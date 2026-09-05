@@ -10,436 +10,721 @@ domain = "assets"
 pages = ["descript_balloon", "descript_ghost", "descript_headline", "descript_install", "descript_plugin", "descript_shell", "descript_shell_surfaces", "descript_shell_surfacetable", "dev_bind", "dev_nar", "dev_ownerdraw", "dev_shell", "dev_shell_error", "dev_update", "manual_balloon", "manual_directory", "manual_ghost", "manual_install", "manual_owner_draw_menu", "manual_shell", "manual_translator", "manual_update", "memo", "spec_update_file"]
 
 [entry."ukadoc:descript_balloon:anchor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの重ね方の指定を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.brush.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.font.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.font.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.font.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+この綴りは、正典キー font.color.r へ値が漏れないことを確かめる引っ掛けとして crates/areka-parsers/src/balloon/parse_tests.rs で使われている。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowcolor.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.27"
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの文字の影の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.brush.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.27"
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの文字の影の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.pen.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.notselect.style_2c_5f62_72b6:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれていない状態のリンクの目印の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.pen.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.style_2c_5f62_72b6:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、選ばれている状態のリンクの目印の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.brush.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.27"
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの文字の影の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.pen.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:anchor.visited.style_2c_5f62_72b6:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+本文中のリンクの機能そのものが areka に無いため、一度たどった状態のリンクの目印の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-anchor-tag-canon（リンクの機能と、その装飾一式を一括で持つ）。
+"""
 
 [entry."ukadoc:descript_balloon:arrow.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.51"
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
+正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:arrow0.x_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:arrow0.y_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:arrow1.x_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:arrow1.y_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はスクロール用の矢印の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+縦書きのときに arrow0 が右・arrow1 が左のスクロールを意味するという先送りは沈黙ルール対応表の `arrow0／arrow1 の縦書き再解釈` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
 status = "implemented"
@@ -453,31 +738,49 @@ areka-parsers の charset::prescan_charset が大小文字を無視して引き�
 """
 
 [entry."ukadoc:descript_balloon:clickwaitmarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.54"
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はクリック待ちの表示の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
+正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:clickwaitmarker.x_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.54"
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はクリック待ちの表示の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
+正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:clickwaitmarker.y_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.54"
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はクリック待ちの表示の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
+正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.background.color.b_2c_6570_5024:1"]
 status = "unclassified"
@@ -608,7 +911,7 @@ note = ""
 [entry."ukadoc:descript_balloon:cursor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -619,7 +922,7 @@ note = """
 [entry."ukadoc:descript_balloon:cursor.brush.color.b_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -630,7 +933,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 [entry."ukadoc:descript_balloon:cursor.brush.color.g_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -641,7 +944,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 [entry."ukadoc:descript_balloon:cursor.brush.color.r_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -652,7 +955,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 [entry."ukadoc:descript_balloon:cursor.font.color.b_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -663,7 +966,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 [entry."ukadoc:descript_balloon:cursor.font.color.g_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -674,7 +977,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 [entry."ukadoc:descript_balloon:cursor.font.color.r_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -683,171 +986,279 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 """
 
 [entry."ukadoc:descript_balloon:cursor.font.shadowcolor.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれている選択肢の文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.font.shadowcolor.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれている選択肢の文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.font.shadowcolor.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれている選択肢の文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.27"
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれている選択肢の文字の影の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.brush.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.brush.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.brush.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の塗りの色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の文字の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の文字の影の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.27"
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の文字の影の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.pen.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.pen.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.pen.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の枠の色を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.notselect.style_2c_5f62_72b6:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重ね方・塗りの色・枠の色・文字の色だけで、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+選ばれていない選択肢の目印の形を宣言しても見た目は変わらない。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-choice-marker-styling（選択肢の目印の見た目を持つ。バルーン定義側の解決は完了 spec areka-P0-choice-render が置いた土台に乗る）。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.pen.color.b_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -858,7 +1269,7 @@ note = """
 [entry."ukadoc:descript_balloon:cursor.pen.color.g_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -869,7 +1280,7 @@ note = """
 [entry."ukadoc:descript_balloon:cursor.pen.color.r_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -880,7 +1291,7 @@ note = """
 [entry."ukadoc:descript_balloon:cursor.style_2c_5f62_72b6:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -898,18 +1309,22 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_balloon:disable.font._28_30d5_30a9_30f3_30c8_5b9a_7fa9_29_2c_28_6307_5b9a_29:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "vocabulary-only"
+introduced = "2.5.51"
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-emo-text の draw::RESERVED_KEY_DISABLE_FONT_PREFIX が接頭辞を、draw::FontDisableSeam が受け口の型を名前だけ持っている。転記層はこのキーを読まず、受け取っても何も起きない。
+担当 spec は areka-P0-text-decoration-canon。
+"""
 
 [entry."ukadoc:descript_balloon:dpi_2c_63a8_5968DPI:1"]
 status = "implemented"
 introduced = "2.7.21"
-owner = ""
+owner = "areka-P0-balloon-offset-dpi"
 priority = ""
 values = []
 links = []
@@ -918,140 +1333,203 @@ areka の placement::source の `BALLOON_DPI_KEY` が引き、`load_balloon_auth
 """
 
 [entry."ukadoc:descript_balloon:font.bold_2c0_2f1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+太字を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
 
 [entry."ukadoc:descript_balloon:font.color.b_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、3 つの成分を束ねて既定の文字色にし、areka-emo-text の draw が描画に使う。担当 spec は areka-P0-text-decoration-canon。
+担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
 """
 
 [entry."ukadoc:descript_balloon:font.color.g_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、3 つの成分を束ねて既定の文字色にし、areka-emo-text の draw が描画に使う。担当 spec は areka-P0-text-decoration-canon。
+担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
 """
 
 [entry."ukadoc:descript_balloon:font.color.r_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、3 つの成分を束ねて既定の文字色にし、areka-emo-text の draw が描画に使う。担当 spec は areka-P0-text-decoration-canon。
+担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
 """
 
 [entry."ukadoc:descript_balloon:font.height_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の draw が文字の大きさとして使う。担当 spec は areka-P0-text-decoration-canon。
+担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
 """
 
 [entry."ukadoc:descript_balloon:font.italic_2c0_2f1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
-priority = ""
-values = []
-links = []
-note = ""
-
-[entry."ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
-status = "implemented"
-introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
 note = """
-areka-parsers の balloon::map_merged が完全一致で引き、文字列のまま持ち上げ、areka-emo-text の draw が書体の名前として使う。担当 spec は areka-P0-text-decoration-canon。
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+斜体を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
+
+[entry."ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
+status = "absent"
+introduced = ""
+owner = "areka-P0-text-decoration-canon"
+priority = ""
+values = []
+links = []
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げ、areka-emo-text の draw::ResolvedFont が書体の設定として解く。先頭の書体名だけは効くが、正典が SSP の機能として定める 2 つが成り立たない。
+⒜ バルーンのフォルダに置いたフォントファイルは指定できない。書体の生成（areka-emo-text の draw::create_text_format）は書体の集まりを渡さないためシステムに入っている書体しか解けず、ファイルを足す経路はリポジトリのどこにも無い。
+⒝ カンマ区切りの優先列が効かない。areka-emo-text の draw::ResolvedFont::resolve はカンマで切って先頭の名前を無条件に採り、その書体がインストールされているかを見ない。残りの名前は保持するだけで読む側がいない。先頭の書体が無い環境では、作者が次に書いた候補ではなく、書体の解決に任せた別の書体で描かれる。
+どちらも記録は残らない。両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+縦書き用の字形が無いフォントを標準ゴシックへ差し替えるという決まりは、正典ではこの項目ではなく vertical の項目の説明の中に書かれている（2026-09-05 にライブの正典で確認）ため、その食い違いは vertical の項目に登記した。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
 """
 
 [entry."ukadoc:descript_balloon:font.outline_2c0_2f1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+縁取りを宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
 
 [entry."ukadoc:descript_balloon:font.shadowcolor.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+文字の影の色を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
 
 [entry."ukadoc:descript_balloon:font.shadowcolor.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+文字の影の色を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
 
 [entry."ukadoc:descript_balloon:font.shadowcolor.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+文字の影の色を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
 
 [entry."ukadoc:descript_balloon:font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.27"
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+文字の影の形を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
 
 [entry."ukadoc:descript_balloon:font.strike_2c0_2f1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+打ち消し線を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
 
 [entry."ukadoc:descript_balloon:font.underline_2c0_2f1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
+下線そのものが描かれない。縦書きのときに下線を列の右側へ引くという写像の先送りは沈黙ルール対応表の `\\f[align]／\\f[valign]／下線の縦書き写像` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+"""
 
 [entry."ukadoc:descript_balloon:homeurl_2cURL:1"]
 status = "unclassified"
@@ -1072,13 +1550,19 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_balloon:marker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.51"
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はさくらスクリプトの目印表示で出す画像の画像を読み込む経路も描く経路も持たない。この項目は誰にも読まれない。
+正典は既定の名前を本体側・相方側・三人目以降の 3 形で持つと定めるが、areka にはその解決も無い。
+両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:mousecursor.arrow_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "unclassified"
@@ -1180,40 +1664,60 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_balloon:onlinemarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.51"
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はオンライン表示の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:onlinemarker.interval_2c_5f85_6a5f_6642_9593:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.77"
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はオンライン表示の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:onlinemarker.x_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はオンライン表示の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:onlinemarker.y_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はオンライン表示の画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:origin.x_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
@@ -1292,31 +1796,46 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_balloon:sstpmarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
+status = "absent"
+introduced = "2.5.51"
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は SSTP マーカーの画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmarker.x_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は SSTP マーカーの画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmarker.y_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は SSTP マーカーの画像を読み込む経路も描く経路も持たない。バルーンのモデルにこの族の受け口が無く、areka-emo-present の balloon::resolve_balloon_faces が面として解くのはバルーン本体の系列だけである。この項目は誰にも読まれない。
+通信・SSTP・オンライン表示まわりを後回しにしたという先送りは見直し表の `areka-P0-balloon-loader` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
+担当 spec は areka-P0-balloon-canon-residue（付属画像族のスコープ別対応を持つ）。当該 brief の Scope 行は 10 項目と書くが番号の付いた項目は 12 あり、担当 spec の記述が古い。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmessage.font.color.b_2c_6570_5024:1"]
 status = "unclassified"
@@ -1462,47 +1981,64 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 """
 
 [entry."ukadoc:descript_balloon:vertical_2c0_2f1:1"]
-status = "implemented"
+status = "degraded"
 introduced = "2.8.80"
-owner = ""
+owner = "areka-P0-balloon-vertical-canon"
 priority = ""
 values = []
 links = []
 note = """
-areka-parsers の balloon::map_merged が完全一致で引き、生の文字列のまま持ち上げ、areka-emo-text の writing::classify_vertical が縦書きの宣言として解く。担当 spec は areka-P0-balloon-vertical-canon。
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が生の文字列のまま持ち上げ、areka-emo-text の writing::WritingDirectionDecision が起動時に一度だけ書字方向を決める。
+正典はサーフェスごとに縦書きと横書きを切り替えられると定めるが、areka は会話中に表示面が替わっても書字方向を変えない。
+縮退の転記元は沈黙ルール対応表の `会話中の書字方向切替`。
+あわせて、縦書き用の字形を持たないフォントを環境の標準ゴシックの縦書き用異体へ自動で差し替えるという決まりは、正典ではこの項目の説明の中に書かれている（font.name の項目ではない・2026-09-05 にライブの正典で確認）。areka はその差し替えを模倣せず作者の指定をそのまま使うので、その食い違いもこの項目が引き受ける——転記元は沈黙ルール対応表の `フォント縦書き異体の挙動等価`。
+担当 spec は areka-P0-balloon-vertical-canon。
 """
 
 [entry."ukadoc:descript_balloon:windowposition.limit_2c0_2f1:1"]
-status = "implemented"
+status = "degraded"
 introduced = "2.5.10"
-owner = ""
+owner = "areka-P0-windowposition-limit"
 priority = ""
 values = []
 links = []
 note = """
-areka-parsers の balloon::map_merged が完全一致で引き、生の文字列のまま持ち上げ、areka の placement::balloon_limit が画面内へ収める判断に使う。担当 spec は areka-P0-windowposition-limit。
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が生の文字列のまま持ち上げ、areka の placement::balloon_limit が画面内へ収める判断に使う。未指定は正典の既定どおり維持する側になる。
+正典はこのキーを SSP に限りゴーストの descript.txt にも書けると注記するが、areka はバルーン側の定義しか読まない。
+縮退の転記元は沈黙ルール対応表の `ゴースト側 descript.txt への windowposition 系（.x / .y / .limit）の記載の受理`。
+担当 spec は areka-P0-windowposition-limit。
 """
 
 [entry."ukadoc:descript_balloon:windowposition.x_2c_5ea7_6a19:1"]
-status = "implemented"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-windowposition-limit"
 priority = ""
 values = []
 links = []
 note = """
-areka-parsers の balloon::map_merged が完全一致で引き、数値の写像と生の文字列の転記の 2 通りで持ち上げる。areka の placement がバルーンの表示位置の調整量として使う。数値にならない語（`center`／`top`／`bottom`）は生のまま配置の層が解く。担当 spec は areka-P0-windowposition-limit。
+壊れ方: 黙って壊れる。記録: なし。
+areka-parsers の balloon::map_merged が数値の写像と生の文字列の転記の 2 通りで持ち上げ、areka の placement がバルーンの表示位置の横の調整量として使う。数値にならない値（center／top／bottom）は生のまま配置の層が解く。
+正典どおりでない点が 2 つある。⑴ 正典はこの 3 キーを SSP に限りゴーストの descript.txt にも書けると注記するが、areka はバルーン側の定義しか読まない。⑵ 正典は数値指定のときシェル側が＋・シェルから離れる側が−と書くが、参照実装はそう動かず、areka は参照実装の実挙動に合わせた。
+縮退の転記元は沈黙ルール対応表の `ゴースト側 descript.txt への windowposition 系（.x / .y / .limit）の記載の受理` と `windowposition.x の符号規約`。
+担当 spec は areka-P0-windowposition-limit。
 """
 
 [entry."ukadoc:descript_balloon:windowposition.y_2c_5ea7_6a19:1"]
-status = "implemented"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-windowposition-limit"
 priority = ""
 values = []
 links = []
 note = """
+壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged が完全一致で引き、areka の placement がバルーンの表示位置の縦の調整量として使う。
+正典はこのキーを SSP に限りゴーストの descript.txt にも書けると注記するが、areka はバルーン側の定義しか読まない。
+縮退の転記元は沈黙ルール対応表の `ゴースト側 descript.txt への windowposition 系（.x / .y / .limit）の記載の受理`。
+担当 spec は areka-P0-windowposition-limit。
 """
 
 [entry."ukadoc:descript_balloon:wordwrappoint.x_2c_5ea7_6a19_20_2a1:1"]
