@@ -6937,1516 +6937,3581 @@ SHIORI から値を引く項目ではない。
 """
 
 [entry."ukadoc:list_shiori_event_ex:OnApplicationBoot:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnApplicationClose:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnApplicationExist:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnApplicationFileOpen:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnApplicationOperationFinish:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnApplicationVersion:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnBatteryCritical:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnBatteryLow:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnBeerShower:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnCrystalDiskInfoClear:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnCrystalDiskInfoEvent:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnDive:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinAllyCondition:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinAllyDead:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinCatchFish:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinMapCharaGenerate:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinMapEnter:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinMapItemGenerate:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinPCCondition:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinPCDead:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElinTarget:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAbandonPet:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAddNewsTopic:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAdventGod:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAreaChanged:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAreaChanged_2a:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAtonement:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAwake:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventBecomeCriminal:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventBelieveGod:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventBuyNuke:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventClothOut:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventConqueredLesimas:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventCooking:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventDead:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventEtherDisease:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventEtherDiseaseCured:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventGameLoad:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventGameQuit:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventGrandmapocalypse:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventHour:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventHourPlayed:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventInvestNPC:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventJoinGuild:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventJoinParty:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventLastword:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventLevelUp:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventLomiasInTheParty:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventLomiasKilled:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMapChanged:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMarriage:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMewmewmew:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMutation:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMutationCured:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventNewGame:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventNukeExploded:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventOffer:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPayTax:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPerformance:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPetDead:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPray:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPrayEyth:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPrayFailed:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventRagnarok:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventRandomEvent:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventReadTreasureMap:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventRefuseMarriage:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSaleSlave:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSaleWife:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSetNuke:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSisterRagnarok:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSkillDown:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSkillLearned:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSkillUp:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSleep:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventStealItem:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventTravelGuide:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventTreasureDigging:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventWeatherChanged:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventWish:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventWished:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventZeomeKilled:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnFleetClockComplete:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnGetValues:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
+ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
+根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+依頼を入口としない。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnHandActivate:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnHitThunder:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnHttpcNotify:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnHydrateStatsNotify:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnJitenBattle:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnJitenTagBattle:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnKanadeTeaParty:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnKanadeTeaPartyEnd:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnKanadeTeaPartyInfomationRequest:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
+ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
+根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+依頼を入口としない。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnKinokoObjectChanged:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnKinokoObjectChanging:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnKinokoObjectCreate:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnKinokoObjectDestroy:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnKinokoObjectInstalled:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnMahjong:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
+ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
+根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+依頼を入口としない。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnMahjongResponse:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnMglBattle:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnMopClear:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnMusicPlay:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnMusicPlayer.SongInfo:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnNeedlePoke:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectDodge:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectDrop:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectEmerge:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectHit:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectVanish:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnNostr:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnPoker:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
+ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
+根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+依頼を入口としない。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnPokerNotify:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnPotatoError:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnPotatoFileNotFound:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnPotatoReturn:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnRequestValues:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
+ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
+根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+依頼を入口としない。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSatolistBoot:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSatolistClosed:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSatolistDictionaryFolderChanged:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSatolistEventAdded:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSatolistGhostOpened:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSatolistSaved:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSpectrePlugin.ConfirmCalibration:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSpectrePlugin.Possession:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSpectrePlugin.Surface:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnStampAdd:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnStampInfo:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnStampInfoCall:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSysResourceCritical:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnSysResourceLow:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnTalkRequest:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnTourabuConquestEnd:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnTourabuConquestStart:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnTourabuDutyEnd:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnTourabuDutyStart:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnUkadocScriptExample:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Alerts:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Astro:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Error:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Forecast.Day:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Forecast.Hourly:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Weather:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:OnWebsiteUpdateNotify:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_Call:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_DiceRoll:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_Dobon:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_GameEnd:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_GetStatus:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
+ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
+根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+依頼を入口としない。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_Goal:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_Marking:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_Start:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_YourTurnEnd:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:Send60stair_YourTurnStart:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.Begin:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandComplete:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandHistory.ForwardIndex:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandHistory.Get:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandHistory.New:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandHistory.Update:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandPrompt:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandUpdate:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.End:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.GetName:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.GetResult:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho.TabPress:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:ShioriEcho:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+"""
 
 [entry."ukadoc:list_shiori_event_ex:_53ef_5909_540d_306e_8fd4_4fe1_30a4_30d9_30f3_30c8:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: areka の側では起きない。送信元は areka ではなく外部のアプリ・プラグイン・他のゴースト
+であり、areka に問われるのは受け口があるかどうかだけである。その受け口（任意の名前のイベントを
+外から受けて SHIORI へ渡す経路）は areka に無い。
+ログ: 外から届く経路では 1 行も出ない。受け口が無いということは、外から届いた要求を読む場所が
+無いということなので、届かなかったことを書き留める場所も無い。なお、この群の名前のうち On で
+始まるものは、ゴーストが \\q の選択肢 ID に書けば選択起源の経路（索引の前置きの⑵）で逐語のまま
+送出され得るが、それは外部からの依頼が届いたことを意味しないので、この行の状態は
+not-applicable のまま変わらない。
+テーマ: 空にする。送信元が areka でない以上、「これが無いと利用者はゴーストの何を失うか」に
+areka の側から答えられないため。
+版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
+この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
+ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
+根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+依頼を入口としない。
+"""
 
 [entry."ukadoc:list_shiori_resource:-:1"]
 status = "vocabulary-only"
