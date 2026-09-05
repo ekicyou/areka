@@ -307,7 +307,7 @@ doc/
 |---|---|---|
 | ⑴ 21 名のうちカタログ id に対応が付かなかった名前 | **0** | 21 名すべてが 1 つ以上の id に当たる（合計 25 id） |
 | ⑵ 正典では SET が有効なのに 21 名に無い葉 | **5** | `currentghost.seriko.zorder`・`currentghost.seriko.sticky-window`（2.8.78）・`position`・`playing`・`pause`（2.8.72）。**`areka-P0-property-query-channels` brief の「21→26」の中身とちょうど一致する** |
-| ⑶（追加で分かったこと）21 名のうち、正典が SET 有効としない id を指す名前 | **2 名 / 4 id** | `seriko.cursor.name`・`seriko.tooltip.name`。当たる id は `...mouse????list(当たり判定名).name`／`...mouse????list.index(ID2).name`／`...textlist(当たり判定名).name`／`...textlist.index(ID2).name` の 4 件で、いずれも印が無く、本文は「index 指定との互換用の記述であり、特に意味はない」と述べる（族の頭の継承も無い）＝**areka の先取り** |
+| ⑶（追加で分かったこと）21 名のうち、正典が SET 有効としない id を指す名前 | **2 名 / 4 id** | `seriko.cursor.name`・`seriko.tooltip.name`。当たる id は `...mouse????list(当たり判定名).name`／`...mouse????list.index(ID2).name`／`...textlist(当たり判定名).name`／`...textlist.index(ID2).name` の 4 件で、いずれも印が無く、族の頭の継承も無い＝**areka の先取り**。*(2026-09-05 訂正: 当初は 4 件すべてが「index 指定との互換用の記述であり、特に意味はない」と述べていると書いたが、スナップショットで読み直すとこの文が付くのは `(当たり判定名)` の 2 件だけで、`.index(ID2)` の 2 件は「マウスカーソル定義リスト内の指定した位置の当たり判定名。」「ツールチップ定義リスト内の指定した位置の当たり判定名。」と述べる。印が無いこと・継承が無いことは 4 件とも同じなので、区分 ⑶ の件数は動かない)* |
 | ⑷（追加）1 名が 2 id に対応する名前 | **4 名** | `seriko.cursor.path`・`seriko.cursor.name`・`seriko.tooltip.text`・`seriko.tooltip.name`（当たり判定名で指す形と番号で指す形の 2 つ） |
 
 ⑶⑷ は要件 6.4 が求める最小（⑴⑵）に足すもので、要件と矛盾しない。ブリーフィングの ⑴ 節の後ろに置く。
