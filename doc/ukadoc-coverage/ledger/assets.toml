@@ -735,6 +735,7 @@ values = []
 links = []
 note = """
 areka-parsers の charset::prescan_charset が大小文字を無視して引き、areka-emo-present の balloon::read_decoded がバルーンの descript を読むときの文字コードとして使う。
+宣言された綴りを解けないときは、呼ぶ側が決めた既定の文字コードへ静かに落ちる（areka-parsers の charset::decode）。落とすときに元の綴りを添えた記録が出るが、段は控えめで、areka の main が既定とする記録の水準では見えない。宣言と違う読み方をされたことに利用者は気づけず、文字化けだけが起きる——壊れ方の判定は黙って壊れる。
 """
 
 [entry."ukadoc:descript_balloon:clickwaitmarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
@@ -1913,23 +1914,25 @@ areka はオンライン表示の画像を読み込む経路も描く経路も�
 [entry."ukadoc:descript_balloon:origin.x_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-vertical-canon"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の region が文字を描き始める横位置として使う。
+担当 spec は areka-P0-balloon-vertical-canon。同 spec の brief は範囲の In に、縦書きのときのこの欄の意味を正典と突き合わせて是正することを名指しで挙げている。areka-P0-balloon-parse の brief もモデル化する欄の数え上げにこの欄の名前を挙げているが、担当は areka-P0-balloon-vertical-canon に置いた——縦書きのときのこの欄の座標の意味を範囲の In で名指ししているのは同 spec だけだからである。
 """
 
 [entry."ukadoc:descript_balloon:origin.y_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-parse"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の region が文字を描き始める縦位置として使う。
+担当 spec は areka-P0-balloon-parse——同 spec の brief はモデル化する欄を `windowposition`・`origin`・`wordwrappoint`・`validrect`・`font` 系と名前で数え上げており、その並びに `origin` が入っている。
 """
 
 [entry."ukadoc:descript_balloon:overlay_outside_balloon_2c_6570_5024:1"]
@@ -1951,7 +1954,7 @@ areka はバルーンの外側へ付属の絵をはみ出させる指定を読�
 [entry."ukadoc:descript_balloon:paint_transparent_region_black_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-emo-atlas"
 priority = ""
 values = []
 links = []
@@ -1961,7 +1964,8 @@ areka は透過色の残る場所を黒で塗るかどうかの指定を読む�
 バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 透過の扱いは areka-emo-atlas の normalize::AlphaParams が組み立てるが、その値は呼ぶ側が決め打ちで渡しており、バルーンの定義からは来ない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。
+担当 spec は areka-P0-emo-atlas。同 spec の brief は、設計に着手するとき正典で必ず読む欄としてこの欄を名指しし、シェル側の同じ名前の欄とは別の定義だから両方読むこと、と書いている。
 """
 
 [entry."ukadoc:descript_balloon:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
@@ -2228,7 +2232,7 @@ areka には入力ボックスのバルーンが無く、その半透明化を�
 [entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-emo-atlas"
 priority = ""
 values = []
 links = []
@@ -2239,51 +2243,56 @@ areka はバルーン側の透過の扱いを宣言で切り替えられない�
 areka-emo-atlas の normalize::UseSelfAlpha という同じ意味の切り替えは実在するが、値は呼ぶ側が決め打ちで渡しており、宣言からは来ない。
 シェルの descript にある `seriko.use_self_alpha` は綴りの違う別の項目である。名前が似ているだけで一緒に扱わないこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。
+担当 spec は areka-P0-emo-atlas。同 spec の brief は、設計に着手するとき正典で必ず読む欄としてこの欄を名指しし、シェル側の同じ名前の欄とは別の定義だから両方読むこと、と書いている。
 """
 
 [entry."ukadoc:descript_balloon:validrect.bottom_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-parse"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の region と areka-emo-present の balloon が文字を置ける範囲の 4 辺として使う。
+担当 spec は areka-P0-balloon-parse——同 spec の brief はモデル化する欄を `windowposition`・`origin`・`wordwrappoint`・`validrect`・`font` 系と名前で数え上げており、その並びに `validrect` が入っている。
 """
 
 [entry."ukadoc:descript_balloon:validrect.left_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-parse"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の region と areka-emo-present の balloon が文字を置ける範囲の 4 辺として使う。
+担当 spec は areka-P0-balloon-parse——同 spec の brief はモデル化する欄を `windowposition`・`origin`・`wordwrappoint`・`validrect`・`font` 系と名前で数え上げており、その並びに `validrect` が入っている。
 """
 
 [entry."ukadoc:descript_balloon:validrect.right_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-parse"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の region と areka-emo-present の balloon が文字を置ける範囲の 4 辺として使う。
+担当 spec は areka-P0-balloon-parse——同 spec の brief はモデル化する欄を `windowposition`・`origin`・`wordwrappoint`・`validrect`・`font` 系と名前で数え上げており、その並びに `validrect` が入っている。
 """
 
 [entry."ukadoc:descript_balloon:validrect.top_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-parse"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の region と areka-emo-present の balloon が文字を置ける範囲の 4 辺として使う。
+担当 spec は areka-P0-balloon-parse——同 spec の brief はモデル化する欄を `windowposition`・`origin`・`wordwrappoint`・`validrect`・`font` 系と名前で数え上げており、その並びに `validrect` が入っている。
 """
 
 [entry."ukadoc:descript_balloon:vertical_2c0_2f1:1"]
@@ -2329,6 +2338,7 @@ note = """
 areka-parsers の balloon::map_merged が数値の写像と生の文字列の転記の 2 通りで持ち上げ、areka の placement がバルーンの表示位置の横の調整量として使う。数値にならない値（center／top／bottom）は生のまま配置の層が解く。
 正典どおりでない点が 2 つある。⑴ 正典はこの 3 キーを SSP に限りゴーストの descript.txt にも書けると注記するが、areka はバルーン側の定義しか読まない。⑵ 正典は数値指定のときシェル側が＋・シェルから離れる側が−と書くが、参照実装はそう動かず、areka は参照実装の実挙動に合わせた。
 縮退の転記元は沈黙ルール対応表の `ゴースト側 descript.txt への windowposition 系（.x / .y / .limit）の記載の受理` と `windowposition.x の符号規約`。
+沈黙ルール対応表には `windowposition 調整量の k 適用時の丸め` の行もあり、拡大率を掛けたときの丸めが参照実装と 1px 食い違うことをそこで引き受けている。ただし正典は丸めに何も書いていないので、正典との食い違いの根拠には採らない。
 担当 spec は areka-P0-windowposition-limit。
 """
 
@@ -2344,29 +2354,32 @@ note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka の placement がバルーンの表示位置の縦の調整量として使う。
 正典はこのキーを SSP に限りゴーストの descript.txt にも書けると注記するが、areka はバルーン側の定義しか読まない。
 縮退の転記元は沈黙ルール対応表の `ゴースト側 descript.txt への windowposition 系（.x / .y / .limit）の記載の受理`。
+沈黙ルール対応表には `windowposition 調整量の k 適用時の丸め` の行もあり、拡大率を掛けたときの丸めが参照実装と 1px 食い違うことをそこで引き受けている。ただし正典は丸めに何も書いていないので、正典との食い違いの根拠には採らない。
 担当 spec は areka-P0-windowposition-limit。
 """
 
 [entry."ukadoc:descript_balloon:wordwrappoint.x_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-vertical-canon"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の region が折り返しの横の境として使う（未指定は文字範囲の右端）。
+担当 spec は areka-P0-balloon-vertical-canon。同 spec の brief は範囲の In に、縦書きのときのこの欄の意味を正典と突き合わせて是正することを名指しで挙げている。areka-P0-balloon-parse の brief もモデル化する欄の数え上げにこの欄の名前を挙げているが、担当は areka-P0-balloon-vertical-canon に置いた——縦書きのときのこの欄の座標の意味を範囲の In で名指ししているのは同 spec だけだからである。
 """
 
 [entry."ukadoc:descript_balloon:wordwrappoint.y_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = "2.8.80"
-owner = ""
+owner = "areka-P0-balloon-vertical-canon"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text の region が折り返しの縦の境として使う（未指定は文字範囲の下端）。
+担当 spec は areka-P0-balloon-vertical-canon。同 spec の brief は範囲の In に、縦書きのときのこの欄の意味を正典と突き合わせて是正することを名指しで挙げている。areka-P0-balloon-parse の brief もモデル化する欄の数え上げにこの欄の名前を挙げているが、担当は areka-P0-balloon-vertical-canon に置いた——縦書きのときのこの欄の座標の意味を範囲の In で名指ししているのは同 spec だけだからである。
 """
 
 [entry."ukadoc:descript_ghost:balloon.defaultsurface_2c_6570_5024:1"]
@@ -2543,6 +2556,7 @@ values = []
 links = []
 note = """
 areka-parsers の charset::prescan_charset が大小文字を無視して引き、package::resolve が起点の descript を読むときの文字コードとして使う。
+宣言された綴りを解けないときは、呼ぶ側が決めた既定の文字コードへ静かに落ちる（areka-parsers の charset::decode）。落とすときに元の綴りを添えた記録が出るが、段は控えめで、areka の main が既定とする記録の水準では見えない。宣言と違う読み方をされたことに利用者は気づけず、文字化けだけが起きる——壊れ方の判定は黙って壊れる。
 """
 
 [entry."ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1"]
@@ -2819,13 +2833,14 @@ note = """
 [entry."ukadoc:descript_ghost:kero.name_2c_540d_524d:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-package-mount"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の package::resolve が `GhostNames::kero_name` へ写し、areka-ghost の sylphya_wiring::derive_flat_statics が `keroname` として配り、areka の placement::source::build_titles が scope 1 の窓の題に、placement::config::detect_scopes が相方の有無の判定に使う。
 シェルの descript にも同じ綴りの項目がある。areka が相方の名前として読むのはゴーストの descript の側だけで、シェル側の同じ綴りは名前としては読まれない——ただし `kero.` で始まるキーがシェルの descript にあること自体は、上に書いた相方の有無の判定が材料に使う（名前の値ではなく綴りの有無だけを見る）。名前としての状態はページごとに別に決まるので、名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-package-mount。同 spec の brief は範囲の In に、起点の descript から読む欄としてこの綴りを名指しで挙げている。
 """
 
 [entry."ukadoc:descript_ghost:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
@@ -3014,13 +3029,14 @@ areka はシェル側の名前で上書きしてよいかの宣言を受け取�
 [entry."ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-package-mount"
 priority = ""
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka-parsers の package::resolve が `GhostNames::name` へ写すだけで、この欄を読む本番の経路が 1 つも無い（読むのは同クレートのテストのみ）。名前は登記されているが受け取っても何もしない。
 この綴りは重なりがいちばん広い——同じ綴りの見出しが本台帳の別ページ（バルーン・シェル・ヘッドライン・インストール指示・プラグイン・surfaces.txt）にもあり、別ドメインのプロパティ（areka-sylphya の vocab::GENERIC_PROP_NAMES）と SHIORI の資源（同じクレートの vocab::shiori_resource）にもある。areka の読み手が別々なので状態も割れる——ゴースト名はここへ写されるだけで誰も読まない、シェル名は areka-ghost の config::resolve_shell_name が読んで起動時のシェル名になる、バルーン名はどこからも読まれない。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-package-mount。同 spec の brief は範囲の In に、起点の descript から読む欄としてこの綴りを名指しで挙げている。
 """
 
 [entry."ukadoc:descript_ghost:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
@@ -3162,18 +3178,20 @@ links = []
 note = """
 areka-parsers の package::resolve が `GhostNames::sakura_name2` へ写し、areka-ghost の sylphya_wiring::derive_flat_statics が `selfname2` として配る（本番の起点は areka-ghost の runtime::boot）。
 シェルの descript にも同じ綴りの項目がある。areka がもう 1 つの呼び名として配るのは起点の descript の宣言だけで、シェル側の同じ綴りは一度も引かれない。同じ綴りでも状態はページごとに別に決まるので、名前で引かず、ページを決めてから引くこと。
+担当は決まっていない。起点の descript を読む areka-P0-package-mount の brief は、範囲の In で読む欄を名前で数え上げているのに、この綴りだけを落としている——担当 spec の記述が古い。
 """
 
 [entry."ukadoc:descript_ghost:sakura.name_2c_540d_524d:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-package-mount"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の package::resolve が `GhostNames::sakura_name` へ写し、areka-ghost の sylphya_wiring::derive_flat_statics が `selfname` として配り（本番の起点は areka-ghost の runtime::boot）、areka の placement::source::build_titles が scope 0 の窓の題に使う。
 シェルの descript にも同じ綴りの項目があるが、areka が本体の名前として採るのはゴーストの descript の側だけである——上に書いた読み取りが引くのは起点の descript から作った表 1 つで、シェルの descript は見ない。だから同じ綴りでもページごとに状態が割れる。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-package-mount。同 spec の brief は範囲の In に、起点の descript から読む欄としてこの綴りを名指しで挙げている。
 """
 
 [entry."ukadoc:descript_ghost:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
@@ -3217,12 +3235,13 @@ note = """
 [entry."ukadoc:descript_ghost:seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-package-mount"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の package::resolve がシェルの置き場所の名前として読み、未指定なら `master` を使う。決まった場所は `ShellMount::dir` になり以降の資産の読み込みの起点になる。
+担当 spec は areka-P0-package-mount。同 spec の brief は範囲の In に、起点の descript から読む欄としてこの綴りを名指しで挙げている。
 """
 
 [entry."ukadoc:descript_ghost:shiori.cache_2c_6570_5024:1"]
@@ -3370,12 +3389,13 @@ areka がつなぐ約束事は SHIORI/3 に固定されている（shiori-host32
 [entry."ukadoc:descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-package-mount"
 priority = ""
 values = []
 links = []
 note = """
 areka-parsers の package::resolve が `ShioriMount::file` へ写し、areka-ghost の shiori_wiring::real_connect と shiori_inproc::inproc_connect が読み込む DLL の名前として使う（未指定なら接続を試みずに失敗する）。
+担当 spec は areka-P0-package-mount。同 spec の brief は範囲の In に、起点の descript から読む欄としてこの綴りを名指しで挙げている。
 """
 
 [entry."ukadoc:descript_ghost:sstp.allowcommunicate_2c_6570_5024:1"]
@@ -4167,6 +4187,7 @@ note = """
 areka-parsers の charset::prescan_charset が大小文字を無視して引き、同 package::read_bindgroup_defaults と areka-ghost の config::resolve_shell_name がシェルの descript を読むときの文字コードとして使う。
 同じ名前の見出しが本台帳の別ページにも並ぶ——ゴースト・バルーン・プラグイン・ヘッドライン・インストール指示・surfaces.txt・surfacetable.txt である。読み手はページごとに別なので状態も割れる。名前で引かず、ページを決めてから引くこと。
 同じページの `readme.charset` は説明文の側の宣言で、areka には読む経路が無い。名前は似ているが別の欄である。
+宣言された綴りを解けないときは、呼ぶ側が決めた既定の文字コードへ静かに落ちる（areka-parsers の charset::decode）。落とすときに元の綴りを添えた記録が出るが、段は控えめで、areka の main が既定とする記録の水準では見えない。宣言と違う読み方をされたことに利用者は気づけず、文字化けだけが起きる——壊れ方の判定は黙って壊れる。
 文字コードを一手に引き受ける areka-P0-charset-canon の brief は、この欄を範囲にも範囲外にも挙げていない。担当は決まっていない。
 """
 
@@ -5596,12 +5617,13 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:animation_2a.interval_2c_30a4_30f3_30bf_30fc_30d0_30eb:1"]
 status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-parse"
 priority = ""
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: debug!。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_animations が忠実に転記し、areka-seriko の table が実際に再生を駆動するのは `random` と `bind+random` の 2 つだけである。`bind` は静的な着せ替えゆえ非駆動、`sometimes`／`always`／`runonce`／`never` などは元の語を添えて非駆動になる。どちらも記録は控えめな段にしか出ず、既定の記録の水準（areka の main が既定とする段）では見えない。見出しの `*` は 1 個以上の数字。
+担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として間隔の語を名指ししている。
 """
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.name_2c_5b9a_7fa9_540d:1"]
@@ -5682,12 +5704,13 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:animation_2a.pattern_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30b5_30fc_30d5_30a7_30b9_756a_53f7_2c_30a6_30a7_30a4_30c8_2c:1"]
 status = "degraded"
 introduced = "2.8.25"
-owner = ""
+owner = "areka-P0-shell-parse"
 priority = ""
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: warn!。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_animations は描き方・面番号・待ち・位置を番号を飛ばさずそのまま転記するが、実際に重ね合わせを導けるのは `overlay` だけで、他の描き方は areka-emo-compose の method が記録を残して未知として吸収する。見出しの 2 つの `*` はそれぞれ 1 個以上の数字。
+担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、受け入れの条件を試験用ゴーストの surfaces.txt が通ることに置いている。そのファイルにはコマの行が並んでいるので、この見出しも同 spec の範囲に入る。ただし brief が範囲の書き出しで名指ししているのは重ね合わせ・間隔・当たり判定・別名で、コマの行は名前で挙がっていない。
 """
 
 [entry."ukadoc:descript_shell_surfaces:asis:1"]
@@ -6410,12 +6433,13 @@ note = """
 [entry."ukadoc:descript_shell_surfaces:collision_2a_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y_2cID:1"]
 status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-parse"
 priority = ""
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_collisions が値にするのは番号が数字だけの行に限られ、円・楕円・多角形を書く `collisionex` は何も記録せずに読み飛ばす。矩形の 4 点と領域名は転記して areka-emo-compose の hit が当たり判定に使う。見出しの `*` は 1 個以上の数字。
+担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として矩形の当たり判定の一覧を名指ししている。
 """
 
 [entry."ukadoc:descript_shell_surfaces:collisionex_2a_2cID_2c_30bf_30a4_30d7_2c_5ea7_6a191_2c_5ea7_6a192...:1"]
@@ -6436,12 +6460,13 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 [entry."ukadoc:descript_shell_surfaces:element_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30d5_30a1_30a4_30eb_540d_2cX_5ea7_6a19_2cY_5ea7_6a19_28_2c_30aa_30d7_30b7:1"]
 status = "degraded"
 introduced = "2.3.53"
-owner = ""
+owner = "areka-P0-shell-parse"
 priority = ""
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_elements は第 2 欄が `overlay` の行だけを値にし、他の描き方の行は何も記録せずに読み飛ばす。層の番号・画像の道・位置は転記してareka-emo-compose が重ね合わせに使う。見出しの `*` は 1 個以上の数字。
+担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として重ね合わせの一覧を名指ししている。
 """
 
 [entry."ukadoc:descript_shell_surfaces:endtalk:1"]
@@ -6776,6 +6801,7 @@ note = """
 areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
 areka が使うのは正典の既定だけである——`\\![move]` の着地点を出す areka の move_cue::CanonDefaultBasepos が、横はサーフェス幅の半分・縦は下端を返す。宣言を差し込むための受け口（同じファイルの move_cue::BaseposResolver）は型として用意されているが、宣言を読む実装はまだ無い。したがって横位置の宣言を書いても、二体の並べ方は既定のままになる。
 この食い違いを引き受ける行が沈黙ルール対応表にある——「宣言 `point.basepos` の実導出（サーフェス個別 basepos）」。ただし受け取る経路そのものが無いので、状態は縮退ではなく未対応とした。行の名前は登記のために残す。
+同じ食い違いを引き受ける行が同じ表にもう 1 つある——「`\\![move]` の基準位置 `base`（basepos）解決」。宣言を読まないという中身は同じで、こちらは着地点を出す側から書いたものである。
 担当 spec は areka-P0-surfaces-basepos。同 spec の brief は範囲の In にこの宣言の転記と、宣言値を正典の既定に優先させることを挙げている。
 """
 
@@ -6791,6 +6817,7 @@ note = """
 areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
 areka が使うのは正典の既定だけである——`\\![move]` の着地点を出す areka の move_cue::CanonDefaultBasepos が、横はサーフェス幅の半分・縦は下端を返す。宣言を差し込むための受け口（同じファイルの move_cue::BaseposResolver）は型として用意されているが、宣言を読む実装はまだ無い。したがって縦位置の宣言を書いても、二体の並べ方は既定のままになる。
 この食い違いを引き受ける行が沈黙ルール対応表にある——「宣言 `point.basepos` の実導出（サーフェス個別 basepos）」。ただし受け取る経路そのものが無いので、状態は縮退ではなく未対応とした。行の名前は登記のために残す。
+同じ食い違いを引き受ける行が同じ表にもう 1 つある——「`\\![move]` の基準位置 `base`（basepos）解決」。宣言を読まないという中身は同じで、こちらは着地点を出す側から書いたものである。
 担当 spec は areka-P0-surfaces-basepos。同 spec の brief は範囲の In にこの宣言の転記と、宣言値を正典の既定に優先させることを挙げている。
 """
 
@@ -7198,58 +7225,94 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfacetable:_30b5_30fc_30d5_30a7_30b9ID_2c_540d_524d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の emo2_boot::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
+`surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
+両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+絵の焼き付けを担う areka-P0-emo-atlas の brief は、設計で確かめることの 1 つとしてこのファイルをアトラスの対象外だと書いている。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_shell_surfacetable:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の emo2_boot::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
+`surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
+両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+文字コードを一手に引き受ける areka-P0-charset-canon の brief は、このファイルを範囲外だと名指しで宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_shell_surfacetable:group_2c_30b0_30eb_30fc_30d7_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の emo2_boot::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
+`surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
+両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+絵の焼き付けを担う areka-P0-emo-atlas の brief は、設計で確かめることの 1 つとしてこのファイルをアトラスの対象外だと書いている。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_shell_surfacetable:option_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の emo2_boot::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
+`surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
+両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+絵の焼き付けを担う areka-P0-emo-atlas の brief は、設計で確かめることの 1 つとしてこのファイルをアトラスの対象外だと書いている。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_shell_surfacetable:scope_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の emo2_boot::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
+`surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
+両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+絵の焼き付けを担う areka-P0-emo-atlas の brief は、設計で確かめることの 1 つとしてこのファイルをアトラスの対象外だと書いている。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_shell_surfacetable:version_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には surfacetable.txt を読む経路がファイルごと無い。シェルの置き場所から areka が開くのは surfaces.txt と descript.txt で、どちらのファイル名も areka の emo2_boot::assets が定数として持っている。この綴りのファイル名は本番の経路のどこにも現れない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+適合の相手にしている試験用ゴーストは、シェルの置き場所にこのファイルを実際に同梱しており、更新の一覧にも名前が載っている。それでも開かれないので、書いた中身はどこにも効かない。作者から見ると「置いたのに何も起きず、何も言われない」形になる。
+`surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
+両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+絵の焼き付けを担う areka-P0-emo-atlas の brief は、設計で確かめることの 1 つとしてこのファイルをアトラスの対象外だと書いている。担当は決まっていない。
+"""
 
 [entry."ukadoc:dev_bind"]
 status = "absent"
