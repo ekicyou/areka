@@ -1,0 +1,6101 @@
+# doc/ukadoc-coverage/ledger/shiori.toml
+# 人手で記入・機械で検査する台帳。形式の正本は
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+
+[ledger]
+domain = "shiori"
+pages = ["list_plugin_event", "list_shiori_event", "list_shiori_event_ex", "list_shiori_resource", "memo_shiorievent", "spec_dll", "spec_fmo_mutex", "spec_headline", "spec_plugin", "spec_shiori3", "spec_sstp", "spec_web"]
+
+[entry."ukadoc:list_plugin_event:OnChoiceSelect_28Ex_29_2fOnAnchorSelect_28Ex_29_2f_5cq_7b49_306b_6307_5b9a_3055_308c_305f_4efb_610f_540d_30a4_30d9_30f3_:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:OnGhostBoot:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:OnGhostExit:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:OnGhostInfoUpdate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:OnInstallComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:OnMenuExec:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:OnOtherGhostTalk:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:OnSecondChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:_5c_21_5braiseplugin_5d_304a_3088_3073_5c_21_5bnotifyplugin_5d_306b_6307_5b9a_3055_308c_305f_4efb_610f_540d_30a4_30d9_30:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:balloonpathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:ghostpathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:headlinepathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:installedballoonname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:installedghostname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:installedplugin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:pluginpathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:property.get:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:property.set:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_plugin_event:version:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnAITalk:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnAnchorEnter:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnAnchorHover:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnAnchorSelect:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnAnchorSelectEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnArchiveViewerOpen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBIFF2Complete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBIFFBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBIFFComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBIFFFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBalloonBreak:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBalloonChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBalloonClose:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBalloonScaling:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBalloonTimeout:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBasewareUpdated:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBasewareUpdating:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBatteryChargingStart:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBatteryChargingStop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBatteryCritical:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBatteryLow:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBatteryNotify:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnBoot:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCPULoadHigh:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCPULoadLow:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCacheRestore:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCacheSuspend:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnChoiceEnter:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnChoiceHover:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnChoiceSelect:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnChoiceSelectEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnChoiceTimeout:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnClose:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCloseAll:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCommunicate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCommunicateInputCancel:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCompressArchiveComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnCompressArchiveFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnConfigurationDialogHelp:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDarkTheme:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDestroy:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDeviceArrival:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDeviceRemove:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDirectoryDrop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDisplayChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDisplayChangeEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDisplayHandover:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDisplayPowerStatus:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnDressupChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnEmbryoExist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteHTTPComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteHTTPFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteHTTPProgress:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteHTTPSSLInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteHTTPStreaming:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteRSSComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteRSSFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteRSS_SSLInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteWebSocketClose:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteWebSocketFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteWebSocketOpen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteWebSocketReceive:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteWebSocketReconnect:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExecuteWebSocket_SSLInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExtractArchiveComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnExtractArchiveFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnFileDrop2:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnFileDrop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnFileDropEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnFileDropped:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnFileDropping:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnFirstBoot:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnFullScreenAppMinimize:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnFullScreenAppRestore:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGamepadAxisMove:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGamepadButtonDown:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGamepadButtonUp:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGamepadConnected:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGamepadDisconnected:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGhostCallComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGhostCalled:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGhostCalling:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGhostChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGhostChanging:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGhostTermsAccept:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnGhostTermsDecline:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnHeadlinesense.OnFind:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnHeadlinesenseBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnHeadlinesenseComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnHeadlinesenseFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnHourTimeSignal:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnInitialize:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnInstallBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnInstallComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnInstallCompleteAll:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnInstallCompleteEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnInstallFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnInstallRefuse:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnInstallReroute:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnKeyPress:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnLanguageChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMediaPlayerOpen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMemoryLoadHigh:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMemoryLoadLow:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMinuteChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseClick:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseClickEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseDoubleClick:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseDoubleClickEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseDown:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseDownEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseDragEnd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseDragStart:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseEnter:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseEnterAll:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseGesture:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseHover:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseLeave:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseLeaveAll:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseMove:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseMultipleClick:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseMultipleClickEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseUp:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseUpEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMouseWheel:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMusicPlay:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnMusicPlayEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNSLookupComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNSLookupFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNarCreated:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNarCreating:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNekodorifExist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNetworkHeavy:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNetworkStatusChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyBalloonInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyDressupInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyFontInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyInternationalInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyOSInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyOtherFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyPluginFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifySelfInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyShellInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnNotifyUserInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOSUpdateInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOffscreen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherGhostBooted:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherGhostChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherGhostClosed:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherGhostTalk:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherGhostVanished:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherObjectDropped:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherObjectDropping:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherOffscreen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherOverlap:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOtherSurfaceChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnOverlap:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnPictureViewerOpen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnPingComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnPingProgress:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRSSBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRSSComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRSSFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRaiseOtherFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRaisePluginFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRecommendsiteChoice:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRecycleBinEmpty:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRecycleBinEmptyFromOther:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnRecycleBinStatusUpdate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnResetWindowPos:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSNTPBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSNTPCompare:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSNTPCompareEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSNTPCorrect:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSNTPCorrectEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSNTPFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSSTPBlacklisting:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSSTPBreak:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSchedule5MinutesToGo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnScheduleRead:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSchedulepostBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSchedulepostComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSchedulesenseBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSchedulesenseComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSchedulesenseFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnScreenSaverEnd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnScreenSaverStart:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSecondChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSelectModeBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSelectModeCancel:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSelectModeComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSelectModeMouseDown:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSelectModeMouseUp:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSessionDisconnect:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSessionLock:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSessionReconnect:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSessionUnlock:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnShellChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnShellChanging:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnShellScaling:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSoundError:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSoundLoop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSoundStop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSpeechSynthesisStatus:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSurfaceChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSurfaceRestore:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSysResume:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSysSuspend:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSystemDialog:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnSystemDialogCancel:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnTabletMode:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnTeach:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnTeachInputCancel:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnTeachStart:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnTextDrop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnTranslate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnTrayBalloonClick:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnTrayBalloonTimeout:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnURLDragDropping:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnURLDropFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnURLDropped:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnURLDropping:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnURLQuery:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdate.OnDownloadBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateCheckComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateCheckFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateCheckResult:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateCheckResultEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateOther.OnDownloadBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateOtherBegin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateOtherComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateOtherFailure:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateOtherReady:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateProcessExec:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateReady:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateResult:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateResultEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdateResultExplorer:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdatedataCreated:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUpdatedataCreating:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUserInput:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnUserInputCancel:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVanishButtonHold:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVanishCancel:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVanishSelected:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVanishSelecting:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVanished:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVideoPlayEx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVirtualDesktopChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVoiceRecognitionStatus:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnVoiceRecognitionWord:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnWallpaperChange:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnWindowStateMinimize:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnWindowStateRestore:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:OnXUkagakaLinkOpen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:balloonpathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:basewareversion:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:calendarpluginpathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:calendarskinpathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:capability:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:configuredbiffname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:enable_debug:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:enable_log:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:ghostpathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:headlinepathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:hwnd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:inputbox.autocomplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:installedballoonname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:installedghostname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:installedheadlinename:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:installedkeroname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:installedplugin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:installedsakuraname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:installedshellname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:otherghostname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:ownerghostname:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:pluginpathlist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:property.get:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:property.set:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:rateofusegraph:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event:uniqueid:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnApplicationBoot:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnApplicationClose:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnApplicationExist:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnApplicationFileOpen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnApplicationOperationFinish:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnApplicationVersion:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnBatteryCritical:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnBatteryLow:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnBeerShower:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnCrystalDiskInfoClear:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnCrystalDiskInfoEvent:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnDive:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinAllyCondition:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinAllyDead:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinCatchFish:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinMapCharaGenerate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinMapEnter:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinMapItemGenerate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinPCCondition:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinPCDead:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElinTarget:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAbandonPet:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAddNewsTopic:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAdventGod:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAreaChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAreaChanged_2a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAtonement:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventAwake:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventBecomeCriminal:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventBelieveGod:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventBuyNuke:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventClothOut:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventConqueredLesimas:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventCooking:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventDead:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventEtherDisease:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventEtherDiseaseCured:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventGameLoad:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventGameQuit:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventGrandmapocalypse:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventHour:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventHourPlayed:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventInvestNPC:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventJoinGuild:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventJoinParty:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventLastword:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventLevelUp:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventLomiasInTheParty:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventLomiasKilled:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMapChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMarriage:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMewmewmew:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMutation:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventMutationCured:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventNewGame:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventNukeExploded:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventOffer:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPayTax:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPerformance:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPetDead:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPray:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPrayEyth:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventPrayFailed:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventRagnarok:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventRandomEvent:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventReadTreasureMap:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventRefuseMarriage:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSaleSlave:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSaleWife:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSetNuke:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSisterRagnarok:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSkillDown:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSkillLearned:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSkillUp:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventSleep:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventStealItem:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventTravelGuide:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventTreasureDigging:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventWeatherChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventWish:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventWished:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnElonaOmakeMMAEventZeomeKilled:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnFleetClockComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnGetValues:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnHandActivate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnHitThunder:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnHttpcNotify:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnHydrateStatsNotify:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnJitenBattle:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnJitenTagBattle:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnKanadeTeaParty:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnKanadeTeaPartyEnd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnKanadeTeaPartyInfomationRequest:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnKinokoObjectChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnKinokoObjectChanging:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnKinokoObjectCreate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnKinokoObjectDestroy:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnKinokoObjectInstalled:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnMahjong:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnMahjongResponse:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnMglBattle:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnMopClear:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnMusicPlay:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnMusicPlayer.SongInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnNeedlePoke:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectDodge:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectDrop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectEmerge:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectHit:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnNekodorifObjectVanish:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnNostr:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnPoker:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnPokerNotify:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnPotatoError:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnPotatoFileNotFound:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnPotatoReturn:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnRequestValues:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSatolistBoot:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSatolistClosed:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSatolistDictionaryFolderChanged:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSatolistEventAdded:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSatolistGhostOpened:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSatolistSaved:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSpectrePlugin.ConfirmCalibration:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSpectrePlugin.Possession:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSpectrePlugin.Surface:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnStampAdd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnStampInfo:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnStampInfoCall:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSysResourceCritical:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnSysResourceLow:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnTalkRequest:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnTourabuConquestEnd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnTourabuConquestStart:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnTourabuDutyEnd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnTourabuDutyStart:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnUkadocScriptExample:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Alerts:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Astro:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Error:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Forecast.Day:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Forecast.Hourly:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnWeatherStation.Weather:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:OnWebsiteUpdateNotify:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_Call:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_DiceRoll:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_Dobon:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_GameEnd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_GetStatus:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_Goal:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_Marking:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_Start:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_YourTurnEnd:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:Send60stair_YourTurnStart:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.Begin:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandComplete:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandHistory.ForwardIndex:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandHistory.Get:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandHistory.New:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandHistory.Update:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandPrompt:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.CommandUpdate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.End:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.GetName:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.GetResult:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho.TabPress:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:ShioriEcho:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_event_ex:_53ef_5909_540d_306e_8fd4_4fe1_30a4_30d9_30f3_30c8:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:-:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:_28_5165_529b_30dc_30c3_30af_30b9_7a2e_985e_29.defaultleft_20_28_5165_529b_30dc_30c3_30af_30b9_7a2e_985e_29.defaulttop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:activaterootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:addressbarbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:aistatebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:alignrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:alwaysstayontopbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:alwaystrayiconvisiblebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:balloon_tooltip:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:balloonhistorybutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:balloonrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:biffallbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:biffbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:calendarbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:callghosthistorybutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:callghostrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:callsstpsendboxbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.defaultleft:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.defaulttop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.defaultx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.defaulty:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.popupmenu.applybindtoself:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.popupmenu.type:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.popupmenu.visible:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.recommendbuttoncaption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.recommendsites.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:char_2a.recommendsites:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:charsetbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:closeballoonbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:closebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:collisionvisiblebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:configurationbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:configurationrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:craftman:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:craftmanw:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:debugballoonbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:definedsurfaceonlybutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:dictationbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:dressuprootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:duibutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:enableballoonmovebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:firststaffbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:getaistate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:getaistateex:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:ghostexplorerbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:ghosthistorybutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:ghostinstallbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:ghostrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:headlinesensehistorybutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:headlinesenserootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:helpbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:hidebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:historyrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:homeurl:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:inforootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.defaultleft:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.defaulttop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.defaultx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.defaulty:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.popupmenu.applybindtoself:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.popupmenu.type:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.popupmenu.visible:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.recommendbuttoncaption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:kero.recommendsites:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:leavepassivebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:legacyinterface:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:log_path:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.background.bitmap.filename:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.background.font.color.b:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.background.font.color.g:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.background.font.color.r:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.disable.font.color.b:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.disable.font.color.g:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.disable.font.color.r:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.foreground.bitmap.filename:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.foreground.font.color.b:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.foreground.font.color.g:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.foreground.font.color.r:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.frame.color.b:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.frame.color.g:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.frame.color.r:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.separator.color.b:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.separator.color.g:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.separator.color.r:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:menu.sidebar.bitmap.filename:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:messengerbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:name:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:other_homeurl_override:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:pluginhistorybutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:pluginrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:portalrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:purgeghostcachebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:quitbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:rateofuseballoonbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:rateofusebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:rateofuserootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:rateofusetotalbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:readmebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:readmebuttoncaption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:recommendrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:regionenabledbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:reloadinfobutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:resetballoonpositionbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:resettodefaultbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.defaultleft:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.defaulttop:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.defaultx:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.defaulty:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.popupmenu.applybindtoself:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.popupmenu.type:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.popupmenu.visible:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.portalbuttoncaption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.portalsites:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.recommendbuttoncaption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sakura.recommendsites:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:scriptlogbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:shellrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:shellscaleotherbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:shellscalerootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:sntpbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchactivatewhentalkbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchactivatewhentalkexceptupdatebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchautobiffbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchautoheadlinesensebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchblacklistingbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchcompatiblemodebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchconsolealwaysvisiblebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchconsolevisiblebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchdeactivatebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchdontactivatebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchdontforcealignbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchduivisiblebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchforcealignfreebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchforcealignlimitbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchignoreserikomovebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchlocalsstpbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchmovetodefaultpositionbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchproxybutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchquietbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchreloadbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchreloadtempghostbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchremotesstpbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:switchtalkghostbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:systeminfobutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:termsbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:texttospeechbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:tooltip:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:updatebutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:updatebuttoncaption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:updatefmobutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:updateplatformbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:useorigin1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:username:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:utilityrootbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:vanishbutton.caption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:vanishbuttoncaption:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:vanishbuttonvisible:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:list_shiori_resource:version:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:memo_shiorievent"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_dll"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_fmo_mutex:32_30d0_30a4_30c8_306e_8b58_5225ID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_fmo_mutex:FMO_306e_30b5_30a4_30ba:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_fmo_mutex:FMO_306e_540d_524d_3068_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_fmo_mutex:_30ad_30fc_540d_30fb_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_fmo_mutex:_30c7_30fc_30bf_672c_4f53:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_fmo_mutex:_30c7_30fc_30bf_7d42_7aef:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_headline"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_plugin"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Age_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:BalloonOffset_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:BaseID_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Charset:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Charset:2"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:ErrorDescription_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:ErrorLevel_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:ID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:MarkerSend_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Marker_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Reference0:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Reference1_7e:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Reference_2a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:SecurityLevel:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:SecurityLevel_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:SecurityOrigin_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Sender:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Sender:2"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:SenderType_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:Value:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:ValueNotify_20_5bSSP_62e1_5f35_202.5.35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:X-SSTP-PassThru-_28_4efb_610f_306e_6587_5b57_5217_29_20_5bSSP_202.5.03_7e_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:X-SSTP-PassThru-_28_4efb_610f_306e_6587_5b57_5217_29_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:_30b9_30c6_30fc_30bf_30b9_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_shiori3:_30e1_30bd_30c3_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_sstp:request:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_sstp:response:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_web:x-ukagaka-link_3atype_3devent_26ghost_3d_28_30b4_30fc_30b9_30c8_540d_29_26info_3d_28_8ffd_52a0_60c5_5831_29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_web:x-ukagaka-link_3atype_3dhomeurl_26url_3d_28_30a8_30f3_30b3_30fc_30c9_6e08URL_29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_web:x-ukagaka-link_3atype_3dinstall_26url_3d_28_30a8_30f3_30b3_30fc_30c9_6e08URL_29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
