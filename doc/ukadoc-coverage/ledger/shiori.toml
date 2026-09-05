@@ -13778,238 +13778,538 @@ links = []
 note = ""
 
 [entry."ukadoc:spec_shiori3:Age_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+"""
 
 [entry."ukadoc:spec_shiori3:BalloonOffset_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+"""
 
 [entry."ukadoc:spec_shiori3:BaseID_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+この行は、上の「送らないもの」として名指しされている 3 つには含まれていない側である。送って
+いないことは他の 3 つと同じだが、送らないと書いてある場所が無い分だけ、読む人が見落としやすい。
+"""
 
 [entry."ukadoc:spec_shiori3:Charset:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-charset-canon"
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 黙って壊れる。ヘッダは送っているが値が 1 つに固定してあり、正典が許す他の値を選べない。
+Charset は UTF-8 だけなので、Shift_JIS で書かれた既存ゴーストとは噛み合わない。SecurityLevel は
+local だけなので、外部由来の呼び出しと区別できない。
+ログ: 固定値であること自体を知らせるログは 1 行も出ない。値は分岐せずそのまま書き出されるので、
+「選べなかった」という判断がコードの中に存在しない。文字の変換に失敗したときだけ、応答を読む側が
+読み取り失敗として扱い、そこで初めて明示的なエラーになる。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request（Charset は 1 値のみを持つ
+型から書き出し、SecurityLevel は local の文字列を直接書き出す）。
+この行は固定値でしか送れない。Charset は UTF-8 の 1 値しか持たない型で、build_request は
+その 1 値を書き出すだけなので、正典が許す他の文字コードを選ぶ枝が無い。任意の文字コードへ
+広げる担当は owner の areka-P0-charset-canon。見出しが同じ項目がレスポンス側にもある
+（Charset:2）。この行はリクエスト側だけを表し、両者を 1 つの行にまとめない。
+"""
 
 [entry."ukadoc:spec_shiori3:Charset:2"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+見出しが同じ項目がリクエスト側にもある（Charset:1）。この行はレスポンス側だけを表し、両者を
+1 つの行にまとめない。parse_response は応答の Charset を読まず、要求のときの文字コードを
+そのまま引き継ぐ。
+"""
 
 [entry."ukadoc:spec_shiori3:ErrorDescription_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 該当なし。areka はステータスコードと Value・ErrorLevel・ErrorDescription を読み取って
+使っている。
+ログ: 応答が 400・500 か ErrorLevel を伴うときは黙って捨てず、SHIORI のエラーとして呼び出し元へ
+返り、kanade が error のログを残す（明示的なエラー）。応答が UTF-8 として読めないときや、
+ステータス行から数値が取れないときも同じく読み取り失敗として返る。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の parse_response（ステータス行の取り出しと
+3 つのヘッダの分岐）と crates/shiori-host32-host/src/client.rs の map_get_result。
+parse_response の ErrorDescription の腕が値を取り、client.rs の map_get_result がエラーへ
+写すときに添える。
+"""
 
 [entry."ukadoc:spec_shiori3:ErrorLevel_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 該当なし。areka はステータスコードと Value・ErrorLevel・ErrorDescription を読み取って
+使っている。
+ログ: 応答が 400・500 か ErrorLevel を伴うときは黙って捨てず、SHIORI のエラーとして呼び出し元へ
+返り、kanade が error のログを残す（明示的なエラー）。応答が UTF-8 として読めないときや、
+ステータス行から数値が取れないときも同じく読み取り失敗として返る。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の parse_response（ステータス行の取り出しと
+3 つのヘッダの分岐）と crates/shiori-host32-host/src/client.rs の map_get_result。
+parse_response の ErrorLevel の腕が値を取り、client.rs の map_get_result がこの値の有無だけで
+エラーの枝へ倒す（ステータスコードが 200 でも倒れる）。
+"""
 
 [entry."ukadoc:spec_shiori3:ID:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 該当なし。areka はこのヘッダを毎回組み立てて送っている。
+ログ: 送出の直前に kanade が trace のログ（shiori_request）で送る内容を残す。組み立てが途中で
+失敗する経路は無い（値をそのまま文字列へ書き出すだけである）。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。
+イベント名を運ぶ。build_request は特定のイベント名で分岐せず、渡された名前をそのまま書き出す。
+"""
 
 [entry."ukadoc:spec_shiori3:MarkerSend_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+"""
 
 [entry."ukadoc:spec_shiori3:Marker_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+"""
 
 [entry."ukadoc:spec_shiori3:Reference0:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+正典ではコミュニケートの送り先を表す 1 本のヘッダで、リクエスト側の Reference* とは別の
+項目である。
+"""
 
 [entry."ukadoc:spec_shiori3:Reference1_7e:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+この行は粗い。1 つの項目が Reference1 以降の可変個のヘッダをまとめて表しており、番号ごとの
+項目は正典に無い。
+"""
 
 [entry."ukadoc:spec_shiori3:Reference_2a:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 該当なし。areka はこのヘッダを毎回組み立てて送っている。
+ログ: 送出の直前に kanade が trace のログ（shiori_request）で送る内容を残す。組み立てが途中で
+失敗する経路は無い（値をそのまま文字列へ書き出すだけである）。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。
+この行は粗い。1 つの項目が Reference の後に数字が続く可変個のヘッダをまとめて表しており、
+番号ごとの項目は正典に無い。build_request は references を 0 起点の連番で Reference0・
+Reference1・… として書き出すので、実際に何本出るかは呼び出しごとに変わる。
+"""
 
 [entry."ukadoc:spec_shiori3:SecurityLevel:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 黙って壊れる。ヘッダは送っているが値が 1 つに固定してあり、正典が許す他の値を選べない。
+Charset は UTF-8 だけなので、Shift_JIS で書かれた既存ゴーストとは噛み合わない。SecurityLevel は
+local だけなので、外部由来の呼び出しと区別できない。
+ログ: 固定値であること自体を知らせるログは 1 行も出ない。値は分岐せずそのまま書き出されるので、
+「選べなかった」という判断がコードの中に存在しない。文字の変換に失敗したときだけ、応答を読む側が
+読み取り失敗として扱い、そこで初めて明示的なエラーになる。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request（Charset は 1 値のみを持つ
+型から書き出し、SecurityLevel は local の文字列を直接書き出す）。
+この行は固定値でしか送れない。build_request は SecurityLevel: local を直に書き出すので、
+正典が定めるもう 1 つの値 external を選ぶ枝が無い。正典で見出しの似ているレスポンス側の
+SecurityLevel [SSP拡張] は別の項目であり、別の行として登記してある。
+"""
 
 [entry."ukadoc:spec_shiori3:SecurityLevel_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+正典で見出しの似ているリクエスト側の SecurityLevel は別の項目であり、別の行として登記して
+ある。ゴーストが喋りたいスクリプトの安全水準を返しても、読む側がそれを取る腕を持たない。
+"""
 
 [entry."ukadoc:spec_shiori3:SecurityOrigin_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+build_request の説明が「送らないもの」として名指ししている 3 つのうちの 1 つ。
+"""
 
 [entry."ukadoc:spec_shiori3:Sender:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 該当なし。areka はこのヘッダを毎回組み立てて送っている。
+ログ: 送出の直前に kanade が trace のログ（shiori_request）で送る内容を残す。組み立てが途中で
+失敗する経路は無い（値をそのまま文字列へ書き出すだけである）。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。
+見出しが同じ項目がレスポンス側にもある（Sender:2）。この行はリクエスト側だけを表し、
+両者を 1 つの行にまとめない。build_request は sender の値をそのまま書き出す。
+"""
 
 [entry."ukadoc:spec_shiori3:Sender:2"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+見出しが同じ項目がリクエスト側にもある（Sender:1）。この行はレスポンス側だけを表し、両者を
+1 つの行にまとめない。
+"""
 
 [entry."ukadoc:spec_shiori3:SenderType_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+build_request の説明が「送らないもの」として名指ししている 3 つのうちの 1 つ。
+"""
 
 [entry."ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-status-execution-states"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 該当なし。areka はこのヘッダを毎回組み立てて送っている。
+ログ: 送出の直前に kanade が trace のログ（shiori_request）で送る内容を残す。組み立てが途中で
+失敗する経路は無い（値をそのまま文字列へ書き出すだけである）。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。
+build_request は値を解釈せずそのまま書き出し、値が無いときは行ごと省く。実行状態の語彙は
+owner の areka-P0-status-execution-states が所有するので、本 spec は語彙の可否を判定しない。
+"""
 
 [entry."ukadoc:spec_shiori3:Value:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 該当なし。areka はステータスコードと Value・ErrorLevel・ErrorDescription を読み取って
+使っている。
+ログ: 応答が 400・500 か ErrorLevel を伴うときは黙って捨てず、SHIORI のエラーとして呼び出し元へ
+返り、kanade が error のログを残す（明示的なエラー）。応答が UTF-8 として読めないときや、
+ステータス行から数値が取れないときも同じく読み取り失敗として返る。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の parse_response（ステータス行の取り出しと
+3 つのヘッダの分岐）と crates/shiori-host32-host/src/client.rs の map_get_result。
+parse_response のヘッダ名を大文字小文字を無視して比べる分岐のうち Value の腕が値を取り、
+client.rs の map_get_result がそれを呼び出し元へ返す。
+"""
 
 [entry."ukadoc:spec_shiori3:ValueNotify_20_5bSSP_62e1_5f35_202.5.35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+"""
 
 [entry."ukadoc:spec_shiori3:X-SSTP-PassThru-_28_4efb_610f_306e_6587_5b57_5217_29_20_5bSSP_202.5.03_7e_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+廃止予定と明記された旧名 X-SSTP-Return- の注記は、正典ではこのレスポンス側の項目に付いている。
+正典では同じ見出しがリクエスト側にもあり（[SSP 2.5.05～拡張] の項目）、そちらとは別の行として
+登記してある。この行は粗い。1 つの項目が X-SSTP-PassThru- で始まる可変個のヘッダをまとめて
+表しており、任意の文字列の部分ごとの項目は正典に無い。
+"""
 
 [entry."ukadoc:spec_shiori3:X-SSTP-PassThru-_28_4efb_610f_306e_6587_5b57_5217_29_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
+届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
+ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
+名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
+リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
+大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
+SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
+crates 以下のソースに 1 件も無い）。
+build_request の説明が「送らないもの」として名指ししている 3 つのうちの 1 つ。正典では同じ
+見出しがレスポンス側にもあり（[SSP 2.5.03～拡張] の項目）、そちらとは別の行として登記して
+ある。この行は粗い。1 つの項目が X-SSTP-PassThru- で始まる可変個のヘッダをまとめて表して
+おり、任意の文字列の部分ごとの項目は正典に無い。
+"""
 
 [entry."ukadoc:spec_shiori3:_30b9_30c6_30fc_30bf_30b9_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
+壊れ方: 該当なし。areka はステータスコードと Value・ErrorLevel・ErrorDescription を読み取って
+使っている。
+ログ: 応答が 400・500 か ErrorLevel を伴うときは黙って捨てず、SHIORI のエラーとして呼び出し元へ
+返り、kanade が error のログを残す（明示的なエラー）。応答が UTF-8 として読めないときや、
+ステータス行から数値が取れないときも同じく読み取り失敗として返る。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の parse_response（ステータス行の取り出しと
+3 つのヘッダの分岐）と crates/shiori-host32-host/src/client.rs の map_get_result。
+parse_response がステータス行を parse_status_code に渡して数値を取り出し、client.rs の
+map_get_result が 400 と 500 をエラーの枝へ、204 をスクリプト無しの成功へ、それ以外を
+Value を返す枝へ振り分ける。
+"""
 
 [entry."ukadoc:spec_shiori3:_30e1_30bd_30c3_30c9:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
+壊れ方: 該当なし。areka はこのヘッダを毎回組み立てて送っている。
+ログ: 送出の直前に kanade が trace のログ（shiori_request）で送る内容を残す。組み立てが途中で
+失敗する経路は無い（値をそのまま文字列へ書き出すだけである）。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。
+この項目は要求行に当たる。build_request は Method の 2 つの枝から GET SHIORI/3.0 と
+NOTIFY SHIORI/3.0 のどちらかを 1 行目として書き出す。
+"""
 
 [entry."ukadoc:spec_sstp:request:1"]
 status = "unclassified"

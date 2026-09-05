@@ -81,7 +81,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
 - [ ] 4. ヘッダ・PLUGIN の受け口・外部連携の仕分け
-- [ ] 4.1 SHIORI/3.0 の 26 項目をリクエスト 11・レスポンス 15 に分けて仕分ける
+- [x] 4.1 SHIORI/3.0 の 26 項目をリクエスト 11・レスポンス 15 に分けて仕分ける
   - 送っているヘッダ 5 を `implemented`、固定値でしか送れない 2（`Charset`・`SecurityLevel`）を `degraded` とし、固定値である旨を `note` に書く。`Charset` の行の `owner` に `areka-P0-charset-canon` を書く
   - 送らない 4（`SenderType`・`SecurityOrigin`・`BaseID`・リクエスト側の `X-SSTP-PassThru-`）を `absent` とし、`build_request` の説明に `BaseID` が挙がっていないことを `note` に書く
   - 読み飛ばす応答ヘッダ 11 を `absent`、現に解釈する 4（ステータスコード・`Value`・`ErrorLevel`・`ErrorDescription`）を `implemented` とし、いずれも判断の根拠を `parse_response` の分岐としてファイル名と定義名で書く
@@ -267,3 +267,10 @@
 - 3.2: 「ゴースト間の伝達が areka に無い」は構造で確認済み — `areka-parsers` の `decode_bang` が `move` 以外の `\!` をすべて無解釈で `GenericCommand` に落とし、汎用キャリアの消費側は 3 か所（`move_cue.rs`・`zorder_cue.rs`・`prop_sink.rs`）だけで、名前選別に `raiseother`／`notifyother` は無い。起動中ゴーストの登記表も本番コードに無い。
 - 3.2: **道具の死角** — `check/content.rs` の `check_introduced` はカタログの `versions` が空なら早期 return する。つまり**版番号を持たない項目に誤った `introduced` を書いても `IntroducedNotInCatalogVersions` は出ない**。タスク 5.4 は「98 件以外は空」を機械検査に頼らず自分で確かめること。
 - 3.2 → **タスク 6.4（ブリーフィング）への申し送り 3 件**: ⑴ 群 5 の 7 行に付けた「根拠の場所:」の段落は 7 行すべてで同一文面＝実質「群の文面」なので、正本 → 写しの順で索引の群 5 に取り込むこと。⑵ 索引の群 5 の追記 1 文は「送信元は外部のアプリではなく他のゴースト」と断定するが、`OnMahjong` の正典本文は「要求元が外部アプリで SSTP による通知であった場合は `X-SSTP-PassThru-*` で返信する」とも述べており**外部アプリもあり得る**。索引の側を直すのが筋。⑶ 設計 DD-3 の「7 件」は自らの論法から見ると取りこぼしがある（`OnGetValues` を返信側として含めるなら `OnMahjongResponse` も同格）。168 件すべて `not-applicable` で状態は同じなので実害は無いが、ブリーフィングで断定しないこと。
+- 4.1: `spec_shiori3` 26 行の内訳は `implemented` 9（送っているヘッダ 5＋解釈する応答 4）＋`degraded` 2（`Charset`・`SecurityLevel`）＋`absent` 15（送らない 4＋読み飛ばす 11）。向きはリクエスト 11・レスポンス 15。
+- 4.1: 同名 2 組はカタログの**連番**で区別（`Charset:1`／`:2`・`Sender:1`／`:2`。`:1` がリクエスト・`:2` がレスポンス）。一方 `SecurityLevel` と `X-SSTP-PassThru-` の 2 組は**見出しが違う**ので連番ではなく別 id。**`X-SSTP-PassThru-` は 2.5.03 版がレスポンス側・2.5.05 版がリクエスト側**（正典本文で確認）。廃止予定の旧名 `X-SSTP-Return-` の注記は 2.5.03 版＝レスポンス側にだけ付いている。
+- 4.1: **DD-8 の切替条件は不成立**。`shiori3.rs` の `Charset` 列挙は `origin/main` でも `Utf8` の 1 バリアントのみで `header_value` は `"UTF-8"` を返す唯一の腕。`areka-P0-charset-canon` は先着していないので `Charset` は `degraded` のままが正しい。
+- 4.1: `Status` の行に `owner = "areka-P0-status-execution-states"` を書いた。タスク本文は `Charset` しか名指ししていないが、**設計の要件対応表 12.3 が「縮退の転記元（`Status` の `owner`）」を充足先として明示**しており、12.3 を持ち `Status` に触れるタスクは 4.1 だけ。転記元の `note` は 5.5 の担当なので書いていない。
+- 4.1: `BaseID` は `crates` 配下のソースに 0 件（ヒットはバイナリ fixture `pasta.dll` の文字列一致のみ）。索引が「ソースに 1 件も無い」と限定しているので主張は真。`build_request` の doc コメントが挙げる未送出は `SenderType`／`SecurityOrigin`／`X-SSTP-PassThru` の 3 つで、`BaseID` は確かに挙がっていない。
+- 4.1: **`Reference0` に「粗さ」を書かないのが正しい**（正典本文は「ゴーストの ` ` 側の名前」で単一ヘッダ。粗さを書けば嘘になる）。粗いのは `Reference*`・`Reference1〜`・`X-SSTP-PassThru-` の 2 件。なお粗さを求めるのは要件 5.8 ではなく**設計 DD-7 の 3**（5.8 はアンカーの無い 4 ページ限定＝タスク 4.3 の担当）。tasks.md の 4.1 が 5.8 を挙げているのは引用の取り違えだが成果物には影響しない。
+- 4.1 → **タスク 7.3 への申し送り**: 設計 DD-10／要件 2.9 の「`absent` の各行に根拠の場所を繰り返さない」と、索引の共通 `note` の全文が根拠の場所を含むことの緊張は、群 2（273 行）・群 4・群 11（15 行）に一様に現れている。1.4 で「正確さを削らない」と裁定済みだが、**7.3 で一度決着させて記録すること。**
