@@ -723,6 +723,7 @@ impl EmoPresenter {
 
 補足正準（本表と一体）:
 - **行送りピッチ**: `line_pitch = ceil(font.height × 1.25)`（image px・`TextLayerConfig` の line_pitch 係数で調整可能。SSP の行間はユーザ設定＝正典値なしのため areka 裁量値）。
+  > 本行は `areka-P0-emo-text-line-height-canon`（2026-09）で改訂。正本は `doc/COMPAT_ARCHITECTURE.md` §8 と同仕様の design.md §4
 - **wordwrappoint.y の典拠**: ukadoc は `wordwrappoint.x` のみ記載（縦書き自体が areka 独自機能）。`.y` は balloon-parse が転記済み（`parse.rs` L74-75）の areka 拡張読みであり、本表が意味論の正典。
 - fixture 実測: 現 fixture は `wordwrappoint.y,0`＝縦書き折返しが退化するため、縦書き観測は example ローカル fixture 変種で有意値を与える（File Structure Plan 参照）。
 
@@ -739,6 +740,8 @@ impl EmoPresenter {
 | image px 原寸の供給 | `TextSlotBinding.image_size = round(surface_size / k)`（**binding 構築時の一点導出**・k=1.0 恒常の現行契約では surface_size と同値）。`TextRegion::resolve` の入力は必ず image_size |
 | 物理寸 | `ceil(validrect 寸 × k)`＝TextSurface/swapchain/Arrangement の単位（物理 px 直接・論理 px 不在） |
 | ukadoc `dpi` キー | 「推奨 DPI＝制作環境の宣言」のみで拡縮挙動は正典無言→上記を areka 正準として本書が確定 |
+
+> 本表の「フォントサイズの写像」の行は `areka-P0-emo-text-line-height-canon`（2026-09）で改訂。正本は `doc/COMPAT_ARCHITECTURE.md` §8 と同仕様の design.md §4
 
 ### Domain Model（集約と不変条件）
 
