@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (202 crate)
+- MIT License (203 crate)
 - BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
@@ -1656,7 +1656,7 @@ DEALINGS IN THE SOFTWARE.
 - is_terminal_polyfill 1.70.2
 - once_cell_polyfill 1.70.2
 - serde_spanned 1.1.1
-- toml 1.1.4+spec-1.1.0
+- toml 1.1.5+spec-1.1.0
 - toml_datetime 1.1.1+spec-1.1.0
 - toml_edit 0.25.13+spec-1.1.0
 - toml_parser 1.1.3+spec-1.1.0
@@ -1933,6 +1933,7 @@ SOFTWARE.
 - shiori-host32-testdll 0.0.1
 - shiori4-testdll 0.0.1
 - temp-path-kit 0.0.1
+- ukadoc-survey 0.0.1
 - wintf 0.0.1
 - ambassador 0.5.1
 - block2 0.6.2

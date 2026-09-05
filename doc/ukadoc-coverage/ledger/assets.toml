@@ -1,0 +1,4886 @@
+# doc/ukadoc-coverage/ledger/assets.toml
+# 人手で記入・機械で検査する台帳。形式の正本は
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+
+[ledger]
+domain = "assets"
+pages = ["descript_balloon", "descript_ghost", "descript_headline", "descript_install", "descript_plugin", "descript_shell", "descript_shell_surfaces", "descript_shell_surfacetable", "dev_bind", "dev_nar", "dev_ownerdraw", "dev_shell", "dev_shell_error", "dev_update", "manual_balloon", "manual_directory", "manual_ghost", "manual_install", "manual_owner_draw_menu", "manual_shell", "manual_translator", "manual_update", "memo", "spec_update_file"]
+
+[entry."ukadoc:descript_balloon:anchor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.brush.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.brush.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.brush.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.font.shadowcolor.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.font.shadowcolor.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.font.shadowcolor.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.brush.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.brush.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.brush.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.font.shadowcolor.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.pen.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.pen.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.pen.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.notselect.style_2c_5f62_72b6:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.pen.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.pen.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.pen.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.style_2c_5f62_72b6:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.brush.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.brush.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.brush.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.font.shadowcolor.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.pen.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.pen.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.pen.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:anchor.visited.style_2c_5f62_72b6:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:arrow.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:arrow0.x_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:arrow0.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:arrow1.x_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:arrow1.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:clickwaitmarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:clickwaitmarker.x_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:clickwaitmarker.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.background.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.background.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.background.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.height_2c_30b5_30a4_30ba:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.width_2c_30b5_30a4_30ba:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.x_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:communicatebox.y_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:craftman_2c_4f5c_8005_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:craftmanurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:craftmanw_2c_4f5c_8005_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.brush.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.brush.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.brush.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.font.shadowcolor.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.font.shadowcolor.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.font.shadowcolor.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.brush.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.brush.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.brush.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.font.shadowcolor.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.pen.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.pen.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.pen.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.notselect.style_2c_5f62_72b6:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.pen.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.pen.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.pen.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor.style_2c_5f62_72b6:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:disable.font._28_30d5_30a9_30f3_30c8_5b9a_7fa9_29_2c_28_6307_5b9a_29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:dpi_2c_63a8_5968DPI:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.bold_2c0_2f1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.height_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.italic_2c0_2f1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.outline_2c0_2f1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.shadowcolor.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.shadowcolor.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.shadowcolor.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.strike_2c0_2f1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:font.underline_2c0_2f1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:homeurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:id_2cID_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:marker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:mousecursor.arrow_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:mousecursor.text_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:mousecursor.wait_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:name_2c_30d0_30eb_30fc_30f3_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:number.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:number.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:number.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:number.font.height_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:number.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:number.xr_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:number.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:onlinemarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:onlinemarker.interval_2c_5f85_6a5f_6642_9593:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:onlinemarker.x_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:onlinemarker.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:origin.x_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:origin.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:overlay_outside_balloon_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:paint_transparent_region_black_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:recommended.ghost.path_2c_30d1_30b9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:recommended.ghost_2c_30b4_30fc_30b9_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmarker.x_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmarker.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmessage.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmessage.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmessage.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmessage.font.height_2c_30b5_30a4_30ba:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmessage.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmessage.x_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmessage.xr_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:sstpmessage.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:type_2c_7a2e_5225:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:use_input_alpha_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:validrect.bottom_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:validrect.left_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:validrect.right_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:validrect.top_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:vertical_2c0_2f1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:windowposition.limit_2c0_2f1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:windowposition.x_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:windowposition.y_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:wordwrappoint.x_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_balloon:wordwrappoint.y_2c_5ea7_6a19_20_2a1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:balloon.defaultsurface_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:balloon.dontmove_2ctrue:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:balloon.syncscale_2ctrue:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:balloon_2c_30d0_30eb_30fc_30f3_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:char_2a.balloon.defaultsurface_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:char_2a.defaultleft_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:char_2a.defaulttop_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:char_2a.defaultx_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:char_2a.defaulty_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:char_2a.name_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:char_2a.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:char_2a.seriko.defaultsurface_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:craftmanurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:craftmanw_2c_4f5c_8005_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:default.balloon.path_2c_30d1_30b9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:don_27t_20need_20bind_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:don_27t_20need_20onmousemove_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:don_27t_20need_20seriko_20talk_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:homeurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:icon.minimize_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:icon_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:id_2cID_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:kero.balloon.defaultsurface_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:kero.defaultleft_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:kero.defaulttop_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:kero.defaultx_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:kero.defaulty_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:kero.name_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:kero.seriko.defaultsurface_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:menu.font.height_2c_30d5_30a9_30f3_30c8_30b5_30a4_30ba:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:menu.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:mousecursor.arrow_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:mousecursor.grip_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:mousecursor.hand_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:mousecursor.text_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:mousecursor.wait_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:name.allowoverride_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:recommended.balloon.path_2c_30d1_30b9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:recommended.balloon_2c_30d0_30eb_30fc_30f3_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.balloon.defaultsurface_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.defaultleft_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.defaulttop_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.defaultx_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.defaulty_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.name2_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.name_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sakura.seriko.defaultsurface_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.cache_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.encoding_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.escape_unknown_2c0_2f1:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.forceencoding_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.logo.align_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.logo.file_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.logo.x_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.logo.y_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori.version_2c_30d0_30fc_30b8_30e7_30f3:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sstp.allowcommunicate_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sstp.allowunspecifiedsend_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:sstp.alwaystranslate_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:title_2c_8868_793a_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_ghost:type_2c_7a2e_5225:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:alwaysdisplay_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:dllname_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:homeurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:name_2c_30d8_30c3_30c9_30e9_30a4_30f3_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:openurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_headline:url_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:_2a.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:_2a.refresh_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:_2a.refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:_2a.source.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2cignore:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:accept_2c_672c_4f53_5074_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:bootghost_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:name_2c_30aa_30d6_30b8_30a7_30af_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:refresh_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_install:type_2c_7a2e_5225:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:craftman_2c_4f5c_8005_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:craftmanurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:craftmanw_2c_4f5c_8005_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:filename_2cdll:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:homeurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:id_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:name_2c_30d7_30e9_30b0_30a4_30f3_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:otherghosttalk_2c_30aa_30d7_30b7_30e7_30f3:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_plugin:type_2c_7a2e_5225:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.balloon.dontmove_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.balloon.syncscale_2ctrue:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.bindgroup_2a.addid_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.bindgroup_2a.default_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.defaultleft_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.defaulttop_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.defaultx_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.defaulty_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.icon.frame.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.icon.frame.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.icon.frame.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.menuitem_2a_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.name_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:char_2a.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:craftman_2c_4f5c_8005_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:craftmanurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:craftmanw_2c_4f5c_8005_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:homeurl_2cURL:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:id_2cID_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.balloon.dontmove_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.balloon.offsetx_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.balloon.offsety_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.balloon.syncscale_2ctrue:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.bindgroup_2a.addid_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.bindgroup_2a.default_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.defaultleft_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.defaulttop_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.defaultx_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.defaulty_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.icon.frame.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.icon.frame.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.icon.frame.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.menu_2cauto_307e_305f_306fhidden:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.menuitem_2a_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.name_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.background.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.background.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.background.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.disable.font.color.b:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.disable.font.color.g:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.disable.font.color.r:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.font.height_2c_30d5_30a9_30f3_30c8_30b5_30a4_30ba:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.foreground.font.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.foreground.font.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.foreground.font.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.frame.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.frame.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.frame.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.separator.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.separator.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.separator.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:menu_2chidden:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:name_2c_30b7_30a7_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.balloon.dontmove_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.balloon.offsety_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.balloon.syncscale_2ctrue:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.bindgroup_2a.addid_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.bindgroup_2a.default_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.defaultleft_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.defaulttop_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.defaultx_2cX_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.defaulty_2cY_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.icon.frame.color.b_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.icon.frame.color.g_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.icon.frame.color.r_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.menu_2cauto_307e_305f_306fhidden:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.menuitem_2a_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.name2_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.name_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:seriko.dpi_2c_63a8_5968DPI:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:seriko.force_disable_crossfade_2c_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:seriko.paint_transparent_region_black_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:seriko.use_self_alpha_2c_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell:type_2c_7a2e_5225:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:_2a_2c_5b_2a_5d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:_5f53_305f_308a_5224_5b9a_540d_2c_8868_793a_5185_5bb9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:add:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:alternativestart_2c_28ID1_2cID2..._29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:alternativestop_2c_28ID1_2cID2..._29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:always:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation-sort_2c_30bd_30fc_30c8_9806_5e8f:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation_2a.collision_2a_2c_5f53_305f_308a_5224_5b9a_5b9a_7fa9animation_2a.collisionex_2a_2c_5f53_305f_308a_5224_5b9a_5:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation_2a.interval_2c_30a4_30f3_30bf_30fc_30d0_30eb:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation_2a.name_2c_5b9a_7fa9_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation_2a.option_2c_30aa_30d7_30b7_30e7_30f3:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation_2a.option_2cbackground:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation_2a.option_2cexclusive:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation_2a.option_2cshared-index:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:animation_2a.pattern_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30b5_30fc_30d5_30a7_30b9_756a_53f7_2c_30a6_30a7_30a4_30c8_2c:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:asis:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:auto:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:balloon.offsetx_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:balloon.offsety_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:base:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:bind:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:bind:2"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-add-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-add-glow-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-add-glow:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-add:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-color-burn-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-color-burn:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-color-dodge-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-color-dodge-glow-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-color-dodge-glow:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-color-dodge:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-color-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-color:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-darken-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-darken:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-darker-color-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-darker-color:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-difference-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-difference:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-dither:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-divide-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-divide:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-exclusion-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-exclusion:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-hard-light-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-hard-light:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-hard-mix-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-hard-mix:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-hue-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-hue:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-lighten-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-lighten:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-lighter-color-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-lighter-color:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-linear-burn-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-linear-burn:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-linear-light-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-linear-light:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-luminosity-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-luminosity:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-multiply-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-multiply:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-overlay-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-overlay:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-pin-light-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-pin-light:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-saturation-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-saturation:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-screen-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-screen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-soft-light-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-soft-light:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-subtract-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-subtract:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-vivid-light-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:blend-vivid-light:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:collision-sort_2c_30bd_30fc_30c8_9806_5e8f:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:collision_2a_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:collisionex_2a_2cID_2c_30bf_30a4_30d7_2c_5ea7_6a191_2c_5ea7_6a192...:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:element_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30d5_30a1_30a4_30eb_540d_2cX_5ea7_6a19_2cY_5ea7_6a19_28_2c_30aa_30d7_30b7:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:endtalk:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:icon.rect_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:import_2c_30d5_30a1_30a4_30eb_540d_2c_30a6_30a8_30a4_30c8msec_2cX_2cY:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:insert_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:interpolate:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:kero.balloon.offsetx_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:kero.balloon.offsety_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:maxwidth_2c_30d4_30af_30bb_30eb:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:mousedown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:mousehover_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:mouserightdown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:mousewheel_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:move:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:name_2c_5b9a_7fa9_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:never:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:overlay-fast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:overlay:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:overlayfast:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:overlaymultiply:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:overlayscreen:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:parallelstart_2c_28ID1_2cID2..._29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:parallelstop_2c_28ID1_2cID2..._29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:periodic_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:point.basepos.x_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:point.basepos.y_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:point.centerx_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:point.centery_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:point.kinoko.centerx_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:point.kinoko.centery_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:random_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:rarely:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:reduce:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:replace:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:runonce:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:sakura.balloon.offsetx_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:sakura.balloon.offsety_2c_5ea7_6a19:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:scaling:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:sometimes:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:start_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:starttalk:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:stop_2cID:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3aarrow:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3across:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3afinger:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3agrip:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3ahand:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3ahelp:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3amove:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3ano:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3atext:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:system_3await:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:talk_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:version_2c_2a:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfaces:yen-e:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfacetable:_30b5_30fc_30d5_30a7_30b9ID_2c_540d_524d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfacetable:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfacetable:group_2c_30b0_30eb_30fc_30d7_540d:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfacetable:option_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfacetable:scope_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:descript_shell_surfacetable:version_2c_6570_5024:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:dev_bind"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:dev_nar"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:dev_ownerdraw"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:dev_shell"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:dev_shell_error"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:dev_update"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:manual_balloon"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:manual_directory"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:manual_ghost"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:manual_install"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:manual_owner_draw_menu"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:manual_shell"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:manual_translator"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:manual_update"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:memo"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:URL_30a8_30f3_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:_30bb_30ad_30e5_30ea_30c6_30a3_30c1_30a7_30c3_30af:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:_30d5_30a1_30a4_30eb_8d70_67fb:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:_5fc5_9808_30d5_30a3_30fc_30eb_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:_62e1_5f35_30d5_30a3_30fc_30eb_30c9_20_28_4f4d_7f6e_5b2_5d_4ee5_964d_29:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:_6587_5b57_30b3_30fc_30c9:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:_884c_30d5_30a9_30fc_30de_30c3_30c8:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:_884c_7a2e_5225:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
+[entry."ukadoc:spec_update_file:ghost_5cmaster_3078_306e_30b3_30d4_30fc:1"]
+status = "unclassified"
+introduced = ""
+owner = ""
+priority = ""
+values = []
+links = []
+note = ""
+
