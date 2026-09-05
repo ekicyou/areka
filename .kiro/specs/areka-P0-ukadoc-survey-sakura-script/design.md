@@ -24,7 +24,7 @@
 
 - 実装（未対応タグを動かす作業）を 1 行も行わない。字句・意味写像・compile・消費側のいずれの判断も変えない。**消費側を新設せず、`\![...]` ごとの専用の型も提案しない**（既存の方針＝1 本の汎用キャリアに載せて消費側が名前で選ぶ、を前提とする・要件 5.5）。
 - 段階 A〜E の最終決定・`linkage.md`・全体の報告・既存 brief 本文の書き換え・`doc/COMPAT_ARCHITECTURE.md` の書き換えを行わない。
-- 上流の道具と重複する常設の検査コードを repo に置かない。
+- 上流の道具と重複する常設の検査コードを repo に置かない（空振り台帳の宣言を実測へ合わせるのは重複ではなく、テスト自身の説明文が求める更新である）。
 - SSP 実機との挙動比較・実ゴースト資産の走査・ukadoc 本文の repo 取り込みを行わない。
 
 ## Boundary Commitments
@@ -45,7 +45,7 @@
 - 既存 brief 11 本の本文と優先順位（8.9・12.4）・`doc/COMPAT_ARCHITECTURE.md`・`.kiro/steering/roadmap.md`（12.3）。
 - 二重所有の**裁定そのもの**（本 spec は案を 1 つ添えるだけ・8.4）と段階 A〜E の最終順序（7.9・10.6）。
 - `areka-P0-sakura-tag-word-boundary` が扱う「本文の半角 `[` で直前のタグと本文が黙って消える」欠陥の是正（12.5）。
-- 常設の整合検査（上流 toolkit 要件 6 が唯一の持ち主）。
+- 常設の整合検査の**判定そのもの**（上流 toolkit 要件 6 が唯一の持ち主）。**ただし空振り台帳（`crates/ukadoc-survey/tests/consistency/checks.rs` の `census` の `Subjects::Zero` の行）だけは例外**——2026-09-06 の開発者裁定により本 spec が `NonEmpty` へ移す。判定の中身は変えず、「今日の実データに対象があるか」の宣言だけを実測へ合わせる（要件 12.1 の但し書き）。
 
 ### Allowed Dependencies
 
@@ -479,7 +479,7 @@ doc/
 | V11 | `crates/**/*.rs` から「行頭の空白を除いて `///`・`//!`・`//` のいずれかで始まり、`ukadoc:` の後に空白区切りの 1 語だけが続き行末に達する行」を集め、⑴ 各 URL がスナップショットの `url` と 1 文字も違わない ⑵ URL → id の集合が台帳の `implemented` の id 集合と一致 ⑶ 同じ id の URL が 2 行以上ない。URL を伴わない `ukadoc` の 156 行は 1 行も拾われない | 9.2〜9.5・9.10・9.11 |
 | V12 | 表 A・表 B・所有の突合表の再生成結果とブリーフィング中の表がバイト一致（比較は作業ツリーのファイル同士・改行を揃える） | 5.2・8.1・10.2 |
 | V13 | URL を足した 5 ファイルの行数が 1,000 未満。`cargo build` で `unused_doc_comments` の警告が 1 件も出ない | 9.7 |
-| V14 | `git diff --name-only`（比較元は分岐点の `origin/main`）の変更対象が `doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/ukadoc-coverage/briefing-sakura-script.md`・`doc/ukadoc-coverage/report/sakura-script.md`・上記 5 ファイルの URL コメント・本 spec 自身の `.kiro/specs/areka-P0-ukadoc-survey-sakura-script/` だけ。`doc/COMPAT_ARCHITECTURE.md`・`.kiro/steering/roadmap.md`・他 3 台帳・他 3 ドメインの報告・`report/summary.md`・`catalog.toml`・`values.md`・`README.md`・11 本の brief に差分が無い（**パスの実在を先に確かめてから差分を取る**——実在しないパスへの `git diff` は空を返して「差分なし」と区別が付かない） | 8.9・11.5・12.1〜12.4 |
+| V14 | `git diff --name-only`（比較元は分岐点の `origin/main`）の変更対象が `doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/ukadoc-coverage/briefing-sakura-script.md`・`doc/ukadoc-coverage/report/sakura-script.md`・上記 5 ファイルの URL コメント・**`crates/ukadoc-survey/tests/consistency/checks.rs` の `census` の宣言行**（2026-09-06 の開発者裁定で許した唯一の追加・要件 12.1 の但し書き）・本 spec 自身の `.kiro/specs/areka-P0-ukadoc-survey-sakura-script/` だけ。`doc/COMPAT_ARCHITECTURE.md`・`.kiro/steering/roadmap.md`・他 3 台帳・他 3 ドメインの報告・`report/summary.md`・`catalog.toml`・`values.md`・`README.md`・11 本の brief に差分が無い（**パスの実在を先に確かめてから差分を取る**——実在しないパスへの `git diff` は空を返して「差分なし」と区別が付かない） | 8.9・11.5・12.1〜12.4 |
 | V15 | 段 9 の前後で `cargo test --workspace` を 1 度ずつ走らせ、結果が同じであること（i686 の host-32 成果物を先にビルドしておく）。道具は着地済みなので、完了直前に担当の報告を必ず作り直し、作り直した後にもう一度常設の検査を回して報告が台帳と食い違わないことを確かめる | 9.8・11.1・11.3 |
 
 **道具そのものを較正する**（緑は台本が壊れていても出る）。V1〜V13 は、それぞれ「わざと 1 か所壊した写し」で赤になることを 1 度は確かめてから本番に当てる（V13 の行数の側は 1,000 行の閾値を一時的に下げて赤を出す）。V14・V15 は git とテスト実行そのものが検査なので較正の対象にしない。例——id を 1 つ削って V1・V2 が赤になるか、`status` を綴り違いにして V5 が赤になるか、`alias_of` を別名へ向けて V6 が赤になるか、URL の末尾を 1 文字変えて V11 が赤になるか。
