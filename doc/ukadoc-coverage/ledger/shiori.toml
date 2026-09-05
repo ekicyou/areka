@@ -26,6 +26,13 @@
 # 優先度の具体的な値は、この索引に後から書き足す。段階（A〜E）と数値はいずれも**仮置き**であり、
 # 最終的な順序を決めるのは統合担当の `ukadoc-coverage-roadmap` である。
 #
+# **優先度はいずれも仮置きである**: 台帳の `priority` 欄には、下の各群が定める値を置いてある。
+# 段階の 1 文字（A〜E）と、その後ろの数値の**どちらも仮置き**であり、最終的にどの順で
+# 手を着けるかを決めるのは統合担当の `ukadoc-coverage-roadmap` である。ここに書いてある値は、
+# 群の中と群どうしの並びを揃えるための出発点であって、着手の順番の約束ではない。値の決め方は
+# 設計の「群→段階」の表に従い、表に当たらない項目は同じテーマの群の値を写した。優先度の
+# 4 つの根拠の序列（壊れ方 ＞ 伺からしさ ＞ 影響する既存資産の広さ ＞ 基盤の共有度）は入れ替えていない。
+#
 # **壊れ方の段**: 下の共通 `note` はすべて、次の 3 つのどれに当たるかを最初に述べる。
 #
 # - **黙って壊れる** — 例外にもログにも現れず、「その場面で何も喋らない」という形でだけ現れる。
@@ -968,7 +975,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A1"
 values = ["気配"]
 links = []
 note = """
@@ -1001,7 +1008,7 @@ OnAITalk なので、最も近い正典項目としてここに置いた。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -1024,7 +1031,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -1046,7 +1053,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -1068,7 +1075,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -1090,7 +1097,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -1119,7 +1126,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1142,7 +1149,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1165,7 +1172,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1188,7 +1195,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1211,7 +1218,7 @@ absent のまま変わらない。
 status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1239,7 +1246,7 @@ Reference 割当（転記元の記録の写し）: Ref0＝中断の操作が起�
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -1261,7 +1268,7 @@ absent のまま変わらない。
 status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1289,7 +1296,7 @@ Reference 割当（転記元の記録の写し）: Ref0＝閉じる際に表示�
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -1311,7 +1318,7 @@ absent のまま変わらない。
 status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1338,7 +1345,7 @@ doc/ukadoc-coverage/values.md はこの項目を気配りの代表として名�
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1361,7 +1368,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1384,7 +1391,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1406,7 +1413,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1428,7 +1435,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1450,7 +1457,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1472,7 +1479,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1513,7 +1520,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1535,7 +1542,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1557,7 +1564,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A1"
 values = ["気配"]
 links = []
 note = """
@@ -1579,7 +1586,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A1"
 values = ["気配"]
 links = []
 note = """
@@ -1601,7 +1608,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -1631,7 +1638,7 @@ OnChoiceEnter だからである（機構そのものを説明する OnChoiceSel
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -1729,7 +1736,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A1"
 values = ["気配"]
 links = []
 note = """
@@ -1751,7 +1758,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -1775,7 +1782,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -1799,7 +1806,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1822,7 +1829,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1845,7 +1852,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -1868,7 +1875,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1890,7 +1897,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B3"
 values = ["記憶"]
 links = []
 note = """
@@ -1914,7 +1921,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1936,7 +1943,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -1958,7 +1965,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -1980,7 +1987,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -2002,7 +2009,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -2024,7 +2031,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -2046,7 +2053,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -2068,7 +2075,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -2090,7 +2097,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -2112,7 +2119,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2135,7 +2142,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2158,7 +2165,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2181,7 +2188,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2204,7 +2211,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2227,7 +2234,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2250,7 +2257,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2273,7 +2280,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2296,7 +2303,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2319,7 +2326,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2342,7 +2349,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2365,7 +2372,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2388,7 +2395,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2411,7 +2418,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2434,7 +2441,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2457,7 +2464,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2480,7 +2487,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -2583,7 +2590,7 @@ OnFileDrop2 の名前では出ない）。この行は判定をしないので�
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -2624,7 +2631,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -2646,7 +2653,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -2668,7 +2675,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -2690,7 +2697,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -2712,7 +2719,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -2734,7 +2741,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -2756,7 +2763,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -2778,7 +2785,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -2802,7 +2809,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -2826,7 +2833,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -2850,7 +2857,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["記憶"]
 links = []
 note = """
@@ -2872,7 +2879,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["記憶"]
 links = []
 note = """
@@ -2894,7 +2901,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2918,7 +2925,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2942,7 +2949,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2965,7 +2972,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -2988,7 +2995,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -3011,7 +3018,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -3034,7 +3041,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A1"
 values = ["気配"]
 links = []
 note = """
@@ -3082,7 +3089,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3104,7 +3111,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3126,7 +3133,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3148,7 +3155,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3170,7 +3177,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3192,7 +3199,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3214,7 +3221,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3236,7 +3243,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3258,7 +3265,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -3280,7 +3287,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3306,7 +3313,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -3328,7 +3335,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -3350,7 +3357,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A1"
 values = ["気配"]
 links = []
 note = """
@@ -3372,7 +3379,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3394,7 +3401,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3435,7 +3442,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3457,7 +3464,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3479,7 +3486,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3501,7 +3508,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3523,7 +3530,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3545,7 +3552,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3567,7 +3574,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3589,7 +3596,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3611,7 +3618,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3633,7 +3640,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3655,7 +3662,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3696,7 +3703,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3718,7 +3725,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3740,7 +3747,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3762,7 +3769,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3784,7 +3791,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -3806,7 +3813,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -3828,7 +3835,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -3850,7 +3857,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -3873,7 +3880,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -3896,7 +3903,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3918,7 +3925,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B5"
 values = ["記憶"]
 links = []
 note = """
@@ -3940,7 +3947,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -3962,7 +3969,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -3984,7 +3991,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -4006,7 +4013,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -4030,7 +4037,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -4054,7 +4061,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -4078,7 +4085,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -4102,7 +4109,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -4125,7 +4132,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4149,7 +4156,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4172,7 +4179,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -4196,7 +4203,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -4220,7 +4227,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["記憶"]
 links = []
 note = """
@@ -4242,7 +4249,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -4264,7 +4271,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A1"
 values = ["気配"]
 links = []
 note = """
@@ -4286,7 +4293,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4308,7 +4315,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4330,7 +4337,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4352,7 +4359,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4374,7 +4381,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4396,7 +4403,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -4418,7 +4425,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -4440,7 +4447,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4462,7 +4469,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4484,7 +4491,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4508,7 +4515,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A1"
 values = ["気配"]
 links = []
 note = """
@@ -4530,7 +4537,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -4556,7 +4563,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4579,7 +4586,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4602,7 +4609,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4625,7 +4632,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4648,7 +4655,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4671,7 +4678,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4693,7 +4700,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4716,7 +4723,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4739,7 +4746,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -4761,7 +4768,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -4783,7 +4790,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -4805,7 +4812,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4828,7 +4835,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4851,7 +4858,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4874,7 +4881,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4897,7 +4904,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4920,7 +4927,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4943,7 +4950,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -4966,7 +4973,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -4988,7 +4995,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -5010,7 +5017,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5033,7 +5040,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5056,7 +5063,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5079,7 +5086,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5102,7 +5109,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5125,7 +5132,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5148,7 +5155,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5171,7 +5178,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5193,7 +5200,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5234,7 +5241,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5257,7 +5264,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5280,7 +5287,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5303,7 +5310,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5326,7 +5333,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5349,7 +5356,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5371,7 +5378,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5393,7 +5400,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5415,7 +5422,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5437,7 +5444,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -5459,7 +5466,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -5481,7 +5488,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -5503,7 +5510,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5526,7 +5533,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5549,7 +5556,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5572,7 +5579,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5595,7 +5602,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -5617,7 +5624,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B4"
 values = ["装い"]
 links = []
 note = """
@@ -5639,7 +5646,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5661,7 +5668,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5683,7 +5690,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5706,7 +5713,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -5729,7 +5736,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5751,7 +5758,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -5773,7 +5780,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -5795,7 +5802,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -5817,7 +5824,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -5839,7 +5846,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -5861,7 +5868,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5884,7 +5891,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -5906,7 +5913,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -5928,7 +5935,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -5950,7 +5957,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -5972,7 +5979,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -5994,7 +6001,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -6629,7 +6636,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -6651,7 +6658,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -6673,7 +6680,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B3"
 values = ["記憶"]
 links = []
 note = """
@@ -6695,7 +6702,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B3"
 values = ["記憶"]
 links = []
 note = """
@@ -6717,7 +6724,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B3"
 values = ["記憶"]
 links = []
 note = """
@@ -6739,7 +6746,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B3"
 values = ["記憶"]
 links = []
 note = """
@@ -6761,7 +6768,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B3"
 values = ["記憶"]
 links = []
 note = """
@@ -6783,7 +6790,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -6805,7 +6812,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -6827,7 +6834,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -6850,7 +6857,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -6872,7 +6879,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -6894,7 +6901,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -6918,7 +6925,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C2"
 values = ["気配り"]
 links = []
 note = """
@@ -6942,7 +6949,7 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D1"
 values = ["交わり"]
 links = []
 note = """
@@ -11195,7 +11202,7 @@ areka の側から答えられないため。
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -11222,7 +11229,7 @@ SHIORI_RESOURCE_IDS もこれを "-" のまま持っている。引くべき名�
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -11386,7 +11393,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -11583,7 +11590,7 @@ areka の素の言葉のままになる。
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -11606,7 +11613,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -11629,7 +11636,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -11652,7 +11659,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -11938,7 +11945,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -11959,7 +11966,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -12135,7 +12142,7 @@ areka の素の言葉のままになる。
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B3"
 values = ["記憶"]
 links = []
 note = """
@@ -12156,7 +12163,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B3"
 values = ["記憶"]
 links = []
 note = """
@@ -12375,7 +12382,7 @@ areka の素の言葉のままになる。
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -12418,7 +12425,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -12441,7 +12448,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -12464,7 +12471,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -12487,7 +12494,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -12639,7 +12646,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -12661,7 +12668,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -13078,7 +13085,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -13099,7 +13106,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -13472,7 +13479,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -13495,7 +13502,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -13518,7 +13525,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -13541,7 +13548,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
@@ -14418,7 +14425,7 @@ areka の素の言葉のままになる。
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "A2"
 values = ["触れ合い"]
 links = []
 note = """
@@ -14527,7 +14534,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -14656,7 +14663,7 @@ vanishbuttoncaption が持つ。
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "D2"
 values = []
 links = []
 note = """
