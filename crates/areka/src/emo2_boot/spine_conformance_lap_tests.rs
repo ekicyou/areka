@@ -68,10 +68,10 @@ use super::conformance_support::{
     StageSink, WaitInjection,
 };
 use super::{
-    CloseReason, Entity, GhostWindows, HINSTANCE, HWND, LoopDriver, Point, PresentCommand,
-    RecordedCall, RecordedStatus, ScriptedShioriHandle, SpineHarness, TalkLifecycleSignal,
-    WindowHandle, WindowPos, World, capture_logs, count_level, run_attach_phase,
-    run_move_drain_phase,
+    ActorKey, CloseReason, Entity, GhostWindows, HINSTANCE, HWND, LoopDriver, Point,
+    PresentCommand, RecordedCall, RecordedStatus, ScriptedShioriHandle, SpineHarness,
+    TalkLifecycleSignal, WindowHandle, WindowPos, World, capture_logs, count_level,
+    run_attach_phase, run_move_drain_phase,
 };
 use areka_kanade::{ChoiceInput, MouseButton, MouseEventKind, MouseInput};
 
@@ -823,6 +823,28 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
     ));
     assert_budget_not_exhausted(&menu, menu_stage);
     collect_display(&mut display, menu);
+
+    // ── 段 6 の自己検査: 選択肢が**相方側（scope1）**のバルーンへ載ったこと（task 5.7） ──
+    //
+    //     3 つの列は scope を 1 ビットも運ばない——表示指令はキャラ窓の面切替だけ、選択の帳簿は
+    //     ID の集合だけ（`crates/areka-kanade/src/schedule/steady.rs:262`）である。実物
+    //     `menu.pasta:15` は選択肢を `エモ：`（scope1）へ置くので、台本がそれを scope0 へ写し
+    //     違えても 3 列は緑のままになる。scope を持つ観測点は文字層の選択状態
+    //     （`crates/areka-emo-text/src/actor.rs:539` の `choice_active`）だけなので、ここで 1 度
+    //     読んで写しの正しさを固定する。`pump_text` は文字層 UI アクターの drain だけを行い、
+    //     交信も表示指令も 1 件も増やさない（`spine.rs:862`）。
+    sink.harness.pump_text();
+    {
+        let rt = sink.harness.runtime.borrow();
+        let (on_sakura, on_kero) = (
+            rt.choice_active(&ActorKey::from("0")),
+            rt.choice_active(&ActorKey::from("1")),
+        );
+        assert!(
+            !on_sakura && on_kero,
+            "メニューの選択肢が相方側へ載っていない（本体側 {on_sakura}・相方側 {on_kero}）——台本の `\\1` が実物 `menu.pasta:15` と食い違っている"
+        );
+    }
 
     // ── 段 7〜9: 選択確定 → サブメニューと戻り（窓 2 つ） ──
     //
