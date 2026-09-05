@@ -17,7 +17,7 @@
 - `emo2-kakukaku`（高さ 93px）で 3 行が収まり、行のインクが重ならず、文字の大きさとベースラインが SSP と許容幅内で一致する（3.x・5.x）。
 - `\_l` の `lh`／`em` が新しい行送りへ自動追随する（4.x）。
 - 折返し基準（`wordwrappoint`）と描画範囲（`validrect`）の二段構えを配置層に実装し、描画範囲の外に文字を置かない（6.x）。
-- 既存 30 ファイルの決定論テストを緩めずに再導出し、新規の決定論テスト（実物 3 台本・SSP 実測値の固定・二段構え・旧式へ戻すと赤）を加える（7.x・8.x）。
+- 既存 32 ファイルの決定論テストを緩めずに再導出し、新規の決定論テスト（実物 3 台本・SSP 実測値の固定・二段構え・旧式へ戻すと赤）を加える（7.x・8.x）。
 - 成功基準: `cargo test -p areka-emo-text` と `cargo test --workspace` が終了コード 0・R8 の新規テストがすべて緑・R8.7 の対照が旧式で赤。
 
 ### Non-Goals
@@ -36,7 +36,7 @@
 - **折返しの二段構え**: 折返し基準（`wordwrappoint`＝超えたら折り返す）と描画範囲（`validrect`＝超えてはならない上限・無条件折返し）の意味論と、配置層 `layout.rs` のゲート③への実装。
 - **計測部の所在**: `crates/areka-emo-text/src/metrics.rs`（新設・COM 層）＝フォント束縛（`FontBinding`）・セル比の実測・`DWriteMetrics`。
 - **SSP 実測の手順と証跡**: `tools/` の道具 3 本と `verification/ssp-measurement/` の記録。
-- **テストの再導出と新規テスト**: `research.md` §3.3 の 30 ファイルの期待値と、R8 の新規テスト。
+- **テストの再導出と新規テスト**: `research.md` §3.3 の 32 ファイル（設計バリデーションで 2 本追加）の期待値と、R8 の新規テスト。
 - **文書の改訂**: 完了 spec `emo-text-layer` の 1 行注記・`research.md:200` の消化注記・COMPAT §8 の行追加・`balloon-canon-residue` brief の登記・`text-decoration-canon` brief の相互参照・roadmap W12 A′・e2e 記録 §13.2 の欄。
 
 ### Out of Boundary
@@ -56,7 +56,7 @@
 
 ### Revalidation Triggers
 
-- `GlyphMetrics` trait の口が変わる（本書で `line_box_height` を撤去する）→ trait を実装・消費する `examples/emo-text-layer/`・`tests/viewbox_blit_spike.rs`・`crates/areka` 側の `TextLayerConfig::default()` 呼び出し（コンパイルのみ）。
+- `GlyphMetrics` trait の口が変わる（本書で `line_box_height` を撤去する）→ trait の実装は crate 内の 2 つ（`draw.rs:441`・`layout.rs:122`）だけで、`examples/emo-text-layer/`（`drive.rs:223,:371-376`）・`tests/viewbox_blit_spike.rs` は `DWriteMetrics` を消費するのみ。`crates/areka` 側の `TextLayerConfig::default()` 呼び出しはコンパイルのみ。
 - `TextLayerConfig` のフィールドが `line_pitch_factor` → `line_gap` へ変わる → `draw_format_metrics_tests.rs:403` の直接構築・`examples/emo-text-typewriter-demo.rs:227` の注記。
 - 本体側バルーン `emo2` の行容量が 3 行 → 4 行へ増える → `emo2-conformance-e2e` の走行期待（起動時の挨拶の行数）・`examples/emo-text-layer/scenario.rs` の容量前提。
 - `create_text_format` が `metrics::bind_font` に吸収される → `viewbox_draw.rs:499-530`・`draw.rs:856-879`（オラクル）・`draw_format_metrics_tests.rs`（format 生成系のテストは `bind_font` 経由へ）。
@@ -170,11 +170,12 @@ graph TB
 | **α0** | 定数 0 | 28 | 実測ピッチ ÷ k − 28 = 0 |
 | α1 | フォントの外部レディング `lineGap ÷ upem × dwrite_em`（整数へ丸め） | 28 + 丸め値 | 実測ピッチ ÷ k − 28 が Yu Gothic UI の外部レディング（§5.2 の GDI `tmExternalLeading`／DirectWrite `lineGap` で事前に求める）と一致 |
 | α2 | SSP の既定設定の定数 c | 28 + c | 上のどちらでもない一定値（2 水準で同じ整数）。SSP の設定 UI に行間項目があればその値と照合 |
+| α3 | `font.height` に比例する量 `round(font.height × r)`（r は SSP 固有の定率） | 28 + 28r | 第 2 の `font.height` 水準（S8・14／56）で `gap` が高さに比例して変わる。α2 とは h = 28 の 1 水準では区別できない（設計バリデーション 重要指摘 1） |
 
 決定手順（実測値が揃ってから機械的に適用する。判断を挟まない）:
 
 1. **意味の弁別（1.2）**: 参照グリフ「漢」「あ」のインク丈 `ink_ssp(k) ÷ k` を、areka 自身が同じ読み取り定義で得た 2 つの予測値 `ink_α`（em 21.05）・`ink_β`（em 28）と比べる。許容幅は 3.3 と同じ（k 1.5 で ±1px・k 2 で ±2px・image px 換算）。**2 水準の両方**で α だけが許容幅に入れば α、β だけなら β。両方入る／どちらも入らない／水準で食い違う → 手順 4。
-2. **行間の確定（1.3）**: `gap(k) = pitch_ssp(k) ÷ k − 28` を 2 水準で求める。両水準で同じ整数（±1 の丸め差は k 1.5 側を優先し、k 2 の値と 1 以内で整合すること）なら、0 → α0、外部レディングと一致 → α1、その他の一定値 → α2。整数に収まらない／水準で食い違う → 手順 4。
+2. **行間の確定（1.3）**: `gap(k, h) = pitch_ssp(k, h) ÷ k − h` を拡大率 2 水準 × `font.height` 2 水準以上（h = 28 の S1〜S7 と、S8 の h = 14／56）で求める。まず拡大率の両水準で同じ整数（±1 の丸め差は k 1.5 側を優先し、k 2 の値と 1 以内で整合すること）であることを確かめ、次に `font.height` の水準間で比べる: 全水準で 0 → α0、外部レディング（h ごとに `lineGap ÷ upem × dwrite_em(h)` を丸めた値）と一致 → α1、h に依らない一定値 → α2、h に比例（`gap ÷ h` が一定）→ α3。整数に収まらない／水準で食い違う／どの形にも当てはまらない → 手順 4。α2 と α3 は h = 28 の 1 水準では同じ値になり得るため、S8 を撮らずに手順 2 を閉じてはならない。
 3. **裏付け（1.4・5.5・6.1）**: 確定した式で相方側 3 行（3 行目の下端 ≤ 133）が SSP の 3 行と一致し、本体側の行数が SSP の同じ撮影の行数と一致し、「閉じる」の右端が SSP でどう見えるか（欠ける／収まる／折り返す）を記録する。
 4. **裁定へ回す（1.5）**: 手順 1／2 が決まらないときは、食い違いの実測値と候補それぞれの帰結（行数・文字の大きさ・インクの重なり）を表にして開発者へ回す。**推測で埋めない**。本書 §4 は裁定後に改訂する。
 
@@ -218,11 +219,12 @@ graph TB
 ### 5.3 手順（1.1・1.6）
 
 1. **環境の記録**: SSP の版（`(Get-Item C:\wintools\ssp\ssp.exe).VersionInfo`＝2.8.83.3000）・モニタ DPI（DPI 対応プロセスから `GetDpiForMonitor`・192／144）・SSP の表示スケール設定と行間に関する設定項目の有無（設定画面のスクリーンショット）・日付。SSP の設定は既定（profile を退避して初期化した状態）で撮る。
-2. **バルーンの同一化**: SSP 側 `C:\wintools\ssp\balloon\emo2-kakukaku\descript.txt` は repo fixture と **2 点で異なる**（2026-09-05 実読: SSP 側だけ `origin.x,0`／`origin.y,0` を宣言・repo 側だけ `budoux_newline,1`）。repo fixture を `C:\wintools\ssp\balloon\emo2-kakukaku-lh\` へ複製し `name` を一意（例 `kakukaku-lh (measure)`）にして、`\![change,balloon,kakukaku-lh (measure)]` で切り替える。差分と複製の事実を記録する。
+2. **バルーンの同一化**: SSP 側 `C:\wintools\ssp\balloon\emo2-kakukaku\descript.txt` は repo fixture と **2 点で異なる**（2026-09-05 実読: SSP 側だけ `origin.x,0`／`origin.y,0` を宣言・repo 側だけ `budoux_newline,1`）。repo fixture を `C:\wintools\ssp\balloon\emo2-kakukaku-lh\` へ複製し `name` を一意（例 `kakukaku-lh (measure)`）にして、`\![change,balloon,kakukaku-lh (measure)]` で切り替える。SSTP 経由の `\![change,balloon,…]` を SSP の設定が拒む場合は SSP の右クリックメニュー（バルーン選択）で手動切替し、その事実を記録する。差分と複製の事実を記録する。
 3. **較正**: `gdi-text-metrics.ps1` を実行し JSON を保存。areka 側の予測値（`ink_α`／`ink_β`・ベースライン・`cell_ratio`・`lineGap`）は `tests/ssp_metrics_parity_test.rs` の診断出力（環境変数 `AREKA_DIAG_OUT`・既存 `viewbox_draw_png_dump_tests.rs:148-151` と同じ流儀）で得て保存。
 4. **台本**（すべて `send-sstp.ps1` で送る・UTF-8）:
    - S1: 相方側 3 行 `\1あ漢Hg\nあ漢Hg\nあ漢Hg\e`／S2: 相方側 4 行（4 行目があふれるか）／S3: 本体側 4 行 `\0…`（本体側の行容量・5.5）／S4: 本体側 5 行（4 行で収まり 5 行目であふれることの確認）。
    - S5／S6／S7: `menu.pasta:15`／`:33`／`:62` の選択肢行を逐語で（`\1` 前置・`emo2_fixture_e2e_test.rs:105-118` の抽出関数と同じ文字列）。S5 表示中に先頭の選択肢へマウスを載せ（`SetCursorPos`）hover 帯を撮る（(b)・5.6）。「閉じる」の右端の見え方を記録する（6.1）。
+   - S8（第 2 の `font.height` 水準・重要指摘 1）: `\1\f[height,14]あ漢Hg\nあ漢Hg\f[height,56]\nあ漢Hg\nあ漢Hg\e` のように 14 と 56 の行を並べ、行ごとの `gap = pitch − height` を読む。`\f[height]` が SSP で効かない場合は `font.height,14` の複製バルーンをもう 1 つ置いて同じ 4 行を撮る。
 5. **撮影と走査**: 各台本について k 2 の面と k 1.5 の面でバルーンを表示し（SSP のバルーン窓を当該モニタへ移して表示）、`measure-ssp-text-metrics.ps1` で PNG と JSON を得る。開発者がいずれかの面を 100% へ設定できる場合だけ k 1 を加える（1.1）——その場合 3.3／3.4 の「実測した最小の拡大率」は k 1 になり、許容幅 ±1px はその面の読みに適用する。
 6. **判定**: §4.2 の決定手順を JSON の値に適用し、`verification/ssp-measurement/README.md` に「環境・台本・生ファイル名・読み取り値・換算値・判定」を表で残す。§4.1 の【実測】欄と `doc/COMPAT_ARCHITECTURE.md` §8 の行をこの表から転記する。
 7. **定数の固定（8.3）**: 読み取り値を `tests/ssp_metrics_parity_test.rs` の定数へ書き写す（実測日・証跡ファイル名をコメントで添える）。
@@ -275,7 +277,7 @@ crates/areka-emo-text/tests/
 | `src/lib.rs`（252） | `pub mod metrics;`・層規律 doc に `metrics` を COM 層として追記（`PURE_SOURCES` には**載せない**） | ≈ 255 |
 | `src/draw_format_metrics_tests.rs`（737） | `DWriteMetrics` 系のテストを `metrics_tests.rs` へ移し、残りは format／方向レシピ | ≈ 450 |
 | `src/cursor_tag_test_support.rs`（106） | `LINE_PITCH = 13` の doc を「`font_height 10 + 仮想行間 3`（em と lh の係数を弁別するための仮想値）」へ（7.5） | 不変 |
-| 30 ファイルの既存テスト（`research.md` §3.3） | §「Testing Strategy」の再導出台帳に従う | 各 ≤ 1,000 |
+| 32 ファイルの既存テスト（`research.md` §3.3） | §「Testing Strategy」の再導出台帳に従う | 各 ≤ 1,000 |
 | `examples/emo-text-layer/scenario.rs`（116） | 容量前提 3 行 → 4 行・pitch 35 → 28 の doc と定数（7.3・5.5） | 不変 |
 | `examples/emo-text-typewriter-demo.rs` | `:227` の注記（`line_gap`） | 不変 |
 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | **触らない**（8.6・9.5）。上表の見込み行数がすべて 1,000 未満であることが根拠 | — |
@@ -376,7 +378,7 @@ flowchart TD
 | 7.1 | 30 ファイルの期待値を計算で再導出 | 再導出台帳 | — | — |
 | 7.2 | 緩めない・本数と名前を減らさない | 再導出台帳・退役台帳 | — | — |
 | 7.3 | 容量前提の導き直し | 再導出台帳 C | — | — |
-| 7.4 | 画素等価比較の両側同寸・負の対照が赤 | 再導出台帳 B（live_diff） | — | — |
+| 7.4 | 画素等価比較の両側同寸・負の対照が赤 | 再導出台帳 B（`viewbox_draw_live_diff_tests`）・台帳 C（`viewbox_draw_oracle_regression_tests`） | — | — |
 | 7.5 | 定数注入テストの doc | `cursor_tag_test_support.rs` | — | — |
 | 7.6 | 終了コードで合否 | Testing Strategy「実行」 | — | — |
 | 8.1 | 実物 3 台本・実経路で先頭可視行 0 | `kero_menu_capacity_test.rs` | — | — |
@@ -512,7 +514,7 @@ impl TextRegion {
 }
 ```
 - `resolve` の末尾: `if wrap_threshold > inline_limit { warn!(balloon = model.name().unwrap_or("(名前なし)"), axis = "x"|"y", wrap_threshold, inline_limit, "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）") }`。
-- 一回化: `resolve` は actor 登録（`actor.rs:313`）と k 再追従（`:383`）でしか呼ばれない（フレームごとには呼ばれない）ので、「バルーンの読込 1 回につき 1 回」が構造で成り立つ。持続 guard は持たない。
+- 一回化: `resolve` は actor 登録（`actor.rs:313`）と k 再追従（`:383`）でしか呼ばれない（フレームごとには呼ばれない）ので、「バルーンの読込（装着）1 回につき 1 回」が構造で成り立つ。k 再追従（DPI 変化）でも 1 回ずつ出るが、これは再解決＝再読込として要件 6.7 の「読み込んだとき」に含める。持続 guard は持たない。
 - State: `PartialEq` 導出に `inline_limit` が加わる（`refresh_actor_binding` の同値判定は同じ model からの再解決なので意味不変）。
 
 **Implementation Notes**
@@ -676,16 +678,16 @@ log-first（`.kiro/steering/logging.md`）: 失敗は `error!`＋`Err`、縮退�
 - `cargo test -p areka-emo-text` と `cargo test --workspace` を**終了コードで**判定する（`| tail` 等で隠さない）。
 - DoD に含めるもの: SSP 実測（§5）・実フォント読み戻し（`ssp_metrics_parity_test.rs`）・R8 の新規テスト全緑・R8.7 の対照・R2.4 の機械検査 0 件・`file_length_guard_test.rs` 緑（例外表不変）。含めないもの: 実機一周（e2e）。
 
-### 再導出台帳（7.1〜7.5・`research.md` §3.3 の 30 ファイルを 4 分類）
+### 再導出台帳（7.1〜7.5・`research.md` §3.3 の 32 ファイルを 4 分類）
 
 | 分類 | 対象 | 作業 |
 |---|---|---|
 | **A 純粋層・`FixedMetrics`**（font 10／12 で値不変） | `layout_wrap_tests`・`layout_segmented_tests`・`layout_visible_window_tests`・`layout_cursor_*_tests`（7 本）・`cursor_tag_tests`／`cursor_tag_resolve_tests`／`cursor_tag_test_support`・`state_cue_apply_tests`・`state_reveal_tests`・`choice_tests`（帯以外）・`viewbox_axis_tests`・`viewbox_dirty_tests`・`viewbox_plan_commit_tests`・`actor_tests`・`actor_choice_contract_tests`・`actor_scale_refresh_tests`・`tests/pipeline_test.rs` | 期待値は新式 `h + 3` から再計算して同値を確認。doc の「`ceil(×1.25)`」を「`font_height + 仮想行間 3`」へ。`fixed_metrics_line_pitch_ceils_fractional_values`（`layout_wrap_tests.rs:24`）は意図（`ceil`）が退役するため名前と本文を「仮想行間の加算」へ差し替え（台帳に記録）。`layout_cursor_overflow_tests.rs:113-166` は値不変（行矩形の厚み＝`font_height` は不変） |
-| **B COM 層・実フォント**（値が変わる） | `draw_format_metrics_tests`→`metrics_tests`（`line_pitch(12)=15→12`・`line_box_height` 系は退役／セル比へ）・`viewbox_draw_frame_render_tests`・`viewbox_draw_live_diff_tests`（P: 25→20・15→12・容量式 `2P+F ≤ block ≤ 3P+F` の面寸を再導出。負の対照 `live_diff_detects_injected_divergence` が赤のまま＝7.4）・`viewbox_draw_choice_hover_tests`（帯 35→28）・`viewbox_draw_png_dump_tests`（pitch グリッド）・`tests/draw_readback_test.rs`（PITCH 15→12）・`tests/viewbox_blit_spike.rs`（N 15→12）・`tests/scale_invariance_test.rs`（font 40: pitch 50→43〔FixedMetrics〕・`block_offset −50→−43`・行数不変の検査は新式でも成立）・`tests/emo2_fixture_e2e_test.rs`（本体側 pitch 35→28・hover 帯 y 範囲）・`tests/choice_fixture_test.rs` | 新式で計算し `assert_eq` のまま更新。既定フォント（比 1.0）ではグリフ描画が不変なのでピッチ由来の差だけが出る |
-| **C 容量前提**（7.3） | `tests/viewbox_scroll_test.rs:60-80`（`PITCH 12`・`FILL_LINES 10`＝行 i の下端 `12i+12 ≤ 120`・`const _: () = assert!` を保つ）・`viewbox_draw_live_diff_tests.rs:455,476`（面寸を `2P+F ≤ block ≤ 3P+F` へ導き直す）・`examples/emo-text-layer/scenario.rs:9-30`（横書き容量 3→**4** 行・pitch 35→28・`LINE3` の「3 行ちょうど」前提を 4 行目へ・`OVERFLOW_LINES 9` は据え置き〔4 行を確実に超える〕・`EXPOSURE_BAND_DRAW_BOUND` は実測で再確認） | 前提が「緑のまま意味を失う」ことを防ぐため、各テストの前提コメントを新しい容量で書き直す |
-| **D 退役**（7.2 の個別記録） | `choice_tests.rs` の `highlight_band_extent` clamp 系・`draw_format_metrics_tests.rs:417-450`（`line_box_height` が em を超える事実）・`viewbox_draw_*` の `expand_overhang_for_band` 系・`dwrite_metrics_line_pitch_follows_config_canon` の「係数 2.0」分岐（`:400-410`） | 根拠: セル丈解釈では行ボックス丈 ≡ `font.height`・帯 ≡ 行矩形となり、検証対象（「行ボックスが em を超える」「帯をピッチで頭打ち」）が仕様判断で存在しなくなった。各テストの代替（セル比・`dwrite_em`・帯とインクの包含）を B／新規で用意してから外す。退役の一覧は `tasks.md` の該当タスクと本書のこの表に残す |
+| **B COM 層・実フォント**（値が変わる） | `draw_format_metrics_tests`→`metrics_tests`（`line_pitch(12)=15→12`・`line_box_height` 系は退役／セル比へ）・`viewbox_draw_frame_render_tests`・`viewbox_draw_live_diff_tests`（P: 25→20・15→12・容量式 `2P+F ≤ block ≤ 3P+F` の面寸を再導出。負の対照 `live_diff_detects_injected_divergence` が赤のまま＝7.4）・`viewbox_draw_choice_hover_tests`（帯 35→28）・`viewbox_draw_png_dump_tests`（pitch グリッド）・`tests/draw_readback_test.rs`（PITCH 15→12）・`tests/viewbox_blit_spike.rs`（N 15→12）・`tests/scale_invariance_test.rs`（font 40: pitch 50→43〔FixedMetrics〕・`block_offset −50→−43`・行数不変の検査は新式でも成立）・`tests/emo2_fixture_e2e_test.rs`（本体側 pitch 35→28・hover 帯 y 範囲）・`tests/choice_fixture_test.rs` | 新式で計算し `assert_eq` のまま更新。既定フォント（比 1.0）を使うテストではグリフ描画が不変なのでピッチ由来の差だけが出る。Yu Gothic UI を使う `tests/emo2_fixture_e2e_test.rs`・`tests/choice_fixture_test.rs`・`draw_format_metrics_tests.rs:417-450` は**文字送りも 28 → 21.05 に変わる**ので、折返し位置・x 座標の期待値も再計算する |
+| **C 容量前提**（7.3） | `tests/viewbox_scroll_test.rs:60-80`（`PITCH 12`・`FILL_LINES 10`＝行 i の下端 `12i+12 ≤ 120`・`const _: () = assert!` を保つ）・`viewbox_draw_live_diff_tests.rs:455,476`（面寸を `2P+F ≤ block ≤ 3P+F` へ導き直す）・`examples/emo-text-layer/scenario.rs:9-30`（横書き容量 3→**4** 行・pitch 35→28・`LINE3` の「3 行ちょうど」前提を 4 行目へ・`OVERFLOW_LINES 9` は据え置き〔4 行を確実に超える〕・`EXPOSURE_BAND_DRAW_BOUND` は実測で再確認）・`src/draw_oracle_tests.rs:430`（ＭＳ ゴシック 10・pitch 13→10 で行下端が 10/20/30/40 となり `validrect.bottom 40` で 4 行目があふれなくなる → `validrect.bottom` を 35 等へ導き直して「4 行目があふれる」前提を保つ）・`src/viewbox_draw_oracle_regression_tests.rs:11,:112`（font 28・pitch 35→28 で「行間 28..35」の領域が消える → 行 1 セル 0..28・行 2 セル 28..56 の寸法で行境界の欠け診断が意味を持つよう前提コメントごと書き直す。R7.4 の「両側とも同じ寸法」の確認はこのファイルで行う） | 前提が「緑のまま意味を失う」ことを防ぐため、各テストの前提コメントを新しい容量で書き直す |
+| **D 退役**（7.2 の個別記録） | `choice_tests.rs` の `highlight_band_extent` clamp 系・`draw_format_metrics_tests.rs:417-450`（`line_box_height` が em を超える事実）・`viewbox_draw_*` の `expand_overhang_for_band` 系・`dwrite_metrics_line_pitch_follows_config_canon` の「係数 2.0」分岐（`:400-410`） | 根拠: セル丈解釈では行ボックス丈 ≡ `font.height`・帯 ≡ 行矩形となり、検証対象（「行ボックスが em を超える」「帯をピッチで頭打ち」）が仕様判断で存在しなくなった。各テストの代替（セル比・`dwrite_em`・帯とインクの包含）を B／新規で用意してから外す。退役の一覧は `tasks.md` の該当タスクと本書のこの表に残す。帯＝セル丈は「グリフのインクがフォントの descent の内側にある」ことに依拠するため、この前提は R5.6 の実フォント読み戻し（「閉じる」「もどる」）で固定する |
 
-分類は着手時に 30 ファイルすべてを `rg "1\.25|1\.33|37\.24|line_pitch|line_box|band"` で再確認してから確定する（本書の分類は設計時点の読み）。
+分類の入口は「§3.3 の一覧」ではなく **crate 全域の検索**とする: 着手時に `rg -l "1\.25|1\.33|37\.24|line_pitch|line_box|band|pitch" crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka-emo-text/examples` の全ヒットを台帳へ載せ、§3.3 の一覧に無いものを追加してから確定する（本書の分類は設計時点の読み。設計バリデーション（重要指摘 2）で `draw_oracle_tests.rs`・`viewbox_draw_oracle_regression_tests.rs` の 2 本が漏れていたことが判明し、台帳 C へ加えた＝計 32 ファイル）。また `TextRegion::resolve` に加わる警告 1 件は行送り非依存だが、`region.rs` の in-file テスト（`:439-794`・kero 2 層マージ `:536`）・`tests/shipped_fixture_region_test.rs`・`cursor_tag_test_support.rs:95` のうちログ件数を固定しているものを赤にし得るので、「警告 1 件の追加による再導出」として台帳に 1 行置く。
 
 ### 新規の決定論テスト（8.x）
 
@@ -711,14 +713,14 @@ log-first（`.kiro/steering/logging.md`）: 失敗は `error!`＋`Err`、縮退�
 rg -n "1\.25" crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka-emo-text/examples doc/COMPAT_ARCHITECTURE.md .kiro/specs/areka-P0-emo-text-line-height-canon/design.md \
   | rg "line_pitch|行送り|係数" | rg -v "旧式|本仕様で改訂|履歴"
 ```
-期待 0 件。除外（R2.4）: DPI 拡大率 k の `1.25`（`region.rs:710-731`・`tests/scale_invariance_test.rs`・`crates/areka/src/placement/`）は第 2 段の絞り込みで自然に落ちる。
+期待 0 件。除外（R2.4）: DPI 拡大率 k の `1.25`（`region.rs:710-731`・`tests/scale_invariance_test.rs`・`crates/areka/src/placement/`）は第 2 段の絞り込みで自然に落ちる。第 3 段の除外語（`旧式|本仕様で改訂|履歴`）は現行式を述べる行に偶然含まれ得るため、第 2 段までの残り行を一覧に出して目視で「すべて履歴か注記つき引用である」ことを確認し、その一覧を DoD の証跡に添える。
 
 ## 9. 設計判断（研究記録 `research.md` §11 の要約・本書が正本）
 
 | # | 判断 | 内容と根拠 |
 |---|---|---|
 | DD-1 | 第一仮説 α（セル丈） | GDI `lfHeight` 正値の慣習・相方側 3 行が式から収まる・インク丈 1 量で β と弁別できる（`research.md` §4.1）。確定は §4.2 の手順 |
-| DD-2 | `line_pitch = font.height + line_gap`・`ceil` なし | 両項とも整数 px。`\n[ratio]` の端数は従来どおり |
+| DD-2 | `line_pitch = font.height + line_gap`・`ceil` なし | 両項とも整数 px。`\n[ratio]` の端数は従来どおり。`TextLayerConfig` のフィールドの形（定数 `line_gap` か比率 `line_gap_ratio` か）は §4.2 手順 2 の実測（α2／α3 の弁別）後に確定する。α3 なら `line_pitch = font.height + round(font.height × r)` とし、定義点が 1 つであることは変わらない |
 | DD-3 | 「2 つの em」を `FontBinding { font_height, dwrite_em }` で分ける | 名前の取り違えを型で塞ぐ。`try_create_format` の引数名も `dwrite_em` |
 | DD-4 | `SetLineSpacing` は使わない（研究 A2 不採用） | 行 TextLayout は 1 行ずつ箱 `font_height` で組む（`draw.rs:614-620`）ので A1 だけで 1 行＝セル丈に収まる。wintf ラッパの拡張も不要 |
 | DD-5 | `line_box_height` を trait から撤去 | セル丈解釈では恒等（＝`font_height`）。実装が 2 つとも定数関数になる口は残さない（Simplification） |
@@ -756,7 +758,7 @@ rg -n "1\.25" crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka
 ### 11.3 登記（6.7・6.9・9.4・10.3）
 
 - `.kiro/specs/areka-P0-balloon-canon-residue/brief.md` に本仕様からの追加登記節（番号は着地時に末尾採番を再確認・現在の末尾は 13）: **項目 N**「`wordwrappoint` が描画範囲の外に解決されるバルーン定義（`emo2-kakukaku` の `balloonk0s.txt` が `wordwrappoint.x` を上書きしない）——areka は hard で折り返し警告 1 回・fixture は改変しない」／**項目 N+1**「行末禁則文字のぶら下がり（折返し基準を超えてよいが描画範囲は超えない・本仕様は未実装）」。
-- `.kiro/specs/areka-P0-text-decoration-canon/brief.md` に相互参照 3 点: (1) 追加登記 4 は本仕様が引き受けなかった（式不変・値の再導出のみ）(2) `\f[height,N]`／`+N`／`N%` は本仕様の `font.height` 意味論（セル丈）を継承する (3) `draw.rs` の計測部は本仕様が `metrics.rs` へ先取り分割した（残りの分割は decoration の前提のまま）。禁則遅延の引受先を residue にした旨も一言。
+- `.kiro/specs/areka-P0-text-decoration-canon/brief.md` に相互参照 3 点: (1) 追加登記 4 は本仕様が引き受けなかった（式不変・値の再導出のみ）(2) `\f[height,N]`／`+N`／`N%` は本仕様の `font.height` 意味論（セル丈）を継承する (3) `draw.rs` の計測部は本仕様が `metrics.rs` へ先取り分割した（残りの分割は decoration の前提のまま）。`measure_cell_metrics`／`derive_dwrite_em` は family 単位の純関数なので、W13 で `\f[name]`／`\f[height]` が per-run になったときも family ごとに `cell_ratio` を引いてそのまま使える。禁則遅延の引受先を residue にした旨も一言。
 - `.kiro/steering/roadmap.md:73`（挙動バグ行）を「✅ 解決」・`:91`（W12 A′）を完了へ。
 
 ## 12. コミット順（9.6・9.5）

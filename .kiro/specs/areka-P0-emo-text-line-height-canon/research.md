@@ -92,10 +92,10 @@ ResolvedBalloonText{font, region, mode, wrap}
 
 ### 3.3 行送り・行ボックス丈・フォントサイズに数値依存する既存テスト（洗い出し・R7.1）
 
-`grep "1\.25|1\.33|37\.24|line_pitch"` で当たった 30 ファイル（DPI 拡大率 `k=1.25` としての出現を含む・R7.1 の列挙より広い）:
+`grep "1\.25|1\.33|37\.24|line_pitch"` で当たった 30 ファイル＋設計バリデーション（2026-09-05・重要指摘 2）で追加した 2 ファイル＝**32**（DPI 拡大率 `k=1.25` としての出現を含む・R7.1 の列挙より広い。着手時は crate 全域の `rg` を入口にして漏れを再確認する）:
 
 - 純粋層（`FixedMetrics` の 1.25／1.33 依存）: `layout_wrap_tests.rs`（26 箇所）・`layout_segmented_tests.rs`（10）・`layout_visible_window_tests.rs`（ピッチ 13 前提・`:10-80`）・`layout_cursor_tests.rs`・`layout_cursor_center_origin_tests.rs`・`layout_cursor_overflow_tests.rs`（`13.0`・`23.0` 等）・`layout_cursor_vertical_tests.rs`・`layout_cursor_vertical_canon_tests.rs`・`layout_cursor_wiring_tests.rs`・`cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs`／`cursor_tag_test_support.rs:21`（`LINE_PITCH = 13`）・`state_cue_apply_tests.rs`・`state_reveal_tests.rs`・`choice_tests.rs`（17・帯の clamp）・`viewbox_axis_tests.rs`・`viewbox_dirty_tests.rs`・`viewbox_plan_commit_tests.rs`・`actor_tests.rs`・`actor_choice_contract_tests.rs`・`actor_scale_refresh_tests.rs`
-- COM 層／読み戻し: `draw_format_metrics_tests.rs`（`line_pitch(10)=13`・`line_box_height(28)=37.24`・係数 2.0 の非既定検査 `:400-410`）・`viewbox_draw_frame_render_tests.rs`・`viewbox_draw_live_diff_tests.rs`（`:455,476` の容量式）・`viewbox_draw_choice_hover_tests.rs`・`viewbox_draw_png_dump_tests.rs`（14）
+- COM 層／読み戻し: `draw_format_metrics_tests.rs`（`line_pitch(10)=13`・`line_box_height(28)=37.24`・係数 2.0 の非既定検査 `:400-410`）・`viewbox_draw_frame_render_tests.rs`・`viewbox_draw_live_diff_tests.rs`（`:455,476` の容量式）・`viewbox_draw_choice_hover_tests.rs`・`viewbox_draw_png_dump_tests.rs`（14）・**追加**: `draw_oracle_tests.rs:430`（ＭＳ ゴシック 10・pitch 13・`validrect.bottom 40` で 4 行目があふれる前提）・`viewbox_draw_oracle_regression_tests.rs:11,:112`（font 28・pitch 35・「行間 28..35」前提）
 - `tests/`: `draw_readback_test.rs:72`（pitch 15）・`viewbox_scroll_test.rs:32,66-80`（`PITCH = 15`・`const _: () = assert!` の容量検査）・`viewbox_blit_spike.rs:66-74`・`pipeline_test.rs`（7）・`scale_invariance_test.rs`（k=1.25 が主・行数不変の検査 `:325-365,462`）・`emo2_fixture_e2e_test.rs`・`choice_fixture_test.rs`
 - example: `examples/emo-text-layer/scenario.rs:9-30`（「validrect 320×122・font 28・pitch 35」「横書き容量 3 行・縦書き 9 列」「`EXPOSURE_BAND_DRAW_BOUND = 3`」）・`drive.rs:371-375`（`line_pitch` を実行時に読む＝自動追随）
 - 他クレート: `crates/areka/src/emo2_boot/spine_conformance_script.rs:452`（コメントのみ）・`crates/areka` の 8 テストファイルは `TextLayerConfig::default()` を渡すだけ（field 名変更時はコンパイルのみ影響）
@@ -351,3 +351,18 @@ Research Needed（設計フェーズで消化）:
 | 5 | k 2 の SSP 描画方式 | 実測で k 2／k 1.5 の両方を読み、決定手順 2 で整合を検査 |
 | 6 | 縮退既定値 | 決定（DD-10・比 1.0＋警告） |
 | 7 | `\f[height]` の継承 | decoration brief への登記で引き渡す（`design.md` §11.3） |
+
+## 12. 設計ディスカッションの分類結果（2026-09-05）
+
+設計バリデーション（`design-validation.md`・GO 条件つき）の重要指摘 2 件・軽微 7 件と、コントローラの精読で見つかった 1 件を分類した記録。
+
+**A: 自明な修正（design.md へ反映済み・コミット `docs(...): fix obvious issues in design`）**
+
+- 重要指摘 1: 行間の既定値の「定数（α2）」と「フォント比例（α3）」を弁別するため、§4.2 に α3 と `font.height` 2 水準の決定手順、§5.3 に台本 S8（`\f[height,14]`／`56`）、DD-2 に `TextLayerConfig` の形は実測後に確定する旨を追記。
+- 重要指摘 2: 再導出台帳の入口を crate 全域の `rg` へ改め、`draw_oracle_tests.rs:430`・`viewbox_draw_oracle_regression_tests.rs:11,:112` を台帳 C へ追加（計 32 ファイル・§3.3 も更新）。R7.4 のトレースを同ファイルへ。要件 7.1 の列挙も 32 へ。
+- 軽微 1（警告追加によるログ件数テストの再導出）・2（帯＝セル丈の前提は R5.6 で固定）・3（バルーン切替の手動代替）・4（Revalidation Triggers の「実装」→「消費」）・5（R2.4 の除外語の目視確認）・6（Yu Gothic UI を使うテストは文字送りも変わる）・7（`measure_cell_metrics`／`derive_dwrite_em` は family 単位＝W13 で再利用可）。
+- コントローラ所見: `TextRegion::resolve` の警告は装着だけでなく k 再追従（`actor.rs:383`）でも 1 回出る——要件 6.7 の「読み込んだとき」に含める旨を DD-9 の本文へ追記。
+
+**B: 開発者確認（1 議題ずつチャットで解決・結果は各議題の末尾に追記）**
+
+- B-1: SSP 実測が開発者の SSP 環境に加える変更の可否——(a) profile の退避と既定への初期化、(b) SSTP 受信の有効化、(c) repo fixture の複製バルーン `emo2-kakukaku-lh` の設置、(d) 実測を実装エージェントが本機で自走してよいか（SSP の起動・SSTP 送信・マウス移動・画面読み取り）。
