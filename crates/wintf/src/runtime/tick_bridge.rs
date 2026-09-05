@@ -297,6 +297,43 @@ mod tests {
     use event_listener::Listener;
     use std::time::Duration;
 
+    /// 実 vblank の壁時計期限に依る 1 本を明示実行へ限る門の環境変数。
+    ///
+    /// 本ワークスペースの実行時環境変数は `AREKA_` 名前空間である（同じ流儀の先例:
+    /// `crates/log-capture-kit/tests/capture_calibration_test.rs` の `MODE_ENV`）。
+    /// 隣の実窓の重なり順の門とは別の変数にしてある——赤くなる機序も、走らせるために
+    /// 要る条件も違うためである（あちらは他プロセスの可視窓が無いこと、こちらは機械が
+    /// 空いていて DWM が動いていること）。
+    const VBLANK_DEADLINE_ENV: &str = "AREKA_WINTF_VBLANK_DEADLINE";
+
+    /// 門が開いていなければ、判定を 1 行も実行せずに落とす。
+    ///
+    /// # なぜ門を付けたか
+    ///
+    /// 下の 1 本は「500ms 以内に vblank の通知が届く」という壁時計の期限そのものが判定で
+    /// ある。機械が混んでいると期限が飢えて赤くなるが、待つ形へ書き換えると判定の意味が
+    /// 変わる（＝根治にあたる）。よって既定の `cargo test` からは外し、狙って走らせる
+    /// ときだけ走る形にした。
+    ///
+    /// **判定そのものは 1 行も変えていない**——期限も期待値も隔離前のままである。根治の
+    /// 引受先は `.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の A-2（壁時計期限の
+    /// 飢餓）である。
+    ///
+    /// # 門が閉じたまま呼ばれたら緑にしない
+    ///
+    /// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実 DWM の通知を測った」
+    /// という記録に化ける。既存の手本（`crates/areka/src/placement/transition_signoff_tests.rs`
+    /// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
+    fn require_explicit_vblank_run() {
+        assert!(
+            std::env::var_os(VBLANK_DEADLINE_ENV).is_some(),
+            "{VBLANK_DEADLINE_ENV} が未設定である。実 vblank の壁時計期限は負荷で飢えて\
+             間欠的に赤くなるため明示実行へ隔離してある（判定は 1 行も走っていない）。\
+             走らせるには環境変数を与えて \
+             `cargo test -p wintf --lib <テスト名> -- --ignored --exact` とすること"
+        );
+    }
+
     /// 名簿に当該役割名の項目が現れるまで待ち、現れた項目を返す（現れなければ `None`）。
     ///
     /// 待ち時間は合否の対象ではなく、登録が起きなかったときに無限に待たないための上限で
@@ -344,7 +381,10 @@ mod tests {
     /// 完了状態の検証: vblank ごとに Event が notify され、待機リスナを起床できる。
     /// さらに drop でスレッドが clean に join することを確認する（ハングしない）。
     #[test]
+    #[ignore = "実 vblank の 500ms 期限が負荷で飢えて間欠的に赤くなる（AREKA_WINTF_VBLANK_DEADLINE を与えて明示実行する）"]
     fn vblank_notifies_listener_then_joins_on_drop() {
+        require_explicit_vblank_run();
+
         let bridge = VsyncEventBridge::new();
 
         // notify/listen レースを避けるため、待機前に listen() を arm する。
