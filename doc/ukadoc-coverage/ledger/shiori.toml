@@ -8449,1435 +8449,3178 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_resource:-:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 右クリックのメニューに並ぶ Language の項目の文言。正典は変更できないと記しており、
+実際のリソースの名前は本文からは分からない。
+見出しが名前になっていない: 正典の見出しがハイフン 1 文字なので、この行の id もハイフンの
+ままである。語彙を落とさないため crates/areka-sylphya/src/vocab/shiori_resource.rs の
+SHIORI_RESOURCE_IDS もこれを "-" のまま持っている。引くべき名前が分からないので、画面の
+材料として数えたボタンの文言 99 件には含めない。
+"""
 
 [entry."ukadoc:list_shiori_resource:_28_5165_529b_30dc_30c3_30af_30b9_7a2e_985e_29.defaultleft_20_28_5165_529b_30dc_30c3_30af_30b9_7a2e_985e_29.defaulttop:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 入力箱を最初に出す画面上の座標。left が X、top が Y で、箱の種類は話しかけ箱・台本箱・
+住所欄・教え込み箱・日付・時刻・IP・つまみ・合言葉・汎用の 10 通りある。
+1 項目に 2 つの名前: 正典はこの 1 項目の見出しに .defaultleft と .defaulttop の 2 つの名前を
+全角の空白で並べて載せている。担当 159 件のうち、1 つの見出しに 2 つの名前が入っているのは
+この 1 件だけである。
+語彙表との突き合わせ: crates/areka-sylphya/src/vocab/shiori_resource.rs の
+SHIORI_RESOURCE_IDS はこの見出しを半角の空白で写している。担当 159 件のうち素の綴りで
+食い違うのはこの 1 件だけで、空白の全角・半角の違いを同じものとみなすと 159 件すべてが
+逐語で一致する。
+既にあるカタログとの差: doc/shiori/fragments/resources/02.ghost_info.toml はこの項目を
+boxname.defaultleft という名前に置き換えて 1 件だけ載せており、.defaulttop の側が落ちて
+いる。断片の側の件数は 159 のままなので、件数を数えるだけでは気づけない。
+"""
 
 [entry."ukadoc:list_shiori_resource:activaterootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:addressbarbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:aistatebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:alignrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:alwaysstayontopbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:alwaystrayiconvisiblebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:balloon_tooltip:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 選択肢の上にマウスを乗せたときに出す小さな吹き出しの文字。選択肢の文言と ID が
+参照値で渡る。
+"""
 
 [entry."ukadoc:list_shiori_resource:balloonhistorybutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:balloonrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:biffallbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:biffbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:calendarbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:callghosthistorybutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:callghostrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:callsstpsendboxbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.defaultleft:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 2 人目以降または \\p[*] 側の画面のどこに既定で置くかの横の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.defaulttop:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 2 人目以降または \\p[*] 側の画面のどこに既定で置くかの縦の座標（自由に動かせる設定のときだけ効く）。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.defaultx:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 2 人目以降または \\p[*] 側の絵を置くときの基準になる横の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.defaulty:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 2 人目以降または \\p[*] 側の絵を置くときの基準になる縦の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.applybindtoself:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 2 人目以降または \\p[*] 側の右クリックのメニューそのものの出し方。メニューの形を変えたときに、
+着せ替えの項目をどのスコープのものにするかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.type:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 2 人目以降または \\p[*] 側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.visible:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 2 人目以降または \\p[*] 側の右クリックのメニューそのものの出し方。出すか出さないかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.recommendbuttoncaption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。2 人目以降または \\p[*] 側のおすすめ一覧を開く項目 に出る言葉である。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.recommendsites.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。2 人目以降または \\p[*] 側の
+おすすめ一覧を開く項目に出る言葉である。
+数え方の注意: 名前に recommendsites を含むので、おすすめ・ポータルの一覧そのもの
+（4 件）と一緒に数えると二重に数えてしまう。ここではボタンの文言の側に数える。
+"""
 
 [entry."ukadoc:list_shiori_resource:char_2a.recommendsites:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 2 人目以降または \\p[*] 側のおすすめ一覧の中身そのもの。項目名・行き先・バナーの画像・選んだときに動く台本が
+1 本の文字列に詰めて返る。
+"""
 
 [entry."ukadoc:list_shiori_resource:charsetbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:closeballoonbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:closebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:collisionvisiblebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:configurationbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:configurationrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:craftman:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: SHIORI の作者の名前（7 ビット文字だけ）。読み込みの直後にベースウェアが引く。
+"""
 
 [entry."ukadoc:list_shiori_resource:craftmanw:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: SHIORI の作者の名前（多バイトの文字も使える方）。読み込みの直後にベースウェアが
+引く。
+"""
 
 [entry."ukadoc:list_shiori_resource:debugballoonbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:definedsurfaceonlybutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:dictationbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:dressuprootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:duibutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:enableballoonmovebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:firststaffbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:getaistate:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: ゴーストの内側の様子（喋った数・好みの度合いなど）を図に描くための値。表示する値・
+ラベル・加算値・最大値を 1 本の文字列に詰めて返す。
+"""
 
 [entry."ukadoc:list_shiori_resource:getaistateex:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: getaistate の図を何枚も描ける方。何枚目を求められているかが参照値で渡り、その先が
+無ければ値なしで返す。
+"""
 
 [entry."ukadoc:list_shiori_resource:ghostexplorerbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:ghosthistorybutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:ghostinstallbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:ghostrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:headlinesensehistorybutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:headlinesenserootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:helpbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:hidebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:historyrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:homeurl:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: ネットワーク更新の取り出し先。descript.txt にも書けるので、どちらが優先されるかは
+descript.txt の側の説明が持つ。
+"""
 
 [entry."ukadoc:list_shiori_resource:inforootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.defaultleft:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 相方側の画面のどこに既定で置くかの横の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.defaulttop:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 相方側の画面のどこに既定で置くかの縦の座標（自由に動かせる設定のときだけ効く）。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.defaultx:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 相方側の絵を置くときの基準になる横の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.defaulty:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 相方側の絵を置くときの基準になる縦の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.popupmenu.applybindtoself:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 相方側の右クリックのメニューそのものの出し方。メニューの形を変えたときに、
+着せ替えの項目をどのスコープのものにするかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.popupmenu.type:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 相方側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.popupmenu.visible:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 相方側の右クリックのメニューそのものの出し方。出すか出さないかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.recommendbuttoncaption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。相方側のおすすめ一覧を開く項目 に出る言葉である。
+"""
 
 [entry."ukadoc:list_shiori_resource:kero.recommendsites:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 相方側のおすすめ一覧の中身そのもの。項目名・行き先・バナーの画像・選んだときに動く台本が
+1 本の文字列に詰めて返る。
+"""
 
 [entry."ukadoc:list_shiori_resource:leavepassivebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:legacyinterface:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 右クリックのメニューに古い形の切り替え項目を出すかどうか。正典は materia582 でのみ
+働くと記している。
+"""
 
 [entry."ukadoc:list_shiori_resource:log_path:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: SHIORI が書き出すログの置き場。開発者向けの窓から開くときに引く。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.background.bitmap.filename:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの、背景に敷く画像。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.background.font.color.b:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの背景の側に載せる文字の色のうち、青の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.background.font.color.g:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの背景の側に載せる文字の色のうち、緑の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.background.font.color.r:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの背景の側に載せる文字の色のうち、赤の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.disable.font.color.b:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの選べない項目の文字の色のうち、青の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.disable.font.color.g:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの選べない項目の文字の色のうち、緑の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.disable.font.color.r:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの選べない項目の文字の色のうち、赤の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.foreground.bitmap.filename:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの、前景に重ねる画像。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.foreground.font.color.b:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの前景の側に載せる文字の色のうち、青の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.foreground.font.color.g:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの前景の側に載せる文字の色のうち、緑の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.foreground.font.color.r:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの前景の側に載せる文字の色のうち、赤の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.frame.color.b:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの枠の色のうち、青の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.frame.color.g:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの枠の色のうち、緑の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.frame.color.r:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの枠の色のうち、赤の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.separator.color.b:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの区切り線の色のうち、青の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.separator.color.g:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの区切り線の色のうち、緑の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.separator.color.r:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの区切り線の色のうち、赤の濃さ。
+"""
 
 [entry."ukadoc:list_shiori_resource:menu.sidebar.bitmap.filename:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューを絵で描くときの、脇に立てる画像。
+"""
 
 [entry."ukadoc:list_shiori_resource:messengerbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:name:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: SHIORI 自身の名前（ゴーストの名前ではない）。読み込みの直後にベースウェアが引く。
+"""
 
 [entry."ukadoc:list_shiori_resource:other_homeurl_override:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 他のゴーストやシェル・バルーンをまとめて更新するときに、更新の取り出し先を差し替える。
+差し替えが要らないときは値なしで返す。
+"""
 
 [entry."ukadoc:list_shiori_resource:pluginhistorybutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:pluginrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:portalrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:purgeghostcachebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:quitbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:rateofuseballoonbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:rateofusebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:rateofuserootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:rateofusetotalbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:readmebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:readmebuttoncaption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。読み物（Read Me!）を開く項目 に出る言葉である。
+"""
 
 [entry."ukadoc:list_shiori_resource:recommendrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:regionenabledbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:reloadinfobutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:resetballoonpositionbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:resettodefaultbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.defaultleft:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 本体側の画面のどこに既定で置くかの横の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.defaulttop:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 本体側の画面のどこに既定で置くかの縦の座標（自由に動かせる設定のときだけ効く）。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.defaultx:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 本体側の絵を置くときの基準になる横の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.defaulty:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 本体側の絵を置くときの基準になる縦の座標。
+スコープの違い: sakura. は本体側・kero. は相方側・char*. は 2 人目以降または \\p[*] 側で、
+新旧の関係ではなく指す相手の違いである。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.popupmenu.applybindtoself:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 本体側の右クリックのメニューそのものの出し方。メニューの形を変えたときに、
+着せ替えの項目をどのスコープのものにするかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.popupmenu.type:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 本体側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.popupmenu.visible:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 本体側の右クリックのメニューそのものの出し方。出すか出さないかを決める。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.portalbuttoncaption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。本体側のポータル一覧を開く項目 に出る言葉である。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.portalsites:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 本体側のポータル一覧の中身そのもの。項目名・行き先・バナーの画像・選んだときに動く台本が
+1 本の文字列に詰めて返る。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.recommendbuttoncaption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。本体側のおすすめ一覧を開く項目 に出る言葉である。
+"""
 
 [entry."ukadoc:list_shiori_resource:sakura.recommendsites:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 本体側のおすすめ一覧の中身そのもの。項目名・行き先・バナーの画像・選んだときに動く台本が
+1 本の文字列に詰めて返る。
+"""
 
 [entry."ukadoc:list_shiori_resource:scriptlogbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:shellrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:shellscaleotherbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:shellscalerootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:sntpbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchactivatewhentalkbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchactivatewhentalkexceptupdatebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchautobiffbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchautoheadlinesensebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchblacklistingbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchcompatiblemodebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchconsolealwaysvisiblebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchconsolevisiblebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchdeactivatebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchdontactivatebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchdontforcealignbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchduivisiblebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchforcealignfreebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchforcealignlimitbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchignoreserikomovebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchlocalsstpbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchmovetodefaultpositionbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchproxybutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchquietbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchreloadbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchreloadtempghostbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchremotesstpbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:switchtalkghostbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:systeminfobutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:termsbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:texttospeechbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:tooltip:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: 絵の上にマウスを乗せたときに出す小さな吹き出しの文字。カーソルの座標・どちら側か・
+当たり判定の名前が参照値で渡る。
+"""
 
 [entry."ukadoc:list_shiori_resource:updatebutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:updatebuttoncaption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ネットワーク更新を始める項目 に出る言葉である。
+"""
 
 [entry."ukadoc:list_shiori_resource:updatefmobutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:updateplatformbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:useorigin1:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: ネットワーク更新でファイルの数を 1 から数えるか 0 から数えるか。
+"""
 
 [entry."ukadoc:list_shiori_resource:username:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka は起動の途中でこのリソースを実際に引いている。
+ログ: 引く直前に trace のログ（shiori_request）が 1 行出る。204 や空の応答・照会の失敗でも起動は
+止めず、値が無いものとして先へ進む。
+縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「%username の SHIORI Resource
+username GET が 204 No Content／空値を応答した場合の値」。照会そのものは行われるが、値が無いときは
+既定値へ決定論的に縮退する。既定値の唯一の定義点は areka_sakura::sysvar::DEFAULT_USERNAME で、
+kanade は不在をそのまま渡すだけで既定値を書かない。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+resource_username、および crates/areka-kanade/src/actor.rs の round_trip_request。
+語彙表: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS にも
+この名前が載っている。担当 159 件のうち実際に引いているのはこの 1 件だけである。
+"""
 
 [entry."ukadoc:list_shiori_resource:utilityrootbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:vanishbutton.caption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。ゴーストがこの名前で自分の言い回しを
+返すと、その項目に出る言葉がそれに替わる。
+"""
 
 [entry."ukadoc:list_shiori_resource:vanishbuttoncaption:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 右クリックのメニューに並ぶ項目の文言。消滅通告の項目 に出る言葉である。
+"""
 
 [entry."ukadoc:list_shiori_resource:vanishbuttonvisible:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = ""
+priority = "C1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
+文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
+らしい見え方が出ないという形で現れる。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+画面の材料: 消滅通告の項目を右クリックのメニューに出すかどうか。項目に出る言葉そのものは
+vanishbuttoncaption が持つ。
+"""
 
 [entry."ukadoc:list_shiori_resource:version:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
+した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
+起きていないようにしか見えない。
+ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
+無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
+いないので、引かれなかったことを書き留める判定にも届かない。
+根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
+載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+内容: SHIORI 自身の版。読み込みの直後にベースウェアが引く（ゴーストの版でも
+SHIORI のやり取りの版でもない）。
+"""
 
 [entry."ukadoc:memo_shiorievent"]
 status = "unclassified"
