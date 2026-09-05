@@ -1032,7 +1032,7 @@ lists brief:22 が切り出しを明記していることを踏まえると、**
 | `doc/ukadoc-coverage/briefing-property.md` | 新設（この文書） |
 | `crates/areka-ghost/src/sylphya_wiring.rs` | ＋2 ／ −0（正典 URL のコメント 2 行） |
 | `crates/ukadoc-survey/tests/consistency/checks.rs` | ＋23 ／ −15（上の 2 番で書いた受け渡し） |
-| 本調査自身の文書 6 本 | `.kiro/specs/areka-P0-ukadoc-survey-property/` の下（`requirements.md`・`design.md`・`design-validation.md`・`research.md`・`tasks.md`・`spec.json`） |
+| 本調査自身の文書 6 本 | `.kiro/specs/completed/areka-P0-ukadoc-survey-property/` の下（`requirements.md`・`design.md`・`design-validation.md`・`research.md`・`tasks.md`・`spec.json`） |
 
 読む人に渡るのは上の 5 本で、残る 6 本は本調査自身の要件・設計・手順の記録である。
 **使い捨ての手順は 1 本も入っていない。** 作業に使った手順はすべて repo の外の一時領域に置き、

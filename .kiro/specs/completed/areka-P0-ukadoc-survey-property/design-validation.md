@@ -1,7 +1,7 @@
 # 設計検証レポート: areka-P0-ukadoc-survey-property
 
 - 実施日: 2026-09-03
-- 対象: `.kiro/specs/areka-P0-ukadoc-survey-property/design.md`（`phase = design-generated`）
+- 対象: `.kiro/specs/completed/areka-P0-ukadoc-survey-property/design.md`（`phase = design-generated`）
 - 突合先: 同 spec の `requirements.md`／`research.md`／`brief.md`、上流 `areka-P0-ukadoc-survey-toolkit/requirements.md`（要件 2〜7・付録 A・付録 B）、`.kiro/steering/`、ワークツリー内のソースと `doc/COMPAT_ARCHITECTURE.md`、ukadoc スナップショット（`%APPDATA%\npm\node_modules\ukagaka-doc-mcp\data\index.json`）
 - 実行形態: 非対話（開発者への質問を行わず、判定まで出す）
 
