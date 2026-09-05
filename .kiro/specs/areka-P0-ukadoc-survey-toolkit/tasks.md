@@ -302,7 +302,7 @@
   - _Depends: 10_
   - _Requirements: 3.3a, 1.8_
 
-- [ ] 12. 完了報告の残件を片付ける（開発者指示 2026-09-05「残件は対応が必要なら深掘りして対応せよ」）
+- [x] 12. 完了報告の残件を片付ける（開発者指示 2026-09-05「残件は対応が必要なら深掘りして対応せよ」）
 - [x] 12.1 要件 付録 A の記入例を実在 id へ訂正し、記入例がカタログに実在して読めることを常時テストで守る
   - 親が要件 A.1／A.3 と設計 D-10 の注記を訂正済み（未コミット・この task の差分に含める）。実装役は ⑴ `doc/ukadoc-coverage/README.md` の「⚠ 要件の記入例にある id は実データに存在しない」節を訂正後の姿（記入例は実在 id・id は符号化済みなので写す・逆斜線を書くのは `note` の中だけ）に書き換える ⑵ `crates/ukadoc-survey/tests/consistency/examples.rs` を新設し、要件 A.1 の TOML ブロックと README の TOML ブロックに現れる `ukadoc:` 形の id が**すべて**カタログに実在すること、A.1 のブロックが道具の台帳読み手（`ledger::read::read`）で property の台帳として読めて前置きの pages が割り当て表と一致し項目が id 順であること、`alias_of` の指す先が実台帳で `alias` でないこと、を主張する。空振り防止に各文書の id 件数の下限（A.1 は 4）を釘付けする
   - 読むだけ。ファイルも一時ディレクトリも作らない。`tests/consistency/checks.rs`（985 行）には触れない
@@ -320,7 +320,7 @@
   - _Depends: 11_
   - _Boundary: crates/ukadoc-survey/src/cli/{generate.rs,generate_tests.rs}・design.md（親）_
   - _Requirements: 3.3, 3.3a, 1.8_
-- [ ] 12.3 `tests/consistency/checks.rs` の摂動の道具を `consistency/perturb.rs` へ分け、行数上限の余白を取り戻す
+- [x] 12.3 `tests/consistency/checks.rs` の摂動の道具を `consistency/perturb.rs` へ分け、行数上限の余白を取り戻す
   - 写し `Perturbed` と補助関数（`anchor_id`・`id_of`・`fabricated_entry`・`seen`・`expect_exactly`・`evidence_with_source_line`・摂動用の綴り定数など）を `tests/consistency/perturb.rs` へ移し、`checks.rs` は `use super::perturb::…` で引く。テストの本体・名前・件数は 1 つも変えない（挙動不変の移動）。`checks.rs` 冒頭の doc コメントの「このファイルの後半」等の自己言及は移動後の姿に直す
   - 完了時: `cargo test -p ukadoc-survey` の件数が移動前と同数、`checks.rs` が 800 行以下、新設ファイルも 1,000 行未満、`cargo test --workspace` が緑
   - _Depends: 12.1_
@@ -490,3 +490,4 @@
   - property ドメインには ukadoc が「旧称」と呼ぶ真の別名の対が無い（旧名は見出しとして残らないので、カタログの項目にならない。真の別名は assets の `overlayfast`→`overlay-fast` 等）。A.1 の alias 例は「index 指定との互換用の記述」と正典が注記する`mouse????list(当たり判定名).name` を使い、仕分けは見本である旨を TOML のコメントに書いた。要件のパスは `examples.rs` の定数 1 つ（`/kiro-complete` のステップ 5-2 がアーカイブ移動で書き換える対象・コメントに明記）。残る取り残し（範囲外）: `tests/consistency.rs:9` の文が兄弟ファイルを `checks.rs` しか挙げていない——12.3 で直す。
 - 12.2: `ledger_init()` を 1 行の配線にし、判断と順番を `ledger_init_with(read_existing, write)` へ移した。在中テスト 3 本（実 repo のカタログ＋実際の取り寄せ＋記録するだけの書き手で呼び、書き出される 4 組がコミット済み台帳とバイト一致＝不動点／4 本目の取り寄せで失敗すると書き手が 0 回かつ 3 本目までの取り寄せは起きている／書き手の失敗が変わらず返り書き出しは 1 回）。摂動 3 本（本文を空に・書き先を取り違え・計画せずにドメインごとに読んで即書く直列ループへ置換）をレビュアーも自分で打ち、それぞれ意図したテストだけが赤（直列ループは `left: 3 / right: 0`）。実データ通し確認は台帳 4 本の sha256 が前後で不変。常時テストが届かないのは `ledger_init()` の 1 行（どの取り寄せ・どの書き手を渡すか）だけになった。11 の「残る未検証 2 か所」のうち⑵は解消、⑴は 1 行の配線に縮んだ。
   - 不動点テストが比べるのは復帰文字を落とした本文どうし（設計 D-6 の正規化・`io/files.rs`）で、生バイトではない。この repo は `core.autocrlf=true` で `.gitattributes` が無いので新しい clone では台帳が CRLF で取り出され `ledger-init` が LF で書き直す。要件 3.3a の「既存の塊を変えない」は正規化後の本文で語られており、欠陥ではない（レビュアー所見）。
+- 12.3: 摂動の道具（写し `Perturbed`・`anchor_id`・`id_of`・`fabricated_entry`・`expect_exactly`・`evidence_with_source_line`・摂動用の綴り定数 6 つ）を `tests/consistency/perturb.rs`（214 行・すべて `pub(super)`）へ移し、`checks.rs` は 985→800 行。テスト名の集合・`#[test]` 19 本・assert の数（25／16／18）は移動前後で完全に保存（レビュアーが HEAD と語単位で突き合わせ）。製品側を弱める摂動 2 本（`structure.rs` の実在判定・`content.rs` の別名連鎖判定）は移動後も同じテストが赤。`tests/consistency.rs` の兄弟一覧（12.1 レビュアー指摘の古い一文）も 5 本の正しい列挙へ直した（宣言のみは維持）。⚠ `checks.rs` は 800 行ちょうどで、⑶ の事例群（283 行以降）が今後も伸びる側。次に摂動の事例を 3 本以上足すときは事例側をもう一段分ける（例 `perturb_cases.rs`）。

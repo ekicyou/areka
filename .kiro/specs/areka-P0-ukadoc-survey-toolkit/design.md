@@ -367,7 +367,8 @@ crates/ukadoc-survey/
     ├── consistency.rs               # 常時走る整合検査の入口（要件 6.1）
     └── consistency/
         ├── mod.rs                   # repo の実データを読み込む共通処理
-        ├── checks.rs                # 6.3〜6.8 6.10 7.4 を実データで走らせる
+        ├── checks.rs                # 6.3〜6.8 6.10 7.4 を実データで走らせる（主張の本体）
+        ├── perturb.rs               # 実データの写しを 1 か所だけ壊す道具（2026-09-05・task 12.3 で checks.rs から分離）
         ├── non_vacuity.rs           # 6.13 の「検査対象が 0 件でない」
         ├── examples.rs              # 要件付録 A.1 と README の記入例がカタログに実在し読める（2026-09-05・task 12.1）
         └── values_md.rs             # 自前の道具の較正 3 本（見出しと 8 テーマの一致・

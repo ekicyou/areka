@@ -20,7 +20,8 @@
 //!    固定する。対象が生まれたら赤になり、書き換えを促す。
 //! ⑶ **1 要件 1 摂動**（このファイルの後半）——実データの写しを 1 か所だけ壊し、
 //!    該当の判定が該当の id と場所つきで赤くなることを要件ごとに確かめる。壊すのは
-//!    メモリ上の写しだけで、repo のファイルには 1 バイトも触れない。
+//!    メモリ上の写しだけで、repo のファイルには 1 バイトも触れない。壊す道具そのもの
+//!    （写しの型・所見の見方・綴りの定数）は兄弟の `consistency/perturb.rs` にある。
 //!
 //! ⑶ が要る理由は ⑵ が明かす——今日の実データでは 6.5・6.6・6.7・6.8・6.11 の対象が
 //! **0 件**である（正典 URL がまだソースのどこにも置かれておらず、台帳は全行が未分類
@@ -40,43 +41,24 @@
 //!   タスク 8.4 の持ち物である。ここが証拠を作るときは項目 URL を 1 行入れるだけで、
 //!   語彙表経路は通さない。
 
-use std::collections::BTreeMap;
-
-use ukadoc_survey::catalog::{Catalog, CatalogEntry};
-use ukadoc_survey::check::{CheckInput, Finding, FindingKind, render, run};
-use ukadoc_survey::evidence::EvidenceIndex;
+use ukadoc_survey::check::{FindingKind, render, run};
 use ukadoc_survey::evidence::extract::extract;
-use ukadoc_survey::evidence::resolve::resolve;
 use ukadoc_survey::io::{files, paths};
 use ukadoc_survey::ledger::read::read as read_ledger;
-use ukadoc_survey::ledger::{Ledger, LedgerEntry};
-use ukadoc_survey::model::{Domain, EntryId, Link, LinkKind, Status, THEMES};
+use ukadoc_survey::model::{Domain, Link, LinkKind, Status, THEMES};
 
 use super::RepoData;
-
-/// 突き合わせの錨に使う項目 id（`doc/ukadoc-coverage/catalog.toml` に実在する）。
-const ANCHOR_ID: &str = "ukadoc:list_shiori_event:OnBoot:1";
+use super::perturb::{
+    ABSENT_ID, ANCHOR_ID, ASSETS_LEDGER, CATALOG_FILE, Perturbed, SHIORI_LEDGER,
+    UNASSIGNED_PAGE_ID, anchor_id, evidence_with_source_line, expect_exactly, fabricated_entry,
+    id_of,
+};
 
 /// その項目の正典 URL（カタログの綴りを逐語で写したもの）。
 const ANCHOR_URL: &str = "https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1";
 
 /// 走査が届いていることの錨に使うソース（既存の語彙台帳・要件 9.2）。
 const ANCHOR_SOURCE: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
-
-/// カタログの場所（所見の「場所」に載る綴り）。
-const CATALOG_FILE: &str = "doc/ukadoc-coverage/catalog.toml";
-
-/// shiori の台帳の場所。
-const SHIORI_LEDGER: &str = "doc/ukadoc-coverage/ledger/shiori.toml";
-
-/// assets の台帳の場所。
-const ASSETS_LEDGER: &str = "doc/ukadoc-coverage/ledger/assets.toml";
-
-/// カタログにも台帳にも無い id（摂動で持ち込む綴り）。
-const ABSENT_ID: &str = "ukadoc:list_shiori_event:OnNoSuchEventForTheTest:1";
-
-/// 割り当て表に無いページを持つ id（摂動で持ち込む綴り）。
-const UNASSIGNED_PAGE_ID: &str = "ukadoc:no_such_page_for_the_test:Whatever:1";
 
 // ---------------------------------------------------------------------------
 // ⑴ 一括の主張
@@ -300,173 +282,6 @@ fn the_subject_census_says_which_requirements_are_vacuous() {
 // ---------------------------------------------------------------------------
 // ⑶ 1 要件 1 摂動——実データの写しを 1 か所だけ壊す
 // ---------------------------------------------------------------------------
-
-/// 実データの写し。**repo のファイルには 1 バイトも触れない**。
-///
-/// 手を入れるのはこの写しの上だけで、テストが終われば消える。台帳のファイルそのものを
-/// 書き換える確認は人手で 1 度だけ行った——常時テストがファイルを書き換えると、並行に
-/// 走る他のテストがその途中の状態を読む。
-struct Perturbed<'a> {
-    data: &'a RepoData,
-    catalog: Catalog,
-    ledgers: Vec<Ledger>,
-    evidence: EvidenceIndex,
-    domain_reports: BTreeMap<Domain, String>,
-}
-
-impl<'a> Perturbed<'a> {
-    /// 手を入れていない写しを作る。
-    fn of(data: &'a RepoData) -> Self {
-        Self {
-            data,
-            catalog: data.catalog.clone(),
-            ledgers: data.ledgers.clone(),
-            evidence: data.evidence.clone(),
-            domain_reports: data.domain_reports.clone(),
-        }
-    }
-
-    /// 写しから検査の入力を組む。割り当て表とテーマ名は本物をそのまま借りる。
-    fn input(&self) -> CheckInput<'_> {
-        CheckInput {
-            catalog: &self.catalog,
-            ledgers: &self.ledgers,
-            assignment: &self.data.assignment,
-            themes: &THEMES,
-            evidence: &self.evidence,
-            domain_reports: &self.domain_reports,
-        }
-    }
-
-    /// 検査を走らせて所見を取る。
-    fn findings(&self) -> Vec<Finding> {
-        run(&self.input()).findings
-    }
-
-    /// そのドメインの台帳（写し）。
-    fn ledger_mut(&mut self, domain: Domain) -> &mut Ledger {
-        self.ledgers
-            .iter_mut()
-            .find(|ledger| ledger.domain == domain)
-            .unwrap_or_else(|| panic!("{} の台帳が写しに無い", domain.as_key()))
-    }
-
-    /// その台帳の項目 1 つ（写し）。
-    fn entry_mut(&mut self, domain: Domain, id: &EntryId) -> &mut LedgerEntry {
-        let key = id.clone();
-        self.ledger_mut(domain)
-            .entries
-            .get_mut(&key)
-            .unwrap_or_else(|| panic!("{} の台帳に {} が無い", domain.as_key(), key.as_str()))
-    }
-}
-
-/// 錨の id。
-fn anchor_id() -> EntryId {
-    EntryId::parse(ANCHOR_ID).expect("錨の id の形が違う")
-}
-
-/// 綴りから id を作る。
-fn id_of(raw: &str) -> EntryId {
-    EntryId::parse(raw).unwrap_or_else(|err| panic!("{raw} の形が違う: {err}"))
-}
-
-/// カタログに足す作り物の項目。
-///
-/// 版番号は空にする——空なら登場版の判定が見ないので（要件 6.7 の番人）、摂動の
-/// 巻き添えが 1 つ減る。
-fn fabricated_entry(id: &EntryId) -> CatalogEntry {
-    CatalogEntry {
-        id: id.clone(),
-        page: id.page(),
-        title: "テストのために作った見出し".to_owned(),
-        category: "shiori_event".to_owned(),
-        versions: Vec::new(),
-        hash: "0000000000000000".to_owned(),
-        url: format!("https://example.invalid/{}", id.as_str()),
-    }
-}
-
-/// 所見を (種類, id, 場所) の並べ替え済みの一覧にする。
-fn seen(findings: &[Finding]) -> Vec<(String, String, String)> {
-    let mut rows: Vec<(String, String, String)> = findings
-        .iter()
-        .map(|finding| {
-            (
-                finding.kind.as_key().to_owned(),
-                finding
-                    .id
-                    .as_ref()
-                    .map(|id| id.as_str().to_owned())
-                    .unwrap_or_default(),
-                finding.place.clone(),
-            )
-        })
-        .collect();
-    rows.sort();
-    rows
-}
-
-/// 所見の顔ぶれが**ちょうど**これであることと、本文が id と場所を名指すこと
-/// （要件 6.10・6.12）。
-///
-/// 「含む」ではなく「ちょうど」で見る——巻き添えの所見が増えたことに気づけないと、
-/// 摂動が何を起こしたのかを読み違える。id を持たない所見は空文字で書く。
-fn expect_exactly(findings: &[Finding], expected: &[(FindingKind, Option<&str>, &str)]) {
-    let mut want: Vec<(String, String, String)> = expected
-        .iter()
-        .map(|(kind, id, place)| {
-            (
-                kind.as_key().to_owned(),
-                id.unwrap_or_default().to_owned(),
-                (*place).to_owned(),
-            )
-        })
-        .collect();
-    want.sort();
-
-    let body = render(findings);
-    assert_eq!(seen(findings), want, "所見の顔ぶれが違う:\n{body}");
-
-    for (kind, id, place) in &want {
-        if !id.is_empty() {
-            assert!(
-                body.contains(id),
-                "本文が id {id} を名指していない:\n{body}"
-            );
-        }
-        assert!(
-            body.contains(place),
-            "本文が場所 {place} を名指していない:\n{body}"
-        );
-        assert!(
-            body.contains(kind),
-            "本文が種類 {kind} を名指していない:\n{body}"
-        );
-    }
-}
-
-/// ソースの写しに 1 行だけ入れて、証拠の索引を作り直す。
-///
-/// `at` は入れる位置（行番号）で、[`the_check_survives_lines_moving`] がここを動かして
-/// 要件 6.11 を確かめる。repo のファイルには触れない。
-fn evidence_with_source_line(data: &RepoData, path: &str, line: &str, at: usize) -> EvidenceIndex {
-    let mut sources: Vec<(String, String)> = data.sources.clone();
-    let target = sources
-        .iter_mut()
-        .find(|(each, _)| each == path)
-        .unwrap_or_else(|| panic!("走査に {path} が無い"));
-    let mut body: Vec<String> = target.1.lines().map(str::to_owned).collect();
-    let at = at.min(body.len());
-    body.insert(at, line.to_owned());
-    target.1 = body.join("\n");
-
-    let hits: Vec<_> = sources
-        .iter()
-        .flat_map(|(each, text)| extract(each, text))
-        .collect();
-    resolve(&hits, &sources, &data.catalog)
-}
 
 /// 手を入れていない写しが実データと同じく緑であること。
 ///
@@ -852,7 +667,7 @@ fn a_misspelled_theme_turns_red() {
 
 /// 要件 6.10——状態の綴りが 7 つのいずれでもないと、id と場所つきで読み取りが止まる。
 ///
-/// 状態の語彙は検査の段には届かない（[`Ledger`] は語彙を通った値しか持てない）。
+/// 状態の語彙は検査の段には届かない（`Ledger` は語彙を通った値しか持てない）。
 /// だから読み取りの段で確かめる。壊すのは**読み込んだ本文の写し**で、repo の
 /// ファイルには触れない。
 #[test]
