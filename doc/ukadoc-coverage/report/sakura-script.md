@@ -6,13 +6,13 @@
 
 | 状態 | 件数 |
 | --- | ---: |
-| 実装済み | 4 |
-| 語彙のみ | 24 |
-| 縮退 | 0 |
-| 未対応 | 0 |
-| 別名 | 0 |
+| 実装済み | 19 |
+| 語彙のみ | 25 |
+| 縮退 | 3 |
+| 未対応 | 40 |
+| 別名 | 13 |
 | 対象外 | 1 |
-| 未分類 | 313 |
+| 未分類 | 241 |
 | 合計 | 342 |
 
 ## ページ別の状態の分布
@@ -21,17 +21,33 @@
 
 | ページ | 実装済み | 語彙のみ | 縮退 | 未対応 | 別名 | 対象外 | 未分類 | 合計 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| list_sakura_script | 4 | 24 | 0 | 0 | 0 | 1 | 313 | 342 |
+| list_sakura_script | 19 | 25 | 3 | 40 | 13 | 1 | 241 | 342 |
 
 ## SSP 世代別の対応表
 
 | 世代 | 実装済み | 語彙のみ | 縮退 | 未対応 | 別名 | 対象外 | 未分類 | 合計 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 世代不明 | 4 | 24 | 0 | 0 | 0 | 1 | 313 | 342 |
+| 2.3 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
+| 2.6 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
+| 世代不明 | 17 | 25 | 3 | 40 | 13 | 1 | 241 | 340 |
 
 ## 別名の一覧
 
-別名の項目はありません。
+| 別名の id | 指す先の id |
+| --- | --- |
+| ukadoc:list_sakura_script:_5c_a_5bID_5d:1 | ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1 |
+| ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_5d:1 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1 |
+| ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_5d:1 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1 |
+| ukadoc:list_sakura_script:_5c_s:1 | ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1 |
+| ukadoc:list_sakura_script:_5cbID_756a_53f7:1 | ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1 |
+| ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_5d:1 | ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1 |
+| ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_5d:1 | ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1 |
+| ukadoc:list_sakura_script:_5cpID_756a_53f7:1 | ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1 |
+| ukadoc:list_sakura_script:_5cq_5bID_5d_5b_30bf_30a4_30c8_30eb_5d_307e_305f_306f_5cq_2a_5bID_5d_5b_30bf_30a4_30c8_30eb_5d:1 | ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1 |
+| ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_5d:1 | ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1 |
+| ukadoc:list_sakura_script:_5csID_756a_53f7:1 | ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1 |
+| ukadoc:list_sakura_script:_5cx:1 | ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1 |
+| ukadoc:list_sakura_script:_5cz:1 | ukadoc:list_sakura_script:_5ce:1 |
 
 ## テーマ別の状態分布
 

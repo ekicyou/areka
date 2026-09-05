@@ -10,7 +10,7 @@
 
 **読む人**: 統合担当（`areka-P0-ukadoc-coverage-roadmap`）と、さくらスクリプトの項目の所有を宣言している 11 本の brief の担当者。前者は「正典の項目 1 つ 1 つが誰の持ち物か」を id 単位で辿るために台帳を読み、後者は「自分の brief のどの記述をどの id の一覧へ書き換えるか」をブリーフィングから読む。
 
-**変わること**: 着地済みの台帳 1 本が 342 項目とも埋まり、ブリーフィング 1 本が増え、担当ドメインの報告 1 本が作り直され、実装済みと判定した項目の定義箇所に正典 URL の 1 行コメントが約 23 行加わる。実行時の判断は 1 つも変わらない。
+**変わること**: 着地済みの台帳 1 本が 342 項目とも埋まり、ブリーフィング 1 本が増え、担当ドメインの報告 1 本が作り直され、実装済みと判定した項目の定義箇所に正典 URL の 1 行コメントが約 22 行加わる。実行時の判断は 1 つも変わらない。
 
 ### Goals
 
@@ -33,7 +33,7 @@
 
 - `doc/ukadoc-coverage/ledger/sakura-script.toml` — `list_sakura_script` の 342 id だけを収める台帳 1 本（上流の道具が既に建てた骨組み。本 spec は**値の欄だけ**を埋め、id・並び順・前置きには触らない）。編集権は本 spec が単独で持つ（1.1・1.3・12.2）。
 - `doc/ukadoc-coverage/briefing-sakura-script.md` — 7 節のブリーフィング 1 本（10.1・10.2）。
-- 実装済みと判定した項目の定義箇所に置く `ukadoc: <正典 URL>` の 1 行コメント（見込み 23 行・5 ファイル・5 クレート）。ソースへの接触はこれだけ（9.1・12.1）。
+- 実装済みと判定した項目の定義箇所に置く `ukadoc: <正典 URL>` の 1 行コメント（見込み 22 行・5 ファイル・5 クレート）。ソースへの接触はこれだけ（9.1・12.1）。
 - 本ドメインの判断そのもの（各 id の状態・世代・担当・優先度・テーマ・関連・備考）と、名寄せの規則。
 - `doc/ukadoc-coverage/report/sakura-script.md` の作り直し（11.1）。道具は 2026-09-05 に着地したので、これは本 spec の担当に入っている（11.2 の「未着地」の枝は使わない）。手で書き換えない（11.3）。
 
@@ -206,7 +206,7 @@ URL を置く先は「意味を作っている定義」であって「綴りを�
 | # | 問い | 答え（根拠は定義の名前） |
 |---|---|---|
 | 1 | `\s[ID]` は seriko まで届いて面が変わるか | **届く**。`decode_tag` の `"s"` の腕 → `compile` の `Instruction::Surface` の腕 → `SurfaceResolver::resolve` → `ScopeStates::apply` → `emit_display`。`-1` は `SurfaceTarget::Hide` として解決される。よって `\s[ID番号]` は `implemented`。ただし**未登記の食い違いが 3 つ**ある——⒜ 面の別名は `kero.surface.alias` の塊しか読まない（`crates/areka-parsers/src/shell/decode.rs` の `dispatch_block` が完全一致で判定し、`sakura.surface.alias` は `crates/` に 1 件も無い）⒝ `name,定義名` による別名は `decode_surface_body` にキーが無く一切入らない ⒞ 同名が複数 id を持つとき先頭固定で選ぶ。DD-8 の扱い |
-| 2 | `\q[タイトル,script:実行内容]` の `script:` | **名前で見分けたうえで、わざと何も起こさない**。`decode_choice` は素通しするが、`crates/areka-kanade/src/schedule/choice.rs` の `plan_cascade` が `script:` を最初に見て `CascadePlan::Unsupported` を返し、`steady.rs` の当該の腕が `warn!("choice_unsupported_category")` を出して選択肢待ちだけ解く。SHIORI イベントは 1 つも出ない。転記元は `doc/choice-cascade-compat.md` の 7a-i／7a-ii（`doc/COMPAT_ARCHITECTURE.md` から参照）＝**登記あり → `degraded`** |
+| 2 | `\q[タイトル,script:実行内容]` の `script:` | **名前で見分けたうえで、わざと何も起こさない**。`decode_choice` は素通しするが、`crates/areka-kanade/src/schedule/choice.rs` の `plan_cascade` が `script:` を最初に見て `CascadePlan::Unsupported` を返し、`steady.rs` の当該の腕が `warn!("choice_unsupported_category")` を出して選択肢待ちだけ解く。SHIORI イベントは 1 つも出ない。転記元は `doc/choice-cascade-compat.md` の 7a-i／7a-ii（`doc/COMPAT_ARCHITECTURE.md` から参照）＝**登記あり → `degraded`**。**2026-09-05 の追記（タスク 2.2 の裁定）**: 同じ表の 7b-i／7b-ii が `\q[タイトル,ID1,ID2,ID3...]` の複数 ID 形も「M1 非対応」と登記している（正典本文は「ID\* は Reference\* に格納される」と定めるが、`crates/areka-kanade/src/schedule/events.rs` の `on_choice_select` は Reference を 1 個しか作らず 2 番目以降が落ちる。§8 の当該行の主題が「CROW 複数 ID 形の M1 非対応縮退」を名指しして同文書へ委譲している）。したがって**この形も `degraded`** であり、本書が当初 `implemented` と見込んでいたのは 7b-ii の拾い落としであった |
 | 3 | 単独の `\![*]` | **`absent`**。`fold_choice_marker` は直後が現行 `\q[...]` のときだけ畳み、単独形は `GenericCommand { name: "*" }` になってキャリアに載る。名前 `"*"` を選ぶ受け手は無く、`areka-emo-present/src/balloon.rs` の系列名の解決も `marker*` を明示的に外している。畳まれた場合もマーカーは描かれない |
 | 4 | `\![bind-noevent,...]` | **`absent`**。`crates/areka-seriko/src/actor.rs` の `handle_message` は `if name != "bind"` の完全一致で選ぶ。`crates/` 全体で `bind-noevent` に当たるのはこの分岐のコメント 1 行だけで、別経路は無い |
 | 5 | `\_l[x,y]` の縦書き | **`degraded`**。§8 の当該行は「未実装（語彙記録＋**既知非互換の登記**）」と書き、`vertical_rl` で `\_l[0,0]` が描画範囲の外側左方へ着地することを実測として登記している。`crates/areka-emo-text/src/layout.rs` の `cursor_to_image_px` は `px`／`em`／`lh` の非負絶対だけを解き、`%`・`@` 相対・負値は `None`（軸不変）へ落ちる。横書きでは動くので「別の応答を返す」に当たる |
@@ -245,8 +245,8 @@ URL を置く先は「意味を作っている定義」であって「綴りを�
 |---|---|---|---|
 | 1 | 見出しがタグでない（規則 1 の第 4 節）、または areka の担当範囲の外である | `not-applicable` | **1** |
 | 2 | DD-2 の判定で別名になった、または本文の注記が旧仕様と述べ置き換え先が本文から特定できる（DD-2 の 3 件） | `alias` | **17** |
-| 3 | `doc/COMPAT_ARCHITECTURE.md` §8（または §8 が指す `doc/choice-cascade-compat.md`）に、正典の定めに対して別の応答を返すことが**既に登記されている**（DD-7 の ⑵ の行だけ） | `degraded` | **3** |
-| 4 | areka が名前を見て正典の動きを起こす。⒜ `decode.rs` の写像先が cue になり実際に効く ⒝ `\![...]` について実行時の 4 経路のいずれかに当たる ⒞ `%` について値の源が実在し展開される | `implemented` | **23** |
+| 3 | `doc/COMPAT_ARCHITECTURE.md` §8（または §8 が指す `doc/choice-cascade-compat.md`）に、正典の定めに対して別の応答を返すことが**既に登記されている**（DD-7 の ⑵ の行だけ） | `degraded` | **4** |
+| 4 | areka が名前を見て正典の動きを起こす。⒜ `decode.rs` の写像先が cue になり実際に効く ⒝ `\![...]` について実行時の 4 経路のいずれかに当たる ⒞ `%` について値の源が実在し展開される | `implemented` | **22** |
 | 5 | `crates/areka-sylphya/src/vocab/flat.rs` の `%` 語彙表に名前がある、または §8 が「M1 非実装／非受理／非実導出で、語彙（と意味論）の記録だけがある」と明記して名指ししている（§8 の実文は行ごとに違い、「完全な語彙と意味論の記録のみ」〔`\![set,balloontimeout]`・`\x`〕・「未実装（語彙記録）」〔`\f[align]`／`\f[valign]`〕・「語彙保持＋縮退のみ」〔時間指令の一覧〕の 3 通り。「語彙・意味論のみ記録」という逐語は §8 に無い）。**行が「等」で閉じている場合（実測 1 行＝compile 側の時間指令の一覧）は、その行が逐語で綴りを書いた名前だけを名指しとみなす**（`quicksection`・`set,balloonwait`・`set,choicetimeout`・`set,balloontimeout`・`embed`・`sound,wait`・`wait,syncobject` の 7 名。「同期 `move` 系の持続時間引数」は綴りではないので名指しに数えない）。書かれていない綴りは順 6 に落とし、行が「等」で開いていることを備考に書く | `vocabulary-only` | **34** |
 | 6 | 上のいずれにも当たらない | `absent` | **264** |
 | — | 判断が付かない | `unclassified` | **0（納品時）** |
@@ -255,7 +255,7 @@ URL を置く先は「意味を作っている定義」であって「綴りを�
 - 順 4 と順 5 の双方に当たる項目は順 4 が勝つ（要件 2.5 の後段。`%` 語彙表の 26 名には値の源が実在する 4 名が含まれるため）。
 - `\![...]` のうち消費側の登録が無く §8 にも記録が無い名前は順 6 に落ちる（要件 2.7）。名前がキャリアに載って最後まで運ばれること自体は備考に書く。
 - `implemented` としたいのに定義箇所が特定できない項目は `implemented` にせず、順 5 か順 3 として理由を備考に書く（要件 2.13）。
-- 見込みの合計は 1＋17＋3＋23＋34＋264＝342。`alias` 17 と `degraded` 3・`implemented` 23 は本書で確定した値、`vocabulary-only` 34 と `absent` 264 は順 5 の「等」の規則で機械的に決まる見込みの値であり、納品時の集計（V4・V5）で確かめて置き換える。§8 に本ドメインの行が増減したら再点検する（Revalidation Triggers）。
+- 見込みの合計は 1＋17＋4＋22＋34＋264＝342。`alias` 17 と `degraded` 4・`implemented` 22 は本書で確定した値（`degraded` は 2026-09-05 のタスク 2.2 の裁定で 3 → 4・`implemented` は 23 → 22 に改めた。根拠は DD-9 の Q2 の追記）、`vocabulary-only` 34 と `absent` 264 は順 5 の「等」の規則で機械的に決まる見込みの値であり、納品時の集計（V4・V5）で確かめて置き換える。§8 に本ドメインの行が増減したら再点検する（Revalidation Triggers）。
 
 ### 規則 3: `introduced`（要件 4.9〜4.11）
 
@@ -374,13 +374,13 @@ URL を置く先は「意味を作っている定義」であって「綴りを�
 | 置き場所（ファイル・定義名） | 当たる項目 | 行数 |
 |---|---|---|
 | `crates/areka-parsers/src/sakura/decode.rs` の `decode_bare` の各腕 | `\e`・`\c`・`\-`・`\n`・`\0もしくは\h`・`\1もしくは\u` | 6 |
-| 同 `decode_tag` の `"_w"`・`"n"`・`"p"`・`"s"`・`"b"`・`"q"` の腕 | `\_w[時間]`・`\n[パーセント]`・`\n[half]`・`\p[ID番号]`・`\s[ID番号]`・`\b[ID番号]`・`\q` の現行形のうち `implemented` と判定したもの | 9 |
+| 同 `decode_tag` の `"_w"`・`"n"`・`"p"`・`"s"`・`"b"`・`"q"` の腕 | `\_w[時間]`・`\n[パーセント]`・`\n[half]`・`\p[ID番号]`・`\s[ID番号]`・`\b[ID番号]`・`\q` の現行形のうち `implemented` と判定したもの | 8 |
 | 同 `decode_token` の `Token::Shorthand { word: 'w', .. }` の腕 | `\w時間` | 1 |
 | `crates/areka-seriko/src/actor.rs` の `handle_message` の名前選別 | `\![bind,カテゴリ名,パーツ名,数値]` | 1 |
 | `crates/areka/src/emo2_boot/zorder_cue.rs` の `ZOrderCueSink::emit` にある名前と選択子の組の判定の直上（定数 `NAME_SET`／`NAME_RESET`／`SELECTOR_ZORDER` は綴りの宣言であって意味を作る場所ではない＝DD-5 と同じ考え方。定数は 3 つで id は 2 件なので、定数側に置くと対応が 1 対 1 にならない） | `\![set,zorder,スコープID,スコープID,...]`・`\![reset,zorder]` | 2 |
 | `crates/areka-sakura/src/sysvar.rs` の `resolve_system_var` の既定値の腕 | `%username` | 1 |
 | `crates/areka-ghost/src/sylphya_wiring.rs` の `derive_flat_statics` の 3 分岐（`keroname` は本体名への代替を含めて 2 か所で値を積むので、正典の `%keroname` そのものを積む側の 1 か所にだけ置く。同じ id の URL を 2 行書かない） | `%selfname`・`%selfname2`・`%keroname` | 3 |
-| 合計 | | **23** |
+| 合計 | | **22** |
 
 `decode_tag` の `"_l"` の腕と `move_cue.rs` は `degraded` なので置かない。`lexer.rs` は DD-5 により 1 行も置かない。`crates/areka-sylphya/src/vocab/flat.rs` の語彙表にも置かない（要件 9.6）。触る 5 ファイルの現在の行数は 351／521／159／156／387 で、1 ファイル 1,000 行の上限から遠い（要件 9.7）。
 
@@ -453,7 +453,7 @@ doc/
 | 6 | `.kiro/specs/*/brief.md` 25 本と §8 の 21 行を走査し、所有を id へ展開する。`owner` を規則 5 で埋め、`priority`・`values` を規則 6・7 で埋める（頻度は `freq.tsv`） | `owner-map.tsv`・`freq.tsv`・台帳の `owner`／`priority`／`values` |
 | 7 | `links` を規則 8 で埋め、相手 id の実在をスナップショットで確かめる | 台帳の `links`・`link-targets.tsv` |
 | 8 | ブリーフィング 7 節を書く | `briefing-sakura-script.md` |
-| 9 | `implemented` の 23 か所へ URL コメントを置く | ソースの 23 行（5 ファイル） |
+| 9 | `implemented` の 22 か所へ URL コメントを置く | ソースの 22 行（5 ファイル） |
 | 10 | 常設の検査（15 種の所見）と V1〜V15 を回し、担当の報告を作り直し、結果をブリーフィングの末尾に記録する | 常設の検査の出力・`check-report.txt`・作り直した `report/sakura-script.md` → ブリーフィング末尾 |
 
 **段 9 を段 8 より前に出さない。** URL コメントは台帳の従属物であり、`status` が動けば置き場所も動く。段 9 の直前の順序は固定する——⑴ submodule の展開と i686 ビルド 2 本を済ませる ⑵ `origin/main` へ rebase して 5 か所の置き場所を再確認する ⑶ **そのツリーで既存テストの基準線を取る**（要件 9.8）⑷ URL を置く。基準線を rebase より前に取ると古いツリーの結果と比べることになる。
@@ -540,7 +540,7 @@ doc/
 | `\![...]` の内部 cue 名は `crates/areka/src/emo2_boot/prop_sink.rs` にある | 実在するのは **`crates/areka-ghost/src/prop_sink.rs`**（別クレート）。定数は `PROP_SET_CUE_NAME` | 要件 5.3・5.7 の参照先を訂正して備考に書く |
 | 名寄せの異なりは規則しだいで 259〜263 名・20〜24 群・99〜107 件 | DD-1 の規則で **259 名・23 群・105 件**に一意に定まる。内訳は 9 群 31 件＋3 群 6 件＋11 群 68 件で、要件 4.5・4.6 の語彙とちょうど一致する | ブリーフィング ⑴ 節にこの数を載せる |
 | 台帳の id には逆斜線が大量に含まれるので `\\` の書き分けが最大の危うさ | **342 件の id に逆斜線・引用符・非 ASCII は 1 件も無い**（見出しの記号は `_5c` などに符号化済み）。`\\` の逃がしが要るのは**備考**だけ | 規則 0 の 5。骨組みを機械生成する利点は「逆斜線」ではなく「符号化された 342 件の逐語と文字順」に移る |
-| `implemented` は 30 件・URL コメントは約 30 行・7 ファイル・5 クレート | **23 件・23 行・5 ファイル・5 クレート**。減った内訳は `\![move]`・`\_l[x,y]`・`\q[タイトル,script:実行内容]` が `degraded`（−3）、`\bID番号`・`\pID番号`・`\q[タイトル,ID]` が `alias`（−3）、単独 `\![*]` が `absent`（−1） | コメントを置く場所の表。`lexer.rs` と `move_cue.rs` に触らなくなる |
+| `implemented` は 30 件・URL コメントは約 30 行・7 ファイル・5 クレート | **22 件・22 行・5 ファイル・5 クレート**。減った内訳は `\![move]`・`\_l[x,y]`・`\q[タイトル,script:実行内容]`・`\q[タイトル,ID1,ID2,ID3...]` が `degraded`（−4）、`\bID番号`・`\pID番号`・`\q[タイトル,ID]` が `alias`（−3）、単独 `\![*]` が `absent`（−1） | コメントを置く場所の表。`lexer.rs` と `move_cue.rs` に触らなくなる |
 | 「値が違うだけの兄弟 11 群」からは別名が出ない | DD-2 の対の判定は `\_a[ID]`⊂`\_a[ID,r2,r3...]` に届き、11 群の側からも **1 件**が `alias` になる。`alias` は合計 **17 件**（順 1 の 3＋順 4 の 3＋接頭辞の 11） | DD-2・規則 2 の順 2。突合表は `alias` の id も載せる |
 | `\![move]` の二重所有は合意済みの分担 | `areka-P0-surfaces-basepos` と `areka-P0-sakura-time-directives` の brief は互いを名指ししておらず、§8 の `\![move]` の行にも両者の住み分けは登記されていない | 規則 5 の順 2（裁定待ち）へ。裁定案を添える対象は `\![embed,...]` と `\![move]` の 2 件 |
 | `\![*]` は `fold_choice_marker` により実装済みの候補 | 畳まれた場合もマーカーは描かれず、単独形の名前 `"*"` を選ぶ受け手も無い＝`absent` | 規則 2 の順 6 |

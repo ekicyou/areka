@@ -367,85 +367,128 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c-:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_bare の \"-\" の腕が Quit を作り、compile が終端理由 Quit を確定して以降の cue を切り詰め、kanade の終了系列へ渡る。正典どおり実行したゴーストだけが終わる。
+ログ: 出ない（正常経路）。
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_bare の \"0\" | \"h\" の腕が本体側（0 番）の SpeakerScope を作り、compile が以降の cue の actor へ転写する。2 つの綴りは同じ腕なので扱いが分かれない。
+ログ: 出ない（正常経路）。
+[並べられた綴り: \\h。正典に独立した id を持たない]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c1_3082_3057_304f_306f_5cu:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_bare の \"1\" | \"u\" の腕が相方側（1 番）の SpeakerScope を作り、compile が以降の cue の actor へ転写する。2 つの綴りは同じ腕なので扱いが分かれない。
+ログ: 出ない（正常経路）。
+[並べられた綴り: \\u。正典に独立した id を持たない]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c4:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。離れる向きの移動が起きず、キャラは動かないまま台詞だけが進む。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: キャラの移動と重なり]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c5:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。隣り合う位置までの移動が起きず、2 体が離れたまま会話が続く。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: キャラの移動と重なり]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c6:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。時刻の修正が実行されず、時計合わせのやりとりが実を結ばない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 時計合わせ]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c7:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。時計合わせが始まらず、時刻サーバへの問い合わせもその結果の通知も起きない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 時計合わせ]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c8_5b_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。効果音が鳴らず、無音のまま台詞が進む。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 音の再生]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cC:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。前のトークへの追記にならず、compile が台本の先頭へ前置する ClearAll でバルーンが空になってから表示される。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: バルーンの追記と選択肢のタイムアウト抑止]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5b_2a_5d:1"]
 status = "unclassified"
@@ -2230,364 +2273,550 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_26_5bID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。実体参照が展開されず、出したかった 1 文字が出ない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字コードの埋め込みと実体参照]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_2a:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。選択肢のタイムアウト抑止が効かず、既定の待ち時間で選択肢が消える。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: バルーンの追記と選択肢のタイムアウト抑止]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_2b:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。他のゴーストへ切り替わらず、その場に留まる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: ゴーストの切り替え]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_V:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。再生の終わりを待たずに次の台詞へ進む。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 音の再生]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__21:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。区間の指定が消え、そのまま見せたかった中身のタグが実行されてしまう。
+ログ: 出る（compile の catch-all の debug! 記録）。
+旧仕様: 本文は [旧仕様] と述べるが置き換え先を名指ししないので、置き換え先を憶測で決めず別名にしない（規則 4 の順 2）。
+[群: タグを実行しない区間]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__2b:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。次の順番のゴーストへ切り替わらない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: ゴーストの切り替え]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__3f:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。囲んだ中のタグが実行され、そのまま見せたかった文が別の動きになる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: タグを実行しない区間]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__c:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。伝言箱の窓が開かない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+旧仕様: 本文は [旧仕様] と述べるが置き換え先を名指ししない。現行形にあたる綴りは正典に実在するが、本文がそれを指していないので別名にしない（規則 4 の順 2）。
+[群: 外部を開く・別窓]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__q_5bID_2c..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。区間が選択肢にならず、囲んだ文がふつうの台詞として流れる（自動改行も付かない）。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢の別書式]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__t:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。教え込みの窓が開かない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+旧仕様: 本文は [旧仕様] と述べるが置き換え先を名指ししない。現行形にあたる綴りは正典に実在するが、本文がそれを指していないので別名にしない（規則 4 の順 2）。
+[群: 外部を開く・別窓]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__v_5b_30aa_30d7_30b7_30e7_30f3_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。音声合成の抑止も読み替えも効かず、書いたとおりに読み上げられる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[版: 本文は 2.4 と書くがカタログの規則（3 桁）で拾えないので登場した版を空のままにした。単なる世代不明ではない]
+[群: 音声合成]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__w_5b_6642_9593_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。再生開始からの累計の待ちが効かず、狙った時刻に台詞がそろわない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c__w_5banimation_2cID_5d:1]
+[群: 表示の速さと区間]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c__w_5banimation_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。アニメーションの完了を待たずに次の台詞が出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c__w_5b_6642_9593_5d:1]
+[群: 表示の速さと区間]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。文がアンカーにならず、押しても何も起きない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_a_5bOnID_2cr0_2cr1..._5d:1]
+[群: アンカー]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_a_5bID_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び ID が、長い側の ID,r2,r3... の先頭と 1 語ずつ一致する]
+[狭さ: 付随参照を取らない 1 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_a_5bOnID_2cr0_2cr1..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。任意の名前のイベントが起きず、押しても何も起きない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1]
+[群: アンカー]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。行の中に画像が入らず、指定したオプションも効かない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1・ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1・ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1]
+[群: バルーンへの画像貼り付け]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。行の中に画像が入らず、透過しない指定も効かない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1・ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1・ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1]
+[群: バルーンへの画像貼り付け]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。同点の処理 ⑴ により、引数が 1 つだけ多い相手を採った]
+[狭さ: オプションを取らない 2 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。座標を指定した画像が貼られず、指定したオプションも効かない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1・ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1・ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1]
+[群: バルーンへの画像貼り付け]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。座標を指定した画像が貼られず、透過しない指定も効かない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1・ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1・ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1]
+[群: バルーンへの画像貼り付け]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。同点の処理 ⑴ により、引数が 1 つだけ多い相手を採った]
+[狭さ: オプションを取らない 3 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"_l\" の腕が x・y を文字列のまま Cursor にし、compile が cue を出して emo-text の cursor_to_image_px が px・em・lh の非負絶対だけを解く。動く用法＝横書きの絶対座標指定。動かない用法＝縦書き（vertical_rl）では原点と符号が正典と食い違い 1 列目ではなく描画範囲の外側左方へ着地すること、および % 指定・@ 相対・負値が軸不変へ落ちて座標が動かないこと。
+ログ: 出る（% 指定・@ 相対・負値・解けない綴りのときだけ layout の warn_cursor_degrade がスコープごとに 1 度 warn! を出す。横書きの正常な絶対指定では出ない）。
+[転記元: doc/COMPAT_ARCHITECTURE.md の「\\_l の縦書き座標系の正典写像と、areka の既知非互換」の行]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_m_5b0x00_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定した文字コードの 1 文字が出ない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字コードの埋め込みと実体参照]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_n:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。自動改行が止まらず、区間の指定が無かったことになる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 表示の速さと区間]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_q:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。瞬間表示にならず、ふつうの速さで文字が出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 表示の速さと区間]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_s:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数なしの形が、スコープ ID を並べる形の先頭と一致する]
+[狭さ: スコープを選べない引数なし形。areka はこの綴りを decode_bare の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定したスコープが同時に喋らず、順番に喋るだけになる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 表示の速さと区間]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_u_5b0x0000_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定した符号位置の 1 文字が出ない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字コードの埋め込みと実体参照]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_v_5b_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。音や曲が鳴らず、無音のまま台詞が進む。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 音の再生]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_w_5b_6642_9593_5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"_w\" の腕が引数を絶対ミリ秒として Wait にし、compile が action を持たず duration だけを持つ Wait cue をその位置へ出す。引数が数でなければ 0ms になり、待ちが消えるだけで台詞は崩れない。
+ログ: 出ない（正常経路）。
+"""
 
 [entry."ukadoc:list_sakura_script:_5ca:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。ランダムトークを促すイベントが起きず、押しても喋り出さない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+旧仕様: 本文は [旧仕様] の札を付けつつ現行の振る舞い（イベントを 1 つ起こすだけ）を明記しているので、別名にせず自分の状態を持つ（規則 4 の順 3）。
+[群: イベントを起こすだけのタグ]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cbID_756a_53f7:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 版番号。3 対のうち版番号が付くのは括弧形の 2.6.34 だけで、括弧形が新しいと決まる]
+[狭さ: 0〜9 の 1 桁だけ。areka は短縮形の語 'b' としてこの綴りを受け、decode_token の Token::Shorthand{ word: 'b' } の腕が写像先と同じ BalloonSurface を作る]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "implemented"
+introduced = "2.6.34"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"b\" の腕が第 1 引数だけを不透明文字列として BalloonSurface にし、compile が cue を出す。-1 は非表示として解ける。候補を並べる形は第 1 引数だけが残り、後ろの候補は落ちる。
+ログ: 出る（面の綴りが数として解けなかったときだけ消費側の warn! 記録）。
+"""
 
 [entry."ukadoc:list_sakura_script:_5cc:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_bare の \"c\" の腕が Clear を作り、compile が現スコープ向けの Clear cue を出す。引数つきの部分消去の形はこの腕に来ない。
+ログ: 出ない（正常経路）。
+[根が 2 つ: 接頭辞の検査で相手の鎖の根が 2 つ残ったので別名にしなかった（同点の処理 ⑵）。根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1・ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定位置からの部分消去が起きず、消したい文字が残る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cc:1・ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1]
+[群: バルーン内の部分消去]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び char,数値 が、長い側の char,数値,開始位置 の先頭と 1 語ずつ一致する]
+[狭さ: 開始位置を指定できない 2 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定行からの部分消去が起きず、消したい行が残る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cc:1・ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1]
+[群: バルーン内の部分消去]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び line,数値 が、長い側の line,数値,開始位置 の先頭と 1 語ずつ一致する]
+[狭さ: 開始位置を指定できない 2 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5ce:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_bare の \"e\" の腕が End を作り、compile が終端理由 Ended を確定して以降の cue を切り詰める。正典どおり、この後に書いたものは実行も表示もされない。
+ログ: 出ない（正常経路）。
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5balign_2c_5bc4_305b_308b_5074_5d:1"]
 status = "unclassified"
@@ -2977,211 +3206,312 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5ci_5bID_2cwait_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。アニメーションが出ず、待ちも入らないまま次の台詞が続く。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5ci_5bID_756a_53f7_5d:1]
+[群: サーフェスアニメーション]
+"""
 
 [entry."ukadoc:list_sakura_script:_5ci_5bID_756a_53f7_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。アニメーションが出ず、立ち絵が動かない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5ci_5bID_2cwait_5d:1]
+[群: サーフェスアニメーション]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cj_5bID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定先へ飛ばず、ブラウザもファイルも開かない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 外部を開く・別窓]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cm_5bumsg_2cwparam_2clparam_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定した窓へメッセージが送られない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 外部を開く・別窓]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cn:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_bare の \"n\" の腕が比率 1.0 の NewLine を作り、compile が NewLine cue を出す。
+ログ: 出ない（正常経路）。
+[根が 2 つ: 接頭辞の検査で相手の鎖の根が 2 つ残ったので別名にしなかった（同点の処理 ⑵）。根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1・ukadoc:list_sakura_script:_5cn_5bhalf_5d:1]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "implemented"
+introduced = "2.3.97"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"n\" の腕が引数を 100 で割った比率の NewLine にする。負の値は符号付きのまま保たれて戻る向きになる。数として読めなければ 1.0（ふつうの改行）へ落ちる。
+ログ: 出ない（正常経路）。
+[根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cn:1・ukadoc:list_sakura_script:_5cn_5bhalf_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cn_5bhalf_5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"n\" の腕が half を比率 0.5 の NewLine にする。
+ログ: 出ない（正常経路）。
+[根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cn:1・ukadoc:list_sakura_script:_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cpID_756a_53f7:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断。3 対のうち版番号が向きを決めるのはバルーン面の対だけなので、版番号の無いこの対には同じ向き（括弧形が正典）を人手で当てた]
+[狭さ: 0〜9 の 1 桁だけ。areka は短縮形の語 'p' としてこの綴りを受け、decode_token の Token::Shorthand{ word: 'p' } の腕が写像先と同じ SpeakerScope を作る]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"p\" の腕が番号を SpeakerScope にし、compile が以降の cue の actor へ転写する。引数が数として読めなければ 0（本体側）になる。
+ログ: 出ない（正常経路）。
+"""
 
 [entry."ukadoc:list_sakura_script:_5cq_5bID_5d_5b_30bf_30a4_30c8_30eb_5d_307e_305f_306f_5cq_2a_5bID_5d_5b_30bf_30a4_30c8_30eb_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 本文の注記。[旧仕様] と述べたうえで「上記のものとは違い」と現行の書式群を参照しており、置き換え先が 1 つに定まる（規則 4 の順 1）。指す先は連鎖を避けて鎖の根にした]
+[並べられた綴り: \\q*[ID][タイトル]。正典に独立した id を持たない。2 つの綴りは is_legacy_q_head が同じ判定で受けるので旧書式としての扱いは分かれないが、直後の浮いた [タイトル] が無いときだけ差が出る——星の付かない綴りは現行形として decode_tag の \"q\" の腕で Choice になり、星の付く綴りは既定の腕から Raw へ落ちる]
+[狭さ: areka はこの綴りを受けない。fold_legacy_q が先頭のタグと直後に浮いた [タイトル] を 1 つの Raw へ畳み、わざと選択肢にしない。compile の catch-all が捨てるので選択肢も台詞も出ない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 本ドメインの 3 通り（タグが消える／%名前が出る／引数が漏れる）のいずれでもない第 4 の形で、選択肢は正典どおり出て選べるのに、2 番目以降の ID だけが落ちる。動く用法＝選択肢の表示と、選択後の先行イベントで 2 番目以降の ID が付随参照として渡ること。動かない用法＝先行イベントが応答を返さなかったときに続く無印のイベントで、areka の on_choice_select が 1 つ目の ID だけを渡し、正典が言う「ID それぞれが順に格納される」にならないこと。areka の運搬形が ID の並びと付随参照の並びを区別できないための構造的な縮退である。
+ログ: 出ない（構造的な縮退で、警告を出す腕が無い）。
+[転記元: doc/choice-cascade-compat.md の 7b-i／7b-ii。doc/COMPAT_ARCHITECTURE.md の「選択確定カスケードの正典沈黙分岐一式」の行がこの台帳を指し、行の見出し自身が「CROW 複数 ID 形の M1 非対応縮退」を名指ししている]
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"q\" の腕が第 1 引数を表示ラベル・第 2 引数を選択 ID・第 3 引数以降を付随参照として Choice にし、compile が選択待ちの barrier を 1 つ置く。選ぶと plan_cascade が正典形を返し、先行のイベントが出て、応答が無ければ無印のイベントが続く。
+ログ: 出ない（正常経路）。
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び タイトル,ID が、長い側の タイトル,ID,r2,r3... の先頭と 1 語ずつ一致する]
+[狭さ: 付随参照を取らない 2 引数形。areka はこの綴りを decode_tag の \"q\" の腕で受け、写像先と同じ Choice を作る]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"q\" の腕が Choice を作り、選ぶと plan_cascade が On で始まる ID を見て、書いたとおりの名前のイベントを 1 段だけ起こす。続く引数は順に付随参照として渡る。先行して固定名のイベントを出さないことは、正典が黙っている所の areka の裁量として登記済みで、縮退ではない。
+ログ: 出ない（正常経路）。
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 本ドメインの 3 通りのいずれでもない第 4 の形で、選択肢は正典どおり出て選べるのに、選んだ後の実行内容だけが走らない。動く用法＝選択肢の表示と、選んだときに選択待ちが解けて会話が止まらないこと。動かない用法＝script: に書いたさくらスクリプトの実行で、plan_cascade が script: を最初に見て未対応と判定し、SHIORI イベントを 1 つも出さない。
+ログ: 出る（steady の choice_unsupported_category の warn! 記録）。
+[転記元: doc/choice-cascade-compat.md の 7a-i／7a-ii。doc/COMPAT_ARCHITECTURE.md の「選択確定カスケードの正典沈黙分岐一式」の行がこの台帳を指している]
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5csID_756a_53f7:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断。3 対のうち版番号が向きを決めるのはバルーン面の対だけなので、版番号の無いこの対には同じ向き（括弧形が正典）を人手で当てた]
+[狭さ: 0〜9 の 1 桁だけ。さらに areka はこの綴りを受けない——短縮形の語は 'w'・'b'・'p' の 3 つで 's' を含まないため、綴りだけが 1 単位として切り出され、続く数字は本文へ回る。面は変わらず数字が台詞へ漏れる（壊れ方 ⑶）。写像先の括弧形は正典どおり動く]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。この綴りでは数字が漏れるどころか、タグから ] までがまとめて消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_tag の \"s\" の腕が引数を不透明文字列のまま Surface にし、compile の Emote cue から SurfaceResolver::resolve → ScopeStates::apply → emit_display まで届く。-1 は非表示として解ける。解けない綴りは未解決となり面が変わらない。
+ログ: 出る（綴りが解けなかったときだけ消費側の記録）。
+[未登記の食い違い: ⑴ 面の別名は相方側の別名の塊しか読まない（shell の dispatch_block が見出しを完全一致で判定し、本体側の綴りの別名の塊は crates 全体に 1 件も無い）⑵ 定義名による別名は decode_surface_body にそのキーが無く一切入らない ⑶ 同じ名前が複数の id を持つとき SurfaceResolver::resolve が先頭を固定で選ぶ。いずれも doc/COMPAT_ARCHITECTURE.md §8 に登記が無いので状態を動かさず、是正候補として出す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5ct:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。マウスの反応が止まらず、喋っている最中に別の話へ割り込まれる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 表示の速さと区間]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cv:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。最前面に上がらず、他の窓の下に隠れたままになる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: キャラの移動と重なり]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cw_6642_9593:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — decode_token の Token::Shorthand{ word: 'w' } の腕が 1 桁の数を 50ms 倍した Wait にする。字句は 1 桁しか読まないので 2 桁書くと 1 桁ぶんの待ちのあと残りの数字が文字として出る（正典もそう定める）。
+ログ: 出ない（正常経路）。
+"""
 
 [entry."ukadoc:list_sakura_script:_5cx:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数なしの形が、長い側の 1 引数形の先頭と一致する]
+[狭さ: 内容を残す指定を書けない引数なし形。areka はこの綴りを decode_bare の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。クリック待ちにならず、会話が止まらずに最後まで流れる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「\\x ／ \\x[noclear]（バルーンをクリック待ちにする）」の行が、M1 非実装で完全な語彙と意味論の記録だけがあると明記して名指ししている。
+"""
 
 [entry."ukadoc:list_sakura_script:_5cz:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5ce:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 本文の注記。[旧仕様] と述べたうえで置き換え先を名指ししている（規則 4 の順 1）]
+[狭さ: areka はこの綴りを受けない。decode_bare の既定の腕から Raw へ落ちて compile の catch-all に捨てられるので、トークが終わらない。写像先は decode_bare の \"e\" の腕で正典どおり終端する]
+[語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+"""
 
 [entry."ukadoc:list_sakura_script:_74b0_5883_5909_6570_306e_8a18_8ff0_4f8b:1"]
 status = "not-applicable"
