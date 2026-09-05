@@ -71,7 +71,7 @@
   - _Requirements: 2.1, 2.5, 2.8, 7.1, 7.2, 7.3_
   - _Depends: 3.1_
 
-- [ ] 3.3 バルーンの descript の残りを仕訳する
+- [x] 3.3 バルーンの descript の残りを仕訳する
   - 担当の決まっていないバルーンの項目に状態・登場した版・備考を入れる
   - 縮退と判定した項目は `degraded-sources.md` から転記元を項目名で示す（自前で転記元を探さない）
   - areka 独自の拡張 2 つには正典の項目が無いことを確かめ、台帳に行を作らない
@@ -289,3 +289,8 @@
 - 3.2: 束の広さは設計 §8 の字面より広くてよい——`areka-P0-anchor-tag-canon` の brief は「アンカー機能そのものと装飾 16 項目を一括所有する」と宣言しており（ukadoc 側で色が r/g/b に割れるため 43 キー）、設計 §8 と要件 7.2 の「`anchor.*.font.*` 系」のほうが**狭い**。残語彙も brief の番号付き 12 項目が正本で、Scope 行の「10 項目」は採らない。
 - 3.2: 空の束が 2 つ——「系列名」（`areka-P0-kero-balloon`）と「表示寿命」（`areka-P0-balloon-visibility`）は `descript_balloon` に相手が居ない（前者は `descript_ghost` の `balloon.defaultsurface` 族＝3.4、後者はさくらスクリプトと SHIORI の台帳）。
 - 3.2: 3.3 への申し送り——`descript_balloon` の `charset` は `areka-P0-charset-canon` の brief の In にも Out にも書かれていない（実測）。要件 7.5 のとおり担当は空のままにし、brief の沈黙を 6.4 の是正候補へ。`areka-P0-balloon-parse`（転記層の範囲）も担当未割り当てのまま。
+- 3.3: `descript_balloon` 162 件を完走（残り 45 件はすべて `absent`）。バルーンの定義を読む本番の経路は 2 つだけ——`areka-emo-present` の `balloon::read_descript_layer`（`areka-parsers` の `balloon::map_merged` が完全一致で引く欄しか拾わない）と `areka` の `placement::load_balloon_author_dpi`（`dpi` のみ）。
+- 3.3: ⚠**備考の写し間違いが 1 件出た**——`craftmanurl` の相手を「SHIORI の資源側」と書いたが実際は**プロパティ側**（資源側にあるのは `craftman` と `craftmanw` の 2 つだけ）。`craftman` 用の文をそのまま隣のキーへ写したのが原因。以後は作業用の `sweep_collisions_33.py`（較正付き）が名前の重なりの主張を台帳・カタログ・語彙表の三方向で当てる。**限界**: 主張表が手書きなので守れるのは登録済みの 12 項目だけ。新しい重なりを書いたら表に行を足すこと。
+- 3.3: ⚠**転記元の引用は「その行が本当にその欄を引き受けているか」まで確かめる**。`use_input_alpha` に見直し表の行を引いたが、その行が defer と言っているのは通信・SSTP・オンライン表示で、入力ボックスは含まれない。但し書きを添えても断定文は残るので引用ごと落とした。`overlay_outside_balloon` は正典本文が「オンライン表示・SSTP マーカー等」と書くので引用が成立する。
+- 3.3: 担当は 45 件すべて空（要件 7.5）。`areka-P0-balloon-parse` の Scope Out が cursor/anchor/number/arrow/marker/sstp/communicatebox を明示除外し、`areka-P0-text-decoration-canon` は `communicatebox.font.*`／`number.font.*`／`sstpmessage.font.*` の **14 件**を Adjacent（自分の In ではない）と宣言している。この 14 件が誰の持ち物にもならない事実は roadmap への申し送りとして作業用 `corrections-for-9-8.md` §8 に登記済み。
+- 3.3: 設計 D9 の確認——`writing_mode`・`budoux_newline` はカタログに id・見出しとも 0 件。台帳にも行を作っていない（`descript_balloon` は 162 行のまま）。

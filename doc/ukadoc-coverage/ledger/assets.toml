@@ -783,130 +783,221 @@ areka はクリック待ちの表示の画像を読み込む経路も描く経�
 """
 
 [entry."ukadoc:descript_balloon:communicatebox.background.color.b_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.background.color.g_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.background.color.r_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.font.color.b_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.font.color.g_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.font.color.r_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.height_2c_30b5_30a4_30ba:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.width_2c_30b5_30a4_30ba:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.x_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:communicatebox.y_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には通信ボックスそのものが無く、その位置・大きさ・色を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:craftman_2c_4f5c_8005_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの作者の情報を読む経路を持たない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがゴースト・シェル・プラグインの descript にもあり、SHIORI の資源の側にも同名の項目がある（そちらは別ドメインの台帳の持ち物で、areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:craftmanurl_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの作者の連絡先を読む経路を持たない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがゴースト・シェル・プラグインの descript にもあり、別ドメインのプロパティの側にも同名の項目がある（そちらは別ドメインの台帳の持ち物で、areka-sylphya の vocab::GENERIC_PROP_NAMES が語彙として持っている）。SHIORI の資源の側にこの名前は無い——そちらにあるのは `craftman` と `craftmanw` の 2 つだけである。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:craftmanw_2c_4f5c_8005_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの作者の表示名を読む経路を持たない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがゴースト・シェル・プラグインの descript にもあり、SHIORI の資源の側にも同名の項目がある（そちらは別ドメインの台帳の持ち物で、areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:cursor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
 status = "vocabulary-only"
@@ -1300,13 +1391,21 @@ note = """
 """
 
 [entry."ukadoc:descript_balloon:cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じページにある `cursor.` で始まる選択肢の目印の欄とは別のものである。目印の側は areka-parsers の balloon::map_merged が引いており状態が割れるので、名前が似ているだけで一緒に扱わないこと。
+ゴーストの descript にも同じ見出しがあるが、それは別の項目である（そちらはゴースト側の絵を決める）。ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:disable.font._28_30d5_30a9_30f3_30c8_5b9a_7fa9_29_2c_28_6307_5b9a_29:1"]
 status = "vocabulary-only"
@@ -1532,22 +1631,36 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 """
 
 [entry."ukadoc:descript_balloon:homeurl_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはネットワークから更新を取ってくる仕組みが無く、その宛先を書くこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがゴースト・シェル・プラグイン・ヘッドラインの descript にもあり、さらに別ドメインのプロパティと SHIORI の資源にもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:id_2cID_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの識別名を読む経路を持たない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがゴースト・シェル・プラグインの descript にもあり、別ドメインのプロパティにもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:marker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
@@ -1565,103 +1678,181 @@ areka はさくらスクリプトの目印表示で出す画像の画像を読�
 """
 
 [entry."ukadoc:descript_balloon:mousecursor.arrow_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.11"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じページにある `cursor.` で始まる選択肢の目印の欄とは別のものである。目印の側は areka-parsers の balloon::map_merged が引いており状態が割れるので、名前が似ているだけで一緒に扱わないこと。
+ゴーストの descript にも同じ見出しがあるが、それは別の項目である（そちらはゴースト側の絵を決める）。ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:mousecursor.text_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じページにある `cursor.` で始まる選択肢の目印の欄とは別のものである。目印の側は areka-parsers の balloon::map_merged が引いており状態が割れるので、名前が似ているだけで一緒に扱わないこと。
+ゴーストの descript にも同じ見出しがあるが、それは別の項目である（そちらはゴースト側の絵を決める）。ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:mousecursor.wait_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.43"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じページにある `cursor.` で始まる選択肢の目印の欄とは別のものである。目印の側は areka-parsers の balloon::map_merged が引いており状態が割れるので、名前が似ているだけで一緒に扱わないこと。
+ゴーストの descript にも同じ見出しがあるが、それは別の項目である（そちらはゴースト側の絵を決める）。ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:name_2c_30d0_30eb_30fc_30f3_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの名前を読む経路を持たない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがゴーストとシェルの descript にもあり、そちらは読まれる——シェル側は areka-ghost の config::resolve_shell_name が、ゴースト側は areka-parsers の package::resolve が引く。3 つは別の項目で状態が割れるので、名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:number.font.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはカウンタの数値を出す仕組みが無く、その位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:number.font.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはカウンタの数値を出す仕組みが無く、その位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:number.font.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはカウンタの数値を出す仕組みが無く、その位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:number.font.height_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはカウンタの数値を出す仕組みが無く、その位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:number.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはカウンタの数値を出す仕組みが無く、その位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:number.xr_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはカウンタの数値を出す仕組みが無く、その位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:number.y_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはカウンタの数値を出す仕組みが無く、その位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:onlinemarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
@@ -1742,58 +1933,99 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 """
 
 [entry."ukadoc:descript_balloon:overlay_outside_balloon_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.54"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの外側へ付属の絵をはみ出させる指定を読む経路を持たない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+そもそも、この指定がはみ出させる相手（オンライン表示や SSTP の目印の絵）を areka は 1 枚も描かないので、指定を読めても効く先が無い。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。なお、その行はこの欄を名指しで挙げてはいない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:paint_transparent_region_black_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は透過色の残る場所を黒で塗るかどうかの指定を読む経路を持たない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+透過の扱いは areka-emo-atlas の normalize::AlphaParams が組み立てるが、その値は呼ぶ側が決め打ちで渡しており、バルーンの定義からは来ない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.10"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には説明文を開く画面が無く、その文字コードの宣言を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じページの `charset` は areka-parsers の charset::prescan_charset が読んでおり実装済みである。名前は似ているが別の欄で、状態も割れる。ページと欄を決めてから引くこと。
+文字コードを一手に引き受ける areka-P0-charset-canon の brief は、この欄を対象外と宣言している（説明文を表示する機能が無いため）。担当は決まっていない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_balloon:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には説明文を開く画面が無く、そのファイル名を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+この欄が成り立つには、インストールの導線か、右クリックで出る作り付けのメニューが要る。どちらも areka には無い。
+同じ名前の見出しがゴースト・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:recommended.ghost.path_2c_30d1_30b9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には勧められた組み合わせの置き場所をたどる仕組みが無く、この欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:recommended.ghost_2c_30b4_30fc_30b9_30c8_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には勧められた組み合わせと違う使い方を警告する仕組みが無く、この欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmarker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "absent"
@@ -1838,103 +2070,177 @@ areka は SSTP マーカーの画像を読み込む経路も描く経路も持�
 """
 
 [entry."ukadoc:descript_balloon:sstpmessage.font.color.b_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のソフトから届いた伝言を出す仕組みが無く、その表示位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmessage.font.color.g_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のソフトから届いた伝言を出す仕組みが無く、その表示位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmessage.font.color.r_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のソフトから届いた伝言を出す仕組みが無く、その表示位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmessage.font.height_2c_30b5_30a4_30ba:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のソフトから届いた伝言を出す仕組みが無く、その表示位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmessage.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のソフトから届いた伝言を出す仕組みが無く、その表示位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+文字の飾りを引き受ける areka-P0-text-decoration-canon の brief は、この欄をバルーン本体の font 系とは別の「隣り合うもの」として挙げるだけで、自分の範囲には入れていない。担当は決まっていない。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmessage.x_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のソフトから届いた伝言を出す仕組みが無く、その表示位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmessage.xr_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のソフトから届いた伝言を出す仕組みが無く、その表示位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:sstpmessage.y_2c_5ea7_6a19_20_2a1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のソフトから届いた伝言を出す仕組みが無く、その表示位置や書体を宣言するこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+見直し表の `areka-P0-balloon-loader` の行が、バルーンの定義を必須の欄だけに絞り通信・SSTP・オンライン表示まわりを後回しにすると書いており、この欄はその後回しの側にある。ただし受け取る経路そのものが無いので、動きが正典と違うのではなく、まるごと無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief は、通信・SSTP・番号・目印・矢印まわりの欄を対象外と宣言している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:type_2c_7a2e_5225:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はファイルセットの種別を読む経路を持たない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがゴースト・シェル・プラグイン・インストール指示の descript にもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:use_input_alpha_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には入力ボックスのバルーンが無く、その半透明化を切り替えるこの欄を読む経路も無い。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーン側の透過の扱いを宣言で切り替えられない。
+バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka-emo-atlas の normalize::UseSelfAlpha という同じ意味の切り替えは実在するが、値は呼ぶ側が決め打ちで渡しており、宣言からは来ない。
+シェルの descript にある `seriko.use_self_alpha` は綴りの違う別の項目である。名前が似ているだけで一緒に扱わないこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_balloon:validrect.bottom_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
