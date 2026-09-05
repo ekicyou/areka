@@ -68,16 +68,27 @@ pub(crate) const REF6_DEVICE_MOUSE: &str = "mouse";
 /// （禁止の根拠＝自発生成との二重駆動は、作者が明示的に書いた 1 クリック 1 回の発火に該当しない・
 /// Req2.9・裁定 8）。
 pub const ALLOWED_EVENT_IDS: &[&str] = &[
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInitialize:1
     "OnInitialize",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnFirstBoot:1
     "OnFirstBoot",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1
     "OnBoot",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#basewareversion:1
     "basewareversion",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnSecondChange:1
     "OnSecondChange",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnClose:1
     "OnClose",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseMove:1
     "OnMouseMove",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDoubleClick:1
     "OnMouseDoubleClick",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnChoiceSelectEx:1
     "OnChoiceSelectEx",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnChoiceSelect:1
     "OnChoiceSelect",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnChoiceTimeout:1
     "OnChoiceTimeout",
 ];
 

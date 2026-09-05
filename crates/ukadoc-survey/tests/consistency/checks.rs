@@ -42,6 +42,7 @@
 //!   語彙表経路は通さない。
 
 use ukadoc_survey::check::{FindingKind, render, run};
+use ukadoc_survey::evidence::EvidenceIndex;
 use ukadoc_survey::evidence::extract::extract;
 use ukadoc_survey::io::{files, paths};
 use ukadoc_survey::ledger::read::read as read_ledger;
@@ -58,7 +59,39 @@ use super::perturb::{
 const ANCHOR_URL: &str = "https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1";
 
 /// 走査が届いていることの錨に使うソース（既存の語彙台帳・要件 9.2）。
+///
+/// **錨の項目の証拠を「ちょうど 1 件」で見てはいけない。** 調査 spec は実装済みと
+/// 判定した項目の定義箇所に正典 URL を 1 行置く契約なので、同じ項目の証拠が複数の
+/// ファイルから挙がるのは正常な状態である（[`EvidenceIndex::by_id`] の並びの契約も
+/// 「重複を除いた名前順」であって件数を約束しない）。ここで確かめたいのは
+/// 「書き足した行がその項目の証拠になる」ことだけである。
 const ANCHOR_SOURCE: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
+
+/// 書き足した 1 行が錨の項目の証拠として現れたこと（「含む」で見る）。
+///
+/// 恒真を避けるため、書き足す**前**に [`ANCHOR_SOURCE`] が錨の項目の証拠へ入って
+/// いないことを同じ場所で確かめる——増えたのは書き足した行のせいである、と言える
+/// ようにするためである。前から入っていたら錨を選び直す合図なので、そのときも赤に
+/// する。
+fn assert_the_added_line_became_evidence(data: &RepoData, after: &EvidenceIndex) {
+    let anchor = anchor_id();
+    let sources = |index: &EvidenceIndex| -> Vec<String> {
+        index.by_id.get(&anchor).cloned().unwrap_or_default()
+    };
+
+    let before = sources(&data.evidence);
+    assert!(
+        !before.iter().any(|path| path == ANCHOR_SOURCE),
+        "書き足す前から {ANCHOR_SOURCE} が錨の項目の証拠になっている。\
+         これでは「足したから増えた」が言えないので、錨のソースを選び直すこと: {before:?}"
+    );
+
+    let after = sources(after);
+    assert!(
+        after.iter().any(|path| path == ANCHOR_SOURCE),
+        "書き足した正典 URL の行が錨の項目の証拠に入っていない: {after:?}"
+    );
+}
 
 // ---------------------------------------------------------------------------
 // ⑴ 一括の主張
@@ -491,11 +524,7 @@ fn implemented_without_evidence_turns_red_and_evidence_clears_it() {
     // 証拠が付いた側。`ImplementedWithoutEvidence` だけが消える。
     copy.evidence =
         evidence_with_source_line(&data, ANCHOR_SOURCE, &format!("// ukadoc: {ANCHOR_URL}"), 0);
-    assert_eq!(
-        copy.evidence.by_id.get(&anchor).map(Vec::as_slice),
-        Some([ANCHOR_SOURCE.to_owned()].as_slice()),
-        "書き足した正典 URL が錨の項目の証拠になっていない"
-    );
+    assert_the_added_line_became_evidence(&data, &copy.evidence);
     expect_exactly(
         &copy.findings(),
         &[(FindingKind::DomainReportStale, None, report)],
@@ -779,11 +808,7 @@ fn the_check_survives_lines_moving() {
     );
 
     let anchor = anchor_id();
-    assert_eq!(
-        at_top.by_id.get(&anchor).map(Vec::as_slice),
-        Some([ANCHOR_SOURCE.to_owned()].as_slice()),
-        "書き足した正典 URL が錨の項目の証拠になっていない"
-    );
+    assert_the_added_line_became_evidence(&data, &at_top);
 
     // 証拠が付いた状態でも、実データに食い違いは 1 件も生まれない（行が増えただけで
     // 赤にならないこと）。

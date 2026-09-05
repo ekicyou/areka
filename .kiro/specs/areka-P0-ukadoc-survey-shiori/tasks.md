@@ -143,7 +143,7 @@
   - _Requirements: 3.6_
 
 - [ ] 6. 証拠のコメントとブリーフィング文書
-- [ ] 6.1 (P) 送出・照会の許可表に正典 URL のコメント 12 行を置く
+- [x] 6.1 (P) 送出・照会の許可表に正典 URL のコメント 12 行を置く
   - 送出許可表の 11 要素それぞれの直前に `//` で `ukadoc: <正典 URL>` を 1 行ずつ置く（要素には `///` を使わない）
   - 照会許可表の doc コメントの末尾に `///` で 1 行置く（要素が 1 件で 1 行に収まるため定義そのものに置く）
   - URL はスナップショットの値をそのまま写し、説明文を伴わない 1 行だけを追加する。実行時に評価される記述を 1 行も追加・変更・削除しない
@@ -195,6 +195,7 @@
   - `cargo run -p ukadoc-survey -- check` と `cargo test -p ukadoc-survey` を走らせ、15 所見のいずれも出ないことを確かめる
   - 証拠の突き合わせ（ソースの正典 URL ⇄ `implemented` の行）は `SourceUrlNotInCatalog` と `ImplementedWithoutEvidence` が担う。手掛かりが要るときは `evidence`／`candidates` を使う
   - ページ別の件数が合わないときは台帳を確定させず、食い違ったページ名と件数を示して原因を先に解消する。数を合わせるために行を足したり消したりしない
+  - **上流の道具の引き継ぎを受け取る**（タスク 6.1 で発火）: `crates/ukadoc-survey/tests/consistency/checks.rs` の `the_subject_census_says_which_requirements_are_vacuous` は「対象が 1 件でも生まれたら赤にして書き換えを促す」仕掛けで、本 spec が正典 URL を置いた時点で設計どおり発火した。`census()` の **`Subjects::Zero` の 6 行すべて**を `NonEmpty` へ移す（6.5 ソースの正典 URL・6.6 `implemented` の行・6.7 の 3 面〔関連／別名の相手・`alias` の行・登場版の記入がある行〕・6.8 テーマ名・6.11 証拠の付いた項目。**実測でいずれも既に非 0**。ループ内 assert なので最初の 6.5 で止まっているだけ）。あわせて `checks.rs` 冒頭の目次コメントと census テスト自身の doc の「対象が 0 件である」という散文も直す。**タスク 6.3 の着地後に行うこと**（6.5 が 12→21・6.11 が 12→21 に動く）
   - 完了条件: 検査が所見 0 件で通り、報告の「未分類」列が全ページ 0 件
   - _Requirements: 1.4, 10.5_
   - _Depends: 6.1, 6.2, 6.3_
@@ -209,7 +210,8 @@
 
 - [ ] 7.3 非接触の境界を最終確認する
   - 変更したファイルの一覧を取り、台帳 1 本・報告 1 本・ブリーフィング 1 本・ソースのコメント 22 行・本 spec の `.kiro/specs/areka-P0-ukadoc-survey-shiori/` 配下の文書のほかに何も変わっていないことを確かめる
-  - 他ドメインの台帳 3 本・全体の報告 `report/summary.md`・束の文書・語彙の文書 `values.md`・カタログ `catalog.toml`・手引き `README.md`・道具の crate・`.kiro/steering/roadmap.md`・`doc/shiori/fragments/`・語彙表の中身・隣接 spec の brief のいずれも変わっていないことを確かめる
+  - 他ドメインの台帳 3 本・全体の報告 `report/summary.md`・束の文書・語彙の文書 `values.md`・カタログ `catalog.toml`・手引き `README.md`・**道具の crate の `src/`**・`.kiro/steering/roadmap.md`・`doc/shiori/fragments/`・語彙表の中身・隣接 spec の brief のいずれも変わっていないことを確かめる
+  - **例外（本 spec が上流の欠陥を是正した分）**: `crates/ukadoc-survey/tests/consistency/checks.rs` **だけ**は変わってよい。理由は 2 つで、⑴ 上流の常時テストが `OnBoot` の正典 URL を「ソースのどこにも無い」前提の錨に使っており、本 spec が要件 9.1・9.2 どおりに URL を置いた時点で恒久的に赤になった（製品側 `EvidenceIndex::by_id` の doc は「同じ URL が複数のファイルに現れても赤にしない」と定めており、旧主張は契約と矛盾していた）。⑵ `the_subject_census_...` の引き継ぎの仕掛けが設計どおり発火し、書き換えを促している。上流 spec は `completed/` に封書済みで開き直せないため、発見した本 spec が最小限で是正した。**道具の `src/` は 1 行も変えないこと。**
   - 他ドメインの項目の行が台帳に 1 つも無いことを確かめる
   - 完了条件: 変更ファイルの一覧が上記の集合と完全一致し、`unclassified` 0 件と合わせて完了条件が満たされている
   - _Requirements: 10.4, 12.2, 12.5, 12.6_
@@ -272,7 +274,7 @@
 - 4.1: **DD-8 の切替条件は不成立**。`shiori3.rs` の `Charset` 列挙は `origin/main` でも `Utf8` の 1 バリアントのみで `header_value` は `"UTF-8"` を返す唯一の腕。`areka-P0-charset-canon` は先着していないので `Charset` は `degraded` のままが正しい。
 - 4.1: `Status` の行に `owner = "areka-P0-status-execution-states"` を書いた。タスク本文は `Charset` しか名指ししていないが、**設計の要件対応表 12.3 が「縮退の転記元（`Status` の `owner`）」を充足先として明示**しており、12.3 を持ち `Status` に触れるタスクは 4.1 だけ。転記元の `note` は 5.5 の担当なので書いていない。
 - 4.1: `BaseID` は `crates` 配下のソースに 0 件（ヒットはバイナリ fixture `pasta.dll` の文字列一致のみ）。索引が「ソースに 1 件も無い」と限定しているので主張は真。`build_request` の doc コメントが挙げる未送出は `SenderType`／`SecurityOrigin`／`X-SSTP-PassThru` の 3 つで、`BaseID` は確かに挙がっていない。
-- 4.1: **`Reference0` に「粗さ」を書かないのが正しい**（正典本文は「ゴーストの ` ` 側の名前」で単一ヘッダ。粗さを書けば嘘になる）。粗いのは `Reference*`・`Reference1〜`・`X-SSTP-PassThru-` の 2 件。なお粗さを求めるのは要件 5.8 ではなく**設計 DD-7 の 3**（5.8 はアンカーの無い 4 ページ限定＝タスク 4.3 の担当）。tasks.md の 4.1 が 5.8 を挙げているのは引用の取り違えだが成果物には影響しない。
+- 4.1: **`Reference0` に「粗さ」を書かないのが正しい**（正典本文は「ゴーストの `\0` 側の名前」で単一ヘッダ。粗さを書けば嘘になる）。粗いのは `Reference*`・`Reference1〜`・`X-SSTP-PassThru-` の 2 件。なお粗さを求めるのは要件 5.8 ではなく**設計 DD-7 の 3**（5.8 はアンカーの無い 4 ページ限定＝タスク 4.3 の担当）。tasks.md の 4.1 が 5.8 を挙げているのは引用の取り違えだが成果物には影響しない。
 - 4.1 → **タスク 7.3 への申し送り**: 設計 DD-10／要件 2.9 の「`absent` の各行に根拠の場所を繰り返さない」と、索引の共通 `note` の全文が根拠の場所を含むことの緊張は、群 2（273 行）・群 4・群 11（15 行）に一様に現れている。1.4 で「正確さを削らない」と裁定済みだが、**7.3 で一度決着させて記録すること。**
 - 4.2: PLUGIN 19 行の種別は **イベント 8**（`OnGhostBoot`・`OnGhostExit`・`OnGhostInfoUpdate`・`OnInstallComplete`・`OnMenuExec`・`OnOtherGhostTalk`・`OnSecondChange`・`version`）／**PLUGIN 向けのリソース 7**（`balloonpathlist`・`ghostpathlist`・`headlinepathlist`・`installedballoonname`・`installedghostname`・`installedplugin`・`pluginpathlist`）／**プロパティの照会 2**／**任意名イベントの枠 2**。要件 5.6 は件数を定めていない。
 - 4.2: `version` は**イベント**。正典が「他のイベントとレスポンス形式が異なる事に注意」と書いてイベントの集合の内側に置いており、リソース 7 件は全件 `[NOTIFY]`（ベースウェアからプラグインへ押し出す側）なのに対し `version` は逆向き（プラグインに問う）。
@@ -307,3 +309,11 @@
 - 5.5: 転記元の原本を全行読み直した結果、名指しは設計の表どおり **5 行**（`doc/COMPAT_ARCHITECTURE.md` §8 のデータ行 81 行のうち 4 行・`doc/emo2-conformance-scope.md` §6 のデータ行 8 行のうち 1 行）。**増減なし。** 縮退の転記元を持つ台帳の行はちょうど 6 行（群 2a の 3・`username`・`spec_dll`・`Status`）で名指しと過不足なく一致。
 - 5.5: **名指しの判定の基準を design に明文化した** — 「表の 1 列目（裁定の対象そのもの）が担当 12 ページの項目を指していること。根拠列・裁量列での言及は参照であって名指しではない」。この基準が無いと再走行で数が再現しない。
 - 5.5: `Status` の行には転記元が **2 つ**ある（選択確定カスケードの正典沈黙分岐一式 →`doc/choice-cascade-compat.md`／`Status [SSP拡張]` の `balloon` の実導出）。タスク 4.1 が `owner` だけ書いて残した分を本タスクが埋めた。
+- 6.1: 送出許可表の 11 要素に `//` で・照会許可表の doc コメント末尾に `///` で正典 URL を計 12 行置いた。URL はカタログの `url` 欄と逐語一致（末尾の `:1` を含む）。`ImplementedWithoutEvidence` は 21 → **9** へ減り、`check` の所見は 10 件（9 ＋ `DomainReportStale` 1）。
+- 6.1: **`///` は定義そのものにだけ使う。** 配列の要素に `///` を置くと `unused_doc_comments` の警告が出ることを較正で実証済み（故意に 1 行変えて赤を確認してから戻した）。
+- 6.1 → **上流の道具の欠陥を 2 件発掘した。**
+  - ⑴ **壊れた錨（是正済み）**: `crates/ukadoc-survey/tests/consistency/checks.rs` が `OnBoot` の正典 URL を「`shiori_resource.rs` にしか無い」前提の錨に使い、証拠を「ちょうど 1 件」と厳密一致で主張していた。本 spec が契約どおり `events.rs` に置いた瞬間に恒久的に赤になり、**6.3／7.1／7.2 が着地しても緑に戻らない**。製品側 `EvidenceIndex::by_id` の doc が「同じ URL が複数のファイルに現れても赤にしない」「並びの契約は重複を除いた名前順」と明記しているので、旧主張は**契約と最初から矛盾**していた。「含む」へ緩めたうえで「**足す前は含まれていない**」という主張を新たに足し、恒真化を防いだ（2 通りに壊して赤を確認済み）。
+  - ⑵ **引き継ぎの仕掛け（タスク 7.1 が受け取る）**: `the_subject_census_says_which_requirements_are_vacuous` は壊れた錨ではなく、道具自身が「対象が生まれたら赤にして書き換えを促す」と doc に明記した仕掛け。設計どおり発火しただけ。
+- 6.1 → **タスク 7.1 への申し送り（数え直し済み）**: `Subjects::Zero` の **6 行すべてが既に非 0** — 6.5 ソースの正典 URL 12／6.6 `implemented` の行 21／6.7 関連・別名の相手 非 0（`alias_of` 3・`links` 128 本）／6.7 `alias` の行 3／6.7 登場版の記入がある行 98／6.8 テーマ名 非 0（`values` 非空 348 行）／6.11 証拠の付いた項目 12。census はループ内 assert なので最初の 6.5 で止まっているだけ。**6 行すべてを `NonEmpty` へ移すこと。**
+- 6.1 → **上流 `areka-P0-ukadoc-survey-toolkit` へ送る材料（任意の改善案）**: 新しい「後」の主張は membership しか見ないので、旧主張が偶然持っていた「他のファイルが紛れ込んでいない」という強さを失っている。`after` が `before` に `ANCHOR_SOURCE` を 1 つ足した集合と**厳密に一致する**形にすれば、契約と矛盾せずに強さを取り戻せる（今日の実データで通ることは確認済み）。
+- 道具の罠（6.1 で発覚）: **ヒアドキュメント経由の Python でバックスラッシュ＋数字を書くと NUL バイトが生まれる。** `\0` と書いてもヒアドキュメントが 1 段落として `\0` になり、Python の非 raw 文字列がそれを NUL と解釈する。tasks.md に 1 個混入していた（`grep` が「Binary file matches」と言い出して発覚）。**バックスラッシュを含む文字列は台本をファイルに書いてから実行するか、`chr(92)` で組み立てること。**
