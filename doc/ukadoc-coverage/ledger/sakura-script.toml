@@ -7,256 +7,364 @@ domain = "sakura-script"
 pages = ["list_sakura_script"]
 
 [entry."ukadoc:list_sakura_script:_25_2a:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%* が台詞にそのまま出る）。字句の scan_sysvar は英数字と下線しか名前に取らないので、名前は空になり * は本文へ回る。画面に出る綴りは %* のまま変わらない。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 構文記録]
+"""
 
 [entry."ukadoc:list_sakura_script:_25day:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%day が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 暦時計]
+"""
 
 [entry."ukadoc:list_sakura_script:_25dms:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%dms が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25et:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%et が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 画面と OS 起動時間・時刻ネタ]
+"""
 
 [entry."ukadoc:list_sakura_script:_25exh:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%exh が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 画面と OS 起動時間・時刻ネタ]
+"""
 
 [entry."ukadoc:list_sakura_script:_25hour:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%hour が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 暦時計]
+"""
 
 [entry."ukadoc:list_sakura_script:_25keroname:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%keroname が台詞にそのまま出る）— 値の源は derive_flat_statics で、相方の名前が無ければ本体側の名前へ代替する（正典が黙っている所の areka の裁量として doc/COMPAT_ARCHITECTURE.md に登記済み）。両方とも定義が無いときだけ値を積まず、resolve_system_var の未対応名の腕が素通しして名前が台詞に出る。
+ログ: 出る（素通しに落ちたときだけ resolve_system_var の未対応名の腕の debug! 記録）。
+"""
 
 [entry."ukadoc:list_sakura_script:_25lastghostname:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%lastghostname が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: インストール文脈]
+"""
 
 [entry."ukadoc:list_sakura_script:_25lastobjectname:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%lastobjectname が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: インストール文脈]
+"""
 
 [entry."ukadoc:list_sakura_script:_25m_3f:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%m? が台詞にそのまま出る）。字句の scan_sysvar は英数字と下線しか名前に取らないので、名前は m で切れて ? は本文へ回る。画面に出る綴りは %m? のまま変わらない。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25mc:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%mc が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25me:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%me が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25mh:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%mh が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25minute:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%minute が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 暦時計]
+"""
 
 [entry."ukadoc:list_sakura_script:_25ml:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%ml が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25month:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%month が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 暦時計]
+"""
 
 [entry."ukadoc:list_sakura_script:_25mp:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%mp が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25ms:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%ms が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25mt:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%mt が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25mz:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%mz が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 単語ランダム系]
+"""
 
 [entry."ukadoc:list_sakura_script:_25property_5b_30d7_30ed_30d1_30c6_30a3_540d_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%property[プロパティ名] が台詞にそのまま出る）。字句の scan_sysvar は英数字と下線しか名前に取らないので、名前は property で切れて角括弧の中は本文へ回る。画面に出る綴りは書いたとおりのまま変わらない。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 構文記録]
+"""
 
 [entry."ukadoc:list_sakura_script:_25screenheight:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%screenheight が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 画面と OS 起動時間・時刻ネタ]
+"""
 
 [entry."ukadoc:list_sakura_script:_25screenwidth:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%screenwidth が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 画面と OS 起動時間・時刻ネタ]
+"""
 
 [entry."ukadoc:list_sakura_script:_25second:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%second が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 暦時計]
+"""
 
 [entry."ukadoc:list_sakura_script:_25selfname2:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%selfname2 が台詞にそのまま出る）— 値の源は derive_flat_statics で、descript に別名が定義されていれば展開される。定義が無いときは既定値を作らず値も積まない（正典が黙っている所の areka の裁量として doc/COMPAT_ARCHITECTURE.md に登記済み）ので、resolve_system_var の未対応名の腕が素通しして名前が台詞に出る。
+ログ: 出る（素通しに落ちたときだけ resolve_system_var の未対応名の腕の debug! 記録）。
+"""
 
 [entry."ukadoc:list_sakura_script:_25selfname:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%selfname が台詞にそのまま出る）— 値の源は descript の名前から静的値を積む derive_flat_statics で、本体の名前が定義されていれば展開される。定義が無いときだけ値を積まず、resolve_system_var の未対応名の腕が素通しして名前が台詞に出る。
+ログ: 出る（素通しに落ちたときだけ resolve_system_var の未対応名の腕の debug! 記録）。
+"""
 
 [entry."ukadoc:list_sakura_script:_25username:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — 値の源は SHIORI リソースの照会結果を積む make_username_resource_sink で、応答が無いときだけ resolve_system_var の既定値の腕が既定の呼び名へ落とす。正典は既定値も空応答時の扱いも定めておらず、どちらも doc/COMPAT_ARCHITECTURE.md の裁量記録に登記されている。台詞そのものは崩れない。
+ログ: 出る（resolve_system_var の既定値の腕の debug! 記録）。
+"""
 
 [entry."ukadoc:list_sakura_script:_25wronghour:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（%wronghour が台詞にそのまま出る）。
+ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+[群: 画面と OS 起動時間・時刻ネタ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c-:1"]
 status = "unclassified"
@@ -3076,11 +3184,13 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_74b0_5883_5909_6570_306e_8a18_8ff0_4f8b:1"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+対象外: 見出しがタグではなく、環境変数の書き方を示す記述例だけの節である（規則 1 の第 4 節）。areka が名前を見て起こす動きが無く、状態を判定する対象そのものが無い。
+"""
 
