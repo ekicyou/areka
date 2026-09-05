@@ -21,7 +21,7 @@
   - 完了状態: 1.1 を終えた台帳に対して手順が走り、検査 7・8 が緑（担当も優先度もまだ全件空文字）、検査 6b が `unclassified` 188 件で赤、検査 6c が備考の空 188 件で赤になる。**赤が出ることで検査が実際に働いていることが分かる**
   - _Requirements: 10.1_
 
-- [ ] 1.3 実装済み 2 件の定義行に正典 URL のコメントを足す
+- [x] 1.3 実装済み 2 件の定義行に正典 URL のコメントを足す
   - `crates/areka-ghost/src/sylphya_wiring.rs` の `baseware.name` と `baseware.version` の各要素の直前行に、id 付きの正典 URL のコメントを 1 行ずつ足す
   - 足すのは URL 1 本だけのコメント 2 行で、説明文を伴わない。`vec![...]` の要素は Rust の doc コメントを置ける位置ではないので `//` を使う。上流の証拠収集は `///`・`//!`・`//` の 3 つを長い印から順に剥がすので `//` でも拾われる（`crates/ukadoc-survey/src/evidence/extract.rs:37`）
   - **証拠をここで先に置くのは 2.1 のため**。上流の `check` は証拠の無い `implemented` を赤にする（`crates/ukadoc-survey/src/check/content.rs:94`・上流要件 6.6）ので、2.1 で状態を書いた瞬間に赤の窓が開かないよう順を前に出してある
@@ -130,7 +130,7 @@
   - 先に `git submodule update --init --recursive` と host-32 の i686 成果物のビルドを済ませる。submodule 未初期化だと `cargo` が `pasta_core` を見つけられずに転び、i686 未ビルドだと helper 系のテストが黙って飛ばずに明示的に失敗する
   - `cargo test --workspace` を通す。語彙表の件数を固定するテスト（`crates/areka-sylphya/src/vocab/dotted.rs:191`・`crates/areka-sylphya/src/ledger_key_determinism_tests.rs:201-204`）が現状のまま緑であることを確かめる
   - `crates/areka-sylphya/src/vocab/` の 3 ファイルに差分が無いこと、`dotted.rs` の URL を伴わない「ukadoc」の語 3 か所（`:3`・`:15`・`:67`）がそのまま残っていることを確かめる。後から実装する spec が自分の証拠を自分で置く前提なので、ここで先回りして URL を足さない
-  - 完了状態: 検査 15（ソースの差分がコメント 2 行の追加だけで他のソースに差分なし）と検査 16（`cargo test --workspace` が成功）が両方緑になる。上流 `crates/ukadoc-survey` のコードにも差分が無い
+  - 完了状態: 検査 15（ソースの差分がコメント 2 行の追加だけで他のソースに差分なし）と検査 16（`cargo test --workspace` が成功）が両方緑になる。上流 `crates/ukadoc-survey` の**本番コード**（`src/` 配下）に差分が無い。*(2026-09-05 訂正: 当初は「上流のコードに差分が無い」と書いていたが、上流の空振り検査の国勢調査 `crates/ukadoc-survey/tests/consistency/checks.rs` は、台帳に初めて中身が入った側が主張を `Subjects::Zero` から `NonEmpty` へ書き換える設計になっている〔テスト自身の doc コメントがそう指示する〕。1.1 と 1.3 でこの受け渡しが起き、同ファイルには差分が残る。差分が許されるのはこのテスト 1 本だけで、`crates/ukadoc-survey/src/` は 1 バイトも動かさない)*
   - _Requirements: 9.3, 9.3a, 9.5, 9.6, 9.8_
   - _Depends: 1.3_
 
@@ -147,8 +147,8 @@
 - [ ] 6.2 結果と末尾注記をブリーフィングに書き、境界を最終確認する
   - ブリーフィングの末尾に検証の結果を書く — 道具の `check` の 2 つの数、自前 4 検査の件数と合否、`cargo test --workspace` の結果、対象 0 件で緑になった検査の名指し
   - 同じ末尾に 1 行だけ経緯を残す — 設計時は「上流の整合検査 6.4・6.7 は他 3 台帳が揃うまで確かめられない」と注記する予定だったが、上流の実装が 4 ドメインの台帳ごと着地したため両方が成立し、注記は不要になった
-  - 触っていないことを最終確認する — `values.md`・`README.md`・`catalog.toml`・`report/summary.md`・他 3 ドメインの台帳と報告・既存 4 brief の本文・`.kiro/steering/roadmap.md`・上流 `crates/ukadoc-survey` のコードに差分が無い
-  - 完了状態: 本 spec がコミットするファイルが `doc/ukadoc-coverage/ledger/property.toml`・`doc/ukadoc-coverage/report/property.md`・`doc/ukadoc-coverage/briefing-property.md`・`crates/areka-ghost/src/sylphya_wiring.rs` の 4 本だけであることを差分で確かめられ、一時領域の使い捨て手順がコミットに含まれていない
+  - 触っていないことを最終確認する — `values.md`・`README.md`・`catalog.toml`・`report/summary.md`・他 3 ドメインの台帳と報告・既存 4 brief の本文・`.kiro/steering/roadmap.md`・上流 `crates/ukadoc-survey/src/`（本番コード）に差分が無い
+  - 完了状態: 本 spec がコミットするファイルが `doc/ukadoc-coverage/ledger/property.toml`・`doc/ukadoc-coverage/report/property.md`・`doc/ukadoc-coverage/briefing-property.md`・`crates/areka-ghost/src/sylphya_wiring.rs`・`crates/ukadoc-survey/tests/consistency/checks.rs` の 5 本だけであることを差分で確かめられ（*2026-09-05 訂正: 当初は 4 本と書いていた。5 本目は上流の国勢調査の受け渡しで、1.1 と 1.3 が主張を裏返した分。上流の本番コード `src/` には差分が無い*）、一時領域の使い捨て手順がコミットに含まれていない
   - _Requirements: 8.3, 8.4, 8.5, 10.2, 10.3, 10.5_
   - _Depends: 5, 6.1_
 
