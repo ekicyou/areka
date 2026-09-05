@@ -32,7 +32,7 @@
   - _Boundary: briefing-assets.md_
 
 - [ ] 2. 機械で決まる 178 件の仕訳
-- [ ] 2.1 受理キー表と見出しの文字列一致で決まる分を埋める
+- [x] 2.1 受理キー表と見出しの文字列一致で決まる分を埋める
   - ゴースト・シェル・バルーン・surfaces.txt の受理キー表を作り、見出しと 1 文字も違わずに一致する項目の状態を埋める
   - シェルは `*` の読み替え規則で橋を架ける。areka が照合しない別系統の接頭辞は一致に数えない
   - 窓の配置が読む descript キー（重なり順・貼り付き・拡大率・机上の揃え・シェルとバルーンの拡大率の鍵）も受理キー表に含め、未対応へ落とさない
@@ -257,3 +257,12 @@
 - 1.3: 正典側の誤記を 1 件発見——`descript_shell_surfaces` の説明文に `surace.append`（`surface` の綴り崩れ）。6.4 の是正候補の材料。
 - 1.3: **WebFetch はライブ HTML を要約で不可逆に劣化させる**（見出し 2 本が 1 行に融合した）。見出しの機械的な突き合わせには `curl` の生 HTML を使うこと。抽出の印は `class="entry"` の完全一致では足りない——旧称の項目は `entry deprecated` なので取りこぼす（`overlayfast`・`overlaymultiply`・`overlayscreen` の 3 件で実害を確認）。
 - 1.3: 版番号の「最大」を書くときは範囲を明示すること。カタログ全体の最大は `7.4.1`（`catalog.toml:804`）・次が `5.19.0`（同 `:736`）で、どちらも他ドメインのページの SSP 以外の版番号。本ドメインの 24 ページに限れば最大は 2.8.82。
+- 2.1: **開発者裁定 2026-09-05**——「正典どおりでないなら実装したことにしない」。値の水準で正典と食い違う項目は、対応表（沈黙ルール対応表・見直し表）に**引き受ける行があれば `degraded`**（要件 2.8 のとおり項目名で転記元を引く）、**行が無ければ `absent`**。要件 2.8 は 1 文字も変えない。設計 §6.4 の末尾に登記済みで、**群 3 の人手の仕訳 364 件にも同じ物差しを当てる**。
+- 2.1: 中間状態では `cargo run -p ukadoc-survey -- check` は必ず exit 1 になり `cargo test -p ukadoc-survey` の consistency 群も赤い（`report/assets.md` は台帳の状態を数えて作るので、台帳を 1 文字でも書けば `DomainReportStale` が出る）。群 2〜6 の受入条件は**「所見の種類が `ImplementedWithoutEvidence` と `DomainReportStale` の 2 つだけ」**とすること。終了コードを見ても意味がない。緑に戻るのは 5.x（URL）と 7.2（報告の再生成）が着地してから。
+- 2.1: 設計 §6.3 の件数は実測と食い違う（実測が勝つ）。規則 1 は 62 の見立てに対し**一致 97 件**。設計が落としていたのは ⑴ ゴースト／シェル双方のスコープ別の窓の配置キー、⑵ `char*.name`（`placement/source.rs` の `char_name_scope_of`）、⑶ **シェル descript の `name`**（`crates/areka-ghost/src/config.rs` の `SHELL_NAME_KEY`・OnBoot の Reference0 になる。要件にも設計にも登場しない受理キー）。
+- 2.1: 設計 §6.3 の「`build_placement_config` は本番から呼ばれない足場」は**誤り**（独立検証で確認）。`main.rs:207` → `open_startup_window`（`:626`）→ `placement::prepare_ghost_windows`（`:627`）→ `mod.rs:749` `prepare_stages` → `mod.rs:392` が本番経路。`config.rs:125` の `#[allow(dead_code)]` は陳腐化した目印。
+- 2.1: **設計 §7.2 の URL の表は実物と 3 か所ずれる**。裁定後の実測は合計 **46 行**で、`placement/config.rs` 3（表は 5）・`placement/source.rs` 3（表は 2）・`crates/areka-ghost/src/config.rs` 1（**表に無いファイル**）・`shell/decode.rs` 2（表は 8）・`balloon/parse.rs` 23（表は 28）・`resolve.rs` 10（表は 12）・`prescan.rs` 3・`method.rs` 1。項目別の割り付けは作業用の `url-budget.md` にある。**5.1／5.2 は §7.2 を引き直してから着手すること**。
+- 2.1: **沈黙ルール対応表のデータ行は 81 行**（要件 2.9 と設計 §9.5 が書く 80 行は古い）。増えた 1 行は角括弧なし `\_` タグの行で、`areka-P0-sakura-bare-tag-lexer` が 2026-09-03（`9dd508be`・PR #134）に足した。**さくらスクリプト側の行なので要件 2.9 の 44／16 は影響を受けない**（独立検証で確認）。3.1 は行番号でなく**見出しで表を切って**数え直すこと。手順は作業用の `row-count-drift.md` にある。
+- 2.1: 台帳の備考に**表の行数を書かない**。数を書けば spec が 1 本着地するたびに黙って古くなる（実際に 31 件が陳腐化した）。「すべての行を当たった」と書く。
+- 2.1: 未決 1 件——`balloon.alignment` 2 件は `implemented` に据え置いた。areka は `left`／`right` しか導出しないが、**正典本文が値の一覧を持たない**ため失われた正典値を特定できない。3.1 がライブの ukadoc（※の脚注を含む）を読んで確定させること。
+- 2.1: 6.4 の是正候補の材料が作業用の `corrections-for-9-8.md` に 2 件ある——⑴ `areka-P0-scope-chain-gap` の「意味論不変」裁定はスコープ間の相対位置についてであり、`defaultx` 単体の基準点が正典どおりかは未確認、⑵ `balloon.offsetx`／`offsety` の片軸落ちには引受先の spec が無い。
