@@ -67,19 +67,24 @@ pub fn resolve(
     // 名前情報（欠落は None・推測しない・Req 1.4）。
     let names = GhostNames {
         name: map.get("name").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name_2c_540d_524d:1
         sakura_name: map.get("sakura.name").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name2_2c_540d_524d:1
         sakura_name2: map.get("sakura.name2").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#kero.name_2c_540d_524d:1
         kero_name: map.get("kero.name").cloned(),
     };
 
     // SHIORI マウント: dir は起点の親（存在確定）、file は未指定なら None（推測禁止・Req 2.3）。
     let shiori = ShioriMount {
         dir: shiori_dir,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori_2c_30d5_30a1_30a4_30eb_540d:1
         file: map.get("shiori").cloned(),
     };
 
     // shell マウント: 指定名 or 既定 master（Req 3.1/3.2）→ 物理存在確認（Req 3.3）。
     let shell_name = map
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1
         .get("seriko.defaultsurfacedirectoryname")
         .map(String::as_str)
         .unwrap_or(DEFAULT_SHELL_DIR);
@@ -161,6 +166,7 @@ fn read_bindgroup_defaults(
         // --- .default 経路（従来挙動・値 "1" のみ・無改変・R1.6）---
         if value == "1" {
             if let Some(id) =
+                // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindgroup_2a.default_2c_6570_5024:1
                 parse_bindgroup_id(key, SAKURA_BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX)
             {
                 defaults.sakura_default_on.push(id);
@@ -173,12 +179,14 @@ fn read_bindgroup_defaults(
             }
         }
         // --- .name 経路（task 1.2・値はカテゴリ,パーツ[,サムネ] 文字列）---
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1
         if let Some(id) = parse_bindgroup_id(key, SAKURA_BINDGROUP_PREFIX, BINDGROUP_NAME_SUFFIX)
             && let Some(name) = parse_bindgroup_name(id, value)
         {
             defaults.sakura_names.push(name);
             continue;
         } else if let Some(id) =
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1
             parse_bindgroup_id(key, KERO_BINDGROUP_PREFIX, BINDGROUP_NAME_SUFFIX)
             && let Some(name) = parse_bindgroup_name(id, value)
         {
@@ -194,6 +202,7 @@ fn read_bindgroup_defaults(
         // 「排他か」の判定語彙は parsers に持ち込まない（転写層原則）。オプション
         // インデックス `N`（`parse_bindgroup_id` が検証する）は M1 不使用＝キー形の妥当性
         // 検査にのみ用いる（転記のみ・展開しない）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1
         if parse_bindgroup_id(key, SAKURA_BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX).is_some()
             && let Some(decl) = parse_bindoption_options(value)
         {
@@ -203,6 +212,7 @@ fn read_bindgroup_defaults(
             if decl.multiple {
                 defaults.sakura_multiple.push(decl.category);
             }
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1
         } else if parse_bindgroup_id(key, KERO_BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX).is_some()
             && let Some(decl) = parse_bindoption_options(value)
         {
