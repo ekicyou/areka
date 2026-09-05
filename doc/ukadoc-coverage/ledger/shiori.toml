@@ -5450,8 +5450,8 @@ absent のまま変わらない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5465,14 +5465,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareBegin:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5486,14 +5487,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareComplete:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5507,14 +5509,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareFailure:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5528,14 +5531,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateBegin:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5549,14 +5553,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateCheckComplete:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5570,14 +5575,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、更新するものがあるかどうかを調べるだけの点検の成否を伝える
+2 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateCheckFailure:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5591,14 +5598,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、更新するものがあるかどうかを調べるだけの点検の成否を伝える
+2 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateCheckResult:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5612,14 +5621,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、一度の更新で起きたことをまとめて伝える結果通知の 5 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateCheckResultEx:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5633,14 +5643,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、一度の更新で起きたことをまとめて伝える結果通知の 5 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateComplete:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5654,14 +5665,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateFailure:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5675,14 +5687,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnDownloadBegin:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5696,14 +5709,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
+伝える 8 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareBegin:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5717,14 +5732,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
+伝える 8 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareComplete:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5738,14 +5755,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
+伝える 8 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareFailure:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5759,14 +5778,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
+伝える 8 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherBegin:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5780,14 +5801,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
+伝える 8 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherComplete:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5801,14 +5824,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
+伝える 8 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherFailure:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5822,14 +5847,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
+伝える 8 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherReady:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5843,14 +5870,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
+伝える 8 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateProcessExec:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5864,14 +5893,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateReady:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5885,14 +5915,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateResult:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5906,14 +5937,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、一度の更新で起きたことをまとめて伝える結果通知の 5 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateResultEx:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5927,14 +5959,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、一度の更新で起きたことをまとめて伝える結果通知の 5 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateResultExplorer:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5948,14 +5981,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、一度の更新で起きたことをまとめて伝える結果通知の 5 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdatedataCreated:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5969,14 +6003,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdatedataCreating:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "B1"
+values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
@@ -5990,6 +6025,7 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
+小群: 更新 26 件のうち、ゴースト本体そのものを新しくする流れを伝える 11 件の 1 つ。
 """
 
 [entry."ukadoc:list_shiori_event:OnUserInput:1"]

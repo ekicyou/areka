@@ -153,8 +153,9 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 26 件すべてに同じテーマ（更新）と同じ優先度を置き、内訳は `note` の 1 文で書き分け、`links` の `same-feature` で鎖にする。
 
 - 鎖の順序は**正典ページの掲載順**に従い、同じ小群の中で隣り合う 2 項目を結ぶ。掲載順は機械で確かめられるので、人が進行順を推測して書くことがない。
-- 小群と件数（実測・検証で訂正）: 本体更新 **11**（`OnUpdatedataCreating`・`OnUpdatedataCreated`・`OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete`・`OnUpdateFailure`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`）・他ゴースト更新 8・点検 2・結果 5＝26。鎖の本数は 10＋7＋1＋4＝**22**。
-- これに加えて、本体更新と他ゴースト更新の**対応する 8 組**（`OnUpdateBegin` と `OnUpdateOtherBegin` など）を `same-feature` で結ぶ。合計 **30 本**。
+- 小群と件数（実測・検証で訂正）: 本体更新 **11**（`OnUpdatedataCreating`・`OnUpdatedataCreated`・`OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete`・`OnUpdateFailure`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`）・ゴースト以外の更新 8・点検 2・結果 5＝26。鎖の本数は 10＋7＋1＋4＝**22**。
+- これに加えて、本体更新とゴースト以外の更新の**対応する 8 組**（`OnUpdateBegin` と `OnUpdateOtherBegin` など）を `same-feature` で結ぶ。合計 **30 本**。
+- **呼称の訂正（2026-09-05・実装時に正典で再確認）**: 設計の初版は `OnUpdateOther*` 8 件を「他ゴースト更新」と呼んでいたが、正典本文は 8 件すべてが「**ゴースト以外の**…」で始まり、「他のゴースト」の語は 1 件も現れない。`OnUpdateReady` の `Reference3` が更新対象の種別を `(shell ghost balloon headline plugin)` と列挙しており、`Other` 系が指すのは `ghost` 以外の種別（シェル・バルーン・ヘッドライン・プラグイン）である。関係の本数（8 本）と書く側（本体側）は変わらない — 8 組は `Begin`／`Ready`／`Complete`／`Failure`／`OnDownloadBegin`／`OnMD5Compare{Begin,Complete,Failure}` で逐語対応し、本体側 11 のうち `OnUpdatedataCreating`・`OnUpdatedataCreated`・`OnUpdateProcessExec` の 3 件が相手を持たない（11 − 3 = 8）。
 
 ### DD-5（§3-6）`sakura.*`／`kero.*`／`char*.*` の繋がり — **案 ⒜ を採用**
 
@@ -285,7 +286,7 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 **繋がりを書く側の決め方**（1 つの関係は 1 回だけ書く）:
 
 1. 要件が名指しで側を定めているものは、その側に書く（DD-3 の 7 件は `list_shiori_event_ex` 側）。
-2. 進行や派生の向きがあるものは、先に起きる側・元の側に書く（`OnUpdate` の鎖・本体更新と他ゴースト更新の対応）。
+2. 進行や派生の向きがあるものは、先に起きる側・元の側に書く（`OnUpdate` の鎖・本体更新とゴースト以外の更新の対応）。
 3. それ以外は id の文字順で先に来る側に書く（`char*.` ＜ `kero.` ＜ `sakura.`／`list_plugin_event:` ＜ `list_shiori_event:`）。
 
 **確定している繋がり**:
@@ -295,7 +296,7 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 | 他ゴースト由来の拡張イベント から `OnCommunicate`（DD-3） | `same-feature` | 7 | `list_shiori_event_ex` 側 |
 | 拡張側と本体側の同名 3 件（`OnBatteryLow` ほか・DD-3） | `same-feature` | 3 | `list_shiori_event` 側 |
 | `OnUpdate` の掲載順の鎖（DD-4） | `same-feature` | 22 | 先に来る項目 |
-| 本体更新と他ゴースト更新の対応 8 組（DD-4） | `same-feature` | 8 | 本体側 |
+| 本体更新とゴースト以外の更新の対応 8 組（DD-4） | `same-feature` | 8 | 本体側 |
 | `sakura.`／`kero.`／`char*.` の総当たり（DD-5） | `same-feature` | 27 | 文字順で先の側 |
 | `list_plugin_event` と `list_shiori_event` の同名 12 組（DD-6） | `same-feature` | 12 | `list_plugin_event` 側 |
 | 旧仕様 3 件 から `OnFileDrop2`（要件 6.3） | `alias_of` | 3 | 別名側（`alias_of` の欄で足りる） |
