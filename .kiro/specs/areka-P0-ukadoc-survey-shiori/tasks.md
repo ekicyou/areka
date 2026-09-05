@@ -18,12 +18,13 @@
   - 完了条件: `cargo test -p ukadoc-survey` が緑で、台帳の 677 項目が付録 A の欄をそのまま持っている
   - _Requirements: 1.1, 1.2, 1.3, 1.7, 9.8, 12.7_
 
-- [ ] 1.3 道具の検査が赤を出せることを、書き始める前に確かめる
-  - 台帳を仮に壊した状態で `cargo run -p ukadoc-survey -- check` を走らせ、少なくとも次の所見が実際に出ることを 1 件ずつ確かめる: `LedgerIdNotInCatalog`（id を 1 文字変える）・`LedgerOutOfOrder`（隣り合う 2 項目を入れ替える）・`LedgerPagesMismatch`（前置きのページを 1 つ落とす）・`AliasChain`（別名の指す先を別の `alias` へ向ける）・`LinkEndpointMissing`（相手 id の末尾の連番を消す）・`UnknownTheme`（テーマ名を 1 つ創作する）・`IntroducedNotInCatalogVersions`（版番号を 1 桁変える）・`ImplementedWithoutEvidence`（証拠の無い行を `implemented` にする）・`SourceUrlNotInCatalog`（URL の符号化部分を 1 文字崩す）・`DomainReportStale`（台帳を直して報告を作り直さない）
+- [x] 1.3 道具の検査が赤を出せることを、書き始める前に確かめる
+  - 台帳を仮に壊した状態で `cargo run -p ukadoc-survey -- check` を走らせ、少なくとも次の所見が実際に出ることを 1 件ずつ確かめる: `LedgerIdNotInCatalog`（id を 1 文字変える）・`LedgerOutOfOrder`（隣り合う 2 項目を入れ替える）・`LedgerPagesMismatch`（前置きのページを 1 つ落とす）・`AliasChain`（別名の指す先を別の `alias` へ向ける）・`LinkEndpointMissing`（相手 id の末尾の連番を別の数字に変える）・`IntroducedNotInCatalogVersions`（版番号を 1 桁変える）・`ImplementedWithoutEvidence`（証拠の無い行を `implemented` にする）・`SourceUrlNotInCatalog`（URL の符号化部分を 1 文字崩す）・`DomainReportStale`（台帳を直して報告を作り直さない）
   - 確かめたら壊した箇所をすべて戻し、`git status` で台帳が元のままであることを確認する
   - 未分類が 0 件であることと状態語の綴りは、報告の「未分類」列と読み込み段の失敗で見る（15 所見には別立てで現れない）
+  - **テーマ名の綴り**（`UnknownTheme`）も同じく読み込み段の失敗で見る。読み取りの `parse_theme` と検査の `CheckInput::themes` が同じ `THEMES` 定数なので、台帳ファイル経由でこの所見に到達する道は無い（道具の常時テスト `a_misspelled_theme_turns_red` が覆う）
   - 使い捨ての検証台本は書かない（道具の 15 所見と常時検査が同じ範囲を覆う）
-  - 完了条件: 10 通りの壊し方それぞれについて「その所見が出た」記録が残り、戻した後に `cargo test -p ukadoc-survey` が緑
+  - 完了条件: 9 通りの壊し方それぞれについて「その所見が出た」記録が残り、`UnknownTheme` は読み込み段の失敗で赤になることの記録が残り、戻した後に `cargo test -p ukadoc-survey` が緑
   - _Requirements: 1.4, 1.6, 6.8, 8.4, 10.5_
 
 - [ ] 1.4 群の索引を確定し、ブリーフィング文書の冒頭と台帳冒頭のコメントに置く
@@ -225,3 +226,7 @@
 - 1.2: 台帳は CRLF・6,101 行・BOM 無し。**値を書き換える際も CRLF を保つこと。**
 - 1.2: 触ってはいけない部分の SHA-256 を scratchpad `shiori-ledger-frozen.md` に控えた（冒頭コメント `a5ccc6a1…` / `[ledger]` 節 `4c9cc888…` / id 行 677 本 `b68abbbc…`）。別セッションでも台帳から数行で再計算できる。
 - 1.2: 1.1 が残した `shiori-catalog-ids.txt` はカタログ全 1,749 件。担当 677 件に絞った `cat-shiori-ids.txt`（LF・677 行）を新設済み。繋がりの相手の実在照合には全件側を使うこと。
+- 1.3: 較正で台本の字句の誤りが 2 件出た（タスク本文を訂正済み）。⑴ `LinkEndpointMissing` は「相手 id の末尾の連番を**消す**」では出ない — `links.to`・`alias_of`・`supersedes` はすべて `ledger/read.rs` の `reference_id` → `model.rs` の `EntryId::parse` を通り、コロン数が合わずに**読み取り段**で止まる。「別の数字に変える」なら出る。⑵ `UnknownTheme` は台帳ファイル経由では**構造上到達しない** — 読み取りの `parse_theme` と検査の `CheckInput::themes` が同一の `THEMES` 定数。所見は道具の常時テスト `a_misspelled_theme_turns_red` が覆う。
+- 1.3: 巻き添えで出る所見の型 — id を書き換えると `CatalogIdMissingFromLedgers` が付く。状態・テーマ・版番号を書き換えると `DomainReportStale` が付く。並び順・前置き・関連の書き換えでは付かない（報告がそれらを載せないため）。
+- 1.3: **`MSYS_NO_PATHCONV=1` を立てること。** MSYS のパス変換が `//` で始まる引数の `\r\n` を `/r/n` に化けさせ、CRLF のファイルへの置換が黙って壊れる（`SourceUrlNotInCatalog` の較正で 1 度空振りした）。
+- 1.3: 戻しは `git checkout -- <明示パス>` で行うこと。`git checkout .` / `git reset --hard` / `git stash` は禁止（stash スタックは他セッションと共有）。
