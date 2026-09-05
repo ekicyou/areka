@@ -2242,337 +2242,411 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_headline:alwaysdisplay_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_headline:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_headline:dllname_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_headline:homeurl_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_headline:name_2c_30d8_30c3_30c9_30e9_30a4_30f3_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_headline:openurl_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_headline:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.10"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_headline:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_headline:url_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:_2a.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:_2a.refresh_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:_2a.refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:_2a.source.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.17"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2cignore:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:accept_2c_672c_4f53_5074_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:bootghost_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.52"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:name_2c_30aa_30d6_30b8_30a7_30af_30c8_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:refresh_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_install:type_2c_7a2e_5225:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:craftman_2c_4f5c_8005_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:craftmanurl_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:craftmanw_2c_4f5c_8005_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:filename_2cdll:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:homeurl_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:id_2cID:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:name_2c_30d7_30e9_30b0_30a4_30f3_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:otherghosttalk_2c_30aa_30d7_30b7_30e7_30f3:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.10"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_plugin:type_2c_7a2e_5225:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:descript_shell:char_2a.balloon.dontmove_2c_6570_5024:1"]
 status = "unclassified"
@@ -2870,7 +2944,7 @@ priority = ""
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の package::read_bindgroup_defaults が `BindGroupDefaults::kero_default_on` へ転記するが、この欄を読む本番の経路が無い。起動時の着せ替えの初期集合を組むemo2_boot::assets::default_bind_ids は `sakura.` の側しか見ない。
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の package::read_bindgroup_defaults が `BindGroupDefaults::kero_default_on` へ転記するが、この欄を読む本番の経路が無い。起動時の着せ替えの初期集合を組む areka の emo2_boot::assets::default_bind_ids は `sakura.` の側しか見ない。
 """
 
 [entry."ukadoc:descript_shell:kero.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1"]
@@ -5022,218 +5096,266 @@ links = []
 note = ""
 
 [entry."ukadoc:dev_bind"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは着せ替えの設定一式（surfaces.txt 側の定義と、シェルの descript.txt 側のメニュー配置）を定める。areka が起動時の初期集合を emo2_boot::assets::default_bind_ids で組むところまでで、利用者が着せ替えを選ぶ入口であるオーナードローメニューが無いため、ページ全体としては満たしていない。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+"""
 
 [entry."ukadoc:dev_nar"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.3.00"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布用アーカイブ（nar）の作り方一式を定める。areka にはアーカイブの作成も展開も無く、install.txt を読む経路も無いので、ページ全体として何も無い。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+"""
 
 [entry."ukadoc:dev_ownerdraw"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはオーナードローメニューの見た目を、シェルの descript.txt と SHIORI のリソース応答で設定する方法を定める。areka にはオーナードローメニューそのものが無く、menu_background.png などの画像を読む経路も 1 か所も無いので、ページ全体として何も無い。
+"""
 
 [entry."ukadoc:dev_shell"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはシェルを 1 つ作る手順一式（立ち絵の用意・surfaces.txt の書き方・当たり判定・着せ替え）を定める。areka はシェルの descript.txt と surfaces.txt を読んで立ち絵とアニメーションを出すところまでは持つが、ページが説明する範囲をそろえてはいないので、ページ全体としては満たしていない。細かい可否は同じ台帳の descript_shell と descript_shell_surfaces の各項目で読める。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+"""
 
 [entry."ukadoc:dev_shell_error"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは SSP が出すエラーメッセージの読み方と直し方を並べる。areka はそのメッセージ群を持たないので、ページが前提とする画面がそもそも出ない。ページ全体として何も無い。
+"""
 
 [entry."ukadoc:dev_update"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.3.00"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはネットワーク更新に対応するためのサーバ側・ゴースト側の準備一式を定める。areka には更新の仕組みが無く、updates2.dau・updates.txt・delete.txt を読む経路もネットワークの出入りも 1 か所も無いので、ページ全体として何も無い。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+"""
 
 [entry."ukadoc:manual_balloon"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.4.78"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはバルーンフォルダに置くファイル一式（descript.txt・本体側と相方側のバルーン画像・選択肢用の画像・矢印画像・通信中の画像など）を並べる。areka はバルーンの descript.txt と面になる画像を読むが、ページが並べるファイルすべてを扱ってはいないので、ページ全体としては満たしていない。細かい可否は同じ台帳の descript_balloon の各項目で読める。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+"""
 
 [entry."ukadoc:manual_directory"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはゴーストとシェルのフォルダ構成の全体像を示す。areka は ghost/master と shell/master の 2 点までは正典どおりに解決するが、ページが並べる要素のうち makoto.dll・updates2.dau・アイコン・カーソルなどを読む経路が無いので、ページ全体としては満たしていない。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+"""
 
 [entry."ukadoc:manual_ghost"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは ghost/master に置くファイル一式（descript.txt・shiori.dll・saori の dll・makoto.dll・updates2.dau・アイコン・カーソル・サムネイル画像・AI グラフの画像）を並べる。areka は descript.txt と shiori.dll までは扱うが、残りを読む経路が 1 か所も無いので、ページ全体としては満たしていない。
+"""
 
 [entry."ukadoc:manual_install"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布アーカイブの中身の並べ方と、install.txt・developer_options.txt の役割を定める。areka にはインストーラの働きも install.txt を読む経路も無いので、ページ全体として何も無い。
+"""
 
 [entry."ukadoc:manual_owner_draw_menu"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはオーナードローメニューに使う画像 3 枚（menu_background.png・menu_foreground.png・menu_sidebar.png）の置き場と役割を定める。areka にはオーナードローメニューが無く、これらの画像を読む経路も 1 か所も無いので、ページ全体として何も無い。
+"""
 
 [entry."ukadoc:manual_shell"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.2.57"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは shell/master に置くファイル一式（descript.txt・立ち絵の画像・surfaces.txt・分割された surfaces の追加ファイル・alias.txt・surfacetable.txt・サムネイル画像・makoto.dll・メニュー用の画像 3 枚）を並べる。areka が読むのは emo2_boot::assets::SURFACES_TXT が指す 1 つの surfaces.txt までで、分割された追加ファイル・alias.txt・surfacetable.txt・makoto.dll・メニュー用の画像を読む経路が無いので、ページ全体としては満たしていない。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+"""
 
 [entry."ukadoc:manual_translator"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはトランスレータ（MAKOTO）の置き場と働きを定める。areka には makoto.dll を読み込む経路が 1 か所も無いので、ページ全体として何も無い。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+"""
 
 [entry."ukadoc:manual_update"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはネットワーク更新に関わるファイル（updates2.dau・updates.txt・delete.txt と番号付きの変種・developer_options.txt）の置き場を定める。areka にはこれらを読む経路もネットワークの出入りも 1 か所も無いので、ページ全体として何も無い。
+"""
 
 [entry."ukadoc:memo"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはベースウェアの機能比較表と、おすすめサイトのバナーなどの雑多な覚え書きを並べる。areka にはバナーの表示も、表が挙げる機能の多くも無い。表は MATERIA・SSP・CROW・ninix-kagari を横に並べた比較で SSP の欄も含むので、他ベースウェア専用の記述には当たらず、対象外にはしない。
+"""
 
 [entry."ukadoc:spec_update_file:URL_30a8_30f3_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:spec_update_file:_30bb_30ad_30e5_30ea_30c6_30a3_30c1_30a7_30c3_30af:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:spec_update_file:_30d5_30a1_30a4_30eb_8d70_67fb:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:spec_update_file:_5fc5_9808_30d5_30a3_30fc_30eb_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:spec_update_file:_62e1_5f35_30d5_30a3_30fc_30eb_30c9_20_28_4f4d_7f6e_5b2_5d_4ee5_964d_29:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:spec_update_file:_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:spec_update_file:_884c_30d5_30a9_30fc_30de_30c3_30c8:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:spec_update_file:_884c_7a2e_5225:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
 [entry."ukadoc:spec_update_file:ghost_5cmaster_3078_306e_30b3_30d4_30fc:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka には更新ファイル（updates2.dau・updates.txt・delete.txt）を読む経路がファイルごと無い。本番の経路にはこれらのファイル名も nar の展開もネットワークの出入りも OnUpdate 系の発火も 1 か所も無く、delete.txt については areka-parsers の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
+"""
 
