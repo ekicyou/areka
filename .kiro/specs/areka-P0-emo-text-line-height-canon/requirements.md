@@ -51,12 +51,13 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall SSP（`C:\wintools\ssp\ssp.exe`・既定設定）で、同じバルーン（`emo2-kakukaku`・`font.name,Yu Gothic UI`・`font.height,28`）に同じ文字列を複数行並べて表示させ、拡大率 2 水準（96 DPI 相当の k=1 と 192 DPI 相当の k=2）で画素を読み取り、次の 4 量を数値で記録する: (a) 行送りピッチ（隣接行の同一基準点の距離）、(b) 行ボックス丈（1 行が占める縦の寸法）、(c) ベースライン位置（行の上端からの距離）、(d) 参照グリフのインク丈（文字の見た目の大きさ）。
-2. When 実測値が揃った, the 本仕様 shall `font.height` の意味を「セル丈（ascent＋descent）」「em サイズ」のいずれかに確定し、確定の根拠を実測値（k=1・k=2 の両方）と照合して記録する。
+1. The 本仕様 shall SSP（`C:\wintools\ssp\ssp.exe`・既定設定）で、同じバルーン（`emo2-kakukaku`・`font.name,Yu Gothic UI`・`font.height,28`）に同じ文字列を複数行並べて表示させ（`menu.pasta` の 3 台本に加え、参照グリフ（例「あ」「漢」「H」「g」）を 4 行並べる単純な台本を相方側 `emo2-kakukaku` と本体側 `emo2` の両バルーンで表示させる＝本体側の行容量も同じ撮影で読む）、拡大率 2 水準で画素を読み取り（本機のモニタは 192 DPI＝k 2 と 144 DPI＝k 1.5 の 2 面で、96 DPI＝k 1 の面は無い〔2026-09-05 に DPI 対応プロセスから実測〕。既定は k 2 と k 1.5 の 2 水準を用い、開発者がいずれかの面を 100% へ設定できる場合のみ k 1 を加える）、次の 4 量を数値で記録する: (a) 行送りピッチ（隣接行の同一基準点の距離）、(b) 行ボックス丈（1 行が占める縦の寸法）、(c) ベースライン位置（行の上端からの距離）、(d) 参照グリフのインク丈（文字の見た目の大きさ）。
+2. When 実測値が揃った, the 本仕様 shall `font.height` の意味を「セル丈（ascent＋descent）」「em サイズ」のいずれかに確定し、確定の根拠を実測値（実測した 2 水準の両方）と照合して記録する。
 3. The 本仕様 shall 行送りの式を `1lh = 1em + 行間` の形で確定し、既定設定の SSP における「行間」の既定値を実測から確定して記録する（ukadoc は既定値に沈黙するため、実測が唯一の根拠である）。
 4. The 本仕様 shall 確定した式に `font.height,28` を代入した行送りピッチが、文字描画範囲の高さ 93px に 3 行を収める値（3 行目の下端 ≤ 133）であることを、SSP の実測（同条件で 3 行が収まる事実）と一致させて示す。
-5. If SSP の実測だけでは意味を一意に決められない（k=1 と k=2 の実測が食い違う、または実測誤差が候補の差より大きい）, then the 本仕様 shall 推測で埋めずに、食い違いの実測値と候補それぞれの帰結（行数・文字の大きさ・インクの重なり）を並べて開発者の裁定へ回す。
+5. If SSP の実測だけでは意味を一意に決められない（2 水準の実測が食い違う、または実測誤差が候補の差より大きい）, then the 本仕様 shall 推測で埋めずに、食い違いの実測値と候補それぞれの帰結（行数・文字の大きさ・インクの重なり）を並べて開発者の裁定へ回す。
 6. The 本仕様 shall 実測の条件（SSP の版・ゴースト・バルーン・モニタ DPI・拡大率・撮影または読み取りの方法・日付）と生の証跡ファイルの所在を、後から同じ手順で再測できる粒度で記録する。
+7. The 本仕様 shall 画素の読み取りの定義（インク丈＝不透明画素の上端から下端・アンチエイリアスを不透明とみなす閾値・ベースラインの取り方・行送りピッチの基準点）を実測の**前**に決めて記録し、GDI と DirectWrite のラスタライズ差が Requirement 3.3／3.4 の許容幅の判定に混ざらないようにする。
 
 ### Requirement 2: 正典表と裁量記録の改訂
 
@@ -67,7 +68,7 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 1. When Requirement 1 の意味論が確定した, the 本仕様 shall 完了 spec `areka-P0-emo-text-layer` の `design.md` 補足正準（行送りピッチの行）と DPI/スケール契約表（「フォントサイズの写像」の行）を、確定した式・`font.height` の意味・行間の既定値へ書き換え、旧記述（`ceil(font.height × 1.25)`・「値そのまま」）を「本仕様で改訂」の注記つきで置き換える。
 2. The 本仕様 shall 同 `research.md` のリスク登記「行送りピッチ 1.25 係数: SSP 実測との視覚差が出る可能性」に消化済みの注記（本仕様名・日付）を加える。
 3. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8（沈黙ルール対応表）へ 1 行を追加し、「`font.height` の意味・行送りの式・行間の既定」を「参照実装 SSP の実測で確定した項目」として、裁量・根拠（実測値）・出典 spec を記録する。
-4. The 本仕様 shall 正典表・裁量記録・実装の doc コメントに残る係数 1.25 の記述を洗い出し、改訂後に「`1.25` を行送り係数として述べる記述が製品コード・spec 文書・steering に残っていない」ことを機械的に（全文検索で）示す。ただし DPI 拡大率 k としての `1.25` は対象外である。
+4. The 本仕様 shall 製品コード（`crates/areka-emo-text/src/` の非テストファイル・テストと `examples/` の doc コメント）と現行の正典表・裁量記録（Requirement 2.1〜2.3 の改訂先）に残る係数 1.25 の記述を洗い出し、改訂後に「`1.25` を**現行の**行送り係数として述べる記述がそこに残っていない」ことを機械的に（同一行に `1.25` と `line_pitch`／`行送り`／`係数` のいずれかを含む行の全文検索で）示す。対象外: DPI 拡大率 k としての `1.25`（`region.rs`・`tests/scale_invariance_test.rs`・`crates/areka/src/placement/`）、履歴として旧式を述べる記述（`roadmap.md` の根因記述・e2e の記録・他の完了 spec のアーカイブ）、および「本仕様で改訂」の注記つきで旧式を引用する記述。
 5. The 本仕様 shall `cursor-tag-canon` の要件「`lh` を『行高さ（1em＋行間）』として解釈する」（同 `requirements.md:63`）を改訂せず、本仕様の式がその定義を実体化するものであることを本仕様の記録に明記する。
 
 ### Requirement 3: 行送りと文字の大きさが SSP と一致する
@@ -78,8 +79,8 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 
 1. When バルーンが `font.height` を宣言している, the emo テキスト層 shall Requirement 1 で確定した式に従う行送りピッチで行を送り、`emo2-kakukaku`（`font.height,28`・高さ 93px）で 3 行を文字描画範囲に収める。
 2. The emo テキスト層 shall 各行の行ボックス丈（インクを含む縦の寸法）が行送りピッチを超えないようにし、隣接する行のインクが重ならないようにする（係数を 1.0 へ下げるだけの応急処置は、行ボックス丈 37.24px が行送り 28px を超えてインクが重なるため不可＝開発者裁定 2026-09-05）。
-3. The emo テキスト層 shall 文字描画基盤へ渡すフォントサイズを Requirement 1 で確定した `font.height` の意味から導き、参照グリフのインク丈が SSP の実測値と拡大率 k=1 で ±1px・k=2 で ±2px の範囲で一致するようにする。
-4. The emo テキスト層 shall ベースライン位置（行の上端からの距離）が SSP の実測値と k=1 で ±1px の範囲で一致するようにする。
+3. The emo テキスト層 shall 文字描画基盤へ渡すフォントサイズを Requirement 1 で確定した `font.height` の意味から導き、参照グリフのインク丈が SSP の実測値と、実測した最小の拡大率（k 1.5・k 1 を実測した場合は k 1）で ±1px・k 2 で ±2px の範囲で一致するようにする。
+4. The emo テキスト層 shall ベースライン位置（行の上端からの距離）が SSP の実測値と、実測した最小の拡大率で ±1px の範囲で一致するようにする。
 5. The emo テキスト層 shall 行送りピッチ・行ボックス丈・`lh` の係数・選択肢の帯の寸法を**同じ一つの源**（確定した式と `font.height`）から導き、いずれかだけが別の係数を持たないようにする。
 6. The emo テキスト層 shall `\n[half]` 等の比率つき改行（行送り量 = 行送りピッチ × 比率）の意味を変えず、比率だけが新しいピッチに掛かるようにする。
 7. While 書字方向が縦書き（`vertical_rl`／`vertical_lr`）である, the emo テキスト層 shall 同じ式を列送り（行送り軸の読み替え）にそのまま適用し、縦書き専用の係数や意味論を新設しない。
@@ -108,7 +109,7 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 2. When `menu.pasta:33`（おしゃべり頻度: 「しゃべくり」「ほどよく」「たまーに」「もどる」・4 項目 3 行）を表示する, the emo テキスト層 shall 4 つの選択肢すべてを文字描画範囲の内に置き、スクロールを発生させない。
 3. When `menu.pasta:62`（位置調整: 「調整」「もどる」・2 項目・2 行目は空）を表示する, the emo テキスト層 shall 2 つの選択肢すべてを文字描画範囲の内に置き、スクロールを発生させない。
 4. The emo テキスト層 shall 上記 3 台本で、各選択肢の行矩形の下端が文字描画範囲の下端 133 を超えないようにする。
-5. The emo テキスト層 shall 本体側バルーン `emo2`（`balloons0s.txt`・文字描画範囲 (36,46)-(356,168)・高さ 122px）で、起動時の挨拶や既存の台本の行数・折返しが本仕様の前後で SSP と同じ行数に収まるようにする（本体側で新たに行が落ちる退行を起こさない）。
+5. The emo テキスト層 shall 本体側バルーン `emo2`（`balloons0s.txt`・文字描画範囲 (36,46)-(356,168)・高さ 122px）で、収まる行数が Requirement 1.1 の同じ撮影で読んだ SSP の行数と一致するようにし（新しい式では 3 行から 4 行へ増える見込み＝`research.md` §4.4）、本体側で新たに行が落ちる退行を起こさない。行容量が変わることによる既存テストの前提の導き直しは Requirement 7.3、e2e への申し送りは Requirement 10.2 が受ける。
 6. While 選択肢の行にマウスが乗っている（hover）, the emo テキスト層 shall ハイライト帯とヒット帯を Requirement 3.5 の同じ源から導き、選択肢の文字の下（descent）が帯の外へ出ないようにする（実機不具合「選択肢の文字の下が切れる」を再発させない）。
 
 ### Requirement 6: 折返し閾値が文字描画範囲の外にあるときの挙動（「閉じる」右端欠けの裁定）
@@ -130,7 +131,7 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 行送りピッチ・行ボックス丈・フォントサイズの導出に数値で依存する既存の決定論テストを洗い出し（少なくとも: `draw_format_metrics_tests.rs`・`layout_wrap_tests.rs`・`layout_visible_window_tests.rs`・`layout_cursor_*_tests.rs`・`layout_segmented_tests.rs`・`viewbox_draw_frame_render_tests.rs`・`viewbox_draw_live_diff_tests.rs`・`actor_choice_contract_tests.rs`・`state_cue_apply_tests.rs`・`choice_tests.rs`・`tests/draw_readback_test.rs`・`tests/viewbox_scroll_test.rs`・`tests/viewbox_blit_spike.rs`・`tests/pipeline_test.rs`・`tests/scale_invariance_test.rs`・`tests/emo2_fixture_e2e_test.rs`・`examples/emo-text-layer/`）、それぞれの期待値を新しい式から**計算で導出**して更新する。
+1. The 本仕様 shall 行送りピッチ・行ボックス丈・フォントサイズの導出に数値で依存する既存の決定論テストを洗い出し（少なくとも: `draw_format_metrics_tests.rs`・`layout_wrap_tests.rs`・`layout_visible_window_tests.rs`・`layout_cursor_*_tests.rs`・`layout_segmented_tests.rs`・`viewbox_draw_frame_render_tests.rs`・`viewbox_draw_live_diff_tests.rs`・`actor_choice_contract_tests.rs`・`state_cue_apply_tests.rs`・`choice_tests.rs`・`tests/draw_readback_test.rs`・`tests/viewbox_scroll_test.rs`・`tests/viewbox_blit_spike.rs`・`tests/pipeline_test.rs`・`tests/scale_invariance_test.rs`・`tests/emo2_fixture_e2e_test.rs`・`examples/emo-text-layer/`、および `research.md` §3.3 が追加で挙げる `state_reveal_tests.rs`・`viewbox_axis_tests.rs`・`viewbox_dirty_tests.rs`・`viewbox_plan_commit_tests.rs`・`actor_tests.rs`・`actor_scale_refresh_tests.rs`・`viewbox_draw_choice_hover_tests.rs`・`viewbox_draw_png_dump_tests.rs`・`layout_cursor_tests.rs`・`cursor_tag_tests.rs`・`cursor_tag_resolve_tests.rs`・`tests/choice_fixture_test.rs`＝計 30 ファイル。`research.md` §3.3 の一覧を正本とする）、それぞれの期待値を新しい式から**計算で導出**して更新する。
 2. The 本仕様 shall 期待値の更新にあたり、許容幅（±px・比率）を広げず、`assert_eq` を範囲判定へ置き換えず、テストを `#[ignore]` にせず、テストの本数と名前を減らさない（陳腐化したテストを除外する場合は、検証対象が仕様判断で退役した根拠を個別に記録する）。
 3. The 本仕様 shall 「3 行が収まり 4 行目であふれる」等の容量前提を持つテスト（`viewbox_draw_live_diff_tests.rs` の矩形寸法・`tests/viewbox_scroll_test.rs` のコンパイル時検査・`examples/emo-text-layer/scenario.rs` の 3 行前提）について、新しいピッチでも同じ前提が成り立つように寸法を導き直し、前提が崩れて検証が空振りになる（緑のまま意味を失う）ことを防ぐ。
 4. The 本仕様 shall 参照描画との画素等価比較（`viewbox_draw_oracle_regression_tests.rs`・`viewbox_draw_live_diff_tests.rs`）が両側とも同じ寸法で動くことを確認したうえで、注入した差分を検出する負の対照（`live_diff_detects_injected_divergence`）が新しい式でも赤になることを示す。
@@ -145,10 +146,10 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 
 1. The 本仕様 shall 実物 `emo2-kakukaku` の `descript.txt`＋`balloonk0s.txt` を 288×203 で解決し（(24,40)-(240,133)・折返し閾値 254）、`menu.pasta:15`／`:33`／`:62` の 3 台本を実 parser → 実 compile → 実 state → 実領域解決 → 実配置で通して、3 台本すべてで先頭可視行が 0 であること、および各選択肢の行矩形が文字描画範囲の縦の内に収まることを固定する決定論テストを加える。
 2. The 本仕様 shall 上記を折返し方式 2 通り（1 文字ずつ／budoux による分節）の両方で実行し、結果が同一であることを固定する。
-3. The 本仕様 shall SSP の実測値（行送りピッチ・行ボックス丈・ベースライン・参照グリフのインク丈・k=1 と k=2）を定数として固定し、areka の同条件の出力がそれらと Requirement 3.3／3.4 の許容幅で一致することを、実フォント（Yu Gothic UI）を用いた読み戻しテストで検証する（定数には実測の日付と証跡ファイル名をコメントで添える）。
+3. The 本仕様 shall SSP の実測値（行送りピッチ・行ボックス丈・ベースライン・参照グリフのインク丈・実測した各拡大率）を定数として固定し、areka の同条件の出力がそれらと Requirement 3.3／3.4 の許容幅で一致することを、実フォント（Yu Gothic UI）を用いた読み戻しテストで検証する（定数には実測の日付と証跡ファイル名をコメントで添える）。
 4. The 本仕様 shall Requirement 6 の裁定（折返し閾値が外にある場合の表示）を、`emo2-kakukaku` の実 fixture で「閉じる」の右端が欠けないこと、および本体側 `emo2` の表示が 1 画素も変わらないことの両方で固定する。
 5. The 本仕様 shall 行ボックス丈が行送りピッチを超えない（隣接行のインクが重ならない）ことを、実フォントの読み戻しで 2 行を並べて固定する。
-6. The 本仕様 shall 新規テストを本番ファイルと同じディレクトリの兄弟ファイル（`<stem>_<theme>_tests.rs`）または `tests/` へ置き、1 ファイル 1,000 行以下を守り、行数の見張り（`file_length_guard_test.rs`）の例外表に触れない。
+6. The 本仕様 shall 新規テストを本番ファイルと同じディレクトリの兄弟ファイル（`<stem>_<theme>_tests.rs`）または `tests/` へ置き、1 ファイル 1,000 行以下を守り、行数の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の例外表に触れない。
 7. The 本仕様 shall 新規テストのうち少なくとも 1 本について、行送りの式を旧式（1.25）へ戻すと赤になることを示す（判定が生きていることの対照）。
 
 ### Requirement 9: 変えないもの（境界の固定）
@@ -171,6 +172,6 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 #### Acceptance Criteria
 
 1. When 本仕様の実装が着地した, the 本仕様 shall `areka-P0-emo2-conformance-e2e` の `verification/acceptance-record.md` §13.2 #1／#2 の「引受先が実在することの確認」欄に、本仕様のディレクトリと確認日を記入する。
-2. The 本仕様 shall 利用者から見える変化（行送りの値・文字の大きさ・「閉じる」の表示）と変わらないもの（`\_l` の語彙・あふれ判定の式・本体側バルーンの表示）を、e2e の走行 A〜D の再走前に読める形で 1 箇所にまとめる。
+2. The 本仕様 shall 利用者から見える変化（行送りの値・文字の大きさ・「閉じる」の表示・本体側バルーンの行容量が 3 行から 4 行へ増えること）と変わらないもの（`\_l` の語彙・あふれ判定の式・本体側バルーンの表示）を、e2e の走行 A〜D の再走前に読める形で 1 箇所にまとめる。
 3. The 本仕様 shall `.kiro/steering/roadmap.md` の W12 裁定枠 A′ の行を完了へ更新し、`text-decoration-canon` brief の「追加登記 4」に本仕様が引き受けなかった旨の相互参照を加える。
 4. The 本仕様 shall 実機走行を DoD に含めない（実機の一周は e2e が採り直す）。ただし Requirement 1 の SSP 実測と Requirement 8.3 の実フォント読み戻しは本仕様の DoD に含める。
