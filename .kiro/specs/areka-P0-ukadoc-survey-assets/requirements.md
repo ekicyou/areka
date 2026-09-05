@@ -224,11 +224,12 @@
 **Objective:** 並走する他の spec の担当者として、この調査が自分の作業に触れないと確信したい。それにより 4 本の調査を同時に進められる。
 
 #### Acceptance Criteria
-1. The 資産ドメイン調査 shall areka の実行時の振る舞いを変えない（`crates/` への変更は要件 6 の doc コメントの追加だけ）。
-2. The 資産ドメイン調査 shall 編集する対象を `doc/ukadoc-coverage/ledger/assets.toml`・`doc/ukadoc-coverage/report/assets.md`・`doc/ukadoc-coverage/briefing-assets.md`・`crates/` 配下の doc コメントの 4 つに限る。
+1. The 資産ドメイン調査 shall areka の実行時の振る舞いを変えない（`crates/` への変更は要件 6 の doc コメントの追加と、後述 10.9 の国勢調査の書き換えだけ）。
+2. The 資産ドメイン調査 shall 編集する対象を `doc/ukadoc-coverage/ledger/assets.toml`・`doc/ukadoc-coverage/report/assets.md`・`doc/ukadoc-coverage/briefing-assets.md`・`crates/` 配下の doc コメント・`crates/ukadoc-survey/tests/consistency/checks.rs` の国勢調査の表（10.9）の 5 つに限る。
 3. The 資産ドメイン調査 shall 他の 3 つの台帳（`shiori.toml`・`sakura-script.toml`・`property.toml`）と、カタログ・テーマ定義・`doc/ukadoc-coverage/README.md` を変更しない。
 4. The 資産ドメイン調査 shall `.kiro/steering/roadmap.md` を変更しない。
 5. The 資産ドメイン調査 shall `doc/COMPAT_ARCHITECTURE.md` を変更しない（沈黙ルール対応表への追記は実装する spec の仕事であり、調査 spec は読むだけである）。
 6. The 資産ドメイン調査 shall 隣接 spec の brief・requirements・design を変更しない。
 7. The 資産ドメイン調査 shall 台帳・報告・ブリーフィングで使う日本語を平易な語に限り、プロジェクト内でしか通じない言い回しを持ち込まない。
 8. The 資産ドメイン調査 shall 上流契約が凍結した台帳の項目形式・状態語彙・ページの割り当て・仕訳の規則を変更しない（変更が要ると判断した場合は、変更せずに是正候補として記録する）。
+9. When 台帳の記入によって上流の国勢調査（`crates/ukadoc-survey/tests/consistency/checks.rs` の `census`）が「対象は 0 件のはず」と固定している行に対象が生まれる, the 資産ドメイン調査 shall その行を `Subjects::Zero` から `Subjects::NonEmpty` へ移す（上流のテスト自身が doc コメントで「対象が 1 件でも生まれたら非空の主張へ書き換えること」と依頼しており、上流 spec は既に完了済みで引き受け手にならないため。開発者裁定 2026-09-06）。判定の中身・件数そのもの・他のテストには手を入れない。

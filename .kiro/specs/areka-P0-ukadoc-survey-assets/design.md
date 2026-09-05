@@ -32,6 +32,7 @@
 - `doc/ukadoc-coverage/briefing-assets.md`（新設）——人手で書く読み物。
 - `crates/` 配下の `ukadoc: <URL>` 1 行コメント（項目の直上は `///`・式の途中は `//`・D11）——実装済みと判定した項目の定義箇所のみ。
 - `doc/ukadoc-coverage/report/assets.md`（既存・道具で再生成するのみ・手編集なし）。
+- `crates/ukadoc-survey/tests/consistency/checks.rs` の `census` の表のうち、台帳の記入で対象が生まれた行の `Subjects::Zero` → `Subjects::NonEmpty`（要件 10.9・開発者裁定 2026-09-06）——上流のテストが doc コメントで明示的に依頼している書き換えで、判定の中身・件数・他のテストには触れない。
 
 ### 2.2 持たないもの
 
