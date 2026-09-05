@@ -933,7 +933,7 @@ note = """
 
 [entry."ukadoc:list_plugin_event:property.get:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.85"
 owner = ""
 priority = "E1"
 values = []
@@ -958,7 +958,7 @@ note = """
 
 [entry."ukadoc:list_plugin_event:property.set:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.85"
 owner = ""
 priority = "E1"
 values = []
@@ -1128,7 +1128,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnArchiveViewerOpen:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.57"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -1376,7 +1376,7 @@ doc/ukadoc-coverage/values.md はこの項目を気配りの代表として名�
 
 [entry."ukadoc:list_shiori_event:OnBasewareUpdated:1"]
 status = "absent"
-introduced = ""
+introduced = "2.3.59"
 owner = ""
 priority = "D2"
 values = []
@@ -1395,11 +1395,18 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 テーマ: 付けない。要件 7.4 がテーマを付けない既定とする群である。この 2 件が伝えるのはベースウェア自
 身の入れ替えであってゴーストの更新ではなく、無いと利用者がゴーストの何を失うかに答えられないため。
+
+版番号: 本文に出てくる版番号は 2.3.59 の 1 つだけだが、これは版番号の目印ですらない。
+Reference0（更新後のバージョン番号）に入る値の例として「例：2.3.59」と書かれた数字である。
+Reference1 の例 2.3.59.3000 も同じ性質の値で、こちらは数字の塊が 4 つあるためカタログの抽出規則が
+採らない。このイベントそのものが登場した版は本文に書かれていない。introduced に書く値の正本はカタ
+ログの versions 欄なので、そこにある唯一の値 2.3.59 を書いてあるが、この項目自体は 2.3.59 より前か
+ら在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnBasewareUpdating:1"]
 status = "absent"
-introduced = ""
+introduced = "2.3.58"
 owner = ""
 priority = "D2"
 values = []
@@ -1418,6 +1425,13 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 テーマ: 付けない。要件 7.4 がテーマを付けない既定とする群である。この 2 件が伝えるのはベースウェア自
 身の入れ替えであってゴーストの更新ではなく、無いと利用者がゴーストの何を失うかに答えられないため。
+
+版番号: 本文に出てくる版番号は 2.3.58 の 1 つだけだが、これは版番号の目印ですらない。
+Reference0（更新前のバージョン番号）に入る値の例として「例：2.3.58」と書かれた数字である。
+Reference1 の例 2.3.58.3000 も同じ性質の値で、こちらは数字の塊が 4 つあるためカタログの抽出規則が
+採らない。このイベントそのものが登場した版は本文に書かれていない。introduced に書く値の正本はカタ
+ログの versions 欄なので、そこにある唯一の値 2.3.58 を書いてあるが、この項目自体は 2.3.58 より前か
+ら在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnBatteryChargingStart:1"]
@@ -1514,7 +1528,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnBatteryNotify:1"]
 status = "absent"
-introduced = ""
+introduced = "2.3.94"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -1532,6 +1546,11 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 電池の残りをゴーストが知らないまま、機械の具合に合わせた気遣いができない。
+
+版番号: 本文に出てくる版番号は 2.3.94 の 1 つだけで、これは Reference3 の状態を示す文字列に
+power_saving（バッテリー節約機能が ON。Windows 10 以降でのみ通知される）が加わった版である。このイ
+ベントそのものが登場した版は本文に書かれていない。introduced に書く値の正本はカタログの versions
+欄なので、そこにある唯一の値 2.3.94 を書いてあるが、この項目自体は 2.3.94 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnBoot:1"]
@@ -1555,7 +1574,7 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 
 [entry."ukadoc:list_shiori_event:OnCPULoadHigh:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.56"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -1577,7 +1596,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnCPULoadLow:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.56"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -1841,7 +1860,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnCompressArchiveComplete:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.23"
 owner = ""
 priority = "D2"
 values = []
@@ -1866,7 +1885,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnCompressArchiveFailure:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.23"
 owner = ""
 priority = "D2"
 values = []
@@ -1914,7 +1933,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnDarkTheme:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.02"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -1932,6 +1951,21 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 画面が暗い設えに切り替わったことに気づけず、まわりに合わせた見え方や言葉にできない。
+
+版番号: 本文の末尾に置かれた版番号 2.5.02 を、この項目そのものの登場を示す版として introduced に
+書いた。本文にはもう 1 つ 2.6.29 があり、これは Reference1（OS の設定そのものが暗い設えかどうか）が
+加わった版である。それより前は Reference0 のアプリ側の設定だけだった。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnDestroy:1"]
@@ -2048,7 +2082,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnDisplayChangeEx:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.09"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -2066,11 +2100,26 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 複数ある画面それぞれの設定が変わったことに気づけない。
+
+版番号: 本文の末尾は「2.4.09/タスクバーは2.6.35」で、この項目そのものの登場を示すのは 2.4.09 なので
+それを introduced に書いた。もう 1 つの 2.6.35 は、Reference にタスクバーの位置と、タスクバーと
+作業領域の区切りの座標が加わった版である。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnDisplayHandover:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.09"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -2114,7 +2163,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnDressupChanged:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.90"
 owner = ""
 priority = "B4"
 values = ["装い"]
@@ -2132,6 +2181,11 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 着せ替えを切り替えても、ゴーストがそれに気づいて言い添えることができない。
+
+版番号: 本文に出てくる版番号は 2.5.90 の 1 つだけで、これは Reference4（切替えの実行元がスクリプト
+なら script、メニューなら user）が加わった版である。このイベントそのものが登場した版は本文に書かれ
+ていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値 2.5.90 を書
+いてあるが、この項目自体は 2.5.90 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnEmbryoExist:1"]
@@ -2158,7 +2212,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPComplete:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.40"
 owner = ""
 priority = "D2"
 values = []
@@ -2177,6 +2231,11 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 テーマ: 付けない。ゴーストが自分で出した通信の結果の通知で、無いと利用者がゴーストの何を失うかを 1
 文で言えないため付けない（迷ったら付けないという上流の補足に従う）。
+
+版番号: 本文に出てくる版番号は 2.6.40 の 1 つだけで、これは Reference6（受け取ったすべてのレスポン
+スヘッダ）が加わった版である。このイベントそのものが登場した版は本文に書かれていない。introduced
+に書く値の正本はカタログの versions 欄なので、そこにある唯一の値 2.6.40 を書いてあるが、この項目自
+体は 2.6.40 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPFailure:1"]
@@ -2204,7 +2263,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPProgress:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.44"
 owner = ""
 priority = "D2"
 values = []
@@ -2227,7 +2286,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPSSLInfo:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.51"
 owner = ""
 priority = "D2"
 values = []
@@ -2246,11 +2305,18 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 テーマ: 付けない。ゴーストが自分で出した通信の暗号化の通知で、無いと利用者がゴーストの何を失うかを 1
 文で言えないため付けない（迷ったら付けないという上流の補足に従う）。
+
+版番号: 本文に出てくる版番号は 2.4.51 の 1 つだけで、これは Reference9（証明書チェーンの
+CommonName をカンマ区切りで順に並べたもの）が加わった版である。このイベントそのものが登場した版は
+本文に書かれていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値
+2.4.51 を書いてあるが、この項目自体は 2.4.51 より前から在る。なお Reference5 の例に載る X509 証明
+書の発行先 /1.3.6.1.4.1.311.60.2.1.3=US/… は版番号ではない数字の並びであり、これが他の行の note に
+ある「数の訂正」で言う 12 件目の正体である。
 """
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPStreaming:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.14"
 owner = ""
 priority = "D2"
 values = []
@@ -2273,7 +2339,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteRSSComplete:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.10"
 owner = ""
 priority = "D2"
 values = []
@@ -2295,6 +2361,11 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 テーマ: 付けない。ゴーストが自分で取り寄せた記事の結果の通知で、無いと利用者がゴーストの何を失うかを
 1 文で言えないため付けない（迷ったら付けないという上流の補足に従う）。
+
+版番号: 本文の末尾にある版番号の欄は「作者名・内容 2.4.10～」であり、版番号だけを置いた欄ではな
+い。これは Reference0～ に詰める情報へ作者名と内容（要約）の 2 つが加わった版であって、このイベン
+トそのものが登場した版は本文に書かれていない。introduced に書く値の正本はカタログの versions 欄な
+ので、そこにある唯一の値 2.4.10 を書いてあるが、この項目自体は 2.4.10 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnExecuteRSSFailure:1"]
@@ -2348,7 +2419,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketClose:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.05"
 owner = ""
 priority = "D2"
 values = []
@@ -2374,7 +2445,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketFailure:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.05"
 owner = ""
 priority = "D2"
 values = []
@@ -2397,7 +2468,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketOpen:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.05"
 owner = ""
 priority = "D2"
 values = []
@@ -2420,7 +2491,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketReceive:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.05"
 owner = ""
 priority = "D2"
 values = []
@@ -2443,7 +2514,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketReconnect:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.05"
 owner = ""
 priority = "D2"
 values = []
@@ -2466,7 +2537,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocket_SSLInfo:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.05"
 owner = ""
 priority = "D2"
 values = []
@@ -2489,7 +2560,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExtractArchiveComplete:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.23"
 owner = ""
 priority = "D2"
 values = []
@@ -2514,7 +2585,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnExtractArchiveFailure:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.23"
 owner = ""
 priority = "D2"
 values = []
@@ -2539,7 +2610,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnFileDrop2:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.98"
 owner = ""
 priority = "B2"
 values = ["触れ合い"]
@@ -2557,11 +2628,19 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: ファイルを渡しても受け取ったそぶりが無く、渡す遊びが成立しない。
+
+版番号: 本文に出てくる版番号は 2.7.98 の 1 つだけで、これは Reference2（ドロップされたファイルの
+MIME タイプ）が加わった版であり、新旧の別を示すものではない。このイベントそのものが登場した版は本
+文に書かれていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値
+2.7.98 を書いてあるが、この項目自体は 2.7.98 より前から在る。OnFileDrop・OnFileDropEx・
+OnFileDropped の 3 つも同じ 2.7.98 になっているのは、4 つの本文がそろって同じ時に Reference2 を得
+たからであって、タスク 2.1 が定めた別名の判断（最新仕様はこの OnFileDrop2、残る 3 つは旧仕様）とは
+関わりが無い。
 """
 
 [entry."ukadoc:list_shiori_event:OnFileDrop:1"]
 status = "alias"
-introduced = ""
+introduced = "2.7.98"
 alias_of = "ukadoc:list_shiori_event:OnFileDrop2:1"
 owner = ""
 priority = ""
@@ -2584,11 +2663,18 @@ OnFileDrop2 の名前では出ない）。この行は判定をしないので�
 第 2 段（版番号）は 4 件とも 2.7.98 で並ぶため決め手にならず、第 3 段（人手の判断）には降りない。
 テーマ: 付けない。群 3（旧仕様の別名）の既定どおりで、テーマは指す先の OnFileDrop2 の行が持つ。同じ
 答えを 2 か所に置くと、直したときに片方だけ古くなるため。
+
+版番号: 本文に出てくる版番号は 2.7.98 の 1 つだけで、これは Reference2（ドロップされたファイルの
+MIME タイプ）が加わった版であり、新旧の別を示すものではない。このイベントそのものが登場した版は本
+文に書かれていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値
+2.7.98 を書いてあるが、この項目自体は 2.7.98 より前から在る。旧仕様のこの行が最新仕様の
+OnFileDrop2 と同じ 2.7.98 になっているのは、4 つの本文がそろって同じ時に Reference2 を得たからであ
+って、タスク 2.1 が定めた別名の判断（この行は旧仕様）とは関わりが無い。
 """
 
 [entry."ukadoc:list_shiori_event:OnFileDropEx:1"]
 status = "alias"
-introduced = ""
+introduced = "2.7.98"
 alias_of = "ukadoc:list_shiori_event:OnFileDrop2:1"
 owner = ""
 priority = ""
@@ -2611,11 +2697,18 @@ OnFileDrop2 の名前では出ない）。この行は判定をしないので�
 第 2 段（版番号）は 4 件とも 2.7.98 で並ぶため決め手にならず、第 3 段（人手の判断）には降りない。
 テーマ: 付けない。群 3（旧仕様の別名）の既定どおりで、テーマは指す先の OnFileDrop2 の行が持つ。同じ
 答えを 2 か所に置くと、直したときに片方だけ古くなるため。
+
+版番号: 本文に出てくる版番号は 2.7.98 の 1 つだけで、これは Reference2（ドロップされたファイルの
+MIME タイプ）が加わった版であり、新旧の別を示すものではない。このイベントそのものが登場した版は本
+文に書かれていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値
+2.7.98 を書いてあるが、この項目自体は 2.7.98 より前から在る。旧仕様のこの行が最新仕様の
+OnFileDrop2 と同じ 2.7.98 になっているのは、4 つの本文がそろって同じ時に Reference2 を得たからであ
+って、タスク 2.1 が定めた別名の判断（この行は旧仕様）とは関わりが無い。
 """
 
 [entry."ukadoc:list_shiori_event:OnFileDropped:1"]
 status = "alias"
-introduced = ""
+introduced = "2.7.98"
 alias_of = "ukadoc:list_shiori_event:OnFileDrop2:1"
 owner = ""
 priority = ""
@@ -2638,6 +2731,13 @@ OnFileDrop2 の名前では出ない）。この行は判定をしないので�
 第 2 段（版番号）は 4 件とも 2.7.98 で並ぶため決め手にならず、第 3 段（人手の判断）には降りない。
 テーマ: 付けない。群 3（旧仕様の別名）の既定どおりで、テーマは指す先の OnFileDrop2 の行が持つ。同じ
 答えを 2 か所に置くと、直したときに片方だけ古くなるため。
+
+版番号: 本文に出てくる版番号は 2.7.98 の 1 つだけで、これは Reference2（ドロップされたファイルの
+MIME タイプ）が加わった版であり、新旧の別を示すものではない。このイベントそのものが登場した版は本
+文に書かれていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値
+2.7.98 を書いてあるが、この項目自体は 2.7.98 より前から在る。旧仕様のこの行が最新仕様の
+OnFileDrop2 と同じ 2.7.98 になっているのは、4 つの本文がそろって同じ時に Reference2 を得たからであ
+って、タスク 2.1 が定めた別名の判断（この行は旧仕様）とは関わりが無い。
 """
 
 [entry."ukadoc:list_shiori_event:OnFileDropping:1"]
@@ -2727,7 +2827,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnGamepadAxisMove:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.54"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -2749,7 +2849,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnGamepadButtonDown:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.54"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -2771,7 +2871,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnGamepadButtonUp:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.54"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -2793,7 +2893,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnGamepadConnected:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.54"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -2815,7 +2915,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnGamepadDisconnected:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.54"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -2953,7 +3053,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnGhostTermsAccept:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.33"
 owner = ""
 priority = "D2"
 values = []
@@ -2977,7 +3077,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnGhostTermsDecline:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.33"
 owner = ""
 priority = "D2"
 values = []
@@ -3251,7 +3351,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnInstallRefuse:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.85"
 owner = ""
 priority = "B5"
 values = ["記憶"]
@@ -3269,11 +3369,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 他のゴースト宛のものが持ち込まれたことを知れず、断りの一言が出ない。
+
+版番号: 本文の末尾にある版番号の欄は「Ref1以降は2.4.85」であり、版番号だけを置いた欄ではない。これ
+は Reference1 以降（インストールしようとした物の識別子と名前）が加わった版であって、このイベントそ
+のものが登場した版は本文に書かれていない。introduced に書く値の正本はカタログの versions 欄なの
+で、そこにある唯一の値 2.4.85 を書いてあるが、この項目自体は 2.4.85 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnInstallReroute:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.85"
 owner = ""
 priority = "B5"
 values = ["記憶"]
@@ -3291,6 +3396,15 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 宛先のゴーストへ受け渡しが移ったことを知れず、取り次ぎに触れられない。
+
+版番号: 本文の末尾にある版番号の欄は「2.4 / Ref1以降は2.4.85」であり、版番号だけを置いた欄ではな
+い。前半の 2.4 がこのイベント自身の登場を示し、後半の 2.4.85 は Reference1 以降（インストールした
+物の識別子と名前）が加わった版である。つまりこの項目は、登場の版が本文にはっきり 2.4 と書いてある
+数少ない行である。ところが 2.4 は数字の塊が 2 つしかなく、カタログの抽出規則は塊がまるごと 3 つの
+数のときだけ採るので拾われない。その結果 versions 欄には 2.4.85 だけが残る。introduced に書く値の
+正本はカタログの versions 欄なので、そこにある唯一の値 2.4.85 を書いてあるが、この項目自体は
+2.4.85 より前、本文が言うとおり 2.4 から在る。抽出規則が 2 桁の版番号を落とすことは、規則を持つ上
+流（areka-P0-ukadoc-survey-toolkit）へ送る材料である。
 """
 
 [entry."ukadoc:list_shiori_event:OnKeyPress:1"]
@@ -3339,7 +3453,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnMediaPlayerOpen:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.51"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -3365,7 +3479,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnMemoryLoadHigh:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.56"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -3387,7 +3501,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnMemoryLoadLow:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.56"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -3650,7 +3764,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnMouseGesture:1"]
 status = "absent"
-introduced = ""
+introduced = "2.3.53"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -3668,6 +3782,12 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 右ドラッグやホイールドラッグでの合図が届かず、その操作には何も返らない。
+
+版番号: 本文に出てくる版番号は 2.3.53 の 1 つだけで、これは挙動の変わり目である。タッチパネルの環
+境で Reference5 が up または down のこのイベントに SHIORI が何も返さなかった（204 No Content）と
+き、代わりに OnMouseWheel が発生するようになった版であって、Reference が加わった版ではない。このイ
+ベントそのものが登場した版は本文に書かれていない。introduced に書く値の正本はカタログの versions
+欄なので、そこにある唯一の値 2.3.53 を書いてあるが、この項目自体は 2.3.53 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseHover:1"]
@@ -3845,7 +3965,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnMouseWheel:1"]
 status = "absent"
-introduced = ""
+introduced = "2.3.53"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -3863,11 +3983,18 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: ホイールを回されたことが届かず、その操作には何も返らない。
+
+版番号: 本文に出てくる版番号は 2.3.53 の 1 つだけで、これは挙動の変わり目である。タッチパネルの環
+境で OnMouseGesture の Reference5 が up または down のものに SHIORI が何も返さなかった（204 No
+Content）とき、代わりにこのイベントが発生するようになった版であって、Reference が加わった版ではな
+い。このイベントそのものが登場した版は本文に書かれていない。introduced に書く値の正本はカタログの
+versions 欄なので、そこにある唯一の値 2.3.53 を書いてあるが、この項目自体は 2.3.53 より前から在
+る。
 """
 
 [entry."ukadoc:list_shiori_event:OnMusicPlay:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.55"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -3891,7 +4018,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnMusicPlayEx:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.55"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -4029,7 +4156,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnNetworkHeavy:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.42"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -4047,11 +4174,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 回線が詰まっていることに気づけず、待たされている理由を教えてくれない。
+
+版番号: 本文に出てくる版番号は 2.6.42 の 1 つだけで、これは Reference1（今までの経過時間。秒単位）
+が加わった版である。このイベントそのものが登場した版は本文に書かれていない。introduced に書く値の
+正本はカタログの versions 欄なので、そこにある唯一の値 2.6.42 を書いてあるが、この項目自体は
+2.6.42 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnNetworkStatusChange:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.22"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -4069,6 +4201,24 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 回線がつながった・切れたことに気づけず、外とつながっているかどうかに触れられない。
+
+版番号: この項目の本文には、項目そのものの登場を示す版番号が置かれていない。出てくる版番号はどれも
+Reference の追加に添えられたもので、2.4.22 は Reference2（接続の種類）と Reference3（回線の最大の
+通信速度）、2.5.26 は Reference4（推定した実際の通信速度）、2.6.15 は Reference5（従量課金の回線か
+どうか）が加わった版である。登場の版を本文から判別できないので、要件 6.10 に従って最も小さい
+2.4.22 を introduced に書いた。2.4.22 自体も Reference の追加の版なので、この項目はそれより前から
+在った可能性がある。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnNotifyBalloonInfo:1"]
@@ -4313,7 +4463,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnOSUpdateInfo:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.02"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -4469,7 +4619,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnOtherObjectDropped:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.41"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -4491,7 +4641,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnOtherObjectDropping:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.41"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -4605,7 +4755,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnPictureViewerOpen:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.51"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -4704,7 +4854,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnRSSComplete:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.10"
 owner = ""
 priority = "D2"
 values = []
@@ -4723,6 +4873,11 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 テーマ: 付けない。記事の取り寄せの節目の通知で、無いと利用者がゴーストの何を失うかを 1 文で言えない
 ため付けない（迷ったら付けないという上流の補足に従う）。
+
+版番号: 本文の末尾にある版番号の欄は「作者名・内容 2.4.10～」であり、版番号だけを置いた欄ではな
+い。これは Reference2～ に詰める情報へ作者名と内容（要約）の 2 つが加わった版であって、このイベン
+トそのものが登場した版は本文に書かれていない。introduced に書く値の正本はカタログの versions 欄な
+ので、そこにある唯一の値 2.4.10 を書いてあるが、この項目自体は 2.4.10 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnRSSFailure:1"]
@@ -4822,7 +4977,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnRecycleBinEmpty:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.04"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -4842,11 +4997,26 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: ゴミ箱を空にしたことに気づけず、片づけに立ち会えない。
+
+版番号: 本文の末尾は「2.6.04/Ref4は2.6.35」で、この項目そのものの登場を示すのは 2.6.04 なので
+それを introduced に書いた。もう 1 つの 2.6.35 は、Reference4（空にできたかどうか）が加わった版で
+ある。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnRecycleBinEmptyFromOther:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.35"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -4870,7 +5040,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnRecycleBinStatusUpdate:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.04"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -4888,6 +5058,21 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: ゴミ箱の中身が変わったことに気づけず、捨てたものに触れられない。
+
+版番号: 本文の末尾は「2.6.04/Ref4は2.6.35」で、この項目そのものの登場を示すのは 2.6.04 なので
+それを introduced に書いた。もう 1 つの 2.6.35 は、Reference4（OnRecycleBinEmpty と形を揃えるための、
+常に 1 が入る控えの欄）が加わった版である。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnResetWindowPos:1"]
@@ -4963,7 +5148,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnSNTPCompareEx:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.66"
 owner = ""
 priority = "D2"
 values = []
@@ -5009,7 +5194,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnSNTPCorrectEx:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.66"
 owner = ""
 priority = "D2"
 values = []
@@ -5453,7 +5638,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnSessionDisconnect:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.53"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -5475,7 +5660,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnSessionLock:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.50"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -5497,7 +5682,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnSessionReconnect:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.53"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -5519,7 +5704,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnSessionUnlock:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.50"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -5630,7 +5815,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnSoundLoop:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.93"
 owner = ""
 priority = "D2"
 values = []
@@ -5653,7 +5838,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnSoundStop:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.65"
 owner = ""
 priority = "D2"
 values = []
@@ -5672,11 +5857,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 テーマ: 付けない。鳴らしていた音が終わったという通知で、無いと利用者がゴーストの何を失うかを 1 文で
 言えないため付けない（迷ったら付けないという上流の補足に従う）。
+
+版番号: 本文に出てくる版番号は 2.6.65 の 1 つだけで、これは Reference1（終了理由。end は再生終了、
+close は再生ウインドウを閉じた）が加わった版である。このイベントそのものが登場した版は本文に書かれ
+ていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値 2.6.65 を書
+いてあるが、この項目自体は 2.6.65 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnSpeechSynthesisStatus:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.01"
 owner = ""
 priority = "D2"
 values = []
@@ -5833,7 +6023,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnTabletMode:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.02"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -6010,7 +6200,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnURLDragDropping:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.37"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -6032,7 +6222,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnURLDropFailure:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.36"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -6050,11 +6240,17 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: URL の中身を受け取り損ねたことにゴーストが触れられない。
+
+版番号: 本文の末尾にある版番号の欄は「Ref2,3は2.6.36」であり、版番号だけを置いた欄ではない。これは
+Reference2（ドロップされた URL）と Reference3（ドロップされたキャラクターのスコープ番号）が加わっ
+た版であって、このイベントそのものが登場した版は本文に書かれていない。introduced に書く値の正本は
+カタログの versions 欄なので、そこにある唯一の値 2.6.36 を書いてあるが、この項目自体は 2.6.36 より
+前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnURLDropped:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.36"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -6072,11 +6268,17 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: URL の中身を受け取り終えたことにゴーストが触れられない。
+
+版番号: 本文の末尾にある版番号の欄は「Ref1,2は2.6.36」であり、版番号だけを置いた欄ではない。これは
+Reference1（ドロップされた URL）と Reference2（ドロップされたキャラクターのスコープ番号）が加わっ
+た版であって、このイベントそのものが登場した版は本文に書かれていない。introduced に書く値の正本は
+カタログの versions 欄なので、そこにある唯一の値 2.6.36 を書いてあるが、この項目自体は 2.6.36 より
+前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnURLDropping:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.36"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -6094,11 +6296,16 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: URL を渡して取り寄せが始まったことにゴーストが触れられない。
+
+版番号: 本文の末尾にある版番号の欄は「Ref1は2.6.36」であり、版番号だけを置いた欄ではない。これは
+Reference1（ドロップされたキャラクターのスコープ番号）が加わった版であって、このイベントそのものが
+登場した版は本文に書かれていない。introduced に書く値の正本はカタログの versions 欄なので、そこに
+ある唯一の値 2.6.36 を書いてあるが、この項目自体は 2.6.36 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnURLQuery:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.35"
 owner = ""
 priority = "A2"
 values = ["触れ合い"]
@@ -6118,6 +6325,12 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 無いと失うもの: 渡された URL をゴーストが自分で扱う道が閉じ、いつも同じ既定の処理になる。
+
+版番号: 本文の末尾にある版番号の欄は「Ref3は2.6.35」であり、版番号だけを置いた欄ではない。これは
+Reference3（反応しなかった場合に本体がこの後実行予定の処理。feed・nar・homeurl・unknown のいずれ
+か）が加わった版であって、このイベントそのものが登場した版は本文に書かれていない。introduced に書
+く値の正本はカタログの versions 欄なので、そこにある唯一の値 2.6.35 を書いてあるが、この項目自体は
+2.6.35 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnDownloadBegin:1"]
@@ -6611,7 +6824,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnUpdateProcessExec:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.23"
 owner = ""
 priority = "B1"
 values = ["更新"]
@@ -6942,7 +7155,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnVideoPlayEx:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.59"
 owner = ""
 priority = "C2"
 values = ["気配り"]
@@ -6986,7 +7199,7 @@ absent のまま変わらない。
 
 [entry."ukadoc:list_shiori_event:OnVoiceRecognitionStatus:1"]
 status = "absent"
-introduced = ""
+introduced = "2.4.01"
 owner = ""
 priority = "D2"
 values = []
@@ -7494,7 +7707,7 @@ SHIORI から値を引く項目ではない。
 
 [entry."ukadoc:list_shiori_event:installedkeroname:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.47"
 owner = ""
 priority = "D2"
 values = ["記憶"]
@@ -7545,7 +7758,7 @@ SHIORI から値を引く項目ではない。
 
 [entry."ukadoc:list_shiori_event:installedsakuraname:1"]
 status = "absent"
-introduced = ""
+introduced = "2.6.47"
 owner = ""
 priority = "D2"
 values = ["記憶"]
@@ -7671,7 +7884,7 @@ SHIORI から値を引く項目ではない。
 
 [entry."ukadoc:list_shiori_event:property.get:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.85"
 owner = "areka-P0-property-query-channels"
 priority = "D2"
 values = []
@@ -7703,7 +7916,7 @@ note = """
 
 [entry."ukadoc:list_shiori_event:property.set:1"]
 status = "absent"
-introduced = ""
+introduced = "2.7.85"
 owner = "areka-P0-property-query-channels"
 priority = "D2"
 values = []
@@ -7736,7 +7949,7 @@ note = """
 
 [entry."ukadoc:list_shiori_event:rateofusegraph:1"]
 status = "absent"
-introduced = ""
+introduced = "2.8.54"
 owner = ""
 priority = "D2"
 values = ["記憶"]
@@ -7758,6 +7971,11 @@ SHIORI から値を引く項目ではない。
 テーマの直し: 群 4 の既定は原則 空だが、この項目は起動回数と起動時間の積み上がりを渡すので記憶を付け
 た。
 無いと失うもの: 何回・どれだけ呼ばれてきたかをゴーストが知らず、付き合いの長さに触れられない。
+
+版番号: 本文に出てくる版番号は 2.8.54 の 1 つだけで、これは Reference* に詰める情報の 8 番目以降
+（週報と月報の起動回数・起動時間・起動時間割合）が加わった版である。この通知そのものが登場した版は
+本文に書かれていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値
+2.8.54 を書いてあるが、この項目自体は 2.8.54 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_event:uniqueid:1"]
@@ -11879,7 +12097,7 @@ note = """
 
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.applybindtoself:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.7.26"
 owner = ""
 priority = "C1"
 values = ["装い"]
@@ -11900,6 +12118,21 @@ note = """
 着せ替えの項目をどのスコープのものにするかを決める。
 無いと失うもの: 2 人目以降または \\p[*] 側のメニューに出す着せ替えを誰のものにするかがゴーストの指定
 どおりにならず、別の子の着せ替えが並ぶ。
+
+版番号: 本文の末尾に置かれた版番号 2.7.26 を、この項目そのものの登場を示す版として introduced に
+書いた。本文にはもう 1 つ 2.7.25 があるが、これはこの名前が登場した版ではなく、「標準の設定が 1 に
+なり 2.7.25 より前の挙動と変わった」という書き方で挙動の変わり目を指すために出てくる版である。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.type:1"]
@@ -12354,7 +12587,7 @@ areka の素の言葉のままになる。
 
 [entry."ukadoc:list_shiori_resource:getaistate:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.4.26"
 owner = ""
 priority = "B3"
 values = ["記憶"]
@@ -12371,11 +12604,17 @@ note = """
 内容: ゴーストの内側の様子（喋った数・好みの度合いなど）を図に描くための値。表示する値・
 ラベル・加算値・最大値を 1 本の文字列に詰めて返す。
 無いと失うもの: トーク数や好感度といった積み上がりが図に出ず、付き合いの深まりが目に見えなくなる。
+
+版番号: 本文に出てくる版番号は 2.4.26 の 1 つだけで、これは挙動の変わり目である。グラフの表示値・
+加算値・最大値が小数点以下も受け付けるようになった版であって、返す形（バイト値 1 で区切る 4 つの
+群）が加わった版ではない。この照会そのものが登場した版は本文に書かれていない。introduced に書く値
+の正本はカタログの versions 欄なので、そこにある唯一の値 2.4.26 を書いてあるが、この項目自体は
+2.4.26 より前から在る。
 """
 
 [entry."ukadoc:list_shiori_resource:getaistateex:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.4.26"
 owner = ""
 priority = "B3"
 values = ["記憶"]
@@ -12739,7 +12978,7 @@ note = """
 
 [entry."ukadoc:list_shiori_resource:kero.popupmenu.applybindtoself:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.7.26"
 owner = ""
 priority = "C1"
 values = ["装い"]
@@ -12759,6 +12998,21 @@ note = """
 着せ替えの項目をどのスコープのものにするかを決める。
 無いと失うもの: 相方側のメニューに出す着せ替えを誰のものにするかがゴーストの指定どおりにならず、別の
 子の着せ替えが並ぶ。
+
+版番号: 本文の末尾に置かれた版番号 2.7.26 を、この項目そのものの登場を示す版として introduced に
+書いた。本文にはもう 1 つ 2.7.25 があるが、これはこの名前が登場した版ではなく、「標準の設定が 1 に
+なり 2.7.25 より前の挙動と変わった」という書き方で挙動の変わり目を指すために出てくる版である。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:list_shiori_resource:kero.popupmenu.type:1"]
@@ -13152,7 +13406,7 @@ note = """
 
 [entry."ukadoc:list_shiori_resource:menu.frame.color.b:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.5.41"
 owner = ""
 priority = "C1"
 values = ["装い"]
@@ -13172,7 +13426,7 @@ note = """
 
 [entry."ukadoc:list_shiori_resource:menu.frame.color.g:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.5.41"
 owner = ""
 priority = "C1"
 values = ["装い"]
@@ -13192,7 +13446,7 @@ note = """
 
 [entry."ukadoc:list_shiori_resource:menu.frame.color.r:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.5.41"
 owner = ""
 priority = "C1"
 values = ["装い"]
@@ -13338,7 +13592,7 @@ note = """
 
 [entry."ukadoc:list_shiori_resource:other_homeurl_override:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.5.33"
 owner = ""
 priority = "B1"
 values = ["更新"]
@@ -13805,7 +14059,7 @@ note = """
 
 [entry."ukadoc:list_shiori_resource:sakura.popupmenu.applybindtoself:1"]
 status = "vocabulary-only"
-introduced = ""
+introduced = "2.7.26"
 owner = ""
 priority = "C1"
 values = ["装い"]
@@ -13823,6 +14077,21 @@ note = """
 着せ替えの項目をどのスコープのものにするかを決める。
 無いと失うもの: 本体側のメニューに出す着せ替えを誰のものにするかがゴーストの指定どおりにならず、別の
 子の着せ替えが並ぶ。
+
+版番号: 本文の末尾に置かれた版番号 2.7.26 を、この項目そのものの登場を示す版として introduced に
+書いた。本文にはもう 1 つ 2.7.25 があるが、これはこの名前が登場した版ではなく、「標準の設定が 1 に
+なり 2.7.25 より前の挙動と変わった」という書き方で挙動の変わり目を指すために出てくる版である。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:list_shiori_resource:sakura.popupmenu.type:1"]
@@ -14941,7 +15210,7 @@ OnChoiceEnter の各行に書いてあり、そこから動かさない。
 
 [entry."ukadoc:spec_dll"]
 status = "degraded"
-introduced = ""
+introduced = "2.6.92"
 owner = ""
 priority = "E1"
 values = []
@@ -14968,6 +15237,11 @@ SAORI: areka はプロトコルを実装せず、実装の主体は SHIORI 側�
 loadu（SSP 2.6.92 以降・パスは UTF-8）・load（従来版・パスは既定のコードページ）・unload である。
 areka の助け手が名前で引くのは load・unload・request の 3 つで、loadu は引かない。この 1 つの
 項目が、その全体を抱える。
+
+版番号: 本文に出てくる版番号は 2.6.92 の 1 つだけで、これは loadu 関数（モジュールの置き場所を
+UTF-8 で渡す初期化の関数）が実装された版である。DLL 共通仕様そのものが登場した版は本文に
+書かれていない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値
+2.6.92 を書いてあるが、この項目自体は 2.6.92 より前から在る。
 """
 
 [entry."ukadoc:spec_fmo_mutex:32_30d0_30a4_30c8_306e_8b58_5225ID:1"]
@@ -15010,7 +15284,7 @@ note = """
 
 [entry."ukadoc:spec_fmo_mutex:FMO_306e_540d_524d_3068_6587_5b57_30b3_30fc_30c9:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.26"
 owner = ""
 priority = "D1"
 values = ["交わり"]
@@ -15025,11 +15299,16 @@ note = """
 SakuraUnicode は UTF-8 固定（SSP 2.5.26 以降）である。
 無いと失うもの: 起動中のゴーストの一覧を置く場所を他のベースウェアと合わせられず、隣に誰が居るのか分
 からない。
+
+版番号: 本文に出てくる版番号は 2.5.26 の 1 つだけで、これは UTF-8 固定の SakuraUnicode という
+名前が加わった版である。FMO の名前と文字コードの取り決めそのものが登場した版は本文に書かれて
+いない。introduced に書く値の正本はカタログの versions 欄なので、そこにある唯一の値 2.5.26 を
+書いてあるが、この項目自体は 2.5.26 より前から在る。
 """
 
 [entry."ukadoc:spec_fmo_mutex:_30ad_30fc_540d_30fb_5024:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.58"
 owner = ""
 priority = "D1"
 values = ["交わり"]
@@ -15046,6 +15325,23 @@ hwnd（主となる窓のハンドル・10 進）・name・keroname（descript.t
 （使用中の窓ハンドルをカンマ区切りで列挙・SSP のみ）・ghostpath ほかが並ぶ。この 1 項目が可変個の
 キーをまとめて表す。
 無いと失うもの: 隣のゴーストの名前も窓も面も一覧から引けず、互いに気づけない。
+
+版番号: この項目の本文には、項目そのものの登場を示す版番号が置かれていない。出てくる版番号はどれも
+個々のキーに添えられたもので、2.5.58 は fullname（起動中のゴーストの descript.txt の name）、
+2.5.79 は modulestate（読み込まれている部品の状態を並べた文字列）が加わった版である。登場の版を
+本文から判別できないので、要件 6.10 に従って最も小さい 2.5.58 を introduced に書いた。この項目は
+可変個のキーを 1 行でまとめて表すものなので、キーの一覧そのものは 2.5.58 より前から在る。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:spec_fmo_mutex:_30c7_30fc_30bf_672c_4f53:1"]
@@ -15503,7 +15799,7 @@ crates 以下のソースに 1 件も無い）。
 
 [entry."ukadoc:spec_shiori3:SenderType_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.05"
 owner = ""
 priority = "D2"
 values = []
@@ -15561,7 +15857,7 @@ client.rs の map_get_result がそれを呼び出し元へ返す。
 
 [entry."ukadoc:spec_shiori3:ValueNotify_20_5bSSP_62e1_5f35_202.5.35_5d:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.35"
 owner = ""
 priority = "D2"
 values = []
@@ -15577,11 +15873,27 @@ note = """
 大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
 SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
 crates 以下のソースに 1 件も無い）。
+
+版番号: 見出しそのものが「ValueNotify [SSP拡張 2.5.35]」なので、この項目そのものの登場を示す
+2.5.35 を introduced に書いた。本文にはもう 2 つある。2.6.76 は「メソッドが NOTIFY でないときや
+Value ヘッダが既にあるときは無視する」という制限が廃止された版、2.6.82 は、このヘッダで実行できる
+タグに \\![get,property] と \\![set,property] が加わった版である。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:spec_shiori3:X-SSTP-PassThru-_28_4efb_610f_306e_6587_5b57_5217_29_20_5bSSP_202.5.03_7e_62e1_5f35_5d:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.03"
 owner = ""
 priority = "D2"
 values = []
@@ -15605,7 +15917,7 @@ crates 以下のソースに 1 件も無い）。
 
 [entry."ukadoc:spec_shiori3:X-SSTP-PassThru-_28_4efb_610f_306e_6587_5b57_5217_29_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.05"
 owner = ""
 priority = "D2"
 values = []
@@ -15667,7 +15979,7 @@ NOTIFY SHIORI/3.0 のどちらかを 1 行目として書き出す。
 
 [entry."ukadoc:spec_sstp:request:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.57"
 owner = ""
 priority = "D1"
 values = ["交わり"]
@@ -15684,6 +15996,24 @@ SecurityOrigin（SSP 2.6.59 以降）・Option・ID・X-SSTP-PassThru-（任意�
 ReceiverGhostHWnd（SSP 2.5.57 以降）・ReceiverGhostName（SSP 2.5.57 以降）である。この 1 項目が
 可変個のヘッダをまとめて表す。
 無いと失うもの: 外から届いた差し込みの中身を読み解けず、話しかけの内容が伝わらない。
+
+版番号: この項目の本文には、項目そのものの登場を示す版番号が置かれていない。出てくる版番号はどれも
+個々のヘッダに添えられたもので、2.5.57 は ReceiverGhostHWnd と ReceiverGhostName（送り先の
+ゴーストを名指しするヘッダ）、2.6.59 は SecurityOrigin（送信元のサーバを示すヘッダ）が加わった版で
+ある。登場の版を本文から判別できないので、要件 6.10 に従って最も小さい 2.5.57 を introduced に
+書いた。この項目は可変個のヘッダを 1 行でまとめて表すものなので、要求の書式そのものは 2.5.57 より
+前から在る。
+
+数の訂正: 相異なる版番号を 2 つ以上持つ項目を、設計と要件 6.10 は 12 件としていたが、カタログの
+versions 欄で数えると 11 件である。12 は正典本文を正規表現で走査した数、11 はカタログの versions
+欄で数えた数で、測っている対象が違う。introduced に書く値の正本はカタログの versions 欄であり、
+道具の検査もそちらを照らすので、この台帳は 11 件として書いてある。12 件目は OnExecuteHTTPSSLInfo
+である。この項目の本文には X509 証明書の発行先の例として /1.3.6.1.4.1.311.60.2.1.3=US/… が載ってお
+り、素の正規表現 [0-9]+\\.[0-9]+\\.[0-9]+ で走査すると 1.3.6・1.4.1・311.60.2 の 3 つを拾ってしま
+い、Reference9 の 2.4.51 と合わせて相異なる版番号 2 つ以上に数えられる。カタログの規則は数字と小数
+点の塊がまるごと 3 つの数のときだけ採るので、11 個の塊でできたこの並びを弾く。その結果 versions 欄
+は 2.4.51 の 1 つだけになり、数は 11 件になる。なお同じ素の走査は SSTP の request の本文からも
+127.0.0 を拾うが、その項目は規則どおりに数えても 2 つ以上なので数は変わらない。
 """
 
 [entry."ukadoc:spec_sstp:response:1"]
@@ -15728,7 +16058,7 @@ sakura.name と同じもので、追加情報の中は任意の文字列であ�
 
 [entry."ukadoc:spec_web:x-ukagaka-link_3atype_3dhomeurl_26url_3d_28_30a8_30f3_30b3_30fc_30c9_6e08URL_29:1"]
 status = "absent"
-introduced = ""
+introduced = "2.5.76"
 owner = ""
 priority = "E1"
 values = []

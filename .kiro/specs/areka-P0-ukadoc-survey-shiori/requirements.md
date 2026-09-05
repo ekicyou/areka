@@ -161,7 +161,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 7. If brief に書かれた新旧関係の例が正典本文と食い違う, then the SHIORI ドメイン調査 shall 正典本文に従い、食い違いを `note` に明記する。
 8. The SHIORI ドメイン台帳 shall 別名の連鎖を作らない（`alias_of` の指す先が `alias` であってはならない）。
 9. Where 項目に版番号が無い, the SHIORI ドメイン台帳 shall `introduced` を空にし、その項目を最も古いものとして扱わない。
-10. When 1 つの項目の本文に版番号が 2 つ以上ある（担当範囲に 12 件。例: `OnNetworkStatusChange`・`ValueNotify`・`*.popupmenu.applybindtoself`）, the SHIORI ドメイン台帳 shall 項目そのものの登場を示す版番号を `introduced` に書き、残りの版番号とその意味（挙動の変更・引数の追加など）を `note` に書く。どれが登場の版か本文から判別できなければ、最も小さい版番号を `introduced` に書く。
+10. When 1 つの項目の本文に版番号が 2 つ以上ある（担当範囲に 12 件。カタログの `versions` 欄で数えると **11 件**・付録の訂正を見よ。例: `OnNetworkStatusChange`・`ValueNotify`・`*.popupmenu.applybindtoself`）, the SHIORI ドメイン台帳 shall 項目そのものの登場を示す版番号を `introduced` に書き、残りの版番号とその意味（挙動の変更・引数の追加など）を `note` に書く。どれが登場の版か本文から判別できなければ、最も小さい版番号を `introduced` に書く。
 
 ### Requirement 7: 伺からしさのテーマと優先度の仮置き
 **Objective:** 統合の担当者として、各項目が「無いと利用者がゴーストの何を失うか」で色分けされていてほしい。それにより件数の多さではなく体験の重さで順序を組める。
@@ -243,7 +243,9 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 | # | brief の記載 | 実測 | 扱い |
 |---|---|---|---|
 | 1 | ページ別件数 12 ページ・合計 677 | 全件一致（677） | そのまま採用 |
-| 2 | 版番号付き `list_shiori_event` 65／290・`list_shiori_resource` 8／159 | **78／290**・**9／159**（`[0-9]+\.[0-9]+\.[0-9]+` による実測）。`list_shiori_event_ex` の 0／168 は一致。担当 12 ページ全体では **98 件**（上記のほか `list_plugin_event` 2・`spec_shiori3` 4・`spec_dll` 1・`spec_fmo_mutex` 2・`spec_sstp` 1・`spec_web` 1）。版番号を 2 つ以上含む項目は **12 件** | 数え方の違いの可能性はあるが brief の値は再現しなかった。台帳では版番号を項目ごとに写すので合計値は使わない。複数の版番号の書き方は要件 6.10 |
+| 2 | 版番号付き `list_shiori_event` 65／290・`list_shiori_resource` 8／159 | **78／290**・**9／159**（`[0-9]+\.[0-9]+\.[0-9]+` による実測）。`list_shiori_event_ex` の 0／168 は一致。担当 12 ページ全体では **98 件**（上記のほか `list_plugin_event` 2・`spec_shiori3` 4・`spec_dll` 1・`spec_fmo_mutex` 2・`spec_sstp` 1・`spec_web` 1）。版番号を 2 つ以上含む項目は **12 件**（カタログの `versions` 欄では **11 件**・下記の訂正） | 数え方の違いの可能性はあるが brief の値は再現しなかった。台帳では版番号を項目ごとに写すので合計値は使わない。複数の版番号の書き方は要件 6.10 |
+
+**（2026-09-05 の訂正・実装時に確定）** この「12 件」は**正典本文に素の 3 つ組の数字列を当てた数**である。`introduced` に書く値の正本は**カタログの `versions` 欄**であり、そちらの規則（数字と小数点でできた塊が**まるごと**版番号の形のときだけ採る）で数えると **11 件**になる。差の 1 件は `OnExecuteHTTPSSLInfo` で、本文に X509 証明書の例 `/1.3.6.1.4.1.311.60.2.1.3=US/…` が載っているため、素の走査が `1.3.6`・`1.4.1`・`311.60.2` を版番号と取り違える。どちらの数も**それぞれの測り方では正しい**。台帳が従うのはカタログの側なので **11 件**である。
 | 3 | `OnTeach` 系 3 | 実在は `OnTeach`・`OnTeachStart`・`OnTeachInputCancel`。**`OnTeachInput` は存在しない** | 実在する 3 つで登記 |
 | 4 | `basewareversion` は照会リソース | **`list_shiori_event` の通知イベント**（リソースのページには無い） | 要件 2.5 |
 | 5 | `OnMenuExec` は SHIORI イベント | **`list_plugin_event` にだけ存在** | 要件 5.6 |
