@@ -17,17 +17,24 @@
 //! ⑴ **一括の主張**（[`real_repo_data_produces_no_findings`]）——所見が 1 件も無い。
 //! ⑵ **対象の数え上げ**（[`the_subject_census_says_which_requirements_are_vacuous`]）
 //!    ——要件ごとに今日の対象を数え、対象 0 件（＝空振り）である要件を**名指しで**
-//!    固定する。対象が生まれたら赤になり、書き換えを促す。
+//!    固定する。今日は空振りの行が 1 つも無く、10 の要件すべてが非空を主張する。
+//!    どれかが 0 件へ落ちたら赤になる。
 //! ⑶ **1 要件 1 摂動**（このファイルの後半）——実データの写しを 1 か所だけ壊し、
 //!    該当の判定が該当の id と場所つきで赤くなることを要件ごとに確かめる。壊すのは
 //!    メモリ上の写しだけで、repo のファイルには 1 バイトも触れない。壊す道具そのもの
 //!    （写しの型・所見の見方・綴りの定数）は兄弟の `consistency/perturb.rs` にある。
 //!
-//! ⑶ が要る理由は ⑵ が明かす——今日の実データで対象が **0 件**なのは 6.7 の 1 面
-//! （状態が alias の行）だけである（4 台帳のどこにも別名の行が無いから）。対象 0 件の
-//! 判定は緑でも「壊れていない」ことを 1 つも言わない。写しを壊す ⑶ だけが、その判定が
-//! **実データの上で**生きていることを示す。6.8（台帳に書かれたテーマ名）は property
-//! 台帳にテーマが 3 件書かれたので空振りを脱し、実データの上で働くようになった。
+//! ⑶ が要る理由は ⑵ の履歴が明かす——道具を建てた当初、6.5・6.6・6.7・6.8・6.11 の
+//! 対象は **0 件**だった（正典 URL がまだソースのどこにも置かれておらず、台帳は全行が
+//! 未分類だったから）。対象 0 件の判定は緑でも「壊れていない」ことを 1 つも言わない。
+//! 写しを壊す ⑶ だけが、その判定が**実データの上で**生きていることを示していた。
+//!
+//! **その 5 つは今どれも非空である**——調査 spec が実装済みの項目へ正典 URL を置き、
+//! 台帳の状態・関連・登場版・テーマ名を書き入れたためで（6.8 は property 台帳に書かれた
+//! 3 件が先に空振りを脱し、shiori 台帳がさらに積んだ）、⑵ の 0 件の主張は設計どおり
+//! 赤くなって非空の主張へ移された。それでも ⑶ は残す。実データの対象が非空でも、それは
+//! 「判定を通る行がある」ことしか言わず、**判定が食い違いを見つけられる**ことは言わない
+//! からである（今日の実データは食い違い 0 件なので、判定が丸ごと消えても ⑴ は緑になる）。
 //!
 //! この一群は 1 度較正してある——製品側の判定を 1 か所ずつ弱める摂動 16 本を当てると、
 //! いずれも下の事例のどれかが赤になった（素通り 0 件）。台帳の実ファイルの 1 行を
@@ -43,6 +50,7 @@
 //!   語彙表経路は通さない。
 
 use ukadoc_survey::check::{FindingKind, render, run};
+use ukadoc_survey::evidence::EvidenceIndex;
 use ukadoc_survey::evidence::extract::extract;
 use ukadoc_survey::io::{files, paths};
 use ukadoc_survey::ledger::read::read as read_ledger;
@@ -59,7 +67,39 @@ use super::perturb::{
 const ANCHOR_URL: &str = "https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1";
 
 /// 走査が届いていることの錨に使うソース（既存の語彙台帳・要件 9.2）。
+///
+/// **錨の項目の証拠を「ちょうど 1 件」で見てはいけない。** 調査 spec は実装済みと
+/// 判定した項目の定義箇所に正典 URL を 1 行置く契約なので、同じ項目の証拠が複数の
+/// ファイルから挙がるのは正常な状態である（[`EvidenceIndex::by_id`] の並びの契約も
+/// 「重複を除いた名前順」であって件数を約束しない）。ここで確かめたいのは
+/// 「書き足した行がその項目の証拠になる」ことだけである。
 const ANCHOR_SOURCE: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
+
+/// 書き足した 1 行が錨の項目の証拠として現れたこと（「含む」で見る）。
+///
+/// 恒真を避けるため、書き足す**前**に [`ANCHOR_SOURCE`] が錨の項目の証拠へ入って
+/// いないことを同じ場所で確かめる——増えたのは書き足した行のせいである、と言える
+/// ようにするためである。前から入っていたら錨を選び直す合図なので、そのときも赤に
+/// する。
+fn assert_the_added_line_became_evidence(data: &RepoData, after: &EvidenceIndex) {
+    let anchor = anchor_id();
+    let sources = |index: &EvidenceIndex| -> Vec<String> {
+        index.by_id.get(&anchor).cloned().unwrap_or_default()
+    };
+
+    let before = sources(&data.evidence);
+    assert!(
+        !before.iter().any(|path| path == ANCHOR_SOURCE),
+        "書き足す前から {ANCHOR_SOURCE} が錨の項目の証拠になっている。\
+         これでは「足したから増えた」が言えないので、錨のソースを選び直すこと: {before:?}"
+    );
+
+    let after = sources(after);
+    assert!(
+        after.iter().any(|path| path == ANCHOR_SOURCE),
+        "書き足した正典 URL の行が錨の項目の証拠に入っていない: {after:?}"
+    );
+}
 
 // ---------------------------------------------------------------------------
 // ⑴ 一括の主張
@@ -179,6 +219,15 @@ enum Subjects {
     /// 対象がある。判定は実データの上で実際に働いている。
     NonEmpty,
     /// 対象が 1 件も無い。**判定が壊れていても緑になる**（要件 6.13 の言う状態）。
+    ///
+    /// **今日この値を使う行は 1 つも無い**（調査 spec が 7 行すべてを非空へ移した）。
+    /// それでも残すのは、空振りを名指しで固定するというこの数え上げの役目そのものが
+    /// この値だからである——新しい判定を足して当面その対象が実データに無いとき、
+    /// 緑を空振りのまま置かずにここへ書き留めるための欄である。
+    #[expect(
+        dead_code,
+        reason = "空振りの行が今日 0 本なので構築されない。新しい判定を足す人のために残す"
+    )]
     Zero,
 }
 
@@ -195,7 +244,7 @@ struct CensusRow {
 /// **ここは判定を呼ばない。** 判定が見る母数を、判定とは別の道筋で数え直す——同じ
 /// 関数を呼ぶと、判定が壊れたときに数え上げも一緒に壊れて気づけない。
 fn census(data: &RepoData) -> Vec<CensusRow> {
-    use Subjects::{NonEmpty, Zero};
+    use Subjects::NonEmpty;
 
     let ledger_rows: usize = data.ledgers.iter().map(|led| led.entries.len()).sum();
     let rows = || data.ledgers.iter().flat_map(|led| led.entries.values());
@@ -236,7 +285,7 @@ fn census(data: &RepoData) -> Vec<CensusRow> {
         row("6.5", "ソースの正典 URL", url_hits, NonEmpty),
         row("6.6", "状態が implemented の行", implemented, NonEmpty),
         row("6.7", "関連・別名・後継の相手", endpoints, NonEmpty),
-        row("6.7", "状態が alias の行", alias_rows, Zero),
+        row("6.7", "状態が alias の行", alias_rows, NonEmpty),
         row("6.7", "登場版の記入がある行", introduced_rows, NonEmpty),
         row("6.7", "カタログに版番号のある項目", versioned, NonEmpty),
         row("6.8", "台帳に書かれたテーマ名", theme_values, NonEmpty),
@@ -253,15 +302,21 @@ fn census(data: &RepoData) -> Vec<CensusRow> {
 
 /// 10 の要件のうち、今日の実データで空振りしているものを名指しで固定する（要件 6.13）。
 ///
-/// **このテストは「緑だから守られている」を否定するために置く。** 今日 0 件なのは
-/// 6.7 の 1 面（状態が alias の行）だけで、その判定は丸ごと消えても実データは緑の
-/// ままである。だから 0 件であること自体を主張に変え、対象が 1 件でも生まれたら赤に
-/// する——そのときは「空振り」の但し書きを外し、非空の主張へ書き換えること。
+/// **このテストは「緑だから守られている」を否定するために置く。** かつては 6.5・6.6・
+/// 6.7 の 3 面・6.8・6.11 の 7 行が対象 0 件で、判定が丸ごと消えても実データは緑の
+/// ままだった。だから 0 件であること自体を主張に変え、対象が 1 件でも生まれたら赤に
+/// する仕掛けにしてあった。
 ///
-/// 対象があると分かっている側（6.3・6.4・6.5・6.6・6.7 の 3 面（関連・別名・後継の
-/// 相手／カタログに版番号のある項目／登場版の記入がある行）・6.8・6.10・6.11・
-/// 7.4/7.5）は 0 件になったら赤にする。
-/// 読み込みが空を返した場合をここでも捕まえる。
+/// **その仕掛けは設計どおり発火し、7 行すべてが非空へ移った。** 調査 spec
+/// （`areka-P0-ukadoc-survey-property` と `areka-P0-ukadoc-survey-shiori`）が実装済みと
+/// 判定した項目の定義箇所へ正典 URL を置き、台帳に状態・関連・登場版・テーマ名を書き
+/// 入れたためである。最後まで 0 件で残っていた「状態が alias の行」も、shiori 台帳が
+/// 別名の行を 3 つ立てて非空になった。今日は [`Subjects::Zero`] の行が 1 つも無く、
+/// 10 の要件すべてが実データの上に対象を持つ。
+///
+/// したがって今このテストが言うのは「どの要件も空振りしていない」ことである。どれかが
+/// 0 件へ落ちたら赤になる——台帳を読み込み損ねた・書き入れた欄が消えた・正典 URL の
+/// 行が剥がれた、のいずれかが起きた合図である。
 ///
 /// 件数そのもの（1,749 など）はここでは固定しない。それはタスク 8.3 の持ち物で、
 /// ここが言うのは**有無**だけである。
@@ -471,43 +526,56 @@ fn an_unknown_canon_url_in_a_source_turns_red() {
 
 /// 要件 6.6——`implemented` の行に証拠が無いと赤くなり、証拠が付くと消える。
 ///
-/// **今日の実データにこの判定の対象は 1 件も無い**（台帳は全行が未分類）。写しの
-/// 1 行を `implemented` にして対象を作り、次にソースへ正典 URL を 1 行置いて所見が
-/// 消えることまで見る。片方だけだと「常に赤い判定」と見分けが付かない。
+/// **証拠の無い側は摂動で作る。** 錨の項目には今や実ソースの正典 URL が付いている
+/// （調査 spec が要件 9.1 どおり `areka-kanade/src/schedule/events.rs` へ 1 行置いた）
+/// ので、状態を `implemented` にするだけでは所見が生まれない。だから写しの索引から
+/// **錨の id の証拠を取り除いて**対象を作る。
+///
+/// 錨を「今日まだ証拠の無い項目」へ選び直す道は採らない。調査 spec の仕事はまさに
+/// 実装済みの項目へ正典 URL を置くことなので、証拠の無い項目を選んでも同じ理由で
+/// また腐るからである。
+///
+/// **報告は古くならない。** 錨は台帳の側で既に `implemented` なので、状態を動かす
+/// 摂動がそもそも無いからである。この摂動が触るのは証拠の索引だけで、そこは報告の
+/// 材料ではない（報告が数えるのは状態と世代とテーマの分布）。
+///
+/// 後半はソースへ正典 URL を 1 行置いて所見が消えることまで見る。片方だけだと
+/// 「常に赤い判定」と見分けが付かない。
 #[test]
 fn implemented_without_evidence_turns_red_and_evidence_clears_it() {
     let data = RepoData::load();
     let anchor = anchor_id();
-    let report = "doc/ukadoc-coverage/report/shiori.md";
 
     let mut copy = Perturbed::of(&data);
-    copy.entry_mut(Domain::Shiori, &anchor).status = Status::Implemented;
-
-    // 証拠が無い側。状態が変われば報告も古くなる（状態の分布が動くため）。
-    expect_exactly(
-        &copy.findings(),
-        &[
-            (
-                FindingKind::ImplementedWithoutEvidence,
-                Some(ANCHOR_ID),
-                SHIORI_LEDGER,
-            ),
-            (FindingKind::DomainReportStale, None, report),
-        ],
+    assert_eq!(
+        copy.entry_mut(Domain::Shiori, &anchor).status,
+        Status::Implemented,
+        "錨の項目が台帳で `implemented` でなくなっている。この判定は「錨は既に実装済み\
+         なので報告は動かない」ことに寄りかかって所見を数えているので、状態が変わったなら\
+         期待も錨の選び方も見直すこと"
+    );
+    let stripped = copy.evidence.by_id.remove(&anchor);
+    assert!(
+        stripped.is_some(),
+        "錨の項目に証拠が 1 件も無い。この摂動は証拠を剥がして対象を作るので、\
+         剥がす相手が要る——錨に正典 URL が置かれているか確かめること"
     );
 
-    // 証拠が付いた側。`ImplementedWithoutEvidence` だけが消える。
+    // 証拠が無い側。報告は動かないので、出るのはこの 1 件だけ。
+    expect_exactly(
+        &copy.findings(),
+        &[(
+            FindingKind::ImplementedWithoutEvidence,
+            Some(ANCHOR_ID),
+            SHIORI_LEDGER,
+        )],
+    );
+
+    // 証拠が付いた側。`ImplementedWithoutEvidence` が消えて所見は 1 件も残らない。
     copy.evidence =
         evidence_with_source_line(&data, ANCHOR_SOURCE, &format!("// ukadoc: {ANCHOR_URL}"), 0);
-    assert_eq!(
-        copy.evidence.by_id.get(&anchor).map(Vec::as_slice),
-        Some([ANCHOR_SOURCE.to_owned()].as_slice()),
-        "書き足した正典 URL が錨の項目の証拠になっていない"
-    );
-    expect_exactly(
-        &copy.findings(),
-        &[(FindingKind::DomainReportStale, None, report)],
-    );
+    assert_the_added_line_became_evidence(&data, &copy.evidence);
+    expect_exactly(&copy.findings(), &[]);
 }
 
 /// 要件 6.7——関連の相手がカタログに無いと、書いた側の id つきで赤くなる。
@@ -589,6 +657,18 @@ fn an_alias_chain_turns_red() {
 /// カタログ側に版番号のある項目を実データから 1 つ選ぶ（[`census`] がその母数が
 /// 0 件でないことを守っている）。**両方向を見る**——外へ動かすと赤、中へ戻すと緑。
 /// 片方だけだと「常に赤い判定」「常に緑の判定」と見分けが付かない。
+///
+/// **戻した側で報告は古くならない。** 選ばれる項目の `introduced` は台帳の側で既に
+/// カタログの先頭の版番号と同値なので、戻す操作は台帳を実データそのものへ返すだけ
+/// だからである。だから戻した側の期待は所見 0 件になる。下の `assert_eq!` がその
+/// 同値をその場で確かめるので、台帳が変わったら黙って通り抜けずに赤くなる。
+///
+/// 「台帳の `introduced` がカタログの版番号と**異なる**項目を選ぶ」道は測ったうえで
+/// 採らなかった。そういう項目は 677 行のうち 3 行しかなく、しかも 3 行とも違いは
+/// 末尾の節だけである（台帳 `2.7.26`／カタログ `2.7.25`）。`introduced` が報告へ届く
+/// 唯一の道は世代（先頭 2 節）の分布なので、戻しても世代は `2.7` のまま動かず、結局
+/// 戻した側の所見は同じく 0 件になる。得るものが無いのに、その 3 行が直された日に
+/// 選び方ごと立ち行かなくなる脆さだけが増える。
 #[test]
 fn an_introduced_version_outside_the_catalog_turns_red() {
     let data = RepoData::load();
@@ -611,6 +691,13 @@ fn an_introduced_version_outside_the_catalog_turns_red() {
         .expect("版番号のある項目が shiori の台帳に 1 つも無い");
 
     let mut copy = Perturbed::of(&data);
+    assert_eq!(
+        copy.entry_mut(Domain::Shiori, &id).introduced,
+        known,
+        "選ばれた項目の台帳の `introduced` がカタログの先頭の版番号と食い違っている。\
+         この判定は戻す操作が台帳を実データそのものへ返すことに寄りかかって、戻した側の\
+         期待を所見 0 件にしているので、食い違うならその期待を見直すこと"
+    );
     copy.entry_mut(Domain::Shiori, &id).introduced = "0.0.0-none".to_owned();
 
     let findings = copy.findings();
@@ -630,12 +717,9 @@ fn an_introduced_version_outside_the_catalog_turns_red() {
         "本文がカタログの版番号を載せていない"
     );
 
-    // カタログにある版番号へ戻せば、登場版の所見だけが消える。
+    // カタログにある版番号へ戻せば、台帳は実データそのものに返るので所見は 1 件も残らない。
     copy.entry_mut(Domain::Shiori, &id).introduced = known;
-    expect_exactly(
-        &copy.findings(),
-        &[(FindingKind::DomainReportStale, None, report)],
-    );
+    expect_exactly(&copy.findings(), &[]);
 }
 
 /// 要件 6.8——テーマ名の綴りが違うと赤くなり、定義にある綴りなら赤くならない。
@@ -787,11 +871,7 @@ fn the_check_survives_lines_moving() {
     );
 
     let anchor = anchor_id();
-    assert_eq!(
-        at_top.by_id.get(&anchor).map(Vec::as_slice),
-        Some([ANCHOR_SOURCE.to_owned()].as_slice()),
-        "書き足した正典 URL が錨の項目の証拠になっていない"
-    );
+    assert_the_added_line_became_evidence(&data, &at_top);
 
     // 証拠が付いた状態でも、実データに食い違いは 1 件も生まれない（行が増えただけで
     // 赤にならないこと）。

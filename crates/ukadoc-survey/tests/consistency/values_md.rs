@@ -25,20 +25,27 @@
 //! 行が減ることがない。だから `values.md` の書き換えは新しさの検査にも所見にも出ない。
 //! ここが唯一の見張りである。
 //!
-//! # ⑶ の後半（実データでの語彙表経路）が今日は成り立たないこと
+//! # ⑶ の後半（実データでの語彙表経路）は今日成り立つ
 //!
 //! タスク 8.4 の完了条件には「実データの解決で語彙表経路により解決した件数が 0 でない」
-//! も含まれるが、**今日の repo ではこれは構造的に成り立たない**。走査対象 1,089 本の
-//! どこにも正典 URL の 1 行コメントがまだ 1 つも置かれておらず（`checks.rs` の
-//! 国勢調査の 6.5 の行が「ソースの正典 URL 0 件」を主張として固定している）、語彙表
-//! 経路の入口はページ URL の目印なので、入口に届く証拠が 1 件も無い。
+//! も含まれる。道具を建てた当初、これは**構造的に成り立たなかった**——走査対象のどこにも
+//! 正典 URL の 1 行コメントが 1 つも置かれておらず、語彙表経路の入口はページ URL の
+//! 目印なので、入口に届く証拠が 1 件も無かった。だから空振りの緑を置く代わりに
+//! **0 件であること自体を主張**にし、誰かが目印を置いた瞬間に赤くして書き換えを促す
+//! 仕掛けにしてあった。
 //!
-//! 空振りの緑を置く代わりに、[`the_vocabulary_route_is_vacuous_on_todays_real_data`]
-//! が **0 件であること自体を主張**にしてある。誰かが `/// ukadoc: <ページ URL>` を
-//! ソースへ置いた瞬間にこのテストが赤くなり、読む人に「非空の主張へ書き換えよ」と
-//! 迫る（タスク 8.2 の国勢調査と同じ形）。較正の本体（⑶ の前半）は repo の状態に
-//! 依らない——設計 Testing Strategy 17a の但し書き「ページ URL のコメントが置かれる
-//! 前は、取り出し関数を直接呼んで確かめる」がこの経路である。
+//! **その仕掛けは設計どおり発火した。** 調査 spec（`areka-P0-ukadoc-survey-shiori`）が
+//! 要件 5.4 どおり語彙表へ `/// ukadoc: <ページ URL>` を置いたためである。指示どおり
+//! 主張を裏返し、[`the_vocabulary_route_binds_items_on_todays_real_data`] が
+//! **入口（目印がある）と出口（項目 URL だけでは説明の付かない証拠がある）の 2 段**で
+//! 非空を主張する。`checks.rs` の国勢調査も同じ回に 6.5（ソースの正典 URL）と 6.11
+//! （証拠の付いた項目）を非空へ移してある。
+//!
+//! 較正の本体（⑶ の前半）は repo の状態に依らない——設計 Testing Strategy 17a の
+//! 但し書き「ページ URL のコメントが置かれる前は、取り出し関数を直接呼んで確かめる」が
+//! この経路である。実ソースに目印が置かれた今も、写しへ 1 行足して**足した分だけ
+//! 取り出しが増える**ことを見る形で残してある（実ソースの目印を数え込まずに済ませる
+//! ためではなく、較正が repo の状態に依らないことを保つためである）。
 //!
 //! # この較正が捕まえないもの（実データが構造として持っていない 2 つ）
 //!
@@ -332,16 +339,36 @@ fn the_vocabulary_route_maps_all_159_resource_ids_to_titles() {
     );
 
     let page_url = page_url_of(&data, RESOURCE_PAGE);
-    let marked = with_marker(source, &page_url);
 
+    // **足す前**——実ソースの語彙表には、調査 spec が要件 5.4 どおりに置いた目印が
+    // すでに 1 行ある。だから「目印はちょうど 1 件」では見られない。代わりに、この
+    // ファイルから取り出せる URL が**どれも目印のページ URL である**ことを見る
+    // （項目 URL が混ざっていれば、下の解決は語彙表経路を通らずに `by_id` を埋める）。
+    let bare = extract(VOCABULARY_PATH, source);
+    assert!(
+        bare.iter().all(|hit| hit.url == page_url),
+        "語彙表から目印以外の URL が取り出せる: {:?}。\
+         この較正は語彙表経路だけを通す前提で組んである。\
+         直し方——項目 URL はその項目の定義箇所へ置くこと（語彙表には置かない）。\
+         語彙表に置いてよいのはページ URL の目印 1 行だけである",
+        bare.iter().map(|hit| &hit.url).collect::<Vec<_>>()
+    );
+
+    // **足した後**——書き足した 1 行の分だけ取り出しが増え、増えた分も目印である。
+    let marked = with_marker(source, &page_url);
     let hits = extract(VOCABULARY_PATH, &marked);
     assert_eq!(
         hits.len(),
-        1,
-        "目印を 1 つだけ置いたのに取り出しが {} 件になった",
+        bare.len() + 1,
+        "目印を 1 行足したのに取り出しが {} 件から {} 件になった",
+        bare.len(),
         hits.len()
     );
-    assert_eq!(hits[0].url, page_url, "取り出した URL が目印と違う");
+    assert!(
+        hits.iter().all(|hit| hit.url == page_url),
+        "取り出した URL に目印以外が混ざった: {:?}",
+        hits.iter().map(|hit| &hit.url).collect::<Vec<_>>()
+    );
 
     let sources = vec![(VOCABULARY_PATH.to_owned(), marked)];
     let index = resolve(&hits, &sources, &data.catalog);
@@ -447,43 +474,71 @@ fn exactly_one_element_needs_normalization_to_match_its_title() {
     );
 }
 
-/// 実データの語彙表経路は今日 0 件である（要件 6.13・空振りを主張に変える）。
+/// 実データの語彙表経路が現に項目を結んでいる（タスク 8.4 の完了条件の後半）。
 ///
-/// ソースに正典 URL がまだ 1 つも置かれていないので、語彙表経路の入口——ページ URL
-/// の目印——に届く証拠が 1 件も無い。だから**タスク 8.4 の「実データで 0 件でない」は
-/// 今日は成り立たない**。空振りの緑を置く代わりに 0 件を主張にする。
+/// **この主張はかつて「0 件である」の側に立っていた。** 道具を建てた当初はソースに
+/// 正典 URL が 1 つも置かれておらず、語彙表経路の入口——ページ URL の目印——に届く
+/// 証拠が 1 件も無かったので、空振りの緑を置く代わりに 0 件そのものを主張にし、誰かが
+/// 目印を置いた瞬間に赤くして非空の主張への書き換えを促す仕掛けにしてあった。
 ///
-/// **このテストが赤くなったら**、それは誰かがソースに `/// ukadoc: <ページ URL>` を
-/// 置いたということである。そのときはこのテストを消し、
-/// [`the_vocabulary_route_maps_all_159_resource_ids_to_titles`] の隣へ「実データの
-/// 解決で語彙表経路により結ばれた項目が 0 件でない」という非空の主張を置くこと。
+/// **その仕掛けは設計どおり発火した。** 調査 spec（`areka-P0-ukadoc-survey-shiori`）が
+/// 要件 5.4 どおり語彙表 `crates/areka-sylphya/src/vocab/shiori_resource.rs` へ
+/// `/// ukadoc: <ページ URL>` を置いたためである。そこで書き換えの指示どおり、非空の
+/// 主張を 2 段で置く。
 ///
-/// 主張は**語彙表経路の入口＝ページ URL の目印**だけに絞ってある。項目 URL の 1 行
-/// コメント（要件 5.1・5.2・5.5 の普通の書き方）は `evidence/resolve.rs:93-97` で
-/// 目印を 1 度も通らずに `by_id` を埋めるので、`by_id` の空虚さをここで主張すると
-/// 「語彙表経路」と名乗りながらそれより広いものを見張ることになり、赤くなったとき
-/// 読む人を語彙表経路の書き換えへ誤って導く。`by_id` と取り出し全体の空虚さは
-/// 国勢調査が名指しで持っている（`tests/consistency/checks.rs:253` の 6.5 の行＝
-/// ソースの正典 URL、`:261` の 6.11 の行＝証拠の付いた項目）。
+/// ⑴ **入口**——目印がソースに 1 件以上ある。
+/// ⑵ **出口**——実データの証拠索引に、**項目 URL の 1 行コメントだけでは説明の付かない**
+///    項目がある。項目 URL は `evidence/resolve.rs` の `by_url` の腕が目印を 1 度も
+///    通さずに `by_id` を埋めるので、単に `by_id` が非空であることを主張しても
+///    「語彙表経路」と名乗りながらそれより広いものを見張ることになる。差を取って
+///    語彙表経路の取り分だけを見る。
+///
+/// **赤になったら**——⑴ が落ちたなら語彙表の目印の行が剥がれている。⑵ だけが落ちたなら
+/// 目印は残っているのに要素と見出しの突き合わせが 1 件も結べていない、つまり
+/// `resolve::match_vocabulary` の側が壊れている。
 #[test]
-fn the_vocabulary_route_is_vacuous_on_todays_real_data() {
+fn the_vocabulary_route_binds_items_on_todays_real_data() {
     let data = RepoData::load();
 
     let by_url = data.catalog.by_url();
     let page_urls = data.catalog.page_urls();
-    let markers: Vec<String> = data
+    let hits: Vec<_> = data
         .sources
         .iter()
         .flat_map(|(path, text)| extract(path, text))
+        .collect();
+
+    let markers: Vec<String> = hits
+        .iter()
         .filter(|hit| !by_url.contains_key(hit.url.as_str()) && page_urls.contains_key(&hit.url))
         .map(|hit| format!("{}: {}", hit.path, hit.url))
         .collect();
+    assert!(
+        !markers.is_empty(),
+        "語彙表経路の入口——ページ URL の目印——がソースに 1 件も無い。\
+         要件 5.4 の目印の行が剥がれていないか確かめること"
+    );
+
+    // 項目 URL の 1 行コメントだけで説明の付く項目。ここに入らない証拠が語彙表経路の
+    // 取り分である。
+    let direct: BTreeSet<&str> = hits
+        .iter()
+        .filter_map(|hit| by_url.get(hit.url.as_str()).map(|id| id.as_str()))
+        .collect();
+    let by_route: Vec<&str> = data
+        .evidence
+        .by_id
+        .keys()
+        .map(|id| id.as_str())
+        .filter(|id| !direct.contains(id))
+        .collect();
 
     assert!(
-        markers.is_empty(),
-        "語彙表の目印がソースに {} 件現れた: {markers:?}。\
-         この空振りの主張を消し、語彙表経路で結ばれた項目が 0 件でないことの主張へ\
-         書き換えること（タスク 8.4 の完了条件の後半）",
+        !by_route.is_empty(),
+        "実データの証拠 {} 件がすべて項目 URL で説明が付き、\
+         語彙表経路で結ばれた項目が 1 件も無い。\
+         目印は {} 件あるので、要素と見出しの突き合わせの側が結べていない",
+        data.evidence.by_id.len(),
         markers.len()
     );
 }

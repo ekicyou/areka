@@ -1,0 +1,372 @@
+# 実装計画
+
+> **前提の変更（2026-09-05・上流 `areka-P0-ukadoc-survey-toolkit` が着地したため）**: 道具（`crates/ukadoc-survey`）と `doc/ukadoc-coverage/` 一式が既に main にある。担当分の台帳 `ledger/shiori.toml` は **677 項目すべてが `unclassified` の状態で建っており**、カタログ `catalog.toml`（全 1,749 件）・テーマの正本 `values.md`・手引き `README.md`・報告 `report/shiori.md` も揃っている。したがって設計 DD-1（骨組みを作る使い捨て台本）と DD-9（検証の使い捨て台本）は前提が消え、道具の CLI と常時検査に置き換わる。要件 10.1（道具が着地済みなら本 spec が報告を再生成する）の側が確定した。
+
+- [x] 1. 基盤: 着地した台帳と道具を受け取り、検査が赤を出せることを確かめる
+- [x] 1.1 担当 12 ページ 677 項目の集合と版番号の候補をカタログで確かめる
+  - `doc/ukadoc-coverage/catalog.toml` を読み、ページ部分が担当 12 ページの項目が 677 件であること、ページ別の件数が要件 1.1 の内訳（イベント 290・拡張 168・リソース 159・SHIORI/3.0 26・PLUGIN 19・外部連携 6 ページ 14・補足 1）と 1 件ずつ一致することを確かめる
+  - 食い違ったページがあれば仕分けに進まず、ページ名と件数を書き出して原因を先に解消する
+  - 同じ読み取りで、繋がりの相手の実在を照らす先（カタログの全 1,749 件）と、`introduced` の候補になる `versions` 欄（担当分で 1 つ以上を持つのが 98 件・相異なる 2 つ以上を持つのが 11 件・拡張ページは 0 件）を控える
+  - 完了条件: 12 ページの内訳と合計 677 がカタログと完全一致し、版番号を持つ 98 件と複数持つ 11 件の一覧が作業用の一時置き場に残っている
+  - _Requirements: 1.1, 1.5, 1.6_
+
+- [x] 1.2 着地している台帳を土台として受け取り、前置きと並びを確かめる
+  - `doc/ukadoc-coverage/ledger/shiori.toml` が 677 個の `[entry."<id>"]` を持ち、すべて `unclassified` であること、`[ledger]` の `domain` と `pages` が担当と一致することを確かめる
+  - 以後は id・並び順・`[ledger]` の前置き・冒頭の `#` コメントに触らず、値だけをその場で書き換える。独自の欄・独自の状態語彙・独自の関連の種別を足さない
+  - id は見た目で直さずカタログから写す（符号化済みのため）。正典の見出しや本文を台帳に取り込まない
+  - 骨組みを生成する使い捨て台本は書かない（道具の `ledger-init` が既に済ませている）
+  - 完了条件: `cargo test -p ukadoc-survey` が緑で、台帳の 677 項目が付録 A の欄をそのまま持っている
+  - _Requirements: 1.1, 1.2, 1.3, 1.7, 9.8, 12.7_
+
+- [x] 1.3 道具の検査が赤を出せることを、書き始める前に確かめる
+  - 台帳を仮に壊した状態で `cargo run -p ukadoc-survey -- check` を走らせ、少なくとも次の所見が実際に出ることを 1 件ずつ確かめる: `LedgerIdNotInCatalog`（id を 1 文字変える）・`LedgerOutOfOrder`（隣り合う 2 項目を入れ替える）・`LedgerPagesMismatch`（前置きのページを 1 つ落とす）・`AliasChain`（別名の指す先を別の `alias` へ向ける）・`LinkEndpointMissing`（相手 id の末尾の連番を別の数字に変える）・`IntroducedNotInCatalogVersions`（版番号を 1 桁変える）・`ImplementedWithoutEvidence`（証拠の無い行を `implemented` にする）・`SourceUrlNotInCatalog`（URL の符号化部分を 1 文字崩す）・`DomainReportStale`（台帳を直して報告を作り直さない）
+  - 確かめたら壊した箇所をすべて戻し、`git status` で台帳が元のままであることを確認する
+  - 未分類が 0 件であることと状態語の綴りは、報告の「未分類」列と読み込み段の失敗で見る（15 所見には別立てで現れない）
+  - **テーマ名の綴り**（`UnknownTheme`）も同じく読み込み段の失敗で見る。読み取りの `parse_theme` と検査の `CheckInput::themes` が同じ `THEMES` 定数なので、台帳ファイル経由でこの所見に到達する道は無い（道具の常時テスト `a_misspelled_theme_turns_red` が覆う）
+  - 使い捨ての検証台本は書かない（道具の 15 所見と常時検査が同じ範囲を覆う）
+  - 完了条件: 9 通りの壊し方それぞれについて「その所見が出た」記録が残り、`UnknownTheme` は読み込み段の失敗で赤になることの記録が残り、戻した後に `cargo test -p ukadoc-survey` が緑
+  - _Requirements: 1.4, 1.6, 6.8, 8.4, 10.5_
+
+- [x] 1.4 群の索引を確定し、ブリーフィング文書の冒頭と台帳冒頭のコメントに置く
+  - 設計「群の一覧」の 18 行（群の番号は 1〜15・うち 2 つが a／b／c に枝分かれする）それぞれについて、対象・件数・状態・テーマ・優先度・共通 `note` の全文・判断の根拠の場所（ファイル名と定義名。行番号は書かない）を 1 度だけ書く
+  - 共通 `note` の文面には壊れ方の段（黙って壊れる／明示的なエラー／見た目の差）と、その根拠として「どのログが出るか・出ないか」を必ず含める
+  - 正本はブリーフィング文書の冒頭に置く。台帳冒頭には道具が書いた `#` の前置きが既にあるので、それを消さずに群の索引の写しを書き足す（消えても正本は残る形にしておく）
+  - ここで凍結するのは群ごとの共通 `note` の文面までとし、項目ごとのテーマ（タスク 5.1）・優先度の値（タスク 5.2）・仮置きである旨の明記（タスク 5.2）は後から索引に書き足してよい
+  - 完了条件: 18 行すべての共通 `note` 文面が索引に確定して書かれ、以後の仕分けはこの文面を写すだけで済む状態になっている
+  - _Requirements: 2.9, 7.6_
+
+- [x] 2. 送る側（SHIORI イベント 290）の仕分け
+- [x] 2.1 実装済み 11・別名 3・意図的非発火 3 を確定する
+  - 送出許可表（`areka-kanade` の `schedule/events.rs` の `ALLOWED_EVENT_IDS`）の 11 要素に対応する項目を `implemented` とする。`basewareversion` はこの 11 要素の 1 つであり、正典での所在に従ってイベント側の行に置き、送信の向き（ベースウェアからの通知）を `note` に書く
+  - 正典本文が旧仕様と明記する `OnFileDrop`・`OnFileDropped`・`OnFileDropEx` を `OnFileDrop2` の別名として `alias` とし、`alias_of` に正典側の id を書く。`OnFileDropping` は別の機能なので含めない
+  - `OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak` を `vocabulary-only` とし、`owner` に追跡先の spec 名を書き、`doc/COMPAT_ARCHITECTURE.md` の該当行を転記元として `note` に写す
+  - 正典と別名の向きは上流 要件 4.1 の順序（正典本文の注記 → 版番号 → 人手の判断）で決め、判断の根拠となる areka 側の場所をファイルパスと定義名で書く（行番号は書かない）
+  - 完了条件: 17 行の状態・`alias_of`・`owner`・`note` が埋まり、検査 ⑸（別名の連鎖が無いこと）が緑になる
+  - _Requirements: 2.2, 2.4, 2.5, 2.9, 3.6, 6.1, 6.2, 6.3, 6.4, 12.3_
+
+- [x] 2.2 送出していないイベント 248 を `absent` として埋める
+  - 許可表に無い項目を `absent` とし、群の共通 `note`（「areka はこのイベントを送らない・例外にもログにも現れない」）を写す。`absent` の各行には根拠の場所を繰り返さない
+  - areka の内部でだけ使う名前（`OnTalk`・`OnHour`・`OnMenuBack`）は行を作らず、最も近い正典項目の `note` に areka 側の扱いを書く
+  - 正典 290 と既存カタログ `doc/shiori/fragments/events/` の 287 を id 単位で突き合わせ、差の 3 件（`OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`）を該当する行の `note` に記録する
+  - 完了条件: 自分の担当 248 行がすべて `absent` になり、差の 3 件が該当行の `note` から読み取れる（290 行全体で未分類 0 件になるのはタスク 7.1 の検査 ⑹ で確かめる）
+  - _Requirements: 2.1, 2.3, 2.6, 2.11_
+
+- [x] 2.3 `On` で始まらない同居項目 25 を送信の向きで書き分ける
+  - `property.get`／`property.set`・`hwnd`・`uniqueid`・`capability`・`installed*`・`*pathlist`・`enable_log` ほかについて、ベースウェアからの通知なのか SHIORI から引く値なのかを `note` に書き分ける
+  - `basewareversion` はこの 25 件に含めない（送出許可表にある実装済みの項目としてタスク 2.1 が書く。要件 2.4 の言う 26 件は 2.1 の 1 件と本タスクの 25 件で分担する）
+  - `property.get`／`property.set` は `owner` に `areka-P0-property-query-channels` を書くだけとし、その spec の判断を上書きしない
+  - 完了条件: 25 行すべてに状態と向きの記述が入り、テーマは原則空・優先度は配管の値になっている
+  - _Requirements: 2.4, 12.3_
+
+- [x] 2.4 `OnUpdate` 系 26 件を 1 つの群として揃える
+  - 26 件に同じテーマ（更新）と同じ優先度を置き、小群（本体更新 11・ゴースト以外の更新 8・点検 2・結果 5）の別を `note` の 1 文で書き分ける
+  - 小群ごとの内訳が実測（合計 26）と一致することを、台帳を確定させる前に数え直して確かめる
+  - 完了条件: 26 行のテーマ・優先度・状態が揃い、小群の別が `note` から一意に読み取れる
+  - _Requirements: 2.7_
+
+- [x] 3. 引く側（リソース 159）と外部が送る拡張（168）の仕分け
+- [x] 3.1 リソース 159 を実装済み 1・画面の材料 131・その他 27 に仕分ける
+  - 照会許可表（`areka-kanade` の `schedule/resources.rs` の `ALLOWED_RESOURCE_IDS`）に対応する 1 件を `implemented` とし、値が無いときに既定値へ縮退する旨と転記元を `note` に書く
+  - 語彙表（`areka-sylphya` の `vocab/shiori_resource.rs` の `SHIORI_RESOURCE_IDS`）に載るが実際には引かれていない項目を `vocabulary-only` とする。名前の突き合わせでは空白の全角・半角の違いを同一とみなす（該当は 1 件）
+  - 画面の材料になる群（ボタンの文言・`menu.*`・`popupmenu.*`・`*.recommendsites`・`*.portalsites` ほか）を `values` と `links` で束ねられる形にし、それが何の画面の材料かを `note` に書く
+  - 1 項目に 2 つの名前が入っている 1 件と、`doc/shiori/fragments/` 側が名前を置き換えて `.defaulttop` を落としている事実を `note` に明記する
+  - 完了条件: 159 行の内訳が 1＋131＋27 になり、未分類が 0 件になる
+  - _Requirements: 3.1, 3.2, 3.3, 3.5_
+
+- [x] 3.2 外部が送る拡張イベント 168 を 1 つの群として `not-applicable` にする
+  - 群に共通の `note` に「送信元は areka ではない」「areka が問われるのは受け口の有無だけ」を書き、受け口（任意名イベントの経路）が areka に無い事実を群として 1 度だけ書く
+  - 他のゴーストが送る 7 件（要件が名指しする 3 件＋本文が `raiseother`／`notifyother` を使うと明記する 4 件）には、ゴースト間の伝達そのものが areka に無いことを理由として書き添える
+  - 168 件の `values` をすべて空にし、版番号を持つものが 0 件であることを確かめて `introduced` をすべて空にする
+  - 完了条件: 168 行すべてが同じ状態と共通 `note` を持ち、`values` と `introduced` が全件空になっている
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
+
+- [x] 4. ヘッダ・PLUGIN の受け口・外部連携の仕分け
+- [x] 4.1 SHIORI/3.0 の 26 項目をリクエスト 11・レスポンス 15 に分けて仕分ける
+  - 送っているヘッダ 5 を `implemented`、固定値でしか送れない 2（`Charset`・`SecurityLevel`）を `degraded` とし、固定値である旨を `note` に書く。`Charset` の行の `owner` に `areka-P0-charset-canon` を書く
+  - 送らない 4（`SenderType`・`SecurityOrigin`・`BaseID`・リクエスト側の `X-SSTP-PassThru-`）を `absent` とし、`build_request` の説明に `BaseID` が挙がっていないことを `note` に書く
+  - 読み飛ばす応答ヘッダ 11 を `absent`、現に解釈する 4（ステータスコード・`Value`・`ErrorLevel`・`ErrorDescription`）を `implemented` とし、いずれも判断の根拠を `parse_response` の分岐としてファイル名と定義名で書く
+  - 見出しが同じ 2 組（`Charset`・`Sender`）を項目 id で区別し、1 つの行にまとめない。廃止予定の旧名の注記はレスポンス側の項目に登記する
+  - `Reference*`／`Reference0`／`Reference1〜` のように 1 項目が可変個のヘッダを表すものについて、その粗さを `note` に書く
+  - 定義箇所が特定できない項目は `implemented` とせず、`vocabulary-only` または `degraded` として理由を `note` に書く
+  - 完了条件: 26 行の内訳が 5＋2＋4＋11＋4 になり、リクエスト側とレスポンス側の別が `note` から読み取れる
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.4a, 5.5, 5.8, 6.6, 9.9, 12.3_
+
+- [x] 4.2 PLUGIN の受け口 19 項目を種別で書き分ける
+  - イベント・PLUGIN 向けのリソース・プロパティの照会・任意名イベントの枠という種別の違いを `note` に書き分ける
+  - 完了条件: 19 行すべてに状態と種別の記述が入り、未分類が 0 件になる
+  - _Requirements: 5.6_
+
+- [x] 4.3 外部連携 14 項目と補足 1 項目を「受け口の有無」で判定する
+  - SSTP 2・FMO 6 を交わりの群として、WEB 3・PLUGIN 1・HEADLINE 1 を周辺の群として `absent` にする
+  - DLL 共通仕様 1 件を `degraded` とし、`note` に SHIORI 用の入口が host-32 に実装済みであること・SAORI／MAKOTO／PLUGIN の同居が無いこと・SAORI の成立条件（32bit の同じプロセスに同居・作業ディレクトリ・DLL の探索パス）・MAKOTO の担当 spec を書く。SAORI の独立した行は作らない
+  - アンカーの無いページ全体で 1 項目である 4 件（DLL 共通仕様・PLUGIN・HEADLINE・イベント一覧の補足）について、他ページの 1 項目より粒度が粗い旨を `note` に書く
+  - イベント一覧の補足 1 件にも状態を与え、それが一覧の補足であることを `note` に書く
+  - 完了条件: 15 行すべてに状態が入り、受け口の有無以外の判断（実装の可否）を書いていない
+  - _Requirements: 2.10, 5.7, 5.8, 5.9_
+
+- [x] 5. テーマ・優先度・繋がり・版番号の総仕上げ
+- [x] 5.1 テーマを 8 語彙の中から付け、付けた理由と付けない理由を書く
+  - 名前の頭による既定（設計「テーマの付け方」の表）を出発点とし、最後は 1 項目ずつ正典本文を読んで上流の付与規則（「無いと利用者はゴーストの何を失うか」に答えられるテーマだけを付ける）に当てはめる
+  - 既定が本文と合わない項目は個別に直し、直した理由を `note` に書く。テーマを付けた行には「無いと利用者が失うもの」を 1 文で書く
+  - テーマを付けない既定の群（拡張 168・`OnBasewareUpdating`／`OnBasewareUpdated`・`property.get`／`property.set`・HEADLINE）はその理由を `note` に書く
+  - 完了条件: `values` に上流の 8 語彙以外が 1 つも現れず（検査 ⑷ が緑）、テーマの付いた行すべてに失うものの 1 文がある
+  - _Requirements: 7.1, 7.2, 7.3, 7.4_
+
+- [x] 5.2 優先度を群ごとに 1 つの値で仮置きする
+  - 設計「群→段階」の表に従い、段階 1 文字（A〜E）と数値を群ごとに置く。表に当たらない項目は同じテーマの群の値を写す
+  - 各項目の壊れ方の段を `note` に書き、その根拠として「どのログが出るか・出ないか」を添える
+  - 優先度の 4 つの根拠の序列を入れ替えず、段階と数値がいずれも仮置きであること（最終決定は統合担当）を台帳冒頭の索引に明記する
+  - 完了条件: `priority` が空でない行すべてが群→段階の表のいずれかの値と一致し、**索引が具体値を定めている群の行に空欄が 1 つも残っておらず**（特に群 2a の 3 行が `C2`）、**索引が「テーマから決まる」とする群 8 の 27 行も空欄で残っておらず**（設計の優先度の表は群 8 に `D2` を与えている。テーマが付いた行はテーマから決め、付かない行は `D2`）、壊れ方の段が `note` から読み取れる
+  - _Requirements: 7.5, 7.6, 7.7_
+
+- [x] 5.3 繋がりを 6 種別の中で登記する
+  - 確定している繋がり（拡張から本体への `same-feature` 7・拡張と本体の同名 3・`OnUpdate` の掲載順の鎖 22・本体更新とゴースト以外の更新の対応 8・`sakura.`／`kero.`／`char*.` の総当たり 27・PLUGIN と本体の同名 12・マウスの分担 1）を、設計が定めた「書く側の決め方」に従って一方の側にだけ書く
+  - `sakura.*`／`kero.*`／`char*.*` は新旧の関係として扱わず、正典本文が示すスコープの違いとして結ぶ
+  - 発火条件の源（descript のキー・プロパティ・さくらスクリプトのタグ・OS の事象・利用者の操作）を `triggers`／`configures`／`queries` で登記する。相手が他ドメインの項目でもその id を書いてよく、その項目の行は作らない
+  - 繋がりに人手の名付けや解説を持たせない
+  - 完了条件: 検査 ⑺（相手 id が全 1,749 件の一覧に実在すること）が緑になり、確定している繋がりの本数が設計の表と一致する
+  - _Requirements: 2.8, 3.4, 6.5, 8.1, 8.2, 8.3, 8.4, 8.5_
+
+- [x] 5.4 版番号を決め、複数ある項目の扱いを揃える
+  - 版番号を持つ 98 件について、項目そのものの登場を示す版番号を `introduced` に書く。書く値は**カタログの `versions` 欄にある版番号のいずれか**にする（道具の検査 `IntroducedNotInCatalogVersions` が照らす先はカタログであり、正典本文を自分で読み直した値ではない）
+  - 相異なる版番号を 2 つ以上持つ **11 件**（`OnDarkTheme`・`OnDisplayChangeEx`・`OnNetworkStatusChange`・`OnRecycleBinEmpty`・`OnRecycleBinStatusUpdate`・`sakura`／`kero`／`char*` の `popupmenu.applybindtoself` 3 件・FMO のキー名と値・`ValueNotify`・SSTP の `request`）は、残りの版番号とその意味（挙動の変更・引数の追加など）を `note` に書く。本文から登場の版を判別できなければ最も小さい版番号を書く
+  - 設計と要件 6.10 が「12 件」としていたのはカタログ着地前の見立てで、カタログ実測は 11 件である。この訂正を `note` かブリーフィングに記録する
+  - 版番号が無い項目は `introduced` を空にし、最も古いものとして扱わない（拡張ページはカタログでも 0 件）
+  - 完了条件: `introduced` が入っている行の値がすべてカタログの `versions` に含まれ（検査が緑）、98 件以外は空になっている
+  - _Requirements: 4.5, 6.9, 6.10_
+
+- [x] 5.5 縮退の転記元を読み直して漏れが無いことを確かめる
+  - `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表の全行と `doc/emo2-conformance-scope.md` の見直し表を 1 行ずつ読み直し、SHIORI ドメインの項目を名指ししている行が設計の表の 5 行のほかに無いことを確かめる
+  - 増えていれば同じ形で対応する行の `note` に転記元を書き足す
+  - 転記元を書くのは縮退の記録が名指ししている行（群 2a の 3 件・`Status`・`username`・DLL 共通仕様）に限る。語彙表に載るだけの `vocabulary-only` の行は、転記元ではなく判断の根拠の場所（ファイル名と定義名）を持つ
+  - 完了条件: 名指しの行の一覧が設計の表と一致し（または増えた分が台帳に反映され）、名指しされた行すべてに転記元がある
+  - _Requirements: 3.6_
+
+- [x] 6. 証拠のコメントとブリーフィング文書
+- [x] 6.1 (P) 送出・照会の許可表に正典 URL のコメント 12 行を置く
+  - 送出許可表の 11 要素それぞれの直前に `//` で `ukadoc: <正典 URL>` を 1 行ずつ置く（要素には `///` を使わない）
+  - 照会許可表の doc コメントの末尾に `///` で 1 行置く（要素が 1 件で 1 行に収まるため定義そのものに置く）
+  - URL はスナップショットの値をそのまま写し、説明文を伴わない 1 行だけを追加する。実行時に評価される記述を 1 行も追加・変更・削除しない
+  - 完了条件: 2 ファイルの差分がコメント 12 行だけで、`cargo test -p areka-kanade` が緑
+  - _Requirements: 9.1, 9.2, 9.5_
+  - _Boundary: areka-kanade schedule_
+  - _Depends: 2.1, 3.1_
+
+- [x] 6.2 (P) リソース語彙表にページの URL 1 行を置く
+  - 語彙表の doc コメントの末尾に `///` でページの URL を 1 つ置き、159 の要素ごとには置かない
+  - 語彙表の中身（159 要素）を書き換えない
+  - 上流へ送る材料を `research.md` に残す。⑴ 同じページの URL が 2 か所（語彙表の先頭と照会許可表の 1 件）に現れる＝重複した証拠の扱いの最初の実例／⑵ 台帳へ id を挿入する処理が、道具の書いた冒頭の `#` 前置きだけでなく人が書き足した `#` コメント行も保存するかどうか（`ledger-init` を試した結果を書く）。版番号の取り出し方は着地したカタログの `versions` が正本と決まったので材料から外す
+  - 完了条件: ソース側の差分がコメント 1 行だけで、材料 2 件が `research.md` に書かれ、`cargo test -p areka-sylphya` が緑
+  - _Requirements: 9.1, 9.3, 9.5, 12.6_
+  - _Boundary: areka-sylphya vocab_
+  - _Depends: 3.1_
+
+- [x] 6.3 (P) SHIORI/3.0 のやり取りに正典 URL のコメント 9 行を置く
+  - 作業に入る時点で既定の枝の該当ファイルが既に任意の文字コードへ書き換わっているかを確かめ、書き換わっていれば書き換わった後の定義箇所に置き直す（隣接 spec が先着した場合の切替）
+  - リクエストを組み立てる側は要求行・`Sender`・`Status`・`ID`・`Reference` を書き出す文の直前に 5 行、応答を読む側はステータスコードを取り出す文の直前と 3 つの分岐の腕の直前に 4 行を `//` で置く
+  - `Charset` と `SecurityLevel` を書き出す文には置かない（この 2 項目は実装済みでないため）
+  - 完了条件: 差分がコメント 9 行だけで、`cargo build -p shiori-host32-host` が警告なく通る
+  - _Requirements: 9.1, 9.2, 9.4, 9.5_
+  - _Boundary: shiori-host32-host_
+  - _Depends: 4.1_
+
+- [x] 6.4 (P) ブリーフィング文書を書く
+  - タスク 1.4 が冒頭に置いた群の索引は書き換えず、その後ろに章を足す形で書く
+  - 台帳の群がそのまま章になり、「黙って壊れる」ものを先に、次にテーマの付いたもの、最後に受け口が無い外部連携という順で並べる
+  - 各章に「利用者に何が起きるか（何を失うか）」「その群を成立させる最小の基盤（今ある物と足りない物を分けて）」「台帳の項目 id」を書く
+  - 「段階と優先度は仮置きであり最終決定は統合担当が行う」を冒頭に明記する
+  - 憶測の実装計画（設計・工程・見積り）と段階の最終順序を書かず、内輪でしか通じない言い回しを使わない。隣接 spec の brief との食い違いは brief を書き換えず末尾に是正の候補として列挙する
+  - 完了条件: 群の一覧の 18 行すべてが章として現れ、未対応であることが結論として明記されている
+  - _Requirements: 6.7, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 12.4_
+  - _Boundary: briefing-shiori.md_
+  - _Depends: 1.4, 5.4_
+
+- [x] 6.5 コメントを足しても既存のテストが緑のままであることを確かめる
+  - 逐語一致のテスト 4 本（送出許可 ID・照会許可リソース・語彙表の件数・台帳キーの決定性）が緑であることを、対象クレートのテストを走らせて確かめる
+  - 触れた 4 ファイルが 1 ファイル 1,000 行の上限を超えないことを、上限の見張りのテストで確かめる
+  - コメントを足した 4 ファイルの属するクレートをビルドし、`unused_doc_comments` の警告が 1 件も出ないことを確かめる（`///` と `//` の使い分けが正しいことの確認）
+  - 4 ファイルの差分を読み直し、追加がコメント 22 行だけで実行時に評価される記述が 1 行も変わっていないことを確かめる
+  - 完了条件: `areka-kanade`・`areka-sylphya`・`log-capture-kit`・`ukadoc-survey` のテストが緑、`shiori-host32-host` が警告なくビルドでき、ソースの差分がコメント 22 行のみ
+  - _Requirements: 9.6, 9.7, 12.1_
+  - _Depends: 6.1, 6.2, 6.3_
+
+- [x] 7. 検証と完了条件の確定
+- [x] 7.1 道具の検査を確定した台帳に対して完走させる
+  - `cargo run -p ukadoc-survey -- check` と `cargo test -p ukadoc-survey` を走らせ、15 所見のいずれも出ないことを確かめる
+  - 証拠の突き合わせ（ソースの正典 URL ⇄ `implemented` の行）は `SourceUrlNotInCatalog` と `ImplementedWithoutEvidence` が担う。手掛かりが要るときは `evidence`／`candidates` を使う
+  - ページ別の件数が合わないときは台帳を確定させず、食い違ったページ名と件数を示して原因を先に解消する。数を合わせるために行を足したり消したりしない
+  - **上流の道具の引き継ぎを受け取る（その 3・タスク 6.1 で発火・タスク 6.5 が発掘）**: `crates/ukadoc-survey/tests/consistency/checks.rs` の `implemented_without_evidence_turns_red_and_evidence_clears_it` は錨 `ukadoc:list_shiori_event:OnBoot:1` を `implemented` にして `ImplementedWithoutEvidence` が出ることを見るが、**6.1 が `events.rs` に `OnBoot` の URL を置いたので錨には既に証拠が付いており**、所見が生まれず**証拠を足す前の側の `expect_exactly`** が落ちる。6.1 の是正は `assert_eq!` 2 か所（証拠索引の主張）を直しただけで、この `expect_exactly`（所見の顔ぶれの主張）には届いていない。**直し方は「錨を選び直す」ではなく「摂動の中で錨の証拠を剥がす」**こと — `copy.entry_mut(...).status = Status::Implemented` の直後に「錨 id の証拠を索引から取り除いた `EvidenceIndex`」を `copy.evidence` に入れてから 1 本目の `expect_exactly` を行い、後半は今どおり `evidence_with_source_line` で足し直す。錨の選び直しを採らない理由は 3 つ: ⑴ 調査 spec 4 本の仕事はまさに「実装済みの項目にソースの正典 URL を置く」ことなので、今日たまたま証拠の無い項目を選んでも同じ理由で必ず腐る ⑵ `shiori_resource.rs` のページ URL 1 行だけで**リソース 159 件全部**に証拠が付いた（証拠の合計は 179 件＝イベント 11＋リソース 159＋SHIORI/3.0 9）ので証拠の無い錨は今後さらに枯れる ⑶ `ANCHOR_ID`／`ANCHOR_URL`／`anchor_id()` は他の多数のテストが共有しており、この 1 本だけ別の錨にすると錨が 2 つになって読みにくい。**同テストの doc の「今日の実データにこの判定の対象は 1 件も無い（台帳は全行が未分類）」も偽になっている**ので、census の散文と同じ回で書き換えること
+  - **上流の道具の引き継ぎを受け取る（その 2・タスク 6.2 で発火）**: `crates/ukadoc-survey/tests/consistency/values_md.rs` の 2 本を直す。⑴ `the_vocabulary_route_is_vacuous_on_todays_real_data` は「ページ URL の証拠が 0 件」という空振りの主張で、6.2 が語彙表にページ URL を置いた時点で設計どおり発火した。**赤の本文は上流タスク 8.4 へ書き換えを促すが、その 8.4 は `completed/` に封書済みで引受先が実在しない。** ⑵ `the_vocabulary_route_maps_all_159_resource_ids_to_titles` は**想定外の巻き添え** — `with_marker` が実ソースを読んだうえで同じページ URL を自分で挿し込むので、6.2 の 1 行と合わせて取り出しが 2 件になる（`left: 2 / right: 1`）。⑵ は `checks.rs` の錨と同じ性質（実ソースの走査に自前の 1 行を足す作りが、下流が契約どおり置いた行を勘定に入れていない）なので、同じ形で「足す前は無い／足した後は含む」へ寄せること
+  - **上流の道具の引き継ぎを受け取る**（タスク 6.1 で発火）: `crates/ukadoc-survey/tests/consistency/checks.rs` の `the_subject_census_says_which_requirements_are_vacuous` は「対象が 1 件でも生まれたら赤にして書き換えを促す」仕掛けで、本 spec が正典 URL を置いた時点で設計どおり発火した。`census()` の **`Subjects::Zero` の 6 行すべて**を `NonEmpty` へ移す（6.5 ソースの正典 URL・6.6 `implemented` の行・6.7 の 3 面〔関連／別名の相手・`alias` の行・登場版の記入がある行〕・6.8 テーマ名・6.11 証拠の付いた項目。**実測でいずれも既に非 0**。ループ内 assert なので最初の 6.5 で止まっているだけ）。**⚠ 件数は 7.1 で実測し直すこと** — 6.1 時点で控えた数値は既に陳腐化している（6.5 の census 行は 22＝コメント 22 行と一致・6.11 の証拠の付いた項目は **179**・6.7 の相手は 131〔`alias_of` 3＋`links` 128〕・`alias` 3・`introduced` 98）。「6 行すべてが既に非 0」という結論は変わらないが、数値をそのまま転記すると誤りが混入する。あわせて `checks.rs` 冒頭の目次コメントと census テスト自身の doc の「対象が 0 件である」という散文も直す。**タスク 6.3 の着地後に行うこと**（6.5 が 12→21・6.11 が 12→21 に動く）
+  - 完了条件: 検査が所見 0 件で通り、報告の「未分類」列が全ページ 0 件
+  - _Requirements: 1.4, 10.5_
+  - _Depends: 6.1, 6.2, 6.3_
+
+- [x] 7.2 ドメイン別報告を台帳から作り直し、台帳と同じコミットに入れる
+  - 道具は着地済みなので、本 spec が `report/shiori.md` の作り直しを所有する（要件 10.1 の側で確定。要件 10.2 の「未着地なら作らない」は起きない）
+  - `cargo run -p ukadoc-survey -- report` で作り直す。報告を手で書き換えて辻褄を合わせない（食い違いは `DomainReportStale` で赤になる）
+  - 触るのは自分の報告 1 本だけとし、`report/summary.md` は統合担当に残す。台帳と報告は同じコミットに入れる
+  - 完了条件: `report/shiori.md` が台帳とバイト単位で一致し（`DomainReportStale` が出ない）、状態の分布の「未分類」が 0 件になっている
+  - _Requirements: 10.1, 10.2, 10.3_
+  - _Depends: 7.1_
+
+- [x] 7.3 非接触の境界を最終確認する
+  - 変更したファイルの一覧を取り、台帳 1 本・報告 1 本・ブリーフィング 1 本・ソースのコメント 22 行・本 spec の `.kiro/specs/areka-P0-ukadoc-survey-shiori/` 配下の文書のほかに何も変わっていないことを確かめる
+  - 他ドメインの台帳 3 本・全体の報告 `report/summary.md`・束の文書・語彙の文書 `values.md`・カタログ `catalog.toml`・手引き `README.md`・**道具の crate の `src/`**・`.kiro/steering/roadmap.md`・`doc/shiori/fragments/`・語彙表の中身・隣接 spec の brief のいずれも変わっていないことを確かめる
+  - **例外（本 spec が上流の欠陥を是正した分）**: `crates/ukadoc-survey/tests/consistency/` の **`checks.rs` と `values_md.rs`** は変わってよい。理由は 2 つで、⑴ 上流の常時テストが `OnBoot` の正典 URL を「ソースのどこにも無い」前提の錨に使っており、本 spec が要件 9.1・9.2 どおりに URL を置いた時点で恒久的に赤になった（製品側 `EvidenceIndex::by_id` の doc は「同じ URL が複数のファイルに現れても赤にしない」と定めており、旧主張は契約と矛盾していた）。⑵ `the_subject_census_...` の引き継ぎの仕掛けが設計どおり発火し、書き換えを促している。上流 spec は `completed/` に封書済みで開き直せないため、発見した本 spec が最小限で是正した。**道具の `src/` は 1 行も変えないこと。**
+  - 他ドメインの項目の行が台帳に 1 つも無いことを確かめる
+  - 完了条件: 変更ファイルの一覧が上記の集合と完全一致し、`unclassified` 0 件と合わせて完了条件が満たされている
+  - _Requirements: 10.4, 12.2, 12.5, 12.6_
+  - _Depends: 7.1, 7.2_
+
+## Implementation Notes
+
+- 1.1: カタログ実測はページ別・合計 677・全 1,749・重複 id 無しまで完全一致。`versions` を持つ担当分 98 件・相異なる 2 つ以上 11 件・拡張 0 件も一致。作業ファイルは scratchpad の `shiori-page-counts.md` / `shiori-versions.md` / `shiori-catalog-ids.txt`。
+- 1.1: 「相異なる版番号 2 つ以上」の 11 件は数え方に依存しない（重複潰しによる減少は 0 件）。設計・要件が「12 件」とするのは**正典本文の正規表現による計測**、実測 11 は**カタログ `versions` 欄による計測**で測る対象が違う。タスク 5.4 は「12 が誤り」と断ぜず「`introduced` の正本はカタログの `versions`」と揃える形で書くこと。
+- 1.1: 「12 件」の記載は **4 か所**ある — `design.md:311`・`design.md:420`（要件対応表）・`requirements.md:164`（要件 6.10 本文）・`requirements.md:246`（付録の再検証表）。タスク 5.4 はこの 4 か所すべてを対象にする。
+- 1.1: scratchpad の `shiori-catalog-ids.txt` は CRLF。LF 出力と `diff` で突き合わせる際は CR を落とすこと。
+- 1.1: worktree では `git submodule update --init --recursive`（`vendors/pasta`）を先に済ませないと `cargo` が一切動かない。
+- 1.2: 台帳は付録 A（`.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md` A.1:184 / A.2:224 / A.3:241）どおり。欄の並びは全 677 項目で 1 通り（`status`→`introduced`→`owner`→`priority`→`values`→`links`→`note`）。`alias_of` 0 件・`supersedes` 0 件は**欠落ではなく正しい初期状態**（A.2 が「`alias` のとき必須・それ以外は書かない」「任意」と定め、A.2 末尾が初期値を逐語で列挙している）。
+- 1.2: 台帳は CRLF・6,101 行・BOM 無し。**値を書き換える際も CRLF を保つこと。**
+- 1.2: 触ってはいけない部分の SHA-256 を scratchpad `shiori-ledger-frozen.md` に控えた（冒頭コメント `a5ccc6a1…` / `[ledger]` 節 `4c9cc888…` / id 行 677 本 `b68abbbc…`）。別セッションでも台帳から数行で再計算できる。
+- 1.2: 1.1 が残した `shiori-catalog-ids.txt` はカタログ全 1,749 件。担当 677 件に絞った `cat-shiori-ids.txt`（LF・677 行）を新設済み。繋がりの相手の実在照合には全件側を使うこと。
+- 1.3: 較正で台本の字句の誤りが 2 件出た（タスク本文を訂正済み）。⑴ `LinkEndpointMissing` は「相手 id の末尾の連番を**消す**」では出ない — `links.to`・`alias_of`・`supersedes` はすべて `ledger/read.rs` の `reference_id` → `model.rs` の `EntryId::parse` を通り、コロン数が合わずに**読み取り段**で止まる。「別の数字に変える」なら出る。⑵ `UnknownTheme` は台帳ファイル経由では**構造上到達しない** — 読み取りの `parse_theme` と検査の `CheckInput::themes` が同一の `THEMES` 定数。所見は道具の常時テスト `a_misspelled_theme_turns_red` が覆う。
+- 1.3: 巻き添えで出る所見の型 — id を書き換えると `CatalogIdMissingFromLedgers` が付く。状態・テーマ・版番号を書き換えると `DomainReportStale` が付く。並び順・前置き・関連の書き換えでは付かない（報告がそれらを載せないため）。
+- 1.3: **`MSYS_NO_PATHCONV=1` を立てること。** MSYS のパス変換が `//` で始まる引数の `\r\n` を `/r/n` に化けさせ、CRLF のファイルへの置換が黙って壊れる（`SourceUrlNotInCatalog` の較正で 1 度空振りした）。
+- 1.3: 戻しは `git checkout -- <明示パス>` で行うこと。`git checkout .` / `git reset --hard` / `git stash` は禁止（stash スタックは他セッションと共有）。
+- 1.4: **areka の SHIORI 送出経路は 2 系統ある。**⑴ スケジューラ起源＝`schedule/events.rs`／`schedule/resources.rs` の構築関数が `EventId::Static` の固定名（`ALLOWED_EVENT_IDS` の 11 件）を組み立てる系統。⑵ **選択起源**＝`schedule/steady.rs` の `CascadePlan::Named` が `on_choice_named` を通してゴースト作者が `\q` の ID に書いた名前を `EventId::Choice` として**逐語で運ぶ**系統で、受理規則 `is_allowed_choice_event` は「`On` 接頭であること」の 1 条件のみ。**「areka はこのイベントを送らない・ログが 1 行も出ない」と書けるのは ⑴ の系統に限る。** `On` 始まりの項目はゴーストが `\q` に書けば送出され `actor.rs` の trace `shiori_request` が 1 行出る（ただし正典の発火条件で発火したものではないので状態は `absent` のまま）。
+- 1.4: `On` 始まりを含むのは 3 ページだけ — `list_shiori_event` 290 中 264（非 `On` は 26＝群 4 の 25＋`basewareversion`）・`list_shiori_event_ex` 168 中 **144**・`list_plugin_event` 19 中 **8**。リソース 159 と `spec_*`／`memo_*` の 7 ページ 40 は `On` 始まり 0 件。
+- 1.4: `event_id_not_allowed` の `Choice` 側の腕は**本番では到達しない防御用**（`schedule/choice.rs` の `plan_cascade` が非 `On` を `Canonical` へ回すので `Choice` は必ず `On` 始まり）。索引はこの腕が働くとは書いていない。
+- 1.4: 群の索引の**正本は `doc/ukadoc-coverage/briefing-shiori.md` の冒頭**、写しが台帳冒頭の `#` コメント 559 行。`check` は `#` を読まないので写しの陳腐化は機械では赤にならない。**更新は正本 → 写しの順で節の全体を貼り直すこと。**
+- 1.4 → **タスク 2.2／2.3 への申し送り**: 群 2・群 4 の共通 `note` は根拠の場所（ファイル名と定義名）を含むが、設計は「`absent` の各行には根拠を繰り返さない」と定めている。要件 2.9 は群の共通 `note` に根拠を書くことを許しているので違反ではないが、248 行・25 行へ写すときに緊張が表面化する。**正確さを削ってまで縮めないこと。**
+- 1.4 → **タスク 2.1 への申し送り**: 群 3（別名 3 件）の共通 `note` は「この行に固有のログは無い」とするが、別名 3 件も `On` 始まりなので `\q` 経由なら**別名の名前で** `shiori_request` が 1 行出る（写像先 `OnFileDrop2` の名前では出ない）。判定をしない行なので実害は無いが、群 2 と同じ但し書き 1 文を足せば揃う。
+- 2.1: **`cargo test -p ukadoc-survey` はタスク 2.1 以降 7.1／7.2 が着地するまで赤のまま。これは構造上避けられない中間状態であって欠陥ではない。** 台帳に `implemented` の行が立った瞬間に `ImplementedWithoutEvidence` が付き、それを消す正典 URL コメントを置くタスク 6.1 は `_Depends: 2.1, 3.1_` で後ろにあるため。台帳の値を変えれば `DomainReportStale` も付き、報告を作り直すタスク 7.2 も後ろにある。**以後の各タスクの検証は「テスト緑」ではなく「`check` の所見が予測どおりの集合とちょうど一致する」で行うこと。**
+- 2.1: 赤の内訳の読み方 — 失敗するのは `tests/consistency/checks.rs` のテスト。うち大半は `perturb.rs` の `expect_exactly`（所見集合を「含む」でなく「ちょうど」で比べる）が基底の所見に巻き添えになったもの、2 本（`real_repo_data_produces_no_findings`・`every_kind_of_finding_is_absent_from_real_data`）は基底の主張そのもの。**新しい種別の所見が 1 件でも増えたらそれは本物の欠陥。**
+- 2.1: 別名の向きは**上流 要件 4.1 の第 1 段（正典本文の注記）**で決着。`OnFileDrop`／`OnFileDropped`／`OnFileDropEx` は本文が逐語で `[旧仕様]` 始まり、`OnFileDrop2` は「現時点での最新仕様」。第 2 段（版番号）は 4 件とも `2.7.98` で決め手にならない。`OnFileDropping` はドラッグ中の別機能で `[旧仕様]` の注記が無い。
+- 2.1: `basewareversion` はカタログ全体で 1 件のみ（`list_shiori_event` の `[NOTIFY]`）、リソース側に同名は無い。要件 2.4 の「26 件」＝群 4 の 25 件＋本件 1 件。
+- 2.1 → **タスク 5.1／5.2 への申し送り（埋め忘れの隙）**: 索引は群 2a に具体値（テーマ「装い」・優先度 `B4`）を定めているが、5.1 の完了条件（「8 語彙以外が現れないこと」）も 5.2 の完了条件（「**空でない行**が表の値と一致すること」）も**空欄を通してしまう**。機械検査にもテーマ未設定を赤にする種別は無い。**5.1／5.2 では群 2a の 3 行を明示的に確認すること。**
+- 2.2: 群 2 は 248 行ちょうど（`list_shiori_event` 290 の分布は `absent` 248／`unclassified` 25＝群 4／`implemented` 11／`vocabulary-only` 3／`alias` 3）。共通 `note` は索引から一字一句写した（短縮しない — 1.4 の裁定どおり）。個別追記は 2.2 の時点でちょうど 6 行だったが、**5.1 以降の着地で 248 行すべてが個別追記を持つ**（2026-09-06・タスク 7.3 で数え直し）。内訳は、要件 7.3 の「無いと失うもの」の 1 文が 181 行、テーマを付けない理由の 1 文が 65 行、テーマの直しだけを書いた行が 2 行。テーマに関わる 1 文を除く追記を持つ行は 56 行（小群 26・版番号 24・数の訂正 5・既存カタログとの差 3・繋がり 3、重複あり）。
+- 2.2: 正典 290 と `doc/shiori/fragments/events/` 287 の差は **3 件・向きは一方向**（正典にあって断片に無い＝`OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`。逆向きは 0 件）。
+- 2.2: 内部名 3 つはカタログ全 1,749 件に完全一致 0 なので行を作っていない。`OnTalk` → `OnAITalk`、`OnHour` → `OnHourTimeSignal` の `note` へ。**`OnMenuBack` は恒久禁止の名前ではない** — `ALLOWED_EVENT_IDS` の doc コメントが恒久禁止とするのは `OnTalk`／`OnHour` の 2 つだけで、`OnMenuBack` は `msg.rs` の単体テストに「任意名が `EventId::Choice` に逐語で載る」見本として現れるだけ。要件 2.6 がこれを内部名に数えているのは要件側の不正確さ。
+- 2.2 → **タスク 4.2（PLUGIN 19）への申し送り**: `OnMenuBack` は暫定的に `OnChoiceEnter` の `note` に置いたが、**より近い正典項目が `list_plugin_event` にある** — 「`\q` 等に指定された任意名イベント」を表題にした唯一の項目（現在 `unclassified`）。その行に相互参照を置くか、明示的に置かないと決めること。
+- 2.2 → **タスク 4.3（`memo_shiorievent`）への申し送り**: 索引の群 15 の「判断の根拠の場所」にも内部名 3 つの扱いを書く旨が残っている。**二重に書かないこと。** なお群 15 の文面「恒久的に含めない旨を写す」が当たるのは `OnTalk`／`OnHour` だけ。
+- 2.2 → **タスク 7.1／7.3 への申し送り**: 群 2 の 248 行の `owner` は `""` のまま。付録 A は `""` を正当な値と定めており本タスクの要件にも `owner` は含まれないが、要件 12.3（既存 spec が所有する項目に `owner` を書く）を 248 行へ適用するタスクが tasks.md に無い。**248 行に `owner` が要らないことが意図的かを確認すること。**
+- 2.2: 台帳は 9,869 行に膨らんだが、1,000 行の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs` ＋ `tests/workspace_scan/mod.rs`）は **`crates/` 配下の `.rs` だけ**を列挙するので対象外。
+- 2.3: 群 4 は 25 行ちょうど（`list_shiori_event` の非 `On` 26 件から `basewareversion` を除いた分）。これで **`list_shiori_event` 290 の未分類が 0** になった（`absent` 273／`implemented` 11／`vocabulary-only` 3／`alias` 3）。
+- 2.3: 送信の向きは正典本文で全件裏が取れた — `[NOTIFY]` の明示がある通知 22 件／引く側 2 件（`inputbox.autocomplete`・`property.get`）／値を渡して書かせる側 1 件（`property.set`）。
+- 2.3: 索引の共通 `note` にある `向き:`／`種別:` の行は**書き手への指示文**であって写す本文ではない。具体の記述に置き換えるのが正しい（2.1 が `basewareversion` で採った形）。
+- 2.3 → **タスク 5.2 への申し送り（完了条件を強化済み）**: 索引が具体値を定めているのに空欄のまま残りうるのは**群 2a の 3 行（`B4`）だけ**。群 1 の `priority = ""` は索引・設計とも意図的なので隙ではない。
+- 2.3: **バックスラッシュを含む文字列はヒアドキュメントで書かないこと。** ヒアドキュメントが 1 段落として TOML が読めなくなる（`\!` → `\!`）。`chr(92)` で組み立てるか、台本をファイルに書いてから実行すること。
+- 2.4: `OnUpdate` 系は 26 行ちょうど。テーマ `更新`・優先度 `B1`（設計 DD-11 の表）を全 26 行に置き、小群を示す 1 文を共通 `note` の末尾に足した。小群は正典本文で 1 件ずつ振り分けて **11＋8＋2＋5＝26** を実測。
+- 2.4: **正典との呼称の食い違いを訂正した。** `OnUpdateOther*` 8 件の正典本文はすべて「**ゴースト以外の**…」で、「他のゴースト」の語は 1 件も無い（`OnUpdateReady` の `Reference3` が対象種別を `(shell ghost balloon headline plugin)` と列挙）。design.md 4 か所・tasks.md 2 か所の「他ゴースト更新」を「ゴースト以外の更新」へ改めた。requirements.md は「Other 系は 8」としか書いておらず汚染されていなかった。**関係の本数 8 本と書く側（本体側）は変わらない。**
+- 2.4: 点検 2 と結果 5 が分かれる根拠 — 点検（`OnUpdateCheckComplete`／`Failure`）は 1 回の点検の成否を伝える単発通知、結果（`OnUpdateResult` 系 5 件）は `OnUpdateResult` と同じ一括結果リストの `Reference*` を共有する。
+- 2.4 → **タスク 5.1 への申し送り**: 要件 7.3（テーマを付けた行に「無いと利用者が失うもの」を 1 文）はこの 26 行で未充足。5.1 の完了条件は総称形なので抜けはないが、機械検査に赤にする種別が無いので目視で確かめること。あわせて小群の 1 文の語を正典へ寄せること — ⑴ 本体更新 11 の文「ゴースト本体そのものを新しくする流れ」は `OnUpdatedataCreating`（ゴーストフォルダの DnD）と `OnUpdatedataCreated`（`updates2.dau` の作成）には厳密には当たらない（更新データを**作る側**の出来事）。⑵ 結果 5 の文「一度の更新で起きたことを…」は `OnUpdateCheckResult`／`Ex`（更新チェックのみ）には当たらない（更新は実行されていない）。
+- 3.1: リソース 159 の内訳は **1（`username`・`implemented`）＋131（画面の材料・`vocabulary-only`・`C1`）＋27（その他・`vocabulary-only`）**。131 の内わけは ボタンの文言 99（`*button.caption` 91＋`*buttoncaption` 7＋`char*.recommendsites.caption` 1）＋`menu.*` 18＋`popupmenu.*` 9＋おすすめ／ポータルの一覧 4＋`vanishbuttonvisible` 1。`char*.recommendsites.caption` は文言側に 1 回だけ数える（一覧側に数えると二重計上）。
+- 3.1: 語彙表 `SHIORI_RESOURCE_IDS` は 159 件。**素の綴りで食い違うのはちょうど 1 件** — `(入力ボックス種類).defaultleft␣(入力ボックス種類).defaulttop`（正典は全角空白 U+3000・語彙表は半角 U+0020）。全角・半角を同一とみなすと 159 件完全一致。この 1 件が「1 項目に 2 つの名前が入っている」項目でもある（規定しているのは**要件 3.3 の括弧書き**であって 3.5 ではない）。
+- 3.1: `doc/shiori/fragments/resources/` も 159 件なので**件数では気づけない**。集合差は `boxname.defaultleft`（断片にありカタログに無い）⇔ 2 名前の見出し（カタログにあり断片に無い）の 1 対 1 で、`boxname.defaulttop` は repo 全体で 0 件。
+- 3.1: `-` の 1 件（正典本文「`[変更不可]Language` の名称」）は群 8 に置いた。断片ではボタン文言節の先頭に位置するが、変更不可でゴーストが供給する画面の材料ではなく実リソース名も不明。群 7 に移すと 132／26 になって索引・設計と矛盾する。
+- 3.1 → **タスク 5.2 への申し送り（完了条件を強化済み）**: 群 8 の 27 行の `priority` が空のまま。索引は群 8 を「テーマから決まる」としていて具体値を 1 つに定めないが、**設計の優先度の表は群 8 に `D2` を与えている**。
+- 3.1 → **タスク 5.1 への申し送り**: `*button.caption` 91 行の `note` は同一の総称文で、正典が持つ項目ごとの意味（例 `ghosthistorybutton.caption` ＝「(最近使ったもの)ゴーストに切り替えの名称」）が落ちている。要件 3.5 の水準は満たすが、テーマの 1 文を足すときに項目ごとの意味を引き直すこと。あわせて `*buttoncaption` 系 7 行の `note` にある「項目 に出る言葉である」の余分な空白を直すこと。
+- 3.2: 拡張 168 行はすべて `not-applicable`。カタログの `list_shiori_event_ex` は**全件 `versions = []`** なので `introduced` は全件空。他のゴーストが送る 7 件＝要件 4.2 が逐語で名指しする 3 件（`OnRequestValues`・`OnGetValues`・可変名の返信イベント）＋本文が `raiseother`／`notifyother` を明記する 4 件（`Send60stair_GetStatus`・`OnKanadeTeaPartyInfomationRequest`・`OnPoker`・`OnMahjong`）。本文検索のヒットは 6 件で、`OnGetValues` は `OnRequestValues` 側の本文に送出が書かれている。
+- 3.2: 「ゴースト間の伝達が areka に無い」は構造で確認済み — `areka-parsers` の `decode_bang` が `move` 以外の `\!` をすべて無解釈で `GenericCommand` に落とし、汎用キャリアの消費側は 3 か所（`move_cue.rs`・`zorder_cue.rs`・`prop_sink.rs`）だけで、名前選別に `raiseother`／`notifyother` は無い。起動中ゴーストの登記表も本番コードに無い。
+- 3.2: **道具の死角** — `check/content.rs` の `check_introduced` はカタログの `versions` が空なら早期 return する。つまり**版番号を持たない項目に誤った `introduced` を書いても `IntroducedNotInCatalogVersions` は出ない**。タスク 5.4 は「98 件以外は空」を機械検査に頼らず自分で確かめること。
+- 3.2 → **タスク 6.4（ブリーフィング）への申し送り 3 件**: ⑴ 群 5 の 7 行に付けた「根拠の場所:」の段落は 7 行すべてで同一文面＝実質「群の文面」なので、正本 → 写しの順で索引の群 5 に取り込むこと。⑵ 索引の群 5 の追記 1 文は「送信元は外部のアプリではなく他のゴースト」と断定するが、`OnMahjong` の正典本文は「要求元が外部アプリで SSTP による通知であった場合は `X-SSTP-PassThru-*` で返信する」とも述べており**外部アプリもあり得る**。索引の側を直すのが筋。⑶ 設計 DD-3 の「7 件」は自らの論法から見ると取りこぼしがある（`OnGetValues` を返信側として含めるなら `OnMahjongResponse` も同格）。168 件すべて `not-applicable` で状態は同じなので実害は無いが、ブリーフィングで断定しないこと。
+- 4.1: `spec_shiori3` 26 行の内訳は `implemented` 9（送っているヘッダ 5＋解釈する応答 4）＋`degraded` 2（`Charset`・`SecurityLevel`）＋`absent` 15（送らない 4＋読み飛ばす 11）。向きはリクエスト 11・レスポンス 15。
+- 4.1: 同名 2 組はカタログの**連番**で区別（`Charset:1`／`:2`・`Sender:1`／`:2`。`:1` がリクエスト・`:2` がレスポンス）。一方 `SecurityLevel` と `X-SSTP-PassThru-` の 2 組は**見出しが違う**ので連番ではなく別 id。**`X-SSTP-PassThru-` は 2.5.03 版がレスポンス側・2.5.05 版がリクエスト側**（正典本文で確認）。廃止予定の旧名 `X-SSTP-Return-` の注記は 2.5.03 版＝レスポンス側にだけ付いている。
+- 4.1: **DD-8 の切替条件は不成立**。`shiori3.rs` の `Charset` 列挙は `origin/main` でも `Utf8` の 1 バリアントのみで `header_value` は `"UTF-8"` を返す唯一の腕。`areka-P0-charset-canon` は先着していないので `Charset` は `degraded` のままが正しい。
+- 4.1: `Status` の行に `owner = "areka-P0-status-execution-states"` を書いた。タスク本文は `Charset` しか名指ししていないが、**設計の要件対応表 12.3 が「縮退の転記元（`Status` の `owner`）」を充足先として明示**しており、12.3 を持ち `Status` に触れるタスクは 4.1 だけ。転記元の `note` は 5.5 の担当なので書いていない。
+- 4.1: `BaseID` は `crates` 配下のソースに 0 件（ヒットはバイナリ fixture `pasta.dll` の文字列一致のみ）。索引が「ソースに 1 件も無い」と限定しているので主張は真。`build_request` の doc コメントが挙げる未送出は `SenderType`／`SecurityOrigin`／`X-SSTP-PassThru` の 3 つで、`BaseID` は確かに挙がっていない。
+- 4.1: **`Reference0` に「粗さ」を書かないのが正しい**（正典本文は「ゴーストの `\0` 側の名前」で単一ヘッダ。粗さを書けば嘘になる）。粗いのは `Reference*`・`Reference1〜`・`X-SSTP-PassThru-` の 2 件。なお粗さを求めるのは要件 5.8 ではなく**設計 DD-7 の 3**（5.8 はアンカーの無い 4 ページ限定＝タスク 4.3 の担当）。tasks.md の 4.1 が 5.8 を挙げているのは引用の取り違えだが成果物には影響しない。
+- 4.1 → **タスク 7.3 への申し送り**: 設計 DD-10／要件 2.9 の「`absent` の各行に根拠の場所を繰り返さない」と、索引の共通 `note` の全文が根拠の場所を含むことの緊張は、群 2（273 行）・群 4・群 11（15 行）に一様に現れている。1.4 で「正確さを削らない」と裁定済みだが、**7.3 で一度決着させて記録すること。**
+- 4.2: PLUGIN 19 行の種別は **イベント 8**（`OnGhostBoot`・`OnGhostExit`・`OnGhostInfoUpdate`・`OnInstallComplete`・`OnMenuExec`・`OnOtherGhostTalk`・`OnSecondChange`・`version`）／**PLUGIN 向けのリソース 7**（`balloonpathlist`・`ghostpathlist`・`headlinepathlist`・`installedballoonname`・`installedghostname`・`installedplugin`・`pluginpathlist`）／**プロパティの照会 2**／**任意名イベントの枠 2**。要件 5.6 は件数を定めていない。
+- 4.2: `version` は**イベント**。正典が「他のイベントとレスポンス形式が異なる事に注意」と書いてイベントの集合の内側に置いており、リソース 7 件は全件 `[NOTIFY]`（ベースウェアからプラグインへ押し出す側）なのに対し `version` は逆向き（プラグインに問う）。
+- 4.2: `OnMenuBack` の相互参照は**置かない**と決めた（任意名の枠は受け手がプラグイン、`OnMenuBack` は SHIORI 側へ出る名前で相手が違う）。扱いの本体は `list_shiori_event:OnChoiceEnter:1` の `note` に残し、枠の行には行き先の案内だけを置いた。
+- 4.2 → **タスク 5.3 への申し送り（DD-6 の同名 12 組の id を確定）**: 書く側は `list_plugin_event` 側、相手は各 `ukadoc:list_shiori_event:<同名>:1`。12 件は `ukadoc:list_plugin_event:` の `OnInstallComplete:1`・`OnOtherGhostTalk:1`・`OnSecondChange:1`・`balloonpathlist:1`・`ghostpathlist:1`・`headlinepathlist:1`・`installedballoonname:1`・`installedghostname:1`・`installedplugin:1`・`pluginpathlist:1`・`property.get:1`・`property.set:1`。**`version` は 12 組に入らない**（同名の相手は `list_shiori_resource:version:1` で、DD-6 の対＝plugin_event × shiori_event に当たらない）。
+- 4.2 → **タスク 5.4 への申し送り**: `list_plugin_event` の `property.get`／`property.set` はカタログの `versions` に `2.7.85` を持つ（`introduced` の候補 2 件）。
+- 4.3: **台帳 677 行の未分類が 0 になった。** 状態分布は `absent` 320／`not-applicable` 169／`vocabulary-only` 161／`implemented` 21／`alias` 3／`degraded` 3 ＝ 677。
+- 4.3 → **タスク 6.4（ブリーフィング）と design 追随への申し送り（訂正 3 ファイル 9 行）**: 索引と設計が書く型名 **`ShioriProxy` は実在しない**。実型名は `ShioriByteProxy`（`crates/shiori-host32-helper/src/shiori_proxy.rs` の struct／`load`／`request`）で、`ShioriProxy` は `crates/` 全域に 0 件。訂正先は `doc/ukadoc-coverage/briefing-shiori.md` の群 14c（判断の根拠の場所 2 行＋共通 `note` 2 行）・台帳冒頭の索引の写し 4 行・`design.md` の群 14c の段落 1 行。**訂正の順は 正本（briefing）→ 写し（台帳冒頭）→ design.md。**
+- 4.3 → **同じ訂正の束**: 索引と設計は DLL の入口を「`load`／`unload`／`request` の 3 つ」と書くが、**正典は SSP 2.6.92 で `loadu` を加えた 4 つ**（`loadu` が優先・`load` がフォールバック・パスの文字コードが違う）。台帳の `note` は正典どおりに書けているので、遅れているのは索引と設計の側。
+- 4.3: `spec_dll` は `degraded`（受け口が無いでも実装済みでもない）。SHIORI 用の 3 入口は host-32 が `GetProcAddress` で解決しているが、同じ入口を使う SAORI・MAKOTO・PLUGIN の DLL は読み込めない（`saori`／`makoto` は `crates/**/*.rs` に 0 件）。
+- 4.3: 群 15（`memo_shiorievent`）には内部名 3 つの**行き先の案内だけ**を置いた（本体はタスク 2.2 が `OnAITalk`・`OnHourTimeSignal`・`OnChoiceEnter` に書いており、二重にしない）。
+- 4.3 → **タスク 5.1 への申し送り**: 索引 群 14b の共通 `note` の「テーマ:」行が逐語ではなく言い換えで写されている（「付与規則に照らして」が落ちている）。総仕上げで文言を確定させること。
+- 5.1: テーマ別の件数は 気配 11・触れ合い 40・掛け合い 16・装い 146・記憶 27・交わり 30・気配り 49・更新 29 ＝ **348 行**（テーマ無し 329）。348 行すべてに要件 7.3 の「無いと失うもの」の 1 文がある。
+- 5.1: **群 2a のテーマを索引の既定「装い」から「気配り」へ直し、索引・設計・タスクまで追随させた**（優先度も `B4` → `C2`）。テーマの正本は `doc/ukadoc-coverage/values.md` であって索引ではない — `values.md` が `OnBalloonTimeout` を**気配りの代表項目として id・URL つきで名指し**しており、装いの定義は「見た目を**選び替えられる**こと」に限られる。設計自身が「名前の頭は出発点であって根拠ではない」と定めている。訂正した 5 か所: `briefing-shiori.md` 群 2a のテーマ行と優先度行／台帳冒頭の写し同 2 行／`design.md` の優先度の表 2 行（群 2a を「見た目の変化 B4」から「察し C2」へ移動）／`design.md` の群の一覧表 2a のテーマ列／tasks.md 5.2 の完了条件。
+- 5.1: 既定を直した項目は 31 行（`note` に「テーマの直し:」）。主なもの — `OnNotify*` 8 件・`OnGhostCall*` 3 件（記憶→交わり）・`OnGhostTermsAccept`／`Decline`（記憶→空）・`OnWindowState*` 2 件（装い→気配り）・`OnOtherSurfaceChange`（装い→交わり）・`OnAITalk`（記憶→気配）・`OnArchiveViewerOpen`（記憶→触れ合い）・`OnCommunicate`／`OnCommunicateInputCancel`（掛け合い→交わり・開発者裁定）・群 4 の「原則 空」の例外 7 件。
+- 5.1 → **統合担当（`ukadoc-coverage-roadmap`）への申し送り**: `values.md` の「掛け合い」は「本体側と相方側が交互に喋る」に限られ、「交わり」は「**利用者からの差し込み**」「**話しかけ箱**から声を掛けても返らない」を明示的に含む。付与規則 4.6 だけを当てると `OnUserInput*`／`OnTeach*`（掛け合い 16 行のうち 5 行）は交わり寄りに読める。設計の既定表と段階表がこの束を掛け合いに置き、brief の裁定も `OnCommunicate` 2 件だけを移した経緯があるので**既定のままにした**。テーマ間の境界の見直しが要るなら統合側の判断で。
+- 5.2: 優先度別の件数は `A1` 8／`A2` 36／`A3` 14／`B1` 29／`B2` 2／`B3` 8／`B4` 13／`B5` 9／`C1` 131／`C2` 49／`D1` 31／`D2` 129／`E1` 25／**空欄 193**。空欄は `implemented` 21・`alias` 3・`not-applicable` 169 の**ちょうど 3 状態だけ**（設計の表が `""` を与える範囲と一致）。使われた 13 値は設計 DD-11 の表の集合と過不足なく一致。
+- 5.2: **`priority` の綴りは機械検査に現れない**（道具に `priority` を照らす所見の種別が無い）。設計の表との照合は人が／台本でやるしかない。
+- 5.2: `OnGhostChanged`／`OnGhostChanging` はテーマが「記憶」だが **`D1`**。設計 DD-11 の交わりの行が `OnGhostChanged` を**逐語で名指し**しており、タスク本文はテーマからの写しを「表に当たらない項目」に限っているため。
+- 5.2 → **タスク 6.4 への申し送り（索引の陳腐化・引受先が無い）**: 索引の前置きの段落「**まだ確定していないもの**」が 5.1／5.2 の着地で古くなった（値は台帳に入ったのに索引の群欄は「項目ごと」のまま）。**6.4 の本文は「群の索引は書き換えず、その後ろに章を足す」と定めているのでどのタスクも所有していない。** 6.4 でこの段落の訂正を明示的に許すか、統合担当へ渡すこと。
+- 5.2 → **統合担当（`ukadoc-coverage-roadmap`）への申し送り 2 件**: ⑴ `OnArchiveViewerOpen` は設計 `B5` 行の `OnArchive*` に字義上は当たるが、テーマ「触れ合い」から `A2` を置いた。`OnGhostChanged` の扱い（名指し優先）とは**逆向きの決め方**になっている。群 2a の訂正（名前よりテーマの正本が優先）を先例とすれば妥当。⑵ 群 4 のテーマ付き 7 行（`installed*name` 5・`otherghostname`・`rateofusegraph`）は群値 `D2` のままで、テーマ（根拠 ⑵）が効いていない。索引が群 4 に無条件で `D2` を与えているため。
+- 5.2 → **統合担当への申し送り（上の ⑵ の続き・2026-09-06 に追記）: 群 4 と群 8 でテーマの扱いが逆向きである。** 上の ⑵ は群 4 側だけを挙げていたが、同じ「テーマが付いているのに群の既定がある」形の群がもう 1 つあり、そちらは逆の扱いになっている。並べると次のとおり。
+  - **群 4 のテーマ付き 7 行**（`installedballoonname`・`installedghostname`・`installedkeroname`・`installedsakuraname`・`installedshellname`・`otherghostname`・`rateofusegraph`）は**テーマを効かせず、7 行とも群値 `D2` のまま**である。テーマは 装い 2・記憶 4・交わり 1 と割れているのに優先度は 1 つである。
+  - **群 8 のテーマ付き 7 行**（`balloon_tooltip` `A3`・`tooltip` `A2`・`getaistate` `B3`・`getaistateex` `B3`・`homeurl` `B1`・`other_homeurl_override` `B1`・`useorigin1` `B1`）は**テーマ由来の値**を採っている（`A2`／`A3`／`B1`／`B3` の 4 値）。
+  - どちらも索引に従った結果である——索引は群 4 に無条件で `D2` を与え、群 8 には「テーマから決まる」と定めている。**片方だけを見ると「テーマが効いていない」という一方向の申し送りに読めるが、実際は群ごとに規約が違うだけである。** 統合担当は 2 つを並べて、どちらの規約に寄せるかを判断すること。
+- 5.3: 繋がりは 99 行に計 **128 本**（`same-feature` 80／`triggers` 33／`queries` 8／`configures` 7）。確定分 80 本の内訳は設計の表どおり 7＋3＋22＋8＋27＋12＋1。拡張と本体の同名 3 件は `OnBatteryCritical`・`OnBatteryLow`・`OnMusicPlay`。
+- 5.3: **書く側の決め方は群によって効く条が違う。** 掲載順（規則 2）が効くのは `OnUpdate` の鎖 22 と対応 8 組の計 30 本だけ。`sakura.`／`kero.`／`char*.` の 27 本と PLUGIN の 12 本は**文字順（規則 3）**が効き、27 本は**掲載順には全件逆行するのが正しい**（DD-5 が進行・派生の向きを否定しているため規則 2 が適用できない）。
+- 5.3: 鎖の本数は小群の件数から導ける（n 件の鎖は n−1 本）— 本体更新 11→10・ゴースト以外 8→7・点検 2→1・結果 5→4 ＝ **22**。**件数が合っていても向きが逆行しうる**（レビューが 1 本の逆行を発掘）。鎖を張ったら向きの全数検査を必ずすること。
+- 5.3: 発火条件の源は**正典本文が相手を逐語で挙げている項目に限った**。OS の事象・利用者の操作はカタログに id が無いので登記できない。`triggers`／`configures` は**イベント行に書いて相手をタグ・設定キーにする向き**で統一した（要件 8.3 が他ドメインの行を作ることを禁じているため強制）。
+- 5.3 → **タスク 6.4（ブリーフィング）への申し送り 2 件**: ⑴ `triggers`／`configures` の向きの規約（イベント行 → タグ・設定キー）を 1 行で明記すること。統合担当が向きを取り違えないため。⑵ **正典側の誤記を 1 件発掘した** — `OnSelectModeBegin`／`Cancel`／`Complete` の本文はタグ名を `\![enter,selectrect]`／`\![leave,selectrect]` と書いているが、その綴りの項目はカタログに 0 件で、さくらスクリプト一覧側の綴りは `selectmode`。台帳の 3 行の `note` には記録済み。ブリーフィングにも「正典側の誤り」として引き継ぐこと。
+- 5.4: `introduced` は **98 件**に入り 579 件が空（`introduced` が非空の id 集合とカタログで `versions` を持つ id 集合が完全一致）。拡張 168 件は全件空。
+- 5.4: **「12 件」の 12 件目の正体が確定した — `OnExecuteHTTPSSLInfo`。** 本文に X509 証明書の例 `/1.3.6.1.4.1.311.60.2.1.3=US/…` が載っており、素の 3 つ組の数字列で走査すると `1.3.6`・`1.4.1`・`311.60.2` を版番号と取り違える。カタログの規則（塊がまるごと版番号の形のときだけ採る）はこれを弾くので 11 件になる。**どちらの数もそれぞれの測り方では正しい。** requirements.md 2 か所・design.md 2 か所にこの訂正を書き込み済み。
+- 5.4: **版番号は「項目そのものの登場」を示すとは限らない。** 98 件のうち 61 件は本文末尾の版番号欄／見出し／冒頭にあり登場の版だが、**32 件は本文の途中にだけ現れる**（Reference の追加・Reference の中身の欄の追加・挙動の変わり目・Reference に入る値の例）。この 32 件には値の正本がカタログである旨と「この項目自体は X より前から在る」を `note` に書いた。
+- 5.4 → **上流 `areka-P0-ukadoc-survey-toolkit` へ送る材料**: カタログの版番号の抽出規則が **2 桁の版を落とす**。`OnInstallReroute` の本文末尾は「**2.4** / Ref1以降は2.4.85」で、この項目の登場は本文に 2.4 と明示されているのに、塊が 2 つなので規則が拾わず `versions` は `2.4.85` だけになる。
+- 5.4: 特に注意した 3 組 — ⑴ `OnBasewareUpdated` 2.3.59／`OnBasewareUpdating` 2.3.58 は「Reference0 更新後（前）のバージョン番号　例：2.3.59」＝**Reference に入る値の例**で版番号の目印ですらない。⑵ `OnFileDrop2` と旧仕様 3 件の 2.7.98 は **Reference2（MIME タイプ）の追加の版**であって新旧の別を示すものではない（タスク 2.1 の別名の判断と混ぜないこと）。⑶ `*.popupmenu.applybindtoself` 3 件は**大きい方の 2.7.26 が登場の版**（本文末尾の版番号欄がその値。2.7.25 は既定値が変わった挙動の変わり目の言及）。
+- 5.5: 転記元の原本を全行読み直した結果、名指しは設計の表どおり **5 行**（`doc/COMPAT_ARCHITECTURE.md` §8 のデータ行 81 行のうち 4 行・`doc/emo2-conformance-scope.md` §6 のデータ行 8 行のうち 1 行）。**増減なし。** 縮退の転記元を持つ台帳の行はちょうど 6 行（群 2a の 3・`username`・`spec_dll`・`Status`）で名指しと過不足なく一致。
+- 5.5: **名指しの判定の基準を design に明文化した** — 「表の 1 列目（裁定の対象そのもの）が担当 12 ページの項目を指していること。根拠列・裁量列での言及は参照であって名指しではない」。この基準が無いと再走行で数が再現しない。
+- 5.5: `Status` の行には転記元が **2 つ**ある（選択確定カスケードの正典沈黙分岐一式 →`doc/choice-cascade-compat.md`／`Status [SSP拡張]` の `balloon` の実導出）。タスク 4.1 が `owner` だけ書いて残した分を本タスクが埋めた。
+- 6.1: 送出許可表の 11 要素に `//` で・照会許可表の doc コメント末尾に `///` で正典 URL を計 12 行置いた。URL はカタログの `url` 欄と逐語一致（末尾の `:1` を含む）。`ImplementedWithoutEvidence` は 21 → **9** へ減り、`check` の所見は 10 件（9 ＋ `DomainReportStale` 1）。
+- 6.1: **`///` は定義そのものにだけ使う。** 配列の要素に `///` を置くと `unused_doc_comments` の警告が出ることを較正で実証済み（故意に 1 行変えて赤を確認してから戻した）。
+- 6.1 → **上流の道具の欠陥を 2 件発掘した。**
+  - ⑴ **壊れた錨（是正済み）**: `crates/ukadoc-survey/tests/consistency/checks.rs` が `OnBoot` の正典 URL を「`shiori_resource.rs` にしか無い」前提の錨に使い、証拠を「ちょうど 1 件」と厳密一致で主張していた。本 spec が契約どおり `events.rs` に置いた瞬間に恒久的に赤になり、**6.3／7.1／7.2 が着地しても緑に戻らない**。製品側 `EvidenceIndex::by_id` の doc が「同じ URL が複数のファイルに現れても赤にしない」「並びの契約は重複を除いた名前順」と明記しているので、旧主張は**契約と最初から矛盾**していた。「含む」へ緩めたうえで「**足す前は含まれていない**」という主張を新たに足し、恒真化を防いだ（2 通りに壊して赤を確認済み）。
+  - ⑵ **引き継ぎの仕掛け（タスク 7.1 が受け取る）**: `the_subject_census_says_which_requirements_are_vacuous` は壊れた錨ではなく、道具自身が「対象が生まれたら赤にして書き換えを促す」と doc に明記した仕掛け。設計どおり発火しただけ。
+- 6.1 → **タスク 7.1 への申し送り（数え直し済み）**: `Subjects::Zero` の **6 行すべてが既に非 0** — 6.5 ソースの正典 URL 12／6.6 `implemented` の行 21／6.7 関連・別名の相手 非 0（`alias_of` 3・`links` 128 本）／6.7 `alias` の行 3／6.7 登場版の記入がある行 98／6.8 テーマ名 非 0（`values` 非空 348 行）／6.11 証拠の付いた項目 12。census はループ内 assert なので最初の 6.5 で止まっているだけ。**6 行すべてを `NonEmpty` へ移すこと。**
+- 6.1 → **上流 `areka-P0-ukadoc-survey-toolkit` へ送る材料（任意の改善案）**: 新しい「後」の主張は membership しか見ないので、旧主張が偶然持っていた「他のファイルが紛れ込んでいない」という強さを失っている。`after` が `before` に `ANCHOR_SOURCE` を 1 つ足した集合と**厳密に一致する**形にすれば、契約と矛盾せずに強さを取り戻せる（今日の実データで通ることは確認済み）。
+- 道具の罠（6.1 で発覚）: **ヒアドキュメント経由の Python でバックスラッシュ＋数字を書くと NUL バイトが生まれる。** `\0` と書いてもヒアドキュメントが 1 段落として `\0` になり、Python の非 raw 文字列がそれを NUL と解釈する。tasks.md に 1 個混入していた（`grep` が「Binary file matches」と言い出して発覚）。**バックスラッシュを含む文字列は台本をファイルに書いてから実行するか、`chr(92)` で組み立てること。**
+- 6.2: 語彙表 `SHIORI_RESOURCE_IDS` の doc コメント末尾に**ページの URL** を `///` で 1 行置いた。要素ごとには置かない。ソース側の差分はコメント 1 行だけで 159 要素は byte 一致。
+- 6.2: **ページの URL は `SourceUrlNotInCatalog` にならない。** カタログの `url` 欄にページ全体を指す綴りは無いが、`Catalog::page_urls` が項目 URL からフラグメントを外して索引を作り、証拠の解決が ①項目 URL 完全一致 → ②**ページ URL 一致＝語彙表の目印** → ③`unresolved` の 3 段になっている。ページ URL は 2 段目に落ちる。**「証拠のある項目」は 12 → 170 件**（159 要素すべてに目印経由の証拠が付く。これは副作用ではなく設計の意図で、`resolve.rs` の doc が較正値まで明記している）。
+- 6.2 → **上流へ送る材料（`ledger-init` の 2 つの罠・コードで確定・走らせていない）**: ⑴ 挿入は「後続の見出し行の直前」に入るのにコメントは「直前の塊」に属するので、**見出しの真上に書いた説明コメントが差し込みで別項目の説明に見えるようになる**（黙って起きる・赤にならない）。⑵ **`read_normalized`／`write_lf` が CR を落として LF で書く。** `.gitattributes` 無し・`core.autocrlf=true` なので、**1 度走らせるだけで台帳の全行が CRLF → LF に書き換わる**。`git diff` には出ないがバイト単位の検査は必ず割れる。**本 spec が完了するまで `ledger-init` を走らせないこと。**
+- 6.2 → **上流へ送る材料（証拠の重複の最初の実例）**: `username` だけ証拠のファイルが 2 本になった（`resources.rs` の項目 URL と `shiori_resource.rs` のページ URL）。道具は「項目 URL による直接の証拠」と「語彙表の目印から導いた証拠」を出力で区別しない。区別が要るかは上流の判断。
+- 6.2: **道具の常時テストがさらに 2 本赤になった**（`21 passed / 17 failed` → `19 passed / 19 failed`）。いずれも `values_md.rs`。タスク 7.1 が受け取る（上記の 7.1 の箇条書きを見よ）。**下流が契約どおり正典 URL を置いた瞬間に落ちる前提が、道具のテストに少なくとも 3 か所ある**（`checks.rs` の錨・`values_md.rs` の 2 本）。
+- 6.3: `shiori3.rs` にコメント 9 行を置き、**`ImplementedWithoutEvidence` が 9 → 0 になった。** `check` の所見は **1 件**（`DomainReportStale` のみ＝タスク 7.2 の担当）。証拠のある項目は 170 → 179。道具の常時テストは 19 passed/19 failed → **22 passed/16 failed** に改善し、新たな赤は 0 件。
+- 6.3: **DD-8 の切替条件は不成立**（作業枝・`origin/main` の双方で `Charset` は `Utf8` の 1 バリアントのみ）。`areka-P0-charset-canon` は先着していない。
+- 6.3: **設計の表 #5 の「腕の直前」は要件 9.5 のもとでは実現できない。** `parse_response` の連鎖は `} else if …` が閉じ括弧と同じ行にあり、腕の直前に挿すには行を割るしかなく必ず削除行が出る。3 つとも**腕の本体の先頭**に置いた。design.md の表と直後の箇条書きに訂正を書き込み済み。
+- 6.3: これで**唯一のコード接触 22 行が揃った**（`events.rs` 11・`resources.rs` 1・`shiori_resource.rs` 1・`shiori3.rs` 9）。4 ファイルとも実行時に評価される記述は 1 行も変わっていない。
+- 6.4: ブリーフィングは 1,395 行。索引の後ろに **18 群 = 18 章**を置いた。順は 第 1 部 黙って壊れる（群 2・2a・4・8・10・11＝320 件）→ 第 2 部 見た目の差（群 7＝131 件）→ 第 3 部 受け口が無い外部連携（群 14a・13・14b・14c・5＝201 件）→ 第 4 部 判定の対象にならない群と既にできている群（群 3・15・1・6・9・12＝25 件）。**677 件の名前すべてが本文に現れる。**
+- 6.4: 冒頭の結論は **実装済み 21（3.1%）・一部できている 3・未対応 481・判定の対象にならない 172 ＝ 677**。台帳の実測と完全一致。
+- 6.4: 索引の誤りと陳腐化を **6 件**直した（`ShioriProxy` → `ShioriByteProxy`／DLL の入口は 3 つでなく **4 つ**〔`loadu` は SSP 2.6.92・UTF-8・優先〕／群 5 の「根拠の場所」段落を索引へ取り込み／群 5 の「送信元は他のゴースト」の断定を緩和／前置きの「まだ確定していないもの」を現況へ／**群 7 のテーマ欄「装い・記憶が中心」→「装い」**〔台帳の実測は 131 行すべて装い・記憶は 0 件〕）。`design.md` の群 14c も追随済み。
+- 6.4: **台帳の `spec_dll` の `note` に残る「入口は 3 つ」は事実として誤り**（正典は `loadu` を含めて 4 つ）。値は凍結なので触らず、ブリーフィングの是正の候補に「事実として誤りである・次に改めるときに必ず直すこと」と記録した。
+- 6.4: 申し送り 4 件（`triggers`／`configures` の向きの規約・`OnSelectMode*` の正典側の綴りの誤り・**`ledger-init` を走らせない**・索引の貼り直し手順）と是正の候補 4 件を末尾に置いた。隣接 spec の brief は 1 バイトも変えていない。
+- 6.5: **コメント 22 行は既存のテストを 1 本も壊していない。** 逐語一致 4 本（`allowed_event_ids_are_exactly_the_eleven_and_exclude_ontalk_onhour`・`allowed_resource_ids_are_exactly_username`・`shiori_resource_ids_has_159_entries`・`criterion_ledger_counts_exact`）は名指しで緑。触れた 4 ファイルは 424／224／291／598 行で 1,000 行の上限内。`unused_doc_comments` 0 件。`areka-kanade`・`areka-sylphya`・`log-capture-kit`・`shiori-host32-host` はすべて緑。
+- 6.5: **差分の基準は `main` ではなく `git merge-base HEAD main`（`2350e68a`）。** main は分岐後 2 コミット進んでいるので `git diff main` は無関係な 18 ファイル・約 5,900 行を巻き込む。merge-base 基準で `crates/` の差分は **5 ファイル 57 insertions / 10 deletions** ＝ コメント 22 行 ＋ `checks.rs` の是正（承認済み例外）だけ。**4 ファイルからコメント行を落とすと merge-base 版とバイト一致**（要件 12.1 の機械的な裏取り）。
+- 6.5: **コメントは検査を壊すどころか改善している。** 22 行を一時的に剥がすと `check` の食い違いが 1 件 → **22 件**（`ImplementedWithoutEvidence` 21 ＋ `DomainReportStale` 1）に増え、`a_misspelled_theme_turns_red`・`an_alias_chain_turns_red`・`an_introduced_version_outside_the_catalog_turns_red` の 3 本が赤に転じる。**この 3 本はコメントがあるからこそ緑。**
+- 6.5: 較正 2 本を実証済み（`///` を関数本体に置くと `unused doc comment` が出る／1,024 行にすると見張りが名指しで赤になる）。どちらも恒真ではない。
+- 6.5 → **要件 9.6 の引用行番号が本 spec のコメント追加で 1 行ずれた**（`resources.rs:113-121` → 114-122・`shiori_resource.rs:222` → 223）。定義名は不変。開発規律「引用は行番号でなく何の定義行かで指す」の実例がもう 1 件。
+- 7.1: 上流の道具の引き継ぎ **5 件**を是正した（`checks.rs`・`values_md.rs` の 2 ファイルのみ・道具の `src/` と `perturb.rs` は非接触）。⑴ census の `Subjects::Zero` — **6 行ではなく 7 行**だった。実測は ソースの正典 URL **22**／`implemented` **21**／関連・別名・後継の相手 **131**／`alias` **3**／登場版 **98**／テーマ名 **348**／証拠の付いた項目 **179**。⑵⑶ `values_md.rs` の 2 本（空振りの主張を裏返して 2 段の非空主張へ・`with_marker` の較正を全件を見る形へ）。⑷ `implemented_without_evidence_...`。⑸ **`an_introduced_version_outside_the_catalog_turns_red`（レビューが発掘した 5 件目）**。
+- 7.1: **「偶然の緑」を 2 本発掘した。** ⑷⑸ はどちらも「repo の報告がたまたま古い」ことに寄りかかって緑だった — 錨 `OnBoot` は台帳で既に `implemented`・`property.get` の `introduced` は既にカタログの先頭版なので、**摂動が実質的な変化を起こさず報告も古くならない**のに `expect_exactly` が `DomainReportStale` を期待し続けていた。期待値を 7.2 後の正しい終着点へ合わせ、恒真化を防ぐ主張（「錨が既に `implemented` であること」「戻し先が台帳の元の値と同値であること」）を足した。
+- 7.1: **到達点を実測で確かめた。** 現状は `check` が `DomainReportStale` 1 件・consistency **24 passed / 14 failed**（14 本すべてがその 1 件だけで説明でき欠けは 0）。**報告を一時的に作り直すと consistency 38 passed / 0 failed・パッケージ全体 596 passed / 0 failed・`check` は所見 0 件（終了コード 0）**。これをレビュアも独立に再現している。失敗が 12 → 14 に増えたのは、上の 2 本を偶然の緑から本来の期待値へ直したため。
+- 7.1: 選び方を絞る案（B）は**実測して棄却**した。「台帳の `introduced` がカタログの `versions[0]` と異なる」項目は 677 行中 **3 行だけ**（すべて `2.7.26` vs `2.7.25`）で、`introduced` が報告へ届く唯一の道は**世代**（`report/tally.rs` の `generation_of` ＝ 先頭 2 節）なので、世代 `2.7` のまま動かず B でも報告は古くならない。
+- 7.1 → **タスク 7.2 への申し送り（報告の改行コード）**: 道具の `report` は **LF** で書き出すが作業ツリーの報告は **CRLF**（`core.autocrlf=true` なので index は LF で git の差分には出ない）。⑴ **変更の有無は `git diff --stat` で判定し、実行前の控えとの `md5sum`／`fc` では判定しないこと**（再生成後 `git status` は 4 本を M にするが、中身が変わったのは `shiori.md` だけ）。⑵ **改行を手で直さない・CRLF に直して commit しない。** ⑶ 冪等性（要件 1.5）を確かめるなら `report` を 2 回走らせて**出力どうし**を比べる。⑷ `check` は `strip_cr` してから比べるので **CR 非依存**。再生成後の緑は改行に関わらず信用してよい。⑸ 復元はバイトコピーか `git checkout -- <明示パス>`。
+- 7.1 → **タスク 7.2 への申し送り（`summary.md` の穴）**: `report` は `summary.md` を触らず、**整合検査に `summary.md` の古さを見る所見の種別が無い**（`DomainReportStale` はドメイン別報告だけ）。誰も見張っていないので、**`report-summary` の要否を明示的に判断すること**（タスク 7.2 の本文は「`report/summary.md` は統合担当に残す」としている）。
+- 7.1 → **上流へ送る材料（非阻却）**: `implemented_without_evidence_...` の緑側は `evidence_with_source_line` が索引を実データから丸ごと組み直すため、錨の証拠は「足した行」が無くても実データから復活する。緑側は空虚ではない（`assert_the_added_line_became_evidence` が足した行の索引入りを主張している）が、「足した行のおかげで消えた」という因果の切り分けまではしていない。剥がした状態から**足した行だけ**を索引へ加える形が正確。
+- 7.2: 報告を道具で作り直し、**`check` が所見 0 件・終了コード 0**、**`cargo test -p ukadoc-survey` が 596 passed / 0 failed**（consistency 38/38）になった。冪等性も確認（`report` を 2 度走らせて出力どうしが 0 バイト差）。報告は手で 1 文字も書き換えていない。
+- 7.2: 報告の内訳は 実装済み 21／語彙のみ 161／縮退 3／未対応 320／別名 3／対象外 169／**未分類 0** ＝ 677。**未分類 0 は 27 行すべてで確認**（状態の分布 1・ページ別 12・SSP 世代別 7・テーマ別 8）。ページ別と世代別の列合計もどちらも状態の分布と一致。
+- 7.2: **`summary.md` を触らないのは裁量ではなく義務。** **要件 10.4 が「`report/summary.md` を編集しない」と明示的に禁じている。** さらに `report` サブコマンドはそもそも `summary.md` を書き出さない（再生成には別の `report-summary` が要る）。道具の `check/freshness.rs` も「`CheckInput` に全体報告の欄は無く**構造として届かない**のがこの要件の守り方」と定め、**開発者裁定 2026-09-02 議題 2** を根拠に挙げている。
+- 7.2 → **統合担当（`areka-P0-ukadoc-coverage-roadmap`・`brief.md` のみで実在・未着手）への引き継ぎ 5 点**: ⒜ **`summary.md` は現に古い** — shiori 欄が未分類 677 と読めるが実体は 0（実装済み 21／語彙のみ 161／縮退 3／未対応 320／別名 3／対象外 169）。⒝ 是正は `cargo run -p ukadoc-survey -- report-summary` 1 本で、**手書きは禁止**。⒞ **実行の時機は 4 spec すべてが main に合流した後**（1 本でも未合流だとその枝の断面が焼き付き、共有ファイルなので衝突も招く。実測でこの枝では `assets 542/542`・`property 188/188`・`sakura-script 342/342` が初期状態のまま）。⒟ **この古さは常時検査では永久に赤にならない** — `CheckInput` に欄が無く構造的に届かないので所見の種別自体が無い。人手のチェックリストに載せない限り誰も気づかない。⒠ `report-summary` は 4 本のドメイン報告も LF で上書きするので、実行後の扱いを決めておくこと。
+- 7.2 → **タスク 7.3 への申し送り（実在する罠）**: `report` 実行後、**`git status --porcelain` は兄弟 3 本を ` M` と報告するのに `git diff --stat` は内容変化 0 と報告する**（`core.autocrlf=true`・`.gitattributes` 無しで blob が両者 LF に正規化されるため）。**7.3 では内容の判定に `git diff --stat` を使うこと。`git status` だけで数え上げると兄弟 3 本を境界違反と誤検出する。**
+- 7.2 → **是正の候補（brief は書き換えない）**: `areka-P0-ukadoc-coverage-roadmap/brief.md` が統合台帳を `doc/ukadoc-coverage/report.md` と書いているが、実体は `doc/ukadoc-coverage/report/summary.md`。要件 12.4 に従い**修正せず記録のみ**。
+- 7.3 → **2.2 の申し送りの決着（要件 12.3 の `owner`）**: 要件 12.3 は「**Where 既存の spec が同じ項目を所有している**」という条件節付きなので、所有者の居ない行に `owner` を要求していない。空欄 670 行は違反ではない。所有者の居る **7 行**にはすべて入っており、`OnBalloonBreak`・`OnBalloonClose`・`OnBalloonTimeout` の 3 行が `areka-P0-balloon-canon-residue`、`property.get`・`property.set` の 2 行が `areka-P0-property-query-channels`、`Charset` が `areka-P0-charset-canon`、`Status` が `areka-P0-status-execution-states` である。**4 つの spec 名はいずれも `.kiro/specs/` に実在する現役の spec**（`completed/` ではない）で、7.3 の時点でディレクトリの実在を確かめた。以上で 2.2 の申し送りは決着とする。
+- 7.3 → **4.1 の申し送りの決着（DD-10 と `absent` の根拠の場所）**: 1.4 の裁定を `design.md` の DD-10 へ書き込んで決着させた。趣旨は「**群の共通 `note` は根拠の場所を含み、群に属する全行へ逐語で写す。`absent` の行について禁じるのは、行ごとに固有の根拠を書き足すことである**」。要件 2.9 は既に「群の共通の `note`」を許可の対象に挙げているので**要件側は改訂不要**。実測の裏付けは `absent` 320 行のうち 288 行が共通 `note` 由来の `.rs` を含み、群 11（`spec_shiori3` の `absent` 15 行）が「根拠の場所:」の段落を持つこと。以上で 4.1 の申し送りも決着とする。
+- 7.3 → **台帳 `ukadoc:spec_dll` の `note` を直した**: 冒頭が「DLL の入口の決まり（load・unload・request の 3 つ）」と書いており、正典が定める入口の数を 3 つと述べる形になっていて、同じ `note` の「内容:」の段落（`loadu`・`load`・`unload` を挙げる）と矛盾していた。正典 `ukadoc:spec_dll` を引き直し（「ライフサイクル関数」の節に `loadu`（SSP 2.6.92 以降・UTF-8・優先して使われる）・`load`（従来版・既定の OEM コードページ・フォールバック）・`unload`、別に「request関数」の節）、**正典の入口は `loadu`・`load`・`unload`（＋ `request`）で、areka の助け手が名前で引くのは `load`・`unload`・`request` の 3 つ**という形へ書き直した。ブリーフィングの是正の候補 4 番は「直した」に書き換えた（この台帳は本 spec の持ち物で、送り先の担当が居ないため候補に残さない）。書き直し後に `report` と `check` を回し、所見 0 件・終了コード 0 と 596 全緑を再確認した（`note` は集計の材料ではないので分布は不変）。
+- 7.3 → **優先度の記入率を実測へ直した**: ブリーフィングと台帳冒頭の写しが「`priority` 欄に 677 行すべて記入済み」と書いていたのは**偽**で、実測は **484 行に記入済み・193 行は意図的に空**（`implemented` 21・`alias` 3・`not-applicable` 169 のちょうど 3 状態）。同じ文書が 7 か所で「**優先度**: `""`」と書いており自己矛盾していた。正本を先に直し、台帳冒頭の写しは節の全体を貼り直し、`# ` を剥がした写しと正本が行単位で一致することを機械で確かめた。
+
+## 完了時の申し送り（タスク 7.3 の最終レビューが発掘）
+
+- **上流 `areka-P0-ukadoc-survey-toolkit` は `.kiro/specs/completed/` に封書済みで、先送りの引受先にできない。** 本 spec が「上流へ送る材料」と書いた 5 件（版番号の抽出規則が 2 桁版を落とす／`implemented_without_evidence_...` の因果の切り分け／`ledger-init` の 2 つの罠／証拠の重複の扱い）の**宛先は、実在する統合担当 `areka-P0-ukadoc-coverage-roadmap` に読み替えること**（同 spec の brief が toolkit の報告・束の文書の再生成を自分の上流として明記している）。内容そのものは `doc/ukadoc-coverage/briefing-shiori.md` の申し送りと台帳の `note` に永続記録してあるので消えない。
+- **`report/summary.md` は古いまま残っている**（shiori 欄が未分類 677 と読めるが実体は 0）。要件 10.4 が本 spec による編集を禁じているので触っていない。**この古さを見る所見の種別が道具に無い**ので、統合担当が忘れると全体報告は誤ったまま残る。是正は `cargo run -p ukadoc-survey -- report-summary` 1 本で、**4 spec すべてが main に合流した後**に行うこと。
+- **`doc/ukadoc-coverage/linkage.md` は未作成**（上流の設計が「調査 spec は空ファイルも置かない」と定めている）。統合担当がこれを作る時点で、本 spec の非接触の主張は再確認が要る。
+- **`main` との合流で `crates/ukadoc-survey/tests/consistency/checks.rs` が衝突する（`/kiro-complete` の PR で必ず手当てが要る）。**
+  - **確かめ方と結果**: `git merge-tree --write-tree --name-only main HEAD`（読み取りだけ・実際のマージはしていない）を走らせると、**衝突するファイルは `crates/ukadoc-survey/tests/consistency/checks.rs` の 1 本だけ**である（`CONFLICT (content)` はこの 1 件のみ。台帳・報告・ブリーフィング・カタログ・道具の `src/` は衝突しない）。分岐点は `2350e68a`、`main` は分岐後に `36d1c323`（`cursor-tag-canon`）と `0b64d648`（`areka-P0-ukadoc-survey-property`）を取り込んでいる。
+  - **両者が何をしたか**: 衝突箇所は census（`the_subject_census_says_which_requirements_are_vacuous` が読む対象の数え上げ）の表と、その直上の doc コメントである。**本枝は census の 7 行すべてを `Zero` から `NonEmpty` へ移した**（6.5 ソースの正典 URL 22／6.6 `implemented` 21／6.7 関連・別名・後継の相手 131／6.7 `alias` の行 3／6.7 登場版の記入がある行 98／6.8 テーマ名 348／6.11 証拠の付いた項目 179）。**`main` 側（property spec）は 6 行だけを移し、`alias` の行を `Zero` のまま残して**、doc に「今日 0 件なのは 6.7 の 1 面（状態が alias の行）だけ」「4 台帳のどこにも別名の行が無い」と書いている。
+  - **⚠ 合流後に `main` 側の記述は偽になる**: **本枝の台帳が `alias` の行を 3 行立てた**（`OnFileDrop`・`OnFileDropped`・`OnFileDropEx` を `OnFileDrop2` の別名として登記・要件 6.3）ので、「`alias` の行が 0 件」も「4 台帳のどこにも別名の行が無い」も合流後は成り立たない。放置すると census が赤になる（`Zero` を主張する行の対象が 3 件あるため）。
+  - **解決の指針**: **本枝側（7 行すべて `NonEmpty`）を採る。** そのうえで doc の散文は property 側の記述と合成すること——`main` 側が足した「6.8 は property 台帳にテーマが 3 件書かれたので空振りを脱した」という経緯は残す価値があるので捨てず、「今日 0 件なのは 6.7 の 1 面だけ」という断りと「対象があると分かっている側」の列挙は**本枝側の形（空振りの行は 1 つも無い・`Subjects::Zero` は新しい判定を足す人のために `#[expect(dead_code)]` で残す）**へ寄せる。合成後は `cargo test -p ukadoc-survey` と `cargo run -q -p ukadoc-survey -- check` を回して、596 全緑・所見 0 件・終了コード 0 を確かめること。
