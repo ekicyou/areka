@@ -202,7 +202,7 @@
   - _Requirements: 1.4, 10.5_
   - _Depends: 6.1, 6.2, 6.3_
 
-- [ ] 7.2 ドメイン別報告を台帳から作り直し、台帳と同じコミットに入れる
+- [x] 7.2 ドメイン別報告を台帳から作り直し、台帳と同じコミットに入れる
   - 道具は着地済みなので、本 spec が `report/shiori.md` の作り直しを所有する（要件 10.1 の側で確定。要件 10.2 の「未着地なら作らない」は起きない）
   - `cargo run -p ukadoc-survey -- report` で作り直す。報告を手で書き換えて辻褄を合わせない（食い違いは `DomainReportStale` で赤になる）
   - 触るのは自分の報告 1 本だけとし、`report/summary.md` は統合担当に残す。台帳と報告は同じコミットに入れる
@@ -345,3 +345,9 @@
 - 7.1 → **タスク 7.2 への申し送り（報告の改行コード）**: 道具の `report` は **LF** で書き出すが作業ツリーの報告は **CRLF**（`core.autocrlf=true` なので index は LF で git の差分には出ない）。⑴ **変更の有無は `git diff --stat` で判定し、実行前の控えとの `md5sum`／`fc` では判定しないこと**（再生成後 `git status` は 4 本を M にするが、中身が変わったのは `shiori.md` だけ）。⑵ **改行を手で直さない・CRLF に直して commit しない。** ⑶ 冪等性（要件 1.5）を確かめるなら `report` を 2 回走らせて**出力どうし**を比べる。⑷ `check` は `strip_cr` してから比べるので **CR 非依存**。再生成後の緑は改行に関わらず信用してよい。⑸ 復元はバイトコピーか `git checkout -- <明示パス>`。
 - 7.1 → **タスク 7.2 への申し送り（`summary.md` の穴）**: `report` は `summary.md` を触らず、**整合検査に `summary.md` の古さを見る所見の種別が無い**（`DomainReportStale` はドメイン別報告だけ）。誰も見張っていないので、**`report-summary` の要否を明示的に判断すること**（タスク 7.2 の本文は「`report/summary.md` は統合担当に残す」としている）。
 - 7.1 → **上流へ送る材料（非阻却）**: `implemented_without_evidence_...` の緑側は `evidence_with_source_line` が索引を実データから丸ごと組み直すため、錨の証拠は「足した行」が無くても実データから復活する。緑側は空虚ではない（`assert_the_added_line_became_evidence` が足した行の索引入りを主張している）が、「足した行のおかげで消えた」という因果の切り分けまではしていない。剥がした状態から**足した行だけ**を索引へ加える形が正確。
+- 7.2: 報告を道具で作り直し、**`check` が所見 0 件・終了コード 0**、**`cargo test -p ukadoc-survey` が 596 passed / 0 failed**（consistency 38/38）になった。冪等性も確認（`report` を 2 度走らせて出力どうしが 0 バイト差）。報告は手で 1 文字も書き換えていない。
+- 7.2: 報告の内訳は 実装済み 21／語彙のみ 161／縮退 3／未対応 320／別名 3／対象外 169／**未分類 0** ＝ 677。**未分類 0 は 27 行すべてで確認**（状態の分布 1・ページ別 12・SSP 世代別 7・テーマ別 8）。ページ別と世代別の列合計もどちらも状態の分布と一致。
+- 7.2: **`summary.md` を触らないのは裁量ではなく義務。** **要件 10.4 が「`report/summary.md` を編集しない」と明示的に禁じている。** さらに `report` サブコマンドはそもそも `summary.md` を書き出さない（再生成には別の `report-summary` が要る）。道具の `check/freshness.rs` も「`CheckInput` に全体報告の欄は無く**構造として届かない**のがこの要件の守り方」と定め、**開発者裁定 2026-09-02 議題 2** を根拠に挙げている。
+- 7.2 → **統合担当（`areka-P0-ukadoc-coverage-roadmap`・`brief.md` のみで実在・未着手）への引き継ぎ 5 点**: ⒜ **`summary.md` は現に古い** — shiori 欄が未分類 677 と読めるが実体は 0（実装済み 21／語彙のみ 161／縮退 3／未対応 320／別名 3／対象外 169）。⒝ 是正は `cargo run -p ukadoc-survey -- report-summary` 1 本で、**手書きは禁止**。⒞ **実行の時機は 4 spec すべてが main に合流した後**（1 本でも未合流だとその枝の断面が焼き付き、共有ファイルなので衝突も招く。実測でこの枝では `assets 542/542`・`property 188/188`・`sakura-script 342/342` が初期状態のまま）。⒟ **この古さは常時検査では永久に赤にならない** — `CheckInput` に欄が無く構造的に届かないので所見の種別自体が無い。人手のチェックリストに載せない限り誰も気づかない。⒠ `report-summary` は 4 本のドメイン報告も LF で上書きするので、実行後の扱いを決めておくこと。
+- 7.2 → **タスク 7.3 への申し送り（実在する罠）**: `report` 実行後、**`git status --porcelain` は兄弟 3 本を ` M` と報告するのに `git diff --stat` は内容変化 0 と報告する**（`core.autocrlf=true`・`.gitattributes` 無しで blob が両者 LF に正規化されるため）。**7.3 では内容の判定に `git diff --stat` を使うこと。`git status` だけで数え上げると兄弟 3 本を境界違反と誤検出する。**
+- 7.2 → **是正の候補（brief は書き換えない）**: `areka-P0-ukadoc-coverage-roadmap/brief.md` が統合台帳を `doc/ukadoc-coverage/report.md` と書いているが、実体は `doc/ukadoc-coverage/report/summary.md`。要件 12.4 に従い**修正せず記録のみ**。
