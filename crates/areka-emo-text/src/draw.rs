@@ -366,8 +366,8 @@ fn try_create_format(
 ///   probe 規約「確定内容の metrics は不変ゆえキャッシュ可」）。
 ///
 /// UI スレッド専有（COM 層規律）。`line_pitch` は M1 正準式
-/// `ceil(font_height × line_pitch_factor)`（正本 [`TextLayerConfig::line_pitch_factor`]・
-/// `FixedMetrics` と同一式）に従う。
+/// `font_height + 行間`（正本 [`TextLayerConfig::line_pitch`]・`FixedMetrics` と同一式）
+/// に従う——足し算は自分で持たず config へ委譲する。
 pub struct DWriteMetrics {
     /// probe layout 生成用 factory（描画と同じ `IDWriteFactory2`）。
     factory: IDWriteFactory2,
@@ -375,8 +375,8 @@ pub struct DWriteMetrics {
     format: IDWriteTextFormat,
     /// 束縛フォント高さ（`ResolvedFont::height`・format へ焼き込み済みの正本）。
     font_height: f32,
-    /// 行送りピッチ係数（正本 [`TextLayerConfig::line_pitch_factor`]）。
-    line_pitch_factor: f32,
+    /// 行送りの調整値（行間の正本 [`TextLayerConfig`]・`line_pitch` の委譲先）。
+    config: TextLayerConfig,
     /// 実 font face metrics 由来の行ボックス比 `(ascent + descent) ÷ designUnitsPerEm`
     /// （生成時に一度だけ実測・文字列非依存＝フォント固有の設計値）。
     line_box_ratio: f32,
@@ -399,20 +399,27 @@ impl DWriteMetrics {
         let format = create_text_format(factory, font, mode)?;
         // 行ボックス比は **format が実際に束縛したフォント**の face metrics から実測する
         // （既定フォント再試行後でも format 側から辿るため取り違えが起きない）。取得失敗は
-        // warn＋ピッチ係数へ縮退（帯はピッチで頭打ちゆえ縮退値でも隣接行を侵さない）。
+        // warn＋行送りピッチと同丈の比（`line_pitch(h) / h`）へ縮退する（帯はピッチで
+        // 頭打ちゆえ縮退値でも隣接行を侵さない・R3.10・現行の縮退の意図を新式のまま保つ）。
         let line_box_ratio = measure_line_box_ratio(factory, &format).unwrap_or_else(|| {
+            let fallback_ratio = if font.height > 0.0 {
+                config.line_pitch(font.height) / font.height
+            } else {
+                1.0
+            };
             warn!(
                 font = %font.name,
-                fallback = config.line_pitch_factor,
-                "font face metrics を取得できない——行ボックス比を行送りピッチ係数へ縮退する"
+                line_gap = config.line_gap,
+                fallback = fallback_ratio,
+                "font face metrics を取得できない——行ボックス比を行送りピッチ相当へ縮退する"
             );
-            config.line_pitch_factor
+            fallback_ratio
         });
         Ok(DWriteMetrics {
             factory: factory.clone(),
             format,
             font_height: font.height,
-            line_pitch_factor: config.line_pitch_factor,
+            config: *config,
             line_box_ratio,
             cache: RefCell::new(HashMap::new()),
         })
@@ -473,9 +480,10 @@ impl GlyphMetrics for DWriteMetrics {
         }
     }
 
-    /// 行送りピッチ＝M1 正準式 `ceil(font_height × line_pitch_factor)`。
+    /// 行送りピッチ＝正典式 `font_height + 行間`。式は [`TextLayerConfig::line_pitch`]
+    /// が唯一の定義点で、ここは委譲するだけ（自前の足し算を持たない・R3.5）。
     fn line_pitch(&self, font_height: f32) -> f32 {
-        (font_height * self.line_pitch_factor).ceil()
+        self.config.line_pitch(font_height)
     }
 
     /// 実レンダリング行ボックス丈＝`font_height × (ascent + descent) ÷ designUnitsPerEm`

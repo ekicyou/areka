@@ -223,8 +223,9 @@ pub struct TextLayerRuntime {
     /// k 再追従（[`TextLayerRuntime::refresh_actor_scale`]）は本 map の当該エントリだけを破棄し、
     /// 次フレームの再生成へ委ねる——純粋状態 `state` には触れない・R8.2/R8.3）。
     surfaces: HashMap<ActorKey, ActorRender>,
-    /// 調整値（line_pitch 係数）。reveal ペースは配送 duration 由来ゆえ char_wait は持たない
-    /// （本 config は `DWriteMetrics::new` の行送り算出にのみ使う）。
+    /// 調整値（行送りの行間 `line_gap`）。reveal ペースは配送 duration 由来ゆえ char_wait は
+    /// 持たない（本 config は `DWriteMetrics::new` の行送り算出にのみ使う）。
+    /// [`TextLayerRuntime::new`] で正規化済み——以降はこの値をそのまま配る。
     config: TextLayerConfig,
     /// 未解決 actor の warn を actor ごと初回のみに抑える記録（以降は debug!——
     /// design Error Handling「未 binding actor の cue」）。
@@ -243,13 +244,16 @@ pub struct TextLayerRuntime {
 
 impl TextLayerRuntime {
     /// 空のランタイムを構築する（COM 資源は初回解決フレームで World 資源から遅延構築）。
+    ///
+    /// 調整値はここで 1 度だけ正規化する（[`TextLayerConfig::normalized`]）——非有限・負の
+    /// 行間の縮退警告は構築時の 1 件だけで、以降は正規化済みの値を配る（R1.6）。
     pub fn new(config: TextLayerConfig) -> TextLayerRuntime {
         TextLayerRuntime {
             state: TextLayerState::default(),
             routing: HashMap::new(),
             layout_input: HashMap::new(),
             surfaces: HashMap::new(),
-            config,
+            config: config.normalized(),
             unresolved_warned: BTreeSet::new(),
             choice_hover: HashMap::new(),
             choice_snapshot: HashMap::new(),
@@ -470,7 +474,7 @@ impl TextLayerRuntime {
         &self.state
     }
 
-    /// 調整値（line_pitch 係数）。
+    /// 調整値（行送りの行間 `line_gap`・構築時に正規化済み）。
     pub fn config(&self) -> &TextLayerConfig {
         &self.config
     }

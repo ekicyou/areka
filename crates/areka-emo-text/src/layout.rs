@@ -83,8 +83,9 @@ pub trait GlyphMetrics {
     /// グリフの行内送り幅（image px）。writing_mode の行内軸方向の寸。
     fn advance(&self, ch: char, font_height: f32) -> f32;
 
-    /// 行送りピッチ（image px）。M1 正準: `ceil(font_height × 1.25)`
-    /// （係数は [`TextLayerConfig::line_pitch_factor`] が正本・既定 1.25）。
+    /// 行送りピッチ（image px）。正典式: `font_height + 行間`（切り上げなし）。
+    /// 式も行間の既定値（2）も [`TextLayerConfig::line_pitch`] が正本で、
+    /// 実装は自前で足し算をせずそこへ委譲する（design.md §4.1・R3.5）。
     fn line_pitch(&self, font_height: f32) -> f32;
 
     /// **実レンダリング行ボックス丈**（image px・descent 込み＝`ascent + descent`）。
@@ -106,7 +107,8 @@ pub trait GlyphMetrics {
 /// 構造テスト用の決定論 metrics（R4.5/R11.6）。
 ///
 /// 決定論仮想値: 全角（非 ASCII）＝`font_height`・半角（ASCII）＝`font_height / 2`。
-/// 行送りピッチは M1 正準式 `ceil(font_height × 既定係数 1.25)`。行ボックス丈は
+/// 行送りピッチは既定の調整値を読んで [`TextLayerConfig::line_pitch`] へ委譲する
+/// （`font_height + 行間 2`・自前の仮想行間を持たない）。行ボックス丈は
 /// [`FIXED_LINE_BOX_RATIO`]×`font_height`。
 /// タイポグラフィ的正確さは目的でない——折返し・行送りアルゴリズムの檻のための値。
 #[derive(Clone, Copy, Debug, Default)]
@@ -129,7 +131,7 @@ impl GlyphMetrics for FixedMetrics {
     }
 
     fn line_pitch(&self, font_height: f32) -> f32 {
-        (font_height * TextLayerConfig::default().line_pitch_factor).ceil()
+        TextLayerConfig::default().line_pitch(font_height)
     }
 
     fn line_box_height(&self, font_height: f32) -> f32 {

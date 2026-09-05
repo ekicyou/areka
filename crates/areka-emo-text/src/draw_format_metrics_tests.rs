@@ -390,7 +390,7 @@ fn dwrite_metrics_caches_probed_advances() {
     assert_eq!(metrics.cached_probe_count(), 2);
 }
 
-/// line_pitch は M1 正準式 ceil(font_height × TextLayerConfig::line_pitch_factor)
+/// line_pitch は正典式 font_height + TextLayerConfig::line_gap
 /// ——FixedMetrics と同じ正本（trait doc）に従う。
 #[test]
 fn dwrite_metrics_line_pitch_follows_config_canon() {
@@ -401,7 +401,7 @@ fn dwrite_metrics_line_pitch_follows_config_canon() {
     // 係数は config が正本——非既定係数も反映される。
     let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
     let config = TextLayerConfig {
-        line_pitch_factor: 2.0,
+        line_gap: 2.0,
         ..TextLayerConfig::default()
     };
     let doubled = DWriteMetrics::new(&factory, &resolved, WritingMode::HorizontalTb, &config)

@@ -224,7 +224,7 @@ fn build_and_spawn(world: &mut World) {
         assets: Some(assets),
         model,
         // タイプ速度は配送 duration 由来（cue ヘルパが Text へ N×CHAR_WAIT を焼き込む）。
-        // config は line_pitch_factor のみゆえ既定でよい。
+        // config は line_gap のみゆえ既定でよい。
         runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
