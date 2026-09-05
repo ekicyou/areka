@@ -737,94 +737,227 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnAITalk:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+areka の内部名: areka が会話の自発発火に使う内部の名前 OnTalk は正典に対応する項目が無いので
+台帳の行を作らず、扱いをここに書く。emo2 が OnSecondChange の内部で会話を自発生成するため、
+ベースウェアの側からも周期発火すると二重駆動になる。そのため OnTalk は
+crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS に恒久的に含めない（同じ表の
+説明にその旨が書いてある）。スケジューラ起源で OnTalk を組み立てた呼び出しは送出されず、
+error のログ event_id_not_allowed が残る。この恒久禁止は選択起源には及ばない（受理規則
+is_allowed_choice_event の条件は「On で始まること」ただ 1 つで、作者が選択肢に書いた
+1 クリック 1 回の発火は二重駆動の根拠に当たらないため）。正典で自発の会話に当たるのがこの
+OnAITalk なので、最も近い正典項目としてここに置いた。
+"""
 
 [entry."ukadoc:list_shiori_event:OnAnchorEnter:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnAnchorHover:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnAnchorSelect:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnAnchorSelectEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnArchiveViewerOpen:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+既存カタログとの差: 正典の 290 件と doc/shiori/fragments/events/ の 287 件を項目 id 単位で
+突き合わせると差は 3 件（OnArchiveViewerOpen・OnMediaPlayerOpen・OnPictureViewerOpen）で、
+いずれも正典にあって断片に無い。逆向き（断片にあって正典に無い）は 0 件である。この項目はその
+3 件の 1 つで、断片の側に対応する記述が無い。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBIFF2Complete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBIFFBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBIFFComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBIFFFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBalloonBreak:1"]
 status = "vocabulary-only"
@@ -852,13 +985,25 @@ Reference 割当（転記元の記録の写し）: Ref0＝中断の操作が起�
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonChange:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBalloonClose:1"]
 status = "vocabulary-only"
@@ -884,13 +1029,25 @@ Reference 割当（転記元の記録の写し）: Ref0＝閉じる際に表示�
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonScaling:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBalloonTimeout:1"]
 status = "vocabulary-only"
@@ -917,67 +1074,151 @@ Reference 割当（転記元の記録の写し）: Ref0＝タイムアウトし�
 """
 
 [entry."ukadoc:list_shiori_event:OnBasewareUpdated:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBasewareUpdating:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBatteryChargingStart:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBatteryChargingStop:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBatteryCritical:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBatteryLow:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBatteryNotify:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBoot:1"]
 status = "implemented"
@@ -998,58 +1239,138 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 """
 
 [entry."ukadoc:list_shiori_event:OnCPULoadHigh:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCPULoadLow:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCacheRestore:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCacheSuspend:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnChoiceEnter:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+areka の内部名: 選択肢の ID として使われる OnMenuBack は正典に対応する項目が無いので台帳の行を
+作らず、扱いをここに書く。areka でこの名前が現れるのは crates/areka-kanade/src/msg.rs の
+単体テストだけで、「作者が \\q の選択肢 ID に書いた任意の名前が EventId::Choice に逐語のまま載って
+SHIORI へ出る」ことを示す見本として使われている。恒久的に禁じている名前ではなく（恒久禁止は
+OnTalk と OnHour の 2 つだけ）、On で始まるので選択起源の経路では実際に送出される。この扱いを
+ここに置いたのは、選択肢の ID を Reference に運ぶ正典の項目のうち、この群に属する最も近いものが
+OnChoiceEnter だからである（機構そのものを説明する OnChoiceSelect と OnChoiceSelectEx は
+実装済みで別の群に属する）。
+"""
 
 [entry."ukadoc:list_shiori_event:OnChoiceHover:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnChoiceSelect:1"]
 status = "implemented"
@@ -1124,310 +1445,718 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 """
 
 [entry."ukadoc:list_shiori_event:OnCloseAll:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCommunicate:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCommunicateInputCancel:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCompressArchiveComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCompressArchiveFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnConfigurationDialogHelp:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDarkTheme:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDestroy:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDeviceArrival:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDeviceRemove:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDirectoryDrop:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDisplayChange:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDisplayChangeEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDisplayHandover:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDisplayPowerStatus:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnDressupChanged:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnEmbryoExist:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPProgress:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPSSLInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteHTTPStreaming:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteRSSComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteRSSFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteRSS_SSLInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketClose:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketOpen:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketReceive:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocketReconnect:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExecuteWebSocket_SSLInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExtractArchiveComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnExtractArchiveFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnFileDrop2:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnFileDrop:1"]
 status = "alias"
@@ -1505,13 +2234,25 @@ OnFileDrop2 の名前では出ない）。この行は判定をしないので�
 """
 
 [entry."ukadoc:list_shiori_event:OnFileDropping:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnFirstBoot:1"]
 status = "implemented"
@@ -1532,175 +2273,410 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 """
 
 [entry."ukadoc:list_shiori_event:OnFullScreenAppMinimize:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnFullScreenAppRestore:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGamepadAxisMove:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGamepadButtonDown:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGamepadButtonUp:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGamepadConnected:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGamepadDisconnected:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGhostCallComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGhostCalled:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGhostCalling:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGhostChanged:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGhostChanging:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGhostTermsAccept:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnGhostTermsDecline:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnHeadlinesense.OnFind:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnHeadlinesenseBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnHeadlinesenseComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnHeadlinesenseFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnHourTimeSignal:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+areka の内部名: areka が時報に使う内部の名前 OnHour は正典に対応する項目が無いので台帳の行を
+作らず、扱いをここに書く。emo2 が OnSecondChange の内部で自発生成するため、ベースウェアの側からも
+周期発火すると二重駆動になる。そのため OnHour は
+crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS に恒久的に含めない（同じ表の
+説明にその旨が書いてある）。スケジューラ起源で OnHour を組み立てた呼び出しは送出されず、
+error のログ event_id_not_allowed が残る。この恒久禁止は選択起源には及ばない。正典で時報に
+当たるのがこの OnHourTimeSignal なので、最も近い正典項目としてここに置いた。
+"""
 
 [entry."ukadoc:list_shiori_event:OnInitialize:1"]
 status = "implemented"
@@ -1721,139 +2697,323 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 """
 
 [entry."ukadoc:list_shiori_event:OnInstallBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnInstallComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnInstallCompleteAll:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnInstallCompleteEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnInstallFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnInstallRefuse:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnInstallReroute:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnKeyPress:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnLanguageChange:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMediaPlayerOpen:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+既存カタログとの差: 正典の 290 件と doc/shiori/fragments/events/ の 287 件を項目 id 単位で
+突き合わせると差は 3 件（OnArchiveViewerOpen・OnMediaPlayerOpen・OnPictureViewerOpen）で、
+いずれも正典にあって断片に無い。逆向き（断片にあって正典に無い）は 0 件である。この項目はその
+3 件の 1 つで、断片の側に対応する記述が無い。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMemoryLoadHigh:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMemoryLoadLow:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMinuteChange:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseClick:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseClickEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseDoubleClick:1"]
 status = "implemented"
@@ -1874,103 +3034,235 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseDoubleClickEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseDown:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseDownEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseDragEnd:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseDragStart:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseEnter:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseEnterAll:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseGesture:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseHover:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseLeave:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseLeaveAll:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseMove:1"]
 status = "implemented"
@@ -1991,607 +3283,1415 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 """
 
 [entry."ukadoc:list_shiori_event:OnMouseMultipleClick:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseMultipleClickEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseUp:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseUpEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseWheel:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMusicPlay:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMusicPlayEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNSLookupComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNSLookupFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNarCreated:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNarCreating:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNekodorifExist:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNetworkHeavy:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNetworkStatusChange:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyBalloonInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyDressupInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyFontInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyInternationalInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyOSInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyOtherFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyPluginFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifySelfInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyShellInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnNotifyUserInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOSUpdateInfo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOffscreen:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherGhostBooted:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherGhostChanged:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherGhostClosed:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherGhostTalk:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherGhostVanished:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherObjectDropped:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherObjectDropping:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherOffscreen:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherOverlap:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOtherSurfaceChange:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnOverlap:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnPictureViewerOpen:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+既存カタログとの差: 正典の 290 件と doc/shiori/fragments/events/ の 287 件を項目 id 単位で
+突き合わせると差は 3 件（OnArchiveViewerOpen・OnMediaPlayerOpen・OnPictureViewerOpen）で、
+いずれも正典にあって断片に無い。逆向き（断片にあって正典に無い）は 0 件である。この項目はその
+3 件の 1 つで、断片の側に対応する記述が無い。
+"""
 
 [entry."ukadoc:list_shiori_event:OnPingComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnPingProgress:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRSSBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRSSComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRSSFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRaiseOtherFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRaisePluginFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRecommendsiteChoice:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRecycleBinEmpty:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRecycleBinEmptyFromOther:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnRecycleBinStatusUpdate:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnResetWindowPos:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSNTPBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSNTPCompare:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSNTPCompareEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSNTPCorrect:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSNTPCorrectEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSNTPFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSSTPBlacklisting:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSSTPBreak:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSchedule5MinutesToGo:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnScheduleRead:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSchedulepostBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSchedulepostComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSchedulesenseBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSchedulesenseComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSchedulesenseFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnScreenSaverEnd:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnScreenSaverStart:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSecondChange:1"]
 status = "implemented"
@@ -2612,688 +4712,1600 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 """
 
 [entry."ukadoc:list_shiori_event:OnSelectModeBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSelectModeCancel:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSelectModeComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSelectModeMouseDown:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSelectModeMouseUp:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSessionDisconnect:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSessionLock:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSessionReconnect:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSessionUnlock:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnShellChanged:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnShellChanging:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnShellScaling:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSoundError:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSoundLoop:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSoundStop:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSpeechSynthesisStatus:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSurfaceChange:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSurfaceRestore:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSysResume:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSysSuspend:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSystemDialog:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSystemDialogCancel:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnTabletMode:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnTeach:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnTeachInputCancel:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnTeachStart:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnTextDrop:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnTranslate:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnTrayBalloonClick:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnTrayBalloonTimeout:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnURLDragDropping:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnURLDropFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnURLDropped:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnURLDropping:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnURLQuery:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnDownloadBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateCheckComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateCheckFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateCheckResult:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateCheckResultEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnDownloadBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherBegin:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherComplete:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherFailure:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherReady:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateProcessExec:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateReady:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateResult:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateResultEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdateResultExplorer:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdatedataCreated:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUpdatedataCreating:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUserInput:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnUserInputCancel:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVanishButtonHold:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVanishCancel:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVanishSelected:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVanishSelecting:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVanished:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVideoPlayEx:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVirtualDesktopChanged:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVoiceRecognitionStatus:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnVoiceRecognitionWord:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnWallpaperChange:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnWindowStateMinimize:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnWindowStateRestore:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnXUkagakaLinkOpen:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
+既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
+現れる。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
+載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
+のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
+events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
+ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
+1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
+absent のまま変わらない。
+"""
 
 [entry."ukadoc:list_shiori_event:balloonpathlist:1"]
 status = "unclassified"

@@ -44,7 +44,7 @@
   - 完了条件: 17 行の状態・`alias_of`・`owner`・`note` が埋まり、検査 ⑸（別名の連鎖が無いこと）が緑になる
   - _Requirements: 2.2, 2.4, 2.5, 2.9, 3.6, 6.1, 6.2, 6.3, 6.4, 12.3_
 
-- [ ] 2.2 送出していないイベント 248 を `absent` として埋める
+- [x] 2.2 送出していないイベント 248 を `absent` として埋める
   - 許可表に無い項目を `absent` とし、群の共通 `note`（「areka はこのイベントを送らない・例外にもログにも現れない」）を写す。`absent` の各行には根拠の場所を繰り返さない
   - areka の内部でだけ使う名前（`OnTalk`・`OnHour`・`OnMenuBack`）は行を作らず、最も近い正典項目の `note` に areka 側の扱いを書く
   - 正典 290 と既存カタログ `doc/shiori/fragments/events/` の 287 を id 単位で突き合わせ、差の 3 件（`OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`）を該当する行の `note` に記録する
@@ -241,3 +241,10 @@
 - 2.1: 別名の向きは**上流 要件 4.1 の第 1 段（正典本文の注記）**で決着。`OnFileDrop`／`OnFileDropped`／`OnFileDropEx` は本文が逐語で `[旧仕様]` 始まり、`OnFileDrop2` は「現時点での最新仕様」。第 2 段（版番号）は 4 件とも `2.7.98` で決め手にならない。`OnFileDropping` はドラッグ中の別機能で `[旧仕様]` の注記が無い。
 - 2.1: `basewareversion` はカタログ全体で 1 件のみ（`list_shiori_event` の `[NOTIFY]`）、リソース側に同名は無い。要件 2.4 の「26 件」＝群 4 の 25 件＋本件 1 件。
 - 2.1 → **タスク 5.1／5.2 への申し送り（埋め忘れの隙）**: 索引は群 2a に具体値（テーマ「装い」・優先度 `B4`）を定めているが、5.1 の完了条件（「8 語彙以外が現れないこと」）も 5.2 の完了条件（「**空でない行**が表の値と一致すること」）も**空欄を通してしまう**。機械検査にもテーマ未設定を赤にする種別は無い。**5.1／5.2 では群 2a の 3 行を明示的に確認すること。**
+- 2.2: 群 2 は 248 行ちょうど（`list_shiori_event` 290 の分布は `absent` 248／`unclassified` 25＝群 4／`implemented` 11／`vocabulary-only` 3／`alias` 3）。共通 `note` は索引から一字一句写した（短縮しない — 1.4 の裁定どおり）。個別追記はちょうど 6 行。
+- 2.2: 正典 290 と `doc/shiori/fragments/events/` 287 の差は **3 件・向きは一方向**（正典にあって断片に無い＝`OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`。逆向きは 0 件）。
+- 2.2: 内部名 3 つはカタログ全 1,749 件に完全一致 0 なので行を作っていない。`OnTalk` → `OnAITalk`、`OnHour` → `OnHourTimeSignal` の `note` へ。**`OnMenuBack` は恒久禁止の名前ではない** — `ALLOWED_EVENT_IDS` の doc コメントが恒久禁止とするのは `OnTalk`／`OnHour` の 2 つだけで、`OnMenuBack` は `msg.rs` の単体テストに「任意名が `EventId::Choice` に逐語で載る」見本として現れるだけ。要件 2.6 がこれを内部名に数えているのは要件側の不正確さ。
+- 2.2 → **タスク 4.2（PLUGIN 19）への申し送り**: `OnMenuBack` は暫定的に `OnChoiceEnter` の `note` に置いたが、**より近い正典項目が `list_plugin_event` にある** — 「`\q` 等に指定された任意名イベント」を表題にした唯一の項目（現在 `unclassified`）。その行に相互参照を置くか、明示的に置かないと決めること。
+- 2.2 → **タスク 4.3（`memo_shiorievent`）への申し送り**: 索引の群 15 の「判断の根拠の場所」にも内部名 3 つの扱いを書く旨が残っている。**二重に書かないこと。** なお群 15 の文面「恒久的に含めない旨を写す」が当たるのは `OnTalk`／`OnHour` だけ。
+- 2.2 → **タスク 7.1／7.3 への申し送り**: 群 2 の 248 行の `owner` は `""` のまま。付録 A は `""` を正当な値と定めており本タスクの要件にも `owner` は含まれないが、要件 12.3（既存 spec が所有する項目に `owner` を書く）を 248 行へ適用するタスクが tasks.md に無い。**248 行に `owner` が要らないことが意図的かを確認すること。**
+- 2.2: 台帳は 9,869 行に膨らんだが、1,000 行の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs` ＋ `tests/workspace_scan/mod.rs`）は **`crates/` 配下の `.rs` だけ**を列挙するので対象外。
