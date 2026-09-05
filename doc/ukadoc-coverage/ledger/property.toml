@@ -38,7 +38,10 @@ introduced = "2.7.85"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:property.get:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:property.set:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -65,7 +68,10 @@ introduced = "2.7.85"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:property.get:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:property.set:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -144,7 +150,10 @@ introduced = ""
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -225,7 +234,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -238,7 +249,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -251,7 +264,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -264,7 +279,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -396,12 +413,14 @@ introduced = "2.7.89"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell_surfaces:scaling:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
-値の源: 他エンジンの状態 — 利用者がベースウェアで決める拡大率。掛け合わされる残りの 2 つ（タグの指定とシェルの指定）は正典に相手の id があるので、そちらは関連で指す。相手の id が正典に無いので関連には書けない。
+値の源: 他エンジンの状態 — 利用者がベースウェアで決める拡大率。相手の id が正典に無いので関連には書けない。掛け合わされる残りの 2 つのうち、シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形（倍率／横倍率・縦倍率／横倍率・縦倍率・オプション）のどれを指すか決まらないので関連には書かない。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validheight.initial:1"]
@@ -506,7 +525,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -519,7 +540,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -532,7 +555,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -545,7 +570,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -558,7 +585,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -571,7 +600,9 @@ introduced = "2.6.11"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -597,7 +628,10 @@ introduced = "2.8.28"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5ci_5bID_756a_53f7_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -680,7 +714,14 @@ introduced = "2.6.67"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_ghost:char_2a.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:kero.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:sakura.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:char_2a.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:kero.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:sakura.name_2c_540d_524d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -706,12 +747,14 @@ introduced = "2.7.89"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell_surfaces:scaling:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
-値の源: 他エンジンの状態 — 利用者がベースウェアで決める拡大率。掛け合わされる残りの 2 つ（タグの指定とシェルの指定）は正典に相手の id があるので、そちらは関連で指す。相手の id が正典に無いので関連には書けない。
+値の源: 他エンジンの状態 — 利用者がベースウェアで決める拡大率。相手の id が正典に無いので関連には書けない。掛け合わされる残りの 2 つのうち、シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形（倍率／横倍率・縦倍率／横倍率・縦倍率・オプション）のどれを指すか決まらないので関連には書かない。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.seriko.defaultsurface:1"]
@@ -720,7 +763,9 @@ introduced = ""
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -733,7 +778,10 @@ introduced = ""
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -785,7 +833,14 @@ introduced = ""
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_ghost:char_2a.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:kero.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:sakura.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:char_2a.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:kero.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:sakura.defaultx_2cX_5ea7_6a19:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -798,7 +853,14 @@ introduced = ""
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_ghost:char_2a.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:kero.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:sakura.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:char_2a.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:kero.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:sakura.defaulty_2cY_5ea7_6a19:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -837,7 +899,9 @@ introduced = "2.3.83"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -863,7 +927,9 @@ introduced = "2.3.83"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -876,7 +942,10 @@ introduced = "2.8.78"
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2csticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -942,7 +1011,9 @@ introduced = "2.3.83"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -968,7 +1039,9 @@ introduced = "2.3.83"
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -981,7 +1054,10 @@ introduced = "2.8.78"
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1048,7 +1124,10 @@ introduced = "2.8.72"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cloop_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1074,7 +1153,9 @@ introduced = "2.8.72"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1087,7 +1168,9 @@ introduced = ""
 owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1433,7 +1516,10 @@ introduced = ""
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell:kero.menu_2cauto_307e_305f_306fhidden:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -1461,7 +1547,9 @@ introduced = "2.8.72"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cloop_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1476,7 +1564,10 @@ introduced = ""
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell:menu_2chidden:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
@@ -1625,7 +1716,9 @@ introduced = "2.8.72"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1672,7 +1765,11 @@ introduced = "2.8.72"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cpause_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cresume_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1687,7 +1784,11 @@ introduced = "2.8.72"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cstop_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1728,7 +1829,10 @@ introduced = "2.7.85"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_plugin_event:property.get:1" },
+  { kind = "same-feature", to = "ukadoc:list_plugin_event:property.set:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1755,7 +1859,10 @@ introduced = "2.7.85"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_plugin_event:property.get:1" },
+  { kind = "same-feature", to = "ukadoc:list_plugin_event:property.set:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -1769,7 +1876,10 @@ introduced = "2.8.72"
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2coption_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
@@ -2111,7 +2221,10 @@ introduced = ""
 owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell:sakura.menu_2cauto_307e_305f_306fhidden:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
