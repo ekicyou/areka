@@ -33,7 +33,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 - sylphya は語彙表を実行時の判定にも使っている（`crates/areka-sylphya/src/actor.rs:136-166`）: SET の宛先が「根がルート枝 10 のいずれか、または葉が汎用プロパティ名 17 のいずれか」なら正典の語彙とみなして「受理＋警告＋非反映」、それ以外の自由な名前は保存へ回す。読み取り側（`reader.rs`）は語彙表を見ず、値が無ければ一律に「値なし」を返す。
 - areka 側（sylphya の点付き語彙表・`crates/areka-sylphya/src/vocab/`）: ルート枝 10（`dotted.rs:17`）・汎用プロパティ名 17（`dotted.rs:37`）・SET 有効群 21（`dotted.rs:72`・件数を固定するテストは同 `:191`）・`property.get`／`property.set` の名前の予約（`dotted.rs:106` と `:109`）。**M1 で実際に値へ導出するのは `baseware.*` だけで、他のルート枝の配下は値なしへ縮退する**と宣言されている（`dotted.rs:4-5`・宣言ブロック全体は `:1-9`）。件数を固定するテストは `crates/areka-sylphya/src/ledger_key_determinism_tests.rs:201-204`。
 - 語彙表には既に「ukadoc `list_propertysystem.html`」という語が 2 か所あるが（`dotted.rs:3` と `:67`。「ukadoc」の語だけなら `:15` を含め 3 か所）、**いずれも URL を伴わない**＝toolkit 要件 5.6 により証拠として扱われない。本ページの正典 URL はソース中に 0 件。
-- 縮退の転記元になる既存の登記: `doc/COMPAT_ARCHITECTURE.md:184`（`currentghost.balloon.scope(ID).vertical` の導出規則と、値の枝も照会経路も無いという 2 つの穴）・同 `:185`（`validwidth`／`validheight`／`lines` の 2.8.83 意味論と、スナップショットが 2.8.80 のままである罠）・同 `:136`（SET が無効な名前への書込は受理＋警告＋非反映）。
+- 縮退の転記元になる既存の登記: `doc/COMPAT_ARCHITECTURE.md:184`（`currentghost.balloon.scope(ID).vertical` の導出規則と、値の枝も照会経路も無いという 2 つの穴）・同 `:185`（`validwidth`／`validheight`／`lines` の 2.8.83 意味論と、スナップショットが 2.8.80 のままである罠）・同 `:207`（`currentghost.seriko.zorder` は SSP 2.8.78 の正典項目で設定も有効だが、areka は「本リリースでは提供しない」と決め、参照・書き込みには未提供のプロパティと同じ応答を返す）・同 `:136`（SET が無効な名前への書込は受理＋警告＋非反映）。*(2026-09-05 訂正: `:207` を書き落としていた。項目 1 件の**読み取り**応答の登記なので `:184`／`:185` と同類であり、188 件のほぼ全部に掛かる書き込み側の一般規則 `:136` とは別に数える。これで個別の登記は 8 件になる。同じ 2.8.78 で入った隣の `currentghost.seriko.sticky-window` には個別の登記が無いことも全行を読んで確かめた)*
 - `doc/ukadoc-coverage/` は現時点で存在しない。
 
 ## Boundary Context
