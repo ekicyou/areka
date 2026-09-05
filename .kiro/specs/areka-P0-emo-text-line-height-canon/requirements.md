@@ -65,9 +65,9 @@ areka でゴースト `emo2` を動かす利用者が、相方（エモ）側の
 
 #### Acceptance Criteria
 
-1. When Requirement 1 の意味論が確定した, the 本仕様 shall 完了 spec `areka-P0-emo-text-layer` の `design.md` 補足正準（行送りピッチの行）と DPI/スケール契約表（「フォントサイズの写像」の行）を、確定した式・`font.height` の意味・行間の既定値へ書き換え、旧記述（`ceil(font.height × 1.25)`・「値そのまま」）を「本仕様で改訂」の注記つきで置き換える。
+1. When Requirement 1 の意味論が確定した, the 本仕様 shall 新しい正典表（`font.height` の意味・行送りの式・行間の既定値・折返し基準と描画範囲の二段構え）を本仕様の `design.md` に置き、`doc/COMPAT_ARCHITECTURE.md` §8 を上書きの記録先とし（Requirement 2.3）、完了 spec `areka-P0-emo-text-layer` の `design.md` 補足正準（行送りピッチの行）と DPI/スケール契約表（「フォントサイズの写像」の行）は**表の中身を書き換えず**、その直後に「本仕様で改訂・正本は `doc/COMPAT_ARCHITECTURE.md` §8 と本仕様の design」の 1 行注記だけを加える（開発者裁定 2026-09-05・要件ディスカッション議題 2＝アーカイブ非改変の先例〔`cursor-tag-canon`・§8 `:210`〕に揃えた折衷）。
 2. The 本仕様 shall 同 `research.md` のリスク登記「行送りピッチ 1.25 係数: SSP 実測との視覚差が出る可能性」に消化済みの注記（本仕様名・日付）を加える。
-3. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8（沈黙ルール対応表）へ 1 行を追加し、「`font.height` の意味・行送りの式・行間の既定」を「参照実装 SSP の実測で確定した項目」として、裁量・根拠（実測値）・出典 spec を記録する。
+3. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8（沈黙ルール対応表）へ行を追加し、「`font.height` の意味・行送りの式・行間の既定」（参照実装 SSP の実測で確定）と「折返し基準 `wordwrappoint` と描画範囲 `validrect` の二段構え」（開発者裁定 2026-09-05）を、裁量・根拠（実測値／裁定）・出典 spec つきで記録し、完了 spec `emo-text-layer` の表を上書きした事実を明記する。
 4. The 本仕様 shall 製品コード（`crates/areka-emo-text/src/` の非テストファイル・テストと `examples/` の doc コメント）と現行の正典表・裁量記録（Requirement 2.1〜2.3 の改訂先）に残る係数 1.25 の記述を洗い出し、改訂後に「`1.25` を**現行の**行送り係数として述べる記述がそこに残っていない」ことを機械的に（同一行に `1.25` と `line_pitch`／`行送り`／`係数` のいずれかを含む行の全文検索で）示す。対象外: DPI 拡大率 k としての `1.25`（`region.rs`・`tests/scale_invariance_test.rs`・`crates/areka/src/placement/`）、履歴として旧式を述べる記述（`roadmap.md` の根因記述・e2e の記録・他の完了 spec のアーカイブ）、および「本仕様で改訂」の注記つきで旧式を引用する記述。
 5. The 本仕様 shall `cursor-tag-canon` の要件「`lh` を『行高さ（1em＋行間）』として解釈する」（同 `requirements.md:63`）を改訂せず、本仕様の式がその定義を実体化するものであることを本仕様の記録に明記する。
 
