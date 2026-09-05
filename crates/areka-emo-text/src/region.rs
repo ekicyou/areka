@@ -169,7 +169,8 @@ impl ScaleContract {
     }
 }
 
-/// 解決済みテキスト領域（**全値 image px**・validrect 絶対矩形・描画開始点・折返し閾値）。
+/// 解決済みテキスト領域（**全値 image px**・validrect 絶対矩形・描画開始点・折返し閾値・
+/// バルーン画像原寸）。
 ///
 /// physical への変換は TextSurface 生成寸と D2D SetTransform の一点のみ
 /// （[`ScaleContract`] 経由・k の多重適用を構造排除）。折返し閾値の軸解釈は
@@ -188,11 +189,18 @@ pub struct TextRegion {
     start: (f32, f32),
     /// 折返し閾値（行内軸・image px。横書き＝x 値・縦書き＝y 値）。
     wrap_threshold: f32,
+    /// バルーン画像の原寸（幅, 高さ・image px）。`resolve` の入口で受け取った値そのもの。
+    image_size: (f32, f32),
 }
 
 impl TextRegion {
-    /// `BalloonModel`＋バルーン画像原寸（**image px**・`ScaleContract::image_size` の
-    /// 一点導出値）＋`WritingMode` から解決する。物理 px を渡すのはレビューエラー。
+    /// `BalloonModel`＋バルーン画像原寸（**image px**）＋`WritingMode` から解決する。
+    /// 物理 px を渡すのはレビューエラー。原寸の出所は emo-present が保持する native 原寸
+    /// （`TextSlotView::surface_size` を `TextSlotBinding::from_view` が透過）であって、
+    /// [`ScaleContract`] からの逆写像ではない（逆写像は 2026-07-30 に撤去済み）。
+    ///
+    /// 受け取った原寸はそのまま保持し、[`image_size`](Self::image_size) で返す
+    /// （`\_l` の `centerx`／`centery` の基準）。
     ///
     /// - validrect: 負値=反対辺基準で絶対値化。成分 `None` は画像全域の辺へ縮退
     ///   （`debug!` 記録）。退化矩形（幅/高さ ≤ 0）は `warn!`＋そのまま返す（縮退継続）。
@@ -256,6 +264,7 @@ impl TextRegion {
             bottom,
             start: (start_x, start_y),
             wrap_threshold,
+            image_size: (width, height),
         }
     }
 
@@ -287,6 +296,22 @@ impl TextRegion {
     /// 折返し閾値（行内軸・image px。横書き＝x 値・縦書き＝y 値）。
     pub fn wrap_threshold(&self) -> f32 {
         self.wrap_threshold
+    }
+
+    /// バルーン画像の原寸（幅, 高さ・image px）＝[`resolve`](Self::resolve) が受け取った
+    /// `image_size` を f32 化しただけの値。
+    ///
+    /// **`\_l` の `centerx`／`centery` の基準はこの値である**——文字描画開始点（[`start`](Self::start)）
+    /// でも文字描画範囲（validrect）でもなく、**バルーン画像そのもの**が基準になる。ukadoc 正典が
+    /// 「これだけは文字描画開始点ではなくバルーン画像そのものが基準」と定めているためで、
+    /// `centerx` は幅の半分・`centery` は高さの半分、書字方向には依らない
+    /// （spec `areka-P0-cursor-tag-canon` の要件 4.3／4.4）。
+    ///
+    /// validrect は画像の部分矩形にすぎないので、**この値を validrect の幅・高さや辺と
+    /// 取り違えてはならない**（檻: 本ファイルの
+    /// `image_size_is_the_balloon_image_not_the_validrect_or_origin`）。
+    pub fn image_size(&self) -> (f32, f32) {
+        self.image_size
     }
 }
 
@@ -748,6 +773,88 @@ mod tests {
             contract.physical_extent(ImagePx(region.right() - region.left())),
             640
         );
+    }
+
+    // ── areka-P0-cursor-tag-canon R4.3: バルーン画像原寸の保持（`\_l` の centerx／centery の基準） ──
+
+    /// 檻の独立入力に使う原寸。`FIXTURE_IMAGE_SIZE` とは**別の値**であり、幅 ≠ 高さで、
+    /// 下の各檻が宣言する validrect の 4 辺・幅・高さ・`start` のいずれとも一致しない。
+    /// 「実装の値を読み戻すだけ」にならないよう、期待値はこの定数から直に書く。
+    const ALT_IMAGE_SIZE: (u32, u32) = (531, 289);
+
+    /// `image_size()` は `resolve` に渡した原寸をそのまま f32 で返し、3 書字方向で同一である
+    /// （`centerx`／`centery` は書字方向に依らない——要件 4.4 の前提になる値）。
+    #[test]
+    fn image_size_returns_resolve_input_verbatim_in_every_writing_mode() {
+        for mode in [
+            WritingMode::HorizontalTb,
+            WritingMode::VerticalRl,
+            WritingMode::VerticalLr,
+        ] {
+            let alt = TextRegion::resolve(&fixture_model(), ALT_IMAGE_SIZE, mode);
+            assert_eq!(alt.image_size(), (531.0, 289.0), "{mode:?}");
+            let fixture = TextRegion::resolve(&fixture_model(), FIXTURE_IMAGE_SIZE, mode);
+            assert_eq!(fixture.image_size(), (400.0, 224.0), "{mode:?}");
+        }
+    }
+
+    /// 基準は**バルーン画像そのもの**であって validrect でも描画開始点でもない（要件 4.3）。
+    /// validrect と origin を明示宣言し、それらが実際に効いていること（対照）を見たうえで、
+    /// `image_size()` が validrect の 4 辺・幅高さ・`start` のどれとも一致しないことを固定する。
+    #[test]
+    fn image_size_is_the_balloon_image_not_the_validrect_or_origin() {
+        // validrect (30,50)-(330,200)＝幅 300×高さ 150・origin (120,70)。
+        // いずれの数も ALT_IMAGE_SIZE の 531／289 とは重ならない。
+        let m = model(
+            (Some(120), Some(70)),
+            (None, None),
+            (Some(50), Some(200), Some(30), Some(330)),
+        );
+        let region = TextRegion::resolve(&m, ALT_IMAGE_SIZE, WritingMode::HorizontalTb);
+        // 対照: 宣言は確かに効いている（この檻は恒真ではない）。
+        assert_eq!(
+            (region.left(), region.top(), region.right(), region.bottom()),
+            (30.0, 50.0, 330.0, 200.0)
+        );
+        assert_eq!(region.start(), (120.0, 70.0));
+        // 本題: 画像原寸は渡された値のまま。
+        assert_eq!(region.image_size(), (531.0, 289.0));
+        assert_ne!(
+            region.image_size(),
+            (
+                region.right() - region.left(),
+                region.bottom() - region.top()
+            ),
+            "validrect の幅・高さとの取り違え"
+        );
+        assert_ne!(
+            region.image_size(),
+            (region.right(), region.bottom()),
+            "validrect の右辺・下辺との取り違え"
+        );
+        assert_ne!(region.image_size(), region.start(), "start との取り違え");
+    }
+
+    /// validrect／origin／wordwrappoint を宣言してもしなくても `image_size()` は変わらない
+    /// （画像原寸は宣言から導かれる値ではない）。
+    #[test]
+    fn image_size_is_unchanged_by_validrect_and_origin_declarations() {
+        let declared = model(
+            (Some(120), Some(70)),
+            (Some(-10), Some(-10)),
+            (Some(50), Some(200), Some(30), Some(330)),
+        );
+        let bare = model((None, None), (None, None), (None, None, None, None));
+        for mode in [
+            WritingMode::HorizontalTb,
+            WritingMode::VerticalRl,
+            WritingMode::VerticalLr,
+        ] {
+            let declared = TextRegion::resolve(&declared, ALT_IMAGE_SIZE, mode);
+            let bare = TextRegion::resolve(&bare, ALT_IMAGE_SIZE, mode);
+            assert_eq!(declared.image_size(), (531.0, 289.0), "{mode:?}");
+            assert_eq!(bare.image_size(), declared.image_size(), "{mode:?}");
+        }
     }
 }
 

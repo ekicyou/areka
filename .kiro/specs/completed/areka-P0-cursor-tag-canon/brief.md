@@ -24,7 +24,9 @@
 | 負値絶対座標 | ❌ 拒否縮退（`CursorDegrade::NegativeAbsolute`・`layout.rs:679`・当該軸不動＋actor ごと warn-once） |
 | 副作用（`\_l` 直後の行揃え左寄せリセット・`\f[align]` とのインデント相互作用・`\c[line]` の「行」分割単位） | ❌（`\f[align]` 系自体が全書字方向で未実装＝M2 予約） |
 
-**縮退表の正典は完了 spec `areka-P0-emo-text-layer`**（R2.4／6.5 が 4 分岐縮退——NegativeAbsolute／Relative／Invalid／Omitted——を確定し `CursorWarnGuard` が檻にしている）。本 spec はこの縮退表を改訂する＝**完了 spec の正典改訂**であり、裁定時は design・境界節・steering への追随義務を負う（記憶: revise-design-not-just-requirements）。
+**縮退表の正典は完了 spec `areka-P0-choice-render`**（R2.4＝`requirements.md:47-56`／R6.5＝`:95-105`。4 分岐縮退——NegativeAbsolute／Relative／Invalid／Omitted——を確定し `CursorWarnGuard` が檻にしている）。本 spec はこの縮退表を改訂する＝**完了 spec の正典改訂**であり、裁定時は design・境界節・steering への追随義務を負う（記憶: revise-design-not-just-requirements）。
+
+> **【是正 2026-09-04・`areka-P0-cursor-tag-canon` タスク 6.2】** 起票時（2026-08-27）に本 brief が 5 箇所（本項・Approach 1・Scope・Upstream・Existing Spec Touchpoints）で縮退表の正典所有者を「完了 spec `areka-P0-emo-text-layer`」と書いたのは**誤登記**で、正しい所有者 **`areka-P0-choice-render`** へ書き換えた。根拠（2026-09-04 再実測）: `.kiro/specs/completed/areka-P0-emo-text-layer/requirements.md` は `\_l` 0 件・「縮退」0 件・「警告」0 件で、Requirement 6 は受入基準 4 項目＝**R6.5 が存在しない**（同文書は `writing_mode` による縦横の軸解釈の仕様）。対して `.kiro/specs/completed/areka-P0-choice-render/requirements.md` は `\_l` 14 行・「縮退」9 行で、R2.4（`:47-56`）と R6.5（`:95-105`）が `\_l` の縮退を定め、表本体は同 `design.md:607-625`（`\_l` の 5 行は `:613-617`）にある。アーカイブ側の同じ誤登記（`completed/areka-P0-balloon-vertical-canon/design.md:628`・`research.md:283`）は**1 文字も変えず**、記録先は `doc/COMPAT_ARCHITECTURE.md:210` の【訂正】行。
 
 **縦書き `vertical_rl` は原点と符号が正典と食い違う（bvc 実測・本物の非互換）**:
 - カーソル X は常に `region.left()` 起点の増加方向で解決される（`layout.rs:453-454`）。
@@ -41,7 +43,7 @@
 ## Approach
 
 **一括実装（アトミック）**。語彙単位の分割着地は開発者裁定で禁止。実装順の内訳（設計フェーズで確定）はおよそ:
-1. 縮退表の改訂（完了 spec `emo-text-layer` の正典改訂＋追随）——負値解禁・`Relative` 実装化・`%` 追加で 4 分岐が縮む。
+1. 縮退表の改訂（完了 spec `choice-render` の正典改訂＋追随）——負値解禁・`Relative` 実装化・`%` 追加で 4 分岐が縮む。
 2. 座標解決の書字方向対応——`vertical_rl` の列送り軸原点・符号の是正（`\_l[0,0]`＝1 列目）。`draw.rs` 側の再レイアウト（`rect.left`／縦書き `rect.top` 起点の組み直し・`layout.rs:601-610` 結合コメント）と可視窓あふれ判定（`layout_visible_window_tests.rs`）との 3 者整合は bvc research §7 R-1 を参照。
 3. `%`・`@` 相対（em/% との共存込み）の新規実装。
 4. 3 書字方向 × 全語彙の決定論テスト網（現在縦書き被覆 0 からの新設）。
@@ -51,7 +53,7 @@
 - **In**:
   - `\_l[x,y]` の全座標語彙: 数値（負値含む）／省略／`em`／`lh`／`%`／`@` 相対（em/% 共存込み）。
   - 3 書字方向すべてでの座標系正典化（horizontal_tb＝従来どおり・`vertical_rl`＝SSP 2.8.83 正典・`vertical_lr`＝areka 拡張として `vertical_rl` の鏡像を維持）。
-  - 完了 spec `emo-text-layer` の縮退表（R2.4／6.5・`CursorWarnGuard`）の改訂と追随（design・境界節・steering）。
+  - 完了 spec `choice-render` の縮退表（R2.4／6.5・`CursorWarnGuard`）の改訂と追随（design・境界節・steering）。
   - 副作用のうちカーソル/行構造に閉じるもの（`\c[line]` の「`\_l` で行が分割される」規定が `\c` 実装時に成立する形の登記または実装——`\c[line]` 自体の実装状況を要件段階で実測すること）。
   - 決定論テスト（3 方向 × 全語彙・境界値・縮退経路）。
 - **Out**:
@@ -72,7 +74,7 @@
 ## Upstream / Downstream
 
 - **Upstream**:
-  - `areka-P0-emo-text-layer`（完了）——縮退表の現行正典。本 spec が改訂する。
+  - `areka-P0-choice-render`（完了）——縮退表の現行正典。本 spec が改訂する。
   - `areka-P0-balloon-vertical-canon`（bvc・旧 W6.95〔新 W11〕）——⑴ R3 で座標意味論（origin/wordwrappoint/validrect）を決定論テストで固定済みにする ⑵ **origin クランプ正準の撤去**（bvc 討議 #2 裁定・Requirement 3.10）により「実際の 1 列目」＝「宣言された `origin.x` の列」が常に一致＝本 spec の `\_l[0,0]` 着地定義（SC15）が一意 ⑶ 縦書きフィクスチャ（`vertical,1` 版）を供給。**bvc 完了後に着手するのが自然**。
   - SSP 2.8.83 ライブ ukadoc（`\_l` の縦書き節は 2.8.83 で追加＝**ukadoc-mcp スナップショット（2.8.80）に縦書き節は無い**。正典参照はライブで行うこと。bvc requirements.md の SC8・SC9・SC13〜SC15 が関連疑義）。
 - **Downstream**:
@@ -81,7 +83,7 @@
 
 ## Existing Spec Touchpoints
 
-- **Extends**: `areka-P0-emo-text-layer`（縮退表改訂＝完了 spec の正典改訂・追随義務あり）。
+- **Extends**: `areka-P0-choice-render`（縮退表改訂＝完了 spec の正典改訂・追随義務あり）。
 - **Adjacent**: `areka-P0-balloon-vertical-canon`（bvc・R4 が本 spec を追跡先として語彙登記・二重実装禁止）。`areka-P0-balloon-canon-residue`（M2 ゲート・収載範囲は系列解決と表示寿命＝本 spec と非交差）。
 
 ## Constraints
