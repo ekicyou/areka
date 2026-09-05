@@ -87,7 +87,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_25keroname:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-sylphya"
 priority = ""
 values = []
 links = []
@@ -268,7 +268,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_25property_5b_30d7_30ed_30d1_30c6_30a3_540d_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-query-channels"
 priority = ""
 values = []
 links = []
@@ -320,7 +320,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_25selfname2:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-sylphya"
 priority = ""
 values = []
 links = []
@@ -344,7 +344,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_25username:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-dialogue-tags"
 priority = ""
 values = []
 links = []
@@ -382,7 +382,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-kero-balloon"
 priority = ""
 values = []
 links = []
@@ -396,7 +396,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c1_3082_3057_304f_306f_5cu:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-kero-balloon"
 priority = ""
 values = []
 links = []
@@ -856,6 +856,7 @@ note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のイベントの返す台詞がその場に埋め込まれず、書いたつもりの本文が丸ごと現れない）。
 ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
 語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+[裁定待ち: areka-P0-property-query-channels と areka-P0-sakura-time-directives が主張。名指しは channels から time-directives への一方向だけで、その名指しは層違いで非衝突と述べるだけで分担を決めていない。裁定案は「compile 側の allowlist は time-directives・Result 置換の実行時経路は property-query-channels」——案であって決定ではなく、決めるのは統合担当]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2ccollisionmode_5d_5c_21_5benter_2ccollisionmode_2crect_5d:1"]
@@ -875,7 +876,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2cinductionmode_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-status-execution-states"
 priority = ""
 values = []
 links = []
@@ -917,7 +918,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2cpassivemode_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-status-execution-states"
 priority = ""
 values = []
 links = []
@@ -1358,7 +1359,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-query-channels"
 priority = ""
 values = []
 links = []
@@ -1456,7 +1457,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bload_2cmakoto_5d:1"]
 status = "absent"
 introduced = "2.5.58"
-owner = ""
+owner = "areka-P0-makoto-dll-host"
 priority = ""
 values = []
 links = []
@@ -1535,6 +1536,7 @@ note = """
 ログ: 出る（名前付き形は emit の Err の腕が warn!、非スコープ基準と座標算出不能は適用側が warn!、担当外の名前は debug!）。
 [転記元: doc/COMPAT_ARCHITECTURE.md の「\\![move] の名前付き --key=value 形」「\\![move] の基準 screen／primaryscreen／me／global」「\\![move] の時間指定 time>0（アニメーション付き移動）」の 3 行]
 [版: カタログの規則で拾える版番号は無い。本文に現れる 2.5 は記述例の「2.5 秒かけて移動する」という所要時間であって版番号ではないので、本文が 2 桁の版を書いている項目には数えない]
+[裁定待ち: areka-P0-surfaces-basepos（基準位置 base の解決）と areka-P0-sakura-time-directives（時間引数の枠）が別々に主張し、互いに相手を 1 度も名指ししていない。裁定案は「引数ごとに分ける」——案であって決定ではなく、決めるのは統合担当]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bmoveasync_5d:1"]
@@ -2175,7 +2177,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bquicksection_2cfalse_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -2188,7 +2190,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bquicksection_2ctrue_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -2257,7 +2259,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
@@ -2312,7 +2314,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cmakoto_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-makoto-dll-host"
 priority = ""
 values = []
 links = []
@@ -2409,7 +2411,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2czorder_5d:1"]
 status = "implemented"
 introduced = "2.3.77"
-owner = ""
+owner = "areka-P0-scope-zorder-pinning"
 priority = ""
 values = []
 links = []
@@ -2521,7 +2523,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2calpha_2c_6570_5024_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
 status = "absent"
 introduced = "2.7.52"
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -2621,7 +2623,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
@@ -2630,12 +2632,13 @@ note = """
 ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
 語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
 語彙の登記（2 つ目）: doc/COMPAT_ARCHITECTURE.md の「\\![set,balloontimeout,時間]（バルーン表示のタイムアウト時間指定）のバルーン寿命側の実導出」の行が、M1 非受理で完全な語彙と意味論の記録のみと明記している。同じ綴りを compile 側の行とバルーン寿命側の行が別の側面から扱っている。
+[分担: compile 側の allowlist は areka-P0-sakura-time-directives、バルーン寿命側の実導出は owner の areka-P0-balloon-canon-residue。上の 2 つの登記がその住み分けに当たる]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoonwait_2c_500d_7387_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -2648,7 +2651,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -2703,7 +2706,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-query-channels"
 priority = ""
 values = []
 links = []
@@ -2717,7 +2720,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_500d_7387_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -2732,7 +2735,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
 status = "absent"
 introduced = "2.7.31"
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -2756,6 +2759,7 @@ note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び 横倍率,縦倍率 が、長い側の 横倍率,縦倍率,オプション の先頭と 1 語ずつ一致する]
 [狭さ: オプション（--time／--wait）を取らない 2 引数形。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
 [根が 2 つ: この名前の群は根が 2 つに割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_500d_7387_5d:1]
+[所有の主張: areka-P0-sakura-time-directives が時間引数の語彙表でこの族を主張しているが、この行は別名なので owner は根の側に付く]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cserikotalk_2ctrue_2ffalse_5d:1"]
@@ -2905,7 +2909,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1"]
 status = "implemented"
 introduced = "2.3.77"
-owner = ""
+owner = "areka-P0-scope-zorder-pinning"
 priority = ""
 values = []
 links = []
@@ -3034,7 +3038,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -3131,7 +3135,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bunload_2cmakoto_5d:1"]
 status = "absent"
 introduced = "2.5.58"
-owner = ""
+owner = "areka-P0-makoto-dll-host"
 priority = ""
 values = []
 links = []
@@ -3271,7 +3275,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bwait_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
 status = "vocabulary-only"
 introduced = "2.8.28"
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -3326,7 +3330,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_V:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -3350,6 +3354,7 @@ note = """
 旧仕様: 本文は [旧仕様] と述べるが置き換え先を名指ししないので、置き換え先を憶測で決めず別名にしない（規則 4 の順 2）。
 [群: タグを実行しない区間]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 """
 
 [entry."ukadoc:list_sakura_script:_5c__2b:1"]
@@ -3364,6 +3369,7 @@ note = """
 ログ: 出る（compile の catch-all の debug! 記録）。
 [群: ゴーストの切り替え]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 """
 
 [entry."ukadoc:list_sakura_script:_5c__3f:1"]
@@ -3378,6 +3384,7 @@ note = """
 ログ: 出る（compile の catch-all の debug! 記録）。
 [群: タグを実行しない区間]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 """
 
 [entry."ukadoc:list_sakura_script:_5c__c:1"]
@@ -3393,6 +3400,7 @@ note = """
 旧仕様: 本文は [旧仕様] と述べるが置き換え先を名指ししない。現行形にあたる綴りは正典に実在するが、本文がそれを指していないので別名にしない（規則 4 の順 2）。
 [群: 外部を開く・別窓]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 """
 
 [entry."ukadoc:list_sakura_script:_5c__q_5bID_2c..._5d:1"]
@@ -3406,6 +3414,7 @@ note = """
 壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。区間が選択肢にならず、囲んだ文がふつうの台詞として流れる（自動改行も付かない）。
 ログ: 出る（compile の catch-all の debug! 記録）。
 [群: 選択肢の別書式]
+[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 """
 
 [entry."ukadoc:list_sakura_script:_5c__t:1"]
@@ -3421,6 +3430,7 @@ note = """
 旧仕様: 本文は [旧仕様] と述べるが置き換え先を名指ししない。現行形にあたる綴りは正典に実在するが、本文がそれを指していないので別名にしない（規則 4 の順 2）。
 [群: 外部を開く・別窓]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 """
 
 [entry."ukadoc:list_sakura_script:_5c__v_5b_30aa_30d7_30b7_30e7_30f3_5d:1"]
@@ -3435,6 +3445,7 @@ note = """
 ログ: 出る（compile の catch-all の debug! 記録）。
 [版: 本文は 2.4 と書くがカタログの規則（3 桁）で拾えないので登場した版を空のままにした。単なる世代不明ではない]
 [群: 音声合成]
+[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 """
 
 [entry."ukadoc:list_sakura_script:_5c__w_5b_6642_9593_5d:1"]
@@ -3468,7 +3479,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3490,12 +3501,13 @@ links = []
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び ID が、長い側の ID,r2,r3... の先頭と 1 語ずつ一致する]
 [狭さ: 付随参照を取らない 1 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
+[所有の主張: areka-P0-anchor-tag-canon がアンカーの 3 形を主張しているが、この行は別名なので owner は根の 2 件に付く]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_a_5bOnID_2cr0_2cr1..._5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3591,7 +3603,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1"]
 status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-cursor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3599,6 +3611,7 @@ note = """
 壊れ方: 見た目の差 — decode_tag の \"_l\" の腕が x・y を文字列のまま Cursor にし、compile が cue を出して emo-text の cursor_to_image_px が px・em・lh の非負絶対だけを解く。動く用法＝横書きの絶対座標指定。動かない用法＝縦書き（vertical_rl）では原点と符号が正典と食い違い 1 列目ではなく描画範囲の外側左方へ着地すること、および % 指定・@ 相対・負値が軸不変へ落ちて座標が動かないこと。
 ログ: 出る（% 指定・@ 相対・負値・解けない綴りのときだけ layout の warn_cursor_degrade がスコープごとに 1 度 warn! を出す。横書きの正常な絶対指定では出ない）。
 [転記元: doc/COMPAT_ARCHITECTURE.md の「\\_l の縦書き座標系の正典写像と、areka の既知非互換」の行]
+[分担: 縦書き写像と既知非互換の登記は完了済みの areka-P0-balloon-vertical-canon、全語彙の一括実装は owner の areka-P0-cursor-tag-canon。areka-P0-text-decoration-canon は \\f 装飾との相互作用の側、areka-P0-balloon-canon-residue は残件の追跡]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_m_5b0x00_5d:1"]
@@ -3626,12 +3639,13 @@ note = """
 ログ: 出る（compile の catch-all の debug! 記録）。
 [群: 表示の速さと区間]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_q:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = ""
 values = []
 links = []
@@ -3738,7 +3752,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1"]
 status = "implemented"
 introduced = "2.6.34"
-owner = ""
+owner = "areka-P0-kero-balloon"
 priority = ""
 values = []
 links = []
@@ -3750,7 +3764,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cc:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-cursor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3831,7 +3845,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5balign_2c_5bc4_305b_308b_5074_5d:1"]
 status = "vocabulary-only"
 introduced = "2.5.31"
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -3845,7 +3859,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchor.font.color_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3858,7 +3872,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchorbrushcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3872,7 +3886,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorfontcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3885,7 +3899,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchormethod_2c_63cf_753b_65b9_6cd5_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3898,7 +3912,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchornotselectbrushcolor_2c_8272_6307_5b9a_5:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3912,7 +3926,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectfontcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3925,7 +3939,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectmethod_2c_63cf_753b_65b9_6cd5_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3938,7 +3952,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectpencolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3951,7 +3965,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectstyle_2c_5f62_72b6_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3964,7 +3978,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorpencolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3977,7 +3991,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorstyle_2c_5f62_72b6_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -3990,7 +4004,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchorvisitedbrushcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -4004,7 +4018,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedfontcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -4017,7 +4031,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedmethod_2c_63cf_753b_65b9_6cd5_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -4030,7 +4044,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedpencolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -4043,7 +4057,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedstyle_2c_5f62_72b6_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-anchor-tag-canon"
 priority = ""
 values = []
 links = []
@@ -4056,7 +4070,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4069,7 +4083,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4082,7 +4096,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursorcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5bcursorbrushcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4096,7 +4110,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursorfontcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4109,7 +4123,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursormethod_2c_63cf_753b_65b9_6cd5_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4122,7 +4136,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5bcursornotselectbrushcolor_2c_8272_6307_5b9a_5:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4136,7 +4150,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectfontcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4149,7 +4163,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectmethod_2c_63cf_753b_65b9_6cd5_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4162,7 +4176,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectpencolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4175,7 +4189,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectstyle_2c_5f62_72b6_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4188,7 +4202,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursorpencolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4201,7 +4215,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bcursorstyle_2c_5f62_72b6_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-choice-marker-styling"
 priority = ""
 values = []
 links = []
@@ -4214,7 +4228,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bdefault_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4227,7 +4241,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bdisable_5d:1"]
 status = "absent"
 introduced = "2.5.51"
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4240,7 +4254,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bheight_2c_6570_5024_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4253,7 +4267,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bitalic_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4266,7 +4280,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bname_2c_30d5_30a9_30f3_30c8_540d_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4279,7 +4293,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5boutline_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4292,7 +4306,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4305,7 +4319,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowcolor_2cnone_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4318,7 +4332,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowstyle_2c_5f62_614b_6307_5b9a_5d:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4331,7 +4345,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bstrike_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4344,7 +4358,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bsub_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4357,7 +4371,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bsup_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4370,7 +4384,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bunderline_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4384,7 +4398,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bvalign_2c_5bc4_305b_308b_5074_5d:1"]
 status = "vocabulary-only"
 introduced = "2.6.19"
-owner = ""
+owner = "areka-P0-text-decoration-canon"
 priority = ""
 values = []
 links = []
@@ -4625,7 +4639,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5ct:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-status-execution-states"
 priority = ""
 values = []
 links = []
@@ -4674,12 +4688,13 @@ note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数なしの形が、長い側の 1 引数形の先頭と一致する]
 [狭さ: 内容を残す指定を書けない引数なし形。areka はこの綴りを decode_bare の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
+[所有の主張: areka-P0-balloon-canon-residue と areka-P0-text-decoration-canon が互いを名指しして主張しているが、この行は別名なので owner は根の \\x[noclear] に付く]
 """
 
 [entry."ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
@@ -4687,6 +4702,7 @@ note = """
 壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。クリック待ちにならず、会話が止まらずに最後まで流れる。
 ログ: 出る（compile の catch-all の debug! 記録）。
 語彙の登記: doc/COMPAT_ARCHITECTURE.md の「\\x ／ \\x[noclear]（バルーンをクリック待ちにする）」の行が、M1 非実装で完全な語彙と意味論の記録だけがあると明記して名指ししている。
+[分担: クリック待ちの意味論は owner の areka-P0-balloon-canon-residue、\\f 装飾の解除と保持の側は areka-P0-text-decoration-canon。両者は互いを名指しして登記し合っている]
 """
 
 [entry."ukadoc:list_sakura_script:_5cz:1"]
