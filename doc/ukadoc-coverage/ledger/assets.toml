@@ -2370,49 +2370,85 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 """
 
 [entry."ukadoc:descript_ghost:balloon.defaultsurface_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの初期表示面の宣言を受け取る経路を持たず、どのバルーンも面 ID 0 の絵から出す（面 ID 0 が必ずあることを areka-emo-present の balloon::resolve_balloon_faces が施行し、その先頭の面がそのまま最初の見た目になる）。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
+担当 spec は areka-P0-balloon-canon-residue（brief が番号を付けている項目のうち、バルーンの初期面を指定する語彙の非追従を扱う項目）。
+"""
 
 [entry."ukadoc:descript_ghost:balloon.dontmove_2ctrue:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの位置合わせを切る宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka のバルーンは常に本体の窓に付いて動く（areka の placement::follow が本体の移動をバルーンへ伝える）。切ると書いても付いて動くので、作者が意図した見え方にはならない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:balloon.syncscale_2ctrue:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はバルーンの拡大率を本体に合わせる宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka のバルーンの拡大率は、画面の DPI とバルーンの定義が申告する推奨 DPI から決まる（areka の placement::source が読む）。ゴースト側から連動を強制する道は無い。
+正典本文は登場を 2.7 RC1 と書いているが、カタログの版番号の欄は空である。登場した版はカタログから選ぶ規則に従って空のままにした。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:balloon_2c_30d0_30eb_30fc_30f3_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はゴーストが標準として名指しするバルーンの名前を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
+バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:char_2a.balloon.defaultsurface_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はキャラクタ番号で指すスコープのバルーンの初期表示面の宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
+担当 spec は areka-P0-balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げているのは接頭辞の無い綴りと相方側の綴りだけで、キャラクタ番号で指す綴りを挙げていない（沈黙ルール対応表の行は挙げている）。
+1 つ補いがある——読まれないのはこの欄が宣言する値であって、`charN.` という綴りそのものは数えられている。areka の placement::config::detect_scopes が起点とシェルの両方の表を走査し、`charN.` で始まるキーを見つけると（番号の取り出しは areka の placement::config::char_scope_of）その番号のスコープを立てる。宣言した面の値には何の効果も無いが、綴りを書いたこと自体はキャラクタの人数には効く。
+"""
 
 [entry."ukadoc:descript_ghost:char_2a.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
@@ -2467,6 +2503,7 @@ values = []
 links = []
 note = """
 areka の placement::source::char_name_scope_of が番号を取り出し、同 build_titles が 2 番以降のスコープの窓の題に使う（窓を作る placement::spawn まで届く）。0 番と 1 番の題は `sakura.name`／`kero.name` が正本で、こちらは写さない。
+シェルの descript にも同じ綴りの項目があるが、areka が窓の題に使う名前はゴーストの descript の側からしか採らない——上に書いた題の組み立ては起点の descript の表だけを走査する。だから同じ綴りでもページごとに状態が割れる。名前で引かず、ページを決めてから引くこと。
 """
 
 [entry."ukadoc:descript_ghost:char_2a.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
@@ -2481,13 +2518,21 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:char_2a.seriko.defaultsurface_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はキャラクタ番号で指すスコープの初期サーフェス番号の宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+1 つ補いがある——`charN.` という綴りそのものは捨てられていない。スコープの数え上げ（areka の placement::config::detect_scopes）は起点とシェルの両方の表から `charN.` で始まるキーを拾い、その番号のスコープを立てる。拾われるのは番号だけで、この欄が宣言したサーフェス番号は誰も受け取らない。
+"""
 
 [entry."ukadoc:descript_ghost:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
 status = "implemented"
@@ -2501,130 +2546,231 @@ areka-parsers の charset::prescan_charset が大小文字を無視して引き�
 """
 
 [entry."ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はゴーストの作者名を読む経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインの SHIORI の資源の側にも同名の項目がある（そちらは別の台帳の持ち物で、areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:craftmanurl_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はゴーストの作者の連絡先を読む経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインのプロパティの側にも同名の項目がある（areka-sylphya の vocab::GENERIC_PROP_NAMES が語彙として持っている）。SHIORI の資源の側にこの名前は無い——そちらにあるのは `craftman` と `craftmanw` だけである。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:craftmanw_2c_4f5c_8005_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はゴーストの作者の表示名を読む経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインのプロパティの側（areka-sylphya の vocab::GENERIC_PROP_NAMES）にも SHIORI の資源の側（同じクレートの vocab::shiori_resource）にも同名の項目がある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.41"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵をゴーストごとに差し替える仕組みを持たず、この欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+この見出しは新旧の綴りを 1 つにまとめているので、別名の行は作らない。登場した版はカタログが持つ唯一の値を写したが、正典本文がその版として書いているのは `mousecursor` と書けるようになった時期であって、欄そのものが現れた時期ではない。
+バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:default.balloon.path_2c_30d1_30b9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は標準として使うバルーンの相対パスの宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
+バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:don_27t_20need_20bind_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は着せ替えを丸ごと切る宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+着せ替えの既定値はシェルの descript から areka-parsers の package::resolve が転記しており、切ると書いてあっても転記も適用も止まらない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:don_27t_20need_20onmousemove_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの移動の通知が要らないという宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka はマウスの移動の通知を間引いたうえで送る（areka の input_events::throttle が送出の条件を決める）。要らないと書いてあっても送り続ける。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:don_27t_20need_20seriko_20talk_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は口パクの仕掛けを切る宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+もっとも areka の動きの再生が駆動するのはまばたきの語だけで（areka-seriko の table::AnimationTable）、口パクの語は元から動かない。宣言は捨てられるが、見た目の結果はたまたま作者の意図と一致する。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:homeurl_2cURL:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはゴーストを配布元から取り直す仕組みが無く、その宛先を書くこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもあり、別ドメインのプロパティの側（areka-sylphya の vocab::GENERIC_PROP_NAMES）にも SHIORI の資源の側（同じクレートの vocab::shiori_resource）にもある。名前で引かず、ページを決めてから引くこと。
+この欄が成り立つには配布と更新の仕組みが要る。areka にはそれが無い。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:icon.minimize_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はゴーストを最小化しないので、最小化したときの絵を決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの窓は最小化の箱を持たない形で作られ、最小化を命じる経路も本番のコードに無い（areka の placement::spawn）。通知領域に絵を出す画面も無い。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:icon_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は通知領域にゴーストの絵を出す画面を持たず、この欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:id_2cID_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はゴーストの識別名を読む経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインのプロパティの側にもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka にはゴーストの配布ファイルを受け入れる導線が無く、入れてよい相手の名前を並べるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka-parsers の package::resolve は前置きで install.txt に触れないと自ら宣言しており、入れる側の仕組みは 1 つも無い。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+入れる・更新する・配布ファイルを作るまわりの項目は、どの spec も担当していない。
+"""
 
 [entry."ukadoc:descript_ghost:kero.balloon.defaultsurface_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は相方側のバルーンの初期表示面の宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
+担当 spec は areka-P0-balloon-canon-residue（brief が名前を挙げている綴りのうち相方側にあたる）。
+"""
 
 [entry."ukadoc:descript_ghost:kero.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
@@ -2679,6 +2825,7 @@ values = []
 links = []
 note = """
 areka-parsers の package::resolve が `GhostNames::kero_name` へ写し、areka-ghost の sylphya_wiring::derive_flat_statics が `keroname` として配り、areka の placement::source::build_titles が scope 1 の窓の題に、placement::config::detect_scopes が相方の有無の判定に使う。
+シェルの descript にも同じ綴りの項目がある。areka が相方の名前として読むのはゴーストの descript の側だけで、シェル側の同じ綴りは名前としては読まれない——ただし `kero.` で始まるキーがシェルの descript にあること自体は、上に書いた相方の有無の判定が材料に使う（名前の値ではなく綴りの有無だけを見る）。名前としての状態はページごとに別に決まるので、名前で引かず、ページを決めてから引くこと。
 """
 
 [entry."ukadoc:descript_ghost:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
@@ -2693,94 +2840,176 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:kero.seriko.defaultsurface_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は相方側の初期サーフェス番号の宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-makoto-dll-host"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は台詞を書き換える翻訳の DLL を呼ぶ仕組みを持たず、そのファイル名を書くこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当 spec は areka-P0-makoto-dll-host（brief がゴースト側とシェル側の両方の `makoto,` を自分の範囲に挙げている）。
+"""
 
 [entry."ukadoc:descript_ghost:menu.font.height_2c_30d5_30a9_30f3_30c8_30b5_30a4_30ba:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には作り付けのメニューが無く、その文字の大きさを決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
+同じ名前の見出しがシェルの descript にもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:menu.font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には作り付けのメニューが無く、その書体を決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
+同じ名前の見出しがシェルの descript にもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:mousecursor.arrow_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.11"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:mousecursor.grip_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.11"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+バルーンの descript にはこの見出しが無く、ゴーストの側だけにある。同じ族でもページごとに項目の有無が違うので、名前で引かないこと。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:mousecursor.hand_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.11"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+バルーンの descript にはこの見出しが無く、ゴーストの側だけにある。同じ族でもページごとに項目の有無が違うので、名前で引かないこと。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:mousecursor.text_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.41"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:mousecursor.wait_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.43"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
+選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
+別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:name.allowoverride_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はシェル側の名前で上書きしてよいかの宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+正典はこの欄の既定を「シェル側の `sakura.name`／`kero.name` を使う」と定めているが、areka は名前をゴーストの descript からしか採らない（areka-parsers の package::resolve）。シェルの descript を読むのは areka-ghost の config::resolve_shell_name で、そこが引くのは `name` の欄だけである。つまり areka は宣言の有無にかかわらず、常に上書きしない側の振る舞いをする。
+これが名前の族でゴースト側とシェル側の状態が割れる理由である——ゴーストの descript の `sakura.name`／`sakura.name2`／`kero.name` は読まれて実装済み、シェルの descript の同じ綴りは名前としては読まれない。シェルの `name`（シェル名）だけは起動時のシェル名という別の用途で読まれており実装済みである。バルーンの descript の `name`（バルーン名）はどこからも読まれない。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+完了 spec の areka-P0-sylphya は、この欄の解決規則をどの spec が持つかを未決のまま残している。担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1"]
 status = "vocabulary-only"
@@ -2791,52 +3020,93 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka-parsers の package::resolve が `GhostNames::name` へ写すだけで、この欄を読む本番の経路が 1 つも無い（読むのは同クレートのテストのみ）。名前は登記されているが受け取っても何もしない。
+この綴りは重なりがいちばん広い——同じ綴りの見出しが本台帳の別ページ（バルーン・シェル・ヘッドライン・インストール指示・プラグイン・surfaces.txt）にもあり、別ドメインのプロパティ（areka-sylphya の vocab::GENERIC_PROP_NAMES）と SHIORI の資源（同じクレートの vocab::shiori_resource）にもある。areka の読み手が別々なので状態も割れる——ゴースト名はここへ写されるだけで誰も読まない、シェル名は areka-ghost の config::resolve_shell_name が読んで起動時のシェル名になる、バルーン名はどこからも読まれない。名前で引かず、ページを決めてから引くこと。
 """
 
 [entry."ukadoc:descript_ghost:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.10"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には説明文を開く画面が無く、その文字コードの宣言を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+同じページの `charset` は areka-parsers の charset::prescan_charset が読んでおり実装済みである。名前は似ているが別の欄で、状態も割れる。ページと欄を決めてから引くこと。
+同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。
+文字コードを一手に引き受ける areka-P0-charset-canon の brief は、この欄を対象外と宣言している（説明文を表示する機能が無いため）。担当は決まっていない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_ghost:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には説明文を開く画面が無く、そのファイル名を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+この欄が成り立つには、入れる導線か、右クリックで開く作り付けのメニューが要る。どちらも areka には無い。
+同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:recommended.balloon.path_2c_30d1_30b9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はゴーストが薦めるバルーンの相対パスを受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
+バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:recommended.balloon_2c_30d0_30eb_30fc_30f3_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はゴーストが薦めるバルーンの名前を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
+薦めから外れたバルーンへ切り替えたときに強い警告を出す仕掛けも無い。
+バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:sakura.balloon.defaultsurface_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は本体側のバルーンの初期表示面の宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
+沈黙ルール対応表のこの行も areka-P0-balloon-canon-residue の brief も、本体側の綴りを名前としては挙げていない。ただし行の裁量の欄は各スコープの初期表示面を一括で扱うと書いており、brief の項目もバルーンの初期面を指定する語彙そのものを扱うと書いているので、この綴りも同じ行・同じ担当が引き受けていると読んだ。
+担当 spec は areka-P0-balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げている綴りは正典の綴りをすべて覆っていない。
+"""
 
 [entry."ukadoc:descript_ghost:sakura.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
@@ -2891,6 +3161,7 @@ values = []
 links = []
 note = """
 areka-parsers の package::resolve が `GhostNames::sakura_name2` へ写し、areka-ghost の sylphya_wiring::derive_flat_statics が `selfname2` として配る（本番の起点は areka-ghost の runtime::boot）。
+シェルの descript にも同じ綴りの項目がある。areka がもう 1 つの呼び名として配るのは起点の descript の宣言だけで、シェル側の同じ綴りは一度も引かれない。同じ綴りでも状態はページごとに別に決まるので、名前で引かず、ページを決めてから引くこと。
 """
 
 [entry."ukadoc:descript_ghost:sakura.name_2c_540d_524d:1"]
@@ -2902,6 +3173,7 @@ values = []
 links = []
 note = """
 areka-parsers の package::resolve が `GhostNames::sakura_name` へ写し、areka-ghost の sylphya_wiring::derive_flat_statics が `selfname` として配り（本番の起点は areka-ghost の runtime::boot）、areka の placement::source::build_titles が scope 0 の窓の題に使う。
+シェルの descript にも同じ綴りの項目があるが、areka が本体の名前として採るのはゴーストの descript の側だけである——上に書いた読み取りが引くのは起点の descript から作った表 1 つで、シェルの descript は見ない。だから同じ綴りでもページごとに状態が割れる。名前で引かず、ページを決めてから引くこと。
 """
 
 [entry."ukadoc:descript_ghost:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
@@ -2916,13 +3188,20 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:sakura.seriko.defaultsurface_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は本体側の初期サーフェス番号の宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
@@ -2947,85 +3226,146 @@ areka-parsers の package::resolve がシェルの置き場所の名前として
 """
 
 [entry."ukadoc:descript_ghost:shiori.cache_2c_6570_5024:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.4.73"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は SHIORI を読み込んだまま残すかどうかの宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka にはゴーストを切り替えても SHIORI を生かしたまま残す仕組みが無く、この欄が指す条件そのものが起きない。
+登場した版はカタログが持つ古い方を採った。正典本文が挙げる版は既定値がどこで入れ替わったかを示すもので、欄が現れた版そのものは書かれていない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:shiori.encoding_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-charset-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は SHIORI とのやり取りに使う文字コードの宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka の SHIORI との受け渡しは UTF-8 に固定されている（shiori-host32-host の shiori3 が持つ符号は 1 つだけ）。宣言しても切り替わらないので、Shift_JIS でしか話せない栞とは文字が壊れる。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当 spec は areka-P0-charset-canon（brief がこの欄の解析を自分の範囲に挙げている）。
+"""
 
 [entry."ukadoc:descript_ghost:shiori.escape_unknown_2c0_2f1:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.89"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は文字コードに移せない文字を逃がす書き方の宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka の SHIORI との受け渡しは UTF-8 に固定されている（shiori-host32-host の shiori3 が持つ符号は 1 つだけ）。移せない文字が出る場面そのものが起きない。
+文字コードを一手に引き受ける areka-P0-charset-canon の brief は、この欄を自分の範囲にも対象外にも挙げていない。要件の定めどおり担当の欄は空にした。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_ghost:shiori.forceencoding_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-charset-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は栞が返す文字コードより宣言を優先させる指定を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka の SHIORI との受け渡しは UTF-8 に固定されている（shiori-host32-host の shiori3 が持つ符号は 1 つだけ）。優先させる先の切り替えそのものが無いので、宣言しても何も変わらない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当 spec は areka-P0-charset-canon（brief がこの欄の解析を自分の範囲に挙げている）。
+"""
 
 [entry."ukadoc:descript_ghost:shiori.logo.align_2c_4f4d_7f6e_60c5_5831:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は好感度の絵柄を出す画面を持たず、その背景画像の基準点を決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:shiori.logo.file_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.4.26"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は好感度の絵柄を出す画面を持たず、その背景に使う画像のファイル名を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+登場した版はカタログが持つ古い方を採った。正典本文が挙げる版は、複数の絵を並べられるようになった時期と暗い配色に対応した時期で、欄が現れた版そのものは書かれていない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:shiori.logo.x_2cX_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は好感度の絵柄を出す画面を持たず、その背景画像の横の位置を決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:shiori.logo.y_2cY_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は好感度の絵柄を出す画面を持たず、その背景画像の縦の位置を決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:shiori.version_2c_30d0_30fc_30b8_30e7_30f3:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は SHIORI の約束事の版を指定する宣言を受け取る経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka がつなぐ約束事は SHIORI/3 に固定されている（shiori-host32-host の shiori3 が組み立てる要求行）。古い版でしか話せない栞を指名する道は無い。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1"]
 status = "implemented"
@@ -3039,49 +3379,81 @@ areka-parsers の package::resolve が `ShioriMount::file` へ写し、areka-gho
 """
 
 [entry."ukadoc:descript_ghost:sstp.allowcommunicate_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には他のゴーストから話しかけられる口が無く、その受け入れの可否を決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:sstp.allowunspecifiedsend_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には相手を指名しない呼びかけを受ける口が無く、その受け入れの可否を決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:sstp.alwaystranslate_2c_6570_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka には外から台詞を送り込む口が無く、それを常に翻訳へ回すかを決めるこの欄を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+翻訳の後半を持つ areka-P0-makoto-dll-host の brief は、この欄を対象外と宣言している（外から台詞を送り込む口が未実装であることを理由に挙げている）。要件の定めどおり担当の欄は空にした。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_ghost:title_2c_8868_793a_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka は起動の記録を人に見せる画面を持たず、そこに出す表示名を読む経路も無い。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当は決まっていない。
+"""
 
 [entry."ukadoc:descript_ghost:type_2c_7a2e_5225:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-package-mount"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。
+areka はファイルセットの種別を読む経路を持たない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka がゴーストだと決めるのは置き場所だけで、起点は `ghost/master/descript.txt` に固定されている（areka-parsers の package::resolve）。正典も SSP は置き場所で識別すると書いている。正典が省略できないと定める欄を読まないので、種別の違うファイルセットを渡されても気づかない。
+同じ名前の見出しがバルーン・シェル・プラグイン・インストール指示の descript にもある。名前で引かず、ページを決めてから引くこと。
+両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
+担当 spec は areka-P0-package-mount。ただし担当 spec の記述が古い——同 brief はゴーストの descript を読む欄としてこの欄を挙げているが、着地した読み取りは引いていない。
+"""
 
 [entry."ukadoc:descript_headline:alwaysdisplay_2c_6570_5024:1"]
 status = "absent"

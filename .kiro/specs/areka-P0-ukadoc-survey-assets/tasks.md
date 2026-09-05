@@ -80,7 +80,7 @@
   - _Requirements: 2.1, 2.8, 7.5, 7.6_
   - _Depends: 3.1_
 
-- [ ] 3.4 ゴーストの descript を仕訳する
+- [x] 3.4 ゴーストの descript を仕訳する
   - 一致で決まらなかったゴーストの項目に状態・登場した版・備考を入れる
   - ゴーストとシェルの両方にある名前系の項目は、areka がゴースト側だけを読むために状態が割れる理由を備考に書く
   - 外部呼び出しに関わる項目は、要件確定後に現れた担当 spec を担当の欄に取り込む
@@ -294,3 +294,8 @@
 - 3.3: ⚠**転記元の引用は「その行が本当にその欄を引き受けているか」まで確かめる**。`use_input_alpha` に見直し表の行を引いたが、その行が defer と言っているのは通信・SSTP・オンライン表示で、入力ボックスは含まれない。但し書きを添えても断定文は残るので引用ごと落とした。`overlay_outside_balloon` は正典本文が「オンライン表示・SSTP マーカー等」と書くので引用が成立する。
 - 3.3: 担当は 45 件すべて空（要件 7.5）。`areka-P0-balloon-parse` の Scope Out が cursor/anchor/number/arrow/marker/sstp/communicatebox を明示除外し、`areka-P0-text-decoration-canon` は `communicatebox.font.*`／`number.font.*`／`sstpmessage.font.*` の **14 件**を Adjacent（自分の In ではない）と宣言している。この 14 件が誰の持ち物にもならない事実は roadmap への申し送りとして作業用 `corrections-for-9-8.md` §8 に登記済み。
 - 3.3: 設計 D9 の確認——`writing_mode`・`budoux_newline` はカタログに id・見出しとも 0 件。台帳にも行を作っていない（`descript_balloon` は 162 行のまま）。
+- 3.4: `descript_ghost` 74/74 完走（残り 50 件はすべて `absent`）。担当を書いたのは 8 件——`areka-P0-balloon-canon-residue`（`*.balloon.defaultsurface` 4 綴り）・`areka-P0-charset-canon`（`shiori.encoding`／`shiori.forceencoding`）・`areka-P0-makoto-dll-host`（`makoto`）・`areka-P0-package-mount`（`type`）。設計 §8 が言う「要件確定後に現れた 2 本」のうち本ページで取り込むのは `makoto-dll-host` だけで、`translate-pipeline` の相手は `ukadoc:manual_translator`（3.8 の分）。
+- 3.4: 6.4 の是正候補が 3 件増えた——⑴ `areka-P0-balloon-canon-residue` の brief 項目 3 は 2 綴りしか挙げないが正典は 4 綴り、⑵ `areka-P0-package-mount` の brief In は `type` を解析キーに挙げるが着地した `package::resolve` は読んでいない（`map.get` 6 か所を全数確認）、⑶ `areka-P0-charset-canon` の brief が `shiori.escape_unknown` に沈黙。いずれも該当項目の備考に「担当 spec の記述が古い」を記入済み。
+- 3.4: ⚠**既分類の項目でも「備考の追記」は蒸し返しに当たらない**。要件 7.6 が名指しする `name`／`sakura.name`／`sakura.name2`／`kero.name`／`char*.name` の 5 件は 2.1 が分類済みだったが区別が書かれておらず、3.4 の完了の目印を満たしていなかった。`status`・`priority` 等を動かさず備考だけ足すのは規律に反しない。
+- 3.4: `kero.name` の例外——シェル側の `kero.` で始まるキーは**名前としては読まれない**が、**綴りの有無**が相方の有無の判定に使われる（`areka` の `placement::config` が `shell_kv.keys().any(|k| k.starts_with("kero."))`）。同様に `charN.`（N≥2）は値が捨てられる一方、綴り自体がスコープの数え上げに効く（`detect_scopes` → `char_scope_of`）。「読まれない」と言い切る前にこの 2 つを疑うこと。
+- 3.4: 名前の重なりの主張は作業用 `sweep_collisions_33.py` の主張表（バルーン側＋ゴースト側 56 件）が機械で守る。**新しい重なりを備考に書いたら必ず表に行を足す**——表に無い主張は守られない。
