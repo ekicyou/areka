@@ -108,6 +108,8 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 6. The SHIORI ドメイン調査 shall areka の内部でだけ使う名前（`OnTalk`・`OnHour`・`OnMenuBack`）について台帳の行を作らず、最も近い正典項目の `note` に areka 側の扱いを書く。
 7. When 更新に関わる項目を仕訳する, the SHIORI ドメイン台帳 shall 名前が `OnUpdate` で始まる 26 項目を 1 つの群として扱い、群としての壊れ方・テーマ・優先度を揃える。
 8. The SHIORI ドメイン台帳 shall 各イベントの発火条件の源（descript のキー・プロパティ・さくらスクリプトのタグ・OS の事象・利用者の操作）を `links` に登記する。
+   **（2026-09-06 の訂正・実装時に確定）** 登記できる相手は**カタログに id がある項目に限られる**（要件 8.4 が「相手の id が正典に実在すること」を求めるため）。そこで実装は、**正典本文が相手を逐語で挙げている項目だけ**を登記した。**OS の事象と利用者の操作は登記していない**——それらはカタログに id を持たず、書こうにも書けないからである。実測では `list_shiori_event` の 290 行のうち `links` を持つのは **54 行**（台帳全体では **99 行に 128 本**）。向きは「イベントの行に書き、相手をタグ・設定キー・プロパティにする」で統一した（要件 8.3 が他ドメインの行を作ることを禁じているため、この向き以外は取れない）。
+
 9. When 状態を決める, the SHIORI ドメイン調査 shall 判断の根拠となる areka 側の場所を `note` にファイルパスと定義名（例: `events.rs` の `ALLOWED_EVENT_IDS`・`shiori3.rs` の `parse_response`）で書き、行番号は書かない（隣の spec がファイルを整理すると古くなり、台帳の行番号は誰も検査しないため。上流 要件 2.3・5.1 と同じ考え方。開発者裁定 2026-09-03 議題 1）。書く対象は `implemented`・`degraded`・`vocabulary-only` の行と群の共通の `note` に限り、`absent` の各行には根拠を繰り返さない（「許可表に無い」の 1 か所で足りる）。書く前にその場所を実際に読んで確かめる義務は変わらない。
 10. The SHIORI ドメイン台帳 shall `memo_shiorievent` の 1 項目にも状態を与え、それがイベント一覧の補足であることを `note` に書く。
 11. When 台帳を確定させる, the SHIORI ドメイン調査 shall 正典の 290 項目と既存のカタログ `doc/shiori/fragments/events/` の 287 項目を項目 id 単位で突き合わせ、差の 3 件（着手時の実測では `OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`。いずれも正典にあって断片に無く、逆向きは 0 件）を該当する行の `note` に記録する。
@@ -172,6 +174,8 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 3. Where 項目にテーマを付けた, the SHIORI ドメイン台帳 shall `note` に「無いと利用者が失うもの」を 1 文で書く。
 4. The SHIORI ドメイン台帳 shall テーマを付けない既定の群（`list_shiori_event_ex` の 168・`OnBasewareUpdating`／`OnBasewareUpdated`・`property.get`／`property.set`・HEADLINE）について、その理由を `note` に書く。
 5. The SHIORI ドメイン台帳 shall `priority` に段階 1 文字（A〜E）と数値を仮置きし、最終決定が `ukadoc-coverage-roadmap` にあることを前提とする。
+   **（2026-09-06 の訂正・実測を明記）** 仮置きが入るのは **677 行のうち 484 行**であり、**193 行は意図的に空である**。空にしたのは `implemented` 21・`alias` 3・`not-applicable` 169 の**ちょうど 3 つの状態**の行で（21＋3＋169 ＝ 193）、設計 DD-11 の「群→段階の表」がこの 3 つに `""` を与えているためである——実装済みの項目・別名の行・areka が送信元でない項目には、着手の順番を考える作業がそもそも残っていない。**この 193 は数え落としではなく判断の結果である。** 空欄は機械の検査に現れない（道具に `priority` を照らす所見の種別が無い）ので、ここに明示して残す。
+
 6. The SHIORI ドメイン台帳 shall 各項目の壊れ方の段（黙って壊れる／明示的なエラーになる／見た目が違うだけ）を `note` に書き、その根拠として「どのログが出るか・出ないか」を添える。
 7. The SHIORI ドメイン調査 shall 優先度の 4 つの根拠の序列（上流 要件 4.7）を入れ替えない。
 
@@ -194,7 +198,9 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 3. Where 正典の名前をそのまま並べた語彙表である（`crates/areka-sylphya/src/vocab/shiori_resource.rs` の 159 要素など）, the SHIORI ドメイン調査 shall 表の先頭にページの URL を 1 つ置き、要素ごとの URL は置かない。
 4. Where 項目が実装済みでない, the SHIORI ドメイン調査 shall ソース側に何も書かない。
 5. The SHIORI ドメイン調査 shall 説明文を伴わない 1 行のコメントだけを追加し、実行時に評価される記述（処理・分岐・値）を 1 行も追加・変更・削除しない。
-6. When コメントを追加する, the SHIORI ドメイン調査 shall 既存の逐語一致のテスト（`crates/areka-kanade/src/schedule/events_tests.rs:177-192`・`crates/areka-kanade/src/schedule/resources.rs:113-121`・`crates/areka-sylphya/src/vocab/shiori_resource.rs:222`・`crates/areka-sylphya/src/ledger_key_determinism_tests.rs:200-205`）が緑のままであることを確かめる。
+6. When コメントを追加する, the SHIORI ドメイン調査 shall 既存の逐語一致のテスト（`events_tests.rs` の `allowed_event_ids_are_exactly_the_eleven_and_exclude_ontalk_onhour`・`resources.rs` の `allowed_resource_ids_are_exactly_username`・`shiori_resource.rs` の `shiori_resource_ids_has_159_entries`・`ledger_key_determinism_tests.rs` の `criterion_ledger_counts_exact`）が緑のままであることを確かめる。
+   **（2026-09-06 の訂正）** この 4 本を当初は行番号で指していたが、**本 spec 自身のコメント追加で 2 か所が 1 行ずれた**（`resources.rs` の 1 本と `shiori_resource.rs` の 1 本がそれぞれ 1 行下へ。定義名は動いていない）。開発規律「引用は行番号でなく何の定義行かで指す」に従い、上のとおり**定義名で指す形へ書き換えた**。以後この 4 本は名前で引き、行番号を書かない。
+
 7. When コメントを追加する, the SHIORI ドメイン調査 shall 触れたファイルが 1 ファイル 1,000 行の上限を超えないことを確かめる（上限の見張りは `crates/log-capture-kit/tests/workspace_scan/mod.rs:38` と `crates/log-capture-kit/tests/file_length_guard_test.rs:145`）。
 8. The SHIORI ドメイン台帳 shall 証拠の欄を持たない（証拠は上流の検査の出力に現れる）。
 9. If ある項目を `implemented` としたいのに定義箇所が特定できない, then the SHIORI ドメイン調査 shall その項目を `implemented` とせず、`vocabulary-only` または `degraded` として `note` に理由を書く。
@@ -225,6 +231,8 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 
 #### Acceptance Criteria
 1. The SHIORI ドメイン調査 shall areka の実行時の振る舞いを変えない（追加するのは要件 9 のコメント行だけ）。
+   **（2026-09-06 の訂正・実装時の是正を例外として追記）** 括弧書きの「要件 9 のコメント行だけ」には例外が 1 つある。本 spec は上流の常時テスト 2 ファイル `crates/ukadoc-survey/tests/consistency/checks.rs` と `crates/ukadoc-survey/tests/consistency/values_md.rs` を是正した（計 5 件）。この 2 ファイルは「正典 URL はソースのどこにも置かれていない」「台帳は全行が未分類」という**着手前の実データを前提に建っており**、本 spec が要件 9.1／9.2 のとおり URL を置き台帳を埋めた瞬間に**恒久的に赤**になった。上流 spec `areka-P0-ukadoc-survey-toolkit` は `.kiro/specs/completed/` に封書済みで開き直せないため、本 spec が是正する以外に緑へ戻す道が無い。**触れたのはこの 2 ファイルだけで、道具の `src/` と兄弟の `crates/ukadoc-survey/tests/consistency/perturb.rs` は 1 行も変えていない。** どちらもテストであり、判定そのもの（製品側の検査）は 1 行も緩めていないので、**areka の実行時の振る舞いを変えないという本文はそのまま成り立つ**。詳細は `design.md` の `Boundary Commitments`。
+
 2. The SHIORI ドメイン調査 shall 他ドメインの台帳・報告・ブリーフィング文書を編集せず、他ドメインの項目の行を作らない。
 3. Where 既存の spec（`areka-P0-status-execution-states`・`areka-P0-property-query-channels` ほか）が同じ項目を所有している, the SHIORI ドメイン台帳 shall `owner` にその spec 名を書くだけとし、その spec の判断を上書きしない。
 4. If 既存の spec の brief に正典と食い違う記述を見つける, then the SHIORI ドメイン調査 shall その brief を書き換えず、是正の候補として `note` またはブリーフィング文書に記録する。
