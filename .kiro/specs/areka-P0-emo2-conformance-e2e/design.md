@@ -36,10 +36,9 @@
 
 ### Out of Boundary
 
-- 走行で見つかった欠陥の是正コード（都度切る個別仕様が持つ）。
-- `crates/` の本番コード（`#[cfg(test)]` でない経路）への一切の改変。
+- 本仕様の 1 ウェーブで着地できない規模の欠陥の是正コード（都度切る個別仕様が持つ）。**2026-09-06 第 2 回改訂**: 着地できるものは本仕様が直す（D13・D14）——旧「`crates/` の本番コードへの一切の改変」は撤回。
 - 間欠的な赤の根治（`areka-P0-zorder-chain-residue` A-1／A-2）。
-- 上流の確定済み期待値の見直し（本仕様は確かめる側であり、裁定を覆さない）。
+- 上流の確定済み期待値の見直し（本仕様は確かめる側であり、裁定を覆さない）——ただし**開発者が実機の目視で覆した裁定**は本仕様が新しい正典の置き場になる（2026-09-06・帯の 2 画素許容→D13）。完了置き場の文書は改変しない。
 - 完了置き場（`.kiro/specs/completed/`）の文書の改変。
 - `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表（編成側で「誰も触らない」と決まっている・`roadmap.md:105`）。
 
@@ -177,6 +176,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs` — 同形の兄弟。`:145-156` の待ちが表示記録の非空しか見ないまま `:185-196` が 5 要素を等値照合する形を、S3 と同じ「条件が満たされるまで待つ」形へ更新（R9.2・**2026-09-04 の開発者裁定で追加**＝requirements.md「改訂」節 2）。等値照合そのものは変えない。
 - `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` — `:369` と `:740` の 2 本へ理由付きの `#[ignore]` と環境変数の門を付与（R9.3）。判定ロジックは 1 行も変えない。
 - `crates/wintf/src/runtime/tick_bridge.rs` — `:346` の 1 本へ同じ形の門を付与（R9.3）。
+- `crates/areka-emo-text/src/choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs` — 反転帯の `band_offset`（D13・2026-09-06 第 2 回改訂）。`region.rs`・`actor.rs` — 折返し警告を登録口へ（D14）。兄弟試験と `tests/` の読み戻し検査は導出し直す（緩めない）。
 - `doc/emo2-conformance-scope.md` — `:24` の訂正（R11.1）と、完成宣言時の充足済み注記（R11.2）。
 - `.kiro/steering/roadmap.md` — M1 の節を閉じる・干渉台帳の e2e 行を新前提へ書き換える・申し送り生存先の行（`:66`）を閉じる（R11.2・R11.4）。
 - `.kiro/specs/areka-P0-emo2-conformance-e2e/brief.md` — 引き受けた 3 件（申し送り B-1／B-3・掴んで動かしたときの追従）の該当ブロックへ「消化済み」を追記する（R11.4）。送り元は完了置き場に在って受け取れないため、生きた写しであるこの brief が登記先になる。
@@ -693,6 +693,54 @@ flowchart TB
 
 **走行の外で見つかった欠陥の扱い（2026-09-06・requirements.md「改訂（2026-09-06）」7）**: 決定論層の作業で構造から見つけた製品側の欠陥（タスク 5.5＝起動系列の `BootVersion` 滞在中に届いた再生完了通知を `crates/areka-kanade/src/schedule/boot.rs:33-36` が捨て、トーク枠が `Steady{Some}` へ漏れて終了の握手が始まらなくなる）は、同じ仕分け表（記録 §13.2）へ載せるが、分岐 2 の「先に完遂してから採り直す」は掛からない——発現には起動挨拶の再生完了が `basewareversion` の応答より先に届く必要があり、実機の起動挨拶は非空で数秒、応答は数ミリ秒なので本走行では成立しない。発現の有無は `event=boot_input_ignored` の 0 行で走行ごとに確かめる（D5「採り直し」3 ⑵）。分岐 4（引受先の無いまま閉じない）は掛かる——引受先は S 規模の個別仕様で、起票は開発者専用（`/kiro-discovery`）。記録には「構造的・本走行では発現しない・起票待ち」と書き、完成判定（R10.6）で未達・理由・引受先の形で名指しする。
 
+**その場で直す（2026-09-06 第 2 回改訂・R8.1／8.3／8.6）**: 走行で見つかった症状のうち本仕様の 1 ウェーブで着地できるものは本仕様の中で直す。分岐 2 は「着地できない規模」に限る。直したら、改変の範囲・理由・走行前後で見える挙動の差を記録 §13.2 の当該行と §13.4（改変の台帳・新設）に残し、直したコミットで §2 の準備から一周をやり直す（記録置き場は同日 2 回目なら `-2` を付す）。初例は D13（帯の縦位置）と D14（警告の回数）。
+
+### その場で直す欠陥（2026-09-06 第 2 回改訂・requirements.md「改訂（2026-09-06・第 2 回）」）
+
+#### D13 選択肢の反転帯の縦位置
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 反転帯を行ボックスの中央へ寄せ、hover 行の文字のインクを 1 画素も欠かさない |
+| 要件 | 13.1〜13.8 |
+| 置き場 | `crates/areka-emo-text/src/choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs` と兄弟試験・`tests/` の読み戻し検査 |
+
+**現状の機序（実測・2026-09-06）**。帯の丈 `band_extent = clamp(line_box_height, font_height, max(font_height, line_pitch))`（`choice.rs:139-142`）は 28 で 30。帯は行矩形のブロック軸**近端**に揃えて置かれる——ヒット側 `derive_hit_rows`（`choice.rs:229-231` 横書き `top: line.rect.top`／`:235-236` 縦書き `left`）と描画側 `highlight_rect`（`viewbox_draw.rs:729-750`・`top: dy + block_offset`）。一方 DirectWrite は行ボックス 37.24 の中にインクを中央寄りに置く。読み戻し（`tests/line_pitch_readback_test.rs` の出力）: 帯 y0..29／インク y7..31／上の余白 7／下のはみ出し 2。上流の検査は上の余白を測っていない（同 `:116`）。
+
+**新しい規則（純粋関数を 1 本足す）**。
+
+```text
+band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.rs に highlight_band_offset を新設
+横書き: 帯 = [line.rect.top + band_offset, line.rect.top + band_offset + band_extent)
+縦書き: 帯 = [line.rect.left + band_offset, line.rect.left + band_offset + band_extent)
+```
+
+| フォント | 行ボックス | 帯 | offset | 帯の位置 | インク | 上／下 |
+|---|---|---|---|---|---|---|
+| Yu Gothic UI 28（正典） | 37.24 | 30 | **4** | y4..33 | y7..31 | 3／0 |
+| Yu Gothic UI 20（fixture） | 26.6 | 22 | **2** | y2..23 | ≈y5..22 | ≈3／0（読み戻しで確定） |
+| 既定フォント（比 1.0） | = em | = em | **0** | 従来どおり | — | 非退行（byte 等価 golden は不変） |
+
+隣接行の帯は `offset + extent = 34 > pitch 30` だが、次行の帯は `30 + 4 = 34` から始まるので**接して重ならない**。ヒットは半開区間（`crates/areka/src/input_events/balloon.rs:220`・`y >= top && y < bottom`）ゆえ共有辺の 1 点は 1 行にしか当たらない（R13.4）。
+
+**配線（単一の源・R3.3）**。`actor.rs:789-793` で `band_extent` を決める直後に `band_offset` を決め、`decorate_canvas`（`:797-806`）と `derive_hit_rows`（`:826-832`）の両方へ渡す。`ChoiceLineContent`（`canvas.rs:174-183`）に `band_offset: f32` を足し、`viewbox_draw.rs` の `highlight_rect`（`:729-750`）と `expand_overhang_for_band`（`:761-775`・`excess = band_offset + band_extent − font_height`）が読む。`draw.rs` は触らない（988 行）。
+
+**試験の引き直し（緩めない・締める）**。`BAND_OVERHANG_MAX` 2 → **0**（`tests/line_pitch_readback_test.rs:108`・`tests/choice_fixture_test.rs:472`・`tests/emo2_fixture_e2e_test.rs:545`）。読み戻しは上の余白 ≥ 0 と下のはみ出し = 0 の両方を主張し、帯の実測位置（28: y4..33）も固定する。`choice_tests.rs`（`:260-400` のヒット矩形・`:566-649` の帯）と `choice_decorate_tests.rs:197-225` に offset の分岐（0 と 4）を足す。`viewbox_draw_choice_hover_tests.rs:135-245` と `actor_choice_contract_tests.rs`（`:152-230`・`:255-400`）は新しい帯の位置で導出し直す。hover の移動と解除で塗りが消し残らないことを読み戻しで固定する（R13.5）。既定フォントの byte 等価 golden は 1 バイトも動かない（R13.6＝offset 0 の証拠）。
+
+#### D14 折返し警告の回数
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 「読み込み 1 回につき警告 1 件」を、その意味を持つ層に置く |
+| 要件 | 14.1〜14.5 |
+| 置き場 | `crates/areka-emo-text/src/region.rs`（警告を外す）・`actor.rs`（登録口で記録）・`region_inline_limit_tests.rs`（引き直し）・actor 側の新しい兄弟試験 |
+
+**現状の機序（実測・2026-09-06 走行 A）**。`run_text_scale_phase`（`crates/areka/src/emo2_boot/frame/scale_text.rs:79`）が毎フレーム `refresh_actor_binding`（`actor.rs:355`／`:361`）を呼び、churn ガードの判定キーを得るために `ResolvedBalloonText::resolve`（`:387`）→ `TextRegion::resolve` を毎フレーム通す。警告は `resolve` の中（`region.rs:294-301`）にあるので、相方側バルーンでは 1 フレーム 1 件——生ログ 30,837 行のうち 27,908 行。
+
+**新しい置き場**。`TextRegion::resolve` は純粋（ログなし）。`register_actor`（`actor.rs:269`）が、渡された `resolved.region` について `wrap_threshold() > inline_limit()` かつ「この actor の前回の解決済み領域と値が異なる（初回を含む）」ときだけ、同じ文言・同じ 4 欄で `warn!` を 1 件書く。装着（`register_actor_binding`・`:317`）は必ず初回なので 1 件、値の同じ再追従は churn ガード（`:388-395`）で `register_actor` に達しないので 0 件、値の変わる再追従は 1 件。`BALLOON_NAME_PLACEHOLDER`（`region.rs:206-213`）は移すか `pub(crate)` で共有する。`region.rs` は 932 → 約 924 行。
+
+**試験の引き直し**。`region_inline_limit_tests.rs:192-232`（「resolve が 1 件」）→「resolve は 0 件」に改め、欄と値の主張は actor 側の新しい兄弟試験（`actor_region_warn_tests.rs`・log-capture-kit の `capture`）へ移す: 装着 1 件（4 欄）・値の同じ再追従 N 回 0 件・値の変わる再追従 1 件・折返し基準が遠辺の内なら 0 件。手順書 §5.7 の読み方は「装着ごとに 1 件・それ以上は退行」へ改める（R14.5）。
+
 ### 常設テストの衛生
 
 #### D11 間欠的な赤の隔離裁定
@@ -903,6 +951,7 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 3. **走行時間**——既存 19 本 9.24 秒に対する増分が 1 秒前後であること（R12.6）。
 4. **更新した間欠的な赤 ⑴**——待つ形へ移した後、同じ確認が同じ結果を出すこと。
 5. **上流 spec の着地後に決定論層が緑のままであること**（2026-09-06）——`emo-text-line-height-canon` を取り込んだ merge `3c2908e` で `cargo test -p areka --bin areka conformance` が 13 passed／0 failed。3 つの台帳は字の配置を運ばないので、期待列を 1 つも動かさずに緑であることが、行送りの改訂と決定論層の独立の証拠になる。
+6. **その場で直した 2 件の非回帰（2026-09-06 第 2 回改訂）**——D13: 既定フォントの byte 等価 golden が 1 バイトも動かないこと（offset 0 の証拠）と、実フォントの読み戻し 3 本が「上 ≥ 0・下 = 0」で緑であること。D14: `region_inline_limit_tests.rs` が 0 件、actor 側の兄弟試験が装着 1 件／同値再追従 0 件で緑であること。いずれも `cargo test -p areka-emo-text` の exit 0 で確かめ、`| tail` で終了コードを隠さない。
 
 ### 実機走行（人間サインオフ）
 

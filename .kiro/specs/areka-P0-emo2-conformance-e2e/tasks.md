@@ -188,6 +188,30 @@
   - 完了状態: 記録の宣言欄と準備欄が走行前に埋まっており、走行後に書き足された形跡が無い
   - _Requirements: 5.6, 5.9, 10.3_
   - _Depends: 1.2, 5.4, 5.5, 5.6, 5.8, 5.9_
+- [ ] 6.6 選択肢の反転帯を行ボックスの中央へ寄せる（症状 A・その場で直す・2026-09-06 第 2 回改訂）
+  - RED: 実フォントの読み戻し 3 本（`crates/areka-emo-text/tests/line_pitch_readback_test.rs:108`・`tests/choice_fixture_test.rs:472`・`tests/emo2_fixture_e2e_test.rs:545`）の `BAND_OVERHANG_MAX` を 0 へ締め、上の余白 ≥ 0 と下のはみ出し = 0 の両方を主張し、28 では帯 y4..33 を固定する。`choice_tests.rs` に `highlight_band_offset`（28/37.24/30 → 4・20/26.6/22 → 2・等丈 → 0）と offset 付き `derive_hit_rows`（横書き top+offset・縦書き left+offset・隣接行が接して重ならない）の檻、`choice_decorate_tests.rs` に `band_offset` の焼き込み、`actor_choice_contract_tests.rs` に hover の移動と解除で塗りが消し残らない読み戻しを足す。HEAD で赤を確かめる
+  - GREEN: `choice.rs` に `highlight_band_offset` を新設し `derive_hit_rows`／`decorate_canvas` に `band_offset` を通す。`canvas.rs` の `ChoiceLineContent` に `band_offset`、`viewbox_draw.rs` の `highlight_rect` と `expand_overhang_for_band`（`excess = band_offset + band_extent − font_height`）が読む。`actor.rs:789-806`／`:826-832` で `band_extent` の直後に決めて両方へ配る。`draw.rs` は触らない
+  - 既定フォントの byte 等価 golden が 1 バイトも動かないこと（offset 0）と `viewbox_draw_choice_hover_tests.rs` の再導出を確かめ、`cargo test -p areka-emo-text` と `cargo test -p areka --bin areka` を exit 0 で通す。触った各ファイルが 1,000 行以下であることを示す
+  - 完了状態: 読み戻し 3 本が上 ≥ 0／下 = 0 で緑・golden 不変・帯とヒットが同じ offset・記録 §13.4 に改変の範囲と理由の下書き（6.8 で確定）
+  - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 12.2_
+  - _Depends: 6.1_
+  - _Boundary: `crates/areka-emo-text/src/{choice.rs, actor.rs, canvas.rs, viewbox_draw.rs}` と兄弟試験・`crates/areka-emo-text/tests/{line_pitch_readback_test.rs, choice_fixture_test.rs, emo2_fixture_e2e_test.rs}`（`draw.rs`・`region.rs`・fixture 資産・例外表は触らない）_
+- [ ] 6.7 折返し警告を「装着ごとに 1 件」へ移す（症状 B・その場で直す・2026-09-06 第 2 回改訂）
+  - RED: `region_inline_limit_tests.rs:192-232` を「`resolve` は警告 0 件（対照イベントは数える）」へ改め、新しい兄弟試験 `actor_region_warn_tests.rs`（log-capture-kit の `capture`）で「装着 1 件＋4 欄（`balloon`・`axis`・`wrap_threshold`・`inline_limit`）」「値の同じ再追従 N 回で 0 件」「値の変わる再追従で 1 件」「折返し基準が遠辺の内なら 0 件」を書き、HEAD で赤を確かめる
+  - GREEN: `region.rs:294-301` の `warn!` を外し（`resolve` は純粋）、`actor.rs` の `register_actor`（`:269`）で「折返し基準 > 遠辺 かつ 前回の解決済み領域と値が異なる（初回含む）」ときだけ同じ文言・同じ 4 欄で 1 件書く。`BALLOON_NAME_PLACEHOLDER`（`region.rs:206-213`）は共有する
+  - 文言が 1 文字も変わっていないこと（手順書 §5.7 の grep 語）を diff で示し、`cargo test -p areka-emo-text` と `cargo test -p areka --bin areka` を exit 0 で通す
+  - 完了状態: `resolve` 0 件・装着 1 件・同値再追従 0 件が固定され、文言と欄が不変、`region.rs` が 1,000 行以下
+  - _Requirements: 14.1, 14.2, 14.3, 14.4, 12.2_
+  - _Depends: 6.6_
+  - _Boundary: `crates/areka-emo-text/src/{region.rs, actor.rs, region_inline_limit_tests.rs}`・新規 `crates/areka-emo-text/src/actor_region_warn_tests.rs`（接続宣言は既存の流儀に従う）_
+- [ ] 6.8 2 つの症状と裁定の覆りを記録・手順書へ登記し、採り直しの準備をやり直す（2026-09-06 第 2 回改訂）
+  - 記録 §13.2 に行 5（帯の縦位置・その場で直した・6.6 のコミット）と行 6（警告の回数・その場で直した・6.7 のコミット）、新設 §13.4「製品コードの改変の台帳（R8.6）」に 2 件の範囲・理由・走行前後の見え方の差、§13.1 行 5 を「覆された（2026-09-06・走行 A の目視・R7.7 廃止）」へ、§13.3 に 2026-09-06 走行 A の中断記録（A14 まで成立・症状 A/B・`boot_input_ignored` 0 行／`connect_failed` 0 行／`unload_clean` 1 行は読める）、§6 の追記ブロックの追 3／追 4 を新しい期待（はみ出し 0・警告は装着ごとに 1 件）へ追記（既存行は書き換えない）
+  - 手順書 §5.5 C1 を「はみ出し 0（1 画素でも不合格）」へ、§5.7 の警告の読み方を「装着ごとに 1 件・それ以上は退行」へ、§2.4／§9 に同日 2 回目の記録置き場 `-2` の規則
+  - 6.1 の準備者作業を直したコミットでやり直す: ビルド・32bit 橋渡し `014C`・記録置き場 `emo2-conformance-2026-09-06-2`・`lap.ps1` の写し・永続状態の消去・記録 §1／§3／§4／§5／§5.1 の書き直し
+  - 完了状態: 記録と手順書に旧前提（2 画素許容・警告 1 件は正常とだけ書く記述）が現在形で残っておらず、新しい記録置き場が空で在り、両文書とも 1,000 行以下
+  - _Requirements: 8.4, 8.6, 5.2, 5.6, 11.5, 14.5_
+  - _Depends: 6.7_
+  - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`・リポジトリ外の記録置き場_
 - [ ] 6.2 一周走行を行い記録と機械判定の出力を採る
   - 実ゴースト・絶対パス・実拡大率で一周を走らせ、有界の自動終了と記録用の出力水準で走行の終わりを人手のばらつきから切り離す
   - 適合検証項目表 20 項目を順に確かめ、項目ごとの結果と根拠と根拠の種別を記録する
@@ -195,8 +219,9 @@
   - 走行が途中で成立しなくなった場合は中断点と観測できたところまでを残し、部分的な結果を合格にしない
   - 完了状態: 走行の同定情報・環境変数・点灯確認・20 項目の判定・機械判定の出力が記録に揃っている
   - _Requirements: 1.2, 1.3, 1.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 5.8, 5.11_
-  - _Depends: 6.1_
+  - _Depends: 6.1, 6.8_
   - _Unblocked（2026-09-06）: 引受先 spec `emo-text-line-height-canon` が完了（PR #142・main `e3291fc1`）し merge `3c2908e` で取り込んだ。走行 A は手順書 §2 の準備から採り直す。2026-09-05 の `lap-run-a.log` は §13.3 の中断記録として残す（requirements.md「改訂（2026-09-06）」）_
+  - _第 2 回改訂（2026-09-06）: 採り直しの走行 A（20:41〜20:48）は A14 を越えたが、開発者が症状 A（反転帯の縦位置）・B（警告の洪水）を許容不可と裁定し「その場でつぶす」へスコープを定め直した。6.6〜6.8 の後、直したコミットで §2 から採り直す（記録置き場 `-2`）_
   - _Human: 実機の操作と目視は開発者の手元作業。準備（6.1）が済んだら開発者へ確認の目的と手順を平易に伝えて引き渡す_
 - [ ] 6.3 読み分けを当てて合否ブロックを確定する
   - 機械判定と目視所見が食い違った箇所に 3 問を上から当てて 1 行に定め、閾値を目に合わせて緩めない
@@ -227,7 +252,7 @@
 
 - [ ] 7. 完成判定と正本の更新
 - [ ] 7.1 編集集合と節構造の非回帰を確かめる
-  - 本仕様のブランチの差分が、宣言した編集集合と事前登記済みの例外 2 件の外へ出ていないことを実測で確かめる
+  - 本仕様のブランチの差分が、宣言した編集集合（2026-09-06 第 2 回改訂で `crates/areka-emo-text/` を含む）と事前登記済みの例外 2 件の外へ出ていないことを実測で確かめる
   - 決定論層（相 1）と実機層・完成判定（相 2）が独立した節に保たれ、判断が縮退した箇所はすべて記録として残っていることを確かめる
   - 完了状態: 差分の一覧が編集集合と 1 対 1 で対応し、宣言外のファイルが 0 件である
   - _Requirements: 12.1, 12.2, 12.4, 12.5_
@@ -310,3 +335,4 @@
 - **旧コメントが引いていた `layout.rs:532-546`／`draw.rs:766-774` は上流の着地で行がずれていた（タスク 5.8・実測）**。現行は `visible_window`＝`crates/areka-emo-text/src/layout.rs:680`・先頭行の skip＝`draw.rs:781`。上流が全面改変したファイルの行番号は写さず引き直すこと（記録 §13.2 #1 の本文にも旧番号が残るが、そちらは発見時の記述＝履歴として保つ）。
 - **記録 §13.2 の新行は #4（タスク 5.9）**——タスク文は「行 3」と書いたが、同表には 2026-09-05 の #3（生ログの CP932 化け）が既に在った。手順書 §5.7・記録 §7 の相互参照も「行 4」。`region.rs` の警告文の逐語は `:300`（`:298` は `wrap_threshold` の欄）＝要件「改訂（2026-09-06）」6 ⑴ を訂正済み。
 - **採り直しの準備（タスク 6.1・2026-09-06 20:10〜20:12）**: `cargo build -p areka`（22,759,424 バイト）→ PowerShell で i686 の橋渡しをビルド→複写→PE `014C`。i686 成果物は cargo が「変更なし」と判定（`crates/shiori-host32-*`・`Cargo.lock` に 09-04 以降のコミット無し）＝更新時刻は 09-04 のままだが中身はこのコミットの構成。**採り直しの後の全体テスト（7.2）は実機走行が全部終わってから**——回すと橋渡しが 64bit で上書きされる。永続状態 `profile\areka\sylphya.toml`（`[boot] count = "1"`）は gitignore 対象で消しても repo 差分にならない。レビュー時点で別 worktree に `cargo test --workspace` が走っていた（本ツリーの `target/` は無傷・記録 §5 の「走行 D の前に `Get-Process cargo` で 0 個」は必須の手順）。
+- **2026-09-06 第 2 回改訂＝開発者裁定「総合試験を行い、問題をその場でつぶす」**。採り直しの走行 A は A14 を越えた（3 選択肢すべて可視・`閉じる` 右端も無傷）が、⑴ 反転帯が上すぎて文字の下が切れて見える（読み戻し: 帯 y0..29・インク y7..31＝上 7 余り・下 2 切れ。上流の検査は上の余白を測っていなかった `line_pitch_readback_test.rs:116`）⑵ 折返し警告が毎フレーム（30,837 行中 27,908 行・`scale_text.rs:79` → `refresh_actor_binding` → `resolve` の中で warn）。開発者は上流の 2 画素許容を覆し、本仕様で直すと裁定。R8.1／8.3／8.6・R12.1・Boundary を改め、R7.7 は廃止、R13／R14 と D13／D14 を新設、タスク 6.6〜6.8 を追加。
