@@ -51,6 +51,9 @@ pub(super) fn prescan_charset(bytes: &[u8]) -> Option<String> {
         let Some((key, value)) = text.split_once(',') else {
             continue; // カンマ無し行（`charset:` 異体を含む）はスキップ。
         };
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#charset_2c_6587_5b57_30b3_30fc_30c9:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#charset_2c_6587_5b57_30b3_30fc_30c9:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#charset_2c_6587_5b57_30b3_30fc_30c9:1
         if key.trim().eq_ignore_ascii_case("charset") {
             return Some(value.trim().to_string());
         }
