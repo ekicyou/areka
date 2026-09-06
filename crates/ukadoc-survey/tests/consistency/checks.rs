@@ -64,7 +64,11 @@ use super::perturb::{
 };
 
 /// その項目の正典 URL（カタログの綴りを逐語で写したもの）。
-const ANCHOR_URL: &str = "https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1";
+///
+/// [`ANCHOR_ID`] と**同じ項目**を指す。錨を選び直すときはここも一緒に差し替えること
+/// ——綴りが割れると `the_check_survives_lines_moving` が別の項目の証拠を数える。
+const ANCHOR_URL: &str =
+    "https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnFirstBoot:1";
 
 /// 走査が届いていることの錨に使うソース（既存の語彙台帳・要件 9.2）。
 ///

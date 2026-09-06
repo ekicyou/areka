@@ -22,7 +22,35 @@ use ukadoc_survey::model::{Domain, EntryId, THEMES};
 use super::RepoData;
 
 /// 突き合わせの錨に使う項目 id（`doc/ukadoc-coverage/catalog.toml` に実在する）。
-pub(super) const ANCHOR_ID: &str = "ukadoc:list_shiori_event:OnBoot:1";
+///
+/// # 錨は「どの台帳からも指されていない id」でなければならない
+///
+/// 錨を使う摂動のいくつかは「所見が**ちょうど** 1 件」を主張する（`checks.rs` の
+/// `a_ledger_id_that_left_the_catalog_turns_red` と `the_check_survives_lines_moving`）。
+/// 錨をカタログから抜くと、**その id を関連の相手に書いている台帳の行がもう 1 件
+/// 赤くなる**（`LinkEndpointMissing`）ので、指されている id を錨にすると期待が 1 件
+/// では足りなくなる。実際、以前の錨 `ukadoc:list_shiori_event:OnBoot:1` は
+/// さくらスクリプトの調査が `\![update,platform]` から `triggers` を張った時点で
+/// この形に落ちた（台帳の側は正しい。正典本文がそのイベント名を固定名で名指して
+/// いる）。
+///
+/// **選び直すときの条件**——4 つの台帳（shiori・assets・sakura-script・property）の
+/// `links[].to`・`alias_of`・`supersedes` の**どこからも一度も指されていない** id で
+/// あること。あわせて錨は次を満たす必要がある（いずれも `checks.rs` の別の事例が
+/// 寄りかかっている）。
+///
+/// - カタログでページが `list_shiori_event`・分類が `shiori_event` であること
+/// - shiori の台帳にだけ実在し、状態が `implemented` であること
+/// - 正典 URL の証拠が 1 件以上あり、そこに `ANCHOR_SOURCE` が**含まれない**こと
+/// - `links` が空で、`introduced` が空であること
+/// - テーマが `["気配り"]` **ではない**こと（`a_misspelled_theme_turns_red` が
+///   書き換える先と同じだと摂動が空振りする）
+///
+/// 2026-09-06 の時点でこの条件を満たす id は 5 つあり（`OnFirstBoot`・`OnInitialize`・
+/// `OnMouseDoubleClick`・`OnMouseMove`・`basewareversion`）、名前順の先頭を採った。
+/// **台帳が育つと「どこからも指されていない id」は減る**ので、また同じことが起きたら
+/// 同じ条件でもう一度絞り直すこと。
+pub(super) const ANCHOR_ID: &str = "ukadoc:list_shiori_event:OnFirstBoot:1";
 /// カタログの場所（所見の「場所」に載る綴り）。
 pub(super) const CATALOG_FILE: &str = "doc/ukadoc-coverage/catalog.toml";
 
