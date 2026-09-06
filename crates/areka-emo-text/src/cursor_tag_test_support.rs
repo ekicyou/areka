@@ -49,7 +49,7 @@ pub(super) fn basis() -> CursorBasis {
 /// `(360, 180)` に差し替えると 3 基点は X で `50 / 200 / 180`、Y で `20 / 30 / 90` となり、
 /// どれを取り違えても値が変わる。
 ///
-/// 係数 4 種（`1` / `font_height = 10` / `line_pitch = 13` / `font_height / 100 = 0.1`）も
+/// 係数 4 種（`1` / `font_height = 10` / `line_pitch = 12` / `font_height / 100 = 0.1`）も
 /// 互いに異なるので、基点・係数のどちらを取り違えても檻のどれかが赤になる。
 pub(super) const DISCRIMINATING_IMAGE_SIZE: (f32, f32) = (360.0, 180.0);
 

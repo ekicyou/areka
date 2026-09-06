@@ -6,7 +6,7 @@ use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
 
-// ── R4.5: FixedMetrics の決定論仮想値（全角=height・半角=height/2・pitch=ceil(×1.25)） ──
+// ── R4.5: FixedMetrics の決定論仮想値（全角=height・半角=height/2・pitch=height+行間 2） ──
 
 /// 全角（非 ASCII）は font_height・半角（ASCII）は font_height/2。
 #[test]
@@ -55,7 +55,7 @@ fn horizontal_wraps_before_glyph_exceeding_threshold() {
         vec![0.0, 10.0, 20.0, 30.0, 40.0]
     );
     assert_eq!(inline_positions(&lines[1]), vec![0.0]);
-    // 行矩形: 行内範囲＝開始〜送り終端・行送り軸は +y へ pitch(13) 進む。
+    // 行矩形: 行内範囲＝開始〜送り終端・行送り軸は +y へ pitch(12) 進む。
     assert_eq!(
         lines[0].rect,
         LineRect {
@@ -69,9 +69,9 @@ fn horizontal_wraps_before_glyph_exceeding_threshold() {
         lines[1].rect,
         LineRect {
             left: 0.0,
-            top: 13.0,
+            top: 12.0,
             right: 10.0,
-            bottom: 23.0
+            bottom: 22.0
         }
     );
 }
@@ -130,7 +130,7 @@ fn vertical_rl_wraps_on_y_threshold_and_feeds_leftward() {
     assert_eq!(lines.len(), 2);
     assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0, 20.0]);
     assert_eq!(inline_positions(&lines[1]), vec![0.0, 10.0]);
-    // 列 0: x 帯 [390,400]・y 0..30。列 1: block 400−13=387 → x 帯 [377,387]。
+    // 列 0: x 帯 [390,400]・y 0..30。列 1: block 400−12=388 → x 帯 [378,388]。
     assert_eq!(
         lines[0].rect,
         LineRect {
@@ -143,9 +143,9 @@ fn vertical_rl_wraps_on_y_threshold_and_feeds_leftward() {
     assert_eq!(
         lines[1].rect,
         LineRect {
-            left: 377.0,
+            left: 378.0,
             top: 0.0,
-            right: 387.0,
+            right: 388.0,
             bottom: 20.0
         }
     );
@@ -183,9 +183,9 @@ fn vertical_lr_mirrors_rl_inline_layout_and_feeds_rightward() {
     assert_eq!(
         lines_lr[1].rect,
         LineRect {
-            left: 13.0,
+            left: 12.0,
             top: 0.0,
-            right: 23.0,
+            right: 22.0,
             bottom: 20.0
         }
     );
@@ -208,7 +208,7 @@ fn vertical_lr_mirrors_rl_inline_layout_and_feeds_rightward() {
 // ── 改行マーカー（NewLine{ratio}）: 行送り量 = line_pitch × ratio（正準表） ──
 
 /// 明示改行の ratio（1.0／0.5）が行送り量へ反映される
-/// （font 12 → pitch 15: 行送り軸位置 0 → 15 → 22.5・端数檻）。
+/// （font 12 → pitch 14: 行送り軸位置 0 → 14 → 21。ratio 0.5 は送りをちょうど半分にする）。
 #[test]
 fn explicit_line_break_ratio_scales_line_feed() {
     let region = TextRegion::resolve(
@@ -234,7 +234,7 @@ fn explicit_line_break_ratio_scales_line_feed() {
     );
     assert_eq!(lines.len(), 3);
     let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
-    assert_eq!(tops, vec![0.0, 15.0, 22.5]);
+    assert_eq!(tops, vec![0.0, 14.0, 21.0]);
     assert!(lines.iter().all(|l| l.glyphs.len() == 1));
 }
 
@@ -261,9 +261,9 @@ fn vertical_line_break_feeds_column_axis() {
         WrapPlan::CharByChar,
     );
     assert_eq!(lines.len(), 2);
-    // pitch 15 × 0.5 = 7.5 だけ左へ: 列 1 の右辺 = 400 − 7.5。
+    // pitch 14 × 0.5 = 7 だけ左へ: 列 1 の右辺 = 400 − 7。
     assert_eq!(lines[0].rect.right, 400.0);
-    assert_eq!(lines[1].rect.right, 392.5);
+    assert_eq!(lines[1].rect.right, 393.0);
 }
 
 // ── 縮退・境界 ──
@@ -398,14 +398,14 @@ fn line_break_defers_until_next_visible_glyph() {
     assert_eq!(materialized[0].glyphs[0].ch, 'a');
     assert_eq!(materialized[1].glyphs[0].ch, 'b');
     // 実体化後の 2 行目: 行内 0 起点（b は ASCII で advance 6）・行送り軸位置は
-    // pitch(15) 分進む・中間空行は生じない。
+    // pitch(14) 分進む・中間空行は生じない。
     assert_eq!(
         materialized[1].rect,
         LineRect {
             left: 0.0,
-            top: 15.0,
+            top: 14.0,
             right: 6.0,
-            bottom: 27.0
+            bottom: 26.0
         }
     );
 }
@@ -455,7 +455,7 @@ fn consecutive_newlines_accumulate_into_single_flush() {
         TextItem::Glyph { ch: 'b' },
         TextItem::Glyph { ch: 'c' },
     ];
-    // font 12 → pitch 15。累算 Σratio=1.5 → 行送り 22.5。
+    // font 12 → pitch 14。累算 Σratio=1.5 → 行送り 21。
     let lines = LayoutEngine::layout(
         &items,
         3,
@@ -467,7 +467,7 @@ fn consecutive_newlines_accumulate_into_single_flush() {
     );
     assert_eq!(lines.len(), 2, "連続改行は単一累算＝中間空行なし");
     let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
-    assert_eq!(tops, vec![0.0, 22.5], "行間 = pitch(15) × Σratio(1.5)");
+    assert_eq!(tops, vec![0.0, 21.0], "行間 = pitch(14) × Σratio(1.5)");
     assert_eq!(lines[0].glyphs.len(), 1, "行 0 は a のみ");
     assert_eq!(
         lines[1].glyphs.len(),
@@ -486,7 +486,7 @@ fn leading_newline_zero_ratio_and_newline_only_input() {
         IMAGE,
         WritingMode::HorizontalTb,
     );
-    // (a) 先頭改行 `[\n, a]` → 1 行・block 位置 start + pitch(15)・空行なし。
+    // (a) 先頭改行 `[\n, a]` → 1 行・block 位置 start + pitch(14)・空行なし。
     let leading = [
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::Glyph { ch: 'a' },
@@ -501,7 +501,7 @@ fn leading_newline_zero_ratio_and_newline_only_input() {
         WrapPlan::CharByChar,
     );
     assert_eq!(lines.len(), 1, "先頭改行は空行を作らない");
-    assert_eq!(lines[0].rect.top, 15.0, "block 位置は start + pitch へ前進");
+    assert_eq!(lines[0].rect.top, 14.0, "block 位置は start + pitch へ前進");
     assert_eq!(lines[0].glyphs.len(), 1);
 
     // (b) ratio 0 `[a, \n(0), b]` → 2 行・同一 block 位置（行替えのみ・送りゼロ）。
@@ -588,11 +588,13 @@ fn reveal_progression_materializes_only_when_next_glyph_appears() {
 #[test]
 fn materialized_newline_near_full_triggers_overflow() {
     let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
         WritingMode::HorizontalTb,
     );
-    // 満杯 3 行（下端 10/23/36）＋改行＋次グリフ → 改行が実体化し 4 行目（下端 49 > 36）。
+    // 満杯 3 行（下端 10/22/34）＋改行＋次グリフ → 改行が実体化し 4 行目（下端 46 > 34）。
+    // validrect.bottom は「3 行ちょうどが収まる」という境界の意図を保つため 36 → 34 へ導き直した
+    //（旧格子は pitch 13 の 3 行目下端 36・新格子は pitch 12 の 3 行目下端 34）。
     let mut items = broken_lines(3);
     items.push(TextItem::LineBreak { ratio: 1.0 });
     items.push(TextItem::Glyph { ch: 'あ' });
@@ -601,7 +603,7 @@ fn materialized_newline_near_full_triggers_overflow() {
         window,
         VisibleWindow {
             first_visible_line: 1,
-            block_offset: -13.0
+            block_offset: -12.0
         },
         "実体化後は従来どおりあふれ発火（次グリフが保留改行を実体化）"
     );
@@ -623,7 +625,7 @@ fn deferred_rules_hold_in_vertical_modes() {
         TextItem::LineBreak { ratio: 0.5 },
         TextItem::Glyph { ch: 'あ' },
     ];
-    // font 12 → pitch 15。書字開始角 x=400。列 1 の右辺 = 400 − 15×1.5 = 377.5。
+    // font 12 → pitch 14。書字開始角 x=400。列 1 の右辺 = 400 − 14×1.5 = 379。
     let lines = LayoutEngine::layout(
         &acc,
         2,
@@ -636,7 +638,7 @@ fn deferred_rules_hold_in_vertical_modes() {
     assert_eq!(lines.len(), 2, "縦書きでも連続改行は単一累算（中間列なし）");
     assert_eq!(lines[0].rect.right, 400.0);
     assert_eq!(
-        lines[1].rect.right, 377.5,
+        lines[1].rect.right, 379.0,
         "列送り = block_dir × pitch × Σratio"
     );
 
@@ -727,5 +729,5 @@ fn wrapped_lines_return_to_start_inline_component() {
     );
     assert_eq!(lines.len(), 2);
     assert_eq!(inline_positions(&lines[1]), vec![100.0]);
-    assert_eq!(lines[1].rect.top, 63.0); // 50 + pitch 13
+    assert_eq!(lines[1].rect.top, 62.0); // 50 + pitch 12
 }

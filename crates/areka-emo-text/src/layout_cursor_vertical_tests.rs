@@ -20,7 +20,7 @@
 //!
 //! # 共通前提（design.md Integration Tests）
 //!
-//! `FixedMetrics`・`font_height = 10`（全角 'あ' の advance 10・`line_pitch = ceil(10 × 1.25) = 13`）・
+//! `FixedMetrics`・`font_height = 10`（全角 'あ' の advance 10・`line_pitch = 10 + 行間 2 = 12`）・
 //! バルーン画像原寸 `IMAGE = (400, 224)`・validrect は画像全域（`left/top/right/bottom = 0/0/400/224`）・
 //! **`origin` は未宣言**（`\_l` の非回帰対象＝Requirement 2.7 が保護する条件そのもの）。
 //! 未宣言ゆえ書字開始点は書字開始角へ縮退する——`vertical_rl` は `(right, top) = (400, 0)`・
@@ -35,7 +35,7 @@ use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 
-/// 共通前提の文字高さ（`line_pitch = ceil(10 × 1.25) = 13`）。
+/// 共通前提の文字高さ（`line_pitch = 10 + 行間 2 = 12`）。
 const FONT: f32 = 10.0;
 
 /// 行矩形を `(left, top, right, bottom)` の 4 つ組で取り出す。
@@ -146,7 +146,7 @@ fn vertical_rl_absolute_ten_ten_measures_x_from_text_start() {
 /// 1.1 の時点で既に実導出されていた 4 形式（非負の数値・省略・`em`・`lh`）のうち `em`／`lh` を覆う。
 /// 書き換え前の現行値は X = validrect 左辺(0) + 5em(50) = 50 → 列矩形 `[40, 50]` だった。
 /// 原点切替後は X = 書字開始角(400) + 5 × font_height(10) = 450 → 列矩形 `[440, 450]`。
-/// Y = 2lh = 2 × line_pitch(13) = 26 → 字送り位置 26（原点の Y 成分は不変ゆえ書き換えなし）。
+/// Y = 2lh = 2 × line_pitch(12) = 24 → 字送り位置 24（原点の Y 成分は不変ゆえ書き換えなし）。
 #[test]
 fn vertical_rl_em_and_lh_units_resolve_from_text_start() {
     let items = [
@@ -167,12 +167,12 @@ fn vertical_rl_em_and_lh_units_resolve_from_text_start() {
     assert_eq!(lines.len(), 1);
     assert_eq!(
         rect_of(&lines[0]),
-        (440.0, 26.0, 450.0, 36.0),
+        (440.0, 24.0, 450.0, 34.0),
         "正典値（1.2 の原点切替による）: X = 書字開始角(400) + 5×10 = 450（列矩形 [440, 450]）／\
-         Y = 書字開始角の Y 成分(0) + 2×13 = 26（切替の前後で同値）。\
+         Y = 書字開始角の Y 成分(0) + 2×12 = 24（切替の前後で同値）。\
          書き換え前の現行値は [40, 50]（原点が validrect 左辺 0 だったため）"
     );
-    assert_eq!(inline_positions(&lines[0]), vec![26.0]);
+    assert_eq!(inline_positions(&lines[0]), vec![24.0]);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -182,26 +182,26 @@ fn vertical_rl_em_and_lh_units_resolve_from_text_start() {
 /// **正典値（4.1 の語彙解禁による）**: `vertical_rl` の負の X は次の列へ進む。
 ///
 /// 正典では `vertical_rl` の負の X が「次の列」＝自動列送りと同値であり、
-/// `\_l[-13,0]` は 2 列目 `[377, 387]` を指す。
+/// `\_l[-12,0]` は 2 列目 `[378, 388]` を指す（1 列ぶん＝新しい行送り 12）。
 ///
 /// 書き換え前の現行値は 1 列目 `[390, 400]` だった——旧換算が絶対座標の**非負値のみ**を
 /// 実導出し、負の X を当該軸不動として読み捨てていたため、列は書字開始位置
-/// （`right = 400`）に留まっていた（「`\_l[-13,0]`（2 列目のつもり）」と「X を書かない」が
+/// （`right = 400`）に留まっていた（「`\_l[-12,0]`（2 列目のつもり）」と「X を書かない」が
 /// 同じ結果になっていた）。
 ///
 /// タスク 4.1 で非負ゲートを撤去し、解決層の式 1 本（`位置 = 基点 + 値 × 係数`）へ委譲した
-/// ので、X = 書字開始角(400) + (−13) = 387＝列の右端になる。**原点の切替（1.2）に由来する
+/// ので、X = 書字開始角(400) + (−12) = 388＝列の右端になる。**原点の切替（1.2）に由来する
 /// 差分ではない**——原点はこのテストでは切替の前後とも 400 である。
 #[test]
 fn vertical_rl_negative_x_steps_to_the_next_column() {
-    let items = [cursor_px(-13.0, 0.0), glyph()];
+    let items = [cursor_px(-12.0, 0.0), glyph()];
     let lines = layout_for(&items, 1, WritingMode::VerticalRl);
 
     assert_eq!(lines.len(), 1);
     assert_eq!(
         rect_of(&lines[0]),
-        (377.0, 0.0, 387.0, 10.0),
-        "正典値（4.1 の語彙解禁による）: X = 書字開始角(400) + (−13) = 387 → 2 列目 [377, 387]。\
+        (378.0, 0.0, 388.0, 10.0),
+        "正典値（4.1 の語彙解禁による）: X = 書字開始角(400) + (−12) = 388 → 2 列目 [378, 388]。\
          書き換え前の現行値は [390, 400]（負値が読み捨てられ 1 列目に留まっていた）"
     );
     assert_eq!(inline_positions(&lines[0]), vec![0.0]);
@@ -255,7 +255,7 @@ fn vertical_rl_percent_resolves_from_the_font_height() {
 /// 先頭へ）が 2 列目へ進む。
 ///
 /// `@` 相対の基点は現在の文字描画位置で、`vertical_rl` の列位置は列の右端（`block_pos`）
-/// ＝ 1 文字目を置いた時点の 400。そこから `−1lh = −13` 進んで 387＝2 列目の右端になり、
+/// ＝ 1 文字目を置いた時点の 400。そこから `−1lh = −12` 進んで 388＝2 列目の右端になり、
 /// 自動列送り（`block_pos += −1 × line_pitch`）と同じ値へ着地する。
 ///
 /// 書き換え前の現行値は 1 列目 `[390, 400]` だった——旧換算が `@` 相対（`Relative`）を
@@ -288,8 +288,8 @@ fn vertical_rl_relative_column_step_moves_one_column_left() {
     assert_eq!(rect_of(&lines[0]), (390.0, 0.0, 400.0, 10.0));
     assert_eq!(
         rect_of(&lines[1]),
-        (377.0, 0.0, 387.0, 10.0),
-        "正典値（4.1 の語彙解禁による）: X = 現在の列位置(400) + (−1 × 13) = 387 → 2 列目 [377, 387]。\
+        (378.0, 0.0, 388.0, 10.0),
+        "正典値（4.1 の語彙解禁による）: X = 現在の列位置(400) + (−1 × 12) = 388 → 2 列目 [378, 388]。\
          書き換え前の現行値は [390, 400]（`@-1lh` が読み捨てられ 2 文字目が 1 文字目に重なっていた）"
     );
     assert_eq!(inline_positions(&lines[1]), vec![0.0]);
@@ -395,28 +395,28 @@ fn vertical_lr_em_and_lh_units_today() {
     assert_eq!(lines.len(), 1);
     assert_eq!(
         rect_of(&lines[0]),
-        (50.0, 26.0, 60.0, 36.0),
-        "現行値（正典と一致）: X = 5×10 = 50（列矩形 [50, 60]）／Y = 2×13 = 26"
+        (50.0, 24.0, 60.0, 34.0),
+        "現行値（正典と一致）: X = 5×10 = 50（列矩形 [50, 60]）／Y = 2×12 = 24"
     );
-    assert_eq!(inline_positions(&lines[0]), vec![26.0]);
+    assert_eq!(inline_positions(&lines[0]), vec![24.0]);
 }
 
 /// **現行値（正典と一致・是正後も不変）**: `vertical_lr` の正の X による列送り。
 ///
-/// `vertical_lr` では列が左から右へ進むので、次の列は正の X（`\_l[13,0]`＝ 1lh ぶん右）で
-/// 指せる。これは非負の絶対値ゆえ旧換算でも実導出され、2 列目 `[13, 23]` に着地していた。
-/// 同じ位置を相対で書いた `\_l[@1lh,0]`（下のテスト）が 4.1 で同じ `[13, 23]` へ着地するように
+/// `vertical_lr` では列が左から右へ進むので、次の列は正の X（`\_l[12,0]`＝ 1lh ぶん右）で
+/// 指せる。これは非負の絶対値ゆえ旧換算でも実導出され、2 列目 `[12, 22]` に着地していた。
+/// 同じ位置を相対で書いた `\_l[@1lh,0]`（下のテスト）が 4.1 で同じ `[12, 22]` へ着地するように
 /// なったことと対をなす（絶対と相対が同じ列を指せる）。
 #[test]
 fn vertical_lr_positive_x_steps_to_the_next_column_today() {
-    let items = [cursor_px(13.0, 0.0), glyph()];
+    let items = [cursor_px(12.0, 0.0), glyph()];
     let lines = layout_for(&items, 1, WritingMode::VerticalLr);
 
     assert_eq!(lines.len(), 1);
     assert_eq!(
         rect_of(&lines[0]),
-        (13.0, 0.0, 23.0, 10.0),
-        "現行値（正典と一致）: 2 列目 [13, 23]（line_pitch = 13）"
+        (12.0, 0.0, 22.0, 10.0),
+        "現行値（正典と一致）: 2 列目 [12, 22]（line_pitch = 12）"
     );
 }
 
@@ -427,9 +427,9 @@ fn vertical_lr_positive_x_steps_to_the_next_column_today() {
 /// **正典値（4.1 の語彙解禁による）**: `vertical_lr` の負の X は字義どおり文字描画範囲の
 /// 外へ出る（内側へ寄せない）。
 ///
-/// `vertical_lr` の書字開始角は `(left, top) = (0, 0)` なので、`\_l[-13,0]` の X は
-/// `0 + (−13) = −13`＝文字描画範囲（0〜400）の左外である。正典は**字義どおり用い、内側への
-/// 自動的な寄せを行わない**（Requirement 2.6）ので、列矩形は `[-13, -3]` になる。範囲外なので
+/// `vertical_lr` の書字開始角は `(left, top) = (0, 0)` なので、`\_l[-12,0]` の X は
+/// `0 + (−12) = −12`＝文字描画範囲（0〜400）の左外である。正典は**字義どおり用い、内側への
+/// 自動的な寄せを行わない**（Requirement 2.6）ので、列矩形は `[-12, -2]` になる。範囲外なので
 /// DEBUG が 1 件記録されるが、**位置はその記録によって動かされない**（記録は観測だけを担い、
 /// クランプはしない）。
 ///
@@ -438,14 +438,14 @@ fn vertical_lr_positive_x_steps_to_the_next_column_today() {
 /// ——`vertical_lr` の原点は切替の前後とも `(0, 0)` である。
 #[test]
 fn vertical_lr_negative_x_lands_literally_outside_the_text_area() {
-    let items = [cursor_px(-13.0, 0.0), glyph()];
+    let items = [cursor_px(-12.0, 0.0), glyph()];
     let lines = layout_for(&items, 1, WritingMode::VerticalLr);
 
     assert_eq!(lines.len(), 1);
     assert_eq!(
         rect_of(&lines[0]),
-        (-13.0, 0.0, -3.0, 10.0),
-        "正典値（4.1 の語彙解禁による）: X = 書字開始角(0) + (−13) = −13 → 列矩形 [-13, -3]\
+        (-12.0, 0.0, -2.0, 10.0),
+        "正典値（4.1 の語彙解禁による）: X = 書字開始角(0) + (−12) = −12 → 列矩形 [-12, -2]\
          （字義どおり・内側へ寄せない）。書き換え前の現行値は [0, 10]"
     );
 }
@@ -490,7 +490,7 @@ fn vertical_lr_percent_resolves_from_the_font_height() {
 /// **正典値（4.1 の語彙解禁による）**: `vertical_lr` の正典記述例の鏡像 `\_l[@1lh,0]`
 /// （次の列へ）が 2 列目へ進む。
 ///
-/// 同じ位置を絶対値で書いた `\_l[13,0]`（上のテスト）と同じ 2 列目 `[13, 23]` に着地する
+/// 同じ位置を絶対値で書いた `\_l[12,0]`（上のテスト）と同じ 2 列目 `[12, 22]` に着地する
 /// ——絶対と相対が同じ位置を指せることが、`@` 相対の解禁の意味そのものである。
 /// 書き換え前の現行値は 1 列目 `[0, 10]` で、受理はされるのに動かない形の典型だった。
 /// **原点の切替（1.2）に由来する差分ではない**。
@@ -520,8 +520,8 @@ fn vertical_lr_relative_column_step_moves_to_the_next_column() {
     assert_eq!(rect_of(&lines[0]), (0.0, 0.0, 10.0, 10.0));
     assert_eq!(
         rect_of(&lines[1]),
-        (13.0, 0.0, 23.0, 10.0),
-        "正典値（4.1 の語彙解禁による）: X = 現在の列位置(0) + 1 × 13 = 13 → 2 列目 [13, 23]。\
+        (12.0, 0.0, 22.0, 10.0),
+        "正典値（4.1 の語彙解禁による）: X = 現在の列位置(0) + 1 × 12 = 12 → 2 列目 [12, 22]。\
          書き換え前の現行値は [0, 10]（`@1lh` が読み捨てられ 2 文字目が 1 文字目に重なっていた）"
     );
     assert_eq!(inline_positions(&lines[1]), vec![0.0]);

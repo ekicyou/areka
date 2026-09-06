@@ -144,7 +144,7 @@ macro_rules! relative_case {
 
 /// 解決表の全行 × 両軸（26 ケース）。
 ///
-/// 単位の係数（1 / 10 / 13 / 0.1）が互いに異なり、係数を掛ける値も行ごとに変えてあるので、
+/// 単位の係数（1 / 10 / 12 / 0.1）が互いに異なり、係数を掛ける値も行ごとに変えてあるので、
 /// 単位を取り違えた実装は当該行で赤になる。
 const CASES: &[Case] = &[
     // 省略（両軸）。
@@ -831,7 +831,7 @@ fn degrade_warns_once_per_branch_and_actor() {
 #[test]
 fn shared_premises_match_the_design_document() {
     assert_eq!(FONT_HEIGHT, 10.0, "font_height = 10");
-    assert_eq!(LINE_PITCH, 13.0, "line_pitch = 13");
+    assert_eq!(LINE_PITCH, 12.0, "line_pitch = 12");
     assert_eq!(IMAGE_SIZE, (400.0, 224.0), "image_size = (400, 224)");
     assert_eq!(ORIGIN, (50.0, 20.0), "origin の宣言例 = (50, 20)");
     assert_eq!(CURRENT, (200.0, 30.0), "current = (200, 30)");

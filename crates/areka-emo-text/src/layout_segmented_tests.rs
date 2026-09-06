@@ -9,7 +9,7 @@ use crate::writing::WritingMode;
 //
 // budouy 非依存でゲート③の判断分岐を全網羅するため、plan は手組み（from_segments）で
 // 注入する（design「テスト形: 手組み SegmentPlan」）。共通前提: FixedMetrics・font 10 →
-// 全角 'あ' の advance 10・pitch 13。閾値は wordwrappoint x（横書き）／y（縦書き）。
+// 全角 'あ' の advance 10・pitch 12。閾値は wordwrappoint x（横書き）／y（縦書き）。
 
 /// (start, len) 列から手組み SegmentPlan を作る。
 fn plan(segs: &[(usize, usize)]) -> SegmentPlan {
@@ -343,9 +343,9 @@ fn char_by_char_is_off_path_non_regression_anchor() {
         lines[1].rect,
         LineRect {
             left: 0.0,
-            top: 13.0,
+            top: 12.0,
             right: 10.0,
-            bottom: 23.0
+            bottom: 22.0
         }
     );
 }
@@ -522,7 +522,7 @@ fn segmented_extremely_long_segment_places_all_glyphs() {
 // （design System Flows「保留フラッシュとの順序」5.3）、deferred newline の意味論
 // （遅延・累算・蒸発）は ON でも一切変わらず（5.1/5.2）、typewriter リビール進行の
 // 全段階で配置済みグリフの行が動かない（INV-2・7.2/7.3）。共通前提は 4.1/4.2 と同じ
-// FixedMetrics・font 10（全角 'あ' advance 10・pitch 13）。
+// FixedMetrics・font 10（全角 'あ' advance 10・pitch 12）。
 
 /// 5.3: 保留改行の実体化直後の行頭で塊先決が走る。`[塊A, \n, 塊B, 塊C]`（run2 = 塊B+塊C）で、
 /// 保留改行が run2 を 2 行目行頭へ送り、そこで塊 C が塊ごと 3 行目へワードラップされる
@@ -560,8 +560,8 @@ fn segmented_predecision_runs_at_line_head_after_pending_flush() {
         "塊B は実体化後の行頭に塊ごと配置（塊先決が行頭で先決）"
     );
     assert_eq!(
-        seg[1].rect.top, 13.0,
-        "block 前進 = pitch(13) × Σratio(1.0)（保留改行の送りは OFF と同一）"
+        seg[1].rect.top, 12.0,
+        "block 前進 = pitch(12) × Σratio(1.0)（保留改行の送りは OFF と同一）"
     );
     // 行 2: 塊C は残り行幅（20）に収まらず塊ごと次行へ（フラッシュ後の行で塊単位判定が再開）。
     assert_eq!(
@@ -570,7 +570,7 @@ fn segmented_predecision_runs_at_line_head_after_pending_flush() {
         "塊C は分割されず塊ごと 3 行目へ（ワードラップが 2 行目以降でも効く）"
     );
     // 対比: CharByChar は同一入力で run2 を char 割り（塊C を割る）＝実体化後の送りは同じでも
-    // 折返し粒度が異なる。2 行目 top は両経路で 13（block 前進 = pitch × Σratio は不変）。
+    // 折返し粒度が異なる。2 行目 top は両経路で 12（block 前進 = pitch × Σratio は不変）。
     let ch = LayoutEngine::layout(
         &items,
         8,
@@ -581,7 +581,7 @@ fn segmented_predecision_runs_at_line_head_after_pending_flush() {
         WrapPlan::CharByChar,
     );
     assert_eq!(
-        ch[1].rect.top, 13.0,
+        ch[1].rect.top, 12.0,
         "OFF でも実体化後の block 前進は pitch × Σratio（deferred newline の送りは分岐不変）"
     );
     assert_eq!(ch[1].glyphs.len(), 5, "OFF は run2 を char 割り（5+…）");
@@ -662,8 +662,8 @@ fn deferred_newline_semantics_unchanged_under_segmented() {
     let tops: Vec<f32> = seg_b.iter().map(|l| l.rect.top).collect();
     assert_eq!(
         tops,
-        vec![0.0, 22.5],
-        "行間 = pitch(15) × Σratio(1.5)（ON でも不変）"
+        vec![0.0, 21.0],
+        "行間 = pitch(14) × Σratio(1.5)（ON でも不変）"
     );
     assert_eq!(
         seg_b, ch_b,

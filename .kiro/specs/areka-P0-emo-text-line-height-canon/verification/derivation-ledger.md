@@ -124,12 +124,12 @@ in-file テストの再導出という点では新規の追記です。）
 |---|---|---|---|---|
 | `src/layout_wrap_tests.rs` | A | 行 top 13 → **12**・bottom 23 → **22**・font 12 の `pitch × Σratio 1.5` 22.5 → **21**・`\n[0.5]` 7.5 → **7**・bottom 27 → **26**・満杯 3 行の境界 36 → **34**（4 行目 46 > 34 → `block_offset −12`） | 不要 | design |
 | `src/layout_segmented_tests.rs` | A | 13 → **12**・23 → **22**・15×1.5 → **21** | 不要 | design |
-| `src/layout_visible_window_tests.rs` | A | 境界 36 → **34**（3 行の下端 10/22/34 がちょうど）・4 行目 46 > 34 → `−12`・6 行時 70−36 = **34** → `−36`・縦 rl 列左端 390/378/366/354（4 列目 354 < 360 → `+12`）・lr 列右端 10/22/34/46 → `−12` | 不要 | design |
+| `src/layout_visible_window_tests.rs` | A | 境界 36 → **34**（3 行の下端 10/22/34 がちょうど）・4 行目 46 > 34 → `−12`・6 行時 70−36 = **34** → `−36`・縦 rl 列左端 390/378/366/354（4 列目 354 < 360 → `+12`）・lr 列右端 10/22/34/46 → `−12`。**タスク 3.1 の実走で 3 件を追記**: ⑴ `all_lines_overflowing_saturates_to_newest_line`（font 50 → pitch 63 → **52**・tops 0/52/104・オフセット −126 → **−104**）は行に無かった。⑵ `fractional_ratio_feed_scrolls_by_fractional_line_distance` も行に無く、しかも**新ピッチが偶数だと端数が消える**（`14 × 0.5 = 7.0`）。テスト名と doc が「端数そのもの（整数量子化しない）」を主題にしているため、font 12 → **13**（pitch 15）へ導き直して `−7.5` を保った＝**入力を動かした唯一の箇所**（要件 9.1 の「期待値の更新のみ」の例外として登記）。⑶ 既に緑だった `horizontal_within_region_does_not_scroll` と `trailing_pending_newline_does_not_trigger_overflow` も「3 行ちょうど収まる」を前提にしており、境界 36 のままだと 2px の余裕が生まれて意味を失う。両方 36 → **34** へ | 不要 | design ＋ **タスク 3.1 で追記** |
 | `src/layout_cursor_overflow_tests.rs` | A | 境界 36 → **34**・素の 4 行 top 0/12/24/36・`\_l[,@-2lh]` = 36−24 = **12**・5 行目 `{10,12,20,22}`（最新行 22 ≤ 34 で非発火）／対照 `{1, −12}`・6 行 top 0..60 の 7 行目 `{2, −24}`・13/26/39 → **12/24/36** | 不要 | design |
 | `src/layout_cursor_tests.rs` | A | 13 → **12** 系 | 不要 | design |
 | `src/layout_cursor_center_origin_tests.rs` | A | 同上 | 不要 | design |
-| `src/layout_cursor_vertical_tests.rs` | A | 同上（列送りへ軸読み替え） | 不要 | design |
-| `src/layout_cursor_vertical_canon_tests.rs` | A | 同上 | 不要 | design |
+| `src/layout_cursor_vertical_tests.rs` | A | 同上（列送りへ軸読み替え）。**タスク 3.1 で追記**: `\_l[-13,0]`／`\_l[13,0]` の**実数値そのものが 1 列送り**を表しており、doc も「2 列目」「自動列送りと同値」と述べている。±13 → **±12** へ動かさないと、既に緑のテストが偽の主張を残す | 不要 | design ＋ **タスク 3.1 で追記** |
+| `src/layout_cursor_vertical_canon_tests.rs` | A | 同上。**タスク 3.1 で追記**: この 2 本は `\_l[±13,0]` を**同じ走行の自動列送りと突き合わせて**いるため、±12 へ動かさないと赤になる。上の兄弟ファイルの実数値も同時に動かさないと、片方が 388、片方が 387 を「2 列目」と述べる食い違いが残る | 不要 | design ＋ **タスク 3.1 で追記** |
 | `src/layout_cursor_wiring_tests.rs` | A | 同上 | 不要 | design |
 | **`src/layout_cursor_order_tests.rs`（262 行）** | **A** | `written_order_decides_relative_cursor_against_newline` と `written_order_applies_newlines_before_and_after_the_cursor` の `lines[..].rect.top` が **13.0 → 12.0**（2 本）・`113.0 → 112.0`（2 本＝100 + 12）。doc の「行送り 0 + 13 = 13」「100 + 13 = 113」「100 + 2×13 = 126」を 12／112／124 へ | 不要 | **本台帳で追加** |
 | `src/cursor_tag_tests.rs` | A | `LINE_PITCH` 由来の値（13 → **12**） | 不要 | design |
@@ -147,7 +147,7 @@ in-file テストの再導出という点では新規の追記です。）
 | `src/actor_tests.rs` | A | `1.25` は k。**作業なし** | 不要 | design |
 | `src/actor_scale_refresh_tests.rs` | A | 同上。**作業なし** | 不要 | design |
 | `src/actor_choice_contract_tests.rs` | A | `pitch = FONT_H + 2.0 = 14`・`indent_y = 2lh = 28`。式を inline で書かず `TextLayerConfig::default().line_pitch(FONT_H)` を呼ぶ | 不要 | design |
-| **`src/canvas.rs`（722 行・in-file テスト）** | **A** | `from_layout_generates_one_glyph_resident_per_line`: `r1.transform.offset()` **(0.0, 13.0) → (0.0, 12.0)**・doc「変換 = (0, 13)（pitch 分の平行移動）」→ (0, 12)。`fractional_line_feed_survives_in_translation`: `vec![(0.0,0.0),(0.0,15.0),(0.0,22.5)]` → **`vec![(0.0,0.0),(0.0,14.0),(0.0,21.0)]`**（font 12・pitch 14・ratio 0.5 → 7）・doc「pitch 15 × 0.5 = 7.5」→「pitch 14 × 0.5 = 7」。**据え置き**: `from_layout_maps_empty_line_to_empty_resident` の `top: 15.0` と `(0.0, 15.0)` は手で組んだ合成入力（レイアウトから導いていない）ため不変。`apply((1.0,1.0)) == (3.0, 7.5)` は変換の算術で行送り無関係。`:176-182` の帯 doc も不変 | 不要 | **本台帳で是正**（design「Modified Files」は `canvas.rs` を「不変」としているが、上記 2 本の in-file テストはレイアウト経由の期待値であり赤になる） |
+| **`src/canvas.rs`（722 行・in-file テスト）** | **A** | `from_layout_generates_one_glyph_resident_per_line`: `r1.transform.offset()` **(0.0, 13.0) → (0.0, 12.0)**・doc「変換 = (0, 13)（pitch 分の平行移動）」→ (0, 12)。`fractional_line_feed_survives_in_translation`: `vec![(0.0,0.0),(0.0,15.0),(0.0,22.5)]` → ⚠**この置換値は採らないこと**。`(0,0),(0,14),(0,21)` はすべて整数で、テスト名（`fractional_line_feed`）が主題にしている端数が消える＝緑のまま意味を失う。タスク 3.1 が `layout_visible_window_tests.rs` の同型のテストで採った手当と揃えて、font 12 → **13**（pitch 15）へ導き直し `(0,0),(0,15.0),(0,22.5)` を保つか、端数を落としてよい理由を明記すること。**タスク 3.1 の実走で判明**: このファイルの赤は 2 本でなく **3 本**で、3 本目は `from_layout_translation_carries_line_origin`（本台帳に記載が無かった）。**据え置き**: `from_layout_maps_empty_line_to_empty_resident` の `top: 15.0` と `(0.0, 15.0)` は手で組んだ合成入力（レイアウトから導いていない）ため不変。`apply((1.0,1.0)) == (3.0, 7.5)` は変換の算術で行送り無関係。`:176-182` の帯 doc も不変 | 不要 | **本台帳で是正**（design「Modified Files」は `canvas.rs` を「不変」としているが、上記 2 本の in-file テストはレイアウト経由の期待値であり赤になる） |
 | `tests/pipeline_test.rs` | A | 横書き: 行下端 10/22/34/46・境界 36 は据え置き（3 行が収まる前提のみ）・4 行目 46 > 36 → `−12`。縦書き: 列 i の左端 = 346 − 12i。**25 列では 25 列目の左端 58 ≥ 36 であふれない**ため **27 列**へ導き直す（27 列目の左端 346−312 = 34 < 36）・オフセット `+12`・reveal 途中の `lines.len()` 期待も列数に合わせて再計算 | 不要 | design |
 
 ### 3.2 B 群（COM 層・実フォント／既定フォント）
@@ -277,7 +277,7 @@ em（文字の大きさ）は変わらないため、グリフ描画・文字送
 | # | design の記述 | 実測 | 本台帳での扱い |
 |---|---|---|---|
 | 1 | 「計 32 ファイル」 | 重複なく数えると **37 ファイル** | 呼び方を「37 ファイル」へ訂正。取りこぼしはなく、数え方の誤りのみ |
-| 2 | `src/canvas.rs`（722）は**不変** | in-file テスト 2 本がレイアウト経由の行送りを固定しており赤になる（`(0.0, 13.0)`・`[(0,0),(0,15.0),(0,22.5)]`） | A 群へ追加（§3.1） |
+| 2 | `src/canvas.rs`（722）は**不変** | in-file テスト **3 本**がレイアウト経由の行送りを固定しており赤になる（`(0.0, 13.0)`・`[(0,0),(0,15.0),(0,22.5)]`・`from_layout_translation_carries_line_origin`。3 本目はタスク 3.1 の実走で判明） | A 群へ追加（§3.1） |
 | 3 | 一覧に `layout_cursor_order_tests.rs` がない | `lines[..].rect.top` に `13.0`・`113.0` を直接固定（4 か所） | A 群へ追加 |
 | 4 | 一覧に `choice_decorate_tests.rs` がない | `TEST_BAND = 13.0` と「13.0 が正典」と述べる doc | A 群へ追加（要件 7.5） |
 | 5 | 一覧に `layout_test_support.rs`／`viewbox_test_support.rs` がない | 「共通前提: font 10 → pitch 13（ceil(12.5)）」の doc | A 群へ追加（doc のみ・要件 7.5） |

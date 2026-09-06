@@ -20,23 +20,25 @@ use crate::writing::WritingMode;
 // **手で計算して**書く。手計算の過程は各テストの doc コメントに残す。
 //
 // 幾何の共通前提（`layout_visible_window_tests.rs` の既存檻と同一）: `FixedMetrics`・
-// font 10 → 全角 'あ' の advance 10・pitch `ceil(10 × 1.25) = 13`・折返し閾値 400。
+// font 10 → 全角 'あ' の advance 10・pitch `10 + 行間 2 = 12`・折返し閾値 400。
 
-/// 共通前提: 文字描画開始点 `(0, 0)` 宣言・validrect `top 0 / bottom 36 / left 0 / right 400`。
+/// 共通前提: 文字描画開始点 `(0, 0)` 宣言・validrect `top 0 / bottom 34 / left 0 / right 400`。
 ///
-/// あふれ境界（横書き＝`validrect.bottom`）が **36** ＝ちょうど 3 行ぶん（行下端 10／23／36）に
-/// なるので、4 行目以降が超過する。`layout_visible_window_tests.rs` の既存檻と同一の矩形を
+/// あふれ境界（横書き＝`validrect.bottom`）が **34** ＝ちょうど 3 行ぶん（行下端 10／22／34）に
+/// なるので、4 行目以降が超過する。境界は「3 行ちょうど」という意図を保つため新しい格子へ
+/// 導き直した（旧格子は pitch 13 の 3 行目下端 36・新格子は pitch 12 の 3 行目下端 34）。
+/// `layout_visible_window_tests.rs` の既存檻と同一の矩形を
 /// 使うのは、**`\_l` の有無だけが差分になる**ようにするためである。
 fn region_overflow() -> TextRegion {
     let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
         WritingMode::HorizontalTb,
     );
     // 檻の前提を檻にする（fixture が意図した矩形・開始点になっていることの確認）。
     assert_eq!(
         (region.left(), region.top(), region.right(), region.bottom()),
-        (0.0, 0.0, 400.0, 36.0)
+        (0.0, 0.0, 400.0, 34.0)
     );
     assert_eq!(region.start(), (0.0, 0.0));
     region
@@ -89,27 +91,27 @@ fn rects(lines: &[PositionedLine]) -> Vec<(f32, f32, f32, f32)> {
 /// 可視窓は既存の式どおり「最新行の遠端で判定する」——後戻りによって最新行が境界の内側へ
 /// 戻るので、あふれは**非発火**になる。
 ///
-/// 手計算（前提: `start = (0, 0)`・font 10・pitch 13・境界 `region.bottom() = 36`）。
+/// 手計算（前提: `start = (0, 0)`・font 10・pitch 12・境界 `region.bottom() = 34`）。
 ///
 /// 並び `[あ, \n, あ, \n, あ, \n, あ, \_l[,@-2lh], あ]` の行:
-/// - 4 個目までは素の改行 4 行 → 行矩形の top は 0／13／26／39（bottom は +10）。
-/// - `\_l` 到達時の実効位置は `(inline 10, block 39)`。X は省略＝不動、Y ＝
-///   `current.y + (−2) × pitch = 39 − 2×13 = 13`（design.md 解決表「位置 = 基点 + 値 × 係数」）。
-/// - 次のグリフで実体化 → 4 行目 `{0, 39, 10, 49}` が閉じ、**5 行目が top 13 で開く**
-///   （`inline_pos` は 10 のまま＝X 省略の逐語）→ `{10, 13, 20, 23}`。
+/// - 4 個目までは素の改行 4 行 → 行矩形の top は 0／12／24／36（bottom は +10）。
+/// - `\_l` 到達時の実効位置は `(inline 10, block 36)`。X は省略＝不動、Y ＝
+///   `current.y + (−2) × pitch = 36 − 2×12 = 12`（design.md 解決表「位置 = 基点 + 値 × 係数」）。
+/// - 次のグリフで実体化 → 4 行目 `{0, 36, 10, 46}` が閉じ、**5 行目が top 12 で開く**
+///   （`inline_pos` は 10 のまま＝X 省略の逐語）→ `{10, 12, 20, 22}`。
 ///
 /// あふれ判定（`layout.rs` の `visible_window`・横書きの行）:
-/// - `last_far` ＝最新行（5 行目）の `rect.bottom` ＝ **23**。
-/// - `boundary` ＝ `region.bottom()` ＝ **36**。
-/// - `23 <= 36` ＝**超えていない** → 既定窓 `{ first_visible_line: 0, block_offset: 0.0 }`。
+/// - `last_far` ＝最新行（5 行目）の `rect.bottom` ＝ **22**。
+/// - `boundary` ＝ `region.bottom()` ＝ **34**。
+/// - `22 <= 34` ＝**超えていない** → 既定窓 `{ first_visible_line: 0, block_offset: 0.0 }`。
 ///
 /// **この値は「正しい」のではなく「既存の式が返す値」である**（Requirement 2.8 が式の変更を
-/// 禁じている）。4 行目（bottom 49）は境界の外に残ったままスクロールされない——式が最新行だけを
+/// 禁じている）。4 行目（bottom 46）は境界の外に残ったままスクロールされない——式が最新行だけを
 /// 見るからで、後戻り行は式にとって未知の状況である。所見は spec の申し送りへ回す。
 ///
 /// **対照**（同じ観測点で 0 でない値が出ること＝主張が経路ごと素通りして静かに緑になる形を塞ぐ）:
-/// `\_l` を書かない `[あ, \n, あ, \n, あ, \n, あ]` は最新行の bottom が 49 > 36 で発火し、
-/// 1 行スキップで `49 − 13 = 36 <= 36` → `{ 1, −13.0 }` になる。
+/// `\_l` を書かない `[あ, \n, あ, \n, あ, \n, あ]` は最新行の bottom が 46 > 34 で発火し、
+/// 1 行スキップで `46 − 12 = 34 <= 34` → `{ 1, −12.0 }` になる。
 #[test]
 fn backward_line_after_overflow_stops_the_untouched_overflow_formula() {
     let region = region_overflow();
@@ -120,17 +122,17 @@ fn backward_line_after_overflow_stops_the_untouched_overflow_formula() {
         rects(&control),
         vec![
             (0.0, 0.0, 10.0, 10.0),
-            (0.0, 13.0, 10.0, 23.0),
-            (0.0, 26.0, 10.0, 36.0),
-            (0.0, 39.0, 10.0, 49.0),
+            (0.0, 12.0, 10.0, 22.0),
+            (0.0, 24.0, 10.0, 34.0),
+            (0.0, 36.0, 10.0, 46.0),
         ],
-        "対照は素の改行 4 行（最新行の bottom 49 が境界 36 を超える）"
+        "対照は素の改行 4 行（最新行の bottom 46 が境界 34 を超える）"
     );
     assert_eq!(
         LayoutEngine::visible_window(&control, &region, WritingMode::HorizontalTb),
         VisibleWindow {
             first_visible_line: 1,
-            block_offset: -13.0
+            block_offset: -12.0
         },
         "対照は同じ観測点で 0 でない窓を出す（本檻の 0 が恒真でないことの証跡）"
     );
@@ -144,12 +146,12 @@ fn backward_line_after_overflow_stops_the_untouched_overflow_formula() {
         rects(&lines),
         vec![
             (0.0, 0.0, 10.0, 10.0),
-            (0.0, 13.0, 10.0, 23.0),
-            (0.0, 26.0, 10.0, 36.0),
-            (0.0, 39.0, 10.0, 49.0),
-            (10.0, 13.0, 20.0, 23.0),
+            (0.0, 12.0, 10.0, 22.0),
+            (0.0, 24.0, 10.0, 34.0),
+            (0.0, 36.0, 10.0, 46.0),
+            (10.0, 12.0, 20.0, 22.0),
         ],
-        "5 行目は top 13＝4 行目の top 39 より手前（行送り方向へ後戻りしている）"
+        "5 行目は top 12＝4 行目の top 36 より手前（行送り方向へ後戻りしている）"
     );
     assert!(
         lines[4].rect.top < lines[3].rect.top,
@@ -161,7 +163,7 @@ fn backward_line_after_overflow_stops_the_untouched_overflow_formula() {
             first_visible_line: 0,
             block_offset: 0.0
         },
-        "最新行の遠端 23 は境界 36 を超えない＝既存の式ではあふれ非発火"
+        "最新行の遠端 22 は境界 34 を超えない＝既存の式ではあふれ非発火"
     );
 }
 
@@ -169,16 +171,16 @@ fn backward_line_after_overflow_stops_the_untouched_overflow_formula() {
 /// **最小スキップ探索**がそのまま走る——探索は行列を先頭から舐めて「最新行が収まる最初の行」を
 /// 選ぶので、後戻りで非単調になった行列でも式は 1 ビットも変わらない。
 ///
-/// 手計算（前提は同じ・境界 36）。並び `[あ, \n, …, \n, あ（6 個）, \_l[,@-1lh], あ]`:
-/// - 素の 6 行の top は 0／13／26／39／52／65。`\_l` 到達時の実効位置は `(10, 65)`。
-/// - Y ＝ `65 − 1×13 = 52` → 6 行目 `{0, 65, 10, 75}` が閉じ、7 行目が top 52 で開く
-///   → `{10, 52, 20, 62}`。
+/// 手計算（前提は同じ・境界 34）。並び `[あ, \n, …, \n, あ（6 個）, \_l[,@-1lh], あ]`:
+/// - 素の 6 行の top は 0／12／24／36／48／60。`\_l` 到達時の実効位置は `(10, 60)`。
+/// - Y ＝ `60 − 1×12 = 48` → 6 行目 `{0, 60, 10, 70}` が閉じ、7 行目が top 48 で開く
+///   → `{10, 48, 20, 58}`。
 ///
 /// あふれ判定:
-/// - `last_far` ＝ 7 行目の bottom ＝ **62** > 36 → 発火。
-/// - `origin` ＝先頭行の近端 ＝ **0**。条件は `62 − (top_i − 0) <= 36` すなわち `top_i >= 26`。
-/// - 先頭から最初に満たすのは 3 行目（top 26）＝ index **2**。
-/// - `block_offset = −block_dir × (26 − 0) = −26.0`（横書きの `block_dir` は +1）。
+/// - `last_far` ＝ 7 行目の bottom ＝ **58** > 34 → 発火。
+/// - `origin` ＝先頭行の近端 ＝ **0**。条件は `58 − (top_i − 0) <= 34` すなわち `top_i >= 24`。
+/// - 先頭から最初に満たすのは 3 行目（top 24）＝ index **2**。
+/// - `block_offset = −block_dir × (24 − 0) = −24.0`（横書きの `block_dir` は +1）。
 ///
 /// 条件を満たす最初の行が index 2 であることは、**探索が実際に走っている**ことの証跡でもある
 /// （index 0／1 で止まる実装も、最新行へ飽和する実装〔index 6〕も赤になる）。
@@ -193,22 +195,22 @@ fn backward_line_that_still_overflows_runs_the_untouched_minimum_skip_search() {
         rects(&lines),
         vec![
             (0.0, 0.0, 10.0, 10.0),
-            (0.0, 13.0, 10.0, 23.0),
-            (0.0, 26.0, 10.0, 36.0),
-            (0.0, 39.0, 10.0, 49.0),
-            (0.0, 52.0, 10.0, 62.0),
-            (0.0, 65.0, 10.0, 75.0),
-            (10.0, 52.0, 20.0, 62.0),
+            (0.0, 12.0, 10.0, 22.0),
+            (0.0, 24.0, 10.0, 34.0),
+            (0.0, 36.0, 10.0, 46.0),
+            (0.0, 48.0, 10.0, 58.0),
+            (0.0, 60.0, 10.0, 70.0),
+            (10.0, 48.0, 20.0, 58.0),
         ],
-        "7 行目は top 52＝6 行目の top 65 より手前（後戻り行）"
+        "7 行目は top 48＝6 行目の top 60 より手前（後戻り行）"
     );
     assert_eq!(
         LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb),
         VisibleWindow {
             first_visible_line: 2,
-            block_offset: -26.0
+            block_offset: -24.0
         },
-        "最新行の遠端 62 に対し top >= 26 が最小スキップ＝index 2・オフセット −26"
+        "最新行の遠端 58 に対し top >= 24 が最小スキップ＝index 2・オフセット −24"
     );
 }
 
@@ -216,11 +218,11 @@ fn backward_line_that_still_overflows_runs_the_untouched_minimum_skip_search() {
 /// 適用される。同じ行矩形の並びを ⑴ `\_l` の絶対座標で作った場合と ⑵ 素の改行で作った場合とで、
 /// **行矩形も可視窓も完全に一致する**。
 ///
-/// 手計算（前提: `start = (0, 0)`・pitch 13）。`[あ, \_l[0,13], あ, \_l[0,26], あ, \_l[0,39], あ]`:
+/// 手計算（前提: `start = (0, 0)`・pitch 12）。`[あ, \_l[0,12], あ, \_l[0,24], あ, \_l[0,36], あ]`:
 /// - 各 `\_l` は X ＝ `origin.x + 0 = 0`（行頭へ戻す）・Y ＝ `origin.y + n`（絶対 px）。
 /// - 実体化のたびに現在行が閉じて次の行が top n で開くので、行矩形は素の改行 4 行
-///   （top 0／13／26／39）と 1 ビットも変わらない。
-/// - よってあふれ判定の入力が同一 → 出力も同一 `{ 1, −13.0 }`（対照と同じ手計算）。
+///   （top 0／12／24／36）と 1 ビットも変わらない。
+/// - よってあふれ判定の入力が同一 → 出力も同一 `{ 1, −12.0 }`（対照と同じ手計算）。
 ///
 /// **構造上の根拠**（DD-9）: [`LayoutEngine::visible_window`] の引数は
 /// `(&[PositionedLine], &TextRegion, WritingMode)` だけで、`PositionedLine { rect, glyphs }` は
@@ -243,11 +245,11 @@ fn overflow_window_is_identical_whether_lines_came_from_cursor_or_newline() {
     let via_cursor = layout_h(
         &[
             glyph(),
-            absolute_px(13.0),
+            absolute_px(12.0),
             glyph(),
-            absolute_px(26.0),
+            absolute_px(24.0),
             glyph(),
-            absolute_px(39.0),
+            absolute_px(36.0),
             glyph(),
         ],
         &region,
@@ -256,9 +258,9 @@ fn overflow_window_is_identical_whether_lines_came_from_cursor_or_newline() {
 
     let expected = vec![
         (0.0, 0.0, 10.0, 10.0),
-        (0.0, 13.0, 10.0, 23.0),
-        (0.0, 26.0, 10.0, 36.0),
-        (0.0, 39.0, 10.0, 49.0),
+        (0.0, 12.0, 10.0, 22.0),
+        (0.0, 24.0, 10.0, 34.0),
+        (0.0, 36.0, 10.0, 46.0),
     ];
     assert_eq!(rects(&via_cursor), expected, "`\\_l` 経路の行矩形（逐語）");
     assert_eq!(rects(&via_newline), expected, "改行経路の行矩形（逐語）");
@@ -269,12 +271,12 @@ fn overflow_window_is_identical_whether_lines_came_from_cursor_or_newline() {
 
     let expected_window = VisibleWindow {
         first_visible_line: 1,
-        block_offset: -13.0,
+        block_offset: -12.0,
     };
     assert_eq!(
         LayoutEngine::visible_window(&via_cursor, &region, WritingMode::HorizontalTb),
         expected_window,
-        "手計算: 最新行の bottom 49 > 36・1 行スキップで 49 − 13 = 36 <= 36"
+        "手計算: 最新行の bottom 46 > 34・1 行スキップで 46 − 12 = 34 <= 34"
     );
     assert_eq!(
         LayoutEngine::visible_window(&via_newline, &region, WritingMode::HorizontalTb),
@@ -295,7 +297,7 @@ fn overflow_window_is_identical_whether_lines_came_from_cursor_or_newline() {
 /// 書き手の意図は同じで、片方だけが解決に成功する——成功側だけが行を分割することを行数で固定する。
 ///
 /// 手計算（前提: 素の改行 4 行のあと `\_l` と 1 グリフ）:
-/// - 成立側 `\_l[,@-2lh]`: Y ＝ `39 − 26 = 13` → 実体化で 4 行目が閉じ 5 行目が開く → **5 行**。
+/// - 成立側 `\_l[,@-2lh]`: Y ＝ `36 − 24 = 12` → 実体化で 4 行目が閉じ 5 行目が開く → **5 行**。
 /// - 不成立側 `\_l[,@-2zz]`: X 省略・Y 解釈不能＝両軸とも移動が成立しない → 完全 no-op で
 ///   行を分割せず、5 個目のグリフは 4 行目の続きに置かれる → **4 行**。
 ///   `\_l` を 1 文字も書かなかった `[あ, \n, あ, \n, あ, \n, あ, あ]` と行矩形が完全に一致する
@@ -318,8 +320,8 @@ fn backward_arrangement_splits_a_line_only_when_a_move_succeeds() {
     );
     assert_eq!(
         (resolved_lines[4].rect.left, resolved_lines[4].rect.top),
-        (10.0, 13.0),
-        "分割された 5 行目は後戻り先（top 13）で、X は省略ゆえ 10 のまま"
+        (10.0, 12.0),
+        "分割された 5 行目は後戻り先（top 12）で、X は省略ゆえ 10 のまま"
     );
 
     // 不成立側: 同じ位置で Y の解釈に失敗する（X は省略）。
@@ -346,7 +348,7 @@ fn backward_arrangement_splits_a_line_only_when_a_move_succeeds() {
     );
     assert_eq!(
         rects(&degraded_lines).last().copied(),
-        Some((0.0, 39.0, 20.0, 49.0)),
+        Some((0.0, 36.0, 20.0, 46.0)),
         "5 個目のグリフは 4 行目の続き（行内 10 から）に置かれる"
     );
 }
@@ -395,8 +397,8 @@ fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
     // 空行が作られうる並び（**先頭が改行**＝実体化の (1) が空の現在行に当たる形）でも
     // 内容の無い行は現れない。上の並びは先頭がグリフなので (1) が空に当たらず、この主張が
     // 素通りしてしまう——同じ観測点で「作られうるのに作られない」を見るために足す。
-    // 手計算: `[\n, あ, \_l[,@-1lh], あ]` は 1 行目 `{0, 13, 10, 23}`（先頭の改行で block 13）・
-    // `\_l` の Y ＝ `13 − 13 = 0` で 2 行目 `{10, 0, 20, 10}` の **2 行**（空行 0 本）。
+    // 手計算: `[\n, あ, \_l[,@-1lh], あ]` は 1 行目 `{0, 12, 10, 22}`（先頭の改行で block 12）・
+    // `\_l` の Y ＝ `12 − 12 = 0` で 2 行目 `{10, 0, 20, 10}` の **2 行**（空行 0 本）。
     let leading_newline = layout_h(
         &[
             TextItem::LineBreak { ratio: 1.0 },
@@ -408,7 +410,7 @@ fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
     );
     assert_eq!(
         rects(&leading_newline),
-        vec![(0.0, 13.0, 10.0, 23.0), (10.0, 0.0, 20.0, 10.0)],
+        vec![(0.0, 12.0, 10.0, 22.0), (10.0, 0.0, 20.0, 10.0)],
         "先頭の改行は空行を作らない（保留のみでは行を開かない）"
     );
     assert!(
