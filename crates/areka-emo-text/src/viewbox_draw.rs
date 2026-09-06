@@ -22,7 +22,7 @@
 //!
 //! ダーティ矩形ごとに ①`SetTransform(identity)` → ②`PushAxisAlignedClip`（物理整数矩形・
 //! `ALIASED`）→ ③`Clear(None)`（透明・クリップ内のみ）→ ④`SetTransform(scale(k))`（この一点
-//! のみ）→ ⑤描画対象住人を `DrawTextLayout`（origin は [`DrawExecutor`] と**同一式**）→
+//! のみ）→ ⑤その矩形と交差する行だけを `DrawTextLayout`（origin は [`DrawExecutor`] と**同一式**・design §13.3）→
 //! ⑥`PopAxisAlignedClip`。恒等変換下で物理整数矩形へ描画範囲を限定してから透明化・合成スケール
 //! 適用・描画・範囲解除の順を守る（ダーティ限定は Direct2D の矩形範囲限定機構を直接用い、wintf の
 //! クリップ機構（`ClipShape`/`clip_sync_system`）には依存しない・R9.4）。
@@ -61,7 +61,7 @@ use crate::draw::{LineLayoutStore, ResolvedFont, create_d2d_target_bitmap, creat
 use crate::layout::{PositionedGlyph, VisibleWindow};
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-use crate::viewbox::{FramePlan, LineOverhang, PhysicalRect, ScrollPlanner, ScrollState};
+use crate::viewbox::{DirtyRect, FramePlan, LineOverhang, ScrollPlanner, ScrollState};
 use crate::writing::WritingMode;
 
 /// 行 TextLayout format の前提（フォント名・高さビット・writing_mode）——変わると
@@ -78,7 +78,8 @@ type FormatKey = (String, u32, WritingMode);
 pub struct DrawStats {
     /// 行 TextLayout の累計生成回数（[`LineLayoutStore`] 経由・確定行は再生成しないことの檻）。
     pub line_layout_creations: u64,
-    /// `DrawTextLayout` の累計実行回数（ダーティ交差行ぶんに限られることの檻）。
+    /// `DrawTextLayout` の累計実行回数（**矩形ごとの交差行数の和**に限られることの檻——
+    /// 矩形の枚数 × 描画対象行数の積ではない・R11.1）。
     pub draw_text_layout_calls: u64,
     /// 面内 blit（`copy_front_to_back_shifted` の blit≠0）の累計回数。
     pub blits: u64,
@@ -192,12 +193,13 @@ impl ViewboxExecutor {
     ///   commit 不要）。
     /// - [`FramePlan::FullClear`]: back を全域透明 Clear（描画 0 件）→ flip → commit → `Ok(true)`。
     /// - [`FramePlan::Update`]: 保持ピクセルの面内 blit → ダーティ矩形ごとの正準列（①〜⑥）で
-    ///   限定描画 → flip → commit → `Ok(true)`。
+    ///   限定描画（各矩形は**その矩形と交差する行だけ**を描く・R11.1）→ flip → commit → `Ok(true)`。
     ///
     /// **エラー縮退規律**（Error Handling）: フォント/方向変更（`ensure_format` が format/行キャッシュを
     /// 組み直したフレーム）または `plan` の想定外不整合（[`plan_inconsistency`]）を検知した場合、当該
-    /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=全 GlyphRun 住人）へ
-    /// 差し替えて描画する（正しさ優先・1 フレームでレガシー全域再描画と等価・透明フラッシュを起こす
+    /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=**可視窓の**
+    /// GlyphRun 住人）へ差し替えて描画する（正しさ優先・1 フレームで全域再描画のオラクル
+    /// `DrawExecutor::render` と同じ結果になる・透明フラッシュを起こす
     /// FullClear ではない）。フォント/方向変更は `debug!`・想定外不整合は `warn!` を残す（記憶
     /// areka-log-first-no-silent-failure）。縮退後の commit が prev_lines を張り直すため次フレームは
     /// 正常導出へ復帰する。
@@ -291,7 +293,8 @@ impl ViewboxExecutor {
                 }
 
                 // ── Phase 1（可謬）: 描画資源を BeginDraw の前に確定する ──
-                // 描画対象住人（draw_lines）の TextLayout・origin・Choice ハイライト資源を組む。行
+                // 描画対象住人（draw_lines＝矩形ごとの交差行の和集合）の TextLayout・origin・
+                // Choice ハイライト資源を index 付きで組み、Phase 2 が矩形ごとの行から引く。行
                 // レイアウトは plan 前のはみ出し収集ループで確保済み（ここは全てキャッシュヒット）。
                 // origin 式は DrawExecutor と同一（validrect-local 平行移動＋ブロック軸の可視窓
                 // オフセット）。ブラシ生成・`SetDrawingEffect`（**DrawingEffect リセット正準列**——
@@ -299,7 +302,7 @@ impl ViewboxExecutor {
                 // 範囲へ文字色効果を焼く）は可謬ゆえこの BeginDraw 前区間で `?` 伝播する（失敗フレームは
                 // target 未設定のまま skip＝再試行安全・R4.5/R4.6）。
                 let block_offset = window.block_offset;
-                let mut draws: Vec<LineDraw> = Vec::new();
+                let mut draws: Vec<(usize, LineDraw)> = Vec::new();
                 for &index in draw_lines {
                     let resident = &canvas.residents[index];
                     let (run, choice) = match &resident.content {
@@ -398,11 +401,14 @@ impl ViewboxExecutor {
                         None
                     };
 
-                    draws.push(LineDraw {
-                        origin,
-                        layout,
-                        choice: choice_draw,
-                    });
+                    draws.push((
+                        index,
+                        LineDraw {
+                            origin,
+                            layout,
+                            choice: choice_draw,
+                        },
+                    ));
                 }
 
                 let (r, g, b) = font.color;
@@ -417,7 +423,8 @@ impl ViewboxExecutor {
                 let k = contract.scale;
                 unsafe { self.dc.SetTarget(&target) };
                 unsafe { self.dc.BeginDraw() };
-                for rect in dirty {
+                for dirty_rect in dirty {
+                    let rect = &dirty_rect.rect;
                     // ① 恒等変換（物理整数矩形へ範囲限定するため）。
                     self.dc.set_transform(&Matrix3x2 {
                         M11: 1.0,
@@ -449,10 +456,16 @@ impl ViewboxExecutor {
                         M31: 0.0,
                         M32: 0.0,
                     });
-                    // ⑤ 該当行を描画（クリップにより描画結果は dirty 矩形内へ限定される）。
+                    // ⑤ **この矩形と交差する行だけ**を描く（クリップにより描画結果は当該矩形内へ
+                    // 限定される）。交差しない行のインクはこの矩形の内側に 1 画素も無いので、
+                    // 描かなくても画素は変わらない（R11.1/11.2）。Phase 1 で資源を組まなかった行
+                    // （空グリフ列・シーム住人＝そこで skip 済み）は引けないので飛ばす。
                     // Choice hover 行は (a) セグメント矩形を塗り色で `FillRectangle` してから
                     // (b) `DrawTextLayout`（効果範囲の文字だけが Phase 1 で焼いた切替色で描かれる）。
-                    for d in &draws {
+                    for line in &dirty_rect.lines {
+                        let Some((_, d)) = draws.iter().find(|(i, _)| i == line) else {
+                            continue;
+                        };
                         if let Some(ChoiceDraw {
                             hover: Some(hover), ..
                         }) = &d.choice
@@ -591,10 +604,13 @@ fn degrade_if_needed(
     }
 }
 
-/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=全 GlyphRun 住人）を組む。
+/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=**可視窓の** GlyphRun 住人）を組む。
 ///
-/// [`ScrollPlanner::derive_dirty`] を**空 prev**（`&[]`）で呼び、面全域 1 枚のダーティと全 GlyphRun
-/// 住人の描画対象を得る（初回フレームと同一経路＝レガシー全域再描画と等価）。縮退の唯一の生成口。
+/// [`ScrollPlanner::derive_dirty`] を**空 prev**（`&[]`）で呼び、面全域 1 枚のダーティと
+/// **可視窓（`first_visible_line` 以降）の** GlyphRun 住人の描画対象を得る（初回フレームと同一経路）。
+/// 描画対象を可視窓で切るのは、全域再描画のオラクル `DrawExecutor::render` が
+/// `skip(first_visible_line)` で可視窓より前の行を描かないためで、こちらも同じ結果になる
+/// （タスク 3.4 でこの規律を揃えた——derivation-ledger.md「3.5.1 R-2 の決着」）。縮退の唯一の生成口。
 fn full_domain_update(
     canvas: &ContentCanvas,
     window: &VisibleWindow,
@@ -615,9 +631,10 @@ fn full_domain_update(
 ///
 /// 返り値 `Some(reason)` は縮退のログ理由・`None` は整合。通常経路（[`ScrollPlanner::derive_dirty`]）は
 /// 面寸クランプ済み・住人範囲内の index のみを返すため不発だが、行指紋と内容キャンバスの想定外不整合
-/// （範囲外 index・面寸超過矩形）を検知したら全域ダーティへ縮退させる（ログ無し失敗経路を作らない）。
+/// （範囲外 index・面寸超過矩形・矩形の行が描画対象行に無い）を検知したら全域ダーティへ縮退させる
+/// （ログ無し失敗経路を作らない）。
 fn plan_inconsistency(
-    dirty: &[PhysicalRect],
+    dirty: &[DirtyRect],
     draw_lines: &[usize],
     residents_len: usize,
     surface_size: (u32, u32),
@@ -628,9 +645,17 @@ fn plan_inconsistency(
     let (w, h) = (surface_size.0 as u64, surface_size.1 as u64);
     if dirty
         .iter()
-        .any(|r| r.x as u64 + r.w as u64 > w || r.y as u64 + r.h as u64 > h)
+        .any(|d| d.rect.x as u64 + d.rect.w as u64 > w || d.rect.y as u64 + d.rect.h as u64 > h)
     {
         return Some("dirty 矩形が面寸を超える");
+    }
+    // 各矩形の行は描画対象行の部分集合（Phase 1 が draw_lines の資源しか組まないため、外れた
+    // index はその矩形で描かれず復元が欠ける）。
+    if dirty
+        .iter()
+        .any(|d| d.lines.iter().any(|i| !draw_lines.contains(i)))
+    {
+        return Some("dirty 矩形の行が draw_lines の部分集合でない");
     }
     None
 }

@@ -29,7 +29,7 @@
 //!
 //! # 共通前提（**弁別 fixture**・既定の共通前提を使ってはならない理由）
 //!
-//! `FixedMetrics`・`font_height = 10`（全角 'あ' の advance 10・`line_pitch = ceil(10 × 1.25) = 13`）・
+//! `FixedMetrics`・`font_height = 10`（全角 'あ' の advance 10・`line_pitch = 10 + 行間 2 = 12`）・
 //! バルーン画像原寸 `IMAGE = (400, 224)`。**validrect は画像全域ではなく部分矩形
 //! `left 30 / top 8 / right 350 / bottom 210`** にしてある。
 //!
@@ -59,8 +59,8 @@ use crate::writing::WritingMode;
 const FONT: f32 = 10.0;
 /// 全角 'あ' の行内送り（`FixedMetrics`・前提の檻で実測と突合する）。
 const ADVANCE: f32 = 10.0;
-/// 行送りピッチ `ceil(10 × 1.25)`（前提の檻で実測と突合する）。
-const PITCH: f32 = 13.0;
+/// 行送りピッチ `10 + 行間 2`（前提の檻で実測と突合する）。
+const PITCH: f32 = 12.0;
 
 /// 弁別 fixture の validrect（`left` / `top` / `right` / `bottom`・image px）。
 const VALID: (f32, f32, f32, f32) = (30.0, 8.0, 350.0, 210.0);
@@ -401,7 +401,7 @@ fn center_resolves_to_half_the_balloon_image_in_all_three_writing_modes() {
 ///   （列は未送りなので書字開始角のまま＝`vertical_rl` は 350・`vertical_lr` は 30）。
 ///
 /// **⒞ `[\_l[centerx,3lh], あ]`**（X ＝画像・Y ＝**文字描画開始点**からの絶対）
-/// - X ＝ 200・Y ＝ `origin.y + 3 × line_pitch(13) = 8 + 39 = 47`（3 方向とも `top = 8`）。
+/// - X ＝ 200・Y ＝ `origin.y + 3 × line_pitch(12) = 8 + 36 = 44`（3 方向とも `top = 8`）。
 ///   1 つのタグの中で**基点が 2 つ**（画像と文字描画開始点）使われることの観測点。
 ///
 /// ⒝ は X の着地が 3 方向で `40 / 350 / 30` と**すべて相異なる**ので、書字方向を取り違えた
@@ -517,9 +517,9 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
         glyph(),
     ];
     for (mode, expected_rect) in [
-        (WritingMode::HorizontalTb, (200.0, 47.0, 210.0, 57.0)),
-        (WritingMode::VerticalRl, (190.0, 47.0, 200.0, 57.0)),
-        (WritingMode::VerticalLr, (200.0, 47.0, 210.0, 57.0)),
+        (WritingMode::HorizontalTb, (200.0, 44.0, 210.0, 54.0)),
+        (WritingMode::VerticalRl, (190.0, 44.0, 200.0, 54.0)),
+        (WritingMode::VerticalLr, (200.0, 44.0, 210.0, 54.0)),
     ] {
         let region = region_undeclared(mode);
         let lines = layout_in(&c_items, 1, &region, mode);
@@ -528,7 +528,7 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
         assert_eq!(
             landing_of(&lines[0], mode),
             (IMAGE_CENTER.0, VALID.1 + 3.0 * PITCH),
-            "{mode:?}: ⒞ X は画像中央 200・Y は origin.y(8) + 3 × line_pitch(13) = 47"
+            "{mode:?}: ⒞ X は画像中央 200・Y は origin.y(8) + 3 × line_pitch(12) = 44"
         );
     }
 }

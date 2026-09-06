@@ -21,7 +21,7 @@
 //!
 //! # 共通前提（design.md Integration Tests）
 //!
-//! `FixedMetrics`・`font_height = 10`（全角 'あ' の advance 10・`line_pitch = ceil(10 × 1.25) = 13`）・
+//! `FixedMetrics`・`font_height = 10`（全角 'あ' の advance 10・`line_pitch = 10 + 行間 2 = 12`）・
 //! バルーン画像原寸 `IMAGE = (400, 224)`・validrect は画像全域（`0/0/400/224`）・`origin` 未宣言。
 //! 未宣言ゆえ書字開始点は書字開始角へ縮退する——`vertical_rl` は `(right, top) = (400, 0)`・
 //! `vertical_lr` は `(left, top) = (0, 0)`。折返し閾値は行内軸の遠辺 `bottom = 224`。
@@ -44,8 +44,8 @@ use log_capture_kit::capture;
 const FONT: f32 = 10.0;
 /// 全角 'あ' の行内送り（`FixedMetrics`・前提の檻で実測と突合する）。
 const ADVANCE: f32 = 10.0;
-/// 行送りピッチ `ceil(10 × 1.25)`（前提の檻で実測と突合する）。
-const PITCH: f32 = 13.0;
+/// 行送りピッチ `10 + 行間 2`（前提の檻で実測と突合する）。
+const PITCH: f32 = 12.0;
 
 /// `origin` 未宣言・validrect 全域のバルーン領域。
 ///
@@ -193,10 +193,10 @@ fn the_vertical_fixture_keeps_the_directions_and_basepoints_apart() {
     assert_eq!(
         FixedMetrics.line_pitch(FONT),
         PITCH,
-        "行送りピッチ ceil(10 × 1.25)"
+        "行送りピッチ 10 + 行間 2"
     );
 
-    // ⑵ 列送り幅（13）と字送り送り幅（10）が相異なる＝軸を取り違えた実装が弁別できる。
+    // ⑵ 列送り幅（12）と字送り送り幅（10）が相異なる＝軸を取り違えた実装が弁別できる。
     assert_ne!(
         PITCH, ADVANCE,
         "列送り幅と字送り幅が同値だと、軸の取り違えが着地に現れない"
@@ -234,12 +234,12 @@ fn the_vertical_fixture_keeps_the_directions_and_basepoints_apart() {
     assert_ne!(
         column_of(&rl_cols[1]).1,
         rl.start().0,
-        "vertical_rl: 2 列目の現在位置(387) と原点(400) が相異なる＝`@` 相対の基点が弁別できる"
+        "vertical_rl: 2 列目の現在位置(388) と原点(400) が相異なる＝`@` 相対の基点が弁別できる"
     );
     assert_ne!(
         column_of(&lr_cols[1]).0,
         lr.start().0,
-        "vertical_lr: 2 列目の現在位置(13) と原点(0) が相異なる"
+        "vertical_lr: 2 列目の現在位置(12) と原点(0) が相異なる"
     );
 }
 
@@ -313,15 +313,15 @@ fn vertical_rl_zero_zero_is_inside_the_text_area_and_records_no_debug() {
 // V2・V5: 列指定は自動列送りと同値
 // ─────────────────────────────────────────────────────────────────────
 
-/// **V2**: `vertical_rl` の `\_l[-13,0]` が着く列は、**折返しによる自動列送り**が着く列と
+/// **V2**: `vertical_rl` の `\_l[-12,0]` が着く列は、**折返しによる自動列送り**が着く列と
 /// 同じである（正典「次の列へ移るには X にマイナス値を指定する」）。
 ///
 /// 参照は `\_l` を一切含まない 23 文字——行内軸の閾値は遠辺 `bottom = 224` なので 22 文字で
 /// 列が埋まり、23 文字目が自動で次の列へ送られる。その列は `block_pos += (−1) × pitch`
-/// ＝ 400 − 13 ＝ 387（列の右端）＝列矩形 `[377, 387]`。
-/// `\_l[-13,0]` は X ＝ 書字開始角(400) + (−13) ＝ 387 で、同じ列矩形に着く。
+/// ＝ 400 − 12 ＝ 388（列の右端）＝列矩形 `[378, 388]`。
+/// `\_l[-12,0]` は X ＝ 書字開始角(400) + (−12) ＝ 388 で、同じ列矩形に着く。
 ///
-/// 値の逐語（`[377, 387]`）だけでは「自動列送りと同値」は主張できない。両者を**同じ実行で
+/// 値の逐語（`[378, 388]`）だけでは「自動列送りと同値」は主張できない。両者を**同じ実行で
 /// 突き合わせる**ことで、片方だけが動く変更（列送り幅の取り違え・符号の取り違え）が赤になる。
 #[test]
 fn vertical_rl_negative_x_matches_the_automatic_column_feed() {
@@ -330,27 +330,27 @@ fn vertical_rl_negative_x_matches_the_automatic_column_feed() {
     assert_eq!(auto.len(), 2, "22 文字で列が埋まり 23 文字目が次の列へ");
     assert_eq!(
         column_of(&auto[1]),
-        (377.0, 387.0),
-        "自動列送り: 400 + (−1) × 13 = 387 → 列矩形 [377, 387]"
+        (378.0, 388.0),
+        "自動列送り: 400 + (−1) × 12 = 388 → 列矩形 [378, 388]"
     );
 
-    let moved = layout_in(&[cursor_px(-13.0, 0.0), glyph()], 1, mode);
+    let moved = layout_in(&[cursor_px(-12.0, 0.0), glyph()], 1, mode);
     assert_eq!(moved.len(), 1);
     assert_eq!(
         column_of(&moved[0]),
         column_of(&auto[1]),
-        "`\\_l[-13,0]` の列は自動列送りの列と同値"
+        "`\\_l[-12,0]` の列は自動列送りの列と同値"
     );
-    assert_eq!(rect_of(&moved[0]), (377.0, 0.0, 387.0, 10.0));
+    assert_eq!(rect_of(&moved[0]), (378.0, 0.0, 388.0, 10.0));
     assert_eq!(
         inline_positions(&moved[0]),
         vec![0.0],
         "Y = 0 → 列の先頭（字送り軸の上端）"
     );
 
-    // 弁別: 同じ指定は `vertical_lr` では 2 列目にならない（X = 0 + (−13) = −13＝範囲の外）。
+    // 弁別: 同じ指定は `vertical_lr` では 2 列目にならない（X = 0 + (−12) = −12＝範囲の外）。
     let mirror = layout_in(
-        &[cursor_px(-13.0, 0.0), glyph()],
+        &[cursor_px(-12.0, 0.0), glyph()],
         1,
         WritingMode::VerticalLr,
     );
@@ -363,8 +363,8 @@ fn vertical_rl_negative_x_matches_the_automatic_column_feed() {
 
 /// **V5（V2 の鏡像）**: `vertical_lr` では**正**の X が自動列送りと同値になる。
 ///
-/// `vertical_lr` の列は左から右へ進むので `block_pos += (+1) × pitch` ＝ 0 + 13 ＝ 13
-/// （列の左端）＝列矩形 `[13, 23]`。`\_l[13,0]` は X ＝ 書字開始角(0) + 13 ＝ 13 で同値。
+/// `vertical_lr` の列は左から右へ進むので `block_pos += (+1) × pitch` ＝ 0 + 12 ＝ 12
+/// （列の左端）＝列矩形 `[12, 22]`。`\_l[12,0]` は X ＝ 書字開始角(0) + 12 ＝ 12 で同値。
 #[test]
 fn vertical_lr_positive_x_matches_the_automatic_column_feed() {
     let mode = WritingMode::VerticalLr;
@@ -372,22 +372,22 @@ fn vertical_lr_positive_x_matches_the_automatic_column_feed() {
     assert_eq!(auto.len(), 2);
     assert_eq!(
         column_of(&auto[1]),
-        (13.0, 23.0),
-        "自動列送り: 0 + (+1) × 13 = 13 → 列矩形 [13, 23]"
+        (12.0, 22.0),
+        "自動列送り: 0 + (+1) × 12 = 12 → 列矩形 [12, 22]"
     );
 
-    let moved = layout_in(&[cursor_px(13.0, 0.0), glyph()], 1, mode);
+    let moved = layout_in(&[cursor_px(12.0, 0.0), glyph()], 1, mode);
     assert_eq!(moved.len(), 1);
     assert_eq!(
         column_of(&moved[0]),
         column_of(&auto[1]),
-        "`\\_l[13,0]` の列は自動列送りの列と同値"
+        "`\\_l[12,0]` の列は自動列送りの列と同値"
     );
-    assert_eq!(rect_of(&moved[0]), (13.0, 0.0, 23.0, 10.0));
+    assert_eq!(rect_of(&moved[0]), (12.0, 0.0, 22.0, 10.0));
     assert_eq!(inline_positions(&moved[0]), vec![0.0]);
 
-    // 弁別: 同じ指定は `vertical_rl` では 2 列目にならない（X = 400 + 13 = 413）。
-    let mirror = layout_in(&[cursor_px(13.0, 0.0), glyph()], 1, WritingMode::VerticalRl);
+    // 弁別: 同じ指定は `vertical_rl` では 2 列目にならない（X = 400 + 12 = 412）。
+    let mirror = layout_in(&[cursor_px(12.0, 0.0), glyph()], 1, WritingMode::VerticalRl);
     assert_ne!(column_of(&mirror[0]), column_of(&auto[1]));
 }
 
@@ -400,11 +400,11 @@ fn vertical_lr_positive_x_matches_the_automatic_column_feed() {
 /// 「1 列ぶん左の列の先頭」を値の逐語ではなく**もう 1 回の列送り**として書き、両者が一致する
 /// ことを主張する。参照は `[あ, \n, あ, \n, あ]`（列送り 2 回）、被験は
 /// `[あ, \n, あ, \_l[@-1lh,0], あ]`（列送り 1 回＋記述例）。3 文字目はどちらも 3 列目
-/// ＝ 400 − 13 − 13 ＝ 374（列の右端）＝列矩形 `[364, 374]`・字送り 0（列の先頭）。
+/// ＝ 400 − 12 − 12 ＝ 376（列の右端）＝列矩形 `[366, 376]`・字送り 0（列の先頭）。
 ///
 /// **`\_l` の前に列を 1 つ送っておくことが要点である**——そうしないと現在位置(400) と
 /// 原点(400) が同値になり、`@` 相対の基点を原点と取り違えた実装も同じ値を返してしまう
-/// （前提の檻 ⑸ が、送った後の現在位置 387 が原点 400 と相異なることを保証している）。
+/// （前提の檻 ⑸ が、送った後の現在位置 388 が原点 400 と相異なることを保証している）。
 #[test]
 fn canon_example_relative_column_step_reaches_the_next_column_head_in_vertical_rl() {
     let mode = WritingMode::VerticalRl;
@@ -412,8 +412,8 @@ fn canon_example_relative_column_step_reaches_the_next_column_head_in_vertical_r
     assert_eq!(reference.len(), 3);
     assert_eq!(
         rect_of(&reference[2]),
-        (364.0, 0.0, 374.0, 10.0),
-        "列送り 2 回: 400 − 13 − 13 = 374 → 列矩形 [364, 374]・字送り 0"
+        (366.0, 0.0, 376.0, 10.0),
+        "列送り 2 回: 400 − 12 − 12 = 376 → 列矩形 [366, 376]・字送り 0"
     );
 
     let items = [
@@ -475,8 +475,8 @@ fn canon_example_relative_inline_step_advances_one_character_in_vertical_rl() {
 
 /// **V5（V3 の鏡像）**: `vertical_lr` では `\_l[@1lh,0]` が「1 列ぶん右の列の先頭へ」になる。
 ///
-/// 列送り 2 回は 0 + 13 + 13 ＝ 26（列の左端）＝列矩形 `[26, 36]`。`vertical_rl` の対応する
-/// 着地 `[364, 374]` とは別の値になる＝方向を取り違えた実装が弁別できる。
+/// 列送り 2 回は 0 + 12 + 12 ＝ 24（列の左端）＝列矩形 `[24, 34]`。`vertical_rl` の対応する
+/// 着地 `[366, 376]` とは別の値になる＝方向を取り違えた実装が弁別できる。
 #[test]
 fn canon_example_relative_column_step_reaches_the_next_column_head_in_vertical_lr() {
     let mode = WritingMode::VerticalLr;
@@ -484,8 +484,8 @@ fn canon_example_relative_column_step_reaches_the_next_column_head_in_vertical_l
     assert_eq!(reference.len(), 3);
     assert_eq!(
         rect_of(&reference[2]),
-        (26.0, 0.0, 36.0, 10.0),
-        "列送り 2 回: 0 + 13 + 13 = 26 → 列矩形 [26, 36]"
+        (24.0, 0.0, 34.0, 10.0),
+        "列送り 2 回: 0 + 12 + 12 = 24 → 列矩形 [24, 34]"
     );
 
     let items = [
@@ -592,10 +592,10 @@ fn absolute_y_is_the_downward_inline_advance_in_all_three_writing_modes() {
 /// これを縦書きで守る檻は 5.1 以前に **0 本**だった。`horizontal_tb` と `vertical_lr` は
 /// `block_dir = +1` なので符号を落としても差が出ず、V3 は保留改行を挟まないのでこの経路を
 /// 通らない。実測: 仮適用の `eff_block += block_dir * pitch * sum` を `1.0 * pitch * sum`
-/// に差し替えると本テストだけが赤になる（Σ = 1 で 387 が 413 に、Σ = 2 で 374 が 426 に）。
+/// に差し替えると本テストだけが赤になる（Σ = 1 で 388 が 412 に、Σ = 2 で 376 が 424 に）。
 ///
 /// Σ を 1 と 2 の 2 通り置くのは、`sum` を落とした実装（`block_dir * pitch` だけ）も
-/// 捕まえるためである（Σ = 1 では一致してしまい、Σ = 2 で 374 対 387 の差が出る）。
+/// 捕まえるためである（Σ = 1 では一致してしまい、Σ = 2 で 376 対 388 の差が出る）。
 #[test]
 fn pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_vertical_rl() {
     let mode = WritingMode::VerticalRl;
@@ -605,8 +605,8 @@ fn pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_ve
     assert_eq!(reference.len(), 2);
     assert_eq!(
         rect_of(&reference[1]),
-        (377.0, 0.0, 387.0, 10.0),
-        "保留改行 1 回: 400 + (−1) × 13 × 1 = 387 → 列矩形 [377, 387]"
+        (378.0, 0.0, 388.0, 10.0),
+        "保留改行 1 回: 400 + (−1) × 12 × 1 = 388 → 列矩形 [378, 388]"
     );
     let probed = layout_in(
         &[glyph(), newline(), cursor_relative_zero_x(), glyph()],
@@ -624,8 +624,8 @@ fn pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_ve
     let reference2 = layout_in(&[glyph(), newline(), newline(), glyph()], 2, mode);
     assert_eq!(
         rect_of(&reference2[1]),
-        (364.0, 0.0, 374.0, 10.0),
-        "保留改行 2 回: 400 + (−1) × 13 × 2 = 374 → 列矩形 [364, 374]"
+        (366.0, 0.0, 376.0, 10.0),
+        "保留改行 2 回: 400 + (−1) × 12 × 2 = 376 → 列矩形 [366, 376]"
     );
     let probed2 = layout_in(
         &[
@@ -641,14 +641,14 @@ fn pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_ve
     assert_eq!(
         rect_of(&probed2[1]),
         rect_of(&reference2[1]),
-        "Σratio が基点に乗る（`sum` を落とすと 387 になり赤）"
+        "Σratio が基点に乗る（`sum` を落とすと 388 になり赤）"
     );
 }
 
 /// **鏡像**: `vertical_lr` でも保留改行を挟んだ `@` 相対の基点が列の進む向き（右＝正）で動く。
 ///
 /// `block_dir = +1` なので着地は `vertical_rl` と逆側へ進み、同じ入力が別の列矩形になる
-/// （Σ = 1 で `[13, 23]`・Σ = 2 で `[26, 36]`）。
+/// （Σ = 1 で `[12, 22]`・Σ = 2 で `[24, 34]`）。
 #[test]
 fn pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_vertical_lr() {
     let mode = WritingMode::VerticalLr;
@@ -656,8 +656,8 @@ fn pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_ve
     let reference = layout_in(&[glyph(), newline(), glyph()], 2, mode);
     assert_eq!(
         rect_of(&reference[1]),
-        (13.0, 0.0, 23.0, 10.0),
-        "保留改行 1 回: 0 + (+1) × 13 × 1 = 13 → 列矩形 [13, 23]"
+        (12.0, 0.0, 22.0, 10.0),
+        "保留改行 1 回: 0 + (+1) × 12 × 1 = 12 → 列矩形 [12, 22]"
     );
     let probed = layout_in(
         &[glyph(), newline(), cursor_relative_zero_x(), glyph()],
@@ -669,8 +669,8 @@ fn pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_ve
     let reference2 = layout_in(&[glyph(), newline(), newline(), glyph()], 2, mode);
     assert_eq!(
         rect_of(&reference2[1]),
-        (26.0, 0.0, 36.0, 10.0),
-        "保留改行 2 回: 0 + (+1) × 13 × 2 = 26 → 列矩形 [26, 36]"
+        (24.0, 0.0, 34.0, 10.0),
+        "保留改行 2 回: 0 + (+1) × 12 × 2 = 24 → 列矩形 [24, 34]"
     );
     let probed2 = layout_in(
         &[

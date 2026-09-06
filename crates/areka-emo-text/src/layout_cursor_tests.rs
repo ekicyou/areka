@@ -12,7 +12,7 @@ use log_capture_kit::count_levels;
 // （`cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs`）が持つ。本ファイルが見るのは
 // **配線**だけである——到着時の解決をどう保留し、いつ実体化し、行をどう分割するか。
 //
-// 共通前提は既存 layout テストと同じ FixedMetrics・font 10（全角 'あ' advance 10・pitch 13）。
+// 共通前提は既存 layout テストと同じ FixedMetrics・font 10（全角 'あ' advance 10・pitch 12＝10 + 行間 2）。
 // origin(0,0)・wordwrappoint None ゆえ文字描画開始点は (0, 0)・折返し閾値＝画像右辺 400。
 
 /// 絶対 Px の `\_l` は現在行を確定し（`\_l` は行区切り・RN-3）、指定軸で次グリフの
@@ -60,7 +60,7 @@ fn cursor_move_commits_line_and_overrides_next_glyph_axes() {
 }
 
 /// 保留改行と `\_l` が同一フラッシュに混在するとき、順序は 行確定→保留改行 Σratio→
-/// カーソル軸上書き。`[あ, \n(1.0), \_l[10px,5px], あ]`（pitch 13）: 改行送り(block=13)を
+/// カーソル軸上書き。`[あ, \n(1.0), \_l[10px,5px], あ]`（pitch 12）: 改行送り(block=12)を
 /// 経てカーソル上書きが後勝ちで (inline 10, block 5) が最終値になる（順序 (2)→(3) の証左）。
 #[test]
 fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
@@ -95,10 +95,10 @@ fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
     );
     assert_eq!(lines.len(), 2);
     assert_eq!(lines[0].rect.top, 0.0);
-    // 改行送りは block を 13 にするが、カーソル block 上書きが後勝ちで 5 が最終値。
+    // 改行送りは block を 12 にするが、カーソル block 上書きが後勝ちで 5 が最終値。
     assert_eq!(
         lines[1].rect.top, 5.0,
-        "カーソル block 上書きが保留改行送り(13)に勝つ（順序 (2)→(3)）"
+        "カーソル block 上書きが保留改行送り(12)に勝つ（順序 (2)→(3)）"
     );
     // 改行は行内を 0 へ戻すが、カーソル inline 上書きが後勝ちで 10 が最終値。
     assert_eq!(
@@ -185,7 +185,7 @@ fn both_axes_omitted_cursor_move_is_complete_noop() {
 // （一方をカーソル上書き・他方は改行進行値）である。
 
 /// 解決表の em/lh の係数がレイアウト配置を実際に駆動する。`\_l[2em, 3lh]`
-/// （font 10・pitch 13）は inline=文字描画開始点(0)+2×10=20・block=文字描画開始点(0)+3×13=39 へ
+/// （font 10・pitch 12）は inline=文字描画開始点(0)+2×10=20・block=文字描画開始点(0)+3×12=36 へ
 /// 次グリフを載せる。単位ごとに異なる係数（em＝font_height・lh＝line_pitch）が配置座標に
 /// 現れることを固定する（配線が軸ごとの解決値を取り違えず載せていることの証跡）。
 #[test]
@@ -227,8 +227,8 @@ fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
         "em: inline = origin(0) + 2×font_height(10) = 20"
     );
     assert_eq!(
-        lines[1].rect.top, 39.0,
-        "lh: block = origin(0) + 3×line_pitch(13) = 39"
+        lines[1].rect.top, 36.0,
+        "lh: block = origin(0) + 3×line_pitch(12) = 36"
     );
 }
 
@@ -305,8 +305,8 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
 }
 
 /// 保留改行と単軸 `\_l` が同一フラッシュに混在するとき、上書き軸はカーソル値・省略軸は改行進行値を
-/// 取る（all-or-nothing でなく per-axis 合成の証左・R1.2/1.6）。font 10・pitch 13:
-/// - x のみ `\_l[10px,]`＋`\n(1.0)`: inline=カーソル 10・block=改行進行 13。
+/// 取る（all-or-nothing でなく per-axis 合成の証左・R1.2/1.6）。font 10・pitch 12:
+/// - x のみ `\_l[10px,]`＋`\n(1.0)`: inline=カーソル 10・block=改行進行 12。
 /// - y のみ `\_l[,5px]`＋`\n(1.0)`: block=カーソル 5・inline=改行リセット 0。
 #[test]
 fn cursor_and_pending_newline_compose_per_axis() {
@@ -344,8 +344,8 @@ fn cursor_and_pending_newline_compose_per_axis() {
         "inline: カーソル上書きが後勝ち（改行リセット 0 を上書き）"
     );
     assert_eq!(
-        lines[1].rect.top, 13.0,
-        "block: カーソル省略ゆえ改行進行値 13 が残る（per-axis 合成）"
+        lines[1].rect.top, 12.0,
+        "block: カーソル省略ゆえ改行進行値 12 が残る（per-axis 合成）"
     );
 
     // block 上書き・inline は改行リセット値を取る（vice-versa）。
@@ -373,7 +373,7 @@ fn cursor_and_pending_newline_compose_per_axis() {
     assert_eq!(lines.len(), 2);
     assert_eq!(
         lines[1].rect.top, 5.0,
-        "block: カーソル上書きが後勝ち（改行進行 13 を上書き）"
+        "block: カーソル上書きが後勝ち（改行進行 12 を上書き）"
     );
     assert_eq!(
         inline_positions(&lines[1]),
@@ -679,7 +679,7 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
 /// - `[あ, \_l[@0,@0], あ]`: 保留なし＝実効位置は走査位置そのもの (10, 0)。`@0` は
 ///   そこへ据え置く＝2 個目が 1 個目に続けて置かれる。
 /// - `[あ, \n(1.0), \_l[@0,@0], あ]`: 保留改行があるので実効位置は改行を仮適用した
-///   (0, 13)＝**次行の先頭**。`@0` はそこへ据え置くので、改行が取り消されない。
+///   (0, 12)＝**次行の先頭**。`@0` はそこへ据え置くので、改行が取り消されない。
 ///   書き換え前の現行値は (10, 0) で、`@0` が走査位置を基点にしたせいで**保留改行を
 ///   打ち消していた**（改行が無かったことになる）。
 /// - `[\_l[10,], \_l[@5,], あ]`: 保留カーソルも仮適用の対象。実効位置の X は先の
@@ -687,7 +687,7 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
 /// - `[\n(1.0), \_l[10,], \_l[@0,], あ]`: 保留改行と保留カーソルが**同時に**居る
 ///   交差ケース。仮適用の順序はフラッシュ本体（ゲート②の保留フラッシュ）の (2)→(3) と同順である——
 ///   (2) 保留改行が行内軸を先頭（0）へ戻し、(3) 保留カーソルの X=10 がそれに**後勝ち**する。
-///   ゆえに実効位置は (10, 13) で、`@0` はそこへ据え置き、最終着地も (10, 13) になる。
+///   ゆえに実効位置は (10, 12) で、`@0` はそこへ据え置き、最終着地も (10, 12) になる。
 ///   仮適用の 2 ブロック（`layout.rs` の `CursorMove` 腕・実効位置の算出）を入れ替えると (3)→(2) の順になり、改行の
 ///   行内リセットが後勝ちして `inline` が 0 へ落ちる＝この 1 本だけが赤になる。
 #[test]
@@ -731,7 +731,7 @@ fn relative_cursor_basis_is_the_effective_position() {
     );
     assert_eq!(lines[1].rect.top, 0.0);
 
-    // 保留改行あり: 実効位置は改行を仮適用した (0, 13)＝次行の先頭。
+    // 保留改行あり: 実効位置は改行を仮適用した (0, 12)＝次行の先頭。
     let after_break = [
         TextItem::Glyph { ch: 'あ' },
         TextItem::LineBreak { ratio: 1.0 },
@@ -755,8 +755,8 @@ fn relative_cursor_basis_is_the_effective_position() {
          書き換え前の現行値は 10（走査位置を基点にして改行を打ち消していた）"
     );
     assert_eq!(
-        lines[1].rect.top, 13.0,
-        "正典値（4.2 の実効位置による）: 実効位置の行送り軸は改行送り後の 13。\
+        lines[1].rect.top, 12.0,
+        "正典値（4.2 の実効位置による）: 実効位置の行送り軸は改行送り後の 12。\
          書き換え前の現行値は 0（相対 0 指定が改行を取り消していた）"
     );
 
@@ -832,11 +832,11 @@ fn relative_cursor_basis_is_the_effective_position() {
         vec![10.0],
         "正典値（4.2 の実効位置による）: 仮適用は (2) 保留改行 → (3) 保留カーソル の順\
          ＝フラッシュ本体（`layout.rs` ゲート②）と同順なので、改行の行内リセット(0)に\
-         保留カーソルの X=10 が後勝ちする。実効位置 (10, 13) から `@0` は据え置き＝10。\
+         保留カーソルの X=10 が後勝ちする。実効位置 (10, 12) から `@0` は据え置き＝10。\
          仮適用の 2 ブロックを入れ替えると (3)→(2) になり 0 へ落ちる"
     );
     assert_eq!(
-        lines[0].rect.top, 13.0,
-        "行送り軸は保留改行の送り 13（保留カーソルは Y を動かしていない）"
+        lines[0].rect.top, 12.0,
+        "行送り軸は保留改行の送り 12（保留カーソルは Y を動かしていない）"
     );
 }

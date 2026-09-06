@@ -20,9 +20,23 @@
 //! |---|---|---|---|
 //! | 行内軸（文字が進む） | +x | +y | +y |
 //! | 行送り軸（行が進む） | +y | −x | +x |
-//! | 折返し判定 | 行内位置＋次グリフ幅 > 閾値（3 方向共通・行内軸は常に正方向） | 同 | 同 |
+//! | 折返し判定 | 行内位置＋次グリフ幅 > 折返し基準／描画範囲の遠辺（3 方向共通・行内軸は常に正方向） | 同 | 同 |
 //!
-//! 折返し閾値・描画開始点は [`TextRegion`] が解決済みの絶対値（image px）。
+//! 折返し基準・描画範囲の遠辺・描画開始点は [`TextRegion`] が解決済みの絶対値（image px）。
+//!
+//! ## 行内軸の二段構え（折返し基準と描画範囲・R6.2/6.3）
+//!
+//! 行内軸には別々の意味を持つ 2 つの値が立つ——**折返し基準**
+//! （[`TextRegion::wrap_threshold`]・`wordwrappoint`＝「ここを超えたら折り返す」）と
+//! **描画範囲の行内軸の遠辺**（[`TextRegion::inline_limit`]・`validrect` の当該辺＝
+//! 「ここを超えてはならない」絶対上限）である。折返しはどちらかを超えそうなら起き、
+//! 遠辺の判定は折返し方式にも塊の途中かどうかにも依らず**配置の直前に必ず**通る。
+//! 2 つの値は片方へ丸め込まない（絶対上限の意味論と、行末禁則文字が基準を超えて
+//! ぶら下がる余地〔未実装〕を残すため）。折返し基準が遠辺の内にあるバルーン
+//! （通常の定義）では遠辺の判定は決して発火せず、出力は本規則の導入前と一致する——
+//! ただし **`\_l` による行内位置の跳躍を伴わない入力に限る**。跳躍先が描画範囲の遠辺の
+//! 近くなら、折返し基準が内にあっても要件 6.2（描画範囲の外に置かない）が優先して
+//! 折り返す。
 //!
 //! ## 行内開始位置の規則（design 無言域の実装正準）
 //!
@@ -83,8 +97,9 @@ pub trait GlyphMetrics {
     /// グリフの行内送り幅（image px）。writing_mode の行内軸方向の寸。
     fn advance(&self, ch: char, font_height: f32) -> f32;
 
-    /// 行送りピッチ（image px）。M1 正準: `ceil(font_height × 1.25)`
-    /// （係数は [`TextLayerConfig::line_pitch_factor`] が正本・既定 1.25）。
+    /// 行送りピッチ（image px）。正典式: `font_height + 行間`（切り上げなし）。
+    /// 式も行間の既定値（2）も [`TextLayerConfig::line_pitch`] が正本で、
+    /// 実装は自前で足し算をせずそこへ委譲する（design.md §4.1・R3.5）。
     fn line_pitch(&self, font_height: f32) -> f32;
 
     /// **実レンダリング行ボックス丈**（image px・descent 込み＝`ascent + descent`）。
@@ -106,7 +121,8 @@ pub trait GlyphMetrics {
 /// 構造テスト用の決定論 metrics（R4.5/R11.6）。
 ///
 /// 決定論仮想値: 全角（非 ASCII）＝`font_height`・半角（ASCII）＝`font_height / 2`。
-/// 行送りピッチは M1 正準式 `ceil(font_height × 既定係数 1.25)`。行ボックス丈は
+/// 行送りピッチは既定の調整値を読んで [`TextLayerConfig::line_pitch`] へ委譲する
+/// （`font_height + 行間 2`・自前の仮想行間を持たない）。行ボックス丈は
 /// [`FIXED_LINE_BOX_RATIO`]×`font_height`。
 /// タイポグラフィ的正確さは目的でない——折返し・行送りアルゴリズムの檻のための値。
 #[derive(Clone, Copy, Debug, Default)]
@@ -129,7 +145,7 @@ impl GlyphMetrics for FixedMetrics {
     }
 
     fn line_pitch(&self, font_height: f32) -> f32 {
-        (font_height * TextLayerConfig::default().line_pitch_factor).ceil()
+        TextLayerConfig::default().line_pitch(font_height)
     }
 
     fn line_box_height(&self, font_height: f32) -> f32 {
@@ -216,7 +232,7 @@ impl LayoutEngine {
     ///   分岐させ、ゲート①（可視打切り）・②（保留フラッシュ）・④（配置）の意味論は
     ///   分岐に依らず不変（design System Flows「ゲート③」）:
     ///   - [`WrapPlan::CharByChar`]（既定・OFF 経路）: 既存の文字単位規則
-    ///     （`行内位置＋次グリフ幅 > 閾値`）。この引数を [`WrapPlan::CharByChar`] にした
+    ///     （`行内位置＋次グリフ幅 > 折返し基準`）。この引数を [`WrapPlan::CharByChar`] にした
     ///     出力は本機能導入前の layout と byte 等価（非回帰の構造保証・R4.1/4.3/8.3——
     ///     `SegmentPlan` を一切参照しないため境界値の算出自体が起きない・R4.2）。
     ///   - [`WrapPlan::Segmented`]: 塊先決——塊先頭で塊全体の advance 合計を全文 plan から
@@ -225,8 +241,10 @@ impl LayoutEngine {
     ///     縮退する（3.1/3.2）。塊内の残グリフは残数カウンタで追跡し追加判定なしで配置
     ///     （2.1/2.3・浮動丸めでの途中分割を構造排除）。plan に被覆されないグリフ（不整合）
     ///     は既存文字単位規則で配置される（優しい縮退・4.2）。
-    /// - 折返し判定: `行内位置＋次グリフ幅 > 閾値`（3 方向共通・正準表）。
-    ///   行頭の 1 グリフは閾値超過でも配置する（無限折返しの構造排除・無損失）。
+    /// - 折返し判定: `行内位置＋次グリフ幅 > 折返し基準` **または** `> 描画範囲の遠辺`
+    ///   （3 方向共通・正準表・モジュール doc「行内軸の二段構え」）。遠辺の判定は
+    ///   [`WrapPlan`] の分岐にも塊の途中かどうかにも依らず配置の直前に必ず通る。
+    ///   行頭の 1 グリフはどちらを超えても配置する（無限折返しの構造排除・無損失）。
     /// - 行送り量: 自動折返し＝`line_pitch`・改行マーカー＝`line_pitch × Σratio`。
     /// - 改行は遅延（deferred newline・モジュール doc「改行の遅延」）: 到着即時に
     ///   行を送らず保留へ累算し、次の可視グリフ配置の直前に一括実体化する。保留のみ
@@ -235,8 +253,8 @@ impl LayoutEngine {
     /// 塊先決は `visible_count` に依存しない（seg_sum は全 `items` から算出・INV-1/7.1）。
     /// ゲート①が④より先にあるため、塊途中で可視が切れても配置済み prefix の行は動かない
     /// （INV-2/7.2/7.3）。塊前行送りは行頭では `cap_rem == cap_full` ゆえ不発火＝空行を
-    /// 作らない（INV-3）。縦書きは行内軸の `inline_pos`/`advance`/`threshold` 演算のみゆえ
-    /// 新規 mode 分岐なし（6.1/6.2）。
+    /// 作らない（INV-3）。縦書きは行内軸の `inline_pos`/`advance`/折返し基準/遠辺の演算のみゆえ
+    /// 新規 mode 分岐なし（6.1/6.2・遠辺の軸解決は [`TextRegion`] が済ませている）。
     ///
     /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
     #[allow(clippy::too_many_arguments)]
@@ -312,7 +330,12 @@ impl LayoutEngine {
         mut cursor_warn: Option<(&ActorKey, &mut CursorWarnGuard)>,
     ) -> Vec<PositionedLine> {
         let pitch = metrics.line_pitch(font_height);
-        let threshold = region.wrap_threshold();
+        // 行内軸の二段構え（design.md §4.3・R6.2/6.3/6.8）: 折返し基準（soft・「超えたら
+        // 折り返す」）と描画範囲の遠辺（hard・「超えてはならない」絶対上限）を**別の値**として
+        // 持つ。`min` へ畳み込まない——畳むと絶対上限の意味論も、行末禁則文字が基準を超えて
+        // ぶら下がる余地（本仕様では未実装）も表せなくなる。
+        let soft = region.wrap_threshold();
+        let hard = region.inline_limit();
         let start = region.start();
         // 軸読み替え正準表: 行内軸開始・行送り軸開始・行送り方向（±1）。
         // 行内軸は 3 方向とも正方向（+x／+y）＝折返し判定は共通式で回る。
@@ -387,11 +410,11 @@ impl LayoutEngine {
                     // feed＝この可視グリフの配置前に行送りするか。ゲート①②④・行頭 1 グリフ
                     // 配置（無限折返し回避）・行矩形規約は分岐に依らず不変。
                     // 直前にフラッシュした場合 current は空ゆえ二重前進しない。
+                    // 塊内（先決済み）かどうかは、分岐が `seg_remaining` を減らす前に読む。
+                    let in_segment = seg_remaining > 0;
                     let feed = match wrap {
                         // CharByChar: 既存の文字単位規則そのまま（byte 等価の非回帰経路）。
-                        WrapPlan::CharByChar => {
-                            !current.is_empty() && inline_pos + advance > threshold
-                        }
+                        WrapPlan::CharByChar => !current.is_empty() && inline_pos + advance > soft,
                         WrapPlan::Segmented(plan) => {
                             if seg_remaining > 0 {
                                 // 塊内: 先決済み＝追加判定なしで配置（浮動丸めでの途中分割排除・2.1/2.3）。
@@ -407,8 +430,12 @@ impl LayoutEngine {
                                     font_height,
                                     metrics,
                                 );
-                                let cap_rem = threshold - inline_pos; // 残り行幅
-                                let cap_full = threshold - inline_start; // 行頭からの行幅
+                                // 塊の収まり判定の基準は soft と hard の近い方（塊は
+                                // どちらも超えられない）。2 つの値は畳まずに持ったまま、
+                                // ここでの「行幅」の計算にだけ近い方を使う。
+                                let limit = soft.min(hard);
+                                let cap_rem = limit - inline_pos; // 残り行幅
+                                let cap_full = limit - inline_start; // 行頭からの行幅
                                 if seg_sum <= cap_rem {
                                     // 現在行に収まる → 分割せず継続配置（2.1/2.3）。
                                     seg_remaining = seg.len - 1;
@@ -423,16 +450,35 @@ impl LayoutEngine {
                                     // 長大塊（行頭からでも収まらない）: 当該塊のみ既存 char 規則へ
                                     // 委譲（3.1/3.2）。seg_remaining は設定せず＝続くグリフは非被覆
                                     // として char 規則で処理され、次の塊先頭で通常判定を再開する（3.3）。
-                                    !current.is_empty() && inline_pos + advance > threshold
+                                    !current.is_empty() && inline_pos + advance > soft
                                 }
                             } else {
                                 // plan 非被覆（不整合／長大塊の継続）: 既存 char 規則で配置
                                 // （優しい縮退・4.2・design Error Handling「plan と items の不整合」）。
-                                !current.is_empty() && inline_pos + advance > threshold
+                                !current.is_empty() && inline_pos + advance > soft
                             }
                         }
                     };
-                    if feed {
+                    // ③' 描画範囲の遠辺（hard）の判定。分岐（CharByChar／塊内／塊先頭／
+                    // 非被覆）に依らず**配置の直前に必ず**通す——これが「描画範囲の外へ
+                    // 文字を置かない」（R6.2）を構造で保つ最後の門である。行頭の 1 グリフ
+                    // （`current` が空）は soft と同じく例外で、超えても置く（無限折返しの排除）。
+                    let over_hard = !current.is_empty() && inline_pos + advance > hard;
+                    if over_hard && in_segment {
+                        // 先決済みの塊が途中で割れる＝「塊は分割されない」の例外。塊の容量は
+                        // 塊先頭で `limit = soft.min(hard)` を基準に先決してあるので、送りを積む
+                        // だけではここへ届かない——`\_l`（[`TextItem::CursorMove`]）が塊の途中で
+                        // 行内位置を跳ばしたときにだけ発火する。ゆえに折返し基準が描画範囲の
+                        // 内にある通常のバルーン（soft ≤ hard）でも起こりうる縮退である。
+                        // 判断の理由が読める形で 1 件残す（design.md 縮退表・R6.6）。
+                        tracing::debug!(
+                            inline_pos,
+                            advance,
+                            hard,
+                            "塊の途中で描画範囲の遠辺に達した——塊を分割して次行へ続ける"
+                        );
+                    }
+                    if feed || over_hard {
                         lines.push(finish_line(
                             std::mem::take(&mut current),
                             mode,
@@ -876,6 +922,9 @@ mod cursor_vertical_tests;
 #[cfg(test)]
 #[path = "layout_cursor_wiring_tests.rs"]
 mod cursor_wiring_tests;
+#[cfg(test)]
+#[path = "layout_hard_limit_tests.rs"]
+mod hard_limit_tests;
 #[cfg(test)]
 #[path = "layout_segmented_tests.rs"]
 mod segmented_tests;

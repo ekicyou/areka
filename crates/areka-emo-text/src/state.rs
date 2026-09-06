@@ -47,24 +47,53 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 /// テキスト層の調整値（design.md「TextLayerRuntime」の config 正本）。
 ///
-/// 純粋層・結線層の双方が消費する共有設定。値は design.md の正準既定
-/// （`line_pitch`＝`ceil(font.height × 1.25)` の係数 1.25）。
+/// 純粋層・結線層の双方が消費する共有設定であり、**行送りの式の唯一の定義点**
+/// （`line_pitch = font.height + 行間`・design.md §4.1 正典表）。純粋層の
+/// [`crate::layout::FixedMetrics`] も COM 層の `DWriteMetrics` も自前で足し算をせず
+/// [`TextLayerConfig::line_pitch`] を呼ぶ（R3.5）。
 ///
 /// **文字送り間隔（旧 `char_wait`）は撤去済み**（R7.2）——reveal のペースは自前の定数で
 /// なく**配送された cue の再生時間**（`TalkCue::duration`）から `interval = duration / N`
-/// で導出する（服従＝再生時間の単一真実源に従う）。本 config は描画メトリクス由来の
-/// `line_pitch_factor` のみを保持する。
+/// で導出する（服従＝再生時間の単一真実源に従う）。本 config は行送りの行間
+/// `line_gap` のみを保持する。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextLayerConfig {
-    /// 行送りピッチ係数（`line_pitch = ceil(font.height × 係数)`・既定 1.25）。
-    pub line_pitch_factor: f32,
+    /// 行間（image px・整数値）。`1lh = 1em + 行間` の「行間」にあたる量で、既定は 2
+    /// （裁定 2026-09-05・根拠は `doc/COMPAT_ARCHITECTURE.md` §8・R1.2/R1.6）。
+    pub line_gap: f32,
 }
 
 impl Default for TextLayerConfig {
     fn default() -> Self {
-        Self {
-            line_pitch_factor: 1.25,
+        Self { line_gap: 2.0 }
+    }
+}
+
+impl TextLayerConfig {
+    /// 行送りピッチ＝`font_height + line_gap`（切り上げなし・両項とも整数 px・R1.2/R3.1）。
+    ///
+    /// 行送り・`\_l` の `lh` 係数・比率つき改行の送り量・選択肢の帯の上限は、いずれも
+    /// この 1 本の式を源にする（別々の係数を持たない・R3.5）。書字方向が縦書きのときは
+    /// 同じ値を列送りとして読み替えるだけで、縦書き専用の係数は持たない（R3.8）。
+    pub fn line_pitch(&self, font_height: f32) -> f32 {
+        font_height + self.line_gap
+    }
+
+    /// 非有限・負の `line_gap` を警告つきで 0 へ縮退した調整値を返す（log-first・R1.6）。
+    ///
+    /// 呼び手は構築直後に 1 度だけ通す規約（[`crate::actor::TextLayerRuntime::new`]）——
+    /// 以降は正規化済みの値を配るため、縮退の警告は構築時の 1 件だけになる。
+    /// `line_gap` が有限かつ 0 以上なら値も警告も変えずそのまま返す。
+    pub fn normalized(self) -> TextLayerConfig {
+        if self.line_gap.is_finite() && self.line_gap >= 0.0 {
+            return self;
         }
+        tracing::warn!(
+            line_gap = self.line_gap,
+            fallback = 0,
+            "line_gap が非有限または負——行間を 0 へ縮退する"
+        );
+        TextLayerConfig { line_gap: 0.0 }
     }
 }
 

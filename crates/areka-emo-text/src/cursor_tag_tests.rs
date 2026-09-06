@@ -7,7 +7,7 @@
 //! `cursor_tag_resolve_tests.rs` に置いた。共通前提は `cursor_tag_test_support.rs` が持つ。
 //!
 //! 共通前提は design.md「Unit Tests」の逐語:
-//! `font_height = 10`・`line_pitch = 13`・`image_size = (400, 224)`・
+//! `font_height = 10`・`line_pitch = 12`・`image_size = (400, 224)`・
 //! `origin`＝宣言例 `(50, 20)`・`current = (200, 30)`。
 //!
 //! **期待値は正典（design.md 解決表）の式から書く**——実装が返した値を書き写さない。基点 3 種

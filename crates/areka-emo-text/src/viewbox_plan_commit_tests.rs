@@ -7,7 +7,7 @@ use crate::writing::WritingMode;
 
 // ── 3.3 R2.3/4.3: plan/commit 二相（純粋計画・確定・Clear・失敗フレーム再試行） ──
 //
-// 幾何は 3.2 と同一前提（font 10 → pitch 13・全角 1 グリフ/行）。面寸 (400,100)。
+// 幾何は 3.2 と同一前提（font 10 → 行送り 12＝10 + 行間 2・全角 1 グリフ/行）。面寸 (400,100)。
 
 /// 3 行 canvas（横書き・validrect 100×400）——plan/commit 二相の共通母体。
 fn plan_canvas() -> ContentCanvas {
@@ -38,7 +38,7 @@ fn plan_is_pure_and_repeatable_without_commit() {
     planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &first);
 
     // スクロールを未 commit で 2 回 plan → 同一計画・scroll_state 不変。
-    let w1 = window(1, -13.0);
+    let w1 = window(1, -12.0);
     let before = planner.scroll_state();
     let a = planner.plan(
         &canvas,
@@ -116,8 +116,8 @@ fn commit_of_scroll_update_advances_committed() {
     planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &first);
     assert_eq!(planner.scroll_state().committed, 0);
 
-    // スクロール（内容不変・block_offset=-13＝内容が上へ）→ 下端露出帯付き Update。
-    let w1 = window(1, -13.0);
+    // スクロール（内容不変・block_offset=-12＝内容が上へ）→ 下端露出帯付き Update。
+    let w1 = window(1, -12.0);
     let scroll = planner.plan(
         &canvas,
         &w1,
@@ -129,7 +129,7 @@ fn commit_of_scroll_update_advances_committed() {
         FramePlan::Update { blit, dirty, .. } => {
             assert_eq!(
                 *blit,
-                (0, -13),
+                (0, -12),
                 "横書きスクロールの blit は y 軸・符号素通し"
             );
             assert!(!dirty.is_empty(), "露出帯がダーティ");
@@ -139,7 +139,7 @@ fn commit_of_scroll_update_advances_committed() {
     planner.commit(&canvas, &w1, WritingMode::HorizontalTb, &contract, &scroll);
     assert_eq!(
         planner.scroll_state().committed,
-        -13,
+        -12,
         "commit で committed が目標へ追従"
     );
 }
@@ -200,7 +200,7 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
     let contract = ScaleContract::new(1.0, None);
     let canvas = plan_canvas();
     let mut planner = ScrollPlanner::new();
-    // 全域を確定 → スクロールで committed を -13 まで進める。
+    // 全域を確定 → スクロールで committed を -12 まで進める。
     let w0 = window(0, 0.0);
     let f0 = planner.plan(
         &canvas,
@@ -210,7 +210,7 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
         (400, 100),
     );
     planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &f0);
-    let w1 = window(1, -13.0);
+    let w1 = window(1, -12.0);
     let f1 = planner.plan(
         &canvas,
         &w1,
@@ -219,7 +219,7 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
         (400, 100),
     );
     planner.commit(&canvas, &w1, WritingMode::HorizontalTb, &contract, &f1);
-    assert_eq!(planner.scroll_state().committed, -13);
+    assert_eq!(planner.scroll_state().committed, -12);
 
     // request_clear: scroll_state 0 化・次 plan は FullClear。
     planner.request_clear();
@@ -293,13 +293,13 @@ fn axis_mapping_end_to_end_across_three_writing_modes() {
     let cases = [
         (
             WritingMode::HorizontalTb,
-            -13.0f32,
-            -13,
-            (0, -13),
+            -12.0f32,
+            -12,
+            (0, -12),
             Edge::Bottom,
         ),
-        (WritingMode::VerticalRl, 13.0, 13, (13, 0), Edge::Left),
-        (WritingMode::VerticalLr, -13.0, -13, (-13, 0), Edge::Right),
+        (WritingMode::VerticalRl, 12.0, 12, (12, 0), Edge::Left),
+        (WritingMode::VerticalLr, -12.0, -12, (-12, 0), Edge::Right),
     ];
     for (mode, offset, exp_committed, exp_blit, edge) in cases {
         // 量子化＋軸写像（状態不変の純関数経路）。
@@ -354,13 +354,19 @@ fn axis_mapping_end_to_end_across_three_writing_modes() {
 /// 更新する列を回す）。`k=1.0` は `committed == pos`。増分丸めの累積シミュレータを対照として
 /// 併走させ、本メトリクスが「直接丸め」と「増分丸め（ドリフトする）」を弁別できることを裏取る。
 fn assert_long_scroll_is_drift_free(mode: WritingMode, k: f32, step_sign: f32, steps: usize) {
-    const PITCH: f32 = 13.0; // font 10 → ceil(12.5)（行単位スクロールの刻み）。
+    // 行単位スクロールの刻み＝文字の大きさ + 行間 2。他の檻と同じ文字の大きさ 10
+    // （刻み 12）にすると k=1.25 で真位置が 12 × 1.25 = 15 と常に整数になり、増分丸めが
+    // 直接丸めと一致してしまって末尾の負の対照（増分はドリフトする）が空振りする。
+    // 刻みが 4 の倍数でなければ真位置に端数が出るので、文字の大きさを 13（刻み 15・
+    // 15 × 1.25 = 18.75）へ導き直す。刻みが再び 4 の倍数になれば末尾の対照が赤で知らせる。
+    const FONT_H: f32 = 13.0;
+    const PITCH: f32 = 15.0; // 13 + 行間 2。
     let contract = ScaleContract::new(k, None);
     let canvas = canvas_for(
         &broken_lines(4),
         mode,
         (Some(0), Some(200), Some(0), Some(400)),
-        10.0,
+        FONT_H,
     );
     let surface = (400u32, 400u32); // ブロック軸に十分・committed 追従は面寸非依存。
     let mut planner = ScrollPlanner::new();
@@ -458,9 +464,9 @@ fn plan_dirty_derivation_suite_covers_five_cases() {
         let canvas = canvas_for(&broken_lines(4), mode, vr, 10.0);
         let mut planner = ScrollPlanner::new();
         commit_initial(&mut planner, &canvas, mode, &contract, surface);
-        let plan = planner.plan(&canvas, &window(1, -13.0), mode, &contract, surface);
+        let plan = planner.plan(&canvas, &window(1, -12.0), mode, &contract, surface);
         let (blit, dirty) = expect_update(&plan);
-        assert_eq!(blit, (0, -13), "(1) スクロールの blit は y 軸・符号素通し");
+        assert_eq!(blit, (0, -12), "(1) スクロールの blit は y 軸・符号素通し");
         assert_eq!(dirty.len(), 1, "(1) 露出帯 1 枚のみ（変化行ゼロ）");
         assert_eq!(
             dirty[0].y + dirty[0].h,
@@ -576,9 +582,9 @@ fn back_is_fully_covered_across_modes_and_scenarios() {
         let canvas = canvas_for(&broken_lines(3), mode, vr, 10.0);
         let mut planner = ScrollPlanner::new();
         commit_initial(&mut planner, &canvas, mode, &contract, surf_h);
-        let plan = planner.plan(&canvas, &window(1, -13.0), mode, &contract, surf_h);
+        let plan = planner.plan(&canvas, &window(1, -12.0), mode, &contract, surf_h);
         let (blit, dirty) = expect_update(&plan);
-        assert_eq!(blit, (0, -13));
+        assert_eq!(blit, (0, -12));
         assert_back_fully_covered(blit, &dirty, surf_h, "横書きスクロール");
     }
 
@@ -588,9 +594,9 @@ fn back_is_fully_covered_across_modes_and_scenarios() {
         let canvas = canvas_for(&broken_lines(3), mode, vr, 10.0);
         let mut planner = ScrollPlanner::new();
         commit_initial(&mut planner, &canvas, mode, &contract, surf_v);
-        let plan = planner.plan(&canvas, &window(1, 13.0), mode, &contract, surf_v);
+        let plan = planner.plan(&canvas, &window(1, 12.0), mode, &contract, surf_v);
         let (blit, dirty) = expect_update(&plan);
-        assert_eq!(blit, (13, 0));
+        assert_eq!(blit, (12, 0));
         assert_back_fully_covered(blit, &dirty, surf_v, "vertical_rl スクロール");
     }
 
@@ -600,9 +606,9 @@ fn back_is_fully_covered_across_modes_and_scenarios() {
         let canvas = canvas_for(&broken_lines(3), mode, vr, 10.0);
         let mut planner = ScrollPlanner::new();
         commit_initial(&mut planner, &canvas, mode, &contract, surf_v);
-        let plan = planner.plan(&canvas, &window(1, -13.0), mode, &contract, surf_v);
+        let plan = planner.plan(&canvas, &window(1, -12.0), mode, &contract, surf_v);
         let (blit, dirty) = expect_update(&plan);
-        assert_eq!(blit, (-13, 0));
+        assert_eq!(blit, (-12, 0));
         assert_back_fully_covered(blit, &dirty, surf_v, "vertical_lr スクロール");
     }
 
@@ -650,7 +656,7 @@ fn plan_commit_two_phase_idempotent_across_commit_boundary() {
     let mut planner = ScrollPlanner::new();
     commit_initial(&mut planner, &canvas, mode, &contract, surface);
 
-    let w = window(1, -13.0);
+    let w = window(1, -12.0);
     let before = planner.scroll_state();
     let a = planner.plan(&canvas, &w, mode, &contract, surface);
     let b = planner.plan(&canvas, &w, mode, &contract, surface);
@@ -659,7 +665,7 @@ fn plan_commit_two_phase_idempotent_across_commit_boundary() {
     assert!(matches!(a, FramePlan::Update { .. }), "スクロールは Update");
 
     planner.commit(&canvas, &w, mode, &contract, &a);
-    assert_eq!(planner.scroll_state().committed, -13, "commit で確定が進む");
+    assert_eq!(planner.scroll_state().committed, -12, "commit で確定が進む");
     assert_eq!(
         planner.plan(&canvas, &w, mode, &contract, surface),
         FramePlan::NoChange,
