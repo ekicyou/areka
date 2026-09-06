@@ -43,10 +43,10 @@
 
 | 欄 | 値 |
 |---|---|
-| 実施日時 | （未記入） |
-| 実施者 | （未記入） |
-| コミット | `2df64e79`（`2df64e7974d94719c5fb1b7dfcb9aa8d35ed9f6d`・作業ツリー `C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56`・未コミットの差分なし） |
-| ビルド構成 | `dev`（`cargo build -p areka`・2026-09-05 08:18 ビルド・`target\debug\areka.exe` 22,723,072 バイト）。32bit 橋渡しは `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` を**全体テストの後に**ビルドして隣へ複写（PE machine `014C` を確認済み） |
+| 実施日時 | （未記入・走行の開始時に書く。**準備**は 2026-09-06 20:10〜20:12 に済ませた） |
+| 実施者 | （未記入・走行は開発者が行う）。**準備者: AI（2026-09-06 20:12）**。開発者の手元作業（実拡大率を 96 dpi でない水準にする〔手順書 §2.3〕・§6 の宣言を読んで自分の言葉と違う行を直す）は**未実施**——走行の前に開発者が行い、行った時刻を §2 と §6 の末尾へ書く |
+| コミット | `8eff0c60`（`8eff0c600616ebe3e27021bfc405c5477eca728f`・作業ツリー `C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56`・準備の開始時点〔2026-09-06 20:10〕で `git status --porcelain` は空。準備で生じる差分は本記録の編集のみである） |
+| ビルド構成 | `dev`（`cargo build -p areka`・2026-09-06 20:11:09 ビルド完了・`target\debug\areka.exe` 22,759,424 バイト）。32bit 橋渡しは `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` を**`cargo build -p areka` の後に**ビルドして隣へ複写した（手順書 §2.2 の順序。**ワークスペース全体のビルド／テストは走らせていない**——走らせると同じ名前の 64bit 版が上書きしてしまう）。複写は 2026-09-06 20:11:22・直後に PE machine `014C` を確認 |
 | OS（版・ビルド番号） | Windows 11 Pro 10.0.26200 |
 
 ---
@@ -72,7 +72,7 @@
 |---|---|
 | ゴースト | `C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56\crates\pilot\examples\shiori-host-32\fixtures\emo2` |
 | バルーン | `C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56\crates\pilot\examples\shiori-host-32\fixtures\emo2\emo2-kakukaku` |
-| 実 32bit の脳 | `C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56\target\debug\shiori-host32-helper.exe`（PE machine `014C`＝32bit・2026-09-05 08:18 に i686 版を複写。起動スクリプト `lap.ps1` が毎回この値を確かめ、`8664` なら起動を拒む） |
+| 実 32bit の脳 | `C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56\target\debug\shiori-host32-helper.exe`（PE machine `014C`＝32bit・**2026-09-06 20:11:22 に i686 版を複写**し、同時刻に PE machine を読んで `014C` を確認した。272,896 バイト。i686 の成果物はこのコミットで作り直しを命じたが入力に変更が無く再構築は起きなかったため〔`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` → `Finished` 0.63 秒〕、ファイルの更新時刻は 2026-09-04 21:29:11 のままである。起動スクリプト `lap.ps1` が毎回この値を確かめ、`8664` なら起動を拒む） |
 | 実バイナリ（起動する実行体） | `C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56\target\debug\areka.exe` |
 
 > すべて**絶対パス**で書く。相対パスでは脳の読み込みが成立しない（R5.1）。
@@ -89,7 +89,7 @@
 | 記録用の出力水準 | — | 実際に与えた文字列を逐語で書く | `RUST_LOG=info,kanade=trace,wintf::transition=debug,areka::placement::diag=debug,areka_emo_present=debug`（走行 A・B・C・D すべて同一・起動スクリプト `lap.ps1` が与える） |
 | 有界の自動終了 | — | 与えた値を書く。番犬が無いことも書く | `AREKA_APP_SMOKE_EXIT_MS`＝走行 A `1800000`（30 分）・走行 B／C／D `600000`（10 分）。番犬は付かない（下の明記） |
 | 選択肢の見た目の反転の注入 | 既定は無効 | **本走行では点けない**。点ける場合は別走行として分け、その旨を記録する（処理系に 1 度だけ焼き付くため走行中に切り替えられない） | 走行 A・B・D は**未指定（既定）**。走行 C のみ `AREKA_CHOICE_HOVER_INJECT=cycle`（別プロセス・`lap.ps1 -Run C` が与え、他の走行では変数を消してから起動する） |
-| 実機ログの機械判定の入力 | — | 判定の走行で与える絶対パス | `AREKA_TRANSITION_LOG=C:\home\maz\lap-records\emo2-conformance-2026-09-05\lap-run-d.log`（走行 D の生ログ・`lap.ps1 -Run Judge` が与える） |
+| 実機ログの機械判定の入力 | — | 判定の走行で与える絶対パス | `AREKA_TRANSITION_LOG=C:\home\maz\lap-records\emo2-conformance-2026-09-06\lap-run-d.log`（走行 D の生ログ・`lap.ps1 -Run Judge` が与える） |
 | 実 32bit の脳の絶対パス | — | 絶対パスで与える | **変数は無い**——配置で決まる（実行体の隣の `shiori-host32-helper.exe`・§3 の行）。`areka.exe` はこの名を上書きする環境変数を読まない |
 
 番犬が付かないことの明記: この直接起動には番犬（ハング判定の締切）が付かない。終わりを与えるのは `AREKA_APP_SMOKE_EXIT_MS` の有界自動終了だけである（手順書 §3.4）。
@@ -102,13 +102,15 @@
 
 | 欄 | 値 |
 |---|---|
-| 起動コマンドの逐語 | 起動スクリプト `C:\home\maz\lap-records\emo2-conformance-2026-09-05\lap.ps1`（手順書 §3.2 の逐語を写したもの・本記録の §3／§4 の値を埋め込み済み）。走行 A＝`.\lap.ps1 -Run A`、走行 B＝`-Run B`、走行 C＝`-Run C`。実体は `& $AREKA $GHOST $BALLOON 2>&1 \| Tee-Object -FilePath $LOG` |
+| 起動コマンドの逐語 | 起動スクリプト `C:\home\maz\lap-records\emo2-conformance-2026-09-06\lap.ps1`（手順書 §3.2 の逐語を写したもの・本記録の §3／§4 の値を埋め込み済み）。走行 A＝`.\lap.ps1 -Run A`、走行 B＝`-Run B`、走行 C＝`-Run C`。実体は `& $AREKA $GHOST $BALLOON 2>&1 \| Tee-Object -FilePath $LOG`。この写しは 2026-09-05 の置き場の同名スクリプトから **`$LOGDIR` の 1 行だけ**を新しい置き場へ差し替えたものであり、他は 1 文字も違わない（2026-09-06 20:12 に複写・`Compare-Object` で差が当該 1 行のみであることと、UTF-8 の 2 行〔`[Console]::OutputEncoding` と `$OutputEncoding`〕が写しにも在ることを確認） |
 | 採取の開始時刻 | （未記入・`times.txt` へ自動記録される値を写す） |
 | 採取の終了時刻 | （未記入・同上） |
-| ログの保存先（絶対パス） | 走行 A `C:\home\maz\lap-records\emo2-conformance-2026-09-05\lap-run-a.log`・走行 B 同 `lap-run-b.log`・走行 C 同 `lap-run-c.log`（置き場は 2026-09-05 08:19 に新品で作成・空） |
+| ログの保存先（絶対パス） | 走行 A `C:\home\maz\lap-records\emo2-conformance-2026-09-06\lap-run-a.log`・走行 B 同 `lap-run-b.log`・走行 C 同 `lap-run-c.log`（置き場は **2026-09-06 20:12 に新品で作成・空**。中に在るのは起動スクリプトの写し `lap.ps1` だけである。2026-09-05 の置き場は中断の記録として残し、追記も上書きもしない＝手順書 §9・§13.3） |
 | ログの行数 | （未記入・`times.txt` の `lines=` を写す） |
 | 有界の自動終了が効いて終わったか | （未記入。走行 A は項目 13 のため**自分で閉じる**のが正・走行 B／C は自動終了で可） |
-| 実測を目的とする他の仕様を並走させていないことの確認（R5.9） | 準備時点（2026-09-05 08:19）: 実測目的の仕様は並走していない。ただし別の作業ツリーで `cargo test --workspace -j 3` が 1 本走っていた（CPU 負荷源）。**走行 D の前に `Get-Process cargo` で 0 個を確かめる**こと（機械判定の量は µs 単位で負荷に敏感）。走行時の確認結果: （未記入） |
+| 実測を目的とする他の仕様を並走させていないことの確認（R5.9） | 準備時点（**2026-09-06 20:11:38**）: ⑴ `Get-Process cargo,rustc,areka,shiori-host32-helper` が **0 個**（`tasklist` でも `cargo.exe` 0・`rustc.exe` 0・`areka.exe` 0 を突き合わせた）。⑵ `git worktree list` は 6 本——`C:/home/maz/git/areka`（`main`）・本作業ツリー・`areka-p0-cursor-tag-canon-c24d2c`（完了済み spec `emo-text-line-height-canon` のブランチ）・`areka-p0-ukadoc-survey-33754d`・同 `-d2d757`・`sakura-bare-tag-lexer-bbdf8c`。いずれも文書調査か完了済みで、**実測を目的とする仕様は 1 本も並走していない**。⑶ 何も止めていない（自分が起こしたと確認できないプロセスは止めない）。**走行 D の直前にもう一度 `Get-Process cargo` で 0 個を確かめる**こと（機械判定の量は µs 単位で負荷に敏感）。走行時の確認結果: （未記入） |
+
+> **ゴーストの永続状態の消去（手順書 §2.4 の 2）**。走行 A を初回起動にするため、`crates\pilot\examples\shiori-host-32\fixtures\emo2\ghost\master\profile\areka\` を **2026-09-06 20:12:35 に消した**。消す前に在ったのは `sylphya.toml` の 1 ファイルだけで、中身は起動回数（`[boot] count = "1"`）である。消した後に同フォルダが無いことと、隣の `profile\pasta\`（消さない対象）がそのまま在ることを確認した。このフォルダは版管理の対象外（`crates/pilot/examples/shiori-host-32/.gitignore:3`）であり、消去の前後で `git status --porcelain` は空のままである。**走行 A と走行 B のあいだでは消さない**（項目 12 の後半が観測できなくなる）。
 
 ### 5.1 走行 D（拡大率遷移の専用採取）の同定
 
@@ -117,7 +119,7 @@
 | 欄 | 値 |
 |---|---|
 | 起動コマンドの逐語（走行 A との差は `$LOG` と有界の自動終了の値だけである旨も書く） | `.\lap.ps1 -Run D`（同じスクリプト・走行 A との差は `$LOG`＝`lap-run-d.log` と `AREKA_APP_SMOKE_EXIT_MS=600000` の 2 点だけ。`RUST_LOG` と 3 つの絶対パスは同一） |
-| ログの保存先（絶対パス・`lap-run-d.log`） | `C:\home\maz\lap-records\emo2-conformance-2026-09-05\lap-run-d.log` |
+| ログの保存先（絶対パス・`lap-run-d.log`） | `C:\home\maz\lap-records\emo2-conformance-2026-09-06\lap-run-d.log` |
 | ログの行数 | （未記入） |
 | 切り替えた 2 つの拡大率水準（一方は §2 実機構成の 96 dpi でない水準） | （未記入） |
 | 往復の回数（低→高 何回・高→低 何回。**各 3 回以上**） | （未記入） |
