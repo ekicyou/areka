@@ -45,7 +45,7 @@
 - 既存 brief 11 本の本文と優先順位（8.9・12.4）・`doc/COMPAT_ARCHITECTURE.md`・`.kiro/steering/roadmap.md`（12.3）。
 - 二重所有の**裁定そのもの**（本 spec は案を 1 つ添えるだけ・8.4）と段階 A〜E の最終順序（7.9・10.6）。
 - `areka-P0-sakura-tag-word-boundary` が扱う「本文の半角 `[` で直前のタグと本文が黙って消える」欠陥の是正（12.5）。
-- 常設の整合検査の**判定そのもの**（上流 toolkit 要件 6 が唯一の持ち主）。**ただし空振り台帳（`crates/ukadoc-survey/tests/consistency/checks.rs` の `census` の `Subjects::Zero` の行）だけは例外**——2026-09-06 の開発者裁定により本 spec が `NonEmpty` へ移す。判定の中身は変えず、「今日の実データに対象があるか」の宣言だけを実測へ合わせる（要件 12.1 の但し書き）。
+- 常設の整合検査の**判定そのもの**（上流 toolkit 要件 6 が唯一の持ち主）。**ただし本 spec の台帳記入が上流の常設テストの「今日の実データ」の前提を崩した箇所だけは例外**——2026-09-06 の開発者裁定により本 spec が試験の側を直す。判定の中身は変えず、試験専用（`crates/ukadoc-survey/src/` には触れない）。適用は 2 度あり、⑴ `tests/consistency/checks.rs` の `census` の `Subjects::Zero` の行を `NonEmpty` へ移す（**2026-09-06 の実測で対象消滅**——分岐点の時点で兄弟 spec が全行を `NonEmpty` にしており、本 spec が移す行は 0 行。タスク 5.4 は作業なしで閉じた）⑵ `tests/consistency/perturb.rs` の摂動の錨 `ANCHOR_ID`／`ANCHOR_URL` を、本台帳が `links` で指すようになった `OnBoot` から、4 台帳のどこからも指されていない `OnFirstBoot` へ移す（タスク 5.5・実際に行われたのはこちら）。錨の選定条件はドメインに依らない（要件 12.1 の但し書き）。
 
 ### Allowed Dependencies
 
@@ -244,7 +244,7 @@ URL を置く先は「意味を作っている定義」であって「綴りを�
 | 順 | 条件 | status | 見込み |
 |---|---|---|---|
 | 1 | 見出しがタグでない（規則 1 の第 4 節）、または areka の担当範囲の外である | `not-applicable` | **1** |
-| 2 | DD-2 の判定で別名になった、または本文の注記が旧仕様と述べ置き換え先が本文から特定できる（DD-2 の 3 件） | `alias` | **17** |
+| 2 | DD-2 の判定で別名になった、または本文の注記が旧仕様と述べ置き換え先が本文から特定できる（DD-2 の 3 件） | `alias` | **20**（2026-09-05 のタスク 2.6 の是正で 17 → 20。順 6 の 3 組を数え落としていた） |
 | 3 | `doc/COMPAT_ARCHITECTURE.md` §8（または §8 が指す `doc/choice-cascade-compat.md`）に、正典の定めに対して別の応答を返すことが**既に登記されている**（DD-7 の ⑵ の行だけ） | `degraded` | **4** |
 | 4 | areka が名前を見て正典の動きを起こす。⒜ `decode.rs` の写像先が cue になり実際に効く ⒝ `\![...]` について実行時の 4 経路のいずれかに当たる ⒞ `%` について値の源が実在し展開される | `implemented` | **22** |
 | 5 | `crates/areka-sylphya/src/vocab/flat.rs` の `%` 語彙表に名前がある、または §8 が「M1 非実装／非受理／非実導出で、語彙（と意味論）の記録だけがある」と明記して名指ししている（§8 の実文は行ごとに違い、「完全な語彙と意味論の記録のみ」〔`\![set,balloontimeout]`・`\x`〕・「未実装（語彙記録）」〔`\f[align]`／`\f[valign]`／`\f[underline,true]`——この行は「等」で閉じておらず 3 綴りを逐語で書いている（2026-09-05 のタスク 2.3 の裁定で `underline` を追記）〕・「語彙保持＋縮退のみ」〔時間指令の一覧〕の 3 通り。「語彙・意味論のみ記録」という逐語は §8 に無い）。**行が「等」で閉じている場合（実測 1 行＝compile 側の時間指令の一覧）は、その行が逐語で綴りを書いた名前だけを名指しとみなす**（`quicksection`・`set,balloonwait`・`set,choicetimeout`・`set,balloontimeout`・`embed`・`sound,wait`・`wait,syncobject` の 7 名。「同期 `move` 系の持続時間引数」は綴りではないので名指しに数えない）。書かれていない綴りは順 6 に落とし、行が「等」で開いていることを備考に書く | `vocabulary-only` | **36** |
@@ -255,7 +255,7 @@ URL を置く先は「意味を作っている定義」であって「綴りを�
 - 順 4 と順 5 の双方に当たる項目は順 4 が勝つ（要件 2.5 の後段。`%` 語彙表の 26 名には値の源が実在する 4 名が含まれるため）。
 - `\![...]` のうち消費側の登録が無く §8 にも記録が無い名前は順 6 に落ちる（要件 2.7）。名前がキャリアに載って最後まで運ばれること自体は備考に書く。
 - `implemented` としたいのに定義箇所が特定できない項目は `implemented` にせず、順 5 か順 3 として理由を備考に書く（要件 2.13）。
-- 見込みの合計は 1＋20＋4＋22＋36＋259＝342。`alias` 20 と `degraded` 4・`implemented` 22 は本書で確定した値（`alias` は 2026-09-05 のタスク 2.6 の是正で 17 → 20・`absent` は 262 → 259）（`degraded` は 2026-09-05 のタスク 2.2 の裁定で 3 → 4・`implemented` は 23 → 22 に改めた。根拠は DD-9 の Q2 の追記）、`vocabulary-only` 36 と `absent` 262 は順 5 の「等」の規則で機械的に決まる見込みの値であり（2026-09-05 のタスク 2.3 で `\f[underline,パラメータ]` が名指しに当たると分かり 34 → 35・264 → 263、続くタスク 2.4 で §8 の逐語 7 名が id では 8 件になると分かり 35 → 36・263 → 262 に改めた）、納品時の集計（V4・V5）で確かめて置き換える。§8 に本ドメインの行が増減したら再点検する（Revalidation Triggers）。
+- 見込みの合計は 1＋20＋4＋22＋36＋259＝342。`alias` 20 と `degraded` 4・`implemented` 22 は本書で確定した値（`alias` は 2026-09-05 のタスク 2.6 の是正で 17 → 20・`absent` は 262 → 259）（`degraded` は 2026-09-05 のタスク 2.2 の裁定で 3 → 4・`implemented` は 23 → 22 に改めた。根拠は DD-9 の Q2 の追記）、`vocabulary-only` 36 と `absent` 259 は順 5 の「等」の規則で機械的に決まる見込みの値であり（2026-09-05 のタスク 2.3 で `\f[underline,パラメータ]` が名指しに当たると分かり 34 → 35・264 → 263、続くタスク 2.4 で §8 の逐語 7 名が id では 8 件になると分かり 35 → 36・263 → 262 に改めた）、納品時の集計（V4・V5）で確かめて置き換える。§8 に本ドメインの行が増減したら再点検する（Revalidation Triggers）。
 
 ### 規則 3: `introduced`（要件 4.9〜4.11）
 
@@ -408,7 +408,7 @@ doc/
 
 ### Modified Files（コメント行のみ・実行時の振る舞いは不変）
 
-- `crates/areka-parsers/src/sakura/decode.rs` — `decode_bare`／`decode_tag`／`decode_token` の腕の直上に `//` を 16 行。
+- `crates/areka-parsers/src/sakura/decode.rs` — `decode_bare`／`decode_tag`／`decode_token` の腕の直上に `//` を 15 行（`decode_bare` 6・`decode_tag` 8・`decode_token` 1。当初は 16 行と書いていたが、コメントを置く場所の表の実数は 15 行）。
 - `crates/areka-seriko/src/actor.rs` — `handle_message` の名前選別の直上に `//` を 1 行。
 - `crates/areka/src/emo2_boot/zorder_cue.rs` — `ZOrderCueSink::emit` の組の判定の直上に `//` を 2 行。
 - `crates/areka-sakura/src/sysvar.rs` — `resolve_system_var` の既定値の腕の直上に `//` を 1 行。
@@ -479,7 +479,7 @@ doc/
 | V11 | `crates/**/*.rs` から「行頭の空白を除いて `///`・`//!`・`//` のいずれかで始まり、`ukadoc:` の後に空白区切りの 1 語だけが続き行末に達する行」を集め、⑴ 各 URL がスナップショットの `url` と 1 文字も違わない ⑵ URL → id の集合が台帳の `implemented` の id 集合と一致 ⑶ 同じ id の URL が 2 行以上ない。URL を伴わない `ukadoc` の 156 行は 1 行も拾われない | 9.2〜9.5・9.10・9.11 |
 | V12 | 表 A・表 B・所有の突合表の再生成結果とブリーフィング中の表がバイト一致（比較は作業ツリーのファイル同士・改行を揃える） | 5.2・8.1・10.2 |
 | V13 | URL を足した 5 ファイルの行数が 1,000 未満。`cargo build` で `unused_doc_comments` の警告が 1 件も出ない | 9.7 |
-| V14 | `git diff --name-only`（比較元は分岐点の `origin/main`）の変更対象が `doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/ukadoc-coverage/briefing-sakura-script.md`・`doc/ukadoc-coverage/report/sakura-script.md`・上記 5 ファイルの URL コメント・**`crates/ukadoc-survey/tests/consistency/checks.rs` の `census` の宣言行**（2026-09-06 の開発者裁定で許した唯一の追加・要件 12.1 の但し書き）・本 spec 自身の `.kiro/specs/areka-P0-ukadoc-survey-sakura-script/` だけ。`doc/COMPAT_ARCHITECTURE.md`・`.kiro/steering/roadmap.md`・他 3 台帳・他 3 ドメインの報告・`report/summary.md`・`catalog.toml`・`values.md`・`README.md`・11 本の brief に差分が無い（**パスの実在を先に確かめてから差分を取る**——実在しないパスへの `git diff` は空を返して「差分なし」と区別が付かない） | 8.9・11.5・12.1〜12.4 |
+| V14 | `git diff --name-only`（比較元は分岐点の `origin/main`）の変更対象が `doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/ukadoc-coverage/briefing-sakura-script.md`・`doc/ukadoc-coverage/report/sakura-script.md`・上記 5 ファイルの URL コメント・**`crates/ukadoc-survey/tests/consistency/` の 2 本**（`checks.rs` の `census` の宣言行と `perturb.rs` の錨の定数 `ANCHOR_ID`／`ANCHOR_URL`。2026-09-06 の開発者裁定で許した追加・要件 12.1 の但し書き。実際に動いたのは `perturb.rs` の側で、`census` は対象消滅）・本 spec 自身の `.kiro/specs/areka-P0-ukadoc-survey-sakura-script/` だけ。`doc/COMPAT_ARCHITECTURE.md`・`.kiro/steering/roadmap.md`・他 3 台帳・他 3 ドメインの報告・`report/summary.md`・`catalog.toml`・`values.md`・`README.md`・11 本の brief に差分が無い（**パスの実在を先に確かめてから差分を取る**——実在しないパスへの `git diff` は空を返して「差分なし」と区別が付かない） | 8.9・11.5・12.1〜12.4 |
 | V15 | 段 9 の前後で `cargo test --workspace` を 1 度ずつ走らせ、結果が同じであること（i686 の host-32 成果物を先にビルドしておく）。道具は着地済みなので、完了直前に担当の報告を必ず作り直し、作り直した後にもう一度常設の検査を回して報告が台帳と食い違わないことを確かめる | 9.8・11.1・11.3 |
 
 **道具そのものを較正する**（緑は台本が壊れていても出る）。V1〜V13 は、それぞれ「わざと 1 か所壊した写し」で赤になることを 1 度は確かめてから本番に当てる（V13 の行数の側は 1,000 行の閾値を一時的に下げて赤を出す）。V14・V15 は git とテスト実行そのものが検査なので較正の対象にしない。例——id を 1 つ削って V1・V2 が赤になるか、`status` を綴り違いにして V5 が赤になるか、`alias_of` を別名へ向けて V6 が赤になるか、URL の末尾を 1 文字変えて V11 が赤になるか。
@@ -541,7 +541,7 @@ doc/
 | 名寄せの異なりは規則しだいで 259〜263 名・20〜24 群・99〜107 件 | DD-1 の規則で **259 名・23 群・105 件**に一意に定まる。内訳は 9 群 31 件＋3 群 6 件＋11 群 68 件で、要件 4.5・4.6 の語彙とちょうど一致する | ブリーフィング ⑴ 節にこの数を載せる |
 | 台帳の id には逆斜線が大量に含まれるので `\\` の書き分けが最大の危うさ | **342 件の id に逆斜線・引用符・非 ASCII は 1 件も無い**（見出しの記号は `_5c` などに符号化済み）。`\\` の逃がしが要るのは**備考**だけ | 規則 0 の 5。骨組みを機械生成する利点は「逆斜線」ではなく「符号化された 342 件の逐語と文字順」に移る |
 | `implemented` は 30 件・URL コメントは約 30 行・7 ファイル・5 クレート | **22 件・22 行・5 ファイル・5 クレート**。減った内訳は `\![move]`・`\_l[x,y]`・`\q[タイトル,script:実行内容]`・`\q[タイトル,ID1,ID2,ID3...]` が `degraded`（−4）、`\bID番号`・`\pID番号`・`\q[タイトル,ID]` が `alias`（−3）、単独 `\![*]` が `absent`（−1） | コメントを置く場所の表。`lexer.rs` と `move_cue.rs` に触らなくなる |
-| 「値が違うだけの兄弟 11 群」からは別名が出ない | DD-2 の対の判定は `\_a[ID]`⊂`\_a[ID,r2,r3...]` に届き、11 群の側からも **1 件**が `alias` になる。`alias` は合計 **17 件**（順 1 の 3＋順 4 の 3＋接頭辞の 11） | DD-2・規則 2 の順 2。突合表は `alias` の id も載せる |
+| 「値が違うだけの兄弟 11 群」からは別名が出ない | DD-2 の対の判定は `\_a[ID]`⊂`\_a[ID,r2,r3...]` に届き、11 群の側からも **1 件**が `alias` になる。`alias` は合計 **20 件**（順 1 の 3＋順 4 の 3＋接頭辞の 11＋順 6 の 3。当初は順 6 を数え落として 17 と書いていた・タスク 2.6 で是正） | DD-2・規則 2 の順 2。突合表は `alias` の id も載せる |
 | `\![move]` の二重所有は合意済みの分担 | `areka-P0-surfaces-basepos` と `areka-P0-sakura-time-directives` の brief は互いを名指ししておらず、§8 の `\![move]` の行にも両者の住み分けは登記されていない | 規則 5 の順 2（裁定待ち）へ。裁定案を添える対象は `\![embed,...]` と `\![move]` の 2 件 |
 | `\![*]` は `fold_choice_marker` により実装済みの候補 | 畳まれた場合もマーカーは描かれず、単独形の名前 `"*"` を選ぶ受け手も無い＝`absent` | 規則 2 の順 6 |
 | 上流 付録 A.1 の記入例にある id（`ukadoc:list_sakura_script:\\![get,property,ID]:1`） | その綴りの id はスナップショットに存在しない（形を説明するための作り物）。実物は符号化された形 | 規則 0 の 6。見た目で直さない |
