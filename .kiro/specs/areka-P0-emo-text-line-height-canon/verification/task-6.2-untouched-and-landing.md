@@ -31,7 +31,7 @@
 
 - **`crates/areka-parsers`**: タスク 4.1 は「`BalloonModel` にバルーン名の取得口が無い」ことを実走で見つけましたが、
   parser を改変して口を足すことは**しませんでした**（台帳 §7 #10）。欄は定数
-  `BALLOON_NAME_PLACEHOLDER = "(名前なし)"` で埋め、引受先を `areka-P0-ukadoc-survey-assets` の brief へ登記しています。
+  `BALLOON_NAME_PLACEHOLDER = "(名前なし)"` で埋め、引受先を `areka-P0-balloon-canon-residue`（項目 14）の brief へ登記しています（⚠当初の `areka-P0-ukadoc-survey-assets` は 2026-09-06 に完了・アーカイブされたため、完了ワークフローで差し替えました）。
   差分 0 件はその判断どおりの結果です。
 - **`crates/areka-sakura`**: タスク 3.4 は観測用 example が `text_playback_duration` を呼ぶように直しましたが、
   変えたのは**呼ぶ側**（`crates/areka-emo-text/examples/emo-text-layer.rs:118` の `use` と
@@ -46,7 +46,7 @@
 | 経路 | 件数 | 内訳 |
 |---|---|---|
 | `crates/areka-emo-text/` | 53 | `src/` の非テスト 10（本仕様の対象 6 ファイル＋`canvas.rs`・`lib.rs`・`viewbox.rs`・`viewbox_draw.rs`）・`src/` の兄弟テスト 30・`tests/` 9・example 4 |
-| `.kiro/specs/` | 12 | 本 spec の文書 9（新設）・`ukadoc-survey-assets` brief 1・完了 spec `emo-text-layer` の注記 2 |
+| `.kiro/specs/` | 12 | 本 spec の文書 9（新設）・他 spec の brief 1（⚠完了時に `ukadoc-survey-assets` → `balloon-canon-residue` へ差し替え。本表は タスク 6.2 時点の実測で、以降の登記追加は数に含みません）・完了 spec `emo-text-layer` の注記 2 |
 | `doc/COMPAT_ARCHITECTURE.md` | 1 | §8 の裁量記録 |
 
 新設は全体で 13 件（`crates/` 4 件＝タスク 6.1 の証跡 §2.1 が挙げる Rust ソース 4 ファイル・`.kiro/specs/` 9 件）です。

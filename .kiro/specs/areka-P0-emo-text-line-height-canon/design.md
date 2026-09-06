@@ -459,7 +459,7 @@ impl TextRegion {
 
 **Implementation Notes**
 - Validation: `region_inline_limit_tests.rs`——`inline_limit` の 3 方向テストと警告件数テスト（`log-capture-kit::count_levels`・`emo2-kakukaku` 相当で 1 件・本体側で 0 件）。
-- Risks: ~~`model.name()`（`crates/areka-parsers/src/balloon/model.rs:379`）が `None` のバルーン~~ **⚠訂正 2026-09-06**: design が指した `pub fn name` は `impl Font` のフォント名で、`BalloonModel` にバルーン名の取得口は無い（`descript.txt` の `name,` を `map_merged` が写像していない）。ゆえに全バルーンでプレースホルダ定数 `BALLOON_NAME_PLACEHOLDER` を記録する（ログ無し失敗にしない）。名前の写像は `areka-P0-ukadoc-survey-assets` へ登記（台帳 §7 #10）。
+- Risks: ~~`model.name()`（`crates/areka-parsers/src/balloon/model.rs:379`）が `None` のバルーン~~ **⚠訂正 2026-09-06**: design が指した `pub fn name` は `impl Font` のフォント名で、`BalloonModel` にバルーン名の取得口は無い（`descript.txt` の `name,` を `map_merged` が写像していない）。ゆえに全バルーンでプレースホルダ定数 `BALLOON_NAME_PLACEHOLDER` を記録する（ログ無し失敗にしない）。名前の写像の引受先は **`areka-P0-balloon-canon-residue` の項目 14**（台帳 §7 #10。⚠再訂正 2026-09-06: 当初登記先の `areka-P0-ukadoc-survey-assets` は同日 PR #141 で完了・アーカイブされ、先送りを消化できないため差し替えた）。
 
 #### 帯の防御式を保つ（`choice.rs:101-132`・`actor.rs:781-789`・`viewbox_draw.rs:728-750`）
 

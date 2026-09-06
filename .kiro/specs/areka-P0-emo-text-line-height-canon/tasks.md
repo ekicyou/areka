@@ -227,7 +227,7 @@
 - 3.4: 製品コードを直したら、それを「不変」と述べていた doc（`viewbox_draw.rs` 2 か所）と design の Modified Files／境界節も同じ手で追随させる（差し戻された）。
 - 3.5: 退役の代替は「係数を殺す」だけでなく「丸めの足し戻しも殺す」値を含めること。12→14・10→12 だけだと `(h+2).ceil()` が緑で通ってしまう。端数の font（10.5 → 12.5・旧式 14・ceil 足し戻し 13）の 1 本が両方を締める。
 - 3.5: 台帳の「退役させないもの」に挙げた `expand_overhang_for_band` はテスト名でなく製品コードの関数名。守るべき検査の実体は `choice_tests.rs` の `band_extent_*` 3 本と `draw_format_metrics_tests.rs` の行ボックス丈 1 本。
-- 4.1: design が引いた `BalloonModel::name()` は**存在しない**（`model.rs` の `fn name` は `impl Font` のフォント名）。`descript.txt` の `name,` を `map_merged` が写像していない。警告の `balloon` 欄は定数 `BALLOON_NAME_PLACEHOLDER` で埋め、引受先は `ukadoc-survey-assets` の brief へ登記（台帳 §7 #10）。design の「X が在る」は着手時に `grep` で実在を確かめること。
+- 4.1: design が引いた `BalloonModel::name()` は**存在しない**（`model.rs` の `fn name` は `impl Font` のフォント名）。`descript.txt` の `name,` を `map_merged` が写像していない。警告の `balloon` 欄は定数 `BALLOON_NAME_PLACEHOLDER` で埋め、引受先は `balloon-canon-residue`（項目 14）の brief へ登記（台帳 §7 #10）。design の「X が在る」は着手時に `grep` で実在を確かめること。**⚠完了時に判明（2026-09-06）**: 当初の引受先 `ukadoc-survey-assets` は登記の同日に完了・アーカイブされ、先送りが消化不能になっていた。**引受先は「実在」だけでなく「未完了」も、しかも登記した後も完了直前に取り直すこと**（並走 spec は同じ日に終わる）。
 - 4.1: 純粋層へ兄弟テストを足したら `lib.rs` の `PURE_SOURCES`（windows 依存の構造検査）へも登録する。境界外だが必須の配線。4.2 の `layout_hard_limit_tests.rs` も同じ。
 - 4.1: 0 件を主張するログ検査は、捕捉窓の内側で対照の `error!` を 1 件出して数えられることを同時に確かめる（恒真化の防止）。
 - 4.2: hard の判定は `match wrap` の**外側に 1 か所**（`over_hard`）。経路ごとに複製すると「塊内だけ抜けている」型の欠陥が入る。行頭例外のガードも `!current.is_empty()` 1 つだけを共有する。
