@@ -187,8 +187,13 @@ em（文字の大きさ）は変わらないため、グリフ描画・文字送
 
 | 退役するテスト | 場所 | 根拠 | 代替（本数は減らさない） |
 |---|---|---|---|
-| `fixed_metrics_line_pitch_ceils_fractional_values` | `src/layout_wrap_tests.rs` | 検証対象の `ceil` の端数処理そのものが裁定で存在しなくなる | `fixed_metrics_line_pitch_adds_default_gap` へ名前と本文を差し替え（`12 → 14`・`10 → 12`・`h + 2` 以外の式で赤になること） |
-| `dwrite_metrics_line_pitch_follows_config_canon` の「係数 2.0」分岐 | `src/draw_format_metrics_tests.rs` | 係数の乗算が式から消える | 非既定 `line_gap` の分岐へ差し替え。✅**タスク 3.3 が実施済み**——この分岐は独立したテストではなく、3.3 が緑にする義務を負う赤いテストの中の 1 アサートなので分離できなかった。実際の代替は `line_gap: 5.0` → `line_pitch(10) == 15`（既定の行間 2 なら 12 で赤＝分岐が生きている）、束縛名も `doubled` → `widened` へ。テスト本数は 25 → 25 で不変。**3.5 は再編集せず、この対応を 1 対 1 の記録として書き残すだけでよい**（要件 7.2） |
+| `fixed_metrics_line_pitch_ceils_fractional_values` | `src/layout_wrap_tests.rs` | 検証対象の `ceil` の端数処理そのものが裁定で存在しなくなる | `fixed_metrics_line_pitch_adds_default_gap` へ名前と本文を差し替え（`12 → 14`・`10 → 12`・`h + 2` 以外の式で赤になること）。✅**タスク 3.5 で実施** — 代替 `fixed_metrics_line_pitch_adds_default_gap`（`12 → 14`・`10 → 12`・`10.5 → 12.5`・旧式 `ceil(h × 1.25)` の 15／13 で赤・新式に `ceil` を足し戻すと `10.5` が 13 で赤）・本数 1 ↔ 1 |
+| `dwrite_metrics_line_pitch_follows_config_canon` の「係数 2.0」分岐 | `src/draw_format_metrics_tests.rs` | 係数の乗算が式から消える | 非既定 `line_gap` の分岐へ差し替え。✅**タスク 3.3 が実施済み**——この分岐は独立したテストではなく、3.3 が緑にする義務を負う赤いテストの中の 1 アサートなので分離できなかった。実際の代替は `line_gap: 5.0` → `line_pitch(10) == 15`（既定の行間 2 なら 12 で赤＝分岐が生きている）、束縛名も `doubled` → `widened` へ。テスト本数は 25 → 25 で不変。**3.5 は再編集せず、この対応を 1 対 1 の記録として書き残すだけでよい**（要件 7.2）（3.5 で 1 対 1 の記録を確認） |
+
+> **本数の突き合わせ（タスク 3.5・要件 7.2）**: 退役 2 ↔ 代替 2 で、テストの総本数は減っていない。
+> `src/layout_wrap_tests.rs` の `#[test]` は差し替えの前後とも **20 本**（1 本を名前と本文ごと入れ替えただけ）、
+> `src/draw_format_metrics_tests.rs` は **25 本**で不変（タスク 3.3 の差し替えは 1 テスト内の分岐の入れ替えで本数に触れていない）。
+> 数え方は `grep -c "#\[test\]"` による実測。
 
 **退役させないもの**（明示）: `line_box_height` 系・帯の clamp 系・`expand_overhang_for_band` 系。
 

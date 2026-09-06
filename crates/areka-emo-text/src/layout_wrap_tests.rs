@@ -18,13 +18,24 @@ fn fixed_metrics_advance_full_width_for_nonascii_half_for_ascii() {
     assert_eq!(m.advance('漢', 10.0), 10.0);
 }
 
-/// 行送りピッチは ceil(font_height × 1.25)——端数ケースで檻化
-/// （tasks.md Implementation Notes: floor/丸めなし変異を殺す値を選ぶ）。
+/// 行送りピッチは `font_height + 行間 2`（丸めなし・2026-09-05 の裁定）。
+///
+/// 退役の記録（要件 7.2）: 本テストは
+/// `fixed_metrics_line_pitch_ceils_fractional_values`（旧式 `ceil(font_height × 1.25)` の
+/// 「切り上げの端数」を検証していた 1 本）の代替である。裁定で式から係数の乗算と `ceil` が
+/// 消え、検証対象だった端数処理そのものが仕様上存在しなくなったため、名前と本文ごと
+/// 差し替えた（退役 1 ↔ 代替 1・テストの総本数は不変）。
+///
+/// 判別力（新しい式以外の値では赤になる）:
+/// - `12 → 14`・`10 → 12` は旧式の 15・13 と食い違うので、旧式が残っていれば赤。
+/// - `10.5 → 12.5` は端数を残す font_height で、新式に `ceil` を足し戻すと 13 になり赤。
+///   （旧式なら `ceil(13.125) = 14` でやはり赤＝丸めの有無と係数の両方を同時に締める。）
 #[test]
-fn fixed_metrics_line_pitch_ceils_fractional_values() {
+fn fixed_metrics_line_pitch_adds_default_gap() {
     let m = FixedMetrics;
-    assert_eq!(m.line_pitch(12.0), 15.0); // 15.0（割り切れ）
-    assert_eq!(m.line_pitch(10.0), 13.0); // 12.5 → 13（ceil でなければ fail）
+    assert_eq!(m.line_pitch(12.0), 14.0); // 12 + 2（旧式なら 15 で赤）
+    assert_eq!(m.line_pitch(10.0), 12.0); // 10 + 2（旧式なら 13 で赤）
+    assert_eq!(m.line_pitch(10.5), 12.5); // 端数は丸めずそのまま（ceil を足すと 13 で赤）
 }
 
 // ── R6.1: 横書き——行内 +x・行送り +y・折返し閾値 wordwrappoint.x ──
