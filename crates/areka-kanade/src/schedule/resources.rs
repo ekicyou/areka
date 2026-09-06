@@ -29,6 +29,7 @@ use crate::status::{ExecutionSnapshot, ExecutionStatus};
 ///
 /// SEAM(M2・159 項目汎用化): SHIORI Resource は正典で 159 項目あるが、M1 は源のある `username`
 /// のみを実導出する。語彙拡張は本集合への ID 追加（additive）で行い、判定側は無改変で追随する。
+/// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#username:1
 pub const ALLOWED_RESOURCE_IDS: &[&str] = &["username"];
 
 /// `id` がリソース送出許可集合（[`ALLOWED_RESOURCE_IDS`]）に属するかを判定する（Req4.1）。

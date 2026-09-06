@@ -81,27 +81,39 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         merged.get("windowposition.limit").map(|v| v.to_owned()),
     );
     let origin = Origin::new(
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#origin.x_2c_5ea7_6a19_20_2a1:1
         get_scalar::<i32>(merged, "origin.x"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#origin.y_2c_5ea7_6a19_20_2a1:1
         get_scalar::<i32>(merged, "origin.y"),
     );
     let wordwrappoint = WordWrapPoint::new(
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#wordwrappoint.x_2c_5ea7_6a19_20_2a1:1
         get_scalar::<i32>(merged, "wordwrappoint.x"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#wordwrappoint.y_2c_5ea7_6a19_20_2a1:1
         get_scalar::<i32>(merged, "wordwrappoint.y"),
     );
     let validrect = ValidRect::new(
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.top_2c_5ea7_6a19_20_2a1:1
         get_scalar::<i32>(merged, "validrect.top"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.bottom_2c_5ea7_6a19_20_2a1:1
         get_scalar::<i32>(merged, "validrect.bottom"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.left_2c_5ea7_6a19_20_2a1:1
         get_scalar::<i32>(merged, "validrect.left"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.right_2c_5ea7_6a19_20_2a1:1
         get_scalar::<i32>(merged, "validrect.right"),
     );
     let color = FontColor::new(
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.color.r_2c_6570_5024:1
         get_scalar::<u8>(merged, "font.color.r"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.color.g_2c_6570_5024:1
         get_scalar::<u8>(merged, "font.color.g"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.color.b_2c_6570_5024:1
         get_scalar::<u8>(merged, "font.color.b"),
     );
     let font = Font::new(
         // font.name は文字列値（数値化しない・R2.5）。
         merged.get("font.name").map(|v| v.to_owned()),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.height_2c_6570_5024:1
         get_scalar::<u32>(merged, "font.height"),
         color,
     );
@@ -127,8 +139,11 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         // style は文字列値（数値化しない・要件 4.2/6.5）。
         merged.get("cursor.style").map(|v| v.to_owned()),
         CursorColor::new(
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.brush.color.r_2c_6570_5024:1
             get_scalar::<u8>(merged, "cursor.brush.color.r"),
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.brush.color.g_2c_6570_5024:1
             get_scalar::<u8>(merged, "cursor.brush.color.g"),
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.brush.color.b_2c_6570_5024:1
             get_scalar::<u8>(merged, "cursor.brush.color.b"),
         ),
         CursorColor::new(
@@ -137,8 +152,11 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
             get_scalar::<u8>(merged, "cursor.pen.color.b"),
         ),
         CursorColor::new(
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.font.color.r_2c_6570_5024:1
             get_scalar::<u8>(merged, "cursor.font.color.r"),
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.font.color.g_2c_6570_5024:1
             get_scalar::<u8>(merged, "cursor.font.color.g"),
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.font.color.b_2c_6570_5024:1
             get_scalar::<u8>(merged, "cursor.font.color.b"),
         ),
         // blendmethod は不透明転写（数値化しない・要件 6.5）。
