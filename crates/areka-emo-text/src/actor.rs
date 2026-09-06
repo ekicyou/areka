@@ -30,7 +30,9 @@ use crate::choice::{
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DWriteMetrics, ResolvedFont};
 use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
-use crate::region::{ImagePx, ScaleContract, TextRegion};
+use crate::region::{
+    BALLOON_NAME_PLACEHOLDER, ImagePx, ScaleContract, TextRegion, inline_axis_name,
+};
 use crate::segment::segment_plan;
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
 use crate::state::{TextLayerConfig, TextLayerState};
@@ -166,6 +168,48 @@ impl ResolvedBalloonText {
     }
 }
 
+/// 粗いバルーン定義（折返し基準が描画範囲の遠辺の外）を「装着ごとに 1 件」だけ知らせる
+/// （spec `areka-P0-emo2-conformance-e2e` 要件 14.1〜14.3・design D14・2026-09-06）。
+///
+/// # なぜ解決する側ではなくここなのか
+///
+/// この `warn!` は以前 [`TextRegion::resolve`] の中にあった。しかし解決は**毎フレーム**走る
+/// ——再追従シーム（[`TextLayerRuntime::refresh_actor_binding`]）が churn ガードの判定キーを
+/// 得るために解き直すためで、実機の一周走行では生ログ 30,837 行のうち **27,908 行**がこの
+/// 1 種類の警告になった（走行 A の実測）。件数が意味を失い、生ログが読めなくなる。
+///
+/// 「読み込み（装着）1 回につき 1 件」という意味を持つのは actor の登録口である。ゆえに
+/// 解決からは粗さの記録を外し、記録は本関数が担う。文言と 4 つの欄（`balloon`・`axis`・
+/// `wrap_threshold`・`inline_limit`）は移動の前後で 1 文字も変えていない——実機走行の判定は
+/// この語を grep する（要件 14.3・手順書 §5.7）。バルーン名の代替値は解決側と同一の
+/// [`BALLOON_NAME_PLACEHOLDER`] を共有する。
+///
+/// # 件数（要件 14.2）
+///
+/// `previous` は当該 actor の**前回の**解決済み領域（未登録＝装着なら `None`）。値が新しく
+/// 決まったとき——初回、または前回と異なる領域——だけ 1 件書く:
+///
+/// - 装着（`register_actor_binding`）は必ず初回ゆえ **1 件**、
+/// - 値の同じ再追従は churn ガードで [`TextLayerRuntime::register_actor`] に達しない **0 件**、
+/// - binding だけが変わって領域が同値の再追従は、登録口に達しても **0 件**、
+/// - 領域の値が変わる再追従は **1 件**（新しい値で）。
+///
+/// 檻は `actor_region_warn_tests.rs`（装着 1 件・4 欄・3 回の同値再追従で 0 件・再構築するが
+/// 領域同値で 0 件・値の変わる再追従で 1 件・遠辺の内で 0 件・縦書きの軸欄）。
+fn warn_coarse_wrap_threshold(resolved: &ResolvedBalloonText, previous: Option<TextRegion>) {
+    let region = resolved.region;
+    if region.wrap_threshold() <= region.inline_limit() || previous == Some(region) {
+        return;
+    }
+    warn!(
+        balloon = BALLOON_NAME_PLACEHOLDER,
+        axis = inline_axis_name(resolved.mode),
+        wrap_threshold = region.wrap_threshold(),
+        inline_limit = region.inline_limit(),
+        "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）"
+    );
+}
+
 /// choice.rs（純粋層）所有のバルーン窓物理 px 矩形を結線層から再輸出する（design.md RuntimeContract）。
 /// 下流（choice-interact）は [`ChoiceHitRow::rect`] を本型で受ける——照会契約の座標系正本。
 pub use crate::choice::HitRectPx;
@@ -266,6 +310,12 @@ impl TextLayerRuntime {
     /// から [`TextSlotBinding::new`]／[`ResolvedBalloonText::resolve`] で組んで渡す・R9.5）。
     ///
     /// 未解決のまま蓄積していた actor は次の [`present_frame`] で再試行され装着される。
+    ///
+    /// # 粗いバルーン定義の警告はここが書く（要件 14.2・2026-09-06）
+    ///
+    /// 折返し基準が描画範囲の遠辺の外に解決されたことを知らせる `warn!` は本口が書く——
+    /// 「読み込み（装着）1 回につき 1 件」という意味を持つ層がここだからである
+    /// （本ファイルの `warn_coarse_wrap_threshold` の doc に経緯）。
     pub fn register_actor(
         &mut self,
         actor: ActorKey,
@@ -273,6 +323,8 @@ impl TextLayerRuntime {
         resolved: ResolvedBalloonText,
     ) {
         debug!(actor = %actor, slot = ?binding.slot, "actor の装着先（予約スロット）を登録した");
+        // 前回の解決済み領域（未登録＝装着なら None＝「値が新しく決まった」側）と突き合わせる。
+        warn_coarse_wrap_threshold(&resolved, self.layout_input.get(&actor).map(|it| it.region));
         self.routing.insert(actor.clone(), binding);
         self.layout_input.insert(actor, resolved);
     }
@@ -890,3 +942,7 @@ mod clear_atomicity_tests;
 #[cfg(test)]
 #[path = "actor_scale_refresh_tests.rs"]
 mod scale_refresh_tests;
+
+#[cfg(test)]
+#[path = "actor_region_warn_tests.rs"]
+mod region_warn_tests;
