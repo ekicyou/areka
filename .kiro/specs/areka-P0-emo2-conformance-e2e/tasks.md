@@ -162,7 +162,7 @@
   - _Requirements: 3.1, 3.3, 12.2_
   - _Boundary: `crates/areka/src/emo2_boot/spine_conformance_script.rs`（必要なら `spine_conformance_lap_tests.rs`・`spine_conformance_judge.rs` の期待の導出部のみ・1,000 行の見張りを超えない）_
 
-- [ ] 5.8 上流 spec 着地後の決定論層の再確認と、台本の説明文の履歴化（2026-09-06 追加）
+- [x] 5.8 上流 spec 着地後の決定論層の再確認と、台本の説明文の履歴化（2026-09-06 追加）
   - main（`e3291fc1`・`emo-text-line-height-canon` PR #142）を取り込んだ状態（merge `3c2908e`）で `cargo test -p areka --bin areka conformance` を回し、13 本が緑であること、期待列の定数（`expected_calls`／`expected_display`／`expected_statuses`）を 1 バイトも動かしていないことを差分で示す（R12.2）
   - `crates/areka/src/emo2_boot/spine_conformance_script.rs:449-459` の「走行 A（2026-09-05）の症状 #1 はこの層では観測できない」の節を履歴の形へ直す——35px は当時の値、現行は `font.height + 行間 2`＝30（`crates/areka-emo-text/src/state.rs:78-80`）、症状の決定論テストは `crates/areka-emo-text/tests/kero_menu_capacity_test.rs`（完了 spec）、3 列が字の配置を運ばない事実は不変（引き渡し文書 `completed/areka-P0-emo-text-line-height-canon/verification/handoff.md` 表 3 #6）
   - 完了状態: 説明文に現在形の 35px・1.25 が残っておらず、テスト本体と期待の定数に差分が無く、13 本が緑
@@ -307,3 +307,4 @@
 - **上流 spec `emo-text-line-height-canon` の着地を取り込んだ（2026-09-06・merge `3c2908e`・衝突 2 件は main の版を採用）**。取り込み後 `cargo test -p areka --bin areka conformance` 13 passed／0 failed＝3 列が字の配置を運ばない事実の実証。新前提: 行送り `font.height + 行間 2`＝30（`crates/areka-emo-text/src/state.rs:78-80`）・相方側 3 行／本体側 **4 行**（完了 spec design §4.1）・相方側バルーン読み込み時に `region.rs:294-301` の警告 1 件（正常な記録）・反転帯からのインクのはみ出し 2 画素まで許容（第 2 回裁定）。正本は `completed/areka-P0-emo-text-line-height-canon/verification/handoff.md`（変化 9・不変 8・注意 6）。要件「改訂（2026-09-06）」・design 再検証条件 7・D5「採り直し」・D7・D8 行 5・D9 へ反映済み。
 - **`event=boot_input_ignored`（`crates/areka-kanade/src/schedule/boot.rs:34`・`warn!`）は 5.5 の製品欠陥の点灯語**。捨てる経路そのものが書く語なので、走行 A の生ログで 0 行なら「起動挨拶の再生完了が `basewareversion` の応答より先に届く」窓が本走行で開いていない証拠になる（沈黙ではなく点灯した観測点の 0 行）。実機では起動挨拶が非空で数秒・応答は数ミリ秒のため構造上は狭い窓。引受先は S 規模の個別仕様＝起票は開発者専用。
 - **ブランチに残っていた起票時の `.kiro/specs/areka-P0-emo-text-line-height-canon/brief.md` を削除した（2026-09-06）**。main には無く（PR #142 で完了置き場へ移動済み）、内容も完了置き場の版と異なる古い写しだった。残すと進行中 spec と誤読される。
+- **旧コメントが引いていた `layout.rs:532-546`／`draw.rs:766-774` は上流の着地で行がずれていた（タスク 5.8・実測）**。現行は `visible_window`＝`crates/areka-emo-text/src/layout.rs:680`・先頭行の skip＝`draw.rs:781`。上流が全面改変したファイルの行番号は写さず引き直すこと（記録 §13.2 #1 の本文にも旧番号が残るが、そちらは発見時の記述＝履歴として保つ）。
