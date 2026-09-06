@@ -76,11 +76,38 @@ pub enum FramePlan {
     Update {
         /// 面内 blit ベクトル（物理 px 整数・軸は writing_mode 追随・スクロールなしは 0）。
         blit: (i32, i32),
-        /// ダーティ矩形（物理 px 整数・面寸クランプ済み・露出帯 ∪ 変化行）。
-        dirty: Vec<PhysicalRect>,
-        /// dirty と交差する canvas 住人 index（描画対象・クリップで dirty 限定）。
+        /// ダーティ矩形と、その矩形を復元するために描く行の対（露出帯 ∪ 変化行 ∪ 残滓）。
+        dirty: Vec<DirtyRect>,
+        /// 全ダーティ矩形の交差行の**和集合**（昇順・重複なし）＝このフレームで資源を組む行。
+        /// 実際に描くのは矩形ごとの [`DirtyRect::lines`] だけで、和集合は資源準備と不整合検査の
+        /// 対象を 1 語で指すために持つ（不変条件: 各矩形の行はこの集合の部分集合）。
         draw_lines: Vec<usize>,
     },
+}
+
+/// ダーティ矩形 1 枚と、**その矩形を復元するために描く行**の対（R11.1/11.3）。
+///
+/// `lines` は矩形と行送り軸で交差する GlyphRun/Choice 住人の index（昇順・可視窓の先頭行以降）。
+/// 矩形と交差しない行のインクはその矩形の内側に 1 画素も無い（行の物理矩形は実測はみ出し＋ガード
+/// 1 image px を含む整数格子で、交差判定は半開区間）ので、交差行だけを描いても画素は変わらない。
+/// 1 枚ごとに交差行だけを描くことで、1 フレームの描画呼び出しは「矩形の枚数 × 描画対象行数」の
+/// 積ではなく**各矩形の交差行数の和**になる。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DirtyRect {
+    /// 復元する領域（物理 px 整数・面寸クランプ済み・ガード余白込み）。
+    pub rect: PhysicalRect,
+    /// この矩形を復元するために描く住人 index（昇順・重複なし）。
+    pub lines: Vec<usize>,
+}
+
+/// 矩形だけを比べる補助（テスト専用）。既存の檻は矩形の並びだけを固定しており、行の割当を
+/// 見ないものが多い——`Vec<DirtyRect> == Vec<PhysicalRect>` をそのまま書けるようにして、
+/// 行の割当を追加した後もそれらの assert を書き換えずに保つ。
+#[cfg(test)]
+impl PartialEq<PhysicalRect> for DirtyRect {
+    fn eq(&self, other: &PhysicalRect) -> bool {
+        self.rect == *other
+    }
 }
 
 /// ブロック軸（行送り軸）スカラ `v` を writing_mode 追随の 2D ベクトル `(x, y)` へ写す
@@ -455,10 +482,11 @@ impl ScrollPlanner {
     /// クランプ（退化矩形は除外）。
     ///
     /// `prev_lines` が空（初回・Clear 後・format 再構築）のときは**全域ダーティ**（面全域 1 枚・
-    /// 描画対象＝可視窓の GlyphRun 住人）を返す。返り値 `draw_lines` は dirty とブロック軸で交差
-    /// する GlyphRun 住人 index（クリップにより描画結果は dirty 内へ限定される前提ゆえ交差住人を
-    /// 全て含む）。ただし**可視窓より前の行（`first_visible_line` 未満）は含めない**——全域再描画
-    /// のオラクル（`DrawExecutor`）が `skip(first_visible_line)` で描かないため、含めると
+    /// 描画対象＝可視窓の GlyphRun 住人）を返す。各 [`DirtyRect`] はその矩形とブロック軸で交差
+    /// する GlyphRun 住人 index だけを持ち（クリップにより描画結果は当該矩形内へ限定される）、
+    /// 返り値 `draw_lines` はその**和集合**（昇順・重複なし）。ただし**可視窓より前の行
+    /// （`first_visible_line` 未満）は含めない**——全域再描画のオラクル（`DrawExecutor`）が
+    /// `skip(first_visible_line)` で描かないため、含めると
     /// スクロールアウトした行の下端インクが画面上端へ描き込まれ、両者が食い違う。
     ///
     /// 状態遷移（plan/commit・`FramePlan` の enum 化）は後続タスクの領分——本メソッドは
@@ -474,7 +502,7 @@ impl ScrollPlanner {
         blit: (i32, i32),
         surface_size: (u32, u32),
         prev_lines: &[CommittedLine],
-    ) -> (Vec<PhysicalRect>, Vec<usize>) {
+    ) -> (Vec<DirtyRect>, Vec<usize>) {
         Self::derive_dirty_with_overhangs(
             canvas,
             window,
@@ -505,25 +533,29 @@ impl ScrollPlanner {
         surface_size: (u32, u32),
         prev_lines: &[CommittedLine],
         overhangs: &[LineOverhang],
-    ) -> (Vec<PhysicalRect>, Vec<usize>) {
+    ) -> (Vec<DirtyRect>, Vec<usize>) {
         // 住人 index の実測はみ出し（無ければ既定 0＝em ボックス丈・テスト等の非測定経路）。
         let overhang_of = |i: usize| overhangs.get(i).copied().unwrap_or_default();
         // ── 全域ダーティ（初回・Clear 後・format 再構築）: 面全域 1 枚・全 GlyphRun 住人 ──
+        // 矩形が 1 枚ゆえ「矩形ごとの交差行」＝可視窓の全住人＝和集合（和と積が一致する唯一の形）。
         if prev_lines.is_empty() {
             let (w, h) = surface_size;
             let full = PhysicalRect { x: 0, y: 0, w, h };
+            let draw_lines: Vec<usize> = glyph_run_indices(canvas)
+                .filter(|&i| i >= window.first_visible_line)
+                .collect();
             let dirty = if full.is_empty() {
                 Vec::new()
             } else {
-                vec![full]
+                vec![DirtyRect {
+                    rect: full,
+                    lines: draw_lines.clone(),
+                }]
             };
-            let draw_lines = glyph_run_indices(canvas)
-                .filter(|&i| i >= window.first_visible_line)
-                .collect();
             return (dirty, draw_lines);
         }
 
-        let mut dirty: Vec<PhysicalRect> = Vec::new();
+        let mut rects: Vec<PhysicalRect> = Vec::new();
 
         // (a) 露出帯: blit の逆側の未保持領域（1 枚）。
         if let Some(band) = exposure_band(blit, surface_size) {
@@ -535,7 +567,7 @@ impl ScrollPlanner {
                 contract,
                 surface_size,
             ) {
-                dirty.push(rect);
+                rects.push(rect);
             }
         }
 
@@ -564,28 +596,45 @@ impl ScrollPlanner {
                     surface_size,
                     overhang_of(i),
                 ) {
-                    dirty.push(rect);
+                    rects.push(rect);
                 }
             }
         }
 
-        // 描画対象行: dirty とブロック軸で交差する GlyphRun 住人。可視窓より前の行は
-        // オラクル（DrawExecutor）が描かないので、こちらも描かない（上の doc を参照）。
-        let mut draw_lines = Vec::new();
-        for i in glyph_run_indices(canvas).filter(|&i| i >= window.first_visible_line) {
-            if let Some(rect) = resident_rect(
-                &canvas.residents[i],
-                block_offset,
-                mode,
-                contract,
-                surface_size,
-                overhang_of(i),
-            ) {
-                if dirty.iter().any(|d| d.intersects_block_axis(&rect, mode)) {
-                    draw_lines.push(i);
-                }
-            }
-        }
+        // 描画対象住人の物理矩形を 1 度だけ求める（矩形ごとの割当と和集合の共通入力）。可視窓より
+        // 前の行はオラクル（DrawExecutor）が描かないので、こちらも描かない（上の doc を参照）。
+        let visible_rects: Vec<(usize, PhysicalRect)> = glyph_run_indices(canvas)
+            .filter(|&i| i >= window.first_visible_line)
+            .filter_map(|i| {
+                resident_rect(
+                    &canvas.residents[i],
+                    block_offset,
+                    mode,
+                    contract,
+                    surface_size,
+                    overhang_of(i),
+                )
+                .map(|rect| (i, rect))
+            })
+            .collect();
+
+        // 矩形ごとの交差行（昇順・住人 index の順に見るので並びは昇順）と、その和集合。
+        let dirty: Vec<DirtyRect> = rects
+            .into_iter()
+            .map(|rect| {
+                let lines = visible_rects
+                    .iter()
+                    .filter(|(_, r)| rect.intersects_block_axis(r, mode))
+                    .map(|(i, _)| *i)
+                    .collect();
+                DirtyRect { rect, lines }
+            })
+            .collect();
+        let draw_lines: Vec<usize> = visible_rects
+            .iter()
+            .filter(|(_, r)| dirty.iter().any(|d| d.rect.intersects_block_axis(r, mode)))
+            .map(|(i, _)| *i)
+            .collect();
 
         (dirty, draw_lines)
     }

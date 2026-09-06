@@ -139,12 +139,17 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     let plan_a = mirror.plan(&canvas, &window_a, mode, &contract, size);
     mirror.commit(&canvas, &window_a, mode, &contract, &plan_a);
     let plan_b = mirror.plan(&canvas, &window_b, mode, &contract, size);
-    let (exp_blit, exp_draw_lines, exp_dirty_len) = match plan_b {
+    let (exp_blit, exp_draw_lines, exp_dirty_len, exp_line_sum) = match plan_b {
         FramePlan::Update {
             blit,
             ref draw_lines,
             ref dirty,
-        } => (blit, draw_lines.len(), dirty.len()),
+        } => (
+            blit,
+            draw_lines.len(),
+            dirty.len(),
+            dirty.iter().map(|d| d.lines.len()).sum::<usize>(),
+        ),
         other => panic!("frame B は Update を期待したが {other:?}"),
     };
     assert_ne!(exp_blit, (0, 0), "可視窓移動は blit を生む");
@@ -168,9 +173,8 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     );
     let draw_delta = (stats_b.draw_text_layout_calls - stats_a.draw_text_layout_calls) as usize;
     assert_eq!(
-        draw_delta,
-        exp_dirty_len * exp_draw_lines,
-        "描画は露出帯（1 枚）× 交差行に限られる"
+        draw_delta, exp_line_sum,
+        "描画は矩形ごとの交差行数の**和**に限られる（R11.1）"
     );
     assert!(
         draw_delta <= exp_draw_lines,
@@ -185,6 +189,80 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     assert_ne!(
         before, after,
         "スクロールで供給面の内容が移動する（先頭行が消え内容が上へ）"
+    );
+}
+
+/// R11.1/11.3: ダーティ矩形が 2 枚以上あるフレーム（追いつき＝新しい行が一挙に入りつつ
+/// スクロールする）で、`DrawTextLayout` の増分が **矩形ごとの交差行数の和** に一致し、
+/// 「枚数 × 描画対象行数」の積にはならないこと。
+///
+/// 直前の `visible_window_move_blits_and_redraws_only_exposure_band` は dirty が 1 枚
+/// （露出帯のみ）なので和と積が一致し、この差を弁別できない——本テストが弁別の担い手。
+/// 期待値は独立な mirror planner（純粋層）から採り、和 < 積 が成り立つ入力であること自体も
+/// 検査する（幾何が変わって弁別力を失ったら赤で気づける）。
+#[test]
+fn catch_up_scroll_draws_sum_of_per_rect_lines_not_product() {
+    let mut rig = Rig::new();
+    let image = (60u32, 84u32);
+    let mut surface = rig.attach(image, 1.0);
+    let mode = WritingMode::HorizontalTb;
+    let font = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let size = surface.size();
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+
+    // font 10 → pitch 12。行 i の下端 = 12i + 10 ゆえ 84px には 7 行（i=0..6・82 ≤ 84）が収まり、
+    // 8 行目（94）からあふれる。frame A は 7 行（スクロールなし）。
+    let chars_a = ['あ', 'い', 'う', 'え', 'お', 'か', 'き'];
+    let (canvas_a, window_a) = build(&multiline_items(&chars_a), &region, mode, 10.0);
+    exec.render(&canvas_a, &window_a, &font, mode, &contract, &mut surface)
+        .expect("frame A render 失敗");
+    let stats_a: DrawStats = exec.stats();
+
+    // frame B: 2 行が一挙に入る（追いつき）＝露出帯 1 枚 ＋ 新規行 2 枚のダーティ。
+    let chars_b = ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け'];
+    let (canvas_b, window_b) = build(&multiline_items(&chars_b), &region, mode, 10.0);
+
+    // mirror planner（純粋層）で期待計画を独立に算出する。
+    let mut mirror = ScrollPlanner::new();
+    let plan_a = mirror.plan(&canvas_a, &window_a, mode, &contract, size);
+    mirror.commit(&canvas_a, &window_a, mode, &contract, &plan_a);
+    let plan_b = mirror.plan(&canvas_b, &window_b, mode, &contract, size);
+    let (exp_dirty_len, exp_draw_lines, exp_line_sum) = match plan_b {
+        FramePlan::Update {
+            ref dirty,
+            ref draw_lines,
+            ..
+        } => (
+            dirty.len(),
+            draw_lines.len(),
+            dirty.iter().map(|d| d.lines.len()).sum::<usize>(),
+        ),
+        other => panic!("frame B は Update を期待したが {other:?}"),
+    };
+    assert!(
+        exp_dirty_len >= 2,
+        "弁別の前提: ダーティ矩形が 2 枚以上（実際 {exp_dirty_len} 枚）"
+    );
+    assert!(
+        exp_line_sum < exp_dirty_len * exp_draw_lines,
+        "弁別の前提: 和 {exp_line_sum} < 積 {}（矩形ごとに交差行が異なる入力）",
+        exp_dirty_len * exp_draw_lines
+    );
+
+    let changed = exec
+        .render(&canvas_b, &window_b, &font, mode, &contract, &mut surface)
+        .expect("frame B render 失敗");
+    assert!(changed, "追いつきフレームは変化あり");
+    let stats_b: DrawStats = exec.stats();
+
+    let draw_delta = (stats_b.draw_text_layout_calls - stats_a.draw_text_layout_calls) as usize;
+    assert_eq!(
+        draw_delta,
+        exp_line_sum,
+        "描画呼び出しは矩形ごとの交差行数の和（積 {} ではない）",
+        exp_dirty_len * exp_draw_lines
     );
 }
 
@@ -353,7 +431,7 @@ fn font_change_degrades_to_full_domain_redraw() {
     let draw_delta = stats_b.draw_text_layout_calls - stats_a.draw_text_layout_calls;
     assert_eq!(
         draw_delta, total_b as u64,
-        "縮退フレームは全 GlyphRun 住人を再描画する（全域ダーティ 1 枚 × 全住人）"
+        "縮退フレームは全 GlyphRun 住人を再描画する（全域ダーティは矩形 1 枚に全住人が交差＝和と積が一致する唯一の形）"
     );
     let create_delta = stats_b.line_layout_creations - stats_a.line_layout_creations;
     assert_eq!(
@@ -372,12 +450,13 @@ fn font_change_degrades_to_full_domain_redraw() {
 }
 
 /// 想定外不整合の検査関数（render の縮退経路が呼ぶ述語）が矛盾入力で理由を返し、整合入力で
-/// `None` を返す（範囲外 draw_lines・面寸超過 dirty の両トリガ・R Error Handling）。
+/// `None` を返す（範囲外 draw_lines・面寸超過 dirty・矩形の行が描画対象行の部分集合でない、の
+/// 3 トリガ・R Error Handling／R11.1）。
 /// render からの結線は `font_change_degrades_to_full_domain_redraw`（縮退の実発火）が担保する。
 #[test]
 fn plan_inconsistency_detects_out_of_range_and_oversize() {
     use super::plan_inconsistency;
-    use crate::viewbox::PhysicalRect;
+    use crate::viewbox::{DirtyRect, PhysicalRect};
 
     let size = (100u32, 50u32);
     let full = PhysicalRect {
@@ -386,11 +465,18 @@ fn plan_inconsistency_detects_out_of_range_and_oversize() {
         w: 100,
         h: 50,
     };
+    /// 矩形＋交差行の対を組む短縮構築。
+    fn dr(rect: PhysicalRect, lines: &[usize]) -> DirtyRect {
+        DirtyRect {
+            rect,
+            lines: lines.to_vec(),
+        }
+    }
 
-    // 整合: 範囲内 index・面寸ちょうどの dirty → None。
+    // 整合: 範囲内 index・面寸ちょうどの dirty・矩形の行 ⊆ draw_lines → None。
     assert!(
-        plan_inconsistency(&[full], &[0, 1], 2, size).is_none(),
-        "範囲内・面寸内は整合（縮退しない）"
+        plan_inconsistency(&[dr(full, &[0, 1])], &[0, 1], 2, size).is_none(),
+        "範囲内・面寸内・部分集合は整合（縮退しない）"
     );
 
     // 範囲外 draw_lines（住人数 2 に対し index 5）→ Some。
@@ -402,12 +488,15 @@ fn plan_inconsistency_detects_out_of_range_and_oversize() {
     // dirty が面幅を超える（x+w=101 > 100）→ Some。
     assert!(
         plan_inconsistency(
-            &[PhysicalRect {
-                x: 0,
-                y: 0,
-                w: 101,
-                h: 50
-            }],
+            &[dr(
+                PhysicalRect {
+                    x: 0,
+                    y: 0,
+                    w: 101,
+                    h: 50
+                },
+                &[]
+            )],
             &[],
             2,
             size
@@ -419,18 +508,27 @@ fn plan_inconsistency_detects_out_of_range_and_oversize() {
     // dirty が面高を超える（y+h=60 > 50）→ Some。
     assert!(
         plan_inconsistency(
-            &[PhysicalRect {
-                x: 0,
-                y: 40,
-                w: 100,
-                h: 20
-            }],
+            &[dr(
+                PhysicalRect {
+                    x: 0,
+                    y: 40,
+                    w: 100,
+                    h: 20
+                },
+                &[]
+            )],
             &[],
             2,
             size
         )
         .is_some(),
         "面高を超える dirty を検知する"
+    );
+
+    // 矩形の行が draw_lines に無い（Phase 1 が資源を組まない行を矩形が要求している）→ Some。
+    assert!(
+        plan_inconsistency(&[dr(full, &[0, 1])], &[0], 2, size).is_some(),
+        "矩形の行が描画対象行の部分集合でないことを検知する"
     );
 }
 

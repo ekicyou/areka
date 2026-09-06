@@ -99,10 +99,11 @@ pub(super) fn commit_initial(
     planner.commit(canvas, &w, mode, contract, &first);
 }
 
-/// `FramePlan::Update` から blit とダーティ矩形を取り出す（他 variant は panic）。
+/// `FramePlan::Update` から blit とダーティ**矩形**を取り出す（他 variant は panic）。
+/// 矩形ごとの交差行（[`super::DirtyRect::lines`]）は落とす——矩形の並びだけを見る檻の共通口。
 pub(super) fn expect_update(plan: &FramePlan) -> ((i32, i32), Vec<PhysicalRect>) {
     match plan {
-        FramePlan::Update { blit, dirty, .. } => (*blit, dirty.clone()),
+        FramePlan::Update { blit, dirty, .. } => (*blit, dirty.iter().map(|d| d.rect).collect()),
         other => panic!("Update を期待したが {other:?} が現れた"),
     }
 }
