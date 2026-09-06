@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-emo-text-line-height-canon",
   "created_at": "2026-09-05T07:03:43Z",
-  "updated_at": "2026-09-05T12:17:05Z",
+  "updated_at": "2026-09-06T09:30:00Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "implementation-complete",
   "approvals": {
     "requirements": {
       "generated": true,

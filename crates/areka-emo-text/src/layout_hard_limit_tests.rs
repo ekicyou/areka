@@ -413,3 +413,125 @@ fn output_is_unchanged_when_the_wrap_threshold_is_inside_the_drawing_range() {
         }
     }
 }
+
+// ── 要件 6.6／6.4: 折返し基準が描画範囲の内にある通常のバルーンでも、
+//    `\_l` の跳躍の後なら塊の途中で遠辺が発火する ──
+
+/// 折返し基準が描画範囲の**内**（100 ≤ 120）にある通常のバルーンでも、塊の途中で `\_l` が
+/// 行内位置を遠辺の近くへ跳ばせば、塊の途中で遠辺の判定が発火して塊が割れる。
+///
+/// これを固定するのは、塊の途中の発火を「折返し基準が描画範囲の外にある粗いバルーン定義で
+/// だけ起きる」と読み違えないためである。塊の容量は塊先頭で `soft.min(hard)` を基準に
+/// 先決してあるので、送りを積むだけでは塊の途中で遠辺へ届かない。届かせられるのは
+/// `\_l` の跳躍だけで、それは折返し基準が内にある通常のバルーンでも書ける。
+///
+/// 組み方（[`FixedMetrics`]・font 10 → 送り 10・行内開始 0・折返し基準 100・遠辺 120）。
+/// 4 グリフを 1 塊にする。塊先頭で塊の合計送り 40 が残り行幅 100 に収まると先決されるので、
+/// 以後この塊の内では折返し基準の判定を通らない（発火しうるのは遠辺だけになる）。
+///
+/// 1. 1・2 グリフ目を 0・10 に置く（行内位置は 20）。
+/// 2. `\_l[105,]` が現在行を閉じ、行内位置を 105 へ跳ばす。
+/// 3. 3 グリフ目は行頭（行が空）ゆえ無条件に置かれる（位置 105・遠端 115 ≤ 120）。
+/// 4. 4 グリフ目は遠端 125 が遠辺 120 を超えるので、塊の途中でも折り返して次行の先頭へ置く。
+///
+/// 対照として、同じ入力から `\_l` だけを外すと行内位置は 40 までしか伸びず、塊は 1 行に
+/// 収まって記録も残らない。跳躍そのものが原因であることの裏取りである。
+#[test]
+fn hard_limit_fires_after_cursor_jump_even_when_wrap_threshold_is_inside() {
+    /// 通常のバルーンの遠辺（折返し基準 [`SOFT_IN`] の外側にあり、跳躍先の 105 より遠い）。
+    const NORMAL_HARD: f32 = 120.0;
+    // 前提: 折返し基準が遠辺の内にある（通常のバルーン）。外にあると主題が変わる。
+    const _: () = assert!(SOFT_IN <= NORMAL_HARD);
+
+    let region = region_of(WritingMode::HorizontalTb, SOFT_IN, NORMAL_HARD);
+    let jump = TextItem::CursorMove {
+        x: CursorCoord::Absolute {
+            value: 105.0,
+            unit: CursorUnit::Px,
+        },
+        y: CursorCoord::Omitted,
+    };
+    let items = [
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::Glyph { ch: 'あ' },
+        jump,
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let segments = plan(&[(0, 4)]);
+
+    let (lines, events) = capture(|| {
+        tracing::error!("捕捉窓が生きていることの対照イベント");
+        layout_of(
+            &items,
+            &region,
+            WritingMode::HorizontalTb,
+            WrapPlan::Segmented(&segments),
+        )
+    });
+
+    assert_within(&lines, NORMAL_HARD, "跳躍後の塊の途中の遠辺判定");
+    assert_eq!(
+        glyph_counts(&lines),
+        vec![2, 1, 1],
+        "折返し基準が内にあっても、跳躍の後は塊が途中で割れて次行へ続く"
+    );
+    assert_eq!(inline_positions(&lines[1]), vec![105.0], "跳躍先の行頭");
+    assert_eq!(
+        inline_positions(&lines[2]),
+        vec![0.0],
+        "遠辺で折り返した塊の残りは次行の先頭から続く"
+    );
+
+    let records: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::DEBUG && e.field("hard").is_some())
+        .collect();
+    assert_eq!(
+        records.len(),
+        1,
+        "塊の途中で遠辺が発火した理由の記録の件数が違う: {events:?}"
+    );
+    assert_eq!(number_field(records[0], "inline_pos"), 115.0);
+    assert_eq!(number_field(records[0], "advance"), ADVANCE);
+    assert_eq!(number_field(records[0], "hard"), NORMAL_HARD);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .count(),
+        1,
+        "対照イベントが数えられていない——記録の件数の主張が恒真になっている"
+    );
+
+    // 対照: 跳躍を外すと同じ塊・同じ領域でも遠辺は発火しない（原因が跳躍であることの裏取り）。
+    let without_jump = glyphs(4);
+    let (control_lines, control_events) = capture(|| {
+        tracing::error!("捕捉窓が生きていることの対照イベント");
+        layout_of(
+            &without_jump,
+            &region,
+            WritingMode::HorizontalTb,
+            WrapPlan::Segmented(&segments),
+        )
+    });
+    assert_eq!(
+        glyph_counts(&control_lines),
+        vec![4],
+        "跳躍が無ければ塊は 1 行に収まる（行内位置は 40 までしか伸びない）"
+    );
+    assert!(
+        !control_events
+            .iter()
+            .any(|e| e.level == tracing::Level::DEBUG && e.field("hard").is_some()),
+        "跳躍が無いのに遠辺の記録が残っている: {control_events:?}"
+    );
+    assert_eq!(
+        control_events
+            .iter()
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .count(),
+        1,
+        "対照側の対照イベントが数えられていない"
+    );
+}
