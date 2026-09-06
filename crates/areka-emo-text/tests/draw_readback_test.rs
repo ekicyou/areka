@@ -69,9 +69,9 @@ const IMAGE: (u32, u32) = (200, 150);
 /// 解決結果: 絶対 (36,46)-(156,94) ＝ 原点 (36,46)・寸 (120,48)。
 const VR_ORIGIN: (f32, f32) = (36.0, 46.0);
 const VR_SIZE: (u32, u32) = (120, 48);
-/// 既定フォント高さ 12（image px）・行送り pitch = ceil(12 × 1.25) = 15。
+/// 既定フォント高さ 12（image px）・行送り pitch = 12 + 行間 2 = 14。
 const FONT_H: u32 = 12;
-const PITCH: u32 = 15;
+const PITCH: u32 = 14;
 
 /// 非退化 validrect 付きのテスト用 BalloonModel。**origin は宣言しない**＝描画開始点は
 /// 書字開始角へ縮退する（region.rs の fixture 檻と同じ経路・要件 3.11）。
@@ -529,7 +529,8 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
         .register_actor(actor.clone(), binding, resolved);
 
     // ── セッション 1: 列 0＝■■（at=0.0）＋列 1〜7＝■ 各 1（at=0.5）
-    //    → 8 列 × pitch 15 = 120 ＝ validrect 幅ちょうど（あふれ前の上限） ──
+    //    → 列 i の左端は 120 − 12 − 14i（右上起点・pitch 14）。列 7 は左端 10 ≥ 0 で収まり、
+    //    列 8 は左端 −4 < 0 であふれる＝8 列があふれ前の上限（旧 pitch 15 でも同じく 8 列） ──
     let (mut sink, _handle) =
         spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
     sink.emit(cue("0", 0.0, CueCommand::Text("■■".into())));

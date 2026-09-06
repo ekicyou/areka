@@ -154,6 +154,8 @@ in-file テストの再導出という点では新規の追記です。）
 
 ### 3.2 B 群（COM 層・実フォント／既定フォント）
 
+⚠**この群の 8 ファイルのうち、着手時に赤だったのは 4 つだけ**（`draw_format_metrics_tests`・`scale_invariance_test` の 2 本・`viewbox_draw_live_diff_tests` の R-2）。残る 4 つ（`viewbox_draw_frame_render_tests`・`viewbox_draw_choice_hover_tests`・`tests/draw_readback_test`・`tests/emo2_fixture_e2e_test`）は**緑のまま旧ピッチを正典として述べていた**＝要件 7.5 の是正であって赤の解消ではない。タスク 3.3 で 4 つとも是正済み。3.4 は「同じ数値を二度書き換えない」ためにこの区別を要する。
+
 | ファイル | 分類 | 旧値 → 新値 | 改名追随 | 出所 |
 |---|---|---|---|---|
 | `src/draw_format_metrics_tests.rs`（737 行） | B | `line_pitch(12)` 15 → **14**・`line_pitch(10)` 13 → **12**。係数 2.0 の非既定検査は非既定 `line_gap` の分岐へ（D 群も参照）。`line_box_height(28) = 37.24` の検査は**不変** | **要** | design |
@@ -161,7 +163,7 @@ in-file テストの再導出という点では新規の追記です。）
 | `src/viewbox_draw_live_diff_tests.rs` | B/C | font 20: P = 20+2 = **22**・F = 20（`2P+F = 64 ≤ 80 ≤ 3P+F = 86`）→ 面寸 (160,80)／(80,160) は**据え置き**。font 12: P = **14**・F = 12（`40 ≤ 50 ≤ 54`）→ (80,50)／(50,80) 据え置き＝doc のみ。負の対照 `live_diff_detects_injected_divergence` は新式でも赤のまま（要件 7.4） | 不要 | design。**ただし §3.5 の裁定案件 R-2 を参照**——タスク 2.1 の実走で `yugothic_real_fixture_matches_oracle_byte_for_byte` が赤になり、面寸の据え置きとは別の未決事項（製品側の欠陥の疑い）が残っている |
 | `src/viewbox_draw_choice_hover_tests.rs` | B | 注入 `band_extent` 13 → **12**（font 10 のピッチ上限）。「帯 > em ボックス 10」の関係と `expand_overhang_for_band` の検査は保たれる | 不要 | design |
 | `src/viewbox_draw_png_dump_tests.rs` | B | ピッチを実行時に `metrics.line_pitch` から読む＝**自動追随・作業なし** | 不要 | design |
-| `tests/draw_readback_test.rs` | B | `PITCH` 15 → **14** | 不要 | design |
+| `tests/draw_readback_test.rs` | B | `PITCH` 15 → **14**。**タスク 3.3 で追記**: `PITCH` は定数 1 つではなく、さらに 5 つの不等式の境界（`min_y < PITCH` 2 箇所・`>= VR_SIZE.0 − PITCH − FONT_H` 2 箇所〔93 → 94〕・`min_x < PITCH` 1 箇所）と容量の前提コメントを動かす。いずれも定数と一緒に動き、すべて締まる方向。容量の前提「8 列 × pitch 15 = 120 ＝ validrect 幅ちょうど」は**偶然の一致**であって判定の根拠ではないので、列端の式（列 i の左端 = 108 − 14i・列 7 = 10 ≥ 0・列 8 = −4 < 0）へ書き直した。結論（8 列があふれ前の上限）は新旧どちらのピッチでも変わらない。⚠3.4 への申し送り: `min_y < PITCH` は**縦書き**のテストにあり、そこでは y が送り軸なので、行送りの定数を送り軸の境界に使っている。実害は無い（グリフ 0 の `min_y` はほぼ 0）が、素直な基準は `FONT_H` | 不要 | design ＋ **タスク 3.3 で追記** |
 | `tests/viewbox_blit_spike.rs` | B | `N` 15 → **14**・`BLOCK_POS` [10,25,40,55] → **[10,24,38,52]**・doc 3 か所 | 不要 | design |
 | `tests/scale_invariance_test.rs` | B | font 40: pitch 50 → **42**・`block_offset −50 → −42`・3 行目の下端 46+84+40 = **170 > 168** で縦スクロールは引き続き発火（行数不変の検査は新式でも成立）。縦書き font 10: rl 4 列目の左端 400−10−36 = 354 < 360 → `+12`・lr 4 列目の右端 46 > 40 → `−12`。`1.25` の主用途は DPI 拡大率 k で、そちらは不変 | 不要 | design |
 | `tests/emo2_fixture_e2e_test.rs` | B（文言のみ） | 本体側（font 28）のピッチは 35 → **30** になるが、書き換える対象は `:533` の `eprintln!` 文言「Yu Gothic UI 行ボックス 37.24 → 帯はピッチ 35 で頭打ち」→ 30 の **1 か所だけ**。`\b35\b` の全ヒットがこの 1 行（実測）。走査 y 窓（`:503-507`）は `row0_cl`／`row1_cl` の block 起点から実行時に導出しており帯寸に依存しない＝自動追随。文字送りは不変 | 不要 | **本台帳で是正**（design の「hover 帯の y 範囲」は書き換え対象ではない） |
@@ -186,7 +188,7 @@ em（文字の大きさ）は変わらないため、グリフ描画・文字送
 | 退役するテスト | 場所 | 根拠 | 代替（本数は減らさない） |
 |---|---|---|---|
 | `fixed_metrics_line_pitch_ceils_fractional_values` | `src/layout_wrap_tests.rs` | 検証対象の `ceil` の端数処理そのものが裁定で存在しなくなる | `fixed_metrics_line_pitch_adds_default_gap` へ名前と本文を差し替え（`12 → 14`・`10 → 12`・`h + 2` 以外の式で赤になること） |
-| `dwrite_metrics_line_pitch_follows_config_canon` の「係数 2.0」分岐 | `src/draw_format_metrics_tests.rs` | 係数の乗算が式から消える | 非既定 `line_gap` の分岐へ差し替え |
+| `dwrite_metrics_line_pitch_follows_config_canon` の「係数 2.0」分岐 | `src/draw_format_metrics_tests.rs` | 係数の乗算が式から消える | 非既定 `line_gap` の分岐へ差し替え。✅**タスク 3.3 が実施済み**——この分岐は独立したテストではなく、3.3 が緑にする義務を負う赤いテストの中の 1 アサートなので分離できなかった。実際の代替は `line_gap: 5.0` → `line_pitch(10) == 15`（既定の行間 2 なら 12 で赤＝分岐が生きている）、束縛名も `doubled` → `widened` へ。テスト本数は 25 → 25 で不変。**3.5 は再編集せず、この対応を 1 対 1 の記録として書き残すだけでよい**（要件 7.2） |
 
 **退役させないもの**（明示）: `line_box_height` 系・帯の clamp 系・`expand_overhang_for_band` 系。
 

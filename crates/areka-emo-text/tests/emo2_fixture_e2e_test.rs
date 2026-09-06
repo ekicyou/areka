@@ -530,7 +530,7 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     );
     eprintln!(
         "[emo2-fixture-e2e] hover 行の縦範囲: 塗り y{}..{} ⊇ インク y{}..{}（font.height=28・\
-         Yu Gothic UI 行ボックス 37.24 → 帯はピッチ 35 で頭打ち）",
+         Yu Gothic UI 行ボックス 37.24 → 帯はピッチ 30（28+行間 2）で頭打ち）",
         fill_span.0, fill_span.1, ink_span.0, ink_span.1
     );
 

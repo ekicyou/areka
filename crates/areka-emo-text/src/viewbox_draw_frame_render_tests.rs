@@ -104,9 +104,9 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     let size = surface.size();
     let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
 
-    // 6 行（pitch 13・canvas-local y=0,13,…,65）。各行を相異なるグリフにし、13px の縦
-    // スクロールで供給面の内容が実際に移動する（同一グリフだと行が同型で readback 不変になる）
-    // ことを観測可能にする。canvas は validrect-local に全行保持。
+    // 6 行（font 10 → pitch 10+2=12・canvas-local y=0,12,…,60）。各行を相異なるグリフにし、
+    // 12px の縦スクロールで供給面の内容が実際に移動する（同一グリフだと行が同型で readback
+    // 不変になる）ことを観測可能にする。canvas は validrect-local に全行保持。
     let line_chars = ['あ', 'い', 'う', 'え', 'お', 'か'];
     let mut items = Vec::new();
     for (i, &ch) in line_chars.iter().enumerate() {
@@ -128,10 +128,10 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     let before = surface.read_back().expect("read_back(A) 失敗");
     let stats_a: DrawStats = exec.stats();
 
-    // frame B: 同一 canvas・block_offset -13（1 行ぶん上へスクロール・content 不変）。
+    // frame B: 同一 canvas・block_offset -12（1 行ぶん上へスクロール・content 不変）。
     let window_b = VisibleWindow {
         first_visible_line: 1,
-        block_offset: -13.0,
+        block_offset: -12.0,
     };
 
     // mirror planner（純粋層）で期待計画を独立に算出する。
