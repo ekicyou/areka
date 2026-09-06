@@ -14,7 +14,7 @@
 //!    未指定→`Invert` へ解決されることを固定する（fixture が in-code モデルでなく実 parse される
 //!    descript であることの証明）。
 //! 2. [`real_font_menu_hover_render_dumps_png`]（GPU・headless）: `descript-cursor.txt` を実フォントで
-//!    解決し、4 項目メニュー＋ordinal 0 の hover を通し経路（`register_actor`→`apply_cue`→
+//!    解決し、4 項目メニュー＋ordinal 1（先頭でない行）の hover を通し経路（`register_actor`→`apply_cue`→
 //!    `inject_choice_hover`→`present_frame`→`read_back`）で描画する。pixel 檻（hover 行のセグメント
 //!    矩形へ塗り色＋白文字画素が載る）に加え、read_back を白背景へ合成して **PNG を既知パスへ保存**し、
 //!    実フォント出力の目視確認を pixel 檻へ伴わせる（記憶 emo-text-byte-equiv-default-font-blindspot）。
@@ -247,17 +247,38 @@ fn newline_cue() -> TalkCue {
     }
 }
 
-/// SquareFill 塗り色（105,25,25・premultiplied α=255 ゆえ BGRA=(25,25,105,255)）を矩形内で数える。
-fn fill_pixels_in_rect(bytes: &[u8], width: u32, height: u32, r: &ChoiceHitRow) -> usize {
-    let x0 = r.rect.left.floor().max(0.0) as u32;
-    let x1 = (r.rect.right.ceil() as u32).min(width);
-    let y0 = r.rect.top.floor().max(0.0) as u32;
-    let y1 = (r.rect.bottom.ceil() as u32).min(height);
+/// ヒット行（バルーン窓の物理 px）→ 供給面 readback の座標（validrect-local）へ写す。
+///
+/// 供給面は validrect の寸だけを覆い、validrect 原点×k の位置へ mount される
+/// （surface.rs「Arrangement offset ＝ validrect 原点×k」）。いっぽう `ChoiceHitRow::rect` は
+/// **窓の物理 px** なので、面の中を走査するときは validrect 原点を差し引かなければならない。
+/// 本 fixture の validrect 原点は (5,5)（`TextRegion::resolve(...).start()`）なので、差し引かずに
+/// 使うと走査窓が 5 画素下へずれ、帯の上 5 行が窓から落ちる。
+fn to_canvas_local(r: &ChoiceHitRow, ox: f32, oy: f32) -> (f32, f32, f32, f32) {
+    (
+        r.rect.left - ox,
+        r.rect.top - oy,
+        r.rect.right - ox,
+        r.rect.bottom - oy,
+    )
+}
+
+fn count_in_rect(
+    bytes: &[u8],
+    width: u32,
+    height: u32,
+    rect: (f32, f32, f32, f32),
+    pred: impl Fn(&[u8]) -> bool,
+) -> usize {
+    let x0 = rect.0.floor().max(0.0) as u32;
+    let x1 = (rect.2.ceil().max(0.0) as u32).min(width);
+    let y0 = rect.1.floor().max(0.0) as u32;
+    let y1 = (rect.3.ceil().max(0.0) as u32).min(height);
     let mut n = 0usize;
     for y in y0..y1 {
         for x in x0..x1 {
             let i = ((y * width + x) * 4) as usize;
-            if bytes[i] == 25 && bytes[i + 1] == 25 && bytes[i + 2] == 105 && bytes[i + 3] == 255 {
+            if pred(&bytes[i..i + 4]) {
                 n += 1;
             }
         }
@@ -265,23 +286,37 @@ fn fill_pixels_in_rect(bytes: &[u8], width: u32, height: u32, r: &ChoiceHitRow) 
     n
 }
 
+/// SquareFill 塗り色（105,25,25・premultiplied α=255 ゆえ BGRA=(25,25,105,255)）を矩形内で数える。
+fn fill_pixels_in_rect(bytes: &[u8], width: u32, height: u32, rect: (f32, f32, f32, f32)) -> usize {
+    count_in_rect(bytes, width, height, rect, is_fill)
+}
+
 /// 白文字（≈255,255,255・全チャネル閾値で AA 端を除いた芯）を矩形内で数える。
-fn white_pixels_in_rect(bytes: &[u8], width: u32, height: u32, r: &ChoiceHitRow) -> usize {
-    let x0 = r.rect.left.floor().max(0.0) as u32;
-    let x1 = (r.rect.right.ceil() as u32).min(width);
-    let y0 = r.rect.top.floor().max(0.0) as u32;
-    let y1 = (r.rect.bottom.ceil() as u32).min(height);
-    let mut n = 0usize;
-    for y in y0..y1 {
-        for x in x0..x1 {
-            let i = ((y * width + x) * 4) as usize;
-            if bytes[i] >= 200 && bytes[i + 1] >= 200 && bytes[i + 2] >= 200 && bytes[i + 3] == 255
-            {
-                n += 1;
-            }
-        }
-    }
-    n
+fn white_pixels_in_rect(
+    bytes: &[u8],
+    width: u32,
+    height: u32,
+    rect: (f32, f32, f32, f32),
+) -> usize {
+    count_in_rect(bytes, width, height, rect, |px| {
+        px[0] >= 200 && px[1] >= 200 && px[2] >= 200 && px[3] == 255
+    })
+}
+
+/// SquareFill の塗り帯そのもの（premultiplied BGRA=(25,25,105,255)）。
+fn is_fill(px: &[u8]) -> bool {
+    px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
+}
+
+/// hover 行の**文字だけ**を選ぶ述語（塗り帯を文字と数えないための切り分け）。
+///
+/// α だけでインクを拾うと塗り帯の画素にも当たり、返る縦範囲は帯の縦範囲そのものになる——
+/// 字が 1 画素も無くても「インクは帯の中」が成り立ってしまう。hover 文字は白
+/// （`cursor.font.color` 255,255,255）で premultiplied では B ＝ G ＝ R ＝ α、帯の上に載った字は
+/// B ＝ 25 ＋ 230 × 被覆率 になる。塗り帯の青チャネルは 25 止まり（縁が半透明なら更に小さい）
+/// なので、「青チャネル 128 以上」で白文字だけを拾える。
+fn is_hover_text(px: &[u8]) -> bool {
+    px[3] >= 128 && px[0] >= 128
 }
 
 fn opaque_count(bytes: &[u8]) -> usize {
@@ -315,7 +350,7 @@ fn y_span_where(
 }
 
 /// Observable（R7.6）: cursor.* 指定 fixture を**実フォント（Yu Gothic UI）**で解決し、4 項目メニュー
-/// ＋ordinal 0 の hover を通し経路で描画すると、(a) hover 行のセグメント矩形へ SquareFill 塗り色
+/// ＋ordinal 1 の hover を通し経路で描画すると、(a) hover 行のセグメント矩形へ SquareFill 塗り色
 /// (105,25,25)＋白文字画素が載り（pixel 檻）、(b) その read_back を白背景へ合成した PNG が既知パスへ
 /// 保存される（実フォント出力の目視確認を pixel 檻へ伴わせる）。
 ///
@@ -359,8 +394,14 @@ fn real_font_menu_hover_render_dumps_png() {
         "実フォントで選択肢テキストが描画される（非退化）"
     );
 
-    // ── ordinal 0 を hover 注入 → 再提示 → read_back ──
-    rt.inject_choice_hover(&actor, Some(0));
+    // ── ordinal 1（「いいえ」）を hover 注入 → 再提示 → read_back ──
+    //
+    // ホバーするのを**先頭でない行**にするのは、下の縦範囲の検査で「字の上端が帯の内」を
+    // 反証可能にするためである。先頭行は帯の上端が面の縁（y0）にあり、走査窓をそれより上へ
+    // 開けようがないので、上端の判定は窓の取り方だけで必ず成り立ってしまう（字がベースラインごと
+    // 上へずれても窓に切られて緑のまま）。ordinal 1 なら帯の上端は行送り 1 つぶん下（y22）に
+    // あり、窓はその 4 画素上から見られる。
+    rt.inject_choice_hover(&actor, Some(1));
     present_frame(&mut rt, &mut world, 100.0).expect("hover 提示");
     let hover = rt
         .surface(&actor)
@@ -368,48 +409,144 @@ fn real_font_menu_hover_render_dumps_png() {
         .read_back()
         .expect("read_back");
 
-    // pixel 檻: hover 行（ordinal 0）へ SquareFill 塗り色＋白文字が載る。
+    // read_back は validrect-local なので、窓物理のヒット矩形から validrect 原点を差し引く。
+    let region = TextRegion::resolve(&model, image, WritingMode::HorizontalTb);
+    let (ox, oy) = (region.left(), region.top());
+    let row0_cl = to_canvas_local(&rows[0], ox, oy);
+    let row1_cl = to_canvas_local(&rows[1], ox, oy);
+    let row2_cl = to_canvas_local(&rows[2], ox, oy);
+
+    // 画素の検査: hover 行（ordinal 1）へ SquareFill 塗り色＋白文字が載る。
     assert!(
-        fill_pixels_in_rect(&hover, w, h, &rows[0]) > 0,
-        "hover 行に SquareFill 塗り色(105,25,25)画素が載る: {:?}",
-        rows[0].rect
+        fill_pixels_in_rect(&hover, w, h, row1_cl) > 0,
+        "hover 行に SquareFill 塗り色(105,25,25)画素が載る: canvas-local {row1_cl:?}"
     );
     assert!(
-        white_pixels_in_rect(&hover, w, h, &rows[0]) > 0,
-        "hover 行に白文字(255,255,255)画素が載る: {:?}",
-        rows[0].rect
+        white_pixels_in_rect(&hover, w, h, row1_cl) > 0,
+        "hover 行に白文字(255,255,255)画素が載る: canvas-local {row1_cl:?}"
     );
-    // 非 hover 行（ordinal 1）へは塗り色画素が載らない（ダーティ限定＝hover 行のみハイライト）。
+    // 非 hover 行（ordinal 0＝hover 行の 1 つ上）へは塗り色画素が載らない
+    //（ダーティ限定＝hover 行のみハイライト。帯が上の行へ伸びていないことも同時に言える）。
     assert_eq!(
-        fill_pixels_in_rect(&hover, w, h, &rows[1]),
+        fill_pixels_in_rect(&hover, w, h, row0_cl),
         0,
-        "非 hover 行には SquareFill 塗り色画素が載らない"
+        "非 hover 行には SquareFill 塗り色画素が載らない: canvas-local {row0_cl:?}"
     );
 
-    // ── 回帰檻（実機不具合「hover 文字の下が切れる」）: インクがハイライト矩形から縦にはみ出さない ──
+    // ── 回帰検査（実機不具合「hover 文字の下が切れる」）: インクがハイライト矩形からほぼはみ出さない ──
     //
     // 帯（ハイライト矩形＝ヒット矩形のブロック軸寸）を em ボックス丈（font.height）で切ると、
     // DirectWrite が ascent+descent で描く実インクの descent 側が塗りの外へ落ちる（実フォント
     // Yu Gothic UI は行ボックス 1.3301em）。白バルーン＋白 hover 文字では「下が消えた」ように見える。
-    // 走査 y 窓は「hover 行の block 起点〜次行の block 起点」＝帯寸に依存しない独立の窓。
-    let x0 = rows[0].rect.left.floor().max(0.0) as u32;
-    let x1 = (rows[0].rect.right.ceil() as u32).min(w);
-    let y0 = rows[0].rect.top.floor().max(0.0) as u32;
-    let y1 = (rows[1].rect.top.floor().max(0.0) as u32).min(h);
+    // 走査 y 窓は「hover 行の block 起点−余白 4 〜 次行の block 起点＋余白 4」＝帯寸に依存しない
+    // 独立の窓。窓を帯とぴったり同じにすると、帯からはみ出したインクが窓の外へ落ちて**測れない
+    // まま緑になる**（同 spec 要件 7.3）。これは上端にも同じく効く——窓の上端を帯の上端と揃えると
+    // 「字の上端は帯の上端以上」が窓の取り方だけで必ず成り立ち、字が上へずれても緑のままになる。
+    // ゆえに窓は帯の上下へ 4 画素ずつ開ける。上の行の字は黒（premultiplied の青チャネルは 0）ゆえ
+    // 白文字の述語に当たらず、塗り色 (25,25,105,255) でもないので窓へ入っても数えられない。
+    // 次行のインクはその行の block 起点から 5〜6 画素下で始まるので、4 画素の余白なら窓へ入らない。
+    // 座標は validrect 原点を差し引いた canvas-local。
+    //
+    // **裁定 2026-09-06（第 2 回・spec `areka-P0-emo-text-line-height-canon` 要件 3.6）**:
+    // 行送りが正典（`font.height + 行間 2`）へ確定した後、実フォントの読み戻しで帯の下端から
+    // 文字のインクが下へ出た。開発者の裁定は「**2 画素のはみ出しを許容する**」である。ゆえに
+    // 下の判定は「上端は帯の内・下端のはみ出しは 2 画素以内」を見る。
+    //
+    // はみ出しの量はフォント寸で変わる——**この fixture（font 20）では 1 画素**（ordinal 1 の実測:
+    // 帯 y22..43 ＝ 丈 22（font.height 20 ＋ 行間 2）に対し白文字のインク y28..44）だが、
+    // **正典の 28 では字によって 2 画素**である
+    // （閉・も・調・頻・度 が 2 画素、は・い・じ・る・ど・整 が 1 画素。
+    // `line_pitch_readback_test.rs` の 3 本目に実測表がある）。同日の第 1 回裁定（1 画素）は
+    // この font 20 の fixture だけで測った値であり、28 での測り直しがそれを上書きした。
+    //
+    // これは**裁定による意味の変更**であって、都合に合わせて許容幅を緩めたものではない。
+    // 帯を広げる案は採らない——帯を行送りより広げると隣接する行の帯と重なり、どの選択肢を
+    // 指しているかの一意性が壊れる（同 spec design §「帯の防御式を保つ」）。
+    // **はみ出しが 3 画素以上になった場合は帯を広げず、画素数を添えて改めて開発者の裁定を仰ぐ。**
+    /// 走査窓を hover 行の帯の**上下**へ伸ばす画素数（上端・下端どちらの判定も窓で切らないため）。
+    const SCAN_MARGIN: u32 = 4;
+    /// ハイライト矩形の下端から hover 文字のインクがはみ出してよい上限（画素）。
+    /// 裁定 2026-09-06（第 2 回・要件 3.6）＝ 2 画素を許容する
+    /// ——**許容幅の緩和ではなく裁定による意味の変更**。
+    /// この fixture（font 20）の実測は 1 画素で上限に余裕があるが、正典の 28 では 2 画素になる。
+    const BAND_OVERHANG_MAX: u32 = 2;
+
+    let x0 = row1_cl.0.floor().max(0.0) as u32;
+    let x1 = (row1_cl.2.ceil().max(0.0) as u32).min(w);
+    let block_top = row1_cl.1.floor().max(0.0) as u32;
+    let y0 = block_top.saturating_sub(SCAN_MARGIN);
+    let y1 = ((row2_cl.1.floor().max(0.0) as u32) + SCAN_MARGIN).min(h);
     assert!(
-        x0 < x1 && y0 < y1,
-        "走査窓が非退化: x{x0}..{x1} y{y0}..{y1}"
+        x0 < x1 && y0 < y1 && y0 < block_top,
+        "走査窓が非退化で、かつ hover 行の block 起点 y{block_top} より上から見ている: x{x0}..{x1} y{y0}..{y1}"
     );
-    let fill_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| {
-        px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
-    })
-    .expect("hover 行に塗り画素が在る");
-    let ink_span =
-        y_span_where(&hover, w, x0, x1, y0, y1, |px| px[3] != 0).expect("hover 行にインクが在る");
+    let fill_span =
+        y_span_where(&hover, w, x0, x1, y0, y1, is_fill).expect("hover 行に塗り画素が在る");
+    assert_eq!(
+        fill_span.1 - fill_span.0 + 1,
+        22,
+        "ハイライト矩形の丈は行送り 22（font.height 20 ＋ 行間 2）: 実測 y{}..{}",
+        fill_span.0,
+        fill_span.1
+    );
+    // インクは**文字だけ**を拾う（塗り帯を文字と数えると、字が消えても上端の判定が成り立つ）。
+    let text_pixels = count_in_rect(
+        &hover,
+        w,
+        h,
+        (x0 as f32, y0 as f32, x1 as f32, y1 as f32),
+        is_hover_text,
+    );
     assert!(
-        ink_span.0 >= fill_span.0 && ink_span.1 <= fill_span.1,
-        "hover 行のインク縦範囲 y{}..{} がハイライト矩形 y{}..{} の内側に収まる\
-         （はみ出し＝**文字の下が切れる**・R3.3/4.2）",
+        text_pixels > 0,
+        "hover 行の走査窓 x{x0}..{x1} y{y0}..{y1} に白文字の画素が 1 つも無い\
+         （字が描かれていないのに帯だけで緑になる取り違えを塞ぐ）"
+    );
+    let ink_span = y_span_where(&hover, w, x0, x1, y0, y1, is_hover_text)
+        .expect("画素数が 0 でない以上、白文字の縦範囲は在る");
+    assert!(
+        ink_span.1 < y1 - 1,
+        "hover 文字のインク下端 y{} が走査窓の下端 y{y1} に接している——窓が下端を切っている疑いがあり、\
+         はみ出しの測定が信用できない（窓を深くすること・R7.3）",
+        ink_span.1
+    );
+    // 上端側の対の門。これが在って初めて、下の「字の上端が帯の内」が窓の取り方ではなく描画結果を
+    // 見た判定になる（字が上へずれたら、まず窓の上端に届いてここが赤くなる）。
+    assert!(
+        ink_span.0 > y0,
+        "hover 文字のインク上端 y{} が走査窓の上端 y{y0} に接している——窓が上端を切っている疑いがあり、\
+         上端の判定が信用できない（窓を上へ開けること・R7.3）",
+        ink_span.0
+    );
+    eprintln!(
+        "[choice-fixture] hover 行（ordinal 1「いいえ」）の縦範囲（font.height 20・canvas-local）: 窓 x{x0}..{x1} y{y0}..{y1} / \
+         帯 y{}..{}（丈 {}）/ 白文字 y{}..{}（{text_pixels} 画素）/ 上の余白 {} 画素（負なら帯の上へはみ出し）\
+         / 下のはみ出し {} 画素",
+        fill_span.0,
+        fill_span.1,
+        fill_span.1 - fill_span.0 + 1,
+        ink_span.0,
+        ink_span.1,
+        ink_span.0 as i64 - fill_span.0 as i64,
+        ink_span.1.saturating_sub(fill_span.1)
+    );
+
+    assert!(
+        ink_span.0 >= fill_span.0,
+        "hover 行の文字のインク上端 y{} はハイライト矩形の上端 y{} の内側にある\
+         （上へのはみ出し＝**文字の上が切れる**・R3.3/4.2）",
+        ink_span.0,
+        fill_span.0
+    );
+    let overhang = ink_span.1.saturating_sub(fill_span.1);
+    assert!(
+        overhang <= BAND_OVERHANG_MAX,
+        "hover 行の文字のインク下端 y{} がハイライト矩形の下端 y{} から {overhang} 画素はみ出した\
+         （インク y{}..{}・矩形 y{}..{}）。裁定 2026-09-06（第 2 回・要件 3.6）が許すのは \
+         {BAND_OVERHANG_MAX} 画素までである。**帯を広げてはならない**（隣接行の帯と重なり、\
+         どの選択肢を指しているかの一意性が壊れる）。この数値を添えて開発者の裁定を仰ぐこと",
+        ink_span.1,
+        fill_span.1,
         ink_span.0,
         ink_span.1,
         fill_span.0,
@@ -425,7 +562,7 @@ fn real_font_menu_hover_render_dumps_png() {
     std::fs::write(&path, &png).expect("PNG 書き込み");
     eprintln!(
         "[choice-fixture] 実フォント目視確認 PNG を保存: {path} ({w}x{h}・font=Yu Gothic UI・\
-         4 項目メニュー・ordinal 0 hover＝SquareFill 塗り(105,25,25)＋白文字)"
+         4 項目メニュー・ordinal 1「いいえ」hover＝SquareFill 塗り(105,25,25)＋白文字)"
     );
 }
 
