@@ -300,7 +300,7 @@ URL を置く先の多くは**式の途中**である——`crates/areka-parsers
 
 別名の連鎖は作らない（指す先の状態が `alias` であってはならない・要件 2.4・上流の `AliasChain`）。`alias_of` の逆向きを書きたいときは `supersedes` を使う。
 
-**対象外**（`not-applicable`）は、SSP 以外のベースウェア専用の記述に付ける候補とし、根拠を備考に書く（要件 2.6）。本ドメインでの該当は少数で、いずれもページ全体項目に集中する（MATERIA の注記 8・CROW 5）。ベースウェア名を挙げているだけで SSP でも有効な記述は対象外にしない。
+**対象外**（`not-applicable`）は、SSP 以外のベースウェア専用の記述に付ける候補とし、根拠を備考に書く（要件 2.6）。ベースウェア名を挙げているだけで SSP でも有効な記述は対象外にしない。この規則が効いて、**本ドメインでの該当は実測 0 件**である（§12.1 訂正 28）。
 
 **「正典どおりでないなら実装したことにしない」（開発者裁定 2026-09-05）。** 受理キーが本番の経路まで届いていても、値の水準で正典と違う振る舞いをするなら `implemented` とは書かない。分かれ道は 2 つだけである。
 
@@ -380,7 +380,7 @@ doc/
 | `areka-P0-charset-canon` | `shiori.encoding`／`shiori.forceencoding`／surfaces.txt の `charset` | `brief.md:50` |
 | `areka-P0-scope-zorder-pinning` | シェル descript の `seriko.zorder` | 完了 spec |
 | `areka-P0-windowposition-limit` | `descript_balloon` の `windowposition.x`／`.y`／`.limit`（要件 7.2 は「ゴースト側」と書くが、本ドメインで `windowposition` を見出しに持つ正典項目はバルーンの 3 件だけ・`descript_ghost` には無い——§12 訂正 12） | 完了 spec |
-| `areka-P0-kero-balloon`／`-balloon-visibility`／`-balloon-vertical-canon`／`-balloon-offset-dpi` | バルーンの系列名・表示寿命・縦書き・単位空間 | 完了 spec |
+| `areka-P0-kero-balloon`／`-balloon-visibility`／`-balloon-vertical-canon`／`-balloon-offset-dpi` | バルーンの系列名・表示寿命・縦書き・単位空間（**前 2 本は全数を当たっても担当となる項目が 1 件も無かった**——§12.1 訂正 30） | 完了 spec |
 | `areka-P0-bindoption-exclusivity` | `bindoption*.group` | 完了 spec |
 | `areka-P0-package-mount` | ゴースト descript の起点と install.txt の対象外宣言 | 完了 spec |
 | `areka-P0-shell-parse`／`-balloon-parse` | 転記層の範囲 | 完了 spec |
@@ -566,6 +566,9 @@ WebFetch で 4 ページを引く（`manual_shell`・`descript_shell_surfaces`�
 | 25 | §11「上流に任せる」表の `IntroducedNotInCatalogVersions` | カタログ側の版番号が**空でない項目しか見ない**。空の項目は素通りする |
 | 26 | §11 W6「1,000 未満」 | 上限テストは「上限より大きい」を違反とするので、ちょうど上限ぴったりの行数は違反ではない。条件は「上限を超えない」が正しい |
 | 27 | §11 W8「`cargo test -p ukadoc-survey` が緑」 | 報告を作り直すだけでは緑にならない。上流の対象数え上げのテストが、本 spec の記入で対象が生まれた行を `Subjects::Zero` から `Subjects::NonEmpty` へ移すよう名指しで依頼しており、その 1 行の書き換えも要る（§2.1 が「本 spec が持つもの」として登記済み・要件 10.9・開発者裁定 2026-09-06） |
+| 28 | §6.4「対象外の該当は少数で、いずれもページ全体項目に集中する（MATERIA の注記 8・CROW 5）」 | **0 件**。同じ段落が定める規則（ベースウェア名を挙げているだけで SSP でも有効な記述は対象外にしない）が効き、542 件のどれもこの状態に当たらなかった。MATERIA・CROW への言及はいずれも「SSP ではこう扱う」という但し書きの中にあり、SSP 以外のベースウェア専用の記述ではない
+| 29 | §15-1「上流の設計は別ブランチに存在し未 main」 | 上流は **2026-09-05 に main へ着地した**（§3・PR#136）。§3 は着地を書いているのに §15 が取り残されていた。D6・D11 が写した規則は着地後の実装と一致し、V10・V11 も緑である
+| 30 | §8 の担当表 22 本 | 台帳に実際に立った担当は **20 本**。`areka-P0-kero-balloon`（系列名）と `areka-P0-balloon-visibility`（表示寿命）は、本ドメインの 542 件を全数当たっても相手になる項目が 1 件も無かった。表からは消さず、担当が付かなかったことを表と本訂正に残す
 
 ## 13. 危険と対処
 
@@ -620,7 +623,7 @@ WebFetch で 4 ページを引く（`manual_shell`・`descript_shell_surfaces`�
 
 いずれも本 spec の作業を止めない。設計としての扱いを決めてある。
 
-1. **上流の道具の版番号抽出規則と URL 行の形**——上流の設計は別ブランチに存在し未 main（§3）。D6・D11 は同じ規則を写しているが、main に載るまでに変わる余地がある。着地後に V10・V11 で照合する。
+1. **上流の道具の版番号抽出規則と URL 行の形**——**決着済み**。上流は 2026-09-05 に main へ着地した（§3・PR#136）。D6・D11 が写した規則は着地後の実装と一致し、V10・V11 も緑である（§12.1 訂正 29）。
 1. **`surface.append`・`kero.surface.alias` の正典上の実在**——ライブ確認（§9.6）で決める。確かめられない間は当該の areka の語を根拠にした `implemented` 判定をしない（D9）。
 2. **`areka-P0-text-decoration-canon` が言う「13 キー」の実体**——当該 brief に名前の列挙が無く、`descript_balloon` の `font.*` は実測 14 種。台帳側で名前を確定し、是正候補として §9.8 に記録する（brief は書き換えない）。
 3. **`ukadoc:manual_translator` の担当**——2 本が半分ずつ主張する。§8 の規則（`owner` は `translate-pipeline`・備考と `links` に `makoto-dll-host`）で扱い、最終判断は統合担当へ渡す。
