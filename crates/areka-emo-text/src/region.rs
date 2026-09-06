@@ -170,11 +170,19 @@ impl ScaleContract {
 }
 
 /// 解決済みテキスト領域（**全値 image px**・validrect 絶対矩形・描画開始点・折返し閾値・
-/// バルーン画像原寸）。
+/// 描画範囲の行内軸の遠辺・バルーン画像原寸）。
 ///
 /// physical への変換は TextSurface 生成寸と D2D SetTransform の一点のみ
 /// （[`ScaleContract`] 経由・k の多重適用を構造排除）。折返し閾値の軸解釈は
 /// [`WritingMode`] 依存（横書き＝x・縦書き＝y——design.md 軸読み替え正準表）。
+///
+/// ## 行内軸には意味の違う 2 つの値がある（spec `areka-P0-emo-text-line-height-canon` §4.3）
+///
+/// [`wrap_threshold`](Self::wrap_threshold)（`wordwrappoint` 由来）は「**ここを超えたら
+/// 折り返す**」折返しの基準であり、[`inline_limit`](Self::inline_limit)（`validrect` の
+/// 当該遠辺）は「**ここを超えてはならない**」絶対上限である。2 値は独立に保持し、
+/// 一方をもう一方へ丸め込まない——丸め込むと絶対上限の意味論も、行末の禁則文字が基準を
+/// 超えてぶら下がる余地（折返しの遅延）も表せなくなる（開発者裁定 2026-09-05）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextRegion {
     /// validrect 絶対矩形の左辺（image px）。
@@ -189,9 +197,20 @@ pub struct TextRegion {
     start: (f32, f32),
     /// 折返し閾値（行内軸・image px。横書き＝x 値・縦書き＝y 値）。
     wrap_threshold: f32,
+    /// 描画範囲の行内軸の遠辺（横書き＝`right`・縦書き＝`bottom`・image px）＝絶対上限。
+    inline_limit: f32,
     /// バルーン画像の原寸（幅, 高さ・image px）。`resolve` の入口で受け取った値そのもの。
     image_size: (f32, f32),
 }
+
+/// 折返し基準が描画範囲の外に解決されたときの警告で、バルーン名の欄に載せる代替値。
+///
+/// `BalloonModel`（`areka-parsers` の balloon 集約ルート）は `descript.txt` の `name,` キーを
+/// **写像していない**——写像対象キーを列挙しているのは同 crate の balloon parse の
+/// `map_merged` であり、そこに `name` は無い（あるのは `font.name` で、これはフォント名で
+/// あってバルーン名ではない）。名前を読めるようになるまでは欄をこの値で埋める。欄ごと
+/// 落とさないのは、記録の無い経路を作らないためである（`.kiro/steering/logging.md`）。
+const BALLOON_NAME_PLACEHOLDER: &str = "(名前なし)";
 
 impl TextRegion {
     /// `BalloonModel`＋バルーン画像原寸（**image px**）＋`WritingMode` から解決する。
@@ -208,6 +227,16 @@ impl TextRegion {
     ///   位置は動かさない）。`None` 成分のみ書字開始角へ縮退（`debug!` 記録）。
     /// - 折返し閾値: 横書き＝`wordwrappoint.x`（負値=右辺基準）・縦書き＝`wordwrappoint.y`
     ///   （負値=下辺基準）。`None` は行内軸の validrect 遠辺へ縮退（領域端での自然折返し）。
+    /// - 描画範囲の行内軸の遠辺（[`inline_limit`](Self::inline_limit)）: 横書き＝解決後の
+    ///   `right`・縦書き＝解決後の `bottom`。折返し閾値がこの遠辺の**外**に解決された場合は
+    ///   `warn!` を 1 件記録する（バルーン名・軸・両方の値）。
+    ///
+    /// ## 警告が「読み込み 1 回につき 1 回」になる理屈（持続 guard を持たない）
+    ///
+    /// 本関数はバルーンの装着（actor 登録）と合成スケール k の再追従でしか呼ばれず、
+    /// フレームごとには呼ばれない。したがって静的な一回化の仕掛けを持たなくても
+    /// 「読み込み 1 回につき 1 回」が構造で成り立つ。DPI 変化による k の再追従では
+    /// 再解決＝再読込として改めて 1 件記録する。
     pub fn resolve(model: &BalloonModel, image_size: (u32, u32), mode: WritingMode) -> TextRegion {
         let (width, height) = (image_size.0 as f32, image_size.1 as f32);
 
@@ -247,15 +276,30 @@ impl TextRegion {
             "origin.y",
         );
 
-        // ── 折返し閾値: 行内軸は WritingMode 依存（正準表）・None は遠辺へ ──
-        let wrap_threshold = match mode {
-            WritingMode::HorizontalTb => {
-                resolve_or(model.wordwrappoint().x(), width, right, "wordwrappoint.x")
-            }
-            WritingMode::VerticalRl | WritingMode::VerticalLr => {
-                resolve_or(model.wordwrappoint().y(), height, bottom, "wordwrappoint.y")
-            }
+        // ── 折返し基準（soft）と描画範囲の遠辺（hard）: 行内軸は WritingMode 依存（正準表） ──
+        // 遠辺は上で解決済みの right／bottom をそのまま採る（モデルから引き直さない——
+        // 引き直すと未指定成分の縮退や負値解決が 2 か所に増える）。
+        let (wrap_threshold, inline_limit, axis) = match mode {
+            WritingMode::HorizontalTb => (
+                resolve_or(model.wordwrappoint().x(), width, right, "wordwrappoint.x"),
+                right,
+                "x",
+            ),
+            WritingMode::VerticalRl | WritingMode::VerticalLr => (
+                resolve_or(model.wordwrappoint().y(), height, bottom, "wordwrappoint.y"),
+                bottom,
+                "y",
+            ),
         };
+        if wrap_threshold > inline_limit {
+            tracing::warn!(
+                balloon = BALLOON_NAME_PLACEHOLDER,
+                axis,
+                wrap_threshold,
+                inline_limit,
+                "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）"
+            );
+        }
 
         TextRegion {
             left,
@@ -264,6 +308,7 @@ impl TextRegion {
             bottom,
             start: (start_x, start_y),
             wrap_threshold,
+            inline_limit,
             image_size: (width, height),
         }
     }
@@ -294,8 +339,29 @@ impl TextRegion {
     }
 
     /// 折返し閾値（行内軸・image px。横書き＝x 値・縦書き＝y 値）。
+    ///
+    /// 意味は「**ここを超えたら折り返す**」折返しの基準であって、超えてはならない上限では
+    /// ない。上限は [`inline_limit`](Self::inline_limit) が別に持つ。
     pub fn wrap_threshold(&self) -> f32 {
         self.wrap_threshold
+    }
+
+    /// 描画範囲（validrect）の行内軸の遠辺（横書き＝[`right`](Self::right)・
+    /// 縦書き＝[`bottom`](Self::bottom)・image px）。
+    ///
+    /// 意味は「**ここを超えてはならない**」絶対上限である——文字の遠端がこれを超えそうな
+    /// ときは、折返し基準（[`wrap_threshold`](Self::wrap_threshold)）に関わらず無条件に
+    /// 折り返す。web ページの文字列折返しと同じ二段構えであり、開発者裁定 2026-09-05
+    /// （spec `areka-P0-emo-text-line-height-canon` の design §4.3・要件 6.2／6.3）による。
+    ///
+    /// 2 値は独立に読める。粗いバルーン定義では折返し基準がこの遠辺の外に解決されることが
+    /// 実際にあり（出荷 fixture `emo2-kakukaku` の相方側は 254 > 240）、その場合は
+    /// [`resolve`](Self::resolve) が `warn!` を 1 件記録したうえで、両方の値をそのまま保持する
+    /// （丸め込まない）。唯一の例外は行頭の 1 グリフで、遠辺より広い 1 文字は無限折返しを
+    /// 避けるために置かれる——その判断は配置層（`layout`）の領分であり、本層は値を提供する
+    /// だけである。
+    pub fn inline_limit(&self) -> f32 {
+        self.inline_limit
     }
 
     /// バルーン画像の原寸（幅, 高さ・image px）＝[`resolve`](Self::resolve) が受け取った
@@ -858,6 +924,9 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+#[path = "region_inline_limit_tests.rs"]
+mod inline_limit_tests;
 #[cfg(test)]
 #[path = "region_vertical_canon_tests.rs"]
 mod vertical_canon_tests;

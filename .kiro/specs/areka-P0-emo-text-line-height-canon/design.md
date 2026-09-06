@@ -359,7 +359,7 @@ flowchart TD
 | `TextLayerConfig`＋`line_pitch` | 純粋層 `state.rs` | 行送りの式の唯一の定義点 | 1.2, 1.6, 3.1, 3.5, 3.7 | — | Service |
 | `GlyphMetrics`／`FixedMetrics` | 純粋層 `layout.rs` | 注入点（3 口・不変）と決定論の代役 | 3.5, 4.4, 7.1 | `TextLayerConfig`（P0） | Service |
 | `LayoutEngine` ゲート③ | 純粋層 `layout.rs` | 二段折返し | 6.2, 6.3, 6.4, 6.6, 3.8 | `TextRegion`（P0） | Service |
-| `TextRegion.inline_limit`＋警告 | 純粋層 `region.rs` | 描画範囲の当該辺と粗さの警告 | 6.2, 6.3, 6.7 | `BalloonModel::name`（P1） | Service, State |
+| `TextRegion.inline_limit`＋警告 | 純粋層 `region.rs` | 描画範囲の当該辺と粗さの警告 | 6.2, 6.3, 6.7 | ~~`BalloonModel::name`（P1）~~ **無し**（⚠訂正 2026-09-06: `BalloonModel` にバルーン名の取得口は無く、`balloon` 欄はプレースホルダ定数。台帳 §7 #10） | Service, State |
 | 帯の防御式（`choice.rs`・`actor.rs`） | 純粋層／結線 | 現行の式を保ち、値だけピッチ 30 で頭打ち | 3.6, 5.6 | `GlyphMetrics::line_box_height`／`line_pitch`（P0） | Service |
 | `DWriteMetrics::line_pitch` の追随 | COM 層 `draw.rs` | 式の委譲・doc | 3.1, 3.5, 3.10 | `TextLayerConfig`（P0） | Service |
 | 根拠画像と読み取り値 | 運用（spec 配下） | 裁定の根拠の保存 | 1.1, 1.3, 6.1 | — | — |
@@ -453,13 +453,13 @@ impl TextRegion {
     pub fn inline_limit(&self) -> f32;
 }
 ```
-- `resolve`（`:211`）の末尾: `if wrap_threshold > inline_limit { warn!(balloon = model.name().unwrap_or("(名前なし)"), axis = "x"|"y", wrap_threshold, inline_limit, "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）") }`。
+- `resolve`（`:211`）の末尾: `if wrap_threshold > inline_limit { warn!(balloon = BALLOON_NAME_PLACEHOLDER /* ⚠訂正 2026-09-06: `model.name()` は存在しない（台帳 §7 #10） */, axis = "x"|"y", wrap_threshold, inline_limit, "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）") }`。
 - 一回化: `resolve` は actor 登録（`actor.rs:313-314`）と k 再追従（`:383`）でしか呼ばれない（フレームごとには呼ばれない）ので、「バルーンの読込（装着）1 回につき 1 回」が構造で成り立つ。k 再追従（DPI 変化）でも 1 回ずつ出るが、これは再解決＝再読込として要件 6.7 の「読み込んだとき」に含める。持続 guard は持たない。
 - State: `PartialEq` 導出（`:178`）に `inline_limit` が加わる（`refresh_actor_binding` の同値判定は同じ model からの再解決なので意味不変）。
 
 **Implementation Notes**
 - Validation: `region_inline_limit_tests.rs`——`inline_limit` の 3 方向テストと警告件数テスト（`log-capture-kit::count_levels`・`emo2-kakukaku` 相当で 1 件・本体側で 0 件）。
-- Risks: `model.name()`（`crates/areka-parsers/src/balloon/model.rs:379`）が `None` のバルーン → プレースホルダ文字列で記録する（ログ無し失敗にしない）。
+- Risks: ~~`model.name()`（`crates/areka-parsers/src/balloon/model.rs:379`）が `None` のバルーン~~ **⚠訂正 2026-09-06**: design が指した `pub fn name` は `impl Font` のフォント名で、`BalloonModel` にバルーン名の取得口は無い（`descript.txt` の `name,` を `map_merged` が写像していない）。ゆえに全バルーンでプレースホルダ定数 `BALLOON_NAME_PLACEHOLDER` を記録する（ログ無し失敗にしない）。名前の写像は `areka-P0-ukadoc-survey-assets` へ登記（台帳 §7 #10）。
 
 #### 帯の防御式を保つ（`choice.rs:101-132`・`actor.rs:781-789`・`viewbox_draw.rs:728-750`）
 
@@ -599,7 +599,7 @@ rg -n "1\.25" crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka
 | DD-6 | 撤回（2026-09-05 議題 1）: 帯＝`font.height`・`highlight_band_extent`／`expand_overhang_for_band` 撤去 | 同上。帯は `clamp(37.24, 28, 30) = 30`（式不変・値だけ追随）。残存リスク（インク下端 ≈ 31）は実フォント読み戻しで検査し、赤だった（裁定 2026-09-06 ＝ 1 画素のはみ出しを許容・帯は広げない） |
 | DD-7 | 撤回（2026-09-05 議題 1）: `FixedMetrics` に仮想行間 3 | `FixedMetrics` は現行どおり `TextLayerConfig::default()`（真の既定 2）を読む。純粋層の期待値は 13 → 12・15 → 14 に**変わる**（台帳 A）。`em`（10）と `lh`（12）の弁別は保たれる |
 | DD-8 | 二段判定を 2 値・2 判定で持つ（`min` へ畳まない） | 6.8 ⑶ の却下理由（絶対上限の意味論・禁則の遅延の余地）。hard は配置直前に必ず通す |
-| DD-9 | 警告 1 回は `TextRegion::resolve` | 呼び出しが読込時のみ（`actor.rs:313-314,:383`）＝持続 guard 不要。`BalloonModel::name()`（`model.rs:379`）でバルーン名を載せられる |
+| DD-9 | 警告 1 回は `TextRegion::resolve` | 呼び出しが読込時のみ（`actor.rs:313-314,:383`）＝持続 guard 不要。~~`BalloonModel::name()`（`model.rs:379`）でバルーン名を載せられる~~ ⚠訂正 2026-09-06: 載せられない（取得口が無い・台帳 §7 #10）。欄はプレースホルダ定数 |
 | DD-10 | 縮退は現行経路のまま（警告つき） | 行ボックス比の不取得は `draw.rs:403-410` の `warn!`＋継続を保つ。新しい縮退経路を作らない |
 | DD-11 | R8.7 の対照はテスト専用 `LegacyPitchMetrics` | 製品コードに旧式の口を残さない（`research.md` §10 B の方針） |
 | DD-12 | 撤回（2026-09-05 議題 1）: `metrics.rs` 切り出し | em 導出が無くなり切り出す計測部が無い。`draw.rs` は `line_pitch` の式と doc 以外不変。分割は `text-decoration-canon` の前提のまま（先取り登記も撤回） |

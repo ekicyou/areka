@@ -256,7 +256,7 @@ Research Needed（設計フェーズで消化）:
 - **SSP の版**: `(Get-Item C:\wintools\ssp\ssp.exe).VersionInfo`＝FileVersion **2.8.83.3000**（ProductVersion 2.7.0.0）。
 - **SSP 側 ghost `emo`**: `C:\wintools\ssp\ghost\emo\ghost\master\descript.txt` は `shiori,emo.dll`（emo-gs の配布版）。`dic/menu.pasta` は**存在しない**（`Test-Path` False）。→ 実測の台本は SSP の SSTP 受信（TCP 9801・`SEND SSTP/1.1`）で逐語を送る（DD-14）。ukadoc MCP のスナップショットに SSTP の項目は無い（`search_docs("SSTP/1.1")` not_found）ため、書式は SSTP 仕様の一般形（`Sender`／`Script`／`Charset` ヘッダ＋空行）で組み、SSP 側で受信が無効なら設定で有効化した事実を証跡に残す。
 - **SSP 側バルーン `emo2-kakukaku` の descript**: repo fixture と `Compare-Object` で 2 点差——SSP 側だけ `origin.x,0`／`origin.y,0` を宣言（bvc 要件 10.9 の是正前の姿）・repo 側だけ `budoux_newline,1`。同一定義で測るため repo fixture を複製バルーン（`emo2-kakukaku-lh`・`name` を一意化）として SSP へ置き `\![change,balloon,…]`（ukadoc で確認）で切り替える（DD-13）。
-- **`BalloonModel::name()`**: `crates/areka-parsers/src/balloon/model.rs:379` に存在 → 折返し基準が描画範囲の外のときの警告（R6.7）にバルーン名を載せられる。
+- **`BalloonModel::name()`**: `crates/areka-parsers/src/balloon/model.rs:379` に存在 → 折返し基準が描画範囲の外のときの警告（R6.7）にバルーン名を載せられる。**⚠訂正（2026-09-06・タスク 4.1 の実走）**: 当該行の `pub fn name` は `impl Font` のフォント名で、`BalloonModel` にバルーン名の取得口は無い。警告の `balloon` 欄はプレースホルダ定数（台帳 §7 #10・引受先 `ukadoc-survey-assets`）。
 - **`ResolvedBalloonText::resolve` の呼び出し点**: `actor.rs:313`（装着）・`:383`（k 再追従・判定前に 1 回）と `examples/emo-text-layer/drive.rs:172` のみ。フレームごとには呼ばれない → `TextRegion::resolve` で警告すれば「読込 1 回につき 1 回」が構造で成り立つ（DD-9）。
 - **`FixedMetrics` の仮想行間の算術的一致**: `font_height + 3` は `10 → 13`・`12 → 15` で旧式 `ceil(h × 1.25)` と同値（`28 → 31 ≠ 35`・`40 → 43 ≠ 50`）。純粋層の既存テストの多くは font 10／12 で書かれているため、仮想行間 3 を採ると期待値が変わらず、`em`（10）と `lh`（13）の弁別（`cursor_tag_test_support.rs:48`）も保たれる（DD-7）。
 - **`line_box_height` の消費点**: 製品コードでは `actor.rs:787` の 1 箇所（帯の入力）だけ。`expand_overhang_for_band`（`viewbox_draw.rs:731-745`）は `band_extent − font_height` の超過分を足すだけで、帯＝`font_height` なら恒等（DD-5／DD-6）。
@@ -314,7 +314,7 @@ Research Needed（設計フェーズで消化）:
 - **Rationale**: 6.8 ⑶ の却下理由（絶対上限の意味論と禁則遅延の余地）。soft ≤ hard では出力がビット一致（6.4）。
 
 #### Decision: 警告 1 回の置き場（DD-9・§9-12）
-- **Selected**: `TextRegion::resolve` の末尾（`model.name()` 付き）。持続 guard は持たない（呼び出しが読込時のみ）。研究 §5 注意点 ⑶ の「結線層の初回装着ブロック」案はバルーン名を持たないため不採用。
+- **Selected**: `TextRegion::resolve` の末尾（`model.name()` 付き——⚠訂正 2026-09-06: 実在せずプレースホルダ定数で代替・台帳 §7 #10）。持続 guard は持たない（呼び出しが読込時のみ）。研究 §5 注意点 ⑶ の「結線層の初回装着ブロック」案はバルーン名を持たないため不採用。
 
 #### Decision: 縮退比 1.0＋警告（DD-10・§9-4／§8-6）
 - **Selected**: face metrics 不取得時は `cell_ratio = 1.0`（`dwrite_em = font_height`）・`RatioSource::Fallback`・`warn!`（フォント名・縮退値・「Yu Gothic UI なら再びあふれる」）。`FixedMetrics` は比を持たない（撤去）。
