@@ -117,11 +117,13 @@ impl dola::cue::CueSink for ZOrderCueSink {
         //    要件 4.4／11.2）。第 1 引数が無い場合も担当外へ落ちる。
         let selector = params.first().copied().unwrap_or_default();
         let directive = match (name, selector) {
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1
             (NAME_SET, SELECTOR_ZORDER) => ZOrderDirective::Set {
                 // 解釈しない——選別子より後ろを記述順のまま運ぶだけ（解釈は台帳の状態が
                 // 要るので取り出しの相の担当）。
                 tokens: params.iter().skip(1).map(|t| (*t).to_owned()).collect(),
             },
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breset_2czorder_5d:1
             (NAME_RESET, SELECTOR_ZORDER) => {
                 // 正典の解除は引数を取らない。余分が書かれていても解除として受理し、
                 // 運ばなかったことを記録する（黙って捨てない・要件 8.3）。

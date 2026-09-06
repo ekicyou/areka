@@ -7,1694 +7,2699 @@ domain = "property"
 pages = ["list_propertysystem"]
 
 [entry."ukadoc:list_propertysystem:activeghostlist.current._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:activeghostlist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:activeghostlist.index_28ID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.7.85"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:property.get:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:property.set:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:activeghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_5:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:activeghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.7.85"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:property.get:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:property.set:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:balloonlist.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:balloonlist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:balloonlist_28_30d0_30eb_30fc_30f3_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:baseware.name:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-sylphya"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — 読み取りは値を返すので壊れない。返るのは SSP ではなく areka 自身の名前なので、この値で分岐する辞書だけが別の枝へ進む。
+ログ: 読み取りは値を返すので何も出ない（値が未登録の間だけ crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:baseware.version:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-sylphya"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — 読み取りは値を返すので壊れない。返るのは SSP ではなく areka 自身の版番号なので、この値で分岐する辞書だけが別の枝へ進む。
+ログ: 読み取りは値を返すので何も出ない（値が未登録の間だけ crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:char_2a.bind.menu:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+前置き: currentghost 直下の族の頭 1 本だけで使う。本文が効く前置きを 1 つに絞っているため、ルート枝は currentghost の 1 本にとどまる。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:craftmanurl:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:craftmanw:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.mousecursor.arrow:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.mousecursor.text:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.mousecursor.wait:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.mousecursor:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.background.color:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.7.81"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.basepos.x:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.72"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.basepos.y:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.72"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.char_width:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.lines.initial:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "degraded"
+introduced = "2.3.72"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C30"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+転記元: doc/COMPAT_ARCHITECTURE.md:185
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.lines:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C30"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+転記元: doc/COMPAT_ARCHITECTURE.md:185
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.num:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.rect:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.scaling:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.7.89"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell_surfaces:scaling:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: 他エンジンの状態 — 利用者がベースウェアで決める拡大率。相手の id が正典に無いので関連には書けない。掛け合わされる残りの 2 つのうち、シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形（倍率／横倍率・縦倍率／横倍率・縦倍率・オプション）のどれを指すか決まらないので関連には書かない。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validheight.initial:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "degraded"
+introduced = "2.3.72"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C30"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+転記元: doc/COMPAT_ARCHITECTURE.md:185
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validheight:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C30"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+転記元: doc/COMPAT_ARCHITECTURE.md:185
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validwidth.initial:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "degraded"
+introduced = "2.3.72"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C30"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+転記元: doc/COMPAT_ARCHITECTURE.md:185
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validwidth:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C30"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+転記元: doc/COMPAT_ARCHITECTURE.md:185
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.vertical:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "degraded"
+introduced = "2.8.80"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C30"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+転記元: doc/COMPAT_ARCHITECTURE.md:184
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.x:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.y:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.arrow:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.grip:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.hand:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.text:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.wait:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.11"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.animation.num:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.28"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5ci_5bID_756a_53f7_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒝本文） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.bpp:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 窓が載っている画面の色の深さ。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.dpi:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 窓が載っている画面の目盛の細かさ。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.primary:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 窓が載っている画面が主画面かどうか。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.rect:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 窓が載っている画面の位置と大きさ。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.work:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 窓が載っている画面のうち窓を置いてよい範囲。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.name:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.67"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_ghost:char_2a.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:kero.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:sakura.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:char_2a.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:kero.name_2c_540d_524d:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:sakura.name_2c_540d_524d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.rect:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.scaling:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.7.89"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell_surfaces:scaling:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: 他エンジンの状態 — 利用者がベースウェアで決める拡大率。相手の id が正典に無いので関連には書けない。掛け合わされる残りの 2 つのうち、シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形（倍率／横倍率・縦倍率／横倍率・縦倍率・オプション）のどれを指すか決まらないので関連には書かない。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.seriko.defaultsurface:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
-values = []
-links = []
-note = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
+values = ["装い"]
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒝本文） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+テーマ: 各キャラクターの既定の姿を辞書が読めず、着せ替えを元へ戻す先が分からない。利用者は一度替えた見た目を戻せなくなる。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.surface.num:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒝本文） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.surface.x:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.surface.y:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.surface_28ID_29.rect:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.57"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.x:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_ghost:char_2a.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:kero.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:sakura.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:char_2a.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:kero.defaultx_2cX_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:sakura.defaultx_2cX_5ea7_6a19:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.y:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_ghost:char_2a.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:kero.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_ghost:sakura.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:char_2a.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:kero.defaulty_2cY_5ea7_6a19:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:sakura.defaulty_2cY_5ea7_6a19:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist.count:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist.index_28ID2_29.name:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 型シームの予約のみ・実書込なし / 不一致（正典に設定の定めが無い名前を areka が SET 有効群へ先取りで登記している。実書込は無いので応答そのものは変わらない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist.index_28ID2_29.path:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist_28_5f53_305f_308a_5224_5b9a_540d_29.name:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 型シームの予約のみ・実書込なし / 不一致（正典に設定の定めが無い名前を areka が SET 有効群へ先取りで登記している。実書込は無いので応答そのものは変わらない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist_28_5f53_305f_308a_5224_5b9a_540d_29.path:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.sticky-window:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.78"
 owner = ""
-priority = ""
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2csticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
+裁定待ち: areka-P0-currentghost-property-tree が seriko.* 14 項の一括所有に含め、areka-P0-property-query-channels は sylphya の SET 語彙表の追随（21→26）に含める。争点は値の導出の担い手と、語彙表の 1 行の持ち主。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.surfacelist.all:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
-values = []
+status = "vocabulary-only"
+introduced = "2.5.98"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C20"
+values = ["装い"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+テーマ: 絵の一式にどんな面があるかを辞書が数えられず、用意された姿を選び分けて見せられない。作者が何着ぶんも入れても、利用者は決め打ちの一着しか見られない。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.surfacelist.defined:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
-values = []
+status = "vocabulary-only"
+introduced = "2.5.98"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C20"
+values = ["装い"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+テーマ: 実際に定義されている面だけを辞書が選り分けられず、無い面を指したまま着替えを促してしまう。利用者は着替えたはずの画面が変わらないのを見る。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist.count:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist.index_28ID2_29.name:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 型シームの予約のみ・実書込なし / 不一致（正典に設定の定めが無い名前を areka が SET 有効群へ先取りで登記している。実書込は無いので応答そのものは変わらない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist.index_28ID2_29.text:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist_28_5f53_305f_308a_5224_5b9a_540d_29.name:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 型シームの予約のみ・実書込なし / 不一致（正典に設定の定めが無い名前を areka が SET 有効群へ先取りで登記している。実書込は無いので応答そのものは変わらない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist_28_5f53_305f_308a_5224_5b9a_540d_29.text:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.83"
+owner = "areka-P0-currentghost-property-tree"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.zorder:1"]
-status = "unclassified"
-introduced = ""
+status = "degraded"
+introduced = "2.8.78"
 owner = ""
-priority = ""
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
+転記元: doc/COMPAT_ARCHITECTURE.md:207
+裁定待ち: areka-P0-zorder-property が値の導出を単独で持つと主張し、areka-P0-currentghost-property-tree は seriko.* 14 項の一括所有に含め、areka-P0-property-query-channels は sylphya の SET 語彙表の追随（21→26）に含める。争点は値の導出の担い手と、語彙表の 1 行の持ち主。
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.shelllist.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.shelllist.current._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.shelllist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.shelllist_28_30b7_30a7_30eb_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.sound.count:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cloop_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.sound.index_28ID_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.sound_28_8981_7d20_540d_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:currentghost.status:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-currentghost-property-tree"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:duration:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:error:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:ghostlist.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:ghostlist.current._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:ghostlist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:ghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:ghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29.icon:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:headlinelist.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:headlinelist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:headlinelist_28_30d8_30c3_30c9_30e9_30a4_30f3_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.balloon.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.balloon.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.balloon_28_30d0_30eb_30fc_30f3_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.ghost.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.ghost.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.ghost_28_30b4_30fc_30b9_30c8_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.headline.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.headline.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.headline_28_30d8_30c3_30c9_30e9_30a4_30f3_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.plugin.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.plugin.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:history.plugin_28_30d7_30e9_30b0_30a4_30f3_540d_2f_30d1_30b9_2fID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:homeurl:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:id:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:index:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:kero.bind.menu:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell:kero.menu_2cauto_307e_305f_306fhidden:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+前置き: currentghost 直下の族の頭 1 本だけで使う。本文が効く前置きを 1 つに絞っているため、ルート枝は currentghost の 1 本にとどまる。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:keroname:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:loop:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cloop_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:menu:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell:menu_2chidden:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+前置き: currentghost.shelllist の族の頭 3 本（current・index(ID)・名前指定）だけで使う。本文が効く前置きを 1 つに絞っているため、ルート枝は currentghost の 1 本にとどまる。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:meta.album:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.73"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:meta.albumartist:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.73"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:meta.artist:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.73"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:meta.artwork:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.73"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:meta.genre:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.73"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:meta.title:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.73"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:meta.track:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.73"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:meta.year:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.73"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:name:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+見出しの重複: 見出し name は 2 つの id を持つ。この id は汎用プロパティ名の葉の側で、本文が対象そのものの呼び名を返すと述べ、文書の並びでも sakuraname・keroname と地続きの群の先頭に立つ。もう 1 つは 2.8.72 で加わったサウンドの要素葉。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:name:2"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+見出しの重複: 見出し name は 2 つの id を持つ。この id はサウンドの要素葉の側で、本文が再生の対象をどう書いて指定したかを返すと述べ、2.8.72 で加わり、文書の並びでも char*.bind.menu の直後＝サウンドの葉の群の先頭に置かれている。もう 1 つは前置きを付けて使う汎用プロパティ名の葉。
+語彙表だけを触る spec: areka-P0-property-query-channels
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。載るか載らないかは綴りの一致で決まるので、この id が指すのが 2.8.72 で加わったサウンドの要素葉であることとは別の話である。
+"""
 
 [entry."ukadoc:list_propertysystem:path:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+見出しの重複: 見出し path は 2 つの id を持つ。この id は汎用プロパティ名の葉の側で、本文が対象そのものの置き場所を返すと述べ、文書の並びでも汎用の葉の群の中に立つ。もう 1 つは 2.8.72 で加わったサウンドの要素葉。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:path:2"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+見出しの重複: 見出し path は 2 つの id を持つ。この id はサウンドの要素葉の側で、本文が再生の対象の解決後の置き場所を返すと述べ、2.8.72 で加わり、文書の並びでもサウンドの葉の群の 2 番目に置かれている。もう 1 つは前置きを付けて使う汎用プロパティ名の葉。
+語彙表だけを触る spec: areka-P0-property-query-channels
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。載るか載らないかは綴りの一致で決まるので、この id が指すのが 2.8.72 で加わったサウンドの要素葉であることとは別の話である。
+"""
 
 [entry."ukadoc:list_propertysystem:pause:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cpause_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cresume_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:playing:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cstop_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:pluginlist.count:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:pluginlist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:pluginlist.index_28ID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.7.85"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_plugin_event:property.get:1" },
+  { kind = "same-feature", to = "ukadoc:list_plugin_event:property.set:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:pluginlist_28_30d7_30e9_30b0_30a4_30f3_540d_2f_30d1_30b9_2fID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:pluginlist_28_30d7_30e9_30b0_30a4_30f3_540d_2f_30d1_30b9_2fID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.7.85"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_plugin_event:property.get:1" },
+  { kind = "same-feature", to = "ukadoc:list_plugin_event:property.set:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:position:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2coption_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:preload:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.72"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.bootminute:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.bootminutemonthly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.bootminuteweekly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.boottime:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.boottimemonthly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.boottimeweekly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.keroname:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.name:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.percent:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.percentmonthly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.percentweekly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.sakuraname:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.bootminute:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.bootminutemonthly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.bootminuteweekly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.boottime:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.boottimemonthly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.boottimeweekly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.keroname:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.name:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.percent:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.percentmonthly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.percentweekly:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.54"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+"""
 
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.sakuraname:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:sakura.bind.menu:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C10"
 values = []
-links = []
-note = ""
+links = [
+  { kind = "configures", to = "ukadoc:descript_shell:sakura.menu_2cauto_307e_305f_306fhidden:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
+]
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
+前置き: currentghost 直下の族の頭 1 本だけで使う。本文が効く前置きを 1 つに絞っているため、ルート枝は currentghost の 1 本にとどまる。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:sakuraname:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:shiori._5909_6570_540d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:system.cpu._28_30ad_30fc_29:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.26"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 走っている機械の演算装置の諸元と混み具合。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.cursor.pos:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.5.43"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — マウスポインタの今の位置。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.day:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.dayofweek:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.disk.count:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.17"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 論理ドライブの本数。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.disk.index_28ID_29._28_30ad_30fc_29:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.17"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 各論理ドライブの諸元。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.dnd.mode:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.17"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — OS 側の「邪魔しない」設定。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.hour:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.memory._28_30ad_30fc_29:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.26"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 走っている機械の主記憶の量と使われ具合。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.millisecond:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.minute:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.monitor.count:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — つながっている画面の枚数。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.bpp:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 各画面の色の深さ。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.dpi:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 各画面の目盛の細かさ。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.primary:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 各画面が主画面かどうか。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.rect:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 各画面の位置と大きさ。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.work:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.16"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 各画面のうち窓を置いてよい範囲。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.month:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.network._28_30ad_30fc_29:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.17"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 外とつながっているかどうかと、そのつなぎ方。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.os._28_30ad_30fc_29:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.6.26"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 走っている OS の種別・世代・組み立て。相手の id が正典に無いので関連には書けない。
+版: 5.19.0 は本文が例示する OS の版のため採らない
+"""
 
 [entry."ukadoc:list_propertysystem:system.power._28_30ad_30fc_29:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.17"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — 電源の供給元と電池の残り。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.second:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.theme.app.mode:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.17"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: 他エンジンの状態 — ベースウェア自身の画面まわりの明暗の設定。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.theme.os.mode:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.8.17"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — OS 側の明暗の切り替え。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:system.year:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
+"""
 
 [entry."ukadoc:list_propertysystem:thumbnail:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:update_result:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:update_time:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
-priority = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 
 [entry."ukadoc:list_propertysystem:username:1"]
-status = "unclassified"
-introduced = ""
-owner = ""
-priority = ""
+status = "vocabulary-only"
+introduced = "2.3.51"
+owner = "areka-P0-property-catalog-lists"
+priority = "C90"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
+前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
+語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
+"""
 

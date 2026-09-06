@@ -27,8 +27,9 @@ use crate::choice::{
     ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, highlight_band_extent,
     to_window_physical,
 };
+use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DWriteMetrics, ResolvedFont};
-use crate::layout::{CursorWarnGuard, GlyphMetrics, LayoutEngine, WrapPlan};
+use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::segment::segment_plan;
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
@@ -234,7 +235,7 @@ pub struct TextLayerRuntime {
     /// actor → 提示フレーム同期ヒット行スナップショット（[`choice_hit_rows`](Self::choice_hit_rows)
     /// の照会源）。population は present_actor（task 8.2）が present 成功時に行う——本 task では空のまま。
     choice_snapshot: HashMap<ActorKey, Vec<ChoiceHitRow>>,
-    /// `\_l` カーソル換算縮退（6.5）の actor ごと warn-once 檻。present_actor が
+    /// `\_l` の座標解決の縮退（`CursorDegrade`＝`Unparsable`／`CenterAxisMismatch`・5.1〜5.3）の actor ごと warn-once 持続状態。present_actor が
     /// [`LayoutEngine::layout_with_cursor_warn`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
     /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
     cursor_warn: CursorWarnGuard,
@@ -758,7 +759,7 @@ fn present_actor(
             WrapPlan::Segmented(&plan)
         }
     };
-    // `\_l` 換算縮退（6.5）の warn-once を production で有効化する持続 guard を渡す
+    // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
     // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ・task 4.2 が本配線へ委譲）。
     let lines = LayoutEngine::layout_with_cursor_warn(
         actor_state.items(),

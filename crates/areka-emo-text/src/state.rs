@@ -27,8 +27,10 @@
 //!   で同時初期化・R5.1/R5.3/R9.5）。
 //! - `Cursor`（`\_l` の不透明転写）も本層で実消費する: `parse_cursor_coord` で各軸を
 //!   `CursorCoord` 語彙へ忠実転写し、`TextItem::CursorMove` を items へ追記する（改行マーカーと
-//!   同格の非グリフアイテム＝reveal 対象外・グリフ／リビール状態は不変・R2.1）。単位換算・
-//!   座標解決・原点解釈は下流 layout の責務。
+//!   同格の非グリフアイテム＝reveal 対象外・グリフ／リビール状態は不変・R2.1）。
+//!   **単位の係数・基点・原点の解釈・軸取り違えの判定は解決層 [`crate::cursor_tag`] の責務**で、
+//!   その解決を軸ごとに呼ぶ配線が `layout` である（`areka-P0-cursor-tag-canon` の層分け）。
+//!   本層は軸の情報すら持たない——`centerx` が Y 軸に書かれた事実の判定も解決層が行う。
 //! - **typewriter リビール（R3／R7 系）**: `Text` 追記時に per-glyph リビール時刻を
 //!   `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭は `r_0 = at`）で確定する。
 //!   `interval` は**配送された cue の再生時間**から `interval = duration / glyph_count`
@@ -82,8 +84,9 @@ pub enum TextItem {
     /// カーソル位置指定（`CueCommand::Cursor { x, y }`＝`\_l` の不透明転写）。
     ///
     /// 改行マーカーと同格の**非グリフ**アイテム（reveal 対象外・グリフ序数を消費しない）。
-    /// 各軸は [`parse_cursor_coord`] で忠実転写した [`CursorCoord`] 語彙で、単位換算・
-    /// 座標解決・原点解釈は下流 layout（`cursor_to_image_px`／pending-cursor 遅延実体化）の責務。
+    /// 各軸は [`parse_cursor_coord`] で忠実転写した [`CursorCoord`] 語彙で、単位換算・基点の
+    /// 解釈・軸の判定は下流の解決層（`cursor_tag.rs`）、実体化は配線層（pending-cursor 遅延
+    /// 実体化）の責務。
     CursorMove {
         /// x 軸の座標語彙。
         x: CursorCoord,
@@ -94,49 +97,63 @@ pub enum TextItem {
 
 /// `\_l` 座標 1 軸の語彙（不透明文字列の全語彙を保持・`Copy`・state.rs 所有）。
 ///
-/// `Cursor` cue（`\_l[x,y]` の不透明転写）の各軸を、後段の換算層
-/// （`layout.rs::cursor_to_image_px`）が縮退表どおりに分岐できる語彙へ忠実転写する
-/// （design.md「純粋層 / StateIncrement」正本・R2.1/2.4/6.5）。本層は**語彙の保持**のみを
-/// 責務とし、非負ゲート・単位換算・原点解釈は下流 layout の責務（面引数不透明転写規約）。
+/// `Cursor` cue（`\_l[x,y]` の不透明転写）の各軸を、後段の解決層（`cursor_tag.rs`）が
+/// 解決表どおりに分岐できる語彙へ忠実転写する（`areka-P0-cursor-tag-canon` design.md
+/// 「語彙 `CursorCoord`」正本・R1.1/4.1/4.2）。本層は**語彙の保持**のみを責務とし、
+/// 単位換算・基点の解釈・軸の判定は下流 `cursor_tag` の責務（面引数不透明転写規約）。
 ///
-/// M1 の縮退（design.md 縮退表）:
-/// - `Absolute { Px/Em/Lh, 非負 }` のみ layout が Some(image px) を返す実導出対象。
-/// - `Absolute { Percent, .. }`・`Relative`（`@`）・負値・`Invalid`・`Omitted` は
-///   layout が None（＝当該軸スキップ・warn-once 縮退）を返す。負の裸数値は本層では
-///   Absolute へ忠実転写し（Invalid へ写像しない）、非負ゲートは layout 層に委ねる。
+/// **本層は軸の情報を持たない**——`centerx` が Y 軸に書かれた（軸取り違えの）事実は解決層が
+/// 判定する。語彙としては X 軸に書かれた `centerx` と同じ [`CursorCoord::CenterX`] を返す。
+///
+/// 縮退は 2 分岐だけである（design.md 縮退表）: 解釈不能（[`CursorCoord::Invalid`]）と、
+/// 中央指定の軸取り違え。負値絶対・`%`・`@` 相対はいずれも解決層が「基点＋値×係数」の
+/// 式 1 本で**実導出**する形であって、縮退ではない。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CursorCoord {
-    /// 省略（空文字列）＝当該軸不動（正典・R2.4）。
+    /// 省略（空文字列）＝当該軸不動（正典・R1.6/5.5）。
     Omitted,
-    /// 絶対座標（M1 実導出は Px/Em/Lh の非負値・Percent は縮退保持・負値は忠実転写）。
+    /// 絶対座標（負値・小数を含む忠実転写）。基点は解決後の文字描画開始点（R2.1）。
     Absolute { value: f32, unit: CursorUnit },
-    /// 相対座標（`@` 接頭）。語彙保持のみ——M1 は layout が warn-once 縮退（None）。
+    /// 相対座標（`@` 接頭・負値・小数を含む）。基点は現在の文字描画位置（R3.1）。
     Relative { value: f32, unit: CursorUnit },
-    /// パース不能（warn 縮退＝当該軸スキップ・状態不変・R6.5）。
+    /// `centerx`＝バルーン画像の幅の半分（R4.1）。基準は文字描画開始点でも文字描画範囲でも
+    /// なくバルーン画像そのもの（正典 付録 A）。X 軸に書かれたときだけ解決層が実導出する。
+    CenterX,
+    /// `centery`＝バルーン画像の高さの半分（R4.2）。基準はバルーン画像そのもの
+    /// （正典 付録 A）。Y 軸に書かれたときだけ解決層が実導出する。
+    CenterY,
+    /// パース不能・非有限（解決層が当該軸不動へ縮退・R1.5/5.1）。
     Invalid,
 }
 
-/// `\_l` 座標の単位（design.md「純粋層 / StateIncrement」正本）。
+/// `\_l` 座標の単位（`areka-P0-cursor-tag-canon` design.md 解決表・正本）。
 ///
-/// `Px`＝image px（裸数値）・`Em`＝`em`（font 高基準）・`Lh`＝`lh`（行送り基準）・
-/// `Percent`＝`%`（縮退保持・M1 は layout が None）。
+/// 解決層が用いる係数は `Px`＝1（image px 恒等）・`Em`＝文字高さ・`Lh`＝行送り・
+/// `Percent`＝文字高さ / 100。単位は**軸に依らないスカラー**であり、書字方向や適用軸に
+/// 応じた再写像・拒否は行わない（R1.4）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CursorUnit {
-    /// image px（裸数値・M1 実導出）。
+    /// image px（裸数値・係数 1）。
     Px,
-    /// `em`（font 高基準・M1 実導出）。
+    /// `em`（係数＝タグを書いた時点での文字高さ）。
     Em,
-    /// `lh`（行送り基準・M1 実導出）。
+    /// `lh`（係数＝行送り＝1em＋行間）。
     Lh,
-    /// `%`（縮退保持・M1 は layout が None）。
+    /// `%`（係数＝文字高さ / 100。100%＝文字高さ 1 個ぶん）。
     Percent,
 }
 
 /// 不透明転写文字列 → `CursorCoord` 語彙（純粋・全入力で値を返す全域関数・state.rs 所有）。
 ///
-/// パニックせず `Result` も返さない（不透明文字列の全入力に対し値を返す・R2.4 決定論）。
-/// 文法:
+/// パニックせず `Result` も返さない（不透明文字列の全入力に対し値を返す・決定論）。
+/// 受理形式は `"" | centerx | centery | @?数値(em|lh|%)?` の 1 形式
+/// （`areka-P0-cursor-tag-canon` design.md「語彙 `CursorCoord`」）。文法:
 /// - 空文字列 `""` → [`CursorCoord::Omitted`]（当該軸省略）。
+/// - 生文字列が `centerx`／`centery` に**小文字で完全一致**するとき →
+///   [`CursorCoord::CenterX`]／[`CursorCoord::CenterY`]。判定は `@` 剥離の**前**に置くので
+///   `@centerx` は該当せず、`@` を剥がした本体が数値でないため [`CursorCoord::Invalid`] に
+///   落ちる。大小文字の扱いは正典沈黙ゆえ `doc/COMPAT_ARCHITECTURE.md` §8 の
+///   「小文字の完全一致のみ」の先例に揃える（`CENTERX` は [`CursorCoord::Invalid`]）。
 /// - `@` 接頭 → [`CursorCoord::Relative`]（残りを本体としてパース）。無ければ
 ///   [`CursorCoord::Absolute`]。
 /// - 本体末尾のサフィックス `%`／`em`／`lh` で単位を決め（無ければ [`CursorUnit::Px`]）、
@@ -144,11 +161,21 @@ pub enum CursorUnit {
 /// - 数値本体が有限 `f32` へパースできれば当該 variant、できない／非有限なら
 ///   [`CursorCoord::Invalid`]。
 ///
-/// 負値は Absolute/Relative へ**忠実転写**する（非負ゲートは下流 `cursor_to_image_px`）。
+/// 負値は Absolute/Relative へ**忠実転写**する（負値は解決層が原点から負方向へ実導出する
+/// 形であって、語彙層は Invalid へ写像しない）。
 pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
-    // 空文字列＝当該軸省略（正典 R2.4）。
+    // 空文字列＝当該軸省略（正典 付録 A「(省略): 移動しない」・R1.6/5.5）。
     if raw.is_empty() {
         return CursorCoord::Omitted;
+    }
+
+    // 中央指定は `@` 剥離の**前**に、生文字列の小文字完全一致だけで判定する（正典は小文字で
+    // 記す・大小文字は正典沈黙ゆえ §8 の先例に揃える）。剥離後に判定すると `@centerx` が
+    // CenterX になってしまい、事後条件 `parse_cursor_coord("@centerx") == Invalid` を破る。
+    match raw {
+        "centerx" => return CursorCoord::CenterX,
+        "centery" => return CursorCoord::CenterY,
+        _ => {}
     }
 
     // `@` 接頭は相対（残りを本体としてパースし、成功時に Relative へ包む）。
@@ -170,7 +197,7 @@ pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
     };
 
     match num_str.parse::<f32>() {
-        // 非有限（NaN／inf）は換算を汚さぬよう Invalid へ縮退（防御・R6.5）。
+        // 非有限（NaN／inf）は解決を汚さぬよう Invalid へ縮退（防御・R1.5）。
         Ok(value) if value.is_finite() => {
             if is_relative {
                 CursorCoord::Relative { value, unit }
@@ -178,7 +205,7 @@ pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
                 CursorCoord::Absolute { value, unit }
             }
         }
-        // 数値本体が空／非数値／未知サフィックス残り→パース不能（R6.5 状態不変スキップの源）。
+        // 数値本体が空／非数値／未知サフィックス残り→パース不能（R1.5 当該軸不動の源）。
         _ => CursorCoord::Invalid,
     }
 }
@@ -408,7 +435,8 @@ impl TextLayerState {
             CueCommand::Cursor { x, y } => {
                 // カーソル位置指定（`\_l` の不透明転写）の実消費（R2.1）: 各軸を parse_cursor_coord で
                 // `CursorCoord` 語彙へ忠実転写し、非グリフアイテム `CursorMove` を items へ追記する。
-                // グリフ／リビール状態は不変（reveal 対象外）。単位換算・座標解決・原点解釈は下流 layout。
+                // グリフ／リビール状態は不変（reveal 対象外）。単位の係数・基点・原点の解釈は
+                // 解決層 `cursor_tag`、その呼び出し（配線）は `layout` の責務。
                 let x = parse_cursor_coord(x);
                 let y = parse_cursor_coord(y);
                 tracing::debug!(actor = %cue.actor, ?x, ?y, "Cursor cue 適用（CursorMove 追記・グリフ/リビール不変）");
