@@ -581,3 +581,78 @@ fn committed_lines_are_scroll_independent() {
     let b = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
     assert_eq!(a, b, "同一 canvas の指紋は決定論的に一致");
 }
+
+/// スクロールアウトした行の残滓（要件 7.4・R-2 の回帰檻）: 行送りが「字の丈 ＋ 行間 2px」に
+/// なったため、行と行の隙間は 2px しかない。下端のはみ出しインクがそれより大きいフォント
+/// （Yu Gothic UI 28px は実測 3px）では、可視窓の外へ出た行の下端インクが blit 後の面内に残る。
+///
+/// font 10・pitch 12（10 + 2）・4 行を 1 行ぶん（−12）スクロールした場面で確かめる。
+/// - はみ出し 0: 可視窓の外の行の em ボックス（−12..−2）は面の外＝残滓なし。ダーティは露出帯のみ。
+/// - はみ出し 下 3: 行 0 のインクは −12..1 まで届き、ガード 1 とクランプで面内 y 0..2 が残る。
+///   ここをダーティに入れて消さないと、全域再描画のオラクル（`DrawExecutor`）が
+///   `skip(first_visible_line)` で描かない下端インクが画面上端へ残り、画素等価が破れる。
+/// - 描画対象からも可視窓より前の行を外す（入れるとクリップ内へ描き込んでしまい、
+///   オラクルと同じく「描かない」にならない）。
+#[test]
+fn scrolled_out_line_ink_overhang_is_dirtied_and_not_drawn() {
+    let contract = ScaleContract::new(1.0, None);
+    let canvas = canvas_for(
+        &broken_lines(4),
+        WritingMode::HorizontalTb,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    );
+    let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
+    let scrolled = window(1, -12.0);
+
+    // はみ出し 0 ＝ 残滓なし（露出帯 {0,88,400,12} をガード 1px 拡張＋クランプ → {0,87,400,13}）。
+    let (dirty_flat, draw_flat) = ScrollPlanner::derive_dirty(
+        &canvas,
+        &scrolled,
+        WritingMode::HorizontalTb,
+        &contract,
+        (0, -12),
+        (400, 100),
+        &prev,
+    );
+    assert_eq!(
+        dirty_flat,
+        vec![phys(0, 87, 400, 13)],
+        "はみ出し 0 の行はスクロールアウトしても残滓を作らない（露出帯のみ）"
+    );
+    assert!(
+        !draw_flat.contains(&0),
+        "可視窓より前の行は描画対象に含めない（オラクルの skip(first_visible_line) と同一規律）"
+    );
+
+    // はみ出し 下 3（Yu Gothic UI 28px 相当の比率）→ 行 0 の残滓 y 0..2 がダーティに入る。
+    let over = vec![
+        LineOverhang {
+            top: 0.0,
+            bottom: 3.0,
+            left: 0.0,
+            right: 0.0,
+        };
+        4
+    ];
+    let (dirty_over, draw_over) = ScrollPlanner::derive_dirty_with_overhangs(
+        &canvas,
+        &scrolled,
+        WritingMode::HorizontalTb,
+        &contract,
+        (0, -12),
+        (400, 100),
+        &prev,
+        &over,
+    );
+    assert_eq!(
+        dirty_over,
+        vec![phys(0, 87, 400, 13), phys(0, 0, 11, 2)],
+        "露出帯 ＋ スクロールアウトした行 0 の下端はみ出し（−12..1・ガード 1・クランプで y 0..2）"
+    );
+    assert_eq!(
+        draw_over,
+        vec![1],
+        "描き直すのは可視窓の先頭行のみ——行 0 は残滓を消すだけで描かない"
+    );
+}

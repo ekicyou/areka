@@ -37,10 +37,27 @@
 //! - 本 example は新規ファイルのみで完結し、既存の `crates/areka` 配下ファイルは一切
 //!   変更しない（R11.7）。
 //!
+//! # 自動判定を走らせるときの前提（k=1.0 への固定）
+//!
+//! readback 述語はどれも物理 1:1（合成スケール k=1.0）を前提に刻んである。k は
+//! 「窓のモニタ DPI ÷ 作者基準 DPI（96）」で決まるので、**拡大縮小 200%（dpi=192）の
+//! モニタでは k=2.0 になり、C3 以降の述語が前提を失って FAIL する**（実測 2026-09-06）。
+//! 高 DPI 機で自動判定を走らせるときは、プロセスを DPI 非対応にして dpi=96 を読ませる:
+//!
+//! ```text
+//! # PowerShell
+//! $env:__COMPAT_LAYER = "DPIUNAWARE"; cargo run -p areka-emo-text --example emo-text-layer
+//! # sh
+//! __COMPAT_LAYER=DPIUNAWARE cargo run -p areka-emo-text --example emo-text-layer
+//! ```
+//!
+//! 起動ログの `scale_k` が 1.0 であることを必ず確かめる——1.0 でなければ判定結果は無効である。
+//! （目視確認〔下記〕は逆に非 96 DPI で行う。）
+//!
 //! # 実 DPI（dpi≠96）の手動確認手順（R11.9）
 //!
 //! 起動時に各バルーン窓の実モニタ DPI と合成スケール k を `info!` でログする。
-//! PASS/FAIL の自動判定は readback 述語（物理 1:1・k=1.0 恒常の現行契約）で決定論だが、
+//! PASS/FAIL の自動判定は readback 述語（物理 1:1・k=1.0 前提）で決定論だが、
 //! **バルーン枠とテキストの整合は非 96 DPI 環境で実際に目視確認すること**
 //! （emo-present example の task 5.3 手順と同型・記憶 areka-placement-real-ghost-first）:
 //!
@@ -97,6 +114,7 @@ use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+use areka_sakura::duration::text_playback_duration;
 
 // 責務単位のサブモジュール。`examples/` 直下に置くと Cargo が別のサンプルターゲットとして
 // 拾ってしまうため、サブディレクトリへ置いてパス属性で接続する（当該ディレクトリに `main.rs`

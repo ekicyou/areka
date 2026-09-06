@@ -427,7 +427,10 @@ fn scroll_overflow_drops_oldest_line_via_full_redraw() {
     let image = (60u32, 40u32);
     let mut surface = rig.attach(image, 1.0);
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
-    // font 10 → pitch 13・行下端 10/23/36/49——validrect.bottom 40 で 4 行目があふれる。
+    // font 10 → pitch 12（字の丈 10 ＋ 行間 2）・行下端 10/22/34/46。validrect.bottom 40 に対し
+    // 3 行目 34 ≤ 40 は収まり 4 行目 46 > 40 であふれる（あふれ後の行送り量は −12）。
+    // 旧 pitch 13（行下端 10/23/36/49）でも「3 行収まる・4 行目であふれる」で、**結論は偶然
+    // 一致する**——等差が 13 から 12 へ変わっても 3 行目 34 と 4 行目 46 が 40 を跨ぐため。
     let model = geo_model((Some(0), Some(0)), Some(10));
     let font = ResolvedFont::resolve(&model);
     let mode = WritingMode::HorizontalTb;

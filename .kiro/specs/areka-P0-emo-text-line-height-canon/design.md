@@ -41,6 +41,8 @@
 - `LayoutEngine::visible_window`（`layout.rs:634-680`）の判定分岐（「最新行の遠端 > 境界」・最小スキップ探索・飽和）。本仕様は入力（行矩形の位置・境界）だけが変わる。
 - `cursor_tag.rs`（`\_l` の解決層）と `state.rs` の語彙層 `parse_cursor_coord`。`CursorBasis.line_pitch` へ渡す値が変わるだけ（`layout.rs:553-559`）。
 - DirectWrite へ渡す em サイズの導出（`draw.rs:308-354`・値のまま＝決定 1）・行ボックス丈（`draw.rs:489-537`）・帯の防御式（`choice.rs:101-132`）・ダーティ帯の拡張（`viewbox_draw.rs:728-750`）——いずれも**現行のまま**。
+  - **例外（タスク 3.4 で追加・2026-09-06）**: ダーティと描画対象の導出そのもの（`viewbox.rs` の `ScrollPlanner::derive_dirty_with_overhangs`）は**変えた**。行間が 2px に確定して「インクのはみ出し < 行と行の隙間」という前提が崩れ、スクロールで可視窓の外へ出た行の下端インクが面に残るようになったためで、参照描画との画素等価比較（要件 7.4）がその欠陥を捉えた。上の `viewbox_draw.rs:728-750`（ハイライト帯の拡張）は依然として不変であり、帯は広げていない。全容は `verification/derivation-ledger.md`「3.5.1 R-2 の決着」。
+  - **例外 2（裁定 2026-09-06・決定 3・タスク 7.1）**: 実描画（`viewbox_draw.rs`）のダーティ矩形ごとの描画ループと、計画の値オブジェクト（`FramePlan::Update` の `dirty`）の形を**変える**——矩形ごとに、その矩形と交差する行だけを描く（§13）。`expand_overhang_for_band`（ハイライト帯の拡張）・帯の式・面内 blit・露出帯と残滓の導出は引き続き不変。
 - 行末禁則のぶら下がり・`\f[height,N]`／`+N`／`N%` の実装（`text-decoration-canon`）・`\c[char]`／`\c[line]`（意図的非実装・COMPAT §8）。
 - バルーン資産（`crates/pilot/examples/shiori-host-32/fixtures/emo2/` 配下）の是正。`wordwrappoint.x,-34` は粗さとして台帳へ登記するだけ。
 - `draw.rs` の分割（`text-decoration-canon` の着手前提のまま・本仕様は先取りしない）。
@@ -215,11 +217,15 @@ crates/areka-emo-text/tests/
 | `src/draw.rs`（980） | `DWriteMetrics::line_pitch`（`:476-479`）が `self.config.line_pitch(font_height)` を返す（保持するのは係数でなく `TextLayerConfig`）・縮退値の名前（`:403-410` の `fallback = config.line_pitch_factor`）を追随・doc `:368-370,:378-379,:476`。format 生成・行ボックス丈・オラクルは**不変** | ≈ 985 |
 | `src/choice.rs`（550） | doc のみ（`:101-132` の実測例「`min(37.24, 35) = 35`」を「`min(37.24, 30) = 30`」へ・式は不変） | 不変 |
 | `src/actor.rs`（879） | doc のみ（`:226-227,:473` を「調整値（行間）」へ・`:781-789` は不変） | 不変 |
-| `src/canvas.rs`（722）・`src/viewbox_draw.rs`（806） | 不変（`canvas.rs:176-182` の doc は帯の源を正しく述べている） | 不変 |
+| `src/viewbox.rs`（762） | **タスク 3.4 の製品修正**: `ScrollPlanner::derive_dirty_with_overhangs` の描画対象を可視窓（`first_visible_line` 以降）へ揃え、スクロールで可視窓の外へ出た行が残す下端はみ出しインクをダーティへ入れる（`block_axis_overhang` を新設）。行間が 2px に確定して「はみ出し < 行と行の隙間」が崩れた帰結で、`LineOverhang` の doc もあわせて是正。経緯と実測は `verification/derivation-ledger.md`「3.5.1 R-2 の決着」。**§13（決定 3・タスク 7.1）**: `DirtyRect { rect, lines }` を新設し `FramePlan::Update.dirty` を `Vec<DirtyRect>` へ・`derive_dirty*` が矩形ごとの交差行を割り当てる（`draw_lines` は和集合として残す） | ≈ 840 |
+| `src/canvas.rs`（722） | 不変（`canvas.rs:176-182` の doc は帯の源を正しく述べている） | 不変 |
+| `src/viewbox_draw.rs`（806） | **doc のみ**（`:199`・`:594` の「縮退時の描画対象＝全 GlyphRun 住人／レガシー全域再描画と等価」が上記 3.4 の変更で事実に反するため、「可視窓の GlyphRun 住人」へ是正）。タスク 3.4 ではコード不変。**§13（決定 3・タスク 7.1）でコードも変わる**: Phase 2 の二重ループを「矩形ごとに `lines` だけを描く」へ・Phase 1 は index 引きの資源表へ・`plan_inconsistency` に「各矩形の行は `draw_lines` の部分集合」を追加。`expand_overhang_for_band` は不変 | ≈ 830 |
 | `src/cursor_tag_test_support.rs`（106） | `LINE_PITCH = 13` → `12`・doc `:21` を「`font_height 10 + 行間 2`」へ（7.5・係数 4 種 1／10／12／0.1 は引き続き相異なる） | 不変 |
 | `src/draw_format_metrics_tests.rs`（737） | `:396-410` の値（`line_pitch(12) = 14`・`(10) = 12`）と非既定 `line_gap` の分岐・`:417-450` は不変 | 不変 |
 | 32 ファイルの既存テスト（`research.md` §3.3） | §「Testing Strategy」の再導出台帳に従う | 各 ≤ 1,000 |
-| `examples/emo-text-layer/scenario.rs`（116） | 容量前提 3 行 → 4 行・縦書き 9 列 → 10 列・pitch 35 → 30 の doc と定数（7.3・5.5） | 不変 |
+| `examples/emo-text-layer/scenario.rs`（116） | 容量前提 3 行 → 4 行・縦書き 9 列 → 10 列・pitch 35 → 30 の doc と定数（7.3・5.5）。あわせて `EXPOSURE_BAND_DRAW_BOUND` を実走実測値へ（3 → **16**）と、`cue()` の `duration` を `text_playback_duration` から取る是正（この example の typewriter が 2026-07-17 の PR#60 以降まったく進んでいなかった＝台帳「3.5.1」参照）。**§13（決定 4・タスク 7.2）**: `OVERFLOW_LINES` 9 → **13**・`T_CHECK[4..]`／Clear の注入時刻／`GATE_SAKURA[4]` を式で導き直し・`EXPOSURE_BAND_DRAW_BOUND` を削減後の実測へ（内訳は和） | ≈ 175 |
+| `examples/emo-text-layer.rs`（221）・`examples/emo-text-layer/drive.rs`（856） | **doc とログ文言のみ**: 自動判定は k=1.0 が前提であること（高 DPI 機での固定手順）を明記し、`k=1.0 恒常` という事実に反する記述を改める。**§13（決定 4・タスク 7.2）で `drive.rs` のコードも変わる**: 完成プラトーの選び方（次のプラトーで先頭可視行が 1 進むもの）・統制された 2 段の選択（送り出される行が短行どうし）・プラトー走査の窓 | ≈ 240 ／ ≈ 880 |
+| `src/viewbox_dirty_tests.rs`（658）・`src/viewbox_draw_frame_render_tests.rs`（502）・`src/viewbox_test_support.rs`（108） | **§13（タスク 7.1）**: 矩形ごとの割当の決定論テストを追加・「描画は積」の検査を「和」へ改訂・`DirtyRect` と `PhysicalRect` の比較補助（矩形だけを比べる既存 assert を保つため） | 各 < 1,000 |
 | `examples/emo-text-typewriter-demo.rs` | `:227` の注記（`line_gap`） | 不変 |
 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | **触らない**（8.6・9.5）。上表の見込み行数がすべて 1,000 未満であることが根拠 | — |
 | `doc/COMPAT_ARCHITECTURE.md` §8（`:122`） | 行を 2 本追加（§11.1） | — |
@@ -335,6 +341,16 @@ flowchart TD
 | 10.2 | 変化／不変の一覧を 1 箇所に | §11.2（`verification/handoff.md`） | — | — |
 | 10.3 | roadmap A′ 完了・decoration brief 相互参照 | §11.3 | — | — |
 | 10.4 | 実機走行と SSP 実測は DoD 外・実フォント読み戻しは DoD | Testing Strategy「実行」・§12 | — | — |
+| 11.1 | 矩形ごとに交差行だけを描く（和・積でない） | §13.3・`DirtyRect`・`ViewboxExecutor::render` Phase 2 | `FramePlan::Update.dirty: Vec<DirtyRect>` | §13.3 |
+| 11.2 | 画素等価比較が両側緑・負の対照が赤のまま | 再導出台帳 B（`viewbox_draw_live_diff_tests`）・台帳 C（`viewbox_draw_oracle_regression_tests`） | — | — |
+| 11.3 | 割当は純粋層で導出・決定論テストで固定・実描画側は和を固定 | `derive_dirty_with_overhangs`・`viewbox_dirty_tests.rs`・`viewbox_draw_frame_render_tests.rs` | `DirtyRect.lines` | — |
+| 11.4 | 帯の拡張・帯の式・blit・露出帯・残滓は不変 | Out of Boundary 例外 2 | — | — |
+| 11.5 | 完成プラトー＝次のプラトーで先頭可視行が 1 進むもの・旧来の選び方は落ちる | §13.4・`drive.rs::observe_redraw_less_stats` | — | — |
+| 11.6 | 統制された 2 段（短行どうし）・時刻表の導き直し・C5 縦書き | §13.4・`scenario.rs` | `OVERFLOW_LINES`・`T_CHECK`・`GATE_SAKURA` | — |
+| 11.7 | `EXPOSURE_BAND_DRAW_BOUND` の採り直し（和の内訳） | §13.4・`scenario.rs` | — | — |
+| 11.8 | 両モード PASS（k=1.0・手動実走） | §13.6 | — | — |
+| 11.9 | 採らなかった案の記録 | §13.5 | — | — |
+| 11.10 | 製品の不変条件は保たれている・誤報の記録 | `tests/viewbox_scroll_test.rs`（不変）・台帳 §3.5.3 | — | — |
 
 ## Components and Interfaces
 
@@ -528,6 +544,7 @@ log-first（`.kiro/steering/logging.md`）: 失敗は `error!`＋`Err`、縮退�
 
 - `cargo test -p areka-emo-text` と `cargo test --workspace` を**終了コードで**判定する（`| tail` 等で隠さない）。
 - DoD に含めるもの: 実フォント読み戻し（`line_pitch_readback_test.rs`）・R8 の新規テスト全緑・R8.7 の対照・R2.4 の機械検査 0 件・`file_length_guard_test.rs` 緑（例外表不変）。含めないもの: SSP の画素実測・実機一周（e2e）。
+- **観測用 example の実走**（§13.6・11.8）: `__COMPAT_LAYER=DPIUNAWARE` で横書き・縦書きを各 1 回走らせ `PASS` を確かめる。自動テストの DoD には入れない（実窓と GPU が要る）が、タスク 7.2 の完了条件であり、実測値（`draw1/draw2`・`create1/create2`）を台帳へ残す。
 
 ### 再導出台帳（7.1〜7.5・`research.md` §3.3 の 32 ファイルを 4 分類・ピッチは `h + 2`）
 
@@ -556,6 +573,9 @@ log-first（`.kiro/steering/logging.md`）: 失敗は `error!`＋`Err`、縮退�
 | 同上 | 選択肢行の hover 塗り帯（`band_extent = 30`）が「閉じる」「もどる」のインク上端を含み、下端からのはみ出しが **1 画素以内**であること（裁定 2026-09-06）。2 画素以上なら帯を広げず差分を数値で報告（§「帯の防御式を保つ」） | 5.6, 3.6 |
 | `src/region_inline_limit_tests.rs` | `inline_limit` 3 方向・警告 1 件（相方側相当）／0 件（本体側相当） | 6.7 |
 | `src/state_cue_apply_tests.rs`（追加） | `line_pitch` の値（28 → 30・12 → 14・10 → 12）・`normalized` の縮退 | 1.2, 3.1 |
+| `src/viewbox_dirty_tests.rs`（追加・§13） | 露出帯＋変化行＋残滓の 3 枚に別々の行が交差する入力で、矩形ごとの `lines`（昇順）と `draw_lines`＝和集合を固定。既存の残滓の検査は矩形だけを比べたまま | 11.3, 11.1 |
+| `src/viewbox_draw_frame_render_tests.rs`（改訂・§13） | 可視窓のみ移動フレームの `draw_text_layout_calls` 増分 ＝ `Σ dirty[i].lines.len()`（積の検査を和へ）・全域ダーティは 1 枚 × 全住人＝和と積が一致 | 11.3, 11.1 |
+| `src/viewbox_draw_live_diff_tests.rs`（不変・§13 の検証に流用） | 描く行を減らしても byte 等価が保たれる・負の対照は赤のまま | 11.2 |
 
 置き場: 兄弟ファイル `<stem>_<theme>_tests.rs` または `tests/`（8.6）。各ファイル 1,000 行以下。
 
@@ -620,11 +640,72 @@ rg -n "1\.25" crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka
 1. `verification/evidence/`（画像 2 枚＋README）＋本書 §4 の正典表＋COMPAT §8 の 2 行＋アーカイブ注記＋`research.md:200`（意味論の確定＝文書だけ）。
 2. `state.rs`（`line_gap`・`line_pitch`・`normalized`）＋`draw.rs`（`DWriteMetrics::line_pitch` の委譲・doc）＋`layout.rs`（`FixedMetrics::line_pitch`・doc）＋`choice.rs`／`actor.rs` の doc＝実装の追随（この時点で既存テストは赤でよいが、次のコミットまでに緑にする）。
 3. 再導出台帳 A〜D の更新（緑）。
+   3′. 裁定 2026-09-06 の追補（§13）: `viewbox.rs`＋`viewbox_draw.rs`（矩形ごとの描画・決定 3）→ example の前提の再導出（決定 4）。実装順では 5 の後・6 の前に置いてよい（`tasks.md` 7.1・7.2）。
 4. `region.rs`（`inline_limit`・警告）＋`layout.rs` ゲート③（二段判定）＋`layout_hard_limit_tests.rs`＋`region_inline_limit_tests.rs`。
 5. 新規テスト `kero_menu_capacity_test.rs`・`line_pitch_readback_test.rs`（R8 全緑・R8.7 対照・R5.6 の帯検査＝赤なら裁定へ）。
 6. 登記（residue／decoration brief・roadmap・e2e 記録・`handoff.md`）・R2.4 の機械検査・ワークスペース全体テスト（終了コード）。
 
 着手時の確認（9.5）: `git log main..HEAD -- crates/areka-emo-text/src/draw.rs` で本ブランチ以外の進行中 spec が `draw.rs` を触っていないこと（`text-decoration-canon` は W13・未着手）。
+
+## 13. 裁定 2026-09-06 の追補——スクロール描画量の削減と example の前提の再導出（Requirement 11）
+
+### 13.1 経緯
+
+タスク 3.4 が R-2（スクロールで可視窓の外へ出た行のインク残滓）を直し、2026-07-17 から止まっていた example `emo-text-layer` を復旧したところ、3 件が残った（`verification/derivation-ledger.md` §3.5.2）。開発者裁定（2026-09-06）:
+
+| # | 残件 | 裁定 |
+|---|---|---|
+| 1 | 縦書きでスクロール描画増分が段によって 9／16 に分かれる（`draw1 == draw2` が落ちる） | **決定 3**: 描画量の削減を本仕様で今行う——ダーティ矩形ごとに、その矩形と交差する行だけを描く |
+| 2 | 「確定行は行レイアウトを再生成しない（生成増分は流入 1 行分以下）」が落ちる（生成 2） | **決定 4**: 本仕様で直す（引受先を探さない・新 spec は起こさない） |
+| 3 | 縦書きで C5「先頭バンドの行内インク範囲が縮む」が落ちる | 本仕様（要件 7.3・5.5）——決定 4 の導き直しと一緒に扱う |
+
+### 13.2 深掘りの結果（2026-09-06・実走で確認）
+
+- **#2 は製品の不変条件の破れではない。** example の「完成プラトー」＝「先頭可視行が直前のプラトーより 1 進んだプラトー」は、改行が到着即時に行を開いていた頃の前提である（そのとき先頭可視行が進むのは改行の到着時で、末尾行は完成している）。改行遅延（`areka-P0-newline-defer`・2026-07-18 着地）以降は**次の行の最初の文字**で先頭可視行が進むので、選ばれた点では末尾行が 1 文字だけ（実測: 可視グリフ数 37・39・41＝奇数・短行「ほな」は 2 文字）。2 段の間に「その行が 1 → 2 文字へ伸びる（作り直し 1）」と「次の行が入る（新規 1）」が重なって 2 になる。どちらも確定行の作り直しではなく、`LineLayoutStore` は内容不変の行を再生成していない（`tests/viewbox_scroll_test.rs` が緑のまま）。example は 2026-07-17（PR#60）から止まり、改行遅延はその翌日に着地したので、この前提は一度も検証されずに陳腐化した。タスク 3.4 の記録「行送りを旧式へ戻しても 2＝先行不具合」は事実だが、その解釈（製品側の不具合）は誤報。
+- **#1 の 9／16 は積の帰結。** 実描画は「ダーティ矩形ごとに描画対象行を**全部**描く」二重ループで、1 段の増分＝`枚数 × 行数`（3 × 3・4 × 4）。残滓の矩形は「送り出された行に実測のはみ出しがあるとき」だけ立ち、縦書きは列ごとにはみ出しの有無が分かれる（漢字の列は 1 画素超・仮名の列は 0）ので、段によって枚数が 3／4 に分かれる。スクロール深さによる蓄積ではない。
+- **#3 は容量の帰結。** 縦書きの列容量が 9 → 10 に増え、C5 の時点（`T_CHECK[4]`）で先頭可視列がまだ長い行の列（16 列 − 10 ＝ 6 列目＝3 行目の後半 4 文字）に留まり、1 列目（「おっはよ」4 文字）より縮まない。
+
+### 13.3 決定 3 の設計——矩形ごとの交差行だけを描く
+
+**データモデル**（`viewbox.rs`・純粋層）:
+
+```rust
+/// ダーティ矩形 1 枚と、その矩形を復元するために描く行（行送り軸で交差する GlyphRun/Choice 住人 index・昇順）。
+pub struct DirtyRect { pub rect: PhysicalRect, pub lines: Vec<usize> }
+FramePlan::Update { blit: (i32, i32), dirty: Vec<DirtyRect>, draw_lines: Vec<usize> }
+```
+
+`draw_lines` は `dirty[*].lines` の和集合（昇順・重複なし）として残す——実描画の Phase 1（TextLayout・ブラシ・hover 資源の準備）と不整合検査の対象を 1 語で指すため。不変条件「各 `dirty[i].lines` ⊆ `draw_lines`」は `plan_inconsistency` が検査し、破れていれば `warn!`＋全域ダーティへ縮退（既存の縮退規律と同型）。
+
+**導出**（`derive_dirty_with_overhangs`）: 現行の (a) 露出帯 (b) 変化行 (c) 残滓 で矩形列を作った後、可視窓の GlyphRun/Choice 住人ごとに物理矩形（`resident_rect`・実測はみ出し込み）を 1 度だけ求め、各ダーティ矩形について `intersects_block_axis` が真の住人を `lines` へ入れる。`draw_lines` はその和集合。全域ダーティ（初回・Clear 後・縮退）は矩形 1 枚に可視窓の全住人が入る＝現行と同じ描画。
+
+**実描画**（`viewbox_draw.rs` Phase 2）: `for d in dirty { clip(d.rect); clear; for i in d.lines { draw(i) }; unclip }`。Phase 1 は `draw_lines` の順に資源を組み、index → 資源の表で引く。`draw_text_layout_calls` の増分＝`Σ |d.lines|`。
+
+**画素の等価性**: 矩形と交差しない行のインクは、その矩形の内側に 1 画素も無い（行の物理矩形は実測はみ出し＋ガード 1 image px を含む整数格子で、交差判定は半開区間）。ゆえに描かなくても画素は変わらない。証明はテストで行う——参照描画との byte 等価比較（`viewbox_draw_live_diff_tests.rs`・実 fixture Yu Gothic UI を含む）が緑のまま・注入差分の負の対照が赤のまま。
+
+**見込みの数値**（横書き・本体側 fixture・1 段スクロール・完成行が流入）: 露出帯（下端 31px）は最下行と、はみ出し＋ガードで 2px 重なる直前行の 2 行に交差・流入行の矩形は自身と両隣で最大 3 行・残滓（上端 2px）は先頭行 1 行 → 高々 2 + 3 + 1 = 6（実測はタスク 7.2 で採る）。旧 16 → 一桁。
+
+### 13.4 決定 4 の設計——example の前提の再導出
+
+- **完成プラトーの選び方**: プラトー列（可視グリフ数が一定の区間）のうち「次のプラトーで先頭可視行が 1 進む」もの（かつ先頭可視行 ≥ 1）。改行遅延では次の行が開くのは次の文字の到着時なので、この条件は「末尾行が完成している最後のプラトー」と同値。旧来の選び方（先頭可視行が 1 進んだ直後）を残すと生成増分 2 で落ちる（負の対照として台帳 §3.5.3 に記録）。
+- **統制された 2 段**: 比べる 2 段は「送り出される行がどちらも短行」であるものを選ぶ（長い行の列と短行の列ではみ出しの有無が異なり、残滓の矩形の有無が描画量に 0／1 の差を作るため）。長い行の本数は、短行の流入前（`t = 1.95`・可視グリフ 24）の配置行数から求める（横書き 3 行・縦書き 7 列）。深い側から、始点の先頭可視行 ≥ 長い行の本数 となる 3 連続の完成プラトーを採る。
+- **短行の本数と時刻表**: 縦書きで上の条件を満たすには先頭可視行 9 の完成プラトー（＝短行 12 本目〔0 始まりで 11〕が完成し 13 本目が開く）が要るので `OVERFLOW_LINES` 9 → **13**。短行は 2 文字（`ほな`）のまま——1 文字にすると「完成」と「開く」が同じプラトーになり、選び方の是正が緑のまま意味を失う。リビールは `2.0 + 13 × 0.1 = 3.3` 秒に終わるので、`T_CHECK[4]` 3.0 → **3.4**・Clear（\0）3.1 → **3.5**・`T_CHECK[5]` 3.2 → **3.6**・Clear（\1）3.3 → **3.7**・`T_CHECK[6]` 3.4 → **3.8**・プラトー走査の窓 `[1.95, 2.95]` → **`[1.95, 3.35]`**・`GATE_SAKURA[4]` 53 → **65**（26 + 13 × 3）。横書きは 3 + 13 = 16 行（容量 4・先頭可視行 12 まで）。
+- **C5 縦書き**: 7 + 13 = 20 列・容量 10 → 先頭可視列 10 ＝ 短行の列（7 列目以降が短行）→ 先頭バンドの行内範囲が「おっはよ」4 文字 ≈ 112 から「ほな」2 文字 ≈ 56 へ縮む。
+- **`EXPOSURE_BAND_DRAW_BOUND`**: 7.1 の削減後に両モードで採り直し、和の内訳を doc に残す。
+
+### 13.5 採らなかった案（Requirement 11.9）
+
+| 案 | 理由 |
+|---|---|
+| 可視窓の先頭行を毎スクロールフレーム一律にダーティへ入れる（コスト一定） | 積のままでは実測で悪化（横 20/20・縦 20/25）。和にしても、はみ出しの無い行を毎回消して描き直す無駄が残り、最小性を失う |
+| 残滓の幅をフォント既定値（行ボックス丈 − em）で固定して一定にする | 実測（`GetOverhangMetrics`）を捨てて推定に戻す。実測より大きい行（飾り・斜体）を取りこぼす危険を再び作る。一定性は example の観測の都合であって製品の性質ではない |
+| example の検査を「上限以下」だけへ改める | 統制された比較（同じ短行どうし）を選べば等式のまま保てるので、検査を弱める必要がない |
+| 新 spec を起こして #2 を引き受けさせる | 製品の不変条件は破れておらず、example の前提の陳腐化＝本仕様が復旧させた example の責任範囲 |
+
+### 13.6 着地条件（タスク 7.1・7.2）
+
+- `cargo test -p areka-emo-text --no-fail-fast` で viewbox 系（dirty／plan_commit／choice_marker／frame_render／live_diff／oracle_regression／`tests/viewbox_scroll_test.rs`）が緑・負の対照が赤。
+- example を `__COMPAT_LAYER=DPIUNAWARE` で横書き・縦書きとも実走し `PASS`（`scale_k=1.0` をログで確認）。実測値（`draw1/draw2`・`create1/create2`）を台帳 §3.5.3 へ。
 
 ## Supporting References
 

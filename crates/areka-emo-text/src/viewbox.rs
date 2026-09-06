@@ -319,8 +319,11 @@ pub const DIRTY_GUARD_IMG_PX: f32 = 1.0;
 /// まま）。行ボックスのブロック軸寸が `font_height`（`max_height`／縦は `max_width`）に設定済み
 /// ゆえ、その軸の overhang（横書き＝`top`/`bottom`・縦書き＝`left`/`right`）が em ボックスからの
 /// はみ出しを直接与える（行内軸は巨大 `PROBE_MAX_EXTENT` 箱ゆえ overhang 無意味＝0 に丸める）。
-/// **経験則の推定でなく実測**ゆえ「はみ出し < 行 pitch のギャップ」がフォント設計上必ず成立し、
-/// 隣接行の em ボックスへ届かない（＝確定行の余計な再描画を構造的に起こさない）。
+/// **経験則の推定でなく実測**である。ただし行送りが「字の丈 ＋ 行間 2px」に確定した後は
+/// 「はみ出し < 行と行の隙間」は成り立たない——隙間は 2px しかなく、Yu Gothic UI 28px の
+/// 下端はみ出しは実測 3px で隣の行の em ボックスへ届く。届いた先が変化行なら
+/// [`ScrollPlanner::derive_dirty_with_overhangs`] の交差判定が隣の行も描画対象に含めるため
+/// 見えは保たれ、可視窓の外へ出た行の残り分は同メソッドの (c) が消す。
 ///
 /// [`GetOverhangMetrics`]: https://learn.microsoft.com/windows/win32/api/dwrite/nf-dwrite-idwritetextlayout-getoverhangmetrics
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -446,14 +449,17 @@ impl ScrollPlanner {
     /// ダーティ矩形と描画対象行を導出する（純粋・状態不変・DD4）。
     ///
     /// dirty ＝（a）露出帯（`blit` の逆側に生じる未保持領域・blit≠0 のとき 1 枚）∪（b）変化行
-    /// （`prev_lines` と新 canvas の指紋差分行の物理矩形——**新スクロール位置**）。各矩形は物理 px
-    /// 整数格子へ拡張（min を floor・max を ceil）し、ガード余白 `ceil(DIRTY_GUARD_IMG_PX × k)` を
-    /// 全辺へ加えて面寸 `surface_size` へクランプ（退化矩形は除外）。
+    /// （`prev_lines` と新 canvas の指紋差分行の物理矩形——**新スクロール位置**）∪（c）スクロール
+    /// で可視窓の外へ出た行の**残滓**（下記）。各矩形は物理 px 整数格子へ拡張（min を floor・max を
+    /// ceil）し、ガード余白 `ceil(DIRTY_GUARD_IMG_PX × k)` を全辺へ加えて面寸 `surface_size` へ
+    /// クランプ（退化矩形は除外）。
     ///
     /// `prev_lines` が空（初回・Clear 後・format 再構築）のときは**全域ダーティ**（面全域 1 枚・
-    /// 描画対象＝全 GlyphRun 住人）を返す。返り値 `draw_lines` は dirty とブロック軸で交差する
-    /// 全 GlyphRun 住人 index（クリップにより描画結果は dirty 内へ限定される前提ゆえ交差住人を
-    /// 全て含む・`first_visible_line` で切らない）。
+    /// 描画対象＝可視窓の GlyphRun 住人）を返す。返り値 `draw_lines` は dirty とブロック軸で交差
+    /// する GlyphRun 住人 index（クリップにより描画結果は dirty 内へ限定される前提ゆえ交差住人を
+    /// 全て含む）。ただし**可視窓より前の行（`first_visible_line` 未満）は含めない**——全域再描画
+    /// のオラクル（`DrawExecutor`）が `skip(first_visible_line)` で描かないため、含めると
+    /// スクロールアウトした行の下端インクが画面上端へ描き込まれ、両者が食い違う。
     ///
     /// 状態遷移（plan/commit・`FramePlan` の enum 化）は後続タスクの領分——本メソッドは
     /// 「変化なし＝空 dirty・空 draw_lines」「全域＝面全域」の導出結果を返すに留める。
@@ -484,6 +490,12 @@ impl ScrollPlanner {
     /// 実測インクはみ出し（[`LineOverhang`]・住人 index と 1:1）付きでダーティ矩形と描画対象行を
     /// 導出する（純粋・状態不変・DD4／D2）。変化行の em ボックスを `overhangs` の実測分だけ外側へ
     /// 広げてはみ出しインクを含める（`overhangs` が index を欠く／空なら既定 0＝em ボックス丈）。
+    ///
+    /// **スクロールアウトした行の残滓**（(c)）: 行送りは「字の丈 ＋ 行間 2px」ゆえ、行と行の
+    /// 隙間は 2px しかない。下端のはみ出しインクがそれより大きいフォント（Yu Gothic UI 28px は
+    /// 実測 3px）では、可視窓の外へ出た行の下端インクが blit 後も面内へ 1px 残る。可視窓の外の行は
+    /// 描かれないので、この残滓は消す側（ダーティ）で拾う——`blit ≠ 0` のフレームに限り、
+    /// `first_visible_line` より前の行の矩形もダーティへ入れる（面内へ届かない行は退化して落ちる）。
     pub(crate) fn derive_dirty_with_overhangs(
         canvas: &ContentCanvas,
         window: &VisibleWindow,
@@ -505,7 +517,9 @@ impl ScrollPlanner {
             } else {
                 vec![full]
             };
-            let draw_lines = glyph_run_indices(canvas).collect();
+            let draw_lines = glyph_run_indices(canvas)
+                .filter(|&i| i >= window.first_visible_line)
+                .collect();
             return (dirty, draw_lines);
         }
 
@@ -526,6 +540,11 @@ impl ScrollPlanner {
         }
 
         // (b) 変化行: 指紋差分行の物理矩形（新スクロール位置）。
+        // (c) スクロールアウトした行の残滓: 可視窓の外の行は描かれないが、行間が 2px しかない
+        //     ため下端のはみ出しインク（実測 3px 級）が blit 後の面内へ残る。blit したフレームで
+        //     その矩形もダーティへ入れ、消してから可視窓の先頭行を描き直す。行送りは行単位ゆえ
+        //     可視窓の外の行の em ボックスは面の外にあり、はみ出しが 0 の行は残滓を作らない
+        //     （＝可視窓だけが動いたフレームのダーティは露出帯 1 枚のまま）。
         let block_offset = window.block_offset;
         for (i, resident) in canvas.residents.iter().enumerate() {
             let fingerprint = line_fingerprint(resident, mode);
@@ -533,7 +552,10 @@ impl ScrollPlanner {
                 Some(prev) => *prev != fingerprint,
                 None => true, // 新規行（prev.len() を超える index）。
             };
-            if changed {
+            let scrolled_out_residue = blit != (0, 0)
+                && i < window.first_visible_line
+                && block_axis_overhang(overhang_of(i), mode) > 0.0;
+            if changed || scrolled_out_residue {
                 if let Some(rect) = resident_rect(
                     resident,
                     block_offset,
@@ -547,9 +569,10 @@ impl ScrollPlanner {
             }
         }
 
-        // 描画対象行: dirty とブロック軸で交差する全 GlyphRun 住人（first_visible_line で切らない）。
+        // 描画対象行: dirty とブロック軸で交差する GlyphRun 住人。可視窓より前の行は
+        // オラクル（DrawExecutor）が描かないので、こちらも描かない（上の doc を参照）。
         let mut draw_lines = Vec::new();
-        for i in glyph_run_indices(canvas) {
+        for i in glyph_run_indices(canvas).filter(|&i| i >= window.first_visible_line) {
             if let Some(rect) = resident_rect(
                 &canvas.residents[i],
                 block_offset,
@@ -662,6 +685,18 @@ fn resident_rect(
         }
     };
     expand_guard_clamp(ix0 * k, iy0 * k, ix1 * k, iy1 * k, contract, surface_size)
+}
+
+/// ブロック軸のインクはみ出し量（両端の大きい方・image px）を返す（純粋）。
+///
+/// 横書きはブロック軸が Y ゆえ `top`／`bottom`、縦書きは X ゆえ `left`／`right` を見る
+/// （行内軸のはみ出しは [`LineOverhang`] の定義どおり 0 に丸められている）。0 なら
+/// その行のインクは em ボックスの外へ出ない＝スクロールアウトしても残滓を作らない。
+fn block_axis_overhang(overhang: LineOverhang, mode: WritingMode) -> f32 {
+    match mode {
+        WritingMode::HorizontalTb => overhang.top.max(overhang.bottom),
+        WritingMode::VerticalRl | WritingMode::VerticalLr => overhang.left.max(overhang.right),
+    }
 }
 
 /// スクロール blit の逆側に生じる露出帯（未保持領域・物理 px 整数・ガード前）を返す。

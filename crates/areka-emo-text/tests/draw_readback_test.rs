@@ -405,6 +405,9 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     }
 
     // ── セッション 2: 行 1〜2 を追加（3 行＝validrect 高 48 に収まる上限） ──
+    //    行 i の下端 = 14i + 12（pitch 14 ＝ 字の丈 12 ＋ 行間 2）→ 12／26／40／54。
+    //    3 行目 40 ≤ 48 は収まり 4 行目 54 > 48 であふれる。旧 pitch 15（12／27／42／57）でも
+    //    3 行が上限で、**結論は偶然一致する**——等差が変わっても 3 行目と 4 行目が 48 を跨ぐため。
     sink.emit(cue("0", 1.0, CueCommand::NewLine { ratio: 1.0 }));
     sink.emit(cue("0", 1.0, CueCommand::Text("■".into())));
     sink.emit(cue("0", 1.0, CueCommand::NewLine { ratio: 1.0 }));
@@ -558,6 +561,8 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
             min_x >= VR_SIZE.0 - PITCH - FONT_H,
             "縦書きの列 0 は validrect-local 右端側から始まる（min_x={min_x}）"
         );
+        // ここの `PITCH` は行送り（ブロック軸）ではなく「上端側と言える小さな上界」として
+        // 借りているだけ（縦書きでは y が字の並ぶ軸）。行送りの式が変わっても意味は変わらない。
         assert!(
             min_y < PITCH,
             "列内は上→下＝1 グリフ目は上端側（min_y={min_y}）"

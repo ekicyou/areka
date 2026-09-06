@@ -186,7 +186,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
                 balloon = label,
                 dpi = handle.get_dpi(),
                 scale_k = view0.scale(),
-                "emo-text-layer: 実モニタ DPI（物理 1:1 表示契約・k=1.0 恒常）"
+                "emo-text-layer: 実モニタ DPI と合成スケール（自動判定は scale_k=1.0 が前提）"
             ),
             None => warn!(balloon = label, "WindowHandle 未付与のため DPI を読めない"),
         }

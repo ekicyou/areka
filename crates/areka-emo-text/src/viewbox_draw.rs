@@ -196,8 +196,9 @@ impl ViewboxExecutor {
     ///
     /// **エラー縮退規律**（Error Handling）: フォント/方向変更（`ensure_format` が format/行キャッシュを
     /// 組み直したフレーム）または `plan` の想定外不整合（[`plan_inconsistency`]）を検知した場合、当該
-    /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=全 GlyphRun 住人）へ
-    /// 差し替えて描画する（正しさ優先・1 フレームでレガシー全域再描画と等価・透明フラッシュを起こす
+    /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=**可視窓の**
+    /// GlyphRun 住人）へ差し替えて描画する（正しさ優先・1 フレームで全域再描画のオラクル
+    /// `DrawExecutor::render` と同じ結果になる・透明フラッシュを起こす
     /// FullClear ではない）。フォント/方向変更は `debug!`・想定外不整合は `warn!` を残す（記憶
     /// areka-log-first-no-silent-failure）。縮退後の commit が prev_lines を張り直すため次フレームは
     /// 正常導出へ復帰する。
@@ -591,10 +592,13 @@ fn degrade_if_needed(
     }
 }
 
-/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=全 GlyphRun 住人）を組む。
+/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=**可視窓の** GlyphRun 住人）を組む。
 ///
-/// [`ScrollPlanner::derive_dirty`] を**空 prev**（`&[]`）で呼び、面全域 1 枚のダーティと全 GlyphRun
-/// 住人の描画対象を得る（初回フレームと同一経路＝レガシー全域再描画と等価）。縮退の唯一の生成口。
+/// [`ScrollPlanner::derive_dirty`] を**空 prev**（`&[]`）で呼び、面全域 1 枚のダーティと
+/// **可視窓（`first_visible_line` 以降）の** GlyphRun 住人の描画対象を得る（初回フレームと同一経路）。
+/// 描画対象を可視窓で切るのは、全域再描画のオラクル `DrawExecutor::render` が
+/// `skip(first_visible_line)` で可視窓より前の行を描かないためで、こちらも同じ結果になる
+/// （タスク 3.4 でこの規律を揃えた——derivation-ledger.md「3.5.1 R-2 の決着」）。縮退の唯一の生成口。
 fn full_domain_update(
     canvas: &ContentCanvas,
     window: &VisibleWindow,
