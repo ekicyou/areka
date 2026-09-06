@@ -7899,6 +7899,9 @@ links = [
   { kind = "same-feature", to = "ukadoc:manual_ghost" },
   { kind = "same-feature", to = "ukadoc:manual_install" },
   { kind = "same-feature", to = "ukadoc:manual_shell" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bexecute_2ccreatenar_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnNarCreated:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnNarCreating:1" },
 ]
 note = """
 壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布用アーカイブ（nar）の作り方一式を定める。areka にはアーカイブの作成も展開も無く、install.txt を読む経路も無いので、ページ全体として何も無い。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
@@ -7965,6 +7968,9 @@ priority = "D55"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:manual_update" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bexecute_2ccreateupdatedata_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdatedataCreated:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdatedataCreating:1" },
 ]
 note = """
 壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはネットワーク更新に対応するためのサーバ側・ゴースト側の準備一式を定める。areka には更新の仕組みが無く、updates2.dau・updates.txt・delete.txt を読む経路もネットワークの出入りも 1 か所も無いので、ページ全体として何も無い。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
@@ -8033,6 +8039,12 @@ priority = "D62"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:dev_nar" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnInstallComplete:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnInstallCompleteAll:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnInstallRefuse:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnInstallReroute:1" },
 ]
 note = """
 壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布アーカイブの中身の並べ方と、install.txt・developer_options.txt の役割を定める。areka にはインストーラの働きも install.txt を読む経路も無いので、ページ全体として何も無い。
@@ -8102,6 +8114,13 @@ priority = "B25"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:dev_update" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bupdateother_2c_66f4_65b0_5bfe_8c61_2f_30aa_30d7_30b7_30e7_30f3_7fa4_2c..._5d:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateBegin:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateComplete:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateFailure:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateProcessExec:1" },
+  { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateReady:1" },
 ]
 note = """
 壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページはネットワーク更新に関わるファイル（updates2.dau・updates.txt・delete.txt と番号付きの変種・developer_options.txt）の置き場を定める。areka にはこれらを読む経路もネットワークの出入りも 1 か所も無いので、ページ全体として何も無い。

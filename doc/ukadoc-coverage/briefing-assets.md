@@ -4,7 +4,7 @@
 
 ## この文書の構成
 
-節はこの順に置く——冒頭、SERIKO/MAYUNA 世代別対応表、未知の記述の扱い、nar インストールとネットワーク更新の導線、沈黙ルール対応表の一覧、ライブ確認の結果、未収載の候補、隣接 spec の是正候補。本稿はこのうち「SERIKO/MAYUNA 世代別対応表」「未知の記述の扱い」「沈黙ルール対応表の一覧」「ライブ確認の結果」「未収載の候補」の 5 節を先に書いている。残りは台帳が固まってから同じ順序で差し込む。
+節はこの順に置く——冒頭、SERIKO/MAYUNA 世代別対応表、未知の記述の扱い、nar インストールとネットワーク更新の導線、沈黙ルール対応表の一覧、ライブ確認の結果、未収載の候補、隣接 spec の是正候補。本稿はこのうち「SERIKO/MAYUNA 世代別対応表」「未知の記述の扱い」「nar インストールとネットワーク更新の導線」「沈黙ルール対応表の一覧」「ライブ確認の結果」「未収載の候補」の 6 節を書いている。残りは台帳が固まってから同じ順序で差し込む。
 
 ## SERIKO/MAYUNA 世代別対応表
 
@@ -338,6 +338,216 @@
 
 1. **surfacetable.txt が Rust に現れる行数は 0 ではなく 6 である。** 設計の表は「`crates/` に `surfacetable` を含む Rust の行が 0 件」を根拠にしているが、実際には 6 行ある——`crates/ukadoc-survey/src/assignment.rs:48`・同 `assignment_tests.rs:56`・`:246`・`:327`・同 `model_tests.rs:49`・`:50`。**6 行とも、この網羅調査のための道具が正典のページの名前として持っているもので、シェルのファイルを読む経路ではない。** よって「読む経路が無い」という結論は動かない。
 2. **「読む経路が無い」という言い方は、ページ 1 枚をまとめて指す項目にまで及ぶように読めるが、そこは「一部だけ読む」である。** `manual_shell`・`manual_ghost`・`manual_directory`・`manual_balloon`・`dev_shell`・`dev_bind` の 6 件は、そのページが並べるファイルの一部に読む経路があり、ページ全体としては満たしていない、という形である。たとえば `manual_shell` が並べるファイルのうち areka が開くのは `crates/areka/src/emo2_boot/assets.rs:82` が指す 1 本の surfaces.txt までで、分割された追加ファイル・別名のファイル・surfacetable.txt・翻訳の DLL・メニュー用の画像には経路が無い。`dev_bind` は起動時の着せ替えの初期集合を組むところまでは動く（`crates/areka/src/emo2_boot/assets.rs:55` の `default_bind_ids`）が、利用者が着せ替えを選ぶ入口である作り付けのメニューが無い。**「読む経路が無い」と言い切ってよいのは、上の ⑸〜⑼ の 5 種だけである。** 台帳の 6 件の備考も同じ書き方をしている。
+
+## nar インストールとネットワーク更新の導線
+
+配られているゴーストを手に入れて、自分の環境に入れて、あとから新しくするまでの道を、6 つの段に分けて並べた節である。段は **入手 → 展開 → 配置 → 起動 → 更新 → 削除** の順に置く。各段について ⑴ その段が成り立つために要る正典の項目、⑵ 最小で何ができれば成り立つか、⑶ areka のいまの状態、の 3 つを対にして書く。
+
+**この節は作り方を決めない。** 書庫を開く部品に何を選ぶか、通信をどう組むか、どの段をどの spec が引き受けるかは、いずれもここでは決めていない。ここで確かめたのは「何が要るか」と「いま何が在るか」の 2 つだけである。
+
+**本節が引く行番号は 2026-09-06 に測ったものである。** 行番号はファイルに 1 行足すだけで動くので、どこでもファイル名と、その中の定義や見出しの名前を併せて書いた。
+
+### 測り直した areka の現状
+
+この節が立つ土台は「いま何も無い」という一連の 0 である。0 は書かなければ沈黙と同じなので、1 つずつ数え方を添えて並べる。数え方が違えば数も違うため、何をどう数えたかまで書いた。値はすべて 2026-09-06 に測り直したものである。
+
+| 測ったもの | 数え方 | 結果 |
+|---|---|---|
+| `updates2.dau` の綴り | `crates/` 配下の `.rs` を全文検索 | **0 行** |
+| `updates.txt` の綴り | 同上 | **0 行** |
+| `.nar` の綴り | 同上 | **0 行** |
+| `nar` という語（大小文字を問わず・前後が英字でないもの） | 同上 | 9 行。内訳は「触れない」という宣言 2 行（`areka-parsers` の `package::resolve` の前置きと、`package::validation_tests` が無影響の採取元として控えている行）と、この網羅調査の道具 `ukadoc-survey` が正典のページ名 `dev_nar` を持つ 7 行。**読み取りの経路は 1 行も無い** |
+| `OnUpdate` の綴り | 同上 | **0 行**。`crates/` 全体まで広げると 5 行あるが、いずれも試験用ゴーストの辞書 `crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/update.pasta` の中で、areka のコードではない |
+| `install.txt` の綴り | 同上 | 3 行。`package::resolve` の前置きの「触れない」宣言と、`package::validation_tests` の説明 2 行 |
+| `delete.txt` の綴り | 同上 | 2 行。どちらも同じ `package::validation_tests` の説明 |
+| 書庫を開く依存 | `Cargo.lock` のパッケージ名に `zip`・`tar`・`archive`・`compress`・`7z`・`lzma` を含むもの | **0 件** |
+| 圧縮まわりの依存 | `Cargo.lock` を子から親へ逆にたどる | 5 件（`flate2`・`miniz_oxide` の 2 つの版・`zlib-rs`・`crc32fast`）。親をたどると `flate2` は `png` から、`zlib-rs` と `crc32fast` は `flate2` から、`png` は `image` から、`image` は `wintf` から来ている。すなわち絵を読み込むために付いてきたものである（`miniz_oxide` だけは `flate2` と `png` のほかに `backtrace` からも来ている）。**書庫を開くために入れたものは 1 つも無い** |
+| 通信の依存 | `Cargo.lock` のパッケージ名に `reqwest`・`hyper`・`ureq`・`curl`・`tokio`・`rustls`・`native-tls`・`http`・`url` を持つもの | **0 件** |
+| 通信の呼び出し | `crates/` 配下の `.rs` に `std::net`・`TcpStream`・`TcpListener`・`UdpSocket`・`WinHttp`・`InternetOpen`・`Networking`・`Winsock`・`Wininet` の綴り | **0 行** |
+| 取り違えを見つけるための照合の道具 | `Cargo.lock` のパッケージ名に `md5`・`sha1`・`sha2`・`digest` を含むもの／`.rs` に `md5` の綴り | どちらも **0** |
+
+台帳の側でも同じことが数で出ている。この導線に関わるページの内訳は次のとおりで、**`descript_install` の 15 件と `spec_update_file` の 9 件はすべて未対応**である。実装済み・語彙のみ・縮退・別名はいずれも 0 件で、未分類も 0 件である。ページ 1 枚をまとめて指す `manual_install`・`manual_update`・`manual_directory`・`dev_nar`・`dev_update` の 5 件も、すべて未対応である。
+
+**在るのは 1 段だけである。** 6 段のうち areka の側に実物が立っているのは ④ 起動だけで、①②③⑤⑥ には何も無い。下の各段の「areka のいま」は、この 1 つの例外を除いてすべて同じ結論になる。同じ文が 6 回並ぶのは冗長に見えるが、段ごとに「無い」の中身（読み取りが無いのか、依存が無いのか、そもそも入口が無いのか）が違うので、段ごとに書き分けた。
+
+### 実例に使う 7 本のファイル
+
+読む側の実装は無いが、**正典の書式で書かれた実物は試験用ゴーストの中に 7 本ある**。置き場を数え直したところ、うち 2 本は `fixtures/emo2/` の中ではなくその兄弟にあった。7 本という数のほうは合っていた。各段の実例にはこの 7 本を使う。いずれも `crates/pilot/examples/shiori-host-32/fixtures/` から下の道を書く。
+
+| # | 置き場（`fixtures/` から下） | 何のファイルか | 中身 | 使う段 |
+|---|---|---|---|---|
+| 1 | `emo2/install.txt` | 配布物を入れる指示（ゴースト本体） | 6 行。文字コードの宣言・種別・名前・入れ先の名前・同梱バルーンの入れ先と取り出し元 | ③ |
+| 2 | `emo2/emo2-kakukaku/install.txt` | 同（同梱バルーン） | 4 行。文字コードの宣言・種別・名前・入れ先の名前 | ③ |
+| 3 | `emo2-kakukaku-offsetdpi/install.txt` | 同（検証用に増やしたバルーン） | 4 行。同じ 4 つの欄 | ③ |
+| 4 | `emo2-kakukaku-wplimit/install.txt` | 同（検証用に増やしたバルーン） | 4 行。同じ 4 つの欄 | ③ |
+| 5 | `emo2/updates.txt` | 更新のときに突き合わせる一覧 | 109 行。文字コードの宣言 1 行＋ファイル 1 つにつき 1 行の 108 行。各行は道・取り違えを見つけるための値・大きさ・日付を区切り文字でつないでいる | ⑤ |
+| 6 | `emo2/ghost/master/updates.txt` | 同（ゴースト側の置き場に置いた写し） | #5 とバイト単位で同一である（`cmp` で確認） | ⑤ |
+| 7 | `emo2/delete.txt` | 更新のときに消す道の指示 | 2 行。文字コードの宣言と、消す道 1 つ | ⑥ |
+
+3 つ気づいたことがある。⑴ **`updates2.dau` は 7 本の中に無い。**試験用ゴーストが持っているのは `updates.txt` の側だけである。⑵ **#1 だけ文字コードの宣言の綴りが `Charset` と大文字で始まる**（他の 6 本は `charset`）。読む側が無いので今は何も起きないが、読む側を作るときに大小文字をどう扱うかがそのまま効く箇所である。⑶ #5 と #6 が同じ中身で 2 か所にあるのは書き間違いではない。正典には `ghost\masterへのコピー` という見出しの項目があり（下の ⑤ の表）、ゴーストの置き場を説明するページも更新用のファイルを並べるものとして挙げている（台帳の `ukadoc:manual_ghost` の備考）。読む側を作るときには、2 か所のどちらを見るかが決めるべきことの 1 つになる。
+
+### ① 入手
+
+- **要る正典の項目**: `ukadoc:manual_install`（インストールのページ全体）・`ukadoc:dev_nar`（配布用の書庫の作り方のページ全体）・`ukadoc:descript_ghost:homeurl_2cURL:1`（配布元の宛先）。
+- **最小で何ができれば成り立つか**: 手元のファイルを受け取る口と、宛先から取ってくる口の 2 つ。前者だけでも「手に入れる」は成り立つ（利用者が自分でファイルを落としてきて渡す形）。後者は通信の仕組みが要る。
+- **areka のいま**: 手元のファイルを受け取る口も無く、通信の依存も呼び出しも 0 である。areka が受け取れるのは**すでに展開されたフォルダ**だけで、そこへ至る道が無い。宛先の欄（`homeurl`）は台帳では未対応で、読む経路が無い。
+- **実例**: この段に対応する実物のファイルは 7 本の中に無い。書庫そのものが試験用ゴーストに含まれていないためである。
+
+### ② 展開
+
+- **要る正典の項目**: `ukadoc:dev_nar`（書庫の作り方）・`ukadoc:manual_directory`（展開したあとの全体の構成）。
+- **最小で何ができれば成り立つか**: 書庫を開いて中身を取り出せること、中の道の文字コードを扱えること、取り出す先を一時的に確保できること。
+- **areka のいま**: 書庫を開く依存が 1 つも無い。圧縮まわりの依存は 5 件あるが、いずれも絵の読み込みのために付いてきたもので、書庫を開く用ではない。台帳では `dev_nar`・`manual_directory` とも未対応である。
+- **実例**: この段に対応する実物のファイルも 7 本の中に無い。試験用ゴーストは**展開済みの形で置かれている**からで、これがそのまま「areka の入口は展開済みのフォルダである」という現状を表している。
+
+### ③ 配置
+
+- **要る正典の項目**: `ukadoc:manual_install` と、`descript_install` の 15 件のうち更新に関わる 4 件を除いた 11 件。
+
+| 見出し | 項目 id |
+|---|---|
+| `type,種別` | `ukadoc:descript_install:type_2c_7a2e_5225:1` |
+| `name,オブジェクト名` | `ukadoc:descript_install:name_2c_30aa_30d6_30b8_30a7_30af_30c8_540d:1` |
+| `directory,ディレクトリ名` | `ukadoc:descript_install:directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1` |
+| `*.directory,ディレクトリ名` | `ukadoc:descript_install:_2a.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1` |
+| `*.source.directory,ディレクトリ名` | `ukadoc:descript_install:_2a.source.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1` |
+| `accept,本体側名` | `ukadoc:descript_install:accept_2c_672c_4f53_5074_540d:1` |
+| `bootghost,ディレクトリ名` | `ukadoc:descript_install:bootghost_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1` |
+| `charset,文字コード` | `ukadoc:descript_install:charset_2c_6587_5b57_30b3_30fc_30c9:1` |
+| `相対パス` | `ukadoc:descript_install:_76f8_5bfe_30d1_30b9:1` |
+| `相対パス,オプション1,オプション2,...` | `ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1` |
+| `相対パス,ignore` | `ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2cignore:1` |
+
+- **最小で何ができれば成り立つか**: install.txt を読めること、種別から置き場を決められること、入れ先の名前を決められること、すでに同じものが入っているときの扱いを決められること、入れないファイルの指定を守れること。同梱のバルーンのように 1 つの書庫が 2 つ以上のものを含む形も扱えること。最後の `bootghost` は、入れ終わったあとにどれを起こすかを指す欄で、次の ④ 起動へ引き渡す継ぎ目にあたる。
+- **areka のいま**: install.txt を読む経路がファイルごと無い。`areka-parsers` の `package::resolve` は前置き（ファイル冒頭のモジュール説明・8 行目）で「install.txt には触れない」と自ら宣言しており、同じ束の `package::validation_tests` が、試験用ゴーストに置いてあっても解決の結果へ一切漏れないことをテストで固定している（採取元の控えが 113 行目と 115 行目、説明が 122〜125 行目、テストそのものが 127 行目）。台帳では、上の表の 11 件も `ukadoc:manual_install` も未対応である（12 件）。
+- **実例**: 上の 7 本のうち #1〜#4。#1 が「ゴースト本体＋同梱バルーン」の形、#2〜#4 がバルーン単体の形である。#1 の同梱バルーンの欄が #2 の入れ先の名前と同じ綴りで対応している。
+
+### ④ 起動
+
+- **要る正典の項目**: `ukadoc:manual_ghost`・`ukadoc:manual_shell`・`ukadoc:manual_balloon`（ゴースト・シェル・バルーンそれぞれの置き場のページ全体）と、ゴーストの descript の 3 件。
+
+| 見出し | 項目 id | 台帳の状態 |
+|---|---|---|
+| `shiori,ファイル名` | `ukadoc:descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1` | 実装済み |
+| `seriko.defaultsurfacedirectoryname,ディレクトリ名` | `ukadoc:descript_ghost:seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1` | 実装済み |
+| `name,ゴースト名` | `ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1` | 語彙のみ |
+
+- **最小で何ができれば成り立つか**: 置かれた木からゴーストの定義を読み、頭脳の入れ物を起こし、立ち絵の置き場を決めて絵を出せること。
+- **areka のいま**: **6 段のうちここだけが立っている。**`areka-parsers` の `package::resolve` が、展開済みの根から `ghost/master/descript.txt` を起点にして、頭脳のファイル名と立ち絵の置き場を解決する。ページ全体の 3 件（`manual_ghost`・`manual_shell`・`manual_balloon`）はいずれも未対応だが、これはページが並べるファイルのうち読まないものが残っているためで、起動そのものは通る。台帳の内訳では、ゴーストの descript 74 件のうち実装済み 7・語彙のみ 1・未対応 66、シェルの descript 102 件のうち実装済み 11・語彙のみ 2・未対応 89 である。
+- **実例**: 試験用ゴースト `fixtures/emo2/` そのもの。①②③ を人手で済ませた状態のものを渡している、というのがいまの形である。
+
+### ⑤ 更新
+
+- **要る正典の項目**: `ukadoc:manual_update`（ネットワークのページ全体）・`ukadoc:dev_update`（ネットワーク更新に対応するための準備のページ全体）・`ukadoc:descript_ghost:homeurl_2cURL:1`（宛先）と、`spec_update_file` の 9 件、および install.txt の更新に関わる欄のうち入れ替えを指す 2 件。
+
+| 見出し | 項目 id |
+|---|---|
+| `文字コード` | `ukadoc:spec_update_file:_6587_5b57_30b3_30fc_30c9:1` |
+| `行フォーマット` | `ukadoc:spec_update_file:_884c_30d5_30a9_30fc_30de_30c3_30c8:1` |
+| `行種別` | `ukadoc:spec_update_file:_884c_7a2e_5225:1` |
+| `必須フィールド` | `ukadoc:spec_update_file:_5fc5_9808_30d5_30a3_30fc_30eb_30c9:1` |
+| `拡張フィールド (位置[2]以降)` | `ukadoc:spec_update_file:_62e1_5f35_30d5_30a3_30fc_30eb_30c9_20_28_4f4d_7f6e_5b2_5d_4ee5_964d_29:1` |
+| `ファイル走査` | `ukadoc:spec_update_file:_30d5_30a1_30a4_30eb_8d70_67fb:1` |
+| `URLエンコード` | `ukadoc:spec_update_file:URL_30a8_30f3_30b3_30fc_30c9:1` |
+| `セキュリティチェック` | `ukadoc:spec_update_file:_30bb_30ad_30e5_30ea_30c6_30a3_30c1_30a7_30c3_30af:1` |
+| `ghost\masterへのコピー` | `ukadoc:spec_update_file:ghost_5cmaster_3078_306e_30b3_30d4_30fc:1` |
+| `refresh,数値` | `ukadoc:descript_install:refresh_2c_6570_5024:1` |
+| `*.refresh,数値` | `ukadoc:descript_install:_2a.refresh_2c_6570_5024:1` |
+
+- **最小で何ができれば成り立つか**: 宛先から一覧を取ってくること、手元の実物と一覧を突き合わせて違っているものを見つけること、違っていたものだけを取り直すこと、取ったものを置き場へ写すこと、道の綴りを安全に扱うこと、受け取ったものが期待どおりかを確かめること。突き合わせには取り違えを見つけるための照合の道具が要る。
+- **areka のいま**: 更新ファイルを読む経路がファイルごと無く、通信の依存も呼び出しも 0 で、照合の道具も入っていない。更新を知らせる出来事（`OnUpdate` で始まる名前）を発火する場所も 0 である。台帳では、上の表の 11 件も `ukadoc:manual_update`・`ukadoc:dev_update`・宛先の欄も未対応である（14 件）。
+- **実例**: 上の 7 本のうち #5 と #6。突き合わせの一覧が正典の書式でどう並ぶかは、この 108 行で読める。ただし `updates2.dau` の実物は無い。
+
+### ⑥ 削除
+
+- **要る正典の項目**: `ukadoc:manual_update`・`ukadoc:dev_update` と、install.txt の更新に関わる欄のうち消さずに残すものを指す 2 件。
+
+| 見出し | 項目 id |
+|---|---|
+| `refreshundeletemask,ファイル名1:ファイル名2...` | `ukadoc:descript_install:refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1` |
+| `*.refreshundeletemask,ファイル名1:ファイル名2...` | `ukadoc:descript_install:_2a.refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1` |
+
+- **正典の側に細かい項目が無いことについて。**この段だけは、正典に見出しの粒度で対応する項目がほとんど無い。カタログの 1,749 件を見出しの文字で当たったところ、`delete.txt`・`updates2.dau`・`updates.txt` という綴りを見出しに持つ項目は**それぞれ 0 件**である。これらのファイルそのものは、ページ 1 枚をまとめて指す `manual_update` と `dev_update` の中で扱われている。つまりこの段は「項目が足りない」のではなく、**正典がページの説明として書いていて、見出しに切り出していない**のである。台帳に無い行を作ることはできないので、この段の受け皿はページ全体の 2 件と、上の 2 件になる。
+- **最小で何ができれば成り立つか**: 消す道の指示を読めること、消してはいけないものの指定を守れること、指示された道が置き場の外を指していないかを確かめられること。
+- **areka のいま**: 更新ファイルを読む経路がファイルごと無い。`delete.txt` は試験用ゴーストに実際に置いてあるが、`areka-parsers` の `package::validation_tests` が、置いてあっても解決の結果へ一切漏れないことを固定している。台帳では、上の表の 2 件も `ukadoc:manual_update`・`ukadoc:dev_update` も未対応である（4 件）。
+- **実例**: 上の 7 本のうち #7。2 行しかないが、正典の書式で消す道を書いた実物である。
+
+### 本ドメインの外へ伸びる先
+
+導線の入口と出口は本ドメインの外にある。**外の項目は台帳へ写さず、関連の欄で指す。**さくらスクリプトの実行タグは sakura-script 台帳が、更新と設置を知らせる出来事は shiori 台帳が、それぞれ項目そのものを持っている。ここで複製すると同じものが 2 か所で数えられてしまう。
+
+置いたのは 19 本で、置き先はページ 1 枚をまとめて指す 4 件だけである。相手の項目 id はカタログから写した（打ち直していない）。相手が実在するかどうかは、上流の道具の整合検査が毎回見ている。
+
+| 置き先 | 相手の見出し | 相手の項目 id | 種別 |
+|---|---|---|---|
+| `ukadoc:manual_install` | `\![execute,install,path,ファイル名]` | `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1` | `same-feature` |
+| `ukadoc:manual_install` | `\![execute,install,url,URL,(feed\|nar\|homeurlのいずれか)]` | `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1` | `same-feature` |
+| `ukadoc:manual_install` | `OnInstallComplete` | `ukadoc:list_shiori_event:OnInstallComplete:1` | `same-feature` |
+| `ukadoc:manual_install` | `OnInstallCompleteAll` | `ukadoc:list_shiori_event:OnInstallCompleteAll:1` | `same-feature` |
+| `ukadoc:manual_install` | `OnInstallRefuse` | `ukadoc:list_shiori_event:OnInstallRefuse:1` | `same-feature` |
+| `ukadoc:manual_install` | `OnInstallReroute` | `ukadoc:list_shiori_event:OnInstallReroute:1` | `same-feature` |
+| `ukadoc:dev_nar` | `\![execute,createnar]` | `ukadoc:list_sakura_script:_5c_21_5bexecute_2ccreatenar_5d:1` | `same-feature` |
+| `ukadoc:dev_nar` | `OnNarCreating` | `ukadoc:list_shiori_event:OnNarCreating:1` | `same-feature` |
+| `ukadoc:dev_nar` | `OnNarCreated` | `ukadoc:list_shiori_event:OnNarCreated:1` | `same-feature` |
+| `ukadoc:manual_update` | `\![update,更新対象(,オプション,オプション...)]` | `ukadoc:list_sakura_script:_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1` | `same-feature` |
+| `ukadoc:manual_update` | `\![updateother,更新対象/オプション群,...]` | `ukadoc:list_sakura_script:_5c_21_5bupdateother_2c_66f4_65b0_5bfe_8c61_2f_30aa_30d7_30b7_30e7_30f3_7fa4_2c..._5d:1` | `same-feature` |
+| `ukadoc:manual_update` | `OnUpdateProcessExec` | `ukadoc:list_shiori_event:OnUpdateProcessExec:1` | `same-feature` |
+| `ukadoc:manual_update` | `OnUpdateBegin` | `ukadoc:list_shiori_event:OnUpdateBegin:1` | `same-feature` |
+| `ukadoc:manual_update` | `OnUpdateReady` | `ukadoc:list_shiori_event:OnUpdateReady:1` | `same-feature` |
+| `ukadoc:manual_update` | `OnUpdateComplete` | `ukadoc:list_shiori_event:OnUpdateComplete:1` | `same-feature` |
+| `ukadoc:manual_update` | `OnUpdateFailure` | `ukadoc:list_shiori_event:OnUpdateFailure:1` | `same-feature` |
+| `ukadoc:dev_update` | `\![execute,createupdatedata]` | `ukadoc:list_sakura_script:_5c_21_5bexecute_2ccreateupdatedata_5d:1` | `same-feature` |
+| `ukadoc:dev_update` | `OnUpdatedataCreating` | `ukadoc:list_shiori_event:OnUpdatedataCreating:1` | `same-feature` |
+| `ukadoc:dev_update` | `OnUpdatedataCreated` | `ukadoc:list_shiori_event:OnUpdatedataCreated:1` | `same-feature` |
+
+**種別に `same-feature` を選んだ理由。**使える種別は 6 つあり、そのうち「これをすると、あの出来事が飛ぶ」を表すものと「この設定が、あれの動きを決める」を表すものは、片側が操作や設定キーであることを前提にしている。ここで置き先にしている 4 件はいずれも**ページ 1 枚をまとめて指す粗い粒度の項目**で、操作でも設定キーでもないので、その向きには当てはまらない。残る「同じ機能の別の面」＝ `same-feature` が、書式の側と入口の側と知らせの側が 1 つの機能の 3 つの面である、という関係をそのまま表す。向きを持たないので、どちらの側から読んでも同じ意味になる。
+
+**台帳の備考が書いている「関連の向き」の規則との関係。**4 件の備考には、正典の本文が相手のページを名指しで指しているときに、指している側にだけ関連を置く、という規則が書いてある。あれは**本ドメインの中のページどうし**の重複を避けるための規則で、どちらに置くか迷う場面のための決め方である。ここで足した 19 本はドメインを跨ぐもので、迷う余地が無い（相手の項目は別の台帳の持ち物であり、こちら側にしか置けない）。2 つは別の規則であり、先に置かれていた関連は 1 本も動かしていない。
+
+**この 19 本は要件が名指しで求めた最小の集合そのものである。**「導線に関わる外の項目をすべて挙げた」とは言えない——たとえば更新の途中経過を知らせる出来事は上に挙げた以外にも多数あり、この節はそれらを数えていない。ここで保証するのは、要件が最低限として並べた実行タグ 6 種と出来事 13 種が漏れなく指されていることだけである。
+
+**跨いだ関連は、報告の束としては現れない。**相手が別の台帳の持ち物である関連は、ドメイン別の報告に載る束の材料にならない（束は構成する項目の全員が同じ台帳に居るときだけ載る）。この 19 本を目で追えるのは、いまのところ台帳の該当する 4 件と、この表だけである。全体をまとめる側へ申し送るべき事柄として、ここに書き残しておく。
+
+### 既存の判断記録は 1 件も無い
+
+導線に関わる部分について、**これまでに下した判断の記録は 1 件も無い**。
+
+- `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表のデータ行を全数当たった。何をデータ行と数えるかと、その件数は、下の「沈黙ルール対応表の一覧」節の「数え方と、この節の数がいつのものか」に書いた手順（見出し「8. 沈黙ルール対応表」から次の同じ深さの見出しの直前までを切り、縦棒で始まる行のうち区切りの行と見出しの行を除く）による——本節では件数を書かない。表は spec が 1 本着地するたびに伸びるので、同じ数を 2 か所に置くと片方だけが古くなるためである。その全データ行のうち、`install.txt`・`updates2.dau`・`updates.txt`・`delete.txt`・`nar`（大小文字を問わず・前後が英字でないもの）・「ネットワーク更新」・「インストール」・「配布」のいずれかを、どの列でもよいから含む行は **0 行**である（2026-09-06 に測り直した）。すなわちこの導線について areka が何かを決めた記録は、この表には無い。
+
+**既存の言及はいずれも範囲の線を引いた宣言である。**どう振る舞わせるかを決めた記録は 1 つも無く、範囲の内と外を分ける文だけが 5 か所ある。
+
+| 場所 | 何と書いてあるか |
+|---|---|
+| `doc/emo2-conformance-scope.md` の「5. パッケージローダ／配置規約」の 1 つ目の項目（73 行目） | M1 の置き付けの入口を install.txt の種別に取ると書いている。**ここだけは「外す」とは書いておらず、範囲の内側に線を引いた文である。**ただし実装はそのとおりになっておらず、`areka-parsers` の `package::resolve` は install.txt を読まずに `ghost/master/descript.txt` から始まる（上の測り直し） |
+| 同 節の 3 つ目の項目（75 行目） | `delete.txt` は更新のときの旧い道の削除指示であり、M1 の置き付けでは無視してよい |
+| 同 節の 4 つ目の項目（76 行目） | NAR の設置の仕組みは M1 の範囲外である（展開済みのフォルダを渡す） |
+| 同 「7. 生態系拡張」の本文（92 行目） | 他のゴーストまで広げるには NAR の設置などが順次要る。emo2 の区切りを越えたあとの互換面の拡大として扱う |
+| `crates/areka-parsers/src/package/resolve.rs` の前置き（8 行目） | 参照する欄を数えたうえで、install.txt・バルーン系・NAR には触れないと宣言する |
+
+**89 行目について。**設計の「実測の訂正」の表は、以前の要件が挙げていた 89 行目が空行であることを訂正として記録している。測り直したところ、確かに 89 行目は空行だった。いまの要件は既に 73・75・76・92 の 4 か所へ直っているので、この節が引くのはその 4 か所である。要件と設計はこの 4 か所をまとめて「対象外の宣言」と呼んでいる。読み直すと、**3 か所（75・76・92）はそのとおりの「外す」宣言で、73 行目だけは範囲の内側に線を引いた文である**——ただし、そこに書かれた入口を読む実装は無い（上の測り直し）。**5 か所のどれもが、どう振る舞わせるかを決めた記録ではない**という点は共通する。要件 5.7 が確かめたかったこと——判断の記録が 1 件も無く、あるのは範囲についての宣言だけであること——は、この読み直しでも成り立つ。
+
+### 対象外の候補として区別するもの
+
+導線は「利用者が受け取る側」の話である。それに対し、**配る側が使う機能は導線の対象外の候補**として分けておく。区別しておかないと、利用者に届かないものが導線の見積もりに紛れ込む。
+
+| 対象外の候補 | 項目 | 台帳での扱い |
+|---|---|---|
+| 配布用の書庫を作ること | `ukadoc:dev_nar` | 優先度だけを付け、テーマは付けていない。担当は空 |
+| 更新用の一覧を作ること | `ukadoc:dev_update` | 同上 |
+
+これに対応する外の項目——`\![execute,createnar]`・`\![execute,createupdatedata]` と、`OnNarCreating`／`OnNarCreated`／`OnUpdatedataCreating`／`OnUpdatedataCreated` の 4 つの出来事——も同じ側にある。上の関連の表では、これらを `dev_nar` と `dev_update` に寄せて置いた。導線の 6 段に関わる関連（`manual_install` と `manual_update` に置いたもの）とは、置き先で分かれている。
+
+**「対象外」と決めたわけではない。**ここでしているのは候補としての区別だけで、実際に外すかどうかは全体をまとめる側の判断である。台帳の側でも状態を変えていない（4 件とも未対応のままである）。
+
+### 将来 spec を切り出すときの自然な境界 3 つ
+
+この導線と、その周りに残っている未対応の塊を眺めると、切り口が 3 つ見える。**ここでは境界を挙げるだけで、spec は起票しない。**
+
+1. **定義ファイルの解釈**——すでにある転記層を広げる話。ゴースト・シェル・バルーンの descript と surfaces.txt について、いま読んでいない欄を読むようにする。土台は既にあり、増えるのは受け付ける欄の数である。
+2. **配布と更新**——新しい土台が要る話。書庫を開くこと、通信すること、突き合わせること、置き換えること。この節の 6 段のうち ④ 起動を除く 5 段がここに入る。上の測り直しが示すとおり、依存も呼び出しも 0 からの出発になる。
+3. **surfaces.txt の SERIKO/MAYUNA**——それだけで 1 本になる大きさの話。ページ 1 枚で 137 項目あり、本ドメインの中では最も大きい塊である。1 と重なるように見えるが、動きの組み立てという別の仕組みを伴うので分けた。
+
+この 3 つは互いに重ならないが、**本ドメインの未対応を全部覆うわけでもない**（たとえばプラグインとヘッドライン、オーナードローメニュー、トランスレータはどれにも入らない）。3 つに絞ったのは、この導線から見て自然に切れる線がここだったからである。
 
 ## 沈黙ルール対応表の一覧
 
