@@ -60,7 +60,7 @@ fn seg(line_index: usize, ordinal: usize, range: (f32, f32)) -> LineChoiceSegmen
 }
 
 /// 装飾テストのハイライト帯（em ボックス丈 10.0 と**異なる**値＝焼込みが観測可能）。
-const TEST_BAND: f32 = 13.0;
+const TEST_BAND: f32 = 12.0;
 
 /// 住人が Choice ならその中身を取り出す（さもなくば panic）。
 fn choice(resident: &Resident) -> &ChoiceLineContent {
@@ -86,7 +86,7 @@ fn empty_segments_returns_canvas_unchanged() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 13.0)),
+        glyph_resident((0.0, 12.0)),
     ]);
     let out = decorate_canvas(
         input.clone(),
@@ -109,7 +109,7 @@ fn hover_sets_highlight_on_matching_line_only() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 13.0)),
+        glyph_resident((0.0, 12.0)),
     ]);
     let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
     let out = decorate_canvas(
@@ -144,7 +144,7 @@ fn hover_none_still_records_segments_without_highlight() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 13.0)),
+        glyph_resident((0.0, 12.0)),
     ]);
     let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
     let out = decorate_canvas(
@@ -195,14 +195,14 @@ fn segment_inline_range_is_resident_local_subtracting_line_origin() {
 }
 
 /// Observable（R3.3 の帯単一化）: 装飾は受け取った `band_extent` を Choice 住人へそのまま
-/// 焼き込む（em ボックス丈 10.0 ではなく 13.0）——COM 層のハイライト矩形／ダーティ帯は
+/// 焼き込む（em ボックス丈 10.0 ではなく 12.0）——COM 層のハイライト矩形／ダーティ帯は
 /// この値だけを読み、`derive_hit_rows` へ渡す値と同一にすることで帯が数値一致する。
 #[test]
 fn decorate_bakes_band_extent_into_choice_residents() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 13.0)),
+        glyph_resident((0.0, 12.0)),
     ]);
     let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
     let out = decorate_canvas(
@@ -333,7 +333,7 @@ fn wrapped_choice_highlights_both_lines() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 13.0)),
+        glyph_resident((0.0, 12.0)),
     ]);
     // 同一 ordinal 0 が line0 末尾と line1 先頭に跨る（annotate_lines の行別分割）。
     let segments = [seg(0, 0, (20.0, 30.0)), seg(1, 0, (0.0, 10.0))];
@@ -362,8 +362,8 @@ fn lines_without_segments_stay_glyph_run() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 13.0)),
-        glyph_resident((0.0, 26.0)),
+        glyph_resident((0.0, 12.0)),
+        glyph_resident((0.0, 24.0)),
     ]);
     let segments = [seg(1, 0, (0.0, 20.0))];
     let out = decorate_canvas(
@@ -400,7 +400,7 @@ fn hover_stale_ordinal_yields_no_highlight() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 13.0)),
+        glyph_resident((0.0, 12.0)),
     ]);
     // セグメントは ordinal 0/1 のみ。hover はそのどちらでもない 99（stale）。
     let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];

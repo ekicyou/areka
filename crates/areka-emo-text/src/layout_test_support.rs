@@ -39,7 +39,7 @@ pub(super) fn inline_positions(line: &PositionedLine) -> Vec<f32> {
 
 // ── 3.2 R7.1/7.2/7.4/7.5（+R6.4）: あふれ判定とスクロール可視窓（visible_window） ──
 //
-// 幾何の共通前提: FixedMetrics・font 10 → pitch 13（ceil(12.5)）・全角 1 グリフ/行。
+// 幾何の共通前提: FixedMetrics・font 10 → pitch 12（10 + 行間 2）・全角 1 グリフ/行。
 // あふれ判定は軸読み替え正準表の行（横書き=最新行の下端 > validrect.bottom・
 // vertical_rl=最新列の左端 < validrect.left・vertical_lr=最新列の右端 > validrect.right）。
 

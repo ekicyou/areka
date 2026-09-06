@@ -6,8 +6,12 @@
 //! 複製すると「共通前提」を名乗る値が黙って食い違う。
 //!
 //! 共通前提は design.md の逐語:
-//! `font_height = 10`・`line_pitch = 13`・`image_size = (400, 224)`・
+//! `font_height = 10`・`line_pitch = 12`・`image_size = (400, 224)`・
 //! `origin`＝宣言例 `(50, 20)`・`current = (200, 30)`。
+//!
+//! 行送りだけは `areka-P0-emo-text-line-height-canon` の裁定で 13 から 12 へ改まった
+//! （`1lh` は 1em＋行間で、行間の既定が 2 になった）。カーソルタグ側の座標語彙・原点・
+//! 書字方向ごとの解決規則は変わらず、`1lh` が指す値だけが追随する。
 
 use super::CursorBasis;
 use crate::region::TextRegion;
@@ -18,8 +22,8 @@ use areka_parsers::balloon::{
 
 /// design.md「Unit Tests」共通前提の文字高さ（正典 `1em`＝タグ時点の文字高さ）。
 pub(super) const FONT_HEIGHT: f32 = 10.0;
-/// 同・行送り（正典 `1lh`＝1em＋行間。`ceil(10 × 1.25) = 13`）。
-pub(super) const LINE_PITCH: f32 = 13.0;
+/// 同・行送り（正典 `1lh`＝1em＋行間。`10 + 2 = 12`）。
+pub(super) const LINE_PITCH: f32 = 12.0;
 /// 同・バルーン画像原寸（`centerx`／`centery` の基準）。
 pub(super) const IMAGE_SIZE: (f32, f32) = (400.0, 224.0);
 /// 同・宣言された文字描画開始点（絶対座標の基点）。
