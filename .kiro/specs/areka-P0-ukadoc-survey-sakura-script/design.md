@@ -378,11 +378,11 @@ URL を置く先は「意味を作っている定義」であって「綴りを�
 | 同 `decode_token` の `Token::Shorthand { word: 'w', .. }` の腕 | `\w時間` | 1 |
 | `crates/areka-seriko/src/actor.rs` の `handle_message` の名前選別 | `\![bind,カテゴリ名,パーツ名,数値]` | 1 |
 | `crates/areka/src/emo2_boot/zorder_cue.rs` の `ZOrderCueSink::emit` にある名前と選択子の組の判定の直上（定数 `NAME_SET`／`NAME_RESET`／`SELECTOR_ZORDER` は綴りの宣言であって意味を作る場所ではない＝DD-5 と同じ考え方。定数は 3 つで id は 2 件なので、定数側に置くと対応が 1 対 1 にならない） | `\![set,zorder,スコープID,スコープID,...]`・`\![reset,zorder]` | 2 |
-| `crates/areka-sakura/src/sysvar.rs` の `resolve_system_var` の既定値の腕 | `%username` | 1 |
+| `crates/areka-sakura/src/sysvar.rs` の `resolve_system_var` の既定値の分岐（`if name == "username"`。この関数に `match` は 1 つも無い。2026-09-06 のタスク 5.1 の裁定で「腕」から訂正） | `%username` | 1 |
 | `crates/areka-ghost/src/sylphya_wiring.rs` の `derive_flat_statics` の 3 分岐（`keroname` は本体名への代替を含めて 2 か所で値を積むので、正典の `%keroname` そのものを積む側の 1 か所にだけ置く。同じ id の URL を 2 行書かない） | `%selfname`・`%selfname2`・`%keroname` | 3 |
 | 合計 | | **22** |
 
-`decode_tag` の `"_l"` の腕と `move_cue.rs` は `degraded` なので置かない。`lexer.rs` は DD-5 により 1 行も置かない。`crates/areka-sylphya/src/vocab/flat.rs` の語彙表にも置かない（要件 9.6）。触る 5 ファイルの現在の行数は 351／521／159／156／387 で、1 ファイル 1,000 行の上限から遠い（要件 9.7）。
+`decode_tag` の `"_l"` の腕と `move_cue.rs` は `degraded` なので置かない。`lexer.rs` は DD-5 により 1 行も置かない。`crates/areka-sylphya/src/vocab/flat.rs` の語彙表にも置かない（要件 9.6）。触る 5 ファイルの現在の行数は 351／521／159／156／**389** で、1 ファイル 1,000 行の上限から遠い（要件 9.7。2026-09-06 の rebase 後の実測。sylphya_wiring.rs は areka-P0-ukadoc-survey-property が置いた URL コメント 2 行の分だけ 387 → 389 に増えた）。
 
 ## File Structure Plan
 
