@@ -488,9 +488,9 @@ mod tests {
                 .all(|g| g.ch == 'あ' && g.advance == 10.0)
         );
 
-        // 行 1: 変換 = (0, 13)（pitch 分の平行移動）・ローカル 0 起点。
+        // 行 1: 変換 = (0, 12)（pitch 分の平行移動・font 10 + 行間 2）・ローカル 0 起点。
         let r1 = &canvas.residents[1];
-        assert_eq!(r1.transform.offset(), (0.0, 13.0));
+        assert_eq!(r1.transform.offset(), (0.0, 12.0));
         let run1 = glyph_run(r1);
         assert_eq!(run1.size, (10.0, 10.0));
         assert_eq!(run1.glyphs[0].inline_pos, 0.0);
@@ -509,11 +509,11 @@ mod tests {
             IMAGE,
             WritingMode::HorizontalTb,
         );
-        // layout 檻と同一幾何: font 10・6 グリフ → 行 1 は (100, 63) 起点。
+        // layout 檻と同一幾何: font 10・6 グリフ → 行送り 10 + 2 = 12 で行 1 は (100, 62) 起点。
         let (_, canvas) = canvas_for(&glyphs(6), &region, WritingMode::HorizontalTb, 10.0);
         assert_eq!(canvas.residents.len(), 2);
         assert_eq!(canvas.residents[0].transform.offset(), (100.0, 50.0));
-        assert_eq!(canvas.residents[1].transform.offset(), (100.0, 63.0));
+        assert_eq!(canvas.residents[1].transform.offset(), (100.0, 62.0));
         for resident in &canvas.residents {
             let run = glyph_run(resident);
             assert_eq!(run.glyphs[0].inline_pos, 0.0, "グリフは行ローカル 0 起点");
@@ -626,6 +626,12 @@ mod tests {
 
     /// ratio 付き改行の端数行送り（pitch 15 × 0.5 = 7.5）も平行移動へ端数のまま
     /// 転写される（整数量子化しない・端数檻——tasks.md Implementation Notes）。
+    ///
+    /// 行送りが `文字の大きさ + 行間 2` になったため、行送りが奇数になるのは
+    /// 文字の大きさが奇数のときだけで、そのときにしか半分の行送りに端数が出ない。
+    /// 従来の文字の大きさ 12 では行送り 14 となり `14 × 0.5 = 7.0` と整数になって、
+    /// このテストが主題にしている端数そのものが消える。そこで文字の大きさを
+    /// **13**（行送り `13 + 2 = 15`）へ導き直し、`15 × 0.5 = 7.5` の端数を保つ。
     #[test]
     fn fractional_line_feed_survives_in_translation() {
         let region = TextRegion::resolve(
@@ -640,7 +646,7 @@ mod tests {
             TextItem::LineBreak { ratio: 0.5 },
             TextItem::Glyph { ch: 'あ' },
         ];
-        let (_, canvas) = canvas_for(&items, &region, WritingMode::HorizontalTb, 12.0);
+        let (_, canvas) = canvas_for(&items, &region, WritingMode::HorizontalTb, 13.0);
         let offsets: Vec<(f32, f32)> = canvas
             .residents
             .iter()

@@ -1,0 +1,31 @@
+{
+  "feature_name": "areka-P0-ukadoc-survey-toolkit",
+  "created_at": "2026-09-02T12:06:10Z",
+  "updated_at": "2026-09-05T01:18:40Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-02T12:11:27Z",
+      "approved_at": "2026-09-02T13:40:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-02T13:45:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-03T00:00:00Z",
+      "approved_at": "2026-09-03T00:00:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-05T01:18:40Z"
+    }
+  },
+  "ready_for_implementation": true
+}

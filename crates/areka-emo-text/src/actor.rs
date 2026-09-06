@@ -27,8 +27,9 @@ use crate::choice::{
     ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, highlight_band_extent,
     to_window_physical,
 };
+use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DWriteMetrics, ResolvedFont};
-use crate::layout::{CursorWarnGuard, GlyphMetrics, LayoutEngine, WrapPlan};
+use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::segment::segment_plan;
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
@@ -222,8 +223,9 @@ pub struct TextLayerRuntime {
     /// k 再追従（[`TextLayerRuntime::refresh_actor_scale`]）は本 map の当該エントリだけを破棄し、
     /// 次フレームの再生成へ委ねる——純粋状態 `state` には触れない・R8.2/R8.3）。
     surfaces: HashMap<ActorKey, ActorRender>,
-    /// 調整値（line_pitch 係数）。reveal ペースは配送 duration 由来ゆえ char_wait は持たない
-    /// （本 config は `DWriteMetrics::new` の行送り算出にのみ使う）。
+    /// 調整値（行送りの行間 `line_gap`）。reveal ペースは配送 duration 由来ゆえ char_wait は
+    /// 持たない（本 config は `DWriteMetrics::new` の行送り算出にのみ使う）。
+    /// [`TextLayerRuntime::new`] で正規化済み——以降はこの値をそのまま配る。
     config: TextLayerConfig,
     /// 未解決 actor の warn を actor ごと初回のみに抑える記録（以降は debug!——
     /// design Error Handling「未 binding actor の cue」）。
@@ -234,7 +236,7 @@ pub struct TextLayerRuntime {
     /// actor → 提示フレーム同期ヒット行スナップショット（[`choice_hit_rows`](Self::choice_hit_rows)
     /// の照会源）。population は present_actor（task 8.2）が present 成功時に行う——本 task では空のまま。
     choice_snapshot: HashMap<ActorKey, Vec<ChoiceHitRow>>,
-    /// `\_l` カーソル換算縮退（6.5）の actor ごと warn-once 檻。present_actor が
+    /// `\_l` の座標解決の縮退（`CursorDegrade`＝`Unparsable`／`CenterAxisMismatch`・5.1〜5.3）の actor ごと warn-once 持続状態。present_actor が
     /// [`LayoutEngine::layout_with_cursor_warn`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
     /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
     cursor_warn: CursorWarnGuard,
@@ -242,13 +244,16 @@ pub struct TextLayerRuntime {
 
 impl TextLayerRuntime {
     /// 空のランタイムを構築する（COM 資源は初回解決フレームで World 資源から遅延構築）。
+    ///
+    /// 調整値はここで 1 度だけ正規化する（[`TextLayerConfig::normalized`]）——非有限・負の
+    /// 行間の縮退警告は構築時の 1 件だけで、以降は正規化済みの値を配る（R1.6）。
     pub fn new(config: TextLayerConfig) -> TextLayerRuntime {
         TextLayerRuntime {
             state: TextLayerState::default(),
             routing: HashMap::new(),
             layout_input: HashMap::new(),
             surfaces: HashMap::new(),
-            config,
+            config: config.normalized(),
             unresolved_warned: BTreeSet::new(),
             choice_hover: HashMap::new(),
             choice_snapshot: HashMap::new(),
@@ -469,7 +474,7 @@ impl TextLayerRuntime {
         &self.state
     }
 
-    /// 調整値（line_pitch 係数）。
+    /// 調整値（行送りの行間 `line_gap`・構築時に正規化済み）。
     pub fn config(&self) -> &TextLayerConfig {
         &self.config
     }
@@ -758,7 +763,7 @@ fn present_actor(
             WrapPlan::Segmented(&plan)
         }
     };
-    // `\_l` 換算縮退（6.5）の warn-once を production で有効化する持続 guard を渡す
+    // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
     // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ・task 4.2 が本配線へ委譲）。
     let lines = LayoutEngine::layout_with_cursor_warn(
         actor_state.items(),

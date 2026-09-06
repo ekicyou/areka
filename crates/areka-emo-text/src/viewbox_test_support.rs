@@ -10,7 +10,7 @@ use areka_parsers::balloon::{
 
 // ── 3.2 R2.2/3.2/3.3/4.2: ダーティ導出（露出帯 ∪ 変化行 ∪ 全域）の檻 ──
 //
-// 幾何の共通前提: FixedMetrics・font 10 → pitch 13（ceil(12.5)）・全角 1 グリフ/行。
+// 幾何の共通前提: FixedMetrics・font 10 → pitch 12（10 + 行間 2）・全角 1 グリフ/行。
 // 露出帯の辺は写像正準表（横書き＝下端・vertical_rl＝左端・vertical_lr＝右端）。
 
 /// テスト画像原寸（image px・他モジュール檻と同一値）。
@@ -99,10 +99,11 @@ pub(super) fn commit_initial(
     planner.commit(canvas, &w, mode, contract, &first);
 }
 
-/// `FramePlan::Update` から blit とダーティ矩形を取り出す（他 variant は panic）。
+/// `FramePlan::Update` から blit とダーティ**矩形**を取り出す（他 variant は panic）。
+/// 矩形ごとの交差行（[`super::DirtyRect::lines`]）は落とす——矩形の並びだけを見る檻の共通口。
 pub(super) fn expect_update(plan: &FramePlan) -> ((i32, i32), Vec<PhysicalRect>) {
     match plan {
-        FramePlan::Update { blit, dirty, .. } => (*blit, dirty.clone()),
+        FramePlan::Update { blit, dirty, .. } => (*blit, dirty.iter().map(|d| d.rect).collect()),
         other => panic!("Update を期待したが {other:?} が現れた"),
     }
 }

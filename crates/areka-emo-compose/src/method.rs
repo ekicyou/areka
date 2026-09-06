@@ -145,6 +145,8 @@ impl ComposeMethod {
         let canon = lower.replace(['-', '_'], "");
         match canon.as_str() {
             // overlay 同義群（ukadoc 同義明文）。
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#overlay:1
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#add:1
             "overlay" | "add" | "bind" => ComposeMethod::Overlay,
             "overlayfast" => ComposeMethod::OverlayFast,
             "interpolate" => ComposeMethod::Interpolate,

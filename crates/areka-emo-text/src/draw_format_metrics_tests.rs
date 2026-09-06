@@ -390,23 +390,28 @@ fn dwrite_metrics_caches_probed_advances() {
     assert_eq!(metrics.cached_probe_count(), 2);
 }
 
-/// line_pitch は M1 正準式 ceil(font_height × TextLayerConfig::line_pitch_factor)
+/// line_pitch は正典式 font_height + TextLayerConfig::line_gap
 /// ——FixedMetrics と同じ正本（trait doc）に従う。
 #[test]
 fn dwrite_metrics_line_pitch_follows_config_canon() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
-    assert_eq!(metrics.line_pitch(12.0), 15.0);
-    assert_eq!(metrics.line_pitch(10.0), 13.0, "12.5 → ceil 13");
-    // 係数は config が正本——非既定係数も反映される。
+    assert_eq!(metrics.line_pitch(12.0), 14.0, "12 + 2 = 14");
+    assert_eq!(metrics.line_pitch(10.0), 12.0, "10 + 2 = 12");
+    // 行間は config が正本——既定（2）以外の行間も反映される。
+    // 既定と同じ 2 を入れると差が出ず検査が空振りになるため、非既定の 5 を使う。
     let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
     let config = TextLayerConfig {
-        line_pitch_factor: 2.0,
+        line_gap: 5.0,
         ..TextLayerConfig::default()
     };
-    let doubled = DWriteMetrics::new(&factory, &resolved, WritingMode::HorizontalTb, &config)
-        .expect("非既定係数でも生成が成立する");
-    assert_eq!(doubled.line_pitch(10.0), 20.0);
+    let widened = DWriteMetrics::new(&factory, &resolved, WritingMode::HorizontalTb, &config)
+        .expect("非既定の行間でも生成が成立する");
+    assert_eq!(
+        widened.line_pitch(10.0),
+        15.0,
+        "非既定の行間 5: 10 + 5 = 15（既定 2 なら 12 で赤）"
+    );
 }
 
 /// line_box_height は**実 font face metrics**（`ascent + descent`）由来——

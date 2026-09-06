@@ -53,17 +53,20 @@ pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
 
     // %selfname＝sakura.name（R4.3）。未定義→積まない（素通し縮退）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25selfname:1
     if let Some(v) = &names.sakura_name {
         out.push(("selfname".to_string(), v.clone()));
     }
 
     // %selfname2＝sakura.name2（R4.4）。未定義→積まない（素通し縮退・対応表 ②）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25selfname2:1
     if let Some(v) = &names.sakura_name2 {
         out.push(("selfname2".to_string(), v.clone()));
     }
 
     // %keroname＝kero.name。未定義なら sakura.name へフォールバック（SSP 互換・R4.5・対応表 ③）。
     // 両者未定義なら積まない（素通し縮退）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25keroname:1
     if let Some(v) = &names.kero_name {
         out.push(("keroname".to_string(), v.clone()));
     } else if let Some(v) = &names.sakura_name {
@@ -123,7 +126,9 @@ pub fn publish_ghost_statics(
 ) {
     let flat = derive_flat_statics(names);
     let dotted = vec![
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#baseware.name:1
         ("baseware.name".to_string(), BASEWARE_NAME.to_string()),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#baseware.version:1
         ("baseware.version".to_string(), baseware_version.to_string()),
     ];
     publisher.publish_static(asker, flat, dotted);

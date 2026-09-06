@@ -42,6 +42,7 @@
 /// 値は先頭 `%` を持たない SHIORI リソース ID（照会時の `ID:` ヘッダ値）。テンプレート形
 /// （`char*` ワイルドカードや `(入力ボックス種類)` プレースホルダ）は正典の表記のまま
 /// 1 エントリとして保持する（1 dt = 1 エントリ）。
+/// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html
 pub const SHIORI_RESOURCE_IDS: &[&str] = &[
     // --- SHIORI 情報 5 ---
     "version",

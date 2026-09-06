@@ -95,26 +95,31 @@ pub fn build_request(req: &ShioriRequest) -> Vec<u8> {
     };
 
     let mut out = String::new();
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#_30e1_30bd_30c3_30c9:1
     out.push_str(request_line);
     out.push_str("\r\n");
     out.push_str("Charset: ");
     out.push_str(req.charset.header_value());
     out.push_str("\r\n");
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Sender:1
     out.push_str("Sender: ");
     out.push_str(req.sender);
     out.push_str("\r\n");
     // `Status` は `Sender` の後・`ID` の前（DD-IT-6）。`None` は行ごと省略（要件 2.3）。
     // 値は解釈せず verbatim に転記する（語彙は kanade が所有・DD-IT-6）。
     if let Some(status) = req.status {
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Status_20_5bSSP_62e1_5f35_5d:1
         out.push_str("Status: ");
         out.push_str(status);
         out.push_str("\r\n");
     }
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#ID:1
     out.push_str("ID: ");
     out.push_str(req.id);
     out.push_str("\r\n");
     for (n, reference) in req.references.iter().enumerate() {
         // Reference0..N（0 起点連番・要件 1.4）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Reference_2a:1
         out.push_str("Reference");
         out.push_str(&n.to_string());
         out.push_str(": ");
@@ -193,6 +198,7 @@ pub fn parse_response(
 
     // status 行（先頭行）から数値コードを抽出。取れなければ malformed。
     let status_line = lines.next().ok_or(ShioriError::Parse)?;
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#_30b9_30c6_30fc_30bf_30b9_30b3_30fc_30c9:1
     let status = parse_status_code(status_line).ok_or(ShioriError::Parse)?;
 
     let mut value = None;
@@ -208,10 +214,13 @@ pub fn parse_response(
         let val = val.trim();
         // ヘッダ名一致は大文字小文字無視（堅牢性）。既知ヘッダ以外は無視（要件 2.8）。
         if name.eq_ignore_ascii_case("Value") {
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Value:1
             value = Some(val.to_string());
         } else if name.eq_ignore_ascii_case("ErrorLevel") {
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#ErrorLevel_20_5bSSP_62e1_5f35_5d:1
             error_level = Some(val.to_string());
         } else if name.eq_ignore_ascii_case("ErrorDescription") {
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#ErrorDescription_20_5bSSP_62e1_5f35_5d:1
             error_description = Some(val.to_string());
         }
         // Charset / Reference0 / Marker / 未知ヘッダ等は読み飛ばす（要件 2.6/2.8）。

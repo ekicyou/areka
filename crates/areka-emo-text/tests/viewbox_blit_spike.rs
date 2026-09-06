@@ -63,16 +63,16 @@ use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
 use wintf::ecs::GraphicsCore;
 
-// ── 幾何定数（k=1.0・image px ＝物理 px。line_pitch(12)=15＝ceil(12×1.25) を 1 行スクロール量 N とする） ──
+// ── 幾何定数（k=1.0・image px ＝物理 px。line_pitch(12)=14＝12+行間 2 を 1 行スクロール量 N とする） ──
 
 /// 供給面（描画面）の物理寸。content が余裕を持って収まり、blit の露出帯／保持域が
 /// 明確に分かれる寸を採る。
 const W: u32 = 200;
 const H: u32 = 120;
 
-/// 1 行ぶんのスクロール blit 量（whole-pixel 整数）。`DWriteMetrics::line_pitch(12)==15`
-/// （既定 ＭＳ ゴシック 12px・`ceil(12×1.25)`）と一致させ、行を跨ぐ整数平行移動を作る。
-const N: u32 = 15;
+/// 1 行ぶんのスクロール blit 量（whole-pixel 整数）。`DWriteMetrics::line_pitch(12)==14`
+/// （既定 ＭＳ ゴシック 12px・`12 + 行間 2`）と一致させ、行を跨ぐ整数平行移動を作る。
+const N: u32 = 14;
 
 /// GO 機械判定の境界許容（保持域の中心核が一致することの主檻）。保持域を全辺 CORE_SHRINK px
 /// 縮めた核が byte 完全一致することを要求する。位相不変が破れれば核の内部にも不一致が広がり
@@ -83,9 +83,9 @@ const CORE_SHRINK: u32 = 4;
 /// 数行パターン（全角＋半角混在の数文字）。同一 TextLayout を A/B 双方の描画で共有する。
 const LINES: [&str; 4] = ["あA1む", "いB2ね", "うC3を", "えD4か"];
 
-/// 各行の行送り軸オフセット（block 位置・image px）。行送りピッチ N と一致させ、
-/// N の整数平行移動がちょうど 1 行ぶんのスクロールに対応するようにする。
-const BLOCK_POS: [f32; 4] = [10.0, 25.0, 40.0, 55.0];
+/// 各行の行送り軸オフセット（block 位置・image px）。行送りピッチ N（=14）と一致させ、
+/// N の整数平行移動がちょうど 1 行ぶんのスクロールに対応するようにする（10 起点で 14 刻み）。
+const BLOCK_POS: [f32; 4] = [10.0, 24.0, 38.0, 52.0];
 
 /// 行内軸の開始位置（image px）。左右端（横書き）・上下端（縦書き）から離し、
 /// 露出帯以外での端 AA を排除する。

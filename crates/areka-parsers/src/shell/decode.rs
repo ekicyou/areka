@@ -385,6 +385,7 @@ fn animation_slot(animations: &mut Vec<Animation>, id: u32) -> &mut Animation {
 fn normalize_interval(fields: &[String]) -> Interval {
     match fields.get(1).map(String::as_str) {
         Some("bind") => Interval::Bind,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#random_2c_6570_5024:1
         Some("random") => Interval::Random {
             k: field_u32(fields, 2),
         },
@@ -498,6 +499,7 @@ fn decode_sort_key(shell: &mut Shell, fields: &[String]) {
         _ => None,
     };
     match key {
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#animation-sort_2c_30bd_30fc_30c8_9806_5e8f:1
         "animation-sort" => shell.animation_sort = order,
         "collision-sort" => shell.collision_sort = order,
         _ => {}

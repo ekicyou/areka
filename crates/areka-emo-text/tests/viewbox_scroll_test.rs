@@ -29,9 +29,10 @@
 //!
 //! ## 幾何（決定論・ブロック軸は整数格子で厳密）
 //!
-//! 既定フォント（ＭＳ ゴシック 12px）→ 行送り pitch = `ceil(12 × 1.25)` = 15。validrect＝画像全域
-//! （物理供給面 100×120）。行 i の下端 = `i×15 + 12` ≤ 120 を満たすのは i = 0..7 の 8 行＝可視行数
-//! V＝8。行 8 の下端 132 > 120 であふれ、1 行ぶん（block_offset −15）スクロールする。ブロック軸の
+//! 既定フォント（ＭＳ ゴシック 12px）→ 行送り pitch = 字の丈 12 ＋ 行間 2 = 14。validrect＝画像全域
+//! （物理供給面 100×120）。行 i の下端 = `i×14 + 12` ≤ 120 を満たすのは i = 0..7 の 8 行＝可視行数
+//! V＝8（行 7 は 110 ≤ 120）。行 8 の下端 124 > 120 であふれ、1 行ぶん（block_offset −14）
+//! スクロールする。ブロック軸の
 //! 行寸は layout の `font_height`（12）由来で DirectWrite 実測に依存しない（行内軸の送り幅のみ実測
 //! 依存だが、1 行 1 グリフ＋明示改行ゆえ折返しに影響しない）。
 
@@ -63,13 +64,16 @@ use wintf_winmsg_executor::{FilterResult, MessageLoop};
 const IMAGE: (u32, u32) = (100, 120);
 /// 既定フォント高さ（image px・ＭＳ ゴシック 12px）。
 const FONT_H: u32 = 12;
-/// 行送りピッチ ＝ ceil(12 × 1.25) ＝ 15（block-axis・整数）。
-const PITCH: u32 = 15;
+/// 行送りピッチ ＝ 字の丈 12 ＋ 行間 2 ＝ 14（block-axis・整数）。
+const PITCH: u32 = 14;
 /// 充填フレームで並べる可視行数（あふれ前の上限＝可視行数 V）。
-/// 行 i 下端 = i×15+12 ≤ 120（validrect 高）を満たすのは i=0..7 の 8 行。
+/// 行 i 下端 = i×14+12 ≤ 120（validrect 高）を満たすのは i=0..7 の 8 行（行 7 は 110 ≤ 120・
+/// 行 8 は 124 > 120）。旧ピッチ 15 でも 8 行（117 ≤ 120・132 > 120）——**行数は偶然一致する**
+/// だけで、根拠の式は 15 の等差から 14 の等差へ変わっている。
 const FILL_LINES: usize = 8;
-/// 露出帯交差行の tight bound（実測 2 ＝ 露出帯矩形＋変化行矩形の 2 dirty × 変化行 1）。
-/// 露出帯は概ね 1 行 pitch 高ゆえ交差は「あふれで流入した変化行」だけに限られる。
+/// 露出帯交差行の tight bound（実測 2）。増分は**ダーティ矩形ごとの交差行数の和**で数える。
+/// 内訳は「露出帯の矩形 ∩ 1 行」＋「変化行の矩形 ∩ 1 行」＝ 1 + 1 ——露出帯は概ね 1 行 pitch 高
+/// ゆえ交差は「あふれで流入した変化行」だけに限られ、2 枚とも同じその 1 行に交差する。
 const EXPOSURE_BAND_DRAW_BOUND: u64 = 3;
 /// 全 emit グリフが可視な注入時刻（reveal 時刻は ≤ 0.5s ゆえ 100.0 で必ず全可視＝
 /// フレーム間差はスクロール／内容変化のみに帰着し、リビール進行が混ざらない）。
@@ -252,7 +256,7 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
 
     // ── 条件 2（可視窓移動＝スクロールフレーム）: 行 8 を追記して 1 行あふれさせる ──
     let before_scroll = stats(&runtime, &actor);
-    emit_line(&mut sink, FILL_LINES); // 行 index 8（下端 132 > 120 であふれ）。
+    emit_line(&mut sink, FILL_LINES); // 行 index 8（下端 8×14+12 = 124 > 120 であふれ）。
     pump_until_idle();
     present(&runtime, &mut world, FULLY_REVEALED);
     let after_scroll = stats(&runtime, &actor);
@@ -280,7 +284,7 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
         "再描画レス(fixture依存 tight check): スクロールフレームの DrawTextLayout 増分 {draw_delta} は可視行数 {visible_line_count} より厳密に小さい（全域再描画なら {visible_line_count}）"
     );
     // tight bound: 露出帯は概ね 1 行 pitch 高＝交差は「あふれで流入した変化行」だけ。
-    // 実測 2（露出帯矩形＋変化行矩形の 2 dirty × 変化行 1 の DrawTextLayout）。
+    // 実測 2 ＝ 露出帯の矩形 ∩ 1 行 ＋ 変化行の矩形 ∩ 1 行（矩形ごとの交差行数の和）。
     assert!(
         draw_delta <= EXPOSURE_BAND_DRAW_BOUND,
         "DrawTextLayout 増分 {draw_delta} は露出帯交差行の tight bound {EXPOSURE_BAND_DRAW_BOUND} 以下（露出帯 ∪ 変化行に限定）"
@@ -340,7 +344,7 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
 
     // ── 再描画レスの fixture 非依存な決定的不変（G3・脆弱な `< visible_line_count` に依存しない）──
     // 上の `< visible_line_count` は可視 8 行 fixture でしか成立しない（可視 2〜3 行の小 fixture では
-    // draw_delta＝dirty_len×draws が可視行数に達し得る）。以下は fixture の可視行数に依らず成立する
+    // draw_delta＝矩形ごとの交差行数の和が可視行数に達し得る）。以下は fixture の可視行数に依らず成立する
     // 再描画レスの決定的証拠であり、これらが本檻の真の負のコントロールである:
     //   (a) blit==+1（上で assert 済み）: viewbox は確定ピクセルを面内 blit で保持する。全域再描画は
     //       保持せず毎フレーム描き直す＝blit 0。全域再描画へ戻すと blits +1 assert が fixture に依らず落ちる。

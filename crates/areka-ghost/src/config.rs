@@ -12,6 +12,7 @@ use areka_parsers::package::MountModel;
 /// shell descript のファイル名（`{shell.dir}/descript.txt`）。
 const SHELL_DESCRIPT_FILE: &str = "descript.txt";
 /// shell descript の name キー（OnBoot Reference0＝「起動時のシェル名」・ukadoc）。
+/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#name_2c_30b7_30a7_30eb_540d:1
 const SHELL_NAME_KEY: &str = "name";
 
 /// `MountModel` と shell descript から `KanadeConfig` を解決する（純関数・I/O は

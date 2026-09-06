@@ -9,9 +9,11 @@ use crate::writing::WritingMode;
 /// （判定は `>`・境界檻）。
 #[test]
 fn horizontal_within_region_does_not_scroll() {
-    // validrect top0/bottom36: 3 行の下端 10/23/36——3 行目はちょうど 36。
+    // validrect top0/bottom34: 3 行の下端 10/22/34——3 行目はちょうど 34。
+    // 境界は「3 行ちょうどが収まる」意図を保つため 36（旧 pitch 13 の 3 行目下端）から
+    // 34（新 pitch 12 の 3 行目下端）へ導き直した。
     let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
         WritingMode::HorizontalTb,
     );
@@ -29,27 +31,29 @@ fn horizontal_within_region_does_not_scroll() {
 /// 内容は上（−y）へ pitch 分オフセットする。行単位＝オフセットは行位置差そのもの。
 #[test]
 fn horizontal_overflow_scrolls_vertically_by_whole_lines() {
+    // 境界 34 は「3 行ちょうどが収まる」新格子の値（旧格子の 36 のままだと
+    // 最小スキップ後の下端が境界ちょうどにならず、最小性の意図が消える）。
     let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
         WritingMode::HorizontalTb,
     );
-    // 4 行目の下端 49 > 36 → 1 行スキップで 49-13=36 ≤ 36（最小スキップ檻）。
+    // 4 行目の下端 46 > 34 → 1 行スキップで 46-12=34 ≤ 34（最小スキップ檻）。
     let one_over = window_for(&broken_lines(4), &region, WritingMode::HorizontalTb, 10.0);
     assert_eq!(
         one_over,
         VisibleWindow {
             first_visible_line: 1,
-            block_offset: -13.0
+            block_offset: -12.0
         }
     );
-    // 6 行（最新行下端 75）→ 3 行スキップ（75-39=36）・オフセット −39。
+    // 6 行（最新行下端 70）→ 3 行スキップ（70-36=34）・オフセット −36。
     let three_over = window_for(&broken_lines(6), &region, WritingMode::HorizontalTb, 10.0);
     assert_eq!(
         three_over,
         VisibleWindow {
             first_visible_line: 3,
-            block_offset: -39.0
+            block_offset: -36.0
         }
     );
 }
@@ -58,7 +62,7 @@ fn horizontal_overflow_scrolls_vertically_by_whole_lines() {
 /// 内容は右（+x）へオフセットする（古い列が右端から消える——正準表）。
 #[test]
 fn vertical_rl_overflow_scrolls_content_rightward() {
-    // validrect left360/right400。列の左端 390/377/364/351——4 列目 351 < 360。
+    // validrect left360/right400。列の左端 390/378/366/354——4 列目 354 < 360。
     let region = TextRegion::resolve(
         &model_rect((None, None), (Some(0), Some(224), Some(360), Some(400))),
         IMAGE,
@@ -73,7 +77,7 @@ fn vertical_rl_overflow_scrolls_content_rightward() {
         over,
         VisibleWindow {
             first_visible_line: 1,
-            block_offset: 13.0
+            block_offset: 12.0
         }
     );
 }
@@ -82,7 +86,7 @@ fn vertical_rl_overflow_scrolls_content_rightward() {
 /// 内容は左（−x）へオフセットする（正準表）。
 #[test]
 fn vertical_lr_overflow_scrolls_content_leftward() {
-    // validrect left0/right40。列の右端 10/23/36/49——4 列目 49 > 40。
+    // validrect left0/right40。列の右端 10/22/34/46——4 列目 46 > 40。
     let region = TextRegion::resolve(
         &model_rect((None, None), (Some(0), Some(224), Some(0), Some(40))),
         IMAGE,
@@ -96,7 +100,7 @@ fn vertical_lr_overflow_scrolls_content_leftward() {
         over,
         VisibleWindow {
             first_visible_line: 1,
-            block_offset: -13.0
+            block_offset: -12.0
         }
     );
 }
@@ -105,7 +109,7 @@ fn vertical_lr_overflow_scrolls_content_leftward() {
 #[test]
 fn empty_lines_yield_default_window() {
     let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
         WritingMode::HorizontalTb,
     );
@@ -123,7 +127,7 @@ fn empty_lines_yield_default_window() {
 /// （最新行は常に可視・行を失わない縮退規則）。
 #[test]
 fn all_lines_overflowing_saturates_to_newest_line() {
-    // font 50 → pitch 63・行下端 50/113/176 は全て validrect.bottom 40 超過。
+    // font 50 → pitch 52・行下端 50/102/154 は全て validrect.bottom 40 超過。
     let region = TextRegion::resolve(
         &model_rect((Some(0), Some(0)), (Some(0), Some(40), Some(0), Some(400))),
         IMAGE,
@@ -134,7 +138,7 @@ fn all_lines_overflowing_saturates_to_newest_line() {
         window,
         VisibleWindow {
             first_visible_line: 2,
-            block_offset: -126.0
+            block_offset: -104.0
         }
     );
     // 1 行だけで領域より厚い場合も先頭 0・オフセット 0（それ以上戻せない）。
@@ -150,6 +154,9 @@ fn all_lines_overflowing_saturates_to_newest_line() {
 
 /// ratio 付き改行の端数行送り（pitch 15 × 0.5 = 7.5）でもオフセットは
 /// 実際の行位置差＝端数そのもの（整数量子化しない・端数檻）。
+/// 新式 `pitch = font + 行間 2` では ratio 0.5 が端数を生むのは pitch が奇数のとき
+/// ＝font が奇数のときなので、font 12（pitch 14・送り 7.0 で端数が消える）から
+/// font 13（pitch 15・送り 7.5）へ導き直した——「端数」という意図を残すため。
 #[test]
 fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
     let region = TextRegion::resolve(
@@ -157,7 +164,8 @@ fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
         IMAGE,
         WritingMode::HorizontalTb,
     );
-    // font 12 → pitch 15。ratio 0.5 区切り 4 行: 上端 0/7.5/15/22.5・下端 …/34.5 > 30。
+    // font 13 → pitch 15（13 + 行間 2）。ratio 0.5 区切り 4 行:
+    // 上端 0/7.5/15/22.5・下端 13/20.5/28/35.5——最新行 35.5 > 30。
     let items = [
         TextItem::Glyph { ch: 'あ' },
         TextItem::LineBreak { ratio: 0.5 },
@@ -167,7 +175,7 @@ fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
         TextItem::LineBreak { ratio: 0.5 },
         TextItem::Glyph { ch: 'あ' },
     ];
-    let window = window_for(&items, &region, WritingMode::HorizontalTb, 12.0);
+    let window = window_for(&items, &region, WritingMode::HorizontalTb, 13.0);
     assert_eq!(
         window,
         VisibleWindow {
@@ -183,11 +191,11 @@ fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
 #[test]
 fn trailing_pending_newline_does_not_trigger_overflow() {
     let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
         WritingMode::HorizontalTb,
     );
-    // 3 行（下端 10/23/36——ちょうど収まる）＋末尾改行は保留のまま蒸発＝空 4 行目を
+    // 3 行（下端 10/22/34——ちょうど収まる）＋末尾改行は保留のまま蒸発＝空 4 行目を
     // 開かないためあふれ入力に現れない。
     let mut items = broken_lines(3);
     items.push(TextItem::LineBreak { ratio: 1.0 });
@@ -206,7 +214,7 @@ fn trailing_pending_newline_does_not_trigger_overflow() {
 #[test]
 fn visible_window_same_input_yields_identical_output() {
     let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
         WritingMode::HorizontalTb,
     );

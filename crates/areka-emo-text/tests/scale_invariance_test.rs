@@ -333,11 +333,11 @@ fn physical_extent_ceils_fractional_values_killing_round_and_floor() {
 ///
 /// 一致だけの空虚な檻にしないため、絶対値も固定する: 自動折返し（閾値 351・font 40 で
 /// 7 グリフ/行）・明示改行・3 行あふれ→縦スクロール（first_visible_line=1・
-/// block_offset=−50）まで通しで効いていること。
+/// block_offset=−42）まで通しで効いていること。
 #[test]
 fn layout_decision_is_scale_independent_for_horizontal_text() {
     // fixture 実測: validrect (36,46)-(356,168)・折返し閾値 400-49=351・
-    // origin は未宣言＝書字開始角 (36,46) から書き始める。font 40 → pitch ceil(50)=50。
+    // origin は未宣言＝書字開始角 (36,46) から書き始める。font 40 → pitch 40+2=42。
     let m = model(
         (None, None),
         (Some(-49), Some(0)),
@@ -388,9 +388,9 @@ fn layout_decision_is_scale_independent_for_horizontal_text() {
         full.window,
         VisibleWindow {
             first_visible_line: 1,
-            block_offset: -50.0
+            block_offset: -42.0
         },
-        "3 行目の下端 186 > 168（bottom,-56 の反対辺解決）で縦スクロール発火（横書き）"
+        "3 行目の下端 46+2×42+40=170 > 168（bottom,-56 の反対辺解決）で縦スクロール発火（横書き）"
     );
 }
 
@@ -462,15 +462,16 @@ fn same_image_size_yields_identical_layout_regardless_of_scale() {
 /// レイアウト決定（列送り・横スクロール可視窓）が k=1.0/1.25/2.0 でビット一致する。
 /// あふれ境界の辺は**負値（反対辺基準）**で与える（rl: left,-40→360・lr: right,-360→40）
 /// ——解決が画像原寸に依存するため k 混入の変異はスクロール発火の差として赤くなる。
-/// 絶対値の檻: vertical_rl は最新列の左端 351 < validrect.left 360 で内容が右（+13）へ、
-/// vertical_lr は最新列の右端 49 > validrect.right 40 で内容が左（−13）へ
+/// 絶対値の檻（font 10 → 列送り 10+2=12）: vertical_rl は最新列の左端 400−10−3×12=354
+/// < validrect.left 360 で内容が右（+12）へ、vertical_lr は最新列の右端 10+3×12=46 >
+/// validrect.right 40 で内容が左（−12）へ
 /// （layout.rs の檻と同一の解決後幾何・軸読み替え正準表）。
 #[test]
 fn layout_decision_is_scale_independent_for_vertical_modes() {
     // (writing_mode, validrect(top,bottom,left,right)・境界辺は負値, 期待オフセット)。
     let cases: [(&str, (i32, i32, i32, i32), f32); 2] = [
-        ("vertical_rl", (0, 224, -40, 400), 13.0),
-        ("vertical_lr", (0, 224, 0, -360), -13.0),
+        ("vertical_rl", (0, 224, -40, 400), 12.0),
+        ("vertical_lr", (0, 224, 0, -360), -12.0),
     ];
     // 4 列（各列 全角 1 グリフ・明示改行区切り）——4 列目であふれ発火する幾何。
     let mut items = Vec::new();

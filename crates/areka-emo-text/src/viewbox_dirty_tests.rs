@@ -19,18 +19,18 @@ fn visible_window_only_move_horizontal_dirties_bottom_band_only() {
     );
     // 前回確定＝同一 canvas の指紋（canvas-local ゆえスクロール非依存）。
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    // 内容を動かさず block_offset だけ −13（内容が上へ）・blit も同量。
+    // 内容を動かさず block_offset だけ −12（内容が上へ・行送り 10 + 2）・blit も同量。
     let (dirty, _draw) = ScrollPlanner::derive_dirty(
         &canvas,
-        &window(1, -13.0),
+        &window(1, -12.0),
         WritingMode::HorizontalTb,
         &contract,
-        (0, -13),
+        (0, -12),
         (400, 100),
         &prev,
     );
-    // 下端の露出帯 {0,87,400,13} をガード 1px で拡張＋クランプ → {0,86,400,14}。
-    assert_eq!(dirty, vec![phys(0, 86, 400, 14)], "露出帯のみ・変化行ゼロ");
+    // 下端の露出帯 {0,88,400,12} をガード 1px で拡張＋クランプ → {0,87,400,13}。
+    assert_eq!(dirty, vec![phys(0, 87, 400, 13)], "露出帯のみ・変化行ゼロ");
 }
 
 /// vertical_rl で可視窓のみ移動 → dirty は左端露出帯のみ（行が左へ流れる）。
@@ -44,18 +44,18 @@ fn visible_window_only_move_vertical_rl_dirties_left_band_only() {
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::VerticalRl);
-    // vertical_rl＝内容が右（正）・blit も +13（左端が露出）。
+    // vertical_rl＝内容が右（正）・blit も +12（左端が露出）。
     let (dirty, _draw) = ScrollPlanner::derive_dirty(
         &canvas,
-        &window(1, 13.0),
+        &window(1, 12.0),
         WritingMode::VerticalRl,
         &contract,
-        (13, 0),
+        (12, 0),
         (100, 200),
         &prev,
     );
-    // 左端の露出帯 {0,0,13,200} をガード拡張＋クランプ → {0,0,14,200}。
-    assert_eq!(dirty, vec![phys(0, 0, 14, 200)], "左端露出帯のみ");
+    // 左端の露出帯 {0,0,12,200} をガード拡張＋クランプ → {0,0,13,200}。
+    assert_eq!(dirty, vec![phys(0, 0, 13, 200)], "左端露出帯のみ");
 }
 
 /// vertical_lr で可視窓のみ移動 → dirty は右端露出帯のみ（行が右へ流れる）。
@@ -69,18 +69,18 @@ fn visible_window_only_move_vertical_lr_dirties_right_band_only() {
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::VerticalLr);
-    // vertical_lr＝内容が左（負）・blit も −13（右端が露出）。
+    // vertical_lr＝内容が左（負）・blit も −12（右端が露出）。
     let (dirty, _draw) = ScrollPlanner::derive_dirty(
         &canvas,
-        &window(1, -13.0),
+        &window(1, -12.0),
         WritingMode::VerticalLr,
         &contract,
-        (-13, 0),
+        (-12, 0),
         (100, 200),
         &prev,
     );
-    // 右端の露出帯 {87,0,13,200} をガード拡張＋クランプ → {86,0,14,200}。
-    assert_eq!(dirty, vec![phys(86, 0, 14, 200)], "右端露出帯のみ");
+    // 右端の露出帯 {88,0,12,200} をガード拡張＋クランプ → {87,0,13,200}。
+    assert_eq!(dirty, vec![phys(87, 0, 13, 200)], "右端露出帯のみ");
 }
 
 // ── R3.3: typewriter 進行（現在行の text 伸長）→ dirty＝現在行のみ ──
@@ -322,12 +322,12 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
     assert_eq!(v_em.len(), 1);
     assert_eq!(v_over.len(), 1);
     assert_eq!(
-        v_over[0].h, v_em[0].h,
+        v_over[0].rect.h, v_em[0].rect.h,
         "縦書きは top/bottom（Y）を無視——高さ（行内軸）は overhang で変わらない"
     );
     assert_eq!(
-        v_over[0].w,
-        v_em[0].w + 4,
+        v_over[0].rect.w,
+        v_em[0].rect.w + 4,
         "縦書きは right（X）でブロック軸（列幅）が実測はみ出し分だけ広がる"
     );
 }
@@ -371,8 +371,8 @@ fn confirmed_line_is_excluded_from_dirty_and_draw() {
         (400, 100),
         &prev,
     );
-    // 行1「いろ」{0,13,20,10} をガード拡張 → {0,12,21,12}（overhang 無し＝em 箱丈）。行0 は現れない。
-    assert_eq!(dirty, vec![phys(0, 12, 21, 12)], "変化行（末尾）のみ");
+    // 行1「いろ」{0,12,20,10} をガード拡張 → {0,11,21,12}（overhang 無し＝em 箱丈）。行0 は現れない。
+    assert_eq!(dirty, vec![phys(0, 11, 21, 12)], "変化行（末尾）のみ");
     assert_eq!(draw, vec![1], "確定行 0 は draw から除外される");
 }
 
@@ -395,8 +395,8 @@ fn catchup_and_new_lines_union_of_changed_lines() {
         (400, 100),
         &prev,
     );
-    // 行2 {0,26,10,10}→{0,25,11,12}・行3 {0,39,10,10}→{0,38,11,12}（overhang 無し）。行0/1 は不変。
-    assert_eq!(dirty, vec![phys(0, 25, 11, 12), phys(0, 38, 11, 12)]);
+    // 行2 {0,24,10,10}→{0,23,11,12}・行3 {0,36,10,10}→{0,35,11,12}（overhang 無し）。行0/1 は不変。
+    assert_eq!(dirty, vec![phys(0, 23, 11, 12), phys(0, 35, 11, 12)]);
     assert_eq!(draw, vec![2, 3], "新規 2 行のみ描画対象");
 }
 
@@ -486,38 +486,39 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
     assert!(
         dirty
             .iter()
-            .all(|r| r.x + r.w <= surface.0 && r.y + r.h <= surface.1),
+            .all(|r| r.rect.x + r.rect.w <= surface.0 && r.rect.y + r.rect.h <= surface.1),
         "全ダーティ矩形は面寸を越えない"
     );
 
-    // (c) 端の露出帯もクランプされる（下端 by=-13）。
+    // (c) 端の露出帯もクランプされる（下端 by=-12）。
     let scroll_canvas = canvas_for(&broken_lines(4), WritingMode::HorizontalTb, vr, 10.0);
     let scroll_prev = ScrollPlanner::committed_lines(&scroll_canvas, WritingMode::HorizontalTb);
     let (band, _) = ScrollPlanner::derive_dirty(
         &scroll_canvas,
-        &window(1, -13.0),
+        &window(1, -12.0),
         WritingMode::HorizontalTb,
         &contract,
-        (0, -13),
+        (0, -12),
         surface,
         &scroll_prev,
     );
-    // 下端露出帯 {0,112,500,13}・ガード 2 → {-2,110,502,127}・クランプ → {0,110,500,15}。
+    // 下端露出帯 {0,113,500,12}・ガード 2（x/y を 2 減らし w/h を 4 増やす＝下端 127）・
+    // 面寸 125 でクランプ → {0,111,500,14}。
     assert_eq!(
         band,
-        vec![phys(0, 110, 500, 15)],
+        vec![phys(0, 111, 500, 14)],
         "端の露出帯はクランプされる"
     );
     assert!(
         band.iter()
-            .all(|r| r.x + r.w <= surface.0 && r.y + r.h <= surface.1),
+            .all(|r| r.rect.x + r.rect.w <= surface.0 && r.rect.y + r.rect.h <= surface.1),
         "露出帯も面寸を越えない"
     );
 }
 
 // ── back 全被覆の素朴檻: blit 写域 ∪ dirty ＝ 面全域（ブロック軸） ──
 
-/// 横書きスクロール（by=-13）で blit 写域（保持ピクセルの移動先）と dirty（露出帯）の
+/// 横書きスクロール（by=-12＝行送り 1 行分）で blit 写域（保持ピクセルの移動先）と dirty（露出帯）の
 /// 和がブロック軸（y）全域を隙間なく覆う（残像漏れの構造檻・簡易ケース）。
 #[test]
 fn back_is_fully_covered_by_blit_and_dirty_horizontal() {
@@ -530,10 +531,10 @@ fn back_is_fully_covered_by_blit_and_dirty_horizontal() {
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    let blit = (0i32, -13i32);
+    let blit = (0i32, -12i32);
     let (dirty, _) = ScrollPlanner::derive_dirty(
         &canvas,
-        &window(1, -13.0),
+        &window(1, -12.0),
         WritingMode::HorizontalTb,
         &contract,
         blit,
@@ -544,7 +545,7 @@ fn back_is_fully_covered_by_blit_and_dirty_horizontal() {
     let by = blit.1.unsigned_abs();
     let mut spans = vec![(0u32, surface.1 - by)];
     for r in &dirty {
-        spans.push((r.y, r.y + r.h)); // 横書きのブロック軸＝y
+        spans.push((r.rect.y, r.rect.y + r.rect.h)); // 横書きのブロック軸＝y
     }
     assert!(
         covers_block_axis_fully(spans, surface.1),
@@ -579,4 +580,196 @@ fn committed_lines_are_scroll_independent() {
     let a = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
     let b = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
     assert_eq!(a, b, "同一 canvas の指紋は決定論的に一致");
+}
+
+/// スクロールアウトした行の残滓（要件 7.4・R-2 の回帰檻）: 行送りが「字の丈 ＋ 行間 2px」に
+/// なったため、行と行の隙間は 2px しかない。下端のはみ出しインクがそれより大きいフォント
+/// （Yu Gothic UI 28px は実測 3px）では、可視窓の外へ出た行の下端インクが blit 後の面内に残る。
+///
+/// font 10・pitch 12（10 + 2）・4 行を 1 行ぶん（−12）スクロールした場面で確かめる。
+/// - はみ出し 0: 可視窓の外の行の em ボックス（−12..−2）は面の外＝残滓なし。ダーティは露出帯のみ。
+/// - はみ出し 下 3: 行 0 のインクは −12..1 まで届き、ガード 1 とクランプで面内 y 0..2 が残る。
+///   ここをダーティに入れて消さないと、全域再描画のオラクル（`DrawExecutor`）が
+///   `skip(first_visible_line)` で描かない下端インクが画面上端へ残り、画素等価が破れる。
+/// - 描画対象からも可視窓より前の行を外す（入れるとクリップ内へ描き込んでしまい、
+///   オラクルと同じく「描かない」にならない）。
+#[test]
+fn scrolled_out_line_ink_overhang_is_dirtied_and_not_drawn() {
+    let contract = ScaleContract::new(1.0, None);
+    let canvas = canvas_for(
+        &broken_lines(4),
+        WritingMode::HorizontalTb,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    );
+    let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
+    let scrolled = window(1, -12.0);
+
+    // はみ出し 0 ＝ 残滓なし（露出帯 {0,88,400,12} をガード 1px 拡張＋クランプ → {0,87,400,13}）。
+    let (dirty_flat, draw_flat) = ScrollPlanner::derive_dirty(
+        &canvas,
+        &scrolled,
+        WritingMode::HorizontalTb,
+        &contract,
+        (0, -12),
+        (400, 100),
+        &prev,
+    );
+    assert_eq!(
+        dirty_flat,
+        vec![phys(0, 87, 400, 13)],
+        "はみ出し 0 の行はスクロールアウトしても残滓を作らない（露出帯のみ）"
+    );
+    assert!(
+        !draw_flat.contains(&0),
+        "可視窓より前の行は描画対象に含めない（オラクルの skip(first_visible_line) と同一規律）"
+    );
+
+    // はみ出し 下 3（Yu Gothic UI 28px 相当の比率）→ 行 0 の残滓 y 0..2 がダーティに入る。
+    let over = vec![
+        LineOverhang {
+            top: 0.0,
+            bottom: 3.0,
+            left: 0.0,
+            right: 0.0,
+        };
+        4
+    ];
+    let (dirty_over, draw_over) = ScrollPlanner::derive_dirty_with_overhangs(
+        &canvas,
+        &scrolled,
+        WritingMode::HorizontalTb,
+        &contract,
+        (0, -12),
+        (400, 100),
+        &prev,
+        &over,
+    );
+    assert_eq!(
+        dirty_over,
+        vec![phys(0, 87, 400, 13), phys(0, 0, 11, 2)],
+        "露出帯 ＋ スクロールアウトした行 0 の下端はみ出し（−12..1・ガード 1・クランプで y 0..2）"
+    );
+    assert_eq!(
+        draw_over,
+        vec![1],
+        "描き直すのは可視窓の先頭行のみ——行 0 は残滓を消すだけで描かない"
+    );
+}
+
+/// n 行（各行の全角グリフ数を `widths` で与える・明示改行 ratio 1.0 区切り）の item 列。
+/// 行ごとに幅を変えられるので、前後の canvas で特定の行だけを変化させられる。
+fn lines_with_widths(widths: &[usize]) -> Vec<TextItem> {
+    let mut items = Vec::new();
+    for (i, &n) in widths.iter().enumerate() {
+        if i > 0 {
+            items.push(TextItem::LineBreak { ratio: 1.0 });
+        }
+        for _ in 0..n {
+            items.push(TextItem::Glyph { ch: 'あ' });
+        }
+    }
+    items
+}
+
+/// 要件 11.1／11.3: ダーティ矩形は **その矩形と行送り軸で交差する行だけ** を持ち、描画対象行
+/// （`draw_lines`）はその和集合である。矩形の枚数と描画対象行数の積では描かない。
+///
+/// 場面（font 10・pitch 12・k=1.0・面 400×100・9 行を 1 行ぶん −12 スクロール）:
+/// 3 種のダーティ源が**別々の行**に交差するように組む。
+/// - 露出帯（下端 y 87..100）: 交差するのは最下行（行 8・y 83..98）だけ。
+/// - スクロールアウトした行 0 の残滓（上端 y 0..2）: 交差するのは可視窓の先頭行（行 1・y 0..14）だけ。
+/// - 変化行 4（y 35..50）・変化行 5（y 47..62）: それぞれ両隣を巻き込み、行 4 と行 5 は
+///   **2 枚の矩形の双方**に現れる（重複しても和集合は昇順・重複なし）。
+///
+/// 各行の物理矩形は「canvas-local 位置 + block_offset −12」「em ボックス丈 10」「下端はみ出し
+/// 実測 3」「ガード 1」で決まる——行 i の y は `12i − 13 .. 12i + 2`（面寸でクランプ）。
+#[test]
+fn dirty_rects_carry_only_their_intersecting_lines() {
+    let contract = ScaleContract::new(1.0, None);
+    let mode = WritingMode::HorizontalTb;
+    let vr = (Some(0), Some(100), Some(0), Some(400));
+    let surface = (400u32, 100u32);
+
+    // 前回確定＝9 行すべて 1 グリフ。今回＝行 4 と行 5 だけが 2 グリフへ伸びた（変化行 2 本）。
+    let prev_canvas = canvas_for(&lines_with_widths(&[1; 9]), mode, vr, 10.0);
+    let prev = ScrollPlanner::committed_lines(&prev_canvas, mode);
+    let canvas = canvas_for(
+        &lines_with_widths(&[1, 1, 1, 1, 2, 2, 1, 1, 1]),
+        mode,
+        vr,
+        10.0,
+    );
+
+    // 全行に下端はみ出し 3（Yu Gothic UI 28px 相当の比率）——行 0 の残滓が立つ条件。
+    let over = vec![
+        LineOverhang {
+            top: 0.0,
+            bottom: 3.0,
+            left: 0.0,
+            right: 0.0,
+        };
+        9
+    ];
+    let (dirty, draw_lines) = ScrollPlanner::derive_dirty_with_overhangs(
+        &canvas,
+        &window(1, -12.0),
+        mode,
+        &contract,
+        (0, -12),
+        surface,
+        &prev,
+        &over,
+    );
+
+    // 矩形は (a) 露出帯 → (b)(c) 住人 index 昇順（行 0 の残滓・変化行 4・変化行 5）の順。
+    assert_eq!(dirty.len(), 4, "露出帯 1 ＋ 残滓 1 ＋ 変化行 2");
+    assert_eq!(dirty[0].rect, phys(0, 87, 400, 13), "(a) 下端の露出帯");
+    assert_eq!(dirty[0].lines, vec![8], "露出帯に交差するのは最下行だけ");
+    assert_eq!(dirty[1].rect, phys(0, 0, 11, 2), "(c) 行 0 の残滓");
+    assert_eq!(
+        dirty[1].lines,
+        vec![1],
+        "残滓に交差するのは可視窓の先頭行だけ"
+    );
+    assert_eq!(dirty[2].rect, phys(0, 35, 21, 15), "(b) 変化行 4");
+    assert_eq!(
+        dirty[2].lines,
+        vec![3, 4, 5],
+        "変化行 4 の矩形は上下の隣も巻き込む（はみ出し 3 ＋ ガード 1 が隣の行へ届く）"
+    );
+    assert_eq!(dirty[3].rect, phys(0, 47, 21, 15), "(b) 変化行 5");
+    assert_eq!(dirty[3].lines, vec![4, 5, 6], "変化行 5 の矩形も同様");
+
+    // 和集合＝描画対象行（昇順・重複なし）。行 4・行 5 は 2 枚の矩形の双方に現れる。
+    assert_eq!(
+        draw_lines,
+        vec![1, 3, 4, 5, 6, 8],
+        "draw_lines は矩形ごとの交差行の和集合"
+    );
+    let mut union: Vec<usize> = dirty.iter().flat_map(|d| d.lines.clone()).collect();
+    union.sort_unstable();
+    union.dedup();
+    assert_eq!(union, draw_lines, "和集合の定義どおり");
+    assert!(
+        dirty[2].lines.contains(&4) && dirty[3].lines.contains(&4),
+        "2 枚の矩形に交差する行は双方に現れる（行 4）"
+    );
+
+    // 描画呼び出しは矩形ごとの交差行数の**和**であって、枚数 × 描画対象行数の積ではない。
+    let sum: usize = dirty.iter().map(|d| d.lines.len()).sum();
+    assert_eq!(sum, 8, "和＝1 + 1 + 3 + 3");
+    assert!(
+        sum < dirty.len() * draw_lines.len(),
+        "和 {sum} は積 {} より小さい（削減が観測できる入力）",
+        dirty.len() * draw_lines.len()
+    );
+
+    // 各矩形の行は描画対象行の部分集合（`plan_inconsistency` が実描画側で見張る不変条件）。
+    assert!(
+        dirty
+            .iter()
+            .all(|d| d.lines.iter().all(|i| draw_lines.contains(i))),
+        "各矩形の行は draw_lines の部分集合"
+    );
 }

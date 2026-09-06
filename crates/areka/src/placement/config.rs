@@ -135,6 +135,7 @@ pub fn build_placement_config(
     PlacementConfig {
         scopes,
         // シーム転記の所在は shell descript（正典表・5.2/DD11）。ghost 側同名キーは対象外。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1
         zorder_raw: shell_kv.get("seriko.zorder").cloned(),
         sticky_window_raw: shell_kv.get("seriko.sticky-window").cloned(),
         shell_dpi_raw: shell_kv.get("seriko.dpi").cloned(),
@@ -252,6 +253,8 @@ fn resolve_scope(
         scope,
     );
 
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#sakura.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#kero.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1
     let balloon_alignment = match cascade2(ghost_kv, shell_kv, scope, &["balloon.alignment"]) {
         None | Some("left") => BalloonSide::Left,
         Some("right") => BalloonSide::Right,

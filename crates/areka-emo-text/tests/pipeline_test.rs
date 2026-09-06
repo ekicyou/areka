@@ -193,11 +193,13 @@ fn model_rect(
     )
 }
 
-/// 横書きシナリオ共通の領域（validrect top0/bottom36・font 10 → pitch 13 で 3 行まで収まり、
-/// 4 行目の下端 49 > 36 であふれ発火——layout.rs の檻と同一幾何）。
+/// 横書きシナリオ共通の領域（validrect top0/bottom34・font 10 → 行送り 12（10 + 行間 2）で
+/// 3 行がちょうど収まり——3 行目の下端 34 が境界そのもの——4 行目の下端 46 > 34 であふれ発火
+/// ——layout.rs の檻と同一幾何）。境界を 36 のまま据え置くと 3 行目に 2px の余りが生まれ、
+/// 「3 行ちょうど」を前提にした下の期待表があふれの寸前を突かなくなる。
 fn horizontal_region() -> TextRegion {
     TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         (400, 224),
         WritingMode::HorizontalTb,
     )
@@ -274,7 +276,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
         "channel 経由と直結適用で可視化決定が一致する"
     );
 
-    // 絶対値の檻（末尾時刻 t=3.0）: actor 0 は 4 行あふれ→1 行スキップ・オフセット −13。
+    // 絶対値の檻（末尾時刻 t=3.0）: actor 0 は 4 行あふれ→1 行スキップ・オフセット −12。
     let last_of = |trace: &[Observation], actor: &str| -> Observation {
         trace
             .iter()
@@ -290,7 +292,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
         a0.window,
         VisibleWindow {
             first_visible_line: 1,
-            block_offset: -13.0
+            block_offset: -12.0
         },
         "actor 0 は 4 行あふれで縦スクロール（横書き）"
     );
@@ -313,8 +315,8 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
 /// 効くことを、手計算の期待表で檻化する。あふれ発火は「最後のグリフがリビールされた
 /// 注入時刻」に正確に一致して起きる（時刻を無視する変異はここで死ぬ）。
 ///
-/// 幾何: validrect bottom36・font 10 → pitch 13。行構成（全量時）: L0"あい" L1"うえ"
-/// L2"お" L3"か"（top 0/13/26/39・下端 10/23/36/49）。リビール時刻:
+/// 幾何: validrect bottom34・font 10 → 行送り 12（10 + 行間 2）。行構成（全量時）:
+/// L0"あい" L1"うえ" L2"お" L3"か"（top 0/12/24/36・下端 10/22/34/46）。リビール時刻:
 /// r=[0.0, 0.25, 0.5, 0.75, 1.0, 1.5]（reveal interval=0.25・chunk at が下限）。
 #[test]
 fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
@@ -343,9 +345,9 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
         (0.5, 3, 2, 0, 0.0),     // "う" 実体化で L1 へ（あい / う）
         (0.75, 4, 2, 0, 0.0),    // "うえ"・末尾改行は保留（あい / うえ）
         (0.99, 4, 2, 0, 0.0),    // r_4=1.0 の直前——保留のまま 2 行
-        (1.0, 5, 3, 0, 0.0),     // "お" 実体化（あい / うえ / お・下端 36＝境界ちょうど・非発火）
-        (1.5, 6, 4, 1, -13.0),   // "か" 実体化で 4 行目（下端 49 > 36）→ あふれ発火
-        (100.0, 6, 4, 1, -13.0), // 末尾到達後は飽和
+        (1.0, 5, 3, 0, 0.0),     // "お" 実体化（あい / うえ / お・下端 34＝境界ちょうど・非発火）
+        (1.5, 6, 4, 1, -12.0),   // "か" 実体化で 4 行目（下端 46 > 34）→ あふれ発火
+        (100.0, 6, 4, 1, -12.0), // 末尾到達後は飽和
     ];
     for &(t, visible, line_count, first, offset) in expected {
         let got_visible = state.visible_glyphs(&actor, t);
@@ -485,8 +487,10 @@ fn read_decoded(name: &str) -> String {
 /// 注入時刻に対して決定論的に決まることを檻化する。
 ///
 /// 幾何（vertical_fixture_test.rs の実測値）: validrect (36,46)-(356,168)・書字開始角
-/// (356,46)・font 10 → pitch 13。明示改行で 25 列（列 i の左端 = 346−13i）を作ると、
-/// 25 列目の左端 34 < validrect.left 36 であふれ発火→1 列スキップ・オフセット +13。
+/// (356,46)・font 10 → 列送り 12（10 + 行間 2）。明示改行で 27 列（列 i の左端 = 346−12i）を
+/// 作ると、27 列目（i=26）の左端 346−312 = 34 < validrect.left 36 であふれ発火→1 列スキップ・
+/// オフセット +12。旧来の 25 列では 25 列目の左端 346−288 = 58 が 36 を上回りあふれないため、
+/// 列数そのものを導き直している（26 列目も左端 46 ≥ 36 で足りない）。
 #[test]
 fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
     let merged = parse_str(
@@ -501,10 +505,10 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
     );
     let region = TextRegion::resolve(&merged, (400, 224), mode);
 
-    // 25 列（各列 全角 1 グリフ・明示改行区切り）。cue 時刻は 0.25 グリッド＝
+    // 27 列（各列 全角 1 グリフ・明示改行区切り）。cue 時刻は 0.25 グリッド＝
     // グリフ i のリビール時刻 r_i = 0.25×i（reveal interval=0.25・at が下限）。
     let mut cues = Vec::new();
-    for i in 0..25 {
+    for i in 0..27 {
         let at = i as f64 * 0.25;
         if i > 0 {
             cues.push(cue("0", at, CueCommand::NewLine { ratio: 1.0 }));
@@ -524,7 +528,7 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
 
     let actor = ActorKey::from("0");
     // リビール途中（t=1.0・可視 5）: 5 列（各列 全角 1 グリフ）・末尾の保留改行は空列を
-    // 開かず蒸発する（遅延化で幽霊空列が消える）。最新列（5 列目 i=4）の左端 294 ≥ 36 → 非発火。
+    // 開かず蒸発する（遅延化で幽霊空列が消える）。最新列（5 列目 i=4）の左端 298 ≥ 36 → 非発火。
     assert_eq!(state_a.visible_glyphs(&actor, 1.0), 5);
     let at_1s = trace_a.iter().find(|o| o.t == 1.0).expect("t=1.0 の観測");
     assert_eq!(at_1s.lines.len(), 5);
@@ -537,16 +541,16 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
         "リビール途中はまだあふれない"
     );
 
-    // 全量リビール（t=10.0・可視 25）: 25 列目の左端 34 < 36 → 横スクロール発火
-    // （vertical_rl＝内容が右へ＝ブロック軸オフセット +13）。
-    assert_eq!(state_a.visible_glyphs(&actor, 10.0), 25);
+    // 全量リビール（t=10.0・可視 27・最終グリフのリビール時刻 6.5）: 27 列目の左端 34 < 36 →
+    // 横スクロール発火（vertical_rl＝内容が右へ＝ブロック軸オフセット +12）。
+    assert_eq!(state_a.visible_glyphs(&actor, 10.0), 27);
     let at_10s = trace_a.iter().find(|o| o.t == 10.0).expect("t=10.0 の観測");
-    assert_eq!(at_10s.lines.len(), 25);
+    assert_eq!(at_10s.lines.len(), 27);
     assert_eq!(
         at_10s.window,
         VisibleWindow {
             first_visible_line: 1,
-            block_offset: 13.0
+            block_offset: 12.0
         },
         "縦書きのあふれは横スクロール（内容が右へ）"
     );

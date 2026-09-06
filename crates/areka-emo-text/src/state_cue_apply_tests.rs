@@ -587,11 +587,83 @@ fn non_balloon_commands_do_not_disturb_state() {
     assert_eq!(state, before);
 }
 
-// ── TextLayerConfig 既定値（design.md 正準: line_pitch 係数=1.25・char_wait は撤去済み） ──
+// ── TextLayerConfig 既定値（design.md 正準: 行間 line_gap=2・char_wait は撤去済み） ──
 
 #[test]
 fn config_defaults_match_design_canon() {
     let config = TextLayerConfig::default();
-    // char_wait は撤去済み（reveal は配送 duration 由来）——config は line_pitch_factor のみ。
-    assert_eq!(config.line_pitch_factor, 1.25);
+    // char_wait は撤去済み（reveal は配送 duration 由来）——config は line_gap のみ。
+    assert_eq!(config.line_gap, 2.0);
+}
+
+// ── 行送りの式（design.md §4.1 正典表・R1.2/R3.1/R3.5/R1.6） ──
+
+/// 行送り＝フォント高さ＋行間（切り上げなし）。正典表の 3 例をそのまま固定する。
+#[test]
+fn line_pitch_adds_line_gap_without_ceiling() {
+    let config = TextLayerConfig::default();
+    assert_eq!(
+        config.line_pitch(28.0),
+        30.0,
+        "emo2-kakukaku の font.height,28"
+    );
+    assert_eq!(config.line_pitch(12.0), 14.0, "既定フォント高さ 12");
+    assert_eq!(config.line_pitch(10.0), 12.0, "構造テストの font 10");
+    // 旧式（切り上げつきの係数倍）なら 35／15／13 になる——差が出る値を選んである。
+    assert_ne!(config.line_pitch(28.0), 35.0);
+}
+
+/// 行間を変えると行送りがそのぶんだけ動く（行間は `TextLayerConfig` で可変・R1.6）。
+#[test]
+fn line_pitch_follows_non_default_line_gap() {
+    let config = TextLayerConfig { line_gap: 5.0 };
+    assert_eq!(config.line_pitch(10.0), 15.0);
+    assert_eq!(TextLayerConfig { line_gap: 0.0 }.line_pitch(10.0), 10.0);
+}
+
+/// 決定論の代役（`FixedMetrics`）は自前の足し算を持たず config の式を呼ぶ（R3.5）。
+#[test]
+fn fixed_metrics_line_pitch_delegates_to_config() {
+    use crate::layout::{FixedMetrics, GlyphMetrics};
+
+    let config = TextLayerConfig::default();
+    for height in [10.0_f32, 12.0, 28.0, 40.0] {
+        assert_eq!(
+            FixedMetrics.line_pitch(height),
+            config.line_pitch(height),
+            "font_height {height} で代役と config の式が食い違う"
+        );
+    }
+}
+
+/// 非有限の行間は警告 1 件つきで 0 へ縮退する（log-first・R1.6）。
+#[test]
+fn normalized_degrades_nonfinite_line_gap_to_zero_with_warning() {
+    let (config, counts) = count_levels(|| TextLayerConfig { line_gap: f32::NAN }.normalized());
+
+    assert_eq!(config.line_gap, 0.0);
+    assert_eq!(
+        config.line_pitch(28.0),
+        28.0,
+        "縮退後は行送り＝フォント高さ"
+    );
+    assert_eq!(counts.warn, 1, "縮退はログ無しで起きない（警告 1 件）");
+}
+
+/// 負の行間も同じく警告 1 件つきで 0 へ縮退する（`line_pitch >= font_height` の不変条件）。
+#[test]
+fn normalized_degrades_negative_line_gap_to_zero_with_warning() {
+    let (config, counts) = count_levels(|| TextLayerConfig { line_gap: -3.0 }.normalized());
+
+    assert_eq!(config.line_gap, 0.0);
+    assert_eq!(counts.warn, 1, "縮退はログ無しで起きない（警告 1 件）");
+}
+
+/// 妥当な行間は値も警告も変えない（正常経路で警告を出さない）。
+#[test]
+fn normalized_keeps_valid_line_gap_without_warning() {
+    let (config, counts) = count_levels(|| TextLayerConfig::default().normalized());
+
+    assert_eq!(config, TextLayerConfig::default());
+    assert_eq!(counts.warn, 0);
 }

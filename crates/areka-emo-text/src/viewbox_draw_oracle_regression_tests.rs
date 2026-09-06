@@ -8,8 +8,9 @@ use crate::state::{TextItem, TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
-/// D1 診断（実機で行間の文字欠けを観測）: example の共有 fixture（font 28px・pitch 35px・
-/// validrect 320×122・**実 DWriteMetrics**・行1「おっはよー！」行2「めっちゃええ朝やん！」）を
+/// D1 診断（実機で行間の文字欠けを観測）: example の共有 fixture（font 28px・行送り
+/// pitch 30px＝字の丈 28 ＋ 行間 2・validrect 320×122・**実 DWriteMetrics**・
+/// 行1「おっはよー！」行2「めっちゃええ朝やん！」）を
 /// oracle（全域再描画）と viewbox（ダーティスクロール）の両方で typewriter 進行させ read_back を
 /// byte 比較する。diverge すれば **viewbox 固有の描画欠陥**（行間で確定行 ink をクリアして
 /// 再描画しない等）、byte 一致すれば **layout 由来**（両方式に同じ＝emo-text-layer 責務）と切り分ける。
@@ -30,6 +31,24 @@ fn diag_line_boundary_dropout_vs_oracle() {
     let metrics = DWriteMetrics::new(&factory, &font, mode, &config).expect("DWriteMetrics");
     let mut oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor");
     let mut viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
+
+    // 要件 7.4「参照描画との画素等価比較が両側とも同じ寸法で動く」の確認点はここ。
+    // 参照描画（oracle）と実描画（viewbox）は同一寸の面へ描き、read_back を byte 比較する。
+    // 面寸 320×122 は本体側バルーンの描画範囲そのもの（`balloons0s.txt` の validrect
+    // (36,46)-(356,168)）で、行送り 30px では行 i の下端 = 30i + 28 ゆえ
+    // 4 行目が 90..118 ≤ 122 まで収まり、5 行目 120..148 が 122 を超えてあふれる
+    // （旧 35px では 3 行目 70..98 までで 4 行目 105..133 があふれていた）。
+    assert_eq!(
+        oracle_surface.size(),
+        viewbox_surface.size(),
+        "参照描画と実描画は同じ寸法の面で比較する（要件 7.4）"
+    );
+    assert_eq!(
+        oracle_surface.size(),
+        image,
+        "面寸は本体側バルーンの描画範囲 320×122 と同値"
+    );
+
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
 
@@ -109,7 +128,7 @@ fn diag_line_boundary_dropout_vs_oracle() {
             }
             panic!(
                 "viewbox が oracle と diverge（viewbox 固有欠陥）: step={step} t={t:.3} visible={visible} \
-                 相違行 y={diff_rows:?}（行1セル 0..28・行間 28..35・行2セル 35..63）"
+                 相違行 y={diff_rows:?}（行1セル 0..28・行間 28..30・行2セル 30..58）"
             );
         }
     }

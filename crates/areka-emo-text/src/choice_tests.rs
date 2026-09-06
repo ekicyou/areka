@@ -573,26 +573,26 @@ fn hit_row_rect_matches_canvas_local_highlight_derivation() {
 /// （descent を覆う。ＭＳ ゴシック系＝比 1.0 は em と一致し従来どおり）。
 #[test]
 fn band_extent_takes_line_box_height_between_em_and_pitch() {
-    // font 28・行ボックス 32.0・ピッチ 35 → 32.0（行ボックス丈が採られる）。
-    assert_eq!(highlight_band_extent(28.0, 32.0, 35.0), 32.0);
+    // font 28・行ボックス 29.0・ピッチ 30 → 29.0（行ボックス丈が採られる）。
+    assert_eq!(highlight_band_extent(28.0, 29.0, 30.0), 29.0);
     // 比 1.0 のフォント（ＭＳ ゴシック実測）は em ボックス丈と一致＝従来挙動（非退行）。
-    assert_eq!(highlight_band_extent(28.0, 28.0, 35.0), 28.0);
+    assert_eq!(highlight_band_extent(28.0, 28.0, 30.0), 28.0);
 }
 
 /// 行ボックス丈が行送りピッチを超えるときはピッチで頭打ち（隣接行の帯／ヒット矩形と
-/// 重ならせない）。実測 Yu Gothic UI 28px（行ボックス 37.242・ピッチ 35）＝35。
+/// 重ならせない）。実測 Yu Gothic UI 28px（行ボックス 37.242・ピッチ 30 ＝ 28 + 行間 2）＝30。
 #[test]
 fn band_extent_is_capped_by_line_pitch() {
-    assert_eq!(highlight_band_extent(28.0, 37.242, 35.0), 35.0);
-    // 隣接行の帯は接するだけで重ならない（行送り 35 ＋ 帯 35）。
-    assert!(highlight_band_extent(28.0, 37.242, 35.0) <= 35.0);
+    assert_eq!(highlight_band_extent(28.0, 37.242, 30.0), 30.0);
+    // 隣接行の帯は接するだけで重ならない（行送り 30 ＋ 帯 30）。
+    assert!(highlight_band_extent(28.0, 37.242, 30.0) <= 30.0);
 }
 
 /// 下限は em ボックス丈——行ボックス丈がそれより小さくても行矩形より痩せない（非退行）。
 /// ピッチが em を下回る病的設定でも下限が勝つ。
 #[test]
 fn band_extent_never_below_font_height() {
-    assert_eq!(highlight_band_extent(28.0, 20.0, 35.0), 28.0);
+    assert_eq!(highlight_band_extent(28.0, 20.0, 30.0), 28.0);
     assert_eq!(highlight_band_extent(28.0, 37.0, 20.0), 28.0);
 }
 
@@ -602,10 +602,10 @@ fn band_extent_never_below_font_height() {
 #[test]
 fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
     let region = region(36, 46, 356, 168);
-    // 実 fixture 相当: 行矩形 block 帯 46..74（font 28）・帯 35（Yu Gothic UI 実測の頭打ち値）。
+    // 実 fixture 相当: 行矩形 block 帯 46..74（font 28）・帯 30（Yu Gothic UI 実測の頭打ち値）。
     let line = prow(36.0, 46.0, 200.0, 74.0);
     let segment = seg(0, 0, (36.0, 100.0));
-    let band = highlight_band_extent(28.0, 37.242, 35.0);
+    let band = highlight_band_extent(28.0, 37.242, 30.0);
     let rows = derive_hit_rows(
         std::slice::from_ref(&line),
         std::slice::from_ref(&segment),
@@ -618,7 +618,7 @@ fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
         "帯の起点は行矩形 block 近端（46−46）"
     );
     assert_eq!(
-        rows[0].rect.bottom, 35.0,
+        rows[0].rect.bottom, 30.0,
         "帯の終端は近端＋band_extent（em ボックス下端 28 ではない＝descent を覆う）"
     );
     assert!(

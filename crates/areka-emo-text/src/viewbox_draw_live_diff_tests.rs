@@ -452,7 +452,8 @@ fn live_diff_nonunit_scale_vertical_lr_within_tolerance() {
 /// G4: 大サイズフォント（20px・既定 ＭＳ ゴシック）でも全シナリオで oracle↔viewbox byte
 /// 完全一致する——AA こぼれが `DIRTY_GUARD_IMG_PX`(=1 image px) を超えず、ダーティ矩形が
 /// AA を取りこぼさないことを実描画 byte 等価で確認（spike/live-diff は従来 10px のみ）。
-/// image 寸は `2P+F ≤ block ≤ 3P+F`（P=ceil(20×1.25)=25・F=20）を満たし ①3行収容／②あふれ。
+/// image 寸は `2P+F ≤ block ≤ 3P+F`（P=20+2=22・F=20 ゆえ 64 ≤ 80 ≤ 86）を満たし
+/// ①3行収容／②あふれ。行送りが 25 から 22 へ縮んでも 80 は範囲内ゆえ面寸は据え置き。
 #[test]
 fn live_diff_larger_font_matches_oracle_byte_for_byte() {
     run_live_diff_scenario_on(&mut LiveDiffRig::new_full(
@@ -473,7 +474,8 @@ fn live_diff_larger_font_matches_oracle_byte_for_byte() {
 
 /// G4: プロポーショナルフォント（ＭＳ Ｐゴシック・可変幅）でも byte 完全一致する——font 種別
 /// を変えても両方式が同一 format ゆえ AA ラスタライズが一致し、ガードが十分なら byte 等価が
-/// 保たれることを確認（P=ceil(12×1.25)=15・F=12）。
+/// 保たれることを確認（P=12+2=14・F=12 ゆえ `2P+F ≤ block ≤ 3P+F` は 40 ≤ 50 ≤ 54・
+/// 行送りが 15 から 14 へ縮んでも 50 は範囲内ゆえ面寸は据え置き）。
 #[test]
 fn live_diff_proportional_font_matches_oracle_byte_for_byte() {
     run_live_diff_scenario_on(&mut LiveDiffRig::new_full(

@@ -186,7 +186,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
                 balloon = label,
                 dpi = handle.get_dpi(),
                 scale_k = view0.scale(),
-                "emo-text-layer: 実モニタ DPI（物理 1:1 表示契約・k=1.0 恒常）"
+                "emo-text-layer: 実モニタ DPI と合成スケール（自動判定は scale_k=1.0 が前提）"
             ),
             None => warn!(balloon = label, "WindowHandle 未付与のため DPI を読めない"),
         }
@@ -635,16 +635,24 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     let actor = actor0();
 
     // ── 「可視窓のみ移動（＋1 完成行の流入）」フレームの端点となる注入時刻対を決定論に選ぶ ──
-    // draw_text_layout_calls は「ダーティ矩形数 × 描画対象行数」の積で計上される。末尾行が
-    // typewriter 途中（部分リビール）だとその変化行がダーティを 1 枚増やして積を膨らませるため、
+    // draw_text_layout_calls の増分は「ダーティ矩形ごとの交差行数の**和**」で計上される。末尾行が
+    // typewriter 途中（部分リビール）だとその行がダーティを 1 枚増やして和を膨らませるため、
     // 端点は**リビールのプラトー**（可視グリフ数が一定＝行が完成し次行が未リビールの区間）の
-    // 中心に採る。こうすると変化行は「新規に流入した完成行」だけ・ダーティは（露出帯 ∪ その行）に
-    // 限られ、確定行は面内 blit で保持されて再描画されない（横書き/縦書き共通・軸非依存・決定論）。
+    // 中心に採る。こうすると変化行は「新規に流入した完成行」だけ・ダーティは（露出帯 ∪ その行
+    // ∪ 送り出された行の残滓）に限られ、確定行は面内 blit で保持されて再描画されない
+    // （横書き/縦書き共通・軸非依存・決定論）。
     let plateaus = enumerate_reveal_plateaus(demo, &actor);
-    // 完成プラトー＝**可視窓が直前プラトーから +1 したプラトー**（流入した行が完成した瞬間・
-    // 末尾実行行はちょうど完成しており部分リビール行がない＝ダーティが露出帯＋その 1 行に限られる）。
+    // 完成プラトー＝**次のプラトーで先頭可視行が 1 進むプラトー**（＝末尾の行が完成している
+    // 最後のプラトー）。改行は次の文字が来るまで行を開かない（改行遅延の意味論）ので、先頭可視行
+    // が進むのは「次の行の最初の文字が出た瞬間」である。ゆえに「先頭可視行が進んだ直後」を採ると
+    // 末尾行が 1 文字だけの途中になり、次の段までに「その行が伸びる（作り直し）」と「さらに次の
+    // 行が入る（新規）」が重なって生成増分が 2 になる（旧い選び方＝負の対照・台帳 §3.5.3）。
     let complete: Vec<&RevealPlateau> = (0..plateaus.len())
-        .filter(|&i| i > 0 && plateaus[i].fvl >= 1 && plateaus[i].fvl == plateaus[i - 1].fvl + 1)
+        .filter(|&i| {
+            i + 1 < plateaus.len()
+                && plateaus[i].fvl >= 1
+                && plateaus[i + 1].fvl == plateaus[i].fvl + 1
+        })
         .map(|i| &plateaus[i])
         .collect();
     // 完成プラトーは可視窓 fvl=1,2,3,… と単調に 1 ずつ進む。深い側で **2 段連続の 1 行スクロール**
@@ -657,9 +665,26 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
         );
         return;
     }
+    // ── 統制された比較: 比べる 2 段は「送り出される行がどちらも短行」であるものに限る ──
+    // 送り出される行の index は各段の**開始時**の先頭可視行そのもの。長い行の列と短行の列では
+    // ブロック軸のはみ出しの有無が分かれ、残滓の矩形が立つか立たないかで描画量に 0／1 の差が
+    // 出る（縦書きでは漢字の列だけ 1 画素超）。長い行の本数は、短行が流入する前——プラトー走査の
+    // 起点 `PLATEAU_START`（可視グリフ 24＝長い 3 行ぶんが出そろった時点）——の配置行数から
+    // 求める（横書き 3 行・縦書き 7 列）。
+    let (_, f_long, v_long) = reveal_probe(demo, &actor, PLATEAU_START);
+    let long_lines = f_long + v_long;
     let i2 = complete.len() - 1; // 最深スクロール先（可視窓 P+2）
     let i1 = i2 - 1; // 中間（可視窓 P+1）
     let i0 = i1 - 1; // ステップ始点（可視窓 P・基準フレーム）
+    // 最深の 3 連が条件を満たさなければ、それより浅い 3 連はなおさら満たさない（先頭可視行は
+    // 完成プラトー列で単調増加）＝短行の本数（`OVERFLOW_LINES`）が足りない。
+    if complete[i0].fvl < long_lines {
+        world.resource_mut::<Verdict>().failures.push(format!(
+            "C8: 送り出される行がどちらも短行になる 2 段が採れない（最深の始点 先頭可視行 {} < 長い行の本数 {long_lines}・短行の本数が不足）",
+            complete[i0].fvl
+        ));
+        return;
+    }
     let visible_line_count = complete[i0].vlc;
 
     // ── 前方リプレイ: 完成プラトーを昇順に提示し、committed／prev_lines／行キャッシュを
@@ -711,6 +736,7 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     let blit2 = s2.blits - s1.blits;
     info!(
         p = complete[i0].fvl,
+        long_lines,
         fvl1,
         fvl2,
         visible_line_count,
@@ -742,8 +768,9 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
         draw1 == draw2,
         "C8: スクロール描画増分がスクロール深さに依らず一定（確定行を蓄積再描画しない）",
     );
-    // 描画は露出帯＋境界の変化行のダーティ矩形に限定され、talk 全体の行数（あふれで 12 行超）まで
-    // 伸びない小定数に収まる（tight bound・reference: tests/viewbox_scroll_test.rs）。
+    // 描画は露出帯＋境界の変化行＋残滓のダーティ矩形に限定され、talk 全体の行数（あふれで
+    // 横 16 行・縦 20 列）まで伸びない小定数に収まる（tight bound・矩形ごとの交差行数の和・
+    // reference: tests/viewbox_scroll_test.rs）。
     v.check(
         draw1 <= EXPOSURE_BAND_DRAW_BOUND && draw2 <= EXPOSURE_BAND_DRAW_BOUND,
         "C8: スクロール描画増分が露出帯＋境界行の tight bound 以下（ダーティ限定描画）",
@@ -767,12 +794,21 @@ struct RevealPlateau {
     vlc: usize,
 }
 
-/// あふれ短行リビール区間 `[1.95, 2.95]` を細かく走査し、可視グリフ数が一定の各プラトー
-/// （typewriter 非進行区間）の中心時刻と可視窓を列挙する（純粋 layout・GPU present 不使用・決定論）。
+/// プラトー走査の起点（短行が 1 本も流入していない時刻＝長い行だけが出そろった時点）。
+/// 短行の cue は `at = 2.0` に注入されるので、その手前に採る。
+const PLATEAU_START: f64 = 1.95;
+/// プラトー走査の終点。短行は `at = 2.0` から 1 本 0.1 秒（2 文字 × 50ms）で順にリビールされ、
+/// 13 本目は `2.0 + 12 × 0.1 = 3.2` に開いて `3.3` に完成する。最後のプラトー（全リビール後）
+/// まで拾えるよう、そこから 0.05 秒の余裕を採って `3.35` とする。
+const PLATEAU_END: f64 = 3.35;
+
+/// あふれ短行リビール区間 `[PLATEAU_START, PLATEAU_END]` を細かく走査し、可視グリフ数が一定の
+/// 各プラトー（typewriter 非進行区間）の中心時刻と可視窓を列挙する
+/// （純粋 layout・GPU present 不使用・決定論）。
 fn enumerate_reveal_plateaus(demo: &Demo, actor: &ActorKey) -> Vec<RevealPlateau> {
     const STEP: f64 = 0.005;
-    const START: f64 = 1.95;
-    const END: f64 = 2.95;
+    const START: f64 = PLATEAU_START;
+    const END: f64 = PLATEAU_END;
     let mut out = Vec::new();
     let mut t = START;
     let (mut cur_vc, mut cur_fvl, mut cur_vlc) = reveal_probe(demo, actor, t);

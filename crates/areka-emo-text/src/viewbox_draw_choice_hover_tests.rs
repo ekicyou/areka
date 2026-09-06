@@ -163,11 +163,12 @@ fn hover_choice_line_paints_segment_and_resets_on_hover_off() {
                         }],
                         hovered,
                         highlight,
-                        // 帯は em ボックス丈（10）より**大きい** 13——実フォント
-                        // （Yu Gothic UI 比 1.33）の descent 込み帯と同じ関係を檻に持ち込む。
-                        // hover 解除フレームの「塗り画素ゼロ」判定が、ダーティ帯の帯超過分
-                        // 拡張（expand_overhang_for_band）まで含めて赤くなる。
-                        band_extent: 13.0,
+                        // 帯は em ボックス丈（10）より**大きい** 12（font 10 の行送り
+                        // 10+2＝帯の頭打ち値）——実フォント（Yu Gothic UI 比 1.33）の
+                        // descent 込み帯と同じ関係を檻に持ち込む。hover 解除フレームの
+                        // 「塗り画素ゼロ」判定が、ダーティ帯の帯超過分拡張
+                        // （expand_overhang_for_band）まで含めて赤くなる。
+                        band_extent: 12.0,
                     }),
                     transform: r.transform,
                     effects: r.effects,

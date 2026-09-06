@@ -1,0 +1,29 @@
+{
+  "feature_name": "areka-P0-ukadoc-survey-property",
+  "created_at": "2026-09-02T13:06:26Z",
+  "updated_at": "2026-09-05T12:03:12Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-02T13:22:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-03T00:00:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-03T00:00:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-05T12:03:12Z"
+    }
+  },
+  "ready_for_implementation": true
+}

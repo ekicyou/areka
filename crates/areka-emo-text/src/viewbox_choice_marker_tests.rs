@@ -1,5 +1,5 @@
 use super::test_support::{phys, window};
-use super::{PhysicalRect, ScrollPlanner, line_fingerprint};
+use super::{DirtyRect, ScrollPlanner, line_fingerprint};
 use crate::canvas::{
     ChoiceLineContent, ChoiceRowSegment, ContentCanvas, GlyphRunContent, RegionTransform, Resident,
     ResidentContent, TextEffects,
@@ -112,7 +112,7 @@ fn choice_marker_hover_switch_dirties_only_two_changed_lines() {
 fn derive_dirty_for_hover(
     before: Vec<Resident>,
     after: Vec<Resident>,
-) -> (Vec<usize>, Vec<PhysicalRect>, Vec<usize>) {
+) -> (Vec<usize>, Vec<DirtyRect>, Vec<usize>) {
     let mode = WritingMode::HorizontalTb;
     let contract = ScaleContract::new(1.0, None);
     let surface = (400u32, 224u32);

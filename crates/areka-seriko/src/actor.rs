@@ -307,6 +307,7 @@ fn handle_message<O: SurfaceOutput>(
                 }
                 // 正準キャリア（`Custom` の String Array）。名前自己選別で bind のみ消費する。
                 Some((name, tokens)) => {
+                    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1
                     if name != "bind" {
                         // 未登記/他担当名（move 等・`bind-noevent` 等も含む）は静かに読み流す
                         // （名前自己選別・R2.5・一意性は areka 消費者台帳が保証・D1/D10）。
