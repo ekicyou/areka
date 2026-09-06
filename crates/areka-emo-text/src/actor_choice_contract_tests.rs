@@ -151,9 +151,11 @@ fn present_populates_choice_hit_rows_and_nochange_preserves_snapshot() {
 #[test]
 fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
     const FONT_H: f32 = 12.0;
-    let pitch: f32 = (FONT_H * 1.25).ceil(); // 15.0
+    // 行送りは正典の式をそのまま呼ぶ（文字の大きさ + 行間・design §4.1 正典表）。
+    // 式をここに書き写さないので、行間の既定値が変わっても本テストは自動で追随する。
+    let pitch: f32 = TextLayerConfig::default().line_pitch(FONT_H); // 12 + 2 = 14.0
     let indent_x: f32 = 5.0 * FONT_H; // 5em = 60.0
-    let indent_y: f32 = 2.0 * pitch; // 2lh = 30.0
+    let indent_y: f32 = 2.0 * pitch; // 2lh = 28.0
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());

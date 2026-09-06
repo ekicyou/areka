@@ -19,18 +19,18 @@ fn visible_window_only_move_horizontal_dirties_bottom_band_only() {
     );
     // 前回確定＝同一 canvas の指紋（canvas-local ゆえスクロール非依存）。
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    // 内容を動かさず block_offset だけ −13（内容が上へ）・blit も同量。
+    // 内容を動かさず block_offset だけ −12（内容が上へ・行送り 10 + 2）・blit も同量。
     let (dirty, _draw) = ScrollPlanner::derive_dirty(
         &canvas,
-        &window(1, -13.0),
+        &window(1, -12.0),
         WritingMode::HorizontalTb,
         &contract,
-        (0, -13),
+        (0, -12),
         (400, 100),
         &prev,
     );
-    // 下端の露出帯 {0,87,400,13} をガード 1px で拡張＋クランプ → {0,86,400,14}。
-    assert_eq!(dirty, vec![phys(0, 86, 400, 14)], "露出帯のみ・変化行ゼロ");
+    // 下端の露出帯 {0,88,400,12} をガード 1px で拡張＋クランプ → {0,87,400,13}。
+    assert_eq!(dirty, vec![phys(0, 87, 400, 13)], "露出帯のみ・変化行ゼロ");
 }
 
 /// vertical_rl で可視窓のみ移動 → dirty は左端露出帯のみ（行が左へ流れる）。
@@ -44,18 +44,18 @@ fn visible_window_only_move_vertical_rl_dirties_left_band_only() {
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::VerticalRl);
-    // vertical_rl＝内容が右（正）・blit も +13（左端が露出）。
+    // vertical_rl＝内容が右（正）・blit も +12（左端が露出）。
     let (dirty, _draw) = ScrollPlanner::derive_dirty(
         &canvas,
-        &window(1, 13.0),
+        &window(1, 12.0),
         WritingMode::VerticalRl,
         &contract,
-        (13, 0),
+        (12, 0),
         (100, 200),
         &prev,
     );
-    // 左端の露出帯 {0,0,13,200} をガード拡張＋クランプ → {0,0,14,200}。
-    assert_eq!(dirty, vec![phys(0, 0, 14, 200)], "左端露出帯のみ");
+    // 左端の露出帯 {0,0,12,200} をガード拡張＋クランプ → {0,0,13,200}。
+    assert_eq!(dirty, vec![phys(0, 0, 13, 200)], "左端露出帯のみ");
 }
 
 /// vertical_lr で可視窓のみ移動 → dirty は右端露出帯のみ（行が右へ流れる）。
@@ -69,18 +69,18 @@ fn visible_window_only_move_vertical_lr_dirties_right_band_only() {
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::VerticalLr);
-    // vertical_lr＝内容が左（負）・blit も −13（右端が露出）。
+    // vertical_lr＝内容が左（負）・blit も −12（右端が露出）。
     let (dirty, _draw) = ScrollPlanner::derive_dirty(
         &canvas,
-        &window(1, -13.0),
+        &window(1, -12.0),
         WritingMode::VerticalLr,
         &contract,
-        (-13, 0),
+        (-12, 0),
         (100, 200),
         &prev,
     );
-    // 右端の露出帯 {87,0,13,200} をガード拡張＋クランプ → {86,0,14,200}。
-    assert_eq!(dirty, vec![phys(86, 0, 14, 200)], "右端露出帯のみ");
+    // 右端の露出帯 {88,0,12,200} をガード拡張＋クランプ → {87,0,13,200}。
+    assert_eq!(dirty, vec![phys(87, 0, 13, 200)], "右端露出帯のみ");
 }
 
 // ── R3.3: typewriter 進行（現在行の text 伸長）→ dirty＝現在行のみ ──
@@ -371,8 +371,8 @@ fn confirmed_line_is_excluded_from_dirty_and_draw() {
         (400, 100),
         &prev,
     );
-    // 行1「いろ」{0,13,20,10} をガード拡張 → {0,12,21,12}（overhang 無し＝em 箱丈）。行0 は現れない。
-    assert_eq!(dirty, vec![phys(0, 12, 21, 12)], "変化行（末尾）のみ");
+    // 行1「いろ」{0,12,20,10} をガード拡張 → {0,11,21,12}（overhang 無し＝em 箱丈）。行0 は現れない。
+    assert_eq!(dirty, vec![phys(0, 11, 21, 12)], "変化行（末尾）のみ");
     assert_eq!(draw, vec![1], "確定行 0 は draw から除外される");
 }
 
@@ -395,8 +395,8 @@ fn catchup_and_new_lines_union_of_changed_lines() {
         (400, 100),
         &prev,
     );
-    // 行2 {0,26,10,10}→{0,25,11,12}・行3 {0,39,10,10}→{0,38,11,12}（overhang 無し）。行0/1 は不変。
-    assert_eq!(dirty, vec![phys(0, 25, 11, 12), phys(0, 38, 11, 12)]);
+    // 行2 {0,24,10,10}→{0,23,11,12}・行3 {0,36,10,10}→{0,35,11,12}（overhang 無し）。行0/1 は不変。
+    assert_eq!(dirty, vec![phys(0, 23, 11, 12), phys(0, 35, 11, 12)]);
     assert_eq!(draw, vec![2, 3], "新規 2 行のみ描画対象");
 }
 
@@ -490,22 +490,23 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
         "全ダーティ矩形は面寸を越えない"
     );
 
-    // (c) 端の露出帯もクランプされる（下端 by=-13）。
+    // (c) 端の露出帯もクランプされる（下端 by=-12）。
     let scroll_canvas = canvas_for(&broken_lines(4), WritingMode::HorizontalTb, vr, 10.0);
     let scroll_prev = ScrollPlanner::committed_lines(&scroll_canvas, WritingMode::HorizontalTb);
     let (band, _) = ScrollPlanner::derive_dirty(
         &scroll_canvas,
-        &window(1, -13.0),
+        &window(1, -12.0),
         WritingMode::HorizontalTb,
         &contract,
-        (0, -13),
+        (0, -12),
         surface,
         &scroll_prev,
     );
-    // 下端露出帯 {0,112,500,13}・ガード 2 → {-2,110,502,127}・クランプ → {0,110,500,15}。
+    // 下端露出帯 {0,113,500,12}・ガード 2（x/y を 2 減らし w/h を 4 増やす＝下端 127）・
+    // 面寸 125 でクランプ → {0,111,500,14}。
     assert_eq!(
         band,
-        vec![phys(0, 110, 500, 15)],
+        vec![phys(0, 111, 500, 14)],
         "端の露出帯はクランプされる"
     );
     assert!(
@@ -517,7 +518,7 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
 
 // ── back 全被覆の素朴檻: blit 写域 ∪ dirty ＝ 面全域（ブロック軸） ──
 
-/// 横書きスクロール（by=-13）で blit 写域（保持ピクセルの移動先）と dirty（露出帯）の
+/// 横書きスクロール（by=-12＝行送り 1 行分）で blit 写域（保持ピクセルの移動先）と dirty（露出帯）の
 /// 和がブロック軸（y）全域を隙間なく覆う（残像漏れの構造檻・簡易ケース）。
 #[test]
 fn back_is_fully_covered_by_blit_and_dirty_horizontal() {
@@ -530,10 +531,10 @@ fn back_is_fully_covered_by_blit_and_dirty_horizontal() {
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    let blit = (0i32, -13i32);
+    let blit = (0i32, -12i32);
     let (dirty, _) = ScrollPlanner::derive_dirty(
         &canvas,
-        &window(1, -13.0),
+        &window(1, -12.0),
         WritingMode::HorizontalTb,
         &contract,
         blit,
