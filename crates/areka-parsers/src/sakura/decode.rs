@@ -141,6 +141,7 @@ fn decode_token(token: Token) -> Instruction {
         Token::Text(s) => Instruction::Text(s),
         Token::SysVar(keyword) => Instruction::SystemVar(keyword),
         // 短縮形 `\<word>N` の意味写像は語で分岐する。待ち `\wN` = n × 50ms（既存等価）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1
         Token::Shorthand { word: 'w', n } => Instruction::Wait(wait_units(n as u64)),
         // バルーン面短縮 `\bN`（要件 1.2/1.3）: 1 桁の面数字を不透明文字列で保持し
         // `BalloonSurface` へ。`\b[N]` ブラケット形の第 1 引数と対称（数値化しない）。
@@ -174,12 +175,18 @@ fn decode_token(token: Token) -> Instruction {
 /// `\p[n]` を発行するため無影響）。
 fn decode_bare(word: &str) -> Instruction {
     match word {
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5ce:1
         "e" => Instruction::End,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cc:1
         "c" => Instruction::Clear,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c-:1
         "-" => Instruction::Quit,
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cn:1
         "n" => Instruction::NewLine(NewLineRatio::new(1.0)),
         // 正典スコープタグ bare 形（R1.5/R4.4・ukadoc）: `\0`/`\h`=本体側、`\1`/`\u`=相方側。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c0_3082_3057_304f_306f_5ch:1
         "0" | "h" => Instruction::SpeakerScope { n: 0 },
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c1_3082_3057_304f_306f_5cu:1
         "1" | "u" => Instruction::SpeakerScope { n: 1 },
         // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_a` `\__q` 等）は
         // タスク 4.2 のパススルー領分。
@@ -195,24 +202,32 @@ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
         // 待ち時間（要件 3.1）: `\w[n]` = n × 50ms。
         "w" => Instruction::Wait(wait_from_arg(args.first())),
         // 待ち時間（要件 3.3）: `\_w[ms]` = 絶対 ms。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
         "_w" => Instruction::Wait(wait_absolute_ms(args.first())),
         // 改行（要件 4.1）: `\n[percent]` = percent/100、`\n[half]` = 0.5。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cn_5bhalf_5d:1
         "n" => Instruction::NewLine(newline_ratio_from_arg(args.first())),
         // 話者スコープ（要件 2.1）: `\p[n]`。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cp_5bID_756a_53f7_5d:1
         "p" => Instruction::SpeakerScope {
             n: speaker_scope_n(args.first()),
         },
         // サーフェス（要件 2.2/2.3）: `\s[...]` 中身は不透明文字列で無加工保持。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cs_5bID_756a_53f7_5d:1
         "s" => Instruction::Surface(SurfaceArg::new(args.into_iter().next().unwrap_or_default())),
         // バルーン面切替（balloon-face-cue 要件 1.1/1.4/1.5）: `\b[...]` は `\s` と完全対称。
         // **第 1 引数のみ**を不透明保持する（fallback 形 `\b[2,--fallback=4]` は `"2"` に
         // 落ちる＝graceful）。数値化・範囲展開・alias 解決・`-1` 解釈は一切行わない。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cb_5bID_756a_53f7_5d:1
         "b" => Instruction::BalloonSurface(SurfaceArg::new(
             args.into_iter().next().unwrap_or_default(),
         )),
         // カーソル絶対位置（要件 6.1）: `\_l[x,y]`（x/y は文字列のまま保持）。
         "_l" => decode_cursor(args),
         // 選択肢（要件 5.1/5.2）: `\q[disp,target,refs...]`。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1
         "q" => decode_choice(args),
         // `\!` コマンド（要件 7.1）: 第 1 引数が `move` のみ本タスクで Move へ decode。
         // move 以外（要件 7.2/7.3）はタスク 4.2 の GenericCommand 領分。

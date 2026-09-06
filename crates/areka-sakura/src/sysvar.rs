@@ -67,6 +67,7 @@ pub fn resolve_system_var(name: &str, vars: &SystemVarSnapshot) -> ResolvedVar {
         return ResolvedVar::Text(value.to_owned());
     }
     // M1 対応語彙は `username` のみ（他は源が着地した時点で just-in-time 実導出）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_25username:1
     if name == "username" {
         tracing::debug!(
             var = %name,
