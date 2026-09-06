@@ -62,6 +62,12 @@ fn seg(line_index: usize, ordinal: usize, range: (f32, f32)) -> LineChoiceSegmen
 /// 装飾テストのハイライト帯（em ボックス丈 10.0 と**異なる**値＝焼込みが観測可能）。
 const TEST_BAND: f32 = 12.0;
 
+/// 既存ケースの帯の寄せ＝0（行ボックス丈 ＝ 帯の丈のフォント＝既定 ＭＳ ゴシックと同じ関係）。
+const NO_OFFSET: f32 = 0.0;
+
+/// 帯の寄せの焼込みが観測可能な値（0 とも em ボックス丈とも異なる）。
+const TEST_OFFSET: f32 = 3.0;
+
 /// 住人が Choice ならその中身を取り出す（さもなくば panic）。
 fn choice(resident: &Resident) -> &ChoiceLineContent {
     match &resident.content {
@@ -97,6 +103,7 @@ fn empty_segments_returns_canvas_unchanged() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     assert_eq!(out, input, "セグメント空は恒等（無変更）");
 }
@@ -121,6 +128,7 @@ fn hover_sets_highlight_on_matching_line_only() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     let l0 = choice(&out.residents[0]);
     assert_eq!(l0.hovered, Some(0));
@@ -156,6 +164,7 @@ fn hover_none_still_records_segments_without_highlight() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
         let c = choice(&out.residents[i]);
@@ -185,6 +194,7 @@ fn segment_inline_range_is_resident_local_subtracting_line_origin() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     let c = choice(&out.residents[0]);
     assert_eq!(
@@ -214,6 +224,7 @@ fn decorate_bakes_band_extent_into_choice_residents() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     for i in [0usize, 1] {
         assert_eq!(
@@ -222,6 +233,58 @@ fn decorate_bakes_band_extent_into_choice_residents() {
             "住人 {i}: hover 有無に依らず帯を焼き込む（hover 解除フレームのダーティ帯にも要る）"
         );
     }
+}
+
+/// Observable（R13.1/13.2 の帯の寄せの単一化）: 装飾は受け取った `band_offset` も Choice 住人へ
+/// そのまま焼き込む——COM 層のハイライト矩形の起点とダーティ帯の超過分はこの値を読み、
+/// `derive_hit_rows` へ渡す値と同一にすることで帯の**位置**まで数値一致する。
+#[test]
+fn decorate_bakes_band_offset_into_choice_residents() {
+    let region = region(0, 0, 400, 224);
+    let input = canvas(vec![
+        glyph_resident((0.0, 0.0)),
+        glyph_resident((0.0, 12.0)),
+    ]);
+    let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
+    let out = decorate_canvas(
+        input,
+        &segments,
+        Some(0),
+        square_fill(),
+        (0, 0, 0),
+        &region,
+        WritingMode::HorizontalTb,
+        TEST_BAND,
+        TEST_OFFSET,
+    );
+    for i in [0usize, 1] {
+        assert_eq!(
+            choice(&out.residents[i]).band_offset,
+            TEST_OFFSET,
+            "住人 {i}: hover 有無に依らず帯の寄せを焼き込む（hover 解除フレームのダーティ帯にも要る）"
+        );
+    }
+}
+
+/// 非退行（R13.6）: 寄せ 0（行ボックス丈 ＝ 帯の丈の既定 ＭＳ ゴシック）を渡すと住人へ焼かれる
+/// 値も 0 になり、下流（ハイライト矩形／ダーティ帯）は寄せを入れる前と 1 画素も変わらない。
+#[test]
+fn decorate_bakes_zero_band_offset_for_flat_line_box_fonts() {
+    let region = region(0, 0, 400, 224);
+    let input = canvas(vec![glyph_resident((0.0, 0.0))]);
+    let segments = [seg(0, 0, (0.0, 20.0))];
+    let out = decorate_canvas(
+        input,
+        &segments,
+        Some(0),
+        square_fill(),
+        (0, 0, 0),
+        &region,
+        WritingMode::HorizontalTb,
+        TEST_BAND,
+        NO_OFFSET,
+    );
+    assert_eq!(choice(&out.residents[0]).band_offset, 0.0);
 }
 
 /// 縦書き（vertical_rl/lr）: 行内軸＝y。行内 offset.1=50 → 絶対 50..70 は top 原点差引きで local 0..20。
@@ -241,6 +304,7 @@ fn segment_inline_range_vertical_subtracts_top_origin() {
             &region,
             mode,
             TEST_BAND,
+            NO_OFFSET,
         );
         let c = choice(&out.residents[0]);
         assert_eq!(
@@ -268,6 +332,7 @@ fn no_marker_style_yields_no_highlight_even_when_hovered() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     let c = choice(&out.residents[0]);
     assert_eq!(c.hovered, Some(0), "hover 印は付く");
@@ -289,6 +354,7 @@ fn invert_style_resolves_highlight_from_default_font_color() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     let c = choice(&out.residents[0]);
     assert_eq!(
@@ -317,6 +383,7 @@ fn two_choices_on_one_line_group_into_one_resident() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     assert_eq!(out.residents.len(), 1, "住人数は不変（1 行 1 住人）");
     let c = choice(&out.residents[0]);
@@ -346,6 +413,7 @@ fn wrapped_choice_highlights_both_lines() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     for i in [0usize, 1] {
         let c = choice(&out.residents[i]);
@@ -375,6 +443,7 @@ fn lines_without_segments_stay_glyph_run() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     assert!(
         matches!(out.residents[0].content, ResidentContent::GlyphRun(_)),
@@ -413,6 +482,7 @@ fn hover_stale_ordinal_yields_no_highlight() {
         &region,
         WritingMode::HorizontalTb,
         TEST_BAND,
+        NO_OFFSET,
     );
     for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
         let c = choice(&out.residents[i]);

@@ -239,12 +239,19 @@ impl ViewboxExecutor {
                     self.line_store
                         .line_layout(index, &text, &format, font.height, mode)?;
                     let measured = self.line_store.overhang(index).unwrap_or_default();
-                    // ハイライト帯（band_extent）は em ボックス丈より外側へ出る（descent 込み）。
-                    // ダーティ矩形が em ボックス＋実測インクはみ出しのままだと、帯の外側部分が
-                    // クリップで塗り残り／消し残りになる（hover 解除フレームに塗りが残る）。
-                    // ゆえにブロック軸の遠端はみ出しを **帯の超過分**まで広げる（横書き＝下・
-                    // 縦書き＝右——`highlight_rect` が帯を伸ばす向きと同一）。
-                    expand_overhang_for_band(measured, choice.band_extent, font.height, mode)
+                    // ハイライト帯（band_offset ＋ band_extent）は em ボックス丈より外側へ出る
+                    // （descent 込み＋行ボックス中央への寄せ）。ダーティ矩形が em ボックス＋
+                    // 実測インクはみ出しのままだと、帯の外側部分がクリップで塗り残り／消し残りに
+                    // なる（hover 解除フレームに塗りが残る）。ゆえにブロック軸の遠端はみ出しを
+                    // **帯の超過分**まで広げる（横書き＝下・縦書き＝右——`highlight_rect` が帯を
+                    // 伸ばす向きと同一）。
+                    expand_overhang_for_band(
+                        measured,
+                        choice.band_extent,
+                        choice.band_offset,
+                        font.height,
+                        mode,
+                    )
                 }
                 // 空行/シーム住人は実インクを持たない＝はみ出し 0（em ボックス丈）。
                 _ => LineOverhang::default(),
@@ -373,14 +380,17 @@ impl ViewboxExecutor {
                                     continue;
                                 }
                                 // hover セグメント矩形（inline_range × ハイライト帯 band_extent・
-                                // 住人 transform ＋block_offset 反映＝ヒット矩形／指紋と同座標系・R3.3）。
-                                // 帯は em ボックス丈（font.height）ではなく choice.band_extent
-                                // （descent 込みの実行ボックス丈）——`derive_hit_rows` へ渡る値と同一。
+                                // 住人 transform ＋block_offset ＋band_offset 反映＝ヒット矩形／
+                                // 指紋と同座標系・R3.3/R13.2）。帯は em ボックス丈（font.height）
+                                // ではなく choice.band_extent（descent 込みの実行ボックス丈）を
+                                // choice.band_offset だけ行ボックスの中央へ寄せた位置に置く
+                                // ——`derive_hit_rows` へ渡る 2 値と同一。
                                 rects.push(highlight_rect(
                                     seg.inline_range,
                                     (dx, dy),
                                     block_offset,
                                     choice.band_extent,
+                                    choice.band_offset,
                                     mode,
                                 ));
                                 // hover セグメントの文字範囲へ文字色効果を適用（run のグリフ位置から
@@ -720,32 +730,37 @@ fn color_f(rgb: (u8, u8, u8)) -> D2D1_COLOR_F {
 
 /// hover セグメント矩形を描画空間（image px・住人 transform＋block_offset 反映）で組む。
 ///
-/// 行内軸＝セグメントの `inline_range`（文字幅）・ブロック軸帯＝`band_extent`
-/// （[`ChoiceLineContent::band_extent`]＝実 font metrics の `ascent + descent` 由来。em ボックス丈
-/// `font_height` ではない——em で切ると和文フォントの descent インクが帯からはみ出す）。住人平行移動
-/// `(dx, dy)` と可視窓オフセット `block_offset`（横＝Y・縦＝X）を反映し、glyph 描画原点と同一系へ
-/// 揃える（ヒット矩形／指紋と同座標系・R3.3）。座標は合成スケール `k` 適用前の image px
+/// 行内軸＝セグメントの `inline_range`（文字幅）・ブロック軸帯＝`band_offset` だけ内側へ寄せた
+/// 起点から `band_extent`（[`ChoiceLineContent::band_extent`]＝実 font metrics の `ascent + descent`
+/// 由来。em ボックス丈 `font_height` ではない——em で切ると和文フォントの descent インクが帯から
+/// はみ出す。[`ChoiceLineContent::band_offset`]＝帯を行ボックスの中央へ置く寄せ——近端へ揃えると
+/// 帯が上に余りながら下でインクを切る・R13.1）。住人平行移動 `(dx, dy)` と可視窓オフセット
+/// `block_offset`（横＝Y・縦＝X）を反映し、glyph 描画原点と同一系へ揃える（ヒット矩形／指紋と
+/// 同座標系・R3.3）。座標は合成スケール `k` 適用前の image px
 /// （呼び手が `SetTransform(scale(k))` 下で `FillRectangle` する）。
 fn highlight_rect(
     inline_range: (f32, f32),
     offset: (f32, f32),
     block_offset: f32,
     band_extent: f32,
+    band_offset: f32,
     mode: WritingMode,
 ) -> D2D_RECT_F {
     let (i0, i1) = inline_range;
     let (dx, dy) = offset;
+    // ブロック軸の帯の起点は「住人原点 ＋ 可視窓オフセット ＋ 帯の寄せ」。寄せ（band_offset）は
+    // 帯を行ボックスの中央へ置くための量で、ヒット導出（`derive_hit_rows`）へ渡す値と同一である。
     match mode {
         WritingMode::HorizontalTb => D2D_RECT_F {
             left: dx + i0,
-            top: dy + block_offset,
+            top: dy + block_offset + band_offset,
             right: dx + i1,
-            bottom: dy + block_offset + band_extent,
+            bottom: dy + block_offset + band_offset + band_extent,
         },
         WritingMode::VerticalRl | WritingMode::VerticalLr => D2D_RECT_F {
-            left: dx + block_offset,
+            left: dx + block_offset + band_offset,
             top: dy + i0,
-            right: dx + block_offset + band_extent,
+            right: dx + block_offset + band_offset + band_extent,
             bottom: dy + i1,
         },
     }
@@ -754,18 +769,21 @@ fn highlight_rect(
 /// Choice 住人のダーティ帯を **ハイライト帯の超過分**まで広げた [`LineOverhang`] を返す（純粋）。
 ///
 /// ダーティ矩形は em ボックス（`font_height`）＋実測インクはみ出しで組まれる（D2）。ハイライト帯
-/// （`band_extent`＝`ascent + descent` 由来）はそれより外側へ出るため、超過分
-/// `band_extent − font_height` をブロック軸**遠端**（横書き＝`bottom`・縦書き＝`right`——
-/// [`highlight_rect`] が帯を伸ばす向き）の下限として与える。実測インクはみ出しの方が大きい場合は
-/// 実測値を保つ（`max`）。これにより hover フレームの塗りが欠けず、hover 解除フレームで
-/// 塗りが消し残らない（同一帯が両フレームでダーティになる）。
+/// （`band_extent`＝`ascent + descent` 由来）は行矩形の block 近端から `band_offset` だけ寄せた
+/// 位置に置かれるので、遠端側の超過分は `band_offset + band_extent − font_height` になる
+/// （寄せを数えないと、寄せた分だけ帯の下（縦書きは右）がダーティ矩形の外へ落ち、hover 解除の
+/// フレームで塗りが消し残る・R13.5）。この超過分をブロック軸**遠端**（横書き＝`bottom`・
+/// 縦書き＝`right`——[`highlight_rect`] が帯を伸ばす向き）の下限として与える。実測インクはみ出しの
+/// 方が大きい場合は実測値を保つ（`max`）。これにより hover フレームの塗りが欠けず、hover 解除
+/// フレームで塗りが消し残らない（同一帯が両フレームでダーティになる）。
 fn expand_overhang_for_band(
     measured: LineOverhang,
     band_extent: f32,
+    band_offset: f32,
     font_height: f32,
     mode: WritingMode,
 ) -> LineOverhang {
-    let excess = (band_extent - font_height).max(0.0);
+    let excess = (band_offset + band_extent - font_height).max(0.0);
     match mode {
         WritingMode::HorizontalTb => LineOverhang {
             bottom: measured.bottom.max(excess),

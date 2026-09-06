@@ -25,7 +25,7 @@ use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::choice::{
     ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, highlight_band_extent,
-    to_window_physical,
+    highlight_band_offset, to_window_physical,
 };
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DWriteMetrics, ResolvedFont};
@@ -786,11 +786,17 @@ fn present_actor(
     // （descent 込み）を行送りピッチで頭打ちにした値を 1 度だけ決め、装飾（描画帯）とヒット導出
     // （照会帯）の両方へ同一値を配る。em ボックス丈（font.height）で切ると和文フォントの descent
     // インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
+    let line_box_height = render.metrics.line_box_height(resolved.font.height);
     let band_extent = highlight_band_extent(
         resolved.font.height,
-        render.metrics.line_box_height(resolved.font.height),
+        line_box_height,
         render.metrics.line_pitch(resolved.font.height),
     );
+    // 帯を行ボックスの中央へ寄せる量（**同じく単一の源**・R13.1/13.2）: 帯の丈が行送りで頭打ちに
+    // なって行ボックス丈より短いとき、余りを上下へ等分して帯を内側へ寄せる。近端へ揃えたままだと
+    // 帯が上に余りながら下でインクを切る（実機の目視「色反転位置が 2 ドット程上すぎる」）。
+    // 行ボックス丈が em ボックス丈に等しい既定フォントでは 0 ＝ 従来と 1 画素も変わらない。
+    let band_offset = highlight_band_offset(line_box_height, band_extent);
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。
     let hover = runtime.choice_hover.get(actor).copied().flatten();
     // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
@@ -804,6 +810,7 @@ fn present_actor(
         &resolved.region,
         resolved.mode,
         band_extent,
+        band_offset,
     );
     let changed = render.executor.render(
         &canvas,
@@ -822,13 +829,15 @@ fn present_actor(
         // （新規のスクロール可視判定は追加しない・6.3）。NoChange フレームはこの更新を丸ごと省き
         // 直前スナップショットを不変のまま保つ。
         let committed = render.executor.scroll_state().committed;
-        // 帯は装飾（描画）へ渡したのと**同一の band_extent**——描画とヒットの座標整合（R3.3）。
+        // 帯は装飾（描画）へ渡したのと**同一の band_extent／band_offset**——描画とヒットの
+        // 座標整合（R3.3/R13.2）。
         let hit_rows = derive_hit_rows(
             &lines,
             &segments,
             resolved.mode,
             &resolved.region,
             band_extent,
+            band_offset,
         );
         // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
         let snapshot: Vec<ChoiceHitRow> = hit_rows

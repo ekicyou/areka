@@ -181,6 +181,16 @@ pub struct ChoiceLineContent {
     /// ハイライト矩形とダーティ帯の両方を組み、純粋層の
     /// [`derive_hit_rows`](crate::choice::derive_hit_rows) は同値を受け取って帯を一致させる。
     pub band_extent: f32,
+    /// ハイライト帯（＝ヒット帯）を行矩形の block 近端から内側へ寄せる量（image px）。
+    ///
+    /// [`highlight_band_offset`](crate::choice::highlight_band_offset) が
+    /// `round(max(0, 行ボックス丈 − band_extent) / 2)` で決めた値——帯を行ボックスの**中央**へ
+    /// 置くための寄せである。近端へ揃えたままだと、行ボックス丈より短い帯が上に余りながら
+    /// 下でインクを切る（実機不具合「色反転位置が 2 ドット程上すぎる」の真因・R13.1）。
+    /// 行ボックス丈が em ボックス丈に等しいフォント（既定 ＭＳ ゴシック）では 0 ＝ 従来と同一。
+    /// COM 層はこの値をハイライト矩形の起点とダーティ帯の超過分の両方に用い、純粋層の
+    /// [`derive_hit_rows`](crate::choice::derive_hit_rows) は同値を受け取って帯を一致させる。
+    pub band_offset: f32,
 }
 
 /// 行内の 1 選択肢セグメント（ordinal ＋ 行内軸ローカル範囲）。
