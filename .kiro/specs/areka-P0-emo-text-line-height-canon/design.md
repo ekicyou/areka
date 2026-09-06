@@ -432,11 +432,11 @@ impl TextLayerConfig {
 - CharByChar: `feed = !current.is_empty() && (inline_pos + advance > soft || inline_pos + advance > hard)`。
 - Segmented: `limit = soft.min(hard)` で `cap_rem`／`cap_full` を計算（`:410-411`）。塊内（`seg_remaining > 0`）も含め、配置直前に `!current.is_empty() && inline_pos + advance > hard` を最後に評価する（true なら行送りし `seg_remaining` は塊の残数として保つ＝塊は次行へ続く）。
 - 縦書きは `inline_limit` が `bottom` になるだけ（`region.rs` が軸を解決済み・`layout` に mode 分岐を足さない・3.8）。
-- 事後条件: どのグリフの遠端も `hard` を超えない（例外＝行頭 1 グリフ）。soft ≤ hard の入力では本仕様前後で出力がビット一致する（6.4）。
+- 事後条件: どのグリフの遠端も `hard` を超えない（例外＝行頭 1 グリフ）。soft ≤ hard の入力では本仕様前後で出力がビット一致する（6.4）——**⚠限定 2026-09-06（台帳 §7 #12）**: `\_l` による行内位置の跳躍を伴わない入力に限る。跳躍先が描画範囲の遠辺付近なら 6.2（描画範囲の外に置かない）が優先して折り返す。
 
 **Implementation Notes**
 - Validation: `layout_hard_limit_tests.rs`（R8.4(b)）——横書き／縦書き × CharByChar／Segmented × {soft > hard, soft ≤ hard, 行頭超過 1 グリフ}。soft ≤ hard の入力は既存 `layout_wrap_tests.rs`／`layout_segmented_tests.rs` が引き続き固定する。
-- Risks: 塊内で hard が発火すると `SegmentPlan` の「塊は途中分割されない」不変条件（`layout.rs:338-342`）に例外ができる——soft > hard の粗いバルーン定義でだけ起きる縮退で、`debug!` を 1 件残す（分岐の理由が読める形に）。
+- Risks: 塊内で hard が発火すると `SegmentPlan` の「塊は途中分割されない」不変条件（`layout.rs:338-342`）に例外ができる——~~soft > hard の粗いバルーン定義でだけ起きる縮退~~ **⚠訂正 2026-09-06（台帳 §7 #11）**: `limit = soft.min(hard)` で塊の容量を先決するため送り幅の積み上がりでは到達せず、塊の途中で `\_l` が行内位置を進めた場合にだけ起きる（通常バルーンでも起きうる）。`debug!` を 1 件残す（分岐の理由が読める形に）。
 
 #### `TextRegion.inline_limit` と警告（`region.rs:178-316`）
 

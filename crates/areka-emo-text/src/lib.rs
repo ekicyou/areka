@@ -233,6 +233,10 @@ mod tests {
                 "layout_cursor_wiring_tests.rs",
                 include_str!("layout_cursor_wiring_tests.rs"),
             ),
+            (
+                "layout_hard_limit_tests.rs",
+                include_str!("layout_hard_limit_tests.rs"),
+            ),
             ("canvas.rs", include_str!("canvas.rs")),
             ("viewbox.rs", include_str!("viewbox.rs")),
             ("wrap.rs", include_str!("wrap.rs")),
