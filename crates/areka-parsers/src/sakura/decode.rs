@@ -224,6 +224,7 @@ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
             args.into_iter().next().unwrap_or_default(),
         )),
         // カーソル絶対位置（要件 6.1）: `\_l[x,y]`（x/y は文字列のまま保持）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_l_5bx_2cy_5d:1
         "_l" => decode_cursor(args),
         // 選択肢（要件 5.1/5.2）: `\q[disp,target,refs...]`。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1

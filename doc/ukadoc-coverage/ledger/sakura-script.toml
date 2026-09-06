@@ -4093,20 +4093,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1"]
-status = "degraded"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-cursor-tag-canon"
-priority = "C40"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:origin.x_2c_5ea7_6a19_20_2a1:1" },
   { kind = "same-feature", to = "ukadoc:descript_balloon:origin.y_2c_5ea7_6a19_20_2a1:1" },
 ]
 note = """
-壊れ方: 見た目の差 — decode_tag の \"_l\" の腕が x・y を文字列のまま Cursor にし、compile が cue を出して emo-text の cursor_to_image_px が px・em・lh の非負絶対だけを解く。動く用法＝横書きの絶対座標指定。動かない用法＝縦書き（vertical_rl）では原点と符号が正典と食い違い 1 列目ではなく描画範囲の外側左方へ着地すること、および % 指定・@ 相対・負値が軸不変へ落ちて座標が動かないこと。
-ログ: 出る（% 指定・@ 相対・負値・解けない綴りのときだけ layout の warn_cursor_degrade がスコープごとに 1 度 warn! を出す。横書きの正常な絶対指定では出ない）。
-[転記元: doc/COMPAT_ARCHITECTURE.md の「\\_l の縦書き座標系の正典写像と、areka の既知非互換」の行]
-[分担: 縦書き写像と既知非互換の登記は完了済みの areka-P0-balloon-vertical-canon、全語彙の一括実装は owner の areka-P0-cursor-tag-canon。areka-P0-text-decoration-canon は \\f 装飾との相互作用の側、areka-P0-balloon-canon-residue は残件の追跡]
+壊れ方: 見た目の差 — decode_tag の \"_l\" の腕が x・y を文字列のまま Cursor にし、compile が cue を出して emo-text の resolve_cursor_axis が軸ごとに解く。裸数値・em・lh・% の単位と、絶対（負値を含む）・@ 相対・centerx／centery のすべてを実導出し、横書きでも縦書きでも正典どおりの写像で着地する（縦書きの正典写像は doc/COMPAT_ARCHITECTURE.md の \\_l の縦書き座標系の行が実装済みとして登記しており、そこに書かれていた既知非互換は同じ行で取り下げられている）。当該軸が動かないのは、centerx／centery を対応しない軸に書いたときと、数として解けない綴りのときだけである。
+ログ: 出る（軸の取り違えと解釈不能のときだけ warn_cursor_degrade がスコープごとに 1 度 warn! を出す。正典どおりの指定では出ない。文字描画範囲の外に着地した位置は note_out_of_range が debug! に記録するだけで、位置を内側へ寄せない）。
+[分担: 縦書きの正典写像の登記は完了済みの areka-P0-balloon-vertical-canon、全語彙の一括実装は完了済みの owner の areka-P0-cursor-tag-canon。areka-P0-text-decoration-canon は \\f 装飾との相互作用の側（正典は \\_l の副作用として直後の行揃えが左揃えへ戻ることを定めており、これが areka で見た目どおりに成り立つのは \\f[align]／\\f[valign] が未実装で行揃えが常に左だからである。同 spec が行揃えを実装しながらこの左揃えへの復帰を実装しなければ、この項目はその時点で縮退へ落ちる）、areka-P0-balloon-canon-residue は残件の追跡]
 [頻度: 里々 4 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\_l。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
