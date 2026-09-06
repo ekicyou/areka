@@ -212,6 +212,17 @@
   - _Depends: 5.3_
   - _Requirements: 12.1_
 
+- [ ] 5.5 (裁定) 上流の摂動テストの的を、どの台帳からも指されていない id へ移す
+  - **2026-09-06 の開発者裁定の 2 度目の適用。** 上流の摂動テスト 2 本（`a_ledger_id_that_left_the_catalog_turns_red`・`the_check_survives_lines_moving`）は `crates/ukadoc-survey/tests/consistency/perturb.rs` の `ANCHOR_ID`＝`ukadoc:list_shiori_event:OnBoot:1` をカタログから抜いて「所見が**ちょうど 1 件**」を主張する。本 spec の台帳がその id へ `triggers` を張ったので `LinkEndpointMissing` が 1 件増えて 2 件になり赤になる
+  - **台帳は正しい**（正典本文が `OnBoot` を固定名で名指ししている・要件 6.2）。直すのはテストの側
+  - **採る案**: 摂動の的を「**4 つの台帳の `links`／`alias_of`／`supersedes` から一度も指されていない id**」へ移す。期待値（ちょうど 1 件）の意味を保てるので最も筋が良い。的は**機械で選ぶ**こと（人が目で選ぶと次に同じ罠を踏む）
+  - ⚠ `ANCHOR_URL`（`checks.rs`）と `ANCHOR_SOURCE` など的に紐づく定数も**同じ id へ揃える**。`checks.rs` の他の `ANCHOR_ID` の用途にも波及するので全数を確かめる
+  - **採らない案とその理由も記録する**: ⑵ 期待値を「1 件含まれる」の部分一致に緩める → `expect_exactly` の「顔ぶれが逐語で一致する」という上流設計の強さを失う ⑶ `LinkEndpointMissing` を期待に足す → 次に別ドメインが同じ id を指した瞬間また赤になる＝**同じ罠を作り直すだけ**
+  - **判定の中身・数え方・他のテストには触れない。実行時に評価される記述を 1 行も追加・変更・削除しない**
+  - 完了の見え方: `cargo test -p ukadoc-survey` が**全緑**になり、新しい的が 4 台帳のどこからも指されていないことが機械で示されている
+  - _Depends: 5.2_
+  - _Requirements: 12.1_
+
 - [ ] 6. 検査を回して結果を残す（段 10）
 
 - [ ] 6.1 常設の検査が見ない分だけを台本にし、わざと壊した写しで赤が出ることを先に確かめる
