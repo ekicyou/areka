@@ -71,8 +71,9 @@ const PITCH: u32 = 14;
 /// 行 8 は 124 > 120）。旧ピッチ 15 でも 8 行（117 ≤ 120・132 > 120）——**行数は偶然一致する**
 /// だけで、根拠の式は 15 の等差から 14 の等差へ変わっている。
 const FILL_LINES: usize = 8;
-/// 露出帯交差行の tight bound（実測 2 ＝ 露出帯矩形＋変化行矩形の 2 dirty × 変化行 1）。
-/// 露出帯は概ね 1 行 pitch 高ゆえ交差は「あふれで流入した変化行」だけに限られる。
+/// 露出帯交差行の tight bound（実測 2）。増分は**ダーティ矩形ごとの交差行数の和**で数える。
+/// 内訳は「露出帯の矩形 ∩ 1 行」＋「変化行の矩形 ∩ 1 行」＝ 1 + 1 ——露出帯は概ね 1 行 pitch 高
+/// ゆえ交差は「あふれで流入した変化行」だけに限られ、2 枚とも同じその 1 行に交差する。
 const EXPOSURE_BAND_DRAW_BOUND: u64 = 3;
 /// 全 emit グリフが可視な注入時刻（reveal 時刻は ≤ 0.5s ゆえ 100.0 で必ず全可視＝
 /// フレーム間差はスクロール／内容変化のみに帰着し、リビール進行が混ざらない）。
@@ -283,7 +284,7 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
         "再描画レス(fixture依存 tight check): スクロールフレームの DrawTextLayout 増分 {draw_delta} は可視行数 {visible_line_count} より厳密に小さい（全域再描画なら {visible_line_count}）"
     );
     // tight bound: 露出帯は概ね 1 行 pitch 高＝交差は「あふれで流入した変化行」だけ。
-    // 実測 2（露出帯矩形＋変化行矩形の 2 dirty × 変化行 1 の DrawTextLayout）。
+    // 実測 2 ＝ 露出帯の矩形 ∩ 1 行 ＋ 変化行の矩形 ∩ 1 行（矩形ごとの交差行数の和）。
     assert!(
         draw_delta <= EXPOSURE_BAND_DRAW_BOUND,
         "DrawTextLayout 増分 {draw_delta} は露出帯交差行の tight bound {EXPOSURE_BAND_DRAW_BOUND} 以下（露出帯 ∪ 変化行に限定）"
@@ -343,7 +344,7 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
 
     // ── 再描画レスの fixture 非依存な決定的不変（G3・脆弱な `< visible_line_count` に依存しない）──
     // 上の `< visible_line_count` は可視 8 行 fixture でしか成立しない（可視 2〜3 行の小 fixture では
-    // draw_delta＝dirty_len×draws が可視行数に達し得る）。以下は fixture の可視行数に依らず成立する
+    // draw_delta＝矩形ごとの交差行数の和が可視行数に達し得る）。以下は fixture の可視行数に依らず成立する
     // 再描画レスの決定的証拠であり、これらが本檻の真の負のコントロールである:
     //   (a) blit==+1（上で assert 済み）: viewbox は確定ピクセルを面内 blit で保持する。全域再描画は
     //       保持せず毎フレーム描き直す＝blit 0。全域再描画へ戻すと blits +1 assert が fixture に依らず落ちる。

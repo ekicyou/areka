@@ -20,7 +20,8 @@
 //! cargo run -p areka-emo-text --example emo-text-layer -- --vertical # 縦書き（fixture 変種 emo2-vertical）
 //! cargo run -p areka-emo-text --example emo-text-layer -- --hold     # 目視確認（自動クローズせず talk をループ・balloon 上ダブルクリックで終了）
 //! ```
-//! 既定ではシナリオが自動進行し（約 4 秒）、完了すると窓を閉じて `PASS`／`FAIL` を出力して終了する。
+//! 既定ではシナリオが自動進行し（約 4.5 秒——最後のチェックポイントが talk 起点 3.8 秒）、
+//! 完了すると窓を閉じて `PASS`／`FAIL` を出力して終了する。
 //! `--hold` を付けると自動クローズせず talk をループ再生し、balloon 窓上での左ダブルクリックで終了する
 //! （実機での目視確認用・`--vertical` と併用可）。
 //!
@@ -191,7 +192,7 @@ fn main() -> windows::core::Result<()> {
             "横書き horizontal_tb（既定）"
         }
     );
-    println!("  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（自動・約 4 秒）");
+    println!("  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（自動・約 4.5 秒）");
     if hold {
         println!(
             "  モード: --hold（目視確認）— talk をループ再生し、balloon 上でダブルクリックすると終了"
