@@ -178,7 +178,7 @@ graph TB
 
 ## 5. 根拠画像の保存と読み取り値（Requirement 1.3・6.1）
 
-- 置き場: `.kiro/specs/areka-P0-emo-text-line-height-canon/verification/evidence/`（画像 2 枚＋`README.md`）。README はコントローラが書く。道具・台本・SSP の設定変更は**持たない**。
+- 置き場: `.kiro/specs/completed/areka-P0-emo-text-line-height-canon/verification/evidence/`（画像 2 枚＋`README.md`）。README はコントローラが書く。道具・台本・SSP の設定変更は**持たない**。
 - 画像: SSP の 200% 表示（開発者提供・2026-09-05）と areka の 200% 表示（コントローラが本ブランチの areka を起動して撮影・同日）。いずれも `emo2-kakukaku`（`font.height,28`・Yu Gothic UI）。
 - 読み取り値の表（README に置く欄・物理 px・目視 ±5px）: 1 文字の送り（≈ 45／45）・インク丈（≈ 45／45）・行送り（SSP ≈ 58〜60・areka 72）・等倍の確認（バルーン画像幅 400 image px が画面上 ≈ 800px）・image px への換算（÷2: 行送り SSP 29〜30・areka 36 ≒ 実装 35）・「閉じる」の右端の見え方（6.1 の裏付け欄）。
 - 使い方: §4.1 の根拠列・COMPAT §8 の根拠欄・`tests/line_pitch_readback_test.rs` の定数のコメントがこの表を引く。再測は同じ 2 画面を撮り直せばよい（手順は README に 3 行で書く）。
@@ -202,7 +202,7 @@ crates/areka-emo-text/src/
 crates/areka-emo-text/tests/
 ├── kero_menu_capacity_test.rs        # 新設: 実物 emo2-kakukaku × menu.pasta 3 台本（R8.1／8.2／8.4(a)(c)／8.7・GPU 不要）
 └── line_pitch_readback_test.rs       # 新設: 裁定値の実フォント読み戻し・2 行のインク非重なり・帯とインク（R8.3／8.5／5.6・headless GPU）
-.kiro/specs/areka-P0-emo-text-line-height-canon/
+.kiro/specs/completed/areka-P0-emo-text-line-height-canon/
 ├── verification/evidence/{README.md, ssp-200pct.png, areka-200pct.png}   # 根拠画像と読み取り値（§5）
 └── verification/handoff.md           # e2e への引き渡し（R10.2・変化／不変の一覧・1 箇所）
 ```
@@ -583,7 +583,7 @@ log-first（`.kiro/steering/logging.md`）: 失敗は `error!`＋`Err`、縮退�
 ### 機械検査（2.4）
 
 ```
-rg -n "1\.25" crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka-emo-text/examples doc/COMPAT_ARCHITECTURE.md .kiro/specs/areka-P0-emo-text-line-height-canon/design.md \
+rg -n "1\.25" crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka-emo-text/examples doc/COMPAT_ARCHITECTURE.md .kiro/specs/completed/areka-P0-emo-text-line-height-canon/design.md \
   | rg "line_pitch|行送り|係数" | rg -v "旧式|本仕様で改訂|履歴"
 ```
 期待 0 件。除外（R2.4）: DPI 拡大率 k の `1.25`（`region.rs:710-731`・`tests/scale_invariance_test.rs`・`crates/areka/src/placement/`）は第 2 段の絞り込みで自然に落ちる。第 3 段の除外語（`旧式|本仕様で改訂|履歴`）は現行式を述べる行に偶然含まれ得るため、第 2 段までの残り行を一覧に出して目視で「すべて履歴か注記つき引用である」ことを確認し、その一覧を DoD の証跡に添える。

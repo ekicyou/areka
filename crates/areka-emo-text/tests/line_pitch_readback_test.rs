@@ -62,7 +62,7 @@ use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
 const RULED_ON: &str = "2026-09-05";
 /// 根拠の所在（表示画像 2 枚の目視読み取り値の表）。
 const EVIDENCE: &str =
-    ".kiro/specs/areka-P0-emo-text-line-height-canon/verification/evidence/README.md";
+    ".kiro/specs/completed/areka-P0-emo-text-line-height-canon/verification/evidence/README.md";
 
 /// 実物 `emo2-kakukaku` と同じ `font.height`（image px）。裁定 1 ＝ **em サイズ**であり、
 /// 文字描画基盤へ値のまま渡す（要件 1.1／3.3）。

@@ -41,7 +41,7 @@ design.md「機械検査（2.4）」は `rg`（ripgrep）で検索を書いて�
 ```
 grep -rnI -E "1\.25" \
   crates/areka-emo-text/src crates/areka-emo-text/tests crates/areka-emo-text/examples \
-  doc/COMPAT_ARCHITECTURE.md .kiro/specs/areka-P0-emo-text-line-height-canon/design.md \
+  doc/COMPAT_ARCHITECTURE.md .kiro/specs/completed/areka-P0-emo-text-line-height-canon/design.md \
   | grep -E "line_pitch|行送り|係数" \
   | grep -vE "旧式|本仕様で改訂|履歴"
 ```
@@ -409,10 +409,10 @@ git status --porcelain
 ```
 
 ```
- M .kiro/specs/areka-P0-emo-text-line-height-canon/design.md
+ M .kiro/specs/completed/areka-P0-emo-text-line-height-canon/design.md
  M crates/areka-emo-text/tests/kero_menu_capacity_test.rs
  M doc/COMPAT_ARCHITECTURE.md
-?? .kiro/specs/areka-P0-emo-text-line-height-canon/verification/task-6.1-sweep-and-tests.md
+?? .kiro/specs/completed/areka-P0-emo-text-line-height-canon/verification/task-6.1-sweep-and-tests.md
 ```
 
 4 件だけで、§4 の「本タスクで変更したファイル」と一致します（`M` 3 件が §1.4 の語の追加、`??` 1 件が本文書）。
