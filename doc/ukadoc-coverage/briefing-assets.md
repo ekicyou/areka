@@ -4,7 +4,187 @@
 
 ## この文書の構成
 
-節はこの順に置く——冒頭、SERIKO/MAYUNA 世代別対応表、未知の記述の扱い、nar インストールとネットワーク更新の導線、沈黙ルール対応表の一覧、ライブ確認の結果、未収載の候補、隣接 spec の是正候補。本稿はこのうち「未知の記述の扱い」「沈黙ルール対応表の一覧」「ライブ確認の結果」「未収載の候補」の 4 節を先に書いている。残りは台帳が固まってから同じ順序で差し込む。
+節はこの順に置く——冒頭、SERIKO/MAYUNA 世代別対応表、未知の記述の扱い、nar インストールとネットワーク更新の導線、沈黙ルール対応表の一覧、ライブ確認の結果、未収載の候補、隣接 spec の是正候補。本稿はこのうち「SERIKO/MAYUNA 世代別対応表」「未知の記述の扱い」「沈黙ルール対応表の一覧」「ライブ確認の結果」「未収載の候補」の 5 節を先に書いている。残りは台帳が固まってから同じ順序で差し込む。
+
+## SERIKO/MAYUNA 世代別対応表
+
+シェルの見た目と動きを決める `surfaces.txt` のページ（`descript_shell_surfaces`）の 137 項目を、1 行ずつ並べた表である。列は「項目 id・見出し・登場した版・areka の状態」の 4 つ。
+
+**この表は手で書いていない。** 作業用のスクリプトが台帳 `doc/ukadoc-coverage/ledger/assets.toml` を読み、見出しを `doc/ukadoc-coverage/catalog.toml` から引いて組んだものを、そのまま貼っている。貼ったものと作り直したものが 1 バイトも違わないこと、台帳のこのページの項目が過不足なく 1 行ずつ載っていること（同じ項目が 2 行に分かれていないこと）は、作業用の検査が毎回見ている。台帳の側を直したら、表も作り直して貼り直すことになる。
+
+### 基準になる 2 つの時点
+
+- 正典のスナップショットが作られた時点: **2026-08-24T04:08:57.881Z**（`doc/ukadoc-coverage/catalog.toml` の `[snapshot]` の `generated_at`）。「登場した版」の欄と「見出し」の欄はこの時点のものである。
+- ライブを確かめた日: **2026-09-05**。このページの見出しはその日のライブでも 137 件で、スナップショットと数が合っていた（下の「ライブ確認の結果」の節）。
+
+つまりこの表は、正典についてはスナップショットの時点を、ライブとの照合についてはその 12 日後の 1 日を写している。それより後に正典が動いていれば、その分だけ古い。areka の側の状態は本調査が調べた時点のものである。
+
+**本節の行番号は 2026-09-06 に測ったものである。** 設計と要件が引いている範囲とは端が数行ずれるが、指している定義は同じである。行番号はソースに 1 行足すだけで動くので、以下ではクレート名・ファイル・定義の名前を併せて書いた。
+
+### 表の読み方
+
+「登場した版」は、その項目が正典で最初に現れた版である。カタログがその項目に版を 1 つも記録していないときは `—` と書いた——**66 項目**がこれに当たる。版が記録されているのは **71 項目**で、最も古いものが 2.3.53、最も新しいものが 2.8.52 である。カタログが 2 つ以上の版を記録している項目はこのページに 2 つあり（`element*` と `animation*.pattern*`）、どちらも最も古い版を採った。この選び方は台帳の冒頭に書いてある規則そのままである。
+
+「areka の状態」は台帳の状態をそのまま写したもので、語の意味は報告 `doc/ukadoc-coverage/report/assets.md` と同じである。このページの内訳は 実装済み 4・語彙のみ 57・縮退 4・別名 4・未対応 68 の合わせて 137 件で、**対象外は 0 件、未分類も 0 件**である。実装済みの 4 件は `overlay`・`add`・`random,数値`・`animation-sort,ソート順序` で、この 4 つだけがソース側に正典 URL の 1 行を持っている。
+
+| 項目 id | 見出し | 登場した版 | areka の状態 |
+| --- | --- | --- | --- |
+| `ukadoc:descript_shell_surfaces:_2a_2c_5b_2a_5d:1` | `*,[*]` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:_5f53_305f_308a_5224_5b9a_540d_2c_8868_793a_5185_5bb9:1` | `当たり判定名,表示内容` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:add:1` | `add` | — | 実装済み |
+| `ukadoc:descript_shell_surfaces:alternativestart_2c_28ID1_2cID2..._29:1` | `alternativestart,(ID1,ID2...)` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:alternativestop_2c_28ID1_2cID2..._29:1` | `alternativestop,(ID1,ID2...)` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:always:1` | `always` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:animation-sort_2c_30bd_30fc_30c8_9806_5e8f:1` | `animation-sort,ソート順序` | — | 実装済み |
+| `ukadoc:descript_shell_surfaces:animation_2a.collision_2a_2c_5f53_305f_308a_5224_5b9a_5b9a_7fa9animation_2a.collisionex_2a_2c_5f53_305f_308a_5224_5b9a_5:1` | `animation*.collision*,当たり判定定義animation*.collisionex*,当たり判定定義(ex)` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:animation_2a.interval_2c_30a4_30f3_30bf_30fc_30d0_30eb:1` | `animation*.interval,インターバル` | — | 縮退 |
+| `ukadoc:descript_shell_surfaces:animation_2a.name_2c_5b9a_7fa9_540d:1` | `animation*.name,定義名` | `2.8.24` | 未対応 |
+| `ukadoc:descript_shell_surfaces:animation_2a.option_2c_30aa_30d7_30b7_30e7_30f3:1` | `animation*.option,オプション` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:animation_2a.option_2cbackground:1` | `animation*.option,background` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:animation_2a.option_2cexclusive:1` | `animation*.option,exclusive` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:animation_2a.option_2cshared-index:1` | `animation*.option,shared-index` | `2.6.02` | 未対応 |
+| `ukadoc:descript_shell_surfaces:animation_2a.pattern_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30b5_30fc_30d5_30a7_30b9_756a_53f7_2c_30a6_30a7_30a4_30c8_2c:1` | `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X座標,Y座標(,オプション...)` | `2.8.25` | 縮退 |
+| `ukadoc:descript_shell_surfaces:asis:1` | `asis` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:auto:1` | `auto` | `2.8.41` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:balloon.offsetx_2c_5ea7_6a19:1` | `balloon.offsetx,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:balloon.offsety_2c_5ea7_6a19:1` | `balloon.offsety,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:base:1` | `base` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:bind:1` | `bind` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:bind:2` | `bind` | — | 別名 |
+| `ukadoc:descript_shell_surfaces:blend-add-fast:1` | `blend-add-fast` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-add-glow-fast:1` | `blend-add-glow-fast` | `2.8.46` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-add-glow:1` | `blend-add-glow` | `2.8.46` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-add:1` | `blend-add` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-color-burn-fast:1` | `blend-color-burn-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-color-burn:1` | `blend-color-burn` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-color-dodge-fast:1` | `blend-color-dodge-fast` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-color-dodge-glow-fast:1` | `blend-color-dodge-glow-fast` | `2.8.46` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-color-dodge-glow:1` | `blend-color-dodge-glow` | `2.8.46` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-color-dodge:1` | `blend-color-dodge` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-color-fast:1` | `blend-color-fast` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-color:1` | `blend-color` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-darken-fast:1` | `blend-darken-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-darken:1` | `blend-darken` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-darker-color-fast:1` | `blend-darker-color-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-darker-color:1` | `blend-darker-color` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-difference-fast:1` | `blend-difference-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-difference:1` | `blend-difference` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-dither:1` | `blend-dither` | `2.8.44` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-divide-fast:1` | `blend-divide-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-divide:1` | `blend-divide` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-exclusion-fast:1` | `blend-exclusion-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-exclusion:1` | `blend-exclusion` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-hard-light-fast:1` | `blend-hard-light-fast` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-hard-light:1` | `blend-hard-light` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-hard-mix-fast:1` | `blend-hard-mix-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-hard-mix:1` | `blend-hard-mix` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-hue-fast:1` | `blend-hue-fast` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-hue:1` | `blend-hue` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-lighten-fast:1` | `blend-lighten-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-lighten:1` | `blend-lighten` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-lighter-color-fast:1` | `blend-lighter-color-fast` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-lighter-color:1` | `blend-lighter-color` | `2.8.40` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-linear-burn-fast:1` | `blend-linear-burn-fast` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-linear-burn:1` | `blend-linear-burn` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-linear-light-fast:1` | `blend-linear-light-fast` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-linear-light:1` | `blend-linear-light` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-luminosity-fast:1` | `blend-luminosity-fast` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-luminosity:1` | `blend-luminosity` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-multiply-fast:1` | `blend-multiply-fast` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-multiply:1` | `blend-multiply` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-overlay-fast:1` | `blend-overlay-fast` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-overlay:1` | `blend-overlay` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-pin-light-fast:1` | `blend-pin-light-fast` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-pin-light:1` | `blend-pin-light` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-saturation-fast:1` | `blend-saturation-fast` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-saturation:1` | `blend-saturation` | `2.8.39` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-screen-fast:1` | `blend-screen-fast` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-screen:1` | `blend-screen` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:blend-soft-light-fast:1` | `blend-soft-light-fast` | `2.8.39` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-soft-light:1` | `blend-soft-light` | `2.8.39` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-subtract-fast:1` | `blend-subtract-fast` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-subtract:1` | `blend-subtract` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-vivid-light-fast:1` | `blend-vivid-light-fast` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:blend-vivid-light:1` | `blend-vivid-light` | `2.8.40` | 未対応 |
+| `ukadoc:descript_shell_surfaces:charset_2c_6587_5b57_30b3_30fc_30c9:1` | `charset,文字コード` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:collision-sort_2c_30bd_30fc_30c8_9806_5e8f:1` | `collision-sort,ソート順序` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:collision_2a_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y_2cID:1` | `collision*,始点X,始点Y,終点X,終点Y,ID` | — | 縮退 |
+| `ukadoc:descript_shell_surfaces:collisionex_2a_2cID_2c_30bf_30a4_30d7_2c_5ea7_6a191_2c_5ea7_6a192...:1` | `collisionex*,ID,タイプ,座標1,座標2...` | `2.5.19` | 未対応 |
+| `ukadoc:descript_shell_surfaces:element_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30d5_30a1_30a4_30eb_540d_2cX_5ea7_6a19_2cY_5ea7_6a19_28_2c_30aa_30d7_30b7:1` | `element*,描画メソッド,ファイル名,X座標,Y座標(,オプション...)` | `2.3.53` | 縮退 |
+| `ukadoc:descript_shell_surfaces:endtalk:1` | `endtalk` | `2.7.26` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:icon.rect_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y:1` | `icon.rect,始点X,始点Y,終点X,終点Y` | `2.8.52` | 未対応 |
+| `ukadoc:descript_shell_surfaces:import_2c_30d5_30a1_30a4_30eb_540d_2c_30a6_30a8_30a4_30c8msec_2cX_2cY:1` | `import,ファイル名,ウエイトmsec,X,Y` | `2.7.50` | 未対応 |
+| `ukadoc:descript_shell_surfaces:insert_2cID:1` | `insert,ID` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:interpolate:1` | `interpolate` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:kero.balloon.offsetx_2c_5ea7_6a19:1` | `kero.balloon.offsetx,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:kero.balloon.offsety_2c_5ea7_6a19:1` | `kero.balloon.offsety,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:maxwidth_2c_30d4_30af_30bb_30eb:1` | `maxwidth,ピクセル` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:mousedown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1` | `mousedown*,当たり判定ID,ファイル名` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:mousehover_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1` | `mousehover*,当たり判定ID,ファイル名` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:mouserightdown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1` | `mouserightdown*,当たり判定ID,ファイル名` | `2.6.14` | 未対応 |
+| `ukadoc:descript_shell_surfaces:mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1` | `mouseup*,当たり判定ID,ファイル名` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:mousewheel_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1` | `mousewheel*,当たり判定ID,ファイル名` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:move:1` | `move` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:name_2c_5b9a_7fa9_540d:1` | `name,定義名` | `2.8.24` | 未対応 |
+| `ukadoc:descript_shell_surfaces:never:1` | `never` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:overlay-fast:1` | `overlay-fast` | `2.8.36` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:overlay:1` | `overlay` | — | 実装済み |
+| `ukadoc:descript_shell_surfaces:overlayfast:1` | `overlayfast` | — | 別名 |
+| `ukadoc:descript_shell_surfaces:overlaymultiply:1` | `overlaymultiply` | `2.5.91` | 別名 |
+| `ukadoc:descript_shell_surfaces:overlayscreen:1` | `overlayscreen` | `2.8.35` | 別名 |
+| `ukadoc:descript_shell_surfaces:parallelstart_2c_28ID1_2cID2..._29:1` | `parallelstart,(ID1,ID2...)` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:parallelstop_2c_28ID1_2cID2..._29:1` | `parallelstop,(ID1,ID2...)` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:periodic_2c_6570_5024:1` | `periodic,数値` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:point.basepos.x_2c_5ea7_6a19:1` | `point.basepos.x,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:point.basepos.y_2c_5ea7_6a19:1` | `point.basepos.y,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:point.centerx_2c_5ea7_6a19:1` | `point.centerx,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:point.centery_2c_5ea7_6a19:1` | `point.centery,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:point.kinoko.centerx_2c_5ea7_6a19:1` | `point.kinoko.centerx,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:point.kinoko.centery_2c_5ea7_6a19:1` | `point.kinoko.centery,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:random_2c_6570_5024:1` | `random,数値` | — | 実装済み |
+| `ukadoc:descript_shell_surfaces:rarely:1` | `rarely` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:reduce:1` | `reduce` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:replace:1` | `replace` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:runonce:1` | `runonce` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:sakura.balloon.offsetx_2c_5ea7_6a19:1` | `sakura.balloon.offsetx,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:sakura.balloon.offsety_2c_5ea7_6a19:1` | `sakura.balloon.offsety,座標` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:scaling:1` | `scaling` | `2.7.28` | 未対応 |
+| `ukadoc:descript_shell_surfaces:sometimes:1` | `sometimes` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:start_2cID:1` | `start,ID` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:starttalk:1` | `starttalk` | `2.7.26` | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:stop_2cID:1` | `stop,ID` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3aarrow:1` | `system:arrow` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3across:1` | `system:cross` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3afinger:1` | `system:finger` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3agrip:1` | `system:grip` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3ahand:1` | `system:hand` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3ahelp:1` | `system:help` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3amove:1` | `system:move` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3ano:1` | `system:no` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3atext:1` | `system:text` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:system_3await:1` | `system:wait` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:talk_2c_6570_5024:1` | `talk,数値` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:version_2c_2a:1` | `version,*` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:yen-e:1` | `yen-e` | — | 語彙のみ |
+
+### 表に添える 4 つの注記
+
+**⑴ アニメーションを動かす間隔の語は 2 語だけである。** `animation*.interval` の 2 つめの欄に書く語を、areka は 2 か所で扱う。転記側は `areka-parsers` の `shell::normalize_interval`（`crates/areka-parsers/src/shell/decode.rs:385`）で、`bind`（`:387`）・`random`（`:389`）・`bind+random`（`:392`）の 3 語をそれぞれの値にし、それ以外の語（`sometimes`・`always` など）は綴りを保ったまま持ち上げる（`:396`）。駆動側は `areka-seriko` の `AnimationTable::from_world` の中の振り分け（`crates/areka-seriko/src/table.rs:105`〜`:137`）で、ここで再生を動かすものとして採るのは `random`（`:106`）と `bind+random`（`:107`〜`:109`）の **2 つだけ**である。**`bind` は駆動しない**——採らずに控えめな段の記録を 1 行残して次へ進む（`:110`〜`:117`）。それ以外の語も同じく採らない（`:118`〜`:127`）。控えめな段は既定では見えない（前掲・`crates/areka/src/main.rs:141`）ので、`interval,bind` や `interval,sometimes` と書いた宣言は、利用者から見ると何も起きずに終わる。表で `bind` と、それ以外の間隔語が「語彙のみ」になっているのはこのためである。
+
+**⑵ `bind+random` には正典の項目が無いので、表に行を作っていない。** 駆動する 2 語の一方であるこの綴りは、カタログの ukadoc 1,749 件のどの見出しにも無い（2026-09-06 に数え直して 0 件）。正典の文書を本文まで含めて検索しても当たらない（同日・0 件）。台帳に載る項目の数（542 件）とページ（24 ページ）は正典の側で決まっているので、areka だけが持つ綴りのために新しい行を作ることはしない。代わりに、駆動するもう一方の `random,数値`（`ukadoc:descript_shell_surfaces:random_2c_6570_5024:1`）の備考に、この綴りも同じく駆動する旨を書いた。この注記がもう 1 つの置き場である。
+
+**⑶ 絵の重ね方の語で、実際に画を作るのは `overlay` 1 つだけである。** `areka-emo-compose` の `ComposeMethod::is_implemented`（`crates/areka-emo-compose/src/method.rs:130`〜`:132`）が「実挙動がある」と答えるのは `Overlay` だけである。名前を解く `ComposeMethod::from_name`（同 `:142`）は `overlay`・`add`・`bind` の 3 つの綴りを同じ `Overlay` へ束ねる（`:150`）ので、この 3 つはどれも同じ 1 つの実装で動く。正典自身が後の 2 つを `overlay` と同じ扱いだと書いているためで、台帳もそれに合わせて `overlay` と `add` を実装済み、絵の重ね方の側の `bind` を別名としている。残りの綴りは名前としては受け取るが、そこから画は作られない——旧い書き方の 3 つ（`overlayfast`・`overlaymultiply`・`overlayscreen`）は現在の綴りを指す別名として、名前解決に当たるそれ以外の語は語彙のみとして、どれにも当たらない綴りは未対応として登記した。
+
+**⑷ 当たり判定は矩形だけである。** `areka-parsers` の `decode_collisions`（`crates/areka-parsers/src/shell/decode.rs:229`）は、`collision` に続く部分が数字だけの行しか値にしない（`:234`〜`:236`）。値にするのは始点と終点の 4 つの数、つまり矩形 1 つ分である。円・楕円・多角形を書く `collisionex*` の行はここで**何も記録せずに読み飛ばされる**（上の surfaces.txt の節に書いたのと同じ場所である）。台帳でもそれに合わせて、`collisionex*,ID,タイプ,座標1,座標2...` を未対応、`collision*,始点X,始点Y,終点X,終点Y,ID` を縮退（矩形の分だけ通る）としている。**この縮小は本調査が決めたものではない。** 出所は `doc/emo2-conformance-scope.md:82` で、`areka-P0-seriko-runtime` の範囲を「ukadoc 完全マップ」から「SERIKO/2.0＋MAYUNA bind・overlay のみ・interval 3 種・矩形 collision」へ縮めたと書いてある行である。表のうち当たり判定を名前に持つ項目は 4 つで、内訳は `collision*,始点X,始点Y,終点X,終点Y,ID` が縮退、`collisionex*,ID,タイプ,座標1,座標2...` が未対応、`animation*.collision*`／`animation*.collisionex*` の当たり判定定義が未対応、`collision-sort,ソート順序` が語彙のみである。
+
+### 見出しが `bind` で重なる 2 項目
+
+このページには見出しが `bind` の項目が 2 つある。**表では id で区別して別々の行に載せてあり、1 行にまとめていない。** 名前が同じでも別の機能なので、まとめると片方の状態が消える。
+
+- `ukadoc:descript_shell_surfaces:bind:1` — アニメーションを動かす間隔の語のほう。状態は語彙のみ（注記 ⑴）。
+- `ukadoc:descript_shell_surfaces:bind:2` — 絵の重ね方の語のほう。状態は別名で、`overlay` と同じ扱い（注記 ⑶）。
+
+名前で引くと取り違えるので、表でも台帳でも id で引く。同じ理由から、ソース側に置く正典 URL も id ごとに書いている。
 
 ## 未知の記述の扱い
 
