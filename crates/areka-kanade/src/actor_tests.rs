@@ -867,7 +867,15 @@ fn choice_actions_map_to_talk_commands_and_preserve_order() {
     let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
     let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
 
-    let result = execute_actions(talk_action_batch(), &shiori_tx, &sakura_tx, &noop_sink());
+    // 停止通知は結線しない（`None`）——本檻の対象は talk 指示の写像であり、停止経路は通らない。
+    let result = execute_actions(
+        talk_action_batch(),
+        &shiori_tx,
+        &sakura_tx,
+        &noop_sink(),
+        None,
+        None,
+    );
 
     assert!(
         result.last_reply.is_none(),
@@ -935,6 +943,9 @@ fn talk_command_send_failure_does_not_abort_the_action_batch() {
             &shiori_tx,
             &sakura_tx,
             &noop_sink(),
+            // 停止通知は結線しない（`None`）——本檻の対象は talk 指示の送出失敗の記録である。
+            None,
+            None,
         ));
     });
 

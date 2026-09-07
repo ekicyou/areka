@@ -32,10 +32,11 @@ pub mod shiori;
 pub mod status;
 pub mod talk;
 
-pub use actor::spawn_kanade;
+pub use actor::{spawn_kanade, spawn_kanade_with_stop_sink};
 pub use msg::{
-    ChoiceInput, CloseReason, EventId, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton,
-    MouseEventKind, MouseInput, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
+    ChoiceInput, CloseReason, EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped,
+    MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriFailure, ShioriMsg,
+    ShioriOutcome,
 };
 pub use shiori::{ShioriBackend, ShioriConnection, spawn_shiori_actor};
 pub use status::{ExecutionSnapshot, ExecutionState, ExecutionStatus};

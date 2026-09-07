@@ -33,9 +33,11 @@
 //!   `input_events::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
 //!   input_events→placement。placement は `crate::` パスを持たず `super::`／外部 crate のみ
 //!   参照する＝example の `#[path]` include で成立させるため。areka-P0-input-events）。
-//!   Ctrl+左ダブルクリックは暫定退避（全 `GhostWindowMarker` despawn→window-close funnel→
-//!   `run()` 正常復帰）で、これも input_events 側ハンドラ／main.rs の結線が担う（stand-in
-//!   即終了 `on_ghost_pressed` は退役）
+//!   Ctrl+左ダブルクリックは**終了指示**（kanade の正規の握手へ入る・窓は握手の完了後に閉じる・
+//!   R15.1）で、Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが強制退避
+//!   （全 `GhostWindowMarker` despawn→window-close funnel→`run()` 正常復帰）である。いずれも
+//!   input_events 側ハンドラ／main.rs の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
+//!   全窓を閉じる操作そのものは本モジュールの [`despawn_ghost_windows`] に寄せてある
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
 //!   相対位置記憶（4.8・DD16・task 8.3）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ
@@ -383,6 +385,52 @@ impl GhostWindows {
             .map(|(scope, _)| *scope)?;
         self.windows.remove(&scope).map(|w| (scope, w))
     }
+}
+
+// ---------------------------------------------------------------------------
+// despawn_ghost_windows（全ゴースト窓の一括破棄・呼び手 2 つの共通化）
+// ---------------------------------------------------------------------------
+
+/// 全 [`GhostWindowMarker`] 窓を despawn し、標的として拾った件数を返す（R15.4）。
+///
+/// 呼び手は 2 つある——⑴ 終了の握手が終わったことを知らせる停止通知を受けた相
+/// （`emo2_boot::frame` の終了相・正規経路）、⑵ 起動失敗時の強制退避（`input_events` の
+/// Ctrl+Shift+左ダブルクリック、および結線前の Ctrl+左ダブルクリック）。**同じ「全窓を閉じる」
+/// 操作を 2 箇所で書き写さない**ために、ここへ寄せてある。
+///
+/// # 破棄済み標的の扱い（`main.rs` の smoke 掃除と同じ区別）
+///
+/// query で集めた標的はループ実行中に破棄済みへ変わり得る（bevy の連鎖 despawn＝`Children` は
+/// `LINKED_SPAWN` の関係対象ゆえ、親の despawn が子孫へ再帰する）。破棄済みの entity を
+/// `World::despawn` へ渡すと bevy が `warn!` を出すが、**これは終了処理の正常終了系**であり、
+/// 警告として残すと良性ノイズが本物の異常を埋める。ゆえに [`DESPAWNED_SKIP_TAG`] つきの
+/// `debug!` で当該標的だけ打ち切り、残りの標的は処理し切る。
+///
+/// 窓が 1 枚も無いとき（既に閉じ切った後の 2 度目の呼出）は 0 を返す——これは失敗ではないので
+/// 記録もしない。「2 度目だ」という判断は呼び手側が返り値で行う。
+///
+/// bare `World` だけで動く（headless テスト可）。
+///
+/// [`DESPAWNED_SKIP_TAG`]: super::diag::DESPAWNED_SKIP_TAG
+pub(crate) fn despawn_ghost_windows(world: &mut World) -> usize {
+    let targets: Vec<Entity> = world
+        .query_filtered::<Entity, With<GhostWindowMarker>>()
+        .iter(world)
+        .collect();
+    let count = targets.len();
+    for e in targets {
+        if world.get_entity(e).is_err() {
+            debug!(
+                entity = ?e,
+                "{} ゴースト窓の一括破棄: 標的 entity は既に破棄済み（連鎖破棄）→ \
+                 正常系として打ち切り（残りの標的は継続）",
+                super::diag::DESPAWNED_SKIP_TAG
+            );
+            continue;
+        }
+        world.despawn(e);
+    }
+    count
 }
 
 // ---------------------------------------------------------------------------

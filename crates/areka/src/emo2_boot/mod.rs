@@ -51,6 +51,7 @@ use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
+use areka_kanade::KanadeStopped;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
 use areka_seriko::{
@@ -455,7 +456,14 @@ pub fn wire_emo2_boot(
         app_profile_dir: Some(crate::default_app_profile_dir()),
         ticker: TickerMode::Real(Default::default()),
     };
-    let ghost_runtime = match areka_ghost::boot(boot_options) {
+    // ── 停止通知の channel（R15.4・design D15 の 3） ──
+    // kanade スレッドが終了系列の完了時に送出端へ 1 件送り、UI スレッドの Emo2Wiring が受信端を
+    // 持って終了相で取り出す。`move`／`lifecycle`／`zorder` と同型の跨ぎだが、向きが逆（下流→UI）
+    // ではなく「終了の合図」1 種だけを運ぶ。これが在ることで、終了挨拶を再生し終えてから窓が
+    // 閉じる——無ければ操作が窓を直接閉じるほかなく、挨拶を素通りする（症状 C）。
+    let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel::<KanadeStopped>();
+    let ghost_runtime = match areka_ghost::boot_with_kanade_stop(boot_options, Some(kanade_stop_tx))
+    {
         Ok(runtime) => runtime,
         Err(err) => {
             // R7.4: 既存 main と同一方針で分類（起点不在＝良性 warn・他＝error）。
@@ -499,6 +507,9 @@ pub fn wire_emo2_boot(
     // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
+    // 停止通知の受信端を据える（R15.4）。`insert_non_send` より前・最初の `FrameFinalize` より前の
+    // 1 回だけであり、以後 UI は終了相でこの端を読む。据えなければ通知は誰にも届かず窓は閉じない。
+    wiring.set_kanade_stop(kanade_stop_rx);
     app.world().borrow_mut().world_mut().insert_non_send(wiring);
     // 相の登録は**鎖の適用系より前**という指定つきで行う（task 3.2 の必須事項）。相が組んだ
     // 望む鎖を、同じ巡のうちに適用系が読むための順序である。登録の順そのものは適用系のほうが

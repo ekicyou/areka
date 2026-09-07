@@ -15,13 +15,13 @@ use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 
 use areka_emo_present::EmoPresenter;
-use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind, MouseInput};
+use areka_kanade::{CloseReason, KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, PointerState};
 
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::hit_region::{HitRegion, resolve_hit_region};
-use crate::placement::spawn::{CharWindowMarker, GhostWindowMarker};
+use crate::placement::spawn::{CharWindowMarker, despawn_ghost_windows};
 use throttle::{MouseMoveThrottle, plan_mouse_move};
 
 /// UI スレッド所有のマウス入力配信資源（NonSend・DD-IE-9）。
@@ -199,6 +199,29 @@ impl MouseWiring {
         true
     }
 
+    /// 終了指示（[`KanadeMsg::CloseRequest`]）を 1 件送る（R15.1・design D15 の 1）。
+    ///
+    /// これが kanade の**正規の終了の握手**（`OnClose` GET →終了挨拶の再生 → `\-` →解放）の
+    /// 入口である。送るだけで窓には触れない——窓を閉じるのは握手が終わったことを知らせる
+    /// 停止通知を受けた側（`emo2_boot::frame` の終了相）であり、この順序が
+    /// 「終了挨拶をしてから消える」という見え方を作る。
+    ///
+    /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op（log-first）。既に kanade が
+    /// 止まっているなら終了は進行済みであり、ここで新たに始めるものは無い。
+    fn send_close_request(&mut self, reason: CloseReason) {
+        if self
+            .sender
+            .send(KanadeMsg::CloseRequest { reason })
+            .is_err()
+        {
+            tracing::warn!(
+                event = "close_request_send_failed",
+                reason = ?reason,
+                "kanade Sender 送出失敗（actor 停止後）: no-op で継続"
+            );
+        }
+    }
+
     /// `OnMouseDoubleClick` 相当を無条件送出する（間引きなし・1.2/3.x）。
     ///
     /// クリックは間引き対象外ゆえ throttle を通さず即送出する。`surface_pos` は resolver が返した
@@ -359,10 +382,13 @@ pub(crate) fn on_char_pointer_moved(
 
 /// キャラ窓のポインタ押下ハンドラ（Bubble のみ処理・1.2/3.3・6.2/6.3・7.1/7.3/7.4）。
 ///
-/// - **Ctrl+左ダブルクリック → 暫定退避**（DD-IE-7・`MouseWiring` 非依存＝ghost boot 失敗時も脱出
-///   可能）: 全 `GhostWindowMarker` 窓を despawn し、wintf の window-close funnel（`run()` 復帰→main
-///   shutdown→`ForceQuit` 系列）へ委ねる（stand-in 直接経路を新設しない）。true。
-///   **暫定退避 — M-dialogue の `\-` メニュー終了完成で退役**。
+/// - **Ctrl+左ダブルクリック（結線済み・Shift 非押下）→ 終了指示**（R15.1・design D15 の 1）:
+///   kanade へ `CloseRequest{User}` を 1 件送り、**窓は触らない**。正規の握手（`OnClose` GET →
+///   終了挨拶の再生 → `\-` → 解放）が走り、終わったことを知らせる停止通知を受けた相
+///   （`emo2_boot::frame` の終了相）が窓を閉じる。true。
+/// - **Ctrl+左ダブルクリック（結線前）／Ctrl+Shift+左ダブルクリック → 強制退避**（R15.2）:
+///   全 `GhostWindowMarker` 窓を despawn し、wintf の window-close funnel（`run()` 復帰→main
+///   shutdown→`ForceQuit` 系列）へ委ねる。起動に失敗したゴーストから抜ける口として残す。true。
 /// - **左／右ダブルクリック（Ctrl なし）** → 当たり判定を解決し `KanadeMsg::Mouse(DoubleClick{button})`
 ///   を送出（Left→`MouseButton::Left`・Right→`Right`）。配信座標は resolver が返した `surface_point`
 ///   （縮約後サーフェス px・1.8・DD-IE-10 改訂）。true。
@@ -370,7 +396,7 @@ pub(crate) fn on_char_pointer_moved(
 /// - **単発クリック**（`DoubleClick::None`）→ 送出しない（7.3）。false。
 /// - The Hand／collisionex／owner-draw 右クリックメニューは実装しない（7.4）。
 ///
-/// Tunnel 相は伝播続行のため常に false。送出系は `MouseWiring` 不在時 self-gating no-op（暫定退避は
+/// Tunnel 相は伝播続行のため常に false。送出系は `MouseWiring` 不在時 self-gating no-op（強制退避は
 /// 上流で処理済みゆえ wiring 非依存）。
 pub(crate) fn on_char_pointer_pressed(
     world: &mut World,
@@ -383,21 +409,34 @@ pub(crate) fn on_char_pointer_pressed(
         Phase::Bubble(s) => s,
     };
 
-    // 暫定退避（Ctrl+左ダブルクリック・DD-IE-7）は MouseWiring 非依存。既存 stand-in
-    // （spawn.rs on_ghost_pressed）と同じ機構で全 GhostWindowMarker 窓を despawn する。
-    // 暫定退避 — M-dialogue の `\-` メニュー終了完成で退役。
+    // 終了の操作（Ctrl+左ダブルクリック・R15.1／15.2・design D15 の 1）。分岐は 2 つある。
+    //
+    // ⑴ 結線済み（`MouseWiring` 在）で Shift 非押下 → kanade へ終了指示を 1 件送り、**窓は触らない**。
+    //    以後は正規の握手（OnClose GET →終了挨拶 → `\-` →解放）が走り、終わったことを知らせる
+    //    停止通知を受けた相が窓を閉じる。
+    // ⑵ 結線前（ghost boot 失敗・boot 前）、または Ctrl+**Shift** → 従来どおりの強制退避。
+    //    全 GhostWindowMarker 窓を despawn し、wintf の window-close funnel（`run()` 復帰→main
+    //    shutdown→`ForceQuit` 系列）へ委ねる。起動に失敗したゴーストから抜ける唯一の口である。
     if state.ctrl_down && state.double_click == DoubleClick::Left {
+        let wired = world.get_non_send::<MouseWiring>().is_some();
+        if wired && !state.shift_down {
+            tracing::info!(
+                event = "close_requested",
+                "Ctrl+左ダブルクリック: 終了指示を送る（窓は握手の完了後に閉じる）"
+            );
+            let mut wiring = world
+                .get_non_send_mut::<MouseWiring>()
+                .expect("MouseWiring は直上で存在確認済み");
+            wiring.send_close_request(CloseReason::User);
+            return true;
+        }
         tracing::info!(
             event = "mouse_escape_close",
-            "Ctrl+左ダブルクリック（暫定退避）: 全ゴースト窓を閉じる"
+            wired,
+            shift = state.shift_down,
+            "Ctrl+左ダブルクリック（強制退避）: 全ゴースト窓を閉じる"
         );
-        let targets: Vec<Entity> = world
-            .query_filtered::<Entity, With<GhostWindowMarker>>()
-            .iter(world)
-            .collect();
-        for e in targets {
-            world.despawn(e);
-        }
+        despawn_ghost_windows(world);
         return true;
     }
 
