@@ -785,6 +785,22 @@ band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.
 
 **実機の証跡（項目 13・R16.4）**。終了挨拶の後に `unload_clean` 1 行・`unload_failed` 0 行・`exit=0`。
 
+#### D17 行送りの後も収まる行は全部見える（症状 F・2026-09-07 第 5 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | あふれて 1 行送った後、先頭可視行以降の行がすべて描かれている |
+| 要件 | 17.1〜17.5 |
+| 置き場 | `crates/areka-emo-text/src/{viewbox.rs, viewbox_draw.rs, actor.rs}` のいずれか（再現で決める）と兄弟試験・`tests/` |
+
+**観測と期待の突合（実測）**。スクショ（20:27:58）: 相方側バルーンに「イイジャン！」だけが上から 45 px の位置に見え、上は空白。期待の配置（行送り 30・`\n[150]`＝45・描画範囲 40..133）: 「僕はエモ。クール系の」40・「可愛い娘。」70・「イイジャン！…」115（下端 143 ＞ 133 であふれ）→ `visible_window`（`layout.rs:680-726`・最新行が収まる最小スキップ＝1・オフセット −30）→ 「可愛い娘。」40・「イイジャン！…」85。**スクショの最新行の位置は 85 と一致**する。ゆえにあふれ判定と送り量は正しく、**先頭可視行「可愛い娘。」が描かれていない**のが症状。
+
+**候補 ⑴（本命）: 差分描画の描画対象**。PR #142 で `ViewboxExecutor` の Phase 2 は「ダーティ矩形ごとに交差する行だけ」を描く（`viewbox_draw.rs` の `for line in &dirty_rect.lines`・`DirtyRect { rect, lines }`＝`viewbox.rs:96-101`）。送りのフレームは `blit`（面内平行移動・`viewbox.rs:187`）＋ 露出帯 ∪ 変化行（行指紋 `CommittedLine`・canvas-local ゆえスクロール非依存・`viewbox.rs:410-445`）で組まれる。上の行が消える経路として調べるもの: (a) 送りのフレームで先頭可視行が変わり `first_visible_line` が 0 → 1 になったとき、`draw_lines`／各矩形の `lines` が住人 index で持たれているのに描画側が `skip(first_visible_line)` 相当の読み替えをして 1 つずれる、(b) `is_backward_shrink`（`viewbox.rs:454`）の全域ダーティ縮退で `full_domain_update` が「可視窓の住人」を描くとき、行の並びと index の対応がずれる、(c) blit の量子化（whole-pixel `committed`）と保留改行の端数（45 = 1.5 × 30 は整数だが k=2 で 90）で露出帯が先頭可視行の矩形を覆い、その矩形に先頭可視行が「交差行」として入らない。**候補 ⑵: 再生の相**（`actor.rs` の `present_actor`）でリビール中の行数の数え方と `ContentCanvas::from_layout` の住人列がずれる。
+
+**進め方（決定論・RED 先行）**。⑴ `viewbox_draw_frame_render_tests.rs` の隣に新しい兄弟試験を置き、`Rig`（`viewbox_draw_test_support.rs:39`）で相方側相当の描画範囲（`geo_model` 系・高さ 93・行送り 30）を組み、items＝「2 行に折り返す文字列」→ `LineBreak{1.5}` → 「次の台詞」を 1 字ずつ増やしながら `render_frame` を回す。送りが起きたフレームと次のフレームで面を読み戻し、先頭可視行のブロック帯（送り後 40..68 → 物理 ×k）にインクが在ること、最新行の帯にもインクが在ることを主張する。同じ items を `DrawExecutor::render` で全域描画したものとバイト等価であることも主張する（既存の `live_diff` の形）。**HEAD で赤**を確かめる。⑵ 緑なら候補 ⑵ へ移り、`actor_choice_contract_tests.rs` の読み戻し（`present_actor` を 1 字ずつ進める）で同じ主張を立てる。⑶ 赤になった層で直す。直しは描画対象の決め方（各矩形に交差する行の集合・全域縮退時の描画対象）か描き直しの範囲に限り、`visible_window`・折返し・保留改行の式は触らない（R17.4）。
+
+**実機の証跡（R17.5）**。項目 2 の目視で、相方側バルーンに「僕はエモ。クール系の可愛い娘。」の後半が「イイジャン！…」の上に残っている。
+
 ### 常設テストの衛生
 
 #### D11 間欠的な赤の隔離裁定
@@ -998,6 +1014,7 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 6. **その場で直した 2 件の非回帰（2026-09-06 第 2 回改訂）**——D13: 既定フォントの byte 等価 golden が 1 バイトも動かないこと（offset 0 の証拠）と、実フォントの読み戻し 3 本が「上 ≥ 0・下 = 0」で緑であること。D14: `region_inline_limit_tests.rs` が 0 件、actor 側の兄弟試験が装着 1 件／同値再追従 0 件で緑であること。いずれも `cargo test -p areka-emo-text` の exit 0 で確かめ、`| tail` で終了コードを隠さない。
 7. **終了指示の配線の非回帰（2026-09-07 第 3 回改訂・D15）**——`cargo test -p areka --bin areka`（入力層・相・spine の兄弟試験）と `cargo test -p areka-kanade`・`cargo test -p areka-ghost` が exit 0。既存の一周テスト 13 本は期待を動かさず緑。
 8. **応答方向の送出の非回帰（2026-09-07 第 4 回改訂・D16）**——`cargo test -p shiori-host32-ipc -p shiori-host32-helper -p shiori-host32-host`（x64・PowerShell）が exit 0。要求方向の旗と既存の loopback 試験は無改変。走行の直前に i686 の橋渡しを作り直す（helper を変えたため）。
+9. **行送り後の描画対象の非回帰（2026-09-07 第 5 回改訂・D17）**——再現の檻が直す前は赤・後は緑で、`live_diff`／`oracle_regression`／`line_pitch_readback`／`kero_menu_capacity` は無改変で緑。
 
 ### 実機走行（人間サインオフ）
 
