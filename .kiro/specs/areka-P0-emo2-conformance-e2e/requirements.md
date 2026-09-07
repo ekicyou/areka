@@ -76,6 +76,15 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 4. **走行の扱い。** 2026-09-07 の走行 A は中断記録（§13.3 の 3 件目・A20 で症状 C）。①〜⑪ の所見は参考として残し合否に用いない。直したコミットで §2 から採り直し、記録置き場は `emo2-conformance-2026-09-07`。
 5. **編集集合（12.1）に `crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`（配線と兄弟試験）・`crates/areka-kanade/src/actor.rs`（停止通知の発行点）・`crates/areka-ghost/src/runtime.rs`（通知端の受け渡し）を加える。** `main.rs`（948 行）は触らないか、通知端の受け渡し 1 か所に限る。
 
+### 改訂（2026-09-07・第 4 回・症状 D＝終了挨拶の後の解放が IPC で失敗する／症状 E＝描画の遅延）
+
+終了指示を配線したビルド（`9ba2515f`）での走行 A（2026-09-07 20:01〜20:04・記録置き場 `emo2-conformance-2026-09-07`）で、開発者所見「終了挨拶は流れた——合格。ただし描画が異常に重い・ガクガク・遅延が目に見える」。生ログは終了挨拶の成立（`method=GET id=OnClose`・`close_talk_start`・`talk_done_quit`・`ghost_quit`・`force_quit` 0 行）を示す一方、**解放が失敗**している（`unload_failed`・`unload_clean` 0 行）。2 つを仕分ける。
+
+1. **症状 D（製品の欠陥・その場で直す・Requirement 16 を新設）。** 生ログ: `talk_done_quit`（11:04:20.603）→ 150 ms 後に `[request_clean_shutdown] unload send failed error=Ipc(Timeout)`、同時に helper 側 `[helper] unload-ack 送出失敗（観測）: SendFailed`。機序: SHIORI の往復は WM_COPYDATA の `SendMessageTimeoutW` で、ホストが要求を送って自窓の応答 slot を待ち、helper は要求を処理した WndProc の中から**再入で**応答をホスト窓へ `SendMessageTimeoutW` する（`crates/shiori-host32-ipc/src/lib.rs:325-340`・`:270-305`）。この送出は両方向とも `SMTO_ABORTIFHUNG`（同 `:294`）を付ける。ホストの窓はアクタースレッド上にあり、要求の往復以外では**メッセージを取り出さない**（`crates/areka-kanade/src/shiori/real.rs:179` の `rx.recv()`・`crates/shiori-host32-host/src/parent_window.rs` の pump はハンドシェイク専用）。定常運転では毎秒の変化通知の往復がスレッドを「生きている」状態に保つが、終了挨拶の再生中は kanade が pump を止める（`crates/areka-kanade/src/schedule/close.rs:95`）ため、19 秒の無応答の後に `Unload` を送る時点でホストのスレッドは OS から「応答なし（hung）」と見なされ、helper の応答側 `SMTO_ABORTIFHUNG` が**即座に失敗**（`SendFailed`）し、ホストは応答 slot が空のまま復帰して `Timeout` と読む。強制終了系列（前回まで）では直前 1 秒以内に往復があったため露呈しなかった。**あるべき姿**: 応答（helper → ホスト）の送出は、ホストが自分の要求の中で必ず待っている相手への配送であり、「応答なし」判定で打ち切ってはならない——応答方向から `SMTO_ABORTIFHUNG` を外す（時間上限 `REPLY_TIMEOUT` 5 秒は保つ）。要求方向（ホスト → helper・helper は常時メッセージループ）は従来どおり。ホスト窓のスレッドが待機中に pump しない構造そのものは別の課題として登記する（本仕様では直さない・引受先を記す）。
+2. **症状 E（環境要因の疑い・判定に載せず再計測で確かめる）。** `apply_show` の段階別計時（`areka_emo_present::presenter::timing`）は起動直後の 1 コマ目から前回走行の約 2.2 倍（compose 3.0→6.7 ms・resample 22→49 ms・mask 4.6→11 ms・upload 8.4→19 ms）で、中央値 41→78 ms・p90 65→227 ms。全段階が一様に遅く、本仕様の直し（帯の位置・警告の回数・終了の配線）は描画の段階に触れていない。同時刻に別プロジェクトの `python.exe`（PID 12664・19:20 起動・`export/phase2/canonical/notes` の走査）が 1 コア分の CPU を使い続けており、OneDrive 同期・別リポジトリのパイプラインも動いていた。ティッカーの `catch-up` も前回 10 → 60 件で、別スレッドの遅延＝機械全体の飽和と整合する。**扱い**: 重い別処理を止めた上で走行 A を採り直し、`apply_show` の中央値が前回（41 ms）の水準へ戻るかで環境要因かどうかを判定する。戻らなければ製品側の症状として改めて仕分ける。
+3. **走行の扱い。** 2026-09-07 20:01 の走行 A は中断記録（4 件目・A20 で症状 D）。終了挨拶の目視合格は参考。直したコミットで §2 から採り直す（記録置き場 `emo2-conformance-2026-09-07-2`）。
+4. **編集集合（12.1）に `crates/shiori-host32-ipc/`・`crates/shiori-host32-helper/`・`crates/shiori-host32-host/`（応答方向の送出とその試験）を加える。**
+
 ## Boundary Context
 
 - **In scope**:
@@ -275,7 +284,7 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 編集集合を、新規の一周テスト（`crates/areka/src/emo2_boot/` の兄弟テストファイル＋テスト専用ファイル `spine.rs` への接続宣言 3 本と記録の追補 1 か所）・実物定義の文書・本仕様の記録に限る。The 本仕様 shall 例外として Requirement 9.2（`spine_e2e_test_s3_helper_liveness_detected.rs` と `spine_e2e_test_s1_boot_success.rs` の **S3・S1 の 2 ファイル**の待ちの形への更新。S1 は 2026-09-04 の開発者裁定で追加＝「改訂」節 2）と Requirement 9.8（`wintf` の 2 ファイルへの門の付与）のみを事前登記済みの範囲として認める。 **2026-09-06 第 2 回改訂**: 編集集合に `crates/areka-emo-text/`（Requirement 13・14 の本番コードと試験＝`choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs`・`region.rs` とその兄弟試験・`tests/` の読み戻し検査）を加える。 **2026-09-07 第 3 回改訂**: さらに `crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`（配線と兄弟試験）・`crates/areka-kanade/src/actor.rs`・`crates/areka-ghost/src/runtime.rs`（Requirement 15）を加える。
+1. The 本仕様 shall 編集集合を、新規の一周テスト（`crates/areka/src/emo2_boot/` の兄弟テストファイル＋テスト専用ファイル `spine.rs` への接続宣言 3 本と記録の追補 1 か所）・実物定義の文書・本仕様の記録に限る。The 本仕様 shall 例外として Requirement 9.2（`spine_e2e_test_s3_helper_liveness_detected.rs` と `spine_e2e_test_s1_boot_success.rs` の **S3・S1 の 2 ファイル**の待ちの形への更新。S1 は 2026-09-04 の開発者裁定で追加＝「改訂」節 2）と Requirement 9.8（`wintf` の 2 ファイルへの門の付与）のみを事前登記済みの範囲として認める。 **2026-09-06 第 2 回改訂**: 編集集合に `crates/areka-emo-text/`（Requirement 13・14 の本番コードと試験＝`choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs`・`region.rs` とその兄弟試験・`tests/` の読み戻し検査）を加える。 **2026-09-07 第 3 回改訂**: さらに `crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`（配線と兄弟試験）・`crates/areka-kanade/src/actor.rs`・`crates/areka-ghost/src/runtime.rs`（Requirement 15）を加える。 **2026-09-07 第 4 回改訂**: さらに `crates/shiori-host32-ipc/`・`crates/shiori-host32-helper/`・`crates/shiori-host32-host/`（Requirement 16・応答方向の送出とその試験）を加える。
 2. The 本仕様 shall 既存の決定論テストの期待値を、本仕様の都合で緩めない。
 3. If 併走する仕様と共有するファイルが生じた場合, the 本仕様 shall 着手前に相互確認する。
 4. The 本仕様 shall 決定論層（Requirement 2・3）と実機層・完成判定（Requirement 5〜11）を独立した節に保ち、実装段階の相 1（決定論一周テスト）と相 2（実機一周走行と完成判定）の境界をこの節構造で表す（分割はしない＝議題 2 裁定）。
@@ -323,3 +332,15 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 6. The 決定論テスト shall ⑴ 結線済みの Ctrl+左ダブルクリックで `CloseRequest{User}` がちょうど 1 件送られ despawn が起きないこと ⑵ 結線前および Ctrl+Shift で despawn が起きること ⑶ `StopSelf` で停止通知が届くこと ⑷ 一周の母体（spine）で `CloseRequest` → `OnClose` GET → `\-` で終わる応答 → 停止通知 → ゴースト窓 0 → 解放 1 が成立すること、を固定する。既存の一周テストの 3 台帳の期待は 1 バイトも動かさない（12.2）。
 7. If 辞書が終了を拒否した場合（応答が `\-` で終わらない）, the kanade shall 定常運転へ戻り（正典・既存）、窓は残る。If 再生完了待ちが期限を超えた場合, the 経路 shall `DeadlineExceeded` として同じ停止通知で窓を閉じる。
 8. The 手順書と記録 shall A20 の操作を Ctrl+左ダブルクリックと定め、強制退避（Ctrl+Shift）を別に記し、§5.7 の語に上の 3 語と `force_quit`（0 行が期待）を足す。
+
+### Requirement 16: 終了挨拶の後の解放が IPC で失敗しない（2026-09-07 第 4 回改訂で新設）
+
+**Objective:** As 開発者, I want 長い終了挨拶の後でも解放（Unload）が正規に成立すること, so that 項目 13「解放はちょうど 1 度だけ起きる」が実機で成立する
+
+#### Acceptance Criteria
+
+1. The helper shall 応答（`MsgTag::Response`）をホスト窓へ送るとき `SMTO_ABORTIFHUNG` を付けず、時間上限（`REPLY_TIMEOUT`）だけで送る。要求方向（ホスト → helper）の送出は従来どおり `SMTO_ABORTIFHUNG` 付きとする。
+2. The IPC 層 shall 応答方向と要求方向の送出を別の関数（または明示の引数）で区別し、どちらの向きにどの旗を付けるかを型か名前で読めるようにする。
+3. The 決定論テスト shall ⑴ 応答方向の送出に `SMTO_ABORTIFHUNG` が含まれないこと（構造の檻）と、⑵ ホスト側のスレッドが 5 秒を超えて待機した後の要求でも応答が届くこと（有界の統合檻・上限 10 秒）を固定する。
+4. The 実機一周走行 shall 項目 13 の証跡として、終了挨拶の後に `unload_clean` が 1 行あり `unload_failed` が 0 行であることを示す。
+5. The 記録 shall ホスト窓のスレッドが待機中に pump しない構造を、引受先つきの申し送りとして登記する（本仕様では直さない）。

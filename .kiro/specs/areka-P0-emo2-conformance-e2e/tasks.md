@@ -228,6 +228,22 @@
   - _Requirements: 8.4, 8.6, 5.2, 5.6, 11.5, 15.5, 15.8_
   - _Depends: 6.9_
   - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`・リポジトリ外の記録置き場_
+- [ ] 6.11 応答方向の送出から `SMTO_ABORTIFHUNG` を外す（症状 D・その場で直す・2026-09-07 第 4 回改訂）
+  - RED: `crates/shiori-host32-ipc` に「応答方向の旗に `SMTO_ABORTIFHUNG` が無い」構造の檻、`crates/shiori-host32-helper/src/main_loopback_tests.rs` の隣に「ホスト役がメッセージを取り出さずに 5.5 秒待った後の要求でも応答が届く（有界 10 秒）」統合の檻を書き、HEAD で赤を確かめる（直す前は `slot.take()` が `None`）
+  - GREEN（design D16）: `send_copydata` を向き（`Request`／`Response`）で分け、応答方向だけ `SMTO_ABORTIFHUNG` を外す（`REPLY_TIMEOUT` 5 秒は保つ）。helper の応答 3 か所（`main.rs:281`・`:331`・`:353-358`）を応答方向へ。要求方向の呼び手は無改変
+  - `cargo test -p shiori-host32-ipc -p shiori-host32-helper -p shiori-host32-host`（**PowerShell**・i686 の成果物を上書きしないよう `--target` は付けない＝x64 のテストのみ）と `cargo test -p areka --bin areka`・`cargo test -p areka-kanade`・`cargo test -p areka-ghost` を exit 0 で通す。走行の直前に i686 の橋渡しを作り直す（6.12）
+  - 完了状態: 上の檻が緑・要求方向の旗と既存 loopback 試験が無改変・各ファイル 1,000 行以下・記録 §13.4 の下書き（範囲・理由・差）が Implementation Notes に在る
+  - _Requirements: 16.1, 16.2, 16.3, 12.2_
+  - _Depends: 6.10_
+  - _Boundary: `crates/shiori-host32-ipc/src/`・`crates/shiori-host32-helper/src/`（`main.rs` と兄弟試験）・`crates/shiori-host32-host/src/`（呼び手が要るときのみ）と 3 crate の試験（`crates/areka*`・fixture・例外表は触らない）_
+- [ ] 6.12 症状 D／E を記録・手順書へ登記し、採り直しの準備をやり直す（2026-09-07 第 4 回改訂）
+  - 記録: §13.2 行 8（症状 D・その場で直した・6.11 のコミット）・行 9（症状 E・環境要因の疑い・`apply_show` 中央値 41→78 ms・`python.exe` PID 12664 等・**判定に載せず採り直しで再計測**）・行 10（ホスト窓のスレッドが待機中に pump しない構造・構造的・本走行では発現しない・起票待ち）・§13.4 行 4・§13.3 中断 4 件目（2026-09-07 20:01 走行 A・A20 で症状 D・終了挨拶の目視合格は参考）・§6 の追記（第 4 回）に項目 13 の証跡（`unload_clean` 1・`unload_failed` 0）と「重い別処理を止めてから起動」・§7 に `unload_failed`（0 行）と `apply_show` 中央値の再計測の行・§1／§3／§4／§5／§5.1 を直したコミットの値で
+  - 手順書: §0.2 に「重い別処理（別プロジェクトのジョブ・同期）を止めてから起動し、`Get-Process` の CPU 上位を記録へ写す」・§5.7 に `unload_failed`（0 行）と `perf(apply_show)` の `t_total_us`（中央値を数える手順）・§2.4／§9 の記録置き場は `emo2-conformance-2026-09-07-2`
+  - 準備: `cargo build -p areka` → **i686 の橋渡しを作り直して複写・`014C`**（6.11 が helper を変えたので今回は必ず再ビルドされる）・記録置き場 `emo2-conformance-2026-09-07-2`・`lap.ps1` の写し・永続状態の消去
+  - 完了状態: 記録と手順書に旧前提が現在形で残っておらず、新しい記録置き場が空で在り、両文書とも 1,000 行以下
+  - _Requirements: 8.4, 8.6, 5.2, 5.6, 5.9, 11.5, 16.4, 16.5_
+  - _Depends: 6.11_
+  - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`・リポジトリ外の記録置き場_
 - [ ] 6.2 一周走行を行い記録と機械判定の出力を採る
   - 実ゴースト・絶対パス・実拡大率で一周を走らせ、有界の自動終了と記録用の出力水準で走行の終わりを人手のばらつきから切り離す
   - 適合検証項目表 20 項目を順に確かめ、項目ごとの結果と根拠と根拠の種別を記録する
@@ -235,10 +251,11 @@
   - 走行が途中で成立しなくなった場合は中断点と観測できたところまでを残し、部分的な結果を合格にしない
   - 完了状態: 走行の同定情報・環境変数・点灯確認・20 項目の判定・機械判定の出力が記録に揃っている
   - _Requirements: 1.2, 1.3, 1.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 5.8, 5.11_
-  - _Depends: 6.1, 6.8, 6.10_
+  - _Depends: 6.1, 6.8, 6.10, 6.12_
   - _Unblocked（2026-09-06）: 引受先 spec `emo-text-line-height-canon` が完了（PR #142・main `e3291fc1`）し merge `3c2908e` で取り込んだ。走行 A は手順書 §2 の準備から採り直す。2026-09-05 の `lap-run-a.log` は §13.3 の中断記録として残す（requirements.md「改訂（2026-09-06）」）_
   - _第 2 回改訂（2026-09-06）: 採り直しの走行 A（20:41〜20:48）は A14 を越えたが、開発者が症状 A（反転帯の縦位置）・B（警告の洪水）を許容不可と裁定し「その場でつぶす」へスコープを定め直した。6.6〜6.8 の後、直したコミットで §2 から採り直す（記録置き場 `-2`）_
   - _第 3 回改訂（2026-09-07）: 直したビルドの走行 A（18:30〜18:33）は ①〜⑪ OK・直した 2 症状も解消したが A20 で症状 C（終了指示が終了挨拶を通らない）。6.9〜6.10 の後、記録置き場 `emo2-conformance-2026-09-07` で採り直す_
+  - _第 4 回改訂（2026-09-07）: 配線後の走行 A（20:01〜20:04）は終了挨拶が流れ（目視合格）たが解放が IPC で失敗（症状 D）・描画の遅延（症状 E・環境要因の疑い）。6.11〜6.12 の後、記録置き場 `emo2-conformance-2026-09-07-2` で採り直す_
   - _Human: 実機の操作と目視は開発者の手元作業。準備（6.1）が済んだら開発者へ確認の目的と手順を平易に伝えて引き渡す_
 - [ ] 6.3 読み分けを当てて合否ブロックを確定する
   - 機械判定と目視所見が食い違った箇所に 3 問を上から当てて 1 行に定め、閾値を目に合わせて緩めない
@@ -360,3 +377,4 @@
 - **タスク 6.9 済み（終了指示の配線）——記録 §13.4 の下書き（6.10 が写す）**。範囲: `crates/areka/src/input_events/mod.rs`（終了操作の分岐と `send_close_request`・`:211`／`:418-441`）・`placement/spawn.rs`（`despawn_ghost_windows` `:415`・強制退避と終了相の共通化）・`emo2_boot/{mod.rs（channel `:464`）, frame.rs（`run_ghost_quit_phase` `:177`・先頭 `:236`）, frame/wiring.rs（`set_kanade_stop` `:211`）, spine.rs（968 行・接続宣言＋結線）}`・`crates/areka-kanade/src/{msg.rs（`KanadeStopCause`／`KanadeStopped` `:53`／`:72`）, actor.rs（派生 spawn `:92`・`StopSelf` で `notify_stop` `:274`）, lib.rs}`・`crates/areka-ghost/src/{runtime.rs（`boot_with_kanade_stop` `:497`）, lib.rs}`。試験 4 群 15 本を新設（入力 2＋既存 2 本の意味を強める・kanade 単体 5・kanade 統合 3・相 4・spine 1）。`main.rs`・`boot_config.rs`・一周テストの 3 台帳・fixture・例外表は無改変。理由: 終了操作が「全ゴースト窓を消す」暫定退避のままで、kanade に実装済みの正規の握手（`OnClose` GET → 辞書の終了挨拶 → `\-` で解放）へ入る道が無く、握手が終わっても窓を閉じる者がいなかった。走行前後の見え方の差: 項目 13 だけ——Ctrl+左ダブルクリックで終了挨拶が流れ、終わってから窓が自分で閉じる。生ログは `method=GET id=OnClose`・`close_talk_start`・`ghost_quit`・`unload_clean` が 1 行ずつ・`force_quit` 0 行（改変前は `force_quit` → `NOTIFY id=OnClose`）。起動失敗時は Ctrl+左、起動後は Ctrl+Shift+左が強制退避。終了を拒否する辞書では通知が出ず窓は残る（正典）。レビューは変異 3 通り（分岐を despawn へ／`notify_stop` 除去／終了相を no-op）で各檻が赤になることを確かめた。
 - **設計からの差 3 点は D15「着地した形」に登記**（`GhostBootOptions` フィールド → `boot_with_kanade_stop`／`with_kanade_stop` → `set_kanade_stop`／原因は `Phase::Unloading` から控える）。`spine.rs` 968 行（目安 962 は超・見張り 1,000 の内）。**ログ捕捉の規約**: アクタースレッドで発火するログを統合層で数えるには `install_global_capture_all` が要り `log-capture-kit` の `ALLOWED_GLOBAL_CAPTURE` へ登録が要る（許可 crate の外）→ 発行点の単体檻で `warn!` を数え、統合檻は「停止が完走する」を持つ二段構え。
 - **タスク 6.10 済み（2026-09-07 19:37〜19:56）**: 記録 §13.2 行 7・§13.4 行 3・§13.3 中断 3 件目・§6 追記（第 3 回・追 5）・§7 に `force_quit`（0 行）と `ghost_quit`（1 行）・§14 に 2026-09-07 の確認表、手順書 §3.5（強制退避の扱い）・A20・§5.7 に 4 語・§2.4／§9。準備は `9ba2515f` で: `areka.exe` 22,809,088 バイト（19:37:16）・橋渡し `014C`（i686 は no-op・ハッシュ一致）・記録置き場 `emo2-conformance-2026-09-07`・`profilereka` 消去。レビュー 2 往復: 1 回目は §14 の確認表が自分の行を数え落とし（1→2・4→5）・2 回目は**親（本セッション）が同じラウンドで要件の「27 ms」を「28 µs（同時刻）」へ直したのが境界外と指摘**→別コミットに分けて開示（レビューの是正案 (b)）。`sylphya.toml` は 6.9 の決定論テストが 19:30 に作り直していた（走行後の消去だけでは足りない＝起動直前にもう一度確かめる）。
+- **2026-09-07 第 4 回改訂＝症状 D（解放の IPC 失敗）／E（描画の遅延）**。走行 A（`9ba2515f`・20:01〜20:04）: 終了挨拶は成立（`GET id=OnClose`・`close_talk_start`・`talk_done_quit`・`ghost_quit`・`force_quit` 0）だが `unload_failed`（`Ipc(Timeout)`・helper 側 `unload-ack 送出失敗 SendFailed`）。機序＝WM_COPYDATA の応答は helper が再入で `SendMessageTimeoutW(SMTO_ABORTIFHUNG)`（`shiori-host32-ipc/src/lib.rs:294`）で送るが、ホスト窓のスレッド（shiori アクター・`real.rs:179` の `recv()`）は往復以外で pump せず、終了挨拶中は kanade が pump を止める（`close.rs:95`）ため 19 秒の空白で OS が「応答なし」と判定→応答が即失敗→`slot.take()` 空→`Timeout`。定常は毎秒の往復が隠していた。直し＝応答方向だけ `SMTO_ABORTIFHUNG` を外す（R16／D16・6.11）。E は `apply_show` が 1 コマ目から一様に 2.2 倍（41→78 ms 中央値）＝別プロジェクトの `python.exe`（PID 12664・1 コア 100%）等の機械負荷の疑い→採り直しで再計測（6.12）。

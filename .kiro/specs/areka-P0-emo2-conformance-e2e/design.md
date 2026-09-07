@@ -176,6 +176,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs` — 同形の兄弟。`:145-156` の待ちが表示記録の非空しか見ないまま `:185-196` が 5 要素を等値照合する形を、S3 と同じ「条件が満たされるまで待つ」形へ更新（R9.2・**2026-09-04 の開発者裁定で追加**＝requirements.md「改訂」節 2）。等値照合そのものは変えない。
 - `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` — `:369` と `:740` の 2 本へ理由付きの `#[ignore]` と環境変数の門を付与（R9.3）。判定ロジックは 1 行も変えない。
 - `crates/wintf/src/runtime/tick_bridge.rs` — `:346` の 1 本へ同じ形の門を付与（R9.3）。
+- `crates/shiori-host32-ipc/src/lib.rs`・`crates/shiori-host32-helper/src/main.rs` — 応答方向の送出から `SMTO_ABORTIFHUNG` を外す（D16・2026-09-07 第 4 回改訂）。
 - `crates/areka/src/input_events/mod.rs`・`crates/areka-kanade/src/actor.rs`（＋`msg.rs` の `KanadeStopped`）・`crates/areka-ghost/src/runtime.rs`・`crates/areka/src/emo2_boot/{mod.rs, frame.rs, frame/wiring.rs}`・`crates/areka/src/placement/spawn.rs` — 終了指示の配線と停止通知（D15・2026-09-07 第 3 回改訂）。`main.rs` は触らない。
 - `crates/areka-emo-text/src/choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs` — 反転帯の `band_offset`（D13・2026-09-06 第 2 回改訂）。`region.rs`・`actor.rs` — 折返し警告を登録口へ（D14）。兄弟試験と `tests/` の読み戻し検査は導出し直す（緩めない）。
 - `doc/emo2-conformance-scope.md` — `:24` の訂正（R11.1）と、完成宣言時の充足済み注記（R11.2）。
@@ -766,6 +767,24 @@ band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.
 
 **実機の証跡（項目 13・R15.5）**。A20 で Ctrl+左ダブルクリック 1 回 → 終了挨拶がバルーンに流れ → 窓が自分で閉じる → 生ログに `method=GET id=OnClose`・`event="close_talk_start"`・`event="ghost_quit"`・`unload_clean` 1 行、`event="force_quit"` 0 行、`exit=0`。
 
+#### D16 応答方向の送出から `SMTO_ABORTIFHUNG` を外す（症状 D・2026-09-07 第 4 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 終了挨拶の後（ホストのスレッドが長く待機した後）でも helper の応答がホストへ届き、解放が正規に成立する |
+| 要件 | 16.1〜16.5 |
+| 置き場 | `crates/shiori-host32-ipc/src/lib.rs`（送出関数）・`crates/shiori-host32-helper/src/main.rs`（応答の 3 か所）・両 crate と `shiori-host32-host` の試験 |
+
+**現状の機序（実測・2026-09-07 20:04）**。往復は `ipc_send_request`（`crates/shiori-host32-ipc/src/lib.rs:325-340`）＝ `slot.clear()` → `send_copydata(target, self_hwnd, tag, payload, timeout)`（同 `:337`・`SendMessageTimeoutW` に `SMTO_ABORTIFHUNG`＝同 `:289-294`）→ `slot.take()` が空なら `IpcError::Timeout`（同 `:340`）。helper は要求を WndProc で処理し、その中から `send_copydata(parent, self, Response, ack, REPLY_TIMEOUT)`（`crates/shiori-host32-helper/src/main.rs:281`・`:331`・`:353-358`）で応答をホスト窓へ再入配送する。ホスト窓のスレッドは shiori アクター（`crates/areka-kanade/src/shiori/real.rs:179` の `rx.recv()`）で、要求の往復とハンドシェイクの pump（`parent_window.rs:258`）以外ではメッセージを取り出さない。OS は 5 秒以上メッセージを取り出さないスレッドの窓を「応答なし」と扱い、`SMTO_ABORTIFHUNG` 付きの送出を待たずに失敗させる。定常運転は毎秒の変化通知の往復で 5 秒を超えないが、終了挨拶の再生中は kanade が pump を止める（`close.rs:95`）ため 19 秒の空白ができ、`Unload` の往復で helper の応答が `SendFailed`、ホストは `Timeout` と読み `unload_failed`（`real.rs:224`）→ 終了系列は継続（kanade）→ shiori アクターの `Close` で接続資材を RAII で片づける＝helper は正規終了せず、`unload_clean` が出ない。
+
+**新しい規則**。応答方向の送出は `SMTO_ABORTIFHUNG` を付けない——ホストはその応答を自分の `SendMessageTimeoutW` の中で必ず待っており（再入で受け取る）、「応答なし」判定はこの向きでは誤検知にしかならない。時間上限 `REPLY_TIMEOUT`（5 秒）は保つ。要求方向は従来どおり（helper は常時メッセージループ）。実装は `send_copydata` を `SendFlavor`（`Request`／`Response`）等の明示の引数か、`send_copydata_response` の別関数で分け、旗の有無を名前で読めるようにする（R16.2）。既存の呼び手（要求方向）は 1 文字も変えない。
+
+**試験（R16.3）**。⑴ 構造の檻: 応答方向の関数が `SendMessageTimeoutW` に渡す旗に `SMTO_ABORTIFHUNG` が無いことを、旗を返す純関数（`flags_for(SendFlavor)`）で固定する。⑵ 統合の檻（`crates/shiori-host32-helper/src/main_loopback_tests.rs` の隣・有界 10 秒）: ホスト役のスレッドがメッセージを取り出さずに 5.5 秒待った後に要求を送り、helper 役の応答が届いて `slot.take()` が `Some` になること。直す前は `None`（`Timeout`）で赤。既存の loopback 試験は無改変で緑。
+
+**申し送り（R16.5）**。ホスト窓のスレッドが待機中に pump しない構造（アクターの `recv()` とメッセージ待ちが別）は本仕様では直さない。`MsgWaitForMultipleObjectsEx` で inbox とメッセージを同時に待つ形が本来の姿であり、`areka-P0-zorder-chain-residue` の A 系（wintf／host32 の常設の飢餓・間欠赤）に隣接する。記録 §13.2 に「構造的・本走行では発現しない（応答方向の直しで露呈しない）・引受先＝起票待ち」で登記する。
+
+**実機の証跡（項目 13・R16.4）**。終了挨拶の後に `unload_clean` 1 行・`unload_failed` 0 行・`exit=0`。
+
 ### 常設テストの衛生
 
 #### D11 間欠的な赤の隔離裁定
@@ -978,6 +997,7 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 5. **上流 spec の着地後に決定論層が緑のままであること**（2026-09-06）——`emo-text-line-height-canon` を取り込んだ merge `3c2908e` で `cargo test -p areka --bin areka conformance` が 13 passed／0 failed。3 つの台帳は字の配置を運ばないので、期待列を 1 つも動かさずに緑であることが、行送りの改訂と決定論層の独立の証拠になる。
 6. **その場で直した 2 件の非回帰（2026-09-06 第 2 回改訂）**——D13: 既定フォントの byte 等価 golden が 1 バイトも動かないこと（offset 0 の証拠）と、実フォントの読み戻し 3 本が「上 ≥ 0・下 = 0」で緑であること。D14: `region_inline_limit_tests.rs` が 0 件、actor 側の兄弟試験が装着 1 件／同値再追従 0 件で緑であること。いずれも `cargo test -p areka-emo-text` の exit 0 で確かめ、`| tail` で終了コードを隠さない。
 7. **終了指示の配線の非回帰（2026-09-07 第 3 回改訂・D15）**——`cargo test -p areka --bin areka`（入力層・相・spine の兄弟試験）と `cargo test -p areka-kanade`・`cargo test -p areka-ghost` が exit 0。既存の一周テスト 13 本は期待を動かさず緑。
+8. **応答方向の送出の非回帰（2026-09-07 第 4 回改訂・D16）**——`cargo test -p shiori-host32-ipc -p shiori-host32-helper -p shiori-host32-host`（x64・PowerShell）が exit 0。要求方向の旗と既存の loopback 試験は無改変。走行の直前に i686 の橋渡しを作り直す（helper を変えたため）。
 
 ### 実機走行（人間サインオフ）
 
