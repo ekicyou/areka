@@ -40,9 +40,10 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use shiori_host32_ipc::{
-    FramingError, MsgTag, copydata_payload, encode_hwnd_le, hwnd_from_u32, send_copydata,
+    FramingError, IpcError, MsgTag, copydata_payload, encode_hwnd_le, hwnd_from_u32, send_copydata,
+    send_copydata_response,
 };
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{GetLastError, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
@@ -69,6 +70,26 @@ const LOAD_ACK_FAIL: u8 = 0;
 /// 空でもなく **error status の SHIORI/3.0 応答**を返す。host 側 codec がこれを識別可能な SHIORI
 /// エラーへ解釈できる（research §7.4「空 or エラー status バイト列」許容）。新 `MsgTag` は導入しない。
 const REQUEST_ERROR_RESPONSE: &[u8] = b"SHIORI/3.0 500 Internal Server Error\r\n\r\n";
+
+/// 応答（`MsgTag::Response`）の送出が失敗したときの観測ログ（要件 16.1・design.md D16）。
+///
+/// `SendMessageTimeoutW` の戻り 0 には由来が 2 つある——**本当の送出失敗**（宛先の窓が既に無い等・
+/// last error が非 0）と、**「応答なし」判定による打ち切り**（戻り 0 かつ last error 0・待たずに
+/// 即座に返る）である。前者と後者は `IpcError::SendFailed` に潰れて見分けが付かないため、生の
+/// last error を必ず一緒に残す。応答方向からハング打ち切りの旗を外した後に last error 0 の失敗が
+/// 再発したら、旗以外の原因を疑う手がかりになる（log-first・silent swallow 禁止）。
+fn log_response_send_failure(what: &str, e: &IpcError) {
+    // SAFETY: Win32 境界。直前の送出呼び出しが残したスレッド局所のエラー値を読むだけ。
+    let last_error = unsafe { GetLastError() }.0;
+    if last_error == 0 {
+        eprintln!(
+            "[helper] {what} 送出失敗（観測）: {e:?} / last_error=0 \
+             ＝戻り 0 かつ last error 0＝応答なし判定で打ち切られた"
+        );
+    } else {
+        eprintln!("[helper] {what} 送出失敗（観測）: {e:?} / last_error={last_error}");
+    }
+}
 
 /// inbound WM_COPYDATA の framing 検証結果に応じた WndProc の取るべき動作（窓なしで単体検証可）。
 ///
@@ -150,8 +171,8 @@ struct HelperShared {
     /// **常設プロキシ保持スロット**（design.md §320・WndProc の LOAD 結線）。確立成功時に
     /// `Some(proxy)` を常設保持し、以後の再 LOAD は `load` 再呼出なしで ack `[1]` 冪等返送する（R2.4）。
     /// 非 `Copy` ゆえ `Cell` 不可・single UI thread 前提で `RefCell` で足りる。**再入規律**（validation
-    /// issue #1）: この `RefCell` の borrow を `send_copydata`（ブロッキング SMTO・再入可）越しに保持
-    /// しない（`BorrowMutError` panic の構造的排除・R6.4）。
+    /// issue #1）: この `RefCell` の borrow を送出関数（`send_copydata` / `send_copydata_response`・
+    /// ブロッキング SMTO・再入可）越しに保持しない（`BorrowMutError` panic の構造的排除・R6.4）。
     proxy: RefCell<Option<ShioriByteProxy>>,
     /// 観測カウンタ: 送出した HELLO 数。
     hellos_sent: Cell<u64>,
@@ -241,7 +262,7 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             //
             // **RefCell 再入規律（validation issue #1・LOAD アームと同型）**: `s.proxy` の borrow を
             // FFI `proxy.request` 呼出中に保持することは可（FFI は同期・跨プロセス SendMessage を発しない）
-            // だが、その後の RESPONSE 返送（`send_copydata`・ブロッキング SMTO・WndProc 再入を許す）へ
+            // だが、その後の RESPONSE 返送（`send_copydata_response`・ブロッキング SMTO・WndProc 再入を許す）へ
             // borrow を持ち越さない。応答バイトを scoped borrow 内で確定し borrow を drop してから送出する。
             // 再入 REQUEST が borrow を掴んでも `BorrowError` panic を起こさない（R6.4）。
             s.requests_handled.set(s.requests_handled.get() + 1);
@@ -271,9 +292,10 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             }; // ← ここで borrow が drop され、以後 RESPONSE 送出は borrow 非保持で行う。
 
             // 2) borrow を一切保持しない状態で RESPONSE を親へ 1 通だけ返す（ブロッキング SMTO・再入可・§200）→
-            //    即 return（それ以上の跨プロセス SendMessage 不可）。
+            //    即 return（それ以上の跨プロセス SendMessage 不可）。応答方向ゆえ
+            //    `send_copydata_response`（ハング打ち切りの旗を付けず上限時間のみ・要件 16.1）。
             let target = hwnd_from_u32(s.parent_hwnd);
-            match send_copydata(
+            match send_copydata_response(
                 target,
                 self_hwnd,
                 MsgTag::Response,
@@ -281,14 +303,14 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
                 REPLY_TIMEOUT,
             ) {
                 Ok(()) => s.responses_sent.set(s.responses_sent.get() + 1),
-                Err(e) => eprintln!("[helper] RESPONSE 送出失敗（観測）: {e:?}"),
+                Err(e) => log_response_send_failure("RESPONSE", &e),
             }
         }
         InboundAction::TriggerLoad => {
             // LOAD 実結線（design.md §321・要件 4.1/4.3/5.1/6.4）。
             //
             // **RefCell 再入規律（validation issue #1・最重要）**: `s.proxy` の borrow/borrow_mut を
-            // `send_copydata`（ブロッキング SMTO・WndProc 再入を許す）越しに保持しない。
+            // ack 送出（`send_copydata_response`・ブロッキング SMTO・WndProc 再入を許す）越しに保持しない。
             // 「既確立判定 → 未確立なら確立して即 borrow_mut を閉じる → borrow 非保持で ack 送出」の
             // 順序を固定し、再入 LOAD の borrow_mut 衝突（BorrowMutError panic＝R6.4 違反）を構造的に
             // 排除する。以下、borrow は全て短命スコープに閉じ、ack 送出時には生きていない。
@@ -326,16 +348,17 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
                 s.load_acks_fail.set(s.load_acks_fail.get() + 1);
             }
             let target = hwnd_from_u32(s.parent_hwnd);
-            // ack は既存 Response 再入経路で 1 通返送。送出失敗は観測ログのみ（親は timeout で検出）。
+            // ack は既存 Response 再入経路で 1 通返送（応答方向＝ハング打ち切りの旗なし・要件 16.1）。
+            // 送出失敗は観測ログのみ（親は timeout で検出）。
             if let Err(e) =
-                send_copydata(target, self_hwnd, MsgTag::Response, &[ack], REPLY_TIMEOUT)
+                send_copydata_response(target, self_hwnd, MsgTag::Response, &[ack], REPLY_TIMEOUT)
             {
-                eprintln!("[helper] load-ack 送出失敗（観測）: {e:?}");
+                log_response_send_failure("load-ack", &e);
             }
         }
         InboundAction::TriggerUnload => {
             // 正規の正常終了経路（design §UNLOAD アーム・R5.1/R5.6）。RefCell 再入規律を LOAD/REQUEST と
-            // 同格に厳守: borrow を send_copydata（ブロッキング SMTO・再入可）越しに保持しない。
+            // 同格に厳守: borrow を send_copydata_response（ブロッキング SMTO・再入可）越しに保持しない。
             s.unloads_handled.set(s.unloads_handled.get() + 1);
             // 1) proxy を take（borrow は文末で終了）。
             let taken = s.proxy.borrow_mut().take();
@@ -348,14 +371,14 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             //    しない・ack[1]=「unload 完了・終了系列に入った」）。送出失敗は eprintln! 観測のみ
             //    （親は ack timeout で検出＝意図的逸脱・design §475/validation Issue 2）。
             let target = hwnd_from_u32(s.parent_hwnd);
-            if let Err(e) = send_copydata(
+            if let Err(e) = send_copydata_response(
                 target,
                 self_hwnd,
                 MsgTag::Response,
                 &[LOAD_ACK_OK],
                 REPLY_TIMEOUT,
             ) {
-                eprintln!("[helper] unload-ack 送出失敗（観測）: {e:?}");
+                log_response_send_failure("unload-ack", &e);
             }
             // 5) 自窓へ PostMessageW(WM_NULL) — posted メッセージで MessageLoop を起こす
             //    （sent-message はフィルタに現れない）。main のフィルタが quit_requested を検知して
@@ -557,3 +580,7 @@ mod load_ack_tests;
 #[cfg(test)]
 #[path = "main_loopback_tests.rs"]
 mod loopback_tests;
+
+#[cfg(test)]
+#[path = "main_response_flavor_hung_cage_tests.rs"]
+mod response_flavor_hung_cage_tests;

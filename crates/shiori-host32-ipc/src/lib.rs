@@ -12,10 +12,12 @@
 //! - shift/mask 評価は必ず `u64` cast で行い、i686 の `usize` = 32bit での
 //!   overflow を回避する（要件 7.2）。
 //!
-//! 送信プリミティブ（`send_copydata` / `send_request`）・`ResponseSlot`・
-//! `IpcError` も本モジュールに同居する（跨ビットネス共有の単一ソース）。
-//! 送信関数は `SendMessageTimeoutW`（`SMTO_ABORTIFHUNG` ＋上限時間）で
-//! 無限待機を構造的に排除する（要件 5.3）。実往復の再入受領は実窓を要すため
+//! 送信プリミティブ（`send_copydata` / `send_copydata_response` / `send_request`）・
+//! `ResponseSlot`・`IpcError` も本モジュールに同居する（跨ビットネス共有の単一ソース）。
+//! 送信関数は `SendMessageTimeoutW` の上限時間で無限待機を構造的に排除する（要件 5.3）。
+//! 旗は**送出の向き**で分ける（[`SendFlavor`]・[`send_flags`]・要件 16.1/16.2）:
+//! 要求方向（ホスト → helper）は `SMTO_ABORTIFHUNG` ＋上限時間、応答方向
+//! （helper → ホスト）は上限時間のみ。実往復の再入受領は実窓を要すため
 //! 統合タスクで検証する（本モジュールは型・timeout 契約・slot 消費の確立まで）。
 
 use core::cell::RefCell;
@@ -23,7 +25,9 @@ use core::time::Duration;
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
-use windows::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_COPYDATA};
+use windows::Win32::UI::WindowsAndMessaging::{
+    SEND_MESSAGE_TIMEOUT_FLAGS, SMTO_ABORTIFHUNG, SMTO_NORMAL, SendMessageTimeoutW, WM_COPYDATA,
+};
 
 /// 跨プロセス payload の固定ヘッダ長。
 ///
@@ -160,6 +164,8 @@ pub enum FramingError {
 /// **一様な失敗報告**: peer の生死やハングを distinct なバリアントで区別せず、
 /// 到達不能・timeout・ハング peer の中断（`SMTO_ABORTIFHUNG`）は一律
 /// `Timeout` / `SendFailed` に集約する（distinct な PeerGone は設けない）。
+/// ハング打ち切りが起きうるのは**要求方向だけ**である（旗は送出の向きで決まる・
+/// [`send_flags`]・要件 16.1）。
 /// peer の生死は送信結果に混ぜず、上位の `ExitKind`（ProcessHost・別タスク）で
 /// 観測する（Requirement 1 と 5 の分離）。
 ///
@@ -169,7 +175,8 @@ pub enum FramingError {
 #[derive(thiserror::Error, Debug)]
 pub enum IpcError {
     /// 応答が上限時間内に返らなかった（要件 5.2）、または
-    /// ハング peer が `SMTO_ABORTIFHUNG` で中断された（要件 5.3）。
+    /// 要求方向の送出でハング peer が `SMTO_ABORTIFHUNG` で中断された（要件 5.3）。
+    /// 応答方向にはこの旗が付かない（要件 16.1）。
     #[error("ipc request timed out or peer was hung")]
     Timeout,
     /// `SendMessageTimeoutW` が 0 を返した（送出そのものの失敗）。
@@ -253,11 +260,42 @@ fn timeout_millis(timeout: Duration) -> u32 {
     timeout.as_millis().min(u32::MAX as u128) as u32
 }
 
-/// 生バイト payload を WM_COPYDATA として片道送出する（要件 2.1 / 5.3・design.md §315）。
+/// 送出の**向き**（要件 16.2・design.md D16）。
 ///
-/// `SendMessageTimeoutW` に `SMTO_ABORTIFHUNG` ＋上限時間を与え、送出先がハング中でも
-/// 上限時間で復帰する（無限待機の構造的排除）。戻り 0（失敗 / timeout / hung peer）は
-/// 一律 [`IpcError::SendFailed`] とする。
+/// 向きによって `SendMessageTimeoutW` へ渡す旗が変わる。どちらの向きにどの旗が付くかは
+/// [`send_flags`] が単独で決める（呼び出し側に旗を書かせない）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendFlavor {
+    /// 要求方向（ホスト → helper）。相手はメッセージループを常時回している。
+    Request,
+    /// 応答方向（helper → ホスト）。相手は自分の `SendMessageTimeoutW` の中でこの応答を
+    /// 待っており、待っている間はメッセージを取り出さない。
+    Response,
+}
+
+/// 向きに応じた `SendMessageTimeoutW` の旗を返す純関数（要件 16.1・16.2）。
+///
+/// - [`SendFlavor::Request`] → `SMTO_ABORTIFHUNG`（相手が応答なしなら待たずに打ち切る）。
+/// - [`SendFlavor::Response`] → `SMTO_NORMAL`（旗なし＝上限時間だけで送る）。応答の宛先は
+///   自分の要求の中でこの応答を待っている相手であり、「応答なし」判定はこの向きでは
+///   誤検知にしかならない（design.md D16）。
+#[inline]
+#[must_use]
+pub const fn send_flags(flavor: SendFlavor) -> SEND_MESSAGE_TIMEOUT_FLAGS {
+    match flavor {
+        SendFlavor::Request => SMTO_ABORTIFHUNG,
+        SendFlavor::Response => SMTO_NORMAL,
+    }
+}
+
+/// 生バイト payload を WM_COPYDATA として**要求方向**へ片道送出する
+/// （要件 2.1 / 5.3 / 16.1・design.md §315・D16）。
+///
+/// 旗は [`send_flags`]`(`[`SendFlavor::Request`]`)`＝`SMTO_ABORTIFHUNG` ＋上限時間。送出先が
+/// ハング中でも上限時間で復帰する（無限待機の構造的排除）。戻り 0（失敗 / timeout /
+/// hung peer）は一律 [`IpcError::SendFailed`] とする。
+///
+/// 応答方向は [`send_copydata_response`] を使う（旗が異なる）。
 ///
 /// - `dwData`: `tag.as_u32()`（低 32bit のみ有意・跨ビットネス安全）。
 /// - `cbData`: `payload.len()`（メッセージ境界＝固定ヘッダ長 0）。
@@ -274,6 +312,57 @@ pub fn send_copydata(
     payload: &[u8],
     timeout: Duration,
 ) -> Result<(), IpcError> {
+    send_copydata_with(
+        SendFlavor::Request,
+        target,
+        self_hwnd,
+        tag,
+        payload,
+        timeout,
+    )
+}
+
+/// 生バイト payload を WM_COPYDATA として**応答方向**へ片道送出する（要件 16.1・design.md D16）。
+///
+/// [`send_copydata`] との違いは旗だけ——`SMTO_ABORTIFHUNG` を付けず、上限時間のみで送る。
+/// 応答の宛先は自分の `SendMessageTimeoutW` の中でこの応答を待っている相手であり、待機中は
+/// メッセージを取り出さないため OS からは「応答なし」に見えるが、この向きではその判定を
+/// 送出の打ち切り理由にしない。時間上限は呼び出し側が渡す（helper は `REPLY_TIMEOUT`＝5 秒）。
+///
+/// # Safety
+/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+pub fn send_copydata_response(
+    target: HWND,
+    self_hwnd: HWND,
+    tag: MsgTag,
+    payload: &[u8],
+    timeout: Duration,
+) -> Result<(), IpcError> {
+    send_copydata_with(
+        SendFlavor::Response,
+        target,
+        self_hwnd,
+        tag,
+        payload,
+        timeout,
+    )
+}
+
+/// 向きを明示して片道送出する共通本体（[`send_copydata`]／[`send_copydata_response`] の実体）。
+///
+/// 旗以外は両方向で同一である（COPYDATASTRUCT の組み立て・timeout の飽和変換・戻り 0 の
+/// [`IpcError::SendFailed`] 写像）。
+///
+/// # Safety
+/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+fn send_copydata_with(
+    flavor: SendFlavor,
+    target: HWND,
+    self_hwnd: HWND,
+    tag: MsgTag,
+    payload: &[u8],
+    timeout: Duration,
+) -> Result<(), IpcError> {
     let cds = COPYDATASTRUCT {
         dwData: tag.as_u32() as usize,
         cbData: payload.len() as u32,
@@ -283,15 +372,15 @@ pub fn send_copydata(
 
     let mut result: usize = 0;
     // SAFETY: target は有効 HWND 前提。&cds は本呼び出し中生存し、その lpData が指す
-    // payload も同期送信中生存する。SMTO_ABORTIFHUNG ＋ timeout_ms により無期限
-    // ブロックしない（要件 5.3）。
+    // payload も同期送信中生存する。timeout_ms により無期限ブロックしない（要件 5.3）。
+    // 旗は向きで決まる（要件 16.1/16.2・応答方向は SMTO_ABORTIFHUNG を付けない）。
     let ret: LRESULT = unsafe {
         SendMessageTimeoutW(
             target,
             WM_COPYDATA,
             WPARAM(self_hwnd.0 as usize),
             LPARAM(&cds as *const COPYDATASTRUCT as isize),
-            SMTO_ABORTIFHUNG,
+            send_flags(flavor),
             timeout_ms,
             Some(&mut result as *mut usize),
         )
@@ -494,5 +583,53 @@ mod framing_tests {
     #[test]
     fn payload_header_len_is_zero() {
         assert_eq!(PAYLOAD_HEADER_LEN, 0);
+    }
+}
+
+/// 送出の向きごとの旗の檻（要件 16.1・16.2・16.3⑴・design.md D16）。
+///
+/// 応答方向（helper → ホスト）は「応答なし」判定で打ち切ってはならない。ホストは自分の
+/// `SendMessageTimeoutW` の中でその応答を必ず待っており、待機中はメッセージを取り出さない
+/// ため OS からは「応答なし」に見えるが、これはこの向きでは誤検知にしかならない。
+#[cfg(test)]
+mod send_flavor_tests {
+    use super::*;
+
+    // 応答方向の旗に `SMTO_ABORTIFHUNG` が立っていない（要件 16.1・16.3⑴）。
+    #[test]
+    fn response_flavor_has_no_abort_if_hung() {
+        let flags = send_flags(SendFlavor::Response);
+        assert_eq!(
+            flags.0 & SMTO_ABORTIFHUNG.0,
+            0,
+            "応答方向は SMTO_ABORTIFHUNG を付けない（要件 16.1）: {flags:?}"
+        );
+    }
+
+    // 要求方向の旗には従来どおり `SMTO_ABORTIFHUNG` が立つ（要件 16.1 後段）。
+    #[test]
+    fn request_flavor_keeps_abort_if_hung() {
+        let flags = send_flags(SendFlavor::Request);
+        assert_ne!(
+            flags.0 & SMTO_ABORTIFHUNG.0,
+            0,
+            "要求方向は SMTO_ABORTIFHUNG を保つ（要件 16.1 後段）: {flags:?}"
+        );
+    }
+
+    // 向きが違えば旗も違う（区別が名前だけの見せかけでないことの固定・要件 16.2）。
+    #[test]
+    fn the_two_flavors_do_not_share_the_same_flags() {
+        assert_ne!(
+            send_flags(SendFlavor::Request).0,
+            send_flags(SendFlavor::Response).0,
+            "向きの区別は旗の実差に対応する（要件 16.2）"
+        );
+    }
+
+    // 応答方向は「旗を全部落とす」＝ `SMTO_NORMAL`（上限時間だけで送る・要件 16.1）。
+    #[test]
+    fn response_flavor_is_plain_normal() {
+        assert_eq!(send_flags(SendFlavor::Response).0, SMTO_NORMAL.0);
     }
 }
