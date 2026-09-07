@@ -229,7 +229,7 @@
   - _Depends: 6.9_
   - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`・リポジトリ外の記録置き場_
 - [ ] 6.11 応答方向の送出から `SMTO_ABORTIFHUNG` を外す（症状 D・その場で直す・2026-09-07 第 4 回改訂）
-  - RED: `crates/shiori-host32-ipc` に「応答方向の旗に `SMTO_ABORTIFHUNG` が無い」構造の檻、`crates/shiori-host32-helper/src/main_loopback_tests.rs` の隣に「ホスト役がメッセージを取り出さずに 5.5 秒待った後の要求でも応答が届く（有界 10 秒）」統合の檻を書き、HEAD で赤を確かめる（直す前は `slot.take()` が `None`）
+  - RED: `crates/shiori-host32-ipc` に「応答方向の旗に `SMTO_ABORTIFHUNG` が無い」構造の檻、`crates/shiori-host32-helper/src/main_loopback_tests.rs` の隣に「ホスト役の窓を持つスレッドが 20 秒 pump せず → 往復①（届く）→ さらに 20 秒 pump せず → 往復②の応答が届く（有界 90 秒・所要約 42 秒）」統合の檻を書き、HEAD で赤（往復②が届かない）を確かめる。**5.5 秒／10 秒では猶予期間の内で緑になり檻にならない**（2026-09-07 調査係の較正・当初の記述を訂正）
   - GREEN（design D16）: `send_copydata` を向き（`Request`／`Response`）で分け、応答方向だけ `SMTO_ABORTIFHUNG` を外す（`REPLY_TIMEOUT` 5 秒は保つ）。helper の応答 3 か所（`main.rs:281`・`:331`・`:353-358`）を応答方向へ。要求方向の呼び手は無改変
   - `cargo test -p shiori-host32-ipc -p shiori-host32-helper -p shiori-host32-host`（**PowerShell**・i686 の成果物を上書きしないよう `--target` は付けない＝x64 のテストのみ）と `cargo test -p areka --bin areka`・`cargo test -p areka-kanade`・`cargo test -p areka-ghost` を exit 0 で通す。走行の直前に i686 の橋渡しを作り直す（6.12）
   - 完了状態: 上の檻が緑・要求方向の旗と既存 loopback 試験が無改変・各ファイル 1,000 行以下・記録 §13.4 の下書き（範囲・理由・差）が Implementation Notes に在る
