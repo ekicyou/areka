@@ -66,6 +66,16 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 5. **走行の扱い。** 2026-09-06 の走行 A は中断記録（§13.3 の 2 件目）として残し、判定に用いない。2 つの症状を直したコミットで §2 の準備からやり直し、記録置き場は `emo2-conformance-2026-09-06-2`（同日 2 回目）とする。直す前の生ログは 5.5 の欠陥の非発現（`event=boot_input_ignored` 0 行）と項目 20 ⑴（`connect_failed` 0 行）・⑶（`unload_clean` 1 行）の証拠としては読めるが、合否には載せない。
 6. **8.5（引受先の無い症状を閉じない）の帰結。** 症状 A・B は本仕様が引受先である。5.5 の kanade の欠陥（前節 7）は依然として起票待ちであり、本改訂で変わらない。
 
+### 改訂（2026-09-07・第 3 回・症状 C＝終了指示が終了挨拶を通らない）
+
+直したビルド（`a9aef152`）での走行 A（2026-09-07 18:30〜18:33・記録置き場 `emo2-conformance-2026-09-06-2`）は ①〜⑪（項目 1〜12 前半・14〜19）が開発者の目視で OK、直した 2 症状も実機で解消（反転帯で文字が欠けない・警告 1 行）。しかし **項目 13「終了」で終了挨拶が出ず即時終了した**（開発者所見「Ctrl+ダブルクリックしか終了方法がなく、即時終了。挨拶は出てこなかった」）。第 2 回改訂のスコープ（その場でつぶす）に従い本仕様で直す。
+
+1. **機序（実測）。** 唯一の終了操作 Ctrl+左ダブルクリックは「暫定退避」であり（`crates/areka/src/input_events/mod.rs:361-364`・`:387-400`・`event="mouse_escape_close"`）、全ゴースト窓を despawn → wintf の `run()` が戻る → `main.rs:337-347` が `GhostRuntime::shutdown(User)` → `KanadeMsg::ForceQuit`（`crates/areka-ghost/src/runtime.rs:266-267`）→ `OnClose` を **NOTIFY**（`crates/areka-kanade/src/actor.rs:14-17`）→ 解放。生ログ: `force_quit reason="user"` の 27 ms 後に `method=NOTIFY id=OnClose`、50 ms 後に `unload_clean`。辞書の終了挨拶 3 パターン（`fixtures/emo2/ghost/master/dic/boot.pasta:92-105`）は照会されない。一方、正規の握手（`KanadeMsg::CloseRequest` → `begin_close` → `OnClose` **GET** → 応答台本を再生 → `\-` で `Unloading{Quit}` → 解放 → `StopSelf`）は kanade に実装済み（`crates/areka-kanade/src/schedule/close.rs:1-20`）で、決定論一周の終了段はこれを注入で通している（`spine_conformance_lap_tests.rs:948-956`）。**製品の操作からこの握手へ入る配線と、握手が終わった後に窓を閉じる配線の 2 つが無い**——コメント自身が「暫定退避——`\-` メニュー終了完成で退役」と書く未完の箇所である。
+2. **あるべき姿（Requirement 15 を新設）。** ⑴ Ctrl+左ダブルクリックは kanade へ `CloseRequest{User}` を送る（窓はそのまま）。⑵ kanade の終了系列が完了したら（`Action::StopSelf`・原因を問わず）UI へ 1 度だけ知らせ、UI が全ゴースト窓を閉じる→`run()` が戻る→`main.rs` の終了統括は冪等（`ForceQuit` の送出失敗は既に `debug!`＝`runtime.rs:266-272`）。⑶ 起動失敗時の脱出は残す——`MouseWiring` 不在時の Ctrl+左ダブルクリック、および Ctrl+**Shift**+左ダブルクリックは従来どおり窓を despawn する強制退避。⑷ 辞書が終了を拒否（`\-` で終わらない）したら正典どおり定常へ戻り窓は残る（`close.rs:15-17`）。期限超過（`close_talk_deadline_ms`）は `Unloading{DeadlineExceeded}` → 同じ経路で窓が閉じる。
+3. **項目 13 の実機の証跡（11.5）。** 生ログに `method=GET id=OnClose`・`event="close_talk_start"`・`unload_clean` 1 行が並び、`event="force_quit"` が **0 行**。走行 A の終了操作は A20 で Ctrl+左ダブルクリック 1 回のみ。
+4. **走行の扱い。** 2026-09-07 の走行 A は中断記録（§13.3 の 3 件目・A20 で症状 C）。①〜⑪ の所見は参考として残し合否に用いない。直したコミットで §2 から採り直し、記録置き場は `emo2-conformance-2026-09-07`。
+5. **編集集合（12.1）に `crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`（配線と兄弟試験）・`crates/areka-kanade/src/actor.rs`（停止通知の発行点）・`crates/areka-ghost/src/runtime.rs`（通知端の受け渡し）を加える。** `main.rs`（948 行）は触らないか、通知端の受け渡し 1 か所に限る。
+
 ## Boundary Context
 
 - **In scope**:
@@ -265,7 +275,7 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 編集集合を、新規の一周テスト（`crates/areka/src/emo2_boot/` の兄弟テストファイル＋テスト専用ファイル `spine.rs` への接続宣言 3 本と記録の追補 1 か所）・実物定義の文書・本仕様の記録に限る。The 本仕様 shall 例外として Requirement 9.2（`spine_e2e_test_s3_helper_liveness_detected.rs` と `spine_e2e_test_s1_boot_success.rs` の **S3・S1 の 2 ファイル**の待ちの形への更新。S1 は 2026-09-04 の開発者裁定で追加＝「改訂」節 2）と Requirement 9.8（`wintf` の 2 ファイルへの門の付与）のみを事前登記済みの範囲として認める。 **2026-09-06 第 2 回改訂**: 編集集合に `crates/areka-emo-text/`（Requirement 13・14 の本番コードと試験＝`choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs`・`region.rs` とその兄弟試験・`tests/` の読み戻し検査）を加える。
+1. The 本仕様 shall 編集集合を、新規の一周テスト（`crates/areka/src/emo2_boot/` の兄弟テストファイル＋テスト専用ファイル `spine.rs` への接続宣言 3 本と記録の追補 1 か所）・実物定義の文書・本仕様の記録に限る。The 本仕様 shall 例外として Requirement 9.2（`spine_e2e_test_s3_helper_liveness_detected.rs` と `spine_e2e_test_s1_boot_success.rs` の **S3・S1 の 2 ファイル**の待ちの形への更新。S1 は 2026-09-04 の開発者裁定で追加＝「改訂」節 2）と Requirement 9.8（`wintf` の 2 ファイルへの門の付与）のみを事前登記済みの範囲として認める。 **2026-09-06 第 2 回改訂**: 編集集合に `crates/areka-emo-text/`（Requirement 13・14 の本番コードと試験＝`choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs`・`region.rs` とその兄弟試験・`tests/` の読み戻し検査）を加える。 **2026-09-07 第 3 回改訂**: さらに `crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`（配線と兄弟試験）・`crates/areka-kanade/src/actor.rs`・`crates/areka-ghost/src/runtime.rs`（Requirement 15）を加える。
 2. The 本仕様 shall 既存の決定論テストの期待値を、本仕様の都合で緩めない。
 3. If 併走する仕様と共有するファイルが生じた場合, the 本仕様 shall 着手前に相互確認する。
 4. The 本仕様 shall 決定論層（Requirement 2・3）と実機層・完成判定（Requirement 5〜11）を独立した節に保ち、実装段階の相 1（決定論一周テスト）と相 2（実機一周走行と完成判定）の境界をこの節構造で表す（分割はしない＝議題 2 裁定）。
@@ -298,3 +308,18 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 3. The 警告 shall 文言と 4 つの欄（`balloon`・`axis`・`wrap_threshold`・`inline_limit`）を上流と同一に保つ（手順書 §5.7 の grep 語を変えない）。
 4. The 決定論テスト shall 「resolve は 0 件」「装着 1 件」「値の変わらない再追従 N 回で 0 件」「値が変わる再追従で 1 件」「折返し基準が遠辺の内なら 0 件」を固定する。
 5. The 採り直しの走行 A の生ログ shall 相方側バルーンについて警告の行数が装着の回数（1）に等しい——手順書 §5.7 の読み方をそのとおりに改める。
+
+### Requirement 15: 終了指示が終了挨拶を通って窓を閉じる（2026-09-07 第 3 回改訂で新設）
+
+**Objective:** As 利用者, I want 終了の操作でゴーストが終了挨拶をしてから消えること, so that 項目 13「終了指示 → 終了挨拶 → 終了指令 → 解放」が実機で成立する
+
+#### Acceptance Criteria
+
+1. When 利用者が Ctrl+左ダブルクリックしたとき（結線済み）, the 入力層 shall kanade へ `CloseRequest{reason: User}` を 1 件送り、窓を閉じない（記録 1 行）。
+2. When 結線前（`MouseWiring` 不在）に Ctrl+左ダブルクリックしたとき, または Ctrl+Shift+左ダブルクリックしたとき, the 入力層 shall 従来どおり全ゴースト窓を despawn する（起動失敗時の脱出・強制退避）。
+3. When kanade の終了系列が完了したとき（`StopSelf`・原因 Quit／CloseSilent／DeadlineExceeded／Forced／Fault のいずれでも）, the kanade shall UI へ非ブロッキングで停止通知（原因つき）を 1 件送り、送出失敗は `warn!` で記録して panic しない。
+4. When UI が停止通知を受けたとき, the UI shall 記録 1 行の上で全ゴースト窓をちょうど 1 度 despawn し、以後の `main.rs` の終了統括は冪等に完走する（`ForceQuit` の送出失敗は `debug!`）。
+5. The 実機一周走行 shall 項目 13 の証跡として、生ログに `method=GET id=OnClose`・`event="close_talk_start"`・`unload_clean` 1 行が並び、`event="force_quit"` が 0 行であることを示す。
+6. The 決定論テスト shall ⑴ 結線済みの Ctrl+左ダブルクリックで `CloseRequest{User}` がちょうど 1 件送られ despawn が起きないこと ⑵ 結線前および Ctrl+Shift で despawn が起きること ⑶ `StopSelf` で停止通知が届くこと ⑷ 一周の母体（spine）で `CloseRequest` → `OnClose` GET → `\-` で終わる応答 → 停止通知 → ゴースト窓 0 → 解放 1 が成立すること、を固定する。既存の一周テストの 3 台帳の期待は 1 バイトも動かさない（12.2）。
+7. If 辞書が終了を拒否した場合（応答が `\-` で終わらない）, the kanade shall 定常運転へ戻り（正典・既存）、窓は残る。If 再生完了待ちが期限を超えた場合, the 経路 shall `DeadlineExceeded` として同じ停止通知で窓を閉じる。
+8. The 手順書と記録 shall A20 の操作を Ctrl+左ダブルクリックと定め、強制退避（Ctrl+Shift）を別に記し、§5.7 の語に上の 3 語と `force_quit`（0 行が期待）を足す。

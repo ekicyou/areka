@@ -176,6 +176,7 @@ crates/areka/src/emo2_boot/
 - `crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs` — 同形の兄弟。`:145-156` の待ちが表示記録の非空しか見ないまま `:185-196` が 5 要素を等値照合する形を、S3 と同じ「条件が満たされるまで待つ」形へ更新（R9.2・**2026-09-04 の開発者裁定で追加**＝requirements.md「改訂」節 2）。等値照合そのものは変えない。
 - `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` — `:369` と `:740` の 2 本へ理由付きの `#[ignore]` と環境変数の門を付与（R9.3）。判定ロジックは 1 行も変えない。
 - `crates/wintf/src/runtime/tick_bridge.rs` — `:346` の 1 本へ同じ形の門を付与（R9.3）。
+- `crates/areka/src/input_events/mod.rs`・`crates/areka-kanade/src/actor.rs`（＋`msg.rs` の `KanadeStopped`）・`crates/areka-ghost/src/runtime.rs`・`crates/areka/src/emo2_boot/{mod.rs, frame.rs, frame/wiring.rs}`・`crates/areka/src/placement/spawn.rs` — 終了指示の配線と停止通知（D15・2026-09-07 第 3 回改訂）。`main.rs` は触らない。
 - `crates/areka-emo-text/src/choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs` — 反転帯の `band_offset`（D13・2026-09-06 第 2 回改訂）。`region.rs`・`actor.rs` — 折返し警告を登録口へ（D14）。兄弟試験と `tests/` の読み戻し検査は導出し直す（緩めない）。
 - `doc/emo2-conformance-scope.md` — `:24` の訂正（R11.1）と、完成宣言時の充足済み注記（R11.2）。
 - `.kiro/steering/roadmap.md` — M1 の節を閉じる・干渉台帳の e2e 行を新前提へ書き換える・申し送り生存先の行（`:66`）を閉じる（R11.2・R11.4）。
@@ -741,6 +742,28 @@ band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.
 
 **試験の引き直し**。`region_inline_limit_tests.rs:192-232`（「resolve が 1 件」）→「resolve は 0 件」に改め、欄と値の主張は actor 側の新しい兄弟試験（`actor_region_warn_tests.rs`・log-capture-kit の `capture`）へ移す: 装着 1 件（4 欄）・値の同じ再追従 N 回 0 件・値の変わる再追従 1 件・折返し基準が遠辺の内なら 0 件。手順書 §5.7 の読み方は「装着ごとに 1 件・それ以上は退行」へ改める（R14.5）。
 
+#### D15 終了指示の配線（症状 C・2026-09-07 第 3 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 利用者の終了操作が kanade の正規の握手（終了挨拶 → `\-` → 解放）を通り、終わったら窓が閉じる |
+| 要件 | 15.1〜15.8 |
+| 置き場 | `crates/areka/src/input_events/mod.rs`（操作）・`crates/areka-kanade/src/actor.rs`（停止通知の発行）・`crates/areka-ghost/src/runtime.rs`（通知端の受け渡し）・`crates/areka/src/emo2_boot/{mod.rs, frame.rs, frame/wiring.rs}`（受信と窓の despawn）・`crates/areka/src/placement/spawn.rs`（despawn の共通化） |
+
+**現状の機序（実測・2026-09-07 走行 A）**。唯一の終了操作 Ctrl+左ダブルクリックは暫定退避（`input_events/mod.rs:387-400`）で全 `GhostWindowMarker` 窓を despawn する。窓が無くなると wintf の `run()` が戻り、`main.rs:337-347` が `GhostRuntime::shutdown(User)` → `KanadeMsg::ForceQuit`（`runtime.rs:266-267`）→ `OnClose` NOTIFY → 解放。正規の握手は `KanadeMsg::CloseRequest` から始まり（`close.rs:1-20`・`msg.rs:127`）、決定論一周が注入で通している（`spine_conformance_lap_tests.rs:948-956`・台本 `spine_conformance_script.rs:546-547` は `OnClose` GET に `\-` で終わる挨拶 `CLOSE_TALK`（`:513`）を返す）。**不足は 2 か所**——操作が `CloseRequest` を送らないこと、握手が終わっても窓を閉じる者がいないこと（kanade は `Action::StopSelf`＝`actor.rs:216-222` で shiori へ Close を送って自分を止めるだけ）。
+
+**新しい配線（追加のみ・既存の呼び手は不変）**。
+
+1. **操作** — `on_char_pointer_pressed`（`input_events/mod.rs:380-400`）の Ctrl+左ダブルクリック分岐を 2 つに分ける: ⑴ `MouseWiring` が在り Shift が押されていなければ（`PointerState.shift_down`・wintf `pointer/buffers.rs:241`）`wiring.send_close_request(CloseReason::User)`（`MouseWiring.sender`＝`GhostRuntime::kanade()` のクローン・`:41-50`）を 1 件送り `event="close_requested"` を `info!` で記録、窓は触らない。⑵ `MouseWiring` 不在、または Ctrl+**Shift**+左ダブルクリックは従来の強制退避（despawn・`event="mouse_escape_close"`）。
+2. **停止通知** — kanade に `KanadeStopped { cause }`（`cause` は `TermCause`＝`schedule/mod.rs:285-291` の 5 値を公開型へ写す）を新設し、`spawn_kanade`（`actor.rs:67-72`）と同じ引数に `stop_sink: Option<std::sync::mpsc::Sender<KanadeStopped>>` を足した派生関数を用意する（既存 `spawn_kanade(…)` は `None` を渡す薄い包み＝既存の呼び手は不変）。`Action::StopSelf` の実行点（`actor.rs:216-222`）で、`stop_sink` が `Some` なら 1 度だけ送る。送出失敗（受信端切断）は `warn!` で記録し panic しない（log-first）。
+3. **受け渡し** — `GhostBootOptions`（`runtime.rs:109-128`）に `kanade_stop: Option<Sender<KanadeStopped>>` を足し（既定 `None`＝`boot_config.rs:127` など既存の構築点は不変）、`boot`（`:479`・`:582` の `spawn_kanade`）が派生関数へ渡す。`wire_emo2_boot`（`emo2_boot/mod.rs:441-458`）が `mpsc::channel::<KanadeStopped>()` を作り送出端を options へ、受信端を `Emo2Wiring::new`（`frame/wiring.rs:148-160`）の新しい引数 `kanade_stop_rx` へ渡す（`lifecycle_rx` と同じ形）。
+4. **窓を閉じる** — `emo2_frame_system`（`frame.rs:167`）の**先頭**（`sync_monitor_snapshot` の前）に `run_ghost_quit_phase(&mut wiring, world)` を置く。受信端を `try_recv` で全件取り出し、1 件でも在れば `info!(event = "ghost_quit", cause = ?cause)` の上で全 `GhostWindowMarker` 窓を despawn し（`placement::spawn::despawn_ghost_windows(world) -> usize` として暫定退避と共通化）、以後の相は走らせずに戻る（wiring は戻す）。窓が無くなると `run()` が戻り、`main.rs` の終了統括は既存のまま冪等に完走する（`ForceQuit` の送出は kanade 停止済みで失敗＝`debug!`・`runtime.rs:266-272`）。2 度目以降の通知や窓が既に無い場合は `debug!` で打ち切る（`despawn_smoke_targets` と同じ区別・`main.rs:788-830`）。
+5. **拒否と期限** — 応答が `\-` で終わらなければ kanade は定常へ戻る（`close.rs:15-17`・既存）ので通知は出ず窓は残る（正典）。`CloseTalkWait` の期限超過は `Unloading{DeadlineExceeded}`（`close.rs:18-19`・既定 30 秒 `close_talk_deadline_ms`＝`msg.rs:281-282`）→ 同じ通知 → 窓が閉じる。
+
+**試験（すべて決定論・R15.6）**。⑴ `input_events_tests.rs`: 結線済み Ctrl+左ダブル → `CloseRequest{User}` ちょうど 1 件・despawn 0／結線前 → despawn／Ctrl+Shift → despawn かつ送出 0。⑵ kanade（`tests/kanade/close_test.rs` の隣）: `StopSelf` で `KanadeStopped{cause}` が届く・受信端 drop で `warn!` 1 件かつ停止は完走（log-capture-kit）。⑶ `frame` の相（`frame_*_tests.rs` の隣に新設）: 通知 1 件で `GhostWindowMarker` が 0 になり 2 件目は `debug!` で打ち切り。⑷ spine の新しい兄弟試験 `spine_close_wiring_tests.rs`（`spine.rs` に接続宣言 3 行・959 → 962 行）: `CloseRequest{User}` → 台本の `OnClose` GET（`CLOSE_TALK`）→ 通知 → 相を 1 回回して窓 0 → 記録に `Unload` 1 件。既存の一周テスト 13 本の 3 台帳の期待は 1 バイトも動かない（注入は元から `CloseRequest` を送っている）。
+
+**実機の証跡（項目 13・R15.5）**。A20 で Ctrl+左ダブルクリック 1 回 → 終了挨拶がバルーンに流れ → 窓が自分で閉じる → 生ログに `method=GET id=OnClose`・`event="close_talk_start"`・`event="ghost_quit"`・`unload_clean` 1 行、`event="force_quit"` 0 行、`exit=0`。
+
 ### 常設テストの衛生
 
 #### D11 間欠的な赤の隔離裁定
@@ -952,6 +975,7 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 4. **更新した間欠的な赤 ⑴**——待つ形へ移した後、同じ確認が同じ結果を出すこと。
 5. **上流 spec の着地後に決定論層が緑のままであること**（2026-09-06）——`emo-text-line-height-canon` を取り込んだ merge `3c2908e` で `cargo test -p areka --bin areka conformance` が 13 passed／0 failed。3 つの台帳は字の配置を運ばないので、期待列を 1 つも動かさずに緑であることが、行送りの改訂と決定論層の独立の証拠になる。
 6. **その場で直した 2 件の非回帰（2026-09-06 第 2 回改訂）**——D13: 既定フォントの byte 等価 golden が 1 バイトも動かないこと（offset 0 の証拠）と、実フォントの読み戻し 3 本が「上 ≥ 0・下 = 0」で緑であること。D14: `region_inline_limit_tests.rs` が 0 件、actor 側の兄弟試験が装着 1 件／同値再追従 0 件で緑であること。いずれも `cargo test -p areka-emo-text` の exit 0 で確かめ、`| tail` で終了コードを隠さない。
+7. **終了指示の配線の非回帰（2026-09-07 第 3 回改訂・D15）**——`cargo test -p areka --bin areka`（入力層・相・spine の兄弟試験）と `cargo test -p areka-kanade`・`cargo test -p areka-ghost` が exit 0。既存の一周テスト 13 本は期待を動かさず緑。
 
 ### 実機走行（人間サインオフ）
 

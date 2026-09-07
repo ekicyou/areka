@@ -212,6 +212,22 @@
   - _Requirements: 8.4, 8.6, 5.2, 5.6, 11.5, 14.5_
   - _Depends: 6.7_
   - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`・リポジトリ外の記録置き場_
+- [ ] 6.9 終了指示を正規の握手へ配線し、握手が終わったら窓を閉じる（症状 C・その場で直す・2026-09-07 第 3 回改訂）
+  - RED: `input_events_tests.rs` に「結線済み Ctrl+左ダブルクリック → `CloseRequest{User}` ちょうど 1 件・despawn 0」「結線前 → despawn」「Ctrl+Shift → despawn かつ送出 0」、kanade の試験（`tests/kanade/close_test.rs` の隣）に「`StopSelf` で `KanadeStopped{cause}` が届く・受信端 drop で `warn!` 1 件かつ停止は完走」、`frame` の相の試験（`frame_*_tests.rs` の隣に新設）に「通知 1 件で `GhostWindowMarker` 0・2 件目は `debug!` 打ち切り」、spine の新しい兄弟試験 `spine_close_wiring_tests.rs` に「`CloseRequest{User}` → `OnClose` GET（`\-` で終わる挨拶）→ 通知 → 相 1 回で窓 0 → `Unload` 1 件」を書き、HEAD で赤を確かめる
+  - GREEN（design D15 の 1〜5）: `MouseWiring::send_close_request`・Ctrl+左ダブルの分岐（Shift／結線前は強制退避のまま）・`KanadeStopped` と `spawn_kanade` の派生関数（既存は `None` の包み）・`GhostBootOptions.kanade_stop`（既定 `None`）・`wire_emo2_boot` でチャネルを作り `Emo2Wiring::new` の `kanade_stop_rx` へ・`emo2_frame_system` 先頭の `run_ghost_quit_phase`・`placement::spawn::despawn_ghost_windows` へ暫定退避と共通化。`main.rs` は触らない
+  - `cargo test -p areka --bin areka`・`cargo test -p areka-kanade`・`cargo test -p areka-ghost`・`cargo test -p areka-emo-text` を exit 0 で通し、一周テスト 13 本の 3 台帳の期待が 1 バイトも動いていないことを diff で示す。触った各ファイルが 1,000 行以下（`spine.rs` は 962 まで）
+  - 完了状態: 上の試験がすべて緑で、既存の呼び手（`spawn_kanade`・`GhostBootOptions` の他の構築点）に差分が無く、記録 §13.4 の下書き（範囲・理由・差）が Implementation Notes に在る
+  - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.6, 15.7, 12.2_
+  - _Depends: 6.8_
+  - _Boundary: `crates/areka/src/input_events/{mod.rs, input_events_tests.rs}`・`crates/areka/src/emo2_boot/{mod.rs, frame.rs, frame/wiring.rs, spine.rs（接続宣言 3 行）, spine_close_wiring_tests.rs（新規）}` と frame の兄弟試験・`crates/areka/src/placement/spawn.rs`・`crates/areka-kanade/src/{actor.rs, msg.rs, lib.rs}` と同 crate の試験・`crates/areka-ghost/src/runtime.rs`（`main.rs`・`spine_conformance_*`・fixture・例外表は触らない）_
+- [ ] 6.10 症状 C を記録・手順書へ登記し、採り直しの準備をやり直す（2026-09-07 第 3 回改訂）
+  - 記録: §13.2 行 7（終了指示が強制終了系列へ入り終了挨拶を通らない・その場で直した・6.9 のコミット）・§13.4 行 3・§13.3 中断 3 件目（2026-09-07 走行 A・A20 で症状 C・①〜⑪ の開発者所見 OK は参考・`force_quit` 1 行／`OnClose` NOTIFY の生ログ事実）・§6 の追記（第 3 回）に項目 13 の新しい期待（Ctrl+左ダブルクリック → 挨拶 → 窓が自分で閉じる・強制退避は Ctrl+Shift）・§7 に `force_quit` 0 行の点灯行・§1／§3／§4／§5／§5.1 を直したコミットの値で
+  - 手順書: A20 の操作を Ctrl+左ダブルクリックに定め強制退避（Ctrl+Shift）を別記・§3.4／§9 に強制退避の扱い・§5.7 に `method=GET id=OnClose`・`event="close_talk_start"`・`event="ghost_quit"`・`event="force_quit"`（0 行が期待）・§2.4／§9 の記録置き場は `emo2-conformance-2026-09-07`
+  - 準備: ビルド・32bit 橋渡し `014C`・記録置き場 `emo2-conformance-2026-09-07`・`lap.ps1` の写し・永続状態の消去
+  - 完了状態: 記録と手順書に「Ctrl+ダブルクリックは暫定退避」を現在形で述べる記述が残っておらず、新しい記録置き場が空で在り、両文書とも 1,000 行以下
+  - _Requirements: 8.4, 8.6, 5.2, 5.6, 11.5, 15.5, 15.8_
+  - _Depends: 6.9_
+  - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`・リポジトリ外の記録置き場_
 - [ ] 6.2 一周走行を行い記録と機械判定の出力を採る
   - 実ゴースト・絶対パス・実拡大率で一周を走らせ、有界の自動終了と記録用の出力水準で走行の終わりを人手のばらつきから切り離す
   - 適合検証項目表 20 項目を順に確かめ、項目ごとの結果と根拠と根拠の種別を記録する
@@ -219,9 +235,10 @@
   - 走行が途中で成立しなくなった場合は中断点と観測できたところまでを残し、部分的な結果を合格にしない
   - 完了状態: 走行の同定情報・環境変数・点灯確認・20 項目の判定・機械判定の出力が記録に揃っている
   - _Requirements: 1.2, 1.3, 1.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 5.8, 5.11_
-  - _Depends: 6.1, 6.8_
+  - _Depends: 6.1, 6.8, 6.10_
   - _Unblocked（2026-09-06）: 引受先 spec `emo-text-line-height-canon` が完了（PR #142・main `e3291fc1`）し merge `3c2908e` で取り込んだ。走行 A は手順書 §2 の準備から採り直す。2026-09-05 の `lap-run-a.log` は §13.3 の中断記録として残す（requirements.md「改訂（2026-09-06）」）_
   - _第 2 回改訂（2026-09-06）: 採り直しの走行 A（20:41〜20:48）は A14 を越えたが、開発者が症状 A（反転帯の縦位置）・B（警告の洪水）を許容不可と裁定し「その場でつぶす」へスコープを定め直した。6.6〜6.8 の後、直したコミットで §2 から採り直す（記録置き場 `-2`）_
+  - _第 3 回改訂（2026-09-07）: 直したビルドの走行 A（18:30〜18:33）は ①〜⑪ OK・直した 2 症状も解消したが A20 で症状 C（終了指示が終了挨拶を通らない）。6.9〜6.10 の後、記録置き場 `emo2-conformance-2026-09-07` で採り直す_
   - _Human: 実機の操作と目視は開発者の手元作業。準備（6.1）が済んだら開発者へ確認の目的と手順を平易に伝えて引き渡す_
 - [ ] 6.3 読み分けを当てて合否ブロックを確定する
   - 機械判定と目視所見が食い違った箇所に 3 問を上から当てて 1 行に定め、閾値を目に合わせて緩めない
@@ -339,3 +356,4 @@
 - **タスク 6.6 済み（帯の縦位置）——記録 §13.4 の下書き（6.8 が写す）**。範囲: `crates/areka-emo-text/src/choice.rs`（純関数 `highlight_band_offset` 新設・`derive_hit_rows`／`decorate_canvas` に引数 1 つ）・`canvas.rs`（`ChoiceLineContent::band_offset`）・`viewbox_draw.rs`（`highlight_rect` の起点とダーティ帯の超過分に寄せを加算）・`actor.rs`（帯の丈の直後に寄せを 1 度だけ決め描画とヒットへ配る）。試験は兄弟 5 本＋`tests/` 読み戻し 3 本（`BAND_OVERHANG_MAX` 2→0）。`draw.rs`・`region.rs`・fixture は未接触。理由: 走行 A で開発者が「反転位置が上すぎる」と判じ上流の 2 画素許容を覆した。機序＝DirectWrite は行ボックス（28 で 37.24）の中央寄りに字を置くのに帯（30）は行の上端に揃えていた。帯を広げると隣の行と重なるので広げず中央へ寄せる（寄せ＝(37.24−30)/2 → 4・font 20 では 2・既定フォントでは 0）。走行前後の見え方の差: 直した症状だけ——帯が 4 画素下がり上の余白 7→3・下の切れ 2→**0**（読み戻し: 28 帯 y4..33／字 y7..31・emo2 塗り y34..63／字 y37..61・font 20 帯 y24..45／字 y28..44）。帯の丈と当たり範囲は帯と一緒に下がり一致したまま、隣の行とは接して重ならない。既定フォントの byte 等価 9 本は 1 バイトも動かず。レビューは変異 3 通り（offset→0／ダーティ帯の寄せ除去／縦書きの寄せ除去）で各檻が赤になることを確かめた。
 - **タスク 6.7 済み（警告の回数）——記録 §13.4 の下書き（6.8 が写す）**。範囲: `crates/areka-emo-text/src/region.rs`（粗さの `warn!` 撤去・`inline_axis_name` 新設・`BALLOON_NAME_PLACEHOLDER` を `pub(crate)`）・`actor.rs`（`warn_coarse_wrap_threshold` を新設し `register_actor` が `layout_input` を上書きする前に 1 度呼ぶ）・`region_inline_limit_tests.rs`（resolve は 0 件へ）・新規 `actor_region_warn_tests.rs`（6 本・各本が対照 `error!` 1 件を数える）。理由: 再追従の判定キーを得るために `refresh_actor_binding` が churn ガードの**前**に毎フレーム `resolve` を呼び（`actor.rs:439-440`）、警告が解決関数の中にあったため走行 A の生ログ 30,837 行中 27,908 行が同じ 1 行になった。「装着 1 回につき 1 件」の意味を持つ登録口へ移す。走行前後の見え方の差: 同じ警告が毎フレーム繰り返されなくなることだけ。文言と 4 欄はバイト同一（SHA-256 一致）・出る条件（折返し基準 > 遠辺）も不変・画面の見た目や当たり判定は 1 画素も変わらない。**手順書 §5.7 と記録 §7／§14 の出所 `region.rs:294-301` は `actor.rs` の `warn_coarse_wrap_threshold` へ改める（6.8）**。R14.1 の文言は「この警告について純粋」へ訂正済み（退化 validrect の `warn!` と縮退の `debug!` は残す＝R12.5）。
 - **タスク 6.8 済み（2026-09-06 22:06〜22:10）**: 記録 §13.2 行 5／6・§13.4（改変の台帳）・§13.1 行 5 は「覆された」・§13.3 中断 2 件目・§6 追記（第 2 回）・§14 の注記、手順書 §2.4／§9（同日 2 回目は `-2`）・A14・C1（はみ出し 0）・§5.7（警告は装着ごとに 1 件・出所は `actor.rs` の `warn_coarse_wrap_threshold`）。準備は `a9aef152` で: `areka.exe` 22,761,472 バイト（22:06:30）・橋渡し `014C`（i686 は no-op・ハッシュ一致）・記録置き場 `emo2-conformance-2026-09-06-2`・`profilereka` 消去。⚠ **別セッションがこの作業ツリーで `cargo test --workspace` を回していた**（22:01〜22:05・橋渡しを上書きし得る）——走行の直前に `Get-Process cargo` 0 個と PE `014C` を毎回確かめること。
+- **2026-09-07 第 3 回改訂＝症状 C（終了指示が終了挨拶を通らない）**。走行 A（`a9aef152`・18:30〜18:33）は ①〜⑪ OK・帯と警告の直しも実機で確認（警告 1 行）。A20: Ctrl+左ダブルクリックは暫定退避（`input_events/mod.rs:387-400`）＝窓 despawn → `run()` 復帰 → `shutdown(User)` → `ForceQuit` → `OnClose` NOTIFY（`force_quit` の 50 ms 後に `unload_clean`）。正規の握手（`CloseRequest` → GET → 挨拶 → `\-`）は kanade 実装済み・決定論一周が注入で通しているが、製品の操作からの配線と、終了後に窓を閉じる配線が無い。R15／D15／tasks 6.9〜6.10 を追加。`PointerState` は `shift_down`／`ctrl_down` を持つ（wintf `pointer/buffers.rs:241-242`）。
