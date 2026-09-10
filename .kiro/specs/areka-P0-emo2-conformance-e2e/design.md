@@ -805,8 +805,6 @@ band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.
 
 #### D18 `\w[n]` 括弧形を読まない（症状 G の areka 側・2026-09-10 第 6 回改訂）
 
-> **取り下げ（2026-09-10・開発者裁定「pasta 側で対応・本 spec では不要」）。** 以下は履歴。差分は `parked-6.15-drop-bracket-wait.patch`。
-
 | 項目 | 内容 |
 |---|---|
 | 意図 | 正典に無い括弧形を発明して読まない。未知タグの既定（`decode_passthrough_tag` → `Raw`）へ落とす |
