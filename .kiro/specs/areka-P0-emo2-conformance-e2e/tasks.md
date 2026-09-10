@@ -292,7 +292,7 @@
   - _Requirements: 6.2, 6.3, 6.6, 6.7_
   - _Depends: 6.2_
   - _Human: 走行 6.2 の結果が要る（開発者の目視所見と機械判定の出力）_
-- [ ] 6.16 会話中の 204 を「想定外」の警告から外す（症状 H・その場で直す・2026-09-11 第 7 回改訂）
+- [x] 6.16 会話中の 204 を「想定外」の警告から外す（症状 H・その場で直す・2026-09-11 第 7 回改訂）
   - RED: `crates/areka-kanade/src/schedule/` の兄弟試験に「`Steady{Some}` で `OnMouseMove` 由来の `NoContent` → 状態不変・`Action` 空・`steady_unexpected_reply` 0 行」を足す（HEAD は警告 1 行で赤）
   - GREEN: `steady.rs` の `Phase::Steady{talk: Some}` の `match outcome` に `ShioriOutcome::NoContent => (state, Vec::new())` を足す（1 腕のみ・doc 1 行）
   - 記録 §13.2 行 14（症状 H・その場で直した）・§13.4 行 7、手順書 §5.7 に `steady_unexpected_reply`（期待 0 行）

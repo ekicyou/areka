@@ -346,6 +346,7 @@ $env:AREKA_CHOICE_HOVER_INJECT = "cycle"
 | 項目 13 ⑶ 握手の完了を受けて窓を閉じたこと（**2026-09-07 追加**） | `event="ghost_quit"` | `crates/areka/src/emo2_boot/frame.rs` の `run_ghost_quit_phase`（`info!`・文言「kanade の終了系列が完了した: 全ゴースト窓を閉じる」・欄は `event` と `cause`）。同関数は相順の**先頭**に置かれている |
 | 項目 13 ⑷ **強制終了系列へ入っていないこと**（**2026-09-07 追加**・**0 行が期待**） | `event="force_quit"` | `crates/areka-kanade/src/schedule/mod.rs` の `force_quit` 関数（`warn!`・target `kanade`・文言「強制終了指示——終了系列（Forced）へ直行」・欄は `event` と `reason`） |
 | 項目 13 ⑸ **解放が脳との通信で失敗していないこと**（**2026-09-07 第 4 回改訂で追加**・**0 行が期待**） | `event="unload_failed"` | `crates/areka-kanade/src/shiori/real.rs:224`（`error!`・target `shiori-actor`・文言「正規 clean shutdown に失敗」・欄は `event` と `error`） |
+| 定常相で想定外の SHIORI 応答を受けた印（**2026-09-11 第 7 回改訂で追加**・**0 行が期待**） | `steady_unexpected_reply` | `crates/areka-kanade/src/schedule/steady.rs` の `steady_reply_unexpected`（`warn!`・target `kanade`・文言「Steady 待ち点で想定外の SHIORI 応答——現 Phase 維持で継続」・欄は `event` と `phase`） |
 | 1 コマ適用の所要（**2026-09-07 第 4 回改訂で追加**・**合否には載せない参考値**） | `perf(apply_show)` | `crates/areka-emo-present/src/presenter/timing.rs` の `debug!`（文言は同 `:56` の `perf(apply_show): 段階別計時`・欄は `t_cache_us`／`t_compose_us`／`t_resample_us`／`t_mask_us`／`t_upload_us`／`t_total_us` ほか・target はモジュールのパス）。`debug!` なので §3.2 の `areka_emo_present=debug` が要る |
 | バルーンがあふれて可視の窓を決めた印（**2026-09-10 追加**・**本走行では 0 行が正常**） | `あふれ発火——スクロール可視窓を決定した` | `crates/areka-emo-text/src/layout.rs:736`（`debug!`・欄は `mode`／`first_visible_line`／`block_offset`／`total_lines`・target はモジュールのパス）。§3.2 の出力水準には `areka_emo_text` が入っていないので、**この語は本走行の生ログには出ない** |
 
@@ -374,6 +375,8 @@ $env:AREKA_CHOICE_HOVER_INJECT = "cycle"
 数えた 5 つの結果は、0 行のものも含めて記録 **§7 点灯確認**へ書く（`force_quit`・`ghost_quit`・`unload_failed` の行は §7 に用意してある）。
 
 **`event="unload_failed"` の読み方（2026-09-07 第 4 回改訂で追加・R16.4）。** 終了挨拶が終わった後、走行 A の生ログをこの語で数える。**期待は 0 行**であり、対になる `event=unload_clean` が **1 行**出ていることが、この観測点が点いていること（沈黙ではないこと）を示す。**1 行でも出たら、その走行の項目 13 は不合格**である——2026-09-07 20:01 の走行では `unload_failed` 1 行・`unload_clean` 0 行で、終了挨拶は流れたのに解放が成立していなかった（記録 §13.2 の行 8）。直したのはタスク 6.11 で、helper が応答を送るときの「相手が応答なしなら待たずに打ち切る」旗を外してある。数えた結果は 0 行でも記録 **§7 点灯確認**へ 1 行書く。
+
+**`steady_unexpected_reply` の読み方（2026-09-11 第 7 回改訂で追加・R19.4）。** 期待は **0 行**であり、1 行でも出たら定常相が想定していない応答が届いている証拠なので、その前後を記録 §13.2 へ引く（2026-09-10 の走行では会話中の撫でに台本が無いという**普通の応答**がここへ落ちて走行 A だけで 19 行出ていた＝症状 H・記録 §13.2 の行 14。タスク 6.16 で直したので、以後この語が出たら本当に想定外である）。数えた結果は 0 行でも記録 **§7 点灯確認**へ 1 行書く。
 
 **`perf(apply_show)` の `t_total_us` の中央値の数え方（2026-09-07 第 4 回改訂で追加・合否には載せない）。** 走行 A の生ログから 1 コマ適用の総所要を全部拾い、並べ替えて中央の値を採る。
 

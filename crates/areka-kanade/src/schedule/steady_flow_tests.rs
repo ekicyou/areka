@@ -886,3 +886,39 @@ fn steady_some_mouse_replacement_records_new_script_in_active_talk() {
         "置換で差し替わった slot の script も新 talk のものへ更新される（DD-10）"
     );
 }
+
+// === 会話中の 204 は想定外ではない（タスク 6.16・症状 H・Req19.1／19.2） ===
+//
+// 会話中（`status="talking"`）の撫でで発行した `OnMouseMove` GET に台本が無いのは普通の
+// 応答である。HEAD ではこの 204 が `Steady{Some}` の `other` 腕へ落ちて
+// `steady_unexpected_reply` の警告になっていた（実機走行 A の生ログに 19 行）。挙動は
+// 変わらないが、生ログの警告の数が異常の数と一致しなくなるため直す。
+
+#[test]
+fn steady_some_mouse_no_content_is_silent_and_keeps_state() {
+    use crate::schedule::log_capture::{assert_not_logged, capture};
+
+    let mut captured = Vec::new();
+    let mut result = None;
+    captured.extend(capture(|| {
+        result = Some(step(
+            steady_some(TalkId(3), 6),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnMouseMove",
+            },
+            &config(),
+        ));
+    }));
+    let (next, actions) = result.expect("step が走っていない");
+
+    match next.phase {
+        Phase::Steady { talk: Some(active) } => {
+            assert_eq!(active.talk_id, TalkId(3), "再生中の talk は差し替わらない");
+            assert_eq!(active.origin, "OnSecondChange", "origin も保たれる");
+        }
+        _ => panic!("Steady{{Some}} が保たれていない"),
+    }
+    assert!(actions.is_empty(), "204 は何も指令しない");
+    assert_not_logged(&captured, "steady_unexpected_reply");
+}
