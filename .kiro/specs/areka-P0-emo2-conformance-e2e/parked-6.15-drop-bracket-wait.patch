@@ -1,0 +1,728 @@
+diff --git a/.kiro/specs/areka-P0-emo2-conformance-e2e/verification/acceptance-record.md b/.kiro/specs/areka-P0-emo2-conformance-e2e/verification/acceptance-record.md
+index 5f2478a5..712e4d10 100644
+--- a/.kiro/specs/areka-P0-emo2-conformance-e2e/verification/acceptance-record.md
++++ b/.kiro/specs/areka-P0-emo2-conformance-e2e/verification/acceptance-record.md
+@@ -766,14 +766,14 @@ ATOM-SIGNOFF: （未記入: PASS|FAIL）
+ | 9 | **拡大率 200% で描画が重く、ガクガクする**（症状 E・走行 A・2026-09-07・開発者所見「描画が異常に重い・ガクガク・遅延が目に見える」）。1 コマの適用（`perf(apply_show)`）の段階別の計時が 1 コマ目から一様に前の走行の約 2.2 倍で、中央値 41 → **78 ms**・p90 65 → 227 ms（compose 3.0→6.7・resample 22→49・mask 4.6→11・upload 8.4→19 ms）。当初は機械の負荷（別プロジェクトの `python.exe` が 1 コア分を占有・クラウド同期・別リポジトリのテスト）を疑ったが、その後の計測で**絵が変わるコマ 1 回ぶんの費用そのものが 61〜84 ms**（compose 5〜7＋resample 44〜61＋mask 11・いずれも画面のスレッド上・作り置きは容量 3 の入れ替え）と分かり、環境の負荷で説明が付くのは **1.35 倍まで**であった。まばたきのように 60 ms 間隔で絵が変わる場面では 1 コマが間に合わない | **構造的**（性能の設計に掛かる。本仕様の 1 ウェーブでは着地しない）。**本走行の合否には載せない**（開発者裁定・2026-09-07「E は別 spec」）——採り直しでは `perf(apply_show)` の中央値を数えて記録に残すだけにする（§7・§6 の追記 追 8） | **別仕様 `areka-P0-present-resample-budget`**（2026-09-07 起票・ロードマップの W12 裁定枠 A″。目標は 1 回 16 ms 以下・許容 30 ms 以下） | **確認済み**（`.kiro/specs/areka-P0-present-resample-budget/brief.md` が実在することを **2026-09-10** に見た〔7,695 バイト〕。`.kiro/steering/roadmap.md` の W12 の行にも、本仕様の症状 E の引受先として登記されている） |
+ | 10 | **ホスト窓のスレッドが待機中にメッセージを取り出さない**（構造・2026-09-07 の症状 D の調査で分かったもので、走行で見えた症状ではない）。脳と話す窓は SHIORI アクターのスレッドに在るが、そのスレッドは入力待ち（`crates/areka-kanade/src/shiori/real.rs:179` の `rx.recv()`）で止まり、要求の往復と起動時の握手以外ではメッセージを取り出さない。あるべき姿は、入力と窓のメッセージを**同時に**待つ形（`MsgWaitForMultipleObjectsEx`）である | **構造的**。ただし**本走行では発現しない**——症状 D の直し（応答方向から旗を外す・§13.4 の改変 4）で、待機が長くても応答が届くようになり、この構造が表に出る経路は塞がっている。R8.3 の「その時点で切って先に完遂する」は**走行で見つかった症状**に掛かる条項なので、この行には掛からない | **起票待ち**（R8.5 により、この行は**まだ閉じていない**）。起票するときの中身＝「SHIORI アクターの入力待ちを、窓のメッセージと同時に待つ形へ改める」。隣接するのは `areka-P0-zorder-chain-residue` の A 系（wintf／host32 の常設の飢餓と間欠的な赤）で、そこへ寄せるか単独で切るかは開発者が決める | **未**——引受先がまだ無い。**仕様名を書くだけでは登記にならない**（R7.6）ので、起票が済むまでこの欄は埋めない。この行は「いずれ誰かが直す」で閉じてはならない側である（R8.5） |
+ | 11 | **相方側バルーンが最新の 1 行しか見せない**（症状 F・2026-09-07 20:22〜20:27 の診断のための走行と、それに続けて始めた採り直しの走行 A・**A3**〔項目 2 起動挨拶の再生〕。開発者のスクリーンショットは 20:27:58＝`OnFirstBoot` の 4 往復目）。相方側バルーンには「イイジャン！」だけが描画範囲の上から 45 px の位置に見え、直前の台詞「僕はエモ。クール系の可愛い娘。」（幅 216 の描画範囲では 2 行に折り返す）が見えない。**機序**——あふれたときに何行ぶん送るかを決める起点を、`crates/areka-emo-text/src/layout.rs` の `visible_window` が**最初の行の開始側**に取っていた。相方側の台詞の冒頭には 1.5 行ぶん（行送り 30 で 45）の空きがある（行 13。台本が話者交替の前に出す `\n[150]` が、まだ 1 文字も出ていない相方側へ落ちてできる）が、この空きは起点より前にあるので送る候補に入らず、「1 行送る」しか選べない。その結果、収まるはずの上の行が描画範囲から押し出されていた。起点を**描画範囲の開始側**に取れば「0 行送って空きだけを詰める（−45）」が選べ、3 行とも 40／70／100..130 に収まる。**2026-09-07 に本命と疑った「PR #142 が入れた差分描画（矩形ごとに交差する行だけを描く）」は外れである**——外した根拠は 2 つで、⑴ 同日に書いた再現の試験 5 本は台本に冒頭の改行を含んでおらず、直す前のコードでそのまま緑だった（症状を再現していなかった）、⑵ 診断のための走行のログの `first_visible_line` が 1・2 と動いており、上の行は「描かれていない」のではなく「送られて可視窓の外にある」ことを示していた | **その場で直した**（R8.1）。本仕様の 1 ウェーブで着地できる規模——送り量の起点 1 か所だけを変えるもので、あふれの判定・行単位の送り・最新行への飽和は変えない | **本仕様**（タスク 6.13・コミット `6cbf7c59`）。改変の範囲・理由・走行前後で見える挙動の差は **§13.4 の改変 5** | **確認済み**（`git log -1 6cbf7c59` を **2026-09-10** に実行し、`6cbf7c591a2a6d7389577f3514447bad7e6d67c5`「task 6.13 - visible_window anchors the scroll at the region start instead of the first line, so a leading pending newline (pasta's \n[150] in the empty kero scope) is scrolled away first and every fitting line stays visible (symptom F)」が実在することを見た） |
+-| 12 | **終了挨拶が終わってから窓が閉じるまで長く待つ**（症状 G・2026-09-07 の診断のための走行で症状 F と一緒に見つけたもの。同じ日の 20:01 の走行で「終了挨拶の再生中に 17〜19 秒メッセージを取り出さない空白があった」（§13.2 の行 8）と数えた空白は、その大半がこの待ちで説明が付く）。ゴーストの辞書は話の終わりに「ゴースト終了（３００）」を呼び（`crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/boot.pasta:95`・同 `:102`・同 `:109`）、pasta の `act:wait(ms)` はこれを **`\w[300]`** という綴りで出す（上流 `ekicyou/pasta` v0.3.3 の `crates/pasta_lua/pasta_scripts/pasta/shiori/sakura_builder.lua:73`。ゴーストに同梱された写しでは同名ファイルの `:85`。待ちを積む側は上流・写しとも `pasta_scripts/pasta/act.lua:229` の `ACT_IMPL.wait`）。ところが ukadoc の `\w時間` は**書いた数 × 50 ms** であり（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1 「時間x50ms分の時間ウェイト」）、ミリ秒で待たせたいときに使う綴りは `\_w[時間]`（同 `#_5c_w_5b_6642_9593_5d:1` 「精密ウエイト。[時間]ms」）である。areka は ukadoc どおりに読むので（`crates/areka-parsers/src/sakura/decode.rs:39` の `WAIT_UNIT_MS = 50`）、`\w[300]` は 300 × 50 ms ＝ **15 秒**の待ちになる。台本の意図が 0.3 秒なら、綴りを `\_w[300]` へ改めるのは台本側の仕事である | **構造的（上流）**。**本仕様では直さない**——areka は正典どおりに読んでおり、直すところが無い。**本走行の判定にも載せない**: 終了挨拶が流れて `event="unload_clean"` が 1 行出れば項目 13 は成立であり、挨拶の後の待ちが長いこと自体は不合格の理由にしない（待つ分だけ有界自動終了の時間を長めに取っておく） | **上流のリポジトリ `ekicyou/pasta`**（areka の repo ではない。台本〔`ゴースト終了（３００）`〕と、それを綴りへ変換する側の両方が上流にある） | **確認済み**（上流の作業ツリー `C:\home\maz\git\pasta` が実在し、`git -C C:\home\maz\git\pasta log --oneline -1` が **2026-09-10** に `edde4b37 release: v0.3.3` を返した。同ツリーの `Cargo.toml:9` が `version = "0.3.3"` であることも見た） |
++| 12 | **終了挨拶が終わってから窓が閉じるまで長く待つ**（症状 G・2026-09-07 の診断のための走行で症状 F と一緒に見つけたもの。同じ日の 20:01 の走行で「終了挨拶の再生中に 17〜19 秒メッセージを取り出さない空白があった」（§13.2 の行 8）と数えた空白は、その大半がこの待ちで説明が付く）。ゴーストの辞書は話の終わりに「ゴースト終了（３００）」を呼び（`crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/boot.pasta:95`・同 `:102`・同 `:109`）、pasta の `act:wait(ms)` はこれを **`\w[300]`** という綴りで出す（上流 `ekicyou/pasta` v0.3.3 の `crates/pasta_lua/pasta_scripts/pasta/shiori/sakura_builder.lua:73`。ゴーストに同梱された写しでは同名ファイルの `:85`。待ちを積む側は上流・写しとも `pasta_scripts/pasta/act.lua:229` の `ACT_IMPL.wait`）。ところが ukadoc の `\w時間` は**書いた数 × 50 ms** であり（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1 「時間x50ms分の時間ウェイト」）、ミリ秒で待たせたいときに使う綴りは `\_w[時間]`（同 `#_5c_w_5b_6642_9593_5d:1` 「精密ウエイト。[時間]ms」）である。**待ちが 15 秒になったのは areka の側の読みである**——ukadoc に括弧形 `\w[n]` は無いのに、areka の復号（`crates/areka-parsers/src/sakura/decode.rs`）が短縮形と同じ「書いた数 × 50 ms」で括弧形を受理していた（正典に無い綴りを発明して読んでいた）。原因は 2 つ重なっている: ⑴ 台本が正典に無い綴りを出す（上流）、⑵ areka がその綴りを待ちとして読む（areka 側） | **2 つに分かれる**。⑵ areka 側の非正典読みは**その場で直した**（R8.1・2026-09-10 第 6 回改訂の裁定「`\w[xxx]` 系は不要・除去が正しい・この場で修正」）——復号から括弧形の腕を削るだけで、他の未知タグと同じ素通し（待ち無し）になる。⑴ 台本側の綴りは**上流**のままである（areka からは直せない）。**本走行の判定には載せない**: 終了挨拶が流れて `event="unload_clean"` が 1 行出れば項目 13 は成立であり、挨拶の後の待ちの長さ自体は不合格の理由にしない | **2 つ**。⑵ は**本仕様**（タスク 6.15・コミット（タスク 6.15 のコミット）。改変の範囲・理由・走行前後で見える挙動の差は **§13.4 の改変 6**）。⑴ は**上流のリポジトリ `ekicyou/pasta`**（areka の repo ではない。台本〔`ゴースト終了（３００）`〕と、それを綴り `\w[300]` へ変換する側の両方が上流にある。正しい綴りは `\_w[300]`） | **⑴ は確認済み**（上流の作業ツリー `C:\home\maz\git\pasta` が実在し、`git -C C:\home\maz\git\pasta log --oneline -1` が **2026-09-10** に `edde4b37 release: v0.3.3` を返した。同ツリーの `Cargo.toml:9` が `version = "0.3.3"` であることも見た）。**⑵ は本仕様の中で完結**（タスク 6.15。檻は `crates/areka-parsers/src/sakura/decode_tests.rs` の `wait_bracket_form_is_raw_not_wait`＝`\w[2]` が `Raw` になることを固定し、`\w2`＝100 ms・`\_w[450]`＝450 ms を同じ檻で対照する） |
+ | 13 | **話者が切り替わる前の改行が、まだ空の相手側へ落ちて冒頭に 1.5 行ぶんの空きを作る**（**症状 F の引き金であって、症状 F そのものではない**）。pasta は話者が変わるとき、変わる**前**の相手の側へ `\n[150]`（1.5 行ぶんの改行）を出す（上流 `ekicyou/pasta` v0.3.3 `crates/pasta_lua/pasta_scripts/pasta/shiori/sakura_builder.lua:160`。ゴーストに同梱された写しでは同名ファイルの `:63`＝話者交替の出力点で、既定の 1.5 は同 `:115`）。トークの最初の話者交替では、その改行が**まだ 1 文字も出ていない相方側**へ落ちるため、相方側バルーンの一番上に 1.5 行ぶん（行送り 30 で 45）の空きができる。areka はこの空きを捨てない——ukadoc の `\n[パーセント]`（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1 「通常のパーセント分改行する」）はカーソルの移動なので、**収まっている間は空きが見えるのが正典どおり**であり、あふれたときはこの空きから先に送られて消える。その「先に送られる」が成り立っていなかったのが症状 F（行 11）である | **構造的（上流）**。**本仕様では直さない**——areka 側は正典どおりで直すところが無い。**本走行の判定にも載せない**: 冒頭の空きが見えることを項目 2 の不合格の理由にしない（§6 の追記 追 10・手順書 §5.2 の A3） | **上流のリポジトリ `ekicyou/pasta`**（行 12 と同じ引受先である。1 つの引受先が 2 つの症状を抱える形で、症状の側は分けない＝R8.7） | **確認済み**（行 12 と同じ——`C:\home\maz\git\pasta` が実在し、HEAD は **2026-09-10** 時点で `edde4b37`〔v0.3.3〕である） |
+ 
+ **行 4 の発現の有無は、走行ごとに確かめる**（2026-09-06 追加）。確かめ方は `event=boot_input_ignored` の**行数を数える**ことであり、**0 行なら発現していない**（§7 の点灯確認の表に 1 行として書く。沈黙ではなく、点灯している観測点の 0 行として読む＝§0.1）。1 行でも出たら、行 4 の「本走行では発現しない」を「発現した」へ改め、その走行の**項目 13（終了）の結果と突き合わせる**。
+ 
+ **製品コードの改変（R8.6・2026-09-06 第 2 回改訂）**
+ 
+-**この節はもう「例外」ではない。** 2026-09-06 の第 2 回改訂で R8.1 が「走行で見つかった症状のうち、本仕様の 1 ウェーブで着地できるものは本仕様の中で直す（製品コードの改変を含む）」へ改まった。改変ごとに、範囲・理由・走行前後で見える挙動の差（直した症状そのものを除き差が無いこと）を残す。**台帳は §13.4 に置く**（改変 2 件・行 5 と行 6 に対応）。改訂の前に書いてあった「埋める欄が無いことが正常である」は、もう当てはまらない。
++**この節はもう「例外」ではない。** 2026-09-06 の第 2 回改訂で R8.1 が「走行で見つかった症状のうち、本仕様の 1 ウェーブで着地できるものは本仕様の中で直す（製品コードの改変を含む）」へ改まった。改変ごとに、範囲・理由・走行前後で見える挙動の差（直した症状そのものを除き差が無いこと）を残す。**台帳は §13.4 に置く**（改変 6 件・行 5・6・7・8・11・12 に対応）。改訂の前に書いてあった「埋める欄が無いことが正常である」は、もう当てはまらない。
+ 
+ ### 13.3 中断（R5.11）
+ 
+@@ -841,7 +841,7 @@ ATOM-SIGNOFF: （未記入: PASS|FAIL）
+ 
+ ### 13.4 製品コードの改変の台帳（R8.6）
+ 
+-2026-09-06 の第 2 回改訂で、本仕様は「走行で見つかった症状のうち 1 ウェーブで着地できるものはその場で直す」ことになった（R8.1）。**直した 5 件を下表に登記する**（改変 1・2 は 2026-09-06・改変 3・4 は 2026-09-07・改変 5 は 2026-09-10）。走行前後で見える挙動の差は、**直した症状そのものだけ**である。
++2026-09-06 の第 2 回改訂で、本仕様は「走行で見つかった症状のうち 1 ウェーブで着地できるものはその場で直す」ことになった（R8.1）。**直した 6 件を下表に登記する**（改変 1・2 は 2026-09-06・改変 3・4 は 2026-09-07・改変 5・6 は 2026-09-10）。走行前後で見える挙動の差は、**直した症状そのものだけ**である。
+ 
+ | # | 改変 | 範囲（ファイル） | 理由 | 走行の前後で見える挙動の差 | コミット |
+ |---|---|---|---|---|---|
+@@ -850,8 +850,9 @@ ATOM-SIGNOFF: （未記入: PASS|FAIL）
+ | 3 | **終了指示を kanade の正規の握手へつなぎ、握手が終わったら窓を閉じる**（症状 C・§13.2 の行 7・R15） | `crates/areka/src/input_events/mod.rs`（終了操作の分岐を 2 つに割る・`MouseWiring::send_close_request` を新設）・`placement/spawn.rs`（`despawn_ghost_windows` を新設し、強制退避と終了相で共通に使う）・`emo2_boot/mod.rs`（`wire_emo2_boot` が停止通知の通り道を 1 本作る）・`emo2_boot/frame.rs`（終了相 `run_ghost_quit_phase` を新設し、相順の**先頭**へ置く）・`emo2_boot/frame/wiring.rs`（受信端を受け取る口 `set_kanade_stop`）・`emo2_boot/spine.rs`（接続宣言と結線で 968 行・1 ファイル 1,000 行の見張りの内）・`crates/areka-kanade/src/msg.rs`（停止通知の型 `KanadeStopCause`／`KanadeStopped`）・同 `actor.rs`（停止通知つきの派生 spawn `spawn_kanade_with_stop_sink`・`Action::StopSelf` の実行点で `notify_stop`）・同 `lib.rs`・`crates/areka-ghost/src/runtime.rs`（派生関数 `boot_with_kanade_stop`）・同 `lib.rs`。試験は 4 群 15 本を新設（入力層 2・kanade 単体 5・kanade 統合 3・終了相 4・spine 1。ほかに既存 2 本の意味を強めた）。`main.rs`・`boot_config.rs`・一周テストの 3 台帳・バルーン fixture・行数の見張りの例外表は**未接触** | 終了操作が「全ゴースト窓を消す」暫定の退避のままで、kanade に実装済みの正規の握手（`OnClose` GET → 辞書の終了挨拶 → `\-` で解放）へ入る道が無く、握手が終わっても窓を閉じる者がいなかった。**欠けていたのは 2 か所**であり、どちらも配線である | **直した症状だけ**——項目 13 のみが変わる。Ctrl+左ダブルクリックで終了挨拶が流れ、終わってから窓が自分で閉じる。生ログは `method=GET id=OnClose`・`event="close_talk_start"`・`event="ghost_quit"`・`event="unload_clean"` が**それぞれ 1 行**で、`event="force_quit"` は **0 行**である（改変前は `event="force_quit"` → `method=NOTIFY id=OnClose` の順で、GET も終了挨拶も無かった）。**起動に失敗して結線前のときは従来どおり Ctrl+左ダブルクリックが強制退避**であり、起動後の強制退避は Ctrl+**Shift**+左ダブルクリックへ分かれた。辞書が終了を拒む（応答が `\-` で終わらない）ときは停止通知が出ず窓が残るのは正典どおりである。レビューでは 3 通りの摂動（分岐を退避へ戻す／停止通知を外す／終了相を無操作にする）で各検査が赤になることを確かめた | `9ba2515f` |
+ | 4 | **応答方向の送出から「応答なしなら打ち切る」旗を外す**（症状 D・§13.2 の行 8・R16） | `crates/shiori-host32-ipc/src/lib.rs`（向きを表す `SendFlavor`〔`Request`／`Response`〕と、旗を返す純関数 `send_flags` を新設。`send_copydata` は要求方向の薄い包みとして署名を変えず、応答方向は `send_copydata_response` を新設し、共通の本体 `send_copydata_with` へ寄せた。構造の試験 4 本）・`crates/shiori-host32-helper/src/main.rs`（応答の 3 か所＝要求への応答・load-ack・unload-ack を応答方向へ。送出に失敗したときの記録に `GetLastError` を併記。HELLO は要求方向のまま）・新規 `main_response_flavor_hung_cage_tests.rs`（結合の試験・所要約 40 秒・上限 90 秒）。`shiori-host32-host`・既存の loopback 試験・要求方向の呼び手は**未接触** | 走行 A で終了挨拶の後の解放が失敗した（§13.2 の行 8）。応答の宛先は**自分の送出の中で必ず待っている相手**なので、「応答なし」判定でこの向きの配送を打ち切るのは誤検知にしかならない。**較正の経緯**——最初は起動直後に 20 秒待って「届く」と反証されたが、それは猶予期間の内だった。調査係が「20 秒待つ → 往復① → さらに 20 秒待つ → 往復②」で直す前の赤（往復②の応答が届かない）を作り、5.5 秒／10 秒の待ちでは試験が恒真の緑になることも示した | **直した症状だけ**。終了挨拶の後に `event="unload_clean"` が 1 行出て、`event="unload_failed"` が 0 行になる（項目 13）。要求方向の旗・HELLO・LOAD・毎秒の往復は 1 文字も変えていない。レビューは応答方向へ旗を戻す変異で、構造の試験 3 本と結合の試験が赤になることを再現して確かめた。⚠ `cargo test -p shiori-host32-helper` の既定の所要が 40 秒になる（常設の遅い試験・設計どおり） | `ce545350` |
+ | 5 | **あふれたときの送り量の起点を、最初の行の開始側から描画範囲の開始側へ移す**（症状 F・§13.2 の行 11・R17） | `crates/areka-emo-text/src/layout.rs`（`LayoutEngine::visible_window` の起点を `near(&lines[0])`〔最初の行の開始側〕から**描画範囲の開始側**へ。軸の読み替えは `layout` と同じ表を使う——横書きは `region.start()` の縦座標、縦書き右流しはその横座標の符号を反転したもの、縦書き左流しは横座標そのもの。`visible_window` と `VisibleWindow::block_offset` の説明文も「スキップした行の位置差そのもの」から「先頭可視行の開始側と描画範囲の開始側の差」へ直した）。試験は `layout_visible_window_tests.rs` に 2 本（`leading_gap_scrolls_from_region_start_not_from_first_line`＝直す前は 2 行スキップ／−60、直した後は 0 行／−45。`vertical_rl_leading_gap_scrolls_from_region_start`＝2／+60 → 0／+45。どちらも**冒頭の空きが無い対照を同じ試験の中に置いて**、値が直す前後で動かないことを一緒に固定した）と、`actor_scroll_retain_tests.rs` に 2 本（`present_actor_leading_gap_keeps_earlier_lines_visible_k1`／`_k2`＝台本の先頭が 1.5 行ぶんの改行で、直す前は最初の台詞の帯にインクが無い）。2026-09-07 に書いた 5 本（冒頭の改行を含まない台本）は主張を変えずに残した——差分描画と再生の相という 2 つの疑いを外した証拠だからである。`draw.rs`・`viewbox.rs`・バルーン fixture は**未接触** | 相方側バルーンが最新の 1 行しか見せなかった（症状 F）。台詞の冒頭にある 1.5 行ぶんの空きは起点より前にあるため送る候補に入らず、「1 行送る」しか選べないので、収まるはずの行が描画範囲の外へ押し出されていた。起点を描画範囲の開始側に取れば「0 行送って空きだけを詰める」が選べる | **直した症状だけ**。値が変わるのは**冒頭に空きのある台本のときだけ**で、相方側の起動挨拶では 3 行が 40／70／100..130 に収まって見える。**空きの無い入力では起点が最初の行の開始側と一致する**ので、送り量は 1 バイトも変わらない——レビュー係が式から独立に導き直して確かめ、`layout_visible_window_tests.rs` の既存 10 本と読み戻し検査（`live_diff`・`oracle_regression`・`line_pitch_readback`・`kero_menu_capacity`）は無改変で緑だった（`cargo test -p areka-emo-text` は単体 538 本と統合が全緑・`cargo test -p areka --bin areka` は 1,570 本が緑） | `6cbf7c59` |
++| 6 | **正典に無い括弧形 `\w[n]` を待ちとして読むのをやめる**（症状 G の areka 側・§13.2 の行 12・R18） | `crates/areka-parsers/src/sakura/decode.rs`（`decode_tag` の `"w"` の腕と `wait_from_arg` を**削るだけ**——括弧形は既定の `decode_passthrough_tag` へ落ちて `Raw` になる。`\wN` 用の `wait_units`／`WAIT_UNIT_MS` と `\_w[ms]` の腕は無改変。モジュール doc・`WAIT_UNIT_MS`・`wait_units` の説明文から括弧形の記述を消した）・`decode_tests.rs`（`wait_bracket_n_times_50ms` を `wait_bracket_form_is_raw_not_wait` へ書き換え。`\w[2]` → `Raw(r"\w[2]")` を固定し、正典 2 形〔`\w2`＝100 ms・`\_w[450]`＝450 ms〕を同じ檻で対照）・`model.rs` と `parse_tests.rs`・`validation_tests.rs`（括弧形を使っていた台本と説明文を正典形へ）・括弧形を台本に使っていた試験 8 ファイル（`crates/areka-sakura/src/{compile_sheet,drive_choice,drive_delivery,drive_lifecycle}_tests.rs`・`crates/areka-ghost/src/{dispatcher_choice,dispatcher_slot}_tests.rs`・`crates/areka-ghost/tests/ghost/spine_e2e_test_s5_close_deadline.rs`・`crates/areka/src/emo2_boot/spine_talk_close_tests.rs`）で `\w[n]` → **同じ待ち時間**の `\_w[n×50]`（`\w[2]`→`\_w[100]`・`\w[999999]`→`\_w[49999950]` など。主張と期待値は 1 つも変えていない）・`crates/areka/src/emo2_boot/talk_lifecycle_tests.rs`（説明文のみ）・`doc/emo2-conformance-scope.md`・`doc/PASTA_PROFILE.md`（注記を追加）。**lexer は未接触**（`\w[2]` を正準タグとして切る構造は残る＝`Raw` の中身が元の綴りのまま復元できる） | 走行 A の A20 で終了挨拶の後に 15 秒待った（§13.2 の行 12）。ukadoc のウェイトは `\w時間`（1〜9・n × 50 ms）と `\_w[時間]`（絶対 ms）の 2 形だけで、括弧形 `\w[n]` は**正典に無い**。areka が正典に無い綴りを発明して読むと、台本側の綴りの誤りが areka でだけ別の意味（15 秒の待ち）になる。**削除が正しい直しである**（開発者裁定・2026-09-10） | **直した症状だけ**。pasta が `\w[300]` を出す間、終了挨拶の後の待ちが **15 秒 → 0 秒**になる（上流が `\_w[300]` へ直せば 0.3 秒）。ほかに変わるものは無い——正典の `\wN`（短縮形）と `\_w[ms]` の解釈は 1 文字も触っておらず、括弧形を使っていた試験台本はすべて**同じ待ち時間**の `\_w` 形へ書き換えたので、期待値・発火時刻・horizon はどれも同じ値のままである。`cargo test -p areka-parsers -p areka-sakura -p areka-ghost` と `cargo test -p areka --bin areka`（1,570 本）が緑 | （タスク 6.15 のコミット） |
+ 
+-> **5 件とも、直した症状を除けば走行の前後で見えるものは変わらない。** 1 は既定フォントで寄せが 0 になること（byte 等価検査が 1 バイトも動かない）が、2 は文言と 4 欄がバイト同一で出る条件も変わらないことが、3 は一周テストの 3 台帳の期待が 1 バイトも動かないこと（注入は元から終了指示を送っている）が、その証拠である。編集集合に `crates/areka-emo-text/` を加えたのは第 2 回改訂の 1（R12.1）、`crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`・`crates/areka-kanade/src/actor.rs`・`crates/areka-ghost/src/runtime.rs` を加えたのは第 3 回改訂の 5 による。4 は、要求方向の旗・HELLO・LOAD・毎秒の往復が 1 文字も変わっていないこと（応答方向へ旗を戻す変異で試験が赤くなることも確かめてある）がその証拠であり、編集集合に `crates/shiori-host32-ipc/`・`crates/shiori-host32-helper/`・`crates/shiori-host32-host/` を加えたのは第 4 回改訂の 4 による。5 は、**冒頭に空きの無い入力では起点が最初の行の開始側と一致して送り量が同じ値になる**こと——だから既存の読み戻し検査と `layout_visible_window_tests.rs` の既存の期待値が 1 つも動かず無改変で緑である——がその証拠であり、編集集合は第 2 回改訂で加えた `crates/areka-emo-text/` の中で足りている（第 5 回改訂の 5・追加なし）。
++> **6 件とも、直した症状を除けば走行の前後で見えるものは変わらない。** 1 は既定フォントで寄せが 0 になること（byte 等価検査が 1 バイトも動かない）が、2 は文言と 4 欄がバイト同一で出る条件も変わらないことが、3 は一周テストの 3 台帳の期待が 1 バイトも動かないこと（注入は元から終了指示を送っている）が、その証拠である。編集集合に `crates/areka-emo-text/` を加えたのは第 2 回改訂の 1（R12.1）、`crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`・`crates/areka-kanade/src/actor.rs`・`crates/areka-ghost/src/runtime.rs` を加えたのは第 3 回改訂の 5 による。4 は、要求方向の旗・HELLO・LOAD・毎秒の往復が 1 文字も変わっていないこと（応答方向へ旗を戻す変異で試験が赤くなることも確かめてある）がその証拠であり、編集集合に `crates/shiori-host32-ipc/`・`crates/shiori-host32-helper/`・`crates/shiori-host32-host/` を加えたのは第 4 回改訂の 4 による。5 は、**冒頭に空きの無い入力では起点が最初の行の開始側と一致して送り量が同じ値になる**こと——だから既存の読み戻し検査と `layout_visible_window_tests.rs` の既存の期待値が 1 つも動かず無改変で緑である——がその証拠であり、編集集合は第 2 回改訂で加えた `crates/areka-emo-text/` の中で足りている（第 5 回改訂の 5・追加なし）。6 は、**正典の `\wN`／`\_w[ms]` の解釈を 1 文字も触っておらず、括弧形を使っていた試験台本をすべて同じ待ち時間の `\_w` 形へ書き換えた**こと——だから期待値・発火時刻・horizon が 1 つも動かない——がその証拠であり、編集集合に `crates/areka-parsers/`・括弧形を台本に使っていた試験ファイル・`doc/emo2-conformance-scope.md`・`doc/PASTA_PROFILE.md` を加えたのは第 6 回改訂による。
+ 
+ ---
+ 
+diff --git a/crates/areka-ghost/src/dispatcher_choice_tests.rs b/crates/areka-ghost/src/dispatcher_choice_tests.rs
+index 4575850c..e3841c1a 100644
+--- a/crates/areka-ghost/src/dispatcher_choice_tests.rs
++++ b/crates/areka-ghost/src/dispatcher_choice_tests.rs
+@@ -107,9 +107,9 @@ fn release(state: &mut DispatcherState) {
+ 
+ /// 実 talk の選択待ち台本（sakura drive.rs の MENU_SCRIPT と同一）。
+ ///
+-/// compile 後（アンカー 0）: `hello`@0（D=0.25）／Wait@0.25（`\w[2]`=0.1）／Choice@0.35（id=targetA）
++/// compile 後（アンカー 0）: `hello`@0（D=0.25）／Wait@0.25（`\_w[100]`=0.1）／Choice@0.35（id=targetA）
+ /// ／Barrier@0.35。占有 horizon＝0.35（barrier が最終 horizon 要素の menu ケース）。
+-const MENU_SCRIPT: &str = r"\s[10]hello\w[2]\q[選択A,targetA]\e";
++const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
+ 
+ /// **一致中継（Resolve）・R5.5**: 現行 slot と `talk_id` が一致する `ResolveChoice` は
+ /// `SakuraMsg::ResolveChoice{id}` として talk へ無改変で転送され、slot と `base_now` は動かない
+diff --git a/crates/areka-ghost/src/dispatcher_slot_tests.rs b/crates/areka-ghost/src/dispatcher_slot_tests.rs
+index 2813c286..4bca758d 100644
+--- a/crates/areka-ghost/src/dispatcher_slot_tests.rs
++++ b/crates/areka-ghost/src/dispatcher_slot_tests.rs
+@@ -118,7 +118,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
+     tx.send(DispatcherMsg::Start(StartTalk {
+         epilogue: Vec::new(),
+         talk_id: talk_a,
+-        script: r"\s[1]A\w[50]A_END\e".to_string(),
++        script: r"\s[1]A\_w[2500]A_END\e".to_string(),
+     }))
+     .expect("send Start(A)");
+ 
+@@ -126,11 +126,11 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
+     tx.send(DispatcherMsg::Start(StartTalk {
+         epilogue: Vec::new(),
+         talk_id: talk_b,
+-        script: r"\s[2]B\w[2]B_END\e".to_string(),
++        script: r"\s[2]B\_w[100]B_END\e".to_string(),
+     }))
+     .expect("send Start(B)");
+ 
+-    // B を完走させる（D 焼き込み後 B/B_END の再生完了＋\w[2] を含む占有 horizon=0.40 を跨ぐ
++    // B を完走させる（D 焼き込み後 B/B_END の再生完了＋\_w[100] を含む占有 horizon=0.40 を跨ぐ
+     // elapsed 0.5・base_now は最初の Tick の now で確定）。
+     tx.send(DispatcherMsg::Tick {
+         now: MonotonicMs(1_000),
+@@ -195,13 +195,13 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
+     tx.send(DispatcherMsg::Start(StartTalk {
+         epilogue: Vec::new(),
+         talk_id: talk_a,
+-        script: r"\s[1]A\w[50]A_END\e".to_string(),
++        script: r"\s[1]A\_w[2500]A_END\e".to_string(),
+     }))
+     .expect("send Start(A)");
+     tx.send(DispatcherMsg::Start(StartTalk {
+         epilogue: Vec::new(),
+         talk_id: talk_b,
+-        script: r"\s[2]B\w[2]B_END\e".to_string(),
++        script: r"\s[2]B\_w[100]B_END\e".to_string(),
+     }))
+     .expect("send Start(B)");
+ 
+@@ -274,7 +274,7 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher()
+     tx.send(DispatcherMsg::Start(StartTalk {
+         epilogue: Vec::new(),
+         talk_id: TalkId(21),
+-        script: r"\s[1]X\w[50]X_END\e".to_string(),
++        script: r"\s[1]X\_w[2500]X_END\e".to_string(),
+     }))
+     .expect("send Start");
+ 
+@@ -309,13 +309,13 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
+         test_system_vars(),
+     );
+ 
+-    // \w[4]=200ms・\w[6]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
+-    //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \w[4]=0.20）/
+-    //   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \w[6]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
++    // \_w[200]=200ms・\_w[300]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
++    //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \_w[200]=0.20）/
++    //   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \_w[300]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
+     tx.send(DispatcherMsg::Start(StartTalk {
+         epilogue: Vec::new(),
+         talk_id: TalkId(31),
+-        script: r"\s[5]FIRST\w[4]SECOND\w[6]THIRD\e".to_string(),
++        script: r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e".to_string(),
+     }))
+     .expect("send Start");
+ 
+@@ -415,7 +415,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
+     tx.send(DispatcherMsg::Start(StartTalk {
+         epilogue: Vec::new(),
+         talk_id: talk_c,
+-        script: r"\s[9]hello\w[2]world\e".to_string(),
++        script: r"\s[9]hello\_w[100]world\e".to_string(),
+     }))
+     .expect("send Start(C)");
+     tx.send(DispatcherMsg::Tick {
+diff --git a/crates/areka-ghost/tests/ghost/spine_e2e_test_s5_close_deadline.rs b/crates/areka-ghost/tests/ghost/spine_e2e_test_s5_close_deadline.rs
+index b9b0bfc3..1f6d5735 100644
+--- a/crates/areka-ghost/tests/ghost/spine_e2e_test_s5_close_deadline.rs
++++ b/crates/areka-ghost/tests/ghost/spine_e2e_test_s5_close_deadline.rs
+@@ -7,8 +7,8 @@
+ // Quit 経路）と対をなす「close talk が自然完了しない」経路として駆動する（要件
+ // 7.4/7.5/7.6）。
+ //
+-// close talk の script は `\w[999999]this-never-completes\-`（`\w[999999]`＝約13.9時間
+-// 相当の待ち・drive.rs のコメントが示すとおり `\w[N]`＝N×50ms）にする——先頭に待ちを置く
++// close talk の script は `\_w[49999950]this-never-completes\-`（`\_w[49999950]`＝約13.9時間
++// 相当の待ち・`\_w[ms]` は絶対ミリ秒）にする——先頭に待ちを置く
+ // ことで空 sheet 高速経路（bare quit `\-`・S4 参照）を踏まず、実際に「再生完了通知が来ない」
+ // 状態を作る。本シナリオは close talk 開始後、dispatcher へ一切 Tick を送らない（送れば
+ // `\w` の経過秒が進み得る）ため、close talk は spawn 直後の待ちで恒久的に止まったまま
+@@ -103,7 +103,7 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Dur
+     );
+ }
+ 
+-/// S5: close deadline 超過——close talk を意図的に完了させず（`\w[999999]`＝約13.9時間
++/// S5: close deadline 超過——close talk を意図的に完了させず（`\_w[49999950]`＝約13.9時間
+ /// 相当の待ちで恒久的に止める）、`runtime.kanade()` へ `Tick` を 2 回注入するだけで
+ /// （1本目で deadline を確定・2本目で超過を跨ぐ）、`Unloading{DeadlineExceeded}`→
+ /// scripted `Ok(ExitKind::Clean)` の `Unload`→`Unloaded` 観測→`StopSelf` へ完走する
+@@ -134,7 +134,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
+         .notify("basewareversion", Ok(()))
+         .get(
+             "OnClose",
+-            Ok(Some(r"\w[999999]this-never-completes\-".to_string())),
++            Ok(Some(r"\_w[49999950]this-never-completes\-".to_string())),
+         )
+         .unload(Ok(ExitKind::Clean))
+         .build();
+@@ -316,7 +316,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
+     // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----
+     // deadline 超過による強制終了が既に Unload まで完走済み（上の有界待機で確認済み）
+     // であるため、ここでの `ForceQuit` 送出は kanade が既に自発停止済みであることの
+-    // 冪等パスを実地で運動させる（S4 と同旨）。close talk（`\w[999999]` で止まった
++    // 冪等パスを実地で運動させる（S4 と同旨）。close talk（`\_w[49999950]` で止まった
+     // まま）は dispatcher の active slot に残っているはずだが、dispatcher への Close
+     // 送出は稼働中 active talk へ `SakuraMsg::Close` を送って即座に中断させてから
+     // join する（`close_active_if_any`・dispatcher.rs）ため、恒久的に止まった close
+diff --git a/crates/areka-parsers/src/sakura/decode.rs b/crates/areka-parsers/src/sakura/decode.rs
+index 7ec0e2d7..cb418db8 100644
+--- a/crates/areka-parsers/src/sakura/decode.rs
++++ b/crates/areka-parsers/src/sakura/decode.rs
+@@ -6,8 +6,9 @@
+ //! decode しきるため（要件 1.2）。
+ //!
+ //! 本ファイル（タスク 4.1）が担うのは **emo2 subset の値正規化のみ**:
+-//! - 待ち時間 `\w[n]` / `\wN` / `\_w[ms]` → 単一 `Wait(Duration)`
+-//!   （`\w[n]`/`\wN` = n × 50ms、`\_w[ms]` = 絶対 ms。要件 3）。
++//! - 待ち時間 `\wN` / `\_w[ms]` → 単一 `Wait(Duration)`
++//!   （`\wN` = n × 50ms、`\_w[ms]` = 絶対 ms。要件 3）。正典に無い括弧形
++//!   `\w[n]` は待ちにしない（未知タグと同じ `Raw` 素通し・要件 18.1）。
+ //! - 改行 `\n` / `\n[percent]` / `\n[half]` → `NewLine(NewLineRatio)`
+ //!   （素の `\n` = 1.0、`percent`/100、`half` = 0.5、負値は符号付き保持。要件 4）。
+ //! - 選択肢 `\q[disp,target,refs...]` → `Choice`（disp/target 分離・要件 5.1/5.2）。
+@@ -35,7 +36,7 @@ use std::iter::Peekable;
+ use std::time::Duration;
+ use std::vec;
+ 
+-/// 1 ウェイト単位（`\w[n]` / `\wN` の n に乗ずる基準。ukadoc 確定: 50ms）。
++/// 1 ウェイト単位（`\wN` の n に乗ずる基準。ukadoc 確定: 50ms）。
+ const WAIT_UNIT_MS: u64 = 50;
+ 
+ /// 構文トークン列を値正規化済みの `Instruction` 列へ写像する（mod 内・`parse` が結線）。
+@@ -199,8 +200,6 @@ fn decode_bare(word: &str) -> Instruction {
+ /// word ごとに emo2 subset の値正規化を施す。subset 外 word はタスク 4.2 のシームへ。
+ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
+     match word.as_str() {
+-        // 待ち時間（要件 3.1）: `\w[n]` = n × 50ms。
+-        "w" => Instruction::Wait(wait_from_arg(args.first())),
+         // 待ち時間（要件 3.3）: `\_w[ms]` = 絶対 ms。
+         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
+         "_w" => Instruction::Wait(wait_absolute_ms(args.first())),
+@@ -272,17 +271,11 @@ fn decode_bang(args: Vec<String>) -> Instruction {
+     }
+ }
+ 
+-/// n ウェイト単位を `Duration` へ（`\w[n]` / `\wN` = n × 50ms・要件 3.1/3.2）。
++/// n ウェイト単位を `Duration` へ（`\wN` = n × 50ms・要件 3.2）。
+ fn wait_units(n: u64) -> Duration {
+     Duration::from_millis(n.saturating_mul(WAIT_UNIT_MS))
+ }
+ 
+-/// `\w[n]` の引数 n（10 進）から待ち時間を求める。引数欠落・非数は 0 ウェイト。
+-fn wait_from_arg(arg: Option<&String>) -> Duration {
+-    let n = arg.and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+-    wait_units(n)
+-}
+-
+ /// `\_w[ms]` の引数（絶対ミリ秒・要件 3.3）から待ち時間を求める。引数欠落・非数は 0ms。
+ fn wait_absolute_ms(arg: Option<&String>) -> Duration {
+     let ms = arg.and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+diff --git a/crates/areka-parsers/src/sakura/decode_tests.rs b/crates/areka-parsers/src/sakura/decode_tests.rs
+index 87d5207d..d7a3ffbe 100644
+--- a/crates/areka-parsers/src/sakura/decode_tests.rs
++++ b/crates/areka-parsers/src/sakura/decode_tests.rs
+@@ -1,7 +1,7 @@
+ //! `decode` の単体テスト（emo2 subset 値正規化・タスク 4.1 範囲）。
+ //!
+ //! 検証対象は構文トークン（`lexer::Token`）→ 値正規化済み `Instruction` の写像:
+-//! - 待ち時間（`\w[n]` / `\wN` = n×50ms、`\_w[ms]` = 絶対 ms）の境界値。
++//! - 待ち時間（`\wN` = n×50ms、`\_w[ms]` = 絶対 ms）の境界値。
+ //! - 改行比率（素の `\n` = 1.0、`\n[percent]` = percent/100、`\n[half]` = 0.5、負値）。
+ //! - 選択肢 `\q[disp,target,refs...]` の disp/target 分離 ＋ references 順序保持。
+ //! - `\![move,...]` の Move 化、`\p[n]`/`\s[...]`/`\_l[x,y]`/`\e`/`\c`/`\-`、`%keyword`、テキスト。
+@@ -36,15 +36,22 @@ fn wait_shorthand_boundary_values() {
+     );
+ }
+ 
+-/// `\w[n]` 正準形: `\w[2]` → 100ms、`\w[9]` → 450ms（n × 50ms・要件 3.1）。
++/// 括弧形 `\w[n]` は正典に無い（ukadoc に在るのは `\w時間`＝1〜9 の
++/// n × 50ms https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1
++/// と `\_w[時間]`＝絶対 ms
++/// https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
++/// の 2 形だけ）。よって待ちとして解釈せず、他の未知タグと同じく `Raw` の
++/// 素通しにする（要件 18.1/18.2）。正典 2 形が不変であることを同じ檻で対照する。
+ #[test]
+-fn wait_bracket_n_times_50ms() {
++fn wait_bracket_form_is_raw_not_wait() {
++    assert_eq!(dec(r"\w[2]"), vec![Instruction::Raw(r"\w[2]".to_string())]);
++    // 対照: 正典の短縮形と絶対ミリ秒形は従来どおり `Wait`。
+     assert_eq!(
+-        dec(r"\w[2]"),
++        dec(r"\w2"),
+         vec![Instruction::Wait(Duration::from_millis(100))]
+     );
+     assert_eq!(
+-        dec(r"\w[9]"),
++        dec(r"\_w[450]"),
+         vec![Instruction::Wait(Duration::from_millis(450))]
+     );
+ }
+diff --git a/crates/areka-parsers/src/sakura/model.rs b/crates/areka-parsers/src/sakura/model.rs
+index 70ccd2c2..0949aa45 100644
+--- a/crates/areka-parsers/src/sakura/model.rs
++++ b/crates/areka-parsers/src/sakura/model.rs
+@@ -36,7 +36,7 @@ pub enum Instruction {
+     /// 数値化・範囲展開・alias 解決・`-1` の解釈はいずれも本層で行わず、消費側
+     /// （seriko）の下流責務とする（転記層の規律・balloon-face-cue R1.1/1.4/1.5）。
+     BalloonSurface(SurfaceArg),
+-    /// 待ち時間 `\w[n]` / `\wN` / `\_w[ms]` を統一（要件 3）。
++    /// 待ち時間 `\wN` / `\_w[ms]` を統一（要件 3）。
+     Wait(Duration),
+     /// 改行 `\n[percent]` / `\n`（比率。要件 4）。
+     NewLine(NewLineRatio),
+diff --git a/crates/areka-parsers/src/sakura/parse_tests.rs b/crates/areka-parsers/src/sakura/parse_tests.rs
+index 301c62af..6508c4a1 100644
+--- a/crates/areka-parsers/src/sakura/parse_tests.rs
++++ b/crates/areka-parsers/src/sakura/parse_tests.rs
+@@ -36,10 +36,10 @@ fn mixed_tags_and_text_preserve_input_order() {
+ }
+ 
+ /// 複数タグ＋テキストの長めの混在でも順序が保たれる（要件 1.3）。
+-/// `\p[0]\s[10]はい\w[2]\q[ok,id0]いいえ` の順序を固定。
++/// `\p[0]\s[10]はい\_w[100]\q[ok,id0]いいえ` の順序を固定。
+ #[test]
+ fn longer_mixed_sequence_preserves_order() {
+-    let got = parse(r"\p[0]\s[10]はい\w[2]\q[ok,id0]いいえ");
++    let got = parse(r"\p[0]\s[10]はい\_w[100]\q[ok,id0]いいえ");
+     let want = vec![
+         Instruction::SpeakerScope { n: 0 },
+         Instruction::Surface(super::model::SurfaceArg::new("10".to_string())),
+@@ -58,7 +58,7 @@ fn longer_mixed_sequence_preserves_order() {
+ /// 同一入力 → 同一出力の純粋・決定的関数（要件 12.2）。2 回呼び出しで等価。
+ #[test]
+ fn same_input_yields_same_output_pure() {
+-    let input = r"\s[0]あ\w[1]い\n\e%username";
++    let input = r"\s[0]あ\_w[50]い\n\e%username";
+     let a = parse(input);
+     let b = parse(input);
+     assert_eq!(a, b);
+diff --git a/crates/areka-parsers/src/sakura/validation_tests.rs b/crates/areka-parsers/src/sakura/validation_tests.rs
+index 77878506..77e89c28 100644
+--- a/crates/areka-parsers/src/sakura/validation_tests.rs
++++ b/crates/areka-parsers/src/sakura/validation_tests.rs
+@@ -113,12 +113,12 @@ fn syntax_scope_bare_tag_terminates_at_one_char() {
+ // VALUE NORMALIZATION（要件 3/4）— 待ち時間・改行比率の境界値
+ // ───────────────────────────────────────────────────────────────────
+ 
+-/// 待ち時間の 3 表記が単一 `Wait(Duration)` へ正規化される（要件 3.1/3.2/3.3/3.4）。
+-/// `\w9`=450ms（=9×50）/ `\w[2]`=100ms / `\_w[500]`=500ms（絶対）。
++/// 待ち時間の正典 2 表記が単一 `Wait(Duration)` へ正規化される（要件 3.2/3.3/3.4・18.1）。
++/// `\w9`=450ms（=9×50・短縮形）/ `\_w[100]`=100ms / `\_w[500]`=500ms（絶対 ms）。
+ #[test]
+-fn value_wait_shorthand_bracket_and_absolute_ms() {
++fn value_wait_shorthand_and_absolute_ms() {
+     assert_eq!(
+-        parse(r"\w9\w[2]\_w[500]"),
++        parse(r"\w9\_w[100]\_w[500]"),
+         vec![
+             Instruction::Wait(Duration::from_millis(450)),
+             Instruction::Wait(Duration::from_millis(100)),
+diff --git a/crates/areka-sakura/src/compile_sheet_tests.rs b/crates/areka-sakura/src/compile_sheet_tests.rs
+index 7b61d8fc..68a89be4 100644
+--- a/crates/areka-sakura/src/compile_sheet_tests.rs
++++ b/crates/areka-sakura/src/compile_sheet_tests.rs
+@@ -73,15 +73,15 @@ fn wait_accumulation_is_monotonic() {
+ 
+     let t_text_a = 0.0_f64;
+     let t_wait1 = t_text_a + d_a; // Text("a") の再生完了後
+-    let t_text_b = t_wait1 + w50; // 明示 \w[50] の累積
++    let t_text_b = t_wait1 + w50; // 明示 \_w[50] の累積
+     let t_wait2 = t_text_b + d_b; // Text("b") の再生完了後
+-    let t_emote = t_wait2 + w100; // 明示 \w[100] の累積
++    let t_emote = t_wait2 + w100; // 明示 \_w[100] の累積
+ 
+     // Text("a")
+     assert_eq!(command_of(&cues[0]), &CueCommand::Text("a".into()));
+     assert_eq!(cues[0].start_time, t_text_a);
+     assert_eq!(cues[0].duration, d_a);
+-    // Wait（\w[50]）— 第一級・duration に待ち時間
++    // Wait（\_w[50]）— 第一級・duration に待ち時間
+     assert_eq!(command_of(&cues[1]), &CueCommand::Wait);
+     assert_eq!(cues[1].start_time, t_wait1);
+     assert_eq!(cues[1].duration, w50);
+@@ -89,7 +89,7 @@ fn wait_accumulation_is_monotonic() {
+     assert_eq!(command_of(&cues[2]), &CueCommand::Text("b".into()));
+     assert_eq!(cues[2].start_time, t_text_b);
+     assert_eq!(cues[2].duration, d_b);
+-    // Wait（\w[100]）
++    // Wait（\_w[100]）
+     assert_eq!(command_of(&cues[3]), &CueCommand::Wait);
+     assert_eq!(cues[3].start_time, t_wait2);
+     assert_eq!(cues[3].duration, w100);
+diff --git a/crates/areka-sakura/src/drive_choice_tests.rs b/crates/areka-sakura/src/drive_choice_tests.rs
+index 8c38d215..66c98c2a 100644
+--- a/crates/areka-sakura/src/drive_choice_tests.rs
++++ b/crates/areka-sakura/src/drive_choice_tests.rs
+@@ -7,13 +7,13 @@ use std::time::Duration;
+ 
+ // ── task 5.2: ResolveChoice ハンドラ＋即時 settle の統合檻（R2.3/2.4/9.8） ──
+ //
+-// 共通 fixture: `\s[10]hello\w[2]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
++// 共通 fixture: `\s[10]hello\_w[100]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
+ //   ClearAll@0 / Emote{10}@0 / hello@0(D=0.25) / Wait@0.25(0.1) / Choice@0.35(id=targetA) /
+ //   Barrier@0.35（選択待ち・R2.1/2.2）。占有 horizon=0.35。barrier が**最終 horizon 要素**（menu
+ //   ケース）ゆえ、Tick(0.5) で barrier 到達後に解決すると、既に current_offset(0.5) ≥ horizon(0.35)
+ //   で **その場で** 完了する（次 Tick を待たない・settle_after_tick と同型の後始末を共用）。
+ 
+-const MENU_SCRIPT: &str = r"\s[10]hello\w[2]\q[選択A,targetA]\e";
++const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
+ 
+ /// Choice の着弾（＝barrier 到達）を決定的に観測するため、記録 sink に加えチャンネル sink を挟む
+ /// ヘルパ。Tick(0.5) を送り、Choice(id=targetA) cue の着弾を待って返す（この時点で player は
+@@ -272,7 +272,7 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
+     let talk_id = TalkId(804);
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]world\e".to_string(),
+         talk_id,
+     };
+     let sink = RecordingSink::new();
+@@ -321,7 +321,7 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
+ 
+ /// 通知の**捕捉時点**を弁別するための算術（MENU_SCRIPT の相対占有 horizon）。
+ ///
+-/// `\s[10]hello\w[2]\q[選択A,targetA]\e`: hello の D(0.25) ＋ `\w[2]`(0.1) ＝ 0.35。
++/// `\s[10]hello\_w[100]\q[選択A,targetA]\e`: hello の D(0.25) ＋ `\_w[100]`(0.1) ＝ 0.35。
+ /// 期待値は本番と同一算術で導く（10 進直書きの表現誤差を排除）。
+ fn menu_relative_horizon() -> f64 {
+     text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64()
+@@ -367,7 +367,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
+     assert_eq!(
+         expected_horizon,
+         menu_relative_horizon(),
+-        "台本由来 horizon は hello の D ＋ \\w[2]（本番と同一算術で導いた 0.35）"
++        "台本由来 horizon は hello の D ＋ \\_w[100]（本番と同一算術で導いた 0.35）"
+     );
+ 
+     assert_eq!(
+diff --git a/crates/areka-sakura/src/drive_delivery_tests.rs b/crates/areka-sakura/src/drive_delivery_tests.rs
+index 06994562..d455ec37 100644
+--- a/crates/areka-sakura/src/drive_delivery_tests.rs
++++ b/crates/areka-sakura/src/drive_delivery_tests.rs
+@@ -7,14 +7,14 @@ use std::sync::{Arc, Mutex};
+ use std::time::Duration;
+ 
+ /// **broadcast**: 登録された全 sink が**同一の cue 列を同一順序で**受信する（中央振り分け廃止・
+-/// 演者側 relevance が action 選別・D4/R2.1）。`\s[10]hello\w[2]world\e` を 2 つの記録 sink で
++/// 演者側 relevance が action 選別・D4/R2.1）。`\s[10]hello\_w[100]world\e` を 2 つの記録 sink で
+ /// 駆動し、両者が ClearAll/Emote/hello/Wait/world を過不足なく受けることを固定する。
+ #[test]
+ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
+     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]world\e".to_string(),
+         talk_id: TalkId(200),
+     };
+     let surface = RecordingSink::new();
+@@ -57,7 +57,7 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
+ /// **観測可能な完了条件（task 7.1）**: 同一台本を 2 回**異なる時刻で再生開始**すると、同一 cue が
+ /// **異なる絶対発火時刻**で配送される（絶対開始時刻が dispatch 刻印され honor される・R9.1/D6）。
+ ///
+-/// `\s[0]hi\w[10]bye\e` の "bye" は相対 `at=0.6`（hi の D=0.1 ＋ `\w[10]`=0.5）。初回 Tick を
++/// `\s[0]hi\_w[500]bye\e` の "bye" は相対 `at=0.6`（hi の D=0.1 ＋ `\_w[500]`=0.5）。初回 Tick を
+ /// アンカー `A` として、"bye" の絶対発火時刻は `A + 0.6`。2 つの anchor（10.0 / 20.0）で
+ /// 再生開始すると "bye" の発火時刻は 10.6 / 20.6 と**異なる**。
+ ///
+@@ -71,7 +71,7 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
+         let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+         let start = StartTalk {
+             epilogue: Vec::new(),
+-            script: r"\s[0]hi\w[10]bye\e".to_string(),
++            script: r"\s[0]hi\_w[500]bye\e".to_string(),
+             talk_id: TalkId(1),
+         };
+         let (tx, rx) = mpsc::channel::<TalkCue>();
+@@ -176,7 +176,7 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
+ /// 初めて配送されることを**中間観測で決定的に**検証する（実時計・sleep 非依存）。broadcast ゆえ
+ /// 単一の記録チャンネル sink が全 cue（surface/text の別なく）を受ける。
+ ///
+-/// script `\s[10]hello\w[2]probeA\w[2]probeB\w[2]world\e` の発火予定（D 焼き込み後・アンカー 0）:
++/// script `\s[10]hello\_w[100]probeA\_w[100]probeB\_w[100]world\e` の発火予定（D 焼き込み後・アンカー 0）:
+ ///   ClearAll@0・Emote{10}@0・hello@0 / Wait@0.25 / probeA@0.35 / Wait@0.65 / probeB@0.75 /
+ ///   Wait@1.05 / world@1.15。probe 受信を barrier に、未 due cue が保留されることを try_recv Empty で固定する。
+ #[test]
+@@ -185,7 +185,7 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
+     let talk_id = TalkId(314);
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]probeA\w[2]probeB\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]probeA\_w[100]probeB\_w[100]world\e".to_string(),
+         talk_id,
+     };
+ 
+@@ -199,7 +199,7 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
+ 
+     let d_hello = text_playback_duration("hello"); // 0.25
+     let d_probe = text_playback_duration("probeA"); // 0.30
+-    let w = Duration::from_millis(100).as_secs_f64(); // \w[2] = 0.10
++    let w = Duration::from_millis(100).as_secs_f64(); // \_w[100] = 0.10
+     let at_a = d_hello + w; // probeA: 0.35
+     let at_b = at_a + d_probe + w; // probeB: 0.75
+     let at_w = at_b + d_probe + w; // world:  1.15
+@@ -318,13 +318,13 @@ fn same_at_cues_preserve_script_order_fifo() {
+     assert_eq!(recs[4].at, d_hello);
+ }
+ 
+-/// fixture 駆動の統合テスト（主 observable・R9.3）。`\s[10]hello\w[2]world\e` を注入 Tick 列で
++/// fixture 駆動の統合テスト（主 observable・R9.3）。`\s[10]hello\_w[100]world\e` を注入 Tick 列で
+ /// 駆動し、broadcast の単一記録 sink が ClearAll/Emote/hello/Wait/world を **at 昇順・FIFO** で
+ /// 受け、最後に `TalkDone{Ended}`（talk_id エコー・R6.6）が返ることを確認する。
+ ///
+ /// **task 9.5（再生時間搬送 e2e・R1.1/7.1）**: 併せて、各 delivered cue の **envelope
+ /// `duration`** が、コンパイル時に焼き込んだ再生時間と**同一算術**（テキストは
+-/// `text_playback_duration`・`\w[2]` は 2×50ms の `Duration` 算術）で一致することを固定する。
++/// `text_playback_duration`・`\_w[100]` は絶対 100ms の `Duration` 算術）で一致することを固定する。
+ /// これは実際の `compile → drive → CuePlayer broadcast → sink` 経路上で観測した delivered
+ /// duration が無変形で届くことの唯一の檻であり（他 hop は個別 crate で既に檻済み）、演者側
+ /// reveal 完了時刻（区間 `[at, at+duration)` の終端）を導く素が正しく搬送されることを示す。
+@@ -334,7 +334,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
+     let talk_id = TalkId(42);
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]world\e".to_string(),
+         talk_id,
+     };
+     let sink = RecordingSink::new();
+@@ -379,19 +379,22 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
+     );
+     assert_eq!(recs[3].at, text_playback_duration("hello"));
+     assert_eq!(recs[4].command, CueCommand::Text("world".into()));
+-    assert_eq!(recs[4].at, at_world, "world は hello の D＋\\w[2] 後に発火");
++    assert_eq!(
++        recs[4].at, at_world,
++        "world は hello の D＋\\_w[100] 後に発火"
++    );
+     for pair in recs.windows(2) {
+         assert!(pair[0].at <= pair[1].at, "broadcast は at 昇順");
+     }
+ 
+     // ── task 9.5: delivered envelope duration の無変形搬送檻（R1.1/7.1） ──
+     // 期待値は production 経路と**同一算術**で導く（10 進リテラル直書きは IEEE-754 表現誤差ゆえ
+-    // 使わない）: テキストは compile が呼ぶのと同じ `text_playback_duration`、`\w[2]` は parser が
++    // 使わない）: テキストは compile が呼ぶのと同じ `text_playback_duration`、`\_w[100]` は parser が
+     // 生成するのと同じ `Duration::from_millis(2 × 50ms).as_secs_f64()`。この delivered duration が
+     // 期待値とビット同一（`==`）なら、D 焼き込み → `to_talk_schedule` → CuePlayer broadcast の
+     // どの hop でも duration が落とされ／ゼロ化され／再導出されていない（無変形搬送）ことの証拠。
+     let d_hello = text_playback_duration("hello");
+-    let w2 = Duration::from_millis(100).as_secs_f64(); // \w[2] = 2 × 50ms（parser 算術と同一）
++    let w2 = Duration::from_millis(100).as_secs_f64(); // \_w[100] = 絶対 100ms（parser 算術と同一）
+     let d_world = text_playback_duration("world");
+     assert_eq!(recs[0].duration, 0.0, "ClearAll は瞬時（duration=0）");
+     assert_eq!(recs[1].duration, 0.0, "Emote は瞬時（duration=0）");
+@@ -401,7 +404,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
+     );
+     assert_eq!(
+         recs[3].duration, w2,
+-        "Wait の delivered duration は \\w[2]=100ms（envelope duration が待ち時間を担う・無変形）"
++        "Wait の delivered duration は \\_w[100]=100ms（envelope duration が待ち時間を担う・無変形）"
+     );
+     assert_eq!(
+         recs[4].duration, d_world,
+@@ -425,7 +428,7 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
+     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[10]world\e".to_string(),
++        script: r"\s[10]hello\_w[500]world\e".to_string(),
+         talk_id: TalkId(1),
+     };
+     let sink = RecordingSink::new();
+@@ -444,7 +447,7 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
+     handle.inbox.send(SakuraMsg::Tick(-1.0)).unwrap(); // 逆行 → no-op
+     handle.inbox.send(SakuraMsg::Tick(0.1)).unwrap(); // 前進だが world(at=0.75) 未達
+ 
+-    // 終端まで進める（hello D=0.25＋\w[10]=0.5 後 world@0.75・horizon=1.0 を跨ぐ）。
++    // 終端まで進める（hello D=0.25＋\_w[500]=0.5 後 world@0.75・horizon=1.0 を跨ぐ）。
+     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+     let done = recv_done(&done_rx, Duration::from_secs(5)).expect("終端で TalkDone");
+     assert_eq!(done.reason, TalkEndReason::Ended);
+@@ -471,7 +474,7 @@ fn non_finite_tick_is_ignored_and_playback_survives() {
+     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]world\e".to_string(),
+         talk_id: TalkId(9),
+     };
+     let sink = RecordingSink::new();
+@@ -529,7 +532,7 @@ fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
+         let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+         let start = StartTalk {
+             epilogue: Vec::new(),
+-            script: r"\s[10]hello\w[2]world\e".to_string(),
++            script: r"\s[10]hello\_w[100]world\e".to_string(),
+             talk_id: TalkId(7),
+         };
+         let sink = RecordingSink::new();
+diff --git a/crates/areka-sakura/src/drive_lifecycle_tests.rs b/crates/areka-sakura/src/drive_lifecycle_tests.rs
+index 6e98b826..b72fdc3c 100644
+--- a/crates/areka-sakura/src/drive_lifecycle_tests.rs
++++ b/crates/areka-sakura/src/drive_lifecycle_tests.rs
+@@ -51,7 +51,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
+     let id_a = TalkId(11);
+     let start_a = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]world\e".to_string(),
+         talk_id: id_a,
+     };
+     let sink = RecordingSink::new();
+@@ -108,7 +108,7 @@ fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
+     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]world\e".to_string(),
+         talk_id: TalkId(4),
+     };
+     let sink = RecordingSink::new();
+@@ -224,7 +224,7 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
+ }
+ 
+ /// 再生途中の中断（Close）で `TalkDone{Interrupted}` がちょうど 1 回返り、未発火分が sink に
+-/// 届かないこと（R7.1/7.2/7.3/7.4・R6.4）。`\s[10]hello\w[10]world\e`（world は \w[10] 後）を
++/// 届かないこと（R7.1/7.2/7.3/7.4・R6.4）。`\s[10]hello\_w[500]world\e`（world は \_w[500] 後）を
+ /// 先頭群だけ発火させたところで Close。world（at=0.75）は未発火＝以降届いてはならない。
+ #[test]
+ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
+@@ -232,7 +232,7 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
+     let talk_id = TalkId(101);
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[10]world\e".to_string(),
++        script: r"\s[10]hello\_w[500]world\e".to_string(),
+         talk_id,
+     };
+     let sink = RecordingSink::new();
+@@ -283,7 +283,7 @@ fn close_after_natural_end_produces_no_extra_talkdone() {
+     let talk_id = TalkId(102);
+     let start = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]world\e".to_string(),
+         talk_id,
+     };
+     let handle = spawn_talk(
+@@ -329,7 +329,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
+     let id_a = TalkId(7);
+     let start_a = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[10]hello\w[2]world\e".to_string(),
++        script: r"\s[10]hello\_w[100]world\e".to_string(),
+         talk_id: id_a,
+     };
+     let sink_a = RecordingSink::new();
+@@ -340,7 +340,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
+     let id_b = TalkId(42);
+     let start_b = StartTalk {
+         epilogue: Vec::new(),
+-        script: r"\s[20]bye\w[2]done\-".to_string(),
++        script: r"\s[20]bye\_w[100]done\-".to_string(),
+         talk_id: id_b,
+     };
+     let sink_b = RecordingSink::new();
+diff --git a/crates/areka/src/emo2_boot/spine_talk_close_tests.rs b/crates/areka/src/emo2_boot/spine_talk_close_tests.rs
+index 7532aebe..5e48817e 100644
+--- a/crates/areka/src/emo2_boot/spine_talk_close_tests.rs
++++ b/crates/areka/src/emo2_boot/spine_talk_close_tests.rs
+@@ -46,8 +46,8 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
+ /// areka-P0-cue-playback-duration で `char_wait` を撤去）確定、`Clear` は**配送即時にバッファ全消去**（時刻ゲートではない）。
+ /// リビールの時刻ゲートは `visible(t)=|{i:r_i≤t}|` のみ。よって単調非減少の階段は「Text 配送済み・
+ /// Clear 未配送」のバッファに注入 `talk_time`（clock 非経由・R8.3）を振って観測し（Phase 1）、その後
+-/// dispatcher の elapsed を Clear（`\w[20]`＝at=1.05）超へ進めて Clear を配送し全消去を観測する
+-/// （Phase 2）。台本の `\w[1]`（Text at=0.05）により t=0.0 は先頭グリフ r_0=0.05 未達で全透明。単調
++/// dispatcher の elapsed を Clear（`\_w[1000]`＝at=1.05）超へ進めて Clear を配送し全消去を観測する
++/// （Phase 2）。台本の `\_w[50]`（Text at=0.05）により t=0.0 は先頭グリフ r_0=0.05 未達で全透明。単調
+ /// 述語の適用範囲を単一 talk 内（Clear 配送前のリビール区間）に限定することで、talk 跨ぎの epoch
+ /// リベース逆行（talk_clock 既知制約）を対象外にする（設計 Testing Strategy S2）。`present_frame` は
+ /// 各 t で全域再描画（残渣なし・決定論・R7.3）ゆえ、注入 t に対し `opaque_count` は `visible(t)` の
+@@ -62,11 +62,11 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
+ /// draw_readback_test の単体檻に委ねる（parent 指示の best-effort）。
+ #[test]
+ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
+-    // \s[2100]（シェル面切替・actor "0"）→ \w[1] 後にテキスト（typewriter・at=0.05・再生時間
+-    // D=7 文字×50ms=0.35s）→ \w[20] 後に \c（Clear・at=1.05+D=1.40）。Text と Clear の間に大きな
++    // \s[2100]（シェル面切替・actor "0"）→ \_w[50] 後にテキスト（typewriter・at=0.05・再生時間
++    // D=7 文字×50ms=0.35s）→ \_w[1000] 後に \c（Clear・at=1.05+D=1.40）。Text と Clear の間に大きな
+     // 待ちを置き、二段配送（Text のみ→Clear）で「単一 talk 内のリビール」→「Clear の全消去」を
+     // 分離できるようにする。
+-    let mut harness = SpineHarness::boot(r"\s[2100]\w[1]アヒルやアヒル\w[20]\c\e");
++    let mut harness = SpineHarness::boot(r"\s[2100]\_w[50]アヒルやアヒル\_w[1000]\c\e");
+     let actor = ActorKey::from("0");
+ 
+     // ── attach（shell/balloon 装着・text actor 登録）: S1 と同じ planned==attached==2 前提 ──
+@@ -264,7 +264,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
+     }
+     assert!(
+         clear_reached,
+-        "S2: Clear cue が有界内に runtime へ到達しない（\\w[20]\\c の配送が完了しない）"
++        "S2: Clear cue が有界内に runtime へ到達しない（\\_w[1000]\\c の配送が完了しない）"
+     );
+     // Clear 配送後は「リビール済みだった」区間の talk_time（t=0.30）でも全域透明（Clear の全消去・R8.5）。
+     run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
+diff --git a/crates/areka/src/emo2_boot/talk_lifecycle_tests.rs b/crates/areka/src/emo2_boot/talk_lifecycle_tests.rs
+index 48f48218..4cf3ad45 100644
+--- a/crates/areka/src/emo2_boot/talk_lifecycle_tests.rs
++++ b/crates/areka/src/emo2_boot/talk_lifecycle_tests.rs
+@@ -396,7 +396,7 @@ fn construction_and_clone_emit_nothing() {
+ // 時刻は台本から導いた発火時刻の注入のみで進める（実時間の待機なし・Requirement 9.2/9.3）。
+ // =============================================================================
+ 
+-/// `\w[n]` / `\wN` の 1 ウェイト単位（ミリ秒）。
++/// `\wN` の 1 ウェイト単位（ミリ秒）。
+ ///
+ /// 定義は parser 側の非公開定数（`crates/areka-parsers/src/sakura/decode.rs:38` の
+ /// `WAIT_UNIT_MS`・ukadoc 確定の 50ms）。公開されていないため本檻が同値を持つ——
+@@ -539,7 +539,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
+     let registered: Box<dyn BootCueSink> = Box::new(BalloonLifecycleSink::new(tx.clone()));
+ 
+     // 1 本目 `\0あいうえお\w9\e`: 文字 5 × 50ms = 0.25 ＋ 待機 9 × 50ms = 0.45 → 終端 0.7。
+-    // （`\wN` の N は 1 桁のみ——`\w20` は `\w2` ＋ 文字 "0" になる。2 桁以上は `\w[n]` 形。）
++    // （`\wN` の N は 1 桁のみ——`\w20` は `\w2` ＋ 文字 "0" になる。長い待ちは `\_w[ms]` 形。）
+     let first_end = Duration::from_millis(5 * CHAR_NOMINAL_MS).as_secs_f64()
+         + Duration::from_millis(9 * WAIT_UNIT_MS).as_secs_f64();
+     // 2 本目 `\0あ\e`: 文字 1 × 50ms → 終端 0.05。
+diff --git a/doc/PASTA_PROFILE.md b/doc/PASTA_PROFILE.md
+index 99a474bd..50a3a144 100644
+--- a/doc/PASTA_PROFILE.md
++++ b/doc/PASTA_PROFILE.md
+@@ -108,7 +108,9 @@
+ 
+ - `＊` : イベント定義（ランダムトーク、クリック応答等）
+ - `：` : 発言者指定
+-- `\w[N]` : ウェイト（N ミリ秒の停止）
++- `\w[N]` : ウェイト（pasta の意図は N ミリ秒の停止）
++
++> **注記（2026-09-10）**: pasta が出す `\w[N]` の括弧形は上流の欠陥です。さくらスクリプトの正典（ukadoc）にあるウェイトは `\wN`（1〜9・n × 50 ms）と `\_w[N]`（絶対ミリ秒）の 2 形だけで、`\w[N]` は存在しません（ミリ秒を意図するなら正しくは `\_w[N]`）。areka は 2026-09-10 以降、`\w[N]` を未知タグとして素通しします（待ちは発生しません）。
+ 
+ > **注記**: pasta DSL の完全な文法仕様は外部リポジトリで管理されます。本ドキュメントは概要紹介に留めます。
+ 
+diff --git a/doc/emo2-conformance-scope.md b/doc/emo2-conformance-scope.md
+index b7d03d5d..b57fb65c 100644
+--- a/doc/emo2-conformance-scope.md
++++ b/doc/emo2-conformance-scope.md
+@@ -50,7 +50,7 @@
+   - `\p[n]`（話者/スコープ切替・最重要。builder が `\0\1` を `\p[n]` に変換）
+   - `\s[ID]` / `\s[エイリアス]`（**不透明文字列扱い**）
+   - `\n` / `\n[percent]`（パーセント=割合改行。`\n[150]`=1.5行）
+-  - `\w[n]` / `\wN`（短縮形）/ `\_w[ms]`（絶対ミリ秒）
++  - `\wN`（短縮形・1〜9・n × 50 ms）/ `\_w[ms]`（絶対ミリ秒）
+   - `\q[disp,target]` ＋ `\![*]`（選択肢マーカー）
+   - `\_l[x,y]`（カーソル絶対位置・em/lh 単位・menu に必須）
+   - `\e`（終端）/ `\c`（クリア・builder が出す）/ `\-`（終了）
