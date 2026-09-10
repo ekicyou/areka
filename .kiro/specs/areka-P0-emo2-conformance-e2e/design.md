@@ -785,21 +785,23 @@ band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.
 
 **実機の証跡（項目 13・R16.4）**。終了挨拶の後に `unload_clean` 1 行・`unload_failed` 0 行・`exit=0`。
 
-#### D17 行送りの後も収まる行は全部見える（症状 F・2026-09-07 第 5 回改訂）
+#### D17 行送りの後も収まる行は全部見える（症状 F・2026-09-07 第 5 回改訂・2026-09-10 根因の確定で書き直し）
 
 | 項目 | 内容 |
 |---|---|
-| 意図 | あふれて 1 行送った後、先頭可視行以降の行がすべて描かれている |
-| 要件 | 17.1〜17.5 |
-| 置き場 | `crates/areka-emo-text/src/{viewbox.rs, viewbox_draw.rs, actor.rs}` のいずれか（再現で決める）と兄弟試験・`tests/` |
+| 意図 | あふれて送った後、描画範囲に収まる行がすべて描かれている——冒頭の空きが送りを食い潰さない |
+| 要件 | 17.1〜17.5（要件「改訂（第 5 回）」6・7） |
+| 置き場 | `crates/areka-emo-text/src/layout.rs`（`visible_window`）と兄弟試験 `layout_visible_window_tests.rs`・`actor_scroll_retain_tests.rs`（再生の相の読み戻し） |
 
-**観測と期待の突合（実測）**。スクショ（20:27:58）: 相方側バルーンに「イイジャン！」だけが上から 45 px の位置に見え、上は空白。期待の配置（行送り 30・`\n[150]`＝45・描画範囲 40..133）: 「僕はエモ。クール系の」40・「可愛い娘。」70・「イイジャン！…」115（下端 143 ＞ 133 であふれ）→ `visible_window`（`layout.rs:680-726`・最新行が収まる最小スキップ＝1・オフセット −30）→ 「可愛い娘。」40・「イイジャン！…」85。**スクショの最新行の位置は 85 と一致**する。ゆえにあふれ判定と送り量は正しく、**先頭可視行「可愛い娘。」が描かれていない**のが症状。
+**根因（2026-09-10 確定・診断走行のログと式の突合）**。`visible_window` は「最新行が収まる最小スキップ数 k」を探し、オフセットを `−(near(lines[k]) − origin)` と置くが、`origin = near(&lines[0])`＝**最初の行の開始側**である。相方側の起動挨拶は、pasta が話者切替の前に前の scope へ出す `\n[150]` がトーク開始時の**空の相方側 scope に落ちる**ため、最初のグリフで保留改行 Σratio 1.5 が実体化し（`layout.rs` の `apply_pending_newline`・`block_pos += pitch × 1.5`）1 行目の上端が 40 ＋ 45 ＝ 85 になる。以後: 1 行目 85..115・2 行目 115..145 ＞ 133 であふれ→ k=1（−30）で 2 行目だけ 85..115；`\n` の後の 3 行目 145..175 → k=2（−60）で 3 行目だけ。**空きは原点より前にあるので候補に入らず永遠に送られない**——これが「常に一番下の行しか表示されない」。2026-09-07 の改訂 3 が疑った候補 ⑴（差分描画の描画対象）と ⑵（再生の相）は、その日に書いた 5 本の檻（冒頭の改行を含まない台本）が HEAD で緑だったことと、ログの `first_visible_line` の値そのものが「描かれていない」でなく「送られている」を示すことで外れた。
 
-**候補 ⑴（本命）: 差分描画の描画対象**。PR #142 で `ViewboxExecutor` の Phase 2 は「ダーティ矩形ごとに交差する行だけ」を描く（`viewbox_draw.rs` の `for line in &dirty_rect.lines`・`DirtyRect { rect, lines }`＝`viewbox.rs:96-101`）。送りのフレームは `blit`（面内平行移動・`viewbox.rs:187`）＋ 露出帯 ∪ 変化行（行指紋 `CommittedLine`・canvas-local ゆえスクロール非依存・`viewbox.rs:410-445`）で組まれる。上の行が消える経路として調べるもの: (a) 送りのフレームで先頭可視行が変わり `first_visible_line` が 0 → 1 になったとき、`draw_lines`／各矩形の `lines` が住人 index で持たれているのに描画側が `skip(first_visible_line)` 相当の読み替えをして 1 つずれる、(b) `is_backward_shrink`（`viewbox.rs:454`）の全域ダーティ縮退で `full_domain_update` が「可視窓の住人」を描くとき、行の並びと index の対応がずれる、(c) blit の量子化（whole-pixel `committed`）と保留改行の端数（45 = 1.5 × 30 は整数だが k=2 で 90）で露出帯が先頭可視行の矩形を覆い、その矩形に先頭可視行が「交差行」として入らない。**候補 ⑵: 再生の相**（`actor.rs` の `present_actor`）でリビール中の行数の数え方と `ContentCanvas::from_layout` の住人列がずれる。
+**直し（R17.1／17.4）**。原点を**描画範囲の開始側**に取る——`layout` と同じ軸読み替え表で `block_start`＝horizontal_tb は `region.start().1`・vertical_rl は `−region.start().0`・vertical_lr は `region.start().0`。すると k=0 の候補が「先頭行の開始側を描画範囲の開始側へ揃える」＝空きだけを送る（−45）になり、3 行とも 40／70／100..130 に収まる。空きの無い入力では `near(lines[0]) == block_start` なので値は従来と同一（既存 golden・`layout_visible_window_tests.rs` の期待値は 1 つも動かない）。`\_l` で 1 行目が動いた入力も同じ式で扱える。変えるのは原点の 1 行だけで、最小 k の探索・`>` 判定・最新行への飽和・行単位は不変。**完了 spec `areka-P0-emo-text-layer`（R7・行単位スクロール）の文言「オフセットはスキップした行のブロック軸位置差そのもの」は本 D17 で上書き**され、新しい文言は「先頭可視行の開始側と描画範囲の開始側の差」——`layout.rs` の `visible_window` doc と `VisibleWindow::block_offset` doc を追随させる（消費側 `draw.rs`／`viewbox.rs` は `block_offset` を素通しするだけで触らない）。
 
-**進め方（決定論・RED 先行）**。⑴ `viewbox_draw_frame_render_tests.rs` の隣に新しい兄弟試験を置き、`Rig`（`viewbox_draw_test_support.rs:39`）で相方側相当の描画範囲（`geo_model` 系・高さ 93・行送り 30）を組み、items＝「2 行に折り返す文字列」→ `LineBreak{1.5}` → 「次の台詞」を 1 字ずつ増やしながら `render_frame` を回す。送りが起きたフレームと次のフレームで面を読み戻し、先頭可視行のブロック帯（送り後 40..68 → 物理 ×k）にインクが在ること、最新行の帯にもインクが在ることを主張する。同じ items を `DrawExecutor::render` で全域描画したものとバイト等価であることも主張する（既存の `live_diff` の形）。**HEAD で赤**を確かめる。⑵ 緑なら候補 ⑵ へ移り、`actor_choice_contract_tests.rs` の読み戻し（`present_actor` を 1 字ずつ進める）で同じ主張を立てる。⑶ 赤になった層で直す。直しは描画対象の決め方（各矩形に交差する行の集合・全域縮退時の描画対象）か描き直しの範囲に限り、`visible_window`・折返し・保留改行の式は触らない（R17.4）。
+**裁定（要件「改訂（第 5 回）」7）**。冒頭の空きは捨てない（ukadoc `\n[パーセント]`＝カーソルの移動・収まる間は空きが見える）。pasta が空の scope へ `\n[150]` を出す癖は上流（記録 §13.2 に登記・6.14）。SSP の実挙動への問いは取り下げ（意味論は ukadoc から輸入）。
 
-**実機の証跡（R17.5）**。項目 2 の目視で、相方側バルーンに「僕はエモ。クール系の可愛い娘。」の後半が「イイジャン！…」の上に残っている。
+**進め方（決定論・RED 先行）**。⑴ `layout_visible_window_tests.rs` に単体の再現を足す: 相方側相当の描画範囲（`model_rect` で上端 40・下端 133・行送り 30＝`font_height` 28）に items `[LineBreak{1.5}, あ, LineBreak{1.0}, あ, LineBreak{1.0}, あ]`（2 行目・3 行目は明示改行で足りる——折返しは本題でない）→ 期待 `first_visible_line: 0, block_offset: −45.0`。HEAD は `first_visible_line: 2, block_offset: −60.0` を返す（赤）。同じ檻に空き無しの対照 `[あ, LineBreak{1.5}, あ, LineBreak{1.0}, あ]`（上端 40 → 40／85／115..145 ＞ 133 → k=1・−45）を置き、直す前後で同じ値であることを固定する。3 書字方向のうち少なくとも vertical_rl でも同形を 1 本置く（原点の符号）。⑵ `actor_scroll_retain_tests.rs` の `boot_cues` の先頭に `NewLine{1.5}` を入れた変種（または既存台本の置換）で、最初の台詞の 1 行目の帯（描画面の上端 0 から字の丈 × k）にインクが在ることを主張する——HEAD では 1 行目が可視窓の外なので赤。既存 5 本（冒頭の改行を含まない台本）は描画対象の非回帰として残し、主張は変えない。⑶ `visible_window` の原点を直して両方を緑にし、`cargo test -p areka-emo-text`・`cargo test -p areka --bin areka` を exit 0 で通す。`layout.rs` は 939 行——足すのは数行で見張りの内。
+
+**実機の証跡（R17.5）**。項目 2 の目視で、相方側バルーンに「僕はエモ。クール系の可愛い娘。」（2 行）が「イイジャン！…」の上に残っている。冒頭の空き 45 は 3 行目が来るまで見えてよい（あふれたら空きが先に送られる）。
 
 ### 常設テストの衛生
 
@@ -1014,7 +1016,7 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 6. **その場で直した 2 件の非回帰（2026-09-06 第 2 回改訂）**——D13: 既定フォントの byte 等価 golden が 1 バイトも動かないこと（offset 0 の証拠）と、実フォントの読み戻し 3 本が「上 ≥ 0・下 = 0」で緑であること。D14: `region_inline_limit_tests.rs` が 0 件、actor 側の兄弟試験が装着 1 件／同値再追従 0 件で緑であること。いずれも `cargo test -p areka-emo-text` の exit 0 で確かめ、`| tail` で終了コードを隠さない。
 7. **終了指示の配線の非回帰（2026-09-07 第 3 回改訂・D15）**——`cargo test -p areka --bin areka`（入力層・相・spine の兄弟試験）と `cargo test -p areka-kanade`・`cargo test -p areka-ghost` が exit 0。既存の一周テスト 13 本は期待を動かさず緑。
 8. **応答方向の送出の非回帰（2026-09-07 第 4 回改訂・D16）**——`cargo test -p shiori-host32-ipc -p shiori-host32-helper -p shiori-host32-host`（x64・PowerShell）が exit 0。要求方向の旗と既存の loopback 試験は無改変。走行の直前に i686 の橋渡しを作り直す（helper を変えたため）。
-9. **行送り後の描画対象の非回帰（2026-09-07 第 5 回改訂・D17）**——再現の檻が直す前は赤・後は緑で、`live_diff`／`oracle_regression`／`line_pitch_readback`／`kero_menu_capacity` は無改変で緑。
+9. **あふれの送り量の原点の非回帰（2026-09-07 第 5 回改訂・2026-09-10 書き直し・D17）**——`visible_window` の単体再現（冒頭の空き有り→ 0／−45）と再生の相の読み戻し（1 行目の帯にインク）が直す前は赤・後は緑で、空き無しの対照・`layout_visible_window_tests.rs` の既存期待値・`live_diff`／`oracle_regression`／`line_pitch_readback`／`kero_menu_capacity` は無改変で緑。
 
 ### 実機走行（人間サインオフ）
 
