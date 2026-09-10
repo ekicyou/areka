@@ -6,8 +6,9 @@
 //! decode しきるため（要件 1.2）。
 //!
 //! 本ファイル（タスク 4.1）が担うのは **emo2 subset の値正規化のみ**:
-//! - 待ち時間 `\w[n]` / `\wN` / `\_w[ms]` → 単一 `Wait(Duration)`
-//!   （`\w[n]`/`\wN` = n × 50ms、`\_w[ms]` = 絶対 ms。要件 3）。
+//! - 待ち時間 `\wN` / `\_w[ms]` → 単一 `Wait(Duration)`
+//!   （`\wN` = n × 50ms、`\_w[ms]` = 絶対 ms。要件 3）。正典に無い括弧形
+//!   `\w[n]` は待ちにしない（未知タグと同じ `Raw` 素通し・要件 18.1）。
 //! - 改行 `\n` / `\n[percent]` / `\n[half]` → `NewLine(NewLineRatio)`
 //!   （素の `\n` = 1.0、`percent`/100、`half` = 0.5、負値は符号付き保持。要件 4）。
 //! - 選択肢 `\q[disp,target,refs...]` → `Choice`（disp/target 分離・要件 5.1/5.2）。
@@ -35,7 +36,7 @@ use std::iter::Peekable;
 use std::time::Duration;
 use std::vec;
 
-/// 1 ウェイト単位（`\w[n]` / `\wN` の n に乗ずる基準。ukadoc 確定: 50ms）。
+/// 1 ウェイト単位（`\wN` の n に乗ずる基準。ukadoc 確定: 50ms）。
 const WAIT_UNIT_MS: u64 = 50;
 
 /// 構文トークン列を値正規化済みの `Instruction` 列へ写像する（mod 内・`parse` が結線）。
@@ -199,8 +200,6 @@ fn decode_bare(word: &str) -> Instruction {
 /// word ごとに emo2 subset の値正規化を施す。subset 外 word はタスク 4.2 のシームへ。
 fn decode_tag(word: String, args: Vec<String>) -> Instruction {
     match word.as_str() {
-        // 待ち時間（要件 3.1）: `\w[n]` = n × 50ms。
-        "w" => Instruction::Wait(wait_from_arg(args.first())),
         // 待ち時間（要件 3.3）: `\_w[ms]` = 絶対 ms。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
         "_w" => Instruction::Wait(wait_absolute_ms(args.first())),
@@ -272,15 +271,9 @@ fn decode_bang(args: Vec<String>) -> Instruction {
     }
 }
 
-/// n ウェイト単位を `Duration` へ（`\w[n]` / `\wN` = n × 50ms・要件 3.1/3.2）。
+/// n ウェイト単位を `Duration` へ（`\wN` = n × 50ms・要件 3.2）。
 fn wait_units(n: u64) -> Duration {
     Duration::from_millis(n.saturating_mul(WAIT_UNIT_MS))
-}
-
-/// `\w[n]` の引数 n（10 進）から待ち時間を求める。引数欠落・非数は 0 ウェイト。
-fn wait_from_arg(arg: Option<&String>) -> Duration {
-    let n = arg.and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
-    wait_units(n)
 }
 
 /// `\_w[ms]` の引数（絶対ミリ秒・要件 3.3）から待ち時間を求める。引数欠落・非数は 0ms。

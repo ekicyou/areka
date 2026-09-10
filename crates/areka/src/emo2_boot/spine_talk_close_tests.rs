@@ -46,8 +46,8 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// areka-P0-cue-playback-duration で `char_wait` を撤去）確定、`Clear` は**配送即時にバッファ全消去**（時刻ゲートではない）。
 /// リビールの時刻ゲートは `visible(t)=|{i:r_i≤t}|` のみ。よって単調非減少の階段は「Text 配送済み・
 /// Clear 未配送」のバッファに注入 `talk_time`（clock 非経由・R8.3）を振って観測し（Phase 1）、その後
-/// dispatcher の elapsed を Clear（`\w[20]`＝at=1.05）超へ進めて Clear を配送し全消去を観測する
-/// （Phase 2）。台本の `\w[1]`（Text at=0.05）により t=0.0 は先頭グリフ r_0=0.05 未達で全透明。単調
+/// dispatcher の elapsed を Clear（`\_w[1000]`＝at=1.05）超へ進めて Clear を配送し全消去を観測する
+/// （Phase 2）。台本の `\_w[50]`（Text at=0.05）により t=0.0 は先頭グリフ r_0=0.05 未達で全透明。単調
 /// 述語の適用範囲を単一 talk 内（Clear 配送前のリビール区間）に限定することで、talk 跨ぎの epoch
 /// リベース逆行（talk_clock 既知制約）を対象外にする（設計 Testing Strategy S2）。`present_frame` は
 /// 各 t で全域再描画（残渣なし・決定論・R7.3）ゆえ、注入 t に対し `opaque_count` は `visible(t)` の
@@ -62,11 +62,11 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// draw_readback_test の単体檻に委ねる（parent 指示の best-effort）。
 #[test]
 fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
-    // \s[2100]（シェル面切替・actor "0"）→ \w[1] 後にテキスト（typewriter・at=0.05・再生時間
-    // D=7 文字×50ms=0.35s）→ \w[20] 後に \c（Clear・at=1.05+D=1.40）。Text と Clear の間に大きな
+    // \s[2100]（シェル面切替・actor "0"）→ \_w[50] 後にテキスト（typewriter・at=0.05・再生時間
+    // D=7 文字×50ms=0.35s）→ \_w[1000] 後に \c（Clear・at=1.05+D=1.40）。Text と Clear の間に大きな
     // 待ちを置き、二段配送（Text のみ→Clear）で「単一 talk 内のリビール」→「Clear の全消去」を
     // 分離できるようにする。
-    let mut harness = SpineHarness::boot(r"\s[2100]\w[1]アヒルやアヒル\w[20]\c\e");
+    let mut harness = SpineHarness::boot(r"\s[2100]\_w[50]アヒルやアヒル\_w[1000]\c\e");
     let actor = ActorKey::from("0");
 
     // ── attach（shell/balloon 装着・text actor 登録）: S1 と同じ planned==attached==2 前提 ──
@@ -264,7 +264,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     }
     assert!(
         clear_reached,
-        "S2: Clear cue が有界内に runtime へ到達しない（\\w[20]\\c の配送が完了しない）"
+        "S2: Clear cue が有界内に runtime へ到達しない（\\_w[1000]\\c の配送が完了しない）"
     );
     // Clear 配送後は「リビール済みだった」区間の talk_time（t=0.30）でも全域透明（Clear の全消去・R8.5）。
     run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));

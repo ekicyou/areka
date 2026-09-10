@@ -262,7 +262,7 @@
   - _2026-09-10 の追記: 6.12 の後に回す（§13.2 の行 8〜10・§13.3 の中断 4 件目・§13.4 の行 4 は 6.12 が先に書く）。本タスクは §13.2 に行 11（症状 F・その場で直した・`6cbf7c59`・機序＝送り量の原点）に加えて、同じ診断走行で見つかった上流 2 件を登記する: 行 12＝症状 G（終了挨拶の後、終了までに長く待つ＝pasta の `act:wait(ms)` が `\w[%d]` を出し〔`ekicyou/pasta` v0.3.3 `crates/pasta_lua/pasta_scripts/pasta/shiori/sakura_builder.lua:73`〕、ukadoc `\w時間` は 50 ms 単位なので `\w[300]`＝15 秒・引受先は上流 pasta・areka は正典どおり）、行 13＝pasta が話者切替の前に前の scope へ出す `\n[150]`（同 `:160`）がトーク開始時は空の相方側 scope に落ちて冒頭に 1.5 行の空きを作る（ukadoc `\n[パーセント]` の意味論どおり areka は空きを見せる・引受先は上流 pasta・症状 F の引き金であって症状 F そのものではない）。§6 の追記（第 5 回）には項目 2 の目視 2 点（相方側で台詞の前半が最新の上に残る／3 行目が来るまで冒頭の空きが見えてよい）_
   - _Depends: 6.13, 6.12_
   - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`_
-- [ ] 6.15 `\w[n]` 括弧形の解釈を撤去する（症状 G の areka 側・その場で直す・2026-09-10 第 6 回改訂）
+- [x] 6.15 `\w[n]` 括弧形の解釈を撤去する（症状 G の areka 側・その場で直す・2026-09-10 第 6 回改訂）
   - RED: `crates/areka-parsers/src/sakura/decode_tests.rs` の `wait_bracket_n_times_50ms` を「`\w[2]` → `Instruction::Raw(r"\w[2]")`」へ書き換え（HEAD は `Wait(100ms)` で赤）、同じ檻に `\w2` → 100 ms・`\_w[450]` → 450 ms の対照
   - GREEN: `decode.rs` の `decode_tag` から `"w"` の腕と `wait_from_arg` を削る（`wait_units` は `\wN` 用に残す）。doc コメント（モジュール doc・`WAIT_UNIT_MS`・`wait_units`）から `\w[n]` を消す
   - 試験台本: `\w[n]` を使う 8 ファイル（`crates/areka-sakura/src/{compile_sheet,drive_choice,drive_delivery,drive_lifecycle}_tests.rs`・`crates/areka-ghost/src/{dispatcher_choice,dispatcher_slot}_tests.rs`・`crates/areka-ghost/tests/ghost/spine_e2e_test_s5_close_deadline.rs`・`crates/areka/src/emo2_boot/spine_talk_close_tests.rs`）で `\w[n]` → `\_w[n×50]`（同値）。主張・期待値は変えない

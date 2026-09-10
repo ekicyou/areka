@@ -1,7 +1,7 @@
 //! `decode` の単体テスト（emo2 subset 値正規化・タスク 4.1 範囲）。
 //!
 //! 検証対象は構文トークン（`lexer::Token`）→ 値正規化済み `Instruction` の写像:
-//! - 待ち時間（`\w[n]` / `\wN` = n×50ms、`\_w[ms]` = 絶対 ms）の境界値。
+//! - 待ち時間（`\wN` = n×50ms、`\_w[ms]` = 絶対 ms）の境界値。
 //! - 改行比率（素の `\n` = 1.0、`\n[percent]` = percent/100、`\n[half]` = 0.5、負値）。
 //! - 選択肢 `\q[disp,target,refs...]` の disp/target 分離 ＋ references 順序保持。
 //! - `\![move,...]` の Move 化、`\p[n]`/`\s[...]`/`\_l[x,y]`/`\e`/`\c`/`\-`、`%keyword`、テキスト。
@@ -36,15 +36,22 @@ fn wait_shorthand_boundary_values() {
     );
 }
 
-/// `\w[n]` 正準形: `\w[2]` → 100ms、`\w[9]` → 450ms（n × 50ms・要件 3.1）。
+/// 括弧形 `\w[n]` は正典に無い（ukadoc に在るのは `\w時間`＝1〜9 の
+/// n × 50ms https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1
+/// と `\_w[時間]`＝絶対 ms
+/// https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
+/// の 2 形だけ）。よって待ちとして解釈せず、他の未知タグと同じく `Raw` の
+/// 素通しにする（要件 18.1/18.2）。正典 2 形が不変であることを同じ檻で対照する。
 #[test]
-fn wait_bracket_n_times_50ms() {
+fn wait_bracket_form_is_raw_not_wait() {
+    assert_eq!(dec(r"\w[2]"), vec![Instruction::Raw(r"\w[2]".to_string())]);
+    // 対照: 正典の短縮形と絶対ミリ秒形は従来どおり `Wait`。
     assert_eq!(
-        dec(r"\w[2]"),
+        dec(r"\w2"),
         vec![Instruction::Wait(Duration::from_millis(100))]
     );
     assert_eq!(
-        dec(r"\w[9]"),
+        dec(r"\_w[450]"),
         vec![Instruction::Wait(Duration::from_millis(450))]
     );
 }

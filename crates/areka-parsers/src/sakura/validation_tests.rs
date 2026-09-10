@@ -113,12 +113,12 @@ fn syntax_scope_bare_tag_terminates_at_one_char() {
 // VALUE NORMALIZATION（要件 3/4）— 待ち時間・改行比率の境界値
 // ───────────────────────────────────────────────────────────────────
 
-/// 待ち時間の 3 表記が単一 `Wait(Duration)` へ正規化される（要件 3.1/3.2/3.3/3.4）。
-/// `\w9`=450ms（=9×50）/ `\w[2]`=100ms / `\_w[500]`=500ms（絶対）。
+/// 待ち時間の正典 2 表記が単一 `Wait(Duration)` へ正規化される（要件 3.2/3.3/3.4・18.1）。
+/// `\w9`=450ms（=9×50・短縮形）/ `\_w[100]`=100ms / `\_w[500]`=500ms（絶対 ms）。
 #[test]
-fn value_wait_shorthand_bracket_and_absolute_ms() {
+fn value_wait_shorthand_and_absolute_ms() {
     assert_eq!(
-        parse(r"\w9\w[2]\_w[500]"),
+        parse(r"\w9\_w[100]\_w[500]"),
         vec![
             Instruction::Wait(Duration::from_millis(450)),
             Instruction::Wait(Duration::from_millis(100)),

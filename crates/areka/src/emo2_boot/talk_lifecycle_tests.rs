@@ -396,7 +396,7 @@ fn construction_and_clone_emit_nothing() {
 // 時刻は台本から導いた発火時刻の注入のみで進める（実時間の待機なし・Requirement 9.2/9.3）。
 // =============================================================================
 
-/// `\w[n]` / `\wN` の 1 ウェイト単位（ミリ秒）。
+/// `\wN` の 1 ウェイト単位（ミリ秒）。
 ///
 /// 定義は parser 側の非公開定数（`crates/areka-parsers/src/sakura/decode.rs:38` の
 /// `WAIT_UNIT_MS`・ukadoc 確定の 50ms）。公開されていないため本檻が同値を持つ——
@@ -539,7 +539,7 @@ fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
     let registered: Box<dyn BootCueSink> = Box::new(BalloonLifecycleSink::new(tx.clone()));
 
     // 1 本目 `\0あいうえお\w9\e`: 文字 5 × 50ms = 0.25 ＋ 待機 9 × 50ms = 0.45 → 終端 0.7。
-    // （`\wN` の N は 1 桁のみ——`\w20` は `\w2` ＋ 文字 "0" になる。2 桁以上は `\w[n]` 形。）
+    // （`\wN` の N は 1 桁のみ——`\w20` は `\w2` ＋ 文字 "0" になる。長い待ちは `\_w[ms]` 形。）
     let first_end = Duration::from_millis(5 * CHAR_NOMINAL_MS).as_secs_f64()
         + Duration::from_millis(9 * WAIT_UNIT_MS).as_secs_f64();
     // 2 本目 `\0あ\e`: 文字 1 × 50ms → 終端 0.05。

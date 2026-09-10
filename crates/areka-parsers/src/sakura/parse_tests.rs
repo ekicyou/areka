@@ -36,10 +36,10 @@ fn mixed_tags_and_text_preserve_input_order() {
 }
 
 /// 複数タグ＋テキストの長めの混在でも順序が保たれる（要件 1.3）。
-/// `\p[0]\s[10]はい\w[2]\q[ok,id0]いいえ` の順序を固定。
+/// `\p[0]\s[10]はい\_w[100]\q[ok,id0]いいえ` の順序を固定。
 #[test]
 fn longer_mixed_sequence_preserves_order() {
-    let got = parse(r"\p[0]\s[10]はい\w[2]\q[ok,id0]いいえ");
+    let got = parse(r"\p[0]\s[10]はい\_w[100]\q[ok,id0]いいえ");
     let want = vec![
         Instruction::SpeakerScope { n: 0 },
         Instruction::Surface(super::model::SurfaceArg::new("10".to_string())),
@@ -58,7 +58,7 @@ fn longer_mixed_sequence_preserves_order() {
 /// 同一入力 → 同一出力の純粋・決定的関数（要件 12.2）。2 回呼び出しで等価。
 #[test]
 fn same_input_yields_same_output_pure() {
-    let input = r"\s[0]あ\w[1]い\n\e%username";
+    let input = r"\s[0]あ\_w[50]い\n\e%username";
     let a = parse(input);
     let b = parse(input);
     assert_eq!(a, b);
