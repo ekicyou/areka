@@ -845,5 +845,8 @@ mod oracle_regression_tests;
 #[path = "viewbox_draw_png_dump_tests.rs"]
 mod png_dump_tests;
 #[cfg(test)]
+#[path = "viewbox_draw_scroll_retain_tests.rs"]
+mod scroll_retain_tests;
+#[cfg(test)]
 #[path = "viewbox_draw_test_support.rs"]
 mod test_support;

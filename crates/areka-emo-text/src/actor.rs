@@ -946,3 +946,7 @@ mod scale_refresh_tests;
 #[cfg(test)]
 #[path = "actor_region_warn_tests.rs"]
 mod region_warn_tests;
+
+#[cfg(test)]
+#[path = "actor_scroll_retain_tests.rs"]
+mod scroll_retain_tests;
