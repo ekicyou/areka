@@ -803,6 +803,20 @@ band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.
 
 **実機の証跡（R17.5）**。項目 2 の目視で、相方側バルーンに「僕はエモ。クール系の可愛い娘。」（2 行）が「イイジャン！…」の上に残っている。冒頭の空き 45 は 3 行目が来るまで見えてよい（あふれたら空きが先に送られる）。
 
+#### D18 `\w[n]` 括弧形を読まない（症状 G の areka 側・2026-09-10 第 6 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 正典に無い括弧形を発明して読まない。未知タグの既定（`decode_passthrough_tag` → `Raw`）へ落とす |
+| 要件 | 18.1〜18.4 |
+| 置き場 | `crates/areka-parsers/src/sakura/decode.rs`（`decode_tag` の `"w"` の腕と `wait_from_arg` を削る・`wait_units` は `\wN` 用に残す）・`decode_tests.rs`（`wait_bracket_n_times_50ms` を「Raw になる」へ）・括弧形を使う試験台本 8 ファイル（`\w[n]` → `\_w[n×50]`）・`doc/emo2-conformance-scope.md:53`・`doc/PASTA_PROFILE.md`（`\w[N]` の記述） |
+
+**直し**。削除だけ。腕を消せば `\w[n]` は `_ => decode_passthrough_tag` へ落ちて `Raw(r"\w[n]")` になり、下流（`areka-sakura`）は Raw を無視する。lexer は触らない（`\w[2]` を正準タグとして切る構造は残る＝Raw の中身が復元できる）。試験台本の書き換えは待ち時間が同値（`\w[2]`＝100 ms → `\_w[100]`・`\w[999999]` → `\_w[49999950]`）なので主張は動かない。
+
+**再現の檻**。`decode_tests.rs`: `\w[2]` → `Raw` を主張（HEAD は `Wait(100 ms)` で赤）。同じ檻に `\w2` → 100 ms・`\_w[450]` → 450 ms の対照。
+
+**実機**。走行 A の A20 で、終了挨拶の後の待ちが 15 秒から 0 秒（pasta が `\w[300]` を出す間は待ち無し・pasta を `\_w` に直せば 0.3 秒）になる。採り直しは行わない（判定に載せない症状 G の帰結であり、終了系列の証跡は 2026-09-10 の走行 A で採れている）。
+
 ### 常設テストの衛生
 
 #### D11 間欠的な赤の隔離裁定
@@ -1017,6 +1031,7 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 7. **終了指示の配線の非回帰（2026-09-07 第 3 回改訂・D15）**——`cargo test -p areka --bin areka`（入力層・相・spine の兄弟試験）と `cargo test -p areka-kanade`・`cargo test -p areka-ghost` が exit 0。既存の一周テスト 13 本は期待を動かさず緑。
 8. **応答方向の送出の非回帰（2026-09-07 第 4 回改訂・D16）**——`cargo test -p shiori-host32-ipc -p shiori-host32-helper -p shiori-host32-host`（x64・PowerShell）が exit 0。要求方向の旗と既存の loopback 試験は無改変。走行の直前に i686 の橋渡しを作り直す（helper を変えたため）。
 9. **あふれの送り量の原点の非回帰（2026-09-07 第 5 回改訂・2026-09-10 書き直し・D17）**——`visible_window` の単体再現（冒頭の空き有り→ 0／−45）と再生の相の読み戻し（1 行目の帯にインク）が直す前は赤・後は緑で、空き無しの対照・`layout_visible_window_tests.rs` の既存期待値・`live_diff`／`oracle_regression`／`line_pitch_readback`／`kero_menu_capacity` は無改変で緑。
+10. **`\w[n]` 括弧形の非回帰（2026-09-10 第 6 回改訂・D18）**——`\w[2]` → `Raw` の檻が直す前は赤・後は緑で、`\w2`／`\_w[ms]` の対照と書き換えた 8 試験ファイルの主張は不変。
 
 ### 実機走行（人間サインオフ）
 

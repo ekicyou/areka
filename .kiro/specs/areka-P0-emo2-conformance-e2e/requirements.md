@@ -97,6 +97,10 @@ SSP 横並びの診断走行（2026-09-07 20:22〜20:27）と採り直しの走�
 6. **根因の確定（2026-09-10 追記・上の 3 の候補 ⑴⑵ はどちらも外れ）。** 2026-09-07 の `areka_emo_text=debug` 診断走行のログ（相方側 `actor=1`）は、台詞冒頭に `NewLine ratio=1.5`（pasta が話者切替の前に前の scope へ出す `\n[150]` が、トーク開始時は**空の相方側 scope に落ちる**）→ 文字 → `\n` → 文字の順で、あふれ発火が `first_visible_line=1 total_lines=2`、次いで `first_visible_line=2 total_lines=3` だった。つまり**上の行は「描かれていない」のではなく「送られて可視窓の外」**である。機序は `crates/areka-emo-text/src/layout.rs` の `visible_window` が送り量の原点を**最初の行の開始側**（`origin = near(&lines[0])`）に取っていること: 冒頭の空き 45（1.5 × 行送り 30）で 1 行目が 85..115・2 行目が 115..145 ＞ 133 であふれ、原点が 85 なので候補は「1 行送る（−30）」しか無く空きは永遠に送られない。3 行目（`\n` の後）で「2 行送る」＝最新の 1 行だけになる。**原点を描画範囲の開始側（40）に取れば**「0 行スキップ・オフセット −45」で 3 行とも 40／70／100..130 に収まる。候補 ⑴（差分描画）と ⑵（再生の相）は、2026-09-07 に書いた 5 本の檻（`viewbox_draw_scroll_retain_tests.rs`・`actor_scroll_retain_tests.rs`・いずれも冒頭の改行を含まない台本）が HEAD で緑だったことで外れた——症状の引き金（冒頭の保留改行）を台本に含めていなかったので緑は当然で、**描画対象の非回帰の檻としては残す**。
 7. **裁定（2026-09-10・SSP への問いは取り下げ）。** 冒頭の空きそのものは捨てない。ukadoc `\n[パーセント]`（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1）は「通常のパーセント分改行する。負の値を指定すると戻る」＝カーソルの移動であり、収まる間は空きが見えるのが正典どおり。あふれたら空きから先に送られる——ukadoc `\![set,autoscroll,disable]` の記述例「`\n[5000]`ロック中はこの文字は見えない」（https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bset_2cautoscroll_2cdisable_5d:1）は、自動スクロールが効いていれば大きな改行の空きが送られて文字が見えることの裏返しである。pasta が空の scope へ `\n[150]` を出すのは台本側の癖（上流 `ekicyou/pasta`・症状 G と同じ扱い＝記録 §13.2 に上流として登記・本仕様では直さない）。Requirement 17 の 1〜4 を根因に合わせて改訂する（5 は不変）。
 
+### 改訂（2026-09-10・第 6 回・`\w[n]` 括弧形の撤去＝症状 G の areka 側）
+
+走行 A（2026-09-10 22:21〜22:37・`emo2-conformance-2026-09-10-2`）の A20 で、終了挨拶の後に約 15 秒待ってから窓が閉じた。機序は 2 段: ⑴ pasta の `act:wait(ms)` がミリ秒を `\w[%d]` として出す（上流の欠陥・辞書の `ゴースト終了（３００）` が `\w[300]` になる）、⑵ areka の `crates/areka-parsers/src/sakura/decode.rs` が **正典に無い括弧形 `\w[n]`** を「n × 50 ms」として受理する。ukadoc に在るのは `\w時間`（「時間x50ms分の時間ウェイト。設定出来るのは1-9。」https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1）と `\_w[時間]`（「精密ウエイト。[時間]ms。」https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1）の 2 つだけで、括弧形は無い（完了 spec `ukadoc-survey-sakura-script` の design-validation も同じ指摘を残していた）。開発者裁定（2026-09-10）: **「`\w[xxx]` 系は不要。除去が正しい。この場で修正」**。⑴ は上流 pasta（記録 §13.2 行 12）。本改訂で Requirement 18 を新設し、編集集合（12.1）に `crates/areka-parsers/`・括弧形を台本に使っている試験ファイル（`crates/areka-sakura/`・`crates/areka-ghost/`・`crates/areka/src/emo2_boot/`）・`doc/emo2-conformance-scope.md`・`doc/PASTA_PROFILE.md` を加える。
+
 ## Boundary Context
 
 - **In scope**:
@@ -368,3 +372,14 @@ SSP 横並びの診断走行（2026-09-07 20:22〜20:27）と採り直しの走�
 3. The 決定論テスト shall 再生の相（`present_actor`）で同じ台本（cue 列の先頭に `NewLine{1.5}`）を 1 字ずつ駆動し、送りが起きた後のフレームの読み戻しで、最初の台詞の 1 行目の帯（描画範囲の上端から字の丈）にインクが在ること、最新行の帯にもインクが在ることを固定する。全域再描画のオラクルとのバイト等価（既存の等価検査の形）を保つ。直す前の HEAD で赤であること。
 4. The 直し shall `visible_window` の原点だけを変え（`lines[0]` の開始側 → 描画範囲の開始側・3 書字方向とも同じ軸読み替え表）、折返し・保留改行の式・あふれ判定（`>` 判定）・行単位スクロール・最新行への飽和は変えない。冒頭の保留改行は捨てない（改訂 7 の裁定）。`visible_window` の doc と `VisibleWindow::block_offset` の doc（「スキップした行のブロック軸位置差そのもの」）を新しい規則の文言に直す。
 5. The 実機一周走行 shall 項目 2（起動挨拶の再生）の所見として、相方側バルーンで台詞の前半が最新の台詞の上に残っていることを目視で確かめる（§6 の追記に書く）。
+
+### Requirement 18: `\w[n]` 括弧形を読まない（2026-09-10 第 6 回改訂で新設）
+
+**Objective:** As 利用者, I want areka が正典に無いタグを発明して読まないこと, so that 台本側の綴りの誤りが areka でだけ別の意味（15 秒の待ち）にならない
+
+#### Acceptance Criteria
+
+1. The さくらスクリプト復号 shall `\w[n]`（括弧形）を待ちとして解釈せず、他の未知タグと同じく `Instruction::Raw` の素通し（無害な no-op）にする。`\w1`〜`\w9`（n × 50 ms）と `\_w[ms]` の解釈は変えない。
+2. The 決定論テスト shall `\w[2]` が `Raw(r"\w[2]")` になることを固定し（直す前は `Wait(100 ms)` で赤）、`\w2` → 100 ms と `\_w[450]` → 450 ms が不変であることを同じ檻で固定する。
+3. The 既存の試験台本 shall 括弧形 `\w[n]` を `\_w[n×50]`（同じ待ち時間）へ書き換え、主張は変えない。`decode.rs` の doc と `doc/emo2-conformance-scope.md`・`doc/PASTA_PROFILE.md` の `\w[n]` の記述を正典の 2 形へ直す（PASTA_PROFILE は pasta の出力が `\w[N]` なのは上流の欠陥で正しくは `\_w[N]` と注記）。
+4. The 直し shall 復号の他の腕・lexer（`\w[2]` を正準タグとして切る構造）・`areka-sakura` の再生を変えない。`cargo test -p areka-parsers -p areka-sakura -p areka-ghost` と `cargo test -p areka --bin areka` が exit 0。
