@@ -817,6 +817,18 @@ band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.
 
 **実機**。走行 A の A20 で、終了挨拶の後の待ちが 15 秒から 0 秒（pasta が `\w[300]` を出す間は待ち無し・pasta を `\_w` に直せば 0.3 秒）になる。採り直しは行わない（判定に載せない症状 G の帰結であり、終了系列の証跡は 2026-09-10 の走行 A で採れている）。
 
+#### D19 会話中の 204 は想定外ではない（症状 H・2026-09-11 第 7 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 正常な応答を警告に数えない。`Steady{Some}` の 204 を `Steady{None}` の 204 と同じ「何もしない」にする |
+| 要件 | 19.1〜19.4 |
+| 置き場 | `crates/areka-kanade/src/schedule/steady.rs`（`Phase::Steady{talk: Some}` の `match outcome` に `ShioriOutcome::NoContent => (state, Vec::new())` を 1 腕）・兄弟試験 `steady_flow_tests.rs`（または `steady_choice_tests.rs` の形に倣う） |
+
+**直し**。追加は 1 腕だけ。`other => steady_reply_unexpected(...)` は `Unloaded`／`Failed` 用に残す。ログ捕捉の檻は `areka-kanade` の既存の形（`log-capture-kit`）で「`steady_unexpected_reply` が 0 行」を主張する。
+
+**実機**。走行の生ログで `steady_unexpected_reply` は 0 行になる（手順書 §5.7 の語に加える）。採り直しは行わない（記録の上だけの欠陥・挙動は不変）。
+
 ### 常設テストの衛生
 
 #### D11 間欠的な赤の隔離裁定
@@ -1032,6 +1044,7 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 8. **応答方向の送出の非回帰（2026-09-07 第 4 回改訂・D16）**——`cargo test -p shiori-host32-ipc -p shiori-host32-helper -p shiori-host32-host`（x64・PowerShell）が exit 0。要求方向の旗と既存の loopback 試験は無改変。走行の直前に i686 の橋渡しを作り直す（helper を変えたため）。
 9. **あふれの送り量の原点の非回帰（2026-09-07 第 5 回改訂・2026-09-10 書き直し・D17）**——`visible_window` の単体再現（冒頭の空き有り→ 0／−45）と再生の相の読み戻し（1 行目の帯にインク）が直す前は赤・後は緑で、空き無しの対照・`layout_visible_window_tests.rs` の既存期待値・`live_diff`／`oracle_regression`／`line_pitch_readback`／`kero_menu_capacity` は無改変で緑。
 10. **`\w[n]` 括弧形の非回帰（2026-09-10 第 6 回改訂・D18）**——`\w[2]` → `Raw` の檻が直す前は赤・後は緑で、`\w2`／`\_w[ms]` の対照と書き換えた 8 試験ファイルの主張は不変。
+11. **会話中の 204 の非回帰（2026-09-11 第 7 回改訂・D19）**——`Steady{Some}` の `NoContent` で警告 0 行の檻が直す前は赤・後は緑で、`Value`／`Notified`／`Unloaded` の既存試験は不変。
 
 ### 実機走行（人間サインオフ）
 

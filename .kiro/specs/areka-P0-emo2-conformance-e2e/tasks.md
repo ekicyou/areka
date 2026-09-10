@@ -292,6 +292,14 @@
   - _Requirements: 6.2, 6.3, 6.6, 6.7_
   - _Depends: 6.2_
   - _Human: 走行 6.2 の結果が要る（開発者の目視所見と機械判定の出力）_
+- [ ] 6.16 会話中の 204 を「想定外」の警告から外す（症状 H・その場で直す・2026-09-11 第 7 回改訂）
+  - RED: `crates/areka-kanade/src/schedule/` の兄弟試験に「`Steady{Some}` で `OnMouseMove` 由来の `NoContent` → 状態不変・`Action` 空・`steady_unexpected_reply` 0 行」を足す（HEAD は警告 1 行で赤）
+  - GREEN: `steady.rs` の `Phase::Steady{talk: Some}` の `match outcome` に `ShioriOutcome::NoContent => (state, Vec::new())` を足す（1 腕のみ・doc 1 行）
+  - 記録 §13.2 行 14（症状 H・その場で直した）・§13.4 行 7、手順書 §5.7 に `steady_unexpected_reply`（期待 0 行）
+  - `cargo test -p areka-kanade` と `cargo test -p areka --bin areka` を exit 0 で通す。`steady.rs` は 931 行（1,000 以下を保つ）
+  - _Requirements: 19.1, 19.2, 19.3, 19.4, 12.2_
+  - _Depends: 6.2_
+  - _Boundary: `crates/areka-kanade/src/schedule/{steady.rs, steady_flow_tests.rs または steady_choice_tests.rs}`・`verification/acceptance-record.md`・`verification/lap-procedure.md`_
 - [ ] 6.4 判定に載せない既知の症状を登記する
   - 絵と窓の遅れ（引受先なし）・話し始めの冒頭の空行・初回起動限定の位置調整の戻り・重なり規約の逆向き、の 4 件を扱いと引受先つきで登記する
   - 初回起動限定の位置調整は許容仕様とする既存の裁定を実機で確かめ、開発者の判断で最終確定する

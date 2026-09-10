@@ -101,6 +101,10 @@ SSP 横並びの診断走行（2026-09-07 20:22〜20:27）と採り直しの走�
 
 走行 A（2026-09-10 22:21〜22:37・`emo2-conformance-2026-09-10-2`）の A20 で、終了挨拶の後に約 15 秒待ってから窓が閉じた。機序は 2 段: ⑴ pasta の `act:wait(ms)` がミリ秒を `\w[%d]` として出す（上流の欠陥・辞書の `ゴースト終了（３００）` が `\w[300]` になる）、⑵ areka の `crates/areka-parsers/src/sakura/decode.rs` が **正典に無い括弧形 `\w[n]`** を「n × 50 ms」として受理する。ukadoc に在るのは `\w時間`（「時間x50ms分の時間ウェイト。設定出来るのは1-9。」https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1）と `\_w[時間]`（「精密ウエイト。[時間]ms。」https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1）の 2 つだけで、括弧形は無い（完了 spec `ukadoc-survey-sakura-script` の design-validation も同じ指摘を残していた）。開発者裁定（2026-09-10）: **「`\w[xxx]` 系は不要。除去が正しい。この場で修正」**。⑴ は上流 pasta（記録 §13.2 行 12）。本改訂で Requirement 18 を新設し、編集集合（12.1）に `crates/areka-parsers/`・括弧形を台本に使っている試験ファイル（`crates/areka-sakura/`・`crates/areka-ghost/`・`crates/areka/src/emo2_boot/`）・`doc/emo2-conformance-scope.md`・`doc/PASTA_PROFILE.md` を加える。
 
+### 改訂（2026-09-11・第 7 回・症状 H＝会話中のマウス照会の 204 が「想定外」の警告になる）
+
+2026-09-10 の走行 A の生ログに `event="steady_unexpected_reply" phase="Steady{Some}"` の警告が **19 行**（走行 B の 1 回目 7 行・走行 C 4 行）。前後を見ると、会話中（`status="talking"`）の撫でで `GET id=OnMouseMove` を発行し、その応答が 204（台本なし）だったときに出ている。`crates/areka-kanade/src/schedule/steady.rs` の `Phase::Steady{talk: Some}` の腕は `Notified` と `Value` だけを扱い、**`NoContent`（204）を「想定外」へ落とす**（`Steady{None}` の腕には `NoContent` の扱いがある）。会話中の撫でに台本が無いのは普通の応答であり、警告は誤り。挙動は何も止まらない（記録の上だけの欠陥）。第 2 回改訂のスコープにより本仕様で直す（Requirement 19 を新設・編集集合に `crates/areka-kanade/src/schedule/` を加える）。
+
 ## Boundary Context
 
 - **In scope**:
@@ -383,3 +387,14 @@ SSP 横並びの診断走行（2026-09-07 20:22〜20:27）と採り直しの走�
 2. The 決定論テスト shall `\w[2]` が `Raw(r"\w[2]")` になることを固定し（直す前は `Wait(100 ms)` で赤）、`\w2` → 100 ms と `\_w[450]` → 450 ms が不変であることを同じ檻で固定する。
 3. The 既存の試験台本 shall 括弧形 `\w[n]` を `\_w[n×50]`（同じ待ち時間）へ書き換え、主張は変えない。`decode.rs` の doc と `doc/emo2-conformance-scope.md`・`doc/PASTA_PROFILE.md` の `\w[n]` の記述を正典の 2 形へ直す（PASTA_PROFILE は pasta の出力が `\w[N]` なのは上流の欠陥で正しくは `\_w[N]` と注記）。
 4. The 直し shall 復号の他の腕・lexer（`\w[2]` を正準タグとして切る構造）・`areka-sakura` の再生を変えない。`cargo test -p areka-parsers -p areka-sakura -p areka-ghost` と `cargo test -p areka --bin areka` が exit 0。
+
+### Requirement 19: 会話中の 204 は想定外ではない（2026-09-11 第 7 回改訂で新設）
+
+**Objective:** As 記録を読む者, I want 正常な応答が警告として数えられないこと, so that 生ログの警告の数がそのまま異常の数になる
+
+#### Acceptance Criteria
+
+1. The kanade shall `Phase::Steady{talk: Some}` で `ShioriOutcome::NoContent` を受けたとき、状態を保ったまま何もしない（警告を出さない・`Steady{None}` の 204 と同じ）。
+2. The 決定論テスト shall 会話中に `OnMouseMove` 由来の 204 が届いたとき、状態が変わらず `Action` が空で、`steady_unexpected_reply` が 1 行も出ないことを固定する（直す前の HEAD では警告 1 行で赤）。既存の `Value`／`Notified`／`Unloaded` の扱いは不変。
+3. The 直し shall `steady.rs` の当該腕に `NoContent` の 1 腕を足すだけで、他の相・他の応答の扱いを変えない。`cargo test -p areka-kanade` と `cargo test -p areka --bin areka` が exit 0。
+4. The 記録 shall 症状 H を §13.2 に「その場で直した」で登記し、§13.4 に改変を足す。手順書 §5.7 に `steady_unexpected_reply`（期待 0 行）を加える。
