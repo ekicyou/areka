@@ -236,13 +236,14 @@
   - _Requirements: 16.1, 16.2, 16.3, 12.2_
   - _Depends: 6.10_
   - _Boundary: `crates/shiori-host32-ipc/src/`・`crates/shiori-host32-helper/src/`（`main.rs` と兄弟試験）・`crates/shiori-host32-host/src/`（呼び手が要るときのみ）と 3 crate の試験（`crates/areka*`・fixture・例外表は触らない）_
-- [ ] 6.12 症状 D／E を記録・手順書へ登記し、採り直しの準備をやり直す（2026-09-07 第 4 回改訂）
+- [x] 6.12 症状 D／E を記録・手順書へ登記し、採り直しの準備をやり直す（2026-09-07 第 4 回改訂）
   - 記録: §13.2 行 8（症状 D・その場で直した・6.11 のコミット）・行 9（症状 E・環境要因の疑い・`apply_show` 中央値 41→78 ms・`python.exe` PID 12664 等・**判定に載せず採り直しで再計測**）・行 10（ホスト窓のスレッドが待機中に pump しない構造・構造的・本走行では発現しない・起票待ち）・§13.4 行 4・§13.3 中断 4 件目（2026-09-07 20:01 走行 A・A20 で症状 D・終了挨拶の目視合格は参考）・§6 の追記（第 4 回）に項目 13 の証跡（`unload_clean` 1・`unload_failed` 0）と「重い別処理を止めてから起動」・§7 に `unload_failed`（0 行）と `apply_show` 中央値の再計測の行・§1／§3／§4／§5／§5.1 を直したコミットの値で
-  - 手順書: §0.2 に「重い別処理（別プロジェクトのジョブ・同期）を止めてから起動し、`Get-Process` の CPU 上位を記録へ写す」・§5.7 に `unload_failed`（0 行）と `perf(apply_show)` の `t_total_us`（中央値を数える手順）・§2.4／§9 の記録置き場は `emo2-conformance-2026-09-07-2`
-  - 準備: `cargo build -p areka` → **i686 の橋渡しを作り直して複写・`014C`**（6.11 が helper を変えたので今回は必ず再ビルドされる）・記録置き場 `emo2-conformance-2026-09-07-2`・`lap.ps1` の写し・永続状態の消去
+  - 手順書: §0.2 に「重い別処理（別プロジェクトのジョブ・同期）を止めてから起動し、`Get-Process` の CPU 上位を記録へ写す」・§5.7 に `unload_failed`（0 行）と `perf(apply_show)` の `t_total_us`（中央値を数える手順）・§2.4／§9 の記録置き場は `emo2-conformance-2026-09-10`
+  - 準備: `cargo build -p areka` → **i686 の橋渡しを作り直して複写・`014C`**（6.11 が helper を変えたので今回は必ず再ビルドされる）・記録置き場 `emo2-conformance-2026-09-10`・`lap.ps1` の写し・永続状態の消去
+  - _2026-09-10 の前提の変更: ⑴ 6.13（症状 F）が先に着地したので本タスクを 6.14 より先に回す（準備は F を直したコミット `6cbf7c59` 以降で行えばよい）。⑵ 記録置き場の親 `C:\home\maz\lap-records\` が**ディスクから消えている**（2026-09-10 確認・`emo2-conformance-2026-09-05`／`-06`／`-06-2`／`-07`・診断走行 `emo2-diag-2026-09-07-f2` の生ログと `lap.ps1` を含む）——親ディレクトリごと作り直し、名は準備した日で `emo2-conformance-2026-09-10`。前の置き場が消えた事実は記録 §13.3 の冒頭と手順書 §2.4／§9 に 1 文ずつ書く（中断記録の生ログは文書に写した値だけが残る）。⑶ `lap.ps1` は会話記録から復元した写し（`$LOGDIR` だけ差し替える）を置く。⑷ §1／§3／§4／§5／§5.1 の同定は 6.13 のコミット `6cbf7c59` のビルドで書く_
   - 完了状態: 記録と手順書に旧前提が現在形で残っておらず、新しい記録置き場が空で在り、両文書とも 1,000 行以下
   - _Requirements: 8.4, 8.6, 5.2, 5.6, 5.9, 11.5, 16.4, 16.5_
-  - _Depends: 6.11, 6.14_
+  - _Depends: 6.11, 6.13_
   - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`・リポジトリ外の記録置き場_
 - [x] 6.13 あふれの送り量の原点を描画範囲の開始側へ直す（症状 F・その場で直す・2026-09-07 第 5 回改訂・2026-09-10 根因の確定で書き直し）
   - RED ⑴: `crates/areka-emo-text/src/layout_visible_window_tests.rs` に単体の再現を足す——上端 40・下端 133・行送り 30（`font_height` 28）の描画範囲で items `[LineBreak{1.5}, あ, LineBreak{1.0}, あ, LineBreak{1.0}, あ]` → 期待 `first_visible_line: 0, block_offset: −45.0`（HEAD は 2／−60.0 で赤）。空き無しの対照 `[あ, LineBreak{1.5}, あ, LineBreak{1.0}, あ]` → 1／−45.0 が直す前後で不変。vertical_rl でも同形を 1 本（原点の符号）
@@ -258,7 +259,8 @@
   - 手順書: §5.2 A3 に「相方側バルーンで前の台詞が残っているか」を見る一文
   - 完了状態: 両文書とも 1,000 行以下・旧前提の現在形 0 件。採り直しの準備は 6.12 が行う（6.12 は本タスクの後に実施）
   - _Requirements: 8.4, 8.6, 5.6, 17.5_
-  - _Depends: 6.13_
+  - _2026-09-10 の追記: 6.12 の後に回す（§13.2 の行 8〜10・§13.3 の中断 4 件目・§13.4 の行 4 は 6.12 が先に書く）。本タスクは §13.2 に行 11（症状 F・その場で直した・`6cbf7c59`・機序＝送り量の原点）に加えて、同じ診断走行で見つかった上流 2 件を登記する: 行 12＝症状 G（終了挨拶の後、終了までに長く待つ＝pasta の `act:wait(ms)` が `\w[%d]` を出し〔`ekicyou/pasta` v0.3.3 `crates/pasta_lua/pasta_scripts/pasta/shiori/sakura_builder.lua:73`〕、ukadoc `\w時間` は 50 ms 単位なので `\w[300]`＝15 秒・引受先は上流 pasta・areka は正典どおり）、行 13＝pasta が話者切替の前に前の scope へ出す `\n[150]`（同 `:160`）がトーク開始時は空の相方側 scope に落ちて冒頭に 1.5 行の空きを作る（ukadoc `\n[パーセント]` の意味論どおり areka は空きを見せる・引受先は上流 pasta・症状 F の引き金であって症状 F そのものではない）。§6 の追記（第 5 回）には項目 2 の目視 2 点（相方側で台詞の前半が最新の上に残る／3 行目が来るまで冒頭の空きが見えてよい）_
+  - _Depends: 6.13, 6.12_
   - _Boundary: `verification/lap-procedure.md`・`verification/acceptance-record.md`_
 - [ ] 6.2 一周走行を行い記録と機械判定の出力を採る
   - 実ゴースト・絶対パス・実拡大率で一周を走らせ、有界の自動終了と記録用の出力水準で走行の終わりを人手のばらつきから切り離す
@@ -400,3 +402,4 @@
 - **2026-09-10 症状 F の根因を訂正（上の第 5 回改訂の「本命＝差分描画」は外れ）**。診断走行のログ（`actor=1`: `NewLine ratio=1.5` → 文字 → `\n` → 文字・あふれ発火 `first_visible_line=1 total_lines=2` → `=2/3`）と `visible_window` の式の突合で、上の行は「描かれていない」のでなく「送られて可視窓の外」。原点が `near(&lines[0])`（最初の行の上端 85）なので冒頭の空き 45（pasta が空の相方側 scope へ出す `\n[150]`）が候補に入らない。直しは原点を描画範囲の開始側へ（要件 17・D17 書き直し・6.13 書き直し）。2026-09-07 の未コミット 5 本の檻は台本に冒頭の改行が無く緑＝候補 ⑴⑵ の除外証跡として 6.13 が残す。SSP への問いは取り下げ（ukadoc `\n[パーセント]`＝カーソル移動・`\n[5000]` の例＝空きは送られる）。診断走行の置き場 `C:\home\maz\lap-records\` は 2026-09-10 時点で**ディスクから消えている**（前の走行の生ログも含めて）——記録 §13.3 の中断記録は文書の写しだけが残る（6.14 で注記）。
 - **タスク 6.13 済み（送り量の原点・2026-09-10）——記録 §13.4 の下書き（6.14 が写す）**。範囲: `crates/areka-emo-text/src/layout.rs`（`LayoutEngine::visible_window` の原点を `near(&lines[0])` から `region.start()` の軸読み替え〔horizontal_tb `start.1`・vertical_rl `−start.0`・vertical_lr `start.0`〕へ・`VisibleWindow::block_offset` と `visible_window` の doc を「先頭可視行の開始側と描画範囲の開始側の差」へ）。檻: `layout_visible_window_tests.rs` の `leading_gap_scrolls_from_region_start_not_from_first_line`（空き無しの対照を同居・HEAD で 2／−60 → 直後 0／−45）と `vertical_rl_leading_gap_scrolls_from_region_start`（2／+60 → 0／+45）、`actor_scroll_retain_tests.rs` の `present_actor_leading_gap_keeps_earlier_lines_visible_k1`／`_k2`（cue 列の先頭が `NewLine{1.5}`・HEAD で先頭の帯にインク無し）。2026-09-07 の 5 本（冒頭の改行なし）は主張不変で残置＝候補 ⑴⑵ の除外証跡。非回帰: `cargo test -p areka-emo-text` 538＋統合全緑・`cargo test -p areka --bin areka` 1,570 緑・`layout_visible_window_tests.rs` 既存 10 本と `live_diff`／`oracle_regression`／`line_pitch_readback`／`kero_menu_capacity` は無改変で緑。レビュー係が式から独立に再導出（空きの無い入力では `near(lines[0]) == block_start` ゆえ既存 golden は証明つきで不変）。
 - **既知の赤（本タスクの外・6.6 由来）**: `cargo clippy -p areka-emo-text --all-targets` は `absurd_extreme_comparisons` で赤——`tests/choice_fixture_test.rs:561`・`tests/emo2_fixture_e2e_test.rs:632`・`tests/line_pitch_readback_test.rs:705` の `overhang <= BAND_OVERHANG_MAX`（6.6 で 0 へ締めた定数）。`cargo test` は無影響。**3 ファイル**（実装係の報告は 2 ファイルと数え落とし）。扱いは 7.1 の編集集合確認で決める（`assert_eq!(overhang, 0)` へ書き換えるか `#[allow]` か）。
+- **タスク 6.12 済み（2026-09-10 20:2x〜20:4x）**: 記録 §13.2 行 8（症状 D・`ce545350`）／9（症状 E・別 spec `present-resample-budget`・判定に載せない）／10（ホスト窓のスレッドが待機中に pump しない構造・**起票待ちのまま**＝R8.5 の「閉じない」側・開発者の起票が要る）・§13.4 行 4・§13.3 冒頭（置き場の親が 2026-09-08 に消えた事実）＋中断 4 件目・§6 追 6〜8・§7 に `unload_failed`（0 行）と `perf(apply_show)` 中央値・§1／§3／§4／§5／§5.1 を `6cbf7c59` のビルドで・§14 に 2026-09-10 の確認表。手順書 §0.2 の 4（重い別処理を止める・`Get-Process` の写し・他人のプロセスは殺さない）・§5.7（語 2 つ＋中央値の手順＝**`[int](3/2)` は銀行家の丸めで 2 になる罠**・`[math]::Floor` を使う）・§2.4／§9（置き場 `emo2-conformance-2026-09-10`・`lap.ps1` は会話記録から復元）。準備: `areka.exe` 22,810,112 バイト（20:28:27）・i686 橋渡し 273,408 バイト（20:28:52・再コンパイルあり・PE `014C`）・置き場は `lap.ps1` のみ・`profile\areka` 削除（`profile\pasta` 残置）。⚠準備中に別リポジトリ（`evernote_export`）のセッションが `cargo test --workspace` を回していた——areka の橋渡しは無事だが、**走行の直前に開発者が `Get-Process cargo` 0 個と PE `014C` をもう一度確かめる**（手順書 §0.2 の 4）。
