@@ -300,7 +300,7 @@
   - _Requirements: 19.1, 19.2, 19.3, 19.4, 12.2_
   - _Depends: 6.2_
   - _Boundary: `crates/areka-kanade/src/schedule/{steady.rs, steady_flow_tests.rs または steady_choice_tests.rs}`・`verification/acceptance-record.md`・`verification/lap-procedure.md`_
-- [ ] 6.4 判定に載せない既知の症状を登記する
+- [x] 6.4 判定に載せない既知の症状を登記する
   - 絵と窓の遅れ（引受先なし）・話し始めの冒頭の空行・初回起動限定の位置調整の戻り・重なり規約の逆向き、の 4 件を扱いと引受先つきで登記する
   - 初回起動限定の位置調整は許容仕様とする既存の裁定を実機で確かめ、開発者の判断で最終確定する
   - 引受先を新たに作る場合は、引受先が実在することを確かめてから登記する
