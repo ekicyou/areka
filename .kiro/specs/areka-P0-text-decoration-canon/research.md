@@ -195,11 +195,13 @@
 
 **答えで作業が変わる**（b は上流 crate を触る）。分析時の推奨は **a**（口を用意し既定は白）だったが、要件ディスカッション（2026-09-11）で **b を採る**と整理した。理由: ⑴ 要件 4.6 は「バルーンの背景色の側へ寄せた色」と定めており、a は暗いバルーンで要件の文言（薄い同系色）を満たさない ⑵ W13 の並走 9 本のうち `crates/areka/src/emo2_boot/` に触る仕様は無い（roadmap の干渉台帳・2026-09-11 実測）ので、上流の配線を本仕様で行っても共有ファイルは生じない ⑶ 配線は「装着時に 1 画素を取り出して口へ渡す」だけで短い。設計では、口（`ResolvedBalloonText`／`register_actor` の引数）を先に用意し、上流の配線を別タスクにする（口だけの段階でも a の既定白で動く）。W14 以降の `emo2_boot/` を触る仕様（`dpi-transition-two-tick-bounce`・`property-query-channels`）は本仕様の後着なので rebase は向こうが行う。
 
-### D9. フォントファイルの読み込み（R9.3・R9.9）
+### D9. フォントファイルの読み込み（R9.3）——**実装しない（開発者裁定 2026-09-11）**
+
+> 要件ディスカッションで「過剰」と裁定され、読み込みは範囲外になった。R9.3 は「ファイル名の候補は `warn` で読み飛ばして次の候補へ進む」だけを定める。以下の API 調査は参考として残す（口 `font_dirs` も設けない）。
 
 - API は `IDWriteFactory3::CreateFontSetBuilder` → `AddFontFile(path)` → `CreateFontSet` → `CreateFontCollectionFromFontSet` → format 生成時に集合を渡す（範囲指定なら `SetFontCollection`）。集合内の family 名は `IDWriteFontSet::GetPropertyValues` で引く必要がある（ファイル名→family 名の対応は自明でない。**Research Needed**）。
 - **探索フォルダが文字レンダリング層に無い**（D8 と同じ構造）。`register_actor` に `font_dirs: Vec<PathBuf>`（バルーンのフォルダ・`ghost/master`）を渡す口が要り、上流 `emo2_boot` が `balloon_root`／`ghost_root` を持っているので配線は短い。
-- R9.9 が「最後のひとまとまり・後送り可」と定めているので、設計は **口＋縮退（候補を `warn` で読み飛ばす）を先に、読み込み本体を最後のタスク**にする。答えで作業は変わらないが規模には効く。
+- 設計は縮退（候補を `warn` で読み飛ばす）だけを持つ。
 
 ### D10. 色の解析の置き場所（R8.10）
 
@@ -229,7 +231,7 @@
 - **B（新設のみ）**: 不可。解読の腕・`compile` の腕・`state.rs` の腕・`layout_inner` の行高さ・`viewbox_draw.rs` の効果適用は既存関数の中の変更である。
 - **C（併用・推奨）**:
   1. `draw.rs` をテーマ別に兄弟ファイルへ分割（既存関数は移動のみ・テスト無変更）。
-  2. 新設: `look.rs`（見た目の型・2 層・`\f` の値の状態機械・戻す操作）、`color.rs`（色の解析）、`draw_font.rs`／`draw_metrics.rs`／`draw_line_store.rs`（分割先）、`draw_renderer.rs`（`IDWriteTextRenderer` の実装）、`draw_font_files.rs`（フォントファイル・最後のタスク）、各兄弟テスト。
+  2. 新設: `look.rs`（見た目の型・2 層・`\f` の値の状態機械・戻す操作）、`color.rs`（色の解析）、`draw_font.rs`／`draw_metrics.rs`／`draw_line_store.rs`（分割先）、`draw_renderer.rs`（`IDWriteTextRenderer` の実装）、各兄弟テスト。
   3. 既存の腕の追加: `decode_tag`・`compile`・`state.rs::apply_cue`・`actor.rs::apply_cue`（no-catch-all 規律で `Custom` の腕は既にある）・`viewbox_draw.rs` の資源確定区間（run の効果適用）・`layout_inner`（行高さ）・`line_fingerprint`（装飾の要約）。
   4. 段階: ⑴ 分割 → ⑵ 解読・転写・状態機械（純粋層・描画なしで決定論テストが緑に）→ ⑶ 計測の鍵と行高さ → ⑷ 範囲指定で描ける 6 項目（太さ・斜体・大きさ・フォント名・下線・打ち消し線＝横書き）→ ⑸ 自前描画器（色・上下付き・白抜き・縦書きの線の側）→ ⑹ 2 層と戻し・記録 → ⑺ フォントファイル → ⑻ 文書・台帳。
 
@@ -254,7 +256,7 @@
 
 | 区分 | 見立て | 根拠 |
 |---|---|---|
-| 規模 | **L** | 新規部品: 見た目の型と状態機械（純粋・約 300 行＋テスト）・色の解析（約 250 行・色名表込み）・自前描画器（約 300 行）・分割（移動のみ）・計測の鍵（約 100 行）・読み戻しテスト（3 方向 × 10 項目）。フォントファイル読み込みは後送り可 |
+| 規模 | **L** | 新規部品: 見た目の型と状態機械（純粋・約 300 行＋テスト）・色の解析（約 250 行・色名表込み）・自前描画器（約 300 行）・分割（移動のみ）・計測の鍵（約 100 行）・読み戻しテスト（3 方向 × 10 項目）。フォントファイル読み込みは範囲外（開発者裁定） |
 | リスク | **中** | 未知数は 2 つ: ⑴ `#[implement(IDWriteTextRenderer)]` の実装（repo に DirectWrite の COM 実装の先例が無い・shiori 系の `#[implement]` 作法は流用可）⑵ 縦書きでの線の位置と上下付きの側の実測。既存の型・経路の延長部分（解読・転写・状態機械・範囲指定）はリスク低 |
 | 並走との干渉 | 低 | W13 の共有ファイルは 0（`sakura-tag-word-boundary` は `lexer.rs`・本仕様は `decode.rs`／`compile.rs`）。D1-a を採れば dola と他 crate に触れない。D8-b／D9 の上流配線を本仕様で行う場合のみ `crates/areka/src/emo2_boot/mod.rs` に触れる可能性がある（W13 の他 spec との共有を再確認） |
 
@@ -265,7 +267,7 @@
 1. **縦書きでの DirectWrite の既定の下線・打ち消し線の側**（`SetUnderline` を `DWRITE_READING_DIRECTION_TOP_TO_BOTTOM` で使ったときの位置）。自前描画器（D3-B）で側を決めるなら参考値、範囲指定に委ねる案なら決定的。読み戻しテストの通し経路で 30 分程度で測れる。
 2. **`#[implement(IDWriteTextRenderer)]` の最小実装**の確認（`IDWritePixelSnapping` の 3 メソッドの戻り値・`DrawGlyphRun` から `ID2D1DeviceContext::DrawGlyphRun` を呼ぶ形・`clientDrawingEffect` の取り出し方）。windows-core 0.62 の `*_Impl` 面の作法は `crates/areka/src/shiori_host.rs` の注記が先例。
 3. **白抜きの描き方**: `IDWriteFontFace::GetGlyphRunOutline` → `ID2D1PathGeometry`（`ID2D1Factory::CreatePathGeometry`＋`Open` の sink）→ `DrawGeometry`（線幅 1 image px 相当）。emo-text は `ID2D1Factory` を直接持っていないので `GraphicsCore` から取り出す口を確認する。
-4. **フォント集合の family 名の引き方**（`IDWriteFontSet::GetPropertyValues(DWRITE_FONT_PROPERTY_ID_FAMILY_NAME)`）と、`.ttc` の複数 face の扱い。R9.9 で後送り可。
+4. **フォント集合の family 名の引き方**（`IDWriteFontSet::GetPropertyValues(DWRITE_FONT_PROPERTY_ID_FAMILY_NAME)`）と、`.ttc` の複数 face の扱い。**範囲外になったため調査不要**。
 5. **`Custom` に載せるコマンド名の予約**（D1-a）: `\!` の引数に現れ得ない綴りを選ぶ根拠（`lexer.rs` が `\` で語を切る事実）を設計に書く。
 6. **`line_fingerprint` に装飾を含める粒度**: 番号列か、表の中身の要約（ハッシュ）か。番号が `Clear` で振り直されても `FullClear` が指紋を捨てる事実で足りるかを確認する。
 7. **上下付きの縮小比率とずらし量の定数**（R6.4・areka 裁量）: 候補は CSS の慣例（縮小 ≈ 0.58〜0.7・ずらし ≈ ±0.3 em）。値は設計で決めて §8 に登記する。

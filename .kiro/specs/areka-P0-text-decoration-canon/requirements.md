@@ -43,6 +43,7 @@
   - `\x`／`\x[noclear]` の実装（`areka-P0-balloon-lifecycle-events` 項目 9）。本仕様は「戻す操作」を供給するだけで、クリック待ちそのものは作らない。
   - `TextEffects` の予約名のうち `multicolor`・`rotation`（M2 の予約のまま残す）。`shadow` は影 3 項目の所有仕様が実体化する。
   - 行末禁則のぶら下がり・`writing_mode` の警告文言・縦書き字形の観測（`areka-P0-emo-text-canon-residue`）。
+  - `\f[name]` のフォントファイル（`.ttf`／`.otf`／`.ttc`）の読み込み（開発者裁定 2026-09-11・実装しない。ファイル名の候補は読み飛ばして次の候補へ進む）。
   - `sstpmessage.font.*`／`number.font.*`／`communicatebox.font.*` 等の接頭辞付き font 族（各機能の仕様が解禁時に本基盤へ乗る）。
 
 - **Adjacent expectations（隣接する仕様・運用への期待）**
@@ -180,13 +181,12 @@
 #### Acceptance Criteria
 1. When `\f[name,名前]` のとき, the system shall 以降の文字を、その名前でインストール済みのフォントで描く（ukadoc: 「テキストフォントを指定したフォント名に変更する」）。
 2. When `\f[name,名前1,名前2,...]` のとき, the system shall 書いた順を優先度として、最初に見つかったインストール済みフォントを採る（ukadoc: 「カンマ区切りでフォント名を複数指定可で、書いた順＝優先度順で自動的にインストールされている中から選択する」）。
-3. When 候補にフォントファイル名（`.ttf`／`.otf`／`.ttc`）が含まれるとき, the system shall 現在のバルーンのフォルダ、次に実行中ゴーストの `ghost/master` 以下から同名のファイルを探して読み込み、見つかればそのフォントを採る（ukadoc: 「[実行したゴーストのフォルダ]/ghost/master 以下や現在のバルーンのフォルダに置いたフォントファイルも指定可能」・記述例「`\f[name,メイリオ,meiryo.ttf]`」）。
+3. When 候補にフォントファイル名（`.ttf`／`.otf`／`.ttc`）が含まれるとき, the system shall その候補を読み込まずに `warn` の記録（1 台詞につき 1 度）を残して読み飛ばし、次の候補へ進む。フォントファイルの読み込み（ukadoc: 「[実行したゴーストのフォルダ]/ghost/master 以下や現在のバルーンのフォルダに置いたフォントファイルも指定可能」・記述例「`\f[name,メイリオ,meiryo.ttf]`」）は**実装しない**（開発者裁定 2026-09-11・過剰。インストール済みフォントの指定だけで足りる）。台帳では `name` を「縮退（フォントファイルは読み飛ばし）」の注記付きで扱い、§8 に areka の裁量として登記する。
 4. When 候補がすべて見つからないとき, the system shall 既定の見た目のフォントへ戻し、`warn` の記録（試した候補を含む）を 1 度だけ残す（ukadoc: 「指定したフォント候補が全てない場合は、バルーン設定の標準に戻る」）。
 5. When `\f[name,default]` のとき, the system shall フォントだけを既定の見た目へ戻す。
 6. When `\f[name,disable]` のとき, the system shall フォントだけを無効表示の見た目に合わせる（ukadoc: 「disable を指定した場合、無効表示と同じフォントに設定される」）。
 7. The system shall フォントの探索結果を台詞の再生中は再利用し、同じ候補列を文字ごとに探索し直さない。
 8. The system shall バルーン定義 `font.name` のカンマ区切り候補列（現在は先頭だけを採り、残りを `ResolvedFont::fallback_chain` に保持して未消費）にも同じ「優先順に最初のインストール済みを採る」規則を適用する（既定の見た目の側でも候補列が効く）。
-9. The system shall フォントファイルの読み込みを、他の要件から独立した最後のひとまとまりとして着地させられる形にする（規模の裁定で後送りするときは、候補を `warn` で読み飛ばし次の候補へ進む縮退と、追跡先の登記を残す）。
 
 ### Requirement 10: 一括の戻し——`\f[default]`・`\f[disable]` と「戻す操作」の契約
 
@@ -228,7 +228,7 @@
 
 #### Acceptance Criteria
 1. If `\f` の値が解釈できないとき, the system shall 表示を変えず `warn` の記録（キー・値・スコープを含む）を残し、台詞の再生を中断しない。
-2. If フォントの候補が見つからない、またはフォントファイルの読み込みに失敗したとき, the system shall 既定へ戻したうえで `warn` の記録（候補と失敗理由を含む）を残す。
+2. If フォントの候補が 1 つも見つからないとき, the system shall 既定へ戻したうえで `warn` の記録（試した候補を含む）を残す。
 3. If 描画の基盤（DirectWrite）で装飾の適用に失敗したとき, the system shall `error` の記録と `Err` で扱い、panic しない（既存の log-first の規律を保つ）。
 4. The system shall 同じ不正な値が台詞の中で繰り返されても、記録を 1 台詞につき同じ値ごとに 1 度に留める（記録があふれない）。
 5. The system shall 失敗を記録なしで飲み込む経路を持たない（記録なしの失敗経路の禁止）。
@@ -262,12 +262,12 @@
 **Objective:** As a 後続仕様の担当者, I want 本仕様の裁定と着地が正典文書と台帳に写っていること, so that 次の仕様が古い記述を前提にしない
 
 #### Acceptance Criteria
-1. The system shall areka の裁量で決めた各点（相対指定の基準・百分率の基準・スタイルシートのキーワードの見送り・`height,disable`・上下付きの比率とずらし量と縦書きの側・打ち消し線の縦書きの位置・無効表示の色の混ぜ方・行の高さの決め方・戻す操作の対象と時期・台詞開始の戻し）を `doc/COMPAT_ARCHITECTURE.md` §8 に、項目・裁量・根拠（ukadoc の逐語引用と URL）・出典 spec の 4 欄で登記する。
+1. The system shall areka の裁量で決めた各点（相対指定の基準・百分率の基準・スタイルシートのキーワードの見送り・フォントファイルの読み込みの見送り・`height,disable`・上下付きの比率とずらし量と縦書きの側・打ち消し線の縦書きの位置・無効表示の色の混ぜ方・行の高さの決め方・戻す操作の対象と時期・台詞開始の戻し）を `doc/COMPAT_ARCHITECTURE.md` §8 に、項目・裁量・根拠（ukadoc の逐語引用と URL）・出典 spec の 4 欄で登記する。
 2. The system shall `doc/COMPAT_ARCHITECTURE.md` §8 の「`\f[align]`／`\f[valign]`／下線の縦書き写像」の行にある「areka は align／valign を全書字方向でまだ実装していない…本登記は現在の表示結果を変えない」の注記を、下線が実装済みであること・align／valign の追跡先が `areka-P0-text-align-shadow-canon` であることに合わせて改訂する。同じ表で本仕様を「`\f` 核 17 項目の所有者」として追跡先に挙げている箇所（同行の追跡先欄と、「`\_l` の縦書き座標系の正典写像」の行にある疑義 SC8 の追跡先）も、2026-09-11 の 3 分割後の所有（本仕様＝基盤＋フォント系 10＋一括の戻し 2・SC8 と寄せは `areka-P0-text-align-shadow-canon`）に合わせて改訂する。
 3. The system shall `doc/ukadoc-coverage/ledger/sakura-script.toml` の本仕様 12 項目の `status` を実装後の状態（`implemented`・スタイルシートのキーワードのみ `vocabulary-only` の注記付き）へ更新し、`doc/ukadoc-coverage/ledger/assets.toml` の `disable.font.(フォント定義),(指定)` の行を無効表示の層が実体化したことに合わせて更新する。
 4. The system shall `crates/areka-emo-text/src/canvas.rs`・分割後の `draw.rs` 群の予約名の注記（`TextEffects`・`FontDisableSeam`・`RESERVED_EFFECT_*`・「M1 では実挙動を一切実装しない」）を、`outline` と `disable` が実体化したこと・`shadow` は `areka-P0-text-align-shadow-canon`・`multicolor`／`rotation` は M2 予約のままであることに合わせて改訂する。あわせて、予約型が空であることを固定している既存テスト（`draw_format_metrics_tests.rs` の `decoration_and_disable_seams_are_type_only`＝`size_of` が 0 であることの検査）を、実体化した内容を述べる述語へ改訂する。この改訂は実体化の段階で行い、Requirement 1.5 の「分割の段階では既存テストを変更しない」とは段階が異なる（分割と実体化を別の作業に分ける理由）。
 5. The system shall 分割後の新ファイルと接続を steering `structure.md` の該当節へ反映する。
-6. The system shall 本仕様が消費者を足さなかった語彙（寄せ 2・影 3・`cursor*`・`anchor*`・`default.anchor*`・スタイルシートのキーワード・フォントファイルの読み込みを後送りした場合はそれ）の追跡先を、それぞれの所有仕様の brief に 1 行ずつ相互登記する。
+6. The system shall 本仕様が消費者を足さなかった語彙（寄せ 2・影 3・`cursor*`・`anchor*`・`default.anchor*`・スタイルシートのキーワード）の追跡先を、それぞれの所有仕様の brief に 1 行ずつ相互登記する。
 7. The system shall 文書の主張（file:line・行数・件数）を書く前に実測で裏取りし、行番号でなく「何の定義行か」で指す。
 
 ---
