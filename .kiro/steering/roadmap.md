@@ -18,7 +18,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - 「伺かっぽいマスコット」ではなく「**伺か互換系**」であること自体が長期ロードマップの起点。
 - M1 スコープは emo2 が実際に使う機能で**実物定義**。完全網羅・予測実装はしない。
 
-> **✅ M1 完成宣言 2026-09-11（この節は閉じた）。** 適合検証項目表 **20 項目（14 項目＋追補 6 項目）全合格**の実機サインオフに開発者の署名が入り、`emo2-conformance-e2e` が完成を宣言した（`.kiro/specs/areka-P0-emo2-conformance-e2e/verification/m1-completion.md`・項目ごとの結果は同 `verification/acceptance-record.md` §8.1）。持ち越し 6 件はいずれも判定結果を書き換えない（同 m1-completion §6）。**冒頭の「M2 以降は M1 完成後に実物を見て組み直す」の起点はこの宣言である**（同 §7）——以後の M2 ロードマップは本宣言から起こす。
+> **✅ M1 完成宣言 2026-09-11（この節は閉じた）。** 適合検証項目表 **20 項目（14 項目＋追補 6 項目）全合格**の実機サインオフに開発者の署名が入り、`emo2-conformance-e2e` が完成を宣言した（`.kiro/specs/completed/areka-P0-emo2-conformance-e2e/verification/m1-completion.md`・項目ごとの結果は同 `verification/acceptance-record.md` §8.1）。持ち越し 6 件はいずれも判定結果を書き換えない（同 m1-completion §6）。**冒頭の「M2 以降は M1 完成後に実物を見て組み直す」の起点はこの宣言である**（同 §7）——以後の M2 ロードマップは本宣言から起こす。
 
 ## 実装規律（balloon-system の失敗から得た正）
 
@@ -64,14 +64,14 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | W11 | 08-28〜09-02 | `present-write-coherence`（PR#123・**見送り＋登記＝是正 0 行・未達 40 件は引受先なし**）・`balloon-vertical-canon`（PR#124・`vertical,0/1`・origin クランプ撤去）・`balloon-offset-dpi`（PR#125・単位空間 1 つ・実機合格）・`scope-zorder-pinning`（PR#126・改訂第 2 版＝所有の鎖・目視合格・**残件 9 件→`zorder-chain-residue`**） | 4/4 完走・**M1 残＝e2e のみ** |
 
 - **実機サインオフ発見 7 件中 #1〜#6 解決済み**。#7（冒頭空行）のみ pasta 上流（`ekicyou/pasta` 起票済み）＝areka スコープ外。
-- 完了 spec 直下エントリ＝**174**（`.kiro/specs/completed/` 直下・2026-09-06 実測。2026-09-05 に `sakura-bare-tag-lexer`〔PR#134・計数未更新のまま合流〕・`ukadoc-survey-toolkit`〔PR#136〕・`cursor-tag-canon`〔PR#137〕・`ukadoc-survey-property`〔PR#138〕の 4 本で 166 から 170 へ、2026-09-06 に `ukadoc-survey-shiori`〔PR#139〕・`ukadoc-survey-sakura-script`〔PR#140〕・`ukadoc-survey-assets`〔PR#141〕で +3、さらに同日 `emo-text-line-height-canon`〔PR#142〕で +1）。計数は**直下エントリ数**で行うこと（ディレクトリ 173 本＋直下の `graphics-rendering-stability.md` 1 本）。⚠ **引き算で導かず毎回実数えすること**（並走 spec が同じ行を更新するため、書かれた数は容易に二重に古びる）。
+- 完了 spec 直下エントリ＝**175**（`.kiro/specs/completed/` 直下・2026-09-11 実測＝`emo2-conformance-e2e` の完了アーカイブで +1。2026-09-05 に `sakura-bare-tag-lexer`〔PR#134・計数未更新のまま合流〕・`ukadoc-survey-toolkit`〔PR#136〕・`cursor-tag-canon`〔PR#137〕・`ukadoc-survey-property`〔PR#138〕の 4 本で 166 から 170 へ、2026-09-06 に `ukadoc-survey-shiori`〔PR#139〕・`ukadoc-survey-sakura-script`〔PR#140〕・`ukadoc-survey-assets`〔PR#141〕で +3、さらに同日 `emo-text-line-height-canon`〔PR#142〕で +1）。計数は**直下エントリ数**で行うこと（2026-09-11 実数え＝ディレクトリ 174 本＋直下の `graphics-rendering-stability.md` 1 本）。⚠ **引き算で導かず毎回実数えすること**（並走 spec が同じ行を更新するため、書かれた数は容易に二重に古びる）。
 - 主な申し送りの生存先: W7 ⑴ **`ReassertZOrder` 未消費**（再表示直後のバルーン隣接は実機未確認）→ **✅ 消化済み（2026-09-11・e2e の実機一周で確認）**。e2e が引き受けた 3 件はいずれも走行 A で合格した——**再表示直後の重なり順**＝受入記録 §8.1 **行 19**（A9 の拡大率切替の直後も、描き直されたバルーンがキャラの手前に居続けた）・**掴んで動かしたときの追従**＝同 **行 17**（A18・本体と相方を掴むと窓がカーソルに 1 対 1 で付いてきた）・**子プロセスへの受け渡し**＝同 **行 20**（引数・環境変数・作業ディレクトリの 3 経路が同時成立・内訳は同 §8.2）。**この行を「未確認の残件」として読まない。** ⑵ 配置系 spec は `window-placement` R2.9 を正典として引用しない（正典は COMPAT §8 経由で scg へ）。W9 atom→bod 等の追記(70)〜(78) は各 brief が正本。
 
 ## M1 残工程ゴール表（2026-09-02 棚卸⑫）
 
 | 種別 | ゴール（単一文） | ユニット | ウェーブ |
 |---|---|---|---|
-| M-e2e **✅ 完了 2026-09-11** | 適合 **14 を基礎＋追補 6 ＝ 20 項目**一周＋DoD＝**M1 完成宣言**（20 項目すべて合格・項目 18 のみ縮退を開発者裁定で許容） | `emo2-conformance-e2e` **✅ 完了**（宣言＝`.kiro/specs/areka-P0-emo2-conformance-e2e/verification/m1-completion.md`） | **W12**（最終・M1 唯一の残ユニットだった） |
+| M-e2e **✅ 完了 2026-09-11** | 適合 **14 を基礎＋追補 6 ＝ 20 項目**一周＋DoD＝**M1 完成宣言**（20 項目すべて合格・項目 18 のみ縮退を開発者裁定で許容） | `emo2-conformance-e2e` **✅ 完了**（宣言＝`.kiro/specs/completed/areka-P0-emo2-conformance-e2e/verification/m1-completion.md`） | **W12**（最終・M1 唯一の残ユニットだった） |
 | 挙動バグ **✅ 解決（2026-09-06・`emo-text-line-height-canon` 完了）**（M1 ブロッカー・2026-09-05 e2e 走行 A で発見） | 相方側バルーン（`emo2-kakukaku`・validrect 高さ 93px）にメニュー 3 行が収まらず**先頭の選択肢が描かれない**。根因＝行送り `ceil(font.height × 1.25)`＝35px（areka 裁量値・`state.rs:64-66`）と `font.height` を DWrite の em サイズとして渡す解釈（`draw.rs:339-351`）。SSP は同設定で 3 行を収める（≈31px/行）。脳 3 件・kanade 3 件で欠けるのは描画のみ | **`emo-text-line-height-canon`**（M・2026-09-05 起票・開発者裁定「別 spec を切って先に直し一周を採り直す」＝R8.3） | **W12 裁定枠 A′**（`cursor-tag-canon` マージ後・e2e の一周採り直しの前提） |
 | 性能→**構造の無駄**（M1 判定は待たない・2026-09-07 e2e 実機走行で発見・**2026-09-11 開発者裁定で方針確定**） | 拡大率 200% で絵が変わるコマごとに **CPU で 1.4 Mpx を拡大**（`emo-dpi-scaling` D3＝A2・k=1 は恒等コピーゆえ 100% では無料）。静かな機械で外れ 1 回 60〜85 ms・負荷下 300〜600 ms・UI スレッド同期ゆえ文字の再生が止まり「10 字が一度に出る」。SSP は DWM 拡大で無料 | **`present-gpu-transform-scale`**（旧名 `present-resample-budget`・M・裁定「画像本体は原寸で持ち、常に D2D の変換行列で拡大縮小。CPU 拡大は許容しない」＝D3／D5／D6 を設計で覆す） | **W13 裁定枠 D**（e2e と共有ファイル 0・並走可・**最優先**） |
 | 製品欠陥（構造的・走行では非発現・e2e 決定論層が構造から発見 2026-09-06） | kanade が `BootVersion` 滞在中の `TalkDone{Ended}` を捨て（`boot.rs:33-36`）、トーク枠が定常相へ漏れて終了の握手が二度と始まらない | **`kanade-boot-talkdone-drop`**（S・2026-09-11 起票・e2e 記録 §13.2 行 4） | W13 裁定枠 E（独立・S） |
@@ -123,7 +123,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 ## 着手手順
 
-> **brief 全数完備体制**: M1 の最終ユニット e2e **1 本（✅ 2026-09-11 完了）**＋M2 ゲート **14 本**（棚卸⑫で `zorder-chain-residue` 合流）＋調査系 **6 本**（別セッション起票・追記(89) 反映後に実在）＋⓪ `sakura-bare-tag-lexer`（S・09-02 起票・**09-03 完了＝brief 勘定から外れる**）＋`sakura-tag-word-boundary`（M・09-03 起票・追記(93)）＋M2 `charset-canon`（M・09-02 起票・追記(91)）＋翻訳系 `translate-pipeline`／`makoto-dll-host`（M／L・09-02 起票・追記(92)）＝全 25 本 brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
+> **brief 全数完備体制**（2026-09-11 更新: e2e の完了アーカイブで**進行中の spec は 22 本**＝`.kiro/specs/` 直下の実数え）: M1 の最終ユニット e2e **1 本（✅ 2026-09-11 完了・`completed/` へ移動済み）**＋M2 ゲート **14 本**（棚卸⑫で `zorder-chain-residue` 合流）＋調査系 **6 本**（別セッション起票・追記(89) 反映後に実在）＋⓪ `sakura-bare-tag-lexer`（S・09-02 起票・**09-03 完了＝brief 勘定から外れる**）＋`sakura-tag-word-boundary`（M・09-03 起票・追記(93)）＋M2 `charset-canon`（M・09-02 起票・追記(91)）＋翻訳系 `translate-pipeline`／`makoto-dll-host`（M／L・09-02 起票・追記(92)）＝全 25 本 brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
 
 ## 制約
 

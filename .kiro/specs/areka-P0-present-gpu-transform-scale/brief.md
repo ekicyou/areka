@@ -1,6 +1,6 @@
 # Brief: areka-P0-present-gpu-transform-scale
 
-> **起票 2026-09-07（旧名 `areka-P0-present-resample-budget`）・2026-09-11 に改名と方針の確定**。改名の理由: 旧名は「CPU の代金を削る」を示唆したが、開発者裁定（2026-09-11・`/kiro-discovery`）は **「画像本体は原寸で持ち、常に D2D の変換行列指定による拡大縮小とする。画像を CPU で拡大しているなら許容できない」**。目標は予算の圧縮ではなく、CPU 拡大経路の**撤去**である。上流の登記: `.kiro/specs/areka-P0-emo2-conformance-e2e/verification/acceptance-record.md` §13.2 行 9（症状 E）・同 requirements「改訂（2026-09-07・第 4 回）」2。M1 の完成判定（e2e）は本 spec を待たない。
+> **起票 2026-09-07（旧名 `areka-P0-present-resample-budget`）・2026-09-11 に改名と方針の確定**。改名の理由: 旧名は「CPU の代金を削る」を示唆したが、開発者裁定（2026-09-11・`/kiro-discovery`）は **「画像本体は原寸で持ち、常に D2D の変換行列指定による拡大縮小とする。画像を CPU で拡大しているなら許容できない」**。目標は予算の圧縮ではなく、CPU 拡大経路の**撤去**である。上流の登記: `.kiro/specs/completed/areka-P0-emo2-conformance-e2e/verification/acceptance-record.md` §13.2 行 9（症状 E）・同 requirements「改訂（2026-09-07・第 4 回）」2。M1 の完成判定（e2e）は本 spec を待たない。
 
 ## Problem
 
