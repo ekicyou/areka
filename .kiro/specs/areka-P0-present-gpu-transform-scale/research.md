@@ -177,9 +177,10 @@
 
 ## 5. 設計判断へ送る議題（裁定は開発者・本書は材料のみ）
 
-1. **変換の置き場**（§3.1）: A（brush stretch・厳密・最小差分・「行列」ではない）／B（visual scale 行列・字義に近い・f32 で半画素の非厳密＝`as_f32` 禁止への例外裁定が要る）／C（D2D 描画面・字義に最も忠実・差分最大・`read_back` の定義と衝突）。
+1. ~~**変換の置き場**~~ → **裁定 D（2026-09-11・要件ディスカッション 議題 1）**: A／B／C は emo の自前経路の中で選ぶ案だったが、開発者の指摘で「emo-present が wintf の DPI 機構を三重に迂回している（物理寸 `Arrangement`・`GraphicsCommandList` 不使用・自前 swap chain）」ことが根因と確定。**D＝wintf のコマンドリスト経路へ戻す**（原寸 D2D bitmap を論理 px の宛先矩形で `DrawBitmap` 記録・`Arrangement` は論理寸・拡大は `render_surface` の `SetTransform`）を採る。A は D が実測で躓いたときの退避案。B／C は却下。§3.1 の表は経緯として残す。
+   D の Research Needed（§6 へ追加）: ⑴ 作者側補正（96／author_dpi × app_scale）を宛先矩形で吸収したとき `scaled_extent` と物理寸が一致するか ⑵ WUC 描画面の全面再描画（`BeginDraw`→`DrawImage`）が毎コマ走る代金（旧 upload 0.3 ms 相当で収まるか） ⑶ `ID2D1DeviceContext::CreateBitmap`（premultiplied BGRA・メモリ直渡し）の代金と、合成メモに bitmap を持たせる要否 ⑷ `Visual` の `on_add` が連鎖挿入する `SurfaceGraphics`／`SurfaceGraphicsDirty` に emo entity を素直に乗せられるか（`mount.rs` 冒頭 doc の「衝突しない」前提が逆になる）。
 2. **補間モード**（Requirement 2.6）: Linear 固定（既定＝呼出 0 でも成立・明示すれば契約が読める）／整数 k だけ Nearest（鮮明だが k 分岐の新設）。
-3. **÷k 照会**（§3.2）: α（比例写像に任せる・wintf 0・分数 k で 1 px 差）／β（照会口を明示・境界まで `hit_region_client` と一致・wintf の判定手順に手が入り Requirement 9.5 と衝突）。
+3. ~~**÷k 照会**~~ → **α で確定**（Requirement 4.2・裁定 D では wintf の `BitmapSource` と同形＝原寸マスク＋物理 bounds）。
 4. **`CacheEntry.native` の去就**: 消す（`composed` の外形と同値・cache_tests.rs が縮む）／残す（差分最小・重複した真実源が残る）。
    4′. **付録 A の 59 本の裁定**（Requirement 6.3）: 撤去 25／再導出 34 の分類案（§4）をテストごとに確定する。特に `alpha_mask_bits_come_from_k_scaled_display_bytes`（正反対）と `a_scale_change_records_the_buffer_resize`（`resized` の意味変化）。
 5. **撤去段の perf フィールド**（Requirement 3.4）: 0 固定（`Stage::Resample`・`alloc_resample_dst`・`alloc_xmap` を残し常時 0・`judge-perf.py` 不変・語彙が死ぬ）／消費者と同時撤去（`timing.rs`・`budget.rs`・`timing_tests.rs`・`perf_log_tests.rs`・`judge-perf.py` の必須集合 2 タプルを更新・旧 fixture は余分なフィールドとして無害・Revalidation Trigger に該当）。
