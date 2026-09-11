@@ -188,7 +188,7 @@ on_talk_done（一致・非 quit）:
 1. **要件の前提の同一性**（§2）: アクターシェル（DD-2 同期再投入）経由では `BootVersion` 滞在中の `TalkDone` は構造上到達しない。要件 Project Description の「決定論の検証環境では再現できる」は「純粋状態機械 `step` を直接駆動するテスト」に限定して読むことを確認する。答えで変わるもの: 設計に「到達不能の根拠（`actor.rs` の `drive`）」を書くか／要件 5.5 の `cargo test -p areka --bin areka` を「非回帰のみ」と位置づけるか／完了仕様 e2e の記録 §13.2 行 4「窓は狭い」への補足を設計に残すか（完了仕様の文書は書き換えない）。
 2. **受理腕の置き場所**（§4）: 案 A（`boot.rs`）／案 B（`mod.rs` 横断）／案 C（`TalkDone` 専用分配）。既存の順序規律との整合は案 A が最も素直。
 3. **受理ログの語**（要件 3.3）: 候補 `boot_talk_done`（`steady_talk_done`／`close_refused` と並ぶ命名）／`boot_talk_done_early`（起動完了前であることを語に込める）。level は info（`steady_talk_done` と同じ）。フィールドは `talk_id` 必須・`origin`（`"boot"`）は任意。
-4. **「ちょうど 1 行」の読み**（要件 3.3）: `Interrupted` 経路では横断腕の既存 info `talk_done_interrupted_as_non_quit` が先行する。要件の「1 行」は受理の語の行数と読み、横断腕のログは数えない（`steady` の既存経路と同じ扱い）——この読みを設計に明記するか。
+4. ~~**「ちょうど 1 行」の読み**（要件 3.3）~~ — **要件ディスカッションで解決済み（2026-09-11・カテゴリ A）**。要件 3.3 の本文に「数えるのは受理の語の行だけ・横断遷移の既存ログ（`talk_done_interrupted_as_non_quit` など）は数えない」と明記した。設計での再裁定は不要。
 5. **較正テストの追加**（要件 5.4）: `BootVersion{Some}`＋Tick で `boot_input_ignored` が**出続ける**ことを 1 本足すか（受理腕が広すぎる退行の検出器）。既存 `warn_boot_input_ignored_logs`（`BootInit`＋Tick）だけで足りるとするか。
 6. **選択帳簿の掃除の対称性**: `steady::on_talk_done` は `clear_choice_ledger` を呼ぶが、起動中は `ChoiceWaiting` が非 Steady で棄却されるため帳簿は構造上 `None`。受理腕で呼ばない（最小）か、対称性のために呼ぶ（trace のみ・害なし）か。
 7. **`boot.rs` ワイルドカード腕のコメント**: 「Tick・TalkDone など」の文言から `TalkDone` を外す（1 行）。綴り `boot_input_ignored` とメッセージは不変。
