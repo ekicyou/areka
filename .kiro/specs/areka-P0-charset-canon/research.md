@@ -154,7 +154,7 @@ shiori3 codec: build_request(charset) → encode ／ parse_response(bytes, reque
 
 > 2026-09-11 要件ディスカッションでの仕分け: **項目 1 は開発者裁定（要件 10.2 と一体）**。**項目 9・10 は要件側で解消済み**（下記に結果を併記）。**項目 2〜8・11・12 は設計フェーズ（`/kiro-spec-design`）で解決する**（推奨は各項目に記載のとおり）。
 
-1. **裁定 ⑵ と要件 4.8 の齟齬**（→ 開発者裁定・要件 10.2）: (a) 代替文字で吸収なら `parse_invalid_utf8_is_parse_error` の期待値を更新することを 4.8 の例外として明記する／(b) 即時失敗を保つなら 10.2 の推奨を (b) へ変える。
+1. ~~**裁定 ⑵ と要件 4.8 の齟齬**~~ → **開発者裁定で解消**（要件 10.2＝(a) 代替文字で吸収・警告ログ 1 行。`parse_invalid_utf8_is_parse_error` の期待値更新を要件 4.8 の唯一の例外として明記済み）。
 2. **型の持ち方**: ⒝ newtype（推奨）か ⒜ enum 拡張か。裁定 ⑶ は要件側で (a) に確定済み（要件 10.3）——`Charset::for_label` が UTF-16／replacement を `None` にするか、別の失敗理由を返してログの根拠フィールドで区別するかは設計で選ぶ（要件 10.3 は区別を「してよい」とする）。
 3. **交渉状態の置き場所**: B（host32 の純粋 negotiator を `ShioriConnection` が保持・推奨）か A（`ShioriConnection` に素のフィールドと規則を書く）か。
 4. **既定の固定写像の共有方法**: `DefaultEncoding::to_encoding` を `pub` に格上げする（parsers 1 行＋doc の「公開面に出さない」を改訂）か、`areka-ghost` に同じ 2 腕の `match` を置く（写像の二重化・要件 1.3 の「同じ固定写像」を言葉で担保）か。
