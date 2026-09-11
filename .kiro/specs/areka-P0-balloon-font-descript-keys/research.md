@@ -12,7 +12,7 @@
 - **2 層マージ・接頭辞漏れ防止・未指定の区別は、すでに機構として在る**。`parse.rs` の 2 層マージはキー非依存（`descript.clone()` に画像別層を後勝ち `insert`）で、写像はその後に 1 回だけ走る。完全一致の `get` で引くので接頭辞付きキーは構造的に混ざらない。よって**要件 4.1〜4.5 を満たすための新規コードは 0 行**で、必要なのはテストによる固定だけである（先例: `vertical` の 2 層テストが「マージ改変 0 行」を証跡として明記している）。
 - **最大の制約は `Font::new` の呼び出し 50 か所**。`Font::new` 50・`FontColor::new` 52・`BalloonModel::new` 43（実測）が `areka-emo-text`／`areka` にまたがって散在する。コンストラクタの引数を伸ばす案を採ると編集集合が 8 crate 以上へ広がり、brief が保証した「W13 の他 spec と共有ファイル 0」も要件 5 の「既存の解析結果を変えない」も守りにくくなる。本リポジトリには**この問題を解いた先例が 3 つある**（`with_cursor`／`with_windowposition_raw`／`with_vertical_raw` の additive ビルダ）。
 - **要件に書かれた数のうち 2 つが実測と食い違う**。⑴ 要件 6.1 の「既に置かれている 9 本」は実測 **4 本**（`parse.rs` の `font.color.r`／`.g`／`.b`／`font.height` のみ。`font.name` には正典 URL コメントが無い）＝新たに置くのは **10 本**。⑵ 要件 1.3 の「3 か所」は実測 **4 文書**（`areka-P0-text-align-shadow-canon/brief.md:27` が漏れている）。どちらも要件本文の改訂を要する可能性があるため、下の「設計判断項目」へ上げる。
-- **網羅調査の道具は本仕様の作業を止めない**。`vocabulary-only` は状態語彙に実在し（`model.rs`）、証拠（正典 URL）の要否を見るのは `Status::Implemented` の行だけなので、`vocabulary-only` の行に URL コメントを置いても検査は赤にならない。逆に `SourceUrlNotInCatalog`（要件 6.5）と `DomainReportStale`（要件 7.8）は実在の判定であり、URL の綴り写しと `report` の作り直しは必須である。
+- **網羅調査の道具は本仕様の作業を止めない**。`vocabulary-only` は状態語彙に実在し（`model.rs`）、証拠（正典 URL）の要否を見るのは `Status::Implemented` の行だけなので、`vocabulary-only` の行に URL コメントを置いても検査は赤にならない。逆に `SourceUrlNotInCatalog`（要件 6.5）と `DomainReportStale`（要件 7.9）は実在の判定であり、URL の綴り写しと `report` の作り直しは必須である。
 
 ---
 
@@ -69,7 +69,7 @@
 - 状態語彙は 6 種（`implemented`／`vocabulary-only`／`degraded`／`absent`／`alias`／対象外）。`vocabulary-only` は実在する（`model.rs:79`・表示名「語彙のみ」）。台帳の状態語がこの語彙外だと**読み込みそのものが止まる**（`a_status_word_outside_the_seven_stops_the_ledger_read`）。
 - 証拠の行の形は厳格である（`evidence/extract.rs`）: 字下げを除いた行頭が `//`／`///`／`//!` のいずれかで始まり、`ukadoc:` の後に**空白 1 つ以上＋ちょうど 1 語**。説明文を続けると拾われない。要件 6.3 はこの実装そのままである。
 - **証拠の要否を見るのは `implemented` の行だけ**（`check/content.rs:104` の早期 return）。`vocabulary-only`／`absent` の行に URL コメントが在っても所見は出ない。要件 6.1 の「14 本すべてに置く」は道具と衝突しない。
-- 実在する判定は 15 種。本仕様に効くのは `SourceUrlNotInCatalog`（URL がカタログに無い＝要件 6.5）と `DomainReportStale`（ドメイン別報告が台帳と食い違う＝要件 7.8）。常設テストは `crates/ukadoc-survey/tests/consistency/`（`real_repo_data_produces_no_findings` ほか）にあり、ネットワークもスナップショットも要らない。
+- 実在する判定は 15 種。本仕様に効くのは `SourceUrlNotInCatalog`（URL がカタログに無い＝要件 6.5）と `DomainReportStale`（ドメイン別報告が台帳と食い違う＝要件 7.9）。常設テストは `crates/ukadoc-survey/tests/consistency/`（`real_repo_data_produces_no_findings` ほか）にあり、ネットワークもスナップショットも要らない。
 - **優先度・束の名前・備考の文面は機械が見ていない**。要件 7.2／7.3／7.5 は人が守る規約であり、赤にはならない。ここは最終検証で全数を数え直す類の要件である（steering「全項目に○○型の要件はタスク別レビューに映らない」）。
 
 ### 2.4 台帳の現状（14 項目・実測）
@@ -81,7 +81,7 @@
 | `font.bold`・`italic`・`outline`・`strike`・`underline` | `absent` | 同上 | A11 |
 | `font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle` | `absent` | 同上 | A11 |
 
-`report/assets.md` の現在値は 実装済み 42／語彙のみ 65／縮退 8／未対応 423／別名 4／合計 542、`descript_balloon` 行は 20／5／4／133／0／0／0／162。9 項目が `absent` → `vocabulary-only` へ動くと、全体が 語彙のみ 74／未対応 414、`descript_balloon` が 20／14／4／124 になる見込み（作り直しは道具が行う）。
+`report/assets.md` の現在値は 実装済み 42／語彙のみ 65／縮退 8／未対応 423／別名 4／合計 542、`descript_balloon` 行は 20／5／4／133／0／0／0／162。9 項目が `absent` → `vocabulary-only` へ、`font.name` が `absent` → `degraded` へ動くと（後者は 2026-09-11 開発者裁定・議題 1）、全体が 語彙のみ 74／縮退 9／未対応 413、`descript_balloon` が 20／14／5／123 になる見込み。**この数は手計算の見込みであり、道具に数えさせるまでは根拠にしない**（作り直しは道具が行う）。
 
 ### 2.5 正典の確認（ukadoc MCP・2026-09-11）
 
@@ -130,9 +130,10 @@
 | 7.2／7.3 備考の書き換え | 機械は見ない＝人手＋最終の全数確認 | **要追加（見落としやすい）** |
 | 7.4 影 4 項目の担当変更 | 現在 14 項目すべて `text-decoration-canon` | **要追加** |
 | 7.5 優先度据え置き・束名の是正 | A11 の束名「読む経路が無い」が 9 項目で偽になる（設計判断 ④） | **要追加／未知** |
-| 7.6 残り 5 項目の据え置き | 台帳の現状と一致 | **済** |
-| 7.7 `report/assets.md` の作り直し・`summary.md` 不触 | `cargo run -p ukadoc-survey -- report`（ドメイン別 4 本のみ） | **済（道具が在る）** |
-| 7.8 検査 0 件 | `cargo test -p ukadoc-survey` | **済** |
+| 7.6 `implemented` 4 項目の据え置き | 台帳の現状と一致 | **済** |
+| 7.7 `font.name` を `degraded` へ | 状態語彙に `degraded` は実在（`model.rs:80`・表示名「縮退」） | **要追加**（2026-09-11 開発者裁定・議題 1） |
+| 7.8 `report/assets.md` の作り直し・`summary.md` 不触 | `cargo run -p ukadoc-survey -- report`（ドメイン別 4 本のみ） | **済（道具が在る）** |
+| 7.9 検査 0 件 | `cargo test -p ukadoc-survey` | **済** |
 | 8.1〜8.4 下流への引き渡し | 下流 2 spec は **brief のみ**（requirements.md 不在＝未着地）を実測 | **済（判定材料）／要追加（申し送り文書）** |
 | 9.1〜9.6 決定論テスト | `parse_tests.rs` の既存様式をそのまま延長できる | **要追加** |
 | 9.7 「14 である」ことを判定にする | 該当する既存テストが無い | **要追加（設計判断 ⑤）** |
@@ -230,7 +231,7 @@
 - `font.name`＝`ＭＳ ゴシック`／`font.height`＝`12`／`font.color.*`＝`0` の既定値を正典本文で再照合する（`shadowstyle`／`shadowcolor`／`bold`／`outline` は本書で照合済み）。
 - `report/assets.md` の作り直し後の実数（語彙のみ 74／未対応 414 の見込み）を、道具の出力で確定させる。§2.4 の数は手計算の見込みであり、**道具に数えさせるまでは根拠にしない**。
 - 1,000 行番人に対する着地後の余裕を実測し、余裕が乏しければテストのテーマ分割を設計に含める。
-- 要件 7.7 の「統合担当への申し送り」の置き場（`ukadoc-coverage-roadmap` の brief への追記か、本仕様の文書内の節か）を決める。
+- 要件 7.8 の「統合担当への申し送り」の置き場（`ukadoc-coverage-roadmap` の brief への追記か、本仕様の文書内の節か）を決める。
 
 ---
 

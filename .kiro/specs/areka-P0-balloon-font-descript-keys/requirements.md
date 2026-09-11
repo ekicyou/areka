@@ -13,7 +13,7 @@
 - 正典 `descript_balloon` ページの接頭辞なし `font.*` は **14 見出し**である。網羅調査のカタログ `doc/ukadoc-coverage/catalog.toml` に 14 行あり、同じ 14 項目が網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` にも 1 項目 1 塊で載っている。
 - そのうち転記層（`crates/areka-parsers/src/balloon/parse.rs` の写像関数）が引くのは **5 本**（`font.color.r`・`font.color.g`・`font.color.b`・`font.name`・`font.height`）だけである。
 - 残る **9 本**（`font.bold`・`font.italic`・`font.outline`・`font.strike`・`font.underline`・`font.shadowcolor.r`・`font.shadowcolor.g`・`font.shadowcolor.b`・`font.shadowstyle`）は、完全一致で引くキーの並びに無い。上流の KV 化層は未知キーも保持するが、転記層に写す先が無いため値はそこで落ちる。台帳の 9 項目はいずれも「壊れ方: 黙って壊れる。記録: なし」と登記されている。
-- 台帳の状態は、`implemented` が 4（`font.color.r`／`.g`／`.b`・`font.height`）、`absent` が 10（残り全部。`font.name` は写像されてはいるが、バルーンのフォルダに置いたフォントファイルを指定できないこと・カンマ区切りの優先列が効かないことの 2 点で描画側が正典どおりでないため `absent`）。
+- 台帳の状態は、`implemented` が 4（`font.color.r`／`.g`／`.b`・`font.height`）、`absent` が 10（残り全部。`font.name` は写像されてはいるが、バルーンのフォルダに置いたフォントファイルを指定できないこと・カンマ区切りの優先列が効かないことの 2 点で描画側が正典どおりでないため `absent`）。この `font.name` の `absent` は実態と合っておらず、本仕様が `degraded` へ是正する（Requirement 7.7・2026-09-11 開発者裁定）。
 - **数の食い違い**: 本仕様の brief・分割元 `areka-P0-text-decoration-canon` の brief・`.kiro/steering/roadmap.md` はいずれも「基底 13 キー」「残り 8 キー」と書くが、これは `font.outline` を数え落としている。台帳は 14 項目すべての備考に「担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）」と登記済みである。本仕様の brief は「キー集合の照合元」を台帳と明記しているので、**本仕様は 14 を採り、13 と書いた生きた 4 文書を是正する**（本ブランチで全数検索した結果、`areka-P0-text-align-shadow-canon` の brief `:27` が 4 本目である。履歴と完了済みの記録は非改変）。
 
 ### 何を変えるか
@@ -34,7 +34,7 @@
   - 接頭辞付きの `font` 族 9 系統（`anchor.`／`anchor.notselect.`／`anchor.visited.`／`cursor.`／`cursor.notselect.`／`communicatebox.`／`number.`／`sstpmessage.`／`disable.`）。機能ごと M1 非実装であり、各機能の仕様が解禁するときに扱う。ただし本仕様のキーへ値が漏れないことは本仕様が守る（下の Requirement 4）。
   - `\f[...]` タグ側の意味論・リセット規則・実際の描画（`areka-P0-text-decoration-canon`／`areka-P0-text-align-shadow-canon`）。
   - `disable.font.*` の実体化（`areka-P0-text-decoration-canon`・描画側）。
-  - `font.name` の既知の 2 つの食い違い（バルーンのフォルダに置いたフォントファイルを指定できない・カンマ区切りの優先列が効かない）。どちらも描画側の欠陥であり、台帳の担当も描画側の仕様のままとする。
+  - `font.name` の既知の 2 つの食い違いの是正（バルーンのフォルダに置いたフォントファイルを指定できない・カンマ区切りの優先列が効かない）。どちらも描画側の欠陥であり、台帳の担当も描画側の仕様のままとする。ただし**状態語の是正だけは本仕様が行う**（`absent` → `degraded`・Requirement 7.7）。
   - バルーン名 `name,` の写像（`areka-P0-emo-text-canon-residue` 項目 14）。同じ写像関数を触るため同居させない。本仕様を先に着地させる。
   - 全体報告 `doc/ukadoc-coverage/report/summary.md` の作り直し。4 台帳を跨ぐため統合担当（`areka-P0-ukadoc-coverage-roadmap`）が行うと開発者裁定（2026-09-02 議題 2）で決まっており、常時の検査にも入っていない。本仕様は申し送りだけを行う（Requirement 7.7）。
 - **Adjacent expectations**:
@@ -127,9 +127,10 @@
 3. The 本仕様 shall 14 項目すべての備考から「担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）」の一文を除く（Requirement 1.3 で是正済みになるため）。
 4. The 本仕様 shall 影の 4 項目（`font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle`）の担当を `areka-P0-text-align-shadow-canon` へ改め、残る 10 項目の担当は `areka-P0-text-decoration-canon` のまま据え置く（分割の裁定で影と寄せ 2 が同仕様へ移ったため。裁定の文が言う「影 3」は `\f` タグ側の項目数であり、descript 側の見出しは影色 3 成分＋形態の 4 キーである）。
 5. While 9 項目の壊れ方の段が変わらない（宣言しても見た目が変わらず、記録も出ないまま）, the 本仕様 shall 優先度 `A11` を据え置き、束の名前だけを実態に合わせ、同じ束の項目には同じ優先度を付けるという台帳の規則を保つ。束の名前は `A11` に属する **10 項目すべて**（未写像の 9 本＋`font.name`）で揃えて改める。現在の束名「台詞の書体・読む経路が無い」は `font.name` については**すでに事実と合っていない**（同項目の備考自身が「完全一致で引いて文字列のまま持ち上げ」と書いており、読む経路は在る）ので、10 項目を揃えて改めることが、束に嘘を 1 件も残さない唯一の形である。
-6. The 本仕様 shall 残る 5 項目の状態を据え置く——`font.color.r`／`.g`／`.b`・`font.height` は `implemented` のまま、`font.name` は `absent` のままとする。`font.name` は写像されてはいるが、描画側の 2 つの食い違い（バルーンのフォルダに置いたフォントファイルを指定できない・カンマ区切りの優先列が効かない）が残るためであり、本仕様はその食い違いを引き受けない。
-7. When 台帳を書き換えた, the 本仕様 shall ドメイン別報告 `doc/ukadoc-coverage/report/assets.md` を道具で作り直して同じコミットに入れ、全体報告 `doc/ukadoc-coverage/report/summary.md` には触れずに、統合担当（`areka-P0-ukadoc-coverage-roadmap`）へ「assets 台帳の状態分布が変わった」ことを申し送る。
-8. When 網羅調査の常時検査とテストを走らせた, the 検査 shall 台帳・報告について 1 件も食い違いを報告しない。
+6. The 本仕様 shall `font.color.r`／`.g`／`.b`・`font.height` の 4 項目を `implemented` のまま据え置く。
+7. When `font.name` の状態を見直した, the 本仕様 shall これを `absent` から `degraded`（縮退＝受け取るが正典どおりではない）へ改める。実測では転記層が完全一致で引いて文字列のまま持ち上げ、描画側が書体の設定として解いており、先頭の書体名は現に効く。効かないのは 2 点（バルーンのフォルダに置いたフォントファイルを指定できない・カンマ区切りの優先列が効かない）だけであり、これは「何もしていない」ではなく「受け取るが正典どおりでない」に当たる。本仕様はその 2 点の食い違い自体は引き受けず、担当も描画側の仕様（`areka-P0-text-decoration-canon`）のまま据え置く（2026-09-11 開発者裁定・議題 1。完了済みの調査 spec が付けた `absent` を 1 件覆す）。
+8. When 台帳を書き換えた, the 本仕様 shall ドメイン別報告 `doc/ukadoc-coverage/report/assets.md` を道具で作り直して同じコミットに入れ、全体報告 `doc/ukadoc-coverage/report/summary.md` には触れずに、統合担当（`areka-P0-ukadoc-coverage-roadmap`）へ「assets 台帳の状態分布が変わった」ことを申し送る。
+9. When 網羅調査の常時検査とテストを走らせた, the 検査 shall 台帳・報告について 1 件も食い違いを報告しない。
 
 ### Requirement 8: 下流への引き渡しを相互登記する
 
