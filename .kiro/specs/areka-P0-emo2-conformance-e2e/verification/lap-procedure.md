@@ -395,6 +395,28 @@ $v = Get-Content $LOG |
 
 **項目 6 の注意。** 適合検証項目表の項目 6 に現れる `Head0`／`Bust0`／`Head1`／`Bust1` は**撫でる 4 か所の呼び名**であって、ログに出る当たり領域の名ではない。実検体の領域名は `Head`／`Bust` の 2 種だけで（`crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt:23-24`・`:417-418`）、本体か相方かは話者（Ref3）が運ぶ。**`Head0` を grep すると 0 件が返る。**
 
+**転記元の突合（2026-09-11・R11.5）。** 上の表の 14 行と §7.1 の 7 行ブロックについて、**語が発行側に逐語で在ること**と**併記した転記元が今もその発行点を指していること**を 1 行ずつ当たり直した。**古びていたものは 0 件**である。方法は 2 段——⑴ 語で発行側のファイルを検索して逐語一致を確かめる、⑵ 併記した行番号（範囲つきのものは範囲）を開いて、そこが当の `warn!`／`info!`／`error!`／`debug!` の呼出そのものか、定数の定義行かを確かめる。突合の結果は次のとおり。
+
+| grep する語 | 転記元（確かめた位置） | 確認日 |
+|---|---|---|
+| `event=connect_failed` | `crates/areka-kanade/src/shiori/real.rs:275-280`＝`error!` 呼出の全体（`event` 欄は `:277`） | 2026-09-11 |
+| `event=unload_clean` | 同 `:204-208`＝`info!` 呼出の全体（`event` 欄は `:206`） | 2026-09-11 |
+| `event="unload_failed"` | 同 `:224`＝`error!` の `event` 欄 | 2026-09-11 |
+| `[transition]` | `crates/wintf/src/ecs/window/transition_diag.rs:57`＝定数 `RECORD_PREFIX_TAG`（target は同 `:54` の `TRANSITION_TARGET`） | 2026-09-11 |
+| `wrap=BudouxWordWrap` | `crates/areka/tests/emo2_real_run.rs:31` | 2026-09-11 |
+| `折返し基準が描画範囲の外に解決された` | `crates/areka-emo-text/src/actor.rs:199-211`＝`warn_coarse_wrap_threshold` の全体（`warn!` は `:204-210`・文言は `:209`・4 欄は `:205-208`）。呼び口は同 `:327`（`register_actor` の中） | 2026-09-11 |
+| `event=boot_input_ignored` | `crates/areka-kanade/src/schedule/boot.rs:34`＝`warn!`（捨てる分岐は同 `:33-36`） | 2026-09-11 |
+| `method=GET id=OnClose` | `crates/areka-kanade/src/actor.rs:347`＝`trace!` の `event="shiori_request"` 欄（`method`／`id` は同じ呼出の欄） | 2026-09-11 |
+| `event="close_talk_start"` | `crates/areka-kanade/src/schedule/close.rs:66`＝`info!` | 2026-09-11 |
+| `event="ghost_quit"` | `crates/areka/src/emo2_boot/frame.rs:201`＝`info!` の `event` 欄（`info!` 呼出の始まりは同 `:200`・囲む関数 `run_ghost_quit_phase` は同 `:177`） | 2026-09-11 |
+| `event="force_quit"` | `crates/areka-kanade/src/schedule/mod.rs:486`＝`force_quit` 関数の `warn!` | 2026-09-11 |
+| `steady_unexpected_reply` | `crates/areka-kanade/src/schedule/steady.rs:917`＝`steady_reply_unexpected`（同 `:912`）の `warn!` | 2026-09-11 |
+| `perf(apply_show)` | `crates/areka-emo-present/src/presenter/timing.rs:56`＝定数 `PERF_LINE_MESSAGE`（`debug!` の文言は同 `:221`） | 2026-09-11 |
+| `あふれ発火——スクロール可視窓を決定した` | `crates/areka-emo-text/src/layout.rs:736`＝`debug!` の文言 | 2026-09-11 |
+| §7.1 の 7 行ブロック（`ATOM-SIGNOFF`／`ATOM-QUOTA`／`ATOM-NO-DRAG`／`DETERMINISTIC`／`SIGNOFF-BOUNDS`／`VISUAL`／`AGREEMENT`） | `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md:469-477`（囲みの記号を含む・本文は `:470-476`）。**`crates/` に発行元は無い**——これは実行時のログではなく、先行仕様が定めた記入票の書式であり、機械判定の出力を人が写す欄である。ゆえに突合の相手は先行仕様の逐語のみで、ソースの行番号は持たない | 2026-09-11 |
+
+**古びたときに検出できる形（R11.5）。** 表に併記した位置は**何の定義行か**（`warn!` の呼出そのもの・定数の定義行・関数の入口）まで書いてある。行番号が動いても、その素性で当て直せば同じ発行点へ着く。**`BALLOON_NAME_PLACEHOLDER` の定義位置（`crates/areka-emo-text/src/region.rs:217`）も同じ日に確かめた**（上の読み方の但し書きが指す先である）。
+
 点灯を確かめた語と方法は、記録 **§7 点灯確認**の表へ 1 行ずつ書く。
 
 ---

@@ -4,6 +4,7 @@
 > 適合対象ゴースト emo2（作者 ekicyou・脳=pasta.dll・32bit SHIORI）が「そのまま動く」ために areka が実装すべき機能の正確な輪郭。推測でなく実ファイル根拠。
 > 出所: `C:\home\maz\git\ghost_dev\project\emo2\ghost\emo2`（解剖は4並列 subagent・2026-06-28）。
 > 注記: 本書は discovery 分析の保全であり、ロードマップ確定前のドラフト。carving 合意後に各 spec へ配分される。
+> **M1 適合走行で充足済み（2026-09-11）**: 本書が定める実物の輪郭は、適合検証項目表 20 項目（14 項目＋追補 6 項目）の実機一周走行で満たされ、M1 完成を宣言した。根拠と未達の持ち越しは `.kiro/specs/areka-P0-emo2-conformance-e2e/verification/m1-completion.md`、項目ごとの結果は同 `verification/acceptance-record.md` §8.1 に在る。**本書の輪郭そのものは今後も実物定義の正本であり、この注記は「輪郭が満たされたかどうか」だけを述べる。**
 
 ## 0. 前提（最重要・スコープの土台）
 

@@ -963,11 +963,11 @@ ATOM-SIGNOFF: FAIL
 
 ## 15. 編集集合の非回帰（タスク 7.1・2026-09-11）
 
-**測り方**: `git merge-base origin/main HEAD` ＝ `6a6ea1b5`。`git diff --name-only 6a6ea1b5 HEAD` と `git diff --name-only origin/main...HEAD` は**同一の 72 パス**（差 0 行）。本ブランチは 2026-09-05 に PR #135（squash `b2ac9a35`）でいったん main へ入り、その後 main を数回取り込んでいるため、**三点差分が本ブランチの未統合の編集集合**である。PR #135 で入った分（事前登記済みの例外 2 件を含む）は既に main に在るので、この 72 パスには現れない。1,000 行の見張りに収めるため、表は**宣言の出所ごと**に束ねた（パスは 1 つも省いていない・分類は R12.1 と各改訂・タスクの Boundary で裏取りした）。
+**測り方**: `git merge-base origin/main HEAD` ＝ `6a6ea1b5`。`git diff --name-only 6a6ea1b5 HEAD` と `git diff --name-only origin/main...HEAD` は**同一の 72 パス**（差 0 行・タスク 7.1 の測定時点。以後の実数えは追補を見よ）。本ブランチは 2026-09-05 に PR #135（squash `b2ac9a35`）でいったん main へ入り、その後 main を数回取り込んでいるため、**三点差分が本ブランチの未統合の編集集合**である。PR #135 で入った分（事前登記済みの例外 2 件を含む）は既に main に在るので、この 72 パスには現れない。1,000 行の見張りに収めるため、表は**宣言の出所ごと**に束ねた（パスは 1 つも省いていない・分類は R12.1 と各改訂・タスクの Boundary で裏取りした）。
 
 | パス | 分類 | 宣言の出所（要件の改訂 n／例外／討議） |
 |---|---|---|
-| `.kiro/specs/areka-P0-emo2-conformance-e2e/{requirements,design,tasks}.md`・同 `verification/{acceptance-record,lap-procedure}.md`（5） | 本仕様の記録・文書 | R12.1 本文「本仕様の記録」 |
+| `.kiro/specs/areka-P0-emo2-conformance-e2e/{requirements,design,tasks,brief}.md`・同 `verification/{acceptance-record,lap-procedure,m1-completion}.md`（**7**・タスク 7.1 の測定時点では 5） | 本仕様の記録・文書 | R12.1 本文「本仕様の記録」。**うち 2 つは 7.1 の測定の後に加わった**——`verification/m1-completion.md` は**タスク 7.2 が新規作成**したもので、設計が最初から名指ししている（`design.md:163` のファイル木「新規: 完成判定と宣言」・同 `:889` の D10 の置き場の欄）。`brief.md` は**タスク 7.3 が追記**したもので、宣言の出所は design D12 ⑷（引き受けた 3 件の登記先を本仕様の brief と定めた——送り元は完了置き場に在り、本仕様の編集集合の外だからである） |
 | `.kiro/specs/areka-P0-{dpi-transition-two-tick-bounce,host32-window-thread-pump,kanade-boot-talkdone-drop,present-gpu-transform-scale}/brief.md`（4） | 引受先の起票（ディスカバリ出力・2026-09-07／09-11） | R8.5（引受先の無い症状を閉じない）・ロードマップ追記(94) |
 | `.kiro/steering/roadmap.md`（1） | 正本の更新 | R11.2・R11.4／design「Modified Files」 |
 | `crates/areka-emo-text/src/{choice,actor,canvas,region,layout,viewbox_draw}.rs` と兄弟試験 `{actor_choice_contract,actor_region_warn,actor_scroll_retain,choice_decorate,choice,layout_visible_window,region_inline_limit,viewbox_choice_marker,viewbox_draw_choice_hover,viewbox_draw_scroll_retain}_tests.rs`・`tests/{choice_fixture,emo2_fixture_e2e,line_pitch_readback}_test.rs`（19） | 宣言済みの編集集合 | 改訂 2（`crates/areka-emo-text/` を追加・R13／R14）・改訂 5 の 5（R17 は追加なしと明記） |
@@ -984,6 +984,8 @@ ATOM-SIGNOFF: FAIL
 | 例外 R9.2（S3・S1 の 2 ファイル）・例外 R9.8（`wintf` の 2 ファイル）（0） | 事前登記済みの例外 | **本測定には 0 パス**——4 ファイルとも PR #135（`b2ac9a35`）で既に main に在り、三点差分には現れない |
 | **宣言外**（0） | — | **0 件** |
 
-**合計**: 72 パス＝**宣言済み 72／宣言外 0**。`.claude/` の変更は本ブランチの編集ではない（`.claude/skills/ponytail` の最終コミットは分岐点そのもの＝`6a6ea1b5`・main から取り込んだもの）。
+**タスク 7.2・7.3 の追補（2026-09-11）**: 上の表はタスク 7.1 の測定（72 パス）のものであり、その後 **2 パスが加わった**——タスク 7.2 が `verification/m1-completion.md` を新規作成し、タスク 7.3 が `brief.md` へ追記した（どちらも分類は「本仕様の記録・文書」で、宣言の出所は上表の当該行に書いた）。タスク 7.3 が触ったほかの 3 パス（`.kiro/steering/roadmap.md`・`doc/emo2-conformance-scope.md`・`verification/lap-procedure.md`）は上表に既に在る。**よって編集集合は 74 パス＝宣言済み 74／宣言外 0 である。** **この 74 は引き算や足し算で導いたものではなく、実際に数えた値である**——`git diff --name-only $(git merge-base origin/main HEAD)`（**第 2 の参照を与えない**＝作業ツリーの変更を含む形）の出力行数が **74**、`… HEAD` を付けた形（作業ツリーを含まない）が **73** で、差は `brief.md` の 1 本だけである（`comm` で突き合わせて確かめた）。**完了置き場の文書は 1 バイトも触っていない。**
+
+**合計**: **74 パス＝宣言済み 74／宣言外 0**（実数えの値・上の追補のとおり。タスク 7.1 の測定時点では 72 で、7.2 と 7.3 が 1 本ずつ加えた）。`.claude/` の変更は本ブランチの編集ではない（`.claude/skills/ponytail` の最終コミットは分岐点そのもの＝`6a6ea1b5`・main から取り込んだもの）。
 
 **節構造の非回帰（R12.4・R12.5）**: 決定論層の合否は §11、実機層の合否は §12 と**独立した節**に分かれており、§11 の末尾は「§12（実機層）は 1 文字も埋めていない」、§12 の冒頭は「この欄は決定論層の欄とは別である」と互いに明記している（R12.4 の節構造で相 1／相 2 の境界を表す）。縮退は記録の 5 か所すべてに理由が付いている——§7「無し」（対になる語の点灯で裏取り）・§8.1 行 18 後半（拡大率遷移の後に隣接へ戻らない・開発者裁定で判断から外した）・§11.1（設計 D3 が名指しする変異では対照が作れず別の変異へ差し替えた）・§11 末尾の 3 件（新規ファイル数の食い違い・走行時間を中央値で判定・§12 は未記入）・§12（§8.1 と同じ 1 件）。記録の無い縮退は 0 件（R12.5）。
