@@ -264,3 +264,64 @@
 5. 3 連鎖 ⑵（`seriko.zorder`）の `links` をどの台帳に何本足せば 1 つの束になるか（assets または sakura-script 側に最低 1 本）。
 6. makoto 束 53 件の関連の内訳（どの `kind` がページ id を介して繋いでいるか）を辺ごとに列挙し、分割の境界を決める材料にする。
 7. `/kiro-complete` の手順 5-2 が書き換えるパスの綴りと、判定 ⑸ の数え方が移動後も緑になることの確認手順。
+
+## 10. 設計フェーズの調査（2026-09-11・`design.md` の入力）
+
+> 種別: Extension（既存の道具と台帳の延長）。軽い発見の手順で行い、外部の技術調査は不要だった（新規依存 0・テンプレート辞書の URL は開発者裁定で実装時に確認する）。§9 の持ち越し 7 件をここで消化する。
+
+### 10.1 makoto 束（53 件）の辺の内訳（§9 の 6）
+
+- 4 台帳の `links` は 429 本。53 件に触れる辺は **82 本**で、そのうち **46 本**が assets 台帳のページ単位 id（`dev_bind`・`dev_nar`・`dev_ownerdraw`・`dev_shell`・`dev_update`・`manual_balloon`・`manual_directory`・`manual_ghost`・`manual_install`・`manual_owner_draw_menu`・`manual_shell`・`manual_translator`・`manual_update`＝13 件・すべて `absent`）どうし、またはページ id と項目 id の `same-feature` である。次数 4 以上の頂点 13 個のうち項目 id は `OnUpdateOtherReady`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete`・`OnUpdateFailure`・`\![updateother,…]` の 6 つで、いずれもネットワーク更新の群の中にある。
+- 13 のページ id を除くと、残り 40 件は ⑴ ネットワーク更新 27 件（`OnUpdate*`・`OnUpdateOther*`・`OnUpdatedata*`・`OnUpdateCheckResult*`・`OnUpdateResult*`・`\![update,…]`・`\![updateother,…]`・`other_homeurl_override`）、⑵ `list_plugin_event:OnInstallComplete` と `list_shiori_event:OnInstallComplete` の対、⑶ `OnURLQuery` と `\![execute,install,url,…]` の対、⑷ 孤立 9 件（`descript_ghost:makoto`・`\![execute,createnar]`・`\![execute,createupdatedata]`・`\![execute,install,path,…]`・`OnInstallCompleteAll`・`OnInstallRefuse`・`OnInstallReroute`・`OnNarCreating`・`OnNarCreated`）に分かれる。
+- 束を 1 つに繋いでいる要の辺: `manual_translator ↔ descript_ghost:makoto`（束 id の由来である makoto の唯一の繋がり）・`manual_{directory,ghost,shell} ↔ manual_translator`・`dev_nar ↔ manual_{directory,ghost,install,shell}`・`manual_ghost ↔ manual_update`・`dev_shell ↔ dev_update`・`manual_update ↔ dev_update`・`dev_shell ↔ dev_{bind,ownerdraw}`・`dev_ownerdraw ↔ manual_owner_draw_menu`・`manual_directory ↔ manual_balloon`。`manual_*` ページどうしの相互参照は ukadoc の目次の事実であって機能の事実ではない。
+- 含意: `links` を削らず `linkage.md` で分ける（要件 3.3）。名前付き束はネットワーク更新・インストール・nar の作成・トランスレータ・オーナードローメニュー・着せ替え（＋配布物の構造）。13 のページ id の行き先を表で書く（design D-7）。
+
+### 10.2 3 連鎖の現状（§9 の 5）
+
+- ⑴ 時刻: `list_plugin_event:OnSecondChange`（shiori 台帳）の行に `configures → descript_plugin:secondchangeinterval` と `same-feature → list_shiori_event:OnSecondChange` が既にあり、3 件の束として `summary.md` に出ている。3 つの id はカタログに実在。追加 0 本。
+- ⑵ 重なり順: `descript_shell:seriko.zorder…`（assets・`implemented`）は `links = []`。property の `currentghost.seriko.zorder`（`degraded`）は `\![set,property,…]` と `\![set,zorder,…]` へ `same-feature` を持ち、既に 48 件の束（束 id `ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1`）に入っている。property→assets の既存の関連は **24 件すべて `configures`** で、assets→property は 0 件。したがって最小の補修は property 台帳の同じ行に `configures → descript_shell:seriko.zorder…` を **1 本**。`\![reset,zorder]`（`implemented`）は `links = []` のままで人手で束へ入れる。
+- ⑶ インストール: `OnInstallComplete` の対は shiori 内の閉じた束だが、`manual_install` を介して makoto 束の中にある。`\![execute,install,path,…]`・`\![execute,install,url,…]` は `absent`・`links = []`（後者は `OnURLQuery` から `triggers` で指されている）。`descript_install:*` **16 件すべて**が `absent`・`links = []`。同系の `OnInstallBegin`・`OnInstallCompleteEx`・`OnInstallFailure`・`installed*name`・`ghostinstallbutton.caption`・`x-ukagaka-link` の install 形も関連 0 本。`installedballoonname`・`installedghostname`・`installedplugin` は plugin 事件↔shiori 事件の 2 件束が 3 つ。骨格の補修はタグ→事件の `triggers` 2 本（sakura-script 台帳の流儀）に留め、残りは人手で束へ入れる。
+
+### 10.3 台帳の備考にある「壊れ方」の実測
+
+- 「壊れ方:」は対象 1,552 件すべての備考に在るが自由文で、冒頭の語の分布は「黙って」1,272・「見た目」271・「areka …」169（`not-applicable` の形）・「該当なし」27・「明示的」1・その他 6。束ごとの最悪値は人が判定し、`linkage.md` の `breakage` に 3 語（＋全構成 id が `implemented` のときの「該当なし」）で書く（design D-2）。
+
+### 10.4 判定 ⑹ の切り出し（§9 の 2）
+
+- `render_summary` の 5 節のうち ⑸「ドメインごとの証拠あり件数」だけがソース木由来。冒頭 2 行目の「新しさは常時検査の合否に入れません」は `summary_tests.rs` が逐語で釘付けしている。切り出しは `render_summary_judged`（⑴〜⑷）と、それに証拠の表を継ぎ足す既存の `render_summary` の 2 段にし、判定は接頭辞一致で行う（design D-5）。`evidence` 副手続きへ表を移す案は toolkit 設計 D-11 の置き場を動かすので採らない。
+
+### 10.5 `priority` の 1 行置換（§9 の 3）
+
+- `blocks::split` が返す各塊の範囲の中で、行頭が `priority = ` の行は現データで各塊にちょうど 1 行。備考の複数行文字列の中に同じ綴りが行頭で現れる項目は無い（`grep -c '^priority = '` が 4 台帳とも項目数と一致: 677／542／342／188）。置換は行頭判定だけで安全に行える（design `ledger::patch`）。
+
+### 10.6 テンプレート辞書（§9 の 4）
+
+- ukadoc MCP の里々 wiki は「ポストと狛犬（公式テンプレート）」、YAYA wiki は「はろーYAYAわーるど」「SimpleYAYA テンプレート」を名指しするが辞書の全文は無い。開発者裁定（議題 2）どおり配布物を取得して静的に読む。URL は実装の最初のタスクで開発者へ確認し、`briefing.md` の `[[template]]` に url・取得日・ファイル名・写し方を書く。取得できなければ wiki が名指しする語彙（`OnFirstBoot`・`OnBoot`・`OnClose`・`OnGhostChanged`・`OnUserInput`・`OnAiTalk`・`OnSecondChange`）を退路にする（要件 6.8）。
+
+### 10.7 完了手続きと判定 ⑸（§9 の 7）
+
+- `/kiro-complete` の手順 5-2 は `git grep -n "{feature-name}" -- crates` で当たりを出し、「コメント参照は放置可・実ファイル読みだけがビルドを壊す」で仕分ける。テストが持つのは自 spec の**ディレクトリ名**の定数（`OWN_SPEC_DIR`）だけで、実ファイル読みではない。仕分けで残す旨を定数の注釈に書く。数え方は「直下で `brief.md` を持つディレクトリのうち `completed` と `OWN_SPEC_DIR` を除く」で、移動前 28−1、移動後 27−0、どちらも 27。
+
+### 10.8 3 文書の機械可読な形（§9 の 1）
+
+- 選択肢と結論は design D-1。要点: ```toml の囲みを文書ごとに連結して 1 度読む（配列を囲みに分けて書けて、鍵の重複は `toml` が落とす）。id は囲みの中の引用符付きと地の文の逆引用符付きの 2 口で拾い、裸の `ukadoc:` は 0 件を主張する。骨組みに置く数は判定が数え直す。履歴の数（`links` の追加本数・`owner` の変更件数・書き戻し前の分布）は数え直せないので本文に手順付きで書く。
+
+### 10.9 設計判断の要約（design D-1〜D-12 との対応）
+
+| # | 判断 | 代替案と却下理由 |
+|---|---|---|
+| D-1 | 3 文書は本文＋```toml の骨組みで 1 ファイル | 表の列固定（53 id の 1 セルは読めない）・別ファイル（4.1・8.8 に反する） |
+| D-3 | 判定は `tests/consistency/` の兄弟ファイル | 純粋層 `check/` へ足す案 B（上流の遮断の設計を崩し、`FindingKind` と 850 行級のテストを触る） |
+| D-4 | `priority-apply` 副手続き（`priority` のみ） | 使い捨てスクリプト（第二段の再実行と「台帳が文書どおりか」の検証が分かれる） |
+| D-5 | 判定 ⑹ は judged の接頭辞一致・証拠の表は残す | 全文一致（他 spec の URL コメント 1 行で赤）・`evidence` へ移す（toolkit D-11 を動かす） |
+| D-6 | ⑸ はディレクトリ名で除く | 直下の総数−1（移動後に 26 で赤） |
+| D-7 | `links` は最大 3 本・makoto は `linkage.md` で分ける | `links` の削除（束 id が変わり引用が外れる）・大量の `links` 追加（開発者裁定 1 に反する） |
+| D-9 | 段階内の順位は `axis_key` の降順・同鍵は同順位・例外は `override` に根拠 | 人の並び順をそのまま許す（「たぶん重要」を機械が止められない） |
+
+### 10.10 リスク
+
+- **単独項目が多すぎる**: 開発者裁定は関連 0 本の 1,127 件を人手で束へ入れると定めたが、束が見つからない項目が多いと `linkage.md` の `single = true` の塊が数百になる。緩和: 段階ごとに束を切る際に「同じ正典ページの同じ機能群」を 1 束にまとめてよい（帰属の正本は `linkage.md` なので `links` は要らない）。
+- **順序の主張と人の決め（5.3・第二段）の衝突**: `override` 欄で可視化し、裁定候補へ回す。
+- **`render_summary` の版面変更が他 spec を赤にする**: 台帳を触る spec だけが `report-summary` を走らせればよい。README の表に書く。
+- **テンプレート辞書が取得できない**: 要件 6.8 の退路。`fallback = true` を書き、`insufficient` の束を「根拠不足」へ。
+- **1,000 行の番人**: 判定を 2 ファイルに分けた。`summary_tests.rs`（784 行）と `generate_tests.rs`（679 行）への追記は各 100 行未満に留める。
