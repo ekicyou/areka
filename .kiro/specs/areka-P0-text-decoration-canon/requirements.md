@@ -1,11 +1,11 @@
 # Requirements Document
 
 ## Project Description (Input)
-さくらスクリプトの文字装飾タグ `\f[...]` のうち、**フォント系 10 項目**（`name`・`height`・`color`・`bold`・`italic`・`underline`・`strike`・`sub`・`sup`・`outline`）と**一括の戻し 2 項目**（`\f[default]`・`\f[disable]`）を、3 つの書字方向（`horizontal_tb`／`vertical_rl`／`vertical_lr`）すべてで ukadoc の定めどおりに効かせる。あわせて、その土台となる**基盤**（解読の腕・装飾を運ぶ命令・文字ごとの属性の配管・既定の見た目と無効表示の見た目の 2 層・`draw.rs` の分割）を建てる。
+さくらスクリプトの文字装飾タグ `\f[...]` のうち、**フォント系 10 項目**（`name`・`height`・`color`・`bold`・`italic`・`underline`・`strike`・`sub`・`sup`・`outline`）のうち **DirectWrite の範囲指定で素直に表せる 7 項目**（`name`・`height`・`color`・`bold`・`italic`・`underline`・`strike`）と**一括の戻し 2 項目**（`\f[default]`・`\f[disable]`）を、3 つの書字方向（`horizontal_tb`／`vertical_rl`／`vertical_lr`）すべてで ukadoc の定めどおりに効かせる。範囲指定で表せない 3 項目（`sub`・`sup`・`outline`）は語彙として受理し表示は変えない（開発者裁定 2026-09-11: DirectWrite で普通に書ける範疇に限り、自前の描画器など逸脱する手段は採らない）。あわせて、その土台となる**基盤**（解読の腕・装飾を運ぶ命令・文字ごとの属性の配管・既定の見た目と無効表示の見た目の 2 層・`draw.rs` の分割）を建てる。
 
 - **困っている人**: 既存の伺かゴースト作者およびその利用者。SSP 向けに `\f[bold,1]` や `\f[color,red]` を使って書かれた台詞が、areka では素の文字で表示される。
 - **現状**: `\f[...]` は 43 項目のうち **1 項目も解読されていない**。字句解析は通るが、解読の分岐に `"f"` の腕が無いため生のまま保持され（`Instruction::Raw`）、台本を組み立てる段階で「対象外のタグ」として記録だけ残して捨てられる。文字ごとの属性を持つ場所も無く（グリフは文字 1 つだけを持つ）、フォントはバルーン全体で 1 つ、太さと斜体は常に標準に固定されている。
-- **変わるべきこと**: 上記 12 項目が 3 書字方向で正典どおりに効き、`\f[default]`／`\f[disable]` が「何を戻すか」を一か所で定め、それを後続の仕様（`\x` のクリック待ち・選択肢マーカーの装飾）がそのまま使える。残る 31 項目（寄せ 2・影 3・選択肢マーカー 10・アンカー 16）は本仕様が建てる基盤の上に、それぞれの所有仕様が後から乗る。
+- **変わるべきこと**: 上記 7 項目＋戻し 2 項目が 3 書字方向で正典どおりに効き、`sub`・`sup`・`outline` は語彙として受理され、`\f[default]`／`\f[disable]` が「何を戻すか」を一か所で定め、それを後続の仕様（`\x` のクリック待ち・選択肢マーカーの装飾）がそのまま使える。残る 31 項目（寄せ 2・影 3・選択肢マーカー 10・アンカー 16）は本仕様が建てる基盤の上に、それぞれの所有仕様が後から乗る。
 
 ---
 
@@ -15,9 +15,9 @@
 
 不足しているのは語彙よりも**土台**である。文字レンダリング層（`crates/areka-emo-text`）は、追記される 1 文字（`TextItem::Glyph { ch }`）・配置済みの 1 文字（`PositionedGlyph`）・行のグリフ列（`GlyphRunContent`）のいずれも文字以外の属性を持たず、フォントは balloon 定義から 1 つだけ解決され（`ResolvedFont`）、DirectWrite の書式も 1 本で、太さ・斜体は標準固定である。文字装飾の予約型 `TextEffects` はフィールドが 0 個の空の型、`disable.font.*` の予約 `FontDisableSeam` も同様で、「格納はされるが読まれない」。
 
-本仕様は、2026-09-11 の棚卸しで 3 分割された `\f` 装飾仕様群の**先頭**（基盤＋フォント系 10 項目＋一括の戻し 2 項目）である。寄せ 2 項目と影 3 項目は `areka-P0-text-align-shadow-canon`、バルーン定義 `font.*` 13 キーの読み取りは `areka-P0-balloon-font-descript-keys` が持つ。本仕様は `crates/areka-parsers/src/balloon/parse.rs` に**触れない**——既定の見た目は、いま読めている 5 キー（`font.name`・`font.height`・`font.color.r/g/b`）だけから組む。
+本仕様は、2026-09-11 の棚卸しで 3 分割された `\f` 装飾仕様群の**先頭**（基盤＋フォント系 10 項目＋一括の戻し 2 項目）である。**描画の手段は DirectWrite の標準機能（`IDWriteTextLayout` の範囲指定と `DrawTextLayout`）に限る**（開発者裁定 2026-09-11）。範囲指定で表せない上下付き（基線のずらし）と白抜き（輪郭だけの描画）は本仕様では表示を変えず、語彙として受理するにとどめる。寄せ 2 項目と影 3 項目は `areka-P0-text-align-shadow-canon`、バルーン定義 `font.*` 13 キーの読み取りは `areka-P0-balloon-font-descript-keys` が持つ。本仕様は `crates/areka-parsers/src/balloon/parse.rs` に**触れない**——既定の見た目は、いま読めている 5 キー（`font.name`・`font.height`・`font.color.r/g/b`）だけから組む。
 
-意味論は ukadoc から輸入する（SSP の実測は行わない・開発者方針 2026-09-05）。縦書きでの写像（下線は列の右側、など）は完了仕様 `areka-P0-balloon-vertical-canon` の裁定を継承し、再審議しない。`font.height` は em の大きさとして DirectWrite へそのまま渡し、行送りの式は `crates/areka-emo-text/src/state.rs` の `TextLayerConfig::line_pitch` の 1 点にある（完了仕様 `areka-P0-emo-text-line-height-canon` の裁定）——`\f[height]` もこの 1 点を通る。
+意味論は ukadoc から輸入する（SSP の実測は行わない・開発者方針 2026-09-05）。縦書きでの写像（下線は列の右側、など）は完了仕様 `areka-P0-balloon-vertical-canon` の裁定を継承し、再審議しない——ただし線を引く位置は DirectWrite の既定に委ねるので、裁定は「期待値」として実測で照合し、食い違えば §8 に登記する（areka 側で線の位置を自前で描き分けることはしない）。`font.height` は em の大きさとして DirectWrite へそのまま渡し、行送りの式は `crates/areka-emo-text/src/state.rs` の `TextLayerConfig::line_pitch` の 1 点にある（完了仕様 `areka-P0-emo-text-line-height-canon` の裁定）——`\f[height]` もこの 1 点を通る。
 
 **着手の前提**: 1 ファイル 1,000 行の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs`・例外表 11 件・例外表は増やさない）に対し、`crates/areka-emo-text/src/draw.rs` は **988 行**（残り 12 行）、`layout.rs` 955・`actor.rs` 952・`region.rs` 951 も射程にある。本仕様の最初の作業は `draw.rs` の分割であり、既存ファイルへ足す変更は新しいファイルへ置く。
 
@@ -27,13 +27,13 @@
 
 - **In scope（利用者から見える範囲）**
   - `\f[...]` 全 43 形の**受理と転写**（解読の腕・装飾を運ぶ命令）。本仕様が意味を与えるのは下の 12 項目で、残りは「語彙として受理するが表示は変えない」状態に置き、所有仕様が後から消費者を足せる形にする。
-  - フォント系 10 項目: `name`・`height`・`color`・`bold`・`italic`・`underline`・`strike`・`sub`・`sup`・`outline`。
+  - フォント系 10 項目のうち表示に効く 7 項目: `name`・`height`・`color`・`bold`・`italic`・`underline`・`strike`。残る 3 項目（`sub`・`sup`・`outline`）は語彙として受理し表示は変えない（受理・6 値の解釈・戻しへの参加まで）。
   - 一括の戻し 2 項目: `\f[default]`・`\f[disable]`。および「`\f` の状態の何が・いつ戻るか」の権威定義（後続仕様が消費する）。
   - 既定の見た目（バルーン定義から読めている 5 キー）と、無効表示の見た目（`disable.font.*` に相当する第 2 の既定層）の 2 層。
   - 文字ごとの属性の配管（追記→配置→行のグリフ列→描画）と、属性に応じた送り幅の計測・折返し。
   - 3 書字方向での写像（`areka-P0-balloon-vertical-canon` の裁定を継承）。
   - `draw.rs` の分割と、1,000 行の見張りを緑に保ったままの実装。
-  - 3 書字方向 × 12 項目 × 戻しの経路の決定論テスト。
+  - 3 書字方向 × 7 項目 × 戻しの経路の決定論テスト（語彙のみの 3 項目は状態の遷移だけを固定）。
   - 正典文書（`doc/COMPAT_ARCHITECTURE.md` §8）・網羅調査の台帳・コード内の予約名の注記の追随。
 
 - **Out of scope（本仕様が持たない範囲）**
@@ -44,6 +44,8 @@
   - `TextEffects` の予約名のうち `multicolor`・`rotation`（M2 の予約のまま残す）。`shadow` は影 3 項目の所有仕様が実体化する。
   - 行末禁則のぶら下がり・`writing_mode` の警告文言・縦書き字形の観測（`areka-P0-emo-text-canon-residue`）。
   - `\f[name]` のフォントファイル（`.ttf`／`.otf`／`.ttc`）の読み込み（開発者裁定 2026-09-11・実装しない。ファイル名の候補は読み飛ばして次の候補へ進む）。
+  - `sub`・`sup`・`outline` の表示（開発者裁定 2026-09-11・DirectWrite の範囲指定で表せず、自前の描画器を要するため実装しない。語彙として受理し `TextEffects` の予約と同列に M2 予約へ置く）。
+  - DirectWrite の標準機能から逸脱する描画手段（`IDWriteTextRenderer`／`IDWriteInlineObject` の自前実装・グリフ輪郭の取り出し・run ごとの別レイアウト）。
   - `sstpmessage.font.*`／`number.font.*`／`communicatebox.font.*` 等の接頭辞付き font 族（各機能の仕様が解禁時に本基盤へ乗る）。
 
 - **Adjacent expectations（隣接する仕様・運用への期待）**
@@ -96,7 +98,7 @@
 4. While 文字が 1 文字ずつ現れる途中（リビール中）でも, when `\f` の命令が届いたとき, the system shall それ以降に現れる文字へ即時に適用し、文字の現れる時刻・間隔を変えない。
 5. When 選択肢（`\q`）の表示文字列が追記されるとき, the system shall そのときの装飾状態を選択肢の文字にも与える。ただし選択肢の hover 表示（文字色の差し替えと帯の塗り）は既存の規則が優先し、装飾は hover の判定と当たり判定を変えない。
 6. The system shall 1 行の中で装飾の異なる文字が混在しても、各文字を自分の装飾で描く（行を装飾ごとの連続区間＝run に分けて描き分ける）。
-7. When `\n`・`\n[...]`・`\_l`・`\c` が現れたとき, the system shall フォント系 10 項目の装飾状態を**保持**する（これらは装飾を戻さない。`\_l` が戻すのは寄せだけ——所有は `areka-P0-text-align-shadow-canon`）。
+7. When `\n`・`\n[...]`・`\_l`・`\c` が現れたとき, the system shall フォント系の装飾状態を**保持**する（これらは装飾を戻さない。`\_l` が戻すのは寄せだけ——所有は `areka-P0-text-align-shadow-canon`）。
 8. When 台詞の再生が始まるとき（新しい台本の先頭）, the system shall 全スコープの装飾状態を既定の見た目へ戻す（装飾は台詞をまたいで残らない。根拠は ukadoc `\x` の項「`\e` で解除されるさくらスクリプトは継続」＝`\f` の効果は台詞の終わりで消える側に属する）。
 9. The system shall 装飾状態の更新と文字への適用を、GPU や COM に依存しない純粋な層（`state.rs`・`layout.rs` の兄弟）で行い、決定論テストが描画なしで観測できる形にする。
 
@@ -114,33 +116,30 @@
 7. The system shall 無効表示の見た目にも「バルーン定義から与える口」を用意する（`disable.font.*` が読めるようになったとき、キーごとに上書きできる）。
 8. The system shall バルーン定義の値が既定の見た目・無効表示の見た目に反映されるかを、バルーン定義の有無 × 各項目で決定論テストに固定する。
 
-### Requirement 5: 真偽値で切り替える 5 項目——`bold`・`italic`・`underline`・`strike`・`outline`
+### Requirement 5: 真偽値で切り替える 4 項目——`bold`・`italic`・`underline`・`strike`
 
-**Objective:** As a 既存ゴーストのスクリプト作者, I want `\f[bold,1]` など 5 項目の on/off が ukadoc の 6 値で効くこと, so that SSP 向けの台詞がそのまま太字・斜体・下線・打ち消し線・白抜きになる
+**Objective:** As a 既存ゴーストのスクリプト作者, I want `\f[bold,1]` など 4 項目の on/off が ukadoc の 6 値で効くこと, so that SSP 向けの台詞がそのまま太字・斜体・下線・打ち消し線になる
 
 #### Acceptance Criteria
-1. When `\f[bold,値]`・`\f[italic,値]`・`\f[underline,値]`・`\f[strike,値]`・`\f[outline,値]` の値が `true` または `1` のとき, the system shall 以降の文字に当該の装飾を付ける（ukadoc: 「パラメータに true または 1 を指定すると太字」「…イタリック(斜体)」「…下線を引きます」「…打ち消し線」「…白抜き」）。
+1. When `\f[bold,値]`・`\f[italic,値]`・`\f[underline,値]`・`\f[strike,値]` の値が `true` または `1` のとき, the system shall 以降の文字に当該の装飾を DirectWrite の範囲指定（`SetFontWeight`／`SetFontStyle`／`SetUnderline`／`SetStrikethrough`）で付ける（ukadoc: 「パラメータに true または 1 を指定すると太字」「…イタリック(斜体)」「…下線を引きます」「…打ち消し線」）。
 2. When 値が `false` または `0` のとき, the system shall 以降の文字から当該の装飾を外す（ukadoc: 「パラメータに false または 0 を指定すると無効」）。
 3. When 値が `default` のとき, the system shall 当該の項目だけを既定の見た目（Requirement 4）へ戻す（ukadoc: 「default を指定するとバルーン設定の標準に戻る」）。他の項目は変えない。
 4. When 値が `disable` のとき, the system shall 当該の項目だけを無効表示の見た目（Requirement 4）へ合わせる（ukadoc: 「disable を指定すると無効表示と同じ設定になる」）。他の項目は変えない。
 5. If 値が上記 6 値（`true`／`1`／`false`／`0`／`default`／`disable`）のいずれでもない、または値が無いとき, the system shall 当該の項目を変えず `warn` の記録（キーと値を含む）を残す。
 6. The system shall 太字・斜体を「フォントに太字・斜体の書体があればそれを使い、無ければ文字描画基盤の合成に委ねる」形で描き、書体が無いことを致命扱いしない（ukadoc: 「フォントが対応していない場合、太字にならない」「…斜体にならない」）。
-7. The system shall 下線を、横書きでは文字の下、縦書き（`vertical_rl`／`vertical_lr`）では**列の右側**に引く（完了仕様 `areka-P0-balloon-vertical-canon` の裁定を継承・再審議しない）。
-8. The system shall 打ち消し線を、横書きでは文字の中央を横切る線、縦書きでは列の中央を縦に通る線として引く。
-9. The system shall 白抜き（`outline`）を、文字の輪郭だけを現在の文字色で描き、内側を塗らない表示として描く（内側にはバルーンの背景がそのまま見える）。既存の予約名 `outline`（`canvas.rs` の `RESERVED_EFFECT_OUTLINE`）はこの実体へ置き換え、`TextEffects` の「フィールド 0 個の予約型」を残さない。
-10. The system shall 5 項目を組み合わせて同時に付けられる（例: 太字かつ下線かつ白抜き）。
+7. The system shall 下線と打ち消し線の位置（横書きでは文字の下／中央、縦書きではどちらの側か）を DirectWrite の既定に委ね、areka 側で線を描き分けない。縦書きの期待値は完了仕様 `areka-P0-balloon-vertical-canon` の裁定（下線は**列の右側**）で、実測の結果を §8 に登記する（一致すれば「DirectWrite の既定で裁定を満たす」、食い違えば「DirectWrite の既定を採り裁定は期待値として残す」の 1 行）。裁定そのものは再審議しない。
+8. The system shall 4 項目を組み合わせて同時に付けられる（例: 太字かつ下線）。
+9. When `\f[outline,値]` が届いたとき, the system shall 値を 6 値の規則（5.1〜5.5）で解釈して装飾状態に保持し、表示は変えず、`warn` の記録を 1 台詞につき 1 度残す（白抜きは DirectWrite の範囲指定で表せず、自前の描画器を要するため本仕様では実装しない・開発者裁定 2026-09-11）。既存の予約名 `outline`（`canvas.rs` の `RESERVED_EFFECT_OUTLINE`）は M2 予約のまま残す。
 
-### Requirement 6: 上付き・下付き——`sub`・`sup`
+### Requirement 6: 上付き・下付き——`sub`・`sup`（語彙のみ）
 
-**Objective:** As a 既存ゴーストのスクリプト作者, I want `\f[sub,1]`／`\f[sup,1]` で文字が小さく下（上）にずれること, so that 化学式や注釈の表現が台詞のとおりに見える
+**Objective:** As a 後続の実装者, I want `\f[sub]`／`\f[sup]` が捨てられずに状態として届いていること, so that 将来 DirectWrite の標準機能の範囲で表せる手段が見つかったときに受理と解釈を作り直さずに済む
 
 #### Acceptance Criteria
-1. When `\f[sub,値]`／`\f[sup,値]` の値が `true` または `1` のとき, the system shall 以降の文字を「現在の高さより小さく、行の下側（`sub`）／上側（`sup`）へずらして」描く（ukadoc: 「下付き文字」「上付き文字」）。
-2. The system shall `sub`・`sup` の値の扱い（`true`／`1`／`false`／`0`／`default`／`disable`・それ以外は `warn` で不変）を Requirement 5 と同じ規則にする。
-3. When `sub` と `sup` の両方が有効になったとき, the system shall 後から指定した方を採り、先の方を自動的に外す（同時には成り立たない）。
-4. The system shall 縮小の比率とずらし量を 1 か所の定数で定め（areka の裁量として §8 に登記）、行送りは変えない（上下付きの文字が行の丈を押し広げない）。
-5. The system shall 縦書きでは「下側」を**列の右側**（下線と同じ側）、「上側」を列の左側と読み替える（areka の裁量として §8 に登記・下線の写像と同じ回転を適用する）。
-6. The system shall 上下付きの文字の送り幅を縮小後の大きさで計測し、折返しと当たり判定に反映する。
+1. When `\f[sub,値]`／`\f[sup,値]` が届いたとき, the system shall 値を Requirement 5 と同じ 6 値の規則で解釈して装飾状態に保持し、表示（大きさ・位置・送り幅）は変えない（ukadoc: 「下付き文字」「上付き文字」。基線のずらしは DirectWrite の範囲指定で表せず、自前の描画器か `IDWriteInlineObject` の自前実装を要するため本仕様では実装しない・開発者裁定 2026-09-11）。
+2. When `sub` と `sup` の両方が有効になったとき, the system shall 後から指定した方を採り、先の方を自動的に外す（状態としての排他だけを定める）。
+3. The system shall `sub`・`sup` が有効な間に文字が追記されたとき、`warn` の記録を 1 台詞につき 1 度残す（利用者が「効かない」原因をログから追える）。
+4. The system shall `sub`・`sup` の状態を「戻す操作」（Requirement 10）の対象に含める。
 
 ### Requirement 7: 文字の大きさ——`height`
 
@@ -206,7 +205,7 @@
 **Objective:** As a 利用者, I want 装飾で文字の幅が変わっても折返し位置と当たり判定がずれないこと, so that 太字や大きい文字を含む行が欠けたり重なったりしない
 
 #### Acceptance Criteria
-1. The system shall 各文字の送り幅を、その文字に効く装飾（フォント名・大きさ・太字・斜体・上下付き）で計測する（現行の「文字 1 つ→送り幅 1 つ」の記憶は装飾込みの鍵へ改める）。
+1. The system shall 各文字の送り幅を、その文字に効く装飾（フォント名・大きさ・太字・斜体）で計測する（現行の「文字 1 つ→送り幅 1 つ」の記憶は装飾込みの鍵へ改める）。
 2. The system shall 折返し（折返し基準 soft／描画範囲 hard の二段構え・完了仕様 `areka-P0-emo-text-line-height-canon` で確定）を装飾込みの送り幅で判定し、二段構えの意味論そのものは変えない。
 3. The system shall 計測に使う書式と描画に使う書式を同じ経路で作り、装飾を含めても「計測した送り幅＝描画した送り幅」の一致が崩れない（既存の一致テストを装飾ありの行へ拡張する）。
 4. The system shall 行の描画結果の再利用（行ごとの記憶）を、行の文字列だけでなく行内の装飾が同じときに限る（装飾だけが変わった行を古い見た目のまま再利用しない）。
@@ -217,10 +216,10 @@
 **Objective:** As a 縦書きバルーンの利用者, I want 装飾が縦書きでも意味を保つこと, so that 横書きと同じ台詞が縦書きでも装飾のとおりに見える
 
 #### Acceptance Criteria
-1. The system shall `name`・`height`・`color`・`bold`・`italic`・`outline` を書字方向によらず同じ意味で効かせる。
-2. The system shall 下線を縦書きで列の右側、打ち消し線を列の中央、上下付きの「下」を列の右側とする（Requirement 5.7・5.8・6.5。下線は完了仕様 `areka-P0-balloon-vertical-canon` の裁定を継承し再審議しない。打ち消し線と上下付きは areka の裁量として §8 に登記）。
+1. The system shall `name`・`height`・`color`・`bold`・`italic` を書字方向によらず同じ意味で効かせる。
+2. The system shall 縦書きの下線・打ち消し線の位置を DirectWrite の既定に委ね（Requirement 5.7）、実測した位置と完了仕様 `areka-P0-balloon-vertical-canon` の裁定（下線は列の右側）との照合結果を §8 に登記する。
 3. The system shall `vertical_rl` と `vertical_lr` で装飾の見た目を変えない（列送りの向きが違うだけで、列の中での装飾の位置は同じ）。
-4. The system shall 縦書きの装飾の位置（下線・打ち消し線の側と位置）を、オフスクリーンの描画結果の読み戻しで観測する決定論テストに固定する。
+4. The system shall 縦書きの装飾の位置（下線・打ち消し線の側と位置）を、オフスクリーンの描画結果の読み戻しで観測する決定論テストに固定する（述語は「DirectWrite の既定で今日引かれた側」＝値が変われば赤になる形。裁定との一致を要求する述語にはしない）。
 
 ### Requirement 13: 失敗時の扱いと記録
 
@@ -250,8 +249,8 @@
 #### Acceptance Criteria
 1. The system shall 解読（`\f` 43 形の受理・引数の保持・不正形の扱い）を `decode.rs` の兄弟テストで固定する。
 2. The system shall 台本の組み立て（`\f` が再生時間 0 で並び順を保つこと・`\f` なし台本の不変）を `compile.rs` の兄弟テストで固定する。
-3. The system shall 装飾状態の更新（12 項目 × 6 値・`+N`/`-N`/`N%`・色の各書式・スコープ独立・戻す操作・台詞開始の戻し・`\c`/`\n`/`\_l` で戻らないこと）を、描画なしの純粋な層の決定論テストで固定する。
-4. The system shall 3 書字方向 × 10 項目の描画結果を、オフスクリーンの描画結果の読み戻しで観測するテストで固定する（太字・斜体・下線・打ち消し線・白抜き・色・大きさ・上下付き・フォント名の切り替えが、それぞれ「効いていない場合と画素が違う」ことと、下線・打ち消し線の側と位置が正典どおりであることを述語にする）。
+3. The system shall 装飾状態の更新（12 項目 × 6 値〔語彙のみの 3 項目を含む〕・`+N`/`-N`/`N%`・色の各書式・スコープ独立・戻す操作・台詞開始の戻し・`\c`/`\n`/`\_l` で戻らないこと）を、描画なしの純粋な層の決定論テストで固定する。
+4. The system shall 3 書字方向 × 7 項目の描画結果を、オフスクリーンの描画結果の読み戻しで観測するテストで固定する（太字・斜体・下線・打ち消し線・色・大きさ・フォント名の切り替えが、それぞれ「効いていない場合と画素が違う」ことと、下線・打ち消し線の側と位置が今日の DirectWrite の既定と同じであることを述語にする）。語彙のみの 3 項目（`sub`・`sup`・`outline`）は「有効にしても画素が変わらない」ことを述語にする。
 5. The system shall 装飾込みの送り幅の計測と描画の一致・折返し位置・当たり判定の範囲を決定論テストで固定する。
 6. The system shall 既定の見た目・無効表示の見た目が「バルーン定義の有無 × 各項目」で正しく組まれることを決定論テストで固定する。
 7. The system shall テストの各述語が「過去に壊れていた形」を再現すると赤になることを、少なくとも各要件 1 件の較正で確かめる（何が起きても緑になるテストを作らない）。
@@ -262,12 +261,12 @@
 **Objective:** As a 後続仕様の担当者, I want 本仕様の裁定と着地が正典文書と台帳に写っていること, so that 次の仕様が古い記述を前提にしない
 
 #### Acceptance Criteria
-1. The system shall areka の裁量で決めた各点（相対指定の基準・百分率の基準・スタイルシートのキーワードの見送り・フォントファイルの読み込みの見送り・`height,disable`・上下付きの比率とずらし量と縦書きの側・打ち消し線の縦書きの位置・無効表示の色の混ぜ方・行の高さの決め方・戻す操作の対象と時期・台詞開始の戻し）を `doc/COMPAT_ARCHITECTURE.md` §8 に、項目・裁量・根拠（ukadoc の逐語引用と URL）・出典 spec の 4 欄で登記する。
+1. The system shall areka の裁量で決めた各点（相対指定の基準・百分率の基準・スタイルシートのキーワードの見送り・フォントファイルの読み込みの見送り・`height,disable`・`sub`／`sup`／`outline` の見送り（語彙のみ）・縦書きの下線・打ち消し線の位置を DirectWrite の既定に委ねる裁定と実測結果・無効表示の色の混ぜ方・行の高さの決め方・戻す操作の対象と時期・台詞開始の戻し）を `doc/COMPAT_ARCHITECTURE.md` §8 に、項目・裁量・根拠（ukadoc の逐語引用と URL）・出典 spec の 4 欄で登記する。
 2. The system shall `doc/COMPAT_ARCHITECTURE.md` §8 の「`\f[align]`／`\f[valign]`／下線の縦書き写像」の行にある「areka は align／valign を全書字方向でまだ実装していない…本登記は現在の表示結果を変えない」の注記を、下線が実装済みであること・align／valign の追跡先が `areka-P0-text-align-shadow-canon` であることに合わせて改訂する。同じ表で本仕様を「`\f` 核 17 項目の所有者」として追跡先に挙げている箇所（同行の追跡先欄と、「`\_l` の縦書き座標系の正典写像」の行にある疑義 SC8 の追跡先）も、2026-09-11 の 3 分割後の所有（本仕様＝基盤＋フォント系 10＋一括の戻し 2・SC8 と寄せは `areka-P0-text-align-shadow-canon`）に合わせて改訂する。
-3. The system shall `doc/ukadoc-coverage/ledger/sakura-script.toml` の本仕様 12 項目の `status` を実装後の状態（`implemented`・スタイルシートのキーワードのみ `vocabulary-only` の注記付き）へ更新し、`doc/ukadoc-coverage/ledger/assets.toml` の `disable.font.(フォント定義),(指定)` の行を無効表示の層が実体化したことに合わせて更新する。
-4. The system shall `crates/areka-emo-text/src/canvas.rs`・分割後の `draw.rs` 群の予約名の注記（`TextEffects`・`FontDisableSeam`・`RESERVED_EFFECT_*`・「M1 では実挙動を一切実装しない」）を、`outline` と `disable` が実体化したこと・`shadow` は `areka-P0-text-align-shadow-canon`・`multicolor`／`rotation` は M2 予約のままであることに合わせて改訂する。あわせて、予約型が空であることを固定している既存テスト（`draw_format_metrics_tests.rs` の `decoration_and_disable_seams_are_type_only`＝`size_of` が 0 であることの検査）を、実体化した内容を述べる述語へ改訂する。この改訂は実体化の段階で行い、Requirement 1.5 の「分割の段階では既存テストを変更しない」とは段階が異なる（分割と実体化を別の作業に分ける理由）。
+3. The system shall `doc/ukadoc-coverage/ledger/sakura-script.toml` の本仕様 12 項目の `status` を実装後の状態（7 項目＋戻し 2 項目は `implemented`〔`name` はフォントファイル読み飛ばし・`height` はスタイルシートのキーワードのみ注記付き〕・`sub`／`sup`／`outline` は `vocabulary-only`）へ更新し、`doc/ukadoc-coverage/ledger/assets.toml` の `disable.font.(フォント定義),(指定)` の行を無効表示の層が実体化したことに合わせて更新する。
+4. The system shall `crates/areka-emo-text/src/canvas.rs`・分割後の `draw.rs` 群の予約名の注記（`TextEffects`・`FontDisableSeam`・`RESERVED_EFFECT_*`・「M1 では実挙動を一切実装しない」）を、`disable` が実体化したこと・`outline`（および `sub`／`sup`）は本仕様が語彙のみで見送り M2 予約に加えたこと・`shadow` は `areka-P0-text-align-shadow-canon`・`multicolor`／`rotation` は M2 予約のままであることに合わせて改訂する。あわせて、予約型が空であることを固定している既存テスト（`draw_format_metrics_tests.rs` の `decoration_and_disable_seams_are_type_only`＝`size_of` が 0 であることの検査）を、実体化した内容を述べる述語へ改訂する。この改訂は実体化の段階で行い、Requirement 1.5 の「分割の段階では既存テストを変更しない」とは段階が異なる（分割と実体化を別の作業に分ける理由）。
 5. The system shall 分割後の新ファイルと接続を steering `structure.md` の該当節へ反映する。
-6. The system shall 本仕様が消費者を足さなかった語彙（寄せ 2・影 3・`cursor*`・`anchor*`・`default.anchor*`・スタイルシートのキーワード）の追跡先を、それぞれの所有仕様の brief に 1 行ずつ相互登記する。
+6. The system shall 本仕様が消費者を足さなかった語彙（寄せ 2・影 3・`cursor*`・`anchor*`・`default.anchor*`・スタイルシートのキーワード）の追跡先を、それぞれの所有仕様の brief に 1 行ずつ相互登記する。`sub`・`sup`・`outline` は所有仕様が無いため、steering `roadmap.md` の M2 予約（`TextEffects` 予約名 `rotation`／`multicolor` の並び）に「DirectWrite の標準機能で表せる手段が見つかるまで語彙のみ」と 1 行で登記し、台帳の `status` は `vocabulary-only` にする。
 7. The system shall 文書の主張（file:line・行数・件数）を書く前に実測で裏取りし、行番号でなく「何の定義行か」で指す。
 
 ---

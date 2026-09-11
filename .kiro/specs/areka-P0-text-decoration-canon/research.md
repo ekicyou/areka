@@ -8,11 +8,12 @@
 ## 0. 要約
 
 - **土台が丸ごと無い、というより「置き場所はあるが中身が空」**である。解読（`decode_tag`）に `"f"` の腕が無く、台本の組み立て（`compile`）の catch-all が捨てる。文字レンダリング層は 3 層（追記・配置・行）とも文字以外の属性を持たず、フォントは 1 本の `IDWriteTextFormat`、太さ・斜体は固定、`TextEffects`／`FontDisableSeam` は空の型である。**一方で、置き換え先の型・関数・テスト基盤はすべて実在し、どこへ何を足すかは一意に近い**。
+- **（2026-09-11 要件ディスカッションで確定）描画は DirectWrite の標準機能＝範囲指定＋`DrawTextLayout` に限る（開発者裁定・D3 案 A）。自前描画器は却下、`sub`／`sup`／`outline` は語彙のみ、縦書きの線の側は DirectWrite の既定に委ねる。** 以下の段落は裁定前の分析として残す。
 - **最重要の設計判断は「文字ごとの装飾を DirectWrite でどう描くか」**である。太さ・斜体・大きさ・フォント名・下線・打ち消し線は `IDWriteTextLayout` の範囲指定（`DWRITE_TEXT_RANGE`）で 1 行 1 レイアウトのまま表せる（既存の hover 文字色が同じ経路）。しかし **上下付き（基線のずらし）と白抜き（輪郭だけ描く）は範囲指定では表せない**。自前の描画器（`IDWriteTextRenderer` の COM 実装）を持つか、run ごとにレイアウトを分けるかの選択が、実装量と縦書きの制御性を決める。
 - **変更の波及を抑える鍵は「型に足すか、横に持つか」**。`TextItem::Glyph { ch }` の構築箇所は 182 か所・25 ファイル（大半がテスト）なので、この variant にフィールドを足すと機械的な書き換えが大量に出る。配置済みの 1 文字 `PositionedGlyph`（7 か所）・行 `GlyphRunContent`（6 か所）は安い。装飾の運搬も、既存の汎用キャリア `CueCommand::Custom` に乗せれば dola と 20 余りの網羅 match（他 crate を含む）に触れずに済む。
 - **既定の見た目と無効表示の見た目の 2 層は `ResolvedFont` の置き換えで立つ**が、無効表示の色を「バルーンの背景色の側へ寄せる」ための**背景色の源が文字レンダリング層に届いていない**（届くのは寸法と倍率だけ）。フォントファイルの探索先（バルーンのフォルダ・`ghost/master`）も同様に届いていない。どちらも上流（`crates/areka/src/emo2_boot`）に値はあり、渡す口を 1 つ足せばよい。
 - **着手条件の分割**（`draw.rs` 988 行）は、テーマ 3 つ（フォント解決・計測・行レイアウトの記憶）を兄弟ファイルへ出せば本体が約 350 行に落ち、公開の入口は `draw.rs` からの再輸出で不変にできる。`layout.rs`（955）は本仕様の変更で 20〜40 行増える見込みなので、先に自己完結した塊を 1 つ兄弟ファイルへ出しておくのが安全である。
-- 規模の見立て: **L**（要件どおり）。リスク: **中**（DirectWrite の自前描画器と縦書きでの装飾位置の実測が未知数・それ以外は既存の型と経路の延長）。
+- 規模の見立て: 裁定前 **L** → 裁定後 **M**（自前描画器約 300 行とフォントファイル読み込みが消えた）。リスク: **低〜中**（縦書きでの DirectWrite の線の側は実測で登記するだけ・残りは既存の型と経路の延長）。
 
 ---
 
@@ -155,11 +156,11 @@
 | **B. 1 行 1 レイアウト＋範囲指定＋自前描画器（`IDWriteTextRenderer` の COM 実装）** | 太さ・斜体・大きさ・フォント名・下線・打ち消し線の**有無**は範囲指定で焼き（字形と送り幅は DirectWrite が正しく出す）、描画は `layout.Draw(renderer)` で自前描画器へ。`DrawGlyphRun` で run ごとに色・基線のずらし（上下付き）・白抜き（`GetGlyphRunOutline` → `ID2D1PathGeometry` → `DrawGeometry` で輪郭だけ描く）を処理し、`DrawUnderline`／`DrawStrikethrough` で**線の側と位置を自分で決める**（縦書きで列の右側／中央を保証できる） | 10 項目すべてを 1 つの経路で満たす。縦書きの側が裁定どおりになることを構造で保証。run の切り分けは `clientDrawingEffect`（`SetDrawingEffect` に渡す自前の小さな COM 物）で受け取れる | `#[implement(IDWriteTextRenderer)]`（`IDWritePixelSnapping` の 3 メソッド＋`DrawGlyphRun`／`DrawUnderline`／`DrawStrikethrough`／`DrawInlineObject`）を新規に書く（見積 250〜350 行・新ファイル 1 本）。`DrawTextLayout` と画素が同一になる保証は無い→**装飾の無い行は従来の `DrawTextLayout` のまま**にする分岐が要る（D4） |
 | **C. run ごとに別レイアウト** | 行を run に割り、run ごとに `IDWriteTextFormat`（名前・大きさ・太さ・斜体）でレイアウトを作り、原点を行内位置でずらして描く。上下付きは原点のブロック軸ずらしで済む | 自前描画器が不要。`LineLayoutStore` を「run ストア」に読み替えるだけ | 白抜きは結局 `GetGlyphRunOutline` が要る（＝自前描画器か、透明ブラシで中を抜く小細工）。行内で run が変わるたびにカーニング・シェーピングが切れる（和文では実害小）。下線・打ち消し線は DirectWrite 任せ（縦書きの側は未実測のまま）。行の `overhang` 計測・指紋・ダーティ矩形が run 単位に分裂し、`viewbox` 側の変更が広がる |
 
-**推奨**: **B**。理由: ⑴ 白抜きと上下付きは A では不可能、C でも白抜きに描画器相当が要る ⑵ 縦書きの下線の側は裁定済みで再審議しないため、DirectWrite の既定に委ねる A/C は「実測して合わなければ結局 B」になる ⑶ 装飾の無い行を従来経路に残せば R14 が構造で守れる。**答えで作業が大きく変わる**論点だが、要件（白抜き・上下付き・縦書きの側）が事実上 B を指定している。開発者へは「B を採る・DirectWrite 描画器の自前実装が本仕様の最大の新規部品になる」ことを報告し、規模の合意だけ取る。
+**分析時の推奨は B** だったが、**開発者裁定（2026-09-11・要件ディスカッション）で A を採る**——「DirectWrite で普通に書ける範疇でよい。逸脱しないといけないやり方はリジェクト」。帰結: `sub`／`sup`／`outline` は語彙のみ（要件 5.9・6）、縦書きの下線・打ち消し線の側は DirectWrite の既定に委ねて実測結果を §8 に登記（要件 5.7・12.2）、装飾の有無で描画経路を分ける必要が無い（D4 は消滅・全行が従来どおり `DrawTextLayout`）。
 
-補足（B の中の小さな選択）: run の属性は `SetDrawingEffect` に渡す小さな COM 物（`#[implement(IUnknown)]` に `StyleId` を持たせる）で描画器に届ける。色ブラシを直接渡す既存 hover 経路と同居できる（hover 範囲は run の効果の上に重ねて後勝ち）。
+補足（A での色の扱い）: 色は既存 hover 経路と同じく `SetDrawingEffect` にブラシを渡す（run 範囲 → hover 範囲の順で後勝ち）。ブラシは色ごとに作って記憶する。
 
-### D4. 装飾の無い行の描画経路（R14.2）
+### D4. 装飾の無い行の描画経路（R14.2）——A の採用で消滅（全行が `DrawTextLayout`・分岐不要）
 
 - **a. 装飾の有無で分岐**: 行に既定以外の run が 1 つも無ければ従来どおり `DrawTextLayout`、あれば `layout.Draw(自前描画器)`。→ 既定だけの行は 1 バイトも変わらない（オラクル比較・PNG 比較が変更なしで緑）。
 - b. 常に自前描画器: 経路が 1 本になるが、既存の画素同一性テストを描画器の同一性で再証明する必要がある。
@@ -231,9 +232,9 @@
 - **B（新設のみ）**: 不可。解読の腕・`compile` の腕・`state.rs` の腕・`layout_inner` の行高さ・`viewbox_draw.rs` の効果適用は既存関数の中の変更である。
 - **C（併用・推奨）**:
   1. `draw.rs` をテーマ別に兄弟ファイルへ分割（既存関数は移動のみ・テスト無変更）。
-  2. 新設: `look.rs`（見た目の型・2 層・`\f` の値の状態機械・戻す操作）、`color.rs`（色の解析）、`draw_font.rs`／`draw_metrics.rs`／`draw_line_store.rs`（分割先）、`draw_renderer.rs`（`IDWriteTextRenderer` の実装）、各兄弟テスト。
+  2. 新設: `look.rs`（見た目の型・2 層・`\f` の値の状態機械・戻す操作）、`color.rs`（色の解析）、`draw_font.rs`／`draw_metrics.rs`／`draw_line_store.rs`（分割先）、各兄弟テスト。
   3. 既存の腕の追加: `decode_tag`・`compile`・`state.rs::apply_cue`・`actor.rs::apply_cue`（no-catch-all 規律で `Custom` の腕は既にある）・`viewbox_draw.rs` の資源確定区間（run の効果適用）・`layout_inner`（行高さ）・`line_fingerprint`（装飾の要約）。
-  4. 段階: ⑴ 分割 → ⑵ 解読・転写・状態機械（純粋層・描画なしで決定論テストが緑に）→ ⑶ 計測の鍵と行高さ → ⑷ 範囲指定で描ける 6 項目（太さ・斜体・大きさ・フォント名・下線・打ち消し線＝横書き）→ ⑸ 自前描画器（色・上下付き・白抜き・縦書きの線の側）→ ⑹ 2 層と戻し・記録 → ⑺ フォントファイル → ⑻ 文書・台帳。
+  4. 段階: ⑴ 分割 → ⑵ 解読・転写・状態機械（純粋層・描画なしで決定論テストが緑に）→ ⑶ 計測の鍵と行高さ → ⑷ 範囲指定で描ける 7 項目（太さ・斜体・大きさ・フォント名・下線・打ち消し線・色）と縦書きの線の側の実測登記 → ⑸ 2 層と戻し・記録（語彙のみ 3 項目の warn 含む）→ ⑹ 文書・台帳。
 
 ---
 
@@ -248,7 +249,7 @@
 
 - 接続は `#[path = "draw_font.rs"] mod font; pub use font::{...};`（`pub(crate)` の `LineLayoutStore` は `pub(crate) use`）。`device_err` は 3 ファイルが使うので `draw.rs` に残し `super::device_err` で辿る（構造 steering の「サブモジュールから見た `super` はファサード自身」の注記どおり）。
 - 兄弟テストの命名規則との衝突確認: 既存 `draw_format_metrics_tests.rs`・`draw_oracle_tests.rs`・`draw_test_support.rs` は最長 stem の規則で `draw` に解決され、新 stem `draw_font`／`draw_metrics`／`draw_line_store` とは衝突しない（`draw_metrics_` で始まる既存テスト名は無い）。
-- 分割後に本仕様が足す描画器（`draw_renderer.rs`）と装飾の効果適用は新ファイルに置く。`viewbox_draw.rs`（852）への追加は run 範囲の焼き込み呼び出し（数十行）に留め、範囲の算出は新ファイルへ。
+- 分割後に本仕様が足す装飾の効果適用（run 範囲の算出と範囲指定の焼き込み）は新ファイルに置く。`viewbox_draw.rs`（852）への追加は run 範囲の焼き込み呼び出し（数十行）に留め、範囲の算出は新ファイルへ。
 
 ---
 
@@ -256,21 +257,21 @@
 
 | 区分 | 見立て | 根拠 |
 |---|---|---|
-| 規模 | **L** | 新規部品: 見た目の型と状態機械（純粋・約 300 行＋テスト）・色の解析（約 250 行・色名表込み）・自前描画器（約 300 行）・分割（移動のみ）・計測の鍵（約 100 行）・読み戻しテスト（3 方向 × 10 項目）。フォントファイル読み込みは範囲外（開発者裁定） |
-| リスク | **中** | 未知数は 2 つ: ⑴ `#[implement(IDWriteTextRenderer)]` の実装（repo に DirectWrite の COM 実装の先例が無い・shiori 系の `#[implement]` 作法は流用可）⑵ 縦書きでの線の位置と上下付きの側の実測。既存の型・経路の延長部分（解読・転写・状態機械・範囲指定）はリスク低 |
+| 規模 | **M**（裁定後） | 新規部品: 見た目の型と状態機械（純粋・約 300 行＋テスト）・色の解析（約 250 行・色名表込み）・分割（移動のみ）・計測の鍵（約 100 行）・範囲指定の焼き込み（約 100 行）・読み戻しテスト（3 方向 × 7 項目）。自前描画器とフォントファイル読み込みは範囲外（開発者裁定 2026-09-11） |
+| リスク | **低〜中** | 未知数は 1 つ: 縦書きでの DirectWrite の下線・打ち消し線の側（実測して §8 に登記するだけ・実装は変えない）。既存の型・経路の延長部分（解読・転写・状態機械・範囲指定）はリスク低 |
 | 並走との干渉 | 低 | W13 の共有ファイルは 0（`sakura-tag-word-boundary` は `lexer.rs`・本仕様は `decode.rs`／`compile.rs`）。D1-a を採れば dola と他 crate に触れない。D8-b／D9 の上流配線を本仕様で行う場合のみ `crates/areka/src/emo2_boot/mod.rs` に触れる可能性がある（W13 の他 spec との共有を再確認） |
 
 ---
 
 ## 7. 設計フェーズへ持ち越す調査項目（Research Needed）
 
-1. **縦書きでの DirectWrite の既定の下線・打ち消し線の側**（`SetUnderline` を `DWRITE_READING_DIRECTION_TOP_TO_BOTTOM` で使ったときの位置）。自前描画器（D3-B）で側を決めるなら参考値、範囲指定に委ねる案なら決定的。読み戻しテストの通し経路で 30 分程度で測れる。
-2. **`#[implement(IDWriteTextRenderer)]` の最小実装**の確認（`IDWritePixelSnapping` の 3 メソッドの戻り値・`DrawGlyphRun` から `ID2D1DeviceContext::DrawGlyphRun` を呼ぶ形・`clientDrawingEffect` の取り出し方）。windows-core 0.62 の `*_Impl` 面の作法は `crates/areka/src/shiori_host.rs` の注記が先例。
-3. **白抜きの描き方**: `IDWriteFontFace::GetGlyphRunOutline` → `ID2D1PathGeometry`（`ID2D1Factory::CreatePathGeometry`＋`Open` の sink）→ `DrawGeometry`（線幅 1 image px 相当）。emo-text は `ID2D1Factory` を直接持っていないので `GraphicsCore` から取り出す口を確認する。
+1. **縦書きでの DirectWrite の既定の下線・打ち消し線の側**（`SetUnderline` を `DWRITE_READING_DIRECTION_TOP_TO_BOTTOM` で使ったときの位置）。範囲指定に委ねる（A・確定）ので**決定的**——実測値を §8 と読み戻しテストに固定する。読み戻しテストの通し経路で 30 分程度で測れる。
+2. ~~**`#[implement(IDWriteTextRenderer)]` の最小実装**の確認~~（A の採用で不要）（`IDWritePixelSnapping` の 3 メソッドの戻り値・`DrawGlyphRun` から `ID2D1DeviceContext::DrawGlyphRun` を呼ぶ形・`clientDrawingEffect` の取り出し方）。windows-core 0.62 の `*_Impl` 面の作法は `crates/areka/src/shiori_host.rs` の注記が先例。
+3. ~~**白抜きの描き方**~~（語彙のみ・不要）: `IDWriteFontFace::GetGlyphRunOutline` → `ID2D1PathGeometry`（`ID2D1Factory::CreatePathGeometry`＋`Open` の sink）→ `DrawGeometry`（線幅 1 image px 相当）。emo-text は `ID2D1Factory` を直接持っていないので `GraphicsCore` から取り出す口を確認する。
 4. **フォント集合の family 名の引き方**（`IDWriteFontSet::GetPropertyValues(DWRITE_FONT_PROPERTY_ID_FAMILY_NAME)`）と、`.ttc` の複数 face の扱い。**範囲外になったため調査不要**。
 5. **`Custom` に載せるコマンド名の予約**（D1-a）: `\!` の引数に現れ得ない綴りを選ぶ根拠（`lexer.rs` が `\` で語を切る事実）を設計に書く。
 6. **`line_fingerprint` に装飾を含める粒度**: 番号列か、表の中身の要約（ハッシュ）か。番号が `Clear` で振り直されても `FullClear` が指紋を捨てる事実で足りるかを確認する。
-7. **上下付きの縮小比率とずらし量の定数**（R6.4・areka 裁量）: 候補は CSS の慣例（縮小 ≈ 0.58〜0.7・ずらし ≈ ±0.3 em）。値は設計で決めて §8 に登記する。
+7. ~~**上下付きの縮小比率とずらし量の定数**~~（語彙のみ・不要）: 候補は CSS の慣例（縮小 ≈ 0.58〜0.7・ずらし ≈ ±0.3 em）。値は設計で決めて §8 に登記する。
 8. **`DWriteMetrics.advance` の高さ不一致 `warn!`**（:457）を、装飾込みの鍵へ改めたあとどう扱うか（撤去か、鍵に高さを含めて不一致自体を消すか）。
 
 ---
