@@ -55,7 +55,7 @@
 2. When 待機中に別スレッドからホスト窓へ同期送出（送出側が処理完了まで待つ送り方）のメッセージが送られる, the SHIORI アクター shall そのメッセージを処理し、送出側を上限時間の内に復帰させる。
 3. When プロセス開始から 30 秒を超えた後に 20 秒以上要求が無い状態で、「相手が応答なしなら待たずに打ち切る」送り方の通知がホスト窓へ送られる, the SHIORI アクター shall その通知を受け取る（送出側で打ち切られない）。
 4. When 待機中に inbox へ要求が届く, the SHIORI アクター shall 窓のメッセージ処理を挟んでも要求を取り落とさず、到着順に処理する。
-5. The SHIORI アクター shall 待ちの形の変更によって要求の往復の所要時間に利用者が見える差（毎秒の往復・終了挨拶の後の解放）を生まない。
+5. The SHIORI アクター shall 待ちの形の変更によって要求の往復の所要時間に利用者が見える差（毎秒の往復・終了挨拶の後の解放）を生まない（非退行の確認は Requirement 2.8 の既存テストと Requirement 5 の実機走行で行う）。
 6. While 要求の往復中（同期送出が上限時間の内でブロックしている間）である, the SHIORI アクター shall 既存の上限時間（要求方向・解放の ack・終了観測）で必ず復帰し、無限待機を作らない（既存どおり）。
 
 ### Requirement 2: アクター境界と握手・往復・停止の契約の不変
@@ -81,7 +81,7 @@
 
 1. The IPC 層 shall 応答方向（helper → ホスト）の送出に `SMTO_ABORTIFHUNG` を付けず、要求方向（ホスト → helper）には付ける、という 6.11 の区別を無改変で保つ。
 2. The 本仕様 shall `crates/shiori-host32-helper/src/main_response_flavor_hung_cage_tests.rs` を無改変で緑のまま保つ（見出しの説明文の追随を除く・Requirement 6.1）。
-3. The 本仕様 shall `crates/shiori-host32-ipc/` と helper の送出コードに触れない。
+3. The 本仕様 shall `crates/shiori-host32-ipc/` と helper の**コード**（送出の旗・wire・framing・型・テスト）に触れない。Requirement 7.1 が挙げる陳腐化した説明文（rustdoc コメント）2 か所の書き換えのみを例外とし、それ以外の差分を同 crate に持たない。
 
 ### Requirement 4: 決定論の檻（較正つき・x64 偽境界）
 
@@ -126,9 +126,9 @@
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 「待機中は pump しない」「heartbeat は pump フェーズ専用」を述べる本番コードの rustdoc（`crates/shiori-host32-host/src/parent_window.rs` の module doc・`send_request` の説明・`crates/areka-kanade/src/shiori/real.rs` の `run_shiori_loop` の説明）と既存の檻の見出し（`main_response_flavor_hung_cage_tests.rs`「本番では shiori アクターが `recv()` で待つ」）を、変更後の姿に合わせて書き換える。書く前に file:line で裏取りする。
+1. The 本仕様 shall 「待機中は pump しない」「heartbeat は pump フェーズ専用」を述べる本番コードの rustdoc（`crates/shiori-host32-host/src/parent_window.rs` の module doc・`send_request` の説明・`crates/areka-kanade/src/shiori/real.rs` の `run_shiori_loop` の説明）と既存の檻の見出し（`main_response_flavor_hung_cage_tests.rs`「本番では shiori アクターが `recv()` で待つ」）を、変更後の姿に合わせて書き換える。書く前に file:line で裏取りする。 書き換え対象には `crates/shiori-host32-ipc/src/lib.rs` の `send_copydata_response` の rustdoc と `send_flavor_tests` の見出しにある「待機中はメッセージを取り出さない」の 2 か所を含む（コメントのみ・Requirement 3.3 の例外）。
 2. The 本仕様 shall 完了 spec のアーカイブ（`.kiro/specs/completed/areka-P0-emo2-conformance-e2e/`）を書き換えない。
-3. The 本仕様 shall 編集集合を `crates/areka-kanade/src/shiori/real.rs`・`crates/shiori-host32-host/src/parent_window.rs`・それらの兄弟テストファイル・本仕様の記録に限る。入力の到着でスレッドを起こす薄い包みが要る場合は、その置き場を設計で確定し、`crates/areka-kanade/src/schedule/`・`crates/shiori-host32-host/src/{shiori3.rs,client.rs}`・`crates/shiori-host32-ipc/`・`crates/shiori-host32-helper/` には触れない（W13 の共有ファイル 0）。
+3. The 本仕様 shall 編集集合を `crates/areka-kanade/src/shiori/real.rs`・`crates/shiori-host32-host/src/parent_window.rs`・それらの兄弟テストファイル・本仕様の記録に限る。入力の到着でスレッドを起こす薄い包みが要る場合は、その置き場を設計で確定し、`crates/areka-kanade/src/schedule/`・`crates/shiori-host32-host/src/{shiori3.rs,client.rs}`・`crates/shiori-host32-ipc/`・`crates/shiori-host32-helper/` には触れない（W13 の共有ファイル 0）。ただし Requirement 7.1 が挙げる `crates/shiori-host32-ipc/src/lib.rs` の説明文 2 か所については、コメントのみの書き換えを例外として許す。
 4. The 本仕様 shall 1 ファイル 1,000 行以下を本番ファイル・テストファイルの双方で保つ（`parent_window.rs` は 659 行・新しい檻は兄弟テストファイルへ置く）。
 5. The 本仕様 shall 案 1／案 2 の裁定と理由を設計文書に残し、`doc/COMPAT_ARCHITECTURE.md` §8 に本仕様の節を追記する場合は自節のみとする。
 6. The 本仕様 shall `areka-kanade` に Win32 API crate への直接依存を足さない（`crates/areka-kanade/Cargo.toml` は現状 `windows` 非依存）。窓のメッセージを汲む部品は host32 ホスト層（`crates/shiori-host32-host/`）が提供し、`real.rs` はそれを呼ぶ——「host32 型を import してよい唯一の場所は `real.rs`」という既存の境界を保つ。
