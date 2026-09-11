@@ -62,3 +62,7 @@
 
 > **📌 2026-09-02 棚卸⑫**——アンカー再測定: `dotted.rs:3-9`・`reader.rs:80-83/:127-146`・`key.rs:129-141`・`persist/mod.rs:153/:156` ＝命中。**ずれ**: publish 縫い目 `emo2_boot/mod.rs:430-465`→**:458-502**（zsp が +35 行）。Adjacent 節の「`zorder-property` は本ブランチには不在」は**現在は偽**（09-02 の zsp 合流で `.kiro/specs/areka-P0-zorder-property/brief.md` 実在）。**三重所有**（channels も SET 台帳で `seriko.zorder` を主張）＝棚卸⑫の推奨は「本 spec は `seriko.*` から `zorder` を除外」（roadmap 干渉台帳・裁定は着手前）。編成＝W13 裁定枠（channels と `dotted.rs`／`emo2_boot/mod.rs` を共有＝同居不可・直列）。先行スライス可＝balloon.scope 19 項目（bvc R3 の数値源を再利用・publish と決定論檻は channels 抜きで単独着地可）。規模 L。
 
+
+---
+
+> **📌 2026-09-11 棚卸⑬（三重所有の仮裁定・前提の再測定）**——本 spec の `currentghost.seriko.*` は **`zorder` を除外**した 13 項（`sticky-window` は残す）。`zorder` の値は `areka-P0-zorder-property`、SET 台帳行は `areka-P0-sylphya-set-ledger`。Adjacent 節の「`zorder-property` は本ブランチに不在」は偽（実在・棚卸⑫追記どおり）。publish 縫い目は `crates/areka/src/emo2_boot/mod.rs` の `GhostBootOptions` 構築（:442 付近）と sinks vec（:448 付近）＝行番号は再びずれているが実体は健在。編成＝**W15**（`property-query-channels` W14 の後・`property-catalog-lists` とは `dotted.rs`／`key.rs`／`mod.rs` を共有＝直列で W16 へ）。先行スライス「balloon.scope 19 項目」は要件段階で L→M に縮める選択肢として保持。要件定義は Opus（scope ID 集合と未解決スコープの表現の 2 議題）。

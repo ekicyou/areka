@@ -51,3 +51,7 @@ ukadoc プロパティ **`currentghost.seriko.zorder`**（SSP 2.8.78・[SET有�
 > **📌 2026-09-02 棚卸⑫**——上流 zsp は **完了**（PR#126・09-02）＝`.kiro/specs/completed/areka-P0-scope-zorder-pinning/`（本文の `zsp brief:18` 参照は移動後パスで再確認）。`dotted.rs` 21 項に `zorder` 不在（grep 0）・件数檻 `:191`＝一致。
 > **⚠ 二重所有は三重所有だった**: `currentghost-property-tree`（`seriko.*` 14 項一括）に加え **`property-query-channels`** も「SET 台帳 21→26 の追随に `seriko.zorder`・`seriko.sticky-window` を含む（SET 経路の所有者として）」を In に掲げる。本 brief の「dotted.rs に入れない・本 brief が語彙の正本」と食い違う。**棚卸⑫の推奨＝切り出し**: 値の導出（parse の対＝serialize・往復恒等）は本 spec 単独／tree は `seriko.*` から `zorder` を除外／**`SET_EFFECTIVE` の 1 行は channels⑶（台帳スライス・S）が持ち本 spec は台帳に触れない**。完了 spec zsp 要件 13.3/13.4 の追跡先は本 spec 単独と記録済み。裁定は着手前に 1 度（roadmap 干渉台帳）。zsp 残件 B-4 のうち **13.3/13.4 の檻は本 spec の語彙記録行そのもの**＝実質の受け皿（12.1〜12.4 は `zorder-chain-residue`）。
 
+
+---
+
+> **📌 2026-09-11 棚卸⑬（三重所有の仮裁定）**——`currentghost.seriko.zorder` の所有は **値の導出（parse／serialize・往復恒等）＝本 spec 単独**・**SET 台帳行（`SET_EFFECTIVE` の `seriko.zorder`／`seriko.sticky-window`）＝`areka-P0-sylphya-set-ledger`**（`property-query-channels` ⑶ から独立）・**`currentghost-property-tree` は `seriko.*` から `zorder` を除外**。本 spec は `dotted.rs` に触れない（brief 本文の「dotted.rs に入れない」はそのまま・台帳行は set-ledger が置く）。編集集合の主戦場を明記: `crates/areka/src/placement/zorder_group_ledger.rs`（zsp グループ台帳・解釈純関数）＋`doc/COMPAT_ARCHITECTURE.md` §8。編成＝**W15**（`sylphya-set-ledger` W13・`property-query-channels` W14 の後）。規模 S・要件定義は Opus。

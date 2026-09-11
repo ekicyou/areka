@@ -563,6 +563,8 @@ brief が書いている綴りを 1 つずつ項目 id へ当てた。当たり�
 | `areka-P0-text-decoration-canon` | `\x` | `\x` | `ukadoc:list_sakura_script:_5cx:1` | 所有 | 空 |
 | `areka-P0-text-decoration-canon` | `\x[noclear]` | `\x[noclear]` | `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1` | 所有 | `areka-P0-balloon-canon-residue` |
 
+> **注記（2026-09-11 棚卸⑬）**: 上表の `\w[2]`／`\w[3000]` のような**角括弧つきの `\w[n]` は正典に無い綴り**であり、areka はこれを待ちとして読むのをやめた（完了 spec `areka-P0-emo2-conformance-e2e` タスク 6.15・受入記録 §13.4 改変 6）。正典の待ちは `\w1`〜`\w9` と `\_w[ミリ秒]` である。表の綴りは調査時点の例示として残す。
+
 型で数えると **所有 74 組・字句の境界 8 組・例示 14 組**（1 つの項目を 2 本の brief が
 主張していれば 2 組と数える）。所有の型が付いた項目は **67 件**である。
 
