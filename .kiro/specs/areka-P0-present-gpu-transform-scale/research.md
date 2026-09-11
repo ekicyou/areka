@@ -184,8 +184,9 @@
    4′. **付録 A の 59 本の裁定**（Requirement 6.3）: 撤去 25／再導出 34 の分類案（§4）をテストごとに確定する。特に `alpha_mask_bits_come_from_k_scaled_display_bytes`（正反対）と `a_scale_change_records_the_buffer_resize`（`resized` の意味変化）。
 5. **撤去段の perf フィールド**（Requirement 3.4）: 0 固定（`Stage::Resample`・`alloc_resample_dst`・`alloc_xmap` を残し常時 0・`judge-perf.py` 不変・語彙が死ぬ）／消費者と同時撤去（`timing.rs`・`budget.rs`・`timing_tests.rs`・`perf_log_tests.rs`・`judge-perf.py` の必須集合 2 タプルを更新・旧 fixture は余分なフィールドとして無害・Revalidation Trigger に該当）。
 6. **Requirement 7.1 の実現形**: 候補 A では変換の設定は attach の 1 回に畳まれ、k 変化時に失敗し得るのは `set_bounds` の `SetSize`（現状 `warn!`）だけ。`warn!` のまま「変換の設定失敗＝attach 失敗」と読み替えるか、`set_bounds` を `Result` にして upload の**前**へ移す（前状態維持を構造で言うため・`test-cage-determinism` ④の観測点＝upload のエラー分岐の字面を動かさない制約に注意）か。
-7. **受け入れの物差し**（Requirement 3.1 vs e2e 記録行 9）: brief「16.7 ms」（静かな機械の 1 コマ）を合格線にするか、e2e 記録の「目標 16 ms・許容 30 ms」を採るか、負荷下（5 倍）の値を合否に載せないか。撤去後の見込みは静かな機械で 8〜12 ms（compose 5〜7 ＋ mask 約 3 ＋ upload 約 0.1）。
-8. **登記の作法**（Requirement 8.1／8.2）: emo-dpi-scaling の design.md D3／D5／D6 行へ注記を**添える**（先例 3・line-height-canon）か、アーカイブ非改変で §8 の行だけに書く（先例 1・cursor-tag-canon）か。
+7. ~~**受け入れの物差し**~~ → **要件ディスカッションで確定（2026-09-11・自明修正）**: brief の 16.7 ms（静かな機械の 1 コマ）が合格線・e2e 記録の「許容 30 ms」は置き換わる（記録は非改変）・負荷下の値は Requirement 3.5 で報告のみ（Requirement 3.1 に明記）。撤去後の見込みは静かな機械で 8〜12 ms（compose 5〜7 ＋ mask 約 3 ＋ upload 約 0.1）。
+8. ~~**登記の作法**~~ → **要件が既に採択済み**: Requirement 8.1 が「D3／D5／D6 行に追記を置く」＝先例 3（line-height-canon）の形を指定している。議題として閉じる。
+9. **物理寸の単一真実源の置き直し**（付録 B 項目 4・§1.1 着眼）: `show.rs` の `size_changed`／`pending_resize`／`info!` の `scaled_w/h` が読む物理寸を `chain.size()`（原寸になる）から `applied.scaled_extent(native)` へ移す。式は `target_physical_size`／`TextSlotView::physical_size` と同じなので **1 か所のヘルパへ畳む**（例: `PresentTarget` の小さなメソッド）か、`prev_physical` と新 `physical` の 2 か所で同じ式を書くか。
 
 ## 6. Research Needed（設計フェーズへ持ち越す未確認）
 
