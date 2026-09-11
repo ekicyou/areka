@@ -46,7 +46,7 @@
 
 - `crates/ukadoc-survey` の既存の公開 API: `ledger::read`・`ledger::blocks::split`・`report::summary::render_summary`・`report::bundle::bundles`・`io::{paths,files}`・`model::{EntryId,Domain,Status,THEMES,LinkKind}`・`tomlout`。
 - 外部 crate は既存の `toml`（読み取り）だけ。新規依存は 0。
-- 読む文書: `.kiro/specs/completed/areka-P0-emo2-conformance-e2e/design.md`（D4 の 20 項目）・`verification/m1-completion.md` §6（持ち越し 8 行）・`.kiro/steering/roadmap.md`（ウェーブ編成・M2 予約群）・調査 4 本のブリーフィングと完了 spec の `tasks.md`（申し送りの出典）。いずれも**読むだけ**。
+- 読む文書: `.kiro/specs/completed/areka-P0-emo2-conformance-e2e/design.md`（D4 の 20 項目）・`.kiro/specs/completed/areka-P0-emo2-conformance-e2e/verification/m1-completion.md` §6（持ち越し 8 行。`briefing.md` に写すときもこの相対パスで書く）・`.kiro/steering/roadmap.md`（ウェーブ編成・M2 予約群）・調査 4 本のブリーフィングと完了 spec の `tasks.md`（申し送りの出典）。いずれも**読むだけ**。
 - 判定テストが読む場所: `doc/ukadoc-coverage/` 一式と `.kiro/specs/` 直下（`brief.md` の数え上げ）と `.kiro/specs/completed/` のディレクトリ名（`owner` の宛先の整合）。
 - テンプレート辞書: 里々「ポストと狛犬」・YAYA「はろーYAYAわーるど」／「SimpleYAYA」の配布物。URL は実装時に開発者へ確認してから取得する（開発者裁定 2026-09-11 議題 2）。ネットワークを使うのはこの取得だけで、テストは使わない。
 
@@ -56,7 +56,7 @@
 - **束の帰属の変更**（`linkage.md` の `members`）: `priority-apply` を再実行し、報告と台帳を同じコミットに入れる。
 - **順位の変更**（`briefing.md` の `[[rank]]`）: 同上。第二段（要件 9）はこの経路で行う。
 - **`render_summary` の版面の変更**: 判定 ⑹ が本文をバイトで比べるので、報告を作り直して同じコミットに入れる（ドメイン別報告と同じ運用）。
-- **spec ディレクトリの増減**（brief の起票・完了）: 判定 ⑸ が `roadmap-draft.md` の spec 表と実数を比べるので、後続の spec は起票・完了のたびに `roadmap-draft.md` の表を更新する（本 spec 完了後の運用は roadmap.md の棚卸に委ねる）。
+- **spec ディレクトリの増減**（brief の起票・完了）: 判定 ⑸ は「表の各名前の実在」と「`count` ＝ 表の行数」だけを主張するので、他 spec の起票・完了では赤にならない。赤になるのは表の spec が改名・削除されたときだけで、そのときは表を直す。本 spec の完了前に main へ rebase して `spec_dirs` を数え直す（段 6）。
 - **完了手続きによる本 spec の移動**: 判定 ⑸ は本 spec 自身のディレクトリ名を除いて数えるので移動の前後で同じ値を返す（D-6）。テストに本 spec の**パス**は書かない（要件 12.8）。
 
 ## Architecture
@@ -176,7 +176,7 @@ crates/ukadoc-survey/
 - `crates/ukadoc-survey/src/cli/mod.rs`・`cli_tests.rs` — 副手続き 9 つ（表・使い方・「8 つ」の釘付けを 9 へ）。
 - `crates/ukadoc-survey/src/report/summary.rs`・`summary_tests.rs` — 判定範囲の切り出し（D-5）と冒頭の文言（「常時検査の合否に入れません」は事実でなくなる）。`summary_tests.rs` はその文言を逐語で釘付けしているので同時に直す。
 - `crates/ukadoc-survey/tests/consistency/mod.rs`・`examples.rs` — 上記。
-- `doc/ukadoc-coverage/README.md` — 「誰が何を作り直すか」の表の `summary.md` 行を「入る（末尾の証拠の表を除く）・作り直すのは台帳を触った人」に改め、その直下の「`summary.md` を常時の検査に入れないのは…」の 1 段落を「証拠の表だけを外す理由」に書き換える（要件 11.2・12.4 の「表の更新」にこの段落を含める——表と段落は一体で、表だけ直すと段落が表を否定する）。「この一式に入っているもの」に新規 3 文書を 3 行追記。ほかは触らない。
+- `doc/ukadoc-coverage/README.md` — 「誰が何を作り直すか」の表の `summary.md` 行を「入る（末尾の証拠の表を除く）・作り直すのは台帳を触った人」に改め、その直下の「`summary.md` を常時の検査に入れないのは…」の 1 段落を「証拠の表だけを外す理由」に書き換える（要件 11.2・12.4 の「表の更新」にこの段落を含める——表と段落は一体で、表だけ直すと段落が表を否定する）。「この一式に入っているもの」に新規 3 文書を 3 行追記。加えて、判定 ⑹ で事実でなくなる文——「4. 報告の扱い」節の「全体報告は…新しさは常時の検査に入っていない」「統合担当が作り直したときにだけ更新される」と「⚠ 全体報告は黙って古くなる」節の「常時の検査には入っていないので何も失敗しない」——を「カタログと台帳から決まる本文は常時検査が判定する。証拠の表だけは対象外」に揃える（要件 12.4 は「11.2 に伴い事実でなくなる記述」を編集範囲に含める）。ほかは触らない。
 - `doc/ukadoc-coverage/ledger/{shiori,assets,sakura-script,property}.toml` — 要件 3・7・8.6 の編集。
 - `doc/ukadoc-coverage/report/{summary,shiori,assets,sakura-script,property}.md` — 機械で作り直す。
 
@@ -228,7 +228,7 @@ graph LR
 | 3 | `briefing.md` 第一段: テンプレート辞書の取得と語彙の写像（D-8）→ `[[rank]]`・`[stage.*]`・`[[barrier]]`・`[[after]]`・写像規則 → `priority-apply` → `owner` の限定編集（要件 7.4）→ 報告の作り直し。判定 ⑷⑹ を有効にする | 辞書の写像と `[[rank]]` の作成は直列 |
 | 4 | 第二段: D4 の 20 項目と持ち越し 8 行を 1 行ずつ読み、`[[rank]]` を改訂（`override` 欄に根拠）し、改訂記録を書き、`priority-apply` を再実行 | 単独 |
 | 5 | `roadmap-draft.md`（27 brief の表・先頭ウェーブ・M2 予約群の対応表・別軸）。判定 ⑸ を有効にする。申し送りの処分台帳（要件 8.2〜8.6）・裁定 2 件の `owner`／`note` への反映・README の限定編集 | `roadmap-draft.md` と処分台帳は別ファイルなので並走可 |
-| 6 | 全判定の緑と摂動の赤を確かめ、要件 12.7 の 6 項目の完了報告を書く | 単独 |
+| 6 | main へ rebase して `spec_dirs`・`completed_specs` を数え直し（改名・削除があれば `roadmap-draft.md`・`[[owner_completed]]` を直す）、全判定の緑と摂動の赤を確かめ、要件 12.7 の 6 項目の完了報告を書く | 単独 |
 
 ## Requirements Traceability
 
@@ -476,14 +476,14 @@ pub(super) fn cited_ids(markdown: &str) -> BTreeSet<String>;
 | 判定 | 主張（実データで成り立つこと） | 1 か所壊すと赤（11.3） | 対象 0 でない（11.4） |
 |---|---|---|---|
 | ⑴ id の実在 | 3 文書の `quoted_ids ∪ backticked_ids` の全数がカタログに実在し、`bare_id_tokens` が 0 件。付随: 3 文書に `report.md` の綴りが無い（1.2） | id を 1 文字変える | 文書ごとの引用 id 数の下限（`linkage.md` は 1,552 以上）・裸の語を 1 つ混ぜると赤 |
-| ⑵ 機械の束 id の実在 | 3 文書で引用された束 id（`machine` 欄と本文）の全数が、報告 5 本の束の一覧（`\| ukadoc:` で始まる行の 1 列目）に在る | `machine` の id を 1 文字変える | 引用された束 id が 1 件以上・報告から読めた束 id が 100 以上（2026-09-11 の実測は 123。`links` の補修で束が合流すれば減りうるので下限にする） |
-| ⑶ 帰属の分割 | a) 束の `members` が互いに素、b) `members` の和集合＝状態が対象 4 語の全項目（過不足なし）、c) `hand` ⊆ `members` かつ `members ∖ hand` ⊆ 引用した機械の束の構成 id の和集合、d) `alias`・`not-applicable` の id が 1 つも現れない、e) `themes`・`domains` が `derive` の値と一致し、`breakage = "該当なし"` の束は全構成 id が `implemented`、f) `[tally]` の各数が数え直しと一致（`target`・`from_machine`・`by_hand`・`singles`・`alias_excluded`・`not_applicable_excluded`・`singles_by_domain` の 4 欄） | id を 1 つ抜く／2 束に入れる／`tally` を 1 ずらす | 名前付き束が 1 つ以上・`by_hand` が 1 以上（開発者裁定の反映） |
-| ⑷ 段階と順位 | a) 名前付き束（単独項目を含む）の全数が `[[rank]]` にちょうど 1 度現れ、`[[rank]]` の束名がすべて `linkage.md` に在る、b) `[stage.X]` の `bundles`（`bundle` の行の数）・`singles`（`singles` の行の id の総数）・`items`（台帳で `priority` がその文字で始まる項目数）が数え直しと一致（5 段階すべて・0 も比べる）、c) 台帳の全項目の `priority` が `derive::priorities` と一致（`alias`・`not-applicable` は `""`）、d) `[[rank]]` の `assets`・`shared` が `derive` と一致、e) 同じ段階の `[[rank]]` は `axis_key` の降順で並び、鍵が等しい行は同じ `rank`・鍵が異なれば異なる `rank`。`singles` の行は並べた id の鍵がすべて等しいこと（等しくなければ行を分ける）。`override` を持つ行は順序の主張から外し、`override` の本文が「項目 n」か持ち越し行の見出しを含む、f) `[[barrier]]`・`[[after]]`・`[priority_blank]` の数が台帳の数え直しと一致、g) 段階 B の `rank` 1 の束の `themes` に「更新」が含まれ、段階 C の最大 `rank` の束の `members` に `system.` を含む id がある（5.3 の釘付け） | 束名を 1 つ消す／`items` を 1 ずらす／`priority` を 1 件書き換える | `[[rank]]` が 1 行以上・段階 A の `items` が 1 以上 |
-| ⑸ spec ディレクトリ | a) `[briefs].count` ＝ `spec_dirs` の数、b) `[[spec]]` の名前の集合 ＝ `spec_dirs`、c) `owner_count` ＝ 台帳で `owner` がその名前の項目数、d) `[[reserved]]`・`[[spec]]` の `bundle` が `linkage.md` に在る（`none = true` の行を除く）、e) `owner` が `completed_specs` を指す項目の状態が `implemented` か `degraded`（7.4 ⑵） | `count` を 1 ずらす／spec 名を 1 文字変える | `spec_dirs` が 20 以上・`completed_specs` が 100 以上 |
+| ⑵ 機械の束 id の実在 | 3 文書で引用された束 id（`machine` 欄と本文）の全数が、報告 5 本の束の一覧（`\| ukadoc:` で始まる行の 1 列目）に在る | `machine` の id を 1 文字変える | 引用された束 id が 1 件以上・報告から読めた束 id が 100 以上（2026-09-11 の実測は 123。`links` の補修で束が合流すれば減りうるので下限にする。段 1 で数え直した値を下限の注釈に残す） |
+| ⑶ 帰属の分割 | a) 束の `members` が互いに素、b) `members` の和集合＝状態が対象 4 語の全項目（過不足なし）、c) `hand` ⊆ `members` かつ `members ∖ hand` ⊆ 引用した機械の束の構成 id の和集合、d) `alias`・`not-applicable` の id が 1 つも現れない、e) `themes`・`domains` が `derive` の値と一致し、`breakage = "該当なし"` の束は全構成 id が `implemented`、f) `[tally]` の各数が数え直しと一致（`target`・`from_machine`・`by_hand`・`singles`・`alias_excluded`・`not_applicable_excluded`・`singles_by_domain` の 4 欄）し、恒等式 `target = from_machine + by_hand + singles`・`Σ singles_by_domain = singles`・`target + alias_excluded + not_applicable_excluded = 4 台帳の項目数` が成り立つ（`from_machine`・`by_hand` は `single = true` でない束だけの合算） | id を 1 つ抜く／2 束に入れる／`tally` を 1 ずらす | 名前付き束が 1 つ以上・`by_hand` が 1 以上（開発者裁定の反映） |
+| ⑷ 段階と順位 | a) 名前付き束（単独項目を含む）の全数が `[[rank]]` にちょうど 1 度現れ、`[[rank]]` の束名がすべて `linkage.md` に在る、b) `[stage.X]` の `bundles`（`bundle` の行の数）・`singles`（`singles` の行の id の総数）・`items`（台帳で `priority` がその文字で始まる項目数）が数え直しと一致（5 段階すべて・0 も比べる）、c) 台帳の全項目の `priority` が `derive::priorities` と一致（`alias`・`not-applicable` は `""`）、d) `[[rank]]` の `assets`・`shared` が `derive` と一致、e) 同じ段階の `[[rank]]` のうち `override` も `insufficient` も持たない行（対象行）は `axis_key` の降順で並び、鍵が等しい行は同じ `rank`・鍵が異なれば異なる `rank`、`rank` は 1 から始まり同順位の次は 1 増える（密な順位 1,2,2,3。要件 7.1）。`singles` の行は並べた id の鍵がすべて等しいこと（等しくなければ行を分ける）。`override` を持つ行は `kind` が `second-stage` なら `ref` が「項目 n」（1〜20）か持ち越し行の見出し、`stage-rule` なら `ref` が "要件 5.3" であること。`insufficient` の行は同じ段階の対象行より後に並ぶこと、f) `[[barrier]]`・`[[after]]`・`[priority_blank]` の数が台帳の数え直しと一致、g) 段階 B の `rank` 1 の束の `themes` に「更新」が含まれ、段階 C の最大 `rank` の束の `members` に `system.` を含む id がある（5.3 の釘付け） | 束名を 1 つ消す／`items` を 1 ずらす／`priority` を 1 件書き換える | `[[rank]]` が 1 行以上・段階 A の `items` が 1 以上 |
+| ⑸ spec ディレクトリ | a) `[briefs].count` ＝ `[[spec]]` の行数、b) `[[spec]]` の各名前が `spec_dirs ∪ completed_specs` に在る（他 spec の起票・完了で赤にならない。改名・削除で赤になる）、c) `owner_count` ＝ 台帳で `owner` がその名前の項目数、d) `[[reserved]]`・`[[spec]]` の `bundle` が `linkage.md` に在る（`none = true` の行を除く）、e) `briefing.md` の `[[owner_completed]]` に列挙した spec 名が `completed_specs` に在り、その名前を `owner` に持つ項目の状態がすべて `implemented` か `degraded`（7.4 ⑵。生きた `completed/` の全走査はしない）、f) 台帳の非空 `owner` はすべて `[[spec]]` の名前か `[[owner_completed]]` の名前のいずれか（7.4 ⑶: brief の無い候補 spec 名を書かない） | `count` を 1 ずらす／spec 名を 1 文字変える／`owner` を 1 件書き換える | `[[spec]]` が 20 行以上・`[[owner_completed]]` が 1 行以上・`completed_specs` が 100 以上 |
 | ⑹ 全体報告の新しさ | `summary.md`（復帰文字を落とす）が `render_summary_judged(catalog, ledgers, THEMES)` で始まる | 本文の数字を 1 つ変える | `render_summary_judged` の出力が空でない・`summary.md` がそれより長い（証拠の表がある） |
 
 - 失敗の本文は**ファイル名と id（または束名・spec 名）**を名指す（要件 11.1）。
-- ⑸ の数え方（1.3・12.8）: `.kiro/specs/` の直下を列挙し、ディレクトリ名が `completed` でも `OWN_SPEC_DIR` でもなく `brief.md` を持つものを数える。本 spec が `completed/` へ移る前は 28−1、移った後は 27−0、どちらも 27。
+- ⑸ の数え方（1.3・12.8）: `spec_dirs` は `.kiro/specs/` の直下でディレクトリ名が `completed` でも `OWN_SPEC_DIR` でもなく `brief.md` を持つもの。本 spec が `completed/` へ移る前は 28−1、移った後は 27−0、どちらも 27。`[briefs].count` は着手時の写真（`snapshot_on` を添える）であり、判定は「表の各名前が直下か `completed/` に実在する」と「`count` が表の行数と一致する」を主張する。生きた総数との一致は主張しない——他 spec の起票・完了のたびに赤になり、`roadmap-draft.md` が全 spec の共有ファイルになるため（W13「共有ファイル 0」）。新しい brief の登記先は roadmap.md の spec 台帳であり、本文書は 2026-09-11 の草案である。
 - 判定の入力に `evidence` は要らない（⑹ は証拠の表を比べない）。`RepoData` は既存のまま使い、`Documents::load` が足りない分（`summary.md`・3 文書・spec ディレクトリ）を読む。
 
 ## Data Models
@@ -517,14 +517,14 @@ breakage = "黙って壊れる"                                                 
 themes = ["気配"]                                                           # ⑻ values の和集合（数え直す）
 ```
 
-単独項目は同じ表で `single = true` と `reason = "…"`（⑹ を書けない理由）を持ち、`machine`・`hand` は書かない（`hand` は `members` と同じと見なす）。
+単独項目は同じ表で `single = true` と `reason = "…"`（⑹ を書けない理由）を持ち、`members` は id 1 つ、`machine`・`hand` は書かない。**`[tally]` の数え方**: `from_machine`・`by_hand` は `single = true` でない束だけを合算し、`singles` は単独項目の数（＝単独項目の id 数）とする。恒等式 `target = from_machine + by_hand + singles`・`Σ singles_by_domain = singles`・`target + alias_excluded + not_applicable_excluded = 台帳 4 本の項目数` を判定 ⑶-f が主張する（要件 4.2 の 3 つの数が重複なく分割する）。
 
 ```toml
 [tally]
 target = 0                # 対象 4 状態の全数（実装時に数える。以下同じ）
-from_machine = 0          # members ∖ hand の総数
-by_hand = 0               # hand の総数
-singles = 0               # single = true の束の数
+from_machine = 0          # single でない束の members ∖ hand の総数
+by_hand = 0               # single でない束の hand の総数
+singles = 0               # single = true の束の数（＝単独項目の id 数）。target = from_machine + by_hand + singles
 alias_excluded = 0
 not_applicable_excluded = 0
 [tally.singles_by_domain]
@@ -545,8 +545,10 @@ rank = 1
 bundle = "起動と挨拶"
 assets = 0                # ⑶ members ∩ テンプレート語彙（数え直す）
 shared = 0                # ⑷ 同じ foundation の束の数（数え直す）
-# override = "適合検証 項目 12"   第二段で 4 つの根拠の順序から外す行だけに書く
-# insufficient = true            退路（6.8）で assets が決められない束だけに書き、段階の末尾に置く
+# override = { kind = "second-stage", ref = "項目 12" }   4 つの根拠の順序から外す行だけに書く。kind と ref の受け付け形:
+#   second-stage → ref は「項目 n」（n は 1〜20）または持ち越し行の見出し（要件 9.2）
+#   stage-rule   → ref は "要件 5.3"（「更新」を B の先頭・system.* を C の末尾に置くための例外）
+# insufficient = true            退路（6.8）で assets が決められない束だけに書く。順序の主張から外し、同じ段階の対象行より後に並べる
 
 [[rank]]
 stage = "E"
@@ -581,6 +583,10 @@ empty = 0
 alias = 0
 not_applicable = 0
 
+[[owner_completed]]               # 7.4 ⑵ 完了済み spec を owner に残した宛先（判定 ⑸-e はこの列挙だけを見る）
+spec = "areka-P0-window-placement"
+items = 0                         # その名前を owner に持つ項目数（数え直す）。状態はすべて implemented か degraded
+
 [[template]]                      # 6.3
 name = "ポストと狛犬"
 shiori = "里々"
@@ -598,7 +604,8 @@ ids = ["ukadoc:…:1"]              # 辞書に現れた語彙をカタログの
 
 ```toml
 [briefs]
-count = 27                        # 数え方は本文（本 spec 自身のディレクトリ名を除く）
+count = 27                        # ＝ [[spec]] の行数。着手時の写真（数え方は本文・本 spec 自身のディレクトリ名を除く）
+snapshot_on = "2026-09-11"
 
 [[spec]]
 name = "areka-P0-present-gpu-transform-scale"
@@ -641,6 +648,7 @@ bundle = "…"                      # 写った束。写らなければ none = t
 - 選択肢: (a) 表の列を固定して Markdown の表を読む／(b) ```toml の囲み／(c) `linkage.toml` を別に置く。
 - 採用: (b)。理由は 3 つ。`examples.rs` に囲みの読み手の前例があり `toml` は既存依存である。(a) は 53 件の構成 id を 1 セルに入れる表になり読めない。(c) は要件 4.1「8 つを 1 か所に」と 8.8 に反し、機械の正本と人の解説が別ファイルで乖離する。
 - 骨組みに置く数はすべて判定が数え直す（「数の置き方の規則」）。
+- 本文の表（要件 8.1 ⑶ の「段階ごとの順序付き束一覧」など）は束名・順位・`assets`・`shared` だけを持ち、壊れ方とテーマは「`linkage.md` の `breakage`・`themes`」と欄名で指す（判定されない写しを本文に作らない）。
 - 判定 ⑴ が拾う id の範囲: 囲みの中の引用符付き＋地の文の逆引用符付き。加えて裸の `ukadoc:` を 0 件と主張する（拾い漏れを塞ぐ）。`examples.rs` が囲みの中だけを見るのは「地の文に反例を置く」ためだが、新規 3 文書には反例を置かない。
 
 ### D-2 束の 8 項目の置き場
@@ -671,11 +679,12 @@ bundle = "…"                      # 写った束。写らなければ none = t
 - `.kiro/specs/` 直下で `brief.md` を持つディレクトリのうち `completed` と `OWN_SPEC_DIR` を除く。移動の前後で 27。
 - 要件 12.8 が禁じるのは自 spec の**パス**（`.kiro/specs/areka-P0-…/…`）で、`/kiro-complete` の手順 5-2 が `crates/` を grep して書き換えるのは実ファイル読みだけである。`OWN_SPEC_DIR` は実ファイル読みではないので書き換えの対象にならず、仮に書き換えられても直下に無い名前を除くだけで 27 のままである。定数の注釈にそのことを書く。
 - `roadmap-draft.md` の数え方の本文も名前だけを書き、パスを書かない。
+- 判定 ⑸ は生きた総数と比べない（判定の一覧「⑸ の数え方」）。`[briefs]` に `snapshot_on = "2026-09-11"` を持たせ、段 6 で main へ rebase して `spec_dirs` を数え直し、改名・削除があれば表を直してから完了手続きへ進む。
 
 ### D-7 3 連鎖の補修と makoto 束の分割（設計フェーズの実測・research.md §10）
 
 - **⑴ 時刻**: 既に 3 件の束（`ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1`）。`links` の追加 0 本。名前付き束「時刻の刻み」はこれを核に `OnMinuteChange`・`OnHourTimeSignal`・`system.clock.*` 系を人手で足す。
-- **⑵ 重なり順**: `descript_shell:seriko.zorder…`（assets）は関連 0 本。property 台帳の `currentghost.seriko.zorder` の行に `{ kind = "configures", to = "ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1" }` を **1 本**足す（property→assets は既存 24 件すべてが `configures`・assets→property は 0 件なので向きもこれに従う）。これで既存の 48 件の束（束 id `ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1`）に入る。`\![reset,zorder]` は関連 0 本のままで、名前付き束へは人手で入れる（3.6）。
+- **⑵ 重なり順**: `descript_shell:seriko.zorder…`（assets）は関連 0 本。property 台帳の `currentghost.seriko.zorder` の行に `{ kind = "configures", to = "ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1" }` を **1 本**足す（property→assets は既存 24 件すべてが `configures`・assets→property は 0 件なので向きもこれに従う。README の種別定義は「設定キー → 挙動」で、既存の流儀は定義と逆向きである。束は向きを持たないので判定に影響しないが、その事実を `linkage.md`「補修した関連」節に 1 行書く）。これで既存の 48 件の束（束 id `ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1`）に入る。`\![reset,zorder]` は関連 0 本のままで、名前付き束へは人手で入れる（3.6）。
 - **⑶ インストール**: `\![execute,install,path,…]` と `\![execute,install,url,…]` から `OnInstallComplete` へ `triggers` を各 1 本（sakura-script 台帳・タグ行に書く既存の流儀）。`descript_install:*` 16 件は関連 0 本のままで名前付き束「インストール」へ人手で入れる。合計の追加は **最大 3 本**（property 1・sakura-script 2・shiori 0・assets 0）。本数は実装時に数えて `linkage.md` に書く。
 - **makoto 束（53 件）の分割**: 53 件を繋いでいるのは assets 台帳の 13 のページ単位 id（`dev_bind`・`dev_nar`・`dev_ownerdraw`・`dev_shell`・`dev_update`・`manual_balloon`・`manual_directory`・`manual_ghost`・`manual_install`・`manual_owner_draw_menu`・`manual_shell`・`manual_translator`・`manual_update`）どうしの `same-feature` 46 本で、これはページの相互参照であって機能の繋がりではない。13 件を除くと残り 40 件は「ネットワーク更新（27 件＝`OnUpdate*`・`OnUpdateOther*`・`OnUpdatedata*`・`\![update,…]`・`\![updateother,…]`・`other_homeurl_override`）」＋「`OnInstallComplete` の対（2 件）」＋「URL インストール（`OnURLQuery`＋`\![execute,install,url,…]`）」＋ 9 件の孤立に分かれる。
   - 名前付き束: **ネットワーク更新**（27 件＋`manual_update`・`dev_update`）／**インストール**（`OnInstallComplete` の対・URL インストール・`\![execute,install,path,…]`・`OnInstallCompleteAll`・`OnInstallRefuse`・`OnInstallReroute`・`manual_install`・`descript_install:*` 16 件・`OnInstallBegin` 等の関連 0 本の同系）／**nar の作成**（`\![execute,createnar]`・`OnNarCreating`・`OnNarCreated`・`dev_nar`）／**トランスレータ**（`descript_ghost:makoto`・`manual_translator`。M2 の `translate-pipeline`／`makoto-dll-host` が引受先）／**オーナードローメニュー**（`manual_owner_draw_menu`・`dev_ownerdraw`）／**着せ替え**（`dev_bind`・`dev_shell`・`manual_shell` は着せ替えとシェル切替の解説ページなので、`\![bind,…]`・`OnDressupChanged` 等と同じ束）／`manual_directory`・`manual_ghost`・`manual_balloon` は配布物の構造の解説ページなので「配布物の構造」束（`descript_ghost` の `install.accept` 等と同居）か単独項目。最終の帰属は実装で決め、13 のページ id 全部の行き先を `linkage.md`「機械の束の分割」節に表で書く。
@@ -686,14 +695,15 @@ bundle = "…"                      # 写った束。写らなければ none = t
 - 取得: 里々「ポストと狛犬」・YAYA「はろーYAYAわーるど」（無ければ「SimpleYAYA」）の配布物。URL は実装の最初のタスクで開発者へ確認し、`[[template]]` の `url`・`fetched_on`・`files` に書く。配布物はリポジトリに入れず、実走しない。
 - 写し方: 辞書の本文から、イベント名（里々は `＊OnXxx` の見出し・YAYA は `OnXxx` の関数名）・さくらスクリプトのタグ（`\![…]`・`\s[…]` 等の綴り）・プロパティ名（`currentghost.*` 等）・descript のキー（テンプレートの `descript.txt`）を取り出し、カタログの `title` との一致（引数の部分は捨てる）で id に写す。写せなかった語彙は件数と例を本文に書く。
 - 値: 束の `assets` ＝ `members ∩ ∪ template.ids` の件数。判定 ⑷-d が数え直す。
-- 退路（6.8）: 取得できなければ ukadoc MCP の里々／YAYA wiki が名指しする語彙（`OnFirstBoot`・`OnBoot`・`OnClose`・`OnGhostChanged`・`OnUserInput`・`OnAiTalk`・`OnSecondChange` 等）だけを `ids` にし、`fallback = true` と取得できなかった配布元を書く。その場合も `assets` は数（0 を含む）なので、「根拠不足」に置くのは wiki にも辞書にも現れない束ではなく、**退路を使った事実を書いたうえで `insufficient = true` を付けた束**だけとする。
+- 退路（6.8）: 取得できなければ ukadoc MCP の里々／YAYA wiki が名指しする語彙（`OnFirstBoot`・`OnBoot`・`OnClose`・`OnGhostChanged`・`OnUserInput`・`OnAiTalk`・`OnSecondChange` 等）だけを `ids` にし、`fallback = true` と取得できなかった配布元を書く。その場合も `assets` は数（0 を含む）なので、「根拠不足」に置くのは wiki にも辞書にも現れない束ではなく、**退路を使った事実を書いたうえで `insufficient = true` を付けた束**だけとする。`insufficient` の行は順序の主張（判定 ⑷-e）から外れ、同じ段階の対象行より後に並べる。
 - 9.5 の「一般化で壊れる項目」＝ `∪ template.ids` ∩ 段階 A の構成 id のうち状態が `absent`・`vocabulary-only`・`degraded` のもの。本文に id で列挙する（数は `[[template]]` から導けるので骨組みに重ねて書かない）。
 
 ### D-9 順位の導出と写像の規則
 
 - 段階への写像は人が決めて `[[rank]].stage` に書く。規則 3 つ（5.4）は本文に書き、初期配置（5.2）と食い違う束は「裁定候補」節へ（5.5）。
 - 段階内の順位は `axis_key = (壊れ方の重み, テーマ数, assets, shared)` の降順。壊れ方の重みは 黙って壊れる 3 ＞ 明示エラー 2 ＞ 見た目の差 1 ＞ 該当なし 0。テーマは集合なので比べられる値として**個数**を使う（5.4 も個数で規則を切っている）。同じ鍵は同順位（6.7）。判定 ⑷-e がこの順序を釘付けするので「たぶん重要」で並べた行は赤になる。
-- 「更新」のテーマを持つ束を B の先頭に・`system.*` を C の末尾に置く（5.3）のは人の決めで、順序の主張と両立するように `[[rank]]` を組む（両立しなければ `override` に理由を書き、裁定候補へ）。
+- 順位は 1 から始め、同順位の次は 1 増やす（密な順位 1,2,2,3）。判定 ⑷-e が釘付けする。
+- 「更新」のテーマを持つ束を B の先頭に・`system.*` を C の末尾に置く（5.3）のは人の決めで、順序の主張と両立するように `[[rank]]` を組む。両立しなければその行に `override = { kind = "stage-rule", ref = "要件 5.3" }` を書いて順序の主張から外し、裁定候補にも載せる。第二段の改訂は `override = { kind = "second-stage", ref = "項目 n" または持ち越し行の見出し }`。`override` の形は骨組みの注釈（Logical Data Model）と判定 ⑷-e が正本。
 
 ### D-10 申し送りの処分台帳
 

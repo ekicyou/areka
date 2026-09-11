@@ -162,10 +162,10 @@ brief は 2026-09-02 の値で書かれている。要件は以下の実測値�
 
 #### Acceptance Criteria
 
-1. The 統合調査 shall 状態が `implemented`・`vocabulary-only`・`degraded`・`absent` の項目の全数について、`priority` を「確定した段階 1 文字（A〜E）＋段階内の順位を表す数値」で書き戻す（数値は段階内の束の順位を 1 から通しで振り、同じ束の項目は同じ数値。単独項目も 1 つの束として番号を持つ）。形式は凍結された「段階 1 文字＋数値」のまま変えず、README の欄の定義も変えない（property 調査の「10 刻み」提案は要件 8 の処分台帳で却下の理由を書く）。
+1. The 統合調査 shall 状態が `implemented`・`vocabulary-only`・`degraded`・`absent` の項目の全数について、`priority` を「確定した段階 1 文字（A〜E）＋段階内の順位を表す数値」で書き戻す（数値は段階内の束の順位を 1 から通しで振り、同じ束の項目は同じ数値。同順位の束は同じ数値を持ち、その次の順位は 1 増やす＝密な順位 1,2,2,3。単独項目も 1 つの束として番号を持つ）。形式は凍結された「段階 1 文字＋数値」のまま変えず、README の欄の定義も変えない（property 調査の「10 刻み」提案は要件 8 の処分台帳で却下の理由を書く）。
 2. The 統合調査 shall 状態が `alias`・`not-applicable` の項目の `priority` を `""` にし、その件数（別名 27・対象外 170）を `briefing.md` に書く。
 3. The 統合調査 shall 書き戻しの前後で 4 台帳の作り方の違い（assets の 16 件等分・shiori の群ごとの仮置き・sakura-script と property の C のみ）が解消されたことを、ドメイン別の段階分布の表（前／後）で示す。
-4. The 統合調査 shall `owner` を次の規則で扱う: ⑴ 台帳に既に書かれている進行中 spec の宛先（2026-09-11 時点で 372 件・13 spec）は保つ、⑵ 完了済み spec を指す宛先（同 75 件）は、その項目の状態が `implemented` または `degraded` なら「実装した spec の記録」として保ち、`absent` または `vocabulary-only` なら空にして理由を `note` に書く（完了済み spec は未対応の項目を引き受けられない）、⑶ brief がまだ無い候補 spec の名前を `owner` に書かない（候補 spec への割り当ては `roadmap-draft.md` の側に持つ）、⑷ 規則 ⑴〜⑶ で `owner` を変えた件数を `briefing.md` に書く（0 も書く）。
+4. The 統合調査 shall `owner` を次の規則で扱う: ⑴ 台帳に既に書かれている進行中 spec の宛先（2026-09-11 時点で 372 件・13 spec）は保つ、⑵ 完了済み spec を指す宛先（同 75 件）は、その項目の状態が `implemented` または `degraded` なら「実装した spec の記録」として保ち、`absent` または `vocabulary-only` なら空にして理由を `note` に書く（完了済み spec は未対応の項目を引き受けられない）。残した宛先の spec 名と件数を `briefing.md` の骨組みに列挙し、判定はその列挙だけを見る（生きた `completed/` の全走査で他 spec の完了に連動しない）、⑶ brief がまだ無い候補 spec の名前を `owner` に書かない（候補 spec への割り当ては `roadmap-draft.md` の側に持つ）、⑷ 規則 ⑴〜⑶ で `owner` を変えた件数を `briefing.md` に書く（0 も書く）。
 5. When 台帳の `note` に段階や順位の根拠を書き足す, the 統合調査 shall 既存の記述を消さず、行番号を書かない。
 6. The 統合調査 shall 書き戻しの後に `cargo test -p ukadoc-survey` が緑であることを確かめ、赤になった所見の種別と直し方を作業記録に残す。
 
@@ -204,7 +204,7 @@ brief は 2026-09-02 の値で書かれている。要件は以下の実測値�
 #### Acceptance Criteria
 
 1. The 統合調査 shall `doc/ukadoc-coverage/roadmap-draft.md` を新規に作り、段階 A〜E を M2 以降のマイルストーン候補として並べ、段階ごとに束（`linkage.md` の名前）→候補 spec 名→依存順→ウェーブ案を書く。
-2. The 統合調査 shall 既存の brief 済み未完了 spec の全数（着手時に数えた実数・2026-09-11 時点で 27 本）について、各 spec が「どの段階のどの束に属するか・台帳で `owner` に持つ id の数・roadmap.md のウェーブ（W13〜W17／保留）」を 1 表に書き、どの束にも属さない spec があればそう書く（0 本なら 0 と書く）。
+2. The 統合調査 shall 既存の brief 済み未完了 spec の全数（着手時に数えた実数・2026-09-11 時点で 27 本）について、各 spec が「どの段階のどの束に属するか・台帳で `owner` に持つ id の数・roadmap.md のウェーブ（W13〜W17／保留）」を 1 表に書き、どの束にも属さない spec があればそう書く（0 本なら 0 と書く）。表は着手時の写真であり（撮った日付を添える）、生きた総数との一致は主張しない（判定は表の各名前の実在と行数の一致。要件 11.1 ⑸）。新しい brief の登記先は roadmap.md の spec 台帳であって本文書ではない。
 3. The 統合調査 shall roadmap.md のウェーブ編成（W13〜W17）を入力として扱い、並べ替えを提案するときは「現在のウェーブ・提案・理由（id 付き）」を裁定候補として書き、roadmap.md 自体は編集しない。
 4. The 統合調査 shall 先頭ウェーブ（M2 の最初のウェーブ）に入れる束を名指しし、束ごとに候補 spec 名の案・構成 id の全列挙・依存する既存 spec・`/kiro-discovery` 再入の入力になる 3 行の要約（問題・現状・何が変わるか）を書く。
 5. The 統合調査 shall 先頭ウェーブより後の束について brief を作らず、名前付き束と候補 spec 名の案のまま置く（spec 工場化しない）。
@@ -219,7 +219,7 @@ brief は 2026-09-02 の値で書かれている。要件は以下の実測値�
 
 #### Acceptance Criteria
 
-1. The 統合調査 shall 次の判定を標準のテスト実行（`cargo test -p ukadoc-survey`）に加え、いずれも失敗時にファイル名と id（または束名）を名指しする: ⑴ `linkage.md`・`briefing.md`・`roadmap-draft.md` に引用された項目 id の全数がカタログに実在する、⑵ 引用された機械の束 id の全数が報告 5 本の束の一覧に実在する、⑶ `linkage.md` の名前付き束の構成 id が互いに重ならず、状態が `implemented`・`vocabulary-only`・`degraded`・`absent` の全項目が名前付き束か単独項目のちょうど一方に属する、⑷ `briefing.md` が述べる段階ごとの束数・項目数が台帳の `priority` の頭文字から数えた数と一致する、⑸ `roadmap-draft.md` が述べる brief 済み未完了 spec の数が、`.kiro/specs/` 直下の `brief.md` のうち本 spec 自身のディレクトリ名を除いた実数と一致する（本 spec が `completed/` へ移った後も同じ値になる数え方にする）、⑹ `report/summary.md` のうちカタログと台帳 4 本から決まる本文が、作り直した本文と一致する。
+1. The 統合調査 shall 次の判定を標準のテスト実行（`cargo test -p ukadoc-survey`）に加え、いずれも失敗時にファイル名と id（または束名）を名指しする: ⑴ `linkage.md`・`briefing.md`・`roadmap-draft.md` に引用された項目 id の全数がカタログに実在する、⑵ 引用された機械の束 id の全数が報告 5 本の束の一覧に実在する、⑶ `linkage.md` の名前付き束の構成 id が互いに重ならず、状態が `implemented`・`vocabulary-only`・`degraded`・`absent` の全項目が名前付き束か単独項目のちょうど一方に属する、⑷ `briefing.md` が述べる段階ごとの束数・項目数が台帳の `priority` の頭文字から数えた数と一致する、⑸ `roadmap-draft.md` の spec 表について、表の各 spec 名が `.kiro/specs/` 直下または `completed/` に実在し、述べた数が表の行数と一致し、台帳の非空 `owner` がすべて表の名前か「完了済み spec を `owner` に残した宛先の列挙」（`briefing.md`）の名前であり、その列挙の spec が `completed/` に実在してその名前を `owner` に持つ項目の状態がすべて `implemented` か `degraded` である（他 spec の起票・完了で赤にならず、表の spec の改名・削除で赤になる形にする。本 spec が `completed/` へ移った後も同じ結果になる数え方にする）、⑹ `report/summary.md` のうちカタログと台帳 4 本から決まる本文が、作り直した本文と一致する。
 2. The 統合調査 shall ⑹ について、完了 spec toolkit 要件 7.6 が全体報告を常時検査から外した理由（並走 4 本が同じファイルを取り合う）が調査 4 本の完了で消えたことを根拠に、除外を本 spec で覆す旨を `README.md`「誰が何を作り直すか」の表と本 spec の文書に書く。ただし `summary.md` 末尾の「証拠あり件数」はソース木を歩いて数える値であり、判定に入れると他の spec が正典 URL のコメントを 1 行足すだけで赤になるため、⑹ の判定対象から外す（証拠の表を `summary.md` に残すか `evidence` 副手続きの出力へ移すかは設計で決め、残す場合は「判定の対象外」と表の直上に書く）。
 3. The 統合調査 shall 判定の各種別について、実データの写しを 1 か所だけ壊すと赤になることを示すテストを併せて置く（既知の欠陥を再現して赤にできない判定は判定として数えない）。
 4. The 統合調査 shall 判定の各種別について、対象が 0 件でないこと（母数 0 の緑を恒真にしない）を確かめるテストを置く。
@@ -236,7 +236,7 @@ brief は 2026-09-02 の値で書かれている。要件は以下の実測値�
 1. The 統合調査 shall areka の実行時コード（`crates/ukadoc-survey` 以外の crate）に 1 行も触れない。
 2. The 統合調査 shall `crates/ukadoc-survey` への接触を、要件 11 の判定（テストと、判定に要る読み込み・出力の副手続き）と、要件 7 の書き戻しに使う副手続き（既存の項目の塊のバイト列を保ったまま `priority`・`owner` の欄 1 行だけを置き換えるもの。足すか手編集で済ませるかは設計で決める）に限り、台帳の項目形式・状態の語彙・関連の種別・テーマ 8 つ・ドメインの分割を変えない。
 3. The 統合調査 shall `.kiro/steering/roadmap.md`・既存 27 brief・調査 4 本のブリーフィング・`values.md`・`catalog.toml` を編集しない（是正はすべて本 spec の文書の側に候補として書く）。
-4. The 統合調査 shall `README.md` の編集を、要件 11.2 の表の更新と「この一式に入っているもの」への新規 3 文書の追記に限る。
+4. The 統合調査 shall `README.md` の編集を、要件 11.2 の表の更新とその直下の説明の段落、11.2 に伴い事実でなくなる記述（「報告の扱い」節と「全体報告は黙って古くなる」節の「常時の検査に入っていない」の文）の是正、および「この一式に入っているもの」への新規 3 文書の追記に限る。
 5. The 統合調査 shall SSP との実機比較・実在ゴーストの走行を行わず、意味論の根拠は ukadoc の URL と逐語引用で示す。
 6. The 統合調査 shall 新規 3 文書と台帳の `note` に行番号を書かず、引用は「何の定義行か」または節名で指す。
 7. The 統合調査 shall 完了時の報告に、⑴ 作った文書 3 本の絶対パスと行数、⑵ 台帳の編集件数（`links`・`values`・`priority`・`owner`・`note` ごと。0 も書く）、⑶ 判定の種別数と摂動テストの本数、⑷ 開発者の裁定候補の一覧、⑸ `/kiro-discovery` 再入へ渡す先頭ウェーブの束名と候補 spec 名、⑹ 棚卸セッションへ渡す roadmap.md の改訂候補、の 6 つを書く。
