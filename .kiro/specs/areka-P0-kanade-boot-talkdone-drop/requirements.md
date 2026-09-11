@@ -75,7 +75,7 @@ areka のゴーストは、起動すると「初期化 → 利用者名の照会
 #### Acceptance Criteria
 1. When Requirement 1 の受理が起きる, the kanade 運行状態機械 shall `event=boot_input_ignored` を書かない。
 2. When 起動系列の途中に起動進行と無関係な入力（Tick など）が届く, the kanade 運行状態機械 shall 従来どおり `event=boot_input_ignored`（warn・target `kanade`）を書いて捨てる。綴りは変えない（完了仕様 `areka-P0-emo2-conformance-e2e` の手順書 §5.7・記録 §7 の点灯語）。
-3. When Requirement 1 の受理が起きる, the kanade 運行状態機械 shall 受理したことを info 以上のログ（target `kanade`・`event` フィールド・対象の talk_id 付き）でちょうど 1 行記録する（沈黙の経路を作らない）。
+3. When Requirement 1 の受理が起きる, the kanade 運行状態機械 shall 受理そのものを表す `event` のログ（info 以上・target `kanade`・対象の talk_id 付き）をちょうど 1 行記録する（沈黙の経路を作らない）。ここで数えるのは受理の語の行だけであり、横断遷移が先に書く既存のログ（`Interrupted` 経路の `talk_done_interrupted_as_non_quit` など・本仕様で変えない）は数えない。
 4. The kanade 運行状態機械 shall 追跡中のトークと識別子が一致しない完了通知の扱い（未知 talk_id の error `unknown_talk_done`・1 世代 stale の info `talk_done_stale_choice`）を変えない。
 
 ### Requirement 4: 既存の起動系列挙動の保存
