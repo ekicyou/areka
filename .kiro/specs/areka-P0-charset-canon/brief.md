@@ -77,3 +77,7 @@ emo2 は全て UTF-8 なので M1 適合には無害。toolkit 規則 6 の壊�
 - UTF-8 経路は 1 バイトも変えない（emo2 e2e 全緑・変異＝Shift_JIS 実装を外すと赤になる檻）。
 - 1,000 行番人・`file_length_guard_test.rs` 例外表は非接触。
 - 優先度 4 軸: 壊れ方＝混在（応答＝明示エラー・要求＝黙って壊れる）／伺からしさ＝テーマ 0（配管）／影響資産＝最広（里々全ゴースト）／基盤共有度＝高（SSTP／NAR が再利用）。
+
+---
+
+> **📌 2026-09-11 棚卸⑬（開発者指摘「SJIS だけでなく任意のエンコーディング対応が必要」を要件の主語として明記）**——本 spec の主語は **任意の charset** であり、Shift_JIS は検体の 1 つに過ぎない。⑴ **対応集合＝`encoding_rs` が `Encoding::for_label` で解決できる全ラベル**（WHATWG Encoding Standard: UTF-8・Shift_JIS・EUC-JP・ISO-2022-JP・EUC-KR・GBK／gb18030・Big5・windows-125x・ISO-8859-x・KOI8 等）。ファイル層は既にこの集合で動いており、プロトコル層を同じ基盤に載せる。列挙型で表さない（Approach ⒝ が既定＝`&'static encoding_rs::Encoding` の newtype）。⑵ **要求ヘッダの綴りは `Encoding::name()`**（ukadoc 表記と一致）・応答ヘッダは `for_label` で解決（大小文字・別名を寛容）。⑶ **既知の限界を要件で登記**: encoding_rs は UTF-16LE/BE を**復号のみ**サポートし符号化は UTF-8 へ倒す仕様＝SHIORI/3 の wire で UTF-16 を要求されたら `warn!`＋UTF-8 継続とするか拒否するかを裁定する。⑷ **檻は 1 符号化では任意性を証明しない**＝決定論テストの往復は最低 3 系統（UTF-8・Shift_JIS・EUC-JP）＋未知ラベル 1 で組み、実装が「Shift_JIS 分岐」に退化したら赤になる形にする。⑸ 既定（未宣言時）の固定写像 Shift_JIS は「既定値」であって「対応範囲」ではない（D6 の維持）。
