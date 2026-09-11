@@ -1,0 +1,237 @@
+# ギャップ分析: areka-P0-balloon-font-descript-keys
+
+> 実施 2026-09-11（`kiro-validate-gap`）。対象ブランチ `claude/areka-p0-balloon-font-keys-b2e272`。
+> 本書は**判断ではなく材料**である。案は複数提示し、最終決定は要件ディスカッション／設計フェーズに委ねる。
+> 本書の数値はすべてこのブランチでの実測であり、brief・roadmap の記述をそのまま写したものは 1 件も無い。
+
+---
+
+## 1. 要約（5 点）
+
+- **キー集合 14 は正典側で裏が取れた**。`doc/ukadoc-coverage/catalog.toml` の接頭辞なし `font.*` は 14 行ちょうど（`font.bold`／`font.color.b`／`.g`／`.r`／`font.height`／`font.italic`／`font.name`／`font.outline`／`font.shadowcolor.b`／`.g`／`.r`／`font.shadowstyle`／`font.strike`／`font.underline`）。台帳 `ledger/assets.toml` も同じ 14 項目で、状態は `implemented` 4・`absent` 10。要件 1.1／1.2 の前提は実測と一致する。
+- **2 層マージ・接頭辞漏れ防止・未指定の区別は、すでに機構として在る**。`parse.rs` の 2 層マージはキー非依存（`descript.clone()` に画像別層を後勝ち `insert`）で、写像はその後に 1 回だけ走る。完全一致の `get` で引くので接頭辞付きキーは構造的に混ざらない。よって**要件 4.1〜4.5 を満たすための新規コードは 0 行**で、必要なのはテストによる固定だけである（先例: `vertical` の 2 層テストが「マージ改変 0 行」を証跡として明記している）。
+- **最大の制約は `Font::new` の呼び出し 50 か所**。`Font::new` 50・`FontColor::new` 52・`BalloonModel::new` 43（実測）が `areka-emo-text`／`areka` にまたがって散在する。コンストラクタの引数を伸ばす案を採ると編集集合が 8 crate 以上へ広がり、brief が保証した「W13 の他 spec と共有ファイル 0」も要件 5 の「既存の解析結果を変えない」も守りにくくなる。本リポジトリには**この問題を解いた先例が 3 つある**（`with_cursor`／`with_windowposition_raw`／`with_vertical_raw` の additive ビルダ）。
+- **要件に書かれた数のうち 2 つが実測と食い違う**。⑴ 要件 6.1 の「既に置かれている 9 本」は実測 **4 本**（`parse.rs` の `font.color.r`／`.g`／`.b`／`font.height` のみ。`font.name` には正典 URL コメントが無い）＝新たに置くのは **10 本**。⑵ 要件 1.3 の「3 か所」は実測 **4 文書**（`areka-P0-text-align-shadow-canon/brief.md:27` が漏れている）。どちらも要件本文の改訂を要する可能性があるため、下の「設計判断項目」へ上げる。
+- **網羅調査の道具は本仕様の作業を止めない**。`vocabulary-only` は状態語彙に実在し（`model.rs`）、証拠（正典 URL）の要否を見るのは `Status::Implemented` の行だけなので、`vocabulary-only` の行に URL コメントを置いても検査は赤にならない。逆に `SourceUrlNotInCatalog`（要件 6.5）と `DomainReportStale`（要件 7.8）は実在の判定であり、URL の綴り写しと `report` の作り直しは必須である。
+
+---
+
+## 2. 現状の実測
+
+### 2.1 転記層（`crates/areka-parsers/src/balloon/`）
+
+| ファイル | 行数 | 役割 |
+| --- | ---: | --- |
+| `parse.rs` | 186 | 2 層マージ＋`map_merged` 写像＋`get_scalar` ヘルパ |
+| `model.rs` | 529 | `BalloonModel` と sub-struct（I/O 契約の正本） |
+| `parse_tests.rs` | 409 | `parse`／`parse_str` の決定論テスト |
+| `model_tests.rs` | 596 | モデル型の決定論テスト |
+| `validation_tests.rs` | 208 | 構造規律の検査 |
+| `kv/parse.rs` | 43 | 行分割・最初のカンマで分割・trim・後勝ち・値は生文字列 |
+
+**`map_merged` が引く `font.*` は 5 本**（`font.color.r`／`.g`／`.b` を `u8` で個別に引き `FontColor` へ、`font.name` を `Option<String>` でそのまま、`font.height` を `u32` で）。残る 9 本は引く先が無い。上流 `kv::parse_kv` は未知キーも `BTreeMap` に保持するので、値が落ちるのは転記層である（brief の記述と一致）。
+
+**2 層マージはキー非依存**である。
+
+- `parse()` が `descript.clone()` を作り、画像別層があれば各エントリを後勝ち `insert` して「マージ済み 1 マップ」を作る。
+- `map_merged()` はそのマージ済み 1 マップからのみ引く。
+
+つまり 3 段優先度（画像別 ＞ 既定層 ＞ 未指定）は**キーを 1 本足すごとに自動で成立する**。要件 4.1／4.2／4.3 は実装作業ではなくテスト作業である。
+
+**接頭辞漏れ防止も構造的に成立している**。`get_scalar` は `merged.get(key)` の完全一致で、`anchor.font.color.r` のような distractor は別キーなので当たらない。`parse_tests.rs:162` の `distractor_keys_do_not_leak_into_modeled_scalars` がすでに `anchor.font.color.r`／`number.font.height`／`sstpmessage.font.height`／`cursor.font.color.r` の 4 本を固定している。要件 4.4 は**この既存テストを壊さずに影のキーを足す**形になる。
+
+**値の保ち方の先例が 3 種ある**。
+
+| 先例 | 型 | 判断 |
+| --- | --- | --- |
+| `font.color.r`／`.g`／`.b` | `Option<u8>`（`get_scalar`） | 範囲外・非数値は `None` へ降格 |
+| `font.height` | `Option<u32>` | 同上 |
+| `vertical`／`writing_mode`／`budoux_newline`／`windowposition.limit` | `Option<String>`（生文字列転記） | 検証・語彙判定・縮退はすべて下流 |
+
+要件 2.5（語彙外の値を落とさず素通し）と要件 2.6（`none`・数値・未指定の 3 値区別）は、**`get_scalar` 系では満たせない**——`get_scalar::<u8>("300")` は `None` になり、宣言された事実そのものが消えるからである。これは後段の案 A/B/C の分岐点である。
+
+### 2.2 モデル層の拡張様式（決定的な制約）
+
+`Font` は `#[non_exhaustive]`・非公開フィールド・read-only アクセサ。`BalloonModel` には additive ビルダの先例が 3 本ある（`with_cursor` 16 箇所・`with_windowposition_raw`・`with_vertical_raw` 9 箇所）。いずれも doc コメントに「既存呼び出し側は無改変」と理由が明記されている。
+
+**実測した呼び出し数**:
+
+| コンストラクタ | 呼び出し箇所 | 主な所在 |
+| --- | ---: | --- |
+| `Font::new` | 50 | `areka-emo-text/src/`（actor・draw・layout・wrap・writing・region ほか）・`areka-emo-text/tests/`・`areka/src/input_events/` |
+| `FontColor::new` | 52 | 同上 |
+| `BalloonModel::new` | 43 | 同上 |
+
+`Font::new` の引数を伸ばすと、この 50 箇所すべてが編集対象になる。brief の「編集集合＝`balloon/{parse,model}.rs`＋兄弟テスト＋`ledger/assets.toml`」と roadmap の「W13 は共有ファイル 0」を同時に破るので、**案の選択はここでほぼ決まる**。
+
+### 2.3 網羅調査の道具（`crates/ukadoc-survey`）
+
+- 状態語彙は 6 種（`implemented`／`vocabulary-only`／`degraded`／`absent`／`alias`／対象外）。`vocabulary-only` は実在する（`model.rs:79`・表示名「語彙のみ」）。台帳の状態語がこの語彙外だと**読み込みそのものが止まる**（`a_status_word_outside_the_seven_stops_the_ledger_read`）。
+- 証拠の行の形は厳格である（`evidence/extract.rs`）: 字下げを除いた行頭が `//`／`///`／`//!` のいずれかで始まり、`ukadoc:` の後に**空白 1 つ以上＋ちょうど 1 語**。説明文を続けると拾われない。要件 6.3 はこの実装そのままである。
+- **証拠の要否を見るのは `implemented` の行だけ**（`check/content.rs:104` の早期 return）。`vocabulary-only`／`absent` の行に URL コメントが在っても所見は出ない。要件 6.1 の「14 本すべてに置く」は道具と衝突しない。
+- 実在する判定は 15 種。本仕様に効くのは `SourceUrlNotInCatalog`（URL がカタログに無い＝要件 6.5）と `DomainReportStale`（ドメイン別報告が台帳と食い違う＝要件 7.8）。常設テストは `crates/ukadoc-survey/tests/consistency/`（`real_repo_data_produces_no_findings` ほか）にあり、ネットワークもスナップショットも要らない。
+- **優先度・束の名前・備考の文面は機械が見ていない**。要件 7.2／7.3／7.5 は人が守る規約であり、赤にはならない。ここは最終検証で全数を数え直す類の要件である（steering「全項目に○○型の要件はタスク別レビューに映らない」）。
+
+### 2.4 台帳の現状（14 項目・実測）
+
+| 項目 | 状態 | 担当 | 優先度 |
+| --- | --- | --- | --- |
+| `font.color.r`／`.g`／`.b`・`font.height` | `implemented` | `areka-P0-text-decoration-canon` | E66 |
+| `font.name` | `absent` | 同上 | A11 |
+| `font.bold`・`italic`・`outline`・`strike`・`underline` | `absent` | 同上 | A11 |
+| `font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle` | `absent` | 同上 | A11 |
+
+`report/assets.md` の現在値は 実装済み 42／語彙のみ 65／縮退 8／未対応 423／別名 4／合計 542、`descript_balloon` 行は 20／5／4／133／0／0／0／162。9 項目が `absent` → `vocabulary-only` へ動くと、全体が 語彙のみ 74／未対応 414、`descript_balloon` が 20／14／4／124 になる見込み（作り直しは道具が行う）。
+
+### 2.5 正典の確認（ukadoc MCP・2026-09-11）
+
+要件 3.2／3.3 が登記する既定値と語彙を、正典本文で照合した。
+
+| 項目 | 正典本文 | 既定値 |
+| --- | --- | --- |
+| `font.shadowstyle` | 「フォントの陰落ち色のスタイル。offset で右下にずれた表示、outline で縁取り」・2.5.27 | `offset` |
+| `font.shadowcolor.r` | 「フォントの陰落ち色赤(0〜255) none で無効化」 | `none` |
+| `font.bold` | 「常に太字フォント。0 で無効/1 で有効」 | `0` |
+| `font.outline` | 「常に外枠線をつける。0 で無効/1 で有効」 | `0` |
+
+要件 3.2／3.3 の登記値は**正典と一致する**（`font.outline` が 0/1 の 5 本目であることも確認済み）。設計フェーズで残る確認は `font.name`＝`ＭＳ ゴシック`／`font.height`＝`12`／`font.color.*`＝`0` の 3 系統だけである。
+
+---
+
+## 3. 要件 → 資産の対応表
+
+タグ: **済** 既存資産で満たされる／**要追加** 新規コード・文書が要る／**未知** 研究待ち／**制約** 既存構造からの縛り。
+
+| 要件 | 対応する資産 | ギャップ |
+| --- | --- | --- |
+| 1.1 キー集合 14 | `catalog.toml:113-126`（14 行）・`ledger/assets.toml:1541-1756`（14 塊） | **済**（照合元が実在・数も一致） |
+| 1.2 内訳 5／9／0 | `parse.rs` の `map_merged`（5 本）・台帳（`implemented` 4＋`absent` 10） | **済**（ただし「写像済み 5」と「台帳 implemented 4」は別勘定。`font.name` は写像済みだが `absent`＝要件 7.6 が理由を持つ） |
+| 1.3 「13 キー」の是正 3 か所 | 実測 4 文書（下の設計判断 ①） | **要追加＋未知** |
+| 1.4 食い違い時はカタログを照合元に | `catalog.toml` | **済** |
+| 2.1／2.3 0/1 系 5 本＋`shadowstyle` の保持 | 写像先が無い | **要追加** |
+| 2.2／2.6 影色 3 成分の個別保持・`none`／数値／未指定の 3 値区別 | `FontColor`（`Option<u8>`）は**この 3 値を表せない** | **要追加（型の選択が論点）** |
+| 2.4 未指定と宣言値の区別 | `Option<T>` 直持ちの既存規律 | **済（様式）／要追加（対象）** |
+| 2.5 語彙外値の素通し | `get_scalar` は `None` へ降格させてしまう | **制約（案の分岐点）** |
+| 2.7 失敗しない・警告しない | `parse` は `Result` を返さず panic しない | **済** |
+| 3.1 既定値を代入しない | 既存規律（未指定は `None`） | **済** |
+| 3.2〜3.4 既定値表の登記・下流への割り振り | 正典で照合済み（§2.5） | **要追加（文書）** |
+| 4.1〜4.3 2 層優先度 | キー非依存の 2 層マージ（`parse.rs`） | **済（機構）／要追加（テスト）** |
+| 4.4 接頭辞漏れ防止 | 完全一致 `get`＋既存 distractor テスト | **済（機構）／要追加（影のキーを足す）** |
+| 4.5 非写像キーの無視 | 完全一致引きゆえ自然に成立 | **済** |
+| 5.1／5.2 既存解析結果の不変 | 既存 5 キーの写像に触れない設計が可能 | **制約（案の選択で決まる）** |
+| 5.3 既存テストの期待値を緩めない | `parse_tests.rs`・`model_tests.rs`・`validation_tests.rs` | **済（規律）** |
+| 5.4 見た目が変わらない | 読み手が未着地＝消費側が無い | **済** |
+| 6.1 14 本の URL コメント | 実測 4 本（`font.name` は未設置） | **要追加 10 本**（設計判断 ②） |
+| 6.2 URL はカタログから写す | `catalog.toml` の `url` 欄 | **済** |
+| 6.3 行の形 | `evidence/extract.rs` の実装どおり | **済（規律）** |
+| 6.4 定義箇所だけに置く | 既存 4 本は `parse.rs` の写像行に在る（設計判断 ③） | **要追加／未知** |
+| 6.5 カタログに無い URL 0 件 | `SourceUrlNotInCatalog` 判定＋常設テスト | **済（検査が在る）** |
+| 7.1 9 項目を `vocabulary-only` へ | 状態語彙に実在 | **要追加** |
+| 7.2／7.3 備考の書き換え | 機械は見ない＝人手＋最終の全数確認 | **要追加（見落としやすい）** |
+| 7.4 影 4 項目の担当変更 | 現在 14 項目すべて `text-decoration-canon` | **要追加** |
+| 7.5 優先度据え置き・束名の是正 | A11 の束名「読む経路が無い」が 9 項目で偽になる（設計判断 ④） | **要追加／未知** |
+| 7.6 残り 5 項目の据え置き | 台帳の現状と一致 | **済** |
+| 7.7 `report/assets.md` の作り直し・`summary.md` 不触 | `cargo run -p ukadoc-survey -- report`（ドメイン別 4 本のみ） | **済（道具が在る）** |
+| 7.8 検査 0 件 | `cargo test -p ukadoc-survey` | **済** |
+| 8.1〜8.4 下流への引き渡し | 下流 2 spec は **brief のみ**（requirements.md 不在＝未着地）を実測 | **済（判定材料）／要追加（申し送り文書）** |
+| 9.1〜9.6 決定論テスト | `parse_tests.rs` の既存様式をそのまま延長できる | **要追加** |
+| 9.7 「14 である」ことを判定にする | 該当する既存テストが無い | **要追加（設計判断 ⑤）** |
+| 9.8 出力を切り詰めない | steering 既知の罠（`\| tail` が exit code を隠す） | **済（規律）** |
+
+---
+
+## 4. 実装案
+
+### 案 A — `Font` の既存コンストラクタを伸ばす（**非推奨**）
+
+`Font::new(name, height, color, bold, italic, outline, strike, underline, shadow_color, shadow_style)` のように引数を足す。
+
+- ✅ 型が 1 つで済み、アクセサの所在が分かりやすい。
+- ❌ **`Font::new` の呼び出し 50 箇所を全部書き換える**。`areka-emo-text`（15 ファイル以上）・`areka` にまたがり、brief の編集集合と roadmap の「W13 共有ファイル 0」を同時に破る。
+- ❌ 要件 5.1／5.2 の「既存の解析結果を変えない」の証明コストが跳ね上がる（50 箇所の書き換えが挙動不変であることを別途示す必要が出る）。
+- ❌ 引数 10 個の位置引数はこのリポジトリのどの先例よりも長い。
+
+### 案 B — additive ビルダで足す（**先例に忠実**）
+
+`Font` に additive フィールドを足し、`Font::with_style(...)`／`Font::with_shadow(...)`（または `BalloonModel::with_font_extras(...)`）で相乗りさせる。`Font::new` の署名は不変。
+
+- ✅ **`with_cursor`／`with_windowposition_raw`／`with_vertical_raw` と同じ流儀**。3 度採られた判断であり、doc コメントに理由まで残っている。
+- ✅ 呼び出し 50 箇所が無改変＝要件 5.1／5.2 が構造で満たされる。`#[non_exhaustive]` と `Default` 派生により後方互換。
+- ✅ 編集集合が `balloon/{parse,model}.rs`＋兄弟テストに閉じる（brief の Constraints どおり）。
+- ❌ 「取り出し口」が `font().name()` と `font().style().bold()` のように 2 段になる可能性がある（下流の読みやすさの論点＝設計判断 ⑥）。
+- ❌ additive フィールドが 4 本目になる。`BalloonModel` のフィールドが増え続けることの是非は設計で一度点検すべき。
+
+**値の型の下位選択**（案 B 内の分岐・要件 2.5／2.6 に直結）:
+
+| 下位案 | 中身 | 評価 |
+| --- | --- | --- |
+| B-1 全部 `Option<String>` の生文字列転記 | `vertical`／`writing_mode`／`windowposition.limit` と同じ | 要件 2.5（語彙外の素通し）と 2.6（`none`／数値／未指定）を**そのまま**満たす。判定はすべて下流。型が 1 種で済む |
+| B-2 0/1 系 5 本は `Option<u8>`、影色は `Option<String>`、`shadowstyle` は `Option<String>` | 既存 `font.color.*` の流儀を部分的に継承 | `font.bold,2` が `Some(2)` として残るので要件 2.5 は満たすが、`font.bold,yes` は `None` へ落ちて**宣言の事実が消える**＝要件 2.5 違反 |
+| B-3 影色だけ `Option<ShadowComponent>`（`None`／`Keyword(String)`／`Value(u8)` の 3 値 enum） | 3 値を型で表す | 要件 2.6 に最も忠実。ただし転記層が語彙（`none`）を知ることになり、steering「parser は転記層・解釈は下流」と摩擦する |
+
+**B-1 が最も規律に合う**。転記層が値の形を一切知らずに済み、要件 2.5／2.6／2.7 がいずれも「文字列をそのまま持つ」だけで成立する。要件 2.6 の「3 つを互いに区別できる形」は `None`／`Some("none")`／`Some("64")` で満たされる。
+
+### 案 C — 新しい型を独立させる（ハイブリッド）
+
+`model.rs` に `FontDecoration`（0/1 系 5 本）と `FontShadow`（影 4 本）の 2 型を新設し、`BalloonModel` へ additive に載せる（`Font` には触れない）。
+
+- ✅ `Font` を全く触らないので要件 5.1 の証明が最も軽い。
+- ✅ **下流 2 spec の分担（書体 10 ＝ `text-decoration-canon`／影 4 ＝ `text-align-shadow-canon`）が型の境界と一致する**＝要件 3.4／8.4 の申し送りが型の形で表現される。
+- ✅ `model.rs` の行数増を新しい節に閉じ込められる（529 → 750 前後の見込み・1,000 行番人の余裕内）。
+- ❌ `font().bold()` ではなく `decoration().bold()` になり、「バルーンの書体設定」が `Font` と別の型に分かれる。概念の一体性は下がる。
+- ❌ 型が 2 つ増える（`#[non_exhaustive]`・`Default`・アクセサ一式）。
+
+**案 B（B-1）と案 C は排他ではない**。`Font` に additive で載せるか `BalloonModel` に載せるかだけの違いであり、いずれも `Font::new` の 50 箇所を触らない。設計フェーズで決めるのは「取り出し口の見え方」であって、実現可能性ではない。
+
+---
+
+## 5. 規模と危険度
+
+| 区分 | 判定 | 根拠 |
+| --- | --- | --- |
+| 規模 | **S**（1〜3 日） | 新規ロジックは「9 本を引いて持つ」だけ。2 層マージ・漏れ防止・寛容写像はすべて既存機構。作業量の実体はテストと台帳・文書の整備 |
+| 危険度（コード） | **低** | 完全一致引きの追加は既存キーに触れない。`Font::new` を触らない案なら呼び出し 50 箇所が無改変 |
+| 危険度（文書・台帳） | **中** | 要件 7.2／7.3／7.5 は機械が見ない人手の書き換えで、14 項目×複数行にわたる。steering の既知の罠「全項目に○○型の要件はタスク別レビューに映らない」に正面から該当する |
+| 危険度（数の齟齬） | **中** | 要件 6.1 の「9 本」と 1.3 の「3 か所」が実測と食い違う（§1・§6）。着手前に決着しないと、実装が要件どおりでも検証で赤くなる |
+
+**行数の見張り**: `model.rs` 529・`model_tests.rs` 596・`parse_tests.rs` 409。1,000 行番人（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の対象。案 C で型 2 つを足すと `model.rs` が 750 前後、テストを 9 キー分足すと `model_tests.rs` が 800〜900 に達し得る。**着地時点で余裕が 100 行を切るなら、兄弟ファイルへのテーマ分割を設計に織り込むこと**（`<stem>_<テーマ>_tests.rs`・structure.md の導出規則に従う）。
+
+---
+
+## 6. 実測と要件の食い違い（要ディスカッション）
+
+| # | 要件の記述 | 実測 | 影響 |
+| --- | --- | --- | --- |
+| ⒜ | 要件 6.1「既に置かれている 9 本を含めて 14 本」 | 既設は **4 本**（`parse.rs` の `font.color.r`／`.g`／`.b`／`font.height`）。`font.name` にも無い | 新規に置くのは **10 本**。要件本文の数の訂正が要るか、「9 本」を別の意味（新規に置く 9 本＝影 4＋0/1 系 5）と読むかの確認が要る。後者と読んでも `font.name` の 1 本が誰にも数えられない |
+| ⒝ | 要件 1.3「3 か所（本仕様 brief・分割元 brief・roadmap）」 | 「基底 13 キー」を書く**生きた文書は 4 本**。漏れているのは `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md:27` | 是正漏れが 1 件出る。なお `roadmap.md` は「13 キー」とは書かず `:124` に「残り 8 キー」とだけ書く。`roadmap-history.md:749` にも「descript 13 キー」が在るが、steering が history を**非改変**と定めているので対象外と考えられる |
+| ⒞ | 要件 7.5「束の名前だけを実態に合わせ」 | A11 の束名は「台詞の書体・読む経路が無い」。9 項目が `vocabulary-only` になると偽になる。一方 `font.name` は**現に読まれている**のに同じ A11＋同じ束名のまま据え置き（要件 7.6） | 束名を変えると `font.name` だけが古い束名に残るか、読まれているのに「読む経路が無い」束に残るかの二択になる。台帳の規則「同じ束の項目には同じ優先度」は保てるが、束名と実態の対応は 1 件ほつれる |
+
+---
+
+## 7. 設計判断項目（要件ディスカッションへ）
+
+> いずれも「答えで作業が変わる」ものに絞った。決めるのは開発者であり、本書は選択肢と各案の帰結だけを示す。
+
+1. **要件 6.1 の「9 本」をどう読むか**。実測は既設 4 本・未設置 10 本。⒜ 要件の数を 4／10 へ訂正する、⒝ 「新規に置く 9 本」と読み替えて `font.name` の 1 本を別扱いにする、⒞ 実装は 14 本を揃えるだけとし数の記述は設計で正す——のいずれか。**要件本文は確定済みなので、訂正が要るなら要件ディスカッションで決める必要がある。**
+2. **要件 1.3 の是正先を 3 か所から 4 か所へ広げるか**。`text-align-shadow-canon/brief.md:27` を含めるかどうか。含めないと「基底 13 キー」の記述が 1 本生き残る。`roadmap-history.md` は非改変の方針があるため対象外とする前提でよいか。
+3. **正典 URL コメントの置き場**。既設 4 本は `parse.rs` の写像行に在る（`get_scalar` 呼び出しの直前）。要件 6.4 は「定義箇所だけに置き、呼び出し側には置かない」と言うが、本仕様では「キーを引く行」が実質の定義箇所である。⒜ 既設と同じく `parse.rs` に 14 本を揃える（一貫性が高い）、⒝ `model.rs` のフィールド定義側に置く（「定義箇所」の語に忠実だが既設 4 本と場所が割れる）、⒞ 両方に置く（機械は重複を赤にしないが、要件 6.4 の趣旨に反する）。
+4. **台帳の束名と `font.name` の扱い**（§6 ⒞）。⒜ 9 項目を新しい束名へ移し `font.name` は現状の束名に残す、⒝ `font.name` も含めた 10 項目の束名を「読む経路はあるが使う側が無い／描画が正典どおりでない」の形に整える、⒞ 束名を変えず備考の文だけで実態を説明する。**優先度 A11 は要件 7.5 が据え置きと定めているので、変えるのは名前と備考だけ。**
+5. **「14 である」ことの判定の形**（要件 9.7）。⒜ 転記層のテストで、写像したキー名の一覧を定数として持ち、その要素数が 14 であることを `assert` する（カタログとは切れる＝カタログが増えても気付かない）、⒝ テストが `doc/ukadoc-coverage/catalog.toml` を読み、接頭辞なし `font.*` の行数と写像キー数を突き合わせる（カタログ追随するが、パーサ crate がドキュメントを読む依存が生まれる）、⒞ `ukadoc-survey` 側の常設テストに 1 本足す（道具の所有物になるが、本仕様の編集集合が `crates/ukadoc-survey` へ広がる）。**steering「検査は表示するだけでなく判定させよ」「母数 0 の緑は恒真」に照らすと ⒝ か ⒞ が筋。編集集合との兼ね合いが論点。**
+6. **取り出し口の見え方**（案 B と案 C の選択）。⒜ `Font` に additive で載せる（`font().bold()` 相当の 1 段）、⒝ `FontDecoration`／`FontShadow` の 2 型を `BalloonModel` に載せる（下流 2 spec の分担と型の境界が一致）。どちらも `Font::new` の 50 箇所を触らない。**下流が読む形を先に決める話なので、要件 8.4 の申し送り内容と一体で決めるのが自然。**
+7. **値の型**（案 B-1／B-2／B-3）。要件 2.5（語彙外の素通し）と 2.6（`none`／数値／未指定の 3 値）を同時に満たすのは **B-1 の全生文字列転記**が最も素直で、`vertical` の先例と同じ。数値として持ちたい要望があるなら、`font.bold,yes` のような値が黙って消える帰結を受け入れるかの確認が要る。
+8. **着地順の判定時点**（要件 8.3）。下流 2 spec（`text-decoration-canon`・`text-align-shadow-canon`）は**現時点で brief しか無い**（`requirements.md` 不在＝未着地）ことを実測した。よって要件 8.1 の「先に着地する」側になる見込みだが、要件 8.3 は「着地時点の実測で判定」と定めているので、**最終タスクで再測定する手順を設計に明記するか**を決める。
+
+---
+
+## 8. 設計フェーズへ持ち越す研究項目（Research Needed）
+
+- `font.name`＝`ＭＳ ゴシック`／`font.height`＝`12`／`font.color.*`＝`0` の既定値を正典本文で再照合する（`shadowstyle`／`shadowcolor`／`bold`／`outline` は本書で照合済み）。
+- `report/assets.md` の作り直し後の実数（語彙のみ 74／未対応 414 の見込み）を、道具の出力で確定させる。§2.4 の数は手計算の見込みであり、**道具に数えさせるまでは根拠にしない**。
+- 1,000 行番人に対する着地後の余裕を実測し、余裕が乏しければテストのテーマ分割を設計に含める。
+- 要件 7.7 の「統合担当への申し送り」の置き場（`ukadoc-coverage-roadmap` の brief への追記か、本仕様の文書内の節か）を決める。
+
+---
+
+## 9. 次の段
+
+要件ディスカッションで上の設計判断 8 件に決着を付けた後、`/kiro-design areka-P0-balloon-font-descript-keys` で設計フェーズへ進む。
