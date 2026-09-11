@@ -286,3 +286,53 @@
 - **`GenericCommand` の「空トークンを保持する」規約**は `\f[]`・`\f[bold,]` にも当てはまる（R2.2）。`args` の空文字列を潰さない。
 - **`\f` bare（引数なし）**は lexer で bare タグになり `decode_bare` → `Raw` へ落ちる。R2.6 は「`\f` も `warn` で表示不変」と言うので、`decode_bare` にも `"f"` の腕（`Font { args: vec![] }`）を足すか、`Raw` のまま捨てる（記録は `compile` の catch-all の `debug!`）かを設計で決める。後者は R2.6 の `warn` と食い違う。
 - **上流の配線が無い 2 点**（背景色・フォントの探索フォルダ）は本仕様の brief の「編集集合」に無い crate（`areka`／`areka-emo-present`）に触れる可能性がある。口だけ用意して値の配線を後続へ渡すなら、その追跡先を brief に相互登記する（R16.6）。
+
+---
+
+## 9. 設計フェーズの追記（2026-09-11・design.md 生成時）
+
+> §0〜§8 は非改変。本節は設計生成にあたって実測し直した事実と、design.md が採った決定（D14〜D25）を記す。決定の本文は design.md が正本で、ここには根拠と却下した案だけを残す。
+
+### 9.1 設計時に新たに実測した事実（2026-09-11）
+
+| 事実 | 所在 | 設計への影響 |
+|---|---|---|
+| **`draw.rs` の本文を字面で検査する既存テストがある**。`draw_format_metrics_tests.rs` の `font_family_reaches_directwrite_only_as_author_name_or_default_retry`（:590）は `include_str!("draw.rs")`（:507）で `draw.rs` 単体を読み、`try_create_format` の出現数 3・`create_text_format` 本文の 2 つの呼出文字列・`for_mode` の出現数 2 を固定している。同テストの doc は「改名・改形したときはこの検査も同時に更新すること」と明記する | `crates/areka-emo-text/src/draw_format_metrics_tests.rs` | §5 の分割案（`ResolvedFont`・`create_text_format`・`try_create_format` を `draw_font.rs` へ出す）は**分割の段階でこのテストを赤にする**＝R1.5 違反。分割の形を変える（D15） |
+| **`layout.rs` の本文を字面で検査する既存テストがある**。`layout_cursor_overflow_tests.rs` の `LAYOUT_SRC = include_str!("layout.rs")`（:422）は `finish_line(` 4 回・`finish_pending_line(` 3 回・`fn finish_pending_line(` の存在を `layout.rs` 内で固定する | `crates/areka-emo-text/src/layout_cursor_overflow_tests.rs` | §3 D6 の候補のうち「`finish_pending_line`＋`apply_pending_*`」を動かすと赤。動かす塊を `segment_advance_sum`＋`resolve_cursor_component` に限定する（D16） |
+| **純粋層の `windows` 非依存を字面で検査するテスト**が `lib.rs` の `pure_layer_modules_have_no_windows_imports` にあり、検査対象ファイルを配列で列挙している | `crates/areka-emo-text/src/lib.rs`（:174 付近） | 新設する純粋ファイル（`look.rs`・`color.rs`・`state_decoration.rs`・`layout_line_ops.rs`・`layout_styled.rs`）を実体化の段階で列挙に足す（列挙しないと被覆が黙って縮む・steering の規律） |
+| `ViewboxExecutor::render` の呼出は本番 1 か所（`actor.rs` :867）に対しテスト 46 か所、`DWriteMetrics::new` は本番 1（`actor.rs` :774）に対しテスト 14 か所 | `crates/areka-emo-text/src/*_tests.rs`・`tests/*.rs` | 既存署名は変えず、装飾入りの入口を**別名で足す**（`render_styled`・`DWriteMetrics::new` は内側で候補列を解決） |
+| `PositionedGlyph { .. }` の構築は本番 2（`layout.rs`・`canvas.rs`）＋テスト 5 ファイル。`ResolvedFont { .. }` の構築は `draw.rs` の `resolve` のほかテスト 3 か所（`draw_format_metrics_tests`・`draw_oracle_tests`・`tests/viewbox_blit_spike.rs`） | 同上 | フィールド追加の書き換えは実体化の段階のテスト改訂に含める（分割の段階では触れない） |
+| lexer の `scan_bracket_args` は角括弧内の `\` を **`\]` のときだけ**リテラル `]` にし、それ以外の `\` は文字として引数に残す | `crates/areka-parsers/src/sakura/lexer.rs` の `fn scan_bracket_args` | `\![\f,bold,1]` と綴れば `GenericCommand { name: "\f" }` になり得るため、運搬名 `"\f"` は**構造的には**衝突を排除しない（D25 で受容の理由を記す） |
+| `BalloonScopeAssets { scope, emo_world, atlas, model }`（`crates/areka/src/emo2_boot/assets.rs` :112）が面 0 の bake 済みアトラスと定義を同じ束で持ち、`frame/attach.rs` の `connect_balloon_text`（:408）が `register_actor_view(actor, &view, model)` を呼ぶ。アトラスの面は `atlas.resolve(SetId(0), rel_path)`（rel_path＝`ResolvedFace::file_name`・`synthetic_surfaces_txt` が `element0,overlay,{file_name},0,0` と書く）で引け、`AtlasEntry.placement`（`trim_offset`・`uv_rect`・`page`）と `AtlasPage.bytes`（premultiplied BGRA）で画素に届く | `crates/areka/src/emo2_boot/assets.rs`・`frame/attach.rs`・`crates/areka-emo-atlas/src/table.rs` | 背景色の源は**アトラスの面 0 の原点画素**（追加のファイル読取なし・D19） |
+| `windows` 0.62.2 の DirectWrite バインディングに `SetFontFamilyName`／`SetFontSize`／`SetFontWeight`／`SetFontStyle`／`SetUnderline`／`SetStrikethrough`／`SetDrawingEffect`／`GetSystemFontCollection`／`FindFamilyName` の定義があることを再確認（12 件ヒット） | `c:\rust\cargo\registry\src\...\windows-0.62.2\src\Windows\Win32\Graphics\DirectWrite\mod.rs` | 依存追加なし |
+
+### 9.2 設計決定（D14〜D25・design.md が正本）
+
+- **D14 `StyleId(0)`＝既定の見た目（表に載せない）**。装飾表 `StyleTable` は既定と異なる見た目だけを持ち、文字の装飾番号 0 は「そのスコープの既定の見た目」を指す記号とする。理由: ⑴ 装着（`register_actor`）より前に届いた cue も、表示時点の既定で描ける ⑵ 既定だけの行は番号がすべて 0 なので「範囲指定を 1 度も呼ばない」を構造で満たせる（R14.2）⑶ 既定の見た目が変わっても（DPI 再追従の再登録）表を作り直さない。却下: 「表の 0 番に既定を格納」（登録前後で 0 番の中身が食い違う）。
+- **D15 `draw.rs` の分割の形（§5 から変更）**。`draw.rs` に**残す**もの＝定数・`ResolvedFont`・`DirectionRecipe`・`create_text_format`・`try_create_format`・`create_d2d_target_bitmap`・`device_err`・テスト接続。**出す**もの＝`DWriteMetrics`＋`measure_line_box_ratio`（→`draw_metrics.rs`）・`CachedLineLayout`＋`LineLayoutStore`＋`measure_line_overhang`（→`draw_line_store.rs`）・比較専用オラクル `DrawExecutor`＋`FormatKey`＋`create_target_bitmap`＋`none_err`（→`draw_oracle.rs`・`#[cfg(test)]`）。理由: 9.1 の字面検査が `draw.rs` 単体を読むため、検査対象の定義を動かすと分割の段階で赤になる。残る `draw.rs` は約 400 行で、本仕様が足す `looks` の接続（約 40 行）を受けても上限から遠い。
+- **D16 `layout.rs` から出す塊**＝`segment_advance_sum`＋`resolve_cursor_component`（→`layout_line_ops.rs`・子モジュール）。`finish_line`／`finish_pending_line`／`apply_pending_*` は 9.1 の字面検査が `layout.rs` 内に固定しているので動かさない。装飾入りの入口 `layout_styled` は子モジュール `layout_styled.rs` に置き、`layout.rs` 本体の変更は `layout_inner` の引数 1 つと行内最大 em の追跡（約 30 行）に留める。
+- **D17 候補列の解決点＝`create_text_format` の手前**。`FontCatalog::pick(&ResolvedFont) -> ResolvedFont`（COM）が候補列から「最初にインストール済みの名前」を選んで `name` に据えた複製を返し、`DWriteMetrics::new` と両 executor の `ensure_format` がその複製で既存の `create_text_format` を呼ぶ。`create_text_format` 本文はバイト単位で不変（9.1 の字面検査が緑のまま）。却下: `create_text_format` の内側で解決（検査の改訂を分割の段階に持ち込む）。
+- **D18 範囲指定の適用点を 2 つに分ける**。フォント系（家族名・大きさ・太さ・斜体・下線・打ち消し線）は行 TextLayout の**生成時に 1 度**（`LineLayoutStore::line_layout_decorated`）、色は**毎フレーム**（`ViewboxExecutor` Phase 1・既存の hover と同じ場所）。理由: 生成物は行の内容と装飾が同じ間キャッシュされる（R11.4）が、`SetDrawingEffect` は hover が毎フレーム全範囲リセットするので色だけは毎フレーム焼き直す必要がある。順序は「全範囲 `None` → 装飾の色 → hover の色」（後勝ち・R3.5）。既定だけの行は 3 つとも呼ばない。
+- **D19 背景色の源**＝`BalloonScopeAssets` に `background_color: (u8,u8,u8)` を足し、`assets.rs` が面 0 のアトラス原点画素から導く（新ファイル `emo2_boot/balloon_background.rs`）。α が 255 でない（透明・半透明・トリムで原点が bbox の外）ときは白＋`debug!`。文字レンダリング層側の口は `TextLayerRuntime::set_balloon_background(actor, rgb)`＋`ResolvedBalloonText::resolve_with_background`。既存の `resolve(model, image_size)` は白の既定で不変（テスト 26 か所を触らない）。
+- **D20 「戻す操作」の API**＝`TextLayerState::reset_decoration(scope: Option<&ActorKey>)`（`None`＝全スコープ）。`ClearAll` の腕が `None` で呼び、`\f[default]` はスコープ指定で同じ関数を呼ぶ。後続の `\x` は `Some(scope)` または `None` で呼ぶだけ。
+- **D21 予約型の扱い**。`FontDisableSeam` は撤去し `ResolvedFont.looks: LookLayers`（既定／無効表示の 2 層＋選択肢文字色）へ置き換える。行単位の `TextEffects`（`canvas.rs`）と `Resident.effects` は**残す**（`multicolor`／`rotation` の M2 予約の置き場所として doc を改訂するだけ）。`ResolvedFont` の `name`／`fallback_chain`／`height`／`color` は既存の読み手（`actor.rs`・`viewbox_draw.rs`・テスト）のために残し、`looks.default` との一致を `resolve` の単一構築で保証する。
+- **D22 行の高さの規則（R7.9 の裁量）**。閉じる行に文字があれば「その行の文字の em の最大値」、無ければ「そのとき効いている大きさ」（次に置く文字の見た目の高さ）。行送り＝`line_pitch(その高さ)`、保留改行の送り＝`line_pitch(その高さ) × Σratio`。既定だけの台本では従来の `font_height` と同値。
+- **D23 「1 台詞につき 1 度」の実装場所**。純粋層（不正な値・語彙のみ・スタイルシートのキーワード・`default.anchor*`）は `Decoration.warned: BTreeSet<String>`（鍵＝`キー=値`）で数え、`ClearAll`（台詞の開始）で空にする＝正確に台詞ごと。COM 層（フォント候補の不在・ファイル名の読み飛ばし）は `FontCatalog` の記憶（候補列ごと）で数え、`ActorRender` の寿命で 1 度＝「台詞ごとに 1 度以下」。
+- **D24 実体化の段階で改訂する既存テスト 3 件**（分割の段階では 0 件）: ⑴ `decoration_and_disable_seams_are_type_only`（R16.4）⑵ `font_family_reaches_directwrite_only_as_author_name_or_default_retry`（家族名の入口が `try_create_format` と `draw_metrics.rs` の `probe_format_for` の 2 つになる事実へ doc と述語を広げる）⑶ `pure_layer_modules_have_no_windows_imports` の列挙に新設 5 ファイルを足す。
+- **D25 命令の形と運搬名**。`Instruction::Font { args: Vec<String> }`（`args[0]` がキー・以降が値の列・`\f[]` は `[""]`・裸の `\f` は `[]`）。運搬は `CueCommand::command_carrier(FONT_TAG_CARRIER, args)`・`FONT_TAG_CARRIER = "\\f"`（`areka_sakura::contract` に定義）。9.1 のとおり `\![\f,…]` と綴れば同じ名前になるが、ukadoc の `\!` 語彙に `\f` は無く、そう綴った台本が装飾として解釈されても実害が無いため受容する（記録のみ）。
+
+### 9.3 §7 の調査項目の決着
+
+| 項目 | 決着 |
+|---|---|
+| 1. 縦書きでの下線・打ち消し線の側 | 実装の段階で読み戻しテストが実測し、今日の値を定数に固定する（要件 12.4）。§8 の登記は実測後に書く |
+| 5. 運搬名の予約 | D25 |
+| 6. 行指紋の粒度 | 装飾番号の列を `CommittedLine` に足す。番号は `Clear`／`ClearAll` で振り直されるが、そのとき `request_clear` が `prev_lines` を捨てる（`FramePlan::FullClear`）ので古い番号との比較は起きない |
+| 8. `DWriteMetrics::advance` の高さ不一致 `warn!` | 触らない。装飾入りの計測は `advance_styled` を通り、既定の見た目（番号 0）だけが `advance` を通るため不一致は起きない |
+
+### 9.4 却下した案
+
+- **`TextLook` を `Rc` で各グリフに持たせる**（§3 D2-c）: `PositionedGlyph: Copy` が壊れる。
+- **`render` の署名を変える**: テスト 46 か所の書き換え。`render_styled` を別名で足す。
+- **背景色を `BalloonModel` に載せる**: `crates/areka-parsers/src/balloon/model.rs` は本仕様が触らない（R4.2）。
+- **`TextEffects` の撤去**: `Resident { effects }` の構築がテスト 10 ファイルにあり、撤去の見返り（0 バイトの型 1 つ）に対して差分が大きい。
