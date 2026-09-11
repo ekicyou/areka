@@ -145,14 +145,14 @@ shiori3 codec: build_request(charset) → encode ／ parse_response(bytes, reque
 **Research Needed（設計で先に潰す）**:
 1. ~~⒤ emo2 の最初の GET とその References が ASCII のみか~~ → **解消済み**（§5.10: `OnInitialize` NOTIFY と `username` GET はともに References なし）。
 2. ~~⒥ pasta が要求の `Charset` ヘッダ値を検査・拒否するか~~ → **解消済み**（§5.10: 転記のみ・検査 0 箇所）。
-3. ⒦ 実機確認の有界自動終了とログ検索の正本手順（完了仕様 `areka-P0-emo2-conformance-e2e` の実機文書）と、Shift_JIS 検体（里々標準テンプレート）の入手と配置（開発者指定）。
-4. 応答の復号に `decode_without_bom_handling` を使うか `decode`（BOM 判定あり）を使うか——宣言と違う BOM が先頭にある応答は実在するか。
-5. ISO-2022-JP の要求を「全文まとめて `encode`」してよいか（ヘッダごとに符号化すると ESC 列の切れ目が増えるが正しさは同じ・まとめる方が短い）。
-6. 台帳の `owner` 欄と `introduced` 欄の着地時の書き方（直近の完了 spec の更新差分を引く）。
+3. ~~⒦ 実機確認の有界自動終了とログ検索の正本手順~~ → **設計で解消**（§9.2: areka bin は `args[1]`＝ghost root・`args[2]`＝balloon root・helper は実行ファイル隣接（`boot_config.rs` の `default_helper_exe_path`）・有界の自動終了は `AREKA_APP_SMOKE_EXIT_MS`（`main.rs` の `SMOKE_EXIT_ENV`）・出力水準は `RUST_LOG`。検体＝里々標準テンプレート（開発者が絶対パスを指定・要件 11.1）。design.md「実機確認」）。
+4. ~~応答の復号に `decode_without_bom_handling` か `decode` か~~ → **設計で解消**（BOM 判定なし。宣言と食い違う BOM で交渉結果を黙って覆さないため。UTF-8 の有効な入力では `from_utf8` と同じ文字列になり既存テストの期待値が変わらない。design.md「shiori3 codec」）。
+5. ~~ISO-2022-JP の要求を全文まとめて `encode` してよいか~~ → **設計で解消**（可。`Encoding::encode` は終端で ASCII 状態へ戻す。design.md「shiori3 codec」）。
+6. ~~台帳の `owner` 欄と `introduced` 欄の着地時の書き方~~ → **設計で解消**（`implemented` でも `owner` は残す（先例: `choice-marker-styling` の balloon 行群）・`introduced` は版番号不明なら `""` のまま・`Charset:2` の空 owner は本 spec へ・報告は `report`／`report-summary` で作り直す（常設検査に `DomainReportStale` がある）。design.md「正典文書・台帳」）。
 
 ## 8. 設計判断項目（要件ディスカッションへ）
 
-> 2026-09-11 要件ディスカッションでの仕分け: **項目 1 は開発者裁定（要件 10.2 と一体）**。**項目 9・10 は要件側で解消済み**（下記に結果を併記）。**項目 2〜8・11・12 は設計フェーズ（`/kiro-spec-design`）で解決する**（推奨は各項目に記載のとおり）。
+> 2026-09-11 要件ディスカッションでの仕分け: **項目 1 は開発者裁定（要件 10.2 と一体）**。**項目 9・10 は要件側で解消済み**（下記に結果を併記）。**項目 2〜8・11・12 は設計フェーズ（`/kiro-spec-design`）で解決した**——決定は §9.3 に 1 行ずつ記す（正本は `design.md`）。
 
 1. ~~**裁定 ⑵ と要件 4.8 の齟齬**~~ → **開発者裁定で解消**（要件 10.2＝(a) 代替文字で吸収・警告ログ 1 行。`parse_invalid_utf8_is_parse_error` の期待値更新を要件 4.8 の唯一の例外として明記済み）。
 2. **型の持ち方**: ⒝ newtype（推奨）か ⒜ enum 拡張か。裁定 ⑶ は要件側で (a) に確定済み（要件 10.3）——`Charset::for_label` が UTF-16／replacement を `None` にするか、別の失敗理由を返してログの根拠フィールドで区別するかは設計で選ぶ（要件 10.3 は区別を「してよい」とする）。
@@ -166,3 +166,58 @@ shiori3 codec: build_request(charset) → encode ／ parse_response(bytes, reque
 10. ~~**要件 2.7／12.1 の再検討の条件**~~ → **解消**（§5.10 の実測で最初の要求は ASCII のみ・pasta は `Charset` 値を検査しない。再検討不要）。
 11. **`Shiori3Client` の API 形**: `new(window)` を残して charset 引数付きの構築子を足すか、`get/notify` の引数で negotiator を受けるか（案 B なら後者が自然）。
 12. **ログの対象名**: 既存は `target: "shiori-actor"`／`"ghost-boot"`。文字コードの決定・切替・後退のログの `target` と `event` 名を steering `logging.md` に沿って決める（例: `event = "charset_initial"`／`"charset_switched"`／`"charset_label_unresolved"`）。
+
+## 9. 設計フェーズの記録（2026-09-11・`kiro-spec-design`）
+
+### 9.1 要約
+- **Discovery Scope**: Extension（既存系の拡張・light discovery）。外部調査は不要（`encoding_rs` 0.8.35 の API は §1 で読了済み）。サブエージェントは使わず、§2〜§5 の主張をすべてコードで再確認した。
+- **Key Findings（設計を変えた再確認 4 点）**:
+  1. emo2 の `shell/master/surfaces.txt` は **BOM 無し**（先頭バイト `63 68 61 72 73 65 74 2c 55 54 46 2d 38`）。`read_to_string` → `decode` の差し替えで解析結果が同一（要件 6.3）であることの根拠。BOM 付き UTF-8 の surfaces.txt では U+FEFF が消える（既知の差として登記）。
+  2. `placement/measure.rs` は `emo2_boot` を import しない（バルーン側の関数は `areka_emo_present::balloon` から取る）。surfaces.txt 読取の共通ヘルパを作ると新しい依存辺が要るので、2 経路とも 1 行の差し替えにし、決定論テストは `decode`＋`shell::parse` の性質を parsers 側で固定する。
+  3. `shell/decode.rs` に `charset` 専用の腕は無い（未知行として素通し）。台帳の証拠は `charset/prescan.rs` の `charset` キー一致の腕（balloon／ghost／shell の URL 3 行が既に並ぶ）に 4 行目として置く——§8 項目 8 の 2 案のどちらでもない、規約に最も合う場所。
+  4. `ukadoc-survey` の常設検査には `DomainReportStale`（台帳から作り直した報告と一致しない）がある。台帳 5 行を書き換えたら `report`／`report-summary` の作り直しが必須（怠ると赤）。
+- 上記のほか §2〜§5 の実測はすべて一致（`Shiori3Client::new` の呼び出し点は kanade 2＋host32 E2E テスト 5・`ParsedResponse` の構造体リテラルは client.rs テスト 8＋shiori3.rs テスト 1・host32 の既存ログは `target` を持たない・emo2 ghost descript は `charset,UTF-8` のみ）。
+
+### 9.2 調査ログ（設計で追加した分）
+- **実機確認の道具**: `crates/areka/src/boot_config.rs` の「`args[1]` = ghost root、`args[2]` = balloon root」・`default_helper_exe_path`（実行ファイル隣接）・`ghost_boot_options` が `DefaultEncoding::Ansi`＋`ShioriWiring::Helper` を組む。`crates/areka/src/main.rs` の `SMOKE_EXIT_ENV = "AREKA_APP_SMOKE_EXIT_MS"` が有界の自動終了。`emo2-conformance-e2e` の手順書は「絶対パスで起動・有界の自動終了・出力水準を記録」。
+- **ログ捕捉の条件**: `areka-ghost/src/test_log_capture.rs` の doc——捕捉されるのは呼出スレッドで同期発火したイベントだけ。よって初期値の決定とログは `real_connect` が closure を返す**前**（起動スレッド）で行う。host32 の negotiator はテストが直接呼ぶので `log_capture_kit::capture` で足りる。
+- **`Charset` の派生**: `encoding_rs::Encoding` は `PartialEq`／`Eq`／`Hash`／`Debug` を実装。定数は `static` の `UTF_8_INIT`／`SHIFT_JIS_INIT` への参照で作れる。
+- **1,000 行**: 触るファイルの見込み最大は `resolve.rs` 963 行（直接追加）。`shiori3.rs` は約 660・`shiori_wiring.rs` は約 260。
+
+### 9.3 設計判断（§8 項目 2〜8・11・12 の決定）
+
+| 項目 | 決定 | 理由 |
+|---|---|---|
+| 2 型の持ち方 | ⒝ newtype `Charset(&'static Encoding)`。新モジュール `shiori-host32-host/src/charset.rs`。`for_label` は `Result<Charset, LabelError>`（`Unknown`／`NotEncodable`）で理由を区別し、扱いは同じ | 列挙しない＝ラベル表を持たない（1.1）。理由の区別は 5 行で済み、利用者が `UTF-16` を書いたときに「未知」と出るより正確（10.3「してよい」） |
+| 3 交渉状態の置き場 | B。host32 の `CharsetNegotiator` を `ShioriConnection` が 1 フィールド持つ | 規則と codec が同じ crate に閉じ、窓無しでテストできる。kanade は状態を置くだけ |
+| 4 既定写像の共有 | `areka-ghost/src/shiori_wiring.rs` の `default_charset(DefaultEncoding)`＝2 腕の `match`（テストで両腕を固定） | host32 は parsers に依存できない。`to_encoding` を公開して橋渡しすると「UTF-16 でない」検査の失敗腕が要り、固定写像では到達不能＝記録のない死んだ失敗経路になる。2 腕の定数写像の方が小さく失敗経路が無い |
+| 5 descript 2 キー | `resolve.rs` に直接（2 行＋URL 2 行＝963 行）。`ShioriMount { encoding, force_encoding }: Option<String>`（生ラベル・trim しない） | 新モジュールは 4 行のために作らない。番人が 1,000 行未満を守る |
+| 6 置換した文字数 | `Charset::encode -> (bytes, replaced)`。置換があったときだけ文字ごとに符号化して数える | 要件 3.5 の文言を保ちつつ通常経路の追加コスト 0。`Encoder` の状態機械ループを書かない |
+| 7 復号方式 | 復号前に ASCII でヘッダ行を走査（`\n` 分割・`\r` 除去・名前を小文字化して `charset` 一致・値を trim）→ `CharsetPolicy` で復号に使う文字コードを決める → `decode_without_bom_handling` 相当で全体復号 → 既存の行解析 | 対応集合のヘッダ領域は常に ASCII 互換（UTF-16 系は型に入らない）。BOM 判定なし＝宣言を黙って覆さない・UTF-8 の既存テスト不変。`prescan_charset` は別形式なので再利用しない |
+| 8 台帳の証拠 | `charset/prescan.rs` の `charset` キー一致の腕（既存 URL 3 行の隣）に 1 行 | 定義箇所であり「呼び出し側に書かない」「1 項目 1 行」の規約に合う。`shell/decode.rs` には腕が無い |
+| 11 `Shiori3Client` の API | `new(window, &mut negotiator)`／`with_sender(window, &mut negotiator, sender)`。`get`／`notify` は `&mut self`・引数不変 | 接続側は `Shiori3Client::new(&self.window, &mut self.negotiator)` のフィールド別借用で自己参照を避ける。`new(window)` を残すと UTF-8 固定の別経路が残る |
+| 12 ログの対象名 | host32: `target: "shiori-charset"`、ghost: 既存 `"ghost-boot"`。event＝`charset_initial`／`charset_label_unresolved`／`charset_switched`／`charset_forced_ignores_header`／`charset_unmappable_replaced`／`charset_invalid_bytes_replaced` | kanade `"shiori-actor"`・ghost `"ghost-boot"` と同じ `target`＋`event` 形。実機確認が grep する名前を design.md の表で固定 |
+
+追加の決定（§8 に無かったもの）:
+- **codec はログを出さず事実を返す**（`EncodedRequest.replaced`・`ParsedResponse.charset_header`／`decode_had_errors`）。理由: 要件 7.4「同じ内容の後退は警告 1 回」は状態を要し、純粋な codec に置けない。負けた案: codec が `warn!` を直接出す（in-proc にも波及し、重複抑止ができない）。
+- **`CharsetPolicy { Negotiate(Charset), Force(Charset) }`** を codec の第 2 引数にする。負けた案: `bool honor_header` 引数（読めない）。in-proc は `Force(UTF_8)`＝従来どおりヘッダを見ない。
+- **応答の status に依らず `Charset` を採用**（204・400・500 でも）。emo2 の最初の応答待ちイベント `username` 照会が 204 でも UTF-8 に切り替わる。
+- **surfaces.txt の共通ヘルパを作らない**（9.1 の 2）。
+- **同一性の要件 6.3 の根拠は BOM 無しの実測**（9.1 の 1）。
+
+### 9.4 設計統合（一般化・採用／自作・簡素化）
+- 一般化: 「ラベル→文字コード」「符号化」「復号」を 1 つの値型 `Charset` に寄せ、descript の宣言・応答ヘッダ・既定の 3 経路が同じ `for_label`／定数を通る。M2 の SSTP／NAR は同じ型をそのまま使える（インタフェースの一般化のみ・実装は本要件の範囲）。
+- 採用: `encoding_rs`（既存・承認済み）。ラベル解決・数値文字参照・代替文字はすべて同ライブラリの既定動作。自作した部分は ASCII のヘッダ走査 15 行程度と交渉規則のみ。
+- 簡素化: 新設の型は 4 つ（`Charset`・`LabelError`・`CharsetPolicy`・`CharsetNegotiator`・`EncodedRequest` を含めて 5）。新しいエラー型 0・新しい trait 0・新しい crate 0・共通ヘルパ 0。
+
+### 9.5 リスクと対策
+- 最初の要求の `Charset: Shift_JIS`（UTF-8 のゴースト）——pasta は検査しない（§5.10 実測）。他の UTF-8 SHIORI で問題が出れば `shiori.encoding,UTF-8` が ukadoc どおりの回避策（§8 に登記）。
+- 同 crate 別ファイルの並走（`host32-window-thread-pump` が `parent_window.rs`）——共有ファイル 0・rebase のみ。
+- `ParsedResponse`／`build_request` の形の変更が in-proc・host32 E2E に波及——機械的追随のみ（要件 4.8／5.4 が許容）。`Charset` の変更で E2E（i686 依存）が壊れていないかは x64 の `cargo test --workspace` では見えない→タスクで E2E ファイルのコンパイル確認（`cargo test -p shiori-host32-host --no-run`）を明記する。
+- 台帳の報告の作り直し忘れ——常設検査が赤にする（`DomainReportStale`）。
+
+### 9.6 参照
+- ukadoc: `spec_shiori3.html#Charset:1`／`#Charset:2`・`descript_ghost.html#shiori.encoding_…`／`#shiori.forceencoding_…`・`descript_shell_surfaces.html#charset_…`（要件の引用どおり）。
+- `encoding_rs` 0.8.35 `src/lib.rs`: `for_label`・`name`・`encode`・`decode_without_bom_handling`・`output_encoding`。
+- steering: `logging.md`（レベルと構造化フィールド）・`structure.md`（兄弟テストファイル・`#[path]` 接続宣言）・`tech.md`（`encoding_rs` 承認済み）。
+- `doc/ukadoc-coverage/README.md` §3（証拠の書き方）。
