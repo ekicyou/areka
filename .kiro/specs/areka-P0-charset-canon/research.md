@@ -124,8 +124,11 @@ shiori3 codec: build_request(charset) → encode ／ parse_response(bytes, reque
 ### 5.9 既存テストと裁定 ⑵ の矛盾（要件内の齟齬・要ディスカッション）
 `shiori3.rs` の `parse_invalid_utf8_is_parse_error` は不正な UTF-8 バイト列に `Err(ShioriError::Parse)` を期待する。裁定 ⑵(a)（代替文字で吸収して続行）を採ると、この期待は `Ok`＋U+FFFD 混じりの `Value` に変わる。要件 4.8 は「UTF-8 の応答に対する既存テストは期待値を変えずに緑」と定めるため、(a) を採るなら 4.8 の但し書き（このテストは裁定 ⑵ に従い期待値を更新する）が要る。(b) を採れば矛盾は無いが、Shift_JIS の 1 バイトの乱れで応答全体が消える現状の性質を全文字コードへ広げることになる。
 
-### 5.10 emo2 の最初の要求（Unknown ⒤・⒥）
-要件 2.7 は「本文が ASCII のみのとき」と条件付きで書かれている。最初の GET が何かは kanade の boot 系列（`schedule/boot.rs`）と sylphya の prefetch（`username` GET）で決まり、References に日本語が入るなら（例: ゴースト名「えも？？」）既定 Shift_JIS で符号化した最初の要求を pasta が UTF-8 として読んで化ける。設計前に ⒤ 最初の要求の ID と References を列挙し ASCII を確認する。⒥ pasta の `lua_request.rs` は `charset` をテーブルへ渡すだけに見える（`Rule::key_charset => table.set("charset", value)`）が、辞書側で値を検査するかは未確認。どちらも「`shiori.encoding,UTF-8` を emo2 固定物に足す」で回避できるが、要件 12.1 は固定物の改変を禁じるので、確認結果次第で要件 2.7／12.1 の再検討が要る。
+### 5.10 emo2 の最初の要求（Unknown ⒤・⒥ → **要件ディスカッションで実測・解消済み**）
+要件 2.7 は「本文が ASCII のみのとき」と条件付きで書かれている。2026-09-11 の要件ディスカッションで実測した結果:
+- ⒤ **解消**。boot 系列（`schedule/boot.rs`）の最初の送出は `OnInitialize` NOTIFY（`events.rs` の `on_initialize`＝「References なし」）、最初の応答待ちイベントは `username` 照会 GET（`resources.rs` の `resource_username`＝`references: Vec::new()`）。`Sender` は `areka`、`Status` は ukadoc の ASCII 語彙。したがって最初の要求（採用前に既定 Shift_JIS で送る要求）は本文 ASCII のみで、`Charset` ヘッダの値以外にバイト差は生じない。
+- ⒥ **解消**。pasta の `lua_request.rs` は `Rule::key_charset => table.set("charset", value)` でテーブルへ転記するだけ。Lua 側（`pasta_lua/scripts/pasta/shiori/{entry,event/init,event/register,res}.lua`）で `req.charset` を参照するのは doc コメントのみで、値の検査・拒否は 0 箇所。応答側は `res.lua` が常に `Charset: UTF-8` を書く。
+- 結論: 要件 2.7／12.1 の再検討は不要。emo2 固定物は無改変のまま、最初の応答で UTF-8 を採用して以後不変。
 
 ### 5.11 台帳の証拠の置き場所
 `implemented` の証拠は「定義箇所に置かれた `// ukadoc: <URL>` 1 行」（呼び出し側には書かない・URL の後ろに語を続けない）。候補: `Charset:1`＝`build_request` の `Charset:` 書き出し行の直上、`Charset:2`＝`parse_response` の `Charset` ヘッダ判定の腕、`shiori.encoding`／`shiori.forceencoding`＝`resolve.rs`（または新設モジュール）の `map.get(..)` 行の直上、surfaces `charset`＝**定義箇所は shell の decode 層の `charset` 行スキップの腕**（`areka-parsers/src/shell/decode.rs`）か、読取経路の `decode` 呼出行か——README は「呼び出し側には書かない」と定めるので前者が規約に合う（§8 項目 8）。台帳の `owner` は着地時に `""` へ戻すか残すかは台帳 README の慣行に従う（完了 spec の PR#139〜#141 の更新形を設計で引く）。
@@ -140,8 +143,8 @@ shiori3 codec: build_request(charset) → encode ／ parse_response(bytes, reque
 **推奨**: 型 ⒝＋案 C（host32 に `Charset` newtype と純粋な negotiator・`ShioriMount` に生ラベル 2 つ・`areka-ghost` boot で解決とログ・`ShioriConnection` が negotiator を保持）。surfaces.txt は 2 行の差し替え。新テストは兄弟ファイルに置き `log-capture-kit` を host32 の dev-dep に足す。
 
 **Research Needed（設計で先に潰す）**:
-1. ⒤ emo2 の最初の GET（prefetch `username` か boot 系列の先頭イベントか）とその References が ASCII のみか（`areka-kanade/src/schedule/boot.rs`・`areka-ghost/src/sylphya_wiring.rs` の prefetch）。
-2. ⒥ pasta が要求の `Charset` ヘッダ値を検査・拒否するか（`vendors/pasta/crates/pasta_shiori/src/lua_request.rs` と Lua 側辞書）。
+1. ~~⒤ emo2 の最初の GET とその References が ASCII のみか~~ → **解消済み**（§5.10: `OnInitialize` NOTIFY と `username` GET はともに References なし）。
+2. ~~⒥ pasta が要求の `Charset` ヘッダ値を検査・拒否するか~~ → **解消済み**（§5.10: 転記のみ・検査 0 箇所）。
 3. ⒦ 実機確認の有界自動終了とログ検索の正本手順（完了仕様 `areka-P0-emo2-conformance-e2e` の実機文書）と、Shift_JIS 検体（里々標準テンプレート）の入手と配置（開発者指定）。
 4. 応答の復号に `decode_without_bom_handling` を使うか `decode`（BOM 判定あり）を使うか——宣言と違う BOM が先頭にある応答は実在するか。
 5. ISO-2022-JP の要求を「全文まとめて `encode`」してよいか（ヘッダごとに符号化すると ESC 列の切れ目が増えるが正しさは同じ・まとめる方が短い）。
@@ -149,15 +152,17 @@ shiori3 codec: build_request(charset) → encode ／ parse_response(bytes, reque
 
 ## 8. 設計判断項目（要件ディスカッションへ）
 
-1. **裁定 ⑵ と要件 4.8 の齟齬**: (a) 代替文字で吸収なら `parse_invalid_utf8_is_parse_error` の期待値を更新することを 4.8 の例外として明記する／(b) 即時失敗を保つなら 10.2 の推奨を (b) へ変える。
-2. **型の持ち方**: ⒝ newtype（推奨）か ⒜ enum 拡張か。⒝ なら `Charset::for_label` が UTF-16／replacement を `None` にする（裁定 ⑶(a)）か、別の失敗理由を返してログで区別するか。
+> 2026-09-11 要件ディスカッションでの仕分け: **項目 1 は開発者裁定（要件 10.2 と一体）**。**項目 9・10 は要件側で解消済み**（下記に結果を併記）。**項目 2〜8・11・12 は設計フェーズ（`/kiro-spec-design`）で解決する**（推奨は各項目に記載のとおり）。
+
+1. **裁定 ⑵ と要件 4.8 の齟齬**（→ 開発者裁定・要件 10.2）: (a) 代替文字で吸収なら `parse_invalid_utf8_is_parse_error` の期待値を更新することを 4.8 の例外として明記する／(b) 即時失敗を保つなら 10.2 の推奨を (b) へ変える。
+2. **型の持ち方**: ⒝ newtype（推奨）か ⒜ enum 拡張か。裁定 ⑶ は要件側で (a) に確定済み（要件 10.3）——`Charset::for_label` が UTF-16／replacement を `None` にするか、別の失敗理由を返してログの根拠フィールドで区別するかは設計で選ぶ（要件 10.3 は区別を「してよい」とする）。
 3. **交渉状態の置き場所**: B（host32 の純粋 negotiator を `ShioriConnection` が保持・推奨）か A（`ShioriConnection` に素のフィールドと規則を書く）か。
 4. **既定の固定写像の共有方法**: `DefaultEncoding::to_encoding` を `pub` に格上げする（parsers 1 行＋doc の「公開面に出さない」を改訂）か、`areka-ghost` に同じ 2 腕の `match` を置く（写像の二重化・要件 1.3 の「同じ固定写像」を言葉で担保）か。
 5. **descript 2 キーの読取位置**: `resolve.rs` に直接（余裕 30 行台）か、`package/shiori_encoding.rs` 新設（推奨）か。`ShioriMount` のフィールド名（`encoding`／`force_encoding`）と型（生ラベル `Option<String>`＝転記のみ）。
 6. **要件 3.5 の「置換した文字数」**: `Encoder` のループで数える（十数行）か、「置換の有無」へ緩めるか。
 7. **応答の復号方式**: ヘッダ走査は ASCII でバイト列を直接読む（`prescan_charset` と同じ考え方・ただし別形式なので再利用せず 15 行程度を書く）ことでよいか。復号 API は BOM 判定なしでよいか。
 8. **台帳の証拠の定義箇所**: surfaces `charset` の URL コメントを shell decode 層の `charset` スキップの腕に置く（規約どおり）か、読取経路の `decode` 呼出行に置く（規約の「呼び出し側には書かない」に反する）か。
-9. **helper の古くなる doc コメント**（`shiori_proxy.rs`「`request` は UTF-8」）: 要件 12.2「コードを変更しない」をコメントにも適用して残す（COMPAT §8 に注記）か、コメント 1 行だけ直すか。
-10. **要件 2.7／12.1 の再検討の条件**: §5.10 の確認で最初の要求が ASCII のみでない、または pasta が `Charset` 値を拒否すると分かった場合の扱い（固定物へ `shiori.encoding,UTF-8` を足す／初期値の既定を変える／別の回避）。
+9. ~~**helper の古くなる doc コメント**~~ → **要件側で解消**（要件 12.2 を改訂: 挙動・バイト列に関わる変更 0 のまま、当該コメント 1 行の文言追随は可）。
+10. ~~**要件 2.7／12.1 の再検討の条件**~~ → **解消**（§5.10 の実測で最初の要求は ASCII のみ・pasta は `Charset` 値を検査しない。再検討不要）。
 11. **`Shiori3Client` の API 形**: `new(window)` を残して charset 引数付きの構築子を足すか、`get/notify` の引数で negotiator を受けるか（案 B なら後者が自然）。
 12. **ログの対象名**: 既存は `target: "shiori-actor"`／`"ghost-boot"`。文字コードの決定・切替・後退のログの `target` と `event` 名を steering `logging.md` に沿って決める（例: `event = "charset_initial"`／`"charset_switched"`／`"charset_label_unresolved"`）。

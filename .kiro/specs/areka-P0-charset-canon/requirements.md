@@ -83,10 +83,10 @@ areka の現状は「半分だけ対応」である。ファイル層（descript
 1. When ゴーストが起動し SHIORI との通信を始める, the ゴースト起動処理 shall 初期の文字コードを `shiori.forceencoding` ＞ `shiori.encoding` ＞ 既定（Requirement 1.3）の優先順で決める。
 2. While `shiori.forceencoding` が解決できる文字コードで宣言されている, the SHIORI 通信層 shall その文字コードで要求の符号化と応答の復号を行い、SHIORI が返す `Charset` ヘッダの有無・値に関係なく変更しない（ukadoc「SHIORIがCharsetヘッダを返したか否かに関係なく…強制的に行う」）。
 3. While `shiori.encoding` のみが解決できる文字コードで宣言されている, the SHIORI 通信層 shall その文字コードを初期値とし、以後は Requirement 4 の交渉規則に従って SHIORI 側の宣言を優先する（ukadoc「SHIORI側からCharsetヘッダが返された場合はSHIORI側が優先される」）。
-4. If `shiori.forceencoding` または `shiori.encoding` の値が解決できないラベルである, then the ゴースト起動処理 shall 警告ログ 1 行（キー名・ラベル・採用した後退先）を出し、その宣言を無視して次の優先順（`shiori.encoding` → 既定）へ後退し、起動を続ける。
+4. If `shiori.forceencoding` または `shiori.encoding` の値が解決できないラベルである, then the ゴースト起動処理 shall 警告ログ 1 行（キー名・ラベル・採用した後退先）を出し、その宣言を無視して次の優先順（`shiori.encoding` → 既定）へ後退し、起動を続ける。`shiori.forceencoding` が解決できず後退したときは強制の効力も失われ、以後は Requirement 4 の交渉規則（SHIORI 側の宣言が優先）に従う。
 5. The ゴースト起動処理 shall descript の `charset` キー（そのファイル自身の文字コード）を SHIORI 通信の初期値として用いない（用いる箇所は 0）。
 6. When 初期の文字コードが決まる, the ゴースト起動処理 shall 決定した文字コードの正規名と決定根拠（`forceencoding`／`encoding`／既定のいずれか）を情報ログ 1 行で記録する。
-7. While descript が `shiori.encoding` も `shiori.forceencoding` も宣言せず、SHIORI が応答に `Charset: UTF-8` を返す（emo2 の pasta はこの形）, the SHIORI 通信層 shall 最初の応答が届くまでは既定の Shift_JIS で要求を送り、最初の応答の `Charset: UTF-8` を受けて 2 要求目以降を UTF-8 で送る。最初の要求で本仕様前と異なるのは `Charset` ヘッダの値だけであり（本文が ASCII のみのとき）、この既知の差を正典文書に登記する。UTF-8 の SHIORI で最初の要求から UTF-8 を用いたいゴーストは `shiori.encoding,UTF-8` を宣言する（ukadoc どおり）。
+7. While descript が `shiori.encoding` も `shiori.forceencoding` も宣言せず、SHIORI が応答に `Charset: UTF-8` を返す（emo2 の pasta はこの形）, the SHIORI 通信層 shall 最初の応答が届くまでは既定の Shift_JIS で要求を送り、最初の応答の `Charset: UTF-8` を受けて 2 要求目以降を UTF-8 で送る。最初の要求で本仕様前と異なるのは `Charset` ヘッダの値だけであり（本文が ASCII のみのとき——emo2 では実測済み: 最初の片道イベント `OnInitialize` と最初の応答待ちイベント `username` 照会はともに References を持たず、`Sender`／`Status` の値は ASCII の語彙。pasta は要求の `Charset` 値を検査しない）、この既知の差を正典文書に登記する。UTF-8 の SHIORI で最初の要求から UTF-8 を用いたいゴーストは `shiori.encoding,UTF-8` を宣言する（ukadoc どおり）。
 
 ### Requirement 3: 要求の符号化
 
@@ -125,7 +125,7 @@ areka の現状は「半分だけ対応」である。ファイル層（descript
 1. The SHIORI 通信層 shall 採用中の文字コードをゴーストのセッション（SHIORI の load から unload まで）を通じて保持し、応答待ちのイベント（GET）と片道のイベント（NOTIFY）の双方の要求に同じ文字コードを用いる。
 2. When ゴーストが起動する（SHIORI を load する）, the SHIORI 通信層 shall 文字コードを Requirement 2 の初期値へ戻し、前回セッションの採用結果を引き継がない。
 3. The SHIORI 通信層 shall 片道のイベント（NOTIFY）の応答を従来どおり破棄し、その `Charset` ヘッダを採用の根拠に用いない（NOTIFY 応答からの採用 0・完了仕様 `areka-P0-host32-request` 要件 4.8 を維持）。
-4. While SHIORI/4 in-proc 経路（UTF-16 文字列を直接渡す経路）が選ばれている, the SHIORI 通信層 shall 要求の組立と応答の解析を UTF-8 固定のまま行い、交渉を行わず、この経路の挙動を本仕様の前後で変えない（変更 0）。
+4. While SHIORI/4 in-proc 経路（UTF-16 文字列を直接渡す経路）が選ばれている, the SHIORI 通信層 shall 要求の組立と応答の解析を UTF-8 固定のまま行い、交渉を行わず、この経路の挙動を本仕様の前後で変えない（挙動の変更 0。この経路は同じ組立・解析関数を再利用しているため、文字コードを表す型の変更に伴う呼び出し形の機械的な追随は Requirement 4.8 と同じく可）。
 
 ### Requirement 6: surfaces.txt の文字コード
 
@@ -188,7 +188,7 @@ areka の現状は「半分だけ対応」である。ファイル層（descript
 
 1. If 要求に現在の文字コードで表せない文字（例: Shift_JIS への絵文字）が含まれる, then the SHIORI 通信層 shall 次のいずれか 1 つの裁定に従う（**裁定項目 ⑴ 変換できない文字**）——(a) 文字ごとに `&#数値;` 形式の数値文字参照へ置換する（情報を失わない・符号化器の既定）、(b) 文字ごとに `?` へ置換する（情報を失うが慣習的）、(c) 要求全体を失敗として返す。**推奨既定＝(a)**（要求を失敗させず、SHIORI 側が元の文字を復元できる）。いずれでも Requirement 3.5 の警告ログを伴う。
 2. If 応答に宣言された文字コードとして不正な並びが含まれる, then the SHIORI 通信層 shall 次のいずれか 1 つの裁定に従う（**裁定項目 ⑵ 不正なバイト並び**）——(a) 代替文字（U+FFFD）で吸収して続行し警告ログ 1 行（ファイル層と同じ寛容）、(b) 解析失敗として応答全体を捨てる（現行の UTF-8 経路と同じ即時失敗）。**推奨既定＝(a)**（1 バイトの乱れで挨拶全体が消えるより、化けた 1 文字が見える方が利用者にとって原因を追いやすく、ログで記録も残る）。
-3. If descript の宣言または応答の `Charset` が UTF-16LE／UTF-16BE／UTF-16、または replacement に写るラベルを示す, then the SHIORI 通信層 shall 次のいずれか 1 つの裁定に従う（**裁定項目 ⑶ 通信で使えない既知の限界**）——(a) 「解決できないラベル」と同じ扱い（警告ログ＋現在の文字コードを継続・採用しない）、(b) 起動または当該要求を明示エラーで拒否する。**推奨既定＝(a)**（既知の限界として登記し、実資産にほぼ存在しないラベルのために起動を止めない。`Charset` ヘッダの綴りと実際のバイト列が食い違う要求は決して送らない）。
+3. If descript の宣言または応答の `Charset` が UTF-16LE／UTF-16BE／UTF-16、または replacement に写るラベルを示す, then the SHIORI 通信層 shall 「解決できないラベル」と同じ扱い（Requirement 2.4／4.4 の経路＝警告ログ＋現在の文字コードを継続・採用しない）とする（**裁定項目 ⑶ 通信で使えない既知の限界＝確定 (a)**。要件ディスカッションで確定: 起動を止める案 (b) は、実資産にほぼ存在しないラベルのために利用者の起動を止め、かつ解決できないラベルの既存経路と別の失敗経路を増やすため採らない。`Charset` ヘッダの綴りと実際のバイト列が食い違う要求は決して送らない。ログでは「解決できない」と「通信で使えない既知の限界」を根拠フィールドで区別してよい）。
 
 ### Requirement 11: 実機確認
 
@@ -207,7 +207,7 @@ areka の現状は「半分だけ対応」である。ファイル層（descript
 #### Acceptance Criteria
 
 1. The 実装 shall UTF-8 のゴーストの要求バイト列（Requirement 2.7 の最初の要求の `Charset` ヘッダ値を除く）・応答の解析結果・surfaces.txt の解析結果を本仕様の前後で同一に保ち、emo2 の固定物に `shiori.encoding` を足す等の改変をしない（差分 0・Requirement 9.6 で固定）。
-2. The 実装 shall 32bit helper と IPC のコードを変更しない（変更 0）。
+2. The 実装 shall 32bit helper と IPC のコードを変更しない（挙動・バイト列に関わる変更 0）。ただし本仕様の着地で事実と食い違う説明コメント（helper の「`request` は UTF-8」）は、その 1 行の文言だけを「任意の文字コードのバイト列」へ追随させてよい（古くなった説明を残さない）。
 3. The 実装 shall 完了仕様（`areka-P0-host32-request`・`areka-P0-shiori-protocol`・`areka-P0-parser-foundation`・`areka-P0-ukadoc-survey-*`）の文書を改訂しない。
 4. The 実装 shall 1,000 行番人の例外表を変更せず、触るファイルを 1,000 行未満に保つ。
 5. The 実装 shall 既存の公開ログ行の語彙（起動・終了・エラーの既存メッセージ）を変えず、本仕様のログ行を追加のみとする。
