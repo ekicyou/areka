@@ -65,7 +65,7 @@
 #### Acceptance Criteria
 1. The system shall `crates/areka-emo-text/src/draw.rs`（2026-09-11 実測 988 行）を、文字装飾の変更を足す**前に**テーマ単位の複数ファイルへ分割する（本仕様の最初の作業）。
 2. The system shall 分割後も `DrawExecutor`・`DWriteMetrics`・`LineLayoutStore`・`create_text_format`・`ResolvedFont`・`DirectionRecipe` の公開の入口（名前と呼び出し方）を crate 内から見て変えない（呼び手 `actor.rs`・`viewbox_draw.rs` の変更は `use` の付け替えに限る）。
-3. When 本仕様が `crates/areka-emo-text/src/` の `layout.rs`（955 行）・`actor.rs`（952 行）・`region.rs`（951 行）・`viewbox_draw.rs`（852 行）・`canvas.rs`（738 行）・`state.rs`（528 行）へ振る舞いを足すとき, the system shall 追加分を新しい兄弟ファイルへ置き、既存ファイルの行数を上限へ近づけない。
+3. When 本仕様が `crates/areka-emo-text/src/` の `layout.rs`（955 行）・`actor.rs`（952 行）・`region.rs`（951 行）・`viewbox_draw.rs`（852 行）・`viewbox.rs`（846 行・行の再利用判定を持つ）・`canvas.rs`（738 行）・`state.rs`（528 行）へ振る舞いを足すとき, the system shall 追加分を新しい兄弟ファイルへ置き、既存ファイルの行数を上限へ近づけない。
 4. The system shall `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表（`OVER_LIMIT_ALLOWED`・11 件）を 1 件も増減させない。
 5. When 分割が完了したとき, the system shall 既存の決定論テスト（`draw_oracle_tests.rs`・`draw_format_metrics_tests.rs`・`viewbox_draw_*_tests.rs` ほか `areka-emo-text` の全テスト）が変更なしで緑のまま通る。
 6. The system shall 分割で生じた新ファイルの接続と命名を steering `structure.md` の「1 ファイル 1,000 行以下の目安」と兄弟テストの命名規則に従わせる。
@@ -80,7 +80,7 @@
 3. When 台本を組み立てるとき（`crates/areka-sakura/src/compile.rs`）, the system shall `\f` を再生時間 0 の命令として、前後の文字の並び順を保ったまま台本へ載せ、「M-boot 外タグを無視」の腕へ落とさない。
 4. The system shall `\f` を運ぶ命令を、キーごとに型を新設せず **1 本の運搬形**で表現する（`\!` コマンドの汎用キャリアと同じ考え方）。消費側（文字レンダリング層）がキーで自己選別する。
 5. When 文字レンダリング層が本仕様の所有外のキー（`align`・`valign`・`shadowcolor`・`shadowstyle`・`cursor*`・`anchor*`・`anchor.font.color`）を受け取ったとき, the system shall 値を捨てずに保持し、表示は変えず、`debug` の記録を残す（後続の所有仕様が消費者を足すまでの「語彙のみ」の状態）。
-6. If `\f` のキーが 43 形のいずれでもない、または引数が無い（`\f[]`・`\f`）とき, the system shall 表示を変えず `warn` の記録を残し、解析も再生も中断しない。
+6. If `\f` のキーが 43 形のいずれでもない、または引数が無い（`\f[]`・`\f`）とき, the system shall 表示を変えず `warn` の記録を残し、解析も再生も中断しない。引数なしの `\f` は字句解析で bare 形になり `decode_tag` でなく `decode_bare` を通るため、同関数にも `"f"` の腕を置いて同じ扱いにする（`Raw` のまま `compile` の catch-all で `debug` に落とす経路を残さない）。
 7. The system shall 解読の腕の各項目に、対応する ukadoc の URL を `// ukadoc:` の 1 行コメントで添える（既存の腕と同じ書式）。
 8. The system shall `\f` を含まない台本の解読結果・台本の内容・再生時間を 1 バイトも変えない（既存の `decode_tests.rs`・`compile_*_tests.rs` が変更なしで緑）。
 
@@ -238,7 +238,7 @@
 **Objective:** As a M1 適合の保守者, I want `\f` を使わない台本の表示が 1 画素も変わらないこと, so that emo2 の適合検証が本仕様で崩れない
 
 #### Acceptance Criteria
-1. The system shall `\f` を含まない台本について、文字の位置・送り幅・行送り・折返し・描画結果を本仕様の前後で同一に保つ（既存のオラクル比較テスト・PNG 比較テストが変更なしで緑）。
+1. The system shall `\f` を含まない台本について、文字の位置・送り幅・行送り・折返し・描画結果を本仕様の前後で同一に保つ（既存のオラクル比較テスト・PNG 比較テストが変更なしで緑）。唯一の例外は Requirement 9.8 による既定フォントの候補列の解決で、バルーン定義 `font.name` がカンマ区切りの複数候補を持ち、かつ先頭の候補がインストールされていない環境では、採るフォントが変わる（正典どおりの変化であり退行ではない）。適合対象 emo2 のバルーン定義は単一名 `Yu Gothic UI`（2026-09-11 実測）なので、この例外は emo2 の適合検証に及ばない。
 2. The system shall 既定の見た目だけが効いている行の描画を、装飾の配管を通しても従来と同じ描画経路・同じ結果にする（装飾の run が 1 つだけの行は従来の 1 行描画と同一）。
 3. The system shall emo2 の適合検証（`areka-P0-emo2-conformance-e2e` の 20 項目・完了済み）の観測対象を変えない。
 4. The system shall 台本の再生時間（各命令の時刻と長さ）を `\f` の有無で変えない（`\f` は再生時間 0）。
@@ -263,9 +263,9 @@
 
 #### Acceptance Criteria
 1. The system shall areka の裁量で決めた各点（相対指定の基準・百分率の基準・スタイルシートのキーワードの見送り・`height,disable`・上下付きの比率とずらし量と縦書きの側・打ち消し線の縦書きの位置・無効表示の色の混ぜ方・行の高さの決め方・戻す操作の対象と時期・台詞開始の戻し）を `doc/COMPAT_ARCHITECTURE.md` §8 に、項目・裁量・根拠（ukadoc の逐語引用と URL）・出典 spec の 4 欄で登記する。
-2. The system shall `doc/COMPAT_ARCHITECTURE.md` §8 の「`\f[align]`／`\f[valign]`／下線の縦書き写像」の行にある「areka は align／valign を全書字方向でまだ実装していない…本登記は現在の表示結果を変えない」の注記を、下線が実装済みであること・align／valign の追跡先が `areka-P0-text-align-shadow-canon` であることに合わせて改訂する。
+2. The system shall `doc/COMPAT_ARCHITECTURE.md` §8 の「`\f[align]`／`\f[valign]`／下線の縦書き写像」の行にある「areka は align／valign を全書字方向でまだ実装していない…本登記は現在の表示結果を変えない」の注記を、下線が実装済みであること・align／valign の追跡先が `areka-P0-text-align-shadow-canon` であることに合わせて改訂する。同じ表で本仕様を「`\f` 核 17 項目の所有者」として追跡先に挙げている箇所（同行の追跡先欄と、「`\_l` の縦書き座標系の正典写像」の行にある疑義 SC8 の追跡先）も、2026-09-11 の 3 分割後の所有（本仕様＝基盤＋フォント系 10＋一括の戻し 2・SC8 と寄せは `areka-P0-text-align-shadow-canon`）に合わせて改訂する。
 3. The system shall `doc/ukadoc-coverage/ledger/sakura-script.toml` の本仕様 12 項目の `status` を実装後の状態（`implemented`・スタイルシートのキーワードのみ `vocabulary-only` の注記付き）へ更新し、`doc/ukadoc-coverage/ledger/assets.toml` の `disable.font.(フォント定義),(指定)` の行を無効表示の層が実体化したことに合わせて更新する。
-4. The system shall `crates/areka-emo-text/src/canvas.rs`・分割後の `draw.rs` 群の予約名の注記（`TextEffects`・`FontDisableSeam`・`RESERVED_EFFECT_*`・「M1 では実挙動を一切実装しない」）を、`outline` と `disable` が実体化したこと・`shadow` は `areka-P0-text-align-shadow-canon`・`multicolor`／`rotation` は M2 予約のままであることに合わせて改訂する。
+4. The system shall `crates/areka-emo-text/src/canvas.rs`・分割後の `draw.rs` 群の予約名の注記（`TextEffects`・`FontDisableSeam`・`RESERVED_EFFECT_*`・「M1 では実挙動を一切実装しない」）を、`outline` と `disable` が実体化したこと・`shadow` は `areka-P0-text-align-shadow-canon`・`multicolor`／`rotation` は M2 予約のままであることに合わせて改訂する。あわせて、予約型が空であることを固定している既存テスト（`draw_format_metrics_tests.rs` の `decoration_and_disable_seams_are_type_only`＝`size_of` が 0 であることの検査）を、実体化した内容を述べる述語へ改訂する。この改訂は実体化の段階で行い、Requirement 1.5 の「分割の段階では既存テストを変更しない」とは段階が異なる（分割と実体化を別の作業に分ける理由）。
 5. The system shall 分割後の新ファイルと接続を steering `structure.md` の該当節へ反映する。
 6. The system shall 本仕様が消費者を足さなかった語彙（寄せ 2・影 3・`cursor*`・`anchor*`・`default.anchor*`・スタイルシートのキーワード・フォントファイルの読み込みを後送りした場合はそれ）の追跡先を、それぞれの所有仕様の brief に 1 行ずつ相互登記する。
 7. The system shall 文書の主張（file:line・行数・件数）を書く前に実測で裏取りし、行番号でなく「何の定義行か」で指す。
