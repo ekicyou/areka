@@ -196,7 +196,7 @@ areka の現状は「半分だけ対応」である。ファイル層（descript
 
 #### Acceptance Criteria
 
-1. When 開発者が指定した Shift_JIS のゴースト（候補＝里々の標準テンプレート）を areka で起動する, the areka shall OnBoot の挨拶を文字化けなくバルーンに表示する。
+1. When 里々の標準テンプレート（Shift_JIS・32bit の SHIORI DLL。2026-09-11 要件ディスカッションで開発者が検体として確定。配置先の絶対パスは実装フェーズで開発者が指定する——相対パスでは DLL のロードが失敗する）を areka で起動する, the areka shall OnBoot の挨拶を文字化けなくバルーンに表示する。
 2. The 実機確認 shall 有界の自動終了とログの検索で行い、初期の文字コードの情報ログ 1 行と、応答による採用（該当する場合）の詳細ログ 1 行がログに現れることを確認する。
 3. The 実機確認 shall UTF-8 のゴースト（emo2）でも同じ手順を通し、挨拶の表示とログ（初期＝既定 Shift_JIS → 応答 `Charset: UTF-8` による採用 1 回、または `shiori.encoding` 宣言に応じた初期値）が期待どおりであることを確認する。
 
