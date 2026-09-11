@@ -85,10 +85,10 @@ areka でゴースト `emo2` を **拡大率 200%（k=2）** のモニタで動�
 
 #### Acceptance Criteria
 
-1. While 拡大率 k=2 で表示している, when 絵が変わるコマ（引き当て外れ）が来た, the 提示段 shall その適用の UI スレッド処理（compose ＋ mask ＋ upload の合計・`t_total_us`）を **16.7 ms 以下**に収める（静かな機械・期待値 compose 1〜7 ms ＋ mask 数 ms ＋ upload 0.3 ms）。
+1. While 拡大率 k=2 で表示している, when 絵が変わるコマ（引き当て外れ）が来た, the 提示段 shall その適用の UI スレッド処理（compose ＋ mask ＋ upload の合計・`t_total_us`）を **16.7 ms 以下**に収める（静かな機械・期待値 compose 1〜7 ms ＋ mask 数 ms ＋ upload 0.3 ms・ギャップ分析の見込み 8〜12 ms）。合否の物差しは brief の 16.7 ms（1 コマ）であり、完了 spec `emo2-conformance-e2e` `verification/acceptance-record.md` §13.2 行 9 の「目標 16 ms・許容 30 ms」はこれに置き換わる（記録は改変しない）。別プロセスが CPU を取る負荷下の値は Requirement 3.5 で報告するが合否に載せない（brief Out of Boundary「機械負荷の管理」）。
 2. While 拡大率 k=2 で起動挨拶を再生している, the 実機走行 shall ティッカーの `catch-up`（「ticker catch-up: skipped multiple boundaries, firing once」）を **3 分で 10 件以下**に収める（前回並み）。
 3. The 提示段 shall 段階別計時 `perf(apply_show)`（`PERF_LINE_MESSAGE`＝「perf(apply_show): 段階別計時」）の発行と、その既存消費者（`tools/perf/judge-perf.py`・`J_PERF_LINE_MESSAGE` で同じ文言を照合）が読める形を維持する。
-4. The 提示段 shall 撤去した段（`Stage::Resample`・`t_resample_us`・`alloc_resample_dst`・`alloc_xmap`）について、フィールドを残すなら常に 0 を出し、外すなら消費者（`judge-perf.py`）を同時に更新して赤にしない。どちらを採るかは設計で確定する。
+4. The 提示段 shall 撤去した段（`Stage::Resample`・`t_resample_us`・`alloc_resample_dst`・`alloc_xmap`）について、フィールドを残すなら常に 0 を出し、外すなら消費者（`judge-perf.py` の `J_PERF_STAGE_FIELDS`／`J_PERF_ALLOC_FIELDS`＝`J_PERF_REQUIRED_FIELDS` の構成要素）を同時に更新し、`python tools/perf/judge-perf.py --selftest` が緑のままであること（`tools/perf/fixtures` の旧スキーマ行は余分なフィールドとして無害）を機械で確認する。どちらを採るかは設計で確定する。
 5. The 本仕様 shall k=2 の走行で段階別計時の分布（中央値・p90）を採り、症状 E の前回値（中央値 41〜78 ms・p90 65〜227 ms）と並べて報告する。
 6. The 提示段 shall 定常状態（寸法不変・初回確保後）の毎コマ経路で新規確保 0 を保つ（`recompose-budget` の予算席の規律を崩さない・撤去した席の分だけ席が減る）。
 
@@ -130,9 +130,9 @@ areka でゴースト `emo2` を **拡大率 200%（k=2）** のモニタで動�
 2. The 本仕様 shall `read_back`（`EmoPresenter::read_back` → `SwapChainPresenter::read_back`）が返すバイト列の意味を「供給面＝原寸」と定義し直し、k=1 では従来と同一バイトであることを固定する。
 3. The 本仕様 shall k≠1 を読む既存テスト（付録 A の台帳）について、**再導出**（原寸の面・原寸マスク・物理寸境界という新しい不変条件へ期待値を導き直す）か**撤去**（撤去した経路の純関数テスト＝リサンプラ golden など、対象が消えるもの）かを、テストごとに要件ディスカッションまたは設計ディスカッションで**開発者が裁定**する。本仕様はこれを一方的に決めない。
 4. The 本仕様 shall 裁定の材料として付録 A に、ファイルごとの対象テスト名・現在固定している性質・撤去した場合に失う檻・再導出した場合の新しい期待値の方向を並べる。
-5. The 本仕様 shall 新設・改変した判断分岐（原寸面の供給・変換の係数の適用・原寸マスクの生成・÷k 照会・k 変化時の引き当て・撤去段の計時の扱い・変換適用失敗の経路）を GPU 非依存の決定論テスト（純関数・偽境界）で固定し、GPU を要する確認はオフスクリーン readback の既存の型に限る。
+5. The 本仕様 shall 新設・改変した判断分岐（原寸面の供給・変換の係数の適用・原寸マスクの生成・÷k 照会・k 変化時の引き当て・撤去段の計時の扱い・変換適用失敗の経路）を GPU 非依存の決定論テスト（純関数・偽境界）で固定し、GPU を要する確認はオフスクリーン readback の既存の型に限る。「変換の係数の適用」の檻は、供給面の寸（原寸）と visual／`Arrangement.size`（物理寸＝`scaled_extent`）の整合として固定し、GPU の伸縮結果そのものは檻に入れない（Requirement 6.6）。
 6. The 本仕様 shall k≠1 の**見た目**の確認を実機 2 水準サインオフ（Requirement 2.7／4.8）へ移し、k≠1 の画素バイトを決定論 golden で固定しない（GPU 補間の出力は檻に入れない・D5 の却下理由を逆に採る）。
-7. The 本仕様 shall 実装で触るファイルを 1,000 行以下に保つ（`show.rs` 486 行・`cache.rs` 378 行・`budget.rs` 657 行・`mount.rs` 462 行・2026-09-11 実測）。既に例外表（`crates/log-capture-kit/tests/file_length_guard_test.rs` `OVER_LIMIT_ALLOWED`）に載る `cache_tests.rs`（1,618 行）・`presenter/budget_tests.rs`（1,081 行）は、触る場合に行数を増やさない。
+7. The 本仕様 shall 実装で触るファイルを 1,000 行以下に保つ（`show.rs` 486 行・`cache.rs` 378 行・`budget.rs` 657 行・`mount.rs` 462 行・`presenter_perf_log_tests.rs` **956 行（残 44 行・再導出で増やさない）**・`crates/areka-emo-compose/src/scale.rs` 603 行（撤去で縮む）・2026-09-11 実測）。既に例外表（`crates/log-capture-kit/tests/file_length_guard_test.rs` `OVER_LIMIT_ALLOWED`）に載る `cache_tests.rs`（1,618 行）・`presenter/budget_tests.rs`（1,081 行）は、触る場合に行数を増やさない。
 8. If 撤去により消費者が 0 になったテスト補助（`FrameBudget` のリサンプル席の観測口・`alloc_resample_dst`／`alloc_xmap` の計数）が残った, then the 本仕様 shall それを陳腐化テストとして除外し、壊れたまま残さない。
 
 ### Requirement 7: 失敗経路とログ
@@ -146,7 +146,7 @@ areka でゴースト `emo2` を **拡大率 200%（k=2）** のモニタで動�
 3. The 提示段 shall k=1 と k≠1 で失敗経路の分岐を増やさない（変換の適用は k の値に依らず同じ手順で行い、恒等 k だけを特別扱いする分岐を新設しない）。
 4. The 提示段 shall panic を致命（内部不変条件の破れ）に限り、変換・供給・マスクの失敗で panic しない。
 5. The 表示成立点の `info!` 行 shall フィールド（`target_id`／`surface_id`／`cache_hit`／`k_ratio`／`k`／`author_dpi`／`window_dpi`／`native_w`／`native_h`／`scaled_w`／`scaled_h`／`size_changed`）の名と意味を変えない。
-6. The 遷移観測（`transition_diag` の `surface` 行・`resized`）shall 供給面が原寸になることで `resized` の意味が「原寸の外形が変わった回」になることを明記し、判定側（`transition_judge`）が k 変化を「供給面のリサイズ」として期待していないことを確認する（期待していれば追随する）。
+6. The 遷移観測（`transition_diag` の `surface` 行・`resized`）shall 供給面が原寸になることで `resized` の意味が「原寸の外形が変わった回」になることを明記し、判定側（`transition_judge`）が k 変化を「供給面のリサイズ」として期待していないことを確認する（期待していれば追随する）。2026-09-11 grep: `crates/areka/src/placement/transition_judge.rs`／`transition_judge_offset.rs`／`transition_judge_verdict.rs` に `resized` の読み手は 0 件＝**該当 0**。同ディレクトリのテストの `resized=true` は実機ログの写し（fixture）であり判定器は読まないので追随不要。追随は present 側テスト `a_scale_change_records_the_buffer_resize`（`presenter/transition_record_tests.rs`）の再導出のみ（付録 A #8）。
 
 ### Requirement 8: 設計判断の上書き登記
 
@@ -157,8 +157,8 @@ areka でゴースト `emo2` を **拡大率 200%（k=2）** のモニタで動�
 1. The 本仕様 shall 完了 spec `areka-P0-emo-dpi-scaling` の `design.md` の D3／D5／D6 行に「2026-09-11 `areka-P0-present-gpu-transform-scale` が上書き」の追記を置き、D1／D2／D4／D7／D8 は不変であることを併記する。
 2. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8（沈黙ルール対応表）へ【上書き】行を 1 行加え、「画像本体は原寸・拡大縮小は提示側の変換行列・CPU 拡大は不可」（開発者裁定 2026-09-11）と出典 spec を記す。
 3. The 本仕様 shall プロジェクト記憶の該当項目（`areka-emo-own-compositor-atlas`・`areka-dpi-following-core-design`）に同じ裁定を追記する（メモリの索引 `MEMORY.md` から辿れる形）。
-4. The 本仕様 shall `crates/areka-emo-present/src/cache.rs`・`presenter.rs`・`presenter/show.rs`・`presenter/budget.rs`・`crates/areka-emo-compose/src/scale.rs` のモジュール doc に残る「k 適用済み」「リサンプル」の記述を新しい形へ書き換え、旧設計の説明を残さない（doc の主張は file:line で裏取り）。
-5. The 本仕様 shall 完了 spec `areka-P0-collision-dpi-hittest` の点 ÷k 契約が不変であること、および同 spec の設計文書が言及する「k 倍マスク」の記述があれば原寸マスクへ改訂することを確認する（無ければ「該当 0」と記録）。
+4. The 本仕様 shall `crates/areka-emo-present/src/cache.rs`・`presenter.rs`・`presenter/show.rs`・`presenter/budget.rs`・`crates/areka-emo-compose/src/scale.rs` のモジュール doc に残る「k 適用済み」「リサンプル」の記述を新しい形へ書き換え、旧設計の説明を残さない（doc の主張は file:line で裏取り）。あわせて `crates/wintf/src/ecs/layout/hit_test/mod.rs` の `AlphaMaskResource` doc（「マスク原寸＝bounds 寸」）と `alpha_mask_hit` doc（「bounds==マスク原寸で恒等写像」）を「マスク＝原寸・bounds＝物理寸・比例写像が ÷k を与える」へ書き換える（判定コードは不変・Requirement 9.5）。
+5. The 本仕様 shall 完了 spec `areka-P0-collision-dpi-hittest` の点 ÷k 契約が不変であること、および同 spec の設計文書が言及する「k 倍マスク」の記述があれば原寸マスクへ改訂することを確認する（無ければ「該当 0」と記録）。2026-09-11 grep: 同 spec の `design.md`／`requirements.md` に「マスク」「mask」は 0 件＝**該当 0**（`acceptance-record.md`／`brief.md` の `info!` 文言の引用のみ・改訂不要）。
 6. The 本仕様 shall 完了 spec `areka-P0-emo2-conformance-e2e` の `acceptance-record.md` §13.2 行 9 の「引受先」欄を本仕様の完了で埋め、`.kiro/steering/roadmap.md` の状態列を `/kiro-complete` で更新する。
 7. The 本仕様 shall 完了時に、下流 `areka-P0-dpi-transition-two-tick-bounce` へ「外れの代金が消えたので走行 D 形式で再計測してから設計」を申し送る（roadmap W14 ① の条件のまま）。
 
@@ -172,7 +172,7 @@ areka でゴースト `emo2` を **拡大率 200%（k=2）** のモニタで動�
 2. The 本仕様 shall 文字層（`areka-emo-text`）のコード・供給面寸・`ScaleContract` を変更しない（**変更 0**）。
 3. The 本仕様 shall k の政策（`crates/areka-emo-present/src/scale.rs`）と導出のタイミング（show 適用ごと・`refresh_scale` のゲート）を変更しない（**変更 0**）。
 4. The 本仕様 shall バルーンのオフセット・DPI 系の完了 spec（`balloon-offset-dpi`・`balloon-vertical-canon`）の裁定を変更しない（**変更 0**）。
-5. The 本仕様 shall `wintf` の変更を、提示側の変換の適用に必要な表示レシピの lift（在れば）に限り、DPI 機構・窓生成・クリック透過の判定手順を変更しない（**変更 0**・変更が要る場合は設計で file 単位に列挙する）。
+5. The 本仕様 shall `wintf` の変更を、提示側の変換の適用に必要な表示レシピの lift（在れば）に限り、DPI 機構・窓生成・クリック透過の判定手順を変更しない（**変更 0**・変更が要る場合は設計で file 単位に列挙する）。Requirement 8.4 の doc 2 行の書き換えは判定手順の変更に当たらない。
 6. The 本仕様 shall 並走 W13 の 8 本（`kanade-boot-talkdone-drop`・`host32-window-thread-pump`・`sakura-tag-word-boundary`・`charset-canon`・`ukadoc-coverage-roadmap`・`text-decoration-canon`・`sylphya-set-ledger`・`balloon-font-descript-keys`）と共有ファイル 0 を保つ（roadmap の干渉台帳どおり）。
 7. The 本仕様 shall 既存の全テスト（ワークスペース）を緑に保つ。ただし Requirement 6.3 の裁定で撤去・再導出したテストはその裁定の結果に従う。
 
