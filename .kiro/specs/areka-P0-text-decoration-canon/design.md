@@ -61,7 +61,7 @@
 - `ResolvedBalloonText::resolve_with_background` の第 3 引数の意味（バルーン画像の原点画素・sRGB 非 premultiplied）→ `emo2_boot/balloon_background.rs`。
 - `LineLayoutStore` の再利用鍵（内容文字列＋装飾番号列）→ `Clear`／`ClearAll` が `request_clear` で店を空にする前提。
 - `StyleId(0)`＝既定の見た目、という記号の意味 → 装飾表を読むすべての箇所（layout・executor・指紋）。
-- `draw.rs` の字面検査（`draw_format_metrics_tests.rs` の `font_family_reaches_directwrite_only_as_author_name_or_default_retry`）が固定する名前——`create_text_format`／`try_create_format`／`for_mode`／`DEFAULT_FONT_NAME`——を改名するとき。
+- `draw.rs` の字面検査（`draw_format_metrics_tests.rs` の `font_family_reaches_directwrite_only_as_author_name_or_default_retry`）が固定する名前——`create_text_format`／`try_create_format`／`for_mode`／`DEFAULT_FONT_NAME`——を改名するとき、および `DrawExecutor`（`@` の唯一の出所）を `draw.rs` から動かすとき。
 
 ## Architecture
 
@@ -71,7 +71,7 @@
 - **文字レンダリング層の 3 層**: 純粋層（`state.rs`・`layout.rs`・`canvas.rs`・`viewbox.rs`・`choice.rs`・`cursor_tag.rs`）は `windows` 非依存で決定論テストの対象。COM 層（`draw.rs`・`viewbox_draw.rs`・`surface.rs`）が DirectWrite／D2D を触る。結線層（`actor.rs`）が両者を毎フレーム束ねる（`present_actor` :697）。
 - **文字ごとの属性が無い 3 か所**: `TextItem::Glyph { ch }`（`state.rs` :104・構築 182 か所）、`PositionedGlyph { ch, inline_pos, advance }`（`layout.rs` :171・構築 7 か所）、`GlyphRunContent { glyphs, size }`（`canvas.rs` :150）。フォントは `ResolvedFont`（`draw.rs` :158）1 束、`IDWriteTextFormat` は actor ごと 1 本、太さ・斜体は `try_create_format`（:340）が NORMAL 固定。
 - **範囲指定の先例**: `ViewboxExecutor::render` の Phase 1 が Choice 行に対し「全範囲 `SetDrawingEffect(None)` → hover 範囲へ文字色ブラシ」を毎フレーム焼く（`viewbox_draw.rs` :353-403）。`segment_text_range`（:807）がグリフ列から UTF-16 範囲を導く。
-- **字面で守られている 2 ファイル**: `draw.rs` は `draw_format_metrics_tests.rs` の `font_family_reaches_directwrite_only_as_author_name_or_default_retry`（:590・`include_str!("draw.rs")` :507）が `try_create_format` 出現 3・`create_text_format` 本文の呼出文字列 2・`for_mode` 出現 2 を固定する。`layout.rs` は `layout_cursor_overflow_tests.rs`（`LAYOUT_SRC` :422）が `finish_line(` 4・`finish_pending_line(` 3・`fn finish_pending_line(` の存在を固定する。**分割はこの 2 検査を赤にしない形で行う**（research §9 D15／D16）。
+- **字面で守られている 2 ファイル**: `draw.rs` は `draw_format_metrics_tests.rs` の `font_family_reaches_directwrite_only_as_author_name_or_default_retry`（:590・`include_str!("draw.rs")` :507）が `try_create_format` 出現 3・`create_text_format` 本文の呼出文字列 2・`for_mode` 出現 2 を固定し、同ファイルの `at_prefixed_font_name_generation_is_absent_from_production_source` が「`draw.rs` に `@` が 1 個以上ある」こと（空振り防止の対照）を要求する——その `@` は `DrawExecutor::render` の束縛パターン `seam @ (ResidentContent::Image(_) | ResidentContent::Surface(_))` の 1 か所だけにある。`layout.rs` は `layout_cursor_overflow_tests.rs`（`LAYOUT_SRC` :422）が `finish_line(` 4・`finish_pending_line(` 3・`fn finish_pending_line(` の存在を固定する。**分割はこの 2 検査を赤にしない形で行う**（research §9 D15／D16）。
 - **1,000 行の見張り**: `draw.rs` 988・`layout.rs` 955・`actor.rs` 952・`region.rs` 951・`viewbox_draw.rs` 852・`viewbox.rs` 846・`canvas.rs` 738・`state.rs` 528。例外表は触らない。
 
 ### Architecture Pattern & Boundary Map
@@ -155,7 +155,6 @@ crates/areka-emo-text/src/
 ├── draw_metrics_styled_tests.rs    # 鍵ごとの計測・既定は従来と同一値・計測＝描画の一致
 ├── draw_line_store.rs              # LineLayoutStore（純移動）＋ line_layout_decorated
 ├── draw_line_store_tests.rs        # 装飾込みの再利用判定
-├── draw_oracle.rs                  # #[cfg(test)] DrawExecutor ほか比較専用オラクル（純移動）
 ├── draw_catalog.rs                 # FontCatalog（候補列→インストール済み名・記憶・warn 1 度・ファイル名の読み飛ばし）
 ├── draw_catalog_tests.rs
 ├── viewbox_draw_plan.rs            # degrade_if_needed / full_domain_update / plan_inconsistency の純移動（viewbox_draw.rs の子）
@@ -182,7 +181,7 @@ crates/areka/src/emo2_boot/
 | `crates/areka-sakura/src/contract.rs` | `pub const FONT_TAG_CARRIER: &str = "\\f";` | 実体化 |
 | `crates/areka-sakura/src/compile.rs`（329） | `Instruction::Font { args }` の腕（catch-all の前）・`compile_font_tests.rs` の接続 | 実体化 |
 | `crates/areka-emo-text/src/lib.rs` | `pub mod look; pub mod color;`・`pure_layer_modules_have_no_windows_imports` の列挙に新設 5 ファイルを追加 | 実体化 |
-| `crates/areka-emo-text/src/draw.rs`（988→約 400→約 445） | **分割**: `DWriteMetrics`＋`measure_line_box_ratio`→`draw_metrics.rs`、`CachedLineLayout`＋`LineLayoutStore`＋`measure_line_overhang`→`draw_line_store.rs`、`DrawExecutor`＋`FormatKey`＋`create_target_bitmap`＋`none_err`→`draw_oracle.rs`。`#[path]` 子モジュール＋`pub use`／`pub(crate) use` 再輸出（外部パス `crate::draw::X` 不変）。**実体化**: `FontDisableSeam`／`RESERVED_KEY_DISABLE_FONT_PREFIX` を撤去し `ResolvedFont.looks: LookLayers`・`resolve_with_background`・`DEFAULT_BALLOON_BACKGROUND` を追加。`create_text_format`／`try_create_format` の本文は不変 | 分割→実体化 |
+| `crates/areka-emo-text/src/draw.rs`（988→約 650→約 700） | **分割**: `DWriteMetrics`＋`measure_line_box_ratio`→`draw_metrics.rs`、`CachedLineLayout`＋`LineLayoutStore`＋`measure_line_overhang`→`draw_line_store.rs`。`DrawExecutor`・`FormatKey`・`create_target_bitmap`・`none_err`（いずれも `#[cfg(test)]`）は **`draw.rs` に残す**（同ファイルの字面検査 `at_prefixed_font_name_generation_is_absent_from_production_source` が「`draw.rs` に `@` が 1 個以上ある」ことを空振り防止の対照として要求し、その `@` は `DrawExecutor::render` の束縛パターン `seam @ (...)` の 1 か所にしか無いため・設計レビュー 2026-09-12）。`#[path]` 子モジュール＋`pub use`／`pub(crate) use` 再輸出（外部パス `crate::draw::X` 不変）。**実体化**: `FontDisableSeam`／`RESERVED_KEY_DISABLE_FONT_PREFIX` を撤去し `ResolvedFont.looks: LookLayers`・`resolve_with_background`・`DEFAULT_BALLOON_BACKGROUND` を追加。`create_text_format`／`try_create_format` の本文は不変 | 分割→実体化 |
 | `crates/areka-emo-text/src/layout.rs`（955→約 890→約 925） | **分割**: `segment_advance_sum`・`resolve_cursor_component` を `layout_line_ops.rs` へ純移動。**実体化**: `GlyphMetrics::advance_styled` の既定実装、`PositionedGlyph.style: StyleId`、`layout_inner` に `styles: Option<GlyphStyles<'_>>` を足し、文字ごとの送り幅と行内最大 em を追跡、`layout_styled.rs` の接続 | 分割→実体化 |
 | `crates/areka-emo-text/src/state.rs`（528→約 560） | `ActorTextState` にフィールド 3 つ（`glyph_styles`・`styles`・`decor`）、`Text`／`Choice` の腕で番号を追記、`Clear`→`clear_content()`、`ClearAll`→`clear_content()`＋`reset_decoration(None)`、`Custom` の腕で `FONT_TAG_CARRIER` を自己選別、`state_decoration.rs` の接続と `pub use` | 実体化 |
 | `crates/areka-emo-text/src/canvas.rs`（738） | `from_layout` が `style` を転写。モジュール doc と `TextEffects` の doc を改訂（`disable` は実体化・`outline`／`sub`／`sup` は語彙のみ・`shadow` は align-shadow・`multicolor`／`rotation` は M2 予約） | 実体化 |
@@ -193,12 +192,13 @@ crates/areka/src/emo2_boot/
 | `PositionedGlyph { .. }` の構築を持つテスト 5 ファイル（`choice_tests.rs`・`choice_decorate_tests.rs`・`viewbox_choice_marker_tests.rs`・`canvas.rs` のテスト・`layout` 系）と `ResolvedFont { .. }` を持つテスト 3 か所 | フィールド追加の書き換え（`style: StyleId::DEFAULT`・`looks: LookLayers::default()`） | 実体化 |
 | `crates/areka/src/emo2_boot/assets.rs`（416） | `BalloonScopeAssets.background_color: (u8,u8,u8)`、構築時に `balloon_background::face_origin_color` で導出 | 実体化 |
 | `crates/areka/src/emo2_boot/frame/attach.rs`（429） | `connect_balloon_text(..., background)` が `set_balloon_background` → `register_actor_view` の順に呼ぶ | 実体化 |
+| `crates/areka/src/emo2_boot/consumer_ledger.rs` | `CommandConsumer::TextLayer`（文字レンダリング層）の variant と、正準台帳に `"\\f"` → `TextLayer` の 1 行、同ファイルの正準表テストの追随（宣言のみ・実行時の選別には使われない。モジュール doc「以後のコマンド追加は消費者＋本表 1 行」に従う） | 実体化 |
 | `doc/COMPAT_ARCHITECTURE.md` §8 | 本仕様の登記行（Supporting References §A）・`\f[align]`／`\f[valign]`／下線の行（:181）と `\_l` の行（:183）の追跡先を改訂 | 文書 |
 | `doc/ukadoc-coverage/ledger/sakura-script.toml`・`assets.toml` | 12 項目の `status`（9 件 `implemented`〔`name`・`height` 注記付き〕・3 件 `vocabulary-only`）、`disable.font.(フォント定義),(指定)` の note | 文書 |
 | `.kiro/steering/structure.md`・`roadmap.md` | emo-text 節に分割後のファイルと接続、M2 予約に `sub`／`sup`／`outline` の 1 行 | 文書 |
 | 隣接 brief 5 本（`text-align-shadow-canon`・`balloon-font-descript-keys`・`choice-marker-styling`・`anchor-tag-canon`・`balloon-lifecycle-events`） | 相互登記 1 行ずつ（Supporting References §C） | 文書 |
 
-**1,000 行の見張りに対する収支**（実体化後の見込み）: `draw.rs` 約 445・`layout.rs` 約 925・`actor.rs` 約 965・`viewbox_draw.rs` 約 810・`state.rs` 約 560・`viewbox.rs` 約 850・`canvas.rs` 約 740。新設ファイルはいずれも 400 行以下を目安とし、読み戻しテストは入口＋兄弟 2 本に分けて 1 本 700 行以下に収める。例外表は増減しない。
+**1,000 行の見張りに対する収支**（実体化後の見込み）: `draw.rs` 約 700・`layout.rs` 約 925・`actor.rs` 約 965・`viewbox_draw.rs` 約 810・`state.rs` 約 560・`viewbox.rs` 約 850・`canvas.rs` 約 740。新設ファイルはいずれも 400 行以下を目安とし、読み戻しテストは入口＋兄弟 2 本に分けて 1 本 700 行以下に収める。例外表は増減しない。
 
 ## System Flows
 
@@ -255,14 +255,14 @@ stateDiagram-v2
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |---|---|---|---|---|
-| 1.1 | `draw.rs` を装飾の変更の前に分割 | draw ファサード・`draw_metrics.rs`・`draw_line_store.rs`・`draw_oracle.rs` | `#[path]` 子モジュール＋再輸出 | 実装順 段階 1 |
+| 1.1 | `draw.rs` を装飾の変更の前に分割 | draw ファサード・`draw_metrics.rs`・`draw_line_store.rs` | `#[path]` 子モジュール＋再輸出 | 実装順 段階 1 |
 | 1.2 | 6 つの公開の入口を不変に | draw ファサード | `pub use draw_metrics::DWriteMetrics` 等 | 段階 1 |
 | 1.3 | 追加分は新しい兄弟ファイルへ | File Structure Plan の新設 20 ファイル | — | 全段階 |
 | 1.4 | 例外表を増減させない | File Structure Plan の収支表 | — | — |
 | 1.5 | 分割後に既存テストが変更なしで緑 | D15／D16（字面検査を赤にしない分割の形） | — | 段階 1 |
 | 1.6 | steering の命名規則に従う | 新設ファイル名（`<stem>_<モジュール名>.rs`・最長 stem） | — | — |
 | 2.1 | `decode_tag` の `"f"` の腕 | `decode.rs` | `Instruction::Font` | Flow 1 |
-| 2.2 | キーと引数列を記述順で保持 | `Instruction::Font { args }` | `args[0]`＝キー・`\f[]`＝`[""]` | Flow 1 |
+| 2.2 | キーと引数列を記述順で保持 | `Instruction::Font { args }` | `args[0]`＝キー・`\f[]` と裸 `\f`＝`[]`・`\f[""]`＝`[""]` | Flow 1 |
 | 2.3 | 再生時間 0・並び順を保つ | `compile` の Font の腕 | `emit(scope, offset, 0.0, ..)` | Flow 1 |
 | 2.4 | 1 本の運搬形 | `FONT_TAG_CARRIER`・`CueCommand::command_carrier` | `as_command_carrier` で自己選別 | Flow 1 |
 | 2.5 | 所有外キーは保持・表示不変・debug | `apply_font_tag` の `Note::Unowned`・`Decoration.unowned` | — | Flow 2 |
@@ -375,7 +375,7 @@ stateDiagram-v2
 | `state_decoration.rs` | emo-text 純粋 | スコープごとの装飾状態・番号の配管・戻す操作・警告の 1 度化 | 2.5, 3.1〜3.5, 3.7, 3.8, 6.3, 10.3, 10.5, 10.7, 13.1, 13.4 | `look.rs`（P0）・`state.rs` の腕（P0） | Service, State |
 | `layout_styled.rs`＋`layout.rs` の変更 | emo-text 純粋 | 見た目込みの送り幅と行内最大 em | 3.3, 7.8〜7.10, 11.2, 11.5 | `GlyphMetrics::advance_styled`（P0） | Service |
 | `viewbox.rs` の指紋 | emo-text 純粋 | 装飾込みの再利用判定 | 11.4 | `PositionedGlyph.style`（P0） | State |
-| draw ファサード分割 | emo-text COM | `draw.rs` を 4 ファイルに | 1.1〜1.6 | 字面検査 2 本（P0） | — |
+| draw ファサード分割 | emo-text COM | `draw.rs` を 3 ファイルに | 1.1〜1.6 | 字面検査 3 本（`draw.rs` 2 本・`layout.rs` 1 本・P0） | — |
 | `ResolvedFont.looks`／`resolve_with_background` | emo-text COM | 2 層の構築点 | 4.1〜4.8, 9.8 | `LookLayers::from_balloon`（P0） | State |
 | `FontCatalog` | emo-text COM | 候補列→インストール済み名・記憶・warn 1 度 | 9.1〜9.4, 9.7, 9.8, 13.2 | `GetSystemFontCollection`／`FindFamilyName`（P0） | Service |
 | `DWriteMetrics` の styled 計測 | emo-text COM | 鍵ごとの probe format と記憶 | 7.10, 11.1, 11.3 | `FontCatalog`（P0）・`create_text_format`（P0） | Service |
@@ -396,7 +396,7 @@ stateDiagram-v2
 | Requirements | 2.1, 2.2, 2.6, 2.7, 2.8 |
 
 **Responsibilities & Constraints**
-- `model.rs` の `Instruction` に `Font { args: Vec<String> }` を足す。`args` は角括弧の中を `,` で割った列そのもの（`args[0]` がキー・以降が値の列・空トークンを潰さない）。`\f[]` は lexer が `[""]` を返すので `args == [""]`、裸の `\f` は `args == []`。
+- `model.rs` の `Instruction` に `Font { args: Vec<String> }` を足す。`args` は角括弧の中を `,` で割った列そのもの（`args[0]` がキー・以降が値の列・空トークンを潰さない）。`\f[]` と裸の `\f` はどちらも `args == []`（lexer の `scan_bracket_args` は `[]` を「真の空・0 引数」として返す・既存テスト `empty_bracket_yields_no_args` が `\s[]` → `args: vec![]` を固定）、`\f[""]` だけが `[""]`、`\f[bold,]` は `["bold",""]`。
 - `decode_tag`（`decode.rs` :201）の `"!"` の腕の次に `"f" => Instruction::Font { args }` を置き、直前に `// ukadoc:` の URL を本仕様の 12 項目分（付録 A の URL）と「他 31 形は所有仕様が後から意味を与える（本腕は転記のみ）」の注記を添える。`decode_bare` に `"f" => Instruction::Font { args: Vec::new() }` を置く（`decode_passthrough_bare` へ落とさない）。
 - `\foo[...]` は word が `foo` なので本腕に当たらない（既存テスト `unknown_tag_absorbed_as_raw` は不変）。
 
@@ -406,14 +406,14 @@ stateDiagram-v2
 // crates/areka-parsers/src/sakura/model.rs
 pub enum Instruction {
     // ...既存 variant...
-    /// 文字装飾 `\f[key,args...]`（転記のみ・`args[0]` がキー・`\f[]` は `[""]`・裸の `\f` は `[]`）。
+    /// 文字装飾 `\f[key,args...]`（転記のみ・`args[0]` がキー・`\f[]` と裸の `\f` は `[]`・`\f[""]` は `[""]`）。
     Font { args: Vec<String> },
 }
 ```
 
 **Implementation Notes**
 - Integration: `compile` の catch-all（`other =>`）の前に腕を足す。`Instruction` は `#[non_exhaustive]` なので他 crate の match は壊れない。
-- Validation: `decode_font_tests.rs`（43 形の受理・`\f[]`・`\f[bold,]`・裸 `\f`・`\foo` が `Raw` のまま）。較正: 「`\f[bold,1]` が `Raw` になる」を赤にする述語。
+- Validation: `decode_font_tests.rs`（43 形の受理・`\f[]`＝`[]`・`\f[""]`＝`[""]`・`\f[bold,]`＝`["bold",""]`・裸 `\f`＝`[]`・`\foo` が `Raw` のまま）。較正: 「`\f[bold,1]` が `Raw` になる」を赤にする述語。
 - Risks: なし（転記のみ）。
 
 ### Sakura 層
@@ -524,9 +524,10 @@ impl StyleTable {
     pub fn clear(&mut self);
 }
 
-/// layout へ渡す「グリフ序数→見た目」の読み口（表・番号列・既定の 3 つ組）。
+/// layout へ渡す「グリフ序数→見た目」の読み口（表・番号列・既定・現在の見た目の 4 つ組）。
+/// `current` は「次に置く文字が無い」末尾の行（例: `\f[height,30]\n\n` で終わる台本）の高さに使う（R7.9 の「そのとき効いている大きさ」）。
 #[derive(Clone, Copy)]
-pub struct GlyphStyles<'a> { pub table: &'a StyleTable, pub ids: &'a [StyleId], pub default: &'a TextLook }
+pub struct GlyphStyles<'a> { pub table: &'a StyleTable, pub ids: &'a [StyleId], pub default: &'a TextLook, pub current: &'a TextLook }
 impl GlyphStyles<'_> {
     pub fn id_of(&self, ordinal: usize) -> StyleId;      // 範囲外は DEFAULT
     pub fn look_of(&self, ordinal: usize) -> &TextLook;  // resolve(id_of(ordinal))
@@ -546,7 +547,7 @@ pub enum Note {
 pub struct FontTagIssue { pub key: String, pub value: String, pub reason: &'static str }
 
 /// `\f` の値の状態機械（全入力で値を返す・panic しない）。
-/// `args[0]`＝キー・`args[1..]`＝値の列。`Ok(None)`＝適用済み・記録不要。
+/// `args[0]`＝キー・`args[1..]`＝値の列。`args.first()` が `None` または空文字列なら `Err(NoKey)`（index せずに扱う・`\f`／`\f[]`／`\f[""]` の 3 形）。`Ok(None)`＝適用済み・記録不要。
 pub fn apply_font_tag(current: &mut TextLook, layers: &LookLayers, args: &[&str]) -> Result<Option<Note>, FontTagIssue>;
 ```
 
@@ -675,8 +676,8 @@ impl LayoutEngine {
 ```
 
 - `layout_inner` は末尾に `styles: Option<GlyphStyles<'_>>` を受け取る。`None`（既存の `layout`／`layout_with_cursor_warn`）は従来と 1 ビットも変えない。`Some` のとき、グリフ序数 `placed` の見た目 `look` で `advance = if id == DEFAULT { metrics.advance(ch, font_height) } else { metrics.advance_styled(ch, look) }`、`PositionedGlyph.style = id`、`line_max = max(line_max, look.height)`。
-- 行の高さ（D22・R7.9）: `finish_line` の丈と、折返し・保留改行の送り量 `pitch` は「閉じる行の `line_max`（文字が無ければ現在の見た目の高さ＝次に置く文字の `look.height`）」から `metrics.line_pitch(h)` で求める。式は `TextLayerConfig::line_pitch` の 1 点のまま（R7.8）。`segment_advance_sum` も同じ見た目で合計する（`layout_line_ops.rs` へ移動した上で `styles` を受ける）。`\_l` の基点束 `CursorBasis { font_height, line_pitch }` は既定の大きさのまま（境界外）。
-- Validation: `layout_styled_tests.rs`——`FixedMetrics` で `\f[height,20]` の文字が 20 の送り・行矩形の丈が行内最大・改行だけの行の送りが現在の大きさ・折返し位置が見た目込み・`Segmented` の塊の合計も見た目込み・`styles: None` 相当の出力が `layout_with_cursor_warn` と同一。較正: 「行の丈を既定の `font_height` で固定する（旧）」を赤にする述語。
+- 行の高さ（D22・R7.9）: `finish_line` の丈と、折返し・保留改行の送り量 `pitch` は「閉じる行の `line_max`（文字が無ければ現在の見た目の高さ＝次に置く文字の `look.height`）」から `metrics.line_pitch(h)` で求める。末尾に文字が続かない行（台本の終わりの空行）は次に置く文字が無いので `styles.current.height`（スコープの現在の見た目・`ActorTextState::current_look()`）を用いる。式は `TextLayerConfig::line_pitch` の 1 点のまま（R7.8）。`segment_advance_sum` も同じ見た目で合計する（`layout_line_ops.rs` へ移動した上で `styles` を受ける）。`\_l` の基点束 `CursorBasis { font_height, line_pitch }` は既定の大きさのまま（境界外）。
+- Validation: `layout_styled_tests.rs`——`FixedMetrics` で `\f[height,20]` の文字が 20 の送り・行矩形の丈が行内最大・改行だけの行の送りが現在の大きさ（台本末尾の空行を含む）・折返し位置が見た目込み・`Segmented` の塊の合計も見た目込み・`styles: None` 相当の出力が `layout_with_cursor_warn` と同一。較正: 「行の丈を既定の `font_height` で固定する（旧）」を赤にする述語。
 
 #### `viewbox.rs` の指紋
 
@@ -687,12 +688,11 @@ impl LayoutEngine {
 
 #### draw ファサードの分割（段階 1・変更ゼロのテスト緑）
 
-- `draw.rs` に残す: モジュール doc・import・`DEFAULT_FONT_NAME`／`DEFAULT_FONT_HEIGHT`／`LOCALE_JA_JP`／`PROBE_MAX_EXTENT`・`ResolvedFont`＋`impl`・`DirectionRecipe`＋`impl`・`create_text_format`・`try_create_format`・`create_d2d_target_bitmap`・`device_err`・テスト接続 3 本。
+- `draw.rs` に残す: モジュール doc・import・`DEFAULT_FONT_NAME`／`DEFAULT_FONT_HEIGHT`／`LOCALE_JA_JP`／`PROBE_MAX_EXTENT`・`ResolvedFont`＋`impl`・`DirectionRecipe`＋`impl`・`create_text_format`・`try_create_format`・`create_d2d_target_bitmap`・`device_err`・テスト接続 3 本、および `#[cfg(test)]` の `FormatKey`・`DrawExecutor`＋`impl`・`create_target_bitmap`・`none_err`（`at_prefixed_font_name_generation_is_absent_from_production_source` が要求する `@` の唯一の出所が `DrawExecutor::render` にあるため動かさない）。`line_layout_creations` は `LineLayoutStore` 側へ移るので `pub(super)` にする。
 - `draw_metrics.rs`（`#[path] mod metrics;`）: `DWriteMetrics`＋`impl`＋`impl GlyphMetrics`・`measure_line_box_ratio`。`cached_probe_count` は `pub(super)`（ファサード配下のテストから見える最小の可視性）。
 - `draw_line_store.rs`（`mod line_store;`）: `CachedLineLayout`・`LineLayoutStore`＋`impl`・`measure_line_overhang`。
-- `draw_oracle.rs`（`#[cfg(test)] mod oracle;`）: `FormatKey`・`DrawExecutor`＋`impl`・`create_target_bitmap`・`none_err`。`line_layout_creations` は `pub(super)`。
-- ファサードの再輸出: `pub use metrics::{DWriteMetrics}; pub(crate) use line_store::LineLayoutStore; #[cfg(test)] pub use oracle::DrawExecutor;`。子は `super::{device_err, PROBE_MAX_EXTENT, create_text_format, ResolvedFont, ...}` で辿る（`super` はファサード自身・`structure.md` の注記）。
-- 分割の段階で触らないもの: `draw_format_metrics_tests.rs`・`draw_oracle_tests.rs`・`draw_test_support.rs`（`use super::{...}` は再輸出で解決）。字面検査 2 本は検査対象の定義が動かないので緑（D15）。
+- ファサードの再輸出: `pub use metrics::{DWriteMetrics}; pub(crate) use line_store::LineLayoutStore;`。子は `super::{device_err, PROBE_MAX_EXTENT, create_text_format, ResolvedFont, ...}` で辿る（`super` はファサード自身・`structure.md` の注記）。
+- 分割の段階で触らないもの: `draw_format_metrics_tests.rs`・`draw_oracle_tests.rs`・`draw_test_support.rs`（`use super::{...}` は再輸出で解決）。字面検査 3 本（`draw.rs` の家族名検査と `@` の対照・`layout.rs` の `finish_line` 検査）は検査対象の定義が動かないので緑（D15）。
 
 #### `ResolvedFont.looks` と `resolve_with_background`
 
@@ -807,7 +807,8 @@ pub(crate) fn apply_font_ranges(layout: &IDWriteTextLayout, runs: &[StyleRun], s
 /// （Choice 行はリセット済みなので呼び手が `reset` を `false` で渡す）。ブラシは色ごとに記憶。
 pub(crate) fn apply_color_ranges(layout: &IDWriteTextLayout, runs: &[StyleRun], styles: &StyleTable, default: &TextLook, brushes: &mut BrushCache, dc: &ID2D1DeviceContext, reset: bool) -> Result<bool, TextLayerError>;
 pub(crate) struct BrushCache { brushes: HashMap<(u8, u8, u8), ID2D1SolidColorBrush> }
-/// 行の箱のブロック軸寸（横書き＝`size.1`・縦書き＝`size.0`）＝行内最大 em。
+/// 行の箱のブロック軸寸（横書き＝`size.1`・縦書き＝`size.0`）＝行内最大 em。**装飾のある行にだけ使う**——
+/// `run.size` は行矩形の引き算（f32）で `font.height` と厳密に一致しないことがあり得るため、既定だけの行は従来どおり `font.height` を渡す（R14.1 の同一性を丸めに依存させない）。
 pub(crate) fn block_extent(size: (f32, f32), mode: WritingMode) -> f32;
 
 // crates/areka-emo-text/src/viewbox_draw.rs
@@ -820,7 +821,7 @@ impl ViewboxExecutor {
 }
 ```
 
-- Phase 1 の順序（行ごと）: `runs = style_runs(&run.glyphs)` → `layout = line_layout_decorated(index, text, format, block_extent(run.size, mode), mode, ids, |l| apply_font_ranges(l, &runs, styles, default, &fonts))` → Choice 行なら従来の全範囲 `None` → `apply_color_ranges(.., reset = !is_choice)` → hover の色（従来）。既定だけの行（`runs.len() == 1 && runs[0].style == DEFAULT`）は 3 つとも呼ばれず、生成物・呼出列は従来と同一（R14.2）。
+- Phase 1 の順序（行ごと）: `runs = style_runs(&run.glyphs)` → `extent = if 既定だけの行 { font.height } else { block_extent(run.size, mode) }` → `layout = line_layout_decorated(index, text, format, extent, mode, ids, |l| apply_font_ranges(l, &runs, styles, default, &fonts))` → Choice 行なら従来の全範囲 `None` → `apply_color_ranges(.., reset = !is_choice)` → hover の色（従来）。既定だけの行（`runs.len() == 1 && runs[0].style == DEFAULT`）は 3 つとも呼ばれず、生成物・呼出列は従来と同一（R14.2）。
 - はみ出し収集ループ（`render` :228-260）も `line_layout_decorated` を同じ引数で呼ぶ（生成はここで 1 度・以降はキャッシュ）。
 - `ensure_format` は `self.fonts.pick(font)` の複製で `create_text_format` を呼ぶ。`FormatKey` は不変（`font.name`・高さ・方向）。
 - Validation: `viewbox_draw_decoration_tests.rs`——`style_runs` の切り出し（UTF-16 2 単位の文字を含む）・既定だけの行で `apply_*` が何も呼ばない（`DrawStats` と `creations` が従来テストと同値）・色 run の後に hover が勝つ（既存 `viewbox_draw_choice_hover_tests` の装飾版）。較正: 「run を切らず行全体へ焼く」を赤にする述語（混在行の画素差）。
@@ -845,7 +846,7 @@ impl TextLayerRuntime {
 
 - `register_actor` は `self.state.set_look_layers(&actor, resolved.font.looks.clone())` を呼ぶ（装着と再追従の両方が通る 1 点）。
 - `register_actor_binding`／`refresh_actor_binding` は `ResolvedBalloonText::resolve_with_background(model, binding.image_size, self.background_of(actor))` を使う（churn ガードの比較は同じ導出で揃う）。
-- `present_actor`: `ActorRender` の生成で `Rc<FontCatalog>` を 1 つ作って `new_shared` 2 つに渡す。レイアウトは `layout_styled(.., GlyphStyles { table: actor_state.styles(), ids: actor_state.glyph_styles(), default: &resolved.font.looks.default }, ..)`、描画は `render_styled(.., actor_state.styles())`。
+- `present_actor`: `ActorRender` の生成で `Rc<FontCatalog>` を 1 つ作って `new_shared` 2 つに渡す。レイアウトは `layout_styled(.., GlyphStyles { table: actor_state.styles(), ids: actor_state.glyph_styles(), default: &resolved.font.looks.default, current: actor_state.current_look() }, ..)`、描画は `render_styled(.., actor_state.styles())`。
 - Validation: `actor_decoration_tests.rs`——`register_actor` で `state.actor_state(actor).look_layers() == resolved.font.looks`・背景未設定は白・設定後の `disable.color` が `mix_disabled`・`refresh_actor_binding` が同じ背景で churn ガードを通る。
 
 #### `emo2_boot/balloon_background.rs`＋配線
@@ -858,7 +859,7 @@ impl TextLayerRuntime {
 pub(super) fn face_origin_color(atlas: &AtlasTable, file_name: &str) -> (u8, u8, u8);
 ```
 
-- `assets.rs`: `BalloonScopeAssets { scope, emo_world, atlas, model, background_color }`（構築時に `face_origin_color(&atlas, &face0.file_name)`）。テスト構築 3 か所（`frame_test_support.rs`・`input_events/balloon_test_support.rs`・`assets_tests.rs`）はフィールドを足す。
+- `assets.rs`: `BalloonScopeAssets { scope, emo_world, atlas, model, background_color }`（構築時に `face_origin_color(&atlas, &face0.file_name)`）。テスト構築 2 か所（`frame_test_support.rs`・`input_events/balloon_test_support.rs`・2026-09-12 実測）はフィールドを足す。`attach.rs` の分解束縛は `..` 付きなので壊れない。
 - `frame/attach.rs`: `connect_balloon_text(runtime, view, actor, model, background)` が `rt.set_balloon_background(actor.clone(), background)` の後に `register_actor_view` を呼ぶ。`scale_text.rs` の再追従は runtime が記憶した背景を使うので変更なし。
 - Validation: `balloon_background_tests.rs`——`MemoryDecoder`＋`bake` で不透明・透明・トリム付きの 3 画像を作り、それぞれ色・白・白になる。
 
@@ -899,7 +900,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 
 | 事象 | 層 | 記録 | 振る舞い |
 |---|---|---|---|
-| キーが無い（`\f`・`\f[]`）・未知のキー | 純粋 | `warn!(actor, key, value, reason)`・`キー=値` ごとに 1 台詞 1 度 | 見た目不変・再生継続（R2.6, 13.1, 13.4） |
+| キーが無い（`\f`・`\f[]`・`\f[""]`）・未知のキー | 純粋 | `warn!(actor, key, value, reason)`・`キー=値` ごとに 1 台詞 1 度 | 見た目不変・再生継続（R2.6, 13.1, 13.4） |
 | 6 値以外の真偽値・非正／非有限の大きさ・不正な色指定 | 純粋 | 同上 | 当該項目不変（R5.5, 7.6, 8.9） |
 | `sub`／`sup`／`outline` の受理・有効中の文字追記 | 純粋 | `warn!` 1 台詞 1 度 | 状態は更新・表示不変（R5.9, 6.1, 6.3） |
 | `height` のスタイルシートの語・`color,default.anchor*` | 純粋 | `warn!` 1 台詞 1 度 | 大きさ不変／`default` として適用（R7.7, 8.8） |
@@ -921,7 +922,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 
 ### Unit Tests（純粋層・描画なし）
 
-1. `decode_font_tests.rs`: 43 形すべてが `Instruction::Font` になる／`\f[]`＝`[""]`・`\f[bold,]`＝`["bold",""]`・裸 `\f`＝`[]`／`\foo[x]` は `Raw` のまま／`\f` を含まない台本の解読結果が不変（既存 fixture で）。
+1. `decode_font_tests.rs`: 43 形すべてが `Instruction::Font` になる／`\f[]`＝`[]`・`\f[""]`＝`[""]`・`\f[bold,]`＝`["bold",""]`・裸 `\f`＝`[]`／`\foo[x]` は `Raw` のまま／`\f` を含まない台本の解読結果が不変（既存 fixture で）。
 2. `compile_font_tests.rs`: `\f` の cue が `Custom("\\f")`・`duration 0`・`start_time` が前後の `Text` と整合／`\f` の有無で他 cue の `at`・`duration` が同一／台本の先頭は `ClearAll` のまま。
 3. `look_tests.rs`／`color_tests.rs`: 12 項目 × 6 値・`+N`／`-N`／`N%`・色の各書式・排他・戻し・`intern` の畳み込み・`mix_disabled`。
 4. `state_decoration_tests.rs`: スコープ独立・以降の文字にだけ効く・`\c`／`\n`／`\_l` で戻らない・`ClearAll`／`\f[default]`／`reset_decoration` で戻る・所有外キーの保持・warn の 1 度化・登録前後の `set_look_layers`。
@@ -965,7 +966,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 
 ### 既存テストの改訂（実体化の段階のみ・分割の段階は 0 件）
 
-1. `draw_format_metrics_tests.rs::decoration_and_disable_seams_are_type_only` → `disable_layer_is_materialized_and_row_effects_stay_reserved`（`resolve(..).looks.disable.color == mix_disabled(color, 白)`・`size_of::<TextEffects>() == 0` は残す）。
+1. `draw_format_metrics_tests.rs::decoration_and_disable_seams_are_type_only` → `disable_layer_is_materialized_and_row_effects_stay_reserved`（`resolve(..).looks.disable.color == mix_disabled(color, 白)`・`size_of::<TextEffects>() == 0` は残す）。同時に、同ファイルの `use super::{…, FontDisableSeam, RESERVED_KEY_DISABLE_FONT_PREFIX, …}` の import 行と `RESERVED_KEY_DISABLE_FONT_PREFIX`／`resolved.disable == FontDisableSeam::default()` の断言を消し、`surface.rs` の doc コメント（`FontDisableSeam`／`TextEffects` を名指し）を「`TextEffects`（M2 予約）」だけに改める。
 2. 同 `font_family_reaches_directwrite_only_as_author_name_or_default_retry`: doc と述語に「第 2 の入口 `draw_metrics.rs::probe_format_for`（鍵の候補列を `FontCatalog` で解決した名前か既定名のみ）」を加える。`draw.rs` 側の述語は不変。
 3. `lib.rs::pure_layer_modules_have_no_windows_imports`: `look.rs`・`color.rs`・`state_decoration.rs`・`layout_line_ops.rs`・`layout_styled.rs` を列挙に足す。
 4. `PositionedGlyph { .. }`・`ResolvedFont { .. }`・`BalloonScopeAssets { .. }` の構築を持つテストにフィールドを足す。
@@ -978,7 +979,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 
 ## Implementation Order（タスク生成の入力）
 
-1. **分割**（`draw.rs`→4 ファイル・`layout.rs`→`layout_line_ops.rs`・`viewbox_draw.rs`→`viewbox_draw_plan.rs`）: 純移動と再輸出のみ・全テスト変更なしで緑・`cargo fmt`。
+1. **分割**（`draw.rs`→3 ファイル・`layout.rs`→`layout_line_ops.rs`・`viewbox_draw.rs`→`viewbox_draw_plan.rs`）: 純移動と再輸出のみ・全テスト変更なしで緑・`cargo fmt`。
 2. **解読と転写**（parsers・sakura・`contract.rs`）＋兄弟テスト 2 本。
 3. **純粋層の見た目**（`color.rs`・`look.rs`）＋テスト。
 4. **純粋層の状態**（`state_decoration.rs`・`state.rs` の腕・`lib.rs` の列挙）＋テスト。
@@ -1021,5 +1022,5 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 
 ### §D steering・roadmap
 
-- `structure.md` の emo-text 節: `draw.rs`（ファサード）＋`draw_metrics.rs`／`draw_line_store.rs`／`draw_oracle.rs`／`draw_catalog.rs`、`layout.rs`＋`layout_line_ops.rs`／`layout_styled.rs`、`state.rs`＋`state_decoration.rs`、`viewbox_draw.rs`＋`viewbox_draw_plan.rs`／`viewbox_draw_decoration.rs`、`actor.rs`＋`actor_decoration.rs`、新規純粋モジュール `look.rs`／`color.rs`。
+- `structure.md` の emo-text 節: `draw.rs`（ファサード）＋`draw_metrics.rs`／`draw_line_store.rs`／`draw_catalog.rs`、`layout.rs`＋`layout_line_ops.rs`／`layout_styled.rs`、`state.rs`＋`state_decoration.rs`、`viewbox_draw.rs`＋`viewbox_draw_plan.rs`／`viewbox_draw_decoration.rs`、`actor.rs`＋`actor_decoration.rs`、新規純粋モジュール `look.rs`／`color.rs`。
 - `roadmap.md` の M2 予約（`TextEffects` 予約名 `rotation`／`multicolor` の並び）: 「`\f[sub]`／`\f[sup]`／`\f[outline]` は DirectWrite の標準機能で表せる手段が見つかるまで語彙のみ（`areka-P0-text-decoration-canon` 2026-09-11）」。

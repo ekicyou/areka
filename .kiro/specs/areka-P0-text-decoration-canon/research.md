@@ -24,7 +24,7 @@
 | 場所 | 現状 | 本仕様との関係 |
 |---|---|---|
 | `decode.rs` の `fn decode_tag`（:201）の `match word.as_str()` | `_w`・`n`・`p`・`s`・`b`・`_l`・`q`・`!` の腕だけ。末尾 `_ => decode_passthrough_tag(word, args)` が `Instruction::Raw(reconstruct_tag(..))` へ落とす（:321） | `"f"` の腕を足す場所。各腕に `// ukadoc:` の URL コメントを添える書式が既にある（R2.7 と同形） |
-| `lexer.rs` の `fn scan_tag`（:132） | 語は `[`／`\`／`%` の手前まで読む。`\f[bold,1]` は `Tag { word: "f", args: ["bold","1"] }` に、引数なしの `\f` は bare（`decode_bare` → `Raw`）になる | 本仕様は触らない。並走 `sakura-tag-word-boundary` の対象。`\f[]` は `args` が `[""]`（空 1 個）で届く点に注意（R2.2 の「引数が空」） |
+| `lexer.rs` の `fn scan_tag`（:132） | 語は `[`／`\`／`%` の手前まで読む。`\f[bold,1]` は `Tag { word: "f", args: ["bold","1"] }` に、引数なしの `\f` は bare（`decode_bare` → `Raw`）になる | 本仕様は触らない。並走 `sakura-tag-word-boundary` の対象。`\f[]` は `args` が `[]`（0 個）で届く（**2026-09-12 訂正**: 当初「`[""]`（空 1 個）」と書いたが、`scan_bracket_args` は `[]` を 0 引数として返し、既存テスト `empty_bracket_yields_no_args` が固定している。`[""]` になるのは `\f[""]` だけ） |
 | `model.rs` の `pub enum Instruction`（:25） | `#[non_exhaustive]`・`Clone/Debug/PartialEq` のみ。`GenericCommand { name, raw_args }` と `Raw(String)` が寛容経路 | variant 追加は後方互換。`\f` 専用 variant（例 `Font { args: Vec<String> }`）を足す |
 | `compile.rs` の `fn compile` の catch-all `other => tracing::debug!(.., "M-boot 外タグを無視")`（:202-204） | `Raw` と未知 variant を捨てる。`GenericCommand` は `CueCommand::command_carrier(name, raw_args)` で瞬時（duration 0）の cue になる（:187-195） | `\f` の腕を `GenericCommand` の腕と同じ形（`emit(scope, offset, 0.0, ..)`）で足す。並び順は `emit` が `offset` を転写するので保たれる（R2.3） |
 | `compile.rs` の冒頭 `ClearAll` 前置（:225-233） | 内容 cue を持つ台本の先頭に `ClearAll`（`start_time=0.0`）を 1 件挿入する | **「台詞の開始」の観測点がここにある**（R3.8）。文字レンダリング層は `ClearAll` を「新しい台本の先頭」として受け取れる |
@@ -309,17 +309,17 @@
 ### 9.2 設計決定（D14〜D25・design.md が正本）
 
 - **D14 `StyleId(0)`＝既定の見た目（表に載せない）**。装飾表 `StyleTable` は既定と異なる見た目だけを持ち、文字の装飾番号 0 は「そのスコープの既定の見た目」を指す記号とする。理由: ⑴ 装着（`register_actor`）より前に届いた cue も、表示時点の既定で描ける ⑵ 既定だけの行は番号がすべて 0 なので「範囲指定を 1 度も呼ばない」を構造で満たせる（R14.2）⑶ 既定の見た目が変わっても（DPI 再追従の再登録）表を作り直さない。却下: 「表の 0 番に既定を格納」（登録前後で 0 番の中身が食い違う）。
-- **D15 `draw.rs` の分割の形（§5 から変更）**。`draw.rs` に**残す**もの＝定数・`ResolvedFont`・`DirectionRecipe`・`create_text_format`・`try_create_format`・`create_d2d_target_bitmap`・`device_err`・テスト接続。**出す**もの＝`DWriteMetrics`＋`measure_line_box_ratio`（→`draw_metrics.rs`）・`CachedLineLayout`＋`LineLayoutStore`＋`measure_line_overhang`（→`draw_line_store.rs`）・比較専用オラクル `DrawExecutor`＋`FormatKey`＋`create_target_bitmap`＋`none_err`（→`draw_oracle.rs`・`#[cfg(test)]`）。理由: 9.1 の字面検査が `draw.rs` 単体を読むため、検査対象の定義を動かすと分割の段階で赤になる。残る `draw.rs` は約 400 行で、本仕様が足す `looks` の接続（約 40 行）を受けても上限から遠い。
+- **D15 `draw.rs` の分割の形（§5 から変更）**。`draw.rs` に**残す**もの＝定数・`ResolvedFont`・`DirectionRecipe`・`create_text_format`・`try_create_format`・`create_d2d_target_bitmap`・`device_err`・テスト接続。**出す**もの＝`DWriteMetrics`＋`measure_line_box_ratio`（→`draw_metrics.rs`）・`CachedLineLayout`＋`LineLayoutStore`＋`measure_line_overhang`（→`draw_line_store.rs`）・**`DrawExecutor`＋`FormatKey`＋`create_target_bitmap`＋`none_err` は `draw.rs` に残す**（**2026-09-12 訂正**: 当初は `draw_oracle.rs` へ出す案だったが、設計レビューで同ファイルのもう 1 本の字面検査 `at_prefixed_font_name_generation_is_absent_from_production_source` が「`draw.rs` に `@` が 1 個以上ある」ことを要求し、その `@` が `DrawExecutor::render` の束縛パターンにしか無いことが判明した）。理由: 9.1 の字面検査が `draw.rs` 単体を読むため、検査対象の定義を動かすと分割の段階で赤になる。残る `draw.rs` は約 650 行で、本仕様が足す `looks` の接続（約 45 行）を受けても約 700 行・上限から遠い。
 - **D16 `layout.rs` から出す塊**＝`segment_advance_sum`＋`resolve_cursor_component`（→`layout_line_ops.rs`・子モジュール）。`finish_line`／`finish_pending_line`／`apply_pending_*` は 9.1 の字面検査が `layout.rs` 内に固定しているので動かさない。装飾入りの入口 `layout_styled` は子モジュール `layout_styled.rs` に置き、`layout.rs` 本体の変更は `layout_inner` の引数 1 つと行内最大 em の追跡（約 30 行）に留める。
 - **D17 候補列の解決点＝`create_text_format` の手前**。`FontCatalog::pick(&ResolvedFont) -> ResolvedFont`（COM）が候補列から「最初にインストール済みの名前」を選んで `name` に据えた複製を返し、`DWriteMetrics::new` と両 executor の `ensure_format` がその複製で既存の `create_text_format` を呼ぶ。`create_text_format` 本文はバイト単位で不変（9.1 の字面検査が緑のまま）。却下: `create_text_format` の内側で解決（検査の改訂を分割の段階に持ち込む）。
 - **D18 範囲指定の適用点を 2 つに分ける**。フォント系（家族名・大きさ・太さ・斜体・下線・打ち消し線）は行 TextLayout の**生成時に 1 度**（`LineLayoutStore::line_layout_decorated`）、色は**毎フレーム**（`ViewboxExecutor` Phase 1・既存の hover と同じ場所）。理由: 生成物は行の内容と装飾が同じ間キャッシュされる（R11.4）が、`SetDrawingEffect` は hover が毎フレーム全範囲リセットするので色だけは毎フレーム焼き直す必要がある。順序は「全範囲 `None` → 装飾の色 → hover の色」（後勝ち・R3.5）。既定だけの行は 3 つとも呼ばない。
-- **D19 背景色の源**＝`BalloonScopeAssets` に `background_color: (u8,u8,u8)` を足し、`assets.rs` が面 0 のアトラス原点画素から導く（新ファイル `emo2_boot/balloon_background.rs`）。α が 255 でない（透明・半透明・トリムで原点が bbox の外）ときは白＋`debug!`。文字レンダリング層側の口は `TextLayerRuntime::set_balloon_background(actor, rgb)`＋`ResolvedBalloonText::resolve_with_background`。既存の `resolve(model, image_size)` は白の既定で不変（テスト 26 か所を触らない）。
+- **D19 背景色の源**＝`BalloonScopeAssets` に `background_color: (u8,u8,u8)` を足し、`assets.rs` が面 0 のアトラス原点画素から導く（新ファイル `emo2_boot/balloon_background.rs`）。α が 255 でない（透明・半透明・トリムで原点が bbox の外）ときは白＋`debug!`。文字レンダリング層側の口は `TextLayerRuntime::set_balloon_background(actor, rgb)`＋`ResolvedBalloonText::resolve_with_background`。既存の `resolve(model, image_size)` は白の既定で不変（呼出 52 か所・19 ファイルを触らない・2026-09-12 実測。当初の「26 か所」は過少）。
 - **D20 「戻す操作」の API**＝`TextLayerState::reset_decoration(scope: Option<&ActorKey>)`（`None`＝全スコープ）。`ClearAll` の腕が `None` で呼び、`\f[default]` はスコープ指定で同じ関数を呼ぶ。後続の `\x` は `Some(scope)` または `None` で呼ぶだけ。
 - **D21 予約型の扱い**。`FontDisableSeam` は撤去し `ResolvedFont.looks: LookLayers`（既定／無効表示の 2 層＋選択肢文字色）へ置き換える。行単位の `TextEffects`（`canvas.rs`）と `Resident.effects` は**残す**（`multicolor`／`rotation` の M2 予約の置き場所として doc を改訂するだけ）。`ResolvedFont` の `name`／`fallback_chain`／`height`／`color` は既存の読み手（`actor.rs`・`viewbox_draw.rs`・テスト）のために残し、`looks.default` との一致を `resolve` の単一構築で保証する。
-- **D22 行の高さの規則（R7.9 の裁量）**。閉じる行に文字があれば「その行の文字の em の最大値」、無ければ「そのとき効いている大きさ」（次に置く文字の見た目の高さ）。行送り＝`line_pitch(その高さ)`、保留改行の送り＝`line_pitch(その高さ) × Σratio`。既定だけの台本では従来の `font_height` と同値。
+- **D22 行の高さの規則（R7.9 の裁量）**。閉じる行に文字があれば「その行の文字の em の最大値」、無ければ「そのとき効いている大きさ」（次に置く文字の見た目の高さ。台本の末尾で次に置く文字が無い行は `GlyphStyles.current`＝スコープの現在の見た目の高さ・2026-09-12 追記）。行送り＝`line_pitch(その高さ)`、保留改行の送り＝`line_pitch(その高さ) × Σratio`。既定だけの台本では従来の `font_height` と同値。
 - **D23 「1 台詞につき 1 度」の実装場所**。純粋層（不正な値・語彙のみ・スタイルシートのキーワード・`default.anchor*`）は `Decoration.warned: BTreeSet<String>`（鍵＝`キー=値`）で数え、`ClearAll`（台詞の開始）で空にする＝正確に台詞ごと。COM 層（フォント候補の不在・ファイル名の読み飛ばし）は `FontCatalog` の記憶（候補列ごと）で数え、`ActorRender` の寿命で 1 度＝「台詞ごとに 1 度以下」。
-- **D24 実体化の段階で改訂する既存テスト 3 件**（分割の段階では 0 件）: ⑴ `decoration_and_disable_seams_are_type_only`（R16.4）⑵ `font_family_reaches_directwrite_only_as_author_name_or_default_retry`（家族名の入口が `try_create_format` と `draw_metrics.rs` の `probe_format_for` の 2 つになる事実へ doc と述語を広げる）⑶ `pure_layer_modules_have_no_windows_imports` の列挙に新設 5 ファイルを足す。
-- **D25 命令の形と運搬名**。`Instruction::Font { args: Vec<String> }`（`args[0]` がキー・以降が値の列・`\f[]` は `[""]`・裸の `\f` は `[]`）。運搬は `CueCommand::command_carrier(FONT_TAG_CARRIER, args)`・`FONT_TAG_CARRIER = "\\f"`（`areka_sakura::contract` に定義）。9.1 のとおり `\![\f,…]` と綴れば同じ名前になるが、ukadoc の `\!` 語彙に `\f` は無く、そう綴った台本が装飾として解釈されても実害が無いため受容する（記録のみ）。
+- **D24 実体化の段階で改訂する既存テスト 3 件**（分割の段階では 0 件）: ⑴ `decoration_and_disable_seams_are_type_only`（R16.4・同ファイルの `FontDisableSeam`／`RESERVED_KEY_DISABLE_FONT_PREFIX` の import と断言、`surface.rs` の doc コメントも同時に）⑵ `font_family_reaches_directwrite_only_as_author_name_or_default_retry`（家族名の入口が `try_create_format` と `draw_metrics.rs` の `probe_format_for` の 2 つになる事実へ doc と述語を広げる）⑶ `pure_layer_modules_have_no_windows_imports` の列挙に新設 5 ファイルを足す。
+- **D25 命令の形と運搬名**。`Instruction::Font { args: Vec<String> }`（`args[0]` がキー・以降が値の列・`\f[]` と裸の `\f` は `[]`・`\f[""]` は `[""]`・2026-09-12 訂正）。運搬は `CueCommand::command_carrier(FONT_TAG_CARRIER, args)`・`FONT_TAG_CARRIER = "\\f"`（`areka_sakura::contract` に定義）。9.1 のとおり `\![\f,…]` と綴れば同じ名前になるが、ukadoc の `\!` 語彙に `\f` は無く、そう綴った台本が装飾として解釈されても実害が無いため受容する（記録のみ）。
 
 ### 9.3 §7 の調査項目の決着
 
@@ -336,3 +336,13 @@
 - **`render` の署名を変える**: テスト 46 か所の書き換え。`render_styled` を別名で足す。
 - **背景色を `BalloonModel` に載せる**: `crates/areka-parsers/src/balloon/model.rs` は本仕様が触らない（R4.2）。
 - **`TextEffects` の撤去**: `Resident { effects }` の構築がテスト 10 ファイルにあり、撤去の見返り（0 バイトの型 1 つ）に対して差分が大きい。
+
+### 9.5 設計レビュー（2026-09-12・`design-validation.md`）で反映した訂正
+
+- 重要 1: `draw_oracle.rs` は作らない。`DrawExecutor` ほか `#[cfg(test)]` の 4 項目は `draw.rs` に残す（D15 訂正・`@` の対照検査）。
+- 重要 2: `\f[]` は `[]`（D25・§1.1 訂正・`apply_font_tag` は `args.first()` で `NoKey` を判定）。
+- 所見 1: `emo2_boot/consumer_ledger.rs` に `"\\f"` → `CommandConsumer::TextLayer` の 1 行（宣言のみ）。
+- 所見 2: 既定だけの行の箱寸は `font.height` をそのまま渡す（`block_extent` は装飾のある行だけ）。
+- 所見 3: `GlyphStyles.current` を足し、台本末尾の空行の高さを「現在の見た目」にする（D22 追記）。
+- 所見 4: D24 ⑴ の改訂範囲を import・断言・`surface.rs` の doc まで広げる。
+- 所見 5: `BalloonScopeAssets` のテスト構築は 2 か所、`ResolvedBalloonText::resolve` の呼出は 52 か所。
