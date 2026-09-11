@@ -121,24 +121,60 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 ///   隣の行を侵し、かつヒット矩形が重なって同一点が 2 選択肢に当たる（照会の一意性が壊れる）。
 ///   ゆえにピッチで頭打ちにする。実測 Yu Gothic UI 28px（行送り 30 ＝ 28 + 行間 2）では
 ///   `clamp(37.24, 28, max(28, 30)) = 30`——次行の帯へ食い込まない。
-///   行ボックス丈 37.24 は覆いきれず、実フォントの読み戻しでは文字のインクが帯の下端から
-///   はみ出す。正典の `font.height,28`（Yu Gothic UI・帯の丈 30）での実測は
-///   **2 画素**（「閉」「も」「調」「頻」「度」。「は」「い」「じ」「る」「ど」「整」は 1 画素）——
-///   以前ここに書いていた 1 画素は `font.height,20` の fixture で測った値だった。
-///   開発者の**第 2 回裁定（2026-09-06）**は「**2 画素までを許容し、帯は広げない**」である
-///   （design.md §「帯の防御式を保つ」の第 2 回裁定）。帯を広げると隣接行の帯と重なって
-///   「どの選択肢を指しているか」の一意性が壊れるからである。**3 画素以上**になったら
-///   帯を広げず、数値を添えて改めて裁定を仰ぐ。この上限は `tests/line_pitch_readback_test.rs`
-///   （正典 28）・`tests/choice_fixture_test.rs`（font 20）・`tests/emo2_fixture_e2e_test.rs`
-///   の `BAND_OVERHANG_MAX` が固定している。
 ///   `line_pitch < font_height` の病的設定では下限が勝つ（帯 ＝ `font_height`）。
 /// - 行送り比 `\n[ratio]` で ratio < 1 を指定した行間縮小時は帯が隣接行へ届き得る（M1 既知の
 ///   縮退——正典 fixture は ratio ≥ 1）。
+///
+/// ## 帯の丈だけでは足りない（位置も要る）
+///
+/// 行ボックス丈 37.24 を丈 30 では覆いきれないため、帯をどこへ置くかで見え方が変わる。帯を
+/// 行矩形のブロック軸**近端**へ揃えていた頃の読み戻しは「上に 7 画素の余白を残したまま下で
+/// 2 画素を切る」であった。**帯を広げるのではなく、行ボックスの中央へ寄せる**のが正しい
+/// ——寄せる量は [`highlight_band_offset`] が決める（spec `areka-P0-emo2-conformance-e2e`
+/// R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
+/// この裁定が覆した）。帯の丈そのものは本関数のままで、広げない。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch: f32) -> f32 {
     let upper = line_pitch.max(font_height);
     line_box_height.clamp(font_height, upper)
+}
+
+/// ハイライト帯／ヒット帯を行ボックスの中央へ寄せる量を決める（純粋・**描画とヒットの唯一の源**）。
+///
+/// ## なぜ寄せるのか（開発者裁定 2026-09-06 第 2 回・R13.1）
+///
+/// [`highlight_band_extent`] の帯は行送りピッチで頭打ちになるので、行ボックス丈より短くなり得る
+/// （実測 Yu Gothic UI `font.height,28`: 行ボックス 37.24・帯 30）。DirectWrite は行ボックスの
+/// 中にインクを**中央寄り**に置くのに、帯を行矩形のブロック軸**近端**（横書き＝上端）へ揃えると、
+/// 帯は上に余りながら下でインクを切る。読み戻しの実測は 帯 y0..29／インク y7..31 ＝
+/// **上に 7 画素の余白を残したまま下で 2 画素を切る**であった。開発者は実機の目視でこれを
+/// 「色反転位置が 2 ドット程上すぎる」と判じ、同日の第 1 の裁定（2 画素のはみ出しを許容する）を
+/// 覆した。あるべき姿は**帯を広げることではなく、帯を行ボックスの中央へ寄せること**である。
+///
+/// ```text
+/// band_offset = round(max(0, line_box_height − band_extent) / 2)
+/// ```
+///
+/// | フォント | 行ボックス | 帯 | offset | 帯の位置 | インク | 上／下 |
+/// |---|---|---|---|---|---|---|
+/// | Yu Gothic UI 28（正典） | 37.24 | 30 | **4** | y4..33 | y7..31 | 3／0 |
+/// | Yu Gothic UI 20（fixture） | 26.6 | 22 | **2** | y2..23 | y6..22 | 4／0 |
+/// | 既定 ＭＳ ゴシック（比 1.0） | ＝ em | ＝ em | **0** | 従来どおり | — | 非退行 |
+///
+/// 行ボックス丈が em ボックス丈に等しいフォント（既定 ＭＳ ゴシック）では帯 ＝ 行ボックスゆえ
+/// offset は 0 になり、寄せる前と 1 画素も変わらない（既定フォントの byte 等価 golden が
+/// 1 バイトも動かないことが offset 0 の証拠・R13.6）。
+///
+/// ## 隣接行と重ならない（R13.4）
+///
+/// 28 では `offset + 帯 = 34` が行送り 30 を超えるが、次の行の帯も `30 + 4 = 34` から始まるので
+/// **接するだけで重ならない**。ヒット判定は半開区間（`crates/areka/src/input_events/balloon.rs`
+/// の `y >= top && y < bottom`）ゆえ、共有する辺の上の 1 点はたかだか 1 行にしか当たらない。
+///
+/// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
+pub fn highlight_band_offset(line_box_height: f32, band_extent: f32) -> f32 {
+    ((line_box_height - band_extent).max(0.0) / 2.0).round()
 }
 
 /// ヒット行（純粋・canvas-local image px）: 1 選択肢セグメントの矩形＋配送順序数。
@@ -177,9 +213,11 @@ pub struct HitRectPx {
 ///
 /// 各 [`LineChoiceSegment`] について、**行内軸範囲＝セグメントの `inline_range`（＝選択肢グリフ
 /// 範囲の文字幅。行全幅ではない・正典確定「クリック領域幅＝文字幅」）**、**ブロック軸帯＝行矩形の
-/// block 近端から `band_extent` 分**（[`highlight_band_extent`] が決める descent 込みの帯——
-/// 行矩形の em ボックス丈ではない。ハイライト描画（`highlight_rect`）と同一の値を受け取ることで
-/// 帯が数値一致する・R3.3）を軸読み替え正準表で x/y へ割り当て、絶対 image px のヒット矩形を組む。これを
+/// block 近端から `band_offset` だけ内側へ寄せた点から `band_extent` 分**
+/// （[`highlight_band_extent`] が決める descent 込みの帯を [`highlight_band_offset`] が行ボックスの
+/// 中央へ寄せた位置——行矩形の em ボックス丈ではない。ハイライト描画（`highlight_rect`）と同一の
+/// 2 値を受け取ることで帯が数値一致する・R3.3）を軸読み替え正準表で x/y へ割り当て、絶対 image px の
+/// ヒット矩形を組む。これを
 /// [`ContentCanvas::from_layout`] と**同一の原点差引き**（`- region.left()` / `- region.top()`）で
 /// canvas-local（validrect-local）へ写す——ゆえにハイライト描画（`decorate_canvas`）が同じ
 /// `LineChoiceSegment`＋行矩形から組む矩形と数値一致する（表示とヒットの単一導出・R3.3・
@@ -204,6 +242,7 @@ pub fn derive_hit_rows(
     mode: WritingMode,
     region: &TextRegion,
     band_extent: f32,
+    band_offset: f32,
 ) -> Vec<CanvasHitRow> {
     let (ox, oy) = (region.left(), region.top());
     let mut rows = Vec::new();
@@ -218,22 +257,23 @@ pub fn derive_hit_rows(
             continue;
         };
         // 行内軸＝セグメントの inline_range（文字幅）・ブロック軸帯＝行矩形の block 近端から
-        // band_extent 分を軸読み替え正準表で x/y へ割り当て絶対 image px のヒット矩形を組む
-        // （横書き＝行内 x／ブロック y・縦書き＝行内 y／ブロック x）。block 近端（横書き＝rect.top・
-        // 縦書き＝rect.left）は描画（住人 transform の offset＝行矩形の近端）と同一の起点ゆえ、
-        // band_extent が同値なら帯は描画と数値一致する（R3.3・`band_extent == font_height` なら
-        // 従来の行矩形 block 帯と完全一致＝非退行）。
+        // band_offset だけ内側へ寄せた点から band_extent 分を軸読み替え正準表で x/y へ割り当て
+        // 絶対 image px のヒット矩形を組む（横書き＝行内 x／ブロック y・縦書き＝行内 y／ブロック x）。
+        // block 近端（横書き＝rect.top・縦書き＝rect.left）は描画（住人 transform の offset＝
+        // 行矩形の近端）と同一の起点ゆえ、band_extent と band_offset が同値なら帯は描画と数値一致
+        // する（R3.3/R13.2・`band_extent == font_height` かつ `band_offset == 0` なら従来の
+        // 行矩形 block 帯と完全一致＝非退行）。
         let abs = match mode {
             WritingMode::HorizontalTb => LineRect {
                 left: i0,
-                top: line.rect.top,
+                top: line.rect.top + band_offset,
                 right: i1,
-                bottom: line.rect.top + band_extent,
+                bottom: line.rect.top + band_offset + band_extent,
             },
             WritingMode::VerticalRl | WritingMode::VerticalLr => LineRect {
-                left: line.rect.left,
+                left: line.rect.left + band_offset,
                 top: i0,
-                right: line.rect.left + band_extent,
+                right: line.rect.left + band_offset + band_extent,
                 bottom: i1,
             },
         };
@@ -309,9 +349,10 @@ pub fn to_window_physical(
 ///
 /// **セグメント空 → canvas を無変更で返す**（恒等・非退行・要件 1.4/design.md Invariants）。
 ///
-/// `band_extent`（[`highlight_band_extent`] の出力）は Choice 住人へそのまま焼き込み、COM 層の
-/// ハイライト矩形とダーティ帯がこの単一値を読む——[`derive_hit_rows`] へ渡す値と同一にすることで
-/// 描画帯とヒット帯の数値一致（R3.3）を呼び手 1 箇所で担保する。
+/// `band_extent`（[`highlight_band_extent`] の出力）と `band_offset`（[`highlight_band_offset`] の
+/// 出力）は Choice 住人へそのまま焼き込み、COM 層のハイライト矩形とダーティ帯がこの 2 値を読む
+/// ——[`derive_hit_rows`] へ渡す値と同一にすることで描画帯とヒット帯の数値一致（R3.3/R13.2）を
+/// 呼び手 1 箇所で担保する。
 ///
 /// ## 座標系: 絶対 image px → resident-local（GlyphRunContent ローカル系）
 ///
@@ -351,6 +392,7 @@ pub fn decorate_canvas(
     region: &TextRegion,
     mode: WritingMode,
     band_extent: f32,
+    band_offset: f32,
 ) -> ContentCanvas {
     // セグメント空は恒等（非退行・要件 1.4）——入力 canvas をそのまま返す。
     if segments.is_empty() {
@@ -405,6 +447,7 @@ pub fn decorate_canvas(
             hovered,
             highlight,
             band_extent,
+            band_offset,
         });
     }
     canvas

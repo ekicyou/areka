@@ -7,8 +7,8 @@
 // Quit 経路）と対をなす「close talk が自然完了しない」経路として駆動する（要件
 // 7.4/7.5/7.6）。
 //
-// close talk の script は `\w[999999]this-never-completes\-`（`\w[999999]`＝約13.9時間
-// 相当の待ち・drive.rs のコメントが示すとおり `\w[N]`＝N×50ms）にする——先頭に待ちを置く
+// close talk の script は `\_w[49999950]this-never-completes\-`（`\_w[49999950]`＝約13.9時間
+// 相当の待ち・`\_w[ms]` は絶対ミリ秒）にする——先頭に待ちを置く
 // ことで空 sheet 高速経路（bare quit `\-`・S4 参照）を踏まず、実際に「再生完了通知が来ない」
 // 状態を作る。本シナリオは close talk 開始後、dispatcher へ一切 Tick を送らない（送れば
 // `\w` の経過秒が進み得る）ため、close talk は spawn 直後の待ちで恒久的に止まったまま
@@ -103,7 +103,7 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Dur
     );
 }
 
-/// S5: close deadline 超過——close talk を意図的に完了させず（`\w[999999]`＝約13.9時間
+/// S5: close deadline 超過——close talk を意図的に完了させず（`\_w[49999950]`＝約13.9時間
 /// 相当の待ちで恒久的に止める）、`runtime.kanade()` へ `Tick` を 2 回注入するだけで
 /// （1本目で deadline を確定・2本目で超過を跨ぐ）、`Unloading{DeadlineExceeded}`→
 /// scripted `Ok(ExitKind::Clean)` の `Unload`→`Unloaded` 観測→`StopSelf` へ完走する
@@ -134,7 +134,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
         .notify("basewareversion", Ok(()))
         .get(
             "OnClose",
-            Ok(Some(r"\w[999999]this-never-completes\-".to_string())),
+            Ok(Some(r"\_w[49999950]this-never-completes\-".to_string())),
         )
         .unload(Ok(ExitKind::Clean))
         .build();
@@ -316,7 +316,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----
     // deadline 超過による強制終了が既に Unload まで完走済み（上の有界待機で確認済み）
     // であるため、ここでの `ForceQuit` 送出は kanade が既に自発停止済みであることの
-    // 冪等パスを実地で運動させる（S4 と同旨）。close talk（`\w[999999]` で止まった
+    // 冪等パスを実地で運動させる（S4 と同旨）。close talk（`\_w[49999950]` で止まった
     // まま）は dispatcher の active slot に残っているはずだが、dispatcher への Close
     // 送出は稼働中 active talk へ `SakuraMsg::Close` を送って即座に中断させてから
     // join する（`close_active_if_any`・dispatcher.rs）ため、恒久的に止まった close

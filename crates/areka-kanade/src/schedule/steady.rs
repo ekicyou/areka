@@ -824,6 +824,10 @@ fn on_reply(
                     (state, Vec::new())
                 }
             },
+            ShioriOutcome::NoContent => {
+                // 204: 会話中の撫で等に台本なし——普通の応答（Req 19.1・Steady{None} と同じ扱い）。
+                (state, Vec::new())
+            }
             other => steady_reply_unexpected(state, "Steady{Some}", other),
         },
         _ => steady_phase_unexpected(state, "ShioriReply"),

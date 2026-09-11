@@ -17,6 +17,7 @@ use bevy_ecs::world::World;
 #[allow(unused_imports)]
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::TextLayerRuntime;
+use areka_kanade::KanadeStopped;
 use areka_parsers::balloon::BalloonModel;
 
 use super::super::balloon_visibility::BalloonVisibilityState;
@@ -127,6 +128,19 @@ pub struct Emo2Wiring {
     pub(super) assets: Option<BootAssets>,
     /// attach 完了フラグ（高々 1 回のゲート・以降 no-op）。
     pub(super) attached: bool,
+    /// kanade の停止通知の受信端（終了相＝[`run_ghost_quit_phase`] が消費・R15.4）。
+    ///
+    /// `move_rx`／`lifecycle_rx` と同型の配線だが、**既定は `None`**（受信端を持たない）である。
+    /// 埋めるのは [`super::super::wire_emo2_boot`] だけで、そこが
+    /// `mpsc::channel::<KanadeStopped>()` を作り送出端を `boot_with_kanade_stop` へ、受信端を
+    /// [`Emo2Wiring::set_kanade_stop`] へ渡す。`None` のままなら終了相は毎フレーム即座に戻る
+    /// （既存の 6 箇所以上の試験構築点は署名も挙動も変わらない）。
+    ///
+    /// 通知は kanade の終了系列が完了した時点でちょうど 1 件届く。受け手はそれを合図に全ゴースト
+    /// 窓を閉じる——終了挨拶の再生が終わってから窓が消える、という順序はこの一点で決まる。
+    ///
+    /// [`run_ghost_quit_phase`]: super::run_ghost_quit_phase
+    pub(super) kanade_stop: Option<Receiver<KanadeStopped>>,
     /// `Changed<DPI>` 観測の**永続** [`SystemState`]（[`run_dpi_phase`]・emo-dpi-scaling task 4.2）。
     ///
     /// `anchor_changed_system` の `Local<Option<SystemState<..>>>` と同じ役割を担う。あちらは bevy の
@@ -175,9 +189,27 @@ impl Emo2Wiring {
             clock,
             assets: Some(assets),
             attached: false,
+            // 停止通知の受信端は既定で持たない（`set_kanade_stop` を呼んだ結線だけが持つ）。
+            kanade_stop: None,
             // 初回 [`run_dpi_phase`] で遅延生成する（`SystemState::new` は `&mut World` を要する）。
             dpi_state: None,
         }
+    }
+
+    /// kanade の停止通知の受信端を据える（追加の構築口・R15.4・design D15 の 3）。
+    ///
+    /// [`Emo2Wiring::new`] の署名は変えない——試験の構築点が 6 箇所以上あり、そのすべてに
+    /// 「通知端なし」を書かせるのは、既定が `None` であることの言い換えにしかならないためである。
+    /// 呼ぶのは `wire_emo2_boot`（本番）と spine ハーネスの終了配線の試験だけで、いずれも
+    /// **`insert_non_send` より前**の 1 回である。
+    ///
+    /// 設計は本口を `with_kanade_stop(self, rx) -> Self` と名づけていたが、既存の
+    /// [`seed_zorder_descript_base`] と同じ「構築直後に器を埋める `&mut self` の口」に揃えた
+    /// （`with_` の名で値を返さない形は取り違えを招く）。役割は設計のとおりである。
+    ///
+    /// [`seed_zorder_descript_base`]: Self::seed_zorder_descript_base
+    pub(in crate::emo2_boot) fn set_kanade_stop(&mut self, rx: Receiver<KanadeStopped>) {
+        self.kanade_stop = Some(rx);
     }
 
     /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口・要件 5.1）。

@@ -6,7 +6,9 @@
 use std::sync::mpsc::{Receiver, Sender};
 
 use areka_actor::ActorHandle;
-use areka_kanade::{KanadeConfig, KanadeMsg, TalkCommand, spawn_kanade};
+use areka_kanade::{
+    KanadeConfig, KanadeMsg, KanadeStopped, TalkCommand, spawn_kanade, spawn_kanade_with_stop_sink,
+};
 
 use super::{
     BlockOn, FailOn, Fixture, MockSakura, MockShiori, QuitPolicy, SakuraGate, ShioriGate,
@@ -51,6 +53,45 @@ pub fn spawn_harness(config: KanadeConfig, fixture: Fixture, quit_policy: QuitPo
     // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
     let (kanade_tx, kanade_handle) =
         spawn_kanade(config, shiori.sender.clone(), talk_tx, Box::new(|_, _| {}));
+
+    // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す。
+    let sakura = spawn_mock_sakura(talk_rx, kanade_tx.clone(), quit_policy);
+
+    Harness {
+        sender: kanade_tx,
+        kanade: kanade_handle,
+        shiori,
+        sakura,
+    }
+}
+
+/// 停止通知の投函端つき駆動ハーネスを組み立てる（R15.3・[`spawn_harness`] の派生）。
+///
+/// [`spawn_harness`] と同一の結線だが、kanade を [`spawn_kanade_with_stop_sink`] で起動して
+/// `stop_sink` を渡す。`Some` なら終了系列の完了（`Action::StopSelf`）で
+/// [`KanadeStopped`] が 1 件届き、`None` なら通知は出ない（＝[`spawn_harness`] と同一挙動）。
+///
+/// 受信端をテスト側で先に drop しておけば「送出失敗しても停止は完走する」経路も踏める。
+pub fn spawn_harness_with_stop_sink(
+    config: KanadeConfig,
+    fixture: Fixture,
+    quit_policy: QuitPolicy,
+    stop_sink: Option<Sender<KanadeStopped>>,
+) -> Harness {
+    let shiori = spawn_mock_shiori(fixture);
+
+    // kanade→sakura の TalkCommand チャンネルを 1 本張る（DD-5・起動と選択解決が同一チャンネル）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
+
+    // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
+    // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
+    let (kanade_tx, kanade_handle) = spawn_kanade_with_stop_sink(
+        config,
+        shiori.sender.clone(),
+        talk_tx,
+        Box::new(|_, _| {}),
+        stop_sink,
+    );
 
     // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す。
     let sakura = spawn_mock_sakura(talk_rx, kanade_tx.clone(), quit_policy);

@@ -61,9 +61,10 @@ use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{
-    GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode, boot,
+    GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
+    boot_with_kanade_stop,
 };
-use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
+use areka_kanade::{CloseReason, KanadeStopped, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
 use areka_seriko::{
@@ -829,13 +830,17 @@ impl SpineHarness {
             app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
-        let ghost = boot(options).expect("scripted boot は解決可能な emo2 ghost_root で成功する");
+        // 停止通知の channel（R15.4・本番 `wire_emo2_boot` と同型）: 送出端は kanade へ、受信端は
+        // 下の `Emo2Wiring` へ渡す。終了相を回さないテストでは受信端が読まれないだけで無害である。
+        let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeStopped>();
+        let ghost = boot_with_kanade_stop(options, Some(kanade_stop_tx))
+            .expect("scripted boot は解決可能な emo2 ghost_root で成功する");
 
         // ── frame 三相結線状態（wire_emo2_boot 手順6 相当・System 登録はせず直接駆動する） ──
         // Emo2Wiring は move の受信端 move_rx を保持し frame 相 drain（run_move_drain_phase・task 9.2）に
         // 備える。move の spine e2e（task 9.3）は上の実 MoveCueSink 経由で cue→channel→drain を通す。
         // 表示ライフサイクルの受信端 lifecycle_rx も同様に保持し、可視性相（task 4.4）の drain に備える。
-        let wiring = Emo2Wiring::new(
+        let mut wiring = Emo2Wiring::new(
             presenter,
             rx,
             move_rx,
@@ -845,6 +850,7 @@ impl SpineHarness {
             clock,
             wiring_assets,
         );
+        wiring.set_kanade_stop(kanade_stop_rx);
 
         SpineHarness {
             world,
@@ -927,6 +933,9 @@ impl SpineHarness {
 #[cfg(test)]
 #[path = "spine_boot_smoke_tests.rs"]
 mod boot_smoke_tests;
+#[cfg(test)]
+#[path = "spine_close_wiring_tests.rs"]
+mod close_wiring_tests;
 #[cfg(test)]
 #[path = "spine_conformance_lap_tests.rs"]
 mod conformance_lap_tests;

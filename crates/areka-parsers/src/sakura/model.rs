@@ -36,7 +36,7 @@ pub enum Instruction {
     /// 数値化・範囲展開・alias 解決・`-1` の解釈はいずれも本層で行わず、消費側
     /// （seriko）の下流責務とする（転記層の規律・balloon-face-cue R1.1/1.4/1.5）。
     BalloonSurface(SurfaceArg),
-    /// 待ち時間 `\w[n]` / `\wN` / `\_w[ms]` を統一（要件 3）。
+    /// 待ち時間 `\wN` / `\_w[ms]` を統一（要件 3）。
     Wait(Duration),
     /// 改行 `\n[percent]` / `\n`（比率。要件 4）。
     NewLine(NewLineRatio),

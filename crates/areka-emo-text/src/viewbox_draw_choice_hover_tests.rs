@@ -22,8 +22,9 @@ fn as_choice_canvas(canvas: &ContentCanvas) -> ContentCanvas {
                     segments: Vec::new(),
                     hovered: None,
                     highlight: None,
-                    // 素描画等価の検証ゆえ帯は em ボックス丈（塗りを持たない）。
+                    // 素描画等価の検証ゆえ帯は em ボックス丈（塗りを持たない）・寄せなし。
                     band_extent: run.size.1,
+                    band_offset: 0.0,
                 }),
                 transform: r.transform,
                 effects: r.effects,
@@ -169,6 +170,9 @@ fn hover_choice_line_paints_segment_and_resets_on_hover_off() {
                         // 「塗り画素ゼロ」判定が、ダーティ帯の帯超過分拡張
                         // （expand_overhang_for_band）まで含めて赤くなる。
                         band_extent: 12.0,
+                        // 寄せなし（行ボックス丈 ＝ 帯の丈のフォントと同じ関係）——寄せの効き目は
+                        // `hover_band_offset_shifts_paint_and_leaves_no_residue_on_hover_off` が見る。
+                        band_offset: 0.0,
                     }),
                     transform: r.transform,
                     effects: r.effects,
@@ -241,5 +245,221 @@ fn hover_choice_line_paints_segment_and_resets_on_hover_off() {
     assert!(
         opaque_count(&plain_px) > 0,
         "hover 解除でも素のグリフインクは描かれる"
+    );
+}
+
+/// premultiplied BGRA 密配列で、列帯 `x0..x1` の行 `y` に指定 BGRA と完全一致する画素数を数える。
+fn count_bgra_in_row(bytes: &[u8], w: u32, y: u32, x0: u32, x1: u32, target: [u8; 4]) -> usize {
+    let mut n = 0usize;
+    for x in x0..x1.min(w) {
+        let o = ((y * w + x) * 4) as usize;
+        if bytes[o..o + 4] == target {
+            n += 1;
+        }
+    }
+    n
+}
+
+/// 観測可能な完了状態（R13.1/13.2/13.5）: `band_offset` を持つ Choice 行を描画すると、
+/// ハイライトの塗りは行矩形の block 近端から**寄せの分だけ下がって**始まり、寄せの上の行には
+/// 1 画素も載らない。さらに hover 解除フレームで塗りが**消し残らない**——ダーティ帯の超過分は
+/// `band_offset + band_extent − font_height` で組まれるので、寄せを数えないと帯の下端側が
+/// クリップの外へ落ちて塗りが残る（`expand_overhang_for_band` の回帰檻）。
+#[test]
+fn hover_band_offset_shifts_paint_and_leaves_no_residue_on_hover_off() {
+    const BAND_EXTENT: f32 = 12.0;
+    const BAND_OFFSET: f32 = 3.0;
+    let mut rig = Rig::new();
+    let image = (40u32, 20u32);
+    let mut surface = rig.attach(image, 1.0);
+    let (w, h) = surface.size();
+    let mode = WritingMode::HorizontalTb;
+    let font = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+
+    // 1 行「あい」（全角 2・font 10）。先頭グリフのみ選択肢セグメント（ordinal 0）にして
+    // 帯の丈 12・寄せ 3 を焼く——帯は y3..15（em ボックス丈 10 の外へ 5 画素出る）。
+    let (base_canvas, window) = build(&glyph_items("あい"), &region, mode, 10.0);
+    let make_choice = |highlight: Option<HighlightPaint>, hovered: Option<usize>| {
+        let residents = base_canvas
+            .residents
+            .iter()
+            .map(|r| match &r.content {
+                ResidentContent::GlyphRun(run) => Resident {
+                    content: ResidentContent::Choice(ChoiceLineContent {
+                        run: run.clone(),
+                        segments: vec![ChoiceRowSegment {
+                            ordinal: 0,
+                            inline_range: (0.0, 10.0),
+                        }],
+                        hovered,
+                        highlight,
+                        band_extent: BAND_EXTENT,
+                        band_offset: BAND_OFFSET,
+                    }),
+                    transform: r.transform,
+                    effects: r.effects,
+                },
+                _ => r.clone(),
+            })
+            .collect();
+        ContentCanvas {
+            residents,
+            size: base_canvas.size,
+        }
+    };
+    let fill_bgra = [25u8, 25, 105, 255];
+
+    // ── frame 1: hover 中。塗りは y3 から始まり y14 で終わる（寄せ 0 なら y0..11）。 ──
+    let hover_canvas = make_choice(
+        Some(HighlightPaint {
+            fill: (105, 25, 25),
+            text: (255, 255, 255),
+        }),
+        Some(0),
+    );
+    exec.render(&hover_canvas, &window, &font, mode, &contract, &mut surface)
+        .expect("hover render 失敗");
+    let hovered_px = surface.read_back().expect("read_back(hover) 失敗");
+
+    let offset_rows = BAND_OFFSET as u32;
+    for y in 0..offset_rows {
+        assert_eq!(
+            count_bgra_in_row(&hovered_px, w, y, 0, 10, fill_bgra),
+            0,
+            "寄せの上の行 y{y} には塗りが載らない（寄せを配らないとここが塗られる）"
+        );
+    }
+    assert!(
+        count_bgra_in_row(&hovered_px, w, offset_rows, 0, 10, fill_bgra) > 0,
+        "帯の 1 行目は寄せの位置 y{offset_rows} にある"
+    );
+    let last_band_row = offset_rows + BAND_EXTENT as u32 - 1;
+    assert!(
+        last_band_row < h,
+        "帯の最終行 y{last_band_row} は供給面（高さ {h}）の内にある"
+    );
+    assert!(
+        count_bgra_in_row(&hovered_px, w, last_band_row, 0, 10, fill_bgra) > 0,
+        "帯の最終行は寄せ＋丈−1（y{last_band_row}）——em ボックス丈 10 の外まで塗られる"
+    );
+    assert_eq!(
+        count_bgra_in_row(&hovered_px, w, last_band_row + 1, 0, 10, fill_bgra),
+        0,
+        "帯の下は塗られない（丈は寄せても変わらない）"
+    );
+
+    // ── frame 2: hover 解除（同一 executor＝キャッシュ再利用）。塗りは 1 画素も残らない。 ──
+    let plain_canvas = make_choice(None, None);
+    exec.render(&plain_canvas, &window, &font, mode, &contract, &mut surface)
+        .expect("hover 解除 render 失敗");
+    let plain_px = surface.read_back().expect("read_back(hover 解除) 失敗");
+    let residue = count_bgra_in_x_band(&plain_px, w, h, 0, w, fill_bgra);
+    assert_eq!(
+        residue, 0,
+        "hover 解除フレームに塗りが {residue} 画素消し残った——ダーティ帯の超過分が \
+         band_offset を数えていない（expand_overhang_for_band・R13.5）"
+    );
+    assert!(
+        opaque_count(&plain_px) > 0,
+        "hover 解除でも素のグリフインクは描かれる（空面一致で緑にしない）"
+    );
+}
+
+/// premultiplied BGRA 密配列の全域から、指定 BGRA を持つ画素の x 範囲（左端, 右端）を返す。
+fn bgra_x_span(bytes: &[u8], w: u32, h: u32, target: [u8; 4]) -> Option<(u32, u32)> {
+    let mut span: Option<(u32, u32)> = None;
+    for x in 0..w {
+        let hit = (0..h).any(|y| {
+            let o = ((y * w + x) * 4) as usize;
+            bytes[o..o + 4] == target
+        });
+        if hit {
+            span = Some(match span {
+                None => (x, x),
+                Some((l, _)) => (l, x),
+            });
+        }
+    }
+    span
+}
+
+/// 縦書き（R13.7）: 同じ寄せをブロック軸（x）へ適用する。寄せ 0 と寄せ 3 を独立の
+/// executor／供給面へ描き、読み戻した塗りの x 範囲が**寄せのぶんだけ右へ平行移動する**ことを
+/// 見る（幅は不変＝帯を広げていない）。`highlight_rect` の縦書きアームが寄せを無視すると
+/// 平行移動が 0 になって赤くなる。
+///
+/// 列の書き出し位置そのものは書字方向の縮退規約に依るので、絶対座標ではなく**2 枚の差**を
+/// 測る——寄せを配ったかどうかだけを見る形にして、列原点の規約変更に引きずられないようにする。
+#[test]
+fn vertical_band_offset_shifts_paint_on_block_axis() {
+    const BAND_EXTENT: f32 = 12.0;
+    const BAND_OFFSET: f32 = 3.0;
+    let mut rig = Rig::new();
+    let image = (40u32, 40u32);
+    let mode = WritingMode::VerticalLr;
+    let font = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let (base_canvas, window) = build(&glyph_items("あい"), &region, mode, 10.0);
+    let fill_bgra = [25u8, 25, 105, 255];
+
+    let paint_with_offset = |rig: &mut Rig, band_offset: f32| -> Vec<u8> {
+        let residents = base_canvas
+            .residents
+            .iter()
+            .map(|r| match &r.content {
+                ResidentContent::GlyphRun(run) => Resident {
+                    content: ResidentContent::Choice(ChoiceLineContent {
+                        run: run.clone(),
+                        segments: vec![ChoiceRowSegment {
+                            ordinal: 0,
+                            inline_range: (0.0, 10.0),
+                        }],
+                        hovered: Some(0),
+                        highlight: Some(HighlightPaint {
+                            fill: (105, 25, 25),
+                            text: (255, 255, 255),
+                        }),
+                        band_extent: BAND_EXTENT,
+                        band_offset,
+                    }),
+                    transform: r.transform,
+                    effects: r.effects,
+                },
+                _ => r.clone(),
+            })
+            .collect();
+        let canvas = ContentCanvas {
+            residents,
+            size: base_canvas.size,
+        };
+        let mut surface = rig.attach(image, 1.0);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        exec.render(&canvas, &window, &font, mode, &contract, &mut surface)
+            .expect("縦書き hover render 失敗");
+        surface.read_back().expect("read_back 失敗")
+    };
+
+    let (w, h) = (image.0, image.1);
+    let flat = paint_with_offset(&mut rig, 0.0);
+    let shifted = paint_with_offset(&mut rig, BAND_OFFSET);
+    let flat_span = bgra_x_span(&flat, w, h, fill_bgra).expect("寄せ 0 でも塗りは在る");
+    let shifted_span = bgra_x_span(&shifted, w, h, fill_bgra).expect("寄せ 3 でも塗りは在る");
+    assert_eq!(
+        shifted_span.0 - flat_span.0,
+        BAND_OFFSET as u32,
+        "縦書きの帯はブロック軸（x）へ寄せのぶんだけずれる: 寄せ 0 で x{}..{} ／ 寄せ {BAND_OFFSET} で x{}..{}",
+        flat_span.0,
+        flat_span.1,
+        shifted_span.0,
+        shifted_span.1
+    );
+    assert_eq!(
+        shifted_span.1 - shifted_span.0,
+        flat_span.1 - flat_span.0,
+        "寄せても帯の厚みは変わらない（帯を広げない）"
     );
 }

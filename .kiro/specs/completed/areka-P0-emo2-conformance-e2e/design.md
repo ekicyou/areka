@@ -36,10 +36,9 @@
 
 ### Out of Boundary
 
-- 走行で見つかった欠陥の是正コード（都度切る個別仕様が持つ）。
-- `crates/` の本番コード（`#[cfg(test)]` でない経路）への一切の改変。
+- 本仕様の 1 ウェーブで着地できない規模の欠陥の是正コード（都度切る個別仕様が持つ）。**2026-09-06 第 2 回改訂**: 着地できるものは本仕様が直す（D13・D14）——旧「`crates/` の本番コードへの一切の改変」は撤回。**その後の改訂で D15〜D19 も同じ「その場で直す」として境界の内に入った**（第 3 回＝D15 終了指示の配線・第 4 回＝D16 応答方向の送出・第 5 回＝D17 行送りの後の送り量・第 6 回＝D18 `\w[n]` 括弧形・第 7 回＝D19 会話中の 204。いずれも記録 §13.4 に改変の範囲と理由を登記してある）。
 - 間欠的な赤の根治（`areka-P0-zorder-chain-residue` A-1／A-2）。
-- 上流の確定済み期待値の見直し（本仕様は確かめる側であり、裁定を覆さない）。
+- 上流の確定済み期待値の見直し（本仕様は確かめる側であり、裁定を覆さない）——ただし**開発者が実機の目視で覆した裁定**は本仕様が新しい正典の置き場になる（2026-09-06・帯の 2 画素許容→D13）。完了置き場の文書は改変しない。
 - 完了置き場（`.kiro/specs/completed/`）の文書の改変。
 - `crates/log-capture-kit/tests/file_length_guard_test.rs` の例外表（編成側で「誰も触らない」と決まっている・`roadmap.md:105`）。
 
@@ -64,6 +63,7 @@
 4. **`SpineHarness` の受け口構成・起動手順が変わる**（`spine.rs:793-811`）——段の駆動が成立しなくなる。
 5. **上流の確定済み期待値が改訂される**（二体の隣接・台本の移動量の拡大率倍・バルーン追従の相対位置）——適合検証項目表の期待値欄が陳腐化する。
 6. **`transition_signoff` の走行の呼び方・環境変数名が変わる**（`crates/areka/src/placement/transition_signoff_tests.rs:59-61`）——実機の機械判定の手順が壊れる。
+7. **文字層の行送りや折返しの正典（`areka-emo-text` の `TextLayerConfig`・`TextRegion`）が改訂される**——実機で見える行数・選択肢の可視・反転帯の見た目が変わり、走行前の宣言と既知症状の登記が陳腐化する。**2026-09-05 に発火し（`emo-text-line-height-canon`・PR #142）、2026-09-06 の改訂で消化した**（requirements.md「改訂（2026-09-06）」・下の D5「採り直し」・D8 行 5）。
 
 ## Architecture
 
@@ -148,10 +148,12 @@ graph TB
 
 ```
 crates/areka/src/emo2_boot/
-├── spine.rs                              # 既存。接続宣言 3 本と記録の追補のみ
-├── spine_conformance_lap_tests.rs        # 新規: 一周の走行本体 #[test] 1 本
-├── spine_conformance_script.rs           # 新規: 台本と期待列の逐語
-└── spine_conformance_support.rs          # 新規: 段の駆動ヘルパと突合ヘルパ
+├── spine.rs                              # 既存（着地 968 行）。接続宣言 4 本と記録の追補のみ
+├── spine_conformance_lap_tests.rs        # 新規（988 行）: 一周の走行本体 #[test] 1 本
+├── spine_conformance_script.rs           # 新規（807 行・2026-09-11 実測）: 台本と期待列の逐語
+├── spine_conformance_support.rs          # 新規（743 行）: 段の駆動ヘルパと突合ヘルパ
+├── spine_conformance_support_tests.rs    # 新規（847 行）: 駆動器を縛る決定論テスト・タスク 2.3 で分離
+└── spine_conformance_judge.rs            # 新規（186 行）: 3 列の等値照合＝判定の本体・タスク 3.2 で分離
 
 .kiro/specs/areka-P0-emo2-conformance-e2e/
 ├── design.md                             # 本書。D4 適合検証項目表の唯一の置き場
@@ -163,19 +165,24 @@ crates/areka/src/emo2_boot/
     └── m1-completion.md                  # 新規: 完成判定と宣言
 ```
 
-各ファイルの責務は 1 つに絞る。
+各ファイルの責務は 1 つに絞る。**着地は 3 ファイルではなく 5 ファイルである**——1 ファイル 1,000 行の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs`）に収めるため、駆動器の決定論テスト（タスク 2.3）と判定の本体（タスク 3.2）をそれぞれ親の末尾から接続する兄弟へ分けた（R2.11）。
 
-- `spine_conformance_lap_tests.rs` — 一周の段を順に駆動し、最後に交信の列と表示指令の列を期待と突き合わせる。**判定はこのファイルだけが行う**。
+- `spine_conformance_lap_tests.rs` — 一周の段を順に駆動し、最後に `spine_conformance_judge.rs` の `judge_lap` を 1 度呼ぶ。**駆動がこのファイルの責務であり、判定そのものは持たない**。
 - `spine_conformance_script.rs` — 台本（応答表）と期待列（交信・表示指令）の逐語。**駆動も判定も行わない**。期待値を 1 か所に集めることで、上流の裁定が変わったときの追随点が 1 つになる。
 - `spine_conformance_support.rs` — 段の駆動（注入と有界待ちの組）と、記録の突合に使う投影関数。**期待値を持たない**。
+- `spine_conformance_support_tests.rs` — 上の駆動器の契約を縛る決定論テスト。**期待値も判定も持たない**（タスク 2.3 で分離）。
+- `spine_conformance_judge.rs` — 3 つの列（交信・〈段名・表示指令〉・進行状態）の等値照合。**判定はこのファイルだけが行う**（入口 `judge_lap`・照合の本体 `assert_sequence_eq`。タスク 3.2 で分離）。
 
 ### Modified Files
 
-- `crates/areka/src/emo2_boot/spine.rs` — ⑴ 末尾（`:907-930` と同じ形）へ接続宣言 3 本を追加。⑵ 受け口へ**記録の第 2 系統**（呼出 id と組み立て済み進行状態の対の列）を追補し、取り出し口を 1 本足す。記録の型と取り出し口の本体は `spine_conformance_support.rs` に置き、`spine.rs` にはフィールドと書き込み（2 か所）だけを残す（`spine.rs` は 930 行で余白 70 行・追補の予算は接続宣言込みで 40 行以内・Testing Strategy §2）。既存の `RecordedCall`（`:109-118`）と `non_status_calls()`（`:287`）は変えない。
+- `crates/areka/src/emo2_boot/spine.rs` — ⑴ 末尾（`:907-930` と同じ形）へ接続宣言を追加（**着地は 4 本**——一周の 3 本に D15 の `spine_close_wiring_tests.rs` が加わった。判定と駆動器の決定論テストは親の末尾から接続するのでここには現れない）。⑵ 受け口へ**記録の第 2 系統**（呼出 id と組み立て済み進行状態の対の列）を追補し、取り出し口を 1 本足す。記録の型と取り出し口の本体は `spine_conformance_support.rs` に置き、`spine.rs` にはフィールドと書き込み（2 か所）だけを残す（`spine.rs` は 930 行で余白 70 行・追補の予算は接続宣言込みで 40 行以内・Testing Strategy §2）。既存の `RecordedCall`（`:109-118`）と `non_status_calls()`（`:287`）は変えない。
 - `crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs` — `:174-185` の「待たずに数える」形を、既存の手本（`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`）と同じ「条件が満たされるまで待つ」形へ更新（R9.2）。
 - `crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs` — 同形の兄弟。`:145-156` の待ちが表示記録の非空しか見ないまま `:185-196` が 5 要素を等値照合する形を、S3 と同じ「条件が満たされるまで待つ」形へ更新（R9.2・**2026-09-04 の開発者裁定で追加**＝requirements.md「改訂」節 2）。等値照合そのものは変えない。
 - `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` — `:369` と `:740` の 2 本へ理由付きの `#[ignore]` と環境変数の門を付与（R9.3）。判定ロジックは 1 行も変えない。
 - `crates/wintf/src/runtime/tick_bridge.rs` — `:346` の 1 本へ同じ形の門を付与（R9.3）。
+- `crates/shiori-host32-ipc/src/lib.rs`・`crates/shiori-host32-helper/src/main.rs` — 応答方向の送出から `SMTO_ABORTIFHUNG` を外す（D16・2026-09-07 第 4 回改訂）。
+- `crates/areka/src/input_events/mod.rs`・`crates/areka-kanade/src/actor.rs`（＋`msg.rs` の `KanadeStopped`）・`crates/areka-ghost/src/runtime.rs`・`crates/areka/src/emo2_boot/{mod.rs, frame.rs, frame/wiring.rs}`・`crates/areka/src/placement/spawn.rs` — 終了指示の配線と停止通知（D15・2026-09-07 第 3 回改訂）。`main.rs` は触らない。
+- `crates/areka-emo-text/src/choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs` — 反転帯の `band_offset`（D13・2026-09-06 第 2 回改訂）。`region.rs`・`actor.rs` — 折返し警告を登録口へ（D14）。兄弟試験と `tests/` の読み戻し検査は導出し直す（緩めない）。
 - `doc/emo2-conformance-scope.md` — `:24` の訂正（R11.1）と、完成宣言時の充足済み注記（R11.2）。
 - `.kiro/steering/roadmap.md` — M1 の節を閉じる・干渉台帳の e2e 行を新前提へ書き換える・申し送り生存先の行（`:66`）を閉じる（R11.2・R11.4）。
 - `.kiro/specs/areka-P0-emo2-conformance-e2e/brief.md` — 引き受けた 3 件（申し送り B-1／B-3・掴んで動かしたときの追従）の該当ブロックへ「消化済み」を追記する（R11.4）。送り元は完了置き場に在って受け取れないため、生きた写しであるこの brief が登記先になる。
@@ -257,12 +264,12 @@ flowchart TB
 | # | 項目 | 期待する結果 | 観測の層 | 由来ユニット | 期待値の出典 |
 |---|---|---|---|---|---|
 | 1 | 起動と既定位置 | 起動だけで立ち絵が既定位置（本体は右下・相方は左）に出る。初回の `\s` まで非表示で、以後は実サーフェスが描かれる。拡大率が 96 dpi でない水準でも座標が破綻しない | 両層 | emo2-boot／window-placement | 決定論＝`spine_display_tests.rs:65` の装着と初回 `\s` の遷移。実機＝目視 |
-| 2 | 起動挨拶の再生 | 応答が 1 文字ずつ流れ、待ちと改行と表情の切替が台本どおりに同期する | 両層 | cue-playback-duration | 決定論＝表示指令の列。実機＝目視 |
+| 2 | 起動挨拶の再生 | 応答が 1 文字ずつ流れ、待ちと改行と表情の切替が台本どおりに同期する | 両層 | cue-playback-duration | 決定論＝表示指令の列。実機＝目視。見え方の前提: 本体側バルーンの行容量は **4 行**（2026-09-06・完了 spec `emo-text-line-height-canon` design §4.1 最終行。それ以前は 3 行） |
 | 3 | 着せ替えの表情 | `\![bind]` で本体側の表情が変わり、切替後も固着しない | 両層 | mayuna-compose／bindoption-exclusivity | 決定論＝`crates/areka-seriko/tests/bind_e2e.rs`（台本 → 合成 → 表示指令までの貫通）と `crates/areka-seriko/src/state_bind_pattern_tests.rs:203-331`（同カテゴリの排他置換＝切替後に固着しない・5 本）。実機＝目視 |
 | 4 | まばたき 2 系統 | 本体は着せ替え＋抽選、相方は抽選でまばたく | 両層 | seriko-loop | 決定論＝`spine_seriko_loop_tests.rs`（固定注入乱数列）。実機＝目視 |
 | 5 | 放置で自発会話・会話中は割り込まない | 毎秒の変化通知で自発会話が始まる。会話中は同じ通知が片道になり、返ってきた応答が新しい会話を始めない | 両層 | idle-talk | 決定論＝本仕様の一周テスト（R3.2・照会と通知の別と Ref3）。実機＝目視 |
 | 6 | 撫で反応（本体側と相方側の両方） | 頭・胸を撫でると当たり領域と話者が付随参照に載った照会が送られ、反応が返る | 両層 | collision-geometry＋input-events | 決定論＝R3.3。実機＝Head0／Bust0／Head1／Bust1 の 4 か所 |
-| 7 | 二重クリックでメニュー | メニューが表示され、選択肢が字下げされる。選択肢の上にカーソルを載せると見た目が反転する | 決定論（表示まで）／実機（反転） | input-events＋sakura-dialogue-tags＋choice-render | 決定論＝R3.4 と表示指令の列。反転は処理系に 1 度だけ焼き付く環境変数のため実機層（`hover_inject.rs:29`・`:184`） |
+| 7 | 二重クリックでメニュー | メニューが表示され、選択肢が字下げされる。選択肢の上にカーソルを載せると見た目が反転する | 決定論（表示まで）／実機（反転） | input-events＋sakura-dialogue-tags＋choice-render | 決定論＝R3.4 と表示指令の列。反転は処理系に 1 度だけ焼き付く環境変数のため実機層（`hover_inject.rs:29`・`:184`）。**相方側で 3 つの選択肢がすべて可視であること**は 2026-09-06 から決定論の証跡を持つ＝`crates/areka-emo-text/tests/kero_menu_capacity_test.rs`（完了 spec `emo-text-line-height-canon`・実物 `emo2-kakukaku`×`menu.pasta` の 3 台本で先頭可視行 0）。反転帯からのインクのはみ出し 2 画素以下は D8 行 5（判定に載せない） |
 | 8 | 選択によるシーン遷移の一周 | 選択 → サブメニュー → もどる → 閉じる、が一周する。適合対象の選択肢 ID は `On` 始まりゆえ**同名イベント 1 段のみ**が発火し、正典の選択確定イベントは先行しない | 両層 | choice-select-events | 決定論＝R3.5（`choice.rs:57-65`・実物 `menu.pasta:15`／`:33`／`:62`）。実機＝目視 |
 | 9 | 位置調整 | `\![move,-353,,,0,base,base]` で相方の窓が算出位置へ動く。**移動量は拡大率倍で適用される**ため、実拡大率が 1 でない走行では着地が変わる | 両層 | sakura-dialogue-tags | 決定論＝`spine_move_cue_tests.rs`（k=1 で着地 1208,1063）。実機＝拡大率 200% で二体の重なりが 100% の 2 倍。出典は scope-chain-gap 申し送り（`brief.md:26`） |
 | 10 | 二人立ち総合 | 相方の窓と相方用バルーンが表示され、話者が交替し、別名指定で相方の表情が変わり、両バルーンが追従し単独でも動かせる | 実機 | M-boot 充足＋本仕様（退役ユニット 2 本の吸収先） | 実機のみ＝束ねた見た目の総合判断であり、含まれる「両バルーンの追従と単独移動」は項目 17 と同じ理由で決定論層が指令の待ち行列までしか測らない（R1.4・`brief.md:55`）。**退役した 2 つのユニット名の検証を本項目が吸収した**（R4.5・`brief.md:109`）。旧名を復活させない |
@@ -299,7 +306,7 @@ flowchart TB
 | 2.8 | 明示実行の門を持たない | D1 | `#[ignore]` も環境変数も付けない |
 | 2.9 | 製品コード非改変で注入 | D1 | 既存の公開送信端のみ。新設ゼロ |
 | 2.10 | 壁時計だけの待ちを避ける | D6 段の駆動器 | 観測が成立するまで進める形＋注入時刻の頭打ち |
-| 2.11 | 1 ファイルの分量規律 | File Structure Plan | 3 ファイル分割・各 1,000 行以下 |
+| 2.11 | 1 ファイルの分量規律 | File Structure Plan | 5 ファイル分割・各 1,000 行以下 |
 | 3.1 | 起動の列を逐語で固定 | D2 期待列 | `OnInitialize`→`username`→`OnFirstBoot`→`OnBoot`→`basewareversion` |
 | 3.2 | 自発会話は毎秒の変化通知で駆動 | D1／D6 | kanade へ Tick を直接投函 |
 | 3.3 | 撫でで移動の通知・当たり領域と話者 | D2 期待列 | 参照 7 本・Ref3=話者・Ref4=当たり領域 |
@@ -343,7 +350,7 @@ flowchart TB
 | 7.4 | 重なり規約の逆向きが本走行では現れない旨を明記 | D8 | 適合検証項目表の前書きと登記 |
 | 7.5 | 「判定に載せない」と明示し是正対象としない | D8 | 登記表の「扱い」欄 |
 | 7.6 | 引受先を作るなら実在を確かめてから登記 | D8 | 実在確認の欄 |
-| 8.1 | 証明に徹し製品コードを改変しない | Boundary Commitments | 本番コード改変 0 |
+| 8.1 | 1 ウェーブで着地できる症状は本仕様の中で直す（2026-09-06 第 2 回改訂で旧「証明に徹し製品コードを改変しない」を置換） | Boundary Commitments／D13〜D19 | 改変 7 件を記録 §13.4 の台帳に登記（範囲・理由・見える差・コミット） |
 | 8.2 | 症状を小さいものと構造的なものへ仕分ける | D9 仕分け規律 | 仕分けの 2 分岐 |
 | 8.3 | 構造的なら個別仕様を切って先に完遂 | D9 | 完遂後に一周走行をやり直す |
 | 8.4 | 仕分けの結果を記録 | D9 | 仕分け表 |
@@ -377,6 +384,13 @@ flowchart TB
 | 12.4 | 決定論層と実機層を独立した節に保つ | 本書の節構造 | 相 1＝D1〜D3・相 2＝D5〜D12 |
 | 12.5 | 記録の無い縮退経路を作らない | 全体 | 縮退はすべて research §11 と本書に記録 |
 | 12.6 | 常設テストの実行時間を実用の範囲に保つ | D1 | 既存 19 本 9.24 秒に対し追加 1 本 1 秒前後 |
+| 13.1〜13.8 | 選択肢の反転帯を行ボックスの中央へ寄せる（症状 A） | D13 | `crates/areka-emo-text/src/choice.rs` の `highlight_band_offset`・決定論テストは `choice_tests.rs`／`choice_decorate_tests.rs`／`viewbox_draw_choice_hover_tests.rs`／`actor_choice_contract_tests.rs` と読み戻し `tests/line_pitch_readback_test.rs`。記録 §13.4 改変 1 |
+| 14.1〜14.5 | 折返し警告を装着ごとに 1 件へ（症状 B） | D14 | `crates/areka-emo-text/src/actor.rs` の `warn_coarse_wrap_threshold`・決定論テストは `actor_region_warn_tests.rs`／`region_inline_limit_tests.rs`。記録 §13.4 改変 2 |
+| 15.1〜15.8 | 終了指示が終了挨拶を通って窓を閉じる（症状 C） | D15 | `crates/areka/src/input_events/mod.rs`・`emo2_boot/frame.rs`／`frame/wiring.rs`・`areka-kanade/src/actor.rs`・決定論テストは `input_events_tests.rs`／`actor_stop_notify_tests.rs`／`frame_ghost_quit_tests.rs`／`spine_close_wiring_tests.rs`。記録 §13.4 改変 3 |
+| 16.1〜16.5 | 応答方向の送出から `SMTO_ABORTIFHUNG` を外す（症状 D） | D16 | `crates/shiori-host32-ipc/src/lib.rs` の `send_flags`・`shiori-host32-helper/src/main.rs`・決定論テストは `main_response_flavor_hung_cage_tests.rs`。記録 §13.4 改変 4 |
+| 17.1〜17.5 | 行送りの後も収まる行は全部見える（症状 F） | D17 | `crates/areka-emo-text/src/layout.rs` の `visible_window`・決定論テストは `layout_visible_window_tests.rs`／`actor_scroll_retain_tests.rs`。記録 §13.4 改変 5 |
+| 18.1〜18.4 | `\w[n]` 括弧形を読まない（症状 G の areka 側） | D18 | `crates/areka-parsers/src/sakura/decode.rs`・決定論テストは `decode_tests.rs`（括弧形は `Raw`・正典 2 形が対照）。記録 §13.4 改変 6 |
+| 19.1〜19.4 | 会話中の 204 は想定外ではない（症状 H） | D19 | `crates/areka-kanade/src/schedule/steady.rs` の `Steady{talk: Some}` の `NoContent` 腕・決定論テストは `steady_flow_tests.rs`。記録 §13.4 改変 7・§7 の点灯確認に `steady_unexpected_reply` の行 |
 
 ## Components and Interfaces
 
@@ -412,7 +426,7 @@ flowchart TB
 **責務と制約**
 
 - `#[test]` は 1 本。明示実行の門（`#[ignore]`・環境変数）を持たない。
-- 起動は `SpineHarness::boot_with`（`spine.rs:681`）に一周用の台本を渡して行う。GPU World・合成した窓一式・実 emo2 資産・本番と同じ 4 つの受け口は既存の組立がそのまま供給する。
+- 起動は `SpineHarness::boot_with`（`spine.rs:681`）に一周用の台本を渡して行う。GPU World・合成した窓一式・実 emo2 資産・本番と同じ 4 つの受け口は既存の組立がそのまま供給する（D15 で 5 本目 `kanade_stop` の受信端を追加・`crates/areka/src/emo2_boot/frame/wiring.rs`）。
 - 段は次の順に駆動する。各段は自分の完了条件を持ち、成立しなければその時点で走行を不合格とする（後段の結果で埋め合わせない）。
 
 | 段 | 注入 | 完了条件 |
@@ -513,7 +527,13 @@ flowchart TB
 
 **R2.4 の「時刻」が何を指すか（R2.4 の実現形）**
 
-表示指令そのものは時刻を持たない（`crates/areka-emo-present/src/command.rs:39-73`）。時刻を持つのは演出の列だが、areka 側の 4 つの受け口はいずれも演出を記録せず、記録する受け口を足すと本番の受け口列と既存テストの分解へ波及する（research 決定 C）。よって時刻軸は**段の注入時刻の区間**とする（設計討議 #2 裁定・2026-09-02・R2.4 の文言も「段（注入時刻の区間）と指令」へ改訂済み）。役割は次のとおり書き分ける。\n\n- **判定の本体は〈段名・表示指令〉の列の完全一致である。** 遅れて出た指令は後段の採取に載って段名が食い違い、順序の退行は列の並びが食い違う——時刻の退行はすべてここで捕まる。完成宣言が根拠として言えるのは「段の順序と内容までを機械で証明した」であり、ミリ秒単位の時刻ではない。\n- **「採取した時点の注入時刻が当該段の宣言区間に入る」という検査は、駆動器（D6）が契約どおりに動いたことの自己検査であって製品の判定ではない。** 駆動器の不変条件（注入時刻は段の上限を超えない）が守られる限り必ず真になるため、製品の退行では赤にならない。残す理由は、テスト自身の駆動が壊れたときに段名の食い違いとして誤って製品の退行に見えることを防ぐためである。\n- **判定が生きていることの対照を 1 本添える**（Testing Strategy「決定論テスト」6）。段の上限を意図的に 1 段ずらして駆動すると、段名の照合が赤になることを示す。対照が緑のままなら判定は死んでいる。\n\n段の区間はテストが先に宣言する定数であり、走行のたびに変わらない。
+表示指令そのものは時刻を持たない（`crates/areka-emo-present/src/command.rs:39-73`）。時刻を持つのは演出の列だが、areka 側の 4 つの受け口はいずれも演出を記録せず、記録する受け口を足すと本番の受け口列と既存テストの分解へ波及する（research 決定 C）（D15 で 5 本目 `kanade_stop` の受信端を追加・`crates/areka/src/emo2_boot/frame/wiring.rs`。停止通知だけを運ぶ口なので演出も時刻も記録せず、本節の結論は変わらない）。よって時刻軸は**段の注入時刻の区間**とする（設計討議 #2 裁定・2026-09-02・R2.4 の文言も「段（注入時刻の区間）と指令」へ改訂済み）。役割は次のとおり書き分ける。
+
+- **判定の本体は〈段名・表示指令〉の列の完全一致である。** 遅れて出た指令は後段の採取に載って段名が食い違い、順序の退行は列の並びが食い違う——時刻の退行はすべてここで捕まる。完成宣言が根拠として言えるのは「段の順序と内容までを機械で証明した」であり、ミリ秒単位の時刻ではない。
+- **「採取した時点の注入時刻が当該段の宣言区間に入る」という検査は、駆動器（D6）が契約どおりに動いたことの自己検査であって製品の判定ではない。** 駆動器の不変条件（注入時刻は段の上限を超えない）が守られる限り必ず真になるため、製品の退行では赤にならない。残す理由は、テスト自身の駆動が壊れたときに段名の食い違いとして誤って製品の退行に見えることを防ぐためである。
+- **判定が生きていることの対照を 1 本添える**（Testing Strategy「決定論テスト」6）。**着地した対照は「段の上限を 1 段ずらす」ではない**——その変異は空振りだった（記録 §11.1 変異 ①・R12.5 の縮退の記録）。〈段名・表示指令〉の行がどの段名に付くかは段の完了条件が決めており、段の上限は関与しないからである。実際に赤を作れたのは**表示指令の宛先を 1 つずらす**変異（記録 §11.1 変異 ②）——撫でで相方が返す応答の話者を相方（`\1`）から本体（`\0`）へ移すと、指令の届く窓が変わって列の長さも内容も変わり、照合が赤になる。対照が緑のままなら判定は死んでいる。
+
+段の区間はテストが先に宣言する定数であり、走行のたびに変わらない。
 
 #### D6 段の駆動器
 
@@ -602,6 +622,15 @@ flowchart TB
 
 中断点と観測できたところまでを残し、部分的な結果を合格として扱わない。記録の判定欄は「中断」と書き、合格・不合格のいずれにも数えない。
 
+**採り直し（2026-09-06・上流 spec `emo-text-line-height-canon` の着地後・requirements.md「改訂（2026-09-06）」）**
+
+走行 A（2026-09-05）は A14 で中断し、引受先 spec の完遂を待って一周を採り直す。採り直しの規律は 4 つ。
+
+1. **§2 の準備からやり直し、同定を取り直す。** 実施日・コミット・ビルド構成・記録置き場は新しい値で書き直す（R5.2）。記録置き場は**新しい日付のディレクトリ**にし、前回の `lap-run-a.log` は中断の記録として残して追記しない（手順書 §9）。起動スクリプト（`lap.ps1`）は記録置き場の値だけを差し替えた写しを新しいディレクトリへ置く。
+2. **宣言（§6）は行を書き換えず、日付つきの追記で引き直す。** 記録 §13.3 の約束「§6 は書き換えない」を守る。新前提で新たに期待するもの——相方側メニューの 3 選択肢がすべて見える・本体側は 4 行まで見えてから送られる・走行 C の反転帯からのインクのはみ出しは 2 画素まで正常・相方側バルーン読み込み時の警告 1 件は正常な記録——を走行の前に書く。
+3. **生ログの語を 2 つ足す**（手順書 §5.7・R11.5）。⑴ `crates/areka-emo-text/src/region.rs:294-301` の警告（折返し基準が描画範囲の外に解決された）は**正常な記録**であり、項目 14 の不合格理由にしない。⑵ `event=boot_input_ignored`（`crates/areka-kanade/src/schedule/boot.rs:34`）は、タスク 5.5 が構造から見つけた製品側の欠陥（起動系列の `BootVersion` 滞在中に届いた再生完了通知を捨てる）が**発現したときにだけ**出る語であり、走行 A の生ログで 0 行なら本走行では発現していない（点灯確認 §7 の対象・R5.7）。
+4. **決定論層は触らない。** 3 つの台帳は字の配置を運ばないため期待列は動かない（取り込み後 13 本緑を実測）。`spine_conformance_script.rs:449-459` の説明文だけを履歴の形へ直す（タスク 5.8・R12.2）。
+
 #### D7 読み分けと合否
 
 | 項目 | 内容 |
@@ -643,6 +672,7 @@ flowchart TB
   - 前 2 つの不足は**採り直しで解消する**（先行仕様 §5 手順 8＝`signoff-procedure.md:342` が「充足していなければ採り直す。同じログへ追記しない」と書く）。採り直したときは新しいブロックを書き、古いブロックを消さずに並べる。
 - **`SIGNOFF-BOUNDS: FAIL`・`VISUAL: 跳ねあり`・`AGREEMENT: 食い違い` の 3 つは項目 16 の不合格理由にしない。** これは症状 #1 が再現したときに**先行仕様 §6.5 の 3 行目が必ず書かせる組**である——3 つの問いを上から当てると（`signoff-procedure.md:444-450`）、決定論系統が PASS で実機専用系統だけが症状に対応する量で違反を立てている形は 3 行目に落ち（同 `:456`）、その行の `AGREEMENT` は `食い違い` と書くと裁定で固定されている（同 `:463`）。すなわち 3 つは独立した 3 つの兆候ではなく、**症状 #1 の 1 つの現れ方**である。加えて `AGREEMENT` は `PASS|FAIL` を採る欄ではなく**分類の欄**（`一致|食い違い`）なので、「落ちた／落ちない」で数えること自体ができない。決定論系統の違反は `DETERMINISTIC` が捕まえるため、この除外で見落としは生じない。
 - **順序**——上の 4 行の表で行を 1 つに定めてから、この読み分けを当てる。閾値は目に合わせて緩めない（R6.2・R6.3）。
+- **上流の裁定で許容された見た目は食い違いにしない（2026-09-06・R7.7）。** 走行 C で選択肢の反転帯から文字のインクが下へ 2 画素以下はみ出すのは、完了 spec `emo-text-line-height-canon` の開発者裁定（第 2 回・2026-09-06）で許容された正常な見た目であり、機械判定と目視の食い違いにも項目 7 の不合格理由にもしない。3 画素以上なら不合格とせず、数値を添えて再裁定を求める（D8 行 5）。
 
 #### D8 既知症状の登記
 
@@ -658,6 +688,7 @@ flowchart TB
 | 2 | 話し始めの冒頭の空行 | 走行時に確認して登記する。M1 完成を妨げない | 上流のゴースト側（areka の範囲外） |
 | 3 | 初回起動限定の位置調整が 2 回目以降の起動で既定配置へ戻る | 許容仕様とする既存の裁定を実機で確かめ、開発者の判断で最終確定して登記する | 違和感があればその時点で個別仕様を切る |
 | 4 | 重なりの手前・奥の規約が参照実装と逆向き | 適合対象の資産では現れないため本走行では検出されない旨を明記する | なし（意図的な差） |
+| 5 | 選択肢の反転帯から文字のインクが下へ最大 2 画素はみ出す（走行 C・項目 7 後半・**2026-09-06 追加**） | **判定に載せない**。3 画素以上を観測した場合も不合格とせず、数値を添えて再裁定を求める（帯を広げる是正は上流が却下済み＝隣の行の帯と重なり選択肢の指示が一意でなくなる） | 完了 spec `emo-text-line-height-canon` の design「帯の防御式を保つ」節の裁定（第 2 回・2026-09-06）。R7.6 の実在確認＝`.kiro/specs/completed/areka-P0-emo-text-line-height-canon/design.md`（2026-09-06） |
 
 引受先を新たに作る場合は、**引受先が実在することを確かめてから**登記する（R7.6）。仕様名を書くだけでは登記にならない。
 
@@ -678,6 +709,142 @@ flowchart TB
 5. 1 つの症状に 1 つの引受先という粒度を保つ。発見の都度に仕様を量産しない。
 
 **例外（R8.6）**: 製品コードの改変が避けられない場合は、改変の範囲と理由を残し、走行の前後で見える挙動が変わらないことを示す。本設計の時点では、この例外に該当する改変は 1 件も予定していない（`spine.rs` への追補はテスト専用コードであり製品コードではない）。
+
+**走行の外で見つかった欠陥の扱い（2026-09-06・requirements.md「改訂（2026-09-06）」7）**: 決定論層の作業で構造から見つけた製品側の欠陥（タスク 5.5＝起動系列の `BootVersion` 滞在中に届いた再生完了通知を `crates/areka-kanade/src/schedule/boot.rs:33-36` が捨て、トーク枠が `Steady{Some}` へ漏れて終了の握手が始まらなくなる）は、同じ仕分け表（記録 §13.2）へ載せるが、分岐 2 の「先に完遂してから採り直す」は掛からない——発現には起動挨拶の再生完了が `basewareversion` の応答より先に届く必要があり、実機の起動挨拶は非空で数秒、応答は数ミリ秒なので本走行では成立しない。発現の有無は `event=boot_input_ignored` の 0 行で走行ごとに確かめる（D5「採り直し」3 ⑵）。分岐 4（引受先の無いまま閉じない）は掛かる——引受先は S 規模の個別仕様で、起票は開発者専用（`/kiro-discovery`）。記録には「構造的・本走行では発現しない・起票待ち」と書き、完成判定（R10.6）で未達・理由・引受先の形で名指しする。
+
+**その場で直す（2026-09-06 第 2 回改訂・R8.1／8.3／8.6）**: 走行で見つかった症状のうち本仕様の 1 ウェーブで着地できるものは本仕様の中で直す。分岐 2 は「着地できない規模」に限る。直したら、改変の範囲・理由・走行前後で見える挙動の差を記録 §13.2 の当該行と §13.4（改変の台帳・新設）に残し、直したコミットで §2 の準備から一周をやり直す（記録置き場は同日 2 回目なら `-2` を付す）。初例は D13（帯の縦位置）と D14（警告の回数）。
+
+### その場で直す欠陥（2026-09-06 第 2 回改訂・requirements.md「改訂（2026-09-06・第 2 回）」）
+
+#### D13 選択肢の反転帯の縦位置
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 反転帯を行ボックスの中央へ寄せ、hover 行の文字のインクを 1 画素も欠かさない |
+| 要件 | 13.1〜13.8 |
+| 置き場 | `crates/areka-emo-text/src/choice.rs`・`actor.rs`・`canvas.rs`・`viewbox_draw.rs` と兄弟試験・`tests/` の読み戻し検査 |
+
+**現状の機序（実測・2026-09-06）**。帯の丈 `band_extent = clamp(line_box_height, font_height, max(font_height, line_pitch))`（`choice.rs:139-142`）は 28 で 30。帯は行矩形のブロック軸**近端**に揃えて置かれる——ヒット側 `derive_hit_rows`（`choice.rs:229-231` 横書き `top: line.rect.top`／`:235-236` 縦書き `left`）と描画側 `highlight_rect`（`viewbox_draw.rs:729-750`・`top: dy + block_offset`）。一方 DirectWrite は行ボックス 37.24 の中にインクを中央寄りに置く。読み戻し（`tests/line_pitch_readback_test.rs` の出力）: 帯 y0..29／インク y7..31／上の余白 7／下のはみ出し 2。上流の検査は上の余白を測っていない（同 `:116`）。
+
+**新しい規則（純粋関数を 1 本足す）**。
+
+```text
+band_offset = round(max(0, line_box_height − band_extent) / 2)      // choice.rs に highlight_band_offset を新設
+横書き: 帯 = [line.rect.top + band_offset, line.rect.top + band_offset + band_extent)
+縦書き: 帯 = [line.rect.left + band_offset, line.rect.left + band_offset + band_extent)
+```
+
+| フォント | 行ボックス | 帯 | offset | 帯の位置 | インク | 上／下 |
+|---|---|---|---|---|---|---|
+| Yu Gothic UI 28（正典） | 37.24 | 30 | **4** | y4..33 | y7..31 | 3／0 |
+| Yu Gothic UI 20（fixture） | 26.6 | 22 | **2** | y2..23 | ≈y5..22 | ≈3／0（読み戻しで確定） |
+| 既定フォント（比 1.0） | = em | = em | **0** | 従来どおり | — | 非退行（byte 等価 golden は不変） |
+
+隣接行の帯は `offset + extent = 34 > pitch 30` だが、次行の帯は `30 + 4 = 34` から始まるので**接して重ならない**。ヒットは半開区間（`crates/areka/src/input_events/balloon.rs:220`・`y >= top && y < bottom`）ゆえ共有辺の 1 点は 1 行にしか当たらない（R13.4）。
+
+**配線（単一の源・R3.3）**。`actor.rs:789-793` で `band_extent` を決める直後に `band_offset` を決め、`decorate_canvas`（`:797-806`）と `derive_hit_rows`（`:826-832`）の両方へ渡す。`ChoiceLineContent`（`canvas.rs:174-183`）に `band_offset: f32` を足し、`viewbox_draw.rs` の `highlight_rect`（`:729-750`）と `expand_overhang_for_band`（`:761-775`・`excess = band_offset + band_extent − font_height`）が読む。`draw.rs` は触らない（988 行）。
+
+**試験の引き直し（緩めない・締める）**。`BAND_OVERHANG_MAX` 2 → **0**（`tests/line_pitch_readback_test.rs:108`・`tests/choice_fixture_test.rs:472`・`tests/emo2_fixture_e2e_test.rs:545`）。読み戻しは上の余白 ≥ 0 と下のはみ出し = 0 の両方を主張し、帯の実測位置（28: y4..33）も固定する。`choice_tests.rs`（`:260-400` のヒット矩形・`:566-649` の帯）と `choice_decorate_tests.rs:197-225` に offset の分岐（0 と 4）を足す。`viewbox_draw_choice_hover_tests.rs:135-245` と `actor_choice_contract_tests.rs`（`:152-230`・`:255-400`）は新しい帯の位置で導出し直す。hover の移動と解除で塗りが消し残らないことを読み戻しで固定する（R13.5）。既定フォントの byte 等価 golden は 1 バイトも動かない（R13.6＝offset 0 の証拠）。
+
+#### D14 折返し警告の回数
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 「読み込み 1 回につき警告 1 件」を、その意味を持つ層に置く |
+| 要件 | 14.1〜14.5 |
+| 置き場 | `crates/areka-emo-text/src/region.rs`（警告を外す）・`actor.rs`（登録口で記録）・`region_inline_limit_tests.rs`（引き直し）・actor 側の新しい兄弟試験 |
+
+**現状の機序（実測・2026-09-06 走行 A）**。`run_text_scale_phase`（`crates/areka/src/emo2_boot/frame/scale_text.rs:79`）が毎フレーム `refresh_actor_binding`（`actor.rs:355`／`:361`）を呼び、churn ガードの判定キーを得るために `ResolvedBalloonText::resolve`（`:387`）→ `TextRegion::resolve` を毎フレーム通す。警告は `resolve` の中（`region.rs:294-301`）にあるので、相方側バルーンでは 1 フレーム 1 件——生ログ 30,837 行のうち 27,908 行。
+
+**新しい置き場**。`TextRegion::resolve` は純粋（ログなし）。`register_actor`（`actor.rs:269`）が、渡された `resolved.region` について `wrap_threshold() > inline_limit()` かつ「この actor の前回の解決済み領域と値が異なる（初回を含む）」ときだけ、同じ文言・同じ 4 欄で `warn!` を 1 件書く。装着（`register_actor_binding`・`:317`）は必ず初回なので 1 件、値の同じ再追従は churn ガード（`:388-395`）で `register_actor` に達しないので 0 件、値の変わる再追従は 1 件。`BALLOON_NAME_PLACEHOLDER`（`region.rs:206-213`）は移すか `pub(crate)` で共有する。`region.rs` は 932 → 約 924 行。
+
+**試験の引き直し**。`region_inline_limit_tests.rs:192-232`（「resolve が 1 件」）→「resolve は 0 件」に改め、欄と値の主張は actor 側の新しい兄弟試験（`actor_region_warn_tests.rs`・log-capture-kit の `capture`）へ移す: 装着 1 件（4 欄）・値の同じ再追従 N 回 0 件・値の変わる再追従 1 件・折返し基準が遠辺の内なら 0 件。手順書 §5.7 の読み方は「装着ごとに 1 件・それ以上は退行」へ改める（R14.5）。
+
+#### D15 終了指示の配線（症状 C・2026-09-07 第 3 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 利用者の終了操作が kanade の正規の握手（終了挨拶 → `\-` → 解放）を通り、終わったら窓が閉じる |
+| 要件 | 15.1〜15.8 |
+| 置き場 | `crates/areka/src/input_events/mod.rs`（操作）・`crates/areka-kanade/src/actor.rs`（停止通知の発行）・`crates/areka-ghost/src/runtime.rs`（通知端の受け渡し）・`crates/areka/src/emo2_boot/{mod.rs, frame.rs, frame/wiring.rs}`（受信と窓の despawn）・`crates/areka/src/placement/spawn.rs`（despawn の共通化） |
+
+**現状の機序（実測・2026-09-07 走行 A）**。唯一の終了操作 Ctrl+左ダブルクリックは暫定退避（`input_events/mod.rs:387-400`）で全 `GhostWindowMarker` 窓を despawn する。窓が無くなると wintf の `run()` が戻り、`main.rs:337-347` が `GhostRuntime::shutdown(User)` → `KanadeMsg::ForceQuit`（`runtime.rs:266-267`）→ `OnClose` NOTIFY → 解放。正規の握手は `KanadeMsg::CloseRequest` から始まり（`close.rs:1-20`・`msg.rs:127`）、決定論一周が注入で通している（`spine_conformance_lap_tests.rs:948-956`・台本 `spine_conformance_script.rs:546-547` は `OnClose` GET に `\-` で終わる挨拶 `CLOSE_TALK`（`:513`）を返す）。**不足は 2 か所**——操作が `CloseRequest` を送らないこと、握手が終わっても窓を閉じる者がいないこと（kanade は `Action::StopSelf`＝`actor.rs:216-222` で shiori へ Close を送って自分を止めるだけ）。
+
+**新しい配線（追加のみ・既存の呼び手は不変）**。
+
+1. **操作** — `on_char_pointer_pressed`（`input_events/mod.rs:380-400`）の Ctrl+左ダブルクリック分岐を 2 つに分ける: ⑴ `MouseWiring` が在り Shift が押されていなければ（`PointerState.shift_down`・wintf `pointer/buffers.rs:241`）`wiring.send_close_request(CloseReason::User)`（`MouseWiring.sender`＝`GhostRuntime::kanade()` のクローン・`:41-50`）を 1 件送り `event="close_requested"` を `info!` で記録、窓は触らない。⑵ `MouseWiring` 不在、または Ctrl+**Shift**+左ダブルクリックは従来の強制退避（despawn・`event="mouse_escape_close"`）。
+2. **停止通知** — kanade に `KanadeStopped { cause }`（`cause` は `TermCause`＝`schedule/mod.rs:285-291` の 5 値を公開型へ写す）を新設し、`spawn_kanade`（`actor.rs:67-72`）と同じ引数に `stop_sink: Option<std::sync::mpsc::Sender<KanadeStopped>>` を足した派生関数を用意する（既存 `spawn_kanade(…)` は `None` を渡す薄い包み＝既存の呼び手は不変）。`Action::StopSelf` の実行点（`actor.rs:216-222`）で、`stop_sink` が `Some` なら 1 度だけ送る。送出失敗（受信端切断）は `warn!` で記録し panic しない（log-first）。
+3. **受け渡し** — `GhostBootOptions`（`runtime.rs:109-128`）に `kanade_stop: Option<Sender<KanadeStopped>>` を足し（既定 `None`＝`boot_config.rs:127` など既存の構築点は不変）、`boot`（`:479`・`:582` の `spawn_kanade`）が派生関数へ渡す。`wire_emo2_boot`（`emo2_boot/mod.rs:441-458`）が `mpsc::channel::<KanadeStopped>()` を作り送出端を options へ、受信端を `Emo2Wiring` へ渡す。`Emo2Wiring::new`（`frame/wiring.rs:148-160`）は試験 6 か所以上が呼ぶので署名は変えず、追加の構築口 `with_kanade_stop(self, rx) -> Self`（既定は受信端なし＝相は何もしない）を足し、`wire_emo2_boot` だけがそれを呼ぶ。
+4. **窓を閉じる** — `emo2_frame_system`（`frame.rs:167`）の**先頭**（`sync_monitor_snapshot` の前）に `run_ghost_quit_phase(&mut wiring, world)` を置く。受信端を `try_recv` で全件取り出し、1 件でも在れば `info!(event = "ghost_quit", cause = ?cause)` の上で全 `GhostWindowMarker` 窓を despawn し（`placement::spawn::despawn_ghost_windows(world) -> usize` として暫定退避と共通化）、以後の相は走らせずに戻る（wiring は戻す）。窓が無くなると `run()` が戻り、`main.rs` の終了統括は既存のまま冪等に完走する（`ForceQuit` の送出は kanade 停止済みで失敗＝`debug!`・`runtime.rs:266-272`）。2 度目以降の通知や窓が既に無い場合は `debug!` で打ち切る（`despawn_smoke_targets` と同じ区別・`main.rs:788-830`）。
+5. **拒否と期限** — 応答が `\-` で終わらなければ kanade は定常へ戻る（`close.rs:15-17`・既存）ので通知は出ず窓は残る（正典）。`CloseTalkWait` の期限超過は `Unloading{DeadlineExceeded}`（`close.rs:18-19`・既定 30 秒 `close_talk_deadline_ms`＝`msg.rs:281-282`）→ 同じ通知 → 窓が閉じる。
+
+**着地した形（2026-09-07・タスク 6.9・設計との差 3 点）**。⑴ `GhostBootOptions` にフィールドを足すと struct リテラルの構築点 25 か所（`areka-ghost/tests/` 14・`runtime_tests.rs` 7・`areka` 3・`boot_config.rs` 1）を書き換えることになり「既存の構築点は不変」と両立しないため、派生関数 `areka_ghost::boot_with_kanade_stop(options, Option<Sender<KanadeStopped>>)`（`runtime.rs:497`）とした。`boot` は従来どおり。⑵ `Emo2Wiring` の口は `set_kanade_stop(&mut self, rx)`（`frame/wiring.rs:211`・同ファイルの `seed_zorder_descript_base` と同じ `&mut self` の流儀）。⑶ 停止の原因は `Action::StopSelf` にも `State` にも載せず、アクターシェルが `step` へ渡す直前の `Phase::Unloading{cause}` から控える（`actor.rs:167`／`:180`・`StopSelf` の発行点は `schedule::unloading_reply` 1 か所で `Unloading` の先行アームだけが到達する＝不変条件を doc に明記・5 値の写像は単体檻で固定）。`spine.rs` は 968 行（接続宣言 3 行＋停止通知の結線 6 行・見張り 1,000 の内）。
+
+**試験（すべて決定論・R15.6）**。⑴ `input_events_tests.rs`: 結線済み Ctrl+左ダブル → `CloseRequest{User}` ちょうど 1 件・despawn 0／結線前 → despawn／Ctrl+Shift → despawn かつ送出 0。⑵ kanade（`tests/kanade/close_test.rs` の隣）: `StopSelf` で `KanadeStopped{cause}` が届く・受信端 drop で `warn!` 1 件かつ停止は完走（log-capture-kit）。⑶ `frame` の相（`frame_*_tests.rs` の隣に新設）: 通知 1 件で `GhostWindowMarker` が 0 になり 2 件目は `debug!` で打ち切り。⑷ spine の新しい兄弟試験 `spine_close_wiring_tests.rs`（`spine.rs` に接続宣言 3 行・959 → 962 行）: `CloseRequest{User}` → 台本の `OnClose` GET（`CLOSE_TALK`）→ 通知 → 相を 1 回回して窓 0 → 記録に `Unload` 1 件。既存の一周テスト 13 本の 3 台帳の期待は 1 バイトも動かない（注入は元から `CloseRequest` を送っている）。
+
+**実機の証跡（項目 13・R15.5）**。A20 で Ctrl+左ダブルクリック 1 回 → 終了挨拶がバルーンに流れ → 窓が自分で閉じる → 生ログに `method=GET id=OnClose`・`event="close_talk_start"`・`event="ghost_quit"`・`unload_clean` 1 行、`event="force_quit"` 0 行、`exit=0`。
+
+#### D16 応答方向の送出から `SMTO_ABORTIFHUNG` を外す（症状 D・2026-09-07 第 4 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 終了挨拶の後（ホストのスレッドが長く待機した後）でも helper の応答がホストへ届き、解放が正規に成立する |
+| 要件 | 16.1〜16.5 |
+| 置き場 | `crates/shiori-host32-ipc/src/lib.rs`（送出関数）・`crates/shiori-host32-helper/src/main.rs`（応答の 3 か所）・両 crate と `shiori-host32-host` の試験 |
+
+**現状の機序（実測・2026-09-07 20:04）**。往復は `ipc_send_request`（`crates/shiori-host32-ipc/src/lib.rs:325-340`）＝ `slot.clear()` → `send_copydata(target, self_hwnd, tag, payload, timeout)`（同 `:337`・`SendMessageTimeoutW` に `SMTO_ABORTIFHUNG`＝同 `:289-294`）→ `slot.take()` が空なら `IpcError::Timeout`（同 `:340`）。helper は要求を WndProc で処理し、その中から `send_copydata(parent, self, Response, ack, REPLY_TIMEOUT)`（`crates/shiori-host32-helper/src/main.rs:281`・`:331`・`:353-358`）で応答をホスト窓へ再入配送する。ホスト窓のスレッドは shiori アクター（`crates/areka-kanade/src/shiori/real.rs:179` の `rx.recv()`）で、要求の往復とハンドシェイクの pump（`parent_window.rs:258`）以外ではメッセージを取り出さない。OS は「プロセス生存 20〜30 秒を超えた後で 14 秒以上メッセージを取り出していないスレッド」の窓への `SMTO_ABORTIFHUNG` 付き送出を待たずに失敗させる（戻り 0・`GetLastError` 0・実測 5〜200 µs。`IsHungAppWindow` の 5 秒とは別の判定で、起動直後 20〜30 秒は猶予期間＝発現しない。2026-09-07 の調査係が一時プローブで較正）。定常運転は毎秒の変化通知の往復で 5 秒を超えないが、終了挨拶の再生中は kanade が pump を止める（`close.rs:95`）ため 19 秒の空白ができ、`Unload` の往復で helper の応答が `SendFailed`、ホストは `Timeout` と読み `unload_failed`（`real.rs:224`）→ 終了系列は継続（kanade）→ shiori アクターの `Close` で接続資材を RAII で片づける＝helper は正規終了せず、`unload_clean` が出ない。
+
+**新しい規則**。応答方向の送出は `SMTO_ABORTIFHUNG` を付けない——ホストはその応答を自分の `SendMessageTimeoutW` の中で必ず待っており（再入で受け取る）、「応答なし」判定はこの向きでは誤検知にしかならない。時間上限 `REPLY_TIMEOUT`（5 秒）は保つ。要求方向は従来どおり（helper は常時メッセージループ）。実装は `send_copydata` を `SendFlavor`（`Request`／`Response`）等の明示の引数か、`send_copydata_response` の別関数で分け、旗の有無を名前で読めるようにする（R16.2）。既存の呼び手（要求方向）は 1 文字も変えない。
+
+**試験（R16.3）**。⑴ 構造の檻: 応答方向の関数が `SendMessageTimeoutW` に渡す旗に `SMTO_ABORTIFHUNG` が無いことを、旗を返す純関数（`flags_for(SendFlavor)`）で固定する。⑵ 統合の檻（`crates/shiori-host32-helper/src/main_loopback_tests.rs` の隣・**有界 90 秒・所要約 42 秒の遅い檻**）: 同一プロセス内でホスト役の窓を持つスレッドが 20 秒メッセージを取り出さずに待つ → 往復①（猶予期間の内・届く）→ さらに 20 秒待つ → 往復②。直す前の HEAD は往復②の応答が届かず（`first_delivered=true second_delivered=false`）赤、直すと両方届く。5.5 秒／10 秒では猶予期間の内で緑になり檻にならない。既存の loopback 試験は無改変で緑。
+
+**申し送り（R16.5）**。ホスト窓のスレッドが待機中に pump しない構造（アクターの `recv()` とメッセージ待ちが別）は本仕様では直さない。`MsgWaitForMultipleObjectsEx` で inbox とメッセージを同時に待つ形が本来の姿であり、`areka-P0-zorder-chain-residue` の A 系（wintf／host32 の常設の飢餓・間欠赤）に隣接する。記録 §13.2 に「構造的・本走行では発現しない（応答方向の直しで露呈しない）・引受先＝起票待ち」で登記する。
+
+**実機の証跡（項目 13・R16.4）**。終了挨拶の後に `unload_clean` 1 行・`unload_failed` 0 行・`exit=0`。
+
+#### D17 行送りの後も収まる行は全部見える（症状 F・2026-09-07 第 5 回改訂・2026-09-10 根因の確定で書き直し）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | あふれて送った後、描画範囲に収まる行がすべて描かれている——冒頭の空きが送りを食い潰さない |
+| 要件 | 17.1〜17.5（要件「改訂（第 5 回）」6・7） |
+| 置き場 | `crates/areka-emo-text/src/layout.rs`（`visible_window`）と兄弟試験 `layout_visible_window_tests.rs`・`actor_scroll_retain_tests.rs`（再生の相の読み戻し） |
+
+**根因（2026-09-10 確定・診断走行のログと式の突合）**。`visible_window` は「最新行が収まる最小スキップ数 k」を探し、オフセットを `−(near(lines[k]) − origin)` と置くが、`origin = near(&lines[0])`＝**最初の行の開始側**である。相方側の起動挨拶は、pasta が話者切替の前に前の scope へ出す `\n[150]` がトーク開始時の**空の相方側 scope に落ちる**ため、最初のグリフで保留改行 Σratio 1.5 が実体化し（`layout.rs` の `apply_pending_newline`・`block_pos += pitch × 1.5`）1 行目の上端が 40 ＋ 45 ＝ 85 になる。以後: 1 行目 85..115・2 行目 115..145 ＞ 133 であふれ→ k=1（−30）で 2 行目だけ 85..115；`\n` の後の 3 行目 145..175 → k=2（−60）で 3 行目だけ。**空きは原点より前にあるので候補に入らず永遠に送られない**——これが「常に一番下の行しか表示されない」。2026-09-07 の改訂 3 が疑った候補 ⑴（差分描画の描画対象）と ⑵（再生の相）は、その日に書いた 5 本の檻（冒頭の改行を含まない台本）が HEAD で緑だったことと、ログの `first_visible_line` の値そのものが「描かれていない」でなく「送られている」を示すことで外れた。
+
+**直し（R17.1／17.4）**。原点を**描画範囲の開始側**に取る——`layout` と同じ軸読み替え表で `block_start`＝horizontal_tb は `region.start().1`・vertical_rl は `−region.start().0`・vertical_lr は `region.start().0`。すると k=0 の候補が「先頭行の開始側を描画範囲の開始側へ揃える」＝空きだけを送る（−45）になり、3 行とも 40／70／100..130 に収まる。空きの無い入力では `near(lines[0]) == block_start` なので値は従来と同一（既存 golden・`layout_visible_window_tests.rs` の期待値は 1 つも動かない）。`\_l` で 1 行目が動いた入力も同じ式で扱える。変えるのは原点の 1 行だけで、最小 k の探索・`>` 判定・最新行への飽和・行単位は不変。**完了 spec `areka-P0-emo-text-layer`（R7・行単位スクロール）の文言「オフセットはスキップした行のブロック軸位置差そのもの」は本 D17 で上書き**され、新しい文言は「先頭可視行の開始側と描画範囲の開始側の差」——`layout.rs` の `visible_window` doc と `VisibleWindow::block_offset` doc を追随させる（消費側 `draw.rs`／`viewbox.rs` は `block_offset` を素通しするだけで触らない）。
+
+**裁定（要件「改訂（第 5 回）」7）**。冒頭の空きは捨てない（ukadoc `\n[パーセント]`＝カーソルの移動・収まる間は空きが見える）。pasta が空の scope へ `\n[150]` を出す癖は上流（記録 §13.2 に登記・6.14）。SSP の実挙動への問いは取り下げ（意味論は ukadoc から輸入）。
+
+**進め方（決定論・RED 先行）**。⑴ `layout_visible_window_tests.rs` に単体の再現を足す: 相方側相当の描画範囲（`model_rect` で上端 40・下端 133・行送り 30＝`font_height` 28）に items `[LineBreak{1.5}, あ, LineBreak{1.0}, あ, LineBreak{1.0}, あ]`（2 行目・3 行目は明示改行で足りる——折返しは本題でない）→ 期待 `first_visible_line: 0, block_offset: −45.0`。HEAD は `first_visible_line: 2, block_offset: −60.0` を返す（赤）。同じ檻に空き無しの対照 `[あ, LineBreak{1.5}, あ, LineBreak{1.0}, あ]`（上端 40 → 40／85／115..145 ＞ 133 → k=1・−45）を置き、直す前後で同じ値であることを固定する。3 書字方向のうち少なくとも vertical_rl でも同形を 1 本置く（原点の符号）。⑵ `actor_scroll_retain_tests.rs` の `boot_cues` の先頭に `NewLine{1.5}` を入れた変種（または既存台本の置換）で、最初の台詞の 1 行目の帯（描画面の上端 0 から字の丈 × k）にインクが在ることを主張する——HEAD では 1 行目が可視窓の外なので赤。既存 5 本（冒頭の改行を含まない台本）は描画対象の非回帰として残し、主張は変えない。⑶ `visible_window` の原点を直して両方を緑にし、`cargo test -p areka-emo-text`・`cargo test -p areka --bin areka` を exit 0 で通す。`layout.rs` は 939 行——足すのは数行で見張りの内。
+
+**実機の証跡（R17.5）**。項目 2 の目視で、相方側バルーンに「僕はエモ。クール系の可愛い娘。」（2 行）が「イイジャン！…」の上に残っている。冒頭の空き 45 は 3 行目が来るまで見えてよい（あふれたら空きが先に送られる）。
+
+#### D18 `\w[n]` 括弧形を読まない（症状 G の areka 側・2026-09-10 第 6 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 正典に無い括弧形を発明して読まない。未知タグの既定（`decode_passthrough_tag` → `Raw`）へ落とす |
+| 要件 | 18.1〜18.4 |
+| 置き場 | `crates/areka-parsers/src/sakura/decode.rs`（`decode_tag` の `"w"` の腕と `wait_from_arg` を削る・`wait_units` は `\wN` 用に残す）・`decode_tests.rs`（`wait_bracket_n_times_50ms` を「Raw になる」へ）・括弧形を使う試験台本 8 ファイル（`\w[n]` → `\_w[n×50]`）・`doc/emo2-conformance-scope.md:53`・`doc/PASTA_PROFILE.md`（`\w[N]` の記述） |
+
+**直し**。削除だけ。腕を消せば `\w[n]` は `_ => decode_passthrough_tag` へ落ちて `Raw(r"\w[n]")` になり、下流（`areka-sakura`）は Raw を無視する。lexer は触らない（`\w[2]` を正準タグとして切る構造は残る＝Raw の中身が復元できる）。試験台本の書き換えは待ち時間が同値（`\w[2]`＝100 ms → `\_w[100]`・`\w[999999]` → `\_w[49999950]`）なので主張は動かない。
+
+**再現の檻**。`decode_tests.rs`: `\w[2]` → `Raw` を主張（HEAD は `Wait(100 ms)` で赤）。同じ檻に `\w2` → 100 ms・`\_w[450]` → 450 ms の対照。
+
+**実機**。走行 A の A20 で、終了挨拶の後の待ちが 15 秒から 0 秒（pasta が `\w[300]` を出す間は待ち無し・pasta を `\_w` に直せば 0.3 秒）になる。採り直しは行わない（判定に載せない症状 G の帰結であり、終了系列の証跡は 2026-09-10 の走行 A で採れている）。
+
+#### D19 会話中の 204 は想定外ではない（症状 H・2026-09-11 第 7 回改訂）
+
+| 項目 | 内容 |
+|---|---|
+| 意図 | 正常な応答を警告に数えない。`Steady{Some}` の 204 を `Steady{None}` の 204 と同じ「何もしない」にする |
+| 要件 | 19.1〜19.4 |
+| 置き場 | `crates/areka-kanade/src/schedule/steady.rs`（`Phase::Steady{talk: Some}` の `match outcome` に `ShioriOutcome::NoContent => (state, Vec::new())` を 1 腕）・兄弟試験 `steady_flow_tests.rs`（または `steady_choice_tests.rs` の形に倣う） |
+
+**直し**。追加は 1 腕だけ。`other => steady_reply_unexpected(...)` は `Unloaded`／`Failed` 用に残す。ログ捕捉の檻は `areka-kanade` の既存の形（`log-capture-kit`）で「`steady_unexpected_reply` が 0 行」を主張する。
+
+**実機**。走行の生ログで `steady_unexpected_reply` は 0 行になる（手順書 §5.7 の語に加える）。採り直しは行わない（記録の上だけの欠陥・挙動は不変）。
 
 ### 常設テストの衛生
 
@@ -856,7 +1023,8 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 | 表示指令の列が期待と一致しない | 段名つきの列の差分 | 表示経路の退行 |
 | 採取時の注入時刻が段の宣言区間の外 | 段名と時刻 | 駆動器の自己検査の失敗＝テスト自身の駆動が壊れている（製品の退行ではない） |
 | 進行状態が期待と一致しない | 呼出 id と状態の差分 | 会話中・選択待ちの表明が壊れている（R3.8） |
-| 解放が 1 度でない | 件数 | 終了握手の退行（R3.9） |\n| 解放の後も kanade の送信端が閉じない | 段名「終了」の有界待ち切れ | 終了系列が `Stopped` へ落ちていない。後片付けの二重終了を防ぐ前提が崩れているため、この段で止める |
+| 解放が 1 度でない | 件数 | 終了握手の退行（R3.9） |
+| 解放の後も kanade の送信端が閉じない | 段名「終了」の有界待ち切れ | 終了系列が `Stopped` へ落ちていない。後片付けの二重終了を防ぐ前提が崩れているため、この段で止める |
 | 台本の応答が尽きた | 受け口が落ちる | 想定より多く呼ばれた。余裕を積んでも起きるなら送出側の退行 |
 | 走行の終わりに実行主体が畳まれない | 有界待ちの期限切れ | 後片付けの退行（R2.7） |
 
@@ -880,14 +1048,22 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 2. **自発会話の駆動**——毎秒の通知が発行され、応答が会話を始めること。会話中は同じ通知が片道になり Ref3 が "0" になること（R3.2・項目 5）。
 3. **選択確定の発火形**——`On` 始まりの選択肢 ID で同名イベントが 1 段だけ発火し、正典の選択確定イベントが先行しないこと（R3.5・項目 8）。
 4. **終了握手**——終了の照会 → 終了挨拶の再生 → 解放、の順序と、解放がちょうど 1 度であること、解放の後に kanade の送信端が閉じること（R3.9・R2.7・項目 13）。
-5. **送らないことの固定**——会話の発火・時報・更新系・バルーン変更が 1 件も現れないこと（R3.6・R3.7・項目 14）。\n6. **判定が生きている対照**——段の上限を意図的に 1 段ずらして駆動すると、〈段名・表示指令〉の列の照合が赤になること（R2.4・R2.5）。対照が緑なら判定は死んでいる。
+5. **送らないことの固定**——会話の発火・時報・更新系・バルーン変更が 1 件も現れないこと（R3.6・R3.7・項目 14）。
+6. **判定が生きている対照**——**表示指令の宛先を 1 つずらす**と、〈段名・表示指令〉の列の照合が赤になること（R2.4・R2.5）。対照が緑なら判定は死んでいる。当初は「段の上限を意図的に 1 段ずらす」と書いていたが、その変異は判定に届かず空振りだった（記録 §11.1 変異 ①）ので、同じ列を狙う変異 ②（撫でで相方が返す応答の話者を `\1` から `\0` へ移す）へ差し替えた——これが R12.5 の記録を要する縮退である。
 
 ### 既存テストへの影響の確認
 
 1. **既存の spine 兄弟テスト 19 本（8 ファイル）が素通しであること**——記録の追補は書き込みのみで、既存の取り出し口と記録型を変えないため。追補の前後で 19 本の結果が変わらないことを確かめる。
-2. **1 ファイルの分量規律**——新規 3 ファイルと、**追補後の `spine.rs`**（現在 930 行・余白 70 行・例外表に無い）がいずれも 1,000 行以下であること。`spine.rs` への追補は接続宣言 9 行＋フィールドと書き込み・取り出しで **40 行以内**を予算とし、記録の型と取り出し口の本体は `spine_conformance_support.rs` 側へ置く。上限の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs:145`・`:252`）は常設で走る。例外表には触れない。
+2. **1 ファイルの分量規律**——新規 **5 ファイル**（`spine_conformance_lap_tests.rs`・`spine_conformance_script.rs`・`spine_conformance_support.rs`・`spine_conformance_support_tests.rs`・`spine_conformance_judge.rs`。実測値は File Structure Plan の木に 1 か所だけ置く）と、**追補後の `spine.rs`**（着手時 930 行・余白 70 行・例外表に無い）がいずれも 1,000 行以下であること。`spine.rs` への追補は接続宣言 9 行＋フィールドと書き込み・取り出しで **40 行以内**を予算とし、記録の型と取り出し口の本体は `spine_conformance_support.rs` 側へ置く。**着地は `spine.rs` 968 行**（D15 の接続宣言 3 行と停止通知の結線を含む）で予算の内。当初の想定は 3 ファイルだったが、余白が尽きたため駆動器の決定論テスト（タスク 2.3）と判定（タスク 3.2）を親の末尾から接続する兄弟へ分けた（R2.11・上の File Structure Plan）。上限の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs:145`・`:252`）は常設で走る。例外表には触れない。
 3. **走行時間**——既存 19 本 9.24 秒に対する増分が 1 秒前後であること（R12.6）。
 4. **更新した間欠的な赤 ⑴**——待つ形へ移した後、同じ確認が同じ結果を出すこと。
+5. **上流 spec の着地後に決定論層が緑のままであること**（2026-09-06）——`emo-text-line-height-canon` を取り込んだ merge `3c2908e` で `cargo test -p areka --bin areka conformance` が 13 passed／0 failed。3 つの台帳は字の配置を運ばないので、期待列を 1 つも動かさずに緑であることが、行送りの改訂と決定論層の独立の証拠になる。
+6. **その場で直した 2 件の非回帰（2026-09-06 第 2 回改訂）**——D13: 既定フォントの byte 等価 golden が 1 バイトも動かないこと（offset 0 の証拠）と、実フォントの読み戻し 3 本が「上 ≥ 0・下 = 0」で緑であること。D14: `region_inline_limit_tests.rs` が 0 件、actor 側の兄弟試験が装着 1 件／同値再追従 0 件で緑であること。いずれも `cargo test -p areka-emo-text` の exit 0 で確かめ、`| tail` で終了コードを隠さない。
+7. **終了指示の配線の非回帰（2026-09-07 第 3 回改訂・D15）**——`cargo test -p areka --bin areka`（入力層・相・spine の兄弟試験）と `cargo test -p areka-kanade`・`cargo test -p areka-ghost` が exit 0。既存の一周テスト 13 本は期待を動かさず緑。
+8. **応答方向の送出の非回帰（2026-09-07 第 4 回改訂・D16）**——`cargo test -p shiori-host32-ipc -p shiori-host32-helper -p shiori-host32-host`（x64・PowerShell）が exit 0。要求方向の旗と既存の loopback 試験は無改変。走行の直前に i686 の橋渡しを作り直す（helper を変えたため）。
+9. **あふれの送り量の原点の非回帰（2026-09-07 第 5 回改訂・2026-09-10 書き直し・D17）**——`visible_window` の単体再現（冒頭の空き有り→ 0／−45）と再生の相の読み戻し（1 行目の帯にインク）が直す前は赤・後は緑で、空き無しの対照・`layout_visible_window_tests.rs` の既存期待値・`live_diff`／`oracle_regression`／`line_pitch_readback`／`kero_menu_capacity` は無改変で緑。
+10. **`\w[n]` 括弧形の非回帰（2026-09-10 第 6 回改訂・D18）**——`\w[2]` → `Raw` の檻が直す前は赤・後は緑で、`\w2`／`\_w[ms]` の対照と書き換えた 8 試験ファイルの主張は不変。
+11. **会話中の 204 の非回帰（2026-09-11 第 7 回改訂・D19）**——`Steady{Some}` の `NoContent` で警告 0 行の檻が直す前は赤・後は緑で、`Value`／`Notified`／`Unloaded` の既存試験は不変。
 
 ### 実機走行（人間サインオフ）
 

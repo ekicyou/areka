@@ -10,7 +10,10 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
 
 use areka_actor::ActorHandle;
-use areka_kanade::{KanadeConfig, KanadeMsg, ShioriBackend, spawn_kanade, spawn_shiori_actor};
+use areka_kanade::{
+    KanadeConfig, KanadeMsg, KanadeStopped, ShioriBackend, spawn_kanade_with_stop_sink,
+    spawn_shiori_actor,
+};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{MountError, MountModel, resolve};
 use areka_sakura::contract::SystemVarSnapshot;
@@ -476,7 +479,25 @@ fn apply_boot_record_gate(
 /// マウント解決が失敗した場合、他のいかなるコンポーネントも spawn される前に
 /// `error!` の上で `Err(GhostBootError::Mount(_))` を返す（要件 2.5・後片付け
 /// 不要——何も起動していない）。
-pub fn boot(mut options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
+pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
+    boot_with_kanade_stop(options, None)
+}
+
+/// kanade の停止通知の投函端つきで ghost を起動する（R15.3・design D15 の 3）。
+///
+/// 引数は [`boot`] と同一で、末尾に `kanade_stop` が 1 つ増えるだけの派生である（[`boot`] は
+/// `None` を渡す薄い包み＝**既存の構築点は 1 つも変わらない**）。設計は当初これを
+/// `GhostBootOptions` の新フィールドとして書いていたが、[`GhostBootOptions`] は struct
+/// リテラルで組まれる型であり（本 crate と `areka` の合計 25 箇所）、フィールドを増やすと
+/// 全構築点の書き換えを強いる——設計自身が置いた「既存の構築点は不変」という条件と両立しない。
+/// そこで [`areka_kanade::spawn_kanade_with_stop_sink`] と**同じ形の派生関数**を採る。
+///
+/// `Some` を渡すと、kanade の終了系列が完了した時点で [`KanadeStopped`] が 1 件届く。受け手
+/// （UI の毎フレーム結線）はそれを合図に全ゴースト窓を閉じる。`None` なら通知は出ない。
+pub fn boot_with_kanade_stop(
+    mut options: GhostBootOptions,
+    kanade_stop: Option<Sender<KanadeStopped>>,
+) -> Result<GhostRuntime, GhostBootError> {
     // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。
     let mount = match resolve(&options.ghost_root, options.default_encoding) {
         Ok(mount) => mount,
@@ -579,7 +600,9 @@ pub fn boot(mut options: GhostBootOptions) -> Result<GhostRuntime, GhostBootErro
         sylphya_publisher.clone(),
         ghost_asker.clone(),
     );
-    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori_tx, start_tx, resource_sink);
+    //    R15.3: 終了系列完了の通知端をそのまま kanade へ渡す（`None` なら通知は出ない＝従来どおり）。
+    let (kanade_tx, kanade_handle) =
+        spawn_kanade_with_stop_sink(config, shiori_tx, start_tx, resource_sink, kanade_stop);
 
     // 7. sakura dispatcher（可変長 sink 列＋system_vars provider を構築時注入・S-3・
     //    要件 4.6/8.5/7.1）。provider は dispatcher が talk 起動ごとに呼び出す（刻印点＝無改変）。

@@ -7,13 +7,13 @@ use std::time::Duration;
 
 // ── task 5.2: ResolveChoice ハンドラ＋即時 settle の統合檻（R2.3/2.4/9.8） ──
 //
-// 共通 fixture: `\s[10]hello\w[2]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
+// 共通 fixture: `\s[10]hello\_w[100]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
 //   ClearAll@0 / Emote{10}@0 / hello@0(D=0.25) / Wait@0.25(0.1) / Choice@0.35(id=targetA) /
 //   Barrier@0.35（選択待ち・R2.1/2.2）。占有 horizon=0.35。barrier が**最終 horizon 要素**（menu
 //   ケース）ゆえ、Tick(0.5) で barrier 到達後に解決すると、既に current_offset(0.5) ≥ horizon(0.35)
 //   で **その場で** 完了する（次 Tick を待たない・settle_after_tick と同型の後始末を共用）。
 
-const MENU_SCRIPT: &str = r"\s[10]hello\w[2]\q[選択A,targetA]\e";
+const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
 
 /// Choice の着弾（＝barrier 到達）を決定的に観測するため、記録 sink に加えチャンネル sink を挟む
 /// ヘルパ。Tick(0.5) を送り、Choice(id=targetA) cue の着弾を待って返す（この時点で player は
@@ -272,7 +272,7 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
     let talk_id = TalkId(804);
     let start = StartTalk {
         epilogue: Vec::new(),
-        script: r"\s[10]hello\w[2]world\e".to_string(),
+        script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id,
     };
     let sink = RecordingSink::new();
@@ -321,7 +321,7 @@ fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
 
 /// 通知の**捕捉時点**を弁別するための算術（MENU_SCRIPT の相対占有 horizon）。
 ///
-/// `\s[10]hello\w[2]\q[選択A,targetA]\e`: hello の D(0.25) ＋ `\w[2]`(0.1) ＝ 0.35。
+/// `\s[10]hello\_w[100]\q[選択A,targetA]\e`: hello の D(0.25) ＋ `\_w[100]`(0.1) ＝ 0.35。
 /// 期待値は本番と同一算術で導く（10 進直書きの表現誤差を排除）。
 fn menu_relative_horizon() -> f64 {
     text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64()
@@ -367,7 +367,7 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
     assert_eq!(
         expected_horizon,
         menu_relative_horizon(),
-        "台本由来 horizon は hello の D ＋ \\w[2]（本番と同一算術で導いた 0.35）"
+        "台本由来 horizon は hello の D ＋ \\_w[100]（本番と同一算術で導いた 0.35）"
     );
 
     assert_eq!(

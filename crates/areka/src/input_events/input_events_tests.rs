@@ -1,7 +1,7 @@
 use super::*;
 use crate::emo2_boot::hit_region::HitRegion;
 use crate::placement::spawn::{CharWindowMarker, GhostWindowMarker};
-use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
+use areka_kanade::{CloseReason, KanadeMsg, MouseButton, MouseEventKind};
 use std::sync::mpsc;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
@@ -17,6 +17,26 @@ fn bubble_pointer(
         client_point: Point { x, y },
         double_click,
         ctrl_down,
+        ..Default::default()
+    })
+}
+
+/// Bubble 相の合成 `PointerState`（Ctrl／Shift を別々に指定する版・R15.1／15.2）。
+///
+/// [`bubble_pointer`] は Ctrl だけを取る（既存の呼び手 20 箇所以上がそのまま動く）。終了指示と
+/// 強制退避の分岐は Shift の有無で分かれるため、両方を指定できる口をここへ足す。
+fn bubble_pointer_mods(
+    x: i32,
+    y: i32,
+    double_click: DoubleClick,
+    ctrl_down: bool,
+    shift_down: bool,
+) -> Phase<PointerState> {
+    Phase::Bubble(PointerState {
+        client_point: Point { x, y },
+        double_click,
+        ctrl_down,
+        shift_down,
         ..Default::default()
     })
 }
@@ -379,10 +399,17 @@ fn handler_middle_xbutton_and_single_click_do_not_send() {
     assert!(rx.try_recv().is_err(), "中/拡張/単発は何も送出しない");
 }
 
-/// 暫定退避檻（6.2/6.3・DD-IE-7）: Ctrl+左ダブルクリックで全 `GhostWindowMarker`
-/// 窓を despawn し、SHIORI へは何も送らない。無関係 entity は残る。
+/// 終了指示の檻（R15.1・design D15 の 1）: **結線済み**の Ctrl+左ダブルクリックは
+/// `CloseRequest{User}` をちょうど 1 件送り、窓を 1 枚も閉じない。
+///
+/// 2026-09-07 第 3 回改訂で意味が変わった檻である——以前は「全窓を despawn し何も送らない」
+/// 暫定退避だった。それでは終了挨拶を通らずに窓が消えるため（症状 C）、結線済みの経路は
+/// kanade の正規の握手へ入る側へ改めた。強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。
+///
+/// # 非空虚性
+/// 送出が起きなければ `try_recv` が空で落ち、窓を閉じてしまえば件数の表明が落ちる。
 #[test]
-fn handler_ctrl_left_double_click_despawns_all_ghost_windows_without_sending() {
+fn handler_ctrl_left_double_click_sends_one_close_request_and_keeps_the_windows() {
     let (mut world, rx) = world_with_wiring(
         |_, x, y| HitRegion {
             scope: 0,
@@ -399,9 +426,57 @@ fn handler_ctrl_left_double_click_despawns_all_ghost_windows_without_sending() {
 
     let ev = bubble_pointer(10, 20, DoubleClick::Left, true);
     assert!(on_char_pointer_pressed(&mut world, w0, w0, &ev));
-    assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓が despawn される");
+
+    assert!(
+        matches!(
+            rx.try_recv().expect("終了指示が送られる"),
+            KanadeMsg::CloseRequest {
+                reason: CloseReason::User
+            }
+        ),
+        "結線済みの Ctrl+左ダブルクリックは CloseRequest{{User}} を送る（R15.1）"
+    );
+    assert!(
+        rx.try_recv().is_err(),
+        "終了指示はちょうど 1 件（重複しない）"
+    );
+    assert_eq!(
+        ghost_count(&mut world),
+        3,
+        "終了指示は窓を閉じない——閉じるのは握手が終わってからである（R15.1）"
+    );
     assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
-    assert!(rx.try_recv().is_err(), "暫定退避は SHIORI へ送らない");
+}
+
+/// 強制退避の檻（R15.2）: **Ctrl+Shift**+左ダブルクリックは従来どおり全窓を despawn し、
+/// kanade へは何も送らない（起動後でも効く脱出口）。
+///
+/// # 非空虚性
+/// Shift の判定を落とせば終了指示が送られて `try_recv` の表明が落ち、窓も残って件数が合わない。
+#[test]
+fn handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sending() {
+    let (mut world, rx) = world_with_wiring(
+        |_, x, y| HitRegion {
+            scope: 0,
+            region: Some("Head".to_string()),
+            surface_point: (x, y),
+        },
+        stepping_clock(1000, 1000),
+    );
+    world.spawn(GhostWindowMarker);
+    let w0 = world.spawn(GhostWindowMarker).id();
+    let other = world.spawn_empty().id();
+    assert_eq!(ghost_count(&mut world), 2);
+
+    let ev = bubble_pointer_mods(10, 20, DoubleClick::Left, true, true);
+    assert!(on_char_pointer_pressed(&mut world, w0, w0, &ev));
+    assert_eq!(
+        ghost_count(&mut world),
+        0,
+        "Ctrl+Shift は強制退避＝全ゴースト窓が despawn される（R15.2）"
+    );
+    assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
+    assert!(rx.try_recv().is_err(), "強制退避は kanade へ何も送らない");
 }
 
 /// 暫定退避檻（6.1）: Ctrl なしの左ダブルクリックは窓を despawn せず、
@@ -446,7 +521,11 @@ fn handlers_self_gate_when_mouse_wiring_absent() {
     assert!(!on_char_pointer_pressed(&mut world, e, e, &mid));
 }
 
-/// 暫定退避は wiring 非依存（DD-IE-7）: `MouseWiring` 不在でも Ctrl+左で全窓 despawn。
+/// 起動失敗時の脱出（R15.2・旧 DD-IE-7）: `MouseWiring` 不在なら Ctrl+左で全窓 despawn。
+///
+/// 結線前（ghost boot 失敗・boot 前）は終了指示の送り先が無いため、従来どおりの強制退避で
+/// 窓を閉じて抜ける。この経路が残っていることが、終了指示を正規の握手へ配線しても
+/// 「起動に失敗したゴーストを閉じられる」ことの担保である。
 #[test]
 fn escape_works_without_mouse_wiring() {
     let mut world = World::new();
@@ -558,13 +637,22 @@ fn only_escape_terminates_ghost_windows() {
         "非退避操作（移動/中/拡張/単発/Ctrl なし左）は 1 つも despawn しない"
     );
 
-    // 退避操作（Ctrl+左）のみが全窓を despawn する。
-    let escape = bubble_pointer(10, 20, DoubleClick::Left, true);
+    // 結線済みの Ctrl+左は終了指示であって退避ではない——窓は 1 枚も減らない（R15.1）。
+    let close_request = bubble_pointer(10, 20, DoubleClick::Left, true);
+    assert!(on_char_pointer_pressed(&mut world, w, w, &close_request));
+    assert_eq!(
+        ghost_count(&mut world),
+        3,
+        "結線済みの Ctrl+左は終了指示を送るだけで窓を閉じない（R15.1）"
+    );
+
+    // 強制退避操作（Ctrl+Shift+左）のみが全窓を despawn する（R15.2）。
+    let escape = bubble_pointer_mods(10, 20, DoubleClick::Left, true, true);
     assert!(on_char_pointer_pressed(&mut world, w, w, &escape));
     assert_eq!(
         ghost_count(&mut world),
         0,
-        "暫定退避操作でのみ全ゴースト窓が despawn される"
+        "強制退避操作でのみ全ゴースト窓が despawn される"
     );
 }
 

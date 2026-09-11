@@ -51,7 +51,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
     let id_a = TalkId(11);
     let start_a = StartTalk {
         epilogue: Vec::new(),
-        script: r"\s[10]hello\w[2]world\e".to_string(),
+        script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: id_a,
     };
     let sink = RecordingSink::new();
@@ -108,7 +108,7 @@ fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let start = StartTalk {
         epilogue: Vec::new(),
-        script: r"\s[10]hello\w[2]world\e".to_string(),
+        script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: TalkId(4),
     };
     let sink = RecordingSink::new();
@@ -224,7 +224,7 @@ fn quit_only_script_ends_immediately_with_quit_not_ended() {
 }
 
 /// 再生途中の中断（Close）で `TalkDone{Interrupted}` がちょうど 1 回返り、未発火分が sink に
-/// 届かないこと（R7.1/7.2/7.3/7.4・R6.4）。`\s[10]hello\w[10]world\e`（world は \w[10] 後）を
+/// 届かないこと（R7.1/7.2/7.3/7.4・R6.4）。`\s[10]hello\_w[500]world\e`（world は \_w[500] 後）を
 /// 先頭群だけ発火させたところで Close。world（at=0.75）は未発火＝以降届いてはならない。
 #[test]
 fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
@@ -232,7 +232,7 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
     let talk_id = TalkId(101);
     let start = StartTalk {
         epilogue: Vec::new(),
-        script: r"\s[10]hello\w[10]world\e".to_string(),
+        script: r"\s[10]hello\_w[500]world\e".to_string(),
         talk_id,
     };
     let sink = RecordingSink::new();
@@ -283,7 +283,7 @@ fn close_after_natural_end_produces_no_extra_talkdone() {
     let talk_id = TalkId(102);
     let start = StartTalk {
         epilogue: Vec::new(),
-        script: r"\s[10]hello\w[2]world\e".to_string(),
+        script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id,
     };
     let handle = spawn_talk(
@@ -329,7 +329,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
     let id_a = TalkId(7);
     let start_a = StartTalk {
         epilogue: Vec::new(),
-        script: r"\s[10]hello\w[2]world\e".to_string(),
+        script: r"\s[10]hello\_w[100]world\e".to_string(),
         talk_id: id_a,
     };
     let sink_a = RecordingSink::new();
@@ -340,7 +340,7 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
     let id_b = TalkId(42);
     let start_b = StartTalk {
         epilogue: Vec::new(),
-        script: r"\s[20]bye\w[2]done\-".to_string(),
+        script: r"\s[20]bye\_w[100]done\-".to_string(),
         talk_id: id_b,
     };
     let sink_b = RecordingSink::new();

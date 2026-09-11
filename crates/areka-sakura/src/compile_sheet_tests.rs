@@ -73,15 +73,15 @@ fn wait_accumulation_is_monotonic() {
 
     let t_text_a = 0.0_f64;
     let t_wait1 = t_text_a + d_a; // Text("a") の再生完了後
-    let t_text_b = t_wait1 + w50; // 明示 \w[50] の累積
+    let t_text_b = t_wait1 + w50; // 明示 \_w[50] の累積
     let t_wait2 = t_text_b + d_b; // Text("b") の再生完了後
-    let t_emote = t_wait2 + w100; // 明示 \w[100] の累積
+    let t_emote = t_wait2 + w100; // 明示 \_w[100] の累積
 
     // Text("a")
     assert_eq!(command_of(&cues[0]), &CueCommand::Text("a".into()));
     assert_eq!(cues[0].start_time, t_text_a);
     assert_eq!(cues[0].duration, d_a);
-    // Wait（\w[50]）— 第一級・duration に待ち時間
+    // Wait（\_w[50]）— 第一級・duration に待ち時間
     assert_eq!(command_of(&cues[1]), &CueCommand::Wait);
     assert_eq!(cues[1].start_time, t_wait1);
     assert_eq!(cues[1].duration, w50);
@@ -89,7 +89,7 @@ fn wait_accumulation_is_monotonic() {
     assert_eq!(command_of(&cues[2]), &CueCommand::Text("b".into()));
     assert_eq!(cues[2].start_time, t_text_b);
     assert_eq!(cues[2].duration, d_b);
-    // Wait（\w[100]）
+    // Wait（\_w[100]）
     assert_eq!(command_of(&cues[3]), &CueCommand::Wait);
     assert_eq!(cues[3].start_time, t_wait2);
     assert_eq!(cues[3].duration, w100);

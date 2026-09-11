@@ -76,6 +76,8 @@ use tracing::{debug, error, info, warn};
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, TextSlotView};
 #[allow(unused_imports)]
 use areka_emo_text::actor::{TextLayerRuntime, present_frame};
+// 終了相（R15.4）が読む停止通知の型。`run_ghost_quit_phase` が非 test ビルドでも使う。
+use areka_kanade::KanadeStopped;
 #[allow(unused_imports)]
 use areka_parsers::balloon::BalloonModel;
 #[allow(unused_imports)]
@@ -91,6 +93,8 @@ use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 #[allow(unused_imports)]
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
+// 終了相（R15.4）と強制退避（`input_events`）が共有する「全ゴースト窓を閉じる」操作。
+use crate::placement::spawn::despawn_ghost_windows;
 
 use super::assets::{BalloonScopeAssets, BootAssets, ScopeAssets};
 // 可視性の相（design 決定 D5）。相順の所有者は本モジュールなので、呼び出しはここから行う。
@@ -151,6 +155,63 @@ use self::scale_text::reconcile_reported_sizes;
 // 別式で組むと「観測したグリフ数」と「実際に描かれる文字」が食い違う。
 pub(super) use self::scale_text::resolve_talk_time;
 
+/// 終了相: kanade の停止通知を取り出し、届いていれば全ゴースト窓を閉じる（R15.4・design D15 の 4）。
+///
+/// 相順の**先頭**（作業領域源の同期より前）に置く。終了が決まったフレームで他の相を走らせても、
+/// これから閉じる窓のために描き直すだけだからである。返り値は「通知を消化したか」で、`true` の
+/// フレームは呼び手が以後の相を飛ばす。
+///
+/// # 判断
+///
+/// - 受信端が無い（結線していない構成・既存の試験）→ 何もせず `false`。
+/// - 届いていない → 何もせず `false`（定常フレームは無操作）。
+/// - 1 件以上届いた → `try_recv` で**全件**取り出し、`info!(event = "ghost_quit")` の上で
+///   [`despawn_ghost_windows`] を 1 度だけ呼び `true`。2 件目以降と、既に窓が無い場合は
+///   `debug!` で打ち切る（終了処理の正常系であって失敗ではない——`main.rs` の smoke 掃除が
+///   破棄済み標的に対して敷いているのと同じ区別）。
+/// - 送出端が全て落ちた（`Disconnected`）→ 溜まっていた通知は上と同じに扱い、無ければ何もしない。
+///   ghost boot に失敗した構成でも受信端だけは生き得るので、切断そのものは異常ではない。
+///
+/// 窓が 0 になると wintf の `run()` が戻り、`main.rs` の終了統括が走る。そこは既に冪等である
+/// （kanade は停止済みゆえ `ForceQuit` の送出が失敗し `debug!` で流れる）。
+pub(super) fn run_ghost_quit_phase(wiring: &mut Emo2Wiring, world: &mut World) -> bool {
+    let Some(rx) = wiring.kanade_stop.as_ref() else {
+        return false;
+    };
+    let mut first: Option<KanadeStopped> = None;
+    let mut extra = 0usize;
+    // 全件取り出す（`Disconnected` も「もう来ない」だけで異常ではない＝溜まっていた分は消化する）。
+    while let Ok(stopped) = rx.try_recv() {
+        match first {
+            None => first = Some(stopped),
+            Some(_) => extra += 1,
+        }
+    }
+    let Some(stopped) = first else {
+        return false;
+    };
+    if extra > 0 {
+        tracing::debug!(
+            event = "ghost_quit_extra",
+            extra,
+            "停止通知が 2 件以上届いた——窓を閉じるのは 1 度きりゆえ残りは打ち切る"
+        );
+    }
+    tracing::info!(
+        event = "ghost_quit",
+        cause = ?stopped.cause,
+        "kanade の終了系列が完了した: 全ゴースト窓を閉じる"
+    );
+    let closed = despawn_ghost_windows(world);
+    if closed == 0 {
+        tracing::debug!(
+            event = "ghost_quit_no_windows",
+            "閉じる窓が既に無い（強制退避が先に走った等）——正常系として打ち切る"
+        );
+    }
+    true
+}
+
 /// `FrameFinalize` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
@@ -169,6 +230,13 @@ pub fn emo2_frame_system(world: &mut World) {
     let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
         return;
     };
+    // 終了相（R15.4・design D15 の 4）: **すべての相より前**に置く。kanade の終了系列が完了して
+    // いたら全ゴースト窓を閉じ、以後の相は走らせずに戻る（これから消える窓のために描き直さない）。
+    // 通知が無いフレームは即座に false で抜ける＝定常フレームは無操作である。
+    if run_ghost_quit_phase(&mut wiring, world) {
+        world.insert_non_send(wiring);
+        return;
+    }
     // 作業領域源の実行時同期（atom 設計 C6・要件 5.1／5.4／5.5）: **各相より前**に置く。
     // 拡大率の相が読む作業領域源を同一フレームの先頭で新しくしておくと、相は新しい下端へ
     // 1 回で書ける（相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる）。
@@ -315,6 +383,11 @@ mod transition_branch_tests;
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_work_area_resnap_hold_tests.rs"]
 mod work_area_resnap_hold_tests;
+
+// 終了相の判断（areka-P0-emo2-conformance-e2e タスク 6.9・R15.4）。GPU も実窓も要らない。
+#[cfg(test)]
+#[path = "frame_ghost_quit_tests.rs"]
+mod ghost_quit_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]

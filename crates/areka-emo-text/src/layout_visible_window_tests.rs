@@ -268,3 +268,99 @@ fn same_input_yields_identical_output() {
         assert_eq!(first, second, "mode {mode:?} で決定論が崩れている");
     }
 }
+
+/// 送り量の原点は**描画範囲の開始側**であり、最初の行の開始側ではない（R17.1/17.2・症状 F）。
+///
+/// 相方側バルーンと同じ幾何（上端 40・下端 133＝丈 93・`font_height` 28 → 行送り 30）で
+/// 2 つの入力を並べる。先に置く対照は**冒頭に空きが無い**入力で、原点の直しの前後で値が
+/// 動かないこと（既存の期待値が 1 つも動かないこと）を同じ檻の中で示す。後に置くのが
+/// 症状 F の再現——台詞冒頭の `\n[150]`（＝`LineBreak { ratio: 1.5 }`）で 45 の空きが先に立つ。
+#[test]
+fn leading_gap_scrolls_from_region_start_not_from_first_line() {
+    let region = TextRegion::resolve(
+        &model_rect(
+            (Some(0), Some(40)),
+            (Some(40), Some(133), Some(0), Some(400)),
+        ),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    assert_eq!(region.start(), (0.0, 40.0));
+    // 対照（原点の直しで動かない側）: 空きは 1 行目と 2 行目の間に在る。1 行目 40..68・
+    // 2 行目 85..113・3 行目 115..143——最新行の下端 143 > 133 であふれ、1 行スキップで
+    // 143 − 45 = 98 ≤ 133。`near(lines[0])` が描画範囲の開始側 40 と一致するため、
+    // 原点をどちらに取っても同じ値になる。
+    let without_gap = [
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::LineBreak { ratio: 1.5 },
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let control = window_for(&without_gap, &region, WritingMode::HorizontalTb, 28.0);
+    assert_eq!(
+        control,
+        VisibleWindow {
+            first_visible_line: 1,
+            block_offset: -45.0
+        },
+        "冒頭の空きが無い入力は従来どおりの値（原点の直しで動かない）"
+    );
+    // 症状 F の再現: 冒頭の空き 1.5 行（45）＋明示改行で 3 行（折返しは本題でないので
+    // 明示改行で足りる）。1 行目 85..113・2 行目 115..143・3 行目 145..173——最新行の
+    // 下端 173 > 133 であふれる。原点を描画範囲の開始側 40 に取ると 0 行スキップ・
+    // オフセット −45（空きだけを送る）で 3 行とも 40／70／100..130 に収まる。原点が
+    // 最初の行の開始側 85 だと空きは候補に入らず「2 行スキップ・−60」＝最新の 1 行だけになる。
+    let with_gap = [
+        TextItem::LineBreak { ratio: 1.5 },
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let window = window_for(&with_gap, &region, WritingMode::HorizontalTb, 28.0);
+    assert_eq!(
+        window,
+        VisibleWindow {
+            first_visible_line: 0,
+            block_offset: -45.0
+        },
+        "冒頭の空きが最初に送られ、収まる行はすべて見える（症状 F の再現）"
+    );
+}
+
+/// vertical_rl でも原点は描画範囲の開始側（＝右辺）——原点の符号の檻（R17.4）。
+///
+/// 正規化ブロック座標（行送り方向が正）は `−x` ゆえ、描画範囲の開始側は `−region.start().0`。
+/// 横書きの檻と同じ寸法を右辺基準へ写す: 開始側 x=400（＝正規化 −400）・
+/// validrect.left 307（＝正規化の遠端 −307・丈 93）・行送り 30。冒頭の空き 45 で
+/// 1 列目 327..355・2 列目 297..325・3 列目 267..295——最新列の左端 267 < 307 であふれる。
+/// 原点を −400 に取ると 0 列スキップ・オフセット +45（内容が右へ＝正準表）。
+/// 直す前の HEAD は「2 列スキップ・+60」＝最新の 1 列だけを返す。
+#[test]
+fn vertical_rl_leading_gap_scrolls_from_region_start() {
+    let region = TextRegion::resolve(
+        &model_rect((None, None), (Some(0), Some(224), Some(307), Some(400))),
+        IMAGE,
+        WritingMode::VerticalRl,
+    );
+    assert_eq!(region.start(), (400.0, 0.0));
+    let with_gap = [
+        TextItem::LineBreak { ratio: 1.5 },
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let window = window_for(&with_gap, &region, WritingMode::VerticalRl, 28.0);
+    assert_eq!(
+        window,
+        VisibleWindow {
+            first_visible_line: 0,
+            block_offset: 45.0
+        },
+        "縦書きでも冒頭の空きが最初に送られる（オフセットの符号は行送り方向の逆＝右へ）"
+    );
+}

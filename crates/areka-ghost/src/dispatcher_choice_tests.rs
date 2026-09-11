@@ -107,9 +107,9 @@ fn release(state: &mut DispatcherState) {
 
 /// 実 talk の選択待ち台本（sakura drive.rs の MENU_SCRIPT と同一）。
 ///
-/// compile 後（アンカー 0）: `hello`@0（D=0.25）／Wait@0.25（`\w[2]`=0.1）／Choice@0.35（id=targetA）
+/// compile 後（アンカー 0）: `hello`@0（D=0.25）／Wait@0.25（`\_w[100]`=0.1）／Choice@0.35（id=targetA）
 /// ／Barrier@0.35。占有 horizon＝0.35（barrier が最終 horizon 要素の menu ケース）。
-const MENU_SCRIPT: &str = r"\s[10]hello\w[2]\q[選択A,targetA]\e";
+const MENU_SCRIPT: &str = r"\s[10]hello\_w[100]\q[選択A,targetA]\e";
 
 /// **一致中継（Resolve）・R5.5**: 現行 slot と `talk_id` が一致する `ResolveChoice` は
 /// `SakuraMsg::ResolveChoice{id}` として talk へ無改変で転送され、slot と `base_now` は動かない

@@ -118,7 +118,7 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     tx.send(DispatcherMsg::Start(StartTalk {
         epilogue: Vec::new(),
         talk_id: talk_a,
-        script: r"\s[1]A\w[50]A_END\e".to_string(),
+        script: r"\s[1]A\_w[2500]A_END\e".to_string(),
     }))
     .expect("send Start(A)");
 
@@ -126,11 +126,11 @@ fn start_then_start_replaces_active_talk_and_discards_stale_done_from_replaced_t
     tx.send(DispatcherMsg::Start(StartTalk {
         epilogue: Vec::new(),
         talk_id: talk_b,
-        script: r"\s[2]B\w[2]B_END\e".to_string(),
+        script: r"\s[2]B\_w[100]B_END\e".to_string(),
     }))
     .expect("send Start(B)");
 
-    // B を完走させる（D 焼き込み後 B/B_END の再生完了＋\w[2] を含む占有 horizon=0.40 を跨ぐ
+    // B を完走させる（D 焼き込み後 B/B_END の再生完了＋\_w[100] を含む占有 horizon=0.40 を跨ぐ
     // elapsed 0.5・base_now は最初の Tick の now で確定）。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(1_000),
@@ -195,13 +195,13 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
     tx.send(DispatcherMsg::Start(StartTalk {
         epilogue: Vec::new(),
         talk_id: talk_a,
-        script: r"\s[1]A\w[50]A_END\e".to_string(),
+        script: r"\s[1]A\_w[2500]A_END\e".to_string(),
     }))
     .expect("send Start(A)");
     tx.send(DispatcherMsg::Start(StartTalk {
         epilogue: Vec::new(),
         talk_id: talk_b,
-        script: r"\s[2]B\w[2]B_END\e".to_string(),
+        script: r"\s[2]B\_w[100]B_END\e".to_string(),
     }))
     .expect("send Start(B)");
 
@@ -274,7 +274,7 @@ fn close_while_active_closes_and_joins_active_talk_before_stopping_dispatcher() 
     tx.send(DispatcherMsg::Start(StartTalk {
         epilogue: Vec::new(),
         talk_id: TalkId(21),
-        script: r"\s[1]X\w[50]X_END\e".to_string(),
+        script: r"\s[1]X\_w[2500]X_END\e".to_string(),
     }))
     .expect("send Start");
 
@@ -309,13 +309,13 @@ fn tick_relay_converts_absolute_now_to_elapsed_seconds_from_first_tick() {
         test_system_vars(),
     );
 
-    // \w[4]=200ms・\w[6]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
-    //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \w[4]=0.20）/
-    //   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \w[6]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
+    // \_w[200]=200ms・\_w[300]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
+    //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \_w[200]=0.20）/
+    //   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \_w[300]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
     tx.send(DispatcherMsg::Start(StartTalk {
         epilogue: Vec::new(),
         talk_id: TalkId(31),
-        script: r"\s[5]FIRST\w[4]SECOND\w[6]THIRD\e".to_string(),
+        script: r"\s[5]FIRST\_w[200]SECOND\_w[300]THIRD\e".to_string(),
     }))
     .expect("send Start");
 
@@ -415,7 +415,7 @@ fn natural_completion_forwards_talkdone_and_clears_slot_for_next_start() {
     tx.send(DispatcherMsg::Start(StartTalk {
         epilogue: Vec::new(),
         talk_id: talk_c,
-        script: r"\s[9]hello\w[2]world\e".to_string(),
+        script: r"\s[9]hello\_w[100]world\e".to_string(),
     }))
     .expect("send Start(C)");
     tx.send(DispatcherMsg::Tick {

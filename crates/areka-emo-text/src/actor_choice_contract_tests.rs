@@ -738,3 +738,211 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         .expect("read_back");
     assert_eq!(off, off2, "決定論（hover off 状態・バイト同一）");
 }
+
+// ── 帯の寄せ（R13）: 実フォントの hover 移動・解除で塗りが消し残らない読み戻し ──
+
+/// 実フォント `Yu Gothic UI`・正典 `font.height,28` ＋ `cursor.*` 指定のバルーン定義。
+///
+/// 行ボックス丈（37.24）が行送り（30）より高いので帯の寄せが 0 でない値になる——既定
+/// ＭＳ ゴシック（比 1.0）の檻では寄せが 0 のままで、この経路は 1 度も踏まれない
+/// （既定フォント盲点）。
+fn real_font_cursor_model() -> areka_parsers::balloon::BalloonModel {
+    use areka_parsers::balloon::{
+        BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect,
+        WindowPosition, WordWrapPoint,
+    };
+    BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(Some(0), Some(0)),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(
+            Some("Yu Gothic UI".to_owned()),
+            Some(28),
+            FontColor::new(Some(0), Some(0), Some(0)),
+        ),
+        None,
+        None,
+    )
+    .with_cursor(BalloonCursor::new(
+        Some("square".to_string()),
+        CursorColor::new(Some(105), Some(25), Some(25)),
+        CursorColor::new(None, None, None),
+        CursorColor::new(Some(255), Some(255), Some(255)),
+        None,
+    ))
+}
+
+/// Observable（R13.1/13.2/13.5）: 実フォントで帯が行ボックスの中央へ寄った状態で hover を
+/// **移動**させ、さらに**解除**しても、前の行の塗りが 1 画素も残らない。
+///
+/// ダーティ矩形は em ボックス（`font.height`）＋実測インクはみ出しで組まれるので、帯の遠端側の
+/// 超過分を `band_offset + band_extent − font_height` で数えないと、寄せた分だけ帯の下が
+/// クリップの外へ落ちて塗りが残る（`expand_overhang_for_band`）。寄せを数えないままでは
+/// hover を移した後の面に前の行の帯の下端が残り、この檻が赤くなる。
+///
+/// 併せて、ヒット矩形の上端が**行矩形の上端 ＋ 寄せ**であること（R13.1）と、寄せが描画とヒットへ
+/// 同一に配られること（R13.2＝読み戻した塗りの上端がヒット矩形の上端に一致）も固定する。
+#[test]
+fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
+    use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
+    use wintf::com::dwrite::dwrite_create_factory;
+
+    use crate::choice::{highlight_band_extent, highlight_band_offset};
+    use crate::draw::{DWriteMetrics, ResolvedFont};
+    use crate::layout::GlyphMetrics;
+    use crate::writing::WritingMode;
+
+    const FONT_H: f32 = 28.0;
+    let model = real_font_cursor_model();
+
+    // 実フォントが在ることを先に確かめる（代替フォントへ縮退すると寄せが 0 になり、
+    // 「寄せが効いていない」のか「フォントが無い」のかが区別できないまま赤くなる）。
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    let metrics = DWriteMetrics::new(
+        &factory,
+        &ResolvedFont::resolve(&model),
+        WritingMode::HorizontalTb,
+        &TextLayerConfig::default(),
+    )
+    .expect("DWriteMetrics 生成");
+    let advance = metrics.advance('あ', FONT_H);
+    assert!(
+        advance < FONT_H,
+        "実フォント Yu Gothic UI が見つからない（「あ」の送りが {advance} ＝ em {FONT_H} 以上の等幅値へ縮退している）。本檻は実フォントの行ボックス丈を前提にしているので、代替フォントのまま緑にしない"
+    );
+    let pitch = metrics.line_pitch(FONT_H);
+    let band = highlight_band_extent(FONT_H, metrics.line_box_height(FONT_H), pitch);
+    let offset = highlight_band_offset(metrics.line_box_height(FONT_H), band);
+    assert!(
+        offset > 0.0,
+        "実フォントの行ボックス丈 {} は帯の丈 {band} より高く、寄せは正になる（実測 {offset}）",
+        metrics.line_box_height(FONT_H)
+    );
+
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
+    rt.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 }));
+    rt.apply_cue(&choice_cue("0", 0.1, "OnNo", "いいえ", &["r1"]));
+    let image = (240u32, 140u32);
+    rt.register_actor(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, image, image),
+        ResolvedBalloonText::resolve(&model, image),
+    );
+    let (width, height) = image;
+
+    // 面全域の塗り色（premultiplied BGRA の (25,25,105,255)）画素数。
+    let fill_total = |b: &[u8]| -> usize {
+        b.chunks_exact(4)
+            .filter(|px| px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255)
+            .count()
+    };
+    // ヒット矩形の内側の塗り色画素数。
+    let fill_in_row = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
+        let x0 = r.rect.left.floor().max(0.0) as u32;
+        let x1 = (r.rect.right.ceil().max(0.0) as u32).min(width);
+        let y0 = r.rect.top.floor().max(0.0) as u32;
+        let y1 = (r.rect.bottom.ceil().max(0.0) as u32).min(height);
+        let mut n = 0usize;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let i = ((y * width + x) * 4) as usize;
+                if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
+                    n += 1;
+                }
+            }
+        }
+        n
+    };
+    // 面全域で塗り色画素を持つ行の範囲（上端, 下端）——読み戻した帯の縦位置。
+    let fill_rows = |b: &[u8]| -> Option<(u32, u32)> {
+        let mut span: Option<(u32, u32)> = None;
+        for y in 0..height {
+            let hit = (0..width).any(|x| {
+                let i = ((y * width + x) * 4) as usize;
+                b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255
+            });
+            if hit {
+                span = Some(match span {
+                    None => (y, y),
+                    Some((t, _)) => (t, y),
+                });
+            }
+        }
+        span
+    };
+    let read = |rt: &TextLayerRuntime| -> Vec<u8> {
+        rt.surface(&actor)
+            .expect("供給面")
+            .read_back()
+            .expect("read_back")
+    };
+
+    present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
+    let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
+    assert_eq!(rows.len(), 2, "2 選択肢＝2 ヒット行");
+    assert_eq!(
+        fill_total(&read(&rt)),
+        0,
+        "hover 無しでは塗りが 1 画素も無い"
+    );
+    // R13.1: ヒット矩形の上端は行矩形の上端（0 / 行送り 1 つぶん）＋寄せ。
+    assert_eq!(
+        (rows[0].rect.top, rows[1].rect.top),
+        (offset, pitch + offset),
+        "ヒット矩形の上端は行矩形の上端 ＋ 寄せ {offset}（寄せを配らないと 0 と {pitch} で赤）"
+    );
+    assert_eq!(
+        rows[0].rect.bottom - rows[0].rect.top,
+        band,
+        "寄せても帯の丈は変わらない"
+    );
+
+    // ── hover を ordinal 0 へ ──
+    rt.inject_choice_hover(&actor, Some(0));
+    present_frame(&mut rt, &mut world, 10.0).expect("hover 0 提示");
+    let first = read(&rt);
+    assert!(
+        fill_in_row(&first, &rows[0]) > 0,
+        "ordinal 0 の帯が塗られる"
+    );
+    // R13.2: 読み戻した塗りの縦位置がヒット矩形の縦位置と一致する（描画とヒットへ同一の寄せ）。
+    let painted = fill_rows(&first).expect("塗りが在る以上、その縦範囲も在る");
+    assert_eq!(
+        (painted.0, painted.1 + 1),
+        (rows[0].rect.top as u32, rows[0].rect.bottom as u32),
+        "読み戻した塗り y{}..{} はヒット矩形 {:?} と同じ位置（描画とヒットの単一導出）",
+        painted.0,
+        painted.1,
+        rows[0].rect
+    );
+
+    // ── hover を ordinal 1 へ**移す**: 前の行の塗りが 1 画素も残らない ──
+    rt.inject_choice_hover(&actor, Some(1));
+    present_frame(&mut rt, &mut world, 10.0).expect("hover 1 提示");
+    let moved = read(&rt);
+    assert!(
+        fill_in_row(&moved, &rows[1]) > 0,
+        "ordinal 1 の帯が塗られる"
+    );
+    let residue = fill_in_row(&moved, &rows[0]);
+    assert_eq!(
+        residue, 0,
+        "hover を移した後、前の行（ordinal 0・{:?}）に塗りが {residue} 画素消し残った——ダーティ帯の超過分が寄せ {offset} を数えていない（R13.5）",
+        rows[0].rect
+    );
+
+    // ── hover 解除: 面全域から塗りが消える ──
+    rt.inject_choice_hover(&actor, None);
+    present_frame(&mut rt, &mut world, 10.0).expect("hover 解除提示");
+    let off = read(&rt);
+    let left_over = fill_total(&off);
+    assert_eq!(
+        left_over, 0,
+        "hover 解除の後、面全域に塗りが {left_over} 画素消し残った（R13.5）"
+    );
+    assert!(opaque_count(&off) > 0, "解除後も素のグリフインクは描かれる");
+}

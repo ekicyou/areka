@@ -257,6 +257,10 @@ fn seg(line_index: usize, ordinal: usize, range: (f32, f32)) -> LineChoiceSegmen
 /// のとき従来（行矩形 block 帯）と完全一致することを既存期待値がそのまま檻にする（非退行）。
 const HIT_BAND: f32 = 10.0;
 
+/// 既存ケースの帯の寄せ＝0（行ボックス丈 ＝ 帯の丈のフォント＝既定 ＭＳ ゴシックと同じ関係）。
+/// `band_offset == 0` のとき帯は行矩形の block 近端に揃い、寄せを入れる前と完全一致する（非退行）。
+const NO_OFFSET: f32 = 0.0;
+
 // ── derive_hit_rows: canvas-local ヒット矩形（文字幅・block 帯・原点差引き） ──
 
 /// 横書き・原点 (0,0): ヒット矩形の行内範囲＝セグメントの inline_range（**文字幅**）・
@@ -267,7 +271,14 @@ fn derive_horizontal_uses_char_width_inline_and_line_block_band() {
     // 行全幅 0..50・block 帯 0..10（font 10）。
     let lines = [prow(0.0, 0.0, 50.0, 10.0)];
     let segs = [seg(0, 7, (10.0, 30.0))]; // 選択肢グリフ範囲（文字幅）＝10..30。
-    let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND);
+    let rows = derive_hit_rows(
+        &lines,
+        &segs,
+        WritingMode::HorizontalTb,
+        &region,
+        HIT_BAND,
+        NO_OFFSET,
+    );
     assert_eq!(
         rows,
         vec![CanvasHitRow {
@@ -290,7 +301,14 @@ fn derive_horizontal_subtracts_validrect_origin_to_canvas_local() {
     // 絶対 image px: 行矩形 left36/top46/right86/bottom56・セグメント 46..66。
     let lines = [prow(36.0, 46.0, 86.0, 56.0)];
     let segs = [seg(0, 0, (46.0, 66.0))];
-    let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND);
+    let rows = derive_hit_rows(
+        &lines,
+        &segs,
+        WritingMode::HorizontalTb,
+        &region,
+        HIT_BAND,
+        NO_OFFSET,
+    );
     assert_eq!(
         rows[0].rect,
         LineRect {
@@ -312,7 +330,7 @@ fn derive_vertical_assigns_inline_to_y_and_block_to_x() {
         // 縦書き列矩形: x 帯 377..387（block・font 10）・y 全長 0..20。
         let lines = [prow(377.0, 0.0, 387.0, 20.0)];
         let segs = [seg(0, 1, (5.0, 15.0))]; // 行内軸（y）の文字幅範囲。
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, HIT_BAND);
+        let rows = derive_hit_rows(&lines, &segs, mode, &region, HIT_BAND, NO_OFFSET);
         assert_eq!(
             rows[0].rect,
             LineRect {
@@ -336,7 +354,14 @@ fn derive_multiple_segments_yield_rows_in_input_order() {
         seg(0, 1, (20.0, 40.0)),
         seg(1, 2, (0.0, 30.0)),
     ];
-    let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND);
+    let rows = derive_hit_rows(
+        &lines,
+        &segs,
+        WritingMode::HorizontalTb,
+        &region,
+        HIT_BAND,
+        NO_OFFSET,
+    );
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[0].ordinal, 0);
     assert_eq!(
@@ -375,7 +400,17 @@ fn derive_multiple_segments_yield_rows_in_input_order() {
 fn derive_empty_segments_yield_no_rows() {
     let region = region(0, 0, 400, 224);
     let lines = [prow(0.0, 0.0, 30.0, 10.0)];
-    assert!(derive_hit_rows(&lines, &[], WritingMode::HorizontalTb, &region, HIT_BAND).is_empty());
+    assert!(
+        derive_hit_rows(
+            &lines,
+            &[],
+            WritingMode::HorizontalTb,
+            &region,
+            HIT_BAND,
+            NO_OFFSET
+        )
+        .is_empty()
+    );
 }
 
 /// 空範囲セグメント（`i0 >= i1`）は行を生まない（防御・annotate 既除外）。
@@ -385,7 +420,15 @@ fn derive_empty_range_segment_produces_no_row() {
     let lines = [prow(0.0, 0.0, 30.0, 10.0)];
     let segs = [seg(0, 0, (10.0, 10.0)), seg(0, 1, (20.0, 15.0))];
     assert!(
-        derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND).is_empty(),
+        derive_hit_rows(
+            &lines,
+            &segs,
+            WritingMode::HorizontalTb,
+            &region,
+            HIT_BAND,
+            NO_OFFSET
+        )
+        .is_empty(),
         "空/逆順範囲はヒット行を生まない"
     );
 }
@@ -397,7 +440,15 @@ fn derive_out_of_range_line_index_is_skipped() {
     let lines = [prow(0.0, 0.0, 30.0, 10.0)];
     let segs = [seg(5, 0, (0.0, 10.0))];
     assert!(
-        derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND).is_empty()
+        derive_hit_rows(
+            &lines,
+            &segs,
+            WritingMode::HorizontalTb,
+            &region,
+            HIT_BAND,
+            NO_OFFSET
+        )
+        .is_empty()
     );
 }
 
@@ -546,6 +597,7 @@ fn hit_row_rect_matches_canvas_local_highlight_derivation() {
         WritingMode::HorizontalTb,
         &region,
         HIT_BAND,
+        NO_OFFSET,
     );
     // ハイライト描画が使う canvas-local 矩形を from_layout と同一手順で独立算出:
     // 行矩形 block 近端（top）＋帯（HIT_BAND）＋セグメント inline 範囲（i0/i1）を validrect 原点差引き。
@@ -612,10 +664,11 @@ fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
         WritingMode::HorizontalTb,
         &region,
         band,
+        NO_OFFSET,
     );
     assert_eq!(
         rows[0].rect.top, 0.0,
-        "帯の起点は行矩形 block 近端（46−46）"
+        "寄せ 0 なら帯の起点は行矩形 block 近端（46−46）"
     );
     assert_eq!(
         rows[0].rect.bottom, 30.0,
@@ -634,7 +687,7 @@ fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
         let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
         let segs = [seg(0, 1, (5.0, 15.0))];
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, 13.0);
+        let rows = derive_hit_rows(&lines, &segs, mode, &region, 13.0, NO_OFFSET);
         assert_eq!(
             rows[0].rect,
             LineRect {
@@ -646,4 +699,121 @@ fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
             "{mode:?}: block 帯は left から band_extent（13）分"
         );
     }
+}
+
+// ── 帯を行ボックスの中央へ寄せる（highlight_band_offset／derive_hit_rows の offset 適用） ──
+//
+// 実機の目視（2026-09-06・開発者裁定 第 2 回・R13）: 帯を行矩形のブロック軸近端へ揃えると、
+// 行送りで頭打ちになった帯が行ボックスの中で上に余り、下でインクを切る（「色反転位置が
+// 2 ドット程上すぎる」）。帯を広げるのではなく、余りを上下へ等分して帯を内側へ寄せる。
+
+/// 寄せの量は「行ボックス丈 − 帯の丈」の半分（四捨五入）。正典 28・fixture 20・既定フォントの
+/// 3 通りを固定する——既定フォント（行ボックス丈 ＝ 帯の丈）は **0**＝非退行の証拠（R13.1/13.6）。
+#[test]
+fn band_offset_centers_the_band_in_the_line_box() {
+    // 正典 Yu Gothic UI 28: 行ボックス 37.24・帯 clamp(37.24, 28, 30)=30 → round(7.24/2)=4。
+    let band_28 = highlight_band_extent(28.0, 37.24, 30.0);
+    assert_eq!(band_28, 30.0);
+    assert_eq!(highlight_band_offset(37.24, band_28), 4.0);
+    // fixture の font 20: 行ボックス 26.6・帯 clamp(26.6, 20, 22)=22 → round(4.6/2)=2。
+    let band_20 = highlight_band_extent(20.0, 26.6, 22.0);
+    assert_eq!(band_20, 22.0);
+    assert_eq!(highlight_band_offset(26.6, band_20), 2.0);
+    // 既定 ＭＳ ゴシック（比 1.0）: 行ボックス ＝ em ＝ 帯 → 0（寄せる前と 1 画素も変わらない）。
+    let band_flat = highlight_band_extent(12.0, 12.0, 14.0);
+    assert_eq!(band_flat, 12.0);
+    assert_eq!(highlight_band_offset(12.0, band_flat), 0.0);
+}
+
+/// 帯が行ボックスより厚い（＝行ボックスで頭打ちにならない）病的入力では寄せは 0 に留まり、
+/// 負へ振れない（`max(0, ..)`）——帯が近端より上（左）へ飛び出すことはない。
+#[test]
+fn band_offset_never_goes_negative_when_band_exceeds_line_box() {
+    assert_eq!(highlight_band_offset(20.0, 28.0), 0.0);
+    assert_eq!(highlight_band_offset(0.0, 12.0), 0.0);
+}
+
+/// 横書き: ヒット帯は行矩形の上端から `band_offset` 下がって始まり、そこから `band_extent` 分。
+/// 実 fixture 相当（行矩形 top 46・帯 30・寄せ 4）は canvas-local で y4..34 になる。
+#[test]
+fn derive_hit_rows_shifts_horizontal_band_down_by_offset() {
+    let region = region(36, 46, 356, 168);
+    let line = prow(36.0, 46.0, 200.0, 74.0); // 行矩形 block 帯 46..74（font 28）。
+    let segment = seg(0, 0, (36.0, 100.0));
+    let band = highlight_band_extent(28.0, 37.24, 30.0);
+    let offset = highlight_band_offset(37.24, band);
+    let rows = derive_hit_rows(
+        std::slice::from_ref(&line),
+        std::slice::from_ref(&segment),
+        WritingMode::HorizontalTb,
+        &region,
+        band,
+        offset,
+    );
+    assert_eq!(
+        (rows[0].rect.top, rows[0].rect.bottom),
+        (4.0, 34.0),
+        "帯は近端（0）から寄せ {offset} 下がって始まり、丈 {band} 分（寄せ 0 なら 0..30 で赤）"
+    );
+    assert_eq!(
+        rows[0].rect.bottom - rows[0].rect.top,
+        band,
+        "寄せても帯の丈は変わらない（帯を広げない）"
+    );
+}
+
+/// 縦書き: 同じ規則をブロック軸（x）で適用する——帯は行矩形の left から `band_offset` 右へ
+/// ずれて始まる（R13.7）。行内軸（y）は寄せの影響を受けない。
+#[test]
+fn derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis() {
+    let region = region(0, 0, 400, 224);
+    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+        let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
+        let segs = [seg(0, 1, (5.0, 15.0))];
+        let rows = derive_hit_rows(&lines, &segs, mode, &region, 13.0, 2.0);
+        assert_eq!(
+            rows[0].rect,
+            LineRect {
+                left: 379.0,  // 377 + 寄せ 2
+                top: 5.0,     // 行内軸は不動
+                right: 392.0, // 379 + 帯 13
+                bottom: 15.0
+            },
+            "{mode:?}: block 帯は left ＋寄せ から band_extent 分（寄せ 0 なら 377..390 で赤）"
+        );
+    }
+}
+
+/// 隣接する行の帯は**接するが重ならない**（R13.4）。正典 28（行送り 30・帯 30・寄せ 4）では
+/// 上の行の帯が 4..34・下の行が 34..64 で、共有する辺は 34 の 1 本だけ。ヒット判定は半開区間
+/// （`y >= top && y < bottom`）ゆえ、その 1 点はたかだか 1 行にしか当たらない。
+#[test]
+fn adjacent_rows_bands_touch_but_do_not_overlap() {
+    let region = region(0, 0, 400, 224);
+    let pitch = 30.0;
+    let lines = [
+        prow(0.0, 0.0, 200.0, 28.0),
+        prow(0.0, pitch, 200.0, pitch + 28.0),
+    ];
+    let segs = [seg(0, 0, (0.0, 100.0)), seg(1, 1, (0.0, 100.0))];
+    let band = highlight_band_extent(28.0, 37.24, pitch);
+    let offset = highlight_band_offset(37.24, band);
+    let rows = derive_hit_rows(
+        &lines,
+        &segs,
+        WritingMode::HorizontalTb,
+        &region,
+        band,
+        offset,
+    );
+    assert_eq!((rows[0].rect.top, rows[0].rect.bottom), (4.0, 34.0));
+    assert_eq!((rows[1].rect.top, rows[1].rect.bottom), (34.0, 64.0));
+    assert_eq!(
+        rows[0].rect.bottom, rows[1].rect.top,
+        "共有する辺は 1 本（接する）——寄せは行ごとに同じなので隙間も重なりも生まれない"
+    );
+    // 半開区間の帰結: 共有辺 y=34 は下の行にだけ当たる（上の行は y < 34）。
+    let shared = rows[0].rect.bottom;
+    assert!(!(shared >= rows[0].rect.top && shared < rows[0].rect.bottom));
+    assert!(shared >= rows[1].rect.top && shared < rows[1].rect.bottom);
 }

@@ -1,7 +1,9 @@
-//! # region_inline_limit_tests — 描画範囲の行内軸の遠辺と、粗いバルーンの警告（純粋層・兄弟テスト）
+//! # region_inline_limit_tests — 描画範囲の行内軸の遠辺（純粋層・兄弟テスト）
 //!
 //! 出典 spec: `areka-P0-emo-text-line-height-canon`（要件 **6.2**／**6.3**／**6.7**・
-//! design.md §4.3「折返し基準と描画範囲の二段構え」）。
+//! design.md §4.3「折返し基準と描画範囲の二段構え」）。粗いバルーンの警告についての
+//! 主張は spec `areka-P0-emo2-conformance-e2e` の要件 **14.1**／**14.4** で引き直した
+//! （2026-09-06 第 2 回改訂・下の「警告の件数はここでは主張しない」）。
 //!
 //! ## 何を固定するか
 //!
@@ -16,30 +18,45 @@
 //!
 //! 1. 遠辺の軸解決が書字方向 3 方向で正しいこと（横書き＝`right`・縦書き 2 方向＝`bottom`）、
 //! 2. 遠辺が折返し基準へ丸め込まれず、2 つの値が独立に読めること、
-//! 3. 折返し基準が遠辺の外に解決されたバルーンで**警告がちょうど 1 件**記録され、欄に
-//!    バルーン名・軸・両方の値が載ること、
-//! 4. 折返し基準が遠辺の内（および遠辺と同値）のバルーンでは**警告が出ない**こと。
+//! 3. 解決そのものが**粗さの警告を書かない**こと——粗いバルーン（折返し基準が遠辺の外）
+//!    でも遠辺の内のバルーンでも WARN は 0 件であり、毎フレーム呼ばれても記録が増えない
+//!    （要件 14.1）。
+//!
+//! 3 が言うのは**粗さの記録**についてであって、[`TextRegion::resolve`] が一切ログを持たない
+//! という意味ではない——退化した validrect（幅/高さ ≤ 0）の `warn!` と、未指定成分の縮退の
+//! `debug!` は別の症状の記録であり、本改訂では 1 行も動かしていない。
+//!
+//! ## 警告の件数はここでは主張しない（2026-09-06 第 2 回改訂）
+//!
+//! 粗いバルーン定義を知らせる警告は、かつて [`TextRegion::resolve`] の中にあった。しかし
+//! この関数は再追従の判定キーを得るために**毎フレーム**呼ばれるため、実機の一周走行では
+//! 生ログ 30,837 行のうち 27,908 行が同じ警告になった（spec
+//! `areka-P0-emo2-conformance-e2e` の要件 14・走行 A の実測）。「読み込み 1 回につき 1 件」
+//! という意味を持つのは actor の登録口の側なので、警告はそちらへ移した。件数と 4 つの欄の
+//! 主張は兄弟テスト `actor_region_warn_tests.rs` が持つ——本ファイルは「解決は書かない」
+//! 側だけを固定する。
 //!
 //! 実際に無条件折返しを行う配置側の判定は別ファイル（`layout_hard_limit_tests.rs`）の担当で、
 //! 本ファイルは触れない。
 //!
 //! ## 相方側と本体側の実データを並べる理由
 //!
-//! 警告の 1 件は「粗いバルーン定義が実在する」ことに根ざしている。出荷 fixture
+//! 「粗いバルーン定義」は実在する。出荷 fixture
 //! `emo2-kakukaku` の相方側（`balloonk0s.txt`）は `wordwrappoint.x` を上書きせず、共通
 //! `descript.txt` の `-34` を継ぐ。画像 288×203 では 288−34＝**254** に解決され、描画範囲の
 //! 右辺 288−48＝**240** の外へ出る。本体側（`balloons0s.txt`）は `wordwrappoint.x,-49` を
 //! 自ら上書きしており、400−49＝**351** は右辺 400−44＝**356** の内に収まる。この 2 面を
-//! 並べることで、警告が「どのバルーンでも出る」ものでないことが示せる（fixture は
+//! 並べることで、粗さが「どのバルーンにもある」ものでないことが示せる（fixture は
 //! 改変しない＝要件 6.7）。数値の出所は `tests/shipped_fixture_region_test.rs` 冒頭の
-//! 解決結果の表と同一である。
+//! 解決結果の表と同一である。同じ 2 面を `actor_region_warn_tests.rs` も使う——警告の
+//! 件数の主張と、解決結果の主張が同じ実データの上に載る。
 //!
 //! ## 0 件の主張が恒真にならないようにする
 //!
-//! 「警告が 0 件」という主張は、ログの捕捉そのものが死んでいても成立してしまう。そこで
-//! 件数を見るテストは捕捉窓の内側で対照の `error!` を 1 件発行し、その 1 件が数えられて
-//! いることを件数の主張と同時に確かめる（`region_vertical_canon_tests.rs` の
-//! `assert_capture_alive` と同じ流儀）。
+//! 本ファイルの主張は**すべて「0 件」**であり、この形はログの捕捉そのものが死んでいても
+//! 成立してしまう。そこで件数を見るテストは捕捉窓の内側で対照の `error!` を 1 件発行し、
+//! その 1 件が数えられていることを件数の主張と同時に確かめる
+//! （`region_vertical_canon_tests.rs` の `assert_capture_alive` と同じ流儀）。
 //!
 //! ## 決定論
 //!
@@ -134,15 +151,6 @@ fn resolve_capturing(
     (region, warns, errors)
 }
 
-/// 数値欄を f32 として読む（`{:?}` 表現の細部に依存しないよう、解析してから比べる）。
-fn number_field(event: &CapturedEvent, name: &str) -> f32 {
-    let raw = event
-        .field(name)
-        .unwrap_or_else(|| panic!("欄 {name} が警告に載っていない"));
-    raw.parse::<f32>()
-        .unwrap_or_else(|_| panic!("欄 {name} の値 {raw} を数値として読めない"))
-}
-
 // ── 要件 6.2: 描画範囲の行内軸の遠辺を軸解決して保持する ──
 
 /// 遠辺は書字方向で軸が切り替わる——横書きは `validrect.right`・縦書き 2 方向は
@@ -189,39 +197,32 @@ fn inline_limit_is_not_rounded_toward_the_wrap_threshold() {
     );
 }
 
-// ── 要件 6.7: 折返し基準が遠辺の外のとき、読み込み 1 回につき警告 1 件 ──
+// ── 要件 14.1（2026-09-06 第 2 回改訂）: 解決はログを書かない ──
 
-/// 相方側 fixture 相当（折返し基準 254 > 遠辺 240）は警告をちょうど 1 件記録し、
-/// 欄にバルーン名・軸・折返し基準・遠辺の 4 つを載せる。
+/// 相方側 fixture 相当（折返し基準 254 > 遠辺 240）を解決しても警告は 1 件も出ない——
+/// 粗さを知らせる警告は actor の登録口が持つ（`actor_region_warn_tests.rs`）。値そのものは
+/// 従来どおり 2 つとも保持される。
 #[test]
-fn coarse_balloon_warns_once_with_balloon_axis_and_both_values() {
+fn resolving_a_coarse_balloon_writes_no_warning() {
     let (region, warns, errors) =
         resolve_capturing(&merged(KERO_OVERLAY), KERO_IMAGE, WritingMode::HorizontalTb);
     assert_eq!(
         errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の件数の主張は証拠にならない"
+        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
     );
     assert_eq!(
         warns.len(),
-        1,
-        "折返し基準が描画範囲の外のバルーンは警告をちょうど 1 件記録する"
+        0,
+        "解決は純粋であり、粗いバルーンでもログを書かない（要件 14.1）: {warns:?}"
     );
 
-    let warn = &warns[0];
-    assert_eq!(warn.field_str("axis"), Some("x"), "横書きの行内軸は x");
-    assert_eq!(number_field(warn, "wrap_threshold"), KERO_WRAP_X);
-    assert_eq!(number_field(warn, "inline_limit"), KERO_RIGHT);
-    let balloon = warn
-        .field_str("balloon")
-        .expect("欄 balloon が警告に載っていない");
-    assert!(
-        !balloon.is_empty(),
-        "バルーン名の欄を空にしてはならない（名前が無いときもプレースホルダで記録する）"
-    );
-
-    // 領域そのものの値も併せて固定する（ログだけが正しくても意味がない）。
+    // 領域そのものの値は従来どおり（ログを外したことで解決結果が動いていないことの証拠）。
     assert_eq!(region.wrap_threshold(), KERO_WRAP_X);
     assert_eq!(region.inline_limit(), KERO_RIGHT);
+    assert!(
+        region.wrap_threshold() > region.inline_limit(),
+        "本テストは折返し基準（254）が遠辺（240）の外にあるという前提で書かれている"
+    );
 }
 
 /// 本体側 fixture 相当（折返し基準 351 ≤ 遠辺 356）は警告を記録しない。
@@ -275,9 +276,11 @@ fn wrap_threshold_equal_to_the_far_edge_does_not_warn() {
     );
 }
 
-/// 縦書きでは行内軸が y になり、警告の軸欄も遠辺の値も y 側へ切り替わる。
+/// 縦書きでも解決はログを書かない。行内軸が y へ切り替わったことは、警告の欄ではなく
+/// 解決結果の 2 値（折返し基準 193・遠辺 133＝`validrect.bottom`）で示す
+/// （軸欄の主張は `actor_region_warn_tests.rs` が持つ）。
 #[test]
-fn vertical_balloon_warns_with_the_inline_axis_of_the_block_direction() {
+fn resolving_a_vertical_coarse_balloon_writes_no_warning() {
     // 画像高さ 203 に対し wordwrappoint.y,-10 → 193 が描画範囲の下辺 133 の外。
     let source = concat!(
         "wordwrappoint.x,-34\n",
@@ -296,18 +299,10 @@ fn vertical_balloon_warns_with_the_inline_axis_of_the_block_direction() {
         );
         assert_eq!(
             warns.len(),
-            1,
-            "{mode:?}: 折返し基準が描画範囲の外のバルーンは警告をちょうど 1 件記録する"
+            0,
+            "{mode:?}: 解決は純粋であり、粗いバルーンでもログを書かない（要件 14.1）: {warns:?}"
         );
 
-        let warn = &warns[0];
-        assert_eq!(
-            warn.field_str("axis"),
-            Some("y"),
-            "{mode:?}: 縦書きの行内軸は y"
-        );
-        assert_eq!(number_field(warn, "wrap_threshold"), 193.0, "{mode:?}");
-        assert_eq!(number_field(warn, "inline_limit"), KERO_BOTTOM, "{mode:?}");
         assert_eq!(region.inline_limit(), KERO_BOTTOM, "{mode:?}");
         assert_eq!(region.wrap_threshold(), 193.0, "{mode:?}");
     }
