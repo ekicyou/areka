@@ -64,7 +64,7 @@ wintf は「エンティティに `GraphicsCommandList` を挿せば、`render_s
 1. The 提示段 shall 表示のために保持・供給する画像本体（合成結果・供給面へ上げるバイト列・合成メモのエントリ）を **native 原寸**のみとし、k の値に依らず k 倍のバイト列を作らない。
 2. The 提示段 shall 拡大縮小を **wintf の描画経路（`render_surface` の `SetTransform`＝D2D の変換行列）にのみ**委ね、emo 側は原寸ビットマップの描画命令（論理 px の宛先矩形での `DrawBitmap`）を `GraphicsCommandList` として渡すだけとし、CPU で画素を書き換える拡大縮小を k のいかなる値でも行わない（裁定 D・2026-09-11）。
 3. When 引き当て外れで合成が成功した, the 提示段 shall 合成結果を原寸のまま D2D bitmap にして描画命令へ渡し、リサンプルの段を経由しない（k=1 と k≠1 で通る手順が同じであること）。
-4. The 本仕様 shall 提示段の CPU リサンプル経路（`FrameBudget::resample_native_into`・そのリサンプル作業席・`areka_emo_compose::scale::resample`／`resample_with`／`ResampleScratch` の本番消費）を撤去し、本番経路に消費者の無い k 倍リサンプルの実装を残さない（撤去後に `resample` 系の消費者が 0 件であることを機械で確認する）。あわせて自前 swap chain 供給面 `SwapChainPresenter`（`chain.rs`）と `VisualMount` の物理寸配線を撤去し、消費者が 0 になる wintf の swap chain ヘルパ（`com/dxgi.rs` `create_composition_swap_chain`・`com/wuc.rs` `create_composition_surface_for_swap_chain`）も撤去の対象に含める（設計で file 単位に確定）。
+4. The 本仕様 shall 提示段の CPU リサンプル経路（`FrameBudget::resample_native_into`・そのリサンプル作業席・`areka_emo_compose::scale::resample`／`resample_with`／`ResampleScratch` の本番消費）を撤去し、本番経路に消費者の無い k 倍リサンプルの実装を残さない（撤去後に `resample` 系の消費者が 0 件であることを機械で確認する）。あわせて自前 swap chain 供給面 `SwapChainPresenter`（`chain.rs`）と `VisualMount` の物理寸配線を撤去し、消費者が 0 になる wintf の swap chain ヘルパ（`com/dxgi.rs` `create_composition_swap_chain`・`com/wuc.rs` `create_composition_surface_for_swap_chain`）も撤去の対象に含める（設計で file 単位に確定）。2026-09-12 設計で確認: 両ヘルパは `areka-emo-text/src/surface.rs`（文字層の供給面）が消費し続けるため条件不成立＝**撤去しない**（wintf コード変更 0）。
 5. The 本仕様 shall `ScaleRatio` とその寸法権威（`scaled_extent`／`scale_len`／`unscale_coord`）を残し、撤去の対象を k 倍リサンプルの経路に限る（寸法の権威の変更 0）。
 6. The 本仕様 shall CPU リサンプルの高速化・別スレッド化・合成メモの容量増を**採らない**ことを設計で明記する（brief ⓐ／ⓒ／ⓓ 却下）。
 7. If 実装後に提示段のいずれかの経路が k≠1 で CPU 拡大を行っていることが見つかった, then the 本仕様 shall それを完了の阻却事由とし、最適化で薄めず撤去する。
@@ -177,7 +177,7 @@ wintf は「エンティティに `GraphicsCommandList` を挿せば、`render_s
 2. The 本仕様 shall 文字層（`areka-emo-text`）のコード・供給面寸・`ScaleContract` を変更しない（**変更 0**）。
 3. The 本仕様 shall k の政策（`crates/areka-emo-present/src/scale.rs`）と導出のタイミング（show 適用ごと・`refresh_scale` のゲート）を変更しない（**変更 0**）。
 4. The 本仕様 shall バルーンのオフセット・DPI 系の完了 spec（`balloon-offset-dpi`・`balloon-vertical-canon`）の裁定を変更しない（**変更 0**）。
-5. The 本仕様 shall `wintf` のコード変更を、消費者が 0 になる swap chain ヘルパの撤去（Requirement 1.4）に限り、DPI 機構・レイアウト伝播・`render_surface`・窓生成・クリック透過の判定手順を変更しない（**変更 0**・`BitmapSource` の描画命令の記録手順は emo へ lift（複製）し wintf 本体は触らない・変更が要る場合は設計で file 単位に列挙する）。Requirement 8.4 の doc 2 行の書き換えは判定手順の変更に当たらない。
+5. The 本仕様 shall `wintf` のコード変更を、消費者が 0 になる swap chain ヘルパの撤去（Requirement 1.4）に限り、DPI 機構・レイアウト伝播・`render_surface`・窓生成・クリック透過の判定手順を変更しない（**変更 0**・`BitmapSource` の描画命令の記録手順は emo へ lift（複製）し wintf 本体は触らない・変更が要る場合は設計で file 単位に列挙する）。Requirement 8.4 の doc 2 行と、`crates/wintf/src/ecs/world/tick_wake.rs` の起床旗 `REARM` の生産者名簿 1 行（`show.rs` を加える・計 doc 3 行）の書き換えは判定手順の変更に当たらない。
 6. The 本仕様 shall 並走 W13 の 8 本（`kanade-boot-talkdone-drop`・`host32-window-thread-pump`・`sakura-tag-word-boundary`・`charset-canon`・`ukadoc-coverage-roadmap`・`text-decoration-canon`・`sylphya-set-ledger`・`balloon-font-descript-keys`）と共有ファイル 0 を保つ（roadmap の干渉台帳どおり）。
 7. The 本仕様 shall 既存の全テスト（ワークスペース）を緑に保つ。ただし Requirement 6.3 の裁定で撤去・再導出したテストはその裁定の結果に従う。
 

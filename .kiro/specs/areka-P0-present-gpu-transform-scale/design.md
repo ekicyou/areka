@@ -30,6 +30,7 @@
 - 合成メモの容量 3・LRU の意味論: **変更 0**（5.4）。CPU リサンプルの高速化・別スレッド化・容量増: **採らない**（1.6）。
 - 案 A（surface brush の `SetStretch`）の設計: 行わない。D が実機計測（Requirement 3.1）で 16.7 ms を割れないと確定した場合だけの退避案で、そのときは `VisualMount` に brush の伸縮設定を戻す差分を別途起こす（B／C は却下済み）。
 - 提示段の drain 相をどの schedule で回すか（+1 tick の着地・research §7.2）: 本仕様では動かさない。
+- デバイスロスト後の復旧: **変更 0**。合成メモが保持する `GraphicsCommandList`（旧デバイスの D2D bitmap を参照）は、wintf の WUC 系 component と同じく無効化されない（`crates/wintf/src/ecs/graphics/systems/window_pos.rs` `invalidate_dependent_components` の NOTE(W3b-V)）。`invalidate_all` をデバイス再初期化へ配線しない（既存の穴と同格・本仕様で広げも狭めもしない）。
 
 ## Boundary Commitments
 
@@ -140,6 +141,7 @@ crates/areka-emo-present/
 ├── src/display.rs                   # 新設: record_display / DisplayRecipe / DisplayFault（test）
 ├── src/display_tests.rs             # 新設: 純関数の檻（GPU 不要）
 ├── src/display_fault_tests.rs       # 新設: 失敗注入（chain_fault_tests の後継・GPU）
+├── src/display_gpu_tests.rs         # 新設: 成功経路の檻 T-G1（恒等 k のオフスクリーン往復 golden・GPU）
 ├── src/chain.rs                     # 撤去
 ├── src/chain_fault_tests.rs         # 撤去
 ├── src/chain_test_support.rs        # 撤去
@@ -277,11 +279,11 @@ sequenceDiagram
 | 5.4 | 完全一致・容量 3・LRU 不変 | ComposeCache | `CAPACITY`／`touch`／`get`／`take_recycled`／`invalidate_all` | — |
 | 5.5 | 保持量減 | Data Models | 10.3 MB → 約 2.6 MB | — |
 | 5.6 | 旧 k の絵が載らない構造 | ComposeCache・VisualMount | k は係数であって面ではない | — |
-| 6.1 | k=1 golden 不変 | 付録 A′ | compose golden・`read_back` 等価 | — |
+| 6.1 | k=1 golden 不変 | 付録 A′・T-G1 | compose golden・`read_back` 等価・恒等 k のオフスクリーン往復 | — |
 | 6.2 | `read_back`＝原寸の `ComposedSurface` | read.rs | `read_back` | — |
 | 6.3 | 再導出／撤去の裁定 | 付録 A′ | — | — |
 | 6.4 | 裁定材料の並記 | 付録 A′ | — | — |
-| 6.5 | 新設分岐の GPU 非依存檻 | Testing Strategy T-N1〜T-N8 | — | — |
+| 6.5 | 新設分岐の GPU 非依存檻 | Testing Strategy T-N1〜T-N9（GPU 非依存）・T-G1（既存のオフスクリーン型） | — | — |
 | 6.6 | k≠1 の見た目は実機へ | Testing Strategy §実機 | — | — |
 | 6.7 | 1,000 行 | §行数の見張り | — | — |
 | 6.8 | 消費者 0 の観測口は除外 | 付録 A′（budget_tests） | — | — |
@@ -385,7 +387,7 @@ pub(crate) enum DisplayFault { CreateBitmap, CreateCommandList, EndDraw, Close }
 
 **Responsibilities & Constraints**
 - surface entity の bundle: `Name("emo-surface")`・`Visual{is_visible}`・`logical_arrangement(native, k)`・`GraphicsCommandList`（エントリの `display` の clone）・`HitTest::alpha_mask()`／`none()`・`AlphaMaskResource::new()`・`ChildOf(window)`。**`VisualGraphics` を入れない**——`Visual::on_add`（`graphics/visual.rs` `on_visual_add`）が `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty`／`BrushInherit` を連鎖挿入し、`visual_resource_management_system` が SpriteVisual を、`deferred_surface_creation_system` が面と brush と `SetSize` を担う。
-- `logical_arrangement(native, k) = Arrangement{offset: (0,0), scale: LayoutScale{x: k.as_f32(), y: k.as_f32()}, size: Size{native_w, native_h}}`。`as_f32` は「変換行列の係数」であって寸法演算ではない（`ScaleRatio::as_f32` doc に 2 つ目の裁定済み消費者として登記）。
+- `logical_arrangement(native, k) = Arrangement{offset: (0,0), scale: LayoutScale{x: k.as_f32(), y: k.as_f32()}, size: Size{native_w, native_h}}`。`as_f32` は「変換行列の係数」であって寸法演算ではない（`ScaleRatio::as_f32` doc に 2 つ目の裁定済み消費者として登記）。**`offset` は 0 でなければならない**（不変条件・`logical_arrangement` の doc に明記・T-N2 で固定）: wintf は `visual_property_sync_system` が `offset × 自 entity の累積スケール（k 込み）` を WUC へ書き、`impl Mul<Arrangement> for GlobalArrangement` は `offset × 親スケール（1.0）` で bounds を出す。両者は offset が 0 のときだけ一致する。
 - text-layer slot（兄弟・上位 z・`Children` 先頭）: **不変**。
 - `set_layout(world, native, k)`: 現値と同値なら書かない（`Changed<Arrangement>` → 再描画の連鎖を止める）。
 - `set_display(world, &list)`: `world.get::<GraphicsCommandList>(e) != Some(list)` のときだけ `insert`（`draw_bitmap_sources` の守りと同形）。
@@ -514,19 +516,26 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 | ID | file | 固定する性質 |
 |---|---|---|
 | T-N1 | `display_tests.rs` | `DisplayRecipe::for_surface`: bitmap 寸＝native・pitch＝stride・dest＝(0,0,w,h)・補間＝LINEAR。k を引数に持たないことは署名で固定 |
-| T-N2 | `mount.rs` `tests` | `logical_arrangement`: `size`＝native f32・`scale`＝(k.as_f32(), 同)・offset 0。attach 後の entity が `GraphicsCommandList`・`HitTest::alpha_mask`・`AlphaMaskResource` を持ち **`VisualGraphics` を持たない**（bare entity の窓では `on_add` が graphics を挿さない＝自前で入れていないことの証拠） |
-| T-N3 | `display_tests.rs` | 丸めの一致表: (native, k) の表で `GlobalArrangement::from(logical_arrangement)` の bounds 幅＝`native × k_f32`、`calculate_surface_size_from_global_arrangement` と `scaled_extent` の差 ∈ {0, +1}、整数 k は 0 |
+| T-N2 | `mount.rs` `tests` | `logical_arrangement`: `size`＝native f32・`scale`＝(k.as_f32(), 同)・offset 0。親を `Window::default()` 付き entity にして attach → `world.flush()` 後、`Visual::on_add` の連鎖で `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` が**存在**し（既定値・`!is_valid()`＝自前の COM 生成ではない）、`GraphicsCommandList`・`HitTest::alpha_mask`・`AlphaMaskResource`・`Arrangement`（論理・k・offset 0）も揃う（wintf `tests/graphics/dcomp_integration_test.rs` の `(Visual, ChildOf(window))` 1 bundle の型・GPU 不要） |
+| T-N9 | `mount.rs` `tests` | T-N2 の較正（対照）: 親が `Window` を持たなければ上記 3 component は挿されない。片方だけでは恒真になるため両方置く |
+| T-N3 | `display_tests.rs` | 丸めの一致表: (native, k) の表で、本番と同じ式 `窓 GA（scale 1.0・offset 任意） × logical_arrangement`（`impl Mul<Arrangement> for GlobalArrangement`）の bounds 幅＝`native × k_f32`、`calculate_surface_size_from_global_arrangement` と `scaled_extent` の差 ∈ {0, +1}、整数 k は 0 |
 | T-N4 | `mount.rs` `tests`（wintf の純 API） | 二重縮約なし: 窓 entity（`WindowPos.position`）＋ surface entity（`Arrangement` k=2 と `GlobalArrangement::from` を直挿し・原寸 4×4 の既知マスク）で `hit_test_in_window` の結果が `mask.is_hit(⌊x/2⌋, ⌊y/2⌋)` の表と一致 |
 | T-N5 | `mount.rs` `tests` | `set_layout`／`set_display` の同値スキップ: 同じ値を書いても `Changed` が立たない（`world.is_changed` 相当の観測） |
 | T-N6 | `timing_tests.rs` | 段 4・フィールド 11・`t_resample_us` 等が行に**現れない** |
 | T-N7 | `budget_tests.rs` | 発生点 2（`every_allocation_site_is_enumerated` の再導出） |
 | T-N8 | `transition_record_tests.rs` | `resized` 述語: 原寸が同じで k だけ変わる → false・原寸が変わる → true |
 
+### 新設の檻（GPU・要件 6.5 が許す「オフスクリーン readback の既存の型」）
+
+| ID | file | 固定する性質 |
+|---|---|---|
+| T-G1 | `display_gpu_tests.rs` | 供給の成功経路の golden（旧 `chain.rs` `upload_read_back_roundtrip_and_resize` の正当な後継）: `record_display` が返した閉じたリストを**恒等変換（k=1）**でオフスクリーン D2D ターゲット（`ID2D1Bitmap1`・透明クリア）へ `DrawImage` し、`CPU_READ` の bitmap へ `CopyFromBitmap` → `Map` で読み戻したバイト列が `Composer::compose` の原寸バイト列と**バイト単位で一致**する（k=1・整数矩形・LINEAR は texel 中心で恒等・SOURCE_OVER on 透明＝src）。これ 1 本で `CreateBitmap` の寸・pitch・premultiplied・宛先矩形・`Close` を固定する。成功側の最低線として `command_list().is_some()` かつ `!= GraphicsCommandList::empty()` も同 file に置く。型は wintf `tests/graphics/surface_pixel_equivalence_test.rs`（`CPU_READ` の staging へ `CopyFromBitmap` → `Map(READ)`）の既存の型をそのまま使う |
+
 ### 既存 GPU 型の再導出（代表）
 
 - `presenter_dpi_scale_tests.rs`: `same_scale_hits_cache_and_window_dpi_change_still_hits`（DPI 96→192 で `cache_hit=true`・compose 段 0・`Arrangement.scale` 2.0・`target_physical_size` = 764×1094）。
 - `presenter_display_failure_tests.rs`（`presenter_upload_failure_tests.rs` の後継）: 4 注入点 × {初回・同形再表示・Hide 後} で `reply` Err・`GraphicsCommandList`／`Arrangement`／マスク／`applied`／`native_size`／`current_surface_id`／`pending_resize`／メモの件数が全て前値。
-- `presenter_display_tests.rs` `golden_match_read_back_equals_direct_compose`: 主張不変（`read_back` ＝ `Composer::compose` のバイト列）。
+- `presenter_display_tests.rs` `golden_match_read_back_equals_direct_compose`: 主張の字面は不変だが、`read_back` がメモのバイト列を返す形になるため **GPU 非経由の配線検査**（合成 → メモ → 読み戻し）になる。供給の成功経路（`CreateBitmap` の寸・pitch・premultiplied・宛先矩形・`Close`）はこの檻では固定されないので、旧 `upload_read_back_roundtrip_and_resize` の正当な後継として **T-G1** を置く（下表）。
 
 ### 付録 A′: k≠1 を読む既存テストの台帳（Requirement 6.3／6.4・裁定 D 版・要件 付録 A を作り直したもの）
 
@@ -551,20 +560,22 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 | 15 | `presenter/transition_record_tests.rs`（714） | `a_scale_change_records_the_buffer_resize`・`the_previous_size_is_read_immediately_before_the_upload_and_the_error_branch_is_unmoved` | k 変化で `resized=true`・upload 直前の前値読みと error 分岐の字面 | **再導出** | k 変化は `size_changed=true`／`resized=false`（T-N8）・前値（原寸）は `record_display` の前に読む・error 分岐の字面は新モジュールの呼び出しへ。他 15 本不変 |
 | 16 | `presenter_resize_report_tests.rs`（265） | 4 本 | 戻り値＝`scaled_extent` | **不変** | — |
 | 17 | `presenter_read_accessor_tests.rs`（451） | `visible_surface_hit_uses_applied_scale_at_k2` ほか計 9 本 | 領域判定 ÷k | **不変** | — |
-| 18 | `presenter_display_tests.rs`（811） | `golden_match_read_back_equals_direct_compose` ほか計 8 本 | `read_back`＝合成バイト | **不変**（`read_back` の定義が変わっても主張は同じ） | `invalid_surface_skips_and_leaves_display_and_mask_unchanged` の「display」は `GraphicsCommandList` を読む |
+| 18 | `presenter_display_tests.rs`（811） | `golden_match_read_back_equals_direct_compose` ほか計 8 本 | `read_back`＝合成バイト | **不変**（字面）。ただし `read_back` がメモを返すため GPU 非経由の配線検査になる＝供給の成功経路は **T-G1** が引き継ぐ | `invalid_surface_skips_and_leaves_display_and_mask_unchanged` の「display」は `GraphicsCommandList` を読む |
 | 19 | `presenter_upload_failure_tests.rs`（566） | 3 本 | upload 7 点の前状態維持 | **再導出** → `presenter_display_failure_tests.rs`（4 点） | 前状態の集合にメモの件数を加える（失敗点が回収より前になったため） |
 | 20 | `cache_tests.rs`（1,618・例外表・較正） | k 鍵の 4 本 | k のキー参加 | **撤去**（4）・引数削減で他は再導出（機械的） | 行数は減る・1,000 行は下回らない |
 | 21 | `presenter_cache_capacity_tests.rs`（238）・`presenter_hide_contract_tests.rs`（309）・`presenter_compose_input_tests.rs`（470） | 全 9 本 | 容量・非表示契約・合成入力 | **不変** | — |
 | 22 | `crates/areka/examples/emo-present/reconcile.rs`（377）・`collision-probe/probe.rs`（332） | 起動 golden（`resample` で k 倍）・`assert_drawn_anchor`（物理座標へ写像） | **再導出** | golden＝native（k に依らず同一バイト・長さ比較も native）・anchor は Head／Bust 中心を原寸座標で直接読む（写像が消える） |
 | 23 | `crates/areka/src/emo2_boot/frame_dpi_tests.rs`（360） | `dpi_phase_reconciles_changed_window_to_scaled_extent` | 窓寸 | **不変** | — |
 
-集計（`#[test]` の実数え・2026-09-11）: **撤去 44 本**（#1 16・#2 6・#4 15＝`chain.rs` 1＋`chain_fault_tests.rs` 13＋spike 1・#10 2・#11 1・#20 4）／**再導出 34 本**（#5 1・#6 3・#7 4・#8 3・#9 1・#10 4・#11 3・#12 5・#13 1・#14 2・#15 2・#19 3・#22 2。#20 の引数削減と #6 `native_size_*` 2 本の字面変更は機械的ゆえ数えない）／**新設 8 本**（T-N1〜T-N8）／**不変 127 本**（#3 27・#5 4・#6 8・#9 2・#10 15・#11 2・#13 8・#14 15・#15 15・#16 4・#17 9・#18 8・#21 9・#23 1）。最終の裁定は設計ディスカッションで開発者が行う。
+集計（`#[test]` の実数え・2026-09-11）: **撤去 44 本**（#1 16・#2 6・#4 15＝`chain.rs` 1＋`chain_fault_tests.rs` 13＋spike 1・#10 2・#11 1・#20 4）／**再導出 34 本**（#5 1・#6 3・#7 4・#8 3・#9 1・#10 4・#11 3・#12 5・#13 1・#14 2・#15 2・#19 3・#22 2。#20 の引数削減と #6 `native_size_*` 2 本の字面変更は機械的ゆえ数えない）／**新設 10 本**（T-N1〜T-N9・T-G1）／**不変 127 本**（#3 27・#5 4・#6 8・#9 2・#10 15・#11 2・#13 8・#14 15・#15 15・#16 4・#17 9・#18 8・#21 9・#23 1）。分類の方針（陳腐化は除外・壊れたら更新）は要件ディスカッションで承認済み・本表は設計ディスカッションで確定。
+
+数え方の単位: 各行の本数は file の `#[test]` 全数（撤去／再導出／不変の合計＝file の全数）。例外は #23 で、`frame_dpi_tests.rs` 8 本のうち k≠1 の窓寸を読む 1 本だけを載せた（他 7 本は本仕様と無関係ゆえ台帳外）。
 
 ### 実機 2 水準サインオフ（2.7／3.2／3.5／4.8・6.6）
 
 1. 本番ゴースト `emo2` を **絶対パス**で、`AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit・`RUST_LOG=areka_emo_present=debug,areka_ghost=info` で、125%（DPI 120）と 200%（DPI 192）の 2 水準で起動する（完了 spec `emo-dpi-scaling`／`collision-dpi-hittest` の受け入れ記録の手順）。
 2. grep: `apply(ShowSurface): 表示・マスクを更新` 行の `k_ratio`・`native_w/h`・`scaled_w/h` が水準間で異なる物理寸（例 478×684 と 764×1094）・`cache_hit=true` が DPI 変化直後に出る／`perf(apply_show)` 行を `tools/perf/judge-perf.py` で集計し `t_total_us` の中央値・p90 を症状 E の前回値（中央値 41〜78 ms・p90 65〜227 ms）と並べる／`ticker catch-up: skipped multiple boundaries, firing once` が 3 分で ≤10 件／`[hit_region_client] client 物理 px を ÷k して当たり判定を解決` が頭・胸のクリックで出る。
-3. 目視（スクリーンショット）: 立ち絵とバルーンの大きさ・位置・原点（下端中央）が前回と同じ・拡大の画素ムラ無し・透明部でクリックが後ろへ抜け不透明部でつかめる・絵が変わるコマで文字が止まらない・面切替のコマで絵が文字より 1 tick 遅れて見えるか（research §7.2 の既知の帰結の目視）。ついでに e2e §13.1 行 3（初回起動限定の位置調整）も目視する（roadmap の申し送り）。
+3. 目視（スクリーンショット）: 立ち絵とバルーンの大きさ・位置・原点（下端中央）が前回と同じ・拡大の画素ムラ無し・透明部でクリックが後ろへ抜け不透明部でつかめる・絵が変わるコマで文字が止まらない・面切替のコマで絵が文字より 1 tick 遅れて見えるか（research §7.2 の既知の帰結の目視）。ついでに e2e §13.1 行 3（初回起動限定の位置調整）も目視する（roadmap の申し送り）。ドラッグ中に `tick_diag` を 1 度読み、窓移動の tick の再描画代金を記録する。
 4. 合否: 静かな機械で k=2 のミス 1 回 `t_total_us` ≤ 16.7 ms（wintf の再描画分は次の tick の `transition`／`tick_diag` から読める範囲で併記）・負荷下の値は報告のみ。
 
 ### Validation Hooks（DoD・機械で確認）
@@ -583,6 +594,7 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 | upload → 表示記録 | 0.3 ms | 0.3〜0.5 ms | `CreateBitmap` 836 KB ＋ 命令記録 |
 | 合計（`t_total_us`） | 60〜85 ms | **約 9〜11 ms** | 16.7 ms の内側 |
 | wintf 再描画（次の tick） | — | 0.2〜1 ms | `BeginDraw`／`Clear`／`DrawImage`／`EndDraw`（764×1094） |
+| 窓移動中の tick（**新規の定常代金**） | 0（swap chain は再描画なし） | 0.2〜1 ms／tick | `mark_dirty_surfaces` が `Changed<GlobalArrangement>` で dirty を立てるため、ドラッグ・`\![move]` 系で窓の offset が変わる tick ごとに `render_surface` が全面を描き直す（面の再生成は無し・`deferred_surface_creation_system` は同寸なら continue）。実機でドラッグ中の `tick_diag` を 1 度読む |
 | ヒット（k 変化含む） | upload 0.3 ms | **0** | GPU 呼び出しなし |
 
 定常経路の新規確保 0（席 2・`take_delta` 全 0）。合成メモの CPU 保持量は k=2 で約 1/4。

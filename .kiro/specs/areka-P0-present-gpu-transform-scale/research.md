@@ -274,7 +274,7 @@
 | (g) 失敗 | `record_display` の失敗（`CreateBitmap`／`CreateCommandList`／`EndDraw`／`Close`）は `device_err` 経由で `error!`＋`Err(Device)`・**`take_recycled` より前**に行い表示・メモ・World は全て適用前のまま | 合成失敗と同じ規律（R3.4）・k 分岐なし・panic なし |
 | (h) spawn | `Visual`＋`Arrangement`（論理）＋`GraphicsCommandList`＋`HitTest`＋`AlphaMaskResource`＋`ChildOf(窓)`・`VisualGraphics` は入れない・同値なら挿し直さない・成功時に `tick_wake::REARM` | §7.4・§7.2 |
 | (i) 触る file | wintf コード 0・doc 3 行（`hit_test/mod.rs` 2・`tick_wake.rs` 1）・emo-text 0・balloon.rs 0・areka は examples 2＋doc 1 | §7.6・バルーンは同じ漏斗 |
-| (j) 檻 | 撤去 44 本（compose 22・chain 14・spike 1・perf 1・budget 2・cache 4）／再導出 34 本／新設 8 本／不変 127 本（`#[test]` の実数え・design.md 付録 A′） | 陳腐化テスト方針 |
+| (j) 檻 | 撤去 44 本（compose 22・chain 14・spike 1・perf 1・budget 2・cache 4）／再導出 34 本／新設 10 本（T-N1〜T-N9・T-G1）／不変 127 本（`#[test]` の実数え・design.md 付録 A′） | 陳腐化テスト方針 |
 | (k) 行数 | 新 `display.rs` 約 150 行・触る file は全て 1,000 未満・`budget_tests.rs` の例外表からの除外に注意 | §7.8 |
 | (l) 登記 | D3／D5／D6・Option D への追記文と COMPAT §8 の【上書き】行の文言を design.md に固定 | 先例 3（line-height-canon）の作法 |
 
