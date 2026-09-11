@@ -14,7 +14,7 @@
 - そのうち転記層（`crates/areka-parsers/src/balloon/parse.rs` の写像関数）が引くのは **5 本**（`font.color.r`・`font.color.g`・`font.color.b`・`font.name`・`font.height`）だけである。
 - 残る **9 本**（`font.bold`・`font.italic`・`font.outline`・`font.strike`・`font.underline`・`font.shadowcolor.r`・`font.shadowcolor.g`・`font.shadowcolor.b`・`font.shadowstyle`）は、完全一致で引くキーの並びに無い。上流の KV 化層は未知キーも保持するが、転記層に写す先が無いため値はそこで落ちる。台帳の 9 項目はいずれも「壊れ方: 黙って壊れる。記録: なし」と登記されている。
 - 台帳の状態は、`implemented` が 4（`font.color.r`／`.g`／`.b`・`font.height`）、`absent` が 10（残り全部。`font.name` は写像されてはいるが、バルーンのフォルダに置いたフォントファイルを指定できないこと・カンマ区切りの優先列が効かないことの 2 点で描画側が正典どおりでないため `absent`）。
-- **数の食い違い**: 本仕様の brief・分割元 `areka-P0-text-decoration-canon` の brief・`.kiro/steering/roadmap.md` はいずれも「基底 13 キー」「残り 8 キー」と書くが、これは `font.outline` を数え落としている。台帳は 14 項目すべての備考に「担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）」と登記済みである。本仕様の brief は「キー集合の照合元」を台帳と明記しているので、**本仕様は 14 を採り、13 と書いた 3 か所を是正する**。
+- **数の食い違い**: 本仕様の brief・分割元 `areka-P0-text-decoration-canon` の brief・`.kiro/steering/roadmap.md` はいずれも「基底 13 キー」「残り 8 キー」と書くが、これは `font.outline` を数え落としている。台帳は 14 項目すべての備考に「担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）」と登記済みである。本仕様の brief は「キー集合の照合元」を台帳と明記しているので、**本仕様は 14 を採り、13 と書いた生きた 4 文書を是正する**（本ブランチで全数検索した結果、`areka-P0-text-align-shadow-canon` の brief `:27` が 4 本目である。履歴と完了済みの記録は非改変）。
 
 ### 何を変えるか
 
@@ -28,7 +28,7 @@
   - 2 層（バルーン定義の既定層と画像別の上書き層）のどちらに書かれても、既存キーと同じ優先順位で効くこと。
   - 14 本の定義箇所に置く正典 URL のコメント 1 行ずつ。
   - 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の当該 14 項目（状態・備考・担当）と、ドメイン別報告 `doc/ukadoc-coverage/report/assets.md` の作り直し。
-  - 「基底 13 キー」と書いた 3 か所（本仕様 brief・分割元 brief・ロードマップ）の是正。
+  - 「基底 13 キー」「残り 8 キー」と書いた生きた 4 文書（本仕様 brief・分割元 brief・`areka-P0-text-align-shadow-canon` の brief・ロードマップ）の是正。
   - 決定論テスト（値の形ごと・2 層の優先順位・未指定との区別・接頭辞付きキーの巻き込み防止）。
 - **Out of scope**:
   - 接頭辞付きの `font` 族 9 系統（`anchor.`／`anchor.notselect.`／`anchor.visited.`／`cursor.`／`cursor.notselect.`／`communicatebox.`／`number.`／`sstpmessage.`／`disable.`）。機能ごと M1 非実装であり、各機能の仕様が解禁するときに扱う。ただし本仕様のキーへ値が漏れないことは本仕様が守る（下の Requirement 4）。
@@ -53,7 +53,7 @@
 
 1. The 本仕様 shall 対象キー集合を、網羅調査のカタログに載る接頭辞なし `font.*` の見出し全数（**14**）と定め、その一覧（`font.bold`・`font.color.b`・`font.color.g`・`font.color.r`・`font.height`・`font.italic`・`font.name`・`font.outline`・`font.shadowcolor.b`・`font.shadowcolor.g`・`font.shadowcolor.r`・`font.shadowstyle`・`font.strike`・`font.underline`）を本文へ書き出す。
 2. The 本仕様 shall 14 のうち既に写像済みの 5 本（`font.color.r`／`.g`／`.b`・`font.name`・`font.height`）と、未写像の 9 本（残り）を明示して数え、零（＝対象外 0 本）も明示的に書く。
-3. When 本仕様の brief・分割元 `areka-P0-text-decoration-canon` の brief・`.kiro/steering/roadmap.md` が「基底 13 キー」「残り 8 キー」と書いている, the 本仕様 shall その 3 か所を「14」「残り 9」へ是正し、数え落としていたのが `font.outline` であることを添える。
+3. When 生きている文書が「基底 13 キー」「残り 8 キー」と書いている, the 本仕様 shall その **4 文書**を「14」「残り 9」へ是正し、数え落としていたのが `font.outline` であることを添える。対象は ⑴ 本仕様の brief、⑵ 分割元 `areka-P0-text-decoration-canon` の brief、⑶ `areka-P0-text-align-shadow-canon` の brief（`:27` の対象外の行）、⑷ `.kiro/steering/roadmap.md`（`:124`。ここは「13 キー」とは書かず「残り 8 キー」とだけ書く）である。履歴と完了済みの記録（`.kiro/steering/roadmap-history.md`・`.kiro/specs/completed/` 配下）は、非改変の方針と着地時点の記録という理由でいずれも対象外とする。
 4. If 実装の途中で対象キー集合がカタログと食い違うことが分かった, then the 本仕様 shall 見た目で数え直さずカタログの行を照合元とし、食い違いの内容を記録する。
 
 ### Requirement 2: 未写像の 9 キーを解析結果へ写す
@@ -110,7 +110,7 @@
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 14 キーそれぞれの定義箇所に、正典 URL 1 行のコメントを 1 本ずつ置く（既に置かれている 9 本を含めて 14 本が揃った状態にする）。
+1. The 本仕様 shall 14 キーそれぞれの定義箇所に、正典 URL 1 行のコメントを 1 本ずつ置く。既に置かれているのは **4 本**（`font.color.r`・`font.color.g`・`font.color.b`・`font.height`）であり、**新たに置くのは 10 本**（未写像の 9 本＋`font.name`）である。`font.name` の行には説明のコメントは在るが正典 URL の行が無いので、写像済みの 5 本のうち 1 本が未設置である。
 2. The 本仕様 shall 置く URL をカタログの当該行から写し、見た目で打ち直さない。
 3. The 本仕様 shall コメントを行の先頭（字下げを除く）がコメント記号で始まる形とし、`ukadoc:` の後に URL 1 語だけを置いて説明文を続けない（続けると機械が証拠として拾わない）。
 4. The 本仕様 shall 正典 URL を定義箇所だけに置き、呼び出し側には置かない。
@@ -125,8 +125,8 @@
 1. When 9 キーの写像が着地した, the 本仕様 shall 当該 9 項目の状態を `absent` から `vocabulary-only`（名前だけ登記してあり、受け取っても何もしない）へ改める。
 2. The 本仕様 shall 9 項目の備考から「読むキーを並べた表を完全一致で引く形で、この項目はその表に無い」という、実測と合わなくなる記述を除き、代わりに「転記層は読むが、使う側がまだ無い」という実態と、その根拠（どのログが出ないか）を書く。
 3. The 本仕様 shall 14 項目すべての備考から「担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）」の一文を除く（Requirement 1.3 で是正済みになるため）。
-4. The 本仕様 shall 影の 4 項目（`font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle`）の担当を `areka-P0-text-align-shadow-canon` へ改め、残る 10 項目の担当は `areka-P0-text-decoration-canon` のまま据え置く（分割の裁定で影 3 と寄せ 2 が同仕様へ移ったため）。
-5. While 9 項目の壊れ方の段が変わらない（宣言しても見た目が変わらず、記録も出ないまま）, the 本仕様 shall 優先度を据え置き、束の名前だけを実態に合わせ、同じ束の項目には同じ優先度を付けるという台帳の規則を保つ。
+4. The 本仕様 shall 影の 4 項目（`font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle`）の担当を `areka-P0-text-align-shadow-canon` へ改め、残る 10 項目の担当は `areka-P0-text-decoration-canon` のまま据え置く（分割の裁定で影と寄せ 2 が同仕様へ移ったため。裁定の文が言う「影 3」は `\f` タグ側の項目数であり、descript 側の見出しは影色 3 成分＋形態の 4 キーである）。
+5. While 9 項目の壊れ方の段が変わらない（宣言しても見た目が変わらず、記録も出ないまま）, the 本仕様 shall 優先度 `A11` を据え置き、束の名前だけを実態に合わせ、同じ束の項目には同じ優先度を付けるという台帳の規則を保つ。束の名前は `A11` に属する **10 項目すべて**（未写像の 9 本＋`font.name`）で揃えて改める。現在の束名「台詞の書体・読む経路が無い」は `font.name` については**すでに事実と合っていない**（同項目の備考自身が「完全一致で引いて文字列のまま持ち上げ」と書いており、読む経路は在る）ので、10 項目を揃えて改めることが、束に嘘を 1 件も残さない唯一の形である。
 6. The 本仕様 shall 残る 5 項目の状態を据え置く——`font.color.r`／`.g`／`.b`・`font.height` は `implemented` のまま、`font.name` は `absent` のままとする。`font.name` は写像されてはいるが、描画側の 2 つの食い違い（バルーンのフォルダに置いたフォントファイルを指定できない・カンマ区切りの優先列が効かない）が残るためであり、本仕様はその食い違いを引き受けない。
 7. When 台帳を書き換えた, the 本仕様 shall ドメイン別報告 `doc/ukadoc-coverage/report/assets.md` を道具で作り直して同じコミットに入れ、全体報告 `doc/ukadoc-coverage/report/summary.md` には触れずに、統合担当（`areka-P0-ukadoc-coverage-roadmap`）へ「assets 台帳の状態分布が変わった」ことを申し送る。
 8. When 網羅調査の常時検査とテストを走らせた, the 検査 shall 台帳・報告について 1 件も食い違いを報告しない。
