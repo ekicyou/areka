@@ -13,7 +13,7 @@ zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着�
 | # | 事項 | 実測アンカー | e2e DoD への影響 |
 |---|---|---|---|
 | A-1 | 既存ペア機構の実窓の檻が **3 プロセス同時 regime で稀に赤**——他プロセスの可視窓が owner 一組の間に割り込む／`SetWindowPos(HWND_NOTOPMOST)` が Ok を返しつつ帯から出さない。隔離測定では両ツリーとも 0 本＝**測定条件か欠陥か未決着** | `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:767`・同 `:411` | あり（間欠） |
-| A-2 | **壁時計期限の飢餓**——vblank 500ms 期限切れ／boot 応答 5 本が有界内に発火しない（後者は zsp 分岐点 `35387f00` でも同じ場所・同じ文言＝zsp 由来ではない） | `crates/wintf/src/runtime/tick_bridge.rs:355`・`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:46`・`spine_talk_close_tests.rs:306` | あり（間欠） |
+| A-2 | **壁時計期限の飢餓**——vblank 500ms 期限切れ／boot 応答 5 本が有界内に発火しない（後者は zsp 分岐点 `35387f00` でも同じ場所・同じ文言＝zsp 由来ではない） | `crates/wintf/src/runtime/tick_bridge.rs:355`・`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:46`・`spine_talk_close_tests.rs:306`・**2026-09-11 e2e からの追記＝同じ族（壁時計期限 `SPIN_WAIT` 30 秒）**: `crates/areka/src/emo2_boot/spine_text_scale_tests.rs`・`spine_seriko_loop_tests.rs`・`spine_display_tests.rs`（e2e `verification/isolation-decision.md` §4.5.1・負荷走行で赤を観測・既定では緑） | あり（間欠） |
 
 **§13.9（完成検証が掘った未担当・所有者ゼロ 6 件・いずれも挙動不変）**
 
