@@ -962,7 +962,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bembed_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-query-channels"
 priority = "A14"
 values = []
 links = []
@@ -971,6 +971,7 @@ note = """
 ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
 語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
 [裁定待ち: areka-P0-property-query-channels と areka-P0-sakura-time-directives が主張。名指しは channels から time-directives への一方向だけで、その名指しは層違いで非衝突と述べるだけで分担を決めていない。裁定案は「compile 側の allowlist は time-directives・Result 置換の実行時経路は property-query-channels」——案であって決定ではなく、決めるのは統合担当]
+[裁定（統合担当）: 裁定案を採る——台本を読む側の受理の一覧は areka-P0-sakura-time-directives、返ってきた結果でタグを置き換える実行時の経路は areka-P0-property-query-channels が持つ。この項目は 2 本の着地を要し、担当の欄 1 つには収まらない。上の「語彙の登記」が指す doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行は、この綴りを逐語で列挙したうえで M1 は非実導出（語彙保持＋縮退のみ）と定め、実導出を追跡 spec areka-P0-sakura-time-directives へ申し送っている。同 spec の brief は語彙表の C 群でこのタグを「タグ全体が SHIORI Result で置換され続行＝台本分割＋再調停が必要」と分類し、Scope In に allowlist の compile 追加解釈と lowering を挙げている。担当の欄に書いたのは areka-P0-property-query-channels——同 brief の Scope In が経路 4 として「\\![embed] の対」を逐語で自分の範囲と宣言しており、上の「壊れ方」が述べる「別のイベントの返す台詞がその場に埋め込まれない」の、返す側の配管を作るのがこの 1 本だからである。compile 側の実導出（台本分割・Barrier シーム・再調停）は areka-P0-sakura-time-directives に残る依存であり、統合ブリーフィングの申し送りの処分台帳に明記した]
 [テーマ無し: 別のイベントの台詞をその場へ差し込む配管で、失われるのは差し込まれる中身の側であり、テーマは差し込む先の項目が持つ]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![embed。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 [任意のイベント: 第 1 引数のイベント名がそのまま相手になり、その結果でタグ自身が置き換わる ので 1 つに定まらない]
@@ -1735,7 +1736,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5c_21_5bmove_5d:1"]
 status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-sakura-time-directives"
 priority = "A2"
 values = []
 links = []
@@ -1745,6 +1746,7 @@ note = """
 [転記元: doc/COMPAT_ARCHITECTURE.md の「\\![move] の名前付き --key=value 形」「\\![move] の基準 screen／primaryscreen／me／global」「\\![move] の時間指定 time>0（アニメーション付き移動）」の 3 行]
 [版: カタログの規則で拾える版番号は無い。本文に現れる 2.5 は記述例の「2.5 秒かけて移動する」という所要時間であって版番号ではないので、本文が 2 桁の版を書いている項目には数えない]
 [裁定待ち: areka-P0-surfaces-basepos（基準位置 base の解決）と areka-P0-sakura-time-directives（時間引数の枠）が別々に主張し、互いに相手を 1 度も名指ししていない。裁定案は「引数ごとに分ける」——案であって決定ではなく、決めるのは統合担当]
+[裁定（統合担当）: 裁定案「引数ごとに分ける」のうち、時間の側を areka-P0-sakura-time-directives が持つ点は採り、基準の側を areka-P0-surfaces-basepos が持つ点は採らない。採らない理由は 2 つ——同 spec の brief が自分の範囲を宣言 point.basepos の実導出に限って「このタグの他の意味論」を範囲外と明記していることと、上の「壊れ方」の行が挙げる 3 つのどれもその範囲では消えないことである（基準 base は正典既定の解決が既にあり、3 つの中に入っていない）。担当の欄は areka-P0-sakura-time-directives を書いた——3 つのうち時間指定を正面から、名前付きの key=value 形をその中の時間の指定を通じて動かす唯一の brief である。残る基準 screen・primaryscreen・me・global の 4 語はどちらの brief の範囲にも入っていないので、束「窓の配置と重なり」の候補 spec の側が引き受ける。候補 spec には brief がまだ無く、要件 7.4 ⑶ が brief の無い名前を担当の欄へ書くことを禁じているので、担当の欄には書かない]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![move。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![moveasync の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
