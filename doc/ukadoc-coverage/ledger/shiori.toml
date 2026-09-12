@@ -15532,7 +15532,7 @@ crates 以下のソースに 1 件も無い）。
 """
 
 [entry."ukadoc:spec_shiori3:Charset:1"]
-status = "degraded"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-charset-canon"
 priority = "D2"
@@ -15540,41 +15540,57 @@ values = []
 links = []
 note = """
 この行の向き: リクエスト側（ベースウェアが SHIORI へ送るヘッダ）。
-壊れ方: 黙って壊れる。ヘッダは送っているが値が 1 つに固定してあり、正典が許す他の値を選べない。
-Charset は UTF-8 だけなので、Shift_JIS で書かれた既存ゴーストとは噛み合わない。SecurityLevel は
-local だけなので、外部由来の呼び出しと区別できない。
-ログ: 固定値であること自体を知らせるログは 1 行も出ない。値は分岐せずそのまま書き出されるので、
-「選べなかった」という判断がコードの中に存在しない。文字の変換に失敗したときだけ、応答を読む側が
-読み取り失敗として扱い、そこで初めて明示的なエラーになる。
-根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request（Charset は 1 値のみを持つ
-型から書き出し、SecurityLevel は local の文字列を直接書き出す）。
-この行は固定値でしか送れない。Charset は UTF-8 の 1 値しか持たない型で、build_request は
-その 1 値を書き出すだけなので、正典が許す他の文字コードを選ぶ枝が無い。任意の文字コードへ
-広げる担当は owner の areka-P0-charset-canon。見出しが同じ項目がレスポンス側にもある
-（Charset:2）。この行はリクエスト側だけを表し、両者を 1 つの行にまとめない。
+壊れ方: 該当なし。要求の全文はそのつながりで採用している文字コードで符号化して送り、この
+ヘッダには実際に符号化した文字コードの正規名を書く。値を書く場所は要求行の直後の最初の
+ヘッダ行である。初期値はゴーストの descript の宣言（shiori.forceencoding ＞ shiori.encoding）で
+決まり、どちらも無ければ起動時に渡される既定（本番は Shift_JIS）になる。以後は応答が名乗った
+文字コードの採用で切り替わる。
+ログ: 起動時に決めた初期値は ghost-boot の charset_initial が情報として 1 行残す（正規名と、
+どの宣言で決まったか）。以後の切替は shiori-charset の charset_switched が切替 1 回につき
+詳細で 1 行。選んだ文字コードで表せない文字が要求にあったときは 10 進の数値文字参照へ置き換えて
+送り、shiori-charset の charset_unmappable_replaced が出る（要求の ID ごとに初回だけ警告・
+以後は詳細）。置換の無い通常の要求では 1 行も出ない。記録を残さずに後退する経路は持たない。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request（要求行の直後に Charset
+ヘッダを書き出す 1 か所）。文字コードの値とつながりごとの採用の規則は
+crates/shiori-host32-host/src/charset.rs の Charset・CharsetNegotiator が持ち、初期値の決定は
+crates/areka-ghost/src/shiori_wiring.rs の initial_charset にある。
+見出しが同じ項目がレスポンス側にもある（Charset:2）。この行はリクエスト側だけを表し、両者を
+1 つの行にまとめない。担当 spec は areka-P0-charset-canon で、1 値固定だった縮退はその着地で
+解けた。
 """
 
 [entry."ukadoc:spec_shiori3:Charset:2"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-charset-canon"
 priority = "D2"
 values = []
 links = []
 note = """
 この行の向き: レスポンス側（SHIORI が返し、ベースウェアが読む側にあたるヘッダ）。
-壊れ方: 黙って壊れる。リクエスト側の 4 つは組み立てに現れないので相手に届かず、レスポンス側の 11 は
-届いても読まずに捨てるので、ゴーストが返した指示は無かったことになる。
-ログ: 1 行も出ない。応答のヘッダを読む繰り返しは Value・ErrorLevel・ErrorDescription の 3 つに
-名前が一致したときだけ値を取り、一致しなかったときに何かをする枝を持たない（そのまま次の行へ進む）。
-リクエスト側も、書き出す文が並ぶだけで「書かなかった」を記録する場所が無い。
-根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request と parse_response（ヘッダ名を
-大文字小文字を無視して比べる 3 つの分岐）。build_request の説明が挙げる「送らないもの」は
-SenderType・SecurityOrigin・X-SSTP-PassThru の 3 つで、BaseID は挙がっていない（BaseID は
-crates 以下のソースに 1 件も無い）。
+壊れ方: 該当なし。応答のこのヘッダは復号より先に生のバイト列から ASCII の一致で拾い、解決
+できればその文字コードで復号したうえで以後の要求にも採用する。ヘッダが無い応答は要求に用いた
+文字コードを継承し、解決できない綴りは採用せず現在の文字コードを続ける。同じ文字コードを
+名乗る応答（別名の綴りを含む）は状態も記録も変えない。shiori.forceencoding が効いている間は、
+このヘッダを復号にも採用にも使わない。置き場所は問わない——最初のヘッダ行でなくても、ASCII の
+並びとして現れてさえいれば拾う。
+既知の限界 2 件: ⑴ 先行するヘッダの値が非 ASCII で、しかも ISO-2022-JP のように後続を ASCII の
+状態へ戻さない符号化になっていると、綴りがそのままのバイトで現れず走査が届かない（ヘッダの
+無い応答と同じ扱いになる）。⑵ 片道のイベント（NOTIFY）の応答は読まずに捨てるので、採用の
+根拠に用いない。
+ログ: 採用による切替は shiori-charset の charset_switched が詳細で 1 行。解決できない綴りは
+同 target の charset_label_unresolved（同じ綴りの初回だけ警告・以後は詳細。鍵は前後の空白を
+落とし ASCII 小文字化して持つので、大文字小文字の違いで警告が重複しない）。強制中にヘッダが
+食い違ったときは charset_forced_ignores_header が初回だけ詳細で 1 行。宣言された文字コードとして
+不正なバイトの並びがあったときは代替文字で吸収し、charset_invalid_bytes_replaced が出る
+（文字コードごとに初回だけ警告）。ただし吸収の記録が出ない経路が 2 つ残る——ステータス行ごと
+壊れていて解析が失敗する応答（記録へ届く前に戻る）と、SHIORI/4 の直接呼出経路（交渉の状態を
+持たないので、吸収した事実を受け取る先が無い）。
+根拠の場所: crates/shiori-host32-host/src/shiori3.rs の scan_charset_header（ヘッダ名を大文字
+小文字を無視して比べる 1 か所）。採用と記録は crates/shiori-host32-host/src/charset.rs の
+CharsetNegotiator::note_response。
 見出しが同じ項目がリクエスト側にもある（Charset:1）。この行はレスポンス側だけを表し、両者を
-1 つの行にまとめない。parse_response は応答の Charset を読まず、要求のときの文字コードを
-そのまま引き継ぐ。
+1 つの行にまとめない。担当 spec は areka-P0-charset-canon。
 """
 
 [entry."ukadoc:spec_shiori3:ErrorDescription_20_5bSSP_62e1_5f35_5d:1"]
