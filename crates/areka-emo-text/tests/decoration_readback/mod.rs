@@ -1,9 +1,9 @@
-//! # decoration_readback/mod.rs — 読み戻しの共有ヘルパ（task 8.1）
+//! # decoration_readback/mod.rs — 読み戻しの共有ヘルパ（task 8.1／8.2）
 //!
 //! 出典 spec: `areka-P0-text-decoration-canon`（要件 **15.4**／**15.7**／**15.8**）。
 //!
-//! 入口 `decoration_readback_test.rs` と、縦書きの分（`vertical.rs`・task 8.2）が共有する
-//! 道具だけをここに置く。中身は 4 つ:
+//! 入口 `decoration_readback_test.rs`（横書き）と、縦書きの分（[`vertical`]・task 8.2）が
+//! 共有する道具だけをここに置く。中身は 4 つ:
 //!
 //! 1. **描画環境の用意**——headless の GPU World（WARP 可）と予約スロット。
 //! 2. **実行時の組み立て**——`TextLayerRuntime` へ台本を流し、本番の 1 フレーム経路
@@ -25,6 +25,8 @@
 //! `FontCatalog::family_for`（`\f[name,…]` の候補列を解決するのと同じ口）を使う——門そのものが
 //! 正しく閉じることは、入口の `the_font_gate_closes_on_a_missing_family` が実在しない名前で
 //! 確かめる。
+
+mod vertical;
 
 use areka_emo_text::actor::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
@@ -69,6 +71,21 @@ pub(crate) const SAMPLE: &str = "あア亜Agほ";
 /// インクとみなす α の下限（アンチエイリアスの薄い端を落とす二値化・
 /// `line_pitch_readback_test.rs` と同じ閾値）。
 const INK_ALPHA_MIN: u8 = 128;
+
+/// 表示に効く 7 項目（要件 5.1・`\f[…]` のトークン列）。
+///
+/// 横書き（入口）と縦書き（[`vertical`]）が**同じ表**を回す——片方だけ項目が抜けるのを防ぐ。
+/// 母数は入口の `the_visible_keys_are_the_seven_that_directwrite_can_range` が固定する
+/// （表が空になるとどちらのループも恒真で緑になる）。
+pub(crate) const VISIBLE_KEYS: &[(&str, &[&str])] = &[
+    ("name", &["name", ALT_FONT]),
+    ("height", &["height", "44"]),
+    ("color", &["color", "255", "0", "0"]),
+    ("bold", &["bold", "1"]),
+    ("italic", &["italic", "1"]),
+    ("underline", &["underline", "1"]),
+    ("strike", &["strike", "1"]),
+];
 
 // ══ バルーン定義 ═══════════════════════════════════════════════════════════════════════
 
@@ -279,14 +296,40 @@ pub(crate) fn added_ink_rows(plain: &Shot, styled: &Shot) -> Vec<u32> {
         .collect()
 }
 
-/// 一覧が連続した 1 本の帯であることを確かめ、その両端を返す。
-pub(crate) fn single_band(rows: &[u32], what: &str) -> (u32, u32) {
-    assert!(!rows.is_empty(), "{what}: インクの増えた行が 1 本も無い");
-    let (first, last) = (rows[0], rows[rows.len() - 1]);
+/// [`added_ink_rows`] の縦書き用の対——「素の側にインクが無く、装飾した側にインクがある」
+/// 画素を持つ**列**（x）の一覧。
+///
+/// 縦書きでは行が縦に並び、下線・打ち消し線は列に沿った**縦のインク**として現れるので、
+/// 行で数えると字のある行すべてに散らばって帯にならない。数える軸だけが横書きと違う。
+pub(crate) fn added_ink_cols(plain: &Shot, styled: &Shot) -> Vec<u32> {
+    (0..plain.width)
+        .filter(|&x| (0..plain.height).any(|y| styled.is_ink(x, y) && !plain.is_ink(x, y)))
+        .collect()
+}
+
+/// インクのある列の左右端（縦書きの「字の列」が面のどこにあるか）。
+///
+/// 線がその列の**どちら側**に出たかを言うための基準。素の側で測る——装飾で足された線を
+/// 基準に混ぜると、線が自分自身を基準に判定されて向きの意味が消える。
+pub(crate) fn ink_col_range(shot: &Shot) -> (u32, u32) {
+    let cols: Vec<u32> = (0..shot.width)
+        .filter(|&x| (0..shot.height).any(|y| shot.is_ink(x, y)))
+        .collect();
+    assert!(!cols.is_empty(), "インクのある列が 1 本も無い");
+    (cols[0], cols[cols.len() - 1])
+}
+
+/// 一覧が連続した 1 本の帯であることを確かめ、その両端を返す（行にも列にも使う）。
+pub(crate) fn single_band(lanes: &[u32], what: &str) -> (u32, u32) {
+    assert!(
+        !lanes.is_empty(),
+        "{what}: インクの増えた行／列が 1 本も無い"
+    );
+    let (first, last) = (lanes[0], lanes[lanes.len() - 1]);
     assert_eq!(
-        rows.len() as u32,
+        lanes.len() as u32,
         last - first + 1,
-        "{what}: インクの増えた行が連続した 1 本の帯になっていない: {rows:?}"
+        "{what}: インクの増えた行／列が連続した 1 本の帯になっていない: {lanes:?}"
     );
     (first, last)
 }

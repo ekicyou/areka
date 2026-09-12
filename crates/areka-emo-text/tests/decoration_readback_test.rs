@@ -44,7 +44,7 @@
 mod support;
 
 use support::{
-    ALT_FONT, FONT_HEIGHT, MISSING_FONT, REAL_FONT, SAMPLE, added_ink_rows,
+    ALT_FONT, FONT_HEIGHT, MISSING_FONT, REAL_FONT, SAMPLE, VISIBLE_KEYS, added_ink_rows,
     assert_real_font_present, differs, font_cue, font_is_installed, run, shoot_pair, single_band,
     text_cue, unbaked_cue,
 };
@@ -64,20 +64,6 @@ const UNDERLINE_BAND: (u32, u32) = (33, 33);
 /// 2 本の帯が別の位置にあることは、この 2 つの定数がそれぞれ**実測と突き合わされている**
 /// ことで担保される——`SetUnderline` と `SetStrikethrough` を取り違えれば両方の検査が赤になる。
 const STRIKE_BAND: (u32, u32) = (18, 19);
-
-/// 表示に効く 7 項目（要件 5.1・`\f[…]` のトークン列）。
-///
-/// 母数を [`the_visible_keys_are_the_seven_that_directwrite_can_range`] が固定する——
-/// 表が空になるとループが恒真で緑になる。
-const VISIBLE_KEYS: &[(&str, &[&str])] = &[
-    ("name", &["name", ALT_FONT]),
-    ("height", &["height", "44"]),
-    ("color", &["color", "255", "0", "0"]),
-    ("bold", &["bold", "1"]),
-    ("italic", &["italic", "1"]),
-    ("underline", &["underline", "1"]),
-    ("strike", &["strike", "1"]),
-];
 
 /// 語彙として受理するが表示は変えない 3 項目（要件 5.9／6.1）。
 const VOCABULARY_ONLY_KEYS: &[(&str, &[&str])] = &[
