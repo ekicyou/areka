@@ -332,38 +332,617 @@
 
 ## 3. 順序付き束一覧
 
-<!-- 段 3（タスク 4.3）で書く: 束ごとに段階・順位・資産の広さ・基盤共有度を置いた囲みと、
-     束名・順位・資産・共有度だけを持つ本文の表。壊れ方とテーマは `linkage.md` の欄名で指す。 -->
+段階の中の順位は、4 つの根拠を固定の序列で比べて決める（要件 6.1）。序列は **壊れ方 ＞
+伺からしさのテーマ ＞ 影響する既存資産の広さ ＞ 依存基盤の共有度** で、入れ替えない。
+テーマは集合なので、比べる値には要素の数を使う。
 
-下の囲みは着手時（2026-09-12）に置いた器である。**段階ごとの 3 つの数はまだ数えていない
-仮の 0 であり、段 3（タスク 4.3）で数え直した値に置き換える。** 5 段階すべてを、値が 0 の
-段階も省略せずに置く。
+### 3-1. 4 つの根拠をどこで引くか
+
+同じ値を 2 か所に持たない（設計 D-2）。順位の囲みが自分で持つのは、`linkage.md` に置き場の
+無い 2 つ——資産の広さと基盤共有度——だけで、残りは帰属の文書の欄を指す。
+
+| 根拠 | 引く場所 |
+| --- | --- |
+| ⑴ 壊れ方 | `linkage.md` の束の囲みの `breakage` 欄 |
+| ⑵ 伺からしさのテーマ | 同じ囲みの `themes` 欄（比べる値はその要素の数） |
+| ⑶ 影響する既存資産の広さ | 下の囲みの `assets` |
+| ⑷ 依存基盤の共有度 | 下の囲みの `shared` |
+| ⑴ ⑵ の値が由来する構成 id | 同じ囲みの `members` 欄 |
+
+⑶ は、その束の `members` のうち標準テンプレート辞書の語彙に現れる項目の数である（語彙の
+全列挙は 5-1 の `[[template]]` の `ids` 欄。2 本の和集合を取ってから数える）。⑷ は、同じ
+`foundation` の綴りを持つ束の数で、自分自身を含む。`foundation` を持たない単独項目は 0 と
+する——欄が空の者どうしを数え合わせると「基盤を書いていない」が「同じ基盤を共有している」に
+化けるためである。
+
+⑴ は 67 の束すべてで同じ値である（数え方と結果は 2-3 に置いた）。したがって順位を実際に
+分けるのは ⑵ ⑶ ⑷ の 3 つで、同順位が多く出る（3-5）。
+
+### 3-2. 順位の振り方
+
+段階ごとに、4 つの根拠を上の序列で比べて大きい順に並べ、順位を 1 から振る。4 つとも同じ値の
+束は同じ順位にし、その次の順位は 1 だけ増やす（1, 2, 2, 3 の密な順位。要件 6.7・7.1）。
+単独項目も 1 つの束として順位を持ち、4 つの根拠が同じ単独項目は `singles` の 1 行にまとめる。
+
+段階が仮のまま順位表に載せた行には、囲みの中に「段階は仮」の注記を付けた。**6 行**である
+（数え方: 2-5 の裁定候補 5〜10 に挙がった束を数えた）。裁定で段階が動けば、動いた先の段階の
+順位を組み直す。
+
+### 3-3. 順位表
+
+#### 段階 A
+
+```toml
+[[rank]]
+stage = "A"
+rank = 1
+bundle = "会話"
+assets = 28
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 2
+bundle = "窓の配置と重なり"
+assets = 9
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 3
+bundle = "名前の記憶"
+assets = 4
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 4
+bundle = "起動と挨拶"
+assets = 9
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 5
+bundle = "バルーンの文字"
+assets = 5
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 6
+bundle = "サーフェスアニメーション"
+assets = 4
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 7
+bundle = "入力窓とダイアログ"
+assets = 3
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 7
+bundle = "自発発話"
+assets = 3
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 8
+bundle = "終了"
+assets = 2
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 9
+bundle = "キーとゲームパッド"
+assets = 1
+shared = 1
+# 段階は仮（2-5 の裁定候補 5）。裁定で段階が動けば順位も組み直す。
+
+[[rank]]
+stage = "A"
+rank = 10
+bundle = "descript の転記"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 10
+bundle = "バルーンのリンク"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 10
+bundle = "マウスの矢印"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 11
+bundle = "メニュー"
+assets = 18
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 12
+bundle = "撫で"
+assets = 9
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 13
+bundle = "バルーンの付属画像"
+assets = 4
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 14
+bundle = "イベントの呼び起こし"
+assets = 1
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 14
+bundle = "選択肢の目印"
+assets = 1
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 15
+bundle = "絵の重ね方"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 16
+bundle = "動作モードの出入り"
+assets = 2
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 17
+bundle = "定義ファイルの文字コード"
+assets = 1
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 17
+bundle = "組み込みの置換語"
+assets = 1
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 18
+bundle = "SHIORI の要求と応答"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 18
+bundle = "シェル定義の転記"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "A"
+rank = 18
+bundle = "同期オブジェクト"
+assets = 0
+shared = 1
+```
+
+#### 段階 B
+
+```toml
+[[rank]]
+stage = "B"
+rank = 1
+bundle = "インストール"
+assets = 4
+shared = 1
+
+[[rank]]
+stage = "B"
+rank = 1
+bundle = "更新"
+assets = 10
+shared = 1
+override = { kind = "stage-rule", ref = "要件 5.3" }
+
+[[rank]]
+stage = "B"
+rank = 2
+bundle = "切替"
+assets = 12
+shared = 1
+
+[[rank]]
+stage = "B"
+rank = 3
+bundle = "消滅"
+assets = 5
+shared = 1
+
+[[rank]]
+stage = "B"
+rank = 4
+bundle = "投げ込み"
+assets = 3
+shared = 1
+
+[[rank]]
+stage = "B"
+rank = 5
+bundle = "休止と復帰"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "B"
+rank = 5
+bundle = "好感度の絵柄"
+assets = 0
+shared = 1
+# 段階は仮（2-5 の裁定候補 6）。裁定で段階が動けば順位も組み直す。
+
+[[rank]]
+stage = "B"
+rank = 5
+bundle = "着せ替え"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "B"
+rank = 6
+singles = ["ukadoc:manual_balloon"]
+assets = 0
+shared = 0
+
+[[rank]]
+stage = "B"
+rank = 7
+bundle = "配布物の素性"
+assets = 6
+shared = 1
+
+[[rank]]
+stage = "B"
+rank = 8
+singles = ["ukadoc:manual_directory", "ukadoc:manual_ghost"]
+assets = 0
+shared = 0
+```
+
+#### 段階 C
+
+```toml
+[[rank]]
+stage = "C"
+rank = 1
+bundle = "スクリーンセーバー"
+assets = 2
+shared = 5
+
+[[rank]]
+stage = "C"
+rank = 1
+bundle = "バッテリー"
+assets = 2
+shared = 5
+
+[[rank]]
+stage = "C"
+rank = 2
+bundle = "OS の変化の察知"
+assets = 1
+shared = 5
+
+[[rank]]
+stage = "C"
+rank = 2
+bundle = "ディスプレイ変化"
+assets = 1
+shared = 5
+
+[[rank]]
+stage = "C"
+rank = 3
+bundle = "最小化"
+assets = 1
+shared = 2
+
+[[rank]]
+stage = "C"
+rank = 4
+bundle = "壁紙"
+assets = 1
+shared = 1
+
+[[rank]]
+stage = "C"
+rank = 4
+bundle = "通知領域"
+assets = 1
+shared = 1
+# 段階は仮（2-5 の裁定候補 9）。裁定で段階が動けば順位も組み直す。
+
+[[rank]]
+stage = "C"
+rank = 5
+bundle = "スリープ復帰"
+assets = 0
+shared = 5
+
+[[rank]]
+stage = "C"
+rank = 6
+bundle = "フルスクリーン退避"
+assets = 0
+shared = 2
+
+[[rank]]
+stage = "C"
+rank = 7
+bundle = "ごみ箱"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "C"
+rank = 8
+bundle = "一覧と汎用プロパティの照会"
+assets = 1
+shared = 2
+
+[[rank]]
+stage = "C"
+rank = 9
+bundle = "サウンド"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "C"
+rank = 9
+bundle = "予定表"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "C"
+rank = 10
+bundle = "環境の照会"
+assets = 0
+shared = 2
+override = { kind = "stage-rule", ref = "要件 5.3" }
+```
+
+#### 段階 D
+
+```toml
+[[rank]]
+stage = "D"
+rank = 1
+bundle = "呼び出し"
+assets = 3
+shared = 2
+
+[[rank]]
+stage = "D"
+rank = 2
+bundle = "SSTP"
+assets = 2
+shared = 2
+
+[[rank]]
+stage = "D"
+rank = 2
+bundle = "コミュニケート"
+assets = 2
+shared = 2
+
+[[rank]]
+stage = "D"
+rank = 3
+bundle = "FMO"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "D"
+rank = 4
+bundle = "多重ゴースト"
+assets = 5
+shared = 2
+
+[[rank]]
+stage = "D"
+rank = 5
+bundle = "PLUGIN"
+assets = 1
+shared = 3
+
+[[rank]]
+stage = "D"
+rank = 6
+bundle = "リンク"
+assets = 0
+shared = 1
+```
+
+#### 段階 E
+
+```toml
+[[rank]]
+stage = "E"
+rank = 1
+bundle = "外部アプリ"
+assets = 12
+shared = 1
+
+[[rank]]
+stage = "E"
+rank = 2
+bundle = "開発者機能"
+assets = 3
+shared = 1
+
+[[rank]]
+stage = "E"
+rank = 3
+bundle = "ヘッドライン"
+assets = 4
+shared = 3
+
+[[rank]]
+stage = "E"
+rank = 4
+bundle = "トランスレータ"
+assets = 1
+shared = 3
+
+[[rank]]
+stage = "E"
+rank = 5
+bundle = "薦める場所"
+assets = 1
+shared = 1
+# 段階は仮（2-5 の裁定候補 8）。裁定で段階が動けば順位も組み直す。
+
+[[rank]]
+stage = "E"
+rank = 6
+bundle = "作り付けの窓"
+assets = 0
+shared = 1
+# 段階は仮（2-5 の裁定候補 7）。裁定で段階が動けば順位も組み直す。
+
+[[rank]]
+stage = "E"
+rank = 6
+bundle = "読み上げと聞き取り"
+assets = 0
+shared = 1
+# 段階は仮（2-5 の裁定候補 10）。裁定で段階が動けば順位も組み直す。
+
+[[rank]]
+stage = "E"
+rank = 7
+bundle = "書庫"
+assets = 0
+shared = 1
+
+[[rank]]
+stage = "E"
+rank = 8
+singles = ["ukadoc:memo"]
+assets = 0
+shared = 0
+```
+
+### 3-4. 順序の主張から外した行（型の付いた例外の印）
+
+要件 5.3 は「更新」のテーマを持つ束を段階 B の先頭に、`system.*` の照会を段階 C の末尾に
+置くと定める。これは人の決めであって 4 つの根拠から出る順序ではないので、両立しない 2 行に
+`override` の印を付け、順序の主張（3-2）から外した。**2 行**である（数え方: 上の 5 つの囲みで
+`override` を持つ行を数えた。第二段の改訂（要件 9）の印はまだ 0 行である）。
+
+**「更新」を段階 B の先頭に置く**（`override = { kind = "stage-rule", ref = "要件 5.3" }`）
+
+- 何が問題か: 4 つの根拠で並べると、この束は段階 B の 4 番目に落ちる。要件 5.3 は先頭に
+  置くと定めている。「更新」のテーマを持つもう 1 つの束「インストール」は、根拠の順でも
+  先頭に来るので印は要らない。
+- 何を決めるか: 「更新」を順位 1 のまま置くか、根拠の順に戻して 4 番目にするか。
+- 答えで変わること: 順位 1 のままなら、配布されたゴーストが網越しに自分を新しくできるように
+  なるのが段階 B の最初になる。根拠の順に戻せば、シェルとバルーンの差し替えと消滅が
+  先に動き、更新はその後になる。
+
+**`system.*` の照会を段階 C の末尾に置く**（同じ印）
+
+- 何が問題か: 4 つの根拠で並べると「環境の照会」は段階 C の 9 番目で、末尾より前に来る。
+  要件 5.3 は末尾に置くと定めている。`system.` で始まる id を持つ束はこの 1 つだけで、
+  ほかは **0 束**である（数え方: `linkage.md` の 67 の囲みの `members` を走査し、`system.`
+  を含む id が 1 つでもある囲みを数えた。この束の中では 28 件中 25 件が該当する）。
+- 何を決めるか: 末尾に置いたままにするか、根拠の順に戻して 9 番目にするか。
+- 答えで変わること: 末尾のままなら、機械の様子や時刻を尋ねる語にゴーストが答えられるように
+  なるのは段階 C の最後で、音の再生と予定の通知が先に動く。根拠の順に戻せば、その 2 つより
+  先に照会が答えるようになる。
+
+どちらも本タスクでは決めていない。先頭ウェーブの選定（要件 10）の段で開発者の裁定に上げる。
+
+### 3-5. 同順位（要件 6.7）
+
+4 つの根拠がすべて同じ値になった束は、同じ順位で並べた。**13 組・29 束**である（数え方:
+上の 5 つの囲みのうち `override` も `insufficient` も持たない行を段階ごとに集め、同じ順位の
+行が 2 つ以上ある組と、その組に属する束を数えた。`singles` の 1 行に 2 つの id が並ぶ行は
+2 束として数えた）。
+
+同順位のままでは「どちらを先に作るか」が決まらないので、解消は先頭ウェーブの選定（要件 10）の
+段で開発者の裁定候補に上げる。本タスクでは順序を作らない——4 つの根拠のほかに順序の根拠を
+足すと、要件 6.1 が凍結した序列に 5 つ目の根拠を足すことになる。
+
+### 3-6. 根拠不足の一覧（要件 6.6）
+
+**0 束である。** 数え方: 4 つの根拠のうち値が空欄になる束を数えた。⑴ ⑵ は `linkage.md` の
+67 の囲みがすべて `breakage`・`themes` の欄を持ち、⑶ ⑷ は上の囲みの `assets`・`shared` に
+数（0 を含む）が入る。要件 6.8 の退路は使っていない（5-1 の `[[template]]` の `fallback` は
+2 本とも偽）ので、`insufficient = true` を付けた行も **0 行**である。したがって順位表から
+外した束は無く、67 の束と単独項目はすべて上の 5 つの囲みにちょうど 1 度ずつ現れる。
+
+### 3-7. 段階ごとの束数・単独項目数・項目数（要件 5.6）
+
+5 段階すべてを、値が 0 の段階も省略せずに置く。数え方: `bundles` は上の囲みの `bundle` の
+行の数、`singles` は `singles` の行に並んだ id の総数、`items` はその段階の束と単独項目の
+`members` を重複を除いて数えた数である。`items` の 5 つの和は「合計」の `target`
+（`linkage.md`）と一致する。段階 A・C・D の `singles` が 0 なのは、4 つの単独項目のうち
+3 つが段階 B に、1 つが段階 E に落ちて、この 3 段階には 1 つも落ちなかったことを確かめた
+0 である。
 
 ```toml
 [stage.A]
-bundles = 0
+bundles = 25
 singles = 0
-items = 0
+items = 874
 
 [stage.B]
-bundles = 0
-singles = 0
-items = 0
+bundles = 9
+singles = 3
+items = 210
 
 [stage.C]
-bundles = 0
+bundles = 14
 singles = 0
-items = 0
+items = 169
 
 [stage.D]
-bundles = 0
+bundles = 7
 singles = 0
-items = 0
+items = 133
 
 [stage.E]
-bundles = 0
-singles = 0
-items = 0
+bundles = 8
+singles = 1
+items = 166
 ```
 
 ## 4. 段階 A の主障壁
