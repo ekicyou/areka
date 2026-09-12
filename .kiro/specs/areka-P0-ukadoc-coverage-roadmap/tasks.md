@@ -107,7 +107,7 @@
   - _Requirements: 3.6, 4.1_
   - _Depends: 3.4_
 
-- [ ] 3.6 単独項目・合計・SAORI 節・別軸 節を書く
+- [x] 3.6 単独項目・合計・SAORI 節・別軸 節を書く
   - 束に入らない項目を単独項目として同じ表に置き、束に入れられない理由を書き、ドメインごとの件数を（0 のドメインも 0 と）書く
   - 合計の表に対象の全数・機械の束から来た数・人手で足した数・単独項目の数・別名と対象外の除外数を置き、3 つの恒等式が成り立つ値にする
   - 台帳に行が 0 件である SAORI を成立条件 3 つとともに専用の節へ置いて実装項目としてどの束にも入れず、技術選定は「別軸」として 1 節に置く
@@ -382,3 +382,9 @@
 - 3.5: 単独項目候補の引き渡し口は `### 単独項目に落とす候補` 節（行頭 `- \`id\` — 束へ入れない理由:` の 1 行 1 件形式）。候補は **`ukadoc:memo` の 1 件**（assets 1・property 0・sakura-script 0・shiori 0）。**3.6 はこれに 3.1 の表が単独項目と決めた 3 件（`manual_balloon`・`manual_directory`・`manual_ghost`）を加えて計 4 件を扱うこと。**
 - 3.5: 既存 30 束で変わったのは `themes` 4 件と `domains` 2 件のみ（構成 id 追加に伴う導出欄の数え直し）。構成 id・`hand` の削除、`machine`／`foundation`／`breakage` の変更は 0 件。
 - 3.5: **⚠ レビュアーが自分の検出台本の欠陥を 2 つ発掘した**——⑴ ドメイン別報告の束の表が 2 列（summary は 3 列）なのに 3 列を要求して機械の束 144 本中 69 本を取り落とし**偽の赤**を出した ⑵ 注入文字列が実在せず空振り（`### SAORI` は実際は `## SAORI`）。**報告の表の列数はファイルによって違う。後段の判定を書くときに注意すること。**
+- 3.6: 単独項目 4 件（`manual_balloon`・`manual_directory`・`manual_ghost`・`memo`）を `single = true` で置き、`## 合計`・`## SAORI`・`## 別軸` を追加。`linkage.md` **4,900 行**。**対象 4 状態 1,552 件がちょうど 1 つの束か単独項目に属する（欠 0・余 0）。** `[tally]`: `target = 1552`／`from_machine = 195`／`by_hand = 1353`／`singles = 4`／`alias_excluded = 27`／`not_applicable_excluded = 170`、`singles_by_domain` assets 4・property 0・sakura-script 0・shiori 0。恒等式 3 本成立（1552 = 195+1353+4／4 = 4／1552+27+170 = 1749）。
+- 3.6: **⚠⚠ タスク 3.8 への申し送り（罠・必ず読むこと）。** `tests/consistency/documents.rs` の `shift_count` は `only_occurrence` で「`鍵 = ` が本文にちょうど 1 度」を assert する。**`linkage.md` の散文に半角の `target = ` を書いた瞬間に `the_breaking_tools_do_not_touch_the_repository_files` が赤になる。** 3.6 は恒等式を**全角の ＝／＋**で書いて解消した（理由は本文に 1 文残してある）。**`briefing.md` は設計 D-2 により `singles = ` を最低 5 回持つので、`shift_count(briefing_text, "singles")` は散文の有無に関わらず必ず落ちる。** 3.8 は**摂動の錨を `[tally]`／`[stage.X]` の囲みに限る（あるいは出現位置を指定する）**よう `documents.rs` を直すこと。
+- 3.6: **⚠ タスク 3.8 への申し送り。** `tests/consistency/documents_non_vacuity.rs:385-390` の doc コメントの実測（3 文書の `ukadoc:` 0 件・`linkage.md` の `members = ` 0 件）が**陳腐化した**（現状 `ukadoc:` 3,080 件・`members = ` 67 件）。**3.8 で直すこと。**
+- 3.6: 単独項目の表の鍵は**項目 id そのもの**（設計 D-2 の `[[rank]]` の検査「`singles` の各 id は `single = true` の束の名前」と `RankTarget::Singles(Vec<EntryId>)` が強制する）。**人の名前を付けると 4.3 が指せなくなる。**
+- 3.6: SAORI はカタログ側 0 件・台帳側 0 件（`saori` の部分一致で数えた）。成立条件 3 つ（32bit 同一プロセスの同居／作業ディレクトリ `ghost/master`／DLL 探索パス）は要件 4.5 の綴りどおり。SAORI に触れる唯一の台帳の行 `ukadoc:spec_dll` は名前付き束「SHIORI の要求と応答」の構成 id であって SAORI の実装項目ではない。
+- 3.6: 「別軸」節は束にしていない（```toml 囲み無し・`rank`／`stage`／`wave` の欄 0 件）。M2 技術選定 4 つ（pasta の native x64・`IShiori` の in-proc 化・ベクトル描画・AI）。
