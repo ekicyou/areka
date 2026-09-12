@@ -1533,6 +1533,117 @@ alias = 27
 not_applicable = 170
 ```
 
+### 5-3. 宛先の欄の整理（要件 7.4・7.5）
+
+台帳の `owner` 欄は「この項目を引き受ける spec の名前」を書く欄である。整理の前は 1,749 件の
+うち 447 件に名前が入っており、その中に既に完了して封じられた spec の名前も混じっていた。
+完了した spec はもう作業を受け取れないので、まだ実装されていない項目に完了済み spec の名前が
+入っていると、読み手は「引受先が決まっている」と読み違える。次の 4 つの規則で整えた。
+
+**数え方**（前も後も同じ手順。作業ツリーの根で走らせる。台帳の項目は行頭の `owner = ` の行を
+ちょうど 1 つ持つ）:
+
+```sh
+grep -h '^owner = ' doc/ukadoc-coverage/ledger/*.toml | sed 's/^owner = //' | sort | uniq -c
+```
+
+宛先の名前を 2 つの集まりに突き合わせる。進行中 spec は `.kiro/specs/` の直下で、ディレクトリ名が
+`completed` でも本文書を持つ spec 自身でもなく、`brief.md` を持つもの（2026-09-13 に数えて
+**27 本**）。完了済み spec は `.kiro/specs/completed/` の直下にあるもの（同 **174 本**）。
+
+**規則 ⑴——進行中 spec 宛ての宛先は保つ。** 該当は **372 件・13 spec**。変えた件数は **0** で
+ある（1 件も空にせず、1 件も書き換えていない）。
+
+**規則 ⑵——完了済み spec 宛ての宛先は状態で分ける。** 該当は **75 件・16 spec**。状態が実装済み
+か縮退の **41 件**（実装済み 33・縮退 8）は「その項目を実装した spec の記録」として保った。状態が
+未対応か語彙のみの **34 件**（未対応 32・語彙のみ 2）は宛先を空にし、理由を備考に書いた。変えた
+件数は **34** である。宛先だった 16 spec のうち 2 本は持っていた項目がすべて未対応だったので全件
+が空になり、下の列挙から落ちる（`areka-P0-window-placement` 16 件・`areka-P0-emo-atlas` 4 件）。
+残るのは **14 spec** である。
+
+**規則 ⑶——brief がまだ無い候補 spec の名前を宛先に書かない。** 整理の前も後も、非空の宛先の
+うち進行中 27 本にも完了済み 174 本にも当たらない名前は **0 件**であった。変えた件数は **0** で
+ある。この 0 は書き落としではなく、整理の前に上の手順が出した非空の名前 29 通り（進行中 13・
+完了済み 16）を 2 つの集まりに 1 つずつ当てて、どれも外れなかったことを数えた 0 である。整理の
+後は 27 通りになり（規則 ⑵ で 2 本が全件空になった分）、同じく外れは無い。候補 spec への割り
+当ては `roadmap-draft.md` の側に持つ。
+
+**規則 ⑷——変えた件数を書く。** 合計 **34 件**（⑴ **0** 件・⑵ **34** 件・⑶ **0** 件）。整理の
+後は非空の宛先が **413 件**、空が **1,336 件**で、和は 1,749 である。
+
+**備考への書き足し方**（要件 7.5）: 空にした 34 件には、備考の末尾に 1 行だけ足した。足した行は
+「担当の欄を空にした・宛先だった spec 名・完了して封じられていること・状態・規則の在り処・上に
+残る担当の記述は経緯として置くこと」を書く。既にある記述は 1 行も消していない。差分の削除行は
+**34 行**で、そのすべてが `owner = ` の行である（備考の行も優先度の行も削除側に現れない）。
+行番号はどの行にも書いていない。
+
+台帳を触ったので報告 5 本を副手続きで作り直した（`cargo run -p ukadoc-survey -- report` と
+`cargo run -p ukadoc-survey -- report-summary`）。本文に差分は出ていない（**0 本**）。報告は状態・
+テーマ・世代の分布を載せる文書で `owner` 欄を載せないので、宛先だけの変更では本文が変わらない。
+改行の違いは手で直していない。
+
+**保った完了済み spec の列挙。** 判定はこの列挙だけを見る（生きた `completed/` の全走査をしないので、
+他の spec が完了しても赤にならない）。`items` は台帳でその名前を宛先に持つ項目数であり、判定が
+数え直す。14 本の和は 41 で、規則 ⑵ で保った件数と一致する。
+
+```toml
+[[owner_completed]]
+spec = "areka-P0-balloon-offset-dpi"
+items = 2
+
+[[owner_completed]]
+spec = "areka-P0-balloon-parse"
+items = 5
+
+[[owner_completed]]
+spec = "areka-P0-balloon-vertical-canon"
+items = 4
+
+[[owner_completed]]
+spec = "areka-P0-bindoption-exclusivity"
+items = 2
+
+[[owner_completed]]
+spec = "areka-P0-cursor-tag-canon"
+items = 2
+
+[[owner_completed]]
+spec = "areka-P0-ghost-setup"
+items = 1
+
+[[owner_completed]]
+spec = "areka-P0-kero-balloon"
+items = 3
+
+[[owner_completed]]
+spec = "areka-P0-mayuna-compose"
+items = 3
+
+[[owner_completed]]
+spec = "areka-P0-package-mount"
+items = 4
+
+[[owner_completed]]
+spec = "areka-P0-sakura-dialogue-tags"
+items = 1
+
+[[owner_completed]]
+spec = "areka-P0-scope-zorder-pinning"
+items = 3
+
+[[owner_completed]]
+spec = "areka-P0-shell-parse"
+items = 4
+
+[[owner_completed]]
+spec = "areka-P0-sylphya"
+items = 4
+
+[[owner_completed]]
+spec = "areka-P0-windowposition-limit"
+items = 3
+```
+
 ## 6. 申し送りの処分台帳
 
 <!-- 段 5（タスク 6.3）で書く: 調査 4 本のブリーフィングと完了 spec 5 本から拾った申し送りを

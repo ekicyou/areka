@@ -2101,7 +2101,7 @@ areka はバルーンの外側へ付属の絵をはみ出させる指定を読�
 [entry."ukadoc:descript_balloon:paint_transparent_region_black_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-emo-atlas"
+owner = ""
 priority = "A15"
 values = ["装い"]
 links = []
@@ -2114,6 +2114,7 @@ areka は透過色の残る場所を黒で塗るかどうかの指定を読む�
 バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は、設計に着手するとき正典で必ず読む欄としてこの欄を名指しし、シェル側の同じ名前の欄とは別の定義だから両方読むこと、と書いている。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_balloon:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
@@ -2398,7 +2399,7 @@ areka には入力ボックスのバルーンが無く、その半透明化を�
 [entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-emo-atlas"
+owner = ""
 priority = "A15"
 values = ["装い"]
 links = []
@@ -2412,6 +2413,7 @@ areka-emo-atlas の normalize::UseSelfAlpha という同じ意味の切り替え
 バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は、設計に着手するとき正典で必ず読む欄としてこの欄を名指しし、シェル側の同じ名前の欄とは別の定義だから両方読むこと、と書いている。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_balloon:validrect.bottom_2c_5ea7_6a19_20_2a1:1"]
@@ -3271,7 +3273,7 @@ areka はシェル側の名前で上書きしてよいかの宣言を受け取�
 [entry."ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-package-mount"
+owner = ""
 priority = "A3"
 values = []
 links = []
@@ -3280,6 +3282,7 @@ note = """
 この綴りは重なりがいちばん広い——同じ綴りの見出しが本台帳の別ページ（バルーン・シェル・ヘッドライン・インストール指示・プラグイン・surfaces.txt）にもあり、別ドメインのプロパティ（areka-sylphya の vocab::GENERIC_PROP_NAMES）と SHIORI の資源（同じクレートの vocab::shiori_resource）にもある。areka の読み手が別々なので状態も割れる——ゴースト名はここへ写されるだけで誰も読まない、シェル名は areka-ghost の config::resolve_shell_name が読んで起動時のシェル名になる、バルーン名はどこからも読まれない。名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-package-mount。同 spec の brief は範囲の In に、起点の descript から読む欄としてこの綴りを名指しで挙げている。
 束: 配布物の素性と説明文・名前だけ受けて使わない（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 53——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-package-mount は完了して封じられた spec で、状態が語彙のみのこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_ghost:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
@@ -3742,7 +3745,7 @@ areka は起動の記録を人に見せる画面を持たず、そこに出す�
 [entry."ukadoc:descript_ghost:type_2c_7a2e_5225:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-package-mount"
+owner = ""
 priority = "A4"
 values = []
 links = []
@@ -3755,6 +3758,7 @@ areka がゴーストだと決めるのは置き場所だけで、起点は `gho
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当 spec は areka-P0-package-mount。ただし担当 spec の記述が古い——同 brief はゴーストの descript を読む欄としてこの欄を挙げているが、着地した読み取りは引いていない。
 束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-package-mount は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_headline:alwaysdisplay_2c_6570_5024:1"]
@@ -4257,7 +4261,7 @@ areka はバルーンの拡大率をゴーストと連動させることを強�
 [entry."ukadoc:descript_shell:char_2a.bindgroup_2a.addid_2cID:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
+owner = ""
 priority = "B5"
 values = ["装い"]
 links = []
@@ -4268,12 +4272,13 @@ areka は連れ立って着せる相手の指定を、どの綴りでも受け�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は連れ立って着せる指定を「語彙として持つだけで実挙動は持たない」と仕分けているが、その語彙が置かれているのは同 spec の文書と、後から差し替えられるように開けてある型の形であって、areka のコードにこの綴りは無い。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.bindgroup_2a.default_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
+owner = ""
 priority = "B5"
 values = ["装い"]
 links = []
@@ -4284,12 +4289,13 @@ areka はキャラクタ番号で指すスコープの着せ替えの初期状�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は着せ替えの宣言の扱いを 3 つに仕分けた表を持ち、キャラクタ番号で指す綴りを最初の一里塚では取り込まないと決めて、後の段階へ回している。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
+owner = ""
 priority = "B5"
 values = ["装い"]
 links = []
@@ -4300,12 +4306,13 @@ areka はキャラクタ番号で指すスコープの着せ替えの名前宣�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は着せ替えの名前宣言の取り込みを自分のものとし、その設計でキャラクタ番号で指す綴りを最初の一里塚では取り込まないと決めて、後の段階へ回している。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-bindoption-exclusivity"
+owner = ""
 priority = "B5"
 values = ["装い"]
 links = []
@@ -4316,12 +4323,13 @@ areka はキャラクタ番号で指すスコープの排他の指定を受け�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-bindoption-exclusivity。同 spec の brief は自分が直す正典として、本体側・相方側・キャラクタ番号で指す側の 3 つの綴りを並べて引いている。ただし着地した実装が照合するのは前の 2 つだけである。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-bindoption-exclusivity は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4335,12 +4343,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.defaulttop_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4354,12 +4363,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.defaultx_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4373,12 +4383,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.defaulty_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4392,6 +4403,7 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.icon.frame.color.b_2c_6570_5024:1"]
@@ -4523,7 +4535,7 @@ areka が 2 人目以降の窓の題に使う名前は起点の descript の側�
 [entry."ukadoc:descript_shell:char_2a.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4533,6 +4545,7 @@ note = """
 1 つ補いがある——`charN.` の番号は、値の行き先とは別にキャラクタの人数にも効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。この欄の値そのものは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として、2 以上なら書いたとおりのキャラクタの欄として受け取られる（areka の placement::config::scoped_value）。相方が立つのは起点の descript に相方の名前があるか、シェルの descript に `kero.` で始まるキーがあるときで、`char1.` の綴りそのものは相方を立てない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
@@ -4671,7 +4684,7 @@ areka のバルーンはドラッグで動かせる（単独のドラッグを�
 [entry."ukadoc:descript_shell:kero.balloon.offsetx_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = "2.4.58"
-owner = "areka-P0-balloon-offset-dpi"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4685,12 +4698,13 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-balloon-offset-dpi は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.balloon.offsety_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = "2.4.58"
-owner = "areka-P0-balloon-offset-dpi"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4704,6 +4718,7 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-balloon-offset-dpi は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.balloon.syncscale_2ctrue:1"]
@@ -4726,7 +4741,7 @@ areka はバルーンの拡大率をゴーストと連動させることを強�
 [entry."ukadoc:descript_shell:kero.bindgroup_2a.addid_2cID:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
+owner = ""
 priority = "B5"
 values = ["装い"]
 links = []
@@ -4737,12 +4752,13 @@ areka は相方側の連れ立って着せる相手の指定を受け取らな�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は連れ立って着せる指定を「語彙として持つだけで実挙動は持たない」と仕分け、実挙動を自分の目標から外している。ただしその語彙が置かれているのは同 spec の文書と、後から差し替えられるように開けてある型の形であって、areka のコードにこの綴りは無い。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.bindgroup_2a.default_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
+owner = ""
 priority = "B5"
 values = ["装い"]
 links = []
@@ -4750,6 +4766,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。areka-parsers の package::read_bindgroup_defaults が `BindGroupDefaults::kero_default_on` へ転記するが、この欄を読む本番の経路が無い。起動時の着せ替えの初期集合を組む areka の emo2_boot::assets::default_bind_ids は `sakura.` の側しか見ない。
 担当 spec は areka-P0-mayuna-compose。
 束: 着せ替えの宣言・名前だけ受けて使わない（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 40——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が語彙のみのこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1"]
@@ -4783,7 +4800,7 @@ areka-parsers の package::read_bindgroup_defaults が相方の側へ転記し�
 [entry."ukadoc:descript_shell:kero.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4797,12 +4814,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.defaulttop_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4816,12 +4834,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.defaultx_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4835,12 +4854,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.defaulty_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4854,6 +4874,7 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.icon.frame.color.b_2c_6570_5024:1"]
@@ -4985,7 +5006,7 @@ areka が相方の名前として採るのは起点の descript の側だけで�
 [entry."ukadoc:descript_shell:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -4995,6 +5016,7 @@ note = """
 1 つ補いがある——値の導出は上のとおり縮んでいるが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1"]
@@ -5510,7 +5532,7 @@ areka のバルーンはドラッグで動かせる（単独のドラッグを�
 [entry."ukadoc:descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = "2.4.58"
-owner = "areka-P0-balloon-offset-dpi"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -5524,12 +5546,13 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-balloon-offset-dpi は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.balloon.offsety_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = "2.4.58"
-owner = "areka-P0-balloon-offset-dpi"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -5543,6 +5566,7 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-balloon-offset-dpi は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.balloon.syncscale_2ctrue:1"]
@@ -5565,7 +5589,7 @@ areka はバルーンの拡大率をゴーストと連動させることを強�
 [entry."ukadoc:descript_shell:sakura.bindgroup_2a.addid_2cID:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
+owner = ""
 priority = "B5"
 values = ["装い"]
 links = []
@@ -5575,6 +5599,7 @@ areka は本体側の連れ立って着せる相手の指定を受け取らな�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は連れ立って着せる指定を「語彙として持つだけで実挙動は持たない」と仕分け、実挙動を自分の目標から外している。ただしその語彙が置かれているのは同 spec の文書と、後から差し替えられるように開けてある型の形であって、areka のコードにこの綴りは無い。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.bindgroup_2a.default_2c_6570_5024:1"]
@@ -5622,7 +5647,7 @@ areka-parsers の package::read_bindgroup_defaults が `mustselect`／`multiple`
 [entry."ukadoc:descript_shell:sakura.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -5636,12 +5661,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.defaulttop_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -5655,12 +5681,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.defaultx_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -5674,12 +5701,13 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.defaulty_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -5693,6 +5721,7 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.icon.frame.color.b_2c_6570_5024:1"]
@@ -5842,7 +5871,7 @@ areka が本体側の名前として採るのは起点の descript の側だけ�
 [entry."ukadoc:descript_shell:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -5851,12 +5880,13 @@ note = """
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
+owner = ""
 priority = "A2"
 values = []
 links = []
@@ -5865,6 +5895,7 @@ note = """
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決めるので、id は別でも最後は同じ 1 つの置き方になる。名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.dpi_2c_63a8_5968DPI:1"]
@@ -5902,7 +5933,7 @@ areka はサーフェスを切り替えるときの重ね消しを止める宣�
 [entry."ukadoc:descript_shell:seriko.paint_transparent_region_black_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-emo-atlas"
+owner = ""
 priority = "A15"
 values = ["装い"]
 links = []
@@ -5914,6 +5945,7 @@ areka は透過色の残る場所を黒で塗るかどうかの宣言を読む�
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は読むべき正典としてシェルの descript のこの欄を名指しし、透過の正規化を自分の範囲に挙げている。ただし担当 spec の記述が古い——同 brief は「この欄はシェルの descript 由来の設定として注ぎ込む」と書いているが、着地した経路は決め打ちの値を渡しており、宣言は届いていない。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]
@@ -5932,7 +5964,7 @@ note = """
 [entry."ukadoc:descript_shell:seriko.use_self_alpha_2c_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-emo-atlas"
+owner = ""
 priority = "A15"
 values = ["装い"]
 links = []
@@ -5944,6 +5976,7 @@ areka は透過の扱いを宣言で切り替えられない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は読むべき正典としてシェルの descript のこの欄を名指しし、透過の正規化を自分の範囲に挙げている。ただし担当 spec の記述が古い——同 brief は「この欄はシェルの descript 由来の設定として注ぎ込む」と書いているが、着地した経路は決め打ちの値を渡しており、宣言は届いていない。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]
@@ -5980,7 +6013,7 @@ areka がシェルだと決めるのは置き場所だけで、起点の descrip
 [entry."ukadoc:descript_shell_surfaces:_2a_2c_5b_2a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-shell-parse"
+owner = ""
 priority = "A15"
 values = ["装い"]
 links = []
@@ -5991,6 +6024,7 @@ note = """
 2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。適合の対象としたゴーストが相方側の綴りしか使わないので、いままで表に出ていない。
 担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に別名の透過（名前は解釈せず不透明に扱う）を挙げている。
 束: 絵の重ね合わせの行・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 18——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-shell-parse は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell_surfaces:_5f53_305f_308a_5224_5b9a_540d_2c_8868_793a_5185_5bb9:1"]
