@@ -156,6 +156,470 @@ items = 0
      4 本を参照で指す。写しを作らない。資産の広さの物差しであるテンプレート辞書の表も
      この節に置く（段 3・タスク 4.1）。 -->
 
+### 5-1. 資産の広さの物差し——テンプレート辞書
+
+順位の根拠の 3 つ目「影響する既存資産の広さ」は、里々とヤヤの標準テンプレートゴーストの
+辞書に現れる語彙を物差しにする。この節は、その辞書をどこから取り、辞書の語彙をどうやって
+カタログの項目に結び付けたかの記録である。2 本とも取得できたので、取得できないときの退路
+（要件 6.8）は使っていない——下の表の `fallback` は 2 本とも偽である。
+
+#### 取得（2026-09-12）
+
+| テンプレート | 取ってきた物 | 大きさ |
+| --- | --- | ---: |
+| ポストと狛犬（里々） | `post124.zip` | 645,716 バイト |
+| はろーYAYAわーるど（YAYA） | `yayame.nar` | 628,261 バイト |
+
+配布元にたどり着いた道筋も残す。公式の側からたどれる置き場だけを採った。
+
+- **ポストと狛犬**: 里々の解説 wiki のページから作者のサイト（電気で動くうにゅう・廃屋の
+  夏）へたどり、そこが里々のサンプルゴーストとして置いている最終版を取った。同じ wiki が
+  案内しているもう 1 つの置き場は、有志が本家に手を入れた改造版だと wiki 自身が書いて
+  いるので採らなかった。
+- **はろーYAYAわーるど**: 整備班の配布ページが GitHub の Releases から取るよう書いて
+  いるので、そのページが名指す置き場から取った。
+
+配布物はリポジトリに入れていない。作業用の一時ディレクトリで展開してテキストのファイルだけ
+を読み、読み終えたあとに消した。ゴーストは 1 度も起動していない。辞書を動かしてもいない。
+同梱されている実行される形のファイル（里々とヤヤの本体・付属の道具）には触れていない。
+
+#### 写し方
+
+辞書から 4 種類の語彙を取り出した。里々は見出しが `＊` で始まる形、ヤヤは関数の名前が
+そのままイベントの名前になる形なので、どちらも本文の綴りをそのまま拾える。
+
+1. イベントの名前（`On` で始まる綴り。`OnUpdate.OnDownloadBegin` のような点でつないだ
+   形は 1 つの名前として扱い、点で切った断片は数えない）
+2. さくらスクリプトのタグの綴り
+3. プロパティの名前
+4. descript のキー（ゴーストとシェルの説明ファイル）
+
+取り出した綴りは、カタログの題と突き合わせて項目に写す。突き合わせの規則は 3 つある。
+
+- **種別ごとに相手のページを限る。** イベントは SHIORI イベントの 2 ページ、タグはさくら
+  スクリプトのページ、プロパティはプロパティシステムのページ、descript のキーは読んだ
+  ファイルの持ち主（ゴーストの説明ファイルならゴーストのページ、シェルの説明ファイルなら
+  シェルのページ）に限る。限らないと、同じ綴りの欄が別のページにもあるために、語彙 1 つが
+  無関係な項目まで連れてくる。
+- **値の欄は落とし、副命令は残す。** 小文字の英字で始まる欄を副命令、それ以外（大文字で
+  始まるもの・数字・日本語）を値と見なす。`\![open,readme]` は綴りのまま、
+  `\![raise,OnAiTalk]` は `\![raise` まで、`\s[10]` は `\s` まで縮める。
+- **族はしかたのないときだけ。** 副命令まで含めて当たらないときにだけ、同じ頭を持つ項目を
+  まとめて当てる。族で当てたタグは里々 0 件・ヤヤ 2 件（`\![change` と `\_l`）である。
+
+#### 写した数（2026-09-12 にその場で数え直した実測）
+
+| 語彙の種別 | 里々 取り出し | 里々 写せた | 里々 写せず | ヤヤ 取り出し | ヤヤ 写せた | ヤヤ 写せず |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| イベントの名前 | 67 | 67 | 0 | 147 | 84 | 63 |
+| さくらスクリプトのタグ | 17 | 15 | 2 | 70 | 41 | 29 |
+| プロパティの名前 | 6 | 0 | 6 | 5 | 3 | 2 |
+| descript のキー | 39 | 36 | 3 | 43 | 43 | 0 |
+| 合計 | 129 | 118 | 11 | 265 | 171 | 94 |
+
+写した項目の数は里々 122・ヤヤ 188 で、2 本を合わせると 216 である（両方が使う項目が
+あるので、2 つの和より少ない）。語彙 1 つが項目 1 つに写るとは限らない——族で当てた場合と、
+同じ題が 2 つのページにある場合は複数になる——ので、写せた語彙の数と項目の数は一致しない。
+
+#### 写せなかった語彙（里々 11 件・ヤヤ 94 件）
+
+里々の 11 件の内訳。
+
+- タグ 2 件。`\![open,browzer`（辞書の側の綴り誤りで、正しい綴りは同じ辞書の別の行に
+  ある）と、文字としての逆斜線 1 件。
+- プロパティらしき綴り 6 件。`sakura.recommendsites`・`kero.recommendsites`・
+  `sakura.portalsites`・`kero.recommendbuttoncaption` は SHIORI が返す資源の名前であって
+  プロパティシステムの名前ではない。残る 2 件（`index.html`・`shiori.htm`）はファイル名を
+  形が似ているために拾ったものである。
+- descript のキー 3 件。`shiori.logo.filename`・`shiori.logo.x`・`shiori.logo.y` は
+  シェルの説明ファイルに書かれているが、カタログのシェルのページに同じ題が無い。
+- イベントの名前は 0 件。里々が使う 67 個の名前はすべて写せた。
+
+ヤヤの 94 件の内訳。
+
+- イベントの名前 63 件。テンプレートが内部で使う自前の名前で、正典の語彙ではない
+  （`On_name`・`On_Get_Supported_Events`・`OnAYLXXWriteChangeList2` など）。
+- タグの綴り 29 件。辞書の文字列の中の逃がし文字や、ファイルの通り道を拾ってしまったもの
+  （`\[`・`\ghost`・`\master` など）である。
+- プロパティらしき綴り 2 件。`sakura.name`・`kero.name` は説明ファイルのキーであって
+  プロパティシステムの名前ではない（説明ファイルのキーとしては写してある）。
+- descript のキーは 0 件。ゴーストとシェルの説明ファイルのキー 43 件はすべて写せた。
+
+下の囲みが、写した結果の正本である。`files` は配布物を展開した中の位置、`ids` は写した
+項目である。項目が実在することは常時の検査（判定 ⑴）が数え直す。
+
+```toml
+[[template]]
+name = "ポストと狛犬"
+shiori = "里々"
+url = "http://ukgk.s34.xrea.com/poskoma/post124.zip"
+fetched_on = "2026-09-12"
+files = [
+  "ghost/master/descript.txt",
+  "shell/master/descript.txt",
+  "ghost/master/dic01_Base.txt",
+  "ghost/master/dic02_Event.txt",
+  "ghost/master/dic03_Menu.txt",
+  "ghost/master/dic04_Change.txt",
+  "ghost/master/dic05_Communicate.txt",
+  "ghost/master/dic06_String.txt",
+  "ghost/master/dic07_Time.txt",
+  "ghost/master/dic08_Labo.txt",
+  "ghost/master/dic09_ExEvent.txt",
+  "ghost/master/dic10_SAORI_test.txt",
+  "ghost/master/replace.txt",
+  "ghost/master/replace_after.txt",
+  "ghost/master/satori_conf.txt",
+]
+mapping = "語彙の種別ごとに突き合わせる相手のページを限り（イベントは SHIORI イベントの 2 ページ、タグはさくらスクリプトのページ、プロパティはプロパティシステムのページ、descript のキーは読んだファイルの持ち主のページ）、カタログの題から値の欄を落とした綴りとの一致で写す。小文字の英字で始まる欄は副命令として残し、大文字始まり・数字・日本語の欄は値として落とす。副命令まで含めて当たらないときだけ同じ頭の族をまとめて当てる。"
+fallback = false
+ids = [
+  "ukadoc:descript_ghost:charset_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_ghost:craftmanurl_2cURL:1",
+  "ukadoc:descript_ghost:craftmanw_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_ghost:icon_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_ghost:kero.name_2c_540d_524d:1",
+  "ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1",
+  "ukadoc:descript_ghost:sakura.name_2c_540d_524d:1",
+  "ukadoc:descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_ghost:type_2c_7a2e_5225:1",
+  "ukadoc:descript_shell:charset_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_shell:craftman_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_shell:craftmanurl_2cURL:1",
+  "ukadoc:descript_shell:craftmanw_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_shell:id_2cID_540d:1",
+  "ukadoc:descript_shell:kero.balloon.offsetx_2c_5ea7_6a19:1",
+  "ukadoc:descript_shell:kero.balloon.offsety_2c_5ea7_6a19:1",
+  "ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu.background.font.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.background.font.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.background.font.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:name_2c_30b7_30a7_30eb_540d:1",
+  "ukadoc:descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1",
+  "ukadoc:descript_shell:sakura.balloon.offsety_2c_5ea7_6a19:1",
+  "ukadoc:descript_shell:type_2c_7a2e_5225:1",
+  "ukadoc:list_sakura_script:_5c-:1",
+  "ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1",
+  "ukadoc:list_sakura_script:_5c1_3082_3057_304f_306f_5cu:1",
+  "ukadoc:list_sakura_script:_5c6:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2cbrowser_2c_30d1_30e9_30e1_30fc_30bf_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2ccommunicatebox_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2cinputbox_2cID_2c_8868_793a_6642_9593_2c_30c6_30ad_30b9_30c8_2c_30aa_30d7_30b7_30e7_30f3_2c..._5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2cmailer_2c_30d1_30e9_30e1_30fc_30bf_5d:1",
+  "ukadoc:list_sakura_script:_5c__2b:1",
+  "ukadoc:list_sakura_script:_5c_q:1",
+  "ukadoc:list_sakura_script:_5cbID_756a_53f7:1",
+  "ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5cc:1",
+  "ukadoc:list_sakura_script:_5cn_5bhalf_5d:1",
+  "ukadoc:list_sakura_script:_5cw_6642_9593:1",
+  "ukadoc:list_sakura_script:_5cx:1",
+  "ukadoc:list_shiori_event:OnBIFF2Complete:1",
+  "ukadoc:list_shiori_event:OnBIFFBegin:1",
+  "ukadoc:list_shiori_event:OnBIFFComplete:1",
+  "ukadoc:list_shiori_event:OnBIFFFailure:1",
+  "ukadoc:list_shiori_event:OnBatteryCritical:1",
+  "ukadoc:list_shiori_event:OnBatteryLow:1",
+  "ukadoc:list_shiori_event:OnBoot:1",
+  "ukadoc:list_shiori_event:OnChoiceSelect:1",
+  "ukadoc:list_shiori_event:OnChoiceTimeout:1",
+  "ukadoc:list_shiori_event:OnClose:1",
+  "ukadoc:list_shiori_event:OnFirstBoot:1",
+  "ukadoc:list_shiori_event:OnGhostChanged:1",
+  "ukadoc:list_shiori_event:OnGhostChanging:1",
+  "ukadoc:list_shiori_event:OnHeadlinesense.OnFind:1",
+  "ukadoc:list_shiori_event:OnHeadlinesenseBegin:1",
+  "ukadoc:list_shiori_event:OnHeadlinesenseComplete:1",
+  "ukadoc:list_shiori_event:OnHeadlinesenseFailure:1",
+  "ukadoc:list_shiori_event:OnInstallBegin:1",
+  "ukadoc:list_shiori_event:OnInstallComplete:1",
+  "ukadoc:list_shiori_event:OnInstallFailure:1",
+  "ukadoc:list_shiori_event:OnInstallRefuse:1",
+  "ukadoc:list_shiori_event:OnKeyPress:1",
+  "ukadoc:list_shiori_event:OnMinuteChange:1",
+  "ukadoc:list_shiori_event:OnMouseDoubleClick:1",
+  "ukadoc:list_shiori_event:OnMusicPlay:1",
+  "ukadoc:list_shiori_event:OnNarCreated:1",
+  "ukadoc:list_shiori_event:OnNarCreating:1",
+  "ukadoc:list_shiori_event:OnNetworkHeavy:1",
+  "ukadoc:list_shiori_event:OnSNTPBegin:1",
+  "ukadoc:list_shiori_event:OnSNTPCompare:1",
+  "ukadoc:list_shiori_event:OnSNTPCorrect:1",
+  "ukadoc:list_shiori_event:OnSNTPFailure:1",
+  "ukadoc:list_shiori_event:OnSSTPBreak:1",
+  "ukadoc:list_shiori_event:OnShellChanged:1",
+  "ukadoc:list_shiori_event:OnShellChanging:1",
+  "ukadoc:list_shiori_event:OnURLDropped:1",
+  "ukadoc:list_shiori_event:OnURLDropping:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnDownloadBegin:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareBegin:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareComplete:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateBegin:1",
+  "ukadoc:list_shiori_event:OnUpdateComplete:1",
+  "ukadoc:list_shiori_event:OnUpdateFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateReady:1",
+  "ukadoc:list_shiori_event:OnUpdatedataCreated:1",
+  "ukadoc:list_shiori_event:OnUpdatedataCreating:1",
+  "ukadoc:list_shiori_event:OnUserInput:1",
+  "ukadoc:list_shiori_event:OnVanishButtonHold:1",
+  "ukadoc:list_shiori_event:OnVanishCancel:1",
+  "ukadoc:list_shiori_event:OnVanishSelected:1",
+  "ukadoc:list_shiori_event:OnVanishSelecting:1",
+  "ukadoc:list_shiori_event:OnVanished:1",
+  "ukadoc:list_shiori_event:OnWallpaperChange:1",
+  "ukadoc:list_shiori_event:OnWindowStateRestore:1",
+  "ukadoc:list_shiori_event_ex:OnApplicationOperationFinish:1",
+  "ukadoc:list_shiori_event_ex:OnBatteryCritical:1",
+  "ukadoc:list_shiori_event_ex:OnBatteryLow:1",
+  "ukadoc:list_shiori_event_ex:OnKinokoObjectChanged:1",
+  "ukadoc:list_shiori_event_ex:OnKinokoObjectCreate:1",
+  "ukadoc:list_shiori_event_ex:OnKinokoObjectDestroy:1",
+  "ukadoc:list_shiori_event_ex:OnMusicPlay:1",
+  "ukadoc:list_shiori_event_ex:OnNekodorifObjectDodge:1",
+  "ukadoc:list_shiori_event_ex:OnNekodorifObjectDrop:1",
+  "ukadoc:list_shiori_event_ex:OnNekodorifObjectEmerge:1",
+  "ukadoc:list_shiori_event_ex:OnNekodorifObjectHit:1",
+  "ukadoc:list_shiori_event_ex:OnNekodorifObjectVanish:1",
+  "ukadoc:list_shiori_event_ex:OnSysResourceCritical:1",
+  "ukadoc:list_shiori_event_ex:OnSysResourceLow:1",
+  "ukadoc:list_shiori_event_ex:OnWebsiteUpdateNotify:1",
+]
+
+[[template]]
+name = "はろーYAYAわーるど"
+shiori = "YAYA"
+url = "https://github.com/YAYA-shiori/konnoyayame/releases/download/23584055353/yayame.nar"
+fetched_on = "2026-09-12"
+files = [
+  "ghost/master/descript.txt",
+  "shell/master/descript.txt",
+  "ghost/master/dic/emerg/yaya_emerg_dic.dic",
+  "ghost/master/dic/emerg/yaya_homeurl.dic",
+  "ghost/master/dic/normal/yaya_aitalk.dic",
+  "ghost/master/dic/normal/yaya_bootend.dic",
+  "ghost/master/dic/normal/yaya_change.dic",
+  "ghost/master/dic/normal/yaya_communicate.dic",
+  "ghost/master/dic/normal/yaya_etc.dic",
+  "ghost/master/dic/normal/yaya_homeurl.dic",
+  "ghost/master/dic/normal/yaya_menu.dic",
+  "ghost/master/dic/normal/yaya_mouse.dic",
+  "ghost/master/dic/normal/yaya_string.dic",
+  "ghost/master/dic/normal/yaya_tmpl_util.dic",
+  "ghost/master/dic/normal/yaya_word.dic",
+  "ghost/master/dic/system/aya_lilith/aya_lilith.dic",
+  "ghost/master/dic/system/aya_lilith/aya_lilith_ex.dic",
+  "ghost/master/dic/system/yaya_base/compatible.dic",
+  "ghost/master/dic/system/yaya_base/config.dic",
+  "ghost/master/dic/system/yaya_base/optional.dic",
+  "ghost/master/dic/system/yaya_base/shiori3.dic",
+]
+mapping = "語彙の種別ごとに突き合わせる相手のページを限り（イベントは SHIORI イベントの 2 ページ、タグはさくらスクリプトのページ、プロパティはプロパティシステムのページ、descript のキーは読んだファイルの持ち主のページ）、カタログの題から値の欄を落とした綴りとの一致で写す。小文字の英字で始まる欄は副命令として残し、大文字始まり・数字・日本語の欄は値として落とす。副命令まで含めて当たらないときだけ同じ頭の族をまとめて当てる。"
+fallback = false
+ids = [
+  "ukadoc:descript_ghost:charset_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_ghost:craftmanurl_2cURL:1",
+  "ukadoc:descript_ghost:craftmanw_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_ghost:icon_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_ghost:kero.name_2c_540d_524d:1",
+  "ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1",
+  "ukadoc:descript_ghost:sakura.name_2c_540d_524d:1",
+  "ukadoc:descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_ghost:sstp.allowunspecifiedsend_2c_6570_5024:1",
+  "ukadoc:descript_ghost:type_2c_7a2e_5225:1",
+  "ukadoc:descript_shell:charset_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_shell:craftman_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_shell:craftmanurl_2cURL:1",
+  "ukadoc:descript_shell:craftmanw_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_shell:kero.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1",
+  "ukadoc:descript_shell:kero.balloon.offsetx_2c_5ea7_6a19:1",
+  "ukadoc:descript_shell:kero.balloon.offsety_2c_5ea7_6a19:1",
+  "ukadoc:descript_shell:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1",
+  "ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu.background.font.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.background.font.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.background.font.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.disable.font.color.b:1",
+  "ukadoc:descript_shell:menu.disable.font.color.g:1",
+  "ukadoc:descript_shell:menu.disable.font.color.r:1",
+  "ukadoc:descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:name_2c_30b7_30a7_30eb_540d:1",
+  "ukadoc:descript_shell:sakura.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1",
+  "ukadoc:descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1",
+  "ukadoc:descript_shell:sakura.balloon.offsety_2c_5ea7_6a19:1",
+  "ukadoc:descript_shell:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1",
+  "ukadoc:descript_shell:type_2c_7a2e_5225:1",
+  "ukadoc:list_propertysystem:ghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1",
+  "ukadoc:list_sakura_script:_5c-:1",
+  "ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1",
+  "ukadoc:list_sakura_script:_5c1_3082_3057_304f_306f_5cu:1",
+  "ukadoc:list_sakura_script:_5c4:1",
+  "ukadoc:list_sakura_script:_5c6:1",
+  "ukadoc:list_sakura_script:_5cC:1",
+  "ukadoc:list_sakura_script:_5c_21_5b_2a_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bclose_2cinputbox_2cID_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5benter_2cpassivemode_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bleave_2cpassivemode_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2cbrowser_2c_30d1_30e9_30e1_30fc_30bf_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2ccommunicatebox_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2cinputbox_2cID_2c_8868_793a_6642_9593_2c_30c6_30ad_30b9_30c8_2c_30aa_30d7_30b7_30e7_30f3_2c..._5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5braise_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5braiseplugin_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305f_306f_540d_524d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2:1",
+  "ukadoc:list_sakura_script:_5c_21_5breload_2cshiori_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1",
+  "ukadoc:list_sakura_script:_5c__21:1",
+  "ukadoc:list_sakura_script:_5c__3f:1",
+  "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1",
+  "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1",
+  "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_5d:1",
+  "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1",
+  "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1",
+  "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_5d:1",
+  "ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1",
+  "ukadoc:list_sakura_script:_5c_n:1",
+  "ukadoc:list_sakura_script:_5c_q:1",
+  "ukadoc:list_sakura_script:_5c_s:1",
+  "ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1",
+  "ukadoc:list_sakura_script:_5cbID_756a_53f7:1",
+  "ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5cc:1",
+  "ukadoc:list_sakura_script:_5ce:1",
+  "ukadoc:list_sakura_script:_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1",
+  "ukadoc:list_sakura_script:_5cf_5bcolor_2c_8272_6307_5b9a_5d:1",
+  "ukadoc:list_sakura_script:_5cf_5bheight_2c_6570_5024_5d:1",
+  "ukadoc:list_sakura_script:_5ci_5bID_2cwait_5d:1",
+  "ukadoc:list_sakura_script:_5ci_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5cj_5bID_5d:1",
+  "ukadoc:list_sakura_script:_5cn:1",
+  "ukadoc:list_sakura_script:_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1",
+  "ukadoc:list_sakura_script:_5cn_5bhalf_5d:1",
+  "ukadoc:list_sakura_script:_5cpID_756a_53f7:1",
+  "ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5cq_5bID_5d_5b_30bf_30a4_30c8_30eb_5d_307e_305f_306f_5cq_2a_5bID_5d_5b_30bf_30a4_30c8_30eb_5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1",
+  "ukadoc:list_sakura_script:_5csID_756a_53f7:1",
+  "ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5ct:1",
+  "ukadoc:list_sakura_script:_5cw_6642_9593:1",
+  "ukadoc:list_sakura_script:_5cx:1",
+  "ukadoc:list_shiori_event:OnAITalk:1",
+  "ukadoc:list_shiori_event:OnAnchorSelect:1",
+  "ukadoc:list_shiori_event:OnBIFFBegin:1",
+  "ukadoc:list_shiori_event:OnBIFFComplete:1",
+  "ukadoc:list_shiori_event:OnBIFFFailure:1",
+  "ukadoc:list_shiori_event:OnBalloonBreak:1",
+  "ukadoc:list_shiori_event:OnBalloonChange:1",
+  "ukadoc:list_shiori_event:OnBalloonClose:1",
+  "ukadoc:list_shiori_event:OnBalloonTimeout:1",
+  "ukadoc:list_shiori_event:OnBoot:1",
+  "ukadoc:list_shiori_event:OnChoiceSelect:1",
+  "ukadoc:list_shiori_event:OnChoiceTimeout:1",
+  "ukadoc:list_shiori_event:OnClose:1",
+  "ukadoc:list_shiori_event:OnCommunicate:1",
+  "ukadoc:list_shiori_event:OnDisplayChange:1",
+  "ukadoc:list_shiori_event:OnEmbryoExist:1",
+  "ukadoc:list_shiori_event:OnFirstBoot:1",
+  "ukadoc:list_shiori_event:OnGhostCallComplete:1",
+  "ukadoc:list_shiori_event:OnGhostCalled:1",
+  "ukadoc:list_shiori_event:OnGhostCalling:1",
+  "ukadoc:list_shiori_event:OnGhostChanged:1",
+  "ukadoc:list_shiori_event:OnGhostChanging:1",
+  "ukadoc:list_shiori_event:OnHeadlinesense.OnFind:1",
+  "ukadoc:list_shiori_event:OnHeadlinesenseBegin:1",
+  "ukadoc:list_shiori_event:OnHeadlinesenseComplete:1",
+  "ukadoc:list_shiori_event:OnHeadlinesenseFailure:1",
+  "ukadoc:list_shiori_event:OnInitialize:1",
+  "ukadoc:list_shiori_event:OnInstallBegin:1",
+  "ukadoc:list_shiori_event:OnInstallComplete:1",
+  "ukadoc:list_shiori_event:OnInstallFailure:1",
+  "ukadoc:list_shiori_event:OnInstallRefuse:1",
+  "ukadoc:list_shiori_event:OnKeyPress:1",
+  "ukadoc:list_shiori_event:OnMinuteChange:1",
+  "ukadoc:list_shiori_event:OnMouseClick:1",
+  "ukadoc:list_shiori_event:OnMouseDoubleClick:1",
+  "ukadoc:list_shiori_event:OnMouseDown:1",
+  "ukadoc:list_shiori_event:OnMouseDragEnd:1",
+  "ukadoc:list_shiori_event:OnMouseDragStart:1",
+  "ukadoc:list_shiori_event:OnMouseGesture:1",
+  "ukadoc:list_shiori_event:OnMouseMove:1",
+  "ukadoc:list_shiori_event:OnMouseUp:1",
+  "ukadoc:list_shiori_event:OnMouseWheel:1",
+  "ukadoc:list_shiori_event:OnNarCreated:1",
+  "ukadoc:list_shiori_event:OnNarCreating:1",
+  "ukadoc:list_shiori_event:OnNekodorifExist:1",
+  "ukadoc:list_shiori_event:OnNotifyDressupInfo:1",
+  "ukadoc:list_shiori_event:OnNotifySelfInfo:1",
+  "ukadoc:list_shiori_event:OnNotifyUserInfo:1",
+  "ukadoc:list_shiori_event:OnOtherGhostBooted:1",
+  "ukadoc:list_shiori_event:OnOtherGhostChanged:1",
+  "ukadoc:list_shiori_event:OnOtherGhostClosed:1",
+  "ukadoc:list_shiori_event:OnRecommendsiteChoice:1",
+  "ukadoc:list_shiori_event:OnSNTPBegin:1",
+  "ukadoc:list_shiori_event:OnSNTPCompare:1",
+  "ukadoc:list_shiori_event:OnSNTPFailure:1",
+  "ukadoc:list_shiori_event:OnSSTPBreak:1",
+  "ukadoc:list_shiori_event:OnScreenSaverEnd:1",
+  "ukadoc:list_shiori_event:OnScreenSaverStart:1",
+  "ukadoc:list_shiori_event:OnSecondChange:1",
+  "ukadoc:list_shiori_event:OnShellChanged:1",
+  "ukadoc:list_shiori_event:OnShellChanging:1",
+  "ukadoc:list_shiori_event:OnSurfaceChange:1",
+  "ukadoc:list_shiori_event:OnSurfaceRestore:1",
+  "ukadoc:list_shiori_event:OnTextDrop:1",
+  "ukadoc:list_shiori_event:OnTranslate:1",
+  "ukadoc:list_shiori_event:OnURLDropping:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnDownloadBegin:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareBegin:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareComplete:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateBegin:1",
+  "ukadoc:list_shiori_event:OnUpdateComplete:1",
+  "ukadoc:list_shiori_event:OnUpdateFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateReady:1",
+  "ukadoc:list_shiori_event:OnUpdatedataCreated:1",
+  "ukadoc:list_shiori_event:OnUpdatedataCreating:1",
+  "ukadoc:list_shiori_event:OnVanishCancel:1",
+  "ukadoc:list_shiori_event:OnVanishSelected:1",
+  "ukadoc:list_shiori_event:OnVanishSelecting:1",
+  "ukadoc:list_shiori_event:OnVanished:1",
+  "ukadoc:list_shiori_event:OnWindowStateRestore:1",
+  "ukadoc:list_shiori_event_ex:OnStampAdd:1",
+  "ukadoc:list_shiori_event_ex:OnStampInfo:1",
+  "ukadoc:list_shiori_event_ex:OnStampInfoCall:1",
+]
+```
+
 書き戻しの前後を記録する器を下に置く。**いずれもまだ数えていない仮の 0 であり、段 3
 （タスク 4.4）で数え直した値に置き換える。**
 
