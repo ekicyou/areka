@@ -5,7 +5,7 @@
 > **順序の前提**: Rust では署名変更が呼び手を即座に壊すため、経路の付け替えは呼び手の追随まで含めて 1 タスクとする。タスク 2.2 は経路そのものを差し替える**統合タスク**であり、これ以降 `cargo build -p areka-emo-present` は通るがテスト標的は赤のまま進む。提示クレートのテストは 1 つの標的にまとまっているため、個々のファイルだけを先に緑にすることはできない——**赤になるのは 2.2 から、緑に戻るのは major 5 の全サブタスク完了時**であり、その間は中断せず続けて消化する。CPU リサンプラ本体の撤去（major 6）は、その消費者であるテスト群（major 5）を導き直した後に置く。
 
 - [ ] 1. 基盤: 表示の記録（原寸 bitmap → 描画命令）を新設する
-- [ ] 1.1 原寸の合成結果から閉じた描画命令を作る記録経路を追加する
+- [x] 1.1 原寸の合成結果から閉じた描画命令を作る記録経路を追加する
   - 合成結果（原寸・premultiplied BGRA）を 1 度だけ GPU へ上げ、論理 px の宛先矩形で描く命令を、閉じたコマンドリストとして返す関数を新設する
   - 記録の引数（bitmap 寸・pitch・宛先矩形・補間モード）を値で持つ純関数のレシピ型を分け、拡大率を引数に持たない署名にする
   - 補間は bilinear 相当以上（LINEAR）を選ぶ
@@ -272,3 +272,8 @@
   - 完了状態: 2 水準のログ・数値・スクリーンショットが揃い、開発者サインオフに出せる形で記録される
   - _Requirements: 2.3, 2.7, 3.1, 3.2, 3.5, 4.8, 6.6_
   - _Depends: 8.1_
+
+## Implementation Notes
+- 1.1: `windows-numerics` は削除できない（`D2D1DeviceContextExt::set_transform(&Matrix3x2)` を `display.rs` が使う・design「Allowed Dependencies」の記述は誤り）→ 2.3 は `windows-numerics` を残す。`Win32_Graphics_Dxgi` feature の撤去は 2.3 で判断。
+- 1.1: 失敗注入 `DisplayFault::{EndDraw, Close}` は実呼び出しの**後**に置く（共有 DC を `BeginDraw` 開きっぱなしにしないため・レビュー裁定）。1.4 は「呼び手から見える前状態維持」だけを主張し、注入点を前へ動かさない。
+- 1.1: `GraphicsCommandList` の到達経路は `wintf::ecs::GraphicsCommandList`（`wintf::ecs::graphics` は private mod）。`device_err` は `crate::command::device_err` へ共有化済み（`mount.rs` の private 複製は 2.2 で寄せる）。

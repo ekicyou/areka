@@ -30,19 +30,7 @@ use wintf::com::dxgi::create_composition_swap_chain;
 use wintf::com::wuc::CompositorInteropExt;
 use wintf::ecs::GraphicsCore;
 
-use crate::command::PresentError;
-
-/// `windows_core::Error` を [`PresentError::Device`]（ログ＋`HRESULT`＋文脈）へ写像するクロージャ。
-///
-/// 失敗経路はログ規律（error! + `Err` 戻り値・パニック禁止）に従い、発生箇所の静的文脈を添えて
-/// 構造化エラーへ畳む。`.map_err(device_err("<where>"))?` の形で D3D/DXGI 呼び出しを包む。
-fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> PresentError {
-    move |e| {
-        let hresult = e.code().0;
-        tracing::error!(hresult, context, "D3D/DXGI 呼び出しが失敗");
-        PresentError::Device { hresult, context }
-    }
-}
+use crate::command::{PresentError, device_err};
 
 /// `Option` が `None`（本来到達しない成功時 None・デバイス未初期化）を [`PresentError::Device`] にする。
 fn none_err(context: &'static str) -> PresentError {

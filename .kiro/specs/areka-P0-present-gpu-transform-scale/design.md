@@ -54,7 +54,7 @@
 
 - `areka-emo-present` → `wintf`（`ecs::graphics::GraphicsCommandList`・`ecs::GraphicsCore`・`ecs::{Arrangement, LayoutScale, Visual, HitTest, AlphaMaskResource}`・`com::d2d::{D2D1DeviceContextExt, D2D1CommandListExt}`）／`areka-emo-compose`（`ComposedSurface`・`ScaleRatio`）／`windows`（`Win32_Graphics_Direct2D`・`Direct2D_Common`・`Dxgi_Common`）。逆方向（wintf → emo）は禁止のまま。
 - `crates/areka` → `areka-emo-present` の公開 API（`EmoPresenter::{apply, refresh_scale, take_pending_resize, target_physical_size, text_slot_view, read_back, hit_region_client}`）: 署名不変。
-- 依存の削除: `areka-emo-present` の `windows-numerics`（`SpriteVisual::SetSize` の `Vector2` 専用だった）と feature `Win32_Graphics_Dxgi`（chain 専用だった）は不要になる。Direct2D の型（`ID2D1DeviceContext`／`D2D1_BITMAP_PROPERTIES1` 等）は workspace 既定の `Win32_Graphics_Direct2D_Common` が `Win32_Graphics_Direct2D` を含意する（`windows` 0.62.2 の feature 表）ため feature の追加は **0**。
+- 依存の削除: ~~`areka-emo-present` の `windows-numerics`（`SpriteVisual::SetSize` の `Vector2` 専用だった）と~~ feature `Win32_Graphics_Dxgi`（chain 専用だった）は不要になる。（**2026-09-12 実装で訂正**: `windows-numerics` は `display.rs` の `set_transform(&Matrix3x2::identity())` が要するため**残す**。撤去は `Win32_Graphics_Dxgi` feature のみ。）Direct2D の型（`ID2D1DeviceContext`／`D2D1_BITMAP_PROPERTIES1` 等）は workspace 既定の `Win32_Graphics_Direct2D_Common` が `Win32_Graphics_Direct2D` を含意する（`windows` 0.62.2 の feature 表）ため feature の追加は **0**。
 
 ### Revalidation Triggers
 
@@ -154,7 +154,7 @@ graph TB
 
 ```
 crates/areka-emo-present/
-├── Cargo.toml                       # windows-numerics 削除・Win32_Graphics_Dxgi の上乗せ撤去（feature 追加 0）
+├── Cargo.toml                       # Win32_Graphics_Dxgi の上乗せ撤去（windows-numerics は display.rs が要するため残す・feature 追加 0）
 ├── src/lib.rs                       # mod display 追加・chain の記述撤去
 ├── src/display.rs                   # 新設: record_display / DisplayRecipe / DisplayFault（test）
 ├── src/display_tests.rs             # 新設: 純関数の檻（GPU 不要）
