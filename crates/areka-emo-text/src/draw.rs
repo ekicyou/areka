@@ -8,6 +8,7 @@
 //! | `draw.rs`（本ファイル） | 既定値・[`ResolvedFont`]・[`DirectionRecipe`]・書式生成・D2D ターゲット bitmap・比較専用オラクル |
 //! | `draw_metrics.rs` | [`DWriteMetrics`]（計測専用 probe layout・行ボックス比の実測） |
 //! | `draw_line_store.rs` | [`LineLayoutStore`]（行 TextLayout の生成・キャッシュ・インクはみ出しの実測） |
+//! | `draw_catalog.rs` | [`FontCatalog`]（フォント候補列→実在する名前の解決・記憶・記録の 1 度化） |
 //!
 //! 子は `super::` でファサードの定数・型・ヘルパを辿り、ファサードが再輸出するので
 //! crate 内から見た入口（`crate::draw::DWriteMetrics` 等）は分割前と同一。
@@ -149,6 +150,10 @@ mod metrics;
 #[path = "draw_line_store.rs"]
 mod line_store;
 
+#[path = "draw_catalog.rs"]
+mod catalog;
+
+pub use catalog::FontCatalog;
 pub(crate) use line_store::LineLayoutStore;
 pub use metrics::DWriteMetrics;
 

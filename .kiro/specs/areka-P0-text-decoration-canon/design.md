@@ -733,7 +733,9 @@ impl ResolvedFont {
 pub struct FontCatalog {
     collection: IDWriteFontCollection,                      // GetSystemFontCollection
     memo: RefCell<HashMap<Vec<String>, Option<String>>>,   // 候補列→解決名（None＝全滅）
-    warned: RefCell<BTreeSet<String>>,                     // 記録済みの候補（ファイル名・全滅の候補列）
+    warned: RefCell<BTreeSet<WarnKey>>,                    // 記録済みの候補（`enum WarnKey { FontFile(String), AllMissing(Vec<String>) }`——
+                                                          // 種別と候補列を連結せず別々に持つ。連結すると別々の失敗が
+                                                          // 同じ鍵へ潰れて片方が無記録で消える。要件 13.5・実装 2026-09-12）
 }
 impl FontCatalog {
     pub fn new(factory: &IDWriteFactory2) -> Result<FontCatalog, TextLayerError>;
@@ -998,7 +1000,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 1. **`\f[height,+N]`／`-N` の基準**＝そのとき効いている大きさ（重ねて効く）／根拠: ukadoc「+や-による相対的な変更が可能」＋記述例「3pixel 大きくする」／areka-P0-text-decoration-canon 要件 7.2。
 2. **`\f[height,N%]` の基準**＝既定の見た目の大きさ／根拠: 記述例「デフォルトサイズの 200% で表示」／要件 7.3。
 3. **スタイルシートの大きさキーワード**＝語彙のみ（大きさ不変・warn 1 度）／根拠: 「スタイルシートのサイズ指定も可能」は語形を定めない／要件 7.7。
-4. **`\f[name]` のフォントファイル候補**＝読み込まない（warn 1 度で読み飛ばし）／根拠: 開発者裁定 2026-09-11（インストール済みの指定で足りる）／要件 9.3。
+4. **`\f[name]` のフォントファイル候補**＝読み込まない（warn 1 度で読み飛ばし）。判定は `.ttf`／`.otf`／`.ttc` の**末尾一致（大小無視）**で、実在する family 名がこれで終わっていれば誤って読み飛ばす（現実の family 名では起こらないと判断・実装 2026-09-12）／根拠: 開発者裁定 2026-09-11（インストール済みの指定で足りる）／要件 9.3。
 5. **`\f[height,disable]`**＝無効表示の大きさへ／根拠: `disable.font.height` が定義可能／要件 7.5。
 6. **`sub`／`sup`／`outline`**＝語彙のみ（状態・戻しに参加・表示不変・warn 1 度）／根拠: DirectWrite の範囲指定で表せず自前描画器を要する・開発者裁定 2026-09-11／要件 5.9・6.1〜6.4。
 7. **縦書きの下線・打ち消し線の位置**＝DirectWrite の既定に委ねる。実測: 〔実装時に記入: `vertical_rl`／`vertical_lr` とも列の（右／左）側・打ち消し線は列の（中央）〕。bvc の裁定「列の右側」との照合: 〔一致／不一致〕／根拠: 開発者裁定 2026-09-11・自前で線を描き分けない／要件 5.7・12.2。
