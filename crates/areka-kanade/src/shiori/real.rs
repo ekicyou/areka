@@ -23,8 +23,8 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use areka_actor::{ActorHandle, spawn_actor};
 use shiori_host32_host::{
-    ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow, RequestError, Shiori3Client,
-    ShutdownError,
+    CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow, RequestError,
+    Shiori3Client, ShutdownError,
 };
 
 use crate::msg::{KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
@@ -33,11 +33,19 @@ use crate::msg::{KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome}
 ///
 /// `window`（[`ParentMessageWindow`]・`!Send`）と `helper`（[`HelperLifecycle`]）を所有し、
 /// アクタースレッド終了時（Close／全 Sender drop）の drop で RAII teardown される。
+/// # 文字コードの交渉状態（areka-P0-charset-canon 要件 5.1）
+/// [`CharsetNegotiator`] は**接続の持ち物**である。[`Shiori3Client`] は 1 往復ごとに作り捨て
+/// られるため、そちらに置くと採用結果がイベントをまたいで保たれない。接続 1 つ（＝SHIORI の
+/// load から unload まで）につき交渉状態は 1 つで、応答待ちのイベント（GET）と片道のイベント
+/// （NOTIFY）が同じものを共有する。初期値の決定は結線層（`areka-ghost` の `shiori_wiring`）が
+/// 行い、本層は**規則を持たない**（受け取って持ち、結線へ貸すだけ）。
 pub struct ShioriConnection {
     /// HELLO ハンドシェイク済みの親メッセージ窓（`Shiori3Client` が借用する送信経路）。
     pub window: ParentMessageWindow,
     /// helper ライフサイクル監視の器（正規 clean shutdown／死活監視を担う）。
     pub helper: HelperLifecycle,
+    /// 文字コードの交渉状態（接続と同寿命・GET/NOTIFY 共通・要件 5.1）。
+    pub negotiator: CharsetNegotiator,
 }
 
 /// `ShioriMsg` dispatch の背後にある呼出面（本番＝[`ShioriConnection`]・テスト＝scripted fake）。
@@ -78,7 +86,9 @@ impl ShioriBackend for ShioriConnection {
         references: &[String],
         status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
-        Shiori3Client::new(&self.window).get(id, references, status)
+        // フィールド別借用（窓は共有・交渉状態は可変で、別フィールドゆえ同時に借りられる）。
+        // 文字コードの規則は結線側が持ち、本層には書かない。
+        Shiori3Client::new(&self.window, &mut self.negotiator).get(id, references, status)
     }
 
     fn notify(
@@ -87,7 +97,8 @@ impl ShioriBackend for ShioriConnection {
         references: &[String],
         status: Option<&str>,
     ) -> Result<(), RequestError> {
-        Shiori3Client::new(&self.window).notify(id, references, status)
+        // GET と同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
+        Shiori3Client::new(&self.window, &mut self.negotiator).notify(id, references, status)
     }
 
     fn unload(&mut self) -> Result<ExitKind, ShutdownError> {

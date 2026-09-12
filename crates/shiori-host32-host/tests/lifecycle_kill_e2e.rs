@@ -46,8 +46,8 @@ use std::time::{Duration, Instant};
 
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{
-    ExitKind, FailureClass, HelperLifecycle, HelperStatus, ParentMessageWindow, RequestError,
-    Shiori3Client, spawn,
+    Charset, CharsetNegotiator, ExitKind, FailureClass, HelperLifecycle, HelperStatus,
+    ParentMessageWindow, RequestError, Shiori3Client, spawn,
 };
 use shiori_host32_ipc::MsgTag;
 
@@ -234,7 +234,10 @@ fn kill_injection_detection_and_reporting() {
     );
 
     // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用・env timeout 3s を解決済み）---
-    let client = Shiori3Client::new(&parent);
+    // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
+    // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
+    let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+    let mut client = Shiori3Client::new(&parent, &mut negotiator);
 
     // --- ③ baseline GET: kill 前の healthy round-trip を確認（fixture 固定 Value を返す）---
     let baseline = client

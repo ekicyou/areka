@@ -162,6 +162,16 @@ pub fn real_connect(
         Ok(Box::new(ShioriConnection {
             window,
             helper: HelperLifecycle::new(helper),
+            // 暫定の初期値（areka-P0-charset-canon タスク 3.4 で `initial_charset(..)` へ差し替える）。
+            // `real_connect` に既定の文字コードの引数が入るのが 3.4 であり、それまでは適用前と同じ
+            // UTF-8 始まりを置く。適用前は強制 UTF-8（応答の `Charset` ヘッダを復号にも採用にも
+            // 使わない）だったのに対し、ここは**交渉する** UTF-8 なので、応答が `Charset` を名乗らないか
+            // `UTF-8` を名乗る限りで適用前と同一であり、他の文字コードを名乗る SHIORI に対しては
+            // 復号も以後の要求も変わる。既存の固定物はいずれもこの範囲に収まる——
+            // `crates/shiori-host32-testdll/src/lib.rs` の 200 応答は `Charset: UTF-8` を名乗り
+            // （`RESP_GET_200` の定義行）、204・400 応答はヘッダを持たず継承する（`RESP_NOTIFY_204`
+            // ／`RESP_400` の定義行）。
+            negotiator: CharsetNegotiator::new(Charset::UTF_8, false),
         }) as Box<dyn ShioriBackend>)
     }
 }

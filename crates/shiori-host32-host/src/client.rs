@@ -3,11 +3,19 @@
 //! wire / HGLOBAL の内部型を一切露出しない。
 //!
 //! # 責務
-//! - [`Shiori3Client::get`] — 応答を要するイベント。`build_request` → `send_request` →
-//!   `parse_response` を結線し、200 は `Some(Value)`／204 は `None`／400・500・`ErrorLevel`
-//!   は `Err(RequestError::Shiori)` を返す（要件 4.1/4.3/4.7）。
-//! - [`Shiori3Client::notify`] — 片道イベント。**同期 `request()` 往復**で送出し、返却
-//!   response（例 204）を破棄して `Ok(())` を返す（片道 IPC 化しない・要件 4.8）。
+//! - [`Shiori3Client::get`] — 応答を要するイベント。前半（`encode_and_note`）→ `send_request`
+//!   → 後半（`parse_and_note`）を結線し、200 は `Some(Value)`／204 は `None`／400・500・
+//!   `ErrorLevel` は `Err(RequestError::Shiori)` を返す（要件 4.1/4.3/4.7）。
+//! - [`Shiori3Client::notify`] — 片道イベント。前半だけを通して**同期 `request()` 往復**で
+//!   送出し、返却 response（例 204）を破棄して `Ok(())` を返す（片道 IPC 化しない・要件 4.8）。
+//!
+//! # 文字コードの交渉（要件 3.6/5.1/5.3）
+//! 交渉の判断は 1 往復の前半 `encode_and_note`（現在の文字コードで符号化し置換を記録）と
+//! 後半 `parse_and_note`（方針で解析しヘッダと置換有無を記録）の 2 つに閉じており、規則
+//! そのものは [`CharsetNegotiator`] が持つ。前半は GET／NOTIFY の双方が、後半は **GET だけ**が
+//! 通る（片道イベントの応答からは採用しない・要件 5.3）。交渉状態は本 client が持たず借りる
+//! ——本 client は 1 往復ごとに作り捨てられるためで、状態は接続の値が持ち続ける（要件 5.1）。
+//! 符号化したバイト列は helper・IPC へそのまま渡す（解釈を挟まない・要件 3.6）。
 //!
 //! # GET/NOTIFY の合流（要件 4.7）
 //! GET と NOTIFY は host32 wire 上で単一 request 経路（同一 codec build ＋ 同一
@@ -38,7 +46,7 @@ use std::time::Duration;
 
 use shiori_host32_ipc::MsgTag;
 
-use crate::charset::{Charset, CharsetPolicy};
+use crate::charset::CharsetNegotiator;
 use crate::error::{RequestError, ShioriError};
 use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::request_timeout_from_env;
@@ -73,19 +81,26 @@ pub struct Shiori3Client<'a> {
     window: &'a ParentMessageWindow,
     /// `Sender` ヘッダ値（単一差替点・既定 [`DEFAULT_SENDER`]＝`"areka"`）。
     sender: &'a str,
+    /// 文字コードの交渉状態（接続が所有・1 往復ごとに可変借用する・要件 5.1）。
+    ///
+    /// 本 client は 1 往復ごとに作り捨てられるため、交渉状態を**持たず借りる**。採用結果が
+    /// イベントをまたいで保たれるのは、接続の値（`areka-kanade` の `ShioriConnection`）が
+    /// フィールドとして 1 つだけ持ち続けるからである。
+    negotiator: &'a mut CharsetNegotiator,
 }
 
 impl<'a> Shiori3Client<'a> {
-    /// `Sender` を既定（`"areka"`）とする client を構築する（要件 4.x）。
+    /// `Sender` を既定（`"areka"`）とする client を構築する（要件 4.x・5.1）。
     ///
-    /// charset は本仕様では [`Charset::UTF_8`] 固定。`window` はハンドシェイク完了済みである
-    /// ことを前提とする（未準備ガードは設けない・design.md §Preconditions: Load は Request に
-    /// 構造的に先立つ）。
+    /// 文字コードは `negotiator` が決める（本 client は規則を持たない）。`window` は
+    /// ハンドシェイク完了済みであることを前提とする（未準備ガードは設けない・design.md
+    /// §Preconditions: Load は Request に構造的に先立つ）。
     #[must_use]
-    pub fn new(window: &'a ParentMessageWindow) -> Self {
+    pub fn new(window: &'a ParentMessageWindow, negotiator: &'a mut CharsetNegotiator) -> Self {
         Self {
             window,
             sender: DEFAULT_SENDER,
+            negotiator,
         }
     }
 
@@ -94,8 +109,16 @@ impl<'a> Shiori3Client<'a> {
     /// 通常は [`Shiori3Client::new`]（`"areka"` 既定）で足りる。互換ベースウェアの名乗りを
     /// 差し替えたい場合のみ本関数を使う。
     #[must_use]
-    pub fn with_sender(window: &'a ParentMessageWindow, sender: &'a str) -> Self {
-        Self { window, sender }
+    pub fn with_sender(
+        window: &'a ParentMessageWindow,
+        negotiator: &'a mut CharsetNegotiator,
+        sender: &'a str,
+    ) -> Self {
+        Self {
+            window,
+            sender,
+            negotiator,
+        }
     }
 
     /// 応答を要するイベントを送り、Value を取り出す（要件 4.1/4.3/4.7・design.md §GET 往復）。
@@ -117,30 +140,35 @@ impl<'a> Shiori3Client<'a> {
     /// - malformed 応答 → [`RequestError::Shiori`]（`ShioriError::Parse`）
     /// - SHIORI エラー応答（400/500/ErrorLevel）→ [`RequestError::Shiori`]（`ShioriError::Status`・要件 5.2）
     pub fn get(
-        &self,
+        &mut self,
         id: &str,
         references: &[String],
         status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
-        let bytes = build_request(&ShioriRequest {
-            method: Method::Get,
-            id,
-            references,
-            sender: self.sender,
-            status,
-            charset: Charset::UTF_8,
-        })
-        .bytes;
-        // GET/NOTIFY は wire tag = MsgTag::Request で合流（要件 4.7）。
+        let timeout = self.effective_timeout();
+        // 現在の文字コードを先に取り出す（交渉状態の可変借用と読みを同時に持たない）。
+        let charset = self.negotiator.current();
+        let bytes = encode_and_note(
+            self.negotiator,
+            &ShioriRequest {
+                method: Method::Get,
+                id,
+                references,
+                sender: self.sender,
+                status,
+                charset,
+            },
+        );
+        // GET/NOTIFY は wire tag = MsgTag::Request で合流（要件 4.7）。符号化したバイト列は
+        // helper・IPC へ**そのまま**渡す（解釈を挟まない・要件 3.6）。
         let resp = self
             .window
-            .send_request(MsgTag::Request, &bytes, self.effective_timeout())
+            .send_request(MsgTag::Request, &bytes, timeout)
             .map_err(map_send_error)?;
         // parse の malformed（ShioriError::Parse）は #[from] で RequestError::Shiori へ持ち上がる。
-        // 復号方針は UTF-8 固定＝適用前と同じ挙動（この呼出点が `Force(UTF_8)` を渡すから
-        // 応答の `Charset` ヘッダは復号に使われない）。交渉状態（`CharsetNegotiator`）を
-        // 借用して `policy()` を渡す結線は areka-P0-charset-canon タスク 3.3 が行う。
-        let parsed = parse_response(&resp, CharsetPolicy::Force(Charset::UTF_8))?;
+        // 採用と記録は `map_get_result` より前（応答が 204／400／500 でも `Charset` ヘッダは
+        // 採用対象・design.md §交渉の一周）。
+        let parsed = parse_and_note(self.negotiator, &resp)?;
         map_get_result(parsed)
     }
 
@@ -158,26 +186,32 @@ impl<'a> Shiori3Client<'a> {
     /// transport 失敗の写像は [`Shiori3Client::get`] と同一（[`map_send_error`] 経由）。SHIORI 応答の
     /// status は破棄するため、NOTIFY はエラー status を `Err` にしない（応答を surface しない・要件 4.8）。
     pub fn notify(
-        &self,
+        &mut self,
         id: &str,
         references: &[String],
         status: Option<&str>,
     ) -> Result<(), RequestError> {
-        let bytes = build_request(&ShioriRequest {
-            method: Method::Notify,
-            id,
-            references,
-            sender: self.sender,
-            status,
-            charset: Charset::UTF_8,
-        })
-        .bytes;
+        let timeout = self.effective_timeout();
+        // 現在の文字コードを先に取り出す（交渉状態の可変借用と読みを同時に持たない）。
+        let charset = self.negotiator.current();
+        let bytes = encode_and_note(
+            self.negotiator,
+            &ShioriRequest {
+                method: Method::Notify,
+                id,
+                references,
+                sender: self.sender,
+                status,
+                charset,
+            },
+        );
         // 同期往復（要件 4.8）: wire tag は GET と同じ MsgTag::Request（要件 4.7）。
         let _discarded = self
             .window
-            .send_request(MsgTag::Request, &bytes, self.effective_timeout())
+            .send_request(MsgTag::Request, &bytes, timeout)
             .map_err(map_send_error)?;
-        // 返却 response（例 204）は破棄する（要件 4.8・解析も surface もしない）。
+        // 返却 response（例 204）は破棄する（要件 4.8・5.3）。解析も採用も surface もしない
+        // ——片道イベントの応答は採用の根拠に用いないため、1 往復の後半をここでは通らない。
         Ok(())
     }
 
@@ -201,6 +235,32 @@ impl<'a> Shiori3Client<'a> {
     //   - HSTRING⇄バイト変換はプロセス境界を跨がない（HGLOBAL=32bit ローカル・HSTRING=x64 ローカル・
     //     各プロセスが自前通貨を持ち、跨ぐのは生バイト列のみ）。
     //   - SHIORI_S_PENDING（遅延応答）は塞がず型シームに留める（本仕様では実装しない）。
+}
+
+/// 1 往復の**前半**: 現在の文字コードで要求を符号化し、置換を記録する（要件 3.1/3.5/5.1）。
+///
+/// GET／NOTIFY の双方が通る（同じ交渉状態＝同じ文字コードで送る・要件 5.1）。戻り値は
+/// そのまま helper・IPC へ渡すバイト列で、ここから先はバイト列に触れない（要件 3.6）。
+fn encode_and_note(negotiator: &mut CharsetNegotiator, req: &ShioriRequest<'_>) -> Vec<u8> {
+    let encoded = build_request(req);
+    negotiator.note_request(req.id, encoded.replaced);
+    encoded.bytes
+}
+
+/// 1 往復の**後半**: 応答を交渉の方針で解析し、応答ヘッダと置換の有無を記録する（要件 4.2〜4.7）。
+///
+/// **GET だけが呼ぶ**（片道イベントの応答からは採用しない・要件 5.3）。記録は `map_get_result`
+/// より前に行う——応答の status が 204／400／500 であっても `Charset` ヘッダは採用対象である
+/// （design.md §交渉の一周）。`note_response` が記録する文字コード名は「採用後の現在値」であり、
+/// `parse_response` が実際に復号に使った文字コードと一致する（`Negotiate` では解決できた
+/// ヘッダの値、`Force` では強制中の値がそれぞれ両者に共通するため）。
+fn parse_and_note(
+    negotiator: &mut CharsetNegotiator,
+    resp: &[u8],
+) -> Result<ParsedResponse, ShioriError> {
+    let parsed = parse_response(resp, negotiator.policy())?;
+    negotiator.note_response(parsed.charset_header.as_deref(), parsed.decode_had_errors);
+    Ok(parsed)
 }
 
 /// [`SendError`]（transport/handshake）を [`RequestError`]（統合語彙）へ写像する純関数（要件 5.1〜5.4）。
@@ -258,6 +318,8 @@ fn map_get_result(parsed: ParsedResponse) -> Result<Option<String>, RequestError
 mod tests {
     use super::*;
     use shiori_host32_ipc::{FramingError, IpcError};
+
+    use crate::charset::Charset;
 
     use crate::error::HandshakeError;
 
@@ -487,5 +549,227 @@ mod tests {
     #[test]
     fn default_sender_is_areka() {
         assert_eq!(DEFAULT_SENDER, "areka");
+    }
+
+    // --- 交渉状態の結線（タスク 3.3・要件 5.1/5.3）----------------------------
+    //
+    // 1 往復の前半（`encode_and_note`）と後半（`parse_and_note`）は `get`／`notify` が
+    // 実際に呼ぶ本番関数そのものである。窓も 32bit 成果物も要さずに結線を検査できるのは、
+    // 交渉に関わる判断がこの 2 つに閉じているため（要件 9.8）。
+
+    /// 「あ」の EUC-JP バイト列（符号化器から導かない定数）。
+    const A_EUC_JP: &[u8] = &[0xA4, 0xA2];
+
+    /// `Charset: EUC-JP` を名乗り、Value に「あ」の EUC-JP バイト列を載せた 200 応答。
+    fn euc_jp_response() -> Vec<u8> {
+        let mut bytes = b"SHIORI/3.0 200 OK\r\nCharset: EUC-JP\r\nValue: ".to_vec();
+        bytes.extend_from_slice(A_EUC_JP);
+        bytes.extend_from_slice(b"\r\n\r\n");
+        bytes
+    }
+
+    /// `Charset: EUC-JP` を名乗る、Value を持たない応答（ステータス行だけを差し替えて使う）。
+    ///
+    /// 200 以外の応答でも `Charset` ヘッダが採用対象であることを見るための固定物。
+    fn euc_jp_response_with_status(status_line: &str) -> Vec<u8> {
+        let mut bytes = status_line.as_bytes().to_vec();
+        bytes.extend_from_slice(b"\r\nCharset: EUC-JP\r\n\r\n");
+        bytes
+    }
+
+    /// 結線が組み立てる要求と同形の [`ShioriRequest`]（`sender` は既定・References なし）。
+    fn a_request(method: Method, id: &str, charset: Charset) -> ShioriRequest<'_> {
+        ShioriRequest {
+            method,
+            id,
+            references: &[],
+            sender: DEFAULT_SENDER,
+            status: None,
+            charset,
+        }
+    }
+
+    /// 応答の `Charset` ヘッダから採用が起きるのは **後半を通ったときだけ**であり、
+    /// 片道イベントが通る前半だけでは採用が起きない（要件 5.3 の零）。
+    #[test]
+    fn only_the_response_half_of_the_chain_adopts_a_charset() {
+        let euc_jp = Charset::for_label("euc-jp").expect("EUC-JP は解決できる");
+
+        // 応答待ちのイベントが通る後半: 解析と記録で EUC-JP を採用する。
+        let mut answered = CharsetNegotiator::new(Charset::UTF_8, false);
+        let parsed =
+            parse_and_note(&mut answered, &euc_jp_response()).expect("200 応答は解析できる");
+        assert_eq!(
+            parsed.value.as_deref(),
+            Some("あ"),
+            "宣言された文字コードで復号されていない"
+        );
+        assert_eq!(
+            answered.current(),
+            euc_jp,
+            "応答の Charset ヘッダが採用されていない（要件 4.2）"
+        );
+
+        // 片道イベントが通る前半だけでは、同じ応答が来ても現在の文字コードは動かない。
+        let mut one_way = CharsetNegotiator::new(Charset::UTF_8, false);
+        let charset = one_way.current();
+        let bytes = encode_and_note(
+            &mut one_way,
+            &a_request(Method::Notify, "OnSecondChange", charset),
+        );
+        assert!(
+            bytes.starts_with(b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\n"),
+            "片道イベントの要求が現在の文字コードで出ていない"
+        );
+        assert_eq!(
+            one_way.current(),
+            Charset::UTF_8,
+            "片道イベントの経路で採用が起きてはならない（要件 5.3）"
+        );
+    }
+
+    /// 片道イベントの本体が採用の経路を一切踏まないことを、本ファイルの本文で機械的に
+    /// 確かめる（要件 5.3 の零＝「NOTIFY 応答からの採用 0」を件数で数え直す）。
+    ///
+    /// 呼ばれていないことは実行では観測できない（呼び出しが無い＝出来事が無い）ため、
+    /// 本文そのものを判定材料にする。採用の経路を後から片道側へ繋ぐと赤になる。関数の本文は
+    /// コメントも含めて検査するので、片道側の説明では採用の経路を名指ししない（名指しすると
+    /// 赤になる——検査を緩めるのではなく説明の方を言い換えること）。
+    #[test]
+    fn the_one_way_event_body_contains_no_adoption_path() {
+        const SELF_SOURCE: &str = include_str!("client.rs");
+        // 改行の綴り（CRLF／LF）に依存しないよう CR を落としてから切り出す。
+        let source = SELF_SOURCE.replace('\r', "");
+        let after = source
+            .split_once("    pub fn notify(")
+            .expect("notify の定義行が見つからない")
+            .1;
+        let body = after
+            .split_once("\n    }\n")
+            .expect("notify の閉じ括弧が見つからない")
+            .0;
+        assert!(
+            body.contains("encode_and_note("),
+            "片道イベントは前半（符号化と置換の記録）を通るべき（要件 3.5/5.1）"
+        );
+        for forbidden in ["parse_and_note", "note_response", "parse_response"] {
+            assert!(
+                !body.contains(forbidden),
+                "片道イベントの本体に採用の経路 `{forbidden}` がある（要件 5.3 の零が破れている）"
+            );
+        }
+    }
+
+    /// 交渉状態は結線より長生きし、応答待ちのイベントで採用した文字コードが**次の片道
+    /// イベント**の要求バイト列に現れる（要件 5.1＝双方のイベントが同じ文字コードを使う）。
+    #[test]
+    fn adoption_in_an_answered_event_reaches_the_next_one_way_request() {
+        let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+
+        let charset = negotiator.current();
+        let first = encode_and_note(&mut negotiator, &a_request(Method::Get, "OnBoot", charset));
+        assert!(
+            first.starts_with(b"GET SHIORI/3.0\r\nCharset: UTF-8\r\n"),
+            "最初の要求は初期の文字コードで出る"
+        );
+
+        parse_and_note(&mut negotiator, &euc_jp_response()).expect("200 応答は解析できる");
+
+        let charset = negotiator.current();
+        let second = encode_and_note(
+            &mut negotiator,
+            &a_request(Method::Notify, "OnSecondChange", charset),
+        );
+        assert!(
+            second.starts_with(b"NOTIFY SHIORI/3.0\r\nCharset: EUC-JP\r\n"),
+            "採用した文字コードが次の片道イベントの要求に現れていない（要件 5.1）"
+        );
+    }
+
+    /// **200 以外の応答でも** `Charset` ヘッダは採用対象である（要件 4.2）。
+    ///
+    /// design.md §System Flows「交渉の一周（GET）」の流れの決め事 1 つめ——「`note_response` は
+    /// `map_get_result` より前。応答の status が 204・400・500 であっても `Charset` ヘッダは
+    /// 採用対象（4.2）。emo2 の最初の応答待ちイベント `username` 照会が 204 でも UTF-8 を
+    /// 採用する」——が本タスクの結線の契約そのものであり、その順序をここで押さえる。
+    ///
+    /// `note_response` が status を引数に取らないのは構造上の備えであって検査ではない。後半を
+    /// 「200 のときだけ採用する」へ退化させると本テストが赤になる（204・400 の 2 系統）。
+    #[test]
+    fn a_non_200_response_still_adopts_its_charset_header() {
+        let euc_jp = Charset::for_label("euc-jp").expect("EUC-JP は解決できる");
+
+        // 204（スクリプト無しの成功）——emo2 の `username` 照会がこの形。
+        let mut after_204 = CharsetNegotiator::new(Charset::UTF_8, false);
+        let parsed = parse_and_note(
+            &mut after_204,
+            &euc_jp_response_with_status("SHIORI/3.0 204 No Content"),
+        )
+        .expect("204 応答は解析できる");
+        assert_eq!(
+            parsed.status, 204,
+            "固定物の status 行が 204 になっていない"
+        );
+        assert_eq!(
+            after_204.current(),
+            euc_jp,
+            "204 応答の Charset ヘッダが採用されていない（要件 4.2・design §交渉の一周）"
+        );
+
+        // 400（SHIORI エラー応答）——結果の写しはエラーでも、採用は先に済んでいる。
+        let mut after_400 = CharsetNegotiator::new(Charset::UTF_8, false);
+        let parsed = parse_and_note(
+            &mut after_400,
+            &euc_jp_response_with_status("SHIORI/3.0 400 Bad Request"),
+        )
+        .expect("400 応答も（SHIORI エラーではあるが）解析自体は成功する");
+        assert_eq!(
+            parsed.status, 400,
+            "固定物の status 行が 400 になっていない"
+        );
+        assert_eq!(
+            after_400.current(),
+            euc_jp,
+            "400 応答の Charset ヘッダが採用されていない（要件 4.2・design §交渉の一周）"
+        );
+        // 結果の写しは 400 をエラーにする（採用が起きたことと両立する・要件 5.2）。
+        assert!(
+            map_get_result(parsed).is_err(),
+            "400 は SHIORI エラーとして写るべき（採用の有無とは別の主張）"
+        );
+    }
+
+    /// 復号で代替文字への置換が起きたという事実が、後半の結線を通って記録まで届く
+    /// （要件 4.7・7.1＝記録なしに握り潰さない）。
+    ///
+    /// 解析側（置換の検出）と交渉状態側（記録の発火）はそれぞれ別の決定論テストが押さえて
+    /// いるが、その 2 つを繋ぐ 1 語——後半が `parse_response` の返した置換の有無をそのまま
+    /// `note_response` へ渡すこと——はここでしか見ていない。渡す値を `false` に固定すると
+    /// 本テストだけが赤になる。
+    #[test]
+    fn the_decode_replacement_fact_reaches_the_record() {
+        // `Charset: EUC-JP` を名乗りながら、EUC-JP として不正なバイトを値に持つ応答。
+        // 0x80 は EUC-JP の先行バイト域（0xA1〜0xFE）の外にあり、代替文字へ吸収される。
+        let mut bytes = b"SHIORI/3.0 200 OK\r\nCharset: EUC-JP\r\nValue: ".to_vec();
+        bytes.push(0x80);
+        bytes.extend_from_slice(b"\r\n\r\n");
+
+        let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+        let (parsed, events) = log_capture_kit::capture(|| parse_and_note(&mut negotiator, &bytes));
+        let parsed = parsed.expect("不正な並びでも解析は成功する（要件 4.7）");
+        assert!(
+            parsed.decode_had_errors,
+            "解析側が置換を検出していない（固定物が不正な並びになっていない）"
+        );
+
+        let recorded: Vec<_> = events
+            .iter()
+            .filter(|e| e.field_str("event") == Some("charset_invalid_bytes_replaced"))
+            .collect();
+        assert_eq!(
+            recorded.len(),
+            1,
+            "置換の事実が記録まで届いていない（要件 4.7・7.1）"
+        );
     }
 }
