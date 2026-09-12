@@ -10,13 +10,18 @@
 //! - 写しを 1 か所だけ壊す道具 4 つの較正——狙った 1 か所だけが変わり、狙いが無ければ
 //!   止まり、repo のファイルには 1 バイトも触れない。
 //!
+//! - 判定 ⑴ ⑵ の母数の下限（`linkage.md` の引用 id 数・報告 5 本から読めた機械の
+//!   束 id の数・3 文書が引用した機械の束 id の数）と、その下限が**下回ると赤になる**
+//!   ことの較正。
+//!
 //! # ここにまだ置かないもの
 //!
-//! 判定 6 種それぞれの母数の下限（`linkage.md` の引用 id 数・名前付き束の数・
-//! `[[rank]]` の行数・`[[spec]]` の行数など）は、その判定を置くタスク（3.7 以降）の
-//! 持ち物である。3 文書は今のところ骨組みだけで配列表が 0 行なので、ここで下限を
-//! 置くと**実データが追いつく前に赤くなる**。今ここが主張するのは「読める」ことと
-//! 「道具が効く」ことだけである。
+//! 残る判定の母数の下限（名前付き束の数・`by_hand`・`[[rank]]` の行数・段階 A の
+//! `items`・`[[spec]]` の行数・`[[owner_completed]]` の行数など）は、その判定を置く
+//! タスク（3.8 以降）の持ち物である。`briefing.md` と `roadmap-draft.md` は今のところ
+//! 骨組みだけで配列表が 0 行なので、ここで下限を置くと**実データが追いつく前に
+//! 赤くなる**。同じ理由で、判定 ⑴ の下限を置くのは `linkage.md` の引用 id だけで、
+//! 残る 2 文書の引用 id の下限は段 4・段 5 が置く（2026-09-12 の実測はどちらも 0 件）。
 //!
 //! # spec ディレクトリの数は「下限」であって「一致」ではない
 //!
@@ -29,13 +34,16 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use ukadoc_survey::documents::Stage;
+use ukadoc_survey::documents::parse::read_linkage;
 use ukadoc_survey::io::paths;
 use ukadoc_survey::model::Domain;
 
+use super::RepoData;
 use super::documents::{
     Documents, Floors, OWN_SPEC_DIR, cited_ids, drop_bundle_name, drop_member, shift_count,
     twist_id, twisted_id,
 };
+use super::documents_checks::{bundle_ids_in_report, linkage_bundle_ids, report_bundle_ids};
 
 /// `.kiro/specs/` の直下にある brief 持ちディレクトリの数の下限。
 ///
@@ -48,6 +56,37 @@ const MIN_SPEC_DIRS: usize = 10;
 ///
 /// 2026-09-12 の実測は 174。完了した spec は減らないので下限として安定している。
 const MIN_COMPLETED_SPECS: usize = 100;
+
+/// 判定 ⑴ の母数——`linkage.md` の引用 id 数の下限。
+///
+/// 2026-09-12 に段 1 の後で数え直した実測は **1,553 件**で、内訳は束の `members` の
+/// 和集合 1,552 件と、地の文だけに現れる別名 1 件
+/// （`ukadoc:list_sakura_script:_5c7:1`・「過剰だった関連」の節）である。
+///
+/// 下限を 1,552 に置くのは設計「判定の一覧」⑴ の行のとおりで、この値は
+/// `[tally].target`＝対象 4 状態の全数でもある。束の `members` が対象を過不足なく
+/// 並べる以上、`linkage.md` の引用 id はこの数を下回れない。地の文の 1 件を足して
+/// 1,553 に釘付けしないのは、それが本文の書き方次第で増減する余りだからである。
+const MIN_LINKAGE_CITED_IDS: usize = 1_552;
+
+/// 判定 ⑵ の母数——報告 5 本の束の一覧から読めた機械の束 id の数の下限。
+///
+/// 2026-09-12 の実測は **123 行・122 種**（`report/summary.md` 75 行・
+/// `report/sakura-script.md` 23 行・`report/shiori.md` 25 行・`report/assets.md`
+/// **0 行**・`report/property.md` **0 行**）。行数と種類数が 1 だけ食い違うのは、
+/// 1 種が summary とドメイン別報告の両方に現れるためである。
+///
+/// 実数でなく下限（設計「判定の一覧」⑵ のとおり 100）にするのは、`links` の補修で
+/// 束が合流すれば種類が減りうるからである。
+const MIN_REPORT_BUNDLE_IDS: usize = 100;
+
+/// 判定 ⑵ の母数——3 文書が引用した機械の束 id の数の下限。
+///
+/// 2026-09-12 の実測は **47 種**で、すべて `linkage.md` である（`machine` 欄 47 種と、
+/// 見出しが「束 id」で終わる表の列 3 種。列の 3 種はいずれも `machine` 欄にも在る）。
+/// `briefing.md`・`roadmap-draft.md` はどちらも **0 種**。段 2 以降で束を分けると
+/// 増減するので、設計「判定の一覧」⑵ に合わせて「1 件以上」だけを主張する。
+const MIN_CITED_BUNDLE_IDS: usize = 1;
 
 /// 3 文書と全体報告の本文の長さの下限（文字数）。
 ///
@@ -195,6 +234,81 @@ fn the_spec_directory_listing_excludes_this_spec_and_completed() {
     );
 }
 
+/// 判定 ⑴ ⑵ が数えている相手が 0 件でないこと（要件 11.4）。
+#[test]
+fn the_citation_and_bundle_checks_have_something_to_judge() {
+    let repo = RepoData::load();
+    let documents = Documents::load();
+
+    let cited = cited_ids(&documents.linkage_text);
+    let known = report_bundle_ids(&repo, &documents.summary_text);
+    let machine = linkage_bundle_ids(&documents.linkage, &documents.linkage_text);
+
+    Floors::new()
+        .at_least(
+            "判定 ⑴: linkage.md の引用 id",
+            cited.len(),
+            MIN_LINKAGE_CITED_IDS,
+        )
+        .at_least(
+            "判定 ⑵: 報告 5 本から読めた機械の束 id",
+            known.len(),
+            MIN_REPORT_BUNDLE_IDS,
+        )
+        .at_least(
+            "判定 ⑵: 3 文書が引用した機械の束 id",
+            machine.len(),
+            MIN_CITED_BUNDLE_IDS,
+        )
+        .assert_met();
+}
+
+/// 母数が空に落ちたとき、上の下限が**実際に**赤になること。
+///
+/// 下限を置いただけでは「置いた」という記録が残るだけである。取り出しが空を返す
+/// 壊れ方（読み込みが別のファイルを見ている・表の見出しが変わって拾えなくなった）を
+/// 同じ取り出しの上で作り、3 行とも名指しで違反に挙がることを見る。
+#[test]
+fn the_floors_of_the_citation_and_bundle_checks_turn_red_when_the_source_goes_empty() {
+    let empty_linkage = read_linkage("```toml\n[tally]\ntarget = 0\nfrom_machine = 0\nby_hand = 0\nsingles = 0\nalias_excluded = 0\nnot_applicable_excluded = 0\n\n[tally.singles_by_domain]\nassets = 0\nproperty = 0\nsakura-script = 0\nshiori = 0\n```\n")
+        .expect("空の linkage.md を組み立てられない");
+
+    let mut floors = Floors::new();
+    floors
+        .at_least(
+            "判定 ⑴: linkage.md の引用 id",
+            cited_ids("").len(),
+            MIN_LINKAGE_CITED_IDS,
+        )
+        .at_least(
+            "判定 ⑵: 報告 5 本から読めた機械の束 id",
+            bundle_ids_in_report("").len(),
+            MIN_REPORT_BUNDLE_IDS,
+        )
+        .at_least(
+            "判定 ⑵: 3 文書が引用した機械の束 id",
+            linkage_bundle_ids(&empty_linkage, "").len(),
+            MIN_CITED_BUNDLE_IDS,
+        );
+
+    let short = floors.short();
+    assert_eq!(
+        short.len(),
+        3,
+        "母数が空に落ちたのに違反が 3 行そろわない: {short:?}"
+    );
+    assert!(
+        short.iter().all(|line| line.contains("0 件しかない")),
+        "空に落ちたことを本文が言っていない: {short:?}"
+    );
+    assert!(
+        short[0].contains("判定 ⑴")
+            && short[1].contains("報告 5 本")
+            && short[2].contains("3 文書が引用した"),
+        "どの母数が空なのかを名指していない: {short:?}"
+    );
+}
+
 /// 母数の器が、下限を下回った行を**すべて**名指すこと。
 #[test]
 fn the_floor_container_reports_every_row_that_falls_short() {
@@ -324,20 +438,74 @@ fn dropping_a_member_removes_one_id_and_its_comma() {
     );
 }
 
-/// 件数を 1 ずらす摂動が、狙った鍵の数だけを動かすこと。
+/// 件数を 1 ずらす摂動が、狙った囲みの狙った鍵の数だけを動かすこと。
 #[test]
 fn shifting_a_count_moves_the_number_by_one() {
     let toml = "[tally]\ntarget = 1749\nsingles = 0\n";
     assert_eq!(
-        shift_count(toml, "target"),
+        shift_count(toml, "[tally]", "target"),
         "[tally]\ntarget = 1750\nsingles = 0\n",
         "狙った鍵の数を 1 ずらせていない"
     );
     assert_eq!(
-        shift_count(toml, "singles"),
+        shift_count(toml, "[tally]", "singles"),
         "[tally]\ntarget = 1749\nsingles = 1\n",
         "0 の欄を 1 ずらせていない"
     );
+}
+
+/// 同じ鍵が別の表と地の文にも現れるとき、錨が狙った表の中だけを見ること。
+///
+/// これがこの道具の要である。錨を本文全体に置くと、`briefing.md` の `[stage.A]`〜
+/// `[stage.E]` が同じ鍵を 5 回持つだけで摂動が空振りして止まり、`linkage.md` の
+/// 地の文に恒等式を半角の `=` で書くだけで同じことが起きる（設計 D-2）。
+#[test]
+fn shifting_a_count_looks_only_inside_the_named_table() {
+    let markdown = "\
+恒等式は target = from_machine + by_hand + singles である。
+
+```toml
+[stage.A]
+bundles = 7
+singles = 0
+items = 320
+
+[stage.B]
+bundles = 4
+singles = 0
+items = 96
+```
+";
+    let shifted = shift_count(markdown, "[stage.B]", "singles");
+    assert!(
+        shifted.contains("[stage.A]\nbundles = 7\nsingles = 0\nitems = 320"),
+        "狙っていない段階の欄まで動かしている:\n{shifted}"
+    );
+    assert!(
+        shifted.contains("[stage.B]\nbundles = 4\nsingles = 1\nitems = 96"),
+        "狙った段階の欄を動かせていない:\n{shifted}"
+    );
+    assert!(
+        shifted.contains("恒等式は target = from_machine"),
+        "地の文まで書き換えている:\n{shifted}"
+    );
+}
+
+/// 実データの写しの上でも、5 つの段階の囲みを 1 つずつ狙えること。
+///
+/// `briefing.md` は設計 D-2 により `singles = ` を最低 5 回持つ。本文全体を錨に
+/// する書き方はここで必ず止まる。
+#[test]
+fn shifting_a_count_reaches_every_stage_block_of_the_real_briefing() {
+    let documents = Documents::load();
+    for stage in Stage::ALL {
+        let table = format!("[stage.{}]", stage.as_key());
+        let shifted = shift_count(&documents.briefing_text, &table, "singles");
+        assert_ne!(
+            shifted, documents.briefing_text,
+            "{table} の singles を 1 ずらせていない"
+        );
+    }
 }
 
 /// 束名を 1 つ消す摂動が、その名前を書いた行だけを落とすこと。
@@ -367,7 +535,13 @@ fn dropping_an_absent_member_stops() {
 #[test]
 #[should_panic(expected = "ちょうど 1 度現れない")]
 fn shifting_an_absent_count_stops() {
-    shift_count("[tally]\ntarget = 1\n", "singles");
+    shift_count("[tally]\ntarget = 1\n", "[tally]", "singles");
+}
+
+#[test]
+#[should_panic(expected = "ちょうど 1 度現れない")]
+fn shifting_a_count_in_an_absent_table_stops() {
+    shift_count("[tally]\ntarget = 1\n", "[stage.A]", "target");
 }
 
 #[test]
@@ -378,16 +552,27 @@ fn dropping_an_absent_bundle_name_stops() {
 
 /// 壊す道具が repo のファイルに 1 バイトも触れないこと（要件 11.3 の前提）。
 ///
-/// 4 つの道具を**合成の写し**の上で一通り働かせ、うち `shift_count` 1 つは
-/// **実データの写し**（`linkage.md` の本文）の上でも働かせる。前後でファイルの中身と
-/// 更新時刻が変わらないことを見る——写しの上だけで働く関数だという主張は、こうして
-/// 実ファイルを見ないと「たまたま今は書いていない」と区別できない。
+/// 4 つの道具を**合成の写し**の上で一通り働かせ、うち `twist_id` と `shift_count` の
+/// 2 つは**実データの写し**（`linkage.md` の本文）の上でも働かせる。前後でファイルの
+/// 中身と更新時刻が変わらないことを見る——写しの上だけで働く関数だという主張は、
+/// こうして実ファイルを見ないと「たまたま今は書いていない」と区別できない。
 ///
-/// 残る 3 つを実データの写しに掛けないのは、3 文書がまだ骨組みで狙いの綴りを 1 つも
-/// 持たないからである（2026-09-12 の実測: 3 文書の `ukadoc:` 0 件・`linkage.md` の
-/// `members = ` 0 件・`briefing.md` の `bundle = ` 0 件）。掛ければ道具は空振りで
-/// 止まり、確かめたい「触らない」ではなく「狙いが無い」で赤くなる。3 文書が育ったら
-/// 実データの写しへ寄せてよい。
+/// 残る 2 つ（`drop_member`・`drop_bundle_name`）は合成の写しだけに掛ける。実データで
+/// 掛けられないからではなく、**狙いを 1 つに決める理屈がここには無い**からである。
+/// どちらの道具も「写しにちょうど 1 度だけ現れる綴り」を要求するので、実データでは
+/// 狙いを選ぶ側の理屈（どの id・どの束名なら 1 度きりか）が要る。それは帰属の判定
+/// （⑶ ⑷）の持ち物なので、選び方はそちらへ置く。
+///
+/// 2026-09-12 に段 1 の後で数え直した実測（この段落の前の版は 3 文書が骨組みだった
+/// ころの写真のままだった）:
+///
+/// - 3 文書の `ukadoc:` の出現: `linkage.md` **3,135 件**・`briefing.md` **0 件**・
+///   `roadmap-draft.md` **0 件**。
+/// - `linkage.md` の `members = `: **67 件**（束 63・単独項目 4）。
+/// - `briefing.md` の `bundle = `: **0 件**（順位の行は段 4 が書く）。
+/// - `linkage.md` の引用符付き id で**ちょうど 1 度**現れるもの: **151 件**
+///   （`drop_member` の狙いになりうる綴り）。束名 67 のうち、その綴りを引用符付きで
+///   書いた行が 1 行きりのもの: **62 件**（`drop_bundle_name` の狙いになりうる名前）。
 #[test]
 fn the_breaking_tools_do_not_touch_the_repository_files() {
     let watched: Vec<PathBuf> = vec![
@@ -405,10 +590,16 @@ fn the_breaking_tools_do_not_touch_the_repository_files() {
     );
     let _ = twist_id(&sample, id);
     let _ = drop_member(&sample, id);
-    let _ = shift_count(&sample, "target");
+    let _ = shift_count(&sample, "[tally]", "target");
     let _ = drop_bundle_name(&sample, "起動");
-    // 実データの写しの上でも 1 度働かせる（写しを取り違えて元を触る壊れ方を見る）。
-    let _ = shift_count(&documents.linkage_text, "target");
+    // 実データの写しの上でも働かせる（写しを取り違えて元を触る壊れ方を見る）。
+    let _ = shift_count(&documents.linkage_text, "[tally]", "target");
+    let cited = cited_ids(&documents.linkage_text);
+    let first = cited
+        .iter()
+        .next()
+        .expect("linkage.md が id を 1 つも引用していない");
+    let _ = twist_id(&documents.linkage_text, first);
 
     let after: Vec<(Vec<u8>, SystemTime)> = watched.iter().map(fingerprint).collect();
     for (path, (before, after)) in watched.iter().zip(before.iter().zip(after.iter())) {

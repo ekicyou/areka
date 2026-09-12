@@ -53,8 +53,9 @@
 //! の一覧を読む道具は [`documents`]（`documents.rs`）にあり、そこにもテストの本体は
 //! 1 つも無い。その道具の較正と 3 文書まわりの母数の下限は
 //! [`documents_non_vacuity`]（`documents_non_vacuity.rs`）にある。判定 6 種そのものは
-//! `documents_checks.rs`（⑴ ⑵ ⑸ ⑹）と `linkage_checks.rs`（⑶ ⑷）が持ち、
-//! どちらもそれぞれの判定を置くタスク（3.7 以降）が足す。
+//! [`documents_checks`]（`documents_checks.rs`・⑴ ⑵ ⑸ ⑹）と `linkage_checks.rs`
+//! （⑶ ⑷）が持つ。今あるのは ⑴（引用 id の実在）と ⑵（機械の束 id の実在）で、
+//! 残る 4 種はそれぞれの判定を置くタスク（3.8 以降）が足す。
 //!
 //! 実データへの主張は [`checks`]（`checks.rs`）に、検査の対象が 0 件でないことの主張は
 //! [`non_vacuity`]（`non_vacuity.rs`）に、自前の道具の較正は [`values_md`]
@@ -68,6 +69,7 @@
 
 mod checks;
 mod documents;
+mod documents_checks;
 mod documents_non_vacuity;
 mod examples;
 mod non_vacuity;

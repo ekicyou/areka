@@ -187,10 +187,32 @@ pub(super) fn drop_member(text: &str, id: &str) -> String {
     format!("{}{}", &text[..start], &text[end..])
 }
 
-/// `鍵 = 数` の数を 1 つずらす（1 増やす）。
-pub(super) fn shift_count(text: &str, key: &str) -> String {
+/// 囲みの中の `鍵 = 数` の数を 1 つずらす（1 増やす）。
+///
+/// # 錨は表の中だけに置く
+///
+/// 錨を本文全体に置くと、同じ綴りが**別の表**や**地の文**に現れただけで摂動が
+/// 空振りして止まる。実データではどちらも起きる——`briefing.md` は設計 D-2 により
+/// `[stage.A]`〜`[stage.E]` の 5 つが `bundles`・`singles`・`items` を 1 つずつ持ち、
+/// `linkage.md` の「数の突き合わせ」は恒等式 `target = from_machine + by_hand +
+/// singles` を地の文に書く。だから `table`（`[tally]`・`[stage.B]` のような表の見出しの
+/// 行そのもの）で場所を絞り、その表の中でだけ鍵を探す。
+///
+/// 表の範囲は見出しの次の行から、次に行頭が `[` で始まる行の手前まで（見つからなければ
+/// 本文の終わりまで）。TOML の表は行頭の `[` で始まるので、これで隣の表へはみ出さない。
+/// 囲みを閉じる ` ``` ` の行はこの範囲に入るが、そこに `鍵 = ` は現れない。
+pub(super) fn shift_count(text: &str, table: &str, key: &str) -> String {
+    let table_line = format!("{table}\n");
+    let table_at = only_occurrence(text, &table_line, "ずらす件数の表") + table_line.len();
+    let section_len = text[table_at..]
+        .match_indices("\n[")
+        .map(|(at, _)| at + 1)
+        .next()
+        .unwrap_or(text.len() - table_at);
+    let section = &text[table_at..table_at + section_len];
+
     let needle = format!("{key} = ");
-    let at = only_occurrence(text, &needle, "ずらす件数の鍵");
+    let at = table_at + only_occurrence(section, &needle, "ずらす件数の鍵");
     let rest = &text[at + needle.len()..];
     let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
     assert!(
