@@ -78,14 +78,19 @@
 
 use areka_sakura::contract::ActorKey;
 
-use crate::cursor_tag::{
-    CursorAxis, CursorBasis, CursorWarnGuard, note_out_of_range, resolve_cursor_axis,
-    warn_cursor_degrade,
-};
+use crate::cursor_tag::{CursorAxis, CursorBasis, CursorWarnGuard};
 use crate::region::TextRegion;
 use crate::segment::SegmentPlan;
-use crate::state::{CursorCoord, TextItem, TextLayerConfig};
+use crate::state::{TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
+
+// 本ファイルは行配置の本体で、自己完結した補助 2 つ（塊の advance 合計・`\_l` の 1 軸
+// 解決の配線）は子モジュール `layout_line_ops.rs` が持つ。純移動ゆえ本体からの
+// 呼び出し方は分割前と同一。
+#[path = "layout_line_ops.rs"]
+mod line_ops;
+
+use line_ops::{resolve_cursor_component, segment_advance_sum};
 
 /// グリフ送りの注入点（metrics 依存の唯一の口・R4.5）。
 ///
@@ -742,36 +747,6 @@ impl LayoutEngine {
     }
 }
 
-/// 塊の advance 合計（塊先決の判定式の左辺 `seg_sum`）。
-///
-/// glyph 通し番号 `[start_serial, start_serial + len)`（`items` 中の `Glyph` のみを
-/// 0 起点で数えた範囲）のグリフ送り幅を、通し番号昇順＝**左畳み込み順**で合計する
-/// （配置も同順ゆえ浮動小数の順序依存を実装と一致させる・design Service Interface）。
-/// 全 `items` を走るため合計は `visible_count` に依存しない（INV-1/7.1）。
-fn segment_advance_sum(
-    items: &[TextItem],
-    start_serial: usize,
-    len: usize,
-    font_height: f32,
-    metrics: &dyn GlyphMetrics,
-) -> f32 {
-    let end = start_serial + len;
-    let mut sum = 0.0f32;
-    let mut serial = 0usize;
-    for item in items {
-        if let TextItem::Glyph { ch } = *item {
-            if serial >= end {
-                break;
-            }
-            if serial >= start_serial {
-                sum += metrics.advance(ch, font_height);
-            }
-            serial += 1;
-        }
-    }
-    sum
-}
-
 /// 保留の実体化のうち **(1) 現在行の確定**（改行・`\_l` とも行区切り＝RN-3）。
 ///
 /// 保留フラッシュ（ゲート②）と `LineBreak` 到着時の先行実体化（DD-11）が**共有する唯一の
@@ -878,43 +853,6 @@ fn finish_line(
         },
     };
     PositionedLine { rect, glyphs }
-}
-
-/// `\_l` の 1 軸ぶんを解決層へ委譲し、記録の 2 口へ配線する（配線層の責務そのもの）。
-///
-/// 意味論（基点＋値×係数・縮退の分類）は [`crate::cursor_tag::resolve_cursor_axis`] が持つ。
-/// 本関数が足すのは戻り値の 3 形への振り分けだけで、**採る契約は次の 1 行に尽きる**:
-///
-/// - `Ok(Some(px))`＝移動が成立 → [`note_out_of_range`] で範囲外なら DEBUG を 1 件残し
-///   （**位置は動かさない**＝内側へ寄せない・R2.6）、値をそのまま返す。
-/// - `Ok(None)`＝軸省略 → 当該軸不動・**無音**（正典の正常形・R5.5）。
-/// - `Err(degrade)`＝縮退 → guard があれば [`warn_cursor_degrade`]（キャラクター・分岐ごと
-///   初回 1 回）。guard 不在（[`LayoutEngine::layout`] 経路）は警告を抑止するだけで、
-///   当該軸不動という**純挙動は同一**である。
-///
-/// すなわち「`Err` のときだけ警告する」——`cursor_tag_resolve_tests.rs` の局所ヘルパ
-/// `warn_if_degraded` が写しているのはこの契約である。
-fn resolve_cursor_component(
-    coord: CursorCoord,
-    axis: CursorAxis,
-    basis: &CursorBasis,
-    region: &TextRegion,
-    cursor_warn: &mut Option<(&ActorKey, &mut CursorWarnGuard)>,
-) -> Option<f32> {
-    match resolve_cursor_axis(coord, axis, basis) {
-        Ok(Some(value)) => {
-            // 範囲外は記録するだけ（値は素通し）。戻り値を使って寄せてはならない（R2.6）。
-            note_out_of_range(axis, value, region);
-            Some(value)
-        }
-        Ok(None) => None,
-        Err(degrade) => {
-            if let Some((actor, guard)) = cursor_warn.as_mut() {
-                warn_cursor_degrade(actor, axis, coord, degrade, guard);
-            }
-            None
-        }
-    }
 }
 
 #[cfg(test)]

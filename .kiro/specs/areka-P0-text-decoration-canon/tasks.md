@@ -11,7 +11,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6_
   - _Boundary: draw ファサード_
 
-- [ ] 1.2 (P) 行配置から自己完結した 2 つの補助を切り出す
+- [x] 1.2 (P) 行配置から自己完結した 2 つの補助を切り出す
   - 区間ごとの送り幅合計とカーソル座標成分の解決を、行配置の子モジュールへ純移動する
   - 行を閉じる処理と保留改行の適用は**動かさない**（行配置の本文を字面で読む検査がそれらの出現数を固定しているため）
   - 完了状態: カーソルのはみ出し判定のテストを含む行配置の全テストが変更なしで緑、行配置ファイルの行数が上限まで余裕を取り戻している
@@ -263,3 +263,4 @@
 - 1.1: design.md の `mod line_store;` は素の `mod` では解決不能。子モジュール接続は `#[path = "draw_line_store.rs"] mod line_store;` 形を使う（structure.md のパス解決規則）。
 - 1.1: `cargo clippy -p areka-emo-text --all-targets` は本 spec 着手前から赤（tests/choice_fixture_test.rs:561 ほか 2 件の absurd_extreme_comparisons・PR#143 由来）。本 spec の責任外。
 - 全般: worktree では `git submodule update --init --recursive` を先に実行しないと `pasta_core` が解決できずビルドできない。
+- 1.2: 新設した純粋モジュールは `lib.rs::pure_layer_modules_have_no_windows_imports` の静的列挙に載るまで層規律の字面検査に映らない。5.2 で新設 5 本をまとめて追加すること。
