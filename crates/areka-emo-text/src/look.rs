@@ -305,6 +305,263 @@ impl<'a> GlyphStyles<'a> {
     }
 }
 
+// ------------------------------------------------------------- `\f` の値の状態機械
+
+/// `\f` を 1 件適用した結果のうち、呼び手が記録に残すべき印（記録そのものは呼び手の担当）。
+///
+/// 純粋層は `warn!`／`debug!` を出さない——同じキーと値の繰り返しを「1 台詞に 1 度」へ
+/// まとめるのは、台詞の区切りを知っている呼び手（`state_decoration`）の役目だからである
+/// （design.md「Error Handling」）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Note {
+    /// 状態は更新したが**表示は変えない**——`sub`／`sup`（要件 6.1）と `outline`（要件 5.9）。
+    /// 呼び手は `warn!` を 1 台詞に 1 度残す。
+    VocabularyOnly {
+        /// どの項目か（`"sub"`／`"sup"`／`"outline"`）。
+        key: &'static str,
+    },
+    /// 本仕様が意味を与えないキー——見た目を変えない（要件 2.5）。値を捨てずに保つのと
+    /// `debug!` の記録は呼び手の担当。
+    Unowned,
+}
+
+/// 適用できなかった `\f` 1 件（当該項目は変わらない・呼び手が `warn!` に載せる材料）。
+///
+/// 呼び手は `warn!(actor, key, value, reason)` の構造化フィールドへそのまま載せる
+/// （design.md「Error Handling」の「キー＝値ごとに 1 台詞 1 度」）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontTagIssue {
+    /// 受け取ったキー（キーが無い形では空文字列）。
+    pub key: String,
+    /// 受け取った値の列をカンマで繋いだもの（値が無ければ空文字列）。
+    pub value: String,
+    /// 何が受け付けられなかったか（記録用の短い日本語）。
+    pub reason: &'static str,
+}
+
+/// `\f`／`\f[]`／`\f[""]`——キーが無い（要件 2.6）。
+pub(crate) const REASON_NO_KEY: &str = "\\f にキーが無い";
+/// 43 形のいずれでもないキー（要件 2.6）。キーも小文字の完全一致のみ。
+pub(crate) const REASON_UNKNOWN_KEY: &str = "未知の \\f のキー（キーは小文字のみ）";
+/// 値が 1 つでない——値なし（`\f[bold]`）と値が 2 つ以上（`\f[bold,1,0]`）の両方（要件 5.5）。
+pub(crate) const REASON_VALUE_COUNT: &str = "真偽値の値が 1 つでない";
+/// 6 語のいずれでもない値（要件 5.5）。語は小文字の完全一致のみ。
+pub(crate) const REASON_BAD_SWITCH: &str = "真偽値が 6 語のいずれでもない（語は小文字のみ）";
+/// 値を持つ 3 キー（`height`／`color`／`name`）——本仕様の所有だが解釈がまだ無い。
+pub(crate) const REASON_VALUE_KEY_PENDING: &str = "値を持つキーの解釈が未実装";
+
+/// 真偽値で切り替える項目が受ける 6 語（**小文字の完全一致のみ**）。
+///
+/// ukadoc は「パラメータに true または 1 を指定すると太字」「false または 0 を指定すると無効」
+/// 「default を指定するとバルーン設定の標準に戻る」「disable を指定すると無効表示と同じ設定に
+/// なる」と定める。大文字を畳み込んで受けることは正典が定めておらず、areka は
+/// `doc/COMPAT_ARCHITECTURE.md` §8 の「小文字の完全一致のみ」の先例に揃える（design §A 項目 12）。
+/// <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bbold_2c_771f_507d_5024_5d:1>
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Switch {
+    /// `true`／`1`。
+    On,
+    /// `false`／`0`。
+    Off,
+    /// `default`——当該項目だけを既定層の値へ。
+    Default,
+    /// `disable`——当該項目だけを無効表示層の値へ。
+    Disable,
+}
+
+fn parse_switch(value: &str) -> Option<Switch> {
+    match value {
+        "true" | "1" => Some(Switch::On),
+        "false" | "0" => Some(Switch::Off),
+        "default" => Some(Switch::Default),
+        "disable" => Some(Switch::Disable),
+        _ => None,
+    }
+}
+
+/// 真偽 5 項目の「どのフィールドか」を指す関数（読みも書きもこの 1 つを通す）。
+type SwitchSlot = fn(&mut TextLook) -> &mut bool;
+
+/// キー → 項目。**この 1 か所だけ**がキーと項目の対応を持つ（読み用と書き用に分けると
+/// 並びが 2 か所へ散り、片方だけ取り違えても気づけない）。
+fn switch_slot(key: &str) -> Option<SwitchSlot> {
+    let slot: SwitchSlot = match key {
+        "bold" => |look| &mut look.bold,
+        "italic" => |look| &mut look.italic,
+        "underline" => |look| &mut look.underline,
+        "strike" => |look| &mut look.strike,
+        "outline" => |look| &mut look.outline,
+        _ => return None,
+    };
+    Some(slot)
+}
+
+/// キー → 上下付きの値（`sub`／`sup`）。
+fn script_of_key(key: &str) -> Option<Script> {
+    match key {
+        "sub" => Some(Script::Sub),
+        "sup" => Some(Script::Sup),
+        _ => None,
+    }
+}
+
+/// 値を持つ 3 キー——本仕様の所有だが、値の解釈はまだここに無い（タスク 3.4 が
+/// [`apply_font_tag`] へ腕を足す場所）。未知のキーとは別の理由で拒み、記録から
+/// 「所有しているが未実装」が見分けられるようにする。
+const VALUE_KEYS: [&str; 3] = ["height", "color", "name"];
+
+/// 本仕様が意味を与えないキーのうち、接頭辞では拾えないもの（寄せ 2・影 2）。
+const UNOWNED_KEYS: [&str; 4] = ["align", "valign", "shadowcolor", "shadowstyle"];
+
+/// 所有外のキーか（要件 2.5 の列挙——寄せ 2・影 2・`cursor*` 10・`anchor*` 17）。
+///
+/// 所有仕様は `areka-P0-text-align-shadow-canon`（寄せ・影）・
+/// `areka-P0-choice-marker-styling`（`cursor*`）・`areka-P0-anchor-tag-canon`
+/// （`anchor*`・`anchor.font.color` を含む）。
+fn is_unowned(key: &str) -> bool {
+    UNOWNED_KEYS.contains(&key) || key.starts_with("cursor") || key.starts_with("anchor")
+}
+
+fn issue(key: &str, values: &[&str], reason: &'static str) -> FontTagIssue {
+    FontTagIssue {
+        key: key.to_owned(),
+        value: values.join(","),
+        reason,
+    }
+}
+
+/// 真偽値の値をちょうど 1 つ取り出す（値なしと 2 つ以上はどちらも当該項目を変えない・要件 5.5）。
+fn single_value<'a>(key: &str, values: &[&'a str]) -> Result<&'a str, FontTagIssue> {
+    match values {
+        [one] => Ok(one),
+        _ => Err(issue(key, values, REASON_VALUE_COUNT)),
+    }
+}
+
+/// `\f` 1 件を「いま効いている見た目」へ適用する（全入力で値を返す・panic しない）。
+///
+/// `args[0]` がキー、`args[1..]` が値の列（記述順）。`Ok(None)` は「適用済み・記録は要らない」、
+/// `Ok(Some(note))` は「適用したが呼び手が記録すべきことがある」、`Err` は「**当該項目を
+/// 変えなかった**・呼び手が理由を記録する」を表す。
+///
+/// # このタスク（3.3）が持つ腕
+///
+/// - 一括の戻し `\f[default]`／`\f[disable]`——見た目を**丸ごと置き換える**（要件 10.1／10.2）。
+///   項目を列挙しないので、後続仕様が [`TextLook`] へ項目を足せば自動で戻しに含まれる（要件 10.4）。
+/// - 真偽 5 項目 `bold`／`italic`／`underline`／`strike`／`outline`——6 語で当該項目だけを
+///   動かす（要件 5.1〜5.4・5.8）。`outline` は状態だけ更新して表示は変えない（要件 5.9）。
+/// - 上下付き `sub`／`sup`——同じ 6 語で解釈し、後から指定した方が先を外す（要件 6.1／6.2）。
+/// - 所有外のキー——見た目を変えず [`Note::Unowned`]（要件 2.5）。
+///
+/// 値を持つ 3 キー（`height`／`color`／`name`）は本仕様の所有だが解釈はまだ無く、
+/// [`REASON_VALUE_KEY_PENDING`] を理由に拒む（タスク 3.4 が腕を足す）。
+///
+/// # 事前条件・事後条件
+///
+/// - `layers.default.height` は正の有限値（[`LookLayers::from_balloon`] が保証）。
+/// - `Err` のとき `current` は不変。
+pub fn apply_font_tag(
+    current: &mut TextLook,
+    layers: &LookLayers,
+    args: &[&str],
+) -> Result<Option<Note>, FontTagIssue> {
+    let Some(key) = args.first().copied().filter(|key| !key.is_empty()) else {
+        return Err(issue("", &[], REASON_NO_KEY));
+    };
+    let values = &args[1..];
+
+    // 一括の戻し——見た目を丸ごと置き換える（項目を列挙しない・要件 10.4）。
+    // 正典の綴りは値を取らない `\f[default]`／`\f[disable]` で、意味はキーだけで決まる。
+    // 余った値（`\f[default,1]` のような綴り誤り）は戻しを妨げない。
+    if key == "default" {
+        *current = layers.default.clone();
+        return Ok(None);
+    }
+    if key == "disable" {
+        *current = layers.disable.clone();
+        return Ok(None);
+    }
+    if let Some(slot) = switch_slot(key) {
+        return apply_switch(current, layers, key, values, slot);
+    }
+    if let Some(want) = script_of_key(key) {
+        return apply_script(current, layers, key, values, want);
+    }
+    if VALUE_KEYS.contains(&key) {
+        return Err(issue(key, values, REASON_VALUE_KEY_PENDING));
+    }
+    if is_unowned(key) {
+        return Ok(Some(Note::Unowned));
+    }
+    Err(issue(key, values, REASON_UNKNOWN_KEY))
+}
+
+/// 真偽 5 項目の 1 つを 6 語で動かす（当該項目以外は触らない・要件 5.1〜5.5）。
+fn apply_switch(
+    current: &mut TextLook,
+    layers: &LookLayers,
+    key: &str,
+    values: &[&str],
+    slot: SwitchSlot,
+) -> Result<Option<Note>, FontTagIssue> {
+    let word = single_value(key, values)?;
+    let next = match parse_switch(word).ok_or_else(|| issue(key, values, REASON_BAD_SWITCH))? {
+        Switch::On => true,
+        Switch::Off => false,
+        // 層の値も同じ `slot` を通して読む（キーと項目の対応が 1 か所に留まる）。
+        Switch::Default => {
+            let mut probe = layers.default.clone();
+            *slot(&mut probe)
+        }
+        Switch::Disable => {
+            let mut probe = layers.disable.clone();
+            *slot(&mut probe)
+        }
+    };
+    *slot(current) = next;
+    // 白抜きは状態だけ更新して表示は変えない（要件 5.9）。
+    Ok((key == "outline").then_some(Note::VocabularyOnly { key: "outline" }))
+}
+
+/// 上下付きを 6 語で動かす（要件 6.1／6.2）。
+///
+/// 上下付きは 1 つの値（[`Script`]）なので、`sub` を立てれば `sup` は自動的に外れる
+/// ——後から指定した方が残る（要件 6.2）。外す側は「いま効いているのが当該の方のとき
+/// だけ」外す（`\f[sub,0]` が上付きを消してしまわない）。
+fn apply_script(
+    current: &mut TextLook,
+    layers: &LookLayers,
+    key: &str,
+    values: &[&str],
+    want: Script,
+) -> Result<Option<Note>, FontTagIssue> {
+    let word = single_value(key, values)?;
+    let on = match parse_switch(word).ok_or_else(|| issue(key, values, REASON_BAD_SWITCH))? {
+        Switch::On => true,
+        Switch::Off => false,
+        Switch::Default => layers.default.script == want,
+        Switch::Disable => layers.disable.script == want,
+    };
+    if on {
+        current.script = want;
+    } else if current.script == want {
+        current.script = Script::None;
+    }
+    Ok(Some(Note::VocabularyOnly {
+        key: match want {
+            Script::Sub => "sub",
+            Script::Sup => "sup",
+            // `script_of_key` が選り分けるので `None` はここへ来ない。
+            // ワイルドカードにせず全腕を書き、`Script` に値が増えたら型検査で気づけるようにする。
+            Script::None => "sup",
+        },
+    }))
+}
+
 #[cfg(test)]
 #[path = "look_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "look_font_tag_tests.rs"]
+mod font_tag_tests;
