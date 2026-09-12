@@ -1,0 +1,229 @@
+//! スコープごとの装飾状態と、追記される文字への番号付け（純粋層・`state.rs` の子モジュール）。
+//!
+//! `\f[...]` は台本のうえでは再生時間 0 の**汎用キャリア**（[`FONT_TAG_CARRIER`]）で運ばれ、
+//! 本モジュールがその名前で自己選別して消費する（要件 2.4）。効果はスコープ（`\0`・`\1`・
+//! `\p[n]`）ごとに独立で（要件 3.1）、**それ以降に追記される文字**にだけ効く（要件 3.2）。
+//!
+//! ## 何を持ち、何を持たないか
+//!
+//! - 持つもの——[`Decoration`]（2 層・現在の見た目・所有外キーの保持・記録済みの値）と、
+//!   [`ActorTextState`] 側の番号列（`glyph_styles`）・装飾の表（`styles`）。
+//! - 持たないもの——見た目の値の解釈そのもの。`\f` 1 件をどう見た目へ写すかは
+//!   [`crate::look::apply_font_tag`] が唯一の実装点で、本モジュールは
+//!   「どのスコープへ」「いつ」「記録をどう残すか」だけを決める。
+//!
+//! ## 寿命の 2 系統（要件 3.7／3.8・design.md「Flow 2」）
+//!
+//! | 出来事 | 内容（`items`・`reveal`・`choices`・番号列・表） | 装飾状態（`decor`） |
+//! |---|---|---|
+//! | `\c`（`Clear`） | 消える | **保つ** |
+//! | `\n`（`NewLine`）・`\_l`（`Cursor`） | 変わらない | **保つ** |
+//! | 台本の先頭（`ClearAll`） | 消える | 既定へ戻る |
+//! | `\f[default]` | 変わらない | 既定へ戻る |
+//!
+//! 「戻す操作」は 1 か所（[`ActorTextState::reset_look`]）で、`\f[default]` も台本の先頭も
+//! そこを通る（要件 10.3）。見た目を**丸ごと**置き換えるので、後続仕様が
+//! [`crate::look::TextLook`] へ項目を足せば列挙を直さずに戻しへ含まれる（要件 10.4）。
+//! 戻す操作は既に追記済みの文字の番号を書き換えない——番号列は追記時の写しであり、
+//! 表の既存の番号の意味も変わらないからである（要件 10.7）。
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
+
+use crate::look::{LookLayers, Note, StyleId, TextLook, apply_font_tag};
+
+use super::ActorTextState;
+
+/// スコープ 1 つ分の装飾状態（2 層・現在の見た目・所有外キーの保持・記録済みの値）。
+///
+/// [`Decoration::default`] は ukadoc の既定（[`LookLayers::default`]）で、バルーンが装着される
+/// 前に届いた cue のための出発点である。装着時に 2 層を差し込む口（`set_look_layers`）は
+/// タスク 4.2 の担当。
+#[derive(Clone, Debug, PartialEq)]
+pub struct Decoration {
+    /// 既定・無効表示・選択肢文字色（`\f[...,default]`／`\f[...,disable]` の戻し先）。
+    layers: LookLayers,
+    /// いま効いている見た目（次に追記される文字が受け取る値）。
+    current: TextLook,
+    /// 本仕様が意味を与えないキーの最新の引数列（要件 2.5・キー→引数列）。
+    unowned: BTreeMap<String, Vec<String>>,
+    /// 記録済みの「キー=値」（同じ指定の警告を 1 台詞に 1 度へ抑えるための集合・要件 13.4）。
+    warned: BTreeSet<String>,
+}
+
+impl Default for Decoration {
+    fn default() -> Decoration {
+        let layers = LookLayers::default();
+        let current = layers.default.clone();
+        Decoration {
+            layers,
+            current,
+            unowned: BTreeMap::new(),
+            warned: BTreeSet::new(),
+        }
+    }
+}
+
+impl ActorTextState {
+    /// グリフ序数と同じ序数空間の装飾番号列（`items` のグリフだけを数えた序数）。
+    pub fn glyph_styles(&self) -> &[StyleId] {
+        &self.glyph_styles
+    }
+
+    /// このスコープの装飾の表（番号 → 既定と異なる見た目）。
+    pub fn styles(&self) -> &crate::look::StyleTable {
+        &self.styles
+    }
+
+    /// いま効いている見た目（次に追記される文字が受け取る値）。
+    pub fn current_look(&self) -> &TextLook {
+        &self.decor.current
+    }
+
+    /// このスコープの 2 層（既定・無効表示・選択肢文字色）。
+    pub fn look_layers(&self) -> &LookLayers {
+        &self.decor.layers
+    }
+
+    /// 所有外キーの最新の引数列（後続仕様の消費者が読む・戻す操作で空になる・要件 2.5）。
+    pub fn unowned_vocab(&self) -> &BTreeMap<String, Vec<String>> {
+        &self.decor.unowned
+    }
+
+    /// 内容だけを消す（`\c`＝`Clear`・装飾状態は保つ・要件 3.7）。
+    ///
+    /// 番号列と装飾の表は内容と同じ寿命である——番号列はグリフ序数の写しなので内容が消えれば
+    /// 空になり、表は「その内容が使っていた見た目」の入れ物なので同時に空にする。
+    /// 消えないのは `decor`（現在の見た目・所有外キーの保持・記録済みの値）だけ。
+    pub(super) fn clear_content(&mut self) {
+        self.items.clear();
+        self.reveal = super::RevealSchedule::default();
+        self.choices.clear();
+        self.glyph_styles.clear();
+        self.styles.clear();
+    }
+
+    /// いま効いている見た目を表に登録し、追記する文字数だけ番号を並べる（要件 3.2／3.3）。
+    ///
+    /// design.md の `intern_current` と呼び手側の push を 1 つにまとめてある——追記点が
+    /// 文字（`Text`）と選択肢（`Choice`）の 2 か所あり、同じ数行を写すと片方だけ
+    /// 「0 文字なら表を汚さない」を落とすからである（不変条件
+    /// 「`glyph_styles.len()` は `items` のグリフ数に等しい」の実装点はここ 1 つ）。
+    /// 0 文字ガードを実際に踏むのは `Text` の腕（無条件に呼ぶ）で、`Choice` の腕は
+    /// 上位で 0 文字を分岐するのでここへ来ない。
+    ///
+    /// R6.3 の記録を追記点で出すタスク 4.2 は `actor: &ActorKey` を引数へ戻すこと
+    /// （design.md が `intern_current` に割り当てている）。
+    pub(super) fn push_current_style(&mut self, glyph_count: usize) {
+        if glyph_count == 0 {
+            return;
+        }
+        let id = self
+            .styles
+            .intern(&self.decor.current, &self.decor.layers.default);
+        self.glyph_styles
+            .extend(std::iter::repeat_n(id, glyph_count));
+    }
+
+    /// 「戻す操作」の実体——見た目を既定へ丸ごと戻し、所有外キーの保持も空にする
+    /// （要件 10.1／10.3／10.4）。既に追記済みの文字には効かない（要件 10.7）。
+    pub(super) fn reset_look(&mut self) {
+        self.decor.current = self.decor.layers.default.clone();
+        self.decor.unowned.clear();
+    }
+
+    /// 台本の先頭（`ClearAll`）の戻し——[`ActorTextState::reset_look`] に加えて記録済みの値も
+    /// 空にする（次の台詞では同じ指定がもう 1 度記録される・要件 3.8／13.4）。
+    pub(super) fn reset_for_new_talk(&mut self) {
+        self.reset_look();
+        self.decor.warned.clear();
+    }
+
+    /// `\f` 1 件（キャリアのトークン列）を適用し、必要な記録を残す（要件 2.5／2.6／3.2）。
+    ///
+    /// `tokens[0]` がキー、`tokens[1..]` が値の列。値の解釈は
+    /// [`crate::look::apply_font_tag`] の担当で、本関数は「戻す操作へ回すか」「所有外キーを
+    /// 保持するか」「何を記録するか」だけを決める。記録なしで失敗を飲み込む経路は無い
+    /// （`Err` と記録すべき [`Note`] は必ず `warn!`・所有外キーは `debug!`）。
+    pub(super) fn apply_font_args(&mut self, actor: &ActorKey, tokens: &[&str]) {
+        // 一括の戻し（`\f[default]`）は「戻す操作」1 か所を通す（要件 10.3）——
+        // 見た目だけを置き換える apply_font_tag の腕では所有外キーの保持が残ってしまう。
+        // ゆえに `look.rs::apply_font_tag` の `key == "default"` の腕は本番経路から到達しない
+        // （テストからのみ呼ばれる）。所有外キーの保持を戻しに含めるため、本番はこちらを
+        // 通す（要件 10.4）。
+        if tokens.first() == Some(&"default") {
+            tracing::debug!(actor = %actor, "\\f[default]——スコープの装飾状態を既定へ戻す（要件 10.1）");
+            self.reset_look();
+            return;
+        }
+        match apply_font_tag(&mut self.decor.current, &self.decor.layers, tokens) {
+            Ok(None) => {}
+            // 記録すべき印は 4 種——catch-all を置かず、`Note` に腕が増えたときは
+            // コンパイラに「これは保持か記録か」の再検討を強制する。
+            Ok(Some(Note::Unowned)) => {
+                // 要件 2.5: 値を捨てずに保持し、表示は変えず debug の記録を残す。
+                // キーが空なら apply_font_tag は Err を返すので、ここでは必ずキーがある。
+                let key = tokens[0].to_owned();
+                tracing::debug!(actor = %actor, key = %key, "本仕様の所有外の \\f のキー——引数列を保持し表示は変えない（要件 2.5）");
+                self.decor.unowned.insert(
+                    key,
+                    tokens[1..]
+                        .iter()
+                        .map(|value| (*value).to_owned())
+                        .collect(),
+                );
+            }
+            Ok(Some(Note::VocabularyOnly { key })) => {
+                self.warn_once(
+                    actor,
+                    key,
+                    &tokens[1..].join(","),
+                    "語彙として受理したが表示は変えない",
+                );
+            }
+            Ok(Some(Note::StylesheetKeyword)) => {
+                self.warn_once(
+                    actor,
+                    "height",
+                    &tokens[1..].join(","),
+                    "スタイルシートの大きさの語は語彙のみ——大きさを変えない",
+                );
+            }
+            Ok(Some(Note::AnchorColorAsDefault)) => {
+                self.warn_once(
+                    actor,
+                    "color",
+                    &tokens[1..].join(","),
+                    "アンカーの色定義がまだ無い——default と同じ色を適用した",
+                );
+            }
+            Err(issue) => {
+                let value = issue.value.clone();
+                self.warn_once(actor, &issue.key, &value, issue.reason);
+            }
+        }
+    }
+
+    /// 同じ「キー=値」の警告を 1 台詞に 1 度だけ残す（要件 13.1／13.4）。
+    fn warn_once(&mut self, actor: &ActorKey, key: &str, value: &str, reason: &str) {
+        if self.decor.warned.insert(format!("{key}={value}")) {
+            tracing::warn!(actor = %actor, key, value, reason, "\\f の指定を適用できない——当該項目は変えずに再生を続ける");
+        }
+    }
+}
+
+/// `\f` を運ぶ汎用キャリアか（名前による自己選別・要件 2.4）。
+///
+/// 名前が合わない運搬（`\!` の他コマンド）と非正準な params は `None` で、呼び手は従来どおり
+/// 読み飛ばす。
+pub(super) fn font_tag_tokens(command: &areka_sakura::contract::CueCommand) -> Option<Vec<&str>> {
+    match command.as_command_carrier() {
+        Some((name, tokens)) if name == FONT_TAG_CARRIER => Some(tokens),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+#[path = "state_decoration_tests.rs"]
+mod tests;

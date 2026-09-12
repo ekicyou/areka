@@ -81,7 +81,7 @@
   - _Boundary: look_
 
 - [ ] 4. スコープごとの装飾状態と、その配管
-- [ ] 4.1 スコープの装飾状態を持ち、追記される文字に番号を与える
+- [x] 4.1 スコープの装飾状態を持ち、追記される文字に番号を与える
   - 表示状態に「2 層・現在の見た目・所有外キーの保持・記録済みの値」の束と、グリフ序数に対応する番号列・装飾の表を足す
   - 文字と選択肢の追記点で現在の見た目を表に登録し、追記する文字数だけ番号を並べる。それ以前に追記済みの文字には効かない
   - 装飾の命令は汎用キャリアの名前で自己選別して適用する。それ以外の運搬は従来どおり読み飛ばす
@@ -116,7 +116,7 @@
   - 配置の子モジュールに装飾入りの入口を置き、閉じる行に置かれた文字の大きさの最大値で行矩形の丈と行送りを求める。文字の無い行はそのとき効いている大きさを使い、台本の末尾で次に置く文字が無い行はスコープの現在の見た目の大きさを使う
   - 行送りの式は既存の 1 点だけを通し、装飾のために別の式や係数を持ち込まない
   - 区間ごとの送り幅合計も同じ見た目で合計する
-  - 純粋層が Windows に依存していないことを字面で確かめる検査の一覧に、本仕様で新設した純粋モジュール 6 本を足す（着手時に実ファイル名で数え直すこと）
+  - 純粋層が Windows に依存していないことを字面で確かめる検査の一覧に、本仕様で新設した純粋モジュール 10 本を足す（着手時に実ファイル名で数え直すこと）
   - 完了状態: 兄弟テストが「行矩形の丈が行内の最大の大きさ」「改行だけの行と台本末尾の空行の送りが現在の大きさ」「折返し位置が見た目込み」を固定して緑。行の丈を既定の大きさで固定する誤りを再現すると赤になる
   - _Requirements: 7.8, 7.9, 11.2, 15.5_
   - _Depends: 5.1_
@@ -280,3 +280,10 @@
 - 3.3: 5.2 で `pure_layer_modules_have_no_windows_imports` へ足す純粋モジュールは 5 本になった（`color.rs`／`color_tests.rs`／`look.rs`／`look_tests.rs`／`look_font_tag_tests.rs`）。3.4 以降が足すなら件数を追随させること。
 - 3.4: 5.2 で `pure_layer_modules_have_no_windows_imports` へ足す純粋モジュールは **6 本**（`color.rs`／`color_tests.rs`／`look.rs`／`look_tests.rs`／`look_font_tag_tests.rs`／`look_font_tag_value_tests.rs`）。5.2 の本文も 6 本へ改訂済み。
 - 3.4: `[name]` に値が 2 つ以上あるとき `default`／`disable` を層への戻しと解さず候補列の 1 要素として保つ裁量。design §A の 15 件目として登記済み（9.1 の登記件数 14→15）。
+- 4.1: 設計の `intern_current(&mut self, actor) -> StyleId` を `push_current_style(&mut self, glyph_count)` へ畳んだ（追記点が Text／Choice の 2 か所あり、「0 文字なら表を汚さない」ガードの写し漏れを防ぐため）。**4.2 は R6.3 の追記点警告のために `actor: &ActorKey` を引数へ戻すこと**。
+- 4.1: `[default]` は `apply_font_tag` の `default` の腕でなく `reset_look()` を通す（`apply_font_tag` は見た目だけを置き換えるので所有外キーの保持が生き残り要件 10.4 を破る）。結果 `look.rs::apply_font_tag` の `key == "default"` の腕は**本番未到達**（テストからのみ）。
+- 4.1: `[disable]` は今も `apply_font_tag` を通り所有外キーを保つ。`default` との非対称を「戻す操作」の契約を所有する **4.2 が裁定すること**。
+- 4.1: `Decoration.warned` と `warn_once` は 4.1 で先置き済み（フィールドだけだと dead_code のため）。**4.2 に残るのは「戻す操作の公開」「2 層の差し込み口」「R6.3 の追記点警告」と記録件数の試験だけ**——二重実装しないこと。
+- 4.1: 5.2 で `pure_layer_modules_have_no_windows_imports` へ足す純粋モジュールは **8 本**（`color.rs`／`color_tests.rs`／`look.rs`／`look_tests.rs`／`look_font_tag_tests.rs`／`look_font_tag_value_tests.rs`／`state_decoration.rs`／`state_decoration_tests.rs`）。
+- 4.1: 「0 文字で表を汚さない」の述語は**実装側で実際に到達する経路**を踏ませること。`Choice` の腕は上位で 0 文字を分岐するのでガードに届かず恒真になった。到達するのは空の `Text`。
+- 4.1: 5.2 の純粋モジュールは実測 **10 本**——上の 8 本に加えて 1.2 の `layout_line_ops.rs`（design.md の Testing Strategy が名指し）と 1.3 の `viewbox_draw_plan.rs`。分割で生まれた子モジュールも数えること。

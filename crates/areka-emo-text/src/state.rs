@@ -45,6 +45,11 @@ use std::collections::BTreeMap;
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
+use crate::look::{StyleId, StyleTable};
+
+pub use decoration::Decoration;
+use decoration::font_tag_tokens;
+
 /// テキスト層の調整値（design.md「TextLayerRuntime」の config 正本）。
 ///
 /// 純粋層・結線層の双方が消費する共有設定であり、**行送りの式の唯一の定義点**
@@ -329,6 +334,12 @@ pub struct ActorTextState {
     reveal: RevealSchedule,
     /// 選択肢スパン（items と同一ライフサイクル＝`Clear`/`ClearAll` で同時初期化・R5.1/R5.3）。
     choices: Vec<ChoiceSpan>,
+    /// グリフ序数と同じ序数空間の装飾番号列（操作は [`decoration`]・R3.3）。
+    glyph_styles: Vec<StyleId>,
+    /// 装飾の表（番号 → 既定と異なる見た目・内容と同じライフサイクル）。
+    styles: StyleTable,
+    /// スコープの装飾状態（2 層・現在の見た目・所有外キーの保持・記録済みの値・R3.1）。
+    decor: Decoration,
 }
 
 impl ActorTextState {
@@ -394,6 +405,8 @@ impl TextLayerState {
                     .items
                     .extend(text.chars().map(|ch| TextItem::Glyph { ch }));
                 state.reveal.extend_chunk(glyph_count, cue.at, interval);
+                // 追記した文字にいま効いている見た目の番号を与える（R3.2/R3.3）。
+                state.push_current_style(glyph_count);
             }
             CueCommand::NewLine { ratio } => {
                 tracing::debug!(actor = %cue.actor, ratio, "NewLine cue 適用（改行マーカー追記）");
@@ -401,9 +414,14 @@ impl TextLayerState {
                 state.items.push(TextItem::LineBreak { ratio: *ratio });
             }
             CueCommand::Clear => {
-                tracing::debug!(actor = %cue.actor, "Clear cue 適用（未リビール分含む全消去）");
-                // schedule ごと初期状態へ戻す（未リビールの文字も含めて破棄＝後出し優先・R2.3）。
-                *self.actors.entry(cue.actor.clone()).or_default() = ActorTextState::default();
+                tracing::debug!(actor = %cue.actor, "Clear cue 適用（未リビール分含む全消去・装飾は保持）");
+                // 内容だけを消す（未リビールの文字も含めて破棄＝後出し優先・R2.3）。
+                // 装飾状態（現在の見た目・所有外キーの保持）は保つ——`\c` は装飾を戻さない
+                // （R3.7・`= ActorTextState::default()` に戻すと装飾まで消える）。
+                self.actors
+                    .entry(cue.actor.clone())
+                    .or_default()
+                    .clear_content();
             }
             CueCommand::ClearAll => {
                 tracing::debug!(actor = %cue.actor, "ClearAll cue 適用（全スコープを未リビール分含め消去）");
@@ -416,8 +434,12 @@ impl TextLayerState {
                 // entry ごと消すと当該スコープが走査から外れ、既描画のテキストが画面に
                 // 残留する（＝消えない）。`Clear` と同じ「entry は残し中身を空にする」
                 // 流儀を守ることで、次フレームで空描画され実際に消える。
+                // 台本の先頭ゆえ、内容を消したうえで装飾も既定へ戻す（R3.8）——
+                // 装飾は台詞をまたいで残らない。記録済みの値も空にして、次の台詞では
+                // 同じ不正な指定がもう 1 度記録されるようにする（R13.4）。
                 for state in self.actors.values_mut() {
-                    *state = ActorTextState::default();
+                    state.clear_content();
+                    state.reset_for_new_talk();
                 }
             }
             CueCommand::Choice {
@@ -451,6 +473,8 @@ impl TextLayerState {
                         .items
                         .extend(text.chars().map(|ch| TextItem::Glyph { ch }));
                     state.reveal.extend_chunk(glyph_count, cue.at, interval);
+                    // 選択肢の文字にもそのときの装飾状態を与える（R3.5）。
+                    state.push_current_style(glyph_count);
                 }
                 let ordinal = state.choices.len();
                 state.choices.push(ChoiceSpan {
@@ -472,6 +496,21 @@ impl TextLayerState {
                 let state = self.actors.entry(cue.actor.clone()).or_default();
                 state.items.push(TextItem::CursorMove { x, y });
             }
+            // `\f` 文字装飾の汎用キャリア（R2.4）は**名前で自己選別**して消費する。
+            // 名前が合わない運搬（`\!` の他コマンド）と非正準 params は、下の腕と同じ
+            // 良性スキップ（従来どおり読み飛ばす）。
+            CueCommand::Custom { .. } => match font_tag_tokens(&cue.command) {
+                Some(tokens) => {
+                    tracing::debug!(actor = %cue.actor, ?tokens, "\\f cue 適用（以降に追記される文字へ効く）");
+                    self.actors
+                        .entry(cue.actor.clone())
+                        .or_default()
+                        .apply_font_args(&cue.actor, &tokens);
+                }
+                None => {
+                    tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
+                }
+            },
             // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
             // 対象外——演者側 relevance の責務。防御的に無視する（catch-all を置かず、dola の
             // variant 追加時にコンパイラが再検討を強制する）。`BalloonSurface` は表示系
@@ -482,7 +521,6 @@ impl TextLayerState {
             // ローカル遅延を生じさせてはならない（二重待ち禁止）。
             CueCommand::Emote { .. }
             | CueCommand::EntityRef(..)
-            | CueCommand::Custom { .. }
             | CueCommand::BalloonSurface { .. }
             | CueCommand::Wait => {
                 tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
@@ -510,6 +548,9 @@ impl TextLayerState {
         self.actors.iter()
     }
 }
+
+#[path = "state_decoration.rs"]
+mod decoration;
 
 #[cfg(test)]
 #[path = "state_test_support.rs"]
