@@ -15,6 +15,8 @@
 
 pub mod adapter;
 pub mod assets;
+/// バルーン面 0 の原点画素から背景色を導く（無効表示の混色の相手・要件 4.6）。
+mod balloon_background;
 pub mod balloon_visibility;
 pub mod consumer_ledger;
 pub mod frame;

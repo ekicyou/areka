@@ -179,7 +179,7 @@
   - _Boundary: viewbox_draw_
 
 - [ ] 7. 結線（背景色の供給と装飾入り経路の接続）
-- [ ] 7.1 (P) バルーン画像の原点画素から背景色を導く
+- [x] 7.1 (P) バルーン画像の原点画素から背景色を導く
   - 起動時の資材組み立てに、面 0 の焼き込み済み画像の原点画素を読む新しいモジュールを足し、資材の束に背景色を持たせる
   - 不透明でないとき・トリムで原点が範囲の外のとき・面が引けないときは白に落として記録を残す
   - 資材の束を組み立てているテスト 2 か所に背景色を足す
@@ -329,3 +329,10 @@
 - 6.5: 「既定だけの行は範囲指定 0 回」を実際に担っているのは、呼び手の `line.default_only` 短絡と `apply_font_ranges` 外側の `if run.style == StyleId::DEFAULT { continue; }` の 2 点。**6 項目のガードではない**（doc の主張が偽だったので訂正済み）。
 - 6.5: **「本番の判断関数なのにテストからの参照が 0 件」は檻の穴の典型**。`line_styles` がそれで、`style_runs` と `block_extent` を別々に固定していても、束ねて分岐する関数自体は素通しだった。9.4 は新設モジュールの関数を全数走査し、**名前の有無ではなく「判断を潰して赤が出るか」で測ること**。
 - 6.5: `BrushCache` は色が台詞をまたいで累積する（`StyleTable` は台詞ごとに戻るのに executor の寿命いっぱい残る非対称）。上限を設けない判断は doc に記載済み。
+- 7.1: `balloon_background.rs` の防御 2 分岐（`page_missing`／`pixel_out_of_range`）は記録を消しても crate 全体で赤 0 の**無検査**。`AtlasTable` の契約（`bake.rs` の「各 `uv_rect` は `page_size` 内に収まる」）違反時にしか到達しないため受容。**9.4 の全数走査は既知として扱うこと**。残る 4 分岐＋オフセット算術は 1 つずつ潰して全て赤を確認済み。
+- 7.1: design の Monitoring 節は結線層の構造化フィールドを `scope`・`reason` と定めるが、同じ design が与えた署名 `face_origin_color(atlas, file_name)` は scope を運ばない（design の自己矛盾）。実装は署名を優先し `file`＋`reason` にした。**9.4 で design 側を実態へ追随させること**。
+- 7.1: `BalloonScopeAssets.background_color` に `#[allow(dead_code)]`（消費点は 7.2／7.3）。**7.3 の完了時に外すこと**（rustdoc にも記載済み）。
+- 7.1: **emo2 の実バルーン面は scope 0（`balloons0.png`）・scope 1（`balloonk0.png`）とも原点画素の α が 255 でない**——実 fixture では背景色が常に白へ落ち、7.2／7.3 の無効表示の混色は実ゴースト上で「白と混ぜる」に固定される。要件 4.6・design どおりの挙動だが、ukadoc の元式は shell 側 `menu.disable.font.color`（background 画像）でバルーンとは事情が違う。**9.1 で登記を検討すること**。
+- 7.1: 色だけを見る検査は「導出を呼んでいない実装」と区別できない（実バルーンが常に白へ落ちるため恒真）。配線の実在は**記録の件数とファイル名**で判定すること。
+- 7.1: 既存テスト `crates/areka/tests/smoke_boot_loop_exit.rs` は**本 spec 着手前から赤**（i686 host-32 成果物の不在＝`LoadLibraryFailed(0x800700C1)`）。本 spec の責任外。`cargo test -p areka` は `--bin areka` に絞って走らせること。
+- 7.1: `assets_tests.rs` は 904 行（1,000 行の見張りまで 96 行）。7.2／7.3 の増分はここへ足さないこと。
