@@ -1,7 +1,7 @@
 //! k の**政策**（`ScalePolicy`・[`derive_scale`]）＝ 作者基準 DPI・アプリ管理拡大率シーム・
 //! DPI 取得不能時の縮退を、提示段（`presenter`）の外へ純関数として括り出した層。
 //!
-//! 責務分界（design「Architecture Integration」）: k の**数学**（既約有理表現・丸め・リサンプル）は
+//! 責務分界（design「Architecture Integration」）: k の**数学**（既約有理表現・寸法の丸め・座標の縮約）は
 //! 上流 `areka-emo-compose` の `scale`（[`ScaleRatio`]）が単一権威として持ち、本モジュールは
 //! 「どの数を掛けるか」という**政策**のみを決める。k の**適用点**は `presenter` の表示経路 1 箇所、
 //! k の**時間軸**（DPI 変化・初期 k₀）は上位アプリ（`areka`）の領分である。

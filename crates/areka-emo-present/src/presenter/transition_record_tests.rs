@@ -322,29 +322,46 @@ fn the_show_path_builds_the_surface_records_behind_the_front_guard() {
     );
 }
 
-/// design D4: `resized` は upload の**直前**に読んだ寸との比較で得る。
+/// 要件 7.6: 前値（原寸）は**上書きより手前**で読み、記録の失敗分岐は容量回収より手前に在る。
 ///
-/// 途中に別の文が挟まると「upload 直前の寸」ではなくなる。`chain.upload` の戻り値型を変えずに
-/// `resized` を得る唯一の形がこの前後比較であり（旧案 `UploadOutcome` は撤回済み）、
-/// エラー分岐の字面は `test-cage-determinism` ④の観測点ゆえ動かさない。
+/// 上書きが読みより手前へ動くと `resized`／`size_changed` が常に偽になり、遷移観測も窓寸
+/// reconcile 要求も静かに止まる（`debug!` ゆえ濾過テストでは見えない）。失敗分岐は
+/// `test-cage-determinism` ④の観測点で、記録が回収より手前で落ちることが「失敗時は適用前の
+/// まま」（R3.4）の根拠である。
 #[test]
-fn the_previous_size_is_read_immediately_before_the_upload_and_the_error_branch_is_unmoved() {
+fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmoved() {
     let code = code_only(include_str!("show.rs"));
     let lines = code_lines(&code);
+    let at = |needle: &str| {
+        lines
+            .iter()
+            .position(|line| *line == needle)
+            .unwrap_or_else(|| panic!("本文に `{needle}` が無い"))
+    };
+    let write = "target.native_size = Some(native);";
 
-    let at = lines
-        .iter()
-        .position(|line| *line == "let prev_size = chain.size();")
-        .expect("upload 直前の寸取得が無い（`resized` の出所が失われている）");
+    let read_at = at("let resized = target.native_size != Some(native);");
+    let recycle = "let recycled = target.cache.take_recycled();";
     assert_eq!(
-        lines[at + 1],
-        "if let Err(e) = chain.upload(&entry.composed) {",
-        "寸取得と upload のあいだに文が挟まっている（「直前の寸」でなくなる）"
+        lines[read_at + 1],
+        "let prev_physical = target",
+        "前値 2 つが離れた"
     );
+    assert!(
+        read_at < at(write),
+        "前値の読みが上書きより後ろ（述語が常に偽）"
+    );
+    assert_eq!(code.matches(write).count(), 1, "原寸の更新点が 1 つでない");
+
+    let record_at = at(".native_scratch(|scratch| record_display(dc, scratch))");
     assert_eq!(
-        code.matches("chain.size()").count(),
-        2,
-        "`chain.size()` の呼出が upload の前後 2 回でない"
+        lines[record_at + 1..record_at + 6].join(" "),
+        "{ Ok(list) => list, Err(e) => { Self::reply(reply, Err(e)); return;",
+        "記録の失敗分岐の字面が動いている（早期復帰でなくなると前状態維持が崩れる）"
+    );
+    assert!(
+        record_at < at(recycle),
+        "記録が回収より後ろ（空スロットが残る）"
     );
 }
 
@@ -566,12 +583,13 @@ fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line
         );
     }
 
-    // 供給面は原寸で遅延生成されるため、初回の upload は**バッファ寸を変えない**。
-    // 記録が出ているのは `size_changed`（前回適用寸なし）の側が真だからである。
+    // `resized`＝**原寸の外形が前回表示から変わったか**（要件 7.6・T-N8）。初回表示は前値が
+    // 無い（`None != Some(native)`）ので必ず差分扱いになる——`show.rs` の (3a) が「初回を
+    // 黙らせると窓寸の補正が永久に走らない」として意図してそう書いている。
     assert_eq!(
         field_value(&lines[0], SURFACE_FIELD_RESIZED),
-        "false",
-        "初回表示で `resized` が真になっている（前後比較が効いていない）: {lines:?}"
+        "true",
+        "初回表示で `resized` が偽（前値なしが差分扱いになっていない）: {lines:?}"
     );
 
     let perf = perf_line(&events);
@@ -611,9 +629,13 @@ fn a_steady_reapply_with_an_unchanged_size_emits_no_surface_line() {
     );
 }
 
-/// Requirement 2.2: 拡大率が変わって供給面のバッファ寸が変わった回は `resized=true` で出る。
+/// Requirement 2.2／7.6（T-N8）: 拡大率だけが変わった回は、記録される寸（物理寸）が変わっても
+/// `resized` は**偽**である——述語は「原寸の外形が前回表示から変わったか」であり（`show.rs` (3a)
+/// `let resized = target.native_size != Some(native);`）、拡大は wintf の変換行列が掛けるので
+/// 原寸は動かない。行が出るのは物理寸が変わった側（`size_changed`）が真だからで、`w`／`h` は
+/// その物理寸である。真になる側（前値と異なる原寸）は初回表示の檻が押さえる。
 #[test]
-fn a_scale_change_records_the_buffer_resize() {
+fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
@@ -638,8 +660,8 @@ fn a_scale_change_records_the_buffer_resize() {
     assert_eq!(lines.len(), 2, "遷移で 2 行でない: {lines:?}");
     assert_eq!(
         field_value(&lines[0], SURFACE_FIELD_RESIZED),
-        "true",
-        "バッファ寸が変わったのに `resized` が偽: {lines:?}"
+        "false",
+        "k だけの変化で `resized` が真（原寸の変化ではなく物理寸の変化を見ている）: {lines:?}"
     );
     for line in &lines {
         assert_eq!(

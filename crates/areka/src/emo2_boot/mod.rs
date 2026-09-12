@@ -40,6 +40,14 @@ mod spine;
 #[path = "zorder_wiring_tests.rs"]
 mod zorder_wiring_tests;
 
+// 毎フレームの相の登録先の檻（areka-P0-present-gpu-transform-scale task 4.2・T-N10）。
+// 裁定 2026-09-12 で登録先が 1 巡の末尾の段から `Update` へ移った——絵の着地を文字と同じ巡に
+// 揃えるための移動であり、実窓を持たない檻には挙動として映らないので、字面と `Schedules` の
+// 構造の両方から押さえる。
+#[cfg(test)]
+#[path = "frame_schedule_tests.rs"]
+mod frame_schedule_tests;
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -61,8 +69,7 @@ use areka_seriko::{
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use tracing::{error, info, warn};
 use wintf::WinApp;
-use wintf::ecs::FrameFinalize;
-use wintf::ecs::window::apply_zorder_chain;
+use wintf::ecs::{Update, update_typewriters};
 
 use crate::placement::AuthorDpi;
 
@@ -265,10 +272,9 @@ const _: fn() = || {
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false` フォールバック。
 /// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
 ///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入・
-///    `add_systems(FrameFinalize, emo2_frame_system)`（placement の
-///    click-through 登録と同位置・self-gating）。載せ方は**鎖の適用系より前**という 1 点だけを
-///    指定する（重なりの取り出しの相が組んだ望む鎖を同じ巡のうちに適用系へ届けるため・
-///    task 3.2）。成立時
+///    `add_systems(Update, emo2_frame_system)`（self-gating）。載せ方は**上流の
+///    `Update` 鎖の最後の系（`update_typewriters`）より後**という 1 点だけを指定する
+///    （同じ巡のうちに絵を着地させるため・要件 2.4）。成立時
 ///    `info!`「wire 成立」マーカーを発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
 /// 7. `Emo2BootOutcome{ ghost: Some, seriko: Some, wired: true }` を返す。
 ///
@@ -488,9 +494,9 @@ pub fn wire_emo2_boot(
         }
     };
 
-    // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を FrameFinalize へ登録（placement の
-    // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send を
-    // 直接持たないため world_mut() 経由で bevy World へ載せる（add_systems は EcsWorld 直メソッド）。
+    // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を Update へ登録（self-gating）。
+    // EcsWorld は insert_non_send を直接持たないため world_mut() 経由で bevy World へ載せる
+    // （add_systems は EcsWorld 直メソッド）。
     let mut wiring = Emo2Wiring::new(
         presenter,
         rx,
@@ -502,26 +508,32 @@ pub fn wire_emo2_boot(
         wiring_assets,
     );
     // shell 設定（`seriko.zorder`）由来の基底を、World へ載せる前に据える（要件 5.1／5.2／
-    // 5.3／5.4・areka-P0-scope-zorder-pinning task 6.3）。ここはまだ最初の `FrameFinalize` の
+    // 5.3／5.4・areka-P0-scope-zorder-pinning task 6.3）。ここはまだ最初の `Update` の
     // 手前であり、取り出しの相も 1 度も走っていない——ゆえに基底は**タグの実行を待たずに**
     // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
-    // 停止通知の受信端を据える（R15.4）。`insert_non_send` より前・最初の `FrameFinalize` より前の
+    // 停止通知の受信端を据える（R15.4）。`insert_non_send` より前・最初の `Update` より前の
     // 1 回だけであり、以後 UI は終了相でこの端を読む。据えなければ通知は誰にも届かず窓は閉じない。
     wiring.set_kanade_stop(kanade_stop_rx);
     app.world().borrow_mut().world_mut().insert_non_send(wiring);
-    // 相の登録は**鎖の適用系より前**という指定つきで行う（task 3.2 の必須事項）。相が組んだ
-    // 望む鎖を、同じ巡のうちに適用系が読むための順序である。登録の順そのものは適用系のほうが
-    // 先である（`open_startup_window` の `wire_zorder_pair` が確定段へ 3 本を載せてから、ここが
-    // 相を載せる）ので、指定を落とすと相は適用系の後ろへ回り、組み替えが 1 心拍ぶん遅れる
-    // ——要件 14.5 が求める「そのイベントへの応答としての完了」が割れる。飢餓は起きない
-    // （tick の門は旗が 1 つでも立っていれば全スケジュールを回す全か無かの形である）が、
-    // 遅れは実際に生じる。指定が効くのは適用系との間だけで、既存のペア機構との相対順には
-    // 触れない。
+    // 相の登録先は `Update`——上流の `Update` 鎖（表示構成の検知 → モニタ表の更新 → 依存する
+    // 部品の無効化 → 文字送りの更新）の**最後の系より後**という 1 点だけを指定する
+    // （裁定 2026-09-12・要件 2.4）。1 巡のスケジュールは
+    // `Input → Update → PreLayout → Layout → PostLayout → UISetup → GraphicsSetup → Draw
+    //  → PreRenderSurface → RenderSurface → Composition → CommitComposition → FrameFinalize`
+    // の順で回るので、相がここで挿した描画命令と配置は、同じ巡の伝播（`PostLayout`）・面の
+    // 生成（`PreRenderSurface`）・描画（`RenderSurface`）が拾う。末尾の段に載せると絵の着地が
+    // 次の巡へずれ、文字だけが 1 コマ先に出る。
+    // 重なりの鎖の適用系（末尾の段の 3 本目）との前後は、`.before` ではなくこの相順そのものが
+    // 担う（段をまたぐ順序指定は書けない）——`Update` は末尾の段より前なので、相が組んだ
+    // 望む鎖は同じ巡のうちに適用系が読む（要件 14.5 の「そのイベントへの応答としての完了」）。
+    // 上流の鎖より後に置くのは、拡大率の相が読むモニタ表がその巡の最新であるためで、DPI 遷移の
+    // 原子性（完了 spec `dpi-transition-atomicity`「モニタ表更新 → emo の相 → 窓書込の flush」）を
+    // 移動の前後で変えない。
     app.world()
         .borrow_mut()
-        .add_systems(FrameFinalize, emo2_frame_system.before(apply_zorder_chain));
+        .add_systems(Update, emo2_frame_system.after(update_typewriters));
 
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
     // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko

@@ -2,14 +2,14 @@ use super::*;
 use areka_emo_atlas::{
     AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
 };
-use areka_emo_compose::{BindSet, ComposeMethod, Composer, EmoWorld, PatternFrame, resample};
+use areka_emo_compose::{BindSet, ComposeMethod, Composer, EmoWorld, PatternFrame};
 use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
 use std::path::Path;
 
 // ── ComposedSurface 生成補助 ──────────────────────────────────────────────
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接
 // 焼けない。よって「全透明」は公開 `new(w,h)` で、「不透明画素を含む結果」は上流公開 API
-// （atlas bake → EmoWorld → Composer::compose）で本物を合成して得る。後者はマスクが
+// （atlas bake → EmoWorld → Composer::compose_into）で本物を合成して得る。後者はマスクが
 // composed の bytes 由来であることを実合成経路で保証する（模造バッファでの偽陽性を避ける）。
 
 /// カウント用途で十分な任意サイズの全透明合成結果（内容は不問・件数計上のみに使う）。
@@ -17,7 +17,7 @@ fn transparent_surface(w: u32, h: u32) -> ComposedSurface {
     ComposedSurface::new(w, h)
 }
 
-/// 表示バッファの bytes からマスクを生成する（設計 D4 でマスク生成が挿入の外へ出たため、
+/// 原寸の合成面の bytes からマスクを生成する（設計 D4 でマスク生成が挿入の外へ出たため、
 /// **呼び手側**の責務になった手順を檻でもそのまま踏む）。
 fn mask_of(composed: &ComposedSurface) -> Arc<AlphaMask> {
     Arc::new(AlphaMask::from_pbgra32(
@@ -28,33 +28,23 @@ fn mask_of(composed: &ComposedSurface) -> Arc<AlphaMask> {
     ))
 }
 
-/// 「表示バッファ＋その bytes 由来マスク」の原子対を組んで挿入する（既存檻の署名追随）。
+/// 「原寸の合成面＋その bytes 由来マスク」の原子対を組んで挿入する（既存檻の署名追随）。
 ///
 /// 設計 D4 で `insert` は生成済みマスクを引数で受ける形になった。檻側でマスクを別出所から
 /// 作ると原子対の主張が空虚になるため、生成は必ず `composed` の bytes からのみ行う。
+///
+/// 表示スケール k は引数に無い——エントリが持つのは native 原寸の面だけで、k はキー要素でも
+/// 保持内容でもない（要件 5.1／5.2）。
 fn insert_with_mask(
     cache: &mut ComposeCache,
     surface_id: u32,
     binds: BindSet,
     pattern: PatternState,
-    scale: ScaleRatio,
     composed: ComposedSurface,
 ) -> &CacheEntry {
     let mask = mask_of(&composed);
-    // 原寸（k 適用前の合成外形）もエントリへ束ねる（要件 7.1・容量 3 で `CacheEntry` へ移った）。
-    // 本補助は `composed` を「既に k を適用した表示バッファ」として受け取るため原寸を知らない。
-    // 原寸そのものを主張する檻はここを通らず `insert` を直接呼ぶので、ここでは表示寸を置いて
-    // おく（キー・置換・原子対を見る檻にとって `native` の値は判定に関与しない）。
-    let native = (composed.width(), composed.height());
-    cache.insert(surface_id, binds, pattern, scale, composed, mask, native)
-}
-
-/// 作者基準 DPI（ukadoc 正典既定）。k を DPI 比として組み立てるときの分母。
-const AUTHOR_DPI: u32 = 96;
-
-/// 非ゼロ既約 k の構築補助（`ScaleRatio::new` は 0 でのみ失敗する）。
-fn k(num: u32, den: u32) -> ScaleRatio {
-    ScaleRatio::new(num, den).expect("非ゼロの比は必ず構築できる")
+    let display = GraphicsCommandList::empty(); // 檻は GPU を持たない（記録は保持されるだけ）
+    cache.insert(surface_id, binds, pattern, composed, mask, display)
 }
 
 /// 非空の `PatternState`（animation `anim_id` に surface `surf` の `Overlay` コマ 1 枚）を作る。
@@ -104,11 +94,16 @@ fn shell_of(surfaces: Vec<Surface>) -> Shell {
     }
 }
 
-/// 不透明画素と透明画素を**必ず両方**含む本物の合成結果を上流公開 API で作る。
+/// 不透明画素と透明画素を**必ず両方**含む本物の合成を、**与えられた出力先へ書き戻す**。
 ///
 /// 3×1 の単一画像（不透明赤 / 透明 / 不透明赤）を 1 element として合成する。両端が不透明の
 /// ため α=0 除外トリムでも中央の透明画素が矩形内に残る（＝合成結果に不透明・透明が共存）。
-fn composed_with_opaque_and_transparent() -> ComposedSurface {
+///
+/// 出力先を受け取る形なのは、回収したバッファへの書き戻しを**リサンプルに依らず**測るためで
+/// ある（要件 3.1）——本仕様で表示スケールは描画経路の変換行列へ移り、合成層の出力は常に
+/// native 原寸になった。`Composer::compose_into` は出力先の確保を再利用するので、回収した
+/// 容量がそのまま引き継がれているかがここで観測できる。
+fn compose_small_into(out: &mut ComposedSurface) {
     let base = Path::new("shell/master");
     let surfaces = vec![surface(1000, vec![elem("otr.png", 0, 0)])];
 
@@ -139,14 +134,22 @@ fn composed_with_opaque_and_transparent() -> ComposedSurface {
 
     let mut composer = Composer::new();
     composer
-        .compose(
+        .compose_into(
+            out,
             &world,
             &baked.table,
             1000,
             &BindSet::default(),
             &PatternState::default(),
         )
-        .expect("静的 element 単体の合成は Ok")
+        .expect("静的 element 単体の合成は Ok");
+}
+
+/// 上の合成をまっさらな器へ書いて値で返す（出力先を持たない檻用の便宜）。
+fn composed_with_opaque_and_transparent() -> ComposedSurface {
+    let mut out = ComposedSurface::new(0, 0);
+    compose_small_into(&mut out);
+    out
 }
 
 /// 合成結果 bytes から最初の不透明（α≧128）・最初の透明（α<128）画素座標を探す。
@@ -174,8 +177,8 @@ fn find_opaque_and_transparent(cs: &ComposedSurface) -> ((u32, u32), (u32, u32))
 
 // ── 容量政策の檻用の最小補助 ─────────────────────────────────────────────
 //
-// 既定キー（`BindSet::default()`／`PatternState::default()`／恒等 k）で **surface id だけ**を
-// 変える。容量・置換方式は「キーが違う」ことだけで駆動されるため、弁別に要る差はこれで足りる。
+// 既定キー（`BindSet::default()`／`PatternState::default()`）で **surface id だけ**を変える。
+// 容量・置換方式は「キーが違う」ことだけで駆動されるため、弁別に要る差はこれで足りる。
 
 /// 既定キーの surface id `id` で挿入する。
 fn insert_id(cache: &mut ComposeCache, id: u32) {
@@ -184,7 +187,6 @@ fn insert_id(cache: &mut ComposeCache, id: u32) {
         id,
         BindSet::default(),
         PatternState::default(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
 }
@@ -195,23 +197,13 @@ fn insert_id(cache: &mut ComposeCache, id: u32) {
 /// この観測は LRU の状態を乱さない——檻が自分の観測で置換順を書き換えてしまう罠を構造で避ける。
 fn holds(cache: &ComposeCache, id: u32) -> bool {
     cache
-        .get(
-            id,
-            &BindSet::default(),
-            &PatternState::default(),
-            ScaleRatio::ONE,
-        )
+        .get(id, &BindSet::default(), &PatternState::default())
         .is_some()
 }
 
 /// 既定キーの surface id `id` を引き当てて**最近使用へ引き上げる**（本番のヒット経路と同じ口）。
 fn touch_id(cache: &mut ComposeCache, id: u32) -> bool {
-    cache.touch(
-        id,
-        &BindSet::default(),
-        &PatternState::default(),
-        ScaleRatio::ONE,
-    )
+    cache.touch(id, &BindSet::default(), &PatternState::default())
 }
 
 /// R4.1/R4.2: ミス→1 回だけ計算、同一合成入力のヒット→再計算しない（Composer 不呼出の檻）。
@@ -226,34 +218,26 @@ fn miss_computes_once_hit_does_not_recompute() {
     let binds = BindSet::default();
 
     // 1 回目: ミス → 合成（カウンタ +1）→ 挿入。
-    if cache
-        .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-        .is_none()
-    {
+    if cache.get(id, &binds, &PatternState::default()).is_none() {
         compose_calls += 1;
         insert_with_mask(
             &mut cache,
             id,
             binds.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
     assert_eq!(compose_calls, 1, "first access must compose exactly once");
 
     // 2 回目: 同一合成入力＝ヒット → 合成しない（カウンタ据え置き）。
-    if cache
-        .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-        .is_none()
-    {
+    if cache.get(id, &binds, &PatternState::default()).is_none() {
         compose_calls += 1;
         insert_with_mask(
             &mut cache,
             id,
             binds.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
@@ -262,9 +246,7 @@ fn miss_computes_once_hit_does_not_recompute() {
         "second access is a hit; must not recompute"
     );
     assert!(
-        cache
-            .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-            .is_some(),
+        cache.get(id, &binds, &PatternState::default()).is_some(),
         "entry must be retained after hit"
     );
 }
@@ -286,18 +268,17 @@ fn different_binds_on_same_surface_must_miss() {
         id,
         eyes_open.clone(),
         PatternState::default(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     assert!(
         cache
-            .get(id, &eyes_open, &PatternState::default(), ScaleRatio::ONE)
+            .get(id, &eyes_open, &PatternState::default())
             .is_some(),
         "同一入力はヒットする"
     );
     assert!(
         cache
-            .get(id, &eyes_closed, &PatternState::default(), ScaleRatio::ONE)
+            .get(id, &eyes_closed, &PatternState::default())
             .is_none(),
         "同一 surface でも bind 集合が異なればミスしなければならない（着せ替えバグの回帰檻）"
     );
@@ -309,18 +290,17 @@ fn different_binds_on_same_surface_must_miss() {
         id,
         eyes_closed.clone(),
         PatternState::default(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     assert!(
         cache
-            .get(id, &eyes_closed, &PatternState::default(), ScaleRatio::ONE)
+            .get(id, &eyes_closed, &PatternState::default())
             .is_some(),
         "挿入した新入力がヒットする"
     );
     assert!(
         cache
-            .get(id, &eyes_open, &PatternState::default(), ScaleRatio::ONE)
+            .get(id, &eyes_open, &PatternState::default())
             .is_some(),
         "容量 3: 別キーの挿入は既存キーを追い出さない（まばたきの開閉が共存する）"
     );
@@ -332,13 +312,12 @@ fn different_binds_on_same_surface_must_miss() {
             id,
             BindSet::from_ids([1101, 1302, extra]),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
     assert!(
         cache
-            .get(id, &eyes_open, &PatternState::default(), ScaleRatio::ONE)
+            .get(id, &eyes_open, &PatternState::default())
             .is_none(),
         "容量 3 の上限: 異なるキーを入れ続ければ最も古い引き当てから落ちる（無限堆積しない）"
     );
@@ -363,18 +342,17 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
         id,
         binds.clone(),
         pattern_a.clone(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
 
     // (1) 同一 (id, binds, pattern) → ヒット。
     assert!(
-        cache.get(id, &binds, &pattern_a, ScaleRatio::ONE).is_some(),
+        cache.get(id, &binds, &pattern_a).is_some(),
         "surface id・binds・pattern が完全一致すればヒットする"
     );
     // (2) surface id・binds は同一だが pattern が異なる → ミス（新キー要素が load-bearing）。
     assert!(
-        cache.get(id, &binds, &pattern_b, ScaleRatio::ONE).is_none(),
+        cache.get(id, &binds, &pattern_b).is_none(),
         "surface id・binds 同一でも pattern が異なればミスしなければならない（R5.2・pattern がキー要素）"
     );
 
@@ -385,19 +363,18 @@ fn different_pattern_on_same_surface_and_binds_must_miss() {
         id,
         binds.clone(),
         pattern_b.clone(),
-        ScaleRatio::ONE,
         transparent_surface(5, 5),
     );
     assert_eq!(
         cache
-            .get(id, &binds, &pattern_b, ScaleRatio::ONE)
+            .get(id, &binds, &pattern_b)
             .map(|e| (e.composed.width(), e.composed.height())),
         Some((5, 5)),
         "pattern_b の引き当ては pattern_b の絵を返す"
     );
     assert_eq!(
         cache
-            .get(id, &binds, &pattern_a, ScaleRatio::ONE)
+            .get(id, &binds, &pattern_a)
             .map(|e| (e.composed.width(), e.composed.height())),
         Some((4, 4)),
         "容量 3: pattern_a のエントリは残り、しかも**自分の絵**を返す（取り違えない）"
@@ -420,17 +397,14 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
         id,
         binds.clone(),
         PatternState::default(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     assert!(
-        cache
-            .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-            .is_some(),
+        cache.get(id, &binds, &PatternState::default()).is_some(),
         "空 pattern で挿入 → 空 pattern の get はヒット（拡張前と観測等価・R5.4）"
     );
     assert!(
-        cache.get(id, &binds, &pat, ScaleRatio::ONE).is_none(),
+        cache.get(id, &binds, &pat).is_none(),
         "空 pattern で挿入 → 非空 pattern の get はミス（空と非空は別キー）"
     );
 
@@ -443,17 +417,14 @@ fn empty_vs_nonempty_pattern_are_distinct_keys() {
         id,
         binds.clone(),
         pat.clone(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     assert!(
-        cache.get(id, &binds, &pat, ScaleRatio::ONE).is_some(),
+        cache.get(id, &binds, &pat).is_some(),
         "非空 pattern で挿入 → 同値 pattern の get はヒット"
     );
     assert!(
-        cache
-            .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-            .is_none(),
+        cache.get(id, &binds, &PatternState::default()).is_none(),
         "非空 pattern で挿入 → 空 pattern の get はミス（空と非空は別キー）"
     );
 }
@@ -472,17 +443,16 @@ fn invalidate_all_clears_regardless_of_pattern() {
         id,
         binds.clone(),
         pat.clone(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     assert!(
-        cache.get(id, &binds, &pat, ScaleRatio::ONE).is_some(),
+        cache.get(id, &binds, &pat).is_some(),
         "挿入直後は同一 (id, binds, pattern) がヒットする"
     );
 
     cache.invalidate_all();
     assert!(
-        cache.get(id, &binds, &pat, ScaleRatio::ONE).is_none(),
+        cache.get(id, &binds, &pat).is_none(),
         "invalidate_all は pattern に依らずスロットを破棄する（R4.3 挙動不変）"
     );
 }
@@ -506,7 +476,7 @@ fn dynamic_show_reissue_different_binds_recomposes() {
 
     // 1 回目の Show（BindSet A）: ミス → 再合成（カウンタ +1）→ 挿入。
     if cache
-        .get(id, &dressed_a, &PatternState::default(), ScaleRatio::ONE)
+        .get(id, &dressed_a, &PatternState::default())
         .is_none()
     {
         compose_calls += 1;
@@ -515,7 +485,6 @@ fn dynamic_show_reissue_different_binds_recomposes() {
             id,
             dressed_a.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
@@ -523,7 +492,7 @@ fn dynamic_show_reissue_different_binds_recomposes() {
 
     // 2 回目の Show（同一 surface・異なる BindSet B）: ミス → 再合成（カウンタ +1）。
     if cache
-        .get(id, &dressed_b, &PatternState::default(), ScaleRatio::ONE)
+        .get(id, &dressed_b, &PatternState::default())
         .is_none()
     {
         compose_calls += 1;
@@ -532,7 +501,6 @@ fn dynamic_show_reissue_different_binds_recomposes() {
             id,
             dressed_b.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
@@ -545,13 +513,13 @@ fn dynamic_show_reissue_different_binds_recomposes() {
     // 別エントリとして共存し、着せ替えを戻したときは再合成が省ける。
     assert!(
         cache
-            .get(id, &dressed_b, &PatternState::default(), ScaleRatio::ONE)
+            .get(id, &dressed_b, &PatternState::default())
             .is_some(),
         "再合成後の新 binds はヒットする"
     );
     assert!(
         cache
-            .get(id, &dressed_a, &PatternState::default(), ScaleRatio::ONE)
+            .get(id, &dressed_a, &PatternState::default())
             .is_some(),
         "容量 3: 旧 binds も保持される（着せ替えを戻す再発行は再合成を要さない）"
     );
@@ -570,24 +538,20 @@ fn dynamic_show_reissue_same_binds_returns_cached() {
     let dressed = BindSet::from_ids([1100, 1207]);
 
     // 1 回目の Show: ミス → 再合成（カウンタ +1）→ 挿入。
-    if cache
-        .get(id, &dressed, &PatternState::default(), ScaleRatio::ONE)
-        .is_none()
-    {
+    if cache.get(id, &dressed, &PatternState::default()).is_none() {
         compose_calls += 1;
         insert_with_mask(
             &mut cache,
             id,
             dressed.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
     assert_eq!(compose_calls, 1, "初回 Show は 1 回だけ合成する");
 
     // 2 回目の Show（同一 surface・同一 BindSet）: ヒット → 再合成しない（カウンタ据え置き）。
-    let hit = cache.get(id, &dressed, &PatternState::default(), ScaleRatio::ONE);
+    let hit = cache.get(id, &dressed, &PatternState::default());
     assert!(
         hit.is_some(),
         "同一着せ替え集合の再発行はヒットする（R6.2）"
@@ -599,7 +563,6 @@ fn dynamic_show_reissue_same_binds_returns_cached() {
             id,
             dressed.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
@@ -608,9 +571,7 @@ fn dynamic_show_reissue_same_binds_returns_cached() {
         "同一 binds の再発行は再合成なしで復帰しなければならない（R6.2）"
     );
     assert!(
-        cache
-            .get(id, &dressed, &PatternState::default(), ScaleRatio::ONE)
-            .is_some(),
+        cache.get(id, &dressed, &PatternState::default()).is_some(),
         "ヒット後もキャッシュ済みサーフェスは保持される"
     );
 }
@@ -626,15 +587,11 @@ fn different_surface_ids_coexist_until_the_capacity_is_exceeded() {
             id,
             binds.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     };
-    let held = |cache: &ComposeCache, id: u32| {
-        cache
-            .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-            .is_some()
-    };
+    let held =
+        |cache: &ComposeCache, id: u32| cache.get(id, &binds, &PatternState::default()).is_some();
 
     insert(&mut cache, 0);
     insert(&mut cache, 1000);
@@ -659,17 +616,13 @@ fn invalidate_all_forces_recompute() {
     let id = 7;
     let binds = BindSet::default();
 
-    if cache
-        .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-        .is_none()
-    {
+    if cache.get(id, &binds, &PatternState::default()).is_none() {
         compose_calls += 1;
         insert_with_mask(
             &mut cache,
             id,
             binds.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
@@ -677,24 +630,18 @@ fn invalidate_all_forces_recompute() {
 
     cache.invalidate_all();
     assert!(
-        cache
-            .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-            .is_none(),
+        cache.get(id, &binds, &PatternState::default()).is_none(),
         "id must miss after invalidate_all"
     );
 
     // 無効化後の再アクセスはミス → 再合成（カウンタ +1）。
-    if cache
-        .get(id, &binds, &PatternState::default(), ScaleRatio::ONE)
-        .is_none()
-    {
+    if cache.get(id, &binds, &PatternState::default()).is_none() {
         compose_calls += 1;
         insert_with_mask(
             &mut cache,
             id,
             binds.clone(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(4, 4),
         );
     }
@@ -719,7 +666,6 @@ fn mask_generated_once_from_composed_bytes_and_correct() {
         1000,
         binds.clone(),
         PatternState::default(),
-        ScaleRatio::ONE,
         composed,
     );
 
@@ -735,7 +681,7 @@ fn mask_generated_once_from_composed_bytes_and_correct() {
 
     // エントリは composed とマスクを対で保持する（表示の真実源も残る）。
     let got = cache
-        .get(1000, &binds, &PatternState::default(), ScaleRatio::ONE)
+        .get(1000, &binds, &PatternState::default())
         .expect("entry retained");
     assert_eq!(got.composed.width(), w);
     assert_eq!(got.composed.height(), h);
@@ -743,299 +689,84 @@ fn mask_generated_once_from_composed_bytes_and_correct() {
     assert!(!got.mask.is_hit(tx, ty));
 }
 
-// ── 表示スケール k のキー参加（要件 2.4/4.1・設計 D6） ─────────────────────
+// ── キー要素は合成入力の 3 つだけ（要件 5.2・設計 cache::ComposeCache） ──────
 
-/// 要件 2.4/4.1 の名指し受入条件: **合成入力が完全同一でも表示スケールが異なれば必ずミス**する。
+/// キー比較の非退行: 合成入力（surface id・binds・pattern）のいずれかが異なれば必ずミスする。
 ///
-/// エントリが保持するのは k 適用済みサーフェスとその bytes 由来マスクゆえ、k が違えば別の絵で
-/// ある。この 1 点が欠けると DPI の異なるモニタへ窓を移した直後（要件 4.1）に旧 k の絵と
-/// マスクがヒットし、拡大が反映されない。2 水準（5/4・2/1）で固定し、同一 k のヒットを
-/// 陰性対照として併置する（常に `None` を返す `get` では通らない檻）。
+/// 表示スケールがキーから外れた（要件 5.2）ときに、残る 3 要素の比較まで一緒に落ちていないか
+/// を見る檻である。1 要素ずつ違えた 3 通りと、陰性対照の完全一致を並べる。
 #[test]
-fn different_scale_on_same_compose_inputs_must_miss() {
+fn other_key_elements_still_miss_on_the_same_compose_inputs() {
     let mut cache = ComposeCache::new();
     let id = 1000;
     let binds = BindSet::from_ids([1101, 1302]);
     let pattern = pattern_of(2000, 1001);
-    let k96 = k(AUTHOR_DPI, AUTHOR_DPI); // 1/1（等倍）
-    let k120 = k(120, AUTHOR_DPI); // 5/4（125%）
-    let k192 = k(192, AUTHOR_DPI); // 2/1（200%）
 
     insert_with_mask(
         &mut cache,
         id,
         binds.clone(),
         pattern.clone(),
-        k96,
-        transparent_surface(4, 4),
-    );
-
-    // 陰性対照: 同一合成入力＋同一 k はヒットする（ミス檻の非空虚性）。
-    assert!(
-        cache.get(id, &binds, &pattern, k96).is_some(),
-        "合成入力・k が完全一致すればヒットする"
-    );
-    // 受入条件: k だけが異なる 2 水準はいずれもミスする。
-    assert!(
-        cache.get(id, &binds, &pattern, k120).is_none(),
-        "合成入力同一でも k=5/4 は別キー＝ミスしなければならない（要件 2.4/4.1）"
-    );
-    assert!(
-        cache.get(id, &binds, &pattern, k192).is_none(),
-        "合成入力同一でも k=2/1 は別キー＝ミスしなければならない（要件 2.4/4.1）"
-    );
-    // 逆比（4/5＝縮小）も当然ミスする（k の向きを取り違えてヒットしない）。
-    assert!(
-        cache
-            .get(id, &binds, &pattern, k(AUTHOR_DPI, 120))
-            .is_none(),
-        "逆比 k=4/5 も別キー＝ミスする"
-    );
-}
-
-/// 要件 2.4/4.1: キー等価は `ScaleRatio` の**既約正準形**に従う——数値として同値だが構築が
-/// 異なる k（`120/96` と `5/4`）は**同一キー**としてヒットする。
-///
-/// キーが生の `num`/`den` を比較していたらここで落ちる。k の作り方（DPI 比のまま渡すか約分済み
-/// で渡すか）が呼び手ごとに揺れてもヒット/ミスがぶれないことの檻。
-#[test]
-fn numerically_equal_scales_constructed_differently_hit() {
-    let mut cache = ComposeCache::new();
-    let id = 1000;
-    let binds = BindSet::from_ids([1101]);
-    let pattern = PatternState::default();
-
-    // 挿入は DPI 比そのまま（120/96）。
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        k(120, AUTHOR_DPI),
-        transparent_surface(5, 5),
-    );
-
-    // 約分済み 5/4・拡大した 240/192 はいずれも正準形 5/4 ＝ 同一キー → ヒット。
-    assert!(
-        cache.get(id, &binds, &pattern, k(5, 4)).is_some(),
-        "既約正準形が同一の k（5/4）はヒットしなければならない"
-    );
-    assert!(
-        cache.get(id, &binds, &pattern, k(240, 192)).is_some(),
-        "既約正準形が同一の k（240/192 → 5/4）はヒットしなければならない"
-    );
-    // 前提の独立確認: これらは `ScaleRatio` として等価である。
-    assert_eq!(k(120, AUTHOR_DPI), k(5, 4));
-    assert_eq!(k(120, AUTHOR_DPI), k(240, 192));
-
-    // 逆比 4/5 は別値ゆえミス（正準化が「何でもヒット」に堕ちていない陰性対照）。
-    assert!(
-        cache.get(id, &binds, &pattern, k(4, 5)).is_none(),
-        "逆比 4/5 は別キー＝ミスする"
-    );
-}
-
-/// 既存不変条件の非退行: **k が等しくても**合成入力（surface id・binds・pattern）のいずれかが
-/// 異なれば依然ミスする。
-///
-/// scale をキーへ加えた実装が、他のキー要素の比較を落としていないことの檻。非恒等 k
-/// （5/4）で回し、k=1/1 の経路だけを見て通ってしまう取りこぼしも塞ぐ。
-#[test]
-fn other_key_elements_still_miss_when_scale_is_equal() {
-    let mut cache = ComposeCache::new();
-    let id = 1000;
-    let binds = BindSet::from_ids([1101, 1302]);
-    let pattern = pattern_of(2000, 1001);
-    let k54 = k(120, AUTHOR_DPI);
-
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        k54,
         transparent_surface(4, 4),
     );
 
     assert!(
-        cache.get(id, &binds, &pattern, k54).is_some(),
+        cache.get(id, &binds, &pattern).is_some(),
         "陰性対照: 全要素一致はヒットする"
     );
     assert!(
-        cache.get(1001, &binds, &pattern, k54).is_none(),
-        "k 同一でも surface id が異なればミスする"
+        cache.get(1001, &binds, &pattern).is_none(),
+        "surface id が異なればミスする"
     );
     assert!(
         cache
-            .get(id, &BindSet::from_ids([1101]), &pattern, k54)
+            .get(id, &BindSet::from_ids([1101]), &pattern)
             .is_none(),
-        "k 同一でも bind 集合が異なればミスする"
+        "bind 集合が異なればミスする"
     );
     assert!(
-        cache
-            .get(id, &binds, &pattern_of(2000, 1002), k54)
-            .is_none(),
-        "k 同一でも pattern が異なればミスする"
+        cache.get(id, &binds, &pattern_of(2000, 1002)).is_none(),
+        "pattern が異なればミスする"
     );
-    // 合成入力と k の両方が異なる場合も当然ミスする。
+    // 2 要素が同時に異なる場合も当然ミスする。
     assert!(
-        cache.get(1001, &binds, &pattern, ScaleRatio::ONE).is_none(),
-        "合成入力・k がともに異なればミスする"
+        cache.get(1001, &binds, &pattern_of(2000, 1002)).is_none(),
+        "複数のキー要素が異なればミスする"
     );
 }
 
-/// 設計 D6（k はキー要素）: 新しい k での挿入は**別エントリ**になり、引き当てはそれぞれ
-/// **自分の k の絵**を返す。
+/// R4.3 変わらず: `invalidate_all` は**保持中の全エントリ**を破棄する（挙動不変）。
 ///
-/// 保持サーフェスの外形を k 水準ごとに変えて（4×4 / 5×5）、ヒットしたエントリが**その k の絵**
-/// であることまで固定する（キーだけ通ってエントリが古いままの取り違えを検出する）。
-///
-/// 容量 3（要件 7.1・2026-08-15 裁定）では旧 k のエントリも表に残り得るが、**正しさはキー完全
-/// 一致だけに依っている**——旧 k の絵が新しい k の表示に載ることは無い。残った旧 k は LRU で
-/// いずれ落ちる（DPI を戻したときに命中し得るのは副次的な利得である）。
+/// 上限いっぱいの 3 キーを入れてから無効化し、どれ 1 つ残らないことを見る。1 件だけの表で
+/// 測ると「先頭 1 件しか消さない」実装を通してしまうため、満杯の表で測る。
 #[test]
-fn insert_with_new_scale_adds_a_distinct_entry() {
+fn invalidate_all_clears_every_entry() {
     let mut cache = ComposeCache::new();
-    let id = 1000;
-    let binds = BindSet::default();
-    let pattern = PatternState::default();
-    let k96 = ScaleRatio::ONE;
-    let k120 = k(120, AUTHOR_DPI);
-
-    // k=1/1 の絵（4×4 相当）。
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        k96,
-        transparent_surface(4, 4),
-    );
-    assert_eq!(
-        cache
-            .get(id, &binds, &pattern, k96)
-            .map(|e| (e.composed.width(), e.composed.height())),
-        Some((4, 4))
-    );
-
-    // k=5/4 の絵（5×5 相当）を挿入 → スロット置換。
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        k120,
-        transparent_surface(5, 5),
-    );
-    assert_eq!(
-        cache
-            .get(id, &binds, &pattern, k120)
-            .map(|e| (e.composed.width(), e.composed.height())),
-        Some((5, 5)),
-        "置換後は新 k のエントリ（k 適用済み表示寸）がヒットする"
-    );
-    assert_eq!(
-        cache
-            .get(id, &binds, &pattern, k96)
-            .map(|e| (e.composed.width(), e.composed.height())),
-        Some((4, 4)),
-        "旧 k のエントリは残り、しかも**旧 k の絵**を返す（k をまたいで取り違えない・設計 D6）"
-    );
-}
-
-/// 要件 4.1（DPI 変化への追従）: k の再導出で表示スケールが変わると、get-or-insert フローが
-/// **ミス → 再合成＋再サンプル**を駆動する。
-///
-/// 窓を 96dpi → 120dpi → 192dpi のモニタへ移した経路を提示段のフローで模し、合成カウンタが
-/// k 水準ごとに増えること・同一 k の再表示では増えないことを固定する。`invalidate_all` を
-/// 一度も呼ばずに成立する点が設計 D6（キー相違だけで表現し命令で二重化しない）の証拠である。
-#[test]
-fn dpi_change_drives_recompose_without_invalidate_all() {
-    let mut cache = ComposeCache::new();
-    let mut compose_calls = 0u32;
-    let id = 1000;
-    let binds = BindSet::from_ids([1100]);
-    let pattern = PatternState::default();
-
-    let show = |cache: &mut ComposeCache, scale: ScaleRatio, calls: &mut u32| {
-        if cache.get(id, &binds, &pattern, scale).is_none() {
-            *calls += 1;
-            // 提示段は原寸合成 → k 倍リサンプルしてから挿入する（本層は k を適用しない）。
-            let (w, h) = scale.scaled_extent(4, 4);
-            insert_with_mask(
-                cache,
-                id,
-                binds.clone(),
-                pattern.clone(),
-                scale,
-                transparent_surface(w, h),
-            );
-        }
-    };
-
-    show(&mut cache, ScaleRatio::ONE, &mut compose_calls);
-    assert_eq!(compose_calls, 1, "初回表示は 1 回だけ合成する");
-
-    // 同一 DPI での再表示はヒット（k がキーに入っても既存のヒット挙動は不変）。
-    show(&mut cache, ScaleRatio::ONE, &mut compose_calls);
-    assert_eq!(compose_calls, 1, "同一 k の再表示は再合成しない");
-
-    // 120dpi のモニタへ移動 → k=5/4 でミス → 再合成（要件 4.1）。
-    show(&mut cache, k(120, AUTHOR_DPI), &mut compose_calls);
-    assert_eq!(
-        compose_calls, 2,
-        "k が変われば同一合成入力でも再合成が走らねばならない（要件 4.1）"
-    );
-    assert_eq!(
-        cache
-            .get(id, &binds, &pattern, k(120, AUTHOR_DPI))
-            .map(|e| (e.composed.width(), e.composed.height())),
-        Some((5, 5)),
-        "新 k の表示寸（round(4×5/4)=5）で保持される"
-    );
-
-    // 192dpi へさらに移動 → k=2/1 でミス → 再合成。
-    show(&mut cache, k(192, AUTHOR_DPI), &mut compose_calls);
-    assert_eq!(compose_calls, 3, "さらなる k 変化も再合成を駆動する");
-    assert_eq!(
-        cache
-            .get(id, &binds, &pattern, k(192, AUTHOR_DPI))
-            .map(|e| (e.composed.width(), e.composed.height())),
-        Some((8, 8))
-    );
-}
-
-/// R4.3 変わらず: `invalidate_all` は k に依らずスロットを破棄する（挙動不変）。
-/// 非恒等 k で挿入したエントリも無効化後は同一 k でミスする。
-#[test]
-fn invalidate_all_clears_regardless_of_scale() {
-    let mut cache = ComposeCache::new();
-    let id = 7;
     let binds = BindSet::from_ids([1100]);
     let pattern = pattern_of(2000, 1001);
-    let k54 = k(120, AUTHOR_DPI);
 
     insert_with_mask(
         &mut cache,
-        id,
+        7,
         binds.clone(),
         pattern.clone(),
-        k54,
         transparent_surface(5, 5),
     );
+    insert_id(&mut cache, 8001);
+    insert_id(&mut cache, 8002);
     assert!(
-        cache.get(id, &binds, &pattern, k54).is_some(),
-        "挿入直後は同一キーがヒットする"
+        cache.get(7, &binds, &pattern).is_some() && holds(&cache, 8001) && holds(&cache, 8002),
+        "前提: 3 キーとも保持されている"
     );
 
     cache.invalidate_all();
     assert!(
-        cache.get(id, &binds, &pattern, k54).is_none(),
-        "invalidate_all は k に依らずスロットを破棄する（R4.3 挙動不変）"
+        cache.get(7, &binds, &pattern).is_none(),
+        "invalidate_all は保持中のエントリを破棄する（R4.3 挙動不変）"
     );
     assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_none(),
-        "無効化後はいかなる k でもミスする"
+        !holds(&cache, 8001) && !holds(&cache, 8002),
+        "invalidate_all は 1 件だけでなく**全て**を破棄する"
     );
 }
 
@@ -1054,7 +785,6 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     let id = 1000;
     let binds = BindSet::from_ids([1101, 1302]);
     let pattern = pattern_of(2000, 1001);
-    let k54 = k(120, AUTHOR_DPI);
 
     // 回収は満杯のときだけ成立する。追跡対象（このキー）が最も古い引き当てになるよう先に入れる。
     insert_with_mask(
@@ -1062,7 +792,6 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         id,
         binds.clone(),
         pattern.clone(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     insert_id(&mut cache, 8001);
@@ -1081,7 +810,7 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         "回収したエントリはマスクも対で保持している（原子対のまま出る）"
     );
     assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_none(),
+        cache.get(id, &binds, &pattern).is_none(),
         "回収されたキーは以後ミスする"
     );
     assert!(
@@ -1093,18 +822,11 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
     let composed = composed_with_opaque_and_transparent();
     let ((ox, oy), (tx, ty)) = find_opaque_and_transparent(&composed);
     let (w, h) = (composed.width(), composed.height());
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        k54,
-        composed,
-    );
+    insert_with_mask(&mut cache, id, binds.clone(), pattern.clone(), composed);
 
     // ⑵ キー完全一致のみヒットし、⑶ 対で引ける。
     let entry = cache
-        .get(id, &binds, &pattern, k54)
+        .get(id, &binds, &pattern)
         .expect("回収後の挿入でも完全一致キーはヒットする");
     assert_eq!((entry.composed.width(), entry.composed.height()), (w, h));
     assert!(
@@ -1116,26 +838,20 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         "透明画素 ({tx},{ty}) は同一エントリのマスクでヒットしない（原子対）"
     );
 
-    // ⑵ キー 4 成分のいずれか 1 つでも異なればミスする（回収を挟んでも比較は落ちない）。
+    // ⑵ キー 3 成分のいずれか 1 つでも異なればミスする（回収を挟んでも比較は落ちない）。
     assert!(
-        cache.get(1001, &binds, &pattern, k54).is_none(),
+        cache.get(1001, &binds, &pattern).is_none(),
         "surface id が異なればミスする"
     );
     assert!(
         cache
-            .get(id, &BindSet::from_ids([1101]), &pattern, k54)
+            .get(id, &BindSet::from_ids([1101]), &pattern)
             .is_none(),
         "bind 集合が異なればミスする"
     );
     assert!(
-        cache
-            .get(id, &binds, &pattern_of(2000, 1002), k54)
-            .is_none(),
+        cache.get(id, &binds, &pattern_of(2000, 1002)).is_none(),
         "pattern が異なればミスする"
-    );
-    assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_none(),
-        "表示スケール k が異なればミスする"
     );
 
     // ⑴ 上限 3 件: 保持件数は上限を超えず、超える挿入は最も古い引き当てから落とす
@@ -1148,7 +864,7 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
         "上限超過で落ちるのは最も古い引き当て（回収を挟んでも LRU のまま・要件 7.1）"
     );
     assert!(
-        cache.get(id, &binds, &pattern, k54).is_some(),
+        cache.get(id, &binds, &pattern).is_some(),
         "直近に入れたキーは残る"
     );
 }
@@ -1160,6 +876,10 @@ fn insert_after_take_recycled_preserves_approved_semantics() {
 /// ゆえに ⑴挿入したバッファの先頭ポインタが回収したエントリにそのまま現れること ⑵回収バッファを
 /// **より小さい出力**の書き戻し先に使っても再確保が起きないこと（＝同寸反復だけを見る檻が
 /// 見逃す新規確保形を捕まえる）⑶その確保のまま再挿入できること、の 3 点で固定する。
+///
+/// ⑵ の「より小さい出力」は**小さな原寸合成**（3×1）で作る。本仕様で表示スケールは描画経路の
+/// 変換行列へ移り、この層に縮小出力を作る口は無くなったため、書き戻しは合成そのもの
+/// （`Composer::compose_into`）で測る——本番の書き戻し経路と同じ口である。
 #[test]
 fn take_recycled_carries_over_buffer_capacity() {
     let mut cache = ComposeCache::new();
@@ -1167,19 +887,12 @@ fn take_recycled_carries_over_buffer_capacity() {
     let binds = BindSet::from_ids([1100]);
     let pattern = PatternState::default();
 
-    // 大きい表示バッファ（64×64＝16,384 バイト）。以後この 1 本の確保だけを追う。
+    // 大きい合成面（64×64＝16,384 バイト）。以後この 1 本の確保だけを追う。
     let big = transparent_surface(64, 64);
     let big_ptr = big.bytes().as_ptr();
     let big_len = big.bytes().len();
     assert_eq!(big_len, 64 * 4 * 64, "前提: 追跡対象は 16,384 バイトの確保");
-    insert_with_mask(
-        &mut cache,
-        id,
-        binds.clone(),
-        pattern.clone(),
-        ScaleRatio::ONE,
-        big,
-    );
+    insert_with_mask(&mut cache, id, binds.clone(), pattern.clone(), big);
     // 回収は満杯のときだけ成立する（容量 3・要件 7.1）。追跡対象が最も古い引き当てのまま
     // 残るよう、別キーで表を埋める。
     insert_id(&mut cache, 9001);
@@ -1194,16 +907,16 @@ fn take_recycled_carries_over_buffer_capacity() {
     );
     assert_eq!(recycled.composed.bytes().len(), big_len);
 
-    // ⑵ 回収バッファを次の表示バッファとして使い回す。**より小さい出力**（8×8 → k=1/2 → 4×4）へ
-    // 書き戻しても再確保が起きない＝回収した容量（16,384）がそのまま引き継がれている。
+    // ⑵ 回収バッファを次の合成面として使い回す。**より小さい出力**（3×1）を書き戻しても
+    // 再確保が起きない＝回収した容量（16,384）がそのまま引き継がれている。
     // 同寸の反復だけを見る檻は、毎回ちょうど同じ大きさを確保し直す実装を捕まえられない。
     let mut reused = recycled.composed;
-    let src = transparent_surface(8, 8);
-    resample(&src, k(1, 2), &mut reused);
-    assert_eq!(
-        (reused.width(), reused.height()),
-        (4, 4),
-        "前提: 書き戻し先は回収時より小さい外形になる"
+    compose_small_into(&mut reused);
+    assert!(
+        reused.bytes().len() < big_len,
+        "前提: 書き戻し先は回収時より小さい外形になる（{}×{}）",
+        reused.width(),
+        reused.height()
     );
     assert_eq!(
         reused.bytes().as_ptr(),
@@ -1213,15 +926,13 @@ fn take_recycled_carries_over_buffer_capacity() {
 
     // ⑶ 引き継いだ確保のまま再挿入でき、エントリはその確保を保持する。
     let mask = mask_of(&reused);
-    let native = (reused.width(), reused.height());
     let entry = cache.insert(
         id,
         binds.clone(),
         pattern.clone(),
-        k(1, 2),
         reused,
         mask,
-        native,
+        GraphicsCommandList::empty(),
     );
     assert_eq!(
         entry.composed.bytes().as_ptr(),
@@ -1252,11 +963,10 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         id,
         binds.clone(),
         pattern.clone(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_some(),
+        cache.get(id, &binds, &pattern).is_some(),
         "陰性対照: 挿入直後は完全一致キーがヒットする"
     );
     assert!(
@@ -1264,7 +974,7 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "1 件しか入っていない表は満杯でない＝生きているエントリを剥がさない"
     );
     assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_some(),
+        cache.get(id, &binds, &pattern).is_some(),
         "回収不成立でエントリが消えていない"
     );
 
@@ -1277,7 +987,7 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "回収で 1 本空いた直後は不成立（連続で剥がし続けない）"
     );
     assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_none(),
+        cache.get(id, &binds, &pattern).is_none(),
         "回収されたのは最も古い引き当て（このキー）である"
     );
 
@@ -1287,11 +997,10 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         id,
         binds.clone(),
         pattern.clone(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_some(),
+        cache.get(id, &binds, &pattern).is_some(),
         "回収後に挿入し直せば再びヒットする"
     );
 
@@ -1302,7 +1011,7 @@ fn take_recycled_without_a_full_table_returns_none_and_leaves_cache_usable() {
         "invalidate_all 後の表からも何も回収できない"
     );
     assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_none(),
+        cache.get(id, &binds, &pattern).is_none(),
         "無効化後はミスしたままである"
     );
 }
@@ -1452,7 +1161,6 @@ fn take_recycled_picks_the_least_recently_used_entry() {
             id,
             BindSet::default(),
             PatternState::default(),
-            ScaleRatio::ONE,
             transparent_surface(side, side),
         );
     }
@@ -1473,8 +1181,8 @@ fn take_recycled_picks_the_least_recently_used_entry() {
 ///
 /// # なぜこの区別が要るのか
 ///
-/// `show.rs` は 1 適用のあいだに `get` を複数回呼ぶ（供給面の遅延生成・アップロード直前・原寸の
-/// 写し取り）。読み取りが順序を動かす形だと「1 適用で最近使用を何度も打ち直す」ことになり、
+/// `show.rs` の表示成立点も `read.rs` の `read_back` も、引き当て済みエントリを `get` で読む。
+/// 読み取りが順序を動かす形だと「観測しただけで最近使用を打ち直す」ことになり、
 /// 檻もまた自分の観測で LRU の状態を書き換えてしまう（本ファイルの [`holds`] がそれである）。
 ///
 /// 逆向きの退化——`touch` が順序を動かさない——は上の 2 本の檻が捕まえる。本檻はその対で、
@@ -1502,7 +1210,7 @@ fn get_does_not_disturb_the_recency_order() {
 /// 引き当ての判定規則は [`ComposeCache::touch`] と [`ComposeCache::get`] で 1 ビットも違わない。
 ///
 /// `touch` が「ヒットしたか」を `bool` で返す別経路である以上、判定が `get` と食い違うと
-/// `show.rs` は「ミスだと思って合成したのに `get` では引ける」あるいはその逆に落ちる。キー 4 成分の
+/// `show.rs` は「ミスだと思って合成したのに `get` では引ける」あるいはその逆に落ちる。キー 3 成分の
 /// それぞれについて、両者の答えが一致することを見る。
 #[test]
 fn touch_and_get_agree_on_every_key_component() {
@@ -1510,45 +1218,24 @@ fn touch_and_get_agree_on_every_key_component() {
     let id = 1000;
     let binds = BindSet::from_ids([1101, 1302]);
     let pattern = pattern_of(2000, 1001);
-    let k54 = k(120, AUTHOR_DPI);
 
     insert_with_mask(
         &mut cache,
         id,
         binds.clone(),
         pattern.clone(),
-        k54,
         transparent_surface(5, 5),
     );
 
-    let probes: [(&str, u32, BindSet, PatternState, ScaleRatio); 5] = [
-        ("完全一致", id, binds.clone(), pattern.clone(), k54),
-        ("surface id 相違", 1001, binds.clone(), pattern.clone(), k54),
-        (
-            "binds 相違",
-            id,
-            BindSet::from_ids([1101]),
-            pattern.clone(),
-            k54,
-        ),
-        (
-            "pattern 相違",
-            id,
-            binds.clone(),
-            pattern_of(2000, 1002),
-            k54,
-        ),
-        (
-            "k 相違",
-            id,
-            binds.clone(),
-            pattern.clone(),
-            ScaleRatio::ONE,
-        ),
+    let probes: [(&str, u32, BindSet, PatternState); 4] = [
+        ("完全一致", id, binds.clone(), pattern.clone()),
+        ("surface id 相違", 1001, binds.clone(), pattern.clone()),
+        ("binds 相違", id, BindSet::from_ids([1101]), pattern.clone()),
+        ("pattern 相違", id, binds.clone(), pattern_of(2000, 1002)),
     ];
-    for (what, pid, pbinds, ppattern, pscale) in probes {
-        let by_get = cache.get(pid, &pbinds, &ppattern, pscale).is_some();
-        let by_touch = cache.touch(pid, &pbinds, &ppattern, pscale);
+    for (what, pid, pbinds, ppattern) in probes {
+        let by_get = cache.get(pid, &pbinds, &ppattern).is_some();
+        let by_touch = cache.touch(pid, &pbinds, &ppattern);
         assert_eq!(
             by_touch, by_get,
             "{what}: touch と get の引き当て判定が食い違う（get={by_get} touch={by_touch}）"
@@ -1581,7 +1268,6 @@ fn reinserting_the_same_key_replaces_the_entry_without_duplicating_it() {
         id,
         binds.clone(),
         pattern.clone(),
-        ScaleRatio::ONE,
         transparent_surface(4, 4),
     );
     insert_with_mask(
@@ -1589,7 +1275,6 @@ fn reinserting_the_same_key_replaces_the_entry_without_duplicating_it() {
         id,
         binds.clone(),
         pattern.clone(),
-        ScaleRatio::ONE,
         transparent_surface(5, 5),
     );
 
@@ -1600,7 +1285,7 @@ fn reinserting_the_same_key_replaces_the_entry_without_duplicating_it() {
     );
     assert_eq!(
         cache
-            .get(id, &binds, &pattern, ScaleRatio::ONE)
+            .get(id, &binds, &pattern)
             .map(|e| (e.composed.width(), e.composed.height())),
         Some((5, 5)),
         "再挿入は後から入れた対を返す（重複した古い側を返している）"
@@ -1610,9 +1295,7 @@ fn reinserting_the_same_key_replaces_the_entry_without_duplicating_it() {
     insert_id(&mut cache, 8001);
     insert_id(&mut cache, 8002);
     assert!(
-        cache.get(id, &binds, &pattern, ScaleRatio::ONE).is_some()
-            && holds(&cache, 8001)
-            && holds(&cache, 8002),
+        cache.get(id, &binds, &pattern).is_some() && holds(&cache, 8001) && holds(&cache, 8002),
         "重複エントリが席を食って異なり 3 キーを保持できていない"
     );
 }

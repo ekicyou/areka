@@ -1656,7 +1656,7 @@ DEALINGS IN THE SOFTWARE.
 - is_terminal_polyfill 1.70.2
 - once_cell_polyfill 1.70.2
 - serde_spanned 1.1.1
-- toml 1.1.4+spec-1.1.0
+- toml 1.1.5+spec-1.1.0
 - toml_datetime 1.1.1+spec-1.1.0
 - toml_edit 0.25.13+spec-1.1.0
 - toml_parser 1.1.3+spec-1.1.0

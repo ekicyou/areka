@@ -192,8 +192,8 @@ fn explicit_hide_command_transitions_both_layers_from_visible_to_hidden() {
 /// Requirement 1.7／6.3: 文字層スロットが**実際に描画内容を持つ**状態でも、明示的な非表示指令は
 /// スロットを不可視かつポインタ判定停止にする（枠だけ消えて文字が残らない）。
 ///
-/// 併せて、非表示が内容そのものを破棄しないこと（再表示に再描画を要さない＝供給面・キャッシュを
-/// 保持する既存契約と対）と、指令経由の再表示で双方が復帰することを見る。
+/// 併せて、非表示が内容そのものを破棄しないこと（再表示に再描画を要さない＝装着・表示記録・
+/// キャッシュを保持する既存契約と対）と、指令経由の再表示で双方が復帰することを見る。
 #[test]
 fn explicit_hide_command_covers_a_text_layer_that_holds_drawn_content() {
     let (mut world, mut presenter, target) = command_driven_target_after_first_show(0x42);

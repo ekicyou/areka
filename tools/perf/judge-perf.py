@@ -666,20 +666,21 @@ J_REQUIRED_LOG_KINDS = (
 #: CPU 時系列 CSV のヘッダ（`invoke-perf-run.ps1` の CSV_HEADER と対）。
 J_CPU_CSV_HEADER = ("timestamp", "cpu_percent_1core")
 
-#: perf サマリ行に必ず載るフィールド（design.md「perf サマリ行スキーマ」の 14 個）。
+#: perf サマリ行に必ず載るフィールド（design.md「perf サマリ行スキーマ」の 11 個）。
 #: 1 つでも欠けた行があれば部分集計を出さずに exit 2（要件 2.5）。
+#: 【task 3.1 の是正】`t_resample_us`・`alloc_resample_dst`・`alloc_xmap` はリサンプル
+#: 処理そのものの撤去に伴い emitter が出さなくなった（要件 3.3/3.4）。旧スキーマ
+#: （この 3 つを含む 14 フィールド）の fixture 行は、この 2 タプルに名前が無ければ
+#: 単なる余剰フィールドとして無害に読み飛ばされる。
 J_PERF_STAGE_FIELDS = (
     "t_cache_us",
     "t_compose_us",
-    "t_resample_us",
     "t_mask_us",
     "t_upload_us",
     "t_total_us",
 )
 J_PERF_ALLOC_FIELDS = (
     "alloc_compose_dst",
-    "alloc_resample_dst",
-    "alloc_xmap",
     "alloc_mask",
 )
 J_PERF_IDENT_FIELDS = ("target_id", "surface_id", "cache_hit", "key_hash")
