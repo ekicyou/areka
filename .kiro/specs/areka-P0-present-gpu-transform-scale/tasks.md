@@ -113,7 +113,7 @@
   - _Boundary: FrameTiming テスト_
 
 - [ ] 4. drain 相の登録先を同一 tick で描かれる席へ移す
-- [ ] 4.1 提示段の drain 相を `Update`（上流の Update 鎖の後）へ登録し直す
+- [x] 4.1 提示段の drain 相を `Update`（上流の Update 鎖の後）へ登録し直す
   - 登録 1 行を末尾の schedule から `Update` へ移し、上流の Update 鎖の最後の system の後に順序を指定する
   - 相の中身と相順は変えない
   - 起動 1 tick 目に資源が揃わない場合に備え、装着のゲートが自己完結で待てることを確認する
@@ -285,3 +285,4 @@
 - 2.4: 赤の期間中のテスト実行は「壊れた test module 宣言を一時的に外して走らせ、完全復元を `git diff` で証明」で行う（`presenter_test_support.rs` は `transition_record_tests.rs` が引くため外せない）。⚠`wintf::ecs::PhysicalPoint` は pointer 側の整数 `Point` に解決される（hit_test 側の `PointF` 別名とは別物）＝テストは `PointF` を直に使う。T-N5 の `set_display` 陽性対照は「不在→挿入」（異なる実リストは GPU が要る）。T-N4 の 4×4 マスクは対称ゆえ x/y 入替を検出しない（任意で 1 セル崩す）。
 - 3.1: `SurfaceSeat::get` は `#[cfg(test)]` に畳む（観測口 `native_scratch_ptr` の唯一の呼び手・削除も allow も不可）。`perf_log_tests` は `t_resample_us` を**文字列**で照合する箇所あり＝コンパイル緑でも実行時赤（5.4）。`presenter.rs` の `#[cfg(test)] use resample` の説明コメントは既に事実でない＝major 6 で一緒に消す。`native_scratch` の doc「高水位」の陳腐化は 7.1 の doc 掃除で拾う。
 - 3.2: `tools/perf/fixtures/generate.py` は旧 14 フィールドを生成したまま（境界外・旧スキーマは無害）。`J_LINE_VOCABULARY_SAMPLES` の perf 行サンプルは 14 フィールドの凍結引用（重複名検査専用）＝残置。7.1 で 11 フィールドのサンプル追加を検討。
+- 4.1: `mod.rs` の差分は登録 1 行＋import 2 行の入替＋手順 6 註釈（+24/−20・8.1 の diff-stat 判定はこれを「登録 1 行＋註釈」と読む）。既存の字面の檻 `zorder_wiring_tests.rs` `t_zwi06`（旧登録 `.before(apply_zorder_chain)` を名指し）は陳腐化＝**4.2 が T-N10 と同時に撤去か再導出**。`frame.rs` 215／226／294-296・`frame/wiring.rs` 218 の `FrameFinalize` 言及 4 か所も 4.2 で書き換え。⚠台帳外の赤: `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs:567`（`read_back` の長さが k で変わる前提）＝**5.7（crates/areka 境界）で再導出**・8.1 で台帳 #23 に追記。
