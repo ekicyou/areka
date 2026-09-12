@@ -4,7 +4,7 @@
 kanade（ゴーストの運行を司る状態機械）が起動系列の最終段（基盤バージョン通知 `basewareversion` の応答待ち＝`BootVersion`）に滞在している間に、起動挨拶の再生完了通知（`TalkDone{Ended}`）が届くと、その通知が捨てられる。トーク枠が「再生中」のまま定常運転へ持ち越され、以後の終了の握手（`OnClose` → 終了挨拶 → `\-` → 自己停止）が二度と始まらない。
 
 - **困っている人**: areka でゴーストを動かす利用者。終了指示を出しても終了挨拶が流れず、窓が閉じない。
-- **現状**: `crates/areka-kanade/src/schedule/mod.rs` の横断遷移 `on_talk_done` は `BootVersion{talk: Some}` を突合対象に含めて防御しているのに、一致後の委譲先 `boot::step`（`crates/areka-kanade/src/schedule/boot.rs`）の「上記以外」の分岐が `warn!(event="boot_input_ignored")` を書いて通知を捨てる。発現には起動挨拶の再生完了が `basewareversion` の応答より先に届く必要があり、実機では窓が開かない（起動挨拶は数秒・応答は数ミリ秒）。決定論の検証環境では起動記録トークが空になり得るため再現できる。2026-09-10 の実機一周では点灯語 `event=boot_input_ignored` が全走行 0 行＝未発現。
+- **現状**: `crates/areka-kanade/src/schedule/mod.rs` の横断遷移 `on_talk_done` は `BootVersion{talk: Some}` を突合対象に含めて防御しているのに、一致後の委譲先 `boot::step`（`crates/areka-kanade/src/schedule/boot.rs`）の「上記以外」の分岐が `warn!(event="boot_input_ignored")` を書いて通知を捨てる。発現には `BootVersion` 滞在中に完了通知が処理される必要があるが、**現行のアクターシェルではその瞬間が構造上存在しない**（`crates/areka-kanade/src/actor.rs` の `drive` が起動系列の SHIORI 往復をすべて 1 回の呼出の中で回し切るため、受信箱が `BootVersion` の相を観測しない）。したがって本欠陥は**純粋状態機械 `step` を直接駆動する crate 内の決定論テストでのみ再現できる**（2026-09-13 に使い捨てテストで赤を実測・完了通知を 1 手後ろにずらした既存テストは緑）。2026-09-10 の実機一周で点灯語 `event=boot_input_ignored` が全走行 0 行だったのは、競争に勝ち続けた結果ではなく構造の帰結である。
 - **変わるべきこと**: `BootVersion` 滞在中に届いた追跡中トークの完了通知を捨てず受理してトーク枠を空にし、起動完了後の終了の握手が成立するようにする。決定論テストで直す前は赤・直した後は緑を固定し、既存の起動系列の試験と `boot_input_ignored` の綴りは変えない。
 
 出所: 完了仕様 `areka-P0-emo2-conformance-e2e` の決定論層の作業（タスク 5.5・2026-09-06）が構造から見つけた製品欠陥。登記は同仕様 `verification/acceptance-record.md` §13.2 行 4・design D9。起票は 2026-09-11（`/kiro-discovery`・開発者「起票候補はすべて起票せよ」）。ロードマップ W13 ②。
@@ -22,6 +22,7 @@ areka のゴーストは、起動すると「初期化 → 利用者名の照会
 - 追跡中の talk の理由 `Quit` は横断遷移で終了系列（Quit）へ直行し、`boot::step` へは来ない。
 - 起動系列中に届いた終了指示は `pending_close` として保留され、起動完了後（`Steady{talk: None}`）の次の Tick で握手が始まる。挨拶の追跡がある場合（`Steady{talk: Some}`）は完了通知の到達時に保留を消化して握手が始まる。
 - 既存の決定論テストは「起動完了後（`Steady{Some}`）に完了通知が届く」順序だけを固定しており、「起動完了前（`BootVersion{Some}`）に届く」順序は 1 本も無い。`boot_input_ignored` の発火テストは `BootInit` に Tick を入れる形で存在する。
+- **到達可能性**: 現行のアクターシェル（`actor.rs` の `drive`）は、`step` が返した指示の列に SHIORI 往復が含まれる限り、その応答を同じ呼出の中で再投入して回り続ける。`BootVersion` へ入る唯一の経路（`boot.rs` の `to_baseware_version`）は必ず `basewareversion` の往復を同じ列に積むため、受信箱が `BootVersion` の相を観測する瞬間が無い。よって本欠陥は**今日の利用者には到達不能**であり、直す理由は「守る側（`current_talk_id` が `BootVersion{Some}` を突合対象に含める防御）と捨てる側（委譲先の取りこぼし）が同じ機械の中で矛盾していること」＝純粋状態機械の契約の穴である。シェルの待ち方が変われば発現する（`kanade/schedule/*` はロードマップ W15／W17 の輻輳点）。
 
 本仕様は、この取り落としを直し、決定論テストで固定する。起動系列の順序・交信内容・areka 側の配線は変えない。
 
@@ -39,7 +40,8 @@ areka のゴーストは、起動すると「初期化 → 利用者名の照会
   - 起動系列の順序そのもの（交信の順番・各段の発行内容・`basewareversion` の Status 導出）。
   - areka 側の配線（`crates/areka/src/emo2_boot/spine.rs`）・終了の握手の配線（`areka-P0-emo2-conformance-e2e` 6.9 で着地済み）・ホスト窓スレッドの pump（別仕様 `areka-P0-host32-window-thread-pump`）。
   - 定常運転・終了系列での完了通知の扱い（`steady.rs`／`close.rs`）の変更。
-  - 実機での再現・実機サインオフ（実機では窓が開かないため決定論テストが唯一の検出器）。
+  - 実機での再現・実機サインオフ（上記のとおりアクターシェル経由では構造上到達不能——純粋状態機械 `step` を直接駆動する決定論テストが唯一の検出器）。
+  - アクターシェルの待ち方（`actor.rs` の `drive` の同期往復規律）そのものの変更。本仕様は純粋状態機械の側だけを直す。
 - **Adjacent expectations（隣接する仕様・機構への期待）**
   - `areka-P0-emo2-conformance-e2e`（完了）: 手順書 §5.7 と記録 §7 が `event=boot_input_ignored` を点灯語として数えている。綴りと「捨てるときに書く」意味は保つ。`crates/areka` の決定論一周（`spine_conformance_*`）は本仕様の非回帰の検出器であり、期待値を変えない。
   - `areka-P0-idle-talk`（完了）の DD-IT-12: 起動挨拶の正規追跡（`BootVersion{talk}` → `Steady{talk}` の引き継ぎ）は保つ。本仕様は追跡の**途中で枠が空く**経路を足すだけである。
@@ -85,7 +87,7 @@ areka のゴーストは、起動すると「初期化 → 利用者名の照会
 1. The kanade 運行状態機械 shall 起動系列の交信の順序（`OnInitialize` → 利用者名の照会 → `OnFirstBoot`／`OnBoot` → `basewareversion`）と各段の発行内容を変えない。
 2. While 起動挨拶が無い起動（`BootVersion{talk: None}`・`OnBoot` が 204 かつ起動記録トークも無い）にある, the kanade 運行状態機械 shall 従来どおり振る舞う（受理対象の完了通知は構造上届かず、`Steady{talk: None}` へ完了する）。
 3. The kanade 運行状態機械 shall 起動系列の途中に届いた終了指示の保留（`pending_close`）と、起動完了後の保留の消化を変えない。
-4. The kanade 運行状態機械 shall 起動記録トーク（初回起動で挨拶が無い場合の空の起動記録トーク）の追跡を変えない——その完了通知も Requirement 1 の受理対象に含まれる（決定論の検証環境で再現する経路）。
+4. The kanade 運行状態機械 shall 起動記録トーク（初回起動で挨拶が無い場合の空の起動記録トーク）の追跡を変えない——その完了通知も Requirement 1 の受理対象に含まれる（純粋状態機械の決定論テストで再現する経路）。
 5. The 既存の起動系列テスト（`boot_sequence_tests.rs`・`boot_reply_branch_tests.rs`・`schedule_log_firing_tests.rs` の boot 関連）shall 期待値を変えずに通る。
 
 ### Requirement 5: 決定論テストと検証
@@ -96,5 +98,5 @@ areka のゴーストは、起動すると「初期化 → 利用者名の照会
 2. The 追加する決定論テスト shall 直す前のコードで赤（失敗）であることを実装の記録で示し、直した後に緑（成功）となる（RED 先行）。
 3. The 本仕様 shall 保留経路の決定論テストを追加する: 起動系列の途中に終了指示を投入して保留させ、`BootVersion{talk: Some}` で完了通知（`Ended`）を投入し、`basewareversion` の応答で `Steady{talk: None}` へ入り、次の Tick で `OnClose` の問い合わせ（GET）が発行される。
 4. The 本仕様 shall 起動系列の途中の Tick が従来どおり `event=boot_input_ignored` を書くことを固定する（既存テストで足りるならそれを保つ）。
-5. When 実装が完了する, the `cargo test -p areka-kanade` と `cargo test -p areka --bin areka` shall いずれも全緑で通る（終了コードで判定し、出力の一部だけを見て判定しない）。
+5. When 実装が完了する, the `cargo test -p areka-kanade` と `cargo test -p areka --bin areka` shall いずれも全緑で通る（終了コードで判定し、出力の一部だけを見て判定しない）。ここで前者は**欠陥の検出器**（要件 5.1／5.3 の追加テストを含む）であり、後者（`spine_conformance_*` を含むアクターシェル経由の一周）は**非回帰の検出器**である——後者は直す前も緑なので、直しの効きの証拠には使わない。
 6. The 追加するテスト shall 対象の本番ファイルの兄弟テストファイルに置き、本番ファイル・テストファイルとも 1 ファイル 1,000 行以下を保つ。

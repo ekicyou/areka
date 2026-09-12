@@ -185,7 +185,7 @@ on_talk_done（一致・非 quit）:
 
 ## 7. 設計フェーズへの申し送り（Design-decision items）
 
-1. **要件の前提の同一性**（§2）: アクターシェル（DD-2 同期再投入）経由では `BootVersion` 滞在中の `TalkDone` は構造上到達しない。要件 Project Description の「決定論の検証環境では再現できる」は「純粋状態機械 `step` を直接駆動するテスト」に限定して読むことを確認する。答えで変わるもの: 設計に「到達不能の根拠（`actor.rs` の `drive`）」を書くか／要件 5.5 の `cargo test -p areka --bin areka` を「非回帰のみ」と位置づけるか／完了仕様 e2e の記録 §13.2 行 4「窓は狭い」への補足を設計に残すか（完了仕様の文書は書き換えない）。
+1. ~~**要件の前提の同一性**（§2）~~ — **要件ディスカッションで解決済み（2026-09-13・開発者裁定）**。裁定は「予定どおり今直す」。実在の証拠は使い捨ての決定論テストで実測した（`BootVersion{talk: Some(id=1)}` に `TalkDone{1, Ended}` を投入 → 相が変わらず `boot_input_ignored` が WARN で点灯 → 枠が `Steady{talk: Some}` へ漏れ → 終了指示で `OnClose` GET が **0 件**。完了通知を 1 手後ろにずらした既存テスト `boot_greeting_talkdone_correlates_without_unknown_error` は緑）。この裁定に伴い requirements.md を改訂した: Project Description の発現条件をタイミング論から構造論（`actor.rs` の `drive` の同期再投入）へ・Introduction に「到達可能性」の段を追加・Out of scope にシェルの待ち方の変更を明記・要件 4.4 の「決定論の検証環境」を「純粋状態機械の決定論テスト」へ・**要件 5.5 に「`-p areka-kanade` が欠陥の検出器／`-p areka --bin areka` は非回帰の検出器」を明記**。設計では「到達不能の根拠」を `actor.rs` の `drive` を引いて記すこと。完了仕様 e2e の文書は書き換えない。
 2. **受理腕の置き場所**（§4）: 案 A（`boot.rs`）／案 B（`mod.rs` 横断）／案 C（`TalkDone` 専用分配）。既存の順序規律との整合は案 A が最も素直。
 3. **受理ログの語**（要件 3.3）: 候補 `boot_talk_done`（`steady_talk_done`／`close_refused` と並ぶ命名）／`boot_talk_done_early`（起動完了前であることを語に込める）。level は info（`steady_talk_done` と同じ）。フィールドは `talk_id` 必須・`origin`（`"boot"`）は任意。
 4. ~~**「ちょうど 1 行」の読み**（要件 3.3）~~ — **要件ディスカッションで解決済み（2026-09-11・カテゴリ A）**。要件 3.3 の本文に「数えるのは受理の語の行だけ・横断遷移の既存ログ（`talk_done_interrupted_as_non_quit` など）は数えない」と明記した。設計での再裁定は不要。
