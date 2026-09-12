@@ -9,7 +9,7 @@
 //! | §7 | 真偽 5 キー × 6 語（当該項目だけが動く・6 語以外と値なし） | 5.1〜5.5, 5.8, 5.9 |
 //! | §8 | 上付き・下付き（後勝ちの排他・語彙のみの印） | 6.1, 6.2 |
 //! | §9 | 一括の戻し（丸ごと置き換え・項目を列挙しない） | 10.1, 10.2, 10.4 |
-//! | §10 | 所有外キー・未知キー・キーなし・値を持つ 3 キーの現況 | 2.5, 2.6 |
+//! | §10 | 所有外キー・未知キー・キーなし | 2.5, 2.6 |
 //! | §11 | 較正——過去に壊れうる形を再現すると赤になる述語 | 15.3 |
 //!
 //! §1〜§6（見た目の値・2 層・装飾の表）は兄弟の `look_tests.rs` にある。本ファイルを分けたのは
@@ -504,30 +504,6 @@ fn a_missing_key_leaves_the_look_unchanged() {
         assert_eq!(look, before, "{args:?} が見た目を変えている");
         assert_eq!(issue.reason, REASON_NO_KEY, "{args:?} の理由");
         assert_eq!(issue.key, "", "キーが無いので記録のキーも空");
-    }
-}
-
-/// 値を持つ 3 キーは本仕様の所有だが、値の解釈はまだここに無い（タスク 3.4 が腕を足す）。
-/// 未知のキーとは別の理由で拒み、見た目は変えない——「所有しているが未実装」が
-/// 記録から見分けられる状態を固定する。
-#[test]
-fn the_keys_that_carry_a_value_are_owned_but_not_interpreted_yet() {
-    let layers = split_layers();
-    for args in [
-        vec!["height", "30"],
-        vec!["color", "255", "0", "0"],
-        vec!["name", "Meiryo", "Arial"],
-    ] {
-        let before = styled_look();
-        let mut look = before.clone();
-        let issue = apply_font_tag(&mut look, &layers, &args)
-            .expect_err(&format!("{args:?} はまだ解釈されない"));
-        assert_eq!(look, before, "{args:?} が見た目を変えている");
-        assert_eq!(issue.reason, REASON_VALUE_KEY_PENDING, "{args:?} の理由");
-        assert_ne!(
-            issue.reason, REASON_UNKNOWN_KEY,
-            "所有しているキーが未知のキーとして記録されている"
-        );
     }
 }
 

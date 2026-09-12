@@ -44,7 +44,7 @@
 //! 呼び手も変わらない。いま値が無い項目は正典の既定（すべて無効）のままで、
 //! 「読めていないから既定」という状態を `look_tests.rs` §3 が明示的に固定している。
 
-use crate::color::mix_disabled;
+use crate::color::{ColorSpec, mix_disabled, parse_color};
 
 /// 上下付き（語彙のみ・表示は変えない・後勝ちの排他なので enum で同時に 1 値）。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -320,6 +320,15 @@ pub enum Note {
         /// どの項目か（`"sub"`／`"sup"`／`"outline"`）。
         key: &'static str,
     },
+    /// スタイルシートの大きさキーワード（`xx-small`〜`xx-large`・`larger`・`smaller`）——
+    /// 語彙として受理するが**大きさは変えない**（要件 7.7・design §A 項目 3）。
+    /// 呼び手は `warn!` を 1 台詞に 1 度残す。
+    StylesheetKeyword,
+    /// `\f[color,default.anchor]`／`default.anchornotselect`／`default.anchorvisited`——
+    /// アンカーの色定義がまだ無いので **`default` と同じ色**を適用した（要件 8.8・
+    /// design §A 項目 11）。呼び手は `warn!` を 1 台詞に 1 度残す。消費者（本物のアンカー色）は
+    /// `areka-P0-anchor-tag-canon` がこの腕を差し替えて足す。
+    AnchorColorAsDefault,
     /// 本仕様が意味を与えないキー——見た目を変えない（要件 2.5）。値を捨てずに保つのと
     /// `debug!` の記録は呼び手の担当。
     Unowned,
@@ -343,12 +352,29 @@ pub struct FontTagIssue {
 pub(crate) const REASON_NO_KEY: &str = "\\f にキーが無い";
 /// 43 形のいずれでもないキー（要件 2.6）。キーも小文字の完全一致のみ。
 pub(crate) const REASON_UNKNOWN_KEY: &str = "未知の \\f のキー（キーは小文字のみ）";
-/// 値が 1 つでない——値なし（`\f[bold]`）と値が 2 つ以上（`\f[bold,1,0]`）の両方（要件 5.5）。
-pub(crate) const REASON_VALUE_COUNT: &str = "真偽値の値が 1 つでない";
+/// 値がちょうど 1 つでない——値なし（`\f[bold]`・`\f[height]`）と値が 2 つ以上
+/// （`\f[bold,1,0]`・`\f[height,15,20]`）の両方（要件 5.5・7.6）。
+pub(crate) const REASON_VALUE_COUNT: &str = "値がちょうど 1 つでない";
 /// 6 語のいずれでもない値（要件 5.5）。語は小文字の完全一致のみ。
 pub(crate) const REASON_BAD_SWITCH: &str = "真偽値が 6 語のいずれでもない（語は小文字のみ）";
-/// 値を持つ 3 キー（`height`／`color`／`name`）——本仕様の所有だが解釈がまだ無い。
-pub(crate) const REASON_VALUE_KEY_PENDING: &str = "値を持つキーの解釈が未実装";
+/// 大きさの値が数値・相対（`+N`／`-N`）・百分率・`default`／`disable`・スタイルシートの語の
+/// いずれとしても読めない（要件 7.6 の「非数」）。
+pub(crate) const REASON_BAD_HEIGHT: &str = "大きさの値が読めない";
+/// 大きさの結果が正の有限値にならない——`0` 以下・非有限・相対指定で 0 以下へ落ちた場合
+/// （要件 7.6）。
+pub(crate) const REASON_HEIGHT_NOT_POSITIVE: &str = "大きさが正の有限値にならない";
+/// `\f[name]` に候補が 1 つも無い（値なし、または候補がすべて空文字列・要件 9.1）。
+pub(crate) const REASON_NO_CANDIDATE: &str = "フォント名の候補が無い";
+
+/// スタイルシートの大きさキーワード——**語彙として受理するだけ**で大きさを変えない
+/// （要件 7.7・design §A 項目 3）。
+///
+/// CSS の絶対サイズ 7 語（`xx-small`〜`xx-large`）と相対サイズ 2 語（`larger`／`smaller`）。
+/// ukadoc は「スタイルシートのサイズ指定も可能」としか述べず、どの語が何ピクセルになるかを
+/// 定めないので、areka は換算そのものを見送る。語は 6 語の規律と同じ**小文字の完全一致のみ**。
+pub(crate) const STYLESHEET_SIZE_KEYWORDS: [&str; 9] = [
+    "xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "larger", "smaller",
+];
 
 /// 真偽値で切り替える項目が受ける 6 語（**小文字の完全一致のみ**）。
 ///
@@ -405,11 +431,6 @@ fn script_of_key(key: &str) -> Option<Script> {
     }
 }
 
-/// 値を持つ 3 キー——本仕様の所有だが、値の解釈はまだここに無い（タスク 3.4 が
-/// [`apply_font_tag`] へ腕を足す場所）。未知のキーとは別の理由で拒み、記録から
-/// 「所有しているが未実装」が見分けられるようにする。
-const VALUE_KEYS: [&str; 3] = ["height", "color", "name"];
-
 /// 本仕様が意味を与えないキーのうち、接頭辞では拾えないもの（寄せ 2・影 2）。
 const UNOWNED_KEYS: [&str; 4] = ["align", "valign", "shadowcolor", "shadowstyle"];
 
@@ -430,7 +451,7 @@ fn issue(key: &str, values: &[&str], reason: &'static str) -> FontTagIssue {
     }
 }
 
-/// 真偽値の値をちょうど 1 つ取り出す（値なしと 2 つ以上はどちらも当該項目を変えない・要件 5.5）。
+/// 値をちょうど 1 つ取り出す（値なしと 2 つ以上はどちらも当該項目を変えない・要件 5.5・7.6）。
 fn single_value<'a>(key: &str, values: &[&'a str]) -> Result<&'a str, FontTagIssue> {
     match values {
         [one] => Ok(one),
@@ -444,17 +465,19 @@ fn single_value<'a>(key: &str, values: &[&'a str]) -> Result<&'a str, FontTagIss
 /// `Ok(Some(note))` は「適用したが呼び手が記録すべきことがある」、`Err` は「**当該項目を
 /// 変えなかった**・呼び手が理由を記録する」を表す。
 ///
-/// # このタスク（3.3）が持つ腕
+/// # 持っている腕
 ///
 /// - 一括の戻し `\f[default]`／`\f[disable]`——見た目を**丸ごと置き換える**（要件 10.1／10.2）。
 ///   項目を列挙しないので、後続仕様が [`TextLook`] へ項目を足せば自動で戻しに含まれる（要件 10.4）。
 /// - 真偽 5 項目 `bold`／`italic`／`underline`／`strike`／`outline`——6 語で当該項目だけを
 ///   動かす（要件 5.1〜5.4・5.8）。`outline` は状態だけ更新して表示は変えない（要件 5.9）。
 /// - 上下付き `sub`／`sup`——同じ 6 語で解釈し、後から指定した方が先を外す（要件 6.1／6.2）。
+/// - 値を持つ 3 キー——`height` は絶対・相対（そのとき効いている大きさが基準）・百分率
+///   （既定の大きさが基準）・層への戻し・スタイルシートの語（語彙のみ）を受ける
+///   （要件 7.1〜7.7）。`color` は書式の解析を [`crate::color::parse_color`] に委ね、
+///   語彙をどの層へ解決するかだけを持つ（要件 8.5〜8.8）。`name` は候補列を記述順のまま
+///   保つ（要件 9.1／9.2／9.5／9.6）。いずれも**当該項目以外は触らない**。
 /// - 所有外のキー——見た目を変えず [`Note::Unowned`]（要件 2.5）。
-///
-/// 値を持つ 3 キー（`height`／`color`／`name`）は本仕様の所有だが解釈はまだ無く、
-/// [`REASON_VALUE_KEY_PENDING`] を理由に拒む（タスク 3.4 が腕を足す）。
 ///
 /// # 事前条件・事後条件
 ///
@@ -487,8 +510,11 @@ pub fn apply_font_tag(
     if let Some(want) = script_of_key(key) {
         return apply_script(current, layers, key, values, want);
     }
-    if VALUE_KEYS.contains(&key) {
-        return Err(issue(key, values, REASON_VALUE_KEY_PENDING));
+    match key {
+        "height" => return apply_height(current, layers, key, values),
+        "color" => return apply_color(current, layers, key, values),
+        "name" => return apply_name(current, layers, key, values),
+        _ => {}
     }
     if is_unowned(key) {
         return Ok(Some(Note::Unowned));
@@ -558,6 +584,136 @@ fn apply_script(
     }))
 }
 
+/// `\f[height,…]` の値の読み——**大きさをどう決めるか**の 6 通り（要件 7.1〜7.5・7.7）。
+///
+/// 「基準は何か」を型で分けておくのが肝で、[`HeightSpec::Relative`] は**そのとき効いている
+/// 大きさ**、[`HeightSpec::Percent`] は**既定の見た目の大きさ**という別の基準を持つ
+/// （design §A 項目 1・2）。両者を同じ「数値」に潰すと基準の取り違えが型に映らない。
+enum HeightSpec {
+    /// `N`——em を image px で直に指定（要件 7.1）。
+    Absolute(f32),
+    /// `+N`／`-N`——そのとき効いている大きさへの加減（符号込みの増分・要件 7.2）。
+    Relative(f32),
+    /// `N%`——既定の見た目の大きさに対する百分率（要件 7.3）。
+    Percent(f32),
+    /// `default`——大きさだけを既定層へ（要件 7.4）。
+    Default,
+    /// `disable`——大きさだけを無効表示層へ（要件 7.5）。
+    Disable,
+    /// スタイルシートの大きさキーワード——語彙のみ（大きさを変えない・要件 7.7）。
+    Keyword,
+}
+
+/// 大きさの値 1 つを [`HeightSpec`] へ（読めなければ `None`）。
+///
+/// 見る順に意味がある——`default`／`disable`／スタイルシートの語を先に選り分けてから
+/// 書式を見る。百分率（末尾 `%`）と相対（先頭の符号）は数値より先で、残りが絶対指定。
+/// 語はいずれも**小文字の完全一致のみ**（6 語の規律と同じ・design §A 項目 12）。
+fn parse_height(value: &str) -> Option<HeightSpec> {
+    match value {
+        "default" => return Some(HeightSpec::Default),
+        "disable" => return Some(HeightSpec::Disable),
+        _ => {}
+    }
+    if STYLESHEET_SIZE_KEYWORDS.contains(&value) {
+        return Some(HeightSpec::Keyword);
+    }
+    if let Some(body) = value.strip_suffix('%') {
+        return body.parse().ok().map(HeightSpec::Percent);
+    }
+    if value.starts_with('+') || value.starts_with('-') {
+        return value.parse().ok().map(HeightSpec::Relative);
+    }
+    value.parse().ok().map(HeightSpec::Absolute)
+}
+
+/// `\f[height,…]`——大きさだけを動かす（要件 7.1〜7.7）。
+///
+/// 結果が正の有限値にならなければ**大きさを変えず**理由を返す（要件 7.6）。この検査は
+/// 6 通りすべての出口に 1 つだけ置く——`0` の直指定も、相対指定で 0 以下へ落ちた場合も、
+/// `inf`／`NaN` も、同じ 1 か所で止まる。
+fn apply_height(
+    current: &mut TextLook,
+    layers: &LookLayers,
+    key: &str,
+    values: &[&str],
+) -> Result<Option<Note>, FontTagIssue> {
+    let value = single_value(key, values)?;
+    let spec = parse_height(value).ok_or_else(|| issue(key, values, REASON_BAD_HEIGHT))?;
+    let next = match spec {
+        HeightSpec::Absolute(size) => size,
+        // 基準は「そのとき効いている大きさ」——重ねて効く（design §A 項目 1）。
+        HeightSpec::Relative(delta) => current.height + delta,
+        // 基準は「既定の見た目の大きさ」——重ねて効かない（design §A 項目 2）。
+        HeightSpec::Percent(percent) => layers.default.height * percent / 100.0,
+        HeightSpec::Default => layers.default.height,
+        HeightSpec::Disable => layers.disable.height,
+        // 語彙として受理するだけ——大きさは変えない（呼び手が warn を 1 度残す・要件 7.7）。
+        HeightSpec::Keyword => return Ok(Some(Note::StylesheetKeyword)),
+    };
+    if !next.is_finite() || next <= 0.0 {
+        return Err(issue(key, values, REASON_HEIGHT_NOT_POSITIVE));
+    }
+    current.height = next;
+    Ok(None)
+}
+
+/// `\f[color,…]`——文字色だけを動かす（要件 8.1〜8.9）。
+///
+/// 書式の解析は [`crate::color::parse_color`] の唯一の担当（要件 8.10）で、ここが持つのは
+/// **語彙をどの層へ解決するか**だけ。アンカー 3 語はアンカーの色定義がまだ無いので既定層へ
+/// 落とし、呼び手が warn を残せるよう印を返す（要件 8.8・design §A 項目 11）。
+fn apply_color(
+    current: &mut TextLook,
+    layers: &LookLayers,
+    key: &str,
+    values: &[&str],
+) -> Result<Option<Note>, FontTagIssue> {
+    let spec = parse_color(values).map_err(|error| issue(key, values, error.reason))?;
+    let (color, note) = match spec {
+        ColorSpec::Rgb(r, g, b) => ((r, g, b), None),
+        ColorSpec::Default | ColorSpec::DefaultPlain => (layers.default.color, None),
+        ColorSpec::Disable => (layers.disable.color, None),
+        ColorSpec::DefaultCursor | ColorSpec::DefaultCursorNotSelect => (layers.cursor_text, None),
+        ColorSpec::DefaultAnchor
+        | ColorSpec::DefaultAnchorNotSelect
+        | ColorSpec::DefaultAnchorVisited => {
+            (layers.default.color, Some(Note::AnchorColorAsDefault))
+        }
+    };
+    current.color = color;
+    Ok(note)
+}
+
+/// `\f[name,…]`——フォント名の候補列だけを動かす（要件 9.1／9.2／9.5／9.6）。
+///
+/// 候補列は**記述順のまま**保つ。実在の判定・フォントファイル名の読み飛ばし（要件 9.3）・
+/// 全滅時の既定への差し戻し（要件 9.4）はいずれも描画層（`FontCatalog`）の担当で、
+/// 純粋層はここで候補を落としたり並べ替えたりしない。
+fn apply_name(
+    current: &mut TextLook,
+    layers: &LookLayers,
+    key: &str,
+    values: &[&str],
+) -> Result<Option<Note>, FontTagIssue> {
+    // 候補が 1 つも無い（値なし・空文字列だけ）——[`TextLook::name`] は空にしない。
+    // 途中の空トークン（`[name,a,,b]`）は落とさず候補列に残す: 解読層が空を潰さずに
+    // 渡してくる（要件 2.2）ので、この層でも記述順を変えない。実在しない候補として
+    // 描画層の [`FontCatalog`] が読み飛ばす（要件 9.1・9.2）。
+    if values.iter().all(|candidate| candidate.is_empty()) {
+        return Err(issue(key, values, REASON_NO_CANDIDATE));
+    }
+    current.name = match values {
+        ["default"] => layers.default.name.clone(),
+        ["disable"] => layers.disable.name.clone(),
+        candidates => candidates
+            .iter()
+            .map(|candidate| (*candidate).to_owned())
+            .collect(),
+    };
+    Ok(None)
+}
+
 #[cfg(test)]
 #[path = "look_tests.rs"]
 mod tests;
@@ -565,3 +721,7 @@ mod tests;
 #[cfg(test)]
 #[path = "look_font_tag_tests.rs"]
 mod font_tag_tests;
+
+#[cfg(test)]
+#[path = "look_font_tag_value_tests.rs"]
+mod font_tag_value_tests;
