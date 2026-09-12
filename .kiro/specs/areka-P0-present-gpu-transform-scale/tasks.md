@@ -140,7 +140,7 @@
   - _Depends: 2.2, 3.1_
   - _Boundary: presenter テスト補助_
 
-- [ ] 5.2 拡大率まわりの提示テストを原寸面・論理配置・係数へ導き直す
+- [x] 5.2 拡大率まわりの提示テストを原寸面・論理配置・係数へ導き直す
   - 供給面の寸を物理寸として読んでいたテストを、配置の寸＝原寸・スケール＝拡大率・照会値＝丸め権威の式、という形へ導き直す
   - 拡大率の変化を「ミス＋再サンプル」として期待していたテストを「ヒット」へ導き直す
   - マスクが拡大後バイト由来であることを固定していたテスト（新正典と正反対）を原寸バイト由来へ導き直し、名も実態に合わせる
@@ -292,3 +292,4 @@
 - 5.7: 差し戻し 2 回（いずれも doc の真偽）。実行例の窓は**生成時 native 原寸**・表示成立後に `reconcile_window_size` が `scaled_extent` へ合わせる（両方書く）。`crates/areka` から `resample` 0 件。⚠`crates/areka/src/emo2_boot/spine_display_tests.rs` 243／342 に「swap chain の供給面」の陳腐化 doc・メッセージが残る（テストは緑）→ 7.1 の doc 掃除で拾う。台帳 #23 へ `spine_seriko_loop_tests.rs`（再導出）を 8.1 で追記。
 - 5.3: `budget_tests.rs` 1,083→**803**＝1,000 未満 → **8.1 で `OVER_LIMIT_ALLOWED` から外し `OVER_LIMIT_ALLOWED_COUNT` 11→10**（それまで `file_length_guard_test` の「例外は依然超過」検査が赤）。identity 名の 3 本は一般名の対と同一化したため**統合**（21→16 本・台帳 #10 の「不変 15」は訂正）。`fill_extent` が `resample(.., ONE, ..)` を残す（`ComposedSurface` を伸ばす公開口が無い）→ **6.1 が引き取る**（emo-compose に公開 seam を足すか `compose_into` で伸ばす）。k=2 レーンに `applied_ratio` の assert を追加（k がキー外になり暗黙の pin が消えたため）。
 - 5.4: `perf_log_tests` 956→883・`transition_record_tests` 714→736（+22 は前状態維持の走査檻の増分・6.7 の名指しは perf_log のみ）。初回表示は `resized=true`（`None != Some`）＝台帳 #15「他 15 本不変」は 14 に訂正。T-N8 の「同一 target で原寸が実際に変わる→true」は fixture（`build_two_face_assets` は同寸）が無く未固定 → 8.1 で記録（寸違いの第 2 面を足せば閉じる）。
+- 5.2: 台帳 #6 の「他 8 本不変」は誤り＝`text_slot_view_*` 2 本・`show_surface_without_dpi_component_*`・`native_size_*` 2 本も `t.chain`／k 依存 `read_back` を読んでおり再導出（`native_size_recovers_when_failed_show_is_followed_by_cache_hit` は「挿入後に失敗」が構造的に到達不能＝別原寸の面を挟む hit の形へ置換・改名）。「bounds 照合」は bare World では `GlobalArrangement` が伝播しないため `Arrangement`＋`target_physical_size` 照合＋T-N3 で代替。⚠`presenter_test_support.rs` の `px_at` が dead code に（6.1 の掃除で落とす）。8.1 で台帳 #6 を訂正。
