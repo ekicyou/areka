@@ -54,6 +54,7 @@ pub(super) fn prescan_charset(bytes: &[u8]) -> Option<String> {
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#charset_2c_6587_5b57_30b3_30fc_30c9:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#charset_2c_6587_5b57_30b3_30fc_30c9:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#charset_2c_6587_5b57_30b3_30fc_30c9:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#charset_2c_6587_5b57_30b3_30fc_30c9:1
         if key.trim().eq_ignore_ascii_case("charset") {
             return Some(value.trim().to_string());
         }

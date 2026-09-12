@@ -55,7 +55,8 @@ use std::time::Duration;
 
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
 use shiori_host32_host::{
-    ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow, Shiori3Client, spawn,
+    Charset, CharsetNegotiator, ExitKind, HelperLifecycle, HelperStatus, ParentMessageWindow,
+    Shiori3Client, spawn,
 };
 use shiori_host32_ipc::MsgTag;
 
@@ -235,7 +236,10 @@ fn cyclic_run_and_clean_shutdown() {
     );
 
     // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用）---
-    let client = Shiori3Client::new(&parent);
+    // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
+    // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
+    let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+    let mut client = Shiori3Client::new(&parent, &mut negotiator);
 
     // --- ③ 周期運転: REPETITIONS 回の GET/NOTIFY 往復（back-to-back・実時間 sleep なし・R3.1/R7.5）---
     for i in 0..REPETITIONS {
@@ -371,7 +375,10 @@ fn cyclic_real_pasta_optional() {
     );
 
     // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用）---
-    let client = Shiori3Client::new(&parent);
+    // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
+    // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
+    let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+    let mut client = Shiori3Client::new(&parent, &mut negotiator);
 
     // --- ③ 周期運転: N_PASTA 回の NOTIFY 連打（応答内容非依存＝transport 健全性のみ観測・R6.1）---
     //     NOTIFY は応答を破棄する契約ゆえ実 pasta の応答内容に依らない。イベント運行の意味論検証は

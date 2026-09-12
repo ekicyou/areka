@@ -457,12 +457,12 @@ DEALINGS IN THE SOFTWARE.
 対象 crate:
 - backtrace 0.3.76
 - cfg-if 1.0.4
-- js-sys 0.3.104
+- js-sys 0.3.105
 - rustc-demangle 0.1.28
-- wasm-bindgen-macro-support 0.2.127
-- wasm-bindgen-macro 0.2.127
-- wasm-bindgen-shared 0.2.127
-- wasm-bindgen 0.2.127
+- wasm-bindgen-macro-support 0.2.128
+- wasm-bindgen-macro 0.2.128
+- wasm-bindgen-shared 0.2.128
+- wasm-bindgen 0.2.128
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -2177,7 +2177,7 @@ SOFTWARE.
 - parking 2.2.1
 - pin-project-lite 0.2.17
 - polling 3.11.0
-- portable-atomic-util 0.2.7
+- portable-atomic-util 0.2.8
 - portable-atomic 1.15.0
 - proc-macro2 1.0.107
 - quote 1.0.47
@@ -2189,7 +2189,7 @@ SOFTWARE.
 - serde_derive 1.0.229
 - serde_json 1.0.151
 - syn 2.0.119
-- syn 3.0.4
+- syn 3.0.5
 - thiserror-impl 2.0.20
 - thiserror 2.0.20
 - typeid 1.0.3
