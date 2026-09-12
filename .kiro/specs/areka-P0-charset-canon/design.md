@@ -147,7 +147,7 @@ crates/shiori-host32-host/src/
 crates/areka-ghost/src/
 └── shiori_wiring_charset_tests.rs   # 2 キーの優先順・後退・起動ログの観測（capture_events）
 crates/areka-parsers/src/shell/
-└── decode_charset_tests.rs          # surfaces.txt 固定物 3 種（Shift_JIS 宣言／未宣言／EUC-JP 宣言）＝UTF-8 固定物と同一の解析結果
+└── decode_charset_tests.rs          # surfaces.txt 固定物 3 種（Shift_JIS 宣言／未宣言／EUC-JP 宣言）＝比較基準の UTF-8 固定物と同一の解析結果（等値に参加するのは基準を含めて 4 枚）
 .kiro/specs/areka-P0-charset-canon/verification/
 └── signoff-record.md                # 実機確認の記録（里々テンプレート＋emo2・11.1〜11.3）
 ```
@@ -237,7 +237,7 @@ flowchart TD
 |---|---|---|---|---|
 | 1.1 | 対応集合＝ファイル層と同一・独自一覧なし | Charset | `Charset::for_label` が `encoding_rs::Encoding::for_label` を呼ぶだけ | — |
 | 1.2 | 別名・大小文字・空白の寛容 | Charset | 同上（`for_label` の寛容性） | — |
-| 1.3 | 既定＝固定写像・OS ロケール不読 | shiori_wiring | `default_charset(DefaultEncoding)` の 2 腕 `match` | 初期決定 |
+| 1.3 | 既定＝固定写像・OS ロケール不読 | shiori_wiring | `default_charset(DefaultEncoding)` の定数写像（名前つき 2 腕＋ワイルドカード 1 腕。`DefaultEncoding` は別クレートの非網羅型ゆえ最後の腕は必須） | 初期決定 |
 | 1.4 | 既定は対応範囲ではない | Charset・CharsetNegotiator | 型に Shift_JIS／UTF-8 の分岐が無い（定数 2 つのみ） | — |
 | 1.5 | UTF-16／replacement の限界 | Charset | `LabelError::NotEncodable`（`output_encoding() != self`） | — |
 | 2.1 | 優先順 force ＞ encoding ＞ 既定 | shiori_wiring | `initial_charset` | 初期決定 |
@@ -284,7 +284,7 @@ flowchart TD
 | 9.2 | 3 系統の応答復号 | 同上 | `Charset:` 宣言つき応答の `Value` | — |
 | 9.3 | 継承・後退（警告観測）・強制無視・次の要求への反映・別名 | charset_tests・shiori3_charset_tests | `CharsetNegotiator` の連続呼出＋`log_capture_kit::capture` | — |
 | 9.4 | 2 キーの優先順と後退（警告観測） | shiori_wiring_charset_tests | `initial_charset`＋`capture_events` | — |
-| 9.5 | surfaces.txt 固定物 3 種＝UTF-8 と同一の解析結果 | decode_charset_tests | `shell::parse(&decode(bytes, Ansi))` の等値 | — |
+| 9.5 | surfaces.txt 固定物 3 種＝比較基準の UTF-8 と同一の解析結果（等値の母数は基準込みで 4） | decode_charset_tests | `shell::parse(&decode(bytes, Ansi))` の等値 | — |
 | 9.6 | UTF-8 要求バイト列＝適用前の定数・emo2 固定物無改変 | shiori3_charset_tests | 適用前の `build_request` 出力を定数で保持 | — |
 | 9.7 | Shift_JIS だけの実装で通らない系統を含む | 同上 | EUC-JP の系統（`A4 A2`）＋ISO-2022-JP の別名解決 | — |
 | 9.8 | 純関数・x64 のみ | 全テスト | `src/` の兄弟ファイル（`tests/*.rs` の i686 依存を避ける） | — |
@@ -421,7 +421,7 @@ impl CharsetNegotiator {
 | あり | あり | `Ok(c)`・`c == current` | なし | なし |
 | あり | あり | それ以外 | なし（4.5） | 初回のみ `debug` `charset_forced_ignores_header`（forced・header） |
 
-`decode_had_errors == true` は上記と独立に、文字コード名につき初回 `warn`・以後 `debug` `charset_invalid_bytes_replaced`（charset）を出す（4.7・10.2・7.4）。`note_request(id, replaced > 0)` はイベント名につき初回 `warn`・以後 `debug` `charset_unmappable_replaced`（id・replaced）（3.5・7.4）。
+`decode_had_errors == true` は上記と独立に、文字コード名につき初回 `warn`・以後 `debug` `charset_invalid_bytes_replaced`（charset）を出す（4.7・10.2・7.4）。`note_request(id, replaced > 0)` はイベント名につき初回 `warn`・以後 `debug` `charset_unmappable_replaced`（charset・id・replaced。`charset` は送ろうとしていた文字コードの正規名＝現在値・要件 7.2）（3.5・7.2・7.4）。
 
 ##### State Management
 - State model: `current: Charset`・`forced: bool`・`warned: BTreeSet<String>`（鍵は `"label:<x>"`／`"unmappable:<id>"`／`"invalid:<charset>"`／`"forced-mismatch"`）。ラベルの鍵は **trim＋ASCII 小文字化してから**入れる（`foo`／`FOO` で 2 回警告しない・応答ごとにラベルの綴りを変える壊れた SHIORI で集合が際限なく育たない）。
@@ -521,7 +521,7 @@ impl<'a> Shiori3Client<'a> {
 
 ##### Service Interface
 ```rust
-/// ファイル層と同じ固定写像（`DefaultEncoding::to_encoding` と同じ 2 腕・OS ロケール不読・1.3）。
+/// ファイル層と同じ固定写像（`DefaultEncoding::to_encoding` と同じ写像・OS ロケール不読・1.3）。
 fn default_charset(default: DefaultEncoding) -> Charset;   // Ansi → SHIFT_JIS／Utf8 → UTF_8
 
 /// 優先順 force > encoding > 既定で初期値を決め、決定と後退をログに残す（2.1／2.4／2.6）。
@@ -531,7 +531,7 @@ pub fn real_connect(helper_exe: PathBuf, shiori: ShioriMount, default_encoding: 
     -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send + 'static;
 ```
 - `real_connect` は closure を返す前に `initial_charset` を呼ぶ（起動スレッドで同期・ログが捕捉できる・接続失敗でも決定は記録される）。closure は `ShioriConnection { window, helper, negotiator }` を返す。
-- `default_charset` を ghost 側の 2 腕 `match` にする理由（研究 §8 項目 4 の裁定）: host32 は parsers に依存できず、`DefaultEncoding::to_encoding` を公開して `Charset` へ橋渡しすると「UTF-16 でない」ことを検査する失敗腕が要り、その腕は固定写像では到達不能＝記録のない死んだ失敗経路になる。2 腕の定数写像をテストで固定する方が小さく、失敗経路が無い。
+- `default_charset` を ghost 側の 2 腕 `match` にする理由（研究 §8 項目 4 の裁定）: host32 は parsers に依存できず、`DefaultEncoding::to_encoding` を公開して `Charset` へ橋渡しすると「UTF-16 でない」ことを検査する失敗腕が要り、その腕は固定写像では到達不能＝記録のない死んだ失敗経路になる。定数写像をテストで固定する方が小さく、失敗経路が無い。**ただし `DefaultEncoding` は別クレートの非網羅型なので、名前つき 2 腕のほかにワイルドカード 1 腕が必須である**（実装は既定の Shift_JIS へ落とす）。この腕は今日到達不能だが、将来 `DefaultEncoding` に変種が増えたときは写像を明示的に足すこと——足さなければ記録なく Shift_JIS になる。
 - 警告ログの `fallback` フィールドには最終的に採用した文字コード名を書く（後退先を先に決めてから記録する）。
 - `runtime.rs` の `Helper` 腕は `real_connect(helper_exe, mount.shiori.clone(), options.default_encoding)` の 1 行変更。`Custom`／`InProc` は非接触。
 
@@ -607,7 +607,7 @@ pub struct ShioriMount {
 | `shiori-charset` | `charset_switched` | debug | `from`・`to` | 4.6 |
 | `shiori-charset` | `charset_label_unresolved` | warn → debug | `label`・`reason`・`kept` | 4.4, 7.4, 10.3 |
 | `shiori-charset` | `charset_forced_ignores_header` | debug（初回のみ） | `forced`・`header` | 4.5 |
-| `shiori-charset` | `charset_unmappable_replaced` | warn → debug | `id`・`replaced` | 3.5, 7.4 |
+| `shiori-charset` | `charset_unmappable_replaced` | warn → debug | `charset`・`id`・`replaced` | 3.5, 7.2, 7.4 |
 | `shiori-charset` | `charset_invalid_bytes_replaced` | warn → debug | `charset` | 4.7, 7.4, 10.2 |
 
 既存のログ行（起動・終了・エラー）は変えない（12.5）。実機確認は `charset_initial` と `charset_switched` を grep する（11.2）。debug 水準の行を点けるときの `RUST_LOG` は **target 名**で指定する（`shiori-charset=debug,ghost-boot=debug`。モジュールパス名では点かない）。

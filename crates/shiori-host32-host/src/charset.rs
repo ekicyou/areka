@@ -195,7 +195,9 @@ impl CharsetNegotiator {
 
     /// 要求の符号化結果を受け取り、表せない文字を置換していれば記録する（要件 3.5・7.2・7.4）。
     ///
-    /// 置換 0 の通常経路では何もしない。
+    /// 置換 0 の通常経路では何もしない。記録する `charset` は「そのとき送ろうとしていた
+    /// 文字コード」＝交渉状態の現在値で、表せなかった当の文字コードを指す（要件 7.2——
+    /// 後退のログは正規名を構造化フィールドで持つ）。
     pub fn note_request(&mut self, id: &str, replaced: usize) {
         if replaced == 0 {
             return;
@@ -204,6 +206,7 @@ impl CharsetNegotiator {
         warn_then_debug!(
             first,
             event = "charset_unmappable_replaced",
+            charset = self.current.name(),
             id,
             replaced,
             "要求に現在の文字コードで表せない文字があった——数値文字参照へ置換して送る"

@@ -384,6 +384,9 @@ fn unmappable_replacements_are_recorded_per_event_id() {
     assert_eq!(replaced[0].level, tracing::Level::WARN);
     assert_eq!(replaced[0].field_str("id"), Some("OnSecondChange"));
     assert_eq!(replaced[0].field("replaced"), Some("2"));
+    // 要件 7.2: 後退のログは文字コードの正規名を構造化フィールドで持つ。表せなかったのは
+    // 「そのとき送ろうとしていた文字コード」＝交渉状態の現在値である。
+    assert_eq!(replaced[0].field_str("charset"), Some("Shift_JIS"));
 
     // 同じイベントの 2 回目は詳細ログ、別のイベントは改めて警告。
     let ((), events) = log_capture_kit::capture(|| {
