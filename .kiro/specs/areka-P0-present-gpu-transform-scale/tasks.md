@@ -205,7 +205,7 @@
   - _Boundary: areka examples_
 
 - [ ] 6. CPU リサンプラ本体とその檻を撤去する
-- [ ] 6.1 合成クレートからリサンプラを撤去し、寸法権威だけを残す
+- [x] 6.1 合成クレートからリサンプラを撤去し、寸法権威だけを残す
   - 重み表・軸サンプル・軸走査・軸混合・作業席・リサンプル関数群を削除し、再輸出からも外す
   - 提示モジュールに残るテストビルド限定のリサンプラ import も外す
   - 拡大率の数学（伸長・寸法の丸め・座標の縮約）は 1 文字も変えない
@@ -295,3 +295,4 @@
 - 5.2: 台帳 #6 の「他 8 本不変」は誤り＝`text_slot_view_*` 2 本・`show_surface_without_dpi_component_*`・`native_size_*` 2 本も `t.chain`／k 依存 `read_back` を読んでおり再導出（`native_size_recovers_when_failed_show_is_followed_by_cache_hit` は「挿入後に失敗」が構造的に到達不能＝別原寸の面を挟む hit の形へ置換・改名）。「bounds 照合」は bare World では `GlobalArrangement` が伝播しないため `Arrangement`＋`target_physical_size` 照合＋T-N3 で代替。⚠`presenter_test_support.rs` の `px_at` が dead code に（6.1 の掃除で落とす）。8.1 で台帳 #6 を訂正。
 - 5.5: 台帳訂正（8.1）: #13 は再導出 3／不変 6（`refresh_scale_without_dpi_change_does_nothing` は memo 直読み `read_back` で恒真化→entity の `GraphicsCommandList` 側で判定・`refresh_scale_failure_keeps_previous_display_and_k` は注入が `last_show` キーを壊す）、#14 は再導出 3／不変 14、#18 は `cache.get` 6 か所＋`chain` 1 か所の機械追随、#19 は再導出 3＋新設 1（`the_matrix_covers_four_fault_points`）。メモ件数は `get`（LRU 非撹乱）で既知 2 キーを数える（`ComposeCache::len` は cache.rs 私有）。⚠改名 `presenter_upload_failure_tests.rs`→`presenter_display_failure_tests.rs` は index 経由で 4.2 のコミット `7b04fc9f` に紛れ込んだ（単体ではビルド不可・squash で消える）。
 - 7.2: 8.7 の申し送りは `.kiro/specs/areka-P0-dpi-transition-two-tick-bounce/brief.md` 末尾「## 申し送り」に置いた。アーカイブ `emo-dpi-scaling/design.md` は冒頭（題の直後）にも上書きのポインタ 1 行を置く（Overview だけ読む人が旧設計を現行と誤読しないため・`emo-text-layer/design.md` の先例）。プロジェクト記憶 2 ファイル＋MEMORY.md も追記済み。
+- 6.1: `scale.rs` 603→305（非 doc 差分は削除のみ＝数学バイト等価）。公開 seam は **`resize_and_clear` を `pub`**（本番の合成先が通るメソッド・義務なし）。`resize_for_full_overwrite` は本番消費者 0 で `#[cfg(test)]` に畳んだ → **6.2 で檻 3 本（composed.rs `mod tests`）ごと削除し、`composed.rs:94／97` の doc 参照も落とす**。6.2 の掃除: `scale_ratio_tests.rs:322,496`（削除される `resample_zero_extent_is_empty_and_warns` を引く）・`composer_tests.rs:310` の陳腐化 doc。7.1: wintf `alpha_mask_regenerate_tests.rs:209` の `scale_resample_tests.rs:629` 引用（doc のみ）。`cargo doc` の intra-doc link 警告 22→24（既存クラス・削除で戻る）。

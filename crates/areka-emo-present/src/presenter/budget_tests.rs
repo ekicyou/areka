@@ -54,7 +54,7 @@
 
 use super::*;
 
-use areka_emo_compose::{BindSet, PatternState, ScaleRatio, resample};
+use areka_emo_compose::{BindSet, PatternState};
 
 use crate::cache::ComposeCache;
 
@@ -258,19 +258,12 @@ fn the_sum_of_per_apply_deltas_equals_the_cumulative() {
 // 席の再利用（Requirement 3.1/3.2・design.md D2/D3・Flow 2）
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// 席の中身を `w×h` へ伸ばす（`compose_into` が合成先席へ書くときと同じ伸長を踏む）。
+/// 席の外形を `w×h` へ合わせる。
 ///
-/// `ComposedSurface` の寸法合わせは emo-compose の `pub(crate)` ゆえ本クレートからは直接
-/// 呼べない。恒等 k の公開 `resample` は入口で `out.resize_for_full_overwrite(外形)` を通り、
-/// 続く転写が全バイトを書くため、**本物の合成が席へ及ぼすのと同じ伸長・同じ容量再利用**を
-/// 公開経路だけで再現できる。
-///
-/// **task 6.1 への申し送り**: リサンプラ本体の撤去はこの伸長口も消す。本檻が要るのは「既存の
-/// `ComposedSurface` を `w×h` へ伸ばす」ことだけなので、代替は emo-compose 側に同等の公開口を
-/// 用意するか、`Composer::compose_into` を小さな fixture で通すかのいずれかになる。
+/// 本物の合成（`compose_into` → `blit`）が合成先席に対して通すのと**同じメソッド**を呼ぶ。
+/// ゆえに確保の起こり方と容量の引き継ぎ方——本檻が観測する唯一のもの——は本番と一致する。
 fn fill_extent(dst: &mut ComposedSurface, w: u32, h: u32) {
-    let src = ComposedSurface::new(w, h);
-    resample(&src, ScaleRatio::ONE, dst);
+    dst.resize_and_clear(w, h);
 }
 
 /// 1 適用で観測した値（計数の増分・回る実体の番地）。

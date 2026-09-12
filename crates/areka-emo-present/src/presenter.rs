@@ -72,16 +72,9 @@ use areka_emo_compose::{
     BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, RegionPriority,
     ScaleRatio, hit_region_scaled,
 };
-// `resample`（使い捨て作業領域を毎回起こす形）の消費者は**テストだけ**になった——本番のミス経路は
-// `FrameBudget` の常設席を使う `resample_with` 側（`budget.rs`）へ移ったためである
-// （`areka-P0-recompose-budget` task 5.3）。テスト 4 本が `use super::*;` でここから拾うので束縛は
-// 残すが、非 test ビルドでは消費者が 1 人も居ないので `#[cfg(test)]` で畳む（抑止指示を足さない）。
-#[cfg(test)]
-use areka_emo_compose::resample;
-
 use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore};
 // `WucGraphicsResource` の本番消費者は無い（装着が純 ECS になり `Compositor` を要さない）。テストが
-// `use super::*;` でここから拾うので、`resample` と同じく `#[cfg(test)]` で畳む。
+// `use super::*;` でここから拾うので、非 test ビルドでは `#[cfg(test)]` で畳む（抑止指示を足さない）。
 #[cfg(test)]
 use wintf::ecs::WucGraphicsResource;
 

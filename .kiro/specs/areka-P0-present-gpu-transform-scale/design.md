@@ -180,7 +180,7 @@ crates/areka-emo-present/
 crates/areka-emo-compose/src/
 ├── scale.rs                         # リサンプラ撤去（ScaleRatio のみ残す）・doc
 ├── lib.rs                           # pub use scale::ScaleRatio（resample 撤去）
-├── composed.rs                      # doc 3 か所
+├── composed.rs                      # doc 3 か所＋`resize_and_clear` を `pub` へ（テスト補助 `fill_extent` の公開口）
 ├── scale_resample_tests.rs          # 撤去
 ├── scale_prior_path_tests.rs        # 撤去
 └── scale_test_support.rs            # 撤去（リサンプラ専用なら）
@@ -319,7 +319,7 @@ sequenceDiagram
 | 8.5 | collision-dpi-hittest の確認（該当 0） | §登記 | — | — |
 | 8.6 | e2e 記録の引受先・roadmap | §登記（完了時） | — | — |
 | 8.7 | two-tick-bounce への申し送り | §登記（完了時） | — | — |
-| 9.1 | 合成規約の変更 0 | Non-Goals | `plan.rs`／`blit.rs`／`compose_into` 不変（compose で触るのは `scale.rs`・`lib.rs` 再輸出・`composed.rs` doc のみ） | — |
+| 9.1 | 合成規約の変更 0 | Non-Goals | `plan.rs`／`blit.rs`／`compose_into` 不変（compose で触るのは `scale.rs`・`lib.rs` 再輸出・`composed.rs` doc ＋ `resize_and_clear` の可視性を `pub` へ広げるのみ＝合成規約そのものは不変） | — |
 | 9.2 | 文字層の変更 0 | Non-Goals・Out of Boundary | `areka-emo-text` 0 file・swap chain ヘルパ残置 | — |
 | 9.3 | k の政策・導出タイミングの変更 0 | Non-Goals | `ScalePolicy`／`derive_scale`／`refresh_scale` のゲート不変 | Flow 2 |
 | 9.4 | バルーン offset／DPI 系裁定の変更 0 | Non-Goals | `balloon.rs` 0 file | — |

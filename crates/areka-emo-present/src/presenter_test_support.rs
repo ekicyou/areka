@@ -26,8 +26,9 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 /// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
 ///
-/// `EmoPresenter` は供給面生成時に World から両資源を読む（compositor は `WucGraphicsResource` 由来）。
-/// ゆえに本番同様、World へ両者を挿入した状態を作る。
+/// `EmoPresenter` が本番で読むのは `GraphicsCore` だけになった（装着が純 ECS になり
+/// `Compositor` を要さない）。`WucGraphicsResource` は本番同様に載せたままにする——
+/// 資源の在不在で分岐する檻（`presenter_hide_contract_tests.rs`）が World から読むためである。
 pub(super) fn make_world_with_gpu() -> World {
     // 各テストは専用スレッドで走る。MTA を初期化（S_FALSE/RPC_E_CHANGED_MODE は無視）。
     unsafe {
@@ -91,14 +92,6 @@ pub(super) fn native_golden_with(
         .compose(emo_world, atlas, surface_id, binds, pattern)
         .expect("golden 用の native 合成は Ok");
     (native.bytes().to_vec(), (native.width(), native.height()))
-}
-
-/// premultiplied BGRA 密配列（`stride = width * 4`）から 1 画素を取り出す（座標突合の読み口）。
-pub(super) fn px_at(bytes: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
-    let i = ((y * width + x) * 4) as usize;
-    bytes[i..i + 4]
-        .try_into()
-        .expect("密配列ゆえ 4 バイト取り出せる")
 }
 
 /// 有効 `ShowSurface` を適用し、reply が `Ok(())` であることを確認する（テスト補助）。

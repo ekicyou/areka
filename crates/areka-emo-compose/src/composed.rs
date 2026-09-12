@@ -67,7 +67,7 @@ impl ComposedSurface {
     /// 消費側（`areka-emo-present` の `FrameBudget`）が「この呼び出しで確保が起きたか」を
     /// **厳密に**観測するための口である。`Vec` の容量は再確保でしか増えず縮みもしないため、
     /// 呼び出しの前後で読み比べれば「増えた＝確保した／変わらない＝確保していない」が
-    /// 過大にも過小にもならずに決まる（[`ResampleScratch::capacity`] と同じ形）。
+    /// 過大にも過小にもならずに決まる。
     ///
     /// [`bytes`] の長さ（`stride * height`）とは別物である——長さは外形が決めるが、容量は
     /// 「これまでに到達した最大」を保つ。**役割ではなく実体に紐づく**値ゆえ、バッファが
@@ -75,7 +75,6 @@ impl ComposedSurface {
     /// 到達済み寸法を覚える必要が無くなる。
     ///
     /// [`bytes`]: ComposedSurface::bytes
-    /// [`ResampleScratch::capacity`]: crate::scale::ResampleScratch::capacity
     pub fn bytes_capacity(&self) -> usize {
         self.bytes.capacity()
     }
@@ -87,8 +86,16 @@ impl ComposedSurface {
     /// クリアは全 0 上書き（前フレームの残像が混ざらない）。blit 実行器（[`crate::blit`]）が
     /// 転写前に呼び、以後 [`bytes_mut`] へ premultiplied BGRA を書き込む。
     ///
+    /// # 公開している理由（消費者）
+    ///
+    /// `areka-emo-present` の予算檻（`presenter/budget_tests.rs` の `fill_extent`）が席を
+    /// `w×h` へ合わせるために呼ぶ。本番の合成先（`compose_into` → [`crate::blit`]）が通るのは
+    /// **まさにこのメソッド**であり、かつ呼び手に事後の義務を課さない
+    /// （[`resize_for_full_overwrite`] は「直後に全バイトを書く」義務を負わせる）。
+    ///
     /// [`bytes_mut`]: ComposedSurface::bytes_mut
-    pub(crate) fn resize_and_clear(&mut self, width: u32, height: u32) {
+    /// [`resize_for_full_overwrite`]: ComposedSurface::resize_for_full_overwrite
+    pub fn resize_and_clear(&mut self, width: u32, height: u32) {
         let stride = width * 4;
         let len = stride as usize * height as usize;
         self.width = width;
@@ -110,13 +117,17 @@ impl ComposedSurface {
     /// # 呼んでよい条件（呼び手の責務）
     ///
     /// 呼び出し直後に `0..stride*height` の**全バイト**が書かれること。これを満たさない
-    /// 呼び手が使うと、使い回したバッファの前回の内容がそのまま出力へ残る。現在の唯一の
-    /// 呼び手は [`crate::scale::resample_with`] で、恒等 k は `copy_from_slice`・非恒等 k は
-    /// 内側 2 重ループが `out_h × out_w × 4` バイトを全て代入する（`stride == width*4` ゆえ
-    /// 行内の余白は存在しない）。**画布へ重ねる**意味論の [`resize_and_clear`]（`blit` 用）とは
-    /// 用途が違い、そちらは 0 初期化が必須なので置き換えてはならない。
+    /// 呼び手が使うと、使い回したバッファの前回の内容がそのまま出力へ残る。
+    /// **画布へ重ねる**意味論の [`resize_and_clear`]（`blit` 用）とは用途が違い、
+    /// そちらは 0 初期化が必須なので置き換えてはならない。かつての唯一の呼び手だった
+    /// CPU リサンプラ（`crate::scale`）は撤去された（spec
+    /// `areka-P0-present-gpu-transform-scale` 要件 1.4）。
     ///
     /// [`resize_and_clear`]: ComposedSurface::resize_and_clear
+    // 本番の消費者は 0 になった（唯一の呼び手だったリサンプラの撤去による）。檻 3 本が
+    // 追補 §A2 の性質を固定し続けるので束縛は残すが、非 test ビルドでは消費者が 1 人も
+    // 居ないので `#[cfg(test)]` で畳む（抑止指示を足さない）。
+    #[cfg(test)]
     pub(crate) fn resize_for_full_overwrite(&mut self, width: u32, height: u32) {
         let stride = width * 4;
         let len = stride as usize * height as usize;
