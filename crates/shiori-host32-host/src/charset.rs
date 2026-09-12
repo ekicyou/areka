@@ -100,6 +100,184 @@ impl Charset {
     }
 }
 
+impl LabelError {
+    /// ログの `reason` フィールドへ写す綴り。
+    ///
+    /// 「Encoding Standard に無い」（`unknown`）と「通信では使えない既知の限界」
+    /// （`not_encodable`）を根拠フィールドで区別する（要件 10.3）。
+    #[must_use]
+    pub fn reason(self) -> &'static str {
+        match self {
+            LabelError::Unknown => "unknown",
+            LabelError::NotEncodable => "not_encodable",
+        }
+    }
+}
+
+/// 交渉のログの宛先。
+///
+/// `RUST_LOG` は **target 名**で指定する（`shiori-charset=debug`。モジュールパス名では
+/// 点かない）。
+const LOG_TARGET: &str = "shiori-charset";
+
+/// 初出なら警告、以後は開発者向け詳細ログ（要件 7.4——毎秒のイベントで同じ後退が
+/// 繰り返されても警告は 1 回）。
+macro_rules! warn_then_debug {
+    ($first:expr, $($fields:tt)*) => {
+        if $first {
+            tracing::warn!(target: LOG_TARGET, $($fields)*);
+        } else {
+            tracing::debug!(target: LOG_TARGET, $($fields)*);
+        }
+    };
+}
+
+/// 応答の復号方針（codec へ渡す 2 値・要件 4.5／5.4）。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CharsetPolicy {
+    /// 応答の `Charset` ヘッダが解決できればそれで復号し、できなければ中の文字コードで復号する。
+    Negotiate(Charset),
+    /// 応答の `Charset` ヘッダを見ずに中の文字コードで復号する（強制・in-proc）。
+    Force(Charset),
+}
+
+/// 1 セッション（SHIORI の load から unload まで）の交渉状態と採用規則（要件 5.1）。
+///
+/// 窓も入出力も持たず、副作用は `tracing` のログだけ。交渉規則の唯一の置き場で、
+/// 上位（kanade）は状態を持つだけで規則を書かない。
+///
+/// 起動時のクロージャ（`Send + 'static`）へ move されるため `Send` を満たす
+/// （`&'static Encoding` は `Sync`・`BTreeSet<String>` は `Send`。`Rc` 等を入れない）。
+#[derive(Debug)]
+pub struct CharsetNegotiator {
+    /// 次の要求に使う文字コード。
+    current: Charset,
+    /// `shiori.forceencoding` が効いているか（効いていれば応答のヘッダで変わらない・要件 2.2）。
+    forced: bool,
+    /// 警告済みの「種別＋鍵」（`label:<x>`／`unmappable:<id>`／`invalid:<charset>`／
+    /// `forced-mismatch`）。鍵の種類は有限（ラベル・イベント名・文字コード名）で、
+    /// ラベルは正規化してから入れるので際限なく育たない。
+    warned: std::collections::BTreeSet<String>,
+}
+
+impl CharsetNegotiator {
+    /// 初期の文字コードと強制の有無で作る（要件 2.2・2.3・5.2）。
+    #[must_use]
+    pub fn new(initial: Charset, forced: bool) -> Self {
+        Self {
+            current: initial,
+            forced,
+            warned: std::collections::BTreeSet::new(),
+        }
+    }
+
+    /// 次の要求に使う文字コード。
+    #[must_use]
+    pub fn current(&self) -> Charset {
+        self.current
+    }
+
+    /// 次の応答の復号方針（強制なら [`CharsetPolicy::Force`]、それ以外は
+    /// [`CharsetPolicy::Negotiate`]）。
+    #[must_use]
+    pub fn policy(&self) -> CharsetPolicy {
+        if self.forced {
+            CharsetPolicy::Force(self.current)
+        } else {
+            CharsetPolicy::Negotiate(self.current)
+        }
+    }
+
+    /// 「種別＋鍵」が初出かを返し、記録する。
+    fn first_time(&mut self, key: String) -> bool {
+        self.warned.insert(key)
+    }
+
+    /// 要求の符号化結果を受け取り、表せない文字を置換していれば記録する（要件 3.5・7.2・7.4）。
+    ///
+    /// 置換 0 の通常経路では何もしない。
+    pub fn note_request(&mut self, id: &str, replaced: usize) {
+        if replaced == 0 {
+            return;
+        }
+        let first = self.first_time(format!("unmappable:{id}"));
+        warn_then_debug!(
+            first,
+            event = "charset_unmappable_replaced",
+            id,
+            replaced,
+            "要求に現在の文字コードで表せない文字があった——数値文字参照へ置換して送る"
+        );
+    }
+
+    /// GET 応答の `Charset` ヘッダ（生ラベル・省略時 `None`）と復号エラーの有無を受け取り、
+    /// 採用と記録を行う（要件 2.2・4.2・4.4〜4.7）。
+    ///
+    /// 記録なしに後退する経路を持たない（要件 7.1）。NOTIFY の応答は採用の根拠に
+    /// 用いないため、呼び手（`Shiori3Client::notify`）はこれを呼ばない（要件 5.3）。
+    pub fn note_response(&mut self, charset_header: Option<&str>, decode_had_errors: bool) {
+        if let Some(header) = charset_header {
+            let resolved = Charset::for_label(header);
+            if self.forced {
+                // 強制中はヘッダを復号にも採用にも用いない。食い違いは初回のみ知らせる
+                // （要件 2.2・4.5）。
+                if resolved != Ok(self.current) && self.first_time("forced-mismatch".to_owned()) {
+                    tracing::debug!(
+                        target: LOG_TARGET,
+                        event = "charset_forced_ignores_header",
+                        forced = self.current.name(),
+                        header,
+                        "forceencoding が効いているため応答の Charset ヘッダを無視する"
+                    );
+                }
+            } else {
+                match resolved {
+                    // SHIORI 側の宣言が優先。切替 1 回につき詳細ログ 1 行（要件 4.2・4.6）。
+                    Ok(charset) if charset != self.current => {
+                        let from = self.current.name();
+                        self.current = charset;
+                        tracing::debug!(
+                            target: LOG_TARGET,
+                            event = "charset_switched",
+                            from,
+                            to = charset.name(),
+                            "応答の Charset ヘッダを以後の要求の文字コードとして採用した"
+                        );
+                    }
+                    // 同じ文字コード（別名の綴りを含む）は状態も記録も変えない（要件 4.6）。
+                    Ok(_) => {}
+                    // 解決できないラベルは採用せず、現在の文字コードを継続する（要件 4.4・10.3）。
+                    Err(error) => {
+                        // 鍵は trim＋ASCII 小文字化（`foo`／`FOO` で 2 回警告しない）。
+                        let key = format!("label:{}", header.trim().to_ascii_lowercase());
+                        let first = self.first_time(key);
+                        warn_then_debug!(
+                            first,
+                            event = "charset_label_unresolved",
+                            label = header,
+                            reason = error.reason(),
+                            kept = self.current.name(),
+                            "応答の Charset ヘッダを解決できない——採用せず現在の文字コードを続ける"
+                        );
+                    }
+                }
+            }
+        }
+
+        // 不正な並びの吸収は採用規則と独立に記録する（要件 4.7・10.2・7.4）。
+        // 記録する名前は実際に復号に使った文字コード＝採用後の現在値。
+        if decode_had_errors {
+            let first = self.first_time(format!("invalid:{}", self.current.name()));
+            warn_then_debug!(
+                first,
+                event = "charset_invalid_bytes_replaced",
+                charset = self.current.name(),
+                "応答に宣言された文字コードとして不正な並びがあった——代替文字で吸収して解析を続ける"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "charset_tests.rs"]
 mod charset_tests;

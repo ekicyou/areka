@@ -9,8 +9,9 @@
 //!   終了分類）。**std-only**（`windows` 非依存）。
 //! - [`parent_window`] — `ParentMessageWindow`（HELLO ハンドシェイク観測 /
 //!   `pump_until_hello_or`）。`wintf-winmsg-executor` の message-only 窓。
-//! - [`charset`] — `Charset`（任意の文字コードを列挙せず表す newtype）と `LabelError`。
-//!   ラベル解決・符号化・復号を `encoding_rs` へ委ねる。純粋・決定的。
+//! - [`charset`] — `Charset`（任意の文字コードを列挙せず表す newtype）と `LabelError`、
+//!   セッションの交渉状態 `CharsetNegotiator`／復号方針 `CharsetPolicy`。ラベル解決・
+//!   符号化・復号を `encoding_rs` へ委ねる。純粋・決定的（副作用はログのみ）。
 //! - [`shiori3`] — SHIORI/3.0 ワイヤコーデック（`build_request` / `parse_response`）。純粋・決定的。
 //! - [`client`] — `Shiori3Client`（`get`/`notify` の出口 API）。codec build → `send_request` →
 //!   parse → `RequestError` 統合を結線する。
@@ -19,7 +20,8 @@
 //!   `classify_failure` による統一終了分類 / `LifecycleReport` によるレポート /
 //!   `ShutdownError` shutdown 失敗語彙）。クレート直下に公開 re-export。
 
-/// 通信の文字コード（`Charset`）とラベル解決の失敗理由（`LabelError`）。
+/// 通信の文字コード（`Charset`）・ラベル解決の失敗理由（`LabelError`）・
+/// セッションの交渉状態（`CharsetNegotiator`）と復号方針（`CharsetPolicy`）。
 pub mod charset;
 pub mod client;
 pub mod error;
@@ -30,7 +32,7 @@ pub mod parent_window;
 pub mod process_host;
 pub mod shiori3;
 
-pub use charset::LabelError;
+pub use charset::{CharsetNegotiator, CharsetPolicy, LabelError};
 pub use client::Shiori3Client;
 pub use error::{HandshakeError, RequestError, ShioriError, SpawnError};
 pub use lifecycle::{

@@ -15,7 +15,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 3.2, 3.4, 7.3, 10.1, 10.2, 10.3_
   - _Boundary: Charset_
 
-- [ ] 1.2 セッションの交渉状態と採用規則、ログと重複抑止を用意する
+- [x] 1.2 セッションの交渉状態と採用規則、ログと重複抑止を用意する
   - 現在の文字コード・強制の有無・警告済みの鍵を持つ交渉状態を新設し、窓も入出力も持たない純粋な値とする（規則の置き場はここ 1 か所）
   - 次の要求に使う文字コードと、応答の復号方針（強制／交渉の 2 値）を取り出せるようにする
   - 応答の文字コードヘッダの扱いを規則表どおりに実装する: 省略は継承、同じ値は無変化かつ無記録、異なる解決可能値は採用＋切替の詳細ログ 1 行、解決不能は採用せず現在の文字コードを継続、強制中はヘッダを復号にも採用にも使わず初回のみ詳細ログ
@@ -164,3 +164,7 @@
 - 1.1: `Charset` の派生 `Debug` は `Charset(Encoding { UTF-8 })` と印字する。ログは必ず `name()` を使う（`?charset` では正規名にならない）。
 - 1.1: `Charset::decode` は BOM を吸収しない（design の明示裁定）。UTF-8 BOM は U+FEFF の 1 文字として残るので、2.2 のヘッダ走査・ステータス行解析はこの前提で書く。
 - 1.1: クレート根の再公開は `LabelError` のみ。新型は `crate::charset::Charset` で到達する（根の `pub use shiori3::Charset` の差し替えは 2.1）。
+- 1.2: ログの target／event 名／フィールド名は design §Monitoring の表と逐語一致させること（6.2 の実機 grep と後続 spec が同じ綴りを引く）。`warn` と `debug` の出し分けは module-private の `warn_then_debug!` 1 本で行う（`tracing` のマクロはレベルが静的）。
+- 1.2: `charset_invalid_bytes_replaced` の `charset` は「採用後の current」＝実際に復号に使った文字コード名。2.2／3.3 は「採用 → 採用後の文字コードで復号 → `note_response`」の順序を保つこと。
+- 1.2: `charset_unmappable_replaced` は `id`／`replaced` のみで正規名を持たない（design §Monitoring の表どおり）。要件 7.2 の「正規名を構造化フィールドで」は直前の `charset_initial`／`charset_switched` を辿る形で満たす。契約の改変は 6.2 の grep を巻き込むので統合担当の論点として残す。
+- 1.2: `log_capture_kit::capture` は捕捉窓の内側で番兵イベントを発火し、捕捉できなければ panic する。ゆえに「イベント 0 件」の主張は恒真にならない（母数 0 の緑を自分で潰している）。
