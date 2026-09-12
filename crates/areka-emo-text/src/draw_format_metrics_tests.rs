@@ -9,11 +9,12 @@ use wintf::com::dwrite::dwrite_create_factory;
 
 use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
 use super::{
-    DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics, DirectionRecipe, FontDisableSeam,
-    PROBE_MAX_EXTENT, RESERVED_KEY_DISABLE_FONT_PREFIX, ResolvedFont, create_text_format,
+    DEFAULT_BALLOON_BACKGROUND, DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics,
+    DirectionRecipe, PROBE_MAX_EXTENT, ResolvedFont, create_text_format,
 };
 use crate::TextLayerError;
 use crate::canvas::TextEffects;
+use crate::color::mix_disabled;
 use crate::layout::GlyphMetrics;
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
@@ -149,19 +150,85 @@ fn all_direction_recipes_share_leading_near_alignment() {
     }
 }
 
-// ── R10.3: 文字装飾／disable.font.* は型シームのみ（実挙動なし） ──
+// ── R4.4/R4.8/R16.4: 無効表示は実体・行単位の装飾は M2 予約のまま ──
 
-/// 装飾（TextEffects）と disable.font.* シームは型のみ＝データを一切持たない
-/// （zero-sized・M1 で描画へ影響し得ない構造保証）。
+/// 無効表示の層が**実体化**し（色が背景との混色になる）、**行単位**の予約型
+/// （[`TextEffects`]）は今も 0 バイトのままであることを固定する
+/// （要件 4.1／4.2／4.4／4.8／16.4・design「既存テストの改訂」1）。
+///
+/// 較正（要件 15.6）: 「無効表示の色を混色せず既定の色のままにする」誤りを入れると
+/// 混色の断言と `assert_ne!` が、「背景を受け取らず常に白として混ぜる」誤りを
+/// 入れると黒背景の 2 つの断言が赤くなる。
 #[test]
-fn decoration_and_disable_seams_are_type_only() {
-    assert_eq!(RESERVED_KEY_DISABLE_FONT_PREFIX, "disable.font.");
+fn disable_layer_is_materialized_and_row_effects_stay_reserved() {
+    // 行単位の装飾は M2 予約のまま（0 バイト＝描画へ影響し得ない構造保証）。
     assert_eq!(std::mem::size_of::<TextEffects>(), 0);
-    assert_eq!(std::mem::size_of::<FontDisableSeam>(), 0);
-    // ResolvedFont はシームを保持するが Default 生成のみ（実挙動なし）。
-    let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
-    assert_eq!(resolved.effects, TextEffects::default());
-    assert_eq!(resolved.disable, FontDisableSeam::default());
+
+    // ── バルーン定義なし: 既定は ukadoc 既定（黒）・無効表示は白背景との混色 ──
+    let plain = ResolvedFont::resolve(&model_with_font(empty_font()));
+    assert_eq!(plain.effects, TextEffects::default());
+    assert_eq!(plain.looks.default.color, (0, 0, 0));
+    assert_eq!(
+        plain.looks.disable.color,
+        mix_disabled((0, 0, 0), DEFAULT_BALLOON_BACKGROUND),
+        "無効表示の色は「既定の文字色と背景色の混色」（要件 4.6）"
+    );
+    assert_ne!(
+        plain.looks.disable.color, plain.looks.default.color,
+        "無効表示の色が既定の文字色のまま＝混色していない"
+    );
+    // 色以外は既定と同じ（正典「ほかは font. 定義群と同じ」・要件 4.5）。
+    assert_eq!(plain.looks.disable.name, plain.looks.default.name);
+    assert_eq!(plain.looks.disable.height, plain.looks.default.height);
+    // 選択肢文字色は既存の選択肢表示の解決結果から取る——未指定バルーンは
+    // `ResolvedChoiceStyle::Invert` なので文字色は既定色の反転（黒→白）。
+    assert_eq!(
+        plain.looks.cursor_text,
+        (255, 255, 255),
+        "選択肢文字色を既定の文字色で代用している（既存の解決を通していない）"
+    );
+
+    // ── バルーン定義あり: 2 層が定義の値から組まれる ──
+    let defined = ResolvedFont::resolve(&model_with_font(Font::new(
+        Some("Yu Gothic UI,Meiryo".to_owned()),
+        Some(20),
+        FontColor::new(Some(255), Some(255), Some(255)),
+    )));
+    // 不変条件⑲: 2 層の既定と ResolvedFont の 4 項目は一致する。
+    assert_eq!(
+        defined.looks.default.name,
+        std::iter::once(defined.name.clone())
+            .chain(defined.fallback_chain.iter().cloned())
+            .collect::<Vec<String>>(),
+        "既定の候補列は「採用名 ＋ 残余名」の順"
+    );
+    assert_eq!(defined.looks.default.height, defined.height);
+    assert_eq!(defined.looks.default.color, defined.color);
+    assert_eq!(defined.looks.default.height, 20.0);
+    assert_eq!(defined.looks.default.color, (255, 255, 255));
+
+    // ── 背景色を実際に受け取っている（白決め打ちではない） ──
+    let white_text = model_with_font(Font::new(
+        None,
+        None,
+        FontColor::new(Some(255), Some(255), Some(255)),
+    ));
+    let on_black = ResolvedFont::resolve_with_background(&white_text, (0, 0, 0));
+    assert_eq!(
+        on_black.looks.disable.color,
+        mix_disabled((255, 255, 255), (0, 0, 0))
+    );
+    assert_ne!(
+        on_black.looks.disable.color,
+        ResolvedFont::resolve(&white_text).looks.disable.color,
+        "背景を受け取らず常に白として混ぜている"
+    );
+
+    // 既存の構築関数は白の既定へ委譲する。
+    assert_eq!(
+        ResolvedFont::resolve(&white_text).looks,
+        ResolvedFont::resolve_with_background(&white_text, DEFAULT_BALLOON_BACKGROUND).looks
+    );
 }
 
 // ── COM 検証（headless DWrite・デバイス非依存・窓不要） ──

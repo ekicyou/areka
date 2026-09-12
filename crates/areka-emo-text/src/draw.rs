@@ -26,8 +26,15 @@
 //!   テキスト widget system へは依存しない（steering 記憶 areka-emo-owns-drawing-wintf-lift）。
 //! - [`create_text_format`]: 上記 2 つを実 `IDWriteTextFormat` へ焼き込む
 //!   （生成失敗は warn→既定フォント再試行→なお失敗は `Device` エラー・R4.2）。
-//! - 文字装飾（[`TextEffects`]）と `disable.font.*`（[`FontDisableSeam`]）は
-//!   **型シームのみ・実挙動なし**（R10.3・M2 予約）。
+//! - 無効表示の層（`disable.font.*`）は [`ResolvedFont::looks`] で**実体化済み**
+//!   （要件 4.4——`\f[disable]` の戻し先）。行単位の文字装飾（[`TextEffects`]）だけが
+//!   **型シームのみ・実挙動なし**のまま残る（M2 予約）。
+//! - 縦書きの寄せと下線の写像は確定済み（spec `areka-P0-balloon-vertical-canon`
+//!   要件 5.1〜5.3・5.7：`align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、
+//!   `valign` は `top`＝右寄せ／`bottom`＝左寄せ、下線は列の右側）。正典 2 ページで
+//!   `valign` の写像が逆である事実（疑義 SC1）と areka が採る側の理由は
+//!   `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が正本で、寄せの追跡先は
+//!   `areka-P0-text-align-shadow-canon`。
 //!
 //! ## 計測専用 probe layout（task 6.2・R4.5・probe 規約）
 //!
@@ -105,6 +112,8 @@ use wintf::com::dwrite::DWriteFactoryExt;
 
 use crate::TextLayerError;
 use crate::canvas::TextEffects;
+use crate::choice::ResolvedChoiceStyle;
+use crate::look::LookLayers;
 use crate::writing::WritingMode;
 
 // 以下は比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）だけが使う依存——本番経路
@@ -157,23 +166,10 @@ const LOCALE_JA_JP: &str = "ja-JP";
 /// font.height も高々数十のため 1e6 は実用上無限）。
 pub const PROBE_MAX_EXTENT: f32 = 1.0e6;
 
-/// M2 予約キー接頭辞: `disable.font.*`（`\f[disable]` 用・SSP 2.5.51+）——
-/// 予約名の記録のみ・実挙動なし（R10.3・fixture 未使用）。
-pub const RESERVED_KEY_DISABLE_FONT_PREFIX: &str = "disable.font.";
-
-/// `disable.font.*` 拡張の型シーム（実挙動なし・R10.3）。
-///
-/// `#[non_exhaustive]`＋フィールドなし＝crate 外から意味を持たせられない構造保証。
-/// 実装（`\f[disable]` によるフォント変更禁止）は M2/後続ユニットの領分。
-///
-/// **縦書き写像は確定済み**（spec `areka-P0-balloon-vertical-canon` 要件 5.1〜5.3・5.7）——
-/// `align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、`valign` は `top`＝右寄せ／
-/// `bottom`＝左寄せ、下線は列の右側。正典 2 ページで `valign` の写像が逆である事実（疑義 SC1）と
-/// areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が正本で、実装の追跡先は
-/// `areka-P0-text-decoration-canon`（同 spec は本裁定を再審議せず継承する）。
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct FontDisableSeam {}
+/// バルーン背景色の既定（白）——無効表示の混色の相手がまだ分からないときに使う
+/// （要件 4.6）。実の背景（バルーン画像の原点画素）を知っている呼び手は
+/// [`ResolvedFont::resolve_with_background`] へそれを渡す。
+pub const DEFAULT_BALLOON_BACKGROUND: (u8, u8, u8) = (255, 255, 255);
 
 /// 解決済みフォント一式（`DrawExecutor::render` の `font` 引数・design.md「DrawExecutor（draw.rs）」）。
 ///
@@ -191,10 +187,15 @@ pub struct ResolvedFont {
     pub height: f32,
     /// フォント色 r/g/b（成分独立既定 0＝欠落は黒・ukadoc 既定）。
     pub color: (u8, u8, u8),
-    /// 文字装飾の M2 予約シーム（実挙動なし・R10.3）。
+    /// 行単位の文字装飾の M2 予約シーム（実挙動なし）。
     pub effects: TextEffects,
-    /// `disable.font.*` の型シーム（実挙動なし・R10.3）。
-    pub disable: FontDisableSeam,
+    /// 既定／無効表示の 2 層＋選択肢文字色（要件 4.1／4.4／4.5）。
+    ///
+    /// `\f[default]`／`\f[disable]` の戻し先で、本型が唯一の構築点。
+    /// `looks.default` の `name`（＝[`name`](Self::name) ＋ [`fallback_chain`](Self::fallback_chain)）・
+    /// `height`・`color` が同名のフィールドと一致することは、構築が
+    /// [`resolve_with_background`](Self::resolve_with_background) の 1 か所だけであることが保証する。
+    pub looks: LookLayers,
 }
 
 impl ResolvedFont {
@@ -208,6 +209,20 @@ impl ResolvedFont {
     ///   `0` は DirectWrite fontsize の正値制約を満たせない縮退値（`warn!`＋既定値）。
     /// - `font.color.r/g/b` は成分独立既定 0（欠落＝黒・正常系・ログなし）。
     pub fn resolve(model: &BalloonModel) -> ResolvedFont {
+        ResolvedFont::resolve_with_background(model, DEFAULT_BALLOON_BACKGROUND)
+    }
+
+    /// [`resolve`](Self::resolve) にバルーンの**背景色**を与えた形（要件 4.4／4.5／4.6）。
+    ///
+    /// 背景色は無効表示の色を導くためだけに使う（混色の式は
+    /// [`crate::color::mix_disabled`] が唯一の実装点）。背景を知らない呼び手は
+    /// [`resolve`](Self::resolve) を使い、[`DEFAULT_BALLOON_BACKGROUND`]（白）が採られる。
+    ///
+    /// バルーン定義からまだ読めない 8 キー（`font.bold` ほか・要件 4.3／4.7）の口は
+    /// [`LookLayers::from_balloon`] の引数列で、読めるようになったときはここで
+    /// `model.font()` から読んで渡すだけで効く（読み取りの所有は
+    /// `areka-P0-balloon-font-descript-keys`）。
+    pub fn resolve_with_background(model: &BalloonModel, background: (u8, u8, u8)) -> ResolvedFont {
         let font = model.font();
 
         let (name, fallback_chain) = match font.name() {
@@ -245,13 +260,23 @@ impl ResolvedFont {
             color.b().unwrap_or(0),
         );
 
+        // 選択肢の既定文字色は既存の選択肢表示の解決結果から取る——マーカー無し
+        // （`cursor.style,none`）は文字色を定めないので既定の文字色。
+        let cursor_text = ResolvedChoiceStyle::resolve(Some(model.cursor()), color)
+            .paint(color)
+            .map_or(color, |(_fill, text)| text);
+
+        let mut candidates = Vec::with_capacity(1 + fallback_chain.len());
+        candidates.push(name.clone());
+        candidates.extend(fallback_chain.iter().cloned());
+
         ResolvedFont {
             name,
             fallback_chain,
             height,
             color,
             effects: TextEffects::default(),
-            disable: FontDisableSeam::default(),
+            looks: LookLayers::from_balloon(candidates, height, color, background, cursor_text),
         }
     }
 }

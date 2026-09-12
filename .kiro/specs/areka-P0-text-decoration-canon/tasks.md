@@ -130,7 +130,7 @@
   - _Boundary: viewbox_
 
 - [ ] 6. 描画層（2 層の構築・候補列の解決・計測・範囲指定）
-- [ ] 6.1 バルーン定義から 2 層を組み、空の予約型を実体へ置き換える
+- [x] 6.1 バルーン定義から 2 層を組み、空の予約型を実体へ置き換える
   - 解決済みフォントに 2 層を持たせ、背景色を受け取る構築関数を足す（既存の構築関数は白の既定で委譲し、呼び手 44 か所を触らない）。この型は構築が解決関数の 1 か所だけなので、フィールド追加によるテストの書き換えは生じない
   - 選択肢文字色は既存の選択肢表示の解決結果から取る
   - 無効表示の空の予約型と予約キー名を撤去し、予約型が空であることを固定している既存テストを「無効表示の層が実体化し、行単位の予約型は 0 バイトのまま」を述べる述語へ改訂する。同ファイルの取り込み行と断言、別ファイルの説明コメントも同時に追随させる
@@ -306,3 +306,7 @@
 - 5.2: `layout_cursor_vertical_canon_tests.rs` の `pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_vertical_rl` の doc が仮適用を「`eff_block += block_dir * pitch * sum`」と**逐語で引いており陳腐化**した（綴りは `line_pitch_of(metrics, heights.peek())` へ変わった）。述語の趣旨は今も真だが、**9.4 は綴りで指した引用の陳腐化も拾うこと**。
 - 5.3: `lib.rs::PURE_SOURCES` は 39 件・本仕様の新設純粋モジュールは 14 本。**`viewbox` の既存兄弟テスト 4 本と `viewbox_test_support.rs` は本仕様以前から一覧に載っていない**——9.4 の突き合わせ検査でこの 5 本の扱い（載せるか、テストは対象外と明記するか）を決めること。
 - 5.3: 「変わらない／空である」を述べる負の側の述語は、指紋が定数を返すスタブでも緑のまま残る（構造上不可避）。**9.4 は負の側だけを較正の根拠にしないこと**——陽性側が「常に異なる」「常に同じ」の双方で赤になることで組として担保する。
+- 6.1: `look.rs` の doc が `crate::draw::ResolvedFont::resolve` を名指ししているが、`warn!` の実体は `resolve_with_background` へ移った（委譲があるので今は真）。**7.2 が `resolve_with_background` を直接呼び始めると不正確になる**——綴りを `resolve*` へ広げる 1 行を 7.2 か 9.4 で拾うこと。
+- 6.1: `doc/ukadoc-coverage/ledger/assets.toml` が撤去済みの `FontDisableSeam`／`RESERVED_KEY_DISABLE_FONT_PREFIX` を名指ししたまま宙に浮いている（`links = []` なので常設整合検査は今赤にならない）。**9.2 が note を改める際にこの 2 つの綴りも消すこと**。
+- 6.1: design の `Modified Files` 表は `canvas.rs` の doc 改訂を 6.1 の段階に挙げるが、実測で `canvas.rs` に `FontDisableSeam` の言及は無く、予約名の説明は `surface.rs` の 1 か所だけだった。要件 16.4 の残り（`TextEffects`／`RESERVED_EFFECT_*`／「M1 では実挙動を一切実装しない」）は **9.3 が所有**。設計表の側が実態より広い。
+- 6.1: `resolve_with_background` は `resolve` の実装本体なので本番から必ず通る（今日は第 3 引数が白の既定）。実の背景を埋める配線は 7.1／7.2。死んだ経路ではない。
