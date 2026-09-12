@@ -527,14 +527,12 @@ impl FrameBudget {
         recycled: Option<CacheEntry>,
     ) -> (ComposedSurface, Option<Arc<AlphaMask>>) {
         match recycled {
-            // 追い出しエントリの native 原寸は使わない——新しいエントリの原寸は今回の合成が
-            // 決めるので、回収するのはバッファの確保だけである。
-            // 表示記録（`display`）も回収の対象外——記録は原寸バイトと 1 対 1 ゆえ、次の合成が
+            // 回収するのはバッファの確保だけである（新しいエントリの原寸は今回の合成が決める）。
+            // 表示記録（`display`）は回収の対象外——記録は原寸バイトと 1 対 1 ゆえ、次の合成が
             // 作り直す（保持しているのは COM 参照だけで、確保の使い回しには関与しない）。
             Some(CacheEntry {
                 composed,
                 mask,
-                native: _,
                 display: _,
             }) => (composed, Some(mask)),
             None => (ComposedSurface::default(), None),

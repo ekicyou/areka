@@ -1,14 +1,15 @@
 //! `EmoPresenter`（presenter.rs）: 提示段の統括ハブ（合成・キャッシュ・表示・マスクの一点結線）。
 //!
-//! 上流が組んだ部品（[`ComposeCache`]・[`SwapChainPresenter`]・[`VisualMount`]・emo-compose の
+//! 上流が組んだ部品（[`ComposeCache`]・`display::record_display`・[`VisualMount`]・emo-compose の
 //! [`Composer`]）を target ごとに束ね、指令 [`PresentCommand`] を UI スレッド上で適用する。合成そのもの
-//! は emo-compose、供給面バイト転送は `SwapChainPresenter`、当たり判定マスクは wintf hit-test が担い、
-//! 本型は「指令を受けて、キャッシュ引き当て or 合成 → 供給面アップロード → AlphaMask 同期 → 可視制御」を
+//! は emo-compose、表示の記録（原寸 D2D bitmap → 描画命令）は `display.rs`、面の生成・変換・描画は
+//! wintf のコマンドリスト経路、当たり判定マスクは wintf hit-test が担い、本型は「指令を受けて、
+//! キャッシュ引き当て or 合成＋記録 → 表示記録・配置の書き込み → AlphaMask 同期 → 可視制御」を
 //! **一続きの UI スレッド呼び出し**として結線する（design §EmoPresenter・§System Flows 指令適用）。
 //!
 //! # UI スレッドアフィニティ（型で強制・R7.1）
 //!
-//! `EmoPresenter` は COM/GPU 資源（`SwapChainPresenter` 内の DXGI/D3D11・`VisualMount` の WUC visual）を
+//! `EmoPresenter` は COM/GPU 資源（合成メモが保持する `GraphicsCommandList`＝D2D コマンドリスト）を
 //! 内包するため **`!Send`**（NonSend）である。`unsafe impl Send` は置かず、`PhantomData<*const ()>` を
 //! 併せ持つことで「他スレッドへ移動できない」ことを**構造（型）で**担保する。wintf World へ NonSend
 //! 資源として登録するか example が直接所有し、`apply`/`attach_target`/`read_back` は必ず UI スレッド
@@ -16,9 +17,10 @@
 //!
 //! # 原子入替（R2.4）
 //!
-//! 表示バッファ（`chain.upload`）と当たり判定マスク（`AlphaMaskResource::set`）の更新は**同一 `apply`
-//! 呼び出し内**で連続して起き、hit-test も同一 UI スレッドで走るため中間状態は観測不能である。ゆえに
-//! surface 切替に伴う「表示とマスクの対入替」は構造的に原子化される（別途ロック不要）。
+//! 表示記録（`VisualMount::set_display`）・配置（`set_layout`）と当たり判定マスク
+//! （`AlphaMaskResource::set_shared`）の更新は**同一 `apply` 呼び出し内**で連続して起き、hit-test も
+//! 同一 UI スレッドで走るため中間状態は観測不能である。ゆえに surface 切替に伴う「表示とマスクの
+//! 対入替」は構造的に原子化される（別途ロック不要）。
 //!
 //! # 失敗経路のログ規律（silent failure 禁止）
 //!
@@ -34,14 +36,11 @@
 //! 維持する点が経路上の 1 箇所（表示成立点）に閉じる。
 //!
 //! 経路は `world.get::<DPI>(target.window)` → [`derive_scale`]（政策＝[`ScalePolicy`]・縮退は log-first）
-//! → `cache.get(.., k)` → ミス時のみ `compose`（**native 原寸**）→ [`resample`]（native → k 適用）→
-//! `cache.insert(.., k, ..)` である。以降の供給面アップロード・`AlphaMaskResource` 同期・`set_bounds`・
-//! 可視制御は**既存コードのまま**で、流れる合成結果が k 適用済みになるだけで自動追従する
-//! （design 「Strategy A2＝composed 外形従属の連鎖を k 追従へ転用」）。
-//!
-//! k=1/1（窓 DPI ＝ author_dpi）は [`resample`] を**呼ばずに** native をそのまま表示資源とする——
-//! [`resample`] 自体も恒等をバイトコピーで保証するが、素通しなら「k 導入前と同一のオブジェクトが同一経路を
-//! 流れる」ことが構造で言えるため、既存 golden の不変（要件 7.2）が最も強く担保される。
+//! → `cache.touch(surface, binds, pattern)`（**k はキーでない**）→ ミス時のみ `compose`（**native
+//! 原寸**）＋ `record_display`（原寸の表示記録）→ `cache.insert(..)` である。k は
+//! `VisualMount::set_layout` が surface entity の `Arrangement.scale` へ書く**変換の係数**としてだけ
+//! 現れ、拡大は wintf の `render_surface`（`SetTransform`）が行う（`areka-P0-present-gpu-transform-scale`
+//! 裁定 D）。ゆえに k=1 と k≠1 で通る手順は同じで、k だけが変わった再適用は再合成なしのヒットになる。
 
 // 責務単位のサブモジュール。すべて私有 `mod` であり、新しい公開モジュールパスは生やさない
 // （公開項目は下の `pub use` で従来と同一のパス `presenter::<Name>` に再輸出する）。
@@ -80,10 +79,13 @@ use areka_emo_compose::{
 #[cfg(test)]
 use areka_emo_compose::resample;
 
-use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore, WucGraphicsResource};
+use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore};
+// `WucGraphicsResource` の本番消費者は無い（装着が純 ECS になり `Compositor` を要さない）。テストが
+// `use super::*;` でここから拾うので、`resample` と同じく `#[cfg(test)]` で畳む。
+#[cfg(test)]
+use wintf::ecs::WucGraphicsResource;
 
 use crate::cache::ComposeCache;
-use crate::chain::SwapChainPresenter;
 use crate::command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 use crate::mount::VisualMount;
 use crate::scale::{ScalePolicy, derive_scale};

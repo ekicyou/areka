@@ -51,7 +51,7 @@
   - _Depends: 1.1_
   - _Boundary: ComposeCache, show.rs_
 
-- [ ] 2.2 原寸経路への切替（統合タスク・複数境界を意図的にまたぐ）
+- [x] 2.2 原寸経路への切替（統合タスク・複数境界を意図的にまたぐ）
   - メモ: 引き当てキーを合成入力（surface id ＋ bind 集合 ＋ pattern 状態）のみとし拡大率をキーから外す。エントリを「原寸の合成面 ＋ その原寸バイト由来のマスク ＋ 表示記録」に改め、原寸を別フィールドで二重に持たない。完全一致のみヒット・容量 3・LRU・回収・全無効化の意味論は変えない
   - 装着: 配置を「原点 0・寸＝原寸・スケール＝拡大率の係数」で作る関数を置き、原点が 0 でなければならない不変条件を doc に明記する。surface entity の bundle から自前のグラフィクス構成要素を外して上流の追加時フックによる連鎖挿入に委ね、このモジュールから COM 呼び出しを 0 にする（失敗経路の無い純 ECS の装着）。描画命令と配置の書き込みは現値と同値なら書かない
   - 漏斗: 装着の遅延生成をエントリの表示記録込みで行い、反映は表示記録 → 配置 → マスク → 可視の順に書く。物理寸の算出を自前供給面の寸の照会から丸め権威の式 1 つへ置き換える。等倍かどうかの分岐を消し、拡大率の値で失敗経路の分岐を増やさない。成立点の `info!` のフィールド名・意味・物理寸を出す規約は変えない
@@ -280,3 +280,4 @@
 - 1.3: 記録した宛先矩形は **DIP** 単位。再生側 DC の DPI が 96 のときだけ 1 DIP＝1 px（wintf は WUC の `begin_draw` DC に `SetDpi` を呼ばないので 96 既定）。記録側 DC の DPI は記録内容に影響しない。2.2 は宛先矩形を物理 px で作り直さないこと。T-G1 は再生 DC を `SetDpi(96)` で固定（機械の既定 DPI 非依存）。
 - 1.4: テスト doc は「観測できること」だけを主張する（旗の非漏れは `Disarm` 番人の**保証**であって檻の観測ではない）。レビューで差し戻し 1 回。
 - 2.1: 例外表 2 ファイルが機械的追随で微増（`cache_tests.rs` 1618→1622・`budget_tests.rs` 1081→1083）→ 5.3／5.6 で減らし 8.1 で最終確認。`GraphicsCommandList` の `PartialEq` は COM ポインタ同一性（`empty()` との比較・ヒット時の同一リスト比較は有意）。`GraphicsCore` 不在の `context` は旧供給面経路と同じ `"GraphicsCore resource"` を踏襲＝2.2 で供給面経路が消えたら `perf_log_tests` の陰性檻はメッセージで弁別し直す。記録の所要時間は 2.2 で `Stage::Upload` へ置き直す（timing.rs の doc も）。
+- 2.2: 遷移観測の Visualize 行は HEAD どおり `resized: None`（Upload 行だけ `Some(resized)`）＝design Flow 1 (3) の字面は過剰記述・5.4／7.1 はこの形に従う。`timing.rs` の `compose_key_hash` は `scale` 引数とハッシュ行を 3.1 で落とす（timing_tests 再導出に含める）。台帳の誤り: #16 `presenter_resize_report_tests.rs`（`t.chain.size()` 2 か所）・#18 `presenter_display_tests.rs`（`target.chain.is_some()` 1 か所）は「不変」でなく機械的再導出（5.2／5.5 で `mount.is_some()`＋`Arrangement` 照合へ）→ 8.1 で台帳訂正。`presenter.rs` の `#[cfg(test)] use resample／WucGraphicsResource` は 5.x／major 6 で消す。

@@ -69,7 +69,7 @@ pub(super) enum Stage {
     Resample,
     /// 当たり判定マスク生成（`AlphaMask` 生成・引き当て時は実行されない）。
     MaskGen,
-    /// 供給面転写（swap chain へのアップロード）。
+    /// 表示の記録（原寸 D2D bitmap 生成＋描画命令の記録＋Close・ミスのみ・ヒットは 0）。
     Upload,
 }
 

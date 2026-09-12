@@ -1,6 +1,6 @@
 //! target ごとの表示コンテキスト（`PresentTarget`）——presenter が target 単位で持つ私有状態。
 //!
-//! 合成入力（`emo_world`／`atlas`／`composer`／`cache`）・装着資源（`window`／`mount`／`chain`）・
+//! 合成入力（`emo_world`／`atlas`／`composer`／`cache`）・装着資源（`window`／`mount`）・
 //! 表示成立点で更新される状態（`applied`／`native_size`／`last_show`／`pending_resize` ほか）を 1 つの
 //! 構造体に束ねる。フィールドの更新規律は各 doc が正本であり、書き込み点は `presenter` サブツリー内に
 //! 閉じる（`pub(super)` はその範囲を表す＝分割前の「`presenter` 私有」と可視集合が同一）。
@@ -8,7 +8,7 @@
 use super::budget::FrameBudget;
 use super::{
     AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, PatternState, ScalePolicy,
-    ScaleRatio, SwapChainPresenter, VisualMount,
+    ScaleRatio, VisualMount,
 };
 
 /// target の可視性を**誰が確定するか**（`areka-P0-balloon-visibility` Requirement 6.8 の所有一元化）。
@@ -42,7 +42,7 @@ pub enum VisibilityOwnership {
 
 /// target ごとの表示コンテキスト（シェル・バルーンで同一機構・R5.1 の統一原則）。
 ///
-/// `chain`／`mount` は **初回 `ShowSurface` で原寸が確定してから遅延生成**する（0×0 の供給面は作れない・
+/// `mount` は **初回 `ShowSurface` で原寸が確定してから遅延生成**する（表示記録と原寸の配置が要る・
 /// 全透明退化では生成しない）。`emo_world`／`atlas`（構築時 `bind_atlas` 済み）と `composer`／`cache` は
 /// 合成・引き当ての入力側、`window` は装着先の窓ハンドル（R1.3）である。
 pub(super) struct PresentTarget {
@@ -62,15 +62,13 @@ pub(super) struct PresentTarget {
     /// 後段（task 5.2）は本フィールドへ再利用席（合成先の常設席・リサンプル作業領域の席・
     /// マスクの輪番）を足す。席が増えても計数の API 面と所有者は動かない。
     pub(super) budget: FrameBudget,
-    /// 合成入力（surface id＋bind 集合）→ (composed, mask, native) 対の**容量 3・LRU** メモ化表
-    /// （容量は 2026-08-15 の開発者裁定で 1 → 3・要件 7.1）。
+    /// 合成入力（surface id＋bind 集合＋pattern）→ (composed 原寸, mask, display) 対の**容量 3・LRU**
+    /// メモ化表（容量は 2026-08-15 の開発者裁定で 1 → 3・要件 7.1）。
     pub(super) cache: ComposeCache,
     /// 装着先の窓 Entity（R1.3・遅延装着の対象）。
     pub(super) window: Entity,
     /// 窓装着ハンドル（初回表示で生成）。
     pub(super) mount: Option<VisualMount>,
-    /// 自前供給面（初回表示で原寸確定後に生成）。
-    pub(super) chain: Option<SwapChainPresenter>,
     /// 現在可視か（`Hide`／全透明退化で false・`ShowSurface` 成功で true）。
     ///
     /// **`ownership` が [`VisibilityOwnership::External`] のときは `ShowSurface` で true にならない**
@@ -118,19 +116,18 @@ pub(super) struct PresentTarget {
     /// 表示中サーフェスの **native 原寸**（k 適用**前**の合成外形・照会契約 `surface_size()` の供給源）。
     ///
     /// 物理寸との関係は `物理寸 == applied.scaled_extent(native_size)`（丸め権威は
-    /// [`ScaleRatio::scaled_extent`] 1 本）。供給面 `chain.size()` は k 適用**後**の物理寸を持つため、
-    /// 照会契約の native 原寸をここで別に保持する。
+    /// [`ScaleRatio::scaled_extent`] 1 本）。表示中エントリが追い出された後（`InvalidateCache`・LRU）も
+    /// 照会契約が画面の絵の原寸を返し続けるため、エントリとは別にここへ写しを持つ。
     ///
     /// **更新規則**: 更新点は `applied` と同じ表示成立点 1 箇所だが、書き込む値は「今回合成したか」に
-    /// 依らず常に [`CacheEntry::native`]（＝いま表示に使ったキャッシュエントリが束ねている原寸）
-    /// である。今回合成した回だけ書く実装は、`insert` 済みのまま失敗して後から**ヒットで**表示が成立した
-    /// 場合に「画面の絵と別サーフェスの原寸」あるいは `None` が残り、照会契約が壊れる。
+    /// 依らず常に、いま表示に使ったキャッシュエントリの `composed` の外形（[`CacheEntry::composed`]・
+    /// 原寸）である。今回合成した回だけ書く実装は、`insert` 済みのまま失敗して後から**ヒットで**表示が
+    /// 成立した場合に「画面の絵と別サーフェスの原寸」あるいは `None` が残り、照会契約が壊れる。
     ///
-    /// 原寸がエントリの中に在る（target 側の別フィールドではない）のは、容量が 3 になって
-    /// 「保持しているエントリ＝直前に挿入したエントリ」が成り立たなくなったためである
-    /// （要件 7.1・[`CacheEntry::native`] の doc）。
+    /// 原寸がエントリの中に在る（挿入時の別フィールドではない）のは、容量が 3 になって
+    /// 「保持しているエントリ＝直前に挿入したエントリ」が成り立たなくなったためである（要件 7.1）。
     ///
-    /// [`CacheEntry::native`]: crate::cache::CacheEntry::native
+    /// [`CacheEntry::composed`]: crate::cache::CacheEntry::composed
     pub(super) native_size: Option<(u32, u32)>,
     /// 最後に表示が成立した show 入力（再表示＝k 再適用のための入力保持）。
     ///
@@ -138,7 +135,7 @@ pub(super) struct PresentTarget {
     /// [`EmoPresenter::refresh_scale`] である。記録点は `applied`/`native_size` と同一（表示成立点）で、
     /// 失敗経路では前値が保たれる——ゆえに再表示は常に「最後に**実際に画面へ出た**入力」を描き直す。
     ///
-    /// `Hide` では**消さない**（キャッシュ・供給面と同じく保持する）。再表示するか否かは可視ゲートが
+    /// `Hide` では**消さない**（キャッシュ・装着と同じく保持する）。再表示するか否かは可視ゲートが
     /// 決めるのであって、入力を捨てて決めるのではない（`Hide` → 再 show の復帰経路を壊さない）。
     pub(super) last_show: Option<(u32, BindSet, PatternState)>,
     /// **未消費の窓寸 reconcile 要求**（表示成立点の状態照合が積む・design Flow 1 キー決定／議題 #2 裁定）。

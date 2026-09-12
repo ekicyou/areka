@@ -87,21 +87,20 @@ impl TextSlotView {
 impl EmoPresenter {
     /// target の予約 text 層スロットへの読み取り専用の到達手段（mount 未生成なら `None`・R9.1/9.2）。
     ///
-    /// mount（と供給面）は初回 `ShowSurface` で原寸確定後に遅延生成されるため、未登録 target・
+    /// mount は初回 `ShowSurface` で原寸確定後に遅延生成されるため、未登録 target・
     /// 初回表示確立前は取得不可（`None`）である。呼び手（結線側）は表示確立後に取得するか再取得を
     /// 試みる。返る値はスナップショット（読み取り専用 view）で、スロット状態は変更できない。
     ///
     /// # 取得条件（k 導入後・要件 1.2）
     ///
-    /// mount／供給面の存在に加えて **表示が一度成立していること**（`applied`／`native_size` が確定
+    /// 装着（mount）の存在に加えて **表示が一度成立していること**（`applied`／`native_size` が確定
     /// していること）を条件とする。`scale()` は実適用 k、`surface_size()` は native 原寸を返す契約で
-    /// あり、いずれも表示成立点でしか確定しないためである——供給面だけ生成できて upload に失敗した
-    /// ような中間状態で「k=1.0・供給面寸」という**実態のない値**を返さない（無言の縮退を作らない）。
+    /// あり、いずれも表示成立点でしか確定しないためである——中間状態で「k=1.0・原寸」という
+    /// **実態のない値**を返さない（無言の縮退を作らない）。
     pub fn text_slot_view(&self, target: TargetId) -> Option<TextSlotView> {
         let t = self.targets.get(&target)?;
+        // 装着の遅延生成前は表示未確立（既存契約の維持・ゲートは装着の有無）。
         let mount = t.mount.as_ref()?;
-        // 供給面の遅延生成前は表示未確立（既存契約の維持）。
-        t.chain.as_ref()?;
         // 実適用 k と native 原寸は表示成立点でのみ確定する（照会値＝実適用値の担保）。
         let applied = t.applied?;
         let surface_size = t.native_size?;
@@ -219,18 +218,35 @@ impl EmoPresenter {
         Some(self.targets.get(&target)?.visible)
     }
 
-    /// target の表示中画素を CPU へ読み戻す（R6.2/R8.3・検証・将来の直読みヒットテスト基盤）。
+    /// target が表示に渡した**原寸の合成バイト列**（表示中エントリの `ComposedSurface`・premultiplied
+    /// BGRA・`stride=width*4`）を返す（R6.2/R8.3・検証・`areka-P0-present-gpu-transform-scale` 要件 6.2）。
     ///
-    /// 未装着、または供給面未生成（未表示）なら [`PresentError::TargetNotAttached`] を返す。
+    /// 表示面（wintf の `CompositionDrawingSurface`）は書き込み専用であり読み戻さない。返るのは
+    /// 合成メモが保持する原寸バイト列そのもので、k=1 では従来（供給面の読み戻し）と同一バイト・
+    /// k の値に依らず同一である。読み戻しの寿命はメモの寿命に等しい——未装着・未表示・表示中
+    /// エントリの消失（LRU 追い出し・`InvalidateCache` 後）は `error!` ＋
+    /// [`PresentError::TargetNotAttached`]（消費者は表示直後に読む）。
     pub fn read_back(&self, target: TargetId) -> Result<Vec<u8>, PresentError> {
         let Some(t) = self.targets.get(&target) else {
             tracing::error!(?target, "read_back: 未装着ターゲット");
             return Err(PresentError::TargetNotAttached(target));
         };
-        match t.chain.as_ref() {
-            Some(chain) => chain.read_back(),
+        let Some((surface_id, binds, pattern)) = t.last_show.as_ref() else {
+            tracing::error!(
+                ?target,
+                "read_back: 未だ表示していない（表示成立点を通っていない）"
+            );
+            return Err(PresentError::TargetNotAttached(target));
+        };
+        // `get` は最近使用順を動かさない（LRU を打ち直すのは `show.rs` の `touch` だけ）。
+        match t.cache.get(*surface_id, binds, pattern) {
+            Some(entry) => Ok(entry.composed.bytes().to_vec()),
             None => {
-                tracing::error!(?target, "read_back: 供給面が未生成（未だ表示していない）");
+                tracing::error!(
+                    ?target,
+                    surface_id,
+                    "read_back: 表示中エントリがメモに無い（追い出し／InvalidateCache 後）"
+                );
                 Err(PresentError::TargetNotAttached(target))
             }
         }
