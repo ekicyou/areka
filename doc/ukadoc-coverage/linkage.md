@@ -15,8 +15,38 @@
 
 ## 補修した関連
 
-<!-- 段 1（タスク 2）で書く: 台帳へ書き足した関連の本数をドメインごとに（0 本のドメインも 0 と）
-     書き、既存の向きの流儀が正典の種別定義と逆であることを 1 行添える。 -->
+段 1（2026-09-12）で台帳へ書き足した関連は 3 本である。数え方: この節を書いたコミットの
+`doc/ukadoc-coverage/ledger/` の差分のうち、`{ kind = ..., to = ... }` の**追加行**を数えた
+（既存の行の削除・書き換えは 0 行）。この数は履歴の数なので機械は数え直さない。
+
+| 台帳 | 足した本数 | 種別 | 書いた行（起点） | 相手（終点） |
+| --- | --- | --- | --- | --- |
+| assets | 0 | — | — | — |
+| property | 1 | `configures` | `ukadoc:list_propertysystem:currentghost.seriko.zorder:1` | `ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1` |
+| sakura-script | 2 | `triggers` | `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1` / `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1` | いずれも `ukadoc:list_shiori_event:OnInstallComplete:1` |
+| shiori | 0 | — | — | — |
+
+3 つの連鎖の着地（機械の束の id は `report/summary.md` の束の一覧から引いた）:
+
+- 時刻の刻み: 追加 0 本。`ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1` を束 id とする
+  1 つの束に既に収まっていた。
+- 重なり順: 追加 1 本。これで `ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1` を
+  束 id とする 1 つの束に収まった（足す前、`ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1`
+  はどの束にも入っていなかった）。
+- インストール: 追加 2 本。3 つの id はいずれも
+  `ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1` を束 id とする 1 つの束に収まる
+  （この束は段 2 で複数の名前付き束に分ける）。
+
+書き方の約束を 3 つ守った——同じ繋がりを往復で 2 度書いていない（足した 3 本の相手側の行は
+いずれも戻りの関連を持たない）、種別は README の 6 つのうち `configures` と `triggers` の 2 つ
+だけを使った、名前付き束への帰属を表すためだけの関連は 1 本も書いていない（帰属の正本はこの
+文書である）。
+
+**既存の向きの流儀は正典の種別定義と逆である。** README「関連の種別は 6 つ」は `configures` を
+「設定キー → 挙動・タグ・イベント」と定めるが、足す前の台帳で assets の設定キーを指していた
+`configures` 既存 29 本（property の行から 24 本・shiori の行から 5 本。終点はすべて `descript_` で
+始まるページの設定キー）は、いずれも設定キーを**始点**ではなく**終点**に置いていた。上に足した
+1 本もその流儀に従った。束は向きを持たないので機械の束の判定には影響しない。
 
 ## 機械の束の分割
 

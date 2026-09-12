@@ -1348,7 +1348,9 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["更新"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnInstallComplete:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、手元のファイルからの導入が始まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1365,7 +1367,9 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["更新"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnInstallComplete:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、網の先を指しての導入が始まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。

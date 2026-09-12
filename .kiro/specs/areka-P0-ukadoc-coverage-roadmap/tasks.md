@@ -62,7 +62,7 @@
   - _Depends: 1.2_
   - _Boundary: tests/consistency/documents.rs, documents_non_vacuity.rs, mod.rs_
 
-- [ ] 2. 段 1: 跨ぐ連鎖の骨格を補修し、報告 5 本を作り直す
+- [x] 2. 段 1: 跨ぐ連鎖の骨格を補修し、報告 5 本を作り直す
   - 重なり順の連鎖にプロパティ側から資産側へ 1 本、インストールの連鎖にさくらスクリプト側からイベントへ 2 本を、相手 id をカタログから写して足す（時刻の連鎖は既に 1 つの束なので 0 本）
   - 同じ繋がりを往復で 2 度書かず、種別は 6 つに限り、帰属を表すためだけの関連は書かない。既存の向きの流儀が正典の種別定義と逆であることを帰属の文書の「補修した関連」節に 1 行書く
   - 関連を足すとドメイン別報告が古くなるので、続けて報告 5 本を各々の副手続きで作り直す（手で編集しない・改行の違いは手で直さない）
@@ -342,3 +342,9 @@
 - 1.7: **⚠ `crates/ukadoc-survey/src/io/paths.rs` の `summary_report_path()` の doc「常時検査の対象外（要件 7.6）」が事実でなくなった**（要件 11.2 が覆した）。境界外のため 1.6・1.7 とも触っていない。**判定 ⑹ を置くタスク（3.7 以降で `paths.rs` を境界に持つもの）で必ず直すこと。**
 - 1.7: 3 文書の実測（復帰文字を落とした後の `chars().count()`・2026-09-12）: `linkage.md` 1,336／`roadmap-draft.md` 1,416／`briefing.md` 4,618／`report/summary.md` 33,326。**バイト長（linkage.md は 2,874）と取り違えないこと。**
 - 1.7: 壊す道具 4 つのうち実データの写しに掛かっているのは `shift_count` 1 つだけ。3 文書に `ukadoc:` も `members = ` も `bundle = ` も 0 件だから（骨組みのため）。**3 文書が育ったら残る 3 つも実データの写しへ寄せてよい。**
+- 2: 足した関連 3 本——`property.toml` に `configures` → `ukadoc:descript_shell:seriko.zorder_…:1` 1 本、`sakura-script.toml` に `triggers` → `ukadoc:list_shiori_event:OnInstallComplete:1` 2 本。ドメイン別 assets 0／property 1／sakura-script 2／shiori 0。
+- 2: **⚠ タスク 3.1 への申し送り。** インストール連鎖に足した `triggers` 2 本は**束の構成を変えていない**（3 id は既にページ単位の `same-feature` 経由で同じ機械の束に居た）。**「機械の束の分割」節で、この 2 本が過剰な `same-feature` に代わる「インストール」束の核である旨を 1 行書くこと。**
+- 2: 向きの流儀の実測（2026-09-12・レビューが独立に数え直して一致）: `configures` の終点ページ別は property 25（うち新規 1）・shiori 7。**assets の設定キーを終点にする既存 `configures` は 29 本**（property 24・shiori 5）で、**assets→property の `configures` は 0 本**。正典の定義（設定キー → 挙動・タグ・イベント）とは向きが逆。
+- 2: 束の総数の数え直し（2026-09-12・判定 ⑵ の下限の材料）: 跨ぐ束 75 ＋ ドメイン内で閉じた束 shiori 25・sakura-script 23・assets 0・property 0 ＝ **合計 123**。補修の前後で変化なし。
+- 2: 3 連鎖の着地——時刻＝`ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1`（3 件）／重なり順＝`ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1`（48→**49** 件）／インストール＝`ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1`（53 件）。
+- 2: `report/{assets,property,sakura-script,shiori}.md` は `git status` に M と出ても **blob は同一**（作業ツリー LF・index CRLF の stat 差）。**改行の違いを手で直さないこと**（要件 2.5）。

@@ -1071,6 +1071,7 @@ values = []
 links = [
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1" },
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1" },
+  { kind = "configures", to = "ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1" },
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
