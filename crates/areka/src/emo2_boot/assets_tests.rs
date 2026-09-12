@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_seriko::{BindChoicePolicy, BindNamespace, SurfaceTarget};
+use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
@@ -836,31 +837,6 @@ fn default_bind_ids_trims_value_whitespace() {
 
 // ── 起動経路の surfaces.txt 復号（要件 6.1）──
 
-/// Drop 時に自身を再帰削除する一時ディレクトリ（placement 側の檻と同じ std-only 最小実装）。
-struct TempDir {
-    path: PathBuf,
-}
-
-impl TempDir {
-    fn new() -> Self {
-        static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "areka-boot-assets-charset-{}-{}",
-            std::process::id(),
-            n
-        ));
-        std::fs::create_dir_all(&path).expect("一時ディレクトリ作成");
-        TempDir { path }
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
-}
-
 /// `charset,Shift_JIS` を宣言し、alias の値に Shift_JIS の「通常」を持つ surfaces.txt。
 ///
 /// UTF-8 として不正なバイト並びであることが本質（`92 CA 8F ED` は UTF-8 の妥当な並びでは
@@ -895,10 +871,12 @@ fn boot_read_honours_the_files_own_charset_declaration() {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
 
-    let root = TempDir::new();
-    let ghost_master = root.path.join("ghost").join("master");
-    let shell_master = root.path.join("shell").join("master");
-    let balloon_dir = root.path.join("balloon-synth");
+    // 一時パスは共通窓口 `temp-path-kit` から受け取る（プロセス間で一意・Drop で中身ごと消える）。
+    // 自前に組むと `std::env::temp_dir` の迂回を見張る番人が赤になる。
+    let root = TempPath::new("areka-boot-assets-charset");
+    let ghost_master = root.path().join("ghost").join("master");
+    let shell_master = root.path().join("shell").join("master");
+    let balloon_dir = root.path().join("balloon-synth");
     for dir in [&ghost_master, &shell_master, &balloon_dir] {
         std::fs::create_dir_all(dir).expect("検体ディレクトリ作成");
     }
@@ -932,7 +910,7 @@ fn boot_read_honours_the_files_own_charset_declaration() {
     .expect("balloons0.png 複写");
 
     // `BootAssets` は Debug を持たないので、失敗側だけを取り出して表示する。
-    let result = build_boot_assets(&root.path, &balloon_dir, &[0], 96, 96);
+    let result = build_boot_assets(root.path(), &balloon_dir, &[0], 96, 96);
     assert!(
         result.is_ok(),
         "Shift_JIS 宣言の surfaces.txt でも起動時資産の組立が成立すること（要件 6.1）: {:?}",
