@@ -18,7 +18,7 @@
   - _Requirements: 1.3, 1.5, 1.6_
   - _Boundary: layout_
 
-- [ ] 1.3 (P) 描画計画の判定群を切り出す
+- [x] 1.3 (P) 描画計画の判定群を切り出す
   - 縮退判定・全域更新・計画の不整合報告を、描画実行の子モジュールへ純移動する
   - 親のファサードに素の取り込みを残し、私有項目を親経由で参照している既存テストが届くようにする
   - 完了状態: 描画実行まわりの全テストが変更なしで緑、親ファイルの行数が上限まで余裕を取り戻している
@@ -264,3 +264,4 @@
 - 1.1: `cargo clippy -p areka-emo-text --all-targets` は本 spec 着手前から赤（tests/choice_fixture_test.rs:561 ほか 2 件の absurd_extreme_comparisons・PR#143 由来）。本 spec の責任外。
 - 全般: worktree では `git submodule update --init --recursive` を先に実行しないと `pasta_core` が解決できずビルドできない。
 - 1.2: 新設した純粋モジュールは `lib.rs::pure_layer_modules_have_no_windows_imports` の静的列挙に載るまで層規律の字面検査に映らない。5.2 で新設 5 本をまとめて追加すること。
+- 1.3: 分割で親へ再束縛する私有項目は、テスト専用なら `#[cfg(test)] use` にすること。素の `use` で 3 本束ねると `unused_imports` が鳴り警告 0 から回帰する（design.md を実装に追随済み）。
