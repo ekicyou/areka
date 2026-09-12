@@ -97,7 +97,7 @@
   - _Depends: 2.2_
   - _Boundary: FrameBudget, FrameTiming_
 
-- [ ] 3.2 判定スクリプトの必須集合を更新する
+- [x] 3.2 判定スクリプトの必須集合を更新する
   - 段フィールド集合と確保フィールド集合の 2 タプルから撤去分を外し、註釈の個数表記を直す
   - 完了状態: `python tools/perf/judge-perf.py --selftest` が緑で、旧スキーマの fixture 行が余分なフィールドとして無害に扱われる
   - _Requirements: 3.3, 3.4_
@@ -284,3 +284,4 @@
 - 2.3: `Win32_Graphics_Dxgi` feature は deps／dev-deps とも撤去（`DXGI_FORMAT_*` は workspace 既定の `Dxgi_Common`）。`windows-numerics` は残置。wintf の swap chain ヘルパ 2 本は `areka-emo-text/src/surface.rs` が消費（要件 1.4 条件不成立＝撤去しない）。
 - 2.4: 赤の期間中のテスト実行は「壊れた test module 宣言を一時的に外して走らせ、完全復元を `git diff` で証明」で行う（`presenter_test_support.rs` は `transition_record_tests.rs` が引くため外せない）。⚠`wintf::ecs::PhysicalPoint` は pointer 側の整数 `Point` に解決される（hit_test 側の `PointF` 別名とは別物）＝テストは `PointF` を直に使う。T-N5 の `set_display` 陽性対照は「不在→挿入」（異なる実リストは GPU が要る）。T-N4 の 4×4 マスクは対称ゆえ x/y 入替を検出しない（任意で 1 セル崩す）。
 - 3.1: `SurfaceSeat::get` は `#[cfg(test)]` に畳む（観測口 `native_scratch_ptr` の唯一の呼び手・削除も allow も不可）。`perf_log_tests` は `t_resample_us` を**文字列**で照合する箇所あり＝コンパイル緑でも実行時赤（5.4）。`presenter.rs` の `#[cfg(test)] use resample` の説明コメントは既に事実でない＝major 6 で一緒に消す。`native_scratch` の doc「高水位」の陳腐化は 7.1 の doc 掃除で拾う。
+- 3.2: `tools/perf/fixtures/generate.py` は旧 14 フィールドを生成したまま（境界外・旧スキーマは無害）。`J_LINE_VOCABULARY_SAMPLES` の perf 行サンプルは 14 フィールドの凍結引用（重複名検査専用）＝残置。7.1 で 11 フィールドのサンプル追加を検討。
