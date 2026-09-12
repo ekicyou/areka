@@ -38,12 +38,11 @@ use std::time::Duration;
 
 use shiori_host32_ipc::MsgTag;
 
+use crate::charset::Charset;
 use crate::error::{RequestError, ShioriError};
 use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::request_timeout_from_env;
-use crate::shiori3::{
-    Charset, Method, ParsedResponse, ShioriRequest, build_request, parse_response,
-};
+use crate::shiori3::{Method, ParsedResponse, ShioriRequest, build_request, parse_response};
 
 /// 送出ヘッダ `Sender` の既定値（design.md §送出ヘッダ最小集合）。
 ///
@@ -79,7 +78,7 @@ pub struct Shiori3Client<'a> {
 impl<'a> Shiori3Client<'a> {
     /// `Sender` を既定（`"areka"`）とする client を構築する（要件 4.x）。
     ///
-    /// charset は本仕様では [`Charset::Utf8`] 固定。`window` はハンドシェイク完了済みである
+    /// charset は本仕様では [`Charset::UTF_8`] 固定。`window` はハンドシェイク完了済みである
     /// ことを前提とする（未準備ガードは設けない・design.md §Preconditions: Load は Request に
     /// 構造的に先立つ）。
     #[must_use]
@@ -129,15 +128,16 @@ impl<'a> Shiori3Client<'a> {
             references,
             sender: self.sender,
             status,
-            charset: Charset::Utf8,
-        });
+            charset: Charset::UTF_8,
+        })
+        .bytes;
         // GET/NOTIFY は wire tag = MsgTag::Request で合流（要件 4.7）。
         let resp = self
             .window
             .send_request(MsgTag::Request, &bytes, self.effective_timeout())
             .map_err(map_send_error)?;
         // parse の malformed（ShioriError::Parse）は #[from] で RequestError::Shiori へ持ち上がる。
-        let parsed = parse_response(&resp, Charset::Utf8)?;
+        let parsed = parse_response(&resp, Charset::UTF_8)?;
         map_get_result(parsed)
     }
 
@@ -166,8 +166,9 @@ impl<'a> Shiori3Client<'a> {
             references,
             sender: self.sender,
             status,
-            charset: Charset::Utf8,
-        });
+            charset: Charset::UTF_8,
+        })
+        .bytes;
         // 同期往復（要件 4.8）: wire tag は GET と同じ MsgTag::Request（要件 4.7）。
         let _discarded = self
             .window

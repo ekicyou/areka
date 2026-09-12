@@ -337,7 +337,7 @@ fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<String>,
         return Err(RequestError::Shiori(ShioriError::Parse));
     }
     // S_OK（即時応答）: 応答バイト列を SHIORI/3.0 として解析し、map_get_result と同一規律で写す。
-    let parsed = match parse_response(response_bytes, Charset::Utf8) {
+    let parsed = match parse_response(response_bytes, Charset::UTF_8) {
         Ok(p) => p,
         Err(_) => {
             error!(
@@ -366,10 +366,11 @@ fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<String>,
 
 /// GET/NOTIFY 共通の request 組み立て（`build_request` → HSTRING）。
 ///
-/// `build_request` の出力は shiori3 codec 契約により常に有効な UTF-8（要件 1.6）ゆえ、
-/// `from_utf8_lossy` は逐語一致し panic しない。`sender` は [`SENDER`]（`"areka"`）固定、
-/// `charset` は [`Charset::Utf8`] 固定（本仕様の唯一の実符号化）。`status` は kanade が render 済みの
-/// wire 値で、解釈せず codec へ verbatim 透過する（DD-IT-1 語彙非漏洩）。
+/// `build_request` は `charset` に渡された文字コードで符号化する（areka-P0-charset-canon
+/// 要件 3.1）。本呼出点は [`Charset::UTF_8`] 固定ゆえ——SHIORI/4 in-proc は文字コード交渉を
+/// 持たない——出力は常に有効な UTF-8 であり、下の `from_utf8_lossy` は逐語一致し panic しない。
+/// `sender` は [`SENDER`]（`"areka"`）固定。`status` は kanade が render 済みの wire 値で、
+/// 解釈せず codec へ verbatim 透過する（DD-IT-1 語彙非漏洩）。
 fn build_input(method: Method, id: &str, references: &[String], status: Option<&str>) -> HSTRING {
     let bytes = build_request(&ShioriRequest {
         method,
@@ -377,8 +378,9 @@ fn build_input(method: Method, id: &str, references: &[String], status: Option<&
         references,
         sender: SENDER,
         status,
-        charset: Charset::Utf8,
-    });
+        charset: Charset::UTF_8,
+    })
+    .bytes;
     HSTRING::from(String::from_utf8_lossy(&bytes).as_ref())
 }
 

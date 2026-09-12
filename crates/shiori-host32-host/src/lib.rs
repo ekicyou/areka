@@ -32,7 +32,7 @@ pub mod parent_window;
 pub mod process_host;
 pub mod shiori3;
 
-pub use charset::{CharsetNegotiator, CharsetPolicy, LabelError};
+pub use charset::{Charset, CharsetNegotiator, CharsetPolicy, LabelError};
 pub use client::Shiori3Client;
 pub use error::{HandshakeError, RequestError, ShioriError, SpawnError};
 pub use lifecycle::{
@@ -42,4 +42,6 @@ pub use parent_window::{ParentMessageWindow, SendError, WindowCreationError};
 pub use process_host::{
     ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit, poll_exit_kind, spawn,
 };
-pub use shiori3::{Charset, Method, ParsedResponse, ShioriRequest, build_request, parse_response};
+pub use shiori3::{
+    EncodedRequest, Method, ParsedResponse, ShioriRequest, build_request, parse_response,
+};
