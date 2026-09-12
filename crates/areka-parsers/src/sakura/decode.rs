@@ -189,6 +189,11 @@ fn decode_bare(word: &str) -> Instruction {
         "0" | "h" => Instruction::SpeakerScope { n: 0 },
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c1_3082_3057_304f_306f_5cu:1
         "1" | "u" => Instruction::SpeakerScope { n: 1 },
+        // 引数なしの裸の `\f`（text-decoration-canon 要件 2.6）: 角括弧が無いので
+        // 字句解析は bare 形にする。角括弧付きと同じ受け皿へ引数 0 個で載せ、
+        // `Raw` のまま台本の組み立ての catch-all へ落ちる経路を残さない
+        // （表示を変えない扱いは消費側が担う——本層は転記に徹する）。
+        "f" => Instruction::Font { args: Vec::new() },
         // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_a` `\__q` 等）は
         // タスク 4.2 のパススルー領分。
         other => decode_passthrough_bare(other),
@@ -232,6 +237,28 @@ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
         // `\!` コマンド（要件 7.1）: 第 1 引数が `move` のみ本タスクで Move へ decode。
         // move 以外（要件 7.2/7.3）はタスク 4.2 の GenericCommand 領分。
         "!" => decode_bang(args),
+        // 文字装飾 `\f[key,args...]`（text-decoration-canon 要件 2.1/2.2/2.7）: 引数列を
+        // 意味を読まずに記述順のまま転記する（空のトークンも潰さない）。キーの意味付けは
+        // 消費側（文字レンダリング層）が自己選別で行う。
+        //
+        // 本仕様が意味を与える 12 項目（フォント系 10 ＋ 一括の戻し 2）:
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bname_2c_30d5_30a9_30f3_30c8_540d_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bheight_2c_6570_5024_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bcolor_2c_8272_6307_5b9a_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bitalic_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bunderline_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bstrike_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bsub_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bsup_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5boutline_2c_30d1_30e9_30e1_30fc_30bf_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bdefault_5d:1
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bdisable_5d:1
+        //
+        // 残る 31 形（寄せ 2・影 3・選択肢マーカー 10・アンカー 16）は本腕が同じ受け皿へ
+        // 転記するだけで、意味はそれぞれの所有仕様（areka-P0-text-align-shadow-canon・
+        // areka-P0-choice-marker-styling・areka-P0-anchor-tag-canon）が後から与える。
+        "f" => Instruction::Font { args },
         // subset 外タグ（`\i` `\j` 等）はタスク 4.2 のパススルー領分。
         _ => decode_passthrough_tag(word, args),
     }
@@ -358,3 +385,7 @@ fn reconstruct_tag(word: &str, args: &[String]) -> String {
         format!("\\{word}[{}]", args.join(","))
     }
 }
+
+#[cfg(test)]
+#[path = "decode_font_tests.rs"]
+mod font_tests;
