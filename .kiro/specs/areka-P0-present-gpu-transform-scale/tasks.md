@@ -185,7 +185,7 @@
   - _Depends: 5.1_
   - _Boundary: presenter refresh/visibility/failure テスト_
 
-- [ ] 5.6 (P) メモのテストから拡大率の檻を撤去し、残りを導き直す
+- [x] 5.6 (P) メモのテストから拡大率の檻を撤去し、残りを導き直す
   - 拡大率がキーに参加することを固定していた 4 本を撤去する（対象そのものが消えるため）
   - 他のキー要素の不一致・全無効化のテストは拡大率引数を落として再導出する
   - 回収容量の引き継ぎ確認がリサンプラで縮小出力を作っているため、リサンプルに依らない書き戻し（小さい原寸合成）へ導き直す
@@ -287,3 +287,4 @@
 - 3.2: `tools/perf/fixtures/generate.py` は旧 14 フィールドを生成したまま（境界外・旧スキーマは無害）。`J_LINE_VOCABULARY_SAMPLES` の perf 行サンプルは 14 フィールドの凍結引用（重複名検査専用）＝残置。7.1 で 11 フィールドのサンプル追加を検討。
 - 4.1: `mod.rs` の差分は登録 1 行＋import 2 行の入替＋手順 6 註釈（+24/−20・8.1 の diff-stat 判定はこれを「登録 1 行＋註釈」と読む）。既存の字面の檻 `zorder_wiring_tests.rs` `t_zwi06`（旧登録 `.before(apply_zorder_chain)` を名指し）は陳腐化＝**4.2 が T-N10 と同時に撤去か再導出**。`frame.rs` 215／226／294-296・`frame/wiring.rs` 218 の `FrameFinalize` 言及 4 か所も 4.2 で書き換え。⚠台帳外の赤: `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs:567`（`read_back` の長さが k で変わる前提）＝**5.7（crates/areka 境界）で再導出**・8.1 で台帳 #23 に追記。
 - 5.1: 補助は `native_golden(w,a,id)`／`native_golden_with(w,a,id,binds,pattern)` → `(Vec<u8>, native_size)`（`ScaledGolden` 撤去）。呼び手 26 か所＝dpi_scale 5・fractional 11・refresh_and_log 3・visibility 4・budget_equivalence 3。⚠4 本のテストは `let (…, native_golden) = build_target_assets(..)` でローカル束縛が関数名を影にする（dpi_scale 96／fractional 117／refresh 172／visibility 362）＝機械置換すると E0618・多くは `build_target_assets` の第 3 要素で足りる。`presenter.rs:80` の `#[cfg(test)] use resample` は最後の再導出タスクが註釈ごと落とす。transition_record_tests の赤 3 本は 2.2／3.1 由来（5.4）。
+- 5.6: `cache_tests.rs` 1,622→1,301（≥1,000 ゆえ例外表・較正エントリは不変）。縮小時の書き戻しは `resize_and_clear`（`clear`+`resize`）で再確保しない＝ポインタ不変の檻は安全。改名候補（任意）: `other_key_elements_still_miss_on_the_same_compose_inputs` → `differing_compose_inputs_still_miss`。
