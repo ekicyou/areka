@@ -20,7 +20,6 @@ use std::collections::BTreeMap;
 
 use super::render_summary;
 use crate::catalog::{Catalog, SnapshotMeta};
-use crate::evidence::{EvidenceIndex, NameMatchFailure, UnmatchedName, UnresolvedUrl};
 use crate::ledger::{Ledger, LedgerEntry};
 use crate::model::{Domain, EntryId, Link, LinkKind, PageName, Status, THEMES};
 
@@ -176,69 +175,8 @@ fn sample_ledgers() -> Vec<Ledger> {
     ]
 }
 
-/// 見本の証拠の索引。
-///
-/// ドメインごとの件数を **0/1/1/2 と散らして**ある（全部同じだと定数を書いただけの
-/// 実装と区別が付かない）。`ghost:1` はどの台帳にも無い id なので、`by_id` の鍵は
-/// 5 つでも台帳ごとの合計は 4 件になる。
-fn sample_evidence() -> EvidenceIndex {
-    let mut by_id: BTreeMap<EntryId, Vec<String>> = BTreeMap::new();
-    by_id.insert(
-        id("ukadoc:list_shell:alpha:1"),
-        vec![
-            "crates/areka-emo/src/atlas.rs".to_owned(),
-            "crates/areka-seriko/src/shell.rs".to_owned(),
-        ],
-    );
-    by_id.insert(
-        id("ukadoc:list_shell:bravo:1"),
-        vec!["crates/areka-seriko/src/bravo.rs".to_owned()],
-    );
-    by_id.insert(
-        id("ukadoc:list_shiori_event:OnBoot:1"),
-        vec!["crates/areka-shiori/src/boot.rs".to_owned()],
-    );
-    by_id.insert(
-        id("ukadoc:list_sakura_script:s:1"),
-        vec!["crates/areka-sakura/src/script.rs".to_owned()],
-    );
-    by_id.insert(
-        id("ukadoc:list_shell:ghost:1"),
-        vec!["crates/areka-seriko/src/ghost.rs".to_owned()],
-    );
-    EvidenceIndex {
-        by_id,
-        unresolved: vec![UnresolvedUrl {
-            path: "crates/areka-emo/src/unresolved.rs".to_owned(),
-            url: "https://ssp.shillest.net/ukadoc/manual/typo.html".to_owned(),
-        }],
-        unmatched_names: vec![UnmatchedName {
-            path: "crates/sylphya/src/unmatched.rs".to_owned(),
-            page_url: "https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html".to_owned(),
-            reason: NameMatchFailure::TableMissing,
-        }],
-    }
-}
-
-/// 見本の証拠に現れるファイルパスのすべて（本文に 1 つも出てはいけない・要件 2.3）。
-const EVIDENCE_PATHS: [&str; 8] = [
-    "crates/areka-emo/src/unresolved.rs",
-    "crates/areka-emo/src/atlas.rs",
-    "crates/areka-seriko/src/shell.rs",
-    "crates/areka-seriko/src/bravo.rs",
-    "crates/areka-shiori/src/boot.rs",
-    "crates/areka-sakura/src/script.rs",
-    "crates/areka-seriko/src/ghost.rs",
-    "crates/sylphya/src/unmatched.rs",
-];
-
 fn sample_body() -> String {
-    render_summary(
-        &catalog_of(GENERATED_AT),
-        &sample_ledgers(),
-        &sample_evidence(),
-        &THEMES,
-    )
+    render_summary(&catalog_of(GENERATED_AT), &sample_ledgers(), &THEMES)
 }
 
 /// 見本の本文の逐語の期待値。
@@ -250,7 +188,7 @@ fn expected_body() -> String {
         "# ukadoc 網羅状況の全体報告",
         "",
         "この本文はカタログと台帳から機械で作ります。手で書き換えず、食い違いは作り直して直します。",
-        "4 本の台帳を跨ぐ報告なので、新しさは常時検査の合否に入れません。作り直すのは統合担当です。",
+        "この報告はカタログと台帳から決まり、常時検査が新しさを判定します。証拠の件数は `evidence` 副手続きで読みます。",
         "",
         "## 元にしたカタログ",
         "",
@@ -312,17 +250,6 @@ fn expected_body() -> String {
         "| 触れ合い | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |",
         "| 記憶 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |",
         "",
-        "## ドメインごとの証拠あり件数",
-        "",
-        "載せるのは件数だけです。どのファイルに書かれているかは検査の出力が示します。",
-        "",
-        "| ドメイン | 証拠あり |",
-        "| --- | ---: |",
-        "| assets | 2 |",
-        "| property | 0 |",
-        "| sakura-script | 1 |",
-        "| shiori | 1 |",
-        "",
     ];
     lines.join("\n")
 }
@@ -376,9 +303,8 @@ fn looks_like_a_time(line: &str) -> bool {
 fn rendering_the_same_input_twice_gives_the_same_body() {
     let catalog = catalog_of(GENERATED_AT);
     let ledgers = sample_ledgers();
-    let evidence = sample_evidence();
-    let first = render_summary(&catalog, &ledgers, &evidence, &THEMES);
-    let second = render_summary(&catalog, &ledgers, &evidence, &THEMES);
+    let first = render_summary(&catalog, &ledgers, &THEMES);
+    let second = render_summary(&catalog, &ledgers, &THEMES);
     assert_eq!(first, second);
     // 空文字どうしを比べて満足しないこと（同一の主張は対象が空だと恒真）。
     assert!(!first.is_empty());
@@ -444,7 +370,6 @@ fn the_snapshot_time_comes_from_the_catalog_and_is_not_baked_in() {
     let body = render_summary(
         &catalog_of("2019-01-02T03:04:05.000Z"),
         &sample_ledgers(),
-        &sample_evidence(),
         &THEMES,
     );
     assert!(body.contains("2019-01-02T03:04:05.000Z"), "{body}");
@@ -476,7 +401,6 @@ fn the_sections_appear_in_the_order_the_design_gives() {
         section_at(&body, "## ドメイン別の状態の分布"),
         section_at(&body, "## ドメインを跨いで繋がった束"),
         section_at(&body, "## テーマ別の状態分布"),
-        section_at(&body, "## ドメインごとの証拠あり件数"),
     ];
     let mut sorted = order;
     sorted.sort_unstable();
@@ -531,7 +455,6 @@ fn the_domain_tables_are_in_name_order_even_though_the_ledgers_arrive_in_another
     for heading in [
         "## 台帳ごとの項目数と未分類件数",
         "## ドメイン別の状態の分布",
-        "## ドメインごとの証拠あり件数",
     ] {
         let section = section_body(&body, heading);
         let names: Vec<&str> = section
@@ -646,12 +569,7 @@ fn several_links_leaving_the_same_id_all_become_edges() {
             &[row("ukadoc:list_propertysystem:hub_b:1", Status::Absent)],
         ),
     ];
-    let body = render_summary(
-        &catalog_of(GENERATED_AT),
-        &ledgers,
-        &EvidenceIndex::default(),
-        &THEMES,
-    );
+    let body = render_summary(&catalog_of(GENERATED_AT), &ledgers, &THEMES);
     let section = section_body(&body, "## ドメインを跨いで繋がった束");
     assert!(
         section.contains(
@@ -682,12 +600,7 @@ fn an_empty_cross_domain_bundle_list_says_there_is_none() {
             row("ukadoc:list_shiori_event:b:1", Status::Absent),
         ],
     )];
-    let body = render_summary(
-        &catalog_of(GENERATED_AT),
-        &ledgers,
-        &EvidenceIndex::default(),
-        &THEMES,
-    );
+    let body = render_summary(&catalog_of(GENERATED_AT), &ledgers, &THEMES);
     let section = section_body(&body, "## ドメインを跨いで繋がった束");
     assert!(
         section.contains("ドメインを跨いだ束はありません。"),
@@ -742,12 +655,7 @@ fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {
     // テーマ名は引数から来る。引数を無視して定数だけを見る実装をここで捕まえる。
     let mut themes: Vec<&str> = THEMES.to_vec();
     themes.push("あいうえお");
-    let body = render_summary(
-        &catalog_of(GENERATED_AT),
-        &sample_ledgers(),
-        &sample_evidence(),
-        &themes,
-    );
+    let body = render_summary(&catalog_of(GENERATED_AT), &sample_ledgers(), &themes);
     let section = section_body(&body, "## テーマ別の状態分布");
     assert!(
         section.contains("| あいうえお | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |"),
@@ -755,30 +663,68 @@ fn a_theme_name_that_only_the_argument_carries_still_gets_a_row() {
     );
 }
 
-// ---- ドメインごとの証拠あり件数（要件 2.3・設計 D-11） ----
+// ---- 証拠の表は本文に無い（要件 11.2・設計 D-5） ----
 
-#[test]
-fn the_evidence_section_gives_counts_per_domain() {
-    let section = section_body(&sample_body(), "## ドメインごとの証拠あり件数");
-    // 件数は 0/1/1/2 と散らしてある（定数を書いただけの実装と区別が付く）。
-    assert!(section.contains("| assets | 2 |"), "{section}");
-    assert!(section.contains("| property | 0 |"), "{section}");
-    assert!(section.contains("| sakura-script | 1 |"), "{section}");
-    assert!(section.contains("| shiori | 1 |"), "{section}");
-    // `by_id` の鍵は 5 つだが、`ghost:1` はどの台帳にも無いので合計は 4 件。
-    // 索引の大きさをそのまま載せる実装をここで捕まえる。
-    assert!(!section.contains("| 5 |"), "{section}");
+/// その行がまるごと本文に在るか。[`section_at`] と違い、無いときに panic しない。
+///
+/// 「無いこと」を主張する道具なので、既知の在る行・既知の無い行・行の一部でしかない
+/// 綴りの 3 通りで較正する（[`the_line_detector_is_calibrated_both_ways`]）。
+fn contains_line(body: &str, line: &str) -> bool {
+    body.contains(&format!("\n{line}\n"))
 }
 
 #[test]
-fn the_report_never_shows_where_the_evidence_is_written() {
-    // 要件 2.3 の上限——報告に載せるのは有無（件数）だけで、ファイルパスは載せない。
-    // 場所を示すのは検査の出力の役目（要件 5.5）。
+fn the_line_detector_is_calibrated_both_ways() {
     let body = sample_body();
-    for path in EVIDENCE_PATHS {
-        assert!(!body.contains(path), "本文に証拠のパスが出た: {path}");
+    assert!(contains_line(&body, "## テーマ別の状態分布"), "{body}");
+    assert!(!contains_line(&body, "## そんな節は無い"), "{body}");
+    // 行の一部でしかない綴りは在ると答えない。
+    assert!(body.contains("## テーマ別"), "{body}");
+    assert!(!contains_line(&body, "## テーマ別"), "{body}");
+}
+
+#[test]
+fn the_body_has_no_evidence_table() {
+    // 証拠の件数は `evidence` 副手続きの出力に一本化した（開発者裁定 2026-09-12）。
+    // ソース木を歩いて数える値を本文に残すと、他 spec が URL のコメントを 1 行足す
+    // だけで判定 ⑹ が赤になる（要件 11.2）。
+    let body = sample_body();
+    assert!(
+        !contains_line(&body, "## ドメインごとの証拠あり件数"),
+        "{body}"
+    );
+    // 母数 0 の緑を恒真にしない対の腕——他の節はちゃんと出ている。
+    for heading in [
+        "## 元にしたカタログ",
+        "## 台帳ごとの項目数と未分類件数",
+        "## 状態の分布",
+        "## ドメイン別の状態の分布",
+        "## ドメインを跨いで繋がった束",
+        "## テーマ別の状態分布",
+    ] {
+        assert!(contains_line(&body, heading), "{heading} が本文から消えた");
     }
-    assert!(!body.contains("https://"), "{body}");
-    // 負の主張の対照——証拠そのものは 4 件あって、件数として本文に出ている。
-    assert!(body.contains("| assets | 2 |"), "{body}");
+    // 「証拠」の語が残るのは冒頭 2 行目の案内 1 か所だけ（表の見出しだけ消して
+    // 行が残る実装をここで捕まえる）。
+    assert_eq!(body.matches("証拠").count(), 1, "{body}");
+    // 本文の最後の節はテーマ別の状態分布である。
+    assert!(
+        body.trim_end()
+            .ends_with("| 記憶 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |"),
+        "{body}"
+    );
+}
+
+#[test]
+fn the_second_line_says_the_standing_check_judges_this_report() {
+    // 逐語の釘付け（要件 11.2・設計 D-5）。旧文言「新しさは常時検査の合否に入れません」
+    // は判定 ⑹ の採用で事実でなくなった。
+    let body = sample_body();
+    // 行 0 は見出し、行 1 は空行、行 2 が案内の 1 行目、行 3 が 2 行目。
+    let second = body.lines().nth(3).expect("冒頭の 2 行目が無い");
+    assert_eq!(
+        second,
+        "この報告はカタログと台帳から決まり、常時検査が新しさを判定します。証拠の件数は `evidence` 副手続きで読みます。"
+    );
+    assert!(!body.contains("常時検査の合否に入れません"), "{body}");
 }

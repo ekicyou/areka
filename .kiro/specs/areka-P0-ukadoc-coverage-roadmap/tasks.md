@@ -45,7 +45,7 @@
   - _Requirements: 7.1, 7.2, 7.6, 1.4, 12.2_
   - _Depends: 1.3, 1.4_
 
-- [ ] 1.6 全体報告を台帳とカタログだけで決まる本文にする
+- [x] 1.6 全体報告を台帳とカタログだけで決まる本文にする
   - 末尾の「ドメインごとの証拠あり件数」の節を落とし、描画の入力から証拠の索引を外す
   - 冒頭 2 行目の「常時検査の合否に入れません」を「カタログと台帳から決まり、常時検査が新しさを判定する。証拠の件数は `evidence` 副手続きで読む」に改め、その文言を逐語で釘付けしている在中テストを同時に直す
   - 報告を作る副手続きから証拠の走査を外す（1.5 と同じ入口のファイルを触るので直列に行う）
@@ -331,3 +331,8 @@
 - 1.5: 専用のエラー変種は足さず `SurveyError::DeriveMismatch` を継続。裁定で足すことになれば `patch.rs` の `undecidable` 1 か所と `error.rs` だけで済む。
 - 1.5: `crates/ukadoc-survey/src/cli/generate_tests.rs` が **948 行**（上限 1,000 まで 52 行）。**次にこのファイルへ追記するなら先に分割すること。**
 - 1.5: 現時点で `priority-apply` を実データに掛けると「どの束にも属さない対象項目」で終了コード 1 になるのが正しい姿（3 文書の `[[bundle]]` がまだ 0 行）。**実台帳を実際に書き換えるのはタスク 4.4 の担当。それまで実データへ `priority-apply` を掛けて書き込まないこと。**
+- 1.6: 冒頭 2 行目の綴りは **design が書き分けている**——`summary.md` は敬体（`render_summary`（純関数化）節）、`README.md` は常体（File Structure Plan の README 行・主語「全体報告は」付き）。tasks.md 1.6 が引いた常体は README 向けの綴りだった。**タスク 6.5 で README を直すときは常体・主語付きの方を使うこと。**
+- 1.6: **⚠ タスク 6.5 への申し送り 2 件。** ⑴ `doc/ukadoc-coverage/README.md` の「⚠ 全体報告は黙って古くなる」節（466 行付近）が丸ごと事実でなくなった。⑵ **design.md の README の行は「証拠の表だけを外す理由に書き換えよ」と書いているが、これは表を丸ごと外した裁定より前の文言で、design のその指示自体が陳腐化している。** 6.5 の担当者は design を鵜呑みにしないこと。
+- 1.6: 廃止したテスト 2 本（`the_evidence_section_gives_counts_per_domain`・`the_report_never_shows_where_the_evidence_is_written`）は陳腐化による除去。後者の残余の主張（本文に URL やパスが出ない）は `the_body_is_pinned_verbatim` の全文一致がより強く引き受けている。
+- 1.6: `report_summary` を参照するテストは `generate_tests.rs` ではなく `cli_tests.rs` にあり、副手続き名と使い方の一覧だけを見ている。`generate_tests.rs` は 948 行のまま。
+- 1.6: design.md が「作らない」と明記した `render_summary_judged` は作っていない（research.md にその旧案が残っているが design が覆している）。

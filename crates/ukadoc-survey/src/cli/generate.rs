@@ -35,9 +35,7 @@ use crate::catalog::read::read as read_catalog;
 use crate::catalog::write::write as write_catalog;
 use crate::documents::{derive, parse};
 use crate::error::SurveyError;
-use crate::evidence::extract::extract;
-use crate::evidence::resolve::resolve;
-use crate::io::{files, paths, snapshot, sources};
+use crate::io::{files, paths, snapshot};
 use crate::ledger::Ledger;
 use crate::ledger::patch;
 use crate::ledger::read::read as read_ledger;
@@ -187,8 +185,9 @@ pub fn report() -> Result<(), SurveyError> {
 
 /// 全体の報告を作り直す（要件 7.2・7.3）。
 ///
-/// カタログ・台帳 4 本・ソースから集めた証拠の索引を入力に取る。ドメインごとの
-/// 証拠の有無だけを載せるので、索引はここで組み立てて渡す。
+/// 入力はカタログと台帳 4 本だけである（要件 11.2・設計 D-5）。ソース木は歩かない
+/// ——証拠の件数は本文から外して `evidence` 副手続きの出力に一本化したので、他の spec
+/// が正典 URL のコメントを 1 行足しても本文は変わらない。
 pub fn report_summary() -> Result<(), SurveyError> {
     let catalog = read_catalog(&files::read_normalized(&paths::catalog_path())?)?;
     let mut ledgers: Vec<Ledger> = Vec::new();
@@ -196,14 +195,7 @@ pub fn report_summary() -> Result<(), SurveyError> {
         ledgers.push(load_ledger(domain)?);
     }
 
-    let sources = sources::walk(&paths::workspace_root())?;
-    let hits: Vec<_> = sources
-        .iter()
-        .flat_map(|(path, text)| extract(path, text))
-        .collect();
-    let evidence = resolve(&hits, &sources, &catalog);
-
-    let body = render_summary(&catalog, &ledgers, &evidence, &THEMES);
+    let body = render_summary(&catalog, &ledgers, &THEMES);
     let target = paths::summary_report_path();
     ensure_parent(&target)?;
     files::write_lf(&target, &body)?;
