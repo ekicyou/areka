@@ -601,7 +601,7 @@ pub const CSS_COLOR_NAMES: &[(&str, (u8, u8, u8))];
 
 **Responsibilities & Constraints**
 - `ActorTextState` に 3 フィールドを足す（定義は `state.rs`・操作は本ファイル）: `glyph_styles: Vec<StyleId>`（`items` のグリフ序数と同じ序数空間）・`styles: StyleTable`・`decor: Decoration`。
-- `Decoration { layers: LookLayers, current: TextLook, unowned: BTreeMap<String, Vec<String>>, warned: BTreeSet<String> }`。`Default` は ukadoc 既定（登録前に届いた cue のため）。
+- `Decoration { layers: LookLayers, current: TextLook, unowned: BTreeMap<String, Vec<String>>, warned: BTreeSet<(u8, String, Vec<String>)> }`（鍵は（記録の種別, キー, 値の列）の 3 つ組——どの要素も連結された綴りではないので、別種別の鍵も、同種別の別指定の鍵も潰れない。要件 13.4／13.5・実装 2026-09-12）。`Default` は ukadoc 既定（登録前に届いた cue のため）。
 - `Clear`（`\c`）は `clear_content()`（`items`・`reveal`・`choices`・`glyph_styles`・`styles` を空に・`decor` は不変）。`ClearAll` は `clear_content()`＋`reset_decoration(None)`（`warned` も空に＝台詞の開始）。
 - `Custom` の腕: `cue.command.as_command_carrier()` が `Some((FONT_TAG_CARRIER, tokens))` のときだけ `apply_font_args(actor, &tokens)`。それ以外の `Custom` は従来どおり `debug!` で無視。
 
@@ -882,7 +882,7 @@ pub(super) fn face_origin_color(atlas: &AtlasTable, file_name: &str) -> (u8, u8,
 | `CueCommand::Custom` | `command == "\\f"`・`params: Array([String…])` | 消費側の名前自己選別 |
 | `TextLook` | `name: Vec<String>`・`height: f32`・`color`・`bold`・`italic`・`underline`・`strike`・`outline`・`script` | `font_key()`＝`(name, height_bits, bold, italic)` |
 | `LookLayers` | `default`・`disable`・`cursor_text` | `disable = { color: mix, ..default }` |
-| `Decoration` | `layers`・`current`・`unowned: BTreeMap<String, Vec<String>>`・`warned: BTreeSet<String>` | スコープごと |
+| `Decoration` | `layers`・`current`・`unowned: BTreeMap<String, Vec<String>>`・`warned: BTreeSet<(u8, String, Vec<String>)>`（（種別, キー, 値の列）の 3 つ組） | スコープごと |
 | `StyleTable` | `looks: Vec<TextLook>` | `StyleId(n) → looks[n-1]`・`StyleId(0)`＝既定 |
 | `PositionedGlyph` | `ch`・`inline_pos`・`advance`・`style: StyleId` | — |
 | `CommittedLine` | 既存 4 欄＋`styles: Vec<u32>` | 行 index |
@@ -1004,7 +1004,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 7. **縦書きの下線・打ち消し線の位置**＝DirectWrite の既定に委ねる。実測: 〔実装時に記入: `vertical_rl`／`vertical_lr` とも列の（右／左）側・打ち消し線は列の（中央）〕。bvc の裁定「列の右側」との照合: 〔一致／不一致〕／根拠: 開発者裁定 2026-09-11・自前で線を描き分けない／要件 5.7・12.2。
 8. **無効表示の色の混ぜ方**＝成分ごとに `(バルーン背景の (0,0) の色 + 文字色 × 2) / 3`（整数除算・1 か所 `color::mix_disabled`）。背景は面 0 の原画像の (0,0)（α が 255 でない・トリムで外・面が無いときは白）／根拠: ukadoc shell `menu.disable.font.color.r` の式を輸入・balloon 側は「画像色とミックス」としか定めない／要件 4.6。
 9. **行の高さの決め方**＝閉じる行の文字の em の最大値・文字の無い行はそのとき効いている大きさ・行送りは `line_pitch(その高さ)`／根拠: 正典は沈黙／要件 7.9。
-10. **戻す操作の対象と時期**＝対象は装飾状態の全項目（`TextLook` 丸ごと＋所有外語彙）・戻すのは `\f[default]`・台詞の開始（`ClearAll`）・`\x`／戻さないのは `\c`・`\n`・`\_l`・`\x[noclear]`／根拠: ukadoc `\x`「`\f` 系の効果も解除」・`\x[noclear]`「効果は残る」／要件 10.6・3.8。追跡先: `areka-P0-balloon-lifecycle-events` 項目 9・`areka-P0-choice-marker-styling`。
+10. **戻す操作の対象と時期**＝対象は装飾状態の全項目（`TextLook` 丸ごと＋所有外語彙）・戻すのは `\f[default]`（既定の層へ）・`\f[disable]`（無効表示の層へ・所有外語彙も空に。要件 10.2 の「全項目」と 10.4 の「後続仕様が登記する項目」に照らし `default` と対称にする裁定・実装 2026-09-12）・台詞の開始（`ClearAll`）・`\x`／戻さないのは `\c`・`\n`・`\_l`・`\x[noclear]`／根拠: ukadoc `\x`「`\f` 系の効果も解除」・`\x[noclear]`「効果は残る」／要件 10.6・3.8。追跡先: `areka-P0-balloon-lifecycle-events` 項目 9・`areka-P0-choice-marker-styling`。
 11. **`default.anchor*`**＝`default` として扱う（warn 1 度）／根拠: アンカーの色定義が未実装／要件 8.8・追跡先 `areka-P0-anchor-tag-canon`。
 12. **6 値の語の大小文字**＝小文字の完全一致のみ／根拠: 正典は小文字で記す・既存の先例（`windowposition.x`・`centerx`）に揃える／要件 5.1〜5.5。
 13. **色名表の範囲**＝SVG 1.1／CSS Color 3 の拡張色名キーワード 147 語（小文字の完全一致のみ・CSS Color 4 で足された `rebeccapurple` は採らない）。あわせて 3 成分は 10 進か百分率のどちらかに揃った形だけを受け、混在と先頭の符号は解析失敗とする（`+N` は要件 7.2 で相対指定という別の意味を持つため）／根拠: ukadoc は色名を列挙せず「基本は HTML・CSS の色の表現と似ています」としか定めない（`[color,色指定]` の※注）・要件 8.1・8.2 が「各 0〜255 の 10 進数」「各 0〜100%」と書式を分けて定める／要件 8.1・8.2・8.4・8.9。

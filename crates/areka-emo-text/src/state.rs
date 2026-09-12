@@ -406,7 +406,7 @@ impl TextLayerState {
                     .extend(text.chars().map(|ch| TextItem::Glyph { ch }));
                 state.reveal.extend_chunk(glyph_count, cue.at, interval);
                 // 追記した文字にいま効いている見た目の番号を与える（R3.2/R3.3）。
-                state.push_current_style(glyph_count);
+                state.push_current_style(&cue.actor, glyph_count);
             }
             CueCommand::NewLine { ratio } => {
                 tracing::debug!(actor = %cue.actor, ratio, "NewLine cue 適用（改行マーカー追記）");
@@ -474,7 +474,7 @@ impl TextLayerState {
                         .extend(text.chars().map(|ch| TextItem::Glyph { ch }));
                     state.reveal.extend_chunk(glyph_count, cue.at, interval);
                     // 選択肢の文字にもそのときの装飾状態を与える（R3.5）。
-                    state.push_current_style(glyph_count);
+                    state.push_current_style(&cue.actor, glyph_count);
                 }
                 let ordinal = state.choices.len();
                 state.choices.push(ChoiceSpan {

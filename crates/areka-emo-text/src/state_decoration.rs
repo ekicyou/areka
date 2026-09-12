@@ -20,26 +20,57 @@
 //! | `\n`（`NewLine`）・`\_l`（`Cursor`） | 変わらない | **保つ** |
 //! | 台本の先頭（`ClearAll`） | 消える | 既定へ戻る |
 //! | `\f[default]` | 変わらない | 既定へ戻る |
+//! | `\f[disable]` | 変わらない | 無効表示の層へ合う |
 //!
-//! 「戻す操作」は 1 か所（[`ActorTextState::reset_look`]）で、`\f[default]` も台本の先頭も
-//! そこを通る（要件 10.3）。見た目を**丸ごと**置き換えるので、後続仕様が
-//! [`crate::look::TextLook`] へ項目を足せば列挙を直さずに戻しへ含まれる（要件 10.4）。
-//! 戻す操作は既に追記済みの文字の番号を書き換えない——番号列は追記時の写しであり、
-//! 表の既存の番号の意味も変わらないからである（要件 10.7）。
+//! 「戻す操作」の実体は 1 か所（[`ActorTextState::reset_look`]）で、`\f[default]`・
+//! 台本の先頭・後続仕様のクリック待ち（`\x`）はいずれもそこを通る（要件 10.3）。
+//! 外から呼ぶ入口は [`TextLayerState::reset_decoration`] 1 本で、スコープ指定と
+//! 全スコープ（要件 10.5）の両方を受ける。`\f[disable]` は戻し先の層が違うだけの
+//! 同じ一括の戻しである（[`ActorTextState::reset_look_disabled`] の裁定）。
+//!
+//! 見た目を**丸ごと**置き換えるので、後続仕様が [`crate::look::TextLook`] へ項目を足せば
+//! 列挙を直さずに戻しへ含まれる（要件 10.4）。戻す操作は既に追記済みの文字の番号を
+//! 書き換えない——番号列は追記時の写しであり、表の既存の番号の意味も変わらないから
+//! である（要件 10.7）。
+//!
+//! ## 記録（要件 13.1／13.4／13.5）
+//!
+//! 記録は「キーと値」ごとに 1 台詞 1 度（`warned` の集合）。集合の要素は
+//! **（記録の種別, キー, 値の列）**の 3 つ組で、台本作者の書いた文字列を 1 本の綴りへ
+//! **一度も繋げない**——鍵のどの要素も連結された綴りではない。種別が違えばキーと値が
+//! 同じでも別の 1 件に数え（[`RECORD_FONT_ARG`]・[`RECORD_SCRIPT_APPEND`]）、同じ種別の
+//! 中でもキーと値は別々の欄に入るので区切り文字を含む指定（`\f[a=b,c]` と `\f[a,b=c]`）が
+//! 同じ鍵へ潰れることはなく、値も列のまま持つので `\f[bold,"x,y"]`（値 1 個）と
+//! `\f[bold,x,y]`（値 2 個）も別の 1 件に数える（引用符が守るカンマは
+//! `areka-parsers` の `lexer_tests.rs::quoted_arg_protects_comma` が固定している）。台本の先頭で集合を空にするので、
+//! 次の台詞では同じ指定がもう 1 度残る。記録なしで失敗を飲み込む経路は持たない——
+//! [`ActorTextState::apply_font_args`] の腕がすべて記録へ落ちることは、`match` の腕を
+//! 字面で数える試験（`state_decoration_reset_tests.rs` §13）が見張る。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
 
-use crate::look::{LookLayers, Note, StyleId, TextLook, apply_font_tag};
+use crate::look::{LookLayers, Note, Script, StyleId, TextLook, apply_font_tag};
 
-use super::ActorTextState;
+use super::{ActorTextState, TextLayerState};
+
+/// 記録の種別——`\f` の指定を適用できなかった側（[`ActorTextState::warn_once`]）。
+///
+/// [`Decoration::warned`] の鍵は（種別, キー, 値の列）の 3 つ組で、この定数はその第 1 要素である。
+/// キーと値を繋げず別々の欄に置くのは、どちらも台本作者の書いた任意の文字列だからで、
+/// 1 本の綴りへ潰すと `\f[a=b,c]`（キーは `a=b`）と `\f[a,b=c]`（キーは `a`）が同じ鍵になり、
+/// 後から来た方が無記録で飲み込まれる。種別を鍵に含めるのも同じ理由で、そうしないと
+/// `\f[sub,追記]` の記録が上下付きの追記の記録と同じ鍵になる（要件 13.4／13.5）。
+const RECORD_FONT_ARG: u8 = 0;
+/// 記録の種別——上下付きが有効なまま文字を追記した側（[`ActorTextState::warn_script_once`]）。
+const RECORD_SCRIPT_APPEND: u8 = 1;
 
 /// スコープ 1 つ分の装飾状態（2 層・現在の見た目・所有外キーの保持・記録済みの値）。
 ///
 /// [`Decoration::default`] は ukadoc の既定（[`LookLayers::default`]）で、バルーンが装着される
-/// 前に届いた cue のための出発点である。装着時に 2 層を差し込む口（`set_look_layers`）は
-/// タスク 4.2 の担当。
+/// 前に届いた cue のための出発点である。装着時に 2 層を差し込む口は
+/// [`TextLayerState::set_look_layers`]。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Decoration {
     /// 既定・無効表示・選択肢文字色（`\f[...,default]`／`\f[...,disable]` の戻し先）。
@@ -48,8 +79,16 @@ pub struct Decoration {
     current: TextLook,
     /// 本仕様が意味を与えないキーの最新の引数列（要件 2.5・キー→引数列）。
     unowned: BTreeMap<String, Vec<String>>,
-    /// 記録済みの「キー=値」（同じ指定の警告を 1 台詞に 1 度へ抑えるための集合・要件 13.4）。
-    warned: BTreeSet<String>,
+    /// 記録済みの（種別, キー, 値の列）（同じ指定の警告を 1 台詞に 1 度へ抑えるための集合・要件 13.4）。
+    ///
+    /// 種別は [`RECORD_FONT_ARG`]／[`RECORD_SCRIPT_APPEND`] で、2 種類の記録に互いに素な
+    /// 鍵空間を与える。キーと値も繋げず別々の欄に置き、**値は列のまま**持つ——台本作者の
+    /// 書いた文字列を区切り文字で 1 本の綴りへ潰すと、別々の指定が同じ鍵になって片方が
+    /// 無記録で消える（要件 13.5）。潰れる例は 2 つとも実測で確かめた: キーと値を `=` で
+    /// 繋ぐと `\f[a=b,c]` と `\f[a,b=c]`、値の列を `,` で繋ぐと `\f[bold,"x,y"]` と
+    /// `\f[bold,x,y]`。よって鍵のどの要素も連結された綴りではない。
+    /// 値を持たない記録（[`RECORD_SCRIPT_APPEND`]）は第 3 要素を空の列にする。
+    warned: BTreeSet<(u8, String, Vec<String>)>,
 }
 
 impl Default for Decoration {
@@ -113,12 +152,13 @@ impl ActorTextState {
     /// 0 文字ガードを実際に踏むのは `Text` の腕（無条件に呼ぶ）で、`Choice` の腕は
     /// 上位で 0 文字を分岐するのでここへ来ない。
     ///
-    /// R6.3 の記録を追記点で出すタスク 4.2 は `actor: &ActorKey` を引数へ戻すこと
-    /// （design.md が `intern_current` に割り当てている）。
-    pub(super) fn push_current_style(&mut self, glyph_count: usize) {
+    /// `actor` は R6.3 の記録（上下付きが有効なまま文字が追記された）に使う——ここが
+    /// 「文字が追記された」ことを知る唯一の地点だからである。
+    pub(super) fn push_current_style(&mut self, actor: &ActorKey, glyph_count: usize) {
         if glyph_count == 0 {
             return;
         }
+        self.warn_script_once(actor);
         let id = self
             .styles
             .intern(&self.decor.current, &self.decor.layers.default);
@@ -129,7 +169,30 @@ impl ActorTextState {
     /// 「戻す操作」の実体——見た目を既定へ丸ごと戻し、所有外キーの保持も空にする
     /// （要件 10.1／10.3／10.4）。既に追記済みの文字には効かない（要件 10.7）。
     pub(super) fn reset_look(&mut self) {
-        self.decor.current = self.decor.layers.default.clone();
+        let layer = self.decor.layers.default.clone();
+        self.reset_look_to(layer);
+    }
+
+    /// 無効表示への一括の戻し（`\f[disable]`・要件 10.2）。
+    ///
+    /// **タスク 4.2 の裁定**——`\f[disable]` も `\f[default]` と同じ「一括の戻し」であり、
+    /// 所有外キーの保持も空にする。要件 10.2 が「**全項目**を無効表示の見た目に合わせる」
+    /// と述べ、要件 10.4 が戻す操作の対象を「装飾状態の全項目（後続仕様が登記する項目を
+    /// 含む）」と定めている以上、後続仕様の項目である所有外キーだけが `\f[disable]` を
+    /// 生き延びるのは「全項目」に反する。ゆえに 2 つの綴りの違いは**戻し先の層だけ**とする。
+    /// この裁定の結果、`look.rs::apply_font_tag` の `key == "disable"` の腕は
+    /// `key == "default"` の腕と同様に本番経路から到達しない（テストからのみ呼ばれる）。
+    pub(super) fn reset_look_disabled(&mut self) {
+        let layer = self.decor.layers.disable.clone();
+        self.reset_look_to(layer);
+    }
+
+    /// 一括の戻しの共通実体——見た目を丸ごと置き換え、所有外キーの保持を空にする。
+    ///
+    /// 見た目は**丸ごと**置き換える（項目を列挙しない）ので、後続仕様が
+    /// [`TextLook`] へ項目を足せば戻しへ自動で含まれる（要件 10.4）。
+    fn reset_look_to(&mut self, layer: TextLook) {
+        self.decor.current = layer;
         self.decor.unowned.clear();
     }
 
@@ -152,10 +215,20 @@ impl ActorTextState {
         // ゆえに `look.rs::apply_font_tag` の `key == "default"` の腕は本番経路から到達しない
         // （テストからのみ呼ばれる）。所有外キーの保持を戻しに含めるため、本番はこちらを
         // 通す（要件 10.4）。
-        if tokens.first() == Some(&"default") {
-            tracing::debug!(actor = %actor, "\\f[default]——スコープの装飾状態を既定へ戻す（要件 10.1）");
-            self.reset_look();
-            return;
+        // `\f[disable]` も同じ一括の戻しで、違うのは戻し先の層だけ
+        // （[`ActorTextState::reset_look_disabled`] の裁定・要件 10.2）。
+        match tokens.first().copied() {
+            Some("default") => {
+                tracing::debug!(actor = %actor, "\\f[default]——スコープの装飾状態を既定へ戻す（要件 10.1）");
+                self.reset_look();
+                return;
+            }
+            Some("disable") => {
+                tracing::debug!(actor = %actor, "\\f[disable]——スコープの装飾状態を無効表示へ合わせる（要件 10.2）");
+                self.reset_look_disabled();
+                return;
+            }
+            _ => {}
         }
         match apply_font_tag(&mut self.decor.current, &self.decor.layers, tokens) {
             Ok(None) => {}
@@ -178,7 +251,7 @@ impl ActorTextState {
                 self.warn_once(
                     actor,
                     key,
-                    &tokens[1..].join(","),
+                    &tokens[1..],
                     "語彙として受理したが表示は変えない",
                 );
             }
@@ -186,7 +259,7 @@ impl ActorTextState {
                 self.warn_once(
                     actor,
                     "height",
-                    &tokens[1..].join(","),
+                    &tokens[1..],
                     "スタイルシートの大きさの語は語彙のみ——大きさを変えない",
                 );
             }
@@ -194,21 +267,101 @@ impl ActorTextState {
                 self.warn_once(
                     actor,
                     "color",
-                    &tokens[1..].join(","),
+                    &tokens[1..],
                     "アンカーの色定義がまだ無い——default と同じ色を適用した",
                 );
             }
             Err(issue) => {
-                let value = issue.value.clone();
-                self.warn_once(actor, &issue.key, &value, issue.reason);
+                // 鍵はトークンの列から作る（`FontTagIssue::value` は連結済みの綴りなので、
+                // それを鍵にすると `\f[bold,"x,y"]` と `\f[bold,x,y]` が同じ鍵へ潰れる）。
+                // キーが空の失敗（要件 2.6）では `tokens` 自体が空になりうるので `get(1..)` で取る。
+                let key = issue.key.clone();
+                let rest = tokens.get(1..).unwrap_or(&[]);
+                self.warn_once(actor, &key, rest, issue.reason);
             }
         }
     }
 
-    /// 同じ「キー=値」の警告を 1 台詞に 1 度だけ残す（要件 13.1／13.4）。
-    fn warn_once(&mut self, actor: &ActorKey, key: &str, value: &str, reason: &str) {
-        if self.decor.warned.insert(format!("{key}={value}")) {
-            tracing::warn!(actor = %actor, key, value, reason, "\\f の指定を適用できない——当該項目は変えずに再生を続ける");
+    /// 同じ（キー, 値の列）の警告を 1 台詞に 1 度だけ残す（要件 13.1／13.4）。
+    ///
+    /// 記録の本文には値の列をカンマで繋いだ読みやすい綴りを載せるが、**鍵は列のまま**である
+    /// （要件 13.5——綴りを鍵にすると、引用符がカンマを守るせいで `\f[bold,"x,y"]` と
+    /// `\f[bold,x,y]` が同じ鍵へ潰れ、片方が無記録で消える）。
+    fn warn_once(&mut self, actor: &ActorKey, key: &str, values: &[&str], reason: &str) {
+        let text = values.join(",");
+        let owned: Vec<String> = values.iter().map(|value| (*value).to_owned()).collect();
+        if self
+            .decor
+            .warned
+            .insert((RECORD_FONT_ARG, key.to_owned(), owned))
+        {
+            tracing::warn!(actor = %actor, key, value = text, reason, "\\f の指定を適用できない——当該項目は変えずに再生を続ける");
+        }
+    }
+
+    /// 上下付きが有効なまま文字が追記されたことを 1 台詞に 1 度だけ残す（要件 6.3）。
+    ///
+    /// 記録済みの集合そのものは [`ActorTextState::warn_once`] と共有するが、**鍵空間は互いに
+    /// 素**である——こちらの鍵は（[`RECORD_SCRIPT_APPEND`], キー（`sub`／`sup`）, 空の列）で、
+    /// あちらは（[`RECORD_FONT_ARG`], キー, 値の列）。種別を鍵に含めるのは、キーの側が
+    /// 台本作者の書いた任意の文字列だからである——種別を落とすと
+    /// `\f[sub,追記]`（値が不正なので `warn_once` が記録する）が、直後の
+    /// 追記の記録を無記録で飲み込む（逆順なら `warn_once` の側が消える・要件 13.5）。
+    /// 文面を分けているのは、利用者が「指定が通らない」のか「指定は通ったが表示に出ない」のかを
+    /// ログから見分けられるようにするためである。
+    fn warn_script_once(&mut self, actor: &ActorKey) {
+        let key = match self.decor.current.script {
+            Script::None => return,
+            Script::Sub => "sub",
+            Script::Sup => "sup",
+        };
+        if self
+            .decor
+            .warned
+            .insert((RECORD_SCRIPT_APPEND, key.to_owned(), Vec::new()))
+        {
+            tracing::warn!(actor = %actor, key, reason = "上下付きは語彙のみ——基線も大きさも送り幅も変えない", "上下付きが有効なまま文字を追記した——表示は変わらない");
+        }
+    }
+}
+
+impl TextLayerState {
+    /// バルーンの装着で 2 層を差し込む（要件 4.1・結線層の 1 点から呼ぶ）。
+    ///
+    /// 現在の見た目が**旧い既定と同値**なら（＝まだ `\f` で明示されていないなら）新しい既定へ
+    /// 追随する。明示された見た目は丸ごと保つ——利用者が指定した値を装着が黙って捨てないため。
+    pub fn set_look_layers(&mut self, actor: &ActorKey, layers: LookLayers) {
+        let state = self.actors.entry(actor.clone()).or_default();
+        if state.decor.current == state.decor.layers.default {
+            state.decor.current = layers.default.clone();
+        }
+        state.decor.layers = layers;
+    }
+
+    /// 「戻す操作」（要件 10.3 の権威定義）——装飾状態の全項目を既定の見た目へ戻す。
+    ///
+    /// `scope` が `Some` なら当該スコープだけ、`None` なら全スコープを 1 回で戻す
+    /// （要件 10.5）。`\f[default]`（[`ActorTextState::apply_font_args`]）・台詞の開始
+    /// （`ClearAll`→[`ActorTextState::reset_for_new_talk`]）・後続仕様のクリック待ち（`\x`）は
+    /// いずれも同じ実体（[`ActorTextState::reset_look`]）を通り、別々の戻し方を持たない。
+    /// 既に表示済みの文字の見た目は変わらない（要件 10.7）。
+    pub fn reset_decoration(&mut self, scope: Option<&ActorKey>) {
+        match scope {
+            Some(actor) => {
+                tracing::debug!(actor = %actor, "戻す操作——当該スコープの装飾状態を既定へ戻す（要件 10.3）");
+                // まだ生まれていないスコープには戻すものが無い——`entry().or_default()` で
+                // 空のスコープを作ると、`present_frame` の `actors()` 走査がその幽霊を
+                // 提示層へ載せてしまう。
+                if let Some(state) = self.actors.get_mut(actor) {
+                    state.reset_look();
+                }
+            }
+            None => {
+                tracing::debug!("戻す操作——全スコープの装飾状態を既定へ戻す（要件 10.5）");
+                for state in self.actors.values_mut() {
+                    state.reset_look();
+                }
+            }
         }
     }
 }
