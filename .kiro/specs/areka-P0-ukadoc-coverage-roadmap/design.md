@@ -161,10 +161,12 @@ crates/ukadoc-survey/
 ├── src/io/paths.rs               # linkage_path・briefing_path・roadmap_draft_path を追加
 ├── src/report/summary.rs         # 証拠の表を外して純関数化（evidence 引数を落とす）・冒頭 2 行目の文言
 └── tests/consistency/
-    ├── mod.rs                    # mod 宣言 4 つを追加・冒頭の「summary.md は読まない」の但し書きを改める
+    ├── mod.rs                    # mod 宣言 6 つを追加・冒頭の「summary.md は読まない」の但し書きを改める
     ├── documents.rs              # 読み込み Documents::load・spec ディレクトリの数え上げ・写しを壊す道具（テスト本体は置かない）
     ├── documents_checks.rs       # 判定 ⑴ ⑵ ⑸ ⑹ の実データでの緑＋各 1 か所壊して赤
-    ├── linkage_checks.rs         # 判定 ⑶ ⑷ の実データでの緑＋各 1 か所壊して赤
+    ├── linkage_checks.rs         # 判定 ⑶ の実データでの緑＋各 1 か所壊して赤（944 行。⑷ は入らない）
+    ├── briefing_arms.rs          # 判定 ⑷ の腕 a〜g と台帳の数え直し（テスト本体は置かない）
+    ├── briefing_checks.rs        # 判定 ⑷ の実データでの緑＋摂動 3 本＋残る腕の較正
     ├── documents_non_vacuity.rs  # 判定 6 種の対象が 0 件でないことの下限
     └── examples.rs               # 自前の toml_blocks／quoted_ids を documents::parse のものへ差し替え
 ```
@@ -301,7 +303,7 @@ graph LR
 | 10.7 | 既存 brief の是正候補 3 列 | `roadmap-draft.md`「是正候補」 | spec 名・食い違う id・直し方 | 段 5 |
 | 10.8 | M3 候補と M2 予約群の対応表（0 件も書く） | `[[reserved]]`・判定 ⑸-d | D-12 | 段 5 |
 | 10.9 | 草案である旨を冒頭に | `roadmap-draft.md` 冒頭 | — | 段 5 |
-| 11.1 | 判定 6 種を標準のテスト実行に | `documents_checks.rs`・`linkage_checks.rs` | D-3 | 段 2・3・5 |
+| 11.1 | 判定 6 種を標準のテスト実行に | `documents_checks.rs`（⑴⑵⑸⑹）・`linkage_checks.rs`（⑶）・`briefing_arms.rs`＋`briefing_checks.rs`（⑷） | D-3 | 段 2・3・5 |
 | 11.2 | ⑹ の除外を覆す旨を README と本 spec の文書に・証拠の表は `evidence` 副手続きへ | README の表と「報告の扱い」節・`render_summary` の純関数化・処分台帳 | D-5 | 段 0・5 |
 | 11.3 | 種別ごとに 1 か所壊して赤 | 各判定の摂動 | D-3 | 段 2・3・5 |
 | 11.4 | 種別ごとに対象 0 件でない | `documents_non_vacuity.rs` | D-3 | 段 2・3・5 |
@@ -327,7 +329,7 @@ graph LR
 | `cli::generate::priority_apply` | 入口 | 読む→導く→置換→書く | 7.1, 7.6 | `documents`・`patch`・`io`（P0） | Batch |
 | `report::summary::render_summary`（純関数化） | 純粋層 | 判定 ⑹ の対象本文（証拠の表を外す） | 11.1 ⑹, 11.2 | `tally`・`bundle`（P0） | Service |
 | `tests/consistency/documents.rs` | 入口 | 実データの読み込みと写しを壊す道具 | 11.3, 11.4 | `RepoData`（P0）・`documents::parse`（P0） | State |
-| `documents_checks.rs`・`linkage_checks.rs`・`documents_non_vacuity.rs` | 入口 | 判定 6 種・摂動・母数 | 11.1〜11.4 | 上 | — |
+| `documents_checks.rs`・`linkage_checks.rs`・`briefing_arms.rs`・`briefing_checks.rs`・`documents_non_vacuity.rs` | 入口 | 判定 6 種・摂動・母数 | 11.1〜11.4 | 上 | — |
 | `linkage.md`・`briefing.md`・`roadmap-draft.md` | 文書 | 帰属・順位・編成の正本 | 3〜6, 8〜10 | — | 骨組み（D-2） |
 
 ### 純粋層 / `documents`
@@ -470,7 +472,7 @@ pub(super) fn cited_ids(markdown: &str) -> BTreeSet<String>;
 
 - 写しを壊す道具: 本文の写し（`String`）の上で「id を 1 文字変える」「`members` から id を 1 つ抜く」「件数を 1 ずらす」「束名を 1 つ消す」を行う小さな関数。repo のファイルには 1 バイトも触れない。
 
-#### 判定の一覧（`documents_checks.rs`・`linkage_checks.rs`）
+#### 判定の一覧（`documents_checks.rs`・`linkage_checks.rs`・`briefing_arms.rs`＋`briefing_checks.rs`）
 
 | 判定 | 主張（実データで成り立つこと） | 1 か所壊すと赤（11.3） | 対象 0 でない（11.4） |
 |---|---|---|---|
@@ -638,7 +640,7 @@ bundle = "…"                      # 写った束。写らなければ none = t
 - **統合テスト（`tests/consistency/`）**: 上の判定の一覧の 6 種 × ⑴ 実データで緑 ⑵ 1 か所壊して赤 ⑶ 対象 0 でない。
 - **実行体テスト**: `cli_streams.rs` に「`priority-apply` は引数を取らない」の使い方の誤りの腕を 1 つ足す（repo の中身に寄りかからない範囲）。
 - **文書の手順としての検証**（機械化しないもの）: 段階 A の主障壁の数え直し（8.1 ⑷）は `[[barrier]]` が数え直すので機械化される。申し送りの全数拾い（8.2）は「統合担当」「裁定案」「是正候補」「申し送り」の 4 語で 4 ブリーフィングと 5 `tasks.md` を検索した結果の件数を処分台帳の冒頭に書き、宛先で仕分けた手順を添える（research.md §2.4 の当たり）。
-- **1,000 行の番人**: 新ファイルはいずれも 1,000 行未満。`documents_checks.rs` と `linkage_checks.rs` を分けてあるのはそのため。
+- **1,000 行の番人**: 新ファイルはいずれも 1,000 行未満。`documents_checks.rs` と `linkage_checks.rs` を分けてあるのはそのため。判定 ⑷ は当初 `linkage_checks.rs` へ同居させる計画だったが、⑶ だけで 944 行に達したので `briefing_arms.rs`（腕 a〜g・テスト本体無し）と `briefing_checks.rs`（緑・摂動・較正）の 2 本へ分けた——腕と摂動を 1 ファイルに収めると 1,200 行を超える。
 
 ## 設計判断（D-1〜D-12）
 
@@ -659,7 +661,7 @@ bundle = "…"                      # 写った束。写らなければ none = t
 ### D-3 判定は統合テストの兄弟ファイルに置く（純粋層 `check/` に足さない）
 
 - research.md §7 の案 A。`CheckInput`・`FindingKind` に触らないので、上流が固定した所見 15 種と `cli check` の出力は変わらない。
-- 分割: `documents.rs`（道具）・`documents_checks.rs`（⑴⑵⑸⑹）・`linkage_checks.rs`（⑶⑷）・`documents_non_vacuity.rs`（母数）。`checks.rs`（893 行）へは足さない。
+- 分割: `documents.rs`（道具）・`documents_checks.rs`（⑴⑵⑸⑹）・`linkage_checks.rs`（⑶）・`briefing_arms.rs`（⑷ の腕・道具）＋`briefing_checks.rs`（⑷ の緑と摂動）・`documents_non_vacuity.rs`（母数）。`checks.rs`（893 行）へは足さない。⑷ を `linkage_checks.rs` へ同居させる当初の計画は、⑶ だけで 944 行に達したので取り下げた（「1,000 行の番人」）。
 - ⑵ は報告の本文から束 id を読む（要件の文言どおり）。報告の新しさは既存の `DomainReportStale` と判定 ⑹ が守るので、台帳から束を作り直す必要が無い。
 
 ### D-4 書き戻しは副手続き `priority-apply`（`priority` だけ）・`owner`／`note`／`links` は手編集

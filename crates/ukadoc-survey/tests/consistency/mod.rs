@@ -54,9 +54,13 @@
 //! 1 つも無い。その道具の較正と 3 文書まわりの母数の下限は
 //! [`documents_non_vacuity`]（`documents_non_vacuity.rs`）にある。判定 6 種そのものは
 //! [`documents_checks`]（`documents_checks.rs`・⑴ ⑵ ⑸ ⑹）と
-//! [`linkage_checks`]（`linkage_checks.rs`・⑶ ⑷）が持つ。今あるのは ⑴（引用 id の
-//! 実在）・⑵（機械の束 id の実在）・⑶（帰属の分割）で、残る 3 種はそれぞれの判定を
-//! 置くタスク（3.9 以降）が足す。
+//! [`linkage_checks`]（`linkage_checks.rs`・⑶）と
+//! [`briefing_checks`]（`briefing_checks.rs`・⑷）が持つ。⑷ の腕そのものは
+//! [`briefing_arms`]（`briefing_arms.rs`）にあり、そこにはテストの本体を 1 つも
+//! 置かない——⑶ だけで 944 行あるので ⑷ を同じファイルへ足せず、⑷ もまた腕と摂動を
+//! 1 ファイルに収めると 1,000 行の目安（`structure.md:176`）を超えるためである。
+//! 今あるのは ⑴（引用 id の実在）・⑵（機械の束 id の実在）・⑶（帰属の分割）・
+//! ⑷（段階と順位）で、残る 2 種はそれぞれの判定を置くタスク（⑹ は 4.8・⑸ は 6.6）が足す。
 //!
 //! 実データへの主張は [`checks`]（`checks.rs`）に、検査の対象が 0 件でないことの主張は
 //! [`non_vacuity`]（`non_vacuity.rs`）に、自前の道具の較正は [`values_md`]
@@ -68,6 +72,8 @@
 //! 読み込まれたファイルの子モジュールは、そのファイル自身のディレクトリを基準に
 //! 解決される——`structure.md:141`）。
 
+mod briefing_arms;
+mod briefing_checks;
 mod checks;
 mod documents;
 mod documents_checks;

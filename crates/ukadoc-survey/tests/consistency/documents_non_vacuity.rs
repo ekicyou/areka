@@ -14,15 +14,19 @@
 //!   束 id の数・3 文書が引用した機械の束 id の数）と、その下限が**下回ると赤になる**
 //!   ことの較正。
 //! - 判定 ⑶ の母数の下限（名前付き束の数・人手で足した id の数）と、同じ較正。
+//! - 判定 ⑷ の母数の下限（`[[rank]]` の行数・段階 A の `items`）と、同じ較正。
 //!
 //! # ここにまだ置かないもの
 //!
-//! 残る判定の母数の下限（`[[rank]]` の行数・段階 A の `items`・`[[spec]]` の行数・
-//! `[[owner_completed]]` の行数など）は、その判定を置くタスク（3.9 以降）の持ち物で
-//! ある。`briefing.md` と `roadmap-draft.md` は今のところ骨組みだけで配列表が 0 行
-//! なので、ここで下限を置くと**実データが追いつく前に赤くなる**。同じ理由で、判定 ⑴
-//! の下限を置くのは `linkage.md` の引用 id だけで、残る 2 文書の引用 id の下限は
-//! 段 4・段 5 が置く（2026-09-12 の実測はどちらも 0 件）。
+//! 残る判定の母数の下限（`[[spec]]` の行数・`[[owner_completed]]` の行数など）は、
+//! その判定を置くタスク（判定 ⑹ は 4.8・判定 ⑸ は 6.6）の持ち物である。
+//! `roadmap-draft.md` は今のところ骨組みだけで配列表が 0 行なので、ここで下限を置くと
+//! **実データが追いつく前に赤くなる**。同じ理由で `roadmap-draft.md` の引用 id の
+//! 下限も置かず、段 5 の持ち物にする。
+//!
+//! `briefing.md` の引用 id は**もう 0 件ではない**（段 4 が順位表を書いた）ので、
+//! 「まだ何も書いていないから」という先送りの理由はこの文書には効かない。だから
+//! 判定 ⑴ の下限は `linkage.md` と `briefing.md` の 2 本ぶん置く（タスク 4.7 で追加）。
 //!
 //! # spec ディレクトリの数は「下限」であって「一致」ではない
 //!
@@ -35,7 +39,7 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use ukadoc_survey::documents::Stage;
-use ukadoc_survey::documents::parse::read_linkage;
+use ukadoc_survey::documents::parse::{read_briefing, read_linkage};
 use ukadoc_survey::io::paths;
 use ukadoc_survey::model::Domain;
 
@@ -69,6 +73,19 @@ const MIN_COMPLETED_SPECS: usize = 100;
 /// 並べる以上、`linkage.md` の引用 id はこの数を下回れない。地の文の 1 件を足して
 /// 1,553 に釘付けしないのは、それが本文の書き方次第で増減する余りだからである。
 const MIN_LINKAGE_CITED_IDS: usize = 1_552;
+
+/// 判定 ⑴ の母数——`briefing.md` の引用 id 数の下限。
+///
+/// **数え方は [`cited_ids`]（引用符付きと逆引用符付きの和集合・重複は畳む）**で、
+/// 2026-09-13 に段 4 の後で数え直した実測は **237 件**（引用符付き 延べ 314・異なり
+/// 220／逆引用符付き 延べ 23・異なり 22）。段 1 の時点では 0 件で、順位表と
+/// `[[template]]` を段 4 が書いたことで増えた。
+///
+/// 下限を 100 に置くのは、束の分け直しで単独項目の並びが増減しても動かさずに済む
+/// 余裕を採ったためである。捕まえたいのは「読み込みが別のファイルを見ている・
+/// 引用 id の取り出しが空を返す」といった**ほとんど何も残らない**壊れ方だけで、
+/// 1 件 2 件の増減は見ない。
+const MIN_BRIEFING_CITED_IDS: usize = 100;
 
 /// 判定 ⑵ の母数——報告 5 本の束の一覧から読めた機械の束 id の数の下限。
 ///
@@ -104,6 +121,56 @@ const MIN_NAMED_BUNDLES: usize = 1;
 /// と決まっているので、この数が 0 に落ちたら腕 c は何も相手にしていない。設計
 /// 「判定の一覧」⑶ のとおり「1 以上」にする。
 const MIN_BY_HAND: usize = 1;
+
+/// 判定 ⑷ の母数——`briefing.md` の `[[rank]]` の行数の下限（設計「判定の一覧」⑷）。
+///
+/// 2026-09-12 の実測は **66 行**（束を指す行 63・単独項目を並べた行 3）。設計のとおり
+/// 「1 行以上」にする。束は段 4 以降で分けたり束ねたりするので実数を釘付けするとその
+/// たびに赤くなり、捕まえたいのは「順位表が空の文書を緑と読む」壊れ方だけである。
+const MIN_RANK_ROWS: usize = 1;
+
+/// 判定 ⑷ の母数——段階 A の `items` の下限（設計「判定の一覧」⑷）。
+///
+/// 2026-09-12 の実測は **874**（台帳 4 本で `priority` が `A` で始まる項目数）。設計の
+/// とおり「1 以上」にする。0 に落ちると、腕 b の 5 段階のうち最も大きい段階が
+/// 「数え直しも 0・宣言も 0」でそろって緑になる。
+const MIN_STAGE_A_ITEMS: usize = 1;
+
+/// 順位表が 1 行も無い `briefing.md`（母数が空に落ちた壊れ方の写し）。
+///
+/// 読み手が受け付ける最小の形で、`[stage.A]`〜`[stage.E]` の 3 つの鍵と
+/// `[priority_blank]` の 2 つの鍵をすべて 0 にしてある。
+const EMPTY_BRIEFING: &str = "```toml
+[stage.A]
+bundles = 0
+singles = 0
+items = 0
+
+[stage.B]
+bundles = 0
+singles = 0
+items = 0
+
+[stage.C]
+bundles = 0
+singles = 0
+items = 0
+
+[stage.D]
+bundles = 0
+singles = 0
+items = 0
+
+[stage.E]
+bundles = 0
+singles = 0
+items = 0
+
+[priority_blank]
+alias = 0
+not_applicable = 0
+```
+";
 
 /// 3 文書と全体報告の本文の長さの下限（文字数）。
 ///
@@ -265,6 +332,7 @@ fn the_citation_and_bundle_checks_have_something_to_judge() {
     let documents = Documents::load();
 
     let cited = cited_ids(&documents.linkage_text);
+    let briefing_cited = cited_ids(&documents.briefing_text);
     let known = report_bundle_ids(&repo, &documents.summary_text);
     let machine = linkage_bundle_ids(&documents.linkage, &documents.linkage_text);
 
@@ -273,6 +341,11 @@ fn the_citation_and_bundle_checks_have_something_to_judge() {
             "判定 ⑴: linkage.md の引用 id",
             cited.len(),
             MIN_LINKAGE_CITED_IDS,
+        )
+        .at_least(
+            "判定 ⑴: briefing.md の引用 id",
+            briefing_cited.len(),
+            MIN_BRIEFING_CITED_IDS,
         )
         .at_least(
             "判定 ⑵: 報告 5 本から読めた機械の束 id",
@@ -304,6 +377,11 @@ fn the_floors_of_the_citation_and_bundle_checks_turn_red_when_the_source_goes_em
             MIN_LINKAGE_CITED_IDS,
         )
         .at_least(
+            "判定 ⑴: briefing.md の引用 id",
+            cited_ids("").len(),
+            MIN_BRIEFING_CITED_IDS,
+        )
+        .at_least(
             "判定 ⑵: 報告 5 本から読めた機械の束 id",
             bundle_ids_in_report("").len(),
             MIN_REPORT_BUNDLE_IDS,
@@ -317,17 +395,18 @@ fn the_floors_of_the_citation_and_bundle_checks_turn_red_when_the_source_goes_em
     let short = floors.short();
     assert_eq!(
         short.len(),
-        3,
-        "母数が空に落ちたのに違反が 3 行そろわない: {short:?}"
+        4,
+        "母数が空に落ちたのに違反が 4 行そろわない: {short:?}"
     );
     assert!(
         short.iter().all(|line| line.contains("0 件しかない")),
         "空に落ちたことを本文が言っていない: {short:?}"
     );
     assert!(
-        short[0].contains("判定 ⑴")
-            && short[1].contains("報告 5 本")
-            && short[2].contains("3 文書が引用した"),
+        short[0].contains("linkage.md の引用 id")
+            && short[1].contains("briefing.md の引用 id")
+            && short[2].contains("報告 5 本")
+            && short[3].contains("3 文書が引用した"),
         "どの母数が空なのかを名指していない: {short:?}"
     );
 }
@@ -387,6 +466,71 @@ fn the_floors_of_the_attribution_check_turn_red_when_the_bundles_go_empty() {
     );
     assert!(
         short[0].contains("名前付き束") && short[1].contains("by_hand"),
+        "どの母数が空なのかを名指していない: {short:?}"
+    );
+}
+
+/// 判定 ⑷ が数えている相手が 0 件でないこと（要件 11.4）。
+///
+/// 見るのは 2 つ——`[[rank]]` の行数と、段階 A の `items` である。順位表が空の
+/// `briefing.md` は、腕 a〜g のうち a・b・d・e・g が**母数 0 でそろって緑**になる。
+#[test]
+fn the_stage_and_rank_check_has_something_to_judge() {
+    let documents = Documents::load();
+
+    Floors::new()
+        .at_least(
+            "判定 ⑷: briefing.md の [[rank]] の行",
+            documents.briefing.ranks.len(),
+            MIN_RANK_ROWS,
+        )
+        .at_least(
+            "判定 ⑷: 段階 A の items（[stage.A]）",
+            documents
+                .briefing
+                .stages
+                .get(&Stage::A)
+                .map(|counts| counts.items)
+                .unwrap_or_default(),
+            MIN_STAGE_A_ITEMS,
+        )
+        .assert_met();
+}
+
+/// 順位表が空に落ちたとき、上の下限が**実際に**赤になること。
+#[test]
+fn the_floors_of_the_stage_and_rank_check_turn_red_when_the_ranks_go_empty() {
+    let empty = read_briefing(EMPTY_BRIEFING).expect("空の briefing.md を組み立てられない");
+
+    let mut floors = Floors::new();
+    floors
+        .at_least(
+            "判定 ⑷: briefing.md の [[rank]] の行",
+            empty.ranks.len(),
+            MIN_RANK_ROWS,
+        )
+        .at_least(
+            "判定 ⑷: 段階 A の items（[stage.A]）",
+            empty
+                .stages
+                .get(&Stage::A)
+                .map(|counts| counts.items)
+                .unwrap_or_default(),
+            MIN_STAGE_A_ITEMS,
+        );
+
+    let short = floors.short();
+    assert_eq!(
+        short.len(),
+        2,
+        "順位表が空に落ちたのに違反が 2 行そろわない: {short:?}"
+    );
+    assert!(
+        short.iter().all(|line| line.contains("0 件しかない")),
+        "空に落ちたことを本文が言っていない: {short:?}"
+    );
+    assert!(
+        short[0].contains("[[rank]]") && short[1].contains("[stage.A]"),
         "どの母数が空なのかを名指していない: {short:?}"
     );
 }
@@ -645,13 +789,16 @@ fn dropping_an_absent_bundle_name_stops() {
 /// 狙いを選ぶ側の理屈（どの id・どの束名なら 1 度きりか）が要る。それは帰属の判定
 /// （⑶ ⑷）の持ち物なので、選び方はそちらへ置く。
 ///
-/// 2026-09-12 に段 1 の後で数え直した実測（この段落の前の版は 3 文書が骨組みだった
-/// ころの写真のままだった）:
+/// 2026-09-13 に段 4 の後で数え直した実測（**この段落は 2 度古びている**——初版は
+/// 3 文書が骨組みだったころの写真のまま、2026-09-12 の版は段 1 の写真のままで、
+/// どちらも `briefing.md` を 0 件と書いていた。**数を doc に書く限りこの壊れ方は
+/// 繰り返す**ので、増減したら日付ごと採り直すこと）:
 ///
-/// - 3 文書の `ukadoc:` の出現: `linkage.md` **3,135 件**・`briefing.md` **0 件**・
+/// - 3 文書の `ukadoc:` の出現: `linkage.md` **3,135 件**・`briefing.md` **337 件**・
 ///   `roadmap-draft.md` **0 件**。
 /// - `linkage.md` の `members = `: **67 件**（束 63・単独項目 4）。
-/// - `briefing.md` の `bundle = `: **0 件**（順位の行は段 4 が書く）。
+/// - `briefing.md` の `bundle = `: **63 件**（段 4 が書いた。`[[rank]]` は **66 行**で、
+///   差の 3 行は単独項目を並べた `singles` の行である）。
 /// - `linkage.md` の引用符付き id で**ちょうど 1 度**現れるもの: **151 件**
 ///   （`drop_member` の狙いになりうる綴り）。束名 67 のうち、その綴りを引用符付きで
 ///   書いた行が 1 行きりのもの: **62 件**（`drop_bundle_name` の狙いになりうる名前）。
