@@ -71,7 +71,7 @@
   - _Requirements: 2.5, 8.5, 12.4_
   - _Boundary: ShioriMount / resolve_
 
-- [ ] 3.2 初期の文字コードを優先順で決め、起動ログに残す
+- [x] 3.2 初期の文字コードを優先順で決め、起動ログに残す
   - ファイル層と同じ固定写像で既定の文字コードを決める 2 腕の写像を結線層に置く（OS のロケール設定を読む箇所 0）
   - 強制 ＞ 宣言 ＞ 既定の優先順で初期値を決め、交渉状態を組み立てて返す。解決できない宣言は警告ログ 1 行（キー名・ラベル・理由・採用した後退先）を出して次の優先順へ後退し、強制が解決できないときは強制の効力も失う
   - 決定した文字コードの正規名と決定根拠を情報ログ 1 行で記録する
@@ -187,3 +187,7 @@
 - 3.1: 代替の固定物は `shiori.encoding,  Shift_JIS ,x  ` → フィールドは `"Shift_JIS ,x"`（値の中の空白とカンマが残る）。転記側に `.trim().to_ascii_lowercase()` を足す変異で 2 本が赤になることをレビュアーが独立に確認済み＝「転記層は整形しない」が検査で守られている。
 - 3.1: 要件 2.5 の零（descript の `charset` キーを SHIORI 通信の初期値に使う箇所 0）の根拠。本番の読み手は 2 つだけ——`charset/prescan.rs` の `charset` キー一致腕（消費点は `charset/decode.rs` の 1 つのみ）と、`shiori3.rs` の応答ヘッダ走査（SHIORI の wire であって descript のキーではない）。`placement/config.rs` のヒットは `#[cfg(test)]` の内側。
 - 3.1: 挙動でも零を固定した（`descript_charset_key_does_not_feed_shiori_encoding`）。`charset,Shift_JIS` を Shift_JIS のバイト列で書いた descript を読み、`name` が正しく読めること（＝復号が実際に効いている陽性対照）を見たうえで 2 フィールドが `None` であることを主張する。`decode` を「宣言を無視して既定を使う」へ退化させると赤になることを確認済み。
+- 3.2: **⚠ 統合担当への申し送り（文書の訂正）** design §shiori_wiring の `default_charset` を「`Ansi → SHIFT_JIS／Utf8 → UTF_8` の 2 腕 `match`」とする記述は**文字どおりには実現不能**。`areka_parsers::charset::DefaultEncoding` は `#[non_exhaustive]` なので、クレート外からの網羅 match は E0004 になる。実装は 2 つの変種を名指ししたうえで型が要求するワイルドカード腕を足した形（覆うのは将来の新しい変種だけ）。design の「失敗経路が無い」という裁定の趣旨は保たれている。
+- 3.2: 要件 1.3 の零（OS のロケール設定を読む箇所 0）の根拠は結線層だけでは完結しない。`default_charset` の唯一の入力 `DefaultEncoding` の生成点は本番では `areka` のブート設定と main のリテラル `Ansi` で、零が担保されるのはそこ。ワークスペース全体のロケール API 走査でも生成に関わるヒットは 0（ヒットは DirectWrite のロケール文字列と 32bit helper の `load` 引数の符号化で、いずれも別経路）。6.1 はこの形で記録すること。
+- 3.2: この時点では `LOG_TARGET`／`default_charset`／`initial_charset` に未使用の警告が 3 件出る（tasks.md 3.2 が予告した状態）。`#[allow(dead_code)]` で塞がず、3.4 が本番の起動経路から呼んで消すこと。
+- 3.2: ログの `fallback` は「後退先を先に決めてから記録する」。退けた宣言を溜めて決定を確定させてから警告を出す構造にしてあり、決定前の推測へ退化させると赤になることを確認済み。
