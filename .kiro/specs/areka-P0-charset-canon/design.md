@@ -55,7 +55,7 @@
 - `Shiori3Client::new` の引数形（negotiator を取る）・`build_request` の戻り型（`EncodedRequest`）・`parse_response` の第 2 引数（`CharsetPolicy`）・`ParsedResponse` のフィールド追加 → in-proc と kanade の呼び出し点、host32 の E2E テスト 3 本。
 - `ShioriMount` のフィールド追加（`#[non_exhaustive]`・crate 内 3 構築点）。
 - `ShioriConnection` のフィールド追加 → 構築点 2 か所（`shiori_wiring.rs`・`real_helper_test.rs`）。
-- `real_connect` の引数追加 → `runtime.rs` の `Helper` 腕。
+- `real_connect` の引数追加 → 呼び出し点 **4**: `runtime.rs` の `Helper` 腕（本番）・`shiori_wiring.rs` 内のテスト 2 か所・`areka-ghost/tests/ghost/snapshot_capture_test.rs`（実 backend へ Recorder を合成する Custom wiring・第 3 引数は本番の既定と同じ `DefaultEncoding::Ansi`）。統合テストは実行に i686 成果物を要するが**コンパイルは x64 で常に走る**ため、漏らすと `cargo test -p areka-ghost` が赤になる。
 - ログ `event` 名（下記 §Monitoring の表）を実機確認と後続 spec が grep する。改名は両方の追随を要する。
 - 台帳 5 行の `implemented` 化と URL コメント（`shiori3.rs` 2 行・`resolve.rs` 2 行・`prescan.rs` 1 行）: 削除・移動は `cargo test -p ukadoc-survey` を赤にする。
 
@@ -164,6 +164,7 @@ crates/areka-parsers/src/shell/
 | `crates/areka-kanade/tests/kanade/real_helper_test.rs` | 構築点に `negotiator` を追加 | +1 |
 | `crates/areka-ghost/src/shiori_wiring.rs` | `default_charset(DefaultEncoding)`・`initial_charset(&ShioriMount, DefaultEncoding) -> CharsetNegotiator`（ログ付き）・`real_connect` に第 3 引数 `default_encoding`・接続時に `negotiator` を `ShioriConnection` へ。テスト接続宣言 | 178 → 約 260 |
 | `crates/areka-ghost/src/runtime.rs` | `Helper` 腕に `options.default_encoding` を渡す 1 行 | +1 |
+| `crates/areka-ghost/tests/ghost/snapshot_capture_test.rs` | `real_connect(helper_exe, mount.shiori, DefaultEncoding::Ansi)` へ機械的追随（採取フィクスチャは本番の既定と同じ） | +1 |
 | `crates/areka-ghost/src/shiori_inproc.rs` | `Charset::UTF_8`・`build_request(..).bytes`・`parse_response(bytes, CharsetPolicy::Force(Charset::UTF_8))` の機械的追随（挙動 0） | ±0 |
 | `crates/areka-parsers/src/package/model.rs` | `ShioriMount` に `encoding: Option<String>`・`force_encoding: Option<String>` | +6 |
 | `crates/areka-parsers/src/package/model_tests.rs` | 構築点 3 か所の追随 | +6 |
@@ -423,9 +424,9 @@ impl CharsetNegotiator {
 `decode_had_errors == true` は上記と独立に、文字コード名につき初回 `warn`・以後 `debug` `charset_invalid_bytes_replaced`（charset）を出す（4.7・10.2・7.4）。`note_request(id, replaced > 0)` はイベント名につき初回 `warn`・以後 `debug` `charset_unmappable_replaced`（id・replaced）（3.5・7.4）。
 
 ##### State Management
-- State model: `current: Charset`・`forced: bool`・`warned: BTreeSet<String>`（鍵は `"label:<x>"`／`"unmappable:<id>"`／`"invalid:<charset>"`／`"forced-mismatch"`）。
+- State model: `current: Charset`・`forced: bool`・`warned: BTreeSet<String>`（鍵は `"label:<x>"`／`"unmappable:<id>"`／`"invalid:<charset>"`／`"forced-mismatch"`）。ラベルの鍵は **trim＋ASCII 小文字化してから**入れる（`foo`／`FOO` で 2 回警告しない・応答ごとにラベルの綴りを変える壊れた SHIORI で集合が際限なく育たない）。
 - Persistence: なし。接続（`ShioriConnection`）と同寿命＝SHIORI の load から unload まで（5.1）。次の load では `initial_charset` が新しい値を作る（5.2）。
-- Concurrency: 窓所有スレッド（shiori アクター）上でのみ触る。`Send` を要求しない（`ShioriBackend` と同じ前提）。
+- Concurrency: 窓所有スレッド（shiori アクター）上でのみ触る。ただし `real_connect` の closure（`Send + 'static`）へ move されるため **`Send` を満たさなければならない**（`&'static Encoding` は `Sync`・`BTreeSet<String>` は `Send`。`Rc` 等を入れない）。
 
 **Implementation Notes**
 - Integration: `Shiori3Client` が `&'a mut` で借用する。`ShioriConnection` のフィールド `negotiator` と `window` は別フィールドなので同時借用できる。
@@ -477,7 +478,7 @@ pub fn parse_response(bytes: &[u8], policy: CharsetPolicy) -> Result<ParsedRespo
 - Invariants: `bytes` の `Charset:` 行の値は `req.charset.name()`、本文は同じ `req.charset` で符号化（3.2）。
 
 **Implementation Notes**
-- Integration: in-proc は `build_request(..).bytes`・`parse_response(.., CharsetPolicy::Force(Charset::UTF_8))` へ機械的に追随（挙動 0・5.4）。`ParsedResponse` の構造体リテラル（client.rs テスト 8 か所・shiori3.rs テスト 1 か所）に 2 フィールドを足す。
+- Integration: in-proc は `build_request(..).bytes`・`parse_response(.., CharsetPolicy::Force(Charset::UTF_8))` へ機械的に追随（挙動 0・5.4）。`ParsedResponse` の構造体リテラル（client.rs テスト 8 か所・shiori3.rs テスト 1 か所）に 2 フィールドを足す。`EncodedRequest.bytes: Vec<u8>` は UTF-8 のとき `Cow::Borrowed` を 1 回 `into_owned` する（複製 1 回・バイト列は同一で 3.4 は成立）。複製を避けるために「UTF-8 なら `String::into_bytes`」の近道を作ってはならない——それが 1.4 の禁じる文字コード分岐そのものになる。
 - Validation: `shiori3_charset_tests.rs`（下記 Testing）。
 - Risks: `Charset` 行より前に非 ASCII のヘッダを置き、しかも ASCII 状態へ戻さない SHIORI（ISO-2022-JP でのみ起こり得る）は走査で拾えない。ukadoc が「最初の行、または少なくとも非 ASCII 行の前が望ましい」と定める側なので、既知の限界として §8 の登記に含める。
 
@@ -562,7 +563,7 @@ pub struct ShioriMount {
 - 既知の差（登記）: BOM 付き UTF-8 の surfaces.txt では従来 U+FEFF が 1 行目に残っていたが、`decode` は BOM を吸収する。emo2 の固定物は BOM 無し（実測）なので 6.3 の同一性は保たれる。
 
 ### 正典文書・台帳
-- `doc/COMPAT_ARCHITECTURE.md` §7 の SHIORI 行から「Charset交渉の具体」を外し「→ §8（charset-canon）」を添える。§8 の表に行を足す: ⑴ 未宣言時の既定＝Shift_JIS 固定写像（OS ロケール不読）、⑵ 表せない文字＝10 進数値文字参照＋警告、⑶ 不正な並び＝U+FFFD＋警告（UTF-8 にも適用）、⑷ UTF-16／replacement＝解決不能と同じ経路（警告＋継続・理由で区別）、⑸ NOTIFY 応答から採用しない、⑹ emo2 のような UTF-8 の SHIORI は最初の要求だけ `Charset: Shift_JIS`（本文 ASCII・`shiori.encoding,UTF-8` で回避可）、⑺ 非 ASCII ヘッダの後に置かれた `Charset` は拾えない（ISO-2022-JP のみ）。出典 spec 列は本 spec。
+- `doc/COMPAT_ARCHITECTURE.md` §7 の SHIORI 行から「Charset交渉の具体」を外し「→ §8（charset-canon）」を添える。§8 の表に行を足す: ⑴ 未宣言時の既定＝Shift_JIS 固定写像（OS ロケール不読）、⑵ 表せない文字＝10 進数値文字参照＋警告、⑶ 不正な並び＝U+FFFD＋警告（UTF-8 にも適用）、⑷ UTF-16／replacement＝解決不能と同じ経路（警告＋継続・理由で区別）、⑸ NOTIFY 応答から採用しない、⑹ emo2 のような UTF-8 の SHIORI は最初の要求だけ `Charset: Shift_JIS`（本文 ASCII・`shiori.encoding,UTF-8` で回避可）、⑺ 非 ASCII ヘッダの後に置かれた `Charset` は拾えない（ISO-2022-JP のみ）、⑻ BOM 付き UTF-8 の surfaces.txt は従来 U+FEFF が 1 行目に残っていたが `decode` が BOM を吸収する（emo2 固定物は BOM 無しで差分 0）。出典 spec 列は本 spec。
 - 台帳: `shiori.toml` `Charset:1`／`Charset:2`、`assets.toml` `shiori.encoding`／`shiori.forceencoding`／`descript_shell_surfaces:charset` を `status = "implemented"`・`owner = "areka-P0-charset-canon"`（`Charset:2` は空から本 spec へ）・`introduced = ""`（版番号不明はそのまま）・note を現状（根拠の場所＝定義箇所・ログの event 名）へ書き直す。`cargo run -p ukadoc-survey -- report` と `-- report-summary` で報告を作り直し、`cargo test -p ukadoc-survey` を緑にする（`DomainReportStale`／`ImplementedWithoutEvidence` の両方）。
 
 ## Data Models
@@ -609,14 +610,14 @@ pub struct ShioriMount {
 | `shiori-charset` | `charset_unmappable_replaced` | warn → debug | `id`・`replaced` | 3.5, 7.4 |
 | `shiori-charset` | `charset_invalid_bytes_replaced` | warn → debug | `charset` | 4.7, 7.4, 10.2 |
 
-既存のログ行（起動・終了・エラー）は変えない（12.5）。実機確認は `charset_initial` と `charset_switched` を grep する（11.2）。
+既存のログ行（起動・終了・エラー）は変えない（12.5）。実機確認は `charset_initial` と `charset_switched` を grep する（11.2）。debug 水準の行を点けるときの `RUST_LOG` は **target 名**で指定する（`shiori-charset=debug,ghost-boot=debug`。モジュールパス名では点かない）。
 
 ## Testing Strategy
 
 ### Unit Tests（決定論・純関数・x64 のみ・`src/` の兄弟ファイル）
-- `charset_tests.rs`: ⑴ 別名（`shift_jis`／`Shift-JIS`／`sjis`／`windows-31j`／` SHIFT_JIS `）が同じ `Charset` に解決し `name()` が `Shift_JIS`（1.2・9.3）。⑵ `UTF-16`／`UTF-16LE`／`replacement`／`hz-gb-2312` が `NotEncodable`、`x-nope` が `Unknown`（1.5・10.3）。⑶ `note_response` の表 7 行を各 1 テストで固定し、`warn`／`debug` の件数と `event` を `log_capture_kit::capture` で数える（4.2〜4.6・7.4）。⑷ 同じ未解決ラベルを 3 回受けて `warn` 1・`debug` 2（4.4・7.4）。⑸ 採用後の `current()` が変わること＝次の要求に反映（9.3）。
-- `shiori3_charset_tests.rs`: ⑴ `あ` を Reference0 に持つ GET を UTF-8／Shift_JIS／EUC-JP で組み、`Charset:` 行の綴りと Reference0 のバイト列を定数（`E3 81 82`／`82 A0`／`A4 A2`）と比較（9.1・9.7）。ISO-2022-JP（`1B 24 42 24 22 1B 28 42`）を 4 系統目として足してよい。⑵ 同じ 3 系統の応答（`Charset: <name>` と各バイト列の `Value`）を `Negotiate(UTF_8)` で復号して `Value == "あ"`（9.2）。⑶ ヘッダ省略時の継承（`Negotiate(SHIFT_JIS)` で Shift_JIS バイト列）（4.3）。⑷ 解決不能ラベルは方針の中の文字コードで復号（4.4）。⑸ `Force(UTF_8)` で `Charset: Shift_JIS` のヘッダを無視（4.5）。⑹ 絵文字を Shift_JIS で符号化すると `&#128512;` になり `replaced == 1`（3.5・10.1）。⑺ 不正 Shift_JIS 並びが `Ok`＋U+FFFD＋`decode_had_errors`（4.7）。⑻ 適用前の `build_request` 出力（emo2 相当の GET）を逐語の定数として保持し、UTF-8 で組んだバイト列と等値（3.4・9.6・12.1）。⑼ `Charset` ヘッダが最初のヘッダ行であること（3.3）。
-- `shiori3.rs` 既存テスト: `Charset::UTF_8`・`.bytes`・`Negotiate(UTF_8)`・2 フィールドの機械的追随。`parse_invalid_utf8_is_parse_error` は「`Ok`・`decode_had_errors == true`・`Value` に U+FFFD」へ改名＋期待値更新（4.8 の唯一の例外）。他の期待値変更 0。
+- `charset_tests.rs`: ⑴ 別名（`shift_jis`／`Shift-JIS`／`sjis`／`windows-31j`／` SHIFT_JIS `）が同じ `Charset` に解決し `name()` が `Shift_JIS`（1.2・9.3）。⑵ `UTF-16`／`UTF-16LE`／`replacement`／`hz-gb-2312` が `NotEncodable`、`x-nope` が `Unknown`（1.5・10.3）。⑶ `note_response` の表 7 行を各 1 テストで固定し、`warn`／`debug` の件数と `event` を `log_capture_kit::capture` で数える（4.2〜4.6・7.4）。⑷ 同じ未解決ラベルを 3 回受けて `warn` 1・`debug` 2（4.4・7.4）。同じラベルの大小文字違い（`foo`／`FOO`）も 1 回と数える（鍵の正規化）。⑸ 採用後の `current()` が変わること（9.3 の前半。「次の要求のバイト列に現れること」は `shiori3_charset_tests.rs` ⑽ が固定する——`current()` の変化と要求バイト列の変化は単位が違う主張なので、前者の緑で後者を証明しない）。
+- `shiori3_charset_tests.rs`: ⑴ `あ` を Reference0 に持つ GET を UTF-8／Shift_JIS／EUC-JP で組み、`Charset:` 行の綴りと Reference0 のバイト列を定数（`E3 81 82`／`82 A0`／`A4 A2`）と比較（9.1・9.7）。ISO-2022-JP（`1B 24 42 24 22 1B 28 42`）を 4 系統目として足してよい。⑵ 同じ 3 系統の応答（`Charset: <name>` と各バイト列の `Value`）を `Negotiate(UTF_8)` で復号して `Value == "あ"`（9.2）。⑶ ヘッダ省略時の継承（`Negotiate(SHIFT_JIS)` で Shift_JIS バイト列）（4.3）。⑷ 解決不能ラベルは方針の中の文字コードで復号（4.4）。⑸ `Force(UTF_8)` で `Charset: Shift_JIS` のヘッダを無視（4.5）。⑹ 絵文字を Shift_JIS で符号化すると `&#128512;` になり `replaced == 1`（3.5・10.1）。⑺ 不正 Shift_JIS 並びが `Ok`＋U+FFFD＋`decode_had_errors`（4.7）。⑻ 適用前の `build_request` 出力（emo2 相当の GET）を逐語の定数として保持し、UTF-8 で組んだバイト列と等値（3.4・9.6・12.1）。⑼ `Charset` ヘッダが最初のヘッダ行であること（3.3）。⑽ **採用が次の要求に現れる連鎖**（9.3・9.7 の要）: `CharsetNegotiator::new(SHIFT_JIS, false)` → `note_response(Some("EUC-JP"), false)` → `build_request(.. charset: neg.current())` の出力に `Charset: EUC-JP` 行があり Reference0 の `あ` が `A4 A2` であることを定数と比較（窓不要・純関数の連続呼出）。
+- `shiori3.rs` 既存テスト: `Charset::UTF_8`・`.bytes`・`Negotiate(UTF_8)`・2 フィールドの機械的追随。**4.8 の唯一の例外** `parse_invalid_utf8_is_parse_error`: 現在の入力 `[FF FE 00]` には status 行が無く、新 codec の事後条件（`Err(Parse)` は status 行の欠落のみ）に従えばこの入力は今後も `Err(Parse)` のままである。よって⑴ 旧入力はそのまま「status 行なし → `Err(Parse)`」を期待するテスト（`parse_without_status_line_is_parse_error` 等）として**期待値を変えずに残し**、⑵ 例外テストは入力を「status 行あり＋`Value` に不正バイト」（`SHIORI/3.0 200 OK\r\nValue: \xFF\r\n\r\n`）へ差し替えて `Ok`・`decode_had_errors == true`・`Value` に U+FFFD を期待する。期待値を更新するのは ⑵ の 1 本だけ（他の期待値変更 0）。
 - `shiori_wiring_charset_tests.rs`: ⑴ `force_encoding=Some("EUC-JP")`・`encoding=Some("UTF-8")` → EUC-JP・forced（2.1・2.2）。⑵ `encoding` のみ → その値・非強制（2.3）。⑶ 両方無し → 既定（`Ansi`→`Shift_JIS`・`Utf8`→`UTF-8`）（1.3）。⑷ `force_encoding=Some("UTF-16")` → 警告 1（`reason=not_encodable`・`fallback`）→ `encoding` へ後退・非強制（2.4・10.3）。⑸ 両方とも未知 → 警告 2・既定（9.4）。⑹ `charset_initial` の `source` フィールド（2.6）。`capture_events` で観測。`ShioriMount` は `#[non_exhaustive]` なので既存テストと同じく `package::resolve` で固定物から作る。
 - `resolve_tests.rs`: 2 キーの有無・値の転記（`shiori.forceencoding, Shift_JIS ` の空白を含む生の値）（2.5・8.5）。
 - `decode_charset_tests.rs`（parsers/shell）: 同内容の surfaces.txt を ⒜ UTF-8（`charset,UTF-8`）⒝ Shift_JIS（`charset,Shift_JIS`）⒞ Shift_JIS（宣言なし）⒟ EUC-JP（`charset,EUC-JP`）の `&[u8]` 定数で持ち、`shell::parse(&decode(bytes, Ansi))` が 4 つとも等値（6.1・6.2・9.5）。要素名に日本語を含めて文字コードの違いが解析結果に現れる形にする。
@@ -626,16 +627,17 @@ pub struct ShioriMount {
 - `emo2-conformance-e2e` の決定論テスト群と spine e2e（`ShioriWiring::Custom` は codec を通らない）。
 - `ukadoc-survey` の常設検査（`cargo test -p ukadoc-survey`）。
 - `file_length_guard_test.rs`（触るファイルの行数）。
+- **コンパイル確認（i686 成果物を要するテストの分）**: `cargo test -p shiori-host32-host --no-run` と `cargo test -p areka-ghost --no-run`。E2E（host32 `tests/*.rs` 3 本）と統合テスト（`snapshot_capture_test.rs`）は x64 の通常走行では実行されないが、`Shiori3Client::new`／`real_connect` の形の変更でコンパイルが壊れていないことはこの 2 本で常に見える。タスク生成で明記する。
 
 ### 変異での較正（9.7）
 - `Charset::encode` を「Shift_JIS なら `SHIFT_JIS`・それ以外は UTF-8」に退化させると EUC-JP の系統が赤。
 - `for_label` を UTF-8／Shift_JIS の 2 値表に退化させると EUC-JP・ISO-2022-JP・別名の系統が赤。
 
 ### 実機確認（11.1〜11.3）
-- 手順（`emo2-conformance-e2e` の手順書と同型）: 実バイナリを**絶対パス**で起動（`areka.exe <ghost_root> <balloon_root>`・helper は実行ファイル隣接）。`AREKA_APP_SMOKE_EXIT_MS` で有界の自動終了、`RUST_LOG=info,shiori_host32_host=debug,areka_ghost=debug` で記録。開発者が指定する里々標準テンプレートの絶対パスを `ghost_root` に、バルーンは emo2 のものを流用。
+- 手順（`emo2-conformance-e2e` の手順書と同型）: 実バイナリを**絶対パス**で起動（`areka.exe <ghost_root> <balloon_root>`・helper は実行ファイル隣接）。`AREKA_APP_SMOKE_EXIT_MS` で有界の自動終了、**`RUST_LOG=info,shiori-charset=debug,ghost-boot=debug`** で記録（env-filter の指令はイベントの **target 名**に掛かる。本設計のログは `target: "shiori-charset"`／`"ghost-boot"` を明示するため、モジュールパス `shiori_host32_host=debug` では `charset_switched`（debug）が点かず 0 行になる——完了仕様 emo2-conformance-e2e が `kanade=trace` と target 名で指定したのと同じ理由）。開発者が指定する里々標準テンプレートの絶対パスを `ghost_root` に、バルーンは emo2 のものを流用。
 - 期待（里々）: `charset_initial charset=Shift_JIS source=default`（テンプレートが `shiori.encoding` を持たない場合）、`charset_switched` 0 行（里々は `Charset: Shift_JIS` を返す）、`charset_label_unresolved` 0 行、OnBoot の挨拶がバルーンに化けずに出る（目視）。
 - 期待（emo2）: `charset_initial charset=Shift_JIS source=default` → `charset_switched from=Shift_JIS to=UTF-8` ちょうど 1 行、以後 0 行。挨拶の表示は適用前と同一。
-- 記録先: `verification/signoff-record.md`（環境・コマンド逐語・grep 結果・目視所見）。
+- 記録先: `verification/signoff-record.md`（環境・コマンド逐語・grep 結果・目視所見・**点灯の裏づけ**＝同じ target の別イベント（emo2 なら `charset_initial`、里々なら `charset_initial` と `shiori-charset` target の任意の debug 行）が記録に出ていることを 1 欄で示し、「0 行」を沈黙と取り違えない）。
 
 ## Supporting References
 - 定数バイト列（9.1）: `あ`＝UTF-8 `E3 81 82`／Shift_JIS `82 A0`／EUC-JP `A4 A2`／ISO-2022-JP `1B 24 42 24 22 1B 28 42`。絵文字 U+1F600 の Shift_JIS 符号化＝`&#128512;`。
