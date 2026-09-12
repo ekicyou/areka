@@ -1520,8 +1520,8 @@ values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
-areka-emo-text の draw::RESERVED_KEY_DISABLE_FONT_PREFIX が接頭辞を、draw::FontDisableSeam が受け口の型を名前だけ持っている。転記層はこのキーを読まず、受け取っても何も起きない。
-担当 spec は areka-P0-text-decoration-canon。
+areka-emo-text の look::LookLayers.disable が無効表示の層として実体化した（色だけがバルーンの背景色との混色 color::mix_disabled で、他の項目は既定の層と同じ）。\\f[disable] と \\f[color,disable] などはこの層を読む。ただし転記層はまだ disable.font.* のキーを読まないので、バルーン定義でこのキーを書いても層の値は動かない。
+担当 spec は areka-P0-text-decoration-canon。キーの読み取り（と、それに伴う状態の実装済みへの進め方）は areka-P0-balloon-font-descript-keys。
 束: 台詞の書体・名前だけ受けて使わない（先に要る仕組み: バルーンの文字描画）。束の順位: 37——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 

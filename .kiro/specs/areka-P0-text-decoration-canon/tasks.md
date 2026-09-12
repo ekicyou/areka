@@ -232,7 +232,7 @@
   - _Requirements: 16.1, 16.2, 10.6_
   - _Depends: 8.2_
 
-- [ ] 9.2 (P) 網羅調査の台帳を更新する
+- [x] 9.2 (P) 網羅調査の台帳を更新する
   - さくらスクリプトの台帳で、本仕様が所有する 12 項目の状態を実装後の値へ更新する（表示に効く 7 項目と一括の戻し 2 項目は実装済み、フォント名と大きさは注記付き、語彙のみの 3 項目は語彙のみ）
   - 寄せ 2 項目と影 3 項目の所有者欄を、2026-09-11 の分割先の仕様へ移す
   - 資産の台帳で、無効表示のフォント定義の行の注記を、無効表示の層が実体化したことに合わせて改める
@@ -367,3 +367,10 @@
 - 9.1: **9.4 で直すこと ②**——§8 の行 7 が名指しする実測値の定義点が縦書き側（`tests/decoration_readback/vertical.rs`）だけで、**横書きの値（下線 33／打ち消し線 18–19）の定義点** `tests/decoration_readback_test.rs::UNDERLINE_BAND`／`STRIKE_BAND` が挙がっていない。値は一致しているが要件 16.7 の「何の定義行かで指す」を横書き側にも及ぼすこと。
 - 9.1: **6.2 の申し送り（要件の「1 台詞につき 1 度」に対し `FontCatalog.warned` は「台帳ごとに 1 度」）は §8 に含めていない**（行 4 は周期を主張しない書き方）。9.4 が裁定を記録すること。
 - 9.1: 7.1 の申し送り（emo2 の実バルーンは 2 スコープとも α≠255 で常に白と混ぜる）は 16 行目を立てず **§8 行 8 の裁量欄へ折り込み済み**（完了条件が「15 件」なので 16 行目は条件違反になる）。この事実は `assets_tests.rs` が `reason="not_opaque"` × 2 と `EMO2_BACKGROUND_SCOPE0/1 = (255,255,255)` で機械的に固定している。
+- 9.2: `assets.toml` に**本仕様所有のまま `absent` が 10 件残る**（`font.bold`／`italic`／`name`／`outline`／`strike`／`underline`／`shadowcolor.r/g/b`／`shadowstyle`）。引受先は `areka-P0-balloon-font-descript-keys`（同 brief の In 節が「`ledger/assets.toml` の `owner` 記入」、Constraints の編集集合が同ファイル、Out 節が「`disable.font.*` の実体化（親 spec）」と明記・ディレクトリ実在をレビュアーが検証済み）。**完了条件「未対応 0 件」はさくらスクリプト台帳の 12 項目について成立**。
+- 9.2: **裁定が未了**——さくらスクリプト台帳では影 3 項目の `owner` を `areka-P0-text-align-shadow-canon` へ移したが、`assets.toml` の影 4 行（`font.shadowcolor.r/g/b`／`font.shadowstyle`）は本仕様所有のまま。**同じ分割の扱いが 2 台帳で割れている**。どちらが正かを決めて記録すること。
+- 9.2: **9.4 で直すこと ③**——`crates/areka-emo-text/src/look.rs` の `Switch` enum の doc の正典錨 `\f[bold,真偽値]` は catalog に **0 件**（正典の綴りは `\f[bold,パラメータ]`）。`evidence/extract.rs::url_of_line` が `///`＋`ukadoc:`＋1 語の形しか拾わないため `/// <URL>` 形のこの行は常設検査に映らない。
+- 9.2: **9.4 で直すこと ④**——`crates/areka-emo-text/src/state_decoration.rs::reset_decoration` の doc が「後続仕様のクリック待ち（`\x`）は…同じ実体を通り」と**現在形**で書いているが、本番の呼び出し元は 0 件。9.3 の射程（要件 16.4 の予約名の列挙）に含まれないので **9.4 の担当**（要件 16.7・`_Boundary:_` を持たない）。
+- 9.2: 台帳の常設整合検査は **`status` を片方向だけ判定する**——証拠の無い `implemented` への格上げは `ImplementedWithoutEvidence` で赤になるが、真の実装を `absent` へ落としても（報告を作り直せば）緑。**`note` と `owner` は一切判定されない**（実在しない spec 名を入れても 38 件緑）。`summary.md` の陳腐化も判定されない。
+- 9.2: 台帳を触ったら **`cargo run -p ukadoc-survey -- report` と `report-summary` を回し直すこと**（`DomainReportStale` が赤になる）。**再生成は `report/*.md` を LF で書き出すので CRLF へ戻すこと**（実装者・レビュアーとも実際に踏んだ）。
+- 9.2: `\f[name]` の記録だけは `warn_once` を通らず `FontCatalog::first_time`（鍵は `WarnKey::FontFile`／`AllMissing`）を通り、**`FontCatalog.warned` は一度も clear されない**——「1 台詞に 1 度」ではなく**カタログの寿命のあいだ 1 度**。一括の文言統一をかけるときの落とし穴。

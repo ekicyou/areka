@@ -4377,7 +4377,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5balign_2c_5bc4_305b_308b_5074_5d:1"]
 status = "vocabulary-only"
 introduced = "2.5.31"
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-text-align-shadow-canon"
 priority = "C50"
 values = []
 links = []
@@ -4665,26 +4665,25 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "C90"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.bold_2c0_2f1:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 太字にする指定が失われ、地の太さのまま出る。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 太字・斜体・上下付き]
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の真偽 5 項目の腕が TextLook.bold を動かす。描画は apply_font_ranges の SetFontWeight。受けるのは 6 語（true／1／false／0／default／disable）の小文字の完全一致だけで、太字を持たない書体では DirectWrite が合成する。
+ログ: 出ない（正常経路）。6 語のどれでもない値のときだけ warn_once がキーと値の組ごとに 1 台詞 1 度の warn を残し、当該項目は変えずに再生を続ける。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcolor_2c_8272_6307_5b9a_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "C90"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.color.b_2c_6570_5024:1" },
@@ -4692,9 +4691,8 @@ links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.color.r_2c_6570_5024:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 文字色の指定が失われ、バルーン設定の色のまま出る。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 文字の色と縁取りと影]
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の color の腕が TextLook.color を動かす。描画は apply_font_ranges が差すブラシ（SetDrawingEffect）。受ける形は 10 進 3 成分・百分率 3 成分・#RGB／#RRGGBB・色名 147 語（SVG 1.1／CSS Color 3 の小文字の完全一致）・default・disable。10 進と百分率の混在と先頭の符号は受けない。
+ログ: 出ない（正常経路）。受けない形のときだけ warn_once がキーと値の組ごとに 1 台詞 1 度の warn を残す。default.anchor 系はアンカーの色定義がまだ無いので default と同じ色を当て、そのことをキーと値の組ごとに 1 台詞 1 度記録する。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
@@ -4871,85 +4869,80 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bdefault_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "C90"
+priority = ""
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（タグが消える）— すべての文字装飾をバルーン設定の標準へ戻す指定が失われる。装飾そのものが 1 つも効いていないので画面は変わらない。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 装飾の一括の戻し]
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_args の Some("default") の腕が reset_look()→reset_look_to() を通り、装飾状態（TextLook）を既定の層へ丸ごと置き換えると同時に所有外キーの保持（unowned）も空にする。項目を列挙しないので、後続仕様が項目を足しても戻しに自動で含まれる。look.rs::apply_font_tag の同名の腕は本番経路から到達しない。台詞の開始（reset_for_new_talk）でも同じ戻しが起きる。\\x は areka-P0-balloon-lifecycle-events が同じ戻し（TextLayerState::reset_decoration）へ繋ぐ予定で、今日は呼び出し元が無い。
+ログ: 出ない（正常経路）。余った値（\\f[default,1] のような綴り誤り）は無視して戻しを実行する。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bdisable_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.5.51"
 owner = "areka-P0-text-decoration-canon"
-priority = "C90"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:disable.font._28_30d5_30a9_30f3_30c8_5b9a_7fa9_29_2c_28_6307_5b9a_29:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— すべての文字装飾を無効表示へ切り替える指定が失われる。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 装飾の一括の戻し]
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_args の Some("disable") の腕が reset_look_disabled()→reset_look_to() を通り、装飾状態（TextLook）を無効表示の層へ丸ごと置き換えると同時に所有外キーの保持（unowned）も空にする。無効表示の層は色だけがバルーン背景との混色（color::mix_disabled）で、他の項目は既定の層と同じ。default と同じく項目を列挙しない。look.rs::apply_font_tag の同名の腕は本番経路から到達しない。
+ログ: 出ない（正常経路）。余った値（\\f[disable,x] のような綴り誤り）は無視して戻しを実行する。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bheight_2c_6570_5024_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "C90"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.height_2c_6570_5024:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 文字の大きさの指定が失われ、バルーン設定の大きさのまま出る。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 文字の書体と大きさ]
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の height の腕が TextLook.height を動かす。描画は apply_font_ranges の SetFontSize。受ける形は絶対値・相対値（+N／-N はそのとき効いている大きさが基準）・百分率（既定の大きさが基準）・default・disable。行送りは閉じる行の em の最大値から決まる。
+ログ: 出ない（正常経路）。スタイルシートの大きさの語（larger など）は語彙のみで大きさを変えず、そのことをキーと値の組ごとに 1 台詞 1 度記録する。受けない形のときも同じくキーと値の組ごとに 1 台詞 1 度記録する。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bitalic_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "C90"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.italic_2c0_2f1:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 斜体にする指定が失われる。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 太字・斜体・上下付き]
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の真偽 5 項目の腕が TextLook.italic を動かす。描画は apply_font_ranges の SetFontStyle。受けるのは 6 語（true／1／false／0／default／disable）の小文字の完全一致だけで、斜体を持たない書体では DirectWrite が合成する。
+ログ: 出ない（正常経路）。6 語のどれでもない値のときだけ warn_once がキーと値の組ごとに 1 台詞 1 度の warn を残し、当該項目は変えずに再生を続ける。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bname_2c_30d5_30a9_30f3_30c8_540d_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "C90"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— フォントの指定が失われ、バルーン設定のフォントのまま出る。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 文字の書体と大きさ]
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の name の腕が TextLook.name（候補列）を動かす。描画は apply_font_ranges の SetFontFamilyName で、記述順を優先度としてインストール済みの最初の 1 つを採る（FontCatalog::family_for）。default／disable は層への戻しだが、値が 2 つ以上あるときは戻しと解さず候補列の 1 要素として保つ。
+ログ: 出ない（正常経路）。フォントファイル名（.ttf／.otf／.ttc で終わる候補）は読み込まずに読み飛ばし、そのことを FontCatalog が候補の綴りごとに 1 度記録する。候補が全滅したときも候補列ごとに 1 度記録して既定の書体へ落とす。この 2 つの記録だけは warn_once とは別の仕組み（FontCatalog::first_time）で、台詞をまたいでカタログの寿命のあいだ 1 度である。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5boutline_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
@@ -4958,8 +4951,8 @@ links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.outline_2c0_2f1:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 白抜きにする指定が失われる。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 見た目の差 — 語彙としては受理する。decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の真偽 5 項目の腕が TextLook.outline を動かし、一括の戻しにも参加するが、表示は変えない（DirectWrite の範囲指定では白抜きを表せず自前の描画器が要るため、表せる手段が見つかるまで語彙のみ）。
+ログ: 出る（「語彙として受理したが表示は変えない」の warn をキーと値の組ごとに 1 台詞 1 度）。
 [群: 文字の色と縁取りと影]
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
@@ -4967,7 +4960,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowcolor_2c_8272_6307_5b9a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-text-align-shadow-canon"
 priority = "C90"
 values = []
 links = [
@@ -4985,7 +4978,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowcolor_2cnone_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-text-align-shadow-canon"
 priority = "C90"
 values = []
 links = [
@@ -5003,7 +4996,7 @@ note = """
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowstyle_2c_5f62_614b_6307_5b9a_5d:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-text-align-shadow-canon"
 priority = "C90"
 values = []
 links = [
@@ -5017,70 +5010,68 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bstrike_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "C90"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.strike_2c0_2f1:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 打ち消し線を引く指定が失われる。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 下線と打ち消し線]
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の真偽 5 項目の腕が TextLook.strike を動かす。描画は apply_font_ranges の SetStrikethrough。線の位置と太さは DirectWrite の既定に委ね、areka 側で描き分けない（縦書きの実測は 2 方向とも列の中央）。
+ログ: 出ない（正常経路）。6 語のどれでもない値のときだけ warn_once がキーと値の組ごとに 1 台詞 1 度の warn を残し、当該項目は変えずに再生を続ける。
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bsub_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 下付き文字にする指定が失われる。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 見た目の差 — 語彙としては受理する。decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の上下付きの腕が装飾状態を動かし、一括の戻しにも参加するが、表示は変えない（DirectWrite の範囲指定では表せず自前の描画器が要るため、表せる手段が見つかるまで語彙のみ）。sub を立てれば sup は外れる。
+ログ: 出る（「語彙として受理したが表示は変えない」の warn をキーと値の組ごとに 1 台詞 1 度）。有効なまま文字が追記されたときも、それとは別の鍵（種別が違う）で 1 台詞に 1 度記録する。
 [群: 太字・斜体・上下付き]
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bsup_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "absent"
+status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 上付き文字にする指定が失われる。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 見た目の差 — 語彙としては受理する。decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の上下付きの腕が装飾状態を動かし、一括の戻しにも参加するが、表示は変えない（DirectWrite の範囲指定では表せず自前の描画器が要るため、表せる手段が見つかるまで語彙のみ）。sup を立てれば sub は外れる。
+ログ: 出る（「語彙として受理したが表示は変えない」の warn をキーと値の組ごとに 1 台詞 1 度）。有効なまま文字が追記されたときも、それとは別の鍵（種別が違う）で 1 台詞に 1 度記録する。
 [群: 太字・斜体・上下付き]
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bunderline_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "C50"
+priority = ""
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_balloon:font.underline_2c0_2f1:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— 下線を引く指定が失われる。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 見た目の差 — decode_tag の "f" の腕が Instruction::Font を作り、compile が汎用キャリア FONT_TAG_CARRIER へ載せ、apply_font_tag の真偽 5 項目の腕が TextLook.underline を動かす。描画は apply_font_ranges の SetUnderline。線の位置と太さは DirectWrite の既定に委ね、areka 側で描き分けない（縦書きの実測は 2 方向とも列の左側）。
+ログ: 出ない（正常経路）。6 語のどれでもない値のときだけ warn_once がキーと値の組ごとに 1 台詞 1 度の warn を残し、当該項目は変えずに再生を続ける。
 [転記元: doc/COMPAT_ARCHITECTURE.md の「\\f[align]／\\f[valign]／下線の縦書き写像」の行]
-[群: 下線と打ち消し線]
 [頻度: 里々 10 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\f。綴りが短く別の語の一部にも当たるぶん過大に出る）]
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5bvalign_2c_5bc4_305b_308b_5074_5d:1"]
 status = "vocabulary-only"
 introduced = "2.6.19"
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-text-align-shadow-canon"
 priority = "C50"
 values = []
 links = []
