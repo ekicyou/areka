@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-present-gpu-transform-scale",
   "created_at": "2026-09-11T09:02:21Z",
-  "updated_at": "2026-09-11T22:32:16Z",
+  "updated_at": "2026-09-12T03:04:36Z",
   "language": "ja",
-  "phase": "design-generated",
+  "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -12,13 +12,14 @@
     },
     "design": {
       "generated": true,
-      "approved": false,
+      "approved": true,
       "generated_at": "2026-09-11T22:32:16Z"
     },
     "tasks": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "generated_at": "2026-09-12T03:04:36Z",
+      "approved": true
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true
 }
