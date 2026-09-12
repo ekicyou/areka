@@ -42,9 +42,9 @@ use crate::model::{Domain, EntryId, PageName, parse_theme};
 const DOCUMENT_DIR: &str = "doc/ukadoc-coverage";
 
 /// 帰属の正本。
-const LINKAGE_FILE: &str = "linkage.md";
+pub(super) const LINKAGE_FILE: &str = "linkage.md";
 /// 段階と順位。
-const BRIEFING_FILE: &str = "briefing.md";
+pub(super) const BRIEFING_FILE: &str = "briefing.md";
 /// ロードマップ草案。
 const ROADMAP_FILE: &str = "roadmap-draft.md";
 
@@ -723,7 +723,7 @@ fn read_bundle_ref(item: &toml::Table, place: &str, file: &str) -> Result<Bundle
 // ---------------------------------------------------------------------------
 
 /// 失敗の本文に添える文書の置き場。
-fn document_file(name: &str) -> String {
+pub(super) fn document_file(name: &str) -> String {
     format!("{DOCUMENT_DIR}/{name}")
 }
 

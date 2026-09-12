@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use crate::model::{Domain, EntryId, PageName};
 
+pub mod derive;
 pub mod parse;
 
 // ---------------------------------------------------------------------------
