@@ -86,7 +86,7 @@ areka の現状は「半分だけ対応」である。ファイル層（descript
 4. If `shiori.forceencoding` または `shiori.encoding` の値が解決できないラベルである, then the ゴースト起動処理 shall 警告ログ 1 行（キー名・ラベル・採用した後退先）を出し、その宣言を無視して次の優先順（`shiori.encoding` → 既定）へ後退し、起動を続ける。`shiori.forceencoding` が解決できず後退したときは強制の効力も失われ、以後は Requirement 4 の交渉規則（SHIORI 側の宣言が優先）に従う。
 5. The ゴースト起動処理 shall descript の `charset` キー（そのファイル自身の文字コード）を SHIORI 通信の初期値として用いない（用いる箇所は 0）。
 6. When 初期の文字コードが決まる, the ゴースト起動処理 shall 決定した文字コードの正規名と決定根拠（`forceencoding`／`encoding`／既定のいずれか）を情報ログ 1 行で記録する。
-7. While descript が `shiori.encoding` も `shiori.forceencoding` も宣言せず、SHIORI が応答に `Charset: UTF-8` を返す（emo2 の pasta はこの形）, the SHIORI 通信層 shall 最初の応答が届くまでは既定の Shift_JIS で要求を送り、最初の応答の `Charset: UTF-8` を受けて 2 要求目以降を UTF-8 で送る。最初の要求で本仕様前と異なるのは `Charset` ヘッダの値だけであり（本文が ASCII のみのとき——emo2 では実測済み: 最初の片道イベント `OnInitialize` と最初の応答待ちイベント `username` 照会はともに References を持たず、`Sender`／`Status` の値は ASCII の語彙。pasta は要求の `Charset` 値を検査しない）、この既知の差を正典文書に登記する。UTF-8 の SHIORI で最初の要求から UTF-8 を用いたいゴーストは `shiori.encoding,UTF-8` を宣言する（ukadoc どおり）。
+7. While descript が `shiori.encoding` も `shiori.forceencoding` も宣言せず、SHIORI が応答に `Charset: UTF-8` を返す（emo2 の pasta はこの形）, the SHIORI 通信層 shall 採用が起きるまでは既定の Shift_JIS で要求を送り、最初の**応答待ちイベント**の応答の `Charset: UTF-8` を受けて以降の要求を UTF-8 で送る。既定の Shift_JIS を名乗る要求は **2 本**であり（⑴ `OnInitialize`＝片道のイベントで、Requirement 5.3 によりその応答は採用の根拠にしない ⑵ `username` 照会＝応答待ちのイベントで、この応答で採用が起きる）、UTF-8 になるのは 3 本目から。この 2 本で本仕様前と異なるのは `Charset` ヘッダの値だけであり（本文が ASCII のみのとき——emo2 では実測済み: 最初の片道イベント `OnInitialize` と最初の応答待ちイベント `username` 照会はともに References を持たず、`Sender`／`Status` の値は ASCII の語彙。pasta は要求の `Charset` 値を検査しない）、この既知の差を正典文書に登記する。UTF-8 の SHIORI で最初の要求から UTF-8 を用いたいゴーストは `shiori.encoding,UTF-8` を宣言する（ukadoc どおり）。
 
 ### Requirement 3: 要求の符号化
 
@@ -206,7 +206,7 @@ areka の現状は「半分だけ対応」である。ファイル層（descript
 
 #### Acceptance Criteria
 
-1. The 実装 shall UTF-8 のゴーストの要求バイト列（Requirement 2.7 の最初の要求の `Charset` ヘッダ値を除く）・応答の解析結果・surfaces.txt の解析結果を本仕様の前後で同一に保ち、emo2 の固定物に `shiori.encoding` を足す等の改変をしない（差分 0・Requirement 9.6 で固定）。
+1. The 実装 shall UTF-8 のゴーストの要求バイト列（Requirement 2.7 の最初の 2 本の要求の `Charset` ヘッダ値を除く）・応答の解析結果・surfaces.txt の解析結果を本仕様の前後で同一に保ち、emo2 の固定物に `shiori.encoding` を足す等の改変をしない（差分 0・Requirement 9.6 で固定）。
 2. The 実装 shall 32bit helper と IPC のコードを変更しない（挙動・バイト列に関わる変更 0）。ただし本仕様の着地で事実と食い違う説明コメント（helper の「`request` は UTF-8」）は、その 1 行の文言だけを「任意の文字コードのバイト列」へ追随させてよい（古くなった説明を残さない）。
 3. The 実装 shall 完了仕様（`areka-P0-host32-request`・`areka-P0-shiori-protocol`・`areka-P0-parser-foundation`・`areka-P0-ukadoc-survey-*`）の文書を改訂しない。
 4. The 実装 shall 1,000 行番人の例外表を変更せず、触るファイルを 1,000 行未満に保つ。
@@ -231,7 +231,7 @@ brief（2026-09-02）の表を実コードで引き直した結果。引用は�
 | `ukadoc-survey-shiori` と同じ `shiori3.rs` を触る＝後着が rebase | **確定**。survey が先に着地済み（PR#139）。`shiori3.rs` に `// ukadoc:` コメントが **9 行**あり、本仕様が後着として位置を合わせる（Requirement 8.4） |
 | 台帳行は本 spec 着地で `implemented` へ | **確定・具体化**。`ledger/shiori.toml` の `spec_shiori3:Charset:1`（要求側）は `degraded`・`owner = "areka-P0-charset-canon"`、`ledger/assets.toml` の `shiori.encoding`／`shiori.forceencoding` は `absent`・同 owner、`descript_shell_surfaces:charset` は「未対応」。応答側 `spec_shiori3:Charset:2` は `absent`・owner 空（本仕様の着地で応答ヘッダを読むため、この行も更新対象に含める） |
 | `doc/COMPAT_ARCHITECTURE.md:85`／`:117` | **一致**。§5 過去互換経路の「64bit areka側で早期に HSTRING(UTF-16) → Charsetヘッダ解析 → charset符号化バイト列」、§7 未決の「Charset交渉の具体」 |
-| UTF-8 経路は 1 バイトも変えない（emo2 e2e 全緑） | **要精密化（ズレ）**。emo2 の ghost descript（`fixtures/emo2/ghost/master/descript.txt`）は `charset,UTF-8` のみで `shiori.encoding` を宣言しない。既定 Shift_JIS の初期値をそのまま適用すると、最初の要求の `Charset` ヘッダ値だけが `UTF-8` から `Shift_JIS` へ変わる（本文は ASCII のみ）。pasta は全応答に `Charset: UTF-8` を書き（`pasta_shiori/src/shiori.rs` の応答組立 2 箇所と `error.rs` のエラー応答）、要求は UTF-8 前提で読む（`lua_request.rs` の「req.charset: utf-8であること」）ため、最初の応答で UTF-8 を採用して以後は不変。既存の scripted fake（`ShioriWiring::Custom`）は codec を通らず、host32 テスト DLL の 200 応答は `Charset: UTF-8` を含む。要件は「採用後は不変・最初の要求はヘッダ値のみ・固定物は改変しない」と精密化した（Requirement 2.7／3.4／12.1） |
+| UTF-8 経路は 1 バイトも変えない（emo2 e2e 全緑） | **要精密化（ズレ）**。emo2 の ghost descript（`fixtures/emo2/ghost/master/descript.txt`）は `charset,UTF-8` のみで `shiori.encoding` を宣言しない。既定 Shift_JIS の初期値をそのまま適用すると、最初の 2 本の要求の `Charset` ヘッダ値だけが `UTF-8` から `Shift_JIS` へ変わる（本文は ASCII のみ）。pasta は全応答に `Charset: UTF-8` を書き（`pasta_shiori/src/shiori.rs` の応答組立 2 箇所と `error.rs` のエラー応答）、要求は UTF-8 前提で読む（`lua_request.rs` の「req.charset: utf-8であること」）ため、2 本目（応答待ちイベント）の応答で UTF-8 を採用して以後は不変。既存の scripted fake（`ShioriWiring::Custom`）は codec を通らず、host32 テスト DLL の 200 応答は `Charset: UTF-8` を含む。要件は「採用後は不変・最初の 2 本の要求はヘッダ値のみ・固定物は改変しない」と精密化した（Requirement 2.7／3.4／12.1） |
 | encoding 基盤の UTF-16 限界 | **確定**。ワークスペースの `encoding_rs` 0.8.35 は「UTF-16LE／UTF-16BE の符号化器を提供しない（replacement と共に出力符号化は UTF-8）」「符号化器の誤り回復は数値文字参照のみ」「復号器の誤り回復は代替文字のみ」と明記。`for_label` は前後空白と大小文字に寛容 |
 
 ## 付録 B: 影響する既存挙動の一覧（変えるもの／変えないもの）

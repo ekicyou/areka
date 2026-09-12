@@ -246,7 +246,7 @@ flowchart TD
 | 2.4 | 解決不能な宣言→警告 1 行＋次へ後退・強制の効力喪失 | shiori_wiring | `charset_label_unresolved`（key／label／reason／fallback） | 初期決定 |
 | 2.5 | descript `charset` を通信の初期値に使わない | ShioriMount・shiori_wiring | `initial_charset` の入力は 2 キーと `DefaultEncoding` のみ | — |
 | 2.6 | 決定の情報ログ 1 行 | shiori_wiring | `charset_initial`（charset／source） | 初期決定 |
-| 2.7 | emo2: 最初の要求は既定 Shift_JIS・応答で UTF-8 採用 | CharsetNegotiator | `note_response` の Negotiate 腕；正典文書 §8 に登記 | 交渉 |
+| 2.7 | emo2: 既定 Shift_JIS の要求が 2 本（1 本目 `OnInitialize` は片道ゆえ採用に使わない）・2 本目の応答で UTF-8 採用・3 本目から UTF-8 | CharsetNegotiator | `note_response` の Negotiate 腕；正典文書 §8 に登記 | 交渉 |
 | 3.1 | 全ヘッダ行を現在の文字コードで符号化 | codec | `build_request`＝組立後の全文を `Charset::encode` | 交渉 |
 | 3.2 | `Charset` 値＝正規名＝実際の符号化 | Charset・codec | `Charset::name()`（`Encoding::name`）・newtype の不変条件 | — |
 | 3.3 | `Charset` は request line 直後の最初のヘッダ | codec | 組立順は現状維持（既に満たす） | — |
@@ -563,7 +563,7 @@ pub struct ShioriMount {
 - 既知の差（登記）: BOM 付き UTF-8 の surfaces.txt では従来 U+FEFF が 1 行目に残っていたが、`decode` は BOM を吸収する。emo2 の固定物は BOM 無し（実測）なので 6.3 の同一性は保たれる。
 
 ### 正典文書・台帳
-- `doc/COMPAT_ARCHITECTURE.md` §7 の SHIORI 行から「Charset交渉の具体」を外し「→ §8（charset-canon）」を添える。§8 の表に行を足す: ⑴ 未宣言時の既定＝Shift_JIS 固定写像（OS ロケール不読）、⑵ 表せない文字＝10 進数値文字参照＋警告、⑶ 不正な並び＝U+FFFD＋警告（UTF-8 にも適用）、⑷ UTF-16／replacement＝解決不能と同じ経路（警告＋継続・理由で区別）、⑸ NOTIFY 応答から採用しない、⑹ emo2 のような UTF-8 の SHIORI は最初の要求だけ `Charset: Shift_JIS`（本文 ASCII・`shiori.encoding,UTF-8` で回避可）、⑺ 非 ASCII ヘッダの後に置かれた `Charset` は拾えない（ISO-2022-JP のみ）、⑻ BOM 付き UTF-8 の surfaces.txt は従来 U+FEFF が 1 行目に残っていたが `decode` が BOM を吸収する（emo2 固定物は BOM 無しで差分 0）。出典 spec 列は本 spec。
+- `doc/COMPAT_ARCHITECTURE.md` §7 の SHIORI 行から「Charset交渉の具体」を外し「→ §8（charset-canon）」を添える。§8 の表に行を足す: ⑴ 未宣言時の既定＝Shift_JIS 固定写像（OS ロケール不読）、⑵ 表せない文字＝10 進数値文字参照＋警告、⑶ 不正な並び＝U+FFFD＋警告（UTF-8 にも適用）、⑷ UTF-16／replacement＝解決不能と同じ経路（警告＋継続・理由で区別）、⑸ NOTIFY 応答から採用しない、⑹ emo2 のような UTF-8 の SHIORI は既定の Shift_JIS を名乗る要求が 2 本（採用は 2 本目の応答・3 本目から UTF-8）（本文 ASCII・`shiori.encoding,UTF-8` で回避可）、⑺ 非 ASCII ヘッダの後に置かれた `Charset` は拾えない（ISO-2022-JP のみ）、⑻ BOM 付き UTF-8 の surfaces.txt は従来 U+FEFF が 1 行目に残っていたが `decode` が BOM を吸収する（emo2 固定物は BOM 無しで差分 0）。出典 spec 列は本 spec。
 - 台帳: `shiori.toml` `Charset:1`／`Charset:2`、`assets.toml` `shiori.encoding`／`shiori.forceencoding`／`descript_shell_surfaces:charset` を `status = "implemented"`・`owner = "areka-P0-charset-canon"`（`Charset:2` は空から本 spec へ）・`introduced = ""`（版番号不明はそのまま）・note を現状（根拠の場所＝定義箇所・ログの event 名）へ書き直す。`cargo run -p ukadoc-survey -- report` と `-- report-summary` で報告を作り直し、`cargo test -p ukadoc-survey` を緑にする（`DomainReportStale`／`ImplementedWithoutEvidence` の両方）。
 
 ## Data Models
