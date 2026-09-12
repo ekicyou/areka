@@ -1007,7 +1007,8 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 10. **戻す操作の対象と時期**＝対象は装飾状態の全項目（`TextLook` 丸ごと＋所有外語彙）・戻すのは `\f[default]`・台詞の開始（`ClearAll`）・`\x`／戻さないのは `\c`・`\n`・`\_l`・`\x[noclear]`／根拠: ukadoc `\x`「`\f` 系の効果も解除」・`\x[noclear]`「効果は残る」／要件 10.6・3.8。追跡先: `areka-P0-balloon-lifecycle-events` 項目 9・`areka-P0-choice-marker-styling`。
 11. **`default.anchor*`**＝`default` として扱う（warn 1 度）／根拠: アンカーの色定義が未実装／要件 8.8・追跡先 `areka-P0-anchor-tag-canon`。
 12. **6 値の語の大小文字**＝小文字の完全一致のみ／根拠: 正典は小文字で記す・既存の先例（`windowposition.x`・`centerx`）に揃える／要件 5.1〜5.5。
-13. 既存行の改訂: 「`\f[align]`／`\f[valign]`／下線の縦書き写像」（:181）の注記を「下線は実装済み（DirectWrite の既定・行 7）・align／valign の追跡先は `areka-P0-text-align-shadow-canon`」へ、追跡先欄の「`\f` 核 17 項目の所有者」を「基盤＋フォント系 10＋一括の戻し 2＝本仕様・寄せ 2＋影 3＋SC8＝align-shadow」へ。「`\_l` の縦書き座標系の正典写像」（:183）の SC8 の追跡先も同様に。
+13. **色名表の範囲**＝SVG 1.1／CSS Color 3 の拡張色名キーワード 147 語（小文字の完全一致のみ・CSS Color 4 で足された `rebeccapurple` は採らない）。あわせて 3 成分は 10 進か百分率のどちらかに揃った形だけを受け、混在と先頭の符号は解析失敗とする（`+N` は要件 7.2 で相対指定という別の意味を持つため）／根拠: ukadoc は色名を列挙せず「基本は HTML・CSS の色の表現と似ています」としか定めない（`[color,色指定]` の※注）・要件 8.1・8.2 が「各 0〜255 の 10 進数」「各 0〜100%」と書式を分けて定める／要件 8.1・8.2・8.4・8.9。
+14. 既存行の改訂: 「`\f[align]`／`\f[valign]`／下線の縦書き写像」（:181）の注記を「下線は実装済み（DirectWrite の既定・行 7）・align／valign の追跡先は `areka-P0-text-align-shadow-canon`」へ、追跡先欄の「`\f` 核 17 項目の所有者」を「基盤＋フォント系 10＋一括の戻し 2＝本仕様・寄せ 2＋影 3＋SC8＝align-shadow」へ。「`\_l` の縦書き座標系の正典写像」（:183）の SC8 の追跡先も同様に。
 
 ### §B 台帳の更新
 

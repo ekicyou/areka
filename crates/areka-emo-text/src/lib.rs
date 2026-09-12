@@ -33,6 +33,7 @@
 pub mod actor;
 pub mod canvas;
 pub mod choice;
+pub mod color;
 pub mod cursor_tag;
 pub mod draw;
 pub mod layout;
