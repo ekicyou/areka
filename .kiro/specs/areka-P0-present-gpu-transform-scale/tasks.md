@@ -123,7 +123,7 @@
   - _Depends: 2.2_
   - _Boundary: emo2_boot 登録_
 
-- [ ] 4.2 登録先の決定論テストを置く
+- [x] 4.2 登録先の決定論テストを置く
   - 結線後の schedule 一覧で当該 system が `Update` に載り、旧登録先に載らないことを固定する（T-N10）
   - 対照として、結線前は `Update` に無いことを固定する
   - 完了状態: GPU 無しで緑になり、登録先を旧に戻すと赤になることを 1 度確認する
@@ -288,3 +288,4 @@
 - 4.1: `mod.rs` の差分は登録 1 行＋import 2 行の入替＋手順 6 註釈（+24/−20・8.1 の diff-stat 判定はこれを「登録 1 行＋註釈」と読む）。既存の字面の檻 `zorder_wiring_tests.rs` `t_zwi06`（旧登録 `.before(apply_zorder_chain)` を名指し）は陳腐化＝**4.2 が T-N10 と同時に撤去か再導出**。`frame.rs` 215／226／294-296・`frame/wiring.rs` 218 の `FrameFinalize` 言及 4 か所も 4.2 で書き換え。⚠台帳外の赤: `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs:567`（`read_back` の長さが k で変わる前提）＝**5.7（crates/areka 境界）で再導出**・8.1 で台帳 #23 に追記。
 - 5.1: 補助は `native_golden(w,a,id)`／`native_golden_with(w,a,id,binds,pattern)` → `(Vec<u8>, native_size)`（`ScaledGolden` 撤去）。呼び手 26 か所＝dpi_scale 5・fractional 11・refresh_and_log 3・visibility 4・budget_equivalence 3。⚠4 本のテストは `let (…, native_golden) = build_target_assets(..)` でローカル束縛が関数名を影にする（dpi_scale 96／fractional 117／refresh 172／visibility 362）＝機械置換すると E0618・多くは `build_target_assets` の第 3 要素で足りる。`presenter.rs:80` の `#[cfg(test)] use resample` は最後の再導出タスクが註釈ごと落とす。transition_record_tests の赤 3 本は 2.2／3.1 由来（5.4）。
 - 5.6: `cache_tests.rs` 1,622→1,301（≥1,000 ゆえ例外表・較正エントリは不変）。縮小時の書き戻しは `resize_and_clear`（`clear`+`resize`）で再確保しない＝ポインタ不変の檻は安全。改名候補（任意）: `other_key_elements_still_miss_on_the_same_compose_inputs` → `differing_compose_inputs_still_miss`。
+- 4.2: T-N10 は字面の檻（`BOOT_REGISTRATION` を `mod.rs` 本文に照合）＋構造の檻（登録を写して `Schedules` を検査）＋対照の 3 本。写しの本文も同じ字面を含むことを assert して原本だけ更新した漏れを塞いだ。system の同定は `SystemTypeSet`（bevy の `debug` feature は無効で表示名が定型化するため）。`t_zwi06` は新登録先へ再導出・`FrameFinalize` 言及の陳腐化 0。

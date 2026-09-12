@@ -40,6 +40,14 @@ mod spine;
 #[path = "zorder_wiring_tests.rs"]
 mod zorder_wiring_tests;
 
+// 毎フレームの相の登録先の檻（areka-P0-present-gpu-transform-scale task 4.2・T-N10）。
+// 裁定 2026-09-12 で登録先が 1 巡の末尾の段から `Update` へ移った——絵の着地を文字と同じ巡に
+// 揃えるための移動であり、実窓を持たない檻には挙動として映らないので、字面と `Schedules` の
+// 構造の両方から押さえる。
+#[cfg(test)]
+#[path = "frame_schedule_tests.rs"]
+mod frame_schedule_tests;
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
