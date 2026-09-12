@@ -4,13 +4,27 @@ use std::time::Duration;
 
 use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
-use wintf::ecs::GraphicsCommandList;
+use wintf::ecs::{Arrangement, GraphicsCommandList};
 
 use super::test_support::{
     CapturedEvent, attach_hit_target, build_target_assets, build_two_face_assets, capture,
-    force_current_surface, make_world_with_gpu, scaled_golden, set_window_dpi, show_ok,
+    force_current_surface, make_world_with_gpu, mount_entities, set_window_dpi, show_ok,
     spawn_window_with_dpi,
 };
+
+/// surface entity の配置＝`(論理寸, 変換の係数)`。
+///
+/// 論理寸は**原寸**（k を焼き込まない）で、k は `scale` の係数としてだけ現れる
+/// （`mount.rs` の `logical_arrangement`）。両方を 1 つの値で読むのは、片方だけを見ると
+/// 「寸へ k を焼き込み係数を 1.0 に据え置く」旧形と区別できないためである。
+fn arrangement_of(world: &World, surface_entity: Entity) -> Option<((u32, u32), f32)> {
+    world.get::<Arrangement>(surface_entity).map(|a| {
+        ((a.size.width as u32, a.size.height as u32), {
+            assert_eq!(a.scale.x, a.scale.y, "x/y で異なる係数は本経路に無い");
+            a.scale.x
+        })
+    })
+}
 
 // ── 表示成立点 info ログ（設計 D10・要件 6.1/6.3）の檻 ──────────────────────────────────
 // 実機サインオフ（R6.3）は有界 auto-exit で起動して `RUST_LOG` を grep し、**このログのフィールド名と
@@ -158,25 +172,29 @@ fn applied_scale_is_none_before_display_and_reports_applied_k_after() {
     );
 }
 
-/// タスク 3.5 の名指し受け入れ基準・要件 4.1/4.2 観測完了: k=1/1 で表示を確立したのち窓 `DPI` を
+/// タスク 3.5 の名指し受け入れ基準・要件 4.1/4.2／5.3 観測完了: k=1/1 で表示を確立したのち窓 `DPI` を
 /// 192 へ差し替えて `refresh_scale` を呼ぶと——(a) 戻り値が `scaled_extent(2/1, native)`、
-/// (b) `applied_scale` が 2.0、(c) readback が k=2/1 のリサンプル結果と全バイト一致する。
+/// (b) `applied_scale` が 2.0、(c) **引き当てが成立する**（`cache_hit=true`＝再合成しない）、
+/// (d) 配置は原寸のまま `scale` だけが 2.0 へ動き、(e) メモの原寸バイトは k に依らず同一。
 ///
-/// さらに (d) `refresh_scale` が返した要求は**消費済み**であり、続く `take_pending_resize` は
+/// (c) が本仕様で加わった観測点である（付録 A′ #13）。エントリは原寸の面・原寸マスク・原寸の
+/// 表示記録だけを持ち **k はキーに参加しない**ので、k だけが変わった再適用は同じエントリに当たる
+/// ——「k 変化＝ミス＋再サンプル」だった旧正典と正反対であり、ヒットを主張しなければ静かに
+/// 再合成へ退化しても緑のままになる。
+///
+/// さらに (f) `refresh_scale` が返した要求は**消費済み**であり、続く `take_pending_resize` は
 /// `None` を返す——タスク 4.2 が `run_dpi_phase`（`refresh_scale`）と drain フェーズ
 /// （`take_pending_resize`）の**両方**を呼ぶため、同一の reconcile が二度出ないことが結線契約である。
 #[test]
 fn refresh_scale_after_dpi_change_reapplies_new_k() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 96);
+    // golden は `build_target_assets` が同一入力を直接合成して返す原寸バイト（k を含まない）。
     let (emo_world, atlas, native_golden) = build_target_assets(6, 5, 0x91);
-    // 同一入力を独立に再現して k=2/1 の golden を作る（presenter の内部値の追認ではない）。
-    let (probe_world, probe_atlas, _) = build_target_assets(6, 5, 0x91);
     let k2 = ScaleRatio::new(2, 1).unwrap();
-    let (scaled_bytes, native_size, scaled_size) =
-        scaled_golden(&probe_world, &probe_atlas, 1000, k2);
-    assert_eq!(native_size, (6, 5));
-    assert_eq!(scaled_size, (12, 10));
+    let native_size = (6, 5);
+    let scaled_size = k2.scaled_extent(native_size.0, native_size.1);
+    assert_eq!(scaled_size, (12, 10), "前提: 原寸と物理寸が弁別可能");
 
     let mut presenter = EmoPresenter::new();
     presenter
@@ -189,8 +207,19 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
         native_golden,
-        "前提: k=1/1 の表示は等倍 native 合成"
+        "前提: 表示に渡すメモは原寸の合成バイト"
     );
+    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
+    assert_eq!(
+        arrangement_of(&world, surface_entity),
+        Some((native_size, 1.0)),
+        "前提: 確立時の配置は原寸・係数 1.0"
+    );
+    // 表示記録は k を含まない＝k 変化で作り直されないことを後段で突き合わせる。
+    let display_before = world
+        .get::<GraphicsCommandList>(surface_entity)
+        .cloned()
+        .expect("表示確立後は surface entity に表示記録がある");
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
         Some(native_size),
@@ -200,9 +229,10 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     // モニタ跨ぎ移動・表示スケール変更の決定論的代替（WM_DPICHANGED 相当）。
     set_window_dpi(&mut world, window, 192);
 
-    // (a) 戻り値＝新物理寸。
+    // (a) 戻り値＝新物理寸。同時に表示成立点のログを捕まえて (c) を読む。
+    let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
     assert_eq!(
-        presenter.refresh_scale(&mut world, TargetId(0)),
+        got,
         Some(scaled_size),
         "DPI 変化後の refresh_scale が新物理寸を返さない（再導出・再表示が走っていない）"
     );
@@ -212,15 +242,43 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
         Some(2.0),
         "refresh_scale 後も照会値が旧 k のまま（要件 4.2 の一貫更新が成立していない）"
     );
-    // (c) 実際に画面へ載った画素が k=2/1 のリサンプル結果。
-    let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
+    // (c) 引き当てが成立している（要件 5.3・k はキーに参加しない）。
+    let ev = events
+        .iter()
+        .find(|e| {
+            e.field("message")
+                .is_some_and(|m| m.contains("表示・マスクを更新"))
+        })
+        .unwrap_or_else(|| panic!("再表示の成立点ログが出ていない: {events:?}"));
     assert_eq!(
-        rb, scaled_bytes,
-        "表示バイトが k=2/1 のリサンプル結果と一致しない（照会値だけ更新して絵を更新していない）"
+        ev.field("cache_hit"),
+        Some("true"),
+        "k だけが変わった再適用が外れている（k がキーに混ざっている＝要件 5.3 違反）"
     );
-    assert_ne!(rb, native_golden, "前提: 2 水準の絵は弁別可能");
+    // (d) 配置は原寸のまま係数だけが動く（拡大は wintf の変換行列が掛ける）。
+    assert_eq!(
+        arrangement_of(&world, surface_entity),
+        Some((native_size, 2.0)),
+        "配置が新 k を映していない（原寸のままか、寸へ k を焼き込んでいる）"
+    );
+    assert_eq!(
+        presenter.target_physical_size(TargetId(0)),
+        Some(scaled_size),
+        "照会の物理寸が丸め権威の式と一致しない"
+    );
+    // (e) メモの原寸バイトは k に依らず同一。ヒットゆえ表示記録も作り直されていない。
+    assert_eq!(
+        presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+        native_golden,
+        "k 変化でメモの原寸バイトが書き換わった（k を含む面を作っている）"
+    );
+    assert_eq!(
+        world.get::<GraphicsCommandList>(surface_entity),
+        Some(&display_before),
+        "ヒットしたのに表示記録が作り直された（記録が k に依存している）"
+    );
 
-    // (d) 要求は refresh_scale が消費済み＝drain フェーズと二重に resize しない（タスク 4.2 の結線契約）。
+    // (f) 要求は refresh_scale が消費済み＝drain フェーズと二重に resize しない（タスク 4.2 の結線契約）。
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
         None,
@@ -232,9 +290,14 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
 /// `None` を返し、**再表示を一切行わない**。
 ///
 /// 「何もしない」は戻り値だけでは証明できない（同寸再表示でも `None` になる）ため、2 つの独立した
-/// 観測で固定する——(1) キャッシュスロットを同一キーのまま**別の絵**で改竄しておき、readback が
-/// 改竄後の絵に**ならない**こと（再表示していればヒットして改竄画が載る）、(2) 表示成立点のログが
-/// **1 件も出ていない**こと。
+/// 観測で固定する——(1) メモのスロットを同一キーのまま**別の絵・空の表示記録**で改竄しておき、
+/// surface entity に載っている表示記録が**改竄後のもの（空）にならない**こと（再表示していれば
+/// ヒットして改竄したエントリが entity へ書かれる）、(2) 表示成立点のログが**1 件も出ていない**こと。
+///
+/// 改竄の効き目を読む口が `read_back` から entity の表示記録へ移ったのは、`read_back` が
+/// **メモそのもの**を返す形になったためである——改竄したメモを読み返しても「メモを改竄できた」
+/// ことしか分からない（恒真）。画面へ渡っている当のものは surface entity の
+/// `GraphicsCommandList` であり、そこへ書くのは表示成立点の `set_display` だけである。
 ///
 /// さらに (3) 未消費の窓寸 reconcile 要求を**握り潰さない**ことを確認する——ゲート不成立時に
 /// `pending_resize` を触る実装は、drain フェーズが拾うはずだった初回表示の要求を消してしまう。
@@ -242,10 +305,11 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
 fn refresh_scale_without_dpi_change_does_nothing() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
-    let (emo_world, atlas, _g1000, _g3000) = build_two_face_assets(6, 5);
+    let (emo_world, atlas, golden_1000, _g3000) = build_two_face_assets(6, 5);
     let (probe_world, probe_atlas, _, _) = build_two_face_assets(6, 5);
     let k2 = ScaleRatio::new(2, 1).unwrap();
-    let (scaled_1000, _native, scaled_size) = scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+    // 窓 192／author 96 ゆえ k=2/1。メモは原寸で持つので golden は k に依らず同一である。
+    let scaled_size = k2.scaled_extent(6, 5);
 
     let mut presenter = EmoPresenter::new();
     presenter
@@ -254,14 +318,26 @@ fn refresh_scale_without_dpi_change_does_nothing() {
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
-        scaled_1000
+        golden_1000
     );
     // 初回表示の要求は**あえて取り出さない**（(3) の握り潰し検査のため）。
 
-    // 改竄プローブ: 同一キーのスロットを別の絵（面 3000 の k 適用結果）で上書きする。
+    // 改竄前に、画面へ渡っている表示記録を控える（改竄で入れる空リストと弁別可能であること）。
+    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
+    let display_before = world
+        .get::<GraphicsCommandList>(surface_entity)
+        .cloned()
+        .expect("表示確立後は surface entity に表示記録がある");
+    assert_ne!(
+        display_before,
+        GraphicsCommandList::empty(),
+        "前提: 確立した表示記録は空でない（改竄値と弁別できる）"
+    );
+
+    // 改竄プローブ: 同一キーのスロットを別の絵（面 3000 の原寸合成）で上書きする。
     let tampered = {
         let mut composer = Composer::new();
-        let native = composer
+        composer
             .compose(
                 &probe_world,
                 &probe_atlas,
@@ -269,10 +345,7 @@ fn refresh_scale_without_dpi_change_does_nothing() {
                 &BindSet::default(),
                 &PatternState::default(),
             )
-            .expect("面 3000 の合成は Ok");
-        let mut scaled = ComposedSurface::new(0, 0);
-        resample(&native, k2, &mut scaled);
-        scaled
+            .expect("面 3000 の合成は Ok")
     };
     let tampered_bytes = tampered.bytes().to_vec();
     // 設計 D4 で `insert` は生成済みマスクを引数で受ける形になった（署名追随）。改竄した絵と
@@ -285,19 +358,11 @@ fn refresh_scale_without_dpi_change_does_nothing() {
             tampered.stride(),
         ));
     assert_ne!(
-        tampered_bytes, scaled_1000,
+        tampered_bytes, golden_1000,
         "プローブ前提: 別の絵であること"
     );
-    // 原寸は改竄前のエントリのものを引き継ぐ（キーも原寸も変えず**絵だけ**を差し替えるプローブ
-    // である）。原寸は `CacheEntry` の中に在るため、差し替えるときも対で渡す必要がある。
-    let tampered_native = presenter
-        .targets
-        .get(&TargetId(0))
-        .unwrap()
-        .cache
-        .get(1000, &BindSet::default(), &PatternState::default(), k2)
-        .expect("初回表示でエントリが在る")
-        .native;
+    // 原寸は面そのものが持つ（エントリに別フィールドは無い・要件 5.1）ゆえ、キーも原寸も変えず
+    // **絵だけ**を差し替えるプローブは面・マスク・表示記録の三つ組を渡すだけで成立する。
     presenter
         .targets
         .get_mut(&TargetId(0))
@@ -307,10 +372,8 @@ fn refresh_scale_without_dpi_change_does_nothing() {
             1000,
             BindSet::default(),
             PatternState::default(),
-            k2,
             tampered,
             tampered_mask,
-            tampered_native,
             GraphicsCommandList::empty(),
         );
 
@@ -318,11 +381,17 @@ fn refresh_scale_without_dpi_change_does_nothing() {
     let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
 
     assert_eq!(got, None, "k 不変なのに新物理寸を返している");
-    // (1) 改竄画が載っていない＝再表示していない。
+    // (1) 改竄したエントリが画面へ載っていない＝再表示していない。
+    assert_eq!(
+        world.get::<GraphicsCommandList>(surface_entity),
+        Some(&display_before),
+        "k 不変なのに再表示している（改竄した空の表示記録が画面へ載った＝無駄な表示更新）"
+    );
+    // 改竄そのものは効いている（プローブの空振りで (1) が緑になっていない）。
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
-        scaled_1000,
-        "k 不変なのに再表示している（改竄画が画面へ載った＝無駄な表示更新）"
+        tampered_bytes,
+        "プローブがメモへ届いていない（(1) の不変が恒真になる）"
     );
     // (2) 表示成立点のログが 1 件も出ていない。
     assert!(
@@ -384,7 +453,7 @@ fn refresh_scale_without_last_show_input_does_nothing() {
     );
     assert!(
         presenter.read_back(TargetId(0)).is_err(),
-        "供給面が生成されている（表示していないのに資源を作った）"
+        "表示中のメモが在る（表示していないのに資源を作った）"
     );
 }
 
@@ -406,7 +475,7 @@ fn refresh_scale_does_not_resurrect_hidden_target() {
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     let _ = presenter.take_pending_resize(TargetId(0));
 
-    // `\s[-1]` 相当で非表示にする（キャッシュ・供給面・last_show は保持される）。
+    // `\s[-1]` 相当で非表示にする（キャッシュ・装着・last_show は保持される）。
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
         &mut world,
@@ -524,9 +593,9 @@ fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
 /// 再 show が失敗しても、直前の k による表示がそのまま残る。
 ///
 /// 失敗は `last_show` の surface id を解決不能値へ差し替えて注入する——ゴースト再読込で
-/// `EmoWorld` から面が消えた場合に実在する状況であり、かつ 2 個目の `Compositor` を作らない
-/// （要件 5.3 の AV 非再導入）。供給面生成の失敗経路は初回表示でしか通らない（`chain` が既に在る）
-/// ため、表示確立**後**の失敗を作るにはこの注入が要る。
+/// `EmoWorld` から面が消えた場合に実在する状況であり、GPU 資源を 2 つ目に作らない。合成の失敗は
+/// k の値に依らず同じ位置で起きるので、表示確立**後**の失敗はこの注入で作れる（記録の失敗を
+/// 注入した場合の前状態維持は `presenter_display_failure_tests.rs` が 4 点 × 3 場面で見る）。
 ///
 /// `apply_show` 自身も失敗を error! するが、それは「合成に失敗した」ことしか語らない。DPI 追従の
 /// 文脈（どの k からどの k への再導出が落ちたか・前表示を維持したこと）は `refresh_scale` でしか
@@ -548,7 +617,19 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
         "前提: 初回表示の要求を取り出しておく"
     );
 
+    // 前表示の証跡を注入前に控える（`read_back` は使えない——下の註釈）。
+    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
+    let display_before = world
+        .get::<GraphicsCommandList>(surface_entity)
+        .cloned()
+        .expect("表示確立後は surface entity に表示記録がある");
+
     // 失敗注入: 再表示入力の surface id を解決不能値へ差し替える。
+    //
+    // これ以降 `read_back` は使えない——読み戻しはメモを `last_show` のキーで引く形になったため、
+    // 注入そのものが「表示中エントリが引けない」状態を作ってしまう（前表示が失われたのではなく、
+    // 注入した偽のキーで引いているだけである）。前表示の維持は ⑴ 画面へ渡っている表示記録
+    // （`GraphicsCommandList`）と ⑵ メモに残る**本物のキー**のエントリのバイト、の 2 つで読む。
     presenter
         .targets
         .get_mut(&TargetId(0))
@@ -573,9 +654,22 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
         "失敗したのに照会値が新 k へ動いている（前 k 維持の違反）"
     );
     assert_eq!(
-        presenter.read_back(TargetId(0)).expect("read_back 失敗"),
-        native_golden,
-        "失敗したのに表示が失われた／変わった（前表示維持の違反）"
+        world.get::<GraphicsCommandList>(surface_entity),
+        Some(&display_before),
+        "失敗したのに画面へ渡している表示記録が差し替わった（前表示維持の違反）"
+    );
+    assert_eq!(
+        presenter
+            .targets
+            .get(&TargetId(0))
+            .unwrap()
+            .cache
+            .get(1000, &BindSet::default(), &PatternState::default())
+            .expect("失敗でメモの表示中エントリが消えた（前表示維持の違反）")
+            .composed
+            .bytes(),
+        native_golden.as_slice(),
+        "失敗したのにメモの原寸バイトが変わった（前表示維持の違反）"
     );
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),

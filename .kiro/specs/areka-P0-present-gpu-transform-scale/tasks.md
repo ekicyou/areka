@@ -174,7 +174,7 @@
   - _Depends: 5.1_
   - _Boundary: presenter perf/transition テスト_
 
-- [ ] 5.5 (P) 再表示・可視性・失敗注入のテストを導き直す
+- [x] 5.5 (P) 再表示・可視性・失敗注入のテストを導き直す
   - DPI 変化後の再表示テストに「引き当てが成立する」ことを加える
   - 不可視中の外部再表示・非等倍での確立のテストを、マスクが原寸で不変・配置のスケールが更新される形へ導き直す
   - 供給失敗の前状態維持テストを、新しい記録の 4 注入点 × 3 場面の形へ作り直し、前状態の集合にメモの件数を加える（失敗点が回収より手前へ移ったため）
@@ -293,3 +293,4 @@
 - 5.3: `budget_tests.rs` 1,083→**803**＝1,000 未満 → **8.1 で `OVER_LIMIT_ALLOWED` から外し `OVER_LIMIT_ALLOWED_COUNT` 11→10**（それまで `file_length_guard_test` の「例外は依然超過」検査が赤）。identity 名の 3 本は一般名の対と同一化したため**統合**（21→16 本・台帳 #10 の「不変 15」は訂正）。`fill_extent` が `resample(.., ONE, ..)` を残す（`ComposedSurface` を伸ばす公開口が無い）→ **6.1 が引き取る**（emo-compose に公開 seam を足すか `compose_into` で伸ばす）。k=2 レーンに `applied_ratio` の assert を追加（k がキー外になり暗黙の pin が消えたため）。
 - 5.4: `perf_log_tests` 956→883・`transition_record_tests` 714→736（+22 は前状態維持の走査檻の増分・6.7 の名指しは perf_log のみ）。初回表示は `resized=true`（`None != Some`）＝台帳 #15「他 15 本不変」は 14 に訂正。T-N8 の「同一 target で原寸が実際に変わる→true」は fixture（`build_two_face_assets` は同寸）が無く未固定 → 8.1 で記録（寸違いの第 2 面を足せば閉じる）。
 - 5.2: 台帳 #6 の「他 8 本不変」は誤り＝`text_slot_view_*` 2 本・`show_surface_without_dpi_component_*`・`native_size_*` 2 本も `t.chain`／k 依存 `read_back` を読んでおり再導出（`native_size_recovers_when_failed_show_is_followed_by_cache_hit` は「挿入後に失敗」が構造的に到達不能＝別原寸の面を挟む hit の形へ置換・改名）。「bounds 照合」は bare World では `GlobalArrangement` が伝播しないため `Arrangement`＋`target_physical_size` 照合＋T-N3 で代替。⚠`presenter_test_support.rs` の `px_at` が dead code に（6.1 の掃除で落とす）。8.1 で台帳 #6 を訂正。
+- 5.5: 台帳訂正（8.1）: #13 は再導出 3／不変 6（`refresh_scale_without_dpi_change_does_nothing` は memo 直読み `read_back` で恒真化→entity の `GraphicsCommandList` 側で判定・`refresh_scale_failure_keeps_previous_display_and_k` は注入が `last_show` キーを壊す）、#14 は再導出 3／不変 14、#18 は `cache.get` 6 か所＋`chain` 1 か所の機械追随、#19 は再導出 3＋新設 1（`the_matrix_covers_four_fault_points`）。メモ件数は `get`（LRU 非撹乱）で既知 2 キーを数える（`ComposeCache::len` は cache.rs 私有）。⚠改名 `presenter_upload_failure_tests.rs`→`presenter_display_failure_tests.rs` は index 経由で 4.2 のコミット `7b04fc9f` に紛れ込んだ（単体ではビルド不可・squash で消える）。

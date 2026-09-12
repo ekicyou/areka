@@ -112,6 +112,9 @@ mod budget_steady_state_tests;
 #[path = "presenter_compose_input_tests.rs"]
 mod compose_input_tests;
 #[cfg(test)]
+#[path = "presenter_display_failure_tests.rs"]
+mod display_failure_tests;
+#[cfg(test)]
 #[path = "presenter_display_tests.rs"]
 mod display_tests;
 #[cfg(test)]
@@ -138,9 +141,6 @@ mod resize_report_tests;
 #[cfg(test)]
 #[path = "presenter_test_support.rs"]
 mod test_support;
-#[cfg(test)]
-#[path = "presenter_upload_failure_tests.rs"]
-mod upload_failure_tests;
 #[cfg(test)]
 #[path = "presenter_visibility_tests.rs"]
 mod visibility_tests;

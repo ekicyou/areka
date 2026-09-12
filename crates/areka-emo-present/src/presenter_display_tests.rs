@@ -19,8 +19,8 @@ use super::test_support::{
 /// R2.4/R3.2/R8.2 観測完了（golden 一致）: `attach_target` → `apply(ShowSurface 有効 id)` で reply が
 /// `Ok(())`、かつ `read_back` が同一入力の直接合成 golden と**全バイト一致**する。
 ///
-/// 供給面は D2D 非経由の純バイト転送ゆえ、readback と `ComposedSurface.bytes()` のバイト一致が
-/// 決定論的に成立する（WARP でも可＝CI 決定論）。
+/// `read_back` は合成メモの原寸バイトを返すため、`ComposedSurface.bytes()` とのバイト一致は
+/// GPU を経由しない配線検査として決定論的に成立する（供給の成功経路は T-G1 が引き継ぐ）。
 #[test]
 fn golden_match_read_back_equals_direct_compose() {
     let mut world = make_world_with_gpu();
@@ -182,7 +182,8 @@ fn build_assets_with_valid_and_empty(w: u32, h: u32, salt: u8) -> (EmoWorld, Atl
 }
 
 /// R3.4 観測完了（skip＋表示不変の回帰檻）: 有効 id で表示・マスクを確立後、**解決不能 id** の
-/// `ShowSurface` は reply が `Err(Compose(SurfaceNotFound))`、かつ (a) `read_back` バイト、
+/// `ShowSurface` は reply が `Err(Compose(SurfaceNotFound))`、かつ (a) `read_back` バイトと
+/// surface entity の `GraphicsCommandList`（＝画面へ渡っている描画命令そのもの）、
 /// (b) surface entity の `HitTest`（`AlphaMask`）、(c) `AlphaMaskResource`（設定済みマスク）の
 /// いずれも**適用前と不変**（表示＋マスクを一切乱さない）。
 ///
@@ -228,6 +229,17 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     let bytes_before = presenter
         .read_back(TargetId(0))
         .expect("read_back（前）失敗");
+    // 「表示」＝ surface entity に載っている描画命令（`GraphicsCommandList`）。`read_back` は
+    // 合成メモの原寸バイトを返す形になったので、画面へ渡っている当のものはこちらで読む。
+    let display_before = world
+        .get::<GraphicsCommandList>(surface_entity)
+        .cloned()
+        .expect("有効表示後は surface entity に表示記録がある");
+    assert_ne!(
+        display_before,
+        GraphicsCommandList::empty(),
+        "有効表示後の表示記録が空（前提が成立していない）"
+    );
     let hit_before = world
         .get::<HitTest>(surface_entity)
         .expect("surface entity に HitTest が無い")
@@ -280,6 +292,12 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         bytes_before, bytes_after,
         "無効 id の skip で表示中バイトが変化した（表示を乱さない不変条件違反）"
     );
+    // (a′) 画面へ渡っている描画命令そのものも不変（記録を差し替えていない）。
+    assert_eq!(
+        world.get::<GraphicsCommandList>(surface_entity),
+        Some(&display_before),
+        "無効 id の skip で表示記録が差し替わった（表示を乱さない不変条件違反）"
+    );
     // (b) HitTest 不変（None へ落ちていない＝当たり判定が生きたまま）。
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
@@ -303,7 +321,7 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
 /// 設計ディスカッション #1 観測完了（EmptyComposition → Hide 縮退＋reply Ok）: 有効表示で mount を
 /// 確立後、**外形 0×0 に退化する既存 surface**（定義層皆無）を `ShowSurface` すると reply は
 /// **`Ok(())`**（`Err` ではない）で、target は Hidden へ縮退（`Visual` 不可視＋`HitTest::none()`）し、
-/// 0×0 供給面を作ろうとして panic しない（既存 chain は破棄されず保持）。
+/// 0×0 の表示記録を作ろうとして panic しない（既存のメモと表示記録は破棄されず保持）。
 ///
 /// 前段で `Composer::compose(7000)` が `EmptyComposition(7000)` を返すことを直接確認し、退化経路が
 /// 「不在 surface（SurfaceNotFound）」ではなく「存在するが 0×0」であることを固定する。
@@ -336,7 +354,7 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
         .expect("attach_target 失敗");
 
-    // 有効 1000 で mount/chain を確立し可視化。
+    // 有効 1000 で mount と表示記録を確立し可視化。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
     presenter.apply(
         &mut world,
@@ -402,14 +420,14 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         "EmptyComposition 後は target.visible=false"
     );
 
-    // 0×0 供給面は作らない: 既存 chain は破棄されず保持（read_back は旧外形の長さのまま成立）。
+    // 0×0 のメモは作らない: 既存のメモは破棄されず保持（read_back は旧外形の長さのまま成立）。
     let bytes_len_after = presenter
         .read_back(TargetId(0))
-        .expect("EmptyComposition 後も既存 chain は保持され read_back できる")
+        .expect("EmptyComposition 後も既存のメモは保持され read_back できる")
         .len();
     assert_eq!(
         bytes_len_before, bytes_len_after,
-        "EmptyComposition で 0×0 chain へ差し替わった（既存 chain 保持の不変条件違反）"
+        "EmptyComposition で 0×0 のメモへ差し替わった（既存メモ保持の不変条件違反）"
     );
     // 7000 は非合成ゆえキャッシュへ載らない（0×0 を挿入しない）。
     assert!(
@@ -418,19 +436,14 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
             .get(&TargetId(0))
             .unwrap()
             .cache
-            .get(
-                7000,
-                &BindSet::default(),
-                &PatternState::default(),
-                ScaleRatio::ONE
-            )
+            .get(7000, &BindSet::default(), &PatternState::default())
             .is_none(),
         "EmptyComposition は cache へ 0×0 を挿入しない"
     );
 }
 
 /// R3.3 観測完了（Hide → 再 ShowSurface 復帰）: 有効表示 → `Hide`（不可視＋`HitTest::none()`＋
-/// chain/cache 保持）→ 同一有効 id を再 `ShowSurface` で表示復帰（可視＋`HitTest::alpha_mask()`）。
+/// 装着・表示記録・メモ保持）→ 同一有効 id を再 `ShowSurface` で表示復帰（可視＋`HitTest::alpha_mask()`）。
 /// 再表示はキャッシュヒットで再合成せず、`read_back` が初回表示バイトと一致する（キャッシュからの復帰）。
 #[test]
 fn hide_then_reshow_recovers_display_from_cache() {
@@ -475,7 +488,7 @@ fn hide_then_reshow_recovers_display_from_cache() {
         "初回表示後は αマスク判定"
     );
 
-    // Hide: 不可視 ＋ HitTest::none() ＋ chain/cache 保持。
+    // Hide: 不可視 ＋ HitTest::none() ＋ 装着・表示記録・メモ保持。
     let (txh, rxh) = reply_channel::<PresentOutcome>();
     presenter.apply(
         &mut world,
@@ -499,19 +512,20 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
     {
         let target = presenter.targets.get(&TargetId(0)).unwrap();
+        // 装着（surface entity・表示記録の載る先）は Hide で剥がさない（R3.3）。かつての
+        // 「swap chain を保持する」の後継＝供給面が消えた今、保持されるのは装着そのものである。
+        assert!(target.mount.is_some(), "Hide は装着を保持する（R3.3）");
+        // 表示記録も剥がさない（再表示は記録し直さずに復帰する）。
         assert!(
-            target.chain.is_some(),
-            "Hide は swap chain を保持する（R3.3）"
+            world
+                .get::<GraphicsCommandList>(surface_entity)
+                .is_some_and(|l| *l != GraphicsCommandList::empty()),
+            "Hide は surface entity の表示記録を保持する（R3.3）"
         );
         assert!(
             target
                 .cache
-                .get(
-                    1000,
-                    &BindSet::default(),
-                    &PatternState::default(),
-                    ScaleRatio::ONE
-                )
+                .get(1000, &BindSet::default(), &PatternState::default())
                 .is_some(),
             "Hide は合成キャッシュを保持する（R3.3）"
         );
@@ -712,14 +726,6 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
         "前提の有効 ShowSurface が Ok でない"
     );
 
-    // 適用に使われた k（窓 DPI 96 ÷ author_dpi 96 ＝ 恒等）。スロットのキー要素そのものを使う。
-    let applied = presenter
-        .targets
-        .get(&TargetId(0))
-        .expect("装着済み target")
-        .applied
-        .expect("表示成立後は適用 k が入る");
-
     // 適用前のスロットの中身を控える（バイトとマスク寸＝原子対の両側）。
     let (bytes_before, mask_dims_before) = {
         let entry = presenter
@@ -727,7 +733,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
             .get(&TargetId(0))
             .expect("装着済み target")
             .cache
-            .get(1000, &BindSet::default(), &PatternState::default(), applied)
+            .get(1000, &BindSet::default(), &PatternState::default())
             .expect("前提: 表示成立でスロットが埋まる");
         (
             entry.composed.bytes().to_vec(),
@@ -770,7 +776,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
         .get(&TargetId(0))
         .expect("装着済み target")
         .cache
-        .get(1000, &BindSet::default(), &PatternState::default(), applied);
+        .get(1000, &BindSet::default(), &PatternState::default());
     let entry = entry.expect(
         "合成失敗でキャッシュスロットが空になった＝`take_recycled` が合成の成否判定より手前に         置かれている（設計 Flow 2「容量回収は合成成功後に限る」の違反）。以後の同一入力の適用は         引き当てに失敗して毎回再合成へ落ちる",
     );
@@ -840,12 +846,7 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
             .get(&TargetId(0))
             .unwrap()
             .cache
-            .get(
-                1000,
-                &BindSet::default(),
-                &PatternState::default(),
-                ScaleRatio::ONE,
-            )
+            .get(1000, &BindSet::default(), &PatternState::default())
             .expect("外れの後は当該キーのエントリが在る");
         assert_ne!(
             entry.display,
@@ -862,12 +863,7 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
         .get(&TargetId(0))
         .unwrap()
         .cache
-        .get(
-            1000,
-            &BindSet::default(),
-            &PatternState::default(),
-            ScaleRatio::ONE,
-        )
+        .get(1000, &BindSet::default(), &PatternState::default())
         .expect("ヒットの後もエントリは在る");
     assert_eq!(
         entry.display, recorded,
