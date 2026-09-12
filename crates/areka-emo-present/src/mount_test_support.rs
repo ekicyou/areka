@@ -38,3 +38,31 @@ pub(super) fn attach_fixture_with_visibility(
 
     (world, window, mount)
 }
+
+/// 親を**実 `Window`** にして `w×h` 原寸・拡大率 `k` で装着した状態を組む（GPU 不要）。
+///
+/// [`attach_fixture`] の親は素の entity ゆえ wintf の `Visual::on_add` は owner Window 判定で
+/// 落ちる。本フィクスチャは親へ `Window::default()` を置き、同フックの連鎖挿入
+/// （`VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty`）が**実際に起きる**側を組む。
+/// `Window` の `on_add` は `LayoutRoot` 不在なら親付けを諦めるだけで、COM も HWND も作らない。
+///
+/// 返り値: (world, window entity, mount)。
+pub(super) fn attach_fixture_under_window(
+    w: u32,
+    h: u32,
+    k: ScaleRatio,
+) -> (World, Entity, VisualMount) {
+    let mut world = World::new();
+    let window = world.spawn(wintf::ecs::Window::default()).id();
+    world.flush();
+    let mount = VisualMount::attach(
+        &mut world,
+        window,
+        (w, h),
+        k,
+        &GraphicsCommandList::empty(),
+        true,
+    );
+
+    (world, window, mount)
+}

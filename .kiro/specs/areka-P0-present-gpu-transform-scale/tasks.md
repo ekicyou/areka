@@ -74,7 +74,7 @@
   - _Depends: 2.2_
   - _Boundary: chain 撤去, lib.rs 宣言, Cargo manifest_
 
-- [ ] 2.4 配置・当たり判定・丸めの決定論テストを置く
+- [x] 2.4 配置・当たり判定・丸めの決定論テストを置く
   - 論理配置の寸・係数・原点 0 と、上流の追加時フックによる連鎖挿入が実際に起きることを固定する（T-N2）
   - 対照として、窓でない親の下では連鎖挿入が起きないことを固定する（片方だけでは恒真になるため対で置く・T-N9）
   - 本番と同じ式で、窓の全体配置 × 論理配置から出る境界幅が原寸×拡大率と一致し、上流の面寸算出と丸め権威の差が 0 か +1 に収まり、整数の拡大率では 0 であることを表で固定する（T-N3）
@@ -282,3 +282,4 @@
 - 2.1: 例外表 2 ファイルが機械的追随で微増（`cache_tests.rs` 1618→1622・`budget_tests.rs` 1081→1083）→ 5.3／5.6 で減らし 8.1 で最終確認。`GraphicsCommandList` の `PartialEq` は COM ポインタ同一性（`empty()` との比較・ヒット時の同一リスト比較は有意）。`GraphicsCore` 不在の `context` は旧供給面経路と同じ `"GraphicsCore resource"` を踏襲＝2.2 で供給面経路が消えたら `perf_log_tests` の陰性檻はメッセージで弁別し直す。記録の所要時間は 2.2 で `Stage::Upload` へ置き直す（timing.rs の doc も）。
 - 2.2: 遷移観測の Visualize 行は HEAD どおり `resized: None`（Upload 行だけ `Some(resized)`）＝design Flow 1 (3) の字面は過剰記述・5.4／7.1 はこの形に従う。`timing.rs` の `compose_key_hash` は `scale` 引数とハッシュ行を 3.1 で落とす（timing_tests 再導出に含める）。台帳の誤り: #16 `presenter_resize_report_tests.rs`（`t.chain.size()` 2 か所）・#18 `presenter_display_tests.rs`（`target.chain.is_some()` 1 か所）は「不変」でなく機械的再導出（5.2／5.5 で `mount.is_some()`＋`Arrangement` 照合へ）→ 8.1 で台帳訂正。`presenter.rs` の `#[cfg(test)] use resample／WucGraphicsResource` は 5.x／major 6 で消す。
 - 2.3: `Win32_Graphics_Dxgi` feature は deps／dev-deps とも撤去（`DXGI_FORMAT_*` は workspace 既定の `Dxgi_Common`）。`windows-numerics` は残置。wintf の swap chain ヘルパ 2 本は `areka-emo-text/src/surface.rs` が消費（要件 1.4 条件不成立＝撤去しない）。
+- 2.4: 赤の期間中のテスト実行は「壊れた test module 宣言を一時的に外して走らせ、完全復元を `git diff` で証明」で行う（`presenter_test_support.rs` は `transition_record_tests.rs` が引くため外せない）。⚠`wintf::ecs::PhysicalPoint` は pointer 側の整数 `Point` に解決される（hit_test 側の `PointF` 別名とは別物）＝テストは `PointF` を直に使う。T-N5 の `set_display` 陽性対照は「不在→挿入」（異なる実リストは GPU が要る）。T-N4 の 4×4 マスクは対称ゆえ x/y 入替を検出しない（任意で 1 セル崩す）。
