@@ -5,12 +5,28 @@ use std::time::Duration;
 use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::WucGraphicsResource;
+use wintf::ecs::Arrangement;
 
 use super::test_support::{
-    build_target_assets, build_two_face_assets, make_world_with_gpu, set_window_dpi, show_ok,
-    spawn_window_with_dpi,
+    build_target_assets, build_two_face_assets, make_world_with_gpu, mount_entities,
+    set_window_dpi, show_ok, spawn_window_with_dpi,
 };
+
+/// surface entity の `Arrangement`（**論理寸＝原寸・係数＝拡大率 k**）を `(寸, 係数)` で読む。
+///
+/// 表示の作り方が「原寸の絵＋変換の係数」になったため、報告値の裏取りはここと照会値
+/// （`target_physical_size`＝丸め権威）で行う。物理寸そのもの（`GlobalArrangement.bounds`）は
+/// wintf の伝播段が導くので、本ファイルのテストは走らせない（丸めの一致は `display_tests.rs`
+/// の T-N3 が表で固定する）。
+fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
+    let arr = world
+        .get::<Arrangement>(surface_entity)
+        .expect("surface entity に Arrangement が無い");
+    (
+        (arr.size.width as u32, arr.size.height as u32),
+        (arr.scale.x, arr.scale.y),
+    )
+}
 
 // ── 表示成立点の状態照合＝窓寸 reconcile 報告（タスク 3.4・議題 #2 裁定）────────────────────
 // design Flow 1 キー決定「表示成立点で今回 scaled 寸を前回適用寸と照合し、差分があれば新物理寸を
@@ -21,7 +37,8 @@ use super::test_support::{
 /// のち窓 `DPI` を 192 へ変えて再表示すると、表示成立点の状態照合が**新しい物理寸**を積み、
 /// `take_pending_resize` がそれを返す（呼び手＝drain フェーズが同一フレームで窓寸 reconcile に使う）。
 ///
-/// 報告値は native 原寸ではなく **k 倍後の物理寸**であり、供給面の実寸と一致する。照合を行わない
+/// 報告値は native 原寸ではなく **k 倍後の物理寸**であり、実際の配置（原寸の寸 × k の係数）と
+/// 整合する。照合を行わない
 /// 実装・native 寸を報告する実装のいずれでも RED になる。
 #[test]
 fn dpi_change_reports_new_physical_size_to_caller() {
@@ -60,14 +77,19 @@ fn dpi_change_reports_new_physical_size_to_caller() {
         "物理寸が変わったのに新物理寸が呼び手へ報告されない（状態照合の欠落）"
     );
 
-    // 報告値＝実際に表示へ載った物理寸（供給面の実寸）であることを裏取りする。
-    let chain_size = presenter
-        .targets
-        .get(&TargetId(0))
-        .and_then(|t| t.chain.as_ref())
-        .expect("表示成立後は供給面が生成済み")
-        .size();
-    assert_eq!(chain_size, expected, "報告値と供給面寸が乖離している");
+    // 報告値＝実際に表示へ載った物理寸であることを裏取りする。表示は「原寸の絵（配置の寸）×
+    // 拡大率（配置の係数）」で作られるので、両者と照会値（丸め権威）の 3 つが揃うことを見る。
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
+    assert_eq!(
+        arrangement_of(&world, surface_entity),
+        ((6, 5), (2.0, 2.0)),
+        "配置が原寸 6×5・係数 2.0 になっていない（報告値の出どころと食い違う）"
+    );
+    assert_eq!(
+        presenter.target_physical_size(TargetId(0)),
+        Some(expected),
+        "報告値と照会値（丸め権威）が乖離している"
+    );
 }
 
 /// 要件 4.2 観測完了（**べき等・churn を作らない**）: 物理寸が変わらない再表示は何も報告しない。
@@ -162,8 +184,8 @@ fn first_show_reports_physical_size_for_initial_reconcile() {
 /// 要件 4.4 観測完了（**失敗は何も報告しない・前値を維持する**）: 表示成立点より手前で early return
 /// する失敗経路は、窓寸 reconcile 要求を積まない。
 ///
-/// 2 種の失敗クラスで檻に入れる——(A) 表示未成立での device 失敗（`WucGraphicsResource` 一時退避・
-/// 2 個目の Compositor を作らない＝要件 5.3 の AV 非再導入を守る）、(C) 表示成立**後**の合成失敗
+/// 2 種の失敗クラスで檻に入れる——(A) 表示未成立での device 失敗（表示記録が要る `GraphicsCore` を
+/// 一時退避する。2 個目のデバイスを作らない＝要件 5.3 の AV 非再導入を守る）、(C) 表示成立**後**の合成失敗
 /// （`SurfaceNotFound`）。(C) は直前に窓 DPI を 192→96 へ変えてから失敗させるため、報告を
 /// 表示成立点より手前（例: `derive_scale` 直後）へ置いた実装なら `Some((4,3))` が積まれて RED になる。
 #[test]
@@ -178,10 +200,10 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
         .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
         .expect("attach_target 失敗");
 
-    // (A) 供給面生成の前提資源を一時退避 → 合成・insert の後、表示成立の手前で失敗する。
-    let wuc = world
-        .remove_resource::<WucGraphicsResource>()
-        .expect("前提: make_world_with_gpu が WucGraphicsResource を載せている");
+    // (A) 表示記録の前提資源を一時退避 → 合成の後、表示成立の手前で失敗する。
+    let gfx = world
+        .remove_resource::<GraphicsCore>()
+        .expect("前提: make_world_with_gpu が GraphicsCore を載せている");
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
         &mut world,
@@ -198,7 +220,7 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
             rx.recv_timeout(Duration::from_secs(10)),
             Ok(Err(PresentError::Device { .. }))
         ),
-        "前提: 供給面生成に失敗する"
+        "前提: 表示記録に失敗する"
     );
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
@@ -212,7 +234,7 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
     }
 
     // (B) 資源を戻して表示を成立させる（以降の「前値」を作る）。
-    world.insert_resource(wuc);
+    world.insert_resource(gfx);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
@@ -257,9 +279,15 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
         Some((4, 3)),
         "失敗しても前 native 原寸を維持する"
     );
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
     assert_eq!(
-        t.chain.as_ref().expect("供給面は生成済み").size(),
-        k2.scaled_extent(4, 3),
-        "失敗しても前表示（物理寸）を維持する"
+        arrangement_of(&world, surface_entity),
+        ((4, 3), (2.0, 2.0)),
+        "失敗しても前表示（原寸 4×3・係数 2.0）を維持する（新 k=1/1 の係数へ書き換わっていない）"
+    );
+    assert_eq!(
+        presenter.target_physical_size(TargetId(0)),
+        Some(k2.scaled_extent(4, 3)),
+        "失敗しても前表示の物理寸を維持する"
     );
 }

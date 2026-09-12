@@ -5,7 +5,7 @@ updated_at: 2026-09-13
 
 # Roadmap — areka（M1 完成後・M2 組み直し前の裁定枠ロードマップ）
 
-> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。本ファイルは、M2 ロードマップを起こす材料（`ukadoc-coverage-roadmap` 第二段）が揃うまでのあいだ、**brief 済み spec 30 本の着手順（ウェーブ）と干渉条件だけ**を持つ。M2 本文はここに書かない（「M2 以降」節）。
+> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。本ファイルは、M2 ロードマップを起こす材料（`ukadoc-coverage-roadmap` 第二段）が揃うまでのあいだ、**brief 済み spec 30 本（うち完了 2）の着手順（ウェーブ）と干渉条件だけ**を持つ。M2 本文はここに書かない（「M2 以降」節）。
 > 正本配置: 本ファイルが正本（`.kiro/steering/roadmap.md`）。`focus.md`（`inclusion: always`）から辿る。設計判断の正本は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md)。M1 実物スコープは [doc/emo2-conformance-scope.md](../../doc/emo2-conformance-scope.md)。
 > **履歴**: 追記①〜(94)・旧ゴール表・旧ウェーブ行・旧干渉台帳・完了詳報は棚卸④〜⑬で [roadmap-history.md](roadmap-history.md) へ退避済み（history が全文正本・非改変）。完了ユニットの実装詳細は各 `completed/` spec が正本。**旧ウェーブ番号の読み替え**: 棚卸⑫（09-02）で W5.95→W6・W6→W7・W6.5→W8・W6.75→W9・W6.9→W10・W6.95→W11・旧 W7（e2e）→W12 へ整数化。棚卸⑬（09-11）で **旧「W13 裁定枠 D〜G」「W13〜W15（裁定枠）」を W13〜W17 へ振り直し**（下表が正本・history と completed spec 内の旧番号は改変しない）。
 
@@ -60,20 +60,20 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | ⓪ | 09-03 | `sakura-bare-tag-lexer`（#134） | `\_X` bare 漏れ修正・完了検証で `sakura-tag-word-boundary` 起票 |
 | W12 | 09-05〜09-11 | `cursor-tag-canon`（#137）・`emo-text-line-height-canon`（#142）・`emo2-conformance-e2e`（#143・**M1 完成宣言**） ∥ 調査系 `ukadoc-survey-toolkit`（#136）・`-property`（#138）・`-shiori`（#139）・`-sakura-script`（#140）・`-assets`（#141） | 行送り 35→30・e2e 20 項目全合格・ukadoc 1,749 項目の台帳 4 本＋`report/summary.md` |
 
-- 完了 spec 直下エントリ＝**175**（`.kiro/specs/completed/` 直下・2026-09-11 実数え＝ディレクトリ 174＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
+- 完了 spec 直下エントリ＝**176**（`.kiro/specs/completed/` 直下・2026-09-12 実数え＝ディレクトリ 175＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
 - M1 実機サインオフ発見 7 件中 #1〜#6 解決済み・#7（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）は W13 の 4 本が引受先。M-dual は退役（e2e 項目 10 で合格・復活させない）。
 
-## 進行中の spec 台帳（brief 済み 30 本・2026-09-11 実数え 28 ＋ 09-12 起票 1 ＋ 09-13 起票 1・着手は `/kiro-start <名>`）
+## 進行中の spec 台帳（brief 済み 30 本・2026-09-11 実数え 28 ＋ 09-12 起票 1 ＋ 09-13 起票 1。**うち完了 2・進行中 28**＝2026-09-13 に状態列を実数え・着手は `/kiro-start <名>`）
 
 > **種別**の優先順は **バグ → 依存ツリーが長い → その他**。**規模**は brief の申告（棚卸⑬で分割したものは分割後）。**状態**列は `/kiro-complete` が ✅ に更新し、完了数を実数えで更新する。**Fable**列＝要件定義（design）を Fable で行うべきか（○＝Fable・−＝Opus で足りる）。
 
 | # | spec（`areka-P0-` 省略） | 種別 | 規模 | Wave | 前提（先に着地） | Fable | 状態 |
 |---|---|---|---|---|---|---|---|
-| 1 | `present-gpu-transform-scale` | バグ（性能・**最優先**） | M | **W13** | なし | ○ | ⚪ |
+| 1 | `present-gpu-transform-scale` | バグ（性能・**最優先**） | M | **W13** | なし | ○ | ✅ |
 | 2 | `kanade-boot-talkdone-drop` | バグ（構造） | S | **W13** | なし | − | ⚪ |
 | 3 | `host32-window-thread-pump` | バグ（構造） | S〜M | **W13** | なし | −（案 1/2 の裁定 1 件） | ⚪ |
 | 4 | `sakura-tag-word-boundary` | バグ（完了契約 13.1 の穴） | S〜M | **W13** | `sakura-bare-tag-lexer` ✅ | − | ⚪ |
-| 5 | `charset-canon` | 正典（里々ゴーストが 1 体も動かない・surfaces.txt 2 箇所は実バグ） | M | **W13** | なし | ○（⑵ 交渉のみ） | ⚪ |
+| 5 | `charset-canon` | 正典（里々ゴーストが 1 体も動かない・surfaces.txt 2 箇所は実バグ） | M | **W13** | なし | ○（⑵ 交渉のみ） | ✅ |
 | 6 | `ukadoc-coverage-roadmap` | 調査（**M2 ロードマップの生成器**・依存ツリー最長） | M | **W13** | survey 4 本 ✅・e2e ✅＝**両段とも解禁済み** | ○ | ⚪ |
 | 7 | `text-decoration-canon`（⑴ 基盤＋font 10＋default/disable） | 正典（文字装飾 4 本の先頭ゲート） | L | **W13** | bvc ✅・cursor-tag ✅・line-height ✅ | ○（design） | ⚪ |
 | 8 | `sylphya-set-ledger`（channels ⑶・**09-11 起票**） | 台帳（三重所有の台帳側） | S | **W13** | なし | − | ⚪ |
@@ -106,7 +106,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 1. **`currentghost.seriko.zorder` の三重所有**＝**値の導出は `zorder-property` 単独**・**SET 台帳行（`seriko.zorder`／`seriko.sticky-window`）は `sylphya-set-ledger`**・**`currentghost-property-tree` は `seriko.*` から `zorder` を除外**（完了 spec `ukadoc-survey-property` のブリーフィング「三重所有」節の案 甲と同じ）。3 brief に登記済み。
 2. **M2 予約群は brief を起票しない**（SSTP・FMO・DirectSSTP・Plugin/HEADLINE・ネットワーク更新・ゴースト選択 UI・多重ゴースト・NAR・pasta native x64・ベクトル描画・owner-draw メニュー・バルーン美観配置・回転テキスト）。生成器は `ukadoc-coverage-roadmap` 第二段（W13）→ `/kiro-discovery` 再入で先頭ウェーブ分だけ just-in-time 起票（spec 工場化しない）。
-3. **e2e §13.1 行 3**（初回起動限定の位置調整が 2 回目以降で既定へ戻るか）は spec を切らず据え置き。次の実機一周（`present-gpu-transform-scale` の k≠1 サインオフ）で目視する。
+3. **e2e §13.1 行 3**（初回起動限定の位置調整が 2 回目以降で既定へ戻るか）は spec を切らず据え置き。⚠ 引受先としていた `present-gpu-transform-scale` の k≠1 サインオフ（2026-09-12 完了）では**実施しなかった**（同 spec `verification/acceptance-record.md` §7 行 6 に「未実施」と登記）。次の実機一周で目視する。
 
 ## ウェーブ編成（着手順の正本・2026-09-11 棚卸⑬・整数番号）
 
@@ -137,7 +137,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 ## 着手手順
 
-- **brief 全数完備体制**: 進行中 spec **30 本**（2026-09-11 実数え 28 ＋ 09-12 起票の `nar-install` ＋ 09-13 起票の `shell-implicit-surface`）全てに brief あり＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。brief の file:line は起票時値＝**着手時に必ず再検証**（棚卸⑬の再測定で実体の消失は 0 件・行番号ドリフトは全 brief に常在）。
+- **brief 全数完備体制**: brief 済み spec **30 本**（2026-09-11 実数え 28 ＋ 09-12 起票の `nar-install` ＋ 09-13 起票の `shell-implicit-surface`）全てに brief あり。**うち完了 2・進行中 28**（状態列の実数え・2026-09-13）＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。brief の file:line は起票時値＝**着手時に必ず再検証**（棚卸⑬の再測定で実体の消失は 0 件・行番号ドリフトは全 brief に常在）。
 - 新規課題の起票は `/kiro-discovery`（再入）で just-in-time。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
 - **要件定義・設計のサブエージェントは Fable**（上表 Fable 列 ○）・タスク生成と実装は Opus（記憶 requirements-design-need-fable-grade-review／fable-main-opus-subagents-token-policy）。
 
