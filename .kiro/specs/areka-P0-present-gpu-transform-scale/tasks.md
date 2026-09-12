@@ -272,6 +272,7 @@
   - 完了状態: 2 水準のログ・数値・スクリーンショットが揃い、開発者サインオフに出せる形で記録される
   - _Requirements: 2.3, 2.7, 3.1, 3.2, 3.5, 4.8, 6.6_
   - _Depends: 8.1_
+  - _Manual: 水準②（200%・k=2・primary DPI 192）は 2026-09-12 に自動走行でログ判定済み（`verification/acceptance-record.md`）。水準①（125%）は OS 表示スケール切替が要るため、目視・クリック・DPI 変化直後の引き当て・ドラッグ中 tick と併せて開発者の手動確認待ち（同記録 §4）_
 
 ## Implementation Notes
 - 1.1: `windows-numerics` は削除できない（`D2D1DeviceContextExt::set_transform(&Matrix3x2)` を `display.rs` が使う・design「Allowed Dependencies」の記述は誤り）→ 2.3 は `windows-numerics` を残す。`Win32_Graphics_Dxgi` feature の撤去は 2.3 で判断。
@@ -299,3 +300,4 @@
 - 6.2: `scale_test_support.rs` は `AUTHOR_DPI` を `scale_ratio_tests.rs` が引くため削除でなく trim。`resize_for_full_overwrite` と檻 3 本を削除。compose テスト 209 本緑・golden 19 本不変。
 - 7.1: 差し戻し 1 回（`SURFACE_STAGE_UPLOAD` の doc がヒット時にも出る行を「記録した」と言い切っていた＝遷移観測の upload 行は `(size_changed || resized)` で出る・ヒットでも出る）。wintf は `hit_test/mod.rs` 1 ファイル **3 行**（2 サイト）＝8.1 の diff-stat 判定はこれを「doc 2 行（2 サイト）」と読む。陳腐化した assert メッセージ 12 件も書き換え（消費者なし）。⚠残: wintf `alpha_mask_regenerate_tests.rs:209` が削除済み `scale_resample_tests.rs:629` を引く（9.5 の doc 2 サイト制約を守るため未修正・8.1 で裁定）。
 - 8.1: 全 11 項目緑（workspace 102 suites・7,134 passed・0 failed）。メモ保持量 1 target＝**2,586,216 B**（原寸 382×547 ×3＋詰めマスク 3）vs 旧 **10,344,864 B**＝1/4.00。`budget_tests.rs` 796 行→例外表から除去・件数 11→10（較正 `cache_tests.rs` 1,301 は維持）。wintf の宙錨（`alpha_mask_regenerate_tests.rs:209`）は 9.5 を守り登記のみ（挙動の主張は真のまま）。W13 との字面交差は `file_length_guard_test.rs`（他 spec は非接触宣言）＝共有 0。付録 A′ に訂正段落を追記（#6/#10/#11/#13/#14/#15/#16/#18/#19/#23・T-N8 の未固定脚は 8.2 以降へ）。⚠ブランチには `9cfe002e`（kiro-impl/kiro-validate-impl の SKILL.md 改訂）も載る＝squash PR に同梱。
+- 8.2: 水準②を自動走行（`AREKA_APP_SMOKE_EXIT_MS=180000`・絶対パス・i686 helper 差替済）: 外れ n=63 中央値 10.69 ms／p90 16.12 ms／最大 29.83 ms（前回 41〜78／65〜227）・ヒット 0.19 ms・catch-up 8 件／3 分・`ERROR` 0・`rendersurface_us` 0.075 ms/tick。`judge-perf.py` は `cpu.csv`（`invoke-perf-run.ps1`）前提ゆえ未実行（Python 集計で代替）。computer-use の権限は非対話セッションで取れずスクリーンショット無し。水準①・目視・クリック・DPI 変化は開発者へ（記録 §4）。
