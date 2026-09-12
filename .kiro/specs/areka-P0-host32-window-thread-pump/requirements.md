@@ -4,7 +4,7 @@
 
 32bit の脳（`shiori-host32-helper.exe`）と WM_COPYDATA で話す**ホスト窓**は SHIORI アクターのスレッドに在るが、そのスレッドは入力待ち（`crates/areka-kanade/src/shiori/real.rs` の受信ループ `run_shiori_loop` の `rx.recv()`）で止まり、要求の往復と起動時の握手以外ではウィンドウメッセージを取り出さない。Windows は「プロセス開始から 20〜30 秒を過ぎ、かつ 14 秒以上メッセージを汲まない窓」を応答なし（hung）と判定するので（`areka-P0-emo2-conformance-e2e` 記録 §13.2 行 8・2026-09-07 較正）、その窓へ「相手が応答なしなら待たずに打ち切る」送り方（`SMTO_ABORTIFHUNG`）で送る側は即失敗する。同 spec のタスク 6.11（コミット `ce545350`・`SendFlavor::Response`）は helper の**応答方向**から旗を外して実害を消したが、「窓を持つスレッドがメッセージを汲まない」構造は残っている（同記録 §13.2 行 10・Requirement 16.5 の申し送り）。
 
-本仕様は、SHIORI アクターのスレッドが**入力と窓のメッセージを同時に待つ**形へ改め、「20 秒以上何もしなくても応答なしにならない」ことを決定論の檻（較正つき）で固定する。6.11 の応答方向の扱いは維持する（二重の守り）。
+本仕様は、SHIORI アクターが**手空きの間も周期的に backend へ保守の機会を与える**形へ改め、その周期を kanade のトラフィックから切り離す。現状は backend の面倒を見る頻度が受信した仕事の量に従属しており（`backend.status()` による死活監視が `rx.recv()` の内側にある）、仕事が止まると窓のメッセージ処理も死活監視も同時に止まる。これは host32 に固有の事情ではなく、SHIORI アクターと backend の結合の問題である。本仕様はこの結合を解き、「20 秒以上仕事が無くても応答なしにならない」「その間も死活監視が働く」ことを決定論テスト（較正つき）で固定する。6.11 の応答方向の扱いは維持する（二重の守り）。
 
 ## Introduction
 
@@ -17,7 +17,9 @@
 - 終了挨拶の再生中は kanade が毎秒の往復を止める（`crates/areka-kanade/src/schedule/close.rs` の `ClosePending` は `Tick` で pump しない）ため、ホスト窓のスレッドは 17〜19 秒メッセージを取り出さない（記録 §13.2 行 8）。
 - 応答方向（helper → ホスト）の送出は 6.11 で `SMTO_ABORTIFHUNG` を外してあり（`crates/shiori-host32-ipc/src/lib.rs` の `send_flags`）、その檻が `crates/shiori-host32-helper/src/main_response_flavor_hung_cage_tests.rs`（20 秒待ち → 往復① → 20 秒待ち → 往復②・上限 90 秒）である。要求方向（ホスト → helper）は旗を保つ。
 
-本仕様は待ちの**形**（入力と窓のメッセージの同時待ち・または窓の専用スレッド分離）を変えるだけであり、IPC の方式（WM_COPYDATA 一本化・再入 RESPONSE・生バイト列のみ跨ぐ）、helper の実装、アクター境界の受理規約（envelope・停止・死活報告）は変えない。案 1（同時待ち）／案 2（窓を専用スレッドへ分離）の選択は設計で行う（brief「設計で選ぶ・推奨は案 1」）。
+本仕様は受信ループの**待ちの形**（手空きを検出する周期の導入）と `ShioriBackend` への**手空き通知の追加**だけを変えるものであり、IPC の方式（WM_COPYDATA 一本化・再入 RESPONSE・生バイト列のみ跨ぐ）、helper の実装、アクター境界の受理規約（envelope・停止・死活報告）は変えない。
+
+**裁定（2026-09-13・開発者承認）**: 待ちの形は「有限時間の受信待ち＋手空き時の backend 通知」を採る（brief の案 1＝起こし手段を手組みする同時待ち・案 2＝窓の専用スレッド分離は、いずれも不採用）。理由は 3 点——⑴ Win32 の規約上、窓のメッセージを取り出せるのはその窓を所有するスレッド自身だけであり、寝ている受信ループの外からは救えない。⑵ 案 2（窓の引越し）は `ParentShared`／`ResponseSlot` の跨スレッド化と `Shiori3Client` の受け型変更を伴い、`crates/shiori-host32-host/src/client.rs` へ波及して併走 spec `areka-P0-charset-canon` と同一ファイルを取り合う。⑶ 採る形は host32 のための特別扱いではなく、**backend の保守周期をトラフィックから独立させる**一般的な疎結合化であり、`ShioriBackend` の既存 10 実装（`InProcBackend` を含む）のうち host32 の実装だけが実体を持つ。
 
 ## Boundary Context
 
@@ -41,7 +43,7 @@
   - **下流（将来）helper → areka 向きの自発通知を要する spec**: 本仕様の後は、ホスト窓宛に「相手が応答なしなら待たずに打ち切る」送り方で送っても、待機の長さに関わらず届くことを前提にできる。
   - **隣接 `areka-P0-zorder-chain-residue`（W14）**: 本仕様の檻は壁時計期限の飢餓に依存しない形で置き、A-2 の族（`SPIN_WAIT` 型の壁時計期限）を増やさない。
   - **併走 W13（`kanade-boot-talkdone-drop`・`charset-canon`）**: 共有ファイル 0 を保つ（上の Out of scope のファイルに触れない）。
-  - **未確定で design が埋める項目**: 案 1（同時待ち）／案 2（専用スレッド）の選択・入力の到着でスレッドを起こす手段（送信端の drop＝inbox 切断でも起きること・Requirement 2.3）・握手時の heartbeat の扱い（常設の pump に統合するか残すか）・檻の置き場（crate・ファイル）と検証の駆動方法。
+  - **未確定で design が埋める項目**: 手空きを検出する周期の値（OS の応答なし判定の閾値に対する余裕を根拠に決め、定数の説明文に残す）・手空き通知の名前と置き場・握手時の heartbeat の扱い（常設の保守に統合するか無改変で残すか）・決定論テストの置き場（crate・ファイル）と駆動方法。
 
 ## Requirements
 
@@ -57,6 +59,7 @@
 4. When 待機中に inbox へ要求が届く, the SHIORI アクター shall 窓のメッセージ処理を挟んでも要求を取り落とさず、到着順に処理する。
 5. The SHIORI アクター shall 待ちの形の変更によって要求の往復の所要時間に利用者が見える差（毎秒の往復・終了挨拶の後の解放）を生まない（非退行の確認は Requirement 2.8 の既存テストと Requirement 5 の実機走行で行う）。
 6. While 要求の往復中（同期送出が上限時間の内でブロックしている間）である, the SHIORI アクター shall 既存の上限時間（要求方向・解放の ack・終了観測）で必ず復帰し、無限待機を作らない（既存どおり）。
+7. While 要求の無い待機中である, the SHIORI アクター shall 死活監視（`backend.status()` の sticky 確認）を手空きの周期で継続する。**現状は死活監視が受信ループの内側にあり、仕事が止まると監視も止まる**（終了挨拶中の 17〜19 秒は一度も確認されない）——本受入基準はその欠陥の是正であり、手空き中に backend の異常終了が生じた場合も `ShioriDown` が一度だけ送られる。
 
 ### Requirement 2: アクター境界と握手・往復・停止の契約の不変
 
@@ -72,6 +75,8 @@
 6. While 要求の往復中である, the host32 ホスト層 shall single-in-flight を保ち、応答の再入受領・上限内未応答の Timeout 復帰・未握手の拒否を既存どおり行う。
 7. When 正規 clean shutdown（unload → ack → 終了観測）が要求される, the host32 ホスト層 shall 既存の系列と結果（`Clean`／非 Clean／失敗の語彙）を返す。
 8. The 本仕様 shall `crates/areka-kanade/src/shiori/real_tests.rs`・`crates/shiori-host32-host/` の既存テスト・`crates/shiori-host32-helper/` の既存テストを期待値を緩めずに緑のまま保つ（説明文の書き換えを除き無改変）。
+9. The `ShioriBackend` トレイト shall 手空き通知を**既定実装（何もしない）つき**で追加し、既存の実装 10 個のうち host32 の `ShioriConnection`（`crates/areka-kanade/src/shiori/real.rs`）以外——`InProcBackend`（`crates/areka-ghost/src/shiori_inproc.rs`）およびテスト用の実装 8 個——を無改変で保つ。
+10. The 手空き通知 shall backend 非依存の契約として定義される（「アクターが手空きのとき backend に処理の機会を与える」）。SHIORI アクター側のコードに Win32 固有の語彙（窓・メッセージポンプ等）を持ち込まず、`crates/areka-kanade/Cargo.toml` に Win32 API crate への依存を足さない（Requirement 7.6 の再掲）。
 
 ### Requirement 3: 応答方向の旗の維持（二重の守り）
 
@@ -97,7 +102,8 @@
 6. The 決定論テスト shall 判定を assert で行い（数値を印字するだけにしない）、赤のときは待ちの長さ・プロセス生存時間・届いた／届かなかった・送出失敗の回数を診断文に含める。
 7. The 本仕様 shall 較正の証跡として、直す前の構造で速い檻と遅い檻が赤になった実行結果（コマンド・所要・赤の診断文）を検証記録に残す。
 8. The 決定論テスト shall 壁時計期限の飢餓に依存する判定（短い期限で「発火しない」を主張する形）を持たず、OS の応答なし判定の条件（実時間そのもの）と十分な上限以外に時間の仮定を置かない。
-9. The 本仕様 shall 既存の常設テスト全体（`cargo test --workspace`）に間欠的な赤を加えない。速い檻は 5 秒以内に終わる。
+9. The 本仕様 shall 既存の常設テスト全体（`cargo test --workspace`）に間欠的な赤を加えない。速い決定論テストは 5 秒以内に終わる。
+10. The 決定論テスト shall 「要求の無い待機中に backend が異常終了したとき、次の仕事を待たずに `ShioriDown` が一度だけ送られる」ことを主張し（Requirement 1.7 の固定）、直す前の構造では送られずに赤になることを較正として記録する。
 
 ### Requirement 5: 実機の非退行
 
@@ -116,9 +122,9 @@
 
 #### Acceptance Criteria
 
-1. If 待ちの機構が失敗を返す（起こし手段の生成失敗・待ち呼び出しの失敗）, then the SHIORI アクター shall error レベルで記録し、既存の終了経路で受信ループを終える（無限待機も busy loop もしない）。
-2. If 受信ループへ入る前に待ちの機構の準備に失敗する, then the SHIORI アクター shall 既存の接続失敗と同じく死活報告（ShioriDown）を送って終了する。
-3. The SHIORI アクター shall 待機中の窓のメッセージ処理を、既存のログ規約（`target`・`event` 欄）を保ったまま行い、正常時の待ち起こしごとにログを出さない（ログを汚さない）。
+1. If 手空きの間に backend の保守が失敗を返す, then the SHIORI アクター shall error レベルで記録し、無限待機も busy loop も作らずに既存の終了経路へ合流する。
+2. The SHIORI アクター shall 手空きの検出そのものに、生成・準備を要する資材（イベントオブジェクト・追加スレッド等）を用いない。**採用した形では「待ちの機構の生成に失敗する」経路が構造上存在しないため、当初の受入基準 6.2（準備失敗時の ShioriDown 送出）は該当なしとして閉じる**（2026-09-13 裁定）。
+3. The SHIORI アクター shall 手空きの保守を、既存のログ規約（`target`・`event` 欄）を保ったまま行い、正常時の手空き 1 回ごとにログを出さない（ログを汚さない）。
 
 ### Requirement 7: 文書の追随・編集集合・規模
 
@@ -130,5 +136,5 @@
 2. The 本仕様 shall 完了 spec のアーカイブ（`.kiro/specs/completed/areka-P0-emo2-conformance-e2e/`）を書き換えない。
 3. The 本仕様 shall 編集集合を `crates/areka-kanade/src/shiori/real.rs`・`crates/shiori-host32-host/src/parent_window.rs`・それらの兄弟テストファイル・本仕様の記録に限る。入力の到着でスレッドを起こす薄い包みが要る場合は、その置き場を設計で確定し、`crates/areka-kanade/src/schedule/`・`crates/shiori-host32-host/src/{shiori3.rs,client.rs}`・`crates/shiori-host32-ipc/`・`crates/shiori-host32-helper/` には触れない（W13 の共有ファイル 0）。ただし Requirement 7.1 が挙げる `crates/shiori-host32-ipc/src/lib.rs` の説明文 2 か所については、コメントのみの書き換えを例外として許す。
 4. The 本仕様 shall 1 ファイル 1,000 行以下を本番ファイル・テストファイルの双方で保つ（`parent_window.rs` は 659 行・新しい檻は兄弟テストファイルへ置く）。
-5. The 本仕様 shall 案 1／案 2 の裁定と理由を設計文書に残し、`doc/COMPAT_ARCHITECTURE.md` §8 に本仕様の節を追記する場合は自節のみとする。
+5. The 本仕様 shall 待ちの形の裁定と理由（不採用とした案を含む）を設計文書に残し、`doc/COMPAT_ARCHITECTURE.md` §8 に本仕様の節を追記する場合は自節のみとする。
 6. The 本仕様 shall `areka-kanade` に Win32 API crate への直接依存を足さない（`crates/areka-kanade/Cargo.toml` は現状 `windows` 非依存）。窓のメッセージを汲む部品は host32 ホスト層（`crates/shiori-host32-host/`）が提供し、`real.rs` はそれを呼ぶ——「host32 型を import してよい唯一の場所は `real.rs`」という既存の境界を保つ。
