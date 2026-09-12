@@ -80,6 +80,10 @@ pub fn resolve(
         dir: shiori_dir,
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori_2c_30d5_30a1_30a4_30eb_540d:1
         file: map.get("shiori").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori.encoding_2c_6587_5b57_30b3_30fc_30c9:1
+        encoding: map.get("shiori.encoding").cloned(),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori.forceencoding_2c_6587_5b57_30b3_30fc_30c9:1
+        force_encoding: map.get("shiori.forceencoding").cloned(),
     };
 
     // shell マウント: 指定名 or 既定 master（Req 3.1/3.2）→ 物理存在確認（Req 3.3）。

@@ -62,7 +62,7 @@
   - _Boundary: shiori3 codec テスト_
 
 - [ ] 3. descript の宣言から初期値を決め、通信経路へ通す
-- [ ] 3.1 (P) descript の文字コード 2 キーを転記する
+- [x] 3.1 (P) descript の文字コード 2 キーを転記する
   - ゴーストのマウント情報に「SHIORI の文字コード」「強制する文字コード」の 2 つの生ラベルを足し、解決も整形もせずそのまま持つ（前後空白を落とさない）
   - 解決処理の既存キー取得の直下に 2 行の転記を足し、各行の直上に正典の URL コメントを置く
   - そのファイル自身の文字コードを表すキーを SHIORI 通信の初期値として使わない（使う箇所 0）
@@ -183,3 +183,7 @@
   - 変異⒞ レビュアーが独自に追加。`build_request` の `SecurityLevel: local` を `Local` へ 1 文字退化 → `utf8_request_equals_the_pre_spec_byte_stream` が赤。適用前定数が「今日の出力の写し」でないことの証明。
 - 2.3: 適用前バイト列の定数は `4db516fe` の `build_request` の組立順から手で書き下したもの（今日の符号化器を 1 度も通していない）。この由来を doc コメントに残すこと——回帰定数の監査証跡そのものなので、たどれない参照先を書かない。
 - 2.3: 2.2 が in-file `mod tests` に置いた 4 本（解決可／継承／解決不能／強制無視）は兄弟テストの強い版へ差し替えて削除した。跡地に差し替え先を指すコメント 4 行を残してある。design が「`shiori3.rs` に残す」と名指しした 3 本（`parse_without_status_line_is_parse_error`／`parse_invalid_bytes_are_replaced_not_parse_error`／`parse_charset_header_found_at_non_first_position`）は無改変で現存。
+- 3.1: **⚠ 統合担当への申し送り（文書の訂正）** design §Testing Strategy の `resolve_tests.rs` 行が名指しした固定物「`shiori.forceencoding, Shift_JIS ` の空白を含む生の値」と、tasks.md 3.1 の「前後空白を落とさない／末尾空白を含む形」は**実現不能**。`crates/areka-parsers/src/kv/parse.rs` の値挿入行が無条件に前後空白を落とすため（kv 層 R4.4）、行末の空白は転記層に到達し得ない。生値の取り出し口も無い。両文書を「`parse_kv` が返した値と 1 バイト違わないこと」へ直すこと。要件 2.5／8.5 の充足には影響しない。
+- 3.1: 代替の固定物は `shiori.encoding,  Shift_JIS ,x  ` → フィールドは `"Shift_JIS ,x"`（値の中の空白とカンマが残る）。転記側に `.trim().to_ascii_lowercase()` を足す変異で 2 本が赤になることをレビュアーが独立に確認済み＝「転記層は整形しない」が検査で守られている。
+- 3.1: 要件 2.5 の零（descript の `charset` キーを SHIORI 通信の初期値に使う箇所 0）の根拠。本番の読み手は 2 つだけ——`charset/prescan.rs` の `charset` キー一致腕（消費点は `charset/decode.rs` の 1 つのみ）と、`shiori3.rs` の応答ヘッダ走査（SHIORI の wire であって descript のキーではない）。`placement/config.rs` のヒットは `#[cfg(test)]` の内側。
+- 3.1: 挙動でも零を固定した（`descript_charset_key_does_not_feed_shiori_encoding`）。`charset,Shift_JIS` を Shift_JIS のバイト列で書いた descript を読み、`name` が正しく読めること（＝復号が実際に効いている陽性対照）を見たうえで 2 フィールドが `None` であることを主張する。`decode` を「宣言を無視して既定を使う」へ退化させると赤になることを確認済み。
