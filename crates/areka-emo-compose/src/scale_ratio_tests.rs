@@ -318,8 +318,8 @@ fn scale_len_handles_large_extents_without_overflow() {
 ///   本テスト・`as_f32_is_query_view_not_dimension_authority`・
 ///   `scale_len_u128_intermediate_beats_u64_overflow`＋既存 2 本
 ///   （`scale_len_rounds_half_away_from_zero`／`dpi_table_scaled_extent_is_deterministic`）。
-/// - 常に切り捨て（`len·num/den`）: `…500/1000`（0.5 丁度）が 1 つ下へずれる。実測 4 失敗＝
-///   本テスト＋既存 3 本（上記 2 本と `resample_zero_extent_is_empty_and_warns`）。
+/// - 常に切り捨て（`len·num/den`）: `…500/1000`（0.5 丁度）が 1 つ下へずれる。実測 3 失敗＝
+///   本テスト＋既存 2 本（上記 2 本）。
 /// - round half to **even**: `n` が偶数の `n+0.5` が `n` へ落ちる（下の両ループが検出）。
 ///   実測 3 失敗＝本テスト＋既存 2 本（`scale_len_rounds_half_away_from_zero` も
 ///   同じ変異で死ぬ）。
@@ -489,11 +489,10 @@ fn mul_saturating_degradation_pins_largest_to_u32_max() {
 /// # 殺す変異（変異注入の実測に基づく）
 ///
 /// - `scale_len` を `(len as f32 * self.as_f32()) as u32` へ差し替える（仮数欠落で
-///   大寸が 1px ずれ、極小 k で 0 へ潰れる）。**既存と共倒れ**——実測 6 失敗＝本テスト・
+///   大寸が 1px ずれ、極小 k で 0 へ潰れる）。**既存と共倒れ**——実測 5 失敗＝本テスト・
 ///   `scale_len_half_tie_pairs_pin_round_half_away_from_zero`・
-///   `scale_len_u128_intermediate_beats_u64_overflow`＋既存 3 本
-///   （`scale_len_rounds_half_away_from_zero`／`dpi_table_scaled_extent_is_deterministic`／
-///   `resample_zero_extent_is_empty_and_warns`）。
+///   `scale_len_u128_intermediate_beats_u64_overflow`＋既存 2 本
+///   （`scale_len_rounds_half_away_from_zero`／`dpi_table_scaled_extent_is_deterministic`）。
 ///   ただし丸めを保った穏当版 `(len as f32 * self.as_f32()).round() as u32` では既存が
 ///   全緑になり、本テストと `scale_len_u128_…` の**新 2 本だけが落ちる**——本テストの
 ///   固有価値はこの「f32 化が丸め規約を保っていても寸法権威にならない」域にある。

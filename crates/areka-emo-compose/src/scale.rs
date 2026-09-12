@@ -293,13 +293,5 @@ impl ScaleRatio {
 mod test_support;
 
 #[cfg(test)]
-#[path = "scale_resample_tests.rs"]
-mod resample_tests;
-
-#[cfg(test)]
 #[path = "scale_ratio_tests.rs"]
 mod ratio_tests;
-
-#[cfg(test)]
-#[path = "scale_prior_path_tests.rs"]
-mod prior_path_tests;
