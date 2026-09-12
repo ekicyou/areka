@@ -7,7 +7,7 @@
 //!   届いていること。
 //! - 母数の下限を集める器（[`Floors`]）の較正——下限を下回れば赤になり、下限 0 は
 //!   主張として受け付けない。
-//! - 写しを 1 か所だけ壊す道具 4 つの較正——狙った 1 か所だけが変わり、狙いが無ければ
+//! - 写しを 1 か所だけ壊す道具 5 つの較正——狙った 1 か所だけが変わり、狙いが無ければ
 //!   止まり、repo のファイルには 1 バイトも触れない。
 //!
 //! - 判定 ⑴ ⑵ の母数の下限（`linkage.md` の引用 id 数・報告 5 本から読めた機械の
@@ -15,11 +15,12 @@
 //!   ことの較正。
 //! - 判定 ⑶ の母数の下限（名前付き束の数・人手で足した id の数）と、同じ較正。
 //! - 判定 ⑷ の母数の下限（`[[rank]]` の行数・段階 A の `items`）と、同じ較正。
+//! - 判定 ⑹ の母数の下限（作り直した全体報告の本文の長さ・その束の表の行数）と、同じ較正。
 //!
 //! # ここにまだ置かないもの
 //!
 //! 残る判定の母数の下限（`[[spec]]` の行数・`[[owner_completed]]` の行数など）は、
-//! その判定を置くタスク（判定 ⑹ は 4.8・判定 ⑸ は 6.6）の持ち物である。
+//! その判定を置くタスク（判定 ⑸ は 6.6）の持ち物である。
 //! `roadmap-draft.md` は今のところ骨組みだけで配列表が 0 行なので、ここで下限を置くと
 //! **実データが追いつく前に赤くなる**。同じ理由で `roadmap-draft.md` の引用 id の
 //! 下限も置かず、段 5 の持ち物にする。
@@ -41,12 +42,13 @@ use std::time::SystemTime;
 use ukadoc_survey::documents::Stage;
 use ukadoc_survey::documents::parse::{read_briefing, read_linkage};
 use ukadoc_survey::io::paths;
-use ukadoc_survey::model::Domain;
+use ukadoc_survey::model::{Domain, THEMES};
+use ukadoc_survey::report::summary::render_summary;
 
 use super::RepoData;
 use super::documents::{
     Documents, Floors, OWN_SPEC_DIR, cited_ids, drop_bundle_name, drop_member, shift_count,
-    twist_id, twisted_id,
+    shift_row_count, twist_id, twisted_id,
 };
 use super::documents_checks::{bundle_ids_in_report, linkage_bundle_ids, report_bundle_ids};
 
@@ -135,6 +137,15 @@ const MIN_RANK_ROWS: usize = 1;
 /// とおり「1 以上」にする。0 に落ちると、腕 b の 5 段階のうち最も大きい段階が
 /// 「数え直しも 0・宣言も 0」でそろって緑になる。
 const MIN_STAGE_A_ITEMS: usize = 1;
+
+/// 判定 ⑹ の母数——作り直した全体報告の束の表の行数の下限（設計「判定の一覧」⑹）。
+///
+/// 2026-09-13 の実測は **75 行**（`report/summary.md`「ドメインを跨いで繋がった束」の
+/// 表）。設計のとおり「1 行以上」にする。`links` の補修で束が合流すれば減りうるので
+/// 実数を釘付けしない。捕まえたいのは「束の表が丸ごと落ちた本文を全文一致で緑と読む」
+/// 壊れ方だけである——束の表は本文の 5 割強を占めるので、そこが両側で揃って落ちれば
+/// 残りが一致するかぎり判定 ⑹ は緑になる。
+const MIN_SUMMARY_BUNDLE_ROWS: usize = 1;
 
 /// 順位表が 1 行も無い `briefing.md`（母数が空に落ちた壊れ方の写し）。
 ///
@@ -535,6 +546,62 @@ fn the_floors_of_the_stage_and_rank_check_turn_red_when_the_ranks_go_empty() {
     );
 }
 
+/// 判定 ⑹ が数えている相手が 0 件でないこと（要件 11.4）。
+///
+/// 見るのは 2 つ——作り直した本文の長さと、その中の束の表の行数である。突き合わせ相手が
+/// 空文字列に落ちれば全文一致は「ファイルも空なら緑」になり、束の表だけが落ちれば
+/// 残りの節が一致するかぎり緑のまま残る。
+#[test]
+fn the_freshness_check_has_something_to_judge() {
+    let repo = RepoData::load();
+    let rendered = render_summary(&repo.catalog, &repo.ledgers, &THEMES);
+
+    Floors::new()
+        .at_least(
+            "判定 ⑹: 作り直した全体報告の本文",
+            rendered.chars().count(),
+            MIN_DOCUMENT_CHARS,
+        )
+        .at_least(
+            "判定 ⑹: 作り直した全体報告の束の表の行",
+            bundle_ids_in_report(&rendered).len(),
+            MIN_SUMMARY_BUNDLE_ROWS,
+        )
+        .assert_met();
+}
+
+/// 突き合わせ相手が空に落ちたとき、上の下限が**実際に**赤になること。
+#[test]
+fn the_floors_of_the_freshness_check_turn_red_when_the_summary_goes_empty() {
+    let mut floors = Floors::new();
+    floors
+        .at_least(
+            "判定 ⑹: 作り直した全体報告の本文",
+            "".chars().count(),
+            MIN_DOCUMENT_CHARS,
+        )
+        .at_least(
+            "判定 ⑹: 作り直した全体報告の束の表の行",
+            bundle_ids_in_report("").len(),
+            MIN_SUMMARY_BUNDLE_ROWS,
+        );
+
+    let short = floors.short();
+    assert_eq!(
+        short.len(),
+        2,
+        "突き合わせ相手が空に落ちたのに違反が 2 行そろわない: {short:?}"
+    );
+    assert!(
+        short.iter().all(|line| line.contains("0 件しかない")),
+        "空に落ちたことを本文が言っていない: {short:?}"
+    );
+    assert!(
+        short[0].contains("本文") && short[1].contains("束の表の行"),
+        "どの母数が空なのかを名指していない: {short:?}"
+    );
+}
+
 /// 母数の器が、下限を下回った行を**すべて**名指すこと。
 #[test]
 fn the_floor_container_reports_every_row_that_falls_short() {
@@ -745,7 +812,37 @@ fn dropping_a_bundle_name_removes_its_line() {
     );
 }
 
-/// 狙いが無いのに素通りしないこと（4 つの道具それぞれ）。
+/// 表の行の数をずらす摂動が、狙った行の数だけを 1 動かすこと。
+///
+/// 錨を行頭に置くのがこの道具の要である。全体報告では「縮退」が状態の分布の**行**と
+/// テーマ別の状態分布の**見出しの 4 桁目**の両方に現れるので、行頭で絞らないと
+/// 「ちょうど 1 行ない」で空振りして止まる。
+#[test]
+fn shifting_a_row_count_moves_the_number_by_one() {
+    let markdown = "\
+| 状態 | 件数 |
+| --- | ---: |
+| 縮退 | 22 |
+| 合計 | 1749 |
+
+| テーマ | 実装済み | 語彙のみ | 縮退 | 合計 |
+| --- | ---: | ---: | ---: | ---: |
+| 装い | 30 | 186 | 2 | 420 |
+";
+    let shifted = shift_row_count(markdown, "縮退");
+    assert_eq!(
+        shifted,
+        markdown.replace("| 縮退 | 22 |", "| 縮退 | 23 |"),
+        "見出しに同じ語がある表で、狙った行の数だけを動かせていない"
+    );
+    assert_eq!(
+        shift_row_count(markdown, "合計"),
+        markdown.replace("| 合計 | 1749 |", "| 合計 | 1750 |"),
+        "4 桁の数を 1 ずらせていない"
+    );
+}
+
+/// 狙いが無いのに素通りしないこと（5 つの道具それぞれ）。
 #[test]
 #[should_panic(expected = "写しに id ukadoc:no:such:1 が無い")]
 fn twisting_an_absent_id_stops() {
@@ -776,10 +873,23 @@ fn dropping_an_absent_bundle_name_stops() {
     drop_bundle_name("[[rank]]\nrank = 1\n", "更新");
 }
 
+#[test]
+#[should_panic(expected = "ちょうど 1 行ない")]
+fn shifting_an_absent_row_count_stops() {
+    shift_row_count("| 縮退 | 22 |\n", "未対応");
+}
+
+#[test]
+#[should_panic(expected = "ちょうど 1 行ない")]
+fn shifting_a_row_count_of_a_repeated_label_stops() {
+    shift_row_count("| 縮退 | 22 |\n| 縮退 | 23 |\n", "縮退");
+}
+
 /// 壊す道具が repo のファイルに 1 バイトも触れないこと（要件 11.3 の前提）。
 ///
-/// 4 つの道具を**合成の写し**の上で一通り働かせ、うち `twist_id` と `shift_count` の
-/// 2 つは**実データの写し**（`linkage.md` の本文）の上でも働かせる。前後でファイルの
+/// 5 つの道具を**合成の写し**の上で一通り働かせ、うち `twist_id`・`shift_count`・
+/// `shift_row_count` の 3 つは**実データの写し**（前 2 つは `linkage.md`、最後は
+/// `report/summary.md` の本文）の上でも働かせる。前後でファイルの
 /// 中身と更新時刻が変わらないことを見る——写しの上だけで働く関数だという主張は、
 /// こうして実ファイルを見ないと「たまたま今は書いていない」と区別できない。
 ///
@@ -821,8 +931,10 @@ fn the_breaking_tools_do_not_touch_the_repository_files() {
     let _ = drop_member(&sample, id);
     let _ = shift_count(&sample, "[tally]", "target");
     let _ = drop_bundle_name(&sample, "起動");
+    let _ = shift_row_count("| 縮退 | 22 |\n", "縮退");
     // 実データの写しの上でも働かせる（写しを取り違えて元を触る壊れ方を見る）。
     let _ = shift_count(&documents.linkage_text, "[tally]", "target");
+    let _ = shift_row_count(&documents.summary_text, "縮退");
     let cited = cited_ids(&documents.linkage_text);
     let first = cited
         .iter()

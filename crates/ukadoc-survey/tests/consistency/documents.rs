@@ -3,7 +3,8 @@
 //!
 //! **テストの本体はここに 1 つも置かない**（`structure.md:129` の流儀・`perturb.rs` と同じ）。
 //! 道具の較正と母数の下限は兄弟の `documents_non_vacuity.rs` にあり、判定 6 種は
-//! `documents_checks.rs`（⑴ ⑵ ⑸ ⑹）と `linkage_checks.rs`（⑶ ⑷）が持つ。
+//! `documents_checks.rs`（⑴ ⑵ ⑸ ⑹）と `linkage_checks.rs`（⑶）と
+//! `briefing_checks.rs`（⑷）が持つ。
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -224,6 +225,59 @@ pub(super) fn shift_count(text: &str, table: &str, key: &str) -> String {
         .unwrap_or_else(|err| panic!("{key} の右辺 {digits} を数として読めない: {err}"))
         + 1;
     format!("{}{needle}{shifted}{}", &text[..at], &rest[digits.len()..])
+}
+
+/// 表の行の数を 1 つずらす（1 増やす）。
+///
+/// 狙うのは `| ラベル | 数 |` の形の行で、Markdown の表を持つ本文（全体報告）用である
+/// ——[`shift_count`] は TOML の `鍵 = 数` を狙うので、こちらには使えない。
+///
+/// 錨は**行頭が `| ラベル |` で始まる行**にする。同じ語が別の表の見出しの途中の桁に
+/// 現れても（全体報告では「縮退」が状態の分布の行と、テーマ別の状態分布の見出しの
+/// 4 桁目の両方に現れる）、行頭で絞れば取り違えない。狙った行がちょうど 1 行でなければ
+/// 止まる——空振りした摂動は「壊しても赤くならない」を「壊れていない」と読み違えさせる。
+pub(super) fn shift_row_count(text: &str, label: &str) -> String {
+    let head = format!("| {label} |");
+    let hits: Vec<(usize, &str)> = line_offsets(text)
+        .into_iter()
+        .filter(|(_, line)| line.starts_with(&head))
+        .collect();
+    assert_eq!(
+        hits.len(),
+        1,
+        "行頭が {head} の行が写しにちょうど 1 行ない（{} 行あった。摂動が空振りする）",
+        hits.len()
+    );
+    let (offset, row) = hits[0];
+
+    // 右端の桁から数を 1 つ拾って 1 増やす（表の数は右詰めの最終桁にある）。
+    let at = row
+        .rfind(|c: char| c.is_ascii_digit())
+        .unwrap_or_else(|| panic!("{row} に数が無い（摂動が空振りする）"));
+    let start = row[..=at]
+        .rfind(|c: char| !c.is_ascii_digit())
+        .map_or(0, |before| before + 1);
+    let digits = &row[start..=at];
+    let shifted = digits
+        .parse::<usize>()
+        .unwrap_or_else(|err| panic!("{digits} を数として読めない: {err}"))
+        + 1;
+    format!(
+        "{}{shifted}{}",
+        &text[..offset + start],
+        &text[offset + at + 1..]
+    )
+}
+
+/// 各行の開始位置と本文（改行は含まない）。
+fn line_offsets(text: &str) -> Vec<(usize, &str)> {
+    let mut rows = Vec::new();
+    let mut at = 0;
+    for line in text.split('\n') {
+        rows.push((at, line));
+        at += line.len() + 1;
+    }
+    rows
 }
 
 /// 束名を 1 つ消す（その名前が現れる行を丸ごと落とす）。
