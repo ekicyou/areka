@@ -53,7 +53,7 @@
   - _Requirements: 11.2_
   - _Depends: 1.5_
 
-- [ ] 1.7 判定の土台（読み込み・数え上げ・写しを壊す道具・母数の器）を置く
+- [x] 1.7 判定の土台（読み込み・数え上げ・写しを壊す道具・母数の器）を置く
   - 3 文書・全体報告・spec ディレクトリの一覧（本 spec 自身のディレクトリ名と `completed` を除く直下の brief 持ち・`completed/` の直下）を 1 か所で読む道具を、統合テスト側に置く
   - 写しを壊す道具（id を 1 文字変える・構成 id を 1 つ抜く・件数を 1 ずらす・束名を 1 つ消す）を本文の写しの上だけで働く小さな関数として置き、リポジトリのファイルには触らない
   - 母数の下限を集める器と、判定ファイル 4 つの登録を済ませる。自 spec はディレクトリ名の定数だけを持ち、パスは書かない
@@ -336,3 +336,9 @@
 - 1.6: 廃止したテスト 2 本（`the_evidence_section_gives_counts_per_domain`・`the_report_never_shows_where_the_evidence_is_written`）は陳腐化による除去。後者の残余の主張（本文に URL やパスが出ない）は `the_body_is_pinned_verbatim` の全文一致がより強く引き受けている。
 - 1.6: `report_summary` を参照するテストは `generate_tests.rs` ではなく `cli_tests.rs` にあり、副手続き名と使い方の一覧だけを見ている。`generate_tests.rs` は 948 行のまま。
 - 1.6: design.md が「作らない」と明記した `render_summary_judged` は作っていない（research.md にその旧案が残っているが design が覆している）。
+- 1.7: **⚠ 判定ファイルの登記は 2 本だけ**（`documents.rs`・`documents_non_vacuity.rs`）。design.md の File Structure Plan が挙げる残り 2 本 `documents_checks.rs`・`linkage_checks.rs` は本タスクの境界外なので `mod.rs` 冒頭の申し送りだけ。**タスク 3.7 以降が作成と `mod` 登記を行うこと。**
+- 1.7: **⚠ 判定 6 種それぞれの母数の下限はまだ 1 つも置いていない**（`linkage.md` の引用 id 1,552 以上・報告の束 id の下限・`[[rank]]` 1 行以上・`[[spec]]` 20 行以上など）。3 文書が骨組み（配列表 0 行）なので今置くと即赤になるため。**タスク 3.7 以降が置くこと。それまで新しい判定は恒真の緑になりうる。**
+- 1.7: **⚠ design.md「入口 / tests/consistency」の署名 `Documents::load(repo: &RepoData)` は実装の `load()` と食い違ったまま**（`repo` は値を運ばない添え物。`Documents` の欄に `RepoData` 由来が 1 つも無く、読むファイルも重ならない）。**設計側の追随（引数を落とす）を最終検証（タスク 7.2／7.3）で処理すること。**
+- 1.7: **⚠ `crates/ukadoc-survey/src/io/paths.rs` の `summary_report_path()` の doc「常時検査の対象外（要件 7.6）」が事実でなくなった**（要件 11.2 が覆した）。境界外のため 1.6・1.7 とも触っていない。**判定 ⑹ を置くタスク（3.7 以降で `paths.rs` を境界に持つもの）で必ず直すこと。**
+- 1.7: 3 文書の実測（復帰文字を落とした後の `chars().count()`・2026-09-12）: `linkage.md` 1,336／`roadmap-draft.md` 1,416／`briefing.md` 4,618／`report/summary.md` 33,326。**バイト長（linkage.md は 2,874）と取り違えないこと。**
+- 1.7: 壊す道具 4 つのうち実データの写しに掛かっているのは `shift_count` 1 つだけ。3 文書に `ukadoc:` も `members = ` も `bundle = ` も 0 件だから（骨組みのため）。**3 文書が育ったら残る 3 つも実データの写しへ寄せてよい。**

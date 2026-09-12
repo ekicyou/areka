@@ -17,11 +17,15 @@
 //! Rust 2024 では `set_var` が unsafe である）。スナップショットへ手が届くのは crate の
 //! 中にある実行ファイルの入口（`cli`）だけなので、**ここからは `cli` の名前も引かない**。
 //!
-//! # 全体報告 `summary.md` は読まない（要件 7.6）
+//! # 全体報告 `summary.md` は [`RepoData`] では読まない
 //!
-//! 読むのはドメイン別報告 4 本だけである。`summary.md` は 4 台帳を跨ぐ成果物で、
-//! 常時赤にすると並走 4 本が同じファイルを取り合う（開発者裁定 2026-09-02 議題 2）。
-//! `paths::summary_report_path()` はこのファイルから 1 度も呼ばない。
+//! ここが読むのはドメイン別報告 4 本だけである。`summary.md` を常時検査から外した
+//! 理由（並走 4 本が同じファイルを取り合う・完了 spec toolkit 要件 7.6・開発者裁定
+//! 2026-09-02 議題 2）は調査 4 本の完了で消えたので、除外は本 spec の要件 11.2 が
+//! 覆した。ただし突き合わせ相手は純粋層の `report::render_summary` の出力であって
+//! [`CheckInput`] の欄ではないので、`summary.md` の本文を持つのは [`RepoData`] では
+//! なく [`documents::Documents`] である。`paths::summary_report_path()` はこの
+//! ファイルからは 1 度も呼ばない。
 //!
 //! # ファイルを 1 つも作らない
 //!
@@ -45,6 +49,13 @@
 //!
 //! # テストの本体はこのディレクトリの兄弟に置く
 //!
+//! 3 文書（`linkage.md`・`briefing.md`・`roadmap-draft.md`）と全体報告と spec ディレクトリ
+//! の一覧を読む道具は [`documents`]（`documents.rs`）にあり、そこにもテストの本体は
+//! 1 つも無い。その道具の較正と 3 文書まわりの母数の下限は
+//! [`documents_non_vacuity`]（`documents_non_vacuity.rs`）にある。判定 6 種そのものは
+//! `documents_checks.rs`（⑴ ⑵ ⑸ ⑹）と `linkage_checks.rs`（⑶ ⑷）が持ち、
+//! どちらもそれぞれの判定を置くタスク（3.7 以降）が足す。
+//!
 //! 実データへの主張は [`checks`]（`checks.rs`）に、検査の対象が 0 件でないことの主張は
 //! [`non_vacuity`]（`non_vacuity.rs`）に、自前の道具の較正は [`values_md`]
 //! （`values_md.rs`）に、要件と README の記入例が実データに実在することの主張は
@@ -56,6 +67,8 @@
 //! 解決される——`structure.md:141`）。
 
 mod checks;
+mod documents;
+mod documents_non_vacuity;
 mod examples;
 mod non_vacuity;
 mod perturb;
