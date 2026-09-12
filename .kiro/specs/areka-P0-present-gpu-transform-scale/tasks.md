@@ -195,7 +195,7 @@
   - _Depends: 5.1_
   - _Boundary: ComposeCache テスト_
 
-- [ ] 5.7 (P) 実行例 2 本を原寸の読み戻しへ導き直す
+- [x] 5.7 (P) 実行例 2 本を原寸の読み戻しへ導き直す
   - 起動時の golden 比較を、リサンプルで拡大した期待値から原寸の期待値へ変え、拡大率に依らず同一バイト・同一長になる形にする
   - 当たり判定の探針を、物理座標への写像を経ずに原寸座標で直接読む形にする
   - 実行例が親モジュールの再輸出からリサンプラを引いているため、親側の再輸出と doc も同時に追随させる
@@ -289,3 +289,4 @@
 - 5.1: 補助は `native_golden(w,a,id)`／`native_golden_with(w,a,id,binds,pattern)` → `(Vec<u8>, native_size)`（`ScaledGolden` 撤去）。呼び手 26 か所＝dpi_scale 5・fractional 11・refresh_and_log 3・visibility 4・budget_equivalence 3。⚠4 本のテストは `let (…, native_golden) = build_target_assets(..)` でローカル束縛が関数名を影にする（dpi_scale 96／fractional 117／refresh 172／visibility 362）＝機械置換すると E0618・多くは `build_target_assets` の第 3 要素で足りる。`presenter.rs:80` の `#[cfg(test)] use resample` は最後の再導出タスクが註釈ごと落とす。transition_record_tests の赤 3 本は 2.2／3.1 由来（5.4）。
 - 5.6: `cache_tests.rs` 1,622→1,301（≥1,000 ゆえ例外表・較正エントリは不変）。縮小時の書き戻しは `resize_and_clear`（`clear`+`resize`）で再確保しない＝ポインタ不変の檻は安全。改名候補（任意）: `other_key_elements_still_miss_on_the_same_compose_inputs` → `differing_compose_inputs_still_miss`。
 - 4.2: T-N10 は字面の檻（`BOOT_REGISTRATION` を `mod.rs` 本文に照合）＋構造の檻（登録を写して `Schedules` を検査）＋対照の 3 本。写しの本文も同じ字面を含むことを assert して原本だけ更新した漏れを塞いだ。system の同定は `SystemTypeSet`（bevy の `debug` feature は無効で表示名が定型化するため）。`t_zwi06` は新登録先へ再導出・`FrameFinalize` 言及の陳腐化 0。
+- 5.7: 差し戻し 2 回（いずれも doc の真偽）。実行例の窓は**生成時 native 原寸**・表示成立後に `reconcile_window_size` が `scaled_extent` へ合わせる（両方書く）。`crates/areka` から `resample` 0 件。⚠`crates/areka/src/emo2_boot/spine_display_tests.rs` 243／342 に「swap chain の供給面」の陳腐化 doc・メッセージが残る（テストは緑）→ 7.1 の doc 掃除で拾う。台帳 #23 へ `spine_seriko_loop_tests.rs`（再導出）を 8.1 で追記。
