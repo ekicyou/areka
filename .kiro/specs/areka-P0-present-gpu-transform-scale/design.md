@@ -46,7 +46,7 @@
 
 ### Out of Boundary
 
-- wintf の DPI 伝播・レイアウト・`render_surface`・`deferred_surface_creation_system`・クリック透過の判定手順: **変更 0**（9.5）。書き換えるのは doc 2 行（`hit_test/mod.rs` の `AlphaMaskResource`／`alpha_mask_hit` の座標契約）だけ。
+- wintf の DPI 伝播・レイアウト・`render_surface`・`deferred_surface_creation_system`・クリック透過の判定手順: **変更 0**（9.5）。書き換えるのは doc 2 か所（`hit_test/mod.rs` の `AlphaMaskResource`／`alpha_mask_hit` の座標契約・物理行では 3 行＝7.1 実装で訂正）だけ。
 - wintf の swap chain ヘルパ（`com/dxgi.rs` `create_composition_swap_chain`・`com/wuc.rs` `CompositorInteropExt::create_composition_surface_for_swap_chain`）: 消費者が `areka-emo-text/src/surface.rs` に残るため **撤去しない**（1.4 の条件不成立を明示）。
 - Non-Goals に列挙した全項目。並走 W13 の 8 本と共有ファイル 0（9.6）。
 
@@ -246,7 +246,7 @@ sequenceDiagram
 - (0) k 導出: 不変（`world.get::<DPI>(window)` → `derive_scale`）。
 - (1) 引き当て: `cache.touch(surface_id, &binds, &pattern)`（**k はキーでない**）。ミスのとき: `budget.native_scratch(|s| composer.compose_into(..))` → `timing.mark(Compose)` → `GraphicsCore::device_context()` を借りて `record_display(dc, scratch)`（失敗は `error!`＋`Err(Device)`・**この時点でメモ・World・表示は無傷**）→ `timing.mark(Upload)` → `take_recycled` → `display_buffer(recycled)` → `swap_native_scratch(&mut display)`（**全 k で交代**・`is_identity` 分岐は消える）→ `regenerate_mask(retired, display.bytes(), w, h, stride)`（原寸バイト）→ `cache.insert(surface_id, binds, pattern, display, mask, list)` → `timing.mark(MaskGen)`。`EmptyComposition`／`SurfaceNotFound` の扱いは不変。
 - (2) 装着の遅延生成: `mount` 不在なら `VisualMount::attach(world, window, native, k, &entry.display, initially_visible)`（surface entity を `GraphicsCommandList`＝エントリの `display` 込みで spawn）。`WucGraphicsResource`／`Compositor` の取得は不要になる（`GraphicsCore` だけ）。
-- (3) 反映: `mount.set_display(world, &entry.display)`（値が異なるときだけ `insert`）→ `mount.set_layout(world, native, k)`（`Arrangement` が同値なら書かない）→ `AlphaMaskResource::set_shared(entry.mask.clone())` → 所有権が `CommandDriven` なら `set_visible(true)`。物理寸は `let physical = k.scaled_extent(native)`（`chain.size()` の代替・研究 §5 議題 9 は「式 1 つ・ヘルパ新設なし」で閉じる）。`resized = prev_native != Some(native)`・`size_changed = prev_physical != Some(physical)`（`prev_physical` の導出式は不変）。遷移観測の `upload`／`visualize` 行は `size: Some(physical)`・`resized: Some(resized)`。
+- (3) 反映: `mount.set_display(world, &entry.display)`（値が異なるときだけ `insert`）→ `mount.set_layout(world, native, k)`（`Arrangement` が同値なら書かない）→ `AlphaMaskResource::set_shared(entry.mask.clone())` → 所有権が `CommandDriven` なら `set_visible(true)`。物理寸は `let physical = k.scaled_extent(native)`（`chain.size()` の代替・研究 §5 議題 9 は「式 1 つ・ヘルパ新設なし」で閉じる）。`resized = prev_native != Some(native)`・`size_changed = prev_physical != Some(physical)`（`prev_physical` の導出式は不変）。遷移観測の `upload` 行は `size: Some(physical)`・`resized: Some(resized)`、`visualize` 行は `size: Some(physical)`・`resized: None`（HEAD の形を維持＝2.2 実装で訂正）。
 - (3.5)〜成立点: `pending_resize`・`applied`・`native_size`（エントリの `composed` 外形）・`last_show`・`info!`（フィールド不変・`scaled_w/h = physical`）・`take_delta`・`timing.emit` は不変。
 
 **キー決定**: 失敗し得る GPU 呼び出しは (1) の `record_display` に**集約**され、メモの回収（`take_recycled`）より手前にある。ゆえに失敗時は「表示・メモ・`GraphicsCommandList`・`Arrangement`・マスク・可視性」の全てが適用前のまま（7.1）——旧 upload 失敗（挿入後に失敗）より強い前状態維持になる。ヒット経路は GPU 呼び出し 0。
@@ -615,7 +615,7 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 
 ### Validation Hooks（DoD・機械で確認）
 
-- `grep -rn "resample\|ResampleScratch\|XmapSeat\|SwapChainPresenter\|create_composition_swap_chain" crates/areka-emo-present crates/areka-emo-compose crates/areka --include=*.rs` → **0 件**（doc を含む・1.4／1.7）。`crates/areka-emo-text` の `create_composition_swap_chain` は残る（対象外）。
+- `grep -rn "resample\|ResampleScratch\|XmapSeat\|SwapChainPresenter\|create_composition_swap_chain" crates/areka-emo-present crates/areka-emo-compose crates/areka --include=*.rs` → **0 件**（doc を含む・1.4／1.7。撤去したフィールド名 `t_resample_us`／`alloc_resample_dst`／`alloc_xmap` の**不在**を主張する陰性檻の定数・doc は除外＝8.1 実装で訂正）。`crates/areka-emo-text` の `create_composition_swap_chain` は残る（対象外）。
 - `cargo test --workspace`（`| tail` で exit code を隠さない）緑・`python tools/perf/judge-perf.py --selftest` 緑・`cargo test -p log-capture-kit --test file_length_guard_test` 緑。
 - `git diff --stat crates/wintf/src` がコード 0・doc 2 行（`hit_test/mod.rs`）だけ。`git diff --stat crates/areka/src/emo2_boot/mod.rs` が登録 1 行＋註釈だけ。
 
