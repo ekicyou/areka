@@ -164,9 +164,10 @@ crates/areka-emo-text/src/
 ├── actor_decoration.rs             # set_balloon_background / background_of（actor.rs の子）
 ├── actor_decoration_tests.rs       # 登録で 2 層が state へ届く・背景の口・既定は白
 crates/areka-emo-text/tests/
-├── decoration_readback_test.rs                 # 横書き 7 項目＋語彙のみ 3＋較正（入口）
-├── decoration_readback_test_vertical_tests.rs  # 縦書き 2 方向 × 7 項目＋線の側の実測固定
-├── decoration_readback_test_test_support.rs    # 共有ヘルパ（GPU world・runtime・読み戻し・インク判定）
+├── decoration_readback_test.rs                 # 入口（1 バイナリ）: 横書き 7 項目＋語彙のみ 3＋較正
+crates/areka-emo-text/tests/decoration_readback/
+├── mod.rs                                      # 共有ヘルパ（GPU world・runtime・読み戻し・インク判定）
+├── vertical.rs                                 # 縦書き 2 方向 × 7 項目＋線の側の実測固定
 crates/areka/src/emo2_boot/
 ├── balloon_background.rs           # face_origin_color(atlas, file_name) -> (u8,u8,u8)
 ├── balloon_background_tests.rs
@@ -189,7 +190,7 @@ crates/areka/src/emo2_boot/
 | `crates/areka-emo-text/src/viewbox_draw.rs`（852→約 740→約 810） | **分割**: `degrade_if_needed`／`full_domain_update`／`plan_inconsistency` を `viewbox_draw_plan.rs`（`#[path] mod plan;`・`pub(super) fn`）へ純移動し、ファサードに素の `use plan::{degrade_if_needed, full_domain_update, plan_inconsistency};` を残す（`viewbox_draw_frame_render_tests.rs` が `super::plan_inconsistency` で参照している私有項目の再束縛・`structure.md` の注記どおり）。**実体化**: `fonts: Rc<FontCatalog>`・`brushes: BrushCache`、`new_shared`、`render_styled`（`render` は空の装飾表で委譲）、Phase 1 の行ごとに `style_runs`→`line_layout_decorated`→色の範囲、`ensure_format` が `fonts.pick(font)` の複製で `create_text_format` を呼ぶ、行の箱寸を `block_extent(run.size, mode)` に | 分割→実体化 |
 | `crates/areka-emo-text/src/actor.rs`（952→約 965） | `ResolvedBalloonText::resolve_with_background`、`TextLayerRuntime.balloon_background`、`register_actor` で `state.set_look_layers`、`register_actor_binding`／`refresh_actor_binding` が背景付きで解決、`present_actor` が `layout_styled`／`render_styled`／共有 `FontCatalog` を使う。それ以上の追加は `actor_decoration.rs` へ | 実体化 |
 | `crates/areka-emo-text/src/draw_format_metrics_tests.rs`（742） | `decoration_and_disable_seams_are_type_only` を「無効表示の層が実体化し、行単位の予約型は 0 バイトのまま」を述べる述語へ改訂。`font_family_reaches_directwrite_only_as_author_name_or_default_retry` の doc と述語に「第 2 の入口 `draw_metrics.rs::probe_format_for`」を加える | 実体化 |
-| `PositionedGlyph { .. }` の構築を持つテスト 5 ファイル（`choice_tests.rs`・`choice_decorate_tests.rs`・`viewbox_choice_marker_tests.rs`・`canvas.rs` のテスト・`layout` 系）と `ResolvedFont { .. }` を持つテスト 3 か所 | フィールド追加の書き換え（`style: StyleId::DEFAULT`・`looks: LookLayers::default()`） | 実体化 |
+| `PositionedGlyph { .. }` の構築を持つテスト 5 ファイル（`choice_tests.rs`・`choice_decorate_tests.rs`・`viewbox_choice_marker_tests.rs`・`canvas.rs` のテスト・`layout` 系） | フィールド追加の書き換え（`style: StyleId::DEFAULT`） | 実体化 |
 | `crates/areka/src/emo2_boot/assets.rs`（416） | `BalloonScopeAssets.background_color: (u8,u8,u8)`、構築時に `balloon_background::face_origin_color` で導出 | 実体化 |
 | `crates/areka/src/emo2_boot/frame/attach.rs`（429） | `connect_balloon_text(..., background)` が `set_balloon_background` → `register_actor_view` の順に呼ぶ | 実体化 |
 | `crates/areka/src/emo2_boot/consumer_ledger.rs` | `CommandConsumer::TextLayer`（文字レンダリング層）の variant と、正準台帳に `"\\f"` → `TextLayer` の 1 行、同ファイルの正準表テストの追随（宣言のみ・実行時の選別には使われない。モジュール doc「以後のコマンド追加は消費者＋本表 1 行」に従う） | 実体化 |
@@ -198,7 +199,7 @@ crates/areka/src/emo2_boot/
 | `.kiro/steering/structure.md`・`roadmap.md` | emo-text 節に分割後のファイルと接続、M2 予約に `sub`／`sup`／`outline` の 1 行 | 文書 |
 | 隣接 brief 5 本（`text-align-shadow-canon`・`balloon-font-descript-keys`・`choice-marker-styling`・`anchor-tag-canon`・`balloon-lifecycle-events`） | 相互登記 1 行ずつ（Supporting References §C） | 文書 |
 
-**1,000 行の見張りに対する収支**（実体化後の見込み）: `draw.rs` 約 700・`layout.rs` 約 925・`actor.rs` 約 965・`viewbox_draw.rs` 約 810・`state.rs` 約 560・`viewbox.rs` 約 850・`canvas.rs` 約 740。新設ファイルはいずれも 400 行以下を目安とし、読み戻しテストは入口＋兄弟 2 本に分けて 1 本 700 行以下に収める。例外表は増減しない。
+**1,000 行の見張りに対する収支**（実体化後の見込み）: `draw.rs` 約 700・`layout.rs` 約 925・`actor.rs` 約 965・`viewbox_draw.rs` 約 810・`state.rs` 約 560・`viewbox.rs` 約 850・`canvas.rs` 約 740。新設ファイルはいずれも 400 行以下を目安とし、読み戻しテストは入口＋サブディレクトリの 2 モジュールに分けて 1 本 700 行以下に収める。例外表は増減しない。
 
 ## System Flows
 
@@ -338,7 +339,7 @@ stateDiagram-v2
 | 12.1 | 5 項目は方向非依存 | 範囲指定は方向を持たない | — | — |
 | 12.2 | 線の側は DirectWrite の既定・§8 に登記 | 読み戻しの実測→Supporting References §A 行 7 | — | — |
 | 12.3 | rl と lr で同じ見た目 | 読み戻しテストの述語 | — | — |
-| 12.4 | 縦書きの線の側を読み戻しで固定 | `decoration_readback_test_vertical_tests.rs` | — | — |
+| 12.4 | 縦書きの線の側を読み戻しで固定 | `tests/decoration_readback/vertical.rs` | — | — |
 | 13.1 | 解釈不能は warn（キー・値・スコープ） | `Decoration::note_issue`（`actor`・`key`・`value`・`reason`） | — | — |
 | 13.2 | 候補全滅は既定＋warn | `FontCatalog` | — | — |
 | 13.3 | DirectWrite 失敗は error＋Err | `device_err` 経由 | — | — |
@@ -351,7 +352,7 @@ stateDiagram-v2
 | 15.1 | 解読を `decode.rs` の兄弟テストで | `decode_font_tests.rs` | — | — |
 | 15.2 | 台本の組み立てを `compile.rs` の兄弟テストで | `compile_font_tests.rs` | — | — |
 | 15.3 | 装飾状態の更新を純粋層のテストで | `look_tests.rs`・`color_tests.rs`・`state_decoration_tests.rs` | — | — |
-| 15.4 | 3 方向 × 7 項目の読み戻し・語彙のみ 3 | `tests/decoration_readback_test.rs`＋兄弟 2 本 | — | — |
+| 15.4 | 3 方向 × 7 項目の読み戻し・語彙のみ 3 | `tests/decoration_readback_test.rs`＋`tests/decoration_readback/` の 2 モジュール | — | — |
 | 15.5 | 計測＝描画・折返し・当たり判定 | `draw_metrics_styled_tests.rs`・`layout_styled_tests.rs`・`viewbox_draw_decoration_tests.rs` | — | — |
 | 15.6 | 2 層が定義の有無 × 各項目で組まれる | `look_tests.rs`（`from_balloon`）・`draw_format_metrics_tests.rs` の改訂・`actor_decoration_tests.rs` | — | — |
 | 15.7 | 各要件 1 件以上の較正 | Testing Strategy「較正」表 | — | — |
@@ -688,8 +689,8 @@ impl LayoutEngine {
 
 #### draw ファサードの分割（段階 1・変更ゼロのテスト緑）
 
-- `draw.rs` に残す: モジュール doc・import・`DEFAULT_FONT_NAME`／`DEFAULT_FONT_HEIGHT`／`LOCALE_JA_JP`／`PROBE_MAX_EXTENT`・`ResolvedFont`＋`impl`・`DirectionRecipe`＋`impl`・`create_text_format`・`try_create_format`・`create_d2d_target_bitmap`・`device_err`・テスト接続 3 本、および `#[cfg(test)]` の `FormatKey`・`DrawExecutor`＋`impl`・`create_target_bitmap`・`none_err`（`at_prefixed_font_name_generation_is_absent_from_production_source` が要求する `@` の唯一の出所が `DrawExecutor::render` にあるため動かさない）。`line_layout_creations` は `LineLayoutStore` 側へ移るので `pub(super)` にする。
-- `draw_metrics.rs`（`#[path] mod metrics;`）: `DWriteMetrics`＋`impl`＋`impl GlyphMetrics`・`measure_line_box_ratio`。`cached_probe_count` は `pub(super)`（ファサード配下のテストから見える最小の可視性）。
+- `draw.rs` に残す: モジュール doc・import・`DEFAULT_FONT_NAME`／`DEFAULT_FONT_HEIGHT`／`LOCALE_JA_JP`／`PROBE_MAX_EXTENT`・`ResolvedFont`＋`impl`・`DirectionRecipe`＋`impl`・`create_text_format`・`try_create_format`・`create_d2d_target_bitmap`・`device_err`・テスト接続 3 本、および `#[cfg(test)]` の `FormatKey`・`DrawExecutor`＋`impl`・`create_target_bitmap`・`none_err`（`at_prefixed_font_name_generation_is_absent_from_production_source` が要求する `@` の唯一の出所が `DrawExecutor::render` にあるため動かさない。`DrawExecutor::line_layout_creations` も一緒に残るので可視性は変わらない）。
+- `draw_metrics.rs`（`#[path] mod metrics;`）: `DWriteMetrics`＋`impl`＋`impl GlyphMetrics`・`measure_line_box_ratio`。`cached_probe_count`（`DWriteMetrics` の私有メソッド・`draw_format_metrics_tests.rs` が 4 か所で参照）は `pub(super)` へ上げる（ファサード配下の兄弟テストから見える最小の可視性）。`LineLayoutStore::creations` は既に `pub(crate)` なので変更不要。
 - `draw_line_store.rs`（`mod line_store;`）: `CachedLineLayout`・`LineLayoutStore`＋`impl`・`measure_line_overhang`。
 - ファサードの再輸出: `pub use metrics::{DWriteMetrics}; pub(crate) use line_store::LineLayoutStore;`。子は `super::{device_err, PROBE_MAX_EXTENT, create_text_format, ResolvedFont, ...}` で辿る（`super` はファサード自身・`structure.md` の注記）。
 - 分割の段階で触らないもの: `draw_format_metrics_tests.rs`・`draw_oracle_tests.rs`・`draw_test_support.rs`（`use super::{...}` は再輸出で解決）。字面検査 3 本（`draw.rs` の家族名検査と `@` の対照・`layout.rs` の `finish_line` 検査）は検査対象の定義が動かないので緑（D15）。
@@ -718,7 +719,7 @@ impl ResolvedFont {
 ```
 
 - `cursor_text` は `ResolvedChoiceStyle::resolve(Some(model.cursor()), color).paint(color)` の文字色（`NoMarker` は既定の文字色）から取る（`choice.rs` の既存の解決を再利用・R8.7）。
-- `FontDisableSeam`／`RESERVED_KEY_DISABLE_FONT_PREFIX` は撤去。`ResolvedFont { .. }` のテスト構築 3 か所は `looks: LookLayers::default()` を足す。
+- `FontDisableSeam`／`RESERVED_KEY_DISABLE_FONT_PREFIX` は撤去。`ResolvedFont` は `#[non_exhaustive]` で、構築は `resolve` の 1 か所だけ（テストも `draw_oracle_tests.rs`・`tests/viewbox_blit_spike.rs`・`draw_format_metrics_tests.rs` のいずれも `ResolvedFont::resolve(..)` を呼ぶ・2026-09-12 実測）。**フィールド追加によるテストの書き換えは 0 か所**。
 
 #### `FontCatalog`（`draw_catalog.rs`）
 
@@ -936,11 +937,12 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 4. `actor_decoration_tests.rs`／`balloon_background_tests.rs`: 2 層の登録・背景の口・原点画素の 3 ケース。
 5. 既存のオラクル比較（`draw_oracle_tests.rs`・`viewbox_draw_live_diff_tests.rs`）・PNG 比較（`viewbox_draw_png_dump_tests.rs`）・`line_pitch_readback_test.rs`・`kero_menu_capacity_test.rs` が**変更なしで緑**（R14.1）。
 
-### 読み戻しテスト（`tests/decoration_readback_test.rs`＋兄弟 2 本・WARP 可）
+### 読み戻しテスト（`tests/decoration_readback_test.rs`＋`tests/decoration_readback/{mod,vertical}.rs`・WARP 可）
 
 - 横書き × 7 項目: `bold`・`italic`・`underline`・`strike`・`color`・`height`・`name` のそれぞれで「有効にした行」と「素の行」の画素が違う（`underline`／`strike` は文字の下／中央に水平のインクの列が現れ、その行の位置を今日の値として固定）。語彙のみ 3 項目（`sub`・`sup`・`outline`）は「有効にしても画素が同じ」。
 - 縦書き 2 方向 × 7 項目: 同上。`underline`／`strike` は列の左右どちらにインクが増えたかを判定し、`vertical_rl` と `vertical_lr` で同じ側であること、今日の DirectWrite の既定（実測値）と同じであることを述語にする（裁定との一致は述語にしない・R12.4）。実測結果を §8 行 7 に登記する。
-- 較正: 各ファイルに「装飾を焼かない経路（`render`）で描くと差が消える」対照を置く（差の検出そのものが空振りしていないことの確認）。
+- 置き方: `tests/` の直下に置いた `.rs` は 1 本ずつ独立した実行ファイルになる（`crates/areka-emo-text/tests/` は現状すべてこの形）ため、共有ヘルパと縦書きは**入口から `mod` で取り込むサブディレクトリ**に置く（`crates/dola/tests/compile.rs`＋`tests/compile/` と同じ作法）。src 側の `<stem>_<モジュール名>.rs` の規則は `tests/` には適用しない
+- 較正: 各モジュールに「装飾を焼かない経路（`render`）で描くと差が消える」対照を置く（差の検出そのものが空振りしていないことの確認）。
 - 実フォント（`Yu Gothic UI`）の存在を先頭で確かめる（`line_pitch_readback_test.rs` と同じ門）。
 
 ### 較正（R15.7・要件ごと 1 件以上）
@@ -969,7 +971,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 1. `draw_format_metrics_tests.rs::decoration_and_disable_seams_are_type_only` → `disable_layer_is_materialized_and_row_effects_stay_reserved`（`resolve(..).looks.disable.color == mix_disabled(color, 白)`・`size_of::<TextEffects>() == 0` は残す）。同時に、同ファイルの `use super::{…, FontDisableSeam, RESERVED_KEY_DISABLE_FONT_PREFIX, …}` の import 行と `RESERVED_KEY_DISABLE_FONT_PREFIX`／`resolved.disable == FontDisableSeam::default()` の断言を消し、`surface.rs` の doc コメント（`FontDisableSeam`／`TextEffects` を名指し）を「`TextEffects`（M2 予約）」だけに改める。
 2. 同 `font_family_reaches_directwrite_only_as_author_name_or_default_retry`: doc と述語に「第 2 の入口 `draw_metrics.rs::probe_format_for`（鍵の候補列を `FontCatalog` で解決した名前か既定名のみ）」を加える。`draw.rs` 側の述語は不変。
 3. `lib.rs::pure_layer_modules_have_no_windows_imports`: `look.rs`・`color.rs`・`state_decoration.rs`・`layout_line_ops.rs`・`layout_styled.rs` を列挙に足す。
-4. `PositionedGlyph { .. }`・`ResolvedFont { .. }`・`BalloonScopeAssets { .. }` の構築を持つテストにフィールドを足す。
+4. `PositionedGlyph { .. }`（テスト 5 ファイル）・`BalloonScopeAssets { .. }`（テスト 2 か所）の構築にフィールドを足す。`ResolvedFont` は構築が `resolve` の 1 か所だけなのでテストの書き換えは無い。
 
 ## Performance & Scalability
 
