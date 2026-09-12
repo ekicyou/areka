@@ -31,7 +31,7 @@
 - **文書 3 本**: `doc/ukadoc-coverage/linkage.md`（束の帰属の正本）・`briefing.md`（段階と順位の正本）・`roadmap-draft.md`（候補 spec とウェーブ案）。3 本とも「人が読む本文」と「機械が読む骨組み（```toml の囲み）」を同じファイルに持つ。
 - **台帳 4 本の `links`・`values`・`priority`・`owner`・`note` の統合のための編集**（形式は凍結のまま）。`priority` の値の正本は「`linkage.md` の帰属 × `briefing.md` の順位」であり、台帳の `priority` はそこから機械で導いた写しである。
 - **報告 5 本の作り直し**（`report`・`report-summary` の副手続きで）。
-- **道具の追加分**: 文書の骨組みの読み取り（`documents`）・`priority` の 1 行置換（`ledger::patch`）・副手続き `priority-apply`・全体報告の判定範囲の切り出し（`render_summary_judged`）・判定テスト 6 種と摂動・母数のテスト。
+- **道具の追加分**: 文書の骨組みの読み取り（`documents`）・`priority` の 1 行置換（`ledger::patch`）・副手続き `priority-apply`・全体報告の純関数化（`render_summary` から証拠の表を外す）・判定テスト 6 種と摂動・母数のテスト。
 - **README の限定編集**: 「誰が何を作り直すか」の表の `summary.md` 行とその直下の説明 1 段落、「この一式に入っているもの」への新規 3 文書の追記。
 
 ### Out of Boundary
@@ -72,7 +72,7 @@
 | 台帳の読み取り | `ledger::read::read` | 判定と `priority-apply` の入力 |
 | 塊の切り分け | `ledger::blocks::split`（前置きの終端と各項目の `start`/`end`） | `priority` 1 行だけの置換（D-4） |
 | 束の連結成分 | `report::bundle::bundles` | 機械の束の再計算は**しない**（判定 ⑵ は報告の本文を読む）。設計上の根拠として束 id が構成 id の最小値であることに寄りかかる |
-| 全体報告の描画 | `report::summary::render_summary` | 判定範囲（カタログ＋台帳由来）と証拠の表を切り分ける（D-5） |
+| 全体報告の描画 | `report::summary::render_summary` | 証拠の表を外してカタログ＋台帳だけの純関数にする（D-5） |
 | 囲みの中の id の実在検査 | `tests/consistency/examples.rs` の `toml_blocks`／`quoted_ids` | 純粋層 `documents::parse` へ移し、`examples.rs` はそれを使う（重複を 1 つにする） |
 | 写しを 1 か所壊す道具 | `tests/consistency/perturb.rs` の `Perturbed` | 文書の写しを壊す摂動は文字列の上で行うので、`Perturbed` は流用せず同じ流儀で `documents.rs` に置く |
 | 母数 0 を許さない前例 | `tests/consistency/non_vacuity.rs` | 同じ形（下限の定数＋関係の主張）を `documents_non_vacuity.rs` に |
@@ -95,7 +95,7 @@ graph TB
         Derive[documents derive 優先度の導出]
         Patch[ledger patch 1行置換]
         Apply[cli priority-apply]
-        Judged[report summary judged]
+        Judged[report summary 純関数化]
         Checks[tests consistency 判定6種]
     end
     Linkage --> Parse
@@ -122,7 +122,7 @@ graph TB
 - **採る形**: 「文書が正本・台帳は導出・テストが突き合わせ」。人が決めるもの（帰属・段階・順位・4 つの根拠）は 3 文書の骨組みに 1 度だけ書き、そこから機械で導けるもの（`priority`・段階ごとの件数・テーマの和集合・跨ぐドメイン・資産の広さ・基盤共有度）は書いても必ず数え直す。
 - **境界**: `documents`（読み取りと導出）は純粋層で、ファイルに触らない。ファイルに触るのは `cli::generate::priority_apply` と統合テストの読み込みだけ（既存の 2 層の規律を保つ）。
 - **保つ既存の形**: `check/` と `FindingKind` は触らない。判定は統合テストの兄弟ファイルに置く（research.md §7 案 A）。`cli check` からは新しい判定は見えないが、要件 11.6 が求めるのは「標準のテスト実行」であり、`cargo test -p ukadoc-survey` がそれである。
-- **新しい部品の理由**: `documents::parse`（3 文書を機械が読む唯一の口。テストと副手続きで読み方が割れない）・`documents::derive`（`priority` と 4 つの根拠の導出を 1 か所に）・`ledger::patch`（`merge_initial` は差し込みしかできない）・`render_summary_judged`（判定 ⑹ の対象を証拠の表から切り離す）。
+- **新しい部品の理由**: `documents::parse`（3 文書を機械が読む唯一の口。テストと副手続きで読み方が割れない）・`documents::derive`（`priority` と 4 つの根拠の導出を 1 か所に）・`ledger::patch`（`merge_initial` は差し込みしかできない）・`render_summary` の純関数化（証拠の表を外し、判定 ⑹ を全文一致にする）。
 - **依存の向き**: `model` → `ledger`／`catalog` → `report` → `documents` → `cli`／`tests`。`documents` は `ledger`（`Status`・`LedgerEntry`）と `model` にだけ依存し、`check/`・`report/` には依存しない。
 
 ### Technology Stack
@@ -159,7 +159,7 @@ crates/ukadoc-survey/
 ├── src/cli/generate.rs           # priority_apply / priority_apply_with を追加
 ├── src/cli/mod.rs                # SUBCOMMANDS 8→9・usage
 ├── src/io/paths.rs               # linkage_path・briefing_path・roadmap_draft_path を追加
-├── src/report/summary.rs         # render_summary_judged を切り出し・冒頭 2 行と証拠の表の見出しの文言
+├── src/report/summary.rs         # 証拠の表を外して純関数化（evidence 引数を落とす）・冒頭 2 行目の文言
 └── tests/consistency/
     ├── mod.rs                    # mod 宣言 4 つを追加・冒頭の「summary.md は読まない」の但し書きを改める
     ├── documents.rs              # 読み込み Documents::load・spec ディレクトリの数え上げ・写しを壊す道具（テスト本体は置かない）
@@ -174,9 +174,9 @@ crates/ukadoc-survey/
 - `crates/ukadoc-survey/src/lib.rs` — `pub mod documents;` を追加。
 - `crates/ukadoc-survey/src/ledger/mod.rs` — `pub mod patch;` を追加。
 - `crates/ukadoc-survey/src/cli/mod.rs`・`cli_tests.rs` — 副手続き 9 つ（表・使い方・「8 つ」の釘付けを 9 へ）。
-- `crates/ukadoc-survey/src/report/summary.rs`・`summary_tests.rs` — 判定範囲の切り出し（D-5）と冒頭の文言（「常時検査の合否に入れません」は事実でなくなる）。`summary_tests.rs` はその文言を逐語で釘付けしているので同時に直す。
+- `crates/ukadoc-survey/src/report/summary.rs`・`summary_tests.rs`・`cli/generate.rs`・`generate_tests.rs` — 証拠の表を外して純関数化（D-5）と冒頭の文言（「常時検査の合否に入れません」は事実でなくなる）。`summary_tests.rs` はその文言を逐語で釘付けしているので同時に直す。`report_summary()` は `EvidenceIndex` を作らなくなる。
 - `crates/ukadoc-survey/tests/consistency/mod.rs`・`examples.rs` — 上記。
-- `doc/ukadoc-coverage/README.md` — 「誰が何を作り直すか」の表の `summary.md` 行を「入る（末尾の証拠の表を除く）・作り直すのは台帳を触った人」に改め、その直下の「`summary.md` を常時の検査に入れないのは…」の 1 段落を「証拠の表だけを外す理由」に書き換える（要件 11.2・12.4 の「表の更新」にこの段落を含める——表と段落は一体で、表だけ直すと段落が表を否定する）。「この一式に入っているもの」に新規 3 文書を 3 行追記。加えて、判定 ⑹ で事実でなくなる文——「4. 報告の扱い」節の「全体報告は…新しさは常時の検査に入っていない」「統合担当が作り直したときにだけ更新される」と「⚠ 全体報告は黙って古くなる」節の「常時の検査には入っていないので何も失敗しない」——を「カタログと台帳から決まる本文は常時検査が判定する。証拠の表だけは対象外」に揃える（要件 12.4 は「11.2 に伴い事実でなくなる記述」を編集範囲に含める）。ほかは触らない。
+- `doc/ukadoc-coverage/README.md` — 「誰が何を作り直すか」の表の `summary.md` 行を「入る（末尾の証拠の表を除く）・作り直すのは台帳を触った人」に改め、その直下の「`summary.md` を常時の検査に入れないのは…」の 1 段落を「証拠の表だけを外す理由」に書き換える（要件 11.2・12.4 の「表の更新」にこの段落を含める——表と段落は一体で、表だけ直すと段落が表を否定する）。「この一式に入っているもの」に新規 3 文書を 3 行追記。加えて、判定 ⑹ で事実でなくなる文——「4. 報告の扱い」節の「全体報告は…新しさは常時の検査に入っていない」「統合担当が作り直したときにだけ更新される」と「⚠ 全体報告は黙って古くなる」節の「常時の検査には入っていないので何も失敗しない」——を「全体報告はカタログと台帳から決まり、常時検査が新しさを判定する。証拠の件数は `evidence` 副手続きで読む」に揃え、完了 spec toolkit の要件 2.3・設計 D-11（報告に証拠の有無を載せる）を本 spec が覆した旨を「4. 報告の扱い」節に 1 行書く（要件 12.4 は「11.2 に伴い事実でなくなる記述」を編集範囲に含める）。ほかは触らない。
 - `doc/ukadoc-coverage/ledger/{shiori,assets,sakura-script,property}.toml` — 要件 3・7・8.6 の編集。
 - `doc/ukadoc-coverage/report/{summary,shiori,assets,sakura-script,property}.md` — 機械で作り直す。
 
@@ -302,14 +302,14 @@ graph LR
 | 10.8 | M3 候補と M2 予約群の対応表（0 件も書く） | `[[reserved]]`・判定 ⑸-d | D-12 | 段 5 |
 | 10.9 | 草案である旨を冒頭に | `roadmap-draft.md` 冒頭 | — | 段 5 |
 | 11.1 | 判定 6 種を標準のテスト実行に | `documents_checks.rs`・`linkage_checks.rs` | D-3 | 段 2・3・5 |
-| 11.2 | ⑹ の除外を覆す旨を README と本 spec の文書に・証拠の表は対象外 | README の表・`render_summary_judged`・`summary.md` の「判定の対象外」行 | D-5 | 段 0・5 |
+| 11.2 | ⑹ の除外を覆す旨を README と本 spec の文書に・証拠の表は `evidence` 副手続きへ | README の表と「報告の扱い」節・`render_summary` の純関数化・処分台帳 | D-5 | 段 0・5 |
 | 11.3 | 種別ごとに 1 か所壊して赤 | 各判定の摂動 | D-3 | 段 2・3・5 |
 | 11.4 | 種別ごとに対象 0 件でない | `documents_non_vacuity.rs` | D-3 | 段 2・3・5 |
 | 11.5 | 0 は「0」と書き数え方を添える | 骨組みの欄（省略不可）・本文 | D-1 | 全段 |
 | 11.6 | 使い捨ての場所に判定を置かない | `tests/consistency/` のみ | — | — |
 | 11.7 | 赤は文書か台帳を直す・判定を緩めない | 作業規律・レビュー基準 | — | 全段 |
 | 12.1 | 実行時コード非接触 | File Structure Plan | — | — |
-| 12.2 | crate への接触の範囲 | `documents`・`patch`・`priority-apply`・`render_summary_judged`・`paths`・テスト | D-4（`priority` のみ置換） | — |
+| 12.2 | crate への接触の範囲 | `documents`・`patch`・`priority-apply`・`render_summary` の純関数化・`paths`・テスト | D-4（`priority` のみ置換） | — |
 | 12.3 | 非編集の文書 | Out of Boundary | — | — |
 | 12.4 | README の編集範囲 | Modified Files | 表＋直下の 1 段落＋一式の追記 | 段 5 |
 | 12.5 | 実機比較・実走をしない | Allowed Dependencies | ukadoc の URL と逐語引用 | — |
@@ -325,7 +325,7 @@ graph LR
 | `documents::derive` | 純粋層 | 帰属 × 順位 → `priority`・4 つの根拠の導出 | 6.1〜6.7, 7.1, 7.2 | `parse`（P0）・`ledger::Ledger`（P0） | Service |
 | `ledger::patch` | 純粋層 | 塊のバイト列を保って `priority` の 1 行だけ置換 | 7.1, 12.2 | `ledger::blocks::split`（P0） | Service |
 | `cli::generate::priority_apply` | 入口 | 読む→導く→置換→書く | 7.1, 7.6 | `documents`・`patch`・`io`（P0） | Batch |
-| `report::summary::render_summary_judged` | 純粋層 | 判定 ⑹ の対象本文 | 11.1 ⑹, 11.2 | `tally`・`bundle`（P0） | Service |
+| `report::summary::render_summary`（純関数化） | 純粋層 | 判定 ⑹ の対象本文（証拠の表を外す） | 11.1 ⑹, 11.2 | `tally`・`bundle`（P0） | Service |
 | `tests/consistency/documents.rs` | 入口 | 実データの読み込みと写しを壊す道具 | 11.3, 11.4 | `RepoData`（P0）・`documents::parse`（P0） | State |
 | `documents_checks.rs`・`linkage_checks.rs`・`documents_non_vacuity.rs` | 入口 | 判定 6 種・摂動・母数 | 11.1〜11.4 | 上 | — |
 | `linkage.md`・`briefing.md`・`roadmap-draft.md` | 文書 | 帰属・順位・編成の正本 | 3〜6, 8〜10 | — | 骨組み（D-2） |
@@ -434,21 +434,20 @@ pub fn replace_priority(text: &str, wanted: &BTreeMap<EntryId, String>) -> Resul
 - 冪等性: 2 回目は変更 0 項目で本文が変わらない。読み取りと書き手を引数で受ける `priority_apply_with` を置き、ファイルを作らずに順番（4 本の本文が全部決まってから書く）を確かめる（`ledger_init_with` と同じ形）。
 - 行末: `write_lf` は LF で書く。作業ツリーが CRLF なら見かけの行末差が出るが、git は内容差分だけを差分にする（要件 2.5 の運用と同じ）。
 
-### 純粋層 / `report::summary::render_summary_judged`
+### 純粋層 / `report::summary::render_summary`（純関数化）
 
 | 項目 | 内容 |
 |---|---|
-| 意図 | 全体報告のうちカタログと台帳 4 本だけから決まる本文を返す。`render_summary` はこれに証拠の表を継ぎ足す |
+| 意図 | 全体報告をカタログと台帳 4 本だけから決まる本文にする（証拠の表を外す・D-5） |
 | 要件 | 11.1 ⑹, 11.2, 2.2 |
 
 ```rust
-pub fn render_summary_judged(catalog: &Catalog, ledgers: &[Ledger], themes: &[&str]) -> String;
-pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], evidence: &EvidenceIndex, themes: &[&str]) -> String; // 既存。judged ＋ 証拠の表
+pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], themes: &[&str]) -> String; // 既存の署名から evidence を落とす
 ```
 
-- 冒頭の 2 行目「4 本の台帳を跨ぐ報告なので、新しさは常時検査の合否に入れません」を「カタログと台帳から決まる本文は常時検査が判定します。末尾の証拠の表だけは判定の対象外です」に改める。証拠の表の見出しの直下に「（判定の対象外——ソース木を歩いて数える値なので、常時検査には入れない）」の 1 行を置く（要件 11.2）。
-- 判定 ⑹ は `summary.md` の本文（復帰文字を落としたもの）が **`render_summary_judged` の出力で始まる**ことを主張する。証拠の表以降は比べない。
-- 事後条件: `render_summary` の出力は `render_summary_judged` の出力を接頭辞として持つ（在中テストで釘付け）。
+- 末尾「ドメインごとの証拠あり件数」の節を削り、証拠の件数は `cargo run -p ukadoc-survey -- evidence` の出力に一本化する。冒頭の 2 行目「4 本の台帳を跨ぐ報告なので、新しさは常時検査の合否に入れません」を「この報告はカタログと台帳から決まり、常時検査が新しさを判定します。証拠の件数は `evidence` 副手続きで読みます」に改める（要件 11.2）。
+- 判定 ⑹ は `summary.md` の本文（復帰文字を落としたもの）が **`render_summary` の出力と全文一致**することを主張する。
+- `cli::generate::report_summary` は証拠の走査（`EvidenceIndex`）を行わなくなる。`summary_tests.rs` の文言の釘付けと `generate_tests.rs` の入力を同時に直す。
 
 ### 入口 / `tests/consistency`（判定 6 種）
 
@@ -480,11 +479,11 @@ pub(super) fn cited_ids(markdown: &str) -> BTreeSet<String>;
 | ⑶ 帰属の分割 | a) 束の `members` が互いに素、b) `members` の和集合＝状態が対象 4 語の全項目（過不足なし）、c) `hand` ⊆ `members` かつ `members ∖ hand` ⊆ 引用した機械の束の構成 id の和集合、d) `alias`・`not-applicable` の id が 1 つも現れない、e) `themes`・`domains` が `derive` の値と一致し、`breakage = "該当なし"` の束は全構成 id が `implemented`、f) `[tally]` の各数が数え直しと一致（`target`・`from_machine`・`by_hand`・`singles`・`alias_excluded`・`not_applicable_excluded`・`singles_by_domain` の 4 欄）し、恒等式 `target = from_machine + by_hand + singles`・`Σ singles_by_domain = singles`・`target + alias_excluded + not_applicable_excluded = 4 台帳の項目数` が成り立つ（`from_machine`・`by_hand` は `single = true` でない束だけの合算） | id を 1 つ抜く／2 束に入れる／`tally` を 1 ずらす | 名前付き束が 1 つ以上・`by_hand` が 1 以上（開発者裁定の反映） |
 | ⑷ 段階と順位 | a) 名前付き束（単独項目を含む）の全数が `[[rank]]` にちょうど 1 度現れ、`[[rank]]` の束名がすべて `linkage.md` に在る、b) `[stage.X]` の `bundles`（`bundle` の行の数）・`singles`（`singles` の行の id の総数）・`items`（台帳で `priority` がその文字で始まる項目数）が数え直しと一致（5 段階すべて・0 も比べる）、c) 台帳の全項目の `priority` が `derive::priorities` と一致（`alias`・`not-applicable` は `""`）、d) `[[rank]]` の `assets`・`shared` が `derive` と一致、e) 同じ段階の `[[rank]]` のうち `override` も `insufficient` も持たない行（対象行）は `axis_key` の降順で並び、鍵が等しい行は同じ `rank`・鍵が異なれば異なる `rank`、`rank` は 1 から始まり同順位の次は 1 増える（密な順位 1,2,2,3。要件 7.1）。`singles` の行は並べた id の鍵がすべて等しいこと（等しくなければ行を分ける）。`override` を持つ行は `kind` が `second-stage` なら `ref` が「項目 n」（1〜20）か持ち越し行の見出し、`stage-rule` なら `ref` が "要件 5.3" であること。`insufficient` の行は同じ段階の対象行より後に並ぶこと、f) `[[barrier]]`・`[[after]]`・`[priority_blank]` の数が台帳の数え直しと一致、g) 段階 B の `rank` 1 の束の `themes` に「更新」が含まれ、段階 C の最大 `rank` の束の `members` に `system.` を含む id がある（5.3 の釘付け） | 束名を 1 つ消す／`items` を 1 ずらす／`priority` を 1 件書き換える | `[[rank]]` が 1 行以上・段階 A の `items` が 1 以上 |
 | ⑸ spec ディレクトリ | a) `[briefs].count` ＝ `[[spec]]` の行数、b) `[[spec]]` の各名前が `spec_dirs ∪ completed_specs` に在る（他 spec の起票・完了で赤にならない。改名・削除で赤になる）、c) `owner_count` ＝ 台帳で `owner` がその名前の項目数、d) `[[reserved]]`・`[[spec]]` の `bundle` が `linkage.md` に在る（`none = true` の行を除く）、e) `briefing.md` の `[[owner_completed]]` に列挙した spec 名が `completed_specs` に在り、その名前を `owner` に持つ項目の状態がすべて `implemented` か `degraded`（7.4 ⑵。生きた `completed/` の全走査はしない）、f) 台帳の非空 `owner` はすべて `[[spec]]` の名前か `[[owner_completed]]` の名前のいずれか（7.4 ⑶: brief の無い候補 spec 名を書かない） | `count` を 1 ずらす／spec 名を 1 文字変える／`owner` を 1 件書き換える | `[[spec]]` が 20 行以上・`[[owner_completed]]` が 1 行以上・`completed_specs` が 100 以上 |
-| ⑹ 全体報告の新しさ | `summary.md`（復帰文字を落とす）が `render_summary_judged(catalog, ledgers, THEMES)` で始まる | 本文の数字を 1 つ変える | `render_summary_judged` の出力が空でない・`summary.md` がそれより長い（証拠の表がある） |
+| ⑹ 全体報告の新しさ | `summary.md`（復帰文字を落とす）が `render_summary(catalog, ledgers, THEMES)` の出力と全文一致 | 本文の数字を 1 つ変える | `render_summary` の出力が空でなく、束の表の行が 1 行以上 |
 
 - 失敗の本文は**ファイル名と id（または束名・spec 名）**を名指す（要件 11.1）。
 - ⑸ の数え方（1.3・12.8）: `spec_dirs` は `.kiro/specs/` の直下でディレクトリ名が `completed` でも `OWN_SPEC_DIR` でもなく `brief.md` を持つもの。本 spec が `completed/` へ移る前は 28−1、移った後は 27−0、どちらも 27。`[briefs].count` は着手時の写真（`snapshot_on` を添える）であり、判定は「表の各名前が直下か `completed/` に実在する」と「`count` が表の行数と一致する」を主張する。生きた総数との一致は主張しない——他 spec の起票・完了のたびに赤になり、`roadmap-draft.md` が全 spec の共有ファイルになるため（W13「共有ファイル 0」）。新しい brief の登記先は roadmap.md の spec 台帳であり、本文書は 2026-09-11 の草案である。
-- 判定の入力に `evidence` は要らない（⑹ は証拠の表を比べない）。`RepoData` は既存のまま使い、`Documents::load` が足りない分（`summary.md`・3 文書・spec ディレクトリ）を読む。
+- 判定の入力に `evidence` は要らない（`summary.md` に証拠の表は無い・D-5）。`RepoData` は既存のまま使い、`Documents::load` が足りない分（`summary.md`・3 文書・spec ディレクトリ）を読む。
 
 ## Data Models
 
@@ -635,7 +634,7 @@ bundle = "…"                      # 写った束。写らなければ none = t
 
 ## Testing Strategy
 
-- **在中テスト（純粋層）**: `parse_tests.rs`（囲みの連結・鍵の重複で落ちる・欄の欠落で鍵を名指す・3 種の id の口の較正）、`derive_tests.rs`（`priorities` の全 id 被覆・帰属の無い id で落ちる・`axis_key` の序列・`shared` が自分を含む・`themes` の和集合）、`patch_tests.rs`（冪等・他の欄のバイト不変・備考の中の字下げ行を触らない・`priority` 行の無い塊で落ちる・置換後に `ledger::read` が読める）、`summary_tests.rs` への追記（judged が全体の接頭辞・証拠の表の直下に「判定の対象外」の行）、`generate_tests.rs` への追記（`priority_apply_with` が 4 本の本文を決めてから書く・導出失敗で 1 本も書かない）、`cli_tests.rs`（9 つ目の名前）。
+- **在中テスト（純粋層）**: `parse_tests.rs`（囲みの連結・鍵の重複で落ちる・欄の欠落で鍵を名指す・3 種の id の口の較正）、`derive_tests.rs`（`priorities` の全 id 被覆・帰属の無い id で落ちる・`axis_key` の序列・`shared` が自分を含む・`themes` の和集合）、`patch_tests.rs`（冪等・他の欄のバイト不変・備考の中の字下げ行を触らない・`priority` 行の無い塊で落ちる・置換後に `ledger::read` が読める）、`summary_tests.rs` への追記（出力に証拠の表が無い・冒頭 2 行目の新しい文言）、`generate_tests.rs` への追記（`priority_apply_with` が 4 本の本文を決めてから書く・導出失敗で 1 本も書かない）、`cli_tests.rs`（9 つ目の名前）。
 - **統合テスト（`tests/consistency/`）**: 上の判定の一覧の 6 種 × ⑴ 実データで緑 ⑵ 1 か所壊して赤 ⑶ 対象 0 でない。
 - **実行体テスト**: `cli_streams.rs` に「`priority-apply` は引数を取らない」の使い方の誤りの腕を 1 つ足す（repo の中身に寄りかからない範囲）。
 - **文書の手順としての検証**（機械化しないもの）: 段階 A の主障壁の数え直し（8.1 ⑷）は `[[barrier]]` が数え直すので機械化される。申し送りの全数拾い（8.2）は「統合担当」「裁定案」「是正候補」「申し送り」の 4 語で 4 ブリーフィングと 5 `tasks.md` を検索した結果の件数を処分台帳の冒頭に書き、宛先で仕分けた手順を添える（research.md §2.4 の当たり）。
@@ -669,10 +668,11 @@ bundle = "…"                      # 写った束。写らなければ none = t
 - 置換は `blocks::split` の範囲内で行頭の `priority = ` 行 1 つだけ。`merge_initial` と同じく他のバイトは写す。
 - `owner` の変更は最大 75 行（完了済み spec 宛ての未対応・語彙のみ）、`note` の追記と `links` の補修は数行なので手編集。件数は本文に履歴の数として書き、`owner` の宛先の整合は判定 ⑸-e が状態として守る。
 
-### D-5 判定 ⑹ は `render_summary_judged` の接頭辞一致・証拠の表は `summary.md` に残す
+### D-5 判定 ⑹ は全文一致・証拠の表は `summary.md` から外し `evidence` 副手続きに一本化（開発者裁定 2026-09-12）
 
-- research.md §5.5 の (b)。`render_summary` を「判定範囲」と「証拠の表」に分け、判定は前者だけを比べる。証拠の表は toolkit 要件 2.3（報告に証拠の有無を載せる）を保つため `summary.md` に残し、直下に「判定の対象外」と書く（要件 11.2）。`evidence` 副手続きへ移す案は toolkit 設計 D-11 の置き場を動かすので採らない。
-- 副作用: 台帳 4 本のいずれかを触った spec は `report-summary` を走らせる必要がある。README の表をそう改める。ソースだけを触る spec は影響を受けない（これが証拠の表を外す理由）。
+- research.md §5.5 の (c)。`summary.md` から末尾「ドメインごとの証拠あり件数」の表を外し、`render_summary` をカタログと台帳 4 本だけの純関数にする（`EvidenceIndex` の引数を落とす。`render_summary_judged` は作らない）。判定 ⑹ は `summary.md` の本文（復帰文字を落としたもの）と `render_summary` の出力の**全文一致**。
+- 理由: 判定されない印字の数を正典の報告に残すと必ず古びる（記憶「表示するだけの数は必ず古びる」）。証拠の件数は既存の `cargo run -p ukadoc-survey -- evidence` の出力で読めるので新しい道具は要らない。完了 spec toolkit の要件 2.3・設計 D-11（報告に証拠の有無を載せる）は本 spec が覆す旨を README「4. 報告の扱い」と本 spec の文書（`briefing.md` の処分台帳）に書く（11.2 の除外覆しと同じ手続き）。
+- 副作用: 台帳 4 本のいずれかを触った spec は `report-summary` を走らせる必要がある。README の表をそう改める。ソースだけを触る spec は影響を受けない。`report_summary()` は証拠の走査をしなくなるので `generate.rs` の入力から `EvidenceIndex` が消える。
 
 ### D-6 判定 ⑸ は自 spec の**ディレクトリ名**を除いて数える
 
