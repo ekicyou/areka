@@ -8,10 +8,6 @@
 ときは、値を写さず欄の名前で指す。項目を指すときは必ず引用符か逆引用符で囲み、地の文に裸で
 書かない。
 
-まだ 1 行も無い表（主障壁・完了済み spec 宛ての宛先）は、囲みに見出しだけを
-置くことができないので書いていない。読み手は「その表が無い」を
-「0 行」として扱う。
-
 ## 1. 着手条件の確認
 
 **確認日: 2026-09-12**（この節は着手の当日に書き、以後は書き換えない）
@@ -947,13 +943,153 @@ items = 166
 
 ## 4. 段階 A の主障壁
 
-<!-- 段 3（タスク 4.6）で書く: ページ別の状態分布を台帳から数え直して置く。 -->
+段階 A の節目は「当面 emo2 が動けばよい」である。その節目に届くのを妨げている物として、brief は
+2 つを名指した——⑴ ベースウェアとゴーストの間でやり取りする口がほとんど無いこと、⑵ 定義ファイルに
+作者が書いた記述を areka が引き当てなかったとき、利用者にも作者にも何も知らせずに捨てること。
+この節は、その 2 つが台帳のどのページにどれだけ残っているかを、ページ単位の状態の分布として置く。
+
+**数え方**（6 ページとも同じ手順。作業ツリーの根で走らせる）: 台帳 4 本の項目は、行頭が
+`[entry."` で始まる見出しの行をちょうど 1 つと、その直後に行頭が `status = ` の行をちょうど
+1 つ持つ。見出しの名前はコロンで 4 つに割れ、その 2 つ目がページ名である。見出しからページ名を
+取り、直後の `status` の値でページごとに数え上げた。これは `cargo run -p ukadoc-survey -- report`
+が作るドメイン別報告の「ページ別の状態の分布」の表と同じ数え方であり、下の 6 行はその表と
+食い違わない（`report/shiori.md` と `report/assets.md` の同名の節の該当行を 1 行ずつ照合した）。
+
+**下の 2 つの囲みは、ページの全項目を数えたものである。** 段階 A に落ちた項目だけを数えたもの
+ではない。要件 8.1 ⑷ が数え直しを求めているのは「着手時の実測」9 の数で、その数がページ単位
+だからである。段階 A に落ちた項目の総数は 3-7 の `[stage.A]` の `items` が持つ。
+
+### 4-1. 障壁 ⑴ イベントと問い合わせの口
+
+`list_shiori_event` はベースウェアがゴーストへ渡すイベントの一覧、`list_shiori_resource` は
+ベースウェアがゴーストへ問い合わせる項目の一覧である。下の囲みの `list_shiori_event` の行は、
+`absent` が 6 行のどの数よりも多く、`implemented` より桁違いに大きい。ゴーストが「起動した」
+「クリックされた」「更新が終わった」を知る手立てがこれだけ欠けていると、利用者から見える結果は
+「話しかけても何も返らない」である。
+
+`list_shiori_resource` の行は `absent` が **0** で、ほぼ全部が `vocabulary_only` に乗る。この 0 は
+「未対応の項目が 1 件も無い」という意味であって、「実装が済んでいる」という意味ではない。語彙のみは
+「綴りは台帳に載っているが areka はその値を一度も問い合わせない」状態を指す（状態の 7 語の定義は
+`README.md`）。上と同じ手順で数え、`status` の値が `absent` の行がこのページに 1 つも無いことを
+確かめた 0 である。
+
+```toml
+[[barrier]]
+page = "list_shiori_event"
+implemented = 11
+vocabulary_only = 3
+degraded = 0
+absent = 273
+alias = 3
+not_applicable = 0
+
+[[barrier]]
+page = "list_shiori_resource"
+implemented = 1
+vocabulary_only = 158
+degraded = 0
+absent = 0
+alias = 0
+not_applicable = 0
+```
+
+### 4-2. 障壁 ⑵ 未知の記述が無言で捨てられる
+
+`descript_ghost`・`descript_balloon`・`descript_shell`・`descript_shell_surfaces` は、ゴースト・
+バルーン・シェル・サーフェスの定義ファイルに書けるキーの一覧である。作者が書いたキーを areka が
+引き当てなかったとき何が起きるかは、`briefing-assets.md` の「未知の記述の扱い」節が転記層の
+コードを読んで確かめている——読み取りの経路にエラー段の記録は 1 行も無く、既定の記録の水準では
+利用者に何も見えない。下の囲みの 4 行の `absent` と `vocabulary_only` が、その「引き当てない」側の
+量である。
+
+4 行のうち `descript_balloon` と `descript_shell_surfaces` は `degraded` が 0 でない。縮退は
+「読んではいるが正典どおりには効かない」状態で、無言で捨てる経路とは別の壊れ方である（状態の
+7 語の定義は `README.md`）。残る `descript_ghost` と `descript_shell` の `degraded` は 0 で、
+この 2 ページには縮退させた実装が 1 つも無い。
+
+```toml
+[[barrier]]
+page = "descript_ghost"
+implemented = 7
+vocabulary_only = 1
+degraded = 0
+absent = 66
+alias = 0
+not_applicable = 0
+
+[[barrier]]
+page = "descript_balloon"
+implemented = 20
+vocabulary_only = 5
+degraded = 4
+absent = 133
+alias = 0
+not_applicable = 0
+
+[[barrier]]
+page = "descript_shell"
+implemented = 11
+vocabulary_only = 2
+degraded = 0
+absent = 89
+alias = 0
+not_applicable = 0
+
+[[barrier]]
+page = "descript_shell_surfaces"
+implemented = 4
+vocabulary_only = 57
+degraded = 4
+absent = 68
+alias = 4
+not_applicable = 0
+```
+
+### 4-3. 0 と書いた欄
+
+上の 2 つの囲みには 0 の欄が 15 ある（`not_applicable` 6・`degraded` 4・`alias` 4・`absent` 1）。
+0 は「調べていない」ではなく「数えて 1 件も無かった」の印なので、内訳と理由を書く。数え方は
+いずれもこの節の冒頭と同じで、ページ別に数え直した結果である。
+
+- `not_applicable` は 6 行とも 0 である。台帳全体の対象外の項目（5-2 の `[priority_blank]` の
+  `not_applicable`）は `list_shiori_event_ex`・`memo_shiorievent`・`list_sakura_script` の 3 ページ
+  だけに乗っており、この 6 ページには 1 件も無い。
+- `degraded` は `list_shiori_event`・`list_shiori_resource`・`descript_ghost`・`descript_shell` の
+  4 行が 0 である。この 4 ページには縮退させた実装が 1 つも無い。
+- `alias` は `list_shiori_resource`・`descript_ghost`・`descript_balloon`・`descript_shell` の
+  4 行が 0 である。別名の項目がこの 4 ページに 1 件も無い。
+- `absent` は `list_shiori_resource` の 1 行が 0 である。理由は 4-1 に書いた。
 
 ## 5. 根拠表への参照
 
-<!-- 段 3（タスク 4.6）で書く: テーマ別の状態分布は全体報告を、SSP 世代別はドメイン別報告
-     4 本を参照で指す。写しを作らない。資産の広さの物差しであるテンプレート辞書の表も
-     この節に置く（段 3・タスク 4.1）。 -->
+順位を付けるときに引いた分布の表は、いずれも機械が作る報告の中にある。**この節はその置き場を
+指すだけで、表そのものを写さない**（要件 2.4・8.8）。写しを作れば、台帳を直して報告を作り直した
+日に、この文書の中の写しだけが古いまま残る。
+
+| 見たい分布 | 置き場 | 作り直す副手続き |
+| --- | --- | --- |
+| テーマ別の状態分布 | `report/summary.md` の「テーマ別の状態分布」節 | `cargo run -p ukadoc-survey -- report-summary` |
+| 状態の分布（全体）・ドメイン別の状態の分布・ドメインを跨いで繋がった束 | `report/summary.md` の同名の 3 節 | 同上 |
+| SSP 世代別の対応表 | `report/shiori.md`・`report/assets.md`・`report/sakura-script.md`・`report/property.md` の「SSP 世代別の対応表」節 | `cargo run -p ukadoc-survey -- report` |
+| ページ別の状態の分布 | 同じドメイン別報告 4 本の「ページ別の状態の分布」節 | 同上 |
+
+`report/summary.md` が全体報告の実在するパスである（1-2 で確かめた。brief が書いた綴りは
+実在しないので、上の表はどこも実在するファイル名で指している）。
+
+**世代別の表は全体報告に無い。** `report/summary.md` の見出し（行頭が `## ` の行）を数えると
+6 つで、そのうち世代を表す語を含む見出しは **0 件**である。だから世代別の見方はドメイン別報告
+4 本に委ねる（要件 2.3）。世代別の合計を述べたくなったときは、上の表が指す 4 本の「SSP 世代別の
+対応表」から数え、数えた手順を添える。
+
+**この文書は世代別の数もテーマ別の数も 1 つも書いていない。** どちらも **0 か所**である。
+確かめ方: この文書を「世代」「テーマ別」の 2 語で検索し、当たった行を 1 行ずつ読んで、分布の
+表でも合計でもないことを確かめた（当たったのは、報告がどんな分布を載せる文書かを述べる 5-2 と
+5-3 の各 1 行と、この節の説明だけである）。順位の根拠のうちテーマを見るのは 3-1 だが、そこが
+引くのは束ごとの `themes`（`linkage.md`）で、テーマ別の状態分布の表とは別物である。
+
+**報告は手で編集しない。** 台帳 4 本のいずれかを触った回は、上の副手続きを走らせて報告を
+作り直し、食い違いは作り直しで解消する。報告の本文へ説明を書き足さない
+（`README.md`「4. 報告の扱い」）。
 
 ### 5-1. 資産の広さの物差し——テンプレート辞書
 
