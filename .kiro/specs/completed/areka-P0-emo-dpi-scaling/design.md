@@ -1,5 +1,7 @@
 # 技術設計書: areka-P0-emo-dpi-scaling（DPI追従レンダリング基盤）
 
+> **登記（2026-09-11 上書き）**: 以下の Overview／Goals／Impact／Key Design Decisions が記す拡大方式（D3 の present 段 CPU リサンプル・D5 の整数 bilinear・D6 の k 適用済み cache）は `areka-P0-present-gpu-transform-scale`（実装 2026-09-12）により置き換わっている——現行は原寸 bitmap を wintf の `SetTransform`（D2D 変換行列）で拡大する方式。詳細は下表 D3／D5／D6 行末尾の上書き注記と、その直後の登記ブロックを参照。
+
 ## Overview
 
 **Purpose**: 本機能は、emo 層にハードワイヤされた合成スケール k=1.0（`presenter.rs:126` のコンパイル時定数）を廃し、**表示スケール係数 k = アプリ管理拡大率（本仕様 1.0 固定シーム）× 窓の実モニタ DPI ÷ 作者基準 DPI（author_dpi）** による実拡大レンダリングと、その k を返す照会契約を確立する。これにより areka の基本設計（DPI追従）が emo 表示で実際に成立し、下流 `areka-P0-collision-dpi-hittest`（W5）の観測条件（k 実拡大表示＋k 照会契約）が開通する。
@@ -166,14 +168,16 @@ graph TB
 |---|------|------|--------------|
 | D1 | author_dpi | shell=`seriko.dpi`／balloon=`dpi`・既定 96（ukadoc 正典）。既存生 KV から読む（パーサ改造なし）。不正・0 は warn＋96 | 固定 96 のみ（正典語彙の切り捨て） |
 | D2 | k 導出規約 | **連続・単一スカラー・既約有理数** `ScaleRatio{num,den}` ＝ app_scale(1/1 固定) × dpi_x／author_dpi。dpi_x≠dpi_y は warn＋dpi_x | 整数段階（125% が表現不能・R2.2 違反）・f32 保持（画素経路の決定性と衝突） |
-| D3 | 拡大方式 | **Strategy A2**: 合成 native 不触・present 段で k× リサンプルした表示用サーフェスを cache エントリ化 | B＝WUC transform（マスク不整合が W5 境界侵食・鮮明性欠如）・A1＝compose 内 k（合成 API/規約への侵食大） |
+| D3 | 拡大方式 | **Strategy A2**: 合成 native 不触・present 段で k× リサンプルした表示用サーフェスを cache エントリ化 | B＝WUC transform（マスク不整合が W5 境界侵食・鮮明性欠如）・A1＝compose 内 k（合成 API/規約への侵食大）（**2026-09-11 上書き**: `areka-P0-present-gpu-transform-scale`——提示段は CPU リサンプルをやめ、原寸 bitmap を wintf のコマンドリスト経路で `render_surface` の `SetTransform`（D2D 変換行列）により拡大する。cache エントリは原寸面＋原寸マスク・k はキー外。D1／D2／D4／D7／D8 は不変。実装 2026-09-12） |
 | D4 | 丸め規約 | round half away from zero（`DPI::to_physical_*` と同規約）・単一権威 `scaled_extent`・非ゼロ入力は最小 1px | 消費点ごとの個別丸め（不一致で見切れ/隙間） |
-| D5 | リサンプラ | 整数固定小数点 **bilinear**（premultiplied BGRA ドメイン・α 込み・完全整数）。k=1/1 は恒等バイトコピー | nearest（連続 k で画素幅ムラ）・GPU stretch（決定論 readback 檻と不整合） |
-| D6 | cache×再スケール | `ComposeKey` へ scale（既約有理）参加。エントリ＝k 適用済み composed＋その bytes 由来 mask。k 変化＝ミス→再合成＋再サンプル | k 変化時 invalidate_all（キー等価で表現できるものを命令で二重化） |
+| D5 | リサンプラ | 整数固定小数点 **bilinear**（premultiplied BGRA ドメイン・α 込み・完全整数）。k=1/1 は恒等バイトコピー | nearest（連続 k で画素幅ムラ）・GPU stretch（決定論 readback 檻と不整合）（**2026-09-11 上書き**: `areka-P0-present-gpu-transform-scale`——提示段は CPU リサンプルをやめ、原寸 bitmap を wintf のコマンドリスト経路で `render_surface` の `SetTransform`（D2D 変換行列）により拡大する。cache エントリは原寸面＋原寸マスク・k はキー外。D1／D2／D4／D7／D8 は不変。実装 2026-09-12） |
+| D6 | cache×再スケール | `ComposeKey` へ scale（既約有理）参加。エントリ＝k 適用済み composed＋その bytes 由来 mask。k 変化＝ミス→再合成＋再サンプル | k 変化時 invalidate_all（キー等価で表現できるものを命令で二重化）（**2026-09-11 上書き**: `areka-P0-present-gpu-transform-scale`——提示段は CPU リサンプルをやめ、原寸 bitmap を wintf のコマンドリスト経路で `render_surface` の `SetTransform`（D2D 変換行列）により拡大する。cache エントリは原寸面＋原寸マスク・k はキー外。D1／D2／D4／D7／D8 は不変。実装 2026-09-12） |
 | D7 | 採寸時の初期 k₀ | primary モニタ DPI（`enumerate_monitors`）÷ author_dpi。取得不能は 96 相当＋error。窓生成後は窓 DPI が正（Changed<DPI>→reconcile が自己補正・べき等） | native 採寸＋初回表示で補正（起動時に必ず可視リサイズが走る） |
 | D8 | 動的追従 | frame `run_dpi_phase`＝`Changed<DPI>` 観測 → `refresh_scale`（保持した最終 show 入力で再表示）→ 窓寸 reconcile（char=`resize_window_to`／balloon=`resize_window_keep_position`） | 新 PresentCommand variant（DPI は UI 側事象・talk actor 経由は迂遠） |
 | D9 | テスト配置 | 純関数=各 crate in-crate／GPU readback=**emo-present in-crate（別プロセス）**／wintf tests/graphics へは wintf 自身の檻のみ（その場合 `on_gpu_owner_thread` 必須）——本仕様は wintf 新設なし。安全根拠＝バイナリ間は別プロセスで無縁＋同一バイナリ内は並列スレッド Compositor 生成の既存実績（`make_world_with_gpu` 型 14+ 本が現状緑） | wintf graphics への集約（2 個目 Compositor 制約を不要に背負う） |
 | D10 | 実機観測 | 表示成立点 info ログ（k num/den・f32・author_dpi・window_dpi・native/scaled 寸）＋ 125%/200% 2 水準の有界起動（`AREKA_APP_SMOKE_EXIT_MS`）＋ RUST_LOG grep・絶対パス起動 | 目視のみ（決定論判定の欠如） |
+
+> **登記（2026-09-11 上書き・`areka-P0-present-gpu-transform-scale`）**: D3（拡大方式）／D5（リサンプラ）／D6（cache×再スケール）は上表の各行末尾のとおり上書きされた（present 段の CPU リサンプルを撤去し wintf の `SetTransform` へ一本化・cache は原寸面＋原寸マスク・k はキー外）。**D1／D2／D4／D7／D8 は不変**。実装着地 2026-09-12。
 
 > **D10 の実装時是正（2026-07-25・タスク 3.4 レビュー承認）**: 本表と §Monitoring は `k_num`/`k_den` を個別ログフィールドとして記していたが、`ScaleRatio` の `num`/`den` は本設計自身が非公開と規定しており（Service Interface 参照）accessor が無い＝**設計内部の矛盾**であった。実装は `k_ratio = ?scale`（Debug 表現 `ScaleRatio { num: 2, den: 1 }`＝両値が観測可能）＋ `k`（f32）で出力する。R6.3 の条文「k 導出値・適用寸のログ出力」は f32 の `k` フィールドが直接 grep 可能な形で満たす。以降 `k_num`/`k_den` の記述は `k_ratio`＋`k` と読み替える。
 

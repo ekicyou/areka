@@ -236,7 +236,7 @@
   - _Depends: 6.2_
   - _Boundary: doc（コード内）_
 
-- [ ] 7.2 (P) 設計判断の上書きを登記する
+- [x] 7.2 (P) 設計判断の上書きを登記する
   - 完了 spec 2 件の設計文書の該当行末尾に上書きの追記を置く（本文は改変しない・不変の判断も併記する）
   - 互換アーキテクチャ文書の沈黙ルール対応表へ【上書き】行を 1 行加え、出典 spec を記す
   - プロジェクト記憶の該当 2 項目に同じ裁定を追記し、索引から辿れる形にする
@@ -294,3 +294,4 @@
 - 5.4: `perf_log_tests` 956→883・`transition_record_tests` 714→736（+22 は前状態維持の走査檻の増分・6.7 の名指しは perf_log のみ）。初回表示は `resized=true`（`None != Some`）＝台帳 #15「他 15 本不変」は 14 に訂正。T-N8 の「同一 target で原寸が実際に変わる→true」は fixture（`build_two_face_assets` は同寸）が無く未固定 → 8.1 で記録（寸違いの第 2 面を足せば閉じる）。
 - 5.2: 台帳 #6 の「他 8 本不変」は誤り＝`text_slot_view_*` 2 本・`show_surface_without_dpi_component_*`・`native_size_*` 2 本も `t.chain`／k 依存 `read_back` を読んでおり再導出（`native_size_recovers_when_failed_show_is_followed_by_cache_hit` は「挿入後に失敗」が構造的に到達不能＝別原寸の面を挟む hit の形へ置換・改名）。「bounds 照合」は bare World では `GlobalArrangement` が伝播しないため `Arrangement`＋`target_physical_size` 照合＋T-N3 で代替。⚠`presenter_test_support.rs` の `px_at` が dead code に（6.1 の掃除で落とす）。8.1 で台帳 #6 を訂正。
 - 5.5: 台帳訂正（8.1）: #13 は再導出 3／不変 6（`refresh_scale_without_dpi_change_does_nothing` は memo 直読み `read_back` で恒真化→entity の `GraphicsCommandList` 側で判定・`refresh_scale_failure_keeps_previous_display_and_k` は注入が `last_show` キーを壊す）、#14 は再導出 3／不変 14、#18 は `cache.get` 6 か所＋`chain` 1 か所の機械追随、#19 は再導出 3＋新設 1（`the_matrix_covers_four_fault_points`）。メモ件数は `get`（LRU 非撹乱）で既知 2 キーを数える（`ComposeCache::len` は cache.rs 私有）。⚠改名 `presenter_upload_failure_tests.rs`→`presenter_display_failure_tests.rs` は index 経由で 4.2 のコミット `7b04fc9f` に紛れ込んだ（単体ではビルド不可・squash で消える）。
+- 7.2: 8.7 の申し送りは `.kiro/specs/areka-P0-dpi-transition-two-tick-bounce/brief.md` 末尾「## 申し送り」に置いた。アーカイブ `emo-dpi-scaling/design.md` は冒頭（題の直後）にも上書きのポインタ 1 行を置く（Overview だけ読む人が旧設計を現行と誤読しないため・`emo-text-layer/design.md` の先例）。プロジェクト記憶 2 ファイル＋MEMORY.md も追記済み。
