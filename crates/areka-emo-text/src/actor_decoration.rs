@@ -11,16 +11,74 @@
 //! 2 層を純粋状態へ差し込む点は 1 つだけ——`actor.rs` の
 //! [`TextLayerRuntime::register_actor`]（装着も再追従もそこへ合流する）。
 
+use std::rc::Rc;
+
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::ActorKey;
-use tracing::debug;
+use tracing::{debug, error};
+use wintf::ecs::GraphicsCore;
 
-use super::{ResolvedBalloonText, TextLayerRuntime};
+use super::{ActorRender, ResolvedBalloonText, TextLayerRuntime};
+use crate::TextLayerError;
 use crate::choice::ResolvedChoiceStyle;
-use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
+use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, FontCatalog, ResolvedFont};
+use crate::look::GlyphStyles;
 use crate::region::TextRegion;
+use crate::state::{ActorTextState, TextLayerConfig};
+use crate::surface::TextSurface;
+use crate::viewbox_draw::ViewboxExecutor;
 use crate::wrap::WrapMode;
 use crate::writing::WritingMode;
+
+/// 装着済みの供給面へ描画実行部と計測器を添えて 1 actor 分の描画資源を組む（task 7.3）。
+///
+/// フォント候補列の解決台帳（[`FontCatalog`]）は**ここで 1 つだけ**作り、計測器と描画器の
+/// 双方へ共有で渡す（要件 9.8）。台帳が 2 つあると、同じ候補列が全滅したときの記録が計測側と
+/// 描画側で二重に出る——警告の源を 1 つに保つための共有である。
+///
+/// `actor.rs` ではなく本ファイルに置くのは、`actor.rs` が 1 ファイル 1,000 行の見張りの
+/// 間近にあるため（design.md「それ以上の追加は `actor_decoration.rs` へ」）。
+pub(super) fn build_actor_render(
+    core: &GraphicsCore,
+    surface: TextSurface,
+    font: &ResolvedFont,
+    mode: WritingMode,
+    config: &TextLayerConfig,
+    actor: &ActorKey,
+) -> Result<ActorRender, TextLayerError> {
+    let Some(factory) = core.dwrite_factory() else {
+        error!(actor = %actor, "present_frame: dwrite_factory 不在（metrics を構築できない）");
+        return Err(TextLayerError::Device {
+            hresult: 0,
+            context: "GraphicsCore::dwrite_factory",
+        });
+    };
+    let fonts = Rc::new(FontCatalog::new(factory)?);
+    let executor = ViewboxExecutor::new_shared(core, Rc::clone(&fonts))?;
+    let metrics = DWriteMetrics::new_shared(factory, font, mode, config, fonts)?;
+    Ok(ActorRender {
+        surface,
+        executor,
+        metrics,
+    })
+}
+
+/// 配置層へ渡す「グリフ序数→見た目」の読み口を当該 actor の状態から組む（要件 3.3）。
+///
+/// `default` は**装着済みバルーン定義の既定**（`resolved.font.looks.default`）を使う——
+/// 純粋状態が持つ 2 層と同一の値であり（装着の 1 点 [`TextLayerRuntime::register_actor`] が
+/// 差し込む）、配置と描画が同じ既定を見ることを呼び出し側で揃える。
+pub(super) fn glyph_styles_of<'a>(
+    actor_state: &'a ActorTextState,
+    resolved: &'a ResolvedBalloonText,
+) -> GlyphStyles<'a> {
+    GlyphStyles {
+        table: actor_state.styles(),
+        ids: actor_state.glyph_styles(),
+        default: &resolved.font.looks.default,
+        current: actor_state.current_look(),
+    }
+}
 
 impl ResolvedBalloonText {
     /// [`resolve`](Self::resolve) にバルーンの**背景色**（面 0 の原点画素・sRGB 非

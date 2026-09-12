@@ -125,11 +125,11 @@ pub struct BalloonScopeAssets {
     /// ための混色の相手。原点画素が採れないとき（面が引けない・全透明・トリムで原点が bbox の
     /// 外・α が 255 でない）は白へ落ちる（導出と記録は [`super::balloon_background`]）。
     ///
-    /// `#[allow(dead_code)]`: 消費点（`frame/attach.rs` の `connect_balloon_text` が
-    /// `TextLayerRuntime::set_balloon_background` へ渡す）は tasks.md task 7.2／7.3 が足す。
-    /// 黙らせるのではなく消費側が来る時期を明記する repo 慣行に従う——**7.3 の完了時に本属性を
-    /// 外すこと**。導出そのものは `assets_tests.rs` の emo2 fixture テストが固定している。
-    #[allow(dead_code)]
+    /// 消費点は `frame/attach.rs` の `connect_balloon_text`——装着（`register_actor_view`）の
+    /// **前**に `TextLayerRuntime::set_balloon_background` へ渡す（task 7.3 で結線済み。
+    /// 順序は `frame_attach_tests.rs` の
+    /// `connect_balloon_text_hands_the_background_over_before_attaching` が見張る）。
+    /// 導出そのものは `assets_tests.rs` の emo2 fixture テストが固定している。
     pub background_color: (u8, u8, u8),
 }
 

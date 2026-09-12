@@ -163,6 +163,7 @@ crates/areka-emo-text/src/
 ├── viewbox_style_fingerprint_tests.rs  # 装飾だけが違う行は再利用しない
 ├── actor_decoration.rs             # set_balloon_background / background_of（actor.rs の子）
 ├── actor_decoration_tests.rs       # 登録で 2 層が state へ届く・背景の口・既定は白
+├── actor_decoration_frame_tests.rs # 毎フレームの経路で装飾が効く（画素・行送り・共有台帳の記録 1 件）
 crates/areka-emo-text/tests/
 ├── decoration_readback_test.rs                 # 入口（1 バイナリ）: 横書き 7 項目＋語彙のみ 3＋較正
 crates/areka-emo-text/tests/decoration_readback/

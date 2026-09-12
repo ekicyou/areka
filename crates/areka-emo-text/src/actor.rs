@@ -774,7 +774,9 @@ fn present_actor(
         // 資源借用の衝突を構造回避する。
         let config = runtime.config;
         let render = world.resource_scope(
-            |world, core: bevy_ecs::world::Mut<GraphicsCore>| -> Result<ActorRender, TextLayerError> {
+            |world,
+             core: bevy_ecs::world::Mut<GraphicsCore>|
+             -> Result<ActorRender, TextLayerError> {
                 let surface = TextSurface::attach(
                     world,
                     &binding,
@@ -783,20 +785,14 @@ fn present_actor(
                     physical_size,
                     physical_offset,
                 )?;
-                let executor = ViewboxExecutor::new(&core)?;
-                let Some(factory) = core.dwrite_factory() else {
-                    error!(actor = %actor, "present_frame: dwrite_factory 不在（metrics を構築できない）");
-                    return Err(TextLayerError::Device {
-                        hresult: 0,
-                        context: "GraphicsCore::dwrite_factory",
-                    });
-                };
-                let metrics = DWriteMetrics::new(factory, &resolved.font, resolved.mode, &config)?;
-                Ok(ActorRender {
+                decoration::build_actor_render(
+                    &core,
                     surface,
-                    executor,
-                    metrics,
-                })
+                    &resolved.font,
+                    resolved.mode,
+                    &config,
+                    actor,
+                )
             },
         )?;
         runtime.surfaces.insert(actor.clone(), render);
@@ -837,7 +833,8 @@ fn present_actor(
     };
     // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
     // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ・task 4.2 が本配線へ委譲）。
-    let lines = LayoutEngine::layout_with_cursor_warn(
+    // 装飾入りの配置の入口（要件 14.1／14.2・番号列が既定だけなら従来と同一の出力）。
+    let lines = LayoutEngine::layout_styled(
         actor_state.items(),
         visible,
         &resolved.region,
@@ -845,6 +842,7 @@ fn present_actor(
         resolved.font.height,
         &render.metrics,
         wrap,
+        decoration::glyph_styles_of(actor_state, &resolved),
         actor,
         &mut runtime.cursor_warn,
     );
@@ -884,13 +882,15 @@ fn present_actor(
         band_extent,
         band_offset,
     );
-    let changed = render.executor.render(
+    // 装飾入りの描画の入口（要件 14.2・既定だけの行は従来と同一の呼出列）。
+    let changed = render.executor.render_styled(
         &canvas,
         &window,
         &resolved.font,
         resolved.mode,
         &contract,
         &mut render.surface,
+        actor_state.styles(),
     )?;
     // 装着済み actor のグリフ更新は供給面の提示のみで完結（emo-compose 再駆動なし・R9.3）。
     // 変化ありのフレームだけ提示する（`FramePlan::NoChange` は blit も描画も present も省く——
@@ -978,3 +978,7 @@ mod decoration;
 #[cfg(test)]
 #[path = "actor_decoration_tests.rs"]
 mod decoration_tests;
+
+#[cfg(test)]
+#[path = "actor_decoration_frame_tests.rs"]
+mod decoration_frame_tests;
