@@ -12,6 +12,9 @@
 //! - 3 種の id の口（引用符・逆引用符・裸）の振り分け
 
 use super::*;
+// 共通の道具を `fields.rs` へ割ったとき、親が引かなくなった型はここで名指す
+// （`use super::*` は親の私有の輸入までは連れてこない）。
+use crate::model::EntryId;
 
 // ---------------------------------------------------------------------------
 // 見本の本文
@@ -423,12 +426,14 @@ fn the_array_tables_are_zero_rows_when_absent() {
 // ---------------------------------------------------------------------------
 
 /// spec 表の行は束名か「どの束にも属さない＋理由」のどちらかを持つ（要件 11.5）。
+///
+/// 段階の欄は束と一蓮托生である——束を持つ行は必ず持ち、持たない行は必ず持たない。
 #[test]
 fn a_spec_row_carries_a_bundle_or_a_stated_none() {
     let markdown = format!(
         "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"areka-P0-present-gpu-transform-scale\"\n\
          wave = \"W13\"\nstage = \"A\"\nbundle = \"時刻の刻み\"\nowner_count = 3\n\n\
-         [[spec]]\nname = \"areka-P0-tick-gate-adoption\"\nwave = \"保留\"\nstage = \"E\"\n\
+         [[spec]]\nname = \"areka-P0-tick-gate-adoption\"\nwave = \"保留\"\n\
          none = true\nreason = \"どの束にも写らない\"\nowner_count = 0\n```\n"
     );
     let draft = read_roadmap_draft(&markdown).expect("spec 表が読めるはず");
@@ -437,12 +442,17 @@ fn a_spec_row_carries_a_bundle_or_a_stated_none() {
         draft.specs[0].bundle,
         BundleRef::Named("時刻の刻み".to_owned())
     );
+    assert_eq!(draft.specs[0].stage, Some(Stage::A));
     assert_eq!(draft.specs[0].owner_count, 3);
     assert_eq!(
         draft.specs[1].bundle,
         BundleRef::None {
             reason: "どの束にも写らない".to_owned()
         }
+    );
+    assert_eq!(
+        draft.specs[1].stage, None,
+        "束の無い行に段階が付いている（置き字が値のふりをする）"
     );
 
     // 空欄で「属さない」を表すことは許さない。
@@ -456,6 +466,40 @@ fn a_spec_row_carries_a_bundle_or_a_stated_none() {
         body.contains("areka-P0-tick-gate-adoption"),
         "どの行かが本文に無い: {body}"
     );
+}
+
+/// 段階の欄は束と一蓮托生で、片方だけを書いた行は読めない。
+///
+/// 置き字を締め出すのはこの 2 本である——束の無い行に段階を書けば落ち、束のある行が
+/// 段階を書かなくても落ちる。どちらかが抜けると `stage = "A"` を 14 行に並べた版が
+/// また通ってしまう（27 行中 23 行が `A`・本物は 9 行）。
+#[test]
+fn the_stage_field_follows_the_bundle() {
+    let with_stage = format!(
+        "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"areka-P0-tick-gate-adoption\"\n\
+         wave = \"保留\"\nstage = \"A\"\nnone = true\nreason = \"どの束にも写らない\"\n\
+         owner_count = 0\n```\n"
+    );
+    let body = err_body(read_roadmap_draft(&with_stage));
+    assert!(body.contains("stage"), "欄の名前が本文に無い: {body}");
+    assert!(
+        body.contains("areka-P0-tick-gate-adoption"),
+        "どの行かが本文に無い: {body}"
+    );
+
+    let without_stage = format!(
+        "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"areka-P0-present-gpu-transform-scale\"\n\
+         wave = \"W13\"\nbundle = \"時刻の刻み\"\nowner_count = 3\n```\n"
+    );
+    let body = err_body(read_roadmap_draft(&without_stage));
+    assert!(body.contains("stage"), "欄の名前が本文に無い: {body}");
+
+    let bad = format!(
+        "{BRIEFS_BLOCK}\n```toml\n[[spec]]\nname = \"areka-P0-present-gpu-transform-scale\"\n\
+         wave = \"W13\"\nstage = \"Z\"\nbundle = \"時刻の刻み\"\nowner_count = 3\n```\n"
+    );
+    let body = err_body(read_roadmap_draft(&bad));
+    assert!(body.contains('Z'), "語彙外の綴りが本文に無い: {body}");
 }
 
 // ---------------------------------------------------------------------------

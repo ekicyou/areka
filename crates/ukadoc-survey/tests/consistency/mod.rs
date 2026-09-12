@@ -51,17 +51,21 @@
 //!
 //! 3 文書（`linkage.md`・`briefing.md`・`roadmap-draft.md`）と全体報告と spec ディレクトリ
 //! の一覧を読む道具は [`documents`]（`documents.rs`）にあり、そこにもテストの本体は
-//! 1 つも無い。その道具の較正と 3 文書まわりの母数の下限は
-//! [`documents_non_vacuity`]（`documents_non_vacuity.rs`）にある。判定 6 種そのものは
-//! [`documents_checks`]（`documents_checks.rs`・⑴ ⑵ ⑸ ⑹）と
+//! 1 つも無い。3 文書まわりの母数の下限は
+//! [`documents_non_vacuity`]（`documents_non_vacuity.rs`）にあり、その器と壊す道具の
+//! 較正は [`documents_tools`]（`documents_tools.rs`）にある。判定 6 種そのものは
+//! [`documents_checks`]（`documents_checks.rs`・⑴ ⑵ ⑹）と
 //! [`linkage_checks`]（`linkage_checks.rs`・⑶）と
-//! [`briefing_checks`]（`briefing_checks.rs`・⑷）が持つ。⑷ の腕そのものは
+//! [`briefing_checks`]（`briefing_checks.rs`・⑷）と
+//! [`spec_checks`]（`spec_checks.rs`・⑸）が持つ。⑷ の腕そのものは
 //! [`briefing_arms`]（`briefing_arms.rs`）にあり、そこにはテストの本体を 1 つも
 //! 置かない——⑶ だけで 944 行あるので ⑷ を同じファイルへ足せず、⑷ もまた腕と摂動を
 //! 1 ファイルに収めると 1,000 行の目安（`structure.md:176`）を超えるためである。
-//! 今あるのは ⑴（引用 id の実在）・⑵（機械の束 id の実在）・⑶（帰属の分割）・
-//! ⑷（段階と順位）・⑹（全体報告の新しさ）で、残る 1 種はその判定を置くタスク
-//! （⑸ は 6.6）が足す。
+//! ⑸ も同じ理由で `documents_checks.rs`（773 行）へは足さず、専用の
+//! `spec_checks.rs` に置いた（設計 File Structure Plan の当初の割り付けは
+//! `documents_checks.rs` に ⑴ ⑵ ⑸ ⑹ の 4 種だったが、⑴ ⑵ ⑹ だけで 773 行に
+//! 達した——タスク 4.7 が ⑷ を 2 本に割ったのと同じ判断である）。
+//! これで判定 6 種が揃った。
 //!
 //! 実データへの主張は [`checks`]（`checks.rs`）に、検査の対象が 0 件でないことの主張は
 //! [`non_vacuity`]（`non_vacuity.rs`）に、自前の道具の較正は [`values_md`]
@@ -79,10 +83,12 @@ mod checks;
 mod documents;
 mod documents_checks;
 mod documents_non_vacuity;
+mod documents_tools;
 mod examples;
 mod linkage_checks;
 mod non_vacuity;
 mod perturb;
+mod spec_checks;
 mod values_md;
 
 use std::collections::BTreeMap;

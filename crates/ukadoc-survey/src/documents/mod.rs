@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use crate::model::{Domain, EntryId, PageName};
 
 pub mod derive;
+mod fields;
 pub mod parse;
 
 // ---------------------------------------------------------------------------
@@ -361,8 +362,14 @@ pub struct SpecRow {
     pub name: String,
     /// roadmap.md のウェーブ（W13〜W17・保留）。
     pub wave: String,
-    /// 段階。
-    pub stage: Stage,
+    /// 段階。**属する束がある行だけが持つ**。
+    ///
+    /// 段階は束が順位表で置かれている段階の写しなので、どの束にも属さない行
+    /// （[`Self::bundle`] が [`BundleRef::None`]）には台帳から決まる段階が無い。
+    /// そこへ既定値を置くと、値ではない綴りが値のふりをして段階の分布を狂わせる
+    /// ——だから欄ごと省く。読み手（`parse::read_roadmap_draft`）が両者の対応を
+    /// 強制するので、片方だけを書き換えることはできない。
+    pub stage: Option<Stage>,
     /// 属する束。
     pub bundle: BundleRef,
     /// 台帳で `owner` にこの名前を持つ id の数。判定が数え直す。

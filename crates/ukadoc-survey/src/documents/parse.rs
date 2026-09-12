@@ -27,19 +27,30 @@
 
 use std::collections::BTreeMap;
 
+use super::fields::{
+    array_of_tables, as_table, bad_vocabulary, bool_field, domain_array_field, id_array_field,
+    malformed, optional_usize_field, read_blocks, reject_present, reject_unknown_keys,
+    required_table, string_array_field, string_field, theme_array_field, usize_field,
+};
 use super::{
     After, Barrier, Breakage, Briefing, Briefs, BundleRef, Linkage, NamedBundle, OverrideKind,
     OwnerCompleted, PriorityBlank, RankOverride, RankRow, RankTarget, Reserved, RoadmapDraft,
     SpecRow, Stage, StageCount, Tally,
 };
 use crate::error::SurveyError;
-use crate::model::{Domain, EntryId, PageName, parse_theme};
+use crate::model::{Domain, PageName};
+
+/// 失敗の本文に添える文書の置き場を組む道具（`derive.rs` が引く公開名）。
+///
+/// 実体は共通の道具の側（`documents::fields`）にある。`parse.rs` から割ったときに
+/// 名前の引き方を変えないよう、ここで再輸出して綴りを保つ。
+pub(super) use super::fields::document_file;
 
 /// 3 文書の置き場（`io::paths` と同じ場所・ワークスペース根から）。
 ///
 /// `io::paths` を呼ばないのは、あれがワークスペース根から組み立てた絶対パスを返し、
 /// 失敗の本文が計算機ごとに変わってしまうからである（`ledger::read` と同じ判断）。
-const DOCUMENT_DIR: &str = "doc/ukadoc-coverage";
+pub(super) const DOCUMENT_DIR: &str = "doc/ukadoc-coverage";
 
 /// 帰属の正本。
 pub(super) const LINKAGE_FILE: &str = "linkage.md";
@@ -657,12 +668,11 @@ pub fn read_roadmap_draft(markdown: &str) -> Result<RoadmapDraft, SurveyError> {
         let name = string_field(item, "[[spec]]", "name", &file)?;
         let place = &format!("[[spec]] {name}");
         reject_unknown_keys(item, &SPEC_FIELDS, place, &file)?;
-        let raw_stage = string_field(item, place, "stage", &file)?;
+        let bundle = read_bundle_ref(item, place, &file)?;
         specs.push(SpecRow {
             wave: string_field(item, place, "wave", &file)?,
-            stage: Stage::parse(&raw_stage)
-                .ok_or_else(|| bad_vocabulary(&file, place, "stage", &raw_stage))?,
-            bundle: read_bundle_ref(item, place, &file)?,
+            stage: read_stage(item, place, &file, &bundle)?,
+            bundle,
             owner_count: usize_field(item, place, "owner_count", &file)?,
             name,
         });
@@ -687,6 +697,28 @@ pub fn read_roadmap_draft(markdown: &str) -> Result<RoadmapDraft, SurveyError> {
         specs,
         reserved,
     })
+}
+
+/// 段階を読む。束を持つ行は必ず持ち、どの束にも属さない行は必ず持たない。
+///
+/// 段階は束が順位表で置かれている段階の写しなので、束の無い行に台帳から決まる段階は
+/// 無い。そこを既定値で埋めると、値でない綴りが値のふりをして段階の分布を狂わせる
+/// ——`stage = "A"` を置き字として 14 行に並べた版が実際にそうなっていた
+/// （27 行中 23 行が `A`・本物は 9 行）。だから省略を**強制**する。
+fn read_stage(
+    item: &toml::Table,
+    place: &str,
+    file: &str,
+    bundle: &BundleRef,
+) -> Result<Option<Stage>, SurveyError> {
+    if matches!(bundle, BundleRef::None { .. }) {
+        reject_present(item, place, file, &["stage"])?;
+        return Ok(None);
+    }
+    let raw = string_field(item, place, "stage", file)?;
+    Stage::parse(&raw)
+        .map(Some)
+        .ok_or_else(|| bad_vocabulary(file, place, "stage", &raw))
 }
 
 /// 属する束、または「どの束にも属さない＋理由」を読む。「属さない」を空欄や省略で
@@ -716,280 +748,6 @@ fn read_bundle_ref(item: &toml::Table, place: &str, file: &str) -> Result<Bundle
         ));
     }
     Ok(BundleRef::Named(bundle))
-}
-
-// ---------------------------------------------------------------------------
-// 共通
-// ---------------------------------------------------------------------------
-
-/// 失敗の本文に添える文書の置き場。
-pub(super) fn document_file(name: &str) -> String {
-    format!("{DOCUMENT_DIR}/{name}")
-}
-
-/// 文書の形が違うことを告げる失敗。置き場を必ず添える。
-fn malformed(file: &str, reason: impl Into<String>) -> SurveyError {
-    SurveyError::TomlParse {
-        path: file.to_owned(),
-        reason: reason.into(),
-    }
-}
-
-/// 語彙に無い値。文書名・表の鍵・欄名・書かれていた綴りを添える。
-fn bad_vocabulary(file: &str, place: &str, field: &'static str, value: &str) -> SurveyError {
-    SurveyError::BadVocabulary {
-        file: file.to_owned(),
-        id: place.to_owned(),
-        field,
-        value: value.to_owned(),
-    }
-}
-
-/// 失敗の本文に写す該当箇所の長さの上限（文字数）。
-const SNIPPET_CHARS: usize = 80;
-
-/// 囲みを連結して 1 度だけ読む。
-///
-/// 失敗の本文に `toml` の**行番号を写さない**——連結した本文の行番号は書き手の見て
-/// いる Markdown の行と一致しない。代わりに該当箇所の綴りを添える。`toml` の言う
-/// 「duplicate key」だけでは**どの鍵が重複したか**が分からないからである。
-fn read_blocks(markdown: &str, file: &str) -> Result<toml::Table, SurveyError> {
-    let joined = toml_blocks(markdown).join("\n");
-    joined.parse::<toml::Table>().map_err(|err| {
-        let at = err
-            .span()
-            .and_then(|span| joined.get(span))
-            .map(str::trim)
-            .filter(|snippet| !snippet.is_empty())
-            .map(|snippet| {
-                let short: String = snippet.chars().take(SNIPPET_CHARS).collect();
-                format!("・該当箇所 {short}")
-            })
-            .unwrap_or_default();
-        malformed(
-            file,
-            format!("囲みを連結した TOML が読めない: {}{at}", err.message()),
-        )
-    })
-}
-
-/// 表として取り出す。
-fn as_table<'a>(
-    value: &'a toml::Value,
-    place: &str,
-    file: &str,
-) -> Result<&'a toml::Table, SurveyError> {
-    value
-        .as_table()
-        .ok_or_else(|| malformed(file, format!("{place} が表でない")))
-}
-
-/// 必ず在る表を取り出す。無ければ表の鍵を名指して落ちる。
-fn required_table<'a>(
-    parent: &'a toml::Table,
-    key: &str,
-    place: &str,
-    file: &str,
-) -> Result<&'a toml::Table, SurveyError> {
-    let value = parent
-        .get(key)
-        .ok_or_else(|| malformed(file, format!("{place} が無い")))?;
-    as_table(value, place, file)
-}
-
-/// 配列表の各行。書かれていなければ 0 行として扱う。
-///
-/// TOML は配列表の見出しだけを空で置けないので（`rank = []` と書くと後続の
-/// `[[rank]]` が「値を上書きできない」で落ちる）、**欄の欠落＝0 行**とする。
-fn array_of_tables<'a>(
-    root: &'a toml::Table,
-    key: &str,
-    file: &str,
-) -> Result<Vec<&'a toml::Table>, SurveyError> {
-    let place = format!("[[{key}]]");
-    let Some(value) = root.get(key) else {
-        return Ok(Vec::new());
-    };
-    let array = value
-        .as_array()
-        .ok_or_else(|| malformed(file, format!("{place} が配列でない")))?;
-    let mut tables = Vec::with_capacity(array.len());
-    for element in array {
-        tables.push(as_table(element, &place, file)?);
-    }
-    Ok(tables)
-}
-
-/// 知らない欄が混じっていないことを確かめる。
-fn reject_unknown_keys(
-    table: &toml::Table,
-    allowed: &[&str],
-    place: &str,
-    file: &str,
-) -> Result<(), SurveyError> {
-    for key in table.keys() {
-        if !allowed.contains(&key.as_str()) {
-            return Err(malformed(file, format!("{place}: 知らない欄 {key}")));
-        }
-    }
-    Ok(())
-}
-
-/// この形では書けない欄が書かれていないことを確かめる。
-fn reject_present(
-    table: &toml::Table,
-    place: &str,
-    file: &str,
-    forbidden: &[&str],
-) -> Result<(), SurveyError> {
-    for key in forbidden {
-        if table.contains_key(*key) {
-            return Err(malformed(
-                file,
-                format!("{place}: この形の行に欄 {key} は書けない"),
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// 欄を 1 つ取り出す。無ければ落ちる。
-fn field<'a>(
-    table: &'a toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<&'a toml::Value, SurveyError> {
-    table
-        .get(key)
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が無い")))
-}
-
-/// 文字列の欄。
-fn string_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<String, SurveyError> {
-    field(table, place, key, file)?
-        .as_str()
-        .map(str::to_owned)
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が文字列でない")))
-}
-
-/// 真偽の欄。書かれていなければ偽。
-fn bool_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<bool, SurveyError> {
-    match table.get(key) {
-        None => Ok(false),
-        Some(value) => value
-            .as_bool()
-            .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が真偽でない"))),
-    }
-}
-
-/// 0 以上の整数の欄。
-fn usize_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<usize, SurveyError> {
-    let raw = field(table, place, key, file)?
-        .as_integer()
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が整数でない")))?;
-    usize::try_from(raw).map_err(|_| malformed(file, format!("{place}: 欄 {key} が負")))
-}
-
-/// 0 以上の整数の欄。書かれていなければ 0（判定が数え直す欄にだけ使う）。
-fn optional_usize_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<usize, SurveyError> {
-    if table.contains_key(key) {
-        usize_field(table, place, key, file)
-    } else {
-        Ok(0)
-    }
-}
-
-/// 文字列の配列の欄。要素の 1 つでも文字列でなければ落ちる。
-fn string_array_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<Vec<String>, SurveyError> {
-    let array = field(table, place, key, file)?
-        .as_array()
-        .ok_or_else(|| malformed(file, format!("{place}: 欄 {key} が配列でない")))?;
-    let mut values = Vec::with_capacity(array.len());
-    for element in array {
-        let value = element.as_str().ok_or_else(|| {
-            malformed(file, format!("{place}: 欄 {key} に文字列でない要素がある"))
-        })?;
-        values.push(value.to_owned());
-    }
-    Ok(values)
-}
-
-/// 項目 id の配列の欄。
-fn id_array_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<Vec<EntryId>, SurveyError> {
-    let raws = string_array_field(table, place, key, file)?;
-    let mut ids = Vec::with_capacity(raws.len());
-    for raw in &raws {
-        let id = EntryId::parse(raw).map_err(|err| {
-            malformed(
-                file,
-                format!("{place}: 欄 {key} が項目 id の形でない（{err}）"),
-            )
-        })?;
-        ids.push(id);
-    }
-    Ok(ids)
-}
-
-/// ドメインの配列の欄。
-fn domain_array_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<Vec<Domain>, SurveyError> {
-    let raws = string_array_field(table, place, key, file)?;
-    let mut domains = Vec::with_capacity(raws.len());
-    for raw in &raws {
-        domains.push(Domain::parse(raw).map_err(|err| err.at(file, place))?);
-    }
-    Ok(domains)
-}
-
-/// テーマの配列の欄（要件 4.4 の 8 テーマ）。
-fn theme_array_field(
-    table: &toml::Table,
-    place: &str,
-    key: &str,
-    file: &str,
-) -> Result<Vec<String>, SurveyError> {
-    let raws = string_array_field(table, place, key, file)?;
-    let mut themes = Vec::with_capacity(raws.len());
-    for raw in &raws {
-        let theme = parse_theme(raw).map_err(|err| err.at(file, place))?;
-        themes.push(theme.to_owned());
-    }
-    Ok(themes)
 }
 
 #[cfg(test)]

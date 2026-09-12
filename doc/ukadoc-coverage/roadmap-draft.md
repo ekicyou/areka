@@ -28,7 +28,7 @@ spec の表と M2 予約群の対応表は、それぞれ「既存 brief の位�
 - **依存する既存 spec**: その束の構成 id を台帳の `owner` に持つ spec と件数である。進行中の
   spec には正本のロードマップのウェーブを、封じた spec には「完了」を添える。1 つも無い束は
   **0 本**と書く（数え方: 構成 id を台帳の `owner` で引き、空でない宛先を数えた）。0 本の束は
-  **37** である。
+  **36** である。
 - **波の案**: 下の規則で決めた M2 の波。正本の W13〜W17 とは別の番号で、続き番号を振るのは
   棚卸セッションである。
 
@@ -73,9 +73,10 @@ snapshot_on = "2026-09-13"
 
 **どの束にも属さない spec は 14 本**である（数え方: 台帳 4 本の宛先の欄を 27 の名前それぞれで
 引き、0 件だったものを数えた。27 − 13 ＝ 14 ではなく、27 本を 1 本ずつ引いて数えた）。この 14 本は
-`none = true` と理由を持ち、束の名前を持たない。**段階の欄は骨組みが省略を許さないので `A` を
-置いたが、この 14 行の `A` は値ではなく置き字である**——台帳に宛先が 0 件なので段階も束も台帳
-からは決まらない。決まらないことのほうを `reason` に書いた。
+`none = true` と理由を持ち、束の名前も**段階の欄も持たない**。段階は束が順位表で置かれている
+段階の写しなので、束が決まらなければ段階も決まらない。決まらないものを既定値で埋めると値で
+ない綴りが値のふりをするので、欄ごと省いた（読み手が省略を強制する。束を持つ 13 行は必ず段階を
+持ち、持たない 14 行は必ず持たない）。決まらないことのほうを `reason` に書いた。
 
 **ウェーブの欄**は正本のウェーブ編成をそのまま写したもので、本文書は書き換えない。`保留` は
 編成のどのウェーブにも入っていない 1 本である。
@@ -127,14 +128,14 @@ wave = "W14"
 name = "areka-P0-sakura-time-directives"
 stage = "A"
 bundle = "会話"
-owner_count = 10
+owner_count = 11
 wave = "W16"
 
 [[spec]]
 name = "areka-P0-property-query-channels"
 stage = "C"
 bundle = "環境の照会"
-owner_count = 5
+owner_count = 6
 wave = "W14"
 
 [[spec]]
@@ -174,7 +175,6 @@ wave = "W15"
 
 [[spec]]
 name = "areka-P0-balloon-font-descript-keys"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑶ で受け持つ書体の欄 14 件は分割元の areka-P0-text-decoration-canon の宛先のままである。是正候補の節にこの spec の行がある"
 owner_count = 0
@@ -182,7 +182,6 @@ wave = "W13"
 
 [[spec]]
 name = "areka-P0-text-align-shadow-canon"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑵ で受け持つ寄せ 2 と影 3 の 5 件は分割元の areka-P0-text-decoration-canon の宛先のままである。是正候補の節にこの spec の行がある"
 owner_count = 0
@@ -190,7 +189,6 @@ wave = "W15"
 
 [[spec]]
 name = "areka-P0-balloon-lifecycle-events"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑵ で受け持つ表示寿命 5 件は分割元の areka-P0-balloon-canon-residue の宛先のままである。是正候補の節にこの spec の行がある"
 owner_count = 0
@@ -198,7 +196,6 @@ wave = "W17"
 
 [[spec]]
 name = "areka-P0-sylphya-set-ledger"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書が登記すると書くサウンドの語彙は、いまも areka-P0-property-catalog-lists の宛先である。是正候補の節にこの spec の行がある"
 owner_count = 0
@@ -206,7 +203,6 @@ wave = "W13"
 
 [[spec]]
 name = "areka-P0-property-ipc-transport"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書の範囲は輸送路の実測と 32bit 側の実装で、正典の項目に当たる行を持たない"
 owner_count = 0
@@ -214,7 +210,6 @@ wave = "W14"
 
 [[spec]]
 name = "areka-P0-emo-text-canon-residue"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書の範囲は文字の折返しと描画の内側で、正典の項目に当たる行を持たない"
 owner_count = 0
@@ -222,7 +217,6 @@ wave = "W14"
 
 [[spec]]
 name = "areka-P0-zorder-property"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書が正本と書く重なり順のプロパティ 1 件は、宛先の欄が空文字のまま裁定を待っている。是正候補の節にこの spec の行がある"
 owner_count = 0
@@ -230,7 +224,6 @@ wave = "W15"
 
 [[spec]]
 name = "areka-P0-zorder-chain-residue"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
 owner_count = 0
@@ -238,7 +231,6 @@ wave = "W14"
 
 [[spec]]
 name = "areka-P0-sakura-tag-word-boundary"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。さくらスクリプトの調査は、この説明書から届いた主張 11 件がいずれも所有を宣言する形をしていないと記録している"
 owner_count = 0
@@ -246,7 +238,6 @@ wave = "W13"
 
 [[spec]]
 name = "areka-P0-present-gpu-transform-scale"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
 owner_count = 0
@@ -254,7 +245,6 @@ wave = "W13"
 
 [[spec]]
 name = "areka-P0-kanade-boot-talkdone-drop"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
 owner_count = 0
@@ -262,7 +252,6 @@ wave = "W13"
 
 [[spec]]
 name = "areka-P0-host32-window-thread-pump"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
 owner_count = 0
@@ -270,7 +259,6 @@ wave = "W13"
 
 [[spec]]
 name = "areka-P0-dpi-transition-two-tick-bounce"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
 owner_count = 0
@@ -278,7 +266,6 @@ wave = "W14"
 
 [[spec]]
 name = "areka-P0-tick-gate-adoption"
-stage = "A"
 none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。門の採否は性能の話で、正典の項目に当たる行を持たない"
 owner_count = 0
@@ -296,7 +283,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
 | 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
-| 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件） | 第 1 波（先頭ウェーブ） |
+| 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件） | 第 1 波（先頭ウェーブ） |
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（W13・2 件）／`areka-P0-package-mount`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 5 | バルーンの文字 | `areka-P0-balloon-font-canon`（残余） | `areka-P0-text-decoration-canon`（W13・32 件）／`areka-P0-currentghost-property-tree`（W15・13 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
@@ -311,7 +298,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-property-catalog-lists`（W16・4 件） | 第 2 波 |
 | 12 | 撫で | `areka-P0-touch-events-canon` | `areka-P0-currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件） | 第 2 波 |
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `areka-P0-balloon-canon-residue`（W14・9 件） | 第 2 波 |
-| 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | **0 本** | 第 2 波 |
+| 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
 | 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `areka-P0-choice-marker-styling`（W16・39 件） | 第 2 波 |
 | 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `areka-P0-shell-parse`（完了・1 件） | 第 2 波 |
 | 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件） | 第 2 波 |
@@ -485,7 +472,7 @@ spec 台帳で、この表はそれを写した写真である。
 - 現状: 構成 126 件の状態は実装済み 7・未対応 84・語彙のみ 30・縮退 5 で、壊れる 75 件のうち 7 件がここにある。M1 の実機一周はこの束を 8 項目（項目 1・9・10・12・16・17・18・19）で見て全部合格しているが、それは emo2 の 1 体で使う範囲である。
 - 何が変わるか: 作者が書いた原点と余白と重なりの指定どおりに二体とバルーンが並び、拡大率を変えても隣接が崩れなくなる。
 
-**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）
+**依存する既存 spec**: `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）
 
 **構成 id（全 126 件）**
 

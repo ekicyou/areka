@@ -2,9 +2,9 @@
 //! 道具、母数の下限を集める器（設計「入口 / `tests/consistency`」→「`documents.rs`」）。
 //!
 //! **テストの本体はここに 1 つも置かない**（`structure.md:129` の流儀・`perturb.rs` と同じ）。
-//! 道具の較正と母数の下限は兄弟の `documents_non_vacuity.rs` にあり、判定 6 種は
-//! `documents_checks.rs`（⑴ ⑵ ⑸ ⑹）と `linkage_checks.rs`（⑶）と
-//! `briefing_checks.rs`（⑷）が持つ。
+//! 母数の下限は兄弟の `documents_non_vacuity.rs`、器と壊す道具の較正は
+//! `documents_tools.rs` にあり、判定 6 種は `documents_checks.rs`（⑴ ⑵ ⑹）と
+//! `linkage_checks.rs`（⑶）と `briefing_checks.rs`（⑷）と `spec_checks.rs`（⑸）が持つ。
 
 use std::collections::BTreeSet;
 use std::path::Path;
