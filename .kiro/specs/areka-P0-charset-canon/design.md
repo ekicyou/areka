@@ -291,7 +291,7 @@ flowchart TD
 | 10.1 | 表せない文字＝10 進数値文字参照 | Charset | `Encoding::encode` の既定動作 | — |
 | 10.2 | 不正並び＝U+FFFD＋警告 | Charset・codec | `decode_without_bom_handling`（置換あり） | — |
 | 10.3 | UTF-16／replacement＝解決不能と同じ経路・理由で区別 | Charset・CharsetNegotiator・shiori_wiring | `LabelError::NotEncodable` を `reason` フィールドへ | — |
-| 11.1 | 里々テンプレートで挨拶が化けない | 実機確認 | §Testing の実機手順 | — |
+| 11.1 | 里々テンプレートで文字コードの経路が最後まで働く（目視は求めない・2026-09-13 裁定） | 実機確認 | §Testing の実機手順 | 目視部分は `areka-P0-shell-implicit-surface` へ（暗黙の基準画像が無く窓が生えない） |
 | 11.2 | 有界自動終了＋ログ検索 | 同上 | `AREKA_APP_SMOKE_EXIT_MS`・`RUST_LOG`・`charset_initial`／`charset_switched` の grep | — |
 | 11.3 | emo2 でも同じ手順 | 同上 | 期待: 初期 Shift_JIS（default）→ 切替 1 回 UTF-8 | — |
 | 12.1 | UTF-8 経路の差分 0・固定物無改変 | 全体 | 9.6 と `emo2-conformance-e2e` の決定論テスト群 | — |
@@ -635,7 +635,7 @@ pub struct ShioriMount {
 
 ### 実機確認（11.1〜11.3）
 - 手順（`emo2-conformance-e2e` の手順書と同型）: 実バイナリを**絶対パス**で起動（`areka.exe <ghost_root> <balloon_root>`・helper は実行ファイル隣接）。`AREKA_APP_SMOKE_EXIT_MS` で有界の自動終了、**`RUST_LOG=info,shiori-charset=debug,ghost-boot=debug`** で記録（env-filter の指令はイベントの **target 名**に掛かる。本設計のログは `target: "shiori-charset"`／`"ghost-boot"` を明示するため、モジュールパス `shiori_host32_host=debug` では `charset_switched`（debug）が点かず 0 行になる——完了仕様 emo2-conformance-e2e が `kanade=trace` と target 名で指定したのと同じ理由）。開発者が指定する里々標準テンプレートの絶対パスを `ghost_root` に、バルーンは emo2 のものを流用。
-- 期待（里々）: `charset_initial charset=Shift_JIS source=default`（テンプレートが `shiori.encoding` を持たない場合）、`charset_switched` 0 行（里々は `Charset: Shift_JIS` を返す）、`charset_label_unresolved` 0 行、OnBoot の挨拶がバルーンに化けずに出る（目視）。
+- 期待（里々）: `charset_initial charset=Shift_JIS source=default`（テンプレートが `shiori.encoding` を持たない場合）、`charset_switched` 0 行（里々は `Charset: Shift_JIS` を返す）、`charset_label_unresolved` 0 行。**目視は求めない**（2026-09-13 裁定）——この検体は暗黙の基準画像が未実装で立ち絵もバルーンも出ないため、見えるものが無い。引受先は `areka-P0-shell-implicit-surface`。
 - 期待（emo2）: `charset_initial charset=Shift_JIS source=default` → `charset_switched from=Shift_JIS to=UTF-8` ちょうど 1 行、以後 0 行。挨拶の表示は適用前と同一。
 - 記録先: `verification/signoff-record.md`（環境・コマンド逐語・grep 結果・目視所見・**点灯の裏づけ**＝同じ target の別イベント（emo2 なら `charset_initial`、里々なら `charset_initial` と `shiori-charset` target の任意の debug 行）が記録に出ていることを 1 欄で示し、「0 行」を沈黙と取り違えない）。
 
