@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 shiori-host32-ipc = { path = "../shiori-host32-ipc" }
+encoding_rs = { workspace = true }
 wintf-winmsg-executor = { workspace = true }
 event-listener = { workspace = true }
 thiserror = { workspace = true }

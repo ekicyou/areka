@@ -9,6 +9,8 @@
 //!   終了分類）。**std-only**（`windows` 非依存）。
 //! - [`parent_window`] — `ParentMessageWindow`（HELLO ハンドシェイク観測 /
 //!   `pump_until_hello_or`）。`wintf-winmsg-executor` の message-only 窓。
+//! - [`charset`] — `Charset`（任意の文字コードを列挙せず表す newtype）と `LabelError`。
+//!   ラベル解決・符号化・復号を `encoding_rs` へ委ねる。純粋・決定的。
 //! - [`shiori3`] — SHIORI/3.0 ワイヤコーデック（`build_request` / `parse_response`）。純粋・決定的。
 //! - [`client`] — `Shiori3Client`（`get`/`notify` の出口 API）。codec build → `send_request` →
 //!   parse → `RequestError` 統合を結線する。
@@ -17,6 +19,8 @@
 //!   `classify_failure` による統一終了分類 / `LifecycleReport` によるレポート /
 //!   `ShutdownError` shutdown 失敗語彙）。クレート直下に公開 re-export。
 
+/// 通信の文字コード（`Charset`）とラベル解決の失敗理由（`LabelError`）。
+pub mod charset;
 pub mod client;
 pub mod error;
 /// helper 孤児化防止（Job Object・KILL_ON_JOB_CLOSE）。windows 依存をここへ隔離する。
@@ -26,6 +30,7 @@ pub mod parent_window;
 pub mod process_host;
 pub mod shiori3;
 
+pub use charset::LabelError;
 pub use client::Shiori3Client;
 pub use error::{HandshakeError, RequestError, ShioriError, SpawnError};
 pub use lifecycle::{
