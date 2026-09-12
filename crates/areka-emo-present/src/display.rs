@@ -217,3 +217,7 @@ pub(crate) fn record_display(
 
     Ok(GraphicsCommandList::new(command_list))
 }
+
+#[cfg(test)]
+#[path = "display_tests.rs"]
+mod tests;
