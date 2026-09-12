@@ -23,7 +23,7 @@
   - _Depends: 1.1_
   - _Boundary: display_
 
-- [ ] 1.3 (P) 供給の成功経路を等倍オフスクリーン往復 golden で固定する
+- [x] 1.3 (P) 供給の成功経路を等倍オフスクリーン往復 golden で固定する
   - 記録した命令を恒等変換でオフスクリーンの D2D ターゲット（透明クリア）へ描き、CPU 読み戻し用 bitmap へ複写して読み戻したバイト列が、合成結果の原寸バイト列とバイト単位で一致することを固定する（T-G1）
   - これ 1 本で bitmap の寸・pitch・premultiplied・宛先矩形・閉じる操作を固定する（撤去する自前供給面の往復テストの正当な後継）
   - 成功側の最低線として、返ったコマンドリストが空でないことも同じファイルに置く
@@ -277,3 +277,4 @@
 - 1.1: `windows-numerics` は削除できない（`D2D1DeviceContextExt::set_transform(&Matrix3x2)` を `display.rs` が使う・design「Allowed Dependencies」の記述は誤り）→ 2.3 は `windows-numerics` を残す。`Win32_Graphics_Dxgi` feature の撤去は 2.3 で判断。
 - 1.1: 失敗注入 `DisplayFault::{EndDraw, Close}` は実呼び出しの**後**に置く（共有 DC を `BeginDraw` 開きっぱなしにしないため・レビュー裁定）。1.4 は「呼び手から見える前状態維持」だけを主張し、注入点を前へ動かさない。
 - 1.1: `GraphicsCommandList` の到達経路は `wintf::ecs::GraphicsCommandList`（`wintf::ecs::graphics` は private mod）。`device_err` は `crate::command::device_err` へ共有化済み（`mount.rs` の private 複製は 2.2 で寄せる）。
+- 1.3: 記録した宛先矩形は **DIP** 単位。再生側 DC の DPI が 96 のときだけ 1 DIP＝1 px（wintf は WUC の `begin_draw` DC に `SetDpi` を呼ばないので 96 既定）。記録側 DC の DPI は記録内容に影響しない。2.2 は宛先矩形を物理 px で作り直さないこと。T-G1 は再生 DC を `SetDpi(96)` で固定（機械の既定 DPI 非依存）。

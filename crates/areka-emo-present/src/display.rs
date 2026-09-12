@@ -221,3 +221,7 @@ pub(crate) fn record_display(
 #[cfg(test)]
 #[path = "display_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "display_gpu_tests.rs"]
+mod gpu_tests;
