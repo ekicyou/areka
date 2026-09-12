@@ -79,6 +79,7 @@
 use areka_sakura::contract::ActorKey;
 
 use crate::cursor_tag::{CursorAxis, CursorBasis, CursorWarnGuard};
+use crate::look::{GlyphStyles, StyleId, TextLook};
 use crate::region::TextRegion;
 use crate::segment::SegmentPlan;
 use crate::state::{TextItem, TextLayerConfig};
@@ -121,6 +122,16 @@ pub trait GlyphMetrics {
     /// （`GetMetrics` の `ascent`/`descent`/`designUnitsPerEm`）から算出し、
     /// [`FixedMetrics`] は決定論仮想値を返す。文字列非依存（フォント固有の設計値）。
     fn line_box_height(&self, font_height: f32) -> f32;
+
+    /// **見た目込み**のグリフ行内送り幅（image px・R7.10／R11.1）。
+    ///
+    /// 既定実装は見た目の**大きさだけ**を見て [`GlyphMetrics::advance`] へ委譲する——
+    /// 既存の 2 実装（[`FixedMetrics`]・COM 層 `DWriteMetrics`）と既存の呼び手は
+    /// これで無変更のまま済む。フォント名・太字・斜体まで含めて測るのは
+    /// 実測 metrics（`DWriteMetrics`）の領分で、そちらが本メソッドを上書きする。
+    fn advance_styled(&self, ch: char, look: &TextLook) -> f32 {
+        self.advance(ch, look.height)
+    }
 }
 
 /// 構造テスト用の決定論 metrics（R4.5/R11.6）。
@@ -180,6 +191,12 @@ pub struct PositionedGlyph {
     pub inline_pos: f32,
     /// 行内送り幅（image px・注入 metrics 由来）。
     pub advance: f32,
+    /// この文字に効く装飾の番号（[`StyleId::DEFAULT`]＝そのスコープの既定の見た目・R3.3）。
+    ///
+    /// 番号の意味を与えるのは装飾の表（[`crate::look::StyleTable`]）で、本型は写しを運ぶだけ。
+    /// 番号列を渡さない配置（[`LayoutEngine::layout`]・[`LayoutEngine::layout_with_cursor_warn`]）
+    /// では全グリフが [`StyleId::DEFAULT`] になる。
+    pub style: StyleId,
 }
 
 /// 配置済みの 1 行（行矩形＋グリフ列・choice-render 再利用シーム・R9.4）。
@@ -288,6 +305,7 @@ impl LayoutEngine {
             metrics,
             wrap,
             None,
+            None,
         )
     }
 
@@ -323,9 +341,16 @@ impl LayoutEngine {
             metrics,
             wrap,
             Some((actor, warn)),
+            None,
         )
     }
 
+    /// 配置の本体。`styles` は「グリフ序数→装飾番号／見た目」の読み口で、
+    /// `None`（[`layout`](Self::layout)・[`layout_with_cursor_warn`](Self::layout_with_cursor_warn)）
+    /// の経路は装飾を入れる前と 1 ビットも変わらない——送り幅は `metrics.advance` のまま、
+    /// [`PositionedGlyph::style`] は全グリフ [`StyleId::DEFAULT`]（`layout_styled_tests.rs`
+    /// が装飾導入前の実測値で固定している）。`Some` のときだけ、既定でない番号の文字を
+    /// [`GlyphMetrics::advance_styled`] で測り、番号を配置済みグリフへ写す（R3.3／R7.10／R11.2）。
     #[allow(clippy::too_many_arguments)]
     fn layout_inner(
         items: &[TextItem],
@@ -336,6 +361,7 @@ impl LayoutEngine {
         metrics: &dyn GlyphMetrics,
         wrap: WrapPlan<'_>,
         mut cursor_warn: Option<(&ActorKey, &mut CursorWarnGuard)>,
+        styles: Option<GlyphStyles<'_>>,
     ) -> Vec<PositionedLine> {
         let pitch = metrics.line_pitch(font_height);
         // 行内軸の二段構え（design.md §4.3・R6.2/6.3/6.8）: 折返し基準（soft・「超えたら
@@ -381,7 +407,18 @@ impl LayoutEngine {
                     if placed == visible_count {
                         break;
                     }
-                    let advance = metrics.advance(ch, font_height);
+                    // 装飾番号と送り幅（R3.3／R7.10）。番号列が無い経路・既定の番号の文字は
+                    // 従来どおり `advance(ch, font_height)`——既定の見た目の高さが
+                    // `font_height` と食い違う登録前の一瞬でも、装飾なしの出力を動かさない。
+                    let (style, advance) = match styles {
+                        None => (StyleId::DEFAULT, metrics.advance(ch, font_height)),
+                        Some(s) => match s.id_of(placed) {
+                            StyleId::DEFAULT => {
+                                (StyleId::DEFAULT, metrics.advance(ch, font_height))
+                            }
+                            id => (id, metrics.advance_styled(ch, s.look_of(placed))),
+                        },
+                    };
                     // ② 保留フラッシュ（次の可視コンテンツ配置の直前・R2.1/2.3）。保留改行と
                     // pending-cursor は同一フラッシュに混在しうるため順序が意味を持つ（design
                     // 「ゲート②の直後に②'として挿入」）。厳密順序:
@@ -503,6 +540,7 @@ impl LayoutEngine {
                         ch,
                         inline_pos,
                         advance,
+                        style,
                     });
                     inline_pos += advance;
                     placed += 1;
@@ -891,3 +929,7 @@ mod visible_window_tests;
 #[cfg(test)]
 #[path = "layout_wrap_tests.rs"]
 mod wrap_tests;
+
+#[cfg(test)]
+#[path = "layout_styled_tests.rs"]
+mod styled_tests;

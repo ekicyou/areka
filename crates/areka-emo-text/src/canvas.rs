@@ -309,6 +309,9 @@ impl ContentCanvas {
                         ch: g.ch,
                         inline_pos: g.inline_pos - inline_origin,
                         advance: g.advance,
+                        // 装飾番号は行のグリフ列まで写す（R3.3 の配管 3 段目）。行ローカルへ
+                        // 移すのは行内位置だけで、番号と送り幅は配置時の値のまま。
+                        style: g.style,
                     })
                     .collect();
                 Resident {
@@ -348,6 +351,7 @@ mod tests {
     use crate::layout::{
         FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, PositionedLine, WrapPlan,
     };
+    use crate::look::StyleId;
     use crate::region::TextRegion;
     use crate::state::TextItem;
     use crate::writing::WritingMode;
@@ -606,6 +610,7 @@ mod tests {
                     ch: 'あ',
                     inline_pos: 0.0,
                     advance: 12.0,
+                    style: StyleId::DEFAULT,
                 }],
             },
             PositionedLine {

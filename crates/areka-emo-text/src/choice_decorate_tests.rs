@@ -8,6 +8,7 @@
 use super::*;
 use crate::canvas::{GlyphRunContent, RegionTransform, Resident, TextEffects};
 use crate::layout::PositionedGlyph;
+use crate::look::StyleId;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
@@ -34,6 +35,7 @@ fn glyph_resident(offset: (f32, f32)) -> Resident {
                 ch: 'あ',
                 inline_pos: 0.0,
                 advance: 10.0,
+                style: StyleId::DEFAULT,
             }],
             size: (10.0, 10.0),
         }),

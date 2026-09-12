@@ -1,5 +1,6 @@
 use super::*;
 use crate::layout::{LineRect, PositionedGlyph, PositionedLine};
+use crate::look::StyleId;
 use crate::state::ChoiceSpan;
 
 /// 行内軸位置 `positions` の各グリフ（送り幅 `adv`）を持つ横書き行を作る
@@ -11,6 +12,7 @@ fn line(positions: &[(f32, f32)]) -> PositionedLine {
             ch: 'あ',
             inline_pos,
             advance,
+            style: StyleId::DEFAULT,
         })
         .collect();
     PositionedLine {
