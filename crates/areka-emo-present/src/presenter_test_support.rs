@@ -1,3 +1,10 @@
+//! presenter 系テストモジュールが共有する補助（フィクスチャ・期待値・ログ捕捉）。
+//!
+//! **期待値はすべて原寸（native）である。** 表示の拡大縮小は wintf の描画経路（`Arrangement.scale`
+//! ＝D2D 変換行列）が持つので、presenter が抱えるバイト列は k に依らず `Composer::compose` の
+//! 出力そのものになった。ゆえに本 module の golden 生成は拡大率を引数に取らず、CPU リサンプラを
+//! 一切呼ばない（spec: areka-P0-present-gpu-transform-scale・要件 6.1／6.3・設計 付録 A′ #8）。
+
 use super::*;
 
 use std::path::Path;
@@ -13,7 +20,7 @@ use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Su
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
-// ── GPU/WUC フィクスチャ（chain.rs / mount.rs / wuc_resource.rs テストと同一方針）──────────
+// ── GPU/WUC フィクスチャ（mount.rs / wuc_resource.rs テストと同一方針）────────────────────
 // 本番 UI スレッドは MTA（メモリ「areka WUC は MTA スレッドで動く」）。WucGraphicsResource::new は
 // DQTAT_COM_NONE（apartment 不変）でディスパッチャを組むため、COM を MTA 初期化してから呼ぶ。
 
@@ -52,69 +59,38 @@ pub(super) fn set_window_dpi(world: &mut World, window: Entity, dpi: u16) {
     world.entity_mut(window).insert(DPI::from_dpi(dpi, dpi));
 }
 
-/// `build_target_assets` と同一入力の **native 合成結果を `scale` 倍**した表示用サーフェスの
-/// バイト列（k≠1 表示の golden）。
+/// `build_target_assets` と同一入力の **native 合成**バイト列とその外形（表示の golden）。
 ///
-/// presenter が辿るのと同じ `Composer::compose`（native）→ `resample`（k 適用）の 2 段を、
-/// テスト側で独立に再現する。「readback が偶然それらしい寸法になった」ではなく
-/// **k 適用後のバイトそのもの**を固定する。
-pub(super) fn scaled_golden(
+/// presenter が抱えるのは原寸バイトそのもので、拡大は描画側の係数に移った。ゆえに golden は
+/// 窓 DPI がいくつであっても同一であり、拡大率を引数に取らない。「読み戻しが偶然それらしい
+/// 寸法になった」ではなく **合成バイトそのもの**を固定する点は変わらない。
+pub(super) fn native_golden(
     emo_world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
-    scale: ScaleRatio,
-) -> (Vec<u8>, (u32, u32), (u32, u32)) {
-    let g = scaled_golden_with(
+) -> (Vec<u8>, (u32, u32)) {
+    native_golden_with(
         emo_world,
         atlas,
         surface_id,
         &BindSet::default(),
         &PatternState::default(),
-        scale,
-    );
-    (g.scaled, g.native_size, g.scaled_size)
+    )
 }
 
-/// [`scaled_golden_with`] の返り値（k 適用**前後**のバイトと外形）。
-pub(super) struct ScaledGolden {
-    /// k 適用後（＝表示相当）のバイト列。
-    pub(super) scaled: Vec<u8>,
-    /// k 適用前（native 合成そのもの）のバイト列。
-    pub(super) native: Vec<u8>,
-    /// native 外形。
-    pub(super) native_size: (u32, u32),
-    /// k 適用後外形（`scaled_extent(scale, native_size)` と厳密一致する）。
-    pub(super) scaled_size: (u32, u32),
-}
-
-/// [`scaled_golden`] の一般形（**任意の bind 集合・pattern** で合成してから k を 1 回掛ける）。
-///
-/// native バイトも返すのは、「k 適用後の画素が native のどの画素に由来するか」を座標で
-/// 突き合わせる相対配置の檻（[`show_surface_scales_layered_bind_and_pattern_content_with_single_k`]）
-/// が要るためである。
-pub(super) fn scaled_golden_with(
+/// [`native_golden`] の一般形（**任意の bind 集合・pattern** で合成する）。
+pub(super) fn native_golden_with(
     emo_world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
     binds: &BindSet,
     pattern: &PatternState,
-    scale: ScaleRatio,
-) -> ScaledGolden {
+) -> (Vec<u8>, (u32, u32)) {
     let mut composer = Composer::new();
     let native = composer
         .compose(emo_world, atlas, surface_id, binds, pattern)
         .expect("golden 用の native 合成は Ok");
-    let native_size = (native.width(), native.height());
-    let native_bytes = native.bytes().to_vec();
-    let mut scaled = ComposedSurface::new(0, 0);
-    resample(&native, scale, &mut scaled);
-    let scaled_size = (scaled.width(), scaled.height());
-    ScaledGolden {
-        scaled: scaled.bytes().to_vec(),
-        native: native_bytes,
-        native_size,
-        scaled_size,
-    }
+    (native.bytes().to_vec(), (native.width(), native.height()))
 }
 
 /// premultiplied BGRA 密配列（`stride = width * 4`）から 1 画素を取り出す（座標突合の読み口）。
@@ -165,7 +141,7 @@ pub(super) fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Ent
     (mount.surface_entity(), mount.text_slot())
 }
 
-// ── ComposedSurface 生成補助（chain.rs テストと同技法）──────────────────────────────────
+// ── ComposedSurface 生成補助 ────────────────────────────────────────────────────────────
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接焼けない。
 // 上流公開 API（atlas bake → EmoWorld → Composer::compose）で本物を合成して得る。
 
@@ -264,7 +240,7 @@ pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasT
 /// 複面版）。
 ///
 /// 両面とも α=255（全不透明）ゆえ α=0 除外トリムは全域を残し、合成外形は両面とも正確に `w×h`
-/// （＝同寸）。ゆえに供給面（chain）リサイズ経路を踏まずに「同寸・異 id 再 Show」だけを固定できる。
+/// （＝同寸）。ゆえに外形変化の経路を踏まずに「同寸・異 id 再 Show」だけを固定できる。
 /// golden は presenter が内部で辿るのと同一 world/atlas から作るため readback とのバイト一致が
 /// 二重に決定論的。2 面の golden が別物であることを fixture 自身が assert する（R6.1 の回帰檻前提）。
 pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {

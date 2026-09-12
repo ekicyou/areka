@@ -132,7 +132,7 @@
   - _Boundary: emo2_boot 登録_
 
 - [ ] 5. 既存の檻を新しい不変条件へ導き直す（設計 付録 A′ の裁定）
-- [ ] 5.1 共有テスト補助の期待値生成を原寸へ置き換える
+- [x] 5.1 共有テスト補助の期待値生成を原寸へ置き換える
   - 拡大後の期待バイト列を作る共有ヘルパ（内部でリサンプラを呼ぶもの）を、原寸の期待バイト列を作る形へ置き換える
   - 呼び手が複数のテストファイルに跨るため、このタスクを先に単独で済ませて以降の並行作業を成立させる
   - 完了状態: 共有テスト補助からリサンプラへの依存が 0 件になり、以降のテスト導き直しが互いに独立に進められる
@@ -286,3 +286,4 @@
 - 3.1: `SurfaceSeat::get` は `#[cfg(test)]` に畳む（観測口 `native_scratch_ptr` の唯一の呼び手・削除も allow も不可）。`perf_log_tests` は `t_resample_us` を**文字列**で照合する箇所あり＝コンパイル緑でも実行時赤（5.4）。`presenter.rs` の `#[cfg(test)] use resample` の説明コメントは既に事実でない＝major 6 で一緒に消す。`native_scratch` の doc「高水位」の陳腐化は 7.1 の doc 掃除で拾う。
 - 3.2: `tools/perf/fixtures/generate.py` は旧 14 フィールドを生成したまま（境界外・旧スキーマは無害）。`J_LINE_VOCABULARY_SAMPLES` の perf 行サンプルは 14 フィールドの凍結引用（重複名検査専用）＝残置。7.1 で 11 フィールドのサンプル追加を検討。
 - 4.1: `mod.rs` の差分は登録 1 行＋import 2 行の入替＋手順 6 註釈（+24/−20・8.1 の diff-stat 判定はこれを「登録 1 行＋註釈」と読む）。既存の字面の檻 `zorder_wiring_tests.rs` `t_zwi06`（旧登録 `.before(apply_zorder_chain)` を名指し）は陳腐化＝**4.2 が T-N10 と同時に撤去か再導出**。`frame.rs` 215／226／294-296・`frame/wiring.rs` 218 の `FrameFinalize` 言及 4 か所も 4.2 で書き換え。⚠台帳外の赤: `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs:567`（`read_back` の長さが k で変わる前提）＝**5.7（crates/areka 境界）で再導出**・8.1 で台帳 #23 に追記。
+- 5.1: 補助は `native_golden(w,a,id)`／`native_golden_with(w,a,id,binds,pattern)` → `(Vec<u8>, native_size)`（`ScaledGolden` 撤去）。呼び手 26 か所＝dpi_scale 5・fractional 11・refresh_and_log 3・visibility 4・budget_equivalence 3。⚠4 本のテストは `let (…, native_golden) = build_target_assets(..)` でローカル束縛が関数名を影にする（dpi_scale 96／fractional 117／refresh 172／visibility 362）＝機械置換すると E0618・多くは `build_target_assets` の第 3 要素で足りる。`presenter.rs:80` の `#[cfg(test)] use resample` は最後の再導出タスクが註釈ごと落とす。transition_record_tests の赤 3 本は 2.2／3.1 由来（5.4）。
