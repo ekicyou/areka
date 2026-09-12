@@ -1541,7 +1541,7 @@ areka の placement::source の `BALLOON_DPI_KEY` が引き、`load_balloon_auth
 [entry."ukadoc:descript_balloon:font.bold_2c0_2f1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1550,7 +1550,7 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 太字を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys。`\f[...]` 側の意味（値の解釈・状態・戻し・描画）は areka-P0-text-decoration-canon が 2026-09-13 に着地させており、読み取りが付いた時点でそのまま消費できる。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -1613,7 +1613,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 [entry."ukadoc:descript_balloon:font.italic_2c0_2f1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1622,14 +1622,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 斜体を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys。`\f[...]` 側の意味（値の解釈・状態・戻し・描画）は areka-P0-text-decoration-canon が 2026-09-13 に着地させており、読み取りが付いた時点でそのまま消費できる。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1640,14 +1640,14 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 ⒝ カンマ区切りの優先列が効かない。areka-emo-text の draw::ResolvedFont::resolve はカンマで切って先頭の名前を無条件に採り、その書体がインストールされているかを見ない。残りの名前は保持するだけで読む側がいない。先頭の書体が無い環境では、作者が次に書いた候補ではなく、書体の解決に任せた別の書体で描かれる。
 どちらも記録は残らない。両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
 縦書き用の字形が無いフォントを標準ゴシックへ差し替えるという決まりは、正典ではこの項目ではなく vertical の項目の説明の中に書かれている（2026-09-05 にライブの正典で確認）ため、その食い違いは vertical の項目に登記した。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys。`\f[...]` 側の意味（値の解釈・状態・戻し・描画）は areka-P0-text-decoration-canon が 2026-09-13 に着地させており、読み取りが付いた時点でそのまま消費できる。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.outline_2c0_2f1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1656,14 +1656,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 縁取りを宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys。`\f[...]` 側の意味（値の解釈・状態・戻し・描画）は areka-P0-text-decoration-canon が 2026-09-13 に着地させており、読み取りが付いた時点でそのまま消費できる。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.shadowcolor.b_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1672,14 +1672,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 文字の影の色を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys、影そのものの意味と描画は areka-P0-text-align-shadow-canon。さくらスクリプト台帳（`ledger/sakura-script.toml`）が影 3 項目の owner を後者にしているのと食い違ってはいない——2 つの台帳は別の軸（タグの意味／descript キーの読み取り）を索引している。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.shadowcolor.g_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1688,14 +1688,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 文字の影の色を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys、影そのものの意味と描画は areka-P0-text-align-shadow-canon。さくらスクリプト台帳（`ledger/sakura-script.toml`）が影 3 項目の owner を後者にしているのと食い違ってはいない——2 つの台帳は別の軸（タグの意味／descript キーの読み取り）を索引している。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.shadowcolor.r_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1704,14 +1704,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 文字の影の色を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys、影そのものの意味と描画は areka-P0-text-align-shadow-canon。さくらスクリプト台帳（`ledger/sakura-script.toml`）が影 3 項目の owner を後者にしているのと食い違ってはいない——2 つの台帳は別の軸（タグの意味／descript キーの読み取り）を索引している。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.shadowstyle_2c_5f62_614b_6307_5b9a:1"]
 status = "absent"
 introduced = "2.5.27"
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1720,14 +1720,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 文字の影の形を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys、影そのものの意味と描画は areka-P0-text-align-shadow-canon。さくらスクリプト台帳（`ledger/sakura-script.toml`）が影 3 項目の owner を後者にしているのと食い違ってはいない——2 つの台帳は別の軸（タグの意味／descript キーの読み取り）を索引している。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.strike_2c0_2f1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1736,14 +1736,14 @@ note = """
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 打ち消し線を宣言しても文字の見た目は変わらない。描画側にも受け口が無い。
 両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys。`\f[...]` 側の意味（値の解釈・状態・戻し・描画）は areka-P0-text-decoration-canon が 2026-09-13 に着地させており、読み取りが付いた時点でそのまま消費できる。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_balloon:font.underline_2c0_2f1:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-text-decoration-canon"
+owner = "areka-P0-balloon-font-descript-keys"
 priority = "A11"
 values = ["装い"]
 links = []
@@ -1751,7 +1751,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka-parsers の balloon::map_merged は読むキーを並べた表を完全一致で引く形で、この項目はその表に無い。値は読み捨てられ、記録も残らない。
 下線そのものが描かれない。縦書きのときに下線を列の右側へ引くという写像の先送りは沈黙ルール対応表の `\\f[align]／\\f[valign]／下線の縦書き写像` に記録されているが、areka にはそれを受け取る経路自体が無いので、動いたうえで正典と違うのではなく、まだ何も無い。
-担当 spec は areka-P0-text-decoration-canon。担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある（担当 spec の記述が古い）。
+キーの読み取り（転記層 `areka-parsers` の `balloon::parse` への写像）の担当 spec は areka-P0-balloon-font-descript-keys。`\f[...]` 側の意味（値の解釈・状態・戻し・描画）は areka-P0-text-decoration-canon が 2026-09-13 に着地させており、読み取りが付いた時点でそのまま消費できる。
 束: 台詞の書体・読む経路が無い（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 

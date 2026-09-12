@@ -383,7 +383,7 @@ pub(crate) const STYLESHEET_SIZE_KEYWORDS: [&str; 9] = [
 /// 「default を指定するとバルーン設定の標準に戻る」「disable を指定すると無効表示と同じ設定に
 /// なる」と定める。大文字を畳み込んで受けることは正典が定めておらず、areka は
 /// `doc/COMPAT_ARCHITECTURE.md` §8 の「小文字の完全一致のみ」の先例に揃える（design §A 項目 12）。
-/// <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bbold_2c_771f_507d_5024_5d:1>
+/// <https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1>
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Switch {
     /// `true`／`1`。

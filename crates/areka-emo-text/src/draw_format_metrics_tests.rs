@@ -586,6 +586,47 @@ const DRAW_FACADE_SOURCES: &[(&str, &str)] = &[
     ("draw_catalog.rs", include_str!("draw_catalog.rs")),
 ];
 
+/// 手保守の [`DRAW_FACADE_SOURCES`] が「新設したのに載せない」を塞げない穴を閉じる
+/// （タスク 9.4）。
+///
+/// ファサード群の外延は機械で決まる——`src/draw*.rs` のうち兄弟テスト（`*_tests.rs`）と
+/// 支援（`*_test_support.rs`）を除いたものが本番ファイルである。実ファイル集合を実行時に
+/// 読んで一覧と突き合わせるので、`draw_*.rs` を新設して一覧へ載せ忘れると赤になる
+/// （母数の `assert_eq!` は「黙って減る」しか塞げない）。
+#[test]
+fn draw_facade_sources_cover_every_draw_production_file() {
+    use std::collections::BTreeSet;
+
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let actual: BTreeSet<String> = std::fs::read_dir(&dir)
+        .expect("src ディレクトリが読めない")
+        .map(|entry| {
+            entry
+                .expect("src の項目が読めない")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .filter(|name| {
+            name.starts_with("draw")
+                && name.ends_with(".rs")
+                && !name.ends_with("_tests.rs")
+                && !name.ends_with("_test_support.rs")
+        })
+        .collect();
+    let listed: BTreeSet<String> = DRAW_FACADE_SOURCES
+        .iter()
+        .map(|(name, _)| (*name).to_owned())
+        .collect();
+    assert_eq!(
+        actual, listed,
+        "`draw*.rs` の本番ファイル集合と DRAW_FACADE_SOURCES が食い違う——\
+         新設したファイルを一覧へ足すこと"
+    );
+    // 空振り防止: どちらも空なら上の等値は恒真になる。
+    assert_eq!(listed.len(), 4, "走査するファサードの母数");
+}
+
 /// 改行を LF へ正規化した `draw.rs` 本文。ワークツリーは `core.autocrlf` により CRLF で
 /// 展開されるため、行末に依存する検査（列 0 閉じ括弧・行単位の走査）は必ずこれを使う。
 fn draw_rs() -> String {

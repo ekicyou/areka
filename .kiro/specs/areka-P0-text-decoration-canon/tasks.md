@@ -250,7 +250,7 @@
   - _Depends: 8.2_
   - _Boundary: doc, steering, 隣接 spec brief_
 
-- [ ] 9.4 最終確認（実測での裏取りと見張り）
+- [x] 9.4 最終確認（実測での裏取りと見張り）
   - 文書に書いた主張（定義の所在・行数・件数）を実測で数え直し、行番号ではなく「何の定義行か」で指しているかを確かめる
   - 1 ファイル 1,000 行の見張りの例外表が 11 件のまま増減していないこと、各ファイルが上限内であることを確かめる
   - 記録なしで失敗を飲み込む経路が無いことを、失敗の分類表と実装の照合で確かめる
@@ -378,3 +378,12 @@
 - 9.3: `crates/areka-emo-text/src/writing.rs` のモジュール doc に「M1 では実挙動を…」が 1 件残るが、これは CSS 借用の予約キー名（`RESERVED_KEY_TEXT_ORIENTATION`／`TEXT_COMBINE_UPRIGHT`）についての記述で、要件 16.4 が名指す予約名のいずれでもなく**記述は今も真**（書き換える方が誤りになる）。
 - 9.3: **9.4 で直すこと ⑤**——`.kiro/specs/areka-P0-balloon-lifecycle-events/brief.md` に入れた登記行の「3 経路だけが同じ実体を通っており」は `state_decoration.rs::reset_decoration` の既存 doc の言い回しを踏襲したもので、**9.4 の項目④と同根**（本番呼び出し元 0 件）。あわせて直すこと。
 - 9.3: 改訂した doc を字面で見張る機械の番人は無い（`canvas.rs` を `include_str!` するのは `PURE_SOURCES` の windows 依存検査だけで、doc の主張は判定しない）。
+- 9.4: **【裁定】装着より先に `\f` が届いた窓は「是正せず記録を足す」で先送り**。引受先は `areka-P0-emo-text-canon-residue`（brief 実在・登記 1 行と編集集合への `state_decoration.rs` 追加を済ませた）。理由＝正しく直すには「作者が明示した項目だけを新しい既定へ載せ替える」3 者併合が要り、承認済み要件 10.4「戻す操作は項目を列挙しない」と衝突する設計判断を伴うため、要件・設計フェーズを通す必要がある。**黙って落ちる状態にはしていない**——`set_look_layers` が旧い 2 層がまだ素の既定のときだけ `warn!` を 1 件残し、正負 2 本の檻が固定する。別解（`items().is_empty()` のとき無条件に新しい既定を採る）は作者の `\f` 指定を捨てるので不採用。
+- 9.4: **【裁定】影の所有は 2 台帳で割れていない**（`sakura-script.toml`＝タグの意味＝`text-align-shadow-canon`／`assets.toml`＝descript キーの読み取り＝`balloon-font-descript-keys`）。`assets.toml` に残っていた本仕様所有の `absent` 10 行は完了アーカイブで宙に浮くので owner を移送済み（本仕様所有は実際に着地させた 5 行だけ）。
+- 9.4: **【裁定】`FontCatalog.warned` は「台帳の寿命のあいだ 1 度」**で要件 9.3／9.4 の「1 台詞につき 1 度」と食い違うが、記録は要件より**少ない側**なので 13.4 の目的を満たし 13.5 も破らない。要件文言と承認済み設計の間の既存のズレ（rustdoc に記録済み）。
+- 9.4: **【裁定】要件 16.6 の「スタイルシートのキーワード」は所有仕様の brief が 0 件**。実在しない引受先を作らず、追跡先は §8 の行と台帳の `height` note とした（どちらも実在確認済み）。
+- 9.4: 新設した番人 4 本——`lib.rs::every_source_file_is_either_scanned_or_explicitly_excluded`（`src/*.rs` の実ファイル集合と 2 つの一覧の和を突き合わせる）・`draw_format_metrics_tests.rs::draw_facade_sources_cover_every_draw_production_file`・`frame_attach_tests.rs::every_production_scan_of_the_actor_map_is_registered`・`state_decoration_reset_tests.rs` の窓 2 本。**4 本ともレビュアーが独立に注入して赤を実測**。
+- 9.4: 純粋層の兄弟 10 本（`layout_*_tests`／`choice_*`／`state_*` 系）は `windows` 参照 0 件を実測したうえで除外一覧から `PURE_SOURCES` へ移した（母数 44→54）。走査面が無償で広がる。
+- 9.4: **`crates/log-capture-kit/tests/file_length_guard_test.rs` は本ブランチで 1 バイトも触っていない**（例外表 11 件のまま）。`main` は並走ブランチ（`present-gpu-transform-scale`）が 1 件外して 10 件に減っている——**マージ時は main 側が勝つのが正しい**。要件 1.4 は「本仕様が増減させない」なので充足。
+- 9.4: ワークスペースの唯一の赤 `areka --test smoke_boot_loop_exit` は、`target/debug/shiori-host32-helper.exe` が x64（PE machine 0x8664）で fixture の `pasta.dll` が i386（0x014c）ゆえの `0x800700C1`。i686 helper を置くと 2/2 緑になることを実測済み。**本ブランチの変更 76 ファイルに LOAD 経路は 0 件**。
+- 9.4: design の 3 点を親が追随させた——Monitoring の結線層のフィールドを `scope`→`file`、`resolve_with_background` ほかの実体が `actor_decoration.rs` にあること、§A 行 7 のプレースホルダを実測値＋「数値の正本は §8」へ。

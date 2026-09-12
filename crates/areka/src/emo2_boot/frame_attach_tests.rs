@@ -699,3 +699,99 @@ fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
          （この true が上の false を意味あるものにする）"
     );
 }
+
+// ───────── `state.actors()` の走査点の見張り（タスク 9.4・7.2 の申し送り）─────────
+
+/// 本番で `state.actors()` を走査する箇所（`.rs` の**実ファイルを読んで**数える）。
+///
+/// ワークスペース root からの相対パス。`areka-emo-text` は上流 crate だが、走査点の不変式は
+/// この結線層が守るものなので見張りもここに置く。
+const ACTOR_SCAN_SITES: &[&str] = &[
+    "crates/areka-emo-text/src/actor.rs",
+    "crates/areka/src/emo2_boot/frame/scale_text.rs",
+    "crates/areka/src/emo2_boot/hover_inject.rs",
+];
+
+/// **幽霊スコープを数えない**という不変式に機械の番人を置く（7.2 の申し送り・タスク 9.4）。
+///
+/// `present_frame`（`areka-emo-text` の `actor.rs`）は `state.actors()` を
+/// 「**中身か供給面のどちらかがある**」で絞って走査する。装着（2 層の差し込み）が
+/// `entry().or_default()` で発話前のスコープの器を作るため、この絞りが無いと一度も発話して
+/// いないスコープにまで供給面が割り当てられる（＝幽霊が提示層へ載る）。
+///
+/// 絞りそのものは `present_frame` の兄弟テストが判定しているが、**新しい走査点が増えたこと**は
+/// 誰も見張っていなかった。ここでは走査点の集合と本数を実ファイルから数え直して固定する
+/// ——4 本目を足した人に「その走査は供給面を割り当てるか」を必ず考えさせるための躓き石である。
+///
+/// 走査点を足すのが正しい変更なら、本表に 1 行足したうえで、その走査が供給面を作らない
+/// （読むだけ）か、作るなら同じ絞りを通すことを確かめること。今日の 3 点のうち供給面を
+/// 割り当てるのは `present_frame` だけで、他の 2 点は読むだけである。
+#[test]
+fn every_production_scan_of_the_actor_map_is_registered() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("crates/areka の 2 つ上がワークスペース root")
+        .to_path_buf();
+
+    let mut found: Vec<String> = Vec::new();
+    let mut stack = vec![root.join("crates")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("crates を読めない") {
+            let path = entry.expect("項目を読めない").path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n == "target") {
+                    continue;
+                }
+                stack.push(path);
+                continue;
+            }
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            // 兄弟テスト・統合テスト・支援は本番ではない（走査しても提示層に触れない）。
+            let in_tests_dir = path
+                .components()
+                .any(|c| c.as_os_str() == std::ffi::OsStr::new("tests"));
+            if !name.ends_with(".rs")
+                || name.ends_with("_tests.rs")
+                || name.ends_with("_test.rs")
+                || name.contains("test_support")
+                || in_tests_dir
+            {
+                continue;
+            }
+            // 綴りの揺れ（改行・字下げ）で取り逃さないよう空白を潰してから見る。
+            // `sheet.actors()`（dola の別 API）と紛れないよう、直前が状態表であることを要求する。
+            let src: String = std::fs::read_to_string(&path)
+                .unwrap_or_default()
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect();
+            if src.contains("state().actors()") || src.contains("state.actors()") {
+                let rel = path
+                    .strip_prefix(&root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                found.push(rel);
+            }
+        }
+    }
+    found.sort();
+
+    // 空振り防止: 1 件も拾えていないなら以下の等値は恒真になる。
+    assert!(
+        !found.is_empty(),
+        "走査点を 1 件も拾えていない——検査が空振りしている"
+    );
+    let expected: Vec<String> = ACTOR_SCAN_SITES.iter().map(|s| (*s).to_owned()).collect();
+    assert_eq!(
+        found, expected,
+        "`state.actors()` の本番走査点が変わった。新しい走査が供給面を割り当てるなら、\
+         `present_frame` と同じ絞り（中身か供給面のどちらかがある）を通すこと。\
+         読むだけなら ACTOR_SCAN_SITES に 1 行足すこと"
+    );
+}

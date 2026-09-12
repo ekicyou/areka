@@ -317,7 +317,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
   - `viewbox_draw.rs`（描画実行 `ViewboxExecutor`）＋ `viewbox_draw_plan.rs`（縮退判定・全域更新・計画の不整合報告）／`viewbox_draw_decoration.rs`（装飾の区間切り出しと範囲指定 `apply_font_ranges`）
   - `actor.rs`（アクターシェル）＋ `actor_decoration.rs`（背景色の受け口・2 層の差し込み）
   - 新規の純粋モジュール `look.rs`（1 文字に効く見た目 `TextLook`・2 層 `LookLayers`・装飾の表・`\f` の値の状態機械）／`color.rs`（色指定の解析と無効表示の混色）
-  - 純粋層の字面検査（`windows` 系 crate 非依存）の走査対象は `lib.rs` の `PURE_SOURCES`、`@` 前置禁止の走査対象は `draw_format_metrics_tests.rs` の `DRAW_FACADE_SOURCES`——**どちらも手保守の一覧なので、純粋モジュールや draw ファサードの兄弟を新設したら同時に足すこと**。
+  - 純粋層の字面検査（`windows` 系 crate 非依存）の走査対象は `lib.rs` の `PURE_SOURCES`、`@` 前置禁止の走査対象は `draw_format_metrics_tests.rs` の `DRAW_FACADE_SOURCES`——どちらも手保守の一覧だが、**`src/*.rs` の実ファイル集合と突き合わせる検査が両方に付いている**（`lib.rs::every_source_file_is_either_scanned_or_explicitly_excluded` と `draw_format_metrics_tests.rs::draw_facade_sources_cover_every_draw_production_file`）。新設したファイルはどちらかの一覧（純粋層なら `PURE_SOURCES`、そうでなければ `SOURCES_OUTSIDE_THE_PURE_SCAN`）へ載せるまで赤になる。
 
 ### SHIORI ABI Crate
 **Location**: `/crates/shiori-abi/`

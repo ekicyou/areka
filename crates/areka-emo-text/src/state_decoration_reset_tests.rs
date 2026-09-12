@@ -173,6 +173,72 @@ fn attaching_layers_keeps_an_explicit_look() {
     );
 }
 
+/// 装着より先に `\f` が届いた窓を**記録が捕まえる**（タスク 9.4 の裁定）。
+///
+/// cue のドレインは非同期で、`text_slot_view` が `None` の間は装着が次フレームへ委ねられる
+/// （`crates/areka/src/emo2_boot/frame/attach.rs::connect_balloon_text` の `None` の腕）。
+/// この窓で `\f[...]` が先に届くと、直上の
+/// [`attaching_layers_keeps_an_explicit_look`] が固定している追随ガードが成立せず、
+/// バルーン定義の既定（大きさ・色・フォント名）が**その台詞のあいだ届かない**——以後の
+/// 文字が素の既定 12px で描かれる。次の台詞頭の `ClearAll` で自然治癒する。
+///
+/// **挙動の是正は本仕様では行わない**（引受先＝`areka-P0-emo-text-canon-residue`）。
+/// 正しく直すには「作者が明示した項目だけを新しい既定へ載せ替える」3 者併合が要り、
+/// それは要件 10.4 の「項目を列挙しない」（後続仕様が [`crate::look::TextLook`] へ足した
+/// 項目も自動で戻しと追随に含まれる）と衝突する設計判断を伴う。ここで固定するのは
+/// **黙って落ちない**ことだけ——既定が届かなかったことが記録に 1 件残る。
+#[test]
+fn attaching_over_an_explicit_look_records_that_the_defaults_could_not_land() {
+    let mut state = TextLayerState::default();
+    state.apply_cue(&font("0", &["bold", "1"]));
+
+    let ((), events) = capture(|| state.set_look_layers(&ActorKey::from("0"), attached_layers()));
+
+    let actor = st(&state, "0");
+    assert_eq!(
+        actor.current_look().height,
+        12.0,
+        "窓の実害——バルーン定義の 20px が現在の見た目へ届かない"
+    );
+    assert_eq!(
+        warn_count(&events),
+        1,
+        "黙って落とさない: 既定が届かなかったことが 1 件記録される"
+    );
+}
+
+/// 較正の負の側——**装着が先**の正常な順序では記録が 0 件（恒真な警告になっていない）。
+///
+/// 初回装着（現在の見た目が旧い既定と同値＝追随する）と、`\f` の後の再装着
+/// （k 再追従。既定はもう素の既定ではないので窓ではない）の**両方**で 0 件を断言する。
+#[test]
+fn attaching_in_the_normal_order_records_nothing() {
+    let mut state = TextLayerState::default();
+    state.apply_cue(&text("0", "あ"));
+
+    let ((), first) = capture(|| state.set_look_layers(&ActorKey::from("0"), attached_layers()));
+    state.apply_cue(&font("0", &["bold", "1"]));
+    let ((), again) = capture(|| state.set_look_layers(&ActorKey::from("0"), attached_layers()));
+
+    let actor = st(&state, "0");
+    assert!(actor.current_look().bold, "明示した太字は残る");
+    assert_eq!(
+        actor.current_look().height,
+        20.0,
+        "正常な順序ならバルーン定義の既定が届いている"
+    );
+    assert_eq!(warn_count(&first), 0, "初回装着で警告は出ない");
+    assert_eq!(warn_count(&again), 0, "再装着（k 再追従）でも警告は出ない");
+}
+
+/// 捕まえた記録のうち `warn` の件数。
+fn warn_count(events: &[CapturedEvent]) -> usize {
+    events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .count()
+}
+
 /// 装着の後の戻す操作は、差し込んだ新しい既定へ戻る。
 #[test]
 fn the_reset_operation_uses_the_attached_layers() {

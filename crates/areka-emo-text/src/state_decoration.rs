@@ -22,8 +22,10 @@
 //! | `\f[default]` | 変わらない | 既定へ戻る |
 //! | `\f[disable]` | 変わらない | 無効表示の層へ合う |
 //!
-//! 「戻す操作」の実体は 1 か所（[`ActorTextState::reset_look`]）で、`\f[default]`・
-//! 台本の先頭・後続仕様のクリック待ち（`\x`）はいずれもそこを通る（要件 10.3）。
+//! 「戻す操作」の実体は 1 か所（[`ActorTextState::reset_look`]）で、`\f[default]` と
+//! 台本の先頭はそこを通る（要件 10.3）。後続仕様のクリック待ち（`\x`）も同じ実体を
+//! 通す前提で口を開けてあるが、`\x` の実装は本仕様の射程外で**本番の呼び出し元はまだ
+//! 無い**（引受先＝`areka-P0-balloon-lifecycle-events`）。
 //! 外から呼ぶ入口は [`TextLayerState::reset_decoration`] 1 本で、スコープ指定と
 //! 全スコープ（要件 10.5）の両方を受ける。`\f[disable]` は戻し先の層が違うだけの
 //! 同じ一括の戻しである（[`ActorTextState::reset_look_disabled`] の裁定）。
@@ -330,10 +332,29 @@ impl TextLayerState {
     ///
     /// 現在の見た目が**旧い既定と同値**なら（＝まだ `\f` で明示されていないなら）新しい既定へ
     /// 追随する。明示された見た目は丸ごと保つ——利用者が指定した値を装着が黙って捨てないため。
+    ///
+    /// # 装着より先に `\f` が届いた窓（記録あり・是正は後続仕様）
+    ///
+    /// cue のドレインは非同期で、`text_slot_view` が `None` の間は装着が次フレームへ委ねられる
+    /// （`areka` の `emo2_boot::frame::attach::connect_balloon_text` の `None` の腕）。この窓で
+    /// `\f[...]` が先に届くと上の追随ガードが成立せず、**バルーン定義の既定（大きさ・色・
+    /// フォント名）がその台詞のあいだ届かない**——以後の文字が素の既定で描かれる。射程は
+    /// 「装飾を含む台詞のみ」で、次の台詞頭の `ClearAll` が自然治癒させる。
+    ///
+    /// 黙って落とさないため、**旧い 2 層がまだ素の既定（＝一度も装着されていない）**のときに
+    /// 限って `warn!` を残す。再装着（k 再追従）では旧い 2 層がバルーン定義由来なので鳴らない。
+    /// 挙動そのものの是正は `areka-P0-emo-text-canon-residue` が持つ——正しく直すには
+    /// 「作者が明示した項目だけを新しい既定へ載せ替える」3 者併合が要り、それは要件 10.4 の
+    /// 「項目を列挙しない」と衝突する設計判断を伴うからである（タスク 9.4 の裁定）。
     pub fn set_look_layers(&mut self, actor: &ActorKey, layers: LookLayers) {
         let state = self.actors.entry(actor.clone()).or_default();
         if state.decor.current == state.decor.layers.default {
             state.decor.current = layers.default.clone();
+        } else if state.decor.layers == LookLayers::default() {
+            tracing::warn!(
+                actor = %actor,
+                "装着より先に \\f が届いた——バルーン定義の既定がこの台詞のあいだ現在の見た目へ届かない（次の台詞頭の全消去で戻る）"
+            );
         }
         state.decor.layers = layers;
     }
@@ -341,17 +362,20 @@ impl TextLayerState {
     /// 「戻す操作」（要件 10.3 の権威定義）——装飾状態の全項目を既定の見た目へ戻す。
     ///
     /// `scope` が `Some` なら当該スコープだけ、`None` なら全スコープを 1 回で戻す
-    /// （要件 10.5）。`\f[default]`（[`ActorTextState::apply_font_args`]）・台詞の開始
-    /// （`ClearAll`→[`ActorTextState::reset_for_new_talk`]）・後続仕様のクリック待ち（`\x`）は
-    /// いずれも同じ実体（[`ActorTextState::reset_look`]）を通り、別々の戻し方を持たない。
+    /// （要件 10.5）。`\f[default]`（[`ActorTextState::apply_font_args`]）と台詞の開始
+    /// （`ClearAll`→[`ActorTextState::reset_for_new_talk`]）は同じ実体
+    /// （[`ActorTextState::reset_look`]）を通り、別々の戻し方を持たない。後続仕様の
+    /// クリック待ち（`\x`）もここを通す前提だが、**本番の呼び出し元はまだ無い**
+    /// （引受先＝`areka-P0-balloon-lifecycle-events`）。
     /// 既に表示済みの文字の見た目は変わらない（要件 10.7）。
     pub fn reset_decoration(&mut self, scope: Option<&ActorKey>) {
         match scope {
             Some(actor) => {
                 tracing::debug!(actor = %actor, "戻す操作——当該スコープの装飾状態を既定へ戻す（要件 10.3）");
-                // まだ生まれていないスコープには戻すものが無い——`entry().or_default()` で
-                // 空のスコープを作ると、`present_frame` の `actors()` 走査がその幽霊を
-                // 提示層へ載せてしまう。
+                // まだ生まれていないスコープには戻すものが無いので、`entry().or_default()`
+                // で器を作らない（`get_mut` で引く）。空の器を作っても `present_frame` の
+                // 走査は「中身か供給面のどちらかがある」で弾くので提示層には載らないが、
+                // 状態表に意味の無い項目を増やさない。
                 if let Some(state) = self.actors.get_mut(actor) {
                     state.reset_look();
                 }

@@ -189,7 +189,7 @@ crates/areka/src/emo2_boot/
 | `crates/areka-emo-text/src/canvas.rs`（738） | `from_layout` が `style` を転写。モジュール doc と `TextEffects` の doc を改訂（`disable` は実体化・`outline`／`sub`／`sup` は語彙のみ・`shadow` は align-shadow・`multicolor`／`rotation` は M2 予約） | 実体化 |
 | `crates/areka-emo-text/src/viewbox.rs`（846） | `CommittedLine.styles: Vec<u32>`、`line_fingerprint` が装飾番号列を写す | 実体化 |
 | `crates/areka-emo-text/src/viewbox_draw.rs`（852→約 740→約 810） | **分割**: `degrade_if_needed`／`full_domain_update`／`plan_inconsistency` を `viewbox_draw_plan.rs`（`#[path] mod plan;`・`pub(super) fn`）へ純移動し、ファサードに `use plan::degrade_if_needed;` と `#[cfg(test)] use plan::plan_inconsistency;` を残す（`viewbox_draw_frame_render_tests.rs` が `super::plan_inconsistency` で参照している私有項目の再束縛・`structure.md` の注記どおり。`full_domain_update` は子の内部専用なので親へ束ねない——3 本を素の `use` で束ねると `unused_imports` が非テスト 2 本・テスト 1 本鳴り、分割前の警告 0 からの回帰になることを実測で確認・実装 2026-09-12）。**実体化**: `fonts: Rc<FontCatalog>`・`brushes: BrushCache`、`new_shared`、`render_styled`（`render` は空の装飾表で委譲）、Phase 1 の行ごとに `style_runs`→`line_layout_decorated`→色の範囲、`ensure_format` が `fonts.pick(font)` の複製で `create_text_format` を呼ぶ、行の箱寸を `block_extent(run.size, mode)` に | 分割→実体化 |
-| `crates/areka-emo-text/src/actor.rs`（952→約 965） | `ResolvedBalloonText::resolve_with_background`、`TextLayerRuntime.balloon_background`、`register_actor` で `state.set_look_layers`、`register_actor_binding`／`refresh_actor_binding` が背景付きで解決、`present_actor` が `layout_styled`／`render_styled`／共有 `FontCatalog` を使う。それ以上の追加は `actor_decoration.rs` へ | 実体化 |
+| `crates/areka-emo-text/src/actor.rs`（952→984） | `TextLayerRuntime.balloon_background`、`register_actor` で `state.set_look_layers`、`register_actor_binding`／`refresh_actor_binding` が背景付きで解決、`present_actor` が `layout_styled`／`render_styled`／共有 `FontCatalog` を使う。**`ResolvedBalloonText::resolve_with_background`・`set_balloon_background`／`background_of`・`build_actor_render`／`glyph_styles_of` の実体は `actor_decoration.rs`**——同じ行の「それ以上の追加は `actor_decoration.rs` へ」に従った結果で、1,000 行の見張りにも掛かっていた（実装 2026-09-13） | 実体化 |
 | `crates/areka-emo-text/src/draw_format_metrics_tests.rs`（742） | `decoration_and_disable_seams_are_type_only` を「無効表示の層が実体化し、行単位の予約型は 0 バイトのまま」を述べる述語へ改訂。`font_family_reaches_directwrite_only_as_author_name_or_default_retry` の doc と述語に「第 2 の入口 `draw_metrics.rs::probe_format_for`」を加える | 実体化 |
 | `PositionedGlyph { .. }` の構築を持つテスト 5 ファイル（`choice_tests.rs`・`choice_decorate_tests.rs`・`viewbox_choice_marker_tests.rs`・`canvas.rs` のテスト・`layout` 系） | フィールド追加の書き換え（`style: StyleId::DEFAULT`） | 実体化 |
 | `crates/areka/src/emo2_boot/assets.rs`（416） | `BalloonScopeAssets.background_color: (u8,u8,u8)`、構築時に `balloon_background::face_origin_color` で導出 | 実体化 |
@@ -914,12 +914,12 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 | フォント候補が全滅 | COM | `warn!(candidates)` 候補列ごと 1 度 | 既定の見た目のフォント（R9.4, 13.2） |
 | `FindFamilyName`／`CreateTextFormat`／範囲指定／`SetDrawingEffect`／ブラシ生成の失敗 | COM | `error!(hresult, context)` | `Err(TextLayerError::Device)`・当該フレーム skip（R13.3） |
 | probe 計測の失敗 | COM | `error!` | 縮退値（`FixedMetrics` と同式）で継続（既存と同じ） |
-| 背景の原点画素が透明・半透明・トリムの外・面が引けない | 結線 | `debug!(scope, reason)` | 白で混色（§A 行 8） |
+| 背景の原点画素が透明・半透明・トリムの外・面が引けない | 結線 | `debug!(file, reason)` | 白で混色（§A 行 8） |
 | `Custom` の params が正準形でない | 純粋 | `debug!` | 無視（既存の良性スキップ） |
 
 ### Monitoring
 
-- 構造化フィールド: `actor`・`key`・`value`・`reason`（純粋層）／`candidate`・`candidates`・`family`（COM 層）／`scope`・`reason`（結線）。文言は「[関数名] …」の既存書式。
+- 構造化フィールド: `actor`・`key`・`value`・`reason`（純粋層）／`candidate`・`candidates`・`family`（COM 層）／`file`・`reason`（結線——`face_origin_color(atlas, file_name)` は scope を運ばないので、どの面から採ったかを名指しする `file` を使う。実装 2026-09-13）。文言は「[関数名] …」の既存書式。
 - 決定論テストは `log-capture-kit` で件数を数える（同じ不正値の繰り返しで 1 件・`ClearAll` 後に再び 1 件）。
 
 ## Testing Strategy
@@ -1004,7 +1004,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 4. **`\f[name]` のフォントファイル候補**＝読み込まない（warn 1 度で読み飛ばし）。判定は `.ttf`／`.otf`／`.ttc` の**末尾一致（大小無視）**で、実在する family 名がこれで終わっていれば誤って読み飛ばす（現実の family 名では起こらないと判断・実装 2026-09-12）／根拠: 開発者裁定 2026-09-11（インストール済みの指定で足りる）／要件 9.3。
 5. **`\f[height,disable]`**＝無効表示の大きさへ／根拠: `disable.font.height` が定義可能／要件 7.5。
 6. **`sub`／`sup`／`outline`**＝語彙のみ（状態・戻しに参加・表示不変・warn 1 度）／根拠: DirectWrite の範囲指定で表せず自前描画器を要する・開発者裁定 2026-09-11／要件 5.9・6.1〜6.4。
-7. **縦書きの下線・打ち消し線の位置**＝DirectWrite の既定に委ねる。実測: 〔実装時に記入: `vertical_rl`／`vertical_lr` とも列の（右／左）側・打ち消し線は列の（中央）〕。bvc の裁定「列の右側」との照合: 〔一致／不一致〕／根拠: 開発者裁定 2026-09-11・自前で線を描き分けない／要件 5.7・12.2。
+7. **縦書きの下線・打ち消し線の位置**＝DirectWrite の既定に委ねる。実測（2026-09-13・タスク 8.2）: `vertical_rl`／`vertical_lr` とも下線は列の**左**側・打ち消し線は列の**中央**。bvc の裁定「列の右側」との照合: **不一致**。**数値の正本は `doc/COMPAT_ARCHITECTURE.md` §8 の同じ行**（帯と列の定数は`tests/decoration_readback/vertical.rs` と `tests/decoration_readback_test.rs` が持つ）——ここで数値を重ねると二重管理になる／根拠: 開発者裁定 2026-09-11・自前で線を描き分けない／要件 5.7・12.2。
 8. **無効表示の色の混ぜ方**＝成分ごとに `(バルーン背景の (0,0) の色 + 文字色 × 2) / 3`（整数除算・1 か所 `color::mix_disabled`）。背景は面 0 の原画像の (0,0)（α が 255 でない・トリムで外・面が無いときは白）／根拠: ukadoc shell `menu.disable.font.color.r` の式を輸入・balloon 側は「画像色とミックス」としか定めない／要件 4.6。
 9. **行の高さの決め方**＝閉じる行の文字の em の最大値・文字の無い行はそのとき効いている大きさ・行送りは `line_pitch(その高さ)`／根拠: 正典は沈黙／要件 7.9。
 10. **戻す操作の対象と時期**＝対象は装飾状態の全項目（`TextLook` 丸ごと＋所有外語彙）・戻すのは `\f[default]`（既定の層へ）・`\f[disable]`（無効表示の層へ・所有外語彙も空に。要件 10.2 の「全項目」と 10.4 の「後続仕様が登記する項目」に照らし `default` と対称にする裁定・実装 2026-09-12）・台詞の開始（`ClearAll`）・`\x`／戻さないのは `\c`・`\n`・`\_l`・`\x[noclear]`／根拠: ukadoc `\x`「`\f` 系の効果も解除」・`\x[noclear]`「効果は残る」／要件 10.6・3.8。追跡先: `areka-P0-balloon-lifecycle-events` 項目 9・`areka-P0-choice-marker-styling`。

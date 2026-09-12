@@ -93,6 +93,12 @@ impl DWriteMetrics {
     /// format は描画と同一の [`create_text_format`] 経路（既定フォント再試行込み・
     /// R4.2）——probe 規約「描画に使うのと同一のフォント設定・writing_mode 設定」の
     /// 構造的保証。生成失敗は当該経路の log-first（`warn!`/`error!`＋`Err`）に従う。
+    ///
+    /// **硬い経路が 1 つ増えている**（タスク 9.4 の記録・6.2 由来）——候補列の解決台帳を
+    /// 作るために `GetSystemFontCollection` を通すので、同 API の失敗が
+    /// **計測の縮退ではなく装着そのものの失敗**（`Err(TextLayerError::Device)`）になる。
+    /// 以前は書式生成の失敗が行ボックス比の縮退で済んでいた。失敗は
+    /// `FontCatalog::new` が `error!` で記録するので記録なしの失敗経路ではない。
     pub fn new(
         factory: &IDWriteFactory2,
         font: &ResolvedFont,
@@ -163,6 +169,14 @@ impl DWriteMetrics {
     /// （`create_text_format`／`try_create_format`）と同じ並び——コレクション既定・
     /// stretch NORMAL・locale ja-JP——に、鍵の太字／斜体／大きさを載せた形で、
     /// 最後に同じ [`DirectionRecipe`] を焼く（R11.3「計測と描画は同じ書式経路」）。
+    /// **`draw.rs::try_create_format` の設定列を字面で複製している**（タスク 9.4 の記録）。
+    ///
+    /// 太さと斜体を鍵ごとに変える必要があるため既存関数を再利用できず、それ以外の設定
+    /// （コレクション既定・`DWRITE_FONT_STRETCH_NORMAL`・`LOCALE_JA_JP`）は同じ値を
+    /// 書き写している（design が逐語で指定した形）。**`try_create_format` 側の設定を
+    /// 変えても、ここは自動では追随しない**——家族名が DirectWrite へ渡る入口が 2 つある
+    /// ことは `draw_format_metrics_tests.rs` の家族名検査が見張っているが、その他の設定の
+    /// 一致を見張る述語は無い。
     fn probe_format_for(&self, key: &FontKey) -> Result<IDWriteTextFormat, TextLayerError> {
         if let Some(format) = self.probe_formats.borrow().get(key) {
             return Ok(format.clone());

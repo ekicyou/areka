@@ -218,6 +218,12 @@ impl ConsumerLedger {
             .copied()
     }
 
+    /// 登記の件数（母数の観測点・テスト専用）。
+    #[cfg(test)]
+    pub(crate) fn entry_count(&self) -> usize {
+        self.table.len()
+    }
+
     /// 正準台帳を構築する（現行登記＝`move` → [`CommandConsumer::MoveSink`]・`bind` →
     /// [`CommandConsumer::Seriko`]・`(set, zorder)` と `(reset, zorder)` →
     /// [`CommandConsumer::ZOrderSink`]・運搬名 `\f` →
@@ -539,13 +545,23 @@ mod tests {
         );
     }
 
-    /// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性檻が緑）。4 エントリが
+    /// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性檻が緑）。5 件が
     /// 共存しても檻は保たれ、既登記の組の再登記は [`LedgerError::Duplicate`] で検出され、
     /// 別名の追加は独立に成功する（task 7.2・要件 11.3）。
+    ///
+    /// **母数も判定する**（タスク 9.4・7.3 の申し送り）——件数を数えずに個々の登記だけを
+    /// 見ていると、登記が黙って増えても減っても緑のままになる。件数は逐語で固定し、
+    /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
     #[test]
     fn canonical_builds_without_duplicate() {
         // canonical() は内部 try_register（5 行）が Ok（重複なら expect が panic する）。
         let ledger = ConsumerLedger::canonical();
+        assert_eq!(
+            ledger.entry_count(),
+            5,
+            "正準台帳の登記は 5 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f）\
+             ——増減させたら本檻と doc の 2 か所を編集すること"
+        );
         assert_eq!(
             ledger.consumer_of("move", None),
             Some(CommandConsumer::MoveSink)
@@ -563,7 +579,7 @@ mod tests {
             Some(CommandConsumer::ZOrderSink)
         );
 
-        // 4 エントリ共存下でも一意性檻は保たれる: 既登記の組 bind の再登記は Duplicate で
+        // 5 件共存下でも一意性檻は保たれる: 既登記の組 bind の再登記は Duplicate で
         // 検出される。
         let mut ext = ledger.clone();
         let err = ext
@@ -575,7 +591,7 @@ mod tests {
                 name: "bind".to_string(),
                 selector: None,
             },
-            "4 エントリ共存下でも重複は Duplicate{{name, selector}} として観測可能"
+            "5 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
         );
         // 既登記の担当は据え置き（上書きしない）。
         assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));

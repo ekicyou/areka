@@ -49,6 +49,8 @@
 
 ## Constraints
 
-- 編集集合: `crates/areka-emo-text/src/{writing,region,layout,actor}.rs`（＋兄弟テスト）・`crates/areka-parsers/src/balloon/{parse,model}.rs`・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 編集集合: `crates/areka-emo-text/src/{writing,region,layout,actor,state_decoration}.rs`（＋兄弟テスト）・`crates/areka-parsers/src/balloon/{parse,model}.rs`・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。（`state_decoration.rs` は 2026-09-13 に `areka-P0-text-decoration-canon` から引き受けた「装着より先に `\f` が届いた窓」のため——下の 📌 を参照）
 - fixture `crates/pilot/examples/shiori-host-32/fixtures/emo2/` は無改変。
 - 規模 M・要件定義は Opus で足りる（裁定は 15 の禁則文字集合の出典 1 件）。
+
+> **📌 2026-09-13 先送りの引受（`areka-P0-text-decoration-canon` 着地・タスク 9.4 の裁定）**——**装着より先に `\f` が届いた窓**（項目 16）。cue のドレインは非同期で、`crates/areka/src/emo2_boot/frame/attach.rs::connect_balloon_text` が `text_slot_view` を`None` で受けると装着が次フレームへ委ねられる。この窓で `\f[...]` が先に届くと`crates/areka-emo-text/src/state_decoration.rs::TextLayerState::set_look_layers` の追随ガード（現在の見た目が旧い既定と同値のときだけ追随）が成立せず、**バルーン定義の既定（大きさ・色・フォント名）がその台詞のあいだ届かない**（以後の文字が素の既定 12px で描かれる。次の台詞頭の `ClearAll` で自然治癒）。親 spec は**是正せず記録だけ足した**——`set_look_layers` は旧い 2 層がまだ素の既定のときに `warn!` を 1 件残し、`state_decoration_reset_tests.rs::attaching_over_an_explicit_look_records_that_the_defaults_could_not_land`（正）と `attaching_in_the_normal_order_records_nothing`（負）が固定している。**是正が本 spec の担当**である理由＝正しく直すには「作者が明示した項目だけを新しい既定へ載せ替える」3 者併合が要り、親 spec の承認済み要件 10.4「戻す操作は項目を列挙しない」（後続仕様が `TextLook` へ足した項目も自動で含まれる）と衝突する設計判断を伴うため、要件・設計のフェーズを通す必要がある。（編集集合の行には `state_decoration.rs` を追加済み。）
