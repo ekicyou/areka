@@ -241,7 +241,7 @@
   - _Depends: 8.2_
   - _Boundary: doc/ukadoc-coverage_
 
-- [ ] 9.3 (P) 予約名の注記・steering・隣接仕様への相互登記
+- [x] 9.3 (P) 予約名の注記・steering・隣接仕様への相互登記
   - コード内の予約名の説明を改訂する（無効表示は実体化・白抜きと上下付きは語彙のみ・影は寄せと影の仕様・残り 2 つは M2 予約のまま）
   - 構造の steering に分割後のファイルと接続を反映し、ロードマップの M2 予約に語彙のみ 3 項目の 1 行を足す
   - 隣接 5 仕様の起案文書に、本仕様が用意した土台の使い方を 1 行ずつ相互登記する
@@ -374,3 +374,7 @@
 - 9.2: 台帳の常設整合検査は **`status` を片方向だけ判定する**——証拠の無い `implemented` への格上げは `ImplementedWithoutEvidence` で赤になるが、真の実装を `absent` へ落としても（報告を作り直せば）緑。**`note` と `owner` は一切判定されない**（実在しない spec 名を入れても 38 件緑）。`summary.md` の陳腐化も判定されない。
 - 9.2: 台帳を触ったら **`cargo run -p ukadoc-survey -- report` と `report-summary` を回し直すこと**（`DomainReportStale` が赤になる）。**再生成は `report/*.md` を LF で書き出すので CRLF へ戻すこと**（実装者・レビュアーとも実際に踏んだ）。
 - 9.2: `\f[name]` の記録だけは `warn_once` を通らず `FontCatalog::first_time`（鍵は `WarnKey::FontFile`／`AllMissing`）を通り、**`FontCatalog.warned` は一度も clear されない**——「1 台詞に 1 度」ではなく**カタログの寿命のあいだ 1 度**。一括の文言統一をかけるときの落とし穴。
+- 9.3: **裁定**——要件 16.6 が挙げる語彙のうち「スタイルシートのキーワード」だけ**所有仕様の brief が 0 件**（`completed/` を含む全 spec を走査して確認）。実在しない引受先を作らず、追跡先は `doc/COMPAT_ARCHITECTURE.md` §8 の「スタイルシートの大きさキーワード」の行と `ledger/sakura-script.toml` の `height` の note とした（どちらも実在確認済み）。**9.4 はこの裁定を要件 16.6 の充足として記録すること**。
+- 9.3: `crates/areka-emo-text/src/writing.rs` のモジュール doc に「M1 では実挙動を…」が 1 件残るが、これは CSS 借用の予約キー名（`RESERVED_KEY_TEXT_ORIENTATION`／`TEXT_COMBINE_UPRIGHT`）についての記述で、要件 16.4 が名指す予約名のいずれでもなく**記述は今も真**（書き換える方が誤りになる）。
+- 9.3: **9.4 で直すこと ⑤**——`.kiro/specs/areka-P0-balloon-lifecycle-events/brief.md` に入れた登記行の「3 経路だけが同じ実体を通っており」は `state_decoration.rs::reset_decoration` の既存 doc の言い回しを踏襲したもので、**9.4 の項目④と同根**（本番呼び出し元 0 件）。あわせて直すこと。
+- 9.3: 改訂した doc を字面で見張る機械の番人は無い（`canvas.rs` を `include_str!` するのは `PURE_SOURCES` の windows 依存検査だけで、doc の主張は判定しない）。

@@ -51,3 +51,5 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
 - 編集集合の見込み: `crates/areka/src/emo2_boot/talk_lifecycle.rs`・`crates/areka-kanade/src/schedule/{events,steady}.rs`・`crates/areka-sakura/`（`\x` の待ち相）・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 正典の曖昧点 1 件を要件で裁定: `balloontimeout` の「`0` または `-1`」（同一項で表現が割れ `-2` の扱いが曖昧）。
 - 決定論テスト必達（3 イベントの発火・`\x` の 2 形・中断起点）。要件定義は Opus で足りる（裁定は上の 1 件と `\x` の scope リセット範囲の 2 件）。
+
+> **📌 2026-09-13 相互登記（`areka-P0-text-decoration-canon` 着地）**——項目 9 の「`\f` 状態の何がリセットされるか」の権威定義は `crates/areka-emo-text/src/state_decoration.rs` の `TextLayerState::reset_decoration(scope)` で、`\x` はこれを `None`（全スコープを 1 回で戻す）で呼び、`\x[noclear]` は呼ばない——という配線を本 spec が足す（親 spec の着地時点では `\f[default]`／`\f[disable]`／台詞開始の `ClearAll` の 3 経路だけが同じ実体を通っており、クリック待ちからの呼び出し元は 0 件）。

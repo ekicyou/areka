@@ -310,6 +310,14 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - **`areka-emo-compose`（2/3・pure）**: `areka-parsers::shell` の忠実転記モデル＋`AtlasTable` を入力に、静的合成済みビットマップ `ComposedSurface` を生成する純粋層。
 - **`areka-emo-present`（3/3・提示段）**: `ComposedSurface` を wintf の WUC 表示面へアップロード・提示し、当たり判定用 AlphaMask を供給。`presenter/show.rs` の `apply_show` が単一漏斗（k 導出・合成/キャッシュ・アップロード・マスク同期・可視化）。
 - **`areka-emo-text`（テキスト層）**: バルーン文字レンダリング（spec 名は `areka-P0-emo-text-layer`・atlas/compose/present の単一トークン命名に倣う）。
+  **主要ファイルと接続**（`areka-P0-text-decoration-canon` 2026-09-13 の分割後・接続はいずれも親ファイル内の `#[path = "…"] mod` 宣言＝`lib.rs` の `pub mod` は親だけを並べる）:
+  - `draw.rs`（COM 層のファサード＝`ResolvedFont`／`DirectionRecipe`／`create_text_format`）＋ `draw_metrics.rs`（文字送り幅の計測 `DWriteMetrics`）／`draw_line_store.rs`（行レイアウトの保持庫 `LineLayoutStore`）／`draw_catalog.rs`（フォント候補列の解決 `FontCatalog`）
+  - `layout.rs`（配置の本体 `LayoutEngine`）＋ `layout_line_ops.rs`（行を閉じる・区間の送り幅合計・カーソル座標の解決）／`layout_styled.rs`（装飾込みの配置の入口・行内最大の大きさ）
+  - `state.rs`（表示状態 `TextLayerState`・スコープの状態 `ActorTextState` の型定義）＋ `state_decoration.rs`（両者の装飾まわりの実装＝所有外キーの保持 `unowned_vocab`・戻す操作 `reset_decoration`）
+  - `viewbox_draw.rs`（描画実行 `ViewboxExecutor`）＋ `viewbox_draw_plan.rs`（縮退判定・全域更新・計画の不整合報告）／`viewbox_draw_decoration.rs`（装飾の区間切り出しと範囲指定 `apply_font_ranges`）
+  - `actor.rs`（アクターシェル）＋ `actor_decoration.rs`（背景色の受け口・2 層の差し込み）
+  - 新規の純粋モジュール `look.rs`（1 文字に効く見た目 `TextLook`・2 層 `LookLayers`・装飾の表・`\f` の値の状態機械）／`color.rs`（色指定の解析と無効表示の混色）
+  - 純粋層の字面検査（`windows` 系 crate 非依存）の走査対象は `lib.rs` の `PURE_SOURCES`、`@` 前置禁止の走査対象は `draw_format_metrics_tests.rs` の `DRAW_FACADE_SOURCES`——**どちらも手保守の一覧なので、純粋モジュールや draw ファサードの兄弟を新設したら同時に足すこと**。
 
 ### SHIORI ABI Crate
 **Location**: `/crates/shiori-abi/`

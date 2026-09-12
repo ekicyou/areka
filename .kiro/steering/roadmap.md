@@ -150,7 +150,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 **M1 完成後に、実物を見て組み直す（起点＝2026-09-11 の完成宣言）。** 本文はここに書かない。組み直しの材料＝完了した `ukadoc-survey-*` 5 本の台帳（`doc/ukadoc-coverage/`・1,749 項目＝実装済み 88／語彙のみ 440／縮退 22／未対応 1,002／別名 27／対象外 170）→ W13 の `ukadoc-coverage-roadmap`（繋がり評価・段階 A〜E・優先度 4 軸＝壊れ方＞伺からしさ＞資産の広さ＞基盤共有度・M3「伺かの冠」候補）→ `/kiro-discovery` 再入で先頭ウェーブ分の brief を起票し、別セッションの棚卸で roadmap へ反映。
 
-予約（全て任意・brief なし・仮裁定 2）: アプリ層＝SSTP（9801）・FMO・DirectSSTP・Plugin/HEADLINE・ネットワーク更新・ゴースト/バルーン選択 UI・多重ゴースト。互換面＝Shift_JIS（**`charset-canon` で W13**）・SAORI は実装しない（SHIORI が直接 `LoadLibrary`・台帳 `not-applicable`）・里々/YAYA 網羅・NAR。emo テキスト進化＝回転テキスト（`TextEffects` 予約名 `rotation`／`multicolor` は `text-decoration-canon` が M2 シームのまま残す）。バルーン美観配置（画面端反転・`[visibility-guard] ClampX` の `warn!` 発火回数が優先度根拠）。pasta の native x64／`IShiori` in-proc・ベクトル描画・owner-draw 右クリックメニュー。
+予約（全て任意・brief なし・仮裁定 2）: アプリ層＝SSTP（9801）・FMO・DirectSSTP・Plugin/HEADLINE・ネットワーク更新・ゴースト/バルーン選択 UI・多重ゴースト。互換面＝Shift_JIS（**`charset-canon` で W13**）・SAORI は実装しない（SHIORI が直接 `LoadLibrary`・台帳 `not-applicable`）・里々/YAYA 網羅・NAR。emo テキスト進化＝回転テキスト（`TextEffects` 予約名 `rotation`／`multicolor` は `text-decoration-canon` が M2 シームのまま残す）。**`\f[sub]`／`\f[sup]`／`\f[outline]` は DirectWrite の標準機能で表せる手段が見つかるまで語彙のみ**（`areka-P0-text-decoration-canon` 2026-09-11 の開発者裁定——6 値の解釈・状態の保持・戻しへの参加までは行い表示は変えない・台帳の `status` は `vocabulary-only`・所有仕様なしで追跡先はこの行）。バルーン美観配置（画面端反転・`[visibility-guard] ClampX` の `warn!` 発火回数が優先度根拠）。pasta の native x64／`IShiori` in-proc・ベクトル描画・owner-draw 右クリックメニュー。
 
 ---
 

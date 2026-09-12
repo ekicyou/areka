@@ -8,7 +8,7 @@
 
 ## Current State
 
-2026-09-11 実測: `parse.rs` の `font.*` 引きは 5 本（親 brief 再測定・OK）。`BalloonModel` の `impl Font` に `name`／`height`／`color` の取得口。`disable.font.*` は draw 側の予約シーム（`FontDisableSeam`）のみ。ukadoc の descript_balloon ページの `font.*` 掃引は `doc/ukadoc-coverage/ledger/assets.toml`（完了 spec `ukadoc-survey-assets`）に 1 項目 1 行で載っている＝キー集合の照合元。
+2026-09-11 実測: `parse.rs` の `font.*` 引きは 5 本（親 brief 再測定・OK）。`BalloonModel` の `impl Font` に `name`／`height`／`color` の取得口。`disable.font.*` の受け皿は **2026-09-13 に実体化済み**（`areka-P0-text-decoration-canon`——空の予約型 `FontDisableSeam` は撤去され、無効表示の層は `crates/areka-emo-text/src/draw.rs` の `ResolvedFont::looks.disable`＝`look.rs::LookLayers` の 1 層として在る。色はバルーン背景との混色・他の項目は既定と同じで、キーの**読み取り**は本 spec の担当）。ukadoc の descript_balloon ページの `font.*` 掃引は `doc/ukadoc-coverage/ledger/assets.toml`（完了 spec `ukadoc-survey-assets`）に 1 項目 1 行で載っている＝キー集合の照合元。
 
 ## Desired Outcome
 
@@ -45,3 +45,5 @@
 
 - 編集集合: `crates/areka-parsers/src/balloon/{parse,model}.rs`＋兄弟テスト（`parse_tests.rs` の distractor 行を壊さない）・`doc/ukadoc-coverage/ledger/assets.toml`。W13 の他 spec と共有ファイル 0（実測）。
 - 規模 S・要件定義は Opus で足りる。
+
+> **📌 2026-09-13 相互登記（`areka-P0-text-decoration-canon` 着地）**——既定の見た目の口は `look.rs::LookLayers::from_balloon` の引数列（フォント候補列・大きさ・色・背景色・選択肢文字色）と `look.rs::TextLook` の各フィールド。残り 8 キーは `draw.rs::ResolvedFont::resolve_with_background` の中で `model.font()` から読んでこの引数列へ渡すだけでよく（`disable.font.*` は `looks.disable` の当該フィールドを上書きする）、`\f` 側の意味論には触れずに済む。
