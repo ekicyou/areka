@@ -1973,9 +1973,176 @@ areka の内部の作りと上流のゴーストの事情で、正典の語彙�
 行を数えた）。前者は次の実機一周での目視に据え置かれ、後者は開発者の受容で確定している。
 4 ＋ 2 ＋ 2 ＝ 8 で、持ち越し 8 行を余さず数えている。
 
-<!-- 段 4 の残り: タスク 5.2（段階 A の温度感と、一般化で壊れる項目の id 単位の列挙）と
-     タスク 5.3（順位表への反映）が続く。5.3 が書き換える順位の行は 7-5 のとおり 0 行で
-     ある。 -->
+### 7-7. 段階 A の温度感と、一般化で壊れる項目（要件 9.5・9.6）
+
+段階 A の温度感は **「当面 emo2 が動けばよい」** である。段階 A に置いた束は、M1 で通した
+emo2 の一周（起動・発話・面の切り替え・終了）が成り立つ範囲を写したものであって、世に出て
+いるゴーストが一般に動く範囲ではない。段階 A を終えても、里々製・ヤヤ製の標準テンプレート
+ゴーストがそのまま動くとは言えない。この節は、その差を id で示す。
+
+**何を「壊れる」と呼ぶか。** 5-1 の `[[template]]` の `ids`（2 本の和集合）と、段階 A に置
+いた束の `members`（`linkage.md`）の和集合との積を取り、両方に現れる項目だけを見る。テンプ
+レート辞書が実際に書いている語彙であって、しかも段階 A の仕事の射程に入っている項目である。
+そのうち台帳の `status` が `implemented` のものは段階 A を終えた時点で動くので壊れない。残
+る `absent`（未対応）・`vocabulary-only`（語彙のみ）・`degraded`（縮退）の 3 状態が、段階
+A を終えた emo2 を里々製・ヤヤ製の代表 2 本へ一般化したときに壊れる項目である。3 つとも数
+え方は同じで、上の積を台帳の `status` で引き直して数えた。
+
+| 重なりの内訳 | 件数 |
+| --- | ---: |
+| 未対応（`absent`） | 67 |
+| 語彙のみ（`vocabulary-only`） | 6 |
+| 縮退（`degraded`） | 2 |
+| 小計＝一般化で壊れる項目 | 75 |
+| 実装済み（`implemented`）＝壊れない | 30 |
+| 重なりの合計 | 105 |
+
+残る 2 つの状態は、重なりに 1 件も現れない。テンプレートの語彙の側には別名と対象外がそれぞ
+れ下の数だけあるが、いずれも段階 A の束の `members` に入っていないので積に残らない。数え方:
+4 つの行とも、対象の集合を台帳の `status` で引き直して数えた。
+
+| 重なりに残らなかった状態 | 件数 |
+| --- | ---: |
+| 重なりのうち別名（`alias`） | 0 |
+| 重なりのうち対象外（`not-applicable`） | 0 |
+| テンプレートの語彙のうち別名（段階 A に届かない） | 9 |
+| テンプレートの語彙のうち対象外（段階 A に届かない） | 18 |
+
+テンプレート 2 本のどちらが困るかも分けて数えた。1 つの項目を 2 本とも使っていることがある
+ので、2 本の数の和は小計より大きい。数え方: 小計の 75 件を `[[template]]` の `ids` へ 1 本
+ずつ照らし、どちらに現れるかで数えた。
+
+| テンプレート | 壊れる項目 |
+| --- | ---: |
+| ポストと狛犬（里々） | 30 |
+| はろーYAYAわーるど（ヤヤ） | 74 |
+| うち 2 本とも使う項目 | 29 |
+
+壊れる項目は段階 A の束すべてに散らばっているのではない。数え方: 下の 3 つの表の id を
+`linkage.md` の帰属で束へ写し、3-3 の段階 A の順位表に並ぶ `bundle` の行から差し引いた。
+
+| 束の分かれ方 | 件数 |
+| --- | ---: |
+| 壊れる項目を持つ段階 A の束 | 16 |
+| 壊れる項目が 0 の段階 A の束 | 9 |
+
+壊れる項目が 0 の束は「終了」「descript の転記」「バルーンのリンク」「マウスの矢印」「絵の
+重ね方」「定義ファイルの文字コード」「SHIORI の要求と応答」「シェル定義の転記」「同期オブ
+ジェクト」である。この 9 束は、段階 A の射程に入っていながらテンプレート 2 本が語彙を 1 つ
+も書いていないか、書いている語彙がすべて実装済みかのどちらかである。
+
+#### 未対応（67 件）
+
+| 項目 | 題 | 使うテンプレート | 段階 A の束 |
+| --- | --- | --- | --- |
+| `ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1` | `craftman,作者名` | 里々・ヤヤ | 起動と挨拶 |
+| `ukadoc:descript_ghost:craftmanurl_2cURL:1` | `craftmanurl,URL` | 里々・ヤヤ | 起動と挨拶 |
+| `ukadoc:descript_ghost:craftmanw_2c_4f5c_8005_540d:1` | `craftmanw,作者名` | 里々・ヤヤ | 起動と挨拶 |
+| `ukadoc:descript_ghost:type_2c_7a2e_5225:1` | `type,種別` | 里々・ヤヤ | 起動と挨拶 |
+| `ukadoc:descript_shell:kero.balloon.offsetx_2c_5ea7_6a19:1` | `kero.balloon.offsetx,座標` | 里々・ヤヤ | 窓の配置と重なり |
+| `ukadoc:descript_shell:kero.balloon.offsety_2c_5ea7_6a19:1` | `kero.balloon.offsety,座標` | 里々・ヤヤ | 窓の配置と重なり |
+| `ukadoc:descript_shell:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1` | `kero.seriko.alignmenttodesktop,位置情報` | ヤヤ | 窓の配置と重なり |
+| `ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1` | `menu.background.alignment,位置` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1` | `menu.background.bitmap.filename,ファイル名` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.background.font.color.b_2c_6570_5024:1` | `menu.background.font.color.b,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.background.font.color.g_2c_6570_5024:1` | `menu.background.font.color.g,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.background.font.color.r_2c_6570_5024:1` | `menu.background.font.color.r,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.disable.font.color.b:1` | `menu.disable.font.color.b` | ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.disable.font.color.g:1` | `menu.disable.font.color.g` | ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.disable.font.color.r:1` | `menu.disable.font.color.r` | ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1` | `menu.foreground.alignment,位置` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1` | `menu.foreground.bitmap.filename,ファイル名` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.foreground.font.color.b_2c_6570_5024:1` | `menu.foreground.font.color.b,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.foreground.font.color.g_2c_6570_5024:1` | `menu.foreground.font.color.g,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.foreground.font.color.r_2c_6570_5024:1` | `menu.foreground.font.color.r,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.separator.color.b_2c_6570_5024:1` | `menu.separator.color.b,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.separator.color.g_2c_6570_5024:1` | `menu.separator.color.g,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.separator.color.r_2c_6570_5024:1` | `menu.separator.color.r,数値` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1` | `menu.sidebar.alignment,位置` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1` | `menu.sidebar.bitmap.filename,ファイル名` | 里々・ヤヤ | メニュー |
+| `ukadoc:descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1` | `sakura.balloon.offsetx,座標` | 里々・ヤヤ | 窓の配置と重なり |
+| `ukadoc:descript_shell:sakura.balloon.offsety_2c_5ea7_6a19:1` | `sakura.balloon.offsety,座標` | 里々・ヤヤ | 窓の配置と重なり |
+| `ukadoc:descript_shell:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1` | `sakura.seriko.alignmenttodesktop,位置情報` | ヤヤ | 窓の配置と重なり |
+| `ukadoc:list_sakura_script:_5c4:1` | `\4` | ヤヤ | 窓の配置と重なり |
+| `ukadoc:list_sakura_script:_5c6:1` | `\6` | 里々・ヤヤ | 組み込みの置換語 |
+| `ukadoc:list_sakura_script:_5cC:1` | `\C` | ヤヤ | 会話 |
+| `ukadoc:list_sakura_script:_5c_21_5b_2a_5d:1` | `\![*]` | ヤヤ | 選択肢の目印 |
+| `ukadoc:list_sakura_script:_5c_21_5bclose_2cinputbox_2cID_5d:1` | `\![close,inputbox,ID]` | ヤヤ | 入力窓とダイアログ |
+| `ukadoc:list_sakura_script:_5c_21_5benter_2cpassivemode_5d:1` | `\![enter,passivemode]` | ヤヤ | 動作モードの出入り |
+| `ukadoc:list_sakura_script:_5c_21_5bleave_2cpassivemode_5d:1` | `\![leave,passivemode]` | ヤヤ | 動作モードの出入り |
+| `ukadoc:list_sakura_script:_5c_21_5bopen_2cinputbox_2cID_2c_8868_793a_6642_9593_2c_30c6_30ad_30b9_30c8_2c_30aa_30d7_30b7_30e7_30f3_2c..._5d:1` | `\![open,inputbox,ID,表示時間,テキスト,オプション,...]` | 里々・ヤヤ | 入力窓とダイアログ |
+| `ukadoc:list_sakura_script:_5c_21_5braise_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1` | `\![raise,イベント名,r0,r1,r2...]` | ヤヤ | イベントの呼び起こし |
+| `ukadoc:list_sakura_script:_5c__21:1` | `\_!` | ヤヤ | 会話 |
+| `ukadoc:list_sakura_script:_5c__3f:1` | `\_?` | ヤヤ | 会話 |
+| `ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1` | `\_b[ファイルパス,inline,オプション,オプション...]` | ヤヤ | バルーンの付属画像 |
+| `ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1` | `\_b[ファイルパス,inline,opaque]` | ヤヤ | バルーンの付属画像 |
+| `ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1` | `\_b[ファイルパス,x,y,オプション,オプション...]` | ヤヤ | バルーンの付属画像 |
+| `ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1` | `\_b[ファイルパス,x,y,opaque]` | ヤヤ | バルーンの付属画像 |
+| `ukadoc:list_sakura_script:_5c_n:1` | `\_n` | ヤヤ | バルーンの文字 |
+| `ukadoc:list_sakura_script:_5c_q:1` | `\_q` | 里々・ヤヤ | 会話 |
+| `ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1` | `\_s[ID1,ID2,ID3...]` | ヤヤ | 会話 |
+| `ukadoc:list_sakura_script:_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1` | `\f[bold,パラメータ]` | ヤヤ | バルーンの文字 |
+| `ukadoc:list_sakura_script:_5cf_5bcolor_2c_8272_6307_5b9a_5d:1` | `\f[color,色指定]` | ヤヤ | バルーンの文字 |
+| `ukadoc:list_sakura_script:_5cf_5bheight_2c_6570_5024_5d:1` | `\f[height,数値]` | ヤヤ | バルーンの文字 |
+| `ukadoc:list_sakura_script:_5ci_5bID_2cwait_5d:1` | `\i[ID,wait]` | ヤヤ | サーフェスアニメーション |
+| `ukadoc:list_sakura_script:_5ci_5bID_756a_53f7_5d:1` | `\i[ID番号]` | ヤヤ | サーフェスアニメーション |
+| `ukadoc:list_sakura_script:_5ct:1` | `\t` | ヤヤ | 会話 |
+| `ukadoc:list_shiori_event:OnAITalk:1` | `OnAITalk` | ヤヤ | 自発発話 |
+| `ukadoc:list_shiori_event:OnAnchorSelect:1` | `OnAnchorSelect` | ヤヤ | 会話 |
+| `ukadoc:list_shiori_event:OnKeyPress:1` | `OnKeyPress` | 里々・ヤヤ | キーとゲームパッド |
+| `ukadoc:list_shiori_event:OnMinuteChange:1` | `OnMinuteChange` | 里々・ヤヤ | 自発発話 |
+| `ukadoc:list_shiori_event:OnMouseClick:1` | `OnMouseClick` | ヤヤ | 撫で |
+| `ukadoc:list_shiori_event:OnMouseDown:1` | `OnMouseDown` | ヤヤ | 撫で |
+| `ukadoc:list_shiori_event:OnMouseDragEnd:1` | `OnMouseDragEnd` | ヤヤ | 撫で |
+| `ukadoc:list_shiori_event:OnMouseDragStart:1` | `OnMouseDragStart` | ヤヤ | 撫で |
+| `ukadoc:list_shiori_event:OnMouseGesture:1` | `OnMouseGesture` | ヤヤ | 撫で |
+| `ukadoc:list_shiori_event:OnMouseUp:1` | `OnMouseUp` | ヤヤ | 撫で |
+| `ukadoc:list_shiori_event:OnMouseWheel:1` | `OnMouseWheel` | ヤヤ | 撫で |
+| `ukadoc:list_shiori_event:OnNotifyUserInfo:1` | `OnNotifyUserInfo` | ヤヤ | 名前の記憶 |
+| `ukadoc:list_shiori_event:OnSurfaceChange:1` | `OnSurfaceChange` | ヤヤ | サーフェスアニメーション |
+| `ukadoc:list_shiori_event:OnSurfaceRestore:1` | `OnSurfaceRestore` | ヤヤ | サーフェスアニメーション |
+| `ukadoc:list_shiori_event:OnUserInput:1` | `OnUserInput` | 里々 | 入力窓とダイアログ |
+
+#### 語彙のみ（6 件）
+
+| 項目 | 題 | 使うテンプレート | 段階 A の束 |
+| --- | --- | --- | --- |
+| `ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1` | `name,ゴースト名` | 里々・ヤヤ | 名前の記憶 |
+| `ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1` | `\![set,balloontimeout,時間]` | ヤヤ | 会話 |
+| `ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1` | `\![set,choicetimeout,時間]` | ヤヤ | 会話 |
+| `ukadoc:list_shiori_event:OnBalloonBreak:1` | `OnBalloonBreak` | ヤヤ | 会話 |
+| `ukadoc:list_shiori_event:OnBalloonClose:1` | `OnBalloonClose` | ヤヤ | 会話 |
+| `ukadoc:list_shiori_event:OnBalloonTimeout:1` | `OnBalloonTimeout` | ヤヤ | 会話 |
+
+#### 縮退（2 件）
+
+| 項目 | 題 | 使うテンプレート | 段階 A の束 |
+| --- | --- | --- | --- |
+| `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1` | `\q[タイトル,ID1,ID2,ID3...]` | ヤヤ | 会話 |
+| `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1` | `\q[タイトル,script:実行内容]` | ヤヤ | 会話 |
+
+#### 参照元をいつ切り替えるか（要件 9.6）
+
+上の 2 本は代表として選んだテンプレートであって、動かす約束をした相手ではない。**外部から
+「このゴーストを動かして」という要望が来た時点で、参照元と検証対象をそのゴーストに切り替え
+る。** 切り替える先は 2 つある——順位の根拠 ⑶「影響する既存資産の広さ」を数えるときに読
+む辞書（5-1 の `[[template]]` の `files`）と、段階 A の出口で「動いた」と言うために動かす
+相手である。切り替えたときは 5-1 を書き直し、この節の重なりを数え直す。
+
+**現時点で切り替え先は 0 件である。** 数え方: 本 spec の着手（2026-09-11）からこの節を書い
+た 2026-09-13 までに開発者から名指しで受け取った「このゴーストを動かして」の要望を数えた。
+候補があるとすれば自作の「どっとさくら」だが、これは外部から来た要望ではなく自分で選ぶ相手
+なので、切り替え先には数えない。
+
+| 数えたもの | 件数 |
+| --- | ---: |
+| 外部から名指しされたゴースト（＝切り替え先） | 0 |
+| 自作の候補（「どっとさくら」） | 1 |
+
+切り替え先が 0 である間は、上の代表 2 本を参照元のまま置く。
+
+<!-- 段 4 の残り: タスク 5.3（順位表への反映）が続く。5.3 が書き換える順位の行は
+     7-5 のとおり 0 行である。 -->
 
 ## 8. 是正候補への参照
 
