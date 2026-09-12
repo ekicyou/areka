@@ -4828,13 +4828,12 @@ themes = []
 - `alias_excluded`・`not_applicable_excluded`: 台帳 4 本で状態が `alias`・`not-applicable` である項目をそれぞれ数えた。
 - `[tally.singles_by_domain]`: 単独項目の id を台帳の `[ledger] domain` で引いて 4 ドメインへ振り分けた。1 件も落ちなかったドメインは欄を省かず 0 と書く（要件 11.5）。
 
-3 つの恒等式が成り立つ。半角の `鍵 = 数` の形を本文に書かないのは、常時の検査が骨組みの数を
-1 か所だけ狙って摂動するためである（本文に同じ綴りがあると摂動が狙いを見失う）。
+3 つの恒等式が成り立つ。
 
-1. `target` ＝ `from_machine` ＋ `by_hand` ＋ `singles` — 対象の全項目がちょうど 1 つの名前付き束か
+1. `target` = `from_machine` + `by_hand` + `singles` — 対象の全項目がちょうど 1 つの名前付き束か
    単独項目に属し、2 つの束に入ったものも、どこにも入らなかったものも無い。
-2. `tally.singles_by_domain` の 4 欄の和 ＝ `singles` — ドメイン別の内訳が単独項目の数を余さず分ける。
-3. `target` ＋ `alias_excluded` ＋ `not_applicable_excluded` ＝ 台帳 4 本の項目数 — 束の構成から
+2. `tally.singles_by_domain` の 4 欄の和 = `singles` — ドメイン別の内訳が単独項目の数を余さず分ける。
+3. `target` + `alias_excluded` + `not_applicable_excluded` = 台帳 4 本の項目数 — 束の構成から
    除いた 2 つの状態を足し戻すと台帳の全項目に戻る（除き漏れも数え過ぎも無い）。
 
 `alias` と `not-applicable` を束の構成から除く理由（要件 4.3）。`alias` は別の項目の別名であり、

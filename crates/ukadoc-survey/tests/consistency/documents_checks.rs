@@ -105,12 +105,27 @@ fn three_documents(documents: &Documents) -> [(&'static str, &str); 3] {
 }
 
 /// 報告 1 本の束の一覧に並ぶ束 id（現れた順・重複は畳まない）。
-///
-/// 見つけ方は [`BUNDLE_TABLE_HEADER`] で始まる行の次の次から、`|` で始まる行が続く
-/// 限り 1 列目を読む（間に挟まる `| --- |` の区切り行は読み飛ばす）。列数は見ない。
 pub(super) fn bundle_ids_in_report(text: &str) -> Vec<String> {
+    bundle_rows_in_report(text)
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect()
+}
+
+/// 報告 1 本の束の一覧の行（束 id とその構成 id・現れた順）。
+///
+/// 見つけ方は [`BUNDLE_TABLE_HEADER`] で始まる行の次から、`|` で始まる行が続く限り
+/// **1 列目**（束 id）と**最終列**（構成 id の読点区切り）を読む（間に挟まる
+/// `| --- |` の区切り行は読み飛ばす）。列数は見ない——束の表は 2 列と 3 列の 2 種が
+/// あり、構成 id はどちらでも最終列である（`report::domain`・`report::summary` の
+/// `push_bundle_list`）。
+///
+/// 構成 id まで読むのは判定 ⑶-c（`members ∖ hand` が引用した機械の束の構成 id に
+/// 含まれる）の相手を作るためで、束 id だけが要る判定 ⑵ は上の
+/// [`bundle_ids_in_report`] を通す。拾い方を 2 つ書くと片方だけが古びる。
+pub(super) fn bundle_rows_in_report(text: &str) -> Vec<(String, Vec<String>)> {
     let lines: Vec<&str> = text.lines().collect();
-    let mut ids = Vec::new();
+    let mut rows = Vec::new();
     let mut at = 0;
     while at < lines.len() {
         if !lines[at].starts_with(BUNDLE_TABLE_HEADER) {
@@ -119,23 +134,24 @@ pub(super) fn bundle_ids_in_report(text: &str) -> Vec<String> {
         }
         at += 1;
         while at < lines.len() && lines[at].starts_with('|') {
-            let cell = first_cell(lines[at]);
-            if !is_rule_cell(cell) {
-                ids.push(cell.to_owned());
+            let cells = row_cells(lines[at]);
+            let id = cells.first().copied().unwrap_or("");
+            if !is_rule_cell(id) {
+                let members = cells
+                    .last()
+                    .copied()
+                    .unwrap_or("")
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|cell| !cell.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+                rows.push((id.to_owned(), members));
             }
             at += 1;
         }
     }
-    ids
-}
-
-/// 表の行の 1 列目（前後の空白を落とす）。
-fn first_cell(line: &str) -> &str {
-    line.trim_start_matches('|')
-        .split('|')
-        .next()
-        .unwrap_or("")
-        .trim()
+    rows
 }
 
 /// 表の区切り行（`---` や `---:` だけの升目）か。

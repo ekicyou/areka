@@ -13,15 +13,16 @@
 //! - 判定 ⑴ ⑵ の母数の下限（`linkage.md` の引用 id 数・報告 5 本から読めた機械の
 //!   束 id の数・3 文書が引用した機械の束 id の数）と、その下限が**下回ると赤になる**
 //!   ことの較正。
+//! - 判定 ⑶ の母数の下限（名前付き束の数・人手で足した id の数）と、同じ較正。
 //!
 //! # ここにまだ置かないもの
 //!
-//! 残る判定の母数の下限（名前付き束の数・`by_hand`・`[[rank]]` の行数・段階 A の
-//! `items`・`[[spec]]` の行数・`[[owner_completed]]` の行数など）は、その判定を置く
-//! タスク（3.8 以降）の持ち物である。`briefing.md` と `roadmap-draft.md` は今のところ
-//! 骨組みだけで配列表が 0 行なので、ここで下限を置くと**実データが追いつく前に
-//! 赤くなる**。同じ理由で、判定 ⑴ の下限を置くのは `linkage.md` の引用 id だけで、
-//! 残る 2 文書の引用 id の下限は段 4・段 5 が置く（2026-09-12 の実測はどちらも 0 件）。
+//! 残る判定の母数の下限（`[[rank]]` の行数・段階 A の `items`・`[[spec]]` の行数・
+//! `[[owner_completed]]` の行数など）は、その判定を置くタスク（3.9 以降）の持ち物で
+//! ある。`briefing.md` と `roadmap-draft.md` は今のところ骨組みだけで配列表が 0 行
+//! なので、ここで下限を置くと**実データが追いつく前に赤くなる**。同じ理由で、判定 ⑴
+//! の下限を置くのは `linkage.md` の引用 id だけで、残る 2 文書の引用 id の下限は
+//! 段 4・段 5 が置く（2026-09-12 の実測はどちらも 0 件）。
 //!
 //! # spec ディレクトリの数は「下限」であって「一致」ではない
 //!
@@ -88,6 +89,22 @@ const MIN_REPORT_BUNDLE_IDS: usize = 100;
 /// 増減するので、設計「判定の一覧」⑵ に合わせて「1 件以上」だけを主張する。
 const MIN_CITED_BUNDLE_IDS: usize = 1;
 
+/// 判定 ⑶ の母数——`linkage.md` の名前付き束の数の下限。
+///
+/// 2026-09-12 の実測は **63**（ほかに単独項目 4）。設計「判定の一覧」⑶ のとおり
+/// 「1 つ以上」にする。束は段 3 で分けたり束ねたりするので実数を釘付けすると
+/// その作業のたびに赤くなり、捕まえたいのは「帰属が空の文書を緑と読む」壊れ方だけ
+/// である。
+const MIN_NAMED_BUNDLES: usize = 1;
+
+/// 判定 ⑶ の母数——人手で足した構成 id の数の下限（`[tally].by_hand`）。
+///
+/// 2026-09-12 の実測は **1,353**（機械由来 195・単独項目 4 と合わせて 1,552）。
+/// 開発者裁定（要件 4.2）で「関連を 1 本も持たない項目は人手で名前付き束へ入れる」
+/// と決まっているので、この数が 0 に落ちたら腕 c は何も相手にしていない。設計
+/// 「判定の一覧」⑶ のとおり「1 以上」にする。
+const MIN_BY_HAND: usize = 1;
+
 /// 3 文書と全体報告の本文の長さの下限（文字数）。
 ///
 /// 数え方は復帰文字を落とした後の `chars().count()`（`io::files::read_normalized` が
@@ -97,6 +114,13 @@ const MIN_CITED_BUNDLE_IDS: usize = 1;
 /// 骨組みから育っていく間も動かさずに済む余裕を採った。捕まえるのは読み込みが空を
 /// 返す・別のファイルを見ている、といった**ほとんど何も残らない**壊れ方だけである。
 const MIN_DOCUMENT_CHARS: usize = 500;
+
+/// 束が 1 つも無い `linkage.md`（母数が空に落ちた壊れ方の写し）。
+///
+/// 読み手が受け付ける最小の形で、`[tally]` の 6 つの鍵とドメイン別の 4 欄をすべて 0
+/// にしてある。これを判定へ渡すと、数えるものが無いまま緑になる腕がどれなのかが
+/// 分かる。
+const EMPTY_LINKAGE: &str = "```toml\n[tally]\ntarget = 0\nfrom_machine = 0\nby_hand = 0\nsingles = 0\nalias_excluded = 0\nnot_applicable_excluded = 0\n\n[tally.singles_by_domain]\nassets = 0\nproperty = 0\nsakura-script = 0\nshiori = 0\n```\n";
 
 /// 読み込みが 3 文書と全体報告に届いていること。
 #[test]
@@ -270,8 +294,7 @@ fn the_citation_and_bundle_checks_have_something_to_judge() {
 /// 同じ取り出しの上で作り、3 行とも名指しで違反に挙がることを見る。
 #[test]
 fn the_floors_of_the_citation_and_bundle_checks_turn_red_when_the_source_goes_empty() {
-    let empty_linkage = read_linkage("```toml\n[tally]\ntarget = 0\nfrom_machine = 0\nby_hand = 0\nsingles = 0\nalias_excluded = 0\nnot_applicable_excluded = 0\n\n[tally.singles_by_domain]\nassets = 0\nproperty = 0\nsakura-script = 0\nshiori = 0\n```\n")
-        .expect("空の linkage.md を組み立てられない");
+    let empty_linkage = read_linkage(EMPTY_LINKAGE).expect("空の linkage.md を組み立てられない");
 
     let mut floors = Floors::new();
     floors
@@ -305,6 +328,65 @@ fn the_floors_of_the_citation_and_bundle_checks_turn_red_when_the_source_goes_em
         short[0].contains("判定 ⑴")
             && short[1].contains("報告 5 本")
             && short[2].contains("3 文書が引用した"),
+        "どの母数が空なのかを名指していない: {short:?}"
+    );
+}
+
+/// 判定 ⑶ が数えている相手が 0 件でないこと（要件 11.4）。
+///
+/// 見るのは 2 つ——名前付き束の数と、人手で足した構成 id の数である。帰属が空の
+/// `linkage.md`（束 0・`[tally]` が全部 0）は、腕 a〜g のうち a・c・d・e が
+/// **母数 0 でそろって緑**になる。数えるものが無いことを「食い違いが無い」と読ませない。
+#[test]
+fn the_attribution_check_has_something_to_judge() {
+    let documents = Documents::load();
+    let named = documents
+        .linkage
+        .bundles
+        .values()
+        .filter(|bundle| !bundle.single)
+        .count();
+
+    Floors::new()
+        .at_least("判定 ⑶: linkage.md の名前付き束", named, MIN_NAMED_BUNDLES)
+        .at_least(
+            "判定 ⑶: 人手で足した構成 id（[tally].by_hand）",
+            documents.linkage.tally.by_hand,
+            MIN_BY_HAND,
+        )
+        .assert_met();
+}
+
+/// 帰属が空に落ちたとき、上の下限が**実際に**赤になること。
+#[test]
+fn the_floors_of_the_attribution_check_turn_red_when_the_bundles_go_empty() {
+    let empty = read_linkage(EMPTY_LINKAGE).expect("空の linkage.md を組み立てられない");
+
+    let mut floors = Floors::new();
+    floors
+        .at_least(
+            "判定 ⑶: linkage.md の名前付き束",
+            empty.bundles.values().filter(|b| !b.single).count(),
+            MIN_NAMED_BUNDLES,
+        )
+        .at_least(
+            "判定 ⑶: 人手で足した構成 id（[tally].by_hand）",
+            empty.tally.by_hand,
+            MIN_BY_HAND,
+        );
+
+    let short = floors.short();
+    assert_eq!(
+        short.len(),
+        2,
+        "帰属が空に落ちたのに違反が 2 行そろわない: {short:?}"
+    );
+    assert!(
+        short.iter().all(|line| line.contains("0 件しかない")),
+        "空に落ちたことを本文が言っていない: {short:?}"
+    );
+    assert!(
+        short[0].contains("名前付き束") && short[1].contains("by_hand"),
         "どの母数が空なのかを名指していない: {short:?}"
     );
 }
