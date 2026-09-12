@@ -573,6 +573,19 @@ fn dwrite_metrics_warns_on_font_height_mismatch() {
 /// 含まれない（`include_str!` はディスク上の `draw.rs` 単体を読む）。
 const DRAW_RS: &str = include_str!("draw.rs");
 
+/// ファサード `draw.rs` の**本番の子モジュール**の本文（ファイル名付き）。
+///
+/// 分割（タスク 1.1）と実体化（タスク 6.2〜6.4）でファサードの本番コードは
+/// 4 ファイルへ分かれた。`draw.rs` 単体だけを走査する檻は、分かれた先に同じ違反が
+/// 入っても赤くならない——`@` 前置の禁止はこの一覧の**全ファイル**を走査する。
+/// **ファサードへ本番の子を足したらここへも足すこと。**
+const DRAW_FACADE_SOURCES: &[(&str, &str)] = &[
+    ("draw.rs", DRAW_RS),
+    ("draw_metrics.rs", include_str!("draw_metrics.rs")),
+    ("draw_line_store.rs", include_str!("draw_line_store.rs")),
+    ("draw_catalog.rs", include_str!("draw_catalog.rs")),
+];
+
 /// 改行を LF へ正規化した `draw.rs` 本文。ワークツリーは `core.autocrlf` により CRLF で
 /// 展開されるため、行末に依存する検査（列 0 閉じ括弧・行単位の走査）は必ずこれを使う。
 fn draw_rs() -> String {
@@ -614,21 +627,28 @@ fn hits<'p>(src: &str, patterns: &'p [&'p str]) -> Vec<&'p str> {
 const AT_PREFIX_PATTERNS: &[&str] = &["\"@", "'@'"];
 
 /// 要件 6.2: 本番ソースに「フォント名の頭へ `@` を付ける」生成が存在しない。
+///
+/// 走査面は `draw.rs` 単体ではなく**ファサードの本番の子を含む全ファイル**
+/// （[`DRAW_FACADE_SOURCES`]）——家族名が DirectWrite へ渡る入口が `draw.rs` の
+/// `try_create_format` と `draw_metrics.rs` の `probe_format_for` の 2 つになったため、
+/// 片方だけを見る檻では違反が素通りする（タスク 1.1 の申し送り）。
 #[test]
 fn at_prefixed_font_name_generation_is_absent_from_production_source() {
-    let src = draw_rs();
     // 空振り防止: draw.rs には素の `@`（束縛パターン）が現に在る。`@` が 1 個も無いから
     // 緑、という無意味な緑ではないことを先に示す。
     assert!(
-        src.contains('@'),
+        draw_rs().contains('@'),
         "draw.rs に `@` が 1 個も無い——この檻は空振りしている可能性がある"
     );
-    assert_eq!(
-        hits(&src, AT_PREFIX_PATTERNS),
-        Vec::<&str>::new(),
-        "SSP の `@` フォント機構（縦書き異体名の生成）が draw.rs に現れた。\
-         areka は裁定 4 によりこれを模倣しない"
-    );
+    for (name, raw) in DRAW_FACADE_SOURCES {
+        let src = raw.replace('\r', "");
+        assert_eq!(
+            hits(&src, AT_PREFIX_PATTERNS),
+            Vec::<&str>::new(),
+            "SSP の `@` フォント機構（縦書き異体名の生成）が {name} に現れた。\
+             areka は裁定 4 によりこれを模倣しない"
+        );
+    }
     // 陽性対照: 同じ検査関数が既知の違反を確かに検出する。
     for planted in [
         r#"    let name = format!("@{}", font.name);"#,
@@ -651,8 +671,18 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
     );
 }
 
-/// 要件 6.3: DirectWrite へ渡るフォント family 名は「バルーン定義の名前そのまま」か
-/// 「既定フォント再試行」の 2 つだけ——縦書き専用の差し替え先は存在しない。
+/// 要件 6.3: DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前」か
+/// 「既定フォントへの戻し」の 2 つだけ——縦書き専用の差し替え先は存在しない。
+///
+/// **家族名の入口は 2 つある**（タスク 6.4）:
+///
+/// 1. `draw.rs::try_create_format`（描画・計測共用の束縛書式）——バルーン定義の
+///    `font.name` をそのまま渡すか、生成失敗時に `DEFAULT_FONT_NAME` で再試行するか。
+/// 2. `draw_metrics.rs::probe_format_for`（計測鍵ごとの試験用書式）——計測鍵の候補列を
+///    `FontCatalog::family_for` で解決した名前か、全滅時の `DEFAULT_FONT_NAME` か。
+///
+/// どちらの入口も「書かれた名前」か「既定名」しか通さないので、`@` 前置のような
+/// 別名生成が入り込む余地が無い。**入口を増やしたらこの檻も広げること。**
 #[test]
 fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
     let src = draw_rs();
@@ -692,6 +722,35 @@ fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
         count(&src, "\"ＭＳ ゴシック\""),
         1,
         "フォント名リテラルが DEFAULT_FONT_NAME の宣言以外にも現れた"
+    );
+
+    // ── 第 2 の入口: draw_metrics.rs::probe_format_for（計測鍵ごとの試験用書式）
+    let metrics_src = include_str!("draw_metrics.rs").replace('\r', "");
+    assert!(
+        metrics_src.contains("fn probe_format_for(&self, key: &FontKey)"),
+        "probe_format_for が見つからない——改名したなら本檻も更新すること"
+    );
+    assert_eq!(
+        count(&metrics_src, ".create_text_format("),
+        1,
+        "draw_metrics.rs から DirectWrite へ family 名を渡す呼出が 1 か所から動いた"
+    );
+    assert!(
+        metrics_src.contains("&HSTRING::from(family.as_str()),"),
+        "試験用書式へ渡す family 名が束縛 `family` 以外から来ている"
+    );
+    // その `family` の唯一の出所——候補列の解決結果か、全滅時の既定名。
+    assert!(
+        metrics_src.contains(
+            "        let family = self\n            .fonts\n            .family_for(&key.name)\n\
+             \x20           .unwrap_or_else(|| DEFAULT_FONT_NAME.to_owned());"
+        ),
+        "family の導出が「計測鍵の候補列を FontCatalog で解決した名前か既定名」から動いた"
+    );
+    assert_eq!(
+        count(&metrics_src, "\"ＭＳ ゴシック\""),
+        0,
+        "draw_metrics.rs にフォント名リテラルが現れた（既定名は DEFAULT_FONT_NAME 経由だけ）"
     );
 }
 
