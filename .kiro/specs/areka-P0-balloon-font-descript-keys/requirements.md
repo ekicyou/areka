@@ -28,6 +28,7 @@
   - 2 層（バルーン定義の既定層と画像別の上書き層）のどちらに書かれても、既存キーと同じ優先順位で効くこと。
   - 14 本の定義箇所に置く正典 URL のコメント 1 行ずつ。
   - 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の当該 14 項目（状態・備考・担当）と、ドメイン別報告 `doc/ukadoc-coverage/report/assets.md` の作り直し。
+  - 網羅調査のブリーフィング `doc/ukadoc-coverage/briefing-assets.md` の是正候補の段 1 つ（件数と引き取り先が是正で古くなるため）。
   - 「基底 13 キー」「残り 8 キー」と書いた生きた 4 文書（本仕様 brief・分割元 brief・`areka-P0-text-align-shadow-canon` の brief・ロードマップ）の是正。
   - 決定論テスト（値の形ごと・2 層の優先順位・未指定との区別・接頭辞付きキーの巻き込み防止）。
 - **Out of scope**:
@@ -56,6 +57,7 @@
 2. The 本仕様 shall 14 のうち既に写像済みの 5 本（`font.color.r`／`.g`／`.b`・`font.name`・`font.height`）と、未写像の 9 本（残り）を明示して数え、零（＝対象外 0 本）も明示的に書く。
 3. When 生きている文書が「基底 13 キー」「残り 8 キー」と書いている, the 本仕様 shall その **4 文書**を「14」「残り 9」へ是正し、数え落としていたのが `font.outline` であることを添える。対象は ⑴ 本仕様の brief、⑵ 分割元 `areka-P0-text-decoration-canon` の brief、⑶ `areka-P0-text-align-shadow-canon` の brief（`:27` の対象外の行）、⑷ `.kiro/steering/roadmap.md`（`:124`。ここは「13 キー」とは書かず「残り 8 キー」とだけ書く）である。履歴と完了済みの記録（`.kiro/steering/roadmap-history.md`・`.kiro/specs/completed/` 配下）は、非改変の方針と着地時点の記録という理由でいずれも対象外とする。
 4. If 実装の途中で対象キー集合がカタログと食い違うことが分かった, then the 本仕様 shall 見た目で数え直さずカタログの行を照合元とし、食い違いの内容を記録する。
+5. When 上の 4 文書を是正した, the 本仕様 shall 網羅調査のブリーフィング `doc/ukadoc-coverage/briefing-assets.md` の是正候補の段（書体の欄の数が 1 つ足りない、という記録）も同じコミットで書き換える。当該の段は「説明書は 6 か所で 13 と書いている」「引き取るのは `areka-P0-text-decoration-canon`」と書くが、是正後は件数が 0 になり、引き取ったのは本仕様である。この文書は完了した記録ではなく**これから手を着ける人が読む案内**であり、古いままだと読んだ人が存在しない宿題を探しに行くため、案内としての正しさを優先する（2026-09-11 開発者裁定・議題 3）。件数は是正後に数え直した実測を書き、引き算で導かない。
 
 ### Requirement 2: 未写像の 9 キーを解析結果へ写す
 
