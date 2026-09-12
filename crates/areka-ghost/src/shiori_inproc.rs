@@ -59,8 +59,8 @@ use areka_parsers::package::ShioriMount;
 use shiori_abi::error::{SHIORI_E_PROPERTY_NOT_FOUND, SHIORI_E_UNKNOWN_TOKEN, SHIORI_S_PENDING};
 use shiori_abi::interface::{IShiori, IShioriFactory, IShioriHost, IShioriHost_Impl};
 use shiori_host32_host::{
-    Charset, ExitKind, HelperStatus, Method, RequestError, ShioriError, ShioriRequest,
-    ShutdownError, build_request, parse_response,
+    Charset, CharsetPolicy, ExitKind, HelperStatus, Method, RequestError, ShioriError,
+    ShioriRequest, ShutdownError, build_request, parse_response,
 };
 use tracing::{error, warn};
 use windows::Win32::Foundation::{FreeLibrary, HMODULE};
@@ -337,7 +337,9 @@ fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<String>,
         return Err(RequestError::Shiori(ShioriError::Parse));
     }
     // S_OK（即時応答）: 応答バイト列を SHIORI/3.0 として解析し、map_get_result と同一規律で写す。
-    let parsed = match parse_response(response_bytes, Charset::UTF_8) {
+    // SHIORI/4 in-proc は UTF-8 固定で交渉を行わない（要件 5.4——`CharsetPolicy::Force`
+    // ゆえ応答の `Charset` ヘッダは復号にも採用にも用いない）。
+    let parsed = match parse_response(response_bytes, CharsetPolicy::Force(Charset::UTF_8)) {
         Ok(p) => p,
         Err(_) => {
             error!(

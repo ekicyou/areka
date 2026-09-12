@@ -38,7 +38,7 @@ use std::time::Duration;
 
 use shiori_host32_ipc::MsgTag;
 
-use crate::charset::Charset;
+use crate::charset::{Charset, CharsetPolicy};
 use crate::error::{RequestError, ShioriError};
 use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::request_timeout_from_env;
@@ -137,7 +137,10 @@ impl<'a> Shiori3Client<'a> {
             .send_request(MsgTag::Request, &bytes, self.effective_timeout())
             .map_err(map_send_error)?;
         // parse の malformed（ShioriError::Parse）は #[from] で RequestError::Shiori へ持ち上がる。
-        let parsed = parse_response(&resp, Charset::UTF_8)?;
+        // 復号方針は UTF-8 固定＝適用前と同じ挙動（この呼出点が `Force(UTF_8)` を渡すから
+        // 応答の `Charset` ヘッダは復号に使われない）。交渉状態（`CharsetNegotiator`）を
+        // 借用して `policy()` を渡す結線は areka-P0-charset-canon タスク 3.3 が行う。
+        let parsed = parse_response(&resp, CharsetPolicy::Force(Charset::UTF_8))?;
         map_get_result(parsed)
     }
 
@@ -339,6 +342,8 @@ mod tests {
             value: Some(r"\s[0]hi\e".to_string()),
             error_level: None,
             error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
         };
         // RequestError は PartialEq を持たない（error.rs は本タスクで不変）ため、Ok 側を取り出して比較する。
         let ok = map_get_result(parsed).expect("200+value は Ok");
@@ -353,6 +358,8 @@ mod tests {
             value: None,
             error_level: None,
             error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
         };
         let ok = map_get_result(parsed).expect("200 (Value 欠落) は Ok");
         assert_eq!(ok, None);
@@ -366,6 +373,8 @@ mod tests {
             value: None,
             error_level: None,
             error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
         };
         let ok = map_get_result(parsed).expect("204 は Ok");
         assert_eq!(ok, None);
@@ -379,6 +388,8 @@ mod tests {
             value: None,
             error_level: None,
             error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
         };
         let err = map_get_result(parsed).expect_err("400 は SHIORI エラー");
         assert!(
@@ -398,6 +409,8 @@ mod tests {
             value: None,
             error_level: Some("critical".to_string()),
             error_description: Some("boom".to_string()),
+            charset_header: None,
+            decode_had_errors: false,
         };
         let err = map_get_result(parsed).expect_err("500 は SHIORI エラー");
         assert!(
@@ -421,6 +434,8 @@ mod tests {
             value: Some("ignored".to_string()),
             error_level: Some("warning".to_string()),
             error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
         };
         let err = map_get_result(parsed).expect_err("ErrorLevel 付きはエラー");
         assert!(
@@ -444,6 +459,8 @@ mod tests {
             value: Some("teach".to_string()),
             error_level: None,
             error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
         };
         let ok = map_get_result(parsed).expect("311 は許容 status で Ok");
         assert_eq!(ok, Some("teach".to_string()));
@@ -457,6 +474,8 @@ mod tests {
             value: None,
             error_level: None,
             error_description: None,
+            charset_header: None,
+            decode_had_errors: false,
         };
         let ok = map_get_result(parsed).expect("312 は許容 status で Ok");
         assert_eq!(ok, None);

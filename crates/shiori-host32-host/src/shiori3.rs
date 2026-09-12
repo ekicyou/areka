@@ -135,8 +135,9 @@ pub fn build_request(req: &ShioriRequest) -> EncodedRequest {
     }
 }
 
-// ---- response 解析（タスク 2.2）--------------------------------------------
+// ---- response 解析 ----------------------------------------------------------
 
+use crate::charset::CharsetPolicy;
 use crate::error::ShioriError;
 
 /// 解析済み SHIORI/3.0 response（status を潰さず保持・要件 2.x）。
@@ -144,7 +145,7 @@ use crate::error::ShioriError;
 /// `parse_response` は純粋なワイヤパーサであり、status を verbatim に保持する
 /// （200/204/311/312/400/500/その他）。400/500 を `ShioriError::Status` へ写像したり
 /// ドロップしたりはしない — その意味論的判断（400/500/`ErrorLevel` → エラー）は
-/// 呼び手（`Shiori3Client::get`・タスク 3）が `status` を検分して行う。これにより
+/// 呼び手（`Shiori3Client::get`）が `status` を検分して行う。これにより
 /// codec を純粋に保ち、client 側に timeout と SHIORI エラーの区別所有権を委ねる
 /// （design.md §shiori3 codec / §Error Strategy）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +158,44 @@ pub struct ParsedResponse {
     pub error_level: Option<String>,
     /// `ErrorDescription` ヘッダ（SSP 拡張・存在時のみ `Some`・要件 2.5）。
     pub error_description: Option<String>,
+    /// 応答の `Charset` ヘッダの生の値（前後空白を落とした値・省略時 `None`）。
+    ///
+    /// **採用するかの判断はここでは行わない**——解決も正規化もせず生の綴りを返すだけで、
+    /// 採用と後退の規則は `CharsetNegotiator::note_response`（`charset.rs`）が所有する
+    /// （areka-P0-charset-canon 要件 4.1/4.2/4.4）。
+    pub charset_header: Option<String>,
+    /// 復号で代替文字（U+FFFD）への置換があったか（areka-P0-charset-canon 要件 4.7・10.2）。
+    ///
+    /// 置換があっても解析は続行する。警告ログは呼び手（`note_response`）が担う。
+    pub decode_had_errors: bool,
+}
+
+/// 復号より先に、応答の `Charset` ヘッダの生の値をバイト列から走査する（要件 4.1）。
+///
+/// 行を LF で切り、行末の CR を落とし、`:` の手前をヘッダ名として ASCII 一致で比べる。
+/// **位置は問わない**（正典は「望ましい」位置を示すのみ）。最初に一致した行の値を
+/// 前後空白を落として返し、`Charset` 行が無ければ `None`。
+///
+/// 復号前ゆえバイト列のまま走るが、ASCII 走査で足りる: 対応集合（`Charset`）には UTF-16 系が
+/// 入らないためヘッダ名の並ぶ領域は常に ASCII 互換である（ISO-2022-JP も ASCII 状態から
+/// 始まる・design.md §走査が ASCII で成り立つ根拠）。非 ASCII を含む値は
+/// `from_utf8_lossy` で文字列化され、`Charset::for_label` が解決できないラベルとして退ける。
+fn scan_charset_header(bytes: &[u8]) -> Option<String> {
+    for line in bytes.split(|&b| b == b'\n') {
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        let Some(colon) = line.iter().position(|&b| b == b':') else {
+            continue;
+        };
+        if line[..colon].trim_ascii().eq_ignore_ascii_case(b"charset") {
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Charset:2
+            return Some(
+                String::from_utf8_lossy(&line[colon + 1..])
+                    .trim()
+                    .to_owned(),
+            );
+        }
+    }
+    None
 }
 
 /// response バイト列を解析する（CRLF/LF 受理・寛容・要件 2.x）。
@@ -164,10 +203,25 @@ pub struct ParsedResponse {
 /// # 返り値
 /// - well-formed（status 行から数値コードが取れる）→ `Ok(ParsedResponse{..})`。
 ///   400/500/311/312 を **含めて** status を verbatim に保持する（要件 2.4/2.7）。
-/// - malformed（status 行が欠落・数値コードが取れない・不正 UTF-8）→ `Err(ShioriError::Parse)`。
+/// - malformed → `Err(ShioriError::Parse)`。**理由は status 行の欠落・数値コードなしだけ**で、
+///   不正なバイト並びでは失敗しない（代替文字で吸収して続行・areka-P0-charset-canon
+///   要件 4.7・10.2）。
 ///
 /// 本関数は `ShioriError::Status` を **返さない**。非成功 status の意味論的写像は
-/// 呼び手（client・タスク 3）の責務であり、ここでは wire の忠実な転記に徹する。
+/// 呼び手（client）の責務であり、ここでは wire の忠実な転記に徹する。
+///
+/// # 復号（areka-P0-charset-canon 要件 4.1〜4.4）
+/// ⑴ 復号より先に [`scan_charset_header`] で `Charset` ヘッダの生の値を拾う（位置不問）。
+/// ⑵ 復号に使う文字コードを `policy` から決める——[`CharsetPolicy::Negotiate`] はヘッダが
+///    `Charset::for_label` で解決できればそれ・できなければ方針の中の値、
+///    [`CharsetPolicy::Force`] は常に方針の中の値（ヘッダを復号に用いない・要件 4.5/5.4）。
+/// ⑶ 全体を 1 本の経路で復号する（文字コードで分岐しない）。BOM は吸収せず 1 文字として
+///    残る（`Charset::decode` は `decode_without_bom_handling` 相当。宣言と食い違う BOM で
+///    交渉結果を黙って覆さないため）。
+/// ⑷ 以降は下記の行解析を無変更で通す。
+///
+/// 採用（以後の要求にどの文字コードを使うか）はここでは決めない。生の値と置換の有無を
+/// 事実として返し、`CharsetNegotiator::note_response` が判断する。
 ///
 /// # 解析規則（design.md §Data Models 受信寛容集合・要件 2.1〜2.8）
 /// - 行区切りは CR+LF を第一に、bare LF にも頑健（donor `parse_value` と同じ二段 split）。
@@ -177,24 +231,26 @@ pub struct ParsedResponse {
 ///   大文字小文字を無視（donor 準拠の堅牢性）。
 /// - `Value` → `value`（要件 2.1）。`ErrorLevel`/`ErrorDescription` → 各 `Option`（要件 2.5）。
 /// - 未知ヘッダ（`Reference0`/`Marker`/任意）は無視し parse を失敗させない（要件 2.8）。
-/// - `Charset` ヘッダ省略時は `request_charset` を継承（要件 2.6）。
-///   ただし現時点の復号は UTF-8 固定であり、`request_charset` はまだ復号に使わない
-///   （宣言された文字コードでの復号は areka-P0-charset-canon タスク 2.2 が
-///   `CharsetPolicy` を受けて実装する）。
+/// - `Charset` ヘッダ省略時は方針の中の文字コード（＝要求に用いた文字コード）を継承（要件 2.6）。
 ///
 /// NUL 終端に依存せず、与えられたバイト長で解析する（len 厳守）。
-pub fn parse_response(
-    bytes: &[u8],
-    request_charset: Charset,
-) -> Result<ParsedResponse, ShioriError> {
-    // charset シーム: 復号はまだ UTF-8 固定（挙動の変更 0）。継承先の宣言として受け取るが
-    // ここでは使わない——宣言された文字コードでの復号はタスク 2.2 が担う。
-    let _ = request_charset;
+pub fn parse_response(bytes: &[u8], policy: CharsetPolicy) -> Result<ParsedResponse, ShioriError> {
+    // ⑴ 復号前にヘッダの生の値を走査する（位置不問・要件 4.1）。
+    let charset_header = scan_charset_header(bytes);
 
-    // UTF-8 として復号。不正バイトは lossy にせず malformed として fail fast（要件: silent 失敗禁止）。
-    let text = std::str::from_utf8(bytes).map_err(|_| ShioriError::Parse)?;
+    // ⑵ 復号に使う文字コードを方針から決める（要件 4.2〜4.5）。
+    let charset = match policy {
+        CharsetPolicy::Negotiate(inherited) => charset_header
+            .as_deref()
+            .and_then(|label| Charset::for_label(label).ok())
+            .unwrap_or(inherited),
+        CharsetPolicy::Force(forced) => forced,
+    };
 
-    // CRLF を第一に、bare LF にも頑健な行分割（donor `parse_value` と同じ二段 split）。
+    // ⑶ 全体を復号。不正な並びは代替文字へ吸収し、解析は続行する（要件 4.7・10.2）。
+    let (text, decode_had_errors) = charset.decode(bytes);
+
+    // ⑷ 以降は行解析。CRLF を第一に、bare LF にも頑健（donor `parse_value` と同じ二段 split）。
     let mut lines = text.split("\r\n").flat_map(|l| l.split('\n'));
 
     // status 行（先頭行）から数値コードを抽出。取れなければ malformed。
@@ -224,7 +280,8 @@ pub fn parse_response(
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#ErrorDescription_20_5bSSP_62e1_5f35_5d:1
             error_description = Some(val.to_string());
         }
-        // Charset / Reference0 / Marker / 未知ヘッダ等は読み飛ばす（要件 2.6/2.8）。
+        // Reference0 / Marker / 未知ヘッダ等は読み飛ばす（要件 2.8）。`Charset` は復号前に
+        // `scan_charset_header` が拾い終えているので、ここでは腕を持たない（要件 4.1）。
     }
 
     Ok(ParsedResponse {
@@ -232,6 +289,8 @@ pub fn parse_response(
         value,
         error_level,
         error_description,
+        charset_header,
+        decode_had_errors,
     })
 }
 
@@ -253,7 +312,7 @@ mod tests {
     use super::*;
     use crate::error::ShioriError;
 
-    // ---- parse_response（タスク 2.2）テスト --------------------------------
+    // ---- parse_response テスト ---------------------------------------------
 
     /// 200 + Value: さくらスクリプト本体（多バイト UTF-8）が `value: Some(..)` に抽出される（要件 2.1）。
     #[test]
@@ -262,7 +321,8 @@ mod tests {
         let resp = format!(
             "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nSender: pasta\r\nValue: {body}\r\n\r\n"
         );
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8).expect("well-formed 200");
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("well-formed 200");
         assert_eq!(
             parsed,
             ParsedResponse {
@@ -270,6 +330,8 @@ mod tests {
                 value: Some(body.to_string()),
                 error_level: None,
                 error_description: None,
+                charset_header: Some("UTF-8".to_string()),
+                decode_had_errors: false,
             }
         );
     }
@@ -278,7 +340,8 @@ mod tests {
     #[test]
     fn parse_200_without_value_is_none() {
         let resp = "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8).expect("well-formed 200");
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("well-formed 200");
         assert_eq!(parsed.status, 200);
         assert_eq!(parsed.value, None);
     }
@@ -287,7 +350,8 @@ mod tests {
     #[test]
     fn parse_204_no_content() {
         let resp = "SHIORI/3.0 204 No Content\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8).expect("well-formed 204");
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("well-formed 204");
         assert_eq!(parsed.status, 204);
         assert_eq!(parsed.value, None);
     }
@@ -296,7 +360,7 @@ mod tests {
     #[test]
     fn parse_400_is_ok_status_preserved() {
         let resp = "SHIORI/3.0 400 Bad Request\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8)
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
             .expect("400 is a parseable response, not a parse error");
         assert_eq!(parsed.status, 400);
     }
@@ -306,7 +370,8 @@ mod tests {
     fn parse_500_is_ok_status_preserved() {
         let resp =
             "SHIORI/3.0 500 Internal Server Error\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8).expect("500 is parseable");
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("500 is parseable");
         assert_eq!(parsed.status, 500);
     }
 
@@ -316,7 +381,8 @@ mod tests {
         for code in [311u16, 312u16] {
             let resp =
                 format!("SHIORI/3.0 {code} Teach\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n");
-            let parsed = parse_response(resp.as_bytes(), Charset::UTF_8).expect("3xx parseable");
+            let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+                .expect("3xx parseable");
             assert_eq!(parsed.status, code);
         }
     }
@@ -325,7 +391,8 @@ mod tests {
     #[test]
     fn parse_error_level_and_description_preserved() {
         let resp = "SHIORI/3.0 500 Internal Server Error\r\nCharset: UTF-8\r\nErrorLevel: critical\r\nErrorDescription: boom happened\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8).expect("parseable");
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("parseable");
         assert_eq!(parsed.status, 500);
         assert_eq!(parsed.error_level.as_deref(), Some("critical"));
         assert_eq!(parsed.error_description.as_deref(), Some("boom happened"));
@@ -335,7 +402,7 @@ mod tests {
     #[test]
     fn parse_unknown_headers_tolerated() {
         let resp = "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nSender: pasta\r\nReference0: x\r\nMarker: y\r\nX-Weird: z\r\nValue: \\s[0]hi\\e\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8)
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
             .expect("unknown headers must not fail parse");
         assert_eq!(parsed.status, 200);
         assert_eq!(parsed.value.as_deref(), Some(r"\s[0]hi\e"));
@@ -346,7 +413,8 @@ mod tests {
     fn parse_charset_omitted_inherits_request_charset() {
         // Charset ヘッダなし・多バイト UTF-8 body。
         let resp = "SHIORI/3.0 200 OK\r\nSender: pasta\r\nValue: 日本語\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8).expect("UTF-8 inherited");
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("UTF-8 inherited");
         assert_eq!(parsed.status, 200);
         assert_eq!(parsed.value.as_deref(), Some("日本語"));
     }
@@ -355,7 +423,8 @@ mod tests {
     #[test]
     fn parse_bare_lf_robust() {
         let resp = "SHIORI/3.0 200 OK\nCharset: UTF-8\nValue: hi\n\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::UTF_8).expect("bare LF parseable");
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("bare LF parseable");
         assert_eq!(parsed.status, 200);
         assert_eq!(parsed.value.as_deref(), Some("hi"));
     }
@@ -363,25 +432,111 @@ mod tests {
     /// 空バイト列は malformed（status 行が取れない）→ Err(Parse)（malformed・fail fast）。
     #[test]
     fn parse_empty_is_parse_error() {
-        let err = parse_response(b"", Charset::UTF_8).expect_err("empty must be a parse error");
+        let err = parse_response(b"", CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect_err("empty must be a parse error");
         assert!(matches!(err, ShioriError::Parse));
     }
 
     /// status コードを含まない先頭行（GARBAGE）は malformed → Err(Parse)（過剰寛容を防ぐ）。
     #[test]
     fn parse_garbage_status_line_is_parse_error() {
-        let err = parse_response(b"GARBAGE\r\nValue: x\r\n\r\n", Charset::UTF_8)
-            .expect_err("no numeric status must be a parse error");
+        let err = parse_response(
+            b"GARBAGE\r\nValue: x\r\n\r\n",
+            CharsetPolicy::Negotiate(Charset::UTF_8),
+        )
+        .expect_err("no numeric status must be a parse error");
         assert!(matches!(err, ShioriError::Parse));
     }
 
-    /// 不正 UTF-8 バイト列は malformed → Err(Parse)（silent lossy にしない）。
+    /// status 行を持たないバイト列は malformed → Err(Parse)（期待値は本 spec の前後で不変）。
+    ///
+    /// `[FF FE 00]` には status 行が無いので、事後条件「`Err(Parse)` は status 行の欠落・
+    /// 数値コードなしのみ」の下でも従来どおり `Err(Parse)` である（不正バイトが理由ではない）。
     #[test]
-    fn parse_invalid_utf8_is_parse_error() {
-        // 0xFF は UTF-8 として不正。
-        let err = parse_response(&[0xFF, 0xFE, 0x00], Charset::UTF_8)
-            .expect_err("invalid UTF-8 must be a parse error");
+    fn parse_without_status_line_is_parse_error() {
+        let err = parse_response(
+            &[0xFF, 0xFE, 0x00],
+            CharsetPolicy::Negotiate(Charset::UTF_8),
+        )
+        .expect_err("status 行が無い入力は parse エラー");
         assert!(matches!(err, ShioriError::Parse));
+    }
+
+    /// 不正なバイト並びは解析を失敗させず、代替文字で吸収して置換ありを報告する
+    /// （areka-P0-charset-canon 要件 4.7・10.2・4.8 の唯一の例外）。
+    #[test]
+    fn parse_invalid_bytes_are_replaced_not_parse_error() {
+        // status 行あり・`Value` の値に UTF-8 として不正な 0xFF を 1 バイト混ぜる。
+        let mut resp = b"SHIORI/3.0 200 OK\r\nValue: ".to_vec();
+        resp.push(0xFF);
+        resp.extend_from_slice(b"\r\n\r\n");
+        let parsed = parse_response(&resp, CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("不正バイトで解析を失敗させてはならない（要件 4.7）");
+        assert_eq!(parsed.status, 200);
+        assert_eq!(parsed.value.as_deref(), Some("\u{FFFD}"));
+        assert!(parsed.decode_had_errors, "置換ありを報告すること");
+    }
+
+    /// 文字コードヘッダは位置を問わず拾う（要件 4.1——正典は「望ましい」位置を示すのみ）。
+    #[test]
+    fn parse_charset_header_found_at_non_first_position() {
+        let resp = "SHIORI/3.0 200 OK\r\nSender: pasta\r\nMarker: x\r\nCharset: EUC-JP\r\nValue: hi\r\n\r\n";
+        let parsed = parse_response(resp.as_bytes(), CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("well-formed");
+        assert_eq!(parsed.charset_header.as_deref(), Some("EUC-JP"));
+    }
+
+    /// 解決できるヘッダの文字コードで全体を復号する（要件 4.2）。
+    #[test]
+    fn parse_negotiate_decodes_by_resolvable_header() {
+        // Shift_JIS の「あ」＝82 A0（符号化器から導かない定数）。
+        let mut resp = b"SHIORI/3.0 200 OK\r\nCharset: Shift_JIS\r\nValue: ".to_vec();
+        resp.extend_from_slice(&[0x82, 0xA0]);
+        resp.extend_from_slice(b"\r\n\r\n");
+        let parsed = parse_response(&resp, CharsetPolicy::Negotiate(Charset::UTF_8))
+            .expect("ヘッダの宣言どおりに復号できること");
+        assert_eq!(parsed.value.as_deref(), Some("あ"));
+        assert!(!parsed.decode_had_errors);
+    }
+
+    /// ヘッダ省略時は方針の中の文字コード（＝要求に用いた文字コード）を継承する（要件 4.3）。
+    #[test]
+    fn parse_negotiate_without_header_inherits_policy_charset() {
+        let mut resp = b"SHIORI/3.0 200 OK\r\nValue: ".to_vec();
+        resp.extend_from_slice(&[0x82, 0xA0]);
+        resp.extend_from_slice(b"\r\n\r\n");
+        let parsed = parse_response(&resp, CharsetPolicy::Negotiate(Charset::SHIFT_JIS))
+            .expect("継承して復号できること");
+        assert_eq!(parsed.charset_header, None);
+        assert_eq!(parsed.value.as_deref(), Some("あ"));
+    }
+
+    /// 解決できないラベルでも失敗せず、方針の中の文字コードで復号を続ける（要件 4.4）。
+    ///
+    /// 採用しない判断は `CharsetNegotiator::note_response` の側にあり、codec は生の値を返すだけ。
+    #[test]
+    fn parse_negotiate_unresolvable_label_falls_back_to_policy_charset() {
+        let mut resp = b"SHIORI/3.0 200 OK\r\nCharset: no-such-charset\r\nValue: ".to_vec();
+        resp.extend_from_slice(&[0x82, 0xA0]);
+        resp.extend_from_slice(b"\r\n\r\n");
+        let parsed = parse_response(&resp, CharsetPolicy::Negotiate(Charset::SHIFT_JIS))
+            .expect("解決できないラベルで失敗してはならない");
+        assert_eq!(parsed.charset_header.as_deref(), Some("no-such-charset"));
+        assert_eq!(parsed.value.as_deref(), Some("あ"));
+    }
+
+    /// 強制方針では応答の文字コードヘッダを復号に用いない（要件 4.5・5.4）。
+    #[test]
+    fn parse_force_ignores_response_header() {
+        // ヘッダは Shift_JIS を名乗るが、本体は UTF-8 の「あ」＝E3 81 82。
+        let mut resp = b"SHIORI/3.0 200 OK\r\nCharset: Shift_JIS\r\nValue: ".to_vec();
+        resp.extend_from_slice(&[0xE3, 0x81, 0x82]);
+        resp.extend_from_slice(b"\r\n\r\n");
+        let parsed = parse_response(&resp, CharsetPolicy::Force(Charset::UTF_8))
+            .expect("強制方針でも解析できること");
+        // 生の値は返すが、復号には使っていない（UTF-8 として読めている）。
+        assert_eq!(parsed.charset_header.as_deref(), Some("Shift_JIS"));
+        assert_eq!(parsed.value.as_deref(), Some("あ"));
     }
 
     /// GET（Reference 1 件）: request line・必須ヘッダ・Reference0・空行終端を検証（要件 1.1/1.3/1.4/1.6）。
@@ -470,7 +625,7 @@ mod tests {
         assert!(s.ends_with("\r\n\r\n"), "request:\n{s}");
     }
 
-    /// 多バイト UTF-8 の Reference 値が UTF-8 バイトとして round-trip する（要件 1.6）。
+    /// 多バイト UTF-8 の Reference 値が UTF-8 バイトとして round-trip する（完了仕様 areka-P0-host32-request 要件 1.6）。
     #[test]
     fn build_multibyte_reference_roundtrips_as_utf8() {
         let references = vec!["こんにちは世界".to_string()];
