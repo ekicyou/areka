@@ -29,6 +29,7 @@ wintf は「エンティティに `GraphicsCommandList` を挿せば、`render_s
 - **In scope**（利用者・運用者から見える範囲）:
   - 提示段の CPU 拡大経路の撤去（開発者裁定・ハード制約）。画像本体は原寸で保持し、拡大縮小は wintf の描画経路（`render_surface` の `SetTransform`＝D2D の変換行列）でのみ行う。
   - emo-present の自前 swap chain 供給面（`chain.rs` `SwapChainPresenter`）と物理寸の `Arrangement`／`SpriteVisual::SetSize` 配線の撤去、および wintf のコマンドリスト経路（`GraphicsCommandList`＋`SurfaceGraphics`＋`render_surface`）への復帰（裁定 D・「根因」節）。
+  - drain 相（`crates/areka/src/emo2_boot/mod.rs` の `emo2_frame_system`）の登録先を `FrameFinalize` から `Update`（wintf の Update 鎖の後）へ移す（登録 1 行・相の中身と相順は変更 0・裁定 2026-09-12）。
   - k≠1 での表示の見た目（原寸画像を k 倍で表示・物理寸は従来と同じ丸め権威で一致）・DPI 変化への追従・k=2 での 1 コマ予算。
   - クリック透過用 α マスクの原寸化と、窓側の照会が ÷k で原寸を引くこと（結果の意味論は「原寸 α を ÷k した点で読む」）。
   - 合成メモのエントリの原寸化（k を保持内容から外す）。
@@ -78,7 +79,7 @@ wintf は「エンティティに `GraphicsCommandList` を挿せば、`render_s
 1. While 拡大率 k≠1 で表示している, the 提示段 shall 原寸 (w, h) の画像を画面上で `ScaleRatio::scaled_extent(w, h)`（round half away from zero・非ゼロ入力は最小 1px）と同じ物理寸で表示する。wintf が `GlobalArrangement`（論理寸×DPI スケール）から導く描画面の寸とこの値の丸めを設計で揃え、揃えきれない 1px の差は退行とみなさない（Requirement 4.3 と同じ許容）。
 2. The 提示段 shall 表示物理寸の照会値（`TextSlotView::physical_size`・`EmoPresenter::target_physical_size`）を従来どおり `scaled_extent(applied, native)` で返し、窓寸 reconcile の呼び手（`drain_resnap.rs`）から見える値を変えない。物理寸の単一真実源は wintf の `GlobalArrangement.bounds` であり、照会値はそれと一致する（一致の担保は設計）。
 3. The 提示段 shall 窓の寸法・配置・バルーンのオフセット・キャラ窓の原点（下端中央）を本仕様の前後で変えない（**変更 0**・実機 2 水準の目視で確認）。
-4. When 窓の DPI が変わり k が再導出された, the 提示段 shall 同一フレーム内で新しい k の表示を成立させ、表示物理寸が変わった場合は従来どおり窓寸 reconcile 要求（`take_pending_resize`）を積む。
+4. When 窓の DPI が変わり k が再導出された, the 提示段 shall 同一フレーム内で新しい k の表示を成立させ、表示物理寸が変わった場合は従来どおり窓寸 reconcile 要求（`take_pending_resize`）を積む。「成立」は表示成立点（状態・`info!`・照会値）だけでなく**画素の着地も同一 tick** を含む（drain 相 `emo2_frame_system` を `Update` に置き、同 tick の `RenderSurface` が描き、窓書込は tick 末尾の flush で同じ vsync に載る・裁定 2026-09-12 設計ディスカッション 議題 1「描画の確定は Draw 前に終わらせる」）。絵が文字より 1 コマ遅れて着く形は採らない。
 5. While 拡大率 k≠1 で表示している, the 提示段 shall 要素間の相対配置・重なり（element 入れ子・SERIKO パターン・着せ替え）を等倍時と同じ見た目関係に保つ（合成済みの 1 枚へ単一の k を掛ける形は従来と同じ）。
 6. The 提示段 shall 拡大時の補間（bilinear 相当以上の品質）で原寸画像を表示し、最近傍拡大による画素幅ムラを出さない。補間モードの選択は設計フェーズで確定する。
 7. The 本仕様 shall 実機 2 水準（125%／200%）で本番ゴースト `emo2` を有界 auto-exit（`AREKA_APP_SMOKE_EXIT_MS`）で起動し、表示成立点の `info!` 行（「apply(ShowSurface): 表示・マスクを更新」の `k_ratio`／`native_w`／`native_h`／`scaled_w`／`scaled_h`）と目視証跡（スクリーンショット）で、2 水準が互いに異なる物理寸で・崩れなく描かれたことをサインオフする。
@@ -165,7 +166,7 @@ wintf は「エンティティに `GraphicsCommandList` を挿せば、`render_s
 4. The 本仕様 shall `crates/areka-emo-present/src/cache.rs`・`presenter.rs`・`presenter/show.rs`・`presenter/budget.rs`・`crates/areka-emo-compose/src/scale.rs` のモジュール doc に残る「k 適用済み」「リサンプル」の記述を新しい形へ書き換え、旧設計の説明を残さない（doc の主張は file:line で裏取り）。あわせて `crates/wintf/src/ecs/layout/hit_test/mod.rs` の `AlphaMaskResource` doc（「マスク原寸＝bounds 寸」）と `alpha_mask_hit` doc（「bounds==マスク原寸で恒等写像」）を「マスク＝原寸・bounds＝物理寸・比例写像が ÷k を与える」へ書き換える（判定コードは不変・Requirement 9.5）。
 5. The 本仕様 shall 完了 spec `areka-P0-collision-dpi-hittest` の点 ÷k 契約が不変であること、および同 spec の設計文書が言及する「k 倍マスク」の記述があれば原寸マスクへ改訂することを確認する（無ければ「該当 0」と記録）。2026-09-11 grep: 同 spec の `design.md`／`requirements.md` に「マスク」「mask」は 0 件＝**該当 0**（`acceptance-record.md`／`brief.md` の `info!` 文言の引用のみ・改訂不要）。
 6. The 本仕様 shall 完了 spec `areka-P0-emo2-conformance-e2e` の `acceptance-record.md` §13.2 行 9 の「引受先」欄を本仕様の完了で埋め、`.kiro/steering/roadmap.md` の状態列を `/kiro-complete` で更新する。
-7. The 本仕様 shall 完了時に、下流 `areka-P0-dpi-transition-two-tick-bounce` へ「外れの代金が消えたので走行 D 形式で再計測してから設計」を申し送る（roadmap W14 ① の条件のまま）。
+7. The 本仕様 shall 完了時に、下流 `areka-P0-dpi-transition-two-tick-bounce` へ「外れの代金が消え、表示・窓書込・文字が同一 tick に揃ったので走行 D 形式で再計測してから設計」を申し送る（roadmap W14 ① の条件のまま）。
 
 ### Requirement 9: 非退行と境界（ゼロの明示）
 
@@ -177,8 +178,8 @@ wintf は「エンティティに `GraphicsCommandList` を挿せば、`render_s
 2. The 本仕様 shall 文字層（`areka-emo-text`）のコード・供給面寸・`ScaleContract` を変更しない（**変更 0**）。
 3. The 本仕様 shall k の政策（`crates/areka-emo-present/src/scale.rs`）と導出のタイミング（show 適用ごと・`refresh_scale` のゲート）を変更しない（**変更 0**）。
 4. The 本仕様 shall バルーンのオフセット・DPI 系の完了 spec（`balloon-offset-dpi`・`balloon-vertical-canon`）の裁定を変更しない（**変更 0**）。
-5. The 本仕様 shall `wintf` のコード変更を、消費者が 0 になる swap chain ヘルパの撤去（Requirement 1.4）に限り、DPI 機構・レイアウト伝播・`render_surface`・窓生成・クリック透過の判定手順を変更しない（**変更 0**・`BitmapSource` の描画命令の記録手順は emo へ lift（複製）し wintf 本体は触らない・変更が要る場合は設計で file 単位に列挙する）。Requirement 8.4 の doc 2 行と、`crates/wintf/src/ecs/world/tick_wake.rs` の起床旗 `REARM` の生産者名簿 1 行（`show.rs` を加える・計 doc 3 行）の書き換えは判定手順の変更に当たらない。
-6. The 本仕様 shall 並走 W13 の 8 本（`kanade-boot-talkdone-drop`・`host32-window-thread-pump`・`sakura-tag-word-boundary`・`charset-canon`・`ukadoc-coverage-roadmap`・`text-decoration-canon`・`sylphya-set-ledger`・`balloon-font-descript-keys`）と共有ファイル 0 を保つ（roadmap の干渉台帳どおり）。
+5. The 本仕様 shall `wintf` のコード変更を、消費者が 0 になる swap chain ヘルパの撤去（Requirement 1.4）に限り、DPI 機構・レイアウト伝播・`render_surface`・窓生成・クリック透過の判定手順を変更しない（**変更 0**・`BitmapSource` の描画命令の記録手順は emo へ lift（複製）し wintf 本体は触らない・変更が要る場合は設計で file 単位に列挙する）。Requirement 8.4 の doc 2 行の書き換えは判定手順の変更に当たらない（起床旗 `REARM` の生産者追加は drain 相を `Update` へ移したことで不要になった＝wintf doc は 2 行）。
+6. The 本仕様 shall 並走 W13 の 8 本（`kanade-boot-talkdone-drop`・`host32-window-thread-pump`・`sakura-tag-word-boundary`・`charset-canon`・`ukadoc-coverage-roadmap`・`text-decoration-canon`・`sylphya-set-ledger`・`balloon-font-descript-keys`）と共有ファイル 0 を保つ（roadmap の干渉台帳どおり。`crates/areka/src/emo2_boot/mod.rs` の登録 1 行も W13 の 8 本と共有 0・W14 `property-query-channels` が後着 rebase）。
 7. The 本仕様 shall 既存の全テスト（ワークスペース）を緑に保つ。ただし Requirement 6.3 の裁定で撤去・再導出したテストはその裁定の結果に従う。
 
 ## 付録 A: k≠1 を読む既存テストの台帳（Requirement 6.3 の裁定材料・2026-09-11 grep・**裁定 D 以前の暫定表**＝設計フェーズで `chain.rs`／`mount.rs`／`presenter_display_tests.rs` の対象を加えて作り直す）

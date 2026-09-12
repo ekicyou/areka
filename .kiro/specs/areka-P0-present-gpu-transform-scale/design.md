@@ -8,7 +8,7 @@
 
 **Users**: 拡大率 k≠1（125%／200%）のモニタで `emo2` を動かす利用者（絵が変わるコマで文字が止まらない）・提示段と wintf の保守者（emo が wintf の DPI 機構を迂回しない形へ戻る）・実機サインオフと性能判定の運用者（`info!`／`perf(apply_show)` の grep 契約は保つ）。
 
-**Impact**: `crates/areka-emo-present` の `chain.rs`（`SwapChainPresenter`）を撤去し `mount.rs` を純 ECS の spawn に改め、`cache.rs` のキーから k を外し、`presenter/budget.rs` のリサンプル席と `presenter/timing.rs` のリサンプル段を撤去する。`crates/areka-emo-compose/src/scale.rs` はリサンプラ（約 370 行）を失い `ScaleRatio` の寸法権威だけになる。wintf のコードは **変更 0**（doc 3 行のみ）。
+**Impact**: `crates/areka-emo-present` の `chain.rs`（`SwapChainPresenter`）を撤去し `mount.rs` を純 ECS の spawn に改め、`cache.rs` のキーから k を外し、`presenter/budget.rs` のリサンプル席と `presenter/timing.rs` のリサンプル段を撤去する。`crates/areka-emo-compose/src/scale.rs` はリサンプラ（約 370 行）を失い `ScaleRatio` の寸法権威だけになる。wintf のコードは **変更 0**（doc 2 行のみ）。areka 側は `crates/areka/src/emo2_boot/mod.rs` の `emo2_frame_system` の登録先 1 行（`FrameFinalize` → `Update`）だけを変える（裁定 2026-09-12・下記「drain 相の登録位置」）。
 
 ### Goals
 
@@ -29,7 +29,7 @@
 - バルーンのオフセット・DPI 系の完了 spec（`balloon-offset-dpi`・`balloon-vertical-canon`）の裁定: **変更 0**（9.4）。
 - 合成メモの容量 3・LRU の意味論: **変更 0**（5.4）。CPU リサンプルの高速化・別スレッド化・容量増: **採らない**（1.6）。
 - 案 A（surface brush の `SetStretch`）の設計: 行わない。D が実機計測（Requirement 3.1）で 16.7 ms を割れないと確定した場合だけの退避案で、そのときは `VisualMount` に brush の伸縮設定を戻す差分を別途起こす（B／C は却下済み）。
-- 提示段の drain 相をどの schedule で回すか（+1 tick の着地・research §7.2）: 本仕様では動かさない。
+- 提示段の drain 相の**中身**（attach／dpi／drain／可視性／z 順／reconcile／text の相順）: **変更 0**。動かすのは登録先の schedule だけ（§drain 相の登録位置）。
 - デバイスロスト後の復旧: **変更 0**。合成メモが保持する `GraphicsCommandList`（旧デバイスの D2D bitmap を参照）は、wintf の WUC 系 component と同じく無効化されない（`crates/wintf/src/ecs/graphics/systems/window_pos.rs` `invalidate_dependent_components` の NOTE(W3b-V)）。`invalidate_all` をデバイス再初期化へ配線しない（既存の穴と同格・本仕様で広げも狭めもしない）。
 
 ## Boundary Commitments
@@ -42,16 +42,17 @@
 - `apply_show` の流れと表示成立点の状態（`show.rs`）・`read_back` の定義（`read.rs`）・段階別計時のスキーマ（`timing.rs`・`tools/perf/judge-perf.py` の必須集合）・予算席の一覧（`budget.rs`）。
 - k≠1 檻の裁定（付録 A′）と実機 2 水準サインオフの手順。
 - 設計判断の上書き登記（D3／D5／D6・Option D・COMPAT §8・プロジェクト記憶）。
+- drain 相（`emo2_frame_system`）の登録先 schedule（`crates/areka/src/emo2_boot/mod.rs`・裁定 2026-09-12）。相の中身と相順は不変。
 
 ### Out of Boundary
 
-- wintf の DPI 伝播・レイアウト・`render_surface`・`deferred_surface_creation_system`・クリック透過の判定手順: **変更 0**（9.5）。書き換えるのは doc 3 行（`hit_test/mod.rs` の `AlphaMaskResource`／`alpha_mask_hit` の座標契約 2 行・`tick_wake.rs` の `REARM` 生産者行 1 行）だけ。
+- wintf の DPI 伝播・レイアウト・`render_surface`・`deferred_surface_creation_system`・クリック透過の判定手順: **変更 0**（9.5）。書き換えるのは doc 2 行（`hit_test/mod.rs` の `AlphaMaskResource`／`alpha_mask_hit` の座標契約）だけ。
 - wintf の swap chain ヘルパ（`com/dxgi.rs` `create_composition_swap_chain`・`com/wuc.rs` `CompositorInteropExt::create_composition_surface_for_swap_chain`）: 消費者が `areka-emo-text/src/surface.rs` に残るため **撤去しない**（1.4 の条件不成立を明示）。
 - Non-Goals に列挙した全項目。並走 W13 の 8 本と共有ファイル 0（9.6）。
 
 ### Allowed Dependencies
 
-- `areka-emo-present` → `wintf`（`ecs::graphics::GraphicsCommandList`・`ecs::GraphicsCore`・`ecs::{Arrangement, LayoutScale, Visual, HitTest, AlphaMaskResource}`・`com::d2d::{D2D1DeviceContextExt, D2D1CommandListExt}`・`ecs::world::tick_wake`）／`areka-emo-compose`（`ComposedSurface`・`ScaleRatio`）／`windows`（`Win32_Graphics_Direct2D`・`Direct2D_Common`・`Dxgi_Common`）。逆方向（wintf → emo）は禁止のまま。
+- `areka-emo-present` → `wintf`（`ecs::graphics::GraphicsCommandList`・`ecs::GraphicsCore`・`ecs::{Arrangement, LayoutScale, Visual, HitTest, AlphaMaskResource}`・`com::d2d::{D2D1DeviceContextExt, D2D1CommandListExt}`）／`areka-emo-compose`（`ComposedSurface`・`ScaleRatio`）／`windows`（`Win32_Graphics_Direct2D`・`Direct2D_Common`・`Dxgi_Common`）。逆方向（wintf → emo）は禁止のまま。
 - `crates/areka` → `areka-emo-present` の公開 API（`EmoPresenter::{apply, refresh_scale, take_pending_resize, target_physical_size, text_slot_view, read_back, hit_region_client}`）: 署名不変。
 - 依存の削除: `areka-emo-present` の `windows-numerics`（`SpriteVisual::SetSize` の `Vector2` 専用だった）と feature `Win32_Graphics_Dxgi`（chain 専用だった）は不要になる。Direct2D の型（`ID2D1DeviceContext`／`D2D1_BITMAP_PROPERTIES1` 等）は workspace 既定の `Win32_Graphics_Direct2D_Common` が `Win32_Graphics_Direct2D` を含意する（`windows` 0.62.2 の feature 表）ため feature の追加は **0**。
 
@@ -62,7 +63,7 @@
 - `transition_diag` の `surface` 行の `resized` の意味（供給面のリサイズ → 原寸外形の変化）: 判定器の読み手 0（7.6）。
 - `ScaleRatio::as_f32` の裁定済み消費者に「`Arrangement.scale` の係数」が加わる: doc を改訂しないと禁止則の違反に読める。
 - `CacheEntry`／`ComposeCache::{insert, touch, get}` の署名（k と `native` が消える）: 消費者は `show.rs` と `cache_tests.rs` のみ。
-- 起床の旗 `REARM` の生産者に `areka-emo-present/src/presenter/show.rs` が加わる: wintf `tick_wake.rs` の doc 行へ登記。
+- `emo2_frame_system` の登録 schedule（`FrameFinalize` → `Update`）: 相順を読む既存の檻（`zorder_wiring_tests.rs` t_zwi03／04 は代役 system で `FrameFinalize` 内の機構を検査するため不変・`spawn_zorder_*_wiring_tests.rs` は placement 鎖の檻ゆえ不変）と新設 T-N10 で固定。W14 `property-query-channels` が同 file を触るため後着 rebase。
 
 ## Architecture
 
@@ -71,7 +72,24 @@
 - **迂回の三重構造**（要件「根因」）: `mount.rs` `physical_arrangement`（`Arrangement` を物理寸・`scale` 1.0 で spawn し自前 `VisualGraphics::new(sprite)` を同梱して `Visual::on_add` の既定挿入を回避）／`GraphicsCommandList` 不使用（`deferred_surface_creation_system`・`render_surface` が走らない）／`chain.rs` `SwapChainPresenter`（自前 swap chain に生バイトを `UpdateSubresource` → `Present(0)`・`SpriteVisual::SetSize` を物理 px で直書き）。
 - **wintf 側の事実**（research §7.1）: `Arrangement.scale` を書く本番コードは `taffy_systems.rs` `update_arrangements_system` だけで `TaffyStyle` を持つ entity に限られる。ゴースト窓は `placement/spawn.rs` が `BoxStyle` を付けずに spawn するため、窓の `GlobalArrangement` のスケールは **1.0**。ゆえに k は emo の surface entity 自身の `Arrangement.scale` に置く（窓に DPI を書かせる案は placement U2 と 9.5 に反する）。
 - **既存パターン**（lift 元）: `bitmap_source/systems.rs` `draw_bitmap_sources`（原寸 bitmap × 論理 px 宛先矩形 → `GraphicsCommandList`・既存と `!=` のときだけ `insert`）。emo はこのレシピを WIC 由来 bitmap → メモリ直渡し `CreateBitmap` に替えて複製する。
-- **スケジュール順**（research §7.2）: `apply_show` は `FrameFinalize`（tick の末尾）で走り、挿した命令と `Arrangement` は次の tick の `PostLayout` → `PreRenderSurface` → `RenderSurface` で描かれる。見た目の着地は現行より **+1 tick**（表示成立点は同一 tick）。
+- **スケジュール順**（research §7.2／§7.9）: 現行の `apply_show` は `FrameFinalize`（tick の末尾）で走るため、挿した命令と `Arrangement` は次の tick でしか描かれない（+1 tick）。裁定（2026-09-12）により登録先を `Update` へ移し、同 tick の `PostLayout`（伝播）→ `PreRenderSurface`（面）→ `RenderSurface`（描画）が拾う＝**画素の着地は同一 tick**（下記）。
+
+### drain 相の登録位置（裁定 2026-09-12・設計ディスカッション 議題 1「描画の確定は Draw 前に終わらせる」）
+
+`emo2_frame_system`（`crates/areka/src/emo2_boot/mod.rs` の `add_systems(FrameFinalize, emo2_frame_system.before(apply_zorder_chain))`）の登録先を **`Update`** へ移し、wintf の Update 鎖（`detect_display_change_system → update_monitor_layout_system → invalidate_dependent_components → update_typewriters`・`crates/wintf/src/ecs/world/mod.rs`）の**後**に置く（`.after(update_typewriters)`）。相の中身と相順（quit → 作業領域同期 → attach → dpi → 再スナップ → drain → 可視性 → z 順 → reconcile → text-scale → text）は **変更 0**。
+
+- **なぜ `Draw` の直前ではなく `Update` か**: 挿した `Arrangement` を `GlobalArrangement` へ伝播するのは `PostLayout` の `propagate_global_arrangements`、面の生成・寸合わせは `PreRenderSurface` の `deferred_surface_creation_system`、描画は `RenderSurface` の `render_surface`。13 schedule の順は `Input → Update → PreLayout → Layout → PostLayout → UISetup → GraphicsSetup → Draw → PreRenderSurface → RenderSurface → Composition → CommitComposition → FrameFinalize`（`schedule_labels.rs`）ゆえ、同 tick で描かせるには **`PostLayout` より前**＝`Update` が最後の席である。`Draw` に置くと伝播が終わっており、面寸も変換も前 tick の値のままになる。
+- **同 tick に揃うもの**: 表示成立点（状態・`info!`・照会値）・`GraphicsCommandList`／`Arrangement` の反映（`RenderSurface`）・`Visual.is_visible`（`Composition` の `visual_property_sync_system`＝可視性の相も同 tick に前進する）・窓書込（`SetWindowPosCommand` は tick 全体の後・World 解放後に `vsync.rs` `try_tick_on_vsync` が `flush_window_pos_commands` で流す＝従来と同じ点）・文字層の present（drain 内で同 tick）。**画素の着地・窓寸・文字が 1 つの vsync に載る**（現行は絵だけ同 tick の `Present(0)`・窓は flush、裁定前の設計案は絵が +1 tick）。
+- **検証した前後関係（致命傷なし）**:
+  1. DPI 遷移の原子性（完了 spec `dpi-transition-atomicity`「`Update`（モニタ表更新）→ emo frame → flush」）: 同じ `Update` 内で `.after(update_typewriters)` に置くため不変。`WM_DPICHANGED` の `DPI` 書込は window_proc（tick 外・`window_proc/window_pos.rs`）ゆえ `Changed<DPI>` は次 tick の `Update` で従来どおり拾う。
+  2. z 順の鎖（完了 spec `scope-zorder-pinning` 要件 14.5「同じ巡で適用」）: 相が組む `ZOrderChainPlan` を `FrameFinalize` の `apply_zorder_chain`（placement 鎖 `establish_owner_links → apply_zorder_pair_maintenance → apply_zorder_chain`）が同 tick で読む。schedule 順が `.before` の代わりを担う（schedule を跨ぐ `.before` は書けない）。`zorder_wiring_tests.rs` の t_zwi03／04 は代役 system で `FrameFinalize` 内の機構を検査するため不変。
+  3. attach のゲート（`GhostWindows`＋`GraphicsCore`（`PreLayout` `init_graphics_core`）＋`WucGraphicsResource`（`GraphicsSetup`）: `Update` は同 tick のそれらより前だが、資源は起動 1 tick 目で揃い以後は常在。初回だけ 1 tick 自己ゲートで待つ（起動時のみ・従来も窓の生成を待っていた）。
+  4. 終了相（`run_ghost_quit_phase` → `despawn_ghost_windows`）: despawn は `WindowHandle` の `on_remove` が `WM_CLOSE` を送るだけで実 `DestroyWindow` は tick 後のメッセージ処理。ペア維持系（`FrameFinalize`）は「despawn と DestroyWindow の間」に同 tick で入る＝現行と同じ。
+  5. 再入: `SetWindowPos` は emo からは直接呼ばれず（`SetWindowPosCommand` 待ち行列）、flush は World 解放後の再入防止ガード付き（`vsync.rs`）。schedule 位置に依らない。
+  6. tick の門（`tick_gate.rs`）: 全か無かで tick を回すため `Update` でも同じ。次 tick の描画を予約する `REARM` は同 tick で描けるので**不要**（裁定前の案から撤回・wintf `tick_wake.rs` の doc も触らない）。
+  7. 干渉: `emo2_boot/mod.rs` は W13 の 8 本と共有 0。W14 `property-query-channels`・W15 `status-execution-states` が同 file を触るため後着が rebase（roadmap の干渉台帳どおり・登録 1 行の差）。
+- **触る file**: `crates/areka/src/emo2_boot/mod.rs`（登録 1 行＋手順 6 の註釈「`FrameFinalize` へ登録」「鎖の適用系より前という指定」の書き換え）。新設の檻 T-N10（登録先）。`Emo2Wiring`／`frame.rs`／各相は不変。
+- **下流への申し送り**: `dpi-transition-two-tick-bounce`（W14）は「表示・窓書込・文字が同一 tick に揃った」状態で走行 D 形式の再計測から始める。
 
 ### Architecture Pattern & Boundary Map
 
@@ -171,7 +189,8 @@ crates/areka/examples/
 ├── collision-probe/probe.rs         # anchor を原寸座標で読む
 └── emo-present.rs                   # モジュール doc
 crates/wintf/src/ecs/layout/hit_test/mod.rs   # doc 2 行（コード 0）
-crates/wintf/src/ecs/world/tick_wake.rs       # doc 1 行（REARM 生産者・コード 0）
+crates/areka/src/emo2_boot/mod.rs             # emo2_frame_system の登録先 FrameFinalize → Update（wintf Update 鎖の後）・手順 6 の註釈
+crates/areka/src/emo2_boot/frame_schedule_tests.rs # 新設: T-N10（登録先の檻）
 tools/perf/judge-perf.py                      # J_PERF_STAGE_FIELDS / J_PERF_ALLOC_FIELDS
 crates/log-capture-kit/tests/file_length_guard_test.rs # budget_tests.rs が 1,000 行を下回ったときのみ例外表から除外
 .kiro/specs/completed/areka-P0-emo-dpi-scaling/design.md  # D3／D5／D6 行の末尾に上書き追記（8.1・本文非改変）
@@ -185,7 +204,7 @@ doc/COMPAT_ARCHITECTURE.md                                # §8 【上書き】�
 - `display.rs`（新）: `record_display(dc, &ComposedSurface) -> Result<GraphicsCommandList, PresentError>`＝原寸 bitmap 生成＋論理 px 宛先矩形の `DrawBitmap` 記録＋`Close`。純関数 `DisplayRecipe::for_surface(&ComposedSurface)`（bitmap 寸・pitch・宛先矩形・補間）。test ビルド限定 `DisplayFault`／`fault_point`／`arm_display_fault`／`clear_display_fault`（`chain.rs` の型を移設）。
 - `mount.rs`: `attach(world, window, native, k, display, initially_visible)`（COM 呼び出し 0・`display` はエントリの `GraphicsCommandList`）・`set_layout(world, native, k)`・`set_display(world, &GraphicsCommandList)`・`logical_arrangement(native, k)`。冒頭 doc の「非衝突」節を「`Visual::on_add` に乗る」へ書き換え。
 - `cache.rs`: `ComposeKey{surface_id, binds, pattern}`・`CacheEntry{composed, mask, display}`・`insert(surface_id, binds, pattern, composed, mask, display)`・`touch(surface_id, &binds, &pattern)`・`get(..)`。モジュール doc の「k のキー参加」節を撤去。
-- `show.rs`: Flow 1。`chain` 系の全行・`is_identity` 分岐・`resample_native_into`・`Stage::Resample` が消え、`record_display`・`set_display`・`set_layout`・`tick_wake::mark(REARM)` が入る。
+- `show.rs`: Flow 1。`chain` 系の全行・`is_identity` 分岐・`resample_native_into`・`Stage::Resample` が消え、`record_display`・`set_display`・`set_layout` が入る。
 - `read.rs`: `read_back` はメモのエントリから原寸バイト列を返す。`text_slot_view` のゲートは `mount` の有無。
 - `budget.rs`: 席 2 つ（合成先の常設席・マスクの輪番）・発生点 2 つ（`ComposeDst`・`Mask`）。表示バッファの成長は次の適用の `ComposeDst` に載る（既存 doc のとおり）。
 - `timing.rs`: `Stage::{CacheLookup, Compose, MaskGen, Upload}`・`COUNT = 4`・emit のフィールド 11 個。
@@ -198,12 +217,12 @@ doc/COMPAT_ARCHITECTURE.md                                # §8 【上書き】�
 
 ```mermaid
 sequenceDiagram
-    participant Drain as areka drain phase FrameFinalize
+    participant Drain as areka drain phase Update
     participant P as EmoPresenter apply_show
     participant C as ComposeCache
     participant D as display record_display
     participant M as VisualMount
-    participant W as wintf next tick
+    participant W as wintf same tick
     Drain->>P: ShowSurface target surface binds pattern
     P->>P: k = derive_scale policy window DPI
     P->>C: touch surface binds pattern
@@ -216,7 +235,7 @@ sequenceDiagram
     end
     P->>M: attach or set_display and set_layout native k
     P->>P: AlphaMaskResource set_shared mask visualize
-    P->>P: physical = k.scaled_extent native pending_resize info perf REARM
+    P->>P: physical = k.scaled_extent native pending_resize info perf
     W->>W: PostLayout propagate GlobalArrangement
     W->>W: PreRenderSurface create or resize surface ceil bounds
     W->>W: RenderSurface SetTransform k DrawImage list
@@ -228,7 +247,7 @@ sequenceDiagram
 - (1) 引き当て: `cache.touch(surface_id, &binds, &pattern)`（**k はキーでない**）。ミスのとき: `budget.native_scratch(|s| composer.compose_into(..))` → `timing.mark(Compose)` → `GraphicsCore::device_context()` を借りて `record_display(dc, scratch)`（失敗は `error!`＋`Err(Device)`・**この時点でメモ・World・表示は無傷**）→ `timing.mark(Upload)` → `take_recycled` → `display_buffer(recycled)` → `swap_native_scratch(&mut display)`（**全 k で交代**・`is_identity` 分岐は消える）→ `regenerate_mask(retired, display.bytes(), w, h, stride)`（原寸バイト）→ `cache.insert(surface_id, binds, pattern, display, mask, list)` → `timing.mark(MaskGen)`。`EmptyComposition`／`SurfaceNotFound` の扱いは不変。
 - (2) 装着の遅延生成: `mount` 不在なら `VisualMount::attach(world, window, native, k, &entry.display, initially_visible)`（surface entity を `GraphicsCommandList`＝エントリの `display` 込みで spawn）。`WucGraphicsResource`／`Compositor` の取得は不要になる（`GraphicsCore` だけ）。
 - (3) 反映: `mount.set_display(world, &entry.display)`（値が異なるときだけ `insert`）→ `mount.set_layout(world, native, k)`（`Arrangement` が同値なら書かない）→ `AlphaMaskResource::set_shared(entry.mask.clone())` → 所有権が `CommandDriven` なら `set_visible(true)`。物理寸は `let physical = k.scaled_extent(native)`（`chain.size()` の代替・研究 §5 議題 9 は「式 1 つ・ヘルパ新設なし」で閉じる）。`resized = prev_native != Some(native)`・`size_changed = prev_physical != Some(physical)`（`prev_physical` の導出式は不変）。遷移観測の `upload`／`visualize` 行は `size: Some(physical)`・`resized: Some(resized)`。
-- (3.5)〜成立点: `pending_resize`・`applied`・`native_size`（エントリの `composed` 外形）・`last_show`・`info!`（フィールド不変・`scaled_w/h = physical`）・`take_delta`・`timing.emit` は不変。成立直前に `tick_wake::mark(tick_wake::REARM)`（次の tick の描画を予約・門が OFF なら無害）。
+- (3.5)〜成立点: `pending_resize`・`applied`・`native_size`（エントリの `composed` 外形）・`last_show`・`info!`（フィールド不変・`scaled_w/h = physical`）・`take_delta`・`timing.emit` は不変。
 
 **キー決定**: 失敗し得る GPU 呼び出しは (1) の `record_display` に**集約**され、メモの回収（`take_recycled`）より手前にある。ゆえに失敗時は「表示・メモ・`GraphicsCommandList`・`Arrangement`・マスク・可視性」の全てが適用前のまま（7.1）——旧 upload 失敗（挿入後に失敗）より強い前状態維持になる。ヒット経路は GPU 呼び出し 0。
 
@@ -254,7 +273,7 @@ sequenceDiagram
 | 2.1 | 表示物理寸＝`scaled_extent` と ≤1 px | VisualMount＋wintf `calculate_surface_size_from_global_arrangement` | 丸めの一致表（§Data Models） | Flow 1 |
 | 2.2 | 照会値は `scaled_extent` のまま | read.rs `target_physical_size`・`TextSlotView::physical_size` | 署名不変 | — |
 | 2.3 | 窓寸・配置・原点の変更 0 | drain_resnap／dpi（不変） | `pending_resize` の式不変 | Flow 2 |
-| 2.4 | DPI 変化の同一フレーム成立＋reconcile 要求 | refresh.rs（不変）・set_layout | `take_pending_resize` | Flow 2 |
+| 2.4 | DPI 変化の同一フレーム成立（画素の着地も同一 tick）＋reconcile 要求 | refresh.rs（不変）・set_layout・drain 相の `Update` 登録（`emo2_boot/mod.rs`） | `take_pending_resize` | Flow 1／2 |
 | 2.5 | 相対配置は合成済み 1 枚に単一 k | VisualMount | `Arrangement.scale` は 1 対の係数 | — |
 | 2.6 | 補間は bilinear 相当以上 | record_display | `D2D1_INTERPOLATION_MODE_LINEAR` | — |
 | 2.7 | 実機 2 水準サインオフ | Testing Strategy §実機 | `info!` grep＋スクショ | — |
@@ -283,7 +302,7 @@ sequenceDiagram
 | 6.2 | `read_back`＝原寸の `ComposedSurface` | read.rs | `read_back` | — |
 | 6.3 | 再導出／撤去の裁定 | 付録 A′ | — | — |
 | 6.4 | 裁定材料の並記 | 付録 A′ | — | — |
-| 6.5 | 新設分岐の GPU 非依存檻 | Testing Strategy T-N1〜T-N9（GPU 非依存）・T-G1（既存のオフスクリーン型） | — | — |
+| 6.5 | 新設分岐の GPU 非依存檻 | Testing Strategy T-N1〜T-N10（GPU 非依存）・T-G1（既存のオフスクリーン型） | — | — |
 | 6.6 | k≠1 の見た目は実機へ | Testing Strategy §実機 | — | — |
 | 6.7 | 1,000 行 | §行数の見張り | — | — |
 | 6.8 | 消費者 0 の観測口は除外 | 付録 A′（budget_tests） | — | — |
@@ -304,7 +323,7 @@ sequenceDiagram
 | 9.2 | 文字層の変更 0 | Non-Goals・Out of Boundary | `areka-emo-text` 0 file・swap chain ヘルパ残置 | — |
 | 9.3 | k の政策・導出タイミングの変更 0 | Non-Goals | `ScalePolicy`／`derive_scale`／`refresh_scale` のゲート不変 | Flow 2 |
 | 9.4 | バルーン offset／DPI 系裁定の変更 0 | Non-Goals | `balloon.rs` 0 file | — |
-| 9.5 | wintf はコード 0・doc 3 行 | Out of Boundary | — | — |
+| 9.5 | wintf はコード 0・doc 2 行 | Out of Boundary | — | — |
 | 9.6 | W13 と共有 0 | Out of Boundary | — | — |
 | 9.7 | 全テスト緑（裁定分を除く） | Validation Hooks | — | — |
 
@@ -315,7 +334,7 @@ sequenceDiagram
 | `display::record_display` | emo-present／表示の記録 | 原寸 `ComposedSurface` から D2D bitmap を作り論理 px 宛先矩形の `DrawBitmap` を `GraphicsCommandList` へ記録 | 1.1, 1.2, 1.3, 2.6, 7.1, 7.2 | `GraphicsCore::device_context`（P0）・`D2D1DeviceContextExt`／`D2D1CommandListExt`（P0） | Service |
 | `mount::VisualMount` | emo-present／配置 | surface entity を wintf の `Visual::on_add` に乗る形で spawn し `Arrangement`（論理・k）と `GraphicsCommandList` を書く | 1.2, 2.1, 2.5, 4.2, 5.6 | `Visual`／`Arrangement`／`HitTest`／`AlphaMaskResource`（P0） | Service, State |
 | `cache::ComposeCache` | emo-present／状態 | 合成入力→（原寸面・原寸マスク・表示記録）の容量 3 LRU | 4.4, 5.1〜5.6 | `GraphicsCommandList`（P1・値として保持） | State |
-| `show.rs apply_show` | emo-present／漏斗 | Flow 1 | 1.3, 2.4, 2.8, 4.1, 5.3, 7.1〜7.6 | 上記全て（P0）・`tick_wake`（P1） | Service |
+| `show.rs apply_show` | emo-present／漏斗 | Flow 1 | 1.3, 2.4, 2.8, 4.1, 5.3, 7.1〜7.6 | 上記全て（P0） | Service |
 | `budget::FrameBudget` | emo-present／予算 | 席 2 つ・発生点 2 つ | 3.6 | — | State |
 | `timing::FrameTiming` | emo-present／観測 | 段 4 つ・確保 2 つの perf 行 | 3.3, 3.4 | `judge-perf.py`（外部消費者・P1） | Event |
 | `read.rs read_back` | emo-present／照会 | 表示中エントリの原寸バイト列 | 6.1, 6.2 | `ComposeCache::get`（P0） | Service |
@@ -518,6 +537,7 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 | T-N1 | `display_tests.rs` | `DisplayRecipe::for_surface`: bitmap 寸＝native・pitch＝stride・dest＝(0,0,w,h)・補間＝LINEAR。k を引数に持たないことは署名で固定 |
 | T-N2 | `mount.rs` `tests` | `logical_arrangement`: `size`＝native f32・`scale`＝(k.as_f32(), 同)・offset 0。親を `Window::default()` 付き entity にして attach → `world.flush()` 後、`Visual::on_add` の連鎖で `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` が**存在**し（既定値・`!is_valid()`＝自前の COM 生成ではない）、`GraphicsCommandList`・`HitTest::alpha_mask`・`AlphaMaskResource`・`Arrangement`（論理・k・offset 0）も揃う（wintf `tests/graphics/dcomp_integration_test.rs` の `(Visual, ChildOf(window))` 1 bundle の型・GPU 不要） |
 | T-N9 | `mount.rs` `tests` | T-N2 の較正（対照）: 親が `Window` を持たなければ上記 3 component は挿されない。片方だけでは恒真になるため両方置く |
+| T-N10 | `crates/areka/src/emo2_boot/frame_schedule_tests.rs`（新） | 登録先の檻: 結線後の `Schedules` で `emo2_frame_system` が `Update` に載り `FrameFinalize` に載らないこと（`spawn_zorder_pair_wiring_tests.rs` の `Schedules` 検査の型・GPU 不要）。対照: 結線前は `Update` に無い |
 | T-N3 | `display_tests.rs` | 丸めの一致表: (native, k) の表で、本番と同じ式 `窓 GA（scale 1.0・offset 任意） × logical_arrangement`（`impl Mul<Arrangement> for GlobalArrangement`）の bounds 幅＝`native × k_f32`、`calculate_surface_size_from_global_arrangement` と `scaled_extent` の差 ∈ {0, +1}、整数 k は 0 |
 | T-N4 | `mount.rs` `tests`（wintf の純 API） | 二重縮約なし: 窓 entity（`WindowPos.position`）＋ surface entity（`Arrangement` k=2 と `GlobalArrangement::from` を直挿し・原寸 4×4 の既知マスク）で `hit_test_in_window` の結果が `mask.is_hit(⌊x/2⌋, ⌊y/2⌋)` の表と一致 |
 | T-N5 | `mount.rs` `tests` | `set_layout`／`set_display` の同値スキップ: 同じ値を書いても `Changed` が立たない（`world.is_changed` 相当の観測） |
@@ -567,7 +587,7 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 | 22 | `crates/areka/examples/emo-present/reconcile.rs`（377）・`collision-probe/probe.rs`（332） | 起動 golden（`resample` で k 倍）・`assert_drawn_anchor`（物理座標へ写像） | **再導出** | golden＝native（k に依らず同一バイト・長さ比較も native）・anchor は Head／Bust 中心を原寸座標で直接読む（写像が消える） |
 | 23 | `crates/areka/src/emo2_boot/frame_dpi_tests.rs`（360） | `dpi_phase_reconciles_changed_window_to_scaled_extent` | 窓寸 | **不変** | — |
 
-集計（`#[test]` の実数え・2026-09-11）: **撤去 44 本**（#1 16・#2 6・#4 15＝`chain.rs` 1＋`chain_fault_tests.rs` 13＋spike 1・#10 2・#11 1・#20 4）／**再導出 34 本**（#5 1・#6 3・#7 4・#8 3・#9 1・#10 4・#11 3・#12 5・#13 1・#14 2・#15 2・#19 3・#22 2。#20 の引数削減と #6 `native_size_*` 2 本の字面変更は機械的ゆえ数えない）／**新設 10 本**（T-N1〜T-N9・T-G1）／**不変 127 本**（#3 27・#5 4・#6 8・#9 2・#10 15・#11 2・#13 8・#14 15・#15 15・#16 4・#17 9・#18 8・#21 9・#23 1）。分類の方針（陳腐化は除外・壊れたら更新）は要件ディスカッションで承認済み・本表は設計ディスカッションで確定。
+集計（`#[test]` の実数え・2026-09-11）: **撤去 44 本**（#1 16・#2 6・#4 15＝`chain.rs` 1＋`chain_fault_tests.rs` 13＋spike 1・#10 2・#11 1・#20 4）／**再導出 34 本**（#5 1・#6 3・#7 4・#8 3・#9 1・#10 4・#11 3・#12 5・#13 1・#14 2・#15 2・#19 3・#22 2。#20 の引数削減と #6 `native_size_*` 2 本の字面変更は機械的ゆえ数えない）／**新設 11 本**（T-N1〜T-N10・T-G1）／**不変 127 本**（#3 27・#5 4・#6 8・#9 2・#10 15・#11 2・#13 8・#14 15・#15 15・#16 4・#17 9・#18 8・#21 9・#23 1）。分類の方針（陳腐化は除外・壊れたら更新）は要件ディスカッションで承認済み・本表は設計ディスカッションで確定。
 
 数え方の単位: 各行の本数は file の `#[test]` 全数（撤去／再導出／不変の合計＝file の全数）。例外は #23 で、`frame_dpi_tests.rs` 8 本のうち k≠1 の窓寸を読む 1 本だけを載せた（他 7 本は本仕様と無関係ゆえ台帳外）。
 
@@ -575,14 +595,14 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 
 1. 本番ゴースト `emo2` を **絶対パス**で、`AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit・`RUST_LOG=areka_emo_present=debug,areka_ghost=info` で、125%（DPI 120）と 200%（DPI 192）の 2 水準で起動する（完了 spec `emo-dpi-scaling`／`collision-dpi-hittest` の受け入れ記録の手順）。
 2. grep: `apply(ShowSurface): 表示・マスクを更新` 行の `k_ratio`・`native_w/h`・`scaled_w/h` が水準間で異なる物理寸（例 478×684 と 764×1094）・`cache_hit=true` が DPI 変化直後に出る／`perf(apply_show)` 行を `tools/perf/judge-perf.py` で集計し `t_total_us` の中央値・p90 を症状 E の前回値（中央値 41〜78 ms・p90 65〜227 ms）と並べる／`ticker catch-up: skipped multiple boundaries, firing once` が 3 分で ≤10 件／`[hit_region_client] client 物理 px を ÷k して当たり判定を解決` が頭・胸のクリックで出る。
-3. 目視（スクリーンショット）: 立ち絵とバルーンの大きさ・位置・原点（下端中央）が前回と同じ・拡大の画素ムラ無し・透明部でクリックが後ろへ抜け不透明部でつかめる・絵が変わるコマで文字が止まらない・面切替のコマで絵が文字より 1 tick 遅れて見えるか（research §7.2 の既知の帰結の目視）。ついでに e2e §13.1 行 3（初回起動限定の位置調整）も目視する（roadmap の申し送り）。ドラッグ中に `tick_diag` を 1 度読み、窓移動の tick の再描画代金を記録する。
-4. 合否: 静かな機械で k=2 のミス 1 回 `t_total_us` ≤ 16.7 ms（wintf の再描画分は次の tick の `transition`／`tick_diag` から読める範囲で併記）・負荷下の値は報告のみ。
+3. 目視（スクリーンショット）: 立ち絵とバルーンの大きさ・位置・原点（下端中央）が前回と同じ・拡大の画素ムラ無し・透明部でクリックが後ろへ抜け不透明部でつかめる・絵が変わるコマで文字が止まらない・面切替のコマで絵と文字が同じコマに載る（drain 相を `Update` へ移した効果・`wintf::transition` の `surface` 行と `tick_diag` の frame 番号が同一）。ついでに e2e §13.1 行 3（初回起動限定の位置調整）も目視する（roadmap の申し送り）。ドラッグ中に `tick_diag` を 1 度読み、窓移動の tick の再描画代金を記録する。
+4. 合否: 静かな機械で k=2 のミス 1 回 `t_total_us` ≤ 16.7 ms（wintf の再描画分は同 tick の `tick_diag` から読み `t_total_us` と別に併記し、合計が 16.7 ms の内側であることを確かめる）・負荷下の値は報告のみ。
 
 ### Validation Hooks（DoD・機械で確認）
 
 - `grep -rn "resample\|ResampleScratch\|XmapSeat\|SwapChainPresenter\|create_composition_swap_chain" crates/areka-emo-present crates/areka-emo-compose crates/areka --include=*.rs` → **0 件**（doc を含む・1.4／1.7）。`crates/areka-emo-text` の `create_composition_swap_chain` は残る（対象外）。
 - `cargo test --workspace`（`| tail` で exit code を隠さない）緑・`python tools/perf/judge-perf.py --selftest` 緑・`cargo test -p log-capture-kit --test file_length_guard_test` 緑。
-- `git diff --stat crates/wintf/src` がコード 0・doc 3 行（`hit_test/mod.rs`・`tick_wake.rs`）だけ。
+- `git diff --stat crates/wintf/src` がコード 0・doc 2 行（`hit_test/mod.rs`）だけ。`git diff --stat crates/areka/src/emo2_boot/mod.rs` が登録 1 行＋註釈だけ。
 
 ## Performance & Scalability
 
@@ -593,7 +613,7 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 | mask | 11 ms | 約 3 ms | 画素数 1/4（原寸） |
 | upload → 表示記録 | 0.3 ms | 0.3〜0.5 ms | `CreateBitmap` 836 KB ＋ 命令記録 |
 | 合計（`t_total_us`） | 60〜85 ms | **約 9〜11 ms** | 16.7 ms の内側 |
-| wintf 再描画（次の tick） | — | 0.2〜1 ms | `BeginDraw`／`Clear`／`DrawImage`／`EndDraw`（764×1094） |
+| wintf 再描画（同 tick の `RenderSurface`） | — | 0.2〜1 ms | `BeginDraw`／`Clear`／`DrawImage`／`EndDraw`（764×1094） |
 | 窓移動中の tick（**新規の定常代金**） | 0（swap chain は再描画なし） | 0.2〜1 ms／tick | `mark_dirty_surfaces` が `Changed<GlobalArrangement>` で dirty を立てるため、ドラッグ・`\![move]` 系で窓の offset が変わる tick ごとに `render_surface` が全面を描き直す（面の再生成は無し・`deferred_surface_creation_system` は同寸なら continue）。実機でドラッグ中の `tick_diag` を 1 度読む |
 | ヒット（k 変化含む） | upload 0.3 ms | **0** | GPU 呼び出しなし |
 
@@ -606,7 +626,7 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 - **`doc/COMPAT_ARCHITECTURE.md` §8** に 1 行: 「| **【上書き】画像本体の保持と拡大縮小の方式**（完了アーカイブ `areka-P0-emo-dpi-scaling` の D3／D5／D6・`areka-P0-emo-present` の Option D を現役仕様が上書きする行） | **画像本体は native 原寸で持ち、拡大縮小は wintf の描画経路（`render_surface` の `SetTransform`＝D2D の変換行列）でのみ行う。CPU で画素を拡大する経路は不可。emo は wintf の DPI 機構（`Arrangement`／`GraphicsCommandList`／`deferred_surface_creation_system`）を迂回しない。** k は surface entity の `Arrangement.scale` の係数としてだけ現れ、当たり判定は原寸 α を ÷k の比例写像で読む | 開発者裁定 2026-09-11（`/kiro-discovery`・要件ディスカッション 議題 1＝裁定 D）。ukadoc は沈黙（areka 内部の描画アーキテクチャ） | areka-P0-present-gpu-transform-scale |」。
 - **プロジェクト記憶**: `areka-emo-own-compositor-atlas.md` に「表示の拡大縮小は wintf の D2D 変換行列（2026-09-11・CPU 拡大不可・`present-gpu-transform-scale`）」、`areka-dpi-following-core-design.md` に「k は `Arrangement.scale` の係数・画像は原寸（2026-09-11）」を追記し、`MEMORY.md` の索引行を更新。
 - **8.5**: 完了 spec `collision-dpi-hittest` の design／requirements に「マスク」「mask」は 0 件＝**該当 0**（要件フェーズ grep のとおり・改訂不要）。
-- **8.6／8.7（完了時）**: e2e `acceptance-record.md` §13.2 行 9 の引受先欄を本仕様で埋める（記録は非改変）・roadmap は `/kiro-complete`・`dpi-transition-two-tick-bounce` へ「外れの代金が消え、絵の着地が +1 tick になったので走行 D 形式で再計測してから設計」を申し送る。
+- **8.6／8.7（完了時）**: e2e `acceptance-record.md` §13.2 行 9 の引受先欄を本仕様で埋める（記録は非改変）・roadmap は `/kiro-complete`・`dpi-transition-two-tick-bounce` へ「外れの代金が消え、drain 相が `Update` へ移って表示・窓書込・文字が同一 tick に揃ったので走行 D 形式で再計測してから設計」を申し送る。
 - **8.4**: モジュール doc の書き換え対象は File Structure Plan のとおり（`cache.rs`・`presenter.rs`・`show.rs`・`budget.rs`・`compose/scale.rs`・`composed.rs`・`read.rs`・`mount.rs`・`lib.rs`・`timing.rs`・`target.rs`・`transition_record.rs`・`examples/emo-present.rs`・wintf `hit_test/mod.rs` 2 行）。
 
 ## 行数の見張り（6.7・2026-09-11 実測）
@@ -625,6 +645,7 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 | `presenter/budget_tests.rs` | 1,081（例外表） | 減・1,000 未満なら例外表から除外 |
 | `cache_tests.rs` | 1,618（例外表・較正） | 減・1,000 以上を保つ |
 | wintf `hit_test/mod.rs` | 632 | ±0（doc 2 行） |
+| `crates/areka/src/emo2_boot/mod.rs` | 640 | ±0（登録 1 行＋註釈） |
 
 ## Supporting References
 

@@ -261,6 +261,13 @@
 
 - `crates/log-capture-kit/tests/file_length_guard_test.rs` `OVER_LIMIT_ALLOWED` は「例外表に載っているのに超過の実体が無い」エントリを**赤にする**（stale 検査）。`presenter/budget_tests.rs`（1,081 行）はリサンプル席の檻 3 本を撤去すると 1,000 行を下回り得る＝その場合は表から外し `OVER_LIMIT_ALLOWED_COUNT` を 11→10 にする（表と件数の 2 か所）。`cache_tests.rs`（1,618 行）は引数削減で縮むが 1,000 行は下回らない（`CALIBRATION_DROPPED_ENTRY` の較正も不変）。走査対象は `.rs` のみ（`tests/workspace_scan/mod.rs`・`name.ends_with(".rs")`）ゆえ `judge-perf.py`（4,153 行）は対象外。
 
+### 7.9 drain 相の登録位置（設計ディスカッション 議題 1・2026-09-12 裁定「描画の確定は Draw 前に終わらせる」）
+
+- **Context**: §7.2 は「絵の着地が +1 tick」を既知の帰結として設計へ固定していた。開発者は受容せず、同 tick での確定を求めた。
+- **Sources**: `crates/wintf/src/ecs/world/schedule_labels.rs`（13 schedule の順）／`crates/wintf/src/ecs/world/mod.rs`（`Update` 鎖・`PostLayout` の `propagate_global_arrangements`・`PreRenderSurface`／`RenderSurface`）／`crates/wintf/src/ecs/world/vsync.rs` `try_tick_on_vsync`（World 解放後に `flush_window_pos_commands`）／`crates/wintf/src/ecs/window_proc/window_pos.rs`（`WM_DPICHANGED` の `DPI` 直接書込）／`crates/areka/src/emo2_boot/mod.rs`（登録行と手順 6 の註釈）／`crates/areka/src/emo2_boot/frame.rs` `emo2_frame_system`（相順）／`frame/attach.rs`（ゲート）／`crates/wintf/src/ecs/window/window_handle.rs` `on_window_handle_remove`（`WM_CLOSE`）／`zorder_pair_maintain.rs`（despawn と DestroyWindow の間）／`zorder_wiring_tests.rs` t_zwi03／04／完了 spec `dpi-transition-atomicity` design（`Update` → emo frame → flush）。
+- **Findings**: 同 tick で描かせる最後の席は `Update`（`PostLayout` の伝播より前）。`Draw` では遅い。`Update` 鎖の後に置けば DPI 原子性の順序は不変、z 順は schedule 順で同 tick、attach ゲートは起動 1 tick 目だけ自己ゲート、終了相の despawn は `WM_CLOSE` 送出のみ、窓書込は従来どおり tick 後の flush、再入ガードは schedule 非依存。副作用として可視性の相の `Visual.is_visible` も同 tick で `Composition` に届く。`REARM` は不要。
+- **Implications**: design.md「drain 相の登録位置」節・T-N10・Requirement 2.4 の文言（画素の着地も同一 tick）。`+1 tick` を前提にした記述（§7.2 の Implications・§9 の第 1 項・`tick_wake` 生産者の登記）は本節が上書きする。
+
 ## 8. 設計判断（(a)〜(l)・design.md の正本を要約）
 
 | 項 | 決定 | 根拠（要点） |
@@ -272,15 +279,15 @@
 | (e) `read_back` | `last_show` のキーで引いたエントリの `composed.bytes()` を返す（k 非依存）。エントリが消えていれば `error!`＋`Err` | 表示面は書込専用・cage ④ の観測点は `record_display` の失敗注入（4 点）へ移る |
 | (f) 遷移観測 | `stage=upload` 行は `w/h`＝物理寸（`scaled_extent`）のまま・`resized`＝原寸の外形が前回表示から変わった回 | 判定器の読み手 0（要件 7.6）・`SurfaceStage::Upload` の語は契約ゆえ保つ |
 | (g) 失敗 | `record_display` の失敗（`CreateBitmap`／`CreateCommandList`／`EndDraw`／`Close`）は `device_err` 経由で `error!`＋`Err(Device)`・**`take_recycled` より前**に行い表示・メモ・World は全て適用前のまま | 合成失敗と同じ規律（R3.4）・k 分岐なし・panic なし |
-| (h) spawn | `Visual`＋`Arrangement`（論理）＋`GraphicsCommandList`＋`HitTest`＋`AlphaMaskResource`＋`ChildOf(窓)`・`VisualGraphics` は入れない・同値なら挿し直さない・成功時に `tick_wake::REARM` | §7.4・§7.2 |
-| (i) 触る file | wintf コード 0・doc 3 行（`hit_test/mod.rs` 2・`tick_wake.rs` 1）・emo-text 0・balloon.rs 0・areka は examples 2＋doc 1 | §7.6・バルーンは同じ漏斗 |
-| (j) 檻 | 撤去 44 本（compose 22・chain 14・spike 1・perf 1・budget 2・cache 4）／再導出 34 本／新設 10 本（T-N1〜T-N9・T-G1）／不変 127 本（`#[test]` の実数え・design.md 付録 A′） | 陳腐化テスト方針 |
+| (h) spawn | `Visual`＋`Arrangement`（論理）＋`GraphicsCommandList`＋`HitTest`＋`AlphaMaskResource`＋`ChildOf(窓)`・`VisualGraphics` は入れない・同値なら挿し直さない（`REARM` は drain 相の `Update` 移設で不要） | §7.4・§7.9 |
+| (i) 触る file | wintf コード 0・doc 2 行（`hit_test/mod.rs`）・emo-text 0・balloon.rs 0・areka は `emo2_boot/mod.rs` の登録 1 行＋examples 2＋doc 1 | §7.6・§7.9・バルーンは同じ漏斗 |
+| (j) 檻 | 撤去 44 本（compose 22・chain 14・spike 1・perf 1・budget 2・cache 4）／再導出 34 本／新設 11 本（T-N1〜T-N10・T-G1）／不変 127 本（`#[test]` の実数え・design.md 付録 A′） | 陳腐化テスト方針 |
 | (k) 行数 | 新 `display.rs` 約 150 行・触る file は全て 1,000 未満・`budget_tests.rs` の例外表からの除外に注意 | §7.8 |
 | (l) 登記 | D3／D5／D6・Option D への追記文と COMPAT §8 の【上書き】行の文言を design.md に固定 | 先例 3（line-height-canon）の作法 |
 
 ## 9. リスク（設計フェーズ）
 
-- **+1 tick の着地遅れ**（§7.2）——実機サインオフの目視で「絵と文字の 1 コマずれ」が見えるかを確かめる。見えるなら drain 相の位置は別 spec（`dpi-transition-two-tick-bounce` の再計測と同じ走行で採る）。
+- ~~**+1 tick の着地遅れ**~~（§7.2）→ **解消（2026-09-12・設計ディスカッション 議題 1）**: drain 相を `Update` へ移す（§7.9）。実機サインオフでは「絵と文字が同じコマに載る」を目視する。
 - **WUC 描画面のリサイズ頻度**——k 変化のたびに `deferred_surface_creation_system` が面を作り直す（旧 `ResizeBuffers` と同じ頻度・稀）。原寸の変化（面切替で外形が違う面）でも作り直しが走る＝旧 `upload` の外形変化時と同じ回数。
-- **`tick_wake` 生産者の登記漏れ**——`show.rs` を wintf `tick_wake.rs` の REARM 行へ載せる。areka 側の字面検査（`AREKA_PRODUCERS`）は areka 内ファイルしか読まないため、emo-present の生産者はそこには載らない（載せない理由を design に書く）。
+- ~~**`tick_wake` 生産者の登記漏れ**~~ → 不要（`REARM` は採らない・§7.9）。
 - **`as_f32` の禁止則との整合**——変換行列の係数への使用を 2 つ目の裁定済み例外として `ScaleRatio::as_f32` の doc へ明記しないと、次の読み手が「禁止の違反」と読む。
