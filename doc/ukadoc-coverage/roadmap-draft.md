@@ -7,8 +7,8 @@
 束の名前は `linkage.md` のものをそのまま使う。段階と順位は `briefing.md` のものをそのまま使う。
 この文書は同じ値を写さず、名前と欄で指す。項目を指すときは必ず引用符か逆引用符で囲む。
 
-まだ 1 行も無い表（spec の表・M2 予約群の対応表）は、囲みに見出しだけを置くことができないので
-書いていない。読み手は「その表が無い」を「0 行」として扱う。
+spec の表と M2 予約群の対応表は、それぞれ「既存 brief の位置づけ」と「M2 予約群の対応表」の節に
+囲みで置いた。読み手は、囲みに見出しだけがあって行が無い表を「0 行」として扱う。
 
 ## 読み方
 
@@ -45,21 +45,248 @@
 
 ## 既存 brief の位置づけ
 
-下の囲みは着手時（2026-09-12）に置いた器である。**まだ数えていない仮の 0 であり、段 5
-（タスク 6.2）で数え直した値に置き換え、そのときに撮った日付へ `snapshot_on` を打ち直す。**
+**数え方**: spec の置き場の直下（完了した spec を封じる場所は数えない）にあるディレクトリのうち、
+説明書のファイルを持つものを数え、そこから**本文書を作っている spec 自身のディレクトリ名 1 つを
+除く**。2026-09-13 に数え直した結果は **27** である（除く前は 28）。自分を除くので、本 spec が
+完了して封じる場所へ移った後も同じ 27 を返す。
+
+**この表は 2026-09-13 に撮った写真である。** 生きた spec の総数と一致し続けることは主張しない
+——新しい spec が起票されても、別の spec が完了して封じられても、この表は赤にならない。機械が
+見張るのは ⑴ 冒頭の数と表の行数が一致すること、⑵ 表の各 spec 名がいまも実在するディレクトリ名で
+あること、⑶ 各行の宛先の件数が台帳の数え直しと一致すること、⑷ 各行の束の名前が帰属の文書に
+在ることの 4 つだけである。表の spec が改名・削除されれば赤になる。
 
 ```toml
 [briefs]
-count = 0
-snapshot_on = "2026-09-12"
+count = 27
+snapshot_on = "2026-09-13"
 ```
 
-<!-- 段 5（タスク 6.2）で書く:
-     - 数え方（本 spec 自身のディレクトリ名を除いて数えること。パスは書かない）。
-     - spec ごとに段階・束・宛先に持つ id の数・ウェーブを 1 表に。どの束にも属さない spec は
-       そう書く。
-     - この表が着手時の写真であること（撮った日付を添える）と、生きた総数との一致は主張しない
-       こと。 -->
+**段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
+束**を 1 つ書き、段階はその束が順位表で置かれている段階を写した。宛先が 2 つ以上の束に散る spec
+は 13 本のうち **8 本**あり、散った先の全部は各段階の節の「依存する既存 spec」の欄が持っている。
+いちばん多い束と 2 番目の差が **1 件**しかない行が **4 行**ある——`areka-P0-currentghost-property-tree`
+（16 対 15）・`areka-P0-property-query-channels`（3 対 2）・`areka-P0-charset-canon`（2 対 1）・
+`areka-P0-status-execution-states`（2 対 1）。この 4 行は宛先が 1 件動くだけで束が入れ替わる。
+同数で並んで決められなかった行は **0 行**である（数え方: 13 本それぞれで束ごとの件数を降順に
+並べ、先頭と 2 番目が同数の行を数えた）。
+
+**どの束にも属さない spec は 14 本**である（数え方: 台帳 4 本の宛先の欄を 27 の名前それぞれで
+引き、0 件だったものを数えた。27 − 13 ＝ 14 ではなく、27 本を 1 本ずつ引いて数えた）。この 14 本は
+`none = true` と理由を持ち、束の名前を持たない。**段階の欄は骨組みが省略を許さないので `A` を
+置いたが、この 14 行の `A` は値ではなく置き字である**——台帳に宛先が 0 件なので段階も束も台帳
+からは決まらない。決まらないことのほうを `reason` に書いた。
+
+**ウェーブの欄**は正本のウェーブ編成をそのまま写したもので、本文書は書き換えない。`保留` は
+編成のどのウェーブにも入っていない 1 本である。
+
+```toml
+[[spec]]
+name = "areka-P0-property-catalog-lists"
+stage = "C"
+bundle = "一覧と汎用プロパティの照会"
+owner_count = 120
+wave = "W16"
+
+[[spec]]
+name = "areka-P0-currentghost-property-tree"
+stage = "A"
+bundle = "窓の配置と重なり"
+owner_count = 64
+wave = "W15"
+
+[[spec]]
+name = "areka-P0-anchor-tag-canon"
+stage = "A"
+bundle = "バルーンのリンク"
+owner_count = 61
+wave = "W17"
+
+[[spec]]
+name = "areka-P0-choice-marker-styling"
+stage = "A"
+bundle = "選択肢の目印"
+owner_count = 39
+wave = "W16"
+
+[[spec]]
+name = "areka-P0-text-decoration-canon"
+stage = "A"
+bundle = "バルーンの文字"
+owner_count = 32
+wave = "W13"
+
+[[spec]]
+name = "areka-P0-balloon-canon-residue"
+stage = "A"
+bundle = "バルーンの付属画像"
+owner_count = 26
+wave = "W14"
+
+[[spec]]
+name = "areka-P0-sakura-time-directives"
+stage = "A"
+bundle = "会話"
+owner_count = 10
+wave = "W16"
+
+[[spec]]
+name = "areka-P0-property-query-channels"
+stage = "C"
+bundle = "環境の照会"
+owner_count = 5
+wave = "W14"
+
+[[spec]]
+name = "areka-P0-charset-canon"
+stage = "A"
+bundle = "起動と挨拶"
+owner_count = 4
+wave = "W13"
+
+[[spec]]
+name = "areka-P0-makoto-dll-host"
+stage = "E"
+bundle = "トランスレータ"
+owner_count = 4
+wave = "W16"
+
+[[spec]]
+name = "areka-P0-status-execution-states"
+stage = "A"
+bundle = "動作モードの出入り"
+owner_count = 4
+wave = "W15"
+
+[[spec]]
+name = "areka-P0-surfaces-basepos"
+stage = "A"
+bundle = "窓の配置と重なり"
+owner_count = 2
+wave = "W13 任意／W14"
+
+[[spec]]
+name = "areka-P0-translate-pipeline"
+stage = "E"
+bundle = "トランスレータ"
+owner_count = 1
+wave = "W15"
+
+[[spec]]
+name = "areka-P0-balloon-font-descript-keys"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑶ で受け持つ書体の欄 14 件は分割元の areka-P0-text-decoration-canon の宛先のままである。是正候補の節にこの spec の行がある"
+owner_count = 0
+wave = "W13"
+
+[[spec]]
+name = "areka-P0-text-align-shadow-canon"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑵ で受け持つ寄せ 2 と影 3 の 5 件は分割元の areka-P0-text-decoration-canon の宛先のままである。是正候補の節にこの spec の行がある"
+owner_count = 0
+wave = "W15"
+
+[[spec]]
+name = "areka-P0-balloon-lifecycle-events"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑵ で受け持つ表示寿命 5 件は分割元の areka-P0-balloon-canon-residue の宛先のままである。是正候補の節にこの spec の行がある"
+owner_count = 0
+wave = "W17"
+
+[[spec]]
+name = "areka-P0-sylphya-set-ledger"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書が登記すると書くサウンドの語彙は、いまも areka-P0-property-catalog-lists の宛先である。是正候補の節にこの spec の行がある"
+owner_count = 0
+wave = "W13"
+
+[[spec]]
+name = "areka-P0-property-ipc-transport"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書の範囲は輸送路の実測と 32bit 側の実装で、正典の項目に当たる行を持たない"
+owner_count = 0
+wave = "W14"
+
+[[spec]]
+name = "areka-P0-emo-text-canon-residue"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書の範囲は文字の折返しと描画の内側で、正典の項目に当たる行を持たない"
+owner_count = 0
+wave = "W14"
+
+[[spec]]
+name = "areka-P0-zorder-property"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書が正本と書く重なり順のプロパティ 1 件は、宛先の欄が空文字のまま裁定を待っている。是正候補の節にこの spec の行がある"
+owner_count = 0
+wave = "W15"
+
+[[spec]]
+name = "areka-P0-zorder-chain-residue"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
+owner_count = 0
+wave = "W14"
+
+[[spec]]
+name = "areka-P0-sakura-tag-word-boundary"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。さくらスクリプトの調査は、この説明書から届いた主張 11 件がいずれも所有を宣言する形をしていないと記録している"
+owner_count = 0
+wave = "W13"
+
+[[spec]]
+name = "areka-P0-present-gpu-transform-scale"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
+owner_count = 0
+wave = "W13"
+
+[[spec]]
+name = "areka-P0-kanade-boot-talkdone-drop"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
+owner_count = 0
+wave = "W13"
+
+[[spec]]
+name = "areka-P0-host32-window-thread-pump"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
+owner_count = 0
+wave = "W13"
+
+[[spec]]
+name = "areka-P0-dpi-transition-two-tick-bounce"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件"
+owner_count = 0
+wave = "W14"
+
+[[spec]]
+name = "areka-P0-tick-gate-adoption"
+stage = "A"
+none = true
+reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。門の採否は性能の話で、正典の項目に当たる行を持たない"
+owner_count = 0
+wave = "保留"
+```
+
+**新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
+spec 台帳で、この表はそれを写した写真である。
 
 ## 段階 A
 
@@ -603,13 +830,226 @@ snapshot_on = "2026-09-12"
 
 ## M2 予約群の対応表
 
-<!-- 段 5（タスク 6.2）で書く: 予約群の各項目がどの束に写ったか。写らなかった項目は名前と
-     理由を書く（0 件なら 0 と書く）。 -->
+**数え方**: 正本のロードマップの「M2 以降」の節は、予約を中黒（・）と全角の斜線（／）で区切って
+並べている。この 2 つの区切りで切ると **17 項目**である。半角の斜線は 1 つの名前の内側なので
+切らない——`Plugin/HEADLINE`・`ゴースト/バルーン選択 UI`・`里々/YAYA 網羅` の 3 つがそれである。
+
+下の表は **18 行**ある。`Plugin/HEADLINE` だけが 2 つの束に分かれたので 2 行に割り、残る 16 項目は
+1 行ずつである。**写った項目は 10 項目（11 行）、写らなかった項目は 7 項目**である（数え方: 下の
+囲みで `none = true` を持つ行を数えて 7、束の名前を持つ行を数えて 11、割った 1 項目を戻して 10。
+10 ＋ 7 ＝ 17 で節の列挙の全数と合う）。
+
+読み取りにくい 3 つの写し先には根拠を添える。
+
+- **NAR** は束「開発者機能」に写った。この束が nar を作る台本の指示と、作り始め・作り終わりを
+  知らせる 2 つのイベントと、開発者向けの解説ページを 1 つに持っているためである。
+- **ゴースト/バルーン選択 UI** は束「作り付けの窓」に写った。ゴースト側とバルーン側の選択の窓を
+  開く台本の指示が、どちらもこの束に居るためである。
+- **バルーン美観配置**（画面端での反転）は束「窓の配置と重なり」に写った。画面の端で位置を丸める
+  かどうかを決める `ukadoc:descript_balloon:windowposition.limit_2c0_2f1:1` がこの束に居るためで
+  ある。
+
+```toml
+[[reserved]]
+name = "SSTP（9801）"
+bundle = "SSTP"
+
+[[reserved]]
+name = "FMO"
+bundle = "FMO"
+
+[[reserved]]
+name = "DirectSSTP"
+none = true
+reason = "カタログでこの綴りを引いて 0 件。写る先の項目が無い"
+
+[[reserved]]
+name = "Plugin"
+bundle = "PLUGIN"
+
+[[reserved]]
+name = "HEADLINE"
+bundle = "ヘッドライン"
+
+[[reserved]]
+name = "ネットワーク更新"
+bundle = "更新"
+
+[[reserved]]
+name = "ゴースト/バルーン選択 UI"
+bundle = "作り付けの窓"
+
+[[reserved]]
+name = "多重ゴースト"
+bundle = "多重ゴースト"
+
+[[reserved]]
+name = "Shift_JIS"
+bundle = "定義ファイルの文字コード"
+
+[[reserved]]
+name = "SAORI は実装しない"
+none = true
+reason = "カタログでこの綴りを引いて 0 件。写る先の項目が無く、実装しないという裁定は正本のロードマップが持つ"
+
+[[reserved]]
+name = "里々/YAYA 網羅"
+none = true
+reason = "カタログで里々と YAYA の綴りを引いて 0 件。標準テンプレート辞書の語彙は順位の根拠として引くだけで、正典の項目ではない"
+
+[[reserved]]
+name = "NAR"
+bundle = "開発者機能"
+
+[[reserved]]
+name = "回転テキスト"
+none = true
+reason = "カタログで回転の綴りを引いて 0 件。予約されているのは areka の側の名前だけで、正典の項目が無い"
+
+[[reserved]]
+name = "バルーン美観配置"
+bundle = "窓の配置と重なり"
+
+[[reserved]]
+name = "pasta の native x64"
+none = true
+reason = "areka の内側の実装方式の選択で、台帳の項目 0 件。数え方は別軸の節にある"
+
+[[reserved]]
+name = "IShiori の in-proc 化"
+none = true
+reason = "areka の内側の実装方式の選択で、台帳の項目 0 件。数え方は別軸の節にある"
+
+[[reserved]]
+name = "ベクトル描画"
+none = true
+reason = "areka の内側の実装方式の選択で、台帳の項目 0 件。数え方は別軸の節にある"
+
+[[reserved]]
+name = "owner-draw 右クリックメニュー"
+bundle = "メニュー"
+```
 
 ## 既存 brief への是正候補
 
-<!-- 段 5（タスク 6.2）で書く: 台帳の id と brief の所有宣言が食い違うものを、spec 名・
-     食い違う id・直し方の案の 3 列で列挙する。brief の本体は書き換えない。 -->
+**説明書の本体は 1 文字も書き換えていない。** ここに並べるのは案だけで、直すかどうかを決めるのは
+各 spec の持ち主である。
+
+拾い方は 2 つ。⑴ 調査 4 本のブリーフィングが「隣の spec の説明書への是正候補」として送ってきた
+ものを全数読み、写真に写っている 27 本に宛てたものだけを採った。⑵ 本 spec で見つけたものを
+加えた——2026-09-11 に 3 本を割って生まれた 6 本の説明書が、割る前の宛先のままになっている件で
+ある。**差の理由が調査の側で説明済みのもの（族の名前だけを挙げた説明書に族の中身まで届いた、
+別名になった項目の宛先が根の項目に付いた、など）は食い違いに数えていない。**
+
+SHIORI の調査から届いた是正候補のうち、写真に写っている 27 本に宛てたものは **0 件**である
+（数え方: あの文書の是正の候補の節の 4 件を 1 つずつ当たり、宛先が完了済みの調査 spec 自身・
+正典への差し戻し・その場で直した台帳の 3 種だけだった）。
+
+全部で **15 件**である。
+
+| spec 名 | 食い違う id | 直し方の案 |
+| --- | --- | --- |
+| `areka-P0-property-catalog-lists` | `ukadoc:list_propertysystem:activeghostlist.index_28ID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1` と `ukadoc:list_propertysystem:activeghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30:1` の 2 件 | 拡張の 2 件は一覧の 5 件の中に既に入っている。合計を 12 から **10** へ直す |
+| `areka-P0-property-catalog-lists` | `ukadoc:list_propertysystem:headlinelist.count:1`・`ukadoc:list_propertysystem:pluginlist.count:1` の 2 件 | 合計 11 は動かさず、内訳をヘッドライン **3**・プラグイン **5** へ直す（件数の葉を 2 つ数え落としている） |
+| `areka-P0-property-catalog-lists` | 履歴の件数の葉 4 件（下に全列挙） | 「8」を **12** へ直す。4 つの枝それぞれに件数の葉がもう 1 つある |
+| `areka-P0-property-catalog-lists` | 使える前置きが 1 つに限られる 4 件（下に全列挙） | 「17」を **13 ＋ 4** に割り、「どのカタログ根の下でも乗算される」という説明を 13 件の側だけに掛ける |
+| `areka-P0-currentghost-property-tree` | バルーンのマウスの矢印 4 件（下に全列挙） | 括弧書きで名前だけ挙げてどの件数にも足していない 4 件を数に入れ、「≈65」を **66** へ直す |
+| `areka-P0-currentghost-property-tree` | `ukadoc:list_propertysystem:currentghost.balloon._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1`・`ukadoc:list_propertysystem:currentghost.balloon.count:1` | 頭を落とした短い綴りを完全な名前へ書き直す。落とすと別の一族があるように読める |
+| `areka-P0-zorder-property` | `ukadoc:list_propertysystem:currentghost.seriko.zorder:1` | **三重所有の仮裁定（案 甲）を採る場合にかぎり**、「一覧への登録は別の spec が行う。本説明書が正本として持つのは読み書きの書式であって一覧の 1 行ではない」の形へ直す。いまは同じ 1 行について正反対の指示が 2 本の説明書に残っている |
+| `areka-P0-balloon-canon-residue` | `ukadoc:descript_ghost:sakura.balloon.defaultsurface_2c_6570_5024:1`・`ukadoc:descript_ghost:char_2a.balloon.defaultsurface_2c_6570_5024:1` | 初期表示面の綴りを 2 つではなく **4 つ**挙げる（本体側とキャラクタ番号で指す形が抜けている）。あわせて範囲の行「6 項目＋追加登記の 7〜10」を、番号の付いた項目が 12 まである実態へ追随させる |
+| `areka-P0-text-decoration-canon` | `ukadoc:descript_balloon:font.outline_2c0_2f1:1` | 書体の欄を「基底 13 キー」ではなく **14** と書く。この 1 件が数に入っていない。分割先の説明書も同じ 13 を写しているので、両方を直す |
+| `areka-P0-balloon-font-descript-keys` | 書体の欄 14 件（下に全列挙） | 2026-09-11 の分割 ⑶ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-text-decoration-canon` のままである。宛先をこの spec へ移すか、分割元の説明書が範囲から外れたことを書く |
+| `areka-P0-text-align-shadow-canon` | 寄せ 2 件と影 3 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-text-decoration-canon` のままである。宛先をこの spec へ移す |
+| `areka-P0-balloon-lifecycle-events` | 表示寿命 5 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-balloon-canon-residue` のままである。宛先をこの spec へ移す。台帳の備考と受け渡し口の注記が名指ししている所有者名も同じ読み替えが要る |
+| `areka-P0-status-execution-states` | `ukadoc:list_sakura_script:_5c_21_5benter_2cnouserbreakmode_5d:1` | 説明書が書いている綴りが正典のどの項目にも当たらない。正典の綴りへ直す。**この 1 件は重い**——その項目の担当を主張している説明書自身が違う綴りを書いている |
+| `areka-P0-charset-canon` | 宛先の欄が空の 6 件（下に全列挙） | 説明書は範囲にも範囲外にもこの 6 件を挙げていない。範囲に入れるか対象外と書くかを決める。**これは誤りではなく沈黙なので、台帳の備考には何も書かれていない** |
+| `areka-P0-sylphya-set-ledger` | サウンドの語彙 18 件（下に全列挙） | 説明書はサウンドの語彙族の登記と台帳の宛先の記入を自分の範囲だと書いているが、台帳の宛先は 18 件とも `areka-P0-property-catalog-lists` である。どちらが持つかを決める |
+
+### 全列挙
+
+**履歴の件数の葉 4 件**
+
+- `ukadoc:list_propertysystem:history.balloon.count:1`
+- `ukadoc:list_propertysystem:history.ghost.count:1`
+- `ukadoc:list_propertysystem:history.headline.count:1`
+- `ukadoc:list_propertysystem:history.plugin.count:1`
+
+**使える前置きが 1 つに限られる 4 件**
+
+- `ukadoc:list_propertysystem:menu:1`
+- `ukadoc:list_propertysystem:sakura.bind.menu:1`
+- `ukadoc:list_propertysystem:kero.bind.menu:1`
+- `ukadoc:list_propertysystem:char_2a.bind.menu:1`
+
+**バルーンのマウスの矢印 4 件**
+
+- `ukadoc:list_propertysystem:currentghost.balloon.mousecursor:1`
+- `ukadoc:list_propertysystem:currentghost.balloon.mousecursor.arrow:1`
+- `ukadoc:list_propertysystem:currentghost.balloon.mousecursor.text:1`
+- `ukadoc:list_propertysystem:currentghost.balloon.mousecursor.wait:1`
+
+**書体の欄 14 件**
+
+- `ukadoc:descript_balloon:font.bold_2c0_2f1:1`
+- `ukadoc:descript_balloon:font.color.b_2c_6570_5024:1`
+- `ukadoc:descript_balloon:font.color.g_2c_6570_5024:1`
+- `ukadoc:descript_balloon:font.color.r_2c_6570_5024:1`
+- `ukadoc:descript_balloon:font.height_2c_6570_5024:1`
+- `ukadoc:descript_balloon:font.italic_2c0_2f1:1`
+- `ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1`
+- `ukadoc:descript_balloon:font.outline_2c0_2f1:1`
+- `ukadoc:descript_balloon:font.shadowcolor.b_2c_6570_5024:1`
+- `ukadoc:descript_balloon:font.shadowcolor.g_2c_6570_5024:1`
+- `ukadoc:descript_balloon:font.shadowcolor.r_2c_6570_5024:1`
+- `ukadoc:descript_balloon:font.shadowstyle_2c_5f62_614b_6307_5b9a:1`
+- `ukadoc:descript_balloon:font.strike_2c0_2f1:1`
+- `ukadoc:descript_balloon:font.underline_2c0_2f1:1`
+
+**寄せ 2 件と影 3 件**
+
+- `ukadoc:list_sakura_script:_5cf_5balign_2c_5bc4_305b_308b_5074_5d:1`
+- `ukadoc:list_sakura_script:_5cf_5bvalign_2c_5bc4_305b_308b_5074_5d:1`
+- `ukadoc:list_sakura_script:_5cf_5bshadowcolor_2c_8272_6307_5b9a_5d:1`
+- `ukadoc:list_sakura_script:_5cf_5bshadowcolor_2cnone_5d:1`
+- `ukadoc:list_sakura_script:_5cf_5bshadowstyle_2c_5f62_614b_6307_5b9a_5d:1`
+
+**表示寿命 5 件**
+
+- `ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1`
+- `ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1`
+- `ukadoc:list_shiori_event:OnBalloonBreak:1`
+- `ukadoc:list_shiori_event:OnBalloonClose:1`
+- `ukadoc:list_shiori_event:OnBalloonTimeout:1`
+
+**宛先の欄が空の文字コードの 6 件**
+
+- `ukadoc:descript_ghost:charset_2c_6587_5b57_30b3_30fc_30c9:1`
+- `ukadoc:descript_shell:charset_2c_6587_5b57_30b3_30fc_30c9:1`
+- `ukadoc:descript_balloon:charset_2c_6587_5b57_30b3_30fc_30c9:1`
+- `ukadoc:descript_plugin:charset_2c_6587_5b57_30b3_30fc_30c9:1`
+- `ukadoc:descript_headline:charset_2c_6587_5b57_30b3_30fc_30c9:1`
+- `ukadoc:descript_ghost:shiori.escape_unknown_2c0_2f1:1`
+
+**サウンドの語彙 18 件**
+
+- `ukadoc:list_propertysystem:duration:1`
+- `ukadoc:list_propertysystem:error:1`
+- `ukadoc:list_propertysystem:id:1`
+- `ukadoc:list_propertysystem:loop:1`
+- `ukadoc:list_propertysystem:meta.album:1`
+- `ukadoc:list_propertysystem:meta.albumartist:1`
+- `ukadoc:list_propertysystem:meta.artist:1`
+- `ukadoc:list_propertysystem:meta.artwork:1`
+- `ukadoc:list_propertysystem:meta.genre:1`
+- `ukadoc:list_propertysystem:meta.title:1`
+- `ukadoc:list_propertysystem:meta.track:1`
+- `ukadoc:list_propertysystem:meta.year:1`
+- `ukadoc:list_propertysystem:name:2`
+- `ukadoc:list_propertysystem:path:2`
+- `ukadoc:list_propertysystem:pause:1`
+- `ukadoc:list_propertysystem:playing:1`
+- `ukadoc:list_propertysystem:position:1`
+- `ukadoc:list_propertysystem:preload:1`
 
 ## 別軸
 
