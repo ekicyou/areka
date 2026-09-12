@@ -3,7 +3,7 @@
 > 段 0〜6 は design.md「作業の段」に対応する。数はすべて 2026-09-11 の写真であり、各タスクで数え直す（要件 1.5）。
 
 - [ ] 1. 段 0: 着手条件の確認と道具の土台
-- [ ] 1.1 着手条件 3 つを確かめ、3 文書の器を置き、辞書の配布元を確認する
+- [x] 1.1 着手条件 3 つを確かめ、3 文書の器を置き、辞書の配布元を確認する
   - 4 台帳の未分類 0 件・`doc/ukadoc-coverage/report/summary.md` の実在・`emo2-conformance-e2e` が `completed/` にあり `verification/m1-completion.md` に開発者の署名があることを確かめ、確かめた日付と方法を `briefing.md` 冒頭の「着手条件の確認」節に書く
   - 欠けている物があれば絶対パスを添えて止まり、代替の値を推測で書かない
   - `linkage.md`・`briefing.md`・`roadmap-draft.md` を、以降の判定が読み込みに失敗しないだけの空の骨組み（`[tally]`・`[stage.A]`〜`[stage.E]`・`[briefs]` の 0 値と `snapshot_on`）付きで新規に作る
@@ -302,3 +302,11 @@
   - 完了状態: 6 項目すべてが数え直した値で埋まっている
   - _Requirements: 12.7_
   - _Depends: 7.2_
+
+## Implementation Notes
+
+- 1.1: 3 文書を読む判定はこの時点でリポジトリに 1 つも無い（`crates/ukadoc-survey/{src,tests}` に `linkage`／`briefing`／`roadmap-draft` を読むコードは無く、当たるのは `src/report/bundle.rs` と `bundle_tests.rs` の散文コメント 2 件だけ）。骨組みの正しさは常時テストがまだ何も主張していない。較正（写しを壊して名前の付いたテストが赤になることの確認）はタスク 1.2 の `documents::parse` の責務。
+- 1.1: 骨組みに 0 行の配列表（`[[rank]]`・`[[barrier]]`・`[[after]]`・`[[owner_completed]]`・`[[template]]`・`[[spec]]`・`[[reserved]]`）は置いていない。TOML は配列表の見出しだけを空で置けず、`rank = []` にすると後続が `[[rank]]` を書いた瞬間に「値を上書きできない」で落ちるため。**1.2 の `documents::parse` はこれらの欄を「欠落＝0 行」として受け取れる形（省略可）で作ること。**
+- 1.1: `roadmap-draft.md` の `[briefs].count = 0`・`snapshot_on = 2026-09-12` は仮値。**タスク 6.2 で数え直し、`snapshot_on` も打ち直すこと。**
+- 1.1: テンプレート辞書の配布元は 2026-09-12 の開発者回答で「実装側（Claude）が公式配布元を探して取得する」。記録済み URL は 0 個。**タスク 4.1 が実際に配布元を特定・取得し、`[[template]]` の `url`・`fetched_on`・`files` を埋める**（取得できなければ要件 6.8 の退路へ落とし、開発者の追加指示は待たない）。経緯は `doc/ukadoc-coverage/briefing.md` §1-5 が唯一の記録。
+- 全般: `grep -c` は 0 件のとき終了コード 1 を返す。0 件を「検査が失敗した」と読み違えないこと。
