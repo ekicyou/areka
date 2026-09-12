@@ -9,10 +9,11 @@ use areka_emo_atlas::{
 };
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::{HitTest, HitTestMode, Visual};
+use wintf::ecs::{GraphicsCommandList, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    build_target_assets, elem, make_world_with_gpu, shell_of, spawn_window_with_dpi, surface,
+    build_target_assets, elem, make_world_with_gpu, shell_of, show_ok, spawn_window_with_dpi,
+    surface,
 };
 
 /// R2.4/R3.2/R8.2 観測完了（golden 一致）: `attach_target` → `apply(ShowSurface 有効 id)` で reply が
@@ -807,5 +808,69 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
             .read_back(TargetId(0))
             .expect("read_back（後）失敗"),
         "合成失敗を挟んだ再適用で表示バイトが変化した"
+    );
+}
+
+/// タスク 2.1・要件 5.4（表示記録の保持）: **外れのたびに表示記録が作られ、メモのエントリへ載る**。
+///
+/// 表示記録は原寸バイトを 1 度だけ GPU へ上げて描く閉じたコマンドリストで、エントリの絵・マスクと
+/// 同じ入れ物に束ねられる。ここで固定するのは「外れの回に記録が作られてエントリに載る」ことと、
+/// 「ヒットの回は載っている記録が作り直されない（同一のリストのまま）」ことの 2 点である。
+///
+/// # 殺す誤実装
+///
+/// - 記録経路を呼ばずに空のリストを挿入する → 1 つ目の主張が RED（`empty()` と等しい）
+/// - ヒットの回にも記録を作り直す（GPU 呼び出しがヒット経路へ漏れる）→ 2 つ目の主張が RED
+#[test]
+fn a_cache_miss_records_a_display_list_into_the_entry() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x2A);
+
+    let mut presenter = EmoPresenter::new();
+    presenter
+        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+        .expect("attach_target 失敗");
+
+    // 1 回目＝外れ（記録が作られる）。
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let recorded = {
+        let entry = presenter
+            .targets
+            .get(&TargetId(0))
+            .unwrap()
+            .cache
+            .get(
+                1000,
+                &BindSet::default(),
+                &PatternState::default(),
+                ScaleRatio::ONE,
+            )
+            .expect("外れの後は当該キーのエントリが在る");
+        assert_ne!(
+            entry.display,
+            GraphicsCommandList::empty(),
+            "外れの回に表示記録が作られてエントリへ載っていない（空のリストのまま）"
+        );
+        entry.display.clone()
+    };
+
+    // 2 回目＝ヒット（記録は作り直されない）。
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let entry = presenter
+        .targets
+        .get(&TargetId(0))
+        .unwrap()
+        .cache
+        .get(
+            1000,
+            &BindSet::default(),
+            &PatternState::default(),
+            ScaleRatio::ONE,
+        )
+        .expect("ヒットの後もエントリは在る");
+    assert_eq!(
+        entry.display, recorded,
+        "ヒットの回に表示記録が作り直されている（記録経路が外れ経路の外に居る）"
     );
 }

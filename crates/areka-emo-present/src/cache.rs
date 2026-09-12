@@ -46,6 +46,14 @@
 //! 表示に載ることは無い**。残った旧 k のエントリは LRU でいずれ追い出される（DPI を戻したときに
 //! 命中し得るのは副次的な利得であって、正しさはキー完全一致だけに依っている）。
 //!
+//! # 表示記録（[`CacheEntry::display`]）も同じ入れ物に束ねる
+//!
+//! エントリは絵・マスクに加えて**表示記録**——原寸バイトを描く閉じた [`GraphicsCommandList`]——を
+//! 保持する。本層は記録を**生成しない**（GPU を知らない）: [`insert`] で与えられた閉じたリストを
+//! そのまま持つだけであり、記録内容は表示スケール k を含まない（k は wintf の変換行列の係数で
+//! あって面ではない）。ゆえに GPU の無い檻では [`GraphicsCommandList::empty`] を渡せばよく、
+//! 保持・引き当て・追い出し・全無効化の意味論は記録の有無に一切依らない。
+//!
 //! [`AlphaMask`] を表示バッファと同一エントリ（[`CacheEntry`]）へ束ねる純粋な状態層である点は
 //! 従来どおり。マスクが k 適用済みバイト由来になることで、[`AlphaMask`] の物理 px 契約は
 //! **マスク生成コードを一切変更せずに** k 追従と整合する（設計「emo-present / cache.rs」）。表示
@@ -77,6 +85,7 @@
 use std::sync::Arc;
 
 use areka_emo_compose::{BindSet, ComposedSurface, PatternState, ScaleRatio};
+use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 /// キャッシュエントリ＝表示バッファと当たり判定マスクの原子対（R2.4 の構造的担保）。
@@ -112,6 +121,13 @@ pub struct CacheEntry {
     /// 挿入した面の原寸を照会契約へ返すことになる（原寸が面ごとに違えば画面と乖離する）。
     /// 原寸を絵・マスクと同じ入れ物へ移すことで、対の維持が構造で決まる。
     pub native: (u32, u32),
+    /// このエントリの**表示記録**＝原寸バイトを描く閉じた [`GraphicsCommandList`]。
+    ///
+    /// 本層は記録を生成せず（GPU を知らない）、[`ComposeCache::insert`] で与えられたリストを
+    /// 保持するだけである。記録内容に表示スケール k は含まれない——拡大は wintf の描画経路が
+    /// 変換行列で掛けるため、同じ記録が任意の k の表示に使える。GPU の無い檻では
+    /// [`GraphicsCommandList::empty`] を渡す。
+    pub display: GraphicsCommandList,
 }
 
 /// キャッシュキー＝エントリを一意に定める全体（合成入力 ＝ surface id ＋ bind 集合 ＋ pattern 状態、
@@ -265,6 +281,10 @@ impl ComposeCache {
     /// `native` は **k 適用前**の合成外形で、絵・マスクと同じエントリへ束ねて保持する
     /// （[`CacheEntry::native`]・照会契約の原寸がヒットしたエントリと必ず対になるため）。
     ///
+    /// `display` は呼び手が原寸バイトから記録した**閉じた**コマンドリスト（[`CacheEntry::display`]）
+    /// で、本層はそれを保持するだけである（生成しない・GPU を知らない）。GPU の無い檻では
+    /// [`GraphicsCommandList::empty`] を渡す。
+    ///
     /// 挿入したエントリへの共有参照を返す（提示段がそのまま表示・マスク同期へ用いる）。
     pub fn insert(
         &mut self,
@@ -275,6 +295,7 @@ impl ComposeCache {
         composed: ComposedSurface,
         mask: Arc<AlphaMask>,
         native: (u32, u32),
+        display: GraphicsCommandList,
     ) -> &CacheEntry {
         // 同一キーの再挿入は重複を作らずその席を外す（以下の push で末尾＝最近使用へ戻る）。
         if let Some(at) = self.position(surface_id, &binds, &pattern, scale) {
@@ -295,6 +316,7 @@ impl ComposeCache {
                 composed,
                 mask,
                 native,
+                display,
             },
         ));
         // 直前に押し込んだ末尾は必ず存在する。

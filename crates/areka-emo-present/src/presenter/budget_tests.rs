@@ -404,6 +404,7 @@ impl Flow2 {
             display,
             Arc::clone(&mask),
             (native_w, native_h),
+            wintf::ecs::GraphicsCommandList::empty(),
         );
 
         // (7) 下流供給（参照カウント増のみ）。旧マスクはここで手放され、輪番の空きが単独所有になる。
@@ -823,6 +824,7 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
         composed,
         mask,
         native: (7, 3),
+        display: wintf::ecs::GraphicsCommandList::empty(),
     }));
 
     assert_eq!(

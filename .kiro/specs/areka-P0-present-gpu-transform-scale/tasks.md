@@ -41,7 +41,7 @@
   - _Boundary: display_
 
 - [ ] 2. 表示経路を wintf のコマンドリスト経路へ付け替える
-- [ ] 2.1 メモのエントリに表示記録を加える（加算的・キーと面は従来のまま）
+- [x] 2.1 メモのエントリに表示記録を加える（加算的・キーと面は従来のまま）
   - エントリへ表示記録のフィールドを足し、挿入がそれを受け取る形にする
   - 外れ経路で記録経路を呼び、返ったコマンドリストをエントリに保存する
   - この時点ではキーの構成も面の寸も従来どおりとし、既存の供給面の流れを壊さない
@@ -279,3 +279,4 @@
 - 1.1: `GraphicsCommandList` の到達経路は `wintf::ecs::GraphicsCommandList`（`wintf::ecs::graphics` は private mod）。`device_err` は `crate::command::device_err` へ共有化済み（`mount.rs` の private 複製は 2.2 で寄せる）。
 - 1.3: 記録した宛先矩形は **DIP** 単位。再生側 DC の DPI が 96 のときだけ 1 DIP＝1 px（wintf は WUC の `begin_draw` DC に `SetDpi` を呼ばないので 96 既定）。記録側 DC の DPI は記録内容に影響しない。2.2 は宛先矩形を物理 px で作り直さないこと。T-G1 は再生 DC を `SetDpi(96)` で固定（機械の既定 DPI 非依存）。
 - 1.4: テスト doc は「観測できること」だけを主張する（旗の非漏れは `Disarm` 番人の**保証**であって檻の観測ではない）。レビューで差し戻し 1 回。
+- 2.1: 例外表 2 ファイルが機械的追随で微増（`cache_tests.rs` 1618→1622・`budget_tests.rs` 1081→1083）→ 5.3／5.6 で減らし 8.1 で最終確認。`GraphicsCommandList` の `PartialEq` は COM ポインタ同一性（`empty()` との比較・ヒット時の同一リスト比較は有意）。`GraphicsCore` 不在の `context` は旧供給面経路と同じ `"GraphicsCore resource"` を踏襲＝2.2 で供給面経路が消えたら `perf_log_tests` の陰性檻はメッセージで弁別し直す。記録の所要時間は 2.2 で `Stage::Upload` へ置き直す（timing.rs の doc も）。

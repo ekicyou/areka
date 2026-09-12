@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
+use wintf::ecs::GraphicsCommandList;
 
 use super::test_support::{
     CapturedEvent, attach_hit_target, build_target_assets, build_two_face_assets, capture,
@@ -310,6 +311,7 @@ fn refresh_scale_without_dpi_change_does_nothing() {
             tampered,
             tampered_mask,
             tampered_native,
+            GraphicsCommandList::empty(),
         );
 
     // DPI は据え置き（k 不変）。

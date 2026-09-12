@@ -46,7 +46,10 @@ fn insert_with_mask(
     // 原寸そのものを主張する檻はここを通らず `insert` を直接呼ぶので、ここでは表示寸を置いて
     // おく（キー・置換・原子対を見る檻にとって `native` の値は判定に関与しない）。
     let native = (composed.width(), composed.height());
-    cache.insert(surface_id, binds, pattern, scale, composed, mask, native)
+    let display = GraphicsCommandList::empty(); // 檻は GPU を持たない（記録は保持されるだけ）
+    cache.insert(
+        surface_id, binds, pattern, scale, composed, mask, native, display,
+    )
 }
 
 /// 作者基準 DPI（ukadoc 正典既定）。k を DPI 比として組み立てるときの分母。
@@ -1222,6 +1225,7 @@ fn take_recycled_carries_over_buffer_capacity() {
         reused,
         mask,
         native,
+        GraphicsCommandList::empty(),
     );
     assert_eq!(
         entry.composed.bytes().as_ptr(),

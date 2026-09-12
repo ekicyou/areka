@@ -9,7 +9,7 @@ use areka_emo_atlas::{
 };
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::WucGraphicsResource;
+use wintf::ecs::{GraphicsCommandList, WucGraphicsResource};
 
 use super::test_support::{
     build_target_assets, build_two_face_assets, elem, make_world_with_gpu, scaled_golden,
@@ -582,6 +582,7 @@ fn same_scale_hits_cache_and_window_dpi_change_misses_and_resamples() {
             tampered,
             tampered_mask,
             tampered_native,
+            GraphicsCommandList::empty(),
         );
 
     // 2 回目（同一入力・同一 k）: ヒットゆえ再合成せず、改竄された絵がそのまま表示される。

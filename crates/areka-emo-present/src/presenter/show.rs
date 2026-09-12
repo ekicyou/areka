@@ -3,6 +3,8 @@
 
 use wintf::ecs::window::transition_diag;
 
+use crate::display::record_display;
+
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
 use super::{
@@ -115,6 +117,45 @@ impl EmoPresenter {
             timing.mark(Stage::Compose);
             match composed {
                 Ok(native_extent) => {
+                    // (1a) 表示の記録（設計 Flow 1・要件 5.4／7.1）: 合成した**原寸**バイトから
+                    // 閉じたコマンドリストを起こし、下の `insert` でエントリへ束ねる。記録は k を
+                    // 含まない（拡大は wintf の変換行列が掛ける）。
+                    //
+                    // 位置が回収（`take_recycled`）より**手前**であることが失敗時の前状態維持を
+                    // 与える——ここで失敗すればメモも表示もマスクも 1 つも動いていない。記録元は
+                    // 合成先席そのもの（下の交代・リサンプルより前ゆえ、まだ原寸が入っている）。
+                    let display_list = {
+                        let Some(dc) = world
+                            .get_resource::<GraphicsCore>()
+                            .and_then(|gfx| gfx.device_context())
+                        else {
+                            tracing::error!(
+                                ?target_id,
+                                "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）"
+                            );
+                            Self::reply(
+                                reply,
+                                Err(PresentError::Device {
+                                    hresult: 0,
+                                    context: "GraphicsCore resource",
+                                }),
+                            );
+                            return;
+                        };
+                        // 席は読むだけだが、貸し出し口は 1 つしかない（`native_scratch`）。伸長は
+                        // 起きないため確保の計数も動かない。
+                        match target
+                            .budget
+                            .native_scratch(|scratch| record_display(dc, scratch))
+                        {
+                            Ok(list) => list,
+                            // record_display は内部で error! 済み（display.rs device_err）。
+                            Err(e) => {
+                                Self::reply(reply, Err(e));
+                                return;
+                            }
+                        }
+                    };
                     // **容量回収は合成成功後に限る**（設計 Flow 2 の規律・`take_recycled` の契約）。
                     // 合成が失敗し得る位置でこれを呼ぶとスロットが空のまま残り、「合成失敗時は表示も
                     // キャッシュも適用前のまま」（R3.4・設計 §Error Handling）が崩れる——直後の同一
@@ -166,6 +207,7 @@ impl EmoPresenter {
                         display,
                         mask,
                         native_extent,
+                        display_list,
                     );
                     // `Stage::MaskGen` の区間はマスク生成＋挿入全体（スロット置換）を含む。是正後は
                     // 旧エントリが `take_recycled` で先に回収されているため、この区間から対の解放
