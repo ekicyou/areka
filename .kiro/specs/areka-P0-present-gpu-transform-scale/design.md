@@ -589,6 +589,21 @@ k=2・1 target: 旧 約 10.3 MB（764×1094×4×3＋マスク）→ 新 約 2.6 
 
 集計（`#[test]` の実数え・2026-09-11）: **撤去 44 本**（#1 16・#2 6・#4 15＝`chain.rs` 1＋`chain_fault_tests.rs` 13＋spike 1・#10 2・#11 1・#20 4）／**再導出 34 本**（#5 1・#6 3・#7 4・#8 3・#9 1・#10 4・#11 3・#12 5・#13 1・#14 2・#15 2・#19 3・#22 2。#20 の引数削減と #6 `native_size_*` 2 本の字面変更は機械的ゆえ数えない）／**新設 11 本**（T-N1〜T-N10・T-G1）／**不変 127 本**（#3 27・#5 4・#6 8・#9 2・#10 15・#11 2・#13 8・#14 15・#15 15・#16 4・#17 9・#18 8・#21 9・#23 1）。分類の方針（陳腐化は除外・壊れたら更新）は要件ディスカッションで承認済み・本表は設計ディスカッションで確定。
 
+**訂正（実装 2026-09-12・task 8.1 で登記・行は消さず追記のみ）**: 実装で台帳の裁定と食い違った点を列挙する（本数は当該ファイルの `#[test]` を `grep -c` で数え直した実測。`presenter_display_failure_tests.rs` は doc コメント中の `#[test]` 1 個を除いた値）。
+- **#6**（`presenter_dpi_scale_tests.rs`・11 本のまま）: 「他 8 本は不変」ではない。`text_slot_view_reports_applied_scale_and_native_surface_size`・`text_slot_view_physical_size_uses_rounding_authority_not_f32_scale` の 2 本と `show_surface_without_dpi_component_degrades_to_identity` も再導出。`native_size_*` 2 本も再導出で、うち 1 本は scenario を置換して `native_size_is_supplied_on_a_cache_hit_established_show` へ改名（字面だけの変更ではない）。訂正後: 再導出 7（scenario 置換 1 を含む）・機械的 1・不変 3。
+- **#10**（`presenter/budget_tests.rs`）: identity 名の 3 本は撤去でなく一般名の対（全 k で交代）へ**統合**され、ファイルは 21→**16 本**（identity を名に含む fn は 0）。「他 15 本不変」は成立しない（行の内訳 2＋5 と集計欄の 4 も元から食い違っていた）。行数は 796 で 1,000 を下回り、例外表（`OVER_LIMIT_ALLOWED`）と件数（11→10）から外した（較正の 1 件 `cache_tests.rs` は 1,301 行で維持）。残 16 の再導出／不変の内訳は再集計を省略。
+- **#11**（`presenter_perf_log_tests.rs`）: 6→5 本を実測で確認（撤去 1・再導出 3・不変 2＝集計欄と一致・行の記述にも矛盾なし）。
+- **#13**（`presenter_refresh_and_log_tests.rs`・9 本）: 再導出 1 ではなく **3**・不変 6（`#[test]` 9 本は不変）。
+- **#14**（`presenter_visibility_tests.rs`・17 本）: 再導出 2 ではなく **3**・不変 14（`#[test]` 17 本は不変）。
+- **#15**（`presenter/transition_record_tests.rs`・17 本）: 再導出 2 ではなく **3**。初回表示は前値が無い（`None != Some(native)`）ため `resized=true` で固定される（T-N8 の「k 変化＝`resized=false`」と両立）。不変 14。
+- **#16**（`presenter_resize_report_tests.rs`・4 本）: 「不変」だが `chain` を読む 2 か所は消費者消滅に伴う機械的再導出（戻り値＝`scaled_extent` の性質は不変）。
+- **#18**（`presenter_display_tests.rs`・8→**9 本**）: 「字面不変」ではない。`cache.get` 6 か所と `chain` 1 か所を機械的に再導出し、`a_cache_miss_records_a_display_list_into_the_entry` を**新設**（メモへ命令リストが載ることの直接固定）。
+- **#19**（`presenter_upload_failure_tests.rs` 3 本 → `presenter_display_failure_tests.rs` **4 本**）: 再導出 3＋新設 1（`the_matrix_covers_four_fault_points`＝4 注入点 × 3 場面の「4」を実行時に固定）。
+- **#23 に追加**: `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs` の `spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing` を再導出（`read_back` の長さは k に依らず原寸で不変）。ファイル 5 本のうち他 4 本は台帳外。
+- **T-N8 の未固定の脚**: 「同一 target で原寸が実際に変わる → `resized=true`」の脚は fixture が同寸 2 面しか持たないため檻に載っていない（寸違いの第 2 面を fixture に足せば閉じる・task 8.2 以降の申し送り）。
+- **上流の宙に浮いた参照（裁定）**: `crates/wintf/src/ecs/widget/bitmap_source/alpha_mask_regenerate_tests.rs` の doc コメントが撤去済みの `scale_resample_tests.rs:629`（旧 `resample_with_identity_leaves_scratch_untouched` の節）を「教訓の出典」として引く。当該コメントが述べる挙動（同寸の反復では確保し直しを検出できず、縮小方向の再生成で容量が縮まないことを檻の要にする）は出典が消えても真のまま＝doc は挙動について偽になっていない。要件 9.5「上流は doc 2 行」を厳格に守り、**直さず既知の宙に浮いた錨として登記する**（直すなら `hit_test/mod.rs` の 2 か所＋この 1 行＝3 か所の doc 差分になる）。
+- **集計の訂正後**（上の差分だけを反映した差分算・#10 の残 16 の内訳は未再集計・機械的再導出は元の方針どおり不変側に数える）: 撤去 44＋統合消滅 3＝**47**／再導出 34＋#6 4＋#13 2＋#14 1＋#15 1＋#23 1＝**43**／新設 11＋#18 1＋#19 1＝**13**／不変 127−4−2−1−1−1＝**118**（#10 の 15 は含めたまま）。
+
 数え方の単位: 各行の本数は file の `#[test]` 全数（撤去／再導出／不変の合計＝file の全数）。例外は #23 で、`frame_dpi_tests.rs` 8 本のうち k≠1 の窓寸を読む 1 本だけを載せた（他 7 本は本仕様と無関係ゆえ台帳外）。
 
 ### 実機 2 水準サインオフ（2.7／3.2／3.5／4.8・6.6）

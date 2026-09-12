@@ -248,7 +248,7 @@
   - _Boundary: spec/doc 登記_
 
 - [ ] 8. 検証
-- [ ] 8.1 機械で確認する完了条件を通す
+- [x] 8.1 機械で確認する完了条件を通す
   - 撤去した型名・関数名（リサンプル系・作業席・自前供給面・上流の swap chain 生成）が提示・合成・アプリの 3 領域で doc を含めて 0 件であることを確認する（文字層に残る消費者は対象外として明示する）
   - ワークスペース全テストを緑にする（exit code を隠さない形で走らせる）
   - 判定スクリプトの自己テストを緑にする
@@ -298,3 +298,4 @@
 - 6.1: `scale.rs` 603→305（非 doc 差分は削除のみ＝数学バイト等価）。公開 seam は **`resize_and_clear` を `pub`**（本番の合成先が通るメソッド・義務なし）。`resize_for_full_overwrite` は本番消費者 0 で `#[cfg(test)]` に畳んだ → **6.2 で檻 3 本（composed.rs `mod tests`）ごと削除し、`composed.rs:94／97` の doc 参照も落とす**。6.2 の掃除: `scale_ratio_tests.rs:322,496`（削除される `resample_zero_extent_is_empty_and_warns` を引く）・`composer_tests.rs:310` の陳腐化 doc。7.1: wintf `alpha_mask_regenerate_tests.rs:209` の `scale_resample_tests.rs:629` 引用（doc のみ）。`cargo doc` の intra-doc link 警告 22→24（既存クラス・削除で戻る）。
 - 6.2: `scale_test_support.rs` は `AUTHOR_DPI` を `scale_ratio_tests.rs` が引くため削除でなく trim。`resize_for_full_overwrite` と檻 3 本を削除。compose テスト 209 本緑・golden 19 本不変。
 - 7.1: 差し戻し 1 回（`SURFACE_STAGE_UPLOAD` の doc がヒット時にも出る行を「記録した」と言い切っていた＝遷移観測の upload 行は `(size_changed || resized)` で出る・ヒットでも出る）。wintf は `hit_test/mod.rs` 1 ファイル **3 行**（2 サイト）＝8.1 の diff-stat 判定はこれを「doc 2 行（2 サイト）」と読む。陳腐化した assert メッセージ 12 件も書き換え（消費者なし）。⚠残: wintf `alpha_mask_regenerate_tests.rs:209` が削除済み `scale_resample_tests.rs:629` を引く（9.5 の doc 2 サイト制約を守るため未修正・8.1 で裁定）。
+- 8.1: 全 11 項目緑（workspace 102 suites・7,134 passed・0 failed）。メモ保持量 1 target＝**2,586,216 B**（原寸 382×547 ×3＋詰めマスク 3）vs 旧 **10,344,864 B**＝1/4.00。`budget_tests.rs` 796 行→例外表から除去・件数 11→10（較正 `cache_tests.rs` 1,301 は維持）。wintf の宙錨（`alpha_mask_regenerate_tests.rs:209`）は 9.5 を守り登記のみ（挙動の主張は真のまま）。W13 との字面交差は `file_length_guard_test.rs`（他 spec は非接触宣言）＝共有 0。付録 A′ に訂正段落を追記（#6/#10/#11/#13/#14/#15/#16/#18/#19/#23・T-N8 の未固定脚は 8.2 以降へ）。⚠ブランチには `9cfe002e`（kiro-impl/kiro-validate-impl の SKILL.md 改訂）も載る＝squash PR に同梱。
