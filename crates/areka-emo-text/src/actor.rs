@@ -28,7 +28,7 @@ use crate::choice::{
     highlight_band_offset, to_window_physical,
 };
 use crate::cursor_tag::CursorWarnGuard;
-use crate::draw::{DWriteMetrics, ResolvedFont};
+use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
 use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
 use crate::region::{
     BALLOON_NAME_PLACEHOLDER, ImagePx, ScaleContract, TextRegion, inline_axis_name,
@@ -153,18 +153,7 @@ impl ResolvedBalloonText {
     /// [`TextSlotBinding::image_size`] の一点導出値）から解決する。
     /// 物理 px を渡すのはレビューエラー（2 空間モデル——design.md「DPI/スケール契約」）。
     pub fn resolve(model: &BalloonModel, image_size: (u32, u32)) -> ResolvedBalloonText {
-        let mode = WritingMode::resolve(model);
-        let font = ResolvedFont::resolve(model);
-        // hover ハイライトスタイルはバルーン cursor.* モデル＋解決済み既定文字色から一度だけ解決する
-        // （下流 present_actor の装飾は本値を読むだけ・choice.rs へは依存しない・design.md Integration）。
-        let choice_style = ResolvedChoiceStyle::resolve(Some(model.cursor()), font.color);
-        ResolvedBalloonText {
-            mode,
-            region: TextRegion::resolve(model, image_size, mode),
-            font,
-            wrap: WrapMode::resolve(model),
-            choice_style,
-        }
+        ResolvedBalloonText::resolve_with_background(model, image_size, DEFAULT_BALLOON_BACKGROUND)
     }
 }
 
@@ -284,6 +273,12 @@ pub struct TextLayerRuntime {
     /// [`LayoutEngine::layout_with_cursor_warn`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
     /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
     cursor_warn: CursorWarnGuard,
+    /// actor → バルーンの背景色（面 0 の原点画素・sRGB 非 premultiplied）。無効表示の見た目の
+    /// 色を導くためだけに使う（要件 4.6）。結線側が装着の**前**に
+    /// [`set_balloon_background`](Self::set_balloon_background) で入れる——未設定は
+    /// [`DEFAULT_BALLOON_BACKGROUND`]（白）。読み口は
+    /// [`background_of`](Self::background_of)（`actor_decoration.rs`）。
+    balloon_background: HashMap<ActorKey, (u8, u8, u8)>,
 }
 
 impl TextLayerRuntime {
@@ -302,6 +297,7 @@ impl TextLayerRuntime {
             choice_hover: HashMap::new(),
             choice_snapshot: HashMap::new(),
             cursor_warn: CursorWarnGuard::default(),
+            balloon_background: HashMap::new(),
         }
     }
 
@@ -325,6 +321,11 @@ impl TextLayerRuntime {
         debug!(actor = %actor, slot = ?binding.slot, "actor の装着先（予約スロット）を登録した");
         // 前回の解決済み領域（未登録＝装着なら None＝「値が新しく決まった」側）と突き合わせる。
         warn_coarse_wrap_threshold(&resolved, self.layout_input.get(&actor).map(|it| it.region));
+        // 2 層（既定・無効表示・選択肢文字色）を純粋状態へ差し込む唯一の点（要件 3.1／4.6）。
+        // 装着も再追従もここへ合流するので、`\f[default]`／`\f[disable]` の戻し先は
+        // 常に「今装着されているバルーン定義」で解決した値になる。
+        self.state
+            .set_look_layers(&actor, resolved.font.looks.clone());
         self.routing.insert(actor.clone(), binding);
         self.layout_input.insert(actor, resolved);
     }
@@ -366,7 +367,11 @@ impl TextLayerRuntime {
         binding: TextSlotBinding,
         model: &BalloonModel,
     ) {
-        let resolved = ResolvedBalloonText::resolve(model, binding.image_size);
+        let resolved = ResolvedBalloonText::resolve_with_background(
+            model,
+            binding.image_size,
+            self.background_of(&actor),
+        );
         self.register_actor(actor, binding, resolved);
     }
 
@@ -436,7 +441,11 @@ impl TextLayerRuntime {
         //
         // 再解決は純関数ゆえ判定前にここで **1 回だけ**行い、再構築側でもこの値をそのまま使う
         // （二重 resolve・第 2 の構築流儀を作らない・R4.3）。
-        let resolved = ResolvedBalloonText::resolve(model, binding.image_size);
+        let resolved = ResolvedBalloonText::resolve_with_background(
+            model,
+            binding.image_size,
+            self.background_of(actor),
+        );
         if current == binding && self.layout_input.get(actor) == Some(&resolved) {
             debug!(
                 actor = %actor,
@@ -656,7 +665,18 @@ pub fn present_frame(
     talk_time: f64,
 ) -> Result<(), TextLayerError> {
     // 状態を持つ actor だけが提示対象（binding 登録済みでも cue が無ければ描くものがない）。
-    let actors: Vec<ActorKey> = runtime.state.actors().map(|(key, _)| key.clone()).collect();
+    //
+    // 「状態を持つ」の判定は **中身か既に作った供給面のどちらかがある**こと（task 7.2）。
+    // 装着（[`TextLayerRuntime::register_actor`]）が 2 層を差し込む時点でスコープの器は
+    // 生まれる——器だけを提示対象に数えると、一度も発話していないスコープにまで供給面を
+    // 割り当ててしまう。逆に、既に供給面を持つスコープは中身が空でも外せない（`Clear`／
+    // `ClearAll` の後の 1 フレームで実際に画面を消すのがこの走査だから）。
+    let actors: Vec<ActorKey> = runtime
+        .state
+        .actors()
+        .filter(|(key, state)| !state.items().is_empty() || runtime.surfaces.contains_key(*key))
+        .map(|(key, _)| key.clone())
+        .collect();
     let mut first_err: Option<TextLayerError> = None;
     for actor in &actors {
         match present_actor(runtime, world, actor, talk_time) {
@@ -950,3 +970,11 @@ mod region_warn_tests;
 #[cfg(test)]
 #[path = "actor_scroll_retain_tests.rs"]
 mod scroll_retain_tests;
+
+/// task 7.2: バルーン背景色の受け口（要件 4.6）。
+#[path = "actor_decoration.rs"]
+mod decoration;
+
+#[cfg(test)]
+#[path = "actor_decoration_tests.rs"]
+mod decoration_tests;

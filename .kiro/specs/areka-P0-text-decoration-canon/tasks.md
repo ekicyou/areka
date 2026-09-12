@@ -187,7 +187,7 @@
   - _Requirements: 4.6_
   - _Boundary: emo2_boot_
 
-- [ ] 7.2 背景色の受け口を開け、装着時に 2 層を登録する
+- [x] 7.2 背景色の受け口を開け、装着時に 2 層を登録する
   - 文字レンダリング層の実行時に背景色を覚える受け口を置き、装着の手前で渡せるようにする。未設定は白
   - バルーン文字の解決に背景色を受ける入口を足し、装着と再追従の両方が同じ導出を通るようにする
   - 装着の 1 点で 2 層を表示状態へ差し込む
@@ -336,3 +336,11 @@
 - 7.1: 色だけを見る検査は「導出を呼んでいない実装」と区別できない（実バルーンが常に白へ落ちるため恒真）。配線の実在は**記録の件数とファイル名**で判定すること。
 - 7.1: 既存テスト `crates/areka/tests/smoke_boot_loop_exit.rs` は**本 spec 着手前から赤**（i686 host-32 成果物の不在＝`LoadLibraryFailed(0x800700C1)`）。本 spec の責任外。`cargo test -p areka` は `--bin areka` に絞って走らせること。
 - 7.1: `assets_tests.rs` は 904 行（1,000 行の見張りまで 96 行）。7.2／7.3 の増分はここへ足さないこと。
+- 7.2: **7.3 は「背景 → 装着」の順を守ること**（design が逐語で指定）。`set_balloon_background` を装着より後に呼ぶと既装着スコープには効かず、次の再追従まで待つ。
+- 7.2: `present_frame` の走査は「**中身か供給面のどちらかがある**」（`actor.rs`）。`set_look_layers` の `entry().or_default()` が発話前のスコープの器を作るため、この項が無いと幽霊が提示層へ載る。**`state.actors()` を新たに走査する箇所を足すときは幽霊スコープを数えないこと**。本番の走査点は 3 か所（`actor.rs`／`emo2_boot/frame/scale_text.rs`／`emo2_boot/hover_inject.rs`）で、**この不変式に機械の番人は無い**——9.4 で見張りを検討。
+- 7.2: `state_decoration.rs::reset_decoration` のコメントの**理由**が陳腐化（「空のスコープを作ると `present_frame` の走査が幽霊を提示層へ載せる」は 7.2 のフィルタで偽になった。ガード自体は今も正しい）。`state.rs` の ClearAll が entry を残す理由は**今も真**。9.4 で前者の 1 文だけ直すこと。
+- 7.2: `actor_decoration_tests.rs` の `resolve_is_resolve_with_a_white_background` は**委譲の同値を突き合わせる構造的恒真**（5.1 が警告した型）。委譲が外れたら赤になる留め金として害は無いが、**9.4 は較正の数に入れないこと**。
+- 7.2: `actor.rs` は 980 行で **1,000 行まで残り 20**。design は 7.3 で `present_actor` の styled 配線を `actor.rs` に足すと定めるが入らない——`actor_decoration.rs`（83 行）か新設兄弟へ寄せること。
+- 7.2: design の疑似コードは `ResolvedBalloonText::resolve_with_background` を `actor.rs` 欄に置くが、実体は同じ design の「それ以上の追加は `actor_decoration.rs` へ」に従い `actor_decoration.rs` にある（帰属のズレ・9.4 で追随）。
+- 7.2: `set_balloon_background` は 7.3 まで本番未到達。**7.1 の `BalloonScopeAssets.background_color` の `#[allow(dead_code)]` 撤去と同じタイミングで、配線が実在することを記録で確かめること**。
+- 7.2: 副作用（実害なし・記録のみ）——`Clear` の後に k 再追従が供給面を捨てた場合、従来は次フレームで空の供給面を作り直したが、今は中身が来るまで作らない。描画結果は同じ（空）。

@@ -163,7 +163,8 @@ impl LookLayers {
     /// - `name_candidates` が空なら正典の既定名（[`UKADOC_DEFAULT_FONT_NAME`]）。
     /// - `height` が正の有限値でなければ正典の既定 12（下流の DirectWrite は em に正値を
     ///   要求するので、2 層は「常に正の大きさ」を約束する）。バルーン定義の側の縮退
-    ///   （`font.height` が 0 など）は [`crate::draw::ResolvedFont::resolve`] が `warn!` で
+    ///   （`font.height` が 0 など）は [`crate::draw::ResolvedFont::resolve_with_background`]
+    ///   （[`resolve`](crate::draw::ResolvedFont::resolve) の実装本体）が `warn!` で
     ///   記録済みなので、ここでは二重に記録しない。
     /// - `background` はバルーンの背景色で、無効表示の色を導くためだけに使う
     ///   （`disable.color = mix_disabled(default.color, background)`・要件 4.6）。
