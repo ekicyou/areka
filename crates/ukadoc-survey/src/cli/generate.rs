@@ -1,4 +1,5 @@
-//! 生成側の副手続き（`catalog`・`ledger-init`・`report`・`report-summary`）。
+//! 生成側の副手続き（`catalog`・`ledger-init`・`report`・`report-summary`・
+//! `priority-apply`）。
 //!
 //! どれも「読む → 組み立てる → 丸ごと書き出す」の 3 段でできている。判断は純粋層に
 //! あり、ここが持つのは**順番**だけである（設計「入口 / cli」）。
@@ -16,6 +17,8 @@
 //! カタログと報告は機械生成の文書なので、部分更新はしない（設計「System Flows /
 //! カタログ再生成」）。台帳だけは人が書く文書なので、既存の塊をバイト列のまま写して
 //! 欠けた id だけを差し込む（要件 3.3a。差し込みの判断は [`merge_initial`] が持つ）。
+//! 確定値の書き戻し（[`priority_apply`]）も同じ流儀で、塊のバイト列を写したまま
+//! 当たった `priority` の 1 行だけを差し替える（判断は [`patch::replace_priority`]）。
 //!
 //! # 出力先
 //!
@@ -30,11 +33,13 @@ use crate::catalog::Catalog;
 use crate::catalog::build::build as build_catalog;
 use crate::catalog::read::read as read_catalog;
 use crate::catalog::write::write as write_catalog;
+use crate::documents::{derive, parse};
 use crate::error::SurveyError;
 use crate::evidence::extract::extract;
 use crate::evidence::resolve::resolve;
 use crate::io::{files, paths, snapshot, sources};
 use crate::ledger::Ledger;
+use crate::ledger::patch;
 use crate::ledger::read::read as read_ledger;
 use crate::ledger::write::merge_initial;
 use crate::model::{Domain, EntryId, PageName, THEMES};
@@ -204,6 +209,89 @@ pub fn report_summary() -> Result<(), SurveyError> {
     files::write_lf(&target, &body)?;
     announce(&target, &format!("台帳 {} 本", ledgers.len()));
     Ok(())
+}
+
+/// 確定した `priority` を台帳 4 本へ書き戻す（要件 7.1・7.2・7.6・1.4）。
+///
+/// 実際の読み手（[`files::read_normalized`]）と実際の書き手（[`files::write_lf`] を
+/// 呼んで結果を 1 行告げる）を [`priority_apply_with`] へ渡すだけの 1 行である。
+/// 置き場は作らない——読む台帳が既にそこに在る以上、親は必ず在る。
+pub fn priority_apply() -> Result<(), SurveyError> {
+    priority_apply_with(
+        &files::read_normalized,
+        &mut |target: &Path, body: &str, changed: usize| {
+            files::write_lf(target, body)?;
+            announce(target, &format!("変更 {changed} 項目"));
+            Ok(())
+        },
+    )
+}
+
+/// 2 文書と台帳 4 本を読み、`priority` を導き、4 本の本文を決めてから書く
+/// （要件 7.1・7.2・1.4・設計「入口 / cli::generate::priority_apply」）。
+///
+/// 判断は全部純粋層にある——帰属と順位から値を決めるのは
+/// [`crate::documents::derive::priorities`]、塊のバイト列を保って `priority` の 1 行
+/// だけを差し替えるのは [`patch::replace_priority`] である。ここに残るのは**順番**
+/// だけである。
+///
+/// 1. `linkage.md`・`briefing.md`・台帳 4 本の 6 本を読む。1 本でも読めなければ、
+///    読み手が添えた**探した絶対パス**をそのまま返して止まる（要件 1.4）。
+/// 2. 全項目の `priority` を導く。導けない id があれば id を挙げて止まる。
+/// 3. 4 本ぶんの本文を決める。決められない台帳が 1 本でもあれば止まる。
+/// 4. **4 本が全部決まってから**書き始める。
+///
+/// 3 と 4 を分けてあるので、途中で落ちた走行は 1 バイトも書かない。読み手と書き手を
+/// 引数で受けるのは、この順番をファイルを 1 つも作らずに確かめるためである
+/// （[`ledger_init_with`] と同じ形）。書き手が受け取る 3 つ目は**変更した項目数**で、
+/// 2 度目の走行が 0 になることが冪等の主張である。
+pub(crate) fn priority_apply_with(
+    read: &dyn Fn(&Path) -> Result<String, SurveyError>,
+    write: &mut dyn FnMut(&Path, &str, usize) -> Result<(), SurveyError>,
+) -> Result<(), SurveyError> {
+    // 読む段が全部済むまで、導出にも書き出しにも進まない。
+    let linkage = parse::read_linkage(&read(&paths::linkage_path())?)?;
+    let briefing = parse::read_briefing(&read(&paths::briefing_path())?)?;
+
+    let mut sources: Vec<(PathBuf, String)> = Vec::new();
+    let mut ledgers: Vec<Ledger> = Vec::new();
+    for domain in Domain::ALL {
+        let target = paths::ledger_path(domain);
+        let text = read(&target)?;
+        ledgers.push(read_ledger(&text, domain)?);
+        sources.push((target, text));
+    }
+
+    // 導けない id が 1 つでもあれば、ここで止まる（何も書いていない）。
+    let wanted = derive::priorities(&linkage, &briefing, &ledgers)?;
+
+    // 4 本ぶんの本文を決める。ここも書き出しではない。
+    let mut plans: Vec<(&Path, String, usize)> = Vec::new();
+    for ((target, text), ledger) in sources.iter().zip(&ledgers) {
+        let body = patch::replace_priority(text, &wanted)?;
+        plans.push((target.as_path(), body, changed_count(ledger, &wanted)));
+    }
+
+    for (target, body, changed) in &plans {
+        write(target, body, *changed)?;
+    }
+    Ok(())
+}
+
+/// 確定値が今の台帳と違う項目の数（要件 7.1 の「変更 n 項目」）。
+///
+/// 台帳に在って `wanted` に無い id は数えない——[`patch::replace_priority`] がその塊を
+/// 1 バイトも変えないので、変更にも当たらない。
+fn changed_count(ledger: &Ledger, wanted: &BTreeMap<EntryId, String>) -> usize {
+    ledger
+        .entries
+        .iter()
+        .filter(|(id, entry)| {
+            wanted
+                .get(*id)
+                .is_some_and(|value| value != &entry.priority)
+        })
+        .count()
 }
 
 /// カタログの id を担当ドメインごとに仕分ける（要件 3.1・3.2・3.5）。
