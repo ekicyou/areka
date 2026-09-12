@@ -270,7 +270,7 @@ pub struct TextLayerRuntime {
     /// の照会源）。population は present_actor（task 8.2）が present 成功時に行う——本 task では空のまま。
     choice_snapshot: HashMap<ActorKey, Vec<ChoiceHitRow>>,
     /// `\_l` の座標解決の縮退（`CursorDegrade`＝`Unparsable`／`CenterAxisMismatch`・5.1〜5.3）の actor ごと warn-once 持続状態。present_actor が
-    /// [`LayoutEngine::layout_with_cursor_warn`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
+    /// [`LayoutEngine::layout_styled`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
     /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
     cursor_warn: CursorWarnGuard,
     /// actor → バルーンの背景色（面 0 の原点画素・sRGB 非 premultiplied）。無効表示の見た目の

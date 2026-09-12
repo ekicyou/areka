@@ -123,6 +123,16 @@ impl ActorTextState {
     }
 
     /// このスコープの 2 層（既定・無効表示・選択肢文字色）。
+    ///
+    /// **本仕様の本番経路にこの読み口の呼び手は無い**（差し込みは
+    /// [`TextLayerState::set_look_layers`]、戻し先の参照は `self.decor.layers` の直読み）。
+    /// それでも `pub` で残すのは、design.md「`state_decoration.rs`」の Contracts 表が
+    /// 本関数を後続仕様の読み口として載せているためで、引受先は
+    /// `areka-P0-emo-text-canon-residue`（項目 16＝装着より先に `\f` が届いた窓の是正）。
+    /// そこでの是正は「作者が明示した項目だけを新しい既定へ載せ替える」3 者併合を要し、
+    /// 旧い既定と新しい既定の双方を読む必要がある。今日の呼び手は決定論テスト
+    /// （`actor_decoration_tests.rs`／`state_decoration_tests.rs`／
+    /// `state_decoration_reset_tests.rs`）だけである。
     pub fn look_layers(&self) -> &LookLayers {
         &self.decor.layers
     }

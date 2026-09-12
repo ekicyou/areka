@@ -99,6 +99,16 @@ impl DWriteMetrics {
     /// **計測の縮退ではなく装着そのものの失敗**（`Err(TextLayerError::Device)`）になる。
     /// 以前は書式生成の失敗が行ボックス比の縮退で済んでいた。失敗は
     /// `FontCatalog::new` が `error!` で記録するので記録なしの失敗経路ではない。
+    ///
+    /// **本番の呼び手は [`new_shared`](Self::new_shared) へ移った**（`actor_decoration.rs::build_actor_render`
+    /// が台帳を 1 つだけ作って描画器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
+    /// 残しているのは自前の台帳で足りる決定論テストが呼ぶ委譲の入口としてである
+    /// （`draw_test_support.rs`／`draw_oracle_tests.rs`／`draw_format_metrics_tests.rs`／
+    /// `actor_choice_contract_tests.rs`／`viewbox_draw_live_diff_tests.rs`／
+    /// `viewbox_draw_oracle_regression_tests.rs`／`viewbox_draw_png_dump_tests.rs`、および
+    /// 統合試験 `tests/kero_menu_capacity_test.rs`／`tests/line_pitch_readback_test.rs`）。
+    /// crate 外では
+    /// `crates/areka-emo-text/examples/emo-text-layer/drive.rs` が 1 か所で呼ぶ（本番ではない）。
     pub fn new(
         factory: &IDWriteFactory2,
         font: &ResolvedFont,
@@ -156,8 +166,18 @@ impl DWriteMetrics {
         })
     }
 
-    /// 候補列の解決台帳（共有の読み口——描画側が同じ台帳を使うための入口）。
-    pub fn fonts(&self) -> &FontCatalog {
+    /// 受け取った解決台帳の**観測口**（テスト専用・本番の共有経路ではない）。
+    ///
+    /// 描画側との共有はこの読み口を経由しない——`actor_decoration.rs::build_actor_render` が
+    /// [`FontCatalog`] を 1 つだけ作り、[`DWriteMetrics::new_shared`] と
+    /// [`ViewboxExecutor::new_shared`](crate::viewbox_draw::ViewboxExecutor::new_shared) の
+    /// **両方へ引数で渡す**形で共有が成立する（要件 9.8）。ゆえに本関数の本番の呼び手は 0 で、
+    /// 唯一の呼び手は `draw_metrics_styled_tests.rs::the_shared_catalog_constructor_measures_the_same_as_the_owning_one`
+    /// ——「渡した台帳がそのまま使われている」（`Rc` の同一性）を確かめるための口である。
+    /// 本番の入口ではないことを構造で示すため [`probe_format_creations`](Self::probe_format_creations)
+    /// と同じく `#[cfg(test)]` で塞いである。
+    #[cfg(test)]
+    pub(super) fn fonts(&self) -> &FontCatalog {
         &self.fonts
     }
 

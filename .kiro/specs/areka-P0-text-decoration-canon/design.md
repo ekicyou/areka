@@ -36,6 +36,7 @@
 - **文字レンダリング層（`crates/areka-emo-text`）の装飾基盤**: 見た目の型（`TextLook`）と 2 層（`LookLayers`）、`\f` の値の状態機械、スコープごとの装飾状態と装飾表（`StyleTable`／`StyleId`）、文字ごとの見た目の配管（`PositionedGlyph.style`）、見た目込みの計測（`GlyphMetrics::advance_styled`・`DWriteMetrics`）、行内最大 em による行の高さ、行の再利用判定の装飾込み化、DirectWrite 範囲指定の適用（フォント系＝行生成時・色＝毎フレーム）、フォント候補列の解決（`FontCatalog`）、`draw.rs`／`layout.rs`／`viewbox_draw.rs` の分割。
 - **「戻す操作」の権威定義**: `TextLayerState::reset_decoration(scope)`——対象（装飾状態の全項目＝`TextLook` 丸ごと＋所有外の語彙）と時期（`\f[default]`・台詞の開始＝`ClearAll`・`\x`）。
 - **無効表示の色の口**: `ResolvedBalloonText::resolve_with_background`・`TextLayerRuntime::set_balloon_background`、およびその上流配線（`crates/areka/src/emo2_boot/assets.rs` の `BalloonScopeAssets.background_color`・`frame/attach.rs` の `connect_balloon_text`）。
+- **提示対象の走査の絞り込み（実装 2026-09-13 に判明した必須の随伴変更）**: `actor.rs::present_frame` の走査を「中身か供給面のどちらかがある」へ絞る。`state.set_look_layers` の `entry().or_default()` が**発話前のスコープの器を作る**ため、これが無いと既存の `attach_wiring_test::single_actor_attaches_only_to_its_own_target` が赤になる。元のコメントが既に宣言していた意図（cue が無ければ描くものがない）の復元であり、`Clear`／`ClearAll` の消去フレーム（供給面あり・中身なし）は従来どおり通る（既存 8 本が見張る）。不変式の番人は `frame_attach_tests.rs::every_production_scan_of_the_actor_map_is_registered`。
 - **文書**: `doc/COMPAT_ARCHITECTURE.md` §8 の本仕様の行、台帳 2 ファイルの 13 項目、steering `structure.md` の emo-text 節、`roadmap.md` の M2 予約 1 行、隣接 5 spec の brief への相互登記 1 行ずつ。
 
 ### Out of Boundary
@@ -46,6 +47,7 @@
 - `crates/areka-emo-present`・`crates/areka-emo-atlas`（背景色の導出はアトラスの公開 API を読むだけ）。
 - 1,000 行の見張りの例外表（`crates/log-capture-kit/tests/file_length_guard_test.rs`・`OVER_LIMIT_ALLOWED` 11 件）。
 - 選択肢の hover の規則（帯の丈・塗り・文字色の差し替え）と当たり帯のブロック軸寸。本設計は行内軸（送り幅）だけを見た目込みにする。
+  - **先送りの引受先（2026-09-13 登記）**: `areka-P0-emo-text-canon-residue`（編集集合に `actor.rs` を含む・brief に登記済み）。**残る症状**——`actor.rs::present_actor` は `highlight_band_extent` の 3 引数すべてをバルーン既定の `resolved.font.height` で作り、`layout_styled` が行内最大の em で伸ばした行矩形を見ない。`\f[height,40]` を含む選択肢は表示が約 42 画素でも当たり帯とハイライト帯は約 14 画素で、行矩形の上端側だけがクリックできる。**要件 11.5 が名指しした症状の一部が残る**（同要件の字句は「送り幅」＝行内軸で、そちらは見た目込みになっている）。あわせて要件 3.5「装飾は hover の判定と当たり判定を変えない」との緊張の裁定も引受先が行う。
 - `\_l` の単位 `em`／`lh`／`%` の係数（既定の見た目の大きさのまま。装飾で変えない）。
 
 ### Allowed Dependencies
@@ -143,11 +145,14 @@ crates/areka-sakura/src/
 ├── compile_font_tests.rs           # Font 腕: 再生時間 0・並び順・`\f` なし台本の不変
 crates/areka-emo-text/src/
 ├── look.rs                         # TextLook / Script / LookLayers / StyleId / StyleTable / GlyphStyles / apply_font_tag（純粋）
-├── look_tests.rs                   # 12 項目 × 6 値・+N/-N/N%・排他・戻し
+├── look_tests.rs                   # 値型・2 層・装飾の表（`look.rs` が 979 行になるのを避けて 3 分割）
+├── look_font_tag_tests.rs          # 真偽 5 キー × 6 値・上下付きの排他・一括の戻し・所有外キー
+├── look_font_tag_value_tests.rs    # 値を持つ 3 キー（大きさ・色・フォント名）の更新規則
 ├── color.rs                        # ColorSpec / parse_color / mix_disabled / CSS 色名 147（純粋）
 ├── color_tests.rs
 ├── state_decoration.rs             # Decoration（層・現在・所有外語彙・警告記録）・装飾表の配管・reset_decoration（state.rs の子）
-├── state_decoration_tests.rs       # スコープ独立・\c で戻らない・ClearAll で戻る・warn 1 度
+├── state_decoration_tests.rs       # スコープ独立・\c で戻らない・ClearAll で戻る・番号の追記
+├── state_decoration_reset_tests.rs # 戻す操作の公開口・記録の 1 度化と鍵空間（`_tests.rs` が 957 行になるため分割）
 ├── layout_line_ops.rs              # segment_advance_sum / resolve_cursor_component の純移動（layout.rs の子）
 ├── layout_styled.rs                # LayoutEngine::layout_styled（layout.rs の子）
 ├── layout_styled_tests.rs          # 見た目込みの送り幅・行内最大 em・折返し・空行の高さ
@@ -185,13 +190,13 @@ crates/areka/src/emo2_boot/
 | `crates/areka-emo-text/src/lib.rs` | `pub mod look; pub mod color;`・`pure_layer_modules_have_no_windows_imports` の列挙に新設 5 ファイルを追加 | 実体化 |
 | `crates/areka-emo-text/src/draw.rs`（988→約 650→約 700） | **分割**: `DWriteMetrics`＋`measure_line_box_ratio`→`draw_metrics.rs`、`CachedLineLayout`＋`LineLayoutStore`＋`measure_line_overhang`→`draw_line_store.rs`。`DrawExecutor`・`FormatKey`・`create_target_bitmap`・`none_err`（いずれも `#[cfg(test)]`）は **`draw.rs` に残す**（同ファイルの字面検査 `at_prefixed_font_name_generation_is_absent_from_production_source` が「`draw.rs` に `@` が 1 個以上ある」ことを空振り防止の対照として要求し、その `@` は `DrawExecutor::render` の束縛パターン `seam @ (...)` の 1 か所にしか無いため・設計レビュー 2026-09-12）。`#[path]` 子モジュール＋`pub use`／`pub(crate) use` 再輸出（外部パス `crate::draw::X` 不変）。**実体化**: `FontDisableSeam`／`RESERVED_KEY_DISABLE_FONT_PREFIX` を撤去し `ResolvedFont.looks: LookLayers`・`resolve_with_background`・`DEFAULT_BALLOON_BACKGROUND` を追加。`create_text_format`／`try_create_format` の本文は不変 | 分割→実体化 |
 | `crates/areka-emo-text/src/layout.rs`（955→約 890→約 925） | **分割**: `segment_advance_sum`・`resolve_cursor_component` を `layout_line_ops.rs` へ純移動。**実体化**: `GlyphMetrics::advance_styled` の既定実装、`PositionedGlyph.style: StyleId`、`layout_inner` に `styles: Option<GlyphStyles<'_>>` を足し、文字ごとの送り幅と行内最大 em を追跡、`layout_styled.rs` の接続 | 分割→実体化 |
-| `crates/areka-emo-text/src/state.rs`（528→約 560） | `ActorTextState` にフィールド 3 つ（`glyph_styles`・`styles`・`decor`）、`Text`／`Choice` の腕で番号を追記、`Clear`→`clear_content()`、`ClearAll`→`clear_content()`＋`reset_decoration(None)`、`Custom` の腕で `FONT_TAG_CARRIER` を自己選別、`state_decoration.rs` の接続と `pub use` | 実体化 |
+| `crates/areka-emo-text/src/state.rs`（528→約 560） | `ActorTextState` にフィールド 3 つ（`glyph_styles`・`styles`・`decor`）、`Text`／`Choice` の腕で番号を追記、`Clear`→`clear_content()`、`ClearAll`→`clear_content()`＋`reset_for_new_talk()`（＝`reset_look()`＋`warned.clear()`。`reset_decoration` は経由しない・実装 2026-09-12）、`Custom` の腕で `FONT_TAG_CARRIER` を自己選別、`state_decoration.rs` の接続と `pub use` | 実体化 |
 | `crates/areka-emo-text/src/canvas.rs`（738） | `from_layout` が `style` を転写。モジュール doc と `TextEffects` の doc を改訂（`disable` は実体化・`outline`／`sub`／`sup` は語彙のみ・`shadow` は align-shadow・`multicolor`／`rotation` は M2 予約） | 実体化 |
 | `crates/areka-emo-text/src/viewbox.rs`（846） | `CommittedLine.styles: Vec<u32>`、`line_fingerprint` が装飾番号列を写す | 実体化 |
 | `crates/areka-emo-text/src/viewbox_draw.rs`（852→約 740→約 810） | **分割**: `degrade_if_needed`／`full_domain_update`／`plan_inconsistency` を `viewbox_draw_plan.rs`（`#[path] mod plan;`・`pub(super) fn`）へ純移動し、ファサードに `use plan::degrade_if_needed;` と `#[cfg(test)] use plan::plan_inconsistency;` を残す（`viewbox_draw_frame_render_tests.rs` が `super::plan_inconsistency` で参照している私有項目の再束縛・`structure.md` の注記どおり。`full_domain_update` は子の内部専用なので親へ束ねない——3 本を素の `use` で束ねると `unused_imports` が非テスト 2 本・テスト 1 本鳴り、分割前の警告 0 からの回帰になることを実測で確認・実装 2026-09-12）。**実体化**: `fonts: Rc<FontCatalog>`・`brushes: BrushCache`、`new_shared`、`render_styled`（`render` は空の装飾表で委譲）、Phase 1 の行ごとに `style_runs`→`line_layout_decorated`→色の範囲、`ensure_format` が `fonts.pick(font)` の複製で `create_text_format` を呼ぶ、行の箱寸を `block_extent(run.size, mode)` に | 分割→実体化 |
 | `crates/areka-emo-text/src/actor.rs`（952→984） | `TextLayerRuntime.balloon_background`、`register_actor` で `state.set_look_layers`、`register_actor_binding`／`refresh_actor_binding` が背景付きで解決、`present_actor` が `layout_styled`／`render_styled`／共有 `FontCatalog` を使う。**`ResolvedBalloonText::resolve_with_background`・`set_balloon_background`／`background_of`・`build_actor_render`／`glyph_styles_of` の実体は `actor_decoration.rs`**——同じ行の「それ以上の追加は `actor_decoration.rs` へ」に従った結果で、1,000 行の見張りにも掛かっていた（実装 2026-09-13） | 実体化 |
 | `crates/areka-emo-text/src/draw_format_metrics_tests.rs`（742） | `decoration_and_disable_seams_are_type_only` を「無効表示の層が実体化し、行単位の予約型は 0 バイトのまま」を述べる述語へ改訂。`font_family_reaches_directwrite_only_as_author_name_or_default_retry` の doc と述語に「第 2 の入口 `draw_metrics.rs::probe_format_for`」を加える | 実体化 |
-| `PositionedGlyph { .. }` の構築を持つテスト 5 ファイル（`choice_tests.rs`・`choice_decorate_tests.rs`・`viewbox_choice_marker_tests.rs`・`canvas.rs` のテスト・`layout` 系） | フィールド追加の書き換え（`style: StyleId::DEFAULT`） | 実体化 |
+| `PositionedGlyph { .. }` の構築を持つテスト **4 ファイル**（`choice_tests.rs`・`choice_decorate_tests.rs`・`viewbox_choice_marker_tests.rs`・`canvas.rs` のテスト。当初挙げた「`layout` 系」に**テストの構築点は無い**——`layout.rs` の構築は本番コード・実測 2026-09-12） | フィールド追加の書き換え（`style: StyleId::DEFAULT`） | 実体化 |
 | `crates/areka/src/emo2_boot/assets.rs`（416） | `BalloonScopeAssets.background_color: (u8,u8,u8)`、構築時に `balloon_background::face_origin_color` で導出 | 実体化 |
 | `crates/areka/src/emo2_boot/frame/attach.rs`（429） | `connect_balloon_text(..., background)` が `set_balloon_background` → `register_actor_view` の順に呼ぶ | 実体化 |
 | `crates/areka/src/emo2_boot/consumer_ledger.rs` | `CommandConsumer::TextLayer`（文字レンダリング層）の variant と、正準台帳に `"\\f"` → `TextLayer` の 1 行、同ファイルの正準表テストの追随（宣言のみ・実行時の選別には使われない。モジュール doc「以後のコマンド追加は消費者＋本表 1 行」に従う） | 実体化 |
@@ -272,13 +277,13 @@ stateDiagram-v2
 | 2.7 | `// ukadoc:` URL を添える | `decode.rs` の腕 | — | — |
 | 2.8 | `\f` なし台本の解読・台本・再生時間は不変 | `decode_font_tests`／`compile_font_tests` の不変検査 | — | — |
 | 3.1 | スコープごとの独立した装飾状態 | `ActorTextState.decor` | — | Flow 2 |
-| 3.2 | 以降の文字にだけ効く | `intern_current` を追記時に呼ぶ（`Text`／`Choice` の腕） | `StyleId` 列 | Flow 1 |
+| 3.2 | 以降の文字にだけ効く | `push_current_style` を追記時に呼ぶ（`Text`／`Choice` の腕） | `StyleId` 列 | Flow 1 |
 | 3.3 | 3 層の配管 | `glyph_styles`（追記）→`PositionedGlyph.style`（配置）→`GlyphRunContent.glyphs`（行） | — | Flow 1 |
 | 3.4 | リビール中も即時・時刻不変 | `\f` は duration 0・`reveal` に触れない | — | Flow 1 |
 | 3.5 | 選択肢の文字にも装飾・hover 優先 | `Choice` の腕で番号追記・色の順序「装飾→hover」 | `apply_color_ranges` | Flow 3 |
 | 3.6 | 1 行に混在した装飾を run で描き分け | `style_runs`・`apply_font_ranges`・`apply_color_ranges` | `StyleRun` | Flow 3 |
 | 3.7 | `\n`・`\_l`・`\c` は装飾を保持 | `Clear`→`clear_content()`（`decor` 保持）・他の腕は触れない | — | Flow 2 |
-| 3.8 | 台詞の開始で全スコープを既定へ | `ClearAll`→`reset_decoration(None)` | — | Flow 2 |
+| 3.8 | 台詞の開始で全スコープを既定へ | `ClearAll`→`clear_content()`＋`reset_for_new_talk()`（実体は `reset_look_to`・`reset_decoration` とは別経路） | — | Flow 2 |
 | 3.9 | 純粋層で更新と適用 | `look.rs`・`state_decoration.rs`・`layout_styled.rs`（`windows` 非依存） | — | — |
 | 4.1 | 既定の見た目＝5 キー＋ukadoc 既定 | `LookLayers::from_balloon`・`ResolvedFont::resolve` | — | — |
 | 4.2 | `parse.rs`・`model.rs` に触れない | `resolve` は `model.font()` の 5 キーだけ読む | — | — |
@@ -299,7 +304,7 @@ stateDiagram-v2
 | 5.9 | `outline` は語彙のみ・warn 1 度 | `Note::VocabularyOnly("outline")` | — | Flow 2 |
 | 6.1 | `sub`／`sup` は語彙のみ | `Script`・`Note::VocabularyOnly` | — | Flow 2 |
 | 6.2 | 後勝ちの排他 | `Script` は enum（同時に 1 値） | — | — |
-| 6.3 | 有効中の追記で warn 1 度 | `intern_current` が `script != None` なら記録 | — | — |
+| 6.3 | 有効中の追記で warn 1 度 | `push_current_style` が `script != None` なら記録 | — | — |
 | 6.4 | 戻す操作の対象 | `TextLook` 丸ごと置換 | — | Flow 2 |
 | 7.1 | `N`＝em を image px で | `parse_height`・`HeightSpec::Absolute` | — | Flow 2 |
 | 7.2 | `+N`／`-N`＝そのとき効いている大きさに加減 | `HeightSpec::Relative`（`current.height` 基準・重ねて効く） | — | Flow 2 |
@@ -329,7 +334,7 @@ stateDiagram-v2
 | 10.1〜10.2 | `\f[default]`／`\f[disable]` | `apply_font_tag`（丸ごと置換） | — | Flow 2 |
 | 10.3 | 戻す操作を 1 つの関数で | `TextLayerState::reset_decoration` | `scope: Option<&ActorKey>` | Flow 2 |
 | 10.4 | 項目の列挙を持たない | `TextLook` 丸ごと置換＋`unowned.clear()` | — | — |
-| 10.5 | スコープ単位・全スコープ 1 回 | `reset_decoration(None)` | — | — |
+| 10.5 | スコープ単位・全スコープ 1 回 | `reset_decoration(Some/None)`（公開口。本番の呼び出し元は `\x` を実装する後続仕様が最初になる） | — | — |
 | 10.6 | §8 に 1 行で登記 | Supporting References §A 行 10 | — | — |
 | 10.7 | 表示済みの文字は変えない | 番号は追記時に確定・表は追記専用 | — | — |
 | 11.1 | 送り幅を装飾込みの鍵で | `DWriteMetrics.cache: (char, FontKey)` | — | — |
@@ -603,7 +608,7 @@ pub const CSS_COLOR_NAMES: &[(&str, (u8, u8, u8))];
 **Responsibilities & Constraints**
 - `ActorTextState` に 3 フィールドを足す（定義は `state.rs`・操作は本ファイル）: `glyph_styles: Vec<StyleId>`（`items` のグリフ序数と同じ序数空間）・`styles: StyleTable`・`decor: Decoration`。
 - `Decoration { layers: LookLayers, current: TextLook, unowned: BTreeMap<String, Vec<String>>, warned: BTreeSet<(u8, String, Vec<String>)> }`（鍵は（記録の種別, キー, 値の列）の 3 つ組——どの要素も連結された綴りではないので、別種別の鍵も、同種別の別指定の鍵も潰れない。要件 13.4／13.5・実装 2026-09-12）。`Default` は ukadoc 既定（登録前に届いた cue のため）。
-- `Clear`（`\c`）は `clear_content()`（`items`・`reveal`・`choices`・`glyph_styles`・`styles` を空に・`decor` は不変）。`ClearAll` は `clear_content()`＋`reset_decoration(None)`（`warned` も空に＝台詞の開始）。
+- `Clear`（`\c`）は `clear_content()`（`items`・`reveal`・`choices`・`glyph_styles`・`styles` を空に・`decor` は不変）。`ClearAll` は `clear_content()`＋`reset_for_new_talk()`（＝`reset_look()`＋`warned.clear()`）。**`warned` を空にするのは `reset_for_new_talk` であって `reset_decoration` ではない**（3 経路——`\f[default]`→`reset_look`／`\f[disable]`→`reset_look_disabled`／台詞の開始→`reset_for_new_talk`——はいずれも共通実体 `reset_look_to` に落ちる。`reset_decoration` は`\x` のための公開口で本番の呼び出し元はまだ無い・実装 2026-09-12）。
 - `Custom` の腕: `cue.command.as_command_carrier()` が `Some((FONT_TAG_CARRIER, tokens))` のときだけ `apply_font_args(actor, &tokens)`。それ以外の `Custom` は従来どおり `debug!` で無視。
 
 **Contracts**: Service [x] / State [x]
@@ -623,7 +628,9 @@ impl ActorTextState {
     pub(super) fn clear_content(&mut self);
     /// 現在の見た目を表に登録して番号を返す（追記する文字数だけ `glyph_styles` へ push するのは呼び手）。
     /// `script != None` なら「効かない」記録を 1 度残す（R6.3）。
-    pub(super) fn intern_current(&mut self, actor: &ActorKey) -> StyleId;
+    // `intern` と番号列の追記と「0 文字なら表を汚さない」ガードを 1 つに畳んだ形
+    // （追記点が `Text`／`Choice` の 2 か所あり、ガードの写し漏れを防ぐ・実装 2026-09-12）。
+    pub(super) fn push_current_style(&mut self, actor: &ActorKey, glyph_count: usize);
     /// `\f` 1 件の適用と記録（warn は `キー=値` ごとに 1 度・`Note::Unowned` は `unowned` へ保持＋debug）。
     pub(super) fn apply_font_args(&mut self, actor: &ActorKey, tokens: &[&str]);
     /// 戻す操作の実体（`current = layers.default.clone()`・`unowned.clear()`）。
@@ -643,7 +650,7 @@ impl TextLayerState {
 - Concurrency: UI スレッド専有（既存と同じ）。
 
 **Implementation Notes**
-- Integration: `state.rs` 側の変更は腕の中の呼出だけ（`Text`／`Choice` で `let id = state.intern_current(&cue.actor); state.glyph_styles.extend(iter::repeat_n(id, glyph_count));`・`Clear`／`ClearAll`／`Custom`）。
+- Integration: `state.rs` 側の変更は腕の中の呼出だけ（`Text`／`Choice` で `state.push_current_style(&cue.actor, glyph_count);`・`Clear`／`ClearAll`／`Custom`）。
 - Validation: `state_decoration_tests.rs`——スコープ独立（`\0` の `\f[bold,1]` が `\1` に効かない）・以降の文字にだけ番号が付く・`\c` の後も `current` が保たれる・`ClearAll` で既定へ・`\f[default]`＝`reset_decoration(Some)` と同値・所有外キーの保持・同じ不正値の warn が 1 台詞 1 件（`log-capture-kit`）・`\f[]`／裸 `\f` が warn・`set_look_layers` の追随。較正: 「`Clear` で装飾が消える（旧 `= ActorTextState::default()`）」を赤にする述語。
 - Risks: 登録前に届いた `\f[height,200%]` は ukadoc 既定（12）を基準に計算される（表示時に既定が 28 でも 24 のまま）。装着は起動時の attach で必ず台詞より先に行われるため、実運用では起きない。起きたときは `debug!` に残す。
 
@@ -732,7 +739,10 @@ impl ResolvedFont {
 ```rust
 // crates/areka-emo-text/src/draw_catalog.rs（COM）
 pub struct FontCatalog {
-    collection: IDWriteFontCollection,                      // GetSystemFontCollection
+    families: FamilySource,                                 // System(IDWriteFontCollection)。
+                                                            // テストは `#[cfg(test)] Fake(BTreeSet<String>)` へ
+                                                            // 差し替えて実機のフォント構成から切り離す
+                                                            // （本番ビルドに Fake は存在しない・実装 2026-09-12）
     memo: RefCell<HashMap<Vec<String>, Option<String>>>,   // 候補列→解決名（None＝全滅）
     warned: RefCell<BTreeSet<WarnKey>>,                    // 記録済みの候補（`enum WarnKey { FontFile(String), AllMissing(Vec<String>) }`——
                                                           // 種別と候補列を連結せず別々に持つ。連結すると別々の失敗が
@@ -946,7 +956,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 - 縦書き 2 方向 × 7 項目: 同上。`underline`／`strike` は列の左右どちらにインクが増えたかを判定し、`vertical_rl` と `vertical_lr` で同じ側であること、今日の DirectWrite の既定（実測値）と同じであることを述語にする（裁定との一致は述語にしない・R12.4）。実測結果を §8 行 7 に登記する。
 - 置き方: `tests/` の直下に置いた `.rs` は 1 本ずつ独立した実行ファイルになる（`crates/areka-emo-text/tests/` は現状すべてこの形）ため、共有ヘルパと縦書きは**入口から `mod` で取り込むサブディレクトリ**に置く（`crates/dola/tests/compile.rs`＋`tests/compile/` と同じ作法）。src 側の `<stem>_<モジュール名>.rs` の規則は `tests/` には適用しない
 - 較正: 各モジュールに「装飾を焼かない経路（`render`）で描くと差が消える」対照を置く（差の検出そのものが空振りしていないことの確認）。
-- 実フォント（`Yu Gothic UI`）の存在を先頭で確かめる（`line_pitch_readback_test.rs` と同じ門）。
+- 実フォント（`Yu Gothic UI`）の存在を先頭で確かめる。門の判定は**本番の判断関数** `FontCatalog::family_for` を使い、実在しない名前で閉じることまで固定する（`line_pitch_readback_test.rs` の送り幅ヒューリスティックより強い形・実装 2026-09-13）。
 
 ### 較正（R15.7・要件ごと 1 件以上）
 
@@ -974,7 +984,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 1. `draw_format_metrics_tests.rs::decoration_and_disable_seams_are_type_only` → `disable_layer_is_materialized_and_row_effects_stay_reserved`（`resolve(..).looks.disable.color == mix_disabled(color, 白)`・`size_of::<TextEffects>() == 0` は残す）。同時に、同ファイルの `use super::{…, FontDisableSeam, RESERVED_KEY_DISABLE_FONT_PREFIX, …}` の import 行と `RESERVED_KEY_DISABLE_FONT_PREFIX`／`resolved.disable == FontDisableSeam::default()` の断言を消し、`surface.rs` の doc コメント（`FontDisableSeam`／`TextEffects` を名指し）を「`TextEffects`（M2 予約）」だけに改める。
 2. 同 `font_family_reaches_directwrite_only_as_author_name_or_default_retry`: doc と述語に「第 2 の入口 `draw_metrics.rs::probe_format_for`（鍵の候補列を `FontCatalog` で解決した名前か既定名のみ）」を加える。`draw.rs` 側の述語は不変。
 3. `lib.rs::pure_layer_modules_have_no_windows_imports`: `look.rs`・`color.rs`・`state_decoration.rs`・`layout_line_ops.rs`・`layout_styled.rs` を列挙に足す。
-4. `PositionedGlyph { .. }`（テスト 5 ファイル）・`BalloonScopeAssets { .. }`（テスト 2 か所）の構築にフィールドを足す。`ResolvedFont` は構築が `resolve` の 1 か所だけなのでテストの書き換えは無い。
+4. `PositionedGlyph { .. }`（テスト **4** ファイル・実測）・`BalloonScopeAssets { .. }`（テスト 2 か所）の構築にフィールドを足す。`ResolvedFont` は構築が `resolve` の 1 か所だけなのでテストの書き換えは無い。
 
 ## Performance & Scalability
 

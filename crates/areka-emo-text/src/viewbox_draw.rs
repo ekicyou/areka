@@ -148,6 +148,11 @@ impl ViewboxExecutor {
     ///
     /// デバイス未初期化（`GraphicsCore` 無効化後）は log-first で `Device` エラー
     /// （`DrawExecutor::new` と同一経路）。
+    ///
+    /// **本番の呼び手は [`new_shared`](Self::new_shared) へ移った**（`actor_decoration.rs::build_actor_render`
+    /// が台帳を 1 つだけ作って計測器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
+    /// 残しているのは自前の台帳で足りる決定論テスト（`viewbox_draw_*_tests.rs`）が呼ぶ
+    /// 委譲の入口としてである。crate 外の呼び手も無い。
     pub fn new(core: &GraphicsCore) -> Result<ViewboxExecutor, TextLayerError> {
         let dwrite = core
             .dwrite_factory()
@@ -248,6 +253,17 @@ impl ViewboxExecutor {
     ///
     /// 失敗は log-first（`error!`＋`Err`・当該フレーム skip＝**plan 未 commit**・front 不変ゆえ
     /// 表示は前フレームを保持・次フレーム再計画）。
+    ///
+    /// **本番の呼び手は [`render_styled`](Self::render_styled) へ移った**（`actor.rs` の
+    /// `present_actor` が唯一の本番呼出点）。本関数の本番の呼び手は 0 で、残しているのは
+    /// 装飾の表を持たない決定論テスト（`viewbox_draw_choice_hover_tests.rs`／
+    /// `viewbox_draw_frame_render_tests.rs`／`viewbox_draw_live_diff_tests.rs`／
+    /// `viewbox_draw_oracle_regression_tests.rs`／`viewbox_draw_png_dump_tests.rs`／
+    /// `viewbox_draw_scroll_retain_tests.rs`）が呼ぶ委譲の入口としてである——空の
+    /// [`StyleTable`] を添えて `render_styled` へ流すだけなので、装飾なしの呼出列が
+    /// 装飾導入前と同一であることの照合面にもなっている（要件 14.2）。crate 外の呼び手は無い
+    /// （`draw_oracle_tests.rs` の `.render(...)` は同名メソッドを持つオラクル
+    /// `draw.rs::DrawExecutor`（`#[cfg(test)]`）のもので、本関数ではない）。
     pub fn render(
         &mut self,
         canvas: &ContentCanvas,

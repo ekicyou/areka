@@ -286,6 +286,14 @@ impl LayoutEngine {
     /// 新規 mode 分岐なし（6.1/6.2・遠辺の軸解決は [`TextRegion`] が済ませている）。
     ///
     /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
+    ///
+    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**（`actor.rs` の
+    /// `present_actor` が唯一の本番呼出点）。本関数の本番の呼び手は 0 で、残しているのは
+    /// 非回帰の檻（`layout_styled_tests.rs` が「装飾なしの出力が装飾導入前と 1 ビットも
+    /// 変わらない」を本関数の出力と突き合わせる）をはじめとする多数の決定論テスト
+    /// （`canvas.rs`／`layout_*_tests.rs`／`viewbox_draw_*_tests.rs`／`draw_oracle_tests.rs`／
+    /// `tests/` の統合試験）が呼ぶ委譲の入口としてである。crate 外では
+    /// `crates/areka-emo-text/examples/emo-text-layer/drive.rs` が 2 か所で呼ぶ（本番ではない）。
     #[allow(clippy::too_many_arguments)]
     pub fn layout(
         items: &[TextItem],
@@ -319,11 +327,17 @@ impl LayoutEngine {
     /// 負値絶対・`%`・`@` 相対は縮退ではなく**実導出**なので警告の対象ではない（R5.2）。
     ///
     /// warn guard は走査を跨いで持続する必要がある（per-frame layout 呼出での重複警告抑止）
-    /// ため、呼び手（ランタイム＝`actor.rs` の `TextLayerRuntime`・既存 `unresolved_warned` と
+    /// ため、ランタイム（`actor.rs` の `TextLayerRuntime::cursor_warn`・既存 `unresolved_warned` と
     /// 同型の持続 guard）が所有し `&mut` で渡す。型の住処は解決層
     /// [`crate::cursor_tag::CursorWarnGuard`] で、本 API の署名は変わらない。行レイアウトの
     /// 純挙動は [`layout`](Self::layout) と完全同一——差は縮退ログの有無のみ（guard は決定的な
     /// 行出力に一切影響しない）。
+    ///
+    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**。ランタイムが持つ
+    /// guard は `present_actor` から `layout_styled` の引数として渡っており、本関数を経由
+    /// **しない**（guard の所有者は変わらないが、受け取る関数は 1 段先である）。本関数の
+    /// 本番の呼び手は 0 で、残しているのは非回帰の檻（`layout_cursor_tests.rs`／
+    /// `layout_cursor_wiring_tests.rs`）が呼ぶ委譲の入口としてである。
     #[allow(clippy::too_many_arguments)]
     pub fn layout_with_cursor_warn(
         items: &[TextItem],

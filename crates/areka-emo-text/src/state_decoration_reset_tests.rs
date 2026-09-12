@@ -20,6 +20,7 @@ use super::*;
 // | §11 | 上下付きが有効なまま文字が追記されたときの記録 | 6.3 |
 // | §12 | `\f[disable]` も一括の戻し（`\f[default]` との対称） | 10.2, 10.4 |
 // | §13 | 記録なしで失敗を飲み込む経路が無いことの字面検査 | 13.5 |
+// | §14 | **本番の**一括の戻しが項目を列挙しないことの字面検査 | 10.4 |
 
 use log_capture_kit::{CapturedEvent, capture};
 
@@ -598,5 +599,42 @@ fn no_failure_path_is_swallowed_without_a_record() {
     assert!(
         !body.contains("_ =>"),
         "catch-all の腕があると `Note` の追加が黙って無記録で通る"
+    );
+}
+
+// -------------------------- §14 本番の一括の戻しは項目を列挙しない（R10.4）
+
+/// 本番の「一括の戻し」の実体（`ActorTextState::reset_look_to`）が見た目を**丸ごと**
+/// 置き換えていることを字面で固定する。
+///
+/// **`look.rs` 側の字面検査では本番を見張れない**——`look_font_tag_tests.rs::the_bulk_reset_replaces_the_look_as_a_whole_without_listing_items`
+/// が走査する `look.rs::apply_font_tag` の `key == "default"`／`"disable"` の 2 腕は、
+/// `apply_font_args` が先に掴んで戻す操作へ回すため**本番経路から到達しない**
+/// （`apply_font_args` の doc とタスク 4.2 の裁定）。本番の実体は本ファイルの
+/// `reset_look_to` であり、そこを項目の列挙へ書き換えても向こうの検査は緑のままになる。
+///
+/// 値の比較でも見張れない——今日の [`crate::look::TextLook`] の項目集合では、列挙形と
+/// 丸ごと置き換えは同じ結果になる。後続仕様が項目を足したときに戻しから漏れるかどうかは
+/// 字面にしか現れない。
+#[test]
+fn the_production_bulk_reset_replaces_the_look_as_a_whole() {
+    let src = include_str!("state_decoration.rs");
+    let body = src
+        .split_once("fn reset_look_to(&mut self, layer: TextLook) {")
+        .expect("一括の戻しの共通実体 reset_look_to が読めるはず")
+        .1;
+    let body = body
+        .split_once("\n    }")
+        .expect("reset_look_to の閉じ括弧があるはず")
+        .0;
+    assert!(
+        body.contains("self.decor.current = layer;"),
+        "本番の一括の戻し（reset_look_to）が丸ごとの置き換えでなくなっている——\
+         項目を列挙すると後続仕様が足した項目が戻しから漏れる。本体:{body}"
+    );
+    assert!(
+        !body.contains("self.decor.current."),
+        "本番の一括の戻し（reset_look_to）が `current` の項目を名指しで書き換えている——\
+         項目を列挙すると後続仕様が足した項目が戻しから漏れる。本体:{body}"
     );
 }

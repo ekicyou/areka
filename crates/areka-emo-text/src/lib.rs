@@ -12,12 +12,22 @@
 //! crate 内は次の一方向に層を分ける。逆流はレビューエラーとして扱う。
 //!
 //! 1. **純粋層**（[`state`]／[`writing`]／[`region`]／[`cursor_tag`]／[`layout`]／[`canvas`]／
-//!    [`viewbox`]）——
+//!    [`viewbox`]／[`look`]／[`color`]）——
 //!    `windows` 系 crate 非依存の決定論檻。純粋層モジュールに `windows` の import が
 //!    現れたらレビューエラー（本 crate のテストでも構造検証する）。
 //! 2. **COM 層**（[`draw`]／[`surface`]／[`viewbox_draw`]）——DirectWrite/D2D/DXGI/WUC を
 //!    触る唯一の場所。UI スレッド専有。
 //! 3. **結線層**（[`sink`]／[`actor`]）——sakura からの cue 受信と UI 配送・フレーム提示。
+//!
+//! 上の 3 つはいずれも**親ファイルの名前**であって、走査面ではない。親は `#[path]` で
+//! 子モジュールを抱えており（`draw` は `draw_metrics`／`draw_line_store`／`draw_catalog`、
+//! `layout` は `layout_line_ops`／`layout_styled`、`state` は `state_decoration`、
+//! `viewbox_draw` は `viewbox_draw_plan`／`viewbox_draw_decoration`、`actor` は
+//! `actor_decoration`）、子は親と同じ層に属する。**層規律を実際に見張る走査面は
+//! `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` の 2 つの一覧**（本ファイル末尾の
+//! `#[cfg(test)] mod layer_discipline` 内）で、その和が `src/*.rs` の実ファイル集合と
+//! 一致することを `every_source_file_is_either_scanned_or_explicitly_excluded` が突き合わせる
+//! （この段落は列挙を数えるためのものではない——数える場所は 2 つの一覧の側にある）。
 //!
 //! ## 依存方向（強制）
 //!
