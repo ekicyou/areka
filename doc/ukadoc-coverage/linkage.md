@@ -966,6 +966,342 @@ themes = ["装い", "記憶"]
 
 構成 id は 9 件で、うち機械の束から来たものが 0 件、人手で足したものが 9 件である（`hand` の行を数えた）。**この束は人手のみである**——`machine` が空配列で、核になる機械の束を持たない（消滅の 9 件はいずれも台帳の関連を 1 本も持たないので、機械の束に現れない）。
 
+段 2 のこのタスク（3.3）が書くのは段階 C 相当の 8 束——環境の察知の 7 束と、環境の値を尋ねる
+1 束——である。書き方は上の 11 束と同じで、囲みが ⑴ 名前（表の鍵）・⑵ `machine`・⑶ `members` と
+人手の印 `hand`・⑷ `domains`・⑸ `foundation` の見出し・⑺ `breakage`・⑻ `themes` を持ち、⑸ の
+中身と ⑹ は囲みの直下の本文に書く。
+
+このタスクで名付けた束は **8**、構成 id は延べ **80** 件（機械の束から来たもの **18** 件・
+人手で足したもの **62** 件）で、同じ id が 2 つの束に現れることは **0 件**である（数え方: 下の
+8 つの囲みの `members` を全部集めて重複を数えた）。上の 11 束が使った id との重なりも **0 件**で
+ある（数え方: 上の 11 束と下の 8 束の `members` を集めて共通部分を数えた）。状態が `alias` の id と
+`not-applicable` の id は **0 件**である（同じ集合を台帳の `status` で引き直して数えた。除外の
+件数と理由はタスク 3.6 の合計の節に書く）。
+
+`OnCacheSuspend` と `OnCacheRestore` はこの 8 束のどれにも入れない。正典の本文はそれぞれ
+「ゴーストキャッシュに入った際に発生。」「ゴーストキャッシュから出た際に発生。」だけを述べており、
+指しているのはゴーストを入れ替えるときにいったん裏へ回して保つ仕組みであって、パソコンの電源
+状態でも画面の状態でも音でもない。段 2 のタスク 3.5（関連を 1 本も持たない項目の残り）へ回す。
+
+### スリープ復帰（段階 C 相当）
+
+```toml
+[bundle."スリープ復帰"]
+machine = []
+members = [
+  "ukadoc:list_shiori_event:OnSysResume:1",
+  "ukadoc:list_shiori_event:OnSysSuspend:1",
+]
+hand = [
+  "ukadoc:list_shiori_event:OnSysResume:1",
+  "ukadoc:list_shiori_event:OnSysSuspend:1",
+]
+domains = ["shiori"]
+foundation = "OS の状態変化の通知を受け取って SHIORI へ送る経路"
+breakage = "黙って壊れる"
+themes = ["気配り"]
+```
+
+**成立に要る最小の基盤**: パソコンがサスペンド（スリープと休止状態の両方）に入ったことと解除されたことを OS から受け取り、`OnSysSuspend`・`OnSysResume` を送って、返ったさくらスクリプトを再生できること。解除のときは理由（`normal`・`auto`・`critical`）を Reference0 に添えること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: パソコンを眠らせるときと目覚めさせたときに、ゴーストが何も言わない。眠る前の見送りの一言も、戻ったときの「おかえり」も出ないので、席を外して戻ってきた利用者から見ると、留守の間に時間が流れたことがゴーストに伝わっていない。
+
+構成 id は 2 件で、うち機械の束から来たものが 0 件、人手で足したものが 2 件である（`hand` の行を数えた）。**この束は人手のみである**——`machine` が空配列で、核になる機械の束を持たない（スリープ復帰の 2 件はいずれも台帳の関連を 1 本も持たないので、機械の束に現れない）。
+
+### バッテリー（段階 C 相当）
+
+```toml
+[bundle."バッテリー"]
+machine = [
+  "ukadoc:list_shiori_event:OnBatteryLow:1",
+  "ukadoc:list_shiori_event:OnBatteryCritical:1",
+]
+members = [
+  "ukadoc:list_shiori_event:OnBatteryChargingStart:1",
+  "ukadoc:list_shiori_event:OnBatteryChargingStop:1",
+  "ukadoc:list_shiori_event:OnBatteryCritical:1",
+  "ukadoc:list_shiori_event:OnBatteryLow:1",
+  "ukadoc:list_shiori_event:OnBatteryNotify:1",
+]
+hand = [
+  "ukadoc:list_shiori_event:OnBatteryChargingStart:1",
+  "ukadoc:list_shiori_event:OnBatteryChargingStop:1",
+  "ukadoc:list_shiori_event:OnBatteryNotify:1",
+]
+domains = ["shiori"]
+foundation = "OS の状態変化の通知を受け取って SHIORI へ送る経路"
+breakage = "黙って壊れる"
+themes = ["気配り"]
+```
+
+**成立に要る最小の基盤**: 電源の供給状態（バッテリー駆動・電源供給中・補助電源）と残量と残り時間を OS から読み、起動のときは通知として、以後は問い合わせに答える形で `OnBatteryNotify` を送り、残量が 1/3 以下・5% 以下になった境目と、充電が始まった・止まった境目で `OnBatteryLow`・`OnBatteryCritical`・`OnBatteryChargingStart`・`OnBatteryChargingStop` を送れること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 電池が減っても、電源を挿しても抜いても、ゴーストは何も言わない。「そろそろ充電して」と促す台詞や、電源を抜いたときに心配する台詞を持つ作品では、その台詞に 1 度も到達しない。ノートパソコンを持ち歩く利用者は、電池切れを自分で見張ることになる。
+
+構成 id は 5 件で、うち機械の束から来たものが 2 件、人手で足したものが 3 件である（`hand` の行を数えた）。
+
+### スクリーンセーバー（段階 C 相当）
+
+```toml
+[bundle."スクリーンセーバー"]
+machine = []
+members = [
+  "ukadoc:list_shiori_event:OnDisplayPowerStatus:1",
+  "ukadoc:list_shiori_event:OnScreenSaverEnd:1",
+  "ukadoc:list_shiori_event:OnScreenSaverStart:1",
+]
+hand = [
+  "ukadoc:list_shiori_event:OnDisplayPowerStatus:1",
+  "ukadoc:list_shiori_event:OnScreenSaverEnd:1",
+  "ukadoc:list_shiori_event:OnScreenSaverStart:1",
+]
+domains = ["shiori"]
+foundation = "OS の状態変化の通知を受け取って SHIORI へ送る経路"
+breakage = "黙って壊れる"
+themes = ["気配り"]
+```
+
+**成立に要る最小の基盤**: スクリーンセーバーが始まったこと・終わったことと、モニタの電源が入ったこと・切れたこと（ノートパソコンの蓋を閉じた場合を含む）を OS から受け取り、`OnScreenSaverStart`・`OnScreenSaverEnd`・`OnDisplayPowerStatus` を送れること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 画面が消えて誰も見ていない間も、ゴーストはそれまでと同じ調子で独り言を続ける。画面が戻ったときの「おかえり」も出ない。スクリーンセーバー中は静かにする作法を辞書に書いた作品でも、その分岐に入らない。
+
+構成 id は 3 件で、うち機械の束から来たものが 0 件、人手で足したものが 3 件である（`hand` の行を数えた）。**この束は人手のみである**——`machine` が空配列で、核になる機械の束を持たない（スクリーンセーバーの 3 件はいずれも台帳の関連を 1 本も持たないので、機械の束に現れない）。
+
+### フルスクリーン退避（段階 C 相当）
+
+```toml
+[bundle."フルスクリーン退避"]
+machine = []
+members = [
+  "ukadoc:list_shiori_event:OnFullScreenAppMinimize:1",
+  "ukadoc:list_shiori_event:OnFullScreenAppRestore:1",
+]
+hand = [
+  "ukadoc:list_shiori_event:OnFullScreenAppMinimize:1",
+  "ukadoc:list_shiori_event:OnFullScreenAppRestore:1",
+]
+domains = ["shiori"]
+foundation = "ゴースト窓の最小化と復帰の状態遷移とその通知"
+breakage = "黙って壊れる"
+themes = ["気配り"]
+```
+
+**成立に要る最小の基盤**: 全画面のアプリが前に出たときにゴーストの窓を退避させ、その理由を `fullscreen` として `OnFullScreenAppMinimize` を送り、元に戻したときに `OnFullScreenAppRestore` を送れること。この 2 つは、同じ場面で通常の最小化として出る `OnWindowStateMinimize` を上書きする。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 動画やゲームを全画面にしてもゴーストが画面の前に残り、見たいものの上に立ち塞がる。退避と復帰の一言も無いので、利用者は全画面にするたびに自分でゴーストを引っ込め、終わったら自分で戻す。
+
+構成 id は 2 件で、うち機械の束から来たものが 0 件、人手で足したものが 2 件である（`hand` の行を数えた）。**この束は人手のみである**——`machine` が空配列で、核になる機械の束を持たない（フルスクリーン退避の 2 件はいずれも台帳の関連を 1 本も持たないので、機械の束に現れない）。
+
+### 最小化（段階 C 相当）
+
+```toml
+[bundle."最小化"]
+machine = []
+members = [
+  "ukadoc:descript_ghost:icon.minimize_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1",
+  "ukadoc:list_shiori_event:OnWindowStateMinimize:1",
+  "ukadoc:list_shiori_event:OnWindowStateRestore:1",
+]
+hand = [
+  "ukadoc:descript_ghost:icon.minimize_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1",
+  "ukadoc:list_shiori_event:OnWindowStateMinimize:1",
+  "ukadoc:list_shiori_event:OnWindowStateRestore:1",
+]
+domains = ["assets", "sakura-script", "shiori"]
+foundation = "ゴースト窓の最小化と復帰の状態遷移とその通知"
+breakage = "黙って壊れる"
+themes = ["気配り"]
+```
+
+**成立に要る最小の基盤**: ゴーストの窓を最小化して元に戻す操作を受け付け、最小化の理由（`system`・`script`・`sakuraapi`・`user`）を添えて `OnWindowStateMinimize`・`OnWindowStateRestore` を送り、台詞の中の `\![set,windowstate,minimize]` でも同じ最小化を起こせて、`icon.minimize,ファイル名` が指す絵を最小化中の姿として使えること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 作業に集中したいときにゴーストを引っ込められない。台詞の中から自分で引っ込む演出を書いた作品でもタグが何も起こさず、引っ込んだ・戻ったの一言も出ない。最小化中の姿の絵を用意した作品でも、その絵は 1 度も画面に出ない。
+
+構成 id は 4 件で、うち機械の束から来たものが 0 件、人手で足したものが 4 件である（`hand` の行を数えた）。**この束は人手のみである**——`machine` が空配列で、核になる機械の束を持たない（最小化の 4 件はいずれも台帳の関連を 1 本も持たないので、機械の束に現れない）。
+
+### ディスプレイ変化（段階 C 相当）
+
+```toml
+[bundle."ディスプレイ変化"]
+machine = []
+members = [
+  "ukadoc:list_shiori_event:OnDisplayChange:1",
+  "ukadoc:list_shiori_event:OnDisplayChangeEx:1",
+  "ukadoc:list_shiori_event:OnDisplayHandover:1",
+]
+hand = [
+  "ukadoc:list_shiori_event:OnDisplayChange:1",
+  "ukadoc:list_shiori_event:OnDisplayChangeEx:1",
+  "ukadoc:list_shiori_event:OnDisplayHandover:1",
+]
+domains = ["shiori"]
+foundation = "OS の状態変化の通知を受け取って SHIORI へ送る経路"
+breakage = "黙って壊れる"
+themes = ["気配り"]
+```
+
+**成立に要る最小の基盤**: 主画面の解像度と色深度が変わったこと、画面ごとの設定が変わったこと、窓が別の画面へ移ったことを OS から受け取り、変化の前後の値を添えて `OnDisplayChange`・`OnDisplayChangeEx`・`OnDisplayHandover` を送れること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 画面の解像度を変えても、ノートパソコンを外部ディスプレイに繋いでも、ゴーストはそれに気づかない。画面が変わったときに立ち位置や台詞を直す辞書を書いた作品ではその分岐に入らず、ゴーストは前の画面のつもりのまま、画面の端や外に取り残される。
+
+構成 id は 3 件で、うち機械の束から来たものが 0 件、人手で足したものが 3 件である（`hand` の行を数えた）。**この束は人手のみである**——`machine` が空配列で、核になる機械の束を持たない（ディスプレイ変化の 3 件はいずれも台帳の関連を 1 本も持たないので、機械の束に現れない）。
+
+### サウンド（段階 C 相当）
+
+```toml
+[bundle."サウンド"]
+machine = [
+  "ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1",
+]
+members = [
+  "ukadoc:list_propertysystem:currentghost.sound.count:1",
+  "ukadoc:list_propertysystem:currentghost.sound.index_28ID_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1",
+  "ukadoc:list_propertysystem:currentghost.sound_28_8981_7d20_540d_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1",
+  "ukadoc:list_propertysystem:duration:1",
+  "ukadoc:list_propertysystem:error:1",
+  "ukadoc:list_propertysystem:id:1",
+  "ukadoc:list_propertysystem:loop:1",
+  "ukadoc:list_propertysystem:meta.album:1",
+  "ukadoc:list_propertysystem:meta.albumartist:1",
+  "ukadoc:list_propertysystem:meta.artist:1",
+  "ukadoc:list_propertysystem:meta.artwork:1",
+  "ukadoc:list_propertysystem:meta.genre:1",
+  "ukadoc:list_propertysystem:meta.title:1",
+  "ukadoc:list_propertysystem:meta.track:1",
+  "ukadoc:list_propertysystem:meta.year:1",
+  "ukadoc:list_propertysystem:name:2",
+  "ukadoc:list_propertysystem:path:2",
+  "ukadoc:list_propertysystem:pause:1",
+  "ukadoc:list_propertysystem:playing:1",
+  "ukadoc:list_propertysystem:position:1",
+  "ukadoc:list_propertysystem:preload:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2ccdplay_2c_30c8_30e9_30c3_30afNo._5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cload_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cloop_2c_30d5_30a1_30a4_30eb_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2coption_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cpause_2c_30d5_30a1_30a4_30eb_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cresume_2c_30d5_30a1_30a4_30eb_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cstop_2c_30d5_30a1_30a4_30eb_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1",
+  "ukadoc:list_shiori_event:OnSoundError:1",
+  "ukadoc:list_shiori_event:OnSoundLoop:1",
+  "ukadoc:list_shiori_event:OnSoundStop:1",
+]
+hand = [
+  "ukadoc:list_propertysystem:currentghost.sound.index_28ID_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1",
+  "ukadoc:list_propertysystem:duration:1",
+  "ukadoc:list_propertysystem:error:1",
+  "ukadoc:list_propertysystem:id:1",
+  "ukadoc:list_propertysystem:meta.album:1",
+  "ukadoc:list_propertysystem:meta.albumartist:1",
+  "ukadoc:list_propertysystem:meta.artist:1",
+  "ukadoc:list_propertysystem:meta.artwork:1",
+  "ukadoc:list_propertysystem:meta.genre:1",
+  "ukadoc:list_propertysystem:meta.title:1",
+  "ukadoc:list_propertysystem:meta.track:1",
+  "ukadoc:list_propertysystem:meta.year:1",
+  "ukadoc:list_propertysystem:path:2",
+  "ukadoc:list_propertysystem:preload:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2ccdplay_2c_30c8_30e9_30c3_30afNo._5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bsound_2cload_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1",
+  "ukadoc:list_shiori_event:OnSoundError:1",
+  "ukadoc:list_shiori_event:OnSoundLoop:1",
+  "ukadoc:list_shiori_event:OnSoundStop:1",
+]
+domains = ["property", "sakura-script", "shiori"]
+foundation = "音声ファイルの再生器と再生状態の通知"
+breakage = "黙って壊れる"
+themes = []
+```
+
+**成立に要る最小の基盤**: 台詞の中から音声ファイルを読み込んで、再生・停止・一時停止・再開・繰り返し・音の終わりの待ち合わせを指示でき、再生が終わったこと・繰り返したこと・失敗したことを `OnSoundStop`・`OnSoundLoop`・`OnSoundError` で返し、鳴っている音の名前・場所・長さ・位置・曲の題や演者をプロパティで読み戻せること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 効果音も音楽も鳴らない。足音や鐘の音を台詞に合わせて鳴らす作品では、音の部分だけが抜け落ちる。`\![sound,wait]` で音の終わりを待つ台本は待ち合わせが効かず、音が鳴らないまま台詞だけが先へ進んで間合いが崩れる。鳴っている曲の題を台詞に差し込む作品では、その場所が空のまま読み上げられる。
+
+構成 id は 33 件で、うち機械の束から来たものが 14 件、人手で足したものが 19 件である（`hand` の行を数えた）。テーマは **0 件**である（構成 id 33 件の `values` をすべて読み、空でないものが 1 件も無かった）。
+
+### 環境の照会（段階 C 相当）
+
+```toml
+[bundle."環境の照会"]
+machine = [
+  "ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1",
+  "ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validheight.initial:1",
+]
+members = [
+  "ukadoc:list_propertysystem:system.cpu._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.cursor.pos:1",
+  "ukadoc:list_propertysystem:system.day:1",
+  "ukadoc:list_propertysystem:system.dayofweek:1",
+  "ukadoc:list_propertysystem:system.disk.count:1",
+  "ukadoc:list_propertysystem:system.disk.index_28ID_29._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.dnd.mode:1",
+  "ukadoc:list_propertysystem:system.hour:1",
+  "ukadoc:list_propertysystem:system.memory._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.millisecond:1",
+  "ukadoc:list_propertysystem:system.minute:1",
+  "ukadoc:list_propertysystem:system.monitor.count:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.bpp:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.dpi:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.primary:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.rect:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.work:1",
+  "ukadoc:list_propertysystem:system.month:1",
+  "ukadoc:list_propertysystem:system.network._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.os._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.power._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.second:1",
+  "ukadoc:list_propertysystem:system.theme.app.mode:1",
+  "ukadoc:list_propertysystem:system.theme.os.mode:1",
+  "ukadoc:list_propertysystem:system.year:1",
+  "ukadoc:list_sakura_script:_25property_5b_30d7_30ed_30d1_30c6_30a3_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1",
+]
+hand = [
+  "ukadoc:list_propertysystem:system.cpu._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.cursor.pos:1",
+  "ukadoc:list_propertysystem:system.day:1",
+  "ukadoc:list_propertysystem:system.dayofweek:1",
+  "ukadoc:list_propertysystem:system.disk.count:1",
+  "ukadoc:list_propertysystem:system.disk.index_28ID_29._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.dnd.mode:1",
+  "ukadoc:list_propertysystem:system.hour:1",
+  "ukadoc:list_propertysystem:system.memory._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.millisecond:1",
+  "ukadoc:list_propertysystem:system.minute:1",
+  "ukadoc:list_propertysystem:system.monitor.count:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.bpp:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.dpi:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.primary:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.rect:1",
+  "ukadoc:list_propertysystem:system.monitor.index_28ID_29.work:1",
+  "ukadoc:list_propertysystem:system.month:1",
+  "ukadoc:list_propertysystem:system.network._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.os._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.power._28_30ad_30fc_29:1",
+  "ukadoc:list_propertysystem:system.second:1",
+  "ukadoc:list_propertysystem:system.theme.app.mode:1",
+  "ukadoc:list_propertysystem:system.theme.os.mode:1",
+  "ukadoc:list_propertysystem:system.year:1",
+  "ukadoc:list_sakura_script:_25property_5b_30d7_30ed_30d1_30c6_30a3_540d_5d:1",
+]
+domains = ["property", "sakura-script"]
+foundation = "プロパティの問い合わせ口と値の解決"
+breakage = "黙って壊れる"
+themes = []
+```
+
+**成立に要る最小の基盤**: 台詞に埋め込む `%property[プロパティ名]`、名指ししたイベントへ値を返す `\![get,property,イベント名,プロパティ名,プロパティ名,...]`、値を書き込む `\![set,property,プロパティ名,値]` の 3 つの口を受け付け、`system.` で始まる 25 の名前——今の年月日・曜日・時分秒とミリ秒、カーソルの位置、CPU とメモリとディスクとネットワークと電源の状態、画面の枚数と 1 枚ごとの位置・作業領域・色深度・DPI・主画面かどうか、OS の種別、OS とアプリの配色、応答不可の設定——を今の環境から解決して返せること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 今が何時か、画面が何枚あってどれだけの広さか、電池がどれだけ残っているか、OS が明るい配色か暗い配色か——そうしたことをゴーストが尋ねても値が返らない。台詞に書いた `%property[プロパティ名]` はその綴りのまま画面に出るので、利用者はゴーストの台詞の中に生の記号を読まされる。時刻や曜日で挨拶を変える作品、画面の広さに合わせて立ち位置を変える作品は、いつも同じ挨拶といつも同じ場所になる。
+
+構成 id は 28 件で、うち機械の束から来たものが 2 件、人手で足したものが 26 件である（`hand` の行を数えた）。テーマは **0 件**である（構成 id 28 件の `values` をすべて読み、空でないものが 1 件も無かった）。
+
 ### 例示の 3 連鎖が 1 つの束に収まること
 
 要件 3.1 が例示する 3 つの連鎖について、束 id と構成 id で着地を示す。件数はこの節を書いた
@@ -988,7 +1324,7 @@ themes = ["装い", "記憶"]
 - `ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1`（seriko.zorder,スコープID,スコープID,...・implemented・assets）
 - `ukadoc:list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1`（\![set,zorder,スコープID,スコープID,...]・implemented・sakura-script）
 - `ukadoc:list_propertysystem:currentghost.seriko.zorder:1`（currentghost.seriko.zorder・degraded・property）
-  この 3 つを含む名前付き束は段階 C 以降の担当（タスク 3.3・3.4）なので、このタスクでは名付けない。上の 11 束の `members` に入っているものは 0 件である——機械の束としては 1 つに収まっており、名前付き束はこの後のタスクが付ける。
+  この 3 つを含む名前付き束は段階 D 以降の担当（タスク 3.4）なので、タスク 3.2・3.3 では名付けない。上の 19 束の `members` に入っているものは 0 件である——機械の束としては 1 つに収まっており、名前付き束はこの後のタスクが付ける。
 
 **インストール** — 連鎖の 3 つの id はいずれも `ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1` を束 id とする 1 つの機械の束の構成 id である。
 - `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1`（\![execute,install,path,ファイル名]・absent・sakura-script）

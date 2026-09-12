@@ -88,7 +88,7 @@
   - _Requirements: 3.1, 4.1, 4.4_
   - _Depends: 3.1_
 
-- [ ] 3.3 段階 C 相当の名前付き束を書く
+- [x] 3.3 段階 C 相当の名前付き束を書く
   - 環境の察知（スリープ復帰・バッテリー・スクリーンセーバー・フルスクリーン退避・最小化・ディスプレイ変化・サウンド）と照会系の各束を 8 項目で書く
   - 完了状態: 段階 C 相当の各束が 8 項目すべて埋まった形で読め、推量の語を含まない
   - _Requirements: 4.1, 4.4_
@@ -360,3 +360,9 @@
 - 3.2: makoto 束 53 件のうち 3.2 が取ったのは **44**（更新 30・インストール 9・切替 3・メニュー 2）。残り 9 件——`descript_ghost:makoto`・`manual_translator`（トランスレータ・**3.4**）／`dev_nar`・`\![execute,createnar]`・`OnNarCreated`・`OnNarCreating`（開発者機能・**3.4**）／`manual_balloon`・`manual_directory`・`manual_ghost`（単独項目・**3.6**）。
 - 3.2: 推量で入れずに **3.5 へ回した id**: `OnCacheRestore`・`OnCacheSuspend`・`\4`・`\5`・`\6`（いずれも台帳の `links` 0 本）。`\-` は備考の逐語に基づき「終了」へ入れた。
 - 3.2: **⚠ 判定 ⑶-a（構成 id が互いに素）はまだ機械化されていない**（重複 id を仕込んでも赤にならない）。**タスク 3.8 の持ち場。** 3.2 時点では手作業の走査で 0 重複を確認しただけ。
+- 3.3: 段階 C 相当の 8 束を書いた（スリープ復帰・バッテリー・スクリーンセーバー・フルスクリーン退避・最小化・ディスプレイ変化・サウンド・環境の照会＝構成 id 80 件）。`linkage.md` 1,032 → **1,368 行**。累計 **19 束・構成 id 375 件**（既存 295 との重なり 0）。
+- 3.3: **⚠ タスク 3.5／3.6 への申し送り（最重要の数）。** 対象 4 状態 **1,552 件**のうち **未帰属は 1,177 件**（1,552 − 375）。そのうち「察知」形の SHIORI イベント **27 件**＋`\![set,tasktrayicon,…]` 1 件 ＝ **28 件**が段階 C の初期配置に名前が無いまま残っている（`OnCPULoadHigh`／`Low`・`OnDarkTheme`・`OnDeviceArrival`／`Remove`・`OnLanguageChange`・`OnMediaPlayerOpen`・`OnMemoryLoadHigh`／`Low`・`OnMusicPlay`／`Ex`・`OnNetworkStatusChange`・`OnOffscreen`・`OnRecycleBinEmpty`／`EmptyFromOther`／`StatusUpdate`・`OnSessionDisconnect`／`Lock`／`Reconnect`／`Unlock`・`OnSystemDialog`／`Cancel`・`OnTabletMode`・`OnTrayBalloonClick`／`Timeout`・`OnVirtualDesktopChanged`・`OnWallpaperChange`）。**3.5 のレビューでこの 28 件が束か単独項目に着地したかを名指しで突き合わせること。**
+- 3.3: **⚠ 3.5 へ回した id**（3.2 の 5 件に加えて）: `OnCacheSuspend`・`OnCacheRestore`（ukadoc の逐語「ゴーストキャッシュに入った／出た際に発生」＝ゴースト入れ替えの退避であって電源・画面・音ではない）／`property.get`・`property.set`（ukadoc 2.7.85 の `activeghostlist(…).ext.拡張プロパティ名` の口＝多重ゴースト側の機構）。
+- 3.3: `サウンド`（33 件）と`環境の照会`（28 件）は **テーマ 0 件**（構成 id の `values` の和集合が空。台帳から全数読んで確認済み）。壊れ方はどちらも「黙って壊れる」なので要件 5.4 の規則 ⑶（段階 E 候補）には掛からないが、**4.2／4.3 は要件 5.5 の裁定候補に当たるかを見ること。**
+- 3.3: `foundation` を意図的に共有した——「OS の状態変化の通知を受け取って SHIORI へ送る経路」4 束・「ゴースト窓の最小化と復帰の状態遷移とその通知」2 束。**基盤共有度（要件 6.5 ⑷）がここで初めて 1 を超える。**
+- 3.3: 3.2 が書いた「例示の 3 連鎖」節の 1 行を陳腐化のため直した（`上の 11 束` → `上の 19 束`・担当タスクの記述）。**3.4 も同じ行を直す必要がある**（束の数が増えるため）。
