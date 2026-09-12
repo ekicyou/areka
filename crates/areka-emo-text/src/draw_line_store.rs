@@ -2,9 +2,18 @@
 //!
 //! [`LineLayoutStore`]（行 TextLayout の共有ストア）と、行の実測インクはみ出しを担う。
 //! 比較専用オラクル（親ファサードの `DrawExecutor`）と本番 `ViewboxExecutor` が**同一経路**で
-//! 行レイアウトを得るための抽出型。親ファサード `draw.rs` から純移動したもので、生成規則・
-//! 破棄規律は移動前と同一。再利用の鍵だけがタスク 6.3 で**内容文字列＋装飾番号列**へ広がった
-//! （要件 11.4——装飾だけが変わった行を古い見た目のまま再利用しない）。
+//! 行レイアウトを得るための抽出型。親ファサード `draw.rs` から純移動したもので、破棄規律は
+//! 移動前と同一。生成規則と再利用の鍵は装飾の導入（タスク 6.3／6.5）で次のように広がった。
+//!
+//! - 再利用の鍵は**内容文字列＋装飾番号列**（要件 11.4——装飾だけが変わった行を古い見た目の
+//!   まま再利用しない）。
+//! - 生成の工程に **`decorate`**（生成時 1 度だけのフォント系範囲指定）が挟まり、順序は
+//!   「生成 → `decorate` → はみ出し実測」になる。装飾はインクの張り出しを変えるので、
+//!   はみ出しは焼いた後の行から測る。
+//! - 行送り軸の箱寸は呼び手が渡す `block_extent`。**既定だけの行は従来どおり `font_height`**
+//!   （`ViewboxExecutor::line_layout_for` が [`line_layout`](LineLayoutStore::line_layout) へ
+//!   落とす）で、装飾のある行だけが行内最大 em（`viewbox_draw_decoration::block_extent`）に
+//!   なる——装飾のない台本の生成物は装飾導入前と 1 ビットも変わらない（要件 14.2）。
 //!
 //! **層規律**: COM 層——UI スレッド専有。失敗は log-first（`tracing::error!`＋`Err`）で
 //! 扱い panic しない。
@@ -44,10 +53,12 @@ struct CachedLineLayout {
 /// 行 TextLayout の生成・キャッシュを担う共有ストア（複数の描画実行が**同一経路**で
 /// 行レイアウトを得るための抽出型・design.md「draw.rs の再編（LineLayoutStore 抽出）」）。
 ///
-/// 生成規則（行内軸＝[`PROBE_MAX_EXTENT`]・行送り軸＝行の箱寸・同一 format）・キー
-/// （canvas 行 index）・破棄規律（[`clear`](Self::clear) のみ全破棄）は抽出前の
-/// `DrawExecutor` 内実装と同一——TextLayout 生成経路の完全共有により両描画実行の
-/// **byte 等価**を構造化する（RN5）。再利用の判定は内容文字列と装飾番号列の一致
+/// 生成規則（行内軸＝[`PROBE_MAX_EXTENT`]・行送り軸＝呼び手が渡す行の箱寸・同一 format・
+/// 生成直後に `decorate` を 1 度）・キー（canvas 行 index）・破棄規律
+/// （[`clear`](Self::clear) のみ全破棄）を両描画実行で共有する——TextLayout 生成経路の完全共有に
+/// より **byte 等価**を構造化する（RN5）。装飾を使わない呼び出し
+/// （[`line_layout`](Self::line_layout)・行の箱寸は `font_height`・`decorate` は何もしない）の
+/// 生成物は抽出前の `DrawExecutor` 内実装と同一。再利用の判定は内容文字列と装飾番号列の一致
 /// （要件 11.4）。UI スレッド専有（COM 層規律）。
 ///
 /// `pub(crate)`: [`DrawExecutor`]（front へ全域再描画）と `ViewboxExecutor`
@@ -169,8 +180,9 @@ impl LineLayoutStore {
 /// 行 TextLayout の実測インクはみ出し（[`LineOverhang`]・image px・全成分 ≥ 0）を返す。
 ///
 /// [`DWriteTextLayoutExt::get_overhang_metrics`]（`GetOverhangMetrics`）はレイアウトボックス各辺
-/// からのはみ出し（正＝外側・DIP）を返す。行ボックスのブロック軸寸が `font_height`（横＝`max_height`
-/// ／縦＝`max_width`）に設定済みゆえ、その軸の値が em ボックス下端/上端（縦は左右）からのはみ出しを
+/// からのはみ出し（正＝外側・DIP）を返す。行ボックスのブロック軸寸が呼び手の渡した `block_extent`
+/// （既定だけの行は `font_height`・装飾のある行は行内最大 em。横＝`max_height`／縦＝`max_width`）に
+/// 設定済みゆえ、その軸の値が行ボックス下端/上端（縦は左右）からのはみ出しを
 /// 直接与える。行内軸は巨大 `PROBE_MAX_EXTENT` 箱ゆえ値は巨大負値＝`max(0.0)` で 0 に丸まる
 /// （`resident_rect` はブロック軸の overhang のみ使うため、これで正しくブロック軸だけが効く）。
 fn measure_line_overhang(layout: &IDWriteTextLayout) -> Result<LineOverhang, TextLayerError> {
