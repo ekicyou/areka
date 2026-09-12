@@ -179,7 +179,7 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
         "0",
         "実行されなかった段は 0 で出ること"
     );
-    assert_eq!(field(ev, "t_upload_us"), "2000", "供給面転写段の区間");
+    assert_eq!(field(ev, "t_upload_us"), "2000", "表示の記録段の区間");
     assert_eq!(
         field(ev, "t_total_us"),
         "12000",

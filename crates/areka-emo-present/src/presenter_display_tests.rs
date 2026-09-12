@@ -60,7 +60,7 @@ fn golden_match_read_back_equals_direct_compose() {
     let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
     assert_eq!(
         rb, golden,
-        "readback が直接合成 golden とバイト一致しない（表示・供給面の恒等転送が壊れている）"
+        "readback が直接合成 golden とバイト一致しない（合成メモの原寸バイト列が壊れている）"
     );
 }
 
@@ -78,7 +78,7 @@ fn invalid_surface_id_replies_err_and_leaves_display_unchanged() {
         .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
         .expect("attach_target 失敗");
 
-    // まず有効 id で表示を確立（供給面生成＋表示バイト確定）。
+    // まず有効 id で表示を確立（表示記録の生成＋表示バイト確定）。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
     presenter.apply(
         &mut world,
@@ -686,8 +686,8 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
 /// # なぜ既存の失敗経路の檻では足りないのか（5.1 → 5.3 の申し送り）
 ///
 /// [`invalid_surface_skips_and_leaves_display_and_mask_unchanged`] は表示バイト・`HitTest`・
-/// `AlphaMaskResource` の不変を見るが、これらはいずれも「失敗した適用は供給面へ再転写しない」ことの
-/// 帰結であり、**スロットが空になったかどうかとは独立**である——空にしても再転写は起きないので
+/// `AlphaMaskResource` の不変を見るが、これらはいずれも「失敗した適用は表示記録を差し替えない」ことの
+/// 帰結であり、**スロットが空になったかどうかとは独立**である——空にしても差し替えは起きないので
 /// バイトは 1 つも変わらない。したがって `ComposeCache::take_recycled`（追い出しエントリの容量回収）を
 /// 合成の成否判定より**手前**へ置く誤りは、既存の檻を丸ごとすり抜ける。本檻はスロットそのものを
 /// 直接読み、Flow 2 の規律を固定する唯一の観測点である。

@@ -5,7 +5,7 @@
 //! [`ComposedSurface::bytes`]（原寸・premultiplied BGRA）と**バイト単位で一致**することを固定する。
 //!
 //! この 1 本で成功経路の 5 点——`CreateBitmap` の寸・pitch・premultiplied・宛先矩形・`Close`——が
-//! まとめて檻に入る。撤去する自前供給面の往復テスト（`chain.rs` の
+//! まとめて檻に入る。撤去済みの自前供給面の往復テスト（`chain.rs` の
 //! `upload_read_back_roundtrip_and_resize`）の正当な後継である。
 //!
 //! バイト一致が成り立つ条件は k=1・整数矩形・LINEAR が texel 中心で恒等・透明地への

@@ -526,7 +526,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     // 実表＋常時発火固定 rng でループ活性化（既存 DPI 檻は Inert＝この組み合わせは本ケースが初）。
     let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
 
-    // 実 attach（供給面・視覚を本番経路で生成）→ 表示中ゲート成立まで talk を駆動して実適用する。
+    // 実 attach（視覚資源を本番経路で生成）→ 表示中ゲート成立まで talk を駆動して実適用する。
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
     assert!(
         logs.iter().any(|l| l.contains("attached=2")),
@@ -537,7 +537,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     let base_k0 = harness
         .wiring
         .read_back_target(shell_target(0))
-        .expect("前提: 初回 \\s[2100] 適用で shell 供給面が生成される");
+        .expect("前提: 初回 \\s[2100] 適用で shell の原寸面が確立される");
     assert!(
         opaque_count(&base_k0) > 0,
         "前提: DPI 変化前の shell が実描画されている"

@@ -226,7 +226,7 @@
   - _Boundary: compose/scale テスト_
 
 - [ ] 7. 旧設計の説明を消し、上書きを登記する
-- [ ] 7.1 モジュール doc から旧経路の説明を消す
+- [x] 7.1 モジュール doc から旧経路の説明を消す
   - 提示・メモ・漏斗・予算・計時・読み戻し・装着・提示対象・遷移観測・合成・実行例の各モジュール doc から「拡大率適用済み」「リサンプル」の記述を新しい形へ書き換え、旧設計の説明を残さない
   - 上流の α マスク資源と比例写像の doc 2 行を「マスク＝原寸・境界＝物理寸・比例写像が縮約を与える」へ書き換える（判定コードは触らない）
   - 装着モジュール冒頭の「上流と衝突しない」節を「上流の追加時フックに乗る」へ全面書き換えする
@@ -297,3 +297,4 @@
 - 7.2: 8.7 の申し送りは `.kiro/specs/areka-P0-dpi-transition-two-tick-bounce/brief.md` 末尾「## 申し送り」に置いた。アーカイブ `emo-dpi-scaling/design.md` は冒頭（題の直後）にも上書きのポインタ 1 行を置く（Overview だけ読む人が旧設計を現行と誤読しないため・`emo-text-layer/design.md` の先例）。プロジェクト記憶 2 ファイル＋MEMORY.md も追記済み。
 - 6.1: `scale.rs` 603→305（非 doc 差分は削除のみ＝数学バイト等価）。公開 seam は **`resize_and_clear` を `pub`**（本番の合成先が通るメソッド・義務なし）。`resize_for_full_overwrite` は本番消費者 0 で `#[cfg(test)]` に畳んだ → **6.2 で檻 3 本（composed.rs `mod tests`）ごと削除し、`composed.rs:94／97` の doc 参照も落とす**。6.2 の掃除: `scale_ratio_tests.rs:322,496`（削除される `resample_zero_extent_is_empty_and_warns` を引く）・`composer_tests.rs:310` の陳腐化 doc。7.1: wintf `alpha_mask_regenerate_tests.rs:209` の `scale_resample_tests.rs:629` 引用（doc のみ）。`cargo doc` の intra-doc link 警告 22→24（既存クラス・削除で戻る）。
 - 6.2: `scale_test_support.rs` は `AUTHOR_DPI` を `scale_ratio_tests.rs` が引くため削除でなく trim。`resize_for_full_overwrite` と檻 3 本を削除。compose テスト 209 本緑・golden 19 本不変。
+- 7.1: 差し戻し 1 回（`SURFACE_STAGE_UPLOAD` の doc がヒット時にも出る行を「記録した」と言い切っていた＝遷移観測の upload 行は `(size_changed || resized)` で出る・ヒットでも出る）。wintf は `hit_test/mod.rs` 1 ファイル **3 行**（2 サイト）＝8.1 の diff-stat 判定はこれを「doc 2 行（2 サイト）」と読む。陳腐化した assert メッセージ 12 件も書き換え（消費者なし）。⚠残: wintf `alpha_mask_regenerate_tests.rs:209` が削除済み `scale_resample_tests.rs:629` を引く（9.5 の doc 2 サイト制約を守るため未修正・8.1 で裁定）。

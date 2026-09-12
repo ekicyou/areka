@@ -44,7 +44,7 @@ impl TextSlotView {
     /// 表示中の**物理寸ではない**。物理寸は丸め権威 [`ScaleRatio::scaled_extent`] を通した
     /// `scaled_extent(scale(), surface_size())` である（下流の照合式
     /// `GetClientRect ≒ surface_size × scale`・design §State Management）。k=1.0 の窓では両者が
-    /// 一致するため、k 導入前の観測値（＝供給面寸）とも等しい。
+    /// 一致するため、拡大がまだ無かった頃（k 導入前）の観測値とも等しい。
     pub fn surface_size(&self) -> (u32, u32) {
         self.surface_size
     }
@@ -222,7 +222,8 @@ impl EmoPresenter {
     /// BGRA・`stride=width*4`）を返す（R6.2/R8.3・検証・`areka-P0-present-gpu-transform-scale` 要件 6.2）。
     ///
     /// 表示面（wintf の `CompositionDrawingSurface`）は書き込み専用であり読み戻さない。返るのは
-    /// 合成メモが保持する原寸バイト列そのもので、k=1 では従来（供給面の読み戻し）と同一バイト・
+    /// 合成メモが保持する原寸バイト列そのもので、k=1 では旧経路（撤去済みの自前供給面の読み戻し）
+    /// が返していたバイト列と同一バイト・
     /// k の値に依らず同一である。読み戻しの寿命はメモの寿命に等しい——未装着・未表示・表示中
     /// エントリの消失（LRU 追い出し・`InvalidateCache` 後）は `error!` ＋
     /// [`PresentError::TargetNotAttached`]（消費者は表示直後に読む）。
