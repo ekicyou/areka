@@ -9,7 +9,8 @@
 //!
 //! # 採取フロー（design.md 「Batch / Job Contract」）
 //! 実 pasta fixture を組立（`real_pasta_test.rs::write_real_pasta_ghost_fixture` 流儀）→
-//! `ShioriWiring::Custom(Recorder(real_connect(helper_exe, mount.shiori)))` で boot→talk→close
+//! `ShioriWiring::Custom(Recorder(real_connect(helper_exe, mount.shiori, DefaultEncoding::Ansi)))`
+//! で boot→talk→close
 //! を一周（実時間可・本ハーネスは決定論を要求されない）→ 記録から **GET 交信の ID ごと初出**
 //! を取り、`Value(s)`→`SHIORI/3.0 200 OK`＋`Charset: UTF-8`＋`Value: <s>` の正準 envelope、
 //! `NoContent`→204 envelope へ再構成し `AREKA_SNAPSHOT_OUT/<ID>.txt` へ書き出す。
@@ -332,7 +333,10 @@ fn capture_real_pasta_snapshots() {
     // --- 実 backend へ Recorder を合成した Custom wiring（design.md「Batch/Job Contract」）---
     let handle_slot: Arc<Mutex<Option<RecorderHandle>>> = Arc::new(Mutex::new(None));
     let slot2 = Arc::clone(&handle_slot);
-    let connect = real_connect(helper_exe, mount.shiori);
+    // SHIORI 通信の既定は**本番と同じ** `Ansi`（＝Shift_JIS）を渡す。採取フィクスチャの
+    // ファイル層の既定（上の `resolve` の `Utf8`）とは別物で、ここを UTF-8 にすると
+    // 本番と違う最初の要求を採ってしまう（design §Boundary Commitments）。
+    let connect = real_connect(helper_exe, mount.shiori, DefaultEncoding::Ansi);
     let wiring = ShioriWiring::Custom(Box::new(move || {
         // 実 pasta backend を確立（shiori アクタースレッド上で helper spawn＋LOAD）。
         let inner = connect()?;

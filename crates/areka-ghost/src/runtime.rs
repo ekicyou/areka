@@ -580,6 +580,7 @@ pub fn boot_with_kanade_stop(
             ShioriWiring::Helper { helper_exe } => Box::new(crate::shiori_wiring::real_connect(
                 helper_exe,
                 mount.shiori.clone(),
+                options.default_encoding,
             )),
             ShioriWiring::Custom(connect) => connect,
             // 第 3 の正規結線（要件 1.1/3.1/7.1）: `Helper` arm と同型に、mount 解決済みの

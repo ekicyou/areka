@@ -115,12 +115,26 @@ pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) ->
 /// 5. `send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)` で LOAD を発行し ack `[1]` を確認する。
 ///
 /// いずれかの段で失敗すれば `Err(String)`（呼び出し側で `ShioriDown` へ写る）。成功時は
-/// `Box<dyn ShioriBackend>`（実体は `ShioriConnection { window, helper: HelperLifecycle::new(..) }`）
-/// を返す。
+/// `Box<dyn ShioriBackend>`（実体は `ShioriConnection { window, helper, negotiator }`）を返す。
+///
+/// # 初期の文字コード（要件 2.7・5.2）
+/// 初期値の決定（[`initial_charset`]）は**クロージャを返す前に**、つまり `real_connect` を
+/// 呼んだスレッド上で同期に行う。理由は 2 つ（design §shiori_wiring）: 起動ログが呼出
+/// スレッドの同期発火しか捕捉できないこと、そして接続に失敗しても決定と根拠が記録に
+/// 残ること（要件 2.6）。決めた交渉状態はクロージャへ move され、接続成立時に
+/// `ShioriConnection` の持ち物になる。
+///
+/// 交渉状態はこの呼び出しごとに新しく作られるので、ゴーストを起動し直す（SHIORI を
+/// load し直す）たびに descript 由来の初期値へ戻り、前回セッションの採用結果は引き継が
+/// れない（要件 5.2）。
 pub fn real_connect(
     helper_exe: PathBuf,
     shiori: ShioriMount,
+    default_encoding: DefaultEncoding,
 ) -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send + 'static {
+    // クロージャを返す前に同期で決める（接続の成否に依らず記録が残る・ログが捕捉できる）。
+    let negotiator = initial_charset(&shiori, default_encoding);
+
     move || {
         // 1. `file` が None なら推測せず即座に失敗（design.md「推測しない」）。
         let Some(shiori_name) = shiori.file else {
@@ -162,16 +176,28 @@ pub fn real_connect(
         Ok(Box::new(ShioriConnection {
             window,
             helper: HelperLifecycle::new(helper),
-            // 暫定の初期値（areka-P0-charset-canon タスク 3.4 で `initial_charset(..)` へ差し替える）。
-            // `real_connect` に既定の文字コードの引数が入るのが 3.4 であり、それまでは適用前と同じ
-            // UTF-8 始まりを置く。適用前は強制 UTF-8（応答の `Charset` ヘッダを復号にも採用にも
-            // 使わない）だったのに対し、ここは**交渉する** UTF-8 なので、応答が `Charset` を名乗らないか
-            // `UTF-8` を名乗る限りで適用前と同一であり、他の文字コードを名乗る SHIORI に対しては
-            // 復号も以後の要求も変わる。既存の固定物はいずれもこの範囲に収まる——
-            // `crates/shiori-host32-testdll/src/lib.rs` の 200 応答は `Charset: UTF-8` を名乗り
-            // （`RESP_GET_200` の定義行）、204・400 応答はヘッダを持たず継承する（`RESP_NOTIFY_204`
-            // ／`RESP_400` の定義行）。
-            negotiator: CharsetNegotiator::new(Charset::UTF_8, false),
+            // 起動時に決めた初期値（この `real_connect` 呼び出しに 1 つ・要件 5.2）。
+            //
+            // 宣言を持たない UTF-8 のゴースト（emo2 の pasta）では初期値が既定の Shift_JIS に
+            // なる。そこから採用が起きるまでに `Charset: Shift_JIS` を名乗る要求は **2 本**
+            // ある——片道イベントの応答は採用の根拠に用いない（要件 5.3）ためで、並びは
+            // `areka-kanade` の boot 状態機械（`schedule/boot.rs`）の発行点 3 つで決まる:
+            //
+            // 1. `boot_start`（Idle+Boot の遷移関数）が発行する `OnInitialize`＝**片道の
+            //    NOTIFY**。その応答は `client.rs` の `notify` が破棄するだけで、応答ヘッダを
+            //    採用へ回す手続きを呼ばない（同関数の本文にその経路が無いことは通信層の
+            //    構造検査が数えている）。よってこの応答では採用が起きない。
+            // 2. `on_reply` の `BootInit` + `Notified` 腕が発行する username リソース照会
+            //    ＝**応答待ちの GET**。これも Shift_JIS で出る。相手が名乗る
+            //    `Charset: UTF-8` を採用するのはこの応答。
+            // 3. prefetch 応答を写して発行する `OnFirstBoot`＝GET（初回起動の場合。起動記録が
+            //    あれば同じ腕が `OnFirstBoot` を飛ばして `OnBoot` を発行するが、3 本目から
+            //    UTF-8 になる点は変わらない）。ここから UTF-8 になり、以後は変わらない（要件 2.7）。
+            //
+            // 2 本とも本文は ASCII のみ（References を持たず `Sender`／`Status` の値も ASCII の
+            // 語彙）なので、適用前と違うのは `Charset` ヘッダの値だけ。採用の規則は実行層では
+            // なく交渉状態の持ち物であり、ここは決めた値を渡すだけ。
+            negotiator,
         }) as Box<dyn ShioriBackend>)
     }
 }
@@ -229,7 +255,7 @@ mod tests {
             "fixture は shiori 行なし＝file:None のはず"
         );
 
-        let connect = real_connect(helper_exe, shiori);
+        let connect = real_connect(helper_exe, shiori, DefaultEncoding::Ansi);
         let result = connect();
 
         match result {
@@ -258,7 +284,7 @@ mod tests {
             "fixture は shiori 行あり＝file:Some のはず"
         );
 
-        let connect = real_connect(helper_exe, shiori);
+        let connect = real_connect(helper_exe, shiori, DefaultEncoding::Ansi);
         let result = connect();
 
         match result {

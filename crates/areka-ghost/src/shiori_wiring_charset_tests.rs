@@ -12,6 +12,8 @@
 //! さらに本ファイルの各テストは同じ窓の内側で必ず 1 件の `charset_initial`（info）を
 //! 観測するので、「警告 0 件」の主張には毎回その陽性対照が同居している。
 
+use std::path::PathBuf;
+
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{self, ShioriMount};
 use log_capture_kit::CapturedEvent;
@@ -19,7 +21,7 @@ use shiori_host32_host::{Charset, CharsetPolicy};
 use temp_path_kit::TempPath;
 use tracing::Level;
 
-use super::{default_charset, initial_charset};
+use super::{default_charset, initial_charset, real_connect};
 use crate::test_log_capture::capture_events;
 
 /// 起動ログの宛先（`shiori_wiring` の `LOG_TARGET` と同じ綴り・design §Monitoring）。
@@ -54,6 +56,14 @@ fn build_shiori_mount(
     let mount = package::resolve(&root, DefaultEncoding::Ansi)
         .expect("fixture ghost_root の resolve に失敗");
     (temp, mount.shiori)
+}
+
+/// 実在しない helper 実行ファイルのパス（`shiori_wiring.rs` の既存テストと同じ手口）。
+///
+/// 本ファイルの接続テストはクロージャを呼ばないので実際には使われないが、万一呼ばれても
+/// 実プロセスが起動しないことを綴りで示しておく。
+fn unreachable_helper_exe() -> PathBuf {
+    PathBuf::from(r"Z:\definitely\does\not\exist\helper.exe")
 }
 
 /// 捕捉列から「語彙フィールド `event` が `name`・レベルが `level`・宛先が `ghost-boot`」の
@@ -290,4 +300,102 @@ fn charset_initial_records_the_canonical_name_not_the_debug_form() {
         "派生 Debug 表現が漏れていないこと: {charset:?}"
     );
     assert_eq!(source, "forceencoding");
+}
+
+/// ⑺ 初期値の決定は [`real_connect`] を**呼んだ時点**で同期に済んでいる（タスク 3.4・要件 2.7）。
+///
+/// このテストは返ってきたクロージャを**一度も呼ばない**。それでも決定の情報ログが 1 行
+/// 出ていることを見るので、決定がクロージャの内側（＝shiori アクタースレッド上・接続成功時）
+/// へ遅れていないことが分かる。決定を `move ||` の内側へ落とす退化を入れると、捕捉窓が
+/// 別スレッド・別時点の発火を拾えず `charset_initial` が 0 件になって赤になる。
+///
+/// 遅らせてはならない理由は 2 つ（design §shiori_wiring）: 起動ログが呼出スレッドの同期発火
+/// しか捕捉できないこと、そして接続に失敗しても決定と根拠が記録に残ること（要件 2.6）。
+#[test]
+fn real_connect_decides_the_initial_charset_before_returning_the_closure() {
+    let (_temp, shiori) = build_shiori_mount(None, Some("EUC-JP"));
+
+    let events = capture_events(|| {
+        // クロージャを束縛せずに捨てる＝接続手続きは 1 段も走らない（窓生成も spawn も無し）。
+        let _ = real_connect(unreachable_helper_exe(), shiori, DefaultEncoding::Ansi);
+    });
+
+    let (charset, source) = expect_single_initial(&events);
+    assert_eq!(
+        charset, "EUC-JP",
+        "descript の宣言が本番の接続入口まで通っているはず（暫定の UTF-8 なら赤）"
+    );
+    assert_eq!(source, "forceencoding", "決定根拠も記録される");
+}
+
+/// ⑻ 接続のたびに初期値を決め直し、前回の結果を引き継がない（要件 5.2）。
+///
+/// [`real_connect`] を 2 回呼ぶと `charset_initial` は 2 行出て、各行の文字コードは
+/// **その呼び出しに渡した既定**を反映する。交渉状態を 1 つだけ作って共有したり、
+/// 最初の決定を憶えて使い回したりすると（＝前回セッションの採用結果を引き継ぐ形）、
+/// 件数か値のどちらかが崩れて赤になる。
+#[test]
+fn every_connect_derives_the_initial_value_again_and_inherits_nothing() {
+    let (_temp, shiori) = build_shiori_mount(None, None);
+
+    let events = capture_events(|| {
+        let _ = real_connect(
+            unreachable_helper_exe(),
+            shiori.clone(),
+            DefaultEncoding::Ansi,
+        );
+        let _ = real_connect(unreachable_helper_exe(), shiori, DefaultEncoding::Utf8);
+    });
+
+    let hits = boot_events(&events, "charset_initial", Level::INFO);
+    assert_eq!(
+        hits.len(),
+        2,
+        "接続 2 回なら決定も 2 回（使い回すと 1 件になる）: 捕捉={:?}",
+        events.iter().map(|e| e.fields_map()).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        hits[0].field_str("charset"),
+        Some("Shift_JIS"),
+        "1 回目は宣言なし＋既定 Ansi＝Shift_JIS（要件 2.7 の emo2 の形）"
+    );
+    assert_eq!(
+        hits[1].field_str("charset"),
+        Some("UTF-8"),
+        "2 回目は 1 回目の結果ではなくこの呼び出しの引数で決まる（要件 5.2）"
+    );
+    for hit in &hits {
+        assert_eq!(
+            hit.field_str("source"),
+            Some("default"),
+            "どちらの決定も宣言なし＝既定から出発する"
+        );
+    }
+}
+
+/// ⑼ 接続の値は「起動時に決めた交渉状態」をそのまま受け取る（要件 2.7・5.2）。
+///
+/// この最後の受け渡しだけは挙動で確かめられない——接続の値が組まれるのは i686 helper との
+/// 接続が成立した後だけで、決定論テストからは到達できないため。そこで本番ファイルの本文
+/// そのものを判定材料にし、交渉状態を**組み立てている箇所が 1 つだけ**であることを数える。
+///
+/// 唯一の組立点は初期値を決める関数の末尾であり、接続の値へは決まった値を渡すだけである。
+/// 接続のところで暫定の値を作り直す形（本タスク以前の継ぎ目）へ戻すと組立点が 2 つになって
+/// 赤になる。関数の本文はコメントも含めて検査するので、説明の側では組立の綴りを書かない
+/// （書くと赤になる——検査を緩めるのではなく説明の方を言い換えること）。
+#[test]
+fn the_connection_receives_the_already_decided_negotiator() {
+    const SOURCE: &str = include_str!("shiori_wiring.rs");
+
+    assert_eq!(
+        SOURCE.matches("CharsetNegotiator::new").count(),
+        1,
+        "交渉状態の組立点は初期値を決める関数の 1 か所だけのはず\
+         （接続のところで作り直すと 2 になる・要件 2.7／5.2）"
+    );
+    // 「接続の値がフィールド短縮記法で受け取ること」を別に主張していたが、外した。
+    // 意味の変わらない書き換え（`negotiator: negotiator,`）で赤になる一方、決定を
+    // クロージャの内側へ移す退化は上の出現数と
+    // `real_connect_decides_the_initial_charset_before_returning_the_closure` が既に
+    // 捕まえる。欠陥を捕まえず書き方だけを縛る検査は置かない。
 }
