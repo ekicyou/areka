@@ -64,7 +64,7 @@
   - _Depends: 2.1_
   - _Boundary: ComposeCache, VisualMount, show.rs, read.rs, hub.rs, target.rs（統合）_
 
-- [ ] 2.3 自前の swap chain 供給面とその宣言・依存を撤去する
+- [x] 2.3 自前の swap chain 供給面とその宣言・依存を撤去する
   - 供給面の実装・その失敗注入テスト・テスト補助・spike テストを削除する
   - クレートの module 宣言と、提示モジュールが引いている供給面型の import を外す
   - 消費者が 0 になった依存（`SpriteVisual` の寸指定専用だった数値型クレート・swap chain 専用だった feature）をマニフェストから外す
@@ -281,3 +281,4 @@
 - 1.4: テスト doc は「観測できること」だけを主張する（旗の非漏れは `Disarm` 番人の**保証**であって檻の観測ではない）。レビューで差し戻し 1 回。
 - 2.1: 例外表 2 ファイルが機械的追随で微増（`cache_tests.rs` 1618→1622・`budget_tests.rs` 1081→1083）→ 5.3／5.6 で減らし 8.1 で最終確認。`GraphicsCommandList` の `PartialEq` は COM ポインタ同一性（`empty()` との比較・ヒット時の同一リスト比較は有意）。`GraphicsCore` 不在の `context` は旧供給面経路と同じ `"GraphicsCore resource"` を踏襲＝2.2 で供給面経路が消えたら `perf_log_tests` の陰性檻はメッセージで弁別し直す。記録の所要時間は 2.2 で `Stage::Upload` へ置き直す（timing.rs の doc も）。
 - 2.2: 遷移観測の Visualize 行は HEAD どおり `resized: None`（Upload 行だけ `Some(resized)`）＝design Flow 1 (3) の字面は過剰記述・5.4／7.1 はこの形に従う。`timing.rs` の `compose_key_hash` は `scale` 引数とハッシュ行を 3.1 で落とす（timing_tests 再導出に含める）。台帳の誤り: #16 `presenter_resize_report_tests.rs`（`t.chain.size()` 2 か所）・#18 `presenter_display_tests.rs`（`target.chain.is_some()` 1 か所）は「不変」でなく機械的再導出（5.2／5.5 で `mount.is_some()`＋`Arrangement` 照合へ）→ 8.1 で台帳訂正。`presenter.rs` の `#[cfg(test)] use resample／WucGraphicsResource` は 5.x／major 6 で消す。
+- 2.3: `Win32_Graphics_Dxgi` feature は deps／dev-deps とも撤去（`DXGI_FORMAT_*` は workspace 既定の `Dxgi_Common`）。`windows-numerics` は残置。wintf の swap chain ヘルパ 2 本は `areka-emo-text/src/surface.rs` が消費（要件 1.4 条件不成立＝撤去しない）。

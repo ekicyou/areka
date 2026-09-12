@@ -4,7 +4,7 @@
 //! 本クレート `areka-emo-present`（3/3・提示段）と連なる emo track の最終段である。
 //! 上流が生成した静的合成済みビットマップ `ComposedSurface` を、wintf の WUC
 //! （Windows.UI.Composition）表示面へアップロード・提示し、当たり判定用 AlphaMask を
-//! ヒットテストへ供給する。合成そのものは上流の責務であり、本段は「表示・キャッシュ・
+//! ヒットテストへ供給する。合成そのものは上流の責務であり、本段は「表示の記録・キャッシュ・
 //! 指令適用・マスク同期」を UI スレッド上で統括する。
 //!
 //! ## 指令 API 契約正本（command-API contract source of truth）
@@ -24,8 +24,8 @@
 //!
 //! ## 構成
 //!
-//! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・合成キャッシュ（[`cache`]）・swap chain
-//! 供給面（`chain`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・提示統括（[`presenter`]）を備える。
+//! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・合成キャッシュ（[`cache`]）・表示の記録
+//! （`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・提示統括（[`presenter`]）を備える。
 //! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 
 /// scope 別バルーン系列解決の**単一権威**であり、解決した面画像を **シェルと同一の**
@@ -35,9 +35,6 @@
 /// `attach_target` へ渡す `(EmoWorld, AtlasTable)` を組み上げる。
 pub mod balloon;
 pub mod cache;
-/// swap chain 供給面（`SwapChainPresenter`）。`pub(crate)` 内部モジュール（公開 API ではない）。
-/// 後続の `presenter`（`EmoPresenter`）が `crate::chain::SwapChainPresenter` を消費する。
-pub(crate) mod chain;
 pub mod command;
 /// 表示の記録（`record_display`）。原寸の合成結果を D2D bitmap にし、論理 px の宛先矩形で描く命令を
 /// 閉じたコマンドリストへ記録する（拡大率 k を含まない）。`pub(crate)` 内部モジュール。
@@ -45,8 +42,8 @@ pub(crate) mod display;
 /// 窓装着・text 層スロット予約・非表示切替（`VisualMount`）。`pub(crate)` 内部モジュール
 /// （公開 API ではない）。後続の `presenter`（`EmoPresenter`）が `crate::mount::VisualMount` を消費する。
 pub(crate) mod mount;
-/// 提示統括（`EmoPresenter`）。合成・キャッシュ・供給面・窓装着・マスク同期を UI スレッド上で結線する
-/// 統括ハブ。`command`/`cache`/`chain`/`mount` を消費する提示段の一点集約層。
+/// 提示統括（`EmoPresenter`）。合成・キャッシュ・表示の記録・窓装着・マスク同期を UI スレッド上で結線する
+/// 統括ハブ。`command`/`cache`/`display`/`mount` を消費する提示段の一点集約層。
 pub mod presenter;
 /// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。
