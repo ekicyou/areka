@@ -33,7 +33,7 @@
   - _Depends: 1.1_
   - _Boundary: display_
 
-- [ ] 1.4 (P) 記録の失敗注入テストを置く
+- [x] 1.4 (P) 記録の失敗注入テストを置く
   - 4 つの失敗点それぞれで `Err` が返り `error!` が 1 行出ること、生成途中の資源も含めて drop され副作用が残らないことを固定する
   - 完了状態: 失敗注入テストが緑で、撤去予定の供給面の失敗注入が担っていた観測点が新モジュール側に移っている
   - _Requirements: 7.1, 7.2, 6.5_
@@ -278,3 +278,4 @@
 - 1.1: 失敗注入 `DisplayFault::{EndDraw, Close}` は実呼び出しの**後**に置く（共有 DC を `BeginDraw` 開きっぱなしにしないため・レビュー裁定）。1.4 は「呼び手から見える前状態維持」だけを主張し、注入点を前へ動かさない。
 - 1.1: `GraphicsCommandList` の到達経路は `wintf::ecs::GraphicsCommandList`（`wintf::ecs::graphics` は private mod）。`device_err` は `crate::command::device_err` へ共有化済み（`mount.rs` の private 複製は 2.2 で寄せる）。
 - 1.3: 記録した宛先矩形は **DIP** 単位。再生側 DC の DPI が 96 のときだけ 1 DIP＝1 px（wintf は WUC の `begin_draw` DC に `SetDpi` を呼ばないので 96 既定）。記録側 DC の DPI は記録内容に影響しない。2.2 は宛先矩形を物理 px で作り直さないこと。T-G1 は再生 DC を `SetDpi(96)` で固定（機械の既定 DPI 非依存）。
+- 1.4: テスト doc は「観測できること」だけを主張する（旗の非漏れは `Disarm` 番人の**保証**であって檻の観測ではない）。レビューで差し戻し 1 回。
