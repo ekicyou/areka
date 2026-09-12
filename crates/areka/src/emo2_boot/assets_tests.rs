@@ -833,3 +833,109 @@ fn default_bind_ids_trims_value_whitespace() {
         "trim 後に \"1\" と一致する値のみ抽出"
     );
 }
+
+// ── 起動経路の surfaces.txt 復号（要件 6.1）──
+
+/// Drop 時に自身を再帰削除する一時ディレクトリ（placement 側の檻と同じ std-only 最小実装）。
+struct TempDir {
+    path: PathBuf,
+}
+
+impl TempDir {
+    fn new() -> Self {
+        static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "areka-boot-assets-charset-{}-{}",
+            std::process::id(),
+            n
+        ));
+        std::fs::create_dir_all(&path).expect("一時ディレクトリ作成");
+        TempDir { path }
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// `charset,Shift_JIS` を宣言し、alias の値に Shift_JIS の「通常」を持つ surfaces.txt。
+///
+/// UTF-8 として不正なバイト並びであることが本質（`92 CA 8F ED` は UTF-8 の妥当な並びでは
+/// ない）。適用前の `read_to_string` はここで読取失敗になる。
+const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsurface10\n{\nelement0,overlay,surface10.png,0,0\n}\nsakura.surface.alias\n{\n\x92\xCA\x8F\xED,[0]\n}\n";
+
+/// 要件 6.1: **起動時**の surfaces.txt 読取が、そのファイル自身の `charset` 宣言に従う。
+///
+/// `build_boot_assets` はシェル dir でなく ghost ルートを取り、マウント解決を経て
+/// shell dir へ辿り着く。ゆえに検体は `(ghost_root, balloon_root)` の対を組む必要があるが、
+/// これは実 shell を丸ごと複写しなくてよい——`placement_shared_test_support.rs` の
+/// `synth_declared_dpi_ghost` と同型に、**PNG 3 枚の複写**（`surface0.png`／`surface10.png`／
+/// `balloons0.png`）と数行の descript で足りる。その shell だけを `charset,Shift_JIS` 宣言の
+/// surfaces.txt に差し替えたものが本検体。
+///
+/// **この検査がここに居る理由**: タスク 4.2 が固定するのは `charset::decode` と
+/// `shell::parse` を組み合わせた結果の等値——すなわちパーサ層の性質であって、
+/// `assets.rs` の読取が実際に `decode` を通っているかどうかには触れない。配線を
+/// `read_to_string` へ戻してもパーサ層の検査は緑のまま通り抜ける。配置採寸側の同種の檻は
+/// `placement/measure_tests.rs` にあるが、そちらは 1,000 行の上限に余裕が無く起動側を
+/// 同居させられないため、読取点それぞれの兄弟へ 1 本ずつ置く形にしている。
+///
+/// 本検査が主張するのは「読取が失敗しないこと」までで、復号後の文字列そのものは見ない
+/// （Shift_JIS を別の 8bit 文字コードとして復号する退化はここを素通りする）。文字コード
+/// ごとの解析結果の等値はタスク 4.2 のパーサ層が担当する分業。
+///
+/// `bake` は WIC で PNG をデコードするため COM 初期化が要る（本ファイルの既存檻と同じ）。
+#[test]
+fn boot_read_honours_the_files_own_charset_declaration() {
+    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+
+    let root = TempDir::new();
+    let ghost_master = root.path.join("ghost").join("master");
+    let shell_master = root.path.join("shell").join("master");
+    let balloon_dir = root.path.join("balloon-synth");
+    for dir in [&ghost_master, &shell_master, &balloon_dir] {
+        std::fs::create_dir_all(dir).expect("検体ディレクトリ作成");
+    }
+
+    std::fs::write(
+        ghost_master.join("descript.txt"),
+        "charset,UTF-8\nname,えも\n",
+    )
+    .expect("ghost descript");
+    std::fs::write(
+        shell_master.join("descript.txt"),
+        "charset,UTF-8\nseriko.dpi,96\n",
+    )
+    .expect("shell descript");
+    // シェル定義ファイルだけを Shift_JIS で置く（他ファイルの宣言は持ち込まれない・要件 6.2）。
+    std::fs::write(shell_master.join("surfaces.txt"), SHIFT_JIS_SURFACES_TXT)
+        .expect("surfaces.txt の書出し");
+    for png in ["surface0.png", "surface10.png"] {
+        std::fs::copy(
+            emo2_root().join("shell/master").join(png),
+            shell_master.join(png),
+        )
+        .unwrap_or_else(|e| panic!("{png} 複写: {e}"));
+    }
+    std::fs::write(balloon_dir.join("descript.txt"), "charset,UTF-8\ndpi,96\n")
+        .expect("balloon descript");
+    std::fs::copy(
+        emo2_balloon_root().join("balloons0.png"),
+        balloon_dir.join("balloons0.png"),
+    )
+    .expect("balloons0.png 複写");
+
+    // `BootAssets` は Debug を持たないので、失敗側だけを取り出して表示する。
+    let result = build_boot_assets(&root.path, &balloon_dir, &[0], 96, 96);
+    assert!(
+        result.is_ok(),
+        "Shift_JIS 宣言の surfaces.txt でも起動時資産の組立が成立すること（要件 6.1）: {:?}",
+        result.err()
+    );
+}
