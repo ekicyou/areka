@@ -375,7 +375,7 @@ impl EmoPresenter {
         // 合成キーの安定ハッシュ（perf サマリ行の `key_hash`・Requirement 7.2 の裁定材料）は
         // `last_show` への move の**直前**に取る。全段の `mark` が済んだ後なので、この走査
         // （借用のみ・確保なし）は段別所要へ混入せず `t_total_us` にだけ含まれる。
-        let key_hash = compose_key_hash(surface_id, &binds, &pattern, scale);
+        let key_hash = compose_key_hash(surface_id, &binds, &pattern);
         target.last_show = Some((surface_id, binds, pattern));
 
         // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。実機サインオフは有界 auto-exit で

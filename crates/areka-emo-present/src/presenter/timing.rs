@@ -1,8 +1,8 @@
 //! `FrameTiming`: 表示 1 コマ適用（`apply_show`）の段階別計時と perf サマリ行の emit。
 //!
 //! 「何が重いか」を推測でなく実測で確定するための観測基盤である（Requirement 1.1/1.2/1.5）。
-//! 表示 1 コマの適用を **キャッシュ照会・合成・リサンプル・当たり判定マスク生成・供給面転写**
-//! の 5 段へ刻み、合計と併せて 1 適用 = 1 行の固定スキーマで出す。この行だけが
+//! 表示 1 コマの適用を **キャッシュ照会・合成・当たり判定マスク生成・表示の記録**
+//! の 4 段へ刻み、合計と併せて 1 適用 = 1 行の固定スキーマで出す。この行だけが
 //! `tools/perf/judge-perf.py`（判定スクリプト）とコードの間のデータ契約である。
 //!
 //! # 計測は無条件・emit だけがフィルタに従う（Requirement 1.5・design.md D5）
@@ -18,13 +18,13 @@
 //!
 //! 固定文言 [`PERF_LINE_MESSAGE`]・`debug` 水準・target は本モジュールのモジュールパス
 //! （`areka_emo_present::presenter::timing`）＝既存の `RUST_LOG=areka_emo_present=debug` 流儀で
-//! そのまま拾える。フィールドは
+//! そのまま拾える。フィールドは **11 個**（＋末尾の `frame`）:
 //!
 //! - `target_id`（Debug）・`surface_id`（u32）・`cache_hit`（bool）: 適用対象と引き当ての可否
-//! - `t_cache_us` `t_compose_us` `t_resample_us` `t_mask_us` `t_upload_us` `t_total_us`（u64・µs）:
+//! - `t_cache_us` `t_compose_us` `t_mask_us` `t_upload_us` `t_total_us`（u64・µs）:
 //!   **全段が常に出る**。実行されなかった段は 0 である。これにより判定スクリプトは
 //!   「段フィールドの欠落」を行単位で検出でき、部分集計を黙って出さずに済む（Requirement 2.5）
-//! - `alloc_compose_dst` `alloc_resample_dst` `alloc_xmap` `alloc_mask`（u32）: この適用で起きた
+//! - `alloc_compose_dst` `alloc_mask`（u32）: この適用で起きた
 //!   新規確保／容量成長の計数（Requirement 1.3・供給元は `FrameBudget`）
 //! - `key_hash`（u64）: 合成キーの安定ハッシュ。run 内の異なりキー数＝必要スロット数の実測根拠
 //!   （Requirement 7.2 のキャッシュ容量裁定材料）
@@ -39,7 +39,7 @@
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-use areka_emo_compose::{BindSet, ComposeMethod, PatternState, ScaleRatio};
+use areka_emo_compose::{BindSet, ComposeMethod, PatternState};
 
 use super::budget::BudgetDelta;
 use crate::command::TargetId;
@@ -65,26 +65,23 @@ pub(super) enum Stage {
     CacheLookup,
     /// 合成（`Composer::compose` / `compose_into`）。
     Compose,
-    /// リサンプル（k 適用・恒等 k では実行されない）。
-    Resample,
     /// 当たり判定マスク生成（`AlphaMask` 生成・引き当て時は実行されない）。
     MaskGen,
-    /// 表示の記録（原寸 D2D bitmap 生成＋描画命令の記録＋Close・ミスのみ・ヒットは 0）。
+    /// 表示の記録（**原寸** D2D bitmap 生成＋描画命令記録＋閉じる・外れのみ・ヒットは 0）。
     Upload,
 }
 
 impl Stage {
     /// 段数（配列長の正本）。
-    const COUNT: usize = 5;
+    const COUNT: usize = 4;
 
     /// 記録配列上の位置。
     const fn index(self) -> usize {
         match self {
             Stage::CacheLookup => 0,
             Stage::Compose => 1,
-            Stage::Resample => 2,
-            Stage::MaskGen => 3,
-            Stage::Upload => 4,
+            Stage::MaskGen => 2,
+            Stage::Upload => 3,
         }
     }
 }
@@ -177,7 +174,6 @@ impl FrameTiming {
         let stage_us = |stage: Stage| -> u64 { duration_us(self.stages[stage.index()]) };
         let t_cache_us = stage_us(Stage::CacheLookup);
         let t_compose_us = stage_us(Stage::Compose);
-        let t_resample_us = stage_us(Stage::Resample);
         let t_mask_us = stage_us(Stage::MaskGen);
         let t_upload_us = stage_us(Stage::Upload);
         let t_total_us = as_micros_u64(now.saturating_duration_since(self.started));
@@ -191,8 +187,6 @@ impl FrameTiming {
         } = *ctx;
         let BudgetDelta {
             alloc_compose_dst,
-            alloc_resample_dst,
-            alloc_xmap,
             alloc_mask,
         } = allocs;
 
@@ -204,13 +198,10 @@ impl FrameTiming {
             cache_hit,
             t_cache_us,
             t_compose_us,
-            t_resample_us,
             t_mask_us,
             t_upload_us,
             t_total_us,
             alloc_compose_dst,
-            alloc_resample_dst,
-            alloc_xmap,
             alloc_mask,
             key_hash,
             // **末尾追加**（design D12）。既存フィールドの順序・名前・文言を 1 つも動かさない
@@ -269,9 +260,10 @@ impl Hasher for Fnv1a {
     }
 }
 
-/// 合成キー（surface id ＋ bind 集合 ＋ pattern 状態 ＋ 表示スケール k）の安定ハッシュ。
+/// 合成キー（surface id ＋ bind 集合 ＋ pattern 状態）の安定ハッシュ。
 ///
-/// キー要素は `ComposeCache` の `ComposeKey` と同一である——run 中に現れた**異なりキー数**が
+/// キー要素は `ComposeCache` の `ComposeKey` と同一である（**表示スケール k はキー要素ではない**
+/// ——合成結果は原寸であり k に依らない）——run 中に現れた**異なりキー数**が
 /// 「いくつのスロットが要るのか」の実測根拠になるため、要素を 1 つでも取りこぼすと異なり数が
 /// 過少になり、裁定材料（Requirement 7.2）として成立しない。この材料をもとに 2026-08-15 の
 /// 開発者裁定で容量が 1 → 3 へ改訂された（要件 7.1）。以後も同じ役割を担う——容量を再検討する
@@ -281,17 +273,12 @@ impl Hasher for Fnv1a {
 /// animation id 昇順の `iter()`）から値等価と同じ順序で流し込む。`ComposeMethod` は
 /// `#[non_exhaustive]` で網羅 match が書けないため判別子で混ぜる（同一 run 内で安定）。
 /// 走査は借用のみで、確保は行わない（毎フレーム経路で呼ばれる）。
-pub(super) fn compose_key_hash(
-    surface_id: u32,
-    binds: &BindSet,
-    pattern: &PatternState,
-    scale: ScaleRatio,
-) -> u64 {
+pub(super) fn compose_key_hash(surface_id: u32, binds: &BindSet, pattern: &PatternState) -> u64 {
     let mut hasher = Fnv1a::new();
     surface_id.hash(&mut hasher);
     // スライスの `Hash` は長さを前置するため、bind 集合と後続要素の境界は曖昧にならない。
     binds.ids().hash(&mut hasher);
-    // pattern も件数を前置し、コマ列と後続の `scale` が食い違う形の混線を作らない。
+    // pattern も件数を前置し、コマ列の長さが食い違う形の混線を作らない。
     let frame_count = pattern.iter().count() as u64;
     frame_count.hash(&mut hasher);
     for (animation_id, frame) in pattern.iter() {
@@ -309,7 +296,6 @@ pub(super) fn compose_key_hash(
         frame.x.hash(&mut hasher);
         frame.y.hash(&mut hasher);
     }
-    scale.hash(&mut hasher);
     hasher.finish()
 }
 

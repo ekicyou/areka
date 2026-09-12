@@ -86,7 +86,7 @@
   - _Boundary: VisualMount, display_tests_
 
 - [ ] 3. 予算席・段階別計時・判定スクリプトを撤去分に合わせる
-- [ ] 3.1 予算席のリサンプル席と計時の段を同時に撤去する
+- [x] 3.1 予算席のリサンプル席と計時の段を同時に撤去する
   - リサンプル用の作業席と、原寸からの拡大を行う予算経路のメソッドを削除する
   - 確保の発生点を 2 つ（合成先・マスク）に減らし、差分計数と累積の型を追随させる
   - 計時側は確保の差分を網羅的に分解しているため、段の列挙からリサンプル段を外し段数と `perf` 行のフィールド数（11）を合わせる作業を同一タスクで行う（分けるとビルドが赤のまま残る）
@@ -283,3 +283,4 @@
 - 2.2: 遷移観測の Visualize 行は HEAD どおり `resized: None`（Upload 行だけ `Some(resized)`）＝design Flow 1 (3) の字面は過剰記述・5.4／7.1 はこの形に従う。`timing.rs` の `compose_key_hash` は `scale` 引数とハッシュ行を 3.1 で落とす（timing_tests 再導出に含める）。台帳の誤り: #16 `presenter_resize_report_tests.rs`（`t.chain.size()` 2 か所）・#18 `presenter_display_tests.rs`（`target.chain.is_some()` 1 か所）は「不変」でなく機械的再導出（5.2／5.5 で `mount.is_some()`＋`Arrangement` 照合へ）→ 8.1 で台帳訂正。`presenter.rs` の `#[cfg(test)] use resample／WucGraphicsResource` は 5.x／major 6 で消す。
 - 2.3: `Win32_Graphics_Dxgi` feature は deps／dev-deps とも撤去（`DXGI_FORMAT_*` は workspace 既定の `Dxgi_Common`）。`windows-numerics` は残置。wintf の swap chain ヘルパ 2 本は `areka-emo-text/src/surface.rs` が消費（要件 1.4 条件不成立＝撤去しない）。
 - 2.4: 赤の期間中のテスト実行は「壊れた test module 宣言を一時的に外して走らせ、完全復元を `git diff` で証明」で行う（`presenter_test_support.rs` は `transition_record_tests.rs` が引くため外せない）。⚠`wintf::ecs::PhysicalPoint` は pointer 側の整数 `Point` に解決される（hit_test 側の `PointF` 別名とは別物）＝テストは `PointF` を直に使う。T-N5 の `set_display` 陽性対照は「不在→挿入」（異なる実リストは GPU が要る）。T-N4 の 4×4 マスクは対称ゆえ x/y 入替を検出しない（任意で 1 セル崩す）。
+- 3.1: `SurfaceSeat::get` は `#[cfg(test)]` に畳む（観測口 `native_scratch_ptr` の唯一の呼び手・削除も allow も不可）。`perf_log_tests` は `t_resample_us` を**文字列**で照合する箇所あり＝コンパイル緑でも実行時赤（5.4）。`presenter.rs` の `#[cfg(test)] use resample` の説明コメントは既に事実でない＝major 6 で一緒に消す。`native_scratch` の doc「高水位」の陳腐化は 7.1 の doc 掃除で拾う。
