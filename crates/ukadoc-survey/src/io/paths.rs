@@ -80,6 +80,21 @@ pub fn values_path() -> PathBuf {
     coverage_dir().join("values.md")
 }
 
+/// 束の名付けと帰属（`doc/ukadoc-coverage/linkage.md`）。帰属の正本（要件 4）。
+pub fn linkage_path() -> PathBuf {
+    coverage_dir().join("linkage.md")
+}
+
+/// 段階と順位の統合ブリーフィング（`doc/ukadoc-coverage/briefing.md`）。要件 5・6・8。
+pub fn briefing_path() -> PathBuf {
+    coverage_dir().join("briefing.md")
+}
+
+/// 網羅ロードマップ草案（`doc/ukadoc-coverage/roadmap-draft.md`）。要件 10。
+pub fn roadmap_draft_path() -> PathBuf {
+    coverage_dir().join("roadmap-draft.md")
+}
+
 #[cfg(test)]
 #[path = "paths_tests.rs"]
 mod tests;

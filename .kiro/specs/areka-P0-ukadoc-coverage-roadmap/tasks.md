@@ -11,7 +11,7 @@
   - 完了状態: 3 文書が実在し、`briefing.md` の冒頭に確認日と手順が書かれ、着手時の実測値をすべて数え直した値で記録している
   - _Requirements: 1.1, 1.4, 1.5_
 
-- [ ] 1.2 3 文書の骨組みを読む純粋層 `documents::parse` を作る
+- [x] 1.2 3 文書の骨組みを読む純粋層 `documents::parse` を作る
   - ```toml の囲みの取り出し・引用符の id・逆引用符の id・裸の `ukadoc:` の 4 つの口を置き、`examples.rs` の重複した実装をこちらへ寄せる
   - 1 文書の囲みを連結して 1 度だけ TOML として読み、鍵の重複・欄の欠落・語彙外の値を文書名と表の鍵を添えて落とす（行番号は添えない）
   - `[[rank]]` は `bundle` と `singles` のちょうど一方を持つこと・`[stage.*]` が 5 つ揃うことを形として確かめる
@@ -310,3 +310,8 @@
 - 1.1: `roadmap-draft.md` の `[briefs].count = 0`・`snapshot_on = 2026-09-12` は仮値。**タスク 6.2 で数え直し、`snapshot_on` も打ち直すこと。**
 - 1.1: テンプレート辞書の配布元は 2026-09-12 の開発者回答で「実装側（Claude）が公式配布元を探して取得する」。記録済み URL は 0 個。**タスク 4.1 が実際に配布元を特定・取得し、`[[template]]` の `url`・`fetched_on`・`files` を埋める**（取得できなければ要件 6.8 の退路へ落とし、開発者の追加指示は待たない）。経緯は `doc/ukadoc-coverage/briefing.md` §1-5 が唯一の記録。
 - 全般: `grep -c` は 0 件のとき終了コード 1 を返す。0 件を「検査が失敗した」と読み違えないこと。
+- 1.2: **`crates/ukadoc-survey/src/documents/parse.rs` は 997 行**。repo の 1,000 行制限まで余裕 3 行しかない。**次にこのファイルへ 1 行でも足す前に、共通ヘルパ節（`document_file`〜`theme_array_field` の約 270 行）を `documents/fields.rs` へ割ること。**
+- 1.2: `documents::parse` が D-2 の明言を超えて決めた厳しさ 5 つ——名前付き束は `foundation` 必須・`reason` 禁止／単独項目は `reason` 必須・`machine`/`hand`/`foundation` 禁止・`members` ちょうど 1 件／`hand ⊆ members`／`[[rank]]` の `assets`・`shared` は省略可（既定 0）／`[[spec]]`・`[[reserved]]` は `bundle` と `none = true`＋`reason` のちょうど一方。**段 2〜4 で文書を書く担当がこれに当たったら、読み手を緩めるか文書を合わせるかを裁定すること。** 特に「単独項目に `foundation` を禁じた」のは設計に無い上乗せで、単独項目の `shared` が構造的に 0 に固定される（要件 6.5 ⑷）。
+- 1.2: 設計 `documents::parse`「読み取り時の形の検査」のうち **「`bundle` は `single = true` でない束の名前・`singles` の各 id は `single = true` の束の名前」は `read_briefing(&str)` 単体では判定できない**（`linkage.md` を要る跨ぎの検査）。**引受先は `documents::derive`（1.3）かタスク 3.8 の判定。段 2 以降で明示すること。**
+- 1.2: 欄取り出しの補助 5 本（`malformed`・`reject_unknown_keys`・`field`・`string_field`・`string_array_field`）が `src/ledger/read.rs` の私有補助とほぼ同形（約 120 行の重複）。共通化は境界外のため今回は割った。**3 つ目の読み手が出た時点で括ること。**
+- 1.2: `toml_blocks` は行頭からの ```` ```toml ```` だけを囲みの始まりと見るが、`prose_lines` は字下げされた ```` ``` ```` も囲みと見る。**3 文書で囲みを字下げしないこと**（字下げすると骨組みとしても地の文としても読まれない）。
