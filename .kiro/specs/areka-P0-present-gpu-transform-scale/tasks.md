@@ -152,7 +152,7 @@
   - _Depends: 5.1_
   - _Boundary: presenter dpi/fractional テスト_
 
-- [ ] 5.3 (P) 予算まわりのテストを席 2・発生点 2・全拡大率で交代する形へ導き直す
+- [x] 5.3 (P) 予算まわりのテストを席 2・発生点 2・全拡大率で交代する形へ導き直す
   - 予算経路と使い捨て経路の等価テストの期待値を、原寸合成バイトで作る形へ変える
   - 定常状態の確保 0 を、非等倍でも等倍と同じ席の回転で成立する形へ導き直す
   - リサンプル席の伸長規律を固定していたテストを撤去し、発生点の全列挙を 2 へ導き直す（T-N7）
@@ -163,7 +163,7 @@
   - _Depends: 5.1_
   - _Boundary: presenter budget テスト_
 
-- [ ] 5.4 (P) 性能ログと遷移観測の述語を導き直す
+- [x] 5.4 (P) 性能ログと遷移観測の述語を導き直す
   - 非等倍の外れでリサンプル段が非零であることを固定していたテストを撤去し、全段配線・ヒット時の 0・記録前の早期 return のテストを段 4・確保 2 の形へ導き直す
   - 遷移観測の再サイズ述語を「原寸の外形が変わったか（拡大率だけの変化は false）」へ導き直す（T-N8）
   - 前値の読み取り位置と誤り分岐の字面を、新しい記録呼び出しの前後関係へ合わせる
@@ -290,3 +290,5 @@
 - 5.6: `cache_tests.rs` 1,622→1,301（≥1,000 ゆえ例外表・較正エントリは不変）。縮小時の書き戻しは `resize_and_clear`（`clear`+`resize`）で再確保しない＝ポインタ不変の檻は安全。改名候補（任意）: `other_key_elements_still_miss_on_the_same_compose_inputs` → `differing_compose_inputs_still_miss`。
 - 4.2: T-N10 は字面の檻（`BOOT_REGISTRATION` を `mod.rs` 本文に照合）＋構造の檻（登録を写して `Schedules` を検査）＋対照の 3 本。写しの本文も同じ字面を含むことを assert して原本だけ更新した漏れを塞いだ。system の同定は `SystemTypeSet`（bevy の `debug` feature は無効で表示名が定型化するため）。`t_zwi06` は新登録先へ再導出・`FrameFinalize` 言及の陳腐化 0。
 - 5.7: 差し戻し 2 回（いずれも doc の真偽）。実行例の窓は**生成時 native 原寸**・表示成立後に `reconcile_window_size` が `scaled_extent` へ合わせる（両方書く）。`crates/areka` から `resample` 0 件。⚠`crates/areka/src/emo2_boot/spine_display_tests.rs` 243／342 に「swap chain の供給面」の陳腐化 doc・メッセージが残る（テストは緑）→ 7.1 の doc 掃除で拾う。台帳 #23 へ `spine_seriko_loop_tests.rs`（再導出）を 8.1 で追記。
+- 5.3: `budget_tests.rs` 1,083→**803**＝1,000 未満 → **8.1 で `OVER_LIMIT_ALLOWED` から外し `OVER_LIMIT_ALLOWED_COUNT` 11→10**（それまで `file_length_guard_test` の「例外は依然超過」検査が赤）。identity 名の 3 本は一般名の対と同一化したため**統合**（21→16 本・台帳 #10 の「不変 15」は訂正）。`fill_extent` が `resample(.., ONE, ..)` を残す（`ComposedSurface` を伸ばす公開口が無い）→ **6.1 が引き取る**（emo-compose に公開 seam を足すか `compose_into` で伸ばす）。k=2 レーンに `applied_ratio` の assert を追加（k がキー外になり暗黙の pin が消えたため）。
+- 5.4: `perf_log_tests` 956→883・`transition_record_tests` 714→736（+22 は前状態維持の走査檻の増分・6.7 の名指しは perf_log のみ）。初回表示は `resized=true`（`None != Some`）＝台帳 #15「他 15 本不変」は 14 に訂正。T-N8 の「同一 target で原寸が実際に変わる→true」は fixture（`build_two_face_assets` は同寸）が無く未固定 → 8.1 で記録（寸違いの第 2 面を足せば閉じる）。
