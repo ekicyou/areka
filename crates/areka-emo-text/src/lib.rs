@@ -37,6 +37,7 @@ pub mod color;
 pub mod cursor_tag;
 pub mod draw;
 pub mod layout;
+pub mod look;
 pub mod region;
 pub mod segment;
 pub mod sink;
