@@ -49,7 +49,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.7, 4.8, 5.4, 8.4, 8.5, 10.2_
   - _Boundary: shiori3 codec_
 
-- [ ] 2.3 3 系統の定数バイト列で符号化・復号・採用の連鎖を固定する
+- [x] 2.3 3 系統の定数バイト列で符号化・復号・採用の連鎖を固定する
   - 同じ 1 文字を含む要求を UTF-8・Shift_JIS・EUC-JP で組み、文字コードヘッダの綴りと参照値のバイト列を符号化器から導かない定数と比較する（ISO-2022-JP を 4 系統目に足してよい）
   - 同じ 3 系統の応答を復号して値が正しく読めること、ヘッダ省略時の継承、解決不能ラベルでの方針側の文字コードによる復号、強制方針でのヘッダ無視を固定する
   - 表せない文字の数値文字参照化と置換数、不正な並びの代替文字吸収と置換ありを固定する
@@ -177,3 +177,9 @@
 - 2.2: `client.rs` の解析は当面 `CharsetPolicy::Force(Charset::UTF_8)`（挙動 0 のため）。3.3 が `negotiator.policy()` へ差し替える。継ぎ目コメントが 3.3 を名指ししている。
 - 2.2: `scan_charset_header` の大小文字無視とヘッダ名側の空白許容にテストが無い。2.3 の兄弟テストで 1 本拾うこと。
 - 2.2: 2.2 で足した新規テスト 4 本（解決可／継承／解決不能／強制無視）は 2.3 の予定項目 ⑵⑶⑷⑸ と重なる。2.3 着手時に重複を整理してよい。
+- 2.3: **変異較正の記録（実装者とレビュアーの双方が実走・`charset.rs` は sha256 一致で復元済み）**
+  - 変異⒜ `Charset::encode` を「Shift_JIS ならそれ・他は UTF-8」へ退化 → 兄弟テスト 3 赤（`request_bytes_and_charset_header_match_the_constants_in_four_families`／`unmappable_char_becomes_a_numeric_character_reference_in_the_request`／`adopted_charset_appears_in_the_next_request`）＋`charset_tests.rs` 1 赤。
+  - 変異⒝ `Charset::for_label` を UTF-8／Shift_JIS の 2 値表へ退化 → 兄弟テスト 9 赤（上記 2 本以外すべて）＋`charset_tests.rs` 3 赤。緑のまま残る `utf8_request_equals_the_pre_spec_byte_stream`（`for_label` を通らない）と `invalid_byte_sequence_is_absorbed_and_reported`（主張がラベル解決に非依存）は正当。
+  - 変異⒞ レビュアーが独自に追加。`build_request` の `SecurityLevel: local` を `Local` へ 1 文字退化 → `utf8_request_equals_the_pre_spec_byte_stream` が赤。適用前定数が「今日の出力の写し」でないことの証明。
+- 2.3: 適用前バイト列の定数は `4db516fe` の `build_request` の組立順から手で書き下したもの（今日の符号化器を 1 度も通していない）。この由来を doc コメントに残すこと——回帰定数の監査証跡そのものなので、たどれない参照先を書かない。
+- 2.3: 2.2 が in-file `mod tests` に置いた 4 本（解決可／継承／解決不能／強制無視）は兄弟テストの強い版へ差し替えて削除した。跡地に差し替え先を指すコメント 4 行を残してある。design が「`shiori3.rs` に残す」と名指しした 3 本（`parse_without_status_line_is_parse_error`／`parse_invalid_bytes_are_replaced_not_parse_error`／`parse_charset_header_found_at_non_first_position`）は無改変で現存。

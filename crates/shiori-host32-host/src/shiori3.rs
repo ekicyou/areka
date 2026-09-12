@@ -486,58 +486,10 @@ mod tests {
         assert_eq!(parsed.charset_header.as_deref(), Some("EUC-JP"));
     }
 
-    /// 解決できるヘッダの文字コードで全体を復号する（要件 4.2）。
-    #[test]
-    fn parse_negotiate_decodes_by_resolvable_header() {
-        // Shift_JIS の「あ」＝82 A0（符号化器から導かない定数）。
-        let mut resp = b"SHIORI/3.0 200 OK\r\nCharset: Shift_JIS\r\nValue: ".to_vec();
-        resp.extend_from_slice(&[0x82, 0xA0]);
-        resp.extend_from_slice(b"\r\n\r\n");
-        let parsed = parse_response(&resp, CharsetPolicy::Negotiate(Charset::UTF_8))
-            .expect("ヘッダの宣言どおりに復号できること");
-        assert_eq!(parsed.value.as_deref(), Some("あ"));
-        assert!(!parsed.decode_had_errors);
-    }
-
-    /// ヘッダ省略時は方針の中の文字コード（＝要求に用いた文字コード）を継承する（要件 4.3）。
-    #[test]
-    fn parse_negotiate_without_header_inherits_policy_charset() {
-        let mut resp = b"SHIORI/3.0 200 OK\r\nValue: ".to_vec();
-        resp.extend_from_slice(&[0x82, 0xA0]);
-        resp.extend_from_slice(b"\r\n\r\n");
-        let parsed = parse_response(&resp, CharsetPolicy::Negotiate(Charset::SHIFT_JIS))
-            .expect("継承して復号できること");
-        assert_eq!(parsed.charset_header, None);
-        assert_eq!(parsed.value.as_deref(), Some("あ"));
-    }
-
-    /// 解決できないラベルでも失敗せず、方針の中の文字コードで復号を続ける（要件 4.4）。
-    ///
-    /// 採用しない判断は `CharsetNegotiator::note_response` の側にあり、codec は生の値を返すだけ。
-    #[test]
-    fn parse_negotiate_unresolvable_label_falls_back_to_policy_charset() {
-        let mut resp = b"SHIORI/3.0 200 OK\r\nCharset: no-such-charset\r\nValue: ".to_vec();
-        resp.extend_from_slice(&[0x82, 0xA0]);
-        resp.extend_from_slice(b"\r\n\r\n");
-        let parsed = parse_response(&resp, CharsetPolicy::Negotiate(Charset::SHIFT_JIS))
-            .expect("解決できないラベルで失敗してはならない");
-        assert_eq!(parsed.charset_header.as_deref(), Some("no-such-charset"));
-        assert_eq!(parsed.value.as_deref(), Some("あ"));
-    }
-
-    /// 強制方針では応答の文字コードヘッダを復号に用いない（要件 4.5・5.4）。
-    #[test]
-    fn parse_force_ignores_response_header() {
-        // ヘッダは Shift_JIS を名乗るが、本体は UTF-8 の「あ」＝E3 81 82。
-        let mut resp = b"SHIORI/3.0 200 OK\r\nCharset: Shift_JIS\r\nValue: ".to_vec();
-        resp.extend_from_slice(&[0xE3, 0x81, 0x82]);
-        resp.extend_from_slice(b"\r\n\r\n");
-        let parsed = parse_response(&resp, CharsetPolicy::Force(Charset::UTF_8))
-            .expect("強制方針でも解析できること");
-        // 生の値は返すが、復号には使っていない（UTF-8 として読めている）。
-        assert_eq!(parsed.charset_header.as_deref(), Some("Shift_JIS"));
-        assert_eq!(parsed.value.as_deref(), Some("あ"));
-    }
+    // 復号の 4 経路（解決できるヘッダ／省略時の継承／解決不能ラベル／強制時の無視）は、
+    // 兄弟ファイル `shiori3_charset_tests.rs` が 3〜4 系統の定数バイト列で固定する
+    // （タスク 2.3・要件 9.2/9.3）。ASCII と Shift_JIS だけの固定物より強い被覆なので、
+    // ここに置いていた同趣旨の 4 本は重複として外した。
 
     /// GET（Reference 1 件）: request line・必須ヘッダ・Reference0・空行終端を検証（要件 1.1/1.3/1.4/1.6）。
     #[test]
@@ -752,3 +704,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "shiori3_charset_tests.rs"]
+mod charset_tests;
