@@ -6,7 +6,7 @@
 //!
 //! ここは純粋層で、ファイルにもスナップショットにも触らない（要件 6.2）。本文の
 //! 文字列を受け取り、値を返す。読み取りは [`read`]、塊への切り分けは [`blocks`]、
-//! 初期生成と差し込みは [`write`]。
+//! 初期生成と差し込みは [`write`]、`priority` の 1 行置換は [`patch`]。
 //!
 //! # 欄の一覧は付録 A.2 が正本
 //!
@@ -27,6 +27,7 @@ use std::collections::BTreeMap;
 use crate::model::{Domain, EntryId, Link, PageName, Status};
 
 pub mod blocks;
+pub mod patch;
 pub mod read;
 pub mod write;
 
