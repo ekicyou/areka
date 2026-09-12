@@ -1,7 +1,7 @@
 # Brief: areka-P0-shell-implicit-surface
 
 > **種別**: バグ（正典未実装ゆえ**里々標準テンプレートが 1 枚も絵を出せない**）。②parsers／⑥emo（合成）帰属。
-> **源**: `areka-P0-charset-canon` タスク 6.2 の実機確認（2026-09-13）。文字コードの側は直ったのに窓が生えず、原因が別の穴だと判明したため `/kiro-discovery` で分離起票。記録の正本は `.kiro/specs/areka-P0-charset-canon/verification/signoff-record.md` 8 節。
+> **源**: `areka-P0-charset-canon` タスク 6.2 の実機確認（2026-09-13）。文字コードの側は直ったのに窓が生えず、原因が別の穴だと判明したため `/kiro-discovery` で分離起票。記録の正本は `.kiro/specs/completed/areka-P0-charset-canon/verification/signoff-record.md` 8 節。
 > **対 `charset-canon` の関係**: 同じ「里々のゴーストを 1 体動かす」という目に見える成果の**残り半分**。charset-canon が**文字**を直し、本 spec が**絵**を出す。片方だけでは利用者から見て何も変わらない。
 
 ## Problem
