@@ -677,8 +677,8 @@ impl LayoutEngine {
 ```
 
 - `layout_inner` は末尾に `styles: Option<GlyphStyles<'_>>` を受け取る。`None`（既存の `layout`／`layout_with_cursor_warn`）は従来と 1 ビットも変えない。`Some` のとき、グリフ序数 `placed` の見た目 `look` で `advance = if id == DEFAULT { metrics.advance(ch, font_height) } else { metrics.advance_styled(ch, look) }`、`PositionedGlyph.style = id`、`line_max = max(line_max, look.height)`。
-- 行の高さ（D22・R7.9）: `finish_line` の丈と、折返し・保留改行の送り量 `pitch` は「閉じる行の `line_max`（文字が無ければ現在の見た目の高さ＝次に置く文字の `look.height`）」から `metrics.line_pitch(h)` で求める。末尾に文字が続かない行（台本の終わりの空行）は次に置く文字が無いので `styles.current.height`（スコープの現在の見た目・`ActorTextState::current_look()`）を用いる。式は `TextLayerConfig::line_pitch` の 1 点のまま（R7.8）。`segment_advance_sum` も同じ見た目で合計する（`layout_line_ops.rs` へ移動した上で `styles` を受ける）。`\_l` の基点束 `CursorBasis { font_height, line_pitch }` は既定の大きさのまま（境界外）。
-- Validation: `layout_styled_tests.rs`——`FixedMetrics` で `\f[height,20]` の文字が 20 の送り・行矩形の丈が行内最大・改行だけの行の送りが現在の大きさ（台本末尾の空行を含む）・折返し位置が見た目込み・`Segmented` の塊の合計も見た目込み・`styles: None` 相当の出力が `layout_with_cursor_warn` と同一。較正: 「行の丈を既定の `font_height` で固定する（旧）」を赤にする述語。
+- 行の高さ（D22・R7.9）: `finish_line` の丈と、折返し・保留改行の送り量 `pitch` は「閉じる行の `line_max`（文字が無ければ現在の見た目の高さ＝次に置く文字の `look.height`）」から `metrics.line_pitch(h)` で求める。末尾に文字が続かない行は次に置く文字が無いので `styles.current.height`（スコープの現在の見た目・`ActorTextState::current_look()`）を用いる——**この地点に実際に届くのは `\_l` の先行実体化（DD-11）で閉じる、文字の置かれていない行だけ**である（台本の終わりの空行は保留改行が蒸発して最終行が必ずグリフを持つので構造的に到達しない。実測 2026-09-12）。式は `TextLayerConfig::line_pitch` の 1 点のまま（R7.8）。`segment_advance_sum` も同じ見た目で合計する（`layout_line_ops.rs` へ移動した上で `styles` を受ける）。`\_l` の基点束 `CursorBasis { font_height, line_pitch }` は既定の大きさのまま（境界外）。
+- Validation: `layout_styled_tests.rs`——`FixedMetrics` で `\f[height,20]` の文字が 20 の送り・行矩形の丈が行内最大・改行だけの行の送りが現在の大きさ（`\_l` の先行実体化で閉じる、文字の置かれていない行）・折返し位置が見た目込み・`Segmented` の塊の合計も見た目込み・`styles: None` 相当の出力が `layout_with_cursor_warn` と同一。較正: 「行の丈を既定の `font_height` で固定する（旧）」を赤にする述語。
 
 #### `viewbox.rs` の指紋
 

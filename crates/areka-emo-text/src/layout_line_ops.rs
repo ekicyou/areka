@@ -14,10 +14,12 @@ use crate::cursor_tag::{
     CursorAxis, CursorBasis, CursorWarnGuard, note_out_of_range, resolve_cursor_axis,
     warn_cursor_degrade,
 };
+use crate::look::GlyphStyles;
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, TextItem};
 
 use super::GlyphMetrics;
+use super::styled::glyph_style_advance;
 
 /// 塊の advance 合計（塊先決の判定式の左辺 `seg_sum`）。
 ///
@@ -31,6 +33,7 @@ pub(super) fn segment_advance_sum(
     len: usize,
     font_height: f32,
     metrics: &dyn GlyphMetrics,
+    styles: Option<&GlyphStyles<'_>>,
 ) -> f32 {
     let end = start_serial + len;
     let mut sum = 0.0f32;
@@ -41,7 +44,11 @@ pub(super) fn segment_advance_sum(
                 break;
             }
             if serial >= start_serial {
-                sum += metrics.advance(ch, font_height);
+                // 送り幅の決め方は配置ループと**同じ 1 か所**を通す（要件 11.2）——
+                // 塊の合計だけが旧幅のまま取り残されると、塊の収まり判定が
+                // 見た目込みの配置と食い違って折返し位置がずれる。
+                let (_, advance, _) = glyph_style_advance(ch, serial, font_height, metrics, styles);
+                sum += advance;
             }
             serial += 1;
         }

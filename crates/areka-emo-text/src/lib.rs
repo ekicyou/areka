@@ -169,7 +169,7 @@ mod tests {
         assert_eq!(err.to_string(), "text slot not attached: 0");
     }
 
-    /// 層規律の構造檻: 純粋層モジュール（state/writing/region/layout/canvas）の
+    /// 層規律の構造檻: 純粋層モジュール（state/writing/region/layout/canvas/look/color）の
     /// ソースに `windows` 系 crate への依存（import／パス参照）が一切無いことを検証する。
     /// （design.md「依存方向（強制）」——純粋層に `windows` の import が現れたらレビューエラー）
     #[test]
@@ -242,7 +242,40 @@ mod tests {
             ("canvas.rs", include_str!("canvas.rs")),
             ("viewbox.rs", include_str!("viewbox.rs")),
             ("wrap.rs", include_str!("wrap.rs")),
+            // areka-P0-text-decoration-canon が新設した純粋モジュール 13 本
+            // （`draw_metrics.rs`／`draw_line_store.rs` は COM 層なので載せない）。
+            ("color.rs", include_str!("color.rs")),
+            ("color_tests.rs", include_str!("color_tests.rs")),
+            ("look.rs", include_str!("look.rs")),
+            ("look_tests.rs", include_str!("look_tests.rs")),
+            (
+                "look_font_tag_tests.rs",
+                include_str!("look_font_tag_tests.rs"),
+            ),
+            (
+                "look_font_tag_value_tests.rs",
+                include_str!("look_font_tag_value_tests.rs"),
+            ),
+            ("state_decoration.rs", include_str!("state_decoration.rs")),
+            (
+                "state_decoration_tests.rs",
+                include_str!("state_decoration_tests.rs"),
+            ),
+            (
+                "state_decoration_reset_tests.rs",
+                include_str!("state_decoration_reset_tests.rs"),
+            ),
+            ("layout_line_ops.rs", include_str!("layout_line_ops.rs")),
+            ("layout_styled.rs", include_str!("layout_styled.rs")),
+            (
+                "layout_styled_tests.rs",
+                include_str!("layout_styled_tests.rs"),
+            ),
+            ("viewbox_draw_plan.rs", include_str!("viewbox_draw_plan.rs")),
         ];
+        // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
+        // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
+        assert_eq!(PURE_SOURCES.len(), 38, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",
