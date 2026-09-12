@@ -202,9 +202,799 @@
 
 ## 名前付き束
 
-<!-- 段 2（タスク 3.2〜3.4）で書く: 束ごとに見出しを立て、直下に TOML の囲みを 1 つ置き、
-     その下に本文で「成立に要る最小の基盤」と「欠けると壊れる既存ゴーストの振る舞い」を
-     利用者から見える結果の差で書く。 -->
+帰属を決めているのはこの節と次の節の `members` である（冒頭の「この文書は…正本である」と
+「書き方の規律」がその約束で、id の囲み方もそこに書いてある）。
+
+段 2 のこのタスク（3.2）が書くのは段階 A 相当の 7 束と段階 B 相当の 4 束である。段階 C・D・E 相当の
+束はタスク 3.3・3.4 が、関連を 1 本も持たない項目の残りはタスク 3.5 が、単独項目と合計は
+タスク 3.6 がこの下に続けて書く。
+
+各束の囲みは 8 つの事柄のうち ⑴ 名前（表の鍵）・⑵ `machine`・⑶ `members` と人手の印 `hand`・
+⑷ `domains`・⑸ `foundation` の見出し・⑺ `breakage`・⑻ `themes` を持ち、⑸ の中身と ⑹ は
+囲みの直下の本文に書く。`machine` が空配列の束は「人手のみ」で、核になる機械の束を持たない。
+
+このタスクで名付けた束は **11**、構成 id は延べ **295** 件（機械の束から来たもの **108** 件・人手で足したもの **187** 件）で、同じ id が 2 つの束に
+現れることは **0 件**である（数え方: 下の 11 の囲みの `members` を全部集めて重複を数えた）。
+状態が `alias` の id と `not-applicable` の id は **0 件**である（同じ集合を台帳の `status` で
+引き直して数えた。除外の件数と理由はタスク 3.6 の合計の節に書く）。
+
+### 起動と挨拶（段階 A 相当）
+
+```toml
+[bundle."起動と挨拶"]
+machine = [
+  "ukadoc:list_sakura_script:_5c_21_5bupdate_2cplatform_5d:1",
+]
+members = [
+  "ukadoc:descript_ghost:charset_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_ghost:craftmanurl_2cURL:1",
+  "ukadoc:descript_ghost:craftmanw_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_ghost:id_2cID_540d:1",
+  "ukadoc:descript_ghost:shiori.cache_2c_6570_5024:1",
+  "ukadoc:descript_ghost:shiori.encoding_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_ghost:shiori.escape_unknown_2c0_2f1:1",
+  "ukadoc:descript_ghost:shiori.forceencoding_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_ghost:shiori.version_2c_30d0_30fc_30b8_30e7_30f3:1",
+  "ukadoc:descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_ghost:title_2c_8868_793a_540d:1",
+  "ukadoc:descript_ghost:type_2c_7a2e_5225:1",
+  "ukadoc:list_shiori_event:OnBoot:1",
+  "ukadoc:list_shiori_event:OnFirstBoot:1",
+  "ukadoc:list_shiori_event:OnInitialize:1",
+]
+hand = [
+  "ukadoc:descript_ghost:charset_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_ghost:craftmanurl_2cURL:1",
+  "ukadoc:descript_ghost:craftmanw_2c_4f5c_8005_540d:1",
+  "ukadoc:descript_ghost:id_2cID_540d:1",
+  "ukadoc:descript_ghost:shiori.cache_2c_6570_5024:1",
+  "ukadoc:descript_ghost:shiori.encoding_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_ghost:shiori.escape_unknown_2c0_2f1:1",
+  "ukadoc:descript_ghost:shiori.forceencoding_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_ghost:shiori.version_2c_30d0_30fc_30b8_30e7_30f3:1",
+  "ukadoc:descript_ghost:shiori_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_ghost:title_2c_8868_793a_540d:1",
+  "ukadoc:descript_ghost:type_2c_7a2e_5225:1",
+  "ukadoc:list_shiori_event:OnFirstBoot:1",
+  "ukadoc:list_shiori_event:OnInitialize:1",
+]
+domains = ["assets", "shiori"]
+foundation = "SHIORI の読み込みと起動時イベントの発火路"
+breakage = "黙って壊れる"
+themes = ["気配", "記憶"]
+```
+
+**成立に要る最小の基盤**: descript.txt を読んでゴーストを組み立て、`shiori` の欄が指す SHIORI を読み込んで `OnInitialize`・`OnFirstBoot`・`OnBoot` をこの順に送り、返ってきたさくらスクリプトを再生できること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 初めて入れたゴーストが最初の挨拶をしない。2 回目以降の起動でも黙ったまま立っているだけになり、作者名や表示名を読む欄が無いので、ゴースト一覧にも正しい名前が出ない。
+
+構成 id は 16 件で、うち機械の束から来たものが 1 件、人手で足したものが 15 件である（`hand` の行を数えた）。
+
+### 会話（段階 A 相当）
+
+```toml
+[bundle."会話"]
+machine = [
+  "ukadoc:list_sakura_script:_5c__q_5bID_2c..._5d:1",
+  "ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1",
+]
+members = [
+  "ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1",
+  "ukadoc:list_sakura_script:_5c1_3082_3057_304f_306f_5cu:1",
+  "ukadoc:list_sakura_script:_5cC:1",
+  "ukadoc:list_sakura_script:_5c_21_5bquicksection_2cfalse_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bquicksection_2ctrue_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cdisable_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cenable_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cballoonwait_2c_500d_7387_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1",
+  "ukadoc:list_sakura_script:_5c__q_5bID_2c..._5d:1",
+  "ukadoc:list_sakura_script:_5c__w_5b_6642_9593_5d:1",
+  "ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1",
+  "ukadoc:list_sakura_script:_5c_q:1",
+  "ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1",
+  "ukadoc:list_sakura_script:_5c_w_5b_6642_9593_5d:1",
+  "ukadoc:list_sakura_script:_5cc:1",
+  "ukadoc:list_sakura_script:_5ce:1",
+  "ukadoc:list_sakura_script:_5cn:1",
+  "ukadoc:list_sakura_script:_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1",
+  "ukadoc:list_sakura_script:_5cn_5bhalf_5d:1",
+  "ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1",
+  "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1",
+  "ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5ct:1",
+  "ukadoc:list_sakura_script:_5cw_6642_9593:1",
+  "ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1",
+  "ukadoc:list_shiori_event:OnAnchorEnter:1",
+  "ukadoc:list_shiori_event:OnAnchorHover:1",
+  "ukadoc:list_shiori_event:OnAnchorSelect:1",
+  "ukadoc:list_shiori_event:OnAnchorSelectEx:1",
+  "ukadoc:list_shiori_event:OnChoiceEnter:1",
+  "ukadoc:list_shiori_event:OnChoiceHover:1",
+  "ukadoc:list_shiori_event:OnChoiceSelect:1",
+  "ukadoc:list_shiori_event:OnChoiceSelectEx:1",
+  "ukadoc:list_shiori_event:OnChoiceTimeout:1",
+  "ukadoc:list_shiori_resource:balloon_tooltip:1",
+]
+hand = [
+  "ukadoc:list_sakura_script:_5c0_3082_3057_304f_306f_5ch:1",
+  "ukadoc:list_sakura_script:_5c1_3082_3057_304f_306f_5cu:1",
+  "ukadoc:list_sakura_script:_5cC:1",
+  "ukadoc:list_sakura_script:_5c_21_5bquicksection_2cfalse_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bquicksection_2ctrue_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cdisable_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cenable_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cballoonwait_2c_500d_7387_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1",
+  "ukadoc:list_sakura_script:_5c__w_5b_6642_9593_5d:1",
+  "ukadoc:list_sakura_script:_5c_q:1",
+  "ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1",
+  "ukadoc:list_sakura_script:_5c_w_5b_6642_9593_5d:1",
+  "ukadoc:list_sakura_script:_5cc:1",
+  "ukadoc:list_sakura_script:_5ce:1",
+  "ukadoc:list_sakura_script:_5cn:1",
+  "ukadoc:list_sakura_script:_5cn_5b_30d1_30fc_30bb_30f3_30c8_5d:1",
+  "ukadoc:list_sakura_script:_5cn_5bhalf_5d:1",
+  "ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1",
+  "ukadoc:list_sakura_script:_5ct:1",
+  "ukadoc:list_sakura_script:_5cw_6642_9593:1",
+  "ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1",
+  "ukadoc:list_shiori_event:OnAnchorEnter:1",
+  "ukadoc:list_shiori_event:OnAnchorHover:1",
+  "ukadoc:list_shiori_event:OnChoiceEnter:1",
+  "ukadoc:list_shiori_event:OnChoiceHover:1",
+  "ukadoc:list_shiori_resource:balloon_tooltip:1",
+]
+domains = ["sakura-script", "shiori"]
+foundation = "さくらスクリプトの解釈とバルーンへの文字送り"
+breakage = "黙って壊れる"
+themes = ["気配", "掛け合い", "交わり"]
+```
+
+**成立に要る最小の基盤**: さくらスクリプトを字句に分け、スコープの切り替え・サーフェスの指定・改行・待ち・終端をバルーンへ順に反映し、選択肢とアンカーを押した結果を SHIORI へ返せること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 台詞が最後まで流れて止まらず、クリックで送る間が無くなる。選択肢が出ないので、分岐する会話はどの枝にも進まない。二人が交互に喋る掛け合いも、片方のバルーンにまとめて出る。
+
+構成 id は 39 件で、うち機械の束から来たものが 11 件、人手で足したものが 28 件である（`hand` の行を数えた）。
+
+### 撫で（段階 A 相当）
+
+```toml
+[bundle."撫で"]
+machine = [
+  "ukadoc:list_shiori_event:OnMouseClick:1",
+]
+members = [
+  "ukadoc:descript_shell_surfaces:animation_2a.collision_2a_2c_5f53_305f_308a_5224_5b9a_5b9a_7fa9animation_2a.collisionex_2a_2c_5f53_305f_308a_5224_5b9a_5:1",
+  "ukadoc:descript_shell_surfaces:collision-sort_2c_30bd_30fc_30c8_9806_5e8f:1",
+  "ukadoc:descript_shell_surfaces:collision_2a_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y_2cID:1",
+  "ukadoc:descript_shell_surfaces:collisionex_2a_2cID_2c_30bf_30a4_30d7_2c_5ea7_6a191_2c_5ea7_6a192...:1",
+  "ukadoc:list_sakura_script:_5c_21_5benter_2ccollisionmode_5d_5c_21_5benter_2ccollisionmode_2crect_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bleave_2ccollisionmode_5d:1",
+  "ukadoc:list_shiori_event:OnMouseClick:1",
+  "ukadoc:list_shiori_event:OnMouseClickEx:1",
+  "ukadoc:list_shiori_event:OnMouseDoubleClick:1",
+  "ukadoc:list_shiori_event:OnMouseDoubleClickEx:1",
+  "ukadoc:list_shiori_event:OnMouseDown:1",
+  "ukadoc:list_shiori_event:OnMouseDownEx:1",
+  "ukadoc:list_shiori_event:OnMouseDragEnd:1",
+  "ukadoc:list_shiori_event:OnMouseDragStart:1",
+  "ukadoc:list_shiori_event:OnMouseEnter:1",
+  "ukadoc:list_shiori_event:OnMouseEnterAll:1",
+  "ukadoc:list_shiori_event:OnMouseGesture:1",
+  "ukadoc:list_shiori_event:OnMouseHover:1",
+  "ukadoc:list_shiori_event:OnMouseLeave:1",
+  "ukadoc:list_shiori_event:OnMouseLeaveAll:1",
+  "ukadoc:list_shiori_event:OnMouseMove:1",
+  "ukadoc:list_shiori_event:OnMouseMultipleClick:1",
+  "ukadoc:list_shiori_event:OnMouseMultipleClickEx:1",
+  "ukadoc:list_shiori_event:OnMouseUp:1",
+  "ukadoc:list_shiori_event:OnMouseUpEx:1",
+  "ukadoc:list_shiori_event:OnMouseWheel:1",
+  "ukadoc:list_shiori_resource:tooltip:1",
+]
+hand = [
+  "ukadoc:descript_shell_surfaces:animation_2a.collision_2a_2c_5f53_305f_308a_5224_5b9a_5b9a_7fa9animation_2a.collisionex_2a_2c_5f53_305f_308a_5224_5b9a_5:1",
+  "ukadoc:descript_shell_surfaces:collision-sort_2c_30bd_30fc_30c8_9806_5e8f:1",
+  "ukadoc:descript_shell_surfaces:collision_2a_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y_2cID:1",
+  "ukadoc:descript_shell_surfaces:collisionex_2a_2cID_2c_30bf_30a4_30d7_2c_5ea7_6a191_2c_5ea7_6a192...:1",
+  "ukadoc:list_sakura_script:_5c_21_5benter_2ccollisionmode_5d_5c_21_5benter_2ccollisionmode_2crect_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bleave_2ccollisionmode_5d:1",
+  "ukadoc:list_shiori_event:OnMouseDoubleClick:1",
+  "ukadoc:list_shiori_event:OnMouseDoubleClickEx:1",
+  "ukadoc:list_shiori_event:OnMouseDown:1",
+  "ukadoc:list_shiori_event:OnMouseDownEx:1",
+  "ukadoc:list_shiori_event:OnMouseDragEnd:1",
+  "ukadoc:list_shiori_event:OnMouseDragStart:1",
+  "ukadoc:list_shiori_event:OnMouseEnter:1",
+  "ukadoc:list_shiori_event:OnMouseEnterAll:1",
+  "ukadoc:list_shiori_event:OnMouseGesture:1",
+  "ukadoc:list_shiori_event:OnMouseHover:1",
+  "ukadoc:list_shiori_event:OnMouseLeave:1",
+  "ukadoc:list_shiori_event:OnMouseLeaveAll:1",
+  "ukadoc:list_shiori_event:OnMouseMove:1",
+  "ukadoc:list_shiori_event:OnMouseMultipleClick:1",
+  "ukadoc:list_shiori_event:OnMouseMultipleClickEx:1",
+  "ukadoc:list_shiori_event:OnMouseUp:1",
+  "ukadoc:list_shiori_event:OnMouseUpEx:1",
+  "ukadoc:list_shiori_event:OnMouseWheel:1",
+  "ukadoc:list_shiori_resource:tooltip:1",
+]
+domains = ["assets", "sakura-script", "shiori"]
+foundation = "当たり判定の解決とマウス入力の配送"
+breakage = "黙って壊れる"
+themes = ["触れ合い"]
+```
+
+**成立に要る最小の基盤**: surfaces.txt の当たり判定を面ごとに解決し、マウスの座標をその名前へ写して `OnMouseMove`・`OnMouseClick` 系のイベントとして SHIORI へ送れること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 頭を撫でても顔を触っても何も起こらない。ゴーストは立っているだけで、触れ合いを入口にした反応がすべて出ない。
+
+構成 id は 27 件で、うち機械の束から来たものが 2 件、人手で足したものが 25 件である（`hand` の行を数えた）。
+
+### メニュー（段階 A 相当）
+
+```toml
+[bundle."メニュー"]
+machine = [
+  "ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1",
+  "ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:list_shiori_resource:char_2a.popupmenu.applybindtoself:1",
+  "ukadoc:list_shiori_resource:char_2a.popupmenu.type:1",
+  "ukadoc:list_shiori_resource:char_2a.popupmenu.visible:1",
+]
+members = [
+  "ukadoc:descript_ghost:menu.font.height_2c_30d5_30a9_30f3_30c8_30b5_30a4_30ba:1",
+  "ukadoc:descript_ghost:menu.font.name_2c_30d5_30a9_30f3_30c8_540d:1",
+  "ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1",
+  "ukadoc:descript_shell:char_2a.menuitem_2a_2cID:1",
+  "ukadoc:descript_shell:char_2a.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1",
+  "ukadoc:descript_shell:kero.menu_2cauto_307e_305f_306fhidden:1",
+  "ukadoc:descript_shell:kero.menuitem_2a_2cID:1",
+  "ukadoc:descript_shell:kero.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1",
+  "ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu.background.font.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.background.font.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.background.font.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.disable.font.color.b:1",
+  "ukadoc:descript_shell:menu.disable.font.color.g:1",
+  "ukadoc:descript_shell:menu.disable.font.color.r:1",
+  "ukadoc:descript_shell:menu.font.height_2c_30d5_30a9_30f3_30c8_30b5_30a4_30ba:1",
+  "ukadoc:descript_shell:menu.font.name_2c_30d5_30a9_30f3_30c8_540d:1",
+  "ukadoc:descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.frame.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.frame.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.frame.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu_2chidden:1",
+  "ukadoc:descript_shell:sakura.menu_2cauto_307e_305f_306fhidden:1",
+  "ukadoc:descript_shell:sakura.menuitem_2a_2cID:1",
+  "ukadoc:descript_shell:sakura.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1",
+  "ukadoc:dev_ownerdraw",
+  "ukadoc:list_plugin_event:OnMenuExec:1",
+  "ukadoc:list_propertysystem:char_2a.bind.menu:1",
+  "ukadoc:list_propertysystem:kero.bind.menu:1",
+  "ukadoc:list_propertysystem:menu:1",
+  "ukadoc:list_propertysystem:sakura.bind.menu:1",
+  "ukadoc:list_shiori_resource:char_2a.popupmenu.applybindtoself:1",
+  "ukadoc:list_shiori_resource:char_2a.popupmenu.type:1",
+  "ukadoc:list_shiori_resource:char_2a.popupmenu.visible:1",
+  "ukadoc:list_shiori_resource:kero.popupmenu.applybindtoself:1",
+  "ukadoc:list_shiori_resource:kero.popupmenu.type:1",
+  "ukadoc:list_shiori_resource:kero.popupmenu.visible:1",
+  "ukadoc:list_shiori_resource:menu.background.bitmap.filename:1",
+  "ukadoc:list_shiori_resource:menu.background.font.color.b:1",
+  "ukadoc:list_shiori_resource:menu.background.font.color.g:1",
+  "ukadoc:list_shiori_resource:menu.background.font.color.r:1",
+  "ukadoc:list_shiori_resource:menu.disable.font.color.b:1",
+  "ukadoc:list_shiori_resource:menu.disable.font.color.g:1",
+  "ukadoc:list_shiori_resource:menu.disable.font.color.r:1",
+  "ukadoc:list_shiori_resource:menu.foreground.bitmap.filename:1",
+  "ukadoc:list_shiori_resource:menu.foreground.font.color.b:1",
+  "ukadoc:list_shiori_resource:menu.foreground.font.color.g:1",
+  "ukadoc:list_shiori_resource:menu.foreground.font.color.r:1",
+  "ukadoc:list_shiori_resource:menu.frame.color.b:1",
+  "ukadoc:list_shiori_resource:menu.frame.color.g:1",
+  "ukadoc:list_shiori_resource:menu.frame.color.r:1",
+  "ukadoc:list_shiori_resource:menu.separator.color.b:1",
+  "ukadoc:list_shiori_resource:menu.separator.color.g:1",
+  "ukadoc:list_shiori_resource:menu.separator.color.r:1",
+  "ukadoc:list_shiori_resource:menu.sidebar.bitmap.filename:1",
+  "ukadoc:list_shiori_resource:sakura.popupmenu.applybindtoself:1",
+  "ukadoc:list_shiori_resource:sakura.popupmenu.type:1",
+  "ukadoc:list_shiori_resource:sakura.popupmenu.visible:1",
+  "ukadoc:manual_owner_draw_menu",
+]
+hand = [
+  "ukadoc:descript_ghost:menu.font.height_2c_30d5_30a9_30f3_30c8_30b5_30a4_30ba:1",
+  "ukadoc:descript_ghost:menu.font.name_2c_30d5_30a9_30f3_30c8_540d:1",
+  "ukadoc:descript_shell:char_2a.menuitem_2a_2cID:1",
+  "ukadoc:descript_shell:char_2a.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1",
+  "ukadoc:descript_shell:kero.menuitem_2a_2cID:1",
+  "ukadoc:descript_shell:kero.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1",
+  "ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.background.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu.background.font.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.background.font.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.background.font.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.disable.font.color.b:1",
+  "ukadoc:descript_shell:menu.disable.font.color.g:1",
+  "ukadoc:descript_shell:menu.disable.font.color.r:1",
+  "ukadoc:descript_shell:menu.font.height_2c_30d5_30a9_30f3_30c8_30b5_30a4_30ba:1",
+  "ukadoc:descript_shell:menu.font.name_2c_30d5_30a9_30f3_30c8_540d:1",
+  "ukadoc:descript_shell:menu.foreground.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.foreground.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.foreground.font.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.frame.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.frame.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.frame.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.b_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.g_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.separator.color.r_2c_6570_5024:1",
+  "ukadoc:descript_shell:menu.sidebar.alignment_2c_4f4d_7f6e:1",
+  "ukadoc:descript_shell:menu.sidebar.bitmap.filename_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:descript_shell:sakura.menuitem_2a_2cID:1",
+  "ukadoc:descript_shell:sakura.menuitemex_2a_2c_30e1_30cb_30e5_30fc_540d_2cID:1",
+  "ukadoc:list_plugin_event:OnMenuExec:1",
+  "ukadoc:list_shiori_resource:menu.background.bitmap.filename:1",
+  "ukadoc:list_shiori_resource:menu.background.font.color.b:1",
+  "ukadoc:list_shiori_resource:menu.background.font.color.g:1",
+  "ukadoc:list_shiori_resource:menu.background.font.color.r:1",
+  "ukadoc:list_shiori_resource:menu.disable.font.color.b:1",
+  "ukadoc:list_shiori_resource:menu.disable.font.color.g:1",
+  "ukadoc:list_shiori_resource:menu.disable.font.color.r:1",
+  "ukadoc:list_shiori_resource:menu.foreground.bitmap.filename:1",
+  "ukadoc:list_shiori_resource:menu.foreground.font.color.b:1",
+  "ukadoc:list_shiori_resource:menu.foreground.font.color.g:1",
+  "ukadoc:list_shiori_resource:menu.foreground.font.color.r:1",
+  "ukadoc:list_shiori_resource:menu.frame.color.b:1",
+  "ukadoc:list_shiori_resource:menu.frame.color.g:1",
+  "ukadoc:list_shiori_resource:menu.frame.color.r:1",
+  "ukadoc:list_shiori_resource:menu.separator.color.b:1",
+  "ukadoc:list_shiori_resource:menu.separator.color.g:1",
+  "ukadoc:list_shiori_resource:menu.separator.color.r:1",
+  "ukadoc:list_shiori_resource:menu.sidebar.bitmap.filename:1",
+]
+domains = ["assets", "property", "shiori"]
+foundation = "メニューの組み立てと自前描画"
+breakage = "黙って壊れる"
+themes = ["装い"]
+```
+
+**成立に要る最小の基盤**: 右クリックでメニューを組み立て、descript.txt と SHIORI の資源が指定した項目・配色・背景画像で自前描画し、選んだ項目を実行できること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 右クリックしても何も出ない。着せ替えの切り替え・シェルの選択・ゴーストの入れ替え・終了はすべてメニューが入口なので、利用者はゴーストを操作する手段を持たない。
+
+構成 id は 69 件で、うち機械の束から来たものが 19 件、人手で足したものが 50 件である（`hand` の行を数えた）。
+
+### 終了（段階 A 相当）
+
+```toml
+[bundle."終了"]
+machine = [
+  "ukadoc:list_sakura_script:_5c_21_5bupdate_2cplatform_5d:1",
+]
+members = [
+  "ukadoc:list_sakura_script:_5c-:1",
+  "ukadoc:list_shiori_event:OnClose:1",
+  "ukadoc:list_shiori_event:OnCloseAll:1",
+  "ukadoc:list_shiori_event:OnDestroy:1",
+]
+hand = [
+  "ukadoc:list_sakura_script:_5c-:1",
+  "ukadoc:list_shiori_event:OnCloseAll:1",
+  "ukadoc:list_shiori_event:OnDestroy:1",
+]
+domains = ["sakura-script", "shiori"]
+foundation = "終了要求の受理と最後の台詞の再生"
+breakage = "黙って壊れる"
+themes = ["気配", "記憶"]
+```
+
+**成立に要る最小の基盤**: 終了要求を受けて `OnClose` を送り、返ってきた別れの台詞を再生し終えてからプロセスを畳めること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 別れの挨拶をせずに窓が消える。複数のゴーストを立てているときも、全体の終了に合わせた台詞が 1 つも出ない。
+
+構成 id は 4 件で、うち機械の束から来たものが 1 件、人手で足したものが 3 件である（`hand` の行を数えた）。
+
+### 自発発話（段階 A 相当）
+
+```toml
+[bundle."自発発話"]
+machine = [
+  "ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1",
+]
+members = [
+  "ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1",
+  "ukadoc:list_plugin_event:OnSecondChange:1",
+  "ukadoc:list_shiori_event:OnAITalk:1",
+  "ukadoc:list_shiori_event:OnHourTimeSignal:1",
+  "ukadoc:list_shiori_event:OnMinuteChange:1",
+  "ukadoc:list_shiori_event:OnSecondChange:1",
+  "ukadoc:list_shiori_resource:getaistate:1",
+  "ukadoc:list_shiori_resource:getaistateex:1",
+]
+hand = [
+  "ukadoc:list_shiori_event:OnAITalk:1",
+  "ukadoc:list_shiori_event:OnHourTimeSignal:1",
+  "ukadoc:list_shiori_event:OnMinuteChange:1",
+  "ukadoc:list_shiori_resource:getaistate:1",
+  "ukadoc:list_shiori_resource:getaistateex:1",
+]
+domains = ["assets", "shiori"]
+foundation = "絶対時刻の刻みを台本の起点にする発火路"
+breakage = "黙って壊れる"
+themes = ["気配", "記憶"]
+```
+
+**成立に要る最小の基盤**: 起動からの絶対時刻を刻み、秒・分・正時の境界で `OnSecondChange`・`OnMinuteChange`・`OnHourTimeSignal` を送り、`OnAITalk` の間隔を資源の値で決められること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: 話しかけない限りゴーストが一言も喋らない。時報も鳴らず、机の隅で勝手に喋っているという伺かの基本の姿にならない。
+
+構成 id は 8 件で、うち機械の束から来たものが 3 件、人手で足したものが 5 件である（`hand` の行を数えた）。
+
+### 名前の記憶（段階 A 相当）
+
+```toml
+[bundle."名前の記憶"]
+machine = [
+  "ukadoc:descript_ghost:char_2a.name_2c_540d_524d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2cteachbox_5d:1",
+]
+members = [
+  "ukadoc:descript_ghost:char_2a.name_2c_540d_524d:1",
+  "ukadoc:descript_ghost:kero.name_2c_540d_524d:1",
+  "ukadoc:descript_ghost:name.allowoverride_2c_6570_5024:1",
+  "ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1",
+  "ukadoc:descript_ghost:sakura.name2_2c_540d_524d:1",
+  "ukadoc:descript_ghost:sakura.name_2c_540d_524d:1",
+  "ukadoc:descript_shell:char_2a.name_2c_540d_524d:1",
+  "ukadoc:descript_shell:kero.name_2c_540d_524d:1",
+  "ukadoc:descript_shell:sakura.name_2c_540d_524d:1",
+  "ukadoc:list_propertysystem:currentghost.scope_28ID_29.name:1",
+  "ukadoc:list_sakura_script:_25keroname:1",
+  "ukadoc:list_sakura_script:_25selfname2:1",
+  "ukadoc:list_sakura_script:_25selfname:1",
+  "ukadoc:list_sakura_script:_25username:1",
+  "ukadoc:list_sakura_script:_5c_21_5bopen_2cteachbox_5d:1",
+  "ukadoc:list_shiori_event:OnNotifyUserInfo:1",
+  "ukadoc:list_shiori_event:OnTeach:1",
+  "ukadoc:list_shiori_event:OnTeachInputCancel:1",
+  "ukadoc:list_shiori_event:OnTeachStart:1",
+  "ukadoc:list_shiori_event:installedkeroname:1",
+  "ukadoc:list_shiori_event:installedsakuraname:1",
+  "ukadoc:list_shiori_resource:username:1",
+]
+hand = [
+  "ukadoc:descript_ghost:name.allowoverride_2c_6570_5024:1",
+  "ukadoc:descript_ghost:sakura.name2_2c_540d_524d:1",
+  "ukadoc:list_sakura_script:_25keroname:1",
+  "ukadoc:list_sakura_script:_25selfname2:1",
+  "ukadoc:list_sakura_script:_25selfname:1",
+  "ukadoc:list_sakura_script:_25username:1",
+  "ukadoc:list_shiori_event:OnNotifyUserInfo:1",
+  "ukadoc:list_shiori_event:installedkeroname:1",
+  "ukadoc:list_shiori_event:installedsakuraname:1",
+  "ukadoc:list_shiori_resource:username:1",
+]
+domains = ["assets", "property", "sakura-script", "shiori"]
+foundation = "ゴーストと利用者の名前を保存して読み戻す口"
+breakage = "黙って壊れる"
+themes = ["掛け合い", "記憶", "交わり"]
+```
+
+**成立に要る最小の基盤**: 本体側と相方の名前を descript.txt と shell の descript.txt から読み、利用者の名前を SHIORI の資源として保存して読み戻せること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: ゴースト自身の名前が出ないので、台詞の中の名前が空欄になる。名前を尋ねる会話をしても答えを覚えないため、次の起動で同じ質問を繰り返す。
+
+構成 id は 22 件で、うち機械の束から来たものが 12 件、人手で足したものが 10 件である（`hand` の行を数えた）。
+
+### 更新（段階 B 相当）
+
+```toml
+[bundle."更新"]
+machine = [
+  "ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnDownloadBegin:1",
+  "ukadoc:list_shiori_event:OnUpdateCheckResult:1",
+  "ukadoc:list_shiori_event:OnUpdateCheckComplete:1",
+  "ukadoc:list_sakura_script:_5c_21_5bupdate_2cplatform_5d:1",
+]
+members = [
+  "ukadoc:descript_ghost:homeurl_2cURL:1",
+  "ukadoc:dev_update",
+  "ukadoc:list_sakura_script:_5c_21_5bexecute_2ccreateupdatedata_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bupdate_2cplatform_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bupdatebymyself_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bupdateother_2c_66f4_65b0_5bfe_8c61_2f_30aa_30d7_30b7_30e7_30f3_7fa4_2c..._5d:1",
+  "ukadoc:list_shiori_event:OnBasewareUpdated:1",
+  "ukadoc:list_shiori_event:OnBasewareUpdating:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnDownloadBegin:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareBegin:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareComplete:1",
+  "ukadoc:list_shiori_event:OnUpdate.OnMD5CompareFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateBegin:1",
+  "ukadoc:list_shiori_event:OnUpdateCheckComplete:1",
+  "ukadoc:list_shiori_event:OnUpdateCheckFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateCheckResult:1",
+  "ukadoc:list_shiori_event:OnUpdateCheckResultEx:1",
+  "ukadoc:list_shiori_event:OnUpdateComplete:1",
+  "ukadoc:list_shiori_event:OnUpdateFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateOther.OnDownloadBegin:1",
+  "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareBegin:1",
+  "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareComplete:1",
+  "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateOtherBegin:1",
+  "ukadoc:list_shiori_event:OnUpdateOtherComplete:1",
+  "ukadoc:list_shiori_event:OnUpdateOtherFailure:1",
+  "ukadoc:list_shiori_event:OnUpdateOtherReady:1",
+  "ukadoc:list_shiori_event:OnUpdateProcessExec:1",
+  "ukadoc:list_shiori_event:OnUpdateReady:1",
+  "ukadoc:list_shiori_event:OnUpdateResult:1",
+  "ukadoc:list_shiori_event:OnUpdateResultEx:1",
+  "ukadoc:list_shiori_event:OnUpdateResultExplorer:1",
+  "ukadoc:list_shiori_event:OnUpdatedataCreated:1",
+  "ukadoc:list_shiori_event:OnUpdatedataCreating:1",
+  "ukadoc:list_shiori_resource:homeurl:1",
+  "ukadoc:list_shiori_resource:other_homeurl_override:1",
+  "ukadoc:list_shiori_resource:useorigin1:1",
+  "ukadoc:manual_update",
+]
+hand = [
+  "ukadoc:descript_ghost:homeurl_2cURL:1",
+  "ukadoc:list_sakura_script:_5c_21_5bupdatebymyself_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1",
+  "ukadoc:list_shiori_resource:homeurl:1",
+  "ukadoc:list_shiori_resource:useorigin1:1",
+]
+domains = ["assets", "sakura-script", "shiori"]
+foundation = "ネットワーク越しの差分取得とファイルの入れ替え"
+breakage = "黙って壊れる"
+themes = ["更新"]
+```
+
+**成立に要る最小の基盤**: homeurl が指すサーバから updates2.dau を取り、md5 を突き合わせて差分だけを取得し、入れ替えの前後で `OnUpdate*` 系のイベントを送れること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: ゴーストが新しい版に上がらない。作者が配信した修正も追加の台詞も届かず、更新の進行を伝える台詞も 1 つも出ない。
+
+構成 id は 39 件で、うち機械の束から来たものが 35 件、人手で足したものが 4 件である（`hand` の行を数えた）。
+
+### インストール（段階 B 相当）
+
+```toml
+[bundle."インストール"]
+machine = [
+  "ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:list_plugin_event:OnInstallComplete:1",
+]
+members = [
+  "ukadoc:descript_ghost:install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1",
+  "ukadoc:descript_install:_2a.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1",
+  "ukadoc:descript_install:_2a.refresh_2c_6570_5024:1",
+  "ukadoc:descript_install:_2a.refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1",
+  "ukadoc:descript_install:_2a.source.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1",
+  "ukadoc:descript_install:_76f8_5bfe_30d1_30b9:1",
+  "ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1",
+  "ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2cignore:1",
+  "ukadoc:descript_install:accept_2c_672c_4f53_5074_540d:1",
+  "ukadoc:descript_install:bootghost_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1",
+  "ukadoc:descript_install:charset_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_install:directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1",
+  "ukadoc:descript_install:name_2c_30aa_30d6_30b8_30a7_30af_30c8_540d:1",
+  "ukadoc:descript_install:refresh_2c_6570_5024:1",
+  "ukadoc:descript_install:refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1",
+  "ukadoc:descript_install:type_2c_7a2e_5225:1",
+  "ukadoc:list_plugin_event:OnInstallComplete:1",
+  "ukadoc:list_plugin_event:installedballoonname:1",
+  "ukadoc:list_plugin_event:installedghostname:1",
+  "ukadoc:list_plugin_event:installedplugin:1",
+  "ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1",
+  "ukadoc:list_shiori_event:OnInstallBegin:1",
+  "ukadoc:list_shiori_event:OnInstallComplete:1",
+  "ukadoc:list_shiori_event:OnInstallCompleteAll:1",
+  "ukadoc:list_shiori_event:OnInstallCompleteEx:1",
+  "ukadoc:list_shiori_event:OnInstallFailure:1",
+  "ukadoc:list_shiori_event:OnInstallRefuse:1",
+  "ukadoc:list_shiori_event:OnInstallReroute:1",
+  "ukadoc:list_shiori_event:OnURLQuery:1",
+  "ukadoc:list_shiori_event:installedballoonname:1",
+  "ukadoc:list_shiori_event:installedghostname:1",
+  "ukadoc:list_shiori_event:installedheadlinename:1",
+  "ukadoc:list_shiori_event:installedplugin:1",
+  "ukadoc:list_shiori_event:installedshellname:1",
+  "ukadoc:manual_install",
+]
+hand = [
+  "ukadoc:descript_ghost:install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1",
+  "ukadoc:descript_install:_2a.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1",
+  "ukadoc:descript_install:_2a.refresh_2c_6570_5024:1",
+  "ukadoc:descript_install:_2a.refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1",
+  "ukadoc:descript_install:_2a.source.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1",
+  "ukadoc:descript_install:_76f8_5bfe_30d1_30b9:1",
+  "ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1",
+  "ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2cignore:1",
+  "ukadoc:descript_install:accept_2c_672c_4f53_5074_540d:1",
+  "ukadoc:descript_install:bootghost_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1",
+  "ukadoc:descript_install:charset_2c_6587_5b57_30b3_30fc_30c9:1",
+  "ukadoc:descript_install:directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1",
+  "ukadoc:descript_install:name_2c_30aa_30d6_30b8_30a7_30af_30c8_540d:1",
+  "ukadoc:descript_install:refresh_2c_6570_5024:1",
+  "ukadoc:descript_install:refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1",
+  "ukadoc:descript_install:type_2c_7a2e_5225:1",
+  "ukadoc:list_plugin_event:installedballoonname:1",
+  "ukadoc:list_plugin_event:installedghostname:1",
+  "ukadoc:list_plugin_event:installedplugin:1",
+  "ukadoc:list_shiori_event:OnInstallBegin:1",
+  "ukadoc:list_shiori_event:OnInstallCompleteEx:1",
+  "ukadoc:list_shiori_event:OnInstallFailure:1",
+  "ukadoc:list_shiori_event:installedballoonname:1",
+  "ukadoc:list_shiori_event:installedghostname:1",
+  "ukadoc:list_shiori_event:installedheadlinename:1",
+  "ukadoc:list_shiori_event:installedplugin:1",
+  "ukadoc:list_shiori_event:installedshellname:1",
+]
+domains = ["assets", "sakura-script", "shiori"]
+foundation = "配布アーカイブの受け取りと所定の場所への展開"
+breakage = "黙って壊れる"
+themes = ["触れ合い", "装い", "記憶", "更新"]
+```
+
+**成立に要る最小の基盤**: nar 書庫を受け取って install.txt の指定どおりに展開し、`OnInstallComplete` 系のイベントで受け入れの結果を伝えられること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: ゴーストやバルーンやシェルを窓へ落としても何も入らない。配布された物を追加する手段が無くなるので、最初に入れた 1 体だけを使い続けることになる。
+
+構成 id は 36 件で、うち機械の束から来たものが 9 件、人手で足したものが 27 件である（`hand` の行を数えた）。
+
+### 切替（段階 B 相当）
+
+```toml
+[bundle."切替"]
+machine = [
+  "ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1",
+]
+members = [
+  "ukadoc:dev_bind",
+  "ukadoc:dev_shell",
+  "ukadoc:list_sakura_script:_5c_21_5bbind-noevent_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5breload_2cghost_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_500d_7387_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1",
+  "ukadoc:list_sakura_script:_5c_2b:1",
+  "ukadoc:list_sakura_script:_5c__2b:1",
+  "ukadoc:list_shiori_event:OnBalloonChange:1",
+  "ukadoc:list_shiori_event:OnBalloonScaling:1",
+  "ukadoc:list_shiori_event:OnDressupChanged:1",
+  "ukadoc:list_shiori_event:OnGhostChanged:1",
+  "ukadoc:list_shiori_event:OnGhostChanging:1",
+  "ukadoc:list_shiori_event:OnNotifyBalloonInfo:1",
+  "ukadoc:list_shiori_event:OnNotifyDressupInfo:1",
+  "ukadoc:list_shiori_event:OnNotifyShellInfo:1",
+  "ukadoc:list_shiori_event:OnShellChanged:1",
+  "ukadoc:list_shiori_event:OnShellChanging:1",
+  "ukadoc:list_shiori_event:OnShellScaling:1",
+  "ukadoc:manual_shell",
+]
+hand = [
+  "ukadoc:list_sakura_script:_5c_21_5bbind-noevent_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5breload_2cghost_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_500d_7387_5d:1",
+  "ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1",
+  "ukadoc:list_shiori_event:OnBalloonScaling:1",
+  "ukadoc:list_shiori_event:OnGhostChanged:1",
+  "ukadoc:list_shiori_event:OnNotifyBalloonInfo:1",
+  "ukadoc:list_shiori_event:OnNotifyShellInfo:1",
+  "ukadoc:list_shiori_event:OnShellScaling:1",
+]
+domains = ["assets", "sakura-script", "shiori"]
+foundation = "シェル・バルーン・ゴーストの読み直しと差し替え"
+breakage = "黙って壊れる"
+themes = ["装い", "記憶"]
+```
+
+**成立に要る最小の基盤**: shell/master と balloon の別のフォルダを読み直して立ち絵とバルーンを差し替え、着せ替えの重ね合わせを付け外しし、別のゴーストへ入れ替えられること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: シェルを選んでも見た目が変わらない。着せ替えの服も切り替わらず、同じゴーストに複数の姿を用意した作品はどれも 1 つの姿しか見せられない。
+
+構成 id は 26 件で、うち機械の束から来たものが 15 件、人手で足したものが 11 件である（`hand` の行を数えた）。
+
+### 消滅（段階 B 相当）
+
+```toml
+[bundle."消滅"]
+machine = []
+members = [
+  "ukadoc:list_sakura_script:_5c_21_5bvanishbymyself_5d:1",
+  "ukadoc:list_shiori_event:OnVanishButtonHold:1",
+  "ukadoc:list_shiori_event:OnVanishCancel:1",
+  "ukadoc:list_shiori_event:OnVanishSelected:1",
+  "ukadoc:list_shiori_event:OnVanishSelecting:1",
+  "ukadoc:list_shiori_event:OnVanished:1",
+  "ukadoc:list_shiori_resource:vanishbutton.caption:1",
+  "ukadoc:list_shiori_resource:vanishbuttoncaption:1",
+  "ukadoc:list_shiori_resource:vanishbuttonvisible:1",
+]
+hand = [
+  "ukadoc:list_sakura_script:_5c_21_5bvanishbymyself_5d:1",
+  "ukadoc:list_shiori_event:OnVanishButtonHold:1",
+  "ukadoc:list_shiori_event:OnVanishCancel:1",
+  "ukadoc:list_shiori_event:OnVanishSelected:1",
+  "ukadoc:list_shiori_event:OnVanishSelecting:1",
+  "ukadoc:list_shiori_event:OnVanished:1",
+  "ukadoc:list_shiori_resource:vanishbutton.caption:1",
+  "ukadoc:list_shiori_resource:vanishbuttoncaption:1",
+  "ukadoc:list_shiori_resource:vanishbuttonvisible:1",
+]
+domains = ["sakura-script", "shiori"]
+foundation = "ゴーストの削除要求の確認と自分自身の後始末"
+breakage = "黙って壊れる"
+themes = ["装い", "記憶"]
+```
+
+**成立に要る最小の基盤**: 消滅の要求を受けて確認のやりとりを行い、`OnVanishSelected` を送ってからそのゴーストのフォルダを削除して窓を閉じられること。
+
+**欠けると壊れる既存ゴーストの振る舞い**: ゴーストを消す手段が無い。別れの場面を用意した作品はその台詞に到達せず、入れたゴーストは手で削除するほかなくなる。
+
+構成 id は 9 件で、うち機械の束から来たものが 0 件、人手で足したものが 9 件である（`hand` の行を数えた）。**この束は人手のみである**——`machine` が空配列で、核になる機械の束を持たない（消滅の 9 件はいずれも台帳の関連を 1 本も持たないので、機械の束に現れない）。
+
+### 例示の 3 連鎖が 1 つの束に収まること
+
+要件 3.1 が例示する 3 つの連鎖について、束 id と構成 id で着地を示す。件数はこの節を書いた
+時点で数え直した（数え方: `report/summary.md`「ドメインを跨いで繋がった束」の表からその束 id の
+行を取り、構成 id の欄を読点で切って数えた。3 つとも段 1 の値と同じである）。
+
+| 連鎖 | 収まる束 id | その束の構成 id 数 | 名前付き束 |
+| --- | --- | ---: | --- |
+| 時刻の刻み | `ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1` | 3 | `自発発話` |
+| 重なり順 | `ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1` | 49 | 段 2 のこのタスクでは付けない |
+| インストール | `ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1` | 53 | `インストール` |
+
+**時刻の刻み** — 連鎖の 3 つの id はいずれも `ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1` を束 id とする 1 つの機械の束の構成 id である。
+- `ukadoc:descript_plugin:secondchangeinterval_2c_79d2_6570:1`（secondchangeinterval,秒数・absent・assets）
+- `ukadoc:list_plugin_event:OnSecondChange:1`（OnSecondChange・absent・shiori）
+- `ukadoc:list_shiori_event:OnSecondChange:1`（OnSecondChange・implemented・shiori）
+  3 つとも名前付き束「自発発話」の `members` に入っている（入っていない id は 0 件）。
+
+**重なり順** — 連鎖の 3 つの id はいずれも `ukadoc:descript_shell:char_2a.menu_2cauto_307e_305f_306fhidden:1` を束 id とする 1 つの機械の束の構成 id である。
+- `ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1`（seriko.zorder,スコープID,スコープID,...・implemented・assets）
+- `ukadoc:list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1`（\![set,zorder,スコープID,スコープID,...]・implemented・sakura-script）
+- `ukadoc:list_propertysystem:currentghost.seriko.zorder:1`（currentghost.seriko.zorder・degraded・property）
+  この 3 つを含む名前付き束は段階 C 以降の担当（タスク 3.3・3.4）なので、このタスクでは名付けない。上の 11 束の `members` に入っているものは 0 件である——機械の束としては 1 つに収まっており、名前付き束はこの後のタスクが付ける。
+
+**インストール** — 連鎖の 3 つの id はいずれも `ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1` を束 id とする 1 つの機械の束の構成 id である。
+- `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1`（\![execute,install,path,ファイル名]・absent・sakura-script）
+- `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1`（\![execute,install,url,URL,(feed|nar|homeurlのいずれか)]・absent・sakura-script）
+- `ukadoc:list_shiori_event:OnInstallComplete:1`（OnInstallComplete・absent・shiori）
+  3 つとも名前付き束「インストール」の `members` に入っている（入っていない id は 0 件）。
 
 ## 単独項目
 
