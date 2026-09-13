@@ -504,7 +504,7 @@ impl ParentMessageWindow {
 
 実装を **2 段階**に分けることで「直す前の構造」でテストがコンパイルできる状態を作る:
 
-1. **段階 1（契約と部品）**: `on_idle`（既定実装）・`IDLE_INTERVAL`・`ShioriConnection::on_idle`・`pump_pending_messages`・Test-A〜F を入れる。受信ループは `rx.recv()` のまま。→ Test-A・B・D・F が赤（Test-C・E は緑）。この状態で `cargo test -p areka-kanade --lib idle_tests` と `cargo test -p areka-kanade --test idle_pump_hung` を走らせ、コマンド・所要・赤の診断文を `calibration.md` に写す。
+1. **段階 1（契約と部品）**: `on_idle`（既定実装）・`IDLE_INTERVAL`・`ShioriConnection::on_idle`・`pump_pending_messages`・Test-A〜F を入れる。受信ループは `rx.recv()` のまま。→ Test-A・B・D・F が赤（Test-C・E は緑）。この状態で `cargo test -p areka-kanade --lib idle_tests` と `cargo test -p areka-kanade --test kanade idle_pump_test` を走らせ、コマンド・所要・赤の診断文を `calibration.md` に写す。
 2. **段階 2（待ちの形）**: `run_shiori_loop` を `recv_timeout` の形へ。→ 全緑。同じコマンドの緑の結果を併記する。
 
 `git stash` は使わない（ハーネス規律）。段階 1 をコミットしてから段階 2 を別コミットにする。段階 1 のコミットは**意図して赤のテストを含む**——`calibration.md` の冒頭にその旨とコミット ID を書き、完了検証がこれを退行と読まないようにする（squash マージで履歴からは消える）。
