@@ -30,8 +30,14 @@
 //! 全スコープ（要件 10.5）の両方を受ける。`\f[disable]` は戻し先の層が違うだけの
 //! 同じ一括の戻しである（[`ActorTextState::reset_look_disabled`] の裁定）。
 //!
+//! バルーンの装着（[`TextLayerState::set_look_layers`]）は戻す操作ではない——2 層を
+//! 差し替え、現在の見た目を**新しい層の上へ載せ直す**（[`Decoration::rebase`]）。作者が
+//! `\f` で明示した指定は残り、明示しなかった項目はバルーン定義の値になるので、
+//! **装着より先に `\f` が届いても既定を取りこぼさない**（開発者裁定 2026-09-13）。
+//!
 //! 見た目を**丸ごと**置き換えるので、後続仕様が [`crate::look::TextLook`] へ項目を足せば
-//! 列挙を直さずに戻しへ含まれる（要件 10.4）。戻す操作は既に追記済みの文字の番号を
+//! 列挙を直さずに戻しへ含まれる（要件 10.4）。載せ直しも同じ性質を持つ——憶えるのは
+//! `\f` の命令の**トークン列**であって項目ごとの欄ではない。戻す操作は既に追記済みの文字の番号を
 //! 書き換えない——番号列は追記時の写しであり、表の既存の番号の意味も変わらないから
 //! である（要件 10.7）。
 //!
@@ -68,6 +74,19 @@ const RECORD_FONT_ARG: u8 = 0;
 /// 記録の種別——上下付きが有効なまま文字を追記した側（[`ActorTextState::warn_script_once`]）。
 const RECORD_SCRIPT_APPEND: u8 = 1;
 
+/// いま土台にしている層——一括の戻しの行き先（[`Decoration::base`]）。
+///
+/// 「どちらの層か」の 1 値だけを持ち、層の中身は持たない。装着で 2 層が差し替わったとき、
+/// 新しい方の同じ層へ載せ直すために要る（[`Decoration::rebase`]）。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum BaseLayer {
+    /// 既定の見た目（`\f[default]`・台本の先頭の戻し先）。
+    #[default]
+    Default,
+    /// 無効表示の見た目（`\f[disable]` の戻し先）。
+    Disable,
+}
+
 /// スコープ 1 つ分の装飾状態（2 層・現在の見た目・所有外キーの保持・記録済みの値）。
 ///
 /// [`Decoration::default`] は ukadoc の既定（[`LookLayers::default`]）で、バルーンが装着される
@@ -79,6 +98,16 @@ pub struct Decoration {
     layers: LookLayers,
     /// いま効いている見た目（次に追記される文字が受け取る値）。
     current: TextLook,
+    /// いま土台にしている層（[`Decoration::rebase`] の載せ直し先）。
+    base: BaseLayer,
+    /// 一括の戻しから後に届いた `\f` の命令列（**トークンのまま**・要件 4.1／10.4）。
+    ///
+    /// [`Decoration::rebase`] が新しい土台の上でこれを再生する。**トークンのまま持つ**のが
+    /// 肝で、「どの項目が明示されたか」を項目ごとの欄で持つと後続仕様が
+    /// [`crate::look::TextLook`] へ項目を足すたびに欄と併合を直すことになる（要件 10.4 が
+    /// 禁じている列挙）。再生は [`crate::look::apply_font_tag`] 1 か所を通るので、
+    /// 項目が増えても再生の側は変わらない。
+    applied: Vec<Vec<String>>,
     /// 本仕様が意味を与えないキーの最新の引数列（要件 2.5・キー→引数列）。
     unowned: BTreeMap<String, Vec<String>>,
     /// 記録済みの（種別, キー, 値の列）（同じ指定の警告を 1 台詞に 1 度へ抑えるための集合・要件 13.4）。
@@ -100,8 +129,42 @@ impl Default for Decoration {
         Decoration {
             layers,
             current,
+            base: BaseLayer::Default,
+            applied: Vec::new(),
             unowned: BTreeMap::new(),
             warned: BTreeSet::new(),
+        }
+    }
+}
+
+impl Decoration {
+    /// いま土台にしている層の見た目。
+    fn base_look(&self) -> TextLook {
+        match self.base {
+            BaseLayer::Default => self.layers.default.clone(),
+            BaseLayer::Disable => self.layers.disable.clone(),
+        }
+    }
+
+    /// 差し替わった 2 層の上へ現在の見た目を載せ直す（要件 4.1・装着の 1 点から呼ぶ）。
+    ///
+    /// 土台を新しい層にしてから、一括の戻しから後に届いた `\f` の命令を**そのままの順で
+    /// 再生する**。作者が明示した指定はそのまま残り、明示しなかった項目はバルーン定義の
+    /// 値になる——項目を 1 つも名指ししないので、後続仕様が [`crate::look::TextLook`] へ
+    /// 足した項目も同じ規則で載る（要件 10.4）。
+    ///
+    /// 相対値（`\f[height,+4]`・`\f[height,150%]`）と `\f[キー,default]` の類は、再生の
+    /// 時点で**新しい既定**を基準に解き直される。これは装着の前後で「バルーン定義に対する
+    /// 相対」という作者の意図が保たれる側であり、旧い既定を基準に確定した数値を運ぶより
+    /// 正しい。
+    ///
+    /// 記録は残さない——再生する命令は既に 1 度適用されており、そのとき記録すべきものは
+    /// 記録済みだからである（[`Decoration::warned`] は台詞の寿命で、装着はそれを跨がない）。
+    fn rebase(&mut self) {
+        self.current = self.base_look();
+        for tokens in &self.applied {
+            let args: Vec<&str> = tokens.iter().map(String::as_str).collect();
+            let _ = apply_font_tag(&mut self.current, &self.layers, &args);
         }
     }
 }
@@ -125,13 +188,11 @@ impl ActorTextState {
     /// このスコープの 2 層（既定・無効表示・選択肢文字色）。
     ///
     /// **本仕様の本番経路にこの読み口の呼び手は無い**（差し込みは
-    /// [`TextLayerState::set_look_layers`]、戻し先の参照は `self.decor.layers` の直読み）。
-    /// それでも `pub` で残すのは、design.md「`state_decoration.rs`」の Contracts 表が
-    /// 本関数を後続仕様の読み口として載せているためで、引受先は
-    /// `areka-P0-emo-text-canon-residue`（項目 16＝装着より先に `\f` が届いた窓の是正）。
-    /// そこでの是正は「作者が明示した項目だけを新しい既定へ載せ替える」3 者併合を要し、
-    /// 旧い既定と新しい既定の双方を読む必要がある。今日の呼び手は決定論テスト
-    /// （`actor_decoration_tests.rs`／`state_decoration_tests.rs`／
+    /// [`TextLayerState::set_look_layers`]、戻し先と載せ直しの参照は `self.decor.layers` の
+    /// 直読み）。それでも `pub` で残すのは、design.md「`state_decoration.rs`」の Contracts 表が
+    /// 本関数を後続仕様の読み口として載せているためである（`disable.font.*` が読めるように
+    /// なる `areka-P0-balloon-font-descript-keys` が 2 層の実値を突き合わせる）。
+    /// 今日の呼び手は決定論テスト（`actor_decoration_tests.rs`／`state_decoration_tests.rs`／
     /// `state_decoration_reset_tests.rs`）だけである。
     pub fn look_layers(&self) -> &LookLayers {
         &self.decor.layers
@@ -181,8 +242,7 @@ impl ActorTextState {
     /// 「戻す操作」の実体——見た目を既定へ丸ごと戻し、所有外キーの保持も空にする
     /// （要件 10.1／10.3／10.4）。既に追記済みの文字には効かない（要件 10.7）。
     pub(super) fn reset_look(&mut self) {
-        let layer = self.decor.layers.default.clone();
-        self.reset_look_to(layer);
+        self.reset_look_to(BaseLayer::Default);
     }
 
     /// 無効表示への一括の戻し（`\f[disable]`・要件 10.2）。
@@ -195,15 +255,20 @@ impl ActorTextState {
     /// この裁定の結果、`look.rs::apply_font_tag` の `key == "disable"` の腕は
     /// `key == "default"` の腕と同様に本番経路から到達しない（テストからのみ呼ばれる）。
     pub(super) fn reset_look_disabled(&mut self) {
-        let layer = self.decor.layers.disable.clone();
-        self.reset_look_to(layer);
+        self.reset_look_to(BaseLayer::Disable);
     }
 
     /// 一括の戻しの共通実体——見た目を丸ごと置き換え、所有外キーの保持を空にする。
     ///
     /// 見た目は**丸ごと**置き換える（項目を列挙しない）ので、後続仕様が
     /// [`TextLook`] へ項目を足せば戻しへ自動で含まれる（要件 10.4）。
-    fn reset_look_to(&mut self, layer: TextLook) {
+    /// 併せて土台の層を憶え、そこから後の `\f` の命令列を空にする——戻しの後は
+    /// 「土台そのまま」が現在の見た目なので、装着の載せ直し（[`Decoration::rebase`]）は
+    /// 新しい土台をそのまま採ればよい。
+    fn reset_look_to(&mut self, base: BaseLayer) {
+        self.decor.base = base;
+        self.decor.applied.clear();
+        let layer = self.decor.base_look();
         self.decor.current = layer;
         self.decor.unowned.clear();
     }
@@ -242,7 +307,16 @@ impl ActorTextState {
             }
             _ => {}
         }
-        match apply_font_tag(&mut self.decor.current, &self.decor.layers, tokens) {
+        let outcome = apply_font_tag(&mut self.decor.current, &self.decor.layers, tokens);
+        if outcome.is_ok() {
+            // 装着で 2 層が差し替わったとき新しい土台の上へ載せ直すため、命令を
+            // **トークンのまま**憶える（[`Decoration::rebase`]・項目を列挙しない・要件 10.4）。
+            // 失敗した指定は見た目を変えていないので憶えない（再生しても何も起きない）。
+            self.decor
+                .applied
+                .push(tokens.iter().map(|token| (*token).to_owned()).collect());
+        }
+        match outcome {
             Ok(None) => {}
             // 記録すべき印は 4 種——catch-all を置かず、`Note` に腕が増えたときは
             // コンパイラに「これは保持か記録か」の再検討を強制する。
@@ -340,33 +414,25 @@ impl ActorTextState {
 impl TextLayerState {
     /// バルーンの装着で 2 層を差し込む（要件 4.1・結線層の 1 点から呼ぶ）。
     ///
-    /// 現在の見た目が**旧い既定と同値**なら（＝まだ `\f` で明示されていないなら）新しい既定へ
-    /// 追随する。明示された見た目は丸ごと保つ——利用者が指定した値を装着が黙って捨てないため。
+    /// 2 層を差し替えたうえで、現在の見た目を新しい層の上へ**載せ直す**
+    /// （[`Decoration::rebase`]）——土台は新しいバルーン定義の値になり、作者が `\f` で
+    /// 明示した指定はそのまま残る。項目を 1 つも名指ししないので、後続仕様が
+    /// [`TextLook`] へ足した項目も同じ規則で載る（要件 10.4）。
     ///
-    /// # 装着より先に `\f` が届いた窓（記録あり・是正は後続仕様）
+    /// # 装着より先に `\f` が届いても取りこぼさない
     ///
     /// cue のドレインは非同期で、`text_slot_view` が `None` の間は装着が次フレームへ委ねられる
     /// （`areka` の `emo2_boot::frame::attach::connect_balloon_text` の `None` の腕）。この窓で
-    /// `\f[...]` が先に届くと上の追随ガードが成立せず、**バルーン定義の既定（大きさ・色・
-    /// フォント名）がその台詞のあいだ届かない**——以後の文字が素の既定で描かれる。射程は
-    /// 「装飾を含む台詞のみ」で、次の台詞頭の `ClearAll` が自然治癒させる。
+    /// `\f[...]` が先に届いても、載せ直しが作者の命令を新しい既定の上で再生するので
+    /// **バルーン定義の既定（大きさ・色・フォント名）はその台詞に届く**。台詞の流し始めを
+    /// 1 フレーム遅らせて順序を作る必要は無い（開発者裁定 2026-09-13）。
     ///
-    /// 黙って落とさないため、**旧い 2 層がまだ素の既定（＝一度も装着されていない）**のときに
-    /// 限って `warn!` を残す。再装着（k 再追従）では旧い 2 層がバルーン定義由来なので鳴らない。
-    /// 挙動そのものの是正は `areka-P0-emo-text-canon-residue` が持つ——正しく直すには
-    /// 「作者が明示した項目だけを新しい既定へ載せ替える」3 者併合が要り、それは要件 10.4 の
-    /// 「項目を列挙しない」と衝突する設計判断を伴うからである（タスク 9.4 の裁定）。
+    /// 再装着（k 再追従）でも同じ経路を通る——土台だけが新しい値へ移り、明示された指定は
+    /// 保たれる。
     pub fn set_look_layers(&mut self, actor: &ActorKey, layers: LookLayers) {
         let state = self.actors.entry(actor.clone()).or_default();
-        if state.decor.current == state.decor.layers.default {
-            state.decor.current = layers.default.clone();
-        } else if state.decor.layers == LookLayers::default() {
-            tracing::warn!(
-                actor = %actor,
-                "装着より先に \\f が届いた——バルーン定義の既定がこの台詞のあいだ現在の見た目へ届かない（次の台詞頭の全消去で戻る）"
-            );
-        }
         state.decor.layers = layers;
+        state.decor.rebase();
     }
 
     /// 「戻す操作」（要件 10.3 の権威定義）——装飾状態の全項目を既定の見た目へ戻す。

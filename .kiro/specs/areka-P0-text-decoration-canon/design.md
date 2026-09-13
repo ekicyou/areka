@@ -245,6 +245,7 @@ stateDiagram-v2
     Styled --> Disabled: f disable
     Disabled --> Styled: f key value applied
     Disabled --> Default: f default or ClearAll
+    Styled --> Styled: set_look_layers rebases onto the new layers
     Styled --> Styled: Clear keeps decoration
     Default --> Default: Clear NewLine Cursor keep decoration
 ```
@@ -638,7 +639,8 @@ impl ActorTextState {
 }
 
 impl TextLayerState {
-    /// 装着時に結線層が呼ぶ。`current` が旧 `layers.default` と同値なら新しい既定へ追随する。
+    /// 装着時に結線層が呼ぶ。2 層を差し替え、現在の見た目を新しい層の上へ載せ直す
+    /// （土台の層＋作者の `` 命令のトークン列を再生。項目を列挙しない）。
     pub fn set_look_layers(&mut self, actor: &ActorKey, layers: LookLayers);
     /// 「戻す操作」（権威定義・R10.3）。`None`＝全スコープ。表示済みの文字には効かない。
     pub fn reset_decoration(&mut self, scope: Option<&ActorKey>);
@@ -651,7 +653,7 @@ impl TextLayerState {
 
 **Implementation Notes**
 - Integration: `state.rs` 側の変更は腕の中の呼出だけ（`Text`／`Choice` で `state.push_current_style(&cue.actor, glyph_count);`・`Clear`／`ClearAll`／`Custom`）。
-- Validation: `state_decoration_tests.rs`——スコープ独立（`\0` の `\f[bold,1]` が `\1` に効かない）・以降の文字にだけ番号が付く・`\c` の後も `current` が保たれる・`ClearAll` で既定へ・`\f[default]`＝`reset_decoration(Some)` と同値・所有外キーの保持・同じ不正値の warn が 1 台詞 1 件（`log-capture-kit`）・`\f[]`／裸 `\f` が warn・`set_look_layers` の追随。較正: 「`Clear` で装飾が消える（旧 `= ActorTextState::default()`）」を赤にする述語。
+- Validation: `state_decoration_tests.rs`——スコープ独立（`\0` の `\f[bold,1]` が `\1` に効かない）・以降の文字にだけ番号が付く・`\c` の後も `current` が保たれる・`ClearAll` で既定へ・`\f[default]`＝`reset_decoration(Some)` と同値・所有外キーの保持・同じ不正値の warn が 1 台詞 1 件（`log-capture-kit`）・`\f[]`／裸 `\f` が warn・`set_look_layers` の載せ直し（装着より先に `` が届いても既定が届く・相対値は新しい既定で解き直す・無効表示を土台にした装着）。較正: 「`Clear` で装飾が消える（旧 `= ActorTextState::default()`）」を赤にする述語。
 - Risks: 登録前に届いた `\f[height,200%]` は ukadoc 既定（12）を基準に計算される（表示時に既定が 28 でも 24 のまま）。装着は起動時の attach で必ず台詞より先に行われるため、実運用では起きない。起きたときは `debug!` に残す。
 
 #### `layout_styled.rs`／`layout_line_ops.rs`／`layout.rs` の変更
