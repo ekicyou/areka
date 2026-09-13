@@ -53,3 +53,4 @@
 
 > **📌 2026-09-02 棚卸⑫**——アンカー **実質ドリフト 0**（`choice.rs` :432 impl／:450 `resolve`／:470 `match cursor.style()`／:472-476 underline→`SquareFill` warn-once／:519-521 `style_has_underline`・`viewbox_draw.rs:346-354`）。前提: decoration 未着手（必須先行）・`choice-render` ✅・bvc ✅。編成＝W14 裁定枠（anchor と同居・`decode.rs` は decoration の `"f"` 腕の内側＝所有分割を design で確認）。規模 S・要件定義は Opus で足りる。
 
+> **📌 2026-09-13 相互登記（`areka-P0-text-decoration-canon` 着地）**——`\f[cursor*]` 10 項目は親 spec が `ActorTextState::unowned_vocab()`（`crates/areka-emo-text/src/state_decoration.rs`）に保持するだけで表示を変えない。`\f[color,default.cursor*]` の色源は `look.rs::LookLayers::cursor_text`（`draw.rs::ResolvedFont::resolve_with_background` が `choice.rs::ResolvedChoiceStyle::resolve` から取る）、`default` 復帰の実体は `state_decoration.rs::TextLayerState::reset_decoration`。下線の描画基盤は着地済み（`viewbox_draw_decoration.rs::apply_font_ranges` が `SetUnderline` を区間へ渡す）ため、`choice.rs` の underline 系→`SquareFill` 縮退は解除できる。

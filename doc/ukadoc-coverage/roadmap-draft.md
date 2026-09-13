@@ -63,7 +63,7 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 入れ替わった 4 本は次のとおりである（数え方: 表の 27 行の名前と、いまの置き場の直下で説明書を
 持つディレクトリ名から本 spec 自身を除いた 27 個を、両向きに突き合わせた）。
 
-- 表にあるが封じる場所へ移ったもの **2 本**: `areka-P0-charset-canon`・`areka-P0-present-gpu-transform-scale`
+- 表にあるが封じる場所へ移ったもの **3 本**: `areka-P0-charset-canon`・`areka-P0-present-gpu-transform-scale`・`areka-P0-text-decoration-canon`（2026-09-13 完了。宛先に残る 17 件は実装済み 13＋語彙のみ 4 で、語彙のみの 4 件〔`sub`／`sup`／`outline` 系〕は本 spec が意図して見送った項目ゆえ `[[owner_completed]]` の条件〔全件が実装済みか縮退〕を満たさない。分割 ⑵⑶ が受け持つ 15 件は同日 `areka-P0-text-align-shadow-canon`〔5〕と`areka-P0-balloon-font-descript-keys`〔10〕へ付け替え済み）
 - いま置き場にあるが表に無いもの **2 本**: `areka-P0-nar-install`・`areka-P0-shell-implicit-surface`
 
 行数が 27 のまま合っているのは、出た数と入った数がたまたま同じだからである。行の集合はこの
@@ -147,7 +147,7 @@ wave = "W16"
 name = "areka-P0-text-decoration-canon"
 stage = "A"
 bundle = "バルーンの文字"
-owner_count = 32
+owner_count = 17
 wave = "W13"
 
 [[spec]]
@@ -209,15 +209,15 @@ wave = "W15"
 [[spec]]
 name = "areka-P0-balloon-font-descript-keys"
 none = true
-reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑶ で受け持つ書体の欄 14 件は分割元の areka-P0-text-decoration-canon の宛先のままである。是正候補の節にこの spec の行がある"
-owner_count = 0
+reason = "束はまだ割り当てていない。分割 ⑶ で受け持つ書体の欄は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替え済み（10 件）"
+owner_count = 10
 wave = "W13"
 
 [[spec]]
 name = "areka-P0-text-align-shadow-canon"
 none = true
-reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。分割 ⑵ で受け持つ寄せ 2 と影 3 の 5 件は分割元の areka-P0-text-decoration-canon の宛先のままである。是正候補の節にこの spec の行がある"
-owner_count = 0
+reason = "束はまだ割り当てていない。分割 ⑵ で受け持つ寄せ 2 と影 3 は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替え済み（5 件）"
+owner_count = 5
 wave = "W15"
 
 [[spec]]

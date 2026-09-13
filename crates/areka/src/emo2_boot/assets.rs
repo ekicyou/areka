@@ -33,6 +33,7 @@ use areka_seriko::{
 use tracing::{error, warn};
 
 use super::BootWiringError;
+use super::balloon_background;
 
 /// shell descript KV から `default==1` の bindgroup id を抽出する純関数（DD-8・ukadoc 正典）。
 ///
@@ -118,6 +119,18 @@ pub struct BalloonScopeAssets {
     pub atlas: AtlasTable,
     /// scope 別 2 層マージ済み定義（文字層・`windowposition`／`validrect` の源・Req 2.1）。
     pub model: BalloonModel,
+    /// バルーンの背景色（面 0 の焼き込み済み画像の原点画素・sRGB 非 premultiplied・要件 4.6）。
+    ///
+    /// 無効表示（`\f[disable]`）の文字色を「既定の文字色を背景色の側へ寄せた色」として導く
+    /// ための混色の相手。原点画素が採れないとき（面が引けない・全透明・トリムで原点が bbox の
+    /// 外・α が 255 でない）は白へ落ちる（導出と記録は [`super::balloon_background`]）。
+    ///
+    /// 消費点は `frame/attach.rs` の `connect_balloon_text`——装着（`register_actor_view`）の
+    /// **前**に `TextLayerRuntime::set_balloon_background` へ渡す（task 7.3 で結線済み。
+    /// 順序は `frame_attach_tests.rs` の
+    /// `connect_balloon_text_hands_the_background_over_before_attaching` が見張る）。
+    /// 導出そのものは `assets_tests.rs` の emo2 fixture テストが固定している。
+    pub background_color: (u8, u8, u8),
 }
 
 /// SERIKO ループ表の一括（シェル面 1 表＋バルーン面の scope 別表・design「結線・資産・実機経路
@@ -376,6 +389,8 @@ pub fn build_boot_assets(
             )));
         };
         let model = load_scope_balloon_model(balloon_root, scope, face0);
+        // 無効表示の混色の相手＝面 0 の原点画素（要件 4.6）。採れないときは白＋`debug!`。
+        let background_color = balloon_background::face_origin_color(&atlas, &face0.file_name);
         // 表は World を資産へ move する前に、この scope の World から導出する（単一導出点）。
         balloon_tables.insert(scope, AnimationTable::from_world(&emo_world));
         balloons.push(BalloonScopeAssets {
@@ -383,6 +398,7 @@ pub fn build_boot_assets(
             emo_world,
             atlas,
             model,
+            background_color,
         });
     }
 

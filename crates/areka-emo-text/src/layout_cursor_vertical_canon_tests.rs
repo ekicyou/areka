@@ -591,11 +591,13 @@ fn absolute_y_is_the_downward_inline_advance_in_all_three_writing_modes() {
 ///
 /// これを縦書きで守る檻は 5.1 以前に **0 本**だった。`horizontal_tb` と `vertical_lr` は
 /// `block_dir = +1` なので符号を落としても差が出ず、V3 は保留改行を挟まないのでこの経路を
-/// 通らない。実測: 仮適用の `eff_block += block_dir * pitch * sum` を `1.0 * pitch * sum`
-/// に差し替えると本テストだけが赤になる（Σ = 1 で 388 が 412 に、Σ = 2 で 376 が 424 に）。
+/// 通らない。実測: `layout.rs` の実効位置の仮適用（保留改行 `pending` を読み取り専用に
+/// 足し込む 1 行。行送りは `line_pitch_of` を通す）で `block_dir` を `1.0` に差し替えると
+/// 本テストだけが赤になる（Σ = 1 で 388 が 412 に、Σ = 2 で 376 が 424 に）。綴りでなく
+/// 「何の行か」で指す——係数の掛け合わせ方は装飾の導入で書き換わっている。
 ///
-/// Σ を 1 と 2 の 2 通り置くのは、`sum` を落とした実装（`block_dir * pitch` だけ）も
-/// 捕まえるためである（Σ = 1 では一致してしまい、Σ = 2 で 376 対 388 の差が出る）。
+/// Σ を 1 と 2 の 2 通り置くのは、`sum` を落とした実装（Σ を掛けず行送り 1 行ぶんだけ
+/// 足す形）も捕まえるためである（Σ = 1 では一致してしまい、Σ = 2 で 376 対 388 の差が出る）。
 #[test]
 fn pending_newline_moves_the_relative_basepoint_along_the_column_direction_in_vertical_rl() {
     let mode = WritingMode::VerticalRl;

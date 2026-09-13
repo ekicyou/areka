@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_seriko::{BindChoicePolicy, BindNamespace, SurfaceTarget};
+use log_capture_kit::{LineFormat, capture_lines};
 use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
@@ -423,6 +424,74 @@ fn build_boot_assets_holds_per_scope_balloon_models() {
         "scope1 は balloonk0s.txt に宣言が無く descript 基層 -34 を継承"
     );
 }
+
+/// 要件 4.6: 起動時資産が **面 0 の焼き込み済み画像の原点画素**からバルーンの背景色を導く。
+///
+/// 兄弟テスト（`balloon_background_tests.rs`）は導出規則そのものを合成画像で固定するが、
+/// `build_boot_assets` の中で規則が**実際に呼ばれている**ことはそこでは映らない。ここが実
+/// fixture（emo2）を通した唯一の配線点の檻である。
+///
+/// emo2 の 2 面はどちらも原点画素が不透明でない（実測 α ≠ 255）——結果は白（既定）だが、
+/// 「導出を呼ばずに白を置く」実装とはログで区別できる。**色だけを見ると恒真**なので、白へ落ちた
+/// 理由の記録を scope ごとに 1 件ずつ数えることで配線の実在を判定する（導出の呼出を消すと 0 件で
+/// 赤になる）。捕捉が空振りしていないことは、同じ窓に載る他のログ（`build_boot_assets` は確定値を
+/// `info!` で出す）が 0 でないことで確かめる。
+#[test]
+fn build_boot_assets_derives_balloon_background_from_face_zero_origin_pixel() {
+    // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+
+    let (boot, lines) = capture_lines(LineFormat::LevelTargetFields, || {
+        build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+            .expect("emo2 fixture の BootAssets 組立は成功する")
+    });
+
+    let colors: Vec<(u32, (u8, u8, u8))> = boot
+        .balloons
+        .iter()
+        .map(|b| (b.scope, b.background_color))
+        .collect();
+    assert_eq!(
+        colors,
+        vec![(0, EMO2_BACKGROUND_SCOPE0), (1, EMO2_BACKGROUND_SCOPE1)],
+        "各 scope の背景色は当該 scope の面 0 の原点画素から導く（2026-09-12 実測）"
+    );
+
+    assert!(
+        !lines.is_empty(),
+        "捕捉窓が空振りしている（build_boot_assets は確定値を info! で出す）"
+    );
+    let derivations: Vec<&String> = lines
+        .iter()
+        .filter(|l| l.contains("target=areka::emo2_boot::balloon_background "))
+        .collect();
+    assert_eq!(
+        derivations.len(),
+        2,
+        "背景色の導出は scope ごとに 1 度ずつ通る（呼出を消すと 0 件）: {derivations:?}"
+    );
+    let seen: Vec<(bool, bool)> = derivations
+        .iter()
+        .map(|l| (l.contains("reason=\"not_opaque\""), l.contains("file=")))
+        .collect();
+    assert_eq!(
+        seen,
+        vec![(true, true), (true, true)],
+        "emo2 の 2 面はどちらも原点画素が不透明でない（実測 α ≠ 255）・記録は面のファイル名を載せる: {derivations:?}"
+    );
+    assert!(
+        derivations[0].contains("file=\"balloons0.png\"")
+            && derivations[1].contains("file=\"balloonk0.png\""),
+        "記録は scope ごとに当該 scope が解決した面 0 を名指しする（scope0=本体側／scope1=相方側）: {derivations:?}"
+    );
+}
+
+/// emo2 本体側バルーン（面 0）の背景色（2026-09-12 実測・原点画素が不透明でないゆえ白の既定）。
+const EMO2_BACKGROUND_SCOPE0: (u8, u8, u8) = (255, 255, 255);
+/// emo2 相方側バルーン（面 0）の背景色（2026-09-12 実測・同上）。
+const EMO2_BACKGROUND_SCOPE1: (u8, u8, u8) = (255, 255, 255);
 
 /// 本仕様適用**前**の 2 層マージを再現する神託（tasks 5.1・R5.5）。
 ///
