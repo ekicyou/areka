@@ -300,6 +300,13 @@
 - **Selected Approach**: 段階 1（`on_idle`・`IDLE_INTERVAL`・`pump_pending_messages`・委譲・Test-A〜F／受信ループは `recv()` のまま）で Test-A・B・D・F の赤を `verification/calibration.md` に写し、段階 2（`recv_timeout` の形）で緑を併記する。
 - **Rationale**: 「直す前の構造」＝待ちの形。契約と部品が無い木では速いテストがコンパイルできない。`git stash` は禁止（ハーネス規律）。
 
+#### Decision: 窓を作るテスト（Test-D／F）の backend は実 `ShioriConnection`＋x64 stand-in（設計検証の指摘・2026-09-13）
+
+- **Context**: 当初は `WindowOnlyBackend`（fake・`on_idle` → `pump_pending_messages`）で本番部品を踏む形だった。設計検証が「委譲先の同じ関数を fake から呼ぶ形は `ShioriConnection::on_idle` の 1 行が欠けても緑」と指摘。
+- **Selected Approach**: `ShioriConnection { window, helper: HelperLifecycle::new(spawn_command(cmd.exe /c exit 0)) }`。`spawn_command` は `shiori_host32_host::process_host` の公開関数、`ShioriConnection` のフィールドは `pub`（`tests/kanade/real_helper_test.rs` が同じ形で組んでいる）。stand-in は即終了するので手空きの初回に `ShioriDown` が 1 通届く——既存の死活経路であり、ちょうど 1 通であることも assert する。
+- **Rationale**: 本番の型そのものを通すので fake が不要になり（`WindowOnlyBackend` の複製問題も消える）、委譲の 1 行が決定論テストで検出される。
+- **Trade-offs**: テストが `cmd.exe` の起動に依存する（`lifecycle.rs`・`process_host.rs` のテストが既に同じ依存を持つ）。
+
 #### Decision: `doc/COMPAT_ARCHITECTURE.md` §8 は追記しない
 
 - **Rationale**: §8 は ukadoc の沈黙に対する裁量の表。本仕様の裁定は OS の挙動に対するもので正典の沈黙に関わらない。裁定の正本は design.md「待ちの形の裁定と不採用案」節。
@@ -310,7 +317,7 @@
 
 ### 9.5 Risks & Mitigations
 
-- `ShioriConnection::on_idle` の 1 行の委譲はテストで踏まれない（fake が同じ部品へ委譲する形）— 配線は再テストしない規律に従い、実装レビューで委譲先を目視確認する。実機走行（5.x）は 6.11 の二重の守りで緑になるため、この 1 行の欠落を検出しない点を `real-machine.md` に注記する。
+- `ShioriConnection::on_idle` の 1 行の委譲——設計検証（2026-09-13）で「fake が同じ部品へ委譲する形はこの 1 行が欠けても緑（恒真）」と指摘され、Test-D／Test-F の backend を実 `ShioriConnection`（`process_host::spawn_command` で起こす x64 の stand-in `cmd.exe /c exit 0`＋`HelperLifecycle::new`・`lifecycle.rs` のテストと同意匠）へ改めた。実機走行（5.x）は 6.11 の二重の守りで緑になるためこの 1 行の欠落を検出しないが、決定論テストが検出する。
 - 速いテストの 2 秒上限が負荷下で薄くなる — 周期の 4 倍を const assert で固定・1 度だけ負荷計測。
 - `Timeout` と `Disconnected` の取り違え — 既存テストが赤にする。
 - kanade の lib テストバイナリに親窓を作るテストが将来 2 本目以降置かれる — Revalidation Triggers に登記。`WINDOW_TEST_SERIAL` 同型のロックを置く。

@@ -53,7 +53,7 @@
 ### Allowed Dependencies
 
 - `areka-kanade` → `shiori-host32-host`（既存・`real.rs` だけが host32 型を import してよい）。`areka-kanade` の `[dependencies]` に `windows` crate を足さない（7.6）。
-- `areka-kanade` の dev-dependencies `shiori-host32-ipc`（既存）: テストが `send_copydata`／`send_copydata_response`／`MsgTag`／`hwnd_from_u32` を使う。
+- `areka-kanade` の dev-dependencies `shiori-host32-ipc`（既存）: テストが `send_copydata`／`send_copydata_response`／`MsgTag`／`hwnd_from_u32` を使う。x64 の stand-in helper は `shiori_host32_host::process_host::spawn_command`（公開・`pub mod process_host`）で起こす——依存の追加なし。
 - `shiori-host32-host` → `windows`（feature `Win32_UI_WindowsAndMessaging`＝既存・`PeekMessageW`／`PM_REMOVE`／`MSG`／`TranslateMessage`／`DispatchMessageW` はこの feature に含まれ、`Cargo.toml` の変更は不要）。
 - 依存方向（不変）: `shiori-host32-ipc` → `shiori-host32-host` → `areka-kanade`（`shiori/real.rs` のみ）→ `areka-ghost`。逆向きの import は違反。
 
@@ -245,7 +245,7 @@ sequenceDiagram
 | 3.2 | helper の遅いテストを無改変で緑 | C8（見出しのみ） | — | — |
 | 3.3 | ipc・helper のコードに触れない | C8・File Structure Plan | — | — |
 | 4.1 | x64 偽境界・実 helper／DLL／ゴースト不使用 | Test-A〜F（fake backend＋実親窓） | — | — |
-| 4.2 | 本番の待ちの経路を駆動 | Test-A〜E（`run_shiori_loop` 直呼び）・Test-F（`spawn_shiori_actor`） | — | 両フロー |
+| 4.2 | 本番の待ちの経路を駆動 | Test-A〜E（`run_shiori_loop` 直呼び）・Test-F（`spawn_shiori_actor`）・Test-D／F は実 `ShioriConnection` | — | 両フロー |
 | 4.3 | 速いテスト（同期送出が上限内）・直す前は赤 | Test-D・C7（段階 1 で赤） | `send_copydata_response` | — |
 | 4.4 | 遅いテスト（② が届く）・直す前は赤 | Test-F・C7 | `send_copydata` | 遅いテストの時間軸 |
 | 4.5 | 遅いテストの上限 90 秒 | Test-F の `CAGE_BOUND` | — | — |
@@ -411,7 +411,7 @@ fn report_exit_once(
 | Requirements | 1.1, 2.10, 7.6 |
 
 - 配線のみ（判断分岐なし）。`real.rs` は host32 型を import してよい唯一の場所であり、ここで Win32 の語彙が kanade の他所へ漏れない。
-- Validation: 決定論テストは fake backend が同じ `pump_pending_messages` へ委譲する形で本番部品を踏む（Test-D・Test-F）。この 1 行自体は再テストしない（配線は再テストしない・steering）。実装レビューで委譲先を目視確認する。
+- Validation: Test-D・Test-F は backend に実 `ShioriConnection`（x64 の stand-in helper つき）を使うため、この 1 行の委譲も本番経路として踏まれる。fake backend が同じ部品へ委譲する形は「委譲先の同じ関数」を踏むだけで、この 1 行が欠けても緑になる（恒真）ため採らない。
 
 ### host32 / 窓
 
@@ -476,23 +476,23 @@ impl ParentMessageWindow {
 | Test | 主張 | 直す前 | 上限 |
 |---|---|---|---|
 | Test-A `on_idle_is_called_while_idle` | 何も送らず 2 秒以内に `idles ≥ 1` | 0 のまま → 赤（較正） | 5 s |
-| Test-B `helper_exit_during_idle_reports_shiori_down_once` | `exited=true` にして何も送らず、`on_down_rx.recv_timeout(2 s)` が `ShioriDown` を返し、さらに `2 × IDLE_INTERVAL` 待っても 2 通目が来ない | 1 通目が来ず → 赤（較正・4.10） | 5 s |
-| Test-C `requests_after_idle_are_served_in_order` | `3 × IDLE_INTERVAL` 手空きにした後に GET を 3 件連投し、reply が到着順で id を echo する | 緑（非退行の見張り・較正対象外） | 5 s |
-| Test-D `sync_send_to_idle_window_returns_within_bound` | runner スレッドが `ParentMessageWindow::create()` して HWND を channel で渡し、`WindowOnlyBackend`（`on_idle` → `pump_pending_messages`）で `run_shiori_loop` に入る。テストスレッドが `send_copydata_response(host, host, MsgTag::Response, b"idle-pump", SEND_BOUND)` を送り、`Ok` かつ所要 `< SEND_BOUND` を assert | `SendFailed`（上限まで待つ）→ 赤（較正・4.3） | 全体 5 s |
-| Test-E `no_liveness_report_after_clean_unload_even_when_idle` | `Unload` を往復させ `Unloaded` を得た後 `exited=true` にし `3 × IDLE_INTERVAL` 待っても `ShioriDown` が来ない | 緑（既存規約の手空き版・較正対象外） | 5 s |
+| Test-B `helper_exit_during_idle_reports_shiori_down_once` | `exited=true` にして何も送らず、`on_down_rx.recv_timeout(2 s)` が `ShioriDown` を返す。その後 `idles` が **2 以上増える**まで待ち（上限内）、その上で 2 通目が来ないことを主張する——「来ない」は手空きの腕が回った証拠（`idles` の増分）を伴う | 1 通目が来ず → 赤（較正・4.10） | 5 s |
+| Test-C `requests_after_idle_are_served_in_order` | `idles ≥ 1` になるまで待って「手空きを挟んだ」証拠を得た後に GET を 3 件連投し、reply が到着順で id を echo する | 緑（非退行の見張り・較正対象外） | 5 s |
+| Test-D `sync_send_to_idle_window_returns_within_bound` | runner スレッドが `ParentMessageWindow::create()` して HWND を channel で渡し、**実 `ShioriConnection`**（その `window` と、x64 の stand-in `cmd.exe /c exit 0` を `process_host::spawn_command` で起こした `HelperLifecycle::new(handle)`——`lifecycle.rs` のテストと同意匠）を backend にして `run_shiori_loop` に入る。`ShioriConnection::on_idle` の委譲の 1 行まで本番経路を踏む。stand-in は即終了するので手空きの初回に `ShioriDown` が 1 通届く（既存の死活経路・ちょうど 1 通であることも assert）。テストスレッドが `send_copydata_response(host, host, MsgTag::Response, b"idle-pump", SEND_BOUND)` を送り、`Ok` かつ所要 `< SEND_BOUND` を assert | `SendFailed`（上限まで待つ）→ 赤（較正・4.3） | 全体 5 s |
+| Test-E `no_liveness_report_after_clean_unload_even_when_idle` | `Unload` を往復させ `Unloaded` を得た後 `exited=true` にし、`idles` が **2 以上増える**まで待った上で（上限内）`ShioriDown` が来ない——手空きの腕が `unloaded` を見て黙る判断分岐を、腕が回った証拠つきで固定する | 緑（既存規約の手空き版・較正対象外） | 5 s |
 
-診断文（4.6）: どのテストも assert の失敗文に「待った長さ・観測した回数（`idles`／`ShioriDown` の通数）・届いた／届かなかった・（送出があるものは）送出失敗の回数と所要・プロセス生存時間」を含め、数値を印字するだけの形にしない。
+診断文（4.6）: どのテストも assert の失敗文に「待った長さ・観測した回数（`idles`／`ShioriDown` の通数）・届いた／届かなかった・（送出があるものは）送出失敗の回数と所要・プロセス生存時間」を含め、数値を印字するだけの形にしない。「来ない」を主張するテスト（Test-B 後半・Test-E）は `idles_before`／`idles_after` を診断文に含め、手空きの腕が回った上で沈黙したことを示す（4.8——腕が一度も回らなくても緑になる形を退ける）。
 
 Test-D の定数: `SEND_BOUND = Duration::from_secs(2)` と `const _: () = assert!(SEND_BOUND.as_millis() >= 4 * IDLE_INTERVAL.as_millis());`（周期を動かしたら上限の余裕が黙って薄くならない・4.8）。送出タグは `MsgTag::Response`（本番の `StoreResponse` の腕を踏む・6.11 の遅いテストと同じタグ・`response_slot` は次の `send_request` が必ず `clear` する）。送出元 HWND には自窓の HWND を渡す（`window_tests` と同じ）。診断文: `delivered`・`elapsed`・`uptime`・`result`。kanade の lib テストバイナリで親窓を作るのは本テストだけであり直列化ロックは置かない（2 本目が現れたら `lifecycle.rs` の `WINDOW_TEST_SERIAL` と同型のロックを本ファイルへ置く——Revalidation Triggers 参照）。
 
 #### Test-F `crates/areka-kanade/tests/idle_pump_hung/hung_test.rs`（遅い・別バイナリ）
 
-- 本番の `spawn_shiori_actor(connect, on_down)` を使う。`connect` はアクタースレッド上で `ParentMessageWindow::create()` → `hwnd_u32()` を channel で返す → `Box::new(WindowOnlyBackend { window })`（`on_idle` → `pump_pending_messages`・他は `unreachable!`／`Running`）。本番と同じ「窓は connect がアクタースレッド上で作る」順序（4.2）。
+- 本番の `spawn_shiori_actor(connect, on_down)` を使う。`connect` はアクタースレッド上で `ParentMessageWindow::create()` → `hwnd_u32()` を channel で返す → `Box::new(ShioriConnection { window, helper })`（`helper` は Test-D と同じ x64 の stand-in）。本番と同じ「窓は connect がアクタースレッド上で作る」順序（4.2）で、backend も本番の型そのもの——fake backend を置かない。
 - 時間軸: `IDLE = 20 s`・`SEND_BOUND = 5 s`・`CAGE_BOUND = 90 s`・`READY_BOUND = 10 s`。`sleep(IDLE)` → 送出①（`send_copydata(host, host, MsgTag::Response, b"hung-cage-1", SEND_BOUND)`＝`SMTO_ABORTIFHUNG` つき）→ `sleep(IDLE)` → 送出②（同・`b"hung-cage-2"`）→ `Close`・有界 join。
 - 主張: ① `Ok`・② `Ok`・送出失敗 0・全体 `< CAGE_BOUND`。診断文: `first`／`second` の結果と所要・`idle`・`uptime_at_first`／`uptime_at_second`・`send_failures`。
 - 直す前: ① が 5 秒待って `SendFailed`・② が即座に `SendFailed`（応答なし判定の署名）→ 赤（較正・4.4）。
 - 時間の仮定は OS の判定条件（実時間）と上限のみ（4.8）。env ゲート・`#[ignore]`・feature ゲートを付けない（4.11）。`cargo test --workspace` の壁時計 +約 42 秒を受容する。
-- `WindowOnlyBackend` は Test-D と同型の 15 行程度を本ファイルにも持つ（別バイナリから lib テストの private 項目へは届かない）。
+- stand-in を組む数行（`spawn_command` → `HelperLifecycle::new` → `ShioriConnection`）の置き場は「置き場の裁定」に従う。
 
 #### C7 較正の手順と証跡（`verification/calibration.md`）
 
@@ -501,7 +501,7 @@ Test-D の定数: `SEND_BOUND = Duration::from_secs(2)` と `const _: () = asser
 1. **段階 1（契約と部品）**: `on_idle`（既定実装）・`IDLE_INTERVAL`・`ShioriConnection::on_idle`・`pump_pending_messages`・Test-A〜F を入れる。受信ループは `rx.recv()` のまま。→ Test-A・B・D・F が赤（Test-C・E は緑）。この状態で `cargo test -p areka-kanade --lib idle_tests` と `cargo test -p areka-kanade --test idle_pump_hung` を走らせ、コマンド・所要・赤の診断文を `calibration.md` に写す。
 2. **段階 2（待ちの形）**: `run_shiori_loop` を `recv_timeout` の形へ。→ 全緑。同じコマンドの緑の結果を併記する。
 
-`git stash` は使わない（ハーネス規律）。段階 1 をコミットしてから段階 2 を別コミットにする。
+`git stash` は使わない（ハーネス規律）。段階 1 をコミットしてから段階 2 を別コミットにする。段階 1 のコミットは**意図して赤のテストを含む**——`calibration.md` の冒頭にその旨とコミット ID を書き、完了検証がこれを退行と読まないようにする（squash マージで履歴からは消える）。
 
 #### C8 説明文の追随（7.1・file:line で裏取り済み）
 
@@ -515,7 +515,7 @@ Test-D の定数: `SEND_BOUND = Duration::from_secs(2)` と `const _: () = asser
 | `shiori-host32-ipc/src/lib.rs` | `send_copydata_response` の doc（`:328-329`）・`send_flavor_tests` の doc（`:591-593`） | 「待機中はメッセージを取り出さない」→「往復の間は取り出さない（手空き時の周期的な保守は往復の外）ため、往復が長引けば応答なしに見えうる」（コメントのみ・3.3 の例外） |
 | `main_response_flavor_hung_cage_tests.rs` | 見出し（`:5-6`・`:32`） | 「本番では shiori アクターが `recv()` で待つ」「待機中に pump しない姿」→「往復中の本番ホストと同じ『取り出さない』姿（手空き時の保守は kanade 側のテストが固定）」（コメントのみ・3.2） |
 
-`shiori/mod.rs`（`:44-46`「メッセージ到達のたびに冒頭で `status` を確認」）は変更後も真であり書き換えない（Out of Boundary）。
+`shiori/mod.rs`（`:44-46`「メッセージ到達のたびに冒頭で `status` を確認」）は変更後も真であり書き換えない（Out of Boundary）。`crates/areka-ghost/tests/ghost/spine_e2e_test_s6_full_disconnect.rs`（現 `:188`・コメント「inbox 受信（blocking recv）」）は語として古くなるが、趣旨（全 Sender drop で `Err` → 正常終了）は `recv_timeout` の `Disconnected` でも真のままで、編集集合の外（`areka-ghost`）ゆえ触らない。本番コードにこれ以外の陳腐化は無い（「待機中は…取り出さない」「pump フェーズ専用」「`recv()` で待つ」「タイマー poll」「blocking `recv`」を `crates/`・`doc/`・`.kiro/steering/` で grep・2026-09-13）。
 
 #### C9 実機の非退行（`verification/real-machine.md`）
 
@@ -554,10 +554,10 @@ Test-D の定数: `SEND_BOUND = Duration::from_secs(2)` と `const _: () = asser
 - Test-A: 手空きで `on_idle` が呼ばれる（契約の固定・較正）。
 - Test-B: 手空き中の異常終了で `ShioriDown` が一度だけ（1.7／4.10・較正）。
 - Test-C: 手空きを挟んでも要求は到着順（1.4・非退行）。
-- Test-D: 手空き中の同期送出が上限内に復帰（1.2／4.3・較正・実親窓＋本番 `pump_pending_messages`）。
+- Test-D: 手空き中の同期送出が上限内に復帰（1.2／4.3・較正・実親窓＋実 `ShioriConnection`）。
 - Test-E: 正規終了後は手空きでも死活報告しない（既存規約の手空き版）。
 - Test-F: 20 秒→送出①→20 秒→送出②（1.3／4.4・較正・別バイナリ・上限 90 秒）。
-- 既存: `real_tests.rs`（26 本相当）・host32 `src/` と `tests/`・helper の 4 本（6.11 の遅いテストを含む）を無改変で緑（2.8・3.2）。
+- 既存: `real_tests.rs`（17 本）・host32 `src/` と `tests/`・helper の 4 本（6.11 の遅いテストを含む）を無改変で緑（2.8・3.2）。
 
 ### 較正（4.7）
 
