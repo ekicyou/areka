@@ -383,3 +383,73 @@
 ### 8.5 steering への追随（実施済み）
 
 `.kiro/steering/roadmap.md`「棚卸⑬の仮裁定」1 を改訂した（2026-09-13）。`zorder` は台帳行も値の導出もともに `areka-P0-zorder-property` が持ち、`sylphya-set-ledger` の SET 有効群は 21→**25**（仮裁定の文面にあった 26 ではない）。`seriko.sticky-window` と `currentghost-property-tree` に関する部分は据え置き。
+
+---
+
+## 9. 設計フェーズの調査（2026-09-13・`/kiro-spec-design -y`）
+
+> Discovery Scope: **Extension（light discovery）**。既存の語彙表への末尾追加と記録用配列の新設であり、外部依存・新技術は無い。サブエージェントは使わず主文脈で file:line を直接裏取りした。
+
+### 9.1 正典本文の引き直し（§8.2 の 1・最優先）
+
+- **Context**: 台帳の 26 行は完了 spec の成果物だが、同 spec は「実測が設計を 7 度覆した」記録を持つ。4 件目の ⒜印があれば要件 4.1 の 25 が崩れる。
+- **Sources Consulted**: ukadoc MCP `get_doc` でサウンドプロパティ名 18 葉と `currentghost.seriko.sticky-window` の全文（計 19 件）を個別に取得。`search_docs`（`サウンドプロパティ名`・`playing`）で族の頭 2 本と `currentghost.sound.count` も確認。
+- **Findings**:
+  - `[SET有効]` の記述を持つのは **`pause`・`playing`・`position` の 3 葉ちょうど**（`pause`＝`\![sound,pause／resume]` 等価、`playing`＝`\![sound,play／stop]` 等価、`position`＝`\![sound,option,--seektime=]` 等価）。残り 15 葉（`duration`・`error`・`id`・`loop`・`name`・`path`・`preload`・`meta.*` 8）には記述なし。`sticky-window` にはあり。
+  - 版の刻印: 10 葉が 2.8.72、`meta.*` 8 葉が **2.8.73**、`sticky-window` が 2.8.78。カタログ `versions` 欄と一致。
+  - 見た版: MCP スナップショットのプロパティ節は **2.8.80 で陳腐化していることが既知**（記憶 `ukadoc-mcp-preferred-source`）。項目の刻印は上記のとおりで、本 spec が扱う 19 項目はいずれも 2.8.80 以前に定義されたものなので、陳腐化の影響は「19 項目より後に増えた葉を見落とす」方向にしか働かない（正典の増減は自動で見張らない＝開発者方針 2026-09-11）。
+- **Implications**: 25 は崩れない。設計は 3 葉で確定。
+
+### 9.2 版番号を混ぜない（§8.2 の 2）
+
+- 設計の `SOUND_PROP_NAMES` 節と `dotted.rs` の説明文は「括弧を含まない 10 葉（2.8.72）／`meta.` 8 葉（2.8.73）」と分けて書く。brief と要件の「サウンドの 3 葉（2.8.72）」は 3 葉に限れば正しいので改訂しない。
+
+### 9.3 `dotted.rs` の行数見込み（§8.2 の 3）
+
+- 現在 289 行。本機能後およそ 360 行（SET 4＋URL 1＋新表 18＋URL 18＋説明文 25 前後＋兄弟テスト接続 3）。新設テストは兄弟ファイル `vocab/dotted_set_ledger_tests.rs`（およそ 150 行）へ出す（`structure.md` の兄弟テスト規律）。
+- 後続: `areka-P0-currentghost-property-tree`（W15）は縮退宣言文の改訂＝数行、`areka-P0-property-catalog-lists`（W16）はリスト系の名前の追加＝多く見ても 100 行。合計 500 行台で 1,000 行の見張りには当たらない。分割不要。
+
+### 9.4 `ukadoc-survey check` の実走時期（§8.2 の 4）
+
+- `doc/ukadoc-coverage/README.md`: 副手続きは `catalog`／`ledger-init`／`report`／`report-summary`／`check`／`evidence`／`candidates`／`diff` の 8 つ。「台帳を触ったら `cargo test -p ukadoc-survey` を走らせること」。
+- 決定: 実装後に `cargo test -p ukadoc-survey` と `cargo run -p ukadoc-survey -- check` を 1 回ずつ。`evidence` は実装の**前後**で 1 回ずつ走らせ、property の証拠件数 2 → 21 を完了報告に記録する。`report`／`report-summary` は範囲外なので走らせない（走らせると `doc/ukadoc-coverage/report/*.md` が編集集合の外で動く）。
+- 検査の規則を確認（`crates/ukadoc-survey/src/check/content.rs`）: `ImplementedWithoutEvidence` は `status = "implemented"` の行だけが対象・`SourceUrlNotInCatalog` はカタログに無い URL だけが対象。本機能の URL はすべてカタログの `url` 欄と完全一致させるので赤にならない。`owner` の中身はどの規則も見ない。
+
+### 9.5 `seriko.cursor.name`／`seriko.tooltip.name` の先取りの出典（§8.2 の 5）
+
+- 出典 **あり**: 完了 spec `areka-P0-ukadoc-survey-property` の `design.md` 規則 8 突合表・区分 ⑶「21 名のうち、正典が SET 有効としない id を指す名前＝2 名／4 id」（2026-09-05 訂正込み。`(当たり判定名)` の 2 件は「index 指定との互換用の記述であり、特に意味はない」、`.index(ID2)` の 2 件は「…の当たり判定名」と述べるが、印が無く族の頭の継承も無い点は 4 件とも同じ）。同 `research.md` §5-2 で正典本文により決着。
+- 要件 4.2 の導出に「出典＝完了 spec `ukadoc-survey-property` design 規則 8 区分 ⑶」を添える。なぜ areka が先取りしたかの設計判断の記録は sylphya の完了 spec 側に無い（brief 逐語転記の 21 名に最初から含まれていた）ので、「既知の食い違い・本機能は解消しない」と書くにとどめる。
+
+### 9.6 証拠抽出器の記号と配列要素位置の注記（要件 5.3 の形の確定）
+
+- `crates/ukadoc-survey/src/evidence/extract.rs`: 行頭の空白を除いて `///`・`//!`・`//` のいずれかで始まり、`ukadoc:`＋空白＋URL **1 語**の行だけを証拠として拾う（説明文つきは拾わない・コードの尻尾の `// ukadoc:` も拾わない）。
+- 配列要素の直上に doc コメント `///` は置けない（式への属性は安定化されていない）。`//` は抽出器が同じ規則で読む 3 記号の 1 つで、先例 `crates/areka/src/placement/config.rs` の配列要素直上 `// ukadoc:` がある。→ 設計は `// ukadoc: <アンカー付き URL>` で確定。
+- `resolve.rs`: アンカー無しのページ URL の単独行は「直後のスライス定数の要素名を突き合わせる」第 2 段を起動する。→ ページ URL の単独行は置かない（設計に明記）。
+
+### 9.7 先送りテストの名簿登記の実際の形（要件 3.6／9.2 の設計上の確定）
+
+- `zorder_property_deferral_tests.rs` の再読で確定した事実:
+  - t_zpd12 ① は `vocabulary_tables()` が実際に読む表の const 名の列と `SCANNED_VOCAB_TABLES` の**一致**を判定する。名簿だけ足して関数を足さないと赤。→ 登記は const と関数の**対**。
+  - t_zpd11 は `tables.len() == 5` と 5 本の較正行を持つ。名簿を 6 本にすると `5` が赤。→ t_zpd11 の `5` は「名簿の本数の写し」であり、要件 7.4 の「台帳が古い前提を固定していた」側（要件 7.5 が更新側に置くなと定めるのは t_zpd10／12／30／40 で、t_zpd11 は含まれない）。
+  - t_zpd40 は `crates/areka-sylphya/src` の**全ソース本文**から探し語 `zorder`（小文字・部分一致）を探す。追跡 spec の名前 `areka-P0-zorder-property` もこの綴りを含む。→ `dotted.rs` の説明文・新設テスト・URL 注記のどこにも書けない。設計に明記した。
+- `SOUND_PROP_NAMES` は `pub` が必須（t_zpd12 の抜き出しは `pub const` 行だけを見る。私有にすると t_zpd10 の走査から漏れる）。
+
+### 9.8 設計判断の記録（synthesis）
+
+| 判断 | 選択 | 却下した案と理由 |
+|---|---|---|
+| サウンド 18 葉の置き場所 | 新設 `pub const SOUND_PROP_NAMES: &[&str]`（記録用・`classify_set` が読まない） | `GENERIC_PROP_NAMES` へ相乗り（§5 案 A）→ 葉一致の判定に参加して要件 7.2 が成立しない。§8.3 で前提が覆り、開発者裁定「相乗り」も撤回済み（記録用の表を分けることが要件 3.3 に明文化された） |
+| 新表の型 | `&[&str]` | `&[(&str, SetSemantics)]`→ 記録用の表に意味論は不要。`&[(&str, &str)]`（URL を要素に持つ）→ 証拠抽出器はコメント行しか読まないので URL を要素に持っても証拠にならず、二重管理になる |
+| URL 注記の置き場所 | `SET_EFFECTIVE` に 1（sticky-window）・`SOUND_PROP_NAMES` に 18 | SET 側にも 3 葉分を置く→ 正典の項目としては 1 つ（要件 5.1）。証拠件数も二重に数えない |
+| 新設テストの置き場所 | 兄弟ファイル `vocab/dotted_set_ledger_tests.rs`（`#[path]` 接続） | `dotted.rs` のインライン `mod tests` へ追記→ `structure.md` の「新規のテストモジュールは兄弟ファイルへ」に反する。`actor_tests.rs` へ追記→ 表の件数・構造の検査まで actor 側に置くのは責務がずれる |
+| 要件 3.3／7.2 の判定形 | `actor.rs` の本文に `SOUND_PROP_NAMES` の参照が 0 回（較正: `GENERIC_PROP_NAMES` ≥ 1） | 分類の literal 検査だけ→ 「読まない」という構造の主張が検査に写らない（零は明示的に判定する） |
+| 要件 6.5 の 0 | 完了時の 1 回の実数え（`grep -c`＋対照） | 新しい判定テスト→ 開発者裁定（§8.4 ④）で不採用 |
+| 一般化 | 無し | 「語彙表の登記を汎用化する機構」は現要件に無い。配列 2 本で足りる |
+| Build vs Adopt | 既存の `const` スライスと `assert_eq!` をそのまま使う | 新しい依存・マクロ・生成器は不要 |
+
+### 9.9 リスクと軽減
+
+- `zorder` の綴りが sylphya のソースへ紛れ込む（説明文・失敗メッセージ・spec 名）→ 設計に禁止を明記。実装後の `cargo test -p areka --lib placement::zorder_property_deferral_tests` が t_zpd40 で赤にする。
+- `sound(bgm.mp3)` のような括弧内に `.` を含む例を対照に使う → `parse_dotted` が解釈不能で StoreWrite に落ち、対照にならない。設計で `sound(bgm)` に固定。
+- 件数の写しの取りこぼし → 設計の一覧（21 の 7 箇所・5／8 の 2 箇所）を実装後に `grep` で 0 件確認。
+- 報告書の証拠件数が古びる → 範囲外として申し送り（設計「範囲外の申し送り」1）。
