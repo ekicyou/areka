@@ -215,6 +215,8 @@
 >
 > **2026-09-11 要件ディスカッションでの決着**——①②④ は実測が答えを一意に決めたため、要件本文を直して閉じた（①＝既設 4 本・新規 10 本／②＝生きた 4 文書に広げ、履歴と完了済みは対象外／④＝`A11` の 10 項目すべてで束名を改める。現在の束名は `font.name` についてすでに偽だったため、これが嘘を残さない唯一の形）。⑤ は開発者裁定で案 ⒜ に決着（下記）。**設計フェーズへ残るのは ③⑥⑦⑧ の 4 件**である。
 >
+> **2026-09-13 設計フェーズでの決着**——③⑥⑦⑧ はいずれも §10 の設計判断（DD1〜DD4）で閉じた。design.md が正本であり、本節は経緯の記録として残す。
+>
 > **本書が拾えていなかった 2 件**（要件ディスカッションで追加・いずれも開発者裁定済み）——⑼ `font.name` の台帳状態 `absent` は実態と合っていない（現に読まれ描画に使われており、効かないのは 2 点だけ＝縮退）。`degraded` へ是正する（要件 7.7・議題 1）。⑽ `doc/ukadoc-coverage/briefing-assets.md` の是正候補の段が、13 キーの是正によって件数（6 か所）と引き取り先（`text-decoration-canon`）の両方で古くなる。同じコミットで書き換える（要件 1.5・議題 3）。
 
 1. **要件 6.1 の「9 本」をどう読むか**。実測は既設 4 本・未設置 10 本。⒜ 要件の数を 4／10 へ訂正する、⒝ 「新規に置く 9 本」と読み替えて `font.name` の 1 本を別扱いにする、⒞ 実装は 14 本を揃えるだけとし数の記述は設計で正す——のいずれか。**要件本文は確定済みなので、訂正が要るなら要件ディスカッションで決める必要がある。**
@@ -239,4 +241,104 @@
 
 ## 9. 次の段
 
-要件ディスカッションで上の設計判断 8 件に決着を付けた後、`/kiro-design areka-P0-balloon-font-descript-keys` で設計フェーズへ進む。
+~~要件ディスカッションで上の設計判断 8 件に決着を付けた後、`/kiro-design areka-P0-balloon-font-descript-keys` で設計フェーズへ進む。~~ 済み（2026-09-13・design.md 生成）。次は設計検証（`kiro-validate-design`）→ 設計ディスカッション → `/kiro-spec-tasks`。
+
+---
+
+## 10. 設計フェーズの記録（2026-09-13・`kiro-spec-design`）
+
+### 10.1 要約
+
+- **Feature**: `areka-P0-balloon-font-descript-keys`
+- **Discovery Scope**: Extension（既存の転記層への拡張・軽量ディスカバリ）。外部依存の追加は 0 のため WebSearch は不要。正典の照合だけ ukadoc MCP で行った。
+- **Key Findings**:
+  - §8 に残していた既定値 3 系統を正典本文で照合した。`font.name`＝「デフォルトはＭＳ ゴシック」・`font.height`＝12（ピクセル）・`font.color.r`＝0。要件 3.2 の登記値はすべて正典と一致（`font.shadowcolor.r`＝none も再確認）。
+  - リポジトリ内のバルーン定義（`crates/areka-emo-text/examples/fixtures/emo2-vertical*/descript.txt`・`crates/pilot/examples/shiori-host-32/fixtures/emo2*/descript.txt`）に未写像 9 キーの宣言は **0 件**。既存のフィクスチャ適合テストは新フィールドが `None` のままなので赤にならない（要件 5.3 の前提が実測で立つ）。
+  - 新しい 2 型を読む本番コードは **0 か所**（`areka-emo-text/src/draw.rs` の `ResolvedFont::resolve` は `font()` の name/height/color しか読まない）。要件 5.4 の根拠であり、台帳の備考に書く「どのログも出ない」根拠でもある。
+  - 網羅調査の道具は担当 spec の実在を見ない（`check/structure.rs` の owner は台帳のドメイン所属の検査であり、`owner` 欄の spec 名は判定しない）。影 4 項目の担当を `text-align-shadow-canon`（brief のみの spec）へ変えても赤にならない。
+  - 下流 2 spec（`text-decoration-canon`・`text-align-shadow-canon`）はこのブランチ上で `brief.md` のみ＝先着の見込み。判定は最終タスクで再測定する（DD4）。
+
+### 10.2 調査ログ
+
+#### 正典既定値の再照合（§8 持ち越し）
+- **Context**: 要件 3.2 の登記値のうち `font.name`／`font.height`／`font.color.*` が未照合だった。
+- **Sources**: ukadoc MCP（`descript_balloon` の `font.name,フォント名`・`font.height,数値`・`font.color.r,数値`・`font.shadowcolor.r,数値`）。
+- **Findings**: 上記のとおり全一致。`font.name` の本文は「バルーンのフォルダに置いたフォントファイルも指定可能（SSPのみ）」「カンマ区切りで…優先度順」＝台帳 `font.name` 備考の ⒜⒝ の根拠そのもの。
+- **Implications**: design.md の引き渡し表（C7）に既定値をそのまま登記。転記層は代入しない。
+
+#### 転記層の実形と拡張点
+- **Context**: 9 キーをどこへどう足すか。
+- **Sources**: `crates/areka-parsers/src/balloon/parse.rs`（186 行）・`model.rs`（529 行）・`mod.rs`（26 行）・`parse_tests.rs`（409 行）・`model_tests.rs`（596 行）・`validation_tests.rs`（208 行）。
+- **Findings**: `map_merged` の正典 URL コメントは全部（幾何・`font.color.*`・`font.height`・`cursor.*`）「キーを引く行の直前」に在る。`font.name` だけ説明コメントのみで URL 行が無い。生文字列転記の先例は `writing_mode`／`budoux_newline`／`vertical`／`windowposition_raw` の 4 本。additive ビルダは `with_cursor`／`with_windowposition_raw`／`with_vertical_raw` の 3 本。テストモジュールは `mod.rs` から `mod parse_tests;` 等で直接宣言する歴史的形式。
+- **Implications**: DD1（URL は `parse.rs` に揃える）・DD2（additive 2 型）・DD6（既存テストファイルへ追加）。
+
+#### 1,000 行番人に対する余裕（§8 持ち越し）
+- **Findings**: 着地後見込みは `parse.rs` ~220・`model.rs` ~650・`parse_tests.rs` ~640・`model_tests.rs` ~670。いずれも余裕 ≥300 行。番人は `crates/log-capture-kit/tests/file_length_guard_test.rs`（`LINE_LIMIT` 1,000）。
+- **Implications**: テーマ分割は不要。900 行に達したときだけ `<stem>_<テーマ>.rs` へ分ける（DD6）。
+
+#### 申し送りの置き場（§8 持ち越し）
+- **Findings**: `areka-P0-ukadoc-coverage-roadmap` は同じ W13 で並走中。その brief に追記すると共有ファイルが生まれる（roadmap「W13 は共有ファイル 0」）。`doc/ukadoc-coverage/README.md` は `report/summary.md` を統合担当の仕事と定めている。
+- **Implications**: DD8——申し送りは design.md の C7 と完了時の PR 本文に書く。統合担当の文書は触らない。
+
+#### 網羅調査の道具の当たり
+- **Findings**: 判定 15 種（`check/finding.rs`）のうち効くのは `SourceUrlNotInCatalog` と `DomainReportStale`。証拠の要否は `implemented` だけ（`check/content.rs`）。状態語彙は `README.md` の表どおり（`vocabulary-only`＝「名前だけ登記してあり、受け取っても何もしない」・`degraded`＝「動くが正典どおりではない。どう違うかを note に書く」）。`report` の作り直しはドメイン別 4 本を一括で作る＝他ドメインに差分が出ないことを `git status` で確かめる手順を設計に置いた。
+
+### 10.3 設計判断（design.md DD1〜DD8 の根拠の詳細）
+
+#### Decision: 正典 URL の置き場（§7 ③）
+- **Alternatives**: ⒜ `parse.rs` のキーを引く行（既設 4 本と同じ）／⒝ `model.rs` のフィールド定義／⒞ 両方。
+- **Selected**: ⒜。
+- **Rationale**: 同ファイルの他の全 URL がこの位置。要件 6.4 の「定義箇所」はこのリポジトリでは「キーを引く行」。⒞ は重複で趣旨に反し、⒝ は既設と割れる。
+- **Trade-offs**: `model.rs` を読む人は URL を見ない（`parse.rs` を 1 回辿れば足りる）。
+
+#### Decision: 取り出し口の見え方（§7 ⑥）
+- **Alternatives**: 案 B（`Font` に additive で載せる）／案 C（`FontDecorationRaw`／`FontShadowRaw` を `BalloonModel` に載せる）。
+- **Selected**: 案 C。
+- **Rationale**: `Font` を触らないので要件 5.1 が構造で成立（`Font::new` 50 呼出・`BalloonModel::new` 43 呼出とも無改変）。型の境界が下流 2 spec の分担（書体 10／影 4）と一致し、要件 3.4／8.4 の申し送りが型の形で表現される。`with_cursor` と同じ流儀。
+- **Trade-offs**: 「バルーンの書体設定」が `font()`・`font_decoration_raw()`・`font_shadow_raw()` の 3 口に分かれる。深さは `cursor().style()` と同じ 1 段。
+
+#### Decision: 値の型（§7 ⑦）
+- **Alternatives**: B-1 全部 `Option<String>`／B-2 0/1 系を `Option<u8>`／B-3 影色を 3 値 enum。
+- **Selected**: B-1。
+- **Rationale**: 要件 2.5（語彙外の素通し）と 2.6（`none`／数値／未指定）を「文字列をそのまま持つ」だけで満たし、転記層が語彙を知らずに済む。B-2 は `font.bold,yes` が消える。B-3 は転記層が `none` を知る。
+- **Follow-up**: 下流が数値として読みたい場合は下流で `parse::<u8>()` する（既定値の適用と同じ層で行う）。
+
+#### Decision: 着地順の判定時点（§7 ⑧）
+- **Selected**: 最終タスクで再測定し、判定表（design.md C7）で決める。今の実測は先着の見込み。
+- **Rationale**: 要件 8.3 が「着地時点の実測」と定める。判定表を固定しておけば思い込みで決めない。
+
+#### Decision: 「14 である」の判定の形（要件 9.7・裁定案 ⒜ の具体化）
+- **Selected**: `FONT_BASE_KEYS: [&str; 14]` を持ち、14 本すべてに固有の値を入れて `parse()` し、キー→アクセサの対応関数で全部が読み戻せることを判定する。
+- **Rationale**: 要素数だけの判定は配列の型で恒真になる。「読み戻せる」を判定にすれば写像を 1 本消すと赤になる。カタログは読まない（要件 9.8）。較正手順（1 本外して赤を確かめる）を設計に置いた。
+
+#### Decision: テストの置き場
+- **Selected**: 既存の `parse_tests.rs`／`model_tests.rs` へ追加（新ファイル 0）。
+- **Rationale**: 余裕 ≥300 行。ファイルを増やすほどの分量ではない。
+
+#### Decision: 台帳の束名（要件 7.5・裁定 ④ の具体化）
+- **Selected**: A11 の 10 項目を「台詞の書体・読めるが正典どおりに描かれない」で揃える。
+- **Rationale**: 9 項目（読めるが使う側が無い）と `font.name`（読めて使うが正典どおりでない）の両方を 1 つの名で包む。`implemented` 4 項目の束は無改変。
+
+#### Decision: 統合担当への申し送りの置き場
+- **Selected**: design.md C7 と完了時の PR 本文。`ukadoc-coverage-roadmap` の brief は触らない。
+- **Rationale**: 同ウェーブ並走の spec と共有ファイルを作らない。
+
+### 10.4 総合（synthesis）
+
+- **一般化**: 要件 2.1／2.2／2.3 は「生文字列を個別 `Option` で持つ」という 1 つの形の 9 回の適用であり、既存の 4 先例（`vertical` ほか）と同じ。新しい抽象は作らない。
+- **作るか採るか**: 新規の外部依存 0。道具（`ukadoc-survey`）・番人（`file_length_guard_test`）はいずれも既存を使う。
+- **簡素化**: 3 値 enum・数値型・`Font` の改変・カタログ突合・新テストファイル・統合担当の文書編集をいずれも採らなかった。判断分岐の新設は 0。
+
+### 10.5 リスクと対処
+
+- 後着 spec（`emo-text-canon-residue` 項目 14・`anchor-tag-canon`）との `map_merged` 隣接——9 本を 1 塊で置き、後着が rebase する。
+- `text-decoration-canon` の brief 7 か所の是正——同 spec が並走中に brief を編集していれば隣接行の rebase。意味的衝突なし。
+- 束名・備考は機械が見ない——最終検証で 14 項目を全数読み直す手順を design.md に置いた。
+- 統合担当への申し送りの到達性——README の役割分担と PR 本文に依る。
+
+### 10.6 参照
+
+- ukadoc `descript_balloon`: `font.name,フォント名`／`font.height,数値`／`font.color.r,数値`／`font.shadowcolor.r,数値`／`font.shadowstyle,形態指定`／`font.bold,0/1`／`font.outline,0/1`（URL は `doc/ukadoc-coverage/catalog.toml` の当該行）。
+- `doc/ukadoc-coverage/README.md`——状態語彙の表・証拠の行の形・`report/summary.md` の担当。
+- `.kiro/steering/structure.md`——Parser Crate の規律（転記層・`Option` で未指定・`#[non_exhaustive]`）・Unit Tests の兄弟ファイル規約・1,000 行の目安。
+- `.kiro/steering/roadmap.md`——W13 干渉台帳（共有ファイル 0・後着 rebase）。
