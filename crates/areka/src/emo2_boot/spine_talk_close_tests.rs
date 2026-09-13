@@ -83,10 +83,10 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     );
 
     // ── シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: `\s[2100]` 適用前の shell
-    //    scope0 は供給面未生成＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。 ──
+    //    scope0 は未表示＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。 ──
     assert!(
         harness.wiring.read_back_target(shell_target(0)).is_err(),
-        "S2 前提: shell scope0 は初回 \\s cue 前は非表示（供給面未生成・read_back Err・defect #5）"
+        "S2 前提: shell scope0 は初回 \\s cue 前は非表示（未表示・read_back Err・defect #5）"
     );
 
     // ── Phase 1: シェル面指令（\s[2100]）＋テキスト cue **のみ**を配送する。dispatcher は active talk へ
@@ -209,7 +209,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     let after_switch = harness
         .wiring
         .read_back_target(shell_target(0))
-        .expect("\\s[2100] 適用後は shell scope0 の供給面が生成され read_back 可能");
+        .expect("\\s[2100] 適用後は shell scope0 の原寸面が確立され read_back 可能");
     assert!(
         opaque_count(&after_switch) > 0,
         "S2: \\s[2100] 適用で shell scope0 が surface2100 の実描画へ遷移（非表示→非全透明・R3.1/R8.2）"

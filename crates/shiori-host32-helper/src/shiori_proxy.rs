@@ -20,7 +20,7 @@
 //!
 //! ## charset（design §347・research §9.3）
 //! `load` の dir は **ANSI(CP_ACP)**（pasta `to_ansi_str()`＝`MultiByteToWideChar` と対称ゆえ本
-//! モジュールは `WideCharToMultiByte(CP_ACP, ..)` で符号化）。`request` は UTF-8（下流・本仕様非呼出）。
+//! モジュールは `WideCharToMultiByte(CP_ACP, ..)` で符号化）。`request` は**任意の文字コードのバイト列**（意味は x64 側＝`areka-P0-charset-canon` の交渉結果。本モジュールは解釈しない）。
 //!
 //! ## Drop teardown（design §358・R2.1/2.2/2.3）
 //! `load` 成功済みインスタンスの Drop で best-effort courtesy `unload()` → `FreeLibrary`。結果は

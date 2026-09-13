@@ -97,9 +97,9 @@ pub(super) fn boot_present_system(world: &mut World) {
                         reply: None,
                     },
                 );
-                // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）: swap chain readback ==
-                // 「直接合成 → 実適用 k で resample」した golden を full byte equality で検証する
-                // （不一致は loud に panic）。
+                // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）: read_back（native 原寸）==
+                // 直接合成した golden を full byte equality で検証する（k に依らず同一・不一致は
+                // loud に panic）。
                 assert_startup_golden(
                     &boot.presenter,
                     world,

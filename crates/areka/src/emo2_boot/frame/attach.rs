@@ -338,7 +338,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // バルーンの可視性は areka-P0-balloon-visibility の可視性制御ただ一つが所有する
         // （Requirement 6.8）。装着直後・初回指令の**前**に外部所有へ移す——後に置くと直下の
         // ShowSurface が先に可視化してしまい、起動時の不可視（Requirement 1.1）が成立しない。
-        // 移した後の ShowSurface は表示状態の確立（合成・供給面・文字スロット・面 id・寸法）だけを
+        // 移した後の ShowSurface は表示状態の確立（合成・表示記録・文字スロット・面 id・寸法）だけを
         // 行って可視化しないため、面 0 は「不可視のままの確立」として維持される。
         // 未装着 target のみが失敗し得る（直上の attach_target 成功後ゆえ通常は起こらない）が、
         // 沈黙させると以降のバルーンが理由の記録なく不可視で放置されるため error!＋skip する

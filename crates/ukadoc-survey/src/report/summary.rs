@@ -1,14 +1,14 @@
 //! `report/summary.md` の本文（要件 7.2・設計 D-11）。
 //!
 //! ここは純粋層で、ファイルにもスナップショットにも触らない（要件 6.2）。カタログと
-//! 台帳 4 本と証拠の索引とテーマ名を受け取り、文字列を返す。書き出しは入出力層
+//! 台帳 4 本とテーマ名を受け取り、文字列を返す。書き出しは入出力層
 //! （`io::files::write_lf`）の担当である。
 //!
-//! # 載せるのは要件 7.2 の 5 項目
+//! # 載せるのは要件 7.2 の 4 項目
 //!
 //! ⑴ 冒頭にカタログのスナップショット生成日時と、各台帳の項目数・未分類件数
 //! ⑵ 状態の分布（全体・ドメイン別）⑶ ドメインを跨いで繋がった束の一覧
-//! ⑷ テーマ別の状態分布（全体）⑸ ドメインごとの証拠あり件数。順番も設計の列挙
+//! ⑷ テーマ別の状態分布（全体）。順番も設計の列挙
 //! どおりに固定する。数えるところは [`super::tally`]、束を作るところは
 //! [`super::bundle`] が受け持ち、ここは並べるだけ——同じ数を 2 か所で数えない。
 //!
@@ -18,13 +18,14 @@
 //! これは**読み込んだ値**であって壁時計ではない。時計を読む呼び出しはここに 1 つも
 //! 無い（あると同じ入力から 2 回作った本文が食い違い、要件 7.3 が破れる）。
 //!
-//! # 証拠は件数だけ・場所は書かない（要件 2.3・設計 D-11）
+//! # 証拠の件数は載せない（要件 11.2・設計 D-5）
 //!
-//! ドメイン別報告は証拠を載せない（載せるとソース側の変更で他 spec の報告が古くなり、
-//! 4 本の独立性が壊れる）。要件 2.3 の「報告には証拠の有無だけを載せる」は、常時検査の
-//! 対象外であるこの報告（要件 7.6）にドメインごとの件数を載せることで満たす。
-//! **ファイルパスは 1 つも書かない**——どのファイルに書かれているかを示すのは検査の
-//! 出力の役目である（要件 5.5）。
+//! この本文は**カタログと台帳 4 本だけ**から決まる。証拠の件数はソース木を歩いて
+//! 数える値なので、ここに載せると他の spec が正典 URL のコメントを 1 行足すだけで
+//! 判定 ⑹（本文の全文一致）が赤になる。証拠の件数は
+//! `cargo run -p ukadoc-survey -- evidence` の出力に一本化した（開発者裁定
+//! 2026-09-12）。完了 spec toolkit の要件 2.3・設計 D-11（報告に証拠の有無を載せる）は
+//! 本 spec が覆している。
 //!
 //! # 束の辺は `links` だけから作る（設計 D-11）
 //!
@@ -53,7 +54,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::bundle::{Bundle, bundles};
 use super::tally::{StatusCounts, Tally, status_counts, tally};
 use crate::catalog::Catalog;
-use crate::evidence::EvidenceIndex;
 use crate::ledger::Ledger;
 use crate::model::{EntryId, Status};
 
@@ -74,12 +74,7 @@ const NO_LEDGER: &str = "（台帳に無い）";
 /// `ledgers` は 4 本を想定するが、順も本数も問わない。並べる順はドメイン名の名前順で
 /// ここが決める。同じドメインの台帳が 2 本渡されたら 2 行として並べる（本来は整合検査が
 /// 赤にする形なので、ここで黙って畳まない）。
-pub fn render_summary(
-    catalog: &Catalog,
-    ledgers: &[Ledger],
-    evidence: &EvidenceIndex,
-    themes: &[&str],
-) -> String {
+pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], themes: &[&str]) -> String {
     let ordered = ordered_ledgers(ledgers);
     let tallies: Vec<(&Ledger, Tally)> = ordered
         .iter()
@@ -92,9 +87,9 @@ pub fn render_summary(
     out.push_str(
         "この本文はカタログと台帳から機械で作ります。手で書き換えず、食い違いは作り直して直します。\n",
     );
-    // 4 台帳を跨ぐ成果物なので常時検査の合否には入れない（要件 7.6）。
+    // 判定 ⑹ が本文を全文一致で見張る（要件 11.2 が toolkit 要件 7.6 の除外を覆した）。
     out.push_str(
-        "4 本の台帳を跨ぐ報告なので、新しさは常時検査の合否に入れません。作り直すのは統合担当です。\n",
+        "この報告はカタログと台帳から決まり、常時検査が新しさを判定します。証拠の件数は `evidence` 副手続きで読みます。\n",
     );
 
     // ⑴ 冒頭——スナップショットの生成日時。本文で時刻を含むのはこの 1 行だけ。
@@ -149,20 +144,6 @@ pub fn render_summary(
         push_status_row(&mut out, name, counts);
     }
 
-    // ⑸ ドメインごとの証拠あり件数（要件 2.3 の「有無だけ」）。
-    out.push_str("\n## ドメインごとの証拠あり件数\n\n");
-    out.push_str(
-        "載せるのは件数だけです。どのファイルに書かれているかは検査の出力が示します。\n\n",
-    );
-    out.push_str("| ドメイン | 証拠あり |\n| --- | ---: |\n");
-    for (ledger, _) in &tallies {
-        out.push_str(&format!(
-            "| {} | {} |\n",
-            ledger.domain.as_key(),
-            evidence_count(ledger, evidence)
-        ));
-    }
-
     out
 }
 
@@ -198,7 +179,7 @@ fn owning_domain<'a>(ordered: &[&'a Ledger]) -> BTreeMap<&'a str, &'static str> 
 ///
 /// 表の形はドメイン別報告と揃えているが、版面はそれぞれの報告が自分で持つ。片方の
 /// 版面を変えたときにもう片方が黙って動かないようにするためである（ドメイン別報告の
-/// 版面は要件 7.4 の新しさの検査がバイト単位で固定しており、この報告は検査の対象外）。
+/// 版面は要件 7.4 の新しさの検査が、この報告の版面は判定 ⑹ がバイト単位で固定する）。
 fn push_status_header(out: &mut String, first: &str) {
     out.push_str(&format!("| {first}"));
     for status in Status::ALL {
@@ -321,19 +302,6 @@ fn all_links(ordered: &[&Ledger]) -> Vec<(EntryId, EntryId)> {
         }
     }
     edges
-}
-
-/// その台帳の項目のうち、正典 URL がソースに 1 件以上置かれているものの件数
-/// （要件 2.3 の「有無だけ」）。
-///
-/// 数えるのは**この台帳にある id** だけである。索引には台帳に無い id の証拠も入り
-/// うる（綴りの誤りなど）ので、索引の大きさをそのまま載せない。
-fn evidence_count(ledger: &Ledger, evidence: &EvidenceIndex) -> usize {
-    ledger
-        .entries
-        .keys()
-        .filter(|id| matches!(evidence.by_id.get(*id), Some(paths) if !paths.is_empty()))
-        .count()
 }
 
 #[cfg(test)]

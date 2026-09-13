@@ -702,7 +702,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = "2.5.51"
 owner = "areka-P0-balloon-canon-residue"
-priority = "A6"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -718,7 +718,7 @@ areka はスクロール用の矢印の画像を読み込む経路も描く経�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "A6"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -733,7 +733,7 @@ areka はスクロール用の矢印の画像を読み込む経路も描く経�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "A6"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -748,7 +748,7 @@ areka はスクロール用の矢印の画像を読み込む経路も描く経�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "A6"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -763,7 +763,7 @@ areka はスクロール用の矢印の画像を読み込む経路も描く経�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "A6"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -778,13 +778,13 @@ areka はスクロール用の矢印の画像を読み込む経路も描く経�
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "C46"
+priority = "A17"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: debug!。areka-parsers の charset::prescan_charset が大小文字を無視して引き、areka-emo-present の balloon::read_decoded がバルーンの descript を読むときの文字コードとして使う。
 宣言された綴りを解けないときは、呼ぶ側が決めた既定の文字コードへ静かに落ちる（areka-parsers の charset::decode）。落とすときに元の綴りを添えた記録が出るが、段は控えめで、areka の main が既定とする記録の水準では見えない。宣言と違う読み方をされたことに利用者は気づけず、文字化けだけが起きる——これが上の段を選んだ根拠である。
-同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が三手に割れる——ゴースト・シェル・バルーンの descript は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み、シェルの surfaces.txt は宣言を見ないまま UTF-8 決め打ちで読んで読み取りごと失敗しうるので明示的なエラーの段、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目は読む経路のある 3 枚のうちバルーンの descript の側である。名前で引かず、ページを決めてから引くこと。
+同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とシェルの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み（surfaces.txt は areka-P0-charset-canon の着地でこちらへ移った）、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目は読む経路のある 4 枚のうちバルーンの descript の側である。名前で引かず、ページを決めてから引くこと。
 束: 定義ファイルの文字コード・動くが解けない綴りは黙って既定へ落ちる（先に要る仕組み: 定義ファイルの文字コードの前走査）。束の順位: 46——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -792,7 +792,7 @@ note = """
 status = "absent"
 introduced = "2.5.54"
 owner = "areka-P0-balloon-canon-residue"
-priority = "C33"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -808,7 +808,7 @@ areka はクリック待ちの表示の画像を読み込む経路も描く経�
 status = "absent"
 introduced = "2.5.54"
 owner = "areka-P0-balloon-canon-residue"
-priority = "C33"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -824,7 +824,7 @@ areka はクリック待ちの表示の画像を読み込む経路も描く経�
 status = "absent"
 introduced = "2.5.54"
 owner = "areka-P0-balloon-canon-residue"
-priority = "C33"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -840,7 +840,7 @@ areka はクリック待ちの表示の画像を読み込む経路も描く経�
 status = "absent"
 introduced = "2.6.39"
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -856,7 +856,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = "2.6.39"
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -872,7 +872,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = "2.6.39"
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -888,7 +888,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = "2.5.36"
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -905,7 +905,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = "2.5.36"
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -922,7 +922,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = "2.5.36"
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -939,7 +939,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -956,7 +956,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -972,7 +972,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -988,7 +988,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -1004,7 +1004,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A3"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -1020,7 +1020,7 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -1037,7 +1037,7 @@ areka はバルーンの作者の情報を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -1054,7 +1054,7 @@ areka はバルーンの作者の連絡先を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -1083,7 +1083,7 @@ note = """
 status = "implemented"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "E65"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1096,7 +1096,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "E65"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1109,7 +1109,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "E65"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1122,7 +1122,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "E65"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1135,7 +1135,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "E65"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1148,7 +1148,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "E65"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1161,7 +1161,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1177,7 +1177,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1193,7 +1193,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1209,7 +1209,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = "2.5.27"
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1225,7 +1225,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1241,7 +1241,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1257,7 +1257,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1273,7 +1273,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1289,7 +1289,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1305,7 +1305,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1321,7 +1321,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1337,7 +1337,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1353,7 +1353,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1369,7 +1369,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = "2.5.27"
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1385,7 +1385,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1401,7 +1401,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1417,7 +1417,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1433,7 +1433,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "B23"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1449,7 +1449,7 @@ areka-parsers の balloon::map_merged が読む cursor 系は目印の形・重�
 status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "A12"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1461,7 +1461,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "A12"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1473,7 +1473,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "A12"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1485,7 +1485,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = "areka-P0-choice-marker-styling"
-priority = "A13"
+priority = "A14"
 values = ["装い"]
 links = []
 note = """
@@ -1497,7 +1497,7 @@ note = """
 status = "absent"
 introduced = "2.5.40"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
@@ -1515,7 +1515,7 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "vocabulary-only"
 introduced = "2.5.51"
 owner = "areka-P0-text-decoration-canon"
-priority = "C37"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1529,7 +1529,7 @@ areka-emo-text の look::LookLayers.disable が無効表示の層として実体
 status = "implemented"
 introduced = "2.7.21"
 owner = "areka-P0-balloon-offset-dpi"
-priority = "E70"
+priority = "A2"
 values = ["装い"]
 links = []
 note = """
@@ -1542,7 +1542,7 @@ areka の placement::source の `BALLOON_DPI_KEY` が引き、`load_balloon_auth
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1558,7 +1558,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "E66"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1572,7 +1572,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、3 つの成分�
 status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "E66"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1586,7 +1586,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、3 つの成分�
 status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "E66"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1600,7 +1600,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、3 つの成分�
 status = "implemented"
 introduced = ""
 owner = "areka-P0-text-decoration-canon"
-priority = "E66"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1614,7 +1614,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1630,7 +1630,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1648,7 +1648,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1664,7 +1664,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1680,7 +1680,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1696,7 +1696,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1712,7 +1712,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = "2.5.27"
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1728,7 +1728,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1744,7 +1744,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-font-descript-keys"
-priority = "A11"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -1759,7 +1759,7 @@ areka-parsers の balloon::map_merged は読むキーを並べた表を完全一
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A8"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -1776,7 +1776,7 @@ areka にはネットワークから更新を取ってくる仕組みが無く�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -1793,7 +1793,7 @@ areka はバルーンの識別名を読む経路を持たない。
 status = "absent"
 introduced = "2.5.51"
 owner = "areka-P0-balloon-canon-residue"
-priority = "C39"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -1809,7 +1809,7 @@ areka はさくらスクリプトの目印表示で出す画像の画像を読�
 status = "absent"
 introduced = "2.6.11"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
@@ -1827,7 +1827,7 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "absent"
 introduced = "2.5.40"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
@@ -1845,7 +1845,7 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "absent"
 introduced = "2.5.43"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
@@ -1863,7 +1863,7 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -1880,7 +1880,7 @@ areka はバルーンの名前を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A5"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -1897,7 +1897,7 @@ areka にはカウンタの数値を出す仕組みが無く、その位置や�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A5"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -1914,7 +1914,7 @@ areka にはカウンタの数値を出す仕組みが無く、その位置や�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A5"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -1931,7 +1931,7 @@ areka にはカウンタの数値を出す仕組みが無く、その位置や�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A5"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -1948,7 +1948,7 @@ areka にはカウンタの数値を出す仕組みが無く、その位置や�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A5"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -1965,7 +1965,7 @@ areka にはカウンタの数値を出す仕組みが無く、その位置や�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A5"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -1981,7 +1981,7 @@ areka にはカウンタの数値を出す仕組みが無く、その位置や�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A5"
+priority = "A13"
 values = ["装い"]
 links = []
 note = """
@@ -1997,7 +1997,7 @@ areka にはカウンタの数値を出す仕組みが無く、その位置や�
 status = "absent"
 introduced = "2.5.51"
 owner = "areka-P0-balloon-canon-residue"
-priority = "A7"
+priority = "D2"
 values = ["装い"]
 links = []
 note = """
@@ -2012,7 +2012,7 @@ areka はオンライン表示の画像を読み込む経路も描く経路も�
 status = "absent"
 introduced = "2.5.77"
 owner = "areka-P0-balloon-canon-residue"
-priority = "A7"
+priority = "D2"
 values = ["装い"]
 links = []
 note = """
@@ -2027,7 +2027,7 @@ areka はオンライン表示の画像を読み込む経路も描く経路も�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "A7"
+priority = "D2"
 values = ["装い"]
 links = []
 note = """
@@ -2042,7 +2042,7 @@ areka はオンライン表示の画像を読み込む経路も描く経路も�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "A7"
+priority = "D2"
 values = ["装い"]
 links = []
 note = """
@@ -2057,7 +2057,7 @@ areka はオンライン表示の画像を読み込む経路も描く経路も�
 status = "implemented"
 introduced = ""
 owner = "areka-P0-balloon-vertical-canon"
-priority = "D64"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2071,7 +2071,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-balloon-parse"
-priority = "D64"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2085,7 +2085,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "absent"
 introduced = "2.5.54"
 owner = ""
-priority = "A9"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -2101,8 +2101,8 @@ areka はバルーンの外側へ付属の絵をはみ出させる指定を読�
 [entry."ukadoc:descript_balloon:paint_transparent_region_black_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-emo-atlas"
-priority = "A9"
+owner = ""
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -2114,13 +2114,14 @@ areka は透過色の残る場所を黒で塗るかどうかの指定を読む�
 バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は、設計に着手するとき正典で必ず読む欄としてこの欄を名指しし、シェル側の同じ名前の欄とは別の定義だから両方読むこと、と書いている。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_balloon:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
 status = "absent"
 introduced = "2.5.10"
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -2138,7 +2139,7 @@ areka には説明文を開く画面が無く、その文字コードの宣言�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -2156,7 +2157,7 @@ areka には説明文を開く画面が無く、そのファイル名を読む�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D57"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -2172,7 +2173,7 @@ areka には勧められた組み合わせの置き場所をたどる仕組み�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D57"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -2188,7 +2189,7 @@ areka には勧められた組み合わせと違う使い方を警告する仕�
 status = "absent"
 introduced = "2.5.51"
 owner = "areka-P0-balloon-canon-residue"
-priority = "A2"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2203,7 +2204,7 @@ areka は SSTP マーカーの画像を読み込む経路も描く経路も持�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "A2"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2218,7 +2219,7 @@ areka は SSTP マーカーの画像を読み込む経路も描く経路も持�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "A2"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2233,7 +2234,7 @@ areka は SSTP マーカーの画像を読み込む経路も描く経路も持�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A1"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2250,7 +2251,7 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A1"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2267,7 +2268,7 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A1"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2284,7 +2285,7 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A1"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2301,7 +2302,7 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A1"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2318,7 +2319,7 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A1"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2334,7 +2335,7 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A1"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2350,7 +2351,7 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A1"
+priority = "D2"
 values = ["装い", "交わり"]
 links = []
 note = """
@@ -2366,7 +2367,7 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -2383,7 +2384,7 @@ areka はファイルセットの種別を読む経路を持たない。
 status = "absent"
 introduced = "2.5.40"
 owner = ""
-priority = "A9"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -2398,8 +2399,8 @@ areka には入力ボックスのバルーンが無く、その半透明化を�
 [entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-emo-atlas"
-priority = "A9"
+owner = ""
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -2412,13 +2413,14 @@ areka-emo-atlas の normalize::UseSelfAlpha という同じ意味の切り替え
 バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は、設計に着手するとき正典で必ず読む欄としてこの欄を名指しし、シェル側の同じ名前の欄とは別の定義だから両方読むこと、と書いている。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_balloon:validrect.bottom_2c_5ea7_6a19_20_2a1:1"]
 status = "implemented"
 introduced = ""
 owner = "areka-P0-balloon-parse"
-priority = "D64"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2432,7 +2434,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-balloon-parse"
-priority = "D64"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2446,7 +2448,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-balloon-parse"
-priority = "D64"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2460,7 +2462,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = ""
 owner = "areka-P0-balloon-parse"
-priority = "D64"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2474,7 +2476,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "degraded"
 introduced = "2.8.80"
 owner = "areka-P0-balloon-vertical-canon"
-priority = "C38"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2491,7 +2493,7 @@ areka-parsers の balloon::map_merged が生の文字列のまま持ち上げ、
 status = "degraded"
 introduced = "2.5.10"
 owner = "areka-P0-windowposition-limit"
-priority = "C44"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -2507,7 +2509,7 @@ areka-parsers の balloon::map_merged が生の文字列のまま持ち上げ、
 status = "degraded"
 introduced = ""
 owner = "areka-P0-windowposition-limit"
-priority = "C44"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -2524,7 +2526,7 @@ areka-parsers の balloon::map_merged が数値の写像と生の文字列の転
 status = "degraded"
 introduced = ""
 owner = "areka-P0-windowposition-limit"
-priority = "C44"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -2541,7 +2543,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka の place
 status = "implemented"
 introduced = ""
 owner = "areka-P0-balloon-vertical-canon"
-priority = "D64"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2555,7 +2557,7 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "implemented"
 introduced = "2.8.80"
 owner = "areka-P0-balloon-vertical-canon"
-priority = "D64"
+priority = "A5"
 values = ["装い"]
 links = []
 note = """
@@ -2569,13 +2571,13 @@ areka-parsers の balloon::map_merged が完全一致で引き、areka-emo-text 
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "B29"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はバルーンの初期表示面の宣言を受け取る経路を持たず、どのバルーンも面 ID 0 の絵から出す（面 ID 0 が必ずあることを areka-emo-present の balloon::resolve_balloon_faces が施行し、その先頭の面がそのまま最初の見た目になる）。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
 担当 spec は areka-P0-balloon-canon-residue（brief が番号を付けている項目のうち、バルーンの初期面を指定する語彙の非追従を扱う項目）。
 束: 最初に出る吹き出しの面・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 29——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -2585,13 +2587,13 @@ areka はバルーンの初期表示面の宣言を受け取る経路を持た�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はバルーンの位置合わせを切る宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka のバルーンは常に本体の窓に付いて動く（areka の placement::follow が本体の移動をバルーンへ伝える）。切ると書いても付いて動くので、作者が意図した見え方にはならない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2602,13 +2604,13 @@ areka のバルーンは常に本体の窓に付いて動く（areka の placeme
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B22"
+priority = "A2"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はバルーンの拡大率を本体に合わせる宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka のバルーンの拡大率は、画面の DPI とバルーンの定義が申告する推奨 DPI から決まる（areka の placement::source が読む）。ゴースト側から連動を強制する道は無い。
 正典本文は登場を 2.7 RC1 と書いているが、カタログの版番号の欄は空である。登場した版はカタログから選ぶ規則に従って空のままにした。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -2620,13 +2622,13 @@ areka のバルーンの拡大率は、画面の DPI とバルーンの定義が
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C34"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストが標準として名指しするバルーンの名前を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
 バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -2638,13 +2640,13 @@ areka が使うバルーンの置き場所は起動の引数か既定の場所�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "B29"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はキャラクタ番号で指すスコープのバルーンの初期表示面の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
 担当 spec は areka-P0-balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げているのは接頭辞の無い綴りと相方側の綴りだけで、キャラクタ番号で指す綴りを挙げていない（沈黙ルール対応表の行は挙げている）。
 1 つ補いがある——読まれないのはこの欄が宣言する値であって、`charN.` の番号は条件付きで効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。その別名で値を受け取るのは窓の置き方の欄（areka の placement::config::scoped_value）だけなので、この欄はどの番号でも値が読まれない。
@@ -2655,7 +2657,7 @@ areka はキャラクタ番号で指すスコープのバルーンの初期表�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -2668,7 +2670,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -2681,7 +2683,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -2694,7 +2696,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -2707,7 +2709,7 @@ note = """
 status = "implemented"
 introduced = "2.6.66"
 owner = ""
-priority = "E68"
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -2721,7 +2723,7 @@ areka の placement::source::char_name_scope_of が番号を取り出し、同 b
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D50"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -2734,13 +2736,13 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B32"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はキャラクタ番号で指すスコープの初期サーフェス番号の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2752,13 +2754,13 @@ areka はキャラクタ番号で指すスコープの初期サーフェス番�
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "C46"
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: debug!。areka-parsers の charset::prescan_charset が大小文字を無視して引き、package::resolve が起点の descript を読むときの文字コードとして使う。
 宣言された綴りを解けないときは、呼ぶ側が決めた既定の文字コードへ静かに落ちる（areka-parsers の charset::decode）。落とすときに元の綴りを添えた記録が出るが、段は控えめで、areka の main が既定とする記録の水準では見えない。宣言と違う読み方をされたことに利用者は気づけず、文字化けだけが起きる——これが上の段を選んだ根拠である。
-同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が三手に割れる——ゴースト・シェル・バルーンの descript は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み、シェルの surfaces.txt は宣言を見ないまま UTF-8 決め打ちで読んで読み取りごと失敗しうるので明示的なエラーの段、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目は読む経路のある 3 枚のうちゴーストの descript の側である。名前で引かず、ページを決めてから引くこと。
+同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とシェルの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み（surfaces.txt は areka-P0-charset-canon の着地でこちらへ移った）、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目は読む経路のある 4 枚のうちゴーストの descript の側である。名前で引かず、ページを決めてから引くこと。
 束: 定義ファイルの文字コード・動くが解けない綴りは黙って既定へ落ちる（先に要る仕組み: 定義ファイルの文字コードの前走査）。束の順位: 46——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -2766,13 +2768,13 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストの作者名を読む経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインの SHIORI の資源の側にも同名の項目がある（そちらは別の台帳の持ち物で、areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2783,13 +2785,13 @@ areka はゴーストの作者名を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストの作者の連絡先を読む経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインのプロパティの側にも同名の項目がある（areka-sylphya の vocab::GENERIC_PROP_NAMES が語彙として持っている）。SHIORI の資源の側にこの名前は無い——そちらにあるのは `craftman` と `craftmanw` だけである。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2800,13 +2802,13 @@ areka はゴーストの作者の連絡先を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストの作者の表示名を読む経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインのプロパティの側（areka-sylphya の vocab::GENERIC_PROP_NAMES）にも SHIORI の資源の側（同じクレートの vocab::shiori_resource）にも同名の項目がある。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2817,13 +2819,13 @@ areka はゴーストの作者の表示名を読む経路を持たない。
 status = "absent"
 introduced = "2.5.41"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はマウスの矢印の絵をゴーストごとに差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この見出しは新旧の綴りを 1 つにまとめているので、別名の行は作らない。登場した版はカタログが持つ唯一の値を写したが、正典本文がその版として書いているのは `mousecursor` と書けるようになった時期であって、欄そのものが現れた時期ではない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
@@ -2837,13 +2839,13 @@ areka はマウスの矢印の絵をゴーストごとに差し替える仕組�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C34"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は標準として使うバルーンの相対パスの宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
 バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -2855,13 +2857,13 @@ areka が使うバルーンの置き場所は起動の引数か既定の場所�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D56"
+priority = "A10"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は着せ替えを丸ごと切る宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 着せ替えの既定値はシェルの descript から areka-parsers の package::resolve が転記しており、切ると書いてあっても転記も適用も止まらない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2873,13 +2875,13 @@ areka は着せ替えを丸ごと切る宣言を受け取る経路を持たな�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D56"
+priority = "A10"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はマウスの移動の通知が要らないという宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka はマウスの移動の通知を間引いたうえで送る（areka の input_events::throttle が送出の条件を決める）。要らないと書いてあっても送り続ける。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2891,13 +2893,13 @@ areka はマウスの移動の通知を間引いたうえで送る（areka の i
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D56"
+priority = "A10"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は口パクの仕掛けを切る宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 もっとも areka の動きの再生が駆動するのはまばたきの語だけで（areka-seriko の table::AnimationTable）、口パクの語は元から動かない。宣言は捨てられるが、見た目の結果はたまたま作者の意図と一致する。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2909,13 +2911,13 @@ areka は口パクの仕掛けを切る宣言を受け取る経路を持たな�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A8"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka にはゴーストを配布元から取り直す仕組みが無く、その宛先を書くこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもあり、別ドメインのプロパティの側（areka-sylphya の vocab::GENERIC_PROP_NAMES）にも SHIORI の資源の側（同じクレートの vocab::shiori_resource）にもある。名前で引かず、ページを決めてから引くこと。
 この欄が成り立つには配布と更新の仕組みが要る。areka にはそれが無い。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -2927,13 +2929,13 @@ areka にはゴーストを配布元から取り直す仕組みが無く、そ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D54"
+priority = "C3"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストを最小化しないので、最小化したときの絵を決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 ゴーストの窓は最小化の箱を持たない形で作られ、最小化を命じる経路も本番のコードに無い（areka の placement::spawn）。通知領域に絵を出す画面も無い。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2944,13 +2946,13 @@ areka はゴーストを最小化しないので、最小化したときの絵�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は通知領域にゴーストの絵を出す画面を持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
 束: 通知領域とゴースト一覧の絵・読む経路が無い（先に要る仕組み: 通知領域とゴースト一覧の画面）。束の順位: 54——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -2960,13 +2962,13 @@ areka は通知領域にゴーストの絵を出す画面を持たず、この�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストの識別名を読む経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインのプロパティの側にもある。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -2977,13 +2979,13 @@ areka はゴーストの識別名を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B1"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka にはゴーストの配布ファイルを受け入れる導線が無く、入れてよい相手の名前を並べるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka-parsers の package::resolve は前置きで install.txt に触れないと自ら宣言しており、入れる側の仕組みは 1 つも無い。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 入れる・更新する・配布ファイルを作るまわりの項目は、どの spec も担当していない。
@@ -2994,13 +2996,13 @@ areka-parsers の package::resolve は前置きで install.txt に触れない�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "B29"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は相方側のバルーンの初期表示面の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
 担当 spec は areka-P0-balloon-canon-residue（brief が名前を挙げている綴りのうち相方側にあたる）。
 束: 最初に出る吹き出しの面・読む経路が無い（先に要る仕組み: ゴーストとシェルの descript の転記層）。束の順位: 29——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3010,7 +3012,7 @@ areka は相方側のバルーンの初期表示面の宣言を受け取る経�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3023,7 +3025,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3036,7 +3038,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3049,7 +3051,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3062,7 +3064,7 @@ note = """
 status = "implemented"
 introduced = ""
 owner = "areka-P0-package-mount"
-priority = "E68"
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -3077,7 +3079,7 @@ areka-parsers の package::resolve が `GhostNames::kero_name` へ写し、areka
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D50"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3090,13 +3092,13 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B32"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は相方側の初期サーフェス番号の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3107,13 +3109,13 @@ areka は相方側の初期サーフェス番号の宣言を受け取る経路�
 status = "absent"
 introduced = ""
 owner = "areka-P0-makoto-dll-host"
-priority = "D60"
+priority = "E4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は台詞を書き換える翻訳の DLL を呼ぶ仕組みを持たず、そのファイル名を書くこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当 spec は areka-P0-makoto-dll-host（brief がゴースト側とシェル側の両方の `makoto,` を自分の範囲に挙げている）。
 束: トランスレータ（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: 翻訳 DLL のホスティング）。束の順位: 60——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3123,13 +3125,13 @@ areka は台詞を書き換える翻訳の DLL を呼ぶ仕組みを持たず、
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その文字の大きさを決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
 同じ名前の見出しがシェルの descript にもある。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -3141,13 +3143,13 @@ areka には作り付けのメニューが無く、その文字の大きさを�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には作り付けのメニューが無く、その書体を決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄が成り立つには、右クリックで開く自前描画のメニューが要る。areka にはそれが無い。
 同じ名前の見出しがシェルの descript にもある。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -3159,13 +3161,13 @@ areka には作り付けのメニューが無く、その書体を決めるこ�
 status = "absent"
 introduced = "2.6.11"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
@@ -3178,13 +3180,13 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "absent"
 introduced = "2.6.11"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にはこの見出しが無く、ゴーストの側だけにある。同じ族でもページごとに項目の有無が違うので、名前で引かないこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
@@ -3197,13 +3199,13 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "absent"
 introduced = "2.6.11"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にはこの見出しが無く、ゴーストの側だけにある。同じ族でもページごとに項目の有無が違うので、名前で引かないこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
@@ -3216,13 +3218,13 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "absent"
 introduced = "2.5.41"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
@@ -3235,13 +3237,13 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "absent"
 introduced = "2.5.43"
 owner = ""
-priority = "B21"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はマウスの矢印の絵を差し替える仕組みを持たず、この欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 バルーンの descript にも同じ見出しがあるが、それは別の項目である。ページを決めてから引くこと。
 選択肢の目印を飾る `cursor.` で始まる欄はバルーンの定義の側にあり（担当は areka-P0-choice-marker-styling）、この欄とは別である。名前が似ているだけなので一緒に扱わない。
 別ドメインのプロパティの側に同じ名前があるが、そちらは走らせながら書き換える命令の語彙で（areka-sylphya の vocab::SET_EFFECTIVE）、descript のこの欄とは別の項目である。
@@ -3254,13 +3256,13 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "A3"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はシェル側の名前で上書きしてよいかの宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 正典はこの欄の既定を「シェル側の `sakura.name`／`kero.name` を使う」と定めているが、areka は名前をゴーストの descript からしか採らない（areka-parsers の package::resolve）。シェルの descript を読むのは areka-ghost の config::resolve_shell_name で、そこが引くのは `name` の欄だけである。つまり areka は宣言の有無にかかわらず、常に上書きしない側の振る舞いをする。
 これが名前の族でゴースト側とシェル側の状態が割れる理由である——ゴーストの descript の `sakura.name`／`sakura.name2`／`kero.name` は読まれて実装済み、シェルの descript の同じ綴りは名前としては読まれない。シェルの `name`（シェル名）だけは起動時のシェル名という別の用途で読まれており実装済みである。バルーンの descript の `name`（バルーン名）はどこからも読まれない。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -3271,8 +3273,8 @@ areka はシェル側の名前で上書きしてよいかの宣言を受け取�
 [entry."ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-package-mount"
-priority = "D53"
+owner = ""
+priority = "A3"
 values = []
 links = []
 note = """
@@ -3280,19 +3282,20 @@ note = """
 この綴りは重なりがいちばん広い——同じ綴りの見出しが本台帳の別ページ（バルーン・シェル・ヘッドライン・インストール指示・プラグイン・surfaces.txt）にもあり、別ドメインのプロパティ（areka-sylphya の vocab::GENERIC_PROP_NAMES）と SHIORI の資源（同じクレートの vocab::shiori_resource）にもある。areka の読み手が別々なので状態も割れる——ゴースト名はここへ写されるだけで誰も読まない、シェル名は areka-ghost の config::resolve_shell_name が読んで起動時のシェル名になる、バルーン名はどこからも読まれない。名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-package-mount。同 spec の brief は範囲の In に、起点の descript から読む欄としてこの綴りを名指しで挙げている。
 束: 配布物の素性と説明文・名前だけ受けて使わない（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 53——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-package-mount は完了して封じられた spec で、状態が語彙のみのこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_ghost:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
 status = "absent"
 introduced = "2.5.10"
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には説明文を開く画面が無く、その文字コードの宣言を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 同じページの `charset` は areka-parsers の charset::prescan_charset が読んでおり実装済みである。名前は似ているが別の欄で、状態も割れる。ページと欄を決めてから引くこと。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。
 文字コードを一手に引き受ける areka-P0-charset-canon の brief は、この欄を対象外と宣言している（説明文を表示する機能が無いため）。担当は決まっていない。
@@ -3304,13 +3307,13 @@ areka には説明文を開く画面が無く、その文字コードの宣言�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には説明文を開く画面が無く、そのファイル名を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 この欄が成り立つには、入れる導線か、右クリックで開く作り付けのメニューが要る。どちらも areka には無い。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -3322,13 +3325,13 @@ areka には説明文を開く画面が無く、そのファイル名を読む�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D57"
+priority = "B7"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストが薦めるバルーンの相対パスを受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
 バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -3340,13 +3343,13 @@ areka が使うバルーンの置き場所は起動の引数か既定の場所�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D57"
+priority = "B7"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はゴーストが薦めるバルーンの名前を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka が使うバルーンの置き場所は起動の引数か既定の場所から決まる（areka の boot_config::resolve_config_inputs と areka の boot_config::default_balloon_root）。ゴーストの宣言はそこへ届かない。
 薦めから外れたバルーンへ切り替えたときに強い警告を出す仕掛けも無い。
 バルーンの所在を決める仕事は、完了 spec の areka-P0-package-mount が brief で自分の範囲の外だと宣言している（バルーンは利用者が選ぶ共有の資産で、ゴーストの宣言だけでは所在が決まらないため）。
@@ -3359,13 +3362,13 @@ areka が使うバルーンの置き場所は起動の引数か既定の場所�
 status = "absent"
 introduced = ""
 owner = "areka-P0-balloon-canon-residue"
-priority = "B29"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は本体側のバルーンの初期表示面の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表の `ghost descript の balloon.defaultsurface / kero.balloon.defaultsurface / char*.balloon.defaultsurface による初期表示面宣言` の行が、正典の既定である面 ID 0 だけを実装した状態を非追従として引き受けている。ただし areka にはこの欄を受け取る経路そのものが無いので、状態は縮退ではなく未対応とした（受け取る経路が無い項目は転記元の行があっても未対応とする裁定）。
 沈黙ルール対応表のこの行も areka-P0-balloon-canon-residue の brief も、本体側の綴りを名前としては挙げていない。ただし行の裁量の欄は各スコープの初期表示面を一括で扱うと書いており、brief の項目もバルーンの初期面を指定する語彙そのものを扱うと書いているので、この綴りも同じ行・同じ担当が引き受けていると読んだ。
 担当 spec は areka-P0-balloon-canon-residue。ただし担当 spec の記述が古い——同 brief が名前を挙げている綴りは正典の綴りをすべて覆っていない。
@@ -3376,7 +3379,7 @@ areka は本体側のバルーンの初期表示面の宣言を受け取る経�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3389,7 +3392,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3402,7 +3405,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3415,7 +3418,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3428,7 +3431,7 @@ note = """
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "E68"
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -3443,7 +3446,7 @@ areka-parsers の package::resolve が `GhostNames::sakura_name2` へ写し、ar
 status = "implemented"
 introduced = ""
 owner = "areka-P0-package-mount"
-priority = "E68"
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -3458,7 +3461,7 @@ areka-parsers の package::resolve が `GhostNames::sakura_name` へ写し、are
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D50"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3471,13 +3474,13 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B32"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は本体側の初期サーフェス番号の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 よく似た綴りが別ドメインのプロパティの側にもあるが、そちらはスコープの接頭辞を持たない別の項目で、areka-sylphya の vocab::SET_EFFECTIVE が書き込みの効く名前として予約しているだけである（書き込みそのものは行わない）。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3488,7 +3491,7 @@ areka は本体側の初期サーフェス番号の宣言を受け取る経路�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D50"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -3501,7 +3504,7 @@ note = """
 status = "implemented"
 introduced = ""
 owner = "areka-P0-package-mount"
-priority = "E76"
+priority = "A10"
 values = ["装い"]
 links = []
 note = """
@@ -3515,13 +3518,13 @@ areka-parsers の package::resolve がシェルの置き場所の名前として
 status = "absent"
 introduced = "2.4.73"
 owner = ""
-priority = "D58"
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は SHIORI を読み込んだまま残すかどうかの宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka にはゴーストを切り替えても SHIORI を生かしたまま残す仕組みが無く、この欄が指す条件そのものが起きない。
 登場した版はカタログが持つ古い方を採った。正典本文が挙げる版は既定値がどこで入れ替わったかを示すもので、欄が現れた版そのものは書かれていない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
@@ -3530,67 +3533,66 @@ areka にはゴーストを切り替えても SHIORI を生かしたまま残す
 """
 
 [entry."ukadoc:descript_ghost:shiori.encoding_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-charset-canon"
-priority = "D58"
+priority = "A4"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka は SHIORI とのやり取りに使う文字コードの宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka の SHIORI との受け渡しは UTF-8 に固定されている（shiori-host32-host の shiori3 が持つ符号は 1 つだけ）。宣言しても切り替わらないので、Shift_JIS でしか話せない栞とは文字が壊れる。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当 spec は areka-P0-charset-canon（brief がこの欄の解析を自分の範囲に挙げている）。
-束: 栞の呼び出しの設定・読む経路が無い（先に要る仕組み: SHIORI の読み込みと寿命）。束の順位: 58——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+壊れ方: 該当なし。記録: charset_initial（情報）・charset_label_unresolved（警告）。
+areka はこの欄を SHIORI との通信に使う文字コードの宣言として読む。areka-parsers の package::resolve が descript から SHIORI マウントの一部として生の文字列のまま転記し（整形も解決もしない）、areka-ghost の shiori_wiring::initial_charset が解決して通信の初期値に使う。優先順は shiori.forceencoding ＞ この欄 ＞ 起動時に渡される既定（本番は Shift_JIS）で、決めた文字コードで最初の要求から送る。
+解決できない綴りを書いたときは、この欄を飛ばして次の優先順へ下がる。そのとき ghost-boot の charset_label_unresolved が警告 1 行を残す——キー名・書かれた綴り・退けた理由・実際に採用した後退先が付くので、黙って落ちることはない。理由の欄は 2 つを区別する。unknown は Encoding Standard に無い綴り、not_encodable は UTF-16 系や replacement のように「符号化した出力が名乗ったラベルと一致しない」ため通信では使えない既知の限界である。決まった初期値は同じ target の charset_initial が正規名と決定の根拠（forceencoding／encoding／default のいずれか）を添えて 1 行残す。
+根拠の場所: crates/areka-parsers/src/package/resolve.rs の ShioriMount を組み立てる転記の腕（この欄を読む唯一の定義箇所）。解決と記録は crates/areka-ghost/src/shiori_wiring.rs の initial_charset、文字コードの値と綴りの解決は crates/shiori-host32-host/src/charset.rs の Charset::for_label。
+同じページの charset,文字コード は descript そのものを読む文字コードで、この欄とは別の経路である。descript の charset を SHIORI 通信の初期値に使う箇所は無い（逆向きも同じ）。
+担当 spec は areka-P0-charset-canon。
+束: 栞の呼び出しの設定・読む経路が通った（先に要る仕組み: SHIORI の読み込みと寿命）。束の順位: 58——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_ghost:shiori.escape_unknown_2c0_2f1:1"]
 status = "absent"
 introduced = "2.6.89"
 owner = ""
-priority = "D58"
+priority = "A4"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
+壊れ方: 黙って壊れる。記録: なし（この欄を無視したこと自体は記録されない。置換が起きたことは別の記録が残る。下の 4 段落目）。
 areka は文字コードに移せない文字を逃がす書き方の宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka の SHIORI との受け渡しは UTF-8 に固定されている（shiori-host32-host の shiori3 が持つ符号は 1 つだけ）。移せない文字が出る場面そのものが起きない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+areka の SHIORI との受け渡しの文字コードは、ゴーストの宣言と応答の交渉で決まる任意の 1 つである（areka-P0-charset-canon の着地）。そのため「移せない文字」は実際に起こり得るが、逃がし方をこの欄で選ばせる経路は無い——areka は表せない文字を必ず 10 進の数値文字参照へ置き換えて送り（crates/shiori-host32-host/src/charset.rs の Charset::encode）、置き換えた文字数を同ファイルの CharsetNegotiator::note_request が shiori-charset の charset_unmappable_replaced として残す（要求の ID ごとに初回だけ警告・以後は詳細）。記録を呼ぶのは 32bit ホスト経由の経路（crates/shiori-host32-host/src/client.rs）だけで、SHIORI/4 の直接呼出経路は交渉の状態を持たないので呼ばない——ただしそちらは符号化が UTF-8 に固定されており、UTF-8 で表せない文字は無いので置換そのものが起こらない。0 と書いても 1 と書いても送るものは変わらないので、消えるのはこの宣言そのものだけである。
 文字コードを一手に引き受ける areka-P0-charset-canon の brief は、この欄を自分の範囲にも対象外にも挙げていない。要件の定めどおり担当の欄は空にした。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 束: 栞の呼び出しの設定・読む経路が無い（先に要る仕組み: SHIORI の読み込みと寿命）。束の順位: 58——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_ghost:shiori.forceencoding_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-charset-canon"
-priority = "D58"
+priority = "A4"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka は栞が返す文字コードより宣言を優先させる指定を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka の SHIORI との受け渡しは UTF-8 に固定されている（shiori-host32-host の shiori3 が持つ符号は 1 つだけ）。優先させる先の切り替えそのものが無いので、宣言しても何も変わらない。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当 spec は areka-P0-charset-canon（brief がこの欄の解析を自分の範囲に挙げている）。
-束: 栞の呼び出しの設定・読む経路が無い（先に要る仕組み: SHIORI の読み込みと寿命）。束の順位: 58——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+壊れ方: 該当なし。記録: charset_initial（情報）・charset_label_unresolved（警告）・charset_forced_ignores_header（詳細）。
+areka はこの欄を「栞が応答で名乗る文字コードより、書かれた宣言を優先させる」指定として読む。areka-parsers の package::resolve が descript から SHIORI マウントの一部として生の文字列のまま転記し、areka-ghost の shiori_wiring::initial_charset が最優先で解決する（shiori.encoding よりも先に見る）。解決できたときは強制が効き、そのつながりの間は応答の Charset ヘッダを復号にも採用にも使わない。
+解決できない綴りを書いたときは、この欄を飛ばして次の優先順（shiori.encoding ＞ 既定）へ下がり、そのとき強制の効力も失う——以後は応答の Charset ヘッダに従う。後退は ghost-boot の charset_label_unresolved が警告 1 行（キー名・書かれた綴り・退けた理由・実際に採用した後退先）で残すので、黙って効かないことはない。強制が効いている間に応答が違う文字コードを名乗ったときは、shiori-charset の charset_forced_ignores_header が初回だけ詳細で 1 行出る（無視したことは分かるが、繰り返しては言わない）。
+根拠の場所: crates/areka-parsers/src/package/resolve.rs の ShioriMount を組み立てる転記の腕（この欄を読む唯一の定義箇所）。優先順と後退の記録は crates/areka-ghost/src/shiori_wiring.rs の initial_charset、強制の保持と無視は crates/shiori-host32-host/src/charset.rs の CharsetNegotiator（policy／note_response）。
+担当 spec は areka-P0-charset-canon。
+束: 栞の呼び出しの設定・読む経路が通った（先に要る仕組み: SHIORI の読み込みと寿命）。束の順位: 58——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_ghost:shiori.logo.align_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D59"
+priority = "B5"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は好感度の絵柄を出す画面を持たず、その背景画像の基準点を決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
 束: 好感度の絵柄の画面・読む経路が無い（先に要る仕組み: 好感度の絵柄の画面）。束の順位: 59——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3600,13 +3602,13 @@ areka は好感度の絵柄を出す画面を持たず、その背景画像の�
 status = "absent"
 introduced = "2.4.26"
 owner = ""
-priority = "D59"
+priority = "B5"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は好感度の絵柄を出す画面を持たず、その背景に使う画像のファイル名を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 登場した版はカタログが持つ古い方を採った。正典本文が挙げる版は、複数の絵を並べられるようになった時期と暗い配色に対応した時期で、欄が現れた版そのものは書かれていない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3617,13 +3619,13 @@ areka は好感度の絵柄を出す画面を持たず、その背景に使う�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D59"
+priority = "B5"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は好感度の絵柄を出す画面を持たず、その背景画像の横の位置を決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
 束: 好感度の絵柄の画面・読む経路が無い（先に要る仕組み: 好感度の絵柄の画面）。束の順位: 59——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3633,13 +3635,13 @@ areka は好感度の絵柄を出す画面を持たず、その背景画像の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D59"
+priority = "B5"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は好感度の絵柄を出す画面を持たず、その背景画像の縦の位置を決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
 束: 好感度の絵柄の画面・読む経路が無い（先に要る仕組み: 好感度の絵柄の画面）。束の順位: 59——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3649,13 +3651,13 @@ areka は好感度の絵柄を出す画面を持たず、その背景画像の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D58"
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は SHIORI の約束事の版を指定する宣言を受け取る経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka がつなぐ約束事は SHIORI/3 に固定されている（shiori-host32-host の shiori3 が組み立てる要求行）。古い版でしか話せない栞を指名する道は無い。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
@@ -3666,7 +3668,7 @@ areka がつなぐ約束事は SHIORI/3 に固定されている（shiori-host32
 status = "implemented"
 introduced = ""
 owner = "areka-P0-package-mount"
-priority = "E79"
+priority = "A4"
 values = []
 links = []
 note = """
@@ -3680,13 +3682,13 @@ areka-parsers の package::resolve が `ShioriMount::file` へ写し、areka-gho
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C35"
+priority = "D2"
 values = ["交わり"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には他のゴーストから話しかけられる口が無く、その受け入れの可否を決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
 束: 外からの呼びかけを受けるかどうか・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 35——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3696,13 +3698,13 @@ areka には他のゴーストから話しかけられる口が無く、その�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C35"
+priority = "D2"
 values = ["交わり"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には相手を指名しない呼びかけを受ける口が無く、その受け入れの可否を決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
 束: 外からの呼びかけを受けるかどうか・読む経路が無い（先に要る仕組み: 外との通信（SSTP・話しかけ箱））。束の順位: 35——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3712,13 +3714,13 @@ areka には相手を指名しない呼びかけを受ける口が無く、そ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D60"
+priority = "E4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka には外から台詞を送り込む口が無く、それを常に翻訳へ回すかを決めるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 翻訳の後半を持つ areka-P0-makoto-dll-host の brief は、この欄を対象外と宣言している（外から台詞を送り込む口が未実装であることを理由に挙げている）。要件の定めどおり担当の欄は空にした。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 束: トランスレータ（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: 翻訳 DLL のホスティング）。束の順位: 60——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3728,13 +3730,13 @@ areka には外から台詞を送り込む口が無く、それを常に翻訳�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は起動の記録を人に見せる画面を持たず、そこに出す表示名を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当は決まっていない。
 束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -3743,26 +3745,27 @@ areka は起動の記録を人に見せる画面を持たず、そこに出す�
 [entry."ukadoc:descript_ghost:type_2c_7a2e_5225:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-package-mount"
-priority = "C45"
+owner = ""
+priority = "A4"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka はファイルセットの種別を読む経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 areka がゴーストだと決めるのは置き場所だけで、起点は `ghost/master/descript.txt` に固定されている（areka-parsers の package::resolve）。正典も SSP は置き場所で識別すると書いている。正典が省略できないと定める欄を読まないので、種別の違うファイルセットを渡されても気づかない。
 同じ名前の見出しがバルーン・シェル・プラグイン・インストール指示の descript にもある。名前で引かず、ページを決めてから引くこと。
 両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
 担当 spec は areka-P0-package-mount。ただし担当 spec の記述が古い——同 brief はゴーストの descript を読む欄としてこの欄を挙げているが、着地した読み取りは引いていない。
 束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-package-mount は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_headline:alwaysdisplay_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
@@ -3774,12 +3777,12 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka にはヘッドラインセンサの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `headlinelist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
-同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が三手に割れる——ゴースト・シェル・バルーンの descript は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み、シェルの surfaces.txt は宣言を見ないまま UTF-8 決め打ちで読んで読み取りごと失敗しうるので明示的なエラーの段、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちヘッドラインセンサの descript の側である。名前で引かず、ページを決めてから引くこと。
+同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とシェルの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み（surfaces.txt は areka-P0-charset-canon の着地でこちらへ移った）、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちヘッドラインセンサの descript の側である。名前で引かず、ページを決めてから引くこと。
 束: 配布者向け・プラグイン・ヘッドライン（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: プラグインとヘッドラインの仕組み）。束の順位: 55——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3787,7 +3790,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
@@ -3799,7 +3802,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
@@ -3812,7 +3815,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
@@ -3825,7 +3828,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
@@ -3837,7 +3840,7 @@ note = """
 status = "absent"
 introduced = "2.5.10"
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
@@ -3850,7 +3853,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
@@ -3863,7 +3866,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E3"
 values = []
 links = []
 note = """
@@ -3875,7 +3878,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -3887,7 +3890,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B31"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -3899,7 +3902,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B31"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -3911,7 +3914,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -3923,7 +3926,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -3935,7 +3938,7 @@ note = """
 status = "absent"
 introduced = "2.5.17"
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -3947,7 +3950,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -3959,7 +3962,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -3971,7 +3974,7 @@ note = """
 status = "absent"
 introduced = "2.7.52"
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -3983,12 +3986,12 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
-同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が三手に割れる——ゴースト・シェル・バルーンの descript は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み、シェルの surfaces.txt は宣言を見ないまま UTF-8 決め打ちで読んで読み取りごと失敗しうるので明示的なエラーの段、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちインストール指示の install.txt の側である。名前で引かず、ページを決めてから引くこと。
+同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とシェルの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み（surfaces.txt は areka-P0-charset-canon の着地でこちらへ移った）、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちインストール指示の install.txt の側である。名前で引かず、ページを決めてから引くこと。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -3996,7 +3999,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -4008,7 +4011,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -4021,7 +4024,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B31"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -4033,7 +4036,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B31"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -4045,7 +4048,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C47"
+priority = "B1"
 values = []
 links = []
 note = """
@@ -4058,12 +4061,12 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka にはプラグインの descript.txt を読む経路がファイルごと無い。名前として残っているのは areka-sylphya の vocab::DOTTED_ROOTS が持つ `pluginlist` だけで、これはプロパティの語彙の枝を予約しているに過ぎず、設定ファイルの解釈には繋がっていない。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
-同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が三手に割れる——ゴースト・シェル・バルーンの descript は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み、シェルの surfaces.txt は宣言を見ないまま UTF-8 決め打ちで読んで読み取りごと失敗しうるので明示的なエラーの段、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちプラグインの descript の側である。名前で引かず、ページを決めてから引くこと。
+同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とシェルの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み（surfaces.txt は areka-P0-charset-canon の着地でこちらへ移った）、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちプラグインの descript の側である。名前で引かず、ページを決めてから引くこと。
 束: 配布者向け・プラグイン・ヘッドライン（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: プラグインとヘッドラインの仕組み）。束の順位: 55——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -4071,7 +4074,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4084,7 +4087,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4097,7 +4100,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4110,7 +4113,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4122,7 +4125,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4135,7 +4138,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4148,7 +4151,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4161,7 +4164,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4173,7 +4176,7 @@ note = """
 status = "absent"
 introduced = "2.5.10"
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4186,7 +4189,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4199,7 +4202,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "A7"
 values = []
 links = []
 note = """
@@ -4211,7 +4214,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "D5"
 values = []
 links = []
 note = """
@@ -4224,7 +4227,7 @@ note = """
 status = "absent"
 introduced = "2.4.96"
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4242,7 +4245,7 @@ areka のバルーンはドラッグで動かせる（単独のドラッグを�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B22"
+priority = "A2"
 values = ["装い"]
 links = []
 note = """
@@ -4258,8 +4261,8 @@ areka はバルーンの拡大率をゴーストと連動させることを強�
 [entry."ukadoc:descript_shell:char_2a.bindgroup_2a.addid_2cID:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
-priority = "B27"
+owner = ""
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -4269,13 +4272,14 @@ areka は連れ立って着せる相手の指定を、どの綴りでも受け�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は連れ立って着せる指定を「語彙として持つだけで実挙動は持たない」と仕分けているが、その語彙が置かれているのは同 spec の文書と、後から差し替えられるように開けてある型の形であって、areka のコードにこの綴りは無い。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.bindgroup_2a.default_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
-priority = "B27"
+owner = ""
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -4285,13 +4289,14 @@ areka はキャラクタ番号で指すスコープの着せ替えの初期状�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は着せ替えの宣言の扱いを 3 つに仕分けた表を持ち、キャラクタ番号で指す綴りを最初の一里塚では取り込まないと決めて、後の段階へ回している。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
-priority = "B27"
+owner = ""
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -4301,13 +4306,14 @@ areka はキャラクタ番号で指すスコープの着せ替えの名前宣�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は着せ替えの名前宣言の取り込みを自分のものとし、その設計でキャラクタ番号で指す綴りを最初の一里塚では取り込まないと決めて、後の段階へ回している。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.bindoption_2a.group_2c_30ab_30c6_30b4_30ea_540d_2c_30aa_30d7_30b7_30e7_30f3:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-bindoption-exclusivity"
-priority = "B27"
+owner = ""
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -4317,13 +4323,14 @@ areka はキャラクタ番号で指すスコープの排他の指定を受け�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-bindoption-exclusivity。同 spec の brief は自分が直す正典として、本体側・相方側・キャラクタ番号で指す側の 3 つの綴りを並べて引いている。ただし着地した実装が照合するのは前の 2 つだけである。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-bindoption-exclusivity は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4336,13 +4343,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.defaulttop_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4355,13 +4363,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.defaultx_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4374,13 +4383,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.defaulty_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4393,13 +4403,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:char_2a.icon.frame.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -4417,7 +4428,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -4435,7 +4446,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -4453,7 +4464,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -4471,7 +4482,7 @@ areka には着せ替えのメニューが無く、その出しかたを決め�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -4489,7 +4500,7 @@ areka には着せ替えのメニューが無く、その並びの決まった�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -4507,7 +4518,7 @@ areka には着せ替えのメニューが無く、その並びに階層を作�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B30"
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -4524,8 +4535,8 @@ areka が 2 人目以降の窓の題に使う名前は起点の descript の側�
 [entry."ukadoc:descript_shell:char_2a.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "D50"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4534,13 +4545,14 @@ note = """
 1 つ補いがある——`charN.` の番号は、値の行き先とは別にキャラクタの人数にも効く。areka の placement::config::detect_scopes は起点とシェルの両方の表を走査し、`charN.` で始まるキーの番号が 2 以上のときだけ（番号の取り出しは areka の placement::config::char_scope_of）そのキャラクタを立てる。番号が 0 と 1 の綴りは本体と相方の別名という扱いで、人数の数え上げには効かない（areka の placement::config::scope_prefixes）。この欄の値そのものは、番号が 0 なら本体の欄として、番号が 1 なら相方が立っているときにかぎり相方の欄として、2 以上なら書いたとおりのキャラクタの欄として受け取られる（areka の placement::config::scoped_value）。相方が立つのは起点の descript に相方の名前があるか、シェルの descript に `kero.` で始まるキーがあるときで、`char1.` の綴りそのものは相方を立てない。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "C46"
+priority = "A17"
 values = []
 links = []
 note = """
@@ -4556,7 +4568,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -4573,7 +4585,7 @@ areka はシェルの作者名を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -4590,7 +4602,7 @@ areka はシェルの作者の連絡先を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -4607,7 +4619,7 @@ areka はシェルの作者の表示名を読む経路を持たない。
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A8"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -4625,7 +4637,7 @@ areka にはシェルを配布元から取り直す仕組みが無く、その�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -4642,7 +4654,7 @@ areka はシェルの識別名を読む経路を持たない。
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "E77"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4655,7 +4667,7 @@ areka の placement::config::resolve_scope が引き、配置の解決（placeme
 status = "absent"
 introduced = "2.4.96"
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4672,8 +4684,8 @@ areka のバルーンはドラッグで動かせる（単独のドラッグを�
 [entry."ukadoc:descript_shell:kero.balloon.offsetx_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = "2.4.58"
-owner = "areka-P0-balloon-offset-dpi"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4686,13 +4698,14 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-balloon-offset-dpi は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.balloon.offsety_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = "2.4.58"
-owner = "areka-P0-balloon-offset-dpi"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4705,13 +4718,14 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-balloon-offset-dpi は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.balloon.syncscale_2ctrue:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B22"
+priority = "A2"
 values = ["装い"]
 links = []
 note = """
@@ -4727,8 +4741,8 @@ areka はバルーンの拡大率をゴーストと連動させることを強�
 [entry."ukadoc:descript_shell:kero.bindgroup_2a.addid_2cID:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
-priority = "B27"
+owner = ""
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -4738,26 +4752,28 @@ areka は相方側の連れ立って着せる相手の指定を受け取らな�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は連れ立って着せる指定を「語彙として持つだけで実挙動は持たない」と仕分け、実挙動を自分の目標から外している。ただしその語彙が置かれているのは同 spec の文書と、後から差し替えられるように開けてある型の形であって、areka のコードにこの綴りは無い。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.bindgroup_2a.default_2c_6570_5024:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
-priority = "C40"
+owner = ""
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka-parsers の package::read_bindgroup_defaults が `BindGroupDefaults::kero_default_on` へ転記するが、この欄を読む本番の経路が無い。起動時の着せ替えの初期集合を組む areka の emo2_boot::assets::default_bind_ids は `sakura.` の側しか見ない。
 担当 spec は areka-P0-mayuna-compose。
 束: 着せ替えの宣言・名前だけ受けて使わない（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 40——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が語彙のみのこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.bindgroup_2a.name_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_30b5_30e0_30cd_30a4_30eb_540d:1"]
 status = "implemented"
 introduced = ""
 owner = "areka-P0-mayuna-compose"
-priority = "E67"
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -4771,7 +4787,7 @@ areka-parsers の package::read_bindgroup_defaults が相方の側へ転記し�
 status = "implemented"
 introduced = ""
 owner = "areka-P0-bindoption-exclusivity"
-priority = "E67"
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -4784,8 +4800,8 @@ areka-parsers の package::read_bindgroup_defaults が相方の側へ転記し�
 [entry."ukadoc:descript_shell:kero.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4798,13 +4814,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.defaulttop_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4817,13 +4834,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.defaultx_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4836,13 +4854,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.defaulty_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4855,13 +4874,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:kero.icon.frame.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -4879,7 +4899,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -4897,7 +4917,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -4915,7 +4935,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -4933,7 +4953,7 @@ areka には着せ替えのメニューが無く、その出しかたを決め�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -4951,7 +4971,7 @@ areka には着せ替えのメニューが無く、その並びの決まった�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -4969,7 +4989,7 @@ areka には着せ替えのメニューが無く、その並びに階層を作�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B30"
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -4986,8 +5006,8 @@ areka が相方の名前として採るのは起点の descript の側だけで�
 [entry."ukadoc:descript_shell:kero.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "D50"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -4996,13 +5016,14 @@ note = """
 1 つ補いがある——値の導出は上のとおり縮んでいるが、`kero.` で始まるキーがシェルの descript にあること自体は捨てられていない。相方の有無を決める areka の placement::config::detect_scopes がその綴りの有無を材料にする。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:menu.background.alignment_2c_4f4d_7f6e:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5019,7 +5040,7 @@ areka には作り付けのメニューが無く、その背景に敷く画像�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5037,7 +5058,7 @@ areka には作り付けのメニューが無く、その背景に敷く画像�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5055,7 +5076,7 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5073,7 +5094,7 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5091,7 +5112,7 @@ areka には作り付けのメニューが無く、その背景の上に出る�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5109,7 +5130,7 @@ areka には作り付けのメニューが無く、その選べない項目の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5127,7 +5148,7 @@ areka には作り付けのメニューが無く、その選べない項目の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5145,7 +5166,7 @@ areka には作り付けのメニューが無く、その選べない項目の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5163,7 +5184,7 @@ areka には作り付けのメニューが無く、その文字の大きさを�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5181,7 +5202,7 @@ areka には作り付けのメニューが無く、その書体を決めるこ�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5198,7 +5219,7 @@ areka には作り付けのメニューが無く、その手前に重ねる画�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5216,7 +5237,7 @@ areka には作り付けのメニューが無く、その手前に重ねる画�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5234,7 +5255,7 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5252,7 +5273,7 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5270,7 +5291,7 @@ areka には作り付けのメニューが無く、その手前の画像の上�
 status = "absent"
 introduced = "2.5.41"
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5288,7 +5309,7 @@ areka には作り付けのメニューが無く、その枠の色の青の成�
 status = "absent"
 introduced = "2.5.41"
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5306,7 +5327,7 @@ areka には作り付けのメニューが無く、その枠の色の緑の成�
 status = "absent"
 introduced = "2.5.41"
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5324,7 +5345,7 @@ areka には作り付けのメニューが無く、その枠の色の赤の成�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5342,7 +5363,7 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5360,7 +5381,7 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5378,7 +5399,7 @@ areka には作り付けのメニューが無く、その仕切り線の色の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5395,7 +5416,7 @@ areka には作り付けのメニューが無く、その脇に置く画像を�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5413,7 +5434,7 @@ areka には作り付けのメニューが無く、その脇に置く画像の�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5431,7 +5452,7 @@ areka にはシェルを切り替えるメニューが無く、そこにこの�
 status = "implemented"
 introduced = ""
 owner = "areka-P0-ghost-setup"
-priority = "E78"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -5445,7 +5466,7 @@ areka-ghost の config::resolve_shell_name が読み、`KanadeConfig::shell_name
 status = "absent"
 introduced = "2.5.10"
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -5463,7 +5484,7 @@ areka には説明文を開く画面が無く、その文字コードの宣言�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -5481,7 +5502,7 @@ areka には説明文を開く画面が無く、そのファイル名を読む�
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "E77"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5494,7 +5515,7 @@ areka の placement::config::resolve_scope が引き、配置の解決（placeme
 status = "absent"
 introduced = "2.4.96"
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5511,8 +5532,8 @@ areka のバルーンはドラッグで動かせる（単独のドラッグを�
 [entry."ukadoc:descript_shell:sakura.balloon.offsetx_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = "2.4.58"
-owner = "areka-P0-balloon-offset-dpi"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5525,13 +5546,14 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-balloon-offset-dpi は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.balloon.offsety_2c_5ea7_6a19:1"]
 status = "absent"
 introduced = "2.4.58"
-owner = "areka-P0-balloon-offset-dpi"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5544,13 +5566,14 @@ areka の placement::config::resolve_scope は横と縦の両方が書かれて�
 担当 spec は areka-P0-balloon-offset-dpi。同 spec の brief は範囲の In にシェルの descript のこの欄の拡大率の当て方をそろえることを挙げている。
 同じ綴りの項目がシェルの surfaces.txt にもあるが、別の項目である——こちらはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。surfaces.txt のほうはサーフェスごとに宣言する形で、areka-parsers の shell モジュールがどの走査でも見ない。どちらも書いたとおりには効かないが落ちる場所が違う——こちらは横と縦が揃わないと組にならずに捨てられ、あちらは読む経路そのものが無い。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-balloon-offset-dpi は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.balloon.syncscale_2ctrue:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B22"
+priority = "A2"
 values = ["装い"]
 links = []
 note = """
@@ -5566,8 +5589,8 @@ areka はバルーンの拡大率をゴーストと連動させることを強�
 [entry."ukadoc:descript_shell:sakura.bindgroup_2a.addid_2cID:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-mayuna-compose"
-priority = "B27"
+owner = ""
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -5576,13 +5599,14 @@ areka は本体側の連れ立って着せる相手の指定を受け取らな�
 両方の表のすべての行を当たったが、この欄を引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-mayuna-compose。同 spec は連れ立って着せる指定を「語彙として持つだけで実挙動は持たない」と仕分け、実挙動を自分の目標から外している。ただしその語彙が置かれているのは同 spec の文書と、後から差し替えられるように開けてある型の形であって、areka のコードにこの綴りは無い。
 束: 着せ替えの宣言・読む経路が無い（先に要る仕組み: 着せ替え（MAYUNA）の組み立て）。束の順位: 27——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-mayuna-compose は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.bindgroup_2a.default_2c_6570_5024:1"]
 status = "implemented"
 introduced = ""
 owner = "areka-P0-mayuna-compose"
-priority = "E67"
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -5596,7 +5620,7 @@ areka の emo2_boot::assets::default_bind_ids が値 `1` の行の番号を集�
 status = "implemented"
 introduced = ""
 owner = "areka-P0-mayuna-compose"
-priority = "E67"
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -5610,7 +5634,7 @@ areka-parsers の package::read_bindgroup_defaults が分類名・パーツ名�
 status = "implemented"
 introduced = ""
 owner = "areka-P0-bindoption-exclusivity"
-priority = "E67"
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -5623,8 +5647,8 @@ areka-parsers の package::read_bindgroup_defaults が `mustselect`／`multiple`
 [entry."ukadoc:descript_shell:sakura.defaultleft_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5637,13 +5661,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.defaulttop_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5656,13 +5681,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.defaultx_2cX_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5675,13 +5701,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.defaulty_2cY_5ea7_6a19:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "C48"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5694,13 +5721,14 @@ areka は横に 1 つ・縦に 1 つの欄しか持たず、`defaultx` と `defa
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所を建てる範囲として `defaultx`／`defaulty` の解決を design の対象に含めると書き、`defaultx` と `defaultleft` の関係を確かめて両表記を受ける寛容な実装にせよとも書いている（`defaulttop` は「揃えが `free` のときだけ有効」と正典から引いて読むべき欄に挙げている）。
 同じ綴りの見出しがゴーストの descript にもあり、さらに別ドメインの SHIORI の資源の側（list_shiori_resource のページ）にも同じ綴りの項目がある。descript の 2 枚は別々の項目だが行き着く先は 1 つで、areka は両方の表を読み、同じスコープの同じ欄ならシェル側がゴースト側に勝つ重ね方（areka の placement::config の cascade2）で 1 つに決める——この項目は勝つ側で、ゴーストの descript に同じ綴りがあってもこちらが採られる。SHIORI の資源のほうは別の台帳の持ち物で、動いている最中にゴーストが応答として返す値であって、定義ファイルの宣言ではない。名前で引かず、ページを決めてから引くこと。
 束: 窓の置き場所・読む経路が無い（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 48——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:sakura.icon.frame.color.b_2c_6570_5024:1"]
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -5718,7 +5746,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -5736,7 +5764,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = "2.8.53"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -5754,7 +5782,7 @@ areka には発言の履歴を見せる窓が無く、そこに並ぶ顔の絵�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5772,7 +5800,7 @@ areka には着せ替えのメニューが無く、その出しかたを決め�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5790,7 +5818,7 @@ areka には着せ替えのメニューが無く、その並びの決まった�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D49"
+priority = "A11"
 values = []
 links = []
 note = """
@@ -5808,7 +5836,7 @@ areka には着せ替えのメニューが無く、その並びに階層を作�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B30"
+priority = "A10"
 values = ["掛け合い"]
 links = []
 note = """
@@ -5826,7 +5854,7 @@ areka がもう 1 つの呼び名として採るのは起点の descript の側�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B30"
+priority = "A3"
 values = ["掛け合い"]
 links = []
 note = """
@@ -5843,8 +5871,8 @@ areka が本体側の名前として採るのは起点の descript の側だけ�
 [entry."ukadoc:descript_shell:sakura.seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "D50"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5852,13 +5880,14 @@ note = """
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝ち、スコープを名指しした欄が全体の欄に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決める。id は別なので同一視せず、名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.alignmenttodesktop_2c_4f4d_7f6e_60c5_5831:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-window-placement"
-priority = "D50"
+owner = ""
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5866,13 +5895,14 @@ note = """
 同じ名前の見出しがゴーストの descript にもある。areka は両方の表を読み、シェル側がゴースト側に勝つ重ね方（areka の placement::config::resolve_scope）で 1 つに決めるので、id は別でも最後は同じ 1 つの置き方になる。名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-window-placement。同 spec の brief は既定の置き場所をこの欄の重ね方で解くことを自分の範囲に挙げ、ゴーストとシェルの両方にこの欄が書けることも読むべき正典として名指ししている。
 束: 窓の置き場所・受けて別のものへ置き換える（先に要る仕組み: 窓の配置と重なりの解決）。束の順位: 50——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-window-placement は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.dpi_2c_63a8_5968DPI:1"]
 status = "implemented"
 introduced = "2.7.21"
 owner = "areka-P0-balloon-offset-dpi"
-priority = "E70"
+priority = "A2"
 values = ["装い"]
 links = []
 note = """
@@ -5886,7 +5916,7 @@ areka の placement::source の `SHELL_DPI_KEY` が引き、`DescriptSource::she
 status = "absent"
 introduced = "2.8.43"
 owner = ""
-priority = "D56"
+priority = "A10"
 values = []
 links = []
 note = """
@@ -5903,8 +5933,8 @@ areka はサーフェスを切り替えるときの重ね消しを止める宣�
 [entry."ukadoc:descript_shell:seriko.paint_transparent_region_black_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-emo-atlas"
-priority = "A9"
+owner = ""
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -5915,13 +5945,14 @@ areka は透過色の残る場所を黒で塗るかどうかの宣言を読む�
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は読むべき正典としてシェルの descript のこの欄を名指しし、透過の正規化を自分の範囲に挙げている。ただし担当 spec の記述が古い——同 brief は「この欄はシェルの descript 由来の設定として注ぎ込む」と書いているが、着地した経路は決め打ちの値を渡しており、宣言は届いていない。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.sticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "D61"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5933,8 +5964,8 @@ note = """
 [entry."ukadoc:descript_shell:seriko.use_self_alpha_2c_5024:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-emo-atlas"
-priority = "A9"
+owner = ""
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -5945,13 +5976,14 @@ areka は透過の扱いを宣言で切り替えられない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は読むべき正典としてシェルの descript のこの欄を名指しし、透過の正規化を自分の範囲に挙げている。ただし担当 spec の記述が古い——同 brief は「この欄はシェルの descript 由来の設定として注ぎ込む」と書いているが、着地した経路は決め打ちの値を渡しており、宣言は届いていない。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell:seriko.zorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c...:1"]
 status = "implemented"
 introduced = ""
 owner = "areka-P0-scope-zorder-pinning"
-priority = "E77"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -5964,7 +5996,7 @@ areka の placement::config::build_placement_config が生の値のまま持ち�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C45"
+priority = "B7"
 values = []
 links = []
 note = """
@@ -5981,8 +6013,8 @@ areka がシェルだと決めるのは置き場所だけで、起点の descrip
 [entry."ukadoc:descript_shell_surfaces:_2a_2c_5b_2a_5d:1"]
 status = "absent"
 introduced = ""
-owner = "areka-P0-shell-parse"
-priority = "B18"
+owner = ""
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -5992,13 +6024,14 @@ note = """
 2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。適合の対象としたゴーストが相方側の綴りしか使わないので、いままで表に出ていない。
 担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に別名の透過（名前は解釈せず不透明に扱う）を挙げている。
 束: 絵の重ね合わせの行・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 18——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+宛先: 担当の欄を空にした。宛先だった areka-P0-shell-parse は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_shell_surfaces:_5f53_305f_308a_5224_5b9a_540d_2c_8868_793a_5185_5bb9:1"]
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C42"
+priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
@@ -6014,7 +6047,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "E69"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6027,7 +6060,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E73"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6039,7 +6072,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E73"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6051,7 +6084,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6066,7 +6099,7 @@ note = """
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "E74"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6079,7 +6112,7 @@ areka-parsers の shell::decode_sort_key が `ascend`／`descend` を値にし�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C36"
+priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
@@ -6095,7 +6128,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "degraded"
 introduced = ""
 owner = "areka-P0-shell-parse"
-priority = "A15"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6108,7 +6141,7 @@ note = """
 status = "absent"
 introduced = "2.8.24"
 owner = ""
-priority = "B28"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6124,7 +6157,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B28"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6140,7 +6173,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B28"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6156,7 +6189,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B28"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6172,7 +6205,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = "2.6.02"
 owner = ""
-priority = "B28"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6188,7 +6221,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "degraded"
 introduced = "2.8.25"
 owner = "areka-P0-shell-parse"
-priority = "A16"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -6201,7 +6234,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6213,7 +6246,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.41"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6225,7 +6258,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -6241,7 +6274,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -6257,7 +6290,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6269,7 +6302,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B19"
+priority = "B5"
 values = ["装い"]
 links = []
 note = """
@@ -6294,7 +6327,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6306,7 +6339,7 @@ note = """
 status = "absent"
 introduced = "2.8.46"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6318,7 +6351,7 @@ note = """
 status = "absent"
 introduced = "2.8.46"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6330,7 +6363,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6342,7 +6375,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6354,7 +6387,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6366,7 +6399,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6378,7 +6411,7 @@ note = """
 status = "absent"
 introduced = "2.8.46"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6390,7 +6423,7 @@ note = """
 status = "absent"
 introduced = "2.8.46"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6402,7 +6435,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6414,7 +6447,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6426,7 +6459,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6438,7 +6471,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6450,7 +6483,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6462,7 +6495,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6474,7 +6507,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6486,7 +6519,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6498,7 +6531,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6510,7 +6543,7 @@ note = """
 status = "absent"
 introduced = "2.8.44"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6522,7 +6555,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6534,7 +6567,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6546,7 +6579,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6558,7 +6591,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6570,7 +6603,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6582,7 +6615,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6594,7 +6627,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6606,7 +6639,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6618,7 +6651,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6630,7 +6663,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6642,7 +6675,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6654,7 +6687,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6666,7 +6699,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6678,7 +6711,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.40"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6690,7 +6723,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6702,7 +6735,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6714,7 +6747,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6726,7 +6759,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6738,7 +6771,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6750,7 +6783,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6762,7 +6795,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6774,7 +6807,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6786,7 +6819,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6798,7 +6831,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6810,7 +6843,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6822,7 +6855,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6834,7 +6867,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6846,7 +6879,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.39"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6858,7 +6891,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6870,7 +6903,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6882,7 +6915,7 @@ note = """
 status = "absent"
 introduced = "2.8.39"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6894,7 +6927,7 @@ note = """
 status = "absent"
 introduced = "2.8.39"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6906,7 +6939,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6918,7 +6951,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6930,7 +6963,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6942,7 +6975,7 @@ note = """
 status = "absent"
 introduced = "2.8.40"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -6951,27 +6984,27 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-charset-canon"
-priority = "D63"
+priority = "A18"
 values = []
 links = []
 note = """
-壊れ方: 明示的なエラー。記録: error!。黙って落ちるのは charset の宣言そのものである。surfaces.txt を本番で読むのは areka の emo2_boot::assets（起動）と placement::measure（採寸）で、どちらも std の read_to_string で UTF-8 として読む（examples の下にも同じ読み方をする場所があるが、本番の経路ではない）。宣言された文字コードを見る手前を通らないので、この宣言はどこにも届かない。
-段を明示的なエラーにしたのは、宣言そのものが読まれないことよりも、その帰結のほうが利用者に届くからである。読み取りの失敗は既定の記録の水準に残り、画面にはシェルの出ない窓がそのまま残る。正しい顔をした誤った結果ではないので、黙って壊れるには当たらない。他のページの同じ綴りが黙って壊れるのままである理由は、読む経路があるかどうかで二手に分かれる。ゴースト・シェル・バルーンの descript には経路がある——areka-parsers の charset::decode が同 charset::prescan_charset の拾った宣言を受け取り、そこへはゴーストなら areka-parsers の package::resolve、シェルなら同 package::read_bindgroup_defaults と areka-ghost の config::resolve_shell_name と areka の emo2_boot::assets、バルーンなら areka-emo-present の balloon::read_decoded から届く（この 3 つが実装済みなのはそのためである）。それでも黙って壊れるのは、解決できないラベルを既定へ落としたときの記録が areka-parsers の charset::decode の debug! だけで、areka の main が敷く既定の記録の水準（info）では見えないからである。プラグイン・ヘッドライン・インストール指示・surfacetable.txt のほうは読む経路がファイルごと無く、読み取りの失敗も起きないので、そちらは記録の段を問うまでもなく黙って壊れる。
-ゴースト・シェル・バルーンの descript は areka-parsers の charset::prescan が冒頭の宣言を拾ってから読むのに対し、surfaces.txt だけがその経路の外にある。UTF-8 以外で書かれた surfaces.txt は読み取り自体が失敗し、シェルが出ない（Shift_JIS で書かれた既存シェルはこの読み取りで弾かれる）。黙って消えるのは宣言そのものだけで、続く読み取りの失敗のほうは記録される——areka の emo2_boot::BootWiringError::ShellRead が返り、areka の emo2_boot::classify_wiring_error が error として記録する。ただしそこで起動が止まるわけではない。areka の emo2_boot::wire_emo2_boot は記録したうえで結線しないまま戻り、areka の main は縮退した起動を続ける（窓を開くのは結線を試みるより前なので、窓は開いたままになる）。採寸側も同じで、areka の placement::measure は surfaces.txt の読取失敗を error として記録して採寸をあきらめ、areka の main は既定の DPI へ倒して先へ進む。作者に見えるのは「宣言が効かない」ではなく、記録に失敗を残したまま、シェルの出ない窓のまま起動が進む、である。採寸側の doc は、適合の対象としたゴーストの surfaces.txt が UTF-8 の宣言だから UTF-8 で読む、と決め打ちの理由を書いている。
-同じ綴りの項目がゴースト・バルーン・シェル・プラグイン・ヘッドライン・インストール指示・surfacetable.txt にもあるが、いずれも別の項目である（読むファイルが違うので状態も割れる）。
-この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当 spec は areka-P0-charset-canon。同 spec の brief は範囲の In に surfaces.txt の読取 2 か所を挙げ、境界の候補の 1 つ目をその閉鎖としている。
-束: 作者の手控えと書式の宣言・読まないまま読み取りが失敗する（先に要る仕組み: シェルの定義ファイルの転記層）。束の順位: 63——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の charset::prescan_charset が大小文字を無視してこの宣言を引き、同 charset::decode がその文字コードで surfaces.txt 全体を復号する。本番でこのファイルを読むのは areka の emo2_boot::assets（起動）と placement::measure（採寸）の 2 か所で、どちらも読んだバイト列をこの復号に通してから解析へ渡す。Shift_JIS で書かれた既存シェルもそのまま読める。
+宣言された綴りを解けないときは、呼ぶ側が決めた既定（本番は Shift_JIS）へ静かに落ちる。落とすときに元の綴りを添えた記録が出るが、段は控えめで、areka の main が既定とする記録の水準では見えない。宣言と違う読み方をされたことに利用者は気づけず、文字化けだけが起きる——これが上の段を選んだ根拠である。宣言が無いときも同じ既定になる。優先度の数値は調査当時の見立て（読み取りごと失敗する明示的なエラーの段）のまま据え置いてあり、段の付け直しは統合担当の持ち分である。
+既知の差: BOM で始まる UTF-8 の surfaces.txt では、以前は U+FEFF が 1 行目の先頭に残って その行の解釈を狂わせていたが、復号が BOM を吸収するようになった。areka 同梱の emo2 のシェルは BOM を持たないので、解析の結果は変わらない。
+根拠の場所: crates/areka-parsers/src/charset/prescan.rs の charset キー一致の腕（この宣言を読む唯一の定義箇所。ゴースト・シェル・バルーンの descript と同じ腕を共有する）。読取の 2 か所は crates/areka/src/emo2_boot/assets.rs と crates/areka/src/placement/measure.rs。シェルの surfaces.txt を読む腕は areka-parsers の shell::decode の側にあるが、そちらに charset 専用の腕は無い（未知行として素通しする）ので、宣言の読み手は前走査の 1 か所だけである。
+同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とこの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目は読む経路のある 4 枚のうちシェルの surfaces.txt の側である。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-charset-canon。
+束: 作者の手控えと書式の宣言・読む経路が通った（先に要る仕組み: シェルの定義ファイルの転記層）。束の順位: 63——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
 [entry."ukadoc:descript_shell_surfaces:collision-sort_2c_30bd_30fc_30c8_9806_5e8f:1"]
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "C41"
+priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
@@ -6983,7 +7016,7 @@ note = """
 status = "degraded"
 introduced = ""
 owner = "areka-P0-shell-parse"
-priority = "B20"
+priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
@@ -6996,7 +7029,7 @@ note = """
 status = "absent"
 introduced = "2.5.19"
 owner = ""
-priority = "C36"
+priority = "A12"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7012,7 +7045,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "degraded"
 introduced = "2.3.53"
 owner = "areka-P0-shell-parse"
-priority = "B17"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7025,7 +7058,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.7.26"
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7040,7 +7073,7 @@ note = """
 status = "absent"
 introduced = "2.8.52"
 owner = ""
-priority = "D54"
+priority = "C4"
 values = []
 links = []
 note = """
@@ -7055,7 +7088,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = "2.7.50"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7067,7 +7100,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E73"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7079,7 +7112,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7091,7 +7124,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7107,7 +7140,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7123,7 +7156,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E80"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7138,7 +7171,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A4"
+priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
 note = """
@@ -7155,7 +7188,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A4"
+priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
 note = """
@@ -7172,7 +7205,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = "2.6.14"
 owner = ""
-priority = "A4"
+priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
 note = """
@@ -7189,7 +7222,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A4"
+priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
 note = """
@@ -7206,7 +7239,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "A4"
+priority = "A10"
 values = ["触れ合い", "装い"]
 links = []
 note = """
@@ -7223,7 +7256,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7235,7 +7268,7 @@ note = """
 status = "absent"
 introduced = "2.8.24"
 owner = ""
-priority = "D52"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7251,7 +7284,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7266,7 +7299,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.8.36"
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7278,7 +7311,7 @@ note = """
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "E69"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7330,7 +7363,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E73"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7342,7 +7375,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E73"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7354,7 +7387,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7370,7 +7403,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = "areka-P0-surfaces-basepos"
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7387,7 +7420,7 @@ areka が使うのは正典の既定だけである——`\\![move]` の着地�
 status = "absent"
 introduced = ""
 owner = "areka-P0-surfaces-basepos"
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7404,7 +7437,7 @@ areka が使うのは正典の既定だけである——`\\![move]` の着地�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7419,7 +7452,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7434,7 +7467,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7449,7 +7482,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7464,7 +7497,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "implemented"
 introduced = ""
 owner = ""
-priority = "E75"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7478,7 +7511,7 @@ areka-parsers の shell::normalize_interval が値にし、areka-seriko の tabl
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7493,7 +7526,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7505,7 +7538,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "E71"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7517,7 +7550,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7532,7 +7565,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7548,7 +7581,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "C48"
+priority = "A2"
 values = []
 links = []
 note = """
@@ -7564,7 +7597,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = "2.7.28"
 owner = ""
-priority = "E72"
+priority = "A15"
 values = ["装い"]
 links = []
 note = """
@@ -7576,7 +7609,7 @@ note = """
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7591,7 +7624,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E73"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7603,7 +7636,7 @@ note = """
 status = "vocabulary-only"
 introduced = "2.7.26"
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7618,7 +7651,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "E73"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7630,7 +7663,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7646,7 +7679,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7662,7 +7695,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7678,7 +7711,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7694,7 +7727,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7710,7 +7743,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7726,7 +7759,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7742,7 +7775,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7758,7 +7791,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7774,7 +7807,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B26"
+priority = "A10"
 values = ["触れ合い"]
 links = []
 note = """
@@ -7790,7 +7823,7 @@ areka-parsers の shell モジュールには記録の呼び出しが 1 つも�
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7806,7 +7839,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D52"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7822,7 +7855,7 @@ areka はこの宣言を読まないので、どちらの書式を指定して�
 status = "vocabulary-only"
 introduced = ""
 owner = ""
-priority = "B24"
+priority = "A6"
 values = ["気配"]
 links = []
 note = """
@@ -7837,7 +7870,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D51"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7853,7 +7886,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D51"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7862,7 +7895,7 @@ note = """
 `surfacetable` という綴りが crates の Rust に出てくるのは、この網羅調査の道具がページの名前として持つ数か所だけで、読み取りの経路ではない。
 両方の表のすべての行を当たったが、このページの項目を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 文字コードを一手に引き受ける areka-P0-charset-canon の brief は、このファイルを範囲外だと名指しで宣言している。担当は決まっていない。
-同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が三手に割れる——ゴースト・シェル・バルーンの descript は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み、シェルの surfaces.txt は宣言を見ないまま UTF-8 決め打ちで読んで読み取りごと失敗しうるので明示的なエラーの段、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちシェルの surfacetable.txt の側である。名前で引かず、ページを決めてから引くこと。
+同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とシェルの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み（surfaces.txt は areka-P0-charset-canon の着地でこちらへ移った）、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちシェルの surfacetable.txt の側である。名前で引かず、ページを決めてから引くこと。
 束: サーフェスの名前表（作者の手控え）・読む経路が無い（先に要る仕組み: シェルの定義ファイルの転記層）。束の順位: 51——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
 
@@ -7870,7 +7903,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D51"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7886,7 +7919,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D51"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7902,7 +7935,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D51"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7918,7 +7951,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D51"
+priority = "A18"
 values = []
 links = []
 note = """
@@ -7935,7 +7968,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "B2"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:dev_shell" },
@@ -7951,7 +7984,7 @@ note = """
 status = "absent"
 introduced = "2.3.00"
 owner = ""
-priority = "D55"
+priority = "E2"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:manual_directory" },
@@ -7973,7 +8006,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "A11"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:dev_bind" },
@@ -7990,7 +8023,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "B2"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:dev_bind" },
@@ -8009,7 +8042,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E2"
 values = []
 links = []
 note = """
@@ -8023,7 +8056,7 @@ note = """
 status = "absent"
 introduced = "2.3.00"
 owner = ""
-priority = "D55"
+priority = "B1"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:manual_update" },
@@ -8042,7 +8075,7 @@ note = """
 status = "absent"
 introduced = "2.4.78"
 owner = ""
-priority = "C43"
+priority = "B6"
 values = ["装い"]
 links = []
 note = """
@@ -8057,7 +8090,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D62"
+priority = "B8"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:manual_balloon" },
@@ -8077,7 +8110,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D62"
+priority = "B8"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:manual_shell" },
@@ -8095,7 +8128,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D62"
+priority = "B1"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:dev_nar" },
@@ -8118,7 +8151,7 @@ areka-P0-package-mount の brief は範囲の Out で install.txt と nar の配
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D62"
+priority = "A11"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:dev_ownerdraw" },
@@ -8134,7 +8167,7 @@ note = """
 status = "absent"
 introduced = "2.2.57"
 owner = ""
-priority = "C43"
+priority = "B2"
 values = ["装い"]
 links = [
   { kind = "same-feature", to = "ukadoc:manual_ghost" },
@@ -8153,7 +8186,7 @@ areka が受け取るのに正典に項目の見出しが無い語が 2 つあ�
 status = "absent"
 introduced = ""
 owner = "areka-P0-translate-pipeline"
-priority = "D60"
+priority = "E4"
 values = []
 links = [
   { kind = "same-feature", to = "ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1" },
@@ -8170,7 +8203,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:dev_update" },
@@ -8193,7 +8226,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "D55"
+priority = "E8"
 values = []
 links = []
 note = """
@@ -8207,7 +8240,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -8219,7 +8252,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -8231,7 +8264,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -8243,7 +8276,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -8255,7 +8288,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -8267,7 +8300,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -8279,7 +8312,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -8291,7 +8324,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """
@@ -8303,7 +8336,7 @@ note = """
 status = "absent"
 introduced = ""
 owner = ""
-priority = "B25"
+priority = "B1"
 values = ["更新"]
 links = []
 note = """

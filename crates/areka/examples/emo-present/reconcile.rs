@@ -1,7 +1,7 @@
 use super::{
     AUTHOR_DPI, CYCLE_INTERVAL_SECS, ComposeError, ComposedSurface, DPI, EmoBoot, EmoPresenter,
     Entity, FrameTime, Point, SHELL_INITIAL_X, SHELL_INITIAL_Y, ScalePolicy, ScaleRatio, SizeI,
-    TargetId, WindowPos, World, compute_balloon_pos, derive_scale, resample,
+    TargetId, WindowPos, World, compute_balloon_pos, derive_scale,
 };
 
 // ---------------------------------------------------------------------------
@@ -175,22 +175,18 @@ fn reconcile_window_size(
 
 /// 起動時 golden バイト一致 assert（task 5.1／5.1 追補・R6.2/R6.7/R7.1/R7.2/R8.2/R8.3）。
 ///
-/// 初回表示直後に target の表示画素を `EmoPresenter::read_back`（swap chain backbuffer の CPU 読み戻し・
-/// R8.3）で取得し、その surface を **表示経路と同じ 2 段変換**（`Composer::compose`＝native 原寸 →
-/// [`resample`]＝実適用 k）に通した golden [`ComposedSurface`] のバイト列（[`ComposedSurface::bytes`]）と
-/// **完全一致**（full byte equality）することを検証する。これが「供給面（swap chain readback）と合成結果の
-/// 一致」（R8.2）を決定論的に確かめる検証シーム（R6.7）である。
+/// 初回表示直後に target の表示画素を `EmoPresenter::read_back`（表示に渡した**原寸の合成バイト列**・
+/// R8.3／`areka-P0-present-gpu-transform-scale` 要件 6.2）で取得し、`Composer::compose` が返す golden
+/// [`ComposedSurface`] のバイト列（[`ComposedSurface::bytes`]）と **完全一致**（full byte equality）する
+/// ことを検証する。これが「表示に渡した合成面と合成結果の一致」（R8.2）を決定論的に確かめる検証シーム
+/// （R6.7）である。
 ///
-/// # なぜ golden にも k を掛けるのか（task 5.1 追補）
+/// # golden に k を掛けない（`present-gpu-transform-scale` 要件 6.1/6.2）
 ///
-/// `EmoPresenter::apply_show` の表示経路は **compose（native 原寸）→ resample（k 適用）→ cache → 表示**
-/// であり、swap chain backbuffer が保持するのは **k 適用後の物理 px** である。ゆえに golden を native 原寸の
-/// まま突き合わせると、k≠1.0 の実機（例: 125% ＝ dpi 120 ＝ k=5/4）では**長さの時点で必ず食い違い**、
-/// 手動検証エイドである本 example がそもそも起動できない。golden 側にも同一の変換を通すことで、檻
-/// （design「Testing Strategy > Integration Tests」）が課すのと同じ契約を手動エイドにも適用する。
-///
-/// k=1.0 では [`ScaleRatio::is_identity`] 経路で resample を**呼ばず** native を素通しする（presenter 側と
-/// 同一の素通し）ため、96 DPI 環境での比較対象は k 導入前と 1 バイトも変わらない（R7.2）。
+/// 拡大は GPU の Visual 変換が担うようになり、CPU 側の再標本化は表示経路から消えた。
+/// `read_back` が返すのは表示中エントリの **native 原寸バイト列**であり、k の値に依らず同一バイト・
+/// 同一長（`native_w * native_h * 4`）である。ゆえに golden も native 原寸のまま突き合わせる——
+/// k=1.0 の比較対象は k 導入前と 1 バイトも変わらず（要件 6.1）、k≠1.0 でも同じ 1 本の assert が成立する。
 ///
 /// # k の導出と、その一致検査
 ///
@@ -199,7 +195,7 @@ fn reconcile_window_size(
 /// 側の `applied` である。ゆえに推定 k をそのまま信用せず、
 ///
 /// - [`EmoPresenter::target_physical_size`]（＝`scaled_extent(applied, native 原寸)`・丸め単一権威）と
-///   推定 k から求めた golden の物理寸が一致すること、
+///   推定 k を同じ権威に通した golden の物理寸が一致すること、
 /// - [`EmoPresenter::applied_scale`]（照会契約の実適用 k）が推定 k と一致すること
 ///
 /// を **assert で検査**する（食い違えば loud に落ちる＝黙って別の k で比較しない）。
@@ -212,11 +208,12 @@ fn reconcile_window_size(
 ///
 /// # 正当な非表示のスキップ
 ///
-/// golden 合成に失敗した場合、または供給面が未生成（`read_back` が [`areka_emo_present::PresentError`] を返す・
-/// EmptyComposition degradation 等で chain 不在）の場合は、`panic` せず warn ログを出してスキップする（表示すべき
-/// ものが正当に無いだけで観測失敗ではない）。通常の emo2 fixture は両 target とも表示するため assert が走る。
+/// golden 合成に失敗した場合、または表示に渡した合成面が無い（`read_back` が
+/// [`areka_emo_present::PresentError`] を返す・未表示や EmptyComposition degradation 等）の場合は、`panic` せず
+/// warn ログを出してスキップする（表示すべきものが正当に無いだけで観測失敗ではない）。通常の emo2 fixture は
+/// 両 target とも表示するため assert が走る。
 ///
-/// **`read_back` が成功した後の照会 `None` はスキップ事由にしない** — 供給面が在る＝表示経路が生成点まで
+/// **`read_back` が成功した後の照会 `None` はスキップ事由にしない** — 合成面が在る＝表示経路が生成点まで
 /// 到達している以上、「実適用 k が無い」は正当な非表示ではなく観測失敗（表示成立点に届かなかった）だからである。
 pub(super) fn assert_startup_golden(
     presenter: &EmoPresenter,
@@ -244,7 +241,7 @@ pub(super) fn assert_startup_golden(
             tracing::warn!(
                 ?target,
                 error = %e,
-                "emo-present: 供給面が未生成（read_back 不可）— {label} の起動時 golden assert をスキップ（正当な非表示）"
+                "emo-present: 表示に渡した合成面が無い（read_back 不可）— {label} の起動時 golden assert をスキップ（正当な非表示）"
             );
             return;
         }
@@ -255,31 +252,25 @@ pub(super) fn assert_startup_golden(
     let window_dpi = world.get::<DPI>(window).map(|d| (d.dpi_x, d.dpi_y));
     let scale = derive_scale(ScalePolicy::new(AUTHOR_DPI, ScaleRatio::ONE), window_dpi);
 
-    // 表示経路と同じ変換を golden へ適用する（恒等 k は resample を呼ばず native 素通し）。
+    // golden は native 原寸のまま（拡大は GPU 変換の領分・CPU 再標本化は表示経路に無い）。
     let (native_w, native_h) = (golden.width(), golden.height());
-    let display = if scale.is_identity() {
-        golden
-    } else {
-        let mut scaled = ComposedSurface::new(0, 0);
-        resample(&golden, scale, &mut scaled);
-        scaled
-    };
-    let (scaled_w, scaled_h) = (display.width(), display.height());
+    // 窓寸の照合に使う物理寸は**丸め単一権威**だけで導く（`as_f32` の掛け算で復元しない＝D4）。
+    let (scaled_w, scaled_h) = scale.scaled_extent(native_w, native_h);
 
     // 推定 k が **実適用 k** と一致することを、丸め単一権威を通した物理寸で検査する
-    // （`as_f32` の掛け算で復元しない＝D4）。供給面が在るのに照会が `None` なら表示成立点へ
+    // （`as_f32` の掛け算で復元しない＝D4）。合成面が在るのに照会が `None` なら表示成立点へ
     // 届いていない＝観測失敗ゆえ loud に落とす。
     let applied_physical = presenter.target_physical_size(target).unwrap_or_else(|| {
         panic!(
-            "起動時 golden 検証不能 [{label} / {target:?}]: 供給面は在る（read_back 成功）のに \
+            "起動時 golden 検証不能 [{label} / {target:?}]: 合成面は在る（read_back 成功）のに \
              target_physical_size が None — 表示成立点へ到達していない（R6.2 観測失敗）"
         )
     });
     assert_eq!(
         (scaled_w, scaled_h),
         applied_physical,
-        "起動時 golden 不一致 [{label} / {target:?}]: golden へ掛けた k={:?}（窓 DPI {:?} ÷ author {AUTHOR_DPI}）の \
-         変換後寸法 {scaled_w}x{scaled_h}（native {native_w}x{native_h}）が presenter の実適用物理寸 {:?} と不一致 \
+        "起動時 golden 不一致 [{label} / {target:?}]: 導出 k={:?}（窓 DPI {:?} ÷ author {AUTHOR_DPI}）を \
+         丸め権威に通した物理寸 {scaled_w}x{scaled_h}（native {native_w}x{native_h}）が presenter の実適用物理寸 {:?} と不一致 \
          — 推定 k が実適用 k と食い違う（R6.2 観測失敗）",
         scale,
         window_dpi,
@@ -293,25 +284,33 @@ pub(super) fn assert_startup_golden(
         scale,
     );
 
-    let expected = display.bytes();
+    let expected = golden.bytes();
 
-    // まず長さで loud に落とす（相違の一次要因を明示）。
+    // まず長さで loud に落とす（相違の一次要因を明示）。長さは **native 原寸**（`w*h*4`）であり、
+    // k の値に依らず一定である（要件 6.1/6.2）——k で伸びたら「拡大が読み戻しへ漏れている」。
+    let native_len = (native_w as usize) * (native_h as usize) * 4;
+    assert_eq!(
+        actual.len(),
+        native_len,
+        "起動時 golden 不一致 [{label} / {target:?}]: read_back バイト長 {} が native 原寸長 {native_len} \
+         （{native_w}x{native_h}×4）と不一致 — k={:?} の拡大が読み戻しへ漏れている（要件 6.2 観測失敗）",
+        actual.len(),
+        scale,
+    );
     assert_eq!(
         actual.len(),
         expected.len(),
         "起動時 golden 不一致 [{label} / {target:?}]: read_back バイト長 {} が golden バイト長 {} と不一致 \
-         — k={:?} 適用後 golden は {scaled_w}x{scaled_h}（native {native_w}x{native_h}）。swap chain readback が \
-         合成結果と食い違う（R6.2/R8.2 観測失敗）",
+         — golden は native {native_w}x{native_h}。読み戻しが合成結果と食い違う（R6.2/R8.2 観測失敗）",
         actual.len(),
         expected.len(),
-        scale,
     );
 
     // full byte equality: 先頭相違 index を添えて loud に panic する。
     if let Some(idx) = actual.iter().zip(expected.iter()).position(|(a, b)| a != b) {
         panic!(
             "起動時 golden 不一致 [{label} / {target:?}]: 先頭相違 index={idx} (read_back=0x{:02X}, golden=0x{:02X}, len={}) \
-             — k={:?} 適用後 golden {scaled_w}x{scaled_h}（native {native_w}x{native_h}）。swap chain readback が \
+             — golden は native {native_w}x{native_h}（k={:?} は GPU 変換側ゆえ読み戻しに掛からない）。読み戻しが \
              合成結果とバイト不一致（R6.2/R8.2/R8.3 観測失敗）",
             actual[idx],
             expected[idx],
@@ -330,7 +329,7 @@ pub(super) fn assert_startup_golden(
         native_h,
         scaled_w,
         scaled_h,
-        "emo-present: 起動時 golden バイト一致を確認（{label}・k 適用後の物理 px で比較）"
+        "emo-present: 起動時 golden バイト一致を確認（{label}・native 原寸で比較・k に依らず同一）"
     );
 }
 

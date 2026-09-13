@@ -14,13 +14,94 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use areka_kanade::{ShioriBackend, ShioriConnection};
+use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::ShioriMount;
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
-use shiori_host32_host::{HelperLifecycle, ParentMessageWindow, spawn};
+use shiori_host32_host::{Charset, CharsetNegotiator, HelperLifecycle, ParentMessageWindow, spawn};
 use shiori_host32_ipc::MsgTag;
 
 /// ハンドシェイク（HELLO 受領）の上限時間（既存 E2E の `HANDSHAKE_TIMEOUT` と同値）。
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 起動時の決定・後退を記録する宛先（`sylphya_wiring` と同じ `ghost-boot`）。
+///
+/// `RUST_LOG` は **target 名**で指定する（`ghost-boot=debug`。モジュールパス名では点かない）。
+const LOG_TARGET: &str = "ghost-boot";
+
+/// 既定の文字コードを、ファイル層（`DefaultEncoding::to_encoding`）と同じ固定写像で決める
+/// （要件 1.3）。
+///
+/// OS のロケール設定は読まない（読む箇所 0）。ファイル層から橋渡しせず ghost 側に写像を
+/// 置くのは、host-32 側の `Charset` へ渡す際に「UTF-16 でない」ことを検査する失敗腕が要り、
+/// その腕が固定写像では到達不能＝記録のない死んだ失敗経路になるため（design
+/// §shiori_wiring の裁定）。ここには失敗経路が無い。
+///
+/// `DefaultEncoding` は `#[non_exhaustive]` ゆえ網羅の腕が要るが、本番の既定は `Ansi`
+/// ＝Shift_JIS であり、写像は値を返すだけで失敗しない。
+fn default_charset(default: DefaultEncoding) -> Charset {
+    match default {
+        DefaultEncoding::Ansi => Charset::SHIFT_JIS,
+        DefaultEncoding::Utf8 => Charset::UTF_8,
+        // `#[non_exhaustive]` が要求する腕。覆うのは将来の新しい変種だけで、
+        // 現在の 2 つはいずれも上で名指ししている。
+        _ => Charset::SHIFT_JIS,
+    }
+}
+
+/// descript の 2 キーから初期の文字コードを決め、交渉状態を組み立てる（要件 2.1・2.4・2.6）。
+///
+/// 優先順は `shiori.forceencoding` ＞ `shiori.encoding` ＞ 既定（[`default_charset`]）。
+/// 解決できない宣言は警告ログ 1 行（キー名・ラベル・理由・採用した後退先）を出して次の
+/// 優先順へ後退し、`shiori.forceencoding` が退けられたときは**強制の効力も失う**
+/// （以後は応答の `Charset` ヘッダに従う・要件 2.4）。記録なしに後退する経路は無い（要件 7.1）。
+///
+/// 警告の `fallback` には最終的に採用した正規名を書くため、決定を先に済ませてから
+/// 警告・情報の順に記録する（design「後退先を先に決めてから記録する」）。
+pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) -> CharsetNegotiator {
+    // 退けた宣言（キー名・生ラベル・理由）。後退先が決まるまで記録を保留する。
+    let mut rejected: Vec<(&'static str, &str, &'static str)> = Vec::new();
+    let mut decided: Option<(Charset, bool, &'static str)> = None;
+
+    if let Some(label) = shiori.force_encoding.as_deref() {
+        match Charset::for_label(label) {
+            Ok(charset) => decided = Some((charset, true, "forceencoding")),
+            Err(error) => rejected.push(("shiori.forceencoding", label, error.reason())),
+        }
+    }
+    if decided.is_none()
+        && let Some(label) = shiori.encoding.as_deref()
+    {
+        match Charset::for_label(label) {
+            Ok(charset) => decided = Some((charset, false, "encoding")),
+            Err(error) => rejected.push(("shiori.encoding", label, error.reason())),
+        }
+    }
+    let (charset, forced, source) = match decided {
+        Some(decision) => decision,
+        None => (default_charset(default), false, "default"),
+    };
+
+    for (key, label, reason) in rejected {
+        tracing::warn!(
+            target: LOG_TARGET,
+            event = "charset_label_unresolved",
+            key,
+            label,
+            reason,
+            fallback = charset.name(),
+            "descript の文字コード宣言を解決できない——無視して次の優先順へ後退する"
+        );
+    }
+    tracing::info!(
+        target: LOG_TARGET,
+        event = "charset_initial",
+        charset = charset.name(),
+        source,
+        "SHIORI 通信の初期の文字コードを決定した"
+    );
+
+    CharsetNegotiator::new(charset, forced)
+}
 
 /// 本番 connect クロージャを構成する（実行は shiori アクタースレッド上・一度だけ）。
 ///
@@ -34,12 +115,26 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 /// 5. `send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)` で LOAD を発行し ack `[1]` を確認する。
 ///
 /// いずれかの段で失敗すれば `Err(String)`（呼び出し側で `ShioriDown` へ写る）。成功時は
-/// `Box<dyn ShioriBackend>`（実体は `ShioriConnection { window, helper: HelperLifecycle::new(..) }`）
-/// を返す。
+/// `Box<dyn ShioriBackend>`（実体は `ShioriConnection { window, helper, negotiator }`）を返す。
+///
+/// # 初期の文字コード（要件 2.7・5.2）
+/// 初期値の決定（[`initial_charset`]）は**クロージャを返す前に**、つまり `real_connect` を
+/// 呼んだスレッド上で同期に行う。理由は 2 つ（design §shiori_wiring）: 起動ログが呼出
+/// スレッドの同期発火しか捕捉できないこと、そして接続に失敗しても決定と根拠が記録に
+/// 残ること（要件 2.6）。決めた交渉状態はクロージャへ move され、接続成立時に
+/// `ShioriConnection` の持ち物になる。
+///
+/// 交渉状態はこの呼び出しごとに新しく作られるので、ゴーストを起動し直す（SHIORI を
+/// load し直す）たびに descript 由来の初期値へ戻り、前回セッションの採用結果は引き継が
+/// れない（要件 5.2）。
 pub fn real_connect(
     helper_exe: PathBuf,
     shiori: ShioriMount,
+    default_encoding: DefaultEncoding,
 ) -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send + 'static {
+    // クロージャを返す前に同期で決める（接続の成否に依らず記録が残る・ログが捕捉できる）。
+    let negotiator = initial_charset(&shiori, default_encoding);
+
     move || {
         // 1. `file` が None なら推測せず即座に失敗（design.md「推測しない」）。
         let Some(shiori_name) = shiori.file else {
@@ -81,6 +176,28 @@ pub fn real_connect(
         Ok(Box::new(ShioriConnection {
             window,
             helper: HelperLifecycle::new(helper),
+            // 起動時に決めた初期値（この `real_connect` 呼び出しに 1 つ・要件 5.2）。
+            //
+            // 宣言を持たない UTF-8 のゴースト（emo2 の pasta）では初期値が既定の Shift_JIS に
+            // なる。そこから採用が起きるまでに `Charset: Shift_JIS` を名乗る要求は **2 本**
+            // ある——片道イベントの応答は採用の根拠に用いない（要件 5.3）ためで、並びは
+            // `areka-kanade` の boot 状態機械（`schedule/boot.rs`）の発行点 3 つで決まる:
+            //
+            // 1. `boot_start`（Idle+Boot の遷移関数）が発行する `OnInitialize`＝**片道の
+            //    NOTIFY**。その応答は `client.rs` の `notify` が破棄するだけで、応答ヘッダを
+            //    採用へ回す手続きを呼ばない（同関数の本文にその経路が無いことは通信層の
+            //    構造検査が数えている）。よってこの応答では採用が起きない。
+            // 2. `on_reply` の `BootInit` + `Notified` 腕が発行する username リソース照会
+            //    ＝**応答待ちの GET**。これも Shift_JIS で出る。相手が名乗る
+            //    `Charset: UTF-8` を採用するのはこの応答。
+            // 3. prefetch 応答を写して発行する `OnFirstBoot`＝GET（初回起動の場合。起動記録が
+            //    あれば同じ腕が `OnFirstBoot` を飛ばして `OnBoot` を発行するが、3 本目から
+            //    UTF-8 になる点は変わらない）。ここから UTF-8 になり、以後は変わらない（要件 2.7）。
+            //
+            // 2 本とも本文は ASCII のみ（References を持たず `Sender`／`Status` の値も ASCII の
+            // 語彙）なので、適用前と違うのは `Charset` ヘッダの値だけ。採用の規則は実行層では
+            // なく交渉状態の持ち物であり、ここは決めた値を渡すだけ。
+            negotiator,
         }) as Box<dyn ShioriBackend>)
     }
 }
@@ -138,7 +255,7 @@ mod tests {
             "fixture は shiori 行なし＝file:None のはず"
         );
 
-        let connect = real_connect(helper_exe, shiori);
+        let connect = real_connect(helper_exe, shiori, DefaultEncoding::Ansi);
         let result = connect();
 
         match result {
@@ -167,7 +284,7 @@ mod tests {
             "fixture は shiori 行あり＝file:Some のはず"
         );
 
-        let connect = real_connect(helper_exe, shiori);
+        let connect = real_connect(helper_exe, shiori, DefaultEncoding::Ansi);
         let result = connect();
 
         match result {
@@ -176,3 +293,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "shiori_wiring_charset_tests.rs"]
+mod shiori_wiring_charset_tests;

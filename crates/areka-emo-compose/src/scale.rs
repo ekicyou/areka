@@ -17,20 +17,28 @@
 //!   [`ScaleRatio::scaled_extent`] は round half away from zero（wintf `DPI::to_physical_*`
 //!   と同規約）で丸め、非ゼロ入力に最小 1px を保証する（拡大結果が消える欠けを作らない）。
 //! - **丸め規約の単一権威（除算方向・座標）**: [`ScaleRatio::unscale_coord`] は物理画素座標を
-//!   native 画素座標へ縮約する唯一の写像で、[`resample`] の画素中心写像の最近傍逆をとる
-//!   （当たり判定の点 ÷k がここを通る）。乗算方向権威と**対**を成すが互いの逆関数ではない。
+//!   native 画素座標へ縮約する唯一の写像で、GPU の線形サンプリングのテクセル中心規約の
+//!   最近傍逆をとる（当たり判定の点 ÷k がここを通る）。乗算方向権威と**対**を成すが
+//!   互いの逆関数ではない。
 //! - **乗算合成**（要件 1.6）: 最終拡大率＝アプリ管理拡大率 × DPI 由来 k を
 //!   [`ScaleRatio::mul`] の有理数乗算として表現する（本仕様のアプリ管理拡大率は
 //!   [`ScaleRatio::ONE`] 固定の縮退シーム）。
 //! - **恒等**（要件 1.3）: 窓 DPI＝作者基準 DPI のとき k=1/1 となり、
 //!   [`ScaleRatio::is_identity`] が真・`scale_len` は入力を素通しする（既存等倍表示と同一）。
-//! - **k× リサンプル**（要件 2.1/2.5/7.2）: [`resample`] が native 合成結果
-//!   （[`ComposedSurface`]）を k 倍の表示用サーフェスへ整数固定小数点 bilinear で転写する。
-//!   `plan.rs`／`blit.rs` を不触に保つため合成経路から隔離した新設モジュールである。
+//!
+//! # 本 module は**寸法権威だけ**である（画素を 1 バイトも触らない）
+//!
+//! 拡大縮小そのものは wintf の描画経路（`Arrangement.scale` が生む D2D の変換行列）が行う。
+//! かつてここに在った CPU の k 倍リサンプラ（整数固定小数点 bilinear・重み表・軸走査・
+//! 作業席）は消費者が 0 になったため撤去した（spec `areka-P0-present-gpu-transform-scale`・
+//! 要件 1.4）。`ScaleRatio` の数学（伸長・寸法の丸め・座標の縮約）はそのとき 1 文字も
+//! 変えていない（要件 1.5）。
+//!
+//! CPU リサンプルの**高速化・別スレッド化・合成メモの容量増は採らない**（要件 1.6）——
+//! 提示段は原寸のバイト列しか持たず拡大は GPU が行うので、速くする対象そのものが無い。
+//! 画素を書き換える拡大経路をここへ戻してはならない。
 //!
 //! 公開 API はパニックしない（構築失敗は `Option`）。
-
-use crate::composed::ComposedSurface;
 
 /// 最大公約数（Euclid の互除法・u64 域）。
 ///
@@ -147,10 +155,18 @@ impl ScaleRatio {
     /// 下流（`collision-dpi-hittest` の ÷k・`emo-text-layer` の行寸）が参照する
     /// 合成スケール照会値の表現。**寸法・画素演算にこの値を使ってはならない**——
     /// 寸法の k 倍は必ず [`scale_len`]／[`scaled_extent`] を通す（丸め規約の単一権威）。
-    /// この禁止の**唯一の裁定済み例外は供給面寸の導出**（emo-text
-    /// `ScaleContract::physical_extent`＝文字供給面の確保寸）であり、2026-08-14 の裁定
-    /// （spec `areka-P0-scale-exact-rational`）に基づく。誤差は +1 側のみで不可視。
-    /// **この例外を他の用途へ拡大してはならない**——例外は供給面寸のこの 1 点に限られ、
+    ///
+    /// # 裁定済みの消費者は 2 つだけである
+    ///
+    /// 1. **供給面寸の導出**（emo-text `ScaleContract::physical_extent`＝文字供給面の確保寸）。
+    ///    2026-08-14 の裁定（spec `areka-P0-scale-exact-rational`）に基づく。誤差は +1 側のみで
+    ///    不可視。
+    /// 2. **表示の拡大係数**（emo-present が surface entity の `Arrangement.scale` へ書く値）。
+    ///    2026-09-11 の裁定（spec `areka-P0-present-gpu-transform-scale`）に基づく。これは寸法を
+    ///    整数で刻む用途ではなく、描画側（D2D の変換行列）へ渡す**係数そのもの**であり、
+    ///    画素の格子は GPU が持つ。窓寸・物理寸は従来どおり [`scaled_extent`] が決める。
+    ///
+    /// **この 2 例を他の用途へ拡大してはならない**——例外は上の 2 点に限られ、
     /// 上の禁止は他の全ての用途に対してそのまま効く。
     ///
     /// [`scale_len`]: ScaleRatio::scale_len
@@ -208,9 +224,10 @@ impl ScaleRatio {
     /// s(v) = ⌊ ((2v + 1) · den) / (2 · num) ⌋      （⌊⌋ は Euclid 除算＝負値も床方向）
     /// ```
     ///
-    /// [`resample`] が実際に用いた画素中心写像 `src = (v + 1/2)·den/num − 1/2` の**最近傍整数**
-    /// ——すなわち「その表示画素に主として描かれている元画素」——を返す。当たり判定の
-    /// 「見えているとおりの部位が当たる」は、この写像が描画写像と定義的に一致することに依拠する。
+    /// GPU の線形サンプリングのテクセル中心規約（`dst 中心 (d+½) → src (d+½)·den/num − ½`）の
+    /// **最近傍整数**——すなわち「その表示画素に主として描かれている元画素」——を返す。
+    /// 当たり判定の「見えているとおりの部位が当たる」は、この写像が描画写像と定義的に
+    /// 一致することに依拠する。
     ///
     /// # 乗算方向権威との対（責務の相互参照）
     ///
@@ -271,333 +288,10 @@ impl ScaleRatio {
     }
 }
 
-/// bilinear 混合重みの固定小数点分解能（16bit＝65536 段階）。
-///
-/// 重み対の和は常に厳密に `WEIGHT_ONE`（凸結合）ゆえ、premultiplied 不変条件
-/// （B,G,R ≤ A）が補間後も保たれる。
-const WEIGHT_SHIFT: u32 = 16;
-
-/// 重み 1.0 に相当する固定小数点値（`1 << WEIGHT_SHIFT`）。
-const WEIGHT_ONE: u32 = 1 << WEIGHT_SHIFT;
-
-/// 2 軸ぶんの重み積のシフト量（`WEIGHT_SHIFT * 2`）。
-const PRODUCT_SHIFT: u32 = WEIGHT_SHIFT * 2;
-
-/// 2 軸重み積の丸め半量（round half up・`1 << (PRODUCT_SHIFT - 1)`）。
-const PRODUCT_HALF: u64 = 1 << (PRODUCT_SHIFT - 1);
-
-/// 出力 1 画素ぶんの入力サンプル指定（エッジクランプ済みの隣接 2 点と混合重み）。
-#[derive(Debug, Clone, Copy)]
-struct AxisSample {
-    /// 手前側の入力座標（`0..len` へクランプ済み）。
-    i0: u32,
-    /// 奥側の入力座標（`0..len` へクランプ済み・端では `i0` と同値になる）。
-    i1: u32,
-    /// 奥側の重み（`0..WEIGHT_ONE`。手前側は `WEIGHT_ONE - w`）。
-    w: u32,
-}
-
-/// 出力座標 → 入力座標の**有理逆写像**（`den/num`）を整数のみで前進させる走査子。
-///
-/// 画素中心を合わせた写像 `src = (d + 1/2)·den/num − 1/2`
-/// ＝ `((2d+1)·den − num) / (2·num)` を、分子の整数部 `index` と剰余 `rem`（分母 `denom`）で
-/// 厳密に保持する。前進は加算・剰余のみ（除算は重み量子化の 1 回だけ）で、浮動小数を
-/// 一切用いないため累積誤差も丸め非決定も生じない。
-#[derive(Debug, Clone, Copy)]
-struct AxisWalk {
-    /// 入力座標の整数部（出力先頭は入力 −1/2 側へ寄るため**負を取り得る**）。
-    index: i64,
-    /// 整数部の剰余（`0 <= rem < denom`）。
-    rem: u64,
-    /// 剰余の分母（`2·num`）。
-    denom: u64,
-    /// 出力 1 画素あたりの分子の前進量（`2·den`）。
-    step: u64,
-}
-
-impl AxisWalk {
-    /// 出力座標 0 の位置で走査子を初期化する。
-    ///
-    /// # 桁溢れ
-    ///
-    /// `num`／`den` は u32 ゆえ `2·num`・`2·den`・`den − num` はいずれも i64/u64 域に収まる。
-    fn new(scale: ScaleRatio) -> AxisWalk {
-        let denom = 2 * scale.num as i64;
-        // d=0 の分子: (2·0+1)·den − num = den − num（拡大時は負＝先頭画素が入力の外側へ出る）。
-        let n0 = scale.den as i64 - scale.num as i64;
-        AxisWalk {
-            index: n0.div_euclid(denom),
-            rem: n0.rem_euclid(denom) as u64,
-            denom: denom as u64,
-            step: 2 * scale.den as u64,
-        }
-    }
-
-    /// 現在位置のサンプル指定を返す（**エッジクランプ固定**・範囲外を外挿しない）。
-    ///
-    /// `len == 0` は呼び手が事前に弾く（[`resample`] の外形ゼロ早期復帰）。防御的に
-    /// `saturating_sub` を用い、いかなる `len` でも算術パニックを起こさない。
-    fn sample(&self, len: u32) -> AxisSample {
-        let last = len.saturating_sub(1) as i64;
-        AxisSample {
-            i0: self.index.clamp(0, last) as u32,
-            i1: self.index.saturating_add(1).clamp(0, last) as u32,
-            // 剰余の 16bit 量子化（rem < denom <= 2·u32::MAX ゆえ rem<<16 は u64 域）。
-            w: ((self.rem << WEIGHT_SHIFT) / self.denom) as u32,
-        }
-    }
-
-    /// 出力座標を 1 進める（分子へ `2·den` を加算し、整数部へ繰り上げる）。
-    ///
-    /// # 桁溢れ
-    ///
-    /// `rem + step < 2·u32::MAX + 2·u32::MAX` は u64 域。`index` は最終的に入力座標
-    /// （＝`src_w` 相当・u32 域）付近までしか進まない——縮小（`den > num`）では出力画素数
-    /// 自体が入力より小さく、拡大（`num > den`）では 1 画素あたりの前進が 1 未満ゆえ
-    /// `index <= 出力画素数`——ので i64 で厳密に足りる。
-    fn advance(&mut self) {
-        self.rem += self.step;
-        self.index += (self.rem / self.denom) as i64;
-        self.rem %= self.denom;
-    }
-}
-
-/// 1 行ぶんの横方向 bilinear（隣接 2 画素の 4 チャンネル混合・`recompose-budget` 追補 §A3）。
-///
-/// `row` は**1 行を切り出したスライス**で、`o0`／`o1` はその中のバイト添字
-/// （クランプ済み座標 × 4 ゆえ常に行内）。画素を 4 バイトの部分スライスとして取り出すため、
-/// 範囲検査は 1 画素あたり 2 回（行あたりの部分スライス 2 本）に畳まれ、チャンネルごとの
-/// 検査は消える（追補 §A3 項目 1／項目 3 のチャンネル展開）。
-///
-/// # 値は元式と 1 も違わない（整数の恒等変形）
-///
-/// 混合 `p0·(WEIGHT_ONE − wx) + p1·wx` を `p0·WEIGHT_ONE + (p1 − p0)·wx` へ整理した形である。
-/// 分配則による**整数の恒等変形**ゆえ両式は厳密に等しく、途中の切り捨て・飽和は一切ない
-/// （変数どうしの乗算がチャンネルあたり 2 回から 1 回になる。残る `·WEIGHT_ONE` は
-/// 2 の冪の定数倍＝シフトである）。
-///
-/// # 桁溢れ
-///
-/// `p0·WEIGHT_ONE ≤ 255·65536 = 16_711_680`、`(p1 − p0)·wx` は `±255·65535` の域で、和は
-/// 常に `p0·WEIGHT_ONE` と `p1·WEIGHT_ONE` の間（＝`0..=16_711_680`）に収まる。
-/// i32 で厳密に足り、結果は非負である。
-#[inline(always)]
-fn blend_axis(row: &[u8], o0: usize, o1: usize, wx: i32) -> [u32; 4] {
-    let p0 = &row[o0..o0 + 4];
-    let p1 = &row[o1..o1 + 4];
-    let mix = |a: u8, b: u8| (a as i32 * WEIGHT_ONE as i32 + (b as i32 - a as i32) * wx) as u32;
-    [
-        mix(p0[0], p1[0]),
-        mix(p0[1], p1[1]),
-        mix(p0[2], p1[2]),
-        mix(p0[3], p1[3]),
-    ]
-}
-
-/// リサンプルの作業領域（x 軸写像表の席・`recompose-budget` 要件 3.1／design D2⑶）。
-///
-/// [`resample_with`] が行間で共有する x 軸写像表を**呼び手が所有**するための不透明な席である。
-/// 中身は公開しない——保持しているのは私有型 [`AxisSample`] の表のみで、公開面に現れるのは
-/// この型の名前だけである（`AxisSample` は私有のまま）。
-///
-/// [`Default`] で空から始まり、初回のリサンプルで出力幅ぶんの容量へ到達する。以後は
-/// `clear`＋再充填で容量だけを持ち越すため、**同一の席を使い続ける限り容量は成長しない**
-/// （出力幅が縮んでも解放しない＝縮小・再伸長の往復確保を作らない）。毎コマ経路で
-/// この席を常設にすると、リサンプル内部の作業領域の確保が定常状態で 0 になる。
-#[derive(Debug, Default)]
-pub struct ResampleScratch {
-    /// 行間で不変な x 軸の写像表（[`resample_with`] が毎回 `clear`＋再充填する）。
-    x_map: Vec<AxisSample>,
-}
-
-impl ResampleScratch {
-    /// 写像表がいま保持している容量（要素数）。
-    ///
-    /// **中身は返さない**——返すのは容量という 1 個の数だけで、写像表の要素型（私有）も
-    /// その値も公開面には現れない（本型の不透明性は変わらない）。
-    ///
-    /// # 何のための観測口か（`recompose-budget` 要件 3.1）
-    ///
-    /// 席を持ち越す呼び手（`emo-present` の `FrameBudget`）が「この呼び出しで写像表を
-    /// 確保し直したか」を**席そのものから**言い切るための唯一の口である。`Vec` の容量は
-    /// 再確保でしか増えないため、[`resample_with`] の前後でこの値を読み比べれば、
-    /// 増えた＝確保が起きた・変わらない＝確保は起きていない、が厳密に決まる。
-    ///
-    /// 呼び手が別に高水位を覚える形では、**席を毎回まっさらに起こす改変が計数に 1 件も
-    /// 現れない**（高水位が前の実体の値を覚えたままになる）。容量を席から直接読むこの口が
-    /// その抜け道を塞ぐ。
-    ///
-    /// 空の席は 0 を返す。初回のリサンプルで出力幅以上へ到達し、以後は縮まない。
-    pub fn capacity(&self) -> usize {
-        self.x_map.capacity()
-    }
-}
-
-/// native 合成結果を `scale` 倍の表示用サーフェスへ転写する
-/// （premultiplied BGRA・**完全整数** bilinear・要件 2.1/2.5/7.2）。
-///
-/// design「emo-compose / scale.rs」の Service Interface に厳密に従う:
-///
-/// - **事前条件**: `src.width() > 0 && src.height() > 0`（0 寸は上流 `EmptyComposition` で先に落ちる）。
-/// - **事後条件**: `out` の外形は `scale.scaled_extent(src 外形)` と厳密一致する
-///   （欠け・意図しない切り捨てなし・要件 2.5）。同一 `(src, scale)` はバイト決定論。
-/// - **恒等**（要件 7.2）: `scale.is_identity()` なら `src` のバイト恒等コピー。既存の等倍
-///   golden が構造的に一切変化しないことを保証する。
-///
-/// # 整数専用（設計 D5・`blit.rs` と同格の決定性規約）
-///
-/// 座標写像は `den/num` の有理逆写像を分子・剰余で厳密保持（[`AxisWalk`]）し、混合重みは
-/// 16bit 固定小数点へ量子化する。画素値の合成は 32/64bit 整数（i32/u32・i64）のみで行い、
-/// **f32/f64 を経路に一切持ち込まない**。丸めは `(v + 2^31) >> 32`（round half up）で一意である。
-/// 混合式は分配則で整理した恒等形（[`blend_axis`]）を用いるが、値は整理前と厳密に等しい。
-///
-/// # premultiplied ドメイン（設計 D5）
-///
-/// B・G・R・A の 4 チャンネルへ**同一式**を適用する（非乗算化しない・α を特別扱いしない）。
-/// 重み対の和が厳密に `WEIGHT_ONE` の凸結合であり丸めが単調ゆえ、入力が満たす
-/// premultiplied 不変条件（B,G,R ≤ A）は出力でも保たれる。
-///
-/// # エッジクランプ（設計 Risks）
-///
-/// 写像先が入力範囲の外へ出る端画素は、隣接 2 点を独立に `[0, len)` へクランプして混合する
-/// （＝端では原画素そのもの）。外挿は行わない——決定論的で、テストで固定されている。
-///
-/// # 非パニック
-///
-/// 添字はクランプ済み座標から構成するため境界外に出ない。事前条件違反（外形ゼロ）は
-/// `warn!`（log-first・無言縮退禁止）を出したうえで外形どおりの空バッファを返す。
-///
-/// なお `scaled_extent` が u32 を飽和するほどの巨大外形は、`ComposedSurface` の確保契約
-/// （`stride = width * 4`）そのものが表現できない領域であり、[`ScaleRatio::scale_len`] と
-/// 同じく**呼び手の寸法域検査の責務**である。
-///
-/// # 割り当て
-///
-/// 行間で不変な x 軸の写像表を 1 本だけ確保する（`O(out_w)`・画素あたりの除算を排するため）。
-/// 本関数は呼び出しごとに使い捨ての [`ResampleScratch`] を起こして [`resample_with`] へ委譲する
-/// ——ゆえに毎回この 1 本を確保する。作業領域を呼び手が持ち越して確保をなくしたい場合は
-/// [`resample_with`] を直接呼ぶこと（結果はバイト等価）。
-/// リサンプルは k 変化・合成入力変化時のみ発火する経路である（design「Performance」）。
-pub fn resample(src: &ComposedSurface, scale: ScaleRatio, out: &mut ComposedSurface) {
-    // 使い捨ての作業領域で新形へ委譲する（挙動・出力バイトとも従来と同一）。
-    let mut scratch = ResampleScratch::default();
-    resample_with(src, scale, out, &mut scratch);
-}
-
-/// 作業領域受け取り形のリサンプル（`recompose-budget` 要件 3.1・additive）。
-///
-/// 転写の契約——事前条件・事後条件・恒等バイトコピー・整数専用・premultiplied ドメイン・
-/// エッジクランプ・非パニック——は [`resample`] と**完全に同一**である（[`resample`] は本関数へ
-/// 委譲するだけの薄い形であり、同一 `(src, scale)` に対する出力は 1 バイトも違わない）。
-/// 唯一の差は、行間で共有する x 軸写像表を呼び手所有の `scratch` から借りる点にある。
-///
-/// # 作業領域の不変条件
-///
-/// `scratch` は入口で `clear` され、出力幅ぶんを再充填する。容量は出力幅へ到達した後は
-/// 成長せず、より小さい出力幅の呼び出しでも縮まない（往復確保を作らない）。前回の内容は
-/// `clear` で必ず捨てるため、使い回した席の残留が結果へ混ざることはない。恒等（k=1/1）と
-/// 外形ゼロの早期復帰経路は `scratch` に一切触れない。
-///
-/// [`resample`]: crate::scale::resample
-pub fn resample_with(
-    src: &ComposedSurface,
-    scale: ScaleRatio,
-    out: &mut ComposedSurface,
-    scratch: &mut ResampleScratch,
-) {
-    let (out_w, out_h) = scale.scaled_extent(src.width(), src.height());
-    // 出力は常に事後条件どおりの外形へ合わせる。以下の全経路が `0..out_stride*out_h` の
-    // 全バイトを書き潰すため、ゼロ埋めは 1 バイトも読まれない無駄である（追補 §A2）。
-    // 長さが変わるときだけ 0 初期化が走る（未初期化メモリは露出しない）。
-    out.resize_for_full_overwrite(out_w, out_h);
-
-    // 事前条件違反（外形ゼロ）: 転写できる画素が存在しない。パニックせず空を返し、
-    // 無言で通さない（steering ログ規律・要件 1.4 と同格の log-first）。
-    if src.width() == 0 || src.height() == 0 {
-        tracing::warn!(
-            target: "areka_emo_compose",
-            src_w = src.width(),
-            src_h = src.height(),
-            out_w,
-            out_h,
-            "resample: 外形ゼロの入力（事前条件違反・上流 EmptyComposition が先に落とすはず）: 空の出力を返す"
-        );
-        return;
-    }
-
-    // 恒等 k=1/1 はバイト恒等コピー（要件 7.2）。scale_len は素通しゆえ外形・stride は
-    // src と厳密一致し、長さの一致が保証されるため copy_from_slice はパニックしない。
-    if scale.is_identity() {
-        out.bytes_mut().copy_from_slice(src.bytes());
-        return;
-    }
-
-    // x 軸の写像は全行で共通ゆえ一度だけ表に落とす（内側ループから除算を除く）。
-    // 呼び手所有の席を clear＋再充填で使い回す（容量は到達後に成長しない・残留は残さない）。
-    scratch.x_map.clear();
-    scratch.x_map.reserve(out_w as usize);
-    let mut walk = AxisWalk::new(scale);
-    for _ in 0..out_w {
-        scratch.x_map.push(walk.sample(src.width()));
-        walk.advance();
-    }
-
-    let src_stride = src.stride() as usize;
-    let src_row_len = src.width() as usize * 4;
-    let src_bytes = src.bytes();
-    let out_stride = out.stride() as usize;
-    let out_row_len = out_w as usize * 4;
-    let dst = out.bytes_mut();
-
-    let mut y_walk = AxisWalk::new(scale);
-    for dy in 0..out_h as usize {
-        let ys = y_walk.sample(src.height());
-        y_walk.advance();
-
-        // 行スライスの前取り（追補 §A3 項目 2）: 画素ごとの `usize` 加算と添字検査ではなく、
-        // 上下 2 行と出力 1 行を**行の開始で 1 度だけ**切り出す。
-        let row0 = &src_bytes[ys.i0 as usize * src_stride..][..src_row_len];
-        let row1 = &src_bytes[ys.i1 as usize * src_stride..][..src_row_len];
-        let wy = ys.w as i64;
-        let dst_row = &mut dst[dy * out_stride..][..out_row_len];
-
-        for (dpx, xs) in dst_row.chunks_exact_mut(4).zip(scratch.x_map.iter()) {
-            let wx = xs.w as i32;
-            // 4 近傍は行スライス内の**画素単位**の添字で読む（範囲検査は行あたり 2 回の
-            // 部分スライスへ畳まれ、チャンネルごとの検査は消える・追補 §A3 項目 1）。
-            let o0 = xs.i0 as usize * 4;
-            let o1 = xs.i1 as usize * 4;
-
-            // BGRA 4 チャンネルへ同式適用（premultiplied ドメイン・α も同じ）。
-            let top = blend_axis(row0, o0, o1, wx);
-            let bottom = blend_axis(row1, o0, o1, wx);
-
-            // 縦方向も同じ恒等変形（`t·(WEIGHT_ONE − wy) + b·wy` ＝ `t·WEIGHT_ONE + (b − t)·wy`）。
-            // 中間は最大 255·2^32 ≈ 1.1e12（i64 域・値は常に非負）。丸めは round half up。
-            let mix_y = |t: u32, b: u32| -> u8 {
-                let v = t as i64 * WEIGHT_ONE as i64 + (b as i64 - t as i64) * wy;
-                ((v + PRODUCT_HALF as i64) >> PRODUCT_SHIFT) as u8
-            };
-            dpx[0] = mix_y(top[0], bottom[0]);
-            dpx[1] = mix_y(top[1], bottom[1]);
-            dpx[2] = mix_y(top[2], bottom[2]);
-            dpx[3] = mix_y(top[3], bottom[3]);
-        }
-    }
-}
-
 #[cfg(test)]
 #[path = "scale_test_support.rs"]
 mod test_support;
 
 #[cfg(test)]
-#[path = "scale_resample_tests.rs"]
-mod resample_tests;
-
-#[cfg(test)]
 #[path = "scale_ratio_tests.rs"]
 mod ratio_tests;
-
-#[cfg(test)]
-#[path = "scale_prior_path_tests.rs"]
-mod prior_path_tests;

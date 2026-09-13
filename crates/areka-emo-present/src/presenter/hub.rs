@@ -34,9 +34,9 @@ impl EmoPresenter {
 
     /// target を登録し、窓 Entity を装着先として記録する（窓生成は呼び手＝placement/example の責務）。
     ///
-    /// 供給面（`SwapChainPresenter`）と装着（`VisualMount`）は**初回 `ShowSurface` で原寸が確定してから
-    /// 遅延生成**するため、本メソッドは skeleton（`chain=None`/`mount=None`/`visible=false`）を組んで登録
-    /// するのみで World には触れない。既存 id への再登録は表示コンテキストごと置換する。
+    /// 装着（`VisualMount`）は**初回 `ShowSurface` で原寸が確定してから遅延生成**するため、本メソッドは
+    /// skeleton（`mount=None`/`visible=false`）を組んで登録するのみで World には触れない。既存 id への
+    /// 再登録は表示コンテキストごと置換する。
     ///
     /// `world` は将来の system 化（`&mut World` を要する装着タイミング）へ向けた API 一貫性のために受ける
     /// が、遅延生成方針ゆえ本メソッドでは参照しない。
@@ -71,7 +71,6 @@ impl EmoPresenter {
                 cache: ComposeCache::new(),
                 window,
                 mount: None,
-                chain: None,
                 visible: false,
                 // 可視性の所有者は常に既定（従来挙動）で登録する。バルーン窓のような外部所有は
                 // 結線側が `set_visibility_ownership` で明示する（attach に判断を持ち込まない）。
@@ -108,7 +107,7 @@ impl EmoPresenter {
         }
     }
 
-    /// `Hide`（`\s[-1]` 相当）の適用: visual 非表示＋当たり判定停止。swap chain・キャッシュは保持する（R3.3）。
+    /// `Hide`（`\s[-1]` 相当）の適用: visual 非表示＋当たり判定停止。装着・キャッシュは保持する（R3.3）。
     fn apply_hide(
         &mut self,
         world: &mut World,

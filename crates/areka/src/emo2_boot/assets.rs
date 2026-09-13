@@ -288,8 +288,12 @@ pub fn build_boot_assets(
 
     // シェル: surfaces.txt 読取 → parse → bake を **1 回**（donor build_shell_target・placement measure 同経路）。
     let surfaces_path = shell_dir.join(SURFACES_TXT);
-    let content =
-        std::fs::read_to_string(&surfaces_path).map_err(|source| BootWiringError::ShellRead {
+    // 文字コードはこのファイル自身の `charset,<名前>` 宣言に従う（未宣言は既定・
+    // 解決できないラベルは既定へ後退・不正な並びは代替文字で吸収）。他のファイルの
+    // 宣言は持ち込まない。バルーン読取（`areka_emo_present::balloon`）と同じ形。
+    let content = std::fs::read(&surfaces_path)
+        .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
+        .map_err(|source| BootWiringError::ShellRead {
             path: surfaces_path.clone(),
             source,
         })?;

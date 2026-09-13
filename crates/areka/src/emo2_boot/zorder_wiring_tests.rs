@@ -320,10 +320,19 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     );
 }
 
-/// 毎フレームの相は**鎖の適用系より前**へ載る（task 3.2 の必須事項）。
+/// 毎フレームの相は**鎖の適用系より前**に走る（task 3.2 の必須事項）——ただしその順序を
+/// 与えるのは `.before` ではなく**段そのものの並び**である（裁定 2026-09-12・要件 2.4）。
+///
+/// 相の登録先は 1 巡の末尾の段（`FrameFinalize`）から `Update` へ移った（絵の着地を文字と
+/// 同じ巡に揃えるため）。段をまたぐ順序指定は書けないので、順序を担うのは 13 段の並びに
+/// なる——`Update` は適用系が載る末尾の段より前なので、相が公開した望む鎖は同じ巡のうちに
+/// 適用系が読む。
 ///
 /// 後ろに載ると、相が組んだ望む鎖を適用系が読むのが 1 心拍ぶん遅れる。遅れるだけで結果は
-/// 同じなので、挙動を見る檻には映らない——順序指定の字面そのものを名指しで押さえる。
+/// 同じなので、挙動を見る檻には映らない——ここは 3 点を名指しで押さえる。本番の登録先が
+/// `Update` であること（旧い `.before` の形が残っていないこと）・適用系が末尾の段に載る
+/// こと・その 2 段が 1 巡でこの前後関係に回ること。登録先そのものの構造の檻は
+/// `frame_schedule_tests.rs`（T-N10）が受け持つ。
 #[test]
 fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
     let raw = include_str!("mod.rs");
@@ -331,8 +340,34 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
     let squeezed = squeeze(&code);
 
     assert!(
-        squeezed.contains("emo2_frame_system.before(apply_zorder_chain)"),
-        "相の登録に鎖の適用系より前という指定が無い（登録は適用系のほうが先なので、指定を落とすと相は後ろへ回る）"
+        squeezed.contains("add_systems(Update, emo2_frame_system.after(update_typewriters));"),
+        "相の登録先が `Update` ではない（末尾の段へ戻すと、相が公開した望む鎖を適用系が読むのは次の巡になる）"
+    );
+    assert!(
+        !squeezed.contains("emo2_frame_system.before(apply_zorder_chain)"),
+        "旧い段内の順序指定（`.before(apply_zorder_chain)`）が残っている（段をまたぐ順序は指定できない）"
+    );
+
+    // 適用系は末尾の段に載る（`wire_zorder_pair` が 3 本を据える）。
+    let world = wired_finalize_world();
+    assert!(
+        world.resource::<Schedules>().contains(FrameFinalize),
+        "鎖の適用系が末尾の段に載っていない（前後関係の相手が居ない）"
+    );
+
+    // その 2 段は 1 巡でこの前後に回る（並びの正本は wintf・`try_tick_world` の実行順）。
+    let labels = wintf::ecs::world::tick_diag::SCHEDULE_LABELS;
+    let update_at = labels
+        .iter()
+        .position(|label| *label == "Update")
+        .expect("1 巡の並びに `Update` が無い");
+    let finalize_at = labels
+        .iter()
+        .position(|label| *label == "FrameFinalize")
+        .expect("1 巡の並びに末尾の段が無い");
+    assert!(
+        update_at < finalize_at,
+        "1 巡の並びで `Update` が末尾の段より後ろに来ている（相順の前提が崩れている・update={update_at}・finalize={finalize_at}）"
     );
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。

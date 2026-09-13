@@ -200,6 +200,13 @@ pub struct ShioriMount {
     pub dir: PathBuf,
     /// descript `shiori,<file>`。未指定なら None（推測禁止・Req 2.3）。
     pub file: Option<String>,
+    /// descript `shiori.encoding,<ラベル>` の生の値（解釈しない・charset-canon 2.5/8.5）。
+    ///
+    /// ラベルの解決（前後空白・大小文字・別名）は通信層の `Charset::for_label` の
+    /// 責務であり、この層は `parse_kv` が返した文字列をそのまま持つ。
+    pub encoding: Option<String>,
+    /// descript `shiori.forceencoding,<ラベル>` の生の値（解釈しない・charset-canon 2.5/8.5）。
+    pub force_encoding: Option<String>,
 }
 
 /// shell マウント先。
