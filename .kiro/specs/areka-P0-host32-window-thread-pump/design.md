@@ -35,7 +35,7 @@
 - `ShioriBackend::on_idle(&mut self)` の**契約**（backend 非依存・既定は何もしない）と、host32 の `ShioriConnection` におけるその実体。
 - `ParentMessageWindow::pump_pending_messages(&self)`: 自窓を所有するスレッドのキューに溜まったメッセージを空になるまで取り出して配る部品。
 - 定数 `IDLE_INTERVAL` の値と根拠（定数の説明文に残す）。
-- 決定論テスト 2 群（速いもの＝kanade の兄弟テストファイル／遅いもの＝kanade の統合テストバイナリ）とその較正の証跡。
+- 決定論テスト 2 群（窓を作らないもの＝`real.rs` の兄弟テストファイル／窓を作るもの＝kanade の既存の統合テストバイナリ `tests/kanade.rs` 配下）とその較正の証跡。
 - 「待機中は取り出さない」と述べる既存の説明文の書き換え（7.1 の 6 か所）。
 - 実機の非退行の走行と記録（5.1〜5.4）。
 
@@ -64,7 +64,7 @@
 - `pump_pending_messages` を `send_request` の内側（往復中）から呼ぶ形へ変える（`clear→store→take` の不変条件が崩れる）。
 - 親窓を SHIORI アクター以外のスレッドで作る／別スレッドへ移す（`pump_pending_messages` の「自窓のスレッドで呼ぶ」前提が崩れる）。
 - 6.11 の応答方向の旗を戻す（二重の守りが一重になる）。
-- kanade の lib テストバイナリに親窓を作るテストを 2 本目以降置く（同一プロセスで親窓の組を 2 つ同時に持てない既知制約に当たる——直列化が要る）。
+- kanade の lib テストバイナリに親窓を作るテストを置く、または統合バイナリで親窓を作るテストが `common` の生成ロックを取らない（「窓を作るテストは統合バイナリに置き、生成の瞬間だけロックで直列化する」規則が崩れる——同じ瞬間に 2 つの窓を生成すると 2 つ目が失敗する）。
 
 ## Architecture
 
@@ -124,7 +124,7 @@ graph TB
 | Backend / Services（kanade） | Rust 2024・`std::sync::mpsc::Receiver::recv_timeout` | 有限時間の受信待ち | 新規依存なし。`RecvTimeoutError::{Timeout, Disconnected}` の 2 腕で手空きと切断を区別 |
 | Backend / Services（host32） | `windows` 0.62.2 feature `Win32_UI_WindowsAndMessaging`（既存） | `PeekMessageW`／`PM_REMOVE`／`MSG`／`TranslateMessage`／`DispatchMessageW` | feature 追加なし（同 feature を `PostMessageW` が既に使用） |
 | Messaging / Events | WM_COPYDATA（既存・不変） | テストの送出（`shiori_host32_ipc::send_copydata`／`send_copydata_response`） | dev-dep 既存 |
-| Infrastructure / Runtime | `cargo test --workspace` | 速い・遅いの双方を無条件に含める | 遅いバイナリで壁時計 +約 42 秒 |
+| Infrastructure / Runtime | `cargo test --workspace` | 速い・遅いの双方を無条件に含める | kanade 統合バイナリが最長約 41 秒（4.11 で受容） |
 
 ## File Structure Plan
 
@@ -135,11 +135,15 @@ crates/areka-kanade/
 ├── src/shiori/
 │   ├── real.rs                       # 【修正】待ちの形・IDLE_INTERVAL・on_idle 契約と実体・rustdoc・接続宣言 1 行
 │   ├── real_tests.rs                 # 【無改変】既存テスト（2.8）
-│   └── real_idle_tests.rs            # 【新規】速い決定論テスト（手空きの契約・死活監視・順序・速い窓テスト）
+│   └── real_idle_tests.rs            # 【新規】窓を作らない決定論テスト（Test-A〜C・E: 手空きの契約・死活監視・順序・正規終了後の沈黙）
 └── tests/
-    ├── idle_pump_hung.rs             # 【新規】遅い決定論テストのエントリ（#[path] の接続宣言のみ）
-    └── idle_pump_hung/
-        └── hung_test.rs              # 【新規】遅い決定論テスト本体（20 秒→送出①→20 秒→送出②・上限 90 秒）
+    ├── kanade.rs                     # 【修正】接続宣言 1 行を追加（既存の統合テスト入口）
+    └── kanade/
+        ├── idle_pump_test.rs         # 【新規】窓を作る決定論テスト（Test-D 速い窓テスト・Test-F 遅い窓テスト）
+        ├── real_helper_test.rs       # 【修正】窓の生成を共有ロックで囲む 2 行（env-gate・通常は skip）
+        └── common/
+            ├── mod.rs                # 【修正】接続宣言 1 行を追加
+            └── common_window_actor.rs  # 【新規】窓の生成ロック・x64 stand-in helper・connect クロージャ（1 か所）
 crates/shiori-host32-host/src/
 └── parent_window.rs                  # 【修正】pump_pending_messages 新設・rustdoc 4 か所の追随
 crates/shiori-host32-ipc/src/
@@ -156,17 +160,18 @@ crates/shiori-host32-helper/src/
 
 - `crates/areka-kanade/src/shiori/real.rs` — ⑴ `pub const IDLE_INTERVAL: Duration = Duration::from_millis(500)` を追加（根拠を説明文に書く）。⑵ `ShioriBackend` に `fn on_idle(&mut self) {}` を追加（既定は何もしない）。⑶ `impl ShioriBackend for ShioriConnection` に `on_idle` を追加し `self.window.pump_pending_messages()` へ委譲。⑷ `run_shiori_loop` の `while let Ok(msg) = rx.recv()` を `loop { match rx.recv_timeout(IDLE_INTERVAL) { .. } }` へ。死活監視の本体を 1 つの関数へ括り出し、到達時と手空き時の両方から呼ぶ。⑸ `run_shiori_loop` の rustdoc（「blocking `recv`」「タイマー poll は持たない」）を変更後の姿へ。⑹ 末尾に `#[cfg(test)] #[path = "real_idle_tests.rs"] mod idle_tests;` を追加。現 291 行 → 350 行程度。
 - `crates/shiori-host32-host/src/parent_window.rs` — ⑴ `pub fn pump_pending_messages(&self)` を `ParentMessageWindow` のメソッドとして追加（10 行程度・`PeekMessageW`／`PM_REMOVE`／`MSG`／`TranslateMessage`／`DispatchMessageW` を import に足す）。⑵ module doc の 2 項（現 `:12-13`「heartbeat・pump フェーズ専用」）・`HEARTBEAT_INTERVAL` の doc（現 `:47-50`）・`pump_until_hello_or` の doc（現 `:254-256`）・`send_request` の doc（現 `:309-312`）を「握手フェーズの起こし専用・定常時の保守は `pump_pending_messages` が往復の外で担う」へ書き換える。現 659 行 → 700 行程度。
+- `crates/areka-kanade/tests/kanade.rs` — 接続宣言 1 行（`#[path = "kanade/idle_pump_test.rs"] mod idle_pump_test;`）。`tests/kanade/common/mod.rs` — 接続宣言 1 行。`tests/kanade/real_helper_test.rs` — `ParentMessageWindow::create()` の呼び出しを `WINDOW_CREATE_SERIAL` で囲む 2 行（env-gate・通常は skip・設定時の生成競合を防ぐ）。
 - `crates/shiori-host32-ipc/src/lib.rs` — コメントのみ。`send_copydata_response` の doc（現 `:328-329`「待機中はメッセージを取り出さないため OS からは『応答なし』に見えるが」）と `send_flavor_tests` の doc（現 `:591-593`）を「ホストは往復の間は自分の `SendMessageTimeoutW` の中で待ち、その間は取り出さない（手空き時の周期的な保守は往復の外でしか走らない）ため、往復が長引けば OS からは『応答なし』に見えうる」へ。コード差分 0（3.3）。
 - `crates/shiori-host32-helper/src/main_response_flavor_hung_cage_tests.rs` — コメントのみ。現 `:5-6`「本番では shiori アクターが `recv()` で待つ」→「本番のホストは往復の間 `SendMessageTimeoutW` の中で待ち取り出さない」、現 `:32`「本番の shiori アクターと同じ『待機中に pump しない』姿」→「往復中の本番ホストと同じ『取り出さない』姿（手空き時の周期的な保守は `areka-kanade` の決定論テストが固定する）」。テスト本体・期待値は無改変（3.2）。
 
 ### New Files
 
-- `crates/areka-kanade/src/shiori/real_idle_tests.rs` — 命名は structure.md の `<stem>_<モジュール名>.rs`（stem `real`・モジュール `idle_tests`）。`src/shiori/` に `real_idle.rs` は存在せず前向きの衝突なし。中身は後述「Components」の Test-A〜Test-E。300 行程度。
-- `crates/areka-kanade/tests/idle_pump_hung.rs` — `#[path = "idle_pump_hung/hung_test.rs"] mod hung_test;` のみ。
-- `crates/areka-kanade/tests/idle_pump_hung/hung_test.rs` — 遅い決定論テスト（Test-F）。200 行程度。
+- `crates/areka-kanade/src/shiori/real_idle_tests.rs` — 命名は structure.md の `<stem>_<モジュール名>.rs`（stem `real`・モジュール `idle_tests`）。`src/shiori/` に `real_idle.rs` は存在せず前向きの衝突なし。中身は後述「Components」の Test-A〜C・E（窓を作らない）。250 行程度。
+- `crates/areka-kanade/tests/kanade/idle_pump_test.rs` — 窓を作る決定論テスト（Test-D・Test-F）。`tests/kanade.rs` に `#[path = "kanade/idle_pump_test.rs"] mod idle_pump_test;` を 1 行足す。250 行程度。
+- `crates/areka-kanade/tests/kanade/common/common_window_actor.rs` — 窓を作るテストの共有ヘルパ（1 か所）: ⑴ 窓の生成を直列化する `static WINDOW_CREATE_SERIAL: Mutex<()>`、⑵ x64 の stand-in helper（`process_host::spawn_command(cmd.exe /c exit 0)` → `HelperLifecycle::new`）、⑶ アクタースレッド上で `ParentMessageWindow::create()`（ロックの内側）→ HWND を channel で返す → `Box::new(ShioriConnection { window, helper })` を返す connect クロージャの組み立て。`common/mod.rs` に接続宣言 1 行。
 - `.kiro/specs/areka-P0-host32-window-thread-pump/verification/calibration.md`・`real-machine.md`。
 
-**置き場の裁定（要件 7.3 との関係）**: 7.3 は編集集合を「`real.rs`・`parent_window.rs`・それらの兄弟テストファイル・本仕様の記録」に限る。速いテスト群は兄弟ファイル `real_idle_tests.rs` に置く（kanade の lib テストバイナリは現在親窓を 1 つも作らないため、速い窓テストが唯一の親窓になり直列化ロックが要らない）。遅いテストだけは**別のテストバイナリ**（`tests/idle_pump_hung.rs`）に置く。理由: ⑴ 同一プロセスで親窓の組を 2 つ同時に持てない既知制約（`lifecycle.rs` `WINDOW_TEST_SERIAL` の説明・`tests/kanade/real_helper_test.rs` 冒頭「親窓 1 枚制約」）により、同じバイナリに置くと速いテストが遅いテストの 41 秒を待たされ 4.9（5 秒以内）を満たせない、⑵ cargo はテストバイナリを直列に走らせるので別バイナリなら窓は同時に存在しない。この 2 ファイルは kanade crate 内の新規ファイルであり、W13 の共有ファイル 0 は保たれる（併走 spec のファイルには触れない）。7.3 の字義（「兄弟テストファイル」）からの逸脱はこの 2 ファイルだけで、設計ディスカッションで確認する。
+**置き場の裁定（要件 7.3 との関係・2026-09-13 設計ディスカッション #1）**: 窓を作らないテスト（Test-A〜C・E）は兄弟ファイル `real_idle_tests.rs`（private の `run_shiori_loop` を `super::*` で直接駆動する）。窓を作るテスト（Test-D・Test-F）は**既存の統合テストバイナリ `tests/kanade.rs` 配下**に置く。理由: ⑴ 窓を作るテストは既に `tests/kanade/real_helper_test.rs` がそこに居り、「窓を作るなら統合バイナリ・生成だけロック」という一本の規則になる、⑵ 新しいテストバイナリを増やさない、⑶ 開発中に最も頻繁に回す `cargo test -p areka-kanade --lib` に Test-F の 41 秒を足さない、⑷ stand-in を組む数行が `common` の 1 か所で済む。窓の制約について——wintf-winmsg-executor 0.0.5 の制約は「同じ瞬間に 2 つの窓を生成すると 2 つ目が `WindowCreationError`」（`Window::new_ex` の生成呼び出しの競合）であり、生成後の共存は問題ない（本番でも親窓と実行器の窓が同じスレッドに同居する）。既存のロック（`lifecycle.rs` `WINDOW_TEST_SERIAL`）も生成の呼び出しだけを囲んでいる。よって統合バイナリ内で Test-D と Test-F が並列に走っても、ロックが覆うのは生成の一瞬だけで、Test-D の 2 秒の上限は Test-F の 41 秒に影響されない（4.9）。env-gate の `real_helper_test.rs` も同じロックを取る（2 行・env 未設定時は skip されるが、設定時の生成競合を防ぐ）。7.3 の字義（「兄弟テストファイル」）からの逸脱は `tests/kanade/` の新規 2 ファイルと既存 3 ファイルの接続宣言・ロック取得（各 1〜2 行）であり、要件 7.3 に明記した。W13 の共有ファイル 0 は保たれる（併走 spec は `tests/kanade/` を所有しない——`kanade-boot-talkdone-drop` の brief は `schedule/{boot,mod}.rs` のみ）。
 
 ## System Flows
 
@@ -245,14 +250,14 @@ sequenceDiagram
 | 3.2 | helper の遅いテストを無改変で緑 | C8（見出しのみ） | — | — |
 | 3.3 | ipc・helper のコードに触れない | C8・File Structure Plan | — | — |
 | 4.1 | x64 偽境界・実 helper／DLL／ゴースト不使用 | Test-A〜F（fake backend＋実親窓） | — | — |
-| 4.2 | 本番の待ちの経路を駆動 | Test-A〜E（`run_shiori_loop` 直呼び）・Test-F（`spawn_shiori_actor`）・Test-D／F は実 `ShioriConnection` | — | 両フロー |
+| 4.2 | 本番の待ちの経路を駆動 | Test-A〜C・E（`run_shiori_loop` 直呼び）・Test-D／F（`spawn_shiori_actor`・実 `ShioriConnection`） | — | 両フロー |
 | 4.3 | 速いテスト（同期送出が上限内）・直す前は赤 | Test-D・C7（段階 1 で赤） | `send_copydata_response` | — |
 | 4.4 | 遅いテスト（② が届く）・直す前は赤 | Test-F・C7 | `send_copydata` | 遅いテストの時間軸 |
 | 4.5 | 遅いテストの上限 90 秒 | Test-F の `CAGE_BOUND` | — | — |
 | 4.6 | assert＋診断文 | Test-A〜F の `diag` | — | — |
 | 4.7 | 較正の証跡を記録 | C7（`verification/calibration.md`） | — | — |
 | 4.8 | 壁時計期限の飢餓に依存しない | Test-D（`SEND_BOUND ≥ 4 × IDLE_INTERVAL` を const assert・判定は届く／届かないの二値） | — | — |
-| 4.9 | 間欠赤を足さない・速いテストは 5 秒以内 | Test-A〜E の上限・置き場の裁定（別バイナリ） | — | — |
+| 4.9 | 間欠赤を足さない・速いテストは 5 秒以内 | Test-A〜E の上限・置き場の裁定（生成だけロック・Test-F と並列でも Test-D の時間に影響しない） | — | — |
 | 4.10 | 手空き中の異常終了で `ShioriDown` 一度だけ・直す前は赤 | Test-B・C6・C7 | `report_exit_once` | 手空きの周期 |
 | 4.11 | 双方を `cargo test --workspace` に無条件で含める | Test-A〜F（env ゲート・`#[ignore]`・feature ゲートなし） | — | — |
 | 5.1 | 実機で `unload_clean` 1 行・`unload_failed` 0 行 | C9 | e2e 手順書 §5.7 の語の表 | — |
@@ -469,30 +474,31 @@ impl ParentMessageWindow {
 
 ### 検証
 
-#### Test-A〜E `crates/areka-kanade/src/shiori/real_idle_tests.rs`（速い・兄弟テストファイル）
+#### Test-A〜C・E `crates/areka-kanade/src/shiori/real_idle_tests.rs`（速い・兄弟テストファイル・窓を作らない）
 
-共通: `IdleProbeBackend { exited: Arc<AtomicBool>, idles: Arc<AtomicU32> }` を本ファイル内に定義する（`get` は id を echo・`notify` は `Ok(())`・`unload` は `Ok(ExitKind::Clean)`・`status` は `exited` なら `Exited(ExitKind::Terminated)` さもなくば `Running`・`on_idle` は `idles` を加算）。`real_tests.rs` の `FakeBackend`（閉包で台本化・`on_idle` なし）とは責務が異なる（他スレッドから死活を切り替える・手空きを数える）ため複製ではない。`real_tests.rs` は 2.8 により無改変とし、共有ヘルパの集約（`real_test_support.rs`）は 3 つ目のテーマが現れたときに行う。runner は `real_tests.rs` と同じく素のスレッドで `run_shiori_loop(rx, Box::new(probe), on_down_tx)` を走らせる（4.2・本番の待ちの経路）。全テストの上限は `BOUND = 5 s`。
+共通: `IdleProbeBackend { exited: Arc<AtomicBool>, idles: Arc<AtomicU32> }` を本ファイル内に定義する（`get` は id を echo・`notify` は `Ok(())`・`unload` は `Ok(ExitKind::Clean)`・`status` は `exited` なら `Exited(ExitKind::Terminated)` さもなくば `Running`・`on_idle` は `idles` を加算）。`real_tests.rs` の `FakeBackend`（閉包で台本化・`on_idle` なし）とは責務が異なる（他スレッドから死活を切り替える・手空きを数える）ため複製ではない。`real_tests.rs` は 2.8 により無改変とし、共有ヘルパの集約（`real_test_support.rs`）は 3 つ目のテーマが現れたときに行う。runner は `real_tests.rs` と同じく素のスレッドで `run_shiori_loop(rx, Box::new(probe), on_down_tx)` を走らせる（4.2・本番の待ちの経路）。全テストの上限は `BOUND = 5 s`。本ファイルは窓を作らない（kanade の lib テストバイナリに親窓を作るテストは置かない）。
 
 | Test | 主張 | 直す前 | 上限 |
 |---|---|---|---|
 | Test-A `on_idle_is_called_while_idle` | 何も送らず 2 秒以内に `idles ≥ 1` | 0 のまま → 赤（較正） | 5 s |
 | Test-B `helper_exit_during_idle_reports_shiori_down_once` | `exited=true` にして何も送らず、`on_down_rx.recv_timeout(2 s)` が `ShioriDown` を返す。その後 `idles` が **2 以上増える**まで待ち（上限内）、その上で 2 通目が来ないことを主張する——「来ない」は手空きの腕が回った証拠（`idles` の増分）を伴う | 1 通目が来ず → 赤（較正・4.10） | 5 s |
 | Test-C `requests_after_idle_are_served_in_order` | `idles ≥ 1` になるまで待って「手空きを挟んだ」証拠を得た後に GET を 3 件連投し、reply が到着順で id を echo する | 緑（非退行の見張り・較正対象外） | 5 s |
-| Test-D `sync_send_to_idle_window_returns_within_bound` | runner スレッドが `ParentMessageWindow::create()` して HWND を channel で渡し、**実 `ShioriConnection`**（その `window` と、x64 の stand-in `cmd.exe /c exit 0` を `process_host::spawn_command` で起こした `HelperLifecycle::new(handle)`——`lifecycle.rs` のテストと同意匠）を backend にして `run_shiori_loop` に入る。`ShioriConnection::on_idle` の委譲の 1 行まで本番経路を踏む。stand-in は即終了するので手空きの初回に `ShioriDown` が 1 通届く（既存の死活経路・ちょうど 1 通であることも assert）。テストスレッドが `send_copydata_response(host, host, MsgTag::Response, b"idle-pump", SEND_BOUND)` を送り、`Ok` かつ所要 `< SEND_BOUND` を assert | `SendFailed`（上限まで待つ）→ 赤（較正・4.3） | 全体 5 s |
 | Test-E `no_liveness_report_after_clean_unload_even_when_idle` | `Unload` を往復させ `Unloaded` を得た後 `exited=true` にし、`idles` が **2 以上増える**まで待った上で（上限内）`ShioriDown` が来ない——手空きの腕が `unloaded` を見て黙る判断分岐を、腕が回った証拠つきで固定する | 緑（既存規約の手空き版・較正対象外） | 5 s |
 
 診断文（4.6）: どのテストも assert の失敗文に「待った長さ・観測した回数（`idles`／`ShioriDown` の通数）・届いた／届かなかった・（送出があるものは）送出失敗の回数と所要・プロセス生存時間」を含め、数値を印字するだけの形にしない。「来ない」を主張するテスト（Test-B 後半・Test-E）は `idles_before`／`idles_after` を診断文に含め、手空きの腕が回った上で沈黙したことを示す（4.8——腕が一度も回らなくても緑になる形を退ける）。
 
-Test-D の定数: `SEND_BOUND = Duration::from_secs(2)` と `const _: () = assert!(SEND_BOUND.as_millis() >= 4 * IDLE_INTERVAL.as_millis());`（周期を動かしたら上限の余裕が黙って薄くならない・4.8）。送出タグは `MsgTag::Response`（本番の `StoreResponse` の腕を踏む・6.11 の遅いテストと同じタグ・`response_slot` は次の `send_request` が必ず `clear` する）。送出元 HWND には自窓の HWND を渡す（`window_tests` と同じ）。診断文: `delivered`・`elapsed`・`uptime`・`result`。kanade の lib テストバイナリで親窓を作るのは本テストだけであり直列化ロックは置かない（2 本目が現れたら `lifecycle.rs` の `WINDOW_TEST_SERIAL` と同型のロックを本ファイルへ置く——Revalidation Triggers 参照）。
+#### Test-D・Test-F `crates/areka-kanade/tests/kanade/idle_pump_test.rs`（統合バイナリ・窓を作る）
 
-#### Test-F `crates/areka-kanade/tests/idle_pump_hung/hung_test.rs`（遅い・別バイナリ）
+共通: `common_window_actor.rs` の connect クロージャで本番の `spawn_shiori_actor(connect, on_down)` を起こす。`connect` はアクタースレッド上で（`WINDOW_CREATE_SERIAL` の内側で）`ParentMessageWindow::create()` → `hwnd_u32()` を channel で返す → `Box::new(ShioriConnection { window, helper })`（`helper` は x64 の stand-in `cmd.exe /c exit 0` を `process_host::spawn_command` で起こした `HelperLifecycle::new(handle)`——`lifecycle.rs` のテストと同意匠）。本番と同じ「窓は connect がアクタースレッド上で作る」順序（4.2）で、backend も本番の型そのもの——fake backend を置かない。`ShioriConnection::on_idle` の委譲の 1 行まで本番経路を踏む。stand-in は即終了するので手空きの初回に `ShioriDown` が 1 通届く（既存の死活経路・ちょうど 1 通であることも assert し、2 通目が無いことは Test-B の形で見張る）。ロックが覆うのは生成の一瞬だけなので、同じバイナリ内で並列に走る Test-D と Test-F は互いの時間に影響しない。
 
-- 本番の `spawn_shiori_actor(connect, on_down)` を使う。`connect` はアクタースレッド上で `ParentMessageWindow::create()` → `hwnd_u32()` を channel で返す → `Box::new(ShioriConnection { window, helper })`（`helper` は Test-D と同じ x64 の stand-in）。本番と同じ「窓は connect がアクタースレッド上で作る」順序（4.2）で、backend も本番の型そのもの——fake backend を置かない。
+**Test-D `sync_send_to_idle_window_returns_within_bound`（速い・全体 5 秒以内）**: 起動後、テストスレッドが `send_copydata_response(host, host, MsgTag::Response, b"idle-pump", SEND_BOUND)` を送り、`Ok` かつ所要 `< SEND_BOUND` を assert。直す前は `SendFailed`（上限まで待つ）→ 赤（較正・4.3）。定数: `SEND_BOUND = Duration::from_secs(2)` と `const _: () = assert!(SEND_BOUND.as_millis() >= 4 * IDLE_INTERVAL.as_millis());`（周期を動かしたら上限の余裕が黙って薄くならない・4.8）。送出タグは `MsgTag::Response`（本番の `StoreResponse` の腕を踏む・6.11 の遅いテストと同じタグ・`response_slot` は次の `send_request` が必ず `clear` する）。送出元 HWND には自窓の HWND を渡す（`window_tests` と同じ）。診断文: `delivered`・`elapsed`・`uptime`・`result`。
+
+**Test-F `abortifhung_send_reaches_window_idle_for_twenty_seconds`（遅い・上限 90 秒）**:
+
 - 時間軸: `IDLE = 20 s`・`SEND_BOUND = 5 s`・`CAGE_BOUND = 90 s`・`READY_BOUND = 10 s`。`sleep(IDLE)` → 送出①（`send_copydata(host, host, MsgTag::Response, b"hung-cage-1", SEND_BOUND)`＝`SMTO_ABORTIFHUNG` つき）→ `sleep(IDLE)` → 送出②（同・`b"hung-cage-2"`）→ `Close`・有界 join。
 - 主張: ① `Ok`・② `Ok`・送出失敗 0・全体 `< CAGE_BOUND`。診断文: `first`／`second` の結果と所要・`idle`・`uptime_at_first`／`uptime_at_second`・`send_failures`。
 - 直す前: ① が 5 秒待って `SendFailed`・② が即座に `SendFailed`（応答なし判定の署名）→ 赤（較正・4.4）。
-- 時間の仮定は OS の判定条件（実時間）と上限のみ（4.8）。env ゲート・`#[ignore]`・feature ゲートを付けない（4.11）。`cargo test --workspace` の壁時計 +約 42 秒を受容する。
-- stand-in を組む数行（`spawn_command` → `HelperLifecycle::new` → `ShioriConnection`）の置き場は「置き場の裁定」に従う。
+- 時間の仮定は OS の判定条件（実時間）と上限のみ（4.8）。env ゲート・`#[ignore]`・feature ゲートを付けない（4.11）。kanade の統合バイナリ内で他のテストと並列に走るため、`cargo test --workspace` の壁時計はそのバイナリが最長約 41 秒になる分だけ延びる（4.11 で受容済み）。
 
 #### C7 較正の手順と証跡（`verification/calibration.md`）
 
@@ -556,7 +562,7 @@ Test-D の定数: `SEND_BOUND = Duration::from_secs(2)` と `const _: () = asser
 - Test-C: 手空きを挟んでも要求は到着順（1.4・非退行）。
 - Test-D: 手空き中の同期送出が上限内に復帰（1.2／4.3・較正・実親窓＋実 `ShioriConnection`）。
 - Test-E: 正規終了後は手空きでも死活報告しない（既存規約の手空き版）。
-- Test-F: 20 秒→送出①→20 秒→送出②（1.3／4.4・較正・別バイナリ・上限 90 秒）。
+- Test-F: 20 秒→送出①→20 秒→送出②（1.3／4.4・較正・統合バイナリ・上限 90 秒）。
 - 既存: `real_tests.rs`（17 本）・host32 `src/` と `tests/`・helper の 4 本（6.11 の遅いテストを含む）を無改変で緑（2.8・3.2）。
 
 ### 較正（4.7）
@@ -575,7 +581,7 @@ Test-D の上限 2 秒が負荷下で薄くならないことを 1 度だけ確�
 
 - 手空き 1 回のコスト: `recv_timeout` の起床・空の `PeekMessageW` 1 回・`try_wait` 1 回。毎秒 2 回。利用者に見える差はない。
 - 往復の所要: 変化なし（inbox 到達は送信で即起きる・ホップ増 0・スレッド増 0）。
-- 全体テストの壁時計: +約 42 秒（Test-F・別バイナリ・直列）。
+- 全体テストの壁時計: kanade の統合バイナリが最長約 41 秒になる分だけ延びる（Test-F・同バイナリ内の他テストとは並列）。
 
 ## 待ちの形の裁定と不採用案（7.5）
 

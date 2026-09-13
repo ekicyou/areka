@@ -212,7 +212,7 @@
   - 待ちの形は §4 の案 0（交互待ち）で確定（要件 Introduction の裁定・2026-09-13）。`ShioriBackend::on_idle`（既定は何もしない）を唯一の追加契約とし、host32 の `ShioriConnection` だけが `ParentMessageWindow::pump_pending_messages` へ委譲する。kanade は Win32 の語彙を持たない。
   - `pump_pending_messages` に要る `PeekMessageW`／`PM_REMOVE`／`MSG`／`TranslateMessage`／`DispatchMessageW` はすべて `windows` 0.62.2 の `Win32_UI_WindowsAndMessaging`（host32 で有効済み・`PostMessageW` と同 feature）にあり、`Cargo.toml` の変更は不要。in-repo の前例は `crates/wintf/src/com/wuc.rs` `pump_current_thread_messages`（現 `:107-117`）。
   - **較正のためには「直す前の構造」でテストがコンパイルできなければならない**。`on_idle` が存在しない木では速いテストが書けないので、実装を「段階 1＝契約と部品（受信ループは `recv()` のまま）」「段階 2＝待ちの形」の 2 コミットに分け、段階 1 の時点で赤を採る。
-  - **同一プロセスで親窓の組を 2 つ同時に持てない既知制約**（`lifecycle.rs` `WINDOW_TEST_SERIAL` の説明・`tests/kanade/real_helper_test.rs` 冒頭）と 4.9（速いテストは 5 秒以内）は、速い窓テストと遅い窓テストを同じテストバイナリに置くと両立しない（直列化すると速い側が 41 秒待たされる）。遅いテストだけを別バイナリ `crates/areka-kanade/tests/idle_pump_hung.rs` へ置く（7.3 の字義からの唯一の逸脱・設計ディスカッションで確認）。
+  - 窓の制約は「同じ瞬間に 2 つ生成すると 2 つ目が失敗する」だけ（生成後の共存は可・§9.2 の訂正を参照）。窓を作るテスト（Test-D・F）は既存の統合バイナリ `tests/kanade.rs` 配下、窓を作らないテストは兄弟ファイルへ（設計ディスカッション #1 の裁定）。
   - `shiori/mod.rs` の rustdoc「メッセージ到達のたびに冒頭で `status` を確認」（現 `:44-46`）は変更後も真（手空き時の確認が加わるだけ）なので書き換えない。偽になるのは `real.rs` `run_shiori_loop` の doc（現 `:161`「blocking `recv`」・`:167`「タイマー poll は持たない」）で、こちらは 7.1 の対象。
 
 ### 9.2 Research Log
@@ -255,7 +255,8 @@
 - **Context**: §5 は「kanade の兄弟テストファイルに置く」と書いたが、速いテストと遅いテストの同居を調べていなかった。
 - **Sources Consulted**: `lifecycle.rs` 現 `:519-524`（`WINDOW_TEST_SERIAL`・「同一プロセスで 2 組の message-only 窓を同時生成すると 2 組目が `WindowCreationError`」）・`tests/kanade/real_helper_test.rs` 現 `:22-24`（「親窓 1 枚制約ゆえ単一の `#[test]` に集約」）・kanade の lib テストバイナリに親窓を作るテストが現状 0 本であること（grep）。
 - **Findings**: 遅いテストは親窓を約 41 秒持ち続ける。同じバイナリに速い窓テストを置いて直列化すると、順序次第で速い側が 41 秒待つ（4.9 の 5 秒を満たせない・間欠的に遅い）。cargo はテストバイナリを直列に走らせるので、別バイナリなら窓は同時に存在しない。
-- **Implications**: 速いテスト群（Test-A〜E）は兄弟 `real_idle_tests.rs`（lib バイナリの唯一の親窓・ロック不要）、遅いテスト（Test-F）は `tests/idle_pump_hung.rs`＋`tests/idle_pump_hung/hung_test.rs`（structure.md の `tests/{domain}.rs` 入口＋`#[path]` 規約）。`WindowOnlyBackend`（15 行程度）は両方に持つ（別バイナリから lib テストの private 項目へ届かない）。
+- **Implications（当初）**: 速いテスト群を兄弟ファイル、遅いテストを新しいバイナリ `tests/idle_pump_hung.rs` へ。
+- **訂正（2026-09-13・設計検証の指摘 1 → 設計ディスカッション #1）**: 上の Findings の前提「親窓を 2 つ同時に持てない」は誤り。`wintf-winmsg-executor` 0.0.5 `Window::new_ex` を読むと、制約は「同じ瞬間に 2 つの窓を生成すると 2 つ目が `WindowCreationError`」（生成呼び出しの競合）だけで、生成後の共存は問題ない（本番でも親窓と実行器の thread-local 窓が同じスレッドに同居する）。既存のロック `WINDOW_TEST_SERIAL` も生成の呼び出しだけを囲む。開発者裁定: 窓を作らないテスト（Test-A〜C・E）は兄弟 `real_idle_tests.rs`、窓を作るテスト（Test-D・Test-F）は**既存の統合テストバイナリ** `tests/kanade.rs` 配下の `tests/kanade/idle_pump_test.rs`（窓を作る `real_helper_test.rs` が既に居る場所・新しいバイナリを増やさない・lib テストに 41 秒を足さない・stand-in を組む数行は `common/common_window_actor.rs` の 1 か所）。生成の瞬間だけ `WINDOW_CREATE_SERIAL` で直列化するので、並列に走る Test-D の時間は Test-F に影響されない。不採用: (a) 兄弟ファイルに 6 本全部（7.3 の字義どおりだが `cargo test -p areka-kanade --lib` が毎回 +41 秒）、(b) 新しいバイナリ（入口が増える・3 ファイル）。
 
 ### 9.3 Architecture Pattern Evaluation
 
@@ -320,15 +321,15 @@
 - `ShioriConnection::on_idle` の 1 行の委譲——設計検証（2026-09-13）で「fake が同じ部品へ委譲する形はこの 1 行が欠けても緑（恒真）」と指摘され、Test-D／Test-F の backend を実 `ShioriConnection`（`process_host::spawn_command` で起こす x64 の stand-in `cmd.exe /c exit 0`＋`HelperLifecycle::new`・`lifecycle.rs` のテストと同意匠）へ改めた。実機走行（5.x）は 6.11 の二重の守りで緑になるためこの 1 行の欠落を検出しないが、決定論テストが検出する。
 - 速いテストの 2 秒上限が負荷下で薄くなる — 周期の 4 倍を const assert で固定・1 度だけ負荷計測。
 - `Timeout` と `Disconnected` の取り違え — 既存テストが赤にする。
-- kanade の lib テストバイナリに親窓を作るテストが将来 2 本目以降置かれる — Revalidation Triggers に登記。`WINDOW_TEST_SERIAL` 同型のロックを置く。
-- 遅いテストの +42 秒 — 4.11 で受容済み。
+- 統合バイナリで窓を作るテストが `common` の生成ロックを取らずに増える — Revalidation Triggers に登記。
+- 遅いテストの約 41 秒（kanade 統合バイナリの最長時間） — 4.11 で受容済み。
 
 ### 9.6 §7 の判断事項の決着
 
 | # | 事項 | 決着 |
 |---|---|---|
 | 1 | 案 0 の字義 | 要件 Introduction の裁定で採用。T＝500 ms（9.4） |
-| 2 | 7.3 の編集集合 | 案 0 ゆえ広げない。遅いテストの別バイナリ 2 ファイルのみ字義から逸脱（9.2） |
+| 2 | 7.3 の編集集合 | 案 0 ゆえ広げない。窓を作るテスト 2 本は既存の統合バイナリ `tests/kanade/` へ（新規 2 ファイル＋既存 3 ファイルの接続宣言・ロック取得）——要件 7.3 に明記（9.2 の訂正） |
 | 3 | ipc の古い説明文 | コメントのみ書き換える（要件 7.1 の改訂で 3.3 の例外として明文化済み） |
 | 4 | 握手の heartbeat | 無改変・説明文のみ（9.4） |
 | 5 | 6.1／6.2 の空振り | 6.2 は該当なしで閉じる（要件改訂済み）。6.1 は `status` 経由の既存経路へ一本化 |
