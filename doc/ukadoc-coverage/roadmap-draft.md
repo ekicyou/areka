@@ -65,11 +65,15 @@ snapshot_on = "2026-09-13"
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
 束**を 1 つ書き、段階はその束が順位表で置かれている段階を写した。宛先が 2 つ以上の束に散る spec
 は 13 本のうち **8 本**あり、散った先の全部は各段階の節の「依存する既存 spec」の欄が持っている。
-いちばん多い束と 2 番目の差が **1 件**しかない行が **4 行**ある——`areka-P0-currentghost-property-tree`
-（16 対 15）・`areka-P0-property-query-channels`（3 対 2）・`areka-P0-charset-canon`（2 対 1）・
-`areka-P0-status-execution-states`（2 対 1）。この 4 行は宛先が 1 件動くだけで束が入れ替わる。
-同数で並んで決められなかった行は **0 行**である（数え方: 13 本それぞれで束ごとの件数を降順に
-並べ、先頭と 2 番目が同数の行を数えた）。
+いちばん多い束と 2 番目の差が **1 件**しかない行が **3 行**ある——`areka-P0-currentghost-property-tree`
+（16 対 15）・`areka-P0-property-query-channels`（3 対 2）・`areka-P0-status-execution-states`
+（2 対 1）。この 3 行は宛先が 1 件動くだけで束が入れ替わる。
+
+同数で並んで決められなかった行は **1 行**ある（数え方: 13 本それぞれで束ごとの件数を降順に
+並べ、先頭と 2 番目が同数の行を数えた）。`areka-P0-charset-canon` が「起動と挨拶」2 件と
+「SHIORI の要求と応答」2 件で並んだ。並んだときは順位表で前に置かれている束を採る——「起動と
+挨拶」は順位 4、「SHIORI の要求と応答」は順位 18 なので、表は「起動と挨拶」を書いている。
+段階はどちらも A なので、この行の段階の欄はどちらを採っても変わらない。
 
 **どの束にも属さない spec は 14 本**である（数え方: 台帳 4 本の宛先の欄を 27 の名前それぞれで
 引き、0 件だったものを数えた。27 − 13 ＝ 14 ではなく、27 本を 1 本ずつ引いて数えた）。この 14 本は
@@ -142,7 +146,7 @@ wave = "W14"
 name = "areka-P0-charset-canon"
 stage = "A"
 bundle = "起動と挨拶"
-owner_count = 4
+owner_count = 5
 wave = "W13"
 
 [[spec]]
@@ -285,7 +289,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件） | 第 1 波（先頭ウェーブ） |
 | 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件） | 第 1 波（先頭ウェーブ） |
-| 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（W13・2 件）／`areka-P0-package-mount`（完了・1 件） | 第 1 波（先頭ウェーブ） |
+| 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 5 | バルーンの文字 | `areka-P0-balloon-font-canon`（残余） | `areka-P0-text-decoration-canon`（W13・32 件）／`areka-P0-currentghost-property-tree`（W15・13 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 6 | サーフェスアニメーション | `areka-P0-seriko-animation-canon` | `areka-P0-currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件） | 第 1 波（先頭ウェーブ） |
 | 7 | 入力窓とダイアログ | `areka-P0-inputbox-dialog` | **0 本** | 第 2 波 |
@@ -304,8 +308,8 @@ spec 台帳で、この表はそれを写した写真である。
 | 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件） | 第 2 波 |
 | 17 | 定義ファイルの文字コード | なし（構成 2 件がどちらも実装済みで、作る仕事が残っていない） | **0 本** | 第 2 波 |
 | 17 | 組み込みの置換語 | `areka-P0-builtin-substitution` | **0 本** | 第 2 波 |
-| 18 | SHIORI の要求と応答 | `areka-P0-shiori-request-canon` | `areka-P0-charset-canon`（W13・1 件）／`areka-P0-status-execution-states`（W15・1 件） | 第 2 波 |
-| 18 | シェル定義の転記 | `areka-P0-shell-definition-transcribe` | `areka-P0-charset-canon`（W13・1 件） | 第 2 波 |
+| 18 | SHIORI の要求と応答 | `areka-P0-shiori-request-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-status-execution-states`（W15・1 件） | 第 2 波 |
+| 18 | シェル定義の転記 | `areka-P0-shell-definition-transcribe` | `areka-P0-charset-canon`（完了・1 件） | 第 2 波 |
 | 18 | 同期オブジェクト | `areka-P0-sync-object-tags` | `areka-P0-sakura-time-directives`（W16・1 件） | 第 2 波 |
 
 ## 段階 B
@@ -647,10 +651,10 @@ spec 台帳で、この表はそれを写した写真である。
 **3 行の要約**
 
 - 問題: 定義ファイルを読んでゴーストを組み立て、SHIORI を読み込んで最初の 3 つのイベントを送るまでの口のうち、作者名や種別といった素性の欄が未対応で、ゴースト一覧に正しい名前が出ない。
-- 現状: 構成 20 件の状態は実装済み 5・未対応 11・語彙のみ 4 で、壊れる 75 件のうち 4 件がここにあり、4 件とも素性の欄である。
+- 現状: 構成 20 件の状態は実装済み 7・未対応 9・語彙のみ 4 で、壊れる 75 件のうち 4 件がここにあり、4 件とも素性の欄である。
 - 何が変わるか: 配布されたゴーストを入れると素性が読み取られ、初回と 2 回目以降の挨拶が正典の順で送られるようになる。
 
-**依存する既存 spec**: `areka-P0-charset-canon`（W13・2 件）／`areka-P0-package-mount`（完了・1 件）
+**依存する既存 spec**: `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）
 
 **構成 id（全 20 件）**
 

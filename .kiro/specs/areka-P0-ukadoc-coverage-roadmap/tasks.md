@@ -282,7 +282,7 @@
   - _Depends: 6.4_
 
 - [ ] 7. 段 6: 最終検証と完了報告
-- [ ] 7.1 main へ rebase して数え直す
+- [x] 7.1 main へ rebase して数え直す
   - 既定ブランチへ rebase し、spec ディレクトリと完了済みディレクトリを数え直す
   - 改名・削除があれば spec 表と完了済み宛先の列挙を直し、数え直した値で冒頭の数を更新する
   - 完了状態: rebase 後に標準のテスト実行が緑で、表の各名前が実在している
@@ -507,3 +507,11 @@
 - 6.6: **⚠ 同一コミット内で実測値が食い違う罠。** `MIN_OWNER_COMPLETED_ROWS` の注釈「合計 37 件」（実測 **41**）と `spec_checks.rs` の「`completed/` 175 本」（実測 **174**・`ls` の行数は単独の `.md` を 1 本数える）が兄弟ファイルと食い違っていた。**注釈に数を書くときは兄弟ファイルの同じ数と突き合わせること。**
 - 6.6: **⚠ FYI（設計の範囲外・修正不要）。** `SpecRow.stage` の**値そのもの**（束を持つ 13 行の A×9・C×2・E×2）が `briefing.md` の順位表でその束が置かれている段階と一致するかを見る腕は無い。design の判定 ⑸ の a〜f に含まれないため。
 - 6.6: **⚠ 次に `parse.rs` を触るときの整理候補。** `DOCUMENT_DIR` の宣言は `parse.rs` にあるのに消費するのは `fields.rs` の `document_file` だけ。移せば相互参照が片道（`fields → parse::toml_blocks`）に減る。
+- 7.1: `origin/main` へ rebase（0 behind / 46 ahead）。競合 2 件を解決——`report/summary.md` は再生成される生成物なので適用側を採り、`ledger/shiori.toml` の `ukadoc:spec_shiori3:Charset:2` は **`owner` を上流の主張（`areka-P0-charset-canon`）・`priority` を本 spec の導出値（`A18`）**とした。**競合マーカーはリポジトリ全体で 0。**
+- 7.1: **判定が期待どおり働いて 5 件の食い違いを検出した**（`[[barrier]]` の 4 つと `[[spec]].owner_count`）。**判定は 1 つも緩めず文書の数を実測へ直した**（レビューが `MIN_*` 定数のバイト一致と、Rust 2 ファイルの差分が 100% コメントであることを確認）。
+- 7.1: 上流の変化——`charset-canon` と `present-gpu-transform-scale` が `completed/` へ（174 → **176**）、`nar-install` と `shell-implicit-surface` が新規起票。**live spec dir は 27（自 spec を除く）で数は変わらないが集合が入れ替わった。**
+- 7.1: **裁定 A（`[[spec]]` の表を入れ替えない）**——要件 10.2 が表を「着手時の写真」と定め、判定 ⑸-b は「直下 ∪ `completed/`」に照らすので完了した 2 本が残っても赤にならない設計。design の「⑸ の数え方」が W13「共有ファイル 0」を理由に起票・完了で赤にすることを退けている。**live 27・表 27 行・`count = 27` の三者一致。`snapshot_on = 2026-09-13`。**
+- 7.1: **裁定 B（`[[owner_completed]]` に `charset-canon` を足さない）**——同 spec は 5 件を宛先に持ち **5 件とも `implemented`** なので規則 ⑵ を当て直しても空にする件数は 0。判定 ⑸-f は「いずれか」なので `[[spec]]` 側で満たされる。**15 本目を足すと本文が釘付けする「14 本の和は 41」の恒等式が偽になる。** 代わりに §5-3 へ段落を置いた。`present-gpu-transform-scale` は宛先 0 件。
+- 7.1: 直した数（レビューが全数を独立に数え直して一致）: `[[barrier]]` `descript_ghost` implemented **9**・absent **64**／`descript_shell_surfaces` implemented **5**・absent **67**／`[[spec]] charset-canon.owner_count` **5**／§5-3 の非空 **416**・空 **1,333**（差 3 ＝ 6.4 の裁定 2 ＋ 上流 1）／`completed/` **176**／束「SHIORI の要求と応答」の依存 `charset-canon` **2 件**／束「起動と挨拶」実装済み **7**・未対応 **9**／**「差 1 件の行」4 → 3 行・「同数で並んだ行」0 → 1 行**（`charset-canon` が 2 対 2）／`MIN_COMPLETED_SPECS` の実測 **176**／`MIN_DOCUMENT_CHARS` の 4 実測 **268,349／95,695／52,007／33,420**（最小は `report/summary.md`）／`briefing.md` の `cited_ids` union **251**（消した 237 は陳腐化していた）。
+- 7.1: `priority-apply` は **1 回目から「変更 0 項目」**（上流の `status` 変更 5 件は対象 4 状態の中の移動）。報告 5 本は差分 0。
+- 7.1: **⚠ 検証コマンドは 4 本**——`cargo test -p ukadoc-survey`／**`cargo test -p log-capture-kit --test file_length_guard_test`**／`cargo fmt --check`／`cargo clippy -p ukadoc-survey --all-targets`。
