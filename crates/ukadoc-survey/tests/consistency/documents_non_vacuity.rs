@@ -364,6 +364,68 @@ fn the_spec_directory_listing_excludes_this_spec_and_completed() {
     );
 }
 
+/// spec ディレクトリの一覧が空に落ちたとき、上の下限が**実際に**赤になること。
+///
+/// 兄弟の 5 本（引用と束・帰属・順位・spec 表・全体報告）と同じ流儀で、下限を置いた
+/// だけで終わっていないことを見る。ここが無いと [`MIN_SPEC_DIRS`] だけが
+/// 「置いたという記録」のまま残る——一覧の走査が別のディレクトリを見ていて空を返す
+/// 壊れ方は、除外の主張（本 spec と `completed` が混じっていない）を**無条件に**
+/// 通してしまう。
+///
+/// 空に落とすのは**写し**の上である（repo のディレクトリには触れない）。
+#[test]
+fn the_floors_of_the_spec_directory_listing_turn_red_when_the_directories_go_empty() {
+    let empty = BTreeSet::<String>::new();
+
+    let mut floors = Floors::new();
+    floors
+        .at_least(".kiro/specs 直下の brief 持ち", empty.len(), MIN_SPEC_DIRS)
+        .at_least(
+            ".kiro/specs/completed 直下",
+            empty.len(),
+            MIN_COMPLETED_SPECS,
+        );
+
+    let short = floors.short();
+    assert_eq!(
+        short.len(),
+        2,
+        "一覧が空に落ちたのに違反が 2 行そろわない: {short:?}"
+    );
+    assert!(
+        short.iter().all(|line| line.contains("0 件しかない")),
+        "空に落ちたことを本文が言っていない: {short:?}"
+    );
+    assert!(
+        short[0].contains(".kiro/specs 直下") && short[1].contains("completed"),
+        "どの母数が空なのかを名指していない: {short:?}"
+    );
+
+    // 空だけを見ると「0 のときだけ赤い」の証明にしかならない。下限の側を実数より
+    // 1 だけ上へ動かしても赤くなることを、生きた一覧で見る——`at_least` が
+    // `<` で比べていることの較正である（`<=` で書いてあれば上の空の検査は通る）。
+    let documents = Documents::load();
+    let live = documents.spec_dirs.len();
+    let mut just_above = Floors::new();
+    just_above.at_least(".kiro/specs 直下の brief 持ち", live, live + 1);
+    let short = just_above.short();
+    assert_eq!(
+        short.len(),
+        1,
+        "実数 {live} に対して下限 {} を置いたのに赤くならない: {short:?}",
+        live + 1
+    );
+
+    // 逆に下限が実数ちょうどなら緑であること（赤の原因が下限の側だと言い切るために要る）。
+    let mut exactly = Floors::new();
+    exactly.at_least(".kiro/specs 直下の brief 持ち", live, live);
+    assert!(
+        exactly.short().is_empty(),
+        "下限が実数ちょうどなのに赤い: {:?}",
+        exactly.short()
+    );
+}
+
 /// 判定 ⑴ ⑵ が数えている相手が 0 件でないこと（要件 11.4）。
 #[test]
 fn the_citation_and_bundle_checks_have_something_to_judge() {

@@ -70,7 +70,14 @@ pub fn domain_report_path(domain: Domain) -> PathBuf {
         .join(format!("{}.md", domain.as_key()))
 }
 
-/// 全体報告（`doc/ukadoc-coverage/report/summary.md`）。常時検査の対象外（要件 7.6）。
+/// 全体報告（`doc/ukadoc-coverage/report/summary.md`）。
+///
+/// 常時検査の対象である。完了 spec toolkit の要件 7.6 がここを対象外にしていたのは
+/// 並走する調査 4 本が同じファイルを取り合うからで、その理由は 4 本の完了で消えた
+/// ——除外は `ukadoc-coverage-roadmap` の要件 11.2 が覆した。いまは判定 ⑹ が、この
+/// ファイルの本文を `report::summary::render_summary` の出力と**全文一致**で突き合わせる
+/// （証拠の表は本文から外して `evidence` の副手続きへ移したので、突き合わせの両側は
+/// カタログと台帳 4 本だけから決まる）。作り直さずに台帳を変えれば赤になる。
 pub fn summary_report_path() -> PathBuf {
     coverage_dir().join("report").join("summary.md")
 }
