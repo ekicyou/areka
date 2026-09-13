@@ -35,7 +35,7 @@
 ### This Spec Owns
 
 - **転記層の 9 キー写像**——`crates/areka-parsers/src/balloon/parse.rs` の写像関数 `map_merged` に `font.bold`・`font.italic`・`font.outline`・`font.strike`・`font.underline`・`font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle` の完全一致引きを加えること。
-- **2 つの生文字列転記型**——`crates/areka-parsers/src/balloon/model.rs` の `FontDecorationRaw`（0/1 系 5 本）と `FontShadowRaw`（影色 3 成分＋形態）、および `BalloonModel` の additive ビルダ 2 本とアクセサ 2 本。`crates/areka-parsers/src/balloon/mod.rs` の再輸出 2 型。
+- **2 つの生文字列転記型**——`crates/areka-parsers/src/balloon/model.rs` の `FontDecorationRaw`（0/1 系 5 本）と `FontShadowRaw`（影色 3 成分＋形態）、および `BalloonModel` の additive ビルダ 2 本とアクセサ 2 本。`crates/areka-parsers/src/balloon/mod.rs` の再輸出 2 型（`pub use model::{...}` の 1 行。brief の編集集合 `balloon/{parse,model}.rs` の字面には無いが、同じ `balloon` モジュール内で `WindowPositionRaw` の先例と同じ流儀の 1 行であり、W13 の他 spec が触るファイルでもない。要件 9.8 の編集集合の記述もこれに合わせてある）。
 - **14 キーの正典 URL コメント**——`parse.rs` のキーを引く行に置く 10 本の新設（既設 4 本は無改変）。
 - **決定論テスト**——`parse_tests.rs`（値の形・2 層・不漏れ・14 の判定）と `model_tests.rs`（型のアクセサ・`Default`・ビルダ）への追加。
 - **網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の当該 14 項目**——状態・担当・束名・備考。`doc/ukadoc-coverage/report/assets.md` の道具による作り直し。
@@ -80,7 +80,7 @@
 | 転記層 `parse.rs`（186 行） | `pub fn parse(descript, image)` が `descript.clone()` へ画像別層を後勝ち `insert` してから `map_merged` を 1 回呼ぶ。マージはキー非依存 | 4.1〜4.3 は**追加コード 0** で成立。仕事はテストで固定すること |
 | 同 | `fn map_merged(merged)` が `merged.get("font.name")`・`get_scalar::<u32>(merged, "font.height")`・`get_scalar::<u8>(merged, "font.color.{r,g,b}")` の 5 本を引く | 9 本を同じ形（完全一致 `get`）で足す。既存 5 本の行は無改変（5.1） |
 | 同 | `fn get_scalar<T: FromStr>` は非数値・範囲外を `None` へ降格する | 9 キーには**使わない**（2.5・2.6 に反する）。`merged.get(key).map(\|v\| v.to_owned())` の生文字列転記（`vertical`・`writing_mode`・`windowposition_raw` と同型）を使う |
-| 同 | 正典 URL コメントは `map_merged` の**キーを引く行の直前**に `// ukadoc: <URL>` で置かれている（`origin`・`wordwrappoint`・`validrect`・`font.color.*`・`font.height`・`cursor.*` すべて） | 14 本をここへ揃える（DD1）。`font.name` は説明コメントだけあり URL 行が無い＝新設 10 本のうちの 1 本 |
+| 同 | 正典 URL コメントは `map_merged` の**キーを引く行の直前**に `// ukadoc: <URL>` で置かれている（既設 18 本＝`origin` 2・`wordwrappoint` 2・`validrect` 4・`font.color.*` 3・`font.height` 1・`cursor.brush.color.*` 3・`cursor.font.color.*` 3。`cursor.pen.color.*` には無い） | 14 本をここへ揃える（DD1）。`font.name` は説明コメントだけあり URL 行が無い＝新設 10 本のうちの 1 本 |
 | モデル層 `model.rs`（529 行） | `BalloonModel::new` は 7 位置引数。additive ビルダ `with_cursor`／`with_windowposition_raw`／`with_vertical_raw` が「既存呼び出し側は無改変」を doc で宣言 | 第 4・第 5 のビルダを同じ流儀で足す（DD2） |
 | 同 | `WindowPositionRaw`（`Option<String>`×2・`#[non_exhaustive]`・`Default`・`Eq`）が生文字列転記型の先例 | `FontDecorationRaw`／`FontShadowRaw` はこの先例の写し |
 | 同 | `Font` は `#[non_exhaustive]`・非公開 3 フィールド・`Default` 無し。`Font::new` はワークスペース 50 呼出（`areka-emo-text/src`・同 `tests`・`areka/src/input_events`・`areka-parsers/src/balloon`） | `Font` には触れない。5.1 の証明が「型が無改変」で済む |
@@ -133,8 +133,8 @@ graph TB
 | DD2 | 取り出し口の見え方（研究 §7 ⑥） | **`FontDecorationRaw`／`FontShadowRaw` の 2 型を `BalloonModel` に additive で載せる**（研究の案 C）。`Font` は非接触 | `Font` に載せる案 B は `Font::new` の本体を触り、50 呼出の等価性を別途示す必要が出る。案 C は `with_cursor` と同じ形で 5.1 が構造で成立し、型の境界が下流 2 spec の分担（書体 10／影 4）と一致する（3.4・8.4）。呼び出しは `model.font_decoration_raw().bold()` と `model.cursor().style()` と同じ深さ |
 | DD3 | 値の型（研究 §7 ⑦） | **9 本すべて `Option<String>` の生文字列転記**（研究の B-1） | `get_scalar` は `font.bold,2`・`font.shadowcolor.r,300`・`font.bold,yes` を `None` へ落とし、宣言の事実が消える（2.5 違反）。`none`／数値／未指定の 3 値（2.6）は `None`／`Some("none")`／`Some("64")` でそのまま表せ、転記層が語彙 `none` を知らずに済む。3 値 enum（B-3）は転記層に語彙を持ち込む |
 | DD4 | 着地順の判定時点（研究 §7 ⑧） | **最終タスクで再測定する手順を固定**（下記「着地順の実測判定」）。今の実測は下流 2 spec とも `brief.md` のみ＝先着の見込み | 8.3 が「着地時点の実測」と定める。判定表を先に固定しておけば、実装者が思い込みで決めない |
-| DD5 | 「14 である」の判定（9.7・裁定済み） | `parse_tests.rs` に `FONT_BASE_KEYS: [&str; 14]` を持ち、**全 14 キーへ固有の値を入れて `parse()` を通し、各キーの値がアクセサから読み戻せることを判定**する。カタログとは突き合わせない | 要素数だけの判定は配列の型で恒真になる。「読み戻せる」を判定にすれば、写像を 1 本消すと赤・表に無いキーを足しても赤。正典側が増えても緑のまま（9.8） |
-| DD6 | テストの置き場 | **既存の `parse_tests.rs`・`model_tests.rs` へ追加**（新ファイル 0） | 着地後見込み ~640／~670 行で 1,000 行番人に ≥300 行の余裕。分割の閾値（900 行）に達したときだけ `<stem>_<テーマ>.rs` へ分割する |
+| DD5 | 「14 である」の判定（9.7・裁定済み） | `parse_tests.rs` に `FONT_BASE_KEYS: [&str; 14]` を持ち、**全 14 キーへ固有の値を入れて `parse()` を通し、各キーの値がアクセサから読み戻せることを判定**する。カタログとは突き合わせない | 要素数だけの判定は配列の型で恒真になる。「読み戻せる」を判定にすれば、写像を 1 本消す・別のキー名に取り違える・別の口へ繋ぎ間違えると赤。**捕まえないもの**: 表に無い 15 本目の写像を実装側へ足すこと（表を更新しない追加は緑のまま通る。実装側の後退ではないので 9.7 の範囲外）と、正典側の増加（9.8・意図して緑のまま） |
+| DD6 | テストの置き場 | **既存の `parse_tests.rs`・`model_tests.rs` へ追加**（新ファイル 0） | 着地後見込み ~640／~670 行で 1,000 行番人に ≥300 行の余裕。steering の目安は 1,000 行の 1 つだけ（中間の閾値は無い）。着地時の実測が 1,000 行に迫るときだけ `<stem>_<テーマ>.rs` へ分割する |
 | DD7 | 台帳の束名（7.5・裁定済み） | A11 の 10 項目を **「台詞の書体・読めるが正典どおりに描かれない」** で揃える。優先度 A11 据え置き。`implemented` 4 項目の束「台詞の書体・正典どおりに動く」（E66）は無改変 | 9 項目は「読めるが使う側が無い」、`font.name` は「読めて使うが正典どおりでない」。両方を包む名前でなければ 1 件に嘘が残る |
 | DD8 | 統合担当への申し送りの置き場（研究 §8） | 本書「下流への引き渡し」節＋完了時の PR 本文。`ukadoc-coverage-roadmap` の brief は触らない | 同ウェーブ並走の spec の文書へ書くと共有ファイルが生まれる（roadmap「W13 は共有ファイル 0」） |
 
@@ -430,7 +430,7 @@ areka-emo-text の draw::ResolvedFont::resolve は font.name・font.height・fon
 | `.kiro/specs/areka-P0-text-decoration-canon/brief.md` | Current State の descript 行・Desired Outcome・Approach の ⑷・Scope の In・Out of Boundary・分割の継ぎ目の裁定・棚卸⑬追記（計 7 か所の「13 キー」と、棚卸⑬追記の「残り 8 キー」） | 「13 キー」→「14 キー」、「残り 8 キー」→「残り 9 キー」。Current State の行に `font.outline` の注記を添える。`parse.rs:98-105` 等の行番号引用は触らない |
 | `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` | Scope の Out の行 | 「基底 13 キー」→「基底 14 キー」 |
 | `.kiro/steering/roadmap.md` | W13 干渉台帳の 1 行目（`text-decoration-canon` は分割後 `balloon/parse.rs` に触れない…） | 「残り 8 キー」→「残り 9 キー」 |
-| `doc/ukadoc-coverage/briefing-assets.md` | 是正候補の段 ⑵ | 見出しを「`areka-P0-balloon-font-descript-keys`——書体の欄の数（是正済み）」に改め、「何が合っていないか」を「説明書 4 本が 13 と書いていたが、正典の見出しは 14 種（`font.outline` の数え落とし）。是正後に数え直した結果、生きた説明書で 13 と書く箇所は **0**」、「誰が引き取るか」を「`areka-P0-balloon-font-descript-keys` が引き取り済み。台帳 14 項目の備考からも当該の一文を除いた」に書き換える。件数は是正後に `grep` で数え直した実測を書く（1.5） |
+| `doc/ukadoc-coverage/briefing-assets.md` | 是正候補の段 ⑵ | 見出しを「`areka-P0-balloon-font-descript-keys`——書体の欄の数（是正済み）」に改め、「何が合っていないか」を「brief 3 本が 12 か所で「13 キー」と書き（本仕様 4・`text-decoration-canon` 7・`text-align-shadow-canon` 1）、`text-decoration-canon` の brief と roadmap が 1 か所ずつ「残り 8 キー」と書いていたが、正典の見出しは 14 種（`font.outline` の数え落とし）。是正後に数え直した結果、生きた説明書で 13 と書く箇所は **0**」、「誰が引き取るか」を「`areka-P0-balloon-font-descript-keys` が引き取り済み。台帳 14 項目の備考からも当該の一文を除いた」に書き換える。上の是正前の件数は 2026-09-13 の `grep -c` の実測（段 ⑵ が今書いている「6 か所」は数え方が違う古い値）。是正後の件数も `grep` で数え直した実測を書き、引き算で導かない（1.5） |
 
 - 照合元はカタログの 14 行（1.4）。是正の途中で数が合わなくなったら見た目で数え直さず、カタログの行を数え、食い違いを研究記録に書く。
 - 履歴（`roadmap-history.md`）と完了済み（`completed/**`）は非改変。
@@ -538,6 +538,10 @@ areka-emo-text の draw::ResolvedFont::resolve は font.name・font.height・fon
 | M1 | `font_decoration_raw_accessors_read_components_and_default_is_all_none` | `new` で組んだ 5 成分がアクセサから読め、`Default` は全 `None` | 2.1, 2.4 |
 | M2 | `font_shadow_raw_accessors_read_components_and_default_is_all_none` | 同上（4 成分） | 2.2, 2.3, 2.4 |
 | M3 | `balloon_model_new_keeps_font_raw_extras_default_until_builders_replace_them` | `BalloonModel::new(...)` 直後は両型が `Default`。`with_font_decoration_raw`／`with_font_shadow_raw` で差し替わり、他のフィールド（`font()` 等）は不変 | 5.1 |
+
+### 着手前の前提（このワークツリーの実測・2026-09-13）
+
+- `vendors/pasta` submodule が未取得（`git submodule status` が `-` 始まり）で、**`cargo` がワークスペース解決に失敗し下の検査コマンドが 1 本も走らない**。実装の最初のタスクで `git submodule update --init vendors/pasta` を行い、続けて `cargo run -p ukadoc-survey -- check` の**着手前ベースライン（所見 0 件）**と `cargo test -p areka-parsers` の着手前の緑を確かめてから始める。ベースラインが赤なら、本仕様の責任範囲外の赤を切り分けてから着手する（同じ罠は `kanade-boot-talkdone-drop` でも踏んでいる）。
 
 ### 道具のテスト・検査（C4〜C6）
 

@@ -274,7 +274,7 @@
 
 #### 1,000 行番人に対する余裕（§8 持ち越し）
 - **Findings**: 着地後見込みは `parse.rs` ~220・`model.rs` ~650・`parse_tests.rs` ~640・`model_tests.rs` ~670。いずれも余裕 ≥300 行。番人は `crates/log-capture-kit/tests/file_length_guard_test.rs`（`LINE_LIMIT` 1,000）。
-- **Implications**: テーマ分割は不要。900 行に達したときだけ `<stem>_<テーマ>.rs` へ分ける（DD6）。
+- **Implications**: テーマ分割は不要。着地時の実測が 1,000 行に迫るときだけ `<stem>_<テーマ>.rs` へ分ける（DD6。steering の目安は 1,000 行の 1 つだけで、中間の閾値は無い——設計検証で「900 行」が独自の数値だと指摘され訂正）。
 
 #### 申し送りの置き場（§8 持ち越し）
 - **Findings**: `areka-P0-ukadoc-coverage-roadmap` は同じ W13 で並走中。その brief に追記すると共有ファイルが生まれる（roadmap「W13 は共有ファイル 0」）。`doc/ukadoc-coverage/README.md` は `report/summary.md` を統合担当の仕事と定めている。
