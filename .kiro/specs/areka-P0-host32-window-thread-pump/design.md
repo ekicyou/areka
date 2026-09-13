@@ -482,8 +482,8 @@ impl ParentMessageWindow {
 |---|---|---|---|
 | Test-A `on_idle_is_called_while_idle` | 何も送らず 2 秒以内に `idles ≥ 1` | 0 のまま → 赤（較正） | 5 s |
 | Test-B `helper_exit_during_idle_reports_shiori_down_once` | `exited=true` にして何も送らず、`on_down_rx.recv_timeout(2 s)` が `ShioriDown` を返す。その後 `idles` が **2 以上増える**まで待ち（上限内）、その上で 2 通目が来ないことを主張する——「来ない」は手空きの腕が回った証拠（`idles` の増分）を伴う | 1 通目が来ず → 赤（較正・4.10） | 5 s |
-| Test-C `requests_after_idle_are_served_in_order` | `idles ≥ 1` になるまで待って「手空きを挟んだ」証拠を得た後に GET を 3 件連投し、reply が到着順で id を echo する | 緑（非退行の見張り・較正対象外） | 5 s |
-| Test-E `no_liveness_report_after_clean_unload_even_when_idle` | `Unload` を往復させ `Unloaded` を得た後 `exited=true` にし、`idles` が **2 以上増える**まで待った上で（上限内）`ShioriDown` が来ない——手空きの腕が `unloaded` を見て黙る判断分岐を、腕が回った証拠つきで固定する | 緑（既存規約の手空き版・較正対象外） | 5 s |
+| Test-C `requests_after_idle_are_served_in_order` | `idles ≥ 1` になるまで待って「手空きを挟んだ」証拠を得た後に GET を 3 件連投し、reply が到着順で id を echo する | 赤（手空きの証拠待ちで上限に達する・4.10 の較正対象ではないが段階 1 では赤） | 5 s |
+| Test-E `no_liveness_report_after_clean_unload_even_when_idle` | `Unload` を往復させ `Unloaded` を得た後 `exited=true` にし、`idles` が **2 以上増える**まで待った上で（上限内）`ShioriDown` が来ない——手空きの腕が `unloaded` を見て黙る判断分岐を、腕が回った証拠つきで固定する | 赤（同上・段階 1 では手空きの証拠が得られない） | 5 s |
 
 診断文（4.6）: どのテストも assert の失敗文に「待った長さ・観測した回数（`idles`／`ShioriDown` の通数）・届いた／届かなかった・（送出があるものは）送出失敗の回数と所要・プロセス生存時間」を含め、数値を印字するだけの形にしない。「来ない」を主張するテスト（Test-B 後半・Test-E）は `idles_before`／`idles_after` を診断文に含め、手空きの腕が回った上で沈黙したことを示す（4.8——腕が一度も回らなくても緑になる形を退ける）。
 
@@ -504,7 +504,7 @@ impl ParentMessageWindow {
 
 実装を **2 段階**に分けることで「直す前の構造」でテストがコンパイルできる状態を作る:
 
-1. **段階 1（契約と部品）**: `on_idle`（既定実装）・`IDLE_INTERVAL`・`ShioriConnection::on_idle`・`pump_pending_messages`・Test-A〜F を入れる。受信ループは `rx.recv()` のまま。→ Test-A・B・D・F が赤（Test-C・E は緑）。この状態で `cargo test -p areka-kanade --lib idle_tests` と `cargo test -p areka-kanade --test kanade idle_pump_test` を走らせ、コマンド・所要・赤の診断文を `calibration.md` に写す。
+1. **段階 1（契約と部品）**: `on_idle`（既定実装）・`IDLE_INTERVAL`・`ShioriConnection::on_idle`・`pump_pending_messages`・Test-A〜F を入れる。受信ループは `rx.recv()` のまま。→ Test-A〜F の 6 本すべてが赤（Test-C・E は「手空きを挟んだ証拠」を待つ形ゆえ段階 1 では上限に達する——較正として要求されるのは Test-A・B・D・F の 4 本だが、記録には 6 本すべての結果を写す）。この状態で `cargo test -p areka-kanade --lib idle_tests` と `cargo test -p areka-kanade --test kanade idle_pump_test` を走らせ、コマンド・所要・赤の診断文を `calibration.md` に写す。
 2. **段階 2（待ちの形）**: `run_shiori_loop` を `recv_timeout` の形へ。→ 全緑。同じコマンドの緑の結果を併記する。
 
 `git stash` は使わない（ハーネス規律）。段階 1 をコミットしてから段階 2 を別コミットにする。段階 1 のコミットは**意図して赤のテストを含む**——`calibration.md` の冒頭にその旨とコミット ID を書き、完了検証がこれを退行と読まないようにする（squash マージで履歴からは消える）。
@@ -567,7 +567,7 @@ impl ParentMessageWindow {
 
 ### 較正（4.7）
 
-C7 の 2 段階。段階 1 で Test-A・B・D・F の赤（診断文つき）を `calibration.md` に残し、段階 2 で同コマンドの緑を併記する。
+C7 の 2 段階。段階 1 で Test-A〜F の赤（診断文つき・較正として要求されるのは Test-A・B・D・F）を `calibration.md` に残し、段階 2 で同コマンドの緑を併記する。
 
 ### 実機（5.x）
 
