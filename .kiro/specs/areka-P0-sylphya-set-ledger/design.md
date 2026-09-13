@@ -9,7 +9,7 @@
 
 **Users**: ゴースト作者は、正典が「設定できる」と定める 4 つの名前（`seriko.sticky-window`・`pause`・`playing`・`position`）への書き込みが「設定できない名前」として黙って捨てられなくなる（本リリースでは既存 21 項と同じ「受理し、予約済みである旨を記録し、値を反映しない」応答）。互換ベースウェアの保守者は、後続 4 spec が同じ台帳を取り合わずに済み、台帳の件数が機械で判定される状態を得る。
 
-**Impact**: 変更は `crates/areka-sylphya/src/vocab/dotted.rs` の配列 1 本の末尾追加と記録用の配列 1 本の新設、件数を固定する検査の更新、`doc/` 配下の文書 2 つ、および先送りを守る既存テストの走査対象名簿への登記に限る。実行時に見える挙動は、上記 4 つの末尾形の名前そのものへの書き込み分類（StoreWrite → RuntimeCommand・要件 1.3 が求める変化）を除き 1 件も変わらない。
+**Impact**: 変更は `crates/areka-sylphya/src/vocab/dotted.rs` の配列 1 本の末尾追加と記録用の配列 1 本の新設、件数を固定する検査の更新、`doc/` 配下の文書 2 つ、および先送りを守る既存テストの走査対象名簿への登記に限る。実行時に見える挙動は、上記 4 つの末尾形の名前そのものへの書き込み分類（StoreWrite → RuntimeCommand・要件 1.3 が求める変化）を除き 1 件も変わらない。この唯一の変化は完了報告にも利用者から見える言葉で 1 文載せる（要件 7.2・2026-09-13 改訂）。
 
 ### Goals
 - `SET_EFFECTIVE` を 21 → **25** にし、その数を 2 通りの数え方で文書化し、検査が不一致を失敗として判定する（要件 1・4）。
@@ -131,7 +131,7 @@ doc/
 ```
 
 ### Modified Files
-- `crates/areka-sylphya/src/vocab/dotted.rs` — ⑴ `SET_EFFECTIVE` 末尾に 4 要素（`seriko.sticky-window` の直上に `// ukadoc:` 1 行）、⑵ `pub const SOUND_PROP_NAMES: &[&str]`（18 要素・各要素直上に `// ukadoc:` 1 行）を `SET_EFFECTIVE` の後・`EXT_EVENT_GET` の前に新設、⑶ モジュール冒頭と `SET_EFFECTIVE`／`GENERIC_PROP_NAMES` の説明文を更新（件数 25・記録用の表の存在・汎用名の表の定義の改め・要件 10 の記録）、⑷ インラインテストの 21 を 25 へ（関数名を含む 4 箇所）、⑸ 兄弟テストの接続宣言 `#[cfg(test)] #[path = "dotted_set_ledger_tests.rs"] mod dotted_set_ledger_tests;`。
+- `crates/areka-sylphya/src/vocab/dotted.rs` — ⑴ `SET_EFFECTIVE` 末尾に 4 要素（`seriko.sticky-window` の直上に `// ukadoc:` 1 行）、⑵ `pub const SOUND_PROP_NAMES: &[&str]`（18 要素・各要素直上に `// ukadoc:` 1 行）を `SET_EFFECTIVE` の後・`EXT_EVENT_GET` の前に新設、⑶ モジュール冒頭と `SET_EFFECTIVE`／`GENERIC_PROP_NAMES` の説明文を更新（件数 25・記録用の表の存在・汎用名の表の定義の改め・要件 10 の記録）、⑷ インラインテストの 21 を 25 へ（関数名を含む 4 箇所）、⑸ 兄弟テストの接続宣言 `#[cfg(test)] #[path = "dotted_set_ledger_tests.rs"] mod set_ledger_tests;`。
 - `crates/areka-sylphya/src/vocab/dotted_set_ledger_tests.rs` — **新設**。Components 節「兄弟テスト」の 7 本。
 - `crates/areka-sylphya/src/ledger_key_determinism_tests.rs` — 基準群 C: `criterion_ledger_counts_exact` に `SOUND_PROP_NAMES.len() == 18` を追加、`criterion_set_effective_full_group_coverage` の説明文と `[&str; 21]` を 25 へ（4 項追加）。汎用名 17 の記述は**変えない**。
 - `crates/areka/src/placement/zorder_property_deferral_tests.rs` — 走査対象名簿への登記のみ（Components 節「走査対象名簿」）。t_zpd10／t_zpd30／t_zpd40 の本文は不変。
@@ -153,7 +153,7 @@ doc/
 | 2.1 | `zorder` をどの表にも載せない | SET_EFFECTIVE・SOUND_PROP_NAMES | t_zpd10（不変） | — |
 | 2.2 | `zorder` の分類・参照は変更前と同一 | —（`actor.rs`・`reader.rs` 非接触） | t_zpd20／t_zpd30（不変） | — |
 | 2.3 | t_zpd10／30／40 が成功 | 走査対象名簿・「探し語の禁止」 | `dotted.rs` の本文に `zorder` の綴りを書かない | — |
-| 2.4 | 判定 3 本の本文を変えない | 走査対象名簿 | 名簿の 3 箇所＋較正 1 箇所のみ | — |
+| 2.4 | 同ファイルへの変更は名簿・写し・較正行に限り、判定 3 本の本文を変えない | 走査対象名簿 | 「要件 2.4／9.2 との整合」節 | — |
 | 2.5 | 完了 spec 要件 13.5 と互換記録の既存行を改訂しない | COMPAT §8 追加行 | 既存行の直後に 1 行追加 | — |
 | 3.1 | サウンド 18 葉を正準語彙として保持 | SOUND_PROP_NAMES | 配列 18 要素 | — |
 | 3.2 | 族ごと 1 表・3 葉は双方に載る | SOUND_PROP_NAMES・兄弟テスト T2 | 集合検査 | — |
@@ -182,7 +182,7 @@ doc/
 | 6.4 | 他の行は不変 | property.toml 2 行 | 差分は 2 エントリに閉じる | — |
 | 6.5 | 空き 0 を示せる | property.toml 2 行 | 完了時の 1 回の実数え（数え方を明記） | — |
 | 7.1 | 参照結果 0 件変化 | —（`reader.rs` 非接触） | 兄弟テスト T4（18 葉 NotFound） | — |
-| 7.2 | 既存 21 項と自由な名前の書込 0 件変化 | 兄弟テスト T4・T5 | 構造＋literal | — |
+| 7.2 | 既存 21 項と、登記 4 名以外のあらゆる名前の書込 0 件変化 | 兄弟テスト T4・T5 | 構造＋literal（4 名の変化は 1.3 の側・Impact に開示） | — |
 | 7.3 | 利用者に見える状態 0 件変化 | —（値の導出を足さない） | t_zpd50（不変） | — |
 | 7.4 | 赤の切り分け | 「既存テストへの影響」節 | 赤になる箇所の事前列挙 | — |
 | 7.5 | 2.3／3.6 のテストを更新側に置かない | 「既存テストへの影響」節 | t_zpd10／12／30／40 は不変（t_zpd11 は名簿の写し） | — |
@@ -337,7 +337,7 @@ doc/
 | Intent | 本機能が足した項目ごとの分類・件数・構造を literal の期待値で判定する |
 | Requirements | 1.3, 1.4, 3.2, 3.3, 3.4, 3.5, 3.7, 4.6, 4.8, 4.9, 4.10, 5.1, 5.4, 7.1, 7.2 |
 
-**接続**: `dotted.rs` 末尾に `#[cfg(test)] #[path = "dotted_set_ledger_tests.rs"] mod dotted_set_ledger_tests;`（`structure.md` の兄弟テスト規律。`actor.rs` の `#[path = "actor_tests.rs"]` と同型）。テスト側は `use super::*;`（`SET_EFFECTIVE`・`SOUND_PROP_NAMES`）と `use crate::{classify_set, SetClass, SylphyaCore, SylphyaMsg, Effect, AskerId, AskerContext, SylphyaReader, SharedMirror, MirrorImage, DottedResolution};` で足りる。
+**接続**: `dotted.rs` 末尾に `#[cfg(test)] #[path = "dotted_set_ledger_tests.rs"] mod set_ledger_tests;`（`structure.md` の兄弟テスト規律＝ファイル名 `<stem>_<モジュール名>.rs`・宣言は `mod <モジュール名>;`。stem `dotted`・モジュール名 `set_ledger_tests`。`actor.rs` の `#[path = "actor_tests.rs"]` と同型）。テスト側は `use super::*;`（`SET_EFFECTIVE`・`SOUND_PROP_NAMES`）と `use crate::{classify_set, SetClass, SylphyaCore, SylphyaMsg, Effect, AskerId, AskerContext, SylphyaReader, SharedMirror, MirrorImage, DottedResolution};` で足りる。
 
 **期待値は literal**: 分類の期待値を実装や表から導出せず、テストの中に文字として書く（先送りテストと同じ規律）。
 
@@ -347,9 +347,9 @@ doc/
 | T2 | `sound_set_leaves_appear_in_both_tables` | `pause`／`playing`／`position` の 3 つが `SOUND_PROP_NAMES` と `SET_EFFECTIVE` の双方に載る。残り 15 は `SET_EFFECTIVE` に**載らない**（載る個数 == 3 を判定） |
 | T3 | `newly_registered_set_keys_are_runtime_command_reserved` | 4 項（`seriko.sticky-window`・`pause`・`playing`・`position`）それぞれで `classify_set == RuntimeCommand` かつ `SylphyaCore::new().apply(Set{..})` の効果列が `vec![Effect::RuntimeCommandReserved{..}]` に等しい |
 | T4 | `record_only_leaves_keep_their_previous_classification` | literal 期待値表: `duration`・`error`・`id`・`loop`・`preload` と `meta.*` 8 葉 → `StoreWrite`（13 件）／`name`・`path` → `NotSettable`（2 件）。実キー形 `currentghost.sound(bgm).pause`・`currentghost.sound.index(0).playing`・`currentghost.sound(bgm).meta.album` → `NotSettable`（根 `currentghost` による・3 件。**括弧の中に `.` を含む要素名は使わない**——`parse_dotted` は `.` で分割してから括弧を読むため `sound(bgm.mp3)` は解釈不能＝StoreWrite に落ちて対照にならない）。18 葉すべてと実キー形 2 つを `SylphyaReader::resolve_dotted_str` で引くと `NotFound`（対照として `currentghost.name` を 1 つ載せた鏡像で値が返ることを同居させる） |
-| T5 | `classifier_source_does_not_reference_the_record_only_table` | `include_str!("../actor.rs")` の本文に `SOUND_PROP_NAMES` が **0 回**、`GENERIC_PROP_NAMES` が 1 回以上（較正）。失敗メッセージに「仕分けが読む表へ変えるなら要件 3.3／7.2 の再検討と `areka-P0-property-query-channels` の裁定が要る」と書く |
+| T5 | `classifier_source_does_not_reference_the_record_only_table` | `include_str!` で `../actor.rs` と、その兄弟テスト 3 本（`../actor_tests.rs`・`../actor_actor_integration_tests.rs`・`../actor_actor_criteria_cage.rs`。`structure.md`「構造テストは兄弟テストファイルも走査対象に列挙する」の規律）を読み、4 本すべてで `SOUND_PROP_NAMES` が **0 回**、`actor.rs` で `GENERIC_PROP_NAMES` が 1 回以上（較正）。失敗メッセージに「仕分けが読む表へ変えるなら要件 3.3／7.2 の再検討と `areka-P0-property-query-channels` の裁定が要る」と書く |
 | T6 | `exactly_19_anchored_ukadoc_notes_and_no_page_url_line` | `include_str!("dotted.rs")` の行のうち、`trim_start` して `// ukadoc: ` で始まる行がちょうど **19**、うち `list_propertysystem.html#` を含む行が 19、アンカー無しのページ URL（`.html` で終わる）の行が **0** |
-| T7 | `set_effective_first_21_entries_are_unchanged_in_order` | `SET_EFFECTIVE[..21]` のキー列が literal の 21 要素と**順序込みで**一致（要件 1.6 の「順序」を既存の集合検査では見ていないため） |
+| T7 | `set_effective_entries_before_this_spec_are_unchanged_in_order` | 変更前の全キーを literal のスライス `before: &[&str]` に書き、`SET_EFFECTIVE[..before.len()]` のキー列が**順序込みで**一致（要件 1.6 の「順序」を既存の集合検査では見ていないため）。固定長 `[&str; 21]` も関数名の数も使わない＝件数の写しを増やさない |
 
 **Implementation Notes**
 - Integration: `SetClass` は `crate::actor::SetClass`（`lib.rs` が re-export）。`Effect::RuntimeCommandReserved { asker, key, value }` の形は既存 `actor_tests.rs`／t_zpd31 と同じ。
@@ -370,11 +370,11 @@ doc/
 2. `const SCANNED_VOCAB_TABLES: [&str; 5]` → `[&str; 6]`、末尾に `"SOUND_PROP_NAMES"`。
 3. `fn vocabulary_tables()` に `("vocab::dotted::SOUND_PROP_NAMES", SOUND_PROP_NAMES.to_vec())` を末尾へ追加（t_zpd12 ① が名簿と実際に読む表の一致を判定するため、名簿と対で動かす。順序も名簿と同じ末尾）。
 4. t_zpd11 の `assert_eq!(tables.len(), 5, …)` → `6`、`expected_members: [(&str, &str); 5]` → `6`（末尾に `("vocab::dotted::SOUND_PROP_NAMES", "duration")` を追加＝新表も本物を運んでいることの較正）。
-5. `vocabulary_tables()` の doc コメント「5 本」「8 本」→「6 本」「9 本」（数を書いた説明文の写し）。
+5. 数を書いた説明文の写し **9 箇所**をすべて更新する（要件 4.7「1 箇所だけ古いまま残る状態を作らない」）——「5 本」8 箇所（モジュール冒頭の doc・`vocabulary_tables()` の doc 4 箇所・`vocabulary_entries_containing()` の doc・t_zpd10 の doc・t_zpd11 の doc）→「6 本」、「8 本」1 箇所（`vocabulary_tables()` の doc「公開 const は現物 8 本」）→「9 本」。t_zpd10／t_zpd11 の `///` は判定の本文ではなく説明文なので要件 9.2 に触れない。実装後に `grep -n '5 本\|8 本'` が 0 件であることを確かめる。
 
 **変えない箇所**: t_zpd10・t_zpd12・t_zpd20・t_zpd21・t_zpd30・t_zpd31・t_zpd40・t_zpd50 の本文、`NON_PROPERTY_VOCAB_CONSTS`、探し語 `DEFERRED_NEEDLE`。
 
-**要件 9.2 との整合**: 要件 9.2 が「変更しない」と定めるのは**先送りを守る判定そのもの 3 本（t_zpd10／t_zpd30／t_zpd40）の中身**。上記 1〜5 はすべて「走査対象名簿」とその写し（t_zpd11 の本数と較正行は名簿の側の記述であって判定ではない）。t_zpd11 の `5` は要件 7.4 の「台帳が古い前提を固定していた」側（要件 7.5 が更新側に置くなと定める 2.3／3.6 のテストは t_zpd10／30／40 と t_zpd12 であり、t_zpd11 はどちらにも当たらない）。
+**要件 2.4／9.2 との整合**: 要件 2.4 と 9.2 が「変更しない」と定めるのは**先送りを守る判定そのもの 3 本（t_zpd10／t_zpd30／t_zpd40）の中身**（要件 2.4 の文言は 2026-09-13 の設計ディスカッションで 9.2 に揃えた＝同ファイルへの変更を名簿・写し・較正行に限る）。上記 1〜5 はすべて「走査対象名簿」とその写し（t_zpd11 の本数と較正行は名簿の側の記述であって判定ではない）。t_zpd11 の `5` は要件 7.4 の「台帳が古い前提を固定していた」側（要件 7.5 が更新側に置くなと定める 2.3／3.6 のテストは t_zpd10／30／40 と t_zpd12 であり、t_zpd11 はどちらにも当たらない）。
 
 ### 網羅調査台帳
 
@@ -396,7 +396,7 @@ doc/
 - `status = "vocabulary-only"`（sticky-window）は変えない。本 spec 後もこの行は「語彙表に載るが値は導出されない」であり、記述として正しい。
 - サウンド 18 行の「語彙表だけを触る spec: areka-P0-property-query-channels」は**要件 6.4 のとおり触らない**。指し先の古さは COMPAT §8 の追加行で記録の上から上書きする（下記）。
 
-**要件 6.5 の数え方**（完了報告に書く・新しい検査は作らない＝開発者裁定 2026-09-11）: `grep -c '^owner = ""$' doc/ukadoc-coverage/ledger/property.toml` が変更前 2・変更後 0。対照として `grep -c '^owner = "areka-P0-' …` が 180 行以上を拾うこと（母数 0 の恒真を避ける）。恒久的な見張りの置き場所は `crates/ukadoc-survey/src/check/`＝`areka-P0-ukadoc-coverage-roadmap` へ申し送る。
+**要件 6.5 の数え方**（完了報告に書く・新しい検査は作らない＝開発者裁定 2026-09-11）: `grep -c '^owner = ""\r\?$' doc/ukadoc-coverage/ledger/property.toml`（Git Bash。台帳は CRLF なので `\r` を許容する形で書く——`$` が `\r` の前で当たらない道具では母数 0 の恒真になる）が変更前 2・変更後 0。対照として `grep -c '^owner = "areka-P0-' …` が 180 行以上を拾うこと（母数 0 の恒真を避ける）。恒久的な見張りの置き場所は `crates/ukadoc-survey/src/check/`＝`areka-P0-ukadoc-coverage-roadmap` へ申し送る。
 
 **Validation**: 台帳を触ったら `cargo test -p ukadoc-survey` を走らせる（`doc/ukadoc-coverage/README.md` の規律）。`owner` の中身は検査対象外なので赤にはならないが、TOML の構造崩れは拾う。
 
@@ -449,10 +449,10 @@ doc/
 | 21 | `ledger_key_determinism_tests.rs` `let required: [&str; 21]` | → 25 |
 | 21 | `dotted.rs` `SET_EFFECTIVE` の doc「件数 21」 | → 25 |
 | 17 | 上記 2 ファイルの 8 箇所・`structure.md`・他 spec brief | **不変** |
-| 5／8 | `zorder_property_deferral_tests.rs` の名簿本数と公開 const 本数（t_zpd11 の literal・doc コメント） | → 6／9 |
+| 5／8 | `zorder_property_deferral_tests.rs` の名簿本数と公開 const 本数（t_zpd11 の literal 2 箇所・doc コメント「5 本」8 箇所・「8 本」1 箇所） | → 6／9（計 11 箇所） |
 | 18 | 新設（T1・基準群 C） | 新規 |
 
-`SET_EFFECTIVE` の doc 冒頭「件数 21」も写しに数える（要件 4.7 の実測 6 箇所に加えて 1 箇所・計 7 箇所）。実装時に `grep -n '21' crates/areka-sylphya/src/vocab/dotted.rs crates/areka-sylphya/src/ledger_key_determinism_tests.rs` で残りが 0 であることを確かめる。
+`SET_EFFECTIVE` の doc 冒頭「件数 21」も写しに数える（要件 4.7 の実測 6 箇所に加えて 1 箇所・計 7 箇所）。実装時の全数確認は**現在の件数を表す形**に絞る: `grep -nE 'len\(\), 21|; 21\]|has_21_|件数 21|全 21 項' crates/areka-sylphya/src/vocab/dotted.rs crates/areka-sylphya/src/ledger_key_determinism_tests.rs` が 0 件、かつ較正として同じ探し語の `25` 版が 5 件以上。「既存 21 ＋ 4 = 25」のような**過去の数を語る記述**と T7 の `[..before.len()]` は写しではないので残す（素の `grep '21'` は設計自身が書く「既存 21」で必ず赤になるため使わない）。
 
 ## 既存テストへの影響（要件 7.4／7.5 の切り分け・事前列挙）
 
@@ -499,7 +499,7 @@ t_zpd40 が赤になる唯一の経路は、本機能が `crates/areka-sylphya/s
 1. `cargo test -p ukadoc-survey`（README の規律）。
 2. `cargo run -p ukadoc-survey -- check` を実装後に 1 回（`SourceUrlNotInCatalog` 0 件を確かめる）。
 3. `cargo run -p ukadoc-survey -- evidence` を実装の**前後**で 1 回ずつ走らせ、property の証拠件数 2 → 21 を完了報告に記録する（報告書は再生成しない）。
-4. `grep -c '^owner = ""$' doc/ukadoc-coverage/ledger/property.toml` ＝ 0（対照 `^owner = "areka-P0-` ≥ 180）。
+4. `grep -c '^owner = ""\r\?$' doc/ukadoc-coverage/ledger/property.toml` ＝ 0（Git Bash・対照 `^owner = "areka-P0-` ≥ 180）。
 5. `git diff --stat` が File Structure Plan の 6 ファイルに閉じている（要件 9.1）。`git diff doc/COMPAT_ARCHITECTURE.md` が追加 1 行のみ（要件 8.2）。`git diff doc/ukadoc-coverage/ledger/property.toml` が 2 エントリ・各 2 行の置換に閉じている（要件 6.4）。
 
 ### 実機
