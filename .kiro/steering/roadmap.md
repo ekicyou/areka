@@ -75,7 +75,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 4 | `sakura-tag-word-boundary` | バグ（完了契約 13.1 の穴） | S〜M | **W13** | `sakura-bare-tag-lexer` ✅ | − | ⚪ |
 | 5 | `charset-canon` | 正典（里々ゴーストが 1 体も動かない・surfaces.txt 2 箇所は実バグ） | M | **W13** | なし | ○（⑵ 交渉のみ） | ⚪ |
 | 6 | `ukadoc-coverage-roadmap` | 調査（**M2 ロードマップの生成器**・依存ツリー最長） | M | **W13** | survey 4 本 ✅・e2e ✅＝**両段とも解禁済み** | ○ | ⚪ |
-| 7 | `text-decoration-canon`（⑴ 基盤＋font 10＋default/disable） | 正典（文字装飾 4 本の先頭ゲート） | L | **W13** | bvc ✅・cursor-tag ✅・line-height ✅ | ○（design） | ⚪ |
+| 7 | `completed/text-decoration-canon`（⑴ 基盤＋font 10＋default/disable） | 正典（文字装飾 4 本の先頭ゲート） | L | **W13** | bvc ✅・cursor-tag ✅・line-height ✅ | ○（design） | ✅ 完了（2026-09-13） |
 | 8 | `sylphya-set-ledger`（channels ⑶・**09-11 起票**） | 台帳（三重所有の台帳側） | S | **W13** | なし | − | ⚪ |
 | 9 | `balloon-font-descript-keys`（decoration ⑶・**09-11 起票**） | 正典（転記のみ） | S | **W13** | なし | − | ⚪ |
 | 10 | `surfaces-basepos` | 正典（完全独立） | S | W13 任意／W14 | なし | − | ⚪ |
