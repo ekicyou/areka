@@ -1,5 +1,5 @@
 use super::*;
-use crate::layout::{LineRect, PositionedGlyph, PositionedLine};
+use crate::layout::{FixedMetrics, LineRect, PositionedGlyph, PositionedLine};
 use crate::look::StyleId;
 use crate::state::ChoiceSpan;
 
@@ -278,8 +278,7 @@ fn derive_horizontal_uses_char_width_inline_and_line_block_band() {
         &segs,
         WritingMode::HorizontalTb,
         &region,
-        HIT_BAND,
-        NO_OFFSET,
+        &bands_of(HIT_BAND, NO_OFFSET),
     );
     assert_eq!(
         rows,
@@ -308,8 +307,7 @@ fn derive_horizontal_subtracts_validrect_origin_to_canvas_local() {
         &segs,
         WritingMode::HorizontalTb,
         &region,
-        HIT_BAND,
-        NO_OFFSET,
+        &bands_of(HIT_BAND, NO_OFFSET),
     );
     assert_eq!(
         rows[0].rect,
@@ -332,7 +330,7 @@ fn derive_vertical_assigns_inline_to_y_and_block_to_x() {
         // 縦書き列矩形: x 帯 377..387（block・font 10）・y 全長 0..20。
         let lines = [prow(377.0, 0.0, 387.0, 20.0)];
         let segs = [seg(0, 1, (5.0, 15.0))]; // 行内軸（y）の文字幅範囲。
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, HIT_BAND, NO_OFFSET);
+        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(HIT_BAND, NO_OFFSET));
         assert_eq!(
             rows[0].rect,
             LineRect {
@@ -361,8 +359,7 @@ fn derive_multiple_segments_yield_rows_in_input_order() {
         &segs,
         WritingMode::HorizontalTb,
         &region,
-        HIT_BAND,
-        NO_OFFSET,
+        &bands_of(HIT_BAND, NO_OFFSET),
     );
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[0].ordinal, 0);
@@ -408,8 +405,7 @@ fn derive_empty_segments_yield_no_rows() {
             &[],
             WritingMode::HorizontalTb,
             &region,
-            HIT_BAND,
-            NO_OFFSET
+            &bands_of(HIT_BAND, NO_OFFSET),
         )
         .is_empty()
     );
@@ -427,8 +423,7 @@ fn derive_empty_range_segment_produces_no_row() {
             &segs,
             WritingMode::HorizontalTb,
             &region,
-            HIT_BAND,
-            NO_OFFSET
+            &bands_of(HIT_BAND, NO_OFFSET),
         )
         .is_empty(),
         "空/逆順範囲はヒット行を生まない"
@@ -447,8 +442,7 @@ fn derive_out_of_range_line_index_is_skipped() {
             &segs,
             WritingMode::HorizontalTb,
             &region,
-            HIT_BAND,
-            NO_OFFSET
+            &bands_of(HIT_BAND, NO_OFFSET),
         )
         .is_empty()
     );
@@ -598,8 +592,7 @@ fn hit_row_rect_matches_canvas_local_highlight_derivation() {
         std::slice::from_ref(&segment),
         WritingMode::HorizontalTb,
         &region,
-        HIT_BAND,
-        NO_OFFSET,
+        &bands_of(HIT_BAND, NO_OFFSET),
     );
     // ハイライト描画が使う canvas-local 矩形を from_layout と同一手順で独立算出:
     // 行矩形 block 近端（top）＋帯（HIT_BAND）＋セグメント inline 範囲（i0/i1）を validrect 原点差引き。
@@ -614,6 +607,98 @@ fn hit_row_rect_matches_canvas_local_highlight_derivation() {
     assert_eq!(
         rows[0].rect, expected_highlight,
         "ヒット矩形とハイライト矩形は同一 canvas-local 座標（単一導出）"
+    );
+}
+
+// ── 行ごとの帯（line_bands・要件 11.5 のブロック軸） ──
+
+/// 行ごとに丈が違う——帯の基準は**その行に置かれた最も大きい em**（行矩形のブロック軸寸）で、
+/// アクターに 1 つの既定の大きさではない。
+///
+/// 較正: 基準を全行同じ値へ固定する誤り（`\f[height,40]` の選択肢の帯が既定のまま）に戻すと、
+/// 2 行目の丈が 1 行目と同じになって赤。
+#[test]
+fn line_bands_scale_with_each_line_own_em() {
+    // 1 行目 em 10（rect 0..10）・2 行目 em 40（rect 12..52）＝`\f[height,40]` を含む行。
+    let lines = [prow(0.0, 0.0, 100.0, 10.0), prow(0.0, 12.0, 100.0, 52.0)];
+
+    let bands = line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics);
+
+    assert_eq!(bands.len(), 2, "行数と 1:1");
+    // FixedMetrics: 行ボックス丈 = em × 1.33・ピッチ = em + 2 で頭打ち。
+    assert_eq!(bands[0].extent, 12.0, "em 10 → clamp(13.3, 10, 12) = 12");
+    assert_eq!(bands[1].extent, 42.0, "em 40 → clamp(53.2, 40, 42) = 42");
+    assert!(
+        bands[1].extent > bands[0].extent * 3.0,
+        "大きい字の行の帯が既定の行のまま（要件 11.5 のブロック軸が効いていない）"
+    );
+}
+
+/// 縦書きでは行矩形の**行内幅ではなく列幅**（x 軸）が基準になる。
+///
+/// 較正: 軸の読み替えを落として横書きと同じ `bottom - top` を採ると、
+/// 列幅 40 の行が丈 200 相当の帯になって赤。
+#[test]
+fn line_bands_read_the_block_axis_in_vertical_modes() {
+    // 縦書き: ブロック軸は x（列幅 40）・行内軸は y（200）。
+    let lines = [prow(0.0, 0.0, 40.0, 200.0)];
+
+    let bands = line_bands(&lines, WritingMode::VerticalRl, &FixedMetrics);
+
+    assert_eq!(
+        bands[0].extent, 42.0,
+        "列幅 40 が基準（行内軸 200 ではない）"
+    );
+}
+
+/// 装飾の無い行は従来と 1 画素も変わらない（非退行）——行矩形のブロック軸寸が既定の大きさに
+/// 等しいので、アクターに 1 つの値を配っていた頃と同じ帯になる。
+#[test]
+fn line_bands_match_the_actor_wide_value_when_no_line_is_decorated() {
+    const EM: f32 = 10.0;
+    let lines = [prow(0.0, 0.0, 100.0, EM), prow(0.0, 12.0, 100.0, 12.0 + EM)];
+    let metrics = FixedMetrics;
+
+    let bands = line_bands(&lines, WritingMode::HorizontalTb, &metrics);
+
+    let before = highlight_band_extent(EM, metrics.line_box_height(EM), metrics.line_pitch(EM));
+    let before_offset = highlight_band_offset(metrics.line_box_height(EM), before);
+    for band in &bands {
+        assert_eq!(band.extent, before);
+        assert_eq!(band.offset, before_offset);
+    }
+}
+
+/// 塗る帯とクリックを受ける帯は**同じ列**から出る（R3.3 の単一導出をブロック軸でも保つ）。
+///
+/// 較正: `derive_hit_rows` と `decorate_canvas` へ別々の列を渡す実装に戻すと、
+/// 焼き込まれた丈とヒット矩形の丈が食い違って赤。
+#[test]
+fn the_hit_band_and_the_painted_band_come_from_the_same_line_list() {
+    let lines = [prow(0.0, 0.0, 100.0, 10.0), prow(0.0, 12.0, 100.0, 52.0)];
+    let bands = line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics);
+    let segments = [seg(0, 0, (0.0, 50.0)), seg(1, 1, (0.0, 50.0))];
+    let region = region(0, 0, 100, 100);
+
+    let rows = derive_hit_rows(
+        &lines,
+        &segments,
+        WritingMode::HorizontalTb,
+        &region,
+        &bands,
+    );
+
+    assert_eq!(rows.len(), 2);
+    for (row, band) in rows.iter().zip(bands.iter()) {
+        assert_eq!(
+            row.rect.bottom - row.rect.top,
+            band.extent,
+            "ヒット矩形のブロック軸寸が行ごとの帯と一致しない"
+        );
+    }
+    assert!(
+        rows[1].rect.bottom - rows[1].rect.top > rows[0].rect.bottom - rows[0].rect.top,
+        "大きい字の選択肢のクリック範囲が広がっていない（要件 11.5）"
     );
 }
 
@@ -665,8 +750,7 @@ fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
         std::slice::from_ref(&segment),
         WritingMode::HorizontalTb,
         &region,
-        band,
-        NO_OFFSET,
+        &bands_of(band, NO_OFFSET),
     );
     assert_eq!(
         rows[0].rect.top, 0.0,
@@ -689,7 +773,7 @@ fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
         let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
         let segs = [seg(0, 1, (5.0, 15.0))];
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, 13.0, NO_OFFSET);
+        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(13.0, NO_OFFSET));
         assert_eq!(
             rows[0].rect,
             LineRect {
@@ -749,8 +833,7 @@ fn derive_hit_rows_shifts_horizontal_band_down_by_offset() {
         std::slice::from_ref(&segment),
         WritingMode::HorizontalTb,
         &region,
-        band,
-        offset,
+        &bands_of(band, offset),
     );
     assert_eq!(
         (rows[0].rect.top, rows[0].rect.bottom),
@@ -772,7 +855,7 @@ fn derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis() {
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
         let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
         let segs = [seg(0, 1, (5.0, 15.0))];
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, 13.0, 2.0);
+        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(13.0, 2.0));
         assert_eq!(
             rows[0].rect,
             LineRect {
@@ -805,8 +888,7 @@ fn adjacent_rows_bands_touch_but_do_not_overlap() {
         &segs,
         WritingMode::HorizontalTb,
         &region,
-        band,
-        offset,
+        &bands_of(band, offset),
     );
     assert_eq!((rows[0].rect.top, rows[0].rect.bottom), (4.0, 34.0));
     assert_eq!((rows[1].rect.top, rows[1].rect.bottom), (34.0, 64.0));

@@ -24,12 +24,12 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::choice::{
-    ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, highlight_band_extent,
-    highlight_band_offset, to_window_physical,
+    ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, line_bands,
+    to_window_physical,
 };
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
-use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
+use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{
     BALLOON_NAME_PLACEHOLDER, ImagePx, ScaleContract, TextRegion, inline_axis_name,
 };
@@ -852,21 +852,15 @@ fn present_actor(
     // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
     let spans = actor_state.choices();
     let segments = annotate_lines(&lines, spans);
-    // ハイライト帯／ヒット帯のブロック軸寸（**単一の源**・R3.3）: 実 font metrics の行ボックス丈
-    // （descent 込み）を行送りピッチで頭打ちにした値を 1 度だけ決め、装飾（描画帯）とヒット導出
-    // （照会帯）の両方へ同一値を配る。em ボックス丈（font.height）で切ると和文フォントの descent
-    // インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
-    let line_box_height = render.metrics.line_box_height(resolved.font.height);
-    let band_extent = highlight_band_extent(
-        resolved.font.height,
-        line_box_height,
-        render.metrics.line_pitch(resolved.font.height),
-    );
-    // 帯を行ボックスの中央へ寄せる量（**同じく単一の源**・R13.1/13.2）: 帯の丈が行送りで頭打ちに
-    // なって行ボックス丈より短いとき、余りを上下へ等分して帯を内側へ寄せる。近端へ揃えたままだと
-    // 帯が上に余りながら下でインクを切る（実機の目視「色反転位置が 2 ドット程上すぎる」）。
-    // 行ボックス丈が em ボックス丈に等しい既定フォントでは 0 ＝ 従来と 1 画素も変わらない。
-    let band_offset = highlight_band_offset(line_box_height, band_extent);
+    // ハイライト帯／ヒット帯のブロック軸寸と寄せ量を**行ごとに 1 度だけ**決め（**単一の源**・
+    // R3.3/R13.1/R13.2）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
+    // metrics の行ボックス丈（descent 込み）を行送りピッチで頭打ちにした値——em ボックス丈で切ると
+    // 和文フォントの descent インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
+    // 基準の em は**その行に置かれた文字のうち最も大きい em**（行矩形のブロック軸寸・要件 7.9）で、
+    // アクターに 1 つの既定の大きさではない——既定固定だと `[height,40]` の選択肢が表示 42 画素でも
+    // 帯 14 画素になり、文字の上下がクリックできない（要件 11.5）。装飾の無い行では行矩形のブロック軸寸が
+    // 既定の大きさに等しいので、従来と 1 画素も変わらない。
+    let bands = line_bands(&lines, resolved.mode, &render.metrics);
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。
     let hover = runtime.choice_hover.get(actor).copied().flatten();
     // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
@@ -879,8 +873,7 @@ fn present_actor(
         resolved.font.color,
         &resolved.region,
         resolved.mode,
-        band_extent,
-        band_offset,
+        &bands,
     );
     // 装飾入りの描画の入口（要件 14.2・既定だけの行は従来と同一の呼出列）。
     let changed = render.executor.render_styled(
@@ -901,16 +894,9 @@ fn present_actor(
         // （新規のスクロール可視判定は追加しない・6.3）。NoChange フレームはこの更新を丸ごと省き
         // 直前スナップショットを不変のまま保つ。
         let committed = render.executor.scroll_state().committed;
-        // 帯は装飾（描画）へ渡したのと**同一の band_extent／band_offset**——描画とヒットの
+        // 帯は装飾（描画）へ渡したのと**同一の行ごとの列**——描画とヒットの
         // 座標整合（R3.3/R13.2）。
-        let hit_rows = derive_hit_rows(
-            &lines,
-            &segments,
-            resolved.mode,
-            &resolved.region,
-            band_extent,
-            band_offset,
-        );
+        let hit_rows = derive_hit_rows(&lines, &segments, resolved.mode, &resolved.region, &bands);
         // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
         let snapshot: Vec<ChoiceHitRow> = hit_rows
             .iter()

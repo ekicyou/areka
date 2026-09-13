@@ -28,21 +28,24 @@
 //! `font.` 定義群と同じ」に従う（要件 4.5）。混色の式は 1 か所——[`crate::color::mix_disabled`]
 //! だけが実装点で、本モジュールはそれを呼ぶ（式を写さない）。
 //!
-//! ## 残り 8 キーの「口」（要件 4.3／4.7）
+//! ## 残りのキーの「口」（要件 4.3／4.7）
 //!
 //! `font.bold`／`font.italic`／`font.underline`／`font.strike`／`font.outline`／
 //! `font.shadowcolor.*`／`font.shadowstyle`／`disable.font.*` はバルーン定義側がまだ読めない
 //! （読み取りの所有は `areka-P0-balloon-font-descript-keys`）。その口は
-//! **[`TextLook`] の各フィールド**と **[`LookLayers::from_balloon`] の引数列**で、
-//! 読めるようになったときは
+//! [`LookLayers::from_balloon`] の `font_overrides`／`disable_overrides` の 2 引数で、
+//! 1 件は `\f` と**同じ形のトークン列**である——`font.bold,1` なら `["bold", "1"]`、
+//! `disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。
 //!
-//! 1. `from_balloon` に引数を 1 つ足し、
-//! 2. 組み立てている [`TextLook`] の当該フィールドへ入れる（`disable.font.*` は
-//!    [`LookLayers::disable`] 側の当該フィールドを上書きする）
+//! **キーごとに引数を増やさない**のが肝で、読めるキーが 8 個でも 20 個でも `from_balloon`
+//! の形は変わらず、下流の配線は「読んだキーをトークンの組にして渡す」だけで済む。値の綴りの
+//! 解釈（真偽値の別名・色名・相対の大きさ）も台本の `\f` と同じ [`apply_font_tag`] を通るので
+//! 1 か所に揃う。層の組み方（無効表示は色だけ混色・他は既定と同じ・要件 4.5）も、番号の
+//! 畳み込みも変わらない——差し込みは複製の**後**に載るので、`disable.font.*` を 1 つも
+//! 渡さなければ従来どおり「色以外は既定と同じ」が保たれる。
 //!
-//! だけで効く。層の組み方（無効表示は色だけ混色・他は既定と同じ）も、番号の畳み込みも、
-//! 呼び手も変わらない。いま値が無い項目は正典の既定（すべて無効）のままで、
-//! 「読めていないから既定」という状態を `look_tests.rs` §3 が明示的に固定している。
+//! いま値が無い項目は正典の既定（すべて無効）のままで、「読めていないから既定」という状態を
+//! `look_tests.rs` §3 が明示的に固定している。
 
 use crate::color::{ColorSpec, mix_disabled, parse_color};
 
@@ -169,16 +172,22 @@ impl LookLayers {
     /// - `background` はバルーンの背景色で、無効表示の色を導くためだけに使う
     ///   （`disable.color = mix_disabled(default.color, background)`・要件 4.6）。
     ///
-    /// 残り 8 キーはこの引数列へ足すだけで効く（モジュールの説明「残り 8 キーの口」）。
+    /// - `font_overrides`／`disable_overrides` はバルーン定義の残りのキーを差し込む口
+    ///   （要件 4.3／4.7）。1 件は `\f` と**同じ形のトークン列**——`[0]` がキー、`[1..]` が
+    ///   値の列で、`disable.font.bold,1` なら `["bold", "1"]` を渡す。項目を 1 つも
+    ///   名指ししないので、読めるキーが 8 個でも 20 個でも本関数の形は変わらない
+    ///   （モジュールの説明「残りのキーの口」）。
     pub fn from_balloon(
         name_candidates: Vec<String>,
         height: f32,
         color: (u8, u8, u8),
         background: (u8, u8, u8),
         cursor_text: (u8, u8, u8),
+        font_overrides: &[Vec<String>],
+        disable_overrides: &[Vec<String>],
     ) -> LookLayers {
         let canon = TextLook::ukadoc_default();
-        let default = TextLook {
+        let mut default = TextLook {
             name: if name_candidates.is_empty() {
                 canon.name
             } else {
@@ -192,17 +201,47 @@ impl LookLayers {
             color,
             ..canon
         };
+        apply_overrides(&mut default, cursor_text, font_overrides);
         // 無効表示は色だけが違う——項目を列挙せず既定層から複製するので、
-        // 後続仕様が TextLook へ項目を足しても「色以外は既定と同じ」が自動で保たれる。
-        let disable = TextLook {
+        // 後続仕様が TextLook へ項目を足しても「色以外は既定と同じ」が自動で保たれる
+        // （要件 4.5）。キーごとの違いは下の差し込みだけが作る（要件 4.7）。
+        let mut disable = TextLook {
             color: mix_disabled(default.color, background),
             ..default.clone()
         };
+        apply_overrides(&mut disable, cursor_text, disable_overrides);
         LookLayers {
             default,
             disable,
             cursor_text,
         }
+    }
+}
+
+/// バルーン定義のキーを 1 層へ差し込む（[`LookLayers::from_balloon`] の口の実体）。
+///
+/// 台本の `\f` と同じ [`apply_font_tag`] を通すので、値の綴りの解釈（真偽値の別名・色名・
+/// 相対の大きさ）が台本側と 1 か所に揃い、項目を列挙しない（要件 4.3／4.7／10.4）。
+///
+/// `default`／`disable` の語（`\f[color,default]` の類）は**差し込みの前の層**を指す——
+/// バルーン定義に書かれた値どうしが互いを参照して順序に依存する事態を作らないためで、
+/// そもそも正典の descript にこの語は現れない。
+///
+/// 綴り誤りは黙って落とさず、その 1 件を飛ばして残りを差し込む——記録はバルーン定義を
+/// 読む側（`areka-P0-balloon-font-descript-keys`）が行を特定できる位置で出すのが正しく、
+/// ここでは行番号もファイル名も持たないからである。
+fn apply_overrides(layer: &mut TextLook, cursor_text: (u8, u8, u8), overrides: &[Vec<String>]) {
+    if overrides.is_empty() {
+        return;
+    }
+    let base = LookLayers {
+        default: layer.clone(),
+        disable: layer.clone(),
+        cursor_text,
+    };
+    for tokens in overrides {
+        let args: Vec<&str> = tokens.iter().map(String::as_str).collect();
+        let _ = apply_font_tag(layer, &base, &args);
     }
 }
 
@@ -215,6 +254,8 @@ impl Default for LookLayers {
             (0, 0, 0),
             (255, 255, 255),
             (0, 0, 0),
+            &[],
+            &[],
         )
     }
 }

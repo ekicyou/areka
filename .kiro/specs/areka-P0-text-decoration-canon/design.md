@@ -47,7 +47,7 @@
 - `crates/areka-emo-present`・`crates/areka-emo-atlas`（背景色の導出はアトラスの公開 API を読むだけ）。
 - 1,000 行の見張りの例外表（`crates/log-capture-kit/tests/file_length_guard_test.rs`・`OVER_LIMIT_ALLOWED` 11 件）。
 - 選択肢の hover の規則（帯の丈・塗り・文字色の差し替え）と当たり帯のブロック軸寸。本設計は行内軸（送り幅）だけを見た目込みにする。
-  - **先送りの引受先（2026-09-13 登記）**: `areka-P0-emo-text-canon-residue`（編集集合に `actor.rs` を含む・brief に登記済み）。**残る症状**——`actor.rs::present_actor` は `highlight_band_extent` の 3 引数すべてをバルーン既定の `resolved.font.height` で作り、`layout_styled` が行内最大の em で伸ばした行矩形を見ない。`\f[height,40]` を含む選択肢は表示が約 42 画素でも当たり帯とハイライト帯は約 14 画素で、行矩形の上端側だけがクリックできる。**要件 11.5 が名指しした症状の一部が残る**（同要件の字句は「送り幅」＝行内軸で、そちらは見た目込みになっている）。あわせて要件 3.5「装飾は hover の判定と当たり判定を変えない」との緊張の裁定も引受先が行う。
+  - **2026-09-13 是正済み（開発者裁定「両方とも今この spec で直す」）**: `actor.rs::present_actor` は帯を**行ごと**に引き直す（`choice.rs::line_bands`——基準はその行に置かれた最も大きい em＝行矩形のブロック軸寸）。`[height,40]` を含む選択肢の当たり帯とハイライト帯が表示と同じ丈になり、**要件 11.5 は行内軸・ブロック軸の両方で満たされる**。要件 3.5「装飾は hover の判定と当たり判定を変えない」は hover の**表示規則**（文字色の差し替えと帯の塗りが装飾より優先されること）を述べたもので、帯の**寸法**を装飾込みから導く要件 11.5 とは衝突しない（行内軸は当初からそう実装されていた）。塗る帯とクリックを受ける帯は同じ列から出る（R3.3 の単一導出）。檻＝`choice_tests.rs` の `line_bands` 4 本（純粋）と`actor_choice_contract_tests.rs::a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame`（本番の 1 フレーム経路）。
 - `\_l` の単位 `em`／`lh`／`%` の係数（既定の見た目の大きさのまま。装飾で変えない）。
 
 ### Allowed Dependencies
@@ -288,11 +288,11 @@ stateDiagram-v2
 | 3.9 | 純粋層で更新と適用 | `look.rs`・`state_decoration.rs`・`layout_styled.rs`（`windows` 非依存） | — | — |
 | 4.1 | 既定の見た目＝5 キー＋ukadoc 既定 | `LookLayers::from_balloon`・`ResolvedFont::resolve` | — | — |
 | 4.2 | `parse.rs`・`model.rs` に触れない | `resolve` は `model.font()` の 5 キーだけ読む | — | — |
-| 4.3 | 残り 8 キーの差し込み口 | `TextLook` の各フィールド＝口・`LookLayers::from_balloon` の引数列に足すだけ | — | — |
+| 4.3 | 残り 8 キーの差し込み口 | `TextLook` の各フィールド＝口・`LookLayers::from_balloon` の `font_overrides`／`disable_overrides`（`` と同じトークン列・キーごとに引数を増やさない）に足すだけ | — | — |
 | 4.4 | `FontDisableSeam` を実体へ置換 | `ResolvedFont.looks.disable` | — | — |
 | 4.5 | 色以外は既定と同じ | `LookLayers::from_balloon`（`disable = { color: mix, ..default }`） | — | — |
 | 4.6 | 無効表示の色＝shell の式・1 定数 | `color::mix_disabled`・`DEFAULT_BALLOON_BACKGROUND`・`BalloonScopeAssets.background_color` | `resolve_with_background`・`set_balloon_background` | — |
-| 4.7 | 無効表示の口 | `LookLayers.disable` の各フィールド | — | — |
+| 4.7 | 無効表示の口 | `LookLayers::from_balloon` の `disable_overrides`（`` と同じトークン列を複製の**後**に載せる——項目を列挙せず要件 4.5 の「色以外は既定と同じ」も保つ） | `look_tests.rs::disable_overrides_change_only_the_disable_layer` | — |
 | 4.8 | 定義の有無 × 各項目のテスト | `look_tests`・`draw_format_metrics_tests` の改訂・`actor_decoration_tests` | — | — |
 | 5.1 | `true`／`1` で付ける | `parse_switch`・`apply_font_tag`・`apply_font_ranges`（`SetFontWeight`／`SetFontStyle`／`SetUnderline`／`SetStrikethrough`） | `Switch::On` | Flow 2, 3 |
 | 5.2 | `false`／`0` で外す | 同上 | `Switch::Off` | Flow 2 |
@@ -378,6 +378,7 @@ stateDiagram-v2
 |---|---|---|---|---|---|
 | `Instruction::Font`＋解読の腕 | parsers | `\f` を転記層で受理する | 2.1, 2.2, 2.6, 2.7, 2.8 | lexer の `Token::Tag`／`Bare`（P0） | State |
 | `FONT_TAG_CARRIER`＋compile の腕 | sakura | `\f` を再生時間 0 で運ぶ | 2.3, 2.4, 14.4 | `CueCommand::command_carrier`（P0） | Event |
+| `choice.rs` | emo-text 純粋 | 行ごとのハイライト帯／ヒット帯（`LineBand`・`line_bands`）——基準はその行の最大 em。塗る帯とクリックを受ける帯へ同じ列を配る | 11.5 | `layout`（P0） | Service |
 | `look.rs` | emo-text 純粋 | 見た目の型・2 層・装飾表・`\f` の値の状態機械 | 3.9, 4.1, 4.3, 4.5, 4.7, 5.x, 6.x, 7.1〜7.7, 9.5, 9.6, 10.1, 10.2, 10.4 | `color.rs`（P0） | Service, State |
 | `color.rs` | emo-text 純粋 | 色指定の解析と無効表示の混色 | 4.6, 8.1〜8.6, 8.8〜8.10 | なし | Service |
 | `state_decoration.rs` | emo-text 純粋 | スコープごとの装飾状態・番号の配管・戻す操作・警告の 1 度化 | 2.5, 3.1〜3.5, 3.7, 3.8, 6.3, 10.3, 10.5, 10.7, 13.1, 13.4 | `look.rs`（P0）・`state.rs` の腕（P0） | Service, State |
@@ -512,6 +513,8 @@ impl LookLayers {
     pub fn from_balloon(
         name_candidates: Vec<String>, height: f32, color: (u8, u8, u8),
         background: (u8, u8, u8), cursor_text: (u8, u8, u8),
+        // 残りのキーの口（要件 4.3／4.7）——1 件が `` と同じトークン列（[0]=キー・[1..]=値）。
+        font_overrides: &[Vec<String>], disable_overrides: &[Vec<String>],
     ) -> LookLayers;
 }
 impl Default for LookLayers { /* ukadoc 既定＋背景 白＋cursor_text 黒 */ }
@@ -1035,7 +1038,7 @@ log-first（`logging.md`）を保つ。純粋層は失敗を「値の不変＋�
 ### §C 隣接 brief への相互登記（1 行ずつ）
 
 - `areka-P0-text-align-shadow-canon`: 「親 spec は `align`／`valign`／`shadowcolor`／`shadowstyle` を `ActorTextState::unowned_vocab()` に保持している（表示不変）。実装は `TextLook` にフィールドを足して `apply_font_tag` の `Unowned` から腕へ移すだけで、戻す操作には自動で含まれる」。
-- `areka-P0-balloon-font-descript-keys`: 「既定の見た目の口は `LookLayers::from_balloon` の引数列と `TextLook` の各フィールド。残り 8 キーは `ResolvedFont::resolve_with_background` の中で `model.font()` から読んで渡すだけ（`disable.font.*` は `looks.disable` の当該フィールドを上書き）」。
+- `areka-P0-balloon-font-descript-keys`: 「口は `LookLayers::from_balloon` の `font_overrides`／`disable_overrides` の 2 引数で、1 件は `` と**同じ形のトークン列**（`font.bold,1` → `["bold","1"]`）。残りのキーは `ResolvedFont::resolve_with_background` の中で `model.font()` から読み、キーごとにトークンの組を作って渡すだけ——**キーが何個増えても `from_balloon` の形は変わらない**」。
 - `areka-P0-choice-marker-styling`: 「`cursor*` は `unowned_vocab()` に保持。`default.cursor*` の色源は `LookLayers.cursor_text`。戻す操作は `TextLayerState::reset_decoration`」。
 - `areka-P0-anchor-tag-canon`: 「`anchor*`・`anchor.font.color` は `unowned_vocab()` に保持。`color,default.anchor*` は `default` 扱い（`Note::AnchorColorAsDefault`）の腕を差し替える」。
 - `areka-P0-balloon-lifecycle-events`: 「`\x` は `TextLayerState::reset_decoration(None)`（クリック後にスコープが `\0` へ戻るのと同時）を呼ぶ。`\x[noclear]` は呼ばない」。

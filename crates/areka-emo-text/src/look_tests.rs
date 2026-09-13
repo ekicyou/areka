@@ -32,6 +32,8 @@ fn balloon_layers() -> LookLayers {
         (10, 20, 30),
         (200, 210, 220),
         (7, 8, 9),
+        &[],
+        &[],
     )
 }
 
@@ -179,7 +181,15 @@ fn a_balloon_definition_fills_each_readable_item() {
 /// フォント名の定義が無い（候補列が空）ときは正典の既定名へ落ちる（R4.1）。
 #[test]
 fn an_absent_font_name_falls_back_to_the_ukadoc_default_name() {
-    let layers = LookLayers::from_balloon(Vec::new(), 20.0, (10, 20, 30), (0, 0, 0), (0, 0, 0));
+    let layers = LookLayers::from_balloon(
+        Vec::new(),
+        20.0,
+        (10, 20, 30),
+        (0, 0, 0),
+        (0, 0, 0),
+        &[],
+        &[],
+    );
     assert_eq!(
         layers.default.name,
         vec![UKADOC_DEFAULT_FONT_NAME.to_owned()]
@@ -192,8 +202,15 @@ fn an_absent_font_name_falls_back_to_the_ukadoc_default_name() {
 #[test]
 fn a_non_positive_font_height_falls_back_to_twelve() {
     for height in [0.0, -3.0, f32::NAN, f32::INFINITY] {
-        let layers =
-            LookLayers::from_balloon(Vec::new(), height, (0, 0, 0), (255, 255, 255), (0, 0, 0));
+        let layers = LookLayers::from_balloon(
+            Vec::new(),
+            height,
+            (0, 0, 0),
+            (255, 255, 255),
+            (0, 0, 0),
+            &[],
+            &[],
+        );
         assert_eq!(
             layers.default.height, 12.0,
             "大きさ {height} が既定 12 へ落ちていない"
@@ -246,9 +263,18 @@ fn the_background_moves_the_disable_color_and_nothing_else() {
         (255, 255, 255),
         (255, 255, 255),
         (1, 2, 3),
+        &[],
+        &[],
     );
-    let on_black =
-        LookLayers::from_balloon(Vec::new(), 12.0, (255, 255, 255), (0, 0, 0), (1, 2, 3));
+    let on_black = LookLayers::from_balloon(
+        Vec::new(),
+        12.0,
+        (255, 255, 255),
+        (0, 0, 0),
+        (1, 2, 3),
+        &[],
+        &[],
+    );
     assert_eq!(on_white.default, on_black.default);
     assert_eq!(on_white.cursor_text, on_black.cursor_text);
     assert_eq!(
@@ -261,6 +287,86 @@ fn the_background_moves_the_disable_color_and_nothing_else() {
         (170, 170, 170),
         "白文字 × 黒背景は (0 + 510) / 3 = 170"
     );
+}
+
+/// 残りのキーの口——`font_overrides` が既定層へ差し込まれ、無効表示層へも複製で伝わる（R4.3）。
+///
+/// 較正——`from_balloon` が `font_overrides` を無視する実装なら 4 本とも既定（偽・12）で赤。
+#[test]
+fn font_overrides_fill_the_default_layer_and_carry_into_the_disable_layer() {
+    let layers = LookLayers::from_balloon(
+        Vec::new(),
+        12.0,
+        (0, 0, 0),
+        (255, 255, 255),
+        (0, 0, 0),
+        &[
+            vec!["bold".to_owned(), "1".to_owned()],
+            vec!["underline".to_owned(), "true".to_owned()],
+        ],
+        &[],
+    );
+    assert!(layers.default.bold, "font.bold が既定層へ入る");
+    assert!(layers.default.underline, "font.underline が既定層へ入る");
+    assert!(layers.disable.bold, "無効表示層へも複製で伝わる");
+    assert!(layers.disable.underline);
+}
+
+/// 無効表示だけのキーごとの上書き——既定層は動かず、無効表示層だけが変わる（**R4.7 の口**）。
+///
+/// 正典の `disable.font.(フォント定義)` に対応する。要件 4.5 の「色以外は既定と同じ」は
+/// **差し込みが無いときの既定の姿**であって、明示された項目はここで上書きできる。
+///
+/// 較正——`disable_overrides` を無視する実装なら 2 本とも赤。差し込みを複製の**前**に
+/// 置いてしまう実装（複製が上書きを消す）でも同じ 2 本が赤になる。
+#[test]
+fn disable_overrides_change_only_the_disable_layer() {
+    let layers = LookLayers::from_balloon(
+        Vec::new(),
+        12.0,
+        (0, 0, 0),
+        (255, 255, 255),
+        (0, 0, 0),
+        &[],
+        &[
+            vec!["italic".to_owned(), "1".to_owned()],
+            vec!["height".to_owned(), "9".to_owned()],
+        ],
+    );
+    assert!(layers.disable.italic, "disable.font.italic が効く");
+    assert_eq!(layers.disable.height, 9.0, "disable.font.height が効く");
+    assert!(!layers.default.italic, "既定層は動かない");
+    assert_eq!(layers.default.height, 12.0, "既定層は動かない");
+}
+
+/// 差し込みが 1 件も無ければ従来どおり——無効表示層は色以外が既定層と一致する（R4.5 の非退行）。
+#[test]
+fn no_overrides_keeps_the_disable_layer_a_color_only_copy() {
+    let layers = balloon_layers();
+    let with_default_color = TextLook {
+        color: layers.default.color,
+        ..layers.disable.clone()
+    };
+    assert_eq!(with_default_color, layers.default);
+}
+
+/// 綴り誤りの 1 件は残りの差し込みを止めない（黙って全部落とさない）。
+#[test]
+fn a_malformed_override_does_not_block_the_others() {
+    let layers = LookLayers::from_balloon(
+        Vec::new(),
+        12.0,
+        (0, 0, 0),
+        (255, 255, 255),
+        (0, 0, 0),
+        &[
+            vec!["height".to_owned(), "そんな値".to_owned()],
+            vec!["bold".to_owned(), "1".to_owned()],
+        ],
+        &[],
+    );
+    assert_eq!(layers.default.height, 12.0, "読めない大きさは既定のまま");
+    assert!(layers.default.bold, "後続の差し込みは効く");
 }
 
 // ------------------------------------------------------------------ §4 装飾の表

@@ -281,7 +281,15 @@ impl ResolvedFont {
             height,
             color,
             effects: TextEffects::default(),
-            looks: LookLayers::from_balloon(candidates, height, color, background, cursor_text),
+            looks: LookLayers::from_balloon(
+                candidates,
+                height,
+                color,
+                background,
+                cursor_text,
+                &[],
+                &[],
+            ),
         }
     }
 }

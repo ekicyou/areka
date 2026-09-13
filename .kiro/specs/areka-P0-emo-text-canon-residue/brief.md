@@ -49,10 +49,8 @@
 
 ## Constraints
 
-- 編集集合: `crates/areka-emo-text/src/{writing,region,layout,actor}.rs`（＋兄弟テスト）・`crates/areka-parsers/src/balloon/{parse,model}.rs`・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 編集集合: `crates/areka-emo-text/src/{writing,region,layout}.rs`（＋兄弟テスト）・`crates/areka-parsers/src/balloon/{parse,model}.rs`・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
 - fixture `crates/pilot/examples/shiori-host-32/fixtures/emo2/` は無改変。
 - 規模 M・要件定義は Opus で足りる（裁定は 15 の禁則文字集合の出典 1 件）。
 
-
-> **📌 2026-09-13 先送りの引受 その 2（`areka-P0-text-decoration-canon` 着地・最終検証の裁定）**——**選択肢の当たり帯のブロック軸寸が装飾を見ない**。親 spec の design が Out of Boundary に「当たり帯のブロック軸寸。本設計は行内軸（送り幅）だけを見た目込みにする」と宣言した項目で、引受先が空だったものを本 spec が引き受ける。症状＝`crates/areka-emo-text/src/actor.rs::present_actor` が `choice.rs::highlight_band_extent` の 3 引数（`font_height`・`line_box_height`・`line_pitch`）すべてをバルーン既定の `resolved.font.height` で作り、`layout_styled.rs::LineHeights::close` が行内最大の em で伸ばした行矩形を見ない。同じ値が `choice.rs::derive_hit_rows`（当たり帯）と `decorate_canvas`（ハイライト帯）の両方へ配られるので、`\f[height,40]` を含む選択肢は表示が約 42 画素でも帯は約 14 画素になり、行矩形の上端側だけがクリックできる。行内軸（`choice.rs::annotate_lines` の `inline_range`）は装飾込みなので、**要件 11.5 が名指しした症状のうちブロック軸の分だけが残っている**。**裁定が先に要る**——親 spec の要件 3.5 が「装飾は hover の判定と当たり判定を変えない」と述べており、11.5／7.10 の「当たり判定に反映する」と緊張関係にある。どちらを採るかを決めてから直すこと。現状を固定する述語は 0 本（`ChoiceHitRow`／`hit_rows` に触れるテスト 13 本のうち装飾に触れるものは 0 本）。
 
