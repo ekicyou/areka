@@ -102,7 +102,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 ## 棚卸⑬の仮裁定（2026-09-11・開発者が覆すまで有効）
 
-1. **`currentghost.seriko.zorder` の三重所有**＝**値の導出は `zorder-property` 単独**・**SET 台帳行（`seriko.zorder`／`seriko.sticky-window`）は `sylphya-set-ledger`**・**`currentghost-property-tree` は `seriko.*` から `zorder` を除外**（完了 spec `ukadoc-survey-property` のブリーフィング「三重所有」節の案 甲と同じ）。3 brief に登記済み。
+1. ~~**`currentghost.seriko.zorder` の三重所有**＝値の導出は `zorder-property` 単独・**SET 台帳行（`seriko.zorder`／`seriko.sticky-window`）は `sylphya-set-ledger`**・`currentghost-property-tree` は `seriko.*` から `zorder` を除外~~ → **2026-09-13 開発者裁定で `zorder` のみ改訂**。`zorder` は**台帳行も値の導出もともに `zorder-property`** が持つ（語彙表への先行登記は行わない＝完了 spec `areka-P0-scope-zorder-pinning` 要件 13.5 の先送りを維持し、`crates/areka/src/placement/zorder_property_deferral_tests.rs` の 3 本を緑のまま残す）。`seriko.sticky-window` の台帳行が `sylphya-set-ledger` である点と、`currentghost-property-tree` が `seriko.*` から `zorder` を除外する点は**据え置き**。したがって `sylphya-set-ledger` の SET 有効群は 21→**25**（26 ではない）。
 2. **M2 予約群は brief を起票しない**（SSTP・FMO・DirectSSTP・Plugin/HEADLINE・ネットワーク更新・ゴースト選択 UI・多重ゴースト・NAR・pasta native x64・ベクトル描画・owner-draw メニュー・バルーン美観配置・回転テキスト）。生成器は `ukadoc-coverage-roadmap` 第二段（W13）→ `/kiro-discovery` 再入で先頭ウェーブ分だけ just-in-time 起票（spec 工場化しない）。
 3. **e2e §13.1 行 3**（初回起動限定の位置調整が 2 回目以降で既定へ戻るか）は spec を切らず据え置き。次の実機一周（`present-gpu-transform-scale` の k≠1 サインオフ）で目視する。
 
