@@ -459,3 +459,138 @@
 - **引き渡し表の突き合わせ**: 取り出し口 15 行（`font()`・`font_decoration_raw()` の 5 口・`font_shadow_raw()` の `color_r`／`color_g`／`color_b`／`style`・`disable_font()` の `font`／`decoration_raw`／`shadow_raw`）は `crates/areka-parsers/src/balloon/model.rs` の公開メソッドと綴り・型が一致した。表の側を 3 点だけ直した——`font.height` の値の形に「`u32` として読めるものだけ（`-` 付き・`%` 付きは `None`、`+4` は `Some(4)`＝相対指定ではなく絶対値として届く）」を足した（§14）、配線欄の `font_overrides`／`disable_overrides` を実在の `balloon_overrides::overrides(..).font`／`.disable` と受け口の引数名の対応として書き直した、既存配線の関数名を `resolve_with_background`（候補列を組む実体）にした。対象外 0・既定値の適用先（書体 10 は `TextLook::ukadoc_default`・影 4 は `text-align-shadow-canon`）・`shadowstyle` の語彙 2 語と SSP 2.5.27 は表に残っていることを確かめた。
 - 影まわりへの申し送り文は設計書 C7 の該当項目で確定した（PR 本文へ写す）。
 - **§14 の訂正**: §14 は `+4` も `None` へ落ちると書いていたが誤り。`get_scalar::<u32>` は `str::parse::<u32>` で、先頭の `+` を受理する（`"+4"` → `Some(4)`）。`disable.font.height,+4` は配線でトークン `"4"` になり、受け口には絶対値として届く。相対・百分率の分岐に入らないという §14 の結論は変わらない（トークンは整数の `to_string()` なので `+`・`-`・`%` を持たない）。§14 の該当文はその場で直した。
+
+## 18. 全数の最終検証（2026-09-17・タスク 6.2）
+
+本ブランチ HEAD `6f67653e`（ローカル `main` は `a726174a`）。cargo は 1 本ずつ直列に走らせ、出力は切り詰めずにスクラッチのファイルへ保存し、`Running` 行の本数と `test result:` 行の全行を集計した（`| tail`・先頭 N 行の切り出しは使っていない）。
+
+### 18.1 検証コマンド（緑・所見 0 件）
+
+| コマンド | exit | `Running` 行 | `test result:` 行 | passed | failed | ignored |
+|---|---|---|---|---|---|---|
+| `cargo test -p areka-parsers` | 0 | 1（＋Doc-tests） | 2 | 455 | 0 | 0 |
+| `cargo test -p areka-emo-text` | 0 | 15（＋Doc-tests） | 16 | 856 | 0 | 2 |
+| `cargo test -p ukadoc-survey` | 0 | 4（＋Doc-tests） | 5 | 725 | 0 | 0 |
+| `cargo run -p ukadoc-survey -- check` | 0 | 1 | —（テストではない） | — | — | — |
+| `cargo test -p log-capture-kit --test file_length_guard_test` | 0 | 1 | 1 | 6 | 0 | 0 |
+
+- `check` の出力は「食い違い 0 件」・証拠のある項目 274 件（§12 のベースライン 263 件から、タスク 2.4 の正典 URL コメント 11 件ぶん増えた）。
+- `areka-emo-text` の ignored 2 件は `viewbox_draw::png_dump_tests::diag_dump_budoux_wordwrap_pngs`／`diag_dump_horizontal_pngs`（理由文「PNG ダンプ（ファイル副作用・目視診断用・明示実行のみ）」）で、本仕様の差分に含まれない既存の明示実行用テストである。
+- 件数の推移: `areka-parsers` 435（§12）→ 455、`areka-emo-text` 843（§12）→ 856、`ukadoc-survey` 725 → 725。
+
+### 18.2 1,000 行の上限（上限内）
+
+番人テスト（上記）は 6 passed / 0 failed。本仕様が触ったファイルの行数（`wc -l`）:
+
+| ファイル | 行数 | 上限までの残り |
+|---|---|---|
+| `crates/areka-parsers/src/balloon/parse_tests.rs` | 922 | 78 |
+| `crates/areka-parsers/src/balloon/model_tests.rs` | 790 | 210 |
+| `crates/areka-parsers/src/balloon/model.rs` | 774 | 226 |
+| `crates/areka-emo-text/src/look.rs` | 771 | 229 |
+| `crates/areka-emo-text/src/draw.rs` | 750 | 250 |
+| `crates/areka-emo-text/src/balloon_overrides_tests.rs` | 262 | 738 |
+| `crates/areka-parsers/src/balloon/parse.rs` | 252 | 748 |
+| `crates/areka-emo-text/src/balloon_overrides.rs` | 112 | 888 |
+
+最も伸びた `parse_tests.rs` は 922 行で上限に届いていない。分割は不要と判断した（次にこのファイルへテストを足す spec は残り 78 行を意識すること）。
+
+### 18.3 台帳 15 項目の全数突き合わせ（15 行一致）
+
+`python`（`tomllib`）で `doc/ukadoc-coverage/ledger/assets.toml` から id が `ukadoc:descript_balloon:font.`／`disable.font.` で始まる項目を全数取り出し（ちょうど 15 件）、`status`／`owner`／`priority` と備考の「束: 〜（」の束名を、設計書 C5「項目別の変更表」から組んだ期待値と機械で比べた。
+
+| 項目 | `status` | `owner` | `priority` | 束名 | 変更表との照合 |
+|---|---|---|---|---|---|
+| `font.color.r` | `implemented` | `areka-P0-text-decoration-canon` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
+| `font.color.g` | `implemented` | `areka-P0-text-decoration-canon` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
+| `font.color.b` | `implemented` | `areka-P0-text-decoration-canon` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
+| `font.height` | `implemented` | `areka-P0-text-decoration-canon` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
+| `font.bold` | `implemented` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
+| `font.italic` | `implemented` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
+| `font.strike` | `implemented` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
+| `font.underline` | `implemented` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・正典どおりに動く | 一致 |
+| `font.outline` | `vocabulary-only` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.shadowcolor.r` | `vocabulary-only` | `areka-P0-text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.shadowcolor.g` | `vocabulary-only` | `areka-P0-text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.shadowcolor.b` | `vocabulary-only` | `areka-P0-text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.shadowstyle` | `vocabulary-only` | `areka-P0-text-align-shadow-canon` | `A5` | 台詞の書体・名前だけ受けて使わない | 一致 |
+| `font.name` | `degraded` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・読めるが正典どおりに描かれない | 一致 |
+| `disable.font.*` | `degraded` | `areka-P0-balloon-font-descript-keys` | `A5` | 台詞の書体・読めるが正典どおりに描かれない | 一致 |
+
+- 照合結果: 15／15 一致・期待値にあって台帳に無い項目 0・台帳にあって期待値に無い項目 0。
+- 新設の束名「台詞の書体・読めるが正典どおりに描かれない」の数（台帳 4 本の全項目の備考を `束: ` 付きで検索・生の文字列の出現回数も併記）:
+
+| 台帳 | その束名を持つ項目 | 文字列の出現回数 |
+|---|---|---|
+| `ledger/assets.toml` | 2（`font.name`・`disable.font.*`） | 2 |
+| `ledger/property.toml` | 0 | 0 |
+| `ledger/sakura-script.toml` | 0 | 0 |
+| `ledger/shiori.toml` | 0 | 0 |
+| 計 | **2**（どちらも本仕様の項目） | 2 |
+
+### 18.4 「13 キー」「残り 8 キー」の全数検索（0 件）
+
+数え方は `grep -o '<語>' <ファイル> | wc -l`（0 件で終了コード 1 にならない形）。零の数え方が効いていることの対照として「14 キー」も同じ形で数えた。
+
+| ファイル | 「13 キー」 | 「残り 8 キー」 | 対照「14 キー」 |
+|---|---|---|---|
+| `.kiro/specs/areka-P0-balloon-font-descript-keys/brief.md` | 0 | 0 | 4 |
+| `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` | 0 | 0 | 1 |
+| `.kiro/steering/roadmap.md` | 0 | 0 | 0 |
+| `doc/ukadoc-coverage/ledger/assets.toml` | 0 | 0 | 1 |
+| **4 ファイル計** | **0** | **0** | — |
+
+- **例外（零の判定の対象外）**: `doc/ukadoc-coverage/briefing-assets.md` は「13 キー」7・「残り 8 キー」5。タスク 5.4 で是正済みの記録に書き換えた段（「何が合っていないか」「どうやって測ったか」「誰が引き取るか」）が、是正前の言い回しと数え方のコマンドを引用として含むためで、生きた記述の残りではない。
+- 参考: 完了済み `.kiro/specs/completed/areka-P0-text-decoration-canon/brief.md` は「13 キー」7・「残り 8 キー」1（着地時点の記録として残す・ブリーフィングの記載「計 8 か所」と一致）。
+
+### 18.5 宣言していないバルーンの見た目が変わらないこと（0 件・無改変）
+
+- フィクスチャの `descript.txt` は `crates/areka-emo-text/examples/fixtures/**` に 2 本・`crates/pilot/examples/shiori-host-32/fixtures/**` に 5 本、計 7 本（`find -iname descript.txt`）。
+- 各ファイルで `^\s*(disable\.)?font\.(bold|italic|outline|strike|underline|shadowcolor|shadowstyle)`（大小無視）は **0**、`^\s*disable\.font` は **0**。対照として同じ数え方の `^\s*font\.` はバルーンの 5 本で各 5・ゴースト／シェルの 2 本で 0（数え方そのものは効いている）。
+- `git diff main -- crates/areka-emo-text/tests | wc -l` は 0。`git diff main --name-only -- crates/areka-emo-text/tests crates/areka-emo-text/examples crates/pilot` も 0 件＝既存の描画比較テストとフィクスチャは無改変。
+
+### 18.6 較正の痕跡と既存テストの期待値（較正 3 通り記録済み・元に戻っている・緩めていない）
+
+- 較正の赤の記録: 較正①（転記層の写像 1 本）は §13、較正②（配線の旧実装へ戻す）と較正③（事前検証の `warn!` を外す）は §15。③の後半（土台の差し替え）が赤を作れない理由は §14。
+- 痕跡: `git diff`（作業ツリー）0 行・`git diff --cached` 0 行・`git status --porcelain` 0 件。較正で壊したファイル（`parse.rs`・`draw.rs`・`balloon_overrides.rs`）はいずれも HEAD のまま。
+- `git diff main -- crates/areka-parsers crates/areka-emo-text` の削除行（`---` を除く `-` 行）は 26 行。全行を分類した:
+
+| ファイル | 削除行 | 分類 |
+|---|---|---|
+| `areka-parsers/src/balloon/mod.rs` | 2 | `pub use` の並び替え（新しい型を足して rustfmt が折り返し直した） |
+| `areka-parsers/src/balloon/model_tests.rs` | 2 | `use` の並び替え（同上） |
+| `areka-parsers/src/balloon/parse.rs` | 2 | `use` の並び替え（同上） |
+| `areka-emo-text/src/draw.rs` | 4 | doc コメント「まだ読めない 8 キー」の書き換え（§16 と同種の事実是正） |
+| `areka-emo-text/src/draw.rs` | 2 | 呼び口の変更: `from_balloon` の最後の 2 引数 `&[], &[]` → `&overrides.font, &overrides.disable`（本仕様の配線そのもの） |
+| `areka-emo-text/src/lib.rs` | 1 | `PURE_SOURCES.len()` の期待値 54 → 56（新設 `balloon_overrides.rs`／`balloon_overrides_tests.rs` を走査面へ足した・母数を増やす方向で、緩めてはいない） |
+| `areka-emo-text/src/look.rs` | 5 | doc コメントの事実是正（§16） |
+| `areka-emo-text/src/look_font_tag_tests.rs` | 2 | doc コメントの事実是正（§16） |
+| `areka-emo-text/src/look_tests.rs` | 4 | doc コメントの事実是正（§16） |
+| `areka-emo-text/src/state_decoration.rs` | 2 | doc コメントの事実是正（§16） |
+
+- `look_tests.rs`・`look_font_tag_tests.rs`・`state_decoration.rs` の差分からコメント行を除くと `+`／`-` 行は 0＝テストの本体・期待値・テスト名は無改変。削除された `assert` は 0 行で、唯一の期待値の変更は上の 54 → 56（増やす方向）だけ。既存テストの期待値を緩めた箇所は 0 件。
+
+### 18.7 完了時への申し送り: `origin/main` の先行（取り込みはしていない）
+
+`git fetch origin main` 後、`origin/main` は `d4176512`、本ブランチとの分岐点はローカル `main` と同じ `a726174a`。`git log --oneline HEAD..origin/main`:
+
+```
+d4176512 feat(areka-P0-sylphya-set-ledger): … (#151)
+eb4ef6ab fix(areka-P0-sakura-tag-word-boundary): … (#150)
+5f64a4c9 fix(areka-P0-kanade-boot-talkdone-drop): … (#149)
+```
+
+`git diff --stat HEAD...origin/main -- doc/ukadoc-coverage crates/areka-parsers crates/areka-emo-text` は 11 ファイル（563 追加／58 削除）: `crates/areka-parsers/src/sakura/` の 9 本（`lexer.rs`・`parse.rs` と兄弟テスト）・`doc/ukadoc-coverage/ledger/property.toml`・`doc/ukadoc-coverage/roadmap-draft.md`。`crates/areka-emo-text` と `areka-parsers/src/balloon/`・`ledger/assets.toml` には触れていない。
+
+- 両側が触ったファイル（`git diff --name-only main..HEAD` と `HEAD...origin/main` の共通部分）は **`.kiro/steering/roadmap.md` と `doc/ukadoc-coverage/roadmap-draft.md` の 2 本**。完了時の取り込みで衝突し得るので、完了数などの数は引き算でなく道具で数え直して解くこと。`origin/main` 側は `THIRD-PARTY-NOTICES.md` も更新している。
+
+### 18.8 完了条件 6 項目のまとめ
+
+| # | 完了条件 | 結果 |
+|---|---|---|
+| 1 | 検証コマンドが全緑・所見 0 件 | 満たす（18.1: failed 計 0・`check` 食い違い 0 件） |
+| 2 | 1,000 行の上限内 | 満たす（18.2: 最大 922 行・番人 6 passed） |
+| 3 | 台帳 15 行が変更表と一致 | 満たす（18.3: 15／15・新設の束名は 4 台帳で 2 件＝本仕様の 2 項目） |
+| 4 | 「13 キー」「残り 8 キー」0 件 | 満たす（18.4: 4 ファイル計 0／0・`briefing-assets.md` は引用ゆえの例外） |
+| 5 | 宣言していないバルーンの見た目が不変 | 満たす（18.5: フィクスチャ宣言 0・既存テスト差分 0 行） |
+| 6 | 較正 3 通りが記録され、元に戻り、期待値を緩めていない | 満たす（18.6: §13・§15 に記録・作業ツリー差分 0・緩めた期待値 0） |
