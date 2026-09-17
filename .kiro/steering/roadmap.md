@@ -5,7 +5,7 @@ updated_at: 2026-09-13
 
 # Roadmap — areka（M1 完成後・M2 組み直し前の裁定枠ロードマップ）
 
-> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。本ファイルは **brief 済み spec 30 本（うち完了 3）の着手順（ウェーブ）と干渉条件だけ**を持つ。M2 本文はここに書かない（「M2 以降」節）。**M2 ロードマップを起こす材料は 2026-09-13 に揃った**（`ukadoc-coverage-roadmap` 完了・両段とも実施済み）——束と段階と順位の案は `doc/ukadoc-coverage/roadmap-draft.md`、帰属の正本は同 `linkage.md`、段階と順位の正本は同 `briefing.md` にある。次は `/kiro-discovery` 再入で先頭ウェーブ分だけ起票する（「M2 以降」節）。
+> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。本ファイルは **brief 済み spec 30 本（うち完了 7）の着手順（ウェーブ）と干渉条件だけ**を持つ。M2 本文はここに書かない（「M2 以降」節）。**M2 ロードマップを起こす材料は 2026-09-13 に揃った**（`ukadoc-coverage-roadmap` 完了・両段とも実施済み）——束と段階と順位の案は `doc/ukadoc-coverage/roadmap-draft.md`、帰属の正本は同 `linkage.md`、段階と順位の正本は同 `briefing.md` にある。次は `/kiro-discovery` 再入で先頭ウェーブ分だけ起票する（「M2 以降」節）。
 > 正本配置: 本ファイルが正本（`.kiro/steering/roadmap.md`）。`focus.md`（`inclusion: always`）から辿る。設計判断の正本は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md)。M1 実物スコープは [doc/emo2-conformance-scope.md](../../doc/emo2-conformance-scope.md)。
 > **履歴**: 追記①〜(94)・旧ゴール表・旧ウェーブ行・旧干渉台帳・完了詳報は棚卸④〜⑬で [roadmap-history.md](roadmap-history.md) へ退避済み（history が全文正本・非改変）。完了ユニットの実装詳細は各 `completed/` spec が正本。**旧ウェーブ番号の読み替え**: 棚卸⑫（09-02）で W5.95→W6・W6→W7・W6.5→W8・W6.75→W9・W6.9→W10・W6.95→W11・旧 W7（e2e）→W12 へ整数化。棚卸⑬（09-11）で **旧「W13 裁定枠 D〜G」「W13〜W15（裁定枠）」を W13〜W17 へ振り直し**（下表が正本・history と completed spec 内の旧番号は改変しない）。
 
@@ -60,23 +60,23 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | ⓪ | 09-03 | `sakura-bare-tag-lexer`（#134） | `\_X` bare 漏れ修正・完了検証で `sakura-tag-word-boundary` 起票 |
 | W12 | 09-05〜09-11 | `cursor-tag-canon`（#137）・`emo-text-line-height-canon`（#142）・`emo2-conformance-e2e`（#143・**M1 完成宣言**） ∥ 調査系 `ukadoc-survey-toolkit`（#136）・`-property`（#138）・`-shiori`（#139）・`-sakura-script`（#140）・`-assets`（#141） | 行送り 35→30・e2e 20 項目全合格・ukadoc 1,749 項目の台帳 4 本＋`report/summary.md` |
 
-- 完了 spec 直下エントリ＝**178**（`.kiro/specs/completed/` 直下・2026-09-13 実数え＝ディレクトリ 177＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
+- 完了 spec 直下エントリ＝**182**（`.kiro/specs/completed/` 直下・2026-09-17 実数え＝ディレクトリ 181＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
 - M1 実機サインオフ発見 7 件中 #1〜#6 解決済み・#7（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）は W13 の 4 本が引受先。M-dual は退役（e2e 項目 10 で合格・復活させない）。
 
-## 進行中の spec 台帳（brief 済み 30 本・2026-09-11 実数え 28 ＋ 09-12 起票 1 ＋ 09-13 起票 1。**うち完了 3・進行中 27**＝2026-09-13 に状態列を実数え・着手は `/kiro-start <名>`）
+## 進行中の spec 台帳（brief 済み 30 本・2026-09-11 実数え 28 ＋ 09-12 起票 1 ＋ 09-13 起票 1。**うち完了 7・進行中 23**＝2026-09-17 に状態列を実数え・着手は `/kiro-start <名>`）
 
 > **種別**の優先順は **バグ → 依存ツリーが長い → その他**。**規模**は brief の申告（棚卸⑬で分割したものは分割後）。**状態**列は `/kiro-complete` が ✅ に更新し、完了数を実数えで更新する。**Fable**列＝要件定義（design）を Fable で行うべきか（○＝Fable・−＝Opus で足りる）。
 
 | # | spec（`areka-P0-` 省略） | 種別 | 規模 | Wave | 前提（先に着地） | Fable | 状態 |
 |---|---|---|---|---|---|---|---|
 | 1 | `present-gpu-transform-scale` | バグ（性能・**最優先**） | M | **W13** | なし | ○ | ✅ |
-| 2 | `kanade-boot-talkdone-drop` | バグ（構造） | S | **W13** | なし | − | ⚪ |
+| 2 | `completed/kanade-boot-talkdone-drop` | バグ（構造） | S | **W13** | なし | − | ✅ 完了（2026-09-17） |
 | 3 | `host32-window-thread-pump` | バグ（構造） | S〜M | **W13** | なし | −（案 1/2 の裁定 1 件） | ⚪ |
-| 4 | `sakura-tag-word-boundary` | バグ（完了契約 13.1 の穴） | S〜M | **W13** | `sakura-bare-tag-lexer` ✅ | − | ⚪ |
+| 4 | `completed/sakura-tag-word-boundary` | バグ（完了契約 13.1 の穴） | S〜M | **W13** | `sakura-bare-tag-lexer` ✅ | − | ✅ 完了（2026-09-17） |
 | 5 | `charset-canon` | 正典（里々ゴーストが 1 体も動かない・surfaces.txt 2 箇所は実バグ） | M | **W13** | なし | ○（⑵ 交渉のみ） | ✅ |
 | 6 | `ukadoc-coverage-roadmap` | 調査（**M2 ロードマップの生成器**・依存ツリー最長） | M | **W13** | survey 4 本 ✅・e2e ✅＝**両段とも解禁済み** | ○ | ✅ |
 | 7 | `completed/text-decoration-canon`（⑴ 基盤＋font 10＋default/disable） | 正典（文字装飾 4 本の先頭ゲート） | L | **W13** | bvc ✅・cursor-tag ✅・line-height ✅ | ○（design） | ✅ 完了（2026-09-13） |
-| 8 | `sylphya-set-ledger`（channels ⑶・**09-11 起票**） | 台帳（三重所有の台帳側） | S | **W13** | なし | − | ⚪ |
+| 8 | `completed/sylphya-set-ledger`（channels ⑶・**09-11 起票**） | 台帳（三重所有の台帳側） | S | **W13** | なし | − | ✅ 完了（2026-09-17） |
 | 9 | `balloon-font-descript-keys`（decoration ⑶・**09-11 起票**） | 正典（転記＋書体の配線） | S | **W13** | なし | − | ⚪ |
 | 10 | `surfaces-basepos` | 正典（完全独立） | S | W13 任意／W14 | なし | − | ⚪ |
 | 11 | `dpi-transition-two-tick-bounce` | バグ（見た目・判定器） | M | **W14** | #1 | ○ | ⚪ |
@@ -104,7 +104,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 ## 棚卸⑬の仮裁定（2026-09-11・開発者が覆すまで有効）
 
-1. **`currentghost.seriko.zorder` の三重所有**＝**値の導出は `zorder-property` 単独**・**SET 台帳行（`seriko.zorder`／`seriko.sticky-window`）は `sylphya-set-ledger`**・**`currentghost-property-tree` は `seriko.*` から `zorder` を除外**（完了 spec `ukadoc-survey-property` のブリーフィング「三重所有」節の案 甲と同じ）。3 brief に登記済み。
+1. ~~**`currentghost.seriko.zorder` の三重所有**＝値の導出は `zorder-property` 単独・**SET 台帳行（`seriko.zorder`／`seriko.sticky-window`）は `sylphya-set-ledger`**・`currentghost-property-tree` は `seriko.*` から `zorder` を除外~~ → **2026-09-13 開発者裁定で `zorder` のみ改訂**。`zorder` は**台帳行も値の導出もともに `zorder-property`** が持つ（語彙表への先行登記は行わない＝完了 spec `areka-P0-scope-zorder-pinning` 要件 13.5 の先送りを維持し、`crates/areka/src/placement/zorder_property_deferral_tests.rs` の 3 本を緑のまま残す）。`seriko.sticky-window` の台帳行が `sylphya-set-ledger` である点と、`currentghost-property-tree` が `seriko.*` から `zorder` を除外する点は**据え置き**。したがって `sylphya-set-ledger` の SET 有効群は 21→**25**（26 ではない）。
 2. **M2 予約群は brief を起票しない**（SSTP・FMO・DirectSSTP・Plugin/HEADLINE・ネットワーク更新・ゴースト選択 UI・多重ゴースト・NAR・pasta native x64・ベクトル描画・owner-draw メニュー・バルーン美観配置・回転テキスト）。生成器は `ukadoc-coverage-roadmap` 第二段（W13）→ `/kiro-discovery` 再入で先頭ウェーブ分だけ just-in-time 起票（spec 工場化しない）。
 3. **e2e §13.1 行 3**（初回起動限定の位置調整が 2 回目以降で既定へ戻るか）は spec を切らず据え置き。⚠ 引受先としていた `present-gpu-transform-scale` の k≠1 サインオフ（2026-09-12 完了）では**実施しなかった**（同 spec `verification/acceptance-record.md` §7 行 6 に「未実施」と登記）。次の実機一周で目視する。
 

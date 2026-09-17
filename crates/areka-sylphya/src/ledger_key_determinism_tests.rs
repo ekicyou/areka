@@ -14,7 +14,7 @@
 
 use crate::key::{KeyParseError, PathSeg, PropPath, Selector, parse_dotted};
 use crate::vocab::dotted::{
-    DOTTED_ROOTS, EXT_EVENT_GET, EXT_EVENT_SET, GENERIC_PROP_NAMES, SET_EFFECTIVE,
+    DOTTED_ROOTS, EXT_EVENT_GET, EXT_EVENT_SET, GENERIC_PROP_NAMES, SET_EFFECTIVE, SOUND_PROP_NAMES,
 };
 use crate::vocab::flat::{FLAT_VOCAB, SYNTAX_RECORDS};
 use crate::vocab::shiori_resource::SHIORI_RESOURCE_IDS;
@@ -192,7 +192,7 @@ fn criterion_parse_is_deterministic_same_input_same_result() {
 
 // ============================================================================
 // 基準群 C: 台帳件数檻（R1.1/1.2/1.4/3.4・design UnitTests 2）
-//   フラット 26／ルート枝 10／汎用名 17／Resource 159／SET 有効群全項の網羅。
+//   フラット 26／ルート枝 10／汎用名 17／サウンド 18／Resource 159／SET 有効群全項の網羅。
 //   （個別檻: 各 vocab ファイルの *_has_N_entries・set_effective_covers_all_*）
 // ============================================================================
 
@@ -201,14 +201,15 @@ fn criterion_ledger_counts_exact() {
     assert_eq!(FLAT_VOCAB.len(), 26, "フラット 26");
     assert_eq!(DOTTED_ROOTS.len(), 10, "ルート枝 10");
     assert_eq!(GENERIC_PROP_NAMES.len(), 17, "汎用名 17");
+    assert_eq!(SOUND_PROP_NAMES.len(), 18, "サウンド 18");
     assert_eq!(SHIORI_RESOURCE_IDS.len(), 159, "Resource 159");
 }
 
 #[test]
 fn criterion_set_effective_full_group_coverage() {
     use std::collections::BTreeSet;
-    // design.md 確定の SET 有効群 全 21 項（基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4）。
-    let required: [&str; 21] = [
+    // design.md 確定の SET 有効群 全 25 項（基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4＋正典追随 4）。
+    let required: [&str; 25] = [
         "surface.num",
         "animation.num",
         "seriko.defaultsurface",
@@ -230,6 +231,11 @@ fn criterion_set_effective_full_group_coverage() {
         "sakura.bind.menu",
         "kero.bind.menu",
         "char*.bind.menu",
+        // 正典追随 4 項（sticky-window 1・サウンド SET 3）。
+        "seriko.sticky-window",
+        "pause",
+        "playing",
+        "position",
     ];
     let keys: BTreeSet<&str> = SET_EFFECTIVE.iter().map(|(k, _)| *k).collect();
     let exp: BTreeSet<&str> = required.iter().copied().collect();

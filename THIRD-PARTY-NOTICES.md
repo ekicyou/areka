@@ -456,7 +456,7 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - backtrace 0.3.76
-- cfg-if 1.0.4
+- cfg-if 1.0.5
 - js-sys 0.3.105
 - rustc-demangle 0.1.28
 - wasm-bindgen-macro-support 0.2.128
@@ -2184,7 +2184,6 @@ SOFTWARE.
 - bevy_reflect_derive 0.19.1
 - bevy_tasks 0.19.1
 - bevy_utils 0.19.1
-- disqualified 1.0.0
 
 ```
 MIT License
@@ -2245,6 +2244,7 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
+- disqualified 1.1.0
 - variadics_please 1.1.0
 
 ```
@@ -2298,7 +2298,7 @@ SOFTWARE.
 - portable-atomic 1.15.0
 - proc-macro2 1.0.107
 - quote 1.0.47
-- rustix 1.1.4
+- rustix 1.1.5
 - rustversion 1.0.23
 - semver 1.0.28
 - serde 1.0.229
@@ -2306,11 +2306,11 @@ SOFTWARE.
 - serde_derive 1.0.229
 - serde_json 1.0.151
 - syn 2.0.119
-- syn 3.0.5
+- syn 3.0.6
 - thiserror-impl 2.0.20
 - thiserror 2.0.20
 - typeid 1.0.3
-- unicode-ident 1.0.24
+- unicode-ident 1.0.26
 - zmij 1.0.23
 
 ```
@@ -2749,7 +2749,7 @@ SOFTWARE.
 ## Unicode License v3
 
 対象 crate:
-- unicode-ident 1.0.24
+- unicode-ident 1.0.26
 
 ```
 UNICODE LICENSE V3
