@@ -649,7 +649,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 | W6 | `shadow_keys_are_never_forwarded` | `font.shadowcolor.r,64`・`font.shadowstyle,offset`・`disable.font.shadowstyle,outline` を書いても両列に `shadow*` の列は無い（**零を判定**） | 8.3 |
 | W7 | `no_declarations_yield_two_empty_lists` | 9 キー・`disable.font.*` 無し → 両列とも空（＝従来と同じ呼び出し） | 5.4 |
 | W8 | `outline_is_forwarded_without_warning` | `font.outline,1` → `["outline","1"]`・`warn!` 0 件（`Note::VocabularyOnly` は記録しない） | 8.5 |
-| W9 | `relative_disable_height_is_judged_against_the_actual_base_layer` | `font.height,8`＋`disable.font.height,-10` → `warn!` 1 件（受け口も飛ばす）。`font.height,20`＋`disable.font.height,-15` → `warn!` 0 件（受け口は 5 を適用）。土台を `LookLayers::default()` で代用すると前者が 0 件・後者が 1 件になって赤（DD10 の較正） | 8.5, 9.11 |
+| W9（**09-17 実装時に改訂**: 下の旧案は転記層が `disable.font.height` を `u32` で読むため到達しない。実装は `disable_height_rejected_by_receiver_is_forwarded_and_warned_once`——`disable.font.height,0` → 列に在り `warn!` 1 件・`disable.font.height,20` → 0 件。research.md §14） | 旧 `relative_disable_height_is_judged_against_the_actual_base_layer` | `font.height,8`＋`disable.font.height,-10` → `warn!` 1 件（受け口も飛ばす）。`font.height,20`＋`disable.font.height,-15` → `warn!` 0 件（受け口は 5 を適用）。土台を `LookLayers::default()` で代用すると前者が 0 件・後者が 1 件になって赤（DD10 の較正） | 8.5, 9.11 |
 | E1 | `resolve_lifts_declared_bold_into_the_default_look` | `parse_str("font.bold,1", None)` → `ResolvedFont::resolve(&model).looks.default.bold == true`、`disable.bold` も `true`（複製）。旧実装（空の列）では `false` | 5.5, 8.1, 9.10 |
 | E2 | `resolve_lifts_disable_bold_into_the_disable_look_only` | `disable.font.bold,1` → `looks.disable.bold == true`・`looks.default.bold == false` | 8.2, 9.10 |
 | E3 | `resolve_uses_declared_disable_color_instead_of_the_mix` | `disable.font.color.r/g/b,10/20/30` → `looks.disable.color == (10,20,30)`（`mix_disabled` の値ではない）。3 成分が揃わなければ混色のまま | 8.2, 9.10 |
@@ -673,7 +673,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 
 1. 転記層: `parse.rs` の 1 本（例: `font.strike`）の引きを一時的に外して `cargo test -p areka-parsers` を走らせ、T11 と T1 が赤になることを確かめてから元に戻す。
 2. 配線: `draw.rs` の `from_balloon(...)` を旧実装（`&[], &[]`）へ一時的に戻して `cargo test -p areka-emo-text` を走らせ、E1〜E3 が赤になることを確かめてから元に戻す。
-3. 記録: `balloon_overrides.rs` の事前検証を一時的に外し、W3・W4 が赤になることを確かめてから元に戻す。あわせて土台を `LookLayers::default()` へ一時的に差し替え、W9 だけが赤になることを確かめてから元に戻す。
+3. 記録: `balloon_overrides.rs` の事前検証を一時的に外し、W3・W4 が赤になることを確かめてから元に戻す。（**09-17 実装時に改訂**: 次の「土台の差し替えで W9 だけ赤」は、転記層を通る入力では基底層の値に依存する `Err` が作れない＝赤を作れないため行わない。土台を実層にする実装は受け口との一致のために残す。research.md §14）あわせて土台を `LookLayers::default()` へ一時的に差し替え、W9 だけが赤になることを確かめてから元に戻す。
 
 いずれも `git diff -- <当該ファイル>` に痕跡が残らないことを確かめる。
 
