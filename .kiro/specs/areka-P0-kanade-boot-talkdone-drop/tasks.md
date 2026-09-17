@@ -34,7 +34,7 @@
   - _Boundary: areka emo2_boot 一周テストの doc コメント_
 
 - [ ] 3. 全体検証
-- [ ] 3.1 欠陥の検出器・非回帰の検出器・1,000 行の番人を終了コードで判定して全緑を確認する
+- [x] 3.1 欠陥の検出器・非回帰の検出器・1,000 行の番人を終了コードで判定して全緑を確認する
   - `cargo test -p areka-kanade` を全走させ終了コード 0 を確認する（欠陥の検出器）
   - `cargo test -p areka --bin areka` を他の cargo と並走させず単独で全走させ終了コード 0 を確認する（非回帰の検出器・直す前も緑なので直しの証拠には使わない）
   - `cargo test -p log-capture-kit --test file_length_guard_test` を通す
@@ -42,3 +42,8 @@
   - 完了時: 3 コマンドすべての終了コード 0 が実装の記録に残る
   - _Depends: 1.2, 2.1, 2.2_
   - _Requirements: 4.5, 5.5, 5.6_
+
+## Implementation Notes
+- 3.1 全体検証（2026-09-17・順次単独実行）: `cargo test -p areka-kanade` exit 0（lib 289／tests/kanade.rs 50）・`cargo test -p areka --bin areka` exit 0（1570 passed／2 ignored）・`cargo test -p log-capture-kit --test file_length_guard_test` exit 0（6 passed）。
+- 1.2 の直す前の赤は 3 本とも `boot_sequence_tests.rs` の相表明で最初に落ちた（共有の検査関数ゆえ同一行・設計の「`actions[0]` panic」予想は不成立）。
+- 2.1 の残るリスク: ガードを外しても全テスト緑（他の起動相には `mod.rs` の突合が完了通知を届けない）。ガード自体は設計どおり保持。
