@@ -20,7 +20,7 @@ mod parse_tests;
 mod validation_tests;
 
 pub use model::{
-    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
-    WindowPositionRaw, WordWrapPoint,
+    BalloonCursor, BalloonModel, CursorColor, DisableFont, Font, FontColor, FontDecorationRaw,
+    FontShadowRaw, Origin, ValidRect, WindowPosition, WindowPositionRaw, WordWrapPoint,
 };
 pub use parse::{parse, parse_str};
