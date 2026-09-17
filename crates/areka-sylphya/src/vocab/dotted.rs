@@ -106,6 +106,49 @@ pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
     ("position", SetSemantics::RuntimeCommand),
 ];
 
+/// 正典「サウンドプロパティ名」の葉 18（記録用・書き込みの仕分け `classify_set` は読まない）。
+///
+/// 括弧を含まない 10 葉は SSP 2.8.72、`meta.` を伴う 8 葉は SSP 2.8.73。
+/// `name`・`path` は正典で汎用名（`GENERIC_PROP_NAMES`）とは別項目なので本表に置き、汎用名の表からは引かない。
+pub const SOUND_PROP_NAMES: &[&str] = &[
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#duration:1
+    "duration",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#error:1
+    "error",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#id:1
+    "id",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#loop:1
+    "loop",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#name:2
+    "name",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#path:2
+    "path",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#preload:1
+    "preload",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#pause:1
+    "pause",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#playing:1
+    "playing",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#position:1
+    "position",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.album:1
+    "meta.album",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.albumartist:1
+    "meta.albumartist",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.artist:1
+    "meta.artist",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.artwork:1
+    "meta.artwork",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.genre:1
+    "meta.genre",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.title:1
+    "meta.title",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.track:1
+    "meta.track",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.year:1
+    "meta.year",
+];
+
 /// ext 亜枝の GET イベント名（予約のみ・M1 では発火しない・R3.5）。
 ///
 /// `activeghostlist(...).ext.*`・`pluginlist(...).ext.*` は所有者（ゴースト/プラグイン）側へ

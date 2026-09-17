@@ -18,7 +18,7 @@
   - 完了状態: `cargo test -p areka-sylphya --lib vocab::dotted` が緑で、件数の検査が 25 を、網羅の検査が 25 項を過不足なく判定する
   - _Requirements: 1.1, 1.2, 1.5, 1.6, 4.1, 4.7, 4.8_
 
-- [ ] 1.3 サウンドプロパティ名 18 葉の記録用の語彙表を新設し、正典 URL の証跡を残す
+- [x] 1.3 サウンドプロパティ名 18 葉の記録用の語彙表を新設し、正典 URL の証跡を残す
   - 設定可能語彙の後・拡張イベント語彙の前に、公開のスライス定数として 18 要素を新設する。公開にするのは先送りの走査（t_zpd12）が公開定数をソースから抜き出すため
   - 要素は括弧を含まない 10 葉（SSP 2.8.72）と `meta.` を伴う 8 葉（SSP 2.8.73）。綴りは台帳 id・正典見出し・カタログ title と逐語一致させる
   - 各要素の直上に `// ukadoc: <アンカー付き項目 URL>` の単独行を置く（`ukadoc:` と URL の間は空白 1 つ・URL の後に説明を付けない）。アンカーの無いページ URL の単独行は置かない（証拠抽出器の第 2 段が起動して要素名が意図しない照合にかかる）
@@ -117,3 +117,4 @@
 ## Implementation Notes
 - 1.1 基準（09-17 実測）: `evidence` の property 証拠 2 件（全体 263 件）／`owner = ""` 2 件・対照 `owner = "areka-P0-` 186 件／21 の写し 7 箇所（dotted.rs 57・188・190・191・209、ledger_key_determinism_tests.rs 210・211）／zorder_property_deferral_tests.rs の「5 本」8 箇所（19・111・113・116・127・150・252・281）・「8 本」1 箇所（115）
 - ワークツリーは `vendors/pasta` submodule 未取得だった（`git submodule update --init vendors/pasta` で解消）
+- `areka` は bin クレート: tasks.md 3・5.1 の `cargo test -p areka --lib placement::zorder_property_deferral_tests` は「no library targets」で走らない。正しくは `cargo test -p areka --bin areka property_deferral_tests`（モジュールは `placement::zorder_group_ledger::property_deferral_tests`・9 本）
