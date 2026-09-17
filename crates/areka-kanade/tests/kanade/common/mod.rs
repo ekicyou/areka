@@ -51,6 +51,9 @@ mod mock_shiori;
 #[cfg(test)]
 #[path = "common_recording.rs"]
 mod recording;
+#[cfg(test)]
+#[path = "common_window_actor.rs"]
+mod window_actor;
 
 // ============================================================================
 // 疎通テスト（観測可能な完了条件）
@@ -90,3 +93,7 @@ pub use mock_shiori::{
     spawn_mock_shiori_blocking, spawn_mock_shiori_failing,
 };
 pub use recording::{CallMethod, RecordedCall, expected_call, expected_unload};
+// `spawn_window_actor` の消費者（窓を作るテスト）は後続タスクで置かれる。それまでの間だけ
+// `run_bounded` と同じく再輸出の未使用を局所的に許容する。
+#[allow(unused_imports)]
+pub use window_actor::{WINDOW_CREATE_SERIAL, spawn_window_actor};
