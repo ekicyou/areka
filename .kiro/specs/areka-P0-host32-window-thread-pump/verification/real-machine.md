@@ -154,3 +154,11 @@ done
 - **長い手空きは実機の走行では生じなかった。** 定常相では kanade が `OnSecondChange` を約 1 秒ごとに送るため、SHIORI への要求（`event="shiori_request"`）と解放の行の間隔の最大は、走行 1 で 1.53 秒・走行 2 で 1.59 秒・走行 3 で 2.21 秒（`OnClose` の照会から解放まで）だった。要件 1.3 の「20 秒以上要求が無い」状態は実機のこの 3 走行では作れておらず、その条件は決定論テスト（`calibration.md`）が受け持つ。本記録が示すのは、待ちの形を変えた後も解放と死活報告が退行していないこと（要件 1.5・2.7・5.1〜5.3）である。
 - 走行 3 の終了操作は人の手ではなく、合成した入力である。押した点は所有プロセスが areka であることを確かめてから押した。ログ上は人の操作と同じ `event="close_requested"` の経路を通っている。
 - ゴーストの永続状態（`profile\areka\`）は消していない（本記録は初回起動の系列を観測対象にしない）。
+
+## 追記: 開発者による目視確認（main 取り込み後）
+
+- 2026-09-17 23:00 頃（JST）・コミット `811b9d0a`（`origin/main` の #149・#150 を取り込み済み）・debug ビルド・i686 helper（273,408 bytes）・ゴーストとバルーンは上と同じ絶対パス
+- 環境変数: `RUST_LOG=info,kanade=trace,areka_kanade=trace`・`AREKA_APP_SMOKE_EXIT_MS=600000`（上限としてだけ付けた）
+- 開発者が起動後に約 1 分半放置し、キャラ窓を Ctrl＋左ダブルクリックして終了した。開発者の所見は「終了挨拶のあとにアプリが閉じた。遅延は感じなかった」
+- exit code 0・走行 1 分 34.8 秒。生ログ（ANSI 色コードを除いて素の語で数えた）: `unload_clean` 1／`unload_failed` 0／`helper_exited` 0／`connect_failed` 0／`force_quit` 0／`ERROR` 0。自発トーク（`steady_talk`）は 4 回
+- 終了の系列: `close_requested` 14:00:53.06Z → `GET OnClose` 14:00:55.78Z → `close_talk_start` 14:00:55.79Z → `talk_done_quit` 14:00:57.99Z → `unload_clean` 14:00:58.05Z → `ghost_quit` 14:00:58.06Z
