@@ -124,3 +124,4 @@
 - 5.1（09-17）: `cargo test -p areka-sylphya --lib` 178 緑／`cargo test -p areka --bin areka property_deferral_tests` 9 緑／`cargo test -p ukadoc-survey --no-fail-fast` 601・0・6・113・doctest 5 緑。判定 3 本（t_zpd10・t_zpd30・t_zpd40）の本文に分岐元 0c9fb901 からの差分の塊 0
 - 5.2（09-17）: check 食い違い 0／evidence の property 証拠 2→21（全体 263→282）／`owner = ""` 2→0・対照 186→188／21 の写し 7→0・25 版の較正 8／「5 本」「8 本」9→0／変更ファイルは設計の 6＋`roadmap-draft.md` 1＝7（範囲外 1 件は 4.1 の境界拡張で記録済み）
 - 範囲外の申し送り 1・4 の宛先 `areka-P0-ukadoc-coverage-roadmap` は PR#147 で完了済み＝消化不能。引受先の付け替えが要る（完了報告で開発者へ）
+- 完了後の後始末（2026-09-17・開発者了承）: 申し送り 1（報告書の再生成）は 09-12 の裁定で報告書が証拠件数を持たなくなったため**取り下げ**。申し送り 4（担当欄の空き 0 を判定する恒久検査）も**取り下げ**＝台帳全体では空の宛先は正当に 1,331 件あり「0」は常時の不変条件にならず、spec ごとの件数は PR#147 の `owner_count` 検査がすでに判定している。隣の spec の brief 3 本（query-channels・zorder-property・catalog-lists）に完了の注記、台帳の `.ext.` 4 行の備考の宛先を `areka-P0-property-ipc-transport` へ、`roadmap-draft.md` の是正候補の本 spec 行と `briefing-property.md` ⑶ に解消の注記を追加

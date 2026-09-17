@@ -15,6 +15,8 @@ mod common;
 mod failure_test;
 #[path = "kanade/full_run_test.rs"]
 mod full_run_test;
+#[path = "kanade/idle_pump_test.rs"]
+mod idle_pump_test;
 #[path = "kanade/mouse_test.rs"]
 mod mouse_test;
 #[path = "kanade/prefetch_test.rs"]

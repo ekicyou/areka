@@ -19,7 +19,8 @@
 //! アクター境界の受理規約（envelope・停止・on_down の寿命）は親モジュール
 //! [`crate::shiori`] の rustdoc に記す。
 
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::time::Duration;
 
 use areka_actor::{ActorHandle, spawn_actor};
 use shiori_host32_host::{
@@ -77,7 +78,24 @@ pub trait ShioriBackend {
     fn unload(&mut self) -> Result<ExitKind, ShutdownError>;
     /// 非ブロッキング死活問い合わせ（sticky）。
     fn status(&mut self) -> HelperStatus;
+    /// アクターが手空き（inbox が [`IDLE_INTERVAL`] の間空）のたびに呼ばれる保守の機会。
+    ///
+    /// backend が自分のスレッド上で周期的に行うべき軽い仕事（例: 自分が所有する資材の
+    /// 応答性の維持）に使う。ブロックしない・失敗を返さない・異常は [`Self::status`] で報告する
+    /// （直後に必ず確認される）。往復（`get`／`notify`／`unload`）の内側からは呼ばれない。
+    /// 既定は何もしない。
+    fn on_idle(&mut self) {}
 }
+
+/// backend の保守周期（手空きを検出する受信待ちの上限）。
+///
+/// 値の根拠: backend が外から見て応答可能でいるために要する保守の間隔の、現状で最も厳しい
+/// 要求は host32 backend の「資材を所有するスレッドが 5 秒以上処理を止めると OS が応答なしと
+/// 判定しうる」である。その 1/10 を取り、負荷やスケジューラの遅れに対する余裕と、速い決定論
+/// テストの上限（4 倍＝2 秒・全体 5 秒以内）を同時に満たす。往復の所要には影響しない（inbox
+/// 到達は送信で即起きる）。正常時の手空きはログを出さないので、この周期を短くしてもログは
+/// 増えない。
+pub const IDLE_INTERVAL: Duration = Duration::from_millis(500);
 
 impl ShioriBackend for ShioriConnection {
     fn get(
@@ -107,6 +125,12 @@ impl ShioriBackend for ShioriConnection {
 
     fn status(&mut self) -> HelperStatus {
         self.helper.status()
+    }
+
+    fn on_idle(&mut self) {
+        // 手空きの間も窓を所有するこのスレッドがメッセージを取り出し続け、OS の応答なし判定に
+        // 落ちないようにする（往復の外でしか呼ばれない契約ゆえ `clear→store→take` は崩れない）。
+        self.window.pump_pending_messages();
     }
 }
 
@@ -167,15 +191,47 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
     }
 }
 
+/// 死活監視の本体: `backend.status()` が `Exited(kind)` を初めて返したとき、`error!` 記録と
+/// `on_down` への [`KanadeMsg::ShioriDown`] 送出を**一度だけ**行う。
+///
+/// `unloaded`（正規終了の確定後）または `*down_reported`（報告済み）なら何もしない（sticky）。
+/// 毎回呼んでよい。
+fn report_exit_once(
+    backend: &mut dyn ShioriBackend,
+    unloaded: bool,
+    down_reported: &mut bool,
+    on_down: &Sender<KanadeMsg>,
+) {
+    if !unloaded && !*down_reported {
+        if let HelperStatus::Exited(kind) = backend.status() {
+            *down_reported = true;
+            tracing::error!(
+                target: "shiori-actor",
+                event = "helper_exited",
+                exit = ?kind,
+                "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
+            );
+            let _ = on_down.send(KanadeMsg::ShioriDown {
+                reason: format!("helper exited unexpectedly: {kind:?}"),
+            });
+        }
+    }
+}
+
 /// shiori アクターの受信ループ（本番・テスト共通の唯一の dispatch 経路）。
 ///
-/// `ShioriMsg` を blocking `recv` で受け、[`handle_call`] の結果を同梱 `reply` へちょうど 1 回
-/// 送る。`Unload` は `backend.unload()`（正規 clean shutdown）へ委譲し、成功／異常終了／失敗を
-/// それぞれログ区分した上で応答する。`Close` は即時停止する。全 `Sender<ShioriMsg>` drop
-/// （`recv` が `Err`）でも正常終了する。
+/// `ShioriMsg` を [`IDLE_INTERVAL`] を上限とする有限待ち（`recv_timeout`）で受け、
+/// [`handle_call`] の結果を同梱 `reply` へちょうど 1 回送る。`Unload` は `backend.unload()`
+/// （正規 clean shutdown）へ委譲し、成功／異常終了／失敗をそれぞれログ区分した上で応答する。
+/// `Close` は即時停止する。全 `Sender<ShioriMsg>` drop（`Disconnected`）でも正常終了する。
+///
+/// # 手空き
+/// 待ちが [`IDLE_INTERVAL`] の間メッセージなしで明けるたび（`Timeout`）、
+/// [`ShioriBackend::on_idle`] を呼び、続けて死活監視を行ってから待ち直す。ログは出さない。
+/// 手空きの処理は待ちの腕の中だけで行い、往復（`get`／`notify`／`unload`）の内側からは呼ばない。
 ///
 /// # 死活監視（設計ディスカッション #2）
-/// メッセージ到達のたびに冒頭で `backend.status()` を確認する（タイマー poll は持たない）。
+/// メッセージ到達のたびに冒頭で、また手空きのたびに `backend.status()` を確認する。
 /// `Exited(kind)` を初回観測したら `error!`＋`on_down` へ `ShioriDown` を**一度だけ**送る
 /// （sticky）。unload 成功後（`unloaded` フラグ確定後）は死活報告を発火しない（正規終了は
 /// 死ではない）。`on_down` は受信ループの生存期間中保持し、ループを抜ける（関数から return
@@ -187,22 +243,20 @@ fn run_shiori_loop(
 ) {
     let mut unloaded = false;
     let mut down_reported = false;
-    while let Ok(msg) = rx.recv() {
-        // 死活監視: 正規終了が確定するまで、メッセージ到達のたびに sticky 状態を確認する。
-        if !unloaded && !down_reported {
-            if let HelperStatus::Exited(kind) = backend.status() {
-                down_reported = true;
-                tracing::error!(
-                    target: "shiori-actor",
-                    event = "helper_exited",
-                    exit = ?kind,
-                    "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
-                );
-                let _ = on_down.send(KanadeMsg::ShioriDown {
-                    reason: format!("helper exited unexpectedly: {kind:?}"),
-                });
+    loop {
+        let msg = match rx.recv_timeout(IDLE_INTERVAL) {
+            Ok(msg) => msg,
+            Err(RecvTimeoutError::Timeout) => {
+                // 手空き: 保守の機会 → 死活監視 → 待ち直す（ログは出さない・往復の外でだけ呼ぶ）。
+                backend.on_idle();
+                report_exit_once(backend.as_mut(), unloaded, &mut down_reported, &on_down);
+                continue;
             }
-        }
+            // 全 Sender<ShioriMsg> drop: 正常終了（on_down もここで自然に drop される）。
+            Err(RecvTimeoutError::Disconnected) => return,
+        };
+        // 死活監視: 正規終了が確定するまで、メッセージ到達のたびに sticky 状態を確認する。
+        report_exit_once(backend.as_mut(), unloaded, &mut down_reported, &on_down);
         match msg {
             ShioriMsg::Request { call, reply } => {
                 let outcome = handle_call(backend.as_mut(), call);
@@ -300,3 +354,7 @@ pub fn spawn_shiori_actor(
 #[cfg(test)]
 #[path = "real_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "real_idle_tests.rs"]
+mod idle_tests;

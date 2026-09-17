@@ -46,7 +46,7 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
-語彙表だけを触る spec: areka-P0-property-query-channels
+語彙表だけを触る spec: areka-P0-property-ipc-transport（2026-09-11 の分割 ⑵ で areka-P0-property-query-channels から移った）
 """
 
 [entry."ukadoc:list_propertysystem:activeghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_5:1"]
@@ -76,7 +76,7 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
-語彙表だけを触る spec: areka-P0-property-query-channels
+語彙表だけを触る spec: areka-P0-property-ipc-transport（2026-09-11 の分割 ⑵ で areka-P0-property-query-channels から移った）
 """
 
 [entry."ukadoc:list_propertysystem:balloonlist.count:1"]
@@ -1861,7 +1861,7 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
-語彙表だけを触る spec: areka-P0-property-query-channels
+語彙表だけを触る spec: areka-P0-property-ipc-transport（2026-09-11 の分割 ⑵ で areka-P0-property-query-channels から移った）
 """
 
 [entry."ukadoc:list_propertysystem:pluginlist_28_30d7_30e9_30b0_30a4_30f3_540d_2f_30d1_30b9_2fID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
@@ -1891,7 +1891,7 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
-語彙表だけを触る spec: areka-P0-property-query-channels
+語彙表だけを触る spec: areka-P0-property-ipc-transport（2026-09-11 の分割 ⑵ で areka-P0-property-query-channels から移った）
 """
 
 [entry."ukadoc:list_propertysystem:position:1"]

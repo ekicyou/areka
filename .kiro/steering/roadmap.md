@@ -71,7 +71,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 |---|---|---|---|---|---|---|---|
 | 1 | `present-gpu-transform-scale` | バグ（性能・**最優先**） | M | **W13** | なし | ○ | ✅ |
 | 2 | `completed/kanade-boot-talkdone-drop` | バグ（構造） | S | **W13** | なし | − | ✅ 完了（2026-09-17） |
-| 3 | `host32-window-thread-pump` | バグ（構造） | S〜M | **W13** | なし | −（案 1/2 の裁定 1 件） | ⚪ |
+| 3 | `completed/host32-window-thread-pump` | バグ（構造） | S〜M | **W13** | なし | −（案 1/2 の裁定 1 件） | ✅ 完了（2026-09-17） |
 | 4 | `completed/sakura-tag-word-boundary` | バグ（完了契約 13.1 の穴） | S〜M | **W13** | `sakura-bare-tag-lexer` ✅ | − | ✅ 完了（2026-09-17） |
 | 5 | `charset-canon` | 正典（里々ゴーストが 1 体も動かない・surfaces.txt 2 箇所は実バグ） | M | **W13** | なし | ○（⑵ 交渉のみ） | ✅ |
 | 6 | `ukadoc-coverage-roadmap` | 調査（**M2 ロードマップの生成器**・依存ツリー最長） | M | **W13** | survey 4 本 ✅・e2e ✅＝**両段とも解禁済み** | ○ | ✅ |
@@ -146,7 +146,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - Rust 2024・マルチクレート（一覧は structure.md）。**32bit 可搬性の適用範囲＝host-32 系（`shiori-host32-*`／`shiori-abi`）のみ**。wintf/areka 本体は x64＋arm64 ネイティブ。
 - 透過は WUC/DComp GPU 合成上のクリックスルー機構（`WS_EX_TRANSPARENT` 動的トグル＋αマスク）で成立（ULW は撤去済み）。SHIORI 内部唯一 ABI=`IShiori`(COM, HSTRING/UTF-16)。過去互換は 32bit Rust ホスト。
 - 設計判断の変更は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md) を正本として更新。
-- 実機運転の定石: 絶対パス起動（相対は pasta.dll LOAD 失敗）・i686 helper を先ビルド・`AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋`RUST_LOG` grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。
+- 実機運転の定石: 絶対パス起動（相対は pasta.dll LOAD 失敗）・i686 helper を先ビルド・`AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋`RUST_LOG` grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。自動終了は強制終了の経路で終了挨拶を経ないので、終了挨拶を確かめる走行では自動終了を上限に留め、終了はキャラ窓への Ctrl＋左ダブルクリックで求める（2026-09-17 host32-window-thread-pump の裁定）。
 - 常時テストは x86 を避け偽境界で純 x64 決定論（記憶 prefer-x64-fake-boundary-tests-not-x86）。
 
 ## M2 以降
