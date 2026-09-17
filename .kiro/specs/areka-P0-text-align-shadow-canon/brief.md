@@ -24,7 +24,7 @@
 ## Scope
 
 - **In**: align・valign（縦書き写像込み）・shadowcolor・shadowcolor,none・shadowstyle／追加登記 1〜4／`\_l` との相互作用。
-- **Out**: 基盤・font 系 10・`default`／`disable`（親 spec）／descript `font.*` 基底 13 キー（`balloon-font-descript-keys`）／行末禁則のぶら下がり（`emo-text-canon-residue` 項目 15）。
+- **Out**: 基盤・font 系 10・`default`／`disable`（親 spec）／descript `font.*` 基底 14 キー（`balloon-font-descript-keys`）／行末禁則のぶら下がり（`emo-text-canon-residue` 項目 15）。
 
 ## Boundary Candidates
 
