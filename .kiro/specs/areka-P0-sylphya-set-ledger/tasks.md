@@ -4,7 +4,7 @@
 > 全編を通じた禁止事項: `crates/areka-sylphya/src` 配下のいかなるファイルの本文・コメント・失敗メッセージにも、先送り中のプロパティを指す探し語（`zorder`。追跡 spec 名 `areka-P0-zorder-property` もこの綴りを含む）を書かない。t_zpd40 が sylphya の全ソースを小文字部分一致で走査するため、書いた時点で赤になる。
 
 - [ ] 1. 基準の採取と語彙台帳の追加
-- [ ] 1.1 変更前の実測値を採り、後で「動いた」と言える基準を作る
+- [x] 1.1 変更前の実測値を採り、後で「動いた」と言える基準を作る
   - `cargo run -p ukadoc-survey -- evidence` を 1 回走らせ、property ドメインの「証拠あり」件数を控える（設計の見込みは 2）
   - `grep -c '^owner = ""\r\?$' doc/ukadoc-coverage/ledger/property.toml`（Git Bash。台帳は CRLF なので `\r` を許容する形）と、対照の `grep -c '^owner = "areka-P0-' …` を控える
   - `grep -nE 'len\(\), 21|; 21\]|has_21_|件数 21|全 21 項|= 21' crates/areka-sylphya/src/vocab/dotted.rs crates/areka-sylphya/src/ledger_key_determinism_tests.rs`（探し語の末項 `= 21` は説明文中の「menu 4 = 21」を拾うために要る。これが無いと写しが 1 本取り残される）と `grep -n '5 本\|8 本' crates/areka/src/placement/zorder_property_deferral_tests.rs` の現在の該当箇所を控える
@@ -113,3 +113,7 @@
   - 完了状態: 6 つの実測値（URL 不一致 0・証拠件数の前後・担当欄 0 と対照・21 の写し 0 件と 25 版の較正・変更ファイル 6・範囲外 0）が揃い、完了報告に転記できる
   - _Requirements: 4.7, 6.5, 7.2, 9.1, 9.3, 10.3_
   - _Depends: 4.1, 4.2, 5.1_
+
+## Implementation Notes
+- 1.1 基準（09-17 実測）: `evidence` の property 証拠 2 件（全体 263 件）／`owner = ""` 2 件・対照 `owner = "areka-P0-` 186 件／21 の写し 7 箇所（dotted.rs 57・188・190・191・209、ledger_key_determinism_tests.rs 210・211）／zorder_property_deferral_tests.rs の「5 本」8 箇所（19・111・113・116・127・150・252・281）・「8 本」1 箇所（115）
+- ワークツリーは `vendors/pasta` submodule 未取得だった（`git submodule update --init vendors/pasta` で解消）
