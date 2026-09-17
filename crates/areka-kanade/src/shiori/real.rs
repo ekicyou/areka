@@ -191,6 +191,33 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
     }
 }
 
+/// 死活監視の本体: `backend.status()` が `Exited(kind)` を初めて返したとき、`error!` 記録と
+/// `on_down` への [`KanadeMsg::ShioriDown`] 送出を**一度だけ**行う。
+///
+/// `unloaded`（正規終了の確定後）または `*down_reported`（報告済み）なら何もしない（sticky）。
+/// 毎回呼んでよい。
+fn report_exit_once(
+    backend: &mut dyn ShioriBackend,
+    unloaded: bool,
+    down_reported: &mut bool,
+    on_down: &Sender<KanadeMsg>,
+) {
+    if !unloaded && !*down_reported {
+        if let HelperStatus::Exited(kind) = backend.status() {
+            *down_reported = true;
+            tracing::error!(
+                target: "shiori-actor",
+                event = "helper_exited",
+                exit = ?kind,
+                "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
+            );
+            let _ = on_down.send(KanadeMsg::ShioriDown {
+                reason: format!("helper exited unexpectedly: {kind:?}"),
+            });
+        }
+    }
+}
+
 /// shiori アクターの受信ループ（本番・テスト共通の唯一の dispatch 経路）。
 ///
 /// `ShioriMsg` を blocking `recv` で受け、[`handle_call`] の結果を同梱 `reply` へちょうど 1 回
@@ -213,20 +240,7 @@ fn run_shiori_loop(
     let mut down_reported = false;
     while let Ok(msg) = rx.recv() {
         // 死活監視: 正規終了が確定するまで、メッセージ到達のたびに sticky 状態を確認する。
-        if !unloaded && !down_reported {
-            if let HelperStatus::Exited(kind) = backend.status() {
-                down_reported = true;
-                tracing::error!(
-                    target: "shiori-actor",
-                    event = "helper_exited",
-                    exit = ?kind,
-                    "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
-                );
-                let _ = on_down.send(KanadeMsg::ShioriDown {
-                    reason: format!("helper exited unexpectedly: {kind:?}"),
-                });
-            }
-        }
+        report_exit_once(backend.as_mut(), unloaded, &mut down_reported, &on_down);
         match msg {
             ShioriMsg::Request { call, reply } => {
                 let outcome = handle_call(backend.as_mut(), call);
