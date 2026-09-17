@@ -885,3 +885,38 @@ fn font_base_key_table_has_fourteen_entries_and_each_is_read_back_by_the_mapping
         assert_eq!(disable, Some((200 + i).to_string()), "disable.{k}");
     }
 }
+
+/// T12: 14 本と `disable.font.*` を書き足しても、既存 5 キーの読み出しと `font.*` 以外の解析結果は
+/// 5 本だけの宣言と同じ（要件 5.1/5.2）。範囲外の色の未指定への降格も従来どおり（要件 5.3）。
+#[test]
+fn existing_five_font_keys_unchanged_when_new_keys_are_present() {
+    let old = "font.name,MS Gothic\nfont.height,12\nfont.color.r,10\nfont.color.g,20\n\
+               font.color.b,300\norigin.x,4\nwordwrappoint.x,-34\nvertical,1\n\
+               validrect.bottom,-56\nwindowposition.x,7\ncursor.style,square_and_underline\n";
+    let new = format!(
+        "{old}font.bold,1\nfont.italic,0\nfont.outline,1\nfont.strike,1\nfont.underline,1\n\
+         font.shadowcolor.r,none\nfont.shadowcolor.g,2\nfont.shadowcolor.b,3\n\
+         font.shadowstyle,outline\ndisable.font.name,Arial\ndisable.font.height,99\n\
+         disable.font.color.r,1\ndisable.font.bold,1\n"
+    );
+    let (before, after) = (parse_str(old, None), parse_str(&new, None));
+
+    for got in [&before, &after] {
+        assert_eq!(got.font().name(), Some("MS Gothic"));
+        assert_eq!(got.font().height(), Some(12));
+        assert_eq!(got.font().color().r(), Some(10));
+        assert_eq!(got.font().color().g(), Some(20));
+        assert_eq!(
+            got.font().color().b(),
+            None,
+            "300 は u8 に入らず未指定へ降格"
+        );
+    }
+    assert_ne!(after.font_decoration_raw(), before.font_decoration_raw());
+    // 新しい 3 つの層を既定へ戻せば、残りのフィールドはすべて 5 本だけの解析と一致する。
+    let stripped = after
+        .with_font_decoration_raw(Default::default())
+        .with_font_shadow_raw(Default::default())
+        .with_disable_font(Default::default());
+    assert_eq!(stripped, before);
+}
