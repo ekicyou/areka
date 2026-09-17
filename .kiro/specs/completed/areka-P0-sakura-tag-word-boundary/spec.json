@@ -1,0 +1,29 @@
+{
+  "feature_name": "areka-P0-sakura-tag-word-boundary",
+  "created_at": "2026-09-11T09:00:13Z",
+  "updated_at": "2026-09-17T12:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-11T09:20:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-13T00:00:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-13T00:00:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-17T12:00:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

@@ -8,7 +8,7 @@
 use super::{Action, ActiveTalk, Input, Phase, State, events, resources, snapshot_of};
 use crate::msg::{CloseReason, KanadeConfig, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
-use crate::talk::{StartTalk, TalkId};
+use crate::talk::{StartTalk, TalkDone, TalkId};
 use resources::ResourceOutcome;
 
 /// boot 系列（Idle / BootInit / BootType / BootMain / BootVersion）のフェーズ分岐。
@@ -29,7 +29,11 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
         Input::ShioriReply { outcome, .. } => on_reply(state, outcome, config),
         // boot 中の close 指示は保留記録のみ（boot 継続・握手は後続層）。
         Input::CloseRequest { reason } => record_pending_close(state, reason),
-        // 上記以外（Tick・TalkDone など）は boot 進行に無関係——防御的に無視する。
+        // 基盤バージョン通知の応答待ち中に届いた追跡中トークの完了（突合・非 quit 判定は mod.rs 済み）。
+        Input::TalkDone(done) if matches!(state.phase, Phase::BootVersion { talk: Some(_) }) => {
+            on_talk_done(state, done)
+        }
+        // 上記以外（Tick など）は boot 進行に無関係——防御的に無視する。
         _ => {
             tracing::warn!(target: "kanade", event = "boot_input_ignored", "boot 系列に無関係な入力を無視");
             (state, Vec::new())
@@ -279,6 +283,18 @@ fn to_baseware_version(
         &snapshot_of(&state.phase),
     )));
     (state, actions)
+}
+
+/// BootVersion{talk: Some} に届いた追跡中トークの完了（非 quit・突合済み）を受理する。
+///
+/// 呼出契約: `step` のガード腕からのみ呼ぶ（相は `BootVersion{talk: Some(_)}` で確定）。
+/// 追跡を外して枠を空にし、basewareversion 応答待ちを維持する。副作用指示は返さない。
+/// `pending_close` には触れない（起動中は握手を始めない・消化は Steady 遷移後の Tick）。
+/// 選択肢の帳簿も掃除しない（起動中は `state.choice` が構造上 `None`）。
+fn on_talk_done(mut state: State, done: TalkDone) -> (State, Vec<Action>) {
+    tracing::info!(target: "kanade", event = "boot_talk_done", talk_id = done.talk_id.0, "起動挨拶 talk 完了——basewareversion 応答待ちを維持しつつ枠を空にする");
+    state.phase = Phase::BootVersion { talk: None };
+    (state, Vec::new())
 }
 
 /// boot 中の CloseRequest: `pending_close` に記録するのみ（boot 継続・現 Phase 維持）。

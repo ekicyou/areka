@@ -582,3 +582,147 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
         "挨拶 TalkDone が slot と照合されれば unknown_talk_done ERROR は出ないはず: {events:#?}"
     );
 }
+
+// --- 基盤バージョン通知の応答待ち（BootVersion{talk: Some}）中の挨拶 TalkDone 受理 ---
+
+/// `BootVersion{talk: Some(id=1)}` に挨拶 talk の `TalkDone{id=1, reason}` を捕捉付きで投入し、
+/// 受理（枠が空・指示 0 件・無視の警告なし・受理の info ちょうど 1 行・error なし）を表明して
+/// 次の状態を返す。`Interrupted` では横断遷移が先に `talk_done_interrupted_as_non_quit` の info を
+/// 書くが、`boot_talk_done` の行数には数えない（event 名で数えるため）。
+fn assert_boot_version_talkdone_accepted(
+    s: State,
+    reason: crate::talk::TalkEndReason,
+    cfg: &KanadeConfig,
+) -> State {
+    use crate::schedule::log_capture::{
+        assert_no_error_logs, assert_not_logged, capture, logged_once,
+    };
+    use crate::talk::TalkDone;
+    use tracing::Level;
+
+    let mut out = None;
+    let events = capture(|| {
+        out = Some(step(
+            s,
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(1),
+                reason,
+            }),
+            cfg,
+        ));
+    });
+    let (s, actions) = out.expect("step は捕捉窓の中で実行されたはず");
+
+    assert!(
+        matches!(s.phase, Phase::BootVersion { talk: None }),
+        "応答待ち中の挨拶 TalkDone は受理され、追跡枠が空の BootVersion{{talk: None}} になるはず"
+    );
+    assert!(
+        actions.is_empty(),
+        "受理は副作用指示を返さないはず（実際 {} 件）",
+        actions.len()
+    );
+    assert_not_logged(&events, "boot_input_ignored");
+    let accepted = logged_once(&events, Level::INFO, "boot_talk_done");
+    assert_eq!(
+        accepted.fields.get("talk_id").map(String::as_str),
+        Some("1"),
+        "受理の info は talk_id を運ぶはず"
+    );
+    assert_no_error_logs(&events);
+    s
+}
+
+/// 基盤バージョン通知の応答待ち→Steady→close 指示までを、完了理由 `reason` で一周させる。
+fn run_boot_version_talkdone_then_close(reason: crate::talk::TalkEndReason) {
+    let cfg = config();
+    let s = super::test_support::boot_until_version_with_greeting(&cfg, None);
+    let s = assert_boot_version_talkdone_accepted(s, reason, &cfg);
+
+    // 通知完了 → 枠が空の定常運転へ（挨拶を引き継がない）。
+    let (s, actions) = step(
+        s,
+        Input::ShioriReply {
+            outcome: ShioriOutcome::Notified,
+            origin: "test",
+        },
+        &cfg,
+    );
+    assert!(
+        matches!(s.phase, Phase::Steady { talk: None }),
+        "通知完了で追跡枠が空の Steady{{talk: None}} へ進むはず"
+    );
+    assert!(actions.is_empty(), "boot 完了は副作用指示を返さない");
+
+    // close 指示 → 待つべき talk が無いので即握手（OnClose GET・ClosePending）。
+    let (s, actions) = step(
+        s,
+        Input::CloseRequest {
+            reason: CloseReason::User,
+        },
+        &cfg,
+    );
+    assert_eq!(actions.len(), 1, "close 指示で OnClose GET が 1 件出るはず");
+    assert_get(
+        &actions[0],
+        &events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE),
+    );
+    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+}
+
+#[test]
+fn boot_version_talkdone_before_notified_empties_slot_and_close_handshakes() {
+    run_boot_version_talkdone_then_close(crate::talk::TalkEndReason::Ended);
+}
+
+#[test]
+fn boot_version_talkdone_interrupted_is_treated_as_ended() {
+    run_boot_version_talkdone_then_close(crate::talk::TalkEndReason::Interrupted);
+}
+
+#[test]
+fn boot_version_talkdone_keeps_pending_close_until_steady_tick() {
+    use crate::msg::MonotonicMs;
+
+    let cfg = config();
+    let s = super::test_support::boot_until_version_with_greeting(&cfg, Some(CloseReason::System));
+    let s = assert_boot_version_talkdone_accepted(s, crate::talk::TalkEndReason::Ended, &cfg);
+    assert_eq!(
+        s.pending_close.map(CloseReason::as_ref_str),
+        Some("system"),
+        "受理は保留中の close 指示に触れないはず"
+    );
+
+    // 通知完了 → Steady{None}。保留はまだ消化されない（握手は次の Tick）。
+    let (s, actions) = step(
+        s,
+        Input::ShioriReply {
+            outcome: ShioriOutcome::Notified,
+            origin: "test",
+        },
+        &cfg,
+    );
+    assert!(matches!(s.phase, Phase::Steady { talk: None }));
+    assert!(actions.is_empty());
+    assert_eq!(s.pending_close.map(CloseReason::as_ref_str), Some("system"));
+
+    // 次の Tick → 保留を消化して OnClose GET・ClosePending。
+    let (s, actions) = step(
+        s,
+        Input::Tick {
+            now: MonotonicMs(1_000),
+        },
+        &cfg,
+    );
+    assert_eq!(
+        actions.len(),
+        1,
+        "Tick で保留 close の OnClose GET が 1 件出るはず"
+    );
+    assert_get(
+        &actions[0],
+        &events::on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE),
+    );
+    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(s.pending_close.is_none());
+}

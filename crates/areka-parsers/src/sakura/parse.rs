@@ -32,3 +32,7 @@ pub fn parse(input: &str) -> Vec<Instruction> {
 #[cfg(test)]
 #[path = "parse_bare_tag_tests.rs"]
 mod bare_tag_tests;
+
+#[cfg(test)]
+#[path = "parse_word_boundary_tests.rs"]
+mod word_boundary_tests;
