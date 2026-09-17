@@ -15,6 +15,10 @@
 //! | W7 | 何も書かなければ両列とも空 | 5.4 |
 //! | W8 | 縁取りは列に入って記録なし | 8.1, 8.5 |
 //! | W9 | 無効表示の大きさの受け口判定が記録に映る | 8.5, 9.11 |
+//! | E1 | 端から端まで: 基底の太字が既定の見た目に立つ | 5.5, 8.1, 9.10 |
+//! | E2 | 端から端まで: 無効表示の太字は無効表示の見た目だけに立つ | 8.2, 9.10 |
+//! | E3 | 端から端まで: 無効表示の色 3 成分は混色でなく宣言値 | 8.2, 9.10 |
+//! | E4 | 端から端まで: 縁取りは状態だけ立ち他の項目は既定のまま | 9.10 |
 
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use log_capture_kit::{CapturedEvent, capture};
@@ -206,4 +210,53 @@ fn disable_height_rejected_by_receiver_is_forwarded_and_warned_once() {
     let (twenty, events, _) = run("disable.font.height,20\r\n");
     assert_eq!(twenty.disable, lists(&[&["height", "20"]]));
     assert_eq!(warns(&events).len(), 0, "{events:?}");
+}
+
+/// 解析 → 本番の解決関数（端から端まで）。
+fn looks_of(descript: &str) -> LookLayers {
+    ResolvedFont::resolve(&parse_str(descript, None)).looks
+}
+
+/// E1: `font.bold,1` は既定の見た目の太字を立て、無効表示（既定の複製）にも写る。
+/// 配線を空の列へ戻すと赤になる。
+#[test]
+fn resolve_lifts_declared_bold_into_the_default_look() {
+    let looks = looks_of("font.bold,1\r\n");
+    assert!(looks.default.bold, "{:?}", looks.default);
+    assert!(looks.disable.bold, "{:?}", looks.disable);
+}
+
+/// E2: `disable.font.bold,1` は無効表示の見た目だけに立ち、既定の見た目は太字にならない。
+#[test]
+fn resolve_lifts_disable_bold_into_the_disable_look_only() {
+    let looks = looks_of("disable.font.bold,1\r\n");
+    assert!(looks.disable.bold, "{:?}", looks.disable);
+    assert!(!looks.default.bold, "{:?}", looks.default);
+}
+
+/// E3: 無効表示の色は 3 成分が揃えば宣言値（混色ではない）、揃わなければ宣言なしと同じ混色のまま。
+#[test]
+fn resolve_uses_declared_disable_color_instead_of_the_mix() {
+    let mixed = looks_of("").disable.color;
+    assert_ne!(mixed, (10, 20, 30), "対照が成り立たない入力");
+
+    let declared = looks_of(
+        "disable.font.color.r,10\r\ndisable.font.color.g,20\r\ndisable.font.color.b,30\r\n",
+    );
+    assert_eq!(declared.disable.color, (10, 20, 30));
+
+    let partial = looks_of("disable.font.color.r,10\r\n");
+    assert_eq!(partial.disable.color, mixed);
+}
+
+/// E4: `font.outline,1` は `outline` だけを立て、`TextLook` の他の項目は宣言なしと同じ（語彙のみ）。
+#[test]
+fn resolve_keeps_outline_vocabulary_only() {
+    let plain = looks_of("");
+    let looks = looks_of("font.outline,1\r\n");
+    assert!(looks.default.outline, "{:?}", looks.default);
+
+    let mut expected = plain.default.clone();
+    expected.outline = true;
+    assert_eq!(looks.default, expected);
 }

@@ -423,3 +423,17 @@
 - **W9 の差し替え**: 到達しない経路を檻にしない（「檻は到達する経路を踏ませよ」）。W9 は到達する受け口判定 `disable.font.height,0`（`apply_height` の「正でない」で `Err`）→列に在り `warn!` 1 件、`disable.font.height,20` → 0 件へ改める。
 - **較正③の後半**（土台を既定層へ差し替えて W9 だけ赤）は、転記層を通る入力では判定が変わらず赤を作れないので行わない。前半（事前検証を外すと W3・W4・W9 の警告判定が赤）は行う。
 - 判断区分: 勝者が明白な how（到達しない入力は檻にできない）ゆえ開発者議題にせず、design.md の W9 行と較正③・tasks.md 4.3／4.4 を追随させて結果を報告する。
+
+## 15. 較正②③（配線・タスク 4.4・2026-09-17）
+
+各較正はスクラッチの複製から書き戻し、`git diff -- crates/areka-emo-text/src/draw.rs crates/areka-emo-text/src/balloon_overrides.rs` が空であることを確かめた。実装係とレビュー係がそれぞれ独立に再現した。
+
+| # | 壊し方 | 結果 | 赤になったテスト |
+|---|---|---|---|
+| ② | `draw.rs` `resolve_with_background` の最終 `from_balloon` を `&[], &[]` へ | exit 101・9 passed / 4 failed | E1 `resolve_lifts_declared_bold_into_the_default_look`・E2 `resolve_lifts_disable_bold_into_the_disable_look_only`・E3 `resolve_uses_declared_disable_color_instead_of_the_mix`（混色 `(85,85,85)` が返る）・E4 `resolve_keeps_outline_vocabulary_only` |
+| ③a | `balloon_overrides.rs` `probe_all` の `warn!` を外す | exit 101・11 passed / 2 failed | W4 `out_of_vocabulary_values_are_passed_through_and_warned_once`・W9 `disable_height_rejected_by_receiver_is_forwarded_and_warned_once` |
+| ③b | 色の成分不足の `warn!` を外す | exit 101・12 passed / 1 failed | W3 `disable_color_with_missing_components_is_dropped_and_warned_once` |
+| レビュー（4.3） | 無効表示の `shadowstyle` だけを列へ積む | 赤 | W6 `shadow_keys_are_never_forwarded` |
+
+- 土台を `LookLayers::default()` へ差し替えても W1〜W9 は緑のまま（§14 の予測どおり・転記層を通る入力では判定が変わらない）。
+- フィクスチャ `descript.txt` 7 本に `font.(bold|italic|outline|strike|underline|shadow*)`・`disable.font` の宣言は 0 件（行頭・大小無視の行内とも）。`git diff main -- crates/areka-emo-text/tests` は空。書き戻し後 `cargo test -p areka-emo-text` 856 passed / 0 failed。
