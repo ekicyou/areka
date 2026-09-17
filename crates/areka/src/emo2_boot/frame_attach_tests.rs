@@ -158,7 +158,8 @@ fn connect_balloon_text_skips_when_view_none() {
     let model = areka_parsers::balloon::parse_str("", None);
 
     // None 経路: 文字層を接続せず false（次フレーム再試行へ委ねる）。panic しない。
-    let registered = connect_balloon_text(&runtime, view, ActorKey::from("0"), &model);
+    let registered =
+        connect_balloon_text(&runtime, view, ActorKey::from("0"), &model, (255, 255, 255));
     assert!(
         !registered,
         "text_slot_view None では文字層を接続せず false を返す（R4.2）"
@@ -580,5 +581,217 @@ fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
         ends.last().copied(),
         Some(horizon),
         "最後に届く占有終端は台本の占有区間の終端と一致する（待機込み・Requirement 4.1）"
+    );
+}
+
+/// task 7.3／要件 4.6: `connect_balloon_text` は**背景を渡してから装着する**（字面側の檻）。
+///
+/// 装着（`register_actor_view`）の時点で覚えている背景が無効表示の 2 層に焼かれるため、
+/// 順序が逆だと既に装着済みのスコープには効かず、次の再追従まで効き目が遅れる
+/// （`areka-emo-text` の `set_balloon_background` の doc が逐語で定める契約）。
+///
+/// 位置づけ: 実挙動の述語は
+/// [`connect_balloon_text_resolves_text_with_the_background_at_attach_time`]（実 GPU）が持ち、
+/// 本檻はそれに対する**二重の備え**である——実 GPU の檻が環境都合で回らない場では、
+/// この字面検査だけが順序を見張る。
+///
+/// 較正: 2 行を入れ替えると `set < register` が偽になり赤（実測済み）。どちらかの呼び出しを
+/// 消すと `expect` が赤。
+///
+/// **コメント行は先に落とす**——落とさないと、順序を説明している行内コメントの
+/// `set_balloon_background` の綴りに当たってしまい、実際の 2 行を入れ替えても緑のまま通る
+/// （較正で実測した穴）。
+#[test]
+fn connect_balloon_text_hands_the_background_over_before_attaching() {
+    let source = include_str!("frame/attach.rs");
+    let body: String = source
+        .split("pub(super) fn connect_balloon_text")
+        .nth(1)
+        .expect("connect_balloon_text の定義が本文にある")
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let set = body
+        .find(".set_balloon_background(")
+        .expect("背景を渡す呼び出しがある（要件 4.6 の配線）");
+    let register = body
+        .find(".register_actor_view(")
+        .expect("装着の呼び出しがある");
+    assert!(
+        set < register,
+        "背景を渡してから装着する（順序が逆だと既装着スコープに効かない）: \
+         set_balloon_background@{set} / register_actor_view@{register}"
+    );
+}
+
+/// task 7.3／要件 4.6 の**実挙動の述語**: `connect_balloon_text` を通した actor の
+/// 文字レイアウト入力は、**装着の時点で背景が効いた**値になっている。
+///
+/// 観測は `refresh_actor_scale` の churn ガード契約を使う——判定キーには
+/// `ResolvedBalloonText::resolve_with_background(model, image_size, background_of(actor))` が
+/// 入るため、装着時と同じ背景・同じ view・同じモデルで再追従を求めれば **`false`**（作り直し
+/// なし）になる。背景が装着に間に合っていなければ、装着時は既定（白）で解かれ、再追従時は
+/// 渡した背景で解かれるので値が食い違い **`true`** になる。
+///
+/// ゆえに次の 2 値の差が「背景が装着に間に合ったか」を弁別する。
+///
+/// - 正順（本番経路 = `connect_balloon_text`）: `false`
+/// - 逆順（`register_actor_view` → `set_balloon_background` を手で再現）: `true`
+///
+/// 較正: `connect_balloon_text` の 2 行を入れ替えると正順側が `true` になって赤（実測済み）。
+/// 逆順側の `true` が非空虚性を保証する——「何をしても `false`」ではない。
+#[test]
+fn connect_balloon_text_resolves_text_with_the_background_at_attach_time() {
+    let (mut world, _gw) = gpu_attach_world();
+    let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+    let kero = assets.balloons[1].model.clone();
+
+    let mut wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        zero_clock(),
+        assets,
+    );
+    run_attach_phase(&mut wiring, &mut world);
+    // `TextSlotView` は Copy——同じ view 値を両経路と再追従に使う（差は順序だけ）。
+    let view = wiring
+        .presenter
+        .text_slot_view(balloon_target(1))
+        .expect("前提: attach で相方側バルーンの文字層スロットが成立する");
+
+    let actor = ActorKey::from("1");
+    // 既定背景（白）と必ず違う値を選ぶ——同値だと順序が効かず、述語が空虚になる。
+    let background = (0u8, 0u8, 0u8);
+
+    // 正順: 本番の結線そのもの（背景 → 装着）。
+    let correct = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    assert!(
+        connect_balloon_text(&correct, Some(view), actor.clone(), &kero, background),
+        "前提: Some(view) 経路は接続に成功する"
+    );
+    let correct_churn = correct
+        .borrow_mut()
+        .refresh_actor_scale(&actor, &view, &kero);
+
+    // 逆順: 装着 → 背景（要件 4.6 が禁じる並び）を手で再現する。
+    let mut reversed = TextLayerRuntime::new(TextLayerConfig::default());
+    reversed.register_actor_view(actor.clone(), &view, &kero);
+    reversed.set_balloon_background(actor.clone(), background);
+    let reversed_churn = reversed.refresh_actor_scale(&actor, &view, &kero);
+
+    assert!(
+        !correct_churn,
+        "正順では装着時点で背景が効いている＝同じ背景での再追従は作り直しを起こさない（要件 4.6）"
+    );
+    assert!(
+        reversed_churn,
+        "非空虚性: 逆順では装着が既定背景で解かれるため再追従が作り直しを起こす\
+         （この true が上の false を意味あるものにする）"
+    );
+}
+
+// ───────── `state.actors()` の走査点の見張り（タスク 9.4・7.2 の申し送り）─────────
+
+/// 本番で `state.actors()` を走査する箇所（`.rs` の**実ファイルを読んで**数える）。
+///
+/// ワークスペース root からの相対パス。`areka-emo-text` は上流 crate だが、走査点の不変式は
+/// この結線層が守るものなので見張りもここに置く。
+const ACTOR_SCAN_SITES: &[&str] = &[
+    "crates/areka-emo-text/src/actor.rs",
+    "crates/areka/src/emo2_boot/frame/scale_text.rs",
+    "crates/areka/src/emo2_boot/hover_inject.rs",
+];
+
+/// **幽霊スコープを数えない**という不変式に機械の番人を置く（7.2 の申し送り・タスク 9.4）。
+///
+/// `present_frame`（`areka-emo-text` の `actor.rs`）は `state.actors()` を
+/// 「**中身か供給面のどちらかがある**」で絞って走査する。装着（2 層の差し込み）が
+/// `entry().or_default()` で発話前のスコープの器を作るため、この絞りが無いと一度も発話して
+/// いないスコープにまで供給面が割り当てられる（＝幽霊が提示層へ載る）。
+///
+/// 絞りそのものは `present_frame` の兄弟テストが判定しているが、**新しい走査点が増えたこと**は
+/// 誰も見張っていなかった。ここでは走査点の集合と本数を実ファイルから数え直して固定する
+/// ——4 本目を足した人に「その走査は供給面を割り当てるか」を必ず考えさせるための躓き石である。
+///
+/// 走査点を足すのが正しい変更なら、本表に 1 行足したうえで、その走査が供給面を作らない
+/// （読むだけ）か、作るなら同じ絞りを通すことを確かめること。今日の 3 点のうち供給面を
+/// 割り当てるのは `present_frame` だけで、他の 2 点は読むだけである。
+#[test]
+fn every_production_scan_of_the_actor_map_is_registered() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("crates/areka の 2 つ上がワークスペース root")
+        .to_path_buf();
+
+    let mut found: Vec<String> = Vec::new();
+    let mut stack = vec![root.join("crates")];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("crates を読めない") {
+            let path = entry.expect("項目を読めない").path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n == "target") {
+                    continue;
+                }
+                stack.push(path);
+                continue;
+            }
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            // 兄弟テスト・統合テスト・支援は本番ではない（走査しても提示層に触れない）。
+            let in_tests_dir = path
+                .components()
+                .any(|c| c.as_os_str() == std::ffi::OsStr::new("tests"));
+            if !name.ends_with(".rs")
+                || name.ends_with("_tests.rs")
+                || name.ends_with("_test.rs")
+                || name.contains("test_support")
+                || in_tests_dir
+            {
+                continue;
+            }
+            // 綴りの揺れ（改行・字下げ）で取り逃さないよう空白を潰してから見る。
+            // `sheet.actors()`（dola の別 API）と紛れないよう、直前が状態表であることを要求する。
+            let src: String = std::fs::read_to_string(&path)
+                .unwrap_or_default()
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect();
+            if src.contains("state().actors()") || src.contains("state.actors()") {
+                let rel = path
+                    .strip_prefix(&root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                found.push(rel);
+            }
+        }
+    }
+    found.sort();
+
+    // 空振り防止: 1 件も拾えていないなら以下の等値は恒真になる。
+    assert!(
+        !found.is_empty(),
+        "走査点を 1 件も拾えていない——検査が空振りしている"
+    );
+    let expected: Vec<String> = ACTOR_SCAN_SITES.iter().map(|s| (*s).to_owned()).collect();
+    assert_eq!(
+        found, expected,
+        "`state.actors()` の本番走査点が変わった。新しい走査が供給面を割り当てるなら、\
+         `present_frame` と同じ絞り（中身か供給面のどちらかがある）を通すこと。\
+         読むだけなら ACTOR_SCAN_SITES に 1 行足すこと"
     );
 }

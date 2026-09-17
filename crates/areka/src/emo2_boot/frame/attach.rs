@@ -312,6 +312,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             emo_world: balloon_world,
             atlas: balloon_atlas,
             model: balloon_model,
+            background_color,
             ..
         }) = balloons.get_mut(balloon_index).and_then(|b| b.take())
         else {
@@ -377,6 +378,8 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             // ここと式が食い違うと、再追従が別 actor を作って文字だけ旧 k のまま残る。
             ActorKey::from(scope.to_string()),
             &balloon_model,
+            // 面 0 の原点画素（要件 4.6）——無効表示の文字色の混色の相手。
+            background_color,
         );
         // 文字層 k 再追従（D11-3・R8.1）の再利用源: **いま文字層へ渡したのと同一の**モデルを
         // scope キーで記憶する（借用→move の 1 値ゆえ二つの供給先が別値になり得ない——別値になると
@@ -405,17 +408,26 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 /// `true` を返す。`None`（初回 `ShowSurface` 未合流＝上流の遅延化・Revalidation Trigger）なら
 /// 登録せず `warn!` して `false` を返し、接続を次フレーム再試行へ委ねる（panic しない・R4.2）。
 /// 登録判断を純結線として切り出すことで、GPU 不要の headless 単体テストが None 経路を檻に入れられる。
+///
+/// `background` は当該 scope のバルーン面 0 の原点画素（[`BalloonScopeAssets::background_color`]）。
+/// 無効表示（`\f[disable]`）の文字色を導く混色の相手であり、**装着の前**に渡す（要件 4.6・
+/// task 7.3）——順序は `frame_attach_tests.rs` の
+/// `connect_balloon_text_hands_the_background_over_before_attaching` が見張る。
 pub(super) fn connect_balloon_text(
     runtime: &Rc<RefCell<TextLayerRuntime>>,
     view: Option<TextSlotView>,
     actor: ActorKey,
     model: &BalloonModel,
+    background: (u8, u8, u8),
 ) -> bool {
     match view {
         Some(view) => {
-            runtime
-                .borrow_mut()
-                .register_actor_view(actor, &view, model);
+            let mut rt = runtime.borrow_mut();
+            // 背景色は**装着の前**に渡す（要件 4.6）——装着の時点で覚えている値が無効表示
+            // （`\f[disable]`）の 2 層に焼かれるため、後から入れても既装着スコープには効かず
+            // 次の再追従まで効き目が遅れる（`set_balloon_background` の doc が定める契約）。
+            rt.set_balloon_background(actor.clone(), background);
+            rt.register_actor_view(actor, &view, model);
             true
         }
         None => {

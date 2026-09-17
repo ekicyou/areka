@@ -1,10 +1,20 @@
-//! # draw — DirectWrite/D2D 描画実行（COM 層）
+//! # draw — DirectWrite/D2D 描画実行（COM 層・ファサード）
 //!
-//! `DrawExecutor`（可視窓の全域再描画・フォント解決・縦書きレシピの lift）と
-//! `DWriteMetrics`（測定専用 probe TextLayout 由来の `GlyphMetrics` 実装）を担う。
+//! `DrawExecutor`（可視窓の全域再描画・比較専用オラクル）とフォント解決・縦書きレシピの
+//! lift・書式生成を担う。役割ごとに 2 つの子モジュール（兄弟ファイル）へ分かれる:
+//!
+//! | ファイル | 担当 |
+//! |---|---|
+//! | `draw.rs`（本ファイル） | 既定値・[`ResolvedFont`]・[`DirectionRecipe`]・書式生成・D2D ターゲット bitmap・比較専用オラクル |
+//! | `draw_metrics.rs` | [`DWriteMetrics`]（計測専用 probe layout・行ボックス比の実測） |
+//! | `draw_line_store.rs` | [`LineLayoutStore`]（行 TextLayout の生成・キャッシュ・インクはみ出しの実測） |
+//! | `draw_catalog.rs` | [`FontCatalog`]（フォント候補列→実在する名前の解決・記憶・記録の 1 度化） |
+//!
+//! 子は `super::` でファサードの定数・型・ヘルパを辿り、ファサードが再輸出するので
+//! crate 内から見た入口（`crate::draw::DWriteMetrics` 等）は分割前と同一。
 //!
 //! **層規律**: COM 層——UI スレッド専有。`windows`（DirectWrite/D2D）を触るのは
-//! 本モジュールと surface のみ。失敗は log-first（`tracing::error!`＋`Err`）で扱い panic しない。
+//! 本モジュール群と surface のみ。失敗は log-first（`tracing::error!`＋`Err`）で扱い panic しない。
 //!
 //! ## フォント解決＋方向レシピ（task 6.1・R4.1/R4.2/R10.3）
 //!
@@ -17,8 +27,15 @@
 //!   テキスト widget system へは依存しない（steering 記憶 areka-emo-owns-drawing-wintf-lift）。
 //! - [`create_text_format`]: 上記 2 つを実 `IDWriteTextFormat` へ焼き込む
 //!   （生成失敗は warn→既定フォント再試行→なお失敗は `Device` エラー・R4.2）。
-//! - 文字装飾（[`TextEffects`]）と `disable.font.*`（[`FontDisableSeam`]）は
-//!   **型シームのみ・実挙動なし**（R10.3・M2 予約）。
+//! - 無効表示の層（`disable.font.*`）は [`ResolvedFont::looks`] で**実体化済み**
+//!   （要件 4.4——`\f[disable]` の戻し先）。行単位の文字装飾（[`TextEffects`]）だけが
+//!   **型シームのみ・実挙動なし**のまま残る（M2 予約）。
+//! - 縦書きの寄せと下線の写像は確定済み（spec `areka-P0-balloon-vertical-canon`
+//!   要件 5.1〜5.3・5.7：`align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、
+//!   `valign` は `top`＝右寄せ／`bottom`＝左寄せ、下線は列の右側）。正典 2 ページで
+//!   `valign` の写像が逆である事実（疑義 SC1）と areka が採る側の理由は
+//!   `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が正本で、寄せの追跡先は
+//!   `areka-P0-text-align-shadow-canon`。
 //!
 //! ## 計測専用 probe layout（task 6.2・R4.5・probe 規約）
 //!
@@ -57,9 +74,6 @@
 //! `advance_divergence_would_surface_as_wrap_position_drift`）が檻化する——乖離は
 //! クリップに隠れず折返し位置のズレとして赤くなる（design Testing Strategy #5）。
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-
 use areka_parsers::balloon::BalloonModel;
 use tracing::warn;
 use windows::Win32::Graphics::Direct2D::Common::{
@@ -80,23 +94,27 @@ use windows::Win32::Graphics::Direct2D::{
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
-    DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM, DWRITE_FONT_METRICS,
+    DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
     DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_NORMAL,
     DWRITE_PARAGRAPH_ALIGNMENT, DWRITE_PARAGRAPH_ALIGNMENT_NEAR, DWRITE_READING_DIRECTION,
     DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_READING_DIRECTION_TOP_TO_BOTTOM,
-    DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory, IDWriteFactory2,
-    IDWriteFontCollection, IDWriteTextFormat, IDWriteTextLayout,
+    DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory2, IDWriteFontCollection,
+    IDWriteTextFormat,
 };
+// 行 TextLayout そのものを扱うのは子モジュール line_store と、比較専用オラクル
+// [`DrawExecutor`]（`#[cfg(test)]`）だけ——非テストビルドの dead import を避けるべく
+// cfg(test) へ隔離する。
+#[cfg(test)]
+use windows::Win32::Graphics::DirectWrite::IDWriteTextLayout;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Dxgi::IDXGISurface;
-use windows::core::{BOOL, HSTRING, Interface};
-use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
+use windows::core::{HSTRING, Interface};
+use wintf::com::dwrite::DWriteFactoryExt;
 
 use crate::TextLayerError;
 use crate::canvas::TextEffects;
-use crate::layout::GlyphMetrics;
-use crate::state::TextLayerConfig;
-use crate::viewbox::LineOverhang;
+use crate::choice::ResolvedChoiceStyle;
+use crate::look::LookLayers;
 use crate::writing::WritingMode;
 
 // 以下は比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）だけが使う依存——本番経路
@@ -117,6 +135,28 @@ use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 #[cfg(test)]
 use wintf::ecs::GraphicsCore;
 
+// ---------------------------------------------------------------------------
+// 子モジュール（役割ごとの兄弟ファイル）と再輸出
+// ---------------------------------------------------------------------------
+//
+// 本ファイルはファサードで、計測（`draw_metrics.rs`）と行レイアウトの記憶
+// （`draw_line_store.rs`）は子モジュールが持つ。子は `super::` で本ファイルの
+// 定数・型・ヘルパを辿る。再輸出により crate 内から見た入口（`crate::draw::DWriteMetrics`
+// ／`crate::draw::LineLayoutStore`）は分割前と同一のまま。
+
+#[path = "draw_metrics.rs"]
+mod metrics;
+
+#[path = "draw_line_store.rs"]
+mod line_store;
+
+#[path = "draw_catalog.rs"]
+mod catalog;
+
+pub use catalog::FontCatalog;
+pub(crate) use line_store::LineLayoutStore;
+pub use metrics::DWriteMetrics;
+
 /// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
 pub const DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
 
@@ -131,23 +171,10 @@ const LOCALE_JA_JP: &str = "ja-JP";
 /// font.height も高々数十のため 1e6 は実用上無限）。
 pub const PROBE_MAX_EXTENT: f32 = 1.0e6;
 
-/// M2 予約キー接頭辞: `disable.font.*`（`\f[disable]` 用・SSP 2.5.51+）——
-/// 予約名の記録のみ・実挙動なし（R10.3・fixture 未使用）。
-pub const RESERVED_KEY_DISABLE_FONT_PREFIX: &str = "disable.font.";
-
-/// `disable.font.*` 拡張の型シーム（実挙動なし・R10.3）。
-///
-/// `#[non_exhaustive]`＋フィールドなし＝crate 外から意味を持たせられない構造保証。
-/// 実装（`\f[disable]` によるフォント変更禁止）は M2/後続ユニットの領分。
-///
-/// **縦書き写像は確定済み**（spec `areka-P0-balloon-vertical-canon` 要件 5.1〜5.3・5.7）——
-/// `align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、`valign` は `top`＝右寄せ／
-/// `bottom`＝左寄せ、下線は列の右側。正典 2 ページで `valign` の写像が逆である事実（疑義 SC1）と
-/// areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が正本で、実装の追跡先は
-/// `areka-P0-text-decoration-canon`（同 spec は本裁定を再審議せず継承する）。
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct FontDisableSeam {}
+/// バルーン背景色の既定（白）——無効表示の混色の相手がまだ分からないときに使う
+/// （要件 4.6）。実の背景（バルーン画像の原点画素）を知っている呼び手は
+/// [`ResolvedFont::resolve_with_background`] へそれを渡す。
+pub const DEFAULT_BALLOON_BACKGROUND: (u8, u8, u8) = (255, 255, 255);
 
 /// 解決済みフォント一式（`DrawExecutor::render` の `font` 引数・design.md「DrawExecutor（draw.rs）」）。
 ///
@@ -165,10 +192,15 @@ pub struct ResolvedFont {
     pub height: f32,
     /// フォント色 r/g/b（成分独立既定 0＝欠落は黒・ukadoc 既定）。
     pub color: (u8, u8, u8),
-    /// 文字装飾の M2 予約シーム（実挙動なし・R10.3）。
+    /// 行単位の文字装飾の M2 予約シーム（実挙動なし）。
     pub effects: TextEffects,
-    /// `disable.font.*` の型シーム（実挙動なし・R10.3）。
-    pub disable: FontDisableSeam,
+    /// 既定／無効表示の 2 層＋選択肢文字色（要件 4.1／4.4／4.5）。
+    ///
+    /// `\f[default]`／`\f[disable]` の戻し先で、本型が唯一の構築点。
+    /// `looks.default` の `name`（＝[`name`](Self::name) ＋ [`fallback_chain`](Self::fallback_chain)）・
+    /// `height`・`color` が同名のフィールドと一致することは、構築が
+    /// [`resolve_with_background`](Self::resolve_with_background) の 1 か所だけであることが保証する。
+    pub looks: LookLayers,
 }
 
 impl ResolvedFont {
@@ -182,6 +214,20 @@ impl ResolvedFont {
     ///   `0` は DirectWrite fontsize の正値制約を満たせない縮退値（`warn!`＋既定値）。
     /// - `font.color.r/g/b` は成分独立既定 0（欠落＝黒・正常系・ログなし）。
     pub fn resolve(model: &BalloonModel) -> ResolvedFont {
+        ResolvedFont::resolve_with_background(model, DEFAULT_BALLOON_BACKGROUND)
+    }
+
+    /// [`resolve`](Self::resolve) にバルーンの**背景色**を与えた形（要件 4.4／4.5／4.6）。
+    ///
+    /// 背景色は無効表示の色を導くためだけに使う（混色の式は
+    /// [`crate::color::mix_disabled`] が唯一の実装点）。背景を知らない呼び手は
+    /// [`resolve`](Self::resolve) を使い、[`DEFAULT_BALLOON_BACKGROUND`]（白）が採られる。
+    ///
+    /// バルーン定義からまだ読めない 8 キー（`font.bold` ほか・要件 4.3／4.7）の口は
+    /// [`LookLayers::from_balloon`] の引数列で、読めるようになったときはここで
+    /// `model.font()` から読んで渡すだけで効く（読み取りの所有は
+    /// `areka-P0-balloon-font-descript-keys`）。
+    pub fn resolve_with_background(model: &BalloonModel, background: (u8, u8, u8)) -> ResolvedFont {
         let font = model.font();
 
         let (name, fallback_chain) = match font.name() {
@@ -219,13 +265,31 @@ impl ResolvedFont {
             color.b().unwrap_or(0),
         );
 
+        // 選択肢の既定文字色は既存の選択肢表示の解決結果から取る——マーカー無し
+        // （`cursor.style,none`）は文字色を定めないので既定の文字色。
+        let cursor_text = ResolvedChoiceStyle::resolve(Some(model.cursor()), color)
+            .paint(color)
+            .map_or(color, |(_fill, text)| text);
+
+        let mut candidates = Vec::with_capacity(1 + fallback_chain.len());
+        candidates.push(name.clone());
+        candidates.extend(fallback_chain.iter().cloned());
+
         ResolvedFont {
             name,
             fallback_chain,
             height,
             color,
             effects: TextEffects::default(),
-            disable: FontDisableSeam::default(),
+            looks: LookLayers::from_balloon(
+                candidates,
+                height,
+                color,
+                background,
+                cursor_text,
+                &[],
+                &[],
+            ),
         }
     }
 }
@@ -353,198 +417,6 @@ fn try_create_format(
     )
 }
 
-/// 計測専用 probe TextLayout 由来の実測 [`GlyphMetrics`]（task 6.2・R4.5・probe 規約）。
-///
-/// 純粋層 `LayoutEngine` の外部注入点（`&dyn GlyphMetrics`）へ、DirectWrite の実測
-/// 送り幅を提供する。probe 規約（モジュール doc）:
-///
-/// - format は描画と同一の [`create_text_format`] 経路（解決済みフォント＋
-///   writing_mode 方向レシピ込み）で**生成時に一度だけ**焼く。
-/// - `advance` は対象文字の**未折返し probe layout**（[`PROBE_MAX_EXTENT`] 寸）を
-///   生成し cluster metrics の width 合計を返す（折返し決定より前の計測＝鶏卵なし）。
-/// - 計測値は文字単位でキャッシュする（format 固定＝同一文字は同一送り幅の決定論・
-///   probe 規約「確定内容の metrics は不変ゆえキャッシュ可」）。
-///
-/// UI スレッド専有（COM 層規律）。`line_pitch` は M1 正準式
-/// `font_height + 行間`（正本 [`TextLayerConfig::line_pitch`]・`FixedMetrics` と同一式）
-/// に従う——足し算は自分で持たず config へ委譲する。
-pub struct DWriteMetrics {
-    /// probe layout 生成用 factory（描画と同じ `IDWriteFactory2`）。
-    factory: IDWriteFactory2,
-    /// 描画と同一経路で生成済みの計測用 format（フォント・サイズ・方向レシピ込み）。
-    format: IDWriteTextFormat,
-    /// 束縛フォント高さ（`ResolvedFont::height`・format へ焼き込み済みの正本）。
-    font_height: f32,
-    /// 行送りの調整値（行間の正本 [`TextLayerConfig`]・`line_pitch` の委譲先）。
-    config: TextLayerConfig,
-    /// 実 font face metrics 由来の行ボックス比 `(ascent + descent) ÷ designUnitsPerEm`
-    /// （生成時に一度だけ実測・文字列非依存＝フォント固有の設計値）。
-    line_box_ratio: f32,
-    /// 文字単位の計測キャッシュ（probe 成功値のみ・失敗は縮退値を返しキャッシュしない）。
-    cache: RefCell<HashMap<char, f32>>,
-}
-
-impl DWriteMetrics {
-    /// 解決済みフォント＋writing_mode から計測用 metrics を生成する。
-    ///
-    /// format は描画と同一の [`create_text_format`] 経路（既定フォント再試行込み・
-    /// R4.2）——probe 規約「描画に使うのと同一のフォント設定・writing_mode 設定」の
-    /// 構造的保証。生成失敗は当該経路の log-first（`warn!`/`error!`＋`Err`）に従う。
-    pub fn new(
-        factory: &IDWriteFactory2,
-        font: &ResolvedFont,
-        mode: WritingMode,
-        config: &TextLayerConfig,
-    ) -> Result<DWriteMetrics, TextLayerError> {
-        let format = create_text_format(factory, font, mode)?;
-        // 行ボックス比は **format が実際に束縛したフォント**の face metrics から実測する
-        // （既定フォント再試行後でも format 側から辿るため取り違えが起きない）。取得失敗は
-        // warn＋行送りピッチと同丈の比（`line_pitch(h) / h`）へ縮退する（帯はピッチで
-        // 頭打ちゆえ縮退値でも隣接行を侵さない・R3.10・現行の縮退の意図を新式のまま保つ）。
-        let line_box_ratio = measure_line_box_ratio(factory, &format).unwrap_or_else(|| {
-            let fallback_ratio = if font.height > 0.0 {
-                config.line_pitch(font.height) / font.height
-            } else {
-                1.0
-            };
-            warn!(
-                font = %font.name,
-                line_gap = config.line_gap,
-                fallback = fallback_ratio,
-                "font face metrics を取得できない——行ボックス比を行送りピッチ相当へ縮退する"
-            );
-            fallback_ratio
-        });
-        Ok(DWriteMetrics {
-            factory: factory.clone(),
-            format,
-            font_height: font.height,
-            config: *config,
-            line_box_ratio,
-            cache: RefCell::new(HashMap::new()),
-        })
-    }
-
-    /// 1 文字の未折返し probe layout を生成し、cluster metrics の width 合計を返す。
-    fn probe_advance(&self, ch: char) -> Result<f32, TextLayerError> {
-        let text = HSTRING::from(ch.to_string());
-        let layout = self
-            .factory
-            .create_text_layout(&text, &self.format, PROBE_MAX_EXTENT, PROBE_MAX_EXTENT)
-            .map_err(device_err("CreateTextLayout(probe)"))?;
-        let clusters = layout
-            .get_cluster_metrics()
-            .map_err(device_err("GetClusterMetrics(probe)"))?;
-        Ok(clusters.iter().map(|c| c.width).sum())
-    }
-
-    /// キャッシュ済み計測数（テスト観測用: 同一文字の再計測が probe を増やさない檻）。
-    #[cfg(test)]
-    fn cached_probe_count(&self) -> usize {
-        self.cache.borrow().len()
-    }
-}
-
-impl GlyphMetrics for DWriteMetrics {
-    /// 実測送り幅（image px＝format の DIP そのまま・writing_mode の行内軸方向の寸）。
-    ///
-    /// `font_height` は束縛フォント（format へ焼き込み済み）と一致していることが契約。
-    /// 不一致は `warn!`＋縮退継続（値は束縛 format の実測のまま——probe は描画と同一
-    /// format が正準のため引数側へ寄せない）。probe 失敗は `error!`（[`device_err`]）
-    /// 済みで、決定論の縮退値（`FixedMetrics` と同式: 全角＝height・半角＝height/2）
-    /// を返して継続する（trait は失敗経路を持たない・log-first でログ無し失敗にしない）。
-    fn advance(&self, ch: char, font_height: f32) -> f32 {
-        if font_height != self.font_height {
-            warn!(
-                requested = font_height,
-                bound = self.font_height,
-                "advance へ束縛フォントと異なる font_height が渡された——束縛 format の実測を返す"
-            );
-        }
-        if let Some(&cached) = self.cache.borrow().get(&ch) {
-            return cached;
-        }
-        match self.probe_advance(ch) {
-            Ok(advance) => {
-                self.cache.borrow_mut().insert(ch, advance);
-                advance
-            }
-            // 失敗は probe_advance 内で error! 済み。縮退値はキャッシュしない（次回再試行）。
-            Err(_) => {
-                if ch.is_ascii() {
-                    self.font_height / 2.0
-                } else {
-                    self.font_height
-                }
-            }
-        }
-    }
-
-    /// 行送りピッチ＝正典式 `font_height + 行間`。式は [`TextLayerConfig::line_pitch`]
-    /// が唯一の定義点で、ここは委譲するだけ（自前の足し算を持たない・R3.5）。
-    fn line_pitch(&self, font_height: f32) -> f32 {
-        self.config.line_pitch(font_height)
-    }
-
-    /// 実レンダリング行ボックス丈＝`font_height × (ascent + descent) ÷ designUnitsPerEm`
-    /// （生成時に実測した [`line_box_ratio`](Self::line_box_ratio) を掛けるだけ・文字列非依存）。
-    ///
-    /// 実測例: Yu Gothic UI ＝ upem 2048・ascent 2210・descent 514 → 比 1.3301
-    /// （28px で 37.24px＝em ボックス 28px より 9.24px 高い）／ＭＳ ゴシック ＝ upem 256・
-    /// ascent 220・descent 36 → 比ちょうど 1.0（既定フォントでは em ボックスと一致するため
-    /// **既定フォントだけを見ていると descent はみ出しが観測されない**——記憶
-    /// emo-text-byte-equiv-default-font-blindspot の系）。
-    fn line_box_height(&self, font_height: f32) -> f32 {
-        font_height * self.line_box_ratio
-    }
-}
-
-/// format が束縛したフォントの face metrics から行ボックス比 `(ascent + descent) ÷ upem` を実測する。
-///
-/// format 自身が持つ family 名・フォント コレクション・weight/style/stretch を辿るため、
-/// [`create_text_format`] の既定フォント再試行（R4.2）後でも**実際に描画されるフォント**を測る。
-/// 取得経路のいずれかが失敗・不在（family 未発見・upem 0 等）なら `None`（呼び手が縮退）。
-fn measure_line_box_ratio(factory: &IDWriteFactory2, format: &IDWriteTextFormat) -> Option<f32> {
-    // family 名（format 焼込値）。
-    let len = unsafe { format.GetFontFamilyNameLength() } as usize;
-    let mut name = vec![0u16; len + 1];
-    unsafe { format.GetFontFamilyName(&mut name) }.ok()?;
-    let name = HSTRING::from_wide(&name[..len]);
-    // フォント コレクション（format が持たなければシステム コレクション）。
-    let collection: IDWriteFontCollection = match unsafe { format.GetFontCollection() } {
-        Ok(c) => c,
-        Err(_) => {
-            let base: IDWriteFactory = factory.cast().ok()?;
-            let mut system: Option<IDWriteFontCollection> = None;
-            unsafe { base.GetSystemFontCollection(&mut system, false) }.ok()?;
-            system?
-        }
-    };
-    let mut index = 0u32;
-    let mut exists = BOOL(0);
-    unsafe { collection.FindFamilyName(&name, &mut index, &mut exists) }.ok()?;
-    if !exists.as_bool() {
-        return None;
-    }
-    let family = unsafe { collection.GetFontFamily(index) }.ok()?;
-    let font = unsafe {
-        family.GetFirstMatchingFont(
-            format.GetFontWeight(),
-            format.GetFontStretch(),
-            format.GetFontStyle(),
-        )
-    }
-    .ok()?;
-    let face = unsafe { font.CreateFontFace() }.ok()?;
-    let mut metrics = DWRITE_FONT_METRICS::default();
-    unsafe { face.GetMetrics(&mut metrics) };
-    let upem = metrics.designUnitsPerEm as f32;
-    if upem <= 0.0 {
-        return None;
-    }
-    Some((metrics.ascent as f32 + metrics.descent as f32) / upem)
-}
-
 /// 行 TextLayout の format 前提（フォント名・高さ・writing_mode）——変わると
 /// キャッシュ済み行レイアウトの前提が崩れるため format と行キャッシュを組み直す。
 ///
@@ -557,129 +429,6 @@ struct FormatKey {
     /// f32 のビット表現（PartialEq の全順序比較を避ける・同値判定のみ）。
     font_height_bits: u32,
     mode: WritingMode,
-}
-
-/// キャッシュ済みの行 TextLayout（行内容の正本文字列＋実測インクはみ出しと対で保持・
-/// 内容不変なら再利用）。`overhang` は生成時に一度だけ [`DWriteTextLayoutExt::get_overhang_metrics`]
-/// で実測（確定行は再計測しない）——ViewboxExecutor のダーティ矩形が em ボックス下端はみ出しを
-/// 取りこぼさないための実測値（D2）。
-struct CachedLineLayout {
-    text: String,
-    layout: IDWriteTextLayout,
-    overhang: LineOverhang,
-}
-
-/// 行 TextLayout の生成・キャッシュを担う共有ストア（複数の描画実行が**同一経路**で
-/// 行レイアウトを得るための抽出型・design.md「draw.rs の再編（LineLayoutStore 抽出）」）。
-///
-/// 生成規則（行内軸＝[`PROBE_MAX_EXTENT`]・行送り軸＝`font_height`・同一 format）・キー
-/// （canvas 行 index）・内容不変再利用・破棄規律（[`clear`](Self::clear) のみ全破棄）は
-/// 抽出前の `DrawExecutor` 内実装と同一——TextLayout 生成経路の完全共有により両描画実行の
-/// **byte 等価**を構造化する（RN5）。UI スレッド専有（COM 層規律）。
-///
-/// `pub(crate)`: [`DrawExecutor`]（front へ全域再描画）と `ViewboxExecutor`
-/// （back へダーティ描画・viewbox_draw.rs）が**同一経路**で行レイアウトを得るため
-/// crate 内へ公開する（生成規則・キー・破棄規律は不変）。
-pub(crate) struct LineLayoutStore {
-    /// 行 TextLayout 生成用 factory（probe/描画と同一の `IDWriteFactory2`）。
-    factory: IDWriteFactory2,
-    /// 行 TextLayout キャッシュ（key＝canvas 行 index。追記単調ゆえ確定行の index/内容は
-    /// 不変——リビール中＝最終行のみ内容が変わり都度更新される）。
-    cache: HashMap<usize, CachedLineLayout>,
-    /// 行 TextLayout の累計生成回数（**常時コンパイル**・後続 task の `DrawStats` へ集計する
-    /// ため `#[cfg(test)]` にしない・design「Modified Files」）。
-    creations: u64,
-}
-
-impl LineLayoutStore {
-    /// factory を束ねて空ストアを生成する（factory は clone 保持）。
-    pub(crate) fn new(factory: &IDWriteFactory2) -> LineLayoutStore {
-        LineLayoutStore {
-            factory: factory.clone(),
-            cache: HashMap::new(),
-            creations: 0,
-        }
-    }
-
-    /// 行 TextLayout の取得（内容不変なら再利用・変化時のみ生成して置換）。
-    ///
-    /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]・折返しは純粋層で決定済み
-    /// ＝再折返しさせない）・行送り軸＝`font_height`」。方向レシピ（LEADING/NEAR）により
-    /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
-    pub(crate) fn line_layout(
-        &mut self,
-        index: usize,
-        text: &str,
-        format: &IDWriteTextFormat,
-        font_height: f32,
-        mode: WritingMode,
-    ) -> Result<IDWriteTextLayout, TextLayerError> {
-        if let Some(cached) = self.cache.get(&index) {
-            if cached.text == text {
-                return Ok(cached.layout.clone());
-            }
-        }
-        let (max_width, max_height) = match mode {
-            WritingMode::HorizontalTb => (PROBE_MAX_EXTENT, font_height),
-            WritingMode::VerticalRl | WritingMode::VerticalLr => (font_height, PROBE_MAX_EXTENT),
-        };
-        let layout = self
-            .factory
-            .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
-            .map_err(device_err("CreateTextLayout(line)"))?;
-        self.creations += 1;
-        // 実測インクはみ出し（生成時 1 回・確定行は再計測しない）。行ボックスのブロック軸寸は
-        // font_height（横＝max_height／縦＝max_width）ゆえ、その軸の overhang が em ボックスからの
-        // はみ出しを直接与える。行内軸は巨大 PROBE_MAX_EXTENT 箱ゆえ overhang は巨大負値＝`max(0.0)`
-        // で 0 に丸まる（resident_rect はブロック軸の overhang のみ使う）。
-        let overhang = measure_line_overhang(&layout)?;
-        self.cache.insert(
-            index,
-            CachedLineLayout {
-                text: text.to_owned(),
-                layout: layout.clone(),
-                overhang,
-            },
-        );
-        Ok(layout)
-    }
-
-    /// キャッシュ済み行の実測インクはみ出し（[`LineOverhang`]）——`ViewboxExecutor` が plan へ渡す。
-    /// 未生成 index は `None`（呼び手は既定 0＝em ボックス丈として扱う）。
-    pub(crate) fn overhang(&self, index: usize) -> Option<LineOverhang> {
-        self.cache.get(&index).map(|c| c.overhang)
-    }
-
-    /// キャッシュを全破棄する（Clear cue の適用点・破棄はこの口だけ）。
-    pub(crate) fn clear(&mut self) {
-        self.cache.clear();
-    }
-
-    /// 行 TextLayout の累計生成回数（常時コンパイル・`DrawStats` 集計とテスト観測の共通読み口）。
-    /// `ViewboxExecutor::render`（viewbox_draw.rs）が本フレームの生成増分を `DrawStats`
-    /// （`line_layout_creations`）へ集計するために非テストビルドでも読む。
-    pub(crate) fn creations(&self) -> u64 {
-        self.creations
-    }
-}
-
-/// 行 TextLayout の実測インクはみ出し（[`LineOverhang`]・image px・全成分 ≥ 0）を返す。
-///
-/// [`DWriteTextLayoutExt::get_overhang_metrics`]（`GetOverhangMetrics`）はレイアウトボックス各辺
-/// からのはみ出し（正＝外側・DIP）を返す。行ボックスのブロック軸寸が `font_height`（横＝`max_height`
-/// ／縦＝`max_width`）に設定済みゆえ、その軸の値が em ボックス下端/上端（縦は左右）からのはみ出しを
-/// 直接与える。行内軸は巨大 `PROBE_MAX_EXTENT` 箱ゆえ値は巨大負値＝`max(0.0)` で 0 に丸まる
-/// （`resident_rect` はブロック軸の overhang のみ使うため、これで正しくブロック軸だけが効く）。
-fn measure_line_overhang(layout: &IDWriteTextLayout) -> Result<LineOverhang, TextLayerError> {
-    let o = layout
-        .get_overhang_metrics()
-        .map_err(device_err("GetOverhangMetrics(line)"))?;
-    Ok(LineOverhang {
-        top: o.top.max(0.0),
-        bottom: o.bottom.max(0.0),
-        left: o.left.max(0.0),
-        right: o.right.max(0.0),
-    })
 }
 
 /// **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み・除去は本ユニットの

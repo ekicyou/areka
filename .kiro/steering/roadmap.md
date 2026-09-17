@@ -75,7 +75,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 4 | `sakura-tag-word-boundary` | バグ（完了契約 13.1 の穴） | S〜M | **W13** | `sakura-bare-tag-lexer` ✅ | − | ⚪ |
 | 5 | `charset-canon` | 正典（里々ゴーストが 1 体も動かない・surfaces.txt 2 箇所は実バグ） | M | **W13** | なし | ○（⑵ 交渉のみ） | ✅ |
 | 6 | `ukadoc-coverage-roadmap` | 調査（**M2 ロードマップの生成器**・依存ツリー最長） | M | **W13** | survey 4 本 ✅・e2e ✅＝**両段とも解禁済み** | ○ | ✅ |
-| 7 | `text-decoration-canon`（⑴ 基盤＋font 10＋default/disable） | 正典（文字装飾 4 本の先頭ゲート） | L | **W13** | bvc ✅・cursor-tag ✅・line-height ✅ | ○（design） | ⚪ |
+| 7 | `completed/text-decoration-canon`（⑴ 基盤＋font 10＋default/disable） | 正典（文字装飾 4 本の先頭ゲート） | L | **W13** | bvc ✅・cursor-tag ✅・line-height ✅ | ○（design） | ✅ 完了（2026-09-13） |
 | 8 | `sylphya-set-ledger`（channels ⑶・**09-11 起票**） | 台帳（三重所有の台帳側） | S | **W13** | なし | − | ⚪ |
 | 9 | `balloon-font-descript-keys`（decoration ⑶・**09-11 起票**） | 正典（転記のみ） | S | **W13** | なし | − | ⚪ |
 | 10 | `surfaces-basepos` | 正典（完全独立） | S | W13 任意／W14 | なし | − | ⚪ |
@@ -155,7 +155,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 **生成器の出力（2026-09-13）**: 順位対象 1,552 件を 67 束に分け、段階 A〜E と順位を付けた。先頭ウェーブの案は **6 束・324 件**（`roadmap-draft.md`）。起票の候補名は案であって決まった名前ではなく、既存 spec と綴りが重なる 1 件（`areka-P0-nar-install`）は裁定待ちである。裁定候補 30 件・本ロードマップの改訂候補 10 件・是正候補 15 件も同文書に並べた。**この 3 文書は起票のたびに古びる写真ではなく、常設の検査 6 種が台帳との一致を見張っている**（`cargo test -p ukadoc-survey`）。
 
-予約（全て任意・brief なし・仮裁定 2）: アプリ層＝SSTP（9801）・FMO・DirectSSTP・Plugin/HEADLINE・ネットワーク更新・ゴースト/バルーン選択 UI・多重ゴースト。互換面＝Shift_JIS（**`charset-canon` で W13**）・SAORI は実装しない（SHIORI が直接 `LoadLibrary`・台帳 `not-applicable`）・里々/YAYA 網羅・NAR。emo テキスト進化＝回転テキスト（`TextEffects` 予約名 `rotation`／`multicolor` は `text-decoration-canon` が M2 シームのまま残す）。バルーン美観配置（画面端反転・`[visibility-guard] ClampX` の `warn!` 発火回数が優先度根拠）。pasta の native x64／`IShiori` in-proc・ベクトル描画・owner-draw 右クリックメニュー。
+予約（全て任意・brief なし・仮裁定 2）: アプリ層＝SSTP（9801）・FMO・DirectSSTP・Plugin/HEADLINE・ネットワーク更新・ゴースト/バルーン選択 UI・多重ゴースト。互換面＝Shift_JIS（**`charset-canon` で W13**）・SAORI は実装しない（SHIORI が直接 `LoadLibrary`・台帳 `not-applicable`）・里々/YAYA 網羅・NAR。emo テキスト進化＝回転テキスト（`TextEffects` 予約名 `rotation`／`multicolor` は `text-decoration-canon` が M2 シームのまま残す）。**`\f[sub]`／`\f[sup]`／`\f[outline]` は DirectWrite の標準機能で表せる手段が見つかるまで語彙のみ**（`areka-P0-text-decoration-canon` 2026-09-11 の開発者裁定——6 値の解釈・状態の保持・戻しへの参加までは行い表示は変えない・台帳の `status` は `vocabulary-only`・所有仕様なしで追跡先はこの行）。バルーン美観配置（画面端反転・`[visibility-guard] ClampX` の `warn!` 発火回数が優先度根拠）。pasta の native x64／`IShiori` in-proc・ベクトル描画・owner-draw 右クリックメニュー。
 
 ---
 

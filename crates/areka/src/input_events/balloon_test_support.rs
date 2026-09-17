@@ -67,6 +67,8 @@ fn synth_boot_assets() -> BootAssets {
             emo_world: empty_world(),
             atlas: empty_atlas(),
             model: areka_parsers::balloon::parse_str("", None),
+            // headless 純合成のバルーンは面画像を持たない＝背景色は既定の白（要件 4.6）。
+            background_color: (255, 255, 255),
         }],
         resolver: SurfaceResolver::new(BTreeMap::new()),
         static_binds: BindSet::default(),
