@@ -1,4 +1,4 @@
-//! 窓を作る決定論テスト（要件 1.2・4.1〜4.3・4.6・4.8・4.9・4.11）。
+//! 窓を作る決定論テスト（要件 1.2・1.3・4.1〜4.6・4.8・4.9・4.11）。
 //!
 //! 本番の shiori アクター（実 [`areka_kanade::ShioriConnection`]＋即終了する x64 の stand-in
 //! helper）を [`spawn_window_actor`] で起こし、要求の無い待機中のホスト窓へ別スレッド（テスト
@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use areka_kanade::shiori::real::IDLE_INTERVAL;
 use areka_kanade::{KanadeMsg, ShioriMsg};
-use shiori_host32_ipc::{MsgTag, hwnd_from_u32, send_copydata_response};
+use shiori_host32_ipc::{MsgTag, hwnd_from_u32, send_copydata, send_copydata_response};
 
 use super::common::{DEFAULT_TIMEOUT, join_bounded, spawn_window_actor};
 
@@ -75,6 +75,84 @@ fn sync_send_to_idle_window_returns_within_bound() {
     assert!(
         first_down.is_some() && !second_down,
         "即終了した stand-in の死活報告が手空きの初回にちょうど 1 通届く: {diag}"
+    );
+}
+
+/// 遅いテストの各段の待ち（要求を 1 通も送らない時間）。スレッドが応答なしと見なされる 14 秒を
+/// 確実に超える最小の切りの良い値（`shiori-host32-helper` の同型テストと同値）。
+const SLOW_IDLE: Duration = Duration::from_secs(20);
+/// 遅いテストの同期送出の上限（helper 本体の `REPLY_TIMEOUT` と同値）。
+const SLOW_SEND_BOUND: Duration = Duration::from_secs(5);
+/// 遅いテスト全体の上限。構造上の最悪でも 起動待ち 5＋20＋5＋20＋5＋join＝60 秒程度。
+const SLOW_CAGE_BOUND: Duration = Duration::from_secs(90);
+
+/// 要求の無い待機中のホスト窓へ、相手が応答なしなら待たずに打ち切る送り方（`SMTO_ABORTIFHUNG`）で
+/// 20 秒待ち → 送出① → 20 秒待ち → 送出② と送り、どちらも届くこと（要件 1.3・4.4・4.5）。
+///
+/// OS の打ち切りは「プロセスが起きてから概ね 20〜30 秒を過ぎた」かつ「宛先の窓のスレッドが 14 秒
+/// 以上メッセージを取り出していない」ときに起きる。送出②の時点ではプロセスの生存は 40 秒を超え、
+/// アクターは 20 秒要求を受けていないので両方の条件が揃う。待機中に窓のメッセージを取り出さない
+/// 受信ループでは、① が上限まで待って失敗し ② が即座に失敗する（② の即時失敗が打ち切りの署名）。
+#[test]
+fn abortifhung_send_reaches_window_idle_for_twenty_seconds() {
+    let _ = uptime();
+    let started = Instant::now();
+    let actor = spawn_window_actor();
+    let host = hwnd_from_u32(actor.hwnd);
+
+    std::thread::sleep(SLOW_IDLE);
+    let uptime_at_first = uptime();
+    let first_started = Instant::now();
+    let first = send_copydata(
+        host,
+        host,
+        MsgTag::Response,
+        b"hung-cage-1",
+        SLOW_SEND_BOUND,
+    );
+    let first_elapsed = first_started.elapsed();
+
+    std::thread::sleep(SLOW_IDLE);
+    let uptime_at_second = uptime();
+    let second_started = Instant::now();
+    let second = send_copydata(
+        host,
+        host,
+        MsgTag::Response,
+        b"hung-cage-2",
+        SLOW_SEND_BOUND,
+    );
+    let second_elapsed = second_started.elapsed();
+
+    let _ = actor.shiori_tx.send(ShioriMsg::Close);
+    let joined = join_bounded("idle-pump-slow shiori join", DEFAULT_TIMEOUT, actor.handle);
+
+    let send_failures = [first.is_err(), second.is_err()]
+        .iter()
+        .filter(|failed| **failed)
+        .count();
+    let total = started.elapsed();
+    let diag = format!(
+        "first={first:?} first_elapsed={first_elapsed:?} \
+         second={second:?} second_elapsed={second_elapsed:?} \
+         idle={SLOW_IDLE:?} send_bound={SLOW_SEND_BOUND:?} \
+         uptime_lower_bound_at_first={uptime_at_first:?} \
+         uptime_lower_bound_at_second={uptime_at_second:?} \
+         send_failures={send_failures} total={total:?}"
+    );
+    joined.expect("shiori アクターが正常に終わる");
+    assert!(
+        first.is_ok(),
+        "送出①が届く（20 秒の待機後・要件 1.3）: {diag}"
+    );
+    assert!(
+        second.is_ok(),
+        "送出②が届く＝待機中のホスト窓が応答なし判定に落ちていない（要件 1.3・4.4）: {diag}"
+    );
+    assert_eq!(send_failures, 0, "送出の失敗が 0 回である: {diag}");
+    assert!(
+        total < SLOW_CAGE_BOUND,
+        "全体が上限 {SLOW_CAGE_BOUND:?} の内で終わる（要件 4.5）: {diag}"
     );
 }
 
