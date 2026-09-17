@@ -20,6 +20,7 @@
 //! [`crate::shiori`] の rustdoc に記す。
 
 use std::sync::mpsc::{Receiver, Sender};
+use std::time::Duration;
 
 use areka_actor::{ActorHandle, spawn_actor};
 use shiori_host32_host::{
@@ -77,7 +78,24 @@ pub trait ShioriBackend {
     fn unload(&mut self) -> Result<ExitKind, ShutdownError>;
     /// 非ブロッキング死活問い合わせ（sticky）。
     fn status(&mut self) -> HelperStatus;
+    /// アクターが手空き（inbox が [`IDLE_INTERVAL`] の間空）のたびに呼ばれる保守の機会。
+    ///
+    /// backend が自分のスレッド上で周期的に行うべき軽い仕事（例: 自分が所有する資材の
+    /// 応答性の維持）に使う。ブロックしない・失敗を返さない・異常は [`Self::status`] で報告する
+    /// （直後に必ず確認される）。往復（`get`／`notify`／`unload`）の内側からは呼ばれない。
+    /// 既定は何もしない。
+    fn on_idle(&mut self) {}
 }
+
+/// backend の保守周期（手空きを検出する受信待ちの上限）。
+///
+/// 値の根拠: backend が外から見て応答可能でいるために要する保守の間隔の、現状で最も厳しい
+/// 要求は host32 backend の「資材を所有するスレッドが 5 秒以上処理を止めると OS が応答なしと
+/// 判定しうる」である。その 1/10 を取り、負荷やスケジューラの遅れに対する余裕と、速い決定論
+/// テストの上限（4 倍＝2 秒・全体 5 秒以内）を同時に満たす。往復の所要には影響しない（inbox
+/// 到達は送信で即起きる）。正常時の手空きはログを出さないので、この周期を短くしてもログは
+/// 増えない。
+pub const IDLE_INTERVAL: Duration = Duration::from_millis(500);
 
 impl ShioriBackend for ShioriConnection {
     fn get(
