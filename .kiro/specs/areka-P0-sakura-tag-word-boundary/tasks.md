@@ -52,7 +52,7 @@
   - _Boundary: 通しテスト_
 
 - [ ] 4. 検証と記録
-- [ ] 4.1 是正を戻すと赤になる対を変異で実測する
+- [x] 4.1 是正を戻すと赤になる対を変異で実測する
   - まず対象範囲のテストが全緑であることを確かめる（スコープ実行で足りる。ワークスペース全体は 4.3）
   - 変異その一として頭打ちと長さ確定を外し旧実装へ戻す。本文中の開き括弧を扱う項目に加えて架空の多文字綴りの分割を固定する項目（字句側・通し側の両方）と、2.3 で期待値を書き換えた文字装飾のテスト 1 本も赤になる側である。緑のまま残るのは角括弧経路・直後の未閉じ・短縮形規律・影響しない 4 形の項目と、綴りを差し替えた既存テスト 7 本に限る（既存テストが緑であることが差し替えで意図を保った証拠になる）
   - 変異その二として短縮形の例外分岐だけを外す。短縮形規律の項目と既存の短縮形境界テストが赤になり、他は緑であることを確かめる。変異その二′として `q*` の例外分岐だけを外し、`\q*` の項目と既存の旧選択肢テスト 2 本が赤になることも確かめる
@@ -87,3 +87,4 @@
 - 2.1 時点で `other_words_starting_with_f_stay_raw` だけが赤（2.3 で書き換える想定どおり）。
 - 作業の罠: Git Bash の `sed -i` は CRLF を LF にし、バックスラッシュのパターンも一致しない。ソースの編集は Edit で行う。
 - 3.1: 設計 L 番号外に `q_star_without_immediate_bracket_is_one_char_tag_and_text`（`\q*テキスト[注]`）を追加。変異 ⑴ で赤になる側（4.1 の期待一覧へ加える）。審査者の予備実測で変異 ⑵ の赤は設計見込みより `\b1[`（L9）と既存 `balloon_bracketed_digit_word_stays_raw` の分だけ多い。
+- 4.1 変異実測（2026-09-17・`cargo test -p areka-parsers --no-fail-fast`）: ⑴ 旧実装へ戻す → 16 本赤（L1〜L7・L12・`q_star_without_immediate_bracket_is_one_char_tag_and_text`・P1〜P4・P8・P9・`other_words_starting_with_f_split_into_bare_font_and_text`）、L8〜L11・P5〜P7・綴り差し替え 7 本は緑。⑵ 短縮形の例外を外す → 6 本赤（L9・L10・`wait_digit_then_bracket_is_tag_not_shorthand`・`balloon_digit_then_bracket_is_tag_not_shorthand`・`balloon_unclosed_bracket_absorbed_as_raw`・`balloon_bracketed_digit_word_stays_raw`）。⑵′ `q*` の例外を外す → 3 本赤（L10・`legacy_double_bracket_q_star_to_raw`・`choice_legacy_q_star_double_bracket_kept_raw`）。いずれも戻して 457＋91 全緑。設計の見込み一覧は ⑴ に 1 本・⑵ に 2 本足りず、実測に合わせて訂正した。3.1 の審査で独立に同じ 3 変異を回し一致。

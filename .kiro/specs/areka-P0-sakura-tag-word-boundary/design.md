@@ -368,8 +368,8 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize);
 ### 変異手順（要件 5.7・実装タスクで実施し結果を記録する）
 
 1. 是正後の全テストが緑であることを確認する。
-2. **変異 ⑴（旧実装へ戻す）**: 語走査の上限を外し、長さ確定と `j`／`word` の付け直しを外す（角括弧なし腕は `bare_tag_len` で切り出す旧形へ戻す）。`cargo test -p areka-parsers`。**期待の赤: L1〜L7・L12・P1〜P4・P8・P9 と、期待値を書き換えた `decode_font_tests.rs` の 1 本**。**期待の緑: L8〜L11・P5〜P7 とそれ以外の既存の全テスト**（綴りを差し替えた 7 本は `\i` が正典形の 1 文字綴りゆえ旧実装でも緑＝差し替えが意図を保っている証拠）。
-3. **変異 ⑵（例外を外す）**: 「短縮対象語＋数字なら走査結果のまま」の分岐を外し、常に `bare_tag_len` で確定する。**期待の赤: L10 と既存 `wait_digit_then_bracket_is_tag_not_shorthand`・`balloon_digit_then_bracket_is_tag_not_shorthand`・`balloon_unclosed_bracket_absorbed_as_raw`**。他は緑。
+2. **変異 ⑴（旧実装へ戻す）**: 語走査の上限を外し、長さ確定と `j`／`word` の付け直しを外す（角括弧なし腕は `bare_tag_len` で切り出す旧形へ戻す）。`cargo test -p areka-parsers`。**期待の赤: L1〜L7・L12・P1〜P4・P8・P9 と、期待値を書き換えた `decode_font_tests.rs` の 1 本、字句テストに追加した `q_star_without_immediate_bracket_is_one_char_tag_and_text`（計 16 本・2026-09-17 実測）**。**期待の緑: L8〜L11・P5〜P7 とそれ以外の既存の全テスト**（綴りを差し替えた 7 本は `\i` が正典形の 1 文字綴りゆえ旧実装でも緑＝差し替えが意図を保っている証拠）。
+3. **変異 ⑵（例外を外す）**: 「短縮対象語＋数字なら走査結果のまま」の分岐を外し、常に `bare_tag_len` で確定する。**期待の赤: L9（`\b1[`）・L10 と既存 `wait_digit_then_bracket_is_tag_not_shorthand`・`balloon_digit_then_bracket_is_tag_not_shorthand`・`balloon_unclosed_bracket_absorbed_as_raw`・`balloon_bracketed_digit_word_stays_raw`（`decode_tests.rs`）（計 6 本・2026-09-17 実測で L9 と最後の 1 本を追加）**。他は緑。
    - **変異 ⑵′（例外その二を外す）**: 「`q` ＋ `*` ＋ `[` なら走査結果のまま」の分岐だけを外す。**期待の赤: L10 の `\q*` の項目と既存 `legacy_double_bracket_q_star_to_raw`（`decode_tests.rs`）・`choice_legacy_q_star_double_bracket_kept_raw`（`validation_tests.rs`）**。他は緑。
 4. どちらの変異も元へ戻し、再び全緑を確認する。変異ごとに赤になったテスト名を実装記録へ残す。
 
