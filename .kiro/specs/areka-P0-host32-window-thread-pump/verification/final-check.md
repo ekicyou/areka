@@ -1,5 +1,7 @@
 # 最終確認（タスク 6.1）: 常設テスト全体・編集集合・規模
 
+> **コミット ID についての注記**: 本記録のコミット ID は、2026-09-17 に本ブランチを `origin/main`（#149 `5f64a4c9`・#150 `eb4ef6ab`）の上へ rebase する**前**のものである。rebase で ID は変わったが、各コミットの中身（本 spec の差分）は同じ。取り込み後の全体テストは `final-check.md` 末尾の追記を参照。
+
 - 日時: 2026-09-17
 - コミット: `cca0b618`（作業ツリーに未コミットの変更なし）
 - 比較の起点: `git merge-base HEAD origin/main` = `a726174ade19712599b605131c66be8621ebc350`
@@ -152,3 +154,12 @@ IPC と helper の変更がコメントだけであることは、`git diff -U0 
 全体テストは 103 スイートすべてが完走し、失敗 0 件。新しい 6 本は無条件に含まれて `ok`。
 編集集合は設計の計画の範囲に収まり、併走 spec などが所有するファイル・完了 spec のアーカイブ・互換アーキテクチャ文書の差分はすべて 0。
 変更したファイルはすべて 1,000 行以下。
+
+## 追記: main 取り込み後の全体テスト（最終検証）
+
+- 2026-09-17・本ブランチを `origin/main`（`eb4ef6ab`＝#150）の上へ rebase した後の `5e4ea392`（作業ツリーは記録の注記のみ未コミット）。最終検証の指摘で Test-D から短い期限での「2 通目が来ない」の主張を外した後の状態
+- 前提: i686 の testdll と helper をビルドし、`cargo test --workspace --no-run` の後で i686 helper（273,408 bytes）を `target/debug/` へコピー
+- `cargo test --workspace`: exit **0**・約 4 分 33 秒・`Running` 81＋`Doc-tests` 22＝`test result:` 103 行（完走）・passed **7,628**／failed **0**／ignored 40
+- 新しい 6 本はすべて ok（`on_idle_is_called_while_idle`・`helper_exit_during_idle_reports_shiori_down_once`・`requests_after_idle_are_served_in_order`・`no_liveness_report_after_clean_unload_even_when_idle`・`sync_send_to_idle_window_returns_within_bound`・`abortifhung_send_reaches_window_idle_for_twenty_seconds`）
+- `cargo fmt --all -- --check`: exit 0
+- passed が 7,602 から 7,628 へ増えたのは、取り込んだ #149・#150 のテスト分
