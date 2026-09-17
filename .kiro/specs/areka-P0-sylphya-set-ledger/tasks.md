@@ -95,8 +95,8 @@
   - _Requirements: 2.5, 8.1, 8.2, 8.3, 8.4_
   - _Boundary: COMPAT §8 追加行_
 
-- [ ] 5. 統合検証
-- [ ] 5.1 決定論検査を全走させ、赤を「古い前提」と「壊した」へ切り分ける
+- [x] 5. 統合検証
+- [x] 5.1 決定論検査を全走させ、赤を「古い前提」と「壊した」へ切り分ける
   - `cargo test -p areka-sylphya --lib` と `cargo test -p areka --lib placement::zorder_property_deferral_tests` と `cargo test -p ukadoc-survey` を走らせる（名前を指定する走らせ方では母数 0 の緑を避ける指定を付ける）
   - 赤が出た場合、設計が事前列挙した「台帳が古い前提を固定していた」側のみを更新し、先送りを守る判定と語彙表走査の検査が赤になったら本機能の側の変更を取り下げる
   - `Running` 行の本数で全スイートが完走したことを確かめる（出力を先頭で切らない）
@@ -104,7 +104,7 @@
   - _Requirements: 2.1, 2.2, 3.6, 7.3, 7.4, 7.5_
   - _Depends: 1.5, 2.3, 3_
 
-- [ ] 5.2 台帳・証跡の実測と編集範囲の固定を行い、完了報告の材料を揃える
+- [x] 5.2 台帳・証跡の実測と編集範囲の固定を行い、完了報告の材料を揃える
   - `cargo run -p ukadoc-survey -- check` を 1 回走らせ、カタログに無い URL の報告が 0 件であることを確かめる
   - `cargo run -p ukadoc-survey -- evidence` を走らせ、property の証拠件数がタスク 1.1 で控えた値から 21 へ動いたことを記録する（報告書そのものは再生成しない）
   - 担当欄の空きを数え直して 0 であること、対照の探し語が 180 行以上を拾うことを確かめる（母数 0 の恒真を避ける）
@@ -121,3 +121,6 @@
 - `areka` は bin クレート: tasks.md 3・5.1 の `cargo test -p areka --lib placement::zorder_property_deferral_tests` は「no library targets」で走らない。正しくは `cargo test -p areka --bin areka property_deferral_tests`（モジュールは `placement::zorder_group_ledger::property_deferral_tests`・9 本）
 - design T4 は参照側を「実キー形 2 つ」と書くが分類側は 3 つを列挙（design 内の書き違い）。実装は 3 つとも参照 NotFound を判定（tasks.md 2.2 に合わせた・より広い）
 - 4.1 で BLOCKED→debug→RETRY: PR#147 合流の常設検査（`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の `owner_count_findings`）が台帳の担当件数を `roadmap-draft.md` の `[[spec]].owner_count` と突き合わせるため、担当欄を埋めた spec は同じ変更で `owner_count` と `reason` を追随させる（design の「owner は検査対象外」は古い前提だった。design・tasks の境界を追随済み）。`briefing-property.md` の「担当 0 件」は日付入りの写真の報告書なので触らない
+- 5.1（09-17）: `cargo test -p areka-sylphya --lib` 178 緑／`cargo test -p areka --bin areka property_deferral_tests` 9 緑／`cargo test -p ukadoc-survey --no-fail-fast` 601・0・6・113・doctest 5 緑。判定 3 本（t_zpd10・t_zpd30・t_zpd40）の本文に分岐元 0c9fb901 からの差分の塊 0
+- 5.2（09-17）: check 食い違い 0／evidence の property 証拠 2→21（全体 263→282）／`owner = ""` 2→0・対照 186→188／21 の写し 7→0・25 版の較正 8／「5 本」「8 本」9→0／変更ファイルは設計の 6＋`roadmap-draft.md` 1＝7（範囲外 1 件は 4.1 の境界拡張で記録済み）
+- 範囲外の申し送り 1・4 の宛先 `areka-P0-ukadoc-coverage-roadmap` は PR#147 で完了済み＝消化不能。引受先の付け替えが要る（完了報告で開発者へ）
