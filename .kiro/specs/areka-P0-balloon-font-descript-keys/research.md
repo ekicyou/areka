@@ -418,7 +418,7 @@
 
 ## 14. W9 の前提が転記層で崩れた（2026-09-17・タスク 4.1 実装時）
 
-- **実測**: `parse.rs` は `disable.font.height`（および `font.height`）を `get_scalar::<u32>` で読む。`-10`・`+4`・`150%` は `None` へ落ち、`balloon_overrides::overrides` へ届かない。配線に届く大きさは常に非負整数の絶対値で、受け口 `look.rs` の `apply_height` で「今効いている大きさ」に依存する `Relative`／`Percent` の分岐には入らない。基底の列は飾り 5 本だけで大きさを動かさない。
+- **実測**: `parse.rs` は `disable.font.height`（および `font.height`）を `get_scalar::<u32>` で読む。`-10`・`150%` は `None` へ落ち、`balloon_overrides::overrides` へ届かない（`+4` は `str::parse::<u32>` が受理して `Some(4)`——§17 で訂正）。配線は `h.to_string()` でトークンを作るので、届く大きさは常に符号の無い整数の絶対値で、受け口 `look.rs` の `apply_height` で「今効いている大きさ」に依存する `Relative`／`Percent` の分岐には入らない。基底の列は飾り 5 本だけで大きさを動かさない。
 - **帰結**: 設計検証の Critical Issue 1（土台を既定層で代用すると受け口と判定が食い違う）は、`descript.txt` から到達する入力では起こらない。土台を実層にする実装（DD10）は受け口との一致を構造で保つためそのまま残す（コスト 0・将来 `height` の読み方が変わっても崩れない）。
 - **W9 の差し替え**: 到達しない経路を檻にしない（「檻は到達する経路を踏ませよ」）。W9 は到達する受け口判定 `disable.font.height,0`（`apply_height` の「正でない」で `Err`）→列に在り `warn!` 1 件、`disable.font.height,20` → 0 件へ改める。
 - **較正③の後半**（土台を既定層へ差し替えて W9 だけ赤）は、転記層を通る入力では判定が変わらず赤を作れないので行わない。前半（事前検証を外すと W3・W4・W9 の警告判定が赤）は行う。
@@ -441,3 +441,21 @@
 ## 16. 着地で偽になった受け口側のコメント（2026-09-17・タスク 5.1 レビューの指摘）
 
 `look.rs` のモジュール doc「残りのキーの口」・`apply_overrides` の doc、`look_tests.rs` の §3 の doc、`look_font_tag_tests.rs` の `split_layers` の doc、`state_decoration.rs` の `look_layers` の doc が「バルーン定義側がまだ読めない」「残り 8 キー」と書いていた。本仕様の配線で偽になるので**コメントだけ**を実態へ直した（コード・テストの期待値・テスト名は 0 行）。設計の「`look.rs` 変更 0 行」は受け口の振る舞いの非接触を指すものとして扱い、doc の事実是正はその例外として記録する。是正後 `cargo test -p areka-emo-text` 856 passed / 0 failed・`cargo fmt --check` 緑。
+
+## 17. 影まわりの spec の再確認と引き渡し表の突き合わせ（2026-09-17・タスク 6.1）
+
+設計の「着地順の判定」が定める 1 度だけの再確認。`origin/main` は `d4176512`（PR#151 まで）、本ブランチ HEAD は `820a9a36`。
+
+| コマンド | 結果 |
+|---|---|
+| `git fetch origin main` | 成功 |
+| `git ls-tree -d --name-only origin/main .kiro/specs/completed/ \| wc -l` | 181（照合の母数が 0 でないことの確認） |
+| `git ls-tree -d --name-only origin/main .kiro/specs/completed/ \| grep -c shadow` | 0（対照: 同じコマンドで `text-decoration-canon` は 1） |
+| `git ls-tree --name-only origin/main .kiro/specs/areka-P0-text-align-shadow-canon/` | `brief.md` の 1 本だけ（作業ツリーも同じ） |
+| `git show origin/main:crates/areka-emo-text/src/look.rs \| grep -n "const UNOWNED_KEYS"` | `const UNOWNED_KEYS: [&str; 4] = ["align", "valign", "shadowcolor", "shadowstyle"];`（HEAD の `look.rs` も同じ定義） |
+
+- **判定**: `text-align-shadow-canon` は未着地・受け口は影を所有外のまま。設計の判定表（影まわりは先着＝申し送り）をそのまま残す。本仕様は影を配線しない（要件の Out of scope）。
+- **影の配線 0 行**: `git diff main -- crates/areka-emo-text/src/balloon_overrides.rs` の追加行のうち、コメント行を除いて `shadow` を含む行は 0。`crates/areka-emo-text/src` 全体で `shadow_raw`／`FontShadowRaw` の出現は 0。差分に出る `shadow` はモジュール doc と、影を渡さないことを固定するテスト `shadow_keys_are_never_forwarded`（`balloon_overrides_tests.rs`）だけ。
+- **引き渡し表の突き合わせ**: 取り出し口 15 行（`font()`・`font_decoration_raw()` の 5 口・`font_shadow_raw()` の `color_r`／`color_g`／`color_b`／`style`・`disable_font()` の `font`／`decoration_raw`／`shadow_raw`）は `crates/areka-parsers/src/balloon/model.rs` の公開メソッドと綴り・型が一致した。表の側を 3 点だけ直した——`font.height` の値の形に「`u32` として読めるものだけ（`-` 付き・`%` 付きは `None`、`+4` は `Some(4)`＝相対指定ではなく絶対値として届く）」を足した（§14）、配線欄の `font_overrides`／`disable_overrides` を実在の `balloon_overrides::overrides(..).font`／`.disable` と受け口の引数名の対応として書き直した、既存配線の関数名を `resolve_with_background`（候補列を組む実体）にした。対象外 0・既定値の適用先（書体 10 は `TextLook::ukadoc_default`・影 4 は `text-align-shadow-canon`）・`shadowstyle` の語彙 2 語と SSP 2.5.27 は表に残っていることを確かめた。
+- 影まわりへの申し送り文は設計書 C7 の該当項目で確定した（PR 本文へ写す）。
+- **§14 の訂正**: §14 は `+4` も `None` へ落ちると書いていたが誤り。`get_scalar::<u32>` は `str::parse::<u32>` で、先頭の `+` を受理する（`"+4"` → `Some(4)`）。`disable.font.height,+4` は配線でトークン `"4"` になり、受け口には絶対値として届く。相対・百分率の分岐に入らないという §14 の結論は変わらない（トークンは整数の `to_string()` なので `+`・`-`・`%` を持たない）。§14 の該当文はその場で直した。

@@ -541,21 +541,21 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 
 | # | キー | 取り出し口（本仕様後） | 値の形（転記層） | 未指定 | 正典既定値 | 配線 |
 |---|---|---|---|---|---|---|
-| 1 | `font.name` | `model.font().name()` | `Option<&str>`（既存） | `None` | `ＭＳ ゴシック` | 済（既存・`resolve` が候補列へ） |
-| 2 | `font.height` | `model.font().height()` | `Option<u32>`（既存） | `None` | `12`（ピクセル） | 済（既存） |
+| 1 | `font.name` | `model.font().name()` | `Option<&str>`（既存） | `None` | `ＭＳ ゴシック` | 済（既存・`resolve_with_background` が候補列へ） |
+| 2 | `font.height` | `model.font().height()` | `Option<u32>`（既存・`u32` として読めるものだけ。`-` 付き・`%` 付きは `None`、`+4` は `Some(4)`＝相対指定ではなく絶対値として届く） | `None` | `12`（ピクセル） | 済（既存） |
 | 3〜5 | `font.color.r`／`.g`／`.b` | `model.font().color().r()` 等 | `Option<u8>`（既存） | `None` | `0` | 済（既存） |
-| 6 | `font.bold` | `model.font_decoration_raw().bold()` | `Option<&str>`（生文字列・`0`/`1` の判定は受け口） | `None` | `0` | **本仕様が配線**（`font_overrides`） |
+| 6 | `font.bold` | `model.font_decoration_raw().bold()` | `Option<&str>`（生文字列・`0`/`1` の判定は受け口） | `None` | `0` | **本仕様が配線**（`balloon_overrides::overrides(..).font` → `from_balloon` の `font_overrides`） |
 | 7 | `font.italic` | `…italic()` | 同上 | `None` | `0` | 同上 |
 | 8 | `font.outline` | `…outline()` | 同上 | `None` | `0` | 同上（受け口は語彙のみ・表示に効かない） |
 | 9 | `font.strike` | `…strike()` | 同上 | `None` | `0` | 同上 |
 | 10 | `font.underline` | `…underline()` | 同上 | `None` | `0` | 同上 |
 | 11〜13 | `font.shadowcolor.r`／`.g`／`.b` | `model.font_shadow_raw().color_r()` 等 | `Option<&str>`（`none`／数値／語彙外をそのまま） | `None` | `none`（影を無効化） | **未配線**——`areka-P0-text-align-shadow-canon` が受け口を開けて配線 |
 | 14 | `font.shadowstyle` | `model.font_shadow_raw().style()` | `Option<&str>`（語彙は `offset`＝右下にずれた表示・`outline`＝縁取り。SSP 2.5.27 で登場） | `None` | `offset` | 同上 |
-| — | `disable.font.<1〜14>` | `model.disable_font().font()`／`.decoration_raw()`／`.shadow_raw()` | 上と同じ形 | `None` | 正典: `color` は画像色との混色・他は `font.` 定義群と同じ（SSP 2.5.51） | 1〜10 は**本仕様が配線**（`disable_overrides`）。11〜14 は未配線（同上） |
+| — | `disable.font.<1〜14>` | `model.disable_font().font()`／`.decoration_raw()`／`.shadow_raw()` | 上と同じ形 | `None` | 正典: `color` は画像色との混色・他は `font.` 定義群と同じ（SSP 2.5.51） | 1〜10 は**本仕様が配線**（`overrides(..).disable` → `from_balloon` の `disable_overrides`）。11〜14 は未配線（同上） |
 
 - 既定値は正典 `descript_balloon` の各見出しの本文で 2026-09-13 に照合済み。転記層は代入しない（3.1）。書体 10 の既定は受け口の `TextLook::ukadoc_default()` が適用しており、配線は宣言されたキーだけを上書きとして渡すので二重に入らない（3.4）。影 4 の既定は `text-align-shadow-canon` が適用する。
 - 3 値の区別（2.6）: `font.shadowcolor.r` は `None`（未指定）／`Some("none")`（無効化の語）／`Some("64")`（数値）。語彙外（`Some("300")`・`Some("blur")`）もそのまま届く。
-- 影まわりへの申し送り（8.3）: 「基底の影 4 本は `model.font_shadow_raw()`、無効表示の影 4 本は `model.disable_font().shadow_raw()` から `Option<&str>` で読める。配線は `crates/areka-emo-text/src/balloon_overrides.rs` に影のトークンを足す形（3 成分を 1 トークンへ束ねる形と `none` の扱いは同仕様が決める）。受け口 `look.rs` が `shadowcolor`／`shadowstyle` を所有外にしている点も同仕様が開ける」。本書と完了時の PR 本文に書く。
+- 影まわりへの申し送り（8.3・09-17 確定）: 「影 4 キーは本仕様で転記層まで着地し、配線は 0 行。基底は `model.font_shadow_raw()` の `color_r()`／`color_g()`／`color_b()`／`style()`、無効表示は `model.disable_font().shadow_raw()` の同名 4 口から `Option<&str>`（生文字列・未指定は `None`）で読める。配線は `crates/areka-emo-text/src/balloon_overrides.rs` の `overrides` に影のトークンを積む形（今は影を渡さないことを `shadow_keys_are_never_forwarded` が固定しているので、配線時に同テストを改める。3 成分を 1 トークンへ束ねる形と `none` の扱いは同仕様が決める）。受け口は `crates/areka-emo-text/src/look.rs` の `UNOWNED_KEYS` から `shadowcolor`／`shadowstyle` を外して開ける」。本書と完了時の PR 本文に書く。
 
 #### 着地順の判定（DD4・09-17 実測）
 
@@ -564,7 +564,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 | `areka-P0-text-decoration-canon`（書体 10） | `.kiro/specs/completed/` に在る・PR#148 で `main` に入っている・受け口 `from_balloon` の 2 引数が本番で空の列 | **後着** | C8 の配線 |
 | `areka-P0-text-align-shadow-canon`（影 4） | `brief.md` のみ・受け口なし（`look.rs` は `shadowcolor`／`shadowstyle` を所有外） | **先着** | 取り出し口の申し送り（8.3） |
 
-- 最終検証で `text-align-shadow-canon` の状態を 1 度だけ再確認する（`completed/` の有無と `look.rs` の `UNOWNED_KEYS`）。**どちらの結果でも本仕様は影を配線しない**（要件の Out of scope——影の配線は同仕様の範囲）。着地していれば申し送りの宛先を同仕様の design.md の該当節へ更新し、着地していなければ本表のまま。
+- 最終検証で `text-align-shadow-canon` の状態を 1 度だけ再確認する（`completed/` の有無と `look.rs` の `UNOWNED_KEYS`）。**どちらの結果でも本仕様は影を配線しない**（要件の Out of scope——影の配線は同仕様の範囲）。着地していれば申し送りの宛先を同仕様の design.md の該当節へ更新し、着地していなければ本表のまま。**タスク 6.1 で再確認済み（2026-09-17・未着地＝本表のまま・`research.md` §17）**。
 
 ---
 
