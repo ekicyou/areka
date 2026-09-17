@@ -112,8 +112,8 @@
 
 #### Acceptance Criteria
 
-1. When 実 32bit helper と実ゴーストで有界の自動終了つきの走行を行い、終了挨拶を経て解放する, the 生ログ shall `event="unload_clean"` を 1 行含み `event="unload_failed"` を 0 行とする（e2e 手順書 §5.7 の読み方）。
-2. The 実機の走行 shall 絶対パスで脳・ゴースト・バルーンを指定し、有界の自動終了で終える（記憶: 実機サインオフは有界 auto-exit＋ログ grep）。
+1. When 実 32bit helper と実ゴーストで、有界の自動終了を上限として付けた走行を行い、終了操作（キャラ窓への Ctrl＋左ダブルクリック）で終了を求めて終了挨拶を経て解放する, the 生ログ shall `event="unload_clean"` を 1 行含み `event="unload_failed"` を 0 行とする（e2e 手順書 §5.7 の読み方）。
+2. The 実機の走行 shall 絶対パスで脳・ゴースト・バルーンを指定し、有界の自動終了を上限として付ける（走行が必ず終わる保証）。終了そのものは終了操作で求める——自動終了（`AREKA_APP_SMOKE_EXIT_MS`）は窓を直接閉じる強制終了の経路を通り終了挨拶を経ないため（2026-09-17 開発者裁定・e2e 手順書 A20 と同じ形）。
 3. The 生ログ shall `event="helper_exited"` と `event="connect_failed"` を 0 行とする（待ちの形の変更が死活報告を誤発火させない）。
 4. The 本仕様 shall 実機の走行結果（日時・コミット・コマンド・数えた行数）を検証記録に残す。0 行の結果も明示的に書く。
 

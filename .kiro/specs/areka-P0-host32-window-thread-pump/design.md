@@ -261,7 +261,7 @@ sequenceDiagram
 | 4.10 | 手空き中の異常終了で `ShioriDown` 一度だけ・直す前は赤 | Test-B・C6・C7 | `report_exit_once` | 手空きの周期 |
 | 4.11 | 双方を `cargo test --workspace` に無条件で含める | Test-A〜F（env ゲート・`#[ignore]`・feature ゲートなし） | — | — |
 | 5.1 | 実機で `unload_clean` 1 行・`unload_failed` 0 行 | C9 | e2e 手順書 §5.7 の語の表 | — |
-| 5.2 | 絶対パス・有界の自動終了 | C9 | — | — |
+| 5.2 | 絶対パス・有界の自動終了は上限・終了は操作で求める | C9 | — | — |
 | 5.3 | `helper_exited`・`connect_failed` 0 行 | C9 | — | — |
 | 5.4 | 走行結果を記録（0 行も明示） | C9（`verification/real-machine.md`） | — | — |
 | 6.1 | 保守の失敗は error 記録・無限待機も busy loop も作らない | C2（`on_idle` は失敗を返さず異常は `status` へ）・C6・C1（周期は `recv_timeout` が刻む） | `helper_exited` の `error!` | 手空きの周期 |
@@ -525,7 +525,7 @@ impl ParentMessageWindow {
 
 #### C9 実機の非退行（`verification/real-machine.md`）
 
-- 手順: e2e 手順書 §5.7 の読み方。実 32bit helper・実ゴースト・実バルーンを絶対パスで指定し、有界の自動終了で終了挨拶を経て解放する。
+- 手順: e2e 手順書 §5.7 の読み方。実 32bit helper・実ゴースト・実バルーンを絶対パスで指定し、有界の自動終了を上限として付けたうえで、キャラ窓への Ctrl＋左ダブルクリックで終了を求め、終了挨拶を経て解放する（自動終了は強制終了の経路で終了挨拶を経ないため・2026-09-17 開発者裁定）。
 - 数える語: `event="unload_clean"`（期待 1 行）・`event="unload_failed"`（0 行）・`event="helper_exited"`（0 行）・`event="connect_failed"`（0 行）。0 行の結果も明示的に書く（5.4）。
 - 記録: 日時・コミット・コマンド・数えた行数。
 
