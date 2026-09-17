@@ -42,8 +42,9 @@ fn switch_keys() -> [(&'static str, fn(&mut TextLook) -> &mut bool); 5] {
 
 /// 真偽 5 項目が「既定層＝すべて真／無効表示層＝すべて偽」で割れた 2 層。
 ///
-/// [`LookLayers::from_balloon`] はまだ 5 キーしか受け取れず（残り 8 キーの読み取りは
-/// `areka-P0-balloon-font-descript-keys` の所有）、装飾の項目が層ごとに違う 2 層を作れない。
+/// [`LookLayers::from_balloon`] の差し込み（バルーン定義の読み取りと配線は
+/// `areka-P0-balloon-font-descript-keys`）を通すと、ここで見たい `apply_font_tag` の層の解決が
+/// 差し込みの順序と絡む。
 /// `default` と `disable` の行き先が取り違えられていないことを見るには層ごとに反対の値が
 /// 要るので、ここでは各フィールドを直に組む。
 fn split_layers() -> LookLayers {

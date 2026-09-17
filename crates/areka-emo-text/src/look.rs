@@ -31,8 +31,9 @@
 //! ## 残りのキーの「口」（要件 4.3／4.7）
 //!
 //! `font.bold`／`font.italic`／`font.underline`／`font.strike`／`font.outline`／
-//! `font.shadowcolor.*`／`font.shadowstyle`／`disable.font.*` はバルーン定義側がまだ読めない
-//! （読み取りの所有は `areka-P0-balloon-font-descript-keys`）。その口は
+//! `font.shadowcolor.*`／`font.shadowstyle`／`disable.font.*` の読み取りは
+//! `areka-P0-balloon-font-descript-keys` の所有で、飾り 5 本と `disable.font.*`（影を除く）は
+//! [`crate::balloon_overrides`] が配線済み、影の 4 キーは受け口が所有外のため渡していない。その口は
 //! [`LookLayers::from_balloon`] の `font_overrides`／`disable_overrides` の 2 引数で、
 //! 1 件は `\f` と**同じ形のトークン列**である——`font.bold,1` なら `["bold", "1"]`、
 //! `disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。
@@ -44,8 +45,8 @@
 //! 畳み込みも変わらない——差し込みは複製の**後**に載るので、`disable.font.*` を 1 つも
 //! 渡さなければ従来どおり「色以外は既定と同じ」が保たれる。
 //!
-//! いま値が無い項目は正典の既定（すべて無効）のままで、「読めていないから既定」という状態を
-//! `look_tests.rs` §3 が明示的に固定している。
+//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のままで、「渡されなければ既定」という
+//! 状態を `look_tests.rs` §3 が明示的に固定している。
 
 use crate::color::{ColorSpec, mix_disabled, parse_color};
 
@@ -229,7 +230,8 @@ impl LookLayers {
 ///
 /// 綴り誤りは黙って落とさず、その 1 件を飛ばして残りを差し込む——記録はバルーン定義を
 /// 読む側（`areka-P0-balloon-font-descript-keys`）が行を特定できる位置で出すのが正しく、
-/// ここでは行番号もファイル名も持たないからである。
+/// ここでは行番号もファイル名も持たないからである（記録は [`crate::balloon_overrides`] が
+/// 同じ [`apply_font_tag`] で事前に判定して `warn!` で出す）。
 fn apply_overrides(layer: &mut TextLook, cursor_text: (u8, u8, u8), overrides: &[Vec<String>]) {
     if overrides.is_empty() {
         return;

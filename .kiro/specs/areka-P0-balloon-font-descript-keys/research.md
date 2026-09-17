@@ -437,3 +437,7 @@
 
 - 土台を `LookLayers::default()` へ差し替えても W1〜W9 は緑のまま（§14 の予測どおり・転記層を通る入力では判定が変わらない）。
 - フィクスチャ `descript.txt` 7 本に `font.(bold|italic|outline|strike|underline|shadow*)`・`disable.font` の宣言は 0 件（行頭・大小無視の行内とも）。`git diff main -- crates/areka-emo-text/tests` は空。書き戻し後 `cargo test -p areka-emo-text` 856 passed / 0 failed。
+
+## 16. 着地で偽になった受け口側のコメント（2026-09-17・タスク 5.1 レビューの指摘）
+
+`look.rs` のモジュール doc「残りのキーの口」・`apply_overrides` の doc、`look_tests.rs` の §3 の doc、`look_font_tag_tests.rs` の `split_layers` の doc、`state_decoration.rs` の `look_layers` の doc が「バルーン定義側がまだ読めない」「残り 8 キー」と書いていた。本仕様の配線で偽になるので**コメントだけ**を実態へ直した（コード・テストの期待値・テスト名は 0 行）。設計の「`look.rs` 変更 0 行」は受け口の振る舞いの非接触を指すものとして扱い、doc の事実是正はその例外として記録する。是正後 `cargo test -p areka-emo-text` 856 passed / 0 failed・`cargo fmt --check` 緑。
