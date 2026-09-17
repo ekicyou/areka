@@ -80,4 +80,51 @@ Test-C と Test-E も段階 1 では赤だが、上で書いたとおり較正�
 
 ## 3. 段階 2 の実行結果（緑）
 
-タスク 4.3 で、段階 1 と同じ 2 つのコマンドを走らせた結果を追記する。
+タスク 4.3 で、段階 1 と同じ 2 つのコマンドを走らせた結果である。
+
+- 実行日: 2026-09-17（JST）
+- コミット: `5fa186b9c176339d2b6fcf5c01a8ab826ae73537`（タスク 4.2＝受信ループを「500 ms で待ちを打ち切り、手空きなら `on_idle` を呼ぶ」形へ変更した後。作業ツリーに変更なし）
+- 環境: 段階 1 と同じ（Windows 11 Pro 10.0.26200・x64・debug ビルド）
+- 2 つのコマンドは並行させず、1 つずつ順に走らせた
+- 名前で絞っているので他のテストは filtered out になる。passed の数がそれぞれ 4 と 2 であること（対象が 0 本で緑になっていないこと）を確かめた
+
+### 3.1 窓を作らないテスト（Test-A・B・C・E）
+
+- コマンド: `cargo test -p areka-kanade --lib idle_tests`
+- 開始 20:40:39 → 終了 20:40:41（壁時計で約 2 秒。ビルドは既に済んでおり 0.21 秒）
+- exit code: **0**
+- 結果: `test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 286 filtered out; finished in 1.52s`
+
+| テスト | 結果 |
+|---|---|
+| Test-A `shiori::real::idle_tests::on_idle_is_called_while_idle` | ok |
+| Test-B `shiori::real::idle_tests::helper_exit_during_idle_reports_shiori_down_once` | ok |
+| Test-C `shiori::real::idle_tests::requests_after_idle_are_served_in_order` | ok |
+| Test-E `shiori::real::idle_tests::no_liveness_report_after_clean_unload_even_when_idle` | ok |
+
+### 3.2 窓を作るテスト（Test-D・F）
+
+- コマンド: `cargo test -p areka-kanade --test kanade idle_pump_test`
+- 開始 20:40:46 → 終了 20:41:30（壁時計で約 44 秒。うちビルド 3.30 秒）
+- exit code: **0**
+- 結果: `test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 40.12s`
+
+| テスト | 結果 |
+|---|---|
+| Test-D `idle_pump_test::sync_send_to_idle_window_returns_within_bound` | ok |
+| Test-F `idle_pump_test::abortifhung_send_reaches_window_idle_for_twenty_seconds` | ok |
+
+段階 1 の 45.04 秒から 40.12 秒へ縮んだのは、Test-F の送出①が上限 5 秒まで待たされなくなったためである（2 本は並行に走るので全体の所要は最も長い Test-F で決まり、Test-F は 20 秒の待機 2 回が所要の大半を占める）。
+
+### 3.3 段階 1 の赤 → 段階 2 の緑（6 本の対照）
+
+| テスト | 段階 1（`193b1a09`） | 段階 1 の要旨 | 段階 2（`5fa186b9`） | 較正対象か |
+|---|---|---|---|---|
+| Test-A 手空きの通知が届く | 赤 | 2 秒待っても手空き回数 0 | 緑 | **対象**（手空きの契約） |
+| Test-B 手空き中の helper 異常終了を 1 回報告 | 赤 | 2 秒待っても `ShioriDown` が来ない（手空き回数 0） | 緑 | **対象**（要件 4.10） |
+| Test-C 手空きを挟んでも要求を順に処理 | 赤 | 手空きの証拠が来ず本題に進めない | 緑 | 対象外（前提の証拠待ちで赤） |
+| Test-E 正規終了後は手空きでも報告しない | 赤 | 手空き 2 回の証拠が来ず本題に進めない | 緑 | 対象外（前提の証拠待ちで赤） |
+| Test-D 待機中の窓への同期送出が上限内に成功 | 赤 | 上限 2 秒いっぱい待たされ `SendFailed` | 緑 | **対象**（速い窓・要件 4.3） |
+| Test-F 20 秒待機を挟んだ打ち切り旗つき送出が届く | 赤 | 送出① 5 秒で失敗・送出② 20.1µs で即失敗 | 緑 | **対象**（遅い窓・要件 4.4） |
+
+較正として要求される 4 本（Test-A・B・D・F）はすべて「段階 1 で赤 → 段階 2 で緑」になった。`git diff --stat 193b1a09 5fa186b9 -- crates/` で変わったのは `crates/areka-kanade/src/shiori/real.rs` の 1 ファイルだけ（タスク 4.1 の死活監視の括り出しと、タスク 4.2 の受信ループの変更）。テストのファイル（`real_idle_tests.rs` と統合テスト側）は変わっていない。同じテストが赤から緑へ変わったので、この 4 本は待ちの形の欠陥を検出できている（設計 C7・要件 4.7）。
