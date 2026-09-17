@@ -156,14 +156,31 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     }
 
     // それ以外: ワードを `[`／`\`／`%` の手前まで読み進める（他の文字では止まらない）。
+    // 3 文字で頭打ち（`bare_tag_len` の入力として十分）。
     while let Some(&(_, c)) = chars.get(j) {
-        if c == '[' || c == '\\' || c == '%' {
+        if j >= word_start + 3 || c == '[' || c == '\\' || c == '%' {
             break;
         }
         j += 1;
     }
 
-    let word: String = chars[word_start..j].iter().map(|&(_, c)| c).collect();
+    let mut word: String = chars[word_start..j].iter().map(|&(_, c)| c).collect();
+
+    // `[` を見る前にタグ名の長さを確定する。例外は短縮対象語＋1 桁（短縮形判定を
+    // 抜けた以上、次は必ず `[`）で、読み取り結果をそのまま使う。
+    let shorthand_digit = SHORTHAND_WORDS.contains(&first)
+        && chars
+            .get(word_start + 1)
+            .is_some_and(|&(_, d)| d.is_ascii_digit());
+    // 例外その二: 旧仕様の選択肢 `\q*[ID][タイトル]`（`*` の直後が `[` のときだけ）。
+    let legacy_q_star = first == 'q'
+        && chars.get(word_start + 1).map(|&(_, c)| c) == Some('*')
+        && chars.get(word_start + 2).map(|&(_, c)| c) == Some('[');
+    if !(shorthand_digit || legacy_q_star) {
+        let len = bare_tag_len(&word);
+        word = word.chars().take(len).collect();
+        j = word_start + len;
+    }
 
     // 角括弧があれば引数を走査、無ければ bare タグ。
     if let Some(&(_, '[')) = chars.get(j) {
@@ -180,12 +197,7 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
         // 角括弧なし。消費長は `bare_tag_len` の固定規律だけで決める
         // （走査結果 `word` の長さは使わない——本文を含み得るため・要件 2.4）。
         // 決めた長さぶんを綴りとして切り出し、残りはテキスト／後続走査へ委ねる。
-        let take = bare_tag_len(&word);
-        let spelling: String = chars[word_start..word_start + take]
-            .iter()
-            .map(|&(_, c)| c)
-            .collect();
-        (Token::Bare(spelling), word_start + take)
+        (Token::Bare(word), j)
     }
 }
 
