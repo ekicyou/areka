@@ -16,7 +16,7 @@
 //! そこで各テストは**同じ道具で既知の実在物を必ず 1 つ見つける**対照を同居させる:
 //!
 //! - 語彙表の走査（[`t_zpd10_no_vocabulary_table_carries_the_deferred_name`]）には、
-//!   同じ述語が `seriko.` で必ず当たることと、表 5 本それぞれが空でないことを添える。
+//!   同じ述語が `seriko.` で必ず当たることと、表 6 本それぞれが空でないことを添える。
 //! - 走査対象の名簿そのものが実物からずれないことは
 //!   [`t_zpd12_every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が受け持つ
 //!   （名簿倒れ＝「名簿から漏れた表へ登録しても緑のまま」を機械で閉じる）。
@@ -39,7 +39,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use areka_sylphya::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
+use areka_sylphya::vocab::dotted::{
+    DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE, SOUND_PROP_NAMES,
+};
 use areka_sylphya::vocab::flat::FLAT_VOCAB;
 use areka_sylphya::vocab::shiori_resource::SHIORI_RESOURCE_IDS;
 use areka_sylphya::{
@@ -75,12 +77,13 @@ fn asker_ctx() -> AskerContext {
 ///
 /// [`vocabulary_tables`] が実際に読む表と一致していることは
 /// [`t_zpd12_every_public_vocab_const_is_scanned_or_excluded_on_purpose`] が見張る。
-const SCANNED_VOCAB_TABLES: [&str; 5] = [
+const SCANNED_VOCAB_TABLES: [&str; 6] = [
     "FLAT_VOCAB",
     "SHIORI_RESOURCE_IDS",
     "DOTTED_ROOTS",
     "GENERIC_PROP_NAMES",
     "SET_EFFECTIVE",
+    "SOUND_PROP_NAMES",
 ];
 
 /// 走査対象外＝`vocab/` の公開 const のうち、**プロパティ名を載せない**もの（と外す理由）。
@@ -108,12 +111,12 @@ fn const_ident(qualified: &str) -> &str {
     qualified.rsplit("::").next().unwrap_or(qualified)
 }
 
-/// プロパティ名を載せる語彙表 5 本を `(表の名前, 載っている名前の列)` で返す。
+/// プロパティ名を載せる語彙表 6 本を `(表の名前, 載っている名前の列)` で返す。
 ///
-/// # この 5 本は `vocab/` の公開 const 全数ではない
+/// # この 6 本は `vocab/` の公開 const 全数ではない
 ///
-/// `crates/areka-sylphya/src/vocab/` の公開 const は現物 8 本ある。ここが読むのは
-/// そのうち**プロパティ名を要素として持つ 5 本**だけで、残る 3 本は
+/// `crates/areka-sylphya/src/vocab/` の公開 const は現物 9 本ある。ここが読むのは
+/// そのうち**プロパティ名を要素として持つ 6 本**だけで、残る 3 本は
 /// [`NON_PROPERTY_VOCAB_CONSTS`] へ除外理由つきで登記してある。
 ///
 /// 名簿は実物からずれても「載っていない」の主張が緑のままになる（守りが静かに狭まる）。
@@ -124,7 +127,7 @@ fn const_ident(qualified: &str) -> &str {
 ///   公開 const をソースから抜き出して両方向で見張る。
 /// ⑵名簿外の表へ名前が先行登録されること自体は
 ///   [`t_zpd40_the_property_system_sources_never_mention_the_name`] の全ソース走査が
-///   受け持つ（走査対象を 5 本へ絞ったことで守りに穴は開かない）。
+///   受け持つ（走査対象を 6 本へ絞ったことで守りに穴は開かない）。
 fn vocabulary_tables() -> Vec<(&'static str, Vec<&'static str>)> {
     vec![
         (
@@ -144,10 +147,11 @@ fn vocabulary_tables() -> Vec<(&'static str, Vec<&'static str>)> {
             "vocab::dotted::SET_EFFECTIVE",
             SET_EFFECTIVE.iter().map(|(key, _)| *key).collect(),
         ),
+        ("vocab::dotted::SOUND_PROP_NAMES", SOUND_PROP_NAMES.to_vec()),
     ]
 }
 
-/// 語彙表 5 本を横断して、名前に `needle` を含むものを `(表の名前, 名前)` で拾う。
+/// 語彙表 6 本を横断して、名前に `needle` を含むものを `(表の名前, 名前)` で拾う。
 fn vocabulary_entries_containing(needle: &str) -> Vec<(&'static str, &'static str)> {
     let mut hits = Vec::new();
     for (table, names) in vocabulary_tables() {
@@ -249,7 +253,7 @@ fn set_effects(key: &str, value: &str) -> Vec<Effect> {
 // ⑴ 一覧に名前が現れない（要件 13.5）
 // ---------------------------------------------------------------------------
 
-/// 語彙表 5 本のどれにも先送りした名前が載っていない（要件 13.1／13.5）。
+/// 語彙表 6 本のどれにも先送りした名前が載っていない（要件 13.1／13.5）。
 #[test]
 fn t_zpd10_no_vocabulary_table_carries_the_deferred_name() {
     let hits = vocabulary_entries_containing(DEFERRED_NEEDLE);
@@ -278,13 +282,13 @@ fn t_zpd10_no_vocabulary_table_carries_the_deferred_name() {
     }
 }
 
-/// 走査した語彙表 5 本が実在し・空でなく・同じ述語が既知の名前を必ず拾う（恒真回避）。
+/// 走査した語彙表 6 本が実在し・空でなく・同じ述語が既知の名前を必ず拾う（恒真回避）。
 #[test]
 fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
     let tables = vocabulary_tables();
     assert_eq!(
         tables.len(),
-        5,
+        6,
         "この檻が読む語彙表の本数が変わっている\
          （見ているのは檻の側の名簿であって、sylphya 側の表の増減は t_zpd12 の担当）"
     );
@@ -293,12 +297,13 @@ fn t_zpd11_the_scanned_vocabulary_tables_are_live() {
     }
 
     // 表ごとに既知の実在名を 1 つずつ名指しで確かめる（どの表も本物を運んでいる）。
-    let expected_members: [(&str, &str); 5] = [
+    let expected_members: [(&str, &str); 6] = [
         ("vocab::flat::FLAT_VOCAB", "username"),
         ("vocab::shiori_resource::SHIORI_RESOURCE_IDS", "homeurl"),
         ("vocab::dotted::DOTTED_ROOTS", "currentghost"),
         ("vocab::dotted::GENERIC_PROP_NAMES", "keroname"),
         ("vocab::dotted::SET_EFFECTIVE", "seriko.defaultsurface"),
+        ("vocab::dotted::SOUND_PROP_NAMES", "duration"),
     ];
     for (table, member) in expected_members {
         let found = tables
