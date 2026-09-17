@@ -209,14 +209,14 @@ wave = "W15"
 [[spec]]
 name = "areka-P0-balloon-font-descript-keys"
 none = true
-reason = "束はまだ割り当てていない。分割 ⑶ で受け持つ書体の欄は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替え済み（10 件）"
+reason = "束はまだ割り当てていない。分割 ⑶ で受け持つ書体の欄は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替えた（当時 10 件）。2026-09-17 の完了で影 4 件の宛先を areka-P0-text-align-shadow-canon へ移し、disable.font.* を分割元から引き取った（7 件）"
 owner_count = 7
 wave = "W13"
 
 [[spec]]
 name = "areka-P0-text-align-shadow-canon"
 none = true
-reason = "束はまだ割り当てていない。分割 ⑵ で受け持つ寄せ 2 と影 3 は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替え済み（5 件）"
+reason = "束はまだ割り当てていない。分割 ⑵ で受け持つ寄せ 2 と影 3 は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替えた（当時 5 件）。2026-09-17 に areka-P0-balloon-font-descript-keys の完了でバルーン定義の影 4 件の宛先がこの名前へ移った（9 件）"
 owner_count = 9
 wave = "W15"
 
