@@ -198,3 +198,51 @@ fn record_only_leaves_keep_their_previous_classification() {
         );
     }
 }
+
+/// 仕分け（`classify_set`）の実装とその兄弟テスト 3 本が記録用の表を読まない（要件 3.3／3.7／7.2）。
+#[test]
+fn classifier_source_does_not_reference_the_record_only_table() {
+    let sources: &[(&str, &str)] = &[
+        ("actor.rs", include_str!("../actor.rs")),
+        ("actor_tests.rs", include_str!("../actor_tests.rs")),
+        (
+            "actor_actor_integration_tests.rs",
+            include_str!("../actor_actor_integration_tests.rs"),
+        ),
+        (
+            "actor_actor_criteria_cage.rs",
+            include_str!("../actor_actor_criteria_cage.rs"),
+        ),
+    ];
+    let record_only = "SOUND_PROP_NAMES";
+    for (file, text) in sources {
+        assert_eq!(
+            text.matches(record_only).count(),
+            0,
+            "{file} が記録用の表 {record_only} を参照している。仕分けが読む表へ変えるなら要件 3.3／7.2 の再検討と引受先 spec（areka-P0-property-query-channels）の裁定が要る"
+        );
+    }
+    // 較正: 探し方が生きていることを、仕分けが実際に読む表の名前で示す。
+    assert!(
+        sources[0].1.matches("GENERIC_PROP_NAMES").count() >= 1,
+        "較正失敗: actor.rs に GENERIC_PROP_NAMES が見つからない（読み込み対象を取り違えている）"
+    );
+}
+
+/// 語彙表の本体に正典ページのアンカー付き URL 注記がちょうど 19 行あり、アンカー無しのページ URL 行は 0（要件 5.1／5.4）。
+#[test]
+fn exactly_19_anchored_ukadoc_notes_and_no_page_url_line() {
+    // 探し語は行頭に置かない（証拠抽出器がこのファイルの行を拾わないように）。
+    let note_prefix = concat!("// ", "ukadoc", ": ");
+    let canon_page = "https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#";
+    let notes: Vec<&str> = include_str!("dotted.rs")
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| l.starts_with(note_prefix))
+        .collect();
+    assert_eq!(notes.len(), 19, "URL 注記の行数");
+    let anchored = notes.iter().filter(|l| l.contains(canon_page)).count();
+    assert_eq!(anchored, 19, "正典ページのアンカーを指す注記の行数");
+    let page_only = notes.iter().filter(|l| l.ends_with(".html")).count();
+    assert_eq!(page_only, 0, "アンカー無しのページ URL 注記の行数");
+}
