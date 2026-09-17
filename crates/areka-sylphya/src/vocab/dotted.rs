@@ -54,7 +54,7 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
     "char*.bind.menu",
 ];
 
-/// SET 有効群（正準語彙のうち SET が有効な名前族・件数 21・R3.4）。
+/// SET 有効群（正準語彙のうち SET が有効な名前族・件数 25・R3.4）。
 ///
 /// 書込 API の**型シームのみ**を予約し、M1 では実書込を行わない。全項目を
 /// [`SetSemantics::RuntimeCommand`]（運行コマンド書込・ランタイムへの命令）へ写す——
@@ -69,6 +69,36 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
 /// - mousecursor 群 10 項: 本体側 6・balloon 側 4
 /// - seriko.cursor / tooltip 群 4 項: cursor の path/name・tooltip の text/name
 /// - menu / bind.menu 群 4 項: `GENERIC_PROP_NAMES` の `[SET]` 4 名と同一
+/// - 正典追随 4 項: `seriko.sticky-window`・サウンド SET 3 葉（`pause`・`playing`・`position`）
+///
+/// ## 件数 25 の導出（2 通り）
+///
+/// - **登記の側**: 既存の 21 項に、本機能（`areka-P0-sylphya-set-ledger`）が足した 4 項
+///   （`seriko.sticky-window`・`pause`・`playing`・`position`）を加えて 25。
+/// - **照合元の側**: 調査台帳 `doc/ukadoc-coverage/ledger/property.toml` で
+///   「書き込み: 正典 SET有効」と記録する行は 26 行。そこから先送り中の 1 行（窓の重なり順の
+///   プロパティ。所有は互換記録 `doc/COMPAT_ARCHITECTURE.md` §8 の該当行を参照）を除いて 25 行。
+///   このうち `seriko.cursor.path` と `seriko.tooltip.text` はセレクタの書き方違い（当たり判定名で
+///   指す形と番号で指す形）で台帳が 2 行ずつに分かれているが、本表では 1 項目ずつなので 2 項目ぶん
+///   縮んで 23 項目。これに、正典に設定の定めが無いまま areka が先取りで登記している
+///   `seriko.cursor.name`・`seriko.tooltip.name` の 2 項目を足して 25。
+///
+/// 注記: 2 通りが同じ 25 に着くのは偶然の一致である（「台帳 2 行→本表 1 項目」の −2 と
+/// 「先取り」の ＋2 が相殺しているだけ）。「26 から 1 を引く」だけの数え方は、本表の件数の
+/// 根拠にならない。
+///
+/// 26 行に数えないもの: `activeghostlist(...).ext.拡張プロパティ名`・`pluginlist(...).ext.拡張プロパティ名`
+/// 系の 4 行。正典本文は `property.set` を起こして設定すると述べるが `[SET有効]` の印は無く、
+/// ext 亜枝の中継形なので 26 行に含めない（台帳の当該行の note のとおり）。この 4 行の語彙と
+/// 運搬の担い手は `areka-P0-property-ipc-transport` であり、本機能の範囲外。
+///
+/// 既知の食い違い: 先取り 2 項（`seriko.cursor.name`・`seriko.tooltip.name`）は、正典が SET 有効と
+/// 定めていない名前を登記している状態である（完了 spec `areka-P0-ukadoc-survey-property` の
+/// design.md 規則 8 突合表・区分 ⑶「印が無く、族の頭の継承も無い＝areka の先取り」）。
+/// 本機能はこの食い違いを記録するだけで解消しない。
+///
+/// 正典に根拠のない作り（本表が末尾形で持たれ実キーと突き合わされないこと等）の記録と引受先は
+/// [`SOUND_PROP_NAMES`] の説明文を参照。
 pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
     // 基本 3 項（surface/animation/defaultsurface）。
     ("surface.num", SetSemantics::RuntimeCommand),
@@ -96,6 +126,84 @@ pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
     ("sakura.bind.menu", SetSemantics::RuntimeCommand),
     ("kero.bind.menu", SetSemantics::RuntimeCommand),
     ("char*.bind.menu", SetSemantics::RuntimeCommand),
+    // 正典追随 4 項（本 spec）。`pause`・`playing`・`position` の URL は記録用の表
+    // `SOUND_PROP_NAMES` の同名要素に置く（正典の項目としては各 1 つ）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#currentghost.seriko.sticky-window:1
+    ("seriko.sticky-window", SetSemantics::RuntimeCommand),
+    ("pause", SetSemantics::RuntimeCommand),
+    ("playing", SetSemantics::RuntimeCommand),
+    ("position", SetSemantics::RuntimeCommand),
+];
+
+/// 正典「サウンドプロパティ名」の葉 18（記録用・書き込みの仕分け `classify_set` は読まない）。
+///
+/// 括弧を含まない 10 葉は SSP 2.8.72、`meta.` を伴う 8 葉は SSP 2.8.73。
+///
+/// ## 件数 18 の導出
+///
+/// 正典「サウンドプロパティ名」の葉は 18 件＝括弧を含まない 10 葉（`duration`・`error`・`id`・
+/// `loop`・`name`・`path`・`preload`・`pause`・`playing`・`position`）＋ `meta.` を伴う 8 葉
+/// （`meta.album`〜`meta.year`）。調査台帳 `property.toml` のサウンドの独立行 18 と一致する。
+///
+/// `name`・`path` は [`GENERIC_PROP_NAMES`] にも同じ綴りがあるが、正典はサウンドの `name`・`path`
+/// を汎用名の `name`・`path` とは別の項目（アンカー `name:2`／`path:2` と `name:1`／`path:1`）として
+/// 定めている。本表はサウンド族の記録なので汎用名の表からは引かない（汎用名の表の件数 17 は
+/// 動かさない）。`pause`・`playing`・`position` は [`SET_EFFECTIVE`] にも載るが本表からは外さない。
+///
+/// ## 正典に根拠のない areka 固有の作り 2 点（記録のみ・本機能では是正しない）
+///
+/// 1. **葉の名前だけで正準語彙とみなす判定**: 書き込みの仕分け（`actor.rs` の正準語彙判定の
+///    第 2 項）は、キーの根が [`DOTTED_ROOTS`] に無くても、葉の名前が [`GENERIC_PROP_NAMES`] に
+///    載っていれば正準語彙（設定できない名前）とみなす。正典はどの葉も属する根の下でのみ定義して
+///    おり、葉の名前が単独で意味を持つ定めは無い。
+/// 2. **設定可能語彙が末尾形で持たれ実キーと突き合わされない**: [`SET_EFFECTIVE`] は末尾形で
+///    持たれているため、実際の書込キー（例 `currentghost.sound(要素名).pause`）とは一度も
+///    突き合わされない（既存の 21 項も含め全項目が同じ状態）。
+///
+/// 利用者から見える結果: 1 により、正典に無い名前（例 `myplugin.name`）への書き込みが、
+/// 自由な名前としての「保存して読み戻せる」から「受理して捨てる」へ変わり得る（葉の名前が
+/// 汎用名の表に載っているだけで扱いが切り替わる）。
+///
+/// 引受先: `areka-P0-property-query-channels`（`.kiro/specs/areka-P0-property-query-channels/brief.md`
+/// の実在を確認済み）。`\![set,property,...]` の経路を開通させ、フルキーが初めて仕分けへ流れ込む
+/// spec であり、上記 2 点の是正はそこで扱う。
+pub const SOUND_PROP_NAMES: &[&str] = &[
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#duration:1
+    "duration",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#error:1
+    "error",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#id:1
+    "id",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#loop:1
+    "loop",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#name:2
+    "name",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#path:2
+    "path",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#preload:1
+    "preload",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#pause:1
+    "pause",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#playing:1
+    "playing",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#position:1
+    "position",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.album:1
+    "meta.album",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.albumartist:1
+    "meta.albumartist",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.artist:1
+    "meta.artist",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.artwork:1
+    "meta.artwork",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.genre:1
+    "meta.genre",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.title:1
+    "meta.title",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.track:1
+    "meta.track",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#meta.year:1
+    "meta.year",
 ];
 
 /// ext 亜枝の GET イベント名（予約のみ・M1 では発火しない・R3.5）。
@@ -185,10 +293,10 @@ mod tests {
         assert_eq!(got, exp);
     }
 
-    /// SET 有効群 件数檻（基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4 = 21・R3.4）。
+    /// SET 有効群 件数檻（基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4＋正典追随 4 = 25・R3.4）。
     #[test]
-    fn set_effective_has_21_entries() {
-        assert_eq!(SET_EFFECTIVE.len(), 21);
+    fn set_effective_has_25_entries() {
+        assert_eq!(SET_EFFECTIVE.len(), 25);
     }
 
     /// SET 有効群に key 重複がない。
@@ -206,7 +314,7 @@ mod tests {
     #[test]
     fn set_effective_covers_all_named_group_members() {
         let keys: BTreeSet<&str> = SET_EFFECTIVE.iter().map(|(k, _)| *k).collect();
-        let required: [&str; 21] = [
+        let required: [&str; 25] = [
             // 基本 3 項。
             "surface.num",
             "animation.num",
@@ -232,6 +340,11 @@ mod tests {
             "sakura.bind.menu",
             "kero.bind.menu",
             "char*.bind.menu",
+            // 正典追随 4 項（sticky-window 1・サウンド SET 3）。
+            "seriko.sticky-window",
+            "pause",
+            "playing",
+            "position",
         ];
         for member in required {
             assert!(keys.contains(member), "SET 有効群に {member} が欠落");
@@ -287,3 +400,8 @@ mod tests {
         assert_eq!(EXT_EVENT_SET, "property.set");
     }
 }
+
+/// 本機能が足した項目（記録用の表・設定可能語彙への登記）を項目ごとに判定する兄弟テスト。
+#[cfg(test)]
+#[path = "dotted_set_ledger_tests.rs"]
+mod set_ledger_tests;
