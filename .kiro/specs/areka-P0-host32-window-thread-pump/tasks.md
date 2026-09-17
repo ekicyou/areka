@@ -20,7 +20,7 @@
   - _Requirements: 1.1, 6.2, 6.3, 7.6_
   - _Boundary: C4_
 
-- [ ] 1.3 host32 backend の手空き通知を窓を汲む部品へ委譲する
+- [x] 1.3 host32 backend の手空き通知を窓を汲む部品へ委譲する
   - host32 の接続 backend にだけ手空き通知の実体を置き、1.2 の部品を呼ぶ
   - SHIORI アクター側に Win32 API crate への依存を足さない（host32 型を import してよい唯一の場所の境界を保つ）
   - 完了状態: 手空き通知が host32 backend でのみ実体を持ち、`cargo build --workspace` が通る

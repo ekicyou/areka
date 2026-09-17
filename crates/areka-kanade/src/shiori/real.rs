@@ -126,6 +126,12 @@ impl ShioriBackend for ShioriConnection {
     fn status(&mut self) -> HelperStatus {
         self.helper.status()
     }
+
+    fn on_idle(&mut self) {
+        // 手空きの間も窓を所有するこのスレッドがメッセージを取り出し続け、OS の応答なし判定に
+        // 落ちないようにする（往復の外でしか呼ばれない契約ゆえ `clear→store→take` は崩れない）。
+        self.window.pump_pending_messages();
+    }
 }
 
 /// [`RequestError`] を区別語彙を保った [`ShioriFailure`] へ**機械的に写像**する純関数（Req 6.1）。
