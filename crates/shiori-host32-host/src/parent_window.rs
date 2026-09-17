@@ -10,8 +10,9 @@
 //! 2. **`pump_until_hello_or`**（要件 3.4）: HELLO 受領（helper HWND 確定）まで、または
 //!    `timeout` 経過まで `MessageLoop` を **bounded** に回す。無入力でも期限で必ず抜けられる
 //!    よう別スレッドから自窓へ定期 `PostMessageW(WM_NULL)` を撃って `GetMessage` を起こす
-//!    （heartbeat・pump フェーズ専用）。受領なら `Some(helper_hwnd)`、期限内未受領なら `None`
-//!    （呼び出し側は `None` を [`crate::HandshakeError::Timeout`] として扱える）。
+//!    （heartbeat・握手フェーズの起こし専用。定常時は heartbeat を用いない＝責務 5）。受領なら
+//!    `Some(helper_hwnd)`、期限内未受領なら `None`（呼び出し側は `None` を
+//!    [`crate::HandshakeError::Timeout`] として扱える）。
 //! 3. **RESPONSE 再入受領**（task 4.3・要件 4.2）: WndProc で `Response` を受けたら payload を
 //!    [`ParentShared::response_slot`] へ store して**即 return**（跨プロセス SendMessage を
 //!    発行しない＝デッドロック回避の核）。
@@ -19,6 +20,9 @@
 //!    `slot.clear → SendMessageTimeout(REQUEST, SMTO_ABORTIFHUNG) → slot.take` の 1 往復。
 //!    未ハンドシェイクは [`SendError::Handshake`]（`Incomplete`）で拒否し、上限内未応答は
 //!    [`SendError::Ipc`]（[`IpcError::Timeout`]）で復帰する。
+//! 5. **定常時の保守 `pump_pending_messages`**: 握手の後、往復の外で呼び出し側が周期的に呼び、
+//!    自スレッドのキューを空になるまで取り出して配る（窓が応答なしと判定されないため）。
+//!    heartbeat スレッドは要さない。往復の内側からは呼ばない。
 //!
 //! ## 窓状態の共有パターン（design.md §426-429）
 //! `wintf-winmsg-executor` の `Window<S>` は `state: S` を窓と同居させ WndProc へ `Pin<&S>`
@@ -48,8 +52,9 @@ use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 /// heartbeat（別スレッドからの `PostMessageW(WM_NULL)`）の送信間隔。
 ///
-/// pump フェーズ専用の起こし用。無入力でも `GetMessage` をブロックさせ続けず、
+/// 握手フェーズ（`pump_until_hello_or`）専用の起こし用。無入力でも `GetMessage` をブロックさせ続けず、
 /// `pump_until_hello_or` のループが deadline を再評価できるようにする（design.md §398/§429）。
+/// 定常時の保守（`pump_pending_messages`）は呼び出し側の周期で回るため、これを用いない。
 const HEARTBEAT_INTERVAL: Duration = Duration::from_millis(25);
 
 /// inbound WM_COPYDATA の framing 検証結果に応じた親 WndProc の取るべき動作（窓なしで単体検証可）。
@@ -254,8 +259,9 @@ impl ParentMessageWindow {
     /// `None` を [`crate::HandshakeError::Timeout`] として扱える。
     ///
     /// 無入力でも期限で必ず抜けられるよう、別スレッドから自窓へ定期 `PostMessageW(WM_NULL)` を
-    /// 撃って `GetMessage` を起こす（heartbeat・pump フェーズ専用）。ループの各回で deadline と
-    /// helper HWND 確定を再評価し、いずれかで `msg_loop.quit()` する。
+    /// 撃って `GetMessage` を起こす（heartbeat・握手フェーズの起こし専用）。ループの各回で deadline と
+    /// helper HWND 確定を再評価し、いずれかで `msg_loop.quit()` する。握手の後の定常時の保守は
+    /// [`pump_pending_messages`](Self::pump_pending_messages) が往復の外で担い、heartbeat を要さない。
     #[must_use]
     pub fn pump_until_hello_or(&self, timeout: Duration) -> Option<u32> {
         // 既に受領済みなら即返す（helper が先に HELLO を送っている場合）。
@@ -308,10 +314,12 @@ impl ParentMessageWindow {
     ///    `StoreResponse` アームが `response_slot` へ store する。上限時間内に未受領なら
     ///    [`IpcError::Timeout`]（[`SendError::Ipc`] で包む）。single-in-flight。
     ///
-    /// **heartbeat 不干渉（design.md §429）**: 本関数は pump ループも heartbeat スレッドも起動しない。
+    /// **heartbeat・定常時の保守と不干渉（design.md §429）**: 本関数は pump ループも heartbeat
+    /// スレッドも起動せず、[`pump_pending_messages`](Self::pump_pending_messages) も呼ばない。
     /// in-flight 中は `SendMessageTimeout` がブロックし、キューの WM_NULL（`PostMessage`）は配送
     /// されないため、`clear→store→take` 不変条件が保たれる。heartbeat は `pump_until_hello_or` の
-    /// pump フェーズ専用である。
+    /// 握手フェーズ専用であり、定常時の保守は往復の外でしか走らないため、in-flight 中の
+    /// 不変条件は保たれる。
     ///
     /// `slot` は WndProc の RESPONSE アームが参照するものと同一 `&ResponseSlot`（`self.window.state()`
     /// 経由で取得）。
