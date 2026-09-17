@@ -551,6 +551,8 @@ areka 側の受け皿も書き込み有効一覧ではなく `property.get`／`p
 
 ## ⑶ 持ち主のいない項目・裁定待ちの項目の一覧
 
+> **📌 2026-09-17 追記**——この節と ⑷ は調査時点（`areka-P0-ukadoc-survey-property`・PR#138・2026-09-05）の写真である。2 件の裁定待ちはその後に解消した: 開発者裁定 2026-09-13 で `currentghost.seriko.zorder` は語彙台帳の行も値の導出も `areka-P0-zorder-property`（sylphya の語彙表へは載せない）、`currentghost.seriko.sticky-window` の語彙台帳の行は `areka-P0-sylphya-set-ledger`（PR#151 で `SET_EFFECTIVE` へ登記・値の導出は `areka-P0-currentghost-property-tree`）。台帳の担当欄は 2 件とも記入済みで、空文字は **0 件**。⑴ の見出し「`areka-P0-zorder-property`（担当 0 件）」も現在は 1 件。記録の正本は `doc/COMPAT_ARCHITECTURE.md` §8 の【所有の相互参照】行。
+
 ### 一覧は 2 行、台帳で担当欄が空の項目も 2 件
 
 台帳の担当欄（`owner`）が空文字になっている項目は **2 件**である。この節の一覧も **2 行**で、両者は一致する。
