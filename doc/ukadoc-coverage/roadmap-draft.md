@@ -230,8 +230,8 @@ wave = "W17"
 [[spec]]
 name = "areka-P0-sylphya-set-ledger"
 none = true
-reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書が登記すると書くサウンドの語彙は、いまも areka-P0-property-catalog-lists の宛先である。是正候補の節にこの spec の行がある"
-owner_count = 0
+reason = "束はまだ割り当てていない。2026-09-17 に currentghost.seriko.sticky-window の宛先をこの名前で記入した（1 件・SET 有効群の語彙表の行）。説明書が登記すると書くサウンドの語彙は、いまも areka-P0-property-catalog-lists の宛先である。是正候補の節にこの spec の行がある"
+owner_count = 1
 wave = "W13"
 
 [[spec]]
@@ -251,8 +251,8 @@ wave = "W14"
 [[spec]]
 name = "areka-P0-zorder-property"
 none = true
-reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。説明書が正本と書く重なり順のプロパティ 1 件は、宛先の欄が空文字のまま裁定を待っている。是正候補の節にこの spec の行がある"
-owner_count = 0
+reason = "束はまだ割り当てていない。説明書が正本と書く重なり順のプロパティ 1 件の宛先を、開発者裁定（2026-09-13・先送り維持）に従い 2026-09-17 にこの名前で記入した（1 件）。是正候補の節にこの spec の行がある"
+owner_count = 1
 wave = "W15"
 
 [[spec]]

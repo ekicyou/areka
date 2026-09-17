@@ -78,13 +78,14 @@
   - _Requirements: 2.3, 2.4, 3.6, 9.2_
 
 - [ ] 4. 調査台帳と互換記録の所有の記録
-- [ ] 4.1 (P) 調査台帳の担当欄の空き 2 行を埋め、「裁定待ち」を所有の記述へ差し替える
+- [x] 4.1 (P) 調査台帳の担当欄の空き 2 行を埋め、「裁定待ち」を所有の記述へ差し替える
   - 先送り中のプロパティの行の担当欄へ追跡 spec を、設定可能語彙へ登記した `sticky-window` の行の担当欄へ本 spec を記入する
   - 両行の備考末尾の「裁定待ち」の記述を、決まった所有を記す文へ差し替える。転記元の行と状態欄は変えない
   - 他のエントリ（サウンド 18 行の備考を含む）は 1 文字も変えない。ファイルの改行コードを保つ
   - 完了状態: 担当欄が空の行が 0 件になり、`cargo test -p ukadoc-survey` が緑（TOML の構造崩れなし）で、差分が 2 エントリ・各 2 行の置換に閉じている
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
-  - _Boundary: property.toml 2 行_
+  - `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` 2 行（本 spec・追跡 spec）の `owner_count` を 0→1、`reason` を実態へ追随させる（PR#147 の常設検査が台帳の担当件数と突き合わせるため。`none = true`・`wave` は不変）
+  - _Boundary: property.toml 2 行、roadmap-draft.md の [[spec]] 2 行（owner_count・reason）_
 
 - [ ] 4.2 (P) 互換記録に所有の相互参照を 1 行足す
   - 先送り中のプロパティの読み書きを記す既存行の直後に、4 列の体裁を踏襲した 1 行を足す。既存行は 1 文字も変えない
@@ -119,3 +120,4 @@
 - ワークツリーは `vendors/pasta` submodule 未取得だった（`git submodule update --init vendors/pasta` で解消）
 - `areka` は bin クレート: tasks.md 3・5.1 の `cargo test -p areka --lib placement::zorder_property_deferral_tests` は「no library targets」で走らない。正しくは `cargo test -p areka --bin areka property_deferral_tests`（モジュールは `placement::zorder_group_ledger::property_deferral_tests`・9 本）
 - design T4 は参照側を「実キー形 2 つ」と書くが分類側は 3 つを列挙（design 内の書き違い）。実装は 3 つとも参照 NotFound を判定（tasks.md 2.2 に合わせた・より広い）
+- 4.1 で BLOCKED→debug→RETRY: PR#147 合流の常設検査（`crates/ukadoc-survey/tests/consistency/spec_checks.rs` の `owner_count_findings`）が台帳の担当件数を `roadmap-draft.md` の `[[spec]].owner_count` と突き合わせるため、担当欄を埋めた spec は同じ変更で `owner_count` と `reason` を追随させる（design の「owner は検査対象外」は古い前提だった。design・tasks の境界を追随済み）。`briefing-property.md` の「担当 0 件」は日付入りの写真の報告書なので触らない

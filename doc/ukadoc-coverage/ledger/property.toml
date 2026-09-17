@@ -949,7 +949,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.sticky-window:1"]
 status = "vocabulary-only"
 introduced = "2.8.78"
-owner = ""
+owner = "areka-P0-sylphya-set-ledger"
 priority = "A2"
 values = []
 links = [
@@ -960,7 +960,7 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
-裁定待ち: areka-P0-currentghost-property-tree が seriko.* 14 項の一括所有に含め、areka-P0-property-query-channels は sylphya の SET 語彙表の追随（21→26）に含める。争点は値の導出の担い手と、語彙表の 1 行の持ち主。
+所有: 語彙表の 1 行は areka-P0-sylphya-set-ledger（SET 有効群へ登記済み）。値の導出は areka-P0-currentghost-property-tree（seriko.* の一括所有・zorder を除く）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.surfacelist.all:1"]
@@ -1065,7 +1065,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.zorder:1"]
 status = "degraded"
 introduced = "2.8.78"
-owner = ""
+owner = "areka-P0-zorder-property"
 priority = "A2"
 values = []
 links = [
@@ -1078,7 +1078,7 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 転記元: doc/COMPAT_ARCHITECTURE.md:207
-裁定待ち: areka-P0-zorder-property が値の導出を単独で持つと主張し、areka-P0-currentghost-property-tree は seriko.* 14 項の一括所有に含め、areka-P0-property-query-channels は sylphya の SET 語彙表の追随（21→26）に含める。争点は値の導出の担い手と、語彙表の 1 行の持ち主。
+所有: 語彙表の行も値の導出もともに areka-P0-zorder-property（開発者裁定 2026-09-13・先送り維持＝sylphya の語彙表へ名前だけの先行登記もしない）。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.shelllist.count:1"]

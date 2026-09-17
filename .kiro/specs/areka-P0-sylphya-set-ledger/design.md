@@ -207,7 +207,7 @@ doc/
 | 件数検査（既存インライン） | sylphya テスト | 21 → 25 の追随 | 4.1, 4.7〜4.9 | — | — |
 | 兄弟テスト T1〜T7 | sylphya テスト | 本機能の項目ごとの判定 | 1.3, 1.4, 3.2〜3.5, 3.7, 4.6, 4.8〜4.10, 5.1, 5.4, 7.1, 7.2 | `classify_set`・`SylphyaCore::apply`・`SylphyaReader`（P0・読むだけ） | — |
 | 走査対象名簿 | areka placement テスト | 新表を先送りの走査範囲へ | 2.3, 2.4, 3.6, 9.2 | t_zpd12（P0） | — |
-| property.toml 2 行 | 網羅調査台帳 | 担当欄の記入 | 6.1〜6.5 | `cargo test -p ukadoc-survey`（P1） | — |
+| property.toml 2 行 | 網羅調査台帳 | 担当欄の記入（＋`roadmap-draft.md` の `[[spec]]` 2 行の件数追随） | 6.1〜6.5 | `cargo test -p ukadoc-survey`（P1） | — |
 | COMPAT §8 追加行 | 互換記録 | 所有の相互参照 | 2.5, 8.1〜8.4 | — | — |
 
 ### sylphya 語彙台帳（`crates/areka-sylphya/src/vocab/dotted.rs`）
@@ -398,7 +398,7 @@ doc/
 
 **要件 6.5 の数え方**（完了報告に書く・新しい検査は作らない＝開発者裁定 2026-09-11）: `grep -c '^owner = ""\r\?$' doc/ukadoc-coverage/ledger/property.toml`（Git Bash。台帳は CRLF なので `\r` を許容する形で書く——`$` が `\r` の前で当たらない道具では母数 0 の恒真になる）が変更前 2・変更後 0。対照として `grep -c '^owner = "areka-P0-' …` が 180 行以上を拾うこと（母数 0 の恒真を避ける）。恒久的な見張りの置き場所は `crates/ukadoc-survey/src/check/`＝`areka-P0-ukadoc-coverage-roadmap` へ申し送る。
 
-**Validation**: 台帳を触ったら `cargo test -p ukadoc-survey` を走らせる（`doc/ukadoc-coverage/README.md` の規律）。`owner` の中身は検査対象外なので赤にはならないが、TOML の構造崩れは拾う。
+**Validation**: 台帳を触ったら `cargo test -p ukadoc-survey` を走らせる（`doc/ukadoc-coverage/README.md` の規律）。TOML の構造崩れに加え、`owner` の中身は `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]].owner_count` と数え合わせる検査（`crates/ukadoc-survey/tests/consistency/spec_checks.rs`・本設計の承認後に PR#147 で合流）に掛かる。**実装時の追随（2026-09-17）**: 同ファイルの `[[spec]]` 2 行（`areka-P0-sylphya-set-ledger`・`areka-P0-zorder-property`）の `owner_count` を 0 → 1、`reason` を実態へ書き換える（`none = true` と `wave` は不変・束の割り当ては棚卸の仕事）。
 
 ### 互換記録
 
