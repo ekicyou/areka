@@ -401,3 +401,17 @@
 - `cargo run -p ukadoc-survey -- check` exit 0——「食い違い 0 件」・証拠のある項目 263 件。
 - `cargo test -p log-capture-kit --test file_length_guard_test` exit 0——6 passed / 0 failed。
 - 出力は切り詰めずファイルへ保存し、`Running`／`test result:` を全行集計した。着手前の赤は 0 件＝切り分け不要。
+
+## 13. 較正①（転記層・タスク 3.4・2026-09-17）
+
+`parse.rs` をスクラッチへ複製して一時的に壊し、`cargo test -p areka-parsers` を走らせてから複製で書き戻した（`git diff -- crates/areka-parsers/src/balloon/parse.rs` は空）。
+
+| 壊し方 | 結果 | 赤になったテスト |
+|---|---|---|
+| 1a: `font.strike` の引きを `None` に | exit 101・449 passed / 5 failed | T11 `font_base_key_table_has_fourteen_entries_and_each_is_read_back_by_the_mapping`（`基底 font.strike / left: None / right: Some("108")`）・T1 `font_decoration_raw_five_keys_transcribed_verbatim`・T7・T8・T9 |
+| 1b: `disable.font.strike` の引きを `None` に | exit 101・452 passed / 2 failed | T11（`disable.font.strike / left: None / right: Some("208")`）・T13 `disable_font_keys_are_transcribed_in_the_same_shape_as_base` |
+| レビュー側: `disable.font.strike`／`underline` の引きを交差 | 赤 | T11・T13 |
+| レビュー側: テストの読み戻し関数の `"font.strike"` を `underline()` へ | 赤 | T11 |
+| レビュー側: 表のキー名を綴り誤り（`font.outline`） | 赤（未知キーで panic） | T11 |
+
+書き戻し後は 454 passed / 0 failed。

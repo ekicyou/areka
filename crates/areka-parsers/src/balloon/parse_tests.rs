@@ -809,3 +809,79 @@ fn disable_font_prefixed_variants_do_not_leak() {
     assert_eq!(got.disable_font(), &super::DisableFont::default());
     assert_eq!(disable_nine(&got), [None; 9]);
 }
+
+/// 写像対象の接頭辞なし `font.*` キー（実装側の表・カタログとは突き合わせない・要件 9.7/9.8）。
+const FONT_BASE_KEYS: [&str; 14] = [
+    "font.name",
+    "font.height",
+    "font.color.r",
+    "font.color.g",
+    "font.color.b",
+    "font.bold",
+    "font.italic",
+    "font.outline",
+    "font.strike",
+    "font.underline",
+    "font.shadowcolor.r",
+    "font.shadowcolor.g",
+    "font.shadowcolor.b",
+    "font.shadowstyle",
+];
+
+/// キー名 → 取り出し口。表に無いキー名は panic（表の綴り誤りを赤にする）。
+fn read_font_key(
+    f: &super::Font,
+    d: &super::FontDecorationRaw,
+    s: &super::FontShadowRaw,
+    key: &str,
+) -> Option<String> {
+    let num = |v: Option<u32>| v.map(|n| n.to_string());
+    match key {
+        "font.name" => f.name().map(str::to_owned),
+        "font.height" => num(f.height()),
+        "font.color.r" => num(f.color().r().map(u32::from)),
+        "font.color.g" => num(f.color().g().map(u32::from)),
+        "font.color.b" => num(f.color().b().map(u32::from)),
+        "font.bold" => d.bold().map(str::to_owned),
+        "font.italic" => d.italic().map(str::to_owned),
+        "font.outline" => d.outline().map(str::to_owned),
+        "font.strike" => d.strike().map(str::to_owned),
+        "font.underline" => d.underline().map(str::to_owned),
+        "font.shadowcolor.r" => s.color_r().map(str::to_owned),
+        "font.shadowcolor.g" => s.color_g().map(str::to_owned),
+        "font.shadowcolor.b" => s.color_b().map(str::to_owned),
+        "font.shadowstyle" => s.style().map(str::to_owned),
+        other => panic!("FONT_BASE_KEYS に取り出し口の無いキー: {other}"),
+    }
+}
+
+/// T11: 対象キー集合は 14 本で、14 本すべて（と `disable.` 前置の 14 本）が写像から読み戻せる
+/// （要件 9.7/9.8）。値は互いに異なる数値（基底 100+i・無効表示 200+i）で、取り違えも赤にする。
+#[test]
+fn font_base_key_table_has_fourteen_entries_and_each_is_read_back_by_the_mapping() {
+    assert_eq!(FONT_BASE_KEYS.len(), 14);
+    let text: String = FONT_BASE_KEYS
+        .iter()
+        .enumerate()
+        .map(|(i, k)| format!("{k},{}\ndisable.{k},{}\n", 100 + i, 200 + i))
+        .collect();
+
+    let got = parse_str(&text, None);
+
+    let (df, dd, ds) = (
+        got.disable_font().font(),
+        got.disable_font().decoration_raw(),
+        got.disable_font().shadow_raw(),
+    );
+    for (i, k) in FONT_BASE_KEYS.iter().enumerate() {
+        let base = read_font_key(
+            got.font(),
+            got.font_decoration_raw(),
+            got.font_shadow_raw(),
+            k,
+        );
+        assert_eq!(base, Some((100 + i).to_string()), "基底 {k}");
+        let disable = read_font_key(df, dd, ds, k);
+        assert_eq!(disable, Some((200 + i).to_string()), "disable.{k}");
+    }
+}
