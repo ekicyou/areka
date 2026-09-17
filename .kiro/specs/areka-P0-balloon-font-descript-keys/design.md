@@ -190,13 +190,16 @@ graph TB
 | `.kiro/specs/areka-P0-balloon-font-descript-keys/brief.md` | 「基底 13 キー」4 か所（起票行・Problem・Desired Outcome・Scope の In）→ 14、09-13 相互登記の「残り 8 キー」1 か所 → 9。数え落としが `font.outline` である旨を 1 か所に添える |
 | `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` | Scope の Out の行（「基底 13 キー」）→ 14 |
 | `.kiro/steering/roadmap.md` | W13 干渉台帳の行（「既定層の残り 8 キーは後着が配線」）→ 9 |
+| `doc/ukadoc-coverage/briefing.md`・`doc/ukadoc-coverage/roadmap-draft.md` | **09-17 実装時に追加**: 道具が作り直さない手書きの数（`[[barrier]] descript_balloon` の状態別件数・3 spec の `owner_count`）を道具のテストが示す実数へ（tasks.md 5.2） |
+| `doc/COMPAT_ARCHITECTURE.md` | **09-17 最終検証で追加**: 本仕様の配線で偽／未来形になった `\f[height,disable]` の行を着地後へ、無効表示の混色の行に本仕様の解釈（3 成分が揃えば宣言値）を追記 |
+| `.kiro/specs/areka-P0-text-align-shadow-canon/brief.md` | **09-17 最終検証で追加**: Scope の Out を「読み取りは着地済み・影 4 キーの配線は本 spec」へ（申し送りと一致させる） |
 
 ### Untouched（零の明示）
 
 - `crates/areka-parsers/src/kv/**`: 0 行。
 - `parse.rs` の 2 層マージ本体（`parse` 関数）: 0 行（キー非依存）。
 - `Font`／`FontColor`／`BalloonModel::new` の署名: 0 行。
-- `crates/areka-emo-text/src/look.rs`・`color.rs`・`state_decoration.rs`・`actor*.rs`: 0 行。
+- `crates/areka-emo-text/src/look.rs`・`color.rs`・`state_decoration.rs`・`actor*.rs`: 振る舞い 0 行（**09-17 実装時**: 本仕様の配線で偽になった doc コメントだけを `look.rs`・`look_tests.rs`・`look_font_tag_tests.rs`・`state_decoration.rs` で是正。テストの期待値・名前は無改変。research.md §16）。
 - `crates/areka/**`・`crates/areka-emo-present/**`・`crates/ukadoc-survey/**`: 0 行。
 - `Cargo.toml`（全 crate）: 0 行。
 - `doc/ukadoc-coverage/catalog.toml`・`report/{property,sakura-script,shiori}.md`: 0 行（`report` の作り直し後に `git status` で `assets.md`・`summary.md` 以外に差分が出ないことを確かめる）。
@@ -507,7 +510,7 @@ mod balloon_overrides_tests;
 areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げ（BalloonModel::font_decoration_raw）、areka-emo-text の balloon_overrides が \f と同じ形のトークン列にして look::LookLayers::from_balloon の font_overrides へ渡し、既定の見た目に載る。担当 spec は areka-P0-balloon-font-descript-keys。
 束: 台詞の書体・正典どおりに動く（先に要る仕組み: バルーンの文字描画）。<束の順位の文は元のまま>
 ```
-ⓑ `vocabulary-only`（`font.outline`）: ⓐ の 1 段目を「壊れ方: 黙って壊れる。記録: なし。」とし、2 段目末尾を「…へ渡すが、受け口は白抜きを状態だけ更新して表示は変えない（areka-P0-text-decoration-canon 要件 5.9・語彙のみ）。白抜きの描画の引受先は未起票。」とする。束は「台詞の書体・名前だけ受けて使わない」。
+ⓑ `vocabulary-only`（`font.outline`）: ⓐ の 1 段目を「壊れ方: 黙って壊れる。記録: なし。正典どおりの宣言では記録が出ない。語彙外の値（`font.outline,yes` など）は記録が出る——（ⓐ と同じ事前検証の文）」とし（**09-17 最終検証で是正**: 語彙外の値の記録を落としていた）、2 段目末尾を「…へ渡すが、受け口は白抜きを状態だけ更新して表示は変えない（areka-P0-text-decoration-canon 要件 5.9・語彙のみ）。白抜きの描画の引受先は未起票。」とする。束は「台詞の書体・名前だけ受けて使わない」。
 ⓒ `vocabulary-only`（影 4 本）: 「壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は areka-P0-text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。」束は「台詞の書体・名前だけ受けて使わない」。
 ⓓ `degraded`（`disable.font.*`）: 「壊れ方: 見た目の差。記録: なし（語彙外の値と 3 成分が揃わない色は warn! が 1 度出る）。areka-parsers の balloon::map_merged が disable.font.<基底 14 キー> を完全一致で引き（BalloonModel::disable_font）、areka-emo-text の balloon_overrides が disable_overrides へ渡して無効表示の層に載る。効くのは name・height・color（3 成分が揃ったとき。画像色との混色は指定が無いときだけ——正典の「disable.font.color のみバルーンの画像色とミックスした色」を本仕様は「指定が無いときの既定」と解釈した。要件 9.10）・bold・italic・strike・underline。outline は語彙のみ、shadowcolor／shadowstyle は受け口が無く未対応（areka-P0-text-align-shadow-canon）。担当 spec は areka-P0-balloon-font-descript-keys。」束は「台詞の書体・読めるが正典どおりに描かれない」。
 
@@ -644,7 +647,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 | W1 | `font_overrides_emit_one_token_list_per_declared_decoration_key` | `font.bold,1`・`font.strike,0` → `[["bold","1"],["strike","0"]]`（宣言の無い 3 本は列に無い） | 8.1 |
 | W2 | `disable_overrides_emit_name_height_color_and_decorations` | `disable.font.name,A, B`・`disable.font.height,20`・`disable.font.color.r/g/b,1/2/3`・`disable.font.italic,1` → `["name","A","B"]`・`["height","20"]`・`["color","1","2","3"]`・`["italic","1"]` | 8.2 |
 | W3 | `disable_color_with_missing_components_is_dropped_and_warned_once` | `disable.font.color.r,64` だけ → `color` の列は無く、`warn!` が 1 件（`key="disable.font.color"`）。ログ捕捉は `log-capture-kit`。W1〜W9 の `base` は `LookLayers::from_balloon` をそのバルーン定義から空の列で組んだもの（本番の `resolve_with_background` と同じ組み方） | 8.2, 8.5, 9.11 |
-| W4 | `out_of_vocabulary_values_are_passed_through_and_warned_once` | `font.bold,yes` → 列には `["bold","yes"]` が在り、`warn!` が 1 件（`key="bold"`, `value="yes"`, `reason` は受け口の語） | 8.5, 9.11 |
+| W4 | `out_of_vocabulary_values_are_passed_through_and_warned_once` | `font.bold,yes` → 列には `["bold","yes"]` が在り、`warn!` が 1 件（`key="font.bold"`＝descript のキー名, `value="yes"`, `reason` は受け口の語。**09-17 最終検証で是正**: 受け口の語 `bold` のままでは基底と無効表示のどちらの行か区別できないため層の接頭辞を付ける。`disable.font.bold,yes` は `key="disable.font.bold"`） | 8.5, 9.11 |
 | W5 | `canonical_declarations_produce_no_warnings` | `font.bold,1`・`disable.font.color` 3 成分・`disable.font.name,A` → `warn!` 0 件 | 8.5, 9.11 |
 | W6 | `shadow_keys_are_never_forwarded` | `font.shadowcolor.r,64`・`font.shadowstyle,offset`・`disable.font.shadowstyle,outline` を書いても両列に `shadow*` の列は無い（**零を判定**） | 8.3 |
 | W7 | `no_declarations_yield_two_empty_lists` | 9 キー・`disable.font.*` 無し → 両列とも空（＝従来と同じ呼び出し） | 5.4 |

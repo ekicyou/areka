@@ -77,7 +77,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 6 | `ukadoc-coverage-roadmap` | 調査（**M2 ロードマップの生成器**・依存ツリー最長） | M | **W13** | survey 4 本 ✅・e2e ✅＝**両段とも解禁済み** | ○ | ✅ |
 | 7 | `completed/text-decoration-canon`（⑴ 基盤＋font 10＋default/disable） | 正典（文字装飾 4 本の先頭ゲート） | L | **W13** | bvc ✅・cursor-tag ✅・line-height ✅ | ○（design） | ✅ 完了（2026-09-13） |
 | 8 | `sylphya-set-ledger`（channels ⑶・**09-11 起票**） | 台帳（三重所有の台帳側） | S | **W13** | なし | − | ⚪ |
-| 9 | `balloon-font-descript-keys`（decoration ⑶・**09-11 起票**） | 正典（転記のみ） | S | **W13** | なし | − | ⚪ |
+| 9 | `balloon-font-descript-keys`（decoration ⑶・**09-11 起票**） | 正典（転記＋書体の配線） | S | **W13** | なし | − | ⚪ |
 | 10 | `surfaces-basepos` | 正典（完全独立） | S | W13 任意／W14 | なし | − | ⚪ |
 | 11 | `dpi-transition-two-tick-bounce` | バグ（見た目・判定器） | M | **W14** | #1 | ○ | ⚪ |
 | 12 | `property-query-channels`（⑴ スクリプト経路 1〜4） | 正典（プロパティ系の先頭ゲート・依存ツリー長） | M〜L | **W14** | #4・#7（`lexer.rs`／`decode.rs`）・#2（`kanade/schedule`）・#8 | ○ | ⚪ |

@@ -1639,7 +1639,7 @@ priority = "A5"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
+壊れ方: 黙って壊れる。記録: なし。正典どおりの宣言では記録が出ない。語彙外の値（`font.outline,yes` など）は記録が出る——areka-emo-text の balloon_overrides が受け口と同じ判定で事前に検証し、warn! でキー・値・理由を 1 度残す。
 areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げ（BalloonModel::font_decoration_raw）、areka-emo-text の balloon_overrides（draw::ResolvedFont::resolve_with_background から呼ぶ）が \\f と同じ形のトークン列にして look::LookLayers::from_balloon の font_overrides へ渡すが、受け口は白抜きを状態だけ更新して表示は変えない（areka-P0-text-decoration-canon 要件 5.9・語彙のみ）。白抜きの描画の引受先は未起票。担当 spec は areka-P0-balloon-font-descript-keys。
 束: 台詞の書体・名前だけ受けて使わない（先に要る仕組み: バルーンの文字描画）。束の順位: 11——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """

@@ -594,3 +594,18 @@ eb4ef6ab fix(areka-P0-sakura-tag-word-boundary): … (#150)
 | 4 | 「13 キー」「残り 8 キー」0 件 | 満たす（18.4: 4 ファイル計 0／0・`briefing-assets.md` は引用ゆえの例外） |
 | 5 | 宣言していないバルーンの見た目が不変 | 満たす（18.5: フィクスチャ宣言 0・既存テスト差分 0 行） |
 | 6 | 較正 3 通りが記録され、元に戻り、期待値を緩めていない | 満たす（18.6: §13・§15 に記録・作業ツリー差分 0・緩めた期待値 0） |
+
+## 19. 最終検証（kiro-validate-impl）第 1 回の是正（2026-09-17）
+
+機械検査は全緑（areka-parsers 455・areka-emo-text 856・ukadoc-survey 725・check 0 件・`cargo check --workspace --all-targets` 成功・`cargo build -p areka` 成功）。横断の判断で Warning 5 件（すべて本仕様の持ち場）が出たので是正した。
+
+| # | 指摘 | 是正 |
+|---|---|---|
+| W-1 | 事前検証の `warn!` の `key` が受け口の語（`bold`）のままで、基底の宣言か無効表示の宣言か区別できない（要件 8.5 の「同じ（キー, 値）は 1 度」とも字面で食い違う） | `probe_all` に層の接頭辞を渡し、`key` を descript のキー名（`font.bold`／`disable.font.bold`）で記録。W4 に両層の 2 件のケース、W9 のキーを `disable.font.height` へ、design の W4 行を追随。接頭辞を外す摂動で W4・W9 が赤（レビュー実測） |
+| — | W3 が要件 9.11 の字面（`r` だけ）を試していない／名前の切り方のコメントが不正確 | W3 に `r` だけのケースを追加。コメントを「基底は空を捨て、こちらは受け口 `apply_name` に委ねて空を保つ」へ |
+| W-2 | 台帳 `font.outline` の備考が語彙外の値の記録を落としていた（設計テンプレート ⓑ 由来） | 備考とテンプレート ⓑ に記録の文を追加。`report`／`report-summary` は内容差分 0（報告は備考本文を載せない） |
+| W-4 | `doc/COMPAT_ARCHITECTURE.md` の `\f[height,disable]` の行が未来形／偽、無効表示の混色の行に本仕様の解釈が無い | 着地後の記述へ改め、3 成分が揃えば宣言値という解釈を追記 |
+| W-5 | 影まわり spec の brief の Out が「基底 14 キーは balloon-font-descript-keys」のままで、影 4 キーの配線の申し送りと矛盾 | 「読み取りは着地済み・影の配線は本 spec」と取り出し口・配線場所・受け口の場所を記載 |
+| W-3 | design の Untouched と File Structure Plan、要件 9.8 の編集集合が実装時の追加（コメント是正・手書きの数・上記 2 文書）に追随していない | design・requirements に追記。roadmap の種別欄「正典（転記のみ）」→「正典（転記＋書体の配線）」 |
+
+是正後: `cargo test -p areka-emo-text` 856 passed / 0 failed・`cargo test -p areka-parsers` 455 / 0・`cargo test -p ukadoc-survey` 725 / 0・`check` 0 件・`cargo fmt --check` 緑。

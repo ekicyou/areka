@@ -8,8 +8,8 @@
 //! |---|---|---|
 //! | W1 | 基底の飾りは宣言されたキーだけが列になる | 8.1 |
 //! | W2 | 無効表示の書体名・大きさ・色・飾りの形 | 8.2 |
-//! | W3 | 色の成分不足は列に入らず記録 1 件 | 8.3, 8.5 |
-//! | W4 | 語彙外の値は列に入ったうえで記録 1 件 | 8.5, 9.11 |
+//! | W3 | 色の成分不足（`r` だけ・`r`＋`g`）は列に入らず記録 1 件 | 8.3, 8.5 |
+//! | W4 | 語彙外の値は列に入ったうえで記録 1 件（キーは descript のキー名） | 8.5, 9.11 |
 //! | W5 | 正典どおりの宣言は記録 0 件 | 8.5 |
 //! | W6 | 影の 4 キーは両列とも渡さない | 8.3 |
 //! | W7 | 何も書かなければ両列とも空 | 5.4 |
@@ -118,6 +118,13 @@ fn disable_overrides_emit_name_height_color_and_decorations() {
 /// W3: 色の 3 成分が揃わなければ列に入れず、キー `disable.font.color` で 1 度だけ記録する。
 #[test]
 fn disable_color_with_missing_components_is_dropped_and_warned_once() {
+    let (only_r, events, _) = run("disable.font.color.r,1\r\n");
+    assert!(only_r.disable.is_empty(), "{:?}", only_r.disable);
+    let w = warns(&events);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert_eq!(w[0].field_str("key"), Some("disable.font.color"));
+    assert_eq!(w[0].field_str("value"), Some("1,,"));
+
     let (out, events, _) = run("disable.font.color.r,1\r\ndisable.font.color.g,2\r\n");
     assert!(out.disable.is_empty(), "{:?}", out.disable);
     let w = warns(&events);
@@ -127,6 +134,7 @@ fn disable_color_with_missing_components_is_dropped_and_warned_once() {
 }
 
 /// W4: 語彙外の値は落とさず列に入れ、受け口が飛ばす理由で 1 度だけ記録する。
+/// 記録のキーは descript のキー名（`font.bold`／`disable.font.bold`）で、基底と無効表示を取り違えない。
 #[test]
 fn out_of_vocabulary_values_are_passed_through_and_warned_once() {
     let (out, events, base) = run("font.bold,yes\r\n");
@@ -139,9 +147,14 @@ fn out_of_vocabulary_values_are_passed_through_and_warned_once() {
 
     let w = warns(&events);
     assert_eq!(w.len(), 1, "{w:?}");
-    assert_eq!(w[0].field_str("key"), Some("bold"));
+    assert_eq!(w[0].field_str("key"), Some("font.bold"));
     assert_eq!(w[0].field_str("value"), Some("yes"));
     assert_eq!(w[0].field_str("reason"), Some(expected));
+
+    // 基底と無効表示に同じ値を書くと記録は 2 件で、キーで書いた行を区別できる。
+    let (_, events, _) = run("font.bold,yes\r\ndisable.font.bold,yes\r\n");
+    let keys: Vec<_> = warns(&events).iter().map(|e| e.field_str("key")).collect();
+    assert_eq!(keys, [Some("font.bold"), Some("disable.font.bold")]);
 }
 
 /// W5: 正典どおりの宣言（基底・無効表示の全形）は記録を 1 件も出さない。
@@ -204,7 +217,7 @@ fn disable_height_rejected_by_receiver_is_forwarded_and_warned_once() {
     assert_eq!(zero.disable, lists(&[&["height", "0"]]));
     let w = warns(&events);
     assert_eq!(w.len(), 1, "{w:?}");
-    assert_eq!(w[0].field_str("key"), Some("height"));
+    assert_eq!(w[0].field_str("key"), Some("disable.font.height"));
     assert_eq!(w[0].field_str("value"), Some("0"));
 
     let (twenty, events, _) = run("disable.font.height,20\r\n");

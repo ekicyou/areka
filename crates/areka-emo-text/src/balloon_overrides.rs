@@ -44,7 +44,9 @@ pub fn overrides(model: &BalloonModel, base: &LookLayers) -> BalloonOverrides {
     let mut disable = Vec::new();
     let db = disable_font.font();
     if let Some(raw) = db.name() {
-        // 基底の `resolve` と同じ切り方。空トークンは潰さない（受け口が判定する）。
+        // カンマで切って trim する。基底の書体名（`draw.rs` の `resolve_with_background`）は
+        // 空トークンを捨てるが、ここでは残す——受け口の `apply_name` が「途中の空トークンは
+        // 記述順のまま候補列に残す」「全部空なら飛ばす」と判定するので、その判定に委ねる。
         let mut tokens = vec!["name".to_owned()];
         tokens.extend(raw.split(',').map(|s| s.trim().to_owned()));
         disable.push(tokens);
@@ -75,9 +77,9 @@ pub fn overrides(model: &BalloonModel, base: &LookLayers) -> BalloonOverrides {
 
     // 事前検証——受け口の `from_balloon` と同じ順序・同じ土台（基底 → その複製へ無効表示）。
     let mut probe = base.default.clone();
-    probe_all(&mut probe, base, &font);
+    probe_all(&mut probe, base, "font.", &font);
     let mut probe_disable = probe;
-    probe_all(&mut probe_disable, base, &disable);
+    probe_all(&mut probe_disable, base, "disable.font.", &disable);
 
     BalloonOverrides { font, disable }
 }
@@ -98,11 +100,14 @@ fn push_decoration(out: &mut Vec<Vec<String>>, raw: &FontDecorationRaw) {
 }
 
 /// 列を順に [`apply_font_tag`] へ通し、`Err` だけを記録する（語彙のみ・`Ok(None)` は記録しない）。
-fn probe_all(probe: &mut TextLook, base: &LookLayers, lists: &[Vec<String>]) {
+///
+/// 記録の `key` は descript のキー名（`prefix`＋受け口のキー。例 `font.bold`／`disable.font.height`）
+/// ——基底と無効表示の同名キーを書いた行ごとに区別できるようにする。
+fn probe_all(probe: &mut TextLook, base: &LookLayers, prefix: &str, lists: &[Vec<String>]) {
     for tokens in lists {
         let args: Vec<&str> = tokens.iter().map(String::as_str).collect();
         if let Err(FontTagIssue { key, value, reason }) = apply_font_tag(probe, base, &args) {
-            warn!(key, value, reason, "{SKIPPED}");
+            warn!(key = format!("{prefix}{key}"), value, reason, "{SKIPPED}");
         }
     }
 }
