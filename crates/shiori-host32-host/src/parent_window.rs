@@ -40,7 +40,9 @@ use crate::error::HandshakeError;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
-use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
+use windows::Win32::UI::WindowsAndMessaging::{
+    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostMessageW, TranslateMessage, WM_COPYDATA,
+};
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
@@ -338,6 +340,31 @@ impl ParentMessageWindow {
             &state.response_slot,
         )
         .map_err(SendError::Ipc)
+    }
+
+    /// 自窓を所有するスレッドのキューを空になるまで取り出して配る（定常時の保守）。
+    ///
+    /// 背景: Windows は「プロセス開始から 20〜30 秒を過ぎ、かつ窓を所有するスレッドが
+    /// 一定時間（`IsHungAppWindow` は 5 秒・`SMTO_ABORTIFHUNG` の実測は 14 秒）メッセージを
+    /// 取り出していない」窓を応答なしと判定する。往復の外で周期的に本メソッドを呼ぶ限り
+    /// この判定に落ちない。呼び出し側の周期は `areka-kanade` の `IDLE_INTERVAL`。
+    ///
+    /// 往復（[`send_request`](Self::send_request)）の内側からは呼ばないこと
+    /// （`clear→store→take` の不変条件が崩れる）。
+    ///
+    /// `ParentMessageWindow` は `!Send`／`!Sync`（`HWND` が生ポインタ・状態が [`Cell`]）ゆえ
+    /// `&self` を持てるのは窓を作ったスレッドだけであり、`PeekMessageW` が呼び出しスレッドの
+    /// キューを見る前提が型で保証される。資材を生成せず、失敗経路もログも持たない。
+    /// `WM_QUIT` は特別扱いしない（このスレッドで `PostQuitMessage` を呼ぶ者はいない）。
+    pub fn pump_pending_messages(&self) {
+        let mut msg = MSG::default();
+        // SAFETY: msg は本スレッドのスタック上で有効。取り出した msg をそのまま配るだけ。
+        unsafe {
+            while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+                let _ = TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
     }
 
     /// 自窓 HWND（loopback セルフテストからの観測用）。
