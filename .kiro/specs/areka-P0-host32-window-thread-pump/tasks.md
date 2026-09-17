@@ -152,3 +152,10 @@
   - 完了状態: 検証記録に 4 つの語の実測行数（1・0・0・0）とコマンドが載っている
   - _Depends: 4.2_
   - _Requirements: 1.5, 2.7, 5.1, 5.2, 5.3, 5.4_
+
+## Implementation Notes
+
+- 2.3: main の charset-canon で `ShioriConnection` は `negotiator: CharsetNegotiator` を含む 3 フィールドになった（設計は 2 フィールド表記）。stand-in は `CharsetNegotiator::new(Charset::UTF_8, false)` で組む。
+- 2.4: 「来ない」の主張を待たない `try_recv` で行うと恒真（抑止を外しても緑）。1 通目受領後に `3 * IDLE_INTERVAL` を有界に待つ形で判定する。Test-F も同じ規律で。
+- 2.4: `uptime_lower_bound` はテストファイル内 `OnceLock<Instant>` 起点の下限値（kanade に Win32 API crate を足さないため真のプロセス生存時間は取れない）。検証記録でも下限と明記する。
+- 較正の一時変更（受信ループの最終形相当・摂動）は Edit で手で戻し、`git diff --quiet crates/areka-kanade/src` が 0 を確認する（sed は CRLF を壊す）。
