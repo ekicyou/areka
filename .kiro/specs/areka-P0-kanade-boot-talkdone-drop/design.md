@@ -49,7 +49,7 @@
 - 完了仕様 e2e の文書に残る `boot.rs:34`／`:33-36` の行番号（本変更でワイルドカード腕の行が下へずれるが、要件ディスカッションの裁定により書き換えない。指す実体は「`boot::step` のワイルドカード腕」で変わらない）。
 
 ### Allowed Dependencies
-- `boot.rs` が既に import している `super::{Action, Input, Phase, State}`・`crate::talk::TalkDone`・`tracing`。新規の外部依存なし（`areka-kanade` の必須依存は `tracing` のみ＝不変）。
+- `boot.rs` が既に import している `super::{Action, Input, Phase, State}`・`tracing`。`crate::talk::TalkDone` は **`boot.rs` に import を 1 語追加する**（現状の import は `crate::talk::{StartTalk, TalkId}` のみ。同 crate 内の契約型であり新規の外部依存ではない）。新規の外部依存なし（`areka-kanade` の必須依存は `tracing` のみ＝不変）。
 - テストは `schedule/log_capture.rs` の `capture`／`assert_logged`／`assert_not_logged`／`assert_no_error_logs`／`logged_once` と `boot_test_support.rs` の `config`／`initial`／`assert_get`／`assert_notify` を使う。
 - 依存方向: `talk`（契約型） → `schedule/mod.rs`（横断遷移・委譲） → `schedule/boot.rs`（相固有遷移）。`boot.rs` は `mod.rs` の `step` から呼ばれる側であり、`mod.rs` の私的関数を新たに呼ばない。
 
@@ -104,11 +104,11 @@ flowchart TB
 ## File Structure Plan
 
 ### Modified Files
-- `crates/areka-kanade/src/schedule/boot.rs` — `step` に `Input::TalkDone(done) if matches!(state.phase, Phase::BootVersion { talk: Some(_) })` の腕を `CloseRequest` 腕の直後・ワイルドカード腕の直前に追加。新設 `fn on_talk_done(state, done)`（info ログ＋`BootVersion{talk: None}`・空の指示列）。ワイルドカード腕の注記「Tick・TalkDone など」を「Tick など」へ（綴り `boot_input_ignored`・メッセージ・発行点は不変）。307 行 → 330 行前後。
+- `crates/areka-kanade/src/schedule/boot.rs` — import を `use crate::talk::{StartTalk, TalkDone, TalkId};` へ 1 語追加。`step` に `Input::TalkDone(done) if matches!(state.phase, Phase::BootVersion { talk: Some(_) })` の腕を `CloseRequest` 腕の直後・ワイルドカード腕の直前に追加。新設 `fn on_talk_done(state, done)`（info ログ＋`BootVersion{talk: None}`・空の指示列）。ワイルドカード腕の注記「Tick・TalkDone など」を「Tick など」へ（綴り `boot_input_ignored`・メッセージ・発行点は不変）。307 行 → 330 行前後。
 - `crates/areka-kanade/src/schedule/boot_test_support.rs` — 共有ヘルパ `boot_until_version_with_greeting(cfg, pending: Option<CloseReason>) -> State` を追加（`Boot` →〔`pending` があれば `CloseRequest`〕→ `Notified` → `NoContent` → `Value("greeting")` で `BootVersion{talk: Some(id=1)}` へ駆動し、そこまでを表明する）。46 行 → 80 行前後。
 - `crates/areka-kanade/src/schedule/boot_sequence_tests.rs` — T1（要件 5.1）・T2（要件 5.3）・T3（要件 1.2）を末尾に追加。既存テストは不変。584 行 → 720 行前後。
 - `crates/areka-kanade/src/schedule/schedule_log_firing_tests.rs` — T4（要件 5.4 の較正）を既存 `warn_boot_input_ignored_logs` の直後に追加。626 行 → 645 行前後。
-- `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` — `kanade_probe_raises_no_shiori_call_and_observes_the_close` の doc コメントのうち「残る危険（本檻では直せない）」の段落のみを、本仕様で受理経路が入ったことを述べる文へ改める（コメントのみ・テスト本体と表明は不変・行番号は「何の定義か」で指す）。
+- `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` — `kanade_probe_raises_no_shiori_call_and_observes_the_close` の doc コメントのうち「残る危険（本檻では直せない）」の段落のみを、本仕様で受理経路が入ったことを述べる文へ改める（コメントのみ・テスト本体と表明は不変・行番号は「何の定義か」で指す）。同 doc の他の段落が指す `boot.rs:31`／`:253-273`／`:276-280`／`:285-288` は、`:31` 以外が本変更でずれる（挿入点が `step` の中＝ファイル先頭側）が、意味は変わらないので触らない。
 
 ### Unchanged Files（明示）
 - `crates/areka-kanade/src/schedule/mod.rs`・`steady.rs`・`close.rs`・`crates/areka-kanade/src/actor.rs`・`crates/areka/src/emo2_boot/spine.rs`・完了仕様 e2e の文書。
@@ -250,19 +250,19 @@ fn on_talk_done(mut state: State, done: TalkDone) -> (State, Vec<Action>)
 
 | # | 名前（案） | 系列 | 表明 | 直す前 |
 |---|---|---|---|---|
-| T1（5.1） | `boot_version_talkdone_before_notified_empties_slot_and_close_handshakes` | ヘルパで `BootVersion{Some(id=1)}` → `capture` 内で `TalkDone{1, Ended}` → `Notified` → `CloseRequest{User}` | ⑴ 相 `BootVersion{talk: None}`・指示 0 件 ⑵ `assert_not_logged("boot_input_ignored")`・`logged_once(INFO, "boot_talk_done")` の `fields["talk_id"] == "1"`・`assert_no_error_logs` ⑶ `Notified` で `Steady{talk: None}` ⑷ `CloseRequest` で `assert_get(&actions[0], &events::on_close(User, &INACTIVE))`・相 `ClosePending` | 赤（⑴ 相が `Some` のまま・⑵ WARN あり・⑷ `steady_close_pending` で指示 0 件） |
-| T2（5.3・2.2・2.3） | `boot_version_talkdone_keeps_pending_close_until_steady_tick` | ヘルパで `pending = Some(System)` を挟んで `BootVersion{Some(1)}` → `TalkDone{1, Ended}` → `Notified` → `Tick` | 受理時点: 指示 0 件・`pending_close == Some(System)`・相 `BootVersion{None}`。`Notified` で `Steady{None}`・保留は残る。`Tick` で `assert_get(&actions[0], &events::on_close(System, &INACTIVE))`・相 `ClosePending` | 赤 |
+| T1（5.1） | `boot_version_talkdone_before_notified_empties_slot_and_close_handshakes` | ヘルパで `BootVersion{Some(id=1)}` → `capture` 内で `TalkDone{1, Ended}` → `Notified` → `CloseRequest{User}` | ⑴ 相 `BootVersion{talk: None}`・指示 0 件 ⑵ `assert_not_logged("boot_input_ignored")`・`logged_once(INFO, "boot_talk_done")` の `fields["talk_id"] == "1"`・`assert_no_error_logs` ⑶ `Notified` で `Steady{talk: None}` ⑷ `CloseRequest` で `assert_get(&actions[0], &events::on_close(User, &ExecutionSnapshot::INACTIVE))`・相 `ClosePending` | 赤（⑴ 相が `Some` のまま・⑵ WARN あり・⑷ `steady_close_pending` で指示 0 件＝`actions[0]` の添字が範囲外で panic。RED の記録にはこの panic の文言を残す） |
+| T2（5.3・2.2・2.3） | `boot_version_talkdone_keeps_pending_close_until_steady_tick` | ヘルパで `pending = Some(System)` を挟んで `BootVersion{Some(1)}` → `TalkDone{1, Ended}` → `Notified` → `Tick` | 受理時点: 指示 0 件・`pending_close == Some(System)`・相 `BootVersion{None}`。`Notified` で `Steady{None}`・保留は残る。`Tick` で `assert_get(&actions[0], &events::on_close(System, &ExecutionSnapshot::INACTIVE))`・相 `ClosePending` | 赤 |
 | T3（1.2） | `boot_version_talkdone_interrupted_is_treated_as_ended` | T1 と同じで理由 `Interrupted` | T1 ⑴⑵ と同じ（`talk_done_interrupted_as_non_quit` の info が別に 1 行あることは数えない） | 赤 |
 
 ### 較正テスト（`schedule_log_firing_tests.rs`）
 
 | # | 名前（案） | 系列 | 表明 | 直す前 |
 |---|---|---|---|---|
-| T4（5.4） | `warn_boot_input_ignored_still_fires_for_tick_in_boot_version_with_talk` | `run_step(Phase::BootVersion{talk: Some(ActiveTalk{talk_id: TalkId(1), origin: "boot", script: String::new()})}, Input::Tick{..})` | `assert_logged(WARN, "boot_input_ignored")`・`assert_not_logged("boot_talk_done")` | 緑（受理腕が Tick まで受理する退行で赤） |
+| T4（5.4） | `warn_boot_input_ignored_still_fires_for_tick_in_boot_version_with_talk` | `run_step(Phase::BootVersion{talk: Some(ActiveTalk{talk_id: TalkId(1), origin: "boot", script: String::new()})}, Input::Tick{..})` | `assert_logged(WARN, "boot_input_ignored")`・`assert_not_logged("boot_talk_done")` | 緑（受理腕が Tick まで受理する退行で赤）。直す前は `boot_talk_done` の発行点が無いので不在側の表明は恒真＝較正の実体は WARN の存在側 |
 
 ### 共有ヘルパ（`boot_test_support.rs`）
 
-`boot_until_version_with_greeting(cfg: &KanadeConfig, pending: Option<CloseReason>) -> State`: `Boot` →〔`CloseRequest{reason}`〕→ `Notified`（BootInit→BootPrefetch）→ `NoContent`（BootPrefetch→BootType・`config()` は `first_boot: true`）→ `Value("greeting")`（BootType の Value 経路・`OnBoot` を飛ばして `BootVersion{Some(id=1)}`）。戻る前に `matches!(phase, BootVersion{talk: Some(ActiveTalk{talk_id: TalkId(1), ..})})` と `pending_close == pending` を表明する。既存 `boot_greeting_talkdone_correlates_without_unknown_error` は書き換えない（要件 4.5）。
+`boot_until_version_with_greeting(cfg: &KanadeConfig, pending: Option<CloseReason>) -> State`: `Boot` →〔`CloseRequest{reason}`〕→ `Notified`（BootInit→BootPrefetch）→ `NoContent`（BootPrefetch→BootType・`config()` は `first_boot: true`）→ `Value("greeting")`（BootType の Value 経路・`OnBoot` を飛ばして `BootVersion{Some(id=1)}`）。戻る前に `matches!(phase, BootVersion{talk: Some(ActiveTalk{talk_id: TalkId(1), ..})})` と、保留の一致を `assert_eq!(state.pending_close.map(CloseReason::as_ref_str), pending.map(CloseReason::as_ref_str))` で表明する（`CloseReason` は `PartialEq` を持たないので `Option<CloseReason>` の `==` はコンパイルできない。`msg.rs` に derive を足す案は本仕様の範囲外なので採らない）。各段のコメントは実際の相（BootInit→BootPrefetch→BootType→BootVersion）で書く（既存テストの段コメント「BootInit→BootType」は古いが要件 4.5 により触らない）。既存 `boot_greeting_talkdone_correlates_without_unknown_error` は書き換えない（要件 4.5）。
 
 ### 既存テスト（不変・非回帰）
 - `boot_sequence_tests.rs`／`boot_reply_branch_tests.rs`／`schedule_log_firing_tests.rs` の boot 関連（要件 4.5）。
@@ -271,7 +271,7 @@ fn on_talk_done(mut state: State, done: TalkDone) -> (State, Vec<Action>)
 ### 検証手順（要件 5.2・5.5）
 1. テスト T1〜T4 とヘルパを先に書き、`cargo test -p areka-kanade --lib boot_version_talkdone` を走らせて T1〜T3 が赤・T4 が緑であることを記録する（テストのみのコミットを 1 つ作り、コミットメッセージに赤の要約〔失敗した表明の文言〕を残す＝実装の記録）。
 2. `boot.rs` を直し、同じコマンドで T1〜T4 が緑になることを確認する。
-3. `cargo test -p areka-kanade`（終了コードで判定）と `cargo test -p areka --bin areka`（終了コードで判定）を全走させる。出力の一部だけ（`Select-Object -First N` など）を見て判定しない。
+3. `cargo test -p areka-kanade`（終了コードで判定）と `cargo test -p areka --bin areka`（終了コードで判定）を全走させる。出力の一部だけ（`Select-Object -First N` など）を見て判定しない。`crates/areka` 側には壁時計デッドラインを持つテストがあるので、他の cargo と並走させず単独で走らせる（並走すると飢餓して赤になる）。
 4. `cargo test -p log-capture-kit --test file_length_guard_test` で 1,000 行の番人を通す。
 
 ## Error Handling

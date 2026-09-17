@@ -229,7 +229,7 @@ on_talk_done（一致・非 quit）:
 - **Implications**: design Testing Strategy（`matches!` で表明・`logged_once(..).fields["talk_id"] == "1"`・T4 は `run_step` で 1 行）。
 
 ### 9.2 隣接文書の陳腐化（境界の保守）
-- `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` の `kanade_probe_raises_no_shiori_call_and_observes_the_close` の doc に「残る危険（本檻では直せない）——…`schedule/boot.rs:32-36` の防御アームが**それを捨てる**」の段落がある。本仕様の着地でこの主張は反対の意味になる（参照の綴りは残り中身だけが反転する型・`ukadoc-survey-sakura-script` の申し送りと同型）。設計はこの段落だけをコメントとして追随させる（File Structure Plan・コードと表明は不変）。同 doc の他の段落にある `boot.rs:31`／`:285-288` の行番号は本変更で後者がずれるが、意味は変わらないので触らない（既知の行番号ドリフト・「何の定義か」で指す規律の適用は別途）。
+- `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` の `kanade_probe_raises_no_shiori_call_and_observes_the_close` の doc に「残る危険（本檻では直せない）——…`schedule/boot.rs:32-36` の防御アームが**それを捨てる**」の段落がある。本仕様の着地でこの主張は反対の意味になる（参照の綴りは残り中身だけが反転する型・`ukadoc-survey-sakura-script` の申し送りと同型）。設計はこの段落だけをコメントとして追随させる（File Structure Plan・コードと表明は不変）。同 doc の他の段落にある `boot.rs:31`／`:253-273`／`:276-280`／`:285-288` の行番号は本変更で `:31` 以外がずれる（挿入点が `step` の中＝ファイル先頭側なので以降はすべて動く）が、意味は変わらないので触らない（既知の行番号ドリフト・「何の定義か」で指す規律の適用は別途）。
 - 完了仕様 e2e の文書（手順書 §5.7 の表・記録 §7／§13.2・design D9）が指す `boot.rs:34`／`:33-36` は、腕の追加でワイルドカード腕が下へずれる。要件ディスカッションの裁定により書き換えない。実体は「`boot::step` のワイルドカード腕」で不変。
 
 ### 9.3 Architecture Pattern Evaluation
