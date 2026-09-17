@@ -147,7 +147,7 @@ wave = "W16"
 name = "areka-P0-text-decoration-canon"
 stage = "A"
 bundle = "バルーンの文字"
-owner_count = 17
+owner_count = 16
 wave = "W13"
 
 [[spec]]
@@ -210,14 +210,14 @@ wave = "W15"
 name = "areka-P0-balloon-font-descript-keys"
 none = true
 reason = "束はまだ割り当てていない。分割 ⑶ で受け持つ書体の欄は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替え済み（10 件）"
-owner_count = 10
+owner_count = 7
 wave = "W13"
 
 [[spec]]
 name = "areka-P0-text-align-shadow-canon"
 none = true
 reason = "束はまだ割り当てていない。分割 ⑵ で受け持つ寄せ 2 と影 3 は 2026-09-13 に分割元 areka-P0-text-decoration-canon の完了に合わせてこの名前へ付け替え済み（5 件）"
-owner_count = 5
+owner_count = 9
 wave = "W15"
 
 [[spec]]
