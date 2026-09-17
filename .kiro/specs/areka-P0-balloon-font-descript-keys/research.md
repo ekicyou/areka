@@ -342,3 +342,50 @@
 - `doc/ukadoc-coverage/README.md`——状態語彙の表・証拠の行の形・`report/summary.md` の担当。
 - `.kiro/steering/structure.md`——Parser Crate の規律（転記層・`Option` で未指定・`#[non_exhaustive]`）・Unit Tests の兄弟ファイル規約・1,000 行の目安。
 - `.kiro/steering/roadmap.md`——W13 干渉台帳（共有ファイル 0・後着 rebase）。
+
+---
+
+## 11. `main` 取り込み後の改訂記録（2026-09-17）
+
+### 11.1 何が起きたか
+
+タスク承認直後（`a6804540`）に開発者の指摘で `origin/main` を取り込んだ（`7ab2ad89`・衝突 0）。`main` には `areka-P0-text-decoration-canon`（PR#148）と `areka-P0-ukadoc-coverage-roadmap`（PR#147）の完了が入っており、本仕様の前提が **6 点**崩れていた。設計検証・タスク生成をやり直す前に、要件→設計→タスクの順で改訂した（開発者裁定 09-17「推奨で。要件→設計→タスク分解まで実行」）。
+
+### 11.2 崩れた前提と実測（すべて取り込み後のブランチで測った）
+
+| # | 旧前提 | 実測 | 帰結 |
+|---|---|---|---|
+| ⑴ | 下流 2 spec とも brief のみ＝本仕様が先着 | `text-decoration-canon` は `completed/`。受け口 `look.rs::LookLayers::from_balloon(…, font_overrides, disable_overrides)` が在り、本番の呼び出し（`draw.rs::ResolvedFont::resolve_with_background`）は両引数に空の列を渡している | **後着確定**＝本仕様が配線する（DD4 改訂・要件 8 全面改訂） |
+| ⑵ | 見た目を変えない（5.4） | 配線すれば `font.bold,1` は太字になる | 「9 キーと `disable.font.*` を書いていないバルーンの見た目を変えない」へ書き直し（5.4）。効くことは 5.5 として明示。フィクスチャの宣言は 0 件（`grep -rlE '^font\.(bold|…)'`・`disable\.font` とも 0） |
+| ⑶ | 台帳 10 項目の担当は `text-decoration-canon`・優先度 `A11` | 担当は完了アーカイブ時に本仕様へ移送済み。優先度は 15 項目とも `A5`（全体の並べ直し） | 7.4・7.5 を実測へ（担当＝その状態を着地させた spec、という慣行を `implemented` 28 項目で確認） |
+| ⑷ | 是正対象は生きた 4 文書 | `text-decoration-canon` の brief は `completed/` へ（非改変の側）。`main` が本仕様の brief に「残り 8 キー」を 1 か所書き足した | 3 文書 7 か所へ（1.3・1.5・C6） |
+| ⑸ | `font.name` の縮退は 2 点 | カンマ区切りの候補列は `resolve_with_background` が記述順のまま `TextLook::name` へ渡す | 残るのはフォントファイルの 1 点（7.7）。引受先は起票しない（開発者方針） |
+| ⑹ | `disable.font.*` は対象外 | 完了済み spec の台帳備考と最終検証が「読み取りは `balloon-font-descript-keys`」と本仕様を名指し。受け口 `disable_overrides` も用意済み | 本仕様が引き受ける（開発者承認 09-17・推奨案 A）。2.8・2.9・4.6・7.10・8.2 を追加 |
+
+### 11.3 新しい設計判断（DD9〜DD11）と改訂（DD4・DD7・DD8）
+
+- **DD9 無効表示層の型**——`DisableFont { font: Font, decoration: FontDecorationRaw, shadow: FontShadowRaw }` の束 1 つ。書体名・大きさ・色は既存 `Font` を値で再利用し（`get_scalar` の縮退規則を継ぐ）、残り 9 本は基底と同じ 2 型。新しい値の型を増やさず「同じキーは同じ形」。却下: 14 フィールドを平らに並べる型（`Font` と重複）。
+- **DD10 配線の形と記録**——純粋モジュール `balloon_overrides.rs` に `font_overrides`／`disable_overrides` を置き、宣言されたキーだけを `\f` と同じ形のトークン列へ写す。受け口の `apply_overrides` は綴り誤りを**黙って飛ばし**、doc で「記録はバルーン定義を読む側が出す」と本仕様へ申し送っていた。転記層はログを出さない契約なので、配線が公開 API（`apply_font_tag`・`LookLayers::default()`）で**事前検証**して `warn!` を 1 度出す。判定の実体は受け口 1 か所に留まる（配線は語彙表を持たない）。却下: 受け口を改変して飛ばした理由を返す形（完了済み spec の面を触る）・`draw.rs` へ直書き（COM 無しでテストできない・737 行を伸ばす）。
+- **DD11 影 4 キーは渡さない**——受け口は `shadowcolor`／`shadowstyle` を所有外として見た目を変えない。3 成分を 1 トークンへ束ねる形と `none` の扱いは影まわりの仕様の語彙判断なので、本仕様が先に固定しない。W6 で「渡さない」を零として判定する。
+- **DD4 改訂**——着地順は実測で確定（書体＝後着・影＝先着）。「最終タスクで再測定」は不要になり、最終検証で影まわりの状態を 1 度だけ再確認する判定表に置き換えた。
+- **DD7 改訂**——優先度が全項目 `A5` に揃い束名が優先度の鍵ではなくなったので、状態ごとに既設の束名へ揃える（`implemented`／`vocabulary-only`／`degraded` の 3 つ）。「束の順位: N」の文は触らない。
+- **DD8 改訂**——統合担当が完了し、README が「台帳を触った人が `report-summary` を走らせる」と定めた。本仕様が `summary.md` を作り直す。
+
+### 11.4 受け口の実測（配線の設計の根拠・`look.rs`）
+
+- `apply_font_tag` が受ける語彙: `bold`／`italic`／`underline`／`strike`／`outline`（`parse_switch`: `true`/`1`/`false`/`0`/`default`/`disable`）・`sub`／`sup`・`height`・`color`（`parse_color`: 3 成分か 1 語）・`name`（候補列）・一括の `default`／`disable`。所有外 `UNOWNED_KEYS = ["align","valign","shadowcolor","shadowstyle"]`＋`cursor*`／`anchor*` は `Ok(Some(Note::Unowned))`。未知キーは `Err(REASON_UNKNOWN_KEY)`。`outline` は `Ok(Some(Note::VocabularyOnly))`。
+- `Err` の条件（`REASON_BAD_SWITCH`・`REASON_VALUE_COUNT`・`REASON_COMPONENT_COUNT`・`REASON_UNKNOWN_KEY` 等）はいずれも値の綴りだけで決まり、層の値に依らない——事前検証を `LookLayers::default()` で行っても結果は受け口と一致する。
+- `apply_overrides` の `base` は差し込み前の層の複製で、`default`／`disable` の語は差し込み前の層を指す。正典の descript にこの語は現れない。
+- `LookLayers`・`TextLook` のフィールド、`TextLook::ukadoc_default()`、`apply_font_tag`、`FontTagIssue` はすべて `pub`。
+- `lib.rs` の `PURE_SOURCES`（54 本）に新モジュールと兄弟テストを登録しないと `every_source_file_is_either_scanned_or_explicitly_excluded` が赤になる。`draw.rs` は `SOURCES_OUTSIDE_THE_PURE_SCAN` 側。
+
+### 11.5 台帳の実測（09-17）
+
+15 項目とも `priority = "A5"`。`absent` 10 の `owner` は本仕様、`implemented` 4 は `text-decoration-canon`、`disable.font.*` は `vocabulary-only`・`text-decoration-canon`。「13 キーと書くが」の一文は `implemented` 4 項目にだけ残る。束名は「読む経路が無い」（順位 11）・「正典どおりに動く」（66）・「名前だけ受けて使わない」（37）の 3 種。`report/*.md`・`ledger/*.toml` の保存形は `i/lf`（作業ツリーは `w/crlf`）。
+
+### 11.6 参照（追加）
+
+- `crates/areka-emo-text/src/look.rs`——`LookLayers::from_balloon`・`apply_overrides`・`apply_font_tag`・`UNOWNED_KEYS`・`parse_switch`。
+- `crates/areka-emo-text/src/draw.rs`——`ResolvedFont::resolve_with_background`（受け口の呼び出し・空の列 2 つ）。
+- `.kiro/specs/completed/areka-P0-text-decoration-canon/tasks.md`——9.2／9.4／最終検証の申し送り（`absent` 10 行の移送・影の所有の裁定・`disable.font.*` の引受先）。
+- ukadoc `descript_balloon` `disable.font.(フォント定義),(指定)`（SSP 2.5.51）。
