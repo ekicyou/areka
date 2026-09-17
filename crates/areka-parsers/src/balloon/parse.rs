@@ -116,6 +116,7 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     );
     let font = Font::new(
         // font.name は文字列値（数値化しない・R2.5）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.name_2c_30d5_30a9_30f3_30c8_540d:1
         merged.get("font.name").map(|v| v.to_owned()),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.height_2c_6570_5024:1
         get_scalar::<u32>(merged, "font.height"),
@@ -173,18 +174,28 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     // 無効表示の書体名・大きさ・色は基底 5 本と同じ式で引き、既存の縮退規則をそのまま継ぐ。
     // 接頭辞付きキーは完全一致引きゆえ基底と無効表示が互いに混ざらない（要件 4.1〜4.6）。
     let font_decoration_raw = FontDecorationRaw::new(
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.bold_2c0_2f1:1
         get_raw(merged, "font.bold"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.italic_2c0_2f1:1
         get_raw(merged, "font.italic"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.outline_2c0_2f1:1
         get_raw(merged, "font.outline"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.strike_2c0_2f1:1
         get_raw(merged, "font.strike"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.underline_2c0_2f1:1
         get_raw(merged, "font.underline"),
     );
     let font_shadow_raw = FontShadowRaw::new(
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.shadowcolor.r_2c_6570_5024:1
         get_raw(merged, "font.shadowcolor.r"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.shadowcolor.g_2c_6570_5024:1
         get_raw(merged, "font.shadowcolor.g"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.shadowcolor.b_2c_6570_5024:1
         get_raw(merged, "font.shadowcolor.b"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.shadowstyle_2c_5f62_614b_6307_5b9a:1
         get_raw(merged, "font.shadowstyle"),
     );
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#disable.font._28_30d5_30a9_30f3_30c8_5b9a_7fa9_29_2c_28_6307_5b9a_29:1
     let disable_font = DisableFont::new(
         Font::new(
             get_raw(merged, "disable.font.name"),
