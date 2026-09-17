@@ -117,7 +117,7 @@ graph TB
 
 **Architecture Integration**:
 
-- **Selected pattern**: Option C（ハイブリッド）＋ Option D（自前 swap chain 供給面・R8 要件化済み）。低レベル COM ヘルパのみ wintf `com/` 層（unsafe 隔離規約）、表示コンポーネント・キャッシュ・指令 API・マスク同期は emo-present に集約。
+- **Selected pattern**: Option C（ハイブリッド）＋ Option D（自前 swap chain 供給面・R8 要件化済み）。低レベル COM ヘルパのみ wintf `com/` 層（unsafe 隔離規約）、表示コンポーネント・キャッシュ・指令 API・マスク同期は emo-present に集約。（**2026-09-11 上書き**: `areka-P0-present-gpu-transform-scale`——供給面は wintf の `GraphicsCommandList`＋`CompositionDrawingSurface` 経路へ戻り、R8 の読み戻しは `ComposedSurface` 直読みで代替。実装着地 2026-09-12）
 - **Domain boundaries**: 表示口＝emo-present が wintf を知る唯一の層。`BitmapSource` には触れない。hit-test への増分は「emo 専用」ではなく汎用 `AlphaMaskResource`（メモリ供給ウィジェット一般が使える形）。
 - **Existing patterns preserved**: `CreateSurfaceBrushWithSurface`→`SpriteVisual` の装着型・`XxxResource`（CPU リソース）命名・NonSend 資源・ログ規律（error!＋Err・silent failure 禁止）。
 - **New components rationale**: swap chain 供給は wintf に存在しない未踏経路（R8 必達）。`AlphaMaskResource` は hit-test の読み口が `BitmapSourceResource` 固定であるギャップの最小汎用解。

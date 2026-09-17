@@ -81,7 +81,7 @@ The following validation dimensions are independent and can be dispatched as **s
 
 For simple features (few tasks, small scope), run checks in main context without subagent dispatch.
 
-**Dispatch model** (added by areka-P0-draw-load-parity): when the caller (`kiro-impl`) passes `DISPATCH_MODEL=opus`, attach `model: "opus"` to every Agent dispatch made here. When run standalone, perform the same determination yourself — read your own system prompt line "You are powered by the model named <NAME>"; if `<NAME>` contains "Fable" (case-insensitive) or the line cannot be found → `opus`, otherwise inherit (omit the `model` argument). Record the decision once in the run output: `dispatch model: opus` or `dispatch model: inherit`.
+**Dispatch model** (added by areka-P0-draw-load-parity; revised 2026-09-12 — per difficulty): determine `OWN_MODEL` from your own system prompt line "You are powered by the model named <NAME>" (or take it from the caller's `DISPATCH_POLICY=tiered OWN_MODEL=<name>`). If `OWN_MODEL` is Opus or lower → inherit (omit `model`). If Fable or unknown → this is the feature-level judgment gate, so dispatches that **judge** (cross-task contract verification, requirement coverage, the GO/NO-GO verdict) use `model: "fable"`; dispatches that only **collect evidence** (running commands, grepping, counting) use `model: "sonnet"`. Record one line per dispatch: `dispatch model: <role> → <model> (<reason>)`.
 
 #### Mechanical Checks (run commands, use results)
 

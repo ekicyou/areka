@@ -38,16 +38,17 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 4 行（`move`・`bind`・
-//! `(set,zorder)`・`(reset,zorder)`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 5 行（`move`・`bind`・
+//! `(set,zorder)`・`(reset,zorder)`・`\f`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
 //!
 //! 本表は結線時の宣言・検証のためだけにあり、実行時に各消費者がここを引くわけではない
 //! （消費者は自らの名前と選別子で自己選別する）。両者は一致していなければならないが、
-//! 依存はしない——`ZOrderCueSink` が受理する組と `canonical()` の 4 行目までが同じであることは
-//! 本モジュールのテストが名指しで固定する。
+//! 依存はしない——`ZOrderCueSink` が受理する組と、正準台帳に載る zorder の 2 行
+//! （`("set", Some("zorder"))`・`("reset", Some("zorder"))`）が同じであることは、本モジュールの
+//! テストがその組を名指しで固定する。
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
@@ -71,6 +72,10 @@ type LedgerKey = (String, Option<String>);
 /// - [`ZOrderSink`](CommandConsumer::ZOrderSink): 重なり指定・重なり解除を消費する
 ///   [`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)。正準台帳が `(set, zorder)`・
 ///   `(reset, zorder)` の 2 組を登記する（要件 11.2）。
+/// - [`TextLayer`](CommandConsumer::TextLayer): 文字装飾 `\f[...]` を消費する文字レンダリング層
+///   （`areka_emo_text` の `state_decoration.rs` が同じ運搬名で自己選別する）。正準台帳が
+///   運搬名 [`FONT_TAG_CARRIER`](areka_sakura::contract::FONT_TAG_CARRIER) →
+///   `TextLayer` を登記する（areka-P0-text-decoration-canon 要件 2.4）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandConsumer {
     /// `\![move]` の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
@@ -81,6 +86,11 @@ pub enum CommandConsumer {
     /// （[`ZOrderCueSink`](super::zorder_cue::ZOrderCueSink)）。名前だけでは決まらず、
     /// 第 1 引数が `zorder` の出現だけを担当する（要件 11.2）。
     ZOrderSink,
+    /// 文字装飾 `\f[...]` の担当消費者（文字レンダリング層——`areka_emo_text` の
+    /// `state_decoration.rs` が運搬名で自己選別して適用する）。キーは第 1 引数
+    /// （`bold`／`color`／`height` …）で分かれないので、登記は選別子なしの 1 行である
+    /// （areka-P0-text-decoration-canon 要件 2.4）。
+    TextLayer,
 }
 
 /// 選別子を記録本文へ書くときの見え方（「無い」側も読める形にする——片側だけの本文では
@@ -208,11 +218,18 @@ impl ConsumerLedger {
             .copied()
     }
 
+    /// 登記の件数（母数の観測点・テスト専用）。
+    #[cfg(test)]
+    pub(crate) fn entry_count(&self) -> usize {
+        self.table.len()
+    }
+
     /// 正準台帳を構築する（現行登記＝`move` → [`CommandConsumer::MoveSink`]・`bind` →
     /// [`CommandConsumer::Seriko`]・`(set, zorder)` と `(reset, zorder)` →
-    /// [`CommandConsumer::ZOrderSink`]）。
+    /// [`CommandConsumer::ZOrderSink`]・運搬名 `\f` →
+    /// [`CommandConsumer::TextLayer`]）。
     ///
-    /// 後ろの 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
+    /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。
     ///
     /// 以後のコマンド追加は「消費者＋本表 1 行（`try_register`）」のみで **dola 無改変**（R2.6）。
@@ -233,11 +250,20 @@ impl ConsumerLedger {
             .try_register("reset", Some("zorder"), CommandConsumer::ZOrderSink)
             .expect("正準台帳: ('reset','zorder') は一意（重複・排他違反は編集ミス）");
         ledger
+            .try_register(
+                areka_sakura::contract::FONT_TAG_CARRIER,
+                None,
+                CommandConsumer::TextLayer,
+            )
+            .expect("正準台帳: '\\f'（選別子なし）は一意（重複・排他違反は編集ミス）");
+        ledger
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use areka_sakura::contract::FONT_TAG_CARRIER;
+
     use super::*;
 
     /// 正準台帳に `move`・`bind` が共に登記されている → 照会で `move`→[`CommandConsumer::MoveSink`]・
@@ -492,7 +518,7 @@ mod tests {
     }
 
     /// 別のコマンド名どうしは互いに干渉しない（排他は同一名の中だけの規則）。
-    /// 排他の実装が名前をまたいで効いてしまうと、正準台帳の 4 行がそもそも組めなくなる。
+    /// 排他の実装が名前をまたいで効いてしまうと、正準台帳の 5 行がそもそも組めなくなる。
     #[test]
     fn exclusion_applies_only_within_the_same_name() {
         let mut ledger = ConsumerLedger::new();
@@ -519,13 +545,23 @@ mod tests {
         );
     }
 
-    /// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性檻が緑）。4 エントリが
+    /// 正準台帳の構築は重複・排他違反なしで成功する（内部整合＝一意性檻が緑）。5 件が
     /// 共存しても檻は保たれ、既登記の組の再登記は [`LedgerError::Duplicate`] で検出され、
     /// 別名の追加は独立に成功する（task 7.2・要件 11.3）。
+    ///
+    /// **母数も判定する**（タスク 9.4・7.3 の申し送り）——件数を数えずに個々の登記だけを
+    /// 見ていると、登記が黙って増えても減っても緑のままになる。件数は逐語で固定し、
+    /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
     #[test]
     fn canonical_builds_without_duplicate() {
-        // canonical() は内部 try_register（4 行）が Ok（重複なら expect が panic する）。
+        // canonical() は内部 try_register（5 行）が Ok（重複なら expect が panic する）。
         let ledger = ConsumerLedger::canonical();
+        assert_eq!(
+            ledger.entry_count(),
+            5,
+            "正準台帳の登記は 5 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f）\
+             ——増減させたら本檻と doc の 2 か所を編集すること"
+        );
         assert_eq!(
             ledger.consumer_of("move", None),
             Some(CommandConsumer::MoveSink)
@@ -543,7 +579,7 @@ mod tests {
             Some(CommandConsumer::ZOrderSink)
         );
 
-        // 4 エントリ共存下でも一意性檻は保たれる: 既登記の組 bind の再登記は Duplicate で
+        // 5 件共存下でも一意性檻は保たれる: 既登記の組 bind の再登記は Duplicate で
         // 検出される。
         let mut ext = ledger.clone();
         let err = ext
@@ -555,7 +591,7 @@ mod tests {
                 name: "bind".to_string(),
                 selector: None,
             },
-            "4 エントリ共存下でも重複は Duplicate{{name, selector}} として観測可能"
+            "5 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
         );
         // 既登記の担当は据え置き（上書きしない）。
         assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
@@ -566,6 +602,26 @@ mod tests {
         assert_eq!(
             ext.consumer_of("resize", None),
             Some(CommandConsumer::Seriko)
+        );
+    }
+
+    /// task 7.3／要件 2.4: 正準台帳は文字装飾（`\f`）を文字レンダリング層の担当として登記する。
+    ///
+    /// 登記のキーは運搬名そのもの（[`FONT_TAG_CARRIER`]）——`\f` は第 1 引数（`bold`／
+    /// `color` …）で担当が分かれないので選別子なしの 1 行である。実行時の選別は
+    /// `state_decoration.rs` が同じ運搬名で自己選別して行い、本表は宣言だけを持つ。
+    #[test]
+    fn canonical_registers_the_font_tag_for_the_text_layer() {
+        let ledger = ConsumerLedger::canonical();
+        assert_eq!(
+            ledger.consumer_of(FONT_TAG_CARRIER, None),
+            Some(CommandConsumer::TextLayer),
+            "正準台帳は '\\f'（選別子なし）→ TextLayer を登記している（要件 2.4）"
+        );
+        assert_eq!(
+            ledger.consumer_of(FONT_TAG_CARRIER, Some("bold")),
+            Some(CommandConsumer::TextLayer),
+            "選別子なしの登記なので第 1 引数によらず同じ担当（要件 11.3）"
         );
     }
 }

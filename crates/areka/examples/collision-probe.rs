@@ -152,10 +152,12 @@
 //!    （窓が原寸へ引き戻される静かな欠陥）。
 //!
 //! ④ **描画一致の anchor（自動・マウス経路非依存・描画証跡であって判定証跡ではない）**:
-//!    [`EmoPresenter::read_back`] で Head（`93,62`–`271,130`）／Bust（`133,270`–`229,326`）各矩形の中心を
-//!    **物理座標へ写像**（`ScaleRatio::scale_len` で ×k）した画素が**不透明**（実際に絵が描かれている）
-//!    ことを assert する。read_back は k 適用後の供給面（`chain.size()` ＝ 物理寸）ゆえ写像が要る。
-//!    anchor は写像後も矩形内側 **≥2px** にあることを併せて assert し、丸め差 1px と無関係に成立させる。
+//!    [`EmoPresenter::read_back`] で Head（`93,62`–`271,130`）／Bust（`133,270`–`229,326`）各矩形の中心の
+//!    画素が**不透明**（実際に絵が描かれている）ことを assert する。read_back が返すのは **native 原寸の
+//!    合成バイト列**（拡大は GPU 変換の領分・`areka-P0-present-gpu-transform-scale` 要件 6.2）ゆえ
+//!    collision 値をそのまま画素 index へ写せる（×k の写像は不要）。読み戻し長が k に依らず
+//!    `native_w × native_h × 4` であることも併せて assert する。anchor は矩形内側 **≥2px** にあることを
+//!    確かめ、退化矩形で中心の不透明が縁のたまたまになるのを防ぐ。
 //!    **この検査は「collision 値の位置に絵が描かれている」ことしか語らない描画証跡であり、当たり判定の
 //!    証跡ではない**（要件 4.4）——判定の証跡は ⑤ の目視由来経路のみである。記録様式でも両者を混ぜない。
 //!
@@ -310,7 +312,7 @@ fn main() -> Result<()> {
     println!("=======================================");
     println!("  表示  : emo2 surface1000（有効 bind 実値付き・scope0 キャラ窓）");
     println!(
-        "  自動  : ③ 物理寸整合 assert（GetClientRect == target_physical_size）＋④ read_back 描画一致 anchor（物理座標へ写像）"
+        "  自動  : ③ 物理寸整合 assert（GetClientRect == target_physical_size）＋④ read_back 描画一致 anchor（native 座標で直読み）"
     );
     println!(
         "  手動  : ⑤ ゴーストの頭/胸/背景を目視で狙い、resolve 結果（Head/Bust/None）とペア列 Δ=(0,0) を記録"

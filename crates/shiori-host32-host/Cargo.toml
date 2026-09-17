@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 shiori-host32-ipc = { path = "../shiori-host32-ipc" }
+encoding_rs = { workspace = true }
 wintf-winmsg-executor = { workspace = true }
 event-listener = { workspace = true }
 thiserror = { workspace = true }
@@ -28,3 +29,8 @@ features = [
     "Win32_System_JobObjects",
     "Win32_Security",
 ]
+
+[dev-dependencies]
+# `CharsetNegotiator` のログ（件数・レベル・`event` フィールド）を決定論テストで観測する
+# ためだけの workspace path dep（11 crate と同形・本体の `[dependencies]` には置かない）。
+log-capture-kit = { path = "../log-capture-kit" }

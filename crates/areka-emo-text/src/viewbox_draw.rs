@@ -41,6 +41,8 @@
 //! スケール一点適用・描画状態は既定のまま両者同一——比較専用オラクル（[`DrawExecutor`]）との
 //! byte 等価はこの構造共有に載る。
 
+use std::rc::Rc;
+
 use tracing::warn;
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
@@ -56,13 +58,30 @@ use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::ecs::GraphicsCore;
 
 use crate::TextLayerError;
+use crate::canvas::GlyphRunContent;
 use crate::canvas::{ContentCanvas, ResidentContent};
-use crate::draw::{LineLayoutStore, ResolvedFont, create_d2d_target_bitmap, create_text_format};
+use crate::draw::{
+    FontCatalog, LineLayoutStore, ResolvedFont, create_d2d_target_bitmap, create_text_format,
+};
 use crate::layout::{PositionedGlyph, VisibleWindow};
+use crate::look::StyleTable;
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-use crate::viewbox::{DirtyRect, FramePlan, LineOverhang, ScrollPlanner, ScrollState};
+use crate::viewbox::{FramePlan, LineOverhang, ScrollPlanner, ScrollState};
 use crate::writing::WritingMode;
+
+#[path = "viewbox_draw_decoration.rs"]
+mod decoration;
+#[path = "viewbox_draw_plan.rs"]
+mod plan;
+
+use decoration::{BrushCache, LineStyles, apply_color_ranges, apply_font_ranges, line_styles};
+use plan::degrade_if_needed;
+// 兄弟檻（`viewbox_draw_frame_render_tests.rs`）が `super::plan_inconsistency` で私有項目へ届くための
+// 再束縛（design.md の File Structure Plan が要求するファサードの取り込み）。`full_domain_update` は
+// 子モジュールの内部からしか呼ばれないため親へは束ねない（束ねると unused_imports が鳴る）。
+#[cfg(test)]
+use plan::plan_inconsistency;
 
 /// 行 TextLayout format の前提（フォント名・高さビット・writing_mode）——変わると
 /// キャッシュ済み行レイアウトの前提が崩れるため format と行キャッシュを組み直す
@@ -106,6 +125,11 @@ pub struct ViewboxExecutor {
     dc: ID2D1DeviceContext,
     /// 描画/計測共用 format（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
     format: Option<(FormatKey, IDWriteTextFormat)>,
+    /// フォント候補列の解決台帳（計測器と共有できる・要件 9.8）。`ensure_format` はこの台帳が
+    /// 解決した家族名で書式を組むので、バルーン定義のカンマ区切り候補列が描画の側でも効く。
+    fonts: Rc<FontCatalog>,
+    /// 装飾の色ごとの塗りブラシの記憶（同じ色を毎フレーム作り直さない）。
+    brushes: BrushCache,
     /// 決定論観測統計（常時コンパイル・[`Self::stats`] で読む）。
     stats: DrawStats,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・planner の
@@ -124,7 +148,28 @@ impl ViewboxExecutor {
     ///
     /// デバイス未初期化（`GraphicsCore` 無効化後）は log-first で `Device` エラー
     /// （`DrawExecutor::new` と同一経路）。
+    ///
+    /// **本番の呼び手は [`new_shared`](Self::new_shared) へ移った**（`actor_decoration.rs::build_actor_render`
+    /// が台帳を 1 つだけ作って計測器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
+    /// 残しているのは自前の台帳で足りる決定論テスト（`viewbox_draw_*_tests.rs`）が呼ぶ
+    /// 委譲の入口としてである。crate 外の呼び手も無い。
     pub fn new(core: &GraphicsCore) -> Result<ViewboxExecutor, TextLayerError> {
+        let dwrite = core
+            .dwrite_factory()
+            .ok_or_else(|| none_err("GraphicsCore::dwrite_factory"))?
+            .clone();
+        let fonts = Rc::new(FontCatalog::new(&dwrite)?);
+        ViewboxExecutor::new_shared(core, fonts)
+    }
+
+    /// フォント候補列の解決台帳を**共有して**plan 実行部を生成する（要件 9.8）。
+    ///
+    /// 計測器（[`DWriteMetrics::new_shared`](crate::draw::DWriteMetrics::new_shared)）と同じ台帳を
+    /// 渡すと、同じ候補列の全滅の記録が計測側と描画側で二重に出ない（警告の源が 1 つ）。
+    pub fn new_shared(
+        core: &GraphicsCore,
+        fonts: Rc<FontCatalog>,
+    ) -> Result<ViewboxExecutor, TextLayerError> {
         let dwrite = core
             .dwrite_factory()
             .ok_or_else(|| none_err("GraphicsCore::dwrite_factory"))?
@@ -142,6 +187,8 @@ impl ViewboxExecutor {
             dwrite,
             dc,
             format: None,
+            fonts,
+            brushes: BrushCache::default(),
             stats: DrawStats::default(),
             seam_warned: false,
             #[cfg(test)]
@@ -196,7 +243,7 @@ impl ViewboxExecutor {
     ///   限定描画（各矩形は**その矩形と交差する行だけ**を描く・R11.1）→ flip → commit → `Ok(true)`。
     ///
     /// **エラー縮退規律**（Error Handling）: フォント/方向変更（`ensure_format` が format/行キャッシュを
-    /// 組み直したフレーム）または `plan` の想定外不整合（[`plan_inconsistency`]）を検知した場合、当該
+    /// 組み直したフレーム）または `plan` の想定外不整合（[`plan::plan_inconsistency`]）を検知した場合、当該
     /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=**可視窓の**
     /// GlyphRun 住人）へ差し替えて描画する（正しさ優先・1 フレームで全域再描画のオラクル
     /// `DrawExecutor::render` と同じ結果になる・透明フラッシュを起こす
@@ -206,6 +253,17 @@ impl ViewboxExecutor {
     ///
     /// 失敗は log-first（`error!`＋`Err`・当該フレーム skip＝**plan 未 commit**・front 不変ゆえ
     /// 表示は前フレームを保持・次フレーム再計画）。
+    ///
+    /// **本番の呼び手は [`render_styled`](Self::render_styled) へ移った**（`actor.rs` の
+    /// `present_actor` が唯一の本番呼出点）。本関数の本番の呼び手は 0 で、残しているのは
+    /// 装飾の表を持たない決定論テスト（`viewbox_draw_choice_hover_tests.rs`／
+    /// `viewbox_draw_frame_render_tests.rs`／`viewbox_draw_live_diff_tests.rs`／
+    /// `viewbox_draw_oracle_regression_tests.rs`／`viewbox_draw_png_dump_tests.rs`／
+    /// `viewbox_draw_scroll_retain_tests.rs`）が呼ぶ委譲の入口としてである——空の
+    /// [`StyleTable`] を添えて `render_styled` へ流すだけなので、装飾なしの呼出列が
+    /// 装飾導入前と同一であることの照合面にもなっている（要件 14.2）。crate 外の呼び手は無い
+    /// （`draw_oracle_tests.rs` の `.render(...)` は同名メソッドを持つオラクル
+    /// `draw.rs::DrawExecutor`（`#[cfg(test)]`）のもので、本関数ではない）。
     pub fn render(
         &mut self,
         canvas: &ContentCanvas,
@@ -214,6 +272,38 @@ impl ViewboxExecutor {
         mode: WritingMode,
         contract: &ScaleContract,
         surface: &mut TextSurface,
+    ) -> Result<bool, TextLayerError> {
+        self.render_styled(
+            canvas,
+            window,
+            font,
+            mode,
+            contract,
+            surface,
+            &StyleTable::default(),
+        )
+    }
+
+    /// 装飾入りの 1 フレームの実行（[`Self::render`] の本体・要件 3.5／3.6／14.2）。
+    ///
+    /// `styles` は当該 actor の装飾の表で、既定の見た目は `font.looks.default`。番号 0 しか
+    /// 使われていない行は区間が 1 つになるので、範囲指定・色の解除・ブラシ生成のいずれも呼ばず、
+    /// 行の箱寸も従来どおり `font.height` をそのまま渡す——生成物も呼出列も装飾導入前と同一
+    /// （要件 14.2）。装飾のある行だけが `line_layout_decorated`（生成時に 1 度だけフォント系の
+    /// 範囲指定）と `apply_color_ranges`（毎フレーム色を焼き直す）を通る。
+    ///
+    /// 範囲指定と描画基盤の呼び出しの失敗は `error!` を残して `Err` を返し、当該フレームを
+    /// 見送る（plan 未 commit・front 不変＝次フレーム再試行安全・要件 13.3）。
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_styled(
+        &mut self,
+        canvas: &ContentCanvas,
+        window: &VisibleWindow,
+        font: &ResolvedFont,
+        mode: WritingMode,
+        contract: &ScaleContract,
+        surface: &mut TextSurface,
+        styles: &StyleTable,
     ) -> Result<bool, TextLayerError> {
         let size = surface.size();
         let (format, rebuilt) = self.ensure_format(font, mode)?;
@@ -229,15 +319,13 @@ impl ViewboxExecutor {
             let overhang = match &resident.content {
                 ResidentContent::GlyphRun(run) if !run.glyphs.is_empty() => {
                     let text: String = run.glyphs.iter().map(|g| g.ch).collect();
-                    self.line_store
-                        .line_layout(index, &text, &format, font.height, mode)?;
+                    self.line_layout_for(index, &text, run, &format, font, mode, styles)?;
                     self.line_store.overhang(index).unwrap_or_default()
                 }
                 // Choice 住人は内包 run を GlyphRun と同一経路で計測する（R9.5）。
                 ResidentContent::Choice(choice) if !choice.run.glyphs.is_empty() => {
                     let text: String = choice.run.glyphs.iter().map(|g| g.ch).collect();
-                    self.line_store
-                        .line_layout(index, &text, &format, font.height, mode)?;
+                    self.line_layout_for(index, &text, &choice.run, &format, font, mode, styles)?;
                     let measured = self.line_store.overhang(index).unwrap_or_default();
                     // ハイライト帯（band_offset ＋ band_extent）は em ボックス丈より外側へ出る
                     // （descent 込み＋行ボックス中央への寄せ）。ダーティ矩形が em ボックス＋
@@ -333,9 +421,8 @@ impl ViewboxExecutor {
                         continue;
                     }
                     let text: String = run.glyphs.iter().map(|g| g.ch).collect();
-                    let layout =
-                        self.line_store
-                            .line_layout(index, &text, &format, font.height, mode)?;
+                    let (layout, line) =
+                        self.line_layout_for(index, &text, run, &format, font, mode, styles)?;
                     let (dx, dy) = resident.transform.offset();
                     let origin = match mode {
                         WritingMode::HorizontalTb => Vector2 {
@@ -348,9 +435,11 @@ impl ViewboxExecutor {
                         },
                     };
 
-                    // Choice 行はキャッシュ層 TextLayout に前フレームの効果が残り得るため、描画毎に
-                    // 全文字範囲を `None` へリセットする（hover 解除フレームは全範囲 None のみ＝素描画）。
-                    let choice_draw = if let Some(choice) = choice {
+                    // ── 色の焼き込み順（毎フレーム・要件 3.5）: 全範囲の解除 → 装飾の色 → 重ね表示の色 ──
+                    // 色は `SetDrawingEffect` でキャッシュ層 TextLayout に残るため、フォント系
+                    // 6 項目（生成時 1 度）と違って毎フレーム焼き直す。Choice 行はここで全文字範囲を
+                    // `None` へリセットする（hover 解除フレームは全範囲 None のみ＝素描画）。
+                    if choice.is_some() {
                         let full_len = text.encode_utf16().count() as u32;
                         unsafe {
                             layout.SetDrawingEffect(
@@ -362,7 +451,22 @@ impl ViewboxExecutor {
                             )
                         }
                         .map_err(device_err("SetDrawingEffect(reset None)"))?;
+                    }
+                    // 装飾の色（既定と異なる色の区間だけ）。Choice 行は直前で解除済みゆえ
+                    // `reset = false`——解除を二重に行わない。既定だけの行は呼ばない（要件 14.2）。
+                    if !line.default_only {
+                        apply_color_ranges(
+                            &layout,
+                            &line.runs,
+                            styles,
+                            &font.looks.default,
+                            &mut self.brushes,
+                            &self.dc,
+                            choice.is_none(),
+                        )?;
+                    }
 
+                    let choice_draw = if let Some(choice) = choice {
                         // highlight=Some（hover 行）: hover セグメント（ordinal==hovered）へ矩形塗り
                         // ブラシ＋文字色効果を組む。NoMarker/非 hover は highlight=None＝素描画。
                         let hover = if let Some(paint) = choice.highlight {
@@ -519,6 +623,46 @@ impl ViewboxExecutor {
         }
     }
 
+    /// 1 行の行 TextLayout を装飾込みで確保する（はみ出し収集ループと Phase 1 が**同じ引数**で
+    /// 呼ぶための 1 点・引数が食い違うと保持庫の鍵が変わって同じ行を 1 フレームに 2 度生成する）。
+    ///
+    /// 既定だけの行は従来の [`LineLayoutStore::line_layout`] をそのまま通る（空の番号列・
+    /// 行の箱寸は `font.height`・焼き処理なし＝装飾導入前と 1 ビットも変わらない・要件 14.2）。
+    /// 装飾のある行だけが [`LineLayoutStore::line_layout_decorated`] を通り、生成時に 1 度だけ
+    /// フォント系の範囲指定（[`apply_font_ranges`]）を焼く。
+    #[allow(clippy::too_many_arguments)]
+    fn line_layout_for(
+        &mut self,
+        index: usize,
+        text: &str,
+        run: &GlyphRunContent,
+        format: &IDWriteTextFormat,
+        font: &ResolvedFont,
+        mode: WritingMode,
+        styles: &StyleTable,
+    ) -> Result<(IDWriteTextLayout, LineStyles), TextLayerError> {
+        let line = line_styles(run, font.height, mode);
+        if line.default_only {
+            let layout = self
+                .line_store
+                .line_layout(index, text, format, font.height, mode)?;
+            return Ok((layout, line));
+        }
+        // 台帳は `&mut self.line_store` と同時に借りられないので Rc を複製して渡す。
+        let fonts = Rc::clone(&self.fonts);
+        let default = &font.looks.default;
+        let layout = self.line_store.line_layout_decorated(
+            index,
+            text,
+            format,
+            line.extent,
+            mode,
+            &line.ids,
+            |l| apply_font_ranges(l, &line.runs, styles, default, &fonts),
+        )?;
+        Ok((layout, line))
+    }
+
     /// 描画/計測共用 format の確保（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
     ///
     /// 戻り値の `bool` は**format と [`LineLayoutStore`] を組み直したか**（`true`＝組み直し）。
@@ -542,132 +686,15 @@ impl ViewboxExecutor {
                 "フォント/方向が変わったため format と行レイアウトキャッシュを組み直す"
             );
             self.line_store.clear();
-            let format = create_text_format(&self.dwrite, font, mode)?;
+            let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
             self.format = Some((key, format.clone()));
             return Ok((format, true));
         }
         // 初回生成（committed ピクセルが無いため縮退トリガにしない）。
-        let format = create_text_format(&self.dwrite, font, mode)?;
+        let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
         self.format = Some((key, format.clone()));
         Ok((format, false))
     }
-}
-
-/// エラー縮退規律の適用（Error Handling）——`plan` を必要なら**全域ダーティ Update** へ縮退する。
-///
-/// 2 トリガ（正しさ優先・いずれも透明フラッシュを起こす FullClear ではなく全域ダーティ Update）:
-/// - **フォント/方向変更**（`rebuilt`＝`ensure_format` が format/行キャッシュを組み直した）: committed
-///   ピクセルは旧 format で描かれ前提が崩れるため `debug!`＋全域ダーティへ縮退。
-/// - **想定外不整合**（[`plan_inconsistency`] が理由を返す）: `plan` の `Update` が canvas/面寸と矛盾
-///   （draw_lines 範囲外・dirty 面寸超過）する場合 `warn!`＋全域ダーティへ縮退（ログ無し失敗経路を
-///   作らない・記憶 areka-log-first-no-silent-failure）。
-///
-/// [`FramePlan::FullClear`] は縮退対象外（Clear は既に全域リセット）。[`FramePlan::NoChange`] は
-/// `rebuilt` のときのみ縮退（format 組み直し後の committed ピクセル前提消失を全域再描画で回復）。
-fn degrade_if_needed(
-    plan: FramePlan,
-    rebuilt: bool,
-    canvas: &ContentCanvas,
-    window: &VisibleWindow,
-    mode: WritingMode,
-    contract: &ScaleContract,
-    surface_size: (u32, u32),
-) -> FramePlan {
-    match plan {
-        FramePlan::FullClear => FramePlan::FullClear,
-        FramePlan::NoChange => {
-            if rebuilt {
-                tracing::debug!(
-                    "フォント/方向変更を検知——committed ピクセル前提消失のため全域ダーティへ縮退"
-                );
-                full_domain_update(canvas, window, mode, contract, surface_size)
-            } else {
-                FramePlan::NoChange
-            }
-        }
-        FramePlan::Update {
-            blit,
-            dirty,
-            draw_lines,
-        } => {
-            if rebuilt {
-                tracing::debug!(
-                    "フォント/方向変更を検知——format/行キャッシュ組み直し・全域ダーティへ縮退（committed ピクセル前提消失）"
-                );
-                full_domain_update(canvas, window, mode, contract, surface_size)
-            } else if let Some(reason) =
-                plan_inconsistency(&dirty, &draw_lines, canvas.residents.len(), surface_size)
-            {
-                tracing::warn!(
-                    reason,
-                    "plan と canvas/面寸の想定外不整合——全域ダーティ再描画へ縮退（正しさ優先・最悪でもレガシー全域再描画と等価）"
-                );
-                full_domain_update(canvas, window, mode, contract, surface_size)
-            } else {
-                FramePlan::Update {
-                    blit,
-                    dirty,
-                    draw_lines,
-                }
-            }
-        }
-    }
-}
-
-/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=**可視窓の** GlyphRun 住人）を組む。
-///
-/// [`ScrollPlanner::derive_dirty`] を**空 prev**（`&[]`）で呼び、面全域 1 枚のダーティと
-/// **可視窓（`first_visible_line` 以降）の** GlyphRun 住人の描画対象を得る（初回フレームと同一経路）。
-/// 描画対象を可視窓で切るのは、全域再描画のオラクル `DrawExecutor::render` が
-/// `skip(first_visible_line)` で可視窓より前の行を描かないためで、こちらも同じ結果になる
-/// （タスク 3.4 でこの規律を揃えた——derivation-ledger.md「3.5.1 R-2 の決着」）。縮退の唯一の生成口。
-fn full_domain_update(
-    canvas: &ContentCanvas,
-    window: &VisibleWindow,
-    mode: WritingMode,
-    contract: &ScaleContract,
-    surface_size: (u32, u32),
-) -> FramePlan {
-    let (dirty, draw_lines) =
-        ScrollPlanner::derive_dirty(canvas, window, mode, contract, (0, 0), surface_size, &[]);
-    FramePlan::Update {
-        blit: (0, 0),
-        dirty,
-        draw_lines,
-    }
-}
-
-/// `plan` の `Update` が canvas/面寸と矛盾していないか検査する（防御的・render の縮退経路が呼ぶ）。
-///
-/// 返り値 `Some(reason)` は縮退のログ理由・`None` は整合。通常経路（[`ScrollPlanner::derive_dirty`]）は
-/// 面寸クランプ済み・住人範囲内の index のみを返すため不発だが、行指紋と内容キャンバスの想定外不整合
-/// （範囲外 index・面寸超過矩形・矩形の行が描画対象行に無い）を検知したら全域ダーティへ縮退させる
-/// （ログ無し失敗経路を作らない）。
-fn plan_inconsistency(
-    dirty: &[DirtyRect],
-    draw_lines: &[usize],
-    residents_len: usize,
-    surface_size: (u32, u32),
-) -> Option<&'static str> {
-    if draw_lines.iter().any(|&i| i >= residents_len) {
-        return Some("draw_lines に canvas 住人範囲外の index が含まれる");
-    }
-    let (w, h) = (surface_size.0 as u64, surface_size.1 as u64);
-    if dirty
-        .iter()
-        .any(|d| d.rect.x as u64 + d.rect.w as u64 > w || d.rect.y as u64 + d.rect.h as u64 > h)
-    {
-        return Some("dirty 矩形が面寸を超える");
-    }
-    // 各矩形の行は描画対象行の部分集合（Phase 1 が draw_lines の資源しか組まないため、外れた
-    // index はその矩形で描かれず復元が欠ける）。
-    if dirty
-        .iter()
-        .any(|d| d.lines.iter().any(|i| !draw_lines.contains(i)))
-    {
-        return Some("dirty 矩形の行が draw_lines の部分集合でない");
-    }
-    None
 }
 
 /// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を [`TextLayerError::Device`] に
@@ -832,6 +859,9 @@ fn segment_text_range(
 #[cfg(test)]
 #[path = "viewbox_draw_choice_hover_tests.rs"]
 mod choice_hover_tests;
+#[cfg(test)]
+#[path = "viewbox_draw_decoration_tests.rs"]
+mod decoration_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_frame_render_tests.rs"]
 mod frame_render_tests;

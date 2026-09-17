@@ -28,6 +28,8 @@ fn construct_mount_model_and_access_fields() {
         shiori: ShioriMount {
             dir: PathBuf::from("ghost/master"),
             file: Some("shiori.dll".to_string()),
+            encoding: None,
+            force_encoding: None,
         },
         shell: ShellMount {
             dir: PathBuf::from("shell/master"),
@@ -72,6 +74,8 @@ fn shiori_mount_missing_file_is_none() {
     let shiori = ShioriMount {
         dir: PathBuf::from("ghost/master"),
         file: None,
+        encoding: None,
+        force_encoding: None,
     };
     assert_eq!(shiori.dir, PathBuf::from("ghost/master"));
     assert_eq!(shiori.file, None);
@@ -166,6 +170,8 @@ fn mount_model_derives_clone_and_eq() {
         shiori: ShioriMount {
             dir: PathBuf::from("ghost/master"),
             file: None,
+            encoding: None,
+            force_encoding: None,
         },
         shell: ShellMount {
             dir: PathBuf::from("shell/master"),

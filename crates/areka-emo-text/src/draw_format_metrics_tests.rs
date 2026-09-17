@@ -9,11 +9,12 @@ use wintf::com::dwrite::dwrite_create_factory;
 
 use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
 use super::{
-    DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics, DirectionRecipe, FontDisableSeam,
-    PROBE_MAX_EXTENT, RESERVED_KEY_DISABLE_FONT_PREFIX, ResolvedFont, create_text_format,
+    DEFAULT_BALLOON_BACKGROUND, DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics,
+    DirectionRecipe, PROBE_MAX_EXTENT, ResolvedFont, create_text_format,
 };
 use crate::TextLayerError;
 use crate::canvas::TextEffects;
+use crate::color::mix_disabled;
 use crate::layout::GlyphMetrics;
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
@@ -149,19 +150,85 @@ fn all_direction_recipes_share_leading_near_alignment() {
     }
 }
 
-// ── R10.3: 文字装飾／disable.font.* は型シームのみ（実挙動なし） ──
+// ── R4.4/R4.8/R16.4: 無効表示は実体・行単位の装飾は M2 予約のまま ──
 
-/// 装飾（TextEffects）と disable.font.* シームは型のみ＝データを一切持たない
-/// （zero-sized・M1 で描画へ影響し得ない構造保証）。
+/// 無効表示の層が**実体化**し（色が背景との混色になる）、**行単位**の予約型
+/// （[`TextEffects`]）は今も 0 バイトのままであることを固定する
+/// （要件 4.1／4.2／4.4／4.8／16.4・design「既存テストの改訂」1）。
+///
+/// 較正（要件 15.6）: 「無効表示の色を混色せず既定の色のままにする」誤りを入れると
+/// 混色の断言と `assert_ne!` が、「背景を受け取らず常に白として混ぜる」誤りを
+/// 入れると黒背景の 2 つの断言が赤くなる。
 #[test]
-fn decoration_and_disable_seams_are_type_only() {
-    assert_eq!(RESERVED_KEY_DISABLE_FONT_PREFIX, "disable.font.");
+fn disable_layer_is_materialized_and_row_effects_stay_reserved() {
+    // 行単位の装飾は M2 予約のまま（0 バイト＝描画へ影響し得ない構造保証）。
     assert_eq!(std::mem::size_of::<TextEffects>(), 0);
-    assert_eq!(std::mem::size_of::<FontDisableSeam>(), 0);
-    // ResolvedFont はシームを保持するが Default 生成のみ（実挙動なし）。
-    let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
-    assert_eq!(resolved.effects, TextEffects::default());
-    assert_eq!(resolved.disable, FontDisableSeam::default());
+
+    // ── バルーン定義なし: 既定は ukadoc 既定（黒）・無効表示は白背景との混色 ──
+    let plain = ResolvedFont::resolve(&model_with_font(empty_font()));
+    assert_eq!(plain.effects, TextEffects::default());
+    assert_eq!(plain.looks.default.color, (0, 0, 0));
+    assert_eq!(
+        plain.looks.disable.color,
+        mix_disabled((0, 0, 0), DEFAULT_BALLOON_BACKGROUND),
+        "無効表示の色は「既定の文字色と背景色の混色」（要件 4.6）"
+    );
+    assert_ne!(
+        plain.looks.disable.color, plain.looks.default.color,
+        "無効表示の色が既定の文字色のまま＝混色していない"
+    );
+    // 色以外は既定と同じ（正典「ほかは font. 定義群と同じ」・要件 4.5）。
+    assert_eq!(plain.looks.disable.name, plain.looks.default.name);
+    assert_eq!(plain.looks.disable.height, plain.looks.default.height);
+    // 選択肢文字色は既存の選択肢表示の解決結果から取る——未指定バルーンは
+    // `ResolvedChoiceStyle::Invert` なので文字色は既定色の反転（黒→白）。
+    assert_eq!(
+        plain.looks.cursor_text,
+        (255, 255, 255),
+        "選択肢文字色を既定の文字色で代用している（既存の解決を通していない）"
+    );
+
+    // ── バルーン定義あり: 2 層が定義の値から組まれる ──
+    let defined = ResolvedFont::resolve(&model_with_font(Font::new(
+        Some("Yu Gothic UI,Meiryo".to_owned()),
+        Some(20),
+        FontColor::new(Some(255), Some(255), Some(255)),
+    )));
+    // 不変条件⑲: 2 層の既定と ResolvedFont の 4 項目は一致する。
+    assert_eq!(
+        defined.looks.default.name,
+        std::iter::once(defined.name.clone())
+            .chain(defined.fallback_chain.iter().cloned())
+            .collect::<Vec<String>>(),
+        "既定の候補列は「採用名 ＋ 残余名」の順"
+    );
+    assert_eq!(defined.looks.default.height, defined.height);
+    assert_eq!(defined.looks.default.color, defined.color);
+    assert_eq!(defined.looks.default.height, 20.0);
+    assert_eq!(defined.looks.default.color, (255, 255, 255));
+
+    // ── 背景色を実際に受け取っている（白決め打ちではない） ──
+    let white_text = model_with_font(Font::new(
+        None,
+        None,
+        FontColor::new(Some(255), Some(255), Some(255)),
+    ));
+    let on_black = ResolvedFont::resolve_with_background(&white_text, (0, 0, 0));
+    assert_eq!(
+        on_black.looks.disable.color,
+        mix_disabled((255, 255, 255), (0, 0, 0))
+    );
+    assert_ne!(
+        on_black.looks.disable.color,
+        ResolvedFont::resolve(&white_text).looks.disable.color,
+        "背景を受け取らず常に白として混ぜている"
+    );
+
+    // 既存の構築関数は白の既定へ委譲する。
+    assert_eq!(
+        ResolvedFont::resolve(&white_text).looks,
+        ResolvedFont::resolve_with_background(&white_text, DEFAULT_BALLOON_BACKGROUND).looks
+    );
 }
 
 // ── COM 検証（headless DWrite・デバイス非依存・窓不要） ──
@@ -506,6 +573,60 @@ fn dwrite_metrics_warns_on_font_height_mismatch() {
 /// 含まれない（`include_str!` はディスク上の `draw.rs` 単体を読む）。
 const DRAW_RS: &str = include_str!("draw.rs");
 
+/// ファサード `draw.rs` の**本番の子モジュール**の本文（ファイル名付き）。
+///
+/// 分割（タスク 1.1）と実体化（タスク 6.2〜6.4）でファサードの本番コードは
+/// 4 ファイルへ分かれた。`draw.rs` 単体だけを走査する檻は、分かれた先に同じ違反が
+/// 入っても赤くならない——`@` 前置の禁止はこの一覧の**全ファイル**を走査する。
+/// **ファサードへ本番の子を足したらここへも足すこと。**
+const DRAW_FACADE_SOURCES: &[(&str, &str)] = &[
+    ("draw.rs", DRAW_RS),
+    ("draw_metrics.rs", include_str!("draw_metrics.rs")),
+    ("draw_line_store.rs", include_str!("draw_line_store.rs")),
+    ("draw_catalog.rs", include_str!("draw_catalog.rs")),
+];
+
+/// 手保守の [`DRAW_FACADE_SOURCES`] が「新設したのに載せない」を塞げない穴を閉じる
+/// （タスク 9.4）。
+///
+/// ファサード群の外延は機械で決まる——`src/draw*.rs` のうち兄弟テスト（`*_tests.rs`）と
+/// 支援（`*_test_support.rs`）を除いたものが本番ファイルである。実ファイル集合を実行時に
+/// 読んで一覧と突き合わせるので、`draw_*.rs` を新設して一覧へ載せ忘れると赤になる
+/// （母数の `assert_eq!` は「黙って減る」しか塞げない）。
+#[test]
+fn draw_facade_sources_cover_every_draw_production_file() {
+    use std::collections::BTreeSet;
+
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let actual: BTreeSet<String> = std::fs::read_dir(&dir)
+        .expect("src ディレクトリが読めない")
+        .map(|entry| {
+            entry
+                .expect("src の項目が読めない")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .filter(|name| {
+            name.starts_with("draw")
+                && name.ends_with(".rs")
+                && !name.ends_with("_tests.rs")
+                && !name.ends_with("_test_support.rs")
+        })
+        .collect();
+    let listed: BTreeSet<String> = DRAW_FACADE_SOURCES
+        .iter()
+        .map(|(name, _)| (*name).to_owned())
+        .collect();
+    assert_eq!(
+        actual, listed,
+        "`draw*.rs` の本番ファイル集合と DRAW_FACADE_SOURCES が食い違う——\
+         新設したファイルを一覧へ足すこと"
+    );
+    // 空振り防止: どちらも空なら上の等値は恒真になる。
+    assert_eq!(listed.len(), 4, "走査するファサードの母数");
+}
+
 /// 改行を LF へ正規化した `draw.rs` 本文。ワークツリーは `core.autocrlf` により CRLF で
 /// 展開されるため、行末に依存する検査（列 0 閉じ括弧・行単位の走査）は必ずこれを使う。
 fn draw_rs() -> String {
@@ -547,21 +668,28 @@ fn hits<'p>(src: &str, patterns: &'p [&'p str]) -> Vec<&'p str> {
 const AT_PREFIX_PATTERNS: &[&str] = &["\"@", "'@'"];
 
 /// 要件 6.2: 本番ソースに「フォント名の頭へ `@` を付ける」生成が存在しない。
+///
+/// 走査面は `draw.rs` 単体ではなく**ファサードの本番の子を含む全ファイル**
+/// （[`DRAW_FACADE_SOURCES`]）——家族名が DirectWrite へ渡る入口が `draw.rs` の
+/// `try_create_format` と `draw_metrics.rs` の `probe_format_for` の 2 つになったため、
+/// 片方だけを見る檻では違反が素通りする（タスク 1.1 の申し送り）。
 #[test]
 fn at_prefixed_font_name_generation_is_absent_from_production_source() {
-    let src = draw_rs();
     // 空振り防止: draw.rs には素の `@`（束縛パターン）が現に在る。`@` が 1 個も無いから
     // 緑、という無意味な緑ではないことを先に示す。
     assert!(
-        src.contains('@'),
+        draw_rs().contains('@'),
         "draw.rs に `@` が 1 個も無い——この檻は空振りしている可能性がある"
     );
-    assert_eq!(
-        hits(&src, AT_PREFIX_PATTERNS),
-        Vec::<&str>::new(),
-        "SSP の `@` フォント機構（縦書き異体名の生成）が draw.rs に現れた。\
-         areka は裁定 4 によりこれを模倣しない"
-    );
+    for (name, raw) in DRAW_FACADE_SOURCES {
+        let src = raw.replace('\r', "");
+        assert_eq!(
+            hits(&src, AT_PREFIX_PATTERNS),
+            Vec::<&str>::new(),
+            "SSP の `@` フォント機構（縦書き異体名の生成）が {name} に現れた。\
+             areka は裁定 4 によりこれを模倣しない"
+        );
+    }
     // 陽性対照: 同じ検査関数が既知の違反を確かに検出する。
     for planted in [
         r#"    let name = format!("@{}", font.name);"#,
@@ -584,8 +712,18 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
     );
 }
 
-/// 要件 6.3: DirectWrite へ渡るフォント family 名は「バルーン定義の名前そのまま」か
-/// 「既定フォント再試行」の 2 つだけ——縦書き専用の差し替え先は存在しない。
+/// 要件 6.3: DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前」か
+/// 「既定フォントへの戻し」の 2 つだけ——縦書き専用の差し替え先は存在しない。
+///
+/// **家族名の入口は 2 つある**（タスク 6.4）:
+///
+/// 1. `draw.rs::try_create_format`（描画・計測共用の束縛書式）——バルーン定義の
+///    `font.name` をそのまま渡すか、生成失敗時に `DEFAULT_FONT_NAME` で再試行するか。
+/// 2. `draw_metrics.rs::probe_format_for`（計測鍵ごとの試験用書式）——計測鍵の候補列を
+///    `FontCatalog::family_for` で解決した名前か、全滅時の `DEFAULT_FONT_NAME` か。
+///
+/// どちらの入口も「書かれた名前」か「既定名」しか通さないので、`@` 前置のような
+/// 別名生成が入り込む余地が無い。**入口を増やしたらこの檻も広げること。**
 #[test]
 fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
     let src = draw_rs();
@@ -625,6 +763,35 @@ fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
         count(&src, "\"ＭＳ ゴシック\""),
         1,
         "フォント名リテラルが DEFAULT_FONT_NAME の宣言以外にも現れた"
+    );
+
+    // ── 第 2 の入口: draw_metrics.rs::probe_format_for（計測鍵ごとの試験用書式）
+    let metrics_src = include_str!("draw_metrics.rs").replace('\r', "");
+    assert!(
+        metrics_src.contains("fn probe_format_for(&self, key: &FontKey)"),
+        "probe_format_for が見つからない——改名したなら本檻も更新すること"
+    );
+    assert_eq!(
+        count(&metrics_src, ".create_text_format("),
+        1,
+        "draw_metrics.rs から DirectWrite へ family 名を渡す呼出が 1 か所から動いた"
+    );
+    assert!(
+        metrics_src.contains("&HSTRING::from(family.as_str()),"),
+        "試験用書式へ渡す family 名が束縛 `family` 以外から来ている"
+    );
+    // その `family` の唯一の出所——候補列の解決結果か、全滅時の既定名。
+    assert!(
+        metrics_src.contains(
+            "        let family = self\n            .fonts\n            .family_for(&key.name)\n\
+             \x20           .unwrap_or_else(|| DEFAULT_FONT_NAME.to_owned());"
+        ),
+        "family の導出が「計測鍵の候補列を FontCatalog で解決した名前か既定名」から動いた"
+    );
+    assert_eq!(
+        count(&metrics_src, "\"ＭＳ ゴシック\""),
+        0,
+        "draw_metrics.rs にフォント名リテラルが現れた（既定名は DEFAULT_FONT_NAME 経由だけ）"
     );
 }
 

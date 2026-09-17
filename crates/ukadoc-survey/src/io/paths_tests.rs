@@ -2,7 +2,7 @@
 //!
 //! 守るのは 2 つ。⑴ ワークスペース根が「この crate の manifest の 2 段上」で実際に
 //! repo の根を指していること。⑵ **綴りが逐語で正しいこと**——場所の関数は「何本あるか」
-//! ではなく「どこを指すか」が本体なので、7 本すべてについて根からの相対パスを
+//! ではなく「どこを指すか」が本体なので、10 本すべてについて根からの相対パスを
 //! 逐語で釘付けにする。ドメイン 4 種の綴り（`sakura-script` の横棒を含む）も 1 本ずつ
 //! 対で並べる。件数だけを数えると 1 文字の入れ違いが素通りする。
 //!
@@ -62,7 +62,7 @@ fn workspace_root_is_absolute() {
     );
 }
 
-// ---- 7 本の場所を逐語で釘付けにする ----
+// ---- 10 本の場所を逐語で釘付けにする ----
 
 #[test]
 fn coverage_dir_is_verbatim() {
@@ -77,6 +77,17 @@ fn catalog_path_is_verbatim() {
 #[test]
 fn values_path_is_verbatim() {
     assert_eq!(rel(&values_path()), "doc/ukadoc-coverage/values.md");
+}
+
+/// 新規 3 文書（帰属・ブリーフィング・ロードマップ草案）の綴り。拡張子は `.md`。
+#[test]
+fn document_paths_are_verbatim() {
+    assert_eq!(rel(&linkage_path()), "doc/ukadoc-coverage/linkage.md");
+    assert_eq!(rel(&briefing_path()), "doc/ukadoc-coverage/briefing.md");
+    assert_eq!(
+        rel(&roadmap_draft_path()),
+        "doc/ukadoc-coverage/roadmap-draft.md"
+    );
 }
 
 #[test]
@@ -163,11 +174,18 @@ fn summary_report_is_not_a_domain_report() {
     }
 }
 
-/// 7 本すべてがカタログ置き場の下にある。
+/// 10 本すべてがカタログ置き場の下にある。
 #[test]
 fn every_path_lives_under_the_coverage_dir() {
     let dir = coverage_dir();
-    let mut paths = vec![catalog_path(), values_path(), summary_report_path()];
+    let mut paths = vec![
+        catalog_path(),
+        values_path(),
+        summary_report_path(),
+        linkage_path(),
+        briefing_path(),
+        roadmap_draft_path(),
+    ];
     for domain in Domain::ALL {
         paths.push(ledger_path(domain));
         paths.push(domain_report_path(domain));

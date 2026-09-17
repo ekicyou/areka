@@ -99,6 +99,23 @@ pub enum PresentError {
     },
 }
 
+/// `windows_core::Error` を [`PresentError::Device`]（ログ＋`HRESULT`＋文脈）へ写像するクロージャ。
+///
+/// 失敗経路はログ規律（`error!` ＋ `Err` 戻り値・パニック禁止）に従い、発生箇所の静的文脈を添えて
+/// 構造化エラーへ畳む。`.map_err(device_err("<where>"))?` の形で D2D/D3D/DXGI 呼び出しを包む。
+///
+/// [`PresentError`] と同じ場所に置く共有の写像であり、提示段のどのモジュール（`display`・`chain`）
+/// からも同一の形で使える（同形の写像を各モジュールへ複写しないため）。
+pub(crate) fn device_err(
+    context: &'static str,
+) -> impl FnOnce(windows::core::Error) -> PresentError {
+    move |e| {
+        let hresult = e.code().0;
+        tracing::error!(hresult, context, "D3D/DXGI 呼び出しが失敗");
+        PresentError::Device { hresult, context }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

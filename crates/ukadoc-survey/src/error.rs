@@ -49,6 +49,11 @@ pub enum SurveyError {
     /// TOML として読めなかった。パスと理由を必ず添える。
     #[error("TOML の読み取りに失敗: {path}（{reason}）")]
     TomlParse { path: String, reason: String },
+    /// 3 文書と台帳の突き合わせから、機械で決まる値を導けない（要件 6・7）。
+    ///
+    /// 本文には **id（または束名）と文書名**を添える。行番号は添えない（要件 12.6）。
+    #[error("{file} から導けない: {reason}")]
+    DeriveMismatch { file: String, reason: String },
     /// 整合検査が食い違いを見つけた（要件 6.12・設計「Error Handling / 見張り」）。
     ///
     /// 食い違いそのものは `check::finding` の値として集まり、本文は既に標準出力へ

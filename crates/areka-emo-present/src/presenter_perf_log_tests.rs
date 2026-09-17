@@ -9,7 +9,9 @@
 //! 固定する契約は 4 つである。
 //!
 //! 1. **perf サマリ行のスキーマ**（Requirement 1.1/1.3/1.4・design.md §Data Models）:
-//!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・14 フィールド **ちょうど**
+//!    固定文言 [`PERF_LINE_MESSAGE`]・debug 水準・13 フィールド **ちょうど**（段 4・確保 2 ＋
+//!    同定 3 ＋ `key_hash`・`frame`・`message`）。撤去した段（`t_resample_us`）・撤去した発生点
+//!    （`alloc_resample_dst`／`alloc_xmap`）が行に**現れない**ことは、この「ちょうど」が固定する
 //! 2. **既存の表示成立点 info! 行の不変性**（design.md §Boundary Commitments「Out of Boundary」——
 //!    実機サインオフ契約ゆえ文言・水準・フィールドとも不変）: 文言・info 水準・12 フィールド
 //!    **ちょうど**。本ファイルはこの契約の防波堤であり、info! を 1 文字でも触ると RED になる
@@ -22,8 +24,8 @@
 //! # 実時間を合否条件に使わない（Requirement 6.2）
 //!
 //! `sleep`・スピン・経過ミリ秒の閾値は 1 つも使わない。非 0 を主張するのは
-//! **入力の大きさが決めている段**だけである——合成・リサンプル・マスク生成・供給面転写は
-//! いずれも本檻が選んだ 240×180（k 適用後 480×360 ＝ 691,200 バイト）の画素を舐める作業であり、
+//! **入力の大きさが決めている段**だけである——合成・マスク生成・表示の記録は
+//! いずれも本檻が選んだ 240×180（原寸 172,800 バイト・k に依らず同じ画素数）を舐める作業であり、
 //! キャッシュ照会段は本檻が渡す 10 万要素の bind 集合の等価比較（400KB の逐語比較）が支配する。
 //! いずれも µs 分解能の 1 目盛りに対して 1 桁以上の余裕があり、「速いマシンなら 0 になる」形の
 //! 閾値ではない。0 を主張する側（スキップ段）は mark が呼ばれないことの帰結ゆえ厳密である。
@@ -74,6 +76,7 @@ use super::test_support::{
     CapturedEvent, build_target_assets, capture, elem, shell_of, spawn_window_with_dpi, surface,
 };
 use super::timing::{PERF_LINE_MESSAGE, compose_key_hash};
+use crate::display::{DisplayFault, arm_display_fault, clear_display_fault};
 
 // ── 契約面の正本（この 3 つの定数がコード側と乖離したら RED）───────────────────────────
 
@@ -100,19 +103,21 @@ const INFO_LINE_FIELDS: [&str; 13] = [
     "window_dpi",
 ];
 
-/// perf サマリ行のフィールド集合（design.md §Data Models「perf サマリ行スキーマ」の 14 項目
+/// perf サマリ行のフィールド集合（design.md §Data Models「perf サマリ行スキーマ」の 11 項目
 /// ＋ `areka-P0-dpi-transition-atomicity` D12 が末尾へ足した `frame` ＋ `message`）。
 /// 判定スクリプト `tools/perf/judge-perf.py` との唯一のデータ契約である。
+///
+/// **ちょうど**で照合するため、拡大を wintf の変換行列へ移して消えた段・発生点
+/// （`t_resample_us`・`alloc_resample_dst`・`alloc_xmap`）が行へ戻ってくれば RED になる
+/// ——不在の主張は本配列の外に置かない（数え直す場所を 2 つにしない）。
 ///
 /// 本配列は**昇順の集合**であり行の順序は語らない。`frame` が行の**末尾**に出ること
 /// （既存フィールドの順序を崩していないこと）は
 /// `presenter/transition_record_tests.rs::the_perf_line_appends_the_frame_field_at_the_very_end`
 /// が本文走査で固定している。
-const PERF_LINE_FIELDS: [&str; 16] = [
+const PERF_LINE_FIELDS: [&str; 13] = [
     "alloc_compose_dst",
     "alloc_mask",
-    "alloc_resample_dst",
-    "alloc_xmap",
     "cache_hit",
     "frame",
     "key_hash",
@@ -121,7 +126,6 @@ const PERF_LINE_FIELDS: [&str; 16] = [
     "t_cache_us",
     "t_compose_us",
     "t_mask_us",
-    "t_resample_us",
     "t_total_us",
     "t_upload_us",
     "target_id",
@@ -229,10 +233,11 @@ fn assert_perf_line_contract(ev: &CapturedEvent) {
 
 // ── fixture ────────────────────────────────────────────────────────────────────────────
 
-/// 段の非 0 を入力の大きさで担保するための native 外形（k=2/1 で 480×360＝691,200 バイト）。
+/// 段の非 0 を入力の大きさで担保するための native 外形（240×180＝172,800 バイト）。
 ///
-/// 合成・リサンプル・マスク生成・供給面転写はいずれもこの画素数を舐めるため、µs 分解能の
+/// 合成・マスク生成・表示の記録はいずれもこの画素数を舐めるため、µs 分解能の
 /// 1 目盛りに対して 1 桁以上の余裕がある（Requirement 6.2: 閾値ではなく入力で決める）。
+/// 拡大は wintf の変換行列が掛けるので、舐める量は k に依らない。
 const NATIVE_W: u32 = 240;
 const NATIVE_H: u32 = 180;
 
@@ -360,10 +365,11 @@ fn attach(
 
 /// Requirement 1.1／1.3／1.4 観測完了（**配線の檻・ミス経路**）: 実際の `apply_show` が
 /// 表示成立点 info! 行と perf 行を**隣接する対**として各 1 本出し、perf 行が固定文言・
-/// debug 水準・14 フィールドちょうどを備え、5 段すべてに mark が効いていて、`alloc_*` が
-/// 実 `FrameBudget` の値で埋まる。
+/// debug 水準・13 フィールドちょうどを備え、4 段すべてに mark が効いていて、`alloc_*` が
+/// 実 `FrameBudget` の値（発生点 2）で埋まる。
 ///
-/// k=2/1・引き当てミスの初回適用は **5 段すべてが実行される唯一の入力**である。ゆえに
+/// 引き当てミスの初回適用は **4 段すべてが実行される唯一の入力**である（k の値では段が
+/// 増減しない——拡大は wintf の変換行列が掛けるため経路が分岐しない）。ゆえに
 /// どれか 1 つの `timing.mark(..)` を削ると、その段が 0 になって RED になる。同様に
 /// `note_alloc` を 1 つ削ると該当 `alloc_*` が 0 になって RED になる。
 ///
@@ -421,56 +427,35 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
     assert_eq!(field(&perf, "cache_hit"), field(&info, "cache_hit"));
 
     // key_hash は檻が独立に再計算した値と一致する（Requirement 7.2 の裁定材料の帰属可能性）。
-    let expected_hash = compose_key_hash(
-        1000,
-        &BindSet::default(),
-        &PatternState::default(),
-        ScaleRatio::new(2, 1).expect("2/1 は構築できる"),
-    );
+    let expected_hash = compose_key_hash(1000, &BindSet::default(), &PatternState::default());
     assert_eq!(
         field(&perf, "key_hash"),
         expected_hash.to_string(),
-        "key_hash が合成キー（surface_id・binds・pattern・k）から導かれていない"
+        "key_hash が合成キー（surface_id・binds・pattern）から導かれていない（k はキー要素ではない）"
     );
 
-    // (i) mark の設置位置: k≠1 のミスは 5 段すべてが実行される唯一の入力である。
+    // (i) mark の設置位置: ミス経路は 4 段すべてが実行される唯一の入力である。
     //
     // 照会段（`t_cache_us`）だけは本檻で非 0 を主張しない——ミス経路の照会は空スロットの
     // 判定で終わり、舐める入力量が無いためである（照会段の mark は
     // [`cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs`] が
     // 10 万要素の bind 集合の逐語比較で固定する）。フィールドの存在自体は
     // [`assert_perf_line_contract`] が集合ちょうどで押さえている。
-    for name in [
-        "t_compose_us",
-        "t_resample_us",
-        "t_mask_us",
-        "t_upload_us",
-        "t_total_us",
-    ] {
+    for name in ["t_compose_us", "t_mask_us", "t_upload_us", "t_total_us"] {
         assert_ne!(
             stage_us(&perf, name),
             0,
-            "段 `{name}` が 0（k≠1 のミス経路では 5 段すべてが実行される＝mark が\
+            "段 `{name}` が 0（ミス経路では 4 段すべてが実行される＝mark が\
              削除／分岐外へ移動している）: {:?}",
             perf.fields
         );
     }
 
-    // (iv) alloc_* は実 FrameBudget 由来。ミス＋k≠1 の初回適用は 4 発生点すべてを 1 回ずつ踏む。
+    // (iv) alloc_* は実 FrameBudget 由来。ミスの初回適用は発生点 2 をどちらも 1 回ずつ踏む。
     assert_eq!(
         field(&perf, "alloc_compose_dst"),
         "1",
         "合成先の確保が計数されていない"
-    );
-    assert_eq!(
-        field(&perf, "alloc_resample_dst"),
-        "1",
-        "表示バッファ（リサンプル先）の確保が計数されていない"
-    );
-    assert_eq!(
-        field(&perf, "alloc_xmap"),
-        "1",
-        "リサンプル作業領域の確保が計数されていない"
     );
     assert_eq!(
         field(&perf, "alloc_mask"),
@@ -480,12 +465,14 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
 }
 
 /// Requirement 1.1／1.3／1.4 観測完了（**配線の檻・ヒット経路**）: 引き当てが成立した適用では
-/// 合成・リサンプル・マスク生成の 3 段が**厳密に 0**で出て、確保計数も全て 0 になる。
-/// 照会段と転写段は実行されるので非 0 のままである。
+/// 合成・マスク生成・表示の記録の 3 段が**厳密に 0**で出て、確保計数も全て 0 になる。
+/// ヒット経路は GPU 呼び出しを 1 つも持たない（記録はエントリが束ねている）ため、
+/// `t_upload_us` も 0 側である——実行される段は照会段だけである。
 ///
 /// 「どの段が 0 になるか」は mark をどの分岐へ置いたかの構造的帰結であり、測定マシンの速度では
-/// 変わらない。`timing.mark(Stage::Compose)` をミス分岐の外（無条件）へ移す改変・`note_alloc` を
-/// ヒット経路でも踏む位置へ移す改変は、いずれもここで RED になる。
+/// 変わらない。`timing.mark(Stage::Compose)`／`timing.mark(Stage::Upload)` をミス分岐の外
+/// （無条件）へ移す改変・`note_alloc` をヒット経路でも踏む位置へ移す改変は、いずれもここで
+/// RED になる。
 ///
 /// 照会段の非 0 は 10 万要素の bind 集合の等価比較（400KB の逐語比較）が担保する
 /// （[`BIND_COUNT`] の説明を参照——入力量で決めており、実時間の閾値ではない）。
@@ -541,7 +528,9 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
     );
 
     // 実行されなかった段は**厳密に 0**（mark を無条件へ移すと非 0 になり RED）。
-    for name in ["t_compose_us", "t_resample_us", "t_mask_us"] {
+    // `t_upload_us`＝表示の記録もヒットでは 0 である（記録はエントリが束ねており、
+    // ヒット経路には GPU 呼び出しが 1 つも無い）。
+    for name in ["t_compose_us", "t_mask_us", "t_upload_us"] {
         assert_eq!(
             stage_us(hit, name),
             0,
@@ -549,8 +538,8 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
             hit.fields
         );
     }
-    // 実行される段は非 0（照会段・転写段の mark を削ると RED）。
-    for name in ["t_cache_us", "t_upload_us", "t_total_us"] {
+    // 実行される段は非 0（照会段の mark を削ると RED）。
+    for name in ["t_cache_us", "t_total_us"] {
         assert_ne!(
             stage_us(hit, name),
             0,
@@ -559,83 +548,12 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
         );
     }
     // 確保計数も全 0（`note_alloc` をヒット経路でも踏む位置へ移すと RED）。
-    for name in [
-        "alloc_compose_dst",
-        "alloc_resample_dst",
-        "alloc_xmap",
-        "alloc_mask",
-    ] {
+    for name in ["alloc_compose_dst", "alloc_mask"] {
         assert_eq!(
             field(hit, name),
             "0",
             "引き当て経路で確保計数 `{name}` が増えている（確保しない経路で数えている）: {:?}",
             hit.fields
-        );
-    }
-}
-
-/// Requirement 1.1／1.3 観測完了（**恒等 k のミス経路**）: k=1/1 ではリサンプル段が実行されず、
-/// `t_resample_us` が**厳密に 0**、`alloc_resample_dst`／`alloc_xmap` も 0 で出る。合成段・
-/// マスク生成段・転写段は実行されるので非 0、`alloc_compose_dst`／`alloc_mask` は 1 である。
-///
-/// `timing.mark(Stage::Resample)` と 2 つの `note_alloc` が**恒等 k の分岐の内側**に置かれて
-/// いることの檻である。これらを分岐の外（無条件）へ出す改変はここで RED になる。
-#[test]
-fn identity_scale_miss_reports_exact_zero_resample_stage_and_no_resample_allocs() {
-    let mut world = super::test_support::make_world_with_gpu();
-    let mut presenter = EmoPresenter::new();
-    // 窓 DPI ＝ author_dpi ＝ 96 ゆえ k=1/1（resample を呼ばない経路）。
-    attach(&mut presenter, &mut world, TargetId(0), 96, 0xA3);
-
-    let ((), events) = capture(|| {
-        assert!(
-            show(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                1000,
-                BindSet::default()
-            )
-            .is_ok()
-        );
-    });
-
-    let (info, perf) = expect_single_adjacent_pair(&events);
-    assert_info_line_contract(&info);
-    assert_perf_line_contract(&perf);
-    assert_eq!(field(&info, "k"), "1.0", "前提: 96/96 で恒等 k");
-    assert_eq!(
-        field(&info, "scaled_w"),
-        field(&info, "native_w"),
-        "前提: 恒等 k では native と scaled が同寸"
-    );
-
-    assert_eq!(
-        stage_us(&perf, "t_resample_us"),
-        0,
-        "恒等 k でリサンプル段が 0 でない（mark が分岐の外に出ている）: {:?}",
-        perf.fields
-    );
-    assert_eq!(
-        field(&perf, "alloc_resample_dst"),
-        "0",
-        "恒等 k で表示バッファの確保が計数されている（分岐の外で数えている）"
-    );
-    assert_eq!(
-        field(&perf, "alloc_xmap"),
-        "0",
-        "恒等 k でリサンプル作業領域の確保が計数されている（分岐の外で数えている）"
-    );
-    assert_eq!(field(&perf, "alloc_compose_dst"), "1");
-    assert_eq!(field(&perf, "alloc_mask"), "1");
-    // 照会段は本檻でも非 0 を主張しない（理由は
-    // [`miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired`] と同じ）。
-    for name in ["t_compose_us", "t_mask_us", "t_upload_us", "t_total_us"] {
-        assert_ne!(
-            stage_us(&perf, name),
-            0,
-            "恒等 k でも実行される段 `{name}` が 0（mark が削除されている）: {:?}",
-            perf.fields
         );
     }
 }
@@ -762,17 +680,18 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     );
 }
 
-/// Requirement 1.1／1.4 観測完了（**供給面生成前の早期復帰でも 1 行も出ない**）: 供給面の
-/// 遅延生成に必要な資源が World に無い 2 経路（Compositor 不在・GraphicsCore 不在）でも
-/// info! 行・perf 行はいずれも出ない。
+/// Requirement 1.1／1.4 観測完了（**表示記録前の早期復帰でも 1 行も出ない**）: 表示の記録に
+/// 必要な資源が World に無い経路（`GraphicsCore` 不在）と、記録そのものが失敗した経路
+/// （`record_display` の失敗注入）でも info! 行・perf 行はいずれも出ない。
 ///
-/// これらの経路は**合成とキャッシュ挿入を済ませた後**に落ちる（＝確保計数は増えているのに
-/// 行が出ない）ため、「emit を成立点より手前へ動かす」改変を単独で殺す。`FrameTiming` が
-/// `emit` で `self` を消費する構造ゆえ黙って drop される、という設計の主張の実測である。
+/// どちらも**合成を済ませた後**に落ちる（＝確保計数は増えているのに行が出ない）ため、
+/// 「emit を成立点より手前へ動かす」改変を単独で殺す。`FrameTiming` が `emit` で `self` を
+/// 消費する構造ゆえ黙って drop される、という設計の主張の実測である。取り出されなかった
+/// 増分は次の成立へ持ち越される（`budget.rs` の契約）ので、行が出ないことと確保の計数は矛盾しない。
 ///
 /// 陰性主張は陽性（資源が揃った target での成立適用 1 本）と同一スコープで対にする。
 #[test]
-fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
+fn early_returns_before_the_display_record_emit_neither_info_nor_perf_line() {
     let mut world = super::test_support::make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     // 小さめの外形で 3 target（本檻は行の有無だけを見るので画素量は要らない）。
@@ -784,7 +703,7 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
             .expect("attach_target 失敗");
     }
 
-    let ((ok, no_gfx, no_compositor), events) = capture(|| {
+    let ((ok, no_gfx, record_failed), events) = capture(|| {
         // 陽性: 資源が揃った target の成立適用（両 callsite の有効性の証明）。
         let ok = show(
             &mut presenter,
@@ -794,7 +713,7 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
             BindSet::default(),
         );
 
-        // 陰性 1: GraphicsCore 不在（Compositor は在る）。
+        // 陰性 1: GraphicsCore 不在（＝DeviceContext を借りられず記録に入れない）。
         let gfx = world
             .remove_resource::<GraphicsCore>()
             .expect("前提: GraphicsCore が載っている");
@@ -807,10 +726,17 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
         );
         world.insert_resource(gfx);
 
-        // 陰性 2: WucGraphicsResource 不在（＝Compositor を取り出せない）。
-        let wuc = world
-            .remove_resource::<WucGraphicsResource>()
-            .expect("前提: WucGraphicsResource が載っている");
+        // 陰性 2: 記録の失敗（`record_display` の 1 点目＝`CreateBitmap` へ注入）。
+        // 解除は `Drop` に持たせる——assert の panic で飛び越すと旗が同一スレッドの
+        // 後続テストを巻き添えにする（`display_fault_tests.rs` と同じ流儀）。
+        struct Disarm;
+        impl Drop for Disarm {
+            fn drop(&mut self) {
+                clear_display_fault();
+            }
+        }
+        let _disarm = Disarm;
+        arm_display_fault(DisplayFault::CreateBitmap);
         let b = show(
             &mut presenter,
             &mut world,
@@ -818,7 +744,6 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
             1000,
             BindSet::default(),
         );
-        world.insert_resource(wuc);
 
         (ok, a, b)
     });
@@ -836,13 +761,13 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
     );
     assert!(
         matches!(
-            no_compositor,
+            record_failed,
             Err(PresentError::Device {
-                context: "WucGraphicsResource::compositor",
+                context: "<injected:CreateBitmap>",
                 ..
             })
         ),
-        "前提: Compositor 不在経路へ落ちること: {no_compositor:?}"
+        "前提: 記録の失敗経路へ落ちること: {record_failed:?}"
     );
 
     let (info, perf) = expect_single_adjacent_pair(&events);
@@ -870,8 +795,10 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
         "GraphicsCore 不在経路を通っていない（陰性が空虚）: {events:?}"
     );
     assert!(
-        has_error("WucGraphicsResource/Compositor 不在"),
-        "Compositor 不在経路を通っていない（陰性が空虚）: {events:?}"
+        events.iter().any(|e| e.level == tracing::Level::ERROR
+            && e.message() == "D3D/DXGI 呼び出しが失敗"
+            && e.field_str("context") == Some("<injected:CreateBitmap>")),
+        "記録の失敗経路を通っていない（陰性が空虚）: {events:?}"
     );
 }
 

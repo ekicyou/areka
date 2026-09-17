@@ -20,7 +20,7 @@ use wintf::ecs::{Arrangement, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
     attach_hit_target, build_target_assets, build_two_face_assets, make_world_with_gpu,
-    mount_entities, scaled_golden, set_window_dpi, show_ok, spawn_window_with_dpi,
+    mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
 };
 
 // ── テスト補助（装着実体の実値を読む）──────────────────────────────────────────────────
@@ -28,11 +28,19 @@ use super::test_support::{
 // 食い違いを見逃す。可視性の主張は必ず **entity の実 component 値**でも裏を取る
 // （`mount_entities` は `presenter_test_support.rs` の共有補助）。
 
-/// 枠の面 entity の `Arrangement` 寸（＝visual bounds・物理 px で直接設定される）。
+/// 枠の面 entity の `Arrangement` 寸（＝**論理寸＝原寸**。k は寸へ焼かず `scale` の係数になる）。
 fn arrangement_size(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
     world
         .get::<Arrangement>(surface_entity)
         .map(|a| (a.size.width as u32, a.size.height as u32))
+}
+
+/// 枠の面 entity の `Arrangement.scale`（＝実適用 k の係数・wintf の `SetTransform` が掛ける）。
+fn arrangement_scale(world: &World, surface_entity: Entity) -> Option<f32> {
+    world.get::<Arrangement>(surface_entity).map(|a| {
+        assert_eq!(a.scale.x, a.scale.y, "x/y で異なる係数は本経路に無い");
+        a.scale.x
+    })
 }
 
 /// 枠の面 entity へ供給済みの αマスク寸（未供給なら `None`）。
@@ -147,13 +155,13 @@ fn external_target_after_first_show(
 // ── ⑴ 外部所有: 表示指令は確立のみ（Requirement 1.1/1.3）──────────────────────────────
 
 /// Requirement 1.1／1.3: `External` の target へ `ShowSurface` を与えても**不可視のまま**、配置先
-/// （text 層スロット）と面・供給面・実適用 k・物理寸がすべて確立する。
+/// （text 層スロット）と面・合成メモ・実適用 k・物理寸がすべて確立する。
 ///
 /// 1.3 が要求するのは「可視化を伴わずに配置先を確保する」ことである。ゆえに檻は `target_visible` が
 /// `Some(false)` であることと、`text_slot_view` が `Some`（＝スロット・native 原寸・実適用 k が
 /// 揃っている）ことを**同時に**主張する。片方だけでは「出ないが文字も流せない」縮退を見逃す。
 ///
-/// 供給面のバイト（readback）まで golden 一致を見るのは、可視化手順を落とした結果として
+/// メモのバイト（readback）まで golden 一致を見るのは、可視化手順を落とした結果として
 /// アップロードやマスク同期まで一緒に落ちていないこと（design「それ以外の全手順は所有権に依らず共通」）
 /// を実行で確かめるためである。
 #[test]
@@ -194,7 +202,7 @@ fn external_show_establishes_display_without_making_it_visible() {
     let rb = presenter.read_back(target).expect("read_back 失敗");
     assert_eq!(
         rb, golden,
-        "不可視確立でも供給面へのアップロードは走る（合成・アップロードは所有権に依らず共通）"
+        "不可視確立でも合成とメモへの取り込みは走る（所有権に依らず共通）"
     );
 }
 
@@ -237,15 +245,12 @@ fn command_driven_target_is_still_visualized_by_show_surface() {
 /// 文字の配置先が起動時から誤った寸法で成立し、最初の発話が正しい大きさで出ない。
 #[test]
 fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
-    let (world, window, presenter, target, _native_golden) =
-        external_target_after_first_show(192, 0x29);
+    let (world, window, presenter, target, golden) = external_target_after_first_show(192, 0x29);
+    let (surface, _slot) = mount_entities(&presenter, target);
 
-    // 同一入力から k=2/1 の表示バイトを独立に再現する（presenter の内部値の追認にしない）。
-    let (probe_world, probe_atlas, _) = build_target_assets(3, 2, 0x29);
     let k2 = ScaleRatio::new(2, 1).expect("非ゼロ比");
-    let (scaled_bytes, native_size, scaled_size) =
-        scaled_golden(&probe_world, &probe_atlas, 1000, k2);
-    assert_eq!(native_size, (3, 2));
+    let native_size = (3, 2);
+    let scaled_size = k2.scaled_extent(native_size.0, native_size.1);
     assert_eq!(
         scaled_size,
         (6, 4),
@@ -275,10 +280,26 @@ fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
         "配置先の物理寸が確立時の k を反映していない"
     );
     assert_eq!(view.scale(), 2.0, "配置先が読む実適用 k が等倍のまま");
+    // 面・マスクは**原寸**で、k は配置の係数としてだけ現れる（裁定 D）。
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
-        scaled_bytes,
-        "不可視確立でも供給面は k 適用後のバイトで満たされる"
+        golden,
+        "不可視確立でもメモは原寸の合成バイトで満たされる"
+    );
+    assert_eq!(
+        arrangement_size(&world, surface),
+        Some(native_size),
+        "配置の論理寸が原寸でない（寸へ k を焼き込んでいる）"
+    );
+    assert_eq!(
+        arrangement_scale(&world, surface),
+        Some(2.0),
+        "配置の係数に k が届いていない（等倍のまま確立した）"
+    );
+    assert_eq!(
+        mask_dims(&world, surface),
+        Some(native_size),
+        "αマスクが原寸でない（k 適用後のバイトから作っている）"
     );
 }
 
@@ -325,7 +346,7 @@ fn external_reshow_updates_result_without_becoming_visible() {
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
         golden_3000,
-        "不可視でも供給面の中身は新しい面へ入れ替わる"
+        "不可視でも表示中のメモは新しい面へ入れ替わる"
     );
 
     // ループ由来の再指令相当（同一面を繰り返し指令する）。
@@ -351,33 +372,46 @@ fn external_reshow_updates_result_without_becoming_visible() {
 }
 
 /// Requirement 1.3／6.6 の土台: 不可視の期間中に表示倍率が変わった後の再指令で、**可視性に依らない
-/// 手順**（k 導出・供給面・visual bounds・αマスク）がすべて新しい倍率へ揃う。
+/// 手順**（k 導出・配置の係数・物理寸の照会値）がすべて新しい倍率へ揃う。
 ///
-/// 可視化の手順以外を所有権でゲートした実装（bounds やマスクの更新を可視のときだけ行う等）は、
-/// 事後状態だけを見るテストでは捕まらない——初回の確立では装着そのものが正しい外形で bounds を
-/// 組むため、bounds の更新手順が働くのは**再指令の経路だけ**だからである。ゆえに確立時の値を
+/// 可視化の手順以外を所有権でゲートした実装（配置やマスクの更新を可視のときだけ行う等）は、
+/// 事後状態だけを見るテストでは捕まらない——初回の確立では装着そのものが正しい外形で配置を
+/// 組むため、配置の更新手順が働くのは**再指令の経路だけ**だからである。ゆえに確立時の値を
 /// 起点として先に主張し、遷移として検査する。
+///
+/// # 何が動き、何が動かないか（裁定 D で入れ替わった側）
+///
+/// 動くのは `Arrangement.scale`（＝変換の係数）と物理寸の照会値だけで、**面もマスクも配置の論理寸も
+/// 原寸のまま動かない**。旧正典はこの 3 つが k 倍に伸びることを固定していたので、期待値は正反対に
+/// なった。マスクの不変は「αマスクの更新を落とした」ことと区別できなければ意味が無いため、
+/// 係数と照会値が実際に動いていることを同じテストの中で対にして主張する。
 #[test]
 fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
-    let (mut world, window, mut presenter, target, native_golden) =
+    let (mut world, window, mut presenter, target, golden) =
         external_target_after_first_show(96, 0x2A);
     let (surface, _slot) = mount_entities(&presenter, target);
+    let native_size = (3, 2);
 
-    // 遷移の起点: 確立時は k=1/1 の外形で bounds もマスクも揃っている。
+    // 遷移の起点: 確立時は k=1/1。配置は原寸・係数 1.0 で、マスクも原寸。
     assert_eq!(
         arrangement_size(&world, surface),
-        Some((3, 2)),
-        "前提: 確立時の visual bounds は k=1/1 の外形"
+        Some(native_size),
+        "前提: 確立時の配置の論理寸は原寸"
+    );
+    assert_eq!(
+        arrangement_scale(&world, surface),
+        Some(1.0),
+        "前提: 確立時の係数は等倍"
     );
     assert_eq!(
         mask_dims(&world, surface),
-        Some((3, 2)),
-        "前提: 確立時に k=1/1 のαマスクが供給されている"
+        Some(native_size),
+        "前提: 確立時に原寸のαマスクが供給されている"
     );
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
-        native_golden,
-        "前提: 確立時の供給面は等倍のバイト"
+        golden,
+        "前提: 確立時のメモは原寸の合成バイト"
     );
 
     // 不可視の期間中にモニタ跨ぎ相当の表示倍率変化が起き、その後に再指令が届く
@@ -385,11 +419,9 @@ fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
     set_window_dpi(&mut world, window, 192);
     show_ok(&mut presenter, &mut world, target, 1000);
 
-    let (probe_world, probe_atlas, _) = build_target_assets(3, 2, 0x2A);
     let k2 = ScaleRatio::new(2, 1).expect("非ゼロ比");
-    let (scaled_bytes, _native_size, scaled_size) =
-        scaled_golden(&probe_world, &probe_atlas, 1000, k2);
-    assert_eq!(scaled_size, (6, 4), "前提: 遷移の前後で外形が変わる");
+    let scaled_size = k2.scaled_extent(native_size.0, native_size.1);
+    assert_eq!(scaled_size, (6, 4), "前提: 遷移の前後で物理寸が変わる");
 
     assert_eq!(
         presenter.target_visible(target),
@@ -402,21 +434,32 @@ fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
         Some(k2),
         "不可視の再指令が k を導出し直していない"
     );
-    assert_eq!(
-        presenter.read_back(target).expect("read_back 失敗"),
-        scaled_bytes,
-        "不可視の再指令で供給面が新しい倍率のバイトへ入れ替わっていない"
-    );
     // 本題: 可視化以外の手順が可視性でゲートされていないこと。
     assert_eq!(
-        arrangement_size(&world, surface),
+        arrangement_scale(&world, surface),
+        Some(2.0),
+        "配置の係数が可視性でゲートされている（不可視期間中の変化を取りこぼす・Requirement 6.6 の土台）"
+    );
+    assert_eq!(
+        presenter.target_physical_size(target),
         Some(scaled_size),
-        "visual bounds が可視性でゲートされている（不可視期間中の変化を取りこぼす・Requirement 6.6 の土台）"
+        "物理寸の照会値が新しい倍率を映していない"
+    );
+    // 動かない側: 面・マスク・配置の論理寸はいずれも原寸のまま（k は面に入らない）。
+    assert_eq!(
+        presenter.read_back(target).expect("read_back 失敗"),
+        golden,
+        "k 変化でメモの原寸バイトが書き換わった（k を含む面を作っている）"
+    );
+    assert_eq!(
+        arrangement_size(&world, surface),
+        Some(native_size),
+        "配置の論理寸へ k を焼き込んでいる（拡大は変換行列の仕事）"
     );
     assert_eq!(
         mask_dims(&world, surface),
-        Some(scaled_size),
-        "αマスクが可視性でゲートされている（可視化した瞬間に前の倍率の判定が載る）"
+        Some(native_size),
+        "αマスクが k 倍に伸びている（÷k は hit-test 側の比例写像が 1 回だけ掛ける）"
     );
 }
 
@@ -468,7 +511,7 @@ fn show_surface_does_not_revive_an_external_target_hidden_after_being_visible() 
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
         golden,
-        "不可視のまま供給面の中身が更新されていない"
+        "不可視のまま表示中のメモが更新されていない"
     );
 }
 
@@ -477,11 +520,12 @@ fn show_surface_does_not_revive_an_external_target_hidden_after_being_visible() 
 /// Requirement 6.6: `show_target` は**現在の**窓 DPI から k を導出し直した上で可視化する。
 ///
 /// 不可視の期間中に窓 DPI が 96 → 192 へ変わった状況を作る。可視化が「不可視化した時点の絵をそのまま
-/// 出す」実装なら k=1/1 の native 寸のまま出てしまい、非表示期間中に生じた変化を取りこぼす。ゆえに檻は
-/// 可視になったことに加えて、実適用 k・物理寸・表示バイトがすべて**新しい** DPI 由来であることを見る。
+/// 出す」実装なら k=1/1 のまま出てしまい、非表示期間中に生じた変化を取りこぼす。ゆえに檻は
+/// 可視になったことに加えて、実適用 k・物理寸・窓寸 reconcile 要求が**新しい** DPI 由来であることを
+/// 見る（面のバイトは原寸ゆえ k で変わらない——そちらは不変であることを主張する）。
 #[test]
 fn show_target_makes_visible_and_rederives_scale_from_current_dpi() {
-    let (mut world, window, mut presenter, target, _golden) =
+    let (mut world, window, mut presenter, target, golden) =
         external_target_after_first_show(96, 0x23);
     assert_eq!(
         presenter.applied_ratio(target),
@@ -492,12 +536,9 @@ fn show_target_makes_visible_and_rederives_scale_from_current_dpi() {
     // 不可視の期間中にモニタ跨ぎ相当の DPI 変化が起きる。
     set_window_dpi(&mut world, window, 192);
 
-    // 同一入力から k=2/1 の golden を独立に再現する（presenter の内部値の追認にしない）。
-    let (probe_world, probe_atlas, _) = build_target_assets(3, 2, 0x23);
     let k2 = ScaleRatio::new(2, 1).expect("非ゼロ比");
-    let (scaled_bytes, native_size, scaled_size) =
-        scaled_golden(&probe_world, &probe_atlas, 1000, k2);
-    assert_eq!(native_size, (3, 2));
+    let native_size = (3, 2);
+    let scaled_size = k2.scaled_extent(native_size.0, native_size.1);
     assert_eq!(scaled_size, (6, 4), "前提: 2 水準の物理寸は異なる");
 
     presenter
@@ -522,8 +563,8 @@ fn show_target_makes_visible_and_rederives_scale_from_current_dpi() {
     );
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
-        scaled_bytes,
-        "表示バイトが新しい k のリサンプル結果と一致しない（不可視期間中の変化の取りこぼし）"
+        golden,
+        "メモの原寸バイトが k で書き換わった（面は k を含まない）"
     );
     assert_eq!(
         presenter.take_pending_resize(target),
@@ -590,7 +631,7 @@ fn invisible_period_dpi_change_is_ignored_by_refresh_and_applied_by_show_target(
     assert_eq!(
         presenter.read_back(target).expect("read_back 失敗"),
         native_golden,
-        "DPI 追従の相が不可視のまま供給面を書き換えている"
+        "DPI 追従の相が不可視のまま表示中のメモを書き換えている"
     );
     assert_entities_hidden(&world, &presenter, target, "DPI 追従の相を通した後");
 
