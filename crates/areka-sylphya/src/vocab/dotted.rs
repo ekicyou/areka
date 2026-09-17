@@ -400,3 +400,8 @@ mod tests {
         assert_eq!(EXT_EVENT_SET, "property.set");
     }
 }
+
+/// 本機能が足した項目（記録用の表・設定可能語彙への登記）を項目ごとに判定する兄弟テスト。
+#[cfg(test)]
+#[path = "dotted_set_ledger_tests.rs"]
+mod set_ledger_tests;
