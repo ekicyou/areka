@@ -285,7 +285,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Architecture**: **掲示板（マテリアライズド・ビュー）＋単一同期アクター** — 読みは共有読みハンドル（epoch 交換の不変スナップショット）で**同期・無待機**、供給（publish／SET 中継／永続書込）は古典スレッド 1 本の同期アクターが所有。同期読み経路でのクロスアクター pull 照会は禁止。
 **Modules**:
 - `key.rs` - 正準 key `PropPath`／セレクタ 5 形パーサ（正準文字列化 `to_canonical_string()` が**唯一の権威**）
-- `vocab/` - 語彙台帳（`flat.rs` 26 トークン／`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論／`shiori_resource.rs` 159 項目）＝**完全語彙を第一級保持**し未導出は縮退シームで管理
+- `vocab/` - 語彙台帳（`flat.rs` 26 トークン／`dotted.rs` ルート枝 10＋汎用名 17＋SET 意味論＋記録用のサウンドプロパティ名 18（書き込みの仕分けは読まない）／`shiori_resource.rs` 159 項目）＝**完全語彙を第一級保持**し未導出は縮退シームで管理
 - `mirror.rs` / `reader.rs` / `value.rs` / `asker.rs` - 不変鏡像（per-asker/global 区画・epoch 単調増加）と `SylphyaReader`（`resolve_flat`／`resolve_dotted`／`talk_snapshot`）・問い合わせ元コンテキスト第一級
 - `actor.rs` - `SylphyaMsg` envelope・**純関数中核 `SylphyaCore::apply`**（判断分岐を集約・受信ループは薄い配線）・`spawn_sylphya`／`SylphyaPublisher`（`barrier()` で反映フェンス）
 - `persist/` - 層別スコープ（App/Ghost/Shell/Balloon）×TOML（`format-version`）×原子的書込（temp→rename）×寛容読取 3 段×4 key 族
