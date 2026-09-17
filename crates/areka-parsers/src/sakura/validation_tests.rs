@@ -84,13 +84,13 @@ fn syntax_bracket_closes_at_matching_bracket() {
     );
 }
 
-/// 未知（subset 外）タグ `\foo[a,b]` は構文として 1 単位に区切った上で `Raw`
+/// 未知（subset 外）タグ `\i[a,b]` は構文として 1 単位に区切った上で `Raw`
 /// 保持し、意味デコードしない（要件 13.8/11.2）。生情報を失わない。
 #[test]
 fn syntax_unknown_tag_is_syntactically_split_and_kept_raw() {
     assert_eq!(
-        parse(r"\foo[a,b]"),
-        vec![Instruction::Raw(r"\foo[a,b]".to_string())],
+        parse(r"\i[a,b]"),
+        vec![Instruction::Raw(r"\i[a,b]".to_string())],
     );
 }
 
@@ -198,10 +198,10 @@ fn surface_inner_is_opaque_and_unmodified() {
 // ───────────────────────────────────────────────────────────────────
 
 /// 未閉じ `[` の前後に正常命令を置き、両端が欠落せず解析が継続する
-/// （要件 10.1/10.2/10.3）。`\e前\foo[` の `\e` は残り、末尾は `Raw` 吸収。
+/// （要件 10.1/10.2/10.3）。`\e前\i[` の `\e` は残り、末尾は `Raw` 吸収。
 #[test]
 fn lenient_passthrough_keeps_instructions_around_malformed_token() {
-    let got = parse(r"\e\foo[");
+    let got = parse(r"\e\i[");
     assert_eq!(got.first(), Some(&Instruction::End));
     assert_eq!(got.len(), 2);
     assert!(matches!(got[1], Instruction::Raw(_)));

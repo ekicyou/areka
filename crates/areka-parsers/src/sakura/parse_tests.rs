@@ -74,10 +74,10 @@ fn plain_text_only_yields_single_text() {
 }
 
 /// 不正トークン（未閉じ `[`）の前にある正常命令は欠落しない（要件 10.3/10.2）。
-/// `\e\foo[` → End ＋ 未閉じ吸収の `Raw`（エラーを送出せず継続）。
+/// `\e\i[` → End ＋ 未閉じ吸収の `Raw`（エラーを送出せず継続）。
 #[test]
 fn malformed_token_does_not_drop_preceding_instruction() {
-    let got = parse(r"\e\foo[");
+    let got = parse(r"\e\i[");
     assert_eq!(got.first(), Some(&Instruction::End));
     assert_eq!(got.len(), 2);
     assert!(matches!(got[1], Instruction::Raw(_)));

@@ -312,7 +312,7 @@ fn font_keeps_neighbouring_instructions_in_order() {
 #[test]
 fn scripts_without_font_tag_decode_unchanged() {
     assert_eq!(
-        dec(r"\p[0]\s[10]face\n[150]\q[のこり,OnRest]\_w[250]\foo[f]\e"),
+        dec(r"\p[0]\s[10]face\n[150]\q[のこり,OnRest]\_w[250]\i[f]\e"),
         vec![
             Instruction::SpeakerScope { n: 0 },
             Instruction::Surface(SurfaceArg::new("10".to_string())),
@@ -324,7 +324,7 @@ fn scripts_without_font_tag_decode_unchanged() {
                 references: Vec::new(),
             }),
             Instruction::Wait(std::time::Duration::from_millis(250)),
-            Instruction::Raw(r"\foo[f]".to_string()),
+            Instruction::Raw(r"\i[f]".to_string()),
             Instruction::End,
         ]
     );

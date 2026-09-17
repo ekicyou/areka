@@ -417,12 +417,12 @@ fn modern_single_bracket_q_still_choice() {
 
 // ── subset 外タグ・不正トークン → Raw（要件 10.1/11.2）───────────────
 
-/// emo2 subset 外の正準タグ `\foo[a,b]` → `Raw`（構文区切り＋raw 保持・要件 11.2/13.8）。
+/// emo2 subset 外の正準タグ `\i[a,b]` → `Raw`（構文区切り＋raw 保持・要件 11.2/13.8）。
 #[test]
 fn unknown_tag_absorbed_as_raw() {
     assert_eq!(
-        dec(r"\foo[a,b]"),
-        vec![Instruction::Raw(r"\foo[a,b]".to_string())],
+        dec(r"\i[a,b]"),
+        vec![Instruction::Raw(r"\i[a,b]".to_string())],
     );
 }
 
@@ -469,12 +469,12 @@ fn unclosed_bracket_raw_preserves_neighbors() {
 /// 周囲の正常命令を保持する（要件 10.1/10.2/10.3 の総合固定）。
 #[test]
 fn lenient_passthrough_never_aborts_keeps_valid_neighbors() {
-    let out = dec(r"\p[0]\foo[x]こんにちは\![open,a]\q[ID][タイトル]\e");
+    let out = dec(r"\p[0]\i[x]こんにちは\![open,a]\q[ID][タイトル]\e");
     assert_eq!(
         out,
         vec![
             Instruction::SpeakerScope { n: 0 },
-            Instruction::Raw(r"\foo[x]".to_string()),
+            Instruction::Raw(r"\i[x]".to_string()),
             Instruction::Text("こんにちは".to_string()),
             Instruction::GenericCommand {
                 name: "open".to_string(),
