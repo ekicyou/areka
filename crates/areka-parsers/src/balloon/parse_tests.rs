@@ -521,3 +521,157 @@ fn font_shadowcolor_partial_absence_is_independently_none() {
     assert_eq!(s.color_g(), Some("77"));
     assert_eq!(s.color_b(), None);
 }
+
+/// 書体の飾り 5 本＋影 4 本（基底 9 本）を宣言順に並べて読む（T7〜T9 の比較用）。
+fn base_nine(m: &super::BalloonModel) -> [Option<&str>; 9] {
+    let d = m.font_decoration_raw();
+    let s = m.font_shadow_raw();
+    [
+        d.bold(),
+        d.italic(),
+        d.outline(),
+        d.strike(),
+        d.underline(),
+        s.color_r(),
+        s.color_g(),
+        s.color_b(),
+        s.style(),
+    ]
+}
+
+/// 基底 9 本のキー名（`base_nine` と同じ順）。
+const BASE_NINE_KEYS: [&str; 9] = [
+    "font.bold",
+    "font.italic",
+    "font.outline",
+    "font.strike",
+    "font.underline",
+    "font.shadowcolor.r",
+    "font.shadowcolor.g",
+    "font.shadowcolor.b",
+    "font.shadowstyle",
+];
+
+/// T7: 9 本を両層に別の値で書くと、画像別の上書き層の値が勝つ（要件 4.1/9.5）。
+#[test]
+fn font_base_keys_image_layer_overrides_descript() {
+    let descript: String = BASE_NINE_KEYS
+        .iter()
+        .enumerate()
+        .map(|(i, k)| format!("{k},d{i}\n"))
+        .collect();
+    let image: String = BASE_NINE_KEYS
+        .iter()
+        .enumerate()
+        .map(|(i, k)| format!("{k},i{i}\n"))
+        .collect();
+
+    let got = parse_str(&descript, Some(&image));
+
+    assert_eq!(
+        base_nine(&got),
+        [
+            Some("i0"),
+            Some("i1"),
+            Some("i2"),
+            Some("i3"),
+            Some("i4"),
+            Some("i5"),
+            Some("i6"),
+            Some("i7"),
+            Some("i8"),
+        ]
+    );
+}
+
+/// T8: 画像別層が 9 本を持たないとき、既定層の値を引き継ぐ（要件 4.2/9.5）。
+#[test]
+fn font_base_keys_image_missing_key_inherits_descript() {
+    let descript: String = BASE_NINE_KEYS
+        .iter()
+        .enumerate()
+        .map(|(i, k)| format!("{k},d{i}\n"))
+        .collect();
+
+    let got = parse_str(&descript, Some("origin.x,3\nfont.height,20"));
+
+    assert_eq!(
+        base_nine(&got),
+        [
+            Some("d0"),
+            Some("d1"),
+            Some("d2"),
+            Some("d3"),
+            Some("d4"),
+            Some("d5"),
+            Some("d6"),
+            Some("d7"),
+            Some("d8"),
+        ]
+    );
+    // 画像別層の別キーはちゃんと重なっている（層が読まれていないことによる偶然の緑を防ぐ）。
+    assert_eq!(got.font().height(), Some(20));
+}
+
+/// T9: 画像別層そのものが無いとき、既定層だけが写る（要件 4.3/9.5）。
+#[test]
+fn font_base_keys_descript_only_when_image_layer_absent() {
+    let descript = map(&[
+        ("font.bold", "1"),
+        ("font.italic", "0"),
+        ("font.outline", "1"),
+        ("font.strike", "0"),
+        ("font.underline", "1"),
+        ("font.shadowcolor.r", "10"),
+        ("font.shadowcolor.g", "none"),
+        ("font.shadowcolor.b", "30"),
+        ("font.shadowstyle", "outline"),
+    ]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(
+        base_nine(&got),
+        [
+            Some("1"),
+            Some("0"),
+            Some("1"),
+            Some("0"),
+            Some("1"),
+            Some("10"),
+            Some("none"),
+            Some("30"),
+            Some("outline"),
+        ]
+    );
+}
+
+/// T10: 接頭辞付きのキー（影を含む・`disable.` を含む）を書いても、基底 14 本はすべて未指定のまま
+/// （要件 4.4/4.5/9.6）。既存の `distractor_keys_do_not_leak_into_modeled_scalars` は別に残す。
+#[test]
+fn prefixed_font_keys_do_not_leak_into_base_font_keys() {
+    let descript = map(&[
+        ("anchor.font.shadowcolor.r", "11"),
+        ("anchor.font.shadowstyle", "offset"),
+        ("anchor.notselect.font.shadowcolor.r", "12"),
+        ("anchor.visited.font.shadowstyle", "outline"),
+        ("cursor.font.shadowcolor.g", "13"),
+        ("cursor.font.shadowstyle", "offset"),
+        ("cursor.notselect.font.shadowcolor.b", "14"),
+        ("number.font.height", "24"),
+        ("sstpmessage.font.name", "MS Gothic"),
+        ("communicatebox.font.color.r", "15"),
+        ("disable.font.bold", "1"),
+        ("anchor.font.bold", "1"),
+        ("cursor.font.underline", "1"),
+    ]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(got.font().name(), None);
+    assert_eq!(got.font().height(), None);
+    assert_eq!(got.font().color().r(), None);
+    assert_eq!(got.font().color().g(), None);
+    assert_eq!(got.font().color().b(), None);
+    assert_eq!(base_nine(&got), [None; 9]);
+}
