@@ -60,17 +60,17 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | ⓪ | 09-03 | `sakura-bare-tag-lexer`（#134） | `\_X` bare 漏れ修正・完了検証で `sakura-tag-word-boundary` 起票 |
 | W12 | 09-05〜09-11 | `cursor-tag-canon`（#137）・`emo-text-line-height-canon`（#142）・`emo2-conformance-e2e`（#143・**M1 完成宣言**） ∥ 調査系 `ukadoc-survey-toolkit`（#136）・`-property`（#138）・`-shiori`（#139）・`-sakura-script`（#140）・`-assets`（#141） | 行送り 35→30・e2e 20 項目全合格・ukadoc 1,749 項目の台帳 4 本＋`report/summary.md` |
 
-- 完了 spec 直下エントリ＝**178**（`.kiro/specs/completed/` 直下・2026-09-13 実数え＝ディレクトリ 177＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
+- 完了 spec 直下エントリ＝**180**（`.kiro/specs/completed/` 直下・2026-09-17 実数え＝ディレクトリ 179＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
 - M1 実機サインオフ発見 7 件中 #1〜#6 解決済み・#7（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）は W13 の 4 本が引受先。M-dual は退役（e2e 項目 10 で合格・復活させない）。
 
-## 進行中の spec 台帳（brief 済み 30 本・2026-09-11 実数え 28 ＋ 09-12 起票 1 ＋ 09-13 起票 1。**うち完了 3・進行中 27**＝2026-09-13 に状態列を実数え・着手は `/kiro-start <名>`）
+## 進行中の spec 台帳（brief 済み 30 本・2026-09-11 実数え 28 ＋ 09-12 起票 1 ＋ 09-13 起票 1。**うち完了 5・進行中 25**＝2026-09-17 に状態列を実数え・着手は `/kiro-start <名>`）
 
 > **種別**の優先順は **バグ → 依存ツリーが長い → その他**。**規模**は brief の申告（棚卸⑬で分割したものは分割後）。**状態**列は `/kiro-complete` が ✅ に更新し、完了数を実数えで更新する。**Fable**列＝要件定義（design）を Fable で行うべきか（○＝Fable・−＝Opus で足りる）。
 
 | # | spec（`areka-P0-` 省略） | 種別 | 規模 | Wave | 前提（先に着地） | Fable | 状態 |
 |---|---|---|---|---|---|---|---|
 | 1 | `present-gpu-transform-scale` | バグ（性能・**最優先**） | M | **W13** | なし | ○ | ✅ |
-| 2 | `kanade-boot-talkdone-drop` | バグ（構造） | S | **W13** | なし | − | ⚪ |
+| 2 | `completed/kanade-boot-talkdone-drop` | バグ（構造） | S | **W13** | なし | − | ✅ 完了（2026-09-17） |
 | 3 | `host32-window-thread-pump` | バグ（構造） | S〜M | **W13** | なし | −（案 1/2 の裁定 1 件） | ⚪ |
 | 4 | `sakura-tag-word-boundary` | バグ（完了契約 13.1 の穴） | S〜M | **W13** | `sakura-bare-tag-lexer` ✅ | − | ⚪ |
 | 5 | `charset-canon` | 正典（里々ゴーストが 1 体も動かない・surfaces.txt 2 箇所は実バグ） | M | **W13** | なし | ○（⑵ 交渉のみ） | ✅ |

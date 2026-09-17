@@ -594,13 +594,16 @@ fn second_change_calls(handle: &ScriptedShioriHandle) -> usize {
 /// 持つ）。据え置いた注入時刻は待っている観測を追い越しようがなく、予算も減らない——実測では
 /// 握手の開始までに 1,621 反復を要した（据え置き・静かな機械・task 5.5）。
 ///
-/// **残る危険（本檻では直せない）**——記録トークの再生完了通知が kanade の `BootVersion` 滞在中に
-/// 届くと、`schedule/boot.rs:32-36` の防御アームが**それを捨てる**。捨てられた通知は二度と来ない
-/// ので、以後 `Steady{talk: Some}` のまま保留が消化されず、どんな注入でも握手は始まらない
-/// （`schedule/mod.rs:681-694` の `current_talk_id` が `BootVersion{Some}` を突合対象に含めて
-/// おきながら——`:683-684` が「TalkDone が BootVersion 中に届いた場合の防御」と逐語で書いている
-/// ——委譲先が捨てる形）。
-/// これは製品側の欠陥であって檻の待ち方では塞げない。上の assert が落ちたときはこの経路を疑う。
+/// **塞がれた危険（`areka-P0-kanade-boot-talkdone-drop` が受理経路を入れた）**——記録トークの
+/// 再生完了通知が kanade の `BootVersion{talk: Some}` 滞在中に届くと、以前は `schedule/boot.rs` の
+/// `step` のワイルドカード腕が**それを捨て**、以後 `Steady{talk: Some}` のまま保留が消化されな
+/// かった（`schedule/mod.rs` の `current_talk_id` が `BootVersion{Some}` を突合対象に含めておき
+/// ながら委譲先が捨てる形）。本仕様で同 `step` にガード腕を足し、通知を `on_talk_done` が受理して
+/// トーク枠を空にし `BootVersion{talk: None}` に留まるようにした。
+/// ただし本檻はアクターシェル経由であり、この相で通知を受け取る経路に構造上到達しない（`actor.rs`
+/// の `drive` が `basewareversion` の往復を同じ呼出の中で済ませ `Steady` まで進み切る）。ゆえに
+/// 本檻はこの修正の非回帰の検出器であって欠陥の検出器ではない——欠陥そのものを赤にするのは
+/// `areka-kanade` の `boot_version_talkdone_*` テスト（`step` を直接駆動する）である。
 #[test]
 fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
     let (backend, handle) = ScriptedShioriBackend::builder()

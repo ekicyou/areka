@@ -184,6 +184,26 @@ fn warn_boot_input_ignored_logs() {
 }
 
 #[test]
+fn warn_boot_input_ignored_still_fires_for_tick_in_boot_version_with_talk() {
+    // 挨拶追跡中の応答待ち（BootVersion{Some}）でも、TalkDone 以外（Tick）は従来どおり無視の警告。
+    // 受理の info（boot_talk_done）が Tick で出れば受理条件の広げすぎ（較正の実体は WARN の存在側）。
+    let ev = run_step(
+        Phase::BootVersion {
+            talk: Some(ActiveTalk {
+                talk_id: TalkId(1),
+                origin: "boot",
+                script: String::new(),
+            }),
+        },
+        Input::Tick {
+            now: MonotonicMs(1_000),
+        },
+    );
+    assert_logged(&ev, Level::WARN, "boot_input_ignored");
+    super::log_capture::assert_not_logged(&ev, "boot_talk_done");
+}
+
+#[test]
 fn warn_boot_unexpected_reply_logs() {
     // BootInit（Notified 待ち）に Value → boot::on_reply unexpected_reply。
     let ev = run_step(
