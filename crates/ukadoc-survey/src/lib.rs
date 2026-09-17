@@ -19,6 +19,7 @@ pub mod catalog;
 pub mod check;
 pub mod cli;
 pub mod diff;
+pub mod documents;
 pub mod error;
 pub mod evidence;
 pub mod hash;

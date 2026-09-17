@@ -744,7 +744,7 @@ mod tests {
     }
 
     /// 固定層差し込み点は型シームのみ＝データを一切持たない（zero-sized・M1 で描画へ
-    /// 影響し得ない構造保証・R7.2）。他 crate 内シーム（`FontDisableSeam`/`TextEffects`）と
+    /// 影響し得ない構造保証・R7.2）。他 crate 内シーム（`TextEffects`・M2 予約）と
     /// 同じ zero-sized 規律。
     #[test]
     fn fixed_overlay_seam_is_type_only() {

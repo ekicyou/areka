@@ -1,4 +1,4 @@
-use areka_sakura::contract::{ActorKey, CueCommand};
+use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER};
 
 use super::test_support::{choice_cue, com_world, cue, cursor_model, geo_model, opaque_count};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
@@ -144,6 +144,49 @@ fn present_populates_choice_hit_rows_and_nochange_preserves_snapshot() {
         rt.choice_hit_rows(&actor),
         rows.as_slice(),
         "NoChange フレームは直前スナップショットを不変に保つ（更新スキップ）"
+    );
+}
+
+/// **装飾で大きくした選択肢は当たり帯も大きくなる**（要件 11.5 のブロック軸・本番の 1 フレーム経路）。
+///
+/// 帯の丈をバルーン定義の既定の大きさから**アクターに 1 つ**決めていた頃は、`\f[height,40]` の
+/// 選択肢が表示 42 画素でも帯 14 画素で、文字の上下がクリックできなかった。純粋層の
+/// `choice_tests.rs::line_bands_scale_with_each_line_own_em` が値そのものを固定し、本檻は
+/// **それが `present_frame` の本番経路まで繋がっている**ことを述べる（純粋層だけでは配線を主張できない）。
+///
+/// 較正: `actor.rs` の `line_bands` を「全行に既定の大きさで 1 つ」を配る旧実装へ戻すと、
+/// 2 行の帯の丈が等しくなって赤。
+#[test]
+fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    // 1 行目＝既定の大きさの選択肢・2 行目＝`\f[height,40]` の選択肢。
+    rt.apply_cue(&choice_cue("0", 0.0, "OnSmall", "ちいさい", &[]));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }));
+    rt.apply_cue(&cue(
+        "0",
+        0.0,
+        CueCommand::command_carrier(FONT_TAG_CARRIER, vec!["height".to_owned(), "40".to_owned()]),
+    ));
+    rt.apply_cue(&choice_cue("0", 0.2, "OnBig", "おおきい", &[]));
+    let image = (240u32, 200u32);
+    rt.register_actor(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, image, image),
+        ResolvedBalloonText::resolve(&geo_model(), image),
+    );
+
+    present_frame(&mut rt, &mut world, 10.0).expect("提示フレーム");
+
+    let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
+    assert_eq!(rows.len(), 2, "選択肢 2 つぶんのヒット行");
+    let small = rows[0].rect.bottom - rows[0].rect.top;
+    let big = rows[1].rect.bottom - rows[1].rect.top;
+    assert!(
+        big > small * 2.0,
+        "\\f[height,40] の選択肢の当たり帯が既定の大きさのまま——\
+         帯を行ごとに引き直していない（既定 {small} / 装飾 {big}）"
     );
 }
 

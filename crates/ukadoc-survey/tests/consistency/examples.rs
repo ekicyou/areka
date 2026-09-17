@@ -35,6 +35,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ukadoc_survey::assignment::PageAssignment;
+use ukadoc_survey::documents::parse::{quoted_ids, toml_blocks};
 use ukadoc_survey::io::{files, paths};
 use ukadoc_survey::ledger::read::read as read_ledger;
 use ukadoc_survey::model::{Domain, EntryId, PageName, Status};
@@ -71,62 +72,11 @@ const README_ID_FLOOR: usize = 3;
 // 取り出し
 // ---------------------------------------------------------------------------
 
-/// ` ```toml ` で始まり ` ``` ` で閉じる囲みの中身だけを、現れた順に返す。
-///
-/// 入れ子は扱わない（Markdown の囲みは入れ子にならない）。閉じ忘れた囲みは
-/// 本文の終わりまでを 1 つの囲みとして返す——取りこぼして黙って緑になるより、
-/// 中身を検査に掛けたほうが安全側である。
-fn toml_blocks(markdown: &str) -> Vec<String> {
-    let mut blocks = Vec::new();
-    let mut current: Option<Vec<&str>> = None;
-    for line in markdown.lines() {
-        match current.as_mut() {
-            Some(lines) => {
-                if line.trim_end() == "```" {
-                    blocks.push(lines.join("\n"));
-                    current = None;
-                } else {
-                    lines.push(line);
-                }
-            }
-            None => {
-                if line.trim_end() == "```toml" {
-                    current = Some(Vec::new());
-                }
-            }
-        }
-    }
-    if let Some(lines) = current {
-        blocks.push(lines.join("\n"));
-    }
-    blocks
-}
-
-/// 本文に現れる `"ukadoc:…"` の綴りを、現れた順に返す（重複は落とさない）。
-///
-/// 二重引用符で囲まれた `ukadoc:` 始まりの文字列だけを拾う。台帳では id は必ず
-/// 引用符の中に書かれる（`[entry."<id>"]` と `to = "<id>"`）ので、これで表の鍵も
-/// 関連の相手も同じ規則で拾える。備考の複数行文字列（`"""`）の中に id 形の綴りが
-/// 現れることは現データでは無いが、現れたとしても引用符で囲まれていなければ
-/// 拾わない。
-fn quoted_ids(text: &str) -> Vec<String> {
-    let mut ids = Vec::new();
-    let mut rest = text;
-    while let Some(start) = rest.find("\"ukadoc:") {
-        let after_quote = &rest[start + 1..];
-        match after_quote.find('"') {
-            Some(end) => {
-                ids.push(after_quote[..end].to_owned());
-                rest = &after_quote[end + 1..];
-            }
-            // 閉じ引用符が無い＝壊れた本文。ここで打ち切る。
-            None => break,
-        }
-    }
-    ids
-}
-
 /// 囲みの中の id を重複を落として文字順に返す。
+///
+/// 取り出しの実体（[`toml_blocks`]・[`quoted_ids`]）は純粋層の `documents::parse`
+/// にある。ここに写しを置いていたのを 2026-09-12 に寄せた——3 文書の判定が同じ
+/// 取り出しを要るので、読み方が 2 か所に割れると片方だけが直る。
 fn ids_in_toml_blocks(markdown: &str) -> BTreeSet<String> {
     toml_blocks(markdown)
         .iter()

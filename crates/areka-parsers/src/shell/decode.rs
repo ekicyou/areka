@@ -558,3 +558,8 @@ fn parse_alias_ids(value: &str) -> Vec<u32> {
         .map(|s| s.trim().parse::<u32>().unwrap_or(0))
         .collect()
 }
+
+/// 文字コードごとの固定物 4 種が同一の解析結果を産むことを固定する兄弟テスト（タスク 4.2・要件 9.5）。
+#[cfg(test)]
+#[path = "decode_charset_tests.rs"]
+mod charset_tests;

@@ -63,3 +63,12 @@ pub use dola::cue::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueSink, CueTarget, TalkCue,
     cue_target_of,
 };
+
+// ── `\f` 文字装飾の運搬名（text-decoration-canon 要件 2.3/2.4） ──
+
+/// `\f` 装飾を運ぶ `CueCommand::Custom` のコマンド名（消費側はこの名前で自己選別する）。
+///
+/// キーごとに typed な cue を新設せず、`\!` コマンドと同じ 1 本の汎用キャリア
+/// （[`CueCommand::command_carrier`]）へ載せる（要件 2.4）。名前が合わない消費者
+/// （ghost・seriko）は既存の `\!` の規約どおり無視する。
+pub const FONT_TAG_CARRIER: &str = "\\f";

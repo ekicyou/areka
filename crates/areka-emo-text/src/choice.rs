@@ -30,7 +30,7 @@ use tracing::warn;
 use crate::canvas::{
     ChoiceLineContent, ChoiceRowSegment, ContentCanvas, HighlightPaint, ResidentContent,
 };
-use crate::layout::{LineRect, PositionedLine};
+use crate::layout::{GlyphMetrics, LineRect, PositionedLine};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::ChoiceSpan;
 use crate::writing::WritingMode;
@@ -177,6 +177,56 @@ pub fn highlight_band_offset(line_box_height: f32, band_extent: f32) -> f32 {
     ((line_box_height - band_extent).max(0.0) / 2.0).round()
 }
 
+/// 1 行分のハイライト帯／ヒット帯（丈と寄せ量・**描画とヒットの単一の源**）。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineBand {
+    /// 帯のブロック軸の丈（[`highlight_band_extent`] の出力）。
+    pub extent: f32,
+    /// 行矩形のブロック軸近端から内側へ寄せる量（[`highlight_band_offset`] の出力）。
+    pub offset: f32,
+}
+
+/// 行ごとの帯を 1 度だけ決める（純粋・[`decorate_canvas`] と [`derive_hit_rows`] へ同じ列を配る）。
+///
+/// ## なぜ行ごとなのか（要件 11.5）
+///
+/// 帯の丈をバルーン定義の既定の大きさから**アクターに 1 つ**決めていた頃は、`\f[height,40]` を
+/// 含む選択肢が表示 42 画素でも帯は 14 画素で、**文字の上下がクリックできなかった**。行の丈は
+/// 既に「その行に置かれた文字のうち最も大きい em」になっている（要件 7.9・行矩形のブロック軸寸）
+/// ので、そこから行ごとに引き直す。
+///
+/// 要件 3.5「装飾は hover の判定と当たり判定を変えない」は hover の**表示規則**（文字色の
+/// 差し替えと帯の塗りが装飾より優先されること）を述べたもので、帯の**寸法**は要件 11.5 が
+/// 「装飾込みから導く」と定める側である（行内軸は既にそう実装されている）。
+///
+/// 塗る帯とクリックを受ける帯は同じ列から出る——片方だけを広げると「見えている帯の外が
+/// クリックできる」という別の破れ方になる（R3.3 の単一導出）。
+///
+/// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
+pub fn line_bands<M: GlyphMetrics + ?Sized>(
+    lines: &[PositionedLine],
+    mode: WritingMode,
+    metrics: &M,
+) -> Vec<LineBand> {
+    lines
+        .iter()
+        .map(|line| {
+            let em = match mode {
+                WritingMode::HorizontalTb => line.rect.bottom - line.rect.top,
+                WritingMode::VerticalRl | WritingMode::VerticalLr => {
+                    line.rect.right - line.rect.left
+                }
+            };
+            let line_box_height = metrics.line_box_height(em);
+            let extent = highlight_band_extent(em, line_box_height, metrics.line_pitch(em));
+            LineBand {
+                extent,
+                offset: highlight_band_offset(line_box_height, extent),
+            }
+        })
+        .collect()
+}
+
 /// ヒット行（純粋・canvas-local image px）: 1 選択肢セグメントの矩形＋配送順序数。
 ///
 /// `rect` は **canvas-local（validrect-local）image px**——[`ContentCanvas::from_layout`] が
@@ -241,8 +291,7 @@ pub fn derive_hit_rows(
     segments: &[LineChoiceSegment],
     mode: WritingMode,
     region: &TextRegion,
-    band_extent: f32,
-    band_offset: f32,
+    bands: &[LineBand],
 ) -> Vec<CanvasHitRow> {
     let (ox, oy) = (region.left(), region.top());
     let mut rows = Vec::new();
@@ -254,6 +303,14 @@ pub fn derive_hit_rows(
         }
         // line_index 範囲外は防御的にスキップ（annotate は有効添字のみ出す）。
         let Some(line) = lines.get(seg.line_index) else {
+            continue;
+        };
+        // 行ごとの帯（`line_bands` の出力・描画側と同一の列）。行数と 1:1 なので通常は必ず引ける。
+        let Some(&LineBand {
+            extent: band_extent,
+            offset: band_offset,
+        }) = bands.get(seg.line_index)
+        else {
             continue;
         };
         // 行内軸＝セグメントの inline_range（文字幅）・ブロック軸帯＝行矩形の block 近端から
@@ -349,10 +406,9 @@ pub fn to_window_physical(
 ///
 /// **セグメント空 → canvas を無変更で返す**（恒等・非退行・要件 1.4/design.md Invariants）。
 ///
-/// `band_extent`（[`highlight_band_extent`] の出力）と `band_offset`（[`highlight_band_offset`] の
-/// 出力）は Choice 住人へそのまま焼き込み、COM 層のハイライト矩形とダーティ帯がこの 2 値を読む
-/// ——[`derive_hit_rows`] へ渡す値と同一にすることで描画帯とヒット帯の数値一致（R3.3/R13.2）を
-/// 呼び手 1 箇所で担保する。
+/// `bands`（[`line_bands`] の出力・行ごとの [`LineBand`]）から当該行の 2 値を引いて Choice 住人へ
+/// 焼き込み、COM 層のハイライト矩形とダーティ帯がこの 2 値を読む——[`derive_hit_rows`] へ**同じ列**
+/// を渡すことで描画帯とヒット帯の数値一致（R3.3/R13.2）を呼び手 1 箇所で担保する。
 ///
 /// ## 座標系: 絶対 image px → resident-local（GlyphRunContent ローカル系）
 ///
@@ -391,8 +447,7 @@ pub fn decorate_canvas(
     default_font_color: (u8, u8, u8),
     region: &TextRegion,
     mode: WritingMode,
-    band_extent: f32,
-    band_offset: f32,
+    bands: &[LineBand],
 ) -> ContentCanvas {
     // セグメント空は恒等（非退行・要件 1.4）——入力 canvas をそのまま返す。
     if segments.is_empty() {
@@ -428,6 +483,14 @@ pub fn decorate_canvas(
         if row_segments.is_empty() {
             continue;
         }
+        // 行ごとの帯（`line_bands` の出力・ヒット側と同一の列）。
+        let Some(&LineBand {
+            extent: band_extent,
+            offset: band_offset,
+        }) = bands.get(index)
+        else {
+            continue;
+        };
         // hover 印: hover==Some(o) かつ この行に ordinal o のセグメントがあるときのみ Some(o)。
         let hovered = match hover {
             Some(o) if row_segments.iter().any(|rs| rs.ordinal == o) => Some(o),
@@ -599,5 +662,12 @@ mod tests;
 mod style_resolve_tests;
 
 #[cfg(test)]
+/// 全行に同じ帯を配る試験の補助（`tests` と `decorate_tests` の共有・行ごとの帯の導出そのものは
+/// `choice_tests.rs` の `line_bands` の試験が見張る）。
+#[cfg(test)]
+fn bands_of(extent: f32, offset: f32) -> Vec<LineBand> {
+    vec![LineBand { extent, offset }; 16]
+}
+
 #[path = "choice_decorate_tests.rs"]
 mod decorate_tests;

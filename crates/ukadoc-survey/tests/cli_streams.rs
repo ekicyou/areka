@@ -86,6 +86,17 @@ fn an_unknown_subcommand_echoes_the_typed_name_to_stderr_and_exits_two() {
 }
 
 #[test]
+fn priority_apply_takes_no_arguments_and_exits_two_when_given_one() {
+    // 9 つ目の副手続きも引数を取らない（設計「入口 / cli::generate::priority_apply」の
+    // Batch / Job Contract）。ここは**振り分けの手前で断る**経路だけを見るので、
+    // 書き戻しそのものは走らない——走れば repo の台帳 4 本を書き換える。
+    assert_usage_error(
+        &["priority-apply", "shiori"],
+        &["priority-apply", "shiori", USAGE_FIRST_LINE],
+    );
+}
+
+#[test]
 fn candidates_writes_its_result_to_stdout_and_exits_zero() {
     // 成功の腕（`Outcome::Done` → 終了コード 0）を守る唯一の事例。タスク 6.1 の時代は
     // 8 つの副手続きがすべて `Err` を返したので、この腕へはどんな入力からも到達でき

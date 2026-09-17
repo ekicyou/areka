@@ -918,3 +918,66 @@ fn measure_emo2_fixture_applies_k_end_to_end() {
         );
     });
 }
+
+/// 要件 6.1: 配置採寸の読取が **そのファイル自身の** `charset` 宣言に従う。
+///
+/// 合成シェルの surfaces.txt を `charset,Shift_JIS` 宣言つき・値に Shift_JIS の
+/// 「通常」（`92 CA 8F ED`）を含むバイト列で置き、本番関数 `measure_scope_sizes` が
+/// 採寸を成功させることを見る。適用前（`read_to_string`）はこのバイト列が
+/// 「stream did not contain valid UTF-8」で読取失敗になり、`PlacementError::Measure`
+/// を返していた。
+///
+/// **この検査がここに居る理由**: タスク 4.2 が固定するのは `charset::decode` と
+/// `shell::parse` を組み合わせた結果の等値——すなわちパーサ層の性質であって、
+/// `measure.rs` の読取が実際に `decode` を通っているかどうかには触れない。配線を
+/// `read_to_string` へ戻してもパーサ層の検査は緑のまま通り抜ける。本番経路が復号を
+/// 経由することを押さえるのは、読取点の兄弟にあたる本ファイルの役目。
+#[test]
+fn placement_read_honours_the_files_own_charset_declaration() {
+    with_com_initialized(|| {
+        let shell = TempDir::new();
+        std::fs::copy(
+            emo2("shell/master/surface0.png"),
+            shell.path().join("surface0.png"),
+        )
+        .expect("surface0.png の複写");
+        std::fs::write(shell.path().join("surfaces.txt"), SHIFT_JIS_SURFACES_TXT)
+            .expect("surfaces.txt の書出し");
+
+        let out = measure_scope_sizes(
+            shell.path(),
+            &emo2("emo2-kakukaku"),
+            &[0],
+            &MeasureScaling::IDENTITY,
+        )
+        .expect("Shift_JIS 宣言の surfaces.txt でも採寸が成立すること（要件 6.1）");
+        assert_eq!(out.scopes.len(), 1, "採寸できた scope は 1 つ");
+    });
+}
+
+/// `charset,Shift_JIS` を宣言し、alias の値に Shift_JIS の「通常」を持つ surfaces.txt。
+///
+/// UTF-8 として不正なバイト並びであることが本質（`92 CA 8F ED` は UTF-8 の
+/// 妥当な並びではない）。適用前の `read_to_string` はここで読取失敗になる。
+const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsakura.surface.alias\n{\n\x92\xCA\x8F\xED,[0]\n}\n";
+
+/// 要件 6.3: `charset,UTF-8` を宣言する emo2 固定物は、復号を挟んでも適用前と
+/// 同一の文字列・同一の解析結果を産む（UTF-8 経路の差分 0）。
+///
+/// 直上の Shift_JIS 検査の**陽性対照**でもある。復号経路が UTF-8 の固定物を壊して
+/// いれば、「Shift_JIS が読めるようになった」だけでは成功と言えない。COM も WIC も
+/// 要らない純粋な読取＋解析ゆえ `with_com_initialized` を挟まない。
+#[test]
+fn emo2_utf8_fixture_decodes_to_the_same_text_as_before() {
+    let path = emo2("shell/master/surfaces.txt");
+    let bytes = std::fs::read(&path).expect("emo2 固定物を読めること");
+    let before = std::fs::read_to_string(&path).expect("適用前の読み方（UTF-8 固定）");
+    let after =
+        areka_parsers::charset::decode(&bytes, areka_parsers::charset::DefaultEncoding::Ansi);
+    assert_eq!(before, after, "emo2 固定物は復号を挟んでも同一文字列");
+    assert_eq!(
+        areka_parsers::shell::parse(&before).surfaces.len(),
+        areka_parsers::shell::parse(&after).surfaces.len(),
+        "解析結果の surface 数も同一"
+    );
+}

@@ -409,7 +409,7 @@ impl PhysicalRect {
 
 /// 行指紋（planner 内部・DD4——変化行検出の唯一の根拠）。
 ///
-/// 前回確定時の canvas 行のスナップショット。内容文字列・ブロック軸位置・行寸を保持し、
+/// 前回確定時の canvas 行のスナップショット。内容文字列・ブロック軸位置・行寸・装飾番号列を保持し、
 /// 新 canvas の同 index 行と比較して差分（typewriter の現在行・catch-up の複数行・新規行）を
 /// 一様に検出する。位置/寸は **canvas-local**（validrect-local image px・スクロール非依存）
 /// ゆえ、可視窓のみ移動（内容不変）では全行の指紋が一致＝変化行ゼロになる。float は
@@ -423,6 +423,12 @@ pub(crate) struct CommittedLine {
     block_pos_bits: u32,
     /// 行寸 `(幅, 高さ)` のビット表現（image px）。
     extent_bits: (u32, u32),
+    /// 行内の装飾番号列（[`crate::layout::PositionedGlyph::style`] の `StyleId.0` をグリフ順に
+    /// 並べたもの・非グリフ住人は空）。同じ文字列でも装飾が違えば列が違う＝**変化ありと判定される**
+    /// （R11.4——装飾だけが変わった行を古い見た目のまま再利用しない）。番号は `Clear`／`ClearAll`
+    /// で振り直されるが、そのとき `request_clear` が `prev_lines` を捨てる（[`FramePlan::FullClear`]）
+    /// ので古い番号との比較は起きない。
+    styles: Vec<u32>,
     /// hover 印（Choice 行のみ非 0・非 Choice 行は常に 0）。非 hover の Choice 行は 0・
     /// hover 中は `ordinal + 1`（0 と衝突させない）。hover の付与/切替/解除で当該 Choice 行の
     /// 指紋だけが変わり、既存 `derive_dirty` が当該行のみをダーティ化する（R4.4）。
@@ -656,21 +662,31 @@ fn glyph_run_indices(canvas: &ContentCanvas) -> impl Iterator<Item = usize> + '_
         .map(|(i, _)| i)
 }
 
-/// 住人 1 行の行指紋（内容文字列・ブロック軸位置・行寸）を作る（canvas-local・DD4）。
+/// 住人 1 行の行指紋（内容文字列・ブロック軸位置・行寸・hover 印・装飾番号列）を作る
+/// （canvas-local・DD4）。
 fn line_fingerprint(resident: &Resident, mode: WritingMode) -> CommittedLine {
-    let (text, extent) = match &resident.content {
+    let (text, styles, extent) = match &resident.content {
         ResidentContent::GlyphRun(run) => (
             run.glyphs.iter().map(|g| g.ch).collect::<String>(),
+            run.glyphs.iter().map(|g| g.style.0).collect::<Vec<u32>>(),
             run.size,
         ),
         // Choice 住人は内包 run から GlyphRun と同一の指紋を作る（非 hover の素描画が
         // GlyphRun と同一ゆえ指紋も同一・R9.5。hover セグメントの指紋反映は task 6.1）。
         ResidentContent::Choice(choice) => (
             choice.run.glyphs.iter().map(|g| g.ch).collect::<String>(),
+            choice
+                .run
+                .glyphs
+                .iter()
+                .map(|g| g.style.0)
+                .collect::<Vec<u32>>(),
             choice.run.size,
         ),
-        // 画像/サーフェスのシーム住人は空 text・零寸（M1 は from_layout で生成されない）。
-        ResidentContent::Image(_) | ResidentContent::Surface(_) => (String::new(), (0.0, 0.0)),
+        // 画像/サーフェスのシーム住人は空 text・空番号列・零寸（M1 は from_layout で生成されない）。
+        ResidentContent::Image(_) | ResidentContent::Surface(_) => {
+            (String::new(), Vec::new(), (0.0, 0.0))
+        }
     };
     let (dx, dy) = resident.transform.offset();
     // ブロック軸位置: 横書き＝dy・縦書き＝dx（canvas-local・スクロール非依存）。
@@ -691,6 +707,7 @@ fn line_fingerprint(resident: &Resident, mode: WritingMode) -> CommittedLine {
         block_pos_bits: block_pos.to_bits(),
         extent_bits: (extent.0.to_bits(), extent.1.to_bits()),
         choice_marker,
+        styles,
     }
 }
 
@@ -841,6 +858,9 @@ mod dirty_tests;
 #[cfg(test)]
 #[path = "viewbox_plan_commit_tests.rs"]
 mod plan_commit_tests;
+#[cfg(test)]
+#[path = "viewbox_style_fingerprint_tests.rs"]
+mod style_fingerprint_tests;
 #[cfg(test)]
 #[path = "viewbox_test_support.rs"]
 mod test_support;

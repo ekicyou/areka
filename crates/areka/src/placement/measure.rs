@@ -34,6 +34,7 @@ use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState, ScaleRatio};
 use areka_emo_present::balloon::{
     ResolvedFace, build_balloon_target_from_faces, resolve_balloon_faces,
 };
+use areka_parsers::charset::{DefaultEncoding, decode};
 use tracing::{error, warn};
 
 use super::PlacementError;
@@ -322,25 +323,30 @@ fn scale_size_px(
 /// shell dir の surfaces.txt から `(EmoWorld, AtlasTable)` を組む
 /// （donor `build_shell_target` と同経路: read→parse→bake→build＋bind）。
 ///
-/// emo2 の surfaces.txt は `charset,UTF-8` 宣言＝UTF-8 読み（donor と同じ
-/// `read_to_string`）。`use_self_alpha` は emo2 実測（`seriko.use_self_alpha,1`）
+/// surfaces.txt はそのファイル自身の `charset,<名前>` 宣言に従って復号する
+/// （未宣言は既定・解決できないラベルは既定へ後退・不正な並びは代替文字で吸収）。
+/// 他のファイルの宣言は持ち込まない。emo2 の surfaces.txt は `charset,UTF-8` を
+/// 宣言しているので、この経路の解析結果は従来の UTF-8 読みと同一になる。
+/// `use_self_alpha` は emo2 実測（`seriko.use_self_alpha,1`）
 /// に合わせ `On` 固定（donor 同値・descript 由来のパラメタ化は将来シーム）。
 fn build_shell_assets(
     shell_dir: &Path,
     decoder: &WicDecoderArm,
 ) -> Result<(EmoWorld, AtlasTable), PlacementError> {
     let surfaces_txt = shell_dir.join("surfaces.txt");
-    let content = std::fs::read_to_string(&surfaces_txt).map_err(|e| {
-        error!(
-            path = %surfaces_txt.display(),
-            error = %e,
-            "measure: shell surfaces.txt の読取に失敗"
-        );
-        PlacementError::Measure {
-            scope: 0,
-            reason: format!("surfaces.txt 読取失敗: {}: {e}", surfaces_txt.display()),
-        }
-    })?;
+    let content = std::fs::read(&surfaces_txt)
+        .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
+        .map_err(|e| {
+            error!(
+                path = %surfaces_txt.display(),
+                error = %e,
+                "measure: shell surfaces.txt の読取に失敗"
+            );
+            PlacementError::Measure {
+                scope: 0,
+                reason: format!("surfaces.txt 読取失敗: {}: {e}", surfaces_txt.display()),
+            }
+        })?;
 
     let shell = areka_parsers::shell::parse(&content);
     if shell.surfaces.is_empty() {

@@ -122,6 +122,12 @@ fn newline_and_clear_map_to_commands() {
 /// (2) 卒業した 5 語彙（Choice / Cursor / Move / GenericCommand / SystemVar）は除外集合に
 ///     **含まれない**＝各々 cue を生成する（本檻は決してこれらが「無視される」とは主張しない・
 ///     R8.3）。各語彙の写像詳細は個別 behavioral 檻が担い、ここでは除外集合の境界のみを固定する。
+///
+/// **2026-09-13 追記**——上の「5 語彙」は 4.1／4.2 時点の歴史的な数で、その後
+/// `areka-P0-text-decoration-canon` の `\f` 転写で `Instruction::Font` が **6 番目に卒業**した
+/// （`compile.rs` の `Instruction::Font` の腕が `Custom("\\f")` の cue を生成する）。除外集合が
+/// Raw-only であるという本檻の主張は変わらない——卒業が 1 つ増えても除外集合は縮む側にしか
+/// 動かないからである。
 #[test]
 fn catch_all_ignored_set_is_raw_only() {
     use areka_parsers::sakura::{Choice, MoveArgs};

@@ -44,7 +44,7 @@ fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentComma
 /// spine S1（boot→表示・DD-12・R1.1/1.2/1.3/1.4/8.1/8.2/8.5）: `\b` を含まない OnBoot 台本
 /// （`\s[0]`）で boot→attach フェーズ→初回 `\s` 駆動を走らせ、(a) 装着サマリ `info!` が
 /// planned==attached==2（DD-12 の縮退が scope 導出バグを隠さない檻＝期待 scope 数の全 target 完了）・
-/// ERROR 0 件、(b) **シェルは attach 直後は非表示**（`read_back` Err＝供給面未生成・defect #5・
+/// ERROR 0 件、(b) **シェルは attach 直後は非表示**（`read_back` Err＝未表示・defect #5・
 /// 2026-07-13 実機#5）で**バルーンは attach で面 0 を不可視のまま確立済み**（`opaque_count>0`＝面0 の
 /// 実描画＋文字層スロット取得。可視性そのものは付かない）、(c) 最初のさくらスクリプト `\s[0]` cue が
 /// seriko→PresentBridge→drain 経路で運ぶ
@@ -56,7 +56,7 @@ fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentComma
 /// 旧 DD-9 は attach 時にシェル初期面（scope0=surface0／scope>=1=surface10）を焼き込んでいたが、実機#5
 /// で「起動時に規定面が一瞬ちらつく」欠陥が判明した。SSP 互換の既定は「シェル表示なし（-1）」であり、
 /// 初回シェル表示は最初の `\s` cue が駆動する。本ケースは attach 直後の shell `read_back` が Err
-/// （供給面未生成＝合成面なし＝透過）であること、`\s[0]` 適用でのみシェルが非表示→実描画へ遷移する
+/// （未表示＝合成面なし＝透過）であること、`\s[0]` 適用でのみシェルが非表示→実描画へ遷移する
 /// ことを檻に入れて回帰を防ぐ。バルーンは文字層スロット取得のため attach で面 0 の `ShowSurface` を
 /// 保つが、その手前で可視性が外部所有へ移るため画面には出ない（不可視のままの確立・
 /// `areka-P0-balloon-visibility` Requirement 1.1/1.3）。起動直後の不可視そのものは
@@ -89,7 +89,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
         "attach 済み全 scope の BalloonModel が再追従用に記憶されている（D11-3）"
     );
 
-    // (b-1) シェルは初回 `\s` cue まで非表示（defect #5）: attach 直後の shell target は供給面未生成
+    // (b-1) シェルは初回 `\s` cue まで非表示（defect #5）: attach 直後の shell target は未表示
     //       ＝`read_back` Err（合成面なし＝透過）。attach で surface0/surface10 を焼き付けない。
     for (label, target) in [
         ("shell scope0", shell_target(0)),
@@ -97,18 +97,18 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
     ] {
         assert!(
             harness.wiring.read_back_target(target).is_err(),
-            "{label} は初回 \\s cue 前は非表示であるべき（供給面未生成・read_back Err・defect #5）"
+            "{label} は初回 \\s cue 前は非表示であるべき（未表示・read_back Err・defect #5）"
         );
     }
 
     // (b-2) バルーンは attach で面 0 を不可視のまま確立する（文字層スロット取得のため `ShowSurface` を
-    //       保持）。供給面は生成され実描画されるので readback は非全透明（R8.1/8.2/8.5）。
+    //       保持）。原寸面が合成メモに入り実描画されるので readback は非全透明（R8.1/8.2/8.5）。
     for (label, target) in [
         ("balloon scope0", balloon_target(0)),
         ("balloon scope1", balloon_target(1)),
     ] {
         let px = harness.wiring.read_back_target(target).unwrap_or_else(|e| {
-            panic!("{label} の read_back 失敗（不可視でも供給面は生成済みのはず）: {e:?}")
+            panic!("{label} の read_back 失敗（不可視でも原寸面は確立済みのはず）: {e:?}")
         });
         assert!(
             opaque_count(&px) > 0,
@@ -153,7 +153,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
     let after_show = harness
         .wiring
         .read_back_target(shell_target(0))
-        .expect("初回 \\s[0] 適用後は shell scope0 の供給面が生成され read_back 可能");
+        .expect("初回 \\s[0] 適用後は shell scope0 の原寸面が確立され read_back 可能");
     assert!(
         opaque_count(&after_show) > 0,
         "初回 \\s[0] 適用で shell scope0 が surface0 の実描画へ遷移（非表示→非全透明・R8.1/8.2/8.5）"
@@ -164,7 +164,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
 
 /// `areka-P0-balloon-visibility` Requirement 1.1 / 1.6 の spine 檻（起動直後の不可視）: 実 boot 経路
 /// （ghost→窓生成→GPU 資源→attach 相）で装着した**全 scope**のバルーンが、面 0・文字の配置先・
-/// 供給面の実描画まで確立していながら**一度も可視になっていない**ことを主張する。
+/// 原寸面の実描画まで確立していながら**一度も可視になっていない**ことを主張する。
 ///
 /// 同じ不変条件を frame 相当で見る檻は
 /// `frame_attach_tests.rs::attach_establishes_balloons_invisible_with_slot_and_surface` にあり、
@@ -175,7 +175,7 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
 ///
 /// `target_visible` は `attach_target` 直後から `Some(false)` を返すため、不可視だけを見る主張は
 /// 「そもそも何も確立していない」場合にも真になる。ここでは同じ scope について確立の証跡——
-/// 面 0 の記録（`current_surface_id`）・文字の配置先（`text_slot_view`）・供給面の実描画
+/// 面 0 の記録（`current_surface_id`）・文字の配置先（`text_slot_view`）・原寸面の実描画
 /// （`opaque_count > 0`）——を先に要求してから不可視を主張するので、確立が起きていない縮退では
 /// 不可視の主張へ到達する前に落ちる。
 ///
@@ -212,7 +212,7 @@ fn spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface() 
             "scope{scope}: 文字の配置先が確立している（可視化から分離）"
         );
         let px = harness.wiring.read_back_target(target).unwrap_or_else(|e| {
-            panic!("scope{scope}: 確立済みバルーンの供給面が読み戻せない: {e:?}")
+            panic!("scope{scope}: 確立済みバルーンの原寸面が読み戻せない: {e:?}")
         });
         assert!(
             opaque_count(&px) > 0,
@@ -240,10 +240,11 @@ fn spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface() 
 ///
 /// # readback 遷移の観測境界（実装事実の申し送り・CONCERNS 相当）
 ///
-/// `EmoPresenter::apply_hide` は WUC visual の可視フラグを落とすのみで swap chain の供給面
-/// （`source_tex`）は破棄しない。`read_back` はその供給面を直読みするため **Hide は readback の
-/// バイトを変えない**（emo-present の `empty_composition_degrades_to_hidden_and_replies_ok` が
-/// 同事実を固定＝Hide 縮退後も `read_back` は旧供給面長のまま成立）。加えて本ケースが見る scope0 の
+/// `EmoPresenter::apply_hide` は visual の可視フラグと `current_surface_id` を落とすのみで、
+/// 最後の show 入力（`last_show`）も合成メモも捨てない。`read_back` はその合成メモの原寸バイト列を
+/// 直読みするため **Hide は readback のバイトを変えない**（emo-present の
+/// `empty_composition_degrades_to_hidden_and_replies_ok` が
+/// 同事実を固定＝Hide 縮退後も `read_back` は同じ原寸バイト長のまま成立）。加えて本ケースが見る scope0 の
 /// バルーン系列（emo2-kakukaku の `balloons0.png`）は面 0 の 1 枚のみで、attach が確立する面も 0 ゆえ、
 /// `\b[-1]`→`\b[0]` の前後で readback バイトは不変（両方 surface0）。よって「Hide→全透明」型の
 /// ピクセル遷移は本経路では観測不能である。本テストは
@@ -332,14 +333,14 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
     let mut cmds = received.into_iter();
     let hide = cmds.next().expect("Hide");
     harness.wiring.apply_present(&mut harness.world, hide);
-    // apply_hide は供給面を破棄しない → read_back は基準（surface0）のまま（可視フラグは readback に映らない）。
+    // apply_hide は合成メモを捨てない → read_back は基準（surface0）のまま（可視フラグは readback に映らない）。
     let after_hide = harness
         .wiring
         .read_back_target(balloon_target(0))
-        .expect("Hide 後も balloon 供給面は保持され read_back 可能");
+        .expect("Hide 後も balloon の合成メモは保持され read_back 可能");
     assert_eq!(
         after_hide, baseline,
-        "apply_hide は swap chain 供給面を破棄しない（read_back は供給面直読み・可視フラグ非反映）"
+        "apply_hide は合成メモを捨てない（read_back は原寸バイト列の直読み・可視フラグ非反映）"
     );
 
     let show = cmds.next().expect("ShowSurface");
@@ -383,14 +384,14 @@ fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
         0,
         "attach で ERROR なし: {logs:?}"
     );
-    // シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: attach 直後は供給面未生成
+    // シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: attach 直後は未表示
     // ＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。
     assert!(
         harness.wiring.read_back_target(shell_target(0)).is_err(),
-        "shell scope0 は初回 \\s cue 前は非表示であるべき（供給面未生成・read_back Err・defect #5）"
+        "shell scope0 は初回 \\s cue 前は非表示であるべき（未表示・read_back Err・defect #5）"
     );
     // バルーンは attach で面 0 を不可視のまま確立する（文字層スロット取得のため `ShowSurface` を
-    // 保持）＝供給面は実描画されており非全透明。
+    // 保持）＝原寸面は実描画されており非全透明。
     let balloon_px = harness
         .wiring
         .read_back_target(balloon_target(0))

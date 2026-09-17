@@ -68,10 +68,6 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
         "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
     ),
     (
-        "crates/areka-emo-present/src/presenter/budget_tests.rs",
-        "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
-    ),
-    (
         "crates/areka-ghost/tests/ghost/inproc_e2e_test.rs",
         "着手前から超過している統合テスト。分割は本仕様の範囲外（要件 10.4）",
     ),
@@ -106,7 +102,7 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
 ];
 
 /// [`OVER_LIMIT_ALLOWED`] の件数（逐語）。表を増やすときはここも編集する（要件 10.2）。
-const OVER_LIMIT_ALLOWED_COUNT: usize = 11;
+const OVER_LIMIT_ALLOWED_COUNT: usize = 10;
 
 /// 要件 10.3 の自己検査で表から外す 1 件。表の項目でなければならない。
 const CALIBRATION_DROPPED_ENTRY: &str = "crates/areka-emo-present/src/cache_tests.rs";

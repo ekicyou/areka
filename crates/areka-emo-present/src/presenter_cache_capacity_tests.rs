@@ -99,7 +99,7 @@ fn holds(presenter: &EmoPresenter, n: u32) -> bool {
         .get(&TargetId(0))
         .expect("装着済み target")
         .cache
-        .get(SURFACE, &key(n), &PatternState::default(), ScaleRatio::ONE)
+        .get(SURFACE, &key(n), &PatternState::default())
         .is_some()
 }
 
@@ -207,7 +207,7 @@ fn showing_a_face_from_a_few_frames_ago_hits_instead_of_recomposing() {
                 .get(&TargetId(0))
                 .expect("装着済み target")
                 .cache
-                .get(SURFACE, &key(n), &PatternState::default(), ScaleRatio::ONE)
+                .get(SURFACE, &key(n), &PatternState::default())
                 .expect("保持されているキー")
                 .mask,
         )

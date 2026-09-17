@@ -58,22 +58,39 @@ fn field(ev: &CapturedEvent, name: &str) -> String {
 }
 
 /// perf サマリ行スキーマの全段フィールド名（design.md §Data Models・`judge-perf.py` の契約面）。
-const STAGE_FIELDS: [&str; 6] = [
+///
+/// 段は 4（キャッシュ照会・合成・マスク生成・表示の記録）で、リサンプル段は撤去済み
+/// （`t_resample_us` は行に現れない・T-N6）。
+const STAGE_FIELDS: [&str; 5] = [
     "t_cache_us",
     "t_compose_us",
-    "t_resample_us",
     "t_mask_us",
     "t_upload_us",
     "t_total_us",
 ];
 
 /// perf サマリ行スキーマの確保計数フィールド名。
-const ALLOC_FIELDS: [&str; 4] = [
-    "alloc_compose_dst",
-    "alloc_resample_dst",
-    "alloc_xmap",
-    "alloc_mask",
-];
+///
+/// リサンプル関連の確保計数（`alloc_resample_dst`／`alloc_xmap`）は消費者が 0 になり撤去済み
+/// （T-N6）。
+const ALLOC_FIELDS: [&str; 2] = ["alloc_compose_dst", "alloc_mask"];
+
+/// フィールド集合スキーマ（design.md 「11 フィールド＋末尾 `frame`」）: 段・確保計数の他に
+/// 同定 4 種（`target_id`／`surface_id`／`cache_hit`／`key_hash`）と `frame` を持つ。
+/// `STAGE_FIELDS`（5）＋ `ALLOC_FIELDS`（2）＋ 同定 4 ＋ `frame` 1 ＝ 12（`message` を除く）。
+fn expected_field_names() -> Vec<&'static str> {
+    let mut names: Vec<&'static str> = STAGE_FIELDS
+        .iter()
+        .chain(ALLOC_FIELDS.iter())
+        .copied()
+        .chain(["target_id", "surface_id", "cache_hit", "key_hash", "frame"])
+        .collect();
+    names.sort_unstable();
+    names
+}
+
+/// 撤去済みフィールド名（T-N6: 行に現れないことを固定する）。
+const REMOVED_FIELDS: [&str; 3] = ["t_resample_us", "alloc_resample_dst", "alloc_xmap"];
 
 fn ctx() -> EmitContext {
     EmitContext {
@@ -90,8 +107,6 @@ fn ctx() -> EmitContext {
 fn allocs() -> BudgetDelta {
     BudgetDelta {
         alloc_compose_dst: 1,
-        alloc_resample_dst: 2,
-        alloc_xmap: 3,
         alloc_mask: 4,
     }
 }
@@ -103,8 +118,12 @@ fn allocs() -> BudgetDelta {
 ///
 /// 注入した [`Instant`] は互いに弁別可能な区間（1ms / 7ms / 2ms・合計 12ms）で組むため、
 /// 段の取り違え（cache と compose の入替・total と upload の混同）はすべて RED になる。
-/// Resample と MaskGen は **`mark` を呼ばない**——これが「実行されなかった段」であり、
-/// フィールドが消えても 0 以外が出ても RED になる。
+/// MaskGen は **`mark` を呼ばない**——これが「実行されなかった段」であり、フィールドが
+/// 消えても 0 以外が出ても RED になる。
+///
+/// T-N6（design.md §Testing Strategy・段 4・フィールド 11）: フィールド名の集合を
+/// **ちょうどで**固定し（部分一致でなく名前集合の等価）、撤去済みフィールド（リサンプル段・
+/// その確保計数）が行に現れないことを併せて固定する。
 ///
 /// # 殺す誤実装
 ///
@@ -113,13 +132,14 @@ fn allocs() -> BudgetDelta {
 /// - `t_total_us` を段の総和で埋める → 10000 になり RED（合計は起点〜emit の全区間）
 /// - `debug!` を `trace!`／`info!` へ動かす → level assert で RED
 /// - 固定文言を変える → 行が 1 本も見つからず RED
+/// - 撤去済みフィールド（`t_resample_us` 等）を出す／段数を 4 以外に戻す → 名前集合の等価が RED
 #[test]
 fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     let t0 = Instant::now();
     let mut timing = FrameTiming::start_at(t0);
     timing.mark_at(Stage::CacheLookup, t0 + Duration::from_millis(1));
     timing.mark_at(Stage::Compose, t0 + Duration::from_millis(8));
-    // Resample・MaskGen は実行されなかった段（mark を呼ばない）。
+    // MaskGen は実行されなかった段（mark を呼ばない）。
     timing.mark_at(Stage::Upload, t0 + Duration::from_millis(10));
 
     let ((), events) = capture(|| {
@@ -155,16 +175,11 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
         "合成段の区間（累積でない）"
     );
     assert_eq!(
-        field(ev, "t_resample_us"),
-        "0",
-        "実行されなかった段は 0 で出ること"
-    );
-    assert_eq!(
         field(ev, "t_mask_us"),
         "0",
         "実行されなかった段は 0 で出ること"
     );
-    assert_eq!(field(ev, "t_upload_us"), "2000", "供給面転写段の区間");
+    assert_eq!(field(ev, "t_upload_us"), "2000", "表示の記録段の区間");
     assert_eq!(
         field(ev, "t_total_us"),
         "12000",
@@ -186,12 +201,34 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
         );
     }
     assert_eq!(field(ev, "alloc_compose_dst"), "1");
-    assert_eq!(field(ev, "alloc_resample_dst"), "2");
-    assert_eq!(field(ev, "alloc_xmap"), "3");
     assert_eq!(field(ev, "alloc_mask"), "4");
+
+    // T-N6: フィールド名の集合を「ちょうど」で固定する（部分一致でなく名前集合の等価・
+    // Requirement 3.4／6.5／6.8）。`message` は tracing の既定フィールドなので比較対象から除く。
+    let mut actual_names: Vec<&str> = ev
+        .field_names_sorted()
+        .into_iter()
+        .filter(|name| *name != "message")
+        .collect();
+    actual_names.sort_unstable();
+    assert_eq!(
+        actual_names,
+        expected_field_names(),
+        "perf サマリ行のフィールド集合が段 4・フィールド 11(+frame) と一致しない（{:?})",
+        ev.fields
+    );
+
+    // 撤去済みフィールド（リサンプル段・その確保計数）が行に現れないこと（T-N6）。
+    for removed in REMOVED_FIELDS {
+        assert!(
+            ev.field(removed).is_none(),
+            "撤去済みフィールド `{removed}` が perf サマリ行に残っている（{:?})",
+            ev.fields
+        );
+    }
 }
 
-/// Requirement 1.1 観測完了: **1 段も記録されなかった適用**でも 5 段すべてのフィールドが 0 で
+/// Requirement 1.1 観測完了: **1 段も記録されなかった適用**でも 4 段すべてのフィールドが 0 で
 /// 出る（早期の成立・全段スキップという極端形でも行の形が崩れない）。
 ///
 /// これは「フィールドを記録済みの段だけ出す」実装を構造的に殺す檻である。
@@ -212,13 +249,7 @@ fn all_stage_fields_appear_as_zero_when_nothing_was_marked() {
     assert_eq!(lines.len(), 1, "全段スキップでも 1 行は出ること");
     let ev = &lines[0];
 
-    for name in [
-        "t_cache_us",
-        "t_compose_us",
-        "t_resample_us",
-        "t_mask_us",
-        "t_upload_us",
-    ] {
+    for name in ["t_cache_us", "t_compose_us", "t_mask_us", "t_upload_us"] {
         assert_eq!(
             field(ev, name),
             "0",
@@ -260,7 +291,6 @@ fn public_clock_seam_emits_the_same_schema() {
         );
     }
     // 実行されなかった段は実時計でも 0（値が時間依存にならない唯一の段）。
-    assert_eq!(field(ev, "t_resample_us"), "0");
     assert_eq!(field(ev, "t_mask_us"), "0");
 }
 
@@ -279,7 +309,11 @@ fn marking_the_same_stage_twice_is_rejected() {
 }
 
 /// Requirement 7.2 観測完了: `key_hash` は **run 内で安定**（同一キー → 同一値）かつ、
-/// キー要素（surface_id・binds・pattern・k）の**いずれか 1 つでも違えば別値**になる。
+/// キー要素（surface_id・binds・pattern）の**いずれか 1 つでも違えば別値**になる。
+///
+/// 表示スケール k はキー要素ではない（`compose_key_hash` は 3.1 で k 引数を撤去済み・
+/// 合成結果は原寸であり k に依らない・timing.rs のモジュール doc 参照）ため、k 差を
+/// 弁別する檻はここでは持たない。
 ///
 /// 判定スクリプトはこの値の異なり数を「必要スロット数の実測根拠」として数えるため、
 /// ⑴同一キーで揺れる（プロセス毎ランダム化ハッシュ）→ 異なり数が過大になり裁定材料が壊れる
@@ -301,32 +335,31 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
         );
         p
     };
-    let k = ScaleRatio::new(5, 4).expect("5/4 は構築できる");
 
-    let base = compose_key_hash(1000, &binds, &pattern, k);
+    let base = compose_key_hash(1000, &binds, &pattern);
 
     // ⑴ 同一キーは同一値（同一 run 内での安定性）。
     assert_eq!(
         base,
-        compose_key_hash(1000, &binds, &pattern, k),
+        compose_key_hash(1000, &binds, &pattern),
         "同一キーで key_hash が揺れている（非ランダム化ハッシュであること）"
     );
     // 別インスタンスから組み直した等価キーでも同一値（値等価に従う）。
     assert_eq!(
         base,
-        compose_key_hash(1000, &BindSet::from_ids([3, 2, 1]), &pattern.clone(), k),
+        compose_key_hash(1000, &BindSet::from_ids([3, 2, 1]), &pattern.clone()),
         "値等価なキーは同一 key_hash になること（BindSet は昇順正準）"
     );
 
     // ⑵ キー要素ごとの弁別。
     assert_ne!(
         base,
-        compose_key_hash(1001, &binds, &pattern, k),
+        compose_key_hash(1001, &binds, &pattern),
         "surface_id 差が key_hash に現れていない"
     );
     assert_ne!(
         base,
-        compose_key_hash(1000, &BindSet::from_ids([1, 2]), &pattern, k),
+        compose_key_hash(1000, &BindSet::from_ids([1, 2]), &pattern),
         "binds 差が key_hash に現れていない"
     );
     let other_pattern = {
@@ -344,7 +377,7 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
     };
     assert_ne!(
         base,
-        compose_key_hash(1000, &binds, &other_pattern, k),
+        compose_key_hash(1000, &binds, &other_pattern),
         "pattern 差（コマの surface_id）が key_hash に現れていない"
     );
     let shifted_pattern = {
@@ -362,18 +395,13 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
     };
     assert_ne!(
         base,
-        compose_key_hash(1000, &binds, &shifted_pattern, k),
+        compose_key_hash(1000, &binds, &shifted_pattern),
         "pattern 差（コマのオフセット）が key_hash に現れていない"
     );
     assert_ne!(
         base,
-        compose_key_hash(1000, &binds, &PatternState::default(), k),
+        compose_key_hash(1000, &binds, &PatternState::default()),
         "pattern 不在との差が key_hash に現れていない"
-    );
-    assert_ne!(
-        base,
-        compose_key_hash(1000, &binds, &pattern, ScaleRatio::ONE),
-        "表示スケール k 差が key_hash に現れていない"
     );
 
     // ⑶ コマの描画メソッド差。`ComposeMethod` は判別子で混ぜるが、`Blend` は**内側の
@@ -394,21 +422,21 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
     };
     assert_ne!(
         base,
-        compose_key_hash(1000, &binds, &with_method(ComposeMethod::Replace), k),
+        compose_key_hash(1000, &binds, &with_method(ComposeMethod::Replace)),
         "描画メソッド差（variant）が key_hash に現れていない"
     );
     let blend_multiply = with_method(ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)));
     let blend_screen = with_method(ComposeMethod::Blend(BlendMode::new(BlendKind::Screen)));
     assert_ne!(
-        compose_key_hash(1000, &binds, &blend_multiply, k),
-        compose_key_hash(1000, &binds, &blend_screen, k),
+        compose_key_hash(1000, &binds, &blend_multiply),
+        compose_key_hash(1000, &binds, &blend_screen),
         "Blend の内側ブレンド種別差（Multiply / Screen）が key_hash に現れていない"
     );
     let blend_multiply_fast =
         with_method(ComposeMethod::Blend(BlendMode::fast(BlendKind::Multiply)));
     assert_ne!(
-        compose_key_hash(1000, &binds, &blend_multiply, k),
-        compose_key_hash(1000, &binds, &blend_multiply_fast, k),
+        compose_key_hash(1000, &binds, &blend_multiply),
+        compose_key_hash(1000, &binds, &blend_multiply_fast),
         "Blend の -fast 変種差が key_hash に現れていない"
     );
 }

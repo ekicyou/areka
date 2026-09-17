@@ -28,8 +28,8 @@ pub(super) const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 /// ことを probe 自身に hard assert させる（要件 4.1・design Error Handling「probe 期待 k 不一致」）。
 pub(super) const EXPECT_K_ENV: &str = "AREKA_COLLISION_PROBE_EXPECT_K";
 
-/// ④ anchor が写像後も矩形内側に確保すべき最小余裕（物理 px）。`scale_len` の丸め差（≤1px）と
-/// 無関係に anchor 成立を保証するための下限（design CollisionProbe 節 #2「矩形内側 ≥2px」）。
+/// ④ anchor が矩形内側に確保すべき最小余裕（native px）。退化した矩形で「中心の不透明」が縁の
+/// たまたまにならないことを保証する下限（design CollisionProbe 節 #2「矩形内側 ≥2px」）。
 pub(super) const ANCHOR_MARGIN_PX: u32 = 2;
 
 /// [`ratio_parts`] の分母探索上限。実適用 k は `monitor_dpi / author_dpi` の既約有理であり、正典既定の
