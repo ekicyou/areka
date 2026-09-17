@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-balloon-font-descript-keys",
   "created_at": "2026-09-11T00:00:00Z",
-  "updated_at": "2026-09-13T00:00:00Z",
+  "updated_at": "2026-09-17T00:00:00Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "requirements-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -11,12 +11,12 @@
     },
     "design": {
       "generated": true,
-      "approved": true
+      "approved": false
     },
     "tasks": {
       "generated": true,
-      "approved": true
+      "approved": false
     }
   },
-  "ready_for_implementation": true
+  "ready_for_implementation": false
 }
