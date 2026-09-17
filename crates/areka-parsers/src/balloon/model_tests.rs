@@ -12,8 +12,8 @@
 use std::collections::BTreeMap;
 
 use crate::balloon::{
-    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
-    WindowPositionRaw, WordWrapPoint, parse,
+    BalloonCursor, BalloonModel, CursorColor, DisableFont, Font, FontColor, FontDecorationRaw,
+    FontShadowRaw, Origin, ValidRect, WindowPosition, WindowPositionRaw, WordWrapPoint, parse,
 };
 
 /// テスト用: `&[(k, v)]` からフラット KV `BTreeMap` を組む小ヘルパ（parse_tests 流儀）。
@@ -592,5 +592,199 @@ fn balloon_model_vertical_raw_empty_declaration_is_not_collapsed_to_none() {
     for raw in ["2", "true", "01"] {
         let got = base.clone().with_vertical_raw(Some(raw.to_string()));
         assert_eq!(got.vertical_raw(), Some(raw), "vertical={raw:?}");
+    }
+}
+
+/// 書体 5 本の生文字列型: `new` で渡した 5 成分がそれぞれ自分のアクセサから読め、
+/// `Default` は全 `None`（balloon-font-descript-keys 要件 2.1/2.4）。
+/// 成分ごとに別の値を入れるので、アクセサの取り違えは赤になる。
+#[test]
+fn font_decoration_raw_accessors_read_components_and_default_is_all_none() {
+    let d = FontDecorationRaw::new(
+        Some("1".to_string()),
+        Some("0".to_string()),
+        Some("yes".to_string()),
+        Some(String::new()),
+        Some("2".to_string()),
+    );
+    assert_eq!(d.bold(), Some("1"));
+    assert_eq!(d.italic(), Some("0"));
+    assert_eq!(d.outline(), Some("yes"));
+    assert_eq!(d.strike(), Some(""));
+    assert_eq!(d.underline(), Some("2"));
+
+    let empty = FontDecorationRaw::default();
+    assert_eq!(empty.bold(), None);
+    assert_eq!(empty.italic(), None);
+    assert_eq!(empty.outline(), None);
+    assert_eq!(empty.strike(), None);
+    assert_eq!(empty.underline(), None);
+    // 空文字列の宣言と未指定は判別される（要件 2.4）。
+    assert_ne!(
+        empty,
+        FontDecorationRaw::new(None, None, None, Some(String::new()), None)
+    );
+}
+
+/// 影 4 本の生文字列型: 色 3 成分と形態が別々に読め、`none` は数値と同じく素通し。
+/// `Default` は全 `None`（要件 2.2/2.3/2.4）。
+#[test]
+fn font_shadow_raw_accessors_read_components_and_default_is_all_none() {
+    let s = FontShadowRaw::new(
+        Some("64".to_string()),
+        Some("none".to_string()),
+        Some("200".to_string()),
+        Some("offset".to_string()),
+    );
+    assert_eq!(s.color_r(), Some("64"));
+    assert_eq!(s.color_g(), Some("none"));
+    assert_eq!(s.color_b(), Some("200"));
+    assert_eq!(s.style(), Some("offset"));
+
+    let empty = FontShadowRaw::default();
+    assert_eq!(empty.color_r(), None);
+    assert_eq!(empty.color_g(), None);
+    assert_eq!(empty.color_b(), None);
+    assert_eq!(empty.style(), None);
+    // `none` の宣言と未指定は判別される（要件 2.3）。
+    assert_ne!(
+        empty,
+        FontShadowRaw::new(None, Some("none".to_string()), None, None)
+    );
+}
+
+/// `BalloonModel::new` の署名は変えず、書体・影・無効表示層の 3 つは `Default` から始まる。
+/// ビルダ 3 本はそれぞれ自分の値だけを差し替え、既存のフィールドは不変（要件 5.1）。
+#[test]
+fn balloon_model_new_keeps_font_raw_extras_default_until_builders_replace_them() {
+    let base = BalloonModel::new(
+        WindowPosition::new(Some(-34), Some(56)),
+        Origin::new(Some(12), Some(34)),
+        WordWrapPoint::new(Some(-20), None),
+        ValidRect::new(Some(1), Some(2), Some(3), Some(4)),
+        Font::new(
+            Some("MS UI Gothic".to_string()),
+            Some(12),
+            FontColor::new(Some(10), Some(20), Some(30)),
+        ),
+        Some("vertical_rl".to_string()),
+        Some("1".to_string()),
+    )
+    .with_vertical_raw(Some("1".to_string()));
+    assert_eq!(base.font_decoration_raw(), &FontDecorationRaw::default());
+    assert_eq!(base.font_shadow_raw(), &FontShadowRaw::default());
+    assert_eq!(base.disable_font(), &DisableFont::default());
+
+    let decoration = FontDecorationRaw::new(Some("1".to_string()), None, None, None, None);
+    let shadow = FontShadowRaw::new(None, None, Some("128".to_string()), None);
+    let disable = DisableFont::new(
+        Font::new(
+            Some("Meiryo".to_string()),
+            Some(9),
+            FontColor::new(Some(1), None, None),
+        ),
+        FontDecorationRaw::new(None, Some("1".to_string()), None, None, None),
+        FontShadowRaw::new(None, None, None, Some("outline".to_string())),
+    );
+    let replaced = base
+        .clone()
+        .with_font_decoration_raw(decoration.clone())
+        .with_font_shadow_raw(shadow.clone())
+        .with_disable_font(disable.clone());
+
+    assert_eq!(replaced.font_decoration_raw(), &decoration);
+    assert_eq!(replaced.font_shadow_raw(), &shadow);
+    assert_eq!(replaced.disable_font(), &disable);
+
+    // ビルダは自分の値だけを差し替える（互いを巻き戻さない）。3 つとも既定以外の値を
+    // 入れた `replaced` から 1 本ずつ別の値で差し替え、残り 2 つが前の値のままかを見る
+    // （既定から始めると「兄弟を既定へ戻す」欠陥が見えない）。
+    let decoration2 = FontDecorationRaw::new(None, None, Some("1".to_string()), None, None);
+    let shadow2 = FontShadowRaw::new(Some("7".to_string()), None, None, None);
+    let disable2 = DisableFont::new(
+        Font::new(None, Some(20), FontColor::new(None, None, Some(3))),
+        FontDecorationRaw::new(None, None, None, Some("1".to_string()), None),
+        FontShadowRaw::new(None, Some("none".to_string()), None, None),
+    );
+    assert_ne!(decoration2, decoration);
+    assert_ne!(shadow2, shadow);
+    assert_ne!(disable2, disable);
+
+    let d = replaced
+        .clone()
+        .with_font_decoration_raw(decoration2.clone());
+    assert_eq!(d.font_decoration_raw(), &decoration2);
+    assert_eq!(d.font_shadow_raw(), &shadow);
+    assert_eq!(d.disable_font(), &disable);
+
+    let s = replaced.clone().with_font_shadow_raw(shadow2.clone());
+    assert_eq!(s.font_decoration_raw(), &decoration);
+    assert_eq!(s.font_shadow_raw(), &shadow2);
+    assert_eq!(s.disable_font(), &disable);
+
+    let x = replaced.clone().with_disable_font(disable2.clone());
+    assert_eq!(x.font_decoration_raw(), &decoration);
+    assert_eq!(x.font_shadow_raw(), &shadow);
+    assert_eq!(x.disable_font(), &disable2);
+
+    // 既存のフィールドは不変。基底の `font()` は無効表示層の書体に置き換わらない。
+    assert_eq!(replaced.font(), base.font());
+    assert_eq!(replaced.font().name(), Some("MS UI Gothic"));
+    assert_eq!(replaced.windowposition(), base.windowposition());
+    assert_eq!(replaced.origin(), base.origin());
+    assert_eq!(replaced.wordwrappoint(), base.wordwrappoint());
+    assert_eq!(replaced.validrect(), base.validrect());
+    assert_eq!(replaced.writing_mode(), base.writing_mode());
+    assert_eq!(replaced.budoux_newline(), base.budoux_newline());
+    assert_eq!(replaced.cursor(), base.cursor());
+    assert_eq!(replaced.windowposition_raw(), base.windowposition_raw());
+    assert_eq!(replaced.vertical_raw(), base.vertical_raw());
+}
+
+/// 無効表示層の束: `new` の 3 部品がそれぞれのアクセサから読め、`Default` は
+/// `Font` の 3 口（名前・大きさ・色 3 成分）・書体 5 本・影 4 本とも `None`（要件 2.8/2.9）。
+#[test]
+fn disable_font_bundles_font_and_raw_parts_and_default_is_all_none() {
+    let font = Font::new(
+        Some("Yu Gothic".to_string()),
+        Some(14),
+        FontColor::new(Some(128), Some(129), Some(130)),
+    );
+    let decoration = FontDecorationRaw::new(
+        Some("1".to_string()),
+        Some("0".to_string()),
+        None,
+        None,
+        Some("1".to_string()),
+    );
+    let shadow = FontShadowRaw::new(
+        Some("none".to_string()),
+        Some("5".to_string()),
+        None,
+        Some("offset".to_string()),
+    );
+    let d = DisableFont::new(font.clone(), decoration.clone(), shadow.clone());
+    assert_eq!(d.font(), &font);
+    assert_eq!(d.decoration_raw(), &decoration);
+    assert_eq!(d.shadow_raw(), &shadow);
+
+    let empty = DisableFont::default();
+    assert_eq!(empty.font().name(), None);
+    assert_eq!(empty.font().height(), None);
+    assert_eq!(empty.font().color().r(), None);
+    assert_eq!(empty.font().color().g(), None);
+    assert_eq!(empty.font().color().b(), None);
+    for (name, v) in [
+        ("bold", empty.decoration_raw().bold()),
+        ("italic", empty.decoration_raw().italic()),
+        ("outline", empty.decoration_raw().outline()),
+        ("strike", empty.decoration_raw().strike()),
+        ("underline", empty.decoration_raw().underline()),
+        ("shadowcolor.r", empty.shadow_raw().color_r()),
+        ("shadowcolor.g", empty.shadow_raw().color_g()),
+        ("shadowcolor.b", empty.shadow_raw().color_b()),
+        ("shadowstyle", empty.shadow_raw().style()),
+    ] {
+        assert_eq!(v, None, "disable.font.{name}");
     }
 }
