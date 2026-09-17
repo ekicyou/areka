@@ -250,7 +250,7 @@ fn on_talk_done(mut state: State, done: TalkDone) -> (State, Vec<Action>)
 
 | # | 名前（案） | 系列 | 表明 | 直す前 |
 |---|---|---|---|---|
-| T1（5.1） | `boot_version_talkdone_before_notified_empties_slot_and_close_handshakes` | ヘルパで `BootVersion{Some(id=1)}` → `capture` 内で `TalkDone{1, Ended}` → `Notified` → `CloseRequest{User}` | ⑴ 相 `BootVersion{talk: None}`・指示 0 件 ⑵ `assert_not_logged("boot_input_ignored")`・`logged_once(INFO, "boot_talk_done")` の `fields["talk_id"] == "1"`・`assert_no_error_logs` ⑶ `Notified` で `Steady{talk: None}` ⑷ `CloseRequest` で `assert_get(&actions[0], &events::on_close(User, &ExecutionSnapshot::INACTIVE))`・相 `ClosePending` | 赤（⑴ 相が `Some` のまま・⑵ WARN あり・⑷ `steady_close_pending` で指示 0 件＝`actions[0]` の添字が範囲外で panic。RED の記録にはこの panic の文言を残す） |
+| T1（5.1） | `boot_version_talkdone_before_notified_empties_slot_and_close_handshakes` | ヘルパで `BootVersion{Some(id=1)}` → `capture` 内で `TalkDone{1, Ended}` → `Notified` → `CloseRequest{User}` | ⑴ 相 `BootVersion{talk: None}`・指示 0 件 ⑵ `assert_not_logged("boot_input_ignored")`・`logged_once(INFO, "boot_talk_done")` の `fields["talk_id"] == "1"`・`assert_no_error_logs` ⑶ `Notified` で `Steady{talk: None}` ⑷ `CloseRequest` で `assert_get(&actions[0], &events::on_close(User, &ExecutionSnapshot::INACTIVE))`・相 `ClosePending` | 赤（⑴ の相の表明で止まる＝相が `Some` のまま。⑵ WARN あり・⑷ 指示 0 件の添字範囲外は、⑴ で止まるため直す前には観測されない。RED の記録には実際に最初に失敗した表明の文言を残す） |
 | T2（5.3・2.2・2.3） | `boot_version_talkdone_keeps_pending_close_until_steady_tick` | ヘルパで `pending = Some(System)` を挟んで `BootVersion{Some(1)}` → `TalkDone{1, Ended}` → `Notified` → `Tick` | 受理時点: 指示 0 件・`pending_close == Some(System)`・相 `BootVersion{None}`。`Notified` で `Steady{None}`・保留は残る。`Tick` で `assert_get(&actions[0], &events::on_close(System, &ExecutionSnapshot::INACTIVE))`・相 `ClosePending` | 赤 |
 | T3（1.2） | `boot_version_talkdone_interrupted_is_treated_as_ended` | T1 と同じで理由 `Interrupted` | T1 ⑴⑵ と同じ（`talk_done_interrupted_as_non_quit` の info が別に 1 行あることは数えない） | 赤 |
 
@@ -269,8 +269,8 @@ fn on_talk_done(mut state: State, done: TalkDone) -> (State, Vec<Action>)
 - `crates/areka` の `spine_conformance_*`（要件 5.5 の非回帰の検出器・直す前も緑）。
 
 ### 検証手順（要件 5.2・5.5）
-1. テスト T1〜T4 とヘルパを先に書き、`cargo test -p areka-kanade --lib boot_version_talkdone` を走らせて T1〜T3 が赤・T4 が緑であることを記録する（テストのみのコミットを 1 つ作り、コミットメッセージに赤の要約〔失敗した表明の文言〕を残す＝実装の記録）。
-2. `boot.rs` を直し、同じコマンドで T1〜T4 が緑になることを確認する。
+1. テスト T1〜T4 とヘルパを先に書き、`cargo test -p areka-kanade --lib boot_version_talkdone`（T1〜T3）と `cargo test -p areka-kanade --lib warn_boot_input_ignored_still_fires`（T4・前者のフィルタには一致しない）を走らせて T1〜T3 が赤・T4 が緑であることを記録する（テストのみのコミットを 1 つ作り、コミットメッセージに赤の要約〔失敗した表明の文言〕を残す＝実装の記録）。
+2. `boot.rs` を直し、同じ 2 つのコマンドで T1〜T4 が緑になることを確認する。
 3. `cargo test -p areka-kanade`（終了コードで判定）と `cargo test -p areka --bin areka`（終了コードで判定）を全走させる。出力の一部だけ（`Select-Object -First N` など）を見て判定しない。`crates/areka` 側には壁時計デッドラインを持つテストがあるので、他の cargo と並走させず単独で走らせる（並走すると飢餓して赤になる）。
 4. `cargo test -p log-capture-kit --test file_length_guard_test` で 1,000 行の番人を通す。
 
