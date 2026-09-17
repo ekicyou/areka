@@ -134,3 +134,12 @@
 - 決定論テスト網羅は必達。展開の検証は固定 `.nar` の入出力で成立させ、実機を要さない形にする。
 - **検体は 1 体ではなく 2 体。** `emo2`（pasta.dll）に加え `R_POST_and_KOMAINU`（satori.dll・全ファイル Shift_JIS）が `vendors/sample_ghost/` に入った。共有ヘルパは「検体名を受け取って根を返す」形にすること（emo2 専用の関数にしない）。
 - **バイト保存の罠 2 件は `vendors/sample_ghost/` では対処済み・`emo2` 側は未対処。** ⑴ `core.autocrlf=true` ＋ `.gitattributes` 不在だと CRLF が LF で登録され、Windows 以外の取り出しでバイトが変わる（ハッシュによる陳腐化検出が壊れる）。⑵ リポジトリ直下の `.gitignore` の `*_test.txt` が、Windows の大小無視により `dic09_Test.txt` のような辞書を黙って落とす。現行の `fixtures/emo2/` は `git check-attr text` が `unspecified`＝**無防備**なので、移設時に同じ 2 つの手当てを持ち込むこと。
+
+---
+
+## 2026-09-18 追記（棚卸⑭＝α ゴールへの組み直し）
+
+- **本仕様は α（M2）の A1（単独枠）に格上げ**。`shell-implicit-surface`（A0）の後・`baseware-root-layout`（A2）の前。
+- **展開先の形＝ベースウェアの根の形に揃える**: `<根>/ghost/<directory>/`・`<根>/balloon/<balloon.directory>/`（ukadoc「全体の構成」の格納フォルダ）。`target/` 配下に作る開発用の根も同じ形にし、`baseware-root-layout` がその根をそのまま `BasewareRoot` として受ける。共有ヘルパは「検体名を受け取って根を返す」に加え「根そのもの」を返せること。
+- **Out に書いた「利用者が投げた `.nar` を受け取る UI／D&D／インストーラ体験」の引受先は `areka-P0-ghost-install`（09-18 起票・A5-①）**。同じく Out の `updates2.dau`／ネットワーク更新／`delete.txt` は `areka-P0-network-update`（09-18 起票・A5-②）。「ベースウェア直下の `ghost/` `balloon/` 規約と `areka.exe` の既定パス」は `areka-P0-baseware-root-layout`（09-18 起票・A2）。
+- `areka-nar` が受理する `install.txt` の `type` は `ghost`・`shell`・`supplement`・`balloon` の 4 つ。他（`plugin`・`headline`・`language`・`calendar*`・`package`）は理由付きで拒否を返す（製品側が `OnInstallFailure` に写す）。
