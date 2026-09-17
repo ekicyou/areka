@@ -356,11 +356,11 @@ fn unclosed_bracket_preserves_preceding_text() {
 #[test]
 fn unknown_tag_split_as_tag_preserving_neighbors() {
     assert_eq!(
-        lex(r"あ\foo[a,b]い"),
+        lex(r"あ\i[a,b]い"),
         vec![
             Token::Text("あ".to_string()),
             Token::Tag {
-                word: "foo".to_string(),
+                word: "i".to_string(),
                 args: vec!["a".to_string(), "b".to_string()],
             },
             Token::Text("い".to_string()),

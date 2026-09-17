@@ -5,12 +5,14 @@
 //! - 引数は記述順のまま保持され、空のトークンも潰されない。
 //! - 引数の形は 4 通り（`\f[]`＝0 個・裸の `\f`＝0 個・`\f[""]`＝空文字列 1 個・
 //!   途中が空なら空文字列を含む列）。
-//! - 別語で始まるタグ（`\foo[...]` 等）は従来どおり `Raw` へ素通しする。
+//! - `f` で始まる別の綴り（`\foo[...]` 等）は字句層でタグ名が 1 文字に確定するため、
+//!   引数なしの `\f` ＋ 本文へ分かれる（sakura-tag-word-boundary 要件 4.11）。
 //! - `\f` を含まない台本の解読結果は 1 バイトも変わらない。
 //!
-//! 較正（要件 15.1）: 「空のトークンを潰す」誤りと「先頭が `f` の別タグまで拾う」誤りを
-//! 再現すると赤になる述語を含む（`empty_tokens_are_not_squashed`・
-//! `other_words_starting_with_f_stay_raw`）。
+//! 較正（要件 15.1）: 「空のトークンを潰す」誤りを再現すると赤になる述語を含む
+//! （`empty_tokens_are_not_squashed`）。「先頭が `f` の別タグまで拾う」誤りは、
+//! 字句層が `f` で始まる多文字のタグ名を作らなくなったため観測できない
+//! （`other_words_starting_with_f_split_into_bare_font_and_text` の説明を参照）。
 
 use super::super::lexer::lex;
 use super::super::model::{Choice, Instruction, NewLineRatio, SurfaceArg};
@@ -256,17 +258,28 @@ fn empty_tokens_are_not_squashed() {
     assert_eq!(font_args(r"\f[,1]"), vec![String::new(), "1".to_string()]);
 }
 
-// ── 別語の素通し（要件 2.8）─────────────────────────────────────────
+// ── 別語の分割（要件 2.8）───────────────────────────────────────────
 
-/// 先頭が `f` でも別語の角括弧付きタグは従来どおり `Raw` へ落ちる。
+/// 先頭が `f` の別の綴りに角括弧が続く形は、字句層がタグ名を固定長規律で 1 文字に
+/// 確定するため（sakura-tag-word-boundary 要件 4.11）、引数なしの `\f`（要件 2.7）＋
+/// 続く本文へ分かれる。「タグ名 `foo` の角括弧付きタグ」は字句層で構成できない。
 ///
-/// 較正（要件 15.1）: 腕の判定を `word.starts_with('f')` のように広げると赤になる。
+/// 旧来の較正（text-decoration-canon 要件 15.1: 腕の判定を `word.starts_with('f')` へ
+/// 広げると赤）は、`f` で始まる多文字のタグ名が意味層へ届かなくなったので観測できない。
 #[test]
-fn other_words_starting_with_f_stay_raw() {
-    for script in [r"\foo[a,b]", r"\fo[x]", r"\font[bold,1]", r"\f2[1]"] {
+fn other_words_starting_with_f_split_into_bare_font_and_text() {
+    for (script, text) in [
+        (r"\foo[a,b]", "oo[a,b]"),
+        (r"\fo[x]", "o[x]"),
+        (r"\font[bold,1]", "ont[bold,1]"),
+        (r"\f2[1]", "2[1]"),
+    ] {
         assert_eq!(
             dec(script),
-            vec![Instruction::Raw(script.to_string())],
+            vec![
+                Instruction::Font { args: Vec::new() },
+                Instruction::Text(text.to_string()),
+            ],
             "{script}"
         );
     }
@@ -312,7 +325,7 @@ fn font_keeps_neighbouring_instructions_in_order() {
 #[test]
 fn scripts_without_font_tag_decode_unchanged() {
     assert_eq!(
-        dec(r"\p[0]\s[10]face\n[150]\q[のこり,OnRest]\_w[250]\foo[f]\e"),
+        dec(r"\p[0]\s[10]face\n[150]\q[のこり,OnRest]\_w[250]\i[f]\e"),
         vec![
             Instruction::SpeakerScope { n: 0 },
             Instruction::Surface(SurfaceArg::new("10".to_string())),
@@ -324,7 +337,7 @@ fn scripts_without_font_tag_decode_unchanged() {
                 references: Vec::new(),
             }),
             Instruction::Wait(std::time::Duration::from_millis(250)),
-            Instruction::Raw(r"\foo[f]".to_string()),
+            Instruction::Raw(r"\i[f]".to_string()),
             Instruction::End,
         ]
     );

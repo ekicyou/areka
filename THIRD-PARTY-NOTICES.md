@@ -1275,7 +1275,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- smallvec 1.16.1
+- smallvec 1.16.0
 
 ```
 Copyright (c) 2018 The Servo Project Developers
