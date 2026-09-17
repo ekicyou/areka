@@ -356,3 +356,7 @@ fn scan_sysvar(chars: &[(usize, char)], i: usize) -> (Token, usize) {
 #[cfg(test)]
 #[path = "lexer_bare_tag_tests.rs"]
 mod bare_tag_tests;
+
+#[cfg(test)]
+#[path = "lexer_word_boundary_tests.rs"]
+mod word_boundary_tests;
