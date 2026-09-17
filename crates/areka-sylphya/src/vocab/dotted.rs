@@ -54,7 +54,7 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
     "char*.bind.menu",
 ];
 
-/// SET 有効群（正準語彙のうち SET が有効な名前族・件数 21・R3.4）。
+/// SET 有効群（正準語彙のうち SET が有効な名前族・件数 25・R3.4）。
 ///
 /// 書込 API の**型シームのみ**を予約し、M1 では実書込を行わない。全項目を
 /// [`SetSemantics::RuntimeCommand`]（運行コマンド書込・ランタイムへの命令）へ写す——
@@ -69,6 +69,7 @@ pub const GENERIC_PROP_NAMES: &[&str] = &[
 /// - mousecursor 群 10 項: 本体側 6・balloon 側 4
 /// - seriko.cursor / tooltip 群 4 項: cursor の path/name・tooltip の text/name
 /// - menu / bind.menu 群 4 項: `GENERIC_PROP_NAMES` の `[SET]` 4 名と同一
+/// - 正典追随 4 項: `seriko.sticky-window`・サウンド SET 3 葉（`pause`・`playing`・`position`）
 pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
     // 基本 3 項（surface/animation/defaultsurface）。
     ("surface.num", SetSemantics::RuntimeCommand),
@@ -96,6 +97,13 @@ pub const SET_EFFECTIVE: &[(&str, SetSemantics)] = &[
     ("sakura.bind.menu", SetSemantics::RuntimeCommand),
     ("kero.bind.menu", SetSemantics::RuntimeCommand),
     ("char*.bind.menu", SetSemantics::RuntimeCommand),
+    // 正典追随 4 項（本 spec）。`pause`・`playing`・`position` の URL は記録用の表
+    // `SOUND_PROP_NAMES` の同名要素に置く（正典の項目としては各 1 つ）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#currentghost.seriko.sticky-window:1
+    ("seriko.sticky-window", SetSemantics::RuntimeCommand),
+    ("pause", SetSemantics::RuntimeCommand),
+    ("playing", SetSemantics::RuntimeCommand),
+    ("position", SetSemantics::RuntimeCommand),
 ];
 
 /// ext 亜枝の GET イベント名（予約のみ・M1 では発火しない・R3.5）。
@@ -185,10 +193,10 @@ mod tests {
         assert_eq!(got, exp);
     }
 
-    /// SET 有効群 件数檻（基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4 = 21・R3.4）。
+    /// SET 有効群 件数檻（基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4＋正典追随 4 = 25・R3.4）。
     #[test]
-    fn set_effective_has_21_entries() {
-        assert_eq!(SET_EFFECTIVE.len(), 21);
+    fn set_effective_has_25_entries() {
+        assert_eq!(SET_EFFECTIVE.len(), 25);
     }
 
     /// SET 有効群に key 重複がない。
@@ -206,7 +214,7 @@ mod tests {
     #[test]
     fn set_effective_covers_all_named_group_members() {
         let keys: BTreeSet<&str> = SET_EFFECTIVE.iter().map(|(k, _)| *k).collect();
-        let required: [&str; 21] = [
+        let required: [&str; 25] = [
             // 基本 3 項。
             "surface.num",
             "animation.num",
@@ -232,6 +240,11 @@ mod tests {
             "sakura.bind.menu",
             "kero.bind.menu",
             "char*.bind.menu",
+            // 正典追随 4 項（sticky-window 1・サウンド SET 3）。
+            "seriko.sticky-window",
+            "pause",
+            "playing",
+            "position",
         ];
         for member in required {
             assert!(keys.contains(member), "SET 有効群に {member} が欠落");
