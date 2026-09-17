@@ -407,3 +407,117 @@ fn vertical_out_of_vocabulary_value_passes_through_raw() {
     assert_eq!(got_numeric.vertical_raw(), Some("2"));
     assert_eq!(got_word.vertical_raw(), Some("true"));
 }
+
+/// T1: 書体の飾り 5 本はそれぞれ宣言値がそのまま読める（balloon-font-descript-keys 要件 2.1/9.1）。
+///
+/// キーごとに互いに異なる値を入れ、取り違え（別キーへの写像）も赤にする。
+#[test]
+fn font_decoration_raw_five_keys_transcribed_verbatim() {
+    let got = parse_str(
+        "font.bold,1\nfont.italic,0\nfont.outline,11\nfont.strike,12\nfont.underline,13",
+        None,
+    );
+
+    let d = got.font_decoration_raw();
+    assert_eq!(d.bold(), Some("1"));
+    assert_eq!(d.italic(), Some("0"));
+    assert_eq!(d.outline(), Some("11"));
+    assert_eq!(d.strike(), Some("12"));
+    assert_eq!(d.underline(), Some("13"));
+}
+
+/// T2: 影色 3 成分＋形態はそれぞれ宣言値がそのまま読める（要件 2.2/2.3/9.1）。
+#[test]
+fn font_shadow_raw_four_keys_transcribed_verbatim() {
+    let descript = map(&[
+        ("font.shadowcolor.r", "10"),
+        ("font.shadowcolor.g", "20"),
+        ("font.shadowcolor.b", "30"),
+        ("font.shadowstyle", "offset"),
+    ]);
+
+    let got = parse(&descript, None);
+
+    let s = got.font_shadow_raw();
+    assert_eq!(s.color_r(), Some("10"));
+    assert_eq!(s.color_g(), Some("20"));
+    assert_eq!(s.color_b(), Some("30"));
+    assert_eq!(s.style(), Some("offset"));
+}
+
+/// T3: 未指定は 9 本すべて `None`。宣言された `0` は `Some("0")` で未指定と区別される
+/// （要件 2.4/3.1/9.2・既定値を代入しない）。
+#[test]
+fn font_base_keys_unspecified_are_none_and_distinct_from_declared_zero() {
+    let unspecified = parse(&map(&[("origin.x", "12")]), None);
+
+    let d = unspecified.font_decoration_raw();
+    assert_eq!(d.bold(), None);
+    assert_eq!(d.italic(), None);
+    assert_eq!(d.outline(), None);
+    assert_eq!(d.strike(), None);
+    assert_eq!(d.underline(), None);
+    let s = unspecified.font_shadow_raw();
+    assert_eq!(s.color_r(), None);
+    assert_eq!(s.color_g(), None);
+    assert_eq!(s.color_b(), None);
+    assert_eq!(s.style(), None);
+
+    let declared_zero = parse(
+        &map(&[("font.bold", "0"), ("font.shadowcolor.r", "0")]),
+        None,
+    );
+    assert_eq!(declared_zero.font_decoration_raw().bold(), Some("0"));
+    assert_eq!(declared_zero.font_shadow_raw().color_r(), Some("0"));
+}
+
+/// T4: 正典の語彙に無い値も落とさず解釈せず素通しする（要件 2.5/9.3）。
+///
+/// `font.shadowcolor.r,300` は `u8` 範囲外だが、既存の `font.color.r` と違い `None` へ降格しない。
+#[test]
+fn font_base_keys_out_of_vocabulary_values_pass_through() {
+    let got_numeric = parse(
+        &map(&[
+            ("font.bold", "2"),
+            ("font.shadowstyle", "blur"),
+            ("font.shadowcolor.r", "300"),
+        ]),
+        None,
+    );
+    let got_word = parse(&map(&[("font.bold", "yes")]), None);
+
+    assert_eq!(got_numeric.font_decoration_raw().bold(), Some("2"));
+    assert_eq!(got_numeric.font_shadow_raw().style(), Some("blur"));
+    assert_eq!(got_numeric.font_shadow_raw().color_r(), Some("300"));
+    assert_eq!(got_word.font_decoration_raw().bold(), Some("yes"));
+}
+
+/// T5: 影色の「無効化の語 `none`」「数値」「未指定」は互いに異なる 3 状態として保たれる
+/// （要件 2.6/9.4）。
+#[test]
+fn font_shadowcolor_none_numeric_unspecified_are_three_distinct_states() {
+    let none_word = parse(&map(&[("font.shadowcolor.r", "none")]), None);
+    let numeric = parse(&map(&[("font.shadowcolor.r", "64")]), None);
+    let unspecified = parse(&map(&[("origin.x", "12")]), None);
+
+    let a = none_word.font_shadow_raw().color_r();
+    let b = numeric.font_shadow_raw().color_r();
+    let c = unspecified.font_shadow_raw().color_r();
+    assert_eq!(a, Some("none"));
+    assert_eq!(b, Some("64"));
+    assert_eq!(c, None);
+    assert_ne!(a, b);
+    assert_ne!(a, c);
+    assert_ne!(b, c);
+}
+
+/// T6: 影色 3 成分の部分欠落は個別に `None`（`g` だけ宣言 → g=Some, r/b=None・要件 2.2/9.4）。
+#[test]
+fn font_shadowcolor_partial_absence_is_independently_none() {
+    let got = parse(&map(&[("font.shadowcolor.g", "77")]), None);
+
+    let s = got.font_shadow_raw();
+    assert_eq!(s.color_r(), None);
+    assert_eq!(s.color_g(), Some("77"));
+    assert_eq!(s.color_b(), None);
+}
