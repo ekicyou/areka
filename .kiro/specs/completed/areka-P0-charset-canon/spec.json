@@ -1,0 +1,30 @@
+{
+  "feature_name": "areka-P0-charset-canon",
+  "created_at": "2026-09-11T08:59:44Z",
+  "updated_at": "2026-09-13T00:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "generated_at": "2026-09-11T09:30:00Z",
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "generated_at": "2026-09-11T12:00:00Z",
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "generated_at": "2026-09-12T00:00:00Z",
+      "approved": true,
+      "approved_at": "2026-09-12T00:00:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-13T00:00:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

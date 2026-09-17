@@ -5,6 +5,7 @@ use crate::canvas::{
     ResidentContent, TextEffects,
 };
 use crate::layout::PositionedGlyph;
+use crate::look::StyleId;
 use crate::region::ScaleContract;
 use crate::writing::WritingMode;
 
@@ -19,6 +20,7 @@ fn run_content(text: &str) -> GlyphRunContent {
             ch,
             inline_pos: i as f32 * 10.0,
             advance: 10.0,
+            style: StyleId::DEFAULT,
         })
         .collect();
     GlyphRunContent {

@@ -16,7 +16,7 @@ use temp_path_kit::TempPath;
 
 use crate::charset::DefaultEncoding;
 
-use super::{MountError, resolve};
+use super::{MountError, MountModel, resolve};
 
 /// このテスト専用の一時ディレクトリを返す（共通窓口 `temp-path-kit` 経由）。
 ///
@@ -297,4 +297,145 @@ fn resolve_missing_type_is_accepted() {
     // 名前情報は読めており、マウントも所在で確定する。
     assert_eq!(model.names.name, Some("no-type".to_string()));
     assert_eq!(model.shell.dir, shell_dir);
+}
+
+// ---------------------------------------------------------------------------
+// descript の文字コード 2 キーの転記（2.5 / 8.5・areka-P0-charset-canon 3.1）
+//
+// `shiori.encoding` / `shiori.forceencoding` は **生ラベル**として転記するだけで、
+// この層は解決も整形もしない（ラベルの解釈は通信層の `Charset::for_label` が行う）。
+// ゆえにここでの主張は「`parse_kv` が返した値と 1 バイト違わない」ことであり、
+// 綴りの正規化（大小文字・別名）や値の切り詰めが起きないことを固定する。
+// ---------------------------------------------------------------------------
+
+/// 2 キーを持つ最小のゴーストツリーを組み、`resolve` の結果を返す。
+///
+/// 2 キーの転記だけを見るテスト群の共通の組み立て。転記そのものを検査するので、
+/// `ShioriMount` を struct リテラルで組まず必ず `resolve` を通す。
+fn resolve_with_descript(tag: &str, descript_body: &str) -> (TempPath, MountModel) {
+    let temp = unique_temp_dir(tag);
+    let root = temp.path().to_path_buf();
+
+    let ghost_master = root.join("ghost").join("master");
+    fs::create_dir_all(&ghost_master).expect("create ghost/master");
+    fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+
+    fs::write(ghost_master.join("descript.txt"), descript_body.as_bytes())
+        .expect("write descript.txt");
+
+    let model = resolve(&root, DefaultEncoding::Utf8).expect("正常ツリーは Ok(MountModel)");
+    (temp, model)
+}
+
+/// 2 キーとも無い descript では両フィールドが `None`（推測しない・2.5）。
+#[test]
+fn shiori_encoding_keys_absent_are_none() {
+    let (_temp, model) = resolve_with_descript(
+        "encoding_keys_absent",
+        "charset,UTF-8\n\
+         name,テスト\n\
+         shiori,pasta.dll\n\
+         seriko.defaultsurfacedirectoryname,master\n",
+    );
+
+    assert_eq!(
+        model.shiori.encoding, None,
+        "shiori.encoding は未宣言なら None"
+    );
+    assert_eq!(
+        model.shiori.force_encoding, None,
+        "shiori.forceencoding は未宣言なら None"
+    );
+}
+
+/// 2 キーが在るときは生ラベルをそのまま持つ（解決も大小文字の正規化もしない・2.5）。
+///
+/// `sHiFt_jis` と `euc-JP` はどちらも `Charset::for_label` が解決できる綴りだが、
+/// **この層は解決しない**ので綴りは 1 文字も変わらない。ここで正規名（`Shift_JIS`）
+/// が返ってきたら転記層が意味を持ってしまっている証拠になる。
+#[test]
+fn shiori_encoding_keys_are_transcribed_verbatim() {
+    let (_temp, model) = resolve_with_descript(
+        "encoding_keys_verbatim",
+        "charset,UTF-8\n\
+         name,テスト\n\
+         shiori,pasta.dll\n\
+         shiori.encoding,sHiFt_jis\n\
+         shiori.forceencoding,euc-JP\n\
+         seriko.defaultsurfacedirectoryname,master\n",
+    );
+
+    assert_eq!(model.shiori.encoding.as_deref(), Some("sHiFt_jis"));
+    assert_eq!(model.shiori.force_encoding.as_deref(), Some("euc-JP"));
+}
+
+/// 値の中の空白とカンマが落ちない（転記層は `parse_kv` の値へ手を加えない・2.5）。
+///
+/// `parse_kv` は行全体の最初のカンマ 1 個だけで分割し、値の**前後**空白のみを落とす
+/// （kv 層 R4.1/R4.4）。よって値の中に現れる空白・カンマは生き残る。転記層が独自に
+/// trim・分割・整形を足していれば `Shift_JIS ,x` は縮んでこのテストが赤くなる。
+#[test]
+fn shiori_encoding_value_keeps_inner_whitespace_and_comma() {
+    let (_temp, model) = resolve_with_descript(
+        "encoding_value_raw",
+        "charset,UTF-8\n\
+         name,テスト\n\
+         shiori,pasta.dll\n\
+         shiori.encoding,  Shift_JIS ,x  \n\
+         shiori.forceencoding,\tEUC-JP\t\n\
+         seriko.defaultsurfacedirectoryname,master\n",
+    );
+
+    // 前後の空白は kv 層（R4.4）が落とし、値の中の空白とカンマはそのまま残る。
+    assert_eq!(model.shiori.encoding.as_deref(), Some("Shift_JIS ,x"));
+    assert_eq!(model.shiori.force_encoding.as_deref(), Some("EUC-JP"));
+}
+
+/// 片方だけの宣言も独立に転記される（`shiori.encoding` と `shiori.forceencoding`
+/// を取り違えていないことの固定・2.5）。
+#[test]
+fn shiori_force_encoding_alone_does_not_fill_encoding() {
+    let (_temp, model) = resolve_with_descript(
+        "force_encoding_alone",
+        "charset,UTF-8\n\
+         name,テスト\n\
+         shiori,pasta.dll\n\
+         shiori.forceencoding,ISO-2022-JP\n\
+         seriko.defaultsurfacedirectoryname,master\n",
+    );
+
+    assert_eq!(model.shiori.encoding, None);
+    assert_eq!(model.shiori.force_encoding.as_deref(), Some("ISO-2022-JP"));
+}
+
+/// descript の `charset` キー（ファイル自身の文字コード）は SHIORI 通信の初期値へ
+/// 流れ込まない（2.5 の「用いる箇所 0」をこの層で固定する）。
+///
+/// `charset,Shift_JIS` を宣言しつつ 2 キーを書かない descript で、両フィールドが
+/// `None` のままであることを見る。`charset` を初期値の供給源にする実装なら
+/// `Some("Shift_JIS")` が現れて赤くなる。
+#[test]
+fn descript_charset_key_does_not_feed_shiori_encoding() {
+    let temp = unique_temp_dir("charset_key_not_shiori_encoding");
+    let root = temp.path().to_path_buf();
+
+    let ghost_master = root.join("ghost").join("master");
+    fs::create_dir_all(&ghost_master).expect("create ghost/master");
+    fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+
+    // Shift_JIS 宣言つきの descript を **Shift_JIS のバイト列**で書く。
+    let body = "charset,Shift_JIS\n\
+                name,テスト\n\
+                shiori,pasta.dll\n\
+                seriko.defaultsurfacedirectoryname,master\n";
+    let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode(body);
+    fs::write(ghost_master.join("descript.txt"), &bytes[..]).expect("write descript.txt");
+
+    let model = resolve(&root, DefaultEncoding::Utf8).expect("正常ツリーは Ok(MountModel)");
+
+    // ファイル自身の文字コード宣言は読めている（デコードが効いている裏づけ）。
+    assert_eq!(model.names.name.as_deref(), Some("テスト"));
+    // が、SHIORI 通信の 2 キーへは流れ込まない。
+    assert_eq!(model.shiori.encoding, None);
+    assert_eq!(model.shiori.force_encoding, None);
 }

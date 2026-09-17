@@ -49,3 +49,5 @@
 - 編集集合: `crates/areka-emo-text/src/{draw,layout,state,cursor_tag}.rs`（親 spec の分割後の新ファイルを含む）＋兄弟テスト・`crates/areka-parsers/src/sakura/decode.rs`（`"f"` 腕の内側）・`doc/COMPAT_ARCHITECTURE.md` §8。
 - 1,000 行番人: `layout.rs` 955 行＝新規ファイルで足す。
 - 決定論テスト必達（3 書字方向 × 5 項目＋リセット＋インデント＋追加登記 4）。**要件定義は Fable**（SC8 の裁定と追加登記 4 の前提変更）。
+
+> **📌 2026-09-13 相互登記（`areka-P0-text-decoration-canon` 着地）**——寄せ 2 項目（`align`／`valign`）と影 3 項目（`shadowcolor`／`shadowcolor,none`／`shadowstyle`）は親 spec が引数列のまま `ActorTextState::unowned_vocab()`（`crates/areka-emo-text/src/state_decoration.rs`）に保持しており表示を変えない。実装は `look.rs` の `TextLook` にフィールドを足し、`look.rs::apply_font_tag` で `Note::Unowned` を返している腕を専用の腕へ移すだけでよく、戻す操作（`state_decoration.rs::TextLayerState::reset_decoration`）は `TextLook` を丸ごと置き換えるので新しい項目も列挙なしで自動的に戻る。影の予約名 `canvas.rs::RESERVED_EFFECT_SHADOW` の実体化も本 spec の所有（親 spec が doc で明記済み）。

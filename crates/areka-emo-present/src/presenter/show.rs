@@ -1,37 +1,39 @@
-//! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／合成・供給面遅延生成・
-//! アップロード＋マスク同期＋可視化・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
+//! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／合成＋表示記録・装着の遅延生成・
+//! 表示記録＋配置＋マスク同期＋可視化・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
 
 use wintf::ecs::window::transition_diag;
+
+use crate::display::record_display;
 
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
 use super::{
     AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
-    PresentError, PresentOutcome, ReplySender, SwapChainPresenter, TargetId, VisibilityOwnership,
-    VisualMount, World, WucGraphicsResource, derive_scale,
+    PresentError, PresentOutcome, ReplySender, TargetId, VisibilityOwnership, VisualMount, World,
+    derive_scale,
 };
 
 impl EmoPresenter {
-    /// `ShowSurface` の適用（キャッシュ引き当て or 合成 → 供給面アップロード → マスク同期 → 可視化）。
+    /// `ShowSurface` の適用（キャッシュ引き当て or 合成＋表示記録 → 表示記録・配置の書き込み → マスク同期 → 可視化）。
     ///
-    /// 手順（design §System Flows・Flow 1）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。
-    /// (1.5) 窓の `DPI` component と target 政策から**この適用に使う k**を導出する（[`derive_scale`]・
-    /// component 不在は `None` のまま渡して要件 1.4 の縮退へ落とす）。以降 k は合成入力と同格のキー
-    /// 要素であり、ミス時は合成（native）→ k 適用（恒等 k は席の交代・非恒等 k は
-    /// [`FrameBudget`] のリサンプル席）を経て挿入される。(2) 合成入力
-    /// （surface id＋bind 集合）が直前と完全一致するヒットなら再合成しない（R4.2）——bind 集合が
-    /// 1 要素でも異なれば必ずミス＝再合成する（着せ替え・まばたきの正しさの担保）。(3) ミスなら合成し、
-    /// `SurfaceNotFound` は error! ＋表示不変＋
-    /// `Err`（R3.4）、`EmptyComposition` は warn! ＋ Hide 縮退＋`Ok`（設計ディスカッション #1）、`Ok` なら
-    /// マスクを 1 回だけ生成して `cache.insert` へ表示バッファと対で渡す。(4) 使えるエントリで、`chain`/`mount` 未生成なら原寸確定
-    /// 後に遅延生成し、`chain.upload` ＋ `AlphaMaskResource::set_shared` ＋ 可視化を同一呼び出し内で行う（R2.4）。
+    /// 手順（design §System Flows・Flow 1・裁定 D）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。
+    /// (0) 窓の `DPI` component と target 政策から**この適用に使う k**を導出する（[`derive_scale`]・
+    /// component 不在は `None` のまま渡して要件 1.4 の縮退へ落とす）。**k はキー要素ではない**——
+    /// 合成入力（surface id＋bind 集合＋pattern）が完全一致するヒットなら再合成しない（R4.2）し、
+    /// k だけが変わった適用もヒットする（要件 5.3）。(1) ミスなら合成し（native 原寸）、
+    /// `SurfaceNotFound` は error! ＋表示不変＋`Err`（R3.4）、`EmptyComposition` は warn! ＋ Hide 縮退＋
+    /// `Ok`（設計ディスカッション #1）、`Ok` なら原寸バイトから表示記録（閉じた `GraphicsCommandList`）を
+    /// 起こし、マスクを原寸バイトから 1 回だけ生成して `cache.insert` へ面・マスク・記録の三つ組で渡す。
+    /// (2) `mount` 未生成ならエントリの表示記録込みで遅延生成し、(3) 表示記録 → 配置（原寸・k）→
+    /// マスク → 可視化の順に同一呼び出し内で書く（R2.4）。拡大は wintf の描画経路
+    /// （`render_surface` の `SetTransform`）が `Arrangement.scale`＝k で掛ける——この漏斗は k の値で
+    /// 手順を分岐しない（要件 1.3／7.3）。
     ///
     /// # 毎フレーム経路は再利用席の上を走る（`areka-P0-recompose-budget` Requirement 3.1・Flow 2）
     ///
-    /// ミス経路の 4 つのバッファ（native 合成先・表示バッファ・リサンプル作業領域・当たり判定マスク）は
-    /// いずれも [`FrameBudget`] の席か、キャッシュ追い出しエントリの容量回収で回る。定常状態
-    /// （寸法不変・初回確保後）ではこの経路の新規確保は 0 であり、確保が起きた回だけが
-    /// perf サマリ行の `alloc_*` に現れる。
+    /// ミス経路のバッファ（native 合成先・表示バッファ・当たり判定マスク）はいずれも [`FrameBudget`] の
+    /// 席か、キャッシュ追い出しエントリの容量回収で回る。定常状態（寸法不変・初回確保後）ではこの
+    /// 経路の新規確保は 0 であり、確保が起きた回だけが perf サマリ行の `alloc_*` に現れる。
     ///
     /// [`FrameBudget`]: super::budget::FrameBudget
     ///
@@ -39,7 +41,7 @@ impl EmoPresenter {
     ///
     /// [`VisibilityOwnership::External`] の target では、末尾の可視化（`set_visible(true)`／`visible=true`）
     /// と mount 遅延生成の初期可視性だけが変わり、**それ以外の全手順は所有権に依らず共通**である
-    /// （k 導出・合成・キャッシュ・アップロード・マスク・`set_bounds`・`applied`／`native_size`／
+    /// （k 導出・合成・キャッシュ・表示記録・配置・マスク・`applied`／`native_size`／
     /// `last_show`／`pending_resize`・下の `info!`）。表示成立点が 1 つであることを崩さないための境界であり、
     /// 「不可視のまま配置先と面が確立する」（Requirement 1.3）はこの共通部分がそのまま与える。
     /// 可視化は [`EmoPresenter::show_target`] が同じ漏斗を再通過したうえで付与する。
@@ -75,17 +77,18 @@ impl EmoPresenter {
         let window_dpi = world.get::<DPI>(window).map(|d| (d.dpi_x, d.dpi_y));
         let scale = derive_scale(target.policy, window_dpi);
 
-        // (1) 引き当て: 合成入力（id＋binds＋pattern）＋表示スケール k の完全一致のみヒット＝再合成
-        // しない（R4.2/R5.2・要件 2.4）。ミスのみ合成する。pattern は指令が運ぶ現在コマ集合をそのまま
-        // 透過する（presenter は新しい判断を持たず輸送のみ）。空 PatternState なら拡張前と観測等価
-        // （R5.4）。k が変われば必ずミスするため、旧 k の絵とマスクを表示に載せることはない（設計 D6）。
+        // (1) 引き当て: 合成入力（id＋binds＋pattern）の完全一致のみヒット＝再合成しない（R4.2/R5.2）。
+        // **k はキーに参加しない**（要件 5.2）——面・マスク・表示記録はいずれも原寸で k を含まないため、
+        // k だけが変わった適用は同じエントリにヒットし、変換の係数（下の `set_layout`）だけが変わる。
+        // ミスのみ合成する。pattern は指令が運ぶ現在コマ集合をそのまま透過する（presenter は新しい
+        // 判断を持たず輸送のみ）。空 PatternState なら拡張前と観測等価（R5.4）。
         //
         // **`touch` であって `get` ではない**（要件 7.1・容量 3 の LRU）。ここが 1 適用に 1 回の
         // 引き当て点＝最近使用順を動かす唯一の場所である。`get`（順序を動かさない読み取り）へ
         // 替えると置換は挿入順（FIFO）へ静かに退化し、容量 3 の裁定の根拠である LRU 再生の
         // 命中率と実装が対応しなくなる——表示バイトも確保計数も変わらないため、その退化は
         // 専用の檻（`presenter_cache_capacity_tests.rs`）だけが捕まえる。
-        let cache_hit = target.cache.touch(surface_id, &binds, &pattern, scale);
+        let cache_hit = target.cache.touch(surface_id, &binds, &pattern);
         timing.mark(Stage::CacheLookup);
         if !cache_hit {
             // 合成先は [`FrameBudget`] の常設席（設計 D2⑴・Flow 2）。`compose_into` は席の容量を
@@ -100,6 +103,8 @@ impl EmoPresenter {
                 target
                     .composer
                     // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
+                    // 合成は常に native 原寸（emo-compose の合成経路は k を知らない）。外形は席
+                    // そのものが持つ——エントリの `composed` 外形として下流が読む。
                     .compose_into(
                         scratch,
                         &target.emo_world,
@@ -108,44 +113,75 @@ impl EmoPresenter {
                         &binds,
                         &pattern,
                     )
-                    // 合成は常に native 原寸（emo-compose の合成経路は k を知らない・設計 D3 の A2）。
-                    // 外形は席そのものから読む——席は合成の出力先であり、値で返る結果は無い。
-                    .map(|()| (scratch.width(), scratch.height()))
             });
             timing.mark(Stage::Compose);
             match composed {
-                Ok(native_extent) => {
-                    // **容量回収は合成成功後に限る**（設計 Flow 2 の規律・`take_recycled` の契約）。
-                    // 合成が失敗し得る位置でこれを呼ぶとスロットが空のまま残り、「合成失敗時は表示も
-                    // キャッシュも適用前のまま」（R3.4・設計 §Error Handling）が崩れる——直後の同一
-                    // 入力の適用がヒットせず再合成へ落ちるためである。手前の失敗経路は全て早期復帰
-                    // 済みゆえ、ここへ到達した時点で合成は成功している。
+                Ok(()) => {
+                    // (1a) 表示の記録（設計 Flow 1・要件 1.1／7.1）: 合成した**原寸**バイトから
+                    // 閉じたコマンドリストを起こし、下の `insert` でエントリへ束ねる。記録は k を
+                    // 含まない（拡大は wintf の変換行列が掛ける）。
+                    //
+                    // **失敗し得る GPU 呼び出しはここに集約**され、位置が回収（`take_recycled`）より
+                    // **手前**であることが失敗時の前状態維持を与える（design Flow 1 キー決定）——
+                    // ここで失敗すればメモ・表示記録・配置・マスク・可視性・`applied`／`native_size`／
+                    // `last_show`／`pending_resize` の 1 つも動いていない。記録元は合成先席そのもの
+                    // （下の交代より前ゆえ、まだ原寸が入っている）。
+                    let display_list = {
+                        let Some(dc) = world
+                            .get_resource::<GraphicsCore>()
+                            .and_then(|gfx| gfx.device_context())
+                        else {
+                            tracing::error!(
+                                ?target_id,
+                                "apply(ShowSurface): GraphicsCore 不在または DeviceContext 不在（表示を記録できない）"
+                            );
+                            Self::reply(
+                                reply,
+                                Err(PresentError::Device {
+                                    hresult: 0,
+                                    context: "GraphicsCore resource",
+                                }),
+                            );
+                            return;
+                        };
+                        // 席は読むだけだが、貸し出し口は 1 つしかない（`native_scratch`）。伸長は
+                        // 起きないため確保の計数も動かない。
+                        match target
+                            .budget
+                            .native_scratch(|scratch| record_display(dc, scratch))
+                        {
+                            Ok(list) => list,
+                            // record_display は内部で error! 済み（display.rs device_err）。
+                            Err(e) => {
+                                Self::reply(reply, Err(e));
+                                return;
+                            }
+                        }
+                    };
+                    // `Stage::Upload` の区間＝原寸 D2D bitmap の生成＋描画命令の記録＋Close。
+                    timing.mark(Stage::Upload);
+                    // **容量回収は合成・記録の成功後に限る**（設計 Flow 2 の規律・`take_recycled` の契約）。
+                    // 失敗し得る位置でこれを呼ぶとスロットが空のまま残り、「失敗時は表示もキャッシュも
+                    // 適用前のまま」（R3.4・設計 §Error Handling）が崩れる——直後の同一入力の適用が
+                    // ヒットせず再合成へ落ちるためである。手前の失敗経路は全て早期復帰済みゆえ、
+                    // ここへ到達した時点で合成も記録も成功している。
                     let recycled = target.cache.take_recycled();
                     // 追い出しエントリの表示バッファ容量を受け取り、束ねられていたマスクは輪番の
                     // 空きスロットとして下の `regenerate_mask` へ回す（設計 D2⑵/D3）。回収が
                     // 成立しなければ空バッファから始まり、以後の伸長がそのまま計数される。
                     let (mut display, retired_mask) = target.budget.display_buffer(recycled);
-                    // k 適用（要件 2.1/2.3）: 合成済みの 1 枚（element 入れ子・SERIKO パターン・mayuna
-                    // 着せ替えが畳み込まれた結果）へ**単一の k** を掛けるため、要素間の相対配置・重なりは
-                    // 等倍時と同一の見た目関係を保つ。
-                    if scale.is_identity() {
-                        // 恒等 k は合成先席と表示バッファを**交代**させる（複写もリサンプルも確保も
-                        // 起きない・設計 D2⑴・Flow 2 の `alt k が恒等`）。native をそのまま表示へ
-                        // 載せる形は従来と同一ゆえ、既存 golden はバイト単位で不変である（要件 7.2）。
-                        // 交代後は回収した容量が合成先席に入り、次の適用はそちらへ合成する。
-                        target.budget.swap_native_scratch(&mut display);
-                    } else {
-                        // 非恒等 k は常設のリサンプル作業席（x 軸写像表）を使って回収バッファへ転写する
-                        // （設計 D2⑶）。出力バイトは使い捨て作業領域を起こす `resample` と 1 バイトも
-                        // 違わない（emo-compose 側の等価檻が固定している）。
-                        target.budget.resample_native_into(scale, &mut display);
-                        timing.mark(Stage::Resample);
-                    }
-                    // マスクをこの適用で 1 回だけ生成する（R2.1/R2.4）。生成点は `cache.insert` の
-                    // 内側から**予算シームの輪番へ移った**（設計 D4/D3）。`retired_mask` は直前の適用で
-                    // 表示に使ったマスクで、これが次の空きスロットへ回り、代わりに前々回のマスク
-                    // （下流が既に手放して単独所有）が再生成先として取り出される。挿入は表示バッファと
-                    // マスクを同時に受け取るため、対が崩れないことは引き続き構造で担保される。
+                    // 合成先席と表示バッファを**交代**させる（複写も確保も起きない・設計 D2⑴）。
+                    // **k の値に依らず常にこの経路**（要件 1.3・7.3）——表示へ載せるのは原寸そのもの
+                    // であり、k 適用の段は存在しない。交代後は回収した容量が合成先席に入り、次の適用は
+                    // そちらへ合成する。
+                    target.budget.swap_native_scratch(&mut display);
+                    // マスクをこの適用で 1 回だけ**原寸バイト**から生成する（R2.1/R2.4・要件 4.1）。
+                    // 生成点は `cache.insert` の内側から**予算シームの輪番へ移った**（設計 D4/D3）。
+                    // `retired_mask` は直前の適用で表示に使ったマスクで、これが次の空きスロットへ回り、
+                    // 代わりに前々回のマスク（下流が既に手放して単独所有）が再生成先として取り出される。
+                    // 挿入は表示バッファとマスクを同時に受け取るため、対が崩れないことは引き続き
+                    // 構造で担保される。÷k は wintf の `alpha_mask_hit` が物理寸の境界に対する比例
+                    // 写像で 1 回だけ掛ける（要件 4.2）。
                     let mask = target.budget.regenerate_mask(
                         retired_mask,
                         display.bytes(),
@@ -153,23 +189,19 @@ impl EmoPresenter {
                         display.height(),
                         display.stride(),
                     );
-                    // pattern は binds と同格のキー要素として挿入キーへ透過する（R5.2）。マスクは
-                    // k 適用済み bytes 由来ゆえ物理 px 契約が無修正で整合する（設計 D6）。
-                    // native 原寸は絵・マスクと**同じエントリ**へ束ねる（要件 7.1・容量 3）。
-                    // 容量 1 の頃は target 側の 1 フィールドで対を保てたが、3 件を保持する今は
-                    // ヒットしたエントリが直前の挿入とは限らない（`CacheEntry::native` の doc）。
+                    // pattern は binds と同格のキー要素として挿入キーへ透過する（R5.2）。原寸の外形は
+                    // `composed` そのものが持つ（別フィールドで二重に持たない・要件 5.1）。
                     target.cache.insert(
                         surface_id,
                         binds.clone(),
                         pattern.clone(),
-                        scale,
                         display,
                         mask,
-                        native_extent,
+                        display_list,
                     );
-                    // `Stage::MaskGen` の区間はマスク生成＋挿入全体（スロット置換）を含む。是正後は
-                    // 旧エントリが `take_recycled` で先に回収されているため、この区間から対の解放
-                    // churn（is-a A6）が消えている。恒等 k の交代（O(1) の入れ替え）もこの区間に入る。
+                    // `Stage::MaskGen` の区間はマスク生成＋挿入全体（スロット置換）を含む。旧エントリは
+                    // `take_recycled` で先に回収されているため、この区間から対の解放 churn（is-a A6）は
+                    // 消えている。席の交代（O(1) の入れ替え）もこの区間に入る。
                     timing.mark(Stage::MaskGen);
                 }
                 Err(ComposeError::EmptyComposition(id)) => {
@@ -203,141 +235,62 @@ impl EmoPresenter {
             }
         }
 
-        // (2) 供給面・装着の遅延生成（初回表示・原寸確定後）。
-        if target.chain.is_none() {
-            let (w, h) = {
-                let entry = target
-                    .cache
-                    .get(surface_id, &binds, &pattern, scale)
-                    .expect("直前に引き当て済み");
-                (entry.composed.width(), entry.composed.height())
-            };
+        // 使えるエントリ（引き当て済み・順序は動かさない `get`）。原寸はエントリの `composed` 外形、
+        // 物理寸は**丸め権威の式 1 つ**（`scaled_extent`・要件 2.1／2.2）で導く——自前供給面の寸を
+        // 照会する形は消え、照会値（`target_physical_size`）と同じ式で同じ値になる。
+        let entry = target
+            .cache
+            .get(surface_id, &binds, &pattern)
+            .expect("直前に引き当て済み");
+        let native = (entry.composed.width(), entry.composed.height());
+        let physical = scale.scaled_extent(native.0, native.1);
 
-            // Compositor は所有クローンで取り出し、以後の &mut World 装着と借用衝突しないようにする。
-            let Some(compositor) = world
-                .get_resource::<WucGraphicsResource>()
-                .and_then(|r| r.compositor().cloned())
-            else {
-                tracing::error!(
-                    ?target_id,
-                    "apply(ShowSurface): WucGraphicsResource/Compositor 不在（供給面を生成できない）"
-                );
-                Self::reply(
-                    reply,
-                    Err(PresentError::Device {
-                        hresult: 0,
-                        context: "WucGraphicsResource::compositor",
-                    }),
-                );
-                return;
-            };
-
-            // GraphicsCore は生成呼び出しの間だけ借用する（surface は所有で返るため借用は閉じる）。
-            let new_chain = {
-                let Some(gfx) = world.get_resource::<GraphicsCore>() else {
-                    tracing::error!(
-                        ?target_id,
-                        "apply(ShowSurface): GraphicsCore 不在（供給面を生成できない）"
-                    );
-                    Self::reply(
-                        reply,
-                        Err(PresentError::Device {
-                            hresult: 0,
-                            context: "GraphicsCore resource",
-                        }),
-                    );
-                    return;
-                };
-                SwapChainPresenter::new(gfx, &compositor, w, h)
-            };
-            let (chain, surface) = match new_chain {
-                Ok(pair) => pair,
-                // SwapChainPresenter::new は内部で error! 済み（chain.rs device_err）。ここは reply のみ。
-                Err(e) => {
-                    Self::reply(reply, Err(e));
-                    return;
-                }
-            };
-
+        // (2) 装着の遅延生成（初回表示・原寸確定後）。surface entity はエントリの表示記録込みで
+        // spawn する（純 ECS・失敗経路なし）。`WucGraphicsResource`／`Compositor` は要らない。
+        if target.mount.is_none() {
             // 初期可視性は**所有権から導出**する（`areka-P0-balloon-visibility` Requirement 1.2）。
             // `CommandDriven` は従来どおり可視で構築（この漏斗の末尾で `set_visible(true)` する経路と
             // 同値）、`External` は不可視で構築する——「可視で spawn してから消す」経路を持たないことで、
             // 可視状態を component レベルでも一度も経由しないことを構造で保証する。導出をここで行う
             // （装着側の既定に委ねない）のは、可視性の所有者を知っているのがこの層だけだからである。
             let initially_visible = matches!(target.ownership, VisibilityOwnership::CommandDriven);
-            let mount = match VisualMount::attach(
+            target.mount = Some(VisualMount::attach(
                 world,
                 window,
-                &surface,
-                &compositor,
-                (w, h),
+                native,
+                scale,
+                &entry.display,
                 initially_visible,
-            ) {
-                Ok(m) => m,
-                // VisualMount::attach も内部で error! 済み（mount.rs device_err）。
-                Err(e) => {
-                    Self::reply(reply, Err(e));
-                    return;
-                }
-            };
-
-            target.chain = Some(chain);
-            target.mount = Some(mount);
+            ));
         }
 
-        // (3) 供給面アップロード ＋ マスク同期 ＋ 可視化（同一呼び出し内＝原子入替・R2.4）。
+        // (3) 表示記録 → 配置 → マスク同期 → 可視化（同一呼び出し内＝原子入替・R2.4／要件 4.4）。
         //
         // **可視化手順だけ**が所有権でゲートされる（`areka-P0-balloon-visibility` Requirement 6.2/6.9）。
-        // `External` の target では表示状態の確立（合成・供給面・マスク・bounds・k・面 id・再表示入力・
+        // `External` の target では表示状態の確立（合成・表示記録・配置・マスク・k・面 id・再表示入力・
         // 窓寸 reconcile 要求）は従来どおり全て完了し、可視性の付与だけを行わない——面切替もループ由来の
         // 反復指令も、経路を問わず可視状態を変えない。
         let visualize = matches!(target.ownership, VisibilityOwnership::CommandDriven);
-        let entry = target
-            .cache
-            .get(surface_id, &binds, &pattern, scale)
-            .expect("直前に引き当て済み");
-        let chain = target.chain.as_mut().expect("直上で生成済み");
-        // (3a) 遷移観測の `resized`（design D4）: **upload の直前**の供給面寸を控える。upload の
-        // 内側の `ResizeBuffers` は外形が変わったときだけ走る（`chain.rs`）ので、前後比較は
-        // 「バッファ寸が変わったか」と同値である。戻り値型を変えて成否と一緒に受け取る形
-        // （旧案 `UploadOutcome`）は、下のエラー分岐の字面を動かさざるを得ず両立しなかった
-        // ——この分岐は `test-cage-determinism` ④の観測点であり、本 spec は移動させない。
-        let prev_size = chain.size();
-        if let Err(e) = chain.upload(&entry.composed) {
-            // upload は内部で error! 済み（chain.rs）。表示は前状態を保つ（成功まで旧状態不変）。
-            Self::reply(reply, Err(e));
-            return;
-        }
-        timing.mark(Stage::Upload);
-        // 表示物理寸は**供給面の実寸**を単一真実源とする（upload が外形変化を検知して合わせ込んだ後の
-        // 値＝k 適用済み composed の外形）。エントリ外形から別途組み立てないことで、供給面・visual
-        // 境界・マスクが同一の物理寸に揃うことを構造で担保する（R3.2・k 追従は A2 の自動追従）。
-        let size = chain.size();
-        // 供給面のバッファ寸が実際に変わった回（前後比較・design D4）。
-        let resized = size != prev_size;
 
-        // (3b) 状態照合の前値導出（design Flow 1 キー決定・議題 #2 裁定）。**前値を上書きする前に**
-        // 前回適用の物理寸を組み立てる。組み立ては契約式
-        // `物理寸 == applied.scaled_extent(native_size)`（design §State Management）に従う——別
-        // フィールドで物理寸を二重に持つと更新点が 2 つになり、片方だけが書かれる欠陥（本 spec で
-        // 既出）を招く。両者は表示成立点で必ず揃って更新されるため、この導出は常に「前回この経路が
-        // 表示へ載せた物理寸」に一致する（`resample` の事後条件が `出力外形 == scaled_extent(入力外形)`
-        // ゆえ `chain.size()` と厳密に等しい）。
+        // (3a) 状態照合の前値導出（design Flow 1 キー決定・議題 #2 裁定）。**前値を上書きする前に**
+        // 前回表示の原寸と物理寸を組み立てる。物理寸は契約式 `applied.scaled_extent(native_size)`
+        // （design §State Management）に従う——別フィールドで物理寸を二重に持つと更新点が 2 つになり、
+        // 片方だけが書かれる欠陥を招く。
         //
-        // 前値なし（初回表示）は `None` ≠ `Some(size)` ゆえ**必ず差分扱い**になる。これは意図した
+        // `resized`（遷移観測・要件 7.6）は**原寸の外形が前回表示から変わったか**——k だけの変化は
+        // false で、`size_changed`（物理寸の変化・窓寸 reconcile の材料）とは別の述語である。
+        //
+        // 前値なし（初回表示）は `None` ≠ `Some(..)` ゆえ**必ず差分扱い**になる。これは意図した
         // 設計である——窓は起動時 k₀ 見積もり寸で生成されており実窓 DPI 由来の k と一致する保証が
         // ないため、初回を黙らせると Flow 3 手順 5 の補正が永久に走らない。
-        //
-        // 導出をここ（要求の積み上げ地点ではなく upload 直後）に置くのは、下の遷移観測が
-        // `size_changed` を判定材料に要るためである。`applied`／`native_size` はこの点から要求の
-        // 積み上げまでのあいだ 1 度も書かれないので、導出位置の移動で値は変わらない。
+        let resized = target.native_size != Some(native);
         let prev_physical = target
             .applied
             .zip(target.native_size)
             .map(|(k, (nw, nh))| k.scaled_extent(nw, nh));
-        let size_changed = prev_physical != Some(size);
+        let size_changed = prev_physical != Some(physical);
 
-        // (3c) 遷移観測: サーフェス更新の記録（Requirement 2.2・design C3）。
+        // (3b) 遷移観測: サーフェス更新の記録（Requirement 2.2・design C3）。
         //
         // **寸が動いた回だけ**、かつ**観測が有効なときだけ**組む。前置ガードが行の組立より外側に
         // 無いと、既定 OFF の運転でも毎フレーム `String` を確保することになり、`recompose-budget` が
@@ -352,15 +305,22 @@ impl EmoPresenter {
                 stamp: stamp_of(world),
                 stage: SurfaceStage::Upload,
                 target_id,
-                size: Some(size),
+                size: Some(physical),
                 resized: Some(resized),
                 reason: None,
             }));
         }
 
         let mount = target.mount.as_ref().expect("直上で生成済み");
+        // 表示記録: 値が異なるときだけ挿す（同一エントリの再適用で `Changed` を立てない）。
+        mount.set_display(world, &entry.display);
+        // 配置（原寸・k）: 同値なら書かない。bounds（＝αマスク座標基準・物理寸）は wintf が
+        // `GlobalArrangement` へ導く。可視性に依らず常に合わせる——不可視中の更新は安全であり
+        // （`HitTest::none()` 中はマスクが判定に使われない）、ここで揃えておくことが「不可視期間中に
+        // 生じた変化を取りこぼさない」（Requirement 6.6）の土台になる。
+        mount.set_layout(world, native, scale);
         if let Some(mut mask_res) = world.get_mut::<AlphaMaskResource>(mount.surface_entity()) {
-            // 表示バッファと同一 bytes 由来のマスクを hit-test へ供給する（R2.2/R2.5）。
+            // 表示記録と同一の原寸 bytes 由来のマスクを hit-test へ供給する（R2.2/R2.5・要件 4.4）。
             // 供給は**共有参照の受け渡し**（`set_shared`）＝`Arc` の参照カウント増のみで、実体の
             // 複製は起きない（設計 D3・is-a A7 の消し方）。`set` を常に呼ぶ現行の観測形はそのまま。
             mask_res.set_shared(entry.mask.clone());
@@ -373,17 +333,10 @@ impl EmoPresenter {
         }
         if visualize {
             mount.set_visible(world, true);
-        }
-        // bounds（＝αマスク座標基準）は可視性に依らず常に合わせる。不可視中の更新は安全であり
-        // （`Arrangement`・`SpriteVisual::SetSize` は合成コミットと独立、`HitTest::none()` 中はマスクが
-        // 判定に使われない）、ここで揃えておくことが「不可視期間中に生じた変化を取りこぼさない」
-        // （Requirement 6.6）の土台になる。
-        mount.set_bounds(world, size);
-        if visualize {
             target.visible = true;
         }
-        // 可視化後の記録（design C3）。境界を新物理寸へ合わせ終えた点＝「描画内容がこの寸で見える
-        // ようになった」瞬間であり、判定側はこの行の `t_us` と当該窓の窓書込の `t_us` の差
+        // 可視化後の記録（design C3）。表示記録・配置・マスクを揃え終えた点＝「描画内容がこの寸で
+        // 見えるようになった」瞬間であり、判定側はこの行の `t_us` と当該窓の窓書込の `t_us` の差
         // （`visualize_to_write_us`）で「窓矩形と描画内容が食い違う区間」を測る（C7・設計討議 A-2）。
         // 条件は upload の記録と同じ 1 つの札を使う—— 2 度評価すると片方だけが変わる形を作れる。
         if observe_surface {
@@ -391,7 +344,7 @@ impl EmoPresenter {
                 stamp: stamp_of(world),
                 stage: SurfaceStage::Visualize,
                 target_id,
-                size: Some(size),
+                size: Some(physical),
                 // 段階の意味を持たない 2 フィールドは番兵で残す（落とさない）。
                 resized: None,
                 reason: None,
@@ -404,45 +357,32 @@ impl EmoPresenter {
 
         // (3.5) 状態照合＝窓寸 reconcile 要求の生成（design Flow 1 キー決定・議題 #2 裁定）。
         //
-        // 判定材料（`prev_physical`／`size_changed`）は upload 直後の手順 (3b) で既に導いてある
-        // ——遷移観測がそれを要るためであり、値の意味も算出式も (3b) の説明のとおりである。
-        // 要求を積むのは従来どおりここ（表示成立が確定した後）で、`applied`／`native_size` の
-        // 上書きより手前である。
+        // 判定材料（`prev_physical`／`size_changed`）は手順 (3a) で既に導いてある——遷移観測が
+        // それを要るためであり、値の意味も算出式も (3a) の説明のとおりである。要求を積むのは
+        // 従来どおりここ（表示成立が確定した後）で、`applied`／`native_size` の上書きより手前である。
         if size_changed {
             // 差分あり＝呼び手（frame drain フェーズ）へ新物理寸を報告する。同寸のときは**何も触らない**
             // ——`None` を書き戻すと未消費の要求を殺してしまう（取りこぼしを作らない・べき等）。
-            target.pending_resize = Some(size);
+            target.pending_resize = Some(physical);
         }
 
         target.applied = Some(scale);
         // いま表示に使ったエントリ由来の原寸をそのまま写す（合成した回か否かで分岐しない——分岐させると
         // 「insert 済みのまま失敗 → 後からヒットで成立」の経路で照会値が画面と乖離する）。
-        //
-        // **エントリから直接読む**（要件 7.1・容量 3）。容量 1 の頃は「保持しているエントリ＝直前に
-        // 挿入したエントリ」ゆえ target 側の 1 フィールドで対を保てたが、3 件を保持する今はヒットした
-        // エントリが直前の挿入とは限らない。ここの再照会は借用のみで確保を行わず、[`ComposeCache::get`]
-        // は最近使用順を動かさない（LRU を打ち直すのは手順 (1) の `touch` 1 箇所だけである）。
-        target.native_size = target
-            .cache
-            .get(surface_id, &binds, &pattern, scale)
-            .map(|entry| entry.native);
+        // 容量 3 ではヒットしたエントリが直前の挿入とは限らないため、エントリの `composed` 外形から
+        // 読む（要件 7.1）。
+        target.native_size = Some(native);
         // 合成キーの安定ハッシュ（perf サマリ行の `key_hash`・Requirement 7.2 の裁定材料）は
         // `last_show` への move の**直前**に取る。全段の `mark` が済んだ後なので、この走査
         // （借用のみ・確保なし）は段別所要へ混入せず `t_total_us` にだけ含まれる。
-        let key_hash = compose_key_hash(surface_id, &binds, &pattern, scale);
+        let key_hash = compose_key_hash(surface_id, &binds, &pattern);
         target.last_show = Some((surface_id, binds, pattern));
 
         // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。実機サインオフは有界 auto-exit で
         // 起動し `RUST_LOG` を grep してここを読むため、**`info!` レベル**であることが契約である
         // （`debug!` へ落とすと既定の観測条件で消える）。k 導出値（`k`・`k_ratio`）と適用寸（`native_*`・
-        // `scaled_*`）が揃うことで、2 水準（125%/200%）の実行が「異なる物理寸で描かれた」ことを
-        // ログだけで決定論的に判定できる。
-        //
-        // `native_*` の供給源 `native_size` は直上でエントリから写しており、この経路では必ず `Some`
-        // である（引き当てが成立した＝当該キーのエントリが表に在る）。
-        // 万一崩れた場合の `0×0` は**実在し得ない外形**（0 外形は上流 `EmptyComposition` が先行遮断する）
-        // ゆえ、値を捏造せず「対が壊れた」ことを示す診断番兵として機能する。
-        let (native_w, native_h) = target.native_size.unwrap_or((0, 0));
+        // `scaled_*`＝物理寸・要件 2.8／7.5）が揃うことで、2 水準（125%/200%）の実行が「異なる物理寸で
+        // 描かれた」ことをログだけで決定論的に判定できる。フィールドの名と意味は不変。
         tracing::info!(
             ?target_id,
             surface_id,
@@ -453,10 +393,10 @@ impl EmoPresenter {
             author_dpi = target.policy.author_dpi,
             // `None` は要件 1.4 の縮退（DPI component 不在 → k=1.0）そのものゆえ潰さずに出す。
             window_dpi = ?window_dpi,
-            native_w,
-            native_h,
-            scaled_w = size.0,
-            scaled_h = size.1,
+            native_w = native.0,
+            native_h = native.1,
+            scaled_w = physical.0,
+            scaled_h = physical.1,
             // 今回の表示成立が窓寸 reconcile 要求を積んだか（議題 #2 裁定の状態照合の観測点）。
             size_changed,
             "apply(ShowSurface): 表示・マスクを更新"

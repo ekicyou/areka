@@ -212,7 +212,7 @@ pub(super) fn run_ghost_quit_phase(wiring: &mut Emo2Wiring, world: &mut World) -
     true
 }
 
-/// `FrameFinalize` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
+/// `Update` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
 /// attach→dpi→drain→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→連鎖再解決→
@@ -223,8 +223,12 @@ pub(super) fn run_ghost_quit_phase(wiring: &mut Emo2Wiring, world: &mut World) -
 /// （`FrameTime`＋`TalkClock` で `talk_time` を解決）。
 ///
 /// `Emo2Wiring` 未挿入（`wire_emo2_boot`＝task 5.1 前・フォールバック boot 経路）なら早期 return の
-/// no-op（安全・panic しない）。schedule への登録（`add_systems(FrameFinalize, emo2_frame_system)`）は
-/// `wire_emo2_boot`（task 5.1）が行い、本関数はここでは定義のみ（登録しない）。
+/// no-op（安全・panic しない）。schedule への登録
+/// （`add_systems(Update, emo2_frame_system.after(update_typewriters))`）は `wire_emo2_boot`
+/// （task 5.1）が行い、本関数はここでは定義のみ（登録しない）。載せ先が `Update`＝上流の
+/// `Update` 鎖の最後の系より後なのは、本 system が挿した描画命令と配置を同じ巡の伝播
+/// （`PostLayout`）・面の生成（`PreRenderSurface`）・描画（`RenderSurface`）に拾わせるため
+/// である（裁定 2026-09-12・要件 2.4。末尾の段に載せると絵の着地が次の巡へずれる）。
 pub fn emo2_frame_system(world: &mut World) {
     // Emo2Wiring 未挿入（wire_emo2_boot=task 5.1 前・LogSink フォールバック boot 経路）なら no-op。
     let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
@@ -292,8 +296,9 @@ pub fn emo2_frame_system(world: &mut World) {
     // （`ZOrderChainPlan`）へ公開するところまでを行う。
     // 鎖の適用系（確定段の 3 本目）より**前**である必要がある——後ろだと、ここで公開した
     // 望む鎖を適用系が読むのが 1 心拍ぶん遅れ、組み替えがそのイベントの巡で完了しない
-    // （要件 14.5）。その順序は本 system の登録側（`wire_emo2_boot` の
-    // `.before(apply_zorder_chain)`）が持つ。
+    // （要件 14.5）。その順序は**段そのものの並び**が担う——本 system は `Update` に載り
+    // （`wire_emo2_boot` 手順 6・裁定 2026-09-12）、適用系が載る確定段（`FrameFinalize`）は
+    // 1 巡の並びでそれより後ろにある（段をまたぐ順序指定は書けないので `.before` は使わない）。
     // 窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる（取りこぼさない）。
     run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
     // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ

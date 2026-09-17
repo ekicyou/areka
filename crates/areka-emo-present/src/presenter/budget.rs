@@ -1,13 +1,11 @@
 //! `FrameBudget`: 毎フレーム経路における新規確保・容量成長の**唯一の計数シーム**。
 //!
 //! 「定常状態で表示バッファの新規確保が起きていない」（Requirement 3.1・判定式⑶）を、推測でなく
-//! 数値で言い切るための計数器である。確保の発生点は 4 つ（design.md §FrameBudget の席一覧と 1:1）:
+//! 数値で言い切るための計数器である。確保の発生点は 2 つ（design.md §FrameBudget の席一覧と 1:1）:
 //!
 //! | 発生点 | 増えるフィールド | 何の確保か |
 //! |---|---|---|
-//! | [`AllocSite::ComposeDst`] | `alloc_compose_dst` | native 合成先 |
-//! | [`AllocSite::ResampleDst`] | `alloc_resample_dst` | 表示バッファ（リサンプル先） |
-//! | [`AllocSite::Xmap`] | `alloc_xmap` | リサンプル作業領域（x 軸写像表） |
+//! | [`AllocSite::ComposeDst`] | `alloc_compose_dst` | native 合成先（＝交代で表示バッファにもなる） |
 //! | [`AllocSite::Mask`] | `alloc_mask` | 当たり判定マスク |
 //!
 //! # なぜ 1 箇所で数えるのか（design.md D6）
@@ -20,7 +18,7 @@
 //!
 //! # 計数の意味は段階で変わらない（増分と累積の関係）
 //!
-//! 器は計数に加えて**再利用席**（合成先の常設席・リサンプル作業領域の席・マスクの輪番）を持つ
+//! 器は計数に加えて**再利用席**（合成先の常設席・マスクの輪番）を持つ
 //! （task 5.2）。ゆえに [`FrameBudget::note_alloc`] は「呼び手が確保したと申告したとき」ではなく
 //! **「席の再利用が成立せず結局確保したとき」**に席メソッドの内部から呼ばれる。どちらの段でも
 //! 計数の意味は「新規確保・容量成長が 1 回起きた」で変わらないため、増分・累積の意味論と
@@ -31,8 +29,7 @@
 //!
 //! | 席 | 是正対象 | 貸し出し口 |
 //! |---|---|---|
-//! | 合成先の常設席（`ComposedSurface`） | A1 | [`FrameBudget::native_scratch`]・恒等 k の交代は [`FrameBudget::swap_native_scratch`] |
-//! | リサンプル作業領域の席（`ResampleScratch`） | A3 | [`FrameBudget::resample_native_into`] |
+//! | 合成先の常設席（`ComposedSurface`） | A1 | [`FrameBudget::native_scratch`]・表示バッファとの交代は [`FrameBudget::swap_native_scratch`] |
 //! | マスクの輪番（`Option<Arc<AlphaMask>>`・空き 1 枚） | A4/A7 | [`FrameBudget::regenerate_mask`] |
 //!
 //! 表示バッファ（A2/A6）だけは本器が所有しない——所有はキャッシュ側にあり、追い出しエントリの
@@ -43,7 +40,7 @@
 //!
 //! キャッシュが最大 3 エントリを保持するため、毎コマ経路を回る実体の本数は容量 1 の頃から増えた:
 //!
-//! - **表示バッファ**: キャッシュの 3 本 ＋（恒等 k では合成先席の 1 本）＝ 最大 4 本
+//! - **表示バッファ**: キャッシュの 3 本 ＋ 合成先席の 1 本 ＝ 最大 4 本
 //! - **マスク**: キャッシュの 3 本 ＋ 輪番の空き 1 枚 ＝ 4 本
 //!
 //! いずれも本数が有限で、追い出し 1 件が次の適用の入力になるという形は変わらない。**本器が
@@ -56,11 +53,10 @@
 //! 席（あるいは席を通り抜けるバッファ）そのものの `Vec` 容量を、呼び出しの**前後で読み比べる**。
 //! `Vec` の容量は再確保でしか増えず、`clear`／`truncate`／`resize` で縮みもしないため、
 //! 「増えた＝この呼び出しで確保が起きた／変わらない＝起きていない」が厳密に決まる。過大にも
-//! 過小にも振れない。読み口は 3 つで、いずれも本 spec が additive に足した観測専用の getter である:
+//! 過小にも振れない。読み口は 2 つで、いずれも既存 spec が additive に足した観測専用の getter である:
 //!
 //! | 対象 | 読み口 |
 //! |---|---|
-//! | リサンプル作業領域（x 軸写像表） | [`ResampleScratch::capacity`] |
 //! | 合成先席・表示バッファ | [`ComposedSurface::bytes_capacity`] |
 //! | 当たり判定マスクの詰めバイト列 | [`AlphaMask::packed_capacity`] |
 //!
@@ -116,19 +112,17 @@
 //! design.md の当該ブロックを実形へ更新して差異を解消したため、本モジュールが単独で持つ
 //! 未解決の乖離は無い。
 //!
-//! 併せて design.md の `alloc_resample_dst` の説明も実挙動へ揃えた: 恒等 k の交代経路で容量回収が
-//! 不成立になった適用は**その回に確保を 1 件も起こさず**、代金は次の適用の `alloc_compose_dst` に
-//! 載る（空バッファが合成先席へ、容量のある方が表示バッファへ出るため）。取りこぼしは無く、
-//! 判定式⑶は 4 フィールドの合計ゆえ機械判定も動かない。
+//! 交代経路で容量回収が不成立になった適用は**その回に確保を 1 件も起こさず**、代金は次の適用の
+//! `alloc_compose_dst` に載る（空バッファが合成先席へ、容量のある方が表示バッファへ出るため）。
+//! 取りこぼしは無く、判定式⑶は 2 フィールドの合計ゆえ機械判定も動かない。
 //!
 //! [`ComposeCache::take_recycled`]: crate::cache::ComposeCache::take_recycled
 
 use std::sync::Arc;
 
-use areka_emo_compose::scale::{ResampleScratch, resample_with};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
-use super::{ComposedSurface, ScaleRatio};
+use super::ComposedSurface;
 use crate::cache::CacheEntry;
 
 /// 確保の発生点（design.md §FrameBudget の席一覧・perf サマリ行の `alloc_*` と 1:1）。
@@ -139,31 +133,22 @@ use crate::cache::CacheEntry;
 /// 持ち出せないことが条件になる——外に出ていれば席を経由しない計数が書けてしまう。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AllocSite {
-    /// native 合成先の新規確保／容量成長。
+    /// native 合成先の新規確保／容量成長（交代で表示バッファへ出る側の確保もここで数える）。
     ComposeDst,
-    /// 表示バッファ（リサンプル先）の新規確保／容量成長（容量の回収が不成立の場合を含む）。
-    ResampleDst,
-    /// リサンプル作業領域（x 軸写像表）の新規確保／容量成長。
-    Xmap,
     /// 当たり判定マスクの新規確保（輪番スロットの単独所有が不成立の場合を含む）。
     Mask,
 }
 
 impl AllocSite {
-    /// 全発生点（走査の正本。檻はこれを回して「4 つある」ことごと固定する）。
+    /// 全発生点（走査の正本。檻はこれを回して「2 つある」ことごと固定する）。
     ///
     /// 読み手は本モジュールのテスト（`budget_tests.rs`）のみである。**製品コードにも presenter 側の
     /// 檻にも走査の消費者は無い**——本列挙は本モジュール私有ゆえ外へ持ち出せず、presenter 経由の檻
-    /// （`presenter_budget_steady_state_tests.rs`）は [`BudgetCounters`] の名前つき 4 フィールドを
-    /// 直接読む。列挙を増減させると perf サマリ行のフィールド集合が変わるため、「4 つある」ことを
+    /// （`presenter_budget_steady_state_tests.rs`）は [`BudgetCounters`] の名前つき 2 フィールドを
+    /// 直接読む。列挙を増減させると perf サマリ行のフィールド集合が変わるため、「2 つある」ことを
     /// 固定する走査は本モジュール内に置く。
     #[allow(dead_code)]
-    const ALL: [AllocSite; 4] = [
-        AllocSite::ComposeDst,
-        AllocSite::ResampleDst,
-        AllocSite::Xmap,
-        AllocSite::Mask,
-    ];
+    const ALL: [AllocSite; 2] = [AllocSite::ComposeDst, AllocSite::Mask];
 }
 
 /// 1 適用分の確保計数スナップショット（perf サマリ行の `alloc_*` フィールドの供給源）。
@@ -175,10 +160,6 @@ impl AllocSite {
 pub(super) struct BudgetDelta {
     /// native 合成先の新規確保／容量成長。
     pub(super) alloc_compose_dst: u32,
-    /// 表示バッファの新規確保／容量成長。
-    pub(super) alloc_resample_dst: u32,
-    /// リサンプル作業領域の新規確保／容量成長。
-    pub(super) alloc_xmap: u32,
     /// 当たり判定マスクの新規確保。
     pub(super) alloc_mask: u32,
 }
@@ -192,8 +173,6 @@ impl BudgetDelta {
     fn count(&self, site: AllocSite) -> u32 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
-            AllocSite::ResampleDst => self.alloc_resample_dst,
-            AllocSite::Xmap => self.alloc_xmap,
             AllocSite::Mask => self.alloc_mask,
         }
     }
@@ -202,8 +181,6 @@ impl BudgetDelta {
     fn bump(&mut self, site: AllocSite) {
         let slot = match site {
             AllocSite::ComposeDst => &mut self.alloc_compose_dst,
-            AllocSite::ResampleDst => &mut self.alloc_resample_dst,
-            AllocSite::Xmap => &mut self.alloc_xmap,
             AllocSite::Mask => &mut self.alloc_mask,
         };
         *slot = slot.saturating_add(1);
@@ -218,10 +195,6 @@ impl BudgetDelta {
 pub(super) struct BudgetCounters {
     /// native 合成先の累積。
     pub(super) alloc_compose_dst: u64,
-    /// 表示バッファの累積。
-    pub(super) alloc_resample_dst: u64,
-    /// リサンプル作業領域の累積。
-    pub(super) alloc_xmap: u64,
     /// 当たり判定マスクの累積。
     pub(super) alloc_mask: u64,
 }
@@ -234,8 +207,6 @@ impl BudgetCounters {
     fn count(&self, site: AllocSite) -> u64 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
-            AllocSite::ResampleDst => self.alloc_resample_dst,
-            AllocSite::Xmap => self.alloc_xmap,
             AllocSite::Mask => self.alloc_mask,
         }
     }
@@ -244,8 +215,6 @@ impl BudgetCounters {
     fn bump(&mut self, site: AllocSite) {
         let slot = match site {
             AllocSite::ComposeDst => &mut self.alloc_compose_dst,
-            AllocSite::ResampleDst => &mut self.alloc_resample_dst,
-            AllocSite::Xmap => &mut self.alloc_xmap,
             AllocSite::Mask => &mut self.alloc_mask,
         };
         *slot = slot.saturating_add(1);
@@ -259,7 +228,7 @@ impl BudgetCounters {
 /// 観測を席と別の場所に置くと、**席だけを差し替える改変が計数へ現れない**経路ができる。ゆえに
 /// 本入れ物はフィールドを私有にし、**席へ触れる唯一の道**を観測込みのメソッドにする。
 ///
-/// 観測の形は 3 席とも同一で、**実体そのものの `Vec` 容量を呼び出しの前後で読み比べる**
+/// 観測の形は 2 席とも同一で、**実体そのものの `Vec` 容量を呼び出しの前後で読み比べる**
 /// （本モジュール冒頭 §何をもって「確保した」と数えるか）。到達済み寸法（高水位）を器が覚える
 /// 形は 1 つも残っていない——覚える形は実体が複数本で入れ替わる経路（キャッシュ容量 3）で
 /// 破綻し、実体の差し替えを見逃す。
@@ -268,7 +237,7 @@ mod seat {
 
     use wintf::ecs::widget::bitmap_source::AlphaMask;
 
-    use super::{ComposedSurface, ResampleScratch, ScaleRatio, resample_with};
+    use super::ComposedSurface;
 
     /// 合成先の常設席（A1）。**高水位を持たない**——観測は席の実体の容量そのもので行う。
     #[derive(Debug, Default)]
@@ -290,53 +259,19 @@ mod seat {
             (produced, self.surface.bytes_capacity() > before)
         }
 
-        /// 読み取り用の参照（リサンプル元）。
+        /// 読み取り用の参照（席の番地を読む観測口 `FrameBudget::native_scratch_ptr` 専用）。
+        ///
+        /// 製品経路に読み手は無い——原寸をそのまま交代で渡す形になり、席の中身を借りて読む
+        /// 経路（リサンプル元）が消えたためである。ゆえに `#[cfg(test)]` で閉じる。
+        #[cfg(test)]
         pub(super) fn get(&self) -> &ComposedSurface {
             &self.surface
         }
 
-        /// 恒等 k の交代（design.md Flow 2）。観測は実体の容量から読むため、席と一緒に
-        /// 動かすべき付随状態は 1 つも無い。
+        /// 表示バッファとの交代（design.md Flow 2・**k の値に依らず常にこの経路**）。観測は
+        /// 実体の容量から読むため、席と一緒に動かすべき付随状態は 1 つも無い。
         pub(super) fn swap(&mut self, buffer: &mut ComposedSurface) {
             std::mem::swap(&mut self.surface, buffer);
-        }
-    }
-
-    /// リサンプル作業領域の席（A3）。**高水位を持たない**。
-    ///
-    /// # 観測は席そのものの容量で行う（高水位の代用が作った穴）
-    ///
-    /// 以前の形は到達済み**出力幅**（`out.width()`）を高水位に使っていた。出力幅は
-    /// 「出力サーフェスの性質」であって作業領域の性質ではないため、この形は作業領域を
-    /// 一度も観測していなかった——次の 2 種の改変がどちらも檻を 1 本も赤にしなかった:
-    ///
-    /// - `self.scratch = ResampleScratch::default();` を `resample_with` の直前に置く
-    /// - 使い捨てのローカル `ResampleScratch` を作って `resample_with` へ渡す（席は不使用）
-    ///
-    /// 現在の形は [`ResampleScratch::capacity`] を呼び出しの前後で読み比べる。`Vec` の容量は
-    /// **再確保でしか増えない**ので、増えた＝この呼び出しで写像表を確保し直した、が厳密に決まる。
-    /// 上の 2 種はこれで両方死ぬ: 前者は毎回 0 から伸びるので毎回計数され（定常ゼロが赤）、
-    /// 後者は席の容量が永久に 0 のまま動かないので初回の確保が計数されない（初回 1 件が赤）。
-    #[derive(Debug, Default)]
-    pub(super) struct XmapSeat {
-        scratch: ResampleScratch,
-    }
-
-    impl XmapSeat {
-        /// 常設の作業席で `src` を `scale` 倍して `out` へ転写する。
-        ///
-        /// 写像表の容量がこの呼び出しで増えたら `true`（＝確保が起きた）。恒等 k と外形ゼロは
-        /// `resample_with` が写像表に触れる前に復帰するため容量が動かず、自動的に `false` に
-        /// なる（触っていない席の確保を数えない・条件分岐を別に持たない）。
-        pub(super) fn resample(
-            &mut self,
-            src: &ComposedSurface,
-            scale: ScaleRatio,
-            out: &mut ComposedSurface,
-        ) -> bool {
-            let before = self.scratch.capacity();
-            resample_with(src, scale, out, &mut self.scratch);
-            self.scratch.capacity() > before
         }
     }
 
@@ -417,7 +352,7 @@ mod seat {
 
 /// 毎フレーム経路の確保計数の所有者。適用をまたいで存続し、累積を保持する。
 ///
-/// 再利用席（合成先の常設席・リサンプル作業領域の席・マスクの輪番）は本型のフィールドである
+/// 再利用席（合成先の常設席・マスクの輪番）は本型のフィールドである
 /// （task 5.2・design.md §FrameBudget）。計数の API 面は席の導入で変わっていない。
 ///
 /// - Preconditions: 適用対象（表示 target）ごとに 1 つ持ち、適用のたびに使い回す。
@@ -426,8 +361,8 @@ mod seat {
 /// - Invariants: 適用ごとの増分の総和は累積に一致する。是正後の定常状態では
 ///   [`take_delta`](FrameBudget::take_delta) の全フィールドが 0（Requirement 3.1）であり、
 ///   寸法変化時は席ごとに一度だけ増えてまた 0 へ戻る（Requirement 3.2）。「一度だけ」は
-///   **確保対象ごとに一度**の意であり、2 本のバッファが交代する席（恒等 k の合成先席・
-///   マスクの輪番）では代金が 2 適用に分かれて 1 件ずつ現れる。
+///   **確保対象ごとに一度**の意であり、2 本のバッファが交代する席（合成先席・マスクの輪番）
+///   では代金が 2 適用に分かれて 1 件ずつ現れる。
 #[derive(Debug, Default)]
 pub(super) struct FrameBudget {
     /// 取り出し待ちの適用単位の増分。
@@ -436,8 +371,6 @@ pub(super) struct FrameBudget {
     total: BudgetCounters,
     /// 合成先の常設席（A1・`compose_into` の出力先）。
     native: seat::SurfaceSeat,
-    /// リサンプル作業領域の席（A3・`resample_with` の x 軸写像表）。
-    xmap: seat::XmapSeat,
     /// マスクの輪番（A4/A7・2 スロット＋各バッファの到達済み詰めバイト長）。
     mask: seat::MaskRotation,
 }
@@ -469,8 +402,9 @@ impl FrameBudget {
 
     /// 合成先の常設席（A1）を貸し出す（`compose_into` の出力先・design.md D2⑴）。
     ///
-    /// 席は貸し出しの前後で同じ実体であり、閉包の中で外形へ伸びる。伸長が**到達済みのバイト長を
-    /// 超えた**ときにだけ [`AllocSite::ComposeDst`] を計数する（本モジュール冒頭 §高水位）。
+    /// 席は貸し出しの前後で同じ実体であり、閉包の中で外形へ伸びる。席の実体の `Vec` 容量を
+    /// 貸し出しの**前後で読み比べ**、増えたときにだけ [`AllocSite::ComposeDst`] を計数する
+    /// （本モジュール冒頭 §何をもって「確保した」と数えるか——高水位は器が覚えない）。
     ///
     /// # なぜ閉包で貸すのか
     ///
@@ -489,7 +423,10 @@ impl FrameBudget {
         produced
     }
 
-    /// 恒等 k の交代（design.md Flow 2 の `alt k が恒等`）——合成先席と表示バッファを入れ替える。
+    /// 表示バッファとの交代（design.md Flow 2）——合成先席と表示バッファを入れ替える。
+    ///
+    /// **k の値に依らず常にこの経路である**（要件 1.3/7.3）。表示へ載せるのは原寸そのものであり、
+    /// k 適用の段は存在しない。
     ///
     /// コピーも確保も起きない（`Vec` の所有ごと交換する）。交代後は「いま合成した中身」が表示
     /// バッファに、「回収した容量」が合成先席になり、次の適用はそちらへ合成する。
@@ -508,9 +445,9 @@ impl FrameBudget {
     /// [`FrameBudget::regenerate_mask`] へ渡し、輪番の空きスロットとして戻す。
     ///
     /// 回収が成立しなかった場合（キャッシュにまだ空きがある暖機中・[`invalidate_all`] 直後）は
-    /// 空のバッファから始める。このバッファは以後の k 適用で外形まで伸びる＝**そこで必ず確保が
-    /// 起きる**が、その計数は伸長が起きる席メソッド（[`resample_native_into`]／
-    /// [`swap_native_scratch`] 経由の [`native_scratch`]）側が実体の容量差として拾う。ここで
+    /// 空のバッファから始める。このバッファは交代で合成先席へ入り、次の適用の合成で外形まで
+    /// 伸びる＝**そこで必ず確保が起きる**が、その計数は伸長が起きる席メソッド
+    /// （[`swap_native_scratch`] 経由の [`native_scratch`]）側が実体の容量差として拾う。ここで
     /// 先回りして数えると 1 適用で二重に数えることになる。
     ///
     /// 本メソッドが状態を持たない（`&mut self` を使わない）のは、確保の観測が**実体の容量**から
@@ -519,7 +456,6 @@ impl FrameBudget {
     ///
     /// [`ComposeCache::take_recycled`]: crate::cache::ComposeCache::take_recycled
     /// [`invalidate_all`]: crate::cache::ComposeCache::invalidate_all
-    /// [`resample_native_into`]: FrameBudget::resample_native_into
     /// [`native_scratch`]: FrameBudget::native_scratch
     /// [`swap_native_scratch`]: FrameBudget::swap_native_scratch
     pub(super) fn display_buffer(
@@ -527,41 +463,15 @@ impl FrameBudget {
         recycled: Option<CacheEntry>,
     ) -> (ComposedSurface, Option<Arc<AlphaMask>>) {
         match recycled {
-            // 追い出しエントリの native 原寸は使わない——新しいエントリの原寸は今回の合成が
-            // 決めるので、回収するのはバッファの確保だけである。
+            // 回収するのはバッファの確保だけである（新しいエントリの原寸は今回の合成が決める）。
+            // 表示記録（`display`）は回収の対象外——記録は原寸バイトと 1 対 1 ゆえ、次の合成が
+            // 作り直す（保持しているのは COM 参照だけで、確保の使い回しには関与しない）。
             Some(CacheEntry {
                 composed,
                 mask,
-                native: _,
+                display: _,
             }) => (composed, Some(mask)),
             None => (ComposedSurface::default(), None),
-        }
-    }
-
-    /// 合成先席の中身を `scale` 倍して `out`（回収した表示バッファ）へ転写する（A3・design.md D2⑶）。
-    ///
-    /// x 軸写像表は常設席から借りる——`resample`（使い捨ての作業領域を毎回起こす形）ではなく
-    /// `resample_with` を使う唯一の理由がこれである。出力バイトは `resample` と 1 バイトも
-    /// 違わない（emo-compose 側の等価檻が固定している）。
-    ///
-    /// 計数は 2 系統で、どちらも**実体の容量を呼び出しの前後で読み比べる**同じ形である:
-    /// [`AllocSite::ResampleDst`] は `out` のバイト列の容量が増えたとき、[`AllocSite::Xmap`] は
-    /// 写像表の容量が増えたとき。写像表は恒等 k と外形ゼロでは触られない（`resample_with` が
-    /// 先に復帰する）ため容量が動かず、その 2 経路は自動的に計数されない——触っていない席の
-    /// 確保を数えると定常ゼロの主張が濁る。
-    ///
-    /// `out` は毎回同じ実体とは限らない（キャッシュの追い出しバッファが順に回ってくる）。ゆえに
-    /// 器側で到達済みを覚える形は採れず、**その回に渡された実体の容量**だけを見る。回収されずに
-    /// 空バッファが渡ってきた回は容量 0 から伸びるので、必ず 1 件計数される。
-    pub(super) fn resample_native_into(&mut self, scale: ScaleRatio, out: &mut ComposedSurface) {
-        let before = out.bytes_capacity();
-        let grew_x_map = self.xmap.resample(self.native.get(), scale, out);
-
-        if out.bytes_capacity() > before {
-            self.note_alloc(AllocSite::ResampleDst);
-        }
-        if grew_x_map {
-            self.note_alloc(AllocSite::Xmap);
         }
     }
 

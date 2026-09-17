@@ -6,8 +6,10 @@
 // resident-local（from_layout がグリフから行内原点を差し引くのと同一原点で変換）。
 
 use super::*;
+
 use crate::canvas::{GlyphRunContent, RegionTransform, Resident, TextEffects};
 use crate::layout::PositionedGlyph;
+use crate::look::StyleId;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
@@ -34,6 +36,7 @@ fn glyph_resident(offset: (f32, f32)) -> Resident {
                 ch: 'あ',
                 inline_pos: 0.0,
                 advance: 10.0,
+                style: StyleId::DEFAULT,
             }],
             size: (10.0, 10.0),
         }),
@@ -102,8 +105,7 @@ fn empty_segments_returns_canvas_unchanged() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     assert_eq!(out, input, "セグメント空は恒等（無変更）");
 }
@@ -127,8 +129,7 @@ fn hover_sets_highlight_on_matching_line_only() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     let l0 = choice(&out.residents[0]);
     assert_eq!(l0.hovered, Some(0));
@@ -163,8 +164,7 @@ fn hover_none_still_records_segments_without_highlight() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
         let c = choice(&out.residents[i]);
@@ -193,8 +193,7 @@ fn segment_inline_range_is_resident_local_subtracting_line_origin() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     let c = choice(&out.residents[0]);
     assert_eq!(
@@ -223,8 +222,7 @@ fn decorate_bakes_band_extent_into_choice_residents() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     for i in [0usize, 1] {
         assert_eq!(
@@ -254,8 +252,7 @@ fn decorate_bakes_band_offset_into_choice_residents() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        TEST_OFFSET,
+        &bands_of(TEST_BAND, TEST_OFFSET),
     );
     for i in [0usize, 1] {
         assert_eq!(
@@ -281,8 +278,7 @@ fn decorate_bakes_zero_band_offset_for_flat_line_box_fonts() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     assert_eq!(choice(&out.residents[0]).band_offset, 0.0);
 }
@@ -303,8 +299,7 @@ fn segment_inline_range_vertical_subtracts_top_origin() {
             (0, 0, 0),
             &region,
             mode,
-            TEST_BAND,
-            NO_OFFSET,
+            &bands_of(TEST_BAND, NO_OFFSET),
         );
         let c = choice(&out.residents[0]);
         assert_eq!(
@@ -331,8 +326,7 @@ fn no_marker_style_yields_no_highlight_even_when_hovered() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     let c = choice(&out.residents[0]);
     assert_eq!(c.hovered, Some(0), "hover 印は付く");
@@ -353,8 +347,7 @@ fn invert_style_resolves_highlight_from_default_font_color() {
         (10, 20, 30),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     let c = choice(&out.residents[0]);
     assert_eq!(
@@ -382,8 +375,7 @@ fn two_choices_on_one_line_group_into_one_resident() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     assert_eq!(out.residents.len(), 1, "住人数は不変（1 行 1 住人）");
     let c = choice(&out.residents[0]);
@@ -412,8 +404,7 @@ fn wrapped_choice_highlights_both_lines() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     for i in [0usize, 1] {
         let c = choice(&out.residents[i]);
@@ -442,8 +433,7 @@ fn lines_without_segments_stay_glyph_run() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     assert!(
         matches!(out.residents[0].content, ResidentContent::GlyphRun(_)),
@@ -481,8 +471,7 @@ fn hover_stale_ordinal_yields_no_highlight() {
         (0, 0, 0),
         &region,
         WritingMode::HorizontalTb,
-        TEST_BAND,
-        NO_OFFSET,
+        &bands_of(TEST_BAND, NO_OFFSET),
     );
     for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
         let c = choice(&out.residents[i]);

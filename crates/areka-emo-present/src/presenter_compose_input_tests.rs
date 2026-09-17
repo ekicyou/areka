@@ -21,7 +21,7 @@ use super::test_support::{
 /// の `(EmoWorld, AtlasTable)` と、bind 無し／bind 有りそれぞれの直接合成 golden を返す。
 ///
 /// 5000 の part（1×1 不透明・base と異色）は base 内に収まるため、bind 有無で**外形は不変・
-/// バイトのみ変わる**（供給面リサイズ経路を踏まずに bind 差分の表示反映だけを固定できる）。
+/// バイトのみ変わる**（外形の変化を伴わずに bind 差分の表示反映だけを固定できる）。
 fn build_target_assets_with_bind(
     w: u32,
     h: u32,
@@ -192,8 +192,8 @@ fn bind_change_on_same_surface_updates_display() {
 /// （新面が実際に提示された証跡）・(e) `text_slot_view()`（slot/window/surface_size/scale）が切替の
 /// 前後で**完全一致**（文字スロットが安定＝TextSlotView が不変）——をすべて満たす。
 ///
-/// 同寸ゆえ供給面（chain）と装着（mount）は再生成されず（apply_show の `chain.is_none()` 分岐を
-/// 踏まない）、予約 text スロット entity は据え置かれる＝emo-text の描画資源を破壊しない
+/// 装着（mount）は初回表示で一度だけ生成され（`apply_show` の `mount.is_none()` 分岐を踏まない）、
+/// 予約 text スロット entity は据え置かれる＝emo-text の描画資源を破壊しない
 /// （design §emo-present 回帰・文字層＝同寸保持）。本 crate 本体は無改変（test-only・R6.3）。
 #[test]
 fn reshow_same_size_different_face_keeps_text_slot_stable() {
@@ -207,7 +207,7 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
         .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
         .expect("attach_target 失敗");
 
-    // 面 1000 を表示確立（可視・αマスク判定・供給面/装着を遅延生成）。
+    // 面 1000 を表示確立（可視・αマスク判定・装着を遅延生成）。
     let (tx0, rx0) = reply_channel::<PresentOutcome>();
     presenter.apply(
         &mut world,

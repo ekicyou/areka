@@ -133,9 +133,9 @@ fn attach_show_and_resize(world: &mut World) {
     // 期待 k ゲート（env 指定時のみ hard assert・未指定なら上の実測ログのみで通過）。
     assert_expected_ratio(applied);
 
-    // ④ 描画一致の anchor（マウス非依存・read_back）: Head/Bust 中心を物理座標へ写像した画素が不透明で
-    // あることを hard assert する。**描画証跡であって判定証跡ではない**（要件 4.4）。
-    assert_drawn_anchor(&boot.presenter, target, applied, physical);
+    // ④ 描画一致の anchor（マウス非依存・read_back）: Head/Bust 中心の画素が不透明であることを
+    // hard assert する。**描画証跡であって判定証跡ではない**（要件 4.4）。
+    assert_drawn_anchor(&boot.presenter, target, applied, native);
 
     // donor 必須逸脱 #3: 本番の反映関数で placeholder 誤寸 → **物理寸**へ resize（戻り値 true を assert）。
     let ok = placement::follow::resize_window_to(
@@ -244,13 +244,14 @@ fn verify_physical_size_match(world: &mut World) {
     );
 }
 
-/// ④ 描画一致の anchor: `read_back` した表示画素の Head/Bust 各矩形中心（**物理座標へ写像**）が
-/// **不透明**であることを hard assert。
+/// ④ 描画一致の anchor: `read_back` した表示画素の Head/Bust 各矩形中心が **不透明**であることを
+/// hard assert。
 ///
 /// collision 値（サーフェス px）の位置に実際に絵が描かれていることを機械的に固定する（マウス非依存）。
-/// 合成ビットマップ原点 ≡ サーフェス画像原点は構造的に保証される（`compute_extent` は原点 (0,0) 固定）が、
-/// `read_back` が返すのは **k 適用後の供給面**（`chain.size()` ＝ 物理寸）であるため、collision 座標は
-/// 乗算方向の丸め権威 [`ScaleRatio::scale_len`] で ×k してから画素 index へ写す。
+/// 合成ビットマップ原点 ≡ サーフェス画像原点は構造的に保証される（`compute_extent` は原点 (0,0) 固定）で
+/// あり、`read_back` が返すのは **native 原寸の合成バイト列**（拡大は GPU 変換の領分・
+/// `areka-P0-present-gpu-transform-scale` 要件 6.2）であるため、collision 座標を**そのまま**画素 index へ
+/// 写す（×k の写像は不要になった）。
 ///
 /// # 証跡としての位置づけ（要件 4.4）
 ///
@@ -261,51 +262,50 @@ fn assert_drawn_anchor(
     presenter: &EmoPresenter,
     target: TargetId,
     applied: ScaleRatio,
-    physical: (u32, u32),
+    native: (u32, u32),
 ) {
     let bytes = match presenter.read_back(target) {
         Ok(b) => b,
         Err(e) => panic!("collision-probe: read_back に失敗（④ 描画一致 anchor が取れない）: {e}"),
     };
+    // 読み戻しは native 原寸ゆえ、長さは k に依らず `w*h*4` である（伸びていたら拡大が漏れている）。
+    let native_len = (native.0 as usize) * (native.1 as usize) * 4;
+    assert_eq!(
+        bytes.len(),
+        native_len,
+        "collision-probe: read_back バイト長 {} が native 原寸長 {native_len}（{}x{}×4）と不一致 — k={} の拡大が読み戻しへ漏れている（要件 6.2）",
+        bytes.len(),
+        native.0,
+        native.1,
+        format_ratio(applied)
+    );
     for (rect, label) in [(HEAD_RECT, "Head"), (BUST_RECT, "Bust")] {
-        let anchor = physical_anchor(rect, applied, label);
-        assert_pixel_opaque(&bytes, physical, anchor, label);
+        let anchor = native_anchor(rect, label);
+        assert_pixel_opaque(&bytes, native, anchor, label);
     }
     tracing::info!(
         k = %format_ratio(applied),
-        "collision-probe: ④ 描画一致 anchor 通過（物理座標へ写像した Head/Bust 中心が不透明）— これは描画証跡であり判定証跡ではない（判定証跡は ⑤ の目視由来経路のみ）"
+        "collision-probe: ④ 描画一致 anchor 通過（native 座標の Head/Bust 中心が不透明）— これは描画証跡であり判定証跡ではない（判定証跡は ⑤ の目視由来経路のみ）"
     );
 }
 
-/// 当たり判定矩形（サーフェス px）の中心を **物理座標**へ写像した anchor 画素を返す。
+/// 当たり判定矩形（サーフェス px）の中心を、そのまま anchor 画素として返す。
 ///
-/// 中心・矩形境界のいずれも乗算方向の丸め権威 [`ScaleRatio::scale_len`] を通す（probe 側で ×k の式を
-/// 持たない）。写像後の anchor が矩形の内側に [`ANCHOR_MARGIN_PX`] 以上の余裕を持つことを hard assert し、
-/// `scale_len` の丸め差（≤1px）と無関係に anchor が成立することを構図で保証する。
-fn physical_anchor(
-    (left, top, right, bottom): (i64, i64, i64, i64),
-    applied: ScaleRatio,
-    label: &str,
-) -> (u32, u32) {
-    let center = (((left + right) / 2) as u32, ((top + bottom) / 2) as u32);
-    let anchor = (applied.scale_len(center.0), applied.scale_len(center.1));
-    let (pl, pt) = (
-        applied.scale_len(left as u32),
-        applied.scale_len(top as u32),
-    );
-    let (pr, pb) = (
-        applied.scale_len(right as u32),
-        applied.scale_len(bottom as u32),
-    );
+/// collision 値と `read_back` は**同じ native 座標系**（`areka-P0-present-gpu-transform-scale` 要件 6.2）
+/// ゆえ写像は要らない。anchor が矩形の内側に [`ANCHOR_MARGIN_PX`] 以上の余裕を持つことは引き続き hard
+/// assert する——退化した（幅・高さが数 px の）矩形を fixture が持ち込んだとき、中心画素の不透明が
+/// 「たまたま縁に当たった」だけになるのを防ぐ構図の担保である。
+fn native_anchor((left, top, right, bottom): (i64, i64, i64, i64), label: &str) -> (u32, u32) {
+    let anchor = (((left + right) / 2) as u32, ((top + bottom) / 2) as u32);
+    let (l, t, r, b) = (left as u32, top as u32, right as u32, bottom as u32);
     assert!(
-        anchor.0 >= pl + ANCHOR_MARGIN_PX
-            && anchor.0 + ANCHOR_MARGIN_PX <= pr
-            && anchor.1 >= pt + ANCHOR_MARGIN_PX
-            && anchor.1 + ANCHOR_MARGIN_PX <= pb,
-        "collision-probe: {label} anchor ({},{}) が物理矩形 ({pl},{pt})-({pr},{pb}) の内側 {ANCHOR_MARGIN_PX}px 余裕を満たさない（k={}・丸め差と無関係に成立させる前提の破綻）",
+        anchor.0 >= l + ANCHOR_MARGIN_PX
+            && anchor.0 + ANCHOR_MARGIN_PX <= r
+            && anchor.1 >= t + ANCHOR_MARGIN_PX
+            && anchor.1 + ANCHOR_MARGIN_PX <= b,
+        "collision-probe: {label} anchor ({},{}) が矩形 ({l},{t})-({r},{b}) の内側 {ANCHOR_MARGIN_PX}px 余裕を満たさない（退化矩形＝中心の不透明が縁のたまたまになる）",
         anchor.0,
         anchor.1,
-        format_ratio(applied)
     );
     anchor
 }

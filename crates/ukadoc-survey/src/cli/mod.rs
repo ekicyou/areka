@@ -1,8 +1,8 @@
 //! 副手続きの振り分けと使い方の表示（設計「入口 / cli」・要件 6.12）。
 //!
 //! 引数の解析は自前で行う。副手続きは `catalog`・`ledger-init`・`report`・
-//! `report-summary`・`check`・`evidence`・`candidates`・`diff` の 8 つで固定なので、
-//! 引数解析の外部ライブラリは入れない（設計 Technology Stack）。
+//! `report-summary`・`check`・`evidence`・`candidates`・`diff`・`priority-apply` の
+//! 9 つで固定なので、引数解析の外部ライブラリは入れない（設計 Technology Stack）。
 //!
 //! # 振り分けは表 1 本
 //!
@@ -39,8 +39,8 @@ pub(crate) struct Subcommand {
     pub(crate) handler: Handler,
 }
 
-/// 振り分け表（設計「入口 / cli」の表と同じ 8 つ・同じ並び）。
-pub(crate) const SUBCOMMANDS: [Subcommand; 8] = [
+/// 振り分け表（設計「入口 / cli」の表と同じ 9 つ・同じ並び）。
+pub(crate) const SUBCOMMANDS: [Subcommand; 9] = [
     Subcommand {
         name: "catalog",
         handler: generate::catalog,
@@ -72,6 +72,10 @@ pub(crate) const SUBCOMMANDS: [Subcommand; 8] = [
     Subcommand {
         name: "diff",
         handler: inspect::diff,
+    },
+    Subcommand {
+        name: "priority-apply",
+        handler: generate::priority_apply,
     },
 ];
 
@@ -143,7 +147,7 @@ pub(crate) fn extra_arguments_notice(name: &str, rest: &[String]) -> String {
 pub fn usage() -> String {
     "使い方: cargo run -p ukadoc-survey -- <副手続き>
 
-副手続きは 8 つ。いずれも引数を取らない。
+副手続きは 9 つ。いずれも引数を取らない。
 
   catalog         正典のカタログを作り直す（スナップショットが要る）
   ledger-init     初期の台帳を作って既存の台帳へ差し込む
@@ -153,6 +157,7 @@ pub fn usage() -> String {
   evidence        項目ごとの証拠を並べる
   candidates      手掛かりの候補を並べる
   diff            今のカタログと新しいスナップショットの差を並べる（スナップショットが要る）
+  priority-apply  確定した優先度を台帳 4 本へ書き戻す
 
 スナップショットの場所は環境変数 AREKA_UKADOC_SNAPSHOT で指定できる。"
         .to_string()
