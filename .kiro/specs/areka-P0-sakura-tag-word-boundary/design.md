@@ -31,14 +31,14 @@
 - **`scan_tag` におけるタグ名の終端位置の決定**（`crates/areka-parsers/src/sakura/lexer.rs`）: 語走査の頭打ち（最大 3 文字）、`bare_tag_len` による長さ確定の前倒し、短縮対象語＋数字の 1 例外。角括弧の有無の判定はこの確定位置で行う。
 - `lexer.rs` 内の、実装と食い違うことになる説明注記の訂正（要件 6.6）。対象は 7 か所——「モジュール doc の正準タグの項（`[` がワード終端）」「モジュール doc の bare タグの項」「`Token::Tag` の doc（word は `[` まで）」「`scan_tag` の doc の形態一覧（`[` がワード終端）」「`scan_tag` の語走査直前の注記」「角括弧なし経路の注記」「`bare_tag_len` の doc 冒頭 2 段落」。完了条件は `lexer.rs` 内で「`[` がワード終端」「word は `[` まで」の記述が 0 件になること（設計検証 2026-09-13 で 3 か所の漏れを訂正）。
 - 新設テスト 2 ファイル（`lexer_word_boundary_tests.rs`・`parse_word_boundary_tests.rs`）と、`lexer.rs`／`parse.rs` 末尾のパス属性つき接続宣言。
-- 架空の多文字綴り `\foo` を入力に使う既存テスト 6 本（`lexer_tests.rs` 1 本・`decode_tests.rs` 2 本・`parse_tests.rs` 1 本・`validation_tests.rs` 2 本）の入力差し替え（正典の 1 文字綴り `\i` へ）。完了条件は `\foo` を `lex`／`dec`／`parse` に通す既存テストが 0 件になること（`model_tests.rs` の `Instruction::Raw` 直接構築は対象外・設計検証 2026-09-13 で `validation_tests.rs` の 2 本の漏れを訂正）。
+- 架空の多文字綴り `\foo` を入力に使う既存テスト 8 本の扱い。綴り差し替え 7 本（`lexer_tests.rs` 1 本・`decode_tests.rs` 2 本・`parse_tests.rs` 1 本・`validation_tests.rs` 2 本・`decode_font_tests.rs` の `scripts_without_font_tag_decode_unchanged`——正典の 1 文字綴り `\i` へ）と、期待値の書き換え 1 本（`decode_font_tests.rs` の `other_words_starting_with_f_stay_raw`）。完了条件は、書き換え 1 本を除き `\foo[`（角括弧付き）を `lex`／`dec`／`parse` に通す既存テストが 0 件になること（角括弧を伴わない `\fooテキスト` を使う `decode_font_tests.rs` の `bare_f_consumes_exactly_one_character` は是正の前後で結果が同じ（1 文字規律そのものを固定する）ゆえ差し替えずに残す・`model_tests.rs` の `Instruction::Raw` 直接構築は対象外・設計検証 2026-09-13 で `validation_tests.rs` の 2 本、main 取り込み 2026-09-17 で `decode_font_tests.rs` の 2 本を追加）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の裁量表への 1 行登記。
 
 ### Out of Boundary
 
 - `bare_tag_len` の本体と決定表（先行 spec `areka-P0-sakura-bare-tag-lexer` の確定事項・要件 4.8）。読むだけで編集しない。
 - `scan_bracket_args`・`scan_sysvar`・`lex` のエスケープ処理・短縮形判定の条件式（`SHORTHAND_WORDS.contains(&first) && 次が 1 桁 && その次が [ でない`）。
-- `decode.rs`・`model.rs`・`crates/areka-sakura/src/compile.rs`（`Raw` を「M-boot 外タグを無視」の debug ログで捨てる catch-all）。同ウェーブ W13 の `areka-P0-text-decoration-canon` が `decode.rs`／`compile.rs` を触るため、本仕様はこれらに触れない（共有ファイル 0）。
+- `decode.rs`・`model.rs`・`crates/areka-sakura/src/compile.rs`（`Raw` を「M-boot 外タグを無視」の debug ログで捨てる catch-all）。同ウェーブ W13 の `areka-P0-text-decoration-canon` が `decode.rs`／`compile.rs` を触るため、本仕様はこれらに触れない（共有ファイル 0）。同 spec は 2026-09-17 に PR#148 で main へ着地し本ブランチへ取り込み済み——本番ファイルの共有 0 は保たれるが、同 spec が新設したテストファイル `decode_font_tests.rs` の 2 本は本仕様の編集対象に入る（下記 Modified Files）。
 - 完了済み spec（`areka-P0-sakura-parse`・`areka-P0-sakura-bare-tag-lexer`）の文書、行数上限の例外表、roadmap・steering。
 - `\_a`・`\_q` 等の意味付け（`areka-P0-anchor-tag-canon`・`areka-P0-sakura-time-directives` の領分）。
 
@@ -103,7 +103,8 @@ crates/areka-parsers/src/sakura/
 ├── parse_bare_tag_tests.rs         # 不変
 ├── decode_tests.rs                 # 変更: 既存 2 本の入力差し替え（\foo → \i）
 ├── decode.rs / model.rs / mod.rs   # 不変
-└── validation_tests.rs             # 変更: 既存 2 本の入力差し替え（\foo → \i）・mod.rs から常に走る
+├── validation_tests.rs             # 変更: 既存 2 本の入力差し替え（\foo → \i）・mod.rs から常に走る
+└── decode_font_tests.rs            # 変更: 既存 1 本の入力差し替え（\foo[f] → \i[f]）＋ 1 本の期待値書き換え（f で始まる別綴り → 引数なし Font ＋ 本文）
 doc/
 └── COMPAT_ARCHITECTURE.md          # 変更: §8 裁量表に 1 行（先行 spec の行の直後）
 ```
@@ -116,6 +117,7 @@ doc/
 - `crates/areka-parsers/src/sakura/decode_tests.rs` — `unknown_tag_absorbed_as_raw`（`\foo[a,b]` → `\i[a,b]`・期待 `Raw("\i[a,b]")`）と `lenient_passthrough_never_aborts_keeps_valid_neighbors`（`\foo[x]` → `\i[x]`・期待 `Raw("\i[x]")`）の入力差し替え。
 - `crates/areka-parsers/src/sakura/parse_tests.rs` — `malformed_token_does_not_drop_preceding_instruction` の入力 `\e\foo[` を `\e\i[`（期待は不変: `End` ＋ 未閉じ吸収の `Raw`・要素数 2）へ差し替え。
 - `crates/areka-parsers/src/sakura/validation_tests.rs` — `syntax_unknown_tag_is_syntactically_split_and_kept_raw`（`\foo[a,b]` → `\i[a,b]`・期待 `Raw("\i[a,b]")`）と `lenient_passthrough_keeps_instructions_around_malformed_token`（`\e\foo[` → `\e\i[`・期待は不変: 要素数 2）の入力差し替え。`mod.rs` の `#[cfg(test)] mod validation_tests;` で常に走るため、放置すると是正後に 2 本とも赤になる。
+- `crates/areka-parsers/src/sakura/decode_font_tests.rs`（2026-09-17 の main 取り込みで追加・完了 spec `areka-P0-text-decoration-canon` が新設）— `scripts_without_font_tag_decode_unchanged` の台本中の `\foo[f]` を `\i[f]`（期待 `Raw("\i[f]")`・引数の `f` が腕へ滲まない意図は保つ）へ差し替え、`decode_font_tests.rs` の `other_words_starting_with_f_stay_raw`（入力 `\foo[a,b]`・`\fo[x]`・`\font[bold,1]`・`\f2[1]` の 4 つを `Raw` と期待）は、是正後に「`f` で始まる別の綴りの角括弧付きタグ」が字句層で構成できなくなるため意図ごと書き換える——同じ 4 入力が `[Font{args:[]}, Text("oo[a,b]")]` のように引数なしの文字装飾 ＋ 本文へ分かれることを期待し、名前も挙動に合わせる（`other_words_starting_with_f_split_into_bare_font_and_text` 等）。後者は旧実装で赤になり、是正の対を 1 本増やす（変異手順 ⑴）。完了 spec の文書は書き換えない（要件 7.4）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の 4 欄表、項目「角括弧なし `\_` タグ（2 文字形 `\_X`・3 文字形 `\__X`）の字句境界と意味」の行の直後に 1 行。
 
 ### New Files
@@ -164,6 +166,7 @@ flowchart TD
 | 2.4 | `\-` の終了指令 | 通し P2 | — | — |
 | 2.5 | `\c` の消去 | 通し P2 | — | — |
 | 2.6 | 短縮対象語・`\_` タグは意味を持たない Raw のまま | 通し P3 | `decode_passthrough_bare`（不変・読むだけ） | — |
+| 2.7 | 素の `\f` は引数なしの文字装飾のまま | 通し P2・P8 | `decode_bare` の `"f"` 腕（不変・読むだけ） | — |
 | 3.1 | 本文中の未閉じ `[` で残り全部を飲まない | 語境界・L4・P4 | 決定表 行 A〜C | Len→BareN |
 | 3.2 | 直後の未閉じ `[` は従来どおり末尾まで Raw | L9・P5 | `BracketScan::Unclosed`（不変） | Br→Args |
 | 3.3 | エラー・例外なし・前後の単位を欠かさない | 語境界（長さ ≥ 1・常に前進） | 決定表の不変条件 | — |
@@ -179,7 +182,7 @@ flowchart TD
 | 4.10 | 正典の綴りの解釈を 1 つも変えない | L1・L3・L8・P6（規則が 3 形と一致するため） | 決定表 | — |
 | 4.11 | 架空の多文字綴り `\foo[a,b]い` は 1 文字タグ＋本文（意図的非互換） | L12・P8・登記 | 決定表 行 A | — |
 | 4.12 | emo2 の表示結果と時間軸が不変 | 構造証跡（素の `[` 0 件）＋ `cargo test -p areka-sakura` | — | — |
-| 5.1 | 1 文字タグ名の全綴り × 本文中 `[…]`（8 綴りは意味も） | L1・P2 | — | — |
+| 5.1 | 1 文字タグ名の全綴り × 本文中 `[…]`（9 綴りは意味も） | L1・P2 | — | — |
 | 5.2 | 短縮対象語 3 個 × 本文中 `[…]` | L2 | — | — |
 | 5.3 | `\_` 始まり 19 綴り × 本文中 `[…]` | L3 | — | — |
 | 5.4 | 3 形 × 未閉じ | L4・P4 | — | — |
@@ -210,7 +213,7 @@ flowchart TD
 | 注記訂正 | 字句層 `lexer.rs` | 実装と食い違う説明を残さない | 6.6 | — | — |
 | 字句テスト `lexer_word_boundary_tests.rs` | テスト | `lex` → `Token` 列で判断分岐を固定 | 1.5〜1.8, 3.1, 3.2, 4.1〜4.4, 4.7〜4.11, 5.1〜5.8 | `lex`・`Token`（P0） | — |
 | 通しテスト `parse_word_boundary_tests.rs` | テスト | `parse` → `Instruction` 列で利用者から見える結果を固定 | 1.2, 1.6, 1.8, 1.9, 2.1〜2.6, 3.1, 3.2, 4.1, 4.2, 4.9, 4.11, 5.9 | `parse`・`Instruction`（P0） | — |
-| 既存テストの入力差し替え | テスト | 架空綴り `\foo` を正典の `\i` へ | 4.11, 6.5 | — | — |
+| 既存テストの入力差し替え | テスト | 架空綴り `\foo` を正典の `\i` へ（7 本）・`f` 始まり別綴りの期待値書き換え（1 本） | 2.7, 4.11, 6.5 | — | — |
 | 登記 | 記録 `COMPAT_ARCHITECTURE.md` §8 | 裁量・根拠・非互換・残る事項 | 7.1〜7.5 | — | — |
 
 ### 字句層
@@ -293,8 +296,8 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize);
 
 #### 既存テストの入力差し替え
 
-- 対象 6 本（File Structure Plan の Modified Files に列挙）。差し替え先は正典に存在し areka が意味を与えていない 1 文字綴り `\i`（`decode_tag` に腕が無く `decode_passthrough_tag` → `Raw` へ落ちる）。各テストの意図（正典形の未知タグは 1 単位に区切られ `Raw` で保持される／未閉じ吸収が前の命令を欠落させない）は不変で、期待値の形も不変（綴りだけ変わる）。
-- `\foo[a,b]` の新しい結果は新規 L12・P8 が固定する。これにより「架空綴りの結果が変わった」ことが既存テストの改変でなく新規テストの追加として記録される（要件 5.6 の「取り違えない」）。
+- 対象 8 本（File Structure Plan の Modified Files に列挙）。うち 7 本は綴りの差し替え、`decode_font_tests.rs` の `other_words_starting_with_f_stay_raw` 1 本は期待値の書き換え（下記）。差し替え先は正典に存在し areka が意味を与えていない 1 文字綴り `\i`（`decode_tag` に腕が無く `decode_passthrough_tag` → `Raw` へ落ちる）。各テストの意図（正典形の未知タグは 1 単位に区切られ `Raw` で保持される／未閉じ吸収が前の命令を欠落させない）は不変で、期待値の形も不変（綴りだけ変わる）。
+- `\foo[a,b]` の新しい結果は新規 L12・P8 が固定する。これにより「架空綴りの結果が変わった」ことが既存テストの改変でなく新規テストの追加として記録される（要件 5.6 の「取り違えない」）。例外は `other_words_starting_with_f_stay_raw` で、このテストは「`f` で始まる別綴りの角括弧付きタグ」という是正後に構成できない形を固定していたため、綴りの差し替えでは意図を保てない。期待値を新しい結果へ書き換え、テスト名も挙動に合わせる（同テストの較正「腕の判定を `starts_with('f')` へ広げると赤」は、是正後は語が 1 文字に確定するため観測できなくなる——その旨を doc に残す）。
 
 ### 記録
 
@@ -309,7 +312,7 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize);
 - 項目: タグ名の終端位置（本文中に半角 `[` が続く形を含む）。
 - 裁量: タグ名の長さは綴りによらず「`\` ＋ 1 文字」（`\_` 始まりのみ `\_` ＋ 1 文字／`\__` ＋ 1 文字）で決まり、その位置に `[` があれば角括弧経路へ送る。短縮対象語 `w`/`b`/`p` の直後が数字のときは従来どおり数字まで読んでから `[` を判定する（`\w2[x]` は角括弧形）。定義点は `crates/areka-parsers/src/sakura/lexer.rs` の `scan_tag`（長さは `bare_tag_len`）。
 - 根拠（要件 7.2 の 4 点）: ① 正典はタグ語の終端規則を明文化していない。② 正典のタグ名は 3 形しか無いことを `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\` 始まり項目で全数え確認した（1 文字 31・`\_` ＋ 1 文字 14・`\__` ＋ 1 文字 5）。③ `[` はエスケープ対象でなく（エスケープはバックスラッシュの二重化のみ）台詞中の素の `[` は正当な入力である。④ 完了済み spec `areka-P0-sakura-parse` の受入基準 13.1 に `[` 後続形のテストが無かった。
-- 非互換（要件 7.3）: 正典に存在しない架空の多文字綴りの直後に角括弧が続く形（例 `\foo[a,b]`・未閉じの `\foo[`・`\___x[1]`）は、従来の「丸ごと捨てる（未閉じなら残り全部を吸収）」から「1 文字タグ ＋ 本文」へ変わる。正典の綴りは 1 つも変わらない。
+- 非互換（要件 7.3）: 正典に存在しない架空の多文字綴りの直後に角括弧が続く形（例 `\foo[a,b]`・未閉じの `\foo[`・`\___x[1]`）は、従来の「丸ごと捨てる（未閉じなら残り全部を吸収）」から「1 文字タグ ＋ 本文」へ変わる（`\f` で始まる綴りは、1 文字タグ `\f` が引数なしの文字装飾として読まれる）。正典の綴りは 1 つも変わらない。
 - 残る事項（要件 7.3）: タグの直後の `[` は従来どおり角括弧形として読む（`\e[注です` の寛容吸収を含む）。綴りごとの意味付けの未実装は本仕様の範囲外で、台帳の所有先未定項目として `areka-P0-ukadoc-coverage-roadmap` の裁定に委ねる。
 - 出典 spec: `areka-P0-sakura-tag-word-boundary`（PR 番号は `/kiro-complete` の最終コミット直前に自分の行だけ埋める 2 段登記・先行 spec と同じ手順）。
 - 完了 spec 文書は書き換えず（7.4）、ソースへ ukadoc の出典注記を置かない（7.5）。
@@ -351,27 +354,27 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize);
 ### 通しテスト `crates/areka-parsers/src/sakura/parse_word_boundary_tests.rs`（`parse` → `Instruction` 列）
 
 - **P1** 要件の代表例: `\1青い[1]ノートさんから交代したよ〜。\e` → `[SpeakerScope{1}, Text("青い[1]ノートさんから交代したよ〜。"), End]`（1.2・2.1・5.9）。
-- **P2** 意味の保持 8 綴り: `\0本文[注]`／`\h` → `SpeakerScope{0}`＋`Text`、`\1`／`\u` → `SpeakerScope{1}`＋`Text`、`\n本文[注]` → `NewLine(1.0)`＋`Text`、`\e本文[注]` → `End`＋`Text`、`\-本文[注]` → `Quit`＋`Text`、`\c本文[注]` → `Clear`＋`Text`（2.1〜2.5・5.1・5.9）。
+- **P2** 意味の保持 9 綴り: `\0本文[注]`／`\h` → `SpeakerScope{0}`＋`Text`、`\1`／`\u` → `SpeakerScope{1}`＋`Text`、`\n本文[注]` → `NewLine(1.0)`＋`Text`、`\e本文[注]` → `End`＋`Text`、`\-本文[注]` → `Quit`＋`Text`、`\c本文[注]` → `Clear`＋`Text`、`\f本文[注]` → `Font{args:[]}`＋`Text`（2.1〜2.5・2.7・5.1・5.9）。
 - **P3** 意味を持たない綴りは `Raw` のまま新しい動作を得ない: `\wテキスト[注]です` → `[Raw(r"\w"), Text("テキスト[注]です")]`・`\_q文字[注]を瞬間表示する。\_q` → `[Raw(r"\_q"), Text("文字[注]を瞬間表示する。"), Raw(r"\_q")]`・`\4テキスト[注]です` → `[Raw(r"\4"), Text("テキスト[注]です")]`（1.4・1.9・2.6・6.3・6.4）。
 - **P4** 本文中の未閉じ: `\1テキスト[注です。まだ続く台詞` → `[SpeakerScope{1}, Text("テキスト[注です。まだ続く台詞")]`・`\eテキスト[注です。まだ続く台詞` → `[End, Text("テキスト[注です。まだ続く台詞")]`（3.1・3.3・5.4・5.9）。
 - **P5** 直後の未閉じは不変: `\e[注です` → `[Raw(r"\e[注です")]`（3.2・4.7・5.5）。
 - **P6** 角括弧形の意味は不変: `\n[half]` → `NewLine(0.5)`・`\_w[600]` → `Wait(600ms)`・`\_l[x,y]` → `Cursor{x:"x",y:"y"}`・`\_a[ID]` → `Raw(r"\_a[ID]")`・`\p[1]` → `SpeakerScope{1}`（4.1・4.2・5.5）。
 - **P7** 影響しない 4 形の通し: `\s[0]テキスト[注]です` → `[Surface("0"), Text(...)]`・`\w9テキスト[注]です` → `[Wait(450ms), Text(...)]`・`\eテキスト［注］です` → `[End, Text(...)]`・`ふつうの台詞[1]です` → `[Text(...)]`（4.4・4.9・5.6）。
-- **P8** 架空綴りの通し: `\foo[a,b]い` → `[Raw(r"\f"), Text("oo[a,b]い")]`（4.11・5.6・7.3）。
+- **P8** 架空綴りの通し: `\foo[a,b]い` → `[Font{args:[]}, Text("oo[a,b]い")]`（2.7・4.11・5.6・7.3。2026-09-17 の main 取り込みで素の `\f` が `Raw` から `Font` へ変わったため期待値を訂正）。
 - **P9** 半角英数と後続単位: `\0file[1].txt` → `[SpeakerScope{0}, Text("file[1].txt")]`・`\1青い[1]ノート\nさん%username` → `[SpeakerScope{1}, Text("青い[1]ノート"), NewLine(1.0), Text("さん"), SystemVar("username")]`（1.6・1.8・5.8）。
 
 ### 変異手順（要件 5.7・実装タスクで実施し結果を記録する）
 
 1. 是正後の全テストが緑であることを確認する。
-2. **変異 ⑴（旧実装へ戻す）**: 語走査の上限を外し、長さ確定と `j`／`word` の付け直しを外す（角括弧なし腕は `bare_tag_len` で切り出す旧形へ戻す）。`cargo test -p areka-parsers`。**期待の赤: L1〜L7・L12・P1〜P4・P8・P9**。**期待の緑: L8〜L11・P5〜P7 と既存の全テスト**（入力差し替え後の 6 本は `\i` が正典形の 1 文字綴りゆえ旧実装でも緑＝差し替えが意図を保っている証拠）。
+2. **変異 ⑴（旧実装へ戻す）**: 語走査の上限を外し、長さ確定と `j`／`word` の付け直しを外す（角括弧なし腕は `bare_tag_len` で切り出す旧形へ戻す）。`cargo test -p areka-parsers`。**期待の赤: L1〜L7・L12・P1〜P4・P8・P9 と、期待値を書き換えた `decode_font_tests.rs` の 1 本**。**期待の緑: L8〜L11・P5〜P7 とそれ以外の既存の全テスト**（綴りを差し替えた 7 本は `\i` が正典形の 1 文字綴りゆえ旧実装でも緑＝差し替えが意図を保っている証拠）。
 3. **変異 ⑵（例外を外す）**: 「短縮対象語＋数字なら走査結果のまま」の分岐を外し、常に `bare_tag_len` で確定する。**期待の赤: L10 と既存 `wait_digit_then_bracket_is_tag_not_shorthand`・`balloon_digit_then_bracket_is_tag_not_shorthand`・`balloon_unclosed_bracket_absorbed_as_raw`**。他は緑。
 4. どちらの変異も元へ戻し、再び全緑を確認する。変異ごとに赤になったテスト名を実装記録へ残す。
 
 ### 既存テストの扱い
 
-- 入力差し替え 6 本（`lexer_tests.rs` 1・`decode_tests.rs` 2・`parse_tests.rs` 1・`validation_tests.rs` 2）は綴り `\foo` → `\i` の置換と doc の追随のみ。期待値の形は変えない。完了条件: `\foo` を `lex`／`dec`／`parse` に通す既存テストが 0 件（`model_tests.rs` の `Instruction::Raw("\\foo[a,b]")` は直接構築ゆえ対象外）。
+- 綴り差し替え 7 本（`lexer_tests.rs` 1・`decode_tests.rs` 2・`parse_tests.rs` 1・`validation_tests.rs` 2・`decode_font_tests.rs` 1）は綴り `\foo` → `\i` の置換と doc の追随のみ。期待値の形は変えない。期待値書き換え 1 本（`decode_font_tests.rs` の `other_words_starting_with_f_stay_raw`）は上記。完了条件: 書き換え 1 本を除き `\foo[`（角括弧付き）を `lex`／`dec`／`parse` に通す既存テストが 0 件（角括弧を伴わない `\fooテキスト` を使う `decode_font_tests.rs` の `bare_f_consumes_exactly_one_character` は是正の前後で結果が同じ（1 文字規律そのものを固定する）ゆえ差し替えずに残す・`model_tests.rs` の `Instruction::Raw("\\foo[a,b]")` は直接構築ゆえ対象外）。
 - `lexer_bare_tag_tests.rs`・`parse_bare_tag_tests.rs`・`model_tests.rs` は無変更。
-- `research.md` §8 の「更新対象の既存テストは `lexer_tests.rs` の 1 本」は設計時の全数 grep で 4 本へ、設計検証（2026-09-13）で `validation_tests.rs` の 2 本を加えて 6 本へ訂正した（`research.md` §9）。
+- `research.md` §8 の「更新対象の既存テストは `lexer_tests.rs` の 1 本」は設計時の全数 grep で 4 本へ、設計検証（2026-09-13）で `validation_tests.rs` の 2 本を加えて 6 本へ、main 取り込み（2026-09-17）で `decode_font_tests.rs` の 2 本を加えて 8 本へ訂正した（`research.md` §9・§10）。
 
 ### 実行手順（要件 5.11・4.12）
 
@@ -390,6 +393,6 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize);
 
 - 未解決の要件はない。要件 5.1 の「31 綴り」は設計ディスカッション（2026-09-13）で「`\_` を除く 30 綴り」へ訂正した——`\_` の直後に本文が続く形は要件 4.8 の固定長規律で 2 文字形 `\_X` として読まれ、「1 文字タグ ＋ 本文」の形が入力として構成できないため。L1 は 30 綴りをループし、`\_` 単独の形は既存 T4／T6〜T8／T10 に委ねる。
 - リスク ⑴: 例外判定の誤実装（対策: L2・L10・既存 2 本・変異 ⑵）。
-- リスク ⑵: `decode_tests.rs`・`parse_tests.rs` の入力差し替えが同ウェーブ `text-decoration-canon` のテスト追加と同じファイルで rebase 面を作り得る（roadmap の干渉台帳は本番ファイル `decode.rs`／`compile.rs` の共有 0 を実測したもので、テストファイルは対象外）。対策: 差し替えは綴り 1 語の置換に留め（各 1〜3 行）、先に着地した側の上に後着が rebase する。
+- リスク ⑵: `decode_tests.rs`・`parse_tests.rs` の入力差し替えが同ウェーブ `text-decoration-canon` のテスト追加と同じファイルで rebase 面を作り得る（roadmap の干渉台帳は本番ファイル `decode.rs`／`compile.rs` の共有 0 を実測したもので、テストファイルは対象外）。対策: 差し替えは綴り 1 語の置換に留め（各 1〜3 行）、先に着地した側の上に後着が rebase する。→ 2026-09-17 に `text-decoration-canon` が先に着地し、main 取り込みは衝突なしで完了。ただし同 spec の新設テスト `decode_font_tests.rs` の 2 本が本仕様の是正と両立しないことが判明し、編集対象へ加えた（`research.md` §10）。
 - リスク ⑶: ワークスペース全体テストの i686 前提と submodule（対策: 実行手順に前置）。
 - リスク ⑷: 登記行の PR 番号（対策: 先行 spec と同じ 2 段登記）。

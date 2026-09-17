@@ -305,3 +305,13 @@ scratchpad の小さな probe crate から `areka_parsers::sakura::parse` を呼
 - `doc/COMPAT_ARCHITECTURE.md` §8。
 - `.kiro/steering/structure.md`（Unit Tests の兄弟ファイル規約・1,000 行）・`.kiro/steering/roadmap.md`（W13 干渉台帳）。
 - `.kiro/specs/completed/areka-P0-sakura-bare-tag-lexer/design.md`（テスト構成・変異手順・2 段登記の先例）。
+
+## 10. main 取り込みで判明した前提の変化（2026-09-17）
+
+- **何が起きたか**: 同ウェーブの `areka-P0-text-decoration-canon` が PR#148 で main へ着地し、本ブランチへ取り込んだ（マージコミット `15f6a4ab`・衝突なし・取り込み直後の `cargo test -p areka-parsers` は 435 件緑）。同 spec は `decode.rs` の `decode_bare` に `"f" => Instruction::Font { args: Vec::new() }` の腕を足し、角括弧を伴わない `\f` を生の断片でなく引数なしの文字装飾へ解読するようにした。
+- **本仕様への影響 3 点**:
+  1. 設計 P8 の期待値 `[Raw(r"\f"), Text("oo[a,b]い")]` は誤りになった。是正後の結果は `[Font{args:[]}, Text("oo[a,b]い")]`。
+  2. 同 spec が新設した `decode_font_tests.rs` の 2 本が `\foo[...]` を入力に使い、是正後に赤になる。`scripts_without_font_tag_decode_unchanged`（台本中の `\foo[f]`）は綴り差し替え（`\i[f]`）で意図を保てる。`other_words_starting_with_f_stay_raw`（`\foo[a,b]`・`\fo[x]`・`\font[bold,1]`・`\f2[1]` を `Raw` と期待）は「`f` で始まる別綴りの角括弧付きタグ」という是正後に構成できない形を固定しているため、期待値ごと書き換える。これで既存テストの扱いは 6 本 → 8 本（差し替え 7・書き換え 1）。
+  3. 要件の「areka が意味を与えている綴り」に `\f` が加わった（8 → 9 綴り）。要件 2.7 を追加し、1.1・4.11・5.1・7.3 の記述を追随させた。
+- **判断**: 開発者裁定（2026-09-17「反映」）。本番ファイルの共有 0（`decode.rs`・`model.rs`・`compile.rs` に触れない）は保たれる。編集集合に加わるのは完了 spec が新設したテストファイル 1 つだけで、完了 spec の文書は書き換えない（要件 7.4）。
+- **教訓**: roadmap の干渉台帳は本番ファイルの共有だけを測っており、テストファイルが**入力として使う綴り**の衝突は映らない。並走 spec が同じ層の意味写像を足すときは、着地後に本仕様の期待値（`Raw` を期待する箇所）を全数 grep で引き直す。
