@@ -156,7 +156,7 @@
 ## Implementation Notes
 
 - 2.3: main の charset-canon で `ShioriConnection` は `negotiator: CharsetNegotiator` を含む 3 フィールドになった（設計は 2 フィールド表記）。stand-in は `CharsetNegotiator::new(Charset::UTF_8, false)` で組む。
-- 2.4: 「来ない」の主張を待たない `try_recv` で行うと恒真（抑止を外しても緑）。1 通目受領後に `3 * IDLE_INTERVAL` を有界に待つ形で判定する。Test-F も同じ規律で。
+- 2.4: 「来ない」の主張を待たない `try_recv` で行うと恒真（抑止を外しても緑）。一方で 1 通目受領後に固定の短い期限（`3 * IDLE_INTERVAL`）で待つ形は要件 4.8 が禁じる「短い期限で発火しない」そのもの（最終検証で指摘）。「来ない」は手空きが回った証拠（`idles` の増分）を得てから主張する Test-B の形でだけ行い、Test-D は「届く」だけを主張する。
 - 2.4: `uptime_lower_bound` はテストファイル内 `OnceLock<Instant>` 起点の下限値（kanade に Win32 API crate を足さないため真のプロセス生存時間は取れない）。検証記録でも下限と明記する。
 - 較正の一時変更（受信ループの最終形相当・摂動）は Edit で手で戻し、`git diff --quiet crates/areka-kanade/src` が 0 を確認する（sed は CRLF を壊す）。
 - 6.2: `AREKA_APP_SMOKE_EXIT_MS` の自動終了は ForceQuit 経路（NOTIFY OnClose・終了挨拶なし）。終了挨拶を経る実機走行は自動終了を上限に残し、キャラ窓への Ctrl＋左ダブルクリックで終了を要求する（要件 5.2・design C9・tasks 6.2 の「自動終了で終了挨拶を経る」という文言は構造上成り立たない＝開発者へ報告）。

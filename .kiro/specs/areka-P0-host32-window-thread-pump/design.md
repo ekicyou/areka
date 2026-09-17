@@ -249,7 +249,7 @@ sequenceDiagram
 | 3.1 | 応答方向の旗の区別を無改変 | Out of Boundary（ipc コード非接触） | `send_flags` | — |
 | 3.2 | helper の遅いテストを無改変で緑 | C8（見出しのみ） | — | — |
 | 3.3 | ipc・helper のコードに触れない | C8・File Structure Plan | — | — |
-| 4.1 | x64 偽境界・実 helper／DLL／ゴースト不使用 | Test-A〜F（fake backend＋実親窓） | — | — |
+| 4.1 | x64 偽境界・実 helper／DLL／ゴースト不使用 | Test-A〜C・E（fake backend・窓なし）＋Test-D・F（実 `ShioriConnection`＋x64 stand-in＋実親窓） | — | — |
 | 4.2 | 本番の待ちの経路を駆動 | Test-A〜C・E（`run_shiori_loop` 直呼び）・Test-D／F（`spawn_shiori_actor`・実 `ShioriConnection`） | — | 両フロー |
 | 4.3 | 速いテスト（同期送出が上限内）・直す前は赤 | Test-D・C7（段階 1 で赤） | `send_copydata_response` | — |
 | 4.4 | 遅いテスト（② が届く）・直す前は赤 | Test-F・C7 | `send_copydata` | 遅いテストの時間軸 |
@@ -436,7 +436,7 @@ fn report_exit_once(
 
 **Dependencies**
 
-- Inbound: C3（P0）・テスト（Test-D／Test-F の fake backend）
+- Inbound: C3（P0）・テスト（Test-D／Test-F は実 `ShioriConnection` の C3 経由）
 - External: `windows::Win32::UI::WindowsAndMessaging::{PeekMessageW, PM_REMOVE, MSG, TranslateMessage, DispatchMessageW}`（P0・feature 既存）
 
 **Contracts**: Service [x]
@@ -489,7 +489,7 @@ impl ParentMessageWindow {
 
 #### Test-D・Test-F `crates/areka-kanade/tests/kanade/idle_pump_test.rs`（統合バイナリ・窓を作る）
 
-共通: `common_window_actor.rs` の connect クロージャで本番の `spawn_shiori_actor(connect, on_down)` を起こす。`connect` はアクタースレッド上で（`WINDOW_CREATE_SERIAL` の内側で）`ParentMessageWindow::create()` → `hwnd_u32()` を channel で返す → `Box::new(ShioriConnection { window, helper })`（`helper` は x64 の stand-in `cmd.exe /c exit 0` を `process_host::spawn_command` で起こした `HelperLifecycle::new(handle)`——`lifecycle.rs` のテストと同意匠）。本番と同じ「窓は connect がアクタースレッド上で作る」順序（4.2）で、backend も本番の型そのもの——fake backend を置かない。`ShioriConnection::on_idle` の委譲の 1 行まで本番経路を踏む。stand-in は即終了するので手空きの初回に `ShioriDown` が 1 通届く（既存の死活経路・ちょうど 1 通であることも assert し、2 通目が無いことは Test-B の形で見張る）。ロックが覆うのは生成の一瞬だけなので、同じバイナリ内で並列に走る Test-D と Test-F は互いの時間に影響しない。
+共通: `common_window_actor.rs` の connect クロージャで本番の `spawn_shiori_actor(connect, on_down)` を起こす。`connect` はアクタースレッド上で（`WINDOW_CREATE_SERIAL` の内側で）`ParentMessageWindow::create()` → `hwnd_u32()` を channel で返す → `Box::new(ShioriConnection { window, helper })`（`helper` は x64 の stand-in `cmd.exe /c exit 0` を `process_host::spawn_command` で起こした `HelperLifecycle::new(handle)`——`lifecycle.rs` のテストと同意匠）。本番と同じ「窓は connect がアクタースレッド上で作る」順序（4.2）で、backend も本番の型そのもの——fake backend を置かない。`ShioriConnection::on_idle` の委譲の 1 行まで本番経路を踏む。stand-in は即終了するので手空きの初回に `ShioriDown` が 1 通届く（既存の死活経路・届くことを assert する。2 通目が無いことは短い期限では主張せず——要件 4.8——手空きが回った証拠つきで Test-B が見張る）。ロックが覆うのは生成の一瞬だけなので、同じバイナリ内で並列に走る Test-D と Test-F は互いの時間に影響しない。
 
 **Test-D `sync_send_to_idle_window_returns_within_bound`（速い・全体 5 秒以内）**: 起動後、テストスレッドが `send_copydata_response(host, host, MsgTag::Response, b"idle-pump", SEND_BOUND)` を送り、`Ok` かつ所要 `< SEND_BOUND` を assert。直す前は `SendFailed`（上限まで待つ）→ 赤（較正・4.3）。定数: `SEND_BOUND = Duration::from_secs(2)` と `const _: () = assert!(SEND_BOUND.as_millis() >= 4 * IDLE_INTERVAL.as_millis());`（周期を動かしたら上限の余裕が黙って薄くならない・4.8）。送出タグは `MsgTag::Response`（本番の `StoreResponse` の腕を踏む・6.11 の遅いテストと同じタグ・`response_slot` は次の `send_request` が必ず `clear` する）。送出元 HWND には自窓の HWND を渡す（`window_tests` と同じ）。診断文: `delivered`・`elapsed`・`uptime`・`result`。
 

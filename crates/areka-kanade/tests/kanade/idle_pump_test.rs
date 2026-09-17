@@ -34,7 +34,8 @@ fn uptime() -> Duration {
 }
 
 /// 待機中のホスト窓へ同期送出すると上限内に成功復帰し、即終了した stand-in の死活報告が
-/// 手空きの初回にちょうど 1 通届く（全体 5 秒以内）。
+/// 手空きの初回に届く（全体 5 秒以内）。2 通目が来ないことは短い期限では主張しない
+/// （要件 4.8）——手空きが回った証拠つきで `real_idle_tests.rs` の Test-B が見張る。
 #[test]
 fn sync_send_to_idle_window_returns_within_bound() {
     let _ = uptime();
@@ -51,10 +52,6 @@ fn sync_send_to_idle_window_returns_within_bound() {
     // 死活報告は起動から SEND_BOUND の内に届くはず（手空きの初回は IDLE_INTERVAL 後）。
     let deadline = started + SEND_BOUND;
     let first_down = down_before(&actor.down_rx, deadline);
-    // 1 通目を受けたら、手空きが少なくとも 2 回以上回る長さだけ待って 2 通目が来ないことを見る。
-    // 1 通目が来ていなければ待たない（全体 5 秒以内を保つ）。
-    let second_down = first_down.is_some()
-        && down_before(&actor.down_rx, Instant::now() + 3 * IDLE_INTERVAL).is_some();
 
     let _ = actor.shiori_tx.send(ShioriMsg::Close);
     join_bounded("idle-pump shiori join", DEFAULT_TIMEOUT, actor.handle)
@@ -64,7 +61,7 @@ fn sync_send_to_idle_window_returns_within_bound() {
     let diag = format!(
         "delivered={delivered} elapsed={elapsed:?} bound={SEND_BOUND:?} \
          uptime_lower_bound={uptime_at_send:?} result={result:?} \
-         shiori_down_first={first_down:?} shiori_down_second={second_down} \
+         shiori_down_first={first_down:?} \
          total={:?}",
         started.elapsed()
     );
@@ -73,8 +70,8 @@ fn sync_send_to_idle_window_returns_within_bound() {
         "待機中のホスト窓への同期送出が上限内に成功復帰する（要件 1.2）: {diag}"
     );
     assert!(
-        first_down.is_some() && !second_down,
-        "即終了した stand-in の死活報告が手空きの初回にちょうど 1 通届く: {diag}"
+        first_down.is_some(),
+        "即終了した stand-in の死活報告が手空きの初回に届く: {diag}"
     );
 }
 
