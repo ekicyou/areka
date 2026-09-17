@@ -51,7 +51,7 @@
   - 完了状態: 3 本のテストが緑で、要素を 1 つ抜いても足しても赤になる
   - _Requirements: 1.6, 3.2, 4.6, 4.8, 4.9_
 
-- [ ] 2.2 足した名前と記録用の葉の書込分類・参照結果を literal の期待値で判定する
+- [x] 2.2 足した名前と記録用の葉の書込分類・参照結果を literal の期待値で判定する
   - 新規登記の 4 項それぞれについて、書込分類が運行コマンドであり、実際に書込を適用した効果列が「予約済みとして受理」ちょうど 1 件に等しいことを判定する
   - 記録用の 15 葉について、変更前と同じ分類（13 件は自由な名前としての保存・2 件は設定できない正準語彙）を literal の期待値表で判定する
   - 実キー形（親枝とセレクタを伴う形）3 つが根の判定で「設定できない正準語彙」になることを判定する。括弧の中に区切り文字を含む要素名は使わない（解釈に失敗して対照にならない）
@@ -118,3 +118,4 @@
 - 1.1 基準（09-17 実測）: `evidence` の property 証拠 2 件（全体 263 件）／`owner = ""` 2 件・対照 `owner = "areka-P0-` 186 件／21 の写し 7 箇所（dotted.rs 57・188・190・191・209、ledger_key_determinism_tests.rs 210・211）／zorder_property_deferral_tests.rs の「5 本」8 箇所（19・111・113・116・127・150・252・281）・「8 本」1 箇所（115）
 - ワークツリーは `vendors/pasta` submodule 未取得だった（`git submodule update --init vendors/pasta` で解消）
 - `areka` は bin クレート: tasks.md 3・5.1 の `cargo test -p areka --lib placement::zorder_property_deferral_tests` は「no library targets」で走らない。正しくは `cargo test -p areka --bin areka property_deferral_tests`（モジュールは `placement::zorder_group_ledger::property_deferral_tests`・9 本）
+- design T4 は参照側を「実キー形 2 つ」と書くが分類側は 3 つを列挙（design 内の書き違い）。実装は 3 つとも参照 NotFound を判定（tasks.md 2.2 に合わせた・より広い）
