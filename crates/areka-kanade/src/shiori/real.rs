@@ -324,3 +324,7 @@ pub fn spawn_shiori_actor(
 #[cfg(test)]
 #[path = "real_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "real_idle_tests.rs"]
+mod idle_tests;
