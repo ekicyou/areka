@@ -186,13 +186,118 @@ on_talk_done（一致・非 quit）:
 ## 7. 設計フェーズへの申し送り（Design-decision items）
 
 1. ~~**要件の前提の同一性**（§2）~~ — **要件ディスカッションで解決済み（2026-09-13・開発者裁定）**。裁定は「予定どおり今直す」。実在の証拠は使い捨ての決定論テストで実測した（`BootVersion{talk: Some(id=1)}` に `TalkDone{1, Ended}` を投入 → 相が変わらず `boot_input_ignored` が WARN で点灯 → 枠が `Steady{talk: Some}` へ漏れ → 終了指示で `OnClose` GET が **0 件**。完了通知を 1 手後ろにずらした既存テスト `boot_greeting_talkdone_correlates_without_unknown_error` は緑）。この裁定に伴い requirements.md を改訂した: Project Description の発現条件をタイミング論から構造論（`actor.rs` の `drive` の同期再投入）へ・Introduction に「到達可能性」の段を追加・Out of scope にシェルの待ち方の変更を明記・要件 4.4 の「決定論の検証環境」を「純粋状態機械の決定論テスト」へ・**要件 5.5 に「`-p areka-kanade` が欠陥の検出器／`-p areka --bin areka` は非回帰の検出器」を明記**。設計では「到達不能の根拠」を `actor.rs` の `drive` を引いて記すこと。完了仕様 e2e の文書は書き換えない。
-2. **受理腕の置き場所**（§4）: 案 A（`boot.rs`）／案 B（`mod.rs` 横断）／案 C（`TalkDone` 専用分配）。既存の順序規律との整合は案 A が最も素直。
-3. **受理ログの語**（要件 3.3）: 候補 `boot_talk_done`（`steady_talk_done`／`close_refused` と並ぶ命名）／`boot_talk_done_early`（起動完了前であることを語に込める）。level は info（`steady_talk_done` と同じ）。フィールドは `talk_id` 必須・`origin`（`"boot"`）は任意。
+2. ~~**受理腕の置き場所**（§4）: 案 A（`boot.rs`）／案 B（`mod.rs` 横断）／案 C（`TalkDone` 専用分配）。既存の順序規律との整合は案 A が最も素直。~~ — **設計で解決（2026-09-17・§9 D1）**: 案 A。`boot::step` にガード付きの腕 `Input::TalkDone(done) if matches!(state.phase, Phase::BootVersion { talk: Some(_) })` を 1 本足し、新設 `boot::on_talk_done` へ委譲する。
+3. ~~**受理ログの語**（要件 3.3）: 候補 `boot_talk_done`（`steady_talk_done`／`close_refused` と並ぶ命名）／`boot_talk_done_early`（起動完了前であることを語に込める）。level は info（`steady_talk_done` と同じ）。フィールドは `talk_id` 必須・`origin`（`"boot"`）は任意。~~ — **設計で解決（2026-09-17・§9 D2）**: `boot_talk_done`・info・target `kanade`・フィールドは `talk_id` のみ（`origin` は付けない）。
 4. ~~**「ちょうど 1 行」の読み**（要件 3.3）~~ — **要件ディスカッションで解決済み（2026-09-11・カテゴリ A）**。要件 3.3 の本文に「数えるのは受理の語の行だけ・横断遷移の既存ログ（`talk_done_interrupted_as_non_quit` など）は数えない」と明記した。設計での再裁定は不要。
-5. **較正テストの追加**（要件 5.4）: `BootVersion{Some}`＋Tick で `boot_input_ignored` が**出続ける**ことを 1 本足すか（受理腕が広すぎる退行の検出器）。既存 `warn_boot_input_ignored_logs`（`BootInit`＋Tick）だけで足りるとするか。
-6. **選択帳簿の掃除の対称性**: `steady::on_talk_done` は `clear_choice_ledger` を呼ぶが、起動中は `ChoiceWaiting` が非 Steady で棄却されるため帳簿は構造上 `None`。受理腕で呼ばない（最小）か、対称性のために呼ぶ（trace のみ・害なし）か。
-7. **`boot.rs` ワイルドカード腕のコメント**: 「Tick・TalkDone など」の文言から `TalkDone` を外す（1 行）。綴り `boot_input_ignored` とメッセージは不変。
+5. ~~**較正テストの追加**（要件 5.4）: `BootVersion{Some}`＋Tick で `boot_input_ignored` が**出続ける**ことを 1 本足すか（受理腕が広すぎる退行の検出器）。既存 `warn_boot_input_ignored_logs`（`BootInit`＋Tick）だけで足りるとするか。~~ — **設計で解決（2026-09-17・§9 D4）**: 足す（T4・`schedule_log_firing_tests.rs` の既存 `warn_boot_input_ignored_logs` の直後）。受理が入る相そのもので Tick が従来どおり捨てられることを固定する。
+6. ~~**選択帳簿の掃除の対称性**: `steady::on_talk_done` は `clear_choice_ledger` を呼ぶが、起動中は `ChoiceWaiting` が非 Steady で棄却されるため帳簿は構造上 `None`。受理腕で呼ばない（最小）か、対称性のために呼ぶ（trace のみ・害なし）か。~~ — **設計で解決（2026-09-17・§9 D3）**: 呼ばない。構造上 `None` の帳簿に対する呼出はテストで区別できない空振りであり、握手開始時の `begin_close` が別途掃除する。
+7. ~~**`boot.rs` ワイルドカード腕のコメント**: 「Tick・TalkDone など」の文言から `TalkDone` を外す（1 行）。綴り `boot_input_ignored` とメッセージは不変。~~ — **設計で解決（2026-09-17・§9 D5）**: 「上記以外（Tick など）」へ改める。綴り・メッセージ・レベル・発行点は不変。
 
 ## 8. Research Needed
 
-- なし（外部依存・未知技術ともに無し）。§2 の構造的事実は `actor.rs` の `drive`／`execute_actions`／`round_trip` の精読で確認済み。設計での再確認点は「`run_inbox` が 1 メッセージ 1 `drive` であること」（`crates/areka-actor/src/spawn.rs` の `run_inbox`）のみ。
+- なし（外部依存・未知技術ともに無し）。§2 の構造的事実は `actor.rs` の `drive`／`execute_actions`／`round_trip` の精読で確認済み。設計での再確認点は「`run_inbox` が 1 メッセージ 1 `drive` であること」（`crates/areka-actor/src/spawn.rs` の `run_inbox`）のみ。→ **§9.1 で確認済み（2026-09-17）**。
+
+---
+
+## 9. 設計フェーズの追記（kiro-spec-design・2026-09-17）
+
+### Summary
+- **Feature**: `areka-P0-kanade-boot-talkdone-drop`
+- **Discovery Scope**: Extension（既存状態機械への腕 1 本の追加）→ light discovery をメインコンテキストで実施（サブエージェント派遣なし・外部調査なし）
+- **Key Findings**:
+  - §2 の到達不能の根拠を再確認した（§9.1）。`run_inbox` は 1 メッセージ 1 ハンドラ呼出で、ハンドラは 1 回の `drive` を呼ぶ。
+  - `boot::step` のワイルドカード腕にガード付きの `TalkDone` 腕を前置すれば、`boot_input_ignored` の発行点を 1 か所に保ったまま、到達しない `TalkDone` の防御を既存のワイルドカードに委ねられる（第 2 の防御腕も第 2 の発行点も要らない）。
+  - 既存テストの基線: `cargo test -p areka-kanade --lib boot_` は 23 本すべて緑（2026-09-17 実測・`boot_greeting_talkdone_correlates_without_unknown_error` を含む）。
+  - 直る欠陥を「残る危険（本檻では直せない）」と逐語で書いたコード内 doc が `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` に残る（§9.2）。
+
+### 9.1 Research Log
+
+#### 到達可能性の再確認（要件の前提）
+- **Context**: 要件ディスカッションの裁定（§7 項目 1）で「設計に到達不能の根拠を `actor.rs` の `drive` を引いて記す」とされた。
+- **Sources Consulted**: `crates/areka-kanade/src/actor.rs` の `drive`（DD-2 同期往復ループ）・`execute_actions`・`spawn_kanade_with_stop_sink` の受信ハンドラ／`crates/areka-actor/src/spawn.rs` の `run_inbox`／`crates/areka-kanade/src/schedule/boot.rs` の `to_baseware_version`。
+- **Findings**: `drive` は `step` の指示列を全実行し、往復応答を同じ呼出の中で `Input::ShioriReply` として再投入し、往復の無い指示列が返るまで反復する。`to_baseware_version` は必ず `basewareversion` の往復を積む。`run_inbox` は `recv` ごとにハンドラを 1 回呼び、ハンドラは `KanadeMsg` を `Input` へ写して `drive` を 1 回呼ぶ。
+- **Implications**: 受信箱が `TalkDone` を取り出す時点で相は `Steady`。`spine_conformance_*` は非回帰の検出器（design Overview「到達可能性」）。
+
+#### 受理腕の形（ガード付き腕 vs 受理関数内の防御腕）
+- **Context**: 案 A で `boot::on_talk_done` を新設すると、相が `BootVersion{Some}` でない場合の腕をどう書くかが残る。
+- **Findings**: 受理関数の中で `_ => warn boot_input_ignored` を書くと点灯語の発行点が 2 か所になる（完了仕様 e2e の手順書 §5.7 は 1 か所を指す）。沈黙の `_ => (state, vec![])` は log-first に反する。`step` の腕にガード `if matches!(state.phase, Phase::BootVersion { talk: Some(_) })` を付ければ、外れる `TalkDone` は既存のワイルドカード腕へ落ちて従来どおり warn になり、受理関数は前提が確定した状態だけを受ける。
+- **Implications**: design「boot::step 受理腕」「boot::on_talk_done」の契約。`matches!` は `Some(_)` を束縛しないので `state` を動かさず、腕本体で `state` を move できる。
+
+#### テストの表明手段
+- **Sources Consulted**: `schedule/log_capture.rs`（`capture`／`assert_logged`／`assert_not_logged`／`assert_no_error_logs`／`logged_once`・`CapturedEvent.fields` に `talk_id` の文字列値）・`boot_test_support.rs`・`schedule_log_firing_tests.rs` の `run_step`／`state_in`。
+- **Findings**: `Phase`／`State`／`ActiveTalk` は `Debug` を持たない（`mod.rs` の定義に derive なし）。`config()` は `KanadeConfig::new("master", "1.0.0")` で `first_boot: true`・`first_boot_epilogue` 空。`BootVersion{Some(id=1)}` へは `Boot` → `Notified` → `NoContent` → `Value("greeting")` の 4 入力で到達する（`OnFirstBoot` にスクリプトが返る経路＝`boot_type_script`・`OnBoot` を飛ばす）。
+- **Implications**: design Testing Strategy（`matches!` で表明・`logged_once(..).fields["talk_id"] == "1"`・T4 は `run_step` で 1 行）。
+
+### 9.2 隣接文書の陳腐化（境界の保守）
+- `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` の `kanade_probe_raises_no_shiori_call_and_observes_the_close` の doc に「残る危険（本檻では直せない）——…`schedule/boot.rs:32-36` の防御アームが**それを捨てる**」の段落がある。本仕様の着地でこの主張は反対の意味になる（参照の綴りは残り中身だけが反転する型・`ukadoc-survey-sakura-script` の申し送りと同型）。設計はこの段落だけをコメントとして追随させる（File Structure Plan・コードと表明は不変）。同 doc の他の段落にある `boot.rs:31`／`:285-288` の行番号は本変更で後者がずれるが、意味は変わらないので触らない（既知の行番号ドリフト・「何の定義か」で指す規律の適用は別途）。
+- 完了仕様 e2e の文書（手順書 §5.7 の表・記録 §7／§13.2・design D9）が指す `boot.rs:34`／`:33-36` は、腕の追加でワイルドカード腕が下へずれる。要件ディスカッションの裁定により書き換えない。実体は「`boot::step` のワイルドカード腕」で不変。
+
+### 9.3 Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 案 A（採用） | `boot::step` にガード付き `TalkDone` 腕＋`boot::on_talk_done` | 最小差分・`steady`／`close` と対称・`mod.rs` の順序規律不変・発行点 1 か所 | ワイルドカード腕の注記を 1 行直す | §4 案 A＋§9.1 のガード形 |
+| 案 B | `mod.rs` の `on_talk_done` が `BootVersion{Some}` を横断受理 | `boot.rs` に触れない | 相固有の状態書き換えを横断層が持つ＝責務分割に反する・非対称 | 不採用 |
+| 案 C | `TalkDone` 専用の相別分配を新設 | 到達先が 1 表で見える | 3 ファイルに差分・Out of scope（`steady.rs`／`close.rs` 非接触）に触れる | 不採用 |
+
+### 9.4 Design Decisions
+
+#### D1: 受理腕の置き場所＝案 A（`boot.rs`・ガード付き腕）
+- **Context**: §7 項目 2。
+- **Alternatives Considered**: 案 A／案 B／案 C（§9.3）。
+- **Selected Approach**: `boot::step` の `CloseRequest` 腕の直後に `Input::TalkDone(done) if matches!(state.phase, Phase::BootVersion { talk: Some(_) }) => on_talk_done(state, done)` を置く。
+- **Rationale**: 相固有の遷移は相のモジュールが持つ（`mod.rs` ヘッダの責務分割）。ガード形により防御は既存のワイルドカード腕に一本化される。
+- **Trade-offs**: 受理関数の前提（相の確定）が呼出側のガードに依存する——私的関数で呼出点は 1 か所なので doc に契約を書く。
+- **Follow-up**: レビューで「ガード付きの腕 1 本・`boot_input_ignored` の発行点 1 か所」を確認する。
+
+#### D2: 受理ログの語＝`boot_talk_done`（info・`talk_id` のみ）
+- **Context**: §7 項目 3。
+- **Alternatives Considered**: `boot_talk_done_early`／`origin` フィールド付き。
+- **Selected Approach**: `info!(target: "kanade", event = "boot_talk_done", talk_id = done.talk_id.0, "起動挨拶 talk 完了——basewareversion 応答待ちを維持しつつ枠を空にする")`。
+- **Rationale**: `steady_talk_done`／`close_refused` と並ぶ `<相>_talk_done` の命名。「起動完了前」は相名が表す。`BootVersion` の追跡は常に `origin="boot"` なので `origin` は情報を増やさない。
+- **Follow-up**: T1 の `logged_once` で `talk_id` の値まで突合する。
+
+#### D3: `clear_choice_ledger` は呼ばない
+- **Context**: §7 項目 6。
+- **Selected Approach**: 受理関数は `state.choice`／`choice_prev_talk` に触れない。
+- **Rationale**: 起動中は `ChoiceWaiting` が `choice_waiting_stale` で棄却され帳簿は構造上 `None`。呼んでも trace の空振りにしかならず、テストで区別できない呼出は置かない（到達する経路だけを書く）。握手開始時の `begin_close` が別途掃除する。
+- **Trade-offs**: `steady::on_talk_done` との字面の対称は崩れる——doc に理由を書く。
+
+#### D4: 較正テスト T4 を足す
+- **Context**: §7 項目 5。
+- **Selected Approach**: `schedule_log_firing_tests.rs` の `warn_boot_input_ignored_logs` の直後に、`BootVersion{Some}`＋Tick で `boot_input_ignored` が出続け `boot_talk_done` が出ないことを 1 本足す。
+- **Rationale**: 受理が入る相そのもので「無関係な入力は従来どおり捨てる」を固定する（要件 3.2・5.4）。既存の `BootInit`＋Tick だけでは受理腕が Tick まで広がる退行を見ない。
+
+#### D5: ワイルドカード腕の注記
+- **Context**: §7 項目 7。
+- **Selected Approach**: 「上記以外（Tick・TalkDone など）」→「上記以外（Tick など）」。綴り・メッセージ・レベル・発行点は不変。
+
+#### D6: 隣接 doc コメントの追随（`spine_conformance_support_tests.rs`・コメントのみ）
+- **Context**: §9.2。
+- **Alternatives Considered**: 触らない（Out of scope の「areka 側の配線」に含めて読む）／段落を追随させる。
+- **Selected Approach**: 「残る危険（本檻では直せない）」の段落だけを、本仕様で `boot::on_talk_done` が受理するようになった旨へ改める。テスト本体・表明・他の段落は不変。
+- **Rationale**: 直った欠陥を「残る危険」と書き続けるのは、参照が残って中身だけ反転する既知の罠。配線（`spine.rs`）には触れないので Out of scope と衝突しない。
+
+#### D7: テストの配置と共有ヘルパ
+- **Selected Approach**: T1〜T3 は `boot_sequence_tests.rs`（584 → 720 行前後）、T4 は `schedule_log_firing_tests.rs`（626 → 645 行前後）、ヘルパ `boot_until_version_with_greeting(cfg, pending)` は `boot_test_support.rs`。既存 `boot_greeting_talkdone_correlates_without_unknown_error` は書き換えない。
+- **Rationale**: `structure.md` の兄弟配置・1,000 行以下・共有ヘルパは `<stem>_test_support.rs` へ集約。`steady_flow_tests.rs`（924 行）・`schedule_tests.rs`（935 行）には置かない。
+
+### 9.5 Synthesis（generalization／build-vs-adopt／simplification）
+- Generalization: 要件 1.1／1.2／4.4 は「`BootVersion{Some}` に届いた一致・非 quit の通知」という 1 つの経路であり、理由と追跡トークの由来（挨拶／起動記録）で分岐しない腕 1 本で満たす。
+- Build vs Adopt: 既存の `steady::on_talk_done` の保留なしの枝を写す。新規の機構・依存なし。
+- Simplification: 受理関数内の防御腕・`origin` フィールド・帳簿掃除・`mod.rs` の変更を落とした。残るのは腕 1 本・関数 1 本・注記 1 行・テスト 4 本・ヘルパ 1 本・doc 1 段落。
+
+### 9.6 Risks & Mitigations
+- `pending_close` の消化まで写す誤り（要件 2.3 違反）— T2 が赤になる。
+- 名前指定の `cargo test` を `--lib` 無しで走らせて母数 0 の緑を「赤の記録」と取り違える — design 検証手順に `--lib` を明記。
+- 完了仕様 e2e の文書の行番号（`boot.rs:34`）がずれる — 書き換えない裁定・実体は「ワイルドカード腕」で不変（§9.2）。
+- 壁時計デッドラインを持つ `crates/areka` のテストは他の cargo と並走させると赤になる — 非回帰の全走は単独で行う。
+
+### 9.7 設計レビューゲート（2026-09-17）
+- 機械検査: 要件 ID 25 件（1.1〜5.6）すべてが design.md の traceability 表に存在・Boundary 4 節と File Structure Plan は具体・全コンポーネントがファイルへ対応。
+- 判断検査: 要件の曖昧・矛盾なし。修正 1 回（受理腕の Risks の文言を明確化）でゲート通過。
+
+### 9.8 References
+- `crates/areka-kanade/src/actor.rs` の `drive`／`spawn_kanade_with_stop_sink`・`crates/areka-actor/src/spawn.rs` の `run_inbox`・`crates/areka-kanade/src/schedule/{mod.rs, boot.rs, steady.rs, close.rs, log_capture.rs}`。
+- 完了仕様 `areka-P0-idle-talk`（DD-IT-12）・`areka-P0-emo2-conformance-e2e`（手順書 §5.7・記録 §7／§13.2 行 4・design D9）。
+- steering: `structure.md`（兄弟テスト・1,000 行）・`logging.md`（構造化フィールド）・`roadmap.md` W13 ②。
