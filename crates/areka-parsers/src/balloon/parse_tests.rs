@@ -407,3 +407,516 @@ fn vertical_out_of_vocabulary_value_passes_through_raw() {
     assert_eq!(got_numeric.vertical_raw(), Some("2"));
     assert_eq!(got_word.vertical_raw(), Some("true"));
 }
+
+/// T1: 書体の飾り 5 本はそれぞれ宣言値がそのまま読める（balloon-font-descript-keys 要件 2.1/9.1）。
+///
+/// キーごとに互いに異なる値を入れ、取り違え（別キーへの写像）も赤にする。
+#[test]
+fn font_decoration_raw_five_keys_transcribed_verbatim() {
+    let got = parse_str(
+        "font.bold,1\nfont.italic,0\nfont.outline,11\nfont.strike,12\nfont.underline,13",
+        None,
+    );
+
+    let d = got.font_decoration_raw();
+    assert_eq!(d.bold(), Some("1"));
+    assert_eq!(d.italic(), Some("0"));
+    assert_eq!(d.outline(), Some("11"));
+    assert_eq!(d.strike(), Some("12"));
+    assert_eq!(d.underline(), Some("13"));
+}
+
+/// T2: 影色 3 成分＋形態はそれぞれ宣言値がそのまま読める（要件 2.2/2.3/9.1）。
+#[test]
+fn font_shadow_raw_four_keys_transcribed_verbatim() {
+    let descript = map(&[
+        ("font.shadowcolor.r", "10"),
+        ("font.shadowcolor.g", "20"),
+        ("font.shadowcolor.b", "30"),
+        ("font.shadowstyle", "offset"),
+    ]);
+
+    let got = parse(&descript, None);
+
+    let s = got.font_shadow_raw();
+    assert_eq!(s.color_r(), Some("10"));
+    assert_eq!(s.color_g(), Some("20"));
+    assert_eq!(s.color_b(), Some("30"));
+    assert_eq!(s.style(), Some("offset"));
+}
+
+/// T3: 未指定は 9 本すべて `None`。宣言された `0` は `Some("0")` で未指定と区別される
+/// （要件 2.4/3.1/9.2・既定値を代入しない）。
+#[test]
+fn font_base_keys_unspecified_are_none_and_distinct_from_declared_zero() {
+    let unspecified = parse(&map(&[("origin.x", "12")]), None);
+
+    let d = unspecified.font_decoration_raw();
+    assert_eq!(d.bold(), None);
+    assert_eq!(d.italic(), None);
+    assert_eq!(d.outline(), None);
+    assert_eq!(d.strike(), None);
+    assert_eq!(d.underline(), None);
+    let s = unspecified.font_shadow_raw();
+    assert_eq!(s.color_r(), None);
+    assert_eq!(s.color_g(), None);
+    assert_eq!(s.color_b(), None);
+    assert_eq!(s.style(), None);
+
+    let declared_zero = parse(
+        &map(&[("font.bold", "0"), ("font.shadowcolor.r", "0")]),
+        None,
+    );
+    assert_eq!(declared_zero.font_decoration_raw().bold(), Some("0"));
+    assert_eq!(declared_zero.font_shadow_raw().color_r(), Some("0"));
+}
+
+/// T4: 正典の語彙に無い値も落とさず解釈せず素通しする（要件 2.5/9.3）。
+///
+/// `font.shadowcolor.r,300` は `u8` 範囲外だが、既存の `font.color.r` と違い `None` へ降格しない。
+#[test]
+fn font_base_keys_out_of_vocabulary_values_pass_through() {
+    let got_numeric = parse(
+        &map(&[
+            ("font.bold", "2"),
+            ("font.shadowstyle", "blur"),
+            ("font.shadowcolor.r", "300"),
+        ]),
+        None,
+    );
+    let got_word = parse(&map(&[("font.bold", "yes")]), None);
+
+    assert_eq!(got_numeric.font_decoration_raw().bold(), Some("2"));
+    assert_eq!(got_numeric.font_shadow_raw().style(), Some("blur"));
+    assert_eq!(got_numeric.font_shadow_raw().color_r(), Some("300"));
+    assert_eq!(got_word.font_decoration_raw().bold(), Some("yes"));
+}
+
+/// T5: 影色の「無効化の語 `none`」「数値」「未指定」は互いに異なる 3 状態として保たれる
+/// （要件 2.6/9.4）。
+#[test]
+fn font_shadowcolor_none_numeric_unspecified_are_three_distinct_states() {
+    let none_word = parse(&map(&[("font.shadowcolor.r", "none")]), None);
+    let numeric = parse(&map(&[("font.shadowcolor.r", "64")]), None);
+    let unspecified = parse(&map(&[("origin.x", "12")]), None);
+
+    let a = none_word.font_shadow_raw().color_r();
+    let b = numeric.font_shadow_raw().color_r();
+    let c = unspecified.font_shadow_raw().color_r();
+    assert_eq!(a, Some("none"));
+    assert_eq!(b, Some("64"));
+    assert_eq!(c, None);
+    assert_ne!(a, b);
+    assert_ne!(a, c);
+    assert_ne!(b, c);
+}
+
+/// T6: 影色 3 成分の部分欠落は個別に `None`（`g` だけ宣言 → g=Some, r/b=None・要件 2.2/9.4）。
+#[test]
+fn font_shadowcolor_partial_absence_is_independently_none() {
+    let got = parse(&map(&[("font.shadowcolor.g", "77")]), None);
+
+    let s = got.font_shadow_raw();
+    assert_eq!(s.color_r(), None);
+    assert_eq!(s.color_g(), Some("77"));
+    assert_eq!(s.color_b(), None);
+}
+
+/// 書体の飾り 5 本＋影 4 本（基底 9 本）を宣言順に並べて読む（T7〜T9 の比較用）。
+fn base_nine(m: &super::BalloonModel) -> [Option<&str>; 9] {
+    let d = m.font_decoration_raw();
+    let s = m.font_shadow_raw();
+    [
+        d.bold(),
+        d.italic(),
+        d.outline(),
+        d.strike(),
+        d.underline(),
+        s.color_r(),
+        s.color_g(),
+        s.color_b(),
+        s.style(),
+    ]
+}
+
+/// 基底 9 本のキー名（`base_nine` と同じ順）。
+const BASE_NINE_KEYS: [&str; 9] = [
+    "font.bold",
+    "font.italic",
+    "font.outline",
+    "font.strike",
+    "font.underline",
+    "font.shadowcolor.r",
+    "font.shadowcolor.g",
+    "font.shadowcolor.b",
+    "font.shadowstyle",
+];
+
+/// T7: 9 本を両層に別の値で書くと、画像別の上書き層の値が勝つ（要件 4.1/9.5）。
+#[test]
+fn font_base_keys_image_layer_overrides_descript() {
+    let descript: String = BASE_NINE_KEYS
+        .iter()
+        .enumerate()
+        .map(|(i, k)| format!("{k},d{i}\n"))
+        .collect();
+    let image: String = BASE_NINE_KEYS
+        .iter()
+        .enumerate()
+        .map(|(i, k)| format!("{k},i{i}\n"))
+        .collect();
+
+    let got = parse_str(&descript, Some(&image));
+
+    assert_eq!(
+        base_nine(&got),
+        [
+            Some("i0"),
+            Some("i1"),
+            Some("i2"),
+            Some("i3"),
+            Some("i4"),
+            Some("i5"),
+            Some("i6"),
+            Some("i7"),
+            Some("i8"),
+        ]
+    );
+}
+
+/// T8: 画像別層が 9 本を持たないとき、既定層の値を引き継ぐ（要件 4.2/9.5）。
+#[test]
+fn font_base_keys_image_missing_key_inherits_descript() {
+    let descript: String = BASE_NINE_KEYS
+        .iter()
+        .enumerate()
+        .map(|(i, k)| format!("{k},d{i}\n"))
+        .collect();
+
+    let got = parse_str(&descript, Some("origin.x,3\nfont.height,20"));
+
+    assert_eq!(
+        base_nine(&got),
+        [
+            Some("d0"),
+            Some("d1"),
+            Some("d2"),
+            Some("d3"),
+            Some("d4"),
+            Some("d5"),
+            Some("d6"),
+            Some("d7"),
+            Some("d8"),
+        ]
+    );
+    // 画像別層の別キーはちゃんと重なっている（層が読まれていないことによる偶然の緑を防ぐ）。
+    assert_eq!(got.font().height(), Some(20));
+}
+
+/// T9: 画像別層そのものが無いとき、既定層だけが写る（要件 4.3/9.5）。
+#[test]
+fn font_base_keys_descript_only_when_image_layer_absent() {
+    let descript = map(&[
+        ("font.bold", "1"),
+        ("font.italic", "0"),
+        ("font.outline", "1"),
+        ("font.strike", "0"),
+        ("font.underline", "1"),
+        ("font.shadowcolor.r", "10"),
+        ("font.shadowcolor.g", "none"),
+        ("font.shadowcolor.b", "30"),
+        ("font.shadowstyle", "outline"),
+    ]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(
+        base_nine(&got),
+        [
+            Some("1"),
+            Some("0"),
+            Some("1"),
+            Some("0"),
+            Some("1"),
+            Some("10"),
+            Some("none"),
+            Some("30"),
+            Some("outline"),
+        ]
+    );
+}
+
+/// T10: 接頭辞付きのキー（影を含む・`disable.` を含む）を書いても、基底 14 本はすべて未指定のまま
+/// （要件 4.4/4.5/9.6）。既存の `distractor_keys_do_not_leak_into_modeled_scalars` は別に残す。
+#[test]
+fn prefixed_font_keys_do_not_leak_into_base_font_keys() {
+    let descript = map(&[
+        ("anchor.font.shadowcolor.r", "11"),
+        ("anchor.font.shadowstyle", "offset"),
+        ("anchor.notselect.font.shadowcolor.r", "12"),
+        ("anchor.visited.font.shadowstyle", "outline"),
+        ("cursor.font.shadowcolor.g", "13"),
+        ("cursor.font.shadowstyle", "offset"),
+        ("cursor.notselect.font.shadowcolor.b", "14"),
+        ("number.font.height", "24"),
+        ("sstpmessage.font.name", "MS Gothic"),
+        ("communicatebox.font.color.r", "15"),
+        ("disable.font.bold", "1"),
+        ("anchor.font.bold", "1"),
+        ("cursor.font.underline", "1"),
+    ]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(got.font().name(), None);
+    assert_eq!(got.font().height(), None);
+    assert_eq!(got.font().color().r(), None);
+    assert_eq!(got.font().color().g(), None);
+    assert_eq!(got.font().color().b(), None);
+    assert_eq!(base_nine(&got), [None; 9]);
+}
+
+/// 無効表示の 14 本のうち生文字列の 9 本（飾り 5＋影 4）を `base_nine` と同じ順に読む（T13・T16 用）。
+fn disable_nine(m: &super::BalloonModel) -> [Option<&str>; 9] {
+    let d = m.disable_font().decoration_raw();
+    let s = m.disable_font().shadow_raw();
+    [
+        d.bold(),
+        d.italic(),
+        d.outline(),
+        d.strike(),
+        d.underline(),
+        s.color_r(),
+        s.color_g(),
+        s.color_b(),
+        s.style(),
+    ]
+}
+
+/// T13: `disable.font.*` 14 本は基底と同じ形で `disable_font()` の各口から読める
+/// （要件 2.8）。大きさの非数値は基底と同じく未指定へ落ちる。
+#[test]
+fn disable_font_keys_are_transcribed_in_the_same_shape_as_base() {
+    let got = parse_str(
+        "disable.font.name,A,B\n\
+         disable.font.height,20\n\
+         disable.font.color.r,31\n\
+         disable.font.color.g,32\n\
+         disable.font.color.b,33\n\
+         disable.font.bold,41\n\
+         disable.font.italic,42\n\
+         disable.font.outline,43\n\
+         disable.font.strike,44\n\
+         disable.font.underline,45\n\
+         disable.font.shadowcolor.r,51\n\
+         disable.font.shadowcolor.g,none\n\
+         disable.font.shadowcolor.b,53\n\
+         disable.font.shadowstyle,offset",
+        None,
+    );
+
+    let f = got.disable_font().font();
+    assert_eq!(f.name(), Some("A,B"));
+    assert_eq!(f.height(), Some(20));
+    assert_eq!(f.color().r(), Some(31));
+    assert_eq!(f.color().g(), Some(32));
+    assert_eq!(f.color().b(), Some(33));
+    assert_eq!(
+        disable_nine(&got),
+        [
+            Some("41"),
+            Some("42"),
+            Some("43"),
+            Some("44"),
+            Some("45"),
+            Some("51"),
+            Some("none"),
+            Some("53"),
+            Some("offset"),
+        ]
+    );
+
+    // 大きさの非数値は基底と同じく未指定へ落ちる（基底側も並べて同じ形であることを見る）。
+    let non_numeric = parse(
+        &map(&[("disable.font.height", "abc"), ("font.height", "abc")]),
+        None,
+    );
+    assert_eq!(non_numeric.disable_font().font().height(), None);
+    assert_eq!(non_numeric.font().height(), None);
+}
+
+/// T14: 基底と無効表示は互いに漏れない。無効表示が 0 本なら束は既定（全未指定）
+/// （要件 2.9/4.4/9.6）。
+#[test]
+fn base_and_disable_font_layers_do_not_leak_into_each_other() {
+    let base_only = parse(&map(&[("font.bold", "1")]), None);
+    assert_eq!(base_only.font_decoration_raw().bold(), Some("1"));
+    assert_eq!(base_only.disable_font().decoration_raw().bold(), None);
+    assert_eq!(base_only.disable_font(), &super::DisableFont::default());
+
+    let disable_only = parse(&map(&[("disable.font.bold", "1")]), None);
+    assert_eq!(
+        disable_only.disable_font().decoration_raw().bold(),
+        Some("1")
+    );
+    assert_eq!(disable_only.font_decoration_raw().bold(), None);
+
+    let no_disable_keys = parse_str(
+        "font.name,Yu Gothic UI\nfont.height,28\nfont.color.r,1\nfont.italic,1\nfont.shadowstyle,offset",
+        None,
+    );
+    assert_eq!(
+        no_disable_keys.disable_font(),
+        &super::DisableFont::default()
+    );
+}
+
+/// T15: 無効表示の 14 本も 2 層の優先順位 3 形に従う（要件 4.6/9.5）。
+#[test]
+fn disable_font_keys_follow_the_two_layer_precedence() {
+    let both = parse_str("disable.font.bold,d\n", Some("disable.font.bold,i\n"));
+    assert_eq!(both.disable_font().decoration_raw().bold(), Some("i"));
+
+    let image_missing = parse_str("disable.font.bold,d\n", Some("disable.font.italic,i\n"));
+    assert_eq!(
+        image_missing.disable_font().decoration_raw().bold(),
+        Some("d")
+    );
+    // 画像別層が読まれていることを別キーで確かめる（層を読まないことによる偶然の緑を防ぐ）。
+    assert_eq!(
+        image_missing.disable_font().decoration_raw().italic(),
+        Some("i")
+    );
+
+    let image_absent = parse_str("disable.font.bold,d\n", None);
+    assert_eq!(
+        image_absent.disable_font().decoration_raw().bold(),
+        Some("d")
+    );
+}
+
+/// T16: `disable.font.` の前後に何か付いたキーは無効表示へ漏れない（要件 4.4/9.6）。
+#[test]
+fn disable_font_prefixed_variants_do_not_leak() {
+    let got = parse(
+        &map(&[
+            ("anchor.disable.font.bold", "1"),
+            ("disabled.font.bold", "1"),
+        ]),
+        None,
+    );
+
+    assert_eq!(got.disable_font(), &super::DisableFont::default());
+    assert_eq!(disable_nine(&got), [None; 9]);
+}
+
+/// 写像対象の接頭辞なし `font.*` キー（実装側の表・カタログとは突き合わせない・要件 9.7/9.8）。
+const FONT_BASE_KEYS: [&str; 14] = [
+    "font.name",
+    "font.height",
+    "font.color.r",
+    "font.color.g",
+    "font.color.b",
+    "font.bold",
+    "font.italic",
+    "font.outline",
+    "font.strike",
+    "font.underline",
+    "font.shadowcolor.r",
+    "font.shadowcolor.g",
+    "font.shadowcolor.b",
+    "font.shadowstyle",
+];
+
+/// キー名 → 取り出し口。表に無いキー名は panic（表の綴り誤りを赤にする）。
+fn read_font_key(
+    f: &super::Font,
+    d: &super::FontDecorationRaw,
+    s: &super::FontShadowRaw,
+    key: &str,
+) -> Option<String> {
+    let num = |v: Option<u32>| v.map(|n| n.to_string());
+    match key {
+        "font.name" => f.name().map(str::to_owned),
+        "font.height" => num(f.height()),
+        "font.color.r" => num(f.color().r().map(u32::from)),
+        "font.color.g" => num(f.color().g().map(u32::from)),
+        "font.color.b" => num(f.color().b().map(u32::from)),
+        "font.bold" => d.bold().map(str::to_owned),
+        "font.italic" => d.italic().map(str::to_owned),
+        "font.outline" => d.outline().map(str::to_owned),
+        "font.strike" => d.strike().map(str::to_owned),
+        "font.underline" => d.underline().map(str::to_owned),
+        "font.shadowcolor.r" => s.color_r().map(str::to_owned),
+        "font.shadowcolor.g" => s.color_g().map(str::to_owned),
+        "font.shadowcolor.b" => s.color_b().map(str::to_owned),
+        "font.shadowstyle" => s.style().map(str::to_owned),
+        other => panic!("FONT_BASE_KEYS に取り出し口の無いキー: {other}"),
+    }
+}
+
+/// T11: 対象キー集合は 14 本で、14 本すべて（と `disable.` 前置の 14 本）が写像から読み戻せる
+/// （要件 9.7/9.8）。値は互いに異なる数値（基底 100+i・無効表示 200+i）で、取り違えも赤にする。
+#[test]
+fn font_base_key_table_has_fourteen_entries_and_each_is_read_back_by_the_mapping() {
+    assert_eq!(FONT_BASE_KEYS.len(), 14);
+    let text: String = FONT_BASE_KEYS
+        .iter()
+        .enumerate()
+        .map(|(i, k)| format!("{k},{}\ndisable.{k},{}\n", 100 + i, 200 + i))
+        .collect();
+
+    let got = parse_str(&text, None);
+
+    let (df, dd, ds) = (
+        got.disable_font().font(),
+        got.disable_font().decoration_raw(),
+        got.disable_font().shadow_raw(),
+    );
+    for (i, k) in FONT_BASE_KEYS.iter().enumerate() {
+        let base = read_font_key(
+            got.font(),
+            got.font_decoration_raw(),
+            got.font_shadow_raw(),
+            k,
+        );
+        assert_eq!(base, Some((100 + i).to_string()), "基底 {k}");
+        let disable = read_font_key(df, dd, ds, k);
+        assert_eq!(disable, Some((200 + i).to_string()), "disable.{k}");
+    }
+}
+
+/// T12: 14 本と `disable.font.*` を書き足しても、既存 5 キーの読み出しと `font.*` 以外の解析結果は
+/// 5 本だけの宣言と同じ（要件 5.1/5.2）。範囲外の色の未指定への降格も従来どおり（要件 5.3）。
+#[test]
+fn existing_five_font_keys_unchanged_when_new_keys_are_present() {
+    let old = "font.name,MS Gothic\nfont.height,12\nfont.color.r,10\nfont.color.g,20\n\
+               font.color.b,300\norigin.x,4\nwordwrappoint.x,-34\nvertical,1\n\
+               validrect.bottom,-56\nwindowposition.x,7\ncursor.style,square_and_underline\n";
+    let new = format!(
+        "{old}font.bold,1\nfont.italic,0\nfont.outline,1\nfont.strike,1\nfont.underline,1\n\
+         font.shadowcolor.r,none\nfont.shadowcolor.g,2\nfont.shadowcolor.b,3\n\
+         font.shadowstyle,outline\ndisable.font.name,Arial\ndisable.font.height,99\n\
+         disable.font.color.r,1\ndisable.font.bold,1\n"
+    );
+    let (before, after) = (parse_str(old, None), parse_str(&new, None));
+
+    for got in [&before, &after] {
+        assert_eq!(got.font().name(), Some("MS Gothic"));
+        assert_eq!(got.font().height(), Some(12));
+        assert_eq!(got.font().color().r(), Some(10));
+        assert_eq!(got.font().color().g(), Some(20));
+        assert_eq!(
+            got.font().color().b(),
+            None,
+            "300 は u8 に入らず未指定へ降格"
+        );
+    }
+    assert_ne!(after.font_decoration_raw(), before.font_decoration_raw());
+    // 新しい 3 つの層を既定へ戻せば、残りのフィールドはすべて 5 本だけの解析と一致する。
+    let stripped = after
+        .with_font_decoration_raw(Default::default())
+        .with_font_shadow_raw(Default::default())
+        .with_disable_font(Default::default());
+    assert_eq!(stripped, before);
+}

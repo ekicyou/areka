@@ -29,6 +29,12 @@
 //!   同じ——`new` の署名を伸ばさずに追加でき、既存の解析結果を 1 つも変えないためである
 //!   （balloon-vertical-canon 要件 1.4/1.8・設計 DD3）。値の解釈（`0`/`1` の判定・語彙外値の
 //!   縮退・警告）は下流の書字方向の解決層（`areka-emo-text::writing`）の責務である。
+//! - 同じく SSP 正典キーの書体 5 本（`font.bold` ほか・[`FontDecorationRaw`]）・影 4 本
+//!   （`font.shadowcolor.*`／`font.shadowstyle`・[`FontShadowRaw`]）・無効表示層 14 本
+//!   （`disable.font.*`・[`DisableFont`]）を additive に持つ（balloon-font-descript-keys 要件
+//!   2.1〜2.4/2.8・設計 DD2/DD3/DD9）。書体 5 本・影 4 本は生文字列転記であり、`0`/`1`・`none`
+//!   の判定・語彙外値の縮退・警告は下流の責務である。既存の [`Font`] と `new` の署名は無改変
+//!   （要件 5.1）。
 //!
 //! 構築は同クレートの `balloon::parse`（写像）とテストが公開/クレートパスで行う。
 //! `new` コンストラクタ＋read-only accessor という不変値オブジェクト流儀（`sakura::SurfaceArg` 流儀）。
@@ -50,6 +56,9 @@ pub struct BalloonModel {
     cursor: BalloonCursor,
     windowposition_raw: WindowPositionRaw,
     vertical_raw: Option<String>,
+    font_decoration_raw: FontDecorationRaw,
+    font_shadow_raw: FontShadowRaw,
+    disable_font: DisableFont,
 }
 
 impl BalloonModel {
@@ -68,6 +77,12 @@ impl BalloonModel {
     /// 本コンストラクタでは `None`（未宣言）で初期化する。生値を持つ写像は
     /// [`BalloonModel::with_vertical_raw`] で相乗りさせる
     /// （balloon-vertical-canon 要件 1.4/1.8・既存 30 呼出箇所は無改変）。
+    ///
+    /// 書体 5 本 `font_decoration_raw`・影 4 本 `font_shadow_raw`・無効表示層 `disable_font` も
+    /// 同様に additive 追加フィールドであり、本コンストラクタでは各 `Default`（全キー未指定）で
+    /// 初期化する。宣言を持つ写像は [`BalloonModel::with_font_decoration_raw`]／
+    /// [`BalloonModel::with_font_shadow_raw`]／[`BalloonModel::with_disable_font`] で相乗りさせる
+    /// （balloon-font-descript-keys 要件 2.1〜2.4/2.8・既存呼び出し側は無改変＝要件 5.1）。
     pub fn new(
         windowposition: WindowPosition,
         origin: Origin,
@@ -88,6 +103,9 @@ impl BalloonModel {
             cursor: BalloonCursor::default(),
             windowposition_raw: WindowPositionRaw::default(),
             vertical_raw: None,
+            font_decoration_raw: FontDecorationRaw::default(),
+            font_shadow_raw: FontShadowRaw::default(),
+            disable_font: DisableFont::default(),
         }
     }
 
@@ -117,6 +135,36 @@ impl BalloonModel {
     /// 要件 1.4/1.8）。未宣言は `None` を渡す。
     pub fn with_vertical_raw(mut self, vertical_raw: Option<String>) -> Self {
         self.vertical_raw = vertical_raw;
+        self
+    }
+
+    /// 書体 5 本（`font.bold`／`.italic`／`.outline`／`.strike`／`.underline`）の生文字列を
+    /// 差し替えた値を返す additive ビルダ（`with_cursor` 流儀）。
+    ///
+    /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの生値を相乗りさせる
+    /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 5.1）。
+    pub fn with_font_decoration_raw(mut self, font_decoration_raw: FontDecorationRaw) -> Self {
+        self.font_decoration_raw = font_decoration_raw;
+        self
+    }
+
+    /// 影 4 本（`font.shadowcolor.r`／`.g`／`.b`／`font.shadowstyle`）の生文字列を差し替えた値を
+    /// 返す additive ビルダ（`with_cursor` 流儀）。
+    ///
+    /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの生値を相乗りさせる
+    /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 5.1）。
+    pub fn with_font_shadow_raw(mut self, font_shadow_raw: FontShadowRaw) -> Self {
+        self.font_shadow_raw = font_shadow_raw;
+        self
+    }
+
+    /// 無効表示層 `disable.font.*`（14 本の束 [`DisableFont`]）を差し替えた値を返す additive ビルダ
+    /// （`with_cursor` 流儀）。
+    ///
+    /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの値を相乗りさせる
+    /// ために消費する（既存呼び出し側は `new` のまま不変・balloon-font-descript-keys 要件 2.8/5.1）。
+    pub fn with_disable_font(mut self, disable_font: DisableFont) -> Self {
+        self.disable_font = disable_font;
         self
     }
 
@@ -189,6 +237,30 @@ impl BalloonModel {
     /// 両者は潰されずに区別される（共存規則の判定に宣言の有無が要るため）。
     pub fn vertical_raw(&self) -> Option<&str> {
         self.vertical_raw.as_deref()
+    }
+
+    /// 書体 5 本の生文字列 [`FontDecorationRaw`] を参照で読み取る
+    /// （balloon-font-descript-keys 要件 2.1/2.4）。
+    ///
+    /// `Option<String>` を含むため参照返し（`cursor()` 流儀）。既存の [`BalloonModel::font`] は
+    /// 本フィールドの追加で一切変化しない（要件 5.1）。
+    pub fn font_decoration_raw(&self) -> &FontDecorationRaw {
+        &self.font_decoration_raw
+    }
+
+    /// 影 4 本の生文字列 [`FontShadowRaw`] を参照で読み取る（balloon-font-descript-keys 要件 2.2/2.4）。
+    ///
+    /// `Option<String>` を含むため参照返し（`cursor()` 流儀）。
+    pub fn font_shadow_raw(&self) -> &FontShadowRaw {
+        &self.font_shadow_raw
+    }
+
+    /// 無効表示層 `disable.font.*` の束 [`DisableFont`] を参照で読み取る
+    /// （balloon-font-descript-keys 要件 2.8）。
+    ///
+    /// `disable.font.*` が 1 本も無いバルーンでは `DisableFont::default()`（全キー未指定）となる。
+    pub fn disable_font(&self) -> &DisableFont {
+        &self.disable_font
     }
 }
 
@@ -419,6 +491,179 @@ impl FontColor {
     /// 青成分（0–255・未指定は `None`・`Some(0)` と判別・要件 2.5/2.6）。
     pub fn b(&self) -> Option<u8> {
         self.b
+    }
+}
+
+/// `font.bold`／`font.italic`／`font.outline`／`font.strike`／`font.underline` の生文字列。
+/// 未指定は `None`（balloon-font-descript-keys 要件 2.1/2.6・設計 DD3）。
+///
+/// 転記層契約: 2 層マージ済みの値を**解釈せず・警告せず**そのまま保持する（[`WindowPositionRaw`]
+/// 流儀）。`0`/`1` の判定・語彙外値の縮退・警告は下流の責務であり、ここでは語彙外の値も素通しで
+/// 保持する。担当下流は `areka-emo-text` の `balloon_overrides` 経由で `look.rs` の受け口
+/// （`\f` と同じ判定）であり、本仕様が配線する。
+///
+/// `#[derive(Default)]` は「全キー未指定」の素直な表現であり、[`BalloonModel::new`] が用いる。
+/// `Option<String>` を含むため `Copy` 不可。
+#[non_exhaustive]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FontDecorationRaw {
+    bold: Option<String>,
+    italic: Option<String>,
+    outline: Option<String>,
+    strike: Option<String>,
+    underline: Option<String>,
+}
+
+impl FontDecorationRaw {
+    /// 5 本の生文字列を個別に `Option` で保持して構築する（部分欠落を欠落なく表現）。
+    pub fn new(
+        bold: Option<String>,
+        italic: Option<String>,
+        outline: Option<String>,
+        strike: Option<String>,
+        underline: Option<String>,
+    ) -> Self {
+        FontDecorationRaw {
+            bold,
+            italic,
+            outline,
+            strike,
+            underline,
+        }
+    }
+
+    /// `font.bold` の生文字列（未指定は `None`・判定は下流）。
+    pub fn bold(&self) -> Option<&str> {
+        self.bold.as_deref()
+    }
+
+    /// `font.italic` の生文字列（未指定は `None`・判定は下流）。
+    pub fn italic(&self) -> Option<&str> {
+        self.italic.as_deref()
+    }
+
+    /// `font.outline` の生文字列（未指定は `None`・判定は下流）。
+    pub fn outline(&self) -> Option<&str> {
+        self.outline.as_deref()
+    }
+
+    /// `font.strike` の生文字列（未指定は `None`・判定は下流）。
+    pub fn strike(&self) -> Option<&str> {
+        self.strike.as_deref()
+    }
+
+    /// `font.underline` の生文字列（未指定は `None`・判定は下流）。
+    pub fn underline(&self) -> Option<&str> {
+        self.underline.as_deref()
+    }
+}
+
+/// `font.shadowcolor.r`／`.g`／`.b`／`font.shadowstyle` の生文字列。
+/// 未指定は `None`（balloon-font-descript-keys 要件 2.2/2.6・設計 DD3）。
+///
+/// 転記層契約: 2 層マージ済みの値を**解釈せず・警告せず**そのまま保持する。`none`／数値／未指定は
+/// `Some("none")`／`Some("64")`／`None` として区別される。`none` の判定・色成分の数値化・
+/// 語彙外値の縮退・警告は下流の責務であり、担当下流は `areka-P0-text-align-shadow-canon`
+/// （本仕様は影を描画へ配線しない）。
+///
+/// `#[derive(Default)]` は「全キー未指定」の素直な表現であり、[`BalloonModel::new`] が用いる。
+#[non_exhaustive]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FontShadowRaw {
+    color_r: Option<String>,
+    color_g: Option<String>,
+    color_b: Option<String>,
+    style: Option<String>,
+}
+
+impl FontShadowRaw {
+    /// 4 本の生文字列を個別に `Option` で保持して構築する（部分欠落を欠落なく表現）。
+    pub fn new(
+        color_r: Option<String>,
+        color_g: Option<String>,
+        color_b: Option<String>,
+        style: Option<String>,
+    ) -> Self {
+        FontShadowRaw {
+            color_r,
+            color_g,
+            color_b,
+            style,
+        }
+    }
+
+    /// `font.shadowcolor.r` の生文字列（`none` を含め素通し・未指定は `None`）。
+    pub fn color_r(&self) -> Option<&str> {
+        self.color_r.as_deref()
+    }
+
+    /// `font.shadowcolor.g` の生文字列（`none` を含め素通し・未指定は `None`）。
+    pub fn color_g(&self) -> Option<&str> {
+        self.color_g.as_deref()
+    }
+
+    /// `font.shadowcolor.b` の生文字列（`none` を含め素通し・未指定は `None`）。
+    pub fn color_b(&self) -> Option<&str> {
+        self.color_b.as_deref()
+    }
+
+    /// `font.shadowstyle` の生文字列（語彙判定は下流・未指定は `None`）。
+    pub fn style(&self) -> Option<&str> {
+        self.style.as_deref()
+    }
+}
+
+/// `disable.font.*`——無効表示の書体設定 14 本。基底の `font.*` とは別の層
+/// （balloon-font-descript-keys 要件 2.8・設計 DD9）。
+///
+/// 書体名・大きさ・色は既存 [`Font`] を値で再利用し（数値化の縮退規則は基底と同じ）、書体 5 本・
+/// 影 4 本は基底と同じ [`FontDecorationRaw`]／[`FontShadowRaw`] で持つ。束であって生文字列では
+/// ないため `Raw` を付けない。値の解釈は下流の責務であり、書体は `look.rs` の受け口へ本仕様が
+/// 配線し、影は `areka-P0-text-align-shadow-canon` が引き受ける。
+///
+/// `Font` が `Default` を持たないため `Default` は手書き（全キー未指定）。
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DisableFont {
+    font: Font,
+    decoration: FontDecorationRaw,
+    shadow: FontShadowRaw,
+}
+
+impl DisableFont {
+    /// 書体名・大きさ・色／書体 5 本／影 4 本を束ねて構築する（同クレート写像・テスト用）。
+    pub fn new(font: Font, decoration: FontDecorationRaw, shadow: FontShadowRaw) -> Self {
+        DisableFont {
+            font,
+            decoration,
+            shadow,
+        }
+    }
+
+    /// `disable.font.name`／`.height`／`.color.*`（参照で読む）。
+    pub fn font(&self) -> &Font {
+        &self.font
+    }
+
+    /// `disable.font.bold` ほか書体 5 本の生文字列（参照で読む）。
+    pub fn decoration_raw(&self) -> &FontDecorationRaw {
+        &self.decoration
+    }
+
+    /// `disable.font.shadowcolor.*`／`.shadowstyle` の生文字列（参照で読む）。
+    pub fn shadow_raw(&self) -> &FontShadowRaw {
+        &self.shadow
+    }
+}
+
+impl Default for DisableFont {
+    /// 全キー未指定。
+    fn default() -> Self {
+        Self::new(
+            Font::new(None, None, FontColor::new(None, None, None)),
+            FontDecorationRaw::default(),
+            FontShadowRaw::default(),
+        )
     }
 }
 

@@ -1024,10 +1024,10 @@ not_applicable = 0
 
 [[barrier]]
 page = "descript_balloon"
-implemented = 20
-vocabulary_only = 5
-degraded = 4
-absent = 133
+implemented = 24
+vocabulary_only = 9
+degraded = 6
+absent = 123
 alias = 0
 not_applicable = 0
 

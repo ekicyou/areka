@@ -14,6 +14,10 @@
 //! - 上流 `kv::parse_kv` のフラット KV 出力を消費し、KV 化を再実装しない（R1.5・foundation 所有）。
 //! - `windowposition.x`/`.limit` は数値写像とは別枠で生文字列を忠実転記する（解釈も警告もしない
 //!   転記層契約・windowposition-limit 要件 1.1/4.1。既存の数値写像は無改変＝同要件 5.1）。
+//! - `font.{bold,italic,outline,strike,underline}`／`font.shadowcolor.{r,g,b}`／`font.shadowstyle`
+//!   の 9 本は生文字列のまま転記し、`disable.font.*` 14 本は基底と同じ形（書体名・大きさ・色は
+//!   既存 5 本と同じ縮退規則）で別の層へ束ねる（解釈も警告もしない・balloon-font-descript-keys
+//!   要件 2.1〜2.9/4.1〜4.6。既存 5 本の写像は無改変＝同要件 5.1）。
 //!
 //! 依存方向は `model ← parse`。KV 化は `crate::kv::parse_kv` に委譲する。
 
@@ -23,8 +27,8 @@ use std::str::FromStr;
 use crate::kv::parse_kv;
 
 use super::model::{
-    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
-    WindowPositionRaw, WordWrapPoint,
+    BalloonCursor, BalloonModel, CursorColor, DisableFont, Font, FontColor, FontDecorationRaw,
+    FontShadowRaw, Origin, ValidRect, WindowPosition, WindowPositionRaw, WordWrapPoint,
 };
 
 /// 主入口: 既に KV マップ化済みの 2 層（descript 既定層＋画像別上書き層・任意）を写像する。
@@ -112,6 +116,7 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     );
     let font = Font::new(
         // font.name は文字列値（数値化しない・R2.5）。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.name_2c_30d5_30a9_30f3_30c8_540d:1
         merged.get("font.name").map(|v| v.to_owned()),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.height_2c_6570_5024:1
         get_scalar::<u32>(merged, "font.height"),
@@ -163,6 +168,59 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         merged.get("cursor.blendmethod").map(|v| v.to_owned()),
     );
 
+    // 書体 5 本・影 4 本（基底）と `disable.font.*` 14 本（無効表示）の転記
+    // （balloon-font-descript-keys 要件 2.1〜2.9・設計 DD3/DD9）。書体・影は生文字列のまま保つ
+    // （`get_scalar` で数値化すると語彙外の値・無効化の語 `none`・宣言された `0` が消える）。
+    // 無効表示の書体名・大きさ・色は基底 5 本と同じ式で引き、既存の縮退規則をそのまま継ぐ。
+    // 接頭辞付きキーは完全一致引きゆえ基底と無効表示が互いに混ざらない（要件 4.1〜4.6）。
+    let font_decoration_raw = FontDecorationRaw::new(
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.bold_2c0_2f1:1
+        get_raw(merged, "font.bold"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.italic_2c0_2f1:1
+        get_raw(merged, "font.italic"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.outline_2c0_2f1:1
+        get_raw(merged, "font.outline"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.strike_2c0_2f1:1
+        get_raw(merged, "font.strike"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.underline_2c0_2f1:1
+        get_raw(merged, "font.underline"),
+    );
+    let font_shadow_raw = FontShadowRaw::new(
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.shadowcolor.r_2c_6570_5024:1
+        get_raw(merged, "font.shadowcolor.r"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.shadowcolor.g_2c_6570_5024:1
+        get_raw(merged, "font.shadowcolor.g"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.shadowcolor.b_2c_6570_5024:1
+        get_raw(merged, "font.shadowcolor.b"),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.shadowstyle_2c_5f62_614b_6307_5b9a:1
+        get_raw(merged, "font.shadowstyle"),
+    );
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#disable.font._28_30d5_30a9_30f3_30c8_5b9a_7fa9_29_2c_28_6307_5b9a_29:1
+    let disable_font = DisableFont::new(
+        Font::new(
+            get_raw(merged, "disable.font.name"),
+            get_scalar::<u32>(merged, "disable.font.height"),
+            FontColor::new(
+                get_scalar::<u8>(merged, "disable.font.color.r"),
+                get_scalar::<u8>(merged, "disable.font.color.g"),
+                get_scalar::<u8>(merged, "disable.font.color.b"),
+            ),
+        ),
+        FontDecorationRaw::new(
+            get_raw(merged, "disable.font.bold"),
+            get_raw(merged, "disable.font.italic"),
+            get_raw(merged, "disable.font.outline"),
+            get_raw(merged, "disable.font.strike"),
+            get_raw(merged, "disable.font.underline"),
+        ),
+        FontShadowRaw::new(
+            get_raw(merged, "disable.font.shadowcolor.r"),
+            get_raw(merged, "disable.font.shadowcolor.g"),
+            get_raw(merged, "disable.font.shadowcolor.b"),
+            get_raw(merged, "disable.font.shadowstyle"),
+        ),
+    );
+
     BalloonModel::new(
         windowposition,
         origin,
@@ -175,6 +233,14 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     .with_cursor(cursor)
     .with_windowposition_raw(windowposition_raw)
     .with_vertical_raw(vertical)
+    .with_font_decoration_raw(font_decoration_raw)
+    .with_font_shadow_raw(font_shadow_raw)
+    .with_disable_font(disable_font)
+}
+
+/// マージ済みマップから `key` を完全一致で引き、値を生文字列のまま複製する（数値化しない）。
+fn get_raw(merged: &BTreeMap<String, String>, key: &str) -> Option<String> {
+    merged.get(key).map(|v| v.to_owned())
 }
 
 /// マージ済みマップから `key` を完全一致で引き、値を `T` へ整数パースする寛容ヘルパ（R1.4/R2.6）。

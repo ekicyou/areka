@@ -24,7 +24,7 @@
 ## Scope
 
 - **In**: align・valign（縦書き写像込み）・shadowcolor・shadowcolor,none・shadowstyle／追加登記 1〜4／`\_l` との相互作用。
-- **Out**: 基盤・font 系 10・`default`／`disable`（親 spec）／descript `font.*` 基底 13 キー（`balloon-font-descript-keys`）／行末禁則のぶら下がり（`emo-text-canon-residue` 項目 15）。
+- **Out**: 基盤・font 系 10・`default`／`disable`（親 spec）／descript `font.*` 基底 14 キーと `disable.font.*` の**読み取り**（`balloon-font-descript-keys` で着地済み。ただし影 4 キー〔`font.shadowcolor.r`／`.g`／`.b`・`font.shadowstyle`〕と無効表示の影 4 キーの**配線は本 spec の範囲**——取り出し口 `BalloonModel::font_shadow_raw()`／`disable_font().shadow_raw()`、配線を足す場所 `crates/areka-emo-text/src/balloon_overrides.rs` の `overrides`、受け口を開ける場所 `look.rs` の `UNOWNED_KEYS`。詳細は `balloon-font-descript-keys` の design.md「C7 引き渡し表」）／行末禁則のぶら下がり（`emo-text-canon-residue` 項目 15）。
 
 ## Boundary Candidates
 

@@ -5,7 +5,7 @@ updated_at: 2026-09-13
 
 # Roadmap — areka（M1 完成後・M2 組み直し前の裁定枠ロードマップ）
 
-> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。本ファイルは **brief 済み spec 30 本（うち完了 8）の着手順（ウェーブ）と干渉条件だけ**を持つ。M2 本文はここに書かない（「M2 以降」節）。**M2 ロードマップを起こす材料は 2026-09-13 に揃った**（`ukadoc-coverage-roadmap` 完了・両段とも実施済み）——束と段階と順位の案は `doc/ukadoc-coverage/roadmap-draft.md`、帰属の正本は同 `linkage.md`、段階と順位の正本は同 `briefing.md` にある。次は `/kiro-discovery` 再入で先頭ウェーブ分だけ起票する（「M2 以降」節）。
+> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。本ファイルは **brief 済み spec 30 本（うち完了 9）の着手順（ウェーブ）と干渉条件だけ**を持つ。M2 本文はここに書かない（「M2 以降」節）。**M2 ロードマップを起こす材料は 2026-09-13 に揃った**（`ukadoc-coverage-roadmap` 完了・両段とも実施済み）——束と段階と順位の案は `doc/ukadoc-coverage/roadmap-draft.md`、帰属の正本は同 `linkage.md`、段階と順位の正本は同 `briefing.md` にある。次は `/kiro-discovery` 再入で先頭ウェーブ分だけ起票する（「M2 以降」節）。
 > 正本配置: 本ファイルが正本（`.kiro/steering/roadmap.md`）。`focus.md`（`inclusion: always`）から辿る。設計判断の正本は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md)。M1 実物スコープは [doc/emo2-conformance-scope.md](../../doc/emo2-conformance-scope.md)。
 > **履歴**: 追記①〜(94)・旧ゴール表・旧ウェーブ行・旧干渉台帳・完了詳報は棚卸④〜⑬で [roadmap-history.md](roadmap-history.md) へ退避済み（history が全文正本・非改変）。完了ユニットの実装詳細は各 `completed/` spec が正本。**旧ウェーブ番号の読み替え**: 棚卸⑫（09-02）で W5.95→W6・W6→W7・W6.5→W8・W6.75→W9・W6.9→W10・W6.95→W11・旧 W7（e2e）→W12 へ整数化。棚卸⑬（09-11）で **旧「W13 裁定枠 D〜G」「W13〜W15（裁定枠）」を W13〜W17 へ振り直し**（下表が正本・history と completed spec 内の旧番号は改変しない）。
 
@@ -60,10 +60,10 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | ⓪ | 09-03 | `sakura-bare-tag-lexer`（#134） | `\_X` bare 漏れ修正・完了検証で `sakura-tag-word-boundary` 起票 |
 | W12 | 09-05〜09-11 | `cursor-tag-canon`（#137）・`emo-text-line-height-canon`（#142）・`emo2-conformance-e2e`（#143・**M1 完成宣言**） ∥ 調査系 `ukadoc-survey-toolkit`（#136）・`-property`（#138）・`-shiori`（#139）・`-sakura-script`（#140）・`-assets`（#141） | 行送り 35→30・e2e 20 項目全合格・ukadoc 1,749 項目の台帳 4 本＋`report/summary.md` |
 
-- 完了 spec 直下エントリ＝**183**（`.kiro/specs/completed/` 直下・2026-09-17 実数え＝ディレクトリ 182＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
+- 完了 spec 直下エントリ＝**184**（`.kiro/specs/completed/` 直下・2026-09-17 実数え＝ディレクトリ 183＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
 - M1 実機サインオフ発見 7 件中 #1〜#6 解決済み・#7（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）は W13 の 4 本が引受先。M-dual は退役（e2e 項目 10 で合格・復活させない）。
 
-## 進行中の spec 台帳（brief 済み 30 本・2026-09-11 実数え 28 ＋ 09-12 起票 1 ＋ 09-13 起票 1。**うち完了 8・進行中 22**＝2026-09-17 に状態列を実数え・着手は `/kiro-start <名>`）
+## 進行中の spec 台帳（brief 済み 30 本・2026-09-11 実数え 28 ＋ 09-12 起票 1 ＋ 09-13 起票 1。**うち完了 9・進行中 21**＝2026-09-17 に状態列を実数え・着手は `/kiro-start <名>`）
 
 > **種別**の優先順は **バグ → 依存ツリーが長い → その他**。**規模**は brief の申告（棚卸⑬で分割したものは分割後）。**状態**列は `/kiro-complete` が ✅ に更新し、完了数を実数えで更新する。**Fable**列＝要件定義（design）を Fable で行うべきか（○＝Fable・−＝Opus で足りる）。
 
@@ -77,7 +77,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 6 | `ukadoc-coverage-roadmap` | 調査（**M2 ロードマップの生成器**・依存ツリー最長） | M | **W13** | survey 4 本 ✅・e2e ✅＝**両段とも解禁済み** | ○ | ✅ |
 | 7 | `completed/text-decoration-canon`（⑴ 基盤＋font 10＋default/disable） | 正典（文字装飾 4 本の先頭ゲート） | L | **W13** | bvc ✅・cursor-tag ✅・line-height ✅ | ○（design） | ✅ 完了（2026-09-13） |
 | 8 | `completed/sylphya-set-ledger`（channels ⑶・**09-11 起票**） | 台帳（三重所有の台帳側） | S | **W13** | なし | − | ✅ 完了（2026-09-17） |
-| 9 | `balloon-font-descript-keys`（decoration ⑶・**09-11 起票**） | 正典（転記のみ） | S | **W13** | なし | − | ⚪ |
+| 9 | `completed/balloon-font-descript-keys`（decoration ⑶・**09-11 起票**） | 正典（転記＋書体の配線） | S | **W13** | なし | − | ✅ 完了（2026-09-17） |
 | 10 | `surfaces-basepos` | 正典（完全独立） | S | W13 任意／W14 | なし | − | ⚪ |
 | 11 | `dpi-transition-two-tick-bounce` | バグ（見た目・判定器） | M | **W14** | #1 | ○ | ⚪ |
 | 12 | `property-query-channels`（⑴ スクリプト経路 1〜4） | 正典（プロパティ系の先頭ゲート・依存ツリー長） | M〜L | **W14** | #4・#7（`lexer.rs`／`decode.rs`）・#2（`kanade/schedule`）・#8 | ○ | ⚪ |
@@ -124,7 +124,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | **保留** | `tick-gate-adoption` | — | 夜間/25 分/n≥3 の実測要求が開発者方針「長時間試行禁止」と正面衝突＝要件段階で「始める前に決着可能な A/B 設計」を組めた時点で単独ウェーブへ。他 spec と並走しない（計測を汚す） |
 
 **干渉台帳（W13・W14 の全ペア実測・2026-09-11・共有ファイル ≥1 の組のみ）**:
-- **W13 は共有ファイル 0**。⚠ 同 crate 別ファイル: `kanade-boot-talkdone-drop`（`schedule/{boot,mod}.rs`）⇄ `host32-window-thread-pump`（`shiori/real.rs`）／`host32-window-thread-pump`（`parent_window.rs`）⇄ `charset-canon`（`shiori3.rs`／`client.rs`）／`sakura-tag-word-boundary`（`lexer.rs`）⇄ `text-decoration-canon`（`decode.rs`・`compile.rs`）。`text-decoration-canon` は分割後 `balloon/parse.rs` に触れない（`balloon-font-descript-keys` が持つ・既定層の残り 8 キーは後着が配線）。
+- **W13 は共有ファイル 0**。⚠ 同 crate 別ファイル: `kanade-boot-talkdone-drop`（`schedule/{boot,mod}.rs`）⇄ `host32-window-thread-pump`（`shiori/real.rs`）／`host32-window-thread-pump`（`parent_window.rs`）⇄ `charset-canon`（`shiori3.rs`／`client.rs`）／`sakura-tag-word-boundary`（`lexer.rs`）⇄ `text-decoration-canon`（`decode.rs`・`compile.rs`）。`text-decoration-canon` は分割後 `balloon/parse.rs` に触れない（`balloon-font-descript-keys` が持つ・既定層の残り 9 キーは後着が配線）。
 - **W14**: `property-query-channels` ⇄ `dpi-transition-two-tick-bounce`＝`areka/src/emo2_boot/`（`mod.rs`／`consumer_ledger.rs` 対 `frame/dpi.rs`）・⇄ `property-ipc-transport`＝`areka-ghost`（`prop_sink.rs`／`runtime.rs` 対 `shiori_inproc.rs`）。`balloon-canon-residue` ⇄ `dpi-transition-two-tick-bounce`＝`areka-emo-present`（`balloon.rs` 対 `presenter/refresh.rs`）・`emo2_boot/frame/`（`attach.rs` 対 `dpi.rs`）。`zorder-chain-residue`（`spine_*_tests.rs`・wintf `tick_bridge.rs`・placement テスト）は W14 内で共有 0。
 - **輻輳点（ウェーブ跨ぎ・1 ウェーブ 1 spec）**: `areka-parsers/sakura/decode.rs`＝W13 decoration → W14 channels → W15 align-shadow → W16 choice-marker → W17 anchor／`areka-sylphya/vocab/dotted.rs`＝W13 set-ledger → W15 tree → W16 catalog（zorder-property は触れない）／`areka-kanade/schedule/*`＝W13 talkdone → W14 channels → W15 translate → W16 time-directives → W17 lifecycle-events／`areka-emo-text/src/{draw,layout}.rs`＝W13 decoration → W14 emo-text-residue → W15 align-shadow → W16 choice-marker → W17 anchor／host32 crate＝W13 pump・charset → W14 ipc → W16 makoto／`doc/COMPAT_ARCHITECTURE.md` §8 は各自の節のみ追記・後着 rebase／番人の例外表は**誰も触らない**。
 - **保存義務**: `property-query-channels` の本番 sink 追加は e2e spine が数える sink 数を変え得る＝檻が数を固定していたら channels が更新する（挙動不変の証跡として）。`sakura-tag-word-boundary` は `\_a[ID]` の角括弧経路を「不変」対象に含める（anchor の前提）。

@@ -799,11 +799,11 @@ areka の中で使われている `surface.append` と `kero.surface.alias` の 
 - どうやって測ったか: カタログでゴーストの descript のこの名前を持つ見出しを全数拾ったら 4 件だった。説明書は番号の付いた項目を最後まで読んだ。
 - 誰が引き取るか: `areka-P0-balloon-canon-residue`。増えた 2 つの綴りの台帳の備考に 1 行ずつ書いてある。
 
-**⑵ `areka-P0-text-decoration-canon`——書体の欄の数が 1 つ足りない**
+**⑵ `areka-P0-balloon-font-descript-keys`——書体の欄の数（是正済み）**
 
-- 何が合っていないか: 説明書はバルーンの descript の書体の欄を「基底 13 キー」と 6 か所で書いているが、正典の見出しは 14 種ある。
-- どうやって測ったか: カタログでバルーンの descript の `font.` で始まる見出しを全数拾ったら 14 件だった。
-- 誰が引き取るか: `areka-P0-text-decoration-canon`。14 件の台帳の備考に 1 行ずつ書いてある。
+- 何が合っていないか: 生きた説明書 3 本が、バルーンの descript の書体の欄を 7 か所で「13 キー」「残り 8 キー」と書いていた（`areka-P0-balloon-font-descript-keys` の brief が「13 キー」4 か所と「残り 8 キー」1 か所、`areka-P0-text-align-shadow-canon` の brief が「13 キー」1 か所、`.kiro/steering/roadmap.md` が「残り 8 キー」1 か所）。正典の見出しは 14 種あり、13 は `font.outline` の数え落としだった。是正後に数え直した結果、この 3 本で「13 キー」「残り 8 キー」と書く箇所は **0** である。完了済みの `areka-P0-text-decoration-canon` の brief には「13 キー」7 か所と「残り 8 キー」1 か所（計 8 か所）が残るが、これは着地した時点の記録なので書き換えない。
+- どうやって測ったか: カタログでバルーンの descript の `font.` で始まる見出しを全数拾ったら 14 件だった。説明書の箇所は、2 つの言い回しの出現回数を `grep -o '13 キー' <ファイル> | wc -l` の形で数えた（是正前は是正のコミットの 1 つ前の版を `git show` で取り出して数え、是正後は作業中のファイルを数えた。引き算では導いていない）。
+- 誰が引き取るか: `areka-P0-balloon-font-descript-keys` が引き取り、是正を済ませた。台帳 `ledger/assets.toml` の備考に書いてあった「担当 spec の brief はバルーンの font 系を 13 キーと書くが、正典の見出しは 14 種ある」という一文（4 件の項目に 1 行ずつ）も、同じ spec で除いた（除いた後は 0 件）。
 
 **⑶ `areka-P0-package-mount`——読む欄の数え上げが実物と食い違う**
 

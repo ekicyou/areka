@@ -190,8 +190,9 @@ impl ActorTextState {
     /// **本仕様の本番経路にこの読み口の呼び手は無い**（差し込みは
     /// [`TextLayerState::set_look_layers`]、戻し先と載せ直しの参照は `self.decor.layers` の
     /// 直読み）。それでも `pub` で残すのは、design.md「`state_decoration.rs`」の Contracts 表が
-    /// 本関数を後続仕様の読み口として載せているためである（`disable.font.*` が読めるように
-    /// なる `areka-P0-balloon-font-descript-keys` が 2 層の実値を突き合わせる）。
+    /// 本関数を後続仕様の読み口として載せているためである（`disable.font.*` の配線を着地させた
+    /// `areka-P0-balloon-font-descript-keys` は 2 層の実値を `ResolvedFont::resolve` の結果で
+    /// 突き合わせたので、この読み口は使っていない）。
     /// 今日の呼び手は決定論テスト（`actor_decoration_tests.rs`／`state_decoration_tests.rs`／
     /// `state_decoration_reset_tests.rs`）だけである。
     pub fn look_layers(&self) -> &LookLayers {
