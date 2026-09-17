@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (203 crate)
+- MIT License (209 crate)
 - BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
@@ -228,7 +228,7 @@ areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参
 ## BSD 3-Clause "New" or "Revised" License
 
 対象 crate:
-- encoding_rs 0.8.35
+- encoding_rs 0.8.41
 
 ```
 // Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
@@ -292,7 +292,7 @@ pub(crate) static GB18030_2022_OVERRIDE_BYTES: [[u8; 2]; 18] = [
 ## BSD 3-Clause "New" or "Revised" License
 
 対象 crate:
-- encoding_rs 0.8.35
+- encoding_rs 0.8.41
 
 ```
 Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
@@ -457,12 +457,12 @@ DEALINGS IN THE SOFTWARE.
 対象 crate:
 - backtrace 0.3.76
 - cfg-if 1.0.4
-- js-sys 0.3.104
+- js-sys 0.3.105
 - rustc-demangle 0.1.28
-- wasm-bindgen-macro-support 0.2.127
-- wasm-bindgen-macro 0.2.127
-- wasm-bindgen-shared 0.2.127
-- wasm-bindgen 0.2.127
+- wasm-bindgen-macro-support 0.2.128
+- wasm-bindgen-macro 0.2.128
+- wasm-bindgen-shared 0.2.128
+- wasm-bindgen 0.2.128
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -568,7 +568,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- bitflags 2.13.1
+- bitflags 2.13.2
 - log 0.4.34
 - regex-automata 0.4.18
 - regex-syntax 0.8.11
@@ -606,7 +606,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- uuid 1.26.0
+- uuid 1.26.1
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -961,7 +961,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- indexmap 2.14.1
+- indexmap 2.14.2
 
 ```
 Copyright (c) 2016--2017
@@ -1066,6 +1066,41 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
+- scopeguard 1.2.0
+
+```
+Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+---
+## MIT License
+
+対象 crate:
 - heapless 0.9.3
 
 ```
@@ -1129,6 +1164,41 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+```
+
+---
+## MIT License
+
+対象 crate:
+- core_detect 1.0.0
+
+```
+Copyright (c) 2017-2020 The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
 ```
 
 ---
@@ -1205,7 +1275,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- smallvec 1.16.0
+- smallvec 1.16.1
 
 ```
 Copyright (c) 2018 The Servo Project Developers
@@ -1656,9 +1726,9 @@ DEALINGS IN THE SOFTWARE.
 - is_terminal_polyfill 1.70.2
 - once_cell_polyfill 1.70.2
 - serde_spanned 1.1.1
-- toml 1.1.4+spec-1.1.0
+- toml 1.1.6+spec-1.1.0
 - toml_datetime 1.1.1+spec-1.1.0
-- toml_edit 0.25.13+spec-1.1.0
+- toml_edit 0.25.15+spec-1.1.0
 - toml_parser 1.1.3+spec-1.1.0
 - toml_writer 1.1.2+spec-1.1.0
 
@@ -1795,7 +1865,26 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- encoding_rs 0.8.35
+- multiversion-macros 0.9.0
+- multiversion 0.9.0
+
+```
+Copyright 2019 Caleb Zulawski
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+```
+
+---
+## MIT License
+
+対象 crate:
+- encoding_rs 0.8.41
+- multiversion_no_op 1.0.0
 
 ```
 Copyright Mozilla Foundation
@@ -1942,7 +2031,7 @@ SOFTWARE.
 - objc2-encode 4.1.0
 - objc2-io-kit 0.3.2
 - objc2 0.6.4
-- pasta_core 0.3.3
+- pasta_core 0.3.4
 - r-efi 6.0.0
 - taffy 0.13.0
 - winapi-i686-pc-windows-gnu 0.4.0
@@ -2049,6 +2138,34 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+```
+
+---
+## MIT License
+
+対象 crate:
+- simdutf8 0.1.5
+
+```
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ---
@@ -2177,7 +2294,7 @@ SOFTWARE.
 - parking 2.2.1
 - pin-project-lite 0.2.17
 - polling 3.11.0
-- portable-atomic-util 0.2.7
+- portable-atomic-util 0.2.8
 - portable-atomic 1.15.0
 - proc-macro2 1.0.107
 - quote 1.0.47
@@ -2189,7 +2306,7 @@ SOFTWARE.
 - serde_derive 1.0.229
 - serde_json 1.0.151
 - syn 2.0.119
-- syn 3.0.4
+- syn 3.0.5
 - thiserror-impl 2.0.20
 - thiserror 2.0.20
 - typeid 1.0.3
@@ -2533,8 +2650,8 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- crossbeam-queue 0.3.13
-- crossbeam-utils 0.8.22
+- crossbeam-queue 0.3.14
+- crossbeam-utils 0.8.23
 
 ```
 The MIT License (MIT)

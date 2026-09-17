@@ -70,7 +70,14 @@ pub fn domain_report_path(domain: Domain) -> PathBuf {
         .join(format!("{}.md", domain.as_key()))
 }
 
-/// 全体報告（`doc/ukadoc-coverage/report/summary.md`）。常時検査の対象外（要件 7.6）。
+/// 全体報告（`doc/ukadoc-coverage/report/summary.md`）。
+///
+/// 常時検査の対象である。完了 spec toolkit の要件 7.6 がここを対象外にしていたのは
+/// 並走する調査 4 本が同じファイルを取り合うからで、その理由は 4 本の完了で消えた
+/// ——除外は `ukadoc-coverage-roadmap` の要件 11.2 が覆した。いまは判定 ⑹ が、この
+/// ファイルの本文を `report::summary::render_summary` の出力と**全文一致**で突き合わせる
+/// （証拠の表は本文から外して `evidence` の副手続きへ移したので、突き合わせの両側は
+/// カタログと台帳 4 本だけから決まる）。作り直さずに台帳を変えれば赤になる。
 pub fn summary_report_path() -> PathBuf {
     coverage_dir().join("report").join("summary.md")
 }
@@ -78,6 +85,21 @@ pub fn summary_report_path() -> PathBuf {
 /// 伺からしさのテーマ定義（`doc/ukadoc-coverage/values.md`）。要件 4.4 の 8 テーマの正本。
 pub fn values_path() -> PathBuf {
     coverage_dir().join("values.md")
+}
+
+/// 束の名付けと帰属（`doc/ukadoc-coverage/linkage.md`）。帰属の正本（要件 4）。
+pub fn linkage_path() -> PathBuf {
+    coverage_dir().join("linkage.md")
+}
+
+/// 段階と順位の統合ブリーフィング（`doc/ukadoc-coverage/briefing.md`）。要件 5・6・8。
+pub fn briefing_path() -> PathBuf {
+    coverage_dir().join("briefing.md")
+}
+
+/// 網羅ロードマップ草案（`doc/ukadoc-coverage/roadmap-draft.md`）。要件 10。
+pub fn roadmap_draft_path() -> PathBuf {
+    coverage_dir().join("roadmap-draft.md")
 }
 
 #[cfg(test)]

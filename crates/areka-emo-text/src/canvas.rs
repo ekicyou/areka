@@ -26,26 +26,38 @@
 //!
 //! ## M2 予約（記録のみ・実装しない・R8.3/R10.3）
 //!
-//! `\f` 系文字装飾の**縦書き写像は確定済み**（spec `areka-P0-balloon-vertical-canon`
-//! 要件 5.1〜5.3・5.7）——`align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、
-//! `valign` は `top`＝右寄せ／`bottom`＝左寄せ、下線は列の右側。正典 2 ページで `valign` の
-//! 写像が逆である事実（疑義 SC1）と areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md`
-//! §8 の該当行が正本で、実装の追跡先は `areka-P0-text-decoration-canon`。
+//! `\f` 系のうち**寄せ 2 項目（`align`／`valign`）は今も未実装**（語彙の記録のみ）で、
+//! 追跡先は `areka-P0-text-align-shadow-canon`。正典 2 ページで `valign` の写像が逆である
+//! 事実（疑義 SC1）と areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が
+//! 正本。**下線は `areka-P0-text-decoration-canon` が実装済み**——線を引く位置は描画基盤の
+//! 既定に委ね、書字方向ごとに描き分けない（実測値と、`areka-P0-balloon-vertical-canon`
+//! の裁定「列の右側」との照合結果も同 §8 の該当行が正本）。
 //!
-//! 回転値・文字装飾（アウトライン/多色/シャドウ）は [`TextEffects`] 予約型と
-//! 予約名定数（[`RESERVED_EFFECT_OUTLINE`]／[`RESERVED_EFFECT_MULTICOLOR`]／
-//! [`RESERVED_EFFECT_SHADOW`]／[`RESERVED_EFFECT_ROTATION`]）として記録するに留め、
-//! M1 では実挙動を一切実装しない。`\f` 系文字装飾・`disable.font.*` 拡張も同シームに属する。
+//! 文字ごとの `\f` 装飾は per-run の見た目（[`TextLook`](crate::look::TextLook)）が担い、
+//! 行単位の [`TextEffects`] とは別の経路である。無効表示の層（`disable.font.*` の戻し先）も
+//! [`ResolvedFont::looks`](crate::draw::ResolvedFont::looks) で実体化済みで、本シームに属さない。
+//! [`TextEffects`] に残るのは次の予約名だけである:
+//!
+//! - [`RESERVED_EFFECT_MULTICOLOR`]／[`RESERVED_EFFECT_ROTATION`]——M2 予約のまま
+//!   （所有仕様なし・実挙動を持たない）。
+//! - [`RESERVED_EFFECT_SHADOW`]——影 3 項目の実体化は `areka-P0-text-align-shadow-canon`
+//!   が所有する。
+//! - [`RESERVED_EFFECT_OUTLINE`]——白抜き。上下付き（`\f[sub]`／`\f[sup]`）とあわせて
+//!   `areka-P0-text-decoration-canon` が**語彙のみ**で受理する裁定を下した（6 値の解釈・
+//!   状態の保持・戻しへの参加までは行い、表示は変えない）。表示手段が見つかるまで M2 予約
+//!   （追跡先＝steering `roadmap.md` の M2 予約の行）。
 
 use crate::layout::{PositionedGlyph, PositionedLine};
 use crate::region::TextRegion;
 use crate::writing::WritingMode;
 
-/// M2 予約名: アウトライン装飾 `outline`（記録のみ・実装しない・R8.3/R10.3）。
+/// M2 予約名: 白抜き `outline`（`areka-P0-text-decoration-canon` が語彙のみで受理する
+/// 裁定を下し、表示手段が見つかるまで M2 予約に据え置いた・R8.3/R10.3）。
 pub const RESERVED_EFFECT_OUTLINE: &str = "outline";
-/// M2 予約名: 多色装飾 `multicolor`（記録のみ・実装しない・R8.3/R10.3）。
+/// M2 予約名: 多色装飾 `multicolor`（記録のみ・実装しない・所有仕様なし・R8.3/R10.3）。
 pub const RESERVED_EFFECT_MULTICOLOR: &str = "multicolor";
-/// M2 予約名: シャドウ装飾 `shadow`（記録のみ・実装しない・R8.3/R10.3）。
+/// M2 予約名: シャドウ装飾 `shadow`（記録のみ・実体化の所有は
+/// `areka-P0-text-align-shadow-canon`・R8.3/R10.3）。
 pub const RESERVED_EFFECT_SHADOW: &str = "shadow";
 /// M2 予約名: 回転 `rotation`（記録のみ・実装しない・R8.2/R8.3）。
 pub const RESERVED_EFFECT_ROTATION: &str = "rotation";
@@ -133,11 +145,13 @@ impl RegionTransform {
     }
 }
 
-/// 文字装飾の M2 予約型シーム（R8.3/R10.3——実挙動なし・フィールド未使用）。
+/// **行単位**の文字装飾の M2 予約型シーム（R8.3/R10.3——実挙動なし・フィールド未使用）。
 ///
-/// 予約対象: アウトライン・多色・シャドウ・回転（予約名定数はモジュール doc 参照）。
+/// 予約対象: 白抜き（語彙のみ・上記の裁定）・多色・シャドウ（`areka-P0-text-align-shadow-canon`
+/// が所有）・回転（予約名定数はモジュール doc 参照）。文字ごとの `\f` 装飾は
+/// [`TextLook`](crate::look::TextLook) が担うため本型には載らない。
 /// `#[non_exhaustive]` により M2 でのフィールド追加は破壊的変更にならない。
-/// M1 では [`Default`] 生成のみ可能で、描画へ一切影響しない。
+/// 今日は [`Default`] 生成のみ可能で、描画へ一切影響しない。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TextEffects {}
@@ -258,7 +272,7 @@ pub struct Resident {
     pub content: ResidentContent,
     /// キャンバス上の配置変換（M1: 恒等/平行移動のみ・R8.2）。
     pub transform: RegionTransform,
-    /// M2 予約の文字装飾シーム（アウトライン/多色/シャドウ/回転・R8.3）。
+    /// M2 予約の**行単位**の文字装飾シーム（白抜き〔語彙のみ〕/多色/シャドウ/回転・R8.3）。
     pub effects: TextEffects,
 }
 
@@ -309,6 +323,9 @@ impl ContentCanvas {
                         ch: g.ch,
                         inline_pos: g.inline_pos - inline_origin,
                         advance: g.advance,
+                        // 装飾番号は行のグリフ列まで写す（R3.3 の配管 3 段目）。行ローカルへ
+                        // 移すのは行内位置だけで、番号と送り幅は配置時の値のまま。
+                        style: g.style,
                     })
                     .collect();
                 Resident {
@@ -348,6 +365,7 @@ mod tests {
     use crate::layout::{
         FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, PositionedLine, WrapPlan,
     };
+    use crate::look::StyleId;
     use crate::region::TextRegion;
     use crate::state::TextItem;
     use crate::writing::WritingMode;
@@ -445,10 +463,11 @@ mod tests {
         assert_eq!(RegionTransform::identity().then(&a), a);
     }
 
-    // ── R8.3/R10.3: TextEffects——M2 予約の型シーム（実挙動なし・予約名は定数記録のみ） ──
+    // ── R8.3/R10.3: TextEffects——行単位の M2 予約の型シーム（予約名は定数記録のみ） ──
 
     /// M2 予約名（outline/multicolor/shadow/rotation）は定数として記録するに留める。
-    /// TextEffects 自体はフィールド未使用の予約型（既定値のみ生成可能）。
+    /// TextEffects 自体はフィールド未使用の予約型（既定値のみ生成可能）で、文字ごとの
+    /// `\f` 装飾（[`TextLook`](crate::look::TextLook)）はここを通らない。
     #[test]
     fn text_effects_is_reserved_seam_with_recorded_names() {
         assert_eq!(RESERVED_EFFECT_OUTLINE, "outline");
@@ -606,6 +625,7 @@ mod tests {
                     ch: 'あ',
                     inline_pos: 0.0,
                     advance: 12.0,
+                    style: StyleId::DEFAULT,
                 }],
             },
             PositionedLine {

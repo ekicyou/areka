@@ -11,8 +11,9 @@ use super::{
 /// シェル窓 Entity を構築する（WS_POPUP 透過窓・物理 px 採寸・αマスク当たりは emo-surface 子が担う）。
 ///
 /// mock-shell と異なり `BitmapSource`／`BoxStyle` は使わない。表示内容は `EmoPresenter` が
-/// `attach_target`→`apply` で装着する swap chain 供給面。窓クライアント寸は surface 原寸（物理 px）を
-/// `WindowPos.size` へ直接与える（DPI 表示契約・taffy 非経由）。
+/// `attach_target`→`apply` で装着する原寸のコマンドリスト（拡大は wintf の `SetTransform`）。窓クライアント寸は
+/// 起動時点では surface の **native 原寸**（物理 px 単位）を `WindowPos.size` へ直接与える（DPI 表示契約・
+/// taffy 非経由）——表示成立後に `reconcile_window_size` が `target_physical_size`（`scaled_extent`）へ合わせ直す。
 pub(super) fn create_shell_window(world: &mut World, x: i32, y: i32, w: u32, h: u32) -> Entity {
     world
         .spawn((

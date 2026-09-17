@@ -25,7 +25,7 @@
 //! 台本〜スケジュールを通して保存される。
 
 use crate::contract::{
-    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, TalkEndReason,
+    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, FONT_TAG_CARRIER, TalkEndReason,
 };
 use crate::sysvar::SystemVarSnapshot;
 use areka_parsers::sakura::Instruction;
@@ -193,6 +193,20 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
                 cues.push(emit(scope, offset, d, CueCommand::Text(expanded)));
                 offset += d;
             }
+            // 文字装飾 `\f[key,args...]`（→汎用キャリア・R2.3/2.4/14.4）。キーごとに typed variant を
+            // 新設せず、`\!` と同じ 1 本の汎用キャリア（名前 `FONT_TAG_CARRIER`）へ載せる。引数
+            // （空トークン含む）は記述順のまま無変形で運び、意味付けは消費側（文字レンダリング層）
+            // がキーで自己選別して行う。**再生時間 0**（`\f` の有無で台本の時刻列を変えない）で、
+            // 前後の文字との並び順は書き出し位置 `offset` の転写だけで保たれる（offset は進めない）。
+            // 本腕は catch-all の**前**に置く（後ろに置くと「M-boot 外タグ」として捨てられる）。
+            Instruction::Font { args } => {
+                cues.push(emit(
+                    scope,
+                    offset,
+                    0.0,
+                    CueCommand::command_carrier(FONT_TAG_CARRIER, args.clone()),
+                ));
+            }
             // 残る除外（`Raw` および `#[non_exhaustive]` の未知 variant）は無視ログを記録し cue を
             // 生成せず継続する（寛容・非 panic・型シーム・R8.2/8.3/R11.2）。Choice/Cursor は task 4.1、
             // Move/GenericCommand/SystemVar は task 4.2 で専用アームへ卒業したため、catch-all が無視
@@ -321,6 +335,9 @@ pub struct CompiledTalk {
 #[cfg(test)]
 #[path = "compile_arm_tests.rs"]
 mod arm_tests;
+#[cfg(test)]
+#[path = "compile_font_tests.rs"]
+mod font_tests;
 #[cfg(test)]
 #[path = "compile_sheet_tests.rs"]
 mod sheet_tests;

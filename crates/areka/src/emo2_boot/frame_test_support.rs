@@ -74,6 +74,8 @@ pub(super) fn synth_assets_with_balloons(
                 emo_world: empty_world(),
                 atlas: empty_atlas(),
                 model: areka_parsers::balloon::parse_str("", None),
+                // headless 純合成のバルーンは面画像を持たない＝背景色は既定の白（要件 4.6）。
+                background_color: (255, 255, 255),
             })
             .collect(),
         resolver: SurfaceResolver::new(BTreeMap::new()),

@@ -78,14 +78,24 @@
 
 use areka_sakura::contract::ActorKey;
 
-use crate::cursor_tag::{
-    CursorAxis, CursorBasis, CursorWarnGuard, note_out_of_range, resolve_cursor_axis,
-    warn_cursor_degrade,
-};
+use crate::cursor_tag::{CursorAxis, CursorBasis, CursorWarnGuard};
+use crate::look::{GlyphStyles, StyleId, TextLook};
 use crate::region::TextRegion;
 use crate::segment::SegmentPlan;
-use crate::state::{CursorCoord, TextItem, TextLayerConfig};
+use crate::state::{TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
+
+// 本ファイルは行配置の本体で、自己完結した補助 2 つ（塊の advance 合計・`\_l` の 1 軸
+// 解決の配線）は子モジュール `layout_line_ops.rs` が持つ。純移動ゆえ本体からの
+// 呼び出し方は分割前と同一。
+#[path = "layout_line_ops.rs"]
+mod line_ops;
+
+#[path = "layout_styled.rs"]
+mod styled;
+
+use line_ops::{resolve_cursor_component, segment_advance_sum};
+use styled::{LineHeights, glyph_style_advance, line_pitch_of};
 
 /// グリフ送りの注入点（metrics 依存の唯一の口・R4.5）。
 ///
@@ -116,6 +126,16 @@ pub trait GlyphMetrics {
     /// （`GetMetrics` の `ascent`/`descent`/`designUnitsPerEm`）から算出し、
     /// [`FixedMetrics`] は決定論仮想値を返す。文字列非依存（フォント固有の設計値）。
     fn line_box_height(&self, font_height: f32) -> f32;
+
+    /// **見た目込み**のグリフ行内送り幅（image px・R7.10／R11.1）。
+    ///
+    /// 既定実装は見た目の**大きさだけ**を見て [`GlyphMetrics::advance`] へ委譲する——
+    /// 既存の 2 実装（[`FixedMetrics`]・COM 層 `DWriteMetrics`）と既存の呼び手は
+    /// これで無変更のまま済む。フォント名・太字・斜体まで含めて測るのは
+    /// 実測 metrics（`DWriteMetrics`）の領分で、そちらが本メソッドを上書きする。
+    fn advance_styled(&self, ch: char, look: &TextLook) -> f32 {
+        self.advance(ch, look.height)
+    }
 }
 
 /// 構造テスト用の決定論 metrics（R4.5/R11.6）。
@@ -175,6 +195,12 @@ pub struct PositionedGlyph {
     pub inline_pos: f32,
     /// 行内送り幅（image px・注入 metrics 由来）。
     pub advance: f32,
+    /// この文字に効く装飾の番号（[`StyleId::DEFAULT`]＝そのスコープの既定の見た目・R3.3）。
+    ///
+    /// 番号の意味を与えるのは装飾の表（[`crate::look::StyleTable`]）で、本型は写しを運ぶだけ。
+    /// 番号列を渡さない配置（[`LayoutEngine::layout`]・[`LayoutEngine::layout_with_cursor_warn`]）
+    /// では全グリフが [`StyleId::DEFAULT`] になる。
+    pub style: StyleId,
 }
 
 /// 配置済みの 1 行（行矩形＋グリフ列・choice-render 再利用シーム・R9.4）。
@@ -260,6 +286,14 @@ impl LayoutEngine {
     /// 新規 mode 分岐なし（6.1/6.2・遠辺の軸解決は [`TextRegion`] が済ませている）。
     ///
     /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
+    ///
+    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**（`actor.rs` の
+    /// `present_actor` が唯一の本番呼出点）。本関数の本番の呼び手は 0 で、残しているのは
+    /// 非回帰の檻（`layout_styled_tests.rs` が「装飾なしの出力が装飾導入前と 1 ビットも
+    /// 変わらない」を本関数の出力と突き合わせる）をはじめとする多数の決定論テスト
+    /// （`canvas.rs`／`layout_*_tests.rs`／`viewbox_draw_*_tests.rs`／`draw_oracle_tests.rs`／
+    /// `tests/` の統合試験）が呼ぶ委譲の入口としてである。crate 外では
+    /// `crates/areka-emo-text/examples/emo-text-layer/drive.rs` が 2 か所で呼ぶ（本番ではない）。
     #[allow(clippy::too_many_arguments)]
     pub fn layout(
         items: &[TextItem],
@@ -283,6 +317,7 @@ impl LayoutEngine {
             metrics,
             wrap,
             None,
+            None,
         )
     }
 
@@ -292,11 +327,17 @@ impl LayoutEngine {
     /// 負値絶対・`%`・`@` 相対は縮退ではなく**実導出**なので警告の対象ではない（R5.2）。
     ///
     /// warn guard は走査を跨いで持続する必要がある（per-frame layout 呼出での重複警告抑止）
-    /// ため、呼び手（ランタイム＝`actor.rs` の `TextLayerRuntime`・既存 `unresolved_warned` と
+    /// ため、ランタイム（`actor.rs` の `TextLayerRuntime::cursor_warn`・既存 `unresolved_warned` と
     /// 同型の持続 guard）が所有し `&mut` で渡す。型の住処は解決層
     /// [`crate::cursor_tag::CursorWarnGuard`] で、本 API の署名は変わらない。行レイアウトの
     /// 純挙動は [`layout`](Self::layout) と完全同一——差は縮退ログの有無のみ（guard は決定的な
     /// 行出力に一切影響しない）。
+    ///
+    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**。ランタイムが持つ
+    /// guard は `present_actor` から `layout_styled` の引数として渡っており、本関数を経由
+    /// **しない**（guard の所有者は変わらないが、受け取る関数は 1 段先である）。本関数の
+    /// 本番の呼び手は 0 で、残しているのは非回帰の檻（`layout_cursor_tests.rs`／
+    /// `layout_cursor_wiring_tests.rs`）が呼ぶ委譲の入口としてである。
     #[allow(clippy::too_many_arguments)]
     pub fn layout_with_cursor_warn(
         items: &[TextItem],
@@ -318,9 +359,20 @@ impl LayoutEngine {
             metrics,
             wrap,
             Some((actor, warn)),
+            None,
         )
     }
 
+    /// 配置の本体。`styles` は「グリフ序数→装飾番号／見た目」の読み口で、
+    /// `None`（[`layout`](Self::layout)・[`layout_with_cursor_warn`](Self::layout_with_cursor_warn)）
+    /// の経路は装飾を入れる前と 1 ビットも変わらない——送り幅は `metrics.advance` のまま、
+    /// [`PositionedGlyph::style`] は全グリフ [`StyleId::DEFAULT`]（`layout_styled_tests.rs`
+    /// が装飾導入前の実測値で固定している）。`Some` のときだけ、既定でない番号の文字を
+    /// [`GlyphMetrics::advance_styled`] で測り、番号を配置済みグリフへ写す（R3.3／R7.10／R11.2）。
+    ///
+    /// 行の丈と行送りは [`LineHeights`] が供給する——閉じる行に置かれた文字の em の最大値
+    /// （文字が無い行は次に置く文字の大きさ・それも無ければスコープの現在の見た目）を
+    /// [`line_pitch_of`] へ渡すだけで、装飾のための別の式は持ち込まない（R7.8／R7.9）。
     #[allow(clippy::too_many_arguments)]
     fn layout_inner(
         items: &[TextItem],
@@ -331,8 +383,16 @@ impl LayoutEngine {
         metrics: &dyn GlyphMetrics,
         wrap: WrapPlan<'_>,
         mut cursor_warn: Option<(&ActorKey, &mut CursorWarnGuard)>,
+        styles: Option<GlyphStyles<'_>>,
     ) -> Vec<PositionedLine> {
-        let pitch = metrics.line_pitch(font_height);
+        // 行送りの式は [`line_pitch_of`] の 1 点だけを通る（要件 7.8）。この `pitch` は
+        // `\_l` の**単位 `lh` の係数**（`CursorBasis::line_pitch`）専用で、design の宣言
+        // どおり既定の大きさのまま装飾では動かない。行を閉じる各点と `\_l` の実効位置の
+        // 先読みは、そこで閉じる行の丈から引き直す（[`LineHeights`]）。
+        let pitch = line_pitch_of(metrics, font_height);
+        // 行の丈（行内最大 em・要件 7.9）。番号列が無い経路では常に `font_height` を返すので
+        // 従来の出力と 1 ビットも変わらない。
+        let mut heights = LineHeights::new(styles.as_ref(), font_height);
         // 行内軸の二段構え（design.md §4.3・R6.2/6.3/6.8）: 折返し基準（soft・「超えたら
         // 折り返す」）と描画範囲の遠辺（hard・「超えてはならない」絶対上限）を**別の値**として
         // 持つ。`min` へ畳み込まない——畳むと絶対上限の意味論も、行末禁則文字が基準を超えて
@@ -376,7 +436,11 @@ impl LayoutEngine {
                     if placed == visible_count {
                         break;
                     }
-                    let advance = metrics.advance(ch, font_height);
+                    // 装飾番号と送り幅（R3.3／R7.10）。番号列が無い経路・既定の番号の文字は
+                    // 従来どおり `advance(ch, font_height)`——既定の見た目の高さが
+                    // `font_height` と食い違う登録前の一瞬でも、装飾なしの出力を動かさない。
+                    let (style, advance, glyph_height) =
+                        glyph_style_advance(ch, placed, font_height, metrics, styles.as_ref());
                     // ② 保留フラッシュ（次の可視コンテンツ配置の直前・R2.1/2.3）。保留改行と
                     // pending-cursor は同一フラッシュに混在しうるため順序が意味を持つ（design
                     // 「ゲート②の直後に②'として挿入」）。厳密順序:
@@ -390,6 +454,9 @@ impl LayoutEngine {
                     // 改行の到着時点で 3 段が走り済みで、ここへ来る `pending_cursor` は空だから
                     // 改行が後勝ちする（`LineBreak` 腕を参照）。
                     if pending.is_some() || pending_cursor.is_some() {
+                        // 閉じる行の丈（要件 7.9）。文字の無い行（改行だけの行）はここで
+                        // 手元にある**次に置く文字**の大きさ＝そのとき効いている大きさになる。
+                        let closing = heights.close(Some(glyph_height));
                         finish_pending_line(
                             &mut lines,
                             &mut current,
@@ -397,7 +464,7 @@ impl LayoutEngine {
                             inline_start,
                             inline_pos,
                             block_pos,
-                            font_height,
+                            closing,
                         );
                         apply_pending_newline(
                             &mut pending,
@@ -405,7 +472,7 @@ impl LayoutEngine {
                             &mut block_pos,
                             inline_start,
                             block_dir,
-                            pitch,
+                            line_pitch_of(metrics, closing),
                         );
                         apply_pending_cursor(&mut pending_cursor, &mut inline_pos, &mut block_pos);
                     }
@@ -432,6 +499,7 @@ impl LayoutEngine {
                                     seg.len,
                                     font_height,
                                     metrics,
+                                    styles.as_ref(),
                                 );
                                 // 塊の収まり判定の基準は soft と hard の近い方（塊は
                                 // どちらも超えられない）。2 つの値は畳まずに持ったまま、
@@ -482,15 +550,16 @@ impl LayoutEngine {
                         );
                     }
                     if feed || over_hard {
+                        let closing = heights.close(Some(glyph_height));
                         lines.push(finish_line(
                             std::mem::take(&mut current),
                             mode,
                             inline_start,
                             inline_pos,
                             block_pos,
-                            font_height,
+                            closing,
                         ));
-                        block_pos += block_dir * pitch;
+                        block_pos += block_dir * line_pitch_of(metrics, closing);
                         inline_pos = inline_start;
                     }
                     // ④ 配置。
@@ -498,8 +567,10 @@ impl LayoutEngine {
                         ch,
                         inline_pos,
                         advance,
+                        style,
                     });
                     inline_pos += advance;
+                    heights.place(glyph_height);
                     placed += 1;
                 }
                 TextItem::LineBreak { ratio } => {
@@ -524,6 +595,9 @@ impl LayoutEngine {
                     // 無いので本分岐は不発火）——順序で結果が分かれるのが正典の振舞いである。
                     // 末尾規則は不変: 実体化は位置の更新と現在行の確定だけで、内容の無い行は作らない。
                     if pending_cursor.is_some() {
+                        // 先行実体化の時点では**次に置く文字が無い**——文字の置かれていない
+                        // 行はスコープの現在の見た目の大きさで送る（要件 7.9）。
+                        let closing = heights.close(None);
                         finish_pending_line(
                             &mut lines,
                             &mut current,
@@ -531,7 +605,7 @@ impl LayoutEngine {
                             inline_start,
                             inline_pos,
                             block_pos,
-                            font_height,
+                            closing,
                         );
                         apply_pending_newline(
                             &mut pending,
@@ -539,7 +613,7 @@ impl LayoutEngine {
                             &mut block_pos,
                             inline_start,
                             block_dir,
-                            pitch,
+                            line_pitch_of(metrics, closing),
                         );
                         apply_pending_cursor(&mut pending_cursor, &mut inline_pos, &mut block_pos);
                     }
@@ -573,7 +647,9 @@ impl LayoutEngine {
                     let mut eff_inline = inline_pos;
                     let mut eff_block = block_pos;
                     if let Some(sum) = pending {
-                        eff_block += block_dir * pitch * sum;
+                        // 行送りはフラッシュ側と同じ規則——閉じる行の丈から引く
+                        // （[`LineHeights::peek`] の doc に理由・要件 7.9）。
+                        eff_block += block_dir * line_pitch_of(metrics, heights.peek()) * sum;
                         eff_inline = inline_start;
                     }
                     if let Some((inline_val, block_val)) = pending_cursor {
@@ -653,13 +729,14 @@ impl LayoutEngine {
         // 隣接するため、旧 `opened` フラグは `!current.is_empty()` と等価・DD-4）。
         // 残存する保留（末尾改行）は実体化せず蒸発する（R5.2/5.3）。
         if !current.is_empty() {
+            let closing = heights.close(None);
             lines.push(finish_line(
                 current,
                 mode,
                 inline_start,
                 inline_pos,
                 block_pos,
-                font_height,
+                closing,
             ));
         }
         lines
@@ -742,36 +819,6 @@ impl LayoutEngine {
     }
 }
 
-/// 塊の advance 合計（塊先決の判定式の左辺 `seg_sum`）。
-///
-/// glyph 通し番号 `[start_serial, start_serial + len)`（`items` 中の `Glyph` のみを
-/// 0 起点で数えた範囲）のグリフ送り幅を、通し番号昇順＝**左畳み込み順**で合計する
-/// （配置も同順ゆえ浮動小数の順序依存を実装と一致させる・design Service Interface）。
-/// 全 `items` を走るため合計は `visible_count` に依存しない（INV-1/7.1）。
-fn segment_advance_sum(
-    items: &[TextItem],
-    start_serial: usize,
-    len: usize,
-    font_height: f32,
-    metrics: &dyn GlyphMetrics,
-) -> f32 {
-    let end = start_serial + len;
-    let mut sum = 0.0f32;
-    let mut serial = 0usize;
-    for item in items {
-        if let TextItem::Glyph { ch } = *item {
-            if serial >= end {
-                break;
-            }
-            if serial >= start_serial {
-                sum += metrics.advance(ch, font_height);
-            }
-            serial += 1;
-        }
-    }
-    sum
-}
-
 /// 保留の実体化のうち **(1) 現在行の確定**（改行・`\_l` とも行区切り＝RN-3）。
 ///
 /// 保留フラッシュ（ゲート②）と `LineBreak` 到着時の先行実体化（DD-11）が**共有する唯一の
@@ -784,7 +831,7 @@ fn finish_pending_line(
     inline_start: f32,
     inline_pos: f32,
     block_pos: f32,
-    font_height: f32,
+    line_height: f32,
 ) {
     if current.is_empty() {
         return;
@@ -795,7 +842,7 @@ fn finish_pending_line(
         inline_start,
         inline_pos,
         block_pos,
-        font_height,
+        line_height,
     ));
 }
 
@@ -839,13 +886,17 @@ fn apply_pending_cursor(
 
 /// 行の確定: 行内範囲（開始〜送り終端）と行送り軸位置から行矩形を組む
 /// （行送り軸の厚み方向は行送り方向と同符号——モジュール doc「行矩形の規約」）。
+///
+/// `line_height` は**その行の丈**であって既定の大きさとは限らない——装飾のある行では
+/// 行内に置かれた文字の em の最大値が入る（R7.9・[`LineHeights::close`] が決める）。
+/// 装飾の無い経路では従来どおり `font_height` がそのまま届く。
 fn finish_line(
     glyphs: Vec<PositionedGlyph>,
     mode: WritingMode,
     inline_start: f32,
     inline_end: f32,
     block_pos: f32,
-    font_height: f32,
+    line_height: f32,
 ) -> PositionedLine {
     // 行内開始エッジ（rect の行内軸近端）は「実際に置かれた先頭グリフの inline_pos」から取る。
     // グリフは行内軸で単調増加ゆえ先頭が近端。`\_l` カーソル字下げは pending-cursor 実体化で
@@ -862,10 +913,10 @@ fn finish_line(
             left: inline_lo,
             top: block_pos,
             right: inline_end,
-            bottom: block_pos + font_height,
+            bottom: block_pos + line_height,
         },
         WritingMode::VerticalRl => LineRect {
-            left: block_pos - font_height,
+            left: block_pos - line_height,
             top: inline_lo,
             right: block_pos,
             bottom: inline_end,
@@ -873,48 +924,11 @@ fn finish_line(
         WritingMode::VerticalLr => LineRect {
             left: block_pos,
             top: inline_lo,
-            right: block_pos + font_height,
+            right: block_pos + line_height,
             bottom: inline_end,
         },
     };
     PositionedLine { rect, glyphs }
-}
-
-/// `\_l` の 1 軸ぶんを解決層へ委譲し、記録の 2 口へ配線する（配線層の責務そのもの）。
-///
-/// 意味論（基点＋値×係数・縮退の分類）は [`crate::cursor_tag::resolve_cursor_axis`] が持つ。
-/// 本関数が足すのは戻り値の 3 形への振り分けだけで、**採る契約は次の 1 行に尽きる**:
-///
-/// - `Ok(Some(px))`＝移動が成立 → [`note_out_of_range`] で範囲外なら DEBUG を 1 件残し
-///   （**位置は動かさない**＝内側へ寄せない・R2.6）、値をそのまま返す。
-/// - `Ok(None)`＝軸省略 → 当該軸不動・**無音**（正典の正常形・R5.5）。
-/// - `Err(degrade)`＝縮退 → guard があれば [`warn_cursor_degrade`]（キャラクター・分岐ごと
-///   初回 1 回）。guard 不在（[`LayoutEngine::layout`] 経路）は警告を抑止するだけで、
-///   当該軸不動という**純挙動は同一**である。
-///
-/// すなわち「`Err` のときだけ警告する」——`cursor_tag_resolve_tests.rs` の局所ヘルパ
-/// `warn_if_degraded` が写しているのはこの契約である。
-fn resolve_cursor_component(
-    coord: CursorCoord,
-    axis: CursorAxis,
-    basis: &CursorBasis,
-    region: &TextRegion,
-    cursor_warn: &mut Option<(&ActorKey, &mut CursorWarnGuard)>,
-) -> Option<f32> {
-    match resolve_cursor_axis(coord, axis, basis) {
-        Ok(Some(value)) => {
-            // 範囲外は記録するだけ（値は素通し）。戻り値を使って寄せてはならない（R2.6）。
-            note_out_of_range(axis, value, region);
-            Some(value)
-        }
-        Ok(None) => None,
-        Err(degrade) => {
-            if let Some((actor, guard)) = cursor_warn.as_mut() {
-                warn_cursor_degrade(actor, axis, coord, degrade, guard);
-            }
-            None
-        }
-    }
 }
 
 #[cfg(test)]
@@ -953,3 +967,7 @@ mod visible_window_tests;
 #[cfg(test)]
 #[path = "layout_wrap_tests.rs"]
 mod wrap_tests;
+
+#[cfg(test)]
+#[path = "layout_styled_tests.rs"]
+mod styled_tests;

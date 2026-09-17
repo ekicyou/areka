@@ -410,6 +410,18 @@ fn shell_applied_scale(harness: &SpineHarness, scope: u32) -> f32 {
         .expect("表示済みの shell target は適用 k を持つ")
 }
 
+/// シェル target の**物理寸権威**（`target_physical_size`＝`scaled_extent(applied, native)`）を読む短縮。
+///
+/// 読み戻し（`read_back`）は native 原寸ゆえ k が変わっても長さが変わらない
+/// （`areka-P0-present-gpu-transform-scale` 要件 6.2）。「k が実描画へ届いたか」はこの照会で見る。
+fn shell_physical_size(harness: &SpineHarness, scope: u32) -> (u32, u32) {
+    harness
+        .wiring
+        .presenter()
+        .target_physical_size(shell_target(scope))
+        .expect("表示済みの shell target は物理寸を持つ")
+}
+
 /// dispatcher tick で OnBoot talk を駆動しつつ、届いた `PresentCommand` を**実 presenter へ適用**し、
 /// scope0 shell が `surface_id` を表示する（＝実描画が成立する）まで有界スピンする。
 ///
@@ -483,7 +495,9 @@ fn seriko_tick_apply_one(
 /// 2. ループは**リセットも停止もせず同じ 1 周の続き**（2110 → `-1` ベース復帰）を、実 fixture 実測の
 ///    golden どおりに発行し続ける（先頭 2106 へ戻らない・無発行にならない）。
 /// 3. その全区間で shell の `read_back` が成立し全透明にならない（クラッシュ・表示消失なし）。
-/// 4. DPI 変化以降の表示は一貫して**新 k の物理寸**（旧 k の絵が残らない・k 変化が実描画へ届いている）。
+/// 4. DPI 変化以降の表示は一貫して**新 k の物理寸**（`target_physical_size`・旧 k の寸が残らない＝k 変化が
+///    実描画へ届いている）。読み戻しバイト列は **native 原寸**のまま長さを変えない
+///    （拡大は GPU の Visual 変換の領分・`areka-P0-present-gpu-transform-scale` 要件 6.2）。
 ///
 /// # 既存 DPI 檻との差（なぜ本ケースが要るか）
 ///
@@ -512,7 +526,7 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     // 実表＋常時発火固定 rng でループ活性化（既存 DPI 檻は Inert＝この組み合わせは本ケースが初）。
     let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
 
-    // 実 attach（供給面・視覚を本番経路で生成）→ 表示中ゲート成立まで talk を駆動して実適用する。
+    // 実 attach（視覚資源を本番経路で生成）→ 表示中ゲート成立まで talk を駆動して実適用する。
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
     assert!(
         logs.iter().any(|l| l.contains("attached=2")),
@@ -523,12 +537,13 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     let base_k0 = harness
         .wiring
         .read_back_target(shell_target(0))
-        .expect("前提: 初回 \\s[2100] 適用で shell 供給面が生成される");
+        .expect("前提: 初回 \\s[2100] 適用で shell の原寸面が確立される");
     assert!(
         opaque_count(&base_k0) > 0,
         "前提: DPI 変化前の shell が実描画されている"
     );
     let k_before = shell_applied_scale(&harness, 0);
+    let physical_before = shell_physical_size(&harness, 0);
 
     // ── 1 周の途中まで歩かせる（起動 tick → 境界 1000 で発火＋elapsed0 → pattern0=2106） ──
     harness.inject_seriko_tick(0); // 起動 tick（境界初期化・非跨ぎ・無発行）
@@ -564,9 +579,17 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
         "DPI 変化直後の shell readback が全透明（表示消失・要件 4.3）: len={}",
         frame1_k1.len()
     );
-    assert_ne!(
+    // 読み戻しは **native 原寸**（拡大は GPU の Visual 変換・`areka-P0-present-gpu-transform-scale`
+    // 要件 6.2）ゆえ、k が変わっても長さは変わらない。「k が実描画へ届いた」ことは物理寸権威
+    // （`target_physical_size`＝`scaled_extent(applied, native)`）が変わることで見る。
+    assert_eq!(
         frame1_k1.len(),
         frame1_k0.len(),
+        "DPI 変化で読み戻し長が変わった（読み戻しは native 原寸のはず＝拡大が原寸バイト列へ漏れている・要件 6.2）"
+    );
+    let physical_after = shell_physical_size(&harness, 0);
+    assert_ne!(
+        physical_after, physical_before,
         "DPI 変化後も旧 k の物理寸のまま（k が実描画へ届いていない）"
     );
 
@@ -578,9 +601,9 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
         "DPI 変化を跨いでもループは同じ 1 周の続き（pattern1=2110）を発行する（先頭 2106 へ戻さない＝リセットなし・要件 4.3）"
     );
     assert_eq!(
-        frame2_k1.len(),
-        frame1_k1.len(),
-        "DPI 変化後のループ指令が旧 k の寸へ戻っている（k の一貫性が崩れた）"
+        shell_physical_size(&harness, 0),
+        physical_after,
+        "DPI 変化後のループ指令が旧 k の物理寸へ戻っている（k の一貫性が崩れた）"
     );
     assert_ne!(
         frame2_k1, frame1_k1,
@@ -593,8 +616,8 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
         "DPI 変化を跨いだ 1 周が実 fixture どおり `-1` 終端（ベース復帰）まで到達する（要件 4.3/4.3 終端）"
     );
     assert_eq!(
-        base_k1.len(),
-        frame1_k1.len(),
+        shell_physical_size(&harness, 0),
+        physical_after,
         "ベース復帰も新 k の物理寸で成立する"
     );
 

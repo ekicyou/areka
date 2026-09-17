@@ -1,11 +1,11 @@
 //! areka emo-present 観測 example（task 4.2 ＋ 4.3）
 //!
-//! `areka_emo_present::EmoPresenter` を使い、**メモリ供給のスワップチェーン**（swap chain）を
+//! `areka_emo_present::EmoPresenter` を使い、**原寸バイトを記録した `GraphicsCommandList`** を
 //! WUC（Windows.UI.Composition）表示面へ載せて 2 窓を表示する観測用 example。mock-shell donor
 //! （`examples/mock-shell.rs`）から窓生成（WS_POPUP・透過 ex-style）・クリック透過機構への窓登録
 //! （`register_click_through_windows`・`Added<WindowHandle>`）・アプリ起動骨格を移植し、**表示内容の
-//! 供給機構だけ**を `BitmapSource`（ファイルパス widget）から `EmoPresenter`（メモリ供給の swap chain）
-//! へ差し替える。
+//! 供給機構だけ**を `BitmapSource`（ファイルパス widget）から `EmoPresenter`（合成した原寸バイトを
+//! コマンドリストへ記録し、拡大は D2D の変換行列が掛ける経路）へ差し替える。
 //!
 //! - **シェル窓**（target 0）: emo2 `surface0`（`surface0.png` 単一 element）。
 //! - **バルーン窓**（target 1）: `balloons0.png`（`areka_emo_present::build_balloon_target` 経由）。
@@ -23,10 +23,11 @@
 //! task 5.1 で以下を追加する:
 //!
 //! - **起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）**: 各 target の初回 `apply(ShowSurface)`
-//!   直後に `EmoPresenter::read_back` で swap chain backbuffer を CPU 読み戻しし、その surface を
-//!   **表示経路と同じ 2 段変換**（直接合成＝native 原寸 → `resample`＝実適用 k）へ通した golden
-//!   `ComposedSurface::bytes()` と **完全一致**することを `assert`（不一致は loud に panic）する。
-//!   供給面が正当に未生成なら warn してスキップする。詳細は `assert_startup_golden` を参照。
+//!   直後に `EmoPresenter::read_back` で表示中エントリの **native 原寸バイト列**を読み、直接合成した
+//!   golden `ComposedSurface::bytes()` と **完全一致**することを `assert`（不一致は loud に panic）する。
+//!   拡大は GPU 変換の領分ゆえ golden に k は掛けず、**k に依らず同一バイト・同一長**である
+//!   （`areka-P0-present-gpu-transform-scale` 要件 6.1/6.2）。表示に渡した合成面が正当に無ければ warn して
+//!   スキップする。詳細は `assert_startup_golden` を参照。
 //!
 //! `areka-P0-emo-dpi-scaling` task 5.2 で以下を追加する:
 //!
@@ -49,9 +50,11 @@
 //!
 //! 窓サイズは `BoxStyle`/taffy 論理レイアウトを経由せず、**合成結果の物理 px を `WindowPos.size` へ
 //! 直接与える**（この点は不変）。ただし「DPI による拡縮は行わない（等倍）」という当初の契約は
-//! `areka-P0-emo-dpi-scaling` が**上書き**した — 現在の表示経路は compose（native 原寸）→ resample
-//! （k＝窓 DPI ÷ author_dpi）であり、窓 DPI が author_dpi と異なれば表示は k 倍される（k=1.0 は
-//! 「窓 DPI ＝ author_dpi」という**一水準**であって恒常の契約ではない）。
+//! `areka-P0-emo-dpi-scaling` が**上書き**した — 現在の表示経路は compose（native 原寸）→ コマンドリスト
+//! へ原寸記録 → wintf の `render_surface` が `SetTransform` で **×k**（k＝窓 DPI ÷ author_dpi・
+//! `areka-P0-present-gpu-transform-scale`）であり、窓 DPI が author_dpi と異なれば表示は k 倍される
+//! （k=1.0 は「窓 DPI ＝ author_dpi」という
+//! **一水準**であって恒常の契約ではない）。
 //!
 //! 本 example は窓を **k 未適用の native 原寸**で生成する（起動時は実窓 DPI が未確定なため）。その後
 //! **表示が成立した時点で窓 client を k 適用後の物理 px へ合わせる**（`areka-P0-emo-dpi-scaling`
@@ -60,7 +63,7 @@
 //! `emo2_frame_system` が drain の後段で直接呼ぶ `reconcile_reported_sizes`）と同一である。これが
 //! 無いと k≠1.0 の環境で
 //! 「窓 client（native 原寸）＜ 表示内容（k 倍）」となり、拡大表示もクリック捕捉域も窓 client の外側が
-//! 切り詰められて**手動観測が劣化する**（golden assert は `read_back` が backbuffer 直読みゆえ無影響）。
+//! 切り詰められて**手動観測が劣化する**（golden assert は `read_back` が合成メモの原寸直読みゆえ無影響）。
 //!
 //! **DPI の動的追従（`Changed<DPI>`／モニタ跨ぎ移動）は本 example の領分ではない** — それは本番
 //! `emo2_boot` の DPI 追従フェーズ（`run_dpi_phase`＝`refresh_scale`）が担う。本 example は
@@ -88,12 +91,14 @@
 //!      窓 client も同じ物理寸へ合う（`emo-present: 窓 client を k 適用後の物理寸へ reconcile` ログの
 //!      `w/h` が上記 `scaled_w/h` と一致する＝切り詰めが無い・emo-dpi-scaling task 5.2）。
 //!    - (b) **起動時 golden 不 panic（task 5.1・R6.2/R8.2）**: 非 96 DPI でも `assert_startup_golden`
-//!      が両 target で通る（panic せず「起動時 golden バイト一致を確認」ログが出る）。swap chain
-//!      readback は**表示面の物理 px＝ k 適用後**を読み戻すため、golden 側も `resample` で同じ k を
-//!      掛けてから比較する（k=1.0 なら resample を経ない素通しで従来と同一バイト）。
+//!      が両 target で通る（panic せず「起動時 golden バイト一致を確認」ログが出る）。`read_back` が
+//!      返すのは **native 原寸**ゆえ golden に k は掛けず、**k に依らず同一バイト・同一長**で比較する
+//!      （96 DPI での比較対象は k 導入前と 1 バイトも変わらない）。
 //!    - (c) **クリック捕捉**: キャラクタの不透明域をクリックすると task 5.2 の「不透明域クリックを
 //!      捕捉」ログが発火し、透明域のクリックは背後へ透過する（ログ不発）。αマスクは表示バッファと
-//!      **同一 bytes 由来**（＝k 適用後）ゆえ、クリック透過の境界は実 DPI でも見た目の絵柄と一致する。
+//!      **同一 bytes 由来**——`native 原寸バイト列`から 1 度だけ生成される（表示ビットマップと原子対・
+//!      要件 4.1）——であり、÷k は wintf の `alpha_mask_hit` が**物理寸の境界に対する比例写像**として
+//!      1 度だけ掛ける（要件 4.2）。ゆえにクリック透過の境界は実 DPI でも見た目の絵柄と一致する。
 //!      窓 client も k 適用後の物理寸へ揃う（上記 (a)）ため、捕捉域が窓 client の外側で切り詰められて
 //!      「透明域だ」と誤認する経路は無い（emo-dpi-scaling task 5.2 以前はこれが起きていた）。
 //!      なお `hit_region`（領域名解決）の座標系は native px であり、k≠1.0 での点÷k は下流
@@ -132,7 +137,7 @@ use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
 use areka_emo_compose::{
-    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, ScaleRatio, resample,
+    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, ScaleRatio,
 };
 use areka_emo_present::{
     EmoPresenter, PresentCommand, ScalePolicy, TargetId, build_balloon_target, derive_scale,

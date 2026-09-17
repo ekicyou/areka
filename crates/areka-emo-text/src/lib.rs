@@ -12,12 +12,22 @@
 //! crate 内は次の一方向に層を分ける。逆流はレビューエラーとして扱う。
 //!
 //! 1. **純粋層**（[`state`]／[`writing`]／[`region`]／[`cursor_tag`]／[`layout`]／[`canvas`]／
-//!    [`viewbox`]）——
+//!    [`viewbox`]／[`look`]／[`color`]）——
 //!    `windows` 系 crate 非依存の決定論檻。純粋層モジュールに `windows` の import が
 //!    現れたらレビューエラー（本 crate のテストでも構造検証する）。
 //! 2. **COM 層**（[`draw`]／[`surface`]／[`viewbox_draw`]）——DirectWrite/D2D/DXGI/WUC を
 //!    触る唯一の場所。UI スレッド専有。
 //! 3. **結線層**（[`sink`]／[`actor`]）——sakura からの cue 受信と UI 配送・フレーム提示。
+//!
+//! 上の 3 つはいずれも**親ファイルの名前**であって、走査面ではない。親は `#[path]` で
+//! 子モジュールを抱えており（`draw` は `draw_metrics`／`draw_line_store`／`draw_catalog`、
+//! `layout` は `layout_line_ops`／`layout_styled`、`state` は `state_decoration`、
+//! `viewbox_draw` は `viewbox_draw_plan`／`viewbox_draw_decoration`、`actor` は
+//! `actor_decoration`）、子は親と同じ層に属する。**層規律を実際に見張る走査面は
+//! `PURE_SOURCES` と `SOURCES_OUTSIDE_THE_PURE_SCAN` の 2 つの一覧**（本ファイル末尾の
+//! `#[cfg(test)] mod layer_discipline` 内）で、その和が `src/*.rs` の実ファイル集合と
+//! 一致することを `every_source_file_is_either_scanned_or_explicitly_excluded` が突き合わせる
+//! （この段落は列挙を数えるためのものではない——数える場所は 2 つの一覧の側にある）。
 //!
 //! ## 依存方向（強制）
 //!
@@ -33,9 +43,11 @@
 pub mod actor;
 pub mod canvas;
 pub mod choice;
+pub mod color;
 pub mod cursor_tag;
 pub mod draw;
 pub mod layout;
+pub mod look;
 pub mod region;
 pub mod segment;
 pub mod sink;
@@ -167,80 +179,219 @@ mod tests {
         assert_eq!(err.to_string(), "text slot not attached: 0");
     }
 
-    /// 層規律の構造檻: 純粋層モジュール（state/writing/region/layout/canvas）の
+    /// 純粋層モジュールの走査面。[`pure_layer_modules_have_no_windows_imports`] と
+    /// [`every_source_file_is_either_scanned_or_explicitly_excluded`] が共有する。
+    const PURE_SOURCES: &[(&str, &str)] = &[
+        ("choice.rs", include_str!("choice.rs")),
+        ("cursor_tag.rs", include_str!("cursor_tag.rs")),
+        (
+            "cursor_tag_resolve_tests.rs",
+            include_str!("cursor_tag_resolve_tests.rs"),
+        ),
+        (
+            "cursor_tag_test_support.rs",
+            include_str!("cursor_tag_test_support.rs"),
+        ),
+        ("cursor_tag_tests.rs", include_str!("cursor_tag_tests.rs")),
+        ("state.rs", include_str!("state.rs")),
+        (
+            "state_cursor_coord_parse_tests.rs",
+            include_str!("state_cursor_coord_parse_tests.rs"),
+        ),
+        ("writing.rs", include_str!("writing.rs")),
+        (
+            "writing_decision_tests.rs",
+            include_str!("writing_decision_tests.rs"),
+        ),
+        ("region.rs", include_str!("region.rs")),
+        (
+            "region_vertical_canon_tests.rs",
+            include_str!("region_vertical_canon_tests.rs"),
+        ),
+        (
+            "region_inline_limit_tests.rs",
+            include_str!("region_inline_limit_tests.rs"),
+        ),
+        ("segment.rs", include_str!("segment.rs")),
+        ("layout.rs", include_str!("layout.rs")),
+        (
+            "layout_cursor_center_origin_tests.rs",
+            include_str!("layout_cursor_center_origin_tests.rs"),
+        ),
+        (
+            "layout_cursor_order_tests.rs",
+            include_str!("layout_cursor_order_tests.rs"),
+        ),
+        (
+            "layout_cursor_overflow_tests.rs",
+            include_str!("layout_cursor_overflow_tests.rs"),
+        ),
+        (
+            "layout_cursor_tests.rs",
+            include_str!("layout_cursor_tests.rs"),
+        ),
+        (
+            "layout_cursor_vertical_canon_tests.rs",
+            include_str!("layout_cursor_vertical_canon_tests.rs"),
+        ),
+        (
+            "layout_cursor_vertical_tests.rs",
+            include_str!("layout_cursor_vertical_tests.rs"),
+        ),
+        (
+            "layout_cursor_wiring_tests.rs",
+            include_str!("layout_cursor_wiring_tests.rs"),
+        ),
+        (
+            "layout_hard_limit_tests.rs",
+            include_str!("layout_hard_limit_tests.rs"),
+        ),
+        ("canvas.rs", include_str!("canvas.rs")),
+        ("viewbox.rs", include_str!("viewbox.rs")),
+        ("wrap.rs", include_str!("wrap.rs")),
+        // areka-P0-text-decoration-canon が新設した純粋モジュール 14 本
+        // （`draw_metrics.rs`／`draw_line_store.rs` は COM 層なので載せない）。
+        ("color.rs", include_str!("color.rs")),
+        ("color_tests.rs", include_str!("color_tests.rs")),
+        ("look.rs", include_str!("look.rs")),
+        ("look_tests.rs", include_str!("look_tests.rs")),
+        (
+            "look_font_tag_tests.rs",
+            include_str!("look_font_tag_tests.rs"),
+        ),
+        (
+            "look_font_tag_value_tests.rs",
+            include_str!("look_font_tag_value_tests.rs"),
+        ),
+        ("state_decoration.rs", include_str!("state_decoration.rs")),
+        (
+            "state_decoration_tests.rs",
+            include_str!("state_decoration_tests.rs"),
+        ),
+        (
+            "state_decoration_reset_tests.rs",
+            include_str!("state_decoration_reset_tests.rs"),
+        ),
+        ("layout_line_ops.rs", include_str!("layout_line_ops.rs")),
+        ("layout_styled.rs", include_str!("layout_styled.rs")),
+        (
+            "layout_styled_tests.rs",
+            include_str!("layout_styled_tests.rs"),
+        ),
+        ("viewbox_draw_plan.rs", include_str!("viewbox_draw_plan.rs")),
+        (
+            "viewbox_style_fingerprint_tests.rs",
+            include_str!("viewbox_style_fingerprint_tests.rs"),
+        ),
+        (
+            "viewbox_axis_tests.rs",
+            include_str!("viewbox_axis_tests.rs"),
+        ),
+        (
+            "viewbox_choice_marker_tests.rs",
+            include_str!("viewbox_choice_marker_tests.rs"),
+        ),
+        (
+            "viewbox_dirty_tests.rs",
+            include_str!("viewbox_dirty_tests.rs"),
+        ),
+        (
+            "viewbox_plan_commit_tests.rs",
+            include_str!("viewbox_plan_commit_tests.rs"),
+        ),
+        (
+            "viewbox_test_support.rs",
+            include_str!("viewbox_test_support.rs"),
+        ),
+        // 純粋層モジュールの兄弟テスト／支援で歴史的に載っていなかったもの（タスク 9.4 で追加）。
+        // いずれも `windows` 参照 0 件を実測してから移した——除外一覧に置いておく理由が無い。
+        (
+            "layout_segmented_tests.rs",
+            include_str!("layout_segmented_tests.rs"),
+        ),
+        (
+            "layout_test_support.rs",
+            include_str!("layout_test_support.rs"),
+        ),
+        (
+            "layout_visible_window_tests.rs",
+            include_str!("layout_visible_window_tests.rs"),
+        ),
+        ("layout_wrap_tests.rs", include_str!("layout_wrap_tests.rs")),
+        ("choice_tests.rs", include_str!("choice_tests.rs")),
+        (
+            "choice_style_resolve_tests.rs",
+            include_str!("choice_style_resolve_tests.rs"),
+        ),
+        (
+            "choice_decorate_tests.rs",
+            include_str!("choice_decorate_tests.rs"),
+        ),
+        (
+            "state_cue_apply_tests.rs",
+            include_str!("state_cue_apply_tests.rs"),
+        ),
+        (
+            "state_reveal_tests.rs",
+            include_str!("state_reveal_tests.rs"),
+        ),
+        (
+            "state_test_support.rs",
+            include_str!("state_test_support.rs"),
+        ),
+    ];
+    /// 純粋層の走査面へ**載せない**ファイルの明示（タスク 9.4）。
+    ///
+    /// ここに載るのは COM 層・結線層のモジュールとその兄弟テスト／支援である。
+    /// ここへ置くことは「純粋層でない」の宣言ではなく「この検査では走査しない」の明示で、
+    /// この一覧は新設ファイルが黙って走査面から外れることを防ぐためにある
+    /// （[`every_source_file_is_either_scanned_or_explicitly_excluded`] が和を実ファイル
+    /// 集合と突き合わせるので、どちらかへの明示的な編集が必ず要る）。
+    const SOURCES_OUTSIDE_THE_PURE_SCAN: &[&str] = &[
+        "actor.rs",
+        "actor_choice_contract_tests.rs",
+        "actor_clear_atomicity_tests.rs",
+        "actor_decoration.rs",
+        "actor_decoration_frame_tests.rs",
+        "actor_decoration_tests.rs",
+        "actor_region_warn_tests.rs",
+        "actor_runtime_frame_tests.rs",
+        "actor_scale_refresh_tests.rs",
+        "actor_scroll_retain_tests.rs",
+        "actor_test_support.rs",
+        "actor_tests.rs",
+        "draw.rs",
+        "draw_catalog.rs",
+        "draw_catalog_tests.rs",
+        "draw_format_metrics_tests.rs",
+        "draw_line_store.rs",
+        "draw_line_store_tests.rs",
+        "draw_metrics.rs",
+        "draw_metrics_styled_tests.rs",
+        "draw_oracle_tests.rs",
+        "draw_test_support.rs",
+        "sink.rs",
+        "surface.rs",
+        "viewbox_draw.rs",
+        "viewbox_draw_choice_hover_tests.rs",
+        "viewbox_draw_decoration.rs",
+        "viewbox_draw_decoration_tests.rs",
+        "viewbox_draw_frame_render_tests.rs",
+        "viewbox_draw_live_diff_tests.rs",
+        "viewbox_draw_oracle_regression_tests.rs",
+        "viewbox_draw_png_dump_tests.rs",
+        "viewbox_draw_scroll_retain_tests.rs",
+        "viewbox_draw_test_support.rs",
+    ];
+
+    /// 層規律の構造檻: 純粋層モジュール（state/writing/region/layout/canvas/look/color）の
     /// ソースに `windows` 系 crate への依存（import／パス参照）が一切無いことを検証する。
     /// （design.md「依存方向（強制）」——純粋層に `windows` の import が現れたらレビューエラー）
     #[test]
     fn pure_layer_modules_have_no_windows_imports() {
-        const PURE_SOURCES: &[(&str, &str)] = &[
-            ("choice.rs", include_str!("choice.rs")),
-            ("cursor_tag.rs", include_str!("cursor_tag.rs")),
-            (
-                "cursor_tag_resolve_tests.rs",
-                include_str!("cursor_tag_resolve_tests.rs"),
-            ),
-            (
-                "cursor_tag_test_support.rs",
-                include_str!("cursor_tag_test_support.rs"),
-            ),
-            ("cursor_tag_tests.rs", include_str!("cursor_tag_tests.rs")),
-            ("state.rs", include_str!("state.rs")),
-            (
-                "state_cursor_coord_parse_tests.rs",
-                include_str!("state_cursor_coord_parse_tests.rs"),
-            ),
-            ("writing.rs", include_str!("writing.rs")),
-            (
-                "writing_decision_tests.rs",
-                include_str!("writing_decision_tests.rs"),
-            ),
-            ("region.rs", include_str!("region.rs")),
-            (
-                "region_vertical_canon_tests.rs",
-                include_str!("region_vertical_canon_tests.rs"),
-            ),
-            (
-                "region_inline_limit_tests.rs",
-                include_str!("region_inline_limit_tests.rs"),
-            ),
-            ("segment.rs", include_str!("segment.rs")),
-            ("layout.rs", include_str!("layout.rs")),
-            (
-                "layout_cursor_center_origin_tests.rs",
-                include_str!("layout_cursor_center_origin_tests.rs"),
-            ),
-            (
-                "layout_cursor_order_tests.rs",
-                include_str!("layout_cursor_order_tests.rs"),
-            ),
-            (
-                "layout_cursor_overflow_tests.rs",
-                include_str!("layout_cursor_overflow_tests.rs"),
-            ),
-            (
-                "layout_cursor_tests.rs",
-                include_str!("layout_cursor_tests.rs"),
-            ),
-            (
-                "layout_cursor_vertical_canon_tests.rs",
-                include_str!("layout_cursor_vertical_canon_tests.rs"),
-            ),
-            (
-                "layout_cursor_vertical_tests.rs",
-                include_str!("layout_cursor_vertical_tests.rs"),
-            ),
-            (
-                "layout_cursor_wiring_tests.rs",
-                include_str!("layout_cursor_wiring_tests.rs"),
-            ),
-            (
-                "layout_hard_limit_tests.rs",
-                include_str!("layout_hard_limit_tests.rs"),
-            ),
-            ("canvas.rs", include_str!("canvas.rs")),
-            ("viewbox.rs", include_str!("viewbox.rs")),
-            ("wrap.rs", include_str!("wrap.rs")),
-        ];
+        // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
+        // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
+        assert_eq!(PURE_SOURCES.len(), 54, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",
@@ -256,5 +407,63 @@ mod tests {
                 );
             }
         }
+    }
+    /// 手保守の静的な列挙が「新設したのに載せない」を塞げない穴を閉じる（タスク 9.4）。
+    ///
+    /// [`PURE_SOURCES`] も [`SOURCES_OUTSIDE_THE_PURE_SCAN`] も人が書く一覧なので、
+    /// 新しい兄弟ファイルを足しただけでは走査面が広がらず、層規律の字面検査は黙って
+    /// 素通りする（`PURE_SOURCES.len()` の母数固定は「黙って減る」しか塞げない）。
+    /// `src/*.rs` の**実ファイル集合**を実行時に読み、2 つの一覧の和と突き合わせる。
+    #[test]
+    fn every_source_file_is_either_scanned_or_explicitly_excluded() {
+        use std::collections::BTreeSet;
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let actual: BTreeSet<String> = std::fs::read_dir(&dir)
+            .expect("src ディレクトリが読めない")
+            .map(|entry| {
+                entry
+                    .expect("src の項目が読めない")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .filter(|name| name.ends_with(".rs") && name != "lib.rs")
+            .collect();
+        // 空振り防止: 実ファイルが 0 件だと以下の包含判定はどちらも恒真になる。
+        assert!(
+            actual.len() > 50,
+            "src/*.rs の実ファイルが {} 件しか読めていない——検査が空振りしている",
+            actual.len()
+        );
+
+        let scanned: BTreeSet<&str> = PURE_SOURCES.iter().map(|(name, _)| *name).collect();
+        let excluded: BTreeSet<&str> = SOURCES_OUTSIDE_THE_PURE_SCAN.iter().copied().collect();
+        let both: Vec<&str> = scanned.intersection(&excluded).copied().collect();
+        assert!(
+            both.is_empty(),
+            "同じファイルを走査面と除外の両方に置いている: {both:?}"
+        );
+
+        let listed: BTreeSet<&str> = scanned.union(&excluded).copied().collect();
+        let unlisted: Vec<&str> = actual
+            .iter()
+            .map(String::as_str)
+            .filter(|name| !listed.contains(name))
+            .collect();
+        assert!(
+            unlisted.is_empty(),
+            "src/ に在るのにどちらの一覧にも載っていない: {unlisted:?}——\
+             純粋層なら PURE_SOURCES へ、そうでなければ SOURCES_OUTSIDE_THE_PURE_SCAN へ足す"
+        );
+        let vanished: Vec<&str> = listed
+            .iter()
+            .copied()
+            .filter(|name| !actual.contains(*name))
+            .collect();
+        assert!(
+            vanished.is_empty(),
+            "一覧に在るのに src/ から消えている: {vanished:?}"
+        );
     }
 }

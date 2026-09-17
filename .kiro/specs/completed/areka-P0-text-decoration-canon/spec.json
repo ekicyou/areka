@@ -1,0 +1,31 @@
+{
+  "feature_name": "areka-P0-text-decoration-canon",
+  "created_at": "2026-09-11T08:59:49Z",
+  "updated_at": "2026-09-13T00:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-11T09:20:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-12T00:30:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-12T00:31:47Z"
+    },
+    "implementation": {
+      "generated": true,
+      "approved": true,
+      "completed": true,
+      "completed_at": "2026-09-13T00:00:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

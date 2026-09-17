@@ -38,7 +38,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
-use shiori_host32_host::{ParentMessageWindow, Shiori3Client, poll_exit_kind, spawn};
+use shiori_host32_host::{
+    Charset, CharsetNegotiator, ParentMessageWindow, Shiori3Client, poll_exit_kind, spawn,
+};
 use shiori_host32_ipc::MsgTag;
 
 /// ハンドシェイク（HELLO 受領）の上限時間。i686 helper の起動＋窓生成＋HELLO 送出に十分な余裕。
@@ -223,7 +225,10 @@ fn request_e2e_get_value_and_notify_discard() {
     );
 
     // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用）---
-    let client = Shiori3Client::new(&parent);
+    // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
+    // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
+    let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+    let mut client = Shiori3Client::new(&parent, &mut negotiator);
 
     // --- ③ GET: 固定 Value を取り出す（request 正組立＋Value 抽出＋HGLOBAL 所有権往復の証明・R6.4）---
     //     誤組立なら fixture は 400 を返し get は Err(RequestError::Shiori) へ写る。
@@ -337,7 +342,10 @@ fn request_e2e_real_pasta_optional() {
 
     // --- ③ OnBoot GET: 起動あいさつの Value 受領を検証（R6.5）---
     //     OnBoot Reference0=シェル名（ukadoc）ゆえ emo2 のシェル dir 名 "master" を渡す。
-    let client = Shiori3Client::new(&parent);
+    // 交渉状態は接続の持ち物（本番は `ShioriConnection`）。本テストは接続の値を組まないので
+    // 適用前と同じ初期値（UTF-8・強制なし）をローカルに置く。testdll は `Charset` を見ない。
+    let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+    let mut client = Shiori3Client::new(&parent, &mut negotiator);
     let value = client
         .get("OnBoot", &["master".to_string()], None)
         .expect("OnBoot GET が Err（実 pasta との request 往復が失敗・R6.5）");

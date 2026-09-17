@@ -43,7 +43,7 @@ fn hit_mode(world: &World, entity: Entity, what: &str) -> HitTestMode {
 /// 可視時のスロットは `HitTestMode::Bounds`＝従来の「component 不在＝既定 Bounds」と同値。
 #[test]
 fn hide_and_show_cover_both_surface_and_text_slot() {
-    let (mut world, _window, mount, _g) = attach_fixture(4, 4);
+    let (mut world, _window, mount) = attach_fixture(4, 4);
     let surface = mount.surface_entity();
     let slot = mount.text_slot();
 
@@ -120,7 +120,7 @@ fn invisible_construction_never_inserts_a_visible_visual() {
     let inserted: Arc<Mutex<Vec<(Entity, bool)>>> = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&inserted);
 
-    let (world, _window, mount, _g) =
+    let (world, _window, mount) =
         attach_fixture_with_visibility(4, 4, false, move |world: &mut World| {
             world.add_observer(move |on: On<Insert, Visual>, q: Query<&Visual>| {
                 let entity = on.entity;

@@ -1,7 +1,7 @@
 //! 遷移観測の**サーフェス記録**（`kind=surface`）——語彙・レコード純関数・刻印の取り出し口。
 //!
 //! design.md の C3（`transition_record`＋`show.rs`／`refresh.rs`／`timing.rs`）が正本である。
-//! 表示 1 コマの適用で供給面の寸が変わった回と、その寸で可視化した回、および再表示を見送った回を
+//! 表示 1 コマの適用で表示の物理寸か原寸の外形が変わった回と、その寸で可視化した回、および再表示を見送った回を
 //! wintf の観測チャネル（[`transition_diag::TRANSITION_TARGET`]）へ 1 行ずつ出し、窓書込・モニタ表
 //! 更新・メッセージ受理と**同一のフレーム番号系列**へ並べる（Requirement 2.2）。
 //!
@@ -51,7 +51,8 @@ pub const KIND_SURFACE: &str = "surface";
 // 段階語（stage）
 // ---------------------------------------------------------------------------
 
-/// 供給面へのアップロードが成立した（バッファ寸の変更を含み得る）。
+/// この寸で表示記録を載せた（外れでは原寸 D2D bitmap 生成＋描画命令の記録を伴い、ヒットでは
+/// 合成メモが保持する記録をそのまま載せる）。原寸の外形の変化を含み得る。
 pub const SURFACE_STAGE_UPLOAD: &str = "upload";
 /// 新しい寸で可視化した（`set_bounds`・可視性付与の後）。
 pub const SURFACE_STAGE_VISUALIZE: &str = "visualize";
@@ -93,11 +94,11 @@ pub const SURFACE_REASON_ALL: &[&str] = &[SURFACE_REASON_K_UNCHANGED, SURFACE_RE
 
 /// 適用対象（[`TargetId`] の内側の u32）。
 pub const SURFACE_FIELD_TARGET_ID: &str = "target_id";
-/// 供給面の物理幅（見送りでは番兵）。
+/// 表示の物理幅（`scaled_extent`＝原寸 × k・見送りでは番兵）。
 pub const SURFACE_FIELD_W: &str = "w";
-/// 供給面の物理高さ（見送りでは番兵）。
+/// 表示の物理高さ（`scaled_extent`＝原寸 × k・見送りでは番兵）。
 pub const SURFACE_FIELD_H: &str = "h";
-/// この適用で供給面のバッファ寸が変わったか（`stage=upload` のみ・他は番兵）。
+/// この適用で原寸の外形が前回表示から変わったか（k だけの変化は false・`stage=upload` のみ・他は番兵）。
 pub const SURFACE_FIELD_RESIZED: &str = "resized";
 /// 見送りの理由（`stage=skipped` のみ・他は番兵）。
 pub const SURFACE_FIELD_REASON: &str = "reason";
@@ -147,9 +148,10 @@ pub(super) struct SurfaceRecord {
     pub(super) stage: SurfaceStage,
     /// 適用対象。
     pub(super) target_id: TargetId,
-    /// 供給面の物理寸。見送りでは寸そのものが無いので `None`（2 フィールドとも番兵）。
+    /// 表示の物理寸（`scaled_extent`）。見送りでは寸そのものが無いので `None`（2 フィールドとも番兵）。
     pub(super) size: Option<(u32, u32)>,
-    /// バッファ寸が変わったか。`stage=upload` 以外では意味を持たないので `None`（番兵）。
+    /// 原寸の外形が前回表示から変わったか（k だけの変化は false）。`stage=upload` 以外では意味を
+    /// 持たないので `None`（番兵）。
     ///
     /// `false` へ潰さないのは、「寸は変わらなかった」と「この段階では測っていない」を同じ
     /// 字面にしないためである（[`transition_diag::FlushRecord::total_us`] と同じ規律）。

@@ -31,7 +31,7 @@ use areka_kanade::{
     spawn_kanade, spawn_shiori_actor,
 };
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
-use shiori_host32_host::{HelperLifecycle, ParentMessageWindow, spawn};
+use shiori_host32_host::{Charset, CharsetNegotiator, HelperLifecycle, ParentMessageWindow, spawn};
 use shiori_host32_ipc::MsgTag;
 
 use super::common::{DEFAULT_TIMEOUT, QuitPolicy, join_bounded, spawn_mock_sakura};
@@ -132,6 +132,10 @@ fn connect_real_helper(
     Ok(Box::new(ShioriConnection {
         window,
         helper: HelperLifecycle::new(helper),
+        // 採取フィクスチャ側も本番の接続手続き（`areka-ghost` の `shiori_wiring`）と同じ初期値を
+        // 置く（UTF-8 始まり・強制なし）。以後の文字コードは相手の応答の `Charset` ヘッダ次第で、
+        // ヘッダが無いか `UTF-8` を名乗る限り UTF-8 のまま変わらない。
+        negotiator: CharsetNegotiator::new(Charset::UTF_8, false),
     }))
 }
 

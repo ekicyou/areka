@@ -24,12 +24,12 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::choice::{
-    ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, highlight_band_extent,
-    highlight_band_offset, to_window_physical,
+    ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, line_bands,
+    to_window_physical,
 };
 use crate::cursor_tag::CursorWarnGuard;
-use crate::draw::{DWriteMetrics, ResolvedFont};
-use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
+use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
+use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{
     BALLOON_NAME_PLACEHOLDER, ImagePx, ScaleContract, TextRegion, inline_axis_name,
 };
@@ -153,18 +153,7 @@ impl ResolvedBalloonText {
     /// [`TextSlotBinding::image_size`] の一点導出値）から解決する。
     /// 物理 px を渡すのはレビューエラー（2 空間モデル——design.md「DPI/スケール契約」）。
     pub fn resolve(model: &BalloonModel, image_size: (u32, u32)) -> ResolvedBalloonText {
-        let mode = WritingMode::resolve(model);
-        let font = ResolvedFont::resolve(model);
-        // hover ハイライトスタイルはバルーン cursor.* モデル＋解決済み既定文字色から一度だけ解決する
-        // （下流 present_actor の装飾は本値を読むだけ・choice.rs へは依存しない・design.md Integration）。
-        let choice_style = ResolvedChoiceStyle::resolve(Some(model.cursor()), font.color);
-        ResolvedBalloonText {
-            mode,
-            region: TextRegion::resolve(model, image_size, mode),
-            font,
-            wrap: WrapMode::resolve(model),
-            choice_style,
-        }
+        ResolvedBalloonText::resolve_with_background(model, image_size, DEFAULT_BALLOON_BACKGROUND)
     }
 }
 
@@ -281,9 +270,15 @@ pub struct TextLayerRuntime {
     /// の照会源）。population は present_actor（task 8.2）が present 成功時に行う——本 task では空のまま。
     choice_snapshot: HashMap<ActorKey, Vec<ChoiceHitRow>>,
     /// `\_l` の座標解決の縮退（`CursorDegrade`＝`Unparsable`／`CenterAxisMismatch`・5.1〜5.3）の actor ごと warn-once 持続状態。present_actor が
-    /// [`LayoutEngine::layout_with_cursor_warn`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
+    /// [`LayoutEngine::layout_styled`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
     /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
     cursor_warn: CursorWarnGuard,
+    /// actor → バルーンの背景色（面 0 の原点画素・sRGB 非 premultiplied）。無効表示の見た目の
+    /// 色を導くためだけに使う（要件 4.6）。結線側が装着の**前**に
+    /// [`set_balloon_background`](Self::set_balloon_background) で入れる——未設定は
+    /// [`DEFAULT_BALLOON_BACKGROUND`]（白）。読み口は
+    /// [`background_of`](Self::background_of)（`actor_decoration.rs`）。
+    balloon_background: HashMap<ActorKey, (u8, u8, u8)>,
 }
 
 impl TextLayerRuntime {
@@ -302,6 +297,7 @@ impl TextLayerRuntime {
             choice_hover: HashMap::new(),
             choice_snapshot: HashMap::new(),
             cursor_warn: CursorWarnGuard::default(),
+            balloon_background: HashMap::new(),
         }
     }
 
@@ -325,6 +321,11 @@ impl TextLayerRuntime {
         debug!(actor = %actor, slot = ?binding.slot, "actor の装着先（予約スロット）を登録した");
         // 前回の解決済み領域（未登録＝装着なら None＝「値が新しく決まった」側）と突き合わせる。
         warn_coarse_wrap_threshold(&resolved, self.layout_input.get(&actor).map(|it| it.region));
+        // 2 層（既定・無効表示・選択肢文字色）を純粋状態へ差し込む唯一の点（要件 3.1／4.6）。
+        // 装着も再追従もここへ合流するので、`\f[default]`／`\f[disable]` の戻し先は
+        // 常に「今装着されているバルーン定義」で解決した値になる。
+        self.state
+            .set_look_layers(&actor, resolved.font.looks.clone());
         self.routing.insert(actor.clone(), binding);
         self.layout_input.insert(actor, resolved);
     }
@@ -366,7 +367,11 @@ impl TextLayerRuntime {
         binding: TextSlotBinding,
         model: &BalloonModel,
     ) {
-        let resolved = ResolvedBalloonText::resolve(model, binding.image_size);
+        let resolved = ResolvedBalloonText::resolve_with_background(
+            model,
+            binding.image_size,
+            self.background_of(&actor),
+        );
         self.register_actor(actor, binding, resolved);
     }
 
@@ -436,7 +441,11 @@ impl TextLayerRuntime {
         //
         // 再解決は純関数ゆえ判定前にここで **1 回だけ**行い、再構築側でもこの値をそのまま使う
         // （二重 resolve・第 2 の構築流儀を作らない・R4.3）。
-        let resolved = ResolvedBalloonText::resolve(model, binding.image_size);
+        let resolved = ResolvedBalloonText::resolve_with_background(
+            model,
+            binding.image_size,
+            self.background_of(actor),
+        );
         if current == binding && self.layout_input.get(actor) == Some(&resolved) {
             debug!(
                 actor = %actor,
@@ -656,7 +665,18 @@ pub fn present_frame(
     talk_time: f64,
 ) -> Result<(), TextLayerError> {
     // 状態を持つ actor だけが提示対象（binding 登録済みでも cue が無ければ描くものがない）。
-    let actors: Vec<ActorKey> = runtime.state.actors().map(|(key, _)| key.clone()).collect();
+    //
+    // 「状態を持つ」の判定は **中身か既に作った供給面のどちらかがある**こと（task 7.2）。
+    // 装着（[`TextLayerRuntime::register_actor`]）が 2 層を差し込む時点でスコープの器は
+    // 生まれる——器だけを提示対象に数えると、一度も発話していないスコープにまで供給面を
+    // 割り当ててしまう。逆に、既に供給面を持つスコープは中身が空でも外せない（`Clear`／
+    // `ClearAll` の後の 1 フレームで実際に画面を消すのがこの走査だから）。
+    let actors: Vec<ActorKey> = runtime
+        .state
+        .actors()
+        .filter(|(key, state)| !state.items().is_empty() || runtime.surfaces.contains_key(*key))
+        .map(|(key, _)| key.clone())
+        .collect();
     let mut first_err: Option<TextLayerError> = None;
     for actor in &actors {
         match present_actor(runtime, world, actor, talk_time) {
@@ -754,7 +774,9 @@ fn present_actor(
         // 資源借用の衝突を構造回避する。
         let config = runtime.config;
         let render = world.resource_scope(
-            |world, core: bevy_ecs::world::Mut<GraphicsCore>| -> Result<ActorRender, TextLayerError> {
+            |world,
+             core: bevy_ecs::world::Mut<GraphicsCore>|
+             -> Result<ActorRender, TextLayerError> {
                 let surface = TextSurface::attach(
                     world,
                     &binding,
@@ -763,20 +785,14 @@ fn present_actor(
                     physical_size,
                     physical_offset,
                 )?;
-                let executor = ViewboxExecutor::new(&core)?;
-                let Some(factory) = core.dwrite_factory() else {
-                    error!(actor = %actor, "present_frame: dwrite_factory 不在（metrics を構築できない）");
-                    return Err(TextLayerError::Device {
-                        hresult: 0,
-                        context: "GraphicsCore::dwrite_factory",
-                    });
-                };
-                let metrics = DWriteMetrics::new(factory, &resolved.font, resolved.mode, &config)?;
-                Ok(ActorRender {
+                decoration::build_actor_render(
+                    &core,
                     surface,
-                    executor,
-                    metrics,
-                })
+                    &resolved.font,
+                    resolved.mode,
+                    &config,
+                    actor,
+                )
             },
         )?;
         runtime.surfaces.insert(actor.clone(), render);
@@ -817,7 +833,8 @@ fn present_actor(
     };
     // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
     // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ・task 4.2 が本配線へ委譲）。
-    let lines = LayoutEngine::layout_with_cursor_warn(
+    // 装飾入りの配置の入口（要件 14.1／14.2・番号列が既定だけなら従来と同一の出力）。
+    let lines = LayoutEngine::layout_styled(
         actor_state.items(),
         visible,
         &resolved.region,
@@ -825,6 +842,7 @@ fn present_actor(
         resolved.font.height,
         &render.metrics,
         wrap,
+        decoration::glyph_styles_of(actor_state, &resolved),
         actor,
         &mut runtime.cursor_warn,
     );
@@ -834,21 +852,15 @@ fn present_actor(
     // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
     let spans = actor_state.choices();
     let segments = annotate_lines(&lines, spans);
-    // ハイライト帯／ヒット帯のブロック軸寸（**単一の源**・R3.3）: 実 font metrics の行ボックス丈
-    // （descent 込み）を行送りピッチで頭打ちにした値を 1 度だけ決め、装飾（描画帯）とヒット導出
-    // （照会帯）の両方へ同一値を配る。em ボックス丈（font.height）で切ると和文フォントの descent
-    // インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
-    let line_box_height = render.metrics.line_box_height(resolved.font.height);
-    let band_extent = highlight_band_extent(
-        resolved.font.height,
-        line_box_height,
-        render.metrics.line_pitch(resolved.font.height),
-    );
-    // 帯を行ボックスの中央へ寄せる量（**同じく単一の源**・R13.1/13.2）: 帯の丈が行送りで頭打ちに
-    // なって行ボックス丈より短いとき、余りを上下へ等分して帯を内側へ寄せる。近端へ揃えたままだと
-    // 帯が上に余りながら下でインクを切る（実機の目視「色反転位置が 2 ドット程上すぎる」）。
-    // 行ボックス丈が em ボックス丈に等しい既定フォントでは 0 ＝ 従来と 1 画素も変わらない。
-    let band_offset = highlight_band_offset(line_box_height, band_extent);
+    // ハイライト帯／ヒット帯のブロック軸寸と寄せ量を**行ごとに 1 度だけ**決め（**単一の源**・
+    // R3.3/R13.1/R13.2）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
+    // metrics の行ボックス丈（descent 込み）を行送りピッチで頭打ちにした値——em ボックス丈で切ると
+    // 和文フォントの descent インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
+    // 基準の em は**その行に置かれた文字のうち最も大きい em**（行矩形のブロック軸寸・要件 7.9）で、
+    // アクターに 1 つの既定の大きさではない——既定固定だと `[height,40]` の選択肢が表示 42 画素でも
+    // 帯 14 画素になり、文字の上下がクリックできない（要件 11.5）。装飾の無い行では行矩形のブロック軸寸が
+    // 既定の大きさに等しいので、従来と 1 画素も変わらない。
+    let bands = line_bands(&lines, resolved.mode, &render.metrics);
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。
     let hover = runtime.choice_hover.get(actor).copied().flatten();
     // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
@@ -861,16 +873,17 @@ fn present_actor(
         resolved.font.color,
         &resolved.region,
         resolved.mode,
-        band_extent,
-        band_offset,
+        &bands,
     );
-    let changed = render.executor.render(
+    // 装飾入りの描画の入口（要件 14.2・既定だけの行は従来と同一の呼出列）。
+    let changed = render.executor.render_styled(
         &canvas,
         &window,
         &resolved.font,
         resolved.mode,
         &contract,
         &mut render.surface,
+        actor_state.styles(),
     )?;
     // 装着済み actor のグリフ更新は供給面の提示のみで完結（emo-compose 再駆動なし・R9.3）。
     // 変化ありのフレームだけ提示する（`FramePlan::NoChange` は blit も描画も present も省く——
@@ -881,16 +894,9 @@ fn present_actor(
         // （新規のスクロール可視判定は追加しない・6.3）。NoChange フレームはこの更新を丸ごと省き
         // 直前スナップショットを不変のまま保つ。
         let committed = render.executor.scroll_state().committed;
-        // 帯は装飾（描画）へ渡したのと**同一の band_extent／band_offset**——描画とヒットの
+        // 帯は装飾（描画）へ渡したのと**同一の行ごとの列**——描画とヒットの
         // 座標整合（R3.3/R13.2）。
-        let hit_rows = derive_hit_rows(
-            &lines,
-            &segments,
-            resolved.mode,
-            &resolved.region,
-            band_extent,
-            band_offset,
-        );
+        let hit_rows = derive_hit_rows(&lines, &segments, resolved.mode, &resolved.region, &bands);
         // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
         let snapshot: Vec<ChoiceHitRow> = hit_rows
             .iter()
@@ -950,3 +956,15 @@ mod region_warn_tests;
 #[cfg(test)]
 #[path = "actor_scroll_retain_tests.rs"]
 mod scroll_retain_tests;
+
+/// task 7.2: バルーン背景色の受け口（要件 4.6）。
+#[path = "actor_decoration.rs"]
+mod decoration;
+
+#[cfg(test)]
+#[path = "actor_decoration_tests.rs"]
+mod decoration_tests;
+
+#[cfg(test)]
+#[path = "actor_decoration_frame_tests.rs"]
+mod decoration_frame_tests;
