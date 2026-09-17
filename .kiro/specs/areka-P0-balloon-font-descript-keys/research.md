@@ -391,3 +391,13 @@
 - `crates/areka-emo-text/src/draw.rs`——`ResolvedFont::resolve_with_background`（受け口の呼び出し・空の列 2 つ）。
 - `.kiro/specs/completed/areka-P0-text-decoration-canon/tasks.md`——9.2／9.4／最終検証の申し送り（`absent` 10 行の移送・影の所有の裁定・`disable.font.*` の引受先）。
 - ukadoc `descript_balloon` `disable.font.(フォント定義),(指定)`（SSP 2.5.51）。
+
+## 12. 実装着手前のベースライン（2026-09-17・タスク 1）
+
+- `git submodule update --init vendors/pasta` → `git submodule status` は ` 048d646c… vendors/pasta (v0.1.6-1-g048d646c)`（先頭 `-` 解消）。
+- `cargo test -p areka-parsers` exit 0——`Running unittests src\lib.rs` 1 本＋Doc-tests。435 passed / 0 failed。
+- `cargo test -p areka-emo-text` exit 0——`Running` 15 本。843 passed / 0 failed。
+- `cargo test -p ukadoc-survey` exit 0——`Running` 4 本。725 passed / 0 failed。
+- `cargo run -p ukadoc-survey -- check` exit 0——「食い違い 0 件」・証拠のある項目 263 件。
+- `cargo test -p log-capture-kit --test file_length_guard_test` exit 0——6 passed / 0 failed。
+- 出力は切り詰めずファイルへ保存し、`Running`／`test result:` を全行集計した。着手前の赤は 0 件＝切り分け不要。

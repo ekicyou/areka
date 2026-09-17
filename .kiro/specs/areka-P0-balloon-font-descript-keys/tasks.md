@@ -3,7 +3,7 @@
 > 対象 spec: `areka-P0-balloon-font-descript-keys`（09-17 改訂版・`main` 取り込み後）。設計書 `design.md` の C1〜C8・DD1〜DD11・T1〜T16／M1〜M4／W1〜W9／E1〜E4 に対応する。
 > 行番号の引用は着手時に再検証すること（設計書冒頭の但し書き）。
 
-- [ ] 1. 着手前の前提を整え、ベースラインの緑を記録する
+- [x] 1. 着手前の前提を整え、ベースラインの緑を記録する
   - `git submodule update --init vendors/pasta` を行い、`git submodule status` が `-` 始まりでなくなることを確かめる（未取得のままだと `cargo` がワークスペース解決に失敗し、以降の検証コマンドが 1 本も走らない）
   - `cargo test -p areka-parsers`・`cargo test -p areka-emo-text` を出力を切り詰めずに走らせ、`Running` 行と `test result:` 行を全部読んで着手前が全緑であることを記録する
   - `cargo run -p ukadoc-survey -- check` を走らせ、着手前の所見が **0 件**であることを記録する。`cargo test -p ukadoc-survey` も全緑を記録する
