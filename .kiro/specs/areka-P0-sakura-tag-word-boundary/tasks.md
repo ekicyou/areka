@@ -51,7 +51,7 @@
   - _Requirements: 1.2, 1.6, 1.8, 1.9, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 4.1, 4.2, 4.9, 4.11, 5.6, 5.9, 5.10, 6.3, 6.4_
   - _Boundary: 通しテスト_
 
-- [ ] 4. 検証と記録
+- [x] 4. 検証と記録
 - [x] 4.1 是正を戻すと赤になる対を変異で実測する
   - まず対象範囲のテストが全緑であることを確かめる（スコープ実行で足りる。ワークスペース全体は 4.3）
   - 変異その一として頭打ちと長さ確定を外し旧実装へ戻す。本文中の開き括弧を扱う項目に加えて架空の多文字綴りの分割を固定する項目（字句側・通し側の両方）と、2.3 で期待値を書き換えた文字装飾のテスト 1 本も赤になる側である。緑のまま残るのは角括弧経路・直後の未閉じ・短縮形規律・影響しない 4 形の項目と、綴りを差し替えた既存テスト 7 本に限る（既存テストが緑であることが差し替えで意図を保った証拠になる）
@@ -71,7 +71,7 @@
   - _Boundary: 互換記録_
   - _Depends: 2.1_
 
-- [ ] 4.3 対象範囲とワークスペース全体のテストを通し、分量規律を確かめる
+- [x] 4.3 対象範囲とワークスペース全体のテストを通し、分量規律を確かめる
   - 対象範囲の 2 crate を走らせる。台詞断片を直入力するテストがフィクスチャの表示結果と時間軸の不変を兼ねる（辞書側に素の開き括弧が 0 件であることは調査で確認済み）
   - 行数上限の機械検査を走らせ、触れたファイルがいずれも上限以下で例外表に触れていないことを確かめる
   - ワークスペース全体を走らせる。先に 32 ビットの補助成果物をビルドし、submodule が未取得なら一度だけ取得を前置する
@@ -88,3 +88,4 @@
 - 作業の罠: Git Bash の `sed -i` は CRLF を LF にし、バックスラッシュのパターンも一致しない。ソースの編集は Edit で行う。
 - 3.1: 設計 L 番号外に `q_star_without_immediate_bracket_is_one_char_tag_and_text`（`\q*テキスト[注]`）を追加。変異 ⑴ で赤になる側（4.1 の期待一覧へ加える）。審査者の予備実測で変異 ⑵ の赤は設計見込みより `\b1[`（L9）と既存 `balloon_bracketed_digit_word_stays_raw` の分だけ多い。
 - 4.1 変異実測（2026-09-17・`cargo test -p areka-parsers --no-fail-fast`）: ⑴ 旧実装へ戻す → 16 本赤（L1〜L7・L12・`q_star_without_immediate_bracket_is_one_char_tag_and_text`・P1〜P4・P8・P9・`other_words_starting_with_f_split_into_bare_font_and_text`）、L8〜L11・P5〜P7・綴り差し替え 7 本は緑。⑵ 短縮形の例外を外す → 6 本赤（L9・L10・`wait_digit_then_bracket_is_tag_not_shorthand`・`balloon_digit_then_bracket_is_tag_not_shorthand`・`balloon_unclosed_bracket_absorbed_as_raw`・`balloon_bracketed_digit_word_stays_raw`）。⑵′ `q*` の例外を外す → 3 本赤（L10・`legacy_double_bracket_q_star_to_raw`・`choice_legacy_q_star_double_bracket_kept_raw`）。いずれも戻して 457＋91 全緑。設計の見込み一覧は ⑴ に 1 本・⑵ に 2 本足りず、実測に合わせて訂正した。3.1 の審査で独立に同じ 3 変異を回し一致。
+- 4.3（2026-09-17・PowerShell）: i686 の `shiori-host32-testdll`／`shiori-host32-helper` をビルド → `cargo test -p areka-parsers -p areka-sakura` exit 0（457＋91）→ `cargo test -p log-capture-kit` exit 0 → `cargo test --workspace --no-run` 後に i686 helper を `target/debug/` へコピー → `cargo test --workspace --no-fail-fast` exit 0（`Running` 81 本・失敗 0）。
