@@ -985,7 +985,7 @@ SHIORI の調査から届いた是正候補のうち、写真に写っている 
 | `areka-P0-balloon-lifecycle-events` | 表示寿命 5 件（下に全列挙） | 分割 ⑵ でこの spec の持ち分になったが、台帳の宛先は分割元の `areka-P0-balloon-canon-residue` のままである。宛先をこの spec へ移す。台帳の備考と受け渡し口の注記が名指ししている所有者名も同じ読み替えが要る |
 | `areka-P0-status-execution-states` | `ukadoc:list_sakura_script:_5c_21_5benter_2cnouserbreakmode_5d:1` | 説明書が書いている綴りが正典のどの項目にも当たらない。正典の綴りへ直す。**この 1 件は重い**——その項目の担当を主張している説明書自身が違う綴りを書いている |
 | `areka-P0-charset-canon` | 宛先の欄が空の 6 件（下に全列挙） | 説明書は範囲にも範囲外にもこの 6 件を挙げていない。範囲に入れるか対象外と書くかを決める。**これは誤りではなく沈黙なので、台帳の備考には何も書かれていない** |
-| `areka-P0-sylphya-set-ledger` | サウンドの語彙 18 件（下に全列挙） | 説明書はサウンドの語彙族の登記と台帳の宛先の記入を自分の範囲だと書いているが、台帳の宛先は 18 件とも `areka-P0-property-catalog-lists` である。どちらが持つかを決める |
+| `areka-P0-sylphya-set-ledger` | サウンドの語彙 18 件（下に全列挙） | 説明書はサウンドの語彙族の登記と台帳の宛先の記入を自分の範囲だと書いているが、台帳の宛先は 18 件とも `areka-P0-property-catalog-lists` である。どちらが持つかを決める（**2026-09-17 解消**: 記録用の語彙表 `SOUND_PROP_NAMES` は `areka-P0-sylphya-set-ledger`〔PR#151〕、値の導出と台帳の宛先は `areka-P0-property-catalog-lists` のまま。正本は `doc/COMPAT_ARCHITECTURE.md` §8 の【所有の相互参照】行） |
 
 ### 全列挙
 
