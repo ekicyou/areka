@@ -144,7 +144,7 @@ graph TB
 | DD1 | 正典 URL の置き場 | **`parse.rs` のキーを引く行の直前に 15 本を揃える**。`model.rs`・配線には置かない | 既設 4 本と同ファイルの他の全 URL がこの位置。6.4 の「定義箇所」は「そのキーを引く行」。`disable.font.*` はカタログの見出しが 1 つなので、無効表示の塊の先頭に 1 本 |
 | DD2 | 取り出し口の見え方 | **`FontDecorationRaw`／`FontShadowRaw` の 2 型を `BalloonModel` に additive で載せる**。`Font` は非接触 | `Font` に載せる案は `Font::new` 50 呼出の等価性を別途示す必要が出る。呼び出しは `model.font_decoration_raw().bold()` と `model.cursor().style()` と同じ深さ |
 | DD3 | 値の型 | **飾り 5・影 4 は `Option<String>` の生文字列転記** | `get_scalar` は `font.bold,2`・`font.bold,yes` を `None` へ落とし宣言の事実が消える（2.5 違反）。`none`／数値／未指定は `None`／`Some("none")`／`Some("64")` でそのまま表せる |
-| DD4 | 着地順（**09-17 改訂**） | **書体まわりは後着＝本仕様が配線する**（`text-decoration-canon` は `completed/` に在り PR#148 で `main` に入っている）。**影まわりは先着＝申し送り**（`text-align-shadow-canon` は brief のみ・受け口も無い） | 旧設計の「最終タスクで再測定」は不要になった（実測で確定）。最終検証で `text-align-shadow-canon` の状態を 1 度だけ再確認し、着地していれば影の配線を同仕様の設計に従って足すか判断する（本文の判定表） |
+| DD4 | 着地順（**09-17 改訂**） | **書体まわりは後着＝本仕様が配線する**（`text-decoration-canon` は `completed/` に在り PR#148 で `main` に入っている）。**影まわりは先着＝申し送り**（`text-align-shadow-canon` は brief のみ・受け口も無い） | 旧設計の「最終タスクで再測定」は不要になった（実測で確定）。最終検証で `text-align-shadow-canon` の状態を 1 度だけ再確認するが、影の配線は要件の Out of scope なのでどちらの結果でも本仕様は行わない（本文の判定表） |
 | DD5 | 「14 である」の判定（9.7） | `parse_tests.rs` に `FONT_BASE_KEYS: [&str; 14]` を持ち、**全 14 キーへ固有の値を入れて `parse()` を通し、各キーの値がアクセサから読み戻せることを判定**。同じ表に `disable.` を前置して無効表示層も読み戻す。カタログとは突き合わせない | 要素数だけの判定は配列の型で恒真になる。「読み戻せる」を判定にすれば、写像を 1 本消す・別のキー名に取り違える・別の口へ繋ぎ間違えると赤。**捕まえないもの**: 表に無い 15 本目の写像を実装側へ足すこと（9.7 の範囲外）と、正典側の増加（9.8・意図して緑のまま） |
 | DD6 | テストの置き場 | **既存の `parse_tests.rs`・`model_tests.rs` へ追加**。配線は新設の兄弟 `balloon_overrides_tests.rs` | 着地後見込み ~760／~680／~260 行で 1,000 行番人に余裕。steering の目安は 1,000 行の 1 つだけ。着地時の実測が 1,000 行に迫るときだけ `<stem>_<テーマ>.rs` へ分割する |
 | DD7 | 台帳の束名（7.5・**09-17 改訂**） | **状態ごとに束名を揃える**——`implemented`＝「台詞の書体・正典どおりに動く」（既設・4 項目が使用中）、`vocabulary-only`＝「台詞の書体・名前だけ受けて使わない」（既設・`disable.font.*` が使用中）、`degraded`＝「台詞の書体・読めるが正典どおりに描かれない」（**新設**——台帳 4 本に 0 件。`font.name`・`disable.font.*` の 2 項目のために作る）。優先度 `A5` は据え置き | 09-17 の台帳は優先度が 15 項目とも `A5` に揃い、束名が優先度の鍵ではなくなった。状態と束名を一致させれば 1 件も嘘が残らない。新設の束名は最終検証で「台帳 4 本を通して同じ綴りが本仕様の 2 項目にだけ在る」ことを数えて固定する。備考の「束の順位: N」は触らない（優先度欄が正本・7.5） |
@@ -564,7 +564,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 | `areka-P0-text-decoration-canon`（書体 10） | `.kiro/specs/completed/` に在る・PR#148 で `main` に入っている・受け口 `from_balloon` の 2 引数が本番で空の列 | **後着** | C8 の配線 |
 | `areka-P0-text-align-shadow-canon`（影 4） | `brief.md` のみ・受け口なし（`look.rs` は `shadowcolor`／`shadowstyle` を所有外） | **先着** | 取り出し口の申し送り（8.3） |
 
-- 最終検証で `text-align-shadow-canon` の状態を 1 度だけ再確認する（`completed/` の有無と `look.rs` の `UNOWNED_KEYS`）。着地していれば、同仕様の設計が定める形で影のトークンを `balloon_overrides.rs` に足す。着地していなければ本表のまま。
+- 最終検証で `text-align-shadow-canon` の状態を 1 度だけ再確認する（`completed/` の有無と `look.rs` の `UNOWNED_KEYS`）。**どちらの結果でも本仕様は影を配線しない**（要件の Out of scope——影の配線は同仕様の範囲）。着地していれば申し送りの宛先を同仕様の design.md の該当節へ更新し、着地していなければ本表のまま。
 
 ---
 
@@ -666,7 +666,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 - `cargo run -p ukadoc-survey -- check`——所見 0 件（6.5・7.9）。
 - `cargo run -p ukadoc-survey -- evidence`——`descript_balloon:font.*` 14 項目＋`disable.font.*` に `crates/areka-parsers/src/balloon/parse.rs` が並ぶ（目視）。
 - `cargo test -p log-capture-kit --test file_length_guard_test`——1,000 行番人が緑。
-- 文書是正の全数確認: `grep -c` で「13 キー」「残り 8 キー」を本仕様 brief・`text-align-shadow-canon` brief・`roadmap.md`・`briefing-assets.md`・`ledger/assets.toml` について数え、いずれも **0**（`grep` の 0 件は exit 1 になるので、件数を数える形で書く）。
+- 文書是正の全数確認: `grep -c` で「13 キー」「残り 8 キー」を本仕様 brief・`text-align-shadow-canon` brief・`roadmap.md`・`ledger/assets.toml` の 4 ファイルについて数え、いずれも **0**（`grep` の 0 件は exit 1 になるので、件数を数える形で書く）。`briefing-assets.md` は対象に入れない——段 ⑵ の是正済み記録がこの 2 語を**引用として含む**（C6）ので、零の判定の例外として記録する。
 - 台帳の全数確認: 15 項目の `status`／`owner`／`priority`／束名を表にして本書 C5 の変更表と突き合わせる（機械が見ない項目・最終検証）。
 
 ### 較正（見張りが本当に赤になるか・9.12）
