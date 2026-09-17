@@ -675,3 +675,137 @@ fn prefixed_font_keys_do_not_leak_into_base_font_keys() {
     assert_eq!(got.font().color().b(), None);
     assert_eq!(base_nine(&got), [None; 9]);
 }
+
+/// 無効表示の 14 本のうち生文字列の 9 本（飾り 5＋影 4）を `base_nine` と同じ順に読む（T13・T16 用）。
+fn disable_nine(m: &super::BalloonModel) -> [Option<&str>; 9] {
+    let d = m.disable_font().decoration_raw();
+    let s = m.disable_font().shadow_raw();
+    [
+        d.bold(),
+        d.italic(),
+        d.outline(),
+        d.strike(),
+        d.underline(),
+        s.color_r(),
+        s.color_g(),
+        s.color_b(),
+        s.style(),
+    ]
+}
+
+/// T13: `disable.font.*` 14 本は基底と同じ形で `disable_font()` の各口から読める
+/// （要件 2.8）。大きさの非数値は基底と同じく未指定へ落ちる。
+#[test]
+fn disable_font_keys_are_transcribed_in_the_same_shape_as_base() {
+    let got = parse_str(
+        "disable.font.name,A,B\n\
+         disable.font.height,20\n\
+         disable.font.color.r,31\n\
+         disable.font.color.g,32\n\
+         disable.font.color.b,33\n\
+         disable.font.bold,41\n\
+         disable.font.italic,42\n\
+         disable.font.outline,43\n\
+         disable.font.strike,44\n\
+         disable.font.underline,45\n\
+         disable.font.shadowcolor.r,51\n\
+         disable.font.shadowcolor.g,none\n\
+         disable.font.shadowcolor.b,53\n\
+         disable.font.shadowstyle,offset",
+        None,
+    );
+
+    let f = got.disable_font().font();
+    assert_eq!(f.name(), Some("A,B"));
+    assert_eq!(f.height(), Some(20));
+    assert_eq!(f.color().r(), Some(31));
+    assert_eq!(f.color().g(), Some(32));
+    assert_eq!(f.color().b(), Some(33));
+    assert_eq!(
+        disable_nine(&got),
+        [
+            Some("41"),
+            Some("42"),
+            Some("43"),
+            Some("44"),
+            Some("45"),
+            Some("51"),
+            Some("none"),
+            Some("53"),
+            Some("offset"),
+        ]
+    );
+
+    // 大きさの非数値は基底と同じく未指定へ落ちる（基底側も並べて同じ形であることを見る）。
+    let non_numeric = parse(
+        &map(&[("disable.font.height", "abc"), ("font.height", "abc")]),
+        None,
+    );
+    assert_eq!(non_numeric.disable_font().font().height(), None);
+    assert_eq!(non_numeric.font().height(), None);
+}
+
+/// T14: 基底と無効表示は互いに漏れない。無効表示が 0 本なら束は既定（全未指定）
+/// （要件 2.9/4.4/9.6）。
+#[test]
+fn base_and_disable_font_layers_do_not_leak_into_each_other() {
+    let base_only = parse(&map(&[("font.bold", "1")]), None);
+    assert_eq!(base_only.font_decoration_raw().bold(), Some("1"));
+    assert_eq!(base_only.disable_font().decoration_raw().bold(), None);
+    assert_eq!(base_only.disable_font(), &super::DisableFont::default());
+
+    let disable_only = parse(&map(&[("disable.font.bold", "1")]), None);
+    assert_eq!(
+        disable_only.disable_font().decoration_raw().bold(),
+        Some("1")
+    );
+    assert_eq!(disable_only.font_decoration_raw().bold(), None);
+
+    let no_disable_keys = parse_str(
+        "font.name,Yu Gothic UI\nfont.height,28\nfont.color.r,1\nfont.italic,1\nfont.shadowstyle,offset",
+        None,
+    );
+    assert_eq!(
+        no_disable_keys.disable_font(),
+        &super::DisableFont::default()
+    );
+}
+
+/// T15: 無効表示の 14 本も 2 層の優先順位 3 形に従う（要件 4.6/9.5）。
+#[test]
+fn disable_font_keys_follow_the_two_layer_precedence() {
+    let both = parse_str("disable.font.bold,d\n", Some("disable.font.bold,i\n"));
+    assert_eq!(both.disable_font().decoration_raw().bold(), Some("i"));
+
+    let image_missing = parse_str("disable.font.bold,d\n", Some("disable.font.italic,i\n"));
+    assert_eq!(
+        image_missing.disable_font().decoration_raw().bold(),
+        Some("d")
+    );
+    // 画像別層が読まれていることを別キーで確かめる（層を読まないことによる偶然の緑を防ぐ）。
+    assert_eq!(
+        image_missing.disable_font().decoration_raw().italic(),
+        Some("i")
+    );
+
+    let image_absent = parse_str("disable.font.bold,d\n", None);
+    assert_eq!(
+        image_absent.disable_font().decoration_raw().bold(),
+        Some("d")
+    );
+}
+
+/// T16: `disable.font.` の前後に何か付いたキーは無効表示へ漏れない（要件 4.4/9.6）。
+#[test]
+fn disable_font_prefixed_variants_do_not_leak() {
+    let got = parse(
+        &map(&[
+            ("anchor.disable.font.bold", "1"),
+            ("disabled.font.bold", "1"),
+        ]),
+        None,
+    );
+
+    assert_eq!(got.disable_font(), &super::DisableFont::default());
+    assert_eq!(disable_nine(&got), [None; 9]);
+}
