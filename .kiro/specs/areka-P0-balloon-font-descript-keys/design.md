@@ -89,7 +89,7 @@
 | モデル層 `model.rs`（529 行） | `BalloonModel::new` は 7 位置引数。additive ビルダ `with_cursor`／`with_windowposition_raw`／`with_vertical_raw` が「既存呼び出し側は無改変」を doc で宣言 | 第 4〜第 6 のビルダを同じ流儀で足す（DD2） |
 | 同 | `WindowPositionRaw`（`Option<String>`×2・`#[non_exhaustive]`・`Default`・`Eq`）が生文字列転記型の先例。`Font` は `#[non_exhaustive]`・非公開 3 フィールド・`Default` 無し・`Eq` 派生 | `FontDecorationRaw`／`FontShadowRaw` はこの先例の写し。`DisableFont` は `Font`＋2 型を値で束ね、`Default` は手書き（`Font::new(None, None, FontColor::new(None, None, None))`） |
 | 受け口 `areka-emo-text/src/look.rs`（769 行・**着地済み**） | `LookLayers::from_balloon(name_candidates, height, color, background, cursor_text, font_overrides: &[Vec<String>], disable_overrides: &[Vec<String>])`。`apply_overrides` が各トークン列を `apply_font_tag` に通し、`Err` は**黙って飛ばす**（doc が「記録はバルーン定義を読む側が出す」と本仕様へ申し送り）。受ける語彙: `bold`／`italic`／`underline`／`strike`／`outline`（`true`/`1`/`false`/`0`/`default`/`disable`）・`name`（候補列）・`height`・`color`（3 成分または 1 語）。`outline` は `Note::VocabularyOnly`（表示に効かない）。`shadowcolor`／`shadowstyle` は `UNOWNED_KEYS`＝`Note::Unowned`（見た目を変えない）。`TextLook::ukadoc_default()`・`apply_font_tag`・`FontTagIssue`・`LookLayers` の 3 フィールドはすべて `pub` | 配線はこの形へ合わせるだけ（DD10）。影は渡さない（DD11）。事前検証は公開 API だけで書ける |
-| 消費側 `areka-emo-text/src/draw.rs`（737 行） | `ResolvedFont::resolve_with_background(model, background)` が `model.font()` から書体名（カンマ分割・記述順の候補列）・大きさ・色を解き、`from_balloon(..., &[], &[])` を呼ぶ。doc に「読めるようになったときはここで `model.font()` から読んで渡すだけで効く（読み取りの所有は `areka-P0-balloon-font-descript-keys`）」 | 空の列 2 つを `balloon_overrides::font_overrides(model)`／`disable_overrides(model)` へ差し替える 1 か所（C8）。他は無改変（8.6） |
+| 消費側 `areka-emo-text/src/draw.rs`（737 行） | `ResolvedFont::resolve_with_background(model, background)` が `model.font()` から書体名（カンマ分割・記述順の候補列）・大きさ・色を解き、`from_balloon(..., &[], &[])` を呼ぶ。doc に「読めるようになったときはここで `model.font()` から読んで渡すだけで効く（読み取りの所有は `areka-P0-balloon-font-descript-keys`）」 | 空の列で土台の 2 層を先に組み、`balloon_overrides::overrides(model, &base)` の結果を最終の `from_balloon` へ渡す 1 か所（C8）。他は無改変（8.6） |
 | 走査の番人 `areka-emo-text/src/lib.rs` | `PURE_SOURCES`（54 本・`include_str!` で `windows` 参照 0 を判定）と `SOURCES_OUTSIDE_THE_PURE_SCAN` の 2 一覧。`every_source_file_is_either_scanned_or_explicitly_excluded` が `src/*.rs` の実ファイル集合と突き合わせ、`assert_eq!(PURE_SOURCES.len(), 54)` で母数を固定 | 新モジュールと兄弟テストを `PURE_SOURCES` へ登録し母数を 56 へ（**登録しないと番人が赤**＝隠れた前提） |
 | フィクスチャ | リポジトリ内のバルーン定義（`crates/areka-emo-text/examples/fixtures/emo2-vertical*/descript.txt`・`crates/pilot/examples/shiori-host-32/fixtures/emo2*/descript.txt`）に 9 キー・`disable.font.*` の宣言は **0 件**（09-17 実測） | 既存のフィクスチャ適合・描画比較テストは新フィールドが `None`・渡す列が空のまま＝赤にならない（5.3・5.4） |
 | 網羅調査の道具 `crates/ukadoc-survey` | 証拠の行の形（`evidence/extract.rs`）は「字下げを除いた行頭がコメント記号・`ukadoc:` の後に空白＋1 語」。証拠の要否を見るのは `Status::Implemented` の行だけ。判定で効くのは `SourceUrlNotInCatalog`・`DomainReportStale`・`ImplementedWithoutEvidence`。担当 spec の実在・備考・束名は見ない。`report-summary` が `summary.md` を作り直す（README「台帳を触った人が走らせる」） | URL はカタログから写す（6.2）。`implemented` へ上げる 4 項目は `parse.rs` の URL が証拠になる。台帳の書き換え後は `report` と `report-summary` の両方が必須（7.8）。束名・備考は最終検証で全数を数え直す |
@@ -147,10 +147,10 @@ graph TB
 | DD4 | 着地順（**09-17 改訂**） | **書体まわりは後着＝本仕様が配線する**（`text-decoration-canon` は `completed/` に在り PR#148 で `main` に入っている）。**影まわりは先着＝申し送り**（`text-align-shadow-canon` は brief のみ・受け口も無い） | 旧設計の「最終タスクで再測定」は不要になった（実測で確定）。最終検証で `text-align-shadow-canon` の状態を 1 度だけ再確認し、着地していれば影の配線を同仕様の設計に従って足すか判断する（本文の判定表） |
 | DD5 | 「14 である」の判定（9.7） | `parse_tests.rs` に `FONT_BASE_KEYS: [&str; 14]` を持ち、**全 14 キーへ固有の値を入れて `parse()` を通し、各キーの値がアクセサから読み戻せることを判定**。同じ表に `disable.` を前置して無効表示層も読み戻す。カタログとは突き合わせない | 要素数だけの判定は配列の型で恒真になる。「読み戻せる」を判定にすれば、写像を 1 本消す・別のキー名に取り違える・別の口へ繋ぎ間違えると赤。**捕まえないもの**: 表に無い 15 本目の写像を実装側へ足すこと（9.7 の範囲外）と、正典側の増加（9.8・意図して緑のまま） |
 | DD6 | テストの置き場 | **既存の `parse_tests.rs`・`model_tests.rs` へ追加**。配線は新設の兄弟 `balloon_overrides_tests.rs` | 着地後見込み ~760／~680／~260 行で 1,000 行番人に余裕。steering の目安は 1,000 行の 1 つだけ。着地時の実測が 1,000 行に迫るときだけ `<stem>_<テーマ>.rs` へ分割する |
-| DD7 | 台帳の束名（7.5・**09-17 改訂**） | **状態ごとに既設の束名へ揃える**——`implemented`＝「台詞の書体・正典どおりに動く」、`vocabulary-only`＝「台詞の書体・名前だけ受けて使わない」、`degraded`＝「台詞の書体・読めるが正典どおりに描かれない」。優先度 `A5` は据え置き | 09-17 の台帳は優先度が 15 項目とも `A5` に揃い、束名が優先度の鍵ではなくなった。状態と束名を一致させれば 1 件も嘘が残らない。備考の「束の順位: N」は触らない（優先度欄が正本・7.5） |
+| DD7 | 台帳の束名（7.5・**09-17 改訂**） | **状態ごとに束名を揃える**——`implemented`＝「台詞の書体・正典どおりに動く」（既設・4 項目が使用中）、`vocabulary-only`＝「台詞の書体・名前だけ受けて使わない」（既設・`disable.font.*` が使用中）、`degraded`＝「台詞の書体・読めるが正典どおりに描かれない」（**新設**——台帳 4 本に 0 件。`font.name`・`disable.font.*` の 2 項目のために作る）。優先度 `A5` は据え置き | 09-17 の台帳は優先度が 15 項目とも `A5` に揃い、束名が優先度の鍵ではなくなった。状態と束名を一致させれば 1 件も嘘が残らない。新設の束名は最終検証で「台帳 4 本を通して同じ綴りが本仕様の 2 項目にだけ在る」ことを数えて固定する。備考の「束の順位: N」は触らない（優先度欄が正本・7.5） |
 | DD8 | 全体報告（**09-17 改訂**） | **本仕様が `report-summary` で `summary.md` を作り直し、台帳と同じコミットに入れる** | 統合担当が完了し、README が「台帳を触った人が走らせる」と定めた。申し送りの相手はもう居ない |
 | DD9 | 無効表示層の型（**09-17 新設**） | **`DisableFont { font: Font, decoration: FontDecorationRaw, shadow: FontShadowRaw }` の束 1 つ**を `BalloonModel` に additive で載せる。書体名・大きさ・色は既存 `Font` を値で再利用（`get_scalar` の縮退規則を継ぐ）、残り 9 本は基底と同じ 2 型 | 新しい値の型を増やさず、基底と無効表示で「同じキーは同じ形」が保たれる。基底の `font()` を別扱いにしないため `BalloonModel` の既存の面は変わらない。14 個のフィールドを 1 つの平らな型に並べる案は `Font` と重複する形になる |
-| DD10 | 配線の形と綴り誤りの記録（**09-17 新設**） | **純粋モジュール `balloon_overrides.rs`** に `font_overrides(model) -> Vec<Vec<String>>`／`disable_overrides(model) -> Vec<Vec<String>>` を置く。宣言されたキーだけをトークン列へ写す（飾り: `[key, 値]`／`name`: `["name"]`＋カンマ分割・trim（基底の `resolve` と同じ切り方）／`height`: `["height", 値]`／`color`: 3 成分が揃ったときだけ `["color", r, g, b]`）。各列を組む際に `apply_font_tag(&mut probe, &LookLayers::default(), args)` で**事前検証**し、`Err` なら `warn!(key, value, reason, …)` で記録して列からは外さない（受け口も同じ判定で飛ばす）。色の成分不足は配線が自分で `warn!` する | 受け口の `apply_overrides` は `Err` を黙って飛ばす設計で、記録を本仕様へ申し送っている。受け口の改変は完了済み spec の面を触るので採らない。事前検証は公開 API（`apply_font_tag`・`LookLayers::default()`）だけで書け、判定の実体は受け口と 1 か所に留まる（配線が語彙表を複製しない）。記録は 1 回の解決で同じ（キー, 値）が 1 度ずつ（各キーは列に 1 度しか現れない）。`draw.rs` に直書きせず純粋モジュールにするのは、COM 無しでテストするためと `draw.rs`（737 行）を伸ばさないため |
+| DD10 | 配線の形と綴り誤りの記録（**09-17 新設・検証で是正**） | **純粋モジュール `balloon_overrides.rs`** に `overrides(model, base: &LookLayers) -> BalloonOverrides { font, disable }` を置く。宣言されたキーだけをトークン列へ写す（飾り: `[key, 値]`／`name`: `["name"]`＋カンマ分割・trim（基底の `resolve` と同じ切り方）／`height`: `["height", 値]`／`color`: 3 成分が揃ったときだけ `["color", r, g, b]`）。**受け口と同じ順序・同じ土台で事前検証**する——`base`（`from_balloon` を空の列で呼んだ結果）の `default` を写した探り用の `TextLook` に基底の列を順に `apply_font_tag` し、次にその複製へ無効表示の列を順に適用する。`Err` なら `warn!(key, value, reason, …)` で記録し、列からは外さない（受け口も同じ判定で飛ばす）。色の成分不足は配線が自分で `warn!` する | 受け口の `apply_overrides` は `Err` を黙って飛ばす設計で、記録を本仕様へ申し送っている。受け口の改変は完了済み spec の面を触るので採らない。**`Err` の条件は綴りだけでは決まらない**——相対・百分率の `height`（`+4`・`-10`・`150%`）は「今効いている大きさ」に足して `0` 以下なら `Err`（`look.rs` の `apply_height`）。だから探り用の土台は既定の層ではなく、バルーン定義から組んだ実際の層でなければ受け口と判定が一致しない（設計検証の指摘で是正）。判定の実体は受け口 1 か所に留まる（配線が語彙表を複製しない）。記録は 1 回の解決で同じ（キー, 値）が 1 度ずつ（各キーは列に 1 度しか現れない）。`draw.rs` に直書きせず純粋モジュールにするのは、COM 無しでテストするためと `draw.rs`（737 行）を伸ばさないため |
 | DD11 | 影 4 キーは渡さない（**09-17 新設**） | 基底・無効表示とも `FontShadowRaw` を配線に**渡さない**。取り出し口を申し送る | 受け口は `shadowcolor`／`shadowstyle` を `Note::Unowned` として見た目を変えない。渡しても無害だが、3 成分を 1 トークンへ束ねる形（`\f[shadowcolor,r,g,b]`）と `none` の扱いは影まわりの仕様が決めるべき語彙判断で、本仕様が先に固定すると後で覆される。「渡さない」を W6 で明示的に固定する |
 
 ### Technology Stack
@@ -174,10 +174,10 @@ graph TB
 | `crates/areka-parsers/src/balloon/mod.rs` | 26 | `pub use model::{...}` に 3 型を追加 | ~27 |
 | `crates/areka-parsers/src/balloon/parse_tests.rs` | 409 | T1〜T16（下記 Testing Strategy）＋`FONT_BASE_KEYS` | ~760／~240 |
 | `crates/areka-parsers/src/balloon/model_tests.rs` | 596 | M1〜M4 | ~690／~310 |
-| `crates/areka-emo-text/src/balloon_overrides.rs` | **新設** | `font_overrides`／`disable_overrides`・トークン列の組み立て・事前検証・`warn!` | ~130 |
-| `crates/areka-emo-text/src/balloon_overrides_tests.rs` | **新設** | W1〜W8・E1〜E4 | ~260 |
-| `crates/areka-emo-text/src/draw.rs` | 737 | `resolve_with_background` の `from_balloon(..., &[], &[])` を組み立てた列へ（呼び出し 1 か所・`let` 2 行）。doc の「読めるようになったときは…」の段を現状へ | ~745 |
-| `crates/areka-emo-text/src/lib.rs` | 469 | `pub mod balloon_overrides;`＋`#[cfg(test)] mod balloon_overrides_tests;`。`PURE_SOURCES` に 2 本登録・母数 54→56 | ~475 |
+| `crates/areka-emo-text/src/balloon_overrides.rs` | **新設** | `BalloonOverrides`・`overrides(model, base)`・トークン列の組み立て・受け口と同じ順序の事前検証・`warn!`。末尾に `#[cfg(test)] #[path = …] mod balloon_overrides_tests;` | ~150 |
+| `crates/areka-emo-text/src/balloon_overrides_tests.rs` | **新設** | W1〜W9・E1〜E4 | ~280 |
+| `crates/areka-emo-text/src/draw.rs` | 737 | `resolve_with_background` で土台の 2 層を空の列で組み、`balloon_overrides::overrides` の結果を最終の `from_balloon` へ渡す（呼び出し 1 か所・`let` 2 行）。doc の「読めるようになったときは…」の段を現状へ | ~745 |
+| `crates/areka-emo-text/src/lib.rs` | 469 | `pub mod balloon_overrides;`（テストモジュールの宣言は置かない）。`PURE_SOURCES` に 2 本登録・母数 54→56 | ~474 |
 
 ### Modified Files（文書・台帳）
 
@@ -252,11 +252,11 @@ graph TB
 | 7.8 | `report`＋`report-summary`・保存形の確認 | C5・DD8 | — | — |
 | 7.9 | 検査とテストで食い違い 0 件 | C5 検査コマンド | — | — |
 | 7.10 | `disable.font.*` を `degraded`・担当を本仕様へ | C5 | — | — |
-| 8.1 | 基底の飾り 5 本を `font_overrides` へ | C8（DD10）・W1・E1 | `font_overrides(&BalloonModel)` | 配線フロー |
-| 8.2 | `disable.font.*` を `disable_overrides` へ | C8・W2・E2・E3 | `disable_overrides(&BalloonModel)` | 配線フロー |
+| 8.1 | 基底の飾り 5 本を `font_overrides` へ | C8（DD10）・W1・E1 | `overrides(&BalloonModel, &LookLayers).font` | 配線フロー |
+| 8.2 | `disable.font.*` を `disable_overrides` へ | C8・W2・E2・E3 | `overrides(&BalloonModel, &LookLayers).disable` | 配線フロー |
 | 8.3 | 影 4 は渡さず申し送り | DD11・W6・C7 | — | — |
 | 8.4 | 引き渡す内容を文書に残す | C7 引き渡し表 | — | — |
-| 8.5 | 受け口が飛ばした値を `warn!` | C8（事前検証）・W3・W4・W5 | — | 配線フロー |
+| 8.5 | 受け口が飛ばした値を `warn!` | C8（事前検証）・W3・W4・W5・W9 | — | 配線フロー |
 | 8.6 | `resolve_with_background` の他の結果を変えない | C8（`let` 2 行の差し替えだけ）・既存 draw テスト | — | — |
 | 9.1 | 9 キーの宣言値が取り出せる | T1・T2 | — | — |
 | 9.2 | 未指定を宣言 `0` と取り違えない | T3 | — | — |
@@ -404,10 +404,19 @@ impl BalloonModel {
 
 ```rust
 // crates/areka-emo-text/src/balloon_overrides.rs（純粋層・windows 参照 0）
-/// 基底の飾り 5 本 → `font_overrides`。宣言されたキーだけ。影は渡さない（DD11）。
-pub fn font_overrides(model: &BalloonModel) -> Vec<Vec<String>>;
-/// `disable.font.*` → `disable_overrides`。飾り 5・`name`・`height`・`color`。影は渡さない。
-pub fn disable_overrides(model: &BalloonModel) -> Vec<Vec<String>>;
+/// `LookLayers::from_balloon` の 2 引数に渡す列。
+#[non_exhaustive]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BalloonOverrides { pub font: Vec<Vec<String>>, pub disable: Vec<Vec<String>> }
+/// 基底の飾り 5 本 → `font`、`disable.font.*`（飾り 5・`name`・`height`・`color`）→ `disable`。
+/// 宣言されたキーだけ。影は渡さない（DD11）。`base` はバルーン定義から空の列で組んだ 2 層で、
+/// 受け口と同じ順序で事前検証するための土台（DD10）。
+pub fn overrides(model: &BalloonModel, base: &LookLayers) -> BalloonOverrides;
+
+// 末尾に兄弟テストを結ぶ（クレートの慣行・structure.md）
+#[cfg(test)]
+#[path = "balloon_overrides_tests.rs"]
+mod balloon_overrides_tests;
 ```
 
 - トークン列の形（受け口 `apply_font_tag` の `args[0]`＝キー、`args[1..]`＝値の列）:
@@ -422,14 +431,19 @@ pub fn disable_overrides(model: &BalloonModel) -> Vec<Vec<String>>;
 | 同 | 1〜2 成分だけ `Some` | 列に入れず `warn!(key = "disable.font.color", value = <揃った成分>, reason = "3 成分が揃っていない", …)` |
 | `font_shadow_raw()`／`disable_font().shadow_raw()` | — | **渡さない**（DD11） |
 
-- 事前検証（8.5）: 組んだ各列について `apply_font_tag(&mut TextLook::ukadoc_default(), &LookLayers::default(), &args)` を呼び、`Err(FontTagIssue { key, value, reason })` なら `warn!(key, value, reason, "バルーン定義の書体設定を適用できない——当該項目は既定のまま")` を出す。列からは外さない（受け口が同じ判定で飛ばすので結果は同じ。外すと「受け口が判定の唯一の実体」が崩れる）。`Ok(Some(Note::VocabularyOnly))`（`outline`）・`Ok(None)` は記録しない。
+- 事前検証（8.5）——受け口の `apply_overrides` と**同じ順序・同じ土台**で写す:
+  1. `probe = base.default.clone()`。基底の列を組みながら、各列について `apply_font_tag(&mut probe, base, &args)` を呼ぶ。
+  2. `probe_disable = probe.clone()`（受け口は色だけ混色して複製するが、`Err` の判定に色は関わらない）。無効表示の列を組みながら、各列について `apply_font_tag(&mut probe_disable, base, &args)` を呼ぶ。
+  3. `Err(FontTagIssue { key, value, reason })` なら `warn!(key, value, reason, "バルーン定義の書体設定を適用できない——当該項目は既定のまま")` を出す。列からは外さない（受け口が同じ判定で飛ばすので結果は同じ。外すと「受け口が判定の唯一の実体」が崩れる）。`Ok(Some(Note::VocabularyOnly))`（`outline`）・`Ok(None)` は記録しない。
+  - `apply_font_tag` の第 2 引数（`default`／`disable` の語の解決先）は受け口では「差し込み前の層の複製」だが、`Err` の判定はそこを読まない（`height,default` の解決先は常に正値）。`base` を渡せば十分。
+  - 相対・百分率の `height` は探り用の `probe` の大きさに足して判定されるので、`font.height,8`＋`disable.font.height,-10` は `Err`（受け口も飛ばす）、`font.height,20`＋`disable.font.height,-15` は `Ok`（受け口も適用）——W9 で固定する。
 - 記録の回数: 各キーは列に 1 度しか現れないので、1 回の解決で同じ（キー, 値）は 1 度まで（8.5）。解決のたびに出るのは既存の `font.name`／`font.height` の `warn!` と同じ周期。
-- `draw.rs` の変更は `resolve_with_background` 内の `let font_overrides = balloon_overrides::font_overrides(model); let disable_overrides = balloon_overrides::disable_overrides(model);` と `from_balloon(..., &font_overrides, &disable_overrides)` の 1 か所。他の解決（書体名・大きさ・色・選択肢文字色）は無改変（8.6）。doc の「読めるようになったときはここで…」の段は現状（配線済み）へ書き換える。
-- `lib.rs`: `pub mod balloon_overrides;`・`#[cfg(test)] mod balloon_overrides_tests;`・`PURE_SOURCES` に `("balloon_overrides.rs", include_str!(...))` と `("balloon_overrides_tests.rs", include_str!(...))` を追加し、`assert_eq!(PURE_SOURCES.len(), 56, …)` へ。
+- `draw.rs` の変更は `resolve_with_background` 内の 1 か所: `let base = LookLayers::from_balloon(candidates.clone(), height, color, background, cursor_text, &[], &[]); let o = balloon_overrides::overrides(model, &base);` を置き、最終の `from_balloon(candidates, …, &o.font, &o.disable)` へ渡す（`from_balloon` は純関数で 2 度呼んでも副作用が無い）。他の解決（書体名・大きさ・色・選択肢文字色）は無改変（8.6）。doc の「読めるようになったときはここで…」の段は現状（配線済み）へ書き換える。
+- `lib.rs`: `pub mod balloon_overrides;` を足し、`PURE_SOURCES` に `("balloon_overrides.rs", include_str!(...))` と `("balloon_overrides_tests.rs", include_str!(...))` を追加して `assert_eq!(PURE_SOURCES.len(), 56, …)` へ。**テストモジュールの宣言は `lib.rs` に置かない**——クレートの慣行（`look.rs`・`draw.rs` の末尾）と `structure.md` のとおり、本番ファイル `balloon_overrides.rs` の末尾に `#[cfg(test)] #[path = "balloon_overrides_tests.rs"] mod balloon_overrides_tests;` で結ぶ。
 
 **Implementation Notes**
 - Validation: W1〜W8・E1〜E4（Testing Strategy）。
-- Risks: `apply_font_tag` の語彙が変われば事前検証の結果も自動で追随する（配線は語彙表を持たない）。`LookLayers::default()` の層の値は `default`／`disable` の語の解決先になるだけで、`Err`／`Ok` の判定には影響しない（`switch`・`color`・`name`・`height` の `Err` 条件はいずれも値の綴りだけで決まる）。
+- Risks: `apply_font_tag` の語彙が変われば事前検証の結果も自動で追随する（配線は語彙表を持たない）。**探り用の土台を既定の層で代用してはならない**——`switch`・`color`・`name` の `Err` は綴りだけで決まるが、`height` の相対・百分率は「今効いている大きさ」に依存する（`look.rs` の `apply_height`：`current.height + delta` が `0` 以下なら `Err`）。土台と順序を受け口に揃えることで判定が一致する（設計検証の指摘 1・W9 で固定）。
 
 ### 証拠
 
@@ -495,7 +509,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 ```
 ⓑ `vocabulary-only`（`font.outline`）: ⓐ の 1 段目を「壊れ方: 黙って壊れる。記録: なし。」とし、2 段目末尾を「…へ渡すが、受け口は白抜きを状態だけ更新して表示は変えない（areka-P0-text-decoration-canon 要件 5.9・語彙のみ）。白抜きの描画の引受先は未起票。」とする。束は「台詞の書体・名前だけ受けて使わない」。
 ⓒ `vocabulary-only`（影 4 本）: 「壊れ方: 黙って壊れる。記録: なし。areka-parsers の balloon::map_merged が完全一致で引いて文字列のまま持ち上げる（BalloonModel::font_shadow_raw）が、areka-emo-text の look は shadowcolor／shadowstyle を所有外として見た目を変えず、配線も渡さない。影そのものの意味と描画・受け口への配線は areka-P0-text-align-shadow-canon。さくらスクリプト台帳の影 3 項目の owner と一致。」束は「台詞の書体・名前だけ受けて使わない」。
-ⓓ `degraded`（`disable.font.*`）: 「壊れ方: 見た目の差。記録: なし（語彙外の値と 3 成分が揃わない色は warn! が 1 度出る）。areka-parsers の balloon::map_merged が disable.font.<基底 14 キー> を完全一致で引き（BalloonModel::disable_font）、areka-emo-text の balloon_overrides が disable_overrides へ渡して無効表示の層に載る。効くのは name・height・color（3 成分が揃ったとき。正典どおり画像色との混色は指定が無いときだけ）・bold・italic・strike・underline。outline は語彙のみ、shadowcolor／shadowstyle は受け口が無く未対応（areka-P0-text-align-shadow-canon）。担当 spec は areka-P0-balloon-font-descript-keys。」束は「台詞の書体・読めるが正典どおりに描かれない」。
+ⓓ `degraded`（`disable.font.*`）: 「壊れ方: 見た目の差。記録: なし（語彙外の値と 3 成分が揃わない色は warn! が 1 度出る）。areka-parsers の balloon::map_merged が disable.font.<基底 14 キー> を完全一致で引き（BalloonModel::disable_font）、areka-emo-text の balloon_overrides が disable_overrides へ渡して無効表示の層に載る。効くのは name・height・color（3 成分が揃ったとき。画像色との混色は指定が無いときだけ——正典の「disable.font.color のみバルーンの画像色とミックスした色」を本仕様は「指定が無いときの既定」と解釈した。要件 9.10）・bold・italic・strike・underline。outline は語彙のみ、shadowcolor／shadowstyle は受け口が無く未対応（areka-P0-text-align-shadow-canon）。担当 spec は areka-P0-balloon-font-descript-keys。」束は「台詞の書体・読めるが正典どおりに描かれない」。
 
 - 「読むキーを並べた表を完全一致で引く形で、この項目はその表に無い」「描画側にも受け口が無い」「両方の表のすべての行を当たったが、この食い違いを引き受ける行は無い」の文は 10 項目から除く（着地後は偽になる・7.2）。
 
@@ -629,12 +643,13 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 |---|---|---|---|
 | W1 | `font_overrides_emit_one_token_list_per_declared_decoration_key` | `font.bold,1`・`font.strike,0` → `[["bold","1"],["strike","0"]]`（宣言の無い 3 本は列に無い） | 8.1 |
 | W2 | `disable_overrides_emit_name_height_color_and_decorations` | `disable.font.name,A, B`・`disable.font.height,20`・`disable.font.color.r/g/b,1/2/3`・`disable.font.italic,1` → `["name","A","B"]`・`["height","20"]`・`["color","1","2","3"]`・`["italic","1"]` | 8.2 |
-| W3 | `disable_color_with_missing_components_is_dropped_and_warned_once` | `disable.font.color.r,64` だけ → `color` の列は無く、`warn!` が 1 件（`key="disable.font.color"`）。ログ捕捉は `log-capture-kit` | 8.2, 8.5, 9.11 |
+| W3 | `disable_color_with_missing_components_is_dropped_and_warned_once` | `disable.font.color.r,64` だけ → `color` の列は無く、`warn!` が 1 件（`key="disable.font.color"`）。ログ捕捉は `log-capture-kit`。W1〜W9 の `base` は `LookLayers::from_balloon` をそのバルーン定義から空の列で組んだもの（本番の `resolve_with_background` と同じ組み方） | 8.2, 8.5, 9.11 |
 | W4 | `out_of_vocabulary_values_are_passed_through_and_warned_once` | `font.bold,yes` → 列には `["bold","yes"]` が在り、`warn!` が 1 件（`key="bold"`, `value="yes"`, `reason` は受け口の語） | 8.5, 9.11 |
 | W5 | `canonical_declarations_produce_no_warnings` | `font.bold,1`・`disable.font.color` 3 成分・`disable.font.name,A` → `warn!` 0 件 | 8.5, 9.11 |
 | W6 | `shadow_keys_are_never_forwarded` | `font.shadowcolor.r,64`・`font.shadowstyle,offset`・`disable.font.shadowstyle,outline` を書いても両列に `shadow*` の列は無い（**零を判定**） | 8.3 |
 | W7 | `no_declarations_yield_two_empty_lists` | 9 キー・`disable.font.*` 無し → 両列とも空（＝従来と同じ呼び出し） | 5.4 |
 | W8 | `outline_is_forwarded_without_warning` | `font.outline,1` → `["outline","1"]`・`warn!` 0 件（`Note::VocabularyOnly` は記録しない） | 8.5 |
+| W9 | `relative_disable_height_is_judged_against_the_actual_base_layer` | `font.height,8`＋`disable.font.height,-10` → `warn!` 1 件（受け口も飛ばす）。`font.height,20`＋`disable.font.height,-15` → `warn!` 0 件（受け口は 5 を適用）。土台を `LookLayers::default()` で代用すると前者が 0 件・後者が 1 件になって赤（DD10 の較正） | 8.5, 9.11 |
 | E1 | `resolve_lifts_declared_bold_into_the_default_look` | `parse_str("font.bold,1", None)` → `ResolvedFont::resolve(&model).looks.default.bold == true`、`disable.bold` も `true`（複製）。旧実装（空の列）では `false` | 5.5, 8.1, 9.10 |
 | E2 | `resolve_lifts_disable_bold_into_the_disable_look_only` | `disable.font.bold,1` → `looks.disable.bold == true`・`looks.default.bold == false` | 8.2, 9.10 |
 | E3 | `resolve_uses_declared_disable_color_instead_of_the_mix` | `disable.font.color.r/g/b,10/20/30` → `looks.disable.color == (10,20,30)`（`mix_disabled` の値ではない）。3 成分が揃わなければ混色のまま | 8.2, 9.10 |
@@ -658,7 +673,7 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 
 1. 転記層: `parse.rs` の 1 本（例: `font.strike`）の引きを一時的に外して `cargo test -p areka-parsers` を走らせ、T11 と T1 が赤になることを確かめてから元に戻す。
 2. 配線: `draw.rs` の `from_balloon(...)` を旧実装（`&[], &[]`）へ一時的に戻して `cargo test -p areka-emo-text` を走らせ、E1〜E3 が赤になることを確かめてから元に戻す。
-3. 記録: `balloon_overrides.rs` の事前検証を一時的に外し、W3・W4 が赤になることを確かめてから元に戻す。
+3. 記録: `balloon_overrides.rs` の事前検証を一時的に外し、W3・W4 が赤になることを確かめてから元に戻す。あわせて土台を `LookLayers::default()` へ一時的に差し替え、W9 だけが赤になることを確かめてから元に戻す。
 
 いずれも `git diff -- <当該ファイル>` に痕跡が残らないことを確かめる。
 

@@ -365,7 +365,7 @@
 ### 11.3 新しい設計判断（DD9〜DD11）と改訂（DD4・DD7・DD8）
 
 - **DD9 無効表示層の型**——`DisableFont { font: Font, decoration: FontDecorationRaw, shadow: FontShadowRaw }` の束 1 つ。書体名・大きさ・色は既存 `Font` を値で再利用し（`get_scalar` の縮退規則を継ぐ）、残り 9 本は基底と同じ 2 型。新しい値の型を増やさず「同じキーは同じ形」。却下: 14 フィールドを平らに並べる型（`Font` と重複）。
-- **DD10 配線の形と記録**——純粋モジュール `balloon_overrides.rs` に `font_overrides`／`disable_overrides` を置き、宣言されたキーだけを `\f` と同じ形のトークン列へ写す。受け口の `apply_overrides` は綴り誤りを**黙って飛ばし**、doc で「記録はバルーン定義を読む側が出す」と本仕様へ申し送っていた。転記層はログを出さない契約なので、配線が公開 API（`apply_font_tag`・`LookLayers::default()`）で**事前検証**して `warn!` を 1 度出す。判定の実体は受け口 1 か所に留まる（配線は語彙表を持たない）。却下: 受け口を改変して飛ばした理由を返す形（完了済み spec の面を触る）・`draw.rs` へ直書き（COM 無しでテストできない・737 行を伸ばす）。
+- **DD10 配線の形と記録**——純粋モジュール `balloon_overrides.rs` に `font_overrides`／`disable_overrides` を置き、宣言されたキーだけを `\f` と同じ形のトークン列へ写す。受け口の `apply_overrides` は綴り誤りを**黙って飛ばし**、doc で「記録はバルーン定義を読む側が出す」と本仕様へ申し送っていた。転記層はログを出さない契約なので、配線が公開 API（`apply_font_tag`・`LookLayers::from_balloon`）で**事前検証**して `warn!` を 1 度出す。判定の実体は受け口 1 か所に留まる（配線は語彙表を持たない）。**設計検証で是正（09-17）**——初稿は「`Err` の条件は綴りだけで決まるので `LookLayers::default()` を土台にしてよい」と書いたが、相対・百分率の `height` は「今効いている大きさ」に依存する（`look.rs` の `apply_height`）。土台をバルーン定義から組んだ実際の 2 層にし、受け口と同じ順序で探り用の `TextLook` へ適用する形へ改めた（W9 で較正）。却下: 受け口を改変して飛ばした理由を返す形（完了済み spec の面を触る）・`draw.rs` へ直書き（COM 無しでテストできない・737 行を伸ばす）。
 - **DD11 影 4 キーは渡さない**——受け口は `shadowcolor`／`shadowstyle` を所有外として見た目を変えない。3 成分を 1 トークンへ束ねる形と `none` の扱いは影まわりの仕様の語彙判断なので、本仕様が先に固定しない。W6 で「渡さない」を零として判定する。
 - **DD4 改訂**——着地順は実測で確定（書体＝後着・影＝先着）。「最終タスクで再測定」は不要になり、最終検証で影まわりの状態を 1 度だけ再確認する判定表に置き換えた。
 - **DD7 改訂**——優先度が全項目 `A5` に揃い束名が優先度の鍵ではなくなったので、状態ごとに既設の束名へ揃える（`implemented`／`vocabulary-only`／`degraded` の 3 つ）。「束の順位: N」の文は触らない。
@@ -374,7 +374,9 @@
 ### 11.4 受け口の実測（配線の設計の根拠・`look.rs`）
 
 - `apply_font_tag` が受ける語彙: `bold`／`italic`／`underline`／`strike`／`outline`（`parse_switch`: `true`/`1`/`false`/`0`/`default`/`disable`）・`sub`／`sup`・`height`・`color`（`parse_color`: 3 成分か 1 語）・`name`（候補列）・一括の `default`／`disable`。所有外 `UNOWNED_KEYS = ["align","valign","shadowcolor","shadowstyle"]`＋`cursor*`／`anchor*` は `Ok(Some(Note::Unowned))`。未知キーは `Err(REASON_UNKNOWN_KEY)`。`outline` は `Ok(Some(Note::VocabularyOnly))`。
-- `Err` の条件（`REASON_BAD_SWITCH`・`REASON_VALUE_COUNT`・`REASON_COMPONENT_COUNT`・`REASON_UNKNOWN_KEY` 等）はいずれも値の綴りだけで決まり、層の値に依らない——事前検証を `LookLayers::default()` で行っても結果は受け口と一致する。
+- `Err` の条件のうち `REASON_BAD_SWITCH`・`REASON_VALUE_COUNT`・`REASON_COMPONENT_COUNT`・`REASON_UNKNOWN_KEY` は値の綴りだけで決まるが、**`height` の相対・百分率は層の値に依る**（`apply_height`: `current.height + delta` が `0` 以下なら `Err`）。事前検証の土台は既定の層ではなく実際の層でなければならない（設計検証の指摘 1）。
+- 兄弟テストの結び方: クレートは `lib.rs` にテストモジュールを宣言せず、本番ファイルの末尾で `#[cfg(test)] #[path = "…"] mod …;` と結ぶ（`look.rs`・`draw.rs` の末尾・`structure.md`）。
+- 束名「台詞の書体・読めるが正典どおりに描かれない」は台帳 4 本に 0 件＝新設（設計検証の指摘 3）。
 - `apply_overrides` の `base` は差し込み前の層の複製で、`default`／`disable` の語は差し込み前の層を指す。正典の descript にこの語は現れない。
 - `LookLayers`・`TextLook` のフィールド、`TextLook::ukadoc_default()`、`apply_font_tag`、`FontTagIssue` はすべて `pub`。
 - `lib.rs` の `PURE_SOURCES`（54 本）に新モジュールと兄弟テストを登録しないと `every_source_file_is_either_scanned_or_explicitly_excluded` が赤になる。`draw.rs` は `SOURCES_OUTSIDE_THE_PURE_SCAN` 側。
