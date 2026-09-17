@@ -77,3 +77,9 @@
 - release ビルドで測る（debug は CPU 3 倍）。
 - サインオフの根拠になった実行体のコミットを記録する（M1 の教訓＝§6 R8.3）。
 - 規模 **S〜M**（スクリプトと文書が主・コードはほぼ増えない）。
+
+---
+
+## 2026-09-18 追記（裁定候補 ⑴ の移管）
+
+- 「既定バルーンの同梱」は独立の spec `areka-P0-default-balloon-bundle`（2026-09-18 起票・A2 並走）へ移した。開発者裁定: `emo2-kakukaku` は癖が強く既定に向かない。候補は CC0 の `Balloon for Staysee Syncfield`（作者は SSP 本家）。**areka は常に `use_self_alpha,1`・`.pna` 非対応**（開発者確認）。本 brief の裁定候補 ⑴ は同 spec の要件段階で決める。
