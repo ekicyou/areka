@@ -290,7 +290,8 @@ flowchart TD
 | 5.10 | 要素の列＋accept＋読み飛ばし | outcome | `InstallOutcome` | 展開 |
 | 5.11 | 途中失敗で書きかけ無し・既存無傷 | install | 作業フォルダ → 入れ替え・巻き戻し | 展開 |
 | 6.1 | refresh≠1 は上書き | install | `ExistingPolicy::Overlay` | 展開 |
-| 6.2 | refresh,1 は全消去＋mask | install | `ExistingPolicy::Replace { keep }`（結果同値の「組んでから入れ替え」・**`supplement` は `Overlay` 固定＝6.2 の狭め・Open Questions**） | 展開 |
+| 6.2 | refresh,1 は全消去＋mask（supplement を除く） | install | `ExistingPolicy::Replace { keep }`（結果同値の「組んでから入れ替え」・`supplement` は `Overlay` 固定＋`RefreshIgnoredForSupplement` の警告＝2026-09-18 開発者裁定で要件 6.2 に明記） | 展開 |
+| 6.6 | 宛先が使用中なら無傷で失敗・解放は呼び出し側 | install/error | `rename(dest → old)` の失敗 → `Io { phase: Commit, committed: [], rolled_back: true }`・エンジンは解放を試みない | 展開 |
 | 6.3 | 同梱バルーン側も同規則 | plan/install | `Companion::existing` | 展開 |
 | 6.4 | 途中失敗の原因と範囲 | error | `NarError::Io { phase, committed }` | 展開 |
 | 6.5 | 開発用の根は再インストールしない | Kit devroot | 常に空の根へ展開 | 取得 |
@@ -791,7 +792,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8>;    // CRLF で連結
 - `names_tests`: ビット 11 あり UTF-8（日本語）・印なし Shift_JIS（日本語のフォルダ名とファイル名）・印なしで不正な列 → `NameUndecodable`（生バイト 16 進を含む）・`..`・`/` 始まり・`C:`・`\\`・`\`・NUL・`CON.txt`・末尾ドット・`<>`・`A.txt` と `a.txt` の衝突・S_IFLNK。
 - `manifest_tests`: `Charset,UTF-8`（大文字キー）・`charset, Shift_JIS`（値の前の空白）・`charset` 無し（ANSI 既定で日本語の `name`）・`Type,Ghost`（大文字の値は拒否・キーだけ大小無視）・4 種の受理・7 種＋未知＋無しの拒否・`directory`／`name` 無し／空・`directory` に `/` `..` `C:`・`accept,` 空・`balloon.directory` のみ（source は同値）・`balloon0` と `balloon1`・`headline.directory` の警告・`type,balloon` に `balloon.directory` の警告・`refresh,1`／`refresh,0`／`refresh,true`・mask の分割と不正要素・`bootghost` の無視。
 - `plan_tests`: 4 種の宛先・同梱バルーンの除外と接頭辞剥がし・取り出し元無し・shell／supplement の宛先無し・supplement の `install.txt` 除外・空フォルダ・フォルダのエントリ無し。
-- `install_tests`（根は OS の一時フォルダではなく `sample_ghost_kit::WorkDir` が配る `target/nar-samples/work/<pid>-<連番>/`。dev 依存の循環により kit が見る `areka_nar` はテスト対象とは別の写しなので、`areka-nar` 自身のテストは kit から `WorkDir` と `nar_writer` だけを借り、`SampleError::Nar` の中身を `crate::` の型と比べない）: 新規・`Overlay` で既存ファイルが残り同名が上書き・`Replace` で mask 以外が消える（全階層）・同梱バルーン側の `*.refresh`・途中失敗（読み取り専用の宛先を作って確定を失敗させる）で宛先が無傷・2 配置の 2 つ目の失敗で 1 つ目が戻る・`leftovers`・確定後の各ファイルの実パスが宛先配下・バイト一致。
+- `install_tests`（根は OS の一時フォルダではなく `sample_ghost_kit::WorkDir` が配る `target/nar-samples/work/<pid>-<連番>/`。dev 依存の循環により kit が見る `areka_nar` はテスト対象とは別の写しなので、`areka-nar` 自身のテストは kit から `WorkDir` と `nar_writer` だけを借り、`SampleError::Nar` の中身を `crate::` の型と比べない）: 新規・`Overlay` で既存ファイルが残り同名が上書き・`Replace` で mask 以外が消える（全階層）・同梱バルーン側の `*.refresh`・途中失敗（読み取り専用の宛先を作って確定を失敗させる）で宛先が無傷・**宛先が使用中**（宛先の中のファイルを `share_mode(0)` で開いたまま `install`＝起動中の `shiori.dll` の再現）で `Io { phase: Commit, rolled_back: true }` が返り宛先が呼ぶ前のまま（6.6）・2 配置の 2 つ目の失敗で 1 つ目が戻る・`leftovers`・確定後の各ファイルの実パスが宛先配下・バイト一致。
 - `error_tests`: **1 本のテスト**が `nar_writer` で 13 変種それぞれの固定入力を組み、各入力を `open`（または `install`）に通して得た `kind()` の集合が `ALL_KINDS` と**完全一致**することを判定する（集合が空なら当然赤＝母数 0 で緑にならない）。別ファイルの兄弟テストの結果を集めて突き合わせる形にはしない（テスト間で状態を共有できない）。
 - `no_deflate_side_is_called`: `areka-nar/src/*.rs`（兄弟テストを含む）が `miniz_oxide::deflate` を綴らないことを `include_str!` の字面で見張る（10.2 の代替措置）。
 
@@ -837,7 +838,8 @@ flowchart LR
 
 - **依存の承認＝決着（2026-09-18 開発者「(a) で」）**: `zip 8.6` の代わりに `miniz_oxide 0.9`（`default-features = false, features = ["with-alloc"]`・推移的に `adler2`）を本番に入れ、zip コンテナの読み手は `std` だけで持つ。開発者の判断基準は「可能なら Rust ネイティブ実装」＝外部は純 Rust の伸長器 1 本、残りは本リポジトリの `std` コード。`zip` へ戻す場合の差し替え範囲は `container.rs` だけ（記録のみ）。
 - **10.2 は要件側を改訂済み**: 「既定機能を切って伸長に要る機能だけを明示し、書き込み側の API を呼ばないことを検査で見張る」。設計の措置は `Cargo.toml` の明示と `no_deflate_side_is_called`（`areka-nar/src/*.rs` が `miniz_oxide::deflate` を綴らない字面の見張り）。
-- **6.2 の狭め**（開発者確認）: `type,supplement` では `refresh` を読まず常に重ね置き（`Overlay`）にする。重ね置き先はゴースト本体で、全消去は利用者のゴーストを壊すため。正典は種別を限定していないので、SSP の実挙動と違う可能性がある。
+- **6.2 の狭め＝決着（2026-09-18 開発者「(a) で」）**: `type,supplement` では `refresh` を読み飛ばして常に重ね置き（`Overlay`）＋警告。要件 6.2 に「supplement を除く」を明記済み。
+- **宛先が使用中（起動中のゴーストの `shiori.dll` 等）＝決着（2026-09-18 開発者指摘）**: エンジンは解放を試みず、`rename(dest → old)` の失敗を `Io { phase: Commit, committed: [], rolled_back: true }` で返し宛先は無傷（要件 6.6）。SHIORI のアンロードは呼び出し側の責務で、`ghost-install`・`network-update`・`ghost-shell-balloon-switch` の brief に申し送り済み。決定論テストは「宛先のファイルを共有なしで開いたまま `install` → `Err`・宛先が呼ぶ前のまま」で固定する。
 - **6.2 の実現順**: 「消してから展開」ではなく「組んでから入れ替え」。結果は同じで、消した後に失敗して空になる経路が無くなる。
 - **`StayseeBalloon`**: 段 ③ の時点で `vendors/sample_ghost/StayseeBalloon/` が在るかで登記の 1 行と `.nar` 1 本が変わる（8.5 のとおり・後から着地する側が行う）。
 - **同じ根への同時インストール**: `root/.nar-work/` の残骸掃除は同時実行を想定しない（製品は単一インスタンス・開発用の根は取得ごとに別）。`ghost-install` が並行を要するなら札ファイルの型を移す。

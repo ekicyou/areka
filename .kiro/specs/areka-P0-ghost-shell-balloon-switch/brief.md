@@ -99,3 +99,5 @@
 - 決定論テスト網羅は必達。偽の SHIORI 2 体はテスト DLL ではなく偽境界（記憶 prefer-x64-fake-boundary-tests-not-x86）。実機は emo2 ⇄ R_POST_and_KOMAINU の往復を 1 周（記憶 areka-real-machine-signoff-bounded-auto-exit）。
 - 1 ファイル 1,000 行。`runtime.rs`・`main.rs`・`kanade/schedule/*` の現在行数を着手時に測る。
 - 規模 **L**。要件段階で ①②（寿命＋バルーン）を先行スライスにできる。
+
+- **2026-09-18 `nar-install` 設計からの申し送り（使用中の宛先）**: `areka-nar` の展開は「作業フォルダに組んでから宛先と入れ替える」形で、宛先の中のファイル（起動中のゴーストの `shiori.dll` 等）が開かれていると入れ替えが失敗し、宛先は無傷のまま `NarError::Io { phase: Commit, rolled_back: true }` が返る。**エンジンは SHIORI の解放を試みない**。起動中のゴーストへ入れる・更新する・切り替える経路は、呼び出し側が先に SHIORI をアンロード（`OnClose` 相当の終了経路）してから `install` を呼ぶこと。
