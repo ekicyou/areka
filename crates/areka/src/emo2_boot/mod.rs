@@ -23,6 +23,7 @@ pub mod frame;
 pub mod hit_region;
 pub mod hover_inject;
 pub mod move_cue;
+mod readme_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;

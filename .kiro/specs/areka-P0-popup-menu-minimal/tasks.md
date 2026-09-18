@@ -89,7 +89,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.7, 9.4, 11.4_
   - _Depends: 1.3, 3.1_
 
-- [ ] 4.2 台本の説明書コマンドの消費者を足す
+- [x] 4.2 台本の説明書コマンドの消費者を足す
   - 汎用コマンド運搬から名前で自己選別し、引数なしのときだけ UI へ要求を 1 件送る。引数付きは記録して何もしない。他の名前・非キャリアは良性スキップ
   - 消費者台帳に名前と選別子の行を 1 行足し、正典 URL のコメントはその分岐の定義側に置く
   - 完了状態: 兄弟テストで「引数なし→1 件・引数付き→0 件＋記録・他の名前→0 件」が緑になり、台帳の一意性テストが新しい行を含んで緑
@@ -211,3 +211,4 @@
 - 3.1: `menu/mod.rs` 先頭の `#![allow(dead_code)]` は配下 4 module にも及ぶ。8.1 で結線したら必ず外し、直後に `cargo build -p areka` の警告 0 を確かめる。`main.rs` は 950 行（`mod menu; mod readme;` は宣言済み＝以降のタスクは宣言行に触らない）。ログの捕捉は `log-capture-kit` の `capture_lines`（`tracing` マクロを捕まえる）。`Frame` を増やす日の長さ一致は `ORDER`・`slots` を縛り済み、`captions::FRAME_CAPTIONS` は 5.1 で縛る。
 - 3.2: `CaptionMap`（`Default`＋`insert`＝空文字を捨てる＋`get`）は `captions.rs` に先置き済み。5.1 の `interpret` はこの `insert` で組む。`plan::build` は `Frame::ORDER` を参照せず入力の順を前提にする（`ORDER` の入れ替えで赤くなるのは `mod_registry_tests`、群分け・識別子・`&` の摂動で赤くなるのが `plan_tests`＝9.1 の摂動はこの対応で選ぶ）。群番号の付け替えは恒等（`build` は群の不等号しか見ない）なので摂動にならない。
 - 4.1: `readme.rs` 先頭の `#![allow(dead_code)]` は 4.3 の結線で外す。テストは `ReadmeWiring` を直に `insert_non_send` する（`wire_readme` は分岐の無い配線）。`open`（`ShellExecuteW`）へ届くテストは 1 本も無い＝以降のテストでも実ファイルのある状態で `open_from_world`／`drain_readme_requests` を呼ばない（開発者の机でアプリが開く）。`&World` からの `get_non_send` の共有借用どうしは衝突しない。
+- 4.2: `/// ukadoc:` の行は URL を `<…>` で囲まない（解決は完全一致＝`SourceUrlNotInCatalog` で `cargo test -p ukadoc-survey` が 9 本赤になる）。ソースに正典 URL を書いたタスクは必ず `cargo test -p ukadoc-survey -j 4` まで走らせる。`readme_cue.rs` 先頭の `#![allow(dead_code)]` は 4.3 で外す。送出後に `tick_wake::mark` は立てない（門は既定で無効・有効時も 30 コマの心拍で Input 段が回る・立てると `tick_gate_config_producers_tests` の名簿検査が赤）。
