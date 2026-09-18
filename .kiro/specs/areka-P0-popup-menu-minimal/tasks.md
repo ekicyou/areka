@@ -102,8 +102,8 @@
   - _Requirements: 4.5_
   - _Depends: 4.1, 4.2_
 
-- [ ] 5. 項目名と表示可否
-- [ ] 5.1 リソース名の表と、返り値の写し・表示可否の判定
+- [x] 5. 項目名と表示可否
+- [x] 5.1 リソース名の表と、返り値の写し・表示可否の判定
   - 枠 7 種とリソース名と既定名の対応表、表示可否のリソース名をスコープで選ぶ関数、問い合わせない 4 名の表を置く（それぞれ正典 URL のコメント付き）
   - 写しに現れる文言リソースと表示可否の 1 名を集める列挙、運行へ「送るだけで待たない」照会の送出、待ちの上限の定数を作る
   - 返り値の写しは 値が非空→文言／空・値なし→既定名＋記録／失敗→既定名 とし、失敗した id は 1 回の表示につき 1 行にまとめて記録する。表示可否は値が `0` のときだけ抑止＋記録、それ以外（値なし・失敗・上限超過を含む）は表示
@@ -213,3 +213,4 @@
 - 4.1: `readme.rs` 先頭の `#![allow(dead_code)]` は 4.3 の結線で外す。テストは `ReadmeWiring` を直に `insert_non_send` する（`wire_readme` は分岐の無い配線）。`open`（`ShellExecuteW`）へ届くテストは 1 本も無い＝以降のテストでも実ファイルのある状態で `open_from_world`／`drain_readme_requests` を呼ばない（開発者の机でアプリが開く）。`&World` からの `get_non_send` の共有借用どうしは衝突しない。
 - 4.2: `/// ukadoc:` の行は URL を `<…>` で囲まない（解決は完全一致＝`SourceUrlNotInCatalog` で `cargo test -p ukadoc-survey` が 9 本赤になる）。ソースに正典 URL を書いたタスクは必ず `cargo test -p ukadoc-survey -j 4` まで走らせる。`readme_cue.rs` 先頭の `#![allow(dead_code)]` は 4.3 で外す。送出後に `tick_wake::mark` は立てない（門は既定で無効・有効時も 30 コマの心拍で Input 段が回る・立てると `tick_gate_config_producers_tests` の名簿検査が赤）。
 - 4.3: `wire_emo2_boot` には boot 成功まで届く決定論の道具が無い（既存テストは fallback 経路だけ・`spine.rs` は `wire_emo2_boot` を呼ばず自前の sinks 4 本で組む）。成功経路の結線は実機確認 9.3 ⑵ で見る。sinks の並びは `zorder_wiring_tests.rs` の `t_zwi05` が `mod.rs` の字面で固定している。`readme::is_available` だけ狭い `#[allow(dead_code)]` が残る（8.1 で外す）。`spine.rs` のコメント「production は 4 本」は陳腐化（実際は 6 本・本仕様の範囲外）。
+- 5.1: `send_query` は送出失敗を自分では記録せず `Err(SendFailed)` を返す。呼び手（7.3）がそれを `interpret` へ渡して初めて `warn!` 1 行になる＝7.3 は `Err` を捨てずに必ず `interpret` まで運ぶ。空・値なしの `debug!` も失敗の `warn!` も 1 回の表示につき 1 行（id は構造化欄に列挙）。表示可否の空・値なしは正常系なので記録しない。`captions.rs` の 3 表は `resources.rs` と二重に証拠解決する（設計どおり）。
