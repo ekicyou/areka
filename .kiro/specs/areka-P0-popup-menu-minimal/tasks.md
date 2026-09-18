@@ -80,7 +80,7 @@
   - _Boundary: areka menu plan_
 
 - [ ] 4. 説明書
-- [ ] 4.1 説明書のファイルを決めて既定のアプリで開く
+- [x] 4.1 説明書のファイルを決めて既定のアプリで開く
   - ゴーストのフォルダの根と定義キーから説明書のパスを決める（キーが無ければ正典の既定名）。中身も文字コードも読まない
   - UI 側の持ち物として、パス・台本からの要求の受信端・「無いことを 1 度だけ記録した」印を持つ資源と、その結線（毎 tick の取り出しを入力の段へ登録）を作る
   - 在否の判定は共有借用だけで済む形にし、初めて「無い」を見たときだけ記録する
@@ -210,3 +210,4 @@
 - 2.3: kanade は 1 メッセージを同期で完走させ、`Boot` 1 通で `Steady` まで進む。起動途中の段は受信箱から見えないので、「会話できない状態の照会」は `Idle`（`Boot` より前）で確かめた（design.md を訂正済み）。任意 GET id の応答は `Fixture::with_resource_response`（値の語彙は `MouseResponse` を流用・`Script(String::new())` は 200 の空文字で 204 ではない）。
 - 3.1: `menu/mod.rs` 先頭の `#![allow(dead_code)]` は配下 4 module にも及ぶ。8.1 で結線したら必ず外し、直後に `cargo build -p areka` の警告 0 を確かめる。`main.rs` は 950 行（`mod menu; mod readme;` は宣言済み＝以降のタスクは宣言行に触らない）。ログの捕捉は `log-capture-kit` の `capture_lines`（`tracing` マクロを捕まえる）。`Frame` を増やす日の長さ一致は `ORDER`・`slots` を縛り済み、`captions::FRAME_CAPTIONS` は 5.1 で縛る。
 - 3.2: `CaptionMap`（`Default`＋`insert`＝空文字を捨てる＋`get`）は `captions.rs` に先置き済み。5.1 の `interpret` はこの `insert` で組む。`plan::build` は `Frame::ORDER` を参照せず入力の順を前提にする（`ORDER` の入れ替えで赤くなるのは `mod_registry_tests`、群分け・識別子・`&` の摂動で赤くなるのが `plan_tests`＝9.1 の摂動はこの対応で選ぶ）。群番号の付け替えは恒等（`build` は群の不等号しか見ない）なので摂動にならない。
+- 4.1: `readme.rs` 先頭の `#![allow(dead_code)]` は 4.3 の結線で外す。テストは `ReadmeWiring` を直に `insert_non_send` する（`wire_readme` は分岐の無い配線）。`open`（`ShellExecuteW`）へ届くテストは 1 本も無い＝以降のテストでも実ファイルのある状態で `open_from_world`／`drain_readme_requests` を呼ばない（開発者の机でアプリが開く）。`&World` からの `get_non_send` の共有借用どうしは衝突しない。
