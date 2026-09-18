@@ -3,7 +3,7 @@
 //!
 //! この doc は**利用手順**である。ここだけを読めば、別の crate のテスト・example から検体を
 //! 使う書き方が分かる。実装を開く必要は無い。掲載している Rust の例は **doctest** として
-//! `cargo test -p sample-ghost-kit` でコンパイル・実行される（手順書が黙って古びない）。
+//! `cargo test -p sample-ghost-kit` でコンパイルされる（手順書が黙って古びない）。
 //!
 //! # なぜ要るか
 //!
@@ -21,12 +21,17 @@
 //!
 //! # 使い方
 //!
-//! [`SampleRoot::acquire`] に検体名を渡し、**得た値を束縛したまま**パスを借りる。
+//! [`SampleRoot::acquire`] に検体名を渡し、**得た値を束縛したまま**パスを借りる。取得の
+//! たびに `vendors/sample_ghost/<名>.nar` を展開した原本の**使い捨ての複製**が配られ、
+//! 値を捨てた時点でその複製は消える（起動記録の無い新品で始まる＝要件 7.4）。
 //!
-//! ```rust
+//! ```rust,no_run
 //! use sample_ghost_kit::SampleRoot;
 //!
 //! let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+//!
+//! // ベースウェアの根（`ghost/`・`balloon/` を直下に持つ）。
+//! assert!(emo2.root().join("ghost").is_dir());
 //!
 //! // ゴースト／バルーンのフォルダ。
 //! assert!(emo2.folder().join("ghost").join("master").is_dir());
@@ -35,8 +40,14 @@
 //! assert!(emo2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン").is_dir());
 //! ```
 //!
-//! 3 つの読み口は**全て借用を返す**ので、値を捨ててパスだけ取り出す書き方はコンパイルできない
-//! （[`SampleRoot::folder`] の例を参照）。段 ③ 以降は値の寿命が展開された木の寿命になるため、
+//! 上の例が `no_run`（組むだけで走らせない）なのは、doctest の実行ファイルだけが
+//! ビルド成果物の置き場の外（OS の一時フォルダ）に置かれるため。展開先はその置き場の
+//! 下に掘るので、doctest から呼ぶと設計どおり [`SampleError::TargetDirNotFound`] に
+//! なる（`devroot` の doc を参照）。振る舞いの判定は兄弟テストが持ち、この例は
+//! **窓口が crate の外から届くこと**（doctest は別 crate として組まれる）を固定する。
+//!
+//! 3 つの読み口は**全て借用を返す**ので、値を捨ててパスだけ取り出す書き方はコンパイル
+//! できない（[`SampleRoot::folder`] の例を参照）。値の寿命が複製された木の寿命なので、
 //! この型の強制が「消えた木のパスを渡す」事故を構造的に防ぐ。
 //!
 //! # 検体を足すとき
@@ -44,22 +55,33 @@
 //! 2 手で終わる（要件 1.5）——`vendors/sample_ghost/<名>.nar` を 1 つ置き、[`SAMPLES`] に
 //! 1 行足す。検体ごとの専用関数は増やさない。
 //!
-//! # 段 ① の中間形
+//! # 返す位置
 //!
-//! 現在の窓口は**追跡済みの展開形**を指すだけで、展開は行わない。`folder()` は
-//! `<リポジトリ根>/<登記の checked_in_parent>/<名>` を、`balloon()` はその直下を返す。
-//! 根を返す `root()` は段 ③（`.nar` からの展開）で入る。段 ③ で返す先は
-//! `<根>/ghost/<名>`・`<根>/balloon/<名>` に変わるが、**呼び手の 1 行は変わらない**。
+//! [`SampleRoot::root`] が**ベースウェアの根**、[`SampleRoot::folder`] が
+//! `<根>/ghost/<名>/`（バルーンの検体なら `<根>/balloon/<名>/`）、
+//! [`SampleRoot::balloon`] が `<根>/balloon/<directory>/`。展開結果の要素が登記
+//! （種別・フォルダ名・同梱バルーン）と食い違えば [`SampleError::RegistryMismatch`]
+//! を返す（黙って存在しないパスを配らない）。
 
 use std::path::{Path, PathBuf};
 
-/// 検体の種別。段 ③ では展開結果が登記と一致するかの照合に使う。
+/// 検体の種別。展開結果が登記と一致するかの照合に使う。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SampleKind {
     /// ゴースト（`install.txt` の `type,ghost`）。
     Ghost,
     /// バルーン（`install.txt` の `type,balloon`）。
     Balloon,
+}
+
+impl SampleKind {
+    /// 根の直下の格納先の名前（`<根>/ghost/`・`<根>/balloon/`）。
+    fn store(self) -> &'static str {
+        match self {
+            SampleKind::Ghost => "ghost",
+            SampleKind::Balloon => "balloon",
+        }
+    }
 }
 
 /// 検体 1 つの登記。足すときに書く 1 行がこれである。
@@ -71,12 +93,6 @@ pub struct Sample {
     pub kind: SampleKind,
     /// 同時にインストールされるバルーンの `directory` 名。
     pub balloons: &'static [&'static str],
-    /// **段 ① 限定**——追跡済みの展開形が置かれている親フォルダ（リポジトリ根から見た相対）。
-    ///
-    /// 検体ごとに置き場が違う（emo2 系は example の fixtures・里々の標準テンプレートは
-    /// `vendors/`）ので、登記の同じ行に持たせて「1 行足すだけ」を保つ。段 ③ で保管が
-    /// `vendors/sample_ghost/<名>.nar` に統一されると、この欄は消える。
-    pub checked_in_parent: &'static str,
 }
 
 /// 検体の登記表。**検体を足す作業はここに 1 行**（要件 1.5）。
@@ -85,40 +101,33 @@ pub const SAMPLES: &[Sample] = &[
         name: "emo2",
         kind: SampleKind::Ghost,
         balloons: &["emo2-kakukaku"],
-        checked_in_parent: "crates/pilot/examples/shiori-host-32/fixtures",
     },
     Sample {
         name: "R_POST_and_KOMAINU",
         kind: SampleKind::Ghost,
         balloons: &[],
-        checked_in_parent: "vendors/sample_ghost",
     },
     Sample {
         name: "emo2-kakukaku-offsetdpi",
         kind: SampleKind::Balloon,
         balloons: &[],
-        checked_in_parent: "crates/pilot/examples/shiori-host-32/fixtures",
     },
     Sample {
         name: "emo2-kakukaku-wplimit",
         kind: SampleKind::Balloon,
         balloons: &[],
-        checked_in_parent: "crates/pilot/examples/shiori-host-32/fixtures",
     },
 ];
 
-/// リポジトリ根の絶対パス。本 crate だけがこの綴りを持つ。
-fn workspace_root() -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
-}
-
 /// 取得した検体。**この値を束縛している間だけ**パスを借りられる。
 ///
-/// 段 ③ 以降は値の寿命が展開された木の寿命になるので、借用しか配らないことが
-/// 「消えた木のパス」を構造的に防ぐ。
+/// 値の寿命が複製された木の寿命なので、借用しか配らないことが「消えた木のパス」を
+/// 構造的に防ぐ。破棄で複製の木と生存の札の両方が消える。
 #[derive(Debug)]
 pub struct SampleRoot {
     sample: &'static Sample,
+    /// 配られた複製。破棄で木が消えるので、**この値が根の寿命そのもの**である。
+    copy: WorkDir,
     folder: PathBuf,
     /// 同梱バルーンの `(directory 名, フォルダ)`。借用を返すため先に組んでおく。
     balloons: Vec<(&'static str, PathBuf)>,
@@ -127,9 +136,13 @@ pub struct SampleRoot {
 impl SampleRoot {
     /// 検体名から検体を取得する（要件 1.1）。
     ///
+    /// `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
+    ///
     /// # Errors
     ///
     /// 未登録の名前なら [`SampleError::UnknownSample`]（既知の名前の一覧を含む・要件 1.4）。
+    /// 展開結果が登記と食い違えば [`SampleError::RegistryMismatch`]。`.nar` の取り回しの
+    /// 失敗は [`SampleError::Nar`]・[`SampleError::Io`]・[`SampleError::TargetDirNotFound`]。
     pub fn acquire(name: &str) -> Result<SampleRoot, SampleError> {
         let sample = SAMPLES
             .iter()
@@ -138,22 +151,63 @@ impl SampleRoot {
                 requested: name.to_owned(),
                 known: known_sample_names(),
             })?;
-        let folder = workspace_root()
-            .join(sample.checked_in_parent)
-            .join(sample.name);
+        SampleRoot::from_copy(sample, devroot::fresh_root(sample.name)?)
+    }
+
+    /// 配られた複製を**登記と照合**してから窓口の形に組む（要件 1.1・1.2・1.3）。
+    ///
+    /// 照合が要るのは、位置（`<根>/ghost/<名>/` など）を登記の行から組み立てるからである。
+    /// `.nar` の `install.txt` が別の `directory` や別の種別を名乗っていると、組んだ位置は
+    /// 実在しないパスになる。黙って配らずに [`SampleError::RegistryMismatch`] を返す。
+    ///
+    /// 兄弟テストは私有の名前空間と自前の `.nar` から取った複製をここへ渡して、4 通りの
+    /// 食い違い（フォルダ名・種別・同梱の欠け・同梱の余り）を通す。
+    fn from_copy(sample: &'static Sample, copy: WorkDir) -> Result<SampleRoot, SampleError> {
+        let declared = declared_elements(sample);
+        let installed = installed_elements(copy.path())?;
+        if installed != declared {
+            return Err(SampleError::RegistryMismatch {
+                sample: sample.name,
+                expected: declared.join(", "),
+                installed,
+            });
+        }
+        let root = copy.path().to_path_buf();
+        let folder = root.join(sample.kind.store()).join(sample.name);
         let balloons = sample
             .balloons
             .iter()
-            .map(|balloon| (*balloon, folder.join(balloon)))
+            .map(|balloon| (*balloon, root.join("balloon").join(balloon)))
             .collect();
         Ok(SampleRoot {
             sample,
+            copy,
             folder,
             balloons,
         })
     }
 
-    /// 検体がインストール済み形で置かれたフォルダの絶対パス（要件 1.1）。
+    /// 検体を含む**ベースウェアの根**（`ghost/`・`balloon/` を直下に持つ）の絶対パス
+    /// （要件 1.2）。
+    ///
+    /// 返すのは借用なので、取得した値を捨ててパスだけ持ち出すことはできない。
+    ///
+    /// ```rust,compile_fail
+    /// use sample_ghost_kit::SampleRoot;
+    ///
+    /// fn main() -> Result<(), sample_ghost_kit::SampleError> {
+    ///     // 一時値の破棄と借用が衝突する（E0716）。
+    ///     let path = SampleRoot::acquire("emo2")?.root();
+    ///     println!("{}", path.display());
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn root(&self) -> &Path {
+        self.copy.path()
+    }
+
+    /// 検体がインストール済み形で置かれたフォルダの絶対パス
+    /// （`<根>/ghost/<名>/` またはバルーンの検体なら `<根>/balloon/<名>/`・要件 1.1）。
     ///
     /// 返すのは借用なので、取得した値を捨ててパスだけ持ち出すことはできない。
     ///
@@ -170,7 +224,7 @@ impl SampleRoot {
     ///
     /// 値を束縛すれば通る（上の例が別の理由で落ちているのではないことの対）。
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sample_ghost_kit::SampleRoot;
     ///
     /// fn main() -> Result<(), sample_ghost_kit::SampleError> {
@@ -184,10 +238,10 @@ impl SampleRoot {
         &self.folder
     }
 
-    /// 同時にインストールされるバルーンのフォルダの絶対パス（要件 1.3）。
+    /// 同時にインストールされるバルーンのフォルダ `<根>/balloon/<directory>/` の絶対パス
+    /// （要件 1.3）。
     ///
-    /// `folder()` に名前を継ぎ足して自分でパスを作る代わりにこれを呼ぶ。段 ③ で
-    /// バルーンの置き場が `<根>/balloon/<名>` に変わっても呼び手は書き換えずに済む。
+    /// `folder()` に名前を継ぎ足して自分でパスを作る代わりにこれを呼ぶ。
     ///
     /// # Errors
     ///
@@ -207,7 +261,7 @@ impl SampleRoot {
     /// }
     /// ```
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use sample_ghost_kit::SampleRoot;
     ///
     /// fn main() -> Result<(), sample_ghost_kit::SampleError> {
@@ -228,6 +282,53 @@ impl SampleRoot {
                 known: self.sample.balloons,
             })
     }
+}
+
+/// 登記の 1 行が主張する**展開結果の要素**を `<格納先>/<名前>` の形で名前順に並べる。
+///
+/// 本体が 1 つと同梱バルーンが 0 個以上。照合の期待値であり、位置を組み立てる式でもある。
+fn declared_elements(sample: &Sample) -> Vec<String> {
+    let mut declared = vec![format!("{}/{}", sample.kind.store(), sample.name)];
+    declared.extend(
+        sample
+            .balloons
+            .iter()
+            .map(|balloon| format!("balloon/{balloon}")),
+    );
+    declared.sort();
+    declared
+}
+
+/// 展開された根の直下に**実際に**在る要素を `<格納先>/<名前>` の形で名前順に並べる。
+///
+/// 片方の格納先しか作らない検体（同梱バルーンの無いゴースト・単体のバルーン）があるので、
+/// 棚が無いのは「その格納先の要素が 0 件」と読む。
+fn installed_elements(root: &Path) -> Result<Vec<String>, SampleError> {
+    let mut installed = Vec::new();
+    for store in ["ghost", "balloon"] {
+        let shelf = root.join(store);
+        let entries = match std::fs::read_dir(&shelf) {
+            Ok(entries) => entries,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(source) => {
+                return Err(SampleError::Io {
+                    what: "展開結果の走査",
+                    path: shelf,
+                    source,
+                });
+            }
+        };
+        for entry in entries {
+            let entry = entry.map_err(|source| SampleError::Io {
+                what: "展開結果の走査",
+                path: shelf.clone(),
+                source,
+            })?;
+            installed.push(format!("{store}/{}", entry.file_name().to_string_lossy()));
+        }
+    }
+    installed.sort();
+    Ok(installed)
 }
 
 /// 登記されている検体名の一覧（失敗の理由に載せる・要件 1.4）。
@@ -259,6 +360,16 @@ pub enum SampleError {
         /// その検体が同時にインストールするバルーンの全て（無ければ空）。
         known: &'static [&'static str],
     },
+    /// 展開結果の要素が登記（種別・フォルダ名・同梱バルーン）と食い違う。
+    #[error("sample {sample:?} installed {installed:?} but the registry declares {expected}")]
+    RegistryMismatch {
+        /// 検体名。
+        sample: &'static str,
+        /// 登記が主張する要素（`<格納先>/<名前>` を名前順に並べたもの）。
+        expected: String,
+        /// 実際に置かれた要素。
+        installed: Vec<String>,
+    },
     /// ビルド成果物の置き場が決まらない（`CARGO_TARGET_DIR` も祖先の `target` も無い）。
     #[error("build output directory not found from {started_from:?}; set CARGO_TARGET_DIR")]
     TargetDirNotFound {
@@ -282,7 +393,7 @@ pub enum SampleError {
 }
 
 mod devroot;
-pub use devroot::{WorkDir, cached_root, fresh_root};
+pub use devroot::WorkDir;
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};

@@ -289,18 +289,18 @@ fn split_stamp(entry: &str) -> Option<(&str, &str)> {
 /// 原本は**誰にも配らない**。配るのは [`fresh_root`] がここから取る複製である。
 /// 掃除は取得の入口（[`fresh_root`]）が走らせるので、この関数は棚を片付けない。
 ///
-/// `pub` なのは、今日の呼び手がテストだけで `pub(crate)` にすると本体のビルドで
-/// 「使われていない」の警告が出るからである（[`WorkDir::lock_path`] と同じ事情）。
-/// 窓口 `SampleRoot::acquire` がこれを内側から呼ぶタスクで `pub(crate)` へ絞ること——
-/// 設計の窓口の一覧にこの関数は無く、公開したままでは「検体を得る唯一の入口は
-/// `SampleRoot`」（要件 1.1）が嘘になる。
+/// 窓口 `SampleRoot::acquire` は複製を配る [`fresh_root`] だけを通るので、**原本を直に
+/// 求める呼び手はテストだけ**である（多重プロセスの検査が、実物の `.nar` と
+/// [`nar_dir`] の綴りを本物の経路で通す唯一の場所）。公開したままでは「検体を得る唯一の
+/// 入口は `SampleRoot`」（要件 1.1）が嘘になるので、テスト専用と明示して閉じてある。
 ///
 /// # Errors
 ///
 /// `.nar` が読めない・原本を据え付けられないとき [`SampleError::Io`]、`.nar` が
 /// 受理されないとき [`SampleError::Nar`]。古い原本の回収に失敗しても**失敗にはしない**
 /// （標準エラーへ出して取得を続ける＝要件 7.3）。
-pub fn cached_root(name: &str) -> Result<PathBuf, SampleError> {
+#[cfg(test)]
+pub(crate) fn cached_root(name: &str) -> Result<PathBuf, SampleError> {
     cached_root_in(
         &namespace_dir()?,
         name,
@@ -498,14 +498,14 @@ fn sweep(namespace: &Path) {
 /// 取得のたびに ⑴ 棚を掃除し、⑵ 原本を用意し、⑶ 札を先に開いてから原本を複写する。
 /// 返った値を束縛している間だけ複製が生き、破棄で木と札の両方が消える。
 ///
-/// `pub` の事情は [`cached_root`] と同じ。窓口 `SampleRoot::acquire` がこれを内側から
-/// 呼ぶタスクで `pub(crate)` へ絞ること。
+/// 窓口 `SampleRoot::acquire` が内側から呼ぶ。crate の外へは出さない——検体を得る
+/// 唯一の入口は `SampleRoot` である（要件 1.1）。
 ///
 /// # Errors
 ///
 /// 原本を用意できないとき [`cached_root`] と同じ失敗、複写できないとき
 /// [`SampleError::Io`]。掃除の失敗は**失敗にしない**（人の読める形に出して続ける）。
-pub fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
+pub(crate) fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
     fresh_root_in(
         &namespace_dir()?,
         name,
@@ -514,7 +514,13 @@ pub fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
 }
 
 /// 名前空間と `.nar` を明示して複製を配る（テストが私有の名前空間を渡す）。
-fn fresh_root_in(namespace: &Path, name: &str, nar: &Path) -> Result<WorkDir, SampleError> {
+///
+/// 窓口の兄弟テストも、登記と食い違う展開結果を作るためにここから複製を取る。
+pub(crate) fn fresh_root_in(
+    namespace: &Path,
+    name: &str,
+    nar: &Path,
+) -> Result<WorkDir, SampleError> {
     sweep(namespace);
     let master = cached_root_in(namespace, name, nar)?;
     // 札はフォルダより先に開かれる（`WorkDir` の約束）。複写はその後なので、組み上がる

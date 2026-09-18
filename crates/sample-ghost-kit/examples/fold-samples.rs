@@ -4,20 +4,18 @@
 //! # 呼び方
 //!
 //! ```text
-//! cargo run -p sample-ghost-kit --example fold-samples
 //! cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/StayseeBalloon
-//! cargo run -p sample-ghost-kit --example fold-samples -- --check
+//! cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/StayseeBalloon --check
 //! ```
 //!
-//! - 引数無し: 登記表 [`SAMPLES`] の検体を全て畳む。**展開形がディスクに在る間だけ**使える。
-//! - `--from <展開形のフォルダ>`: そのフォルダ 1 本だけを畳む。登記表を見ないので、
-//!   まだ登記していない検体でも畳める（登記の 1 行は畳んだ**後**に足す）。`.nar` の名前は
+//! - `--from <展開形のフォルダ>`: そのフォルダ 1 本を畳む。登記表を見ないので、まだ
+//!   登記していない検体でも畳める（登記の 1 行は畳んだ**後**に足す）。`.nar` の名前は
 //!   フォルダ名から採る。
 //! - `--check`: `.nar` を書き直さず、既にある `.nar` の往復だけを確かめる。
 //!
-//! 検体を 1 本足すときは `--from` の形を使う。引数無しの形は、他の検体の展開形が
-//! 1 つでも消えていると最初の 1 本で落ちる（`git ls-files` が空を返す＝畳む対象が
-//! 無い）。タスク 5.6 が旧置き場を消した後は `--from` だけが通る。
+//! `--from` は必須である。段 ③ の登記表は展開形の在処を持たない（保管は
+//! `vendors/sample_ghost/<名>.nar` に統一され、展開形はタスク 5.6 で消える）ので、畳む元の
+//! フォルダは呼び手が指すしかない。
 //!
 //! # なぜ使い捨てか
 //!
@@ -42,7 +40,7 @@
 //! だけで、登記表の綴りは使わない（`--from` でも同じ突き合わせが働く）。
 
 use areka_nar::{InstallKind, InstallManifest, InstallRequest, NarArchive};
-use sample_ghost_kit::{SAMPLES, fold_tree};
+use sample_ghost_kit::fold_tree;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
@@ -70,10 +68,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     // 畳む対象。`--from` は登記表を見ない＝まだ登記していない検体でも畳める。
     let sources: Vec<PathBuf> = match &from {
         Some(spelled) => vec![resolve(&root, spelled)?],
-        None => SAMPLES
-            .iter()
-            .map(|sample| root.join(sample.checked_in_parent).join(sample.name))
-            .collect(),
+        None => {
+            return Err(
+                "--from <展開形のフォルダ> を書くこと（登記表は展開形の在処を持たない）".into(),
+            );
+        }
     };
 
     let mut mismatches = 0usize;
