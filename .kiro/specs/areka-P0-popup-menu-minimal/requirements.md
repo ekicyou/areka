@@ -71,6 +71,7 @@
 7. If メニューの表示そのものに失敗した（OS の API がエラーを返した）, then the areka shall 失敗を `error!` で記録して何も表示せず、ゴーストの動作を続ける。
 8. While ゴーストの起動が完了する前（入力の結線が済む前）, the areka shall 右クリックでメニューを出さず、`trace!` で記録して何もしない（既存の自己抑止と同じ扱い）。
 9. While キャラクター窓を左ボタンでドラッグしている, the areka shall 右ボタンの操作でメニューを出さない（ドラッグを終えてからの右クリックで出る）。
+10. When 右ボタンのダブルクリックが検出された, the areka shall 右クリックがメニューの引き金として有効なとき（`popupmenu.visible` が `0` でない）は `OnMouseDoubleClick`（Ref5＝1）を SHIORI へ送らず、`popupmenu.visible` が `0` でメニューを出さないときだけ既存どおり送る（正典 [OnMouseDoubleClick](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDoubleClick:1) の Ref5＝1 はメニューを抑止したゴーストのためのもの）。1 度目の解放と 2 度目の押下が同じ処理単位に入ると「メニューが出る」と「ダブルクリックが届く」が同時に起きうるため、どちらか一方に定める（裁定候補 ⑸・要件 11.3）。
 
 ### Requirement 2: メニューの構成と並び
 
@@ -108,9 +109,9 @@
 3. If リソースの問い合わせが「値なし（204）」または空文字列を返した, then the areka shall 既定名を使い、そのことを `debug!` で記録する。
 4. If リソースの問い合わせが失敗した（SHIORI が応答できない・応答が壊れている）, then the areka shall 既定名を使い、失敗を `warn!` で 1 回記録し、メニューは出す。
 5. When 文言に `&` が含まれている, the areka shall それを OS のアクセラレータ記法としてそのまま渡す（`(&U)` が下線付きの U として出る）。エスケープや除去は行わない。
-6. When メニューを出す操作が行われた窓のスコープが n である, the areka shall `popupmenu.visible` の問い合わせ先を n＝0 なら `sakura.popupmenu.visible`・n＝1 なら `kero.popupmenu.visible`・n≧2 なら `char{n}.popupmenu.visible` とする（正典 [sakura.popupmenu.visible](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#sakura.popupmenu.visible:1)・[kero.popupmenu.visible](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#kero.popupmenu.visible:1)・[char*.popupmenu.visible](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#char_2a.popupmenu.visible:1)）。
+6. When メニューを出す操作が行われた窓のスコープが n である, the areka shall `popupmenu.visible` の問い合わせ先を n＝0 なら `sakura.popupmenu.visible`・n＝1 なら `kero.popupmenu.visible` とする（正典 [sakura.popupmenu.visible](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#sakura.popupmenu.visible:1)・[kero.popupmenu.visible](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#kero.popupmenu.visible:1)）。α のキャラクター窓はスコープ 0 と 1 だけ（Boundary Context・`char_scope` の前提）なので、[char*.popupmenu.visible](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#char_2a.popupmenu.visible:1)（n≧2）は語彙として持つだけで問い合わせ先を作らない（多キャラクターの窓が生まれる spec が引き受ける）。
 7. If `popupmenu.visible` の問い合わせが `0` を返した, then the areka shall メニューを出さず、そのことを `info!` で 1 回記録する。値なし・空・失敗・`0` 以外の値はいずれも「表示する」と扱う。
-8. The areka shall `popupmenu.type`（同じスコープ接頭辞・正典 [sakura.popupmenu.type](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#sakura.popupmenu.type:1)）の値によってメニューの中身を変えない。値 `1`（省略メニュー）の中身を正典が定めていないため、α では本体側メニューと同じものを出し、警告も記録も出さない。
+8. The areka shall `popupmenu.type`（同じスコープ接頭辞・正典 [sakura.popupmenu.type](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#sakura.popupmenu.type:1)）を**問い合わせない**。値 `1`（省略メニュー）の中身を正典が定めていないため、α ではどの値でも本体側メニューと同じものを出す（値で中身を変えないなら問い合わせる意味が無く、往復を増やさない）。警告も記録も出さない。
 9. The areka shall 登記された項目が自分の文言に使うリソース名を登記時に指定できるようにし、指定が無い項目は登記された既定名をそのまま使う（サブメニューの子項目＝列挙されたゴースト名などは通常リソースを持たない）。
 10. While ゴーストの起動が完了して SHIORI と会話できる状態になる前, the areka shall 問い合わせを行わず既定名でメニューを出す（起動待ちでメニューを止めない）。
 
@@ -186,13 +187,13 @@
 
 1. The areka shall 「登記 → 枠と並び → 識別子」の構造を純粋関数として持ち、次を決定論テストで確かめる: 7 枠の並び順・未登記の枠が出ないこと・サブメニューの子項目の順とチェック位置・無効の写し・識別子の一意性と逆引き。
 2. The areka shall 偽の SHIORI（台本どおりに `GET` へ答える既存の仕組み）で、`*button.caption` が値を返す／空を返す／204 を返す／失敗する の 4 通りで項目名が要件 3.2〜3.4 のとおりになることを確かめる。
-3. The areka shall `popupmenu.visible` が `0`／`1`／値なし のときの表示可否（要件 3.7）を確かめる。
+3. The areka shall `popupmenu.visible` が `0`／`1`／値なし のときの表示可否（要件 3.7）と、`0` のときだけ右ダブルクリックが `OnMouseDoubleClick`（Ref5＝1）として届くこと（要件 1.10）を確かめる。
 4. The areka shall 説明書のファイルの決め方（`readme` キーあり／なし・ファイルあり／なし）と、その結果としての有効／無効（要件 4.1・4.3）を確かめる。
 5. The areka shall `\![open,readme]` が「説明書」と同じ関数へ届くこと、引数付きが警告して何もしないこと（要件 4.5・4.6）を確かめる。
 6. The areka shall 「終了」の選択が `CloseRequest{User}` を 1 件送ること、および `OnClose` の Ref1・Ref2 がスコープ番号になること（要件 5.1〜5.3）を、既存の終了テスト（`input_events_tests.rs`）と同じ観測方法（送られた指示を受信側で数える）で確かめる。
 7. The areka shall 上のテストが判断分岐を壊すと赤になることを、少なくとも 1 つの分岐で摂動して示す（記憶 cage-must-walk-the-reachable-path・checks-must-judge-not-just-print）。
 8. The areka shall 新設・改変したファイルを 1 ファイル 1,000 行以内に収める（`input_events/mod.rs` は現 475 行・番人は `crates/log-capture-kit/tests/file_length_guard_test.rs`）。
-9. The areka shall OS の API に触れる部分（表示・位置・閉じ方・既定アプリで開く・IME 窓の罠）を、現行の argv 起動（emo2 の実 pasta と `R_POST_and_KOMAINU` の里々）による実機確認で 1 度確かめ、確認項目と結果を tasks の完了記録に残す: ⑴ 右クリックで出る ⑵ 「説明書」で readme.txt が既定アプリで開く ⑶ 「終了」で終了挨拶が再生されて閉じる ⑷ 里々の `updatebutton.caption` 等の文言（`(&U)` の下線）が写る（`R_POST_and_KOMAINU` の `dic06_String.txt`）⑸ 表示中に落ちない・閉じた後に会話が続く ⑹ 閉じた後に見えない窓（IME 窓）がキャラクター窓の上に残らない。
+9. The areka shall OS の API に触れる部分（表示・位置・閉じ方・既定アプリで開く・IME 窓の罠）を、現行の argv 起動（emo2 の実 pasta と `R_POST_and_KOMAINU` の里々）による実機確認で 1 度確かめ、確認項目と結果を tasks の完了記録に残す: ⑴ 右クリックで出る ⑵ 「説明書」で readme.txt が既定アプリで開く ⑶ 「終了」で終了挨拶が再生されて閉じる ⑷ 里々の `readmebutton.caption` の文言（`(&R)` の下線）が写る（`R_POST_and_KOMAINU` の `dic06_String.txt` は「現在のシェルについて(&R)」「取扱説明書(&R)」「Read me(&R)」の 3 候補から毎回選ぶので、開き直すたびに変わりうる＝要件 3.2 の「毎回問い合わせる」の実機観察でもある。同ファイルの `updatebutton.caption` は枠 ④ が α で未登記のため観察できない）⑸ 表示中に落ちない・閉じた後に会話が続く ⑹ 閉じた後に見えない窓（IME 窓）がキャラクター窓の上に残らない。
 
 ### Requirement 10: 網羅台帳への登記
 
@@ -206,7 +207,9 @@
    - `doc/ukadoc-coverage/ledger/assets.toml`（1）: `descript_ghost` の `readme,ファイル名`
    - 担当に**しない**もの（理由付き）: `quitbutton.caption`（「全て終了」は α に無い）・`OnMouseClick`（裁定候補 ⑶・送らない）・`readme.charset`（中身を読まない）・`menu,hidden`／`char*.menu`（シェルの列挙側＝`areka-P0-ghost-shell-balloon-switch` か `areka-P0-baseware-root-layout` が登記時に除外する）・`OnClose`（既に実装済み・Ref1/2 を足しても状態は変わらない）・束「メニュー」の残り（オーナードロー・着せ替え・その他の `*button.caption`＝α 後）。
 2. When 担当欄を登記する, the 本仕様 shall 同じコミットで `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` に本仕様の行（`owner_count`＝台帳の数え直し）を足し、`[briefs].count` と本文の手書きの数を実数えで直し、`report`・`report-summary` を走らせて報告を作り直し、`cargo test -p ukadoc-survey` が緑であることを確かめる（担当欄の非空の宛先は `[[spec]]` の名前でなければ赤になる＝腕 f）。
-3. When 実装が着地した, the 本仕様 shall 15 項目の状態を実測に合わせる: 7 つの `*button.caption` と 3 つの `popupmenu.visible` と `readme,ファイル名` と `\![open,readme]`（引数なし）は実装済み、3 つの `popupmenu.type` は縮退（差を付けない・理由を備考に書く）、`\![open,readme]` の引数付きは縮退として備考に書く。
+3. When 実装が着地した, the 本仕様 shall 15 項目の状態を実測に合わせる（実装済みは「areka が正典どおりに動く」項目だけ・`README.md` §1）:
+   - 実装済み（6）: `readmebutton.caption`・`closebutton.caption`・`sakura.popupmenu.visible`・`kero.popupmenu.visible`・`readme,ファイル名`・`\![open,readme]`（引数なし。引数付きは縮退として備考に書く）。
+   - 語彙のみのまま担当だけ登記（9・備考に理由と引受先を書く）: `ghostrootbutton.caption`・`shellrootbutton.caption`・`balloonrootbutton.caption`・`updatebutton.caption`・`ghostinstallbutton.caption`（引く仕組みは本仕様が置くが、枠 ①〜⑤が未登記の間は誰も引かない。枠を登記する spec が着地した日に実装済みへ改める）・`char*.popupmenu.visible`（α に n≧2 の窓が無い・要件 3.6）・`sakura.popupmenu.type`・`kero.popupmenu.type`・`char*.popupmenu.type`（問い合わせない裁定・要件 3.8）。
 4. The 本仕様 shall 15 項目の定義箇所に正典 URL のコメントを 1 行ずつ置く（既存の慣行・`doc/ukadoc-coverage/README.md`）。
 5. If 並走する A0 の spec が先に `roadmap-draft.md` を書き換えて数が食い違った, then the 本仕様 shall 引き算で合わせず、台帳を引いて数え直した値を書く。
 
@@ -218,6 +221,6 @@
 
 1. The 本仕様 shall 裁定候補 ⑶「右クリックで `OnMouseClick`（Ref5＝1）も SHIORI へ送るか」を**送らない**（現状維持）で進める。送ると里々の標準テンプレートが「右クリック」の台詞を返し、メニューと同時に喋る（brief）。
 2. The 本仕様 shall 裁定候補 ⑷「トレイアイコンを α に含めるか」を**含めない**で進める（`windowposition.limit` で画面内へ戻る構造が既にある）。
-3. The 本仕様 shall 裁定候補 ⑸「右ダブルクリックの `OnMouseDoubleClick`（Ref5＝1）」を、**既存の経路を残したまま**進める。右ボタンを離した時点でメニューが出て以後の入力はメニューが受けるため、この経路は右クリックメニューがある限り到達しない（Windows のダブルクリックは 2 度目の押下で確定するが、その前の 1 度目の解放でメニューが出る）。削除するかは完了済み `areka-P0-input-events` の振る舞いの変更なので開発者へ。
+3. The 本仕様 shall 裁定候補 ⑸「右ダブルクリックの `OnMouseDoubleClick`（Ref5＝1）」を、**既存の経路を残し、メニューが有効なときは送らず、`popupmenu.visible`＝0 でメニューを抑止したときだけ送る**（要件 1.10）で進める。右ボタンを離した時点でメニューが出れば以後の入力はメニューが受けるので通常は到達しないが、1 度目の解放と 2 度目の押下が同じ処理単位に入る速いダブルクリックでは両方が起きうる。到達不能に頼らず規則として定め、正典の Ref5＝1 が意味を持つ「メニューを抑止したゴースト」でだけ届ける。完了済み `areka-P0-input-events` の右ダブルクリック送出に条件を 1 つ足す改変になる。
 4. The 本仕様 shall 裁定候補 ⑹「説明書のファイルが無いとき」を**項目を灰色で出す**（要件 4.3）で進める。出さない案（枠を消す）は「説明書」の場所が変わるので採らない。
-5. Where 開発者が上の既定を覆した, the 本仕様 shall 該当する要件（1.5・4.3・11.3）と設計を同時に改訂する（記憶 revise-design-not-just-requirements）。
+5. Where 開発者が上の既定を覆した, the 本仕様 shall 該当する要件（1.5・1.10・4.3・11.3）と設計を同時に改訂する（記憶 revise-design-not-just-requirements）。
