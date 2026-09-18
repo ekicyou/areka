@@ -35,6 +35,9 @@ pub struct MountModel {
     pub shell: ShellMount,
     /// shell descript の bindgroup default 転記（bindopt 1.1/1.2・既存 3 フィールドと非衝突）。
     pub bindgroups: BindGroupDefaults,
+    /// descript `readme,<ファイル名>`。未指定なら None（推測禁止・Req 4.1）。
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#readme_2c_30d5_30a1_30a4_30eb_540d:1
+    pub readme: Option<String>,
 }
 
 /// shell descript.txt の bindgroup default（`default,1`＝起動時オン）の転記保持。

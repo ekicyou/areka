@@ -144,9 +144,8 @@ pub struct GhostBootOptions {
 ///
 /// [`GhostRuntime::kanade`]／[`GhostRuntime::dispatcher`]（テスト駆動・Tick 注入点）に
 /// 加え、終了統括の [`GhostRuntime::shutdown`] と分解結線用の [`GhostRuntime::into_parts`]
-/// を提供する（task 3.2・design.md「ghost::runtime」）。`mount` はログ／後続用の保持物
-/// （design.md「保持物」節）で、現時点では読み出さないため `#[allow(dead_code)]` を
-/// フィールド単位で残す。
+/// を提供する（task 3.2・design.md「ghost::runtime」）。`mount` は [`GhostRuntime::mount`]
+/// 経由で読める保持物（design.md「保持物」節・popup-menu-minimal task 1.3）。
 pub struct GhostRuntime {
     kanade_tx: Sender<KanadeMsg>,
     dispatcher_tx: Sender<DispatcherMsg>,
@@ -163,7 +162,6 @@ pub struct GhostRuntime {
     sylphya_reader: SylphyaReader,
     /// sylphya アクターの join ハンドル。shutdown の最終段で join して panic を観測する。
     sylphya_handle: ActorHandle,
-    #[allow(dead_code)]
     mount: MountModel,
 }
 
@@ -232,6 +230,13 @@ impl GhostRuntime {
     /// この clone を捕捉して `PersistWiring`（位置永続の write-through 端）を組む。
     pub fn sylphya_publisher(&self) -> &SylphyaPublisher {
         &self.sylphya_publisher
+    }
+
+    /// 解決済みマウントモデルへの参照（`readme` キー転記の読み出し口・
+    /// popup-menu-minimal task 1.3・要件 4.1/9.4/10.4）。`kanade()`／
+    /// `sylphya_publisher()` と同型の additive アクセサ。
+    pub fn mount(&self) -> &MountModel {
+        &self.mount
     }
 
     /// 終了統括（design.md「終了（shutdown）シーケンス」・要件 6.1/6.4/6.5）。

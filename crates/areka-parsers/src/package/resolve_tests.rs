@@ -439,3 +439,39 @@ fn descript_charset_key_does_not_feed_shiori_encoding() {
     assert_eq!(model.shiori.encoding, None);
     assert_eq!(model.shiori.force_encoding, None);
 }
+
+// ---------------------------------------------------------------------------
+// readme キーの転記（popup-menu-minimal task 1.3・要件 4.1/9.4/10.4）
+//
+// `readme,<ファイル名>` は他の転記キーと同じ 1 行の転記のみ（存在確認も既定値の
+// 補いもしない・resolve 層の原則）。
+// ---------------------------------------------------------------------------
+
+/// `readme,ファイル名` が在るときはそのまま転記する（推測しない・4.1/9.4）。
+#[test]
+fn readme_key_present_is_transcribed() {
+    let (_temp, model) = resolve_with_descript(
+        "readme_key_present",
+        "charset,UTF-8\n\
+         name,テスト\n\
+         shiori,pasta.dll\n\
+         readme,manual.txt\n\
+         seriko.defaultsurfacedirectoryname,master\n",
+    );
+
+    assert_eq!(model.readme.as_deref(), Some("manual.txt"));
+}
+
+/// `readme` キーが無いときは `None`（存在確認も既定値の補いもしない・4.1/9.4）。
+#[test]
+fn readme_key_absent_is_none() {
+    let (_temp, model) = resolve_with_descript(
+        "readme_key_absent",
+        "charset,UTF-8\n\
+         name,テスト\n\
+         shiori,pasta.dll\n\
+         seriko.defaultsurfacedirectoryname,master\n",
+    );
+
+    assert_eq!(model.readme, None);
+}

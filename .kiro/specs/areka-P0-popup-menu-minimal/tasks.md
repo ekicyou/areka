@@ -19,7 +19,7 @@
   - _Requirements: 3.2, 3.4_
   - _Boundary: areka-actor reply_
 
-- [ ] 1.3 (P) ゴースト定義の説明書キーを転記して UI から読めるようにする
+- [x] 1.3 (P) ゴースト定義の説明書キーを転記して UI から読めるようにする
   - ゴースト定義の書き写し模型に説明書ファイル名の欄を足し（正典 URL のコメント 1 行付き）、解決層はキーの値をそのまま写すだけにする（存在確認も既定値の補いもしない）
   - 実行時のゴーストから書き写し模型を読む公開アクセサを足す
   - 完了状態: 解決層の兄弟テストで「キーあり→値・キーなし→無し」が緑になり、UI 側から説明書キーを読める
@@ -202,3 +202,4 @@
 
 - 1.1: 新しい worktree では `vendors/pasta` が未取得で cargo が `pasta_core` を読めない。`git submodule update --init --recursive` を先に走らせる。`cargo` が「invalid metadata」（os error 1455＝ページングファイル不足）で落ちたら `-j 4` で再実行する。
 - 1.1: `released` を消すのは `dispatch_pointer_events` の末尾だけ（`clear_transient_pointer_state` は触らない）。dispatch は Input スケジュールへ無条件登録なので翌フレームへ残る経路は無い。下流からは `wintf::ecs::pointer::ButtonReleased` で届く（`ecs/mod.rs` の明示再輸出には無い）。
+- 1.3: 正典 URL のコメント（`/// ukadoc:`）は定義箇所 1 か所だけに置く（`doc/ukadoc-coverage/README.md` §3）。転記・呼び出し側（`resolve.rs` など）に同じ URL を書くと `cargo run -p ukadoc-survey -- evidence` が同じ id に 2 ファイルを挙げる＝レビューで差し戻し。`MountModel` は全欄リテラル／全欄分解のテストが 2 か所ある（`model_tests.rs`・`validation_tests.rs`）。

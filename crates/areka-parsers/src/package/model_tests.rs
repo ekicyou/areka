@@ -35,6 +35,7 @@ fn construct_mount_model_and_access_fields() {
             dir: PathBuf::from("shell/master"),
         },
         bindgroups: BindGroupDefaults::default(),
+        readme: None,
     };
 
     // フィールドアクセス（正本の I/O 契約）。
@@ -177,6 +178,7 @@ fn mount_model_derives_clone_and_eq() {
             dir: PathBuf::from("shell/master"),
         },
         bindgroups: BindGroupDefaults::default(),
+        readme: None,
     };
     let cloned = model.clone();
     assert_eq!(model, cloned);

@@ -113,6 +113,7 @@ pub fn resolve(
         shiori,
         shell,
         bindgroups,
+        readme: map.get("readme").cloned(),
     })
 }
 
