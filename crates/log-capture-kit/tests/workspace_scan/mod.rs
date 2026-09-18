@@ -354,3 +354,93 @@ pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
     }
     hits
 }
+
+// ---------------------------------------------------------------------------
+// `Cargo.toml` の行分解と本番依存表の抽出（要件 10.3）
+// ---------------------------------------------------------------------------
+//
+// `with_default_guard_test.rs` が私有で持っていた部品を、クレート名を引数に取る形へ移した
+// もの。共有 crate の見張り（要件 1.3・11.5）と検体 crate の見張り（要件 1.7）が同じ部品を
+// 呼ぶ。判定と例外表は消費側の見張りが持つ。
+
+/// `Cargo.toml` の 1 行（コメント除去済み・所属セクションつき）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManifestLine {
+    /// 1 始まりの行番号。
+    pub line: usize,
+    /// 直近のセクション見出し（角括弧を外した中身）。
+    pub section: String,
+    /// コメントを除き前後の空白を落とした行。
+    pub text: String,
+    /// この行自身がセクション見出しか。
+    pub is_header: bool,
+}
+
+/// TOML の行末コメントを落とす。引用符の内側の `#` はコメントではない。
+fn strip_toml_comment(line: &str) -> &str {
+    let mut in_string = false;
+    for (at, ch) in line.char_indices() {
+        match ch {
+            '"' | '\'' => in_string = !in_string,
+            '#' if !in_string => return &line[..at],
+            _ => {}
+        }
+    }
+    line
+}
+
+/// `Cargo.toml` を「コメントを除いた非空行 ＋ 所属セクション」へ分解する（純関数）。
+pub fn manifest_lines(src: &str) -> Vec<ManifestLine> {
+    let mut out = Vec::new();
+    let mut section = String::new();
+    for (index, raw) in src.lines().enumerate() {
+        let text = strip_toml_comment(raw).trim().to_string();
+        if text.is_empty() {
+            continue;
+        }
+        let is_header = text.starts_with('[') && text.ends_with(']');
+        if is_header {
+            section = text
+                .trim_matches(|c| c == '[' || c == ']')
+                .trim()
+                .to_string();
+        }
+        out.push(ManifestLine {
+            line: index + 1,
+            section: section.clone(),
+            text,
+            is_header,
+        });
+    }
+    out
+}
+
+/// 製品側の依存表か（`dev-dependencies` 系は含まない）。
+pub fn is_production_dependency_section(section: &str) -> bool {
+    section.contains("dependencies") && !section.contains("dev-dependencies")
+}
+
+/// `package` の crate を名指ししているか（`-` 表記と `_` 表記の両方）。
+pub fn mentions_crate(text: &str, package: &str) -> bool {
+    text.contains(package) || text.contains(&package.replace('-', "_"))
+}
+
+/// 製品側依存に `package` の crate が現れている行を返す（純関数・要件 1.3／11.5／10.3）。
+///
+/// `[dependencies]` の中の 1 行という形と、`[dependencies.<package>]` という
+/// 下位表の形の両方を拾う。下位表は**見出し 1 件**として報告する（見出しが名前を持つ表では
+/// 中身の行も `path = "../<package>"` のように名前を含みがちで、1 つの依存が
+/// 複数件に膨らむ）。
+pub fn production_dependencies_on(src: &str, package: &str) -> Vec<ManifestLine> {
+    manifest_lines(src)
+        .into_iter()
+        .filter(|l| is_production_dependency_section(&l.section))
+        .filter(|l| {
+            if l.is_header {
+                mentions_crate(&l.section, package)
+            } else {
+                !mentions_crate(&l.section, package) && mentions_crate(&l.text, package)
+            }
+        })
+        .collect()
+}
