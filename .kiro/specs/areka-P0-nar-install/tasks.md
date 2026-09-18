@@ -72,7 +72,7 @@
   - _Boundary: areka-nar Cargo.toml, sample-ghost-kit Cargo.toml_
   - _Depends: 1.1_
 
-- [ ] 2.2 閉じた拒否語彙と失敗の形を定める
+- [x] 2.2 閉じた拒否語彙と失敗の形を定める
   - 拒否の理由を 13 の変種で閉じ、製品側がそのまま失敗の理由に写せる短い語と、その全数の一覧を公開する
   - 入出力の失敗は「どの段階で・どこまで確定したか・巻き戻せたか」を持つ形にし、マニフェストの警告 5 種も同じ場所に置く
   - 完了状態: 全数の一覧の長さが 13 で、各変種の短い語が重複しないことをテストが判定する
@@ -314,3 +314,7 @@
 - 2.1: 数えの正典形＝`cargo tree -e normal --target <的> --workspace --exclude sample-ghost-kit --exclude log-capture-kit --exclude temp-path-kit [--exclude areka-nar] --prefix none --format "{p}" | sed 's/ (\*)$//' | grep . | sort -u`。`grep .` が要る（`cargo tree` は根ごとに空行を挟み、`sort -u | wc -l` がそれを 1 件と数える）。記録するのは**増分と差分集合**であって総数ではない（総数は他所の依存が増えた瞬間に古びる）。
 - 2.1: `cargo deny` の重複警告は 8 件（既存 7＋`miniz_oxide`）。`deny.toml` に `[graph] targets` が無く的を跨いだ lockfile 全体を見るため。出荷バイナリに `miniz_oxide` が 2 版同居することは無い。
 - 2.1: `Cargo.toml` の編集を許す `_Boundary:_` は 2.1 だけ（30 行中 1 件）。よって設計の許可依存 5 本をここで全部登記した。**5.5 は `[[bin]]` 節を書けないが、cargo が `src/bin/*.rs` を自動で見つけるので止まらない。**
+- 2.2: **4.1 / 4.3 への指示**＝`ElementKind`・`ExistingState`・`InstalledElement` を `plan.rs`／`install.rs` で再宣言しないこと。`use crate::error::{...}` で既存の定義を使う（同名の別型を作ると `NarError::Io.committed` に入らない）。設計は `#### plan`／`#### install` に置いているが、設計自身の `Io.committed: Vec<InstalledElement>` が `error` をそれらへ依存させるので非循環の置き場が無く、`error.rs` に置くのが現時点で唯一の形。`install.rs` へ移すのは任意（移すなら `lib.rs` の `pub use` も同じコミットで）。
+- 2.2: **4.4 への指示**＝`NarError::Io` の Display は設計の逐語で `committed`／`rolled_back` を落とすので、唯一の `error!` 呼び出しに `committed = committed.len()` と `rolled_back` を構造化フィールドとして足すこと（要件 6.4 が見えるよう求めている値）。また `NarError` は意図的に `PartialEq` でないので、13 変種のテストは `NarError::Refused { reason, .. }` を分解して `reason.kind()` を集めること。
+- 2.2: `thiserror` は `Path`／`PathBuf` の欄を自動で `.display()` 経由にする（`PathBuf: !Display` は真だが結論に届かない）。`Vec<String>` には及ばないので `{:?}` が要る。
+- 2.2: メッセージの照合に `contains` を使うと Debug 引用符（`{x:?}` への後退）を**素通しする**。実測で、両方を `{:?}` に戻しても旧 `contains` 形は 19/19 緑のままだった。字面を固定するなら `assert_eq!` にすること。
