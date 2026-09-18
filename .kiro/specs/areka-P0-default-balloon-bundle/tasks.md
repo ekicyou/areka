@@ -3,7 +3,7 @@
 > 期待値・件数・file:line は **2026-09-18 の実測**（`design.md`・`research.md` §8）。着手時に必ず引き直し、差は `verification/signoff-record.md` に記す。
 
 - [ ] 1. 基準値の採取・資産の保管・出典の記録
-- [ ] 1.1 着手前の基準値を採る
+- [x] 1.1 着手前の基準値を採る
   - i686 helper を既存手順で既定の出力先に揃えたうえで `cargo test --workspace` を単独で（他の cargo と並走させずに）走らせ、`Running` 行の本数と test result の合計本数を控える
   - 着手前の HEAD を基準コミットとして控え、非回帰の差分がこの基準から採れることを確かめる
   - 台帳の対象項目の現在値（状態・宛先・優先度）と、ロードマップ草案の件数、ブリーフィングの当該ページの分布 2 数値を控える
@@ -144,3 +144,11 @@
   - 完了状態: 上の差分検査がすべて 0 で、ワークスペース全体が緑。結果が記録に本数付きで残っている
   - _Depends: 5.2_
   - _Requirements: 2.7, 3.1, 3.10, 5.3, 6.3, 6.6, 7.2, 8.1, 8.2, 8.3, 8.4, 8.5_
+
+## Implementation Notes
+
+- 1.2: この機械は `core.autocrlf=true`（system 設定）。素の `git clone` で上流を取り直すと `LICENSE`（上流 blob は LF のみ）が CRLF へ壊れ、保管先とハッシュが食い違う。採り直しは必ず `git -c core.autocrlf=false -c core.eol=lf clone` で行うこと。`descript.txt`／`install.txt`／`readme.txt` は blob 自体が CRLF なのでどちらでも同値。
+- 1.2: `research.md` §8.2 の「`LICENSE` は…（CRLF）」は実測と逆（実測は CR 0・LF 121）。`provenance.md` はこの誤記を引き写さないこと（実装者・レビュアーの双方が独立に実測）。
+- preflight: この worktree は `vendors/pasta` サブモジュールが未初期化だった。`cargo` は `[patch.crates-io]` の `pasta_core` を解決できず即座に落ちる。`git submodule update --init --recursive` が要る。
+- 1.1: `cargo test --workspace` は i686 の成果物を **2 つ**要求する。helper（`target/debug/shiori-host32-helper.exe`）だけでなく **testdll**（`cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc` → `target/i686-pc-windows-msvc/debug/shiori.dll`）も要る。testdll が無いと `shiori-host32-host::lifecycle_cyclic_e2e::cyclic_run_and_clean_shutdown` が赤になり、そこで走行が打ち切られて 81→60 ターゲット・7,668→5,411 本しか採れない（＝部分的な緑を全体と誤認する罠）。
+- 1.1: 基準値は `--no-fail-fast` 付きで採った。タスク 6 も旗をそろえること（全緑のときだけ素の `cargo test --workspace` と同本数になる）。基準: passed 7,668 / failed 0 / ignored 40・`Running` 81 ＋ `Doc-tests` 22 ＝ `test result:` 103 行。基準コミット `082379b3`。
