@@ -134,7 +134,7 @@
   - _Depends: 3.2_
   - _Boundary: areka menu win32_
 
-- [ ] 7.2 (P) 表示可否と待ちの判定を純粋関数にする
+- [x] 7.2 (P) 表示可否と待ちの判定を純粋関数にする
   - 「抑止なら預かりがあるときだけ右ダブルクリックを送る・表示なら預かりを捨てる」判定を純粋関数にする
   - 「返事が届いた／期限内で未着／期限超過／切断」の 4 通りを、時刻を引数で受ける純粋関数にする
   - 完了状態: 兄弟テストで判定の 4 組と待ちの 4 通りが緑（要件 9.3 の右ダブルクリック側）
@@ -217,3 +217,4 @@
 - 5.1: `send_query` は送出失敗を自分では記録せず `Err(SendFailed)` を返す。呼び手（7.3）がそれを `interpret` へ渡して初めて `warn!` 1 行になる＝7.3 は `Err` を捨てずに必ず `interpret` まで運ぶ。空・値なしの `debug!` も失敗の `warn!` も 1 回の表示につき 1 行（id は構造化欄に列挙）。表示可否の空・値なしは正常系なので記録しない。`captions.rs` の 3 表は `resources.rs` と二重に証拠解決する（設計どおり）。
 - 6.1: 7.3／8.1 が入るまで預かりを取り出す本番の呼び手が無く、右ダブルクリックは SHIORI へ届かない（途中状態として受容）。`take_pending_right_double_click`／`send_pending_right_double_click` の狭い `#[allow(dead_code)]` は 7.3 で外す。`MouseWiring` の doc「送出ヘルパ群はポインタハンドラ経由でのみ参照される」はメニューの「終了」が `send_close_request` を呼ぶ 8.1 で偽になるので、そのとき 1 行追随する。`char_scope` が `None`（`CharWindowMarker` 無し）の窓は左右とも旧来どおり何もしない。
 - 7.1: RAII は `windows::core::Owned<HMENU>`（`Free` が `DestroyMenu` を呼ぶ）。子は `AppendMenuW(MF_POPUP)` が成功した後にだけ `mem::forget` する。`build(&[PlanEntry])` は私有で、読み戻し（`GetMenuItemCount` ほか）のテストは窓もモーダルループも要らない。**未決の危険**: `TPM_RETURNCMD` の 0 を「未選択／失敗」に分けるのは `GetLastError` だが、表示中は tick が同じ UI スレッドで回るので、その間の Win32 の失敗が最終エラーを汚すと素の未選択が `Err` になり `error!` が出うる（利用者から見える結果は未選択と同じ・記録の重さだけが違う）。owner 消失も同じ形。9.3 で観察し、出るなら規則を見直す。`show` の doc「`Err` は何も表示されていない」もそのとき合わせる。
+- 7.2: `poll_step` は OS にも World にも触れないが、`try_recv` は返事を channel から**取り出す**（`Decided(Ok(..))` は 1 度きり・捨てると返事を失い、同じ tick に 2 回呼ぶと `Timeout` へ落ちる）。`InFlightGuard` は `Clone` しない。同じ旗への二重 `engage` は呼び手の誤り（解放ハンドラが旗で門番する）。`QueryFailure` は `PartialEq` を持たないのでテストは `match`。
