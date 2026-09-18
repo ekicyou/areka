@@ -2362,23 +2362,21 @@ areka には入力ボックスのバルーンが無く、その半透明化を�
 """
 
 [entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-default-balloon-bundle"
 priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーン側の透過の扱いを宣言で切り替えられない。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka-emo-atlas の normalize::UseSelfAlpha という同じ意味の切り替えは実在するが、値は呼ぶ側が決め打ちで渡しており、宣言からは来ない。
+壊れ方: 見た目の差（`0` と書いたバルーンでも 1 として扱う）。記録: なし。
+areka はこの欄を読まない。バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、宣言に何を書いても読まれず、記録も出ない。
+そのうえで焼き方は常に `use_self_alpha,1` 相当に固定されている。areka-emo-present の balloon::build_balloon_target_from_faces が areka-emo-atlas の normalize::UseSelfAlpha::On を決め打ちで渡しており、バルーンの絵をこの値で焼くのはこの 1 か所だけである（areka の emo2_boot::assets も同じ値を決め打ちするが、そちらが焼くのはシェルの絵であって、バルーンの 2 か所目ではない。2026-09-18 に実測して確かめた）。
+したがって `use_self_alpha,0` と書いたバルーンも 1 として扱われる。正典どおりに動かない代わりに動きはするので、状態は縮退である。半透明を前提に描かれたバルーンだけが正しく表示される、というのが利用者から見える差である。
 シェルの descript にある `seriko.use_self_alpha` は綴りの違う別の項目である。名前が似ているだけで一緒に扱わないこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。
-担当 spec は areka-P0-emo-atlas。同 spec の brief は、設計に着手するとき正典で必ず読む欄としてこの欄を名指しし、シェル側の同じ名前の欄とは別の定義だから両方読むこと、と書いている。
+裁量: この固定は黙って壊れているのではなく意図した扱いであり、doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」に 1 行で登記してある（開発者裁定 2026-09-18）。
+担当 spec は areka-P0-default-balloon-bundle。同 spec が §8 の行とこの記述を書いた。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_balloon:validrect.bottom_2c_5ea7_6a19_20_2a1:1"]

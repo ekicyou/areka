@@ -534,7 +534,161 @@ balloonk0.png: 原寸 335×135  (0,0) の α=0
 
 ## 7. 台帳の検査（要件 6.5）
 
-この節はタスク 3.2 が埋める（未記入）。`cargo test -p ukadoc-survey` の結果と、報告 2 本を作り直したことを書く。
+| 項目 | 値 |
+|---|---|
+| 本節の対象要件 | 6.2・6.3・6.4・6.5 |
+| 実施日 | 2026-09-18 |
+| 記入時の HEAD | `76c6ae20a3921907e1517d70ef1f073ef681d735` |
+
+本節の値はすべて本ブランチで採り直した実測である。命令はすべて作業木の根から打っている。
+
+### 7.1 着手前の値（自分で採り直した）
+
+台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 3 項目（採り方: `awk` で各 `[entry."..."]` の欄を切り出した）。
+
+| 項目 id | `status` | `owner` | `priority` |
+|---|---|---|---|
+| `ukadoc:descript_balloon:use_self_alpha_2c_5024:1`（本タスクが触る） | `absent` | `""`（空） | `A15` |
+| `ukadoc:descript_balloon:use_input_alpha_2c_6570_5024:1`（触らない） | `absent` | `""`（空） | `A15` |
+| `ukadoc:descript_balloon:paint_transparent_region_black_2c_6570_5024:1`（触らない） | `absent` | `""`（空） | `A15` |
+
+| 値 | 着手前 | 採り方 |
+|---|---|---|
+| `roadmap-draft.md` の `[briefs].count` | 27 | `grep -n -A3 '^\[briefs\]'` |
+| `roadmap-draft.md` の `[[spec]]` 行の実数 | 27 | `grep -c '^\[\[spec\]\]'` |
+| `briefing.md` `[[barrier]] page = "descript_balloon"` の `degraded` | 6 | `grep -n -A12 'page = "descript_balloon"'` |
+| 同 `absent` | 123 | 同上 |
+
+いずれも `baseline.md` §3 の値と一致した（書き写しではなく、同じ命令を打ち直して同じ数が出たということである）。
+
+着手前の番人は緑である。`cargo test -p ukadoc-survey` の 5 つのターゲットの内訳は **601／0／6／113／5 の計 725 本が成功・失敗 0 本**（`test result` 行をすべて読んだ。`Select-Object -First N` や `| tail` を cargo の上流に挟んでいない）。この緑があるので、この後の赤は本タスクの変更が原因だと言える。
+
+### 7.2 順序を守らないと赤になることの較正
+
+設計 C5 は「台帳 → `roadmap-draft.md` → `briefing.md` → 報告 → 検査」の順を指定している。その順序が本当に要るのかを、**先に赤を作って**確かめた。
+
+⑴ 台帳の 1 項目だけを `degraded`＋宛先 `areka-P0-default-balloon-bundle` に改め、`roadmap-draft.md` を**まだ更新していない**状態で `cargo test -p ukadoc-survey` を打った。結果は **113 本中 92 本成功・21 本失敗**（着手前は 113 本すべて成功だった）。失敗の中身は次の 2 種類である。
+
+- 腕 f（`consistency::spec_checks::the_spec_table_agrees_with_the_directories_the_ledgers_and_the_bundles`）:
+  `doc/ukadoc-coverage/ledger/assets.toml: ukadoc:descript_balloon:use_self_alpha_2c_5024:1 の宛先 areka-P0-default-balloon-bundle が doc/ukadoc-coverage/roadmap-draft.md の [[spec]] にも doc/ukadoc-coverage/briefing.md の [[owner_completed]] にも無い（要件 7.4 ⑶）`
+- 分布の突合（`consistency::briefing_checks::*` が呼ぶ `distribution_findings`）:
+  `doc/ukadoc-coverage/briefing.md: [[barrier]] descript_balloon の degraded は 6 と書いてあるが、数え直しは 7`／`同 absent は 123 と書いてあるが、数え直しは 122`
+
+残りの失敗は、報告 2 本が台帳より古くなったことを見る腕（`DomainReportStale`・`the_summary_report_is_as_fresh_as_the_ledgers`）と、それらを土台にする摂動の腕が連鎖したものである。
+
+⑵ つまり順序は本物の依存である。台帳を先に触ると、宛先の行・分布の 2 数値・報告 2 本がそろうまで番人は赤であり、この赤が消えるのは指定の順序を最後まで通したときだけだった。逆順（`roadmap-draft.md` を先に足す）は、腕 c が `owner_count = 1` に対して台帳の数え直し 0 を返すので同じく赤になる。
+
+### 7.3 着地後の値と判定
+
+| 対象 | 期待値（設計 C5） | 実測 | 判定 | 採り方 |
+|---|---|---|---|---|
+| 対象項目の `status` | `degraded` | `degraded` | 一致 | `awk` で欄を切り出し |
+| 対象項目の `owner` | `areka-P0-default-balloon-bundle` | 同左 | 一致 | 同上 |
+| 対象項目の `priority`・`values`・`links`・`introduced` | 不変（`A15`・`["装い"]`・`[]`・`""`） | 不変 | 一致 | `git diff` の当該行が 0 行 |
+| 隣の 2 項目 | 1 文字も変わらない | 差分 **0 行** | 一致 | `git diff -- .../assets.toml` の `+`／`-` 行のうち隣 2 項目の id を含む行を数えて **0**。台帳の差分の塊（`git diff -U0` の `@@`）は 5 つで、行番号はすべて 2365〜2381、対象項目の見出し（2364 行）と次の項目の見出し（2382 行）の**間に収まっている** |
+| `[[spec]]` 行の実数 | 28 | 28 | 一致 | `grep -c '^\[\[spec\]\]'` |
+| `[briefs].count` | 行数と同じ 28 | 28 | 一致 | `grep -n -A3 '^\[briefs\]'` |
+| `[[spec]]` 本仕様の行の `owner_count` | 台帳 4 本の数え直しの実数 | **1** | 一致 | `grep -c 'owner = "areka-P0-default-balloon-bundle"'` を台帳 4 本それぞれに打った。**assets 1・property 0・sakura-script 0・shiori 0** の合計 1。設計が「裁定どおりなら 1」と書いている数を写したのではなく、4 本を引いて 1 になることを確かめた（`grep -c` は 0 件のとき終了コード 1 を返すので、0 の 3 本は数字そのものを読んで確かめている） |
+| `snapshot_on` | 不変（`2026-09-13`） | 不変 | 一致 | `git diff` の当該行が 0 行 |
+| `[[barrier]] descript_balloon` の `degraded`／`absent` | 7／122 | 7／122 | 一致 | `grep -n -A12 'page = "descript_balloon"'` |
+| 同ページの他の 4 数値（`implemented` 24・`vocabulary_only` 9・`alias` 0・`not_applicable` 0） | 不変 | 不変 | 一致 | `briefing.md` の差分は **2 行のみ**（`git diff --numstat` が `2 2`） |
+
+`roadmap-draft.md` には、束表「絵の重ね方」（順位 15）の「依存する既存 spec」欄に `areka-P0-default-balloon-bundle`（A0・1 件）を足し、`[[spec]]` 表の直前の散文に足した理由を書いた。散文には表の行数（28）と、束を持つ行・持たない行の内訳（14／14）も書いてある——上の段落が書いている 13／14 は 2026-09-13 の写真の数で、足した 1 行を含まないためである（表示するだけの数を、機械が数える値と食い違わせないための追記）。
+
+### 7.4 報告 2 本の作り直し
+
+道具で作り直した。手では 1 文字も編集していない。
+
+| 命令 | 出力 |
+|---|---|
+| `cargo run -p ukadoc-survey -- report` | `report/shiori.md`（677 項目）・`report/assets.md`（542 項目）・`report/sakura-script.md`（342 項目）・`report/property.md`（188 項目）を書き出した |
+| `cargo run -p ukadoc-survey -- report-summary` | `report/summary.md`（台帳 4 本）を書き出した |
+
+`report` は 4 ドメインすべてを書き直すが、**中身が変わったのは `assets.md` と `summary.md` の 2 本だけ**である。`report/property.md`・`report/sakura-script.md`・`report/shiori.md` は書き直された結果が元と同じで、`git diff --numstat` に **1 行も現れない**。触っていない 3 本の台帳の中身が変わっていないのだから、これが期待どおりである。
+
+この 3 本が `git status --porcelain` に `M` として現れる理由は、**改行の形の揺れではない**。同じ中身で書き直されたことで更新時刻と索引の記録が食い違い、git がまだ中身を照合していない（索引の stat が古い）というだけである。中身が 1 バイトも違わないことは、HEAD の blob と作業木のファイルを直接突き合わせて確かめた。採り方は `git show HEAD:<パス> \| md5sum` と `md5sum <パス>` を 5 本すべてに打ち、両者を比べた。
+
+| 報告 | HEAD の md5 | 作業木の md5 | 判定 |
+|---|---|---|---|
+| `report/property.md` | `6b5ff1df1c9a9be8ff28c2ab942d875b` | `6b5ff1df1c9a9be8ff28c2ab942d875b` | **一致**（1 バイトも違わない） |
+| `report/sakura-script.md` | `ce60a9b8782eb326536b206e6bb1a3aa` | `ce60a9b8782eb326536b206e6bb1a3aa` | **一致**（1 バイトも違わない） |
+| `report/shiori.md` | `d04b2c5054ce9fc47e04f6177d3f4d4d` | `d04b2c5054ce9fc47e04f6177d3f4d4d` | **一致**（1 バイトも違わない） |
+| `report/assets.md` | `94275aba77ae9a69508122e79ad1c6f9` | `5434e50f54c425e88e60a3c0384317ce` | 不一致（中身が変わった。下の表の差） |
+| `report/summary.md` | `0f87ac9dcbf0541f320d12d5081d5031` | `168a9ad0a1b98c8aff2bbe4c95282a43` | 不一致（中身が変わった。下の表の差） |
+
+**中身が変わった 2 本と、変わっていない 3 本が、突合ではっきり分かれている**——これが「台帳 1 本だけを触った」ことの裏付けでもある。
+
+数の動きは台帳の 1 件が未対応から縮退へ移ったことと厳密に釣り合っている。
+
+| 報告の欄 | 前 | 後 |
+|---|---|---|
+| `assets.md` 全体の 縮退／未対応 | 10／410 | 11／409 |
+| `assets.md` ページ `descript_balloon` の 縮退／未対応 | 6／123 | 7／122 |
+| `assets.md` 版「世代不明」の 縮退／未対応 | 5／320 | 6／319 |
+| `assets.md` 価値「装い」の 縮退／未対応 | 4／167 | 5／166 |
+| `summary.md` 全体の 縮退／未対応 | 23／977 | 24／976 |
+| `summary.md` ドメイン `assets` の 縮退／未対応 | 10／410 | 11／409 |
+| `summary.md` 価値「装い」の 縮退／未対応 | 4／188 | 5／187 |
+
+どの行も「縮退 +1・未対応 −1・合計は不変」であり、他の状態（実装済み・語彙のみ・別名・対象外・未分類）の数はどこも動いていない。
+
+### 7.5 番人の最終結果（要件 6.5）
+
+`cargo test -p ukadoc-survey`（作業木の根から・上流に `Select-Object -First N` も `| tail` も挟んでいない）。
+
+| ターゲット | 成功 | 失敗 |
+|---|---|---|
+| 単体（`src` 内） | 601 | 0 |
+| 統合 1 | 0 | 0 |
+| 統合 2 | 6 | 0 |
+| `tests/consistency`（常設の検査の本体） | 113 | 0 |
+| doc テスト | 5 | 0 |
+| **合計** | **725** | **0** |
+
+着手前と同じ 725 本・失敗 0 本である（本タスクは検査を足していないので本数は増えない）。要件 6.5 が名指しする腕を名前で打ち直しても緑だった。
+
+| 検査の腕 | テスト名 | 結果 |
+|---|---|---|
+| 腕 a（`count`＝行数）・b（名前の実在）・c（`owner_count`＝数え直し）・d（束の実在）・e・f（宛先の行き先） | `consistency::spec_checks::the_spec_table_agrees_with_the_directories_the_ledgers_and_the_bundles` | ok |
+| 分布の突合（`briefing.md` の `[[barrier]]` と台帳） | `consistency::briefing_checks::every_bundle_carries_one_stage_and_one_rank_that_the_ledgers_agree_with` | ok |
+| 報告の鮮度 | `consistency::documents_checks::the_summary_report_is_as_fresh_as_the_ledgers` | ok |
+| 台帳そのものの整合 | `consistency::checks::real_repo_data_produces_no_findings` | ok |
+
+**分布の突合が台帳の数え直しと一致している**ことは、7.2 の較正が示すとおりこの腕が食い違いを実際に赤にできる腕であること（`degraded は 6 と書いてあるが、数え直しは 7` と名指した）と、いまそれが緑であることの 2 つで言える。
+
+### 7.6 触っていないことの確認（零を明示する）
+
+| 主張 | 数え方 | 結果 |
+|---|---|---|
+| 本番コードを 1 行も変えていない（要件 8.1・6.6） | `git diff --numstat \| grep '/src/'`（`-- 'crates/*/src'` 形は変更が実在しても無出力になるため使わない。設計 C8 の実測） | **0 行** |
+| すべての `Cargo.toml`・`Cargo.lock` を変えていない（要件 8.2） | `git diff --numstat \| grep -E 'Cargo\.(toml\|lock)'` | **0 行** |
+| 台帳の隣の 2 項目を変えていない（要件 6.3） | 上の 7.3 の行を参照 | **0 行** |
+| `doc/COMPAT_ARCHITECTURE.md` を触っていない（タスク 3.1 の担当） | `git status --porcelain` に現れない | **0 件** |
+
+`git status --porcelain` は **9 行**である（数え方: `git status --porcelain \| wc -l`）。その 9 行の内訳は、**中身が変わった 6 本**と、**中身が HEAD と 1 バイトも違わない 3 本**である。9 行すべてを次の表に載せた（要件 8.5 は「`git status --porcelain` の全行が File Structure Plan の一覧に含まれる」を判定に据えているので、載せない行を作らない）。
+
+中身が変わった 6 本。
+
+| ファイル | 変更 | 行数 |
+|---|---|---|
+| `doc/ukadoc-coverage/ledger/assets.toml` | 対象 1 項目 | +8／−10 |
+| `doc/ukadoc-coverage/roadmap-draft.md` | `[[spec]]` 1 行・`count`・散文・束表 | +15／−2 |
+| `doc/ukadoc-coverage/briefing.md` | 2 数値 | +2／−2 |
+| `doc/ukadoc-coverage/report/assets.md` | 道具の出力 | +5／−5 |
+| `doc/ukadoc-coverage/report/summary.md` | 道具の出力 | +4／−4 |
+| `.kiro/specs/areka-P0-default-balloon-bundle/verification/signoff-record.md`（**この記録自身**） | §7 の記入（`## 7. 台帳の検査` の見出しの下の「未記入」1 行を本節群で置き換えた。差分の塊は `git diff -U0` で **1 つだけ**・位置は §7 の中） | この行の増減だけは記入を終えるまで確定しないので数を書かない（自分自身を数えた数は書いた瞬間に古びる） |
+
+中身が変わっていない 3 本。**HEAD の blob と 1 バイトも違わない**ので、File Structure Plan の一覧には載っていない。
+
+| ファイル | HEAD の md5 | 作業木の md5 | 差分 |
+|---|---|---|---|
+| `doc/ukadoc-coverage/report/property.md` | `6b5ff1df1c9a9be8ff28c2ab942d875b` | `6b5ff1df1c9a9be8ff28c2ab942d875b` | **0 行** |
+| `doc/ukadoc-coverage/report/sakura-script.md` | `ce60a9b8782eb326536b206e6bb1a3aa` | `ce60a9b8782eb326536b206e6bb1a3aa` | **0 行** |
+| `doc/ukadoc-coverage/report/shiori.md` | `d04b2c5054ce9fc47e04f6177d3f4d4d` | `d04b2c5054ce9fc47e04f6177d3f4d4d` | **0 行** |
+
+採り方: 3 本それぞれに `git show HEAD:<パス> \| md5sum` と `md5sum <パス>` を打って突き合わせ、あわせて `git diff --numstat` にこの 3 本が 1 行も現れないことを確かめた（同じ命令で `report/assets.md` と `report/summary.md` は md5 が**食い違う**ので、この突合は差を検出できる形になっている）。`M` が付く理由は 7.4 に書いたとおり索引の stat が古いだけで、中身の差ではない。
+
+したがって **File Structure Plan の一覧に載せる必要があるのは 6 本**で、その 6 本はすべて上の表に挙がっている。残る 3 本は中身が HEAD と同一なので、変更したファイルではない。
 
 ## 8. 下流への申し送りの実施記録（要件 7.3・7.4）
 
