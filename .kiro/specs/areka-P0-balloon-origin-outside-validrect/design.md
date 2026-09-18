@@ -114,6 +114,9 @@ graph TB
 | `crates/areka-emo-text/src/region_vertical_canon_tests.rs` | 冒頭 doc の分岐 6・8・9 の説明・既存 3 本の期待値と名前・全数の表 1 本の追加 | 677 → **790〜840** |
 | `crates/areka-emo-text/src/actor_region_warn_tests.rs` | WARN 件数のテスト群の追加・冒頭 doc に節を 1 つ | 380 → **500〜540** |
 | `crates/areka-emo-text/tests/shipped_fixture_region_test.rs` | 検体 `emo2-kakukaku-offsetdpi` のテストを**ファイル末尾**へ追加（既存の関数は 1 つも書き換えない）・冒頭 doc に節を 1 つ | 397 → **445〜465** |
+| `crates/areka-emo-text/src/layout.rs` | 旧規則を現在形で語るコメント 2 か所（冒頭 doc の「行内開始位置の規則」の括弧書き・カーソル基点束のコメント）の「宣言 origin は字義」を「範囲内の宣言は宣言どおり・範囲外と未宣言は書字開始角」へ。**行を増やさない**（語の置き換えだけ） | 973 → **973**（上限 1,000・余白 27） |
+| `crates/areka-emo-text/src/cursor_tag.rs` | `CursorBasis::origin` の doc 1 か所を同じ言い回しへ。同ファイルのほかの `origin` への言及（原点の意味・軸の向き）は別の規則なので触らない | 274 → 274 |
+| `crates/areka-emo-text/tests/choice_fixture_test.rs` | 検体から `origin` を消した是正の doc にある 1 文「宣言が復活すれば……字義どおり `(0,0)` へ落ちて赤くなる」は修正後に偽になる（範囲外の宣言は書字開始角へ落ちるので緑のまま）。事実に合わせて言い直す。テスト本体は無改変 | 行数不変 |
 | `doc/COMPAT_ARCHITECTURE.md` | §8 の 3 行（撤去の行・`\_l` の縦書き座標系の行・`\_l[x,y]` の上書き行） | 行数不変（3 行の書き換え） |
 | `.kiro/specs/areka-P0-balloon-origin-outside-validrect/research.md` | §3.4 の全数確認の引き直し（要件 4.2／4.3 の記録の正本） | — |
 | `.kiro/specs/areka-P0-currentghost-property-tree/brief.md` | 申し送り 1 行（要件 7.2） | +1 |
@@ -171,7 +174,7 @@ WARN の件数は先例と同じ比較で決まる——登録口に達し、か
 | 6.1 | §8 の撤去の行を取り下げの行へ | CompatDoc | 下の「文書」節 | — |
 | 6.2 | `\_l` の縦書き座標系の行の理由の言い直し | CompatDoc | 同上 | — |
 | 6.3 | `\_l[x,y]` の上書き行の 1 句 | CompatDoc | 同上 | — |
-| 6.4 | `region.rs` 冒頭 doc | OriginResolution | 同上 | — |
+| 6.4 | `region.rs` 冒頭 doc と、旧規則を現在形で語るほかのコメント 4 か所 | OriginResolution／CompatDoc | 同上（「ソース内のコメント」の段落） | 「字義」の全文検索で漏れ 0 |
 | 6.5 | アーカイブ本体は無改変 | — | `.kiro/specs/completed/` に差分なし | 差分の確認 |
 | 6.6 | file:line の裏取り・行番号引用の指し直し | CompatDoc | 触る行の `region.rs:292-294`／`:231-234` を「何の定義行か」へ | — |
 | 7.1 | roadmap #38 の完了更新 | —（完了手続き） | `/kiro-complete` で実施。上書きした要件（`areka-P0-balloon-vertical-canon` 3.10）を明記 | — |
@@ -241,7 +244,7 @@ impl TextRegion {
 
 - Integration: `TextRegion::resolve` は 2 つの呼出しを `let (start_x, ignored_x) = …` の形で受け、構造体リテラルに `ignored_origin: (ignored_x, ignored_y)` を 1 行足す。ほかの消費側は `start()` しか読まないので無改変。
 - Validation: `ignored_origin` は `PartialEq` に入る。値はモデルと原寸から決定的に導かれるので、再追従の同値判定（churn ガード）の結果は変わらない。宣言値だけが変わった（開始点は同じ書字開始角のまま）ときは領域が「異なる」と判定され、新しい値で WARN が 1 件出る——要件 3.2 に対して正しい向きである。
-- Risks: `TextRegion` 全体を `==` で比べるテストは、範囲外の宣言を持つ領域と未宣言の領域を**同値とみなさなくなる**（開始点は同じでも `ignored_origin` が違う）。該当する既存テストは 0 本（範囲外の値を使う既存テストは書き直す 4 本だけで、いずれも全体比較をしない）。新設の検体テストは成分ごとの比較（`assert_region`）を使い、原本との `==` 比較をしない。
+- Risks: `TextRegion` 全体を `==` で比べるテストは、範囲外の宣言を持つ領域と未宣言の領域を**同値とみなさなくなる**（開始点は同じでも `ignored_origin` が違う）。該当する既存テストは 0 本である——範囲外の値を使う既存テストは書き直す 4 本だけで、そのうち全体比較をするのは負値のテストの対照（負値の宣言と同じ位置の非負の宣言を `assert_eq!` で比べる）1 か所だが、両辺とも範囲内なので `ignored_origin` は両辺 `(None, None)` で一致する。検体テスト `shipped_fixture_region_test.rs` の全体比較 2 か所も、両辺が未宣言の検体どうしである。新設の検体テストは成分ごとの比較（`assert_region`）を使い、原本との `==` 比較をしない。
 - doc の更新 6 か所（何の定義行かで指す）: ⑴ 冒頭の 1 段落目の「宣言 origin の字義解決」の句 ⑵ 冒頭の節「描画開始点は宣言どおり」「撤去された規約」→ 本仕様の規則＋経緯（2026-08-27 撤去・2026-09-18 取り下げ・理由＝撤去の前提が実機目視で反証・参照先＝本仕様） ⑶ `TextRegion` の欄 `start` の doc ⑷ `TextRegion::resolve` の doc の「描画開始点」の項と本体の区切りコメント ⑸ `start()` の doc ⑹ `resolve_origin_component` の doc（不変条件の段落を削除し、3 分岐の表へ）。撤去の経緯を語る段落が縮むので、doc 全体の行数はほぼ増えない。
 
 ### 結線層
@@ -285,7 +288,7 @@ decoration::warn_ignored_origin(&resolved, previous);
 **Implementation Notes**
 
 - Integration: `actor.rs` の増分は `previous` の取り出し 1 行・呼出し 1 行・`register_actor` の doc 2〜3 行。`use` の追加は不要（`decoration::` は既に経路修飾で呼ばれている）。`actor_decoration.rs` は `use tracing::{debug, error, warn};` と `use crate::region::{BALLOON_NAME_PLACEHOLDER, TextRegion};` へ広げる。
-- Validation: 面の区別は `range_min` で付く（検体では sakura 36／kero 24）。実機での補助確認は、検体を装着して WARN が 2 面×2 成分＝4 件であることの目視（任意。主は決定論テスト）。
+- Validation: 面の区別は `range_min` で付く（検体では sakura 36／kero 24）。実機での補助確認は、検体を装着して WARN が 2 面×2 成分＝4 件であることの目視（任意。主は決定論テスト）。面の切り替えを挟むと領域の値が変わって新しい値で再び出る（先例の警告と同じ件数規律）ので、数えるのは起動直後の装着ぶんだけにする。
 - Risks: 同じ定義のバルーンへ付け替えて領域が完全に同値のままなら 2 件目は出ない。これは先例の警告と同じ件数規律であり、本仕様では変えない。
 
 ## Data Models
@@ -350,7 +353,7 @@ decoration::warn_ignored_origin(&resolved, previous);
 - a. 両成分が範囲外のバルーンの装着（`register_actor_binding`）→ ちょうど 2 件。`key` が `origin.x` と `origin.y` の 1 件ずつで、欄は x＝`resolved 0／range 36..356／corner 36`、y＝`resolved 0／range 46..168／corner 46`、`balloon` は空でない。片方の成分だけが範囲外の定義では 1 件。
 - b. 値の変わらない再追従を 3 回 → 追加 0 件（戻り値は 3 回とも `false`）。
 - c. binding だけが変わって領域が同値の再追従 → 再構築は起きる（`true`）が 0 件。原寸が変わって領域の値が変わる再追従 → 新しい値で成分 1 つにつき 1 件。
-- d. 範囲内に宣言したバルーンの装着 → 0 件（対照の `error!` 1 件が数えられていること）。未宣言の 0 件は既存の `attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn`（WARN 総数 0）が既に固定している。
+- d. 範囲内に宣言したバルーンの装着 → WARN の**総数**が 0 件（文言で絞らない——絞った 0 件より強い主張になる。対照の `error!` 1 件が数えられていること）。未宣言の 0 件は既存の `attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn`（WARN 総数 0）が既に固定している。
 - 既存 6 本は `origin` を宣言しない入力なので、WARN の総数の主張は無改変のまま成り立つ。
 
 ### 規則を固定していることの確認（要件 5.3）と見張り（要件 5.7）
@@ -364,6 +367,8 @@ decoration::warn_ignored_origin(&resolved, previous);
 
 実装の変更は無い。research.md §3.4 の全数確認（3 手法・対象 `crates/areka-emo-text/{src,tests}` と `crates/areka/src`）を実装時に引き直し、「`\_l` の原点に宣言された `origin` を使う既存テストで範囲外の値を使うものは 0 本」を、対象・方法・日付とともに同じ場所へ明示して更新する。範囲外の値が見つかったときは期待値を本仕様の規則へ見直す。
 
+引き直しでは手法を 1 つ足す——**`Origin::new(` の構築点を全数**（2026-09-18 実測で `crates/areka-emo-text/{src,tests}` と `crates/areka/src` の 29 ファイル）ファイルごとの件数つきで列挙し、値を素通しする補助関数はその呼び手まで辿る。設計検証が、元の 3 手法では §3.4 から漏れるファイル（`layout_cursor_order_tests.rs`・`layout_cursor_overflow_tests.rs`・`pipeline_test.rs`・`layout_wrap_tests.rs`・`draw_oracle_tests.rs`・`canvas.rs`）を実測で示した。いずれも範囲内の値で結論（0 本）は変わらないが、同じ手法で引き直すと同じ漏れを再現するためである。
+
 ## 文書の追随（要件 6）
 
 `doc/COMPAT_ARCHITECTURE.md` §8 の 3 行を次のとおり改める。行番号の引用を含む行は「何の定義行か」で指し直す（要件 6.6）。
@@ -373,6 +378,8 @@ decoration::warn_ignored_origin(&resolved, previous);
 | 「宣言された `origin` の validrect 外クランプ……の撤去」 | 題を「……の撤去の**取り下げ**」へ。判断欄＝範囲外の成分は宣言なしとして書字開始角へ・両端は範囲内・成分ごとに独立・負値は絶対値化してから判定・解決側 DEBUG＋装着 1 回につき成分 1 つ WARN 1 件。根拠欄＝取り下げの理由（撤去の前提「SSP でも壊れた定義」が 2026-09-18 の実機目視〔`emo2-kakukaku` で行頭 1 文字欠け・SSP では欠けない〕で反証された／ukadoc の「テキストを描画してよい範囲。」と「通常は指定せず validrect の定義に任せる」の 2 文／正典は範囲外の扱いに沈黙）と日付。2026-08-27 の撤去の経緯と、アーカイブ 2 件の上書きの記述は履歴として残す。出典欄＝本仕様＋「完了 spec `areka-P0-balloon-vertical-canon` 要件 3.10 を上書き（3.11・3.7 は不変）」 |
 | 「`\_l` の縦書き座標系の正典写像」 | SC15 の理由の文「origin クランプ撤去……により……常に一致し」を、撤去を前提にしない形へ言い直す——「解決後の文字描画開始点は常に 1 つであり（範囲外の宣言は書字開始角へ落ちる）、`\_l[0,0]` はそれを指す」。結論（二択は areka 内では発生しない）は不変。題と判断欄にある「クランプ撤去の行」への言及は新しい題に合わせる。引用 `region.rs:292-294`／`:231-234` は「`TextRegion::resolve` の開始点の解決」「同関数の書字開始角 `start_corner` の選択」へ指し直す |
 | 「【上書き】`\_l[x,y]` の座標解決の正典所有……」 | 「未宣言成分だけが書字開始角へ落ちる」→「未宣言または範囲外の成分が書字開始角へ落ちる」。同じ括弧内の行番号引用を上と同じ形へ指し直す |
+
+**ソース内のコメント**（要件 6.4）: `region.rs` の doc 6 か所（上の OriginResolution の節）に加え、旧規則「宣言された `origin` は字義どおり」を現在形で語るコメントが 4 か所ある——`layout.rs` の 2 か所・`cursor_tag.rs` の `CursorBasis::origin` の doc・`tests/choice_fixture_test.rs` の是正の doc の 1 文。前の 3 つは言い回しを「範囲内の宣言は宣言どおり・範囲外と未宣言は書字開始角」へ揃え、最後の 1 つは修正後に偽になる予言（「宣言が復活すれば赤くなる」）を事実へ言い直す。`layout.rs` は 973 行なので行を増やさない。着手時に「字義」で全文検索して漏れが無いことを確かめる。
 
 `doc/ukadoc-coverage/briefing-*.md` は §8 の行の題を引用しているが、既に旧題のまま食い違っている行があり（`\_l` の行）、題の一致を見張る検査は無い。本仕様では触らない。
 
