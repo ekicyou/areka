@@ -13,6 +13,9 @@ mod crc32;
 mod error;
 // タスク 4.4 の `NarArchive::open` が繋ぐまで本体からは呼ばれない（兄弟テストだけが使う）。
 #[allow(dead_code)]
+mod manifest;
+// タスク 4.4 の `NarArchive::open` が繋ぐまで本体からは呼ばれない（兄弟テストだけが使う）。
+#[allow(dead_code)]
 mod names;
 
 pub use crc32::crc32;
@@ -20,3 +23,6 @@ pub use error::{
     ElementKind, ExistingState, InstalledElement, Integrity, IoPhase, ManifestWarning, NarError,
     RefuseReason, UnsafeWhy, Unsupported,
 };
+// 設計は 4 つとも公開面に置く（後続の `ghost-install` が受け取る形）。結線は
+// タスク 4.4 の仕事なので、ここでは型だけ先に出す。
+pub use manifest::{Companion, ExistingPolicy, InstallKind, InstallManifest};

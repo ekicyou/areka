@@ -117,6 +117,17 @@ fn is_usable_windows_name(component: &str) -> bool {
         .any(|reserved| stem.eq_ignore_ascii_case(reserved))
 }
 
+/// `name` が「木を掘らない 1 つの名前」として使えるか（要件 3.9・3.15）。
+///
+/// `install.txt` の `directory`・`*.directory`・`*.source.directory` と、
+/// `refreshundeletemask` の各要素が満たすべき規則。エントリ名と同じ
+/// [`is_usable_windows_name`] を土台にして、そこに含まれない 3 つ——空・`/`・`\`
+/// ——だけを足す。`..` は末尾がドット、`C:` は禁止文字の `:`、NUL は制御文字と
+/// して、いずれも土台の側で撥ねられる（二重に書くと片方だけ直る）。
+pub(crate) fn is_valid_one_level_name(name: &str) -> bool {
+    !name.is_empty() && !name.contains('/') && !name.contains('\\') && is_usable_windows_name(name)
+}
+
 /// 名前が `X:` の形（ドライブレター）で始まるか。
 fn starts_with_drive_letter(name: &str) -> bool {
     let mut chars = name.chars();
