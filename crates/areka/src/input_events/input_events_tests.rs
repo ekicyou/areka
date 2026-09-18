@@ -61,6 +61,20 @@ fn world_with_wiring(
     (world, rx)
 }
 
+/// 預かっている右ダブルクリックを取り出して送る（メニュー側が「送る」と決めたときの操作）。
+///
+/// 押下ハンドラは右ダブルクリックを送らずに預かる（areka-P0-popup-menu-minimal 要件 1.10）。
+/// 配信されるメッセージの形を見るテストは、この操作で送出まで進めてから受信側を見る。
+fn send_pending_right_double_click(world: &mut World) {
+    let mut wiring = world
+        .get_non_send_mut::<MouseWiring>()
+        .expect("MouseWiring は挿入済み");
+    let pending = wiring
+        .take_pending_right_double_click()
+        .expect("右ダブルクリックは預かりとして残る");
+    wiring.send_pending_right_double_click(pending);
+}
+
 /// 単調増加する注入 clock を作る（毎呼出で +step ms）。
 fn stepping_clock(start: u64, step: u64) -> Box<dyn FnMut() -> u64> {
     let mut t = start;
@@ -201,7 +215,8 @@ fn double_click_left_sends_unconditionally() {
     assert!(rx.try_recv().is_ok(), "クリックは間引かれず 2 回目も届く");
 }
 
-/// 右ダブルクリックも同様に無条件送出され、button=Right が観測できる（3.3）。
+/// 送出ヘルパは右ボタンでも同じ形で送り、button=Right が観測できる（3.3）。
+/// 押下ハンドラが右ダブルクリックを即送出しないことは `input_events_menu_tests.rs` が見る。
 #[test]
 fn double_click_right_sends_with_right_button() {
     let (tx, rx) = mpsc::channel::<KanadeMsg>();
@@ -321,8 +336,9 @@ fn handler_move_sends_then_suppresses_same_position() {
     assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
 }
 
-/// 送出集合檻（1.2・3.3）: 左／右ダブルクリック（Ctrl なし）は当たり判定を解決し
-/// `KanadeMsg::Mouse(DoubleClick{button})` を送出する（Left→Left・Right→Right）。
+/// 送出集合檻（1.2・3.3）: 左ダブルクリック（Ctrl なし）は当たり判定を解決して即
+/// `KanadeMsg::Mouse(DoubleClick{Left})` を送出する。右ダブルクリックは押下の時点では送らずに
+/// 預かり、預かりを送ると `DoubleClick{Right}` が同じ形（スコープ・座標・当たり判定名）で届く。
 #[test]
 fn handler_double_click_left_and_right_send() {
     let (mut world, rx) = world_with_wiring(
@@ -354,11 +370,15 @@ fn handler_double_click_left_and_right_send() {
         _ => panic!("Mouse(DoubleClick Left) を期待"),
     }
 
-    // 右ダブルクリック
+    // 右ダブルクリック: 押下では届かず、預かりを送って初めて届く。
     let ev = bubble_pointer(7, 8, DoubleClick::Right, false);
     assert!(on_char_pointer_pressed(&mut world, e, e, &ev));
+    assert!(rx.try_recv().is_err(), "右は押下の時点では送らない");
+    send_pending_right_double_click(&mut world);
     match rx.try_recv().expect("dblclick が届く") {
         KanadeMsg::Mouse(m) => {
+            assert_eq!((m.scope, m.x, m.y), (0, 7, 8));
+            assert_eq!(m.region, Some("Bust".to_string()));
             assert_eq!(
                 m.kind,
                 MouseEventKind::DoubleClick {
@@ -794,8 +814,10 @@ fn identity_scale_delivers_unchanged_client_coords() {
         _ => panic!("Mouse(Move) を期待"),
     }
 
+    // 右ダブルクリックは預かりになるので、預かりを送ってから配信値を見る。
     let ev = bubble_pointer(13, 99, DoubleClick::Right, false);
     assert!(on_char_pointer_pressed(&mut world, e, e, &ev));
+    send_pending_right_double_click(&mut world);
     match rx.try_recv().expect("dblclick が届く") {
         KanadeMsg::Mouse(m) => assert_eq!(
             (m.x, m.y),

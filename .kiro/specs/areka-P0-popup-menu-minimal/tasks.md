@@ -112,8 +112,8 @@
   - _Depends: 2.2, 1.2, 3.1_
   - _Boundary: areka menu captions_
 
-- [ ] 6. 右クリックと右ダブルクリックの規則
-- [ ] 6.1 右ダブルクリックを預かる箱と終了指示のスコープ
+- [x] 6. 右クリックと右ダブルクリックの規則
+- [x] 6.1 右ダブルクリックを預かる箱と終了指示のスコープ
   - 窓のスコープを引く関数と終了指示の送出をモジュール外から呼べる可視性にする
   - 押下ハンドラの右ダブルクリックは即送出をやめ、材料（スコープ・面座標・領域）を高々 1 件預かる形にする（前の預かりは捨てて上書き）。左ダブルクリックは従来どおり
   - Ctrl＋左ダブルクリックの終了指示に窓のスコープを載せる（Ctrl と Ctrl＋Shift の入口は残す）
@@ -214,3 +214,4 @@
 - 4.2: `/// ukadoc:` の行は URL を `<…>` で囲まない（解決は完全一致＝`SourceUrlNotInCatalog` で `cargo test -p ukadoc-survey` が 9 本赤になる）。ソースに正典 URL を書いたタスクは必ず `cargo test -p ukadoc-survey -j 4` まで走らせる。`readme_cue.rs` 先頭の `#![allow(dead_code)]` は 4.3 で外す。送出後に `tick_wake::mark` は立てない（門は既定で無効・有効時も 30 コマの心拍で Input 段が回る・立てると `tick_gate_config_producers_tests` の名簿検査が赤）。
 - 4.3: `wire_emo2_boot` には boot 成功まで届く決定論の道具が無い（既存テストは fallback 経路だけ・`spine.rs` は `wire_emo2_boot` を呼ばず自前の sinks 4 本で組む）。成功経路の結線は実機確認 9.3 ⑵ で見る。sinks の並びは `zorder_wiring_tests.rs` の `t_zwi05` が `mod.rs` の字面で固定している。`readme::is_available` だけ狭い `#[allow(dead_code)]` が残る（8.1 で外す）。`spine.rs` のコメント「production は 4 本」は陳腐化（実際は 6 本・本仕様の範囲外）。
 - 5.1: `send_query` は送出失敗を自分では記録せず `Err(SendFailed)` を返す。呼び手（7.3）がそれを `interpret` へ渡して初めて `warn!` 1 行になる＝7.3 は `Err` を捨てずに必ず `interpret` まで運ぶ。空・値なしの `debug!` も失敗の `warn!` も 1 回の表示につき 1 行（id は構造化欄に列挙）。表示可否の空・値なしは正常系なので記録しない。`captions.rs` の 3 表は `resources.rs` と二重に証拠解決する（設計どおり）。
+- 6.1: 7.3／8.1 が入るまで預かりを取り出す本番の呼び手が無く、右ダブルクリックは SHIORI へ届かない（途中状態として受容）。`take_pending_right_double_click`／`send_pending_right_double_click` の狭い `#[allow(dead_code)]` は 7.3 で外す。`MouseWiring` の doc「送出ヘルパ群はポインタハンドラ経由でのみ参照される」はメニューの「終了」が `send_close_request` を呼ぶ 8.1 で偽になるので、そのとき 1 行追随する。`char_scope` が `None`（`CharWindowMarker` 無し）の窓は左右とも旧来どおり何もしない。

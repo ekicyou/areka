@@ -38,6 +38,10 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// [`attach_char_pointer_handlers`]（依存方向 input_events→placement。stand-in `on_ghost_pressed`
 /// を退役して差し替え・main.rs が spawn 直後に呼ぶ）で完了済み＝本番消費者が到達したため
 /// dead_code 抑止は不要になった。
+///
+/// 上の 2 点の例外は右ダブルクリックの預かりの取り出しと送出
+/// （`take_pending_right_double_click`／`send_pending_right_double_click`）で、呼び手は
+/// ポインタハンドラではなくメニュー側である（[`PendingDoubleClick`] の不変条件）。
 pub(crate) struct MouseWiring {
     /// `GhostRuntime::kanade()` クローン（1.4・std mpsc）。
     sender: Sender<KanadeMsg>,
@@ -47,6 +51,28 @@ pub(crate) struct MouseWiring {
     region_source: RegionSource,
     /// 注入可能 clock（既定: 起動からの経過 ms・単調）。
     now_ms: Box<dyn FnMut() -> u64>,
+    /// 預かっている右ダブルクリック（高々 1 件・[`PendingDoubleClick`]）。
+    pending_right_double_click: Option<PendingDoubleClick>,
+}
+
+/// 押下ハンドラが預かる右ダブルクリック 1 件分の材料（areka-P0-popup-menu-minimal 要件 1.10）。
+///
+/// # 不変条件
+///
+/// これは `OnMouseDoubleClick`（Ref5＝1）を**組み立てる材料**であって、送出の決定ではない。
+/// 送るかどうかを決める場所はメニュー側の 1 か所（`menu::trigger`）に限る（要件 1.10／11.3）。
+/// 規則は「右クリックでメニューを出すなら捨てる・ゴーストが `popupmenu.visible`＝0 でメニューを
+/// 抑止したときだけ [`MouseWiring::send_pending_right_double_click`] で送る」。本モジュールは
+/// 預かるだけで自分からは送らず、`menu` を参照もしない（依存は `menu` → 本モジュールの向き）。
+/// したがってメニュー側が取り出さない限り、預かった右ダブルクリックは SHIORI へ届かない。
+#[derive(Debug)]
+pub(crate) struct PendingDoubleClick {
+    /// 操作した窓のスコープ番号（本体側 0・相方側 1）。
+    pub scope: u32,
+    /// 配信空間の座標（縮約後サーフェス px）。[`HitRegion::surface_point`] の値そのまま。
+    pub surface_pos: (i64, i64),
+    /// 当たり判定名（無ければ `None`）。
+    pub region: Option<String>,
 }
 
 /// 当たり判定名の供給源シーム（実／mock）。
@@ -77,6 +103,7 @@ impl MouseWiring {
             throttle: HashMap::new(),
             region_source,
             now_ms: Box::new(move || start.elapsed().as_millis() as u64),
+            pending_right_double_click: None,
         }
     }
 
@@ -92,6 +119,7 @@ impl MouseWiring {
             throttle: HashMap::new(),
             region_source,
             now_ms,
+            pending_right_double_click: None,
         }
     }
 
@@ -208,7 +236,11 @@ impl MouseWiring {
     ///
     /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op（log-first）。既に kanade が
     /// 止まっているなら終了は進行済みであり、ここで新たに始めるものは無い。
-    fn send_close_request(&mut self, reason: CloseReason) {
+    ///
+    /// モジュール外から呼べるのは、メニューの「終了」が Ctrl+左ダブルクリックと同じ入口を
+    /// 使うためである（areka-P0-popup-menu-minimal 要件 5.1）。操作した窓のスコープは呼び手が
+    /// `reason` に載せる。
+    pub(crate) fn send_close_request(&mut self, reason: CloseReason) {
         if self
             .sender
             .send(KanadeMsg::CloseRequest { reason })
@@ -251,6 +283,39 @@ impl MouseWiring {
                 "kanade Sender 送出失敗（actor 停止後）: no-op で継続"
             );
         }
+    }
+
+    /// 右ダブルクリックを預かる。前の預かりがあれば捨てて上書きする（残すのは最新の 1 件だけ）。
+    pub(crate) fn defer_right_double_click(&mut self, pending: PendingDoubleClick) {
+        self.pending_right_double_click = Some(pending);
+    }
+
+    /// 預かりを取り出す。取り出した後は空になる。
+    ///
+    /// `#[allow(dead_code)]`: 本番の呼び手はメニュー側（タスク 7.3 の `menu::trigger`）で、
+    /// そこが入ったらこの抑止を外す。
+    #[allow(dead_code)]
+    pub(crate) fn take_pending_right_double_click(&mut self) -> Option<PendingDoubleClick> {
+        self.pending_right_double_click.take()
+    }
+
+    /// 取り出した預かりを `OnMouseDoubleClick`（右ボタン＝Ref5 が 1）として送る。
+    ///
+    /// 中身は [`send_double_click`] を右ボタンで呼ぶだけで、預かる前に押下ハンドラが即送出して
+    /// いたときと同じメッセージになる。
+    ///
+    /// `#[allow(dead_code)]`: 本番の呼び手はメニュー側（タスク 7.3 の `menu::trigger`）で、
+    /// そこが入ったらこの抑止を外す。
+    ///
+    /// [`send_double_click`]: MouseWiring::send_double_click
+    #[allow(dead_code)]
+    pub(crate) fn send_pending_right_double_click(&mut self, pending: PendingDoubleClick) {
+        self.send_double_click(
+            pending.scope,
+            pending.surface_pos,
+            pending.region,
+            MouseButton::Right,
+        );
     }
 }
 
@@ -313,7 +378,10 @@ pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
 /// キャラ窓 `CharWindowMarker.scope`（usize→u32）を取り出す（M1 実値 {0,1} を `debug_assert`）。
 ///
 /// マーカー不在（本来キャラ窓には常在）は `None` を返し、呼び手は no-op で縮退する（panic しない）。
-fn char_scope(world: &World, entity: Entity) -> Option<u32> {
+///
+/// モジュール外から呼べるのは、メニュー側も「右クリックされた窓のスコープ」を同じ規則で
+/// 引くためである（areka-P0-popup-menu-minimal 要件 5.2）。
+pub(crate) fn char_scope(world: &World, entity: Entity) -> Option<u32> {
     let scope = world.get::<CharWindowMarker>(entity)?.scope;
     debug_assert!(scope <= 1, "M1 の scope は {{0,1}} を想定: {scope}");
     Some(scope as u32)
@@ -383,20 +451,24 @@ pub(crate) fn on_char_pointer_moved(
 /// キャラ窓のポインタ押下ハンドラ（Bubble のみ処理・1.2/3.3・6.2/6.3・7.1/7.3/7.4）。
 ///
 /// - **Ctrl+左ダブルクリック（結線済み・Shift 非押下）→ 終了指示**（R15.1・design D15 の 1）:
-///   kanade へ `CloseRequest{User}` を 1 件送り、**窓は触らない**。正規の握手（`OnClose` GET →
+///   kanade へ操作した窓のスコープを載せた `CloseRequest{User}` を 1 件送り、**窓は触らない**。正規の握手（`OnClose` GET →
 ///   終了挨拶の再生 → `\-` → 解放）が走り、終わったことを知らせる停止通知を受けた相
 ///   （`emo2_boot::frame` の終了相）が窓を閉じる。true。
 /// - **Ctrl+左ダブルクリック（結線前）／Ctrl+Shift+左ダブルクリック → 強制退避**（R15.2）:
 ///   全 `GhostWindowMarker` 窓を despawn し、wintf の window-close funnel（`run()` 復帰→main
 ///   shutdown→`ForceQuit` 系列）へ委ねる。起動に失敗したゴーストから抜ける口として残す。true。
-/// - **左／右ダブルクリック（Ctrl なし）** → 当たり判定を解決し `KanadeMsg::Mouse(DoubleClick{button})`
-///   を送出（Left→`MouseButton::Left`・Right→`Right`）。配信座標は resolver が返した `surface_point`
-///   （縮約後サーフェス px・1.8・DD-IE-10 改訂）。true。
+/// - **左ダブルクリック（Ctrl なし）** → 当たり判定を解決し
+///   `KanadeMsg::Mouse(DoubleClick{button: Left})` を送出。配信座標は resolver が返した
+///   `surface_point`（縮約後サーフェス px・1.8・DD-IE-10 改訂）。true。
+/// - **右ダブルクリック** → 当たり判定を解決するが**送らない**。スコープ・`surface_point`・
+///   当たり判定名を [`PendingDoubleClick`] として高々 1 件預かる（前の預かりは上書き）。送るか
+///   どうかはメニュー側が決める（areka-P0-popup-menu-minimal 要件 1.10）。true。
 /// - **中／拡張ボタンのダブルクリック** → 送出しない（OnMouseDoubleClickEx は M2・7.1）。false。
 /// - **単発クリック**（`DoubleClick::None`）→ 送出しない（7.3）。false。
-/// - The Hand／collisionex／owner-draw 右クリックメニューは実装しない（7.4）。
+/// - The Hand／collisionex は実装しない（7.4）。右クリックメニューは本ハンドラでは扱わない
+///   （引き金は押下ではなく右ボタンの解放で、`menu` モジュールの担当）。
 ///
-/// Tunnel 相は伝播続行のため常に false。送出系は `MouseWiring` 不在時 self-gating no-op（強制退避は
+/// Tunnel 相は伝播続行のため常に false。送出・預かりは `MouseWiring` 不在時 self-gating no-op（強制退避は
 /// 上流で処理済みゆえ wiring 非依存）。
 pub(crate) fn on_char_pointer_pressed(
     world: &mut World,
@@ -424,10 +496,12 @@ pub(crate) fn on_char_pointer_pressed(
                 event = "close_requested",
                 "Ctrl+左ダブルクリック: 終了指示を送る（窓は握手の完了後に閉じる）"
             );
+            // 操作した窓のスコープを載せる（`OnClose` の Ref1／Ref2 になる）。マーカーの無い窓は 0。
+            let scope = char_scope(world, entity).unwrap_or(0);
             let mut wiring = world
                 .get_non_send_mut::<MouseWiring>()
                 .expect("MouseWiring は直上で存在確認済み");
-            wiring.send_close_request(CloseReason::User { scope: 0 });
+            wiring.send_close_request(CloseReason::User { scope });
             return true;
         }
         tracing::info!(
@@ -440,10 +514,10 @@ pub(crate) fn on_char_pointer_pressed(
         return true;
     }
 
-    // 送出対象は左／右ダブルクリックのみ。中／拡張ボタン・単発クリックは送出しない（7.1/7.3）。
-    let button = match state.double_click {
-        DoubleClick::Left => MouseButton::Left,
-        DoubleClick::Right => MouseButton::Right,
+    // 扱うのは左／右ダブルクリックのみ。中／拡張ボタン・単発クリックは何もしない（7.1/7.3）。
+    let right = match state.double_click {
+        DoubleClick::Left => false,
+        DoubleClick::Right => true,
         // Middle/XButton1/XButton2（M2）・None（単発）→ 送出しない。
         DoubleClick::Middle | DoubleClick::XButton1 | DoubleClick::XButton2 | DoubleClick::None => {
             return false;
@@ -465,11 +539,24 @@ pub(crate) fn on_char_pointer_pressed(
     let mut wiring = world
         .get_non_send_mut::<MouseWiring>()
         .expect("MouseWiring は直上で存在確認済み");
-    // 配信座標は surface_point（縮約後サーフェス px・1.8）。クリックは throttle を通らない。
-    wiring.send_double_click(scope, hit.surface_point, hit.region, button);
+    // 座標は surface_point（縮約後サーフェス px・1.8）。クリックは throttle を通らない。
+    if right {
+        // 右は送らずに預かる。送るかどうかはメニュー側が決める（[`PendingDoubleClick`] の不変条件）。
+        wiring.defer_right_double_click(PendingDoubleClick {
+            scope,
+            surface_pos: hit.surface_point,
+            region: hit.region,
+        });
+    } else {
+        wiring.send_double_click(scope, hit.surface_point, hit.region, MouseButton::Left);
+    }
     true
 }
 
 #[cfg(test)]
 #[path = "input_events_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "input_events_menu_tests.rs"]
+mod menu_tests;
