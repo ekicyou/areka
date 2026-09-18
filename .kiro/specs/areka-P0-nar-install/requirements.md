@@ -14,7 +14,7 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
 - **検体が走行で汚れ、次の走行の挙動が変わる。** 起動時にゴースト側とシェル側の `profile/areka/` へ永続化ファイル（窓位置と起動回数）が書かれる。起動回数の記録があると初回イベント `OnFirstBoot` が飛ばされて `OnBoot` になるので、同じ検体で 2 回走らせると別の結果になる。いま `fixtures/emo2/ghost/master/profile/areka/sylphya.toml` が実在している（無視対象のため追跡外）。
 - **その場しのぎの初期化が 1 か所だけある。** `crates/areka/src/emo2_boot/spine.rs` の `emo2_root()` は呼ばれるたびに `<root>/ghost/master/profile/areka` を丸ごと消している。他の参照箇所は消していない。
 - **無視されていない書き込み先が残っている。** 起動はシェル側 `shell/master/profile/areka/` にも書く経路を持つが、example の `.gitignore` が無視するのはゴースト側 `fixtures/emo2/ghost/master/profile/` だけ。シェル側の書き込みが初めて起きた日に追跡外ファイルが湧く（本日時点では未発生・潜在）。
-- **参照は 38 ファイル**（src 内の単体テスト 21・`tests/` 8・`examples/` 9・**本番コード 0**。数え方: 検体パスを**組み立てるコード**を持つ `.rs`。コメントだけで言及する 11 ファイルは含めない）。私家版の `emo2_root()` が **12 定義**、`const FIXTURE_DIR` が 1、直書きが 25。綴りは一括 `join` と分割 `join` の 2 種。**共有の窓口は 1 つも無い。** 同梱バルーンは `emo2_root()` の下に `emo2-kakukaku` を継ぎ足して指されている（`.rs` で 45 ファイルが `emo2-kakukaku` を綴る）。コード以外にも、`tools/perf/` のスクリプト 6 本・`doc/` の文書 3 本・example の README 1 本が同じパスを綴っている。
+- **参照は 38 ファイル**（src 内の単体テスト 21・`tests/` 8・`examples/` 9・**本番コード 0**。数え方: 検体パスを**組み立てるコード**を持つ `.rs`＝検索語 `shiori-host-32/fixtures` をコメント行以外で含むもの。同じ検索語をコメント行だけで含む 8 ファイルは含めない。再現コマンドは `research.md` 付録 A-1）。私家版の `emo2_root()` が **12 定義**、`const FIXTURE_DIR` が 1、直書きが 25。綴りは一括 `join` と分割 `join` の 2 種。**共有の窓口は 1 つも無い。** 同梱バルーンは `emo2_root()` の下に `emo2-kakukaku` を継ぎ足して指されている（`.rs` で 45 ファイルが `emo2-kakukaku` を綴る）。コード以外にも、`tools/perf/` のスクリプト 3 本・`doc/` の文書 2 本・example の README 1 本が同じパスを綴っている（09-18 実測。brief 起票時の見立てより少ない）。
 - **`install.txt` を読む実装は皆無。** `areka-parsers/src/package/resolve.rs` は前置きで「`install.txt` / balloon 系 / NAR には触れない」と自ら宣言し、`package/validation_tests.rs` はそれが解決結果へ漏れないことを固定している。アーカイブ展開器も無い。網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `descript_install` ページ 15 項目は全て `absent`・`owner = ""`・優先度 `B1`。
 - **検体の `install.txt` は 4 通りの綴りを持つ。** emo2 は `Charset,UTF-8`（キーの頭が大文字）・`type,ghost`・`directory,emo2`・`balloon.directory,emo2-kakukaku`・`balloon.source.directory,emo2-kakukaku`。派生バルーン 2 つは `charset,UTF-8`・`type,balloon`。R_POST_and_KOMAINU は `charset, Shift_JIS`（カンマの後ろに空白）・`type,ghost`・`directory,R_POST_and_KOMAINU`。
 - **バイト保存の手当ては片側だけ。** `vendors/sample_ghost/` には `.gitattributes`（`* -text`）と `.gitignore`（`!*_test.txt` `!*_dump.txt`）があり `git check-attr text` は `unset`。`fixtures/emo2/` は `unspecified`＝無防備（ルートに `.gitattributes` は無い）。ルート `.gitignore` の `*_test.txt` は Windows の大小無視で `dic09_Test.txt` のような辞書を黙って落とす。
@@ -31,7 +31,7 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
   - NAR エンジン: アーカイブ読取（`.nar`＝zip 形式・`.zip` も同じ扱い）・ファイル名の文字コード決定・`install.txt` の解釈（`type`・`name`・`directory`・`charset`・`accept`・`refresh`・`refreshundeletemask`・`*.directory`・`*.source.directory`・`*.refresh`・`*.refreshundeletemask`）・パス安全性・配布形 → インストール済み形への展開・既存フォルダへの再インストール時の `refresh` の意味論。
   - 開発用の根の管理（`target/` 配下・原子的な確定・陳腐化の検出・自己修復・並走安全）。
   - 検体 5 つの `.nar` 化（`emo2`・`R_POST_and_KOMAINU`・`emo2-kakukaku-offsetdpi`・`emo2-kakukaku-wplimit`・`StayseeBalloon`〔存在するとき〕）・`vendors/sample_ghost/` への集約・畳む手順の文書化・展開済みツリーと `spine.rs` の初期化と example 側 `.gitignore` の削除。
-  - 検体パスを綴るスクリプト・文書の追随（`tools/perf/` 6 本・`doc/` 3 本・example README 1 本・実機サインオフの手順の記述）。
+  - 検体パスを綴るスクリプト・文書の追随（`tools/perf/` 3 本・`doc/` 2 本・example README 1 本・実機サインオフの手順の記述）。
   - 外部依存 1 本（アーカイブ読取）の追加登記（`tech.md`）・ライセンス検査・`THIRD-PARTY-NOTICES.md` の再生成・`structure.md` のクレート一覧・網羅台帳の `owner` 登記と `roadmap-draft.md` の追随。
   - 決定論テスト（固定の小さな `.nar` で受理・拒否・配置・再インストールの全分岐）と、emo2 での実機一周。
 - **Out of scope**:
@@ -63,7 +63,7 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
 5. The 検体の窓口 shall 検体を 1 つ足す作業を「`.nar` を 1 つ置く」と「名前を 1 行登記する」の 2 手に収める（検体ごとの専用関数を増やさない）。
 6. When 段 ①（収束）が完了した, the ワークスペース shall 検体パスを綴る 38 ファイル（src 内単体テスト 21・`tests/` 8・`examples/` 9）の全てが窓口経由になっており、テスト名の集合と合否が段 ① の前と同一で、差分がパスの得方の行に限られる（挙動不変）。
 7. The 本番コード（テスト・example 以外） shall 段 ① の前と同じく検体の窓口を呼ぶ箇所が 0 のままである（本番アプリは検体の在処を知らない）。
-8. The ワークスペース shall 次の綴りが窓口の定義ファイルの外の `.rs` に現れないことを、常時走る検査で判定する: 旧置き場 `shiori-host-32/fixtures`・展開形の `vendors/sample_ghost/<検体名>/`・展開先の名前空間フォルダ名。検査はコメント行を除いた実行行を見る（既存の番人と同じ）。数を印字するだけでなく 1 件でも現れたら赤になり、既知の 1 件を足すと赤になることを較正で確かめる。文書・スクリプトが `.nar` の保管場所 `vendors/sample_ghost/*.nar` を名指しすることは禁じない。旧置き場をコメントだけで言及する 11 ファイルは、段 ③ で実体が消えるため同時に書き換える。
+8. The ワークスペース shall 次の綴りが窓口の定義ファイルの外の `.rs` に現れないことを、常時走る検査で判定する: 旧置き場 `shiori-host-32/fixtures`・展開形の `vendors/sample_ghost/<検体名>/`・展開先の名前空間フォルダ名。検査はコメント行を除いた実行行を見る（既存の番人と同じ）。数を印字するだけでなく 1 件でも現れたら赤になり、既知の 1 件を足すと赤になることを較正で確かめる。文書・スクリプトが `.nar` の保管場所 `vendors/sample_ghost/*.nar` を名指しすることは禁じない。旧置き場をコメント行だけで言及するファイル（検索語 `shiori-host-32/fixtures` で 8・`fixtures/emo2` まで含めれば 11）は、段 ③ で実体が消えるため同時に書き換える。
 9. The 開発者 shall 1 つのコマンドで、指定した検体の展開済みの根と検体フォルダ（同梱バルーンがあればそのフォルダも）の絶対パスを標準出力に得られる（実機走行は絶対パス起動が定石のため）。
 
 ### Requirement 2: NAR コンテナの読取とファイル名の文字コード
@@ -89,14 +89,14 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
 1. The NAR エンジン shall アーカイブの**最上位**にある `install.txt` を読む（正典 `manual_install`: 「その一番上のディレクトリに install.txt を置く」）。
 2. If 最上位に `install.txt` が無い, then the NAR エンジン shall 理由付きで拒否し、理由に最上位のエントリ名の一覧を含める（1 段の包みフォルダを黙って剥がすことはしない。正典は作る側に「フォルダの階層を深くしてしまわないように注意」と求めている）。
 3. The NAR エンジン shall `install.txt` の文字コードを、ファイル内の `charset,<名前>` 行（キーの ASCII 大小は区別しない・値の前後の空白は無視する。検体 emo2 は `Charset,UTF-8`、R_POST_and_KOMAINU は `charset, Shift_JIS` と綴る）から決め、行が無ければ既存の文字コード層の ANSI 既定（Shift_JIS＝CP932 の固定写像。本番の起動設定が charset 未宣言時に使う既定と同じ）で読む（正典 `descript_install#charset`: 省略時は OS の標準設定）。
-4. The NAR エンジン shall `install.txt` を既存の `key,value` 層と同じ規則（最初のカンマで分割・前後空白を除去・同一キーは後勝ち・カンマの無い行は無視）で読む。
+4. The NAR エンジン shall `install.txt` を既存の `key,value` 層と同じ規則（最初のカンマで分割・前後空白を除去・同一キーは後勝ち・カンマの無い行は無視）で読み、その上で**全てのキーを ASCII 大小を区別せずに引く**（既存層はキーの大小を保持するため、`install.txt` の解釈側で揃える。`descript.txt` 等と共有する既存層は変えない。正典はキーの大小に触れておらず、区別しないほうが拒否＝利用者に見える失敗が少ない）。
 5. The NAR エンジン shall `type` の値が `ghost`・`shell`・`supplement`・`balloon` のいずれかであるアーカイブを受理する（正典 `descript_install#type`）。
 6. If `type` が `plugin`・`headline`・`language`・`calendar skin`・`calendar plugin`・`calendar`（旧仕様＝calendar skin と同義）・`package` またはそれ以外の値である、あるいは `type` 行が無い, then the NAR エンジン shall 理由付きで拒否し、理由に読み取った `type` の値（無ければ「無し」）を含める（製品側が `OnInstallFailure` の理由に写せる形）。
 7. If `directory` 行が無い、または値が空である, then the NAR エンジン shall 理由付きで拒否する（正典 `descript_install#directory`: 省略不可・`type,package` のみ不要）。
 8. If `name` 行が無い、または値が空である, then the NAR エンジン shall 理由付きで拒否する（正典 `descript_install#name`: 省略不可。検体 5 つは全て `name` を持つ）。
 9. If `directory`・`*.directory`・`*.source.directory` の値がパス区切り（`/` `\`）・`..`・絶対パスの形・NUL・Windows で使えない文字を含む, then the NAR エンジン shall 理由付きで拒否する（フォルダ名は 1 階層の名前でなければならない）。
 10. The NAR エンジン shall `name` の値を結果に含めて呼び出し側へ返す（後続の `OnInstallComplete` の Reference1 に使う）。
-11. The NAR エンジン shall `accept` の値を結果に含めて呼び出し側へ返し、照合はしない（照合は `ghost-install` の責務。正典 `descript_install#accept`）。
+11. The NAR エンジン shall `accept` の値を結果に含めて呼び出し側へ返し、照合はしない（照合は `ghost-install` の責務。正典 `descript_install#accept`）。値が空の行（`accept,`）は行が無いのと同じ扱い＝「指定なし」として返す（実在の配布物 `hello-pasta.nar` にこの形がある）。
 12. While `type` が `ghost` または `shell` である, the NAR エンジン shall `balloon.directory` と `balloonN.directory`（N は 0 以上の整数）を「同時にインストールするバルーン」として読み、対応する `*.source.directory`（無ければ `*.directory` と同じ値）をアーカイブ内の取り出し元フォルダ名とする（正典 `descript_install#*.directory`・`#*.source.directory`）。
 13. If `*.directory` の `*` が `balloon` 以外（`headline`・`plugin`・`calendar.skin`・`calendar.plugin`）である, then the NAR エンジン shall 警告を記録してその同時インストール指定を読み飛ばし、本体（ゴーストまたはシェル）の展開は続行する。
 14. If `type` が `balloon` または `supplement` であるのに `*.directory` が書かれている, then the NAR エンジン shall 警告を記録して読み飛ばす（正典: `type` が `ghost` か `shell` の場合にのみ設定可能）。
@@ -117,7 +117,7 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
 6. If 復号後のエントリ名が Windows のファイルシステムで作れない名前である（`<>:"|?*`・制御文字・末尾のドットや空白・`CON`/`PRN`/`AUX`/`NUL`/`COM1`〜`9`/`LPT1`〜`9` の予約名）, then the NAR エンジン shall 理由付きで拒否する（作成に失敗して途中で止まるのではなく、書き込み前に止める）。
 7. If 復号後のエントリ名が大文字小文字だけ異なる別のエントリと衝突する, then the NAR エンジン shall 理由付きで拒否する（Windows では同じファイルに書かれ、後勝ちで一方が消える）。
 8. The NAR エンジン shall 展開先のフォルダの外へ解決されるパスを決して作らず、確定後の各ファイルの実パスが展開先の配下にあることを検査で確かめられる。
-9. The NAR エンジン shall フォルダのエントリ（末尾 `/`）を空フォルダとして作り、それ以外の外部属性（実行ビット・所有者）は無視する。
+9. The NAR エンジン shall フォルダのエントリ（末尾 `/`）を空フォルダとして作り、フォルダのエントリが無いアーカイブでも各ファイルの親フォルダを作り（実在の配布物 `hello-pasta.nar` はフォルダのエントリを 1 つも持たない）、それ以外の外部属性（実行ビット・所有者）は無視する。
 
 ### Requirement 5: 配布形からインストール済み形への展開
 
@@ -205,13 +205,13 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
 
 #### Acceptance Criteria
 
-1. When アーカイブ読取のための外部依存を 1 本追加する, the 本仕様 shall `.kiro/steering/tech.md` に「意図的依存追加＝日付・承認済」の形で登記し（`encoding_rs` の前例と同じ書式）、ライセンス検査（`cargo deny check`）が緑で、`THIRD-PARTY-NOTICES.md` を再生成する。
+1. When アーカイブ読取のための外部依存を 1 本追加する, the 本仕様 shall `.kiro/steering/tech.md` に「意図的依存追加＝日付・承認済」の形で登記し（`encoding_rs` の前例と同じ書式）、ライセンス検査（`cargo deny check`）が緑で、`THIRD-PARTY-NOTICES.md` を再生成する。再生成は `cargo update` を伴わずに行い、謝辞に増える項目が追加した依存とその推移的依存（本番グラフに初めて入る crate。`Cargo.lock` は追跡外のため手元の解決に依る）に限られることを差分で確かめる。
 2. The 本仕様 shall 追加する依存の既定機能を切り、書き込み側の圧縮機能を有効にしない（読取と展開に必要な機能だけ）。
 3. The 新設クレート shall 本番の依存（`[dependencies]`）としてワークスペースに加わり、`log-capture-kit` を `[dependencies]` に置かず、テスト用の部品は `[dev-dependencies]` に限る。
 4. The 本仕様 shall `.kiro/steering/structure.md` のクレート一覧に新設クレートと検体の窓口の置き場を登記する。
-5. The 本仕様 shall 検体パスを綴る `tools/perf/` のスクリプト 6 本・`doc/COMPAT_ARCHITECTURE.md`・`doc/emo2-conformance-scope.md`・`doc/ukadoc-coverage/briefing-assets.md`・`crates/pilot/examples/shiori-host-32/README.md` を、窓口経由の得方（Requirement 1.9）へ書き換える。
+5. The 本仕様 shall 検体パスを綴る `tools/perf/` のスクリプト 3 本（`invoke-followup-checks.ps1`・`judge-perf.py`・`perf-loop.measure.ps1`）・`doc/emo2-conformance-scope.md`・`doc/ukadoc-coverage/briefing-assets.md`・`crates/pilot/examples/shiori-host-32/README.md` を、窓口経由の得方（Requirement 1.9）へ書き換え、最終検証で旧置き場の綴りが `tools/`・`doc/` に 0 件であることを数える（`doc/COMPAT_ARCHITECTURE.md` は旧置き場を綴っていない＝対象外）。
 6. The 本仕様 shall 網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `descript_install` ページのうち `install.txt` のキー 11 項目（`type`・`name`・`directory`・`charset`・`accept`・`refresh`・`refreshundeletemask`・`*.directory`・`*.source.directory`・`*.refresh`・`*.refreshundeletemask`）の `owner` を本仕様に登記し、着地後に状態を実測へ更新する。`bootghost`（`type,package` 専用・`package` は拒否対象）と、同ページの `install.txt` 以外の 3 見出し（「相対パス」＝`delete.txt`・「相対パス,オプション1,…」と「相対パス,ignore」＝`developer_options.txt`。前者は `network-update`、後者は作る側の範囲）は `owner` を空のまま残し、備考にその理由を書く。
-7. When 台帳の `owner` を登記した, the 本仕様 shall `doc/ukadoc-coverage/roadmap-draft.md` の表に本仕様の行（`owner_count`）を足して追随させ、`cargo test -p ukadoc-survey` の整合検査が緑であることと、ドメイン別報告・全体報告を作り直すことを完了条件に含める。
+7. When 台帳の `owner` を登記した, the 本仕様 shall `doc/ukadoc-coverage/roadmap-draft.md` の表に本仕様の行（`owner_count`・`bundle`・`wave`）を足し、同じ文書で本仕様を「表に無い」「意図しない重なり」と記す散文と `[briefs].count` も同じコミットで追随させ（台帳の `owner` を書いた瞬間に整合検査が赤になるため、`owner` 登記と分けない）、`cargo test -p ukadoc-survey` の整合検査が緑であることと、ドメイン別報告・全体報告を作り直すことを完了条件に含める。
 8. The 本仕様 shall 1 ファイル 1,000 行の番人の例外表に触れず、新設ファイルは 1,000 行未満に収める。
 9. The 本仕様 shall 実機サインオフの手順に現れる「検体の絶対パス」の得方を、`.kiro/steering/roadmap.md` の制約の節（実機運転の定石）に 1 行で追記する。
 10. The 本仕様 shall 検体を `.nar` に畳む手順（追跡ファイルだけを含める・`profile/` を含めない・改行や文字コードを変換しない・配布形の構造・畳んだ後に Requirement 8.4 の一致を確かめる）を、次の検体を足す人が見つける場所（`vendors/sample_ghost/` の README）に書く。
