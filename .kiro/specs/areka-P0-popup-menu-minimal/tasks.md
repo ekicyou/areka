@@ -42,7 +42,7 @@
   - _Requirements: 3.2, 10.4_
   - _Boundary: areka-kanade schedule/resources_
 
-- [ ] 2.2 殻で答える複数件の照会を足す
+- [x] 2.2 殻で答える複数件の照会を足す
   - 運行への指示に「id の列と返信端を渡す照会」を足す（指示の種類数を数えている既存テストを追随）
   - 殻の受け口で、終了指示と同じ並びに照会の腕を足し、状態機械を経ずにその場で答える
   - 会話できる状態のときだけ SHIORI へ往復し、それ以外（起動中・終了中・停止後）は SHIORI へ送らず全件「値なし」を返す。状態の判定は純粋関数として切り出す
@@ -205,3 +205,5 @@
 - 1.3: 正典 URL のコメント（`/// ukadoc:`）は定義箇所 1 か所だけに置く（`doc/ukadoc-coverage/README.md` §3）。転記・呼び出し側（`resolve.rs` など）に同じ URL を書くと `cargo run -p ukadoc-survey -- evidence` が同じ id に 2 ファイルを挙げる＝レビューで差し戻し。`MountModel` は全欄リテラル／全欄分解のテストが 2 か所ある（`model_tests.rs`・`validation_tests.rs`）。
 - 1.4: `OnClose` の参照列を `events::on_close` から導かずリテラルで突き合わせているのは spine 一周（`spine_conformance_script.rs` の `expected_calls()`）だけ。kanade の握手テストと areka-ghost e2e は期待値を `events::on_close` から作るので、この列の変更には恒真。`input_events/mod.rs` と `main.rs` は機械的な `User { scope: 0 }` のまま（実スコープは 6.1）。`spine_conformance_lap_tests.rs` は 988 行＝余裕 12 行。
 - 2.1: 配列要素の直上の正典 URL は `// ukadoc:`（`///` は rustc が `unused_doc_comment` を出す・`events.rs` の `ALLOWED_EVENT_IDS` と同じ形）。`resource_get` は `schedule::resources` で `pub` だが `lib.rs` の公開ファサードには未追加（クレート外のテストで要るときに足す）。
+- 2.2: 照会の Status は設計の逐語 `snapshot_of(&state.phase)` でなく `state.snapshot()`（選択待ちの `choosing` を落とさない・design.md を追随済み）。照会の失敗は通常経路と違い `Unloading{Fault}` へ倒さず `Failed` を UI へ返すだけ（`round_trip` の `error!` 文言「終了系列（Fault）へ」は照会経路では事実と違う＝文言だけの既知の不正確さ）。
+- 2.2: 偽 SHIORI の受信端を握ったまま返信しないテストは、判定が後退すると赤にならず無限に待つ（`non_queryable_phase_answers_no_content_without_touching_shiori`）。2.3 で偽 SHIORI を書くときは「受信を記録して返信端を捨てる」形にして assert の赤で終わらせる。

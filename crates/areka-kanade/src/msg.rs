@@ -7,7 +7,8 @@
 //!
 //! # 依存規律（Allowed Dependencies）
 //! 本ファイルは `std`・[`crate::talk`]・**`areka_actor::ReplySender` のみ**に
-//! 依存する。`shiori-host32-host`（`RequestError` 等）は一切 import しない
+//! 依存する（クレート内では実行状態 [`crate::status`] とリソース照会の結果語彙
+//! `schedule::resources::ResourceOutcome` を借りる）。`shiori-host32-host`（`RequestError` 等）は一切 import しない
 //! ——[`ShioriFailure`] は host32 非依存の**再表現**（`String` 保持）であり
 //! `RequestError` の re-export ではない。host32 型は `shiori/real.rs`（後続
 //! タスク）に封じ込め、この境界型は差し替え可能な mock/real の共通面となる
@@ -18,6 +19,7 @@
 //! 完了を [`ShioriOutcome::Notified`] として表す——ここに `Value` を運ぶ経路が
 //! 存在しないため、NOTIFY 応答から talk を生成できないことが構造的に保証される。
 
+use crate::schedule::resources::ResourceOutcome;
 use crate::status::ExecutionStatus;
 use crate::talk::EpilogueCommand;
 
@@ -186,6 +188,16 @@ pub enum KanadeMsg {
         /// バリアのタイムアウト指令（秒・3 値語彙）。`None`＝未指定（既定値へ委譲）・
         /// `Some(v <= 0.0)`＝無効化・`Some(v > 0.0)`＝明示秒指定。写像は kanade（DD-8）。
         timeout_directive_secs: Option<f64>,
+    },
+    /// SHIORI リソースの複数件照会（UI → kanade）。additive 増分。
+    ///
+    /// 状態機械を経ず殻がその場で答える（`actor_resources`）。応答は `ids` と同じ順・同じ長さで
+    /// 1 回だけ返る。会話できる状態でなければ SHIORI へ送らず全件 `NoContent`（要件 3.10）。
+    ResourceQuery {
+        /// 照会するリソース ID の列（許可表の要素・許可外はその id だけ `Failed`）。
+        ids: Vec<&'static str>,
+        /// 返信端（oneshot・[`ShioriMsg::Request`] と同じ envelope 規約）。
+        reply: areka_actor::ReplySender<Vec<(&'static str, ResourceOutcome)>>,
     },
 }
 
@@ -483,6 +495,8 @@ mod tests {
                 // 新 2 variant（Task 1.3）。
                 KanadeMsg::Choice(_) => "Choice",
                 KanadeMsg::ChoiceWaiting { .. } => "ChoiceWaiting",
+                // 殻で答える複数件のリソース照会（additive・既存の判別結果を変えない）。
+                KanadeMsg::ResourceQuery { ids: _, reply: _ } => "ResourceQuery",
             }
         }
         let existing = [

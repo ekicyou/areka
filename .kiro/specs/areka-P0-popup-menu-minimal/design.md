@@ -787,7 +787,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 - `actor.rs` の閉包: `KanadeMsg::Close` の腕の隣で `KanadeMsg::ResourceQuery { ids, reply } => { actor_resources::answer(&state, &shiori, ids, reply); return Ok(ControlFlow::Continue(())); }`。`step` を経ない（`drive` の「最後の応答だけ再投入」に乗らない）。
 - `actor_resources.rs`:
   - `fn queryable(phase: &Phase) -> bool` ＝ `matches!(phase, Phase::Steady { .. })`（純粋・テスト対象）。Boot 系（`Idle`〜`BootVersion`）・Close 系・`Unloading`・`Stopped` は `false`（要件 3.10 と「終了中は既定名」）。
-  - `answer`: `queryable` が `false` なら全件 `NoContent`。`true` なら各 id について `resources::resource_get(id, &snapshot_of(&state.phase))` を作り `round_trip_request(shiori, call)` で往復し、`ShioriOutcome` を `ResourceOutcome` へ写す（`boot.rs` の `on_prefetch_reply` と同じ写像: `Value(body)`→`Value`・`NoContent`→`NoContent`・`Failed(f)`→`Failed(f.to_string())`・それ以外→`Failed("unexpected")`＋`warn!`）。`reply.send(vec)`（受信側が待ちを諦めていれば送出失敗を無視）。
+  - `answer`: `queryable` が `false` なら全件 `NoContent`。`true` なら各 id について `resources::resource_get(id, &state.snapshot())` を作り（`steady.rs` の全送出と同じ形。`snapshot_of(&state.phase)` は選択待ちを知れず Status から `choosing` が落ちるので使わない＝実装タスク 2.2 のレビューで確定） `round_trip_request(shiori, call)` で往復し、`ShioriOutcome` を `ResourceOutcome` へ写す（`boot.rs` の `on_prefetch_reply` と同じ写像: `Value(body)`→`Value`・`NoContent`→`NoContent`・`Failed(f)`→`Failed(f.to_string())`・それ以外→`Failed("unexpected")`＋`warn!`）。`reply.send(vec)`（受信側が待ちを諦めていれば送出失敗を無視）。
   - `round_trip_request` は許可表で id を検査する（`is_allowed_resource_id`）。許可されない id は既存どおり拒否され、`Failed` として返す。
 - `resources.rs`: `ALLOWED_RESOURCE_IDS` を 10 名（`username`＋`FRAME_CAPTIONS` の 7＋`sakura.popupmenu.visible`＋`kero.popupmenu.visible`）へ。各要素の直上に `/// ukadoc: <URL#anchor>` 1 行（許可表の要素＝証拠の置き場・要件 10.4。`username` は既存）。`resource_get(id: &'static str, snapshot) -> ShioriCall` を足し、`resource_username` はそれを呼ぶ形に畳む。凍結テスト `allowed_resource_ids_are_exactly_username` は新しい集合の逐語一致に書き換える（名前も改める）。
 - `lib.rs`: `mod actor_resources;`。`ResourceOutcome` は既に公開（`schedule::resources`）。
@@ -797,7 +797,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 ##### Event Contract
 - 受信: `KanadeMsg::ResourceQuery`。inbox の順序どおり処理（他の入力の後ろに並ぶ）。
 - 応答: `Vec<(id, ResourceOutcome)>`・入力の id と同じ順・同じ長さ。1 回だけ（`ReplySender` は consume）。
-- Status ヘッダ: `ExecutionStatus::derive(&snapshot_of(&state.phase))`（会話中なら `talking`）。
+- Status ヘッダ: `ExecutionStatus::derive(&state.snapshot())`（会話中なら `talking`・選択待ちなら `choosing` も載る）。
 
 **Implementation Notes**
 - Validation（要件 9.2）: `crates/areka-kanade/tests/kanade/resource_query_test.rs` — 既存ハーネス（`spawn_harness`＋`Fixture`）で boot→`Steady{None}`（`without_boot_greeting`）へ進めた後に `ResourceQuery` を送り、偽 SHIORI が `readmebutton.caption` に ⑴ `Value("x")` ⑵ `Value("")` ⑶ 204 ⑷ 失敗（`spawn_mock_shiori_failing`＋`FailOn{id:"readmebutton.caption", ..}`）を返す 4 通りで `ResourceOutcome` が対応すること。Boot 中（`OnInitialize` で止める `spawn_mock_shiori_blocking`）に送ると全件 `NoContent`。`Fixture` に任意 GET id の応答を注入する口が無ければ、`mouse_responses` と同型の `resource_responses: HashMap<&'static str, MouseResponse>`（`Script`／`NoContent`）を `Fixture::with_resource_response` として足す（テスト支援の additive 追加）。

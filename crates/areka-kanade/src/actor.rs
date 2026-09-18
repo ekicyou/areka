@@ -105,6 +105,12 @@ pub fn spawn_kanade_with_stop_sink(
                     tracing::info!(target: "kanade", event = "close", "停止指示（Close）を受領——即時停止");
                     return Ok(ControlFlow::Break(()));
                 }
+                // リソース照会は step を経ずその場で答える（`drive` の「最後の応答だけ再投入」に
+                // 乗らない・運行状態は読むだけ）。
+                KanadeMsg::ResourceQuery { ids, reply } => {
+                    crate::actor_resources::answer(&state, &shiori, ids, reply);
+                    return Ok(ControlFlow::Continue(()));
+                }
                 KanadeMsg::Boot => Input::Boot,
                 KanadeMsg::Tick { now } => Input::Tick { now },
                 KanadeMsg::TalkDone(td) => Input::TalkDone(td),
@@ -295,7 +301,7 @@ fn execute_actions(
 ///   既存の fault 経路で処理＝檻専用の応答を発明しない・panic しない・宙吊りにしない）。
 /// - 許可集合内: 送出前に Method・イベント ID・参照値・実行状態の wire 証跡を `trace!`（event=
 ///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
-fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
+pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
     // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
     let (method, event_id, references, status_wire) = match &call {
