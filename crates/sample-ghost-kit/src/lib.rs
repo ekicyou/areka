@@ -259,7 +259,27 @@ pub enum SampleError {
         /// その検体が同時にインストールするバルーンの全て（無ければ空）。
         known: &'static [&'static str],
     },
+    /// ビルド成果物の置き場が決まらない（`CARGO_TARGET_DIR` も祖先の `target` も無い）。
+    #[error("build output directory not found from {started_from:?}; set CARGO_TARGET_DIR")]
+    TargetDirNotFound {
+        /// 祖先を辿り始めた場所（実行ファイル）。
+        started_from: PathBuf,
+    },
+    /// 開発用の根のファイル操作の失敗。何をしようとしたのかを添える。
+    #[error("{what} failed at {path:?}: {source}")]
+    Io {
+        /// 何をしようとしたか。
+        what: &'static str,
+        /// 対象のパス。
+        path: PathBuf,
+        /// 元の失敗。
+        #[source]
+        source: std::io::Error,
+    },
 }
+
+mod devroot;
+pub use devroot::WorkDir;
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};
