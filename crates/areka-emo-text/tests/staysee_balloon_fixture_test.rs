@@ -42,6 +42,7 @@
 //! | `bake` | `staysee_balloon_fixture/bake.rs` | 焼き込みと半透明の保持 |
 //! | `region` | `staysee_balloon_fixture/region.rs` | 文字の領域解決と既定書体の受け入れ口 |
 //! | `wrapping` | `staysee_balloon_fixture/wrapping.rs` | 折返しと描画範囲への内包 |
+//! | `script` | `staysee_balloon_fixture/script.rs` | 選択肢と遅延座標指定の位置 |
 //!
 //! ### 置き場がテーマ別**ディレクトリ**である理由
 //!
@@ -82,6 +83,10 @@ mod region;
 #[cfg(test)]
 #[path = "staysee_balloon_fixture/wrapping.rs"]
 mod wrapping;
+
+#[cfg(test)]
+#[path = "staysee_balloon_fixture/script.rs"]
+mod script;
 
 // ── 検体の所在（要件 3.2: パスを持つのはこの 1 定数だけ）───────────────────
 
