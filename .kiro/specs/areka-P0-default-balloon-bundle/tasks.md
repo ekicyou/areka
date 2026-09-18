@@ -17,7 +17,7 @@
   - 完了状態: 保管フォルダ直下に 29 ファイルがちょうど存在し、readme・ライセンス・インストール指示を含め areka が読まないファイルも 1 つも欠けていない
   - _Requirements: 2.1, 2.2, 2.6, 5.4_
 
-- [ ] 1.3 保管の機械検査を通し、出典記録を書く
+- [x] 1.3 保管の機械検査を通し、出典記録を書く
   - 保管後に 29 ファイルのハッシュを採り直し、取得時の一覧と一致することを確かめる
   - 保管フォルダを索引へ追加してから索引側の改行表示を採る（索引に入るまでこの照会は何も返さない）
   - 改行変換が掛かっていないことを属性照会と索引の改行表示の 2 通りで確かめ、ファイル名をリポジトリ直下の除外規則と大小無視で照合して当たる名前が 0 件であることを確かめる
@@ -152,3 +152,6 @@
 - preflight: この worktree は `vendors/pasta` サブモジュールが未初期化だった。`cargo` は `[patch.crates-io]` の `pasta_core` を解決できず即座に落ちる。`git submodule update --init --recursive` が要る。
 - 1.1: `cargo test --workspace` は i686 の成果物を **2 つ**要求する。helper（`target/debug/shiori-host32-helper.exe`）だけでなく **testdll**（`cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc` → `target/i686-pc-windows-msvc/debug/shiori.dll`）も要る。testdll が無いと `shiori-host32-host::lifecycle_cyclic_e2e::cyclic_run_and_clean_shutdown` が赤になり、そこで走行が打ち切られて 81→60 ターゲット・7,668→5,411 本しか採れない（＝部分的な緑を全体と誤認する罠）。
 - 1.1: 基準値は `--no-fail-fast` 付きで採った。タスク 6 も旗をそろえること（全緑のときだけ素の `cargo test --workspace` と同本数になる）。基準: passed 7,668 / failed 0 / ignored 40・`Running` 81 ＋ `Doc-tests` 22 ＝ `test result:` 103 行。基準コミット `082379b3`。
+- 1.3: Git Bash の `grep` は入力の CR を自分で落とす。**改行の判定に `grep` を使わないこと**（LF のみの `LICENSE` に対し `grep -c $'\r$'` が 121 という嘘を返した）。`od -An -tu1`／`tr -cd '\r'` で数えること。
+- 1.3: `git check-ignore` は `-v` を付けると打ち消し規則（`vendors/sample_ghost/.gitignore` の `!*_test.txt`）への一致も報告して exit 0 を返す。除外の判定に使うのは `-v` なしの形。
+- 1.3: 設計 C1 の 2 か所が実測と合わない（記録は実測側を採用済み）。⑴「`git ls-files --eol` で `i/-text` を確認」→ 実測は `i/-text` 25・`i/crlf` 3・`i/lf` 1（`i/` 欄は属性でなく索引に入ったバイト列の改行を映す）。⑵「取得時の一覧（`research.md` §8.2 で採取済み）」→ §8.2 にハッシュ一覧は**無い**（64 桁 16 進 0 件）。基準は上流 blob に置いた。
