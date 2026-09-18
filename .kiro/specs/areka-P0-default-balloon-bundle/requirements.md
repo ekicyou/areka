@@ -20,7 +20,7 @@ areka を初めて手にする第三者。第三者のゴーストの多くは�
 
 ### 候補（2026-09-18 調査）
 
-**`Balloon for Staysee Syncfield`**（id `StayseeBalloon`・作者 SSP BUGTRAQ＝SSP 本家の作者・`github.com/ponapalt/StayseeBalloon`）。LICENSE は **CC0-1.0**、readme 原文「■転載・再配布・同梱・改変等について　煮るなり焼くなり好きにしてください。License : CC0」「特定のゴーストを意識して作ったバルーンですが、専用指定はしていません」「半透明（アルファチャンネル）ONを前提に作っており、OFFではまともに見られません」。descript は `charset,Shift_JIS`・`type,balloon`・`use_self_alpha,1`・`use_input_alpha,1`・`validrect.left,22`／`top,20`／`right,-26`／`bottom,-47`・`font.height,12`・`vertical` **無し**。ファイルは `balloons0〜3.png`・`balloonk0〜1.png`・`balloonc0〜4.png`・`arrow0/1.png`・`online0〜8.png`・`marker.png`・`sstp.png`・`thumbnail.pnr`・`readme.txt`・`descript.txt`・`install.txt`・`LICENSE`。`.pna` 無し。唯一の注意事項「半透明前提」は areka の固定の扱いと一致する。
+**`Balloon for Staysee Syncfield`**（id `StayseeBalloon`・作者 SSP BUGTRAQ＝SSP 本家の作者・`github.com/ponapalt/StayseeBalloon`）。LICENSE は **CC0-1.0**、readme 原文「■転載・再配布・同梱・改変等について　煮るなり焼くなり好きにしてください。License : CC0」「特定のゴーストを意識して作ったバルーンですが、専用指定はしていません」「半透明（アルファチャンネル）ONを前提に作っており、OFFではまともに見られません」。descript は `charset,Shift_JIS`・`type,balloon`・`use_self_alpha,1`・`use_input_alpha,1`・`paint_transparent_region_black,0`・`validrect.left,22`／`top,20`／`right,-26`／`bottom,-47`・`font.height,12`。`vertical`・`wordwrappoint.*`・`font.name` の宣言は **無い**（それぞれ横書き扱い・折返し基準は `validrect` の遠辺・書体は既定の `ＭＳ ゴシック` へ縮退する＝いずれも areka の既存の縮退経路）。ファイルは `balloons0〜3.png`・`balloonk0〜1.png`・`balloonc0〜4.png`・`arrow0/1.png`・`online0〜8.png`・`marker.png`・`sstp.png`・`thumbnail.pnr`・`readme.txt`・`descript.txt`・`install.txt`・`LICENSE`。`.pna` 無し。唯一の注意事項「半透明前提」は areka の固定の扱いと一致する。
 
 不採用の候補: SSP 同梱の「SSPデフォルト+」「balloon for Emily/P4」は再配布条件が公開されておらず借用の根拠が薄い。自作の無地バルーンは既製品より高くつくので、CC0 候補が見た目で不採用になった場合の**次善**として残す。
 
@@ -49,7 +49,7 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
   - 縦書き（StayseeBalloon の descript に `vertical` が無いので横書きのみ。縦書きでの検証は 0 件）。
   - 既存の検体（`emo2-kakukaku` とその派生 2 つ）の内容変更・既存テストの期待値変更。
 - **Adjacent expectations**:
-  - **並走**: `areka-P0-nar-install`（A0-①）と `areka-P0-popup-menu-minimal`（A0-②）。本仕様は `vendors/sample_ghost/StayseeBalloon/`・新規テストファイル・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳 3 文書だけに触り、`nar-install` が書き換える検体参照ファイル（実測 38）と共有 0 を保つ。
+  - **並走**: `areka-P0-nar-install`（A0-①）と `areka-P0-popup-menu-minimal`（A0-②）。本仕様は `vendors/sample_ghost/StayseeBalloon/`・新規テストファイル・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳 3 文書だけに触り、`nar-install` が書き換える検体参照ファイルと共有 0 を保つ。
   - **下流**: `areka-P0-nar-install`（畳む対象と共有ヘルパの検体名に `StayseeBalloon` を足す）・`areka-P0-baseware-root-layout`（解決順の最後に既定バルーン id を渡す定数 1 つ）・`areka-P0-alpha-release-signoff`（zip に `balloon/StayseeBalloon/` を入れる・README に出典と CC0 と「半透明前提のバルーンだけが正しく表示される」既知の制限を書く）。
   - **前提**（完了済み）: `areka-P0-balloon-parse`・`balloon-vertical-canon`・`balloon-font-descript-keys`（descript の読み手）・`areka-P0-kero-balloon`（`balloonk*`）・`areka-P0-charset-canon`（descript の `charset,Shift_JIS` の復号）。
 
@@ -87,11 +87,11 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall StayseeBalloon を検体にした決定論テストを**新規のテストファイルだけ**で足し、既存のテスト・example（検体パスを参照する実測 38 ファイルを含む）を 1 行も変えない。
+1. The 本仕様 shall StayseeBalloon を検体にした決定論テストを**新規のテストファイルだけ**で足し、既存のテスト・example（検体パスを参照する既存ファイルをすべて含む）を 1 行も変えない。数え方によって件数が揺れるので、判定の基準は件数ではなく「既存ファイルへの変更 0 行」とする。
 2. The 新規テスト shall 検体フォルダのパスを **1 か所の定数**にだけ持ち、`nar-install` が共有ヘルパへ寄せるときに 1 行の付け替えで済む形にする。
-3. When StayseeBalloon の `descript.txt`（`charset,Shift_JIS`）を読んだ, the areka shall `type,balloon`・`id,StayseeBalloon`・`name,Balloon for Staysee Syncfield`・`validrect.left,22`／`top,20`／`right,-26`／`bottom,-47`・`font.height,12` を宣言どおりに読み取り、`vertical` は未指定（横書き）として扱う。
+3. When StayseeBalloon の `descript.txt`（`charset,Shift_JIS`）を読んだ, the areka の定義の読み手（`crates/areka-parsers/`）shall `type,balloon`・`id,StayseeBalloon`・`name,Balloon for Staysee Syncfield`・`validrect.left,22`／`top,20`／`right,-26`／`bottom,-47`・`font.height,12` を宣言どおりに読み取り、`vertical`・`wordwrappoint.*`・`font.name` は未指定として扱う（それぞれ横書き・`validrect` の遠辺・既定書体へ縮退）。`type`／`id`／`name` を保持する型は現状の本番コードに無いので、どの読み口で読むかは Requirement 8.1（本番コード変更 0 行）を崩さない範囲で設計が決める。
 4. When StayseeBalloon の枠画像を本体側（`balloons*`）と相方側（`balloonk*`）で焼き込んだ, the areka shall 面 0 をどちらの側でも解決し、透過部分（α）を保ったまま合成する（半透明前提の画像がそのまま見える）。
-5. When StayseeBalloon の枠に半角のみ・全角のみ・半角全角混在の本文を流し込んだ, the areka shall 各行を `wordwrappoint` を超えたら折り返し、`validrect` を 1 画素も超えずに描く（既存の検体で固定している折返し・描画範囲の観測と同じ観測を StayseeBalloon で取る）。
+5. When StayseeBalloon の枠に半角のみ・全角のみ・半角全角混在の本文を流し込んだ, the areka shall 各行を折返し基準（`wordwrappoint`。StayseeBalloon は未宣言なので `validrect` の遠辺へ縮退する）を超えたら折り返し、`validrect` を 1 画素も超えずに描く（既存の検体で固定している折返し・描画範囲の観測と同じ観測を StayseeBalloon で取る）。
 6. When StayseeBalloon の枠に選択肢（`\q`）と遅延座標指定（`\_l`）を含む台本を流し込んだ, the areka shall 選択肢の目印と本文の位置が `validrect` の内側に収まり、`\_l` の指定位置に本文が置かれる。
 7. When 表示スケール k≠1（少なくとも 1 つ・既存の検体で使っている値）で StayseeBalloon を配置した, the areka shall 枠の寸法と `validrect`・`origin`・`wordwrappoint` の座標を同じ k で拡大し、k=1 と同じ行数・同じ折返し位置になる。
 8. The 新規テスト shall StayseeBalloon に在って areka が使わない資産（`balloonc*`・`arrow*`・`online*`・`marker.png`・`sstp.png`・`thumbnail.pnr`）が焼き込みの列挙に**載らない**こと、および載らないことが `error!` を 1 件も出さないことを固定する。
@@ -152,6 +152,6 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 
 1. The 本仕様 shall 本番コード（`crates/*/src/` の非テストファイル）の変更を **0 行**とする。
 2. The 本仕様 shall 新規の外部依存を **0** とし、`Cargo.toml` を 1 つも変えない。
-3. The 本仕様 shall `areka-P0-nar-install` が書き換える検体参照ファイル（実測 38）と `areka-P0-popup-menu-minimal` の接触面（`input_events/`・新規 `menu.rs`）に触れず、共有ファイル 0 を保つ。
+3. The 本仕様 shall `areka-P0-nar-install` が書き換える検体参照ファイルと `areka-P0-popup-menu-minimal` の接触面（`input_events/`・新規 `menu.rs`）に触れず、共有ファイル 0 を保つ。
 4. When 本仕様の変更を取り込んだ, the ワークスペース shall `cargo test --workspace` が着手前と同じ本数で緑になり（i686 helper が要るテストは既存の手順どおり）、`cargo fmt --check` と 1,000 行の番人が緑である。
 5. The 本仕様 shall 保管フォルダ・新規テスト・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳 3 文書（`assets.toml`・`roadmap-draft.md`・報告）・隣接 brief への申し送り以外のファイルに触れない。
