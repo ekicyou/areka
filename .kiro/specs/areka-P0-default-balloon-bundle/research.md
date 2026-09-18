@@ -298,6 +298,11 @@
 #### DD6: `roadmap-draft.md` の行追加と `snapshot_on` 据え置き（§5 の 4）
 - **Selected**: `[[spec]]` 行（`name = "areka-P0-default-balloon-bundle"`・`stage = "A"`・`bundle = "絵の重ね方"`・`owner_count = 1`・`wave = "A0"`）を末尾に足し、`[briefs].count = 28`、`snapshot_on` は `"2026-09-13"` のまま。表の直前の散文に「2026-09-18 に本 spec の行を 1 行足した（台帳の宛先に書いたため腕 f が要求する）」を 1 文加える。
 
+#### DD8: `briefing.md` の `[[barrier]]` 2 数値を変更範囲に含める（設計検証 Critical Issue 1・2026-09-18）
+- **Context**: 台帳の `absent`→`degraded` で `briefing.md` §4-2 `[[barrier]] page = "descript_balloon"` の `degraded = 6`／`absent = 123` が台帳の数え直しと 1 ずつ食い違い、`briefing_arms.rs` の `distribution_findings` が赤になる（要件 6.5 と 8.5 が両立しない）。前例: `balloon-font-descript-keys`（記憶「台帳を触ると briefing/roadmap-draft の手書きの数が赤」）。
+- **Selected**: `degraded` 6→7・`absent` 123→122 の 2 数値だけを変更範囲に加え、要件 8.5 の列挙に `briefing.md` を足す。C5 の順序は 台帳 → `roadmap-draft.md` → `briefing.md` → 報告 → 検査。あわせて `roadmap-draft.md` 束表「絵の重ね方」の「依存する既存 spec」欄に本 spec を足す（機械照合外・陳腐化予防）。
+- **Rationale**: 6.5（番人が緑）を満たす唯一の形で、8.5 の意図（無関係なファイルに触れない）は台帳文書の範囲内なので崩れない。
+
 #### DD7: `verification/` は 2 本
 - **Selected**: `provenance.md`（取得元・コミット・日付・readme の版・29 本の sha256・`.gitignore` 照合・`check-attr`・`id`＝`directory`・要件 2.6 の判定）と `signoff-record.md`（裁定 1.2 の記録・不採用理由・決定論テストの結果・較正の差・実機目視の観察記録・3.9／4.3 の処理・README 申し送り文・台帳検査の結果・下流申し送りの実施記録）。
 - **Rationale**: 完了 spec の慣行（`charset-canon` の `signoff-record.md`＋`boundary-record.md`）に倣い、出典（機械が照合する値）と判断（人が読む記録）を分ける。

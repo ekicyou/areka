@@ -35,7 +35,7 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
   - `vendors/sample_ghost/StayseeBalloon/` への展開フォルダ保管（原作ファイル無改変・バイト保存・取得元の記録）。
   - StayseeBalloon を検体にした表示検証——決定論テスト（新規ファイルのみ）＋実機目視 1 度（表示スケール k≠1 を含む）。崩れは areka 側の欠陥として本仕様内で直すか、引受先を実在確認して先送りする。
   - 出典・CC0 の記録（本仕様の `verification/`）と、第三者向け README への申し送り。
-  - 裁量の登記: `doc/COMPAT_ARCHITECTURE.md` §8 に 1 行、台帳 `assets.toml` の `use_self_alpha` 項目の状態・備考・宛先、`roadmap-draft.md` の `[[spec]]` 行、報告の作り直し。
+  - 裁量の登記: `doc/COMPAT_ARCHITECTURE.md` §8 に 1 行、台帳 `assets.toml` の `use_self_alpha` 項目の状態・備考・宛先、`roadmap-draft.md` の `[[spec]]` 行、`briefing.md` の分布 2 数値、報告の作り直し。
   - 既定バルーン id `StayseeBalloon` の下流への申し送り。
 - **Out of scope**:
   - `.pna`・`use_self_alpha,0`・`use_input_alpha`・`paint_transparent_region_black` の実装（読まない・常に 1 の裁量）。台帳の `use_input_alpha`・`paint_transparent_region_black` の 2 項目は**触らない**（`absent`・宛先空のまま＝変更 0）。
@@ -129,7 +129,7 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 2. The 本仕様 shall 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の項目 `ukadoc:descript_balloon:use_self_alpha_2c_5024:1` を `status = "degraded"`（動くが正典どおりではない＝宣言に依らず常に 1）・`owner = "areka-P0-default-balloon-bundle"` に改め、備考に「どう違うか」（`0` と書いたバルーンでも 1 として扱う・記録は出ない・裁量は §8 に登記）を書く。`priority` は変えない。
 3. The 本仕様 shall 台帳の隣の 2 項目（`use_input_alpha_2c_6570_5024:1`・`paint_transparent_region_black_2c_6570_5024:1`）を**変えない**（`absent`・宛先空のまま。理由: 本仕様は既定バルーンの資産が主で、これらは §8 の 1 行で裁量が読めれば足りる。宛先を本仕様にすると完了時に実装済みか縮退が求められる）。
 4. When 台帳の宛先に本仕様の名前を書いた, the 本仕様 shall `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` に本仕様の行（`name`・`stage = "A"`（項目の優先度 `A15` の段階）・`bundle = "絵の重ね方"`（`linkage.md` に実在する束名）・`owner_count` は台帳 4 本を数え直した実数（本仕様の裁定どおりなら 1）・`wave` は正本 `roadmap.md` のウェーブ表記 `A0`）を足し、`[briefs].count` を行数に合わせて 1 増やす。
-5. When 台帳を触った, the 本仕様 shall ドメイン別報告と全体報告（`cargo run -p ukadoc-survey -- report` と `report-summary`）を作り直し、`cargo test -p ukadoc-survey` の常設の検査（判定 ⑸ の腕 a〜f を含む）が緑であることを記録に書く。
+5. When 台帳を触った, the 本仕様 shall ドメイン別報告と全体報告（`cargo run -p ukadoc-survey -- report` と `report-summary`）を作り直し、`cargo test -p ukadoc-survey` の常設の検査（判定 ⑸ の腕 a〜f と、`briefing.md` の `[[barrier]]` 行を台帳と突き合わせる分布の検査を含む）が緑であることを記録に書く。台帳の状態を変えると `briefing.md` の `[[barrier]] page = "descript_balloon"` の `degraded`／`absent` が 1 ずつ食い違うので、その 2 数値を台帳の数え直しに合わせる（他の数は触らない）。
 6. The 本仕様 shall 本番コードに正典 URL のコメントを**足さない**（`degraded` は証拠を要求されない・本番コードの変更 0 を保つ）。
 
 ### Requirement 7: 下流への申し送り——既定バルーンの id
@@ -149,8 +149,8 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 本番コード（`crates/*/src/` の非テストファイル）の変更を **0 行**とする。
+1. The 本仕様 shall 本番コード（`crates/*/src/` の非テストファイル）の変更を **0 行**とする。Requirement 3.9／4.3 で areka 側の欠陥を本仕様内で直す場合だけが例外で、その場合は何を・なぜ変えたかを `verification/` に明記する。
 2. The 本仕様 shall 新規の外部依存を **0** とし、`Cargo.toml` を 1 つも変えない。
 3. The 本仕様 shall `areka-P0-nar-install` が書き換える検体参照ファイルと `areka-P0-popup-menu-minimal` の接触面（`input_events/`・新規 `menu.rs`）に触れず、共有ファイル 0 を保つ。
 4. When 本仕様の変更を取り込んだ, the ワークスペース shall `cargo test --workspace` が着手前と同じ本数で緑になり（i686 helper が要るテストは既存の手順どおり）、`cargo fmt --check` と 1,000 行の番人が緑である。
-5. The 本仕様 shall 保管フォルダ・新規テスト・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳 3 文書（`assets.toml`・`roadmap-draft.md`・報告）・隣接 brief への申し送り以外のファイルに触れない。
+5. The 本仕様 shall 保管フォルダ・新規テスト・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳文書（`assets.toml`・`roadmap-draft.md`・`briefing.md` の `[[barrier]]` 2 数値・報告）・隣接 brief への申し送り以外のファイルに触れない。

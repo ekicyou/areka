@@ -8,7 +8,7 @@
 
 **Users**: 第三者（既定バルーンで喋るゴーストを見る）・開発者（毎回のテストで表示保証を持つ）・下流 spec の実装者（`nar-install`＝畳む対象、`baseware-root-layout`＝既定 id、`alpha-release-signoff`＝zip と README の出典文）。
 
-**Impact**: 本番コード（`crates/*/src/` の非テストファイル）の変更 **0 行**・`Cargo.toml` 変更 0・新規外部依存 0。増えるのは保管フォルダ 1 つ（29 ファイル）・新規テストファイル 1 本・`verification/` 2 本・文書 6 か所（`COMPAT_ARCHITECTURE.md` §8 の 1 行・台帳 1 項目・`roadmap-draft.md` 1 行＋count・報告 2 本・隣接 brief 3 本）。
+**Impact**: 本番コード（`crates/*/src/` の非テストファイル）の変更 **0 行**・`Cargo.toml` 変更 0・新規外部依存 0。増えるのは保管フォルダ 1 つ（29 ファイル）・新規テストファイル 1 本・`verification/` 2 本・文書 7 か所（`COMPAT_ARCHITECTURE.md` §8 の 1 行・台帳 1 項目・`roadmap-draft.md` 1 行＋count＋束表 1 欄・`briefing.md` の 2 数値・報告 2 本・隣接 brief 3 本）。
 
 ### Goals
 
@@ -36,7 +36,7 @@
 - 新規テストファイル `crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs`（検体パス定数 1 つを含む）。
 - 記録 `verification/signoff-record.md`（裁定・テスト結果・実機目視・README 申し送り文・台帳検査・下流申し送りの実施記録）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の透過の扱いの行（1 行）。
-- 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 1 項目（`use_self_alpha_2c_5024:1`）の `status`／`owner`／`note`、`doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` 1 行＋`[briefs].count`＋散文 1 文、報告 `doc/ukadoc-coverage/report/assets.md`・`report/summary.md` の作り直し。
+- 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 1 項目（`use_self_alpha_2c_5024:1`）の `status`／`owner`／`note`、`doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` 1 行＋`[briefs].count`＋散文 1 文＋束表「絵の重ね方」の「依存する既存 spec」欄、`doc/ukadoc-coverage/briefing.md` の `[[barrier]] page = "descript_balloon"` の `degraded`／`absent` の 2 数値、報告 `doc/ukadoc-coverage/report/assets.md`・`report/summary.md` の作り直し。
 - 隣接 brief 3 本（`areka-P0-nar-install`・`areka-P0-baseware-root-layout`・`areka-P0-alpha-release-signoff`）への申し送り 1 段ずつ。
 - 既定バルーン id `StayseeBalloon`＝フォルダ名 `StayseeBalloon` という事実の権威（下流はこれを写す）。
 
@@ -51,7 +51,7 @@
 
 ### Allowed Dependencies
 
-- **公開 API（読み取りのみ・変更しない）**: `areka_emo_present::balloon::{resolve_balloon_faces, load_scope_balloon_model, build_balloon_target_from_faces, ResolvedFace, ChainTier}`／`areka_emo_atlas::{WicDecoderArm, AtlasTable, SetId}`／`areka_parsers::{balloon::{parse_str, BalloonModel}, charset::{decode, DefaultEncoding}, kv::parse_kv, sakura::parse}`／`areka_sakura::{compile, contract::*}`／`areka_emo_text::{region::{TextRegion, ScaleContract, ImagePx}, draw::{ResolvedFont, DWriteMetrics, DEFAULT_FONT_NAME}, layout::{LayoutEngine, GlyphMetrics, FixedMetrics, WrapPlan, PositionedLine}, state::{TextLayerState, TextLayerConfig}, actor::{ResolvedBalloonText, TextSlotBinding}, writing::WritingMode}`／`log_capture_kit::capture`／`wintf::com::dwrite::dwrite_create_factory`／`windows::Win32::System::Com::CoInitializeEx`。すべて `crates/areka-emo-text/Cargo.toml` の既存の `[dependencies]`／`[dev-dependencies]` に在る。
+- **公開 API（読み取りのみ・変更しない）**: `areka_emo_present::balloon::{resolve_balloon_faces, load_scope_balloon_model, build_balloon_target_from_faces, ResolvedFace, ChainTier}`／`areka_emo_atlas::{WicDecoderArm, AtlasTable, SetId}`／`areka_parsers::{balloon::{parse_str, BalloonModel}, charset::{decode, DefaultEncoding}, kv::parse_kv, sakura::parse}`／`areka_sakura::{compile, contract::*}`／`areka_emo_text::{region::{TextRegion, ScaleContract, ImagePx}, draw::{ResolvedFont, DWriteMetrics, DEFAULT_FONT_NAME}, layout::{LayoutEngine, GlyphMetrics, FixedMetrics, WrapPlan, PositionedLine}, state::{TextLayerState, TextLayerConfig}, actor::{ResolvedBalloonText, TextSlotBinding}, choice::{highlight_band_extent, ResolvedChoiceStyle}, writing::WritingMode}`／`log_capture_kit::capture`／`wintf::com::dwrite::dwrite_create_factory`／`windows::Win32::System::Com::CoInitializeEx`。すべて `crates/areka-emo-text/Cargo.toml` の既存の `[dependencies]`／`[dev-dependencies]` に在る。
 - **保管慣行**: `vendors/sample_ghost/.gitattributes`（`* -text`）・`vendors/sample_ghost/.gitignore`（打ち消し）——本仕様は**読むだけ**で書き換えない。
 - **番人**: `crates/ukadoc-survey/tests/consistency/spec_checks.rs` 腕 a〜f・`crates/log-capture-kit/tests/file_length_guard_test.rs`——通すだけで書き換えない。
 - **実機目視の起動経路**: `areka.exe <ゴーストの根> <バルーンの根>`（`crates/areka/src/boot_config.rs` `resolve_config_inputs` の `args[2]`）——絶対パスで起動する（記憶 areka-emo2-signoff-needs-absolute-paths）。
@@ -154,7 +154,8 @@ crates/areka-emo-text/tests/
 
 doc/COMPAT_ARCHITECTURE.md                    # 変更: §8 の表に 1 行
 doc/ukadoc-coverage/ledger/assets.toml        # 変更: use_self_alpha_2c_5024:1 の status/owner/note
-doc/ukadoc-coverage/roadmap-draft.md          # 変更: [[spec]] 1 行・[briefs].count 28・散文 1 文
+doc/ukadoc-coverage/roadmap-draft.md          # 変更: [[spec]] 1 行・[briefs].count 28・散文 1 文・束表「絵の重ね方」の依存 spec 欄
+doc/ukadoc-coverage/briefing.md               # 変更: [[barrier]] descript_balloon の degraded 6→7・absent 123→122（2 数値のみ）
 doc/ukadoc-coverage/report/assets.md          # 再生成: cargo run -p ukadoc-survey -- report
 doc/ukadoc-coverage/report/summary.md         # 再生成: cargo run -p ukadoc-survey -- report-summary
 .kiro/specs/areka-P0-nar-install/brief.md              # 変更: 末尾に申し送り 1 段
@@ -167,7 +168,8 @@ doc/ukadoc-coverage/report/summary.md         # 再生成: cargo run -p ukadoc-s
 
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の 4 列表に 1 行（C4）。他の節は触らない（`popup-menu-minimal` 等が別節を触る）。
 - `doc/ukadoc-coverage/ledger/assets.toml` — 1 項目の `status`→`"degraded"`・`owner`→`"areka-P0-default-balloon-bundle"`・`note` の書き換え。`priority = "A15"`・`values`・`links`・`introduced` は不変。隣の 2 項目は不変。
-- `doc/ukadoc-coverage/roadmap-draft.md` — `[[spec]]` 行の追加・`count = 28`・散文 1 文。`snapshot_on` 不変。
+- `doc/ukadoc-coverage/roadmap-draft.md` — `[[spec]]` 行の追加・`count = 28`・散文 1 文・束表「絵の重ね方」の「依存する既存 spec」欄に本仕様（A0・1 件）を書き足す（機械照合はされないが「表示するだけの数は必ず古びる」の再発を避ける）。`snapshot_on` 不変。
+- `doc/ukadoc-coverage/briefing.md` — `[[barrier]] page = "descript_balloon"` の `degraded` 6→7・`absent` 123→122 の **2 数値だけ**（`briefing_arms.rs` の `distribution_findings` が台帳の数え直しと機械照合する行。台帳の `absent`→`degraded` で必ず動く）。他の数（`[stage.X]`・`[[after]]`・`[priority_blank]`・`[tally]`・§7「縮退 2」）は優先度か 4 状態の和か `[[template]]` との積で数えるので動かない（設計検証で確認済み）。
 - `doc/ukadoc-coverage/report/assets.md`・`report/summary.md` — 道具で作り直す（手で編集しない）。
 - 隣接 brief 3 本＋本仕様の brief — 末尾追記のみ。
 
@@ -263,7 +265,7 @@ sequenceDiagram
 | C2 新規テスト | 検証 | 起動経路と同じ公開 API で値を固定 | 1.3, 2.2, 3.1〜3.8, 3.11, 5.4, 7.1 | `areka-emo-present`（P0）・`areka-emo-atlas` WIC（P0）・`log-capture-kit`（P1）・`ＭＳ ゴシック`（P1） | Batch |
 | C3 記録 2 本 | 記録 | 出典（機械照合）と判断（人が読む） | 1.1, 1.2, 1.4, 2.3〜2.6, 3.9, 4.2, 4.3, 5.1, 5.2, 6.5, 7.1 | — | State |
 | C4 §8 の行 | 登記 | 透過の扱いの裁量を対応表へ | 6.1 | `doc/COMPAT_ARCHITECTURE.md` 4 列表（P0） | State |
-| C5 台帳 3 文書 | 登記 | 項目の状態・宛先・報告 | 6.2〜6.5 | `spec_checks.rs` 腕 a〜f（P0）・`ukadoc-survey` CLI（P0） | Batch |
+| C5 台帳文書 | 登記 | 項目の状態・宛先・分布・報告 | 6.2〜6.5 | `spec_checks.rs` 腕 a〜f（P0）・`briefing_arms.rs` `distribution_findings`（P0）・`ukadoc-survey` CLI（P0） | Batch |
 | C6 下流申し送り | 申し送り | id と README 文を brief へ | 5.2, 7.3, 7.4 | 3 brief の実在（P0） | State |
 | C7 実機目視 | 検証（手動） | k=1／k≠1 の見え方 | 4.1 | `areka.exe` argv・i686 helper（P0） | Batch |
 | C8 非回帰の検査 | 検証 | 触っていないことの機械証明 | 2.7, 3.1, 3.10, 5.3, 6.3, 6.6, 7.2, 8.1〜8.5 | `git`・`cargo`（P0） | Batch |
@@ -331,7 +333,7 @@ sequenceDiagram
 | F 既定書体の門 | 1.3, 3.5 | `ResolvedFont::resolve(&model)`・`DWriteMetrics::new(&factory, &font, HorizontalTb, &TextLayerConfig::default())` | `font.name == "ＭＳ ゴシック"` かつ `== DEFAULT_FONT_NAME`・`height == 12.0`・`advance('a',12) == 6.0`・`advance('あ',12) == 12.0`・`line_box_height(12) == 12.0`・`line_pitch(12) == 14.0`（実装時に実測で較正・差は `signoff-record.md` へ） |
 | G 折返しと内包 | 3.5 | 全角のみ 60 字／半角のみ 120 字／混在（全角・半角交互 90 字）の 3 本文を `TextItem` 列にし `LayoutEngine::layout(items, len, &region, HorizontalTb, 12.0, &metrics, WrapPlan::CharByChar)` | 各グリフ矩形が `[22,309]×[20,158]` の内（1 画素も超えない）・行の上端は 20＋14(n−1)・全角のみは 1 行 23 字（3 行）・半角のみは 1 行 47 字（3 行）・混在は各行の送り幅合計 ≤ 287 かつ「次行の先頭グリフを足すと 287 を超える」（貪欲充填の性質）。scope 1 の高さ 68 で 5 行目の下端 88 ＝ 境界ちょうどであふれ非発火（`visible_window`） |
 | H 選択肢とカーソル | 3.6 | 台本 `\_l[60,42]本文\n\q[はい,yes]\n\q[いいえ,no]` を `sakura::parse`→`compile`→`apply_cue`→`layout`（`kero_menu_capacity_test.rs` の経路） | `\_l` 直後のグリフ左上 ＝ (22+60, 20+42)＝(82,62)。選択肢 2 行のグリフ矩形と `highlight_band_extent(12, 12, 14)` の帯がすべて validrect の内（areka の「選択肢の目印」は現状 hover の帯であり、独立の目印画像は α 後の `choice-marker-styling`）。`choice_style` は `cursor.style,square` → SquareFill 実導出 |
-| I スケール | 3.7 | `TextSlotBinding::new(slot, window, k, ceil(335k)×ceil(205k), (335,205))` for k∈{1.0, 1.25, 2.0}・`ScaleContract::new(k, None)` | `binding.image_size`（公開フィールド）は k に依らず (335,205)・`binding.scale == k`。`physical_extent(ImagePx(287))`＝ceil(287k)（k=1.25→359・k=2→574）・`to_physical(ImagePx(22))`＝22k。檻 G の本文で `layout` を k ごとに解き、`PositionedLine` 列が k=1 と**同一**（行数・折返し位置） |
+| I スケール | 3.7 | `TextSlotBinding::new(slot, window, k, ceil(335k)×ceil(205k), (335,205))` for k∈{1.0, 1.25, 2.0}・`ScaleContract::new(k, None)` | `binding.image_size`（公開フィールド）は k に依らず (335,205)・`binding.scale == k`。`physical_extent(ImagePx(287))`＝ceil(287k)（k=1.25→359・k=2→574）・`to_physical(ImagePx(22))`＝22k。`ResolvedBalloonText::resolve(&model, binding.image_size)` の region が k に依らず檻 E と同値（本番の領域解決の入力が物理寸法でなく `image_size` であることの固定）。**`layout` 自体は k を引数に取らない**（image px）ので「k ごとに解き直して同一」は恒真＝檻に置かない |
 
 - Trigger: `cargo test -p areka-emo-text --test staysee_balloon_fixture_test`（`--workspace` に含まれる）。
 - Idempotency & recovery: 全檻は読み取り専用・一時ファイル 0・同一入力で同一結果。COM は各テストで初期化（二重は許容）。
@@ -386,7 +388,7 @@ sequenceDiagram
 - 行（4 列）: 項目「バルーンの `use_self_alpha`／`use_input_alpha`／`paint_transparent_region_black` と `.pna`」｜裁量「宣言を読まず常に `use_self_alpha,1` 相当（PNG の α をそのまま尊重）で焼く。`.pna` は読まない」｜根拠「開発者裁定 2026-09-18・`areka-emo-present/src/balloon.rs` のモジュール doc と `build_balloon_target_from_faces` の `UseSelfAlpha::On` 固定・`areka/src/emo2_boot/assets.rs` の同固定・既知の制限＝半透明前提のバルーンだけが正しく表示される」｜出典 spec「areka-P0-default-balloon-bundle」。
 - 既存行の間に挟まず表の末尾へ足す（`popup-menu-minimal` 等の別節と衝突しない）。
 
-#### C5 台帳 3 文書
+#### C5 台帳文書（`assets.toml`・`roadmap-draft.md`・`briefing.md`・報告 2 本）
 
 | Field | Detail |
 |---|---|
@@ -396,10 +398,11 @@ sequenceDiagram
 **Contracts**: Batch [x]
 
 - `assets.toml` `[entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]`: `status = "degraded"`・`owner = "areka-P0-default-balloon-bundle"`・`note` を「壊れ方: 見た目の差（`0` と書いたバルーンでも 1 として扱う）。記録: なし。areka はこの欄を読まず常に `use_self_alpha,1` 相当で焼く（`areka-emo-present` の `balloon::build_balloon_target_from_faces` と `areka` の `emo2_boot::assets` が `UseSelfAlpha::On` を固定で渡す）。裁量は `COMPAT_ARCHITECTURE.md` §8 に登記（開発者裁定 2026-09-18）。担当 spec は areka-P0-default-balloon-bundle。」の趣旨で書く（実在する関数名だけを書く）。`priority`・`values`・`links`・`introduced` は不変。隣の 2 項目は不変（6.3）。
-- `roadmap-draft.md`: `[[spec]]` 行 `name = "areka-P0-default-balloon-bundle"`／`stage = "A"`／`bundle = "絵の重ね方"`／`owner_count = 1`／`wave = "A0"` を表の末尾へ・`[briefs].count = 28`・`snapshot_on` 不変・表の直前の散文に「2026-09-18 に `areka-P0-default-balloon-bundle` の行を 1 行足した（台帳の宛先に書いたため宛先の検査が行を要求する）」を 1 文（DD6）。
+- `roadmap-draft.md`: `[[spec]]` 行 `name = "areka-P0-default-balloon-bundle"`／`stage = "A"`／`bundle = "絵の重ね方"`／`owner_count = 1`／`wave = "A0"` を表の末尾へ・`[briefs].count = 28`・`snapshot_on` 不変・表の直前の散文に「2026-09-18 に `areka-P0-default-balloon-bundle` の行を 1 行足した（台帳の宛先に書いたため宛先の検査が行を要求する）」を 1 文（DD6）。束表「絵の重ね方」の「依存する既存 spec」欄（現在 `areka-P0-shell-parse`（完了・1 件）のみ）に `areka-P0-default-balloon-bundle`（A0・1 件）を足す。
+- `briefing.md`: `[[barrier]] page = "descript_balloon"` の `degraded = 6`→`7`・`absent = 123`→`122`。この 2 数値以外は触らない（DD8）。
 - 報告: `cargo run -p ukadoc-survey -- report` と `-- report-summary` で作り直す。手で編集しない。
-- 検査: `cargo test -p ukadoc-survey`（腕 a: count＝行数 28／b: 名前が `.kiro/specs/` 直下に実在／c: `owner_count` 1＝台帳の数え直し／d: 束「絵の重ね方」が `linkage.md` に実在／e: 該当なし／f: 宛先が `[[spec]]` に在る）。
-- 順序: 台帳 → `roadmap-draft.md` → 報告 → 検査（この順でないと c・f が赤のまま報告を作る）。
+- 検査: `cargo test -p ukadoc-survey`（腕 a: count＝行数 28／b: 名前が `.kiro/specs/` 直下に実在／c: `owner_count` 1＝台帳の数え直し／d: 束「絵の重ね方」が `linkage.md` に実在／e: 該当なし／f: 宛先が `[[spec]]` に在る。加えて `briefing_arms.rs` の `distribution_findings`: `descript_balloon` ページの状態別件数が台帳と一致）。
+- 順序: 台帳 → `roadmap-draft.md` → `briefing.md` の 2 数値 → 報告 → 検査（この順でないと c・f・分布が赤のまま報告を作る）。
 
 ### 申し送り
 
@@ -475,7 +478,7 @@ sequenceDiagram
 - **決定論テストの赤**（檻 A〜I）: 期待値が実測と違えば `assert!` の文言に値と出所を出して落ちる。導出値（檻 F・G）の較正差は「`ＭＳ ゴシック` のまま」であることを檻 F の名前検査で確かめた上で期待値を実測へ合わせ、理由を `signoff-record.md` §2 に書く。それ以外の差（領域座標・系列・名前集合・α）は保管フォルダか areka 側の欠陥の合図であり、期待値を緩めない（3.10）。
 - **areka 側の崩れ**（3.9／4.3）: バルーンを改変して合わせない。⑴ 本仕様内で直す（その時点で 8.1 の例外になるので `signoff-record.md` §4 に「何を・なぜ」を明記し、同じ崩れを再現する檻を C2 に足す）か、⑵ 引受先の spec が `.kiro/specs/` 直下に実在し `completed/` でないことを `test -d` で確かめてから先送りし、引受先の brief に 1 段追記する。どちらにしたかを §4 に書く。
 - **上流の食い違い**（2.6）: 保管前に一覧・要点・LICENSE を突合し、違えば要件書 Introduction を実測へ是正してから保管する（設計時の突合では発動なし）。
-- **番人の赤**（6.4／6.5）: `spec_checks.rs` の所見はどの腕・どの行かを名指しする。順序（台帳 → `roadmap-draft.md` → 報告 → 検査）を守る。
+- **番人の赤**（6.4／6.5）: `spec_checks.rs` の所見はどの腕・どの行かを名指しする。順序（台帳 → `roadmap-draft.md` → `briefing.md` の 2 数値 → 報告 → 検査）を守る。
 - **申し送り先の不在**（7.4）: `completed/` へ移っていれば `roadmap.md` の当該行へ書く。
 
 ### Monitoring
