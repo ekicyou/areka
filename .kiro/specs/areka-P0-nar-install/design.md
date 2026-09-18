@@ -176,7 +176,7 @@ vendors/sample_ghost/
 - 削除: `crates/pilot/examples/shiori-host-32/fixtures/`（150）・`vendors/sample_ghost/R_POST_and_KOMAINU/`（43）・`crates/pilot/examples/shiori-host-32/.gitignore`。
 - スクリプト: `tools/perf/invoke-followup-checks.ps1:129`・`tools/perf/perf-loop.measure.ps1:64`（既定の根を `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` の `folder=` 行から得る）・`tools/perf/judge-perf.py:197`（コメントの出典を `.nar` へ）。
 - 文書: `doc/emo2-conformance-scope.md:25`・`doc/ukadoc-coverage/briefing-assets.md:362,377,439`・`crates/pilot/examples/shiori-host-32/README.md:26`。
-- steering: `.kiro/steering/tech.md`（`miniz_oxide (0.9): … 意図的依存追加＝日付・承認済`）・`structure.md`（クレート一覧に `areka-nar`・`sample-ghost-kit`、`log-capture-kit` の見張りの節に 4 本目）・`roadmap.md` 「実機運転の定石」に 1 行（絶対パスは `nar-sample-path` で得る）。
+- steering: `.kiro/steering/tech.md`（`miniz_oxide (0.9): … 意図的依存追加＝日付・承認済`）・`structure.md`（クレート一覧に `areka-nar`・`sample-ghost-kit`、`log-capture-kit` の見張りの節に 4 本目）・`roadmap.md` 「実機運転の定石」に 1 行（絶対パスは `nar-sample-path` で得る）と、`zip` を「承認待ちの依存」と綴る 3 か所（制約の節・仮裁定 5・A0 のウェーブ行）を `miniz_oxide`（承認済）へ直す。
 - 台帳: `doc/ukadoc-coverage/ledger/assets.toml`（`descript_install` の 11 項目に `owner = "areka-P0-nar-install"`、`bootghost`・相対パス系 3 件は `note` に理由）・`doc/ukadoc-coverage/roadmap-draft.md`（`[[spec]]` 行 `name/stage = "B"/bundle = "インストール"/owner_count = 11/wave = "A0"`・`[briefs].count` 27→28・散文 3 か所）・ドメイン別報告と全体報告の作り直し。
 - 謝辞: `THIRD-PARTY-NOTICES.md`（`cargo about generate`・差分に増えるのは `miniz_oxide`・`adler2` のみであることを確認）。
 - 検証報告: `.kiro/specs/areka-P0-nar-install/validation-report.md` 相当に、検体ごとのファイル数とハッシュ・`git check-ignore` 0 件・実機 2 周の `OnFirstBoot` を残す。
@@ -835,8 +835,8 @@ flowchart LR
 
 ## Open Questions / Risks
 
-- **依存の承認**（開発者）: `zip 8.6` の代わりに `miniz_oxide 0.9`（＋`adler2`）を本番に入れる。設計ディスカッションで確認する。`zip` を選ぶ場合の差し替え範囲は `container.rs` だけ。
-- **10.2 の字義からの逸脱**（開発者確認）: 10.2 は「既定機能を切り、書き込み側の圧縮機能を有効にしない」だが、`miniz_oxide` は伸長と圧縮を feature で分けておらず、`with-alloc`（既定）は伸長 API に必須。圧縮側のコードは本番バイナリに含まれる。代替措置は「`areka-nar/src/` が `miniz_oxide::deflate` を綴らない」字面の見張り 1 本。`zip` 経路でも `flate2` が同じ性質を持つので、どちらを選んでも字義どおりには満たせない。
+- **依存の承認＝決着（2026-09-18 開発者「(a) で」）**: `zip 8.6` の代わりに `miniz_oxide 0.9`（`default-features = false, features = ["with-alloc"]`・推移的に `adler2`）を本番に入れ、zip コンテナの読み手は `std` だけで持つ。開発者の判断基準は「可能なら Rust ネイティブ実装」＝外部は純 Rust の伸長器 1 本、残りは本リポジトリの `std` コード。`zip` へ戻す場合の差し替え範囲は `container.rs` だけ（記録のみ）。
+- **10.2 は要件側を改訂済み**: 「既定機能を切って伸長に要る機能だけを明示し、書き込み側の API を呼ばないことを検査で見張る」。設計の措置は `Cargo.toml` の明示と `no_deflate_side_is_called`（`areka-nar/src/*.rs` が `miniz_oxide::deflate` を綴らない字面の見張り）。
 - **6.2 の狭め**（開発者確認）: `type,supplement` では `refresh` を読まず常に重ね置き（`Overlay`）にする。重ね置き先はゴースト本体で、全消去は利用者のゴーストを壊すため。正典は種別を限定していないので、SSP の実挙動と違う可能性がある。
 - **6.2 の実現順**: 「消してから展開」ではなく「組んでから入れ替え」。結果は同じで、消した後に失敗して空になる経路が無くなる。
 - **`StayseeBalloon`**: 段 ③ の時点で `vendors/sample_ghost/StayseeBalloon/` が在るかで登記の 1 行と `.nar` 1 本が変わる（8.5 のとおり・後から着地する側が行う）。

@@ -205,8 +205,8 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
 
 #### Acceptance Criteria
 
-1. When アーカイブ読取のための外部依存を 1 本追加する, the 本仕様 shall `.kiro/steering/tech.md` に「意図的依存追加＝日付・承認済」の形で登記し（`encoding_rs` の前例と同じ書式）、ライセンス検査（`cargo deny check`）が緑で、`THIRD-PARTY-NOTICES.md` を再生成する。再生成は `cargo update` を伴わずに行い、謝辞に増える項目が追加した依存とその推移的依存（本番グラフに初めて入る crate。`Cargo.lock` は追跡外のため手元の解決に依る）に限られることを差分で確かめる。
-2. The 本仕様 shall 追加する依存の既定機能を切り、書き込み側の圧縮機能を有効にしない（読取と展開に必要な機能だけ）。
+1. When アーカイブ読取のための外部依存を 1 本追加する（2026-09-18 開発者承認: **`miniz_oxide`**＝deflate 伸長のみ・純 Rust・推移的依存は `adler2` の 1 つ。zip コンテナの読み手は本仕様が `std` だけで持つ。brief の `zip 8.6` は採らない）, the 本仕様 shall `.kiro/steering/tech.md` に「意図的依存追加＝日付・承認済」の形で登記し（`encoding_rs` の前例と同じ書式）、ライセンス検査（`cargo deny check`）が緑で、`THIRD-PARTY-NOTICES.md` を再生成する。再生成は `cargo update` を伴わずに行い、謝辞に増える項目が追加した依存とその推移的依存（本番グラフに初めて入る crate。`Cargo.lock` は追跡外のため手元の解決に依る）に限られることを差分で確かめる。
+2. The 本仕様 shall 追加する依存の既定機能を切って伸長に要る機能だけを明示し、書き込み側（圧縮）の API を本番クレートが呼ばないことを常設の検査で見張る（2026-09-18 改訂: 候補となる伸長 crate はいずれも伸長と圧縮を機能で分けておらず、圧縮側のコードを機能で外すことは字義どおりには不可能。呼ばないことを検査で保証する形に改める）。
 3. The 新設クレート shall 本番の依存（`[dependencies]`）としてワークスペースに加わり、`log-capture-kit` を `[dependencies]` に置かず、テスト用の部品は `[dev-dependencies]` に限る。
 4. The 本仕様 shall `.kiro/steering/structure.md` のクレート一覧に新設クレートと検体の窓口の置き場を登記する。
 5. The 本仕様 shall 検体パスを綴る `tools/perf/` のスクリプト 3 本（`invoke-followup-checks.ps1`・`judge-perf.py`・`perf-loop.measure.ps1`）・`doc/emo2-conformance-scope.md`・`doc/ukadoc-coverage/briefing-assets.md`・`crates/pilot/examples/shiori-host-32/README.md` を、窓口経由の得方（Requirement 1.9）へ書き換え、最終検証で旧置き場の綴りが `tools/`・`doc/` に 0 件であることを数える（`doc/COMPAT_ARCHITECTURE.md` は旧置き場を綴っていない＝対象外）。
