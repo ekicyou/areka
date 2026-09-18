@@ -61,7 +61,7 @@
 ## 段 ②: 展開エンジン
 
 - [ ] 2. `areka-nar` を建て、依存の辺と決定論テストの固定入力をそろえる
-- [ ] 2.1 本番クレート `areka-nar` を新設し、伸長器の依存を登記してライセンス検査を通す
+- [x] 2.1 本番クレート `areka-nar` を新設し、伸長器の依存を登記してライセンス検査を通す
   - ワークスペースの本番メンバとして加え、`publish = false` とする
   - 伸長器を既定機能を切って伸長に要る機能だけ明示する形でクレート側の設定に書き、既存の文字コード層と `key,value` 層を本番の依存に引く
   - 窓口クレートの側にも段 ② で要る辺を足す（`areka-nar` と、書き手が使う伸長器の圧縮側）。窓口クレートは開発専用なので本番の依存グラフには入らない
@@ -309,3 +309,8 @@
 - 1.6: `workspace_scan` の `scan_tokens` は**すべての**走査語を左端に錨付けしていたため、区切り記号で始まる語（設計の ⑷ の `/<バルーン名>"`）は決して当たらない死語だった。錨は識別子文字で始まる語だけに効かせるよう是正。姉妹の見張りの走査語 7 本はすべて識別子文字始まりなので影響なし（較正は `workspace_scan_test.rs`）。
 - 1.6: 除外領域（`crates/sample-ghost-kit/src/`）に在るのは段 ① では ⑴ だけ。`EXCLUSION_FORMS` が 4 形それぞれに状態（`Present` / `ArrivesIn(タスク)` / `ComposedAtRuntime(理由)`）を宣言し、**両方向**で赤になる（消えたら赤・現れたら宣言の書き換えを要求して赤）。段 ③ で `checked_in_parent` を消すと ⑴ の `Present` が赤になるので、5.4/5.6 は宣言も直すこと。
 - 1.6: `workspace_manifests(skip_crate)` の `skip_crate` 引数には直接の較正が無い（HEAD の固定値のときも無かった）。飛ばす対象は自分自身のマニフェストだけで違反を生み得ないため実害は無いが、次に触る人は較正を 1 本足すこと。
+- 2.1: **本番の依存グラフの増分＝外部クレート ちょうど 2 件（`miniz_oxide 0.9.1`・`adler2 2.0.1`）**。areka が組む 3 つの的（`x86_64`／`i686`／`aarch64-pc-windows-msvc`）のいずれでも同じ。設計「### Technology Stack」と research 9.4 の「2」は正しい。→ **6.2 は謝辞に増える項目をちょうど 2 件と期待し、tech.md の登記も 2 と書く**。
+- 2.1: 依存グラフを数えるときに **`--target all` を使わない**。areka が組まない Linux／macOS が混ざり、`backtrace 0.3.76` が `miniz_oxide` を `cfg(not(all(windows, target_env = "msvc", ...)))` で引くせいで「既に本番に居る」ように見えて結論が反転する。数は必ず的の名前と一緒に記録する。
+- 2.1: 数えの正典形＝`cargo tree -e normal --target <的> --workspace --exclude sample-ghost-kit --exclude log-capture-kit --exclude temp-path-kit [--exclude areka-nar] --prefix none --format "{p}" | sed 's/ (\*)$//' | grep . | sort -u`。`grep .` が要る（`cargo tree` は根ごとに空行を挟み、`sort -u | wc -l` がそれを 1 件と数える）。記録するのは**増分と差分集合**であって総数ではない（総数は他所の依存が増えた瞬間に古びる）。
+- 2.1: `cargo deny` の重複警告は 8 件（既存 7＋`miniz_oxide`）。`deny.toml` に `[graph] targets` が無く的を跨いだ lockfile 全体を見るため。出荷バイナリに `miniz_oxide` が 2 版同居することは無い。
+- 2.1: `Cargo.toml` の編集を許す `_Boundary:_` は 2.1 だけ（30 行中 1 件）。よって設計の許可依存 5 本をここで全部登記した。**5.5 は `[[bin]]` 節を書けないが、cargo が `src/bin/*.rs` を自動で見つけるので止まらない。**
