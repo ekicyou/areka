@@ -721,8 +721,7 @@ fn assert_fold_twice_byte_equal(shell: &Shell) -> FoldSnapshot {
 /// `emo2_e2e.rs`（emo-atlas）の読込経路と同一（`read_to_string`＋`areka_parsers::shell::parse`）を
 /// 本 crate から辿る。COM／WIC／atlas bake は経由しない純粋な parse+fold ゆえ headless で走る。
 fn emo2_shell() -> Shell {
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt");
+    let path = crate::sample_test_support::emo2_root().join("shell/master/surfaces.txt");
     let content = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
     areka_parsers::shell::parse(&content)

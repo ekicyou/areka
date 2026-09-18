@@ -110,6 +110,9 @@
 //!    （前者が生値を見る檻・後者が解決結果を見る檻）
 
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+
+use sample_ghost_kit::SampleRoot;
 
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::writing::WritingMode;
@@ -156,22 +159,31 @@ const SAKURA_OVERLAY: &str = "balloons0s.txt";
 /// scope 1（kero）の面別上書き層。
 const KERO_OVERLAY: &str = "balloonk0s.txt";
 
-// ── fixture の所在（`CARGO_MANIFEST_DIR` 基準・crates/areka-emo-text から見た相対）───────
+// ── fixture の所在（窓口 `sample-ghost-kit` が持つ・検体名で引く）───────────────────────
 //
-// アンカー規約は既存の先例に揃える（`areka-emo-present/src/balloon_test_support.rs` の
-// `emo2_balloon_root`・`areka/src/emo2_boot/assets_tests.rs` の `emo2_root`）。
+// 検体は段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。原本と複製は
+// 別々の検体として登記されているので、保持も 2 つになる（同じ木の複製ではない）。
 
-/// 原本の実ゴースト用バルーン定義ディレクトリ（`emo2` ツリー内）。
+/// 原本の検体（実ゴースト `emo2`。バルーン定義は同梱バルーンのフォルダに在る）。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+/// 複製の検体（`windowposition-limit` の実機サインオフ用・単体で登記されたバルーン）。
+static WPLIMIT: LazyLock<SampleRoot> = LazyLock::new(|| {
+    SampleRoot::acquire("emo2-kakukaku-wplimit").expect("emo2-kakukaku-wplimit は登記済みの検体")
+});
+
+/// 原本の実ゴースト用バルーン定義ディレクトリ（自分でパスを継ぎ足さない）。
 fn shipped_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku")
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
 }
 
-/// 複製 fixture（`windowposition-limit` の実機サインオフ用）。原本の兄弟ディレクトリに在り
-/// `emo2` ツリーの外なのでゴーストツリーの列挙には影響しない（同 fixture の `readme.txt` 正典）。
+/// 複製 fixture（`windowposition-limit` の実機サインオフ用）。原本とは別の検体として登記されて
+/// おり、ゴーストツリーの列挙には影響しない（同 fixture の `readme.txt` 正典）。
 fn wplimit_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2-kakukaku-wplimit")
+    WPLIMIT.folder().to_path_buf()
 }
 
 // ── 本番と同じ読み込み経路 ───────────────────────────────────────────────

@@ -42,6 +42,9 @@
 //! あふれる——それが対照テスト（`legacy_pitch_metrics_reproduces_the_dropped_first_line`）である。
 
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+
+use sample_ghost_kit::SampleRoot;
 
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::draw::DWriteMetrics;
@@ -59,16 +62,27 @@ use wintf::com::dwrite::dwrite_create_factory;
 
 // ══ 実物の所在と読み込み（本番と同じ規約） ══════════════════════════════════════════════
 
-/// 実 emo2 fixture ルート（`crates/pilot/examples/shiori-host-32/fixtures/emo2/`）。
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+/// emo2 検体のゴーストフォルダ（pasta 辞書は `ghost/master/dic/` 下に在る）。
 fn emo2_fixture_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    EMO2.folder().to_path_buf()
 }
 
-/// 実 fixture ファイルの生バイト列を読む。
+/// emo2 が同時にインストールするバルーンのフォルダ（自分でパスを継ぎ足さない）。
+fn emo2_balloon_root() -> PathBuf {
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
+}
+
+/// 実 fixture ファイル（与えた基準フォルダからの相対パス）の生バイト列を読む。
 ///
 /// 読めなかったときに「対象 0 件だから緑」にならないよう、失敗と空は明示的に panic する。
-fn read_fixture_bytes(rel: &str) -> Vec<u8> {
-    let mut path: PathBuf = emo2_fixture_root();
+fn read_fixture_bytes(base: PathBuf, rel: &str) -> Vec<u8> {
+    let mut path: PathBuf = base;
     for seg in rel.split('/') {
         path = path.join(seg);
     }
@@ -93,7 +107,10 @@ fn read_fixture_bytes(rel: &str) -> Vec<u8> {
 /// 読む。`emo2-kakukaku/descript.txt` は `charset,UTF-8` を宣言しており、面別上書き層は
 /// 宣言を持たないが純 ASCII ゆえどちらの既定でも同一である。
 fn read_balloon_layer(rel: &str) -> String {
-    decode(&read_fixture_bytes(rel), DefaultEncoding::Ansi)
+    decode(
+        &read_fixture_bytes(emo2_balloon_root(), rel),
+        DefaultEncoding::Ansi,
+    )
 }
 
 /// pasta 辞書を読む。
@@ -101,7 +118,10 @@ fn read_balloon_layer(rel: &str) -> String {
 /// 辞書ファイルは `charset` 宣言を持たない（宣言はゴーストの `master/descript.txt` の
 /// `charset,UTF-8` が担う）ので、既定を UTF-8 として読む（`emo2_fixture_e2e_test.rs` と同じ規約）。
 fn read_pasta(rel: &str) -> String {
-    decode(&read_fixture_bytes(rel), DefaultEncoding::Utf8)
+    decode(
+        &read_fixture_bytes(emo2_fixture_root(), rel),
+        DefaultEncoding::Utf8,
+    )
 }
 
 /// 相方（エモ）側バルーンの面別上書き層（scope 1・`balloonk0.png` 288×203 向け）。
@@ -129,8 +149,8 @@ const KERO_START: (f32, f32) = (24.0, 40.0);
 /// 2 層（`descript.txt` 基層＋面別上書き層）をマージした `BalloonModel`（本番と同じ `parse_str`）。
 fn merged_model(overlay: &str) -> BalloonModel {
     parse_str(
-        &read_balloon_layer("emo2-kakukaku/descript.txt"),
-        Some(&read_balloon_layer(&format!("emo2-kakukaku/{overlay}"))),
+        &read_balloon_layer("descript.txt"),
+        Some(&read_balloon_layer(overlay)),
     )
 }
 
@@ -793,17 +813,13 @@ fn legacy_pitch_metrics_reproduces_the_dropped_first_line() {
 /// パスが腐って「読めないから対象 0 件で緑」になる形を作らないための錨。
 #[test]
 fn the_shipped_fixture_files_this_cage_points_at_exist() {
-    let root = emo2_fixture_root();
-    for rel in [
-        "emo2-kakukaku/descript.txt",
-        &format!("emo2-kakukaku/{KERO_OVERLAY}"),
-        &format!("emo2-kakukaku/{SAKURA_OVERLAY}"),
-        "ghost/master/dic/menu.pasta",
+    let balloon = emo2_balloon_root();
+    for path in [
+        balloon.join("descript.txt"),
+        balloon.join(KERO_OVERLAY),
+        balloon.join(SAKURA_OVERLAY),
+        emo2_fixture_root().join("ghost/master/dic/menu.pasta"),
     ] {
-        let mut path: PathBuf = root.clone();
-        for seg in rel.split('/') {
-            path = path.join(seg);
-        }
         assert!(
             Path::new(&path).is_file(),
             "実物 {} が見つからない",

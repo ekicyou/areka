@@ -171,12 +171,10 @@ mod tests {
         }
     }
 
-    /// emo2 fixture 実資産のパスを組む。
-    /// `CARGO_MANIFEST_DIR` = `crates/areka-emo-atlas`。fixtures はパイロット crate 配下。
-    fn emo2_path(rel: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../pilot/examples/shiori-host-32/fixtures/emo2")
-            .join(rel)
+    /// emo2 が同梱するバルーンの実資産のパスを組む（在処は窓口 `sample-ghost-kit` が持つ）。
+    /// 本モジュールの檻が指す実資産（`online0.png`・`descript.txt`）は全てこのフォルダ直下に在る。
+    fn balloon_path(rel: &str) -> PathBuf {
+        crate::sample_test_support::emo2_balloon_root().join(rel)
     }
 
     /// 2.1: 実 emo2 element PNG（α 付き）を復号し、契約（寸法・stride・長さ・has_alpha）を確認。
@@ -184,7 +182,7 @@ mod tests {
     fn decode_real_emo2_png_satisfies_contract() {
         with_com_initialized(|| {
             let arm = WicDecoderArm::new().expect("WIC factory creates under COM init");
-            let png = emo2_path("emo2-kakukaku/online0.png");
+            let png = balloon_path("online0.png");
             assert!(png.exists(), "fixture must exist: {}", png.display());
 
             let img = arm.decode(&png).expect("real emo2 PNG decodes");
@@ -202,7 +200,7 @@ mod tests {
     fn missing_path_yields_not_found() {
         with_com_initialized(|| {
             let arm = WicDecoderArm::new().expect("WIC factory");
-            let missing = emo2_path("does_not_exist_xyz.png");
+            let missing = balloon_path("does_not_exist_xyz.png");
             assert!(!missing.exists());
             match arm.decode(&missing) {
                 Err(DecodeError::NotFound { path }) => assert_eq!(path, missing),
@@ -216,7 +214,7 @@ mod tests {
     fn non_image_file_yields_decode_error() {
         with_com_initialized(|| {
             let arm = WicDecoderArm::new().expect("WIC factory");
-            let not_image = emo2_path("emo2-kakukaku/descript.txt");
+            let not_image = balloon_path("descript.txt");
             assert!(
                 not_image.exists(),
                 "fixture must exist: {}",
@@ -245,10 +243,10 @@ mod tests {
     fn probe_pna_false_for_emo2() {
         with_com_initialized(|| {
             let arm = WicDecoderArm::new().expect("WIC factory");
-            let png = emo2_path("emo2-kakukaku/online0.png");
+            let png = balloon_path("online0.png");
             assert!(png.exists());
             // `online0.pna` は存在しない。
-            assert!(!emo2_path("emo2-kakukaku/online0.pna").exists());
+            assert!(!balloon_path("online0.pna").exists());
             assert!(!arm.probe_pna(&png), "emo2 has no sibling .pna");
         });
     }
@@ -259,7 +257,7 @@ mod tests {
         with_com_initialized(|| {
             let arm = WicDecoderArm::new().expect("WIC factory");
             let dyn_dec: &dyn ElementDecoder = &arm;
-            let png = emo2_path("emo2-kakukaku/online0.png");
+            let png = balloon_path("online0.png");
             assert!(png.exists());
 
             let _ = dyn_dec.probe_pna(&png);
