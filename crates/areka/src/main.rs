@@ -70,6 +70,8 @@ mod emo2_boot;
 /// 薄い配線層。現状は `throttle`（送出間引きの純粋判定・task 2.4）のみ。ポインタハンドラ結線と
 /// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
 mod input_events;
+mod menu;
+mod readme;
 
 /// アクタースレッドの役割名の宣言（areka-P0-draw-load-parity task 2.3）。
 /// `areka-actor` のスレッド開始フックを導入し、生成されるアクタースレッド 1 本ごとに

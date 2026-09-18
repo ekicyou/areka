@@ -61,7 +61,7 @@
   - _Depends: 2.2_
 
 - [ ] 3. メニューの純粋な構造
-- [ ] 3.1 module の骨組みを置き、登記の口を作る
+- [x] 3.1 module の骨組みを置き、登記の口を作る
   - 以降のタスクが宣言行で衝突しないよう、crate 根へ本仕様の 2 module の宣言を、メニュー module へ配下 4 ファイル（計画・項目名・引き金・OS 表示）の宣言と空の雛形を、このタスクで置く（以降のタスクは中身を埋めるだけ）
   - 枠 7 種の順序付き列挙（並びの権威は 1 か所）、項目の単位（既定名・文言リソース名・有効／無効・チェック・動作または子項目の列）、枠ごとに 1 つだけ持つ供給関数、登記・取り消し・写しの取得を作る
   - 同じ枠への 2 度目の登記は後勝ちで置き換え、そのことを記録する。取り消した枠は写しに現れない
@@ -208,3 +208,4 @@
 - 2.2: 照会の Status は設計の逐語 `snapshot_of(&state.phase)` でなく `state.snapshot()`（選択待ちの `choosing` を落とさない・design.md を追随済み）。照会の失敗は通常経路と違い `Unloading{Fault}` へ倒さず `Failed` を UI へ返すだけ（`round_trip` の `error!` 文言「終了系列（Fault）へ」は照会経路では事実と違う＝文言だけの既知の不正確さ）。
 - 2.2: 偽 SHIORI の受信端を握ったまま返信しないテストは、判定が後退すると赤にならず無限に待つ（`non_queryable_phase_answers_no_content_without_touching_shiori`）。2.3 で偽 SHIORI を書くときは「受信を記録して返信端を捨てる」形にして assert の赤で終わらせる。
 - 2.3: kanade は 1 メッセージを同期で完走させ、`Boot` 1 通で `Steady` まで進む。起動途中の段は受信箱から見えないので、「会話できない状態の照会」は `Idle`（`Boot` より前）で確かめた（design.md を訂正済み）。任意 GET id の応答は `Fixture::with_resource_response`（値の語彙は `MouseResponse` を流用・`Script(String::new())` は 200 の空文字で 204 ではない）。
+- 3.1: `menu/mod.rs` 先頭の `#![allow(dead_code)]` は配下 4 module にも及ぶ。8.1 で結線したら必ず外し、直後に `cargo build -p areka` の警告 0 を確かめる。`main.rs` は 950 行（`mod menu; mod readme;` は宣言済み＝以降のタスクは宣言行に触らない）。ログの捕捉は `log-capture-kit` の `capture_lines`（`tracing` マクロを捕まえる）。`Frame` を増やす日の長さ一致は `ORDER`・`slots` を縛り済み、`captions::FRAME_CAPTIONS` は 5.1 で縛る。
