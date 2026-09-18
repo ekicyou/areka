@@ -698,3 +698,132 @@ git の正規化を通すと差分 0）。報告は状態・世代・束から�
 | `[briefs].count` 27→28 | 27→28 | ○ |
 | 散文 3 か所 | **4 か所**（「表に無い 2 本」・「意図しない重なり」・「数え方／行数が 27 のまま」の段落・「0 本の束は 36」）。4 つ目は設計が挙げていないが、`**0 本**` を持つ表の行を数え直すと 36→35 になるため直した | △（1 か所多い） |
 | `wave` 欄は自由文字列なので `"A0"` は通る | 通った | ○ |
+
+---
+
+## 6.4 検体を畳む手順の README（2026-09-19）
+
+対象要件: 10.10
+
+### 何をしたか
+
+`vendors/sample_ghost/README.md` を新設した（113 行・LF・CR は 0 個）。次の検体を足す人が、登記表に 1 行も持たない状態から畳み終えるまでを追える形にしてある。
+
+書いたのは要件 10.10 が名指しする 5 点（追跡ファイルだけを含める・永続化フォルダを含めない・改行も文字コードも変換しない・配布形の構造・畳んだ後に一致を確かめる）と、5.1 で使った畳み込みの呼び方、加えて畳んだ後の取り出し方（`SampleRoot::acquire` と `nar-sample-path`）である。
+
+### 5.1 との食い違いを 1 つだけ意図的に作った
+
+5.1 の囲みは 3 つの呼び方を並べているが、そのうち引数無しの形と `--check` 単独の形は**タスク 5.4 以降もう通らない**（5.6 の「5.1 の記述の期限切れ」で既に記録済み）。README に書いたのは `--from <フォルダ>` と `--from <フォルダ> --check` の 2 つだけである。
+
+実測で確かめた。
+
+| 呼び方 | 終了コード | 標準エラー |
+|--------|-----------|-----------|
+| `cargo run -p sample-ghost-kit --example fold-samples` | **1** | `--from <展開形のフォルダ> を書くこと（登記表は展開形の在処を持たない）` |
+| `… -- --check` | **1** | 同上 |
+| `… -- --from vendors/sample_ghost/<フォルダ>` | 0 | — |
+
+5.1 の「本タスクで実際に踏んだのは引数無しの形」という記述と README が食い違うのはこの 1 点だけで、5.1 自身が「後続の検体を足すときに使えるのは `--from` の形だけなので README に書くのはこちらにすること」と申し送っているとおりに書いた。他の 4 点（出どころは `git ls-files`・写しはバイト複製・往復で両方向を突き合わせる・写像は `install.txt` の解釈だけから作る）は 5.1 の記述と同じである。
+
+### 手順を頭から通した（README の予行）
+
+README が書いたとおりの順で、既存の検体を 1 本使って手順 1〜4 を実際に踏んだ。`emo2-kakukaku-wplimit.nar` を `vendors/sample_ghost/readme-rehearsal/` へ展開し（20 ファイル）、`git add` し、`--from` で畳み、`--check` で往復を確かめ、`git rm -r --cached` と実体削除で片付けた。
+
+```
+readme-rehearsal: 追跡 20 ファイル / 展開 20 ファイル / balloon/emo2-kakukaku-wplimit=20 / .nar 33906 バイト / 不一致 0 件
+全ての検体で一致
+```
+
+畳み直した `readme-rehearsal.nar` の SHA-256 は元の `emo2-kakukaku-wplimit.nar` と**同じ**（`a62e08f78c6d4aaa36f68fdc8541a23e6dc757d9b5701dac814bc69ad870feaf`）で、5.1 が記録した値とも一致する。README に書いた印字の例はこの走行の実物である。
+
+予行の後始末は済んでいて、`git status` は README 1 件（追跡外の新顔）だけを出す。`vendors/sample_ghost/` の中身は `.gitattributes`・`.gitignore`・`.nar` 4 本に戻っている。
+
+### 5 点の裏取り
+
+| 点 | 何で確かめたか |
+|---|---|
+| ⑴ 追跡ファイルだけ | 出どころは `fold-samples.rs` の `tracked_files()`＝`git ls-files -z` 1 つだけ。走査（`walk`）は突き合わせ側にしか使っていない |
+| ⑴ の静かな 0 | `git ls-files vendors/sample_ghost/R_POST_and_KOMAINU/`（5.6 で消えた木）が **0 行・終了コード 0** を返すことを実測。手順側は追跡 0 件で落ちる判定を持つ |
+| ⑵ 永続化フォルダ | 5.1 の実測（`emo2` はディスク 157・追跡 110＝差 47・**差は全て `profile/` 配下で追跡外**）を引いた。5.1 が言っているのは「追跡外」までで、除外の理由は言っていない。初稿はこれを「`.gitignore` の規則で落ちていた」と書いたが**誤り**で、下の実測で覆した |
+| ⑵ `*_test.txt` の罠 | `git check-ignore --no-index` を 2 か所で実測。`vendors/sample_ghost/readme-rehearsal/dic09_Test.txt` は**終了コード 1**（無視されない。`-v` を付けると当たった規則が `vendors/sample_ghost/.gitignore` の `!*_test.txt` の行と出る）、`crates/areka/dic09_Test.txt` は**終了コード 0**（無視される。当たった規則はリポジトリ直下の `.gitignore:6:*_test.txt`）。片側だけなら判定が素通りしている可能性が残るので両方を採った |
+| ⑶ 改行・文字コード | `git check-attr text` が `vendors/sample_ghost/*.nar` で `text: unset`・属性の届かない `crates/areka/x.nar` で `unspecified`。道具側は `std::fs::read` / `fs::copy` の生バイトで、テキストとして読む経路が無い |
+| ⑷ 配布形の構造 | 独立の読み手（Python の `zipfile`）で 4 本を一覧。`install.txt` は**書庫の最上位**に在り（`emo2.nar` の最上位は `delete.txt` / `emo2-kakukaku/` / `ghost/` / `install.txt` / `readme.txt` / `shell/` / `updates.txt`）、**全エントリが圧縮方式 0**、`testzip()` は 4 本とも `None`、ファイルのエントリ数は 110／43／20／20。読み手側の要求は `areka_nar::manifest::locate_install_txt`＝最上位のエントリ名が丸ごと `install.txt` に等しいこと（包みフォルダ 1 段は黙って剥がさず拒否） |
+| ⑸ 畳んだ後の一致 | 5.1 と同じ方法をそのまま書いた＝本番の展開器で空の根へ入れ直し、**両方向**（増えていない／欠けていない・バイトが同じ）を突き合わせる。恒真を塞ぐ 3 つの判定（追跡 0 件・写しの数＝追跡の数・写像が潰れていない）も書いた |
+
+### ⑵ の因果を実測で引き直した（初稿の誤りの是正）
+
+初稿の README は 47 件を「`.gitignore` の規則で落ちていた（たまたま無かったのではない）」と書いていた。**`profile/` に当たる無視規則は 1 つも存在しない。** 無視の出どころを全部当たって測った。
+
+| 出どころ | 中身 | `profile/` に当たるか |
+|---|---|---|
+| リポジトリ直下の `.gitignore` | `target` / `Cargo.lock` / `tmpclaude*` / `.vs/` / `*_test.txt` / `*_dump.txt` / `__pycache__/` / `*.py[cod]` の 8 パターン | 当たらない |
+| `.git/info/exclude`（ワークツリー側） | 空 | 当たらない |
+| 共通 git ディレクトリの `info/exclude` | `.claude/**` 系のみ | 当たらない |
+| `core.excludesFile` | 未設定（`git config --get` が終了コード 1） | — |
+| `vendors/sample_ghost/.gitignore` | `!*_test.txt` / `!*_dump.txt` の打ち消し 2 行 | 当たらない（そもそも打ち消し側） |
+
+```
+$ git check-ignore -v --no-index vendors/sample_ghost/emo2/ghost/master/profile/ghost.dat     ; echo exit=$?
+exit=1
+$ git check-ignore -v --no-index vendors/sample_ghost/emo2/ghost/master/profile/sakura.dat    ; echo exit=$?
+exit=1
+$ git check-ignore -v --no-index vendors/sample_ghost/emo2/ghost/master/profile/updates2.dat  ; echo exit=$?
+exit=1
+```
+
+出力は 1 行も無く、終了コードは 3 本とも 1（＝無視されない）。当たった規則が在れば `-v` がその出どころと行を印字するので、無言の 1 は「どの出どころにも当たっていない」ことを意味する。裏付けを 2 つ足した。
+
+- `git log --all` で追加されたパスを全部数えても `profile/` を含むものは **0 件**＝この木は一度も追跡されたことが無い。
+- `vendors/` の下に在った `.gitignore` は履歴上 `vendors/sample_ghost/.gitignore` の **1 本だけ**＝検体の木に入れ子の `.gitignore` が同梱されていたことも無い。
+
+したがって 47 件が入らなかった理由は「規則で除外された」ではなく「**誰も `git add` しなかった**」であり、守っていたのは ⑴ の「出どころは追跡ファイルだけ」の側である。5.1 の表（`emo2` はディスク 157・追跡 110＝差 47）の「追跡外」という書き方が正しく、初稿はそれを「規則により除外」へ格上げしていた。
+
+⚠ ただし出どころは初稿の創作ではない。**5.1 の箇条書き 3 点目（本報告 `## 5.1` の 3 番）が既に「47 件が『たまたま無かった』のではなく規則で落ちている」と書いている**。その行が引いている規則は `crates/pilot/examples/shiori-host-32/.gitignore:3:fixtures/emo2/ghost/master/profile/` で、**タスク 5.6 で当の `.gitignore` ごと消えた別の木**のものである。検体の保管場所 `vendors/sample_ghost/` には当時も今も `profile/` に当たる規則は無い。5.1 の節は追記のみで書き換えない約束なので当該行はそのまま残すが、**あの 1 行は検体の木の話ではない**——読むときはここを併せて読むこと。
+
+### 危険が実在することと、足した守りが効くことを両方向で測った
+
+規則が無い以上、`profile/` を持つ木に `git add` すれば入る。README の手順 2 に足した問いがそれを捕まえるかを、仮の木で両方向に踏んだ。
+
+```
+# 赤（危険が実在する）: profile/ を持つ木を git add すると追跡される
+$ mkdir -p vendors/sample_ghost/guard-rehearsal/ghost/master/profile
+$ printf 'directory,guard-rehearsal\n' > vendors/sample_ghost/guard-rehearsal/install.txt
+$ printf 'x\n' > .../profile/ghost.dat ; printf 'y\n' > .../profile/sakura.dat
+$ git add vendors/sample_ghost/guard-rehearsal
+$ git ls-files vendors/sample_ghost/guard-rehearsal | grep -E '/profile/' | wc -l
+2
+
+# 緑（守りを踏むと消える）: profile/ を消して add し直すと 0
+$ rm -rf vendors/sample_ghost/guard-rehearsal/ghost/master/profile
+$ git add -A vendors/sample_ghost/guard-rehearsal
+$ git ls-files vendors/sample_ghost/guard-rehearsal | grep -E '/profile/' | wc -l
+0
+$ git ls-files vendors/sample_ghost/guard-rehearsal
+vendors/sample_ghost/guard-rehearsal/install.txt
+```
+
+赤の 2 は「`git add` が `profile/` を実際に追跡した」ことの実物で、無視規則が守っていないことの直接の証拠でもある。0 の側は同じ問いが黙ることを示しており、**判定が常に 0 を返す作りではない**ことを赤が較正している。
+
+仮の木は後始末した（`git rm -r --cached` の後に実体削除）。`git status --porcelain` は README 1 件と本レポート 1 件の 2 行に戻り、`git diff --cached --name-only` は 0 行（索引は空）。`vendors/sample_ghost/` の中身は `.gitattributes`・`.gitignore`・`README.md`・`.nar` 4 本である。
+
+### 先に書かれていた 2 つの約束に答えているか
+
+| 約束している場所 | 何を約束しているか | 答え |
+|---|---|---|
+| `vendors/sample_ghost/.gitignore` のコメント | 「新しい検体を足す手順は、畳む前の展開形をここへ一時的に置くことを求める」 | README の手順 1 がまさにそれを指示し、⑵ が否定 2 行の要る理由（`dic09_Test.txt` が黙って落ちる）を説明している |
+| `.kiro/steering/roadmap.md` の A0-③ | 次の spec（`default-balloon-bundle`）に「畳む手順は `vendors/sample_ghost/` の README」「取得は登記表 `SAMPLES` に 1 行足すだけ」と案内 | README は登記表に行を持たない状態から始められる（手順 3 の `--from` は登記表を見ない）。手順 5 が `SAMPLES` の 1 行の書き方（`name` は `.nar` のファイル名＝`install.txt` の `directory`・`balloons` は同時に入るバルーンの `directory`）と、**登記は畳んだ後**であることを書いている |
+
+### 走らせた結果
+
+| 何を | 結果 |
+|------|------|
+| `cargo test -p sample-ghost-kit -j 4` | 5 的すべて緑（48 / 0 / 3 / 5 / 3 passed・failed 0） |
+| `cargo test -p log-capture-kit -j 4`（常設検査 1.6・1.8 と 1,000 行の番人を含む） | 8 的すべて緑（117 passed / 0 failed / 2 ignored） |
+| `git status --porcelain` | `?? vendors/sample_ghost/README.md` と本レポートの 2 行のみ＝本タスクで触ったのはこの 2 ファイルだけ |
+
+`vendors/sample_ghost` の外は 1 ファイルも触っていない（`_Boundary:` のとおり）。
+
+### 残した懸念
+
+- README は `.nar` の中のファイル数と大きさを表に持つ。これは 5.1 の実測と現物の大きさに一致しているが、**表示するだけの数で判定は付いていない**ので、検体が増減すれば古びる。判定を足さなかったのは、この表が手順の正しさではなく置き場の案内だからで、代わりに件数の正本は登記表（`SAMPLES`）と `.nar` そのものにある。**この申し送りは README の手順 5 の中へ移した**——次に検体を足す人（A0-③ の `default-balloon-bundle`）が開くのは README であって本レポートではないので、「登記表に 1 行足すのと同じコミットで先頭の表にも 1 行足すこと」は README 自身に書いてある。
+- README の「圧縮方式 0 でも 8 でも読める」は `areka-nar` の決定論テスト（方式 8 を踏む 8 本）が根拠で、**実機で方式 8 の `.nar` を入れた記録は無い**（5.1 の残した懸念と同じ話）。外から貰った圧縮済みの `.nar` を初めて置く人は、そこが実機初踏であることを承知しておくこと。
