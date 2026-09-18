@@ -27,11 +27,16 @@ mod shiori_proxy;
 #[path = "helper_window.rs"]
 mod helper_window;
 
+// 検体を窓口から取得し**プロセス寿命で保持**する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
+// 退避経路が返すパスの寿命は保持している値の寿命なので、関数内の一時値にはしない。
+#[path = "sample_support.rs"]
+mod sample_support;
+
 fn main() {
     // i686 セルフテスト観測（task 3.1・go 基準(1) precursor・requirements 3.3）:
     //   shiori-host-32-helper.exe --selftest-load <ghostdir>
     // pasta.dll を動的ロード→3 エントリ解決→load(ghostdir) 無 crash 完了→unload を実行し、
-    // 結果を標準出力へ出す（親が観測）。ghostdir 省略時は fixtures の emo2 ghost/master を既定。
+    // 結果を標準出力へ出す（親が観測）。ghostdir 省略時は検体 emo2 の ghost/master を既定。
     // ※ cargo test 経由の観測は同 example の ipc.rs #[cfg(test)] が i686 でビルド不能
     //    （usize >> 32 overflow・本タスク境界外）なため、本実行時セルフテストでも観測できる。
     let args: Vec<String> = std::env::args().collect();
@@ -122,13 +127,7 @@ fn read_ghostdir(args: &[String]) -> Option<std::path::PathBuf> {
     args.get(1).map(std::path::PathBuf::from)
 }
 
-/// ビルド時の crate ルートから fixtures の emo2 ghostdir（pasta.dll の在処）を組み立てる。
+/// 検体の窓口から emo2 の ghostdir（pasta.dll の在処）を得る。
 fn default_fixture_ghostdir() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join("shiori-host-32")
-        .join("fixtures")
-        .join("emo2")
-        .join("ghost")
-        .join("master")
+    crate::sample_support::emo2_ghost_master()
 }

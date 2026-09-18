@@ -144,11 +144,19 @@ fn materialize_file(from: &Path, to: &Path) {
     });
 }
 
-/// emo2 実物 shell 資産のアンカー（`crates/areka-ghost` = `CARGO_MANIFEST_DIR` 相対・
-/// `crates/areka/tests/emo2_real_run.rs` の `../pilot/...` 規約に一致）。
+/// emo2 実物 shell 資産のアンカー（検体の窓口から得る）。
+///
+/// 窓口が返すのは借用なので、`SampleRoot` を **プロセス寿命で保持**する。段 ③ で `Drop` が
+/// 展開した複製を消すため、関数内の一時値にすると借用の元がその場で消える。
 fn emo2_shell_master_src() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/shell/master")
+    use std::sync::LazyLock;
+
+    use sample_ghost_kit::SampleRoot;
+
+    static EMO2: LazyLock<SampleRoot> =
+        LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+    EMO2.folder().join("shell").join("master")
 }
 
 /// 実在ゴーストの外観資産を流用した最小テストゴーストを一意 temp root へ組み立てる

@@ -17,19 +17,11 @@
 use crate::charset::DefaultEncoding;
 
 use super::{MountModel, resolve};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-/// emo2 実フィクスチャのルート（`crates/pilot/examples/shiori-host-32/fixtures/emo2/`）。
-///
-/// `CARGO_MANIFEST_DIR` 相対で組み立てる（クロスプラットフォーム・`Path::join` のみ）。
+/// emo2 実フィクスチャのルート（検体の窓口から得る）。
 fn emo2_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("pilot")
-        .join("examples")
-        .join("shiori-host-32")
-        .join("fixtures")
-        .join("emo2")
+    crate::sample_test_support::emo2_root()
 }
 
 /// emo2 を解決して `MountModel` を得るヘルパ。

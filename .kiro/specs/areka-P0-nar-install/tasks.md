@@ -40,7 +40,7 @@
   - _Boundary: areka-emo-text, areka-emo-atlas, areka-emo-compose, areka-emo-present_
   - _Depends: 1.1_
 
-- [ ] 1.5 (P) `areka-parsers`・`areka-seriko`・`areka-ghost`・`pilot` の 11 ファイルを窓口経由へ書き換える
+- [x] 1.5 (P) `areka-parsers`・`areka-seriko`・`areka-ghost`・`pilot` の 11 ファイルを窓口経由へ書き換える
   - 定数で持っている検体フォルダは関数呼び出しへ改める
   - i686 の helper が引数も環境変数も無いときに自分で検体へ落ちる退避経路では、窓口から得た値をプロセスの寿命だけ保持する（関数内の一時値にしない）
   - 各クレートの `[dev-dependencies]` に窓口クレートを 1 行加える
@@ -304,3 +304,5 @@
 - 1.4: 1.6 の走査語 ⑷（同梱バルーン名でパスを組む形）は、窓口の読み口の**引数全般**（`balloon(...)` だけでなく `acquire(...)` も）を除外すること。`shipped_fixture_region_test.rs` に `acquire("emo2-kakukaku-wplimit")` が在る。
 - 1.4: `src/` の本番マウント配下（`wic_arm.rs`・`world.rs`・`balloon_test_support.rs`）へ窓口を引くときは、参照が `#[cfg(test)]` の内側に在ることを**非テストビルド**（`cargo build -p ...`）で確かめる。`cargo test` だけでは通ってしまう。
 - 1.4: `areka-emo-text` の `lib.rs` には `PURE_SOURCES` / `SOURCES_OUTSIDE_THE_PURE_SCAN` の全数一致の見張りが在る。`src/*.rs` を新設すると一覧の更新が要る（既存の支援ファイルを使えば不要）。
+- 1.5: `pilot/examples/shiori-host-32/shiori3.rs:77` の逆スラッシュ綴り（`crates\pilot\...\fixtures\emo2\ghost\master`）は据え置いた。`build_onboot` が引数を捨てる合成のリテラルで、1.6 の走査語（スラッシュ形）にも掛からない。**5.6 で明らかに合成と分かる値へ置き換えること**（段 ③ 後は実在しない木を名指す行として残る）。
+- 1.5: 窓口の `workspace_root()` は正規化していない（`…/crates/sample-ghost-kit/../..`）。実走の出力で区切り記号が混ざる。今日は無害だが正規化パス比較で躓く。担当は 1.1 のファイル。

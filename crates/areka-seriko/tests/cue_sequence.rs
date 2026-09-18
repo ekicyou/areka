@@ -24,14 +24,31 @@ fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
     }
 }
 
+/// emo2 検体の `shell/master/surfaces.txt`（検体の窓口から得る）。
+///
+/// 窓口が返すのは借用なので、`SampleRoot` を **プロセス寿命で保持**する。段 ③ で `Drop` が
+/// 展開した複製を消すため、関数内の一時値にすると借用の元がその場で消える。
+fn emo2_surfaces_txt() -> std::path::PathBuf {
+    use std::sync::LazyLock;
+
+    use sample_ghost_kit::SampleRoot;
+
+    static EMO2: LazyLock<SampleRoot> =
+        LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+    EMO2.folder()
+        .join("shell")
+        .join("master")
+        .join("surfaces.txt")
+}
+
 /// 実 emo2 shell fixture の surfaces.txt を parse し、alias スナップショットから解決層を組む。
 ///
-/// 統合テストの CWD はクレートルート（`crates/areka-seriko/`）ゆえ相対 `../pilot/...` が解決する。
+/// 検体の在処は窓口から得るので、テストの CWD に依存しない（絶対パス）。
 /// emo-compose の world.rs テストと同一 fixture・同一経路（parse→`EmoWorld::build`→
 /// `alias_snapshot`）で、要件 7.3 の「alias 実データ追験」を満たす。
 fn emo2_resolver() -> SurfaceResolver {
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt");
+    let path = emo2_surfaces_txt();
     let content = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
     let shell = areka_parsers::shell::parse(&content);
