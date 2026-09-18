@@ -827,3 +827,235 @@ vendors/sample_ghost/guard-rehearsal/install.txt
 
 - README は `.nar` の中のファイル数と大きさを表に持つ。これは 5.1 の実測と現物の大きさに一致しているが、**表示するだけの数で判定は付いていない**ので、検体が増減すれば古びる。判定を足さなかったのは、この表が手順の正しさではなく置き場の案内だからで、代わりに件数の正本は登記表（`SAMPLES`）と `.nar` そのものにある。**この申し送りは README の手順 5 の中へ移した**——次に検体を足す人（A0-③ の `default-balloon-bundle`）が開くのは README であって本レポートではないので、「登記表に 1 行足すのと同じコミットで先頭の表にも 1 行足すこと」は README 自身に書いてある。
 - README の「圧縮方式 0 でも 8 でも読める」は `areka-nar` の決定論テスト（方式 8 を踏む 8 本）が根拠で、**実機で方式 8 の `.nar` を入れた記録は無い**（5.1 の残した懸念と同じ話）。外から貰った圧縮済みの `.nar` を初めて置く人は、そこが実機初踏であることを承知しておくこと。
+
+## 6.5 実機で一周し、作業木が汚れないことを確かめる（2026-09-19）
+
+**結論: 合格。** 2 周とも `OnFirstBoot` がログに出て、2 周とも `areka.exe` が終了コード 0 で終わり、ワークスペース全体のテストと実機 2 周の後に追跡外のファイルは 1 つも増えていない（`git status --porcelain` は 0 行）。要件 7.11・9.7 を満たす。
+
+走らせた機械: Windows 11 Pro 10.0.26200・実表示あり・主モニタの実効 DPI 192（表示倍率 200%）・実 pasta.dll を 32bit の補助実行体が駆動。作業木 `…\.claude\worktrees\areka-p0-sylphya-ledger-487721`・`HEAD` は `e788b776`（6.4 の commit）。
+
+### 走らせる前の状態
+
+```
+$ git status --porcelain
+（0 行）
+```
+
+### ⑴ 前提の用意——32bit の補助実行体を所定の場所へ置く
+
+ワークスペース全体のビルドは同じ名前の x64 版を `target/debug/` へ置いてしまうので、**置くのはビルドの後・走らせるの前**でなければならない（既存の定石。`crates/areka/tests/emo2_real_run.rs` 冒頭の doc と `crates/areka/src/placement/transition_judge_offset_signoff_tests.rs` の手順が正本）。順序は「i686 をビルド → ワークスペース全体のテスト → `areka` の bin をビルド → 補助実行体を複写 → 2 周」とした。
+
+```powershell
+> cargo build -p shiori-host32-helper -p shiori-host32-testdll --target i686-pc-windows-msvc
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.77s
+EXIT=0
+
+> Copy-Item "…\target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe" `
+            "…\target\debug\shiori-host32-helper.exe" -Force
+EXIT=0
+```
+
+置いた実行体が本当に 32bit であることは、PE ヘッダの機種欄を読んで確かめた（**0x14C＝i386**。x64 なら 0x8664 になる）。この確認は 2 周の**それぞれの直前にも**行い、間に挟まる `cargo run`（次項の窓口）が x64 版で上書きしていないことを毎回確かめている。
+
+```
+PE machine = 0x14C   （補助実行体を置いた直後）
+PE machine = 0x14C   （周 1 の窓口呼び出しの後）
+PE machine = 0x14C   （周 2 の窓口呼び出しの後）
+```
+
+### ⑵ ワークスペース全体のテスト
+
+```powershell
+> cargo test --workspace -j 4
+EXIT=0
+```
+
+`-j 4` は必須である（全並列だと「invalid metadata」（実体はページングファイル不足・os error 1455）で落ちることがある）。**完走の判定は末尾を眺めて行わず、結果行を数えて行った**（上流を止めてしまう `Select-Object -First N` は使っていない。出力は丸ごとファイルへ落として数えた）。
+
+| 数えたもの | 数え方 | 結果 |
+|---|---|---|
+| 結果行 | `grep -E "^test result:" … \| wc -l` | **111** |
+| 通った本数 | 同じ行から `passed` の数を合計 | **7,935** |
+| 落ちた本数 | 同じ行から `failed` の数を合計 | **0** |
+| 除外 | 同じ行から `ignored` の数を合計 | **40** |
+| 赤の結果行 | `grep -cE "^test result: FAILED"` | **0** |
+
+直前の commit で記録されている基準（結果行 111・7,935 本・失敗 0・除外 40）と**完全に一致**する。結果行が減っていれば走らなかった的があることになるが、減っていない。
+
+### ⑶ 周 1
+
+窓口（要件 1.9 のコマンド）に絶対パスを刷らせる。**印字された値をそのまま使い、自分でパスを継ぎ足していない**（相対パスや手組みのパスだと pasta.dll の LOAD が 0x8007007E で落ちる）。
+
+```powershell
+> cargo run -q -p sample-ghost-kit --bin nar-sample-path -- emo2
+root=C:\home\maz\git\areka\.claude\worktrees\areka-p0-sylphya-ledger-487721\target\nar-samples\manual\emo2
+folder=C:\home\maz\git\areka\.claude\worktrees\areka-p0-sylphya-ledger-487721\target\nar-samples\manual\emo2\ghost\emo2
+balloon.emo2-kakukaku=C:\home\maz\git\areka\.claude\worktrees\areka-p0-sylphya-ledger-487721\target\nar-samples\manual\emo2\balloon\emo2-kakukaku
+EXIT=0
+```
+
+配られた根に起動記録が無いことを、走らせる前に数えた——`profile` という名のフォルダは **0 個**である。
+
+起動は有界の自動終了を付ける。
+
+```powershell
+> $env:RUST_LOG = "info,kanade=trace"
+> $env:AREKA_APP_SMOKE_EXIT_MS = "30000"
+> & "…\target\debug\areka.exe" <上の folder=> <上の balloon.emo2-kakukaku=>
+LAP1 areka.exe EXIT=0  elapsed=32s  loglines=212
+```
+
+アプリが実際にその根を使ったことは、ログの 2 行目が印字した値をそのまま復唱していることで分かる。
+
+```
+2026-09-18T23:35:14.953528Z  INFO areka: resolved config inputs ghost_root=C:\home\maz\git\areka\.claude\worktrees\areka-p0-sylphya-ledger-487721\target\nar-samples\manual\emo2\ghost\emo2 balloon_root=C:\home\maz\git\areka\.claude\worktrees\areka-p0-sylphya-ledger-487721\target\nar-samples\manual\emo2\balloon\emo2-kakukaku
+```
+
+**初回起動のイベント（周 1）**:
+
+```
+2026-09-18T23:35:16.208338Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None
+```
+
+続けて挨拶が返り、起動系列が閉じている（＝32bit の補助実行体が実 pasta.dll を本当に駆動している）。
+
+```
+2026-09-18T23:35:16.212059Z  INFO actor{actor=kanade}: kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1
+2026-09-18T23:35:16.212301Z  INFO actor{actor=kanade}: kanade: basewareversion 完了——boot 系列完了・定常運転へ event="boot_complete"
+2026-09-18T23:35:45.741842Z  INFO actor{actor=shiori}: shiori-actor: 正規 clean shutdown 完了（unload → helper 正常終了 exit(0)） event="unload_clean"
+```
+
+### ⑷ 周 1 が本当に記録を残したこと——周 2 の意味の担保
+
+周 2 の `OnFirstBoot` が意味を持つのは、**周 1 が「次は初回ではない」と判定させる記録を確かに書いた**ときだけである。書いたことを実物で示す。
+
+| 何を | 結果 |
+|---|---|
+| 根の下の `profile/` 配下のファイル数（走行前は 0） | **47** |
+| そのうち areka 自身の起動記録 | `ghost\emo2\ghost\master\profile\areka\sylphya.toml`（39 バイト） |
+| 中身 | `format-version = 1` / `[boot]` / `count = "1"` |
+| ゴースト側（pasta）の永続化 | `profile\pasta\` 配下 46 ファイル（Lua のキャッシュ・ログ・`save\save.json`） |
+| 実行体の隣（App スコープ）の `profile/` | 0 ファイル |
+
+`areka.boot.count` は起動記録ゲートの唯一の鍵で、**存在すれば** `first_boot=false` になる（`crates/areka-ghost/src/runtime.rs` の `apply_boot_record_gate` step 1。値の数値解釈はせず存在だけを見る）。周 1 の終了時には `ghost-shutdown: persist flush confirmed` が出ており、書き込みは確定している。つまり**同じ根をそのまま使い回せば、周 2 は必ず `OnFirstBoot` を飛ばす**。
+
+### ⑸ 周 2
+
+もう一度窓口を呼ぶ。
+
+```powershell
+> cargo run -q -p sample-ghost-kit --bin nar-sample-path -- emo2
+root=C:\home\maz\git\areka\.claude\worktrees\areka-p0-sylphya-ledger-487721\target\nar-samples\manual\emo2
+folder=C:\home\maz\git\areka\.claude\worktrees\areka-p0-sylphya-ledger-487721\target\nar-samples\manual\emo2\ghost\emo2
+balloon.emo2-kakukaku=C:\home\maz\git\areka\.claude\worktrees\areka-p0-sylphya-ledger-487721\target\nar-samples\manual\emo2\balloon\emo2-kakukaku
+EXIT=0
+```
+
+**根のパスは周 1 と 1 文字も違わない**（3 行を突き合わせて一致）。手動用の根は `manual/<検体>/` という決まった場所で、新しい場所を作るのではなく**その場で作り直す**設計だからである（design「取得（manual）」）。したがって「新品であること」はパスの違いでは示せず、中身で示すほかない。
+
+| 周 2 の窓口呼び出しの直後 | 結果 |
+|---|---|
+| 根の下の `profile/` 配下のファイル数（周 1 は 47 を残した） | **0** |
+| `…\profile\areka\sylphya.toml` の実在 | **False** |
+
+47 個あった永続化ファイルが 1 つ残らず消えている。つまり作り直しは本物である。
+
+```powershell
+> & "…\target\debug\areka.exe" <folder=> <balloon.emo2-kakukaku=>   （env は周 1 と同じ）
+LAP2 areka.exe EXIT=0  elapsed=31s  loglines=184
+```
+
+**初回起動のイベント（周 2）**:
+
+```
+2026-09-18T23:36:47.951514Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None
+```
+
+配置の復元も「保存値なし」から始まっている（`saved_win_x=None saved_win_y=None saved_off_x=None saved_off_y=None`）。周 2 も挨拶が返り（`boot_talk talk_id=1`）、`unload_clean` で閉じ、終了コードは 0 である。
+
+**2 周とも `OnFirstBoot` が出た。要件 7.4・9.7 の求める姿である。**
+
+### ⑹ 「出ていない」を主張する側の較正
+
+「`OnFirstBoot` が出た」だけでは、探し方が何でも拾う作りである可能性を排除できない。そこで**出てはならない綴りが 0 になること**と、**その綴りが実在する場所ではちゃんと拾えること**の両方を、同じ探し方で示す。
+
+2 回目以降の起動では `OnFirstBoot` を発行せず、代わりに `boot_gate skip_first_boot` という記録が残る（`crates/areka-kanade/src/schedule/boot.rs` の `apply_boot_record_gate` 後の分岐、`first_boot` が偽の側）。
+
+| 探した綴り | 探した先 | 期待 | 実測 |
+|---|---|---|---|
+| `OnFirstBoot` | 周 1 のログ | 1 件以上 | **1** |
+| `OnFirstBoot` | 周 2 のログ | 1 件以上 | **1** |
+| `skip_first_boot` | 周 1 のログ | 0 | **0** |
+| `skip_first_boot` | 周 2 のログ | 0 | **0** |
+| `boot_start` | 周 1・周 2 のログ | 1 件以上（探し方が何も拾えないわけではないことの当たり） | **各 1** |
+| `skip_first_boot`（**綴りそのものの当たり**） | `crates/areka-kanade/src/schedule/boot.rs` | 1 件以上 | **1** |
+
+最後の行が要である——同じ正規表現を、その綴りが本当にある場所へ当てると **1 件**返る。だから周 1・周 2 の **0** は「探し方が壊れていて何も拾えない」ではなく「本当に無い」である。この綴りの経路が到達可能であること自体は、決定論テスト `crates/areka-ghost/tests/ghost/spine_e2e_test_s7_second_boot_record_present.rs`（起動記録が在る根では `OnFirstBoot` を飛ばす）が押さえており、これは⑵のワークスペース走行に含まれて緑である。
+
+送出したイベント ID の全数（2 周の合計）は次のとおりで、`OnFirstBoot` はちょうど 2 件——周ごとに 1 件ずつである。
+
+```
+$ grep -hoE 'id=On[A-Za-z]+' lap1.log lap2.log | sort | uniq -c
+      2 id=OnClose
+      2 id=OnFirstBoot
+      2 id=OnInitialize
+     60 id=OnSecondChange
+```
+
+### ⑺ 作業木が汚れていないこと（要件 7.11）
+
+ワークスペース全体のテストと実機 2 周を終えた後の状態。
+
+```
+$ git status --porcelain
+（0 行）
+
+$ git status --porcelain | wc -l
+0
+
+$ git ls-files --others --exclude-standard | wc -l
+0
+```
+
+**この 0 も較正する。** 追跡外のファイルを 1 つ置けば同じ問いが 1 を返し、消せば 0 に戻る。
+
+```
+$ touch .kiro/specs/areka-P0-nar-install/__calib_probe.tmp
+$ git ls-files --others --exclude-standard
+.kiro/specs/areka-P0-nar-install/__calib_probe.tmp
+$ git ls-files --others --exclude-standard | wc -l
+1
+$ rm .kiro/specs/areka-P0-nar-install/__calib_probe.tmp
+$ git ls-files --others --exclude-standard | wc -l
+0
+```
+
+**シェル側の永続化ファイルも含めて**追跡領域に現れていないことを、名前で探して確かめた。
+
+| 探したもの | 探した範囲 | 結果 |
+|---|---|---|
+| `profile` という名のフォルダ | `target/` と `.git/` を除く全域 | 1 件（下記のとおり本走行とは無関係） |
+| `*.dat`（シェル側の永続化の典型的な綴り） | `target/` と `.git/` を除く全域 | **0** |
+| `profile` という名のフォルダ | `target/nar-samples/` 配下（**当たり**） | `target/nar-samples/manual/emo2/ghost/emo2/ghost/master/profile` |
+
+最後の行が当たりである——同じ探し方で、走行が本当に作った永続化フォルダは見つかる。見つかったうえで `git status` に現れないのは、手動用の根が `target/` の下（無視規則の 1 行目 `target`）にあるからで、`git check-ignore -v` が理由まで答える。
+
+```
+$ git check-ignore -v target/nar-samples/manual/emo2/ghost/emo2/ghost/master/profile/ghost.dat
+.gitignore:1:target	target/nar-samples/manual/emo2/ghost/emo2/ghost/master/profile/ghost.dat
+```
+
+`target/` の外に 1 件見つかった `vendors/pasta/crates/pasta_lua/profile` は**本走行の産物ではない**——中にファイルは **1 個**ある（`find vendors/pasta/crates/pasta_lua/profile -type f` が 1 行返す＝`pasta/save/save.json`・2 バイト・2026-09-17 20:12）。無関係だと言える根拠は「空だから」ではなく**日時と追跡状態**である——本走行（2026-09-19 08:35／08:36）の 2 日前の日時であり、かつ `vendors/pasta` はサブモジュールで `git submodule status` も `git -C vendors/pasta status --porcelain` も汚れを報告しない（後者は 0 行）。つまり本走行の前から在って、本走行で動いてもいない。
+
+### ⑻ この一周が確かめていない範囲
+
+- **圧縮方式は 0（無圧縮）しか踏んでいない。** 検体の `.nar` 4 本は全エントリが方式 0 である（`emo2` 128／128・`R_POST_and_KOMAINU` 49／49・`emo2-kakukaku-offsetdpi` 20／20・`emo2-kakukaku-wplimit` 20／20——`zipfile` で全エントリの `compress_type` を数えた）。**方式 8（deflate）の伸長を実機で踏んだ記録はここには無い**。方式 8 は `areka-nar` の決定論テスト 8 本が押さえており（5.1・6.4 の README の残した懸念と同じ話）、外から貰った圧縮済みの `.nar` を初めて置く人は、そこが実機初踏であることを承知しておくこと。
+- **検体は emo2 1 つだけ。** 要件 9.7 が名指しするのが emo2 の一周だからで、他の 3 検体を実機で起動してはいない（決定論テストの登記往復は 4 本すべてを踏んでいる）。
+- **目視のサインオフはしていない。** 本タスクの完了条件はログと `git status` の記録であり、立ち絵の表示位置・typewriter の進行・ドラッグ追従といった人間の目で見る項目は `crates/areka/tests/emo2_real_run.rs` 冒頭の手順に従って別途行うものである。
+- **有界の自動終了は強制終了（ForceQuit）の経路である。** 「この経路は強制終了で、別れの挨拶を経ない」と過去に記録されている但し書きは**正しく、本走行はそれを覆していない**。2 周とも同じ 1 行が出ている——`lap1.log:207` と `lap2.log:179` の
+  `WARN actor{actor=kanade}: kanade: 強制終了指示——終了系列（Forced）へ直行 event="force_quit" reason="user"`。
+  コードも同じことを言う——`crates/areka-ghost/src/runtime.rs:239` の `shutdown` が送るのは `KanadeMsg::ForceQuit` だけで、`crates/areka/src/emo2_boot/spine.rs:671` は「`GhostRuntime::shutdown` は**常に** ForceQuit 経路」と明記している。`OnClose` は NOTIFY であって GET ではないので、**返答としての別れの挨拶トークは再生されない**（2 周のログに `ClosePending`／`CloseTalkWait` の類は 1 行も無い）。
+- **本走行がここに足したのは別の事実である。** 強制終了の経路であっても、`OnClose` NOTIFY → `unload_clean` → `persist flush confirmed` までは到達している（`lap1.log:208`〜`211`／`lap2.log:180`〜`183`）。だから周 1 は登記を書き終えてから終わったと言える——⑷の担保はこれで立つ。本タスクが主張しているのは起動側（`OnFirstBoot`）なので、挨拶トークが無いことは判定に影響しない。
+- **窓口を 2 つ同時に呼んではいない。** 窓口は呼ぶたびに `manual/<検体>/` を消して作り直すので、走行中に別の端末で呼ぶと走っている木が消える。2 周は厳密に逐次で行った（周 1 の終了コードを受け取ってから周 2 の窓口を呼んだ）。6.1 が 6.5 へ送った未検証 ⒞ はこれで消化した。
+- **`tools/perf/` の計測経路には触れていない。** 6.1 が 6.5 へ送った未検証のうち ⒜⒝⒟（実測 3 種での引き渡し・`invoke-followup-checks.ps1` の単独起動・`check-quiet` 経路）は本タスクの `_Boundary: 実機サインオフ` の外である。なお `tools/perf/check-quiet.ps1` の自己較正が HEAD で赤く `perf-loop.ps1 selftest` が終了コード 4 で止まることは既知で、本タスク以前からある事象であり、本走行はその経路を通っていない。
+- **⒜⒝⒟ は「引受先不在の先送り」である。** 6.5 は本 spec の最後のタスクなので、境界の外と判定したこの 3 件を吸収する後続タスクが無い。よって次のとおり名指しして最終検証と開発者へ上げる——⒜ `tools/perf/invoke-perf-run.ps1` へ `-GhostRoot`／`-BalloonRoot` を実測 3 種で渡す経路の実走確認（6.1 で既定値を削除して必須引数にしたため、渡し忘れは起動時に止まる側へ倒してある）、⒝ `tools/perf/invoke-followup-checks.ps1` を perf-loop を介さず**単独起動**したときの窓口経路（perf-loop 経由では measure が必ず両方渡すので通らない）、⒟ `tools/perf/check-quiet.ps1` の経路（32bit ヘルパ・管理者権限・静寂な機械）——⒟は上記の既知の赤（`perf-loop.ps1 selftest` が終了コード 4）を先に解く必要がある。
