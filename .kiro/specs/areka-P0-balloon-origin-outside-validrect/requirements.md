@@ -53,7 +53,7 @@
 
 1. When 宣言された `origin` 成分の解決後の値が `validrect` の当該軸の範囲の**外**にあるとき, the areka バルーン文字表示 shall その成分を**宣言されていないもの**として扱い、書字開始角の当該成分（横書き・縦書き左送り＝`validrect` 左上／縦書き右送り＝`validrect` 右上）を文字描画開始点に用いる。
 2. The areka バルーン文字表示 shall 範囲の判定を **x と y の成分ごとに独立**に行う——片方の成分だけが範囲外のとき、範囲外の成分だけが書字開始角へ落ち、範囲内の成分は宣言どおりの値のまま残る。
-3. The areka バルーン文字表示 shall 範囲の判定で**両端を範囲内とみなす**——解決後の値が `validrect` の辺とちょうど等しい成分は範囲内であり、宣言どおりの位置を用いる（現行の記録の判定と同じ両端を含む判定を、返す値の判定にもそのまま用いる）。
+3. The areka バルーン文字表示 shall 範囲の判定で**両端を範囲内とみなす**——解決後の値が `validrect` の辺とちょうど等しい成分は範囲内であり、宣言どおりの位置を用いる（現行の記録の判定と同じ両端を含む判定を、返す値の判定にもそのまま用いる）。書字開始角から遠い側の辺にちょうど重なる宣言（例: 横書きで `origin.x` が `validrect` の右辺と等しい）も範囲内である——「文字が置けるだけの余白があるか」で線を引くと閾値が恣意になり（右辺の 1 画素手前でも文字は置けない）、範囲内の狭い宣言は作者の宣言として不変に保つ（要件 2.1）のと同じ扱いに揃える。この点の挙動は本修正の前後で変わらない。
 4. When `origin` 成分が負値で宣言されているとき, the areka バルーン文字表示 shall まず反対端基準で絶対値化し（完了 spec `areka-P0-balloon-vertical-canon` 要件 3.7・不変）、**その解決後の値**で範囲の内外を判定する。
 5. The areka バルーン文字表示 shall 1.〜4. を横書き（`horizontal_tb`）・縦書き右送り（`vertical_rl`）・縦書き左送り（`vertical_lr`）の 3 書字方向で同じ規則として適用し、書字方向は書字開始角の選択にだけ効く。
 6. When `origin` を `validrect` の外に宣言した実物の検体 `emo2-kakukaku-offsetdpi`（`origin.x,0`／`origin.y,0`・面別の `validrect.left` は sakura 36／kero 24）を本番と同じ 2 層マージの経路で解決したとき, the areka バルーン文字表示 shall 文字描画開始点を sakura `(36, 46)`・kero `(24, 40)` に置く（＝同じバルーンから `origin` の 2 行を消したときと同じ位置）。
@@ -99,7 +99,7 @@
 #### Acceptance Criteria
 
 1. The areka ワークスペース shall 3 書字方向 × 2 成分について、範囲外／範囲内／端ちょうど（両端）／負値の反対端基準解決後の範囲内と範囲外、の各場合の文字描画開始点を**表**の形で固定する決定論テストを持つ。
-2. The areka ワークスペース shall 1. のテストを `region.rs` とは別の**兄弟ファイル**に新設する（`region.rs` は 951 行で、テストを同じファイルへ足すと 1 ファイル 1,000 行の目安を見張る `file_length_guard_test.rs` が赤くなる）。
+2. The areka ワークスペース shall 1. のテストを `region.rs` とは別の**兄弟ファイル**に置く。`origin` の解決の判断分岐（範囲内・範囲外・未宣言・負値・`validrect` との独立性）と記録件数の補助を既に所有している `region_vertical_canon_tests.rs`（677 行・2026-09-18 実測）へ足すのを第一とし、1,000 行の目安を超える見込みのときに限り新しい兄弟ファイルへ分ける（`region.rs` は 951 行で、テストを同じファイルへ足すと 1 ファイル 1,000 行の目安を見張る `file_length_guard_test.rs` が赤くなる）。
 3. The areka ワークスペース shall 「範囲外の宣言が書字開始角へ落ちる」ことを見るテストを、**範囲外の腕を潰した実装で赤くなることを確かめてから**採る（到達する経路を踏ませる。判断を潰しても緑のままなら、そのテストは規則を固定していない）。
 4. The areka ワークスペース shall 撤去を固定している既存テスト（`region.rs` の `origin_components_resolve_literally_and_independently`、`region_vertical_canon_tests.rs` の `declared_origin_outside_validrect_is_literal_with_one_debug_per_component`・`negative_origin_resolves_from_opposite_edge_then_is_used_literally` の範囲外の場合・`declared_origin_resolution_is_independent_of_validrect`）を、本仕様の規則の期待値へ書き直す——ここで「退行させない」とは被覆を失わないことであり、正典の改訂に伴う期待値の更新は退行ではない（完了 spec `areka-P0-balloon-vertical-canon` 要件 7 の読みを引き継ぐ）。
 5. The areka ワークスペース shall 要件 1.6 の検体 `emo2-kakukaku-offsetdpi` を、本番と同じ 2 層マージの経路で読んで開始点 sakura `(36, 46)`／kero `(24, 40)` を固定する決定論テストを 1 本持つ（検体は書き換えない。本修正前は `(0, 0)` に解決されるため、修正前に赤・修正後に緑になる）。
