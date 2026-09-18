@@ -21,8 +21,8 @@
 //! 見ない。兄弟テストは `refresh,1` を書いたサプリメントを**マニフェストから通して**
 //! 重ね置きになることを確かめる。
 
-use crate::error::ExistingState;
-use crate::manifest::ExistingPolicy;
+use crate::error::{ExistingState, InstalledElement, IoPhase, ManifestWarning};
+use crate::manifest::{ExistingPolicy, InstallManifest};
 use crate::plan::Placement;
 use std::ffi::OsStr;
 use std::io;
@@ -67,19 +67,17 @@ fn at<T>(path: &Path, result: io::Result<T>) -> Result<T, StageError> {
 #[derive(Debug)]
 pub(crate) struct WorkArea {
     dir: PathBuf,
+    /// 棚に残っていて消せなかった物。[`InstallOutcome::leftovers`] に合流する。
+    residue: Vec<PathBuf>,
 }
 
 impl WorkArea {
     /// 棚の残骸を片付けてから、この展開のための作業フォルダを 1 つ作る。
     ///
-    /// 残骸は前回の異常終了が置いていったもの。同じ根への同時インストールは起きない
-    /// 前提（設計「Risks」）なので、棚に在る物は全て前回の置き土産として消す。
-    ///
     /// # Errors
     ///
-    /// 根が実在しないとき（根を勝手に作らない＝設計の事前条件）、棚の残骸を消せない
-    /// とき、作業フォルダを作れないとき [`StageError`]。残骸を消せないまま続けると
-    /// 前回の木が完成形に混ざるので、黙って続ける道は持たない。
+    /// 根が実在しないとき（根を勝手に作らない＝設計の事前条件）、この走行の番地を
+    /// 空にできないとき、作業フォルダを作れないとき [`StageError`]。
     pub(crate) fn create(root: &Path) -> Result<WorkArea, StageError> {
         if !root.is_dir() {
             return Err(StageError {
@@ -88,25 +86,17 @@ impl WorkArea {
             });
         }
         let shelf = root.join(WORK);
-        if let Err(source) = std::fs::remove_dir_all(&shelf) {
-            // 棚がそもそも無いのは片付けの目的が達成された状態。
-            if source.kind() != io::ErrorKind::NotFound {
-                return Err(StageError {
-                    path: shelf,
-                    source,
-                });
-            }
-        }
         let dir = shelf.join(format!(
             "{}-{}",
             std::process::id(),
             NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
         ));
+        let residue = prepare_shelf(&shelf, &dir)?;
         at(&dir, std::fs::create_dir_all(&dir))?;
-        Ok(WorkArea { dir })
+        Ok(WorkArea { dir, residue })
     }
 
-    /// 作業フォルダそのもの。タスク 4.3 が退避先 `old-<k>` をこの下に作る。
+    /// 作業フォルダそのもの。退避先 `old-<k>` もこの下に作る。
     pub(crate) fn path(&self) -> &Path {
         &self.dir
     }
@@ -115,6 +105,65 @@ impl WorkArea {
     pub(crate) fn stage(&self, k: usize) -> PathBuf {
         self.dir.join(k.to_string())
     }
+
+    /// `k` 番目の配置で宛先を退避しておく場所。
+    ///
+    /// 番号つきの場所を [`WorkArea::stage`] と同じ作業フォルダの直下に取るので、
+    /// 最後の後片付け 1 回で退避も組み上げも一緒に消える。
+    fn retired(&self, k: usize) -> PathBuf {
+        self.dir.join(format!("old-{k}"))
+    }
+
+    /// 棚に残っていて消せなかった物。
+    pub(crate) fn residue(&self) -> &[PathBuf] {
+        &self.residue
+    }
+}
+
+/// 棚の残骸を片付け、この走行の番地だけは必ず空にする。
+///
+/// 他の走行の置き土産（`<別のプロセス識別子>-<連番>/`）は、この走行の木に混ざりようが
+/// ない——組み上げも退避もこの走行の番地の中だけで起こる——ので、消せなくても止めない。
+/// ただし黙って捨てもせず、消せなかった物を 1 件 1 行で返す（呼び手が結果へ載せる）。
+///
+/// 一方、この走行の番地そのものが残っていて消せないのは（Windows のプロセス識別子の
+/// 再利用で起こり得る）前回の木が完成形に混ざる状態なので、そこだけは失敗を返す。
+fn prepare_shelf(shelf: &Path, dir: &Path) -> Result<Vec<PathBuf>, StageError> {
+    let mut residue = Vec::new();
+    let entries = match std::fs::read_dir(shelf) {
+        Ok(entries) => entries,
+        // 棚がそもそも無いのは片付けの目的が達成された状態。
+        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(residue),
+        Err(source) => {
+            return Err(StageError {
+                path: shelf.to_path_buf(),
+                source,
+            });
+        }
+    };
+    for entry in entries {
+        let Ok(entry) = entry else {
+            // 何が居るのかすら読めなかった。棚ごと人の目に出す。
+            residue.push(shelf.to_path_buf());
+            continue;
+        };
+        let path = entry.path();
+        let removed = match entry.file_type() {
+            Ok(kind) if kind.is_dir() => std::fs::remove_dir_all(&path),
+            Ok(_) => std::fs::remove_file(&path),
+            Err(source) => Err(source),
+        };
+        if let Err(source) = removed {
+            if source.kind() == io::ErrorKind::NotFound {
+                continue;
+            }
+            if path == dir {
+                return Err(StageError { path, source });
+            }
+            residue.push(path);
+        }
+    }
+    Ok(residue)
 }
 
 /// 配置 1 つぶんの完成形を `stage` に組み上げ、宛先が確定前にどうだったかを返す。
@@ -154,6 +203,13 @@ pub(crate) fn stage_placement(
         at(&folder, std::fs::create_dir_all(&folder))?;
     }
     for (index, relative) in &placement.files {
+        // 計画のエントリ番号は読取層が数えた列の添字。範囲を出る経路は今日は無いが、
+        // 出たら添字の取り違えなので、黙って別のエントリを書かずにその場で落ちる。
+        debug_assert!(
+            *index < contents.len(),
+            "計画のエントリ番号 {index} が中身の件数 {} を超えている",
+            contents.len()
+        );
         let file = stage.join(relative);
         at(&file, std::fs::write(&file, &contents[*index]))?;
     }
@@ -179,6 +235,17 @@ fn copy_existing(from: &Path, to: &Path, keep: Option<&[String]>) -> Result<(), 
             // 残す物が出てきて初めて親を作る（`keep` の側で空フォルダが生えない）。
             at(to, std::fs::create_dir_all(to))?;
             at(&target, std::fs::copy(&source, &target))?;
+            // 複写は読み取り専用の属性も運ぶ。作業フォルダの写しは必ず書ける形にする
+            // ——さもないと、書庫が同名を持っていたときに続く書き出しが作業フォルダの
+            // パスを名指して失敗し、そのパスは次の走行の片付けで消えるので、利用者は
+            // 直す場所に辿り着けない。属性は宛先を守るためのもので、入れ替えで丸ごと
+            // 新しい木に替わる以上、写しの側で持ち越す意味も無い。
+            let mut mode = at(&target, std::fs::metadata(&target))?.permissions();
+            // Unix なら誰でも書ける形になる綴りだが、本プロジェクトは Windows 専用で、
+            // ここが落とすのは読み取り専用の属性 1 つだけ（設計「Windows 固有」）。
+            #[allow(clippy::permissions_set_readonly_false)]
+            mode.set_readonly(false);
+            at(&target, std::fs::set_permissions(&target, mode))?;
         }
     }
     Ok(())
@@ -197,6 +264,202 @@ fn kept(keep: Option<&[String]>, name: &OsStr) -> bool {
             keep.iter()
                 .any(|allowed| allowed.eq_ignore_ascii_case(&name))
         }
+    }
+}
+
+/// 展開が成功したときに返るもの（要件 5.10）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InstallOutcome {
+    /// `install.txt` の `name`（`OnInstallComplete` の参照に写す）。
+    pub name: String,
+    /// `install.txt` の `accept`。
+    pub accept: Option<String>,
+    /// インストール済みフォルダ 1 つにつき 1 要素。計画と同じ順。
+    pub installed: Vec<InstalledElement>,
+    /// 読み飛ばしたキーなど、拒否ではないが黙って通さないもの。
+    pub warnings: Vec<ManifestWarning>,
+    /// 片付けられずに残った場所（人が消す所）。中身は⑴最後の後片付けが失敗した
+    /// ときの作業フォルダ（退避した木も組み上げた木もこの下に居る）と、⑵開始時に
+    /// 棚から消せなかった他の走行の置き土産。
+    pub leftovers: Vec<PathBuf>,
+}
+
+/// 確定に失敗したときの形。`archive` を足すと [`crate::NarError::Io`] になる（タスク 4.4）。
+///
+/// `path` は**呼び手が手を打てる場所**を指す。巻き戻しまで成功したなら確定を止めた
+/// 失敗そのもの（例: 使用中の宛先）、巻き戻しに失敗したなら元へ戻せなかった宛先。
+#[derive(Debug)]
+pub(crate) struct CommitError {
+    pub phase: IoPhase,
+    pub path: PathBuf,
+    pub source: io::Error,
+    /// 失敗までに確定した配置。`rolled_back` が真ならこれらは元へ戻っている。
+    pub committed: Vec<InstalledElement>,
+    pub rolled_back: bool,
+}
+
+/// 確定済みの配置を元へ戻す 1 手。確定した順に積み、逆順に解く。
+enum Undo {
+    /// 新規に置いた木を消す。
+    Remove(PathBuf),
+    /// 退避した木を宛先へ戻す（新しく置いた木が在れば先に消す）。
+    ///
+    /// 先に消すのは、Windows の `rename` が既に在る宛先を上書きしないため。消えるのは
+    /// 書庫から作り直せる新しい木だけで、利用者の元の木は `old` に居る。戻す手が失敗
+    /// しても `old` はそのまま残る（失敗の経路では作業フォルダを片付けない）ので、
+    /// 取り返しのつかない消え方はしない。
+    Restore { old: PathBuf, dest: PathBuf },
+}
+
+/// 組み上げ済みの全配置を宛先と入れ替えて確定する（要件 5.10・5.11・6.4・6.6）。
+///
+/// 配置の番号順に確定し、途中で失敗したら確定済みを逆順に元へ戻す。利用者から見えるのは
+/// 「全部入った」か「何も変わっていない」のどちらかだけになる（要件 5.11）。
+///
+/// 退避した木を消すのは**全配置が確定した後**の後片付け 1 回にまとめてある。配置ごとに
+/// 消すと、後の配置が失敗したときに前の配置を戻す元が既に無い——要件 5.11 を満たせない
+/// ——ため。退避先は作業フォルダの直下なので、後片付けは `remove_dir_all` 1 回で済む。
+///
+/// # Errors
+///
+/// どれかの配置の入れ替えに失敗したとき [`CommitError`]。`rolled_back` が真なら宛先は
+/// 全て呼ぶ前の内容で、偽なら `committed` に挙げた配置が確定したまま残っている。
+pub(crate) fn commit_all(
+    area: &WorkArea,
+    manifest: &InstallManifest,
+    plan: &[Placement],
+    states: &[ExistingState],
+) -> Result<InstallOutcome, CommitError> {
+    debug_assert_eq!(
+        plan.len(),
+        states.len(),
+        "既存の別は配置ごとに 1 つ（組み上げが返した列をそのまま渡す）"
+    );
+    let mut installed = Vec::with_capacity(plan.len());
+    let mut undo = Vec::with_capacity(plan.len());
+    for (k, (placement, existing)) in plan.iter().zip(states).enumerate() {
+        if let Err(failure) = commit_one(area, k, placement, *existing, &mut undo) {
+            return Err(roll_back(undo, installed, failure));
+        }
+        installed.push(InstalledElement {
+            kind: placement.kind.clone(),
+            name: placement.name.clone(),
+            path: placement.destination.clone(),
+            target_ghost: placement.target_ghost.clone(),
+            existing: *existing,
+        });
+    }
+
+    // 空のまま残すと、開発用の根では原本に写って全複製に伝播する（設計）。失敗しても
+    // 確定は取り消さないが、黙って忘れはしない。
+    let mut leftovers = area.residue().to_vec();
+    if remove_tree(area.path()).is_err() {
+        leftovers.push(area.path().to_path_buf());
+    }
+    Ok(InstallOutcome {
+        name: manifest.name.clone(),
+        accept: manifest.accept.clone(),
+        installed,
+        warnings: manifest.warnings.clone(),
+        leftovers,
+    })
+}
+
+/// 1 配置を入れ替えて確定する。
+///
+/// 宛先が無ければ「作業フォルダ → 宛先」の 1 手。在れば「宛先 → 退避」「作業フォルダ →
+/// 宛先」の 2 手で、2 手目が失敗したら退避を戻す（その戻しは [`roll_back`] が積み上がった
+/// [`Undo`] を解く形で行う——1 配置目の戻しと同じ一言を通す）。
+///
+/// 元へ戻す手は**成功した後**に積む。先に積むと、宛先が既に在るのに `New` として来た
+/// （組み上げから確定までの間に誰かが作った）ときに、自分が作っていない木を消してしまう。
+fn commit_one(
+    area: &WorkArea,
+    k: usize,
+    placement: &Placement,
+    existing: ExistingState,
+    undo: &mut Vec<Undo>,
+) -> Result<(), StageError> {
+    let dest = &placement.destination;
+    // 格納先（`<根>/ghost` など）は根に無いことがある。`rename` は親を作らない。
+    let parent = dest
+        .parent()
+        .expect("宛先は必ず格納先の下にあるので親がある");
+    at(parent, std::fs::create_dir_all(parent))?;
+
+    if existing == ExistingState::New {
+        at(dest, std::fs::rename(area.stage(k), dest))?;
+        undo.push(Undo::Remove(dest.clone()));
+        return Ok(());
+    }
+
+    // 宛先の中のファイルが他のプロセスに掴まれていると、Windows はここを拒む
+    // （要件 6.6）。解放は試みない。宛先は 1 バイトも動いていない。
+    let old = area.retired(k);
+    at(dest, std::fs::rename(dest, &old))?;
+    undo.push(Undo::Restore {
+        old,
+        dest: dest.clone(),
+    });
+    at(dest, std::fs::rename(area.stage(k), dest))
+}
+
+/// 確定済みを逆順に元へ戻し、呼び手へ返す失敗を組む。
+fn roll_back(
+    undo: Vec<Undo>,
+    committed: Vec<InstalledElement>,
+    failure: StageError,
+) -> CommitError {
+    match unwind(undo) {
+        // 全て元へ戻った。報告するのは確定を止めた失敗そのもの。
+        None => CommitError {
+            phase: IoPhase::Commit,
+            path: failure.path,
+            source: failure.source,
+            committed,
+            rolled_back: true,
+        },
+        // 戻せなかった。呼び手が手を打てるのは戻せなかった宛先なので、そちらを名指す。
+        Some(stuck) => CommitError {
+            phase: IoPhase::Rollback,
+            path: stuck.path,
+            source: stuck.source,
+            committed,
+            rolled_back: false,
+        },
+    }
+}
+
+/// 積んだ手を逆順に解く。最初に戻せなかった宛先と理由を返す（戻せていれば `None`）。
+///
+/// 1 つ戻せなくても残りは戻す。戻せる宛先を巻き添えで壊さないため。
+fn unwind(undo: Vec<Undo>) -> Option<StageError> {
+    let mut stuck = None;
+    for step in undo.into_iter().rev() {
+        let (dest, result) = match step {
+            Undo::Remove(dest) => {
+                let result = remove_tree(&dest);
+                (dest, result)
+            }
+            Undo::Restore { old, dest } => {
+                // 新しく置いた木が在れば先に退ける。2 手目の `rename` が失敗した直後は
+                // 宛先が空いているので、その場合は何もせずに戻しへ進む。
+                let result = remove_tree(&dest).and_then(|()| std::fs::rename(&old, &dest));
+                (dest, result)
+            }
+        };
+        if let Err(source) = result {
+            stuck.get_or_insert(StageError { path: dest, source });
+        }
+    }
+    stuck
+}
+
+/// 木ごと消す。既に無いのは消えている状態として通す。
+fn remove_tree(path: &Path) -> io::Result<()> {
+    match std::fs::remove_dir_all(path) {
+        Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(()),
+        other => other,
     }
 }
 

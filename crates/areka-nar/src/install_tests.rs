@@ -17,13 +17,18 @@
 
 use super::*;
 use crate::container::{inflate_entry, read_central_directory};
-use crate::manifest::{locate_install_txt, parse_manifest};
+use crate::manifest::{InstallManifest, locate_install_txt, parse_manifest};
 use crate::names::validate_entry_names;
 use crate::plan::{Placement, build_plan};
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+
+/// 確定（要件 5.10・5.11・6.4・6.6）の兄弟テスト。1 ファイル 1,000 行の上限に
+/// 収めるために分けただけで、助手も固定入力もここから借りる。
+#[path = "install_commit_tests.rs"]
+mod commit;
 
 // ---- 助手 ----
 
@@ -32,6 +37,8 @@ use std::path::Path;
 /// 公開面（タスク 4.4）が `open` で行うことと同じ順で通す。手で [`Placement`] を
 /// 組まないので、計画側の取り違えが組み上げのテストで緑のまま残らない。
 struct Prepared {
+    /// 結果の列（要件 5.10）が `name`・`accept`・警告を写す元。
+    manifest: InstallManifest,
     plan: Vec<Placement>,
     /// エントリ番号で引ける伸長済みの中身（`open` が保持するもの）。
     contents: Vec<Vec<u8>>,
@@ -51,7 +58,11 @@ fn prepare(builder: NarBuilder, request: &InstallRequest<'_>) -> Prepared {
         .map(|entry| inflate_entry(&bytes, entry).expect("エントリを伸長できる"))
         .collect();
     let plan = build_plan(&manifest, &names, request).expect("計画は組める");
-    Prepared { plan, contents }
+    Prepared {
+        manifest,
+        plan,
+        contents,
+    }
 }
 
 /// 木の全内容。ファイルは相対パス → バイト列、フォルダは末尾 `/` の相対パス → 空。
@@ -520,6 +531,52 @@ fn written_content_stays_byte_identical_without_any_conversion() {
     );
 }
 
+/// 既存の宛先に読み取り専用のファイルが在っても、書庫の同名がそれを置き換える。
+///
+/// 複写は読み取り専用の属性も運ぶので、写した先がそのままだと続く書き出しが
+/// **作業フォルダ**のパスを名指して失敗する。そのパスは次の走行の片付けで消えるので、
+/// 利用者は「どこを直せばよいか」に辿り着けない。写した直後に属性を落として根から断つ
+/// ——属性は宛先を守るためのもので、入れ替えで木ごと替わる以上、写しの側で持ち越す
+/// 意味も無い。
+#[test]
+fn a_read_only_existing_file_does_not_block_the_archive_from_replacing_it() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    make_tree(&destination, &[("descript.txt", b"old descript")]);
+    let protected = destination.join("descript.txt");
+    set_read_only(&protected, true);
+
+    let request = InstallRequest {
+        root: work.path(),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let (area, _) = stage_all(work.path(), &prepared);
+
+    let staged = area.stage(0).join("descript.txt");
+    assert_eq!(
+        fs::read(&staged).expect("写しを読める"),
+        b"new descript",
+        "書庫の内容で置き換わっている"
+    );
+    assert!(
+        !fs::metadata(&staged)
+            .expect("属性を読める")
+            .permissions()
+            .readonly(),
+        "作業フォルダの写しは書ける形になっている"
+    );
+    // 借りた根の後片付けが読み取り専用で躓かないよう、仕掛けを戻しておく。
+    set_read_only(&protected, false);
+}
+
+/// 読み取り専用の属性を付け外しする。
+fn set_read_only(path: &Path, on: bool) {
+    let mut mode = fs::metadata(path).expect("属性を読める").permissions();
+    mode.set_readonly(on);
+    fs::set_permissions(path, mode).expect("属性を書ける");
+}
+
 // ---- 作業フォルダ ----
 
 /// 作業フォルダは `<根>/.nar-work/<プロセス識別子>-<連番>/<配置番号>/` に立つ。
@@ -576,19 +633,23 @@ fn stale_work_folders_are_swept_before_staging_starts() {
     assert!(area.path().is_dir(), "自分の作業フォルダは在る");
 }
 
-/// 残骸を片付けられなければ、黙って続けずに失敗を返す。
+/// この走行の番地そのものが残っていて消せなければ、黙って続けずに失敗を返す。
 ///
-/// 前回の木が混ざったまま組み上げると、宛先に入るはずの無い物が入る。同じ根への
-/// 同時インストールは起こらない前提（設計「Risks」）なので、片付けられないのは
-/// 異常であり、そのまま呼び手へ返す。
+/// 前回の木が混ざったまま組み上げると、宛先に入るはずの無い物が入る。番地は
+/// `<プロセス識別子>-<連番>/` なので、ここへ当たるのはプロセス識別子が再利用された
+/// ときだけ。他の番地の残骸（消せなくても混ざりようがない）とは扱いが違う。
+///
+/// 番地の名前は走行ごとに決まるので、[`WorkArea::create`] が呼ぶ片付けそのものを
+/// 名指しで踏む（`create` は同じ一言を通る）。
 #[test]
-fn fails_when_the_stale_residue_cannot_be_swept() {
+fn fails_when_this_runs_own_work_folder_cannot_be_swept() {
     use std::os::windows::fs::OpenOptionsExt;
 
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let shelf = work.path().join(".nar-work");
-    fs::create_dir_all(&shelf).expect("棚を作れる");
-    let held = shelf.join("held.bin");
+    let mine = shelf.join(format!("{}-0", std::process::id()));
+    fs::create_dir_all(&mine).expect("番地を作れる");
+    let held = mine.join("held.bin");
     // 共有なしで開いたままにする（起動中のゴーストの `shiori.dll` と同じ状態）。
     let handle = fs::OpenOptions::new()
         .write(true)
@@ -597,11 +658,41 @@ fn fails_when_the_stale_residue_cannot_be_swept() {
         .open(&held)
         .expect("掴んだままのファイルを作れる");
 
-    let failure = WorkArea::create(work.path()).expect_err("片付けられないので失敗する");
+    let failure = prepare_shelf(&shelf, &mine).expect_err("番地を空にできないので失敗する");
 
-    assert_eq!(failure.path, shelf, "失敗したパスが分かる");
+    assert_eq!(failure.path, mine, "失敗したパスが分かる");
     assert!(held.exists(), "掴まれた物は消えていない");
     drop(handle);
+}
+
+/// 掴まれていない残骸は、名前が誰の物でも片付ける。
+#[test]
+fn a_stale_work_folder_is_swept_even_when_the_name_is_this_runs_own() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let shelf = work.path().join(".nar-work");
+    let mine = shelf.join(format!("{}-0", std::process::id()));
+    make_tree(&mine, &[("0/leftover.txt", b"leftover")]);
+
+    let residue = prepare_shelf(&shelf, &mine).expect("消せるので通る");
+
+    assert_eq!(residue, Vec::<std::path::PathBuf>::new(), "残り物は無い");
+    assert!(!mine.exists(), "番地は空になっている");
+}
+
+/// 棚の場所がフォルダでなければ、黙って続けずに失敗を返す。
+///
+/// 根の直下に `.nar-work` という名前のファイルが居ると、棚を読むことすらできない。
+/// ここを見逃すと、残骸を 1 件も片付けないまま組み上げへ進む。
+#[test]
+fn fails_when_the_shelf_is_not_a_folder() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let shelf = work.path().join(".nar-work");
+    fs::write(&shelf, b"not a folder").expect("邪魔者を置ける");
+
+    let failure = WorkArea::create(work.path()).expect_err("棚を読めないので失敗する");
+
+    assert_eq!(failure.path, shelf, "失敗したパスが分かる");
+    assert!(shelf.is_file(), "邪魔者を勝手に消さない");
 }
 
 /// 根が無ければ、根を勝手に作らずに失敗を返す（設計の事前条件）。
