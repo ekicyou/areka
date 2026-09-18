@@ -11,6 +11,9 @@
 mod container;
 mod crc32;
 mod error;
+// タスク 4.4 の `NarArchive::open` が繋ぐまで本体からは呼ばれない（兄弟テストだけが使う）。
+#[allow(dead_code)]
+mod names;
 
 pub use crc32::crc32;
 pub use error::{
