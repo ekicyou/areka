@@ -256,6 +256,8 @@ HWND は `wintf::ecs::window::WindowHandle{hwnd}`（SparseSet・窓 entity）、
 
 ## 6. 設計判断項目（要件ディスカッションへ）
 
+> 2026-09-18 設計生成: 未決だった 2・3・6〜16 は §7.3 で決着した（各項目の末尾に `→ §7.3-n` を付す）。§6 の本文は要件ディスカッション時点の記録としてそのまま残す。
+
 1. ~~**表示をどこで呼ぶか**（3.4）~~ → **開発者裁定（2026-09-18 要件ディスカッション #1）: 表示中もゴーストが動き続ける（要件 7.2 改訂）**。M-1（tick 内・描画停止）は要件に反するので不可。設計は M-2（tick の借用を解いた外側で `TrackPopupMenuEx`・`spawn_ui_local` 等）を前提に、要件 7.4 の「表示中に窓が消えた」耐性（owner 消失時の戻り・戻った後の entity 不在）を設計する。実行器が隠し窓の `WM_USER` で起床するため、モーダルループ中も tick が poll される（§1.2）ことが M-2 の根拠。
 2. **照会の経路**（3.3）: R-A（殻）か R-B（状態機械の Action）か。R-C は採らない。
 3. **待ち上限と失敗の扱い**: UI が kanade の返信を待つ上限（ms）と、上限超過を要件 3.4 の「失敗」（`warn!` 1 回・既定名・メニューは出す）に含めるか。
@@ -272,4 +274,80 @@ HWND は `wintf::ecs::window::WindowHandle{hwnd}`（SparseSet・窓 entity）、
 13. **A0 並走との台帳衝突**（要件 10.5）: `[briefs].count` と本文の手書き数を後着側が数え直す運用で足りるか、`roadmap-draft.md` の行追加を本仕様の最終コミットまで遅らせるか。
 14. **登記された文言の `&`**（要件 3.5 の裏側）: 要件 3.5 は SHIORI から返った文言を素通しにする。一方、後続 spec が登記する子項目名（ゴースト名・シェル名・バルーン名＝フォルダ名や `name`）に `&` が含まれると OS はアクセラレータと解釈して 1 文字消す。登記の口が既定名・子項目名を `&&` に写すか、登記側の責務とするかを設計で決める（前者が後続 4 本にとって安全）。
 15. **要件 7.1（表示中の死活監視）の表明方法**: 構造上 SHIORI アクターのスレッド側にあり UI のモーダルループと独立（§1.2）。決定論で言うなら「UI が止まっても shiori スレッドの `on_idle` が呼ばれ続ける」を `real_idle_tests.rs` の形で 1 本、実機なら要件 9.9 ⑸ の一部として観察する。どちらで満たすかを設計で決める。
-16. **右ダブルクリックの抑止の置き場**（要件 1.10・2026-09-18 追加）: `OnMouseDoubleClick(Right)` を「メニューが有効なら送らない」にするには、押下ハンドラが `popupmenu.visible` の結果を知る必要がある。解放時の照会結果を待ってから双方を決める（押下側の送出を解放側へ遅らせる）か、直前の照会結果を短く覚えるか。要件は「同時に起きない」だけを定める。
+16. **右ダブルクリックの抑止の置き場**（要件 1.10・2026-09-18 追加）: `OnMouseDoubleClick(Right)` を「メニューが有効なら送らない」にするには、押下ハンドラが `popupmenu.visible` の結果を知る必要がある。解放時の照会結果を待ってから双方を決める（押下側の送出を解放側へ遅らせる）か、直前の照会結果を短く覚えるか。要件は「同時に起きない」だけを定める。 → §7.3-16
+
+## 7. 設計フェーズの調査と判断（2026-09-18・`/kiro-spec-design`）
+
+### 7.1 調査の範囲
+
+- **種別**: 既存システムへの拡張（Extension）＝軽量の調査。外部依存の追加は 0（`windows` 0.62.2 の有効機能で足りる・§1.7）ので、外部調査は行わず、§1〜§5 の地図を設計に必要な範囲で**コードで裏取り**し直した（下の 7.2）。
+- **主な結果**: ⑴ 実行器はモーダルループの内側でも他のタスクを poll する（M-2 の成立条件をクレートのソースで確認）。⑵ `CloseReason::User` の構築点は 20 ファイル・そのうち検体パスを参照する（nar-install と重なりうる）ファイルは 2 本だけ。⑶ `resolve.rs` への `readme` 転記は +2〜4 行で 1,000 行に収まる（分割は不要）。⑷ 台帳の検査で証拠に関わる失敗は `ImplementedWithoutEvidence` の 1 種だけ＝語彙のみの項目に正典 URL を置いても赤にならない。
+
+### 7.2 調査記録
+
+#### 実行器のモーダルループ耐性（M-2 の成立条件）
+- **契機**: 開発者裁定（§6-1）で「表示中もゴーストが動く」が要件 7.2 になり、`TrackPopupMenuEx` を tick の借用の外側で呼ぶ M-2 が前提になった。M-2 は「モーダルループの中でも tick タスクが poll される」ことに依存する。
+- **調べた先**: `wintf-winmsg-executor` 0.0.5 のソース（`c:\rust\cargo\registry\src\…\wintf-winmsg-executor-0.0.5\src\lib.rs` と `util/window.rs`）。
+- **分かったこと**:
+  - `spawn_local` は `async_task::spawn_unchecked` で作った runnable を、起床のたびに `PostMessageW(executor_hwnd, WM_USER, …, runnable_ptr)` で**メッセージ専用窓**へ投函し、その窓手続きが `runnable.run()` で該当タスクだけを poll する（`EXECUTOR_WINDOW` の定義・`spawn_unchecked_lifetime`）。
+  - `EXECUTOR_WINDOW` は `Window::new`（再入可・`Fn` クロージャ）で作られており、`new_checked`（`RefCell` で再入を弾く方）ではない。よって `TrackPopupMenuEx` の内部ループが `WM_USER` を dispatch すると、**我々のタスクの poll の内側で tick タスクが poll される**。`async_task` はタスクごとに実行状態を持つので、別タスクの入れ子 poll は許される。
+  - 初回 poll は `runnable.schedule()`＝投函で起きるので、ハンドラの中（tick の借用中）から `spawn_local` しても、最初の poll は**tick が返ってから**である（借用は解けている）。
+- **設計への影響**: M-2 を「解放ハンドラは要求を置いて `wintf::executor::spawn_local` するだけ・タスクが次の poll で借用→照会→計画→**借用を解いて**表示→再借用して動作」の形で確定できる。tick の再入ガード `IS_TICK_FLUSH_IN_PROGRESS` は tick 自身の入れ子だけを弾くので、モーダルループ中の tick は通常どおり回る（`runtime/tick_bridge.rs` の `tick_one_frame_with`）。
+
+#### `CloseReason::User` の構築点の全数（S-1 の影響範囲）
+- **契機**: §3.6 の S-1（`CloseReason::User{scope}`）と S-2（`CloseRequest{reason, scope}`）の差は「どこを書き換えるか」だけなので、実数を数えた。
+- **分かったこと**: `CloseReason::User` のリテラルは 20 ファイル（kanade 12・areka 8・areka-ghost 2 のテスト含む）。`KanadeMsg::CloseRequest {` の構築点は 25 か所、`Phase::ClosePending {` の構築点は 14 か所。S-2 は後者 2 群＋状態機械の 4 関数（`on_close_request`／`begin_close`／`record_pending_close`／`dispatch`）と `State.pending_close` の型を触る。S-1 は `as_ref_str` と `on_close` の 2 関数＋リテラル置換だけで、状態機械の署名は不変。
+- **検体パスを参照するファイルとの重なり**（要件 Boundary の「共有ファイル 0」の検算）: リテラルを持つファイルのうち `fixtures/`・`sample_ghost` を参照するのは `emo2_boot/spine.rs`（1 か所・`ghost.shutdown(CloseReason::User)`）と `emo2_boot/spine_conformance_script.rs`（`CLOSE_REASON` 定数と `get("OnClose", &[CLOSE_REASON])` の期待列）の 2 本だけ。どちらも 1〜2 行の機械的な変更。
+- **設計への影響**: S-1 を採る（§7.3-7）。nar-install との衝突は上記 2 本の 1〜2 行に限られ、後着側の rebase で解ける（Revalidation Triggers に明記）。
+
+#### `readme` キーの転記と行数
+- `crates/areka-parsers/src/package/resolve.rs` は 963 行。`MountModel` は `#[non_exhaustive]`（`model.rs`）なので欄の追加は破壊的でない。`resolve` は `map.get("…").cloned()` を欄ごとに 1 行で書いている（`name`／`sakura.name` …）ので `readme` は **+1〜2 行**。テストは既存の兄弟ファイル `resolve_tests.rs`（441 行）へ。→ 分割は不要（§7.3-6）。
+- `GhostRuntime`（`crates/areka-ghost/src/runtime.rs`・678 行）は `mount: MountModel` を私有し、公開アクセサは `kanade()`／`dispatcher()`／`sylphya_publisher()`。`mount()` を 1 つ足す（+4 行）。
+
+#### 台帳の証拠規則（要件 10.4 との整合）
+- `doc/ukadoc-coverage/README.md` §3: 証拠は「定義箇所の `/// ukadoc: <URL>` 1 行」。置き場は「許可表の要素・分岐の腕・語彙表の 1 行」。**スライス定数の表は先頭にページ URL 1 行**で足り、機械は各要素の最初の文字列リテラルを名前として突き合わせる。「未実装の項目にはソース側に何も書かない」とも書いてある。
+- 検査の証拠に関わる失敗種別は `crates/ukadoc-survey/src/check/content.rs` の `ImplementedWithoutEvidence` だけ（`implemented` なのに証拠 0）。**語彙のみの項目に証拠があっても失敗にならない**。
+- **設計への影響**: 要件 10.4 の「15 項目に 1 行ずつ」は、⑴ 7 つの `*button.caption` を並べる表（先頭にページ URL）、⑵ `sakura|kero.popupmenu.visible` の定数 2 つ（各 1 行）、⑶ 問い合わせない 4 名（`char*.popupmenu.visible`・`popupmenu.type` ×3）を並べる表（先頭にページ URL・要件 3.8 のテストがこの表を読む＝死んだ定義にしない）で満たす。README の「未実装には書かない」は `absent` の項目についての助言であり、本仕様の 9 項目は「引く仕組みを置く」語彙のみなので表に載せる（README §3 の「語彙表」形式そのもの）。
+
+#### 実行器の起床と UI スレッドの待ち（照会の同期待ち）
+- kanade への照会は `areka_actor::reply_channel()` の `ReplyReceiver::recv_timeout` で**UI スレッドが同期的に待つ**。待っている間は tick も止まる（表示の**前**の短い停止であり、要件 7.2 が禁じる「表示**中**の停止」ではない）。上限は 1,000 ms（§7.3-3）。既存の prefetch（`schedule/boot.rs`）も同期往復であり、新しい形ではない。
+
+#### wintf の解放配送（同 tick の押下＋解放）
+- `pointer/buffers.rs` の `transfer_buffers_to_world` は `if down_received … else if up_received …` で、同じ tick に押下と解放が入ると解放側の分岐に入らない。「離した」を `up_received` から**独立に**立てる旗（`released`）を足せば、速いクリックでも取りこぼさない（§1.1 の見落としやすい点のとおり）。`dispatch_pointer_events` の末尾で `*_down` と `double_click` を消しているので、`released` も同じ場所で消す。
+
+### 7.3 設計判断（§6 の未決項目の決着）
+
+各判断は design.md に結論として書き写してある。ここでは選ばなかった案と理由を残す。
+
+- **7.3-2 照会の経路 → R-A（アクター殻）**。`KanadeMsg::ResourceQuery { ids, reply }` を `actor.rs` の閉包が `step` の前で受ける（`KanadeMsg::Close` と同じ位置）。`Phase::Steady{..}` なら `round_trip_request` を 1 件ずつ回し、それ以外（Boot 系・Close 系・Unloading・Stopped）は全件 `NoContent` を返す（要件 3.10）。R-B（状態機械の Action）は「1 バッチ最後の応答しか再投入しない」既存の殻を変えるか、N 回展開する新しい腕を足すかのどちらかで、数十行多い割に純粋テストで言えることが増えない。名前は「メニュー」を含めず汎用にする（kanade はメニューを知らない）。
+- **7.3-3 待ち上限 → 1,000 ms・上限超過は要件 3.4 の失敗**。3 件（第 1 スライス）の host32 往復は通常数十 ms。kanade が長い往復（終了挨拶の GET 等）の最中なら要求は inbox で待つので、上限で UI を守る。超過・切断・送出失敗はすべて `warn!` 1 回＋全項目既定名＋メニューは出す。
+- **7.3-6 `readme` の読み場所 → parsers に転記（案①・分割なし）**。理由は 7.2 の行数。案②③（areka で再読）は文字コード処理を二重に持つ。
+- **7.3-7 `OnClose` の scope → S-1 `CloseReason::User { scope: u32 }`**。`System` は無引数のまま・`as_ref_str` は変えず・`on_close` が `User{scope}` のとき Ref1＝Ref2＝scope を積む。`on_close_notify`（ForceQuit の NOTIFY）は Ref0 のみのまま（要件外）。窓 0 で `run()` が返る経路の `GhostRuntime::shutdown(CloseReason::User)`（`main.rs`）は `User { scope: 0 }` を渡す（本体側＝0。正典は「不明」の値を定めていない）。
+- **7.3-8 `MenuAction` の形 → 閉包一本（`Rc<dyn Fn(&mut World, &MenuContext)>`）**。enum を作ると後続 spec が variant を足しに来る（台帳の「typed 個別新設禁止」と同じ理由で避ける）。要件 6.6「台本と同じ経路」は規約で守り、本仕様の 2 項目がその手本になる（終了＝`MouseWiring::send_close_request`・説明書＝`readme::open`）。`Rc` にするのは、計画（`MenuPlan`）が登記の複製を World の外へ持ち出し、借用を解いた後に呼ぶため。
+- **7.3-9 「そのときの内容」 → 供給関数（`Rc<dyn Fn(&World, &MenuContext) -> MenuItem>`）**。登記者に refresh を求める形は「誰が・いつ」の取り決めが増える。
+- **7.3-10 `\![open,readme]` の実行スレッド → UI へ送って開く**。talk スレッドの sink（`ReadmeCueSink`）は `mpsc` で `ReadmeRequest` を送るだけ。UI 側の取り出しは `readme.rs` 自身が `Input` スケジュールへ載せる system（`choice_drain.rs` の `wire_choice_drain` と同型）。メニューの「説明書」と同じ関数 `readme::open_from_world` に届く（要件 4.5）。
+- **7.3-11 `main.rs` → 結線 1 呼出（`menu::wire_menu`）に畳む**。`readme` の結線は `wire_emo2_boot` の内側（マウント結果と sink の送出端を両方持っているのはそこだけ）。`main.rs` の増分は 3〜5 行。ファサード分割は本仕様ではやらない。
+- **7.3-12 凍結テスト → 新しい集合の逐語一致に書き換える**（`username`＋7 caption＋`sakura|kero.popupmenu.visible`＝10 名）。「含む」表明 2 本に分ける案は、集合が黙って増える道を開く。
+- **7.3-13 台帳の衝突 → 実装の最終タスクで台帳・`roadmap-draft.md`・報告を同じコミットで書き、後着側が数え直す**（要件 10.2/10.5）。行追加を遅らせる運用は取らない（腕 f が担当欄の登記と同時性を要求する）。
+- **7.3-14 `&` → 計画（`plan`）が「リソース由来でない文言」を `&&` に写す**。リソース由来（`*button.caption` の値）は要件 3.5 のとおり素通し。登記者（後続 4 本）は `&` を気にしなくてよい。
+- **7.3-15 要件 7.1 の表明 → 新規テスト 0・既存 `crates/areka-kanade/src/shiori/real_idle_tests.rs` ＋ 実機 9.9 ⑸**。死活監視は SHIORI アクターのスレッド上（`shiori/real.rs` の受信ループ）にあり、UI スレッドの状態と独立である。「UI が止まっても呼ばれ続ける」を書いても、それは別スレッドの `recv_timeout` が動くという既存テストの言い換えにしかならない（判断分岐が無い＝檻にならない）。
+- **7.3-16 右ダブルクリック → 押下側は送らず `MouseWiring` に預け、メニューのタスクが照会の後に決める**。`OnMouseDoubleClick(Right)` の材料（scope・座標・当たり判定名）は押下ハンドラが従来どおり解決し、`MouseWiring::defer_right_double_click` に預ける。解放で起きたメニューのタスクが `popupmenu.visible` の結果を見て、`0` なら預かりを `send_double_click` で送り、それ以外なら捨てる（trace）。同じ tick に「解放」と「2 度目の押下」が入っても、決めるのは 1 か所（タスク）なので要件 1.10 の「どちらか一方」が成り立つ。「直前の結果を覚える」案は初回（記憶なし）で規則が崩れる。
+- **7.3-M2 表示の形（裁定 §6-1 の具体化）**: 解放ハンドラは `MenuRequest{scope, entity, hwnd, screen_pos}` を作って `wintf::executor::spawn_local` する。外側 World への `Weak<RefCell<EcsWorld>>` は wintf が既に NonSend 資源 `EcsWorldSelfRef`（`crates/wintf/src/ecs/world/mod.rs`・`WinApp::wire_new_path` が `run()` 開始時に注入・`window_system.rs` の `create_windows` が同じ読み方をしている）として World に置いているので、それを読む。`main.rs` から `Rc` を渡す必要は無い（設計の第 1 稿はそうしていたが、既にある資源で済むと分かったので取り下げた）。タスクは ⑴ 借用して登記の写しを取り・照会・判定・計画・預かりの取り出し → ⑵ **借用を解いて** `TrackPopupMenuEx` → ⑶ 再借用して、`Weak` が upgrade でき・窓 entity に `WindowHandle` が残っていれば動作を 1 回呼ぶ（無ければ `debug!`・要件 7.4）。表示中は `MenuWiring.in_flight` で 2 枚目を抑止する。
+- **7.3-区切り線（要件 2.6）**: 枠を 4 群 {①②③}{④⑤}{⑥}{⑦} に分け、**隣り合う非空の群の間**に 1 本置く。第 1 スライスは {⑥}{⑦} だけなので「説明書 ／ 区切り ／ 終了」。
+- **7.3-解放の旗（wintf）**: `PointerState` に 1 フレーム限りの `released: ButtonReleased{left,right,middle,xbutton1,xbutton2}` を足す（`double_click` と同じ扱い）。5 ボタン分にするのは既存の `*_down` 5 欄と対にするためで、消費者は右だけ。
+
+### 7.4 リスクと備え
+
+- **モーダルループ中の入れ子 poll**: 7.2 でソースを確認したが、実機で「表示中にまばたき・文字送りが続く」を見る（要件 9.9 ⑸）。もし止まるなら M-2 の前提が崩れる＝設計へ差し戻し（M-1 は要件 7.2 に反するので取れない）。
+- **owner 窓の消失**（要件 7.4）: `TrackPopupMenuEx` の owner が表示中に破棄されたとき戻り値 0 で返る想定。タスクは戻った後に `Weak` の upgrade と entity の生存を確かめてから動作を呼ぶので、どう返っても落ちない。実機 9.9 ⑸ の一部として観察。
+- **`ShellExecuteW` を MTA スレッドから呼ぶ**（`WinApp::new` は `COINIT_MULTITHREADED`）: 単純な `open` 動詞は動くのが通例。実機 9.9 ⑵。
+- **フォアグラウンド作法**（KB Q135788）: `SetForegroundWindow(owner)` → 表示 → `PostMessageW(owner, WM_NULL)`。怠ると外クリックで閉じない。実機 9.9 ⑴。
+- **待ち上限の間の停止**: 照会の待ち（最大 1,000 ms）は UI スレッドを止める。通常は数十 ms。実機で体感を確認し、長ければ上限を下げる（定数 1 つ）。
+- **A0 並走との衝突**: `spine.rs`・`spine_conformance_script.rs` の 1〜2 行（7.2）と、`roadmap-draft.md`・台帳（要件 10.5）。
+
+### 7.5 参照
+
+- ukadoc [OnClose](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnClose:1)・[OnMouseDoubleClick](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDoubleClick:1)・[SHIORI Resource](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html)・[descript_ghost readme](https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#readme_2c_30d5_30a1_30a4_30eb_540d:1)・[\![open,readme]](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bopen_2creadme_5d:1)
+- Microsoft: `TrackPopupMenuEx`・`TPM_RETURNCMD`・KB Q135788（ポップアップメニューとフォアグラウンド）・`ShellExecuteW`（戻り値 32 以下は失敗）
+- `wintf-winmsg-executor` 0.0.5 `src/lib.rs`（`spawn_local`・`EXECUTOR_WINDOW`）・`src/util/window.rs`（`Window::new` と `new_checked` の差）
+- `doc/ukadoc-coverage/README.md` §1・§3・`crates/ukadoc-survey/tests/consistency/spec_checks.rs`
