@@ -188,15 +188,15 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
         for ((entity, button), buf) in buffers.iter() {
             // 解放の旗は押下優先の分岐とは独立に立てる。同じ tick に押下と解放が
             // 入っても（下の `if/else if` が押下を選んでも）解放を落とさない。
-            if buf.up_received {
-                if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
-                    match button {
-                        PointerButton::Left => pointer_state.released.left = true,
-                        PointerButton::Right => pointer_state.released.right = true,
-                        PointerButton::Middle => pointer_state.released.middle = true,
-                        PointerButton::XButton1 => pointer_state.released.xbutton1 = true,
-                        PointerButton::XButton2 => pointer_state.released.xbutton2 = true,
-                    }
+            if buf.up_received
+                && let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity)
+            {
+                match button {
+                    PointerButton::Left => pointer_state.released.left = true,
+                    PointerButton::Right => pointer_state.released.right = true,
+                    PointerButton::Middle => pointer_state.released.middle = true,
+                    PointerButton::XButton1 => pointer_state.released.xbutton1 = true,
+                    PointerButton::XButton2 => pointer_state.released.xbutton2 = true,
                 }
             }
 

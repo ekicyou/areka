@@ -174,7 +174,7 @@
   - _Requirements: 9.7_
   - _Depends: 3.2, 7.2_
 
-- [ ] 9.2 非回帰と番人を通す
+- [x] 9.2 非回帰と番人を通す
   - 変えないと決めたもの（右クリック単発の非送出・バルーン窓の右クリック・拒まれた終了の経路・Ctrl と Ctrl＋Shift の入口・待機中の死活監視・トレイアイコン不在）が現状のまま動くことを、既存テストの緑と該当箇所の無改変で確かめる
   - 記録の無い失敗経路が無いことを、失敗経路を 1 件ずつ数え上げて確かめる: 表示失敗（1.7）・リソース問い合わせ失敗と上限超過（3.4）・既定アプリで開けない（4.4）・登記の置き換え（6.3）・表示後に窓が消えた（7.4）・結線の資源が不在。各経路に対応する記録が実在する定義箇所を完了記録に書く
   - 新設・改変したすべてのファイルが 1 ファイル 1,000 行以内であることを行数の番人で確かめる
@@ -239,3 +239,35 @@
 | （レビュアー追加）ドラッグの関門 | `menu/trigger.rs` の `handle_release` のドラッグ判定を無効化 | exit 101・`96 passed; 1 failed` | `a_release_while_dragging_is_ignored_and_drops_the_deferred_double_click` |
 
 P1 で `menu::plan::plan_tests` が緑のままなのは欠陥ではない。`plan::build` は既に並んだ入力を受け取り `Frame::ORDER` を読まないので、並びを見張るのは登記側とそこから通しで流れるテストで、計画側の構造（区切りの入り方）は P2 が見張っている。`captions::row` の `debug_assert_eq!` は列挙の宣言順と表の行順の食い違いを見張るもので、`ORDER` 定数の入れ替えでは発火しない（入れ替えを捕まえるのは `captions_tests` の並びの検査）。
+
+### 9.2 非回帰と番人（要件 1.5・1.6・5.4・7.1・8.4・9.8・11.1・11.2・2026-09-18・コードは `19cce0ec` と同一）
+
+差分の基点は `695c40f2`（タスク生成の直後）。「差分なし」はすべて、先に `git ls-files` でパスが実在することを確かめてから `git diff 695c40f2..HEAD -- <path>` を取った。実装者とレビュアーが独立に数え直し、下の数はレビューの訂正を反映してある。
+
+**非回帰 6 項目**
+
+| # | 変えないと決めたもの | 無改変の根拠 | 振る舞いを留めているテスト |
+|---|---|---|---|
+| 1 | 右クリック単発は `OnMouseClick` を送らない（1.5／11.1） | `input_events/mod.rs` の `on_char_pointer_pressed` で、単発の腕（`DoubleClick::Middle \| XButton1 \| XButton2 \| None => return false`）は差分の文脈行のまま。解放の経路も送らない: `menu/*.rs`・`readme.rs` の本番コードに `KanadeMsg::Mouse`／`MouseInput` の組み立ては 0 件（作るのは `captions::send_query` の `ResourceQuery` だけ）。解放・覗きの経路が起こしうるマウス送出は `send_pending_right_double_click` の 1 本だけで、中身は右の**ダブル**クリック（Ref5＝1） | `input_events_tests.rs::handler_middle_xbutton_and_single_click_do_not_send`（無改変）・`trigger_flow_tests.rs::right_release_keeps_one_pending_query_and_sends_one_resource_query`・`a_suppressed_tick_without_a_deferred_double_click_sends_nothing` |
+| 2 | バルーン窓の右クリック（1.6） | `input_events/balloon.rs` と `balloon_*` のテスト 7 本とも差分 0 行。解放ハンドラが付くのは `CharWindowMarker` の窓だけ | 既存のバルーンのテスト群（無改変で緑） |
+| 3 | 拒まれた終了の経路（5.4） | `areka-kanade/src/schedule/close.rs` の差分は `mod tests` の中の 6 か所だけで、どれも `CloseReason::User` → `User { scope: 0 }` の綴りの追随（その行を除いた差分は 0 行） | `close.rs` の `value_then_ended_refuses_close_and_resumes_pump`・`value_then_interrupted_refuses_close_same_as_ended`、`close_test_handshake_tests.rs::close_refused_resumes_pump_then_terminates_via_resumed_talk` |
+| 4 | Ctrl／Ctrl＋Shift の入口（5.5） | `handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sending` は差分 0。`handler_ctrl_left_double_click_sends_one_close_request_and_keeps_the_windows` は `CloseReason::User { scope: 0 }` への 1 行の追随だけで、判定はスコープまで留める形に**強まった**（弱めていない） | 左の 2 本＋新設 `input_events_menu_tests.rs::ctrl_left_double_click_carries_the_scope_of_the_clicked_window` |
+| 5 | 待機中の SHIORI の死活監視（7.1） | `areka-kanade/src/shiori/` の 4 ファイルとも差分 0 行。監視は SHIORI アクター自身のスレッドで回り、UI は同期で待たない（`captions::send_query` は送るだけ・返事は毎 tick の `trigger::poll_step` が `try_recv` で覗くだけ・表示中の `trigger::display` は World を借りない） | `shiori/real_idle_tests.rs` の 4 本（無改変で緑） |
+| 6 | トレイアイコンを持たない（11.2） | `grep -rn "Shell_NotifyIcon\|NOTIFYICONDATA" crates/` は 0 件（同じ形の対照 `ShellExecuteW` は `readme.rs` に 4 件当たるので、検索そのものは働いている） | — |
+
+**記録の無い失敗経路: 0 件**（新設の本番 8 ファイル `menu/{mod,plan,captions,trigger,win32}.rs`・`readme.rs`・`emo2_boot/readme_cue.rs`・`areka-kanade/src/actor_resources.rs` の早期離脱・`Err`・`None` の腕を全数読み、その腕自身か、戻り値を必ず受ける呼び手のどちらかに記録があることを追った。レビュアーも 8 本を全文読んで 0 件）。
+
+| 失敗経路 | 記録の定義箇所（関数と `event`） | 水準 | 留めているテスト |
+|---|---|---|---|
+| 表示失敗（1.7） | `menu::trigger::finish` の `Err` の腕・`menu_display_failed`（`[menu] TrackPopupMenuEx failed`・`error`／`hresult`） | `error!` | `trigger_show_tests.rs::a_failed_display_logs_one_error_and_runs_nothing`・`a_failed_display_logs_shown_then_the_error` |
+| 照会の失敗・上限超過・切断・送出失敗（3.4） | `menu::captions::interpret`・`menu_resource_query_unanswered`（`reason=timeout／dropped／send_failed`）と `menu_resource_failed`（失敗した id を 1 行に列挙）。空・値なしは `menu_resource_empty` | `warn!` 1 行／`debug!` | `captions_tests.rs::timeout_defaults_every_id_with_one_warn_carrying_the_reason`・`dropped_and_send_failed_carry_their_own_reason`・`two_failed_ids_are_reported_in_a_single_warn_line` |
+| 既定のアプリで開けない（4.4） | `readme::open` の戻り値 ≦ 32 の腕・`readme_open_failed`（`path`／`code`） | `error!` | 無し（`ShellExecuteW` の OS の経路＝実機確認 9.3 ⑵） |
+| 登記の置き換え（6.3） | `menu::MenuRegistry::register`・`menu_registration_replaced` | `warn!` | `mod_registry_tests.rs::second_registration_replaces_and_warns_once` |
+| 表示後に窓が消えた（7.4） | `menu::trigger::finish`・`menu_window_gone`（`[menu] window gone after menu`）／`menu_world_unavailable`（`reason="world dropped"／"world busy"`）、返事待ちの間は `trigger::poll_once`・`menu_window_gone_while_waiting` | `debug!` | `trigger_show_tests.rs::a_selection_on_a_window_without_a_handle_runs_nothing`・`a_selection_on_a_despawned_window_runs_nothing`・`a_dropped_outer_world_is_logged_and_runs_nothing`・`a_busy_outer_world_is_logged_and_runs_nothing`、`trigger_flow_tests.rs::a_window_that_disappeared_while_waiting_drops_the_request` |
+| 結線の資源が不在（8 か所） | `trigger::handle_release`・`menu_release_ignored`（`reason="not wired"`）`trace!`／`menu::request_close`・`menu_close_no_mouse_wiring` `warn!`／`readme::open_from_world`・`readme_open_no_wiring` `warn!`／`readme::is_available`・`readme_available_no_wiring` `trace!`／`readme::take_pending`・`readme_drain_no_wiring` `trace!`／`trigger::poll_menu_query`・`menu_outer_world_ref_missing` `warn!`／`menu::register`・`menu_register_no_wiring` `warn!`／`menu::attach_release_handlers` の 0 枚・`menu_release_handlers_attached` `warn!` | 左記 | `mod_wiring_tests.rs`・`trigger_flow_tests.rs`・`readme_tests.rs`・`trigger_show_tests.rs` の該当テスト（`readme_available_no_wiring` だけは文言でなく「結線が無ければ無効」という判定を `is_available_is_false_without_wiring` が留める） |
+
+意図して静かにしてある腕（失敗ではない・理由付き）: 右以外の解放と Tunnel 相（全ポインタ事象が通る）／返事待ちの無い tick（ほぼ全 tick）／未登記の枠（正常な結果）／`send_query` の送出失敗（記録は次の tick の `interpret` の 1 行へ寄せてある＝その場で出すと 2 行になる）／`poll_step` の各 `Err`（純粋関数・受け手が記録）／`finish` の「選択なし」の戻り（直前に 1 行出している）／`win32` の `?` と `client_to_screen` の `None`（呼び手が記録）／`readme::is_available` の 2 回目以降の不在（初回だけ記録）／表示可否の空・値なし（正常系）。
+
+**行数（9.8）**: `cargo test -p log-capture-kit --test file_length_guard_test` は 6 passed。本仕様が変更・追加した `.rs` は 79 本（新規 22・変更 57）で、1,000 行超は 0 本。950 行以上は 4 本: `spine_conformance_lap_tests.rs` 988（本仕様の増分 0）・`spine.rs` 968（0）・`resolve.rs` 964（+1）・`main.rs` 958（+10）。新設の本番ファイルの最大は `menu/trigger.rs` 558 行、新設テストの最大は `trigger_flow_tests.rs` 848 行。
+
+**全体の関門**: i686 の成果物を用意した状態で `cargo test --workspace -j 4` は exit 0。`Running`＋`Doc-tests` 103 行に対し `test result:` も 103 行（最後まで走った）で、7,811 passed／0 failed／40 ignored。`cargo fmt --all -- --check` は exit 0、`cargo build -p areka` の areka 由来の警告は 0、`cargo test -p ukadoc-survey` は緑。clippy は関門ではないが、本仕様が足した行に当たっていた `collapsible_if` 1 件（`wintf/src/ecs/pointer/buffers.rs` の解放の旗）は 9.2 のレビューを受けて `&& let` へ畳んだ（既存の同種 13 件は担当外なので触っていない）。
