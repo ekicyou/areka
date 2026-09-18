@@ -139,7 +139,7 @@
 
 ## 2026-09-18 追記（棚卸⑭＝α ゴールへの組み直し）
 
-- **本仕様は α（M2）の A1（単独枠）に格上げ**。`shell-implicit-surface`（A0）の後・`baseware-root-layout`（A2）の前。
+- **本仕様は α（M2）の A0（単独枠・先頭）に格上げ**（2026-09-18 開発者「nar 関係は早く進めないとダメ」で `shell-implicit-surface` との順序を反転）。後続の A1（`shell-implicit-surface`・`baseware-root-layout`・`default-balloon-bundle`）は全て本仕様の共有ヘルパ（検体名 → 根）を前提にする。**サンプルゴーストを増やして試験する仕組み**はこの共有ヘルパと `vendors/sample_ghost/*.nar` の保管慣行がそのまま器になる（検体を足す＝`.nar` 1 つと名前 1 行）。
 - **展開先の形＝ベースウェアの根の形に揃える**: `<根>/ghost/<directory>/`・`<根>/balloon/<balloon.directory>/`（ukadoc「全体の構成」の格納フォルダ）。`target/` 配下に作る開発用の根も同じ形にし、`baseware-root-layout` がその根をそのまま `BasewareRoot` として受ける。共有ヘルパは「検体名を受け取って根を返す」に加え「根そのもの」を返せること。
 - **Out に書いた「利用者が投げた `.nar` を受け取る UI／D&D／インストーラ体験」の引受先は `areka-P0-ghost-install`（09-18 起票・A5-①）**。同じく Out の `updates2.dau`／ネットワーク更新／`delete.txt` は `areka-P0-network-update`（09-18 起票・A5-②）。「ベースウェア直下の `ghost/` `balloon/` 規約と `areka.exe` の既定パス」は `areka-P0-baseware-root-layout`（09-18 起票・A2）。
 - `areka-nar` が受理する `install.txt` の `type` は `ghost`・`shell`・`supplement`・`balloon` の 4 つ。他（`plugin`・`headline`・`language`・`calendar*`・`package`）は理由付きで拒否を返す（製品側が `OnInstallFailure` に写す）。

@@ -141,3 +141,10 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
 - **テスト規約**: 兄弟ファイル `<stem>_tests.rs` を `src/` に置く／共有ヘルパは `<stem>_test_support.rs`／一時パスは `temp-path-kit`（`areka-parsers` は既に `[dev-dependencies]` 済み）／`log-capture-kit` は **`[dev-dependencies]` のみ**／1,000 行の番人（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の**例外表には触らない**＝新規は 1,000 行未満の新ファイルで足す。⚠ **本 spec が触る兄弟檻はすでに上限の際に居る**——`crates/areka/src/placement/measure_tests.rs` が **983 行**（残り 17 行）、`crates/areka/src/emo2_boot/assets_tests.rs` が 919 行（残り 81 行・2026-09-13 実測）。この 2 ファイルへの追記は事実上できないので、新規ファイルを用意すること。`areka-P0-charset-canon` がこの先送りの引受先を本 spec と明記している（同 tasks.md の Implementation Notes）。
 - **実機運転の定石**: 絶対パス起動・i686 helper 先ビルド・`AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋`RUST_LOG` grep。⚠ **`RUST_LOG` は target 名**で、未設定・書式不正でも黙って `info` へ落ちる（`crates/areka/src/main.rs:141`）。「0 件」を主張するなら**同じ走行の中に debug 行が実在する**ことを示すこと（`charset-canon` の `signoff-record.md` 6.3 節の申し送り）。
 - **想定規模**: 新規 1 ファイル＋`assets.rs`＋`measure.rs`＋（layer 表現を変えるなら）`shell/model.rs`・`decode.rs`・`fold.rs`・`normalized.rs`・`plan.rs` とその兄弟檻。クレート 2〜5・ファイル 5〜12。**M**。
+
+---
+
+## 2026-09-18 追記（順序の反転＝`nar-install` が先）
+
+- 開発者指示「nar 関係は早く進めないとダメ」により、本 spec と `nar-install` の順序を**反転**した（roadmap A0＝`nar-install`・A1-①＝本 spec）。上の「推奨は本 spec が先」は取り下げ。
+- 帰結: 本 spec が参照する検体は `vendors/sample_ghost/R_POST_and_KOMAINU/` の直パスではなく、**nar-install が建てる共有ヘルパ（検体名 → 根）経由**で受ける。`shell/master/` 直下の画像の全数（上の表）は展開後の木で同じ。着手時に file:line と検体パスを引き直すこと。
