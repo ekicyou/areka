@@ -1,6 +1,6 @@
 # Design Document: areka-P0-nar-install
 
-> 2026-09-18 設計。入力は確定済みの `requirements.md`（10 要件・94 受入基準）と `research.md`（ギャップ分析＋設計判断 12 項目）。要件ディスカッションで決まった項目 1・3・4・6・11 はそのまま採り、残る項目 2・5・7・8・9・10・12 を本書で確定する。外部クレートの事実は 2026-09-18 に docs.rs・GitHub のソース・crates.io を当たり直した（`research.md` 節 9）。
+> 2026-09-18 設計。入力は確定済みの `requirements.md`（10 要件・95 受入基準）と `research.md`（ギャップ分析＋設計判断 12 項目）。要件ディスカッションで決まった項目 1・3・4・6・11 はそのまま採り、残る項目 2・5・7・8・9・10・12 を本書で確定する。外部クレートの事実は 2026-09-18 に docs.rs・GitHub のソース・crates.io を当たり直した（`research.md` 節 9）。
 
 ## Overview
 
@@ -291,10 +291,10 @@ flowchart TD
 | 5.11 | 途中失敗で書きかけ無し・既存無傷 | install | 作業フォルダ → 入れ替え・巻き戻し | 展開 |
 | 6.1 | refresh≠1 は上書き | install | `ExistingPolicy::Overlay` | 展開 |
 | 6.2 | refresh,1 は全消去＋mask（supplement を除く） | install | `ExistingPolicy::Replace { keep }`（結果同値の「組んでから入れ替え」・`supplement` は `Overlay` 固定＋`RefreshIgnoredForSupplement` の警告＝2026-09-18 開発者裁定で要件 6.2 に明記） | 展開 |
-| 6.6 | 宛先が使用中なら無傷で失敗・解放は呼び出し側 | install/error | `rename(dest → old)` の失敗 → `Io { phase: Commit, committed: [], rolled_back: true }`・エンジンは解放を試みない | 展開 |
 | 6.3 | 同梱バルーン側も同規則 | plan/install | `Companion::existing` | 展開 |
 | 6.4 | 途中失敗の原因と範囲 | error | `NarError::Io { phase, committed }` | 展開 |
 | 6.5 | 開発用の根は再インストールしない | Kit devroot | 常に空の根へ展開 | 取得 |
+| 6.6 | 宛先が使用中なら無傷で失敗・解放は呼び出し側 | install/error | `rename(dest → old)` の失敗 → `Io { phase: Commit, committed: [], rolled_back: true }`・エンジンは解放を試みない | 展開 |
 | 7.1 | `target/` 配下の専用名前空間 | devroot | `target/nar-samples/` | 取得 |
 | 7.2 | 無ければ展開 | devroot | cache miss | 取得 |
 | 7.3 | 変われば展開し直す | devroot | 刻印＝長さ＋CRC32・古い原本の回収 | 取得 |
