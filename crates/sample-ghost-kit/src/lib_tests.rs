@@ -1,11 +1,13 @@
 //! 窓口 [`SampleRoot`](super::SampleRoot) と登記表 [`SAMPLES`](super::SAMPLES) の自己テスト
-//! （要件 1.1・1.2・1.3・1.4・1.5・7.4）。
+//! （要件 1.1・1.2・1.3・1.4・1.5・7.4・8.4・9.5）。
 //!
 //! 窓口は `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
-//! だから主張は 5 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
+//! だから主張は 7 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
 //! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 4 つを
 //! 含む失敗になる／同梱していないバルーン名は既知の一覧を含む失敗になる／展開結果が
-//! 登記と食い違えば理由付きの失敗になる／種別と同梱バルーンが登記されている。
+//! 登記と食い違えば理由付きの失敗になる／種別と同梱バルーンが登記されている／登記した
+//! 各 `.nar` を空の根へ展開すると要素が登記の 1 行とちょうど一致する（登記の往復）／
+//! 取得した根へ書いた起動記録が次に取得した根に現れない。
 //!
 //! 「借用しか返さないので取得した値を捨てるとコンパイルできない」ことは、コンパイル自体を
 //! 判定に使うので rustdoc の `compile_fail` 例（[`SampleRoot::root`](super::SampleRoot::root)・
@@ -346,4 +348,175 @@ fn registry_records_kind_and_bundled_balloons() {
         assert_eq!(by_name(name).kind, SampleKind::Balloon);
         assert!(by_name(name).balloons.is_empty(), "{name} は同梱バルーン 0");
     }
+}
+
+// ---- 登記の往復と新品（要件 7.4・8.4・9.5） ----
+
+/// 起動記録の置き場。ゴーストのフォルダの中で、前の走行が残す物が置かれる所。
+const BOOT_RECORD: [&str; 5] = ["ghost", "master", "profile", "areka", "x.toml"];
+
+/// 新品の検査に使うゴーストの検体。登記されたゴーストのうち `.nar` が小さい方。
+const FRESH_SAMPLE: &str = "R_POST_and_KOMAINU";
+
+/// 登記の 1 行が主張する要素を、展開結果と同じ `<種別> <格納先>/<名前>` の形で並べる。
+///
+/// 種別は展開器が返す [`ElementKind`](areka_nar::ElementKind) の表示と同じ綴りにする。
+/// 本体が 1 つ、同梱バルーンが 0 個以上。
+fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
+    let kind = match sample.kind {
+        SampleKind::Ghost => "Ghost",
+        SampleKind::Balloon => "Balloon",
+    };
+    let mut declared = vec![format!(
+        "{kind} {}/{}",
+        match sample.kind {
+            SampleKind::Ghost => "ghost",
+            SampleKind::Balloon => "balloon",
+        },
+        sample.name
+    )];
+    declared.extend(
+        sample
+            .balloons
+            .iter()
+            .map(|balloon| format!("Balloon balloon/{balloon}")),
+    );
+    declared.sort();
+    declared
+}
+
+/// 登記の往復——登記した各 `.nar` を空の根へ展開すると、置かれた要素が登記の 1 行
+/// （種別・フォルダ名・同梱バルーン）とちょうど一致する（要件 8.4 の恒常版・9.5）。
+///
+/// 見るのは**展開器が返した要素**であって、根を走査して拾った名前ではない。種別は
+/// `install.txt` の `type` から展開器が決めた物なので、`.nar` が登記と違う種別を
+/// 名乗っていれば（置き場が偶然一致していても）ここで赤になる。
+///
+/// 段 ① の 8.4 は畳む前の追跡ツリーとの突き合わせを 1 度だけ行う手順だった。ツリーを
+/// 消した後は突き合わせる相手が登記になるので、この形が常設の姿である。`.nar` を
+/// 中身の違う物に差し替えれば、`SAMPLES` の行と食い違った瞬間に赤になる。
+#[test]
+fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
+    assert_eq!(
+        SAMPLES.len(),
+        4,
+        "登記は検体 4 つ（母数 0 で緑にならない較正）"
+    );
+    for sample in SAMPLES {
+        let root = WorkDir::new().expect("空の根は取れるはず");
+        let nar = devroot::nar_dir().join(format!("{}.nar", sample.name));
+        assert!(
+            nar.is_file(),
+            "登記した検体の .nar が置かれていない: {}",
+            nar.display()
+        );
+
+        let archive = areka_nar::NarArchive::open(&nar)
+            .unwrap_or_else(|err| panic!("検体 {} の .nar は受理されるはず: {err}", sample.name));
+        let outcome = archive
+            .install(&areka_nar::InstallRequest {
+                root: root.path(),
+                target_ghost: None,
+            })
+            .unwrap_or_else(|err| panic!("検体 {} は空の根へ展開できるはず: {err}", sample.name));
+
+        let mut installed: Vec<String> = outcome
+            .installed
+            .iter()
+            .map(|element| {
+                let place = element
+                    .path
+                    .strip_prefix(root.path())
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "検体 {} の要素が根の外に置かれた: {}",
+                            sample.name,
+                            element.path.display()
+                        )
+                    })
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                assert!(
+                    element.path.is_dir(),
+                    "検体 {} の要素のフォルダが実在しない: {}",
+                    sample.name,
+                    element.path.display()
+                );
+                format!("{:?} {place}", element.kind)
+            })
+            .collect();
+        installed.sort();
+
+        assert_eq!(
+            installed,
+            declared_elements_with_kind(sample),
+            "検体 {} の展開結果が登記の 1 行と食い違う",
+            sample.name
+        );
+    }
+}
+
+/// 窓口から取得した根へ起動記録を書いて捨てても、次に取得した根には現れない
+/// （要件 7.4・9.5）。
+///
+/// 「2 回取得できる」だけでは何も証明しない（同じ木を配り続ける実装でも緑になる）。
+/// そこで 1 回目に書いた起動記録の実在を先に主張し、2 回目の根が**完全**である
+/// ことも主張してから「無い」を言う（空の木を配る実装で恒真にならない）。
+#[test]
+fn a_boot_record_written_into_an_acquired_root_never_appears_in_the_next_one() {
+    let record_of = |acquired: &SampleRoot| {
+        BOOT_RECORD
+            .iter()
+            .fold(acquired.folder().to_path_buf(), |path, part| {
+                path.join(part)
+            })
+    };
+
+    let first = SampleRoot::acquire(FRESH_SAMPLE).expect("登記済みの名前は取得できるはず");
+    let record = record_of(&first);
+    std::fs::create_dir_all(record.parent().expect("起動記録には親が在る"))
+        .expect("起動記録の置き場を作れるはず");
+    std::fs::write(&record, b"boot,1\r\n").expect("起動記録を書けるはず");
+    assert!(
+        record.is_file(),
+        "較正: 1 回目の根に起動記録が実在すること: {}",
+        record.display()
+    );
+    let first_root = first.root().to_path_buf();
+    drop(first);
+    assert!(
+        !first_root.exists(),
+        "破棄で 1 回目の複製が消えること: {}",
+        first_root.display()
+    );
+
+    let second = SampleRoot::acquire(FRESH_SAMPLE).expect("2 回目も取得できるはず");
+    assert!(
+        second
+            .folder()
+            .join("ghost")
+            .join("master")
+            .join("descript.txt")
+            .is_file(),
+        "較正: 2 回目の根が完全であること（空の木では「起動記録が無い」が恒真になる）"
+    );
+    let again = record_of(&second);
+    assert!(
+        !again.exists(),
+        "2 回目の根に前の走行の起動記録が現れないこと（要件 7.4）: {}",
+        again.display()
+    );
+    assert!(
+        !again
+            .parent()
+            .and_then(std::path::Path::parent)
+            .expect("`profile/` には親が在る")
+            .exists(),
+        "前の走行が作った `profile/` ごと現れないこと（要件 7.4）"
+    );
+    assert_ne!(
+        second.root(),
+        first_root,
+        "2 回目は別の複製であること（同じ木を配り直していない）"
+    );
 }

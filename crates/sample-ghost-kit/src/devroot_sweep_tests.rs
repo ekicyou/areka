@@ -11,9 +11,9 @@
 //!
 //! 掃除は札だけを見て持ち主の生死を分ける。だから同じプロセスの別のスレッドから呼んで
 //! も、別のプロセスから呼ぶのと同じ経路を通る（自分の札であっても、削除を共有しない
-//! 開き方をしているので同じプロセスからは消せない）。下の 2 本は ⑴ 2 度目の**取得**が
-//! 走らせる掃除と、⑵ 走りっぱなしの掃除のスレッドの両方で、生きている複製が消えない
-//! ことを見る。
+//! 開き方をしているので同じプロセスからは消せない）。下の 3 本は ⑴ 2 度目の**取得**が
+//! 走らせる掃除、⑵ 走りっぱなしの掃除のスレッド、⑶ 8 スレッドが同じ検体を同時に取りに
+//! 行く並走のいずれでも、生きている複製が消えないことを見る。
 
 use super::cache_tests::{
     RACE_SAMPLE, contents, private_namespace, shelf, tiny_ghost_nar, whole_ghost_tree,
@@ -472,4 +472,133 @@ fn the_sweeper_never_touches_the_manual_root() {
         "手動用の根は掃除で欠けないこと: {}",
         manual.display()
     );
+}
+
+// ---- 並走（同一プロセスの多スレッド・要件 7.5・9.5） ----
+
+/// 同じ検体を同時に取りに行くスレッドの本数（設計の「8 スレッド」）。
+const RACING_THREADS: usize = 8;
+
+/// 各スレッドが自分の根の直下へ置く走行の記録。**綴りは全員同じで中身だけが自分の物**
+/// なので、他人の根へ書けてしまえば中身の違いとして現れる。
+const RACE_MARK: &str = "boot.log";
+
+/// 同じ検体を 8 スレッドが同時に取っても、⑴ 一方の書き込みが他方の根に現れず、
+/// ⑵ 利用中の木が差し替えられない（要件 7.5・9.5）。
+///
+/// 全員が**窓口**（[`crate::SampleRoot::acquire`]）を通るので、通る経路は共有の名前
+/// 空間を使う本物である。段は 3 つで、関門を 2 回くぐる。
+///
+/// 1. 8 本が同時に取得し、自分の根へ自分だけの記録を書き、木の姿を控える。
+/// 2. 関門①。その後、**1 本目を握ったまま**もう 1 度取得する——取得は掃除を走らせる
+///    ので、これで「8 本の生きている複製が在る状態で掃除が 8 回走る」が必ず起きる。
+///    段 1 の取得が走らせる掃除は 8 本とも木が出来る前に済んでしまうことがあり、
+///    それだけでは生死の見分けを壊しても捕まえられない（この段を置かずに
+///    [`owner_is_gone`] を「常に持ち主が居ない」へ変えると緑のまま通ってしまった）。
+/// 3. 関門②の後、控えた姿と今の姿を突き合わせる——差し替えも削除も、この等値を破る。
+///
+/// 取得に失敗しても**必ず両方の関門に着く**書き方にしてある（1 本が早々に落ちて残り
+/// 7 本が関門で止まる、を避ける）。壁時計の期限は置かない（この repo は並走する cargo
+/// に飢餓させられて赤くなる期限で何度も痛い目に遭っている）。
+#[test]
+fn eight_threads_acquiring_the_same_sample_keep_their_own_tree_and_never_see_the_others_writes() {
+    let gate = std::sync::Arc::new(std::sync::Barrier::new(RACING_THREADS));
+    let racers: Vec<_> = (0..RACING_THREADS)
+        .map(|index| {
+            let gate = std::sync::Arc::clone(&gate);
+            std::thread::spawn(move || -> Result<Racer, String> {
+                let mark = format!("thread-{index}").into_bytes();
+                let staged = crate::SampleRoot::acquire(RACE_SAMPLE)
+                    .map_err(|err| format!("{index} 本目の取得: {err}"))
+                    .and_then(|acquired| {
+                        std::fs::write(acquired.root().join(RACE_MARK), &mark)
+                            .map_err(|err| format!("{index} 本目の記録: {err}"))?;
+                        let snapshot = contents(acquired.root());
+                        Ok((acquired, snapshot))
+                    });
+
+                // 関門①——全員が取得と書き込みを終えるまで待つ。
+                gate.wait();
+
+                // 8 本の複製が生きている状態で掃除を走らせる（取得がそれを行う）。
+                let sweeper = crate::SampleRoot::acquire(RACE_SAMPLE)
+                    .map_err(|err| format!("{index} 本目の掃除役の取得: {err}"));
+
+                // 関門②——全員の掃除が済むまで待つ。
+                gate.wait();
+
+                drop(sweeper?); // 掃除役はもう用済み。
+                let (acquired, snapshot) = staged?;
+                let root = acquired.root().to_path_buf();
+                let after = contents(&root);
+                if after != snapshot {
+                    return Err(format!(
+                        "{index} 本目の利用中の木が差し替えられた（掃除 8 回の後）: {}",
+                        root.display()
+                    ));
+                }
+                Ok(Racer {
+                    root,
+                    mark,
+                    tree: snapshot,
+                })
+            })
+        })
+        .collect();
+
+    let taken: Vec<Racer> = racers
+        .into_iter()
+        .map(|racer| {
+            racer
+                .join()
+                .expect("取りに行ったスレッドが落ちていないこと")
+                .unwrap_or_else(|reason| panic!("{reason}"))
+        })
+        .collect();
+
+    let places: std::collections::BTreeSet<&Path> =
+        taken.iter().map(|racer| racer.root.as_path()).collect();
+    assert_eq!(
+        places.len(),
+        RACING_THREADS,
+        "利用者ごとに別の複製が配られること: {places:?}"
+    );
+
+    for racer in &taken {
+        assert_eq!(
+            racer.tree.get(RACE_MARK),
+            Some(&racer.mark),
+            "自分の根に在るのは自分が書いた記録だけであること（要件 7.5）: {}",
+            racer.root.display()
+        );
+    }
+
+    // 記録を除いた木は全員同じで、しかも空ではない（＝中身のある木を比べている）。
+    let descript = format!("balloon/{RACE_SAMPLE}/descript.txt");
+    let bare = |racer: &Racer| {
+        let mut tree = racer.tree.clone();
+        tree.remove(RACE_MARK);
+        tree
+    };
+    let first = bare(&taken[0]);
+    assert!(
+        first.contains_key(&descript),
+        "較正: 比べている木が中身のある完全な木であること: {:?}",
+        first.keys().collect::<Vec<_>>()
+    );
+    for racer in &taken[1..] {
+        assert_eq!(
+            bare(racer),
+            first,
+            "記録を除けば全員が同じ完全な木を受け取ること: {}",
+            racer.root.display()
+        );
+    }
+}
+
+/// 上の検査が 1 スレッドから持ち帰る物——配られた根・自分が書いた記録・その木の全内容。
+struct Racer {
+    root: PathBuf,
+    mark: Vec<u8>,
+    tree: std::collections::BTreeMap<String, Vec<u8>>,
 }

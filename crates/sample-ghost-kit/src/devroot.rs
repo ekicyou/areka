@@ -257,7 +257,11 @@ impl Drop for WorkDir {
 }
 
 /// 検体の `.nar` の置き場。本 crate だけがこの綴りを持つ。
-fn nar_dir() -> PathBuf {
+///
+/// 登記の往復（[`crate::SAMPLES`] の各 `.nar` を空の根へ展開して要素を登記と突き合わせる）
+/// は窓口の兄弟テストに住むので、crate の中でだけ見えるようにしてある。狙いは第 2 の
+/// 綴りを作らせないことなので、crate の外へは出さない。
+pub(crate) fn nar_dir() -> PathBuf {
     PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../vendors/sample_ghost"

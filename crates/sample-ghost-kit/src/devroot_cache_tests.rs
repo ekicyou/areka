@@ -536,6 +536,11 @@ fn four_processes_racing_the_first_install_all_get_a_complete_tree() {
 }
 
 /// 上の検査が起こす子。親の走行では環境変数が無いので何もしない。
+///
+/// 「完全な木」の判定は 2 段。⑴ 目印の 1 ファイルが在って空でないこと——競争が
+/// 生むのは**半端な木**なので、これだけでも半分は捕まる。⑵ 同じ `.nar` を自分用の
+/// 空の根へ展開し直した木と**1 ファイルも違わない**こと——目印以外が欠けた木は⑴を
+/// すり抜けるので、こちらが本体である。
 #[test]
 fn the_multiprocess_child_acquires_the_master_copy() {
     let Ok(index) = std::env::var(CHILD_VAR) else {
@@ -555,5 +560,22 @@ fn the_multiprocess_child_acquires_the_master_copy() {
     assert!(
         !std::fs::read(&descript).expect("読める").is_empty(),
         "子 {index} が受け取った木の中身が空"
+    );
+
+    // 同じ `.nar` を自分だけの空の根へ展開し直して、原本と丸ごと突き合わせる。
+    let reference = WorkDir::new().unwrap_or_else(|err| panic!("子 {index} の空の根: {err}"));
+    let nar = nar_dir().join(format!("{RACE_SAMPLE}.nar"));
+    let archive =
+        NarArchive::open(&nar).unwrap_or_else(|err| panic!("子 {index} の .nar の読み取り: {err}"));
+    archive
+        .install(&InstallRequest {
+            root: reference.path(),
+            target_ghost: None,
+        })
+        .unwrap_or_else(|err| panic!("子 {index} の突き合わせ用の展開: {err}"));
+    assert_eq!(
+        contents(&master),
+        contents(reference.path()),
+        "子 {index} が受け取った原本が、展開し直した木と食い違う（半端な木）"
     );
 }
