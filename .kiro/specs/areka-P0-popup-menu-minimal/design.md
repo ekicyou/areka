@@ -301,7 +301,7 @@ flowchart TD
 | 3.7 | `0` なら出さず `info!` | `captions::interpret`、`trigger::decide` | `Visibility::Suppress` | 判定 |
 | 3.8 | `popupmenu.type` は問い合わせない | `captions::UNQUERIED_POPUPMENU_RESOURCES`＋テスト | 許可表に無い | — |
 | 3.9 | 登記時にリソース名を指定できる | `MenuItem.caption_resource` | `Option<&'static str>` | — |
-| 3.10 | 起動前は既定名で出す | kanade `actor_resources::answer` | `Phase::Steady` 以外は全件 `NoContent` | — |
+| 3.10 | 起動前は既定名で出す | kanade `actor_resources::answer` | `Phase::Steady` 以外は SHIORI へ送らず全件 `NoContent`（UI 側の待ち方は `captions::query`） | — |
 | 4.1 | readme の決め方 | parsers `MountModel.readme`、`readme::resolve_path` | `ghost_root.join(key or readme.txt)` | — |
 | 4.2 | 既定アプリで開く | `readme::open` | `ShellExecuteW("open")` | — |
 | 4.3 | 無ければ灰色＋初回 `debug!` | `readme::is_available`、組込登記 | `Path::exists` | — |
@@ -486,7 +486,7 @@ impl MenuRegistry {
 pub(crate) struct MenuWiring {
     pub registry: MenuRegistry,
     kanade: Sender<KanadeMsg>,
-    in_flight: bool,                          // 表示 1 枚まで
+    in_flight: Rc<Cell<bool>>,                // 表示 1 枚まで（タスクが複製を guard として持ち、Drop で必ず戻す）
 }
 pub(crate) fn wire_menu(world: &mut World, kanade: Sender<KanadeMsg>);
 /// 全 CharWindowMarker 窓へ OnPointerReleased を装着する（wire_menu が呼ぶ・窓を作り直す spec も呼ぶ）
@@ -569,7 +569,7 @@ pub(crate) fn escape_ampersand(label: &str) -> String;
 - 問い合わせない 4 名は `UNQUERIED_POPUPMENU_RESOURCES`（先頭にページ URL）。テストがこの表の全要素が kanade の許可表に**無い**ことを確かめる（要件 3.8 の判定・死んだ定義にしない）。
 - `query_ids(snapshot, scope)`: 表示可否の名前 1 つ＋写しに現れる `caption_resource` の集合（第 1 スライスは 3 件）。
 - `query`: `KanadeMsg::ResourceQuery { ids, reply }` を送り `ReplyReceiver::recv_timeout(QUERY_TIMEOUT)` で待つ。送出失敗・上限超過・切断は `QueryFailure`。
-- `interpret`: 各 `(id, outcome)` を ⑴ `Value(s)` で `s` 非空 → 文言、⑵ `Value("")`／`NoContent` → 既定名＋`debug!`、⑶ `Failed(reason)` → 既定名＋`warn!`、に写す。`QueryFailure` は全件 ⑶ 相当で `warn!` は **1 回**（要件 3.4）。表示可否は `Value("0")` のときだけ `Suppress`＋`info!`（要件 3.7）、それ以外は `Show`。
+- `interpret`: 各 `(id, outcome)` を ⑴ `Value(s)` で `s` 非空 → 文言、⑵ `Value("")`／`NoContent` → 既定名＋`debug!`、⑶ `Failed(reason)` → 既定名、に写す。⑶ に落ちた id は 1 回の表示につき **1 行の `warn!`** にまとめて記録する（id と理由を列挙＝要件 3.4 の「1 回」）。`QueryFailure` は全件 ⑶ 相当で、同じく `warn!` 1 行（理由に `timeout`／`dropped`／`send_failed` を載せる）。表示可否は `Value("0")` のときだけ `Suppress`＋`info!`（要件 3.7）、それ以外は `Show`。
 
 **Contracts**: Service [x]
 
@@ -608,7 +608,7 @@ pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, Que
 - Invariants: 前回の値を持たない（毎回問い合わせる・要件 3.2）。
 
 **Implementation Notes**
-- Validation（要件 9.2 の写し側・9.3）: `captions_tests.rs` — `Value("取扱説明書(&R)")`→文言・`Value("")`／`NoContent`→既定名＋`debug!`・`Failed`→既定名＋`warn!`・`Err(Timeout)`→全件既定名＋`warn!` 1 回・`visible` の `0`／`1`／`NoContent`／`Failed` の表示可否・`UNQUERIED_POPUPMENU_RESOURCES ∩ ALLOWED_RESOURCE_IDS = ∅`。
+- Validation（要件 9.2 の写し側・9.3）: `captions_tests.rs` — `Value("取扱説明書(&R)")`→文言・`Value("")`／`NoContent`→既定名＋`debug!`・`Failed`→既定名＋`warn!` 1 行（2 件失敗でも 1 行）・`Err(Timeout)`→全件既定名＋`warn!` 1 行・`visible` の `0`／`1`／`NoContent`／`Failed` の表示可否・`UNQUERIED_POPUPMENU_RESOURCES ∩ ALLOWED_RESOURCE_IDS = ∅`。
 - Risks: 待ちの間 UI スレッドは止まる（最大 1,000 ms）。表示の**前**であり要件 7.2 の範囲外だが、実機で体感を見て長ければ定数を下げる。
 
 #### `menu::trigger`（`crates/areka/src/menu/trigger.rs`）
@@ -623,12 +623,12 @@ pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, Que
   1. `state.released.right` でなければ `false`。
   2. `MouseWiring` 不在 → `trace!` で `false`（要件 1.8）。`MenuWiring` 不在も同じ。
   3. `snapshot_drag_state() != Idle` → 預かりを `take` して捨て `trace!`・`false`（要件 1.9）。
-  4. `MenuWiring.in_flight` → `trace!`・`false`。
-  5. `char_scope`、`WindowHandle.hwnd`、`win32::client_to_screen(hwnd, client_point)`、`EcsWorldSelfRef` の `Weak` の複製を集めて `MenuRequest{scope, entity, hwnd, screen_pos}` を作り、`in_flight = true`、`wintf::executor::spawn_local(run_request(weak, request))`。`true`（`EcsWorldSelfRef` 不在は結線前と同じ扱い＝`trace!`・`false`）。
+  4. `MenuWiring.in_flight` が立っている → 手順 3 と同じく預かりを `take` して捨て `trace!`・`false`。
+  5. `char_scope`、`WindowHandle.hwnd`、`win32::client_to_screen(hwnd, client_point)`、`EcsWorldSelfRef` の `Weak` の複製を集めて `MenuRequest{scope, entity, hwnd, screen_pos}` を作り、`in_flight.set(true)` してその `Rc` の複製を `InFlightGuard`（`Drop` で `set(false)`）としてタスクへ渡し、`wintf::executor::spawn_local(run_request(weak, request, guard))`。`true`（`EcsWorldSelfRef` 不在は結線前と同じ扱い＝`trace!`・`false`）。
 - `run_request`（async・UI スレッド）:
-  - **A（借用）**: `weak.upgrade()` できなければ終了。`borrow_mut` で `World` を取り、`MenuContext{scope}`、`registry.snapshot`、`captions::query_ids`、`captions::query`、`captions::interpret`、`MouseWiring::take_pending_right_double_click`、`decide`。`Suppress` なら（預かりがあれば `send_pending_right_double_click`）`in_flight=false` で終了。`Show` なら `plan::build` して計画を**World の外へ**持ち出す。借用を解く。
+  - **A（借用）**: `weak.upgrade()` できなければ終了。`try_borrow_mut` で `World` を取り（取れなければ `warn!` で終了・guard が `in_flight` を戻す・panic は使わない）、`MenuContext{scope}`、`registry.snapshot`、`captions::query_ids`、`captions::query`、`captions::interpret`、`MouseWiring::take_pending_right_double_click`、`decide`。`Suppress` なら（預かりがあれば `send_pending_right_double_click`）終了。`Show` なら `plan::build` して計画を**World の外へ**持ち出す。借用を解く。
   - **B（表示）**: `win32::show(hwnd, screen_pos, &plan)`。`Err` → `error!`（要件 1.7）。`Ok(None)` → `debug!`（要件 8.3）。`Ok(Some(id))` → `info!`（要件 8.2）。
-  - **C（再借用）**: `weak.upgrade()` できない、または `world.get::<WindowHandle>(entity)` が無い → `debug!` で動作を行わない（要件 7.4）。それ以外は `plan.action(id)` を 1 回呼ぶ（要件 1.4／6.5）。最後に `in_flight=false`。
+  - **C（再借用）**: `weak.upgrade()` できない、`try_borrow_mut` が取れない、または `world.get::<WindowHandle>(entity)` が無い → `debug!` で動作を行わない（要件 7.4）。それ以外は、表示中に届いた預かりが残っていれば `take` して捨て（古い材料を次の要求へ持ち越さない）、`plan.action(id)` を 1 回呼ぶ（要件 1.4／6.5）。`in_flight` は guard の `Drop` が全経路で戻す。
 - `decide(visibility, pending) -> Decision` は純粋（上の flowchart）。
 - 表示中に SHIORI が止まった場合（要件 7.3）: tick は回り続けるので `run_ghost_quit_phase`（`emo2_boot/frame.rs`）が表示中に窓を消しうる。C の生存確認で動作を行わず終わる。落ちない。
 
@@ -646,7 +646,7 @@ pub(crate) fn decide(visibility: Visibility, pending: Option<&PendingDoubleClick
 async fn run_request(world: Weak<RefCell<EcsWorld>>, request: MenuRequest);
 ```
 - Preconditions: UI スレッド。`spawn_local` の初回 poll は tick が返った後（`research.md` §7.2）。
-- Postconditions: 1 要求につき表示は高々 1 回・動作は高々 1 回・`in_flight` は必ず戻る（早期 return を含む全経路）。
+- Postconditions: 1 要求につき表示は高々 1 回・動作は高々 1 回・`in_flight` は guard の `Drop` で必ず戻る（早期 return を含む全経路）。
 - Invariants: B の間 World を借りていない（要件 7.2）。
 
 ##### ログ（要件 8）
@@ -698,8 +698,8 @@ pub(crate) fn client_to_screen(hwnd: HWND, x: i32, y: i32) -> Option<(i32, i32)>
 
 **Responsibilities & Constraints**
 - `resolve_path(ghost_root, key: Option<&str>) -> PathBuf` ＝ `ghost_root.join(key.unwrap_or("readme.txt"))`。`ghost_root` は `boot_config.rs` の `cfg.ghost_root`（起動引数の根）。中身も `readme.charset` も読まない（要件 4.7）。
-- `ReadmeWiring { path, rx: Receiver<ReadmeRequest>, missing_logged: bool }` を NonSend で持つ。`wire_readme(world, path, rx)` は挿入と、`Input` スケジュールへ `drain_readme_requests.after(dispatch_pointer_events)` の登録（`input_events/choice_drain.rs` の `wire_choice_drain` と同型）。
-- `is_available(world) -> bool`: `path.exists()`。初めて `false` を見たとき `debug!`（要件 4.3）。`ReadmeWiring` 不在は `false`。
+- `ReadmeWiring { path, rx: Receiver<ReadmeRequest>, missing_logged: Cell<bool> }` を NonSend で持つ（`missing_logged` を `Cell` にするのは、供給関数の `&World` から `is_available` を呼ぶため）。`wire_readme(world, path, rx)` は挿入と、`Input` スケジュールへ `drain_readme_requests.after(dispatch_pointer_events)` の登録（`input_events/choice_drain.rs` の `wire_choice_drain` と同型）。
+- `is_available(world: &World) -> bool`: `path.exists()`。初めて `false` を見たとき `debug!`（要件 4.3・`missing_logged.set(true)`）。`ReadmeWiring` 不在は `false`。共有借用だけで済むので `MenuRegistry::snapshot(&World)` の供給関数から呼べる。
 - `open_from_world(world)`: `ReadmeWiring.path` を取り `open(path)`。不在なら `warn!`。
 - `open(path)`: `ShellExecuteW(None, "open", path, None, None, SW_SHOWNORMAL)`。戻り値（`HINSTANCE`）が 32 以下なら失敗＝`error!(path, code)`（要件 4.4）。成功は `info!`。
 - `drain_readme_requests`: `rx.try_iter()` を全件取り出し、1 件ごとに `open_from_world`。
@@ -712,9 +712,9 @@ pub(crate) fn client_to_screen(hwnd: HWND, x: i32, y: i32) -> Option<(i32, i32)>
 pub(crate) struct ReadmeRequest;                       // \![open,readme]（引数なし）
 pub(crate) const DEFAULT_README: &str = "readme.txt";
 pub(crate) fn resolve_path(ghost_root: &Path, key: Option<&str>) -> PathBuf;
-pub(crate) struct ReadmeWiring { /* path, rx, missing_logged */ }
+pub(crate) struct ReadmeWiring { /* path, rx, missing_logged: Cell<bool> */ }
 pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>);
-pub(crate) fn is_available(world: &mut World) -> bool;
+pub(crate) fn is_available(world: &World) -> bool;   // 供給関数（&World）から呼ぶ
 pub(crate) fn open_from_world(world: &World);
 pub(crate) fn drain_readme_requests(world: &mut World);   // Input スケジュール・system
 fn open(path: &Path) -> windows::core::Result<()>;
@@ -826,7 +826,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 ### 台帳の担当登記（要件 10・実装の最終タスクで実施）
 
 手順（同じコミットで行う・`research.md` §1.8・§7.2 の検査の腕に合わせる）:
-1. `doc/ukadoc-coverage/ledger/shiori.toml` の 13 項目・`sakura-script.toml` の `\![open,readme]`・`assets.toml` の `descript_ghost readme,ファイル名` の `owner = "areka-P0-popup-menu-minimal"`。
+1. `doc/ukadoc-coverage/ledger/shiori.toml` の 13 項目・`sakura-script.toml` の `\![open,readme]`・`assets.toml` の `descript_ghost readme,ファイル名` の `owner = "areka-P0-popup-menu-minimal"`。台帳の id は符号化済みなので見た目の名前で探さずカタログから写す（`char*.popupmenu.visible` は `ukadoc:list_shiori_resource:char_2a.popupmenu.visible:1`・`char*.popupmenu.type` は同 `char_2a.popupmenu.type:1`・`\![open,readme]` は `_5c_21_5bopen_2creadme_5d` を含む id・`readme,ファイル名` は `descript_ghost:readme_2c_…`＝README §1）。
 2. `status`: 実装済み 6（`readmebutton.caption`・`closebutton.caption`・`sakura.popupmenu.visible`・`kero.popupmenu.visible`・`readme,ファイル名`・`\![open,readme]`）は `"implemented"`。語彙のみ 9 は `"vocabulary-only"` のまま `note` に理由と引受先（枠 ①〜⑤の caption＝枠を登記する spec が着地した日に実装済みへ／`char*.popupmenu.visible`＝n≧2 の窓が無い／`popupmenu.type` ×3＝問い合わせない裁定）を書く。`\![open,readme]` の引数付きは縮退として備考へ。
 3. 証拠（`/// ukadoc:` 1 行）の置き場: `resources.rs` の許可表の要素（caption 7・visible 2）、`captions.rs` の 3 表（`FRAME_CAPTIONS`・visible 定数 2・`UNQUERIED_POPUPMENU_RESOURCES`）、`consumer_ledger.rs` の `("open","readme")` 行、`model.rs` の `readme` 欄。`cargo run -p ukadoc-survey -- evidence` で拾えていることを見る。
 4. `doc/ukadoc-coverage/roadmap-draft.md`: `[[spec]]` に `name = "areka-P0-popup-menu-minimal"`・`stage = "A"`・`bundle = "メニュー"`・`owner_count = 15`・`wave = "A0"` を足し、`[briefs].count` と本文の手書きの数（「置き場にあるが表に無いもの」等）を**道具で数え直して**書く（引き算をしない・要件 10.5）。
@@ -873,7 +873,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 | `TrackPopupMenuEx` が失敗 | 戻り値 0 かつ `GetLastError()≠0` | `error!`（`hresult`） | 何も表示せず続行 | 1.7 |
 | `ClientToScreen` 失敗 | `BOOL` false | `trace!` | 要求を捨てる | — |
 | リソース 204／空 | `NoContent`／`Value("")` | `debug!` | 既定名 | 3.3 |
-| リソース失敗 | `Failed` | `warn!`（id ごと） | 既定名・出す | 3.4 |
+| リソース失敗 | `Failed` | `warn!` 1 行（失敗した id と理由を列挙） | 既定名・出す | 3.4 |
 | 照会の上限超過・切断・送出失敗 | `QueryFailure` | `warn!` 1 回 | 全件既定名・出す | 3.4 |
 | `visible=0` | `Value("0")` | `info!` 1 回 | 出さない・預かりがあれば右ダブルクリックを送る | 3.7, 1.10 |
 | readme 不在 | `!path.exists()` | 初回 `debug!` | 灰色 | 4.3 |

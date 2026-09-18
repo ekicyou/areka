@@ -113,7 +113,7 @@
 7. If `popupmenu.visible` の問い合わせが `0` を返した, then the areka shall メニューを出さず、そのことを `info!` で 1 回記録する。値なし・空・失敗・`0` 以外の値はいずれも「表示する」と扱う。
 8. The areka shall `popupmenu.type`（同じスコープ接頭辞・正典 [sakura.popupmenu.type](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#sakura.popupmenu.type:1)）を**問い合わせない**。値 `1`（省略メニュー）の中身を正典が定めていないため、α ではどの値でも本体側メニューと同じものを出す（値で中身を変えないなら問い合わせる意味が無く、往復を増やさない）。警告も記録も出さない。
 9. The areka shall 登記された項目が自分の文言に使うリソース名を登記時に指定できるようにし、指定が無い項目は登記された既定名をそのまま使う（サブメニューの子項目＝列挙されたゴースト名などは通常リソースを持たない）。
-10. While ゴーストの起動が完了して SHIORI と会話できる状態になる前, the areka shall 問い合わせを行わず既定名でメニューを出す（起動待ちでメニューを止めない）。
+10. While ゴーストの起動が完了して SHIORI と会話できる状態になる前, the areka shall SHIORI へ問い合わせを送らず（運行側が「値なし」を即座に返す）既定名でメニューを出す（起動待ちでメニューを止めない）。
 
 ### Requirement 4: 説明書を開く
 
