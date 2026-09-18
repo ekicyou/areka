@@ -125,7 +125,9 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 の表に 1 行を足し、項目「バルーンの `use_self_alpha`／`use_input_alpha`／`paint_transparent_region_black` と `.pna`」・裁量「宣言を読まず常に `use_self_alpha,1` 相当（PNG の α をそのまま尊重）で焼く。`.pna` は読まない」・根拠（開発者裁定 2026-09-18・`areka-emo-present/src/balloon.rs` と `emo2_boot/assets.rs` の固定値・半透明前提のバルーンだけが正しく表示されるという既知の制限）・出典 spec（本仕様）を書く。
+1. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 の表に 1 行を足し、項目「バルーンの `use_self_alpha`／`use_input_alpha`／`paint_transparent_region_black` と `.pna`」・裁量「宣言を読まず常に `use_self_alpha,1` 相当（PNG の α をそのまま尊重）で焼く。`.pna` の画素は使わない」・根拠（開発者裁定 2026-09-18・`areka-emo-present/src/balloon.rs` と `emo2_boot/assets.rs` の固定値・半透明前提のバルーンだけが正しく表示されるという既知の制限）・出典 spec（本仕様）を書く。
+
+   > **2026-09-18 の実測による是正**（タスク 3.1）: 当初この行は裁量欄を「`.pna` は**読まない**」と書いていたが、実測では**同名 `.pna` の存在だけは見ている**（`crates/areka-emo-atlas/src/lib.rs` の bake 本体が `probe_pna` を呼ぶ）。画素は使われない——α を持つ PNG では α が勝ち（`crates/areka-emo-atlas/src/normalize.rs` の `Normalizer::normalize` の `UseSelfAlpha::On` の腕が `has_alpha` を先に見る）、α の無い PNG に `.pna` を添えた組合せは実装腕が無いため理由を載せた失敗になる（同 `match` の既定腕が `Err(NormalizeError::Unsupported)` を返し、`crates/areka-emo-present/src/balloon.rs` の `build_balloon_target_from_faces` が記録を出してから `Err` を返す）。§8 に足した行はこの実測どおりに書いてある。
 2. The 本仕様 shall 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の項目 `ukadoc:descript_balloon:use_self_alpha_2c_5024:1` を `status = "degraded"`（動くが正典どおりではない＝宣言に依らず常に 1）・`owner = "areka-P0-default-balloon-bundle"` に改め、備考に「どう違うか」（`0` と書いたバルーンでも 1 として扱う・記録は出ない・裁量は §8 に登記）を書く。`priority` は変えない。
 3. The 本仕様 shall 台帳の隣の 2 項目（`use_input_alpha_2c_6570_5024:1`・`paint_transparent_region_black_2c_6570_5024:1`）を**変えない**（`absent`・宛先空のまま。理由: 本仕様は既定バルーンの資産が主で、これらは §8 の 1 行で裁量が読めれば足りる。宛先を本仕様にすると完了時に実装済みか縮退が求められる）。
 4. When 台帳の宛先に本仕様の名前を書いた, the 本仕様 shall `doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` に本仕様の行（`name`・`stage = "A"`（項目の優先度 `A15` の段階）・`bundle = "絵の重ね方"`（`linkage.md` に実在する束名）・`owner_count` は台帳 4 本を数え直した実数（本仕様の裁定どおりなら 1）・`wave` は正本 `roadmap.md` のウェーブ表記 `A0`）を足し、`[briefs].count` を行数に合わせて 1 増やす。
