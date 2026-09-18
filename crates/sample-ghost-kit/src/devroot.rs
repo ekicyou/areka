@@ -100,6 +100,12 @@ const WORK: &str = "work";
 /// 読み専用の原本を並べる棚。名前は `<検体>-<刻印>`。
 const CACHE: &str = "cache";
 
+/// 手で使う根を並べる棚。名前は検体名そのもの（刻印は入れない——人が読んで打つ）。
+///
+/// [`sweep`] が走査するのは [`WORK`] の棚だけなので、この棚は掃除の対象外である
+/// （要件 1.9。持ち主の札が無い木なので、掃除が届けば印字した直後に消えてしまう）。
+const MANUAL: &str = "manual";
+
 /// 読むことだけを共有する（＝削除は拒む）共有モード `FILE_SHARE_READ`。
 const FILE_SHARE_READ: u32 = 1;
 
@@ -511,6 +517,52 @@ pub(crate) fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
         name,
         &nar_dir().join(format!("{name}.nar")),
     )
+}
+
+/// 検体 1 つの**手で使う根**（`manual/<検体>/`）を配り直して、その絶対パスを返す
+/// （要件 1.9・9.7）。
+///
+/// 複製（[`fresh_root`]）と違って、**プロセスが終わっても木が残る**。印字した絶対パスを
+/// 人が `areka.exe` へ渡すのはこの後だから、配った側の寿命に縛ってはならない。代わりに
+/// 呼ぶたびに丸ごと消して原本から複写し直すので、実機の 2 周が 2 回とも起動記録の無い根で
+/// 始まる。札を持たないので棚を [`WORK`] の外（[`MANUAL`]）に置き、掃除から外す。
+///
+/// # Errors
+///
+/// 原本を用意できないとき [`cached_root`] と同じ失敗、前回の木を消せない・複写できない
+/// とき [`SampleError::Io`]。**消せない木を黙って配り直さない**——前回の起動記録が残った
+/// 根を「新品」として印字するのは、この窓口が唯一避けたい事故である。
+pub(crate) fn manual_root(name: &str) -> Result<PathBuf, SampleError> {
+    manual_root_in(
+        &namespace_dir()?,
+        name,
+        &nar_dir().join(format!("{name}.nar")),
+    )
+}
+
+/// 名前空間と `.nar` を明示して手で使う根を配り直す（テストが私有の名前空間を渡す）。
+pub(crate) fn manual_root_in(
+    namespace: &Path,
+    name: &str,
+    nar: &Path,
+) -> Result<PathBuf, SampleError> {
+    let master = cached_root_in(namespace, name, nar)?;
+    let manual = namespace.join(MANUAL).join(name);
+    match std::fs::remove_dir_all(&manual) {
+        Ok(()) => {}
+        // まだ 1 度も配っていない（または前回の走行が消えている）。作り直しの目的は
+        // 既に達成されている。
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
+        Err(source) => {
+            return Err(SampleError::Io {
+                what: "手動用の根の作り直し",
+                path: manual,
+                source,
+            });
+        }
+    }
+    copy_tree(&master, &manual)?;
+    Ok(manual)
 }
 
 /// 名前空間と `.nar` を明示して複製を配る（テストが私有の名前空間を渡す）。

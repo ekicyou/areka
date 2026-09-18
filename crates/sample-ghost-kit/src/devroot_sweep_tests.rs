@@ -397,3 +397,79 @@ fn a_sweeper_running_alongside_never_disturbs_a_staging_tree_or_a_live_copy() {
         "掃除が周回より多く走ったこと（この検査の較正）: {passes}"
     );
 }
+
+// ---- 手動用の根（要件 1.9） ----
+
+/// 手動用の根は**呼ぶたびに作り直す**ので、前の走行が書いた起動記録は残らない
+/// （要件 1.9・9.7）。
+///
+/// 「2 回呼べる」だけでは何も証明しない（作り直さない実装でも緑になる）。そこで 1 回目に
+/// 配られた根へ**起動記録の形をしたファイル**を置き、実在を較正してから 2 回目を呼ぶ。
+#[test]
+fn the_manual_root_is_rebuilt_from_scratch_on_every_call() {
+    let home = private_namespace();
+    let home = home.path();
+    let nar = tiny_ghost_nar(home, "probe-manual", b"0001");
+
+    let first = manual_root_in(home, "probe-manual", &nar).expect("1 回目の手動用の根");
+    assert_eq!(
+        contents(&first),
+        whole_ghost_tree("probe-manual", b"0001"),
+        "手動用の根も完全な木であること"
+    );
+
+    let profile = first
+        .join("ghost")
+        .join("probe-manual")
+        .join("profile")
+        .join("areka");
+    std::fs::create_dir_all(&profile).expect("起動記録の置き場を作れるはず");
+    let record = profile.join("sylphya.toml");
+    std::fs::write(&record, b"boot_count = 1\n").expect("起動記録を置けるはず");
+    assert!(
+        record.is_file(),
+        "較正: 置いた起動記録が実在すること: {}",
+        record.display()
+    );
+
+    let second = manual_root_in(home, "probe-manual", &nar).expect("2 回目の手動用の根");
+    assert_eq!(second, first, "手動用の根の場所は呼ぶたびに変わらないこと");
+    assert!(
+        !record.exists(),
+        "2 回目に配られた根に前回の起動記録が残っている: {}",
+        record.display()
+    );
+    assert_eq!(
+        contents(&second),
+        whole_ghost_tree("probe-manual", b"0001"),
+        "2 回目も起動記録の無い新品であること"
+    );
+}
+
+/// 手動用の根は**掃除の対象にしない**（設計 `devroot`「回収の対象にしない」・要件 1.9）。
+///
+/// プロセスが終わった後に人が使う木なので、札を持つ者が誰も居ない。掃除が `work/` の外を
+/// 見れば、印字した直後に消える根を配ることになる。較正として、同じ掃除の走行が持ち主の
+/// 居ない残骸を実際に消すことを隣で主張する（「何も消さない掃除」で緑にならない）。
+#[test]
+fn the_sweeper_never_touches_the_manual_root() {
+    let home = private_namespace();
+    let home = home.path();
+    let nar = tiny_ghost_nar(home, "probe-manual-sweep", b"0002");
+    let manual = manual_root_in(home, "probe-manual-sweep", &nar).expect("手動用の根");
+    let orphan = leftover(home, "999999-0", true);
+
+    sweep(home);
+
+    assert!(
+        !orphan.exists(),
+        "較正: 持ち主の居ない残骸は同じ掃除の走行が消すこと: {}",
+        orphan.display()
+    );
+    assert_eq!(
+        contents(&manual),
+        whole_ghost_tree("probe-manual-sweep", b"0002"),
+        "手動用の根は掃除で欠けないこと: {}",
+        manual.display()
+    );
+}

@@ -144,13 +144,7 @@ impl SampleRoot {
     /// 展開結果が登記と食い違えば [`SampleError::RegistryMismatch`]。`.nar` の取り回しの
     /// 失敗は [`SampleError::Nar`]・[`SampleError::Io`]・[`SampleError::TargetDirNotFound`]。
     pub fn acquire(name: &str) -> Result<SampleRoot, SampleError> {
-        let sample = SAMPLES
-            .iter()
-            .find(|candidate| candidate.name == name)
-            .ok_or_else(|| SampleError::UnknownSample {
-                requested: name.to_owned(),
-                known: known_sample_names(),
-            })?;
+        let sample = registered(name)?;
         SampleRoot::from_copy(sample, devroot::fresh_root(sample.name)?)
     }
 
@@ -163,15 +157,7 @@ impl SampleRoot {
     /// 兄弟テストは私有の名前空間と自前の `.nar` から取った複製をここへ渡して、4 通りの
     /// 食い違い（フォルダ名・種別・同梱の欠け・同梱の余り）を通す。
     fn from_copy(sample: &'static Sample, copy: WorkDir) -> Result<SampleRoot, SampleError> {
-        let declared = declared_elements(sample);
-        let installed = installed_elements(copy.path())?;
-        if installed != declared {
-            return Err(SampleError::RegistryMismatch {
-                sample: sample.name,
-                expected: declared.join(", "),
-                installed,
-            });
-        }
+        check_registry(sample, copy.path())?;
         let root = copy.path().to_path_buf();
         let folder = root.join(sample.kind.store()).join(sample.name);
         let balloons = sample
@@ -282,6 +268,69 @@ impl SampleRoot {
                 known: self.sample.balloons,
             })
     }
+}
+
+/// 検体名を登記の 1 行に引き当てる（要件 1.1・1.4）。
+///
+/// 未登録の名前を受けたら既知の名前の一覧を添えて断る。窓口も下の [`manual_paths`] も
+/// ここを通るので、「黙って空のパスを返さない」の判断は 1 か所にしかない。
+fn registered(name: &str) -> Result<&'static Sample, SampleError> {
+    SAMPLES
+        .iter()
+        .find(|candidate| candidate.name == name)
+        .ok_or_else(|| SampleError::UnknownSample {
+            requested: name.to_owned(),
+            known: known_sample_names(),
+        })
+}
+
+/// 配られた根の中身が登記の 1 行と合っているかを照合する（要件 1.1・1.2・1.3）。
+fn check_registry(sample: &'static Sample, root: &Path) -> Result<(), SampleError> {
+    let declared = declared_elements(sample);
+    let installed = installed_elements(root)?;
+    if installed != declared {
+        return Err(SampleError::RegistryMismatch {
+            sample: sample.name,
+            expected: declared.join(", "),
+            installed,
+        });
+    }
+    Ok(())
+}
+
+/// 検体を**手で使う根**へ配り直し、印字する `key=value` の組を並べて返す（要件 1.9）。
+///
+/// 実機走行は絶対パス起動が定石なので、開発者はコマンド `nar-sample-path` でこれを得る。
+/// 配る先は [`SampleRoot::acquire`] の使い捨ての複製ではなく、**プロセスが終わっても残る**
+/// `manual/<名>/`（印字した絶対パスを人が使うのはコマンドが終わった後だから）。呼ぶたびに
+/// 丸ごと作り直すので、実機を 2 周すれば 2 回とも起動記録の無い根で始まる。
+///
+/// 鍵は `root`・`folder`・同梱バルーンごとの `balloon.<directory>` の順。値は
+/// [`SampleRoot`] の 3 つの読み口と同じ位置である（実機と自動テストが同じ木を見る）。
+///
+/// # Errors
+///
+/// [`SampleRoot::acquire`] と同じ。未登録の名前なら既知の名前の一覧を含む
+/// [`SampleError::UnknownSample`]、展開結果が登記と食い違えば
+/// [`SampleError::RegistryMismatch`]（実在しないパスを印字しない）。
+pub fn manual_paths(name: &str) -> Result<Vec<(String, PathBuf)>, SampleError> {
+    let sample = registered(name)?;
+    let root = devroot::manual_root(sample.name)?;
+    check_registry(sample, &root)?;
+    let mut printed = vec![
+        ("root".to_owned(), root.clone()),
+        (
+            "folder".to_owned(),
+            root.join(sample.kind.store()).join(sample.name),
+        ),
+    ];
+    printed.extend(sample.balloons.iter().map(|balloon| {
+        (
+            format!("balloon.{balloon}"),
+            root.join("balloon").join(balloon),
+        )
+    }));
+    Ok(printed)
 }
 
 /// 登記の 1 行が主張する**展開結果の要素**を `<格納先>/<名前>` の形で名前順に並べる。
