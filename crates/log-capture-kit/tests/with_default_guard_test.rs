@@ -48,11 +48,10 @@
 mod workspace_scan;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
 
 use workspace_scan::{
     ManifestLine, manifest_lines, mentions_crate, production_dependencies_on, read_source,
-    scan_tokens, walk_workspace_sources, workspace_root,
+    scan_tokens, walk_workspace_sources, workspace_manifests,
 };
 
 // ---------------------------------------------------------------------------
@@ -266,58 +265,6 @@ fn declares_env_filter_feature(src: &str) -> bool {
     })
 }
 
-/// 列挙から外すディレクトリ名（生成物と外部取り込み）。
-const EXCLUDED_DIRS: &[&str] = &["target", "vendors", ".git"];
-
-/// `crates/**/Cargo.toml` を列挙して `(crate ディレクトリ名, 中身)` を返す。
-///
-/// 共有 crate 自身の manifest は除く（自分の名前を `[package]` に持つので比較の対象外）。
-fn workspace_manifests() -> Vec<(String, String)> {
-    let root = workspace_root();
-    let mut found = Vec::new();
-    collect_manifests(&root.join("crates"), &mut found);
-    let mut out: Vec<(String, String)> = found
-        .into_iter()
-        .filter_map(|path| {
-            let name = path
-                .parent()
-                .and_then(Path::file_name)
-                .expect("Cargo.toml には親ディレクトリがあるはず")
-                .to_string_lossy()
-                .into_owned();
-            if name == KIT_PACKAGE {
-                return None;
-            }
-            let text = std::fs::read_to_string(&path)
-                .unwrap_or_else(|err| panic!("manifest を読めない: {} ({err})", path.display()));
-            Some((name, text))
-        })
-        .collect();
-    out.sort();
-    out
-}
-
-fn collect_manifests(dir: &Path, out: &mut Vec<PathBuf>) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(err) => panic!("列挙できないディレクトリがある: {} ({err})", dir.display()),
-    };
-    for entry in entries {
-        let entry = entry.expect("ディレクトリ項目の読み取りに失敗した");
-        let path = entry.path();
-        let file_type = entry.file_type().expect("種別の判定に失敗した");
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if file_type.is_dir() {
-            if EXCLUDED_DIRS.contains(&name.as_str()) {
-                continue;
-            }
-            collect_manifests(&path, out);
-        } else if file_type.is_file() && name == "Cargo.toml" {
-            out.push(path);
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // ⑴ 捕捉先を直接差す呼出
 // ---------------------------------------------------------------------------
@@ -524,7 +471,7 @@ const KNOWN_DEV_DEPENDENTS: &[&str] = &[
 #[test]
 fn the_shared_crate_never_appears_in_a_production_dependency_table() {
     let mut violations: Vec<String> = Vec::new();
-    for (name, text) in workspace_manifests() {
+    for (name, text) in workspace_manifests(KIT_PACKAGE) {
         for line in production_kit_dependencies(&text) {
             violations.push(format!(
                 "  crates/{name}/Cargo.toml:{} [{}] {}",
@@ -542,7 +489,7 @@ fn the_shared_crate_never_appears_in_a_production_dependency_table() {
 #[test]
 fn the_shared_crate_is_actually_pulled_in_as_a_dev_dependency() {
     // 較正: 上の検査が「manifest を 1 つも読めていないから空」で通っていないことを示す。
-    let manifests = workspace_manifests();
+    let manifests = workspace_manifests(KIT_PACKAGE);
     assert!(
         manifests.len() > 15,
         "manifest の列挙が極端に少ない＝走査が空振りしている疑い: {} 件",
@@ -567,7 +514,7 @@ fn the_shared_crate_is_actually_pulled_in_as_a_dev_dependency() {
 
 #[test]
 fn only_one_crate_declares_the_env_filter_feature() {
-    let owners: BTreeSet<String> = workspace_manifests()
+    let owners: BTreeSet<String> = workspace_manifests(KIT_PACKAGE)
         .into_iter()
         .filter(|(_, text)| declares_env_filter_feature(text))
         .map(|(name, _)| name)

@@ -26,8 +26,8 @@
 mod workspace_scan;
 
 use workspace_scan::{
-    FileLines, LINE_LIMIT, line_count, over_limit, production_dependencies_on, scan_tokens,
-    strip_comments, walk_workspace_sources,
+    FileLines, LINE_LIMIT, line_count, needs_left_anchor, over_limit, production_dependencies_on,
+    scan_tokens, strip_comments, walk_workspace_sources,
 };
 
 /// 走査語（逐語で置かないため 2 片に割る。上の module doc を参照）。
@@ -411,4 +411,47 @@ demo = { package = \"sample_ghost_kit\" }
         1,
         "`_` 表記の名前を拾えていない"
     );
+}
+
+/// 左端のアンカーは**識別子で始まる語にだけ**効く（要件 1.8）。
+///
+/// 区切り文字から始まる語（＝「名前を継ぎ足した形」だけを狙う語）にまでアンカーを
+/// 適用すると、直前が識別子文字である限り絶対に当たらない恒真の走査語になる。
+/// 検体パスの見張り（`sample_path_guard_test.rs`）の ⑷ がこの形の語を持つ。
+#[test]
+fn scan_tokens_anchors_only_tokens_that_start_with_an_identifier_char() {
+    // 区切りから始まる語: 直前が識別子文字でも当たる。
+    let sep_token = "/name\"";
+    assert_eq!(
+        scan_tokens(
+            "    let p = root.join(\"ghost/emo2/name\");
+",
+            &[sep_token]
+        ),
+        vec![(1usize, sep_token.to_string())],
+        "区切りから始まる語がアンカーで潰されている（恒真の走査語になる）"
+    );
+    assert!(!needs_left_anchor(sep_token));
+
+    // 識別子から始まる語: 従来どおりアンカーが効く。
+    let ident_token = "name(";
+    assert_eq!(
+        scan_tokens(
+            "    let p = filename(1);
+",
+            &[ident_token]
+        ),
+        Vec::new(),
+        "識別子で始まる語のアンカーが外れている（末尾がたまたま同じ助走関数を拾う）"
+    );
+    assert_eq!(
+        scan_tokens(
+            "    let p = name(1);
+",
+            &[ident_token]
+        ),
+        vec![(1usize, ident_token.to_string())],
+        "対の陽性が当たらない＝上の 0 件は何も意味しない"
+    );
+    assert!(needs_left_anchor(ident_token));
 }
