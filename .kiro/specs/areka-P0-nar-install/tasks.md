@@ -228,7 +228,7 @@
   - _Boundary: sample-ghost-kit bin_
   - _Depends: 5.4_
 
-- [ ] 5.6 展開済みツリーと、その場しのぎの初期化と無視規則を削除する
+- [x] 5.6 展開済みツリーと、その場しのぎの初期化と無視規則を削除する
   - 旧置き場の展開済みツリーと、展開形で追跡していた検体フォルダ（`vendors/sample_ghost/` の下の展開形を含む）を削除する
   - 起動記録を消す初期化を削除し、削除したツリーを指す無視規則のファイルも削除する
   - 旧置き場をコメント行だけで綴っていたファイルの文言を同時に直す
@@ -381,3 +381,9 @@
 - 5.5: ⚠ **設計の空白＝`manual/` は札を持たないので同時起動を規定していない**。2 つのプロセスが同じ検体を同時に呼ぶと片方の `remove_dir_all` がもう片方の `copy_tree` の最中に走り、**欠けた木の絶対パスを印字しうる**（`check_registry` は最上位 2 要素しか見ない）。開発者 2 人が同じチェックアウトで走らせる／`cargo test` と `cargo run --bin` を並走させるは現実に起こる。札を付けるか「同時に 1 つ」と明記するかの裁定が要る。
 - 5.5: ⚠ `manual_paths` と `SampleRoot::from_copy` が**位置の組み立てを 2 か所に持っている**（`root.join(store).join(name)` と `root.join("balloon").join(d)`）。片方だけ変えるドリフトを捕まえるテストは無い。次に `lib.rs` を触るとき `compose` を 1 本抜いて両者から呼ぶのが安い（実質 4 行）。
 - 5.5: 設計 File Structure Plan は `Cargo.toml` に `[[bin]]` と綴っているが、cargo の自動発見に任せて `Cargo.toml` は触っていない（2.1 が唯一マニフェストを触れるタスクのため）。得られる bin ターゲットは同一。
+- 5.6: 1.3 の申し送り（段 ③ で起動記録消しを外すと 2 度目の起動が 1 度目の永続化を見る）は、**初期化を消すのではなく取得の粒度を起動に合わせて**解いた。`boot_with` が起動ごとに `acquire_emo2()` を呼び、`SpineHarness` が `SampleRoot` を保持する。読むだけの 4 か所は従来どおり静的を共有。実測: 初期化だけ消すと `OnFirstBoot` が欠ける（呼出列に現れない）。
+- 5.6: ⚠ spine スイートは **2.44 秒 → 4.95 秒（2 倍）**。起動 20 回＋静的 1 回＝テストバイナリあたり木を 21 回複写する（1 プロセス 1 回ではなくなった）。ワークスペース全体 12 分に対し +2.5 秒なので受容。
+- 5.6: ⚠ `SpineHarness` の欄の順（`sample` を最後に置いて最後に捨てる）は**用心であって裏付けるテストは無い**。レビュアーが両方向で実証——先頭へ動かしても、`drop(sample)` を終了処理の前に出しても 33 本すべて緑（終了処理の永続化は失敗しても誰も読まない）。コメントはその事実どおりに書き直してある。
+- 5.6: **6.1 へ**＝`tools/perf/` 3 本・`doc/emo2-conformance-scope.md:25`・`crates/pilot/examples/shiori-host-32/README.md:26` が消えた置き場を綴ったまま（6.1 の境界なので 5.6 は触っていない）。**6.3 へ**＝`doc/ukadoc-coverage/briefing-assets.md:362,377,439`。**6.4 へ**＝`vendors/sample_ghost/.gitignore` の理由書きが `vendors/sample_ghost/README.md` を参照しているが、その README は 6.4 が作る。完了前に必ず着地させること。
+- 5.6: ⚠ **既存の（本タスク由来でない）不通**＝`cargo clippy -p areka-emo-text --all-targets` が exit 101（`deny` の `absurd_extreme_comparisons` 3 件）・`cargo test -p areka --bin areka spine -- --test-threads=1` が `STATUS_ACCESS_VIOLATION`。いずれも HEAD の版でも再現する。
+- 5.6: ⚠ 道具の罠＝clippy の出力を grep の後段で `head -5` に通すとエラーが折り返しの下に切り落とされ「緑」と誤報した。`Select-Object -First N` と同型。

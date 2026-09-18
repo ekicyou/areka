@@ -5,7 +5,7 @@
 //!
 //! task 11.1（`choice_fixture_test.rs`）は tests 配下の **test-local** 最小 fixture で parse→resolve と
 //! 実フォント render を固定した。task 11.2 は **リポジトリに実在する emo2 fixture**
-//! （`crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/`）の実 descript／実 menu.pasta を
+//! （`検体 emo2 の同梱バルーン emo2-kakukaku`）の実 descript／実 menu.pasta を
 //! 用い、cue 配送 →選択肢描画をエンドツーエンドで検証する（実窓は起動しない・headless readback のみ）。
 //!
 //! ## 実 fixture の実態（2 層バルーン descript ＋ pasta メニュー台本）

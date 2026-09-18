@@ -48,7 +48,6 @@
 use crate::placement::follow::OffsetBase;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -75,7 +74,8 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use log_capture_kit::{LineFormat, capture_lines};
 
-use super::sample_test_support::{self, emo2_balloon_root};
+use super::sample_test_support::acquire_emo2;
+use sample_ghost_kit::SampleRoot;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -482,25 +482,6 @@ fn make_world_with_gpu() -> World {
     world
 }
 
-/// emo2 検体のゴーストフォルダ（共有の受け口 [`sample_test_support`] から引く）。
-///
-/// 呼ぶたびに **ghost スコープの永続状態（`<ghost>/master/profile/areka/`）を除去**する。
-/// position-persist で永続書込が実際に効くようになったため、実機実走（8.7 サインオフ）や
-/// 過去のテスト実行が共有 fixture へ起動記録（`[boot] count`）と窓位置を書き残す。
-/// 残ると boot が「2 回目起動」と判定して **OnFirstBoot を発行しなくなり**、scripted boot 系列
-/// （OnInitialize → username → OnFirstBoot → …）を期待する spine テストが落ちる。
-/// fixture は git 追跡外（gitignore 済み）ゆえ削除は安全で、テストを実行順・実機実走から独立させる。
-fn emo2_root() -> PathBuf {
-    let root = sample_test_support::emo2_root();
-    let persist_dir = root
-        .join("ghost")
-        .join("master")
-        .join("profile")
-        .join("areka");
-    let _ = std::fs::remove_dir_all(&persist_dir);
-    root
-}
-
 /// scope0/scope1 の 2 スコープぶんの合成配置（placement::spawn テストの emo2 相当値を踏襲）。
 ///
 /// attach フェーズは窓 `Entity` のみを消費し `WindowPos`/寸法は読まないため、位置値は attach の
@@ -653,6 +634,14 @@ struct SpineHarness {
     /// boot が sinks 第 1 要素として値消費するため、この clone をハーネスに保持する。全 clone は単一 seriko
     /// inbox への送信端で配送意味は同一。shutdown 時に drop して inbox 切断→worker 自然終了させる。
     tick_sink: SerikoSink,
+    /// この起動へ配られた検体の使い捨ての複製（要件 7.4）。値が木の寿命そのものなので、
+    /// 起動したものより後に捨てる順（欄の最後・後片付けでも最後）に置いてある。
+    ///
+    /// これは**用心であって、裏付けるテストは無い**。順を入れ替えても今のテストは全て
+    /// 緑になる——終了処理が書く永続化は失敗しても捨てられ、どのテストも読まないためで
+    /// ある。順を守る理由は、木が在るうちに畳むほうが、後から観測を足したときに驚きが
+    /// 少ないことだけである。
+    sample: SampleRoot,
 }
 
 impl SpineHarness {
@@ -704,10 +693,21 @@ impl SpineHarness {
         let mut world = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
 
-        // ── 構築入力（実 emo2 fixture・COM は make_world_with_gpu で初期化済み） ──
-        // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
-        let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
-            .expect("emo2 fixture の BootAssets 組立は成功する");
+        // ── 構築入力（実 emo2 検体・COM は make_world_with_gpu で初期化済み） ──
+        // 検体はこの起動専用に取得する。起動記録の無い新品が配られるので（要件 7.4）、同じ
+        // プロセスで何度起動しても毎回 OnFirstBoot から始まる台本が成り立つ。
+        // 作者基準 DPI は emo2 検体の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+        let sample = acquire_emo2();
+        let assets = build_boot_assets(
+            sample.folder(),
+            sample
+                .balloon("emo2-kakukaku")
+                .expect("emo2 の同梱バルーン"),
+            &[0, 1],
+            96,
+            96,
+        )
+        .expect("emo2 検体の BootAssets 組立は成功する");
 
         // ── presenter／文字層ランタイム／実 EmoTextSink（テストスレッド＝UI pump スレッド） ──
         let presenter = EmoPresenter::new();
@@ -808,7 +808,7 @@ impl SpineHarness {
         // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
         // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（production mod.rs と同順・S-3 形）。
         let options = GhostBootOptions {
-            ghost_root: emo2_root(),
+            ghost_root: sample.folder().to_path_buf(),
             default_encoding: DefaultEncoding::Ansi,
             shiori: ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
@@ -857,6 +857,7 @@ impl SpineHarness {
             shiori_handle,
             text_pump,
             tick_sink,
+            sample,
         }
     }
 
@@ -900,6 +901,7 @@ impl SpineHarness {
             shiori_handle,
             text_pump,
             tick_sink,
+            sample,
         } = self;
 
         run_bounded("spine ghost shutdown", Duration::from_secs(10), move || {
@@ -920,6 +922,8 @@ impl SpineHarness {
         drop(runtime);
         drop(text_pump);
         let _ = shiori_handle;
+        // 検体の複製は最後に捨てる（`SpineHarness::sample` の用心・テストの裏付けは無い）。
+        drop(sample);
     }
 }
 

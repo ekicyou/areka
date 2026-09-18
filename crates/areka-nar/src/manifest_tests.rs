@@ -93,7 +93,7 @@ fn missing_top_level(builder: NarBuilder) -> Vec<String> {
 // するため。消える道を焼き付けると、後のタスクが本タスクのテストごと壊す。
 // 代わりにバイト列を書き写し、下の較正が符号化器で写しの正しさを確かめる。
 
-/// `crates/pilot/examples/shiori-host-32/fixtures/emo2/install.txt` の実物。
+/// `検体 emo2 の install.txt` の実物。
 ///
 /// `Charset` が大文字・`name` が非 ASCII・同時インストールのバルーンつき。
 const EMO2_GHOST: &[u8] = b"Charset,UTF-8\r\ntype,ghost\r\nname,\xe3\x81\x88\xe3\x82\x82\xef\xbc\x9f\xef\xbc\x9f\r\ndirectory,emo2\r\nballoon.directory,emo2-kakukaku\r\nballoon.source.directory,emo2-kakukaku\r\n";
@@ -101,7 +101,7 @@ const EMO2_GHOST: &[u8] = b"Charset,UTF-8\r\ntype,ghost\r\nname,\xe3\x81\x88\xe3
 /// 上の `name` が表しているはずの文字列。
 const EMO2_GHOST_NAME: &str = "えも？？";
 
-/// `vendors/sample_ghost/R_POST_and_KOMAINU/install.txt` の実物。
+/// `検体 R_POST_and_KOMAINU の install.txt` の実物。
 ///
 /// `charset` の値の前に空白があり、本文は Shift_JIS。
 const R_POST: &[u8] = b"charset, Shift_JIS\r\ntype,ghost\r\nname,\x82\x71\x83\x7c\x83\x58\x83\x67\x82\xc6\x8d\x9d\x8c\xa2\r\ndirectory,R_POST_and_KOMAINU\r\n";
@@ -109,7 +109,7 @@ const R_POST: &[u8] = b"charset, Shift_JIS\r\ntype,ghost\r\nname,\x82\x71\x83\x7
 /// 上の `name` が表しているはずの文字列。
 const R_POST_NAME: &str = "Ｒポストと狛犬";
 
-/// `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/install.txt` の実物。
+/// `検体 emo2 の同梱バルーン emo2-kakukaku の install.txt` の実物。
 const EMO2_BALLOON: &[u8] =
     b"charset,UTF-8\r\ntype,balloon\r\nname,kakukaku for emo2\r\ndirectory,emo2-kakukaku\r\n";
 

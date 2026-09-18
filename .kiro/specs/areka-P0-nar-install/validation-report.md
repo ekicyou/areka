@@ -133,3 +133,119 @@ vendors/sample_ghost/emo2.nar: eol: unspecified
 - 検体が方式 0 だけなので、**要件 9.7 の実機一周が踏む圧縮方式は 0 だけ**である。方式 8（deflate）を踏むのは `areka-nar` の決定論テスト 8 本（`container_tests.rs` 6 本・`install_tests.rs` 1 本・`lib_tests.rs` 1 本）に限られる。実機で一周したことをもって deflate の経路まで確かめたとは書かないこと。
 - `vendors/sample_ghost/.gitignore` の否定 2 行は、タスク 5.6 が展開形を消した後は**当たる相手が居なくなる**（`.nar` の名前は `*_test.txt`／`*_dump.txt` に当たらない）。消すと将来また展開形を置いたときに同じ罠に落ちるので、消すなら理由を書き足すこと。
 - 同じ期限切れが `vendors/sample_ghost/.gitattributes` にもある。`* -text` の理由書きは「里々テンプレートは辞書も `surfaces.txt` も `descript.txt` も全行 CRLF」と**消える展開形だけ**を根拠に書いてある。5.6 の後に読んだ人は規則を狭めたり消したりして当然なので、5.6 で `*.nar binary` を足すか理由書きを `.nar` の話へ書き改めること。なお今日の時点では規則は十分に効いており（`git check-attr text` が `unset`）、`.nar` は先頭から 5 バイト目に NUL が来るので git の二値判定でも独立に守られている。
+
+---
+
+## 5.6 展開済みツリーの削除と、その場しのぎの初期化の解消（2026-09-19）
+
+対象要件: 8.1・8.8・8.9
+
+### 何をしたか
+
+追跡していた展開形を消し、追跡対象の検体を配布形（`.nar`）だけにした。消す前に、消える 2 つの木を綴っている場所をワークスペース全体で数え直し、1 件ずつ行き先を決めてから消した。
+
+### 消す前に数えた参照（削除の前提）
+
+区切り記号は `/` と `\` の両方で探し、`target/` は除いた。
+
+| 置き場 | 件数 | 行き先 |
+|--------|------|--------|
+| `.rs` の**実行行** | **0** | 段 ① で全て窓口経由に寄せ済み。コンパイルではなく数えて確かめた（文字列なので消えても落ちない） |
+| `.rs` の**コメント行**（16 ファイル） | 16 ファイル | 本タスクで文言を改めた（下記） |
+| `.rs` の合成テスト値 | 1 | `crates/pilot/examples/shiori-host-32/shiori3.rs` の `build_onboot` 引数（下記） |
+| `crates/pilot/examples/shiori-host-32/.gitignore` | 1 ファイル | 削除（要件 8.9） |
+| `crates/pilot/examples/shiori-host-32/README.md:26` ほか | 2 か所 | **タスク 6.1 の担当**（`_Boundary:` が「pilot example README」と名指ししている）。本タスクでは触らない |
+| `tools/perf/{invoke-followup-checks.ps1,perf-loop.measure.ps1,judge-perf.py}` | 3 ファイル | **タスク 6.1 の担当** |
+| `doc/emo2-conformance-scope.md:25` | 1 | **タスク 6.1 の担当** |
+| `doc/ukadoc-coverage/briefing-assets.md:362,377,439` | 3 | **タスク 6.3 の担当** |
+| `.kiro/steering/roadmap-history.md` の 2 行 | 2 | 過去の記録なので**そのまま残す**（当時そこに在ったことが事実） |
+| `vendors/sample_ghost/emo2-kakukaku-{offsetdpi,wplimit}.nar` の中の `readme.txt` | 2 本 | **触らない**。要件 8.7 が中身のバイト不変を求める。書庫の中の説明文が旧置き場を綴っているのは、畳んだ時点の記録として正しい |
+
+旧置き場を綴る `.rs` は、削除後に 0 件であることを同じ検索語で数え直して確かめた（`vendors/sample_ghost/*.nar` を名指しする文書・スクリプトは要件 1.8 が禁じていない）。
+
+### 消したもの
+
+| 対象 | 追跡ファイル数 |
+|------|----------------|
+| `crates/pilot/examples/shiori-host-32/fixtures/` | 150 |
+| `vendors/sample_ghost/R_POST_and_KOMAINU/` | 43 |
+| `crates/pilot/examples/shiori-host-32/.gitignore` | 1 |
+
+削除後、`git ls-files vendors/sample_ghost` が返すのは `.nar` 4 本と `.gitattributes`・`.gitignore` だけである（要件 8.1）。`git status` は追跡外の新顔を 1 件も出さない——消した `.gitignore` が隠していた `fixtures/emo2/ghost/master/profile/` も木ごと消えたためである。
+
+消した木が `.nar` から取り出し直せることは窓口のコマンドで確かめた。`nar-sample-path -- R_POST_and_KOMAINU` が配った根は 43 ファイルで、大小違いの名前 `dic09_Test.txt` も在る。
+
+### 起動記録を消す初期化の解消（要件 8.8）
+
+`crates/areka/src/emo2_boot/spine.rs` の私家版 `emo2_root()` は、呼ぶたびに `<検体>/ghost/master/profile/areka/` を `remove_dir_all` していた。段 ③ では `sample_test_support` の `static LazyLock<SampleRoot>` 1 つを spine の 2 つの起動口が共有していたので、**この初期化を消すだけでは同じプロセスの 2 回目の起動が 1 回目の `[boot] count` を読み**、`OnFirstBoot` を出さなくなる。
+
+実際に初期化だけを消して走らせたところ `spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded` が落ちた。記録された呼出列は `OnInitialize → username → OnBoot → basewareversion` で、**`OnFirstBoot` が抜けている**。
+
+直し方は「消して祈る」でも「残す」でもなく、**取得の粒度を起動に合わせる**ことにした。窓口は取得のたびに起動記録の無い新品を配る（要件 7.4）ので、起動ごとに取得すれば初期化は要らない。
+
+- `sample_test_support` に `acquire_emo2()`（1 つ取得する）を足し、共有の静的値はそれを呼ぶ形にした。読むだけのテスト（`assets_tests`・`frame_attach_tests`・`frame_visibility_integration_tests`・`mod.rs` の `wire_tests`）は今までどおり静的値を使うので、木の複製はテストバイナリあたり 1 つのままである。
+- `spine.rs` の `boot_with` が起動ごとに `acquire_emo2()` を呼び、得た値を `SpineHarness` の**最後の欄**で保持する。後片付けでも最後に捨てる。ただしこの順は**用心であって、裏付けるテストは無い**——欄を先頭へ移しても、`drop(sample)` を `ghost.shutdown` より前へ移しても 33 本すべて緑になる（終了処理が書く永続化は失敗しても捨てられ、どのテストも読まない）。順を守る理由は、木が在るうちに畳むほうが後から観測を足したときに驚きが少ないことだけである。コード側のコメントも同じ言い方に直した。
+- 初期化を持っていた私家版 `emo2_root()` は無くなった。
+
+この直しが効いていることは摂動で確かめた。`ghost_root` だけを共有の静的値へ戻すと `spine_harness_boots_scripted_ghost_and_reaches_attach_ready`・`spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded`・`spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows`・`kanade_probe_raises_no_shiori_call_and_observes_the_close` の 4 本が赤になり、戻すと 33 本すべて緑に戻る。
+
+### コメントの文言（16 ファイル）
+
+旧置き場の綴りを、窓口が使う**検体名を起点にした言い方**へ改めた（例: `crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/descript.txt` → `検体 emo2 の shell/master/descript.txt`、同梱バルーンは `検体 emo2 の同梱バルーン emo2-kakukaku の descript.txt`）。絶対パスが要る手順（`transition_judge_offset_signoff_tests.rs` の実機採取手順・`emo2_real_run.rs` の直接起動）は、`nar-sample-path` の `folder=` の行から得る形に書き替えた。
+
+`crates/pilot/examples/shiori-host-32/shiori3.rs` の `build_onboot` テストは、旧置き場を**バックスラッシュ区切りの文字列リテラル**で持っていた（タスク 1.5 が本タスクへ送った 1 件）。`build_onboot` は ghostdir を捨てる（SHIORI/3.0 の要求に載らない）ので合成値でよく、`Path::new("ghost/master")` に置き換えた。バックスラッシュ綴りだったことが、常設検査（1.6）の走査語（`/` 区切り）に掛からなかった理由でもある。
+
+### 無視規則と属性の始末
+
+- `crates/pilot/examples/shiori-host-32/.gitignore` は**削除**した（要件 8.9）。指していた `fixtures/emo2/ghost/master/profile/` ごと消えたので残す理由が無い。
+- `vendors/sample_ghost/.gitignore` の否定 2 行は**残した**。理由は**これから起きる作業**である——タスク 6.4 が案内する「検体を足す手順」は、畳む前の展開形をこのフォルダへ一時的に置くことを求める。その間、この 2 行が無ければ里々の辞書 `dic09_Test.txt` がリポジトリ直下の `.gitignore:6:*_test.txt` に当たって落ち、**辞書が 1 つ欠けた検体が黙って出来上がる**（`core.ignorecase=true` なので大小違いでも当たる）。理由書きをこの 1 点で書き直した。
+
+  「要件 8.6 の判定（`git check-ignore --no-index`）がこの 2 行のおかげで正しく答えるから残す」という言い方は**採らない**。判定のために規則を残し、その規則について判定するのは循環であって何も証明しない。実測そのもの（判定の出どころが `vendors/sample_ghost/.gitignore` の `!*_test.txt` の行であり、同じ名前を否定の無い場所に置くとリポジトリ直下の規則に当たること）は正しいが、残す理由にはならない。展開形が消えた今、`.nar` の中身がディスクに現れるのは `target/` の下だけで、そこは丸ごと無視されている。
+- 上の 2 ファイルは **LF** で書き直した。最初の書き替えで CRLF に転んでおり、`* -text` が変換を止めるこのフォルダでは**そのバイトがそのまま登録される**ため、5 行のコメント直しが全 16 行の入れ替えとして記録されるところだった（触っていない `* -text`・`!*_test.txt`・`!*_dump.txt` の行まで含めて）。バイトを揺らさないために在るファイルで揺らしては本末転倒である。`git show HEAD:… | tr -cd '\r' | wc -c` と作業コピーの双方で CR が 0 であること、`git diff` がコメント行だけを出すことを確かめた。
+- `vendors/sample_ghost/.gitattributes` の `* -text` も**残した**。`*.nar binary` は足していない——`* -text` が既に `.nar` を覆っており（`git check-attr text` が `unset`）、足しても判定は変わらないためである。代わりに理由書きを「消える展開形の CRLF」から「書庫の中の生バイトが 1 バイトでも揺れると刻印による陳腐化の検出が成り立たない」へ書き改めた。
+
+### 走らせた結果
+
+| 何を | 結果 |
+|------|------|
+| `cargo test --workspace -j 4` | **7,932 passed / 0 failed / 40 ignored**。走った的は 110（`Running` 86 ＋ `Doc-tests` 24） |
+| `cargo test -p log-capture-kit -j 4`（常設検査 1.6 を含む） | 8 的すべて緑（117 passed / 0 failed / 2 ignored） |
+| `cargo build -p {areka,areka-emo-text,pilot,sample-ghost-kit} --examples` | 緑 |
+| `cargo build -p pilot --example shiori-host-32-helper --target i686-pc-windows-msvc` | 緑 |
+| `cargo fmt --all -- --check` | 緑 |
+| `cargo clippy -p <触った crate> --all-targets` | `areka-emo-text` は**そもそも通らない**（下記） |
+
+常設検査（1.6）の除外形 ⑴ は `Presence::Retired`＝「窓口の中にこの綴りが**無い**」を主張する形である。本タスクのコメント書き替えは窓口の外なので、この主張は動かない（緑のまま）。
+
+### 走らせて**通らなかった**もの（いずれも本タスク以前からの既存事象）
+
+- `cargo clippy -p areka-emo-text --all-targets` は**終了コード 101 で落ちる**。`deny` 水準の `absurd_extreme_comparisons` が 3 件（`tests/choice_fixture_test.rs:561`・`tests/emo2_fixture_e2e_test.rs:638`・`tests/line_pitch_readback_test.rs:705`）。3 件のうち 2 件は本タスクで 1 行も触っていないファイル、1 件は 8 行目のコメントだけを直したファイルなので、**本タスクの持ち込みではない**。他の 7 クレート（`areka`・`areka-parsers`・`areka-nar`・`shiori-host32-host`・`pilot`・`sample-ghost-kit`・`log-capture-kit`）はエラー 0・新規警告 0 である。
+- `cargo test -p areka --bin areka spine -- --test-threads=1` は `STATUS_ACCESS_VIOLATION` で落ちる。spine の 3 ファイルを HEAD へ戻しても同じように落ちるので、**本タスクの持ち込みではない**。spine の判定は既定の並列走行（`-j 4`）で行っている。
+
+### 速くなったか遅くなったか（起動ごとの取得の代償）
+
+`boot_with` が起動ごとに木を複製するようになったので、spine の的は**ちょうど 2 倍**遅くなった。
+
+| | 3 回走らせた中央値 |
+|---|---|
+| 共有の複製 1 つ（本タスク前） | **2.44 秒** |
+| 起動ごとに複製（本タスク後） | **4.95 秒**（自分の実測 3.76／4.85／5.02 の中央値は 4.85 秒） |
+
+複製の中身は 110 ファイル・6,614,383 バイト（6.6 MiB）で、spine の起動口は 23 か所ある。増えた 2.5 秒は、12 分前後かかるワークスペース全体の走行に対して測れるほどの重さではない。対価は「同じプロセスの 2 回目の起動で `OnFirstBoot` が黙って出なくなる」欠陥が構造的に起きえなくなることなので、この交換は引き受ける。速さが問題になったときに効く手は、複製を `emo2_boot` の 1 つに戻すことではなく（それが今回の欠陥そのものである）、起動を伴わない的が共有の複製を使い続けることである（既にそうしてある）。
+
+### 5.1 の記述の期限切れ（追記・5.1 は書き換えない）
+
+5.1 の「畳む手順」の囲みは 3 つの呼び方を並べているが、そのうち **2 つはもう通らない**。タスク 5.4 が `--from` を必須にしたためである。
+
+| 5.1 の綴り | いま |
+|------------|------|
+| `cargo run -p sample-ghost-kit --example fold-samples` | **失敗する**。`--from <展開形のフォルダ> を書くこと（登記表は展開形の在処を持たない）` を返して終わる |
+| `cargo run -p sample-ghost-kit --example fold-samples -- --check` | **失敗する**。同じ理由。`--check` は単独では使えず `--from` と併せる |
+| `cargo run -p sample-ghost-kit --example fold-samples -- --from <フォルダ>` | 通る。**これが唯一の呼び方**である |
+
+置き換わったのは `--from <フォルダ>` と `--from <フォルダ> --check`（畳み直さずに往復だけ確かめる）の 2 つで、実行体の doc がこの 2 行を正本として持っている。タスク 6.4 が `vendors/sample_ghost/README.md` に書くのもこの 2 行である。
+
+### 残した懸念
+
+- `crates/pilot/examples/shiori-host-32/README.md:26` は `fixtures/emo2/` を検証フィクスチャとして案内したままで、実体はもう無い。同ファイルの「fixture 取り込み済ゆえ nar 展開は不要」も同じく古い。**タスク 6.1 の担当**（`_Boundary:` が名指ししている）なので本タスクでは触らなかったが、6.1 が入るまでこの README は読み手を存在しない場所へ案内する。
+- `design.md` の「見張り」の節は「`crates/sample-ghost-kit/src/` に ⑴〜⑷ の実体があること」と書いているが、常設検査の `EXCLUSION_FORMS` が実測で宣言しているのは ⑶ の 1 形だけである（⑴ は `Retired`、⑵⑷ は `ComposedAtRuntime`）。本タスクの後もこの食い違いは残る。

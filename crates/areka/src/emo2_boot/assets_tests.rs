@@ -718,7 +718,7 @@ fn build_boot_assets_carries_emo2_accessor_author_dpi() {
 ///
 /// noise（`.name` エントリ・`kero.*`・`sakura.menu`・`sakura.bindoption*`・`charset`/`type`/
 /// `seriko.*`）を混在させても `.default==1` の 5 件だけが昇順で抽出されることを固定する
-/// （実 fixture `crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/descript.txt` 実測）。
+/// （実 fixture `検体 emo2 の shell/master/descript.txt` 実測）。
 #[test]
 fn default_bind_ids_extracts_emo2_defaults() {
     let map = kv(&[

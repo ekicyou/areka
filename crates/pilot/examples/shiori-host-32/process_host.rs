@@ -30,7 +30,7 @@ pub const HELPER_EXE_ENV: &str = "HELPER_EXE";
 /// 子へ親 HWND を渡す環境変数名（u32 LE ワイヤ値・ipc.rs §3 / design.md §339）。
 pub const PARENT_HWND_ENV: &str = "PARENT_HWND";
 
-/// 子へ ghostdir を渡す環境変数名（SHIORI `load` に渡す `fixtures/emo2/ghost/master/`）。
+/// 子へ ghostdir を渡す環境変数名（SHIORI `load` に渡す `検体 emo2 の ghost/master`）。
 pub const GHOSTDIR_ENV: &str = "GHOSTDIR";
 
 /// 起動済 helper プロセスのハンドル（design.md §306–309）。

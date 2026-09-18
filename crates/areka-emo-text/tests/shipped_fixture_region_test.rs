@@ -4,7 +4,7 @@
 //!
 //! ## この檻が塞ぐ穴
 //!
-//! `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku` は**実機サインオフと
+//! `検体 emo2 の同梱バルーン emo2-kakukaku` は**実機サインオフと
 //! emo-present の実描画に効く実ゴースト定義**でありながら、2026-08-28 の棚卸し時点で
 //! **その文字開始点を固定するテストが 1 本も存在しなかった**。すなわち座標解決規則を壊しても
 //! ワークスペースは全緑のまま出荷できる状態だった（設計 C9 の Risks「**全緑は十分性の証拠に
@@ -64,8 +64,8 @@
 //! | D1 | `areka-emo-text/examples/fixtures/emo2-vertical/descript.txt` | 宣言削除（開始点 (356,46) 不変） |
 //! | D2 | `areka-emo-text/tests/fixtures/emo2-choice/descript-cursor.txt` | 宣言削除＋直前コメントの是正 |
 //! | D3 | `areka-emo-text/tests/fixtures/emo2-choice/descript-plain.txt` | 宣言削除（D2 と対） |
-//! | D4 | `pilot/…/fixtures/emo2/emo2-kakukaku/descript.txt` | 宣言削除（**本檻の対象**） |
-//! | D5 | `pilot/…/fixtures/emo2-kakukaku-wplimit/descript.txt` | 宣言削除（**本檻の対象**・D4 の複製） |
+//! | D4 | `検体 emo2 の同梱バルーン emo2-kakukaku の descript.txt` | 宣言削除（**本檻の対象**） |
+//! | D5 | `検体 emo2-kakukaku-wplimit の descript.txt` | 宣言削除（**本檻の対象**・D4 の複製） |
 //!
 //! **解決後 validrect の外にある in-code モデル＝3 箇所**（＋`region.rs` の fixture 複製 2 箇所）:
 //!
