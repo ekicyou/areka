@@ -56,6 +56,10 @@ pub(crate) struct Placement {
     ///
     /// [`files`](Placement::files) からは既に除いてあるので、組み上げ側が改めて
     /// 判断する必要はない。決めたのが計画の側であることを結果に残すための欄。
+    ///
+    /// 読むのは兄弟テストだけ（4 種の別ごとに値を測る）。本番の経路に読み手が要ると
+    /// 「除く判断」が 2 か所に散るので、意図して持たせたまま読ませない。
+    #[allow(dead_code)]
     pub skip_top_level_install_txt: bool,
     /// (エントリ番号, 宛先からの相対パス `/` 区切り)。アーカイブの順。
     pub files: Vec<(usize, String)>,

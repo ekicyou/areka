@@ -30,3 +30,7 @@ tracing = { workspace = true }
 # 「空の根」（WorkDir）の唯一の出どころ。窓口はパスしか渡さないので型は跨がらない。
 # areka-nar ⇄ sample-ghost-kit は dev 依存の循環で、cargo が許す形。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
+# 記録の捕捉。捕捉先を自前で差すのはワークスペースの常設検査が禁じているので、
+# 「失敗 1 回につき error の記録が 1 件」を測るにはこの窓口を通す。本番の依存
+# （`[dependencies]`）には置かない（要件 10.3）。
+log-capture-kit = { path = "../log-capture-kit" }
