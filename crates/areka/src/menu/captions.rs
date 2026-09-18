@@ -255,7 +255,7 @@ pub(crate) fn interpret(
                     event = "menu_suppressed_by_visible",
                     scope = scope,
                     id = id,
-                    "[menu] the ghost asked not to show the menu"
+                    "[menu] suppressed by popupmenu.visible"
                 );
             }
             if let ResourceOutcome::Failed(reason) = outcome {

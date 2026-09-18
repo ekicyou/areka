@@ -324,7 +324,11 @@ fn visible_zero_suppresses_the_menu_and_records_once() {
         "{:?}",
         infos[0]
     );
-    assert!(infos[0].contains("[menu]"), "{:?}", infos[0]);
+    assert!(
+        infos[0].contains("[menu] suppressed by popupmenu.visible"),
+        "{:?}",
+        infos[0]
+    );
 }
 
 /// `0` 以外・値なし・失敗・返事なしはすべて「出す」（要件 3.7）。

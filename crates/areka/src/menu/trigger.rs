@@ -2,15 +2,18 @@
 //!
 //! キャラクター窓で右ボタンを離したときのハンドラ（[`on_char_pointer_released`]＝登記の写しを
 //! 取り、照会を送って返事待ちを預ける）と、照会の返事を毎 tick 覗いて表示するかどうかを決め、
-//! 表示する計画まで作る system（[`poll_menu_query`]）を置く。
+//! 表示する計画まで作る system（[`poll_menu_query`]）と、メニューを出して閉じた後に動作を
+//! 1 回だけ行う表示のタスク（[`show_task`]）を置く。
 //!
 //! このうち判断そのもの（[`poll_step`]・[`decide`]）は OS も World も触らない純粋関数で、
 //! 時刻は引数で受け取る。待ち時間を実際に過ごさずに 4 通りを確かめられるようにするためで、
 //! 兄弟テストはどれも寝ずに判定を全部踏む。World を触る 2 つの入口も、時刻を引数で受ける
 //! 内側の関数（[`handle_release`]・[`poll_once`]）へ仕事を渡すだけにしてある。
+//! 表示のタスクも同じ考え方で、OS の表示関数を引数で受ける内側の関数（[`run_show`]）を呼ぶだけ
+//! なので、テストは OS のメニューを出さずに表示の前後の判断を全部踏める。
 
-use std::cell::Cell;
-use std::rc::Rc;
+use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
 use std::time::Instant;
 
 use areka_actor::ReplyReceiver;
@@ -19,12 +22,13 @@ use windows::Win32::Foundation::HWND;
 use wintf::ecs::WindowHandle;
 use wintf::ecs::drag::{DragStateSnapshot, snapshot_drag_state};
 use wintf::ecs::pointer::{Phase, PointerState};
+use wintf::ecs::world::{EcsWorld, EcsWorldSelfRef};
 
 use crate::input_events::{MouseWiring, PendingDoubleClick, char_scope};
 
 use super::captions::{self, QUERY_TIMEOUT, QueryFailure, QueryReply, Visibility};
 use super::plan::{self, MenuPlan};
-use super::{Frame, MenuContext, MenuItem, MenuWiring};
+use super::{Frame, MenuContext, MenuItem, MenuWiring, win32};
 
 /// メニューを 1 枚出すための要求（右ボタンを離した時点の材料）。
 pub(crate) struct MenuRequest {
@@ -277,11 +281,40 @@ fn take_deferred_double_click(world: &mut World) -> Option<PendingDoubleClick> {
         .take_pending_right_double_click()
 }
 
-/// 毎 tick 動く system（`Input` スケジュール）。返事待ちを覗き、決着していれば計画まで作る。
+/// 毎 tick 動く system（`Input` スケジュール）。返事待ちを覗き、決着していれば計画まで作って
+/// 表示のタスクを起こす。
 ///
-/// できた計画はここで手放す。手放すと表示 1 枚の旗が降り、次の右クリックを受けられる。
+/// 表示そのものはここでは行わない。ここは tick の中＝外側の World を借りている最中で、
+/// OS のメニューは閉じるまで戻らないので、ここで出すと表示の間じゅう tick が回らなくなる
+/// （要件 7.2）。実行器へ載せたタスクが最初に進むのは tick が返って借用が解けた後である。
+///
+/// タスクへ渡す外側の World への弱い参照は、wintf が起動時に入れる [`EcsWorldSelfRef`] から
+/// 複製する。これが無い World（本番の起動経路を通っていない）では動作を行う手段が無いので、
+/// `warn!` で記録して要求を捨てる。捨てた時点で表示 1 枚の旗は降りる。
 pub(crate) fn poll_menu_query(world: &mut World) {
-    drop(poll_once(world, Instant::now()));
+    let Some(ready) = poll_once(world, Instant::now()) else {
+        return;
+    };
+    let Some(outer) = world
+        .get_non_send::<EcsWorldSelfRef>()
+        .map(|self_ref| self_ref.0.clone())
+    else {
+        tracing::warn!(
+            event = "menu_outer_world_ref_missing",
+            scope = ready.request.scope,
+            "[menu] no reference to the outer world: the request is dropped"
+        );
+        return;
+    };
+    let ReadyMenu {
+        request,
+        plan,
+        guard,
+    } = ready;
+    // 返ってくる取っ手は捨ててよい（捨ててもタスクは最後まで進む）。
+    drop(wintf::executor::spawn_local(show_task(
+        outer, request, plan, guard,
+    )));
 }
 
 /// 返事待ちを 1 回覗く。表示する計画ができたときだけ `Some`。
@@ -345,6 +378,169 @@ fn poll_once(world: &mut World, now: Instant) -> Option<ReadyMenu> {
     }
 }
 
+/// OS の表示の結果。選ばれた識別子（何も選ばずに閉じたら `None`）か、表示の失敗。
+type ShowResult = windows::core::Result<Option<u32>>;
+
+/// 表示のタスク（UI スレッドの実行器に載る）。メニューを出し、閉じた後に動作を 1 回だけ行う。
+///
+/// 中身は [`run_show`] を本番の表示関数（[`win32::show`]）で呼ぶだけで、途中で待つ点は無い。
+/// 旗の持ち主はこのタスクが抱えるので、1 度も進まないまま捨てられても旗は降りる。
+async fn show_task(
+    outer: Weak<RefCell<EcsWorld>>,
+    request: MenuRequest,
+    plan: MenuPlan,
+    guard: InFlightGuard,
+) {
+    let ready = ReadyMenu {
+        request,
+        plan,
+        guard,
+    };
+    run_show(&outer, ready, win32::show);
+}
+
+/// メニュー 1 枚分の仕事: 表示（[`display`]）→ 後始末と動作（[`finish`]）。表示の関数は引数で
+/// 受ける（本番は [`win32::show`]。テストは OS のメニューを出さずに結果だけを返す閉包を渡す）。
+///
+/// 旗の持ち主はこの関数の終わりまで生きているので、表示中の印は動作が終わるまで立っている。
+/// 途中で戻る経路が増えても、降ろすのは持ち主の `Drop` なので降ろし忘れは起きない。
+fn run_show(
+    outer: &Weak<RefCell<EcsWorld>>,
+    ready: ReadyMenu,
+    show: impl FnOnce(HWND, (i32, i32), &MenuPlan) -> ShowResult,
+) {
+    let ReadyMenu {
+        request,
+        plan,
+        guard: _guard,
+    } = ready;
+    let outcome = display(&request, &plan, show);
+    finish(outer, &request, &plan, outcome);
+}
+
+/// メニューを出す。外側の World には触れない（弱い参照すら受け取らない）ので、表示の間も
+/// tick は World を借りて回れる（要件 7.2）。
+///
+/// 「出した」の記録は表示の関数を呼ぶ**直前**に出す。OS の表示はメニューが閉じるまで戻らない
+/// ので、呼んだ後に記録すると「出した」が「選ばれた」の直前にしか現れず、表示中のログを見ても
+/// メニューが出ているかどうかが分からない。表示に失敗したときは、この行の後に失敗の行が続く。
+fn display(
+    request: &MenuRequest,
+    plan: &MenuPlan,
+    show: impl FnOnce(HWND, (i32, i32), &MenuPlan) -> ShowResult,
+) -> ShowResult {
+    tracing::info!(
+        event = "menu_shown",
+        scope = request.scope,
+        items = plan.item_count(),
+        "[menu] shown"
+    );
+    show(request.hwnd, request.screen_pos, plan)
+}
+
+/// メニューが閉じた後の仕事: 結果を記録し、表示中に届いた預かりを捨て、選ばれた項目の動作を
+/// 1 回だけ呼ぶ。
+///
+/// 外側の World は `try_borrow_mut` で借りる。ここはメニューの表示が戻った直後で、表示中に
+/// 入れ子で回っていた tick はどれも自分の借用を返し終えているので、通常は借りられる。
+/// それでも借りられなければ待たず、やり直しもせず、`debug!` で記録して終える——UI スレッドで
+/// 借用が空くのを待つと、借りている側（同じスレッド）が進めず固まるからである。World が既に
+/// 捨てられていた場合（アプリの終了中）も同じく記録して終える。どちらの場合も、選ばれていれば
+/// 「選ばれた」の行は先に出ている（選択そのものは起きた。動作に至らなかった理由は後続の行が語る）。
+///
+/// 預かっていた右ダブルクリックは、World を借りられたどの終わり方でも最初に取り出して捨てる。
+/// 表示中に届いた解放は預かりを残す（[`on_char_pointer_released`] の doc）が、表示の後には
+/// [`decide`] の tick が来ないので、ここで捨てないと後の無関係な要求の抑止で送られてしまう。
+/// World を借りられなかったときは捨てる手段が無い。
+///
+/// 動作を呼ぶのは、操作した窓がまだ窓ハンドルを持っているときだけである（要件 7.4）。表示中も
+/// tick は回るので、SHIORI の終了指示などで窓が消えていることが実際に起こりうる。
+fn finish(
+    outer: &Weak<RefCell<EcsWorld>>,
+    request: &MenuRequest,
+    plan: &MenuPlan,
+    outcome: ShowResult,
+) {
+    let scope = request.scope;
+    let selected = match outcome {
+        Err(error) => {
+            tracing::error!(
+                event = "menu_display_failed",
+                scope = scope,
+                error = %error,
+                hresult = format_args!("{:#010X}", error.code().0),
+                "[menu] TrackPopupMenuEx failed"
+            );
+            None
+        }
+        Ok(None) => {
+            tracing::debug!(event = "menu_dismissed", scope = scope, "[menu] dismissed");
+            None
+        }
+        Ok(Some(id)) => match plan.action(id) {
+            Some((frame, action)) => {
+                tracing::info!(
+                    event = "menu_selected",
+                    scope = scope,
+                    frame = ?frame,
+                    id = id,
+                    "[menu] selected"
+                );
+                Some((id, action))
+            }
+            None => {
+                // 計画は識別子を自分で払い出して OS へ渡しているので、ここへは来ないはずである。
+                tracing::warn!(
+                    event = "menu_selected_unknown_id",
+                    scope = scope,
+                    id = id,
+                    "[menu] the selected id has no action in the plan"
+                );
+                None
+            }
+        },
+    };
+
+    let Some(outer) = outer.upgrade() else {
+        return world_unavailable(scope, "world dropped");
+    };
+    let Ok(mut ecs) = outer.try_borrow_mut() else {
+        return world_unavailable(scope, "world busy");
+    };
+    let world = ecs.world_mut();
+
+    if take_deferred_double_click(world).is_some() {
+        tracing::trace!(
+            event = "menu_deferred_double_click_dropped",
+            scope = scope,
+            "[menu] dropped the right double-click deferred while the menu was open"
+        );
+    }
+    let Some((id, action)) = selected else {
+        return;
+    };
+    if world.get::<WindowHandle>(request.entity).is_none() {
+        tracing::debug!(
+            event = "menu_window_gone",
+            scope = scope,
+            id = id,
+            "[menu] window gone after menu"
+        );
+        return;
+    }
+    action(world, &MenuContext { scope });
+}
+
+/// 外側の World を借りられなかったことを記録する。動作は行わない。
+fn world_unavailable(scope: u32, reason: &'static str) {
+    tracing::debug!(
+        event = "menu_world_unavailable",
+        scope = scope,
+        reason = reason,
+        "[menu] world unavailable after menu"
+    );
+}
+
 #[cfg(test)]
 #[path = "trigger_tests.rs"]
 mod trigger_tests;
@@ -352,3 +548,7 @@ mod trigger_tests;
 #[cfg(test)]
 #[path = "trigger_flow_tests.rs"]
 mod trigger_flow_tests;
+
+#[cfg(test)]
+#[path = "trigger_show_tests.rs"]
+mod trigger_show_tests;

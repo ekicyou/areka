@@ -581,27 +581,6 @@ fn the_tick_that_sees_the_reply_builds_the_plan_with_the_captions() {
     assert!(!in_flight(&f.world), "計画を手放すと印が降りる");
 }
 
-/// 毎 tick の入口は、できた計画をその場で手放す（表示中の印が降りる）。
-#[test]
-fn the_tick_system_releases_the_flag_once_the_plan_is_built() {
-    let mut f = fixture();
-    assert!(handle_release(
-        &mut f.world,
-        f.window,
-        &right_released(),
-        Instant::now()
-    ));
-    let (_ids, reply) = take_query(&f.kanade);
-    reply
-        .send(vec![value("sakura.popupmenu.visible", "1")])
-        .expect("受け口は生きている");
-
-    poll_menu_query(&mut f.world);
-
-    assert!(menu_wiring(&f.world).pending.is_none());
-    assert!(!in_flight(&f.world));
-}
-
 /// 表示可否が `0` の tick では計画を作らず、預かっていた右ダブルクリックをちょうど 1 件送る。
 #[test]
 fn a_suppressed_tick_builds_no_plan_and_sends_the_deferred_double_click() {
