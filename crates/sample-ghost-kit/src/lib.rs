@@ -261,6 +261,9 @@ pub enum SampleError {
     },
 }
 
+mod nar_writer;
+pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};
+
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
