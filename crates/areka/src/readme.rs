@@ -32,7 +32,7 @@ pub(crate) struct ReadmeRequest;
 
 /// `readme` キーが無いときの正典の既定名（要件 4.1 ⑵）。
 ///
-/// ukadoc: <https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#readme_2c_30d5_30a1_30a4_30eb_540d:1>
+/// 正典の URL は `readme` キーの定義箇所（`areka_parsers` の `MountModel.readme` の欄）に置いてある。
 pub(crate) const DEFAULT_README: &str = "readme.txt";
 
 /// 説明書のファイルを決める（要件 4.1）。
