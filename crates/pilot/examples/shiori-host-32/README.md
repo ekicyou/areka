@@ -23,11 +23,15 @@
 - **共有規約（`ipc.rs`）**: `MsgTag`（`dwData` 低 32bit）・ペイロード＝生バイト列（`cbData`=長さ）・HWND は u32 LE・`SendMessageTimeout`（`SMTO_ABORTIFHUNG`）。
 - **バイト proxy（`shiori_proxy.rs`, i686）**: `LoadLibraryW`＋`GetProcAddress` で `pasta.dll` の flat-C `load`/`unload`/`request` を解決し、HGLOBAL 所有権規約・charset 非対称を守ってバイト列を運ぶ（SHIORI3 ロジックは持たない）。
 - **SHIORI3 codec（`shiori3.rs`, x64）**: `build_onboot` / `parse_value`（UTF-8）。x64 過去互換 `IShiori` アダプタのミニチュア。
-- 検証フィクスチャ: `fixtures/emo2/`（リポジトリ取り込み済）。ghostdir = `fixtures/emo2/ghost/master/`。
+- 検証に使う検体: `vendors/sample_ghost/emo2.nar`（配布形のまま追跡している）。展開した検体フォルダの絶対パスは次のコマンドが `folder=` の 1 行で教える。ghostdir はその下の `ghost/master/`。
+
+  ```powershell
+  cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2
+  ```
 
 ### 実行法（再現手順・必須 3 項目）
 
-ビルドは **PowerShell** で行うこと（Git Bash の GNU `link.exe` が MSVC link を遮蔽する既知トラップ）。fixture 取り込み済ゆえ nar 展開は不要。
+ビルドは **PowerShell** で行うこと（Git Bash の GNU `link.exe` が MSVC link を遮蔽する既知トラップ）。検体の展開は上の `nar-sample-path` が呼ばれたときに行われるので、手で `.nar` をほどく手順は要らない。
 
 1. **helper の i686 ビルド**:
    ```powershell

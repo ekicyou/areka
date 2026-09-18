@@ -249,3 +249,208 @@ vendors/sample_ghost/emo2.nar: eol: unspecified
 
 - `crates/pilot/examples/shiori-host-32/README.md:26` は `fixtures/emo2/` を検証フィクスチャとして案内したままで、実体はもう無い。同ファイルの「fixture 取り込み済ゆえ nar 展開は不要」も同じく古い。**タスク 6.1 の担当**（`_Boundary:` が名指ししている）なので本タスクでは触らなかったが、6.1 が入るまでこの README は読み手を存在しない場所へ案内する。
 - `design.md` の「見張り」の節は「`crates/sample-ghost-kit/src/` に ⑴〜⑷ の実体があること」と書いているが、常設検査の `EXCLUSION_FORMS` が実測で宣言しているのは ⑶ の 1 形だけである（⑴ は `Retired`、⑵⑷ は `ComposedAtRuntime`）。本タスクの後もこの食い違いは残る。
+
+---
+
+## 6.1 検体パスを綴るスクリプトと文書を窓口経由へ（2026-09-19）
+
+対象要件: 10.5（得方は 1.9・`.nar` の名指しが許されることは 1.8）
+
+### 何をしたか
+
+| ファイル | 前 | 後 |
+|----------|----|----|
+| `tools/perf/invoke-followup-checks.ps1` | `$DEFAULT_GHOST_ROOT` が旧置き場を綴った固定パス・`-BalloonRoot` 省略時は `<GhostRoot>` の下へ名前を継ぎ足していた | `$SAMPLE_NAME` / `$SAMPLE_BALLOON_NAME` の 2 つの名前だけを持ち、根は窓口の `folder=` の行、バルーンは `balloon.<名前>=` の行から得る |
+| `tools/perf/perf-loop.measure.ps1` | `$MEASURE_GHOST_ROOT_RELPATH` が旧置き場への相対パス・バルーンは同じく継ぎ足し | 同上（`$MEASURE_SAMPLE_NAME` / `$MEASURE_SAMPLE_BALLOON_NAME`） |
+| `tools/perf/perf-loop.common.ps1` | — | 窓口を呼んで `key=value` を表にする `Get-NarSampleMap` と、鍵を 1 つ取り出す `Get-NarSamplePath` を新設 |
+| `tools/perf/judge-perf.py` | コメントの出典が旧置き場の `surfaces.txt` | 検体 `vendors/sample_ghost/emo2.nar` の中の `shell/master/surfaces.txt`（展開した実物の道は窓口が教える） |
+| `doc/emo2-conformance-scope.md` | 旧置き場の `menu.pasta` と辞書フォルダを 2 か所で名指し | 検体の中の道（`ghost/master/dic/…`）＋窓口の案内 |
+| `crates/pilot/examples/shiori-host-32/README.md` | 「検証フィクスチャ: `fixtures/emo2/`」「fixture 取り込み済ゆえ nar 展開は不要」 | 検体は `vendors/sample_ghost/emo2.nar`・絶対パスは窓口のコマンドが `folder=` で教える・展開は窓口が行う |
+
+`perf-loop.measure.ps1` は 991 行あって 1,000 行の上限まで 9 行しか残っていないので、共有する部品は
+`perf-loop.common.ps1`（`perf-loop.ps1` が先に dot-source する）へ置いた。
+`invoke-followup-checks.ps1` は common を読み込まない独立した入口（自前の `Stop-Run` を持ち、
+署名が違う）なので、同じ 2 関数を自前に持たせ、互いを指す注記を両方に入れた——これは同ディレクトリの
+`Get-PythonCommand` が既に取っている形と同じである。
+
+### `folder=` を読むときの 3 つの罠
+
+| 罠 | 本タスクへの当たり | どう扱ったか |
+|----|--------------------|--------------|
+| ⑴ 同梱バルーンを持たない検体は `balloon.` の行が**そもそも出ない**（空の値ではなく行が無い） | 当たる。既定の検体 `emo2` は出るが、別の検体を渡す将来の呼び手が黙って空のパスを掴む | `Get-NarSamplePath` が鍵の不在を見て `Stop-Run` する。実測で `R_POST_and_KOMAINU` に `balloon.emo2-kakukaku` を尋ね、両方の写しが理由付きで止まることを確かめた |
+| ⑵ バルーンの `folder=` は `ghost` の下ではなく `<根>/balloon/<名前>` に在る | 当たる。旧来の「`<GhostRoot>` に名前を継ぎ足す」は新しい配置ではもう成り立たない | 継ぎ足しをやめ、`balloon.<名前>=` の行をそのまま使う形にした |
+| ⑶ `=` は**最初の 1 つだけ**で割る | 当たらない（Windows の絶対パスに `=` は現れない）が、割り方を誤ると値が黙って切れる | `IndexOf('=')` ＋ `Substring` で最初の 1 つだけを区切りにした（`-split '='` は使っていない） |
+
+### 窓口が失敗したときに何が起きるか（黙って進まないこと）
+
+窓口は未登録の名前に対して標準エラーへ理由を書き、**終了コード 2** で終わり、標準出力には 1 行も出さない。
+両方の写しは終了コードを見て止まる。実測（4 通り・いずれも子プロセスで起こして終了コードを確かめた）:
+
+| 呼び | 結果 |
+|------|------|
+| `emo2` の `folder` | 絶対パスを得て、そのフォルダが実在することを確認（`EXISTS=True`） |
+| `emo2` の `balloon.emo2-kakukaku` | 同上（`EXISTS=True`） |
+| `R_POST_and_KOMAINU` の `balloon.emo2-kakukaku` | 「出力に `'balloon.emo2-kakukaku='` の行がありません（出た鍵: folder, root）」で停止。`perf-loop` 側は `code=4`、`invoke-followup-checks` 側は `code=1` と `FOLLOWUP RESULT overall=INCONCLUSIVE` を出す |
+| 未登録の `no-such-sample` | 「終了コード 2」と、窓口が出した既知の名前の一覧を添えて停止 |
+
+窓口は呼ぶたびに検体を展開し直すので、両方の写しは**検体 1 つにつき 1 回だけ**呼んで表を取っておく
+（`Get-MeasureGhostRoot` / `Get-MeasureBalloonRoot` は 1 回の走行で 4 回呼ばれる）。
+
+### 旧置き場の綴りの数え（較正つき）
+
+数える場所は要件 10.5 のとおり `tools/` と、タスク 6.3 が持つ `doc/ukadoc-coverage/` を除いた `doc/`。
+`/` と `\` の両方の綴りを拾うため、区切りは `.`（任意の 1 文字）で書いた。
+
+| 検索語 | 変更前 tools/ | 変更前 doc/（6.3 を除く） | **変更後 tools/** | **変更後 doc/（6.3 を除く）** | 対照: doc/ukadoc-coverage/（6.3 の担当・触っていない） |
+|--------|---------------|---------------------------|-------------------|-------------------------------|------------------------------------------------------|
+| `shiori-host-32.fixtures` | 3 | 1 | **0** | **0** | 2 |
+| `fixtures.emo2` | 3 | 1 | **0** | **0** | 3 |
+| `sample_ghost.(検体名)[^.]`（展開形） | 0 | 0 | **0** | **0** | 0 |
+
+境界の `crates/pilot/examples/shiori-host-32/README.md` も 3 語すべて **0**（変更前は `fixtures.emo2` が 1）。
+
+**0 が本物であることの確かめ方**——数えた 0 が「検索語が壊れていたから 0」ではないことを 2 通りで見た。
+
+1. 同じ検索語が**変更前に実物を見つけている**（上の表の左 2 列。合計 8 か所が挙がり、その全部が本タスクと 6.3 の担当ファイルだった）。
+2. 同じ検索語を**いま当てても 6.3 の担当ファイルでは当たる**（右端の列が 2 と 3）。検索語が死んでいれば、ここも 0 になる。
+3. 3 つ目の検索語（展開形）は変更前も 0 だったので、上の 2 つが効かない。そこで旧綴りを 2 通り（`/` 区切りと `\` 区切り）と、**許されている** `.nar` の綴り 1 通りを並べた合成の入力に当て、前の 2 行だけが挙がり `.nar` の行は挙がらないことを確かめた。`.nar` を名指しすることは要件 1.8 が明示的に許しているので、これを赤にしてはならない。
+
+変更後に `tools/`・`doc/`・境界の README に残る `sample_ghost` の綴りは 3 か所で、いずれも
+`vendors/sample_ghost/emo2.nar`（配布形のファイルそのもの）を指している。
+
+### 走らせて確かめたこと
+
+| 確かめ | 結果 |
+|--------|------|
+| 4 本の `.ps1` の構文（`Parser::ParseFile`） | `invoke-followup-checks.ps1`・`perf-loop.common.ps1`・`perf-loop.measure.ps1`・`perf-loop.ps1` すべて構文誤り 0 |
+| `judge-perf.py` の構文（`python -m py_compile`） | 通る |
+| 道具の自己較正 `perf-loop.ps1 selftest` | `judge-perf.py --selftest` 合格・`invoke-followup-checks.ps1 -SelfTest` は `ok=4 ng=0`。全体は `ok=8 ng=1` で、赤の 1 件は下の「残した懸念」に書いた `check-quiet.ps1`（本タスクで触っていないファイル） |
+| 窓口の解決（上の 4 通り） | 上表のとおり |
+
+本タスクで**確かめられなかったこと**: 性能計測の本走行（`measure-baseline` / `rank-run` / `followup`）は
+1 本 25 分前後かかり、静寂な機械と 32bit ヘルパと管理者権限を要求するので回していない。確かめたのは
+「既定の根の得方」の段までである。本走行の中で根が使われる先（`invoke-perf-run.ps1` への `-GhostRoot` /
+`-BalloonRoot` の引き渡し）は、`Get-MeasureGhostRoot` / `Get-MeasureBalloonRoot` の戻り値をそのまま渡す
+配線で、本タスクはその戻り値の作り方だけを変えている。
+
+### 残した懸念（いずれも本タスクの `_Boundary:_` の外）
+
+- **`tools/perf/check-quiet.ps1` の自己較正が 1 件赤い**（「在るだけで落とす名前 0 件が『-』になりません」）。
+  このファイルは HEAD から 1 文字も変わっていない（`git diff --quiet HEAD` が 0）ので、本タスクより前から赤い。
+  `perf-loop.ps1 selftest` は 1 件でも赤ければ `code=4` で止まるため、性能計測を回す前に誰かが直す必要がある。
+- **`tools/perf/invoke-perf-run.ps1` の `-BalloonRoot` 省略時の既定が古い**。この走者は `<GhostRoot>` に
+  `emo2-kakukaku` を継ぎ足す（`:540`）が、新しい配置ではバルーンはゴーストの下に無い。要件 10.5 が名指しする
+  3 本に入っておらず、旧置き場の綴りも持たないので数えには出ないが、`tools/perf/README.md:123` もこの継ぎ足しを
+  案内している。ただし**黙っては壊れない**——`:546` が「バルーンのルートのフォルダが存在しません」で止まる。
+  なお `perf-loop.measure.ps1` はこの走者を呼ぶとき必ず両方を明示して渡すので、計測ループの中では通らない道である。
+
+### 6.1 差し戻し後の是正: `invoke-perf-run.ps1` の既定を直さずに消した（追記・上の 6.1 は書き換えない）
+
+差し戻しの指摘は 1 点だった——`_Boundary:_` の `tools/perf` は**ディレクトリ全体**であり、
+design が名指しする 3 本だけではない。`tools/perf/invoke-perf-run.ps1` は
+`-BalloonRoot` 省略時に `<GhostRoot>` へ `emo2-kakukaku` を継ぎ足す既定を持ったままで、
+段 ③ の配置ではこれは**必ず存在しない場所**を指す。上の節は「`:546` が止めるので黙っては
+壊れない」と書いて先送りしたが、要件 10 の目的は 「検体パスを綴っていた**文書やスクリプトが
+壊れていないでほしい**」 であり、`tools/perf/README.md:123-124` の 「省略すると
+`<GhostRoot>\emo2-kakukaku` を補います」 は**いま壊れている文書**である。この spec に
+`tools/perf` を持つ後続タスクは無く、先送り先が存在しなかった。
+
+**直し方は「既定を新しい場所へ差し替える」ではなく「既定を消す」**。`perf-loop.measure.ps1` は
+この走者を呼ぶとき必ず `-BalloonRoot` を明示して渡す（`:254`）ので、既定に依存する呼び手は
+1 つも無い。消せば窓口を呼ぶ 3 つ目の写しも要らない。
+
+| 場所 | 前 | 後 |
+|------|----|----|
+| `invoke-perf-run.ps1:539-541` | 省略時に `<GhostRoot>` へ継ぎ足していた | 省略を `Stop-Run $EXIT_BAD_ARGS` にし、`-GhostRoot` の未指定検査（`:523`）と同じ形に揃えた。文言に窓口の得方（`balloon.emo2-kakukaku=` の行）を書いた |
+| `:41`（較正値一覧）・`:175`（定義）・`:681`（実行条件の記録） | `DEFAULT_BALLOON_SUBDIR` を持ち `run-meta.txt` にも書き出していた | 3 か所とも削除。`tools/` 全域に綴りは 0 件 |
+| `:546`（エラー文言） | 「省略時は `<GhostRoot>\…` を補います」 | 補う話を削除 |
+| `:77`（使い方）・`:127`（引数の注記）・`:79`（`-DryRun` の例） | `[-BalloonRoot …]` と旧入れ子を見せていた | 省略できない引数として見せ、値は窓口から得る形に改めた |
+| `tools/perf/README.md:123-124` | 「省略すると `<GhostRoot>\emo2-kakukaku` を補います」 | 「省略できません」＋窓口の `folder=` と `balloon.<名前>=` から得る案内に差し替え |
+| `tools/perf/README.md:29-38`・`:805`（2 つの呼び出し例） | `-GhostRoot C:\絶対パス\emo2` だけで `-BalloonRoot` が無く、そのまま打つと止まる | 窓口を呼ぶ 1 行を先頭に足し、2 つの値を渡す形にした（早わかりの丸数字も繰り下げ） |
+
+### 走らせて見つけた欠陥（報告だけで済ませなかったので出た）
+
+最初に書いた停止の文言を実際に出させたところ、`balloon` が **`alloon`** と表示された。
+PowerShell の二重引用符の中ではバッククォートが逃がし記号で、``` `b ``` が後退空白として食われていた
+（``` `cargo ``` 側もバッククォートが消えていた）。**逐語で見せる文は単引用符で書く**形に直し、
+その理由をその行の注記に残した。文言を目で読んだだけでは分からない種類の欠陥である。
+
+### 確かめたこと
+
+| 確かめ | 結果 |
+|--------|------|
+| `invoke-perf-run.ps1` の構文（`Parser::ParseFile`） | 誤り 0 |
+| ⒜ `-BalloonRoot` を省略して起こす（`-GhostRoot` は窓口から得た実在の根・`-DryRun`） | `exit 3`（`EXIT_BAD_ARGS`）。文言は欠けずに全部出る |
+| ⒝ 窓口から得た `folder=` と `balloon.emo2-kakukaku=` の 2 つを渡して起こす（`-DryRun`） | `exit 0`。ゴースト・バルーン・出力先の 3 行が窓口の値そのままで出て、前提の検証を通過した |
+| ⒝ が書いた `run-meta.txt` | 63 行・`DEFAULT_BALLOON_SUBDIR` の行は **0 件**・`ghost_root` と `balloon_root` は窓口の値と一致。この鍵を読む道具は `tools/` に 1 つも無いことも確かめた |
+| `perf-loop.ps1 selftest` の再走 | `ok=8 ng=1`。赤は**是正前と同じ `check-quiet.ps1` の 1 件だけ**（本タスクで触っていない・HEAD から不変） |
+| 旧置き場の綴りの数え直し | 3 つの検索語すべて tools/ **0**・doc/（6.3 を除く）**0**・境界の README **0**。対照の `doc/ukadoc-coverage/` は 2・3・0 で変わらず（検索語が生きている証拠） |
+
+### 1,000 行の番人は `.ps1` を見ていない（記録・行動はしない）
+
+`perf-loop.measure.ps1` が 991 行だったため共有部品を `perf-loop.common.ps1` へ置いたが、
+**この上限は `.ps1` には強制されていない**。番人の列挙は
+`crates/log-capture-kit/tests/workspace_scan/mod.rs` の `collect_rs_files` が
+`name.ends_with(".rs")` で絞っており、`.ps1` は最初から集められない。つまり 993 行の
+`perf-loop.measure.ps1` が 1,000 行を越えても**赤にはならない**。置き場の判断は規律で
+保たれているだけなので、ここに書き残す。
+
+### 6.1 2 度目の差し戻し: 幅を決め打ちしたワイルドカードが作った 3 つ目の偽の 0（追記・上の 2 節は書き換えない）
+
+指摘は 1 点、直しは 2 行だった——`tools/perf/perf-loop.ps1:146` と `:149` の引数の注記が、
+既に消した既定を現役として説明したままだった。
+
+| 行 | 前 | 後 |
+|----|----|----|
+| `:146` | 「ゴースト一式のルート（絶対パス。省略時は **emo2 fixture**）」 | 「…省略時は検体の窓口が教える emo2 の根」 |
+| `:149` | 「バルーンのルート（絶対パス。省略時は **`<GhostRoot>\emo2-kakukaku`**）」 | 「…省略時は検体の窓口が教える emo2 同梱バルーンの場所」（`invoke-followup-checks.ps1:84` と同じ文言に揃えた） |
+
+**振る舞いは元から正しかった**——`-BalloonRoot` を省くと `$script:BalloonRootArg`（`:240`）が
+空のままになり、`Get-MeasureBalloonRoot`（`perf-loop.measure.ps1:133-135`）が窓口の
+`balloon.emo2-kakukaku=` を読む。誤っていたのは注記の散文だけである。同じ文はもう 2 か所にあり、
+1 つは 1 度目で直し（`invoke-followup-checks.ps1:84`）、1 つは 2 度目で消した
+（`invoke-perf-run.ps1`）。**3 つのうち 2 つを直して 1 つを取り落とした。**
+
+### なぜ取り落としたか——幅を決め打ちしたワイルドカードは偽の 0 を作る
+
+2 度目の報告で「旧入れ子の綴りは 0 件」と結論した根拠は検索語 `GhostRoot.emo2-kakukaku` だったが、
+実物の綴りは `<GhostRoot>\emo2-kakukaku` で、間に **2 文字**（`>` と `\`）ある。`.` は 1 文字ぶんしか
+合わないので、**在るのに 0 と出た**。区切りを文字クラス `[^ ]*` で書けば当たる。
+
+較正は**対で**採った。当てる先は合成の文字列ではなく **git が持つ修正前の実物**にした
+（この節を書く途中、合成の入力を `printf` で作ろうとして `\e` が逃がし記号として ESC に化け、
+**較正そのものが空振りした**。道具で作った検体は道具の逃がし規則に汚染される）。
+
+| 検索語 | HEAD の `perf-loop.ps1`（修正前＝当たるべき） | 作業ツリー（修正後＝0 であるべき） |
+|--------|---------------------------------------------|------------------------------------|
+| `GhostRoot[^ ]*emo2-kakukaku`（文字クラス） | **1 件**（`:149`） | **0 件**（`tools/`・`doc/`・境界の README のいずれも） |
+| `GhostRoot.emo2-kakukaku`（幅 1 の `.`） | **0 件** ← 偽の 0 の再現 | 0 件（意味を持たない） |
+| `emo2 fixture` | **1 件**（`:146`） | **0 件**（`tools/` 全域） |
+
+左の列が当たっているので、右の列の 0 は「検索語が死んでいるから 0」ではない。
+
+**この種別を閉じる**ため、同じ言い回しを全部出して目視した。`grep -rn "省略時は" tools/perf/*.ps1`
+は 8 行返し、うち 3 行が `perf-loop.ps1`（`:142` 実行体の所在・`:146`・`:149`）。残り 5 行は
+記号キャッシュ・`target\debug`・出力先・ビルド種別・`invoke-followup-checks.ps1:84`（1 度目で直した行）で、
+いずれも検体の在処と関係が無い。是正後の 8 行はすべて現状と一致する。
+
+### この spec に持ち越す教訓
+
+本タスク 1 つで**偽の 0 が 3 回**出た。⑴ ハーネスのシェルが検索語のバックスラッシュを落とした、
+⑵ レビュー側の `git grep` がリポジトリ全域で 0 を返した、⑶ 幅を決め打ちした `.` が 2 文字の区切りを
+跨げなかった。**数えて 0 を主張する前に、同じ検索語が既知の当たりを拾うことを必ず見せる。**
+当たりの供給元は、合成した文字列より **git の履歴に在る実物**が安全である。
+
+### 確かめたこと
+
+| 確かめ | 結果 |
+|--------|------|
+| `.ps1` 5 本の構文（`Parser::ParseFile`） | 誤り 0（`invoke-followup-checks` / `perf-loop.common` / `perf-loop.measure` / `perf-loop` / `invoke-perf-run`） |
+| `perf-loop.ps1 selftest` の再走 | `ok=8 ng=1`。赤は 3 度とも同じ `check-quiet.ps1` 1 件（本タスクで触っていない） |
+| 数え直し | 上表のとおり。較正の対つき |
+| ワークスペース走行 | **回していない**。本是正は注記 2 行のみで実行経路に触れていない（直前の走行は 111 スイート・7,935 passed・0 failed で緑） |
+
+### 2 度目の報告の数の訂正
+
+`invoke-perf-run.ps1` の差分を「削除 12・追加 8」と書いたが、正しくは **10 追加 / 10 削除**
+（行数は 887 のまま増減なし）。結論には影響しない。

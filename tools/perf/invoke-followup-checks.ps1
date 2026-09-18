@@ -41,8 +41,8 @@ invoke-followup-checks.ps1 — 見た目の追随をエージェント自身が�
   SCRIPT_VERSION        本スクリプトの版
   RUST_LOG_VALUE        実走時のログフィルタ（design C13 の指定）
   SMOKE_EXIT_ENV_NAME   有界自動終了の環境変数名
-  DEFAULT_GHOST_ROOT    ゴースト（emo2）の既定ルート（絶対パス）
-  DEFAULT_BALLOON_SUBDIR  -BalloonRoot 省略時に補うバルーンの相対位置
+  SAMPLE_NAME           既定で使う検体の名前（検体の窓口へ渡す名前）
+  SAMPLE_BALLOON_NAME   その検体が同梱するバルーンの名前（窓口の `balloon.<名前>=` の鍵）
   SHOW_READY_TIMEOUT_MS 表示成立点を待つ上限
   SETTLE_MS             1 手ごとの反映待ち（クリック透過の再評価・窓書込の flush）
   DRAG_DX_PX            ドラッグで動かす距離（px・judge-followup.py と対）
@@ -81,7 +81,7 @@ param(
     [Parameter(ParameterSetName = 'Run')]
     [string]$GhostRoot,
 
-    # バルーンのルート（絶対パス。省略時は <GhostRoot>\emo2-kakukaku）
+    # バルーンのルート（絶対パス。省略時は検体の窓口が教える emo2 同梱バルーンの場所）
     [Parameter(ParameterSetName = 'Run')]
     [string]$BalloonRoot,
 
@@ -107,7 +107,8 @@ $ErrorActionPreference = 'Stop'
 $SCRIPT_VERSION        = '0.1.1'
 $RUST_LOG_VALUE        = 'info,wintf::ecs::clickthrough=debug,wintf::transition=debug,areka_emo_present=debug'
 $SMOKE_EXIT_ENV_NAME   = 'AREKA_APP_SMOKE_EXIT_MS'
-$DEFAULT_BALLOON_SUBDIR = 'emo2-kakukaku'
+$SAMPLE_NAME            = 'emo2'
+$SAMPLE_BALLOON_NAME    = 'emo2-kakukaku'
 $SHOW_READY_TIMEOUT_MS = 60000
 $SETTLE_MS             = 400
 $DRAG_DX_PX            = 80
@@ -126,8 +127,11 @@ $EXIT_FAIL     = 1
 $EXIT_BAD_ARGS = 3
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$DEFAULT_GHOST_ROOT = Join-Path $repoRoot 'crates\pilot\examples\shiori-host-32\fixtures\emo2'
 $judgePath = Join-Path $PSScriptRoot 'judge-followup.py'
+
+#: 検体の窓口の呼び出し（1 検体 1 回だけ呼ぶ＝呼ぶたびに展開し直すため）。
+$NAR_SAMPLE_ARGS   = @('run', '-q', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path', '--manifest-path')
+$script:NarSampleMaps = @{}
 
 # =============================================================================
 # Win32（DPI 対応で読む・列挙・入力注入・窓の移動）
@@ -228,6 +232,42 @@ function Stop-Run {
     }
     Write-Host ("FOLLOWUP RESULT overall=INCONCLUSIVE clickthrough=- drag=- dpi=- balloon_follow=- code={0} dir={1}" -f $Code, $script:OutDirPath)
     exit $Code
+}
+
+# 検体の窓口（`nar-sample-path`）を 1 回呼んで `key=value` の表にする。
+# perf-loop.common.ps1 の Get-NarSampleMap／Get-NarSamplePath と同形（Stop-Run の形だけが違う）。
+# 窓口は呼ぶたびに検体を展開し直すので、1 検体につき 1 回だけ呼んで表を取っておく。
+function Get-NarSampleMap {
+    param([Parameter(Mandatory = $true)][string]$Sample)
+    if ($script:NarSampleMaps.ContainsKey($Sample)) { return $script:NarSampleMaps[$Sample] }
+    $cargoArgs = @($NAR_SAMPLE_ARGS) + @((Join-Path $repoRoot 'Cargo.toml'), '--', $Sample)
+    $lines = @()
+    try { $lines = @(& cargo @cargoArgs) }
+    catch { Stop-Run $EXIT_FAIL "検体の窓口を呼べません（cargo $($cargoArgs -join ' ')）: $($_.Exception.Message)" }
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Run $EXIT_FAIL "検体の窓口が失敗しました（終了コード $LASTEXITCODE・cargo $($cargoArgs -join ' ')）。理由は上の標準エラーに出ています。"
+    }
+    $map = @{}
+    foreach ($line in $lines) {
+        $text = "$line".Trim()
+        # 最初の '=' だけで割る（値は Windows の絶対パスで、後ろに '=' が来ても壊さない）
+        $sep = $text.IndexOf('=')
+        if ($sep -lt 1) { continue }
+        $map[$text.Substring(0, $sep)] = $text.Substring($sep + 1)
+    }
+    $script:NarSampleMaps[$Sample] = $map
+    return $map
+}
+
+# 表から 1 つの鍵を取り出す。鍵が無ければ止める——同梱バルーンを持たない検体では
+# `balloon.<名前>=` の行そのものが出ないので、空を掴んだまま進むとパス無しで起動してしまう。
+function Get-NarSamplePath {
+    param([Parameter(Mandatory = $true)][string]$Sample, [Parameter(Mandatory = $true)][string]$Key)
+    $map = Get-NarSampleMap -Sample $Sample
+    if (-not $map.ContainsKey($Key) -or -not $map[$Key]) {
+        Stop-Run $EXIT_FAIL "検体の窓口の出力に '$Key=' の行がありません（検体 '$Sample'・出た鍵: $(($map.Keys | Sort-Object) -join ', ')）。"
+    }
+    return $map[$Key]
 }
 
 function Get-PythonCommand {
@@ -368,7 +408,7 @@ if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
     Stop-Run $EXIT_FAIL "実行体がありません: $exePath（-BinDir を確かめるか cargo build -p areka を先に実行してください）"
 }
 
-if (-not $GhostRoot) { $GhostRoot = $DEFAULT_GHOST_ROOT }
+if (-not $GhostRoot) { $GhostRoot = Get-NarSamplePath -Sample $SAMPLE_NAME -Key 'folder' }
 if (-not [System.IO.Path]::IsPathFullyQualified($GhostRoot)) {
     Stop-Run $EXIT_BAD_ARGS "-GhostRoot は絶対パスで指定してください（相対だと SHIORI の読み込みに失敗します）: '$GhostRoot'"
 }
@@ -376,7 +416,7 @@ $ghostRootFull = [System.IO.Path]::GetFullPath($GhostRoot).TrimEnd('\')
 if (-not (Test-Path -LiteralPath $ghostRootFull -PathType Container)) {
     Stop-Run $EXIT_BAD_ARGS "-GhostRoot のフォルダがありません: $ghostRootFull"
 }
-if (-not $BalloonRoot) { $BalloonRoot = Join-Path $ghostRootFull $DEFAULT_BALLOON_SUBDIR }
+if (-not $BalloonRoot) { $BalloonRoot = Get-NarSamplePath -Sample $SAMPLE_NAME -Key "balloon.$SAMPLE_BALLOON_NAME" }
 if (-not [System.IO.Path]::IsPathFullyQualified($BalloonRoot)) {
     Stop-Run $EXIT_BAD_ARGS "-BalloonRoot は絶対パスで指定してください: '$BalloonRoot'"
 }
