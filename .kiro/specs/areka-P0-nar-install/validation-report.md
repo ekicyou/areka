@@ -454,3 +454,101 @@ PowerShell の二重引用符の中ではバッククォートが逃がし記号
 
 `invoke-perf-run.ps1` の差分を「削除 12・追加 8」と書いたが、正しくは **10 追加 / 10 削除**
 （行数は 887 のまま増減なし）。結論には影響しない。
+
+## 6.2 steering の 3 本と謝辞の追随（2026-09-19）
+
+対象要件: 10.1（謝辞の再生成と差分）・10.4（構成の登記）・10.9（実機運転の定石）
+
+### 編集の前に数えたこと（較正）
+
+| 調べ | 結果 |
+|------|------|
+| `roadmap.md` の `zip` の綴り（文字クラス走査） | 7 か所。うち**依存を指すのは 3 か所**＝制約の節（外部依存の追加）・仮裁定 5・A0 のウェーブ行①。残る 4 か所（利用者の一周・完成の器・#17 の行・A5 の行）は**配布物の zip** で対象外 |
+| 同じ綴りの 4 か所目 | `roadmap.md` の 2026-09-12 追記(96) が `zip 8.6` を記録している。日付つきの記録なので**書き換えず、決着の一文を足すだけ**にした |
+| `log-capture-kit` の見張りの節 | 3 本（`with_default_guard_test.rs`・`file_length_guard_test.rs`・`temp_path_guard_test.rs`）と書かれていた。実ファイルは 4 本（`sample_path_guard_test.rs` がタスク 1.6 で増えている）＝**節が 1 本遅れていた** |
+| 謝辞の事前の状態 | `miniz_oxide 0.8.9` が 2 か所、`adler2 2.0.1` が 1 か所**既に載っていた**。MIT 209 件 |
+
+### 謝辞をどう再生成したか
+
+正典の手順は `about.toml` の先頭と `kiro-complete` の DoD が綴る
+`cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md`（cargo-about 0.9.2）。
+`about.toml` は**ターゲットを指定していない**ので、cargo-about は Windows 以外の条件つき依存も含めて歩く。
+
+- 終了コード 0。**2 度走らせて md5 が一致**（`4ac1fa5971e64eda7e4acc94c2deb22e`）＝差分は並び替えの揺らぎではない。
+- `Cargo.lock`（追跡外）の md5 は再生成の前後で不変（`55f711a5b7177c39fd8016433a3c9031`）＝`cargo update` は起きていない。
+
+### 差分（増えた項目だけ・並び替えや書式の揺れは 0）
+
+| 増えた項目 | 何か |
+|------------|------|
+| `miniz_oxide 0.9.1`（2 か所） | 本タスクの依存。MIT の本文が 2 種類あるため MIT の節が 2 つに分かれており、その両方に付く（`miniz_oxide 0.8.9` も同じ 2 か所に居る） |
+| `areka-nar 0.0.1` | 本仕様が新設した**自分のクレート**（第三者ではない。ワークスペースの crate も MIT として載る慣行） |
+| `sample-ghost-kit 0.0.1` | 同上 |
+
+見出しの数は MIT が 209 → 213（＝上の 4 行）。他のライセンスの件数は不変。
+
+**`adler2 2.0.1` は増えていない——既に載っていたからである。** 出どころは
+`human-panic → backtrace → miniz_oxide 0.8.9 → adler2` で、この経路は
+`cfg(not(all(windows, target_env = "msvc", …)))` の下にあり Windows では通らないが、
+`about.toml` がターゲットを絞っていないので謝辞は以前からこれを含んでいた。
+したがって**「差分は 2 項目」ではなく、第三者の増分は `miniz_oxide 0.9.1` の 1 件**（表れは 2 行）で、
+残り 2 行は自分のクレートである。要件 10.1 が求める「増える項目が追加した依存とその推移的依存に限られる」は満たす。
+
+### 本番依存の数え直し（ターゲットごと・`--target all` は使わない）
+
+`cargo tree -e normal --target <t> --workspace --exclude sample-ghost-kit --exclude log-capture-kit --exclude temp-path-kit`
+
+| ターゲット | 本番グラフの crate 数 | `miniz_oxide 0.9.1` / `adler2 2.0.1` |
+|------------|----------------------|--------------------------------------|
+| `x86_64-pc-windows-msvc` | 171 | 両方あり |
+| `i686-pc-windows-msvc` | 171 | 両方あり |
+| `aarch64-pc-windows-msvc` | 166 | 両方あり |
+
+タスク 2.1 の確定値（x86_64 171／i686 171／aarch64 166）から動いていない。
+
+### steering に入れた記述
+
+| ファイル | 追加・訂正 |
+|----------|------------|
+| `tech.md` | Key Libraries に `miniz_oxide` (0.9) を `encoding_rs` と同じ書式で登記（意図的依存追加＝2026-09-18 承認済・伸長のみ・`with-alloc` だけ・圧縮側を綴らないことを `areka-nar/src/lib_tests.rs` が見張る・推移的依存は `adler2` 1 本） |
+| `structure.md` | クレート一覧に `areka-nar`（本番）と `sample-ghost-kit`（テスト専用 leaf・窓口の置き場と bin `nar-sample-path`）の 2 節。見張りの節を 3 本 → **4 本**（`sample_path_guard_test.rs`） |
+| `roadmap.md` | 実機運転の定石に**検体の絶対パスの得方**を 1 行（`cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2`。`manual/<検体>/` を呼ぶたびに作り直すので**2 つの端末で同時に呼ぶと互いの木を消す**ことも書いた）。`zip` を承認待ちの依存と綴る 3 か所を `miniz_oxide`（承認済）へ。追記(96) には決着の一文を追加 |
+
+3 本とも先頭の `updated_at` を 2026-09-19 にした。
+
+### 確かめたこと
+
+| 確かめ | 結果 |
+|--------|------|
+| `cargo deny check` | `advisories ok, bans ok, licenses ok, sources ok`（終了コード 0。ワイルドカードの警告は既存のまま） |
+| `cargo test --workspace -j 4` | **111 スイート・7,935 passed・0 failed**（終了コード 0） |
+| `Cargo.lock` の md5 | 再生成の前後で不変 |
+| `roadmap.md` に残る `zip` | **7 行**。L20・L22・L103・L153 は**配布物の zip**、L132・L148 は本タスクが直した「`zip` を採らなかった」の意味、L195 は日付つきの記録。**`zip` を承認待ちの依存として綴る箇所は 0**（これが判定すべき主張である）。⚠ 行単位で `zip` と `承認待ち` を突き合わせると L132 が 1 件当たるが、その `承認待ち` は同じ行の `md-5` に掛かっており、`zip` の側は「採らず `miniz_oxide` で決着（承認済）」と読む |
+
+### 直さなかったもの
+
+`roadmap-history.md` の追記(96) 全文と W14／単独枠のウェーブ行は `zip 8.6` と
+`vendors/sample_ghost/R_POST_and_KOMAINU/`（展開形）を綴ったままである。日付つきの記録の書庫なので
+書き換えない。
+
+現役の steering 3 本の展開形の綴りは、文字クラス `sample_ghost[/\\][A-Za-z0-9_.-]+[/\\]` で数えた。
+**HEAD では 1 件当たる（`roadmap.md:148` の A0 ウェーブ行③）＝較正済み**で、この 1 件は
+「保管は展開フォルダ（`vendors/sample_ghost/StayseeBalloon/`＝現行慣行）」と読め、**タスク 5.6 が廃した形を
+A0-③ `default-balloon-bundle` に指示したままだった**。本タスクで配布形（`StayseeBalloon.nar`）へ直した。
+是正後の現役 steering 3 本は **0 件**。
+
+なお ③ の一文が指す `vendors/sample_ghost/` の README は**タスク 6.4 が作る**（要件 10.10）。
+6.4 の着地後に真になる前方参照であり、6.4 までは指す先が存在しない。
+
+### 1 度目の報告の訂正
+
+⑴ 「現役の steering 3 本には展開形の検体パスの綴りは 0 件」と書いたが、**実際は 1 件あった**（上記。
+走査語も較正も示さない裸の 0 で、本仕様で 5 度目の偽の 0 である）。
+⑵ 「設計が圧縮側の見張りを `sample_path_guard_test.rs` と取り違えている」と書いたのは**誤りなので取り下げる**。
+設計 `design.md:797` は `no_deflate_side_is_called` を「Unit Tests（`areka-nar/src/*_tests.rs`…）」の下に置き、
+`:840` は「`areka-nar/src/*.rs` が `miniz_oxide::deflate` を綴らない」と書いている。実体の
+`crates/areka-nar/src/lib_tests.rs:338` はその `areka-nar/src/*_tests.rs` に当たる＝**設計は正しい**。
+⑶ `about.toml` が `targets` を持たないことは**受容された恒久の姿勢**であり、先送りではない。
+本番依存グラフの数え（タスク 2.1）では過剰計上が事実誤りになるが、ライセンス表示は逆で、
+**載せ過ぎは無害・載せ落としが法務上の危険**である。`about.toml` の冒頭と `deny.toml` が
+同じ理由で全ターゲットを評価する旨を既に綴っている。

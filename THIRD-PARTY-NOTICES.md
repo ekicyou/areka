@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (209 crate)
+- MIT License (213 crate)
 - BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
@@ -2007,6 +2007,7 @@ SOFTWARE.
 - areka-emo-text 0.0.1
 - areka-ghost 0.0.1
 - areka-kanade 0.0.1
+- areka-nar 0.0.1
 - areka-parsers 0.0.1
 - areka-sakura 0.0.1
 - areka-seriko 0.0.1
@@ -2015,6 +2016,7 @@ SOFTWARE.
 - dola 0.0.1
 - log-capture-kit 0.0.1
 - pilot 0.0.1
+- sample-ghost-kit 0.0.1
 - shiori-abi 0.0.1
 - shiori-host32-helper 0.0.1
 - shiori-host32-host 0.0.1
@@ -2076,6 +2078,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - miniz_oxide 0.8.9
+- miniz_oxide 0.9.1
 
 ```
 MIT License
@@ -2111,6 +2114,7 @@ SOFTWARE.
 
 対象 crate:
 - miniz_oxide 0.8.9
+- miniz_oxide 0.9.1
 
 ```
 MIT License
