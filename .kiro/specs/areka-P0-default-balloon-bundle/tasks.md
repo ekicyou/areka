@@ -57,7 +57,7 @@
   - 完了状態: 檻 D が緑で、両 scope の焼き込みに失敗の記録が 0 件
   - _Requirements: 3.4_
 
-- [ ] 2.4 文字の領域解決と既定書体の門を固定する
+- [x] 2.4 文字の領域解決と既定書体の門を固定する
   - 本番の描画入口と同じ関数で文字の領域を解き、描画範囲の 4 辺・描画開始点・折返し基準・遠辺・画像寸法を両 scope で固定する（未宣言の折返し基準が遠辺へ縮退していること）
   - 解決された書体名が正典既定であり、かつ areka 側の既定書体の定数と一致することを固定する。文字の高さ・全角と半角の送り幅・行ボックス・行送りも固定する
   - 期待値は実装時に実測して較正し、動いた値とその理由を 2.8 の記録へ回す
@@ -166,3 +166,7 @@
 - 2.3: **テーマ分割を前倒しで実施**（タスク 2.8 の規定）。入口は `tests/staysee_balloon_fixture_test.rs`（83 行・検体パス定数と `#[path]` の mod 宣言だけ）、実体は `tests/staysee_balloon_fixture/` 配下。⚠ **`tests/` 直下の平置き（`<stem>_<テーマ>.rs`）は成立しない**——親から `#[path]` で繋いでも cargo が独立テストターゲットとしても自動収集し、同じテストが 2 か所で走る（実装者・レビュアーが独立に再現）。`Cargo.toml` の `autotests` で止める手は要件 8.2 が封じている。design.md C2 と Directory Structure は 2026-09-18 に実測へ追随済み。
 - 2.3 → 2.4〜2.7 への申し送り: 追加先は `tests/staysee_balloon_fixture/` に新規ファイルを作り、**親ファイルに `#[cfg(test)] #[path = "staysee_balloon_fixture/<名>.rs"] mod <名>;` を 1 行足す**。想定: 2.4 → `region.rs`（檻 E・F）、2.5 → `wrapping.rs`（檻 G）、2.6 → `script.rs`（檻 H）、2.7 → `scale.rs`（檻 I）。2 つ目のテーマが要り始めたヘルパは `test_support.rs` へ集約する（複製しない）。現在の共有項目: `staysee_root` / `expected_frame_size` / `resolve_faces` / `EXPECTED_FACE_COUNT` / `read_decoded` / `staysee_model`。
 - 2.3: 焼き上がりの走査矩形はトリム後 333×203（原寸 335×205 から完全透明の縁が 1 画素ずつ落ちる）。`research.md` §8.2 の α 別画素数は**原画像**の値なので、透明の数だけ 9,617 → 8,541 に減る（差 1,076 ＝ 335×205 − 333×203 ＝ 縁 1 周 2·335+2·203）。半透明 2,445・不透明 56,613 はトリムで動かない。
+- 2.4: **較正で動いた期待値は 0 件**。設計 E 行の領域座標（left 22・top 20・right 309・bottom 158／88・start (22,20)・折返し基準と遠辺 309・`image_size`）と F 行の導出値（半角送り 6.0・全角 12.0・行ボックス 12.0・行送り 14.0）がすべて実測と一致した。2.8 の記録には「檻 A〜F は較正差なし」と書けばよい。
+- 2.4: `font.name == DEFAULT_FONT_NAME` の比較は**この検体に対しては構造上恒真**（`draw.rs` の `ResolvedFont::resolve` の未宣言腕が定数そのものを返す）。恒真性を破っているのは⑴逐語リテラル `"ＭＳ ゴシック"` との比較と⑵文字寸法の門の 2 つ。設計 F 行が両方の比較を明記しているので恒真な側も残す。
+- 2.4: 恒真化を防ぐ**常設の対照**を `region.rs` に置いた（`declared_balloon_returns_a_different_font_and_a_split_wrap_threshold`）。対照検体は `crates/areka-emo-text/examples/fixtures/emo2-vertical-canon`（読むだけ）で、`font.name,Yu Gothic UI`・折返し基準 145 と遠辺 149 が分かれることを固定する。対照検体のパス定数は `DECLARED_BALLOON_DIR`＝検体の `STAYSEE_BALLOON_DIR` とは別名で区別。
+- 2.4: `ＭＳ ゴシック` 不在の門は**名前の assert ではなく文字寸法の assert** が担う（名前は解決文字列を見るだけなので不在を捕まえない・設計 DD4 ⑶ どおり）。

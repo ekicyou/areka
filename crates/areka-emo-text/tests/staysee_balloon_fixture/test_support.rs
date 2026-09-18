@@ -11,6 +11,8 @@ use std::path::PathBuf;
 use areka_emo_present::balloon::{ResolvedFace, resolve_balloon_faces};
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
+use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
+use wintf::com::dwrite::dwrite_create_factory;
 
 /// [`crate::STAYSEE_BALLOON_DIR`] を実体化する。
 ///
@@ -145,4 +147,15 @@ pub(crate) fn read_decoded(name: &str) -> String {
 /// StayseeBalloon は面別上書き層（`balloons0s.txt` 等）を持たないので第 2 引数は `None`。
 pub(crate) fn staysee_model() -> BalloonModel {
     parse_str(&read_decoded("descript.txt"), None)
+}
+
+// ── 文字の計測の入口（要件 1.3・3.5）────────────────────────────────────────
+
+/// DirectWrite の factory（文字の寸法を測るのに要るのはこれだけ——実 GPU も実窓も要らない）。
+///
+/// 同 crate の既存の統合テスト（`line_pitch_readback_test.rs`・`kero_menu_capacity_test.rs`）と
+/// 同じ作り方である。生成失敗は明示的に落とす。
+pub(crate) fn dwrite_factory() -> IDWriteFactory2 {
+    dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)
+        .expect("DirectWrite factory を生成できる（文字の寸法の観測はこれが前提）")
 }

@@ -40,6 +40,7 @@
 //! | `definition` | `staysee_balloon_fixture/definition.rs` | 定義ファイルの復号と読み取り |
 //! | `faces` | `staysee_balloon_fixture/faces.rs` | 面の系列解決とその間の記録 |
 //! | `bake` | `staysee_balloon_fixture/bake.rs` | 焼き込みと半透明の保持 |
+//! | `region` | `staysee_balloon_fixture/region.rs` | 文字の領域解決と既定書体の受け入れ口 |
 //!
 //! ### 置き場がテーマ別**ディレクトリ**である理由
 //!
@@ -72,6 +73,10 @@ mod faces;
 #[cfg(test)]
 #[path = "staysee_balloon_fixture/bake.rs"]
 mod bake;
+
+#[cfg(test)]
+#[path = "staysee_balloon_fixture/region.rs"]
+mod region;
 
 // ── 検体の所在（要件 3.2: パスを持つのはこの 1 定数だけ）───────────────────
 
