@@ -310,7 +310,7 @@ HWND は `wintf::ecs::window::WindowHandle{hwnd}`（SparseSet・窓 entity）、
 - **設計への影響**: 要件 10.4 の「15 項目に 1 行ずつ」は、⑴ 7 つの `*button.caption` を並べる表（先頭にページ URL）、⑵ `sakura|kero.popupmenu.visible` の定数 2 つ（各 1 行）、⑶ 問い合わせない 4 名（`char*.popupmenu.visible`・`popupmenu.type` ×3）を並べる表（先頭にページ URL・要件 3.8 のテストがこの表を読む＝死んだ定義にしない）で満たす。README の「未実装には書かない」は `absent` の項目についての助言であり、本仕様の 9 項目は「引く仕組みを置く」語彙のみなので表に載せる（README §3 の「語彙表」形式そのもの）。
 
 #### 実行器の起床と UI スレッドの待ち（照会の同期待ち）
-- kanade への照会は `areka_actor::reply_channel()` の `ReplyReceiver::recv_timeout` で**UI スレッドが同期的に待つ**。待っている間は tick も止まる（表示の**前**の短い停止であり、要件 7.2 が禁じる「表示**中**の停止」ではない）。上限は 1,000 ms（§7.3-3）。既存の prefetch（`schedule/boot.rs`）も同期往復であり、新しい形ではない。
+- ~~kanade への照会は `ReplyReceiver::recv_timeout` で UI スレッドが同期的に待つ~~ → **設計ディスカッション #1（2026-09-18）で覆した**。設計検証が「kanade の inbox が往復で塞がると UI が上限 1 秒まで止まる（tick も止まる）」を到達経路付きで指摘し、開発者は「待ちを tick に乗せる」(b) を選んだ。解放ハンドラは照会を送るだけ、毎 tick の system `poll_menu_query` が `ReplyReceiver::try_recv`（areka-actor へ約 10 行追加）で覗き、届いた tick か期限で判定する。実行器にタイマーも非同期の待ち手も無い（`wintf-winmsg-executor` 0.0.5 の公開 API は `spawn_local`／`block_on`／`MessageLoop` のみ）ので、tick に乗せるのが最小。上限は 1,000 ms のまま（超過は既定名で出す）。
 
 #### wintf の解放配送（同 tick の押下＋解放）
 - `pointer/buffers.rs` の `transfer_buffers_to_world` は `if down_received … else if up_received …` で、同じ tick に押下と解放が入ると解放側の分岐に入らない。「離した」を `up_received` から**独立に**立てる旗（`released`）を足せば、速いクリックでも取りこぼさない（§1.1 の見落としやすい点のとおり）。`dispatch_pointer_events` の末尾で `*_down` と `double_click` を消しているので、`released` も同じ場所で消す。
@@ -320,7 +320,7 @@ HWND は `wintf::ecs::window::WindowHandle{hwnd}`（SparseSet・窓 entity）、
 各判断は design.md に結論として書き写してある。ここでは選ばなかった案と理由を残す。
 
 - **7.3-2 照会の経路 → R-A（アクター殻）**。`KanadeMsg::ResourceQuery { ids, reply }` を `actor.rs` の閉包が `step` の前で受ける（`KanadeMsg::Close` と同じ位置）。`Phase::Steady{..}` なら `round_trip_request` を 1 件ずつ回し、それ以外（Boot 系・Close 系・Unloading・Stopped）は全件 `NoContent` を返す（要件 3.10）。R-B（状態機械の Action）は「1 バッチ最後の応答しか再投入しない」既存の殻を変えるか、N 回展開する新しい腕を足すかのどちらかで、数十行多い割に純粋テストで言えることが増えない。名前は「メニュー」を含めず汎用にする（kanade はメニューを知らない）。
-- **7.3-3 待ち上限 → 1,000 ms・上限超過は要件 3.4 の失敗**。3 件（第 1 スライス）の host32 往復は通常数十 ms。kanade が長い往復（終了挨拶の GET 等）の最中なら要求は inbox で待つので、上限で UI を守る。超過・切断・送出失敗はすべて `warn!` 1 回＋全項目既定名＋メニューは出す。
+- **7.3-3 待ち上限 → 1,000 ms・上限超過は要件 3.4 の失敗**。3 件（第 1 スライス）の host32 往復は通常数十 ms。kanade が長い往復（終了挨拶の GET 等）の最中なら要求は inbox で待つ。超過・切断・送出失敗はすべて `warn!` 1 行＋全項目既定名＋メニューは出す。**待ち方は設計ディスカッション #1 で「同期待ち」から「tick で覗く」へ改めた**（§7.2「実行器の起床と UI スレッドの待ち」）。選ばなかった (a)「同期待ちのまま上限を 300 ms へ」は、塞がっているときに 300 ms 固まる点が裁定（マスコットの挙動優先）に反する。
 - **7.3-6 `readme` の読み場所 → parsers に転記（案①・分割なし）**。理由は 7.2 の行数。案②③（areka で再読）は文字コード処理を二重に持つ。
 - **7.3-7 `OnClose` の scope → S-1 `CloseReason::User { scope: u32 }`**。`System` は無引数のまま・`as_ref_str` は変えず・`on_close` が `User{scope}` のとき Ref1＝Ref2＝scope を積む。`on_close_notify`（ForceQuit の NOTIFY）は Ref0 のみのまま（要件外）。窓 0 で `run()` が返る経路の `GhostRuntime::shutdown(CloseReason::User)`（`main.rs`）は `User { scope: 0 }` を渡す（本体側＝0。正典は「不明」の値を定めていない）。
 - **7.3-8 `MenuAction` の形 → 閉包一本（`Rc<dyn Fn(&mut World, &MenuContext)>`）**。enum を作ると後続 spec が variant を足しに来る（台帳の「typed 個別新設禁止」と同じ理由で避ける）。要件 6.6「台本と同じ経路」は規約で守り、本仕様の 2 項目がその手本になる（終了＝`MouseWiring::send_close_request`・説明書＝`readme::open`）。`Rc` にするのは、計画（`MenuPlan`）が登記の複製を World の外へ持ち出し、借用を解いた後に呼ぶため。
@@ -342,7 +342,7 @@ HWND は `wintf::ecs::window::WindowHandle{hwnd}`（SparseSet・窓 entity）、
 - **owner 窓の消失**（要件 7.4）: `TrackPopupMenuEx` の owner が表示中に破棄されたとき戻り値 0 で返る想定。タスクは戻った後に `Weak` の upgrade と entity の生存を確かめてから動作を呼ぶので、どう返っても落ちない。実機 9.9 ⑸ の一部として観察。
 - **`ShellExecuteW` を MTA スレッドから呼ぶ**（`WinApp::new` は `COINIT_MULTITHREADED`）: 単純な `open` 動詞は動くのが通例。実機 9.9 ⑵。
 - **フォアグラウンド作法**（KB Q135788）: `SetForegroundWindow(owner)` → 表示 → `PostMessageW(owner, WM_NULL)`。怠ると外クリックで閉じない。実機 9.9 ⑴。
-- **待ち上限の間の停止**: 照会の待ち（最大 1,000 ms）は UI スレッドを止める。通常は数十 ms。実機で体感を確認し、長ければ上限を下げる（定数 1 つ）。
+- **待ち上限の間の遅れ**: 照会の待ち（最大 1,000 ms）は tick に乗るので UI は止まらないが、メニューの出現が遅れる。通常は数十 ms。実機で体感を確認し、長ければ上限を下げる（定数 1 つ）。
 - **A0 並走との衝突**: `spine.rs`・`spine_conformance_script.rs` の 1〜2 行（7.2）と、`roadmap-draft.md`・台帳（要件 10.5）。
 
 ### 7.5 参照

@@ -170,8 +170,8 @@ crates/areka/src/
 │   ├── plan_tests.rs          # 要件 9.1
 │   ├── captions.rs            # リソース名の表・問い合わせる名前の列挙・kanade 往復・返り値の写し・表示可否（約 250 行）
 │   ├── captions_tests.rs      # 要件 9.2（写し側）・9.3（表示可否）・3.8（問い合わせない表）
-│   ├── trigger.rs             # 解放ハンドラ・MenuRequest・タスク（借用→照会→計画→表示→動作）・右ダブルクリックの判定（約 300 行）
-│   ├── trigger_tests.rs       # 判定 decide の純粋テスト（要件 9.3）・終了の送出 1 件（要件 9.6）
+│   ├── trigger.rs             # 解放ハンドラ（写し＋照会送出）・PendingQuery・poll_menu_query（毎 tick の返事覗き・判定・計画）・show_task（表示→動作）（約 350 行）
+│   ├── trigger_tests.rs       # 判定 decide／poll_step の純粋テスト（要件 9.3）・終了の送出 1 件（要件 9.6）
 │   └── win32.rs               # HMENU 組立・TrackPopupMenuEx・フォアグラウンド作法・ClientToScreen（約 200 行・unsafe はここだけ）
 ├── readme.rs                  # ReadmeRequest・resolve_path・open（ShellExecuteW）・ReadmeWiring・wire_readme・drain system（約 200 行）
 ├── readme_tests.rs            # 要件 9.4（決め方・有効／無効）
@@ -203,6 +203,7 @@ crates/areka-kanade/tests/kanade/
 | `crates/areka/src/emo2_boot/mod.rs` | 654 | +10 | `ReadmeCueSink` を sinks の 6 本目へ・boot 後に `readme::wire_readme` |
 | `crates/areka/src/emo2_boot/consumer_ledger.rs` | 627 | +8 | `("open", Some("readme"))` → `CommandConsumer::ReadmeSink` |
 | `crates/areka/src/emo2_boot/spine.rs`・`spine_conformance_script.rs`・`spine_conformance_support*.rs`・`spine_*_tests.rs` | — | 各 1〜2 | `CloseReason::User { scope: 0 }` と `OnClose` 期待列 `[user, 0, 0]` |
+| `crates/areka-actor/src/reply.rs` | 161 | +10 | `ReplyReceiver::try_recv(&self)`（`recv`／`recv_timeout` は不変・テスト 2 本を同ファイルの `tests` へ） |
 | `crates/areka-kanade/src/msg.rs` | 744 | +15 | `CloseReason::User { scope: u32 }`・`KanadeMsg::ResourceQuery`・variant 数のテスト追随 |
 | `crates/areka-kanade/src/actor.rs` | 500 | +8 | 閉包で `ResourceQuery` を `actor_resources::answer` へ委譲・`round_trip_request` を `pub(crate)` |
 | `crates/areka-kanade/src/lib.rs` | — | +2 | `mod actor_resources;`・再輸出 |
@@ -227,21 +228,23 @@ sequenceDiagram
     participant OS as Win32
     participant W as wintf tick
     participant H as trigger released handler
-    participant T as menu task
+    participant P as poll system each tick
+    participant T as show task
     participant K as kanade shell
     participant S as SHIORI
     OS->>W: WM_RBUTTONUP
     W->>H: OnPointerReleased right
     H->>H: gates wiring drag in_flight
-    H->>T: spawn_local MenuRequest
-    W-->>W: tick returns borrow released
-    T->>T: borrow world snapshot registry take pending dblclick
-    T->>K: ResourceQuery ids reply
+    H->>H: snapshot registry keep PendingQuery
+    H->>K: ResourceQuery ids reply
+    Note over W,K: ticks keep running while the reply is awaited
     K->>S: GET each id when Steady
     S-->>K: 200 or 204 or failure
-    K-->>T: outcomes
-    T->>T: interpret decide build plan
-    T->>T: drop borrow
+    K-->>P: reply lands in channel
+    W->>P: try_recv or deadline
+    P->>P: interpret decide take pending dblclick build plan
+    P->>T: spawn_local show task
+    W-->>W: tick returns borrow released
     T->>OS: SetForegroundWindow TrackPopupMenuEx
     Note over OS,W: modal loop keeps dispatching WM_USER so ticks run
     OS-->>T: selected id or 0
@@ -251,8 +254,9 @@ sequenceDiagram
 
 流れの上の決め事:
 - **入口は解放だけ**。押下ハンドラはメニューに関わらない（右ダブルクリックの材料を預けるだけ）。
-- **借用は 3 区間**（写しを取る／表示／動作）で、表示の間は World を借りていない。tick は表示中も回る（要件 7.2）。
-- **表示は 1 枚まで**（`MenuWiring.in_flight`）。表示中の解放は起こらない（メニューがマウスを捕捉する）が、タスクが照会で待っている間に届いた解放は `trace!` で捨てる。
+- **待ちは tick に乗せる**（開発者裁定 2026-09-18 設計ディスカッション #1）。解放ハンドラは登記の写しを取って kanade へ照会を送るだけで返事を待たない。返事は毎 tick の system `poll_menu_query` が `try_recv` で覗き、届いた tick（または期限）で判定・計画して表示タスクを起こす。**照会を待っている間も tick は回る**（描画・文字送り・まばたきが止まらない）。UI スレッドが同期で待つ区間は無い。
+- **World を借りるのは tick の中だけ**（解放ハンドラ・poll system・動作の再借用）。表示（`TrackPopupMenuEx`）の間は World を借りていない。tick は表示中も回る（要件 7.2）。
+- **表示は 1 枚まで**（`MenuWiring.in_flight`＝解放から動作の終わりまで）。待ちの間や表示中に届いた解放は預かりを捨てて `trace!`。
 - **動作は戻った後に 1 回**。`Weak` の upgrade と窓 entity の `WindowHandle` の有無を確かめてから呼ぶ（要件 1.4／6.5／7.4）。
 
 ### 表示可否と右ダブルクリックの判定（純粋関数 `decide`）
@@ -293,15 +297,15 @@ flowchart TD
 | 2.6 | 区切り線は設計に委ねる | `plan` | 4 群の間に 1 本 | — |
 | 2.7 | 識別子の一意性と逆引き | `plan` | `MenuPlan::action(id)` | — |
 | 3.1 | 枠↔リソース↔既定名 | `captions::FRAME_CAPTIONS` | `resource_for(frame)` | — |
-| 3.2 | 毎回 GET・空でなければ使う | `captions::query`／`interpret` | `KanadeMsg::ResourceQuery` | 右クリック |
+| 3.2 | 毎回 GET・空でなければ使う | `captions::send_query`／`interpret`、`trigger::poll_menu_query` | `KanadeMsg::ResourceQuery` | 右クリック |
 | 3.3 | 204／空は既定名＋`debug!` | `captions::interpret` | `ResourceOutcome::NoContent`／`Value("")` | エラー表 |
-| 3.4 | 失敗は既定名＋`warn!` 1 回・出す | `captions::query`／`interpret` | `ResourceOutcome::Failed`／上限超過 | エラー表 |
+| 3.4 | 失敗は既定名＋`warn!` 1 回・出す | `captions::send_query`／`interpret`、`trigger::poll_step` | `ResourceOutcome::Failed`／`QueryFailure` | エラー表 |
 | 3.5 | `&` は素通し | `plan` | リソース由来の文言は写さない | — |
 | 3.6 | `visible` の問い合わせ先は scope で 2 名 | `captions::visible_resource_for` | `SAKURA_POPUPMENU_VISIBLE`／`KERO_POPUPMENU_VISIBLE` | — |
 | 3.7 | `0` なら出さず `info!` | `captions::interpret`、`trigger::decide` | `Visibility::Suppress` | 判定 |
 | 3.8 | `popupmenu.type` は問い合わせない | `captions::UNQUERIED_POPUPMENU_RESOURCES`＋テスト | 許可表に無い | — |
 | 3.9 | 登記時にリソース名を指定できる | `MenuItem.caption_resource` | `Option<&'static str>` | — |
-| 3.10 | 起動前は既定名で出す | kanade `actor_resources::answer` | `Phase::Steady` 以外は SHIORI へ送らず全件 `NoContent`（UI 側の待ち方は `captions::query`） | — |
+| 3.10 | 起動前は既定名で出す | kanade `actor_resources::answer` | `Phase::Steady` 以外は SHIORI へ送らず全件 `NoContent`（UI 側は `trigger::poll_menu_query` が tick で覗く・止まらない） | — |
 | 4.1 | readme の決め方 | parsers `MountModel.readme`、`readme::resolve_path` | `ghost_root.join(key or readme.txt)` | — |
 | 4.2 | 既定アプリで開く | `readme::open` | `ShellExecuteW("open")` | — |
 | 4.3 | 無ければ灰色＋初回 `debug!` | `readme::is_available`、組込登記 | `Path::exists` | — |
@@ -322,7 +326,7 @@ flowchart TD
 | 6.6 | 台本と同じ経路 | 組込 2 項目（`send_close_request`／`readme::open_from_world`） | 規約（閉包一本） | — |
 | 6.7 | 純粋な構造 | `plan` | `plan::build` は OS 非依存 | — |
 | 7.1 | 死活監視を止めない | `shiori/real.rs`（不変・別スレッド） | — | 実機 9.9 ⑸ |
-| 7.2 | 表示中も動く | `trigger`（借用の外で表示） | `spawn_local` | 右クリック |
+| 7.2 | 表示中も動く | `trigger`（借用の外で表示・照会の待ちも tick に乗せる） | `spawn_local`・`poll_menu_query` | 右クリック |
 | 7.2a | 閉じた後に飛びを起こさない | `trigger`（表示中に止めていない） | — | 実機 9.9 ⑸ |
 | 7.3 | 表示中の SHIORI 停止 | `trigger`（戻った後は既存経路）、`run_ghost_quit_phase`（不変） | — | — |
 | 7.4 | 表示中に窓が消えても落ちない | `trigger`（`Weak` upgrade・entity 生存確認） | `debug!` | 右クリック |
@@ -448,7 +452,7 @@ impl MouseWiring {
 **Responsibilities & Constraints**
 - 登記の単位は `MenuItem`。枠ごとに供給関数を 1 つだけ持つ（`[Option<Supplier>; 7]`）。同じ枠へ 2 度目の登記は置き換え＋`warn!`（要件 6.3）。`unregister(frame)` で空にする（要件 6.4）。
 - `snapshot(&World, &MenuContext) -> Vec<(Frame, MenuItem)>` は登記された枠だけを `Frame::ORDER` の順に、供給関数をその場で呼んで返す（要件 6.2）。
-- `wire_menu` は ⑴ `MenuWiring` を World へ挿入し、⑵ 組込 2 項目を登記し、⑶ 全 `CharWindowMarker` 窓へ `OnPointerReleased(trigger::on_char_pointer_released)` を装着する（`attach_char_pointer_handlers` と同じ走査）。`main.rs` の wired 分岐で `wire_mouse_input` の直後に呼ぶ（キャラクター窓は `open_startup_window` で既に生えている）。
+- `wire_menu` は ⑴ `MenuWiring` を World へ挿入し、⑵ 組込 2 項目を登記し、⑶ 全 `CharWindowMarker` 窓へ `OnPointerReleased(trigger::on_char_pointer_released)` を装着し（`attach_char_pointer_handlers` と同じ走査）、⑷ `Input` スケジュールへ `trigger::poll_menu_query.after(dispatch_pointer_events)` を登録する（`wire_choice_drain` と同型）。`main.rs` の wired 分岐で `wire_mouse_input` の直後に呼ぶ（キャラクター窓は `open_startup_window` で既に生えている）。
 - 組込の登記:
   - ⑥説明書: `label: "説明書"`, `caption_resource: Some("readmebutton.caption")`, `enabled: readme::is_available(world)`, `checked: None`, `body: Action(readme を開く閉包)`。閉包は `readme::open_from_world(world)`。
   - ⑦終了: `label: "終了"`, `caption_resource: Some("closebutton.caption")`, `enabled: true`, `body: Action(閉包)`。閉包は `world.get_non_send_mut::<MouseWiring>()` を取り `send_close_request(CloseReason::User { scope: ctx.scope })`。`MouseWiring` 不在なら `warn!` で no-op（要件 8.4）。
@@ -486,7 +490,8 @@ impl MenuRegistry {
 pub(crate) struct MenuWiring {
     pub registry: MenuRegistry,
     kanade: Sender<KanadeMsg>,
-    in_flight: Rc<Cell<bool>>,                // 表示 1 枚まで（タスクが複製を guard として持ち、Drop で必ず戻す）
+    in_flight: Rc<Cell<bool>>,                // 表示 1 枚まで（解放〜動作の終わり・guard が Drop で必ず戻す）
+    pending: Option<PendingQuery>,            // 照会の返事待ち（trigger::poll_menu_query が毎 tick 覗く）
 }
 pub(crate) fn wire_menu(world: &mut World, kanade: Sender<KanadeMsg>);
 /// 全 CharWindowMarker 窓へ OnPointerReleased を装着する（wire_menu が呼ぶ・窓を作り直す spec も呼ぶ）
@@ -568,7 +573,8 @@ pub(crate) fn escape_ampersand(label: &str) -> String;
 - 表示可否の名前は scope で選ぶ: `SAKURA_POPUPMENU_VISIBLE`（0）／`KERO_POPUPMENU_VISIBLE`（1）。各定数の直上に `/// ukadoc:` 1 行（要件 3.6）。n≧2 は `debug_assert!(scope <= 1)`（`char_scope` と同じ前提）で到達しない。
 - 問い合わせない 4 名は `UNQUERIED_POPUPMENU_RESOURCES`（先頭にページ URL）。テストがこの表の全要素が kanade の許可表に**無い**ことを確かめる（要件 3.8 の判定・死んだ定義にしない）。
 - `query_ids(snapshot, scope)`: 表示可否の名前 1 つ＋写しに現れる `caption_resource` の集合（第 1 スライスは 3 件）。
-- `query`: `KanadeMsg::ResourceQuery { ids, reply }` を送り `ReplyReceiver::recv_timeout(QUERY_TIMEOUT)` で待つ。送出失敗・上限超過・切断は `QueryFailure`。
+- `send_query`: `KanadeMsg::ResourceQuery { ids, reply }` を送り、**待たずに** `ReplyReceiver` を返す（送出失敗は `Err(QueryFailure::SendFailed)`）。待つのは `trigger::poll_menu_query`（毎 tick の `try_recv`・期限 `QUERY_TIMEOUT` は `Instant` で測る）。上限超過は `Timeout`・切断は `Dropped`。
+- `ReplyReceiver::try_recv(&self) -> Result<Option<T>, ReplyError>` を `crates/areka-actor/src/reply.rs` に足す（`TryRecvError::Empty` → `Ok(None)`・`Disconnected` → `Err(Dropped)`・約 10 行・既存の `recv`／`recv_timeout` は不変）。
 - `interpret`: 各 `(id, outcome)` を ⑴ `Value(s)` で `s` 非空 → 文言、⑵ `Value("")`／`NoContent` → 既定名＋`debug!`、⑶ `Failed(reason)` → 既定名、に写す。⑶ に落ちた id は 1 回の表示につき **1 行の `warn!`** にまとめて記録する（id と理由を列挙＝要件 3.4 の「1 回」）。`QueryFailure` は全件 ⑶ 相当で、同じく `warn!` 1 行（理由に `timeout`／`dropped`／`send_failed` を載せる）。表示可否は `Value("0")` のときだけ `Suppress`＋`info!`（要件 3.7）、それ以外は `Show`。
 
 **Contracts**: Service [x]
@@ -599,8 +605,10 @@ pub(crate) enum Visibility { Show, Suppress }
 pub(crate) struct Interpreted { pub captions: CaptionMap, pub visibility: Visibility }
 
 pub(crate) enum QueryFailure { SendFailed, Timeout, Dropped }
-pub(crate) fn query(kanade: &Sender<KanadeMsg>, ids: Vec<&'static str>, timeout: Duration)
-    -> Result<Vec<(&'static str, ResourceOutcome)>, QueryFailure>;
+pub(crate) type QueryReply = Vec<(&'static str, ResourceOutcome)>;
+/// 送るだけ・待たない（待つのは trigger::poll_menu_query）
+pub(crate) fn send_query(kanade: &Sender<KanadeMsg>, ids: Vec<&'static str>)
+    -> Result<ReplyReceiver<QueryReply>, QueryFailure>;
 pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, QueryFailure>, visible_id: &'static str, scope: u32) -> Interpreted;
 ```
 - Preconditions: `ids` は kanade の許可表に含まれる名前（含まれない名前は kanade が `Failed` で返す）。
@@ -609,13 +617,13 @@ pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, Que
 
 **Implementation Notes**
 - Validation（要件 9.2 の写し側・9.3）: `captions_tests.rs` — `Value("取扱説明書(&R)")`→文言・`Value("")`／`NoContent`→既定名＋`debug!`・`Failed`→既定名＋`warn!` 1 行（2 件失敗でも 1 行）・`Err(Timeout)`→全件既定名＋`warn!` 1 行・`visible` の `0`／`1`／`NoContent`／`Failed` の表示可否・`UNQUERIED_POPUPMENU_RESOURCES ∩ ALLOWED_RESOURCE_IDS = ∅`。
-- Risks: 待ちの間 UI スレッドは止まる（最大 1,000 ms）。表示の**前**であり要件 7.2 の範囲外だが、実機で体感を見て長ければ定数を下げる。
+- Risks: 待ちは tick に乗るので UI は止まらない。返事が遅いとメニューが遅れて出る（最大 `QUERY_TIMEOUT`＝1,000 ms・超過は既定名で出す）。実機で体感を見て長ければ定数を下げる。
 
 #### `menu::trigger`（`crates/areka/src/menu/trigger.rs`）
 
 | Field | Detail |
 |---|---|
-| Intent | 解放ハンドラで要求を作り、UI スレッドのタスクで「借用→照会→計画→（借用を解いて）表示→再借用して動作」を回す |
+| Intent | 解放ハンドラで照会を送って要求を預け、毎 tick の system が返事を覗いて判定・計画し、UI スレッドのタスクで「（借用を解いて）表示→再借用して動作」を回す |
 | Requirements | 1.1, 1.4, 1.7, 1.8, 1.9, 1.10, 6.5, 7.2, 7.2a, 7.3, 7.4, 8.1, 8.2, 8.3, 11.3 |
 
 **Responsibilities & Constraints**
@@ -624,12 +632,16 @@ pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, Que
   2. `MouseWiring` 不在 → `trace!` で `false`（要件 1.8）。`MenuWiring` 不在も同じ。
   3. `snapshot_drag_state() != Idle` → 預かりを `take` して捨て `trace!`・`false`（要件 1.9）。
   4. `MenuWiring.in_flight` が立っている → 手順 3 と同じく預かりを `take` して捨て `trace!`・`false`。
-  5. `char_scope`、`WindowHandle.hwnd`、`win32::client_to_screen(hwnd, client_point)`、`EcsWorldSelfRef` の `Weak` の複製を集めて `MenuRequest{scope, entity, hwnd, screen_pos}` を作り、`in_flight.set(true)` してその `Rc` の複製を `InFlightGuard`（`Drop` で `set(false)`）としてタスクへ渡し、`wintf::executor::spawn_local(run_request(weak, request, guard))`。`true`（`EcsWorldSelfRef` 不在は結線前と同じ扱い＝`trace!`・`false`）。
-- `run_request`（async・UI スレッド）:
-  - **A（借用）**: `weak.upgrade()` できなければ終了。`try_borrow_mut` で `World` を取り（取れなければ `warn!` で終了・guard が `in_flight` を戻す・panic は使わない）、`MenuContext{scope}`、`registry.snapshot`、`captions::query_ids`、`captions::query`、`captions::interpret`、`MouseWiring::take_pending_right_double_click`、`decide`。`Suppress` なら（預かりがあれば `send_pending_right_double_click`）終了。`Show` なら `plan::build` して計画を**World の外へ**持ち出す。借用を解く。
+  5. `char_scope`、`WindowHandle.hwnd`、`win32::client_to_screen(hwnd, client_point)` を集めて `MenuRequest{scope, entity, hwnd, screen_pos}` を作り、`MenuContext{scope}` で `registry.snapshot` を取り（要件 6.2 の「そのとき」＝右クリックの時点）、`captions::query_ids` → `captions::send_query`。送れたら `in_flight.set(true)` し、`MenuWiring.pending = Some(PendingQuery{request, snapshot, rx, deadline: Instant::now() + QUERY_TIMEOUT})`。送れなければ（`SendFailed`）`rx` 無しの `PendingQuery` を置き、次の tick で全件既定名として扱う（`warn!` 1 行）。`true`。
+- `poll_menu_query`（`Input` スケジュールの system・毎 tick・`dispatch_pointer_events` の後）:
+  - `MenuWiring.pending` が `None` なら何もしない（通常の tick のコストはこの 1 判定だけ）。
+  - `Some` なら純粋関数 `poll_step(&pending, now)` で ⑴ `rx.try_recv()` が `Ok(Some(reply))` → `Decided(Ok(reply))`、⑵ `Ok(None)` かつ `now < deadline` → `Wait`、⑶ `Ok(None)` かつ期限超過 → `Decided(Err(Timeout))`、⑷ `Err(Dropped)` → `Decided(Err(Dropped))`。`Wait` なら戻る（tick はそのまま進む）。
+  - `Decided` なら `pending` を取り出し、`captions::interpret`、`MouseWiring::take_pending_right_double_click`、`decide`。`Suppress` なら（預かりがあれば `send_pending_right_double_click`）guard を落として終了。`Show` なら `plan::build(snapshot, &captions)` して計画を作り、`EcsWorldSelfRef` の `Weak` の複製と guard を添えて `wintf::executor::spawn_local(show_task(weak, request, plan, guard))`（初回 poll は tick が返った後・`research.md` §7.2）。`EcsWorldSelfRef` 不在は `warn!` で捨てる。
+- `show_task`（async・UI スレッド・World を借りずに始まる）:
   - **B（表示）**: `win32::show(hwnd, screen_pos, &plan)`。`Err` → `error!`（要件 1.7）。`Ok(None)` → `debug!`（要件 8.3）。`Ok(Some(id))` → `info!`（要件 8.2）。
   - **C（再借用）**: `weak.upgrade()` できない、`try_borrow_mut` が取れない、または `world.get::<WindowHandle>(entity)` が無い → `debug!` で動作を行わない（要件 7.4）。それ以外は、表示中に届いた預かりが残っていれば `take` して捨て（古い材料を次の要求へ持ち越さない）、`plan.action(id)` を 1 回呼ぶ（要件 1.4／6.5）。`in_flight` は guard の `Drop` が全経路で戻す。
-- `decide(visibility, pending) -> Decision` は純粋（上の flowchart）。
+- `decide(visibility, pending) -> Decision` は純粋（上の flowchart）。`poll_step` も純粋（`Instant` を引数で受ける・OS を触らない）。
+- 待ちの間に窓が消えた場合: `poll_menu_query` は `request.entity` に `WindowHandle` が無ければ `debug!` で `pending` を捨てる（表示しない）。
 - 表示中に SHIORI が止まった場合（要件 7.3）: tick は回り続けるので `run_ghost_quit_phase`（`emo2_boot/frame.rs`）が表示中に窓を消しうる。C の生存確認で動作を行わず終わる。落ちない。
 
 **Contracts**: Service [x]
@@ -640,14 +652,25 @@ pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, Que
 pub(crate) fn on_char_pointer_released(world: &mut World, _sender: Entity, entity: Entity, ev: &Phase<PointerState>) -> bool;
 
 pub(crate) struct MenuRequest { pub scope: u32, pub entity: Entity, pub hwnd: HWND, pub screen_pos: (i32, i32) }
+pub(crate) struct PendingQuery {
+    pub request: MenuRequest,
+    pub snapshot: Vec<(Frame, MenuItem)>,     // 右クリック時点の写し（要件 6.2）
+    pub rx: Option<ReplyReceiver<QueryReply>>, // None＝送出失敗（次の tick で全件既定名）
+    pub deadline: Instant,
+    guard: InFlightGuard,
+}
+pub(crate) enum PollOutcome { Wait, Decided(Result<QueryReply, QueryFailure>) }
+pub(crate) fn poll_step(pending: &PendingQuery, now: Instant) -> PollOutcome;   // 純粋
+pub(crate) fn poll_menu_query(world: &mut World);                               // Input スケジュール・system
+
 pub(crate) enum Decision { Show, Suppress { send_double_click: bool } }
 pub(crate) fn decide(visibility: Visibility, pending: Option<&PendingDoubleClick>) -> Decision;
 
-async fn run_request(world: Weak<RefCell<EcsWorld>>, request: MenuRequest);
+async fn show_task(world: Weak<RefCell<EcsWorld>>, request: MenuRequest, plan: MenuPlan, guard: InFlightGuard);
 ```
 - Preconditions: UI スレッド。`spawn_local` の初回 poll は tick が返った後（`research.md` §7.2）。
 - Postconditions: 1 要求につき表示は高々 1 回・動作は高々 1 回・`in_flight` は guard の `Drop` で必ず戻る（早期 return を含む全経路）。
-- Invariants: B の間 World を借りていない（要件 7.2）。
+- Invariants: UI スレッドが同期で待つ区間は無い（照会の待ちは tick に乗る・開発者裁定）。B の間 World を借りていない（要件 7.2）。
 
 ##### ログ（要件 8）
 | 事象 | レベル | 形 |
@@ -661,7 +684,7 @@ async fn run_request(world: Weak<RefCell<EcsWorld>>, request: MenuRequest);
 | 結線前・ドラッグ中・表示中 | `trace!` | `[menu] ignored release` `reason` |
 
 **Implementation Notes**
-- Validation: `trigger_tests.rs` — `decide` の 4 組（`Show`×預かり有無・`Suppress`×預かり有無）。終了の閉包が `rx` に `CloseRequest{User{scope}}` を**1 件**送ること（要件 9.6・`input_events_tests.rs` の `handler_ctrl_left_double_click_sends_one_close_request_and_keeps_the_windows` と同じ観測＝受信側で数える）。World の組み立ては `MouseWiring::new(tx, RegionSource::Mock(_))` を `insert_non_send` する（どちらも `pub(crate)`。`input_events_tests.rs` の `world_with_wiring`／`with_clock` はそのモジュール私有なので借りない）。`run_request` 自体は OS を触るので檻に入れず、A／C の判断は `decide`・`plan`・生存確認の 3 つの純粋部分に寄せる。
+- Validation: `trigger_tests.rs` — `decide` の 4 組（`Show`×預かり有無・`Suppress`×預かり有無）。`poll_step` の 4 通り（返事あり→`Decided(Ok)`・返事なし期限内→`Wait`・返事なし期限超過→`Decided(Err(Timeout))`・送信端 drop→`Decided(Err(Dropped))`・`reply_channel` と `Instant` を注入）。終了の閉包が `rx` に `CloseRequest{User{scope}}` を**1 件**送ること（要件 9.6・`input_events_tests.rs` の `handler_ctrl_left_double_click_sends_one_close_request_and_keeps_the_windows` と同じ観測＝受信側で数える）。World の組み立ては `MouseWiring::new(tx, RegionSource::Mock(_))` を `insert_non_send` する（どちらも `pub(crate)`。`input_events_tests.rs` の `world_with_wiring`／`with_clock` はそのモジュール私有なので借りない）。`run_request` 自体は OS を触るので檻に入れず、A／C の判断は `decide`・`plan`・生存確認の 3 つの純粋部分に寄せる。
 - Risks: 表示中の入れ子 poll（`research.md` §7.4）。実機 9.9 ⑸ で観察。
 
 #### `menu::win32`（`crates/areka/src/menu/win32.rs`）
@@ -843,7 +866,8 @@ fn open(path: &Path) -> windows::core::Result<()>;
 - **項目（`MenuItem`）**: 既定名・文言リソース名・有効／無効・チェック・本体（動作 or 子の列）。
 - **計画（`MenuPlan`）**: `PlanEntry` の木＋識別子→（枠・動作）の索引。1 回の表示ごとに作り捨てる。識別子は 1 起点の連番。
 - **文脈（`MenuContext`）**: メニューを出した窓のスコープ。供給関数と動作に渡る。
-- **預かり（`PendingDoubleClick`）**: 右ダブルクリックの材料。`MouseWiring` が高々 1 件持ち、メニューのタスクが消費する。
+- **預かり（`PendingDoubleClick`）**: 右ダブルクリックの材料。`MouseWiring` が高々 1 件持ち、`poll_menu_query` が判定時に消費する。
+- **返事待ち（`PendingQuery`）**: 右クリック時点の写し・照会の受信端・期限・`in_flight` の guard。`MenuWiring` が高々 1 件持ち、毎 tick 覗かれて判定と同時に消える。
 - **照会結果（`ResourceOutcome`）**: 既存の 3 語彙。`CaptionMap` は非空の文言だけを持つ。
 - **終了理由（`CloseReason`）**: `User { scope }`／`System`。
 
@@ -894,7 +918,8 @@ fn open(path: &Path) -> windows::core::Result<()>;
 ### Unit Tests（決定論・OS 非依存）
 - `menu/plan_tests.rs`（9.1）: 7 枠の順／未登記の枠が出ない／サブメニューの子の順とチェック／無効の写し／識別子の一意性と逆引き／区切りの位置／`&` の写し（リソース由来は素通し・登記由来は `&&`）。
 - `menu/captions_tests.rs`（9.2 の写し・9.3）: `interpret` の 4 通り＋上限超過／`visible` の `0`／`1`／`NoContent`／`Failed`／`query_ids` が第 1 スライスで 3 件／`UNQUERIED_POPUPMENU_RESOURCES` が許可表に無い（3.8）。
-- `menu/trigger_tests.rs`（9.3・9.6）: `decide` の 4 組／終了の閉包が `CloseRequest{User{scope}}` を 1 件。
+- `menu/trigger_tests.rs`（9.3・9.6）: `decide` の 4 組／`poll_step` の 4 通り（返事・期限内・期限超過・切断）／終了の閉包が `CloseRequest{User{scope}}` を 1 件。
+- `areka-actor/src/reply.rs` の `tests`: `try_recv` が空で `Ok(None)`・送信後に `Ok(Some)`・送信端 drop で `Err(Dropped)`。
 - `menu/mod_registry_tests.rs`（6.3・6.4・2.2）: 置き換えの `warn!`／取り消し／組込 2 項目。
 - `readme_tests.rs`（9.4）: `resolve_path`／`is_available` と初回 `debug!`。
 - `input_events/input_events_menu_tests.rs`（1.10・5.3）: 右ダブルクリックは送らず預かる／Ctrl＋左ダブルクリックの scope。
@@ -926,7 +951,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 
 ## Performance & Scalability
 
-- 表示までの遅れ: 解放の tick（≦16 ms）＋照会の往復（第 1 スライス 3 件・通常数十 ms・上限 1,000 ms）。照会の待ちは UI スレッドを止めるが表示の前であり、表示中は止めない（要件 7.2）。
+- 表示までの遅れ: 解放の tick（≦16 ms）＋照会の往復（第 1 スライス 3 件・通常数十 ms・上限 1,000 ms）＋返事を拾う tick（≦16 ms）。待ちの間も表示中も UI スレッドは止まらない（開発者裁定・要件 7.2）。通常の tick に足すのは `pending` の `None` 判定 1 つ。
 - 表示中の tick は通常どおり回る（`research.md` §7.2）。追加の CPU は無い。
 - `HMENU` は表示ごとに作って壊す。項目数は α で 2〜3、後続で十数。
 
