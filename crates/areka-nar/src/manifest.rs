@@ -38,7 +38,7 @@ use areka_parsers::kv::parse_kv;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// 最上位に置かれているはずのマニフェストの名前（ASCII 大小は区別しない）。
-const INSTALL_TXT: &str = "install.txt";
+pub(crate) const INSTALL_TXT: &str = "install.txt";
 
 /// 同時インストールとして読む接頭辞。この後ろは数字列だけを許す。
 const BALLOON_PREFIX: &str = "balloon";
