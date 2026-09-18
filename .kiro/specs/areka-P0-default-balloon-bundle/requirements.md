@@ -26,12 +26,12 @@ areka を初めて手にする第三者。第三者のゴーストの多くは�
 
 ### 何を変えるか
 
-CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作ファイル無改変で置き、areka で崩れずに表示されることを**新規の決定論テストだけ**で 1 周し（既存の検体参照ファイルには触らない）、開発者が実機で見た目を確認して採否を決める。あわせて出典と CC0 を記録し、「`use_self_alpha` は常に 1・`.pna` 非対応」を areka の裁量として §8 と台帳に登記し、既定バルーンの id を下流（`baseware-root-layout`・`nar-install`・`alpha-release-signoff`）へ申し送る。**本番コードの変更は 0 行**（id 定数の配線は `baseware-root-layout` が足す）。
+CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作ファイル無改変で置き、areka で崩れずに表示されることを**新規の決定論テストだけ**で 1 周し（既存の検体参照ファイルには触らない）、開発者が実機で見た目を確認する。**採用は開発者裁定（2026-09-18）で確定済み**——「ukadoc 準拠とし、StayseeBalloon をそのまま採用する」。StayseeBalloon が `font.name` を宣言しないため文字は ukadoc 既定の `ＭＳ ゴシック`／12 になるが、これは正典どおりの挙動なので areka 側の既定（`crates/areka-emo-text/src/draw.rs` の `DEFAULT_FONT_NAME`）は変えない。あわせて出典と CC0 を記録し、「`use_self_alpha` は常に 1・`.pna` 非対応」を areka の裁量として §8 と台帳に登記し、既定バルーンの id を下流（`baseware-root-layout`・`nar-install`・`alpha-release-signoff`）へ申し送る。**本番コードの変更は 0 行**（id 定数の配線は `baseware-root-layout` が足す）。
 
 ## Boundary Context
 
 - **In scope**（第三者・開発者・下流の spec から見える範囲）:
-  - 既定バルーンの選定（候補 `StayseeBalloon`）と、開発者の実機目視による採否の記録。
+  - 既定バルーンの確定（`StayseeBalloon`・開発者裁定 2026-09-18「ukadoc 準拠・そのまま採用」）と、裁定の記録。
   - `vendors/sample_ghost/StayseeBalloon/` への展開フォルダ保管（原作ファイル無改変・バイト保存・取得元の記録）。
   - StayseeBalloon を検体にした表示検証——決定論テスト（新規ファイルのみ）＋実機目視 1 度（表示スケール k≠1 を含む）。崩れは areka 側の欠陥として本仕様内で直すか、引受先を実在確認して先送りする。
   - 出典・CC0 の記録（本仕様の `verification/`）と、第三者向け README への申し送り。
@@ -57,15 +57,14 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 
 ### Requirement 1: 既定バルーンの選定と採否
 
-**Objective:** areka を配布する開発者として、第三者に渡しても恥ずかしくない「癖の無い」既定バルーンを 1 つ、再配布条件が確かなものから選びたい。そうすれば、バルーンを持たないゴーストを入れた第三者が最初の 1 歩で止まらない。
+**Objective:** areka を配布する開発者として、再配布条件が確かな既定バルーンを 1 つ確定し、その選定根拠と裁定を後から読める形で残したい。そうすれば、バルーンを持たないゴーストを入れた第三者が最初の 1 歩で止まらない。
 
 #### Acceptance Criteria
 
 1. The 本仕様 shall 既定バルーンの候補を `Balloon for Staysee Syncfield`（id `StayseeBalloon`・CC0-1.0）とし、選定の根拠（再配布条件が LICENSE と readme の両方で確認できること・専用指定が無いこと・半透明前提が areka の固定の扱いと一致すること）を本文に書き残す。
-2. When 候補を `vendors/sample_ghost/StayseeBalloon/` に置いた, the 開発者 shall `areka.exe <ゴーストの根> <バルーンの根>` で起動して実機で見た目を 1 度確認し、採否を裁定する（判断の観点は `font.height,12` の小ささと薄い青の色味が「癖が無い」に足るか）。
-3. When 開発者が採用を裁定した, the 本仕様 shall その裁定（日付・観点・結論）を `verification/` の記録に書き、Requirement 2 以降を `StayseeBalloon` で進める。
-4. If 開発者が不採用を裁定した, then the 本仕様 shall 次善の「自作の無地バルーン」へ切り替える前に本要件書を改訂し（候補名・保管フォルダ名・id・出典の記述を差し替える）、改訂前の候補で作った資産を残さない。
-5. The 本仕様 shall 「SSPデフォルト+」「balloon for Emily/P4」を候補にしない理由（再配布条件が公開されていない）と、`emo2-kakukaku` を既定にしない理由（開発者裁定「癖が強い」）を本文に書き残す。
+2. The 本仕様 shall 既定バルーンを `StayseeBalloon` に**確定**し（開発者裁定 2026-09-18「ukadoc 準拠とし、StayseeBalloon をそのまま採用する」）、その裁定（日付・結論・根拠）を `verification/` の記録に書く。Requirement 2 以降は `StayseeBalloon` で進める。
+3. The 本仕様 shall StayseeBalloon の見え方を **ukadoc 準拠のまま**受け入れる。StayseeBalloon は `font.name` を宣言しないので文字は ukadoc「`font.name,フォント名`」の既定 `ＭＳ ゴシック`（`font.height,12`）で描かれるが、これは正典どおりの挙動である。したがって本仕様は areka 側の既定書体（`crates/areka-emo-text/src/draw.rs` の `DEFAULT_FONT_NAME`）を変えず、バルーン側に `font.name` を書き足すこともしない（Requirement 2.2 の無改変と Requirement 8.1 の本番コード変更 0 行を同時に守る）。
+4. The 本仕様 shall 「SSPデフォルト+」「balloon for Emily/P4」を候補にしない理由（再配布条件が公開されていない）と、`emo2-kakukaku` を既定にしない理由（開発者裁定「癖が強い」）を本文に書き残す。
 
 ### Requirement 2: リポジトリでの保管——原作ファイル無改変の展開フォルダ
 
@@ -101,7 +100,7 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 
 ### Requirement 4: areka で崩れずに表示される——実機目視
 
-**Objective:** 決定論テストが隠す欠陥（色味・にじみ・実機の DPI 切替）を、開発者が 1 度は自分の目で確かめたい。
+**Objective:** 決定論テストが隠す欠陥（色味・にじみ・実機の DPI 切替）を、開発者が 1 度は自分の目で確かめたい。採否は Requirement 1.2 で確定済みなので、ここは**採否の関門ではなく品質確認**であり、崩れが出たときの行き先は Requirement 4.3（areka 側の欠陥として直すか、引受先を実在確認して先送り）である。
 
 #### Acceptance Criteria
 
