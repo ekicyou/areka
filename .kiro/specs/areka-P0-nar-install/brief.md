@@ -143,3 +143,5 @@
 - **展開先の形＝ベースウェアの根の形に揃える**: `<根>/ghost/<directory>/`・`<根>/balloon/<balloon.directory>/`（ukadoc「全体の構成」の格納フォルダ）。`target/` 配下に作る開発用の根も同じ形にし、`baseware-root-layout` がその根をそのまま `BasewareRoot` として受ける。共有ヘルパは「検体名を受け取って根を返す」に加え「根そのもの」を返せること。
 - **Out に書いた「利用者が投げた `.nar` を受け取る UI／D&D／インストーラ体験」の引受先は `areka-P0-ghost-install`（09-18 起票・A5-①）**。同じく Out の `updates2.dau`／ネットワーク更新／`delete.txt` は `areka-P0-network-update`（09-18 起票・A5-②）。「ベースウェア直下の `ghost/` `balloon/` 規約と `areka.exe` の既定パス」は `areka-P0-baseware-root-layout`（09-18 起票・A2）。
 - `areka-nar` が受理する `install.txt` の `type` は `ghost`・`shell`・`supplement`・`balloon` の 4 つ。他（`plugin`・`headline`・`language`・`calendar*`・`package`）は理由付きで拒否を返す（製品側が `OnInstallFailure` に写す）。
+
+- **並走の条件（2026-09-18 追記）**: 「並走不可」は実測で改訂。書き換えるのは検体パスを参照する既存のテスト・example（38 ファイル）だけなので、**それらに触らず新規ファイルだけ足す spec とは並走できる**（A0 で `popup-menu-minimal`・`default-balloon-bundle` が並走）。`.nar` へ畳む対象に `vendors/sample_ghost/StayseeBalloon/`（`default-balloon-bundle` が展開フォルダで置く）を含める。共有ヘルパの検体名は emo2・R_POST_and_KOMAINU・StayseeBalloon・emo2-kakukaku 派生 2 つ。

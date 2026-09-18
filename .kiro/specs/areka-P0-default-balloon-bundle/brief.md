@@ -100,3 +100,14 @@
 - 1 ファイル 1,000 行。決定論テスト網羅は必達（既存 fixture テストの差し替えで足りる）。
 - **裁定（開発者・要件段階）**: StayseeBalloon の見た目を実機で 1 度確認して採否を決める。不採用なら次善は自作の無地バルーン。
 - 規模 **S**。編成は A2 と並走可（`baseware-root-layout` と共有ファイル 0 の見込み＝本 spec は `vendors/`・テスト fixture・`THIRD-PARTY-NOTICES.md`・`COMPAT_ARCHITECTURE.md` §8 だけに触り、id 定数の配線は root-layout 側の 1 行を後着で足す）。
+
+---
+
+## 2026-09-18 追記（A0 へ前倒し・保管は展開フォルダ）
+
+- 開発者「サンプルバルーンは最初に実施できないか」→ できる。条件 3 つ:
+  1. **保管は展開フォルダ** `vendors/sample_ghost/StayseeBalloon/`（`R_POST_and_KOMAINU` と同じ現行慣行）。`.nar` への畳み込みは並走する `nar-install` が引き受ける（畳む対象が 1 つ増えるだけ・原作ファイル無改変の規律は同じ）。
+  2. **表示検証は新規テストファイルのみ**。`crates/areka/src/emo2_boot/*` など検体パスを参照する既存テストは触らない（`nar-install` の書き換え対象＝実測 38 ファイルと共有 0 にする）。検体パスの参照は 1 か所（新規テストの定数）に留め、`nar-install` が共有ヘルパへ寄せるときに一緒に付け替えられる形にする。
+  3. `THIRD-PARTY-NOTICES.md` は `cargo about` の自動生成（手で編集しない）＝CC0 のバルーンは cargo 依存ではないので載らない。資産の出典と CC0 の記載は第三者向け README（`alpha-release-signoff`）と本 spec の `verification/` に置く。
+- **見た目の採否は今日にでも確認できる**: フォルダを置いて `areka.exe <ゴーストの根> <バルーンのフォルダ>`（argv 第 2 引数）で起動すれば、コード変更 0 で表示される。要件段階を待たずに開発者が先に目視してよい。
+- 既定バルーン id の定数と解決順への配線は `baseware-root-layout`（A1-②）側が足す（本 spec は id を brief と `verification/` に書き残すだけ）。
