@@ -28,10 +28,11 @@
 //! 木が 1 つも変わらないことを突き合わせる。
 
 use crate::error::{ElementKind, RefuseReason};
+use crate::install::InstallRequest;
 use crate::manifest::{Companion, ExistingPolicy, INSTALL_TXT, InstallKind, InstallManifest};
 use crate::names::{EntryName, is_valid_one_level_name};
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// 根の直下のゴースト格納先（ukadoc「全体の構成」）。
 const GHOST_STORE: &str = "ghost";
@@ -41,16 +42,6 @@ const BALLOON_STORE: &str = "balloon";
 
 /// ゴーストの下のシェル格納先。
 const SHELL_STORE: &str = "shell";
-
-/// 展開の要求。根の場所は呼び出し側が決める（要件 5.1）。
-pub struct InstallRequest<'a> {
-    /// ベースウェアの根（絶対パス）。
-    pub root: &'a Path,
-    /// `shell`／`supplement` の宛先ゴーストのフォルダ名。
-    ///
-    /// `accept` から宛先を求めるのは呼び出し側の仕事（要件 5.6）。
-    pub target_ghost: Option<&'a str>,
-}
 
 /// インストール済みフォルダ 1 つぶんの計画。
 pub(crate) struct Placement {

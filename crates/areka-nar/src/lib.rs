@@ -11,6 +11,9 @@
 mod container;
 mod crc32;
 mod error;
+// タスク 4.4 の `NarArchive::install` が繋ぐまで本体からは呼ばれない（兄弟テストだけが使う）。
+#[allow(dead_code)]
+mod install;
 // タスク 4.4 の `NarArchive::open` が繋ぐまで本体からは呼ばれない（兄弟テストだけが使う）。
 #[allow(dead_code)]
 mod manifest;

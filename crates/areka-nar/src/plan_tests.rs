@@ -16,7 +16,7 @@ use crate::container::{inflate_entry, read_central_directory};
 use crate::manifest::{locate_install_txt, parse_manifest};
 use crate::names::validate_entry_names;
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
-use std::path::Component;
+use std::path::{Component, Path};
 
 // ---- 助手 ----
 
