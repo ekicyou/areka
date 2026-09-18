@@ -3,7 +3,7 @@
 > 本計画は `.kiro/specs/areka-P0-popup-menu-minimal/design.md` の File Structure Plan と Requirements Traceability に対応する。行数・増分は着手時に `wc -l` で引き直す。新しい外部クレートは足さない。
 > 要件 `7.2a`（閉じた後に飛びを起こさない）は数字だけの ID ではないため、design.md と同じく要件 `7.2` の補足として同じタスク（7.3）に対応付ける。
 
-- [ ] 1. 基盤: 後続すべてが乗る 4 つの口を開ける
+- [x] 1. 基盤: 後続すべてが乗る 4 つの口を開ける
 - [x] 1.1 (P) ポインタの「離した」を 1 フレームの旗として配る
   - ポインタの状態に「離した」ボタンの旗（左・右・中・X1・X2）と「どれか立っているか」を足し、ダブルクリックやホイールと同じ 1 フレーム限りの寿命にする
   - 入力段の写しで、押下と解放が同じ tick に入っても解放を落とさない独立の文として旗を立てる（既存の押下優先の分岐は変えない）
@@ -34,7 +34,7 @@
   - _Requirements: 5.1, 5.2, 5.3_
 
 - [ ] 2. 運行側: 任意の時点で SHIORI リソースを引く入口
-- [ ] 2.1 許可名を 10 に広げ、汎用のリソース取得を作る
+- [x] 2.1 許可名を 10 に広げ、汎用のリソース取得を作る
   - 許可名を「利用者名＋枠 7 種の項目名リソース＋本体側／相方側の表示可否」の 10 名にし、各要素の直上に正典 URL のコメントを 1 行ずつ置く
   - 任意の id からリソース問い合わせを組み立てる汎用関数を足し、既存の利用者名の取得をその上に畳む
   - 許可名の集合を逐語で凍結しているテストを新しい集合に書き換え、名前も実態に合わせて改める
@@ -204,3 +204,4 @@
 - 1.1: `released` を消すのは `dispatch_pointer_events` の末尾だけ（`clear_transient_pointer_state` は触らない）。dispatch は Input スケジュールへ無条件登録なので翌フレームへ残る経路は無い。下流からは `wintf::ecs::pointer::ButtonReleased` で届く（`ecs/mod.rs` の明示再輸出には無い）。
 - 1.3: 正典 URL のコメント（`/// ukadoc:`）は定義箇所 1 か所だけに置く（`doc/ukadoc-coverage/README.md` §3）。転記・呼び出し側（`resolve.rs` など）に同じ URL を書くと `cargo run -p ukadoc-survey -- evidence` が同じ id に 2 ファイルを挙げる＝レビューで差し戻し。`MountModel` は全欄リテラル／全欄分解のテストが 2 か所ある（`model_tests.rs`・`validation_tests.rs`）。
 - 1.4: `OnClose` の参照列を `events::on_close` から導かずリテラルで突き合わせているのは spine 一周（`spine_conformance_script.rs` の `expected_calls()`）だけ。kanade の握手テストと areka-ghost e2e は期待値を `events::on_close` から作るので、この列の変更には恒真。`input_events/mod.rs` と `main.rs` は機械的な `User { scope: 0 }` のまま（実スコープは 6.1）。`spine_conformance_lap_tests.rs` は 988 行＝余裕 12 行。
+- 2.1: 配列要素の直上の正典 URL は `// ukadoc:`（`///` は rustc が `unused_doc_comment` を出す・`events.rs` の `ALLOWED_EVENT_IDS` と同じ形）。`resource_get` は `schedule::resources` で `pub` だが `lib.rs` の公開ファサードには未追加（クレート外のテストで要るときに足す）。
