@@ -95,6 +95,17 @@ pub struct Fixture {
     /// および `\q` の `On` 始まり任意名 ID そのもの）。含まれない id は 204（`NoContent`）——
     /// 未注入既定は従来の catch-all（未知 GET＝204）と同値ゆえ additive である。
     pub choice_responses: HashMap<&'static str, ChoiceResponse>,
+    /// リソース GET の id → 注入応答の対応（2.3）。
+    ///
+    /// キーは SHIORI リソース名（`"readmebutton.caption"`・`"sakura.popupmenu.visible"` 等）。
+    /// 含まれない id は 204（`NoContent`）——未注入既定は従来の catch-all（未知 GET＝204）と
+    /// 同値ゆえ additive である（既存 consumer はリソース GET を発しない）。
+    ///
+    /// 値の語彙は [`MouseResponse`] を借りる（`Script`＝200 の Value・`NoContent`＝204 の 2 値で
+    /// マウス注入表と同型ゆえ、同じ形の enum を 3 つ目として増やさない・設計 Implementation Notes）。
+    /// `Script(String::new())` は **200 の空文字**であり 204 とは別物である（要件 3.3／3.4 の
+    /// 「空を返す」と「値なしを返す」の区別はここで作る）。
+    pub resource_responses: HashMap<&'static str, MouseResponse>,
 }
 
 impl Default for Fixture {
@@ -109,6 +120,7 @@ impl Default for Fixture {
             farewell_script: FIXED_FAREWELL_SCRIPT.to_string(),
             mouse_responses: HashMap::new(),
             choice_responses: HashMap::new(),
+            resource_responses: HashMap::new(),
         }
     }
 }
@@ -155,6 +167,17 @@ impl Fixture {
     /// （`NoContent`）のまま——カスケードの段ごとに応答を打ち分ける唯一の口である。
     pub fn with_choice_response(mut self, id: &'static str, response: ChoiceResponse) -> Self {
         self.choice_responses.insert(id, response);
+        self
+    }
+
+    /// リソース GET の id へ注入応答（200 の Value ／ 204）を設定する（2.3・連鎖記法）。
+    ///
+    /// `id` は SHIORI リソース名（`"readmebutton.caption"` 等）。同一 id への再指定は後勝ちで
+    /// 上書きする。未設定の id は 204（`NoContent`）のまま——「値を返す」「空を返す」「値なしを
+    /// 返す」を id ごとに打ち分ける唯一の口である（`MouseResponse::Script(String::new())` が
+    /// 200 の空文字・[`MouseResponse::NoContent`] が 204）。
+    pub fn with_resource_response(mut self, id: &'static str, response: MouseResponse) -> Self {
+        self.resource_responses.insert(id, response);
         self
     }
 }
@@ -214,13 +237,22 @@ impl FixtureState {
                         Some(MouseResponse::NoContent) | None => ShioriOutcome::NoContent,
                     }
                 }
-                // 選択由来 GET は fixture の注入表を引く（未注入は 204・6.1）。任意名イベントは
-                // ゴースト作者が書いた名前がそのまま id になるため、固定パターンでは受けられず
-                // catch-all の手前で表引きする（表に無い id は従来どおり 204 へ落ちる）。
-                other => match self.fixture.choice_responses.get(other) {
-                    Some(ChoiceResponse::Script(script)) => ShioriOutcome::Value(script.clone()),
-                    // 未注入の選択由来 GET・未知 GET はいずれも 204（保守的既定）。
-                    Some(ChoiceResponse::NoContent) | None => ShioriOutcome::NoContent,
+                // リソース GET も選択由来 GET も id が固定パターンに載らないため、catch-all の
+                // 手前で 2 つの注入表を順に引く（どちらの表にも無い id は従来どおり 204 へ落ちる）。
+                // リソース名と選択イベント名は語彙が交わらないので、引く順序は結果を変えない。
+                other => match self.fixture.resource_responses.get(other) {
+                    // 200 の Value（空文字もそのまま返す＝204 とは別の応答・2.3）。
+                    Some(MouseResponse::Script(value)) => ShioriOutcome::Value(value.clone()),
+                    Some(MouseResponse::NoContent) => ShioriOutcome::NoContent,
+                    // 選択由来 GET は fixture の注入表を引く（未注入は 204・6.1）。任意名イベントは
+                    // ゴースト作者が書いた名前がそのまま id になるため、固定パターンでは受けられない。
+                    None => match self.fixture.choice_responses.get(other) {
+                        Some(ChoiceResponse::Script(script)) => {
+                            ShioriOutcome::Value(script.clone())
+                        }
+                        // 未注入の選択由来 GET・未知 GET はいずれも 204（保守的既定）。
+                        Some(ChoiceResponse::NoContent) | None => ShioriOutcome::NoContent,
+                    },
                 },
             },
         }

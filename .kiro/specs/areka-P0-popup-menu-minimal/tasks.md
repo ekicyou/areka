@@ -33,7 +33,7 @@
   - 完了状態: ワークスペースのテストが緑に戻り、終了の握手のテストがスコープ 1 の窓で `["user","1","1"]`、`system` で `["system"]` を期待している
   - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 2. 運行側: 任意の時点で SHIORI リソースを引く入口
+- [x] 2. 運行側: 任意の時点で SHIORI リソースを引く入口
 - [x] 2.1 許可名を 10 に広げ、汎用のリソース取得を作る
   - 許可名を「利用者名＋枠 7 種の項目名リソース＋本体側／相方側の表示可否」の 10 名にし、各要素の直上に正典 URL のコメントを 1 行ずつ置く
   - 任意の id からリソース問い合わせを組み立てる汎用関数を足し、既存の利用者名の取得をその上に畳む
@@ -52,9 +52,9 @@
   - _Depends: 2.1_
   - _Boundary: areka-kanade actor shell_
 
-- [ ] 2.3 偽 SHIORI で照会の 4 通りを確かめる
+- [x] 2.3 偽 SHIORI で照会の 4 通りを確かめる
   - 既存の運行テストの道具で起動を済ませたあと照会を送り、項目名リソースが 値を返す／空を返す／値なしを返す／失敗する の 4 通りで結果語彙が対応することを確かめる
-  - 起動の途中で照会を送ると全件「値なし」が返ることを確かめる
+  - 起動の前（会話できる状態になる前）に照会を送ると、SHIORI へ送らず全件「値なし」が返ることを確かめる（起動の途中は受信箱から観測できない＝Implementation Notes 2.3）
   - 任意の id の応答を注入する口が道具側に無ければ、既存の応答表と同型の注入口をテスト支援に足す（本番コードは触らない）
   - 完了状態: 5 本のテストが緑で、応答の種類を取り違えるとそのうち少なくとも 1 本が赤になる
   - _Requirements: 9.2_
@@ -207,3 +207,4 @@
 - 2.1: 配列要素の直上の正典 URL は `// ukadoc:`（`///` は rustc が `unused_doc_comment` を出す・`events.rs` の `ALLOWED_EVENT_IDS` と同じ形）。`resource_get` は `schedule::resources` で `pub` だが `lib.rs` の公開ファサードには未追加（クレート外のテストで要るときに足す）。
 - 2.2: 照会の Status は設計の逐語 `snapshot_of(&state.phase)` でなく `state.snapshot()`（選択待ちの `choosing` を落とさない・design.md を追随済み）。照会の失敗は通常経路と違い `Unloading{Fault}` へ倒さず `Failed` を UI へ返すだけ（`round_trip` の `error!` 文言「終了系列（Fault）へ」は照会経路では事実と違う＝文言だけの既知の不正確さ）。
 - 2.2: 偽 SHIORI の受信端を握ったまま返信しないテストは、判定が後退すると赤にならず無限に待つ（`non_queryable_phase_answers_no_content_without_touching_shiori`）。2.3 で偽 SHIORI を書くときは「受信を記録して返信端を捨てる」形にして assert の赤で終わらせる。
+- 2.3: kanade は 1 メッセージを同期で完走させ、`Boot` 1 通で `Steady` まで進む。起動途中の段は受信箱から見えないので、「会話できない状態の照会」は `Idle`（`Boot` より前）で確かめた（design.md を訂正済み）。任意 GET id の応答は `Fixture::with_resource_response`（値の語彙は `MouseResponse` を流用・`Script(String::new())` は 200 の空文字で 204 ではない）。

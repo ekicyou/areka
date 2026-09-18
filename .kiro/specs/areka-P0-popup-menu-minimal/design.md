@@ -305,7 +305,7 @@ flowchart TD
 | 3.7 | `0` なら出さず `info!` | `captions::interpret`、`trigger::decide` | `Visibility::Suppress` | 判定 |
 | 3.8 | `popupmenu.type` は問い合わせない | `captions::UNQUERIED_POPUPMENU_RESOURCES`＋テスト | 許可表に無い | — |
 | 3.9 | 登記時にリソース名を指定できる | `MenuItem.caption_resource` | `Option<&'static str>` | — |
-| 3.10 | 起動前は既定名で出す | kanade `actor_resources::answer` | `Phase::Steady` 以外は SHIORI へ送らず全件 `NoContent`（UI 側は `trigger::poll_menu_query` が tick で覗く・止まらない） | — |
+| 3.10 | 起動前は既定名で出す | kanade `actor_resources::answer` | `Phase::Steady` 以外は SHIORI へ送らず全件 `NoContent`（UI 側は `trigger::poll_menu_query` が tick で覗く・止まらない）。起動の進行中に投函された照会は即座に値なしにはならず、起動が終わるまで受信箱で待って `Steady` で実際の値が返る。「起動待ちでメニューを止めない」を担保するのは要件 1.8（結線前は出さない）と UI 側 `poll_step` の期限（超過は全件既定名）である | — |
 | 4.1 | readme の決め方 | parsers `MountModel.readme`、`readme::resolve_path` | `ghost_root.join(key or readme.txt)` | — |
 | 4.2 | 既定アプリで開く | `readme::open` | `ShellExecuteW("open")` | — |
 | 4.3 | 無ければ灰色＋初回 `debug!` | `readme::is_available`、組込登記 | `Path::exists` | — |
@@ -800,7 +800,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 - Status ヘッダ: `ExecutionStatus::derive(&state.snapshot())`（会話中なら `talking`・選択待ちなら `choosing` も載る）。
 
 **Implementation Notes**
-- Validation（要件 9.2）: `crates/areka-kanade/tests/kanade/resource_query_test.rs` — 既存ハーネス（`spawn_harness`＋`Fixture`）で boot→`Steady{None}`（`without_boot_greeting`）へ進めた後に `ResourceQuery` を送り、偽 SHIORI が `readmebutton.caption` に ⑴ `Value("x")` ⑵ `Value("")` ⑶ 204 ⑷ 失敗（`spawn_mock_shiori_failing`＋`FailOn{id:"readmebutton.caption", ..}`）を返す 4 通りで `ResourceOutcome` が対応すること。Boot 中（`OnInitialize` で止める `spawn_mock_shiori_blocking`）に送ると全件 `NoContent`。`Fixture` に任意 GET id の応答を注入する口が無ければ、`mouse_responses` と同型の `resource_responses: HashMap<&'static str, MouseResponse>`（`Script`／`NoContent`）を `Fixture::with_resource_response` として足す（テスト支援の additive 追加）。
+- Validation（要件 9.2）: `crates/areka-kanade/tests/kanade/resource_query_test.rs` — 既存ハーネス（`spawn_harness`＋`Fixture`）で boot→`Steady{None}`（`without_boot_greeting`）へ進めた後に `ResourceQuery` を送り、偽 SHIORI が `readmebutton.caption` に ⑴ `Value("x")` ⑵ `Value("")` ⑶ 204 ⑷ 失敗（`spawn_mock_shiori_failing`＋`FailOn{id:"readmebutton.caption", ..}`）を返す 4 通りで `ResourceOutcome` が対応すること。`Boot` より前（`Phase::Idle`）に投函した照会は SHIORI へ 1 通も送らず全件 `NoContent` になる（メニュー 3 名の GET が記録に現れないことも確かめる）。kanade は 1 メッセージを同期で完走させ、`Boot` 1 通で `Steady` まで一気に進むので、起動途中の段は受信箱から見える状態として存在しない（`OnInitialize` で SHIORI を止めて送った照会は受信箱で待ち、`Steady` になってから実際に問い合わせる＝実装タスク 2.3 のレビューで確定）。`Fixture` に任意 GET id の応答を注入する口が無ければ、`mouse_responses` と同型の `resource_responses: HashMap<&'static str, MouseResponse>`（`Script`／`NoContent`）を `Fixture::with_resource_response` として足す（テスト支援の additive 追加）。
 - Risks: kanade が長い往復の最中だと要求は待つ。UI 側の上限（1,000 ms）で守る。
 
 #### `CloseReason::User { scope }` と `events::on_close`
@@ -930,7 +930,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 - `wintf/.../dispatch/tests.rs`: 解放配送／同 tick 押下＋解放／クリア。
 
 ### Integration Tests
-- `areka-kanade/tests/kanade/resource_query_test.rs`（9.2）: 偽 SHIORI で値／空／204／失敗の 4 通り＋Boot 中は全件 `NoContent`。
+- `areka-kanade/tests/kanade/resource_query_test.rs`（9.2）: 偽 SHIORI で値／空／204／失敗の 4 通り＋起動前（`Idle`）は全件 `NoContent`。
 - 既存の spine（`emo2_boot/spine_*`）・areka-ghost e2e・kanade テストは `CloseReason::User { scope: 0 }` へ追随し、`OnClose` の期待列を `[user,0,0]` にして緑を保つ。
 
 ### 摂動（9.7）
