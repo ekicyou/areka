@@ -189,7 +189,7 @@
   - _Requirements: 9.9, 7.2, 7.5_
   - _Depends: 9.2_
 
-- [ ] 9.4 網羅台帳へ担当を登記する
+- [x] 9.4 網羅台帳へ担当を登記する
   - 台帳 3 種の 15 項目に本仕様を担当として登記する（id は符号化済みなので見た目の名前で探さずカタログから写す）
   - 状態を実測に合わせる: 実装済み 6・語彙のみ 9（それぞれ理由と引受先を備考に書く・引数付きの説明書コマンドは縮退として備考へ）
   - 正典 URL のコメントが 15 項目の定義箇所に 1 行ずつ置かれていることを証拠収集の道具で確かめる
@@ -271,3 +271,13 @@ P1 で `menu::plan::plan_tests` が緑のままなのは欠陥ではない。`pl
 **行数（9.8）**: `cargo test -p log-capture-kit --test file_length_guard_test` は 6 passed。本仕様が変更・追加した `.rs` は 79 本（新規 22・変更 57）で、1,000 行超は 0 本。950 行以上は 4 本: `spine_conformance_lap_tests.rs` 988（本仕様の増分 0）・`spine.rs` 968（0）・`resolve.rs` 964（+1）・`main.rs` 958（+10）。新設の本番ファイルの最大は `menu/trigger.rs` 558 行、新設テストの最大は `trigger_flow_tests.rs` 848 行。
 
 **全体の関門**: i686 の成果物を用意した状態で `cargo test --workspace -j 4` は exit 0。`Running`＋`Doc-tests` 103 行に対し `test result:` も 103 行（最後まで走った）で、7,811 passed／0 failed／40 ignored。`cargo fmt --all -- --check` は exit 0、`cargo build -p areka` の areka 由来の警告は 0、`cargo test -p ukadoc-survey` は緑。clippy は関門ではないが、本仕様が足した行に当たっていた `collapsible_if` 1 件（`wintf/src/ecs/pointer/buffers.rs` の解放の旗）は 9.2 のレビューを受けて `&& let` へ畳んだ（既存の同種 13 件は担当外なので触っていない）。
+
+### 9.4 網羅台帳への登記（要件 10.1〜10.5・11.5・2026-09-18）
+
+- **登記**: 担当欄が `areka-P0-popup-menu-minimal` の項目は `shiori.toml` 13・`sakura-script.toml` 1・`assets.toml` 1・`property.toml` 0 ＝ 15（`grep -c` で数え、同じ数え方が `areka-P0-property-catalog-lists` を 120 と数えて表の `owner_count = 120` と合うことで較正）。変更のあった台帳の項目はちょうど 15 件で、担当にしないもの（`quitbutton.caption`・`OnMouseClick`・`readme.charset`・`menu,hidden`／`char*.menu`・`OnClose`・束「メニュー」の残り）は 1 行も動いていない。上書きした既存の担当は 0 件（15 件とも空欄からの登記）。
+- **状態**: 実装済み 6（`readmebutton.caption`・`closebutton.caption`・`sakura.popupmenu.visible`・`kero.popupmenu.visible`・`descript_ghost` の `readme,ファイル名`・`\![open,readme]`＝引数付きは「警告して何もしない」縮退として備考に記載）。語彙のみ 9（枠 ①〜⑤の caption 5 件＝引く仕組みは在るが枠が未登記なので誰も引かない・引受先は `areka-P0-baseware-root-layout`／`areka-P0-ghost-shell-balloon-switch`／`areka-P0-network-update`／`areka-P0-ghost-install`。`char*.popupmenu.visible` と `popupmenu.type` 3 件は引受先の spec が起票 0 本であることを備考に明記）。
+- **証拠**: `cargo run -p ukadoc-survey -- evidence` で 15 件すべて解決（caption 7 と visible 2 は `areka-kanade/src/schedule/resources.rs` と `areka/src/menu/captions.rs` の 2 か所＝設計どおり、`popupmenu.type` 3 と `char*.popupmenu.visible` は `captions.rs` の問い合わせない表、`\![open,readme]` は `emo2_boot/consumer_ledger.rs`、`readme,ファイル名` は `areka-parsers/src/package/model.rs`）。`check` は食い違い 0 件。
+- **三者の一致**: 台帳の数え直し 15 ＝ `roadmap-draft.md` の `[[spec]]` 行の `owner_count = 15` ＝ 作り直した報告（`report/summary.md` の実装済み 106→112＝＋6、語彙のみ 446→442。内訳は shiori ＋4・assets ＋1・sakura-script ＋1）。検査が実際に数を見ていることは、レビュアーが `owner_count` を 14 に変えて当該行を名指しした赤になることで確かめた（戻した後は一致）。
+- **数え直した手書きの数**（引き算はしていない）: `[briefs].count` 27→28／束を持つ `[[spec]]` 行 13→14／宛先が 2 つ以上の束に散る spec 8→9（本仕様は メニュー 13・配布物の素性 1・作り付けの窓 1 に散る）／宛先 0 本の束 36→35／置き場と表の食い違い 3 本・2 本→8 本・8 本／候補 spec 名の案と既存の綴りの一致 2 行→3 行／`briefing.md` の `[[barrier]]` 4 数（`list_shiori_resource` 実装済み 1→5・語彙のみ 158→154、`descript_ghost` 実装済み 9→10・未対応 64→63）。段階表の「依存する既存 spec」の欄は 67 行を台帳と全数照合して食い違い 0（その過程で本仕様と無関係な 2 行＝「窓の配置と重なり」「バルーンの文字」の陳腐化を是正）。
+- **検査**: 台帳だけを編集した直後は `cargo test -p ukadoc-survey` が 91 passed／22 failed（担当が `[[spec]]` に無い・`[[barrier]]` の数・報告の鮮度）。追随後は 601／0／6／113／5 で緑。
+- **統合担当への申し送り（本仕様の範囲外）**: ⑴ `roadmap-draft.md`「先頭ウェーブ」の節は 2026-09-13 の写真で、今日数え直すと 324／84／31 は 324／62／55、「バルーンの文字」の状態の分布と「63 件のうち 45 件」（今日は 22 件）も動く。各束の進行中の件数が 84 の内訳そのものなので部分的に直すと算術が壊れる＝節全体の撮り直しが要る（該当行に注記 1 行を添えた）。⑵ `briefing.md` 5-3 の 416 件／1,333 件は日付付きの作業記録なので触っていない（今日は 433 件／1,316 件）。⑶ 段階 B「更新」の候補 spec 名の案 `areka-P0-network-update` が 09-18 に起票された実在の spec と同名（意図しない重なり・裁定が要る）。⑷ 波の欄は全行が旧編成（W13〜W17）の写しのまま。⑸ 9.3 の実機確認で OS 側（メニュー表示・既定アプリで開く）に欠陥が出たら、実装済み 6 件の状態を再判定する。
