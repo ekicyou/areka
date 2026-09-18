@@ -111,3 +111,17 @@
   3. `THIRD-PARTY-NOTICES.md` は `cargo about` の自動生成（手で編集しない）＝CC0 のバルーンは cargo 依存ではないので載らない。資産の出典と CC0 の記載は第三者向け README（`alpha-release-signoff`）と本 spec の `verification/` に置く。
 - **見た目の採否は今日にでも確認できる**: フォルダを置いて `areka.exe <ゴーストの根> <バルーンのフォルダ>`（argv 第 2 引数）で起動すれば、コード変更 0 で表示される。要件段階を待たずに開発者が先に目視してよい。
 - 既定バルーン id の定数と解決順への配線は `baseware-root-layout`（A1-②）側が足す（本 spec は id を brief と `verification/` に書き残すだけ）。
+
+## 2026-09-19 追記（`nar-install` から申し送り・畳み込みは本 spec が行う）
+
+- `nar-install` のタスク 5.1（検体の畳み込み）を実施した時点で `vendors/sample_ghost/StayseeBalloon/` は**存在しなかった**。よって `nar-install` は `StayseeBalloon.nar` を作らず、共有ヘルパの登記表 `SAMPLES` にも `StayseeBalloon` を足していない（要件 8.5 の「存在しなければ登記しない」）。
+- **畳み込みは本 spec が行う**。`nar-install` の要件 10.10 の手順（`vendors/sample_ghost/README.md`）に従って `StayseeBalloon.nar` を作り、展開形を追跡から外し、共有ヘルパの登記表に 1 行足す。上の 2026-09-18 追記の条件 1「`.nar` への畳み込みは並走する `nar-install` が引き受ける」は、着地の順序が入れ替わったため**本 spec 側の作業に戻る**。
+- 畳む手順は使い捨ての実行体 `crates/sample-ghost-kit/examples/fold-samples.rs` が持つ。**畳むフォルダを引数で渡す形**で呼ぶこと。
+
+  ```
+  cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/StayseeBalloon
+  ```
+
+  これ 1 回で、追跡ファイルだけを集めた `vendors/sample_ghost/StayseeBalloon.nar` を作り、空の根へ展開して元のツリーとバイト単位で突き合わせるところまで終わる。
+- **登記表 `SAMPLES` の 1 行は畳んだ「後」に足す**。引数無しで呼ぶ形（登記表の検体を全部畳む形）は、本 spec が着地する頃には**使えない**——`nar-install` のタスク 5.6 が他の 4 検体の展開形（`crates/pilot/examples/shiori-host-32/fixtures/` と `vendors/sample_ghost/R_POST_and_KOMAINU/`）を消しているため、最初の検体で「追跡ファイルが 0 件」になって落ちる。`--from` の形は登記表を見ないので、まだ登記していない検体でも畳める。
+- **バイト保存の罠は 2 件とも解消済み**（`nar-install` タスク 5.1 で実測）。`vendors/sample_ghost/.gitattributes` の `* -text` が `.nar` にも効いており（`git check-attr text` が `unset`）、`.gitignore` の `*_test.txt`／`*_dump.txt` は同フォルダの否定規則で打ち消されている。StayseeBalloon の同梱ファイル名に `*_test.txt`／`*_dump.txt` に当たるものは無い想定だが、畳んだ後に中身の全ファイル名へ `git check-ignore --no-index` を当てて 0 件を確かめること。
