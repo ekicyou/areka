@@ -33,7 +33,7 @@
 ### This Spec Owns
 
 - 保管フォルダ `vendors/sample_ghost/StayseeBalloon/`（29 ファイル・原作バイト列そのもの）の作成と、その出典記録 `verification/provenance.md`。
-- 新規テストファイル `crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs`（検体パス定数 1 つを含む）。
+- 新規テスト `crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs`（入口・検体パス定数 1 つを含む）と `crates/areka-emo-text/tests/staysee_balloon_fixture/` 配下のテーマ別ファイル。
 - 記録 `verification/signoff-record.md`（裁定・テスト結果・実機目視・README 申し送り文・台帳検査・下流申し送りの実施記録）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の透過の扱いの行（1 行）。
 - 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の 1 項目（`use_self_alpha_2c_5024:1`）の `status`／`owner`／`note`、`doc/ukadoc-coverage/roadmap-draft.md` の `[[spec]]` 1 行＋`[briefs].count`＋散文 1 文＋束表「絵の重ね方」の「依存する既存 spec」欄、`doc/ukadoc-coverage/briefing.md` の `[[barrier]] page = "descript_balloon"` の `degraded`／`absent` の 2 数値、報告 `doc/ukadoc-coverage/report/assets.md`・`report/summary.md` の作り直し。
@@ -146,7 +146,11 @@ vendors/sample_ghost/StayseeBalloon/          # 新規: 上流 fe1b02f3 の 29 �
 └── online0.png … online8.png  marker.png  sstp.png
 
 crates/areka-emo-text/tests/
-└── staysee_balloon_fixture_test.rs           # 新規: 本仕様の決定論テストのすべて（検体パス定数 1 つ・≤1,000 行）
+├── staysee_balloon_fixture_test.rs           # 新規: 入口。検体パス定数 1 つと #[path] の mod 宣言だけを持つ
+└── staysee_balloon_fixture/                  # 新規: テーマ別の実体（各 ≤1,000 行）
+    ├── test_support.rs                       #   テーマ間で共有するヘルパ（1 か所へ集約）
+    ├── assets.rs  definition.rs  faces.rs  bake.rs
+    └── region.rs  wrapping.rs  script.rs  scale.rs
 
 .kiro/specs/areka-P0-default-balloon-bundle/verification/
 ├── provenance.md                             # 新規: 取得元・コミット・日付・readme の版・29 本の sha256・.gitignore 照合・check-attr・id＝directory・2.6 の判定
@@ -312,7 +316,10 @@ sequenceDiagram
 **Responsibilities & Constraints**
 - 検体パスは `const STAYSEE_BALLOON_DIR: &str = "../../vendors/sample_ghost/StayseeBalloon";` の **1 定数**だけが持ち、`PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(STAYSEE_BALLOON_DIR)` で実体化する（`nar-install` の共有ヘルパへ寄せるときはこの 1 行を付け替える）。
 - 既存テストファイルから `use` はできない（各 `tests/*.rs` は独立クレート）ので、必要な小ヘルパ（COM 初期化・PNG IHDR 読み・descript の復号）はこのファイル内に持つ。
-- 1,000 行以下。超える見込みが立ったら structure.md の規約どおり `staysee_balloon_fixture_test_<テーマ>.rs` へ `#[cfg(test)] #[path]` でテーマ分割し、定数は親ファイルに残す（Option C・DD1）。
+- 1,000 行以下。超える見込みが立ったらテーマ分割し、定数は親ファイルに残す（Option C・DD1）。**分割先は `tests/staysee_balloon_fixture/<テーマ>.rs`（サブディレクトリ）とし、親ファイル内の `#[cfg(test)] #[path = "staysee_balloon_fixture/<テーマ>.rs"] mod <テーマ>;` で繋ぐ。**
+  - 当初この行は `staysee_balloon_fixture_test_<テーマ>.rs`（`tests/` 直下の平置き）と書いていたが、**その形は成立しない**（2026-09-18・タスク 2.3 で実測・レビュアーが独立に再現）。`tests/` 直下に置いたファイルは親から `#[path]` で繋いでも cargo が**独立したテストターゲットとしても自動収集**するため、同じテストが 2 か所で走る。`Cargo.toml` の `autotests` や明示ターゲットで止める手はあるが、要件 8.2 が `Cargo.toml` の変更を 0 に縛るので採れない。サブディレクトリは自動収集の対象外なのでこの問題が起きない。
+  - この形は `.kiro/steering/structure.md` の統合テストの慣行（`tests/{ドメイン}.rs` を入口にし、実体を `tests/{ドメイン}/` 配下へ置き、ファイル名からドメイン接頭辞を落とす）と、同 crate の先例 `crates/areka-emo-text/tests/decoration_readback_test.rs` ＋ `decoration_readback/` に一致する。
+  - テーマ間で共有するヘルパは structure.md の規約どおり 1 か所へ集約する（本仕様では `staysee_balloon_fixture/test_support.rs`。項目が 1 件でも複製しない）。
 - 既存檻の期待値には触れない。`ＭＳ ゴシック` 前提を先頭の門で明示する（DD4 ⑶）。
 
 **Dependencies**
