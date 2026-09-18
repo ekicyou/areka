@@ -168,7 +168,7 @@
   - _Depends: 7.4, 4.1, 4.3, 6.1, 3.1_
 
 - [ ] 9. 検証と登記
-- [ ] 9.1 檻が判断を測っていることを摂動で示す
+- [x] 9.1 檻が判断を測っていることを摂動で示す
   - 枠の並びの 2 要素を入れ替えて構造テストが赤になること、抑止の腕を表示に変えて判定テストが赤になることを実際に走らせて確かめ、元に戻す
   - 完了状態: 赤の出力（テスト名と失敗内容）と復元の確認をタスクの完了記録に残す
   - _Requirements: 9.7_
@@ -224,3 +224,18 @@
 - 7.4: 表示の関数は `MenuWiring` の欄でなく内側の `run_show`／`display` の引数（`show_task` が `win32::show` を渡すだけ）。`[menu] shown` は OS の表示を呼ぶ**直前**に出す（`TrackPopupMenuEx` はメニューが閉じるまで戻らない）＝失敗時は shown の後に error が続く。World を借りられない 2 経路は `[menu] world unavailable after menu`（`reason="world dropped"／"world busy"`）の `debug!` で、預かりは捨てられない。`spawn_local` は実行器の窓へ起床を投函するだけで同期 poll しない・tick 中に UI スレッドでメッセージを汲む者もいないので、通常の流れで「world busy」は起きない（レビューで wintf と実行器の実ソースを確認）。完了状態の実機の半分（右クリックで出る・動作 1 回）は 8.1 の結線後に 9.3 で見る。
 - 8.1: **設計を改めた**: `open_startup_window` は窓を同期では作らない。World を書き換えるクロージャを積むだけで、適用は `app.run()` の tick の中（`drain_task_pool_commands`）＝`menu::wire_menu` より後。当初の設計どおり `wire_menu` の中で装着すると本番では 0 枚に付き（レビューの探針で `count=0` を実測）、メニューが出ず、6.1 以降は右ダブルクリックも届かなくなる。装着は `main.rs` の窓を生やすクロージャ内、`attach_char_pointer_handlers` の隣の `menu::attach_release_handlers(world)` で行う（是正後の有界実走で「実 sink 結線で起動しました」→ `menu_release_handlers_attached count=2` →「本物のゴースト窓を開きました scopes=[0, 1]」を実装者・レビュアーの双方が確認）。窓を作り直す spec は両方の装着を掛け直す。
 - 8.1: `main.rs` の装着の 1 行を消しても決定論テストは気付かない（隣の `attach_char_pointer_handlers` と同じ性質）。気付くのは ⑴ 警告 0 のビルド（消すと dead_code が 14 件出る）⑵ 有界実走の `count=2` の行 ⑶ 実機確認 9.3。0 枚装着の `warn!` が捕まえるのは呼び出しの**順序違い**であって行の削除ではない。有界実走は引数 2 つ（ゴーストの根とバルーンの絶対パス）が要り、`target\debug\shiori-host32-helper.exe` は cargo が x64 で上書きするので i686 版を毎回コピーする。`main.rs` は 958 行。残した狭い `#[allow(dead_code)]` は後続 spec の口 3 つ（`register`・`MenuRegistry::unregister`・`ItemBody::Submenu`）と `captions::UNQUERIED_POPUPMENU_RESOURCES`（証拠行を本番ソースに保つ表・読むのは兄弟テスト）。
+
+## 完了記録
+
+### 9.1 摂動（要件 9.7・2026-09-18・HEAD `19cce0ec`）
+
+走らせたコマンドはいずれも `cargo test -p areka --bin areka -j 4 menu::`。摂動前と全復元後はどちらも exit 0・`ok. 97 passed; 0 failed`。摂動は 1 つずつ明示の編集で入れ、逆向きの編集で戻し、対象ファイルの sha256 が摂動前と一致することと `git status --porcelain` が空であることを毎回確かめた。実装者とレビュアーがそれぞれ独立に走らせ、P1 と P3 は失敗したテストの集合まで一致した。
+
+| 摂動 | 編集 | 結果 | 赤になったテスト |
+|---|---|---|---|
+| P1 枠の並び | `menu/mod.rs` の `Frame::ORDER` 末尾 2 要素を入れ替え（`Readme`⇄`Close`） | exit 101・`86 passed; 11 failed` | `menu::registry_tests::frame_order_is_the_seven_frames_and_matches_slot_indices`（left `[.., Close, Readme]`／right `[.., Readme, Close]`）・`menu::registry_tests::snapshot_follows_frame_order_not_registration_order`・`menu::captions::captions_tests::frame_captions_table_is_the_seven_rows_of_requirement_3_1`・`menu::wiring_tests` 2 本・`menu::trigger::trigger_flow_tests` 5 本（例: 照会の並びが left `[visible, closebutton, readmebutton]`／right `[visible, readmebutton, closebutton]`）・`menu::trigger::trigger_wired_tests` 1 本 |
+| P2 区切りの群分け | `menu/plan.rs` の `group_of` で `Frame::Close => 3` を `2` へ（説明書と同じ群へ入れる） | exit 101・`90 passed; 7 failed` | `menu::plan::plan_tests::readme_and_close_only_are_separated_by_one_line`（left に `Separator` が無い）・`menu::plan::plan_tests::all_seven_frames_follow_the_declared_order_with_three_separators`・`trigger_flow_tests` 4 本・`trigger_wired_tests` 1 本 |
+| P3 抑止の判定 | `menu/trigger.rs` の `decide` で `Visibility::Suppress` の腕を `Decision::Show` へ | exit 101・`92 passed; 5 failed` | `menu::trigger::trigger_tests::decide_sends_the_double_click_only_when_suppressed_and_deferred`（left `Show`／right `Suppress { send_double_click: true }`）・`trigger_flow_tests` の抑止 4 本（`a_suppressed_tick_*` 2 本・`a_late_suppressing_reply_*`・`a_fast_suppressing_reply_*`） |
+| （レビュアー追加）ドラッグの関門 | `menu/trigger.rs` の `handle_release` のドラッグ判定を無効化 | exit 101・`96 passed; 1 failed` | `a_release_while_dragging_is_ignored_and_drops_the_deferred_double_click` |
+
+P1 で `menu::plan::plan_tests` が緑のままなのは欠陥ではない。`plan::build` は既に並んだ入力を受け取り `Frame::ORDER` を読まないので、並びを見張るのは登記側とそこから通しで流れるテストで、計画側の構造（区切りの入り方）は P2 が見張っている。`captions::row` の `debug_assert_eq!` は列挙の宣言順と表の行順の食い違いを見張るもので、`ORDER` 定数の入れ替えでは発火しない（入れ替えを捕まえるのは `captions_tests` の並びの検査）。
