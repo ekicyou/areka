@@ -265,3 +265,45 @@ Some(v) => {
   - `emo2-kakukaku-offsetdpi` の 2 枚の PNG の IHDR 原寸（原本と同一の見込み。新設テストで突合して確定）。
   - `nar-install` の共有ヘルパの名前と置き場所（同 spec の設計待ち）。本仕様の検体テストは `shipped_fixture_region_test.rs` と同じ `CARGO_MANIFEST_DIR` 相対の形に揃えておけば後着側が機械的に寄せられる。
   - 実機での確認手順（任意）: `areka.exe <emo2 の絶対パス> <emo2-kakukaku-offsetdpi の絶対パス>` で「ちがうよう。」の行頭が欠けないこと＋WARN が 2 面×2 成分＝4 件（装着 1 回）であることの目視。決定論テストが主で、実機は補助。
+
+## 8. 設計フェーズの発見と統合（2026-09-18・`/kiro-spec-design -y`）
+
+発見の種別は **light**（既存システムの拡張・外部依存の追加 0・新しい技術 0）。§5.1 の決着 12 項目はすべて実コードで引き直し、**覆すものは 0 件**だった。設計で新しく確定したのは次の 6 点である。
+
+### 8.1 実測で確定したこと
+
+| 項目 | 実測 | 設計への帰結 |
+|---|---|---|
+| `actor.rs` の余白 | 970 行（上限 1,000・余白 30）。先例 `warn_coarse_wrap_threshold` は doc 込みで 41 行 | 警告の関数本体を `actor.rs` に置くと 1,000 行付近に達する。**本体は子モジュール `actor_decoration.rs`（141 行）へ `pub(super)` で置き、`register_actor` から `decoration::warn_ignored_origin` として呼ぶ**。同ファイルは既に「`actor.rs` が 1,000 行の見張りの間近にあるため」という理由で `build_actor_render`／`glyph_styles_of` を引き受けており（同ファイルの doc）、同じ理由・同じ形である。§5.1 項目 1 の決着（登録口で、前回領域との比較で 1 件に絞る）は変わらない——変わるのは関数の置き場所だけ |
+| 検体の PNG 原寸 | `emo2-kakukaku-offsetdpi/balloons0.png`＝400×224・`balloonk0.png`＝288×203（IHDR の 16〜23 バイト目を直読） | §7 の「調査が要る項目」の 1 つ目は解消。原本と同寸なので、検体テストは既存の定数（`SAKURA_IMAGE_SIZE`／`KERO_IMAGE_SIZE`・`*_EDGES`・`*_START`・`*_WRAP`）をそのまま期待値に使える |
+| `TextRegion` の構築点 | 構造体リテラルは `resolve` の末尾の 1 か所だけ（`TextRegion {` の全域検索。ほかのヒットは全て `-> TextRegion {` の関数定義） | 欄の追加の波及は 0 |
+| 本番の解決経路 | 本番で `TextRegion::resolve` を呼ぶのは `actor_decoration.rs` の `ResolvedBalloonText::resolve_with_background` の 1 か所で、結果は必ず `register_actor` を通る（`canvas.rs` のヒットは同ファイル内のテスト） | 「解決側 `debug!`＋登録口 `warn!`」で無記録の経路は生じない（要件 3.5） |
+| 書き直す 4 本の名前の参照 | 名前を参照しているのは `region.rs` の `resolve_origin_component` の doc 1 か所だけ | 意味が反転する 4 本は名前も改める（design.md「T-書直し」）。doc の書き直しで参照は消える |
+| `shipped_fixture_region_test.rs` の検査関数の数 | **6 本**（§2.3／§5 の「既存 5 本」は数え違い。実在＝ファイル実在・PNG 原寸・書字方向・sakura・kero・wplimit 複製） | 要件 2.3 の「既存の検査関数を 1 つも書き換えない」の対象は 6 本 |
+
+### 8.2 設計で気づいた落とし穴（実装への申し送り）
+
+- **`TextRegion` の全体比較**: 欄 `ignored_origin` は `PartialEq` に入る。範囲外の宣言を持つ領域と、同じ位置へ落ちる未宣言の領域は、開始点が同じでも**同値ではなくなる**。検体テストで「原本 `emo2-kakukaku` と `==`」と書くと赤くなるので、成分ごとの比較（既存の `assert_region`）を使う。該当する既存テストは 0 本（範囲外の値を使う既存テストは書き直す 4 本だけで、いずれも全体比較をしない）。
+- **検体テストは宣言の存在を前提として確かめる**: 検体から `origin` の 2 行が消えると、テストは未宣言の縮退を測るだけになり規則を固定しなくなる。`model.origin().x() == Some(0)`（y も）を前提として同じテストに置く。同ファイル冒頭 doc の禁則（宣言された生値を assert しない）は原本 `emo2-kakukaku` のテストに向けたものなので、対象を明記して両立させる。
+- **表の「辺ちょうど」の行は開始点だけでは内と外を見分けられない**: 近い辺ちょうど（横書きの x＝36 など）は宣言値と書字開始角が一致する。区別は `ignored_origin()` が `None` であることと `debug` 0 件が担う。
+- **既存の WARN 件数テスト 6 本は WARN の総数を数えている**: いずれも `origin` を宣言しない入力なので無改変で成り立つ。新設のテストは折返しの警告と混ざらないよう、本警告の文言と一致するものだけを数える。
+- **`shipped_fixture_region_test.rs` は `areka-P0-nar-install` が書き換える 38 ファイルの 1 つ**（検体パスを参照している）。§5.1 項目 6 の決着どおり同ファイルへ足すが、追加分（根パス関数とテスト）は**ファイル末尾にまとめ**、既存の `shipped_root()`／`wplimit_root()` の近傍を触らない——後着側の取り込みが行の追記どうしになる。
+- **ukadoc 網羅台帳は触らない**: `doc/ukadoc-coverage/ledger/assets.toml` の `origin.x`／`origin.y` は「実装済み・記録なし（正典どおりに書かれた宣言について）」のまま正しい。ukadoc は範囲外の宣言に沈黙しており、判定は変わらない。台帳を触ると briefing と roadmap-draft の数の検査が連動する。
+- **`doc/ukadoc-coverage/briefing-*.md` は COMPAT §8 の行の題を引用している**が、`\_l` の行は既に旧題のまま食い違っており、題の一致を見張る検査は無い（`COMPAT_ARCHITECTURE` を読むコードは 0）。§8 の題を改めても赤くならない。本仕様では触らない。
+
+### 8.3 統合（synthesis）
+
+- **一般化**: 要件 1（範囲外の解決）と要件 3（記録）は「範囲判定 1 回の結果を 2 つの消費者が使う」同じ問題である。判定を `resolve_origin_component` の 1 か所に保ち、返値を `(開始点の成分, 無視した宣言の解決値)` の組にして両方へ配る。折返しの警告との共通化（警告の汎用部品化）は**しない**——2 種類しかなく、欄も判定も違う。
+- **作るか借りるか**: すべて既存の借用。範囲判定の式（現行の記録の判定）・書字開始角（`start_corner`）・件数規律（`previous == Some(region)`）・プレースホルダ定数・テスト補助（`resolve_counting`／`assert_capture_alive`／`merged_model`／`assert_region`／`capturing`）。新規は欄 1 つ・読み口 1 つ・関数 1 つ。
+- **簡素化**: 新規ファイル 0・新しい型 0（欄は `(Option<f32>, Option<f32>)` の組で足り、専用の構造体は作らない）・設定 0。退化した `validrect` の分岐は足さない。読み口は `pub(crate)`（crate の外に消費者がいない）。
+
+### 8.4 行数の見込み（1 ファイル 1,000 行の見張り）
+
+| ファイル | 現在 | 見込み |
+|---|---|---|
+| `region.rs` | 951 | 965〜975（985 を超える見込みになったら止めて報告） |
+| `actor.rs` | 970 | 973〜977（関数本体は置かない） |
+| `actor_decoration.rs` | 141 | 175〜190 |
+| `region_vertical_canon_tests.rs` | 677 | 790〜840 |
+| `actor_region_warn_tests.rs` | 380 | 500〜540 |
+| `tests/shipped_fixture_region_test.rs` | 397 | 445〜465 |
