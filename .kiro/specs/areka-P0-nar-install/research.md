@@ -396,3 +396,136 @@ cargo tree --workspace -e all -i flate2 2>/dev/null | head -8                # i
 ```
 
 A-5. `hello-pasta.nar` の観測（Python 3.13・`zipfile`）: `flag_bits & 0x800` が立つエントリ 0／54・`compress_type` は 8 のみ・`is_dir()` 0・`install.txt` は `accept,`（空値）。
+
+---
+
+# 設計フェーズの調査記録（2026-09-18・`design.md` の根拠）
+
+> ここから下は設計生成時に足した。節 1〜8 と付録 A は要件ディスカッション時点の記録のまま残す。節 5 の未決 7 項目（2・5・7・8・9・10・12）の決定は「設計判断」に番号を引いて書く。
+
+## 9. 外部クレートの再確認（docs.rs・GitHub のソース・crates.io を当たり直した）
+
+### 9.1 `zip` 8.6.0
+
+- **「名前は UTF-8」の印を返す文書化された公開 API は無い。** `ZipFile` は `HasZipMetadata` を実装し（`lib.rs` で `pub use crate::read::HasZipMetadata`）、`get_metadata(&self) -> &ZipFileData` を返す。`ZipFileData` は `pub struct` で `pub flags: u16`・`pub is_utf8: bool` を持つが、置き場の `mod types;` が非公開なので docs.rs に頁が無い（`zip/8.6.0/zip/types/struct.ZipFileData.html` は 404）。フィールド参照はコンパイルが通るが、文書に無い漏れ出し経路。節 4.1 の案 A「比較で回復」は不要になったが、代わりに「文書に無い経路に依存する」形になる。
+- `name()` は読込時に 1 回だけ判定し、印なしは `from_cp437()?`（8.6 では失敗しうる）・印ありは `from_utf8_lossy`（`read.rs:547-556`）。`name_raw() -> &[u8]`「エンコードは未定義」。
+- **`default-features = false, features = ["deflate-flate2"]` は単体ではコンパイルできない。** `zip` は `flate2` を `default-features = false` で引くため伸長のバックエンドが立たず、`flate2` 側の `compile_error!("You need to choose a zlib backend")` が出る。`flate2 = { version = "1.1", features = ["rust_backend"] }` を自分の直接依存に足すか、`deflate-flate2-zlib-rs` を選ぶ必要がある。brief の指定はこの罠を踏んでいた。
+- 全 feature を切ったときの非任意依存は `crc32fast`・`indexmap`・`memchr`・`typed-path` の 4 本。`extract()` は `make_symlink` を呼ぶ（`read.rs:122-145,448`）。エントリ単位の `crc32()`・`header_start()`・`data_start()` は公開。8.x 最新は 8.6.0（2026-04-25・MIT）。RUSTSEC-2025-0168 は `>=1.3.0, <2.3.0` で 8.6.0 は無関係。
+
+### 9.2 `miniz_oxide` 0.9.1（最新は 0.8 系ではなく 0.9 系・`flate2` 1.1.10 も 0.9 を引く）
+
+- `pub fn decompress_to_vec(input: &[u8]) -> Result<Vec<u8>, DecompressError>`（zlib ヘッダ無しの生 deflate）・`pub fn decompress_to_vec_with_limit(input: &[u8], max_size: usize) -> Result<Vec<u8>, DecompressError>`（上限超過は `TINFLStatus::HasMoreOutput`）。ストリーミング `inflate::stream::inflate(&mut InflateState, input, output, MZFlush)` もあるが、エントリ単位に宣言サイズが分かる本用途では上限付きの一括版で足りる。
+- 既定 feature は `with-alloc`。非任意依存は `adler2` のみ。純 Rust・`unsafe` FFI 無し。`MIT OR Zlib OR Apache-2.0`（`deny.toml` の許可リストは MIT を含むので OR 式は通る）。
+
+### 9.3 `flate2` 1.1.10
+
+- `default = ["rust_backend", "runtime_detection"]`・`rust_backend = ["miniz_oxide", "any_impl"]`。既定で `miniz_oxide`（`features = ["simd"]`＝`simd-adler32` も入る）と `crc32fast` を引く。`read::DeflateDecoder` は生 deflate 用。読み手だけの本用途には `miniz_oxide` を直接引くほうが 3 本少ない。
+
+### 9.4 本番グラフに増える crate の数
+
+| 選択肢 | 増える crate | 本数 |
+|---|---|---|
+| `zip 8.6`（`deflate-flate2`）＋ `flate2/rust_backend` | zip・crc32fast・cfg-if・indexmap・equivalent・hashbrown・memchr・typed-path・flate2・miniz_oxide・adler2・simd-adler32 | 12 |
+| `flate2` 既定 | flate2・miniz_oxide・adler2・simd-adler32・crc32fast | 5 |
+| **`miniz_oxide` 既定** | **miniz_oxide・adler2** | **2** |
+
+## 10. コード側の再確認（設計が依拠する事実）
+
+- `areka_parsers::charset::decode(bytes: &[u8], default: DefaultEncoding) -> String`（`decode.rs:24`）は `prescan_charset` でキーを `eq_ignore_ascii_case("charset")` で探し（`prescan.rs:58`）、`DefaultEncoding::Ansi → SHIFT_JIS`（`model.rs:37`）。`kv::parse_kv(text: &str) -> BTreeMap<String, String>`（`parse.rs:20`）。
+- `workspace_scan/mod.rs`: `walk_workspace_sources()`（`crates/**/*.rs`・`target`／`vendors`／`.git` 除外・src／tests／examples を全て含む・`mod.rs:79`）・`read_source`・`scan_tokens`・`strip_comments`。`with_default_guard_test.rs:283-318` に `is_production_dependency_section`／`production_kit_dependencies` があり、本番依存の見張りはこの部品で書ける。
+- `ukadoc-survey/src/documents/parse.rs:673` は `wave` を `string_field` で読む（自由文字列）。`parse_tests.rs` は `"W13"`・`"保留"` を使う。**`"A0"` は通る。** `roadmap-draft.md` の `[[spec]]` 行は `name`・`stage`・`bundle`・`owner_count`・`wave` の 5 欄（`:118-151`）。
+- 38 ファイルの内訳（付録 A-1 を再実行・一致）: `areka` 13・`areka-emo-text` 7・`pilot` 4（`shiori-host-32/{helper,helper_window,main,shiori_proxy}.rs`＝i686 の helper を含む）・`areka-emo-atlas` 3・`areka-emo-compose` 3・`areka-parsers` 3・`areka-seriko` 3・`areka-emo-present` 1・`areka-ghost` 1。`emo2-kakukaku` を実行行で綴る 27 のうち 38 に無いのは 4 で、パスを組むのは `areka/examples/emo-present/setup.rs:147`（`emo2("emo2-kakukaku")`）だけ。残り 3（`balloon_model_tests.rs:10`・`balloon_target_tests.rs:434`・`state_cue_apply_tests.rs:608`）は説明文の中の綴り。
+- `.rs` 以外: `tools/perf/invoke-followup-checks.ps1:129`・`perf-loop.measure.ps1:64`（既定の根を変数で持つ）・`judge-perf.py:197`（コメント）・`doc/emo2-conformance-scope.md:25`・`doc/ukadoc-coverage/briefing-assets.md:362,377,439`・`shiori-host-32/README.md:26`。
+- 検体の追跡ファイル名に非 ASCII は 0（`git ls-files | grep -P '[^\x00-\x7F]'` が空）。`.nar` に畳んだときエントリ名は全て ASCII で、ビット 11 の有無は展開結果に影響しない。名前の文字コードの決定論テストは `nar_writer` で組む固定入力だけが担う。
+- `vendors/sample_ghost/.gitattributes`（`* -text`）・`.gitignore`（`!*_test.txt` `!*_dump.txt`）は既に在り、`.nar` にもそのまま効く。ルートに `.gitattributes` は無い。
+- `current_exe()` の前例: `boot_config.rs` の `default_helper_exe_path`・`default_app_profile_dir`（親を取るだけ）。`CARGO_TARGET_DIR` を読む箇所は 0。
+
+## 11. 設計判断（節 5 の未決項目の決定）
+
+### 決定 D1（項目 8）: コンテナ読取は自前・伸長だけ `miniz_oxide`
+
+- **選択肢**: A `zip`（印は `get_metadata().is_utf8`）／B 自前の中央ディレクトリ読み＋`miniz_oxide`／C UTF-8 妥当性で近似。
+- **決定**: B。
+- **理由**: 要件 2.2/2.3 を文字どおり満たせる唯一の文書化された形。本番グラフの増分が 2（A は 12）。`extract()`・CP437 経路・`typed-path` を持ち込まない。拒否すべき形（9.2 の 13 語彙）を自分の語で持てる。A は `deflate-flate2` の罠と文書に無いフィールドへの依存を抱える。C は要件を弱める。
+- **代償**: 読み手 350 行前後を自前で持つ（EOCD・中央ディレクトリ・ローカルヘッダの 3 構造・zip64 とマルチディスクは印を見て拒否）。CRC-32 も 30 行の表引きで自前に持つ（`crc32fast` を足すと cfg-if と 2 本増える・較正値 `0xCBF43926` を固定）。
+- **追跡**: 開発者の承認（`tech.md` 登記）は `miniz_oxide` に対して求める。承認が `zip` に傾いた場合は `container.rs` だけを差し替える。
+
+### 決定 D2（項目 2）: 原本＋取得ごとの複製・刻印は長さ＋CRC-32・札ファイルで回収
+
+- **選択肢**: (a) 利用者ごとの複製／(b) 共有の木＋`profile/` 削除／(c) 毎回再展開。刻印は (i) 全体ハッシュ／(ii) 長さ＋更新時刻／(iii) エントリ CRC の列。
+- **決定**: (a)＋(i)（長さ＋自前 CRC-32・`.nar` は展開時に丸ごと読むので追加 I/O 無し）。
+- **回収の形**: pid の生存判定（`OpenProcess`＝`windows` crate が要る）ではなく、**共有モード `FILE_SHARE_READ` だけで開いたままの札ファイル**で生存を表す。他プロセスの `remove_file` は共有違反で失敗し、持ち主が死ねば成功する。`std::os::windows::fs::OpenOptionsExt::share_mode` だけで書けて依存 0。
+- **原本の完全性**: 「名前が合う原本は完全」を不変条件にする。作るときは作業フォルダで組んでから `rename` で入れ、消すときは `rename` で作業フォルダへ出してから消す。半端な木が `cache/` の名前の下に見えることが無い。
+- **多重プロセスの初回**: 両者が作業フォルダで組み、`rename` の負け側（宛先フォルダが既に在ると Windows の `rename` は失敗する）は自分の作業を消して勝者を使う。
+- **代償**: 取得のたびに emo2 で 6.6 MB・110 ファイルの複写（SSD で 100〜200 ms）。ワークスペース全体で 100 回前後＝数十秒だが並列に散る。共有の木 (b) は同一プロセスの並走で 7.5 を破る余地があるので採らない。
+- **手動用**: bin が配る木はプロセス終了後も要るので `manual/<名>/` に置き、呼ぶたびに作り直す（回収の対象外）。
+
+### 決定 D3（項目 9）: `target/` は `CARGO_TARGET_DIR` → `current_exe()` の祖先で名前が `target` のフォルダ
+
+- 38 ファイルの `CARGO_MANIFEST_DIR` 相対はソースツリーからの相対で `--target-dir` に追随しない。`current_exe()` はテストバイナリ（`target/<profile>/deps/`）・example（`target/<profile>/examples/`）・bin（`target/<profile>/`）のどれでも `target` に当たる。見つからなければ `TargetDirNotFound { started_from }`。`CARGO_TARGET_DIR` は 2 行で読めるので先に見る。
+
+### 決定 D4（項目 10）: 窓口は `sample-ghost-kit`（テスト専用 leaf）＋各消費クレートは `[dev-dependencies]` 1 行
+
+- 本番から見えないことを依存の向きで保証し、`with_default_guard_test.rs` と同じ部品で「本番 `[dependencies]` に現れたら赤」を 1 本置く。各クレートの `*_test_support.rs` からの転送は、`SampleRoot` の読み口が借用を返す型なので `pub(super) fn emo2_root() -> PathBuf` の形には写せない。呼び手は `let sample = SampleRoot::acquire("emo2")?;` を 1 行置き、以降 `sample.folder()` を使う（差分はパスを得る行に限る）。
+- `areka-parsers` の dev 依存が `sample-ghost-kit` → `areka-nar` → `areka-parsers` と自分へ戻るのは dev 依存の循環で cargo が許す形（`tokio` ⇄ `tokio-test`）。テストバイナリに `areka-parsers` が 2 度リンクされるが、窓口はパスしか渡さない。
+- i686 の `pilot` helper も同じ窓口を使う。`areka-nar`・`miniz_oxide`・`sample-ghost-kit` は純 Rust なので i686 でも組める。
+
+### 決定 D5（項目 7）: 段 ① で読み口 3 つの**形**を公開し、`root()` の**提供**は段 ③
+
+- `folder()`・`balloon()` は段 ① で最終形の署名で公開し、中身だけ段 ③ で切り替える。段 ① で 27 ファイルの `emo2-kakukaku` 継ぎ足しも `balloon()` へ寄せる（1.3）。`root()` は段 ① の呼び手に使う者がおらず、追跡済みの展開形には「根」に相当するフォルダが無い（`fixtures/` の直下に `ghost/` は無い）ので、嘘の値を返すより段 ③ で足す。A1 の 3 仕様は段 ③ の後に着手する。
+- 並走側 `default-balloon-bundle` との窓: 要件 8.5 のとおり「後から着地する側が `.nar` 1 本と登記 1 行を行う」。順序をどちらにも固定しない。
+
+### 決定 D6（項目 5）: 見張りの語彙は 4 種＋本番依存
+
+- ⑴ `shiori-host-32/fixtures`・`join("shiori-host-32")` ⑵ `vendors/sample_ghost/<登記名>/` ⑶ `nar-samples` ⑷ 同梱バルーンの名前でパスを組む形だけ＝`join("emo2-kakukaku")`・`emo2-kakukaku/`・`/emo2-kakukaku"`。設計レビューの指摘で ⑷ を「引用符込みの丸ごと」から「パスを組む形」に狭めた——窓口の読み口 `balloon("emo2-kakukaku")` の引数は 1.3 の正規の使い方で、丸ごとの綴りを禁じると呼び手 27 ファイル全部が赤になる。説明文の中の綴り（実在 3 件）も当たらない。走査語は `concat!` で 2 片に割り、除外は `crates/sample-ghost-kit/src/` だけ。段 ① から置く。
+- 本番依存の見張りは `with_default_guard_test.rs` の私有関数（`manifest_lines`／`production_kit_dependencies`・`log-capture-kit` の名前を固定で持つ）を `workspace_scan/mod.rs` へ移してクレート名を引数化し、両方の見張りが呼ぶ。
+
+### 設計レビュー（2026-09-18・Fable・1 回で通過）で直した点
+
+- **`open` で全エントリを伸長・CRC 突合し、伸長済みバイト列を保持する**（当初は `install` の書出し中に伸長していたため、CRC 破損の `.nar` が `root/.nar-work/` へ書いた後に拒否され 2.6／4.1 に反していた）。
+- **10.2 の字義からの逸脱を明示**: `miniz_oxide` は伸長と圧縮を feature で分けられない。代替は「`areka-nar/src/` が `miniz_oxide::deflate` を綴らない」字面の見張り。`zip`＋`flate2` 経路でも同じ。
+- **段ごとの `Cargo.toml`**: 段 ① の kit は `thiserror` だけ・段 ② で `areka-nar`・`miniz_oxide`（`nar_writer` の deflate 側）を足し `devroot` の `target/` 発見と `WorkDir` を段 ② へ前倒し（`areka-nar` のテストが根に使う）・段 ③ で原本・複製・手動用。
+- **9.2 の判定は 1 本のテスト**が 13 変種の固定入力を全部組んで `kind()` の集合と `ALL_KINDS` の完全一致を見る（兄弟テスト間で状態を集める形は成立しない）。
+- **`supplement` で `refresh` を読まない**ことを 6.2 の狭めとして traceability と Open Questions に登記。
+- **Windows の `rename`** は宛先が**空でない**フォルダのときに失敗する（空フォルダは std 1.98 が置き換える）。原本・宛先は常に空でないので設計の不変条件は保たれる。
+
+### 決定 D7（項目 12）: `.nar` 書き手は `sample-ghost-kit::nar_writer`
+
+- `areka-nar/src/*_test_support.rs`（`#[cfg(test)]`）に置くと `ghost-install` の `[dev-dependencies]` から届かない。feature で公開モジュールにすると本番クレートにテスト専用の書き手が同居する。`sample-ghost-kit` に置けば `areka-nar` 自身のテストも後続も `[dev-dependencies]` 1 行で同じ入力を得る。書き手は無圧縮を既定にし、deflate は `miniz_oxide::deflate`（dev 側だけ）で任意に掛ける。壊れ方（CRC・長さ・データ・暗号化ビット・方式・S_IFLNK・印の有無）を口として持つ。
+
+### 決定 D8: 確定は「作業フォルダで組み上げてから入れ替える」
+
+- `Overlay`（refresh≠1）は既存の木を作業フォルダへ複写してからアーカイブを上書き、`Replace { keep }`（refresh,1）は mask に合うファイルだけ複写してからアーカイブを書く。確定は `dest → old`・`stage → dest`・`old` 削除の 3 手で、2 手目の失敗は `old → dest` で戻す。要件 6.2 の「消してから展開」と結果は同じで、「消した後に展開が失敗する」経路が構造的に無くなる（6.4 の記録は `old` の削除失敗＝`leftovers` と巻き戻し失敗＝`committed` の 2 つに縮む）。作業フォルダは `root/.nar-work/<pid>-<連番>/`（同一ボリューム＝`rename` 可・`ghost/`／`balloon/` の列挙に混ざらない）。
+- 同じ根への同時インストールは想定しない（製品は単一インスタンス・開発用の根は取得ごとに別）。
+
+### 決定 D9: 正典が沈黙する小さな決定（設計で追加したもの）
+
+- `install.txt` の名前は ASCII 大小無視で探す（Windows のファイルシステムの意味論・`Install.txt` を拒否しない）。
+- 拒否は最初の 1 件で全体を止める（製品側が写す理由は 1 つ・4.1 は「書き込み前に止まる」ことが要点）。
+- `supplement` では `refresh` を読まない（重ね置き先はゴースト本体で、全消去は危険。書かれていれば警告）。
+- 同梱バルーンの取り出し元フォルダ内の `install.txt` は普通のファイルとして置く（解釈はしない。8.4 の 20 ファイル一致に必要）。
+- 大小衝突の比較は Unicode の小文字化（Windows の照合表とは厳密には違うが、安全側に倒れる）。
+- 宣言サイズの総和は 1 GiB で打ち切る（利用者の `.nar` を受ける経路の信頼境界）。
+
+## 12. 統合（一般化・採用か自作か・簡素化）
+
+- **一般化**: 「宛先ごとの配置」を `Placement` 1 つの形にしたので、ghost／balloon／shell／supplement／同梱バルーンの 5 経路が同じ確定コードを通る。`ExistingPolicy` を本体と同梱バルーンで共有し、6.3 は追加コード無しで満たす。
+- **採用か自作か**: 伸長は採用（`miniz_oxide`）。zip 構造の読み・CRC-32・パス安全性・Windows 名規則は自作（採用候補 `zip` は印の公開 API が無く、`enclosed_name()` は CP437 経路。`crc32fast` は 2 本増える）。一時パスの窓口 `temp-path-kit` は OS の一時フォルダに組むので採れない（7.10）。
+- **簡素化**: 引数で `refresh` を上書きする口は置かない（呼び手が `accept` で入れるか入れないかを決めるだけで、入れ方を変える者はいない）。刻印ファイルは置かず原本のフォルダ名に刻印を入れる。pid の生存判定は札ファイルで代替し `windows` crate を窓口に入れない。stage ① の `root()` は作らない。
+
+## 13. リスクと対策（設計時点）
+
+- 依存の承認が `zip` に傾く → `container.rs` だけ差し替え・他の契約は不変。
+- 複写の費用がテスト時間を押し上げる → 計時を `debug!` に出し、実測で問題なら「読み専用で使う呼び手向けの共有複製」を**別の読み口**として足す（既定は変えない）。
+- 走行中に `.nar` を差し替えると古い原本の回収が別プロセスの複写と競合しうる → 開発者の操作でしか起きない。赤になった走行をやり直す。
+- dev 依存の循環でビルド時間が延びる → `areka-parsers` は小さい。実測で問題なら `areka-nar` の `kv`／`charset` 呼び出しを最小の複製に置き換える判断を設計ディスカッションへ。
+- `StayseeBalloon` の有無で段 ③ の成果物が変わる → 8.5 の条件分岐のまま。報告に「どちらだったか」を書く。
+
+## 14. 参照
+
+- docs.rs `zip` 8.6.0 `struct.ZipFile.html`／`trait.HasZipMetadata.html`、GitHub `zip-rs/zip2` `v8.6.0` の `src/read.rs`・`src/types.rs`・`src/lib.rs`・`Cargo.toml`、crates.io `zip/8.6.0/dependencies`。
+- docs.rs `miniz_oxide` `inflate::decompress_to_vec_with_limit`・`inflate::stream::inflate`、GitHub `Frommi/miniz_oxide` `Cargo.toml`。
+- GitHub `rust-lang/flate2-rs` `Cargo.toml`・`src/lib.rs`（`compile_error!`）。
+- rustsec.org `RUSTSEC-2025-0168`。
+- ukadoc `manual_install`・`manual_directory`・`descript_install`（`refresh`・`refreshundeletemask`・`*.directory`・`*.source.directory`・`accept`）。
+- 本リポジトリ: `crates/areka-parsers/src/charset/{decode,prescan,model}.rs`・`kv/parse.rs`・`crates/log-capture-kit/tests/{with_default_guard_test,temp_path_guard_test}.rs`・`workspace_scan/mod.rs`・`crates/ukadoc-survey/src/documents/parse.rs`・`tests/consistency/spec_checks.rs`・`crates/areka/src/boot_config.rs`・`crates/temp-path-kit/src/lib.rs`。
