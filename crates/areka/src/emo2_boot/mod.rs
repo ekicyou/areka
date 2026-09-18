@@ -35,6 +35,11 @@ pub mod zorder_cue;
 #[cfg(test)]
 mod spine;
 
+// emo2 検体の共有の受け口（spec: areka-P0-nar-install 要件 1.6）。`emo2_boot` 配下のテストが
+// 検体をここから引くので、保持（＝段 ③ の複製）はテストバイナリあたり 1 回で済む。
+#[cfg(test)]
+mod sample_test_support;
+
 // タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
 // 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
@@ -563,21 +568,11 @@ pub fn wire_emo2_boot(
 
 #[cfg(test)]
 mod wire_tests {
+    use super::sample_test_support::{emo2_balloon_root, emo2_root};
     use super::*;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
     use wintf::WinApp;
-
-    /// emo2 fixture ルート（assets.rs／placement テストと同一アンカー規約）。
-    fn emo2_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../pilot/examples/shiori-host-32/fixtures/emo2")
-    }
-
-    /// emo2 fixture のバルーンルート。
-    fn emo2_balloon_root() -> PathBuf {
-        emo2_root().join("emo2-kakukaku")
-    }
 
     /// 取り違え防止の檻（task 4.3・要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
     /// （`shell_author_dpi`／`balloon_author_dpi`）が [`AuthorDpi`] の各フィールドと

@@ -21,7 +21,7 @@
   - _Requirements: 10.3_
   - _Boundary: log-capture-kit 走査部品_
 
-- [ ] 1.3 (P) `areka` の 14 ファイルを窓口経由へ書き換える
+- [x] 1.3 (P) `areka` の 14 ファイルを窓口経由へ書き換える
   - 単体テスト・`tests/`・`examples/` の私家版の検体パス関数と直書きを窓口の呼び出しに置き換え、同梱バルーンのパスを自分で組んでいる 1 か所も窓口の読み口へ寄せる
   - 起動記録を消す初期化は段 ① では残す（段 ③ で削除する）
   - 行数に余裕の無いファイルは私家版の本体を窓口呼び出しで置き換え、正味の行数を増やさない
@@ -298,3 +298,6 @@
 - 1.1: `Sample` に段 ①だけの欄 `checked_in_parent`（追跡済み展開形の親）を置いた。段 ③（5.4/5.6）で削除する。
 - 1.1: 借用のみを返す証明は rustdoc の `compile_fail` doctest（`trybuild` は依存許可に無い）。`compile_fail` はどんなコンパイル失敗でも緑になるので、較正では「`compile_fail` を外すと E0716 が出る」ことまで確かめること。
 - 1.2: `workspace_scan/mod.rs` の較正の定位置は `tests/workspace_scan_test.rs`（module doc が名指し）。移し元の見張りに較正を足すとテスト名が増えて「移動前と同一」を自分で破る。
+- 1.3: 読み口は借用を返すので、呼び手は `SampleRoot` を**プロセス寿命の `static LazyLock<SampleRoot>`**（共有のテスト支援モジュール 1 か所）で保持し、私家版の助け手はそこから `to_path_buf()` する。一時値から複製すると段 ③ で木が消える。ファイルごとに静的を複製しない（段 ③ の複写回数がそのまま増える）。
+- 1.3: 段 ③（5.6）への申し送り＝`spine.rs` は段 ③ で 1 つの根を 2 つの起動地点で共有するので、`remove_dir_all` を消すと 2 度目の起動が 1 度目の `ghost/master/profile/areka/` を見て `OnFirstBoot` の台本が崩れる。5.6 の境界（areka 起動経路）で解くこと。
+- 1.3: 実着地は design の「`crates/areka`（13）＋setup.rs＝14」に対し変更 15＋新設 1（`emo2_boot/sample_test_support.rs`）。5.4 の「38＋1 ファイル」の数え直しが要る。

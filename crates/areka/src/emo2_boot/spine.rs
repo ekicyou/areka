@@ -74,6 +74,8 @@ use areka_seriko::{
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use log_capture_kit::{LineFormat, capture_lines};
+
+use super::sample_test_support::{self, emo2_balloon_root};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -480,7 +482,7 @@ fn make_world_with_gpu() -> World {
     world
 }
 
-/// emo2 fixture ルート（`CARGO_MANIFEST_DIR`＝`crates/areka` 相対・assets.rs テストと同一規約）。
+/// emo2 検体のゴーストフォルダ（共有の受け口 [`sample_test_support`] から引く）。
 ///
 /// 呼ぶたびに **ghost スコープの永続状態（`<ghost>/master/profile/areka/`）を除去**する。
 /// position-persist で永続書込が実際に効くようになったため、実機実走（8.7 サインオフ）や
@@ -489,8 +491,7 @@ fn make_world_with_gpu() -> World {
 /// （OnInitialize → username → OnFirstBoot → …）を期待する spine テストが落ちる。
 /// fixture は git 追跡外（gitignore 済み）ゆえ削除は安全で、テストを実行順・実機実走から独立させる。
 fn emo2_root() -> PathBuf {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2");
+    let root = sample_test_support::emo2_root();
     let persist_dir = root
         .join("ghost")
         .join("master")
@@ -498,11 +499,6 @@ fn emo2_root() -> PathBuf {
         .join("areka");
     let _ = std::fs::remove_dir_all(&persist_dir);
     root
-}
-
-/// emo2 fixture のバルーンルート（assets.rs テストと同一規約）。
-fn emo2_balloon_root() -> PathBuf {
-    emo2_root().join("emo2-kakukaku")
 }
 
 /// scope0/scope1 の 2 スコープぶんの合成配置（placement::spawn テストの emo2 相当値を踏襲）。

@@ -45,8 +45,9 @@
 //!   成立せず attach 完了マーカーが出ない（＝本テストは headless では成立しない）。これは env-gate
 //!   opt-in の設計意図どおりであり、実表示のある実機でのみ緑になる。
 
-use std::path::PathBuf;
+use sample_ghost_kit::SampleRoot;
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 /// 実走を有効化する opt-in 環境変数（未設定／空なら即 skip・R9.2・DoD 非前提）。
@@ -65,10 +66,9 @@ const WATCHDOG_DEADLINE: Duration = Duration::from_secs(120);
 /// `try_wait()` のポーリング周期（smoke ドナーと同一）。
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
-/// emo2 fixture ルート（smoke ドナー `emo2_root` と同一アンカー規約・`CARGO_MANIFEST_DIR` 相対）。
-fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
-}
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 
 // ===========================================================================
 // 実 DPI 人間サインオフ手順（R9.3）
@@ -139,8 +139,8 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
     }
 
     // --- 実走（R9.1）: emo2 fixture を位置引数に実バイナリを起動する ---
-    let ghost_root = emo2_root();
-    let balloon_root = ghost_root.join("emo2-kakukaku");
+    let ghost_root = EMO2.folder();
+    let balloon_root = EMO2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
     assert!(
         ghost_root.join("ghost/master/descript.txt").exists(),
         "emo2 fixture が見つかりません（in-repo 前提）: {}",

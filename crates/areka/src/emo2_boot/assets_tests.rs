@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_seriko::{BindChoicePolicy, BindNamespace, SurfaceTarget};
 use log_capture_kit::{LineFormat, capture_lines};
@@ -7,6 +5,7 @@ use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
+use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
 use crate::emo2_boot::target_map::scope_of;
 // 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
@@ -18,17 +17,6 @@ fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         .iter()
         .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
         .collect()
-}
-
-/// emo2 fixture ルートを `CARGO_MANIFEST_DIR`（`crates/areka`）相対で解決する
-/// （placement source/measure・emo-present example と同一アンカー規約）。
-fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
-}
-
-/// emo2 fixture のバルーンルート（placement テストと同一規約）。
-fn emo2_balloon_root() -> PathBuf {
-    emo2_root().join("emo2-kakukaku")
 }
 
 /// 観測可能な完了条件（tasks.md task 2.6）: emo2 fixture を渡した統合テストが
