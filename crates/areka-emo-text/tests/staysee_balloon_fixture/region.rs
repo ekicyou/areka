@@ -43,14 +43,17 @@
 use std::path::PathBuf;
 
 use areka_emo_text::actor::ResolvedBalloonText;
-use areka_emo_text::draw::{DEFAULT_FONT_NAME, DWriteMetrics};
+use areka_emo_text::draw::DEFAULT_FONT_NAME;
 use areka_emo_text::layout::GlyphMetrics;
-use areka_emo_text::state::TextLayerConfig;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
 
-use super::test_support::{dwrite_factory, expected_frame_size, staysee_model};
+use super::test_support::{
+    EXPECTED_ADVANCE_FULL, EXPECTED_ADVANCE_HALF, EXPECTED_FONT_HEIGHT, EXPECTED_LEFT,
+    EXPECTED_LINE_BOX, EXPECTED_LINE_PITCH, EXPECTED_RIGHT, EXPECTED_TOP, SCOPE_FACE0_FILES,
+    expected_bottom, resolve_staysee, scope_image_size, staysee_metrics, staysee_model,
+};
 
 // ── 領域解決の期待値（設計 C2 の E 行）──────────────────────────────────────────
 //
@@ -59,25 +62,8 @@ use super::test_support::{dwrite_factory, expected_frame_size, staysee_model};
 // （本体側 335×205・相方側 335×135）に当てはめて解いたもの。したがって値が食い違ったら
 // 期待値ではなく解決の側を疑う。
 
-/// 各 scope の面 0 として焼き込まれる枠画像の名前（原寸の引き先）。
-///
-/// 原寸そのものは `test_support` の表（実 PNG の IHDR と突合済み）から引くので、ここで
-/// 二重に綴らない。
-const SCOPE_FACE0_FILES: [(u32, &str); 2] = [(0, "balloons0.png"), (1, "balloonk0.png")];
-
-/// 描画範囲の左辺（`validrect.left,22` の素通し・image px）。
-const EXPECTED_LEFT: f32 = 22.0;
-/// 描画範囲の上辺（`validrect.top,20` の素通し・image px）。
-const EXPECTED_TOP: f32 = 20.0;
-/// 描画範囲の右辺（`validrect.right,-26` → 幅 335 − 26・image px）。両 scope とも同値。
-const EXPECTED_RIGHT: f32 = 309.0;
 /// 描画開始点（`origin` 未宣言 → 横書きの書字開始角＝描画範囲の左上・image px）。
 const EXPECTED_START: (f32, f32) = (EXPECTED_LEFT, EXPECTED_TOP);
-
-/// scope ごとの描画範囲の下辺（`validrect.bottom,-47` → 高さ − 47・image px）。
-///
-/// 本体側は 205 − 47 ＝ 158・相方側は 135 − 47 ＝ 88。下辺だけが scope で違う。
-const EXPECTED_BOTTOM: [(u32, f32); 2] = [(0, 158.0), (1, 88.0)];
 
 // ── 既定書体と文字の寸法の期待値（設計 C2 の F 行・DD4）──────────────────────────
 //
@@ -86,16 +72,6 @@ const EXPECTED_BOTTOM: [(u32, f32); 2] = [(0, 158.0), (1, 88.0)];
 
 /// ukadoc が定める既定書体の名前（リテラル。areka 側の定数とは独立に綴る）。
 const CANON_DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
-/// 解決される文字の高さ（`font.height,12` の素通し・image px）。
-const EXPECTED_FONT_HEIGHT: f32 = 12.0;
-/// 半角 1 文字の送り幅（`ＭＳ ゴシック` は半角 0.5em ＝ 12 × 0.5・image px）。
-const EXPECTED_ADVANCE_HALF: f32 = 6.0;
-/// 全角 1 文字の送り幅（`ＭＳ ゴシック` は全角 1em ＝ 12 × 1.0・image px）。
-const EXPECTED_ADVANCE_FULL: f32 = 12.0;
-/// 行ボックスの丈（`ＭＳ ゴシック` は `ascent + descent` がちょうど 1em・image px）。
-const EXPECTED_LINE_BOX: f32 = 12.0;
-/// 行送り（正典式 `font.height + 行間 2` ＝ 12 + 2・image px）。
-const EXPECTED_LINE_PITCH: f32 = 14.0;
 
 // ── 対照に使う「宣言を持つ」バルーン定義 ─────────────────────────────────────
 //
@@ -115,29 +91,6 @@ const DECLARED_WRAP_THRESHOLD: f32 = 145.0;
 const DECLARED_INLINE_LIMIT: f32 = 149.0;
 
 // ── 読み込み ─────────────────────────────────────────────────────────────────
-
-/// scope の面 0 の原寸（image px）。`test_support` の表から引く。
-fn scope_image_size(scope: u32) -> (u32, u32) {
-    let (_, file) = SCOPE_FACE0_FILES
-        .iter()
-        .find(|(s, _)| *s == scope)
-        .unwrap_or_else(|| panic!("scope {scope} の面 0 の枠画像が表に無い"));
-    expected_frame_size(file)
-}
-
-/// scope ごとの描画範囲の下辺を引く。
-fn expected_bottom(scope: u32) -> f32 {
-    EXPECTED_BOTTOM
-        .iter()
-        .find(|(s, _)| *s == scope)
-        .map(|(_, b)| *b)
-        .unwrap_or_else(|| panic!("scope {scope} の下辺の期待値が表に無い"))
-}
-
-/// 検体の当該 scope を本番の描画入口と同じ関数で解く。
-fn resolve_staysee(scope: u32) -> ResolvedBalloonText {
-    ResolvedBalloonText::resolve(&staysee_model(), scope_image_size(scope))
-}
 
 /// 対照のバルーン定義を本番と同じ 2 層マージで組む。
 ///
@@ -161,17 +114,6 @@ fn declared_model() -> BalloonModel {
         decode(&bytes, DefaultEncoding::Ansi)
     };
     parse_str(&read("descript.txt"), Some(&read(DECLARED_BALLOON_OVERLAY)))
-}
-
-/// 検体の書体で実測の文字の寸法を組む（GPU 不要——計測に要るのは factory だけ）。
-fn staysee_metrics(resolved: &ResolvedBalloonText) -> DWriteMetrics {
-    DWriteMetrics::new(
-        &dwrite_factory(),
-        &resolved.font,
-        resolved.mode,
-        &TextLayerConfig::default(),
-    )
-    .expect("既定バルーンの書体で文字の寸法を組める")
 }
 
 // ── 領域解決（設計 C2 の E 行・要件 3.3／3.5）────────────────────────────────
