@@ -1,0 +1,13 @@
+[package]
+name = "sample-ghost-kit"
+workspace = "../.."
+description = "検体ゴースト／バルーンを名前で引く窓口をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-nar-install）: 登記表 SAMPLES と SampleRoot の 3 読み口"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
