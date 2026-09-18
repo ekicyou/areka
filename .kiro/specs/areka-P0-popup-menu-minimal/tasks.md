@@ -60,7 +60,7 @@
   - _Requirements: 9.2_
   - _Depends: 2.2_
 
-- [ ] 3. メニューの純粋な構造
+- [x] 3. メニューの純粋な構造
 - [x] 3.1 module の骨組みを置き、登記の口を作る
   - 以降のタスクが宣言行で衝突しないよう、crate 根へ本仕様の 2 module の宣言を、メニュー module へ配下 4 ファイル（計画・項目名・引き金・OS 表示）の宣言と空の雛形を、このタスクで置く（以降のタスクは中身を埋めるだけ）
   - 枠 7 種の順序付き列挙（並びの権威は 1 か所）、項目の単位（既定名・文言リソース名・有効／無効・チェック・動作または子項目の列）、枠ごとに 1 つだけ持つ供給関数、登記・取り消し・写しの取得を作る
@@ -70,7 +70,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 3.9_
   - _Boundary: areka menu（module の骨組み＋登記）, crate 根の module 宣言_
 
-- [ ] 3.2 写しと名前から表示直前の計画を作る（純粋）
+- [x] 3.2 写しと名前から表示直前の計画を作る（純粋）
   - 枠の並び・群ごとの区切り線・識別子の払い出し（1 起点・深さ優先の出現順・サブメニューの見出しは持たない）・識別子から動作への逆引きを、OS の型に触れずに作る
   - 文言は「リソースの値が非空ならそのまま（アクセラレータ記法を素通し）・それ以外は登記された既定名をアクセラレータ用に写す」で決め、子項目にも同じ規則を適用する
   - 無効とチェックを計画にそのまま写す
@@ -209,3 +209,4 @@
 - 2.2: 偽 SHIORI の受信端を握ったまま返信しないテストは、判定が後退すると赤にならず無限に待つ（`non_queryable_phase_answers_no_content_without_touching_shiori`）。2.3 で偽 SHIORI を書くときは「受信を記録して返信端を捨てる」形にして assert の赤で終わらせる。
 - 2.3: kanade は 1 メッセージを同期で完走させ、`Boot` 1 通で `Steady` まで進む。起動途中の段は受信箱から見えないので、「会話できない状態の照会」は `Idle`（`Boot` より前）で確かめた（design.md を訂正済み）。任意 GET id の応答は `Fixture::with_resource_response`（値の語彙は `MouseResponse` を流用・`Script(String::new())` は 200 の空文字で 204 ではない）。
 - 3.1: `menu/mod.rs` 先頭の `#![allow(dead_code)]` は配下 4 module にも及ぶ。8.1 で結線したら必ず外し、直後に `cargo build -p areka` の警告 0 を確かめる。`main.rs` は 950 行（`mod menu; mod readme;` は宣言済み＝以降のタスクは宣言行に触らない）。ログの捕捉は `log-capture-kit` の `capture_lines`（`tracing` マクロを捕まえる）。`Frame` を増やす日の長さ一致は `ORDER`・`slots` を縛り済み、`captions::FRAME_CAPTIONS` は 5.1 で縛る。
+- 3.2: `CaptionMap`（`Default`＋`insert`＝空文字を捨てる＋`get`）は `captions.rs` に先置き済み。5.1 の `interpret` はこの `insert` で組む。`plan::build` は `Frame::ORDER` を参照せず入力の順を前提にする（`ORDER` の入れ替えで赤くなるのは `mod_registry_tests`、群分け・識別子・`&` の摂動で赤くなるのが `plan_tests`＝9.1 の摂動はこの対応で選ぶ）。群番号の付け替えは恒等（`build` は群の不等号しか見ない）なので摂動にならない。
