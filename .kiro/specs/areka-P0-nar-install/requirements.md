@@ -147,10 +147,10 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
 
 1. While 宛先フォルダが既に存在し `refresh` の値が `1` でない, the NAR エンジン shall 既存のファイルを残し、アーカイブに含まれる同名ファイルだけを上書きする（正典 `descript_install#refresh`: 1 以外は refresh 無効）。
 2. While 宛先フォルダが既に存在し `refresh,1` である（`type` が `supplement` の場合を除く）, the NAR エンジン shall 宛先フォルダの中身を全て消してから展開する。ただし `refreshundeletemask` に列挙されたファイル名（コロン区切り・全ての階層で同名を対象）は消さない（正典 `descript_install#refreshundeletemask`）。`type,supplement` が `refresh,1` を宣言していても読み飛ばして重ね置き（6.1）とし、読み飛ばした旨を警告として記録する（2026-09-18 開発者裁定: supplement の宛先はゴースト本体であり、全消去は正典の supplement の定義「フォルダ構造はそのまま、追加するファイルのみ」と両立しない。利用者からは「ゴーストは無傷で追加ファイルだけ入る」と見える）。
-6. If 宛先フォルダの中のファイルが他のプロセスに開かれている（起動中のゴーストの `shiori.dll` 等）ために入れ替えの確定ができない, then the NAR エンジン shall 宛先を呼ぶ前の内容のまま保ち、確定に失敗した旨と対象パスを理由に返す（使用中のファイルの解放＝SHIORI のアンロードは呼び出し側〔`ghost-install`・`network-update`・`ghost-shell-balloon-switch`〕の責務であり、本エンジンは解放を試みない。2026-09-18 開発者指摘で追加）。
 3. While 同時インストールのバルーンの宛先が既に存在する, the NAR エンジン shall `*.refresh`・`*.refreshundeletemask` を同じ規則でバルーン側に適用する。
 4. If 再インストールの途中で失敗した, then the NAR エンジン shall 失敗した旨と原因を理由に返し、消した・上書きした範囲を記録に残す（`refresh,1` の削除後の失敗は元に戻せないため、少なくとも何が起きたかが分かること）。
 5. The 開発用の根（Requirement 7）shall 再インストールの経路を通らない（毎回新しい宛先へ展開する）。再インストールの検証は Requirement 9 の決定論テストで行う。
+6. If 宛先フォルダの中のファイルが他のプロセスに開かれている（起動中のゴーストの `shiori.dll` 等）ために入れ替えの確定ができない, then the NAR エンジン shall 宛先を呼ぶ前の内容のまま保ち、確定に失敗した旨と対象パスを理由に返す（使用中のファイルの解放＝SHIORI のアンロードは呼び出し側〔`ghost-install`・`network-update`・`ghost-shell-balloon-switch`〕の責務であり、本エンジンは解放を試みない。2026-09-18 開発者指摘で追加）。
 
 ### Requirement 7: 開発用の根の管理——使い捨て・新品・自己修復・並走安全
 
