@@ -46,7 +46,7 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
   - **前提**: 完了仕様 `areka-P0-charset-canon`（文字コードの復号の既存層）・`areka-P0-test-cage-determinism`（テスト用一時パスの窓口と dev-only の規律）。`vendors/sample_ghost/R_POST_and_KOMAINU/` が展開形で在ること。
   - **読み手（下流）**: `baseware-root-layout`（窓口が返す根をそのまま「根」として受ける）・`shell-implicit-surface`（R_POST_and_KOMAINU の `shell/master/` を窓口経由で受ける）・`default-balloon-bundle`（保管を展開フォルダで行い、`.nar` 化は本仕様が引き受ける。検体名 `StayseeBalloon` の登記は 1 行）・`ghost-install`／`network-update`（エンジンをそのまま呼ぶ・二度実装しない）・実機サインオフを持つ全仕様（手順の「検体の絶対パス」の得方が変わる）。
   - **並走**: A0 で `popup-menu-minimal`・`default-balloon-bundle` と並走する。本仕様が書き換える既存の**コード**は検体パスを参照する 38 ファイル（と `emo2-kakukaku` を継ぎ足す同じ集合内のファイル）に限り、並走側はそれらに触らない約束（roadmap 追記(100)）。steering・網羅台帳・`roadmap.md`・`THIRD-PARTY-NOTICES.md` は全仕様が触る合流点であり、完了時に `main` を取り込んで数え直す（既存の完了手順どおり）。
-  - **本仕様の In に無く隣接仕様が本仕様のものと明記している項目**: `refresh`／`refreshundeletemask` の実行の意味論（Requirement 6）は、brief の In 列挙には無いが、`ghost-install` の brief が「`areka-nar` が持つ」と列挙し、本仕様の brief が「エンジンをそのまま昇格して使う（二度実装しない）」と定めるため本仕様に置く。要件ディスカッションで確認する。
+  - **`refresh`／`refreshundeletemask` の実行の意味論（Requirement 6）は本仕様が持つ**（2026-09-18 要件ディスカッションで開発者裁定。brief の In 列挙には無かったが、`ghost-install` の brief が「`areka-nar` が持つ」と列挙し、本仕様の brief が「エンジンをそのまま昇格して使う（二度実装しない）」と定める）。展開の結果は「何をインストールしたか」の要素の列（Requirement 5.10）で返し、`ghost-install` はそれを `OnInstallComplete` の参照に写す。
 
 ## Requirements
 
@@ -134,14 +134,14 @@ areka の開発者と、実機サインオフを回す全員。加えて、本�
 7. If `type` が `shell` または `supplement` で、宛先ゴーストのフォルダ名が渡されない、または `<根>/ghost/<宛先>/` が無い, then the NAR エンジン shall 理由付きで拒否する。
 8. While `type` が `supplement` である, the NAR エンジン shall アーカイブ最上位の内容を `<根>/ghost/<宛先>/` へ重ねて置く（ukadoc「インストール」: フォルダ構造はそのまま、追加するファイルのみ）。ただし最上位の `install.txt` は重ねない（本仕様の決定: 重ねるとゴースト自身の `install.txt` が `type,supplement` の物に置き換わり、ゴーストの素性が壊れる。正典はこの点に触れていない）。
 9. The NAR エンジン shall 展開したファイルの内容がアーカイブ内のバイト列と一致することを保証し、改行や文字コードの変換を行わない。
-10. When 展開が成功した, the NAR エンジン shall 結果として「種別・`name`・`accept`・置いたゴーストまたはバルーンのフォルダの絶対パス・同時インストールしたバルーンのフォルダの絶対パスの列・読み飛ばしたキーの列」を返す。
+10. When 展開が成功した, the NAR エンジン shall 結果として**「何をインストールしたか」の要素の列**を返す。要素は 1 つのインストール済みフォルダに 1 つで、「種別（ゴースト／バルーン／シェル／サプリメント）・`name`・置いたフォルダの絶対パス・シェルとサプリメントは宛先ゴーストのフォルダ名・宛先が既に在ったか（新規／上書き／`refresh` で消してから）」を持つ。例: `type,ghost` でバルーン同梱の `.nar` なら「ゴースト emo2」「バルーン emo2-kakukaku」の 2 要素、`type,shell` なら「ゴースト A のシェル B」の 1 要素。列に加えて、アーカイブの `accept` の値（3.11）と読み飛ばしたキーの列（3.13・3.14・3.16）を結果に含める（2026-09-18 開発者裁定＝要素の列で返す）。
 11. If 展開が途中で失敗した, then the NAR エンジン shall 宛先に書きかけの木を残さず、以前から在った宛先の内容も壊さない（利用者からは「全部入った」か「何も変わっていない」のどちらかしか見えない）。
 
 ### Requirement 6: 既存のフォルダへの再インストール（`refresh`）
 
 **Objective:** 後続の `ghost-install`・`network-update` の実装者として、同じゴーストの新しい `.nar` を上から入れたときの正典の振る舞いをエンジンが持っていてほしい。そうすれば、製品側は呼ぶだけで済む。
 
-> 本要件は brief の In 列挙に無い（Boundary Context「本仕様の In に無く隣接仕様が本仕様のものと明記している項目」）。要件ディスカッションで「本仕様に置く」か「値を読んで返すまで（3.15）に留め、実行は `ghost-install` へ送る」かを確認する。
+> 本要件は brief の In 列挙に無かったが、**2026-09-18 の要件ディスカッションで「本仕様が実行まで持つ」と開発者が裁定**した（`ghost-install` は呼ぶだけ。削除と展開の原子性を 1 つの書き込み経路に置く）。設計では「宛先が既に在るときの振る舞い」を展開器の引数で受け、`install.txt` の値からその引数を組む補助も本仕様が提供する形を許す。
 
 #### Acceptance Criteria
 
