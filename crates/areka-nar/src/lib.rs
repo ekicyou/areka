@@ -6,6 +6,9 @@
 //! 根の場所は決めず、`&Path` として受け取る（決めるのは `baseware-root-layout`）。
 //! 検体の在処も知らない（窓口は開発専用の `sample-ghost-kit` にある）。
 
+// タスク 4.4 の `NarArchive::open` が繋ぐまで本体からは呼ばれない（兄弟テストだけが使う）。
+#[allow(dead_code)]
+mod container;
 mod crc32;
 mod error;
 

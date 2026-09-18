@@ -3,8 +3,10 @@
 //! 自作の書き手を自作の読み手で確かめるだけでは恒真になるので、**書き手と無関係な
 //! 出どころ**を噛ませる——⑴ deflate の戻しは `miniz_oxide::inflate`（圧縮側とは別の
 //! 実装）、⑵ CRC の刻印は外部の較正値で検算済みの `areka_nar::crc32`、⑶ 容器の構造は
-//! 開発時に Python の `zipfile`（標準ライブラリ＝完全に別実装）で実際に開いて確かめた
-//! （記録は検証報告に置く。常設のテストが外部道具に依存しないよう、ここでは走らせない）。
+//! `areka-nar` の読取層が毎回読み直す——`areka-nar/src/container_tests.rs` の
+//! `writer_bytes_survive_both_methods_unchanged` が、ここで組んだ無圧縮と deflate の
+//! 書庫を本番の読み手に通し、原文と 1 バイトも違わずに戻ることを常設で確かめる
+//! （読み手は書き手とは別に書き起こされたもので、写しではない）。
 
 use super::*;
 use std::path::PathBuf;
