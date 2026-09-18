@@ -135,11 +135,11 @@
 
 #### Acceptance Criteria
 
-1. When 「終了」が選ばれた, the areka shall 既存の Ctrl＋左ダブルクリックと同じ経路（`CloseRequest{User}`）で終了の握手を始め、窓を直接閉じない。
+1. When 「終了」が選ばれた, the areka shall 既存の終了指示の経路（`CloseRequest{User}`・完了済み `areka-P0-input-events` が Ctrl＋左ダブルクリックのために敷いたもの）で終了の握手を始め、窓を直接閉じない。
 2. When 終了の握手の `OnClose` を SHIORI へ送る, the areka shall Ref0 を `user`、Ref1 と Ref2 をメニューを出した窓のスコープ番号（本体側 0・相方側 1）にする（正典 [OnClose](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnClose:1)）。`popupmenu.type` に差を付けない α では Ref1＝Ref2 である。
-3. When Ctrl＋左ダブルクリックで終了の握手を始める, the areka shall 同じく Ref1・Ref2 に操作した窓のスコープ番号を載せる（2 つの入口で `OnClose` の形を揃える）。
+3. The areka shall 結線済みの Ctrl＋左ダブルクリックによる終了指示の入口を**取り除く**（開発者裁定 2026-09-19・実機確認でメニューの「終了」が働くことを確かめたうえで: 同じ役目の隠し操作は要らない）。結線済みで Shift を伴わない Ctrl＋左ダブルクリックは、Ctrl の無い左ダブルクリックと同じに扱う（`OnMouseDoubleClick` を送る）。利用者起因の終了の入口はメニューの「終了」だけになる。
 4. If 終了の握手が SHIORI に拒まれた（終了挨拶の台本が返らず握手が `Steady` へ戻る既存の経路）, then the areka shall メニューからの終了でも同じく終了せず、既存の記録をそのまま出す。
-5. The areka shall 既存の Ctrl＋左ダブルクリック（結線済み）と Ctrl＋Shift＋左ダブルクリック（強制退避）の入口を残す。
+5. The areka shall 強制退避の入口（結線前の Ctrl＋左ダブルクリック、および Ctrl＋Shift＋左ダブルクリック）を残す。メニューは結線後のキャラクター窓にしか出ず、応答しない SHIORI は終了の握手を拒むので、起動に失敗した・固まったゴーストから抜ける口はこれだけである（2026-09-19 の実機確認でも、絵を出せないゴーストは検証用ダミー窓へ落ちてメニューを出せなかった）。
 
 ### Requirement 6: 登記式の口（MenuRegistry）
 

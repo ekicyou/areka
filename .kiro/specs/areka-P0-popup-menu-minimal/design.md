@@ -315,9 +315,9 @@ flowchart TD
 | 4.7 | `readme.charset` は読まない | `readme`（読まない） | — | — |
 | 5.1 | 終了は `CloseRequest{User}` 経路 | 組込登記（終了）、`MouseWiring::send_close_request` | `CloseReason::User { scope }` | — |
 | 5.2 | `OnClose` Ref1＝Ref2＝scope | kanade `events::on_close` | 参照列 `[user, n, n]` | — |
-| 5.3 | Ctrl+左ダブルクリックも scope | `input_events::on_char_pointer_pressed` | `CloseReason::User { scope }` | — |
+| 5.3 | 結線済みの Ctrl+左ダブルクリックの終了指示を取り除く | `input_events::on_char_pointer_pressed` | Ctrl を無視して左ダブルクリックとして扱う | — |
 | 5.4 | 拒否経路は既存 | `schedule/close.rs`（不変） | — | — |
-| 5.5 | Ctrl／Ctrl+Shift の入口は残す | `input_events`（不変） | — | — |
+| 5.5 | 強制退避の入口（結線前の Ctrl+左・Ctrl+Shift+左）は残す | `input_events`（強制退避の腕は不変） | `despawn_ghost_windows` | — |
 | 6.1 | 登記の単位 | `menu::MenuItem`／`ItemBody`／`Supplier` | `MenuRegistry::register` | — |
 | 6.2 | そのときの内容 | `MenuRegistry::snapshot` | 供給関数を表示のたびに呼ぶ | 右クリック |
 | 6.3 | 置き換えは `warn!` | `MenuRegistry::register` | — | — |
@@ -411,7 +411,7 @@ flowchart TD
 - `pub(crate) fn char_scope(world, entity) -> Option<u32>`（可視性のみ変更）。
 - `MouseWiring` に `pending_right_double_click: Option<PendingDoubleClick>` を足す。
 - `on_char_pointer_pressed` の変更は 2 点だけ:
-  - Ctrl＋左ダブルクリック（結線済み・Shift 非押下）: `let scope = char_scope(world, entity).unwrap_or(0)` を先に取り、`send_close_request(CloseReason::User { scope })`。
+  - Ctrl＋左ダブルクリック（結線済み・Shift 非押下）: **終了指示を送らない**（開発者裁定 2026-09-19・要件 5.3 改訂）。強制退避の条件（`!wired || shift_down`）に当たらなければ Ctrl を無視して下の左ダブルクリックの経路へ落とす。当初の「`char_scope` を取って `CloseRequest{User{scope}}` を送る」はタスク 6.1 で入れ、タスク 8.2 で取り除いた。
   - `DoubleClick::Right`: `send_double_click` を呼ばず `wiring.defer_right_double_click(PendingDoubleClick{scope, surface_pos: hit.surface_point, region: hit.region})` を呼んで `true`。`Left` は従来どおり即送出。
 - `send_close_request` を `pub(crate)` にする（メニューの「終了」が呼ぶ）。
 
