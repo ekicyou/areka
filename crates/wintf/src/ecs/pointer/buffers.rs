@@ -186,6 +186,20 @@ pub(crate) fn transfer_buffers_to_world(world: &mut World) {
         let buffers = buffers.borrow();
 
         for ((entity, button), buf) in buffers.iter() {
+            // 解放の旗は押下優先の分岐とは独立に立てる。同じ tick に押下と解放が
+            // 入っても（下の `if/else if` が押下を選んでも）解放を落とさない。
+            if buf.up_received {
+                if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
+                    match button {
+                        PointerButton::Left => pointer_state.released.left = true,
+                        PointerButton::Right => pointer_state.released.right = true,
+                        PointerButton::Middle => pointer_state.released.middle = true,
+                        PointerButton::XButton1 => pointer_state.released.xbutton1 = true,
+                        PointerButton::XButton2 => pointer_state.released.xbutton2 = true,
+                    }
+                }
+            }
+
             if buf.down_received {
                 // ボタンが押された瞬間
                 if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
@@ -397,6 +411,44 @@ mod tests {
             !world.get::<PointerState>(e).unwrap().left_down,
             "up 受信で押下状態 false"
         );
+    }
+
+    #[test]
+    fn test_transfer_buffers_to_world_sets_released_flag_even_with_down() {
+        // 同じ tick に押下と解放が入ると、押下優先の `if/else if` では解放が捨てられる。
+        // 解放の旗は独立した文で立てるため、押下状態と同時に立つ。
+        reset_all_buffers();
+        let mut world = World::new();
+        let e = world.spawn(PointerState::default()).id();
+
+        record_button_down(e, PointerButton::Right);
+        record_button_up(e, PointerButton::Right);
+        transfer_buffers_to_world(&mut world);
+
+        let s = world.get::<PointerState>(e).unwrap();
+        assert!(s.right_down, "押下優先の既存分岐は不変");
+        assert!(s.released.right, "同 tick でも解放の旗は落ちない");
+        assert!(s.released.any(), "any() が真");
+        assert!(!s.released.left, "他のボタンの旗は立たない");
+    }
+
+    #[test]
+    fn test_transfer_buffers_to_world_released_flag_maps_all_buttons() {
+        reset_all_buffers();
+        let mut world = World::new();
+        let e = world.spawn(PointerState::default()).id();
+
+        record_button_up(e, PointerButton::Left);
+        record_button_up(e, PointerButton::Right);
+        record_button_up(e, PointerButton::Middle);
+        record_button_up(e, PointerButton::XButton1);
+        record_button_up(e, PointerButton::XButton2);
+
+        transfer_buffers_to_world(&mut world);
+
+        let r = world.get::<PointerState>(e).unwrap().released;
+        assert!(r.left && r.right && r.middle);
+        assert!(r.xbutton1 && r.xbutton2, "XButton も個別に写像");
     }
 
     #[test]

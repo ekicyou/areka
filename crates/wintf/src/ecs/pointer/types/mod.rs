@@ -43,6 +43,33 @@ pub struct WheelDelta {
     pub horizontal: i16,
 }
 
+/// ボタン解放の旗（1フレームのみ有効）
+///
+/// tick 中に離されたボタンごとに `true` が立つ。押下状態（`PointerState::*_down`）と
+/// 独立しているため、同じ tick に押下と解放が入っても解放を落とさない。
+/// `DoubleClick` と同じく dispatch の末尾でリセットされる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ButtonReleased {
+    /// 左ボタンが離された
+    pub left: bool,
+    /// 右ボタンが離された
+    pub right: bool,
+    /// 中ボタンが離された
+    pub middle: bool,
+    /// XButton1 が離された
+    pub xbutton1: bool,
+    /// XButton2 が離された
+    pub xbutton2: bool,
+}
+
+impl ButtonReleased {
+    /// いずれかのボタンが離されたか
+    #[inline]
+    pub fn any(&self) -> bool {
+        self.left || self.right || self.middle || self.xbutton1 || self.xbutton2
+    }
+}
+
 /// カーソル移動速度（ピクセル/秒）
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CursorVelocity {
@@ -117,6 +144,10 @@ pub struct PointerState {
     /// ダブルクリック検出（FrameFinalizeでNoneにリセット）
     pub double_click: DoubleClick,
 
+    // === ボタン解放（1フレームのみ有効）===
+    /// 解放されたボタンの旗（dispatch_pointer_events の末尾でリセット）
+    pub released: ButtonReleased,
+
     // === ホイール（1フレームのみ有効）===
     /// ホイール回転情報（FrameFinalizeでリセット）
     pub wheel: WheelDelta,
@@ -141,6 +172,7 @@ impl Default for PointerState {
             shift_down: false,
             ctrl_down: false,
             double_click: DoubleClick::None,
+            released: ButtonReleased::default(),
             wheel: WheelDelta::default(),
             velocity: CursorVelocity::default(),
             timestamp: Instant::now(),

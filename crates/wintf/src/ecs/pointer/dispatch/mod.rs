@@ -237,9 +237,22 @@ pub fn dispatch_pointer_events(world: &mut World) {
                 |h| h.0,
             );
         }
+
+        // OnPointerReleased: 解放の旗が立っている場合に発火（1フレームのみ）。
+        // 押下の配送の後に同じ経路（Tunnel→Bubble）で配るため、同じ tick の
+        // 押下＋解放では Pressed → Released の順に両方が届く。
+        if state.released.any() {
+            dispatch_event_for_handler::<PointerState, OnPointerReleased>(
+                world,
+                *sender,
+                &path,
+                state,
+                |h| h.0,
+            );
+        }
     }
 
-    // ボタン状態とダブルクリック情報をクリア（次フレームで再発火しないように）
+    // ボタン状態・ダブルクリック情報・解放の旗をクリア（次フレームで再発火しないように）
     for (entity, _) in &targets {
         if let Some(mut pointer_state) = world.get_mut::<PointerState>(*entity) {
             pointer_state.left_down = false;
@@ -248,6 +261,7 @@ pub fn dispatch_pointer_events(world: &mut World) {
             pointer_state.xbutton1_down = false;
             pointer_state.xbutton2_down = false;
             pointer_state.double_click = super::DoubleClick::None;
+            pointer_state.released = super::ButtonReleased::default();
         }
     }
 }

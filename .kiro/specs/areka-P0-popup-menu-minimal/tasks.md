@@ -4,7 +4,7 @@
 > 要件 `7.2a`（閉じた後に飛びを起こさない）は数字だけの ID ではないため、design.md と同じく要件 `7.2` の補足として同じタスク（7.3）に対応付ける。
 
 - [ ] 1. 基盤: 後続すべてが乗る 4 つの口を開ける
-- [ ] 1.1 (P) ポインタの「離した」を 1 フレームの旗として配る
+- [x] 1.1 (P) ポインタの「離した」を 1 フレームの旗として配る
   - ポインタの状態に「離した」ボタンの旗（左・右・中・X1・X2）と「どれか立っているか」を足し、ダブルクリックやホイールと同じ 1 フレーム限りの寿命にする
   - 入力段の写しで、押下と解放が同じ tick に入っても解放を落とさない独立の文として旗を立てる（既存の押下優先の分岐は変えない）
   - 配送段で、押下の配送の後に「離した」ハンドラを同じ経路（Tunnel→Bubble）で配り、配送の末尾で旗を消す
@@ -197,3 +197,8 @@
   - 完了状態: `cargo test -p ukadoc-survey` が緑で、台帳の担当欄・ロードマップの行・報告の三者が一致している
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 11.5_
   - _Depends: 9.2_
+
+## Implementation Notes
+
+- 1.1: 新しい worktree では `vendors/pasta` が未取得で cargo が `pasta_core` を読めない。`git submodule update --init --recursive` を先に走らせる。`cargo` が「invalid metadata」（os error 1455＝ページングファイル不足）で落ちたら `-j 4` で再実行する。
+- 1.1: `released` を消すのは `dispatch_pointer_events` の末尾だけ（`clear_transient_pointer_state` は触らない）。dispatch は Input スケジュールへ無条件登録なので翌フレームへ残る経路は無い。下流からは `wintf::ecs::pointer::ButtonReleased` で届く（`ecs/mod.rs` の明示再輸出には無い）。
