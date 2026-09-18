@@ -522,7 +522,7 @@ pub(crate) fn build_plan(
 **Responsibilities & Constraints**
 - 作業フォルダ: `root/.nar-work/<pid>-<連番>/<k>/`（`k` は配置の番号）。同じボリューム上なので `rename` で入れ替えられる。開始時に `root/.nar-work/` の残骸を消す（前回の異常終了の後始末。同じ根への同時インストールは製品でも開発でも起きない前提＝節「Risks」）。
 - 組み上げ（配置ごと）: ⑴ 宛先が既に在り `Overlay` なら宛先の木を作業フォルダへ複写、`Replace { keep }` なら宛先の木のうちファイル名（ASCII 大小無視）が `keep` にあるものだけを同じ相対位置へ複写、`Supplement` は常に宛先の木を複写。⑵ アーカイブの内容を上書きで書く（`inflate_entry` の結果をそのまま・変換無し）。
-- 確定（配置ごと・番号順）: 宛先が無ければ `rename(stage → dest)`。在れば `rename(dest → root/.nar-work/<pid>-<連番>/old-<k>)` → `rename(stage → dest)` → `remove_dir_all(old)`。2 つ目の `rename` が失敗したら `old → dest` に戻す。`remove_dir_all(old)` の失敗は確定を取り消さず、`InstallOutcome.leftovers` に残す。全配置の確定後に `root/.nar-work/<pid>-<連番>/` を消す（空のまま残すと開発用の根では原本に写り、全複製に伝播する）。
+- 確定（配置ごと・番号順）: 宛先が無ければ `rename(stage → dest)`。在れば `rename(dest → root/.nar-work/<pid>-<連番>/old-<k>)` → `rename(stage → dest)` の 2 手。2 つ目の `rename` が失敗したら `old → dest` に戻す。**`old` は配置ごとには消さず、全配置の確定後の後片付け 1 回（`root/.nar-work/<pid>-<連番>/` の削除）にまとめる**——配置ごとに消すと、後の配置が失敗したときに前の配置を戻す元が無くなり、要件 5.11 を満たせないため（2026-09-19・タスク 4.3 が実測で確認: 逐語どおりに戻すと巻き戻しのテストが赤）。その後片付けが失敗したら確定は取り消さず、作業フォルダのパスを `InstallOutcome.leftovers` に残す。作業フォルダを空のまま残すと開発用の根では原本に写り、全複製に伝播する。
 - 複数配置（ゴースト＋同梱バルーン）で後の配置の確定が失敗したら、確定済みの配置を逆順に元へ戻す（新規なら削除、入れ替えなら `old` を戻す）。戻せなかったものは `NarError::Io { committed, rolled_back: false }` に列挙する（6.4）。
 - 既存状態の判定: 確定前に宛先が無ければ `New`、在って `Overlay` なら `Overlaid`、在って `Replace` なら `Refreshed`。
 - ファイルは `File::create` → `write_all` → `sync_all` は行わない（フォルダ単位の入れ替えで十分・`FsPersistIo` は 1 ファイルの設定値だから fsync していた）。
@@ -553,7 +553,7 @@ pub struct InstallOutcome {
     pub accept: Option<String>,
     pub installed: Vec<InstalledElement>,
     pub warnings: Vec<ManifestWarning>, // 読み飛ばしたキーを含む
-    pub leftovers: Vec<PathBuf>,        // 消せなかった old フォルダ
+    pub leftovers: Vec<PathBuf>,        // 片付けられずに残った場所（後片付けに失敗した作業フォルダ・開始時に消せなかった他の走行の置き土産）
 }
 
 impl NarArchive {
@@ -792,7 +792,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8>;    // CRLF で連結
 - `names_tests`: ビット 11 あり UTF-8（日本語）・印なし Shift_JIS（日本語のフォルダ名とファイル名）・印なしで不正な列 → `NameUndecodable`（生バイト 16 進を含む）・`..`・`/` 始まり・`C:`・`\\`・`\`・NUL・`CON.txt`・末尾ドット・`<>`・`A.txt` と `a.txt` の衝突・S_IFLNK。
 - `manifest_tests`: `Charset,UTF-8`（大文字キー）・`charset, Shift_JIS`（値の前の空白）・`charset` 無し（ANSI 既定で日本語の `name`）・`Type,Ghost`（大文字の値は拒否・キーだけ大小無視）・4 種の受理・7 種＋未知＋無しの拒否・`directory`／`name` 無し／空・`directory` に `/` `..` `C:`・`accept,` 空・`balloon.directory` のみ（source は同値）・`balloon0` と `balloon1`・`headline.directory` の警告・`type,balloon` に `balloon.directory` の警告・`refresh,1`／`refresh,0`／`refresh,true`・mask の分割と不正要素・`bootghost` の無視。
 - `plan_tests`: 4 種の宛先・同梱バルーンの除外と接頭辞剥がし・取り出し元無し・shell／supplement の宛先無し・supplement の `install.txt` 除外・空フォルダ・フォルダのエントリ無し。
-- `install_tests`（根は OS の一時フォルダではなく `sample_ghost_kit::WorkDir` が配る `target/nar-samples/work/<pid>-<連番>/`。dev 依存の循環により kit が見る `areka_nar` はテスト対象とは別の写しなので、`areka-nar` 自身のテストは kit から `WorkDir` と `nar_writer` だけを借り、`SampleError::Nar` の中身を `crate::` の型と比べない）: 新規・`Overlay` で既存ファイルが残り同名が上書き・`Replace` で mask 以外が消える（全階層）・同梱バルーン側の `*.refresh`・途中失敗（読み取り専用の宛先を作って確定を失敗させる）で宛先が無傷・**宛先が使用中**（宛先の中のファイルを `share_mode(0)` で開いたまま `install`＝起動中の `shiori.dll` の再現）で `Io { phase: Commit, rolled_back: true }` が返り宛先が呼ぶ前のまま（6.6）・2 配置の 2 つ目の失敗で 1 つ目が戻る・`leftovers`・確定後の各ファイルの実パスが宛先配下・バイト一致。
+- `install_tests`（根は OS の一時フォルダではなく `sample_ghost_kit::WorkDir` が配る `target/nar-samples/work/<pid>-<連番>/`。dev 依存の循環により kit が見る `areka_nar` はテスト対象とは別の写しなので、`areka-nar` 自身のテストは kit から `WorkDir` と `nar_writer` だけを借り、`SampleError::Nar` の中身を `crate::` の型と比べない）: 新規・`Overlay` で既存ファイルが残り同名が上書き・`Replace` で mask 以外が消える（全階層）・同梱バルーン側の `*.refresh`・途中失敗（読み取り専用の宛先を作って確定を失敗させる）で宛先が無傷・**宛先が使用中**（宛先の中のファイルを `share_mode(1)`（`FILE_SHARE_READ`）で開いたまま `install`＝起動中の `shiori.dll` の再現。共有ゼロだと組み上げの複写が os error 32 で先に失敗し、確定の段に届かないので 6.6 が無検査になる）で `Io { phase: Commit, rolled_back: true }` が返り宛先が呼ぶ前のまま（6.6）・2 配置の 2 つ目の失敗で 1 つ目が戻る・`leftovers`・確定後の各ファイルの実パスが宛先配下・バイト一致。
 - `error_tests`: **1 本のテスト**が `nar_writer` で 13 変種それぞれの固定入力を組み、各入力を `open`（または `install`）に通して得た `kind()` の集合が `ALL_KINDS` と**完全一致**することを判定する（集合が空なら当然赤＝母数 0 で緑にならない）。別ファイルの兄弟テストの結果を集めて突き合わせる形にはしない（テスト間で状態を共有できない）。
 - `no_deflate_side_is_called`: `areka-nar/src/*.rs`（兄弟テストを含む）が `miniz_oxide::deflate` を綴らないことを `include_str!` の字面で見張る（10.2 の代替措置）。
 
