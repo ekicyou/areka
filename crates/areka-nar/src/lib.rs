@@ -6,8 +6,10 @@
 //! 根の場所は決めず、`&Path` として受け取る（決めるのは `baseware-root-layout`）。
 //! 検体の在処も知らない（窓口は開発専用の `sample-ghost-kit` にある）。
 
+mod crc32;
 mod error;
 
+pub use crc32::crc32;
 pub use error::{
     ElementKind, ExistingState, InstalledElement, Integrity, IoPhase, ManifestWarning, NarError,
     RefuseReason, UnsafeWhy, Unsupported,
