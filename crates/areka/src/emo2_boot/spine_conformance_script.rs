@@ -281,7 +281,7 @@ pub(super) const MENU_CLICK_BUTTON: &str = "0";
 ///
 /// 出所: `crates/areka-kanade/src/schedule/events.rs:200-206` が `reason.as_ref_str()` を載せ、
 /// `crates/areka-kanade/src/msg.rs:40` が `CloseReason::User` を `"user"` と綴る。
-/// 正典の Ref1／Ref2（スコープ番号）は単一スコープの M1 では省略される（同 `events.rs:199`）。
+/// 利用者起因は Ref1／Ref2 に終了操作を受けた窓のスコープ番号が続く（同 `events.rs` の `on_close`）。
 pub(super) const CLOSE_REASON: &str = "user";
 
 // ===========================================================================
@@ -672,9 +672,9 @@ pub(super) fn expected_calls() -> Vec<RecordedCall> {
         get(CHOICE_MOVE_MENU, &[]),
         // ── 位置調整: 「調整」を確定すると応答が移動の指令を運ぶ。
         get(CHOICE_MOVE_APPLY, &[]),
-        // ── 終了: 照会で送られ Ref0 は由来のみ（正典の Ref1／Ref2 は M1 では省略される）。
+        // ── 終了: 照会で送られ Ref0 は由来・Ref1／Ref2 はスコープ番号（窓 0 の終了は 0）。
         //    出所: events.rs:197-206。
-        get("OnClose", &[CLOSE_REASON]),
+        get("OnClose", &[CLOSE_REASON, "0", "0"]),
         // ── 解放: ちょうど 1 度だけ（R3.9）。列の等値照合が件数もそのまま固定する。
         RecordedCall::Unload,
     ]

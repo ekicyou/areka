@@ -431,7 +431,7 @@ fn handler_ctrl_left_double_click_sends_one_close_request_and_keeps_the_windows(
         matches!(
             rx.try_recv().expect("終了指示が送られる"),
             KanadeMsg::CloseRequest {
-                reason: CloseReason::User
+                reason: CloseReason::User { scope: 0 }
             }
         ),
         "結線済みの Ctrl+左ダブルクリックは CloseRequest{{User}} を送る（R15.1）"

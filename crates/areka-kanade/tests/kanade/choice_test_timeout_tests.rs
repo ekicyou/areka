@@ -117,7 +117,7 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 

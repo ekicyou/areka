@@ -27,9 +27,12 @@ use crate::talk::EpilogueCommand;
 pub struct MonotonicMs(pub u64);
 
 /// close 指示の理由（ukadoc OnClose Ref0 への写像: User→"user"・System→"system"）。
+///
+/// `User` は終了操作を受けた窓のスコープ番号（本体 0／相方 1）を運び、通常握手の `OnClose` の
+/// Ref1／Ref2 へ載る（[`crate::events::on_close`]）。`System` はスコープを持たない。
 #[derive(Debug, Clone, Copy)]
 pub enum CloseReason {
-    User,
+    User { scope: u32 },
     System,
 }
 
@@ -37,7 +40,7 @@ impl CloseReason {
     /// ukadoc OnClose Ref0 への写像文字列（`User`→`"user"`・`System`→`"system"`）。
     pub fn as_ref_str(self) -> &'static str {
         match self {
-            CloseReason::User => "user",
+            CloseReason::User { .. } => "user",
             CloseReason::System => "system",
         }
     }
@@ -492,7 +495,7 @@ mod tests {
                 reason: crate::talk::TalkEndReason::Ended,
             }),
             KanadeMsg::CloseRequest {
-                reason: CloseReason::User,
+                reason: CloseReason::User { scope: 0 },
             },
             KanadeMsg::ForceQuit {
                 reason: CloseReason::System,
@@ -644,7 +647,7 @@ mod tests {
 
     #[test]
     fn close_reason_maps_to_onclose_ref0() {
-        assert_eq!(CloseReason::User.as_ref_str(), "user");
+        assert_eq!(CloseReason::User { scope: 0 }.as_ref_str(), "user");
         assert_eq!(CloseReason::System.as_ref_str(), "system");
     }
 

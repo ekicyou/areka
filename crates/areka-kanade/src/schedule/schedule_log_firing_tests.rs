@@ -305,7 +305,7 @@ fn warn_close_notified_unexpected_logs() {
     // ClosePending + Notified（OnClose は GET ゆえ構造上あり得ない）→ close_notified_unexpected。
     let ev = run_step(
         Phase::ClosePending {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
         Input::ShioriReply {
             outcome: ShioriOutcome::Notified,
@@ -320,7 +320,7 @@ fn warn_close_reply_unexpected_logs() {
     // ClosePending + Unloaded（Value/NoContent/Notified 以外）→ close_reply_unexpected。
     let ev = run_step(
         Phase::ClosePending {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
         Input::ShioriReply {
             outcome: ShioriOutcome::Unloaded,
@@ -335,10 +335,10 @@ fn warn_close_pending_input_ignored_logs() {
     // ClosePending + 無関係入力（CloseRequest）→ close_pending_input_ignored。
     let ev = run_step(
         Phase::ClosePending {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
         Input::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
     );
     assert_logged(&ev, Level::WARN, "close_pending_input_ignored");
@@ -353,7 +353,7 @@ fn warn_close_talk_wait_input_ignored_logs() {
             deadline: None,
         },
         Input::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
     );
     assert_logged(&ev, Level::WARN, "close_talk_wait_input_ignored");

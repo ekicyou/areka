@@ -337,7 +337,7 @@ fn stage_driver_refuses_a_plan_that_cannot_fit_in_the_stage_interval() {
                     scope: 0,
                     references: vec![],
                 }),
-                Injection::CloseRequest(CloseReason::User),
+                Injection::CloseRequest(CloseReason::User { scope: 0 }),
             ],
             waiting: WaitInjection::Idle,
         },
@@ -411,7 +411,7 @@ fn stage_driver_reports_a_closed_inbox_without_swallowing_or_panicking() {
             &mut sink,
             &StagePlan {
                 stage: &closing,
-                once: vec![Injection::CloseRequest(CloseReason::User)],
+                once: vec![Injection::CloseRequest(CloseReason::User { scope: 0 })],
                 waiting: WaitInjection::Idle,
             },
             |progress| progress.closed.kanade,
@@ -674,7 +674,10 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
     );
 
     harness
-        .inject(&Injection::CloseRequest(CloseReason::User), CLOSE_HOLD_MS)
+        .inject(
+            &Injection::CloseRequest(CloseReason::User { scope: 0 }),
+            CLOSE_HOLD_MS,
+        )
         .expect("kanade の受信端は生きている（直前の段で探りが 12 本通っている）");
     let probe = handle.clone();
     let mut dispatcher_closed = false;
@@ -785,7 +788,10 @@ fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
         .expect("status ledger mutex poisoned");
     let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);
     harness
-        .inject(&Injection::CloseRequest(CloseReason::User), 11_000)
+        .inject(
+            &Injection::CloseRequest(CloseReason::User { scope: 0 }),
+            11_000,
+        )
         .expect("起動直後の kanade の受信端は開いている");
     assert!(
         frozen.is_empty(),

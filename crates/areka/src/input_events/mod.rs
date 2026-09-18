@@ -427,7 +427,7 @@ pub(crate) fn on_char_pointer_pressed(
             let mut wiring = world
                 .get_non_send_mut::<MouseWiring>()
                 .expect("MouseWiring は直上で存在確認済み");
-            wiring.send_close_request(CloseReason::User);
+            wiring.send_close_request(CloseReason::User { scope: 0 });
             return true;
         }
         tracing::info!(

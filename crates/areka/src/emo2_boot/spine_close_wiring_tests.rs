@@ -101,7 +101,7 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
         .ghost
         .kanade()
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("kanade は生存しており終了指示を受け取る");
 

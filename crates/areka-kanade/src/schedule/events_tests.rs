@@ -139,11 +139,21 @@ fn on_second_change_ref0_truncates_toward_zero() {
     assert_eq!(references[0], "0");
 }
 
+/// 通常握手の `OnClose`（Req5.2/5.3）: 利用者起因は Ref0=`user`・Ref1／Ref2＝終了操作を受けた
+/// 窓のスコープ番号。相方側（スコープ 1）の窓なら `["user","1","1"]`。
 #[test]
-fn on_close_user_maps_to_user() {
-    let (id, references) = expect_get(on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE));
+fn on_close_user_carries_scope_in_ref1_and_ref2() {
+    let (id, references) = expect_get(on_close(
+        CloseReason::User { scope: 1 },
+        &ExecutionSnapshot::INACTIVE,
+    ));
     assert_eq!(id, "OnClose");
-    assert_eq!(references, vec!["user".to_string()]);
+    assert_eq!(references, vec!["user", "1", "1"]);
+    let (_, references) = expect_get(on_close(
+        CloseReason::User { scope: 0 },
+        &ExecutionSnapshot::INACTIVE,
+    ));
+    assert_eq!(references, vec!["user", "0", "0"]);
 }
 
 #[test]
@@ -165,6 +175,12 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
     let (id, references) = expect_notify(call);
     assert_eq!(id, "OnClose");
     assert_eq!(references, vec!["system".to_string()]);
+    // 強制退避の通知はスコープを載せない（利用者起因でも Ref0 のみ・通常握手とは非対称）。
+    let (_, references) = expect_notify(on_close_notify(
+        CloseReason::User { scope: 1 },
+        &ExecutionSnapshot::INACTIVE,
+    ));
+    assert_eq!(references, vec!["user"]);
 }
 
 /// 許可 ID 檻（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待11集合と完全一致し
@@ -385,7 +401,7 @@ fn every_construction_function_returns_static_event_id() {
                 choice_active: false,
             },
         ),
-        on_close(CloseReason::User, &snap),
+        on_close(CloseReason::User { scope: 0 }, &snap),
         on_close_notify(CloseReason::System, &snap),
         on_mouse_move(0, 0, 0, Some("Head"), &snap),
         on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
@@ -423,7 +439,7 @@ fn every_construction_function_returns_an_allowed_id() {
                 choice_active: false,
             },
         ),
-        on_close(CloseReason::User, &snap),
+        on_close(CloseReason::User { scope: 0 }, &snap),
         on_close_notify(CloseReason::System, &snap),
         on_mouse_move(0, 0, 0, Some("Head"), &snap),
         on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),

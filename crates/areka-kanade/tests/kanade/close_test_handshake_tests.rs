@@ -75,7 +75,7 @@ fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 
@@ -109,7 +109,7 @@ fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
     let recorded = shiori.recorded();
 
     // (a) close 握手を通った証拠: OnClose GET（Ref0=user）が現れる。
-    let onclose_index = onclose_get_index(&recorded, CloseReason::User)
+    let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("OnClose GET（Ref0=user）が記録列に現れるはず（握手を通った）");
 
     // (b) close talk が現に起動した（別れの Value を受け取り再生起動要求を配送した）。
@@ -217,7 +217,7 @@ fn silent_close_on_204_terminates_without_extra_events() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 
@@ -253,7 +253,7 @@ fn silent_close_on_204_terminates_without_extra_events() {
     let recorded = shiori.recorded();
 
     // (a) OnClose GET（Ref0=user）が現れる。
-    let onclose_index = onclose_get_index(&recorded, CloseReason::User)
+    let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("OnClose GET（Ref0=user）が記録列に現れるはず");
 
     // (b) OnClose GET の直後は Unload（末尾）で、間に追加の GET/NOTIFY は一切ない
@@ -292,7 +292,7 @@ fn silent_close_on_204_terminates_without_extra_events() {
         .iter()
         .filter(|c| {
             **c == expected_call(events::on_close(
-                CloseReason::User,
+                CloseReason::User { scope: 0 },
                 &ExecutionSnapshot::INACTIVE,
             ))
         })
@@ -373,7 +373,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 
@@ -406,7 +406,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     let recorded = shiori.recorded();
 
     // (a) close 握手を通った証拠: OnClose GET（Ref0=user）が現れる。
-    let onclose_index = onclose_get_index(&recorded, CloseReason::User)
+    let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("OnClose GET（Ref0=user）が記録列に現れるはず（握手を通った）");
 
     // (b) TalkDone 不着でも終了系列は完走: 末尾は Unload（DeadlineExceeded 継続）で閉じる。
@@ -463,7 +463,7 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
     harness
         .sender
         .send(KanadeMsg::ForceQuit {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send ForceQuit");
 
@@ -494,7 +494,7 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
 
     // (b) DD-10 の best-effort OnClose NOTIFY（Ref0=user）が Unload の直前に現れる。
     //     force_quit がインラインで組む退化 NOTIFY（events 表由来ではない）に一致させる。
-    let force_notify = force_quit_onclose_notify(CloseReason::User);
+    let force_notify = force_quit_onclose_notify(CloseReason::User { scope: 0 });
     let notify_index = recorded
         .iter()
         .position(|c| *c == force_notify)
@@ -507,7 +507,7 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
 
     // (c) close 握手（OnClose GET）は通っていない: ForceQuit は握手を経ず直行する。
     assert!(
-        onclose_get_index(&recorded, CloseReason::User).is_none(),
+        onclose_get_index(&recorded, CloseReason::User { scope: 0 }).is_none(),
         "ForceQuit は close 握手（OnClose GET）を経ず終了へ直行するはず: {:?}",
         recorded
     );

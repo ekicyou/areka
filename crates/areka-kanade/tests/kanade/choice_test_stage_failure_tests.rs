@@ -50,7 +50,7 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
     gate.release_all();

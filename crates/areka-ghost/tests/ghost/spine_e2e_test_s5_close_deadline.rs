@@ -187,7 +187,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     runtime
         .kanade()
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("kanade actor should still be alive to receive the close request");
 
@@ -294,7 +294,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
             &areka_kanade::ExecutionSnapshot::INACTIVE,
         )),
         expected_from_shiori_call(events::on_close(
-            CloseReason::User,
+            CloseReason::User { scope: 0 },
             &areka_kanade::ExecutionSnapshot::INACTIVE,
         )),
         RecordedCall::Unload,

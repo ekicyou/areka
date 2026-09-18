@@ -18,7 +18,7 @@
 //! ／`open_startup_window` の後で `emo2_boot::wire_emo2_boot` を呼び、その成否で実 sink boot
 //! （`wired=true`）／既存 `LogSink`×2 フォールバック boot（`wired=false`）を呼び分ける（task 5.2・
 //! design.md「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）。`run()` 復帰後は
-//! `GhostRuntime::shutdown(CloseReason::User)`（DD-10）→ seriko `ActorHandle::join` で終了を
+//! `GhostRuntime::shutdown(CloseReason::User { scope: 0 })`（DD-10）→ seriko `ActorHandle::join` で終了を
 //! 総仕上げする。boot 失敗は非致命として扱い骨格起動を止めない（要件 7.3・8.2）。
 
 use bevy_ecs::prelude::*;
@@ -348,7 +348,7 @@ fn main() -> Result<()> {
     // 不改変・R6.2）。失敗は `error!` の上で main 自身の `Result` へ伝播する（genuine な失敗を
     // 黙って exit 0 にしない・R6.3）。
     if let Some(runtime) = ghost_runtime {
-        if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::User) {
+        if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::User { scope: 0 }) {
             tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
             return Err(windows::core::Error::from_hresult(
                 windows::Win32::Foundation::E_FAIL,

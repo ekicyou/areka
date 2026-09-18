@@ -70,7 +70,7 @@ fn force_quit_delivers_exactly_one_stop_notification_with_the_forced_cause() {
     harness
         .sender
         .send(KanadeMsg::ForceQuit {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send ForceQuit");
 
@@ -115,7 +115,7 @@ fn silent_close_delivers_the_close_silent_cause() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 
@@ -170,7 +170,7 @@ fn a_dropped_receiver_does_not_stop_the_termination_sequence() {
     harness
         .sender
         .send(KanadeMsg::ForceQuit {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send ForceQuit");
 

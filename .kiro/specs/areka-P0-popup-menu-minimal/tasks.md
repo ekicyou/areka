@@ -26,7 +26,7 @@
   - _Requirements: 4.1, 9.4, 10.4_
   - _Boundary: areka-parsers package, areka-ghost runtime_
 
-- [ ] 1.4 横断改変: 終了理由にスコープ番号を載せる
+- [x] 1.4 横断改変: 終了理由にスコープ番号を載せる
   - 終了理由の「利用者」にスコープ番号を持たせ、終了の握手の問い合わせが Ref0 に `user`・Ref1 と Ref2 にスコープ番号を載せるようにする（`system` は従来どおり Ref0 のみ・強制退避の通知は変えない）
   - 運行の状態機械（保留・締切・遷移）の本文は変えず、終了理由を組み立てている全箇所（areka 本体・背骨の台本と期待列・kanade と ghost のテスト）を追随させる
   - 責務をまたぐ機械的な一斉改変であることを明示し、以降のタスクはこの形を前提にする
@@ -203,3 +203,4 @@
 - 1.1: 新しい worktree では `vendors/pasta` が未取得で cargo が `pasta_core` を読めない。`git submodule update --init --recursive` を先に走らせる。`cargo` が「invalid metadata」（os error 1455＝ページングファイル不足）で落ちたら `-j 4` で再実行する。
 - 1.1: `released` を消すのは `dispatch_pointer_events` の末尾だけ（`clear_transient_pointer_state` は触らない）。dispatch は Input スケジュールへ無条件登録なので翌フレームへ残る経路は無い。下流からは `wintf::ecs::pointer::ButtonReleased` で届く（`ecs/mod.rs` の明示再輸出には無い）。
 - 1.3: 正典 URL のコメント（`/// ukadoc:`）は定義箇所 1 か所だけに置く（`doc/ukadoc-coverage/README.md` §3）。転記・呼び出し側（`resolve.rs` など）に同じ URL を書くと `cargo run -p ukadoc-survey -- evidence` が同じ id に 2 ファイルを挙げる＝レビューで差し戻し。`MountModel` は全欄リテラル／全欄分解のテストが 2 か所ある（`model_tests.rs`・`validation_tests.rs`）。
+- 1.4: `OnClose` の参照列を `events::on_close` から導かずリテラルで突き合わせているのは spine 一周（`spine_conformance_script.rs` の `expected_calls()`）だけ。kanade の握手テストと areka-ghost e2e は期待値を `events::on_close` から作るので、この列の変更には恒真。`input_events/mod.rs` と `main.rs` は機械的な `User { scope: 0 }` のまま（実スコープは 6.1）。`spine_conformance_lap_tests.rs` は 988 行＝余裕 12 行。

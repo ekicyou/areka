@@ -22,7 +22,7 @@
 //! | `OnBoot` | GET | Ref0=`config.shell_name`（Ref6/7 省略） |
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
-//! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"・Ref1/2 省略） |
+//! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"）・"user" のみ Ref1=Ref2=スコープ番号（ForceQuit の NOTIFY は Ref0 のみ） |
 //! | `OnChoiceSelectEx` | GET | Ref0=ラベル・Ref1=選択肢 ID・Ref2 以降=付随参照列（空なら位置なし・Req3.1/3.5） |
 //! | `OnChoiceSelect` | GET | Ref0=選択肢 ID（Req3.2） |
 //! | 任意名（`\q` の `On` 始まり ID） | GET | Ref0 以降=付随参照列のみ（空なら References なし・Req3.3/3.5） |
@@ -205,13 +205,19 @@ pub fn on_second_change(now: MonotonicMs, snapshot: &ExecutionSnapshot) -> Shior
     }
 }
 
-/// `OnClose`（GET・Ref0=`reason.as_ref_str()`）。
+/// `OnClose`（GET・Ref0=`reason.as_ref_str()`・利用者起因は Ref1／Ref2＝スコープ番号）。
 ///
-/// Ref1/2（スコープ番号・SSP）は単一スコープの M1 では省略する。
+/// 利用者起因（[`CloseReason::User`]）は、終了操作を受けた窓のスコープ番号を Ref1 と Ref2 の
+/// 両方へ載せる（例: 相方側の窓なら `["user","1","1"]`）。`system` はスコープを持たないため
+/// Ref0 のみ。
 pub fn on_close(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    let mut references = vec![reason.as_ref_str().to_string()];
+    if let CloseReason::User { scope } = reason {
+        references.extend([scope.to_string(), scope.to_string()]);
+    }
     ShioriCall::Get {
         id: EventId::Static("OnClose"),
-        references: vec![reason.as_ref_str().to_string()],
+        references,
         status: ExecutionStatus::derive(snapshot),
     }
 }
@@ -221,6 +227,7 @@ pub fn on_close(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall
 /// DD-IT-8: `mod.rs` の `force_quit` が inline 構築していた退化 NOTIFY を置き換え、events.rs を
 /// `ShioriCall` 構築の単一列挙点へ回復する。通常握手の [`on_close`] は **GET** を返すため
 /// force_quit には流用できず（force_quit は NOTIFY を要する）、NOTIFY 版を別に増設する。
+/// 通常握手と違い、利用者起因でもスコープ番号（Ref1／Ref2）は載せない（Ref0 のみ）。
 /// snapshot は Unloading へ遷移後の [`ExecutionSnapshot::INACTIVE`] を渡す（DD-IT-4）。
 pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
