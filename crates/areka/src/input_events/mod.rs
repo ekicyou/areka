@@ -39,9 +39,9 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// を退役して差し替え・main.rs が spawn 直後に呼ぶ）で完了済み＝本番消費者が到達したため
 /// dead_code 抑止は不要になった。
 ///
-/// 上の 2 点の例外は右ダブルクリックの預かりの取り出しと送出
-/// （`take_pending_right_double_click`／`send_pending_right_double_click`）で、呼び手は
-/// ポインタハンドラではなくメニュー側である（[`PendingDoubleClick`] の不変条件）。
+/// 例外はメニュー側（`menu`）から呼ばれる 3 つである: 右ダブルクリックの預かりの取り出しと送出
+/// （`take_pending_right_double_click`／`send_pending_right_double_click`・[`PendingDoubleClick`] の
+/// 不変条件）と、メニューの「終了」が Ctrl+左ダブルクリックと同じ入口として呼ぶ `send_close_request`。
 pub(crate) struct MouseWiring {
     /// `GhostRuntime::kanade()` クローン（1.4・std mpsc）。
     sender: Sender<KanadeMsg>,

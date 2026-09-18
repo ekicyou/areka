@@ -73,8 +73,6 @@ pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeR
 ///
 /// 無いときは「説明書」を灰色で出すための `false` を返し、**初めて無いと分かったときだけ**
 /// `debug!` で記録する（毎 tick の照会で記録が溢れない）。持ち物が無いときも `false`。
-// task 8.1 のメニュー組込項目が呼ぶ。
-#[allow(dead_code)]
 pub(crate) fn is_available(world: &World) -> bool {
     let Some(wiring) = world.get_non_send::<ReadmeWiring>() else {
         tracing::trace!(

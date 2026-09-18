@@ -45,7 +45,7 @@
 - `Emo2Wiring`（`crates/areka/src/emo2_boot/frame/wiring.rs`）の形。本仕様は `Emo2Wiring::new` の署名にも欄にも触らない（構築点が 6 か所以上あるため）。`readme` の受け口は別の NonSend 資源として置く。
 - kanade の状態機械（`schedule/mod.rs`・`steady.rs`・`boot.rs`・`close.rs`）の遷移。`CloseReason::User` の形が変わるだけで、遷移・保留・締切の規則は不変。
 - バルーン窓の右クリック（`input_events/balloon.rs` は触らない）。
-- `main.rs` のファサード分割（別途）。本仕様の `main.rs` 増分は結線 1 呼出（3〜5 行）に限る。
+- `main.rs` のファサード分割（別途）。本仕様の `main.rs` 増分は結線の 1 呼出と、窓を生やすクロージャ内の装着の 1 呼出（合わせて 10 行前後）に限る。
 - `ForceQuit` 経路の `OnClose` NOTIFY（`events::on_close_notify`）の Ref 列（Ref0 のみのまま）。
 
 ### Allowed Dependencies
@@ -64,7 +64,7 @@
 - `CloseReason::User { scope }` は 20 ファイルの構築点を持つ。並走する `nar-install` が触りうるのは `crates/areka/src/emo2_boot/spine.rs`（1 行）と `spine_conformance_script.rs`（`CLOSE_REASON` の期待列・2 行）で、後着側が rebase で解く。
 - `PointerState.released` を足すため、wintf の `dispatch_pointer_events` の末尾のクリア処理と既存テスト `test_dispatch_clears_button_state_after_dispatch` を同時に更新する。
 - `wire_emo2_boot` の sinks の本数（5→6）。sinks の順序を前提にしたテストがあれば追随する。
-- `wire_menu` は呼ばれた時点に在る `CharWindowMarker` 窓へだけ `OnPointerReleased` を装着する（`attach_char_pointer_handlers` と同じ性質）。ゴースト切替で窓を作り直す spec（`ghost-shell-balloon-switch`）は、再生成した窓へ `attach_char_pointer_handlers` と `menu::attach_release_handlers` の両方を掛け直す。
+- `OnPointerReleased` の装着は `wire_menu` ではなく `menu::attach_release_handlers` が行い、呼ばれた時点に在る `CharWindowMarker` 窓へだけ付く（`attach_char_pointer_handlers` と同じタイミング契約＝窓を生やした直後に同じ `&mut World` のクロージャ内で呼ぶ）。起動時の窓は `wire_menu` より**後**に生える（実装タスク 8.1 のレビューで確定）。ゴースト切替で窓を作り直す spec（`ghost-shell-balloon-switch`）は、再生成した窓へ `attach_char_pointer_handlers` と `menu::attach_release_handlers` の両方を掛け直す。
 - 台帳（`doc/ukadoc-coverage/ledger/*.toml`）と `roadmap-draft.md` は A0 の 3 本が同時に触りうる（要件 10.5）。
 
 ## Architecture
@@ -199,7 +199,7 @@ crates/areka-kanade/tests/kanade/
 | `crates/wintf/src/ecs/pointer/dispatch/tests.rs` | 362 | +60 | 解放配送・同 tick 押下＋解放・クリアの檻 |
 | `crates/areka/src/input_events/mod.rs` | 475 | +40 | `char_scope` を `pub(crate)`、`MouseWiring` に右ダブルクリックの預かり、`send_close_request` を `pub(crate)`、押下ハンドラの右ダブルクリック分岐を預かりへ、Ctrl+左ダブルクリックに scope |
 | `crates/areka/src/input_events/input_events_tests.rs` | 845 | +5 | `CloseReason::User { scope }` の追随（新規檻は兄弟ファイルへ） |
-| `crates/areka/src/main.rs` | 948 | +5 | wired 分岐で `wire_mouse_input` の直後に `menu::wire_menu(app.world().borrow_mut().world_mut(), runtime.kanade().clone())` 1 呼出・`mod menu; mod readme;`・`shutdown(CloseReason::User { scope: 0 })` |
+| `crates/areka/src/main.rs` | 948 | +10 | wired 分岐で `wire_mouse_input` の直後に `menu::wire_menu(app.world().borrow_mut().world_mut(), runtime.kanade().clone())` 1 呼出・窓を生やすクロージャ内の `attach_char_pointer_handlers` の隣に `menu::attach_release_handlers(world)` 1 呼出・`mod menu; mod readme;`・`shutdown(CloseReason::User { scope: 0 })` |
 | `crates/areka/src/emo2_boot/mod.rs` | 654 | +10 | `ReadmeCueSink` を sinks の 6 本目へ・boot 後に `readme::wire_readme` |
 | `crates/areka/src/emo2_boot/consumer_ledger.rs` | 627 | +8 | `("open", Some("readme"))` → `CommandConsumer::ReadmeSink` |
 | `crates/areka/src/emo2_boot/spine.rs`・`spine_conformance_script.rs`・`spine_conformance_support*.rs`・`spine_*_tests.rs` | — | 各 1〜2 | `CloseReason::User { scope: 0 }` と `OnClose` 期待列 `[user, 0, 0]` |
@@ -452,7 +452,8 @@ impl MouseWiring {
 **Responsibilities & Constraints**
 - 登記の単位は `MenuItem`。枠ごとに供給関数を 1 つだけ持つ（`[Option<Supplier>; 7]`）。同じ枠へ 2 度目の登記は置き換え＋`warn!`（要件 6.3）。`unregister(frame)` で空にする（要件 6.4）。
 - `snapshot(&World, &MenuContext) -> Vec<(Frame, MenuItem)>` は登記された枠だけを `Frame::ORDER` の順に、供給関数をその場で呼んで返す（要件 6.2）。
-- `wire_menu` は ⑴ `MenuWiring` を World へ挿入し、⑵ 組込 2 項目を登記し、⑶ 全 `CharWindowMarker` 窓へ `OnPointerReleased(trigger::on_char_pointer_released)` を装着し（`attach_char_pointer_handlers` と同じ走査）、⑷ `Input` スケジュールへ `trigger::poll_menu_query.after(dispatch_pointer_events)` を登録する（`wire_choice_drain` と同型）。`main.rs` の wired 分岐で `wire_mouse_input` の直後に呼ぶ（キャラクター窓は `open_startup_window` で既に生えている）。
+- `wire_menu` は ⑴ `MenuWiring` を World へ挿入し、⑵ 組込 2 項目を登記し、⑶ `Input` スケジュールへ `trigger::poll_menu_query.after(dispatch_pointer_events)` を登録する（`wire_choice_drain` と同型）。`main.rs` の wired 分岐で `wire_mouse_input` の直後に呼ぶ。**窓への装着はここでは行わない**: `open_startup_window` は窓を同期では作らず、World を書き換えるクロージャを積むだけで、適用されるのは `app.run()` の tick の中（`drain_task_pool_commands`）＝`wire_menu` より後である（当初の「既に生えている」は偽で、実装タスク 8.1 のレビューが実測で覆した）。
+- `attach_release_handlers` は全 `CharWindowMarker` 窓へ `OnPointerReleased(trigger::on_char_pointer_released)` を装着する（`attach_char_pointer_handlers` と同じ走査・同じタイミング契約）。呼び手は `main.rs` の窓を生やすクロージャ（`attach_char_pointer_handlers` の隣）。装着した件数を記録し、0 件なら `warn!`（無記録の 0 件装着を作らない）。解放ハンドラは `MenuWiring`／`MouseWiring` が無ければ `trace!` で無視するので、fallback 経路で付いても無害。
 - 組込の登記:
   - ⑥説明書: `label: "説明書"`, `caption_resource: Some("readmebutton.caption")`, `enabled: readme::is_available(world)`, `checked: None`, `body: Action(readme を開く閉包)`。閉包は `readme::open_from_world(world)`。
   - ⑦終了: `label: "終了"`, `caption_resource: Some("closebutton.caption")`, `enabled: true`, `body: Action(閉包)`。閉包は `world.get_non_send_mut::<MouseWiring>()` を取り `send_close_request(CloseReason::User { scope: ctx.scope })`。`MouseWiring` 不在なら `warn!` で no-op（要件 8.4）。
@@ -499,7 +500,7 @@ pub(crate) fn attach_release_handlers(world: &mut World);
 /// 後続 spec 向けの便宜: MenuWiring 不在なら warn! で no-op
 pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier);
 ```
-- Preconditions: `wire_menu` は UI スレッド・boot 成功後（`wire_mouse_input` と同じ枠）に 1 回。
+- Preconditions: `wire_menu` は UI スレッド・boot 成功後（`wire_mouse_input` と同じ枠）に 1 回。`attach_release_handlers` は窓を生やした直後に同じクロージャ内で（窓を作り直すたびに）。
 - Postconditions: `snapshot` は登記順ではなく `Frame::ORDER` の順。供給関数は表示のたびに呼ばれ、値は使い回さない。
 - Invariants: 枠 1 つに供給関数は高々 1 つ。`MenuWiring` は UI スレッド専有（NonSend）。
 
@@ -947,7 +948,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 | ⑹ | 閉じた後に見えない窓がキャラクター窓の上に残らない | IME 窓の罠 |
 
 ### 1,000 行の番人（9.8）
-- 新規ファイルはいずれも 300 行前後。変更ファイルの増分は File Structure Plan の表のとおりで、最大の `resolve.rs` は 965 前後・`main.rs` は 953 前後。`cargo test -p log-capture-kit --test file_length_guard_test` で確かめる。
+- 新規ファイルはいずれも 300 行前後。変更ファイルの増分は File Structure Plan の表のとおりで、最大の `resolve.rs` は 965 前後・`main.rs` は 958 前後。`cargo test -p log-capture-kit --test file_length_guard_test` で確かめる。
 
 ## Performance & Scalability
 

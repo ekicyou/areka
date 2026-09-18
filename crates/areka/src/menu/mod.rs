@@ -5,13 +5,10 @@
 //! 取得（[`MenuRegistry`]）。後続 spec（列挙・切替・インストール・更新）はメニュー本体を
 //! 触らず、自分の枠へ供給関数を登記するだけで項目を足せる（要件 6.1）。
 //! 登記の口と、表示 1 枚の旗・照会の返事待ちは [`MenuWiring`] が 1 つの資源として束ねる。
+//! 起動時の結線（[`wire_menu`]）と、本体が自分で登記する 2 項目（説明書・終了）もここに置く。
 //!
 //! 配下の module は役割ごとに分かれる: [`plan`]（構造の計算）・[`captions`]（項目名と
 //! 表示可否の照会）・[`trigger`]（引き金と表示の段取り）・[`win32`]（OS 表示）。
-
-// 登記の口は、メニューの結線（`wire_menu`・task 8.1）が入るまで本番から呼ばれない。
-// 結線が入った時点でこの許可を外す（配下 module にも及ぶので、個別の属性は置かない）。
-#![allow(dead_code)]
 
 pub(crate) mod captions;
 pub(crate) mod plan;
@@ -22,10 +19,16 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
-use areka_kanade::KanadeMsg;
+use areka_kanade::{CloseReason, KanadeMsg};
 use bevy_ecs::prelude::*;
+use bevy_ecs::schedule::Schedules;
 use windows::Win32::Foundation::HWND;
+use wintf::ecs::Input;
+use wintf::ecs::pointer::{OnPointerReleased, dispatch_pointer_events};
 
+use crate::input_events::MouseWiring;
+use crate::placement::spawn::CharWindowMarker;
+use crate::readme;
 use trigger::PendingQuery;
 
 /// メニューの枠。宣言順がそのまま並び順（①〜⑦・要件 2.1）で、判別値を登記の添字に使う。
@@ -89,6 +92,9 @@ pub(crate) struct MenuItem {
 /// 項目の中身。動作を持つ葉か、子項目を登記順に並べたサブメニュー。
 pub(crate) enum ItemBody {
     Action(MenuAction),
+    // 本仕様の組込 2 項目はどちらも葉で、本番でこれを作るのは後続 spec
+    // （ghost-shell-balloon-switch ほか・一覧をサブメニューで出す）である。
+    #[allow(dead_code)]
     Submenu(Vec<MenuItem>),
 }
 
@@ -111,6 +117,8 @@ impl MenuRegistry {
     }
 
     /// 枠の登記を取り消す（要件 6.4）。登記の無い枠に対しては何もしない。
+    // 後続 spec（ghost-shell-balloon-switch ほか）が自分の枠を下ろす口。本仕様の中に呼び手は無い。
+    #[allow(dead_code)]
     pub(crate) fn unregister(&mut self, frame: Frame) {
         self.slots[frame as usize] = None;
     }
@@ -169,6 +177,141 @@ impl MenuWiring {
     }
 }
 
+/// メニューを起動に結ぶ。boot 成功後に `main.rs` から 1 回だけ呼ぶ（入力の結線の直後）。
+///
+/// 行うのは結線状態の挿入・組込 2 項目の登記・返事の取り出しの登録までで、**窓には触れない**。
+/// 呼ばれるのは `app.run()` の前で、キャラクター窓はまだ 1 枚も無いからである（窓を作る
+/// クロージャは `app.run()` の最初の数 tick で動く）。解放ハンドラはそのクロージャが
+/// [`attach_release_handlers`] で付ける。
+///
+/// `Schedules` 資源は在る前提（`wire_choice_drain` と同じ）。運行（kanade）への送り口は
+/// 照会（`KanadeMsg::ResourceQuery`）に使う。
+pub(crate) fn wire_menu(world: &mut World, kanade: Sender<KanadeMsg>) {
+    wire_menu_with(world, MenuWiring::new(kanade));
+}
+
+/// 結線の中身。結線状態を受け取るのは、テストが画面座標への写しを差し替えた状態
+/// （[`MenuWiring::with_to_screen`]）で同じ手順を通せるようにするためである。
+///
+/// 手順は ⑴ 組込の 2 項目を登記して結線状態を World へ入れる、⑵ 照会の返事の取り出しを
+/// 毎 tick の入力の段へ登録する。⑵ の並びは `dispatch_pointer_events` の後——解放ハンドラが
+/// 同じ tick に預けた返事待ちを、その tick のうちに 1 度覗けるようにする。
+fn wire_menu_with(world: &mut World, mut wiring: MenuWiring) {
+    wiring
+        .registry
+        .register(Frame::Readme, Rc::new(readme_item));
+    wiring.registry.register(Frame::Close, Rc::new(close_item));
+    world.insert_non_send(wiring);
+    world.resource_mut::<Schedules>().add_systems(
+        Input,
+        trigger::poll_menu_query.after(dispatch_pointer_events),
+    );
+}
+
+/// 全 [`CharWindowMarker`] 窓へ解放ハンドラ（[`trigger::on_char_pointer_released`]）を付ける。
+///
+/// # タイミング契約
+///
+/// キャラクター窓を作った**直後**に、同じ `&mut World` クロージャの中で呼ぶこと（`main.rs` の
+/// `open_startup_window` が `input_events::attach_char_pointer_handlers` の隣で呼ぶ）。付くのは
+/// 呼ばれた時点に在る窓だけなので、窓を作り直す spec は作り直した窓へもう一度呼ぶ。既に付いて
+/// いる窓へ呼んでも、同じハンドラで置き換わるだけで害は無い。
+///
+/// [`wire_menu`] との前後は問わない。ハンドラは結線（`MenuWiring`／`MouseWiring`）が無ければ
+/// 解放を無視するだけなので、boot に失敗して結線の無い起動でも害は無い。
+///
+/// 付けた枚数は `debug!` で記録する。0 枚は意図した呼び方ではありえない（窓より先に呼んだ）
+/// ので `warn!` にする——黙って 0 枚に付けると、メニューが出ない理由がログに残らない。
+pub(crate) fn attach_release_handlers(world: &mut World) {
+    // クエリが `&mut World` を借りるので、先に対象を集めてから 1 件ずつ付ける。
+    let char_windows: Vec<Entity> = world
+        .query_filtered::<Entity, With<CharWindowMarker>>()
+        .iter(world)
+        .collect();
+    let count = char_windows.len();
+    for window in char_windows {
+        world
+            .entity_mut(window)
+            .insert(OnPointerReleased(trigger::on_char_pointer_released));
+    }
+    if count == 0 {
+        tracing::warn!(
+            event = "menu_release_handlers_attached",
+            count,
+            "[menu] no character window to attach the release handler to: the menu cannot open"
+        );
+    } else {
+        tracing::debug!(
+            event = "menu_release_handlers_attached",
+            count,
+            "[menu] release handlers attached"
+        );
+    }
+}
+
+/// 枠へ供給関数を登記する（World 越しの入口）。結線の前に呼ばれたら `warn!` で記録して
+/// 何もしない。
+// 後続 spec（ghost-shell-balloon-switch ほか）の登記の口。本仕様の中に呼び手は無い。
+#[allow(dead_code)]
+pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
+    let Some(mut wiring) = world.get_non_send_mut::<MenuWiring>() else {
+        tracing::warn!(
+            event = "menu_register_no_wiring",
+            frame = ?frame,
+            "[menu] MenuWiring absent: the registration is dropped"
+        );
+        return;
+    };
+    wiring.registry.register(frame, supplier);
+}
+
+/// ⑥「説明書」の供給関数。有効／無効は写しを取るたびにファイルの在否で決まる
+/// （要件 4.3・6.2・11.4）。項目名とリソース名は [`captions::FRAME_CAPTIONS`] から引く。
+fn readme_item(world: &World, _ctx: &MenuContext) -> MenuItem {
+    MenuItem {
+        label: captions::default_label(Frame::Readme).to_string(),
+        caption_resource: Some(captions::resource_for(Frame::Readme)),
+        enabled: readme::is_available(world),
+        checked: None,
+        body: ItemBody::Action(Rc::new(open_readme)),
+    }
+}
+
+/// 「説明書」の動作。台本の `\![open,readme]` と同じ関数で開く（要件 4.2）。
+fn open_readme(world: &mut World, _ctx: &MenuContext) {
+    readme::open_from_world(world);
+}
+
+/// ⑦「終了」の供給関数。常に選べる（要件 2.2）。
+fn close_item(_world: &World, _ctx: &MenuContext) -> MenuItem {
+    MenuItem {
+        label: captions::default_label(Frame::Close).to_string(),
+        caption_resource: Some(captions::resource_for(Frame::Close)),
+        enabled: true,
+        checked: None,
+        body: ItemBody::Action(Rc::new(request_close)),
+    }
+}
+
+/// 「終了」の動作。Ctrl+左ダブルクリックと同じ入口（`MouseWiring::send_close_request`）へ、
+/// メニューを出した窓のスコープを載せた終了指示を 1 件送る（要件 5.1・6.6）。メニューだけの
+/// 終了の道は作らない——窓を閉じるのは、終了の握手が終わったことを受けた側である。
+fn request_close(world: &mut World, ctx: &MenuContext) {
+    let Some(mut wiring) = world.get_non_send_mut::<MouseWiring>() else {
+        tracing::warn!(
+            event = "menu_close_no_mouse_wiring",
+            scope = ctx.scope,
+            "[menu] MouseWiring absent: the close request is not sent"
+        );
+        return;
+    };
+    wiring.send_close_request(CloseReason::User { scope: ctx.scope });
+}
+
 #[cfg(test)]
 #[path = "mod_registry_tests.rs"]
 mod registry_tests;
+
+#[cfg(test)]
+#[path = "mod_wiring_tests.rs"]
+mod wiring_tests;

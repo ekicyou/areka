@@ -552,3 +552,7 @@ mod trigger_flow_tests;
 #[cfg(test)]
 #[path = "trigger_show_tests.rs"]
 mod trigger_show_tests;
+
+#[cfg(test)]
+#[path = "trigger_wired_tests.rs"]
+mod trigger_wired_tests;

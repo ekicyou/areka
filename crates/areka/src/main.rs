@@ -247,6 +247,11 @@ fn main() -> Result<()> {
         if let Some(runtime) = outcome.ghost.as_ref() {
             let sender = runtime.kanade().clone();
             input_events::wire_mouse_input(app.world().borrow_mut().world_mut(), sender);
+            // 右クリックメニューの結線（areka-P0-popup-menu-minimal）: 終了の項目が上の入力の結線を使う。
+            menu::wire_menu(
+                app.world().borrow_mut().world_mut(),
+                runtime.kanade().clone(),
+            );
             // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
             // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
             // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
@@ -705,6 +710,9 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
                     // input_events 側が担う。spawn 直後の同一 World-mutation クロージャ内で
                     // 同期実行するため、キャラ窓は既に存在し async race はない。
                     input_events::attach_char_pointer_handlers(world);
+                    // 右クリックメニューの解放ハンドラも同じ場所で付ける。このクロージャが動くのは
+                    // `app.run()` の中＝`menu::wire_menu` より後で、結線の無い起動では解放を無視するだけ。
+                    menu::attach_release_handlers(world);
                     // バルーン窓へポインタハンドラを装着（task 6.2・`attach_char_pointer_handlers`
                     // 直後・R4.3/5.5）: `BalloonWindowMarker` 窓へ `OnPointerMoved`／`OnPointerPressed`
                     // を post-spawn 挿入する（標的はバルーン窓のみ＝キャラ窓配線の非退行・R4.3）。同一

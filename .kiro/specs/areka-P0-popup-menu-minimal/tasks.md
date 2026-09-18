@@ -158,11 +158,11 @@
   - _Requirements: 1.1, 1.4, 1.7, 6.5, 7.2, 7.3, 8.1, 8.2, 8.3, 8.5_
   - _Depends: 7.3_
 
-- [ ] 8. 結線と組込の 2 項目
-- [ ] 8.1 メニューを起動に結び、説明書と終了を登記する
-  - 結線関数が ⑴ メニューの持ち物を World へ挿入し ⑵ 組込の 2 項目を登記し ⑶ その時点のキャラクター窓すべてへ解放ハンドラを装着し ⑷ 毎 tick の取り出しを配送の後に登録する
+- [x] 8. 結線と組込の 2 項目
+- [x] 8.1 メニューを起動に結び、説明書と終了を登記する
+  - 結線関数が ⑴ メニューの持ち物を World へ挿入し ⑵ 組込の 2 項目を登記し ⑶ 毎 tick の取り出しを配送の後に登録する。解放ハンドラの装着は結線関数では行わず、窓を生やした直後の同じクロージャ内（既存の押下ハンドラの装着の隣）で行う（起動時の窓は結線より後に生える＝Implementation Notes 8.1）
   - 説明書は既定名「説明書」・文言リソース・在否で有効／無効が決まり、選ばれたら説明書を開く。終了は既定名「終了」・文言リソース・常に有効で、選ばれたら既存の終了指示をメニューを出した窓のスコープで送る（メニュー固有の抜け道を作らない）
-  - 本体の起動は入力の結線の直後に 1 呼出だけ足す。窓を作り直す spec 向けに装着だけを行う口を公開する
+  - 本体の起動は入力の結線の直後に結線の 1 呼出、窓を生やすクロージャに装着の 1 呼出を足す。装着の口は窓を作り直す spec も呼べるよう公開し、装着した件数を記録する（0 件は警告）
   - 完了状態: 兄弟テストで組込 2 項目が写しに現れ（説明書のファイルが無ければ無効）、終了の動作が終了指示をちょうど 1 件送ることを受信側で数えて確かめられる
   - _Requirements: 2.2, 4.3, 5.1, 6.6, 9.6, 11.4_
   - _Depends: 7.4, 4.1, 4.3, 6.1, 3.1_
@@ -222,3 +222,5 @@
 - 7.3: 7.4 への必須事項: 表示中の預かりはその後に判定の tick が来ないので、`show_task` の手順 C が **World を借りられた全終了経路**（選択・未選択・表示失敗・窓が消えていた）で取り出して捨てる。落とすと古い預かりが後の無関係な要求の抑止で送られる。`ReadyMenu.guard` は保持するだけのフィールドで、7.4 が表示タスクへ移す（`poll_menu_query` は今は `drop(poll_once(..))`）。
 - 7.3: 8.1 への必須事項: `poll_menu_query` は `dispatch_pointer_events` の後に並べる。`menu/mod.rs` の module 全体の許可を外した時点で、`input_events` の `take_pending_right_double_click`／`send_pending_right_double_click` が本番から到達していることを `cargo build -p areka` の警告 0 で確かめる。差し替え口は `MenuWiring.to_screen`（本番は `win32::client_to_screen`）の 1 つだけ。ドラッグ状態のテストは wintf の `update_drag_state`／`DragState::JustEnded` を置き、`Drop` で Idle へ戻す。
 - 7.4: 表示の関数は `MenuWiring` の欄でなく内側の `run_show`／`display` の引数（`show_task` が `win32::show` を渡すだけ）。`[menu] shown` は OS の表示を呼ぶ**直前**に出す（`TrackPopupMenuEx` はメニューが閉じるまで戻らない）＝失敗時は shown の後に error が続く。World を借りられない 2 経路は `[menu] world unavailable after menu`（`reason="world dropped"／"world busy"`）の `debug!` で、預かりは捨てられない。`spawn_local` は実行器の窓へ起床を投函するだけで同期 poll しない・tick 中に UI スレッドでメッセージを汲む者もいないので、通常の流れで「world busy」は起きない（レビューで wintf と実行器の実ソースを確認）。完了状態の実機の半分（右クリックで出る・動作 1 回）は 8.1 の結線後に 9.3 で見る。
+- 8.1: **設計を改めた**: `open_startup_window` は窓を同期では作らない。World を書き換えるクロージャを積むだけで、適用は `app.run()` の tick の中（`drain_task_pool_commands`）＝`menu::wire_menu` より後。当初の設計どおり `wire_menu` の中で装着すると本番では 0 枚に付き（レビューの探針で `count=0` を実測）、メニューが出ず、6.1 以降は右ダブルクリックも届かなくなる。装着は `main.rs` の窓を生やすクロージャ内、`attach_char_pointer_handlers` の隣の `menu::attach_release_handlers(world)` で行う（是正後の有界実走で「実 sink 結線で起動しました」→ `menu_release_handlers_attached count=2` →「本物のゴースト窓を開きました scopes=[0, 1]」を実装者・レビュアーの双方が確認）。窓を作り直す spec は両方の装着を掛け直す。
+- 8.1: `main.rs` の装着の 1 行を消しても決定論テストは気付かない（隣の `attach_char_pointer_handlers` と同じ性質）。気付くのは ⑴ 警告 0 のビルド（消すと dead_code が 14 件出る）⑵ 有界実走の `count=2` の行 ⑶ 実機確認 9.3。0 枚装着の `warn!` が捕まえるのは呼び出しの**順序違い**であって行の削除ではない。有界実走は引数 2 つ（ゴーストの根とバルーンの絶対パス）が要り、`target\debug\shiori-host32-helper.exe` は cargo が x64 で上書きするので i686 版を毎回コピーする。`main.rs` は 958 行。残した狭い `#[allow(dead_code)]` は後続 spec の口 3 つ（`register`・`MenuRegistry::unregister`・`ItemBody::Submenu`）と `captions::UNQUERIED_POPUPMENU_RESOURCES`（証拠行を本番ソースに保つ表・読むのは兄弟テスト）。
