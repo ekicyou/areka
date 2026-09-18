@@ -265,6 +265,9 @@ pub enum SampleError {
         /// 祖先を辿り始めた場所（実行ファイル）。
         started_from: PathBuf,
     },
+    /// 検体の `.nar` が受理されなかった（原本を作れない）。
+    #[error("sample archive refused: {0}")]
+    Nar(#[from] areka_nar::NarError),
     /// 開発用の根のファイル操作の失敗。何をしようとしたのかを添える。
     #[error("{what} failed at {path:?}: {source}")]
     Io {
@@ -279,7 +282,7 @@ pub enum SampleError {
 }
 
 mod devroot;
-pub use devroot::WorkDir;
+pub use devroot::{WorkDir, cached_root};
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};

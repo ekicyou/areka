@@ -204,3 +204,44 @@ fn a_missing_target_dir_fails_with_the_place_it_searched_from() {
         "失敗の表示に探索の起点が出ること: {err}"
     );
 }
+
+/// 原本の据え付けが `rename` の勝敗で決まる（7.6）ことの**前提の実測**。
+///
+/// 設計は「Windows の `std::fs::rename` は宛先が**空でない**フォルダのときに失敗し、
+/// 空フォルダなら置き換える」という規則の上に立っている。この規則が崩れると、負けた側が
+/// 勝者の木を上書きしてしまう。前提そのものをここで測る（推測で通さない）。
+#[test]
+fn a_rename_onto_a_non_empty_folder_fails_and_onto_an_empty_folder_replaces() {
+    let work = WorkDir::new().expect("作業フォルダは取れるはず");
+    let source = work.path().join("src");
+    std::fs::create_dir(&source).expect("移す木");
+    std::fs::write(source.join("a.txt"), b"src").expect("中身");
+
+    // 本命: 宛先が空でなければ失敗し、宛先は 1 バイトも変わらない。
+    let occupied = work.path().join("occupied");
+    std::fs::create_dir(&occupied).expect("宛先");
+    std::fs::write(occupied.join("b.txt"), b"dst").expect("先客");
+    let refused = std::fs::rename(&source, &occupied);
+    assert!(
+        refused.is_err(),
+        "空でないフォルダへの rename は失敗すること（7.6 の勝敗判定の前提）"
+    );
+    assert_eq!(
+        std::fs::read(occupied.join("b.txt")).expect("先客は無傷"),
+        b"dst",
+        "負けた側が勝者の木を書き換えていないこと"
+    );
+    assert!(source.is_dir(), "失敗した rename は元の木を動かさないこと");
+
+    // 較正: 空フォルダなら置き換わる（＝上の失敗は「フォルダだから」ではなく
+    // 「空でないから」だと分かる）。原本も宛先も常に空でない木なので、実運用では
+    // こちらの経路には入らない。
+    let empty = work.path().join("empty");
+    std::fs::create_dir(&empty).expect("空の宛先");
+    std::fs::rename(&source, &empty).expect("空フォルダへは置き換えられること");
+    assert_eq!(
+        std::fs::read(empty.join("a.txt")).expect("移った木"),
+        b"src"
+    );
+    assert!(!source.exists(), "移した元は残らないこと");
+}
