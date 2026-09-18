@@ -59,6 +59,7 @@
 - 展開先の形（`<根>/ghost/<名>/`・`<根>/balloon/<名>/`・`<根>/.nar-work/`）が変わったとき → `baseware-root-layout` が再確認。
 - `target/nar-samples/` の階層名・検体の登記表の形が変わったとき → 実機手順と `tools/perf/` が再確認。
 - 外部依存を `miniz_oxide` から替えるとき → `tech.md` の登記と謝辞を作り直す。
+- 下流 `network-update` への注記: 「組んでから入れ替え」は宛先フォルダの中のファイルが開かれていると `rename(dest → old)` が失敗する。起動中のゴーストへ入れる経路は、先に SHIORI を解放してから `install` を呼ぶ形になる。
 
 ## Architecture
 
@@ -110,7 +111,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | コンテナ読取 | 自前（`std` のみ・約 350 行） | EOCD → 中央ディレクトリ → ローカルヘッダの読み。汎用目的ビット 11・方式・CRC・外部属性を直接読む | zip64・マルチディスク・暗号化は理由付きで拒否 |
-| 伸長 | **`miniz_oxide` 0.9**（`default-features` のまま＝`with-alloc`） | `inflate::decompress_to_vec_with_limit(data, declared_size)` で deflate（方式 8）を伸長。方式 0（無圧縮）は複写 | 純 Rust・依存は `adler2` のみ・MIT OR Zlib OR Apache-2.0。**新規に本番へ入る crate は 2 つ**。⚠ 10.2 との関係: `miniz_oxide` には伸長と圧縮を分ける feature が無く、`with-alloc` は `decompress_to_vec` に必須。圧縮側のコードは feature では切れないので「`areka-nar/src/` が `miniz_oxide::deflate` を綴らない」ことを兄弟テストで見張る（10.2 の字義からの逸脱＝節「Open Questions」） |
+| 伸長 | **`miniz_oxide` 0.9**（`default-features = false, features = ["with-alloc"]`＝伸長 API に必須の 1 機能だけを明示。今日の既定と同じコードだが、将来増える既定機能を拾わない） | `inflate::decompress_to_vec_with_limit(data, declared_size)` で deflate（方式 8）を伸長。方式 0（無圧縮）は複写 | 純 Rust・依存は `adler2` のみ・MIT OR Zlib OR Apache-2.0。**新規に本番へ入る crate は 2 つ**。⚠ 10.2 との関係: `miniz_oxide` には伸長と圧縮を分ける feature が無く、`with-alloc` は `decompress_to_vec` に必須。圧縮側のコードは feature では切れないので「`areka-nar/src/` が `miniz_oxide::deflate` を綴らない」ことを兄弟テストで見張る（10.2 の字義からの逸脱＝節「Open Questions」） |
 | 整合性検査 | 自前 CRC-32（IEEE・表引き・約 30 行） | 伸長後のバイト列と中央ディレクトリの CRC の突合・`.nar` の刻印 | 較正値 `crc32("123456789") = 0xCBF43926` を固定テストに置く |
 | 文字コード | `encoding_rs` 0.8（既存）・`areka-parsers::charset`（既存） | エントリ名: ビット 11 なら `std::str::from_utf8`、無ければ `SHIFT_JIS.decode_without_bom_handling` で `had_errors` を見る。`install.txt`: `charset::decode(bytes, Ansi)` | 置換文字で黙って通さない（2.4） |
 | `key,value` | `areka-parsers::kv::parse_kv`（既存） | `install.txt` の行分割。結果のキーを ASCII 小文字化した写しで引く（3.4） | 既存層は変えない |
@@ -157,7 +158,7 @@ vendors/sample_ghost/
 
 段 ①（窓口へ寄せる・挙動不変）。差分はパスを得る行に限る。
 
-- `crates/areka`（13）: `src/emo2_boot/{assets_tests,frame_attach_tests,frame_visibility_integration_tests,mod,spine}.rs`・`src/placement/{measure_tests,placement_shared_test_support,source_tests}.rs`・`tests/{emo2_real_run,smoke_boot_loop_exit}.rs`・`examples/collision-probe/fixture.rs`・`examples/emo-present/fixture.rs`・`examples/window-placement.rs`。加えて `examples/emo-present/setup.rs`（同梱バルーン名でパスを組む 1 行）。`spine.rs` の `remove_dir_all` は段 ① で保持・段 ③ で削除（8.8）。
+- `crates/areka`（13）: `src/emo2_boot/{assets_tests,frame_attach_tests,frame_visibility_integration_tests,mod,spine}.rs`・`src/placement/{measure_tests,placement_shared_test_support,source_tests}.rs`・`tests/{emo2_real_run,smoke_boot_loop_exit}.rs`・`examples/collision-probe/fixture.rs`・`examples/emo-present/fixture.rs`・`examples/window-placement.rs`。加えて `examples/emo-present/setup.rs`（同梱バルーン名でパスを組む 1 行）。`spine.rs` の `remove_dir_all` は段 ① で保持・段 ③ で削除（8.8）。⚠ `spine.rs` は今日 968 行（1,000 行まで残り 31）なので、段 ① の差分は私家版 `emo2_root()` の本体を窓口呼び出しに置き換えて正味で増やさない。
 - `crates/areka-emo-text`（7）: `src/{viewbox_draw_live_diff_tests,viewbox_draw_png_dump_tests}.rs`・`tests/{emo2_fixture_e2e_test,kero_menu_capacity_test,shipped_fixture_region_test}.rs`・`examples/emo-text-layer/fixture.rs`・`examples/emo-text-typewriter-demo.rs`。
 - `crates/areka-emo-atlas`（3）: `src/{decode/wic_arm,emo2_e2e,emo2_golden}.rs`。
 - `crates/areka-emo-compose`（3）: `src/{fold_tests,golden_tests_test_support,world}.rs`。
@@ -165,7 +166,7 @@ vendors/sample_ghost/
 - `crates/areka-seriko`（3）: `src/resolve.rs`・`tests/{cue_sequence,regression}.rs`。
 - `crates/areka-emo-present`（1）: `src/balloon_test_support.rs`。
 - `crates/areka-ghost`（1）: `tests/ghost/inproc_fixture.rs`。
-- `crates/pilot`（4）: `examples/shiori-host-32/{helper,helper_window,main,shiori_proxy}.rs`（i686 の helper も同じ窓口を使う。窓口と `areka-nar` は純 Rust なので i686 でも組める）。
+- `crates/pilot`（4）: `examples/shiori-host-32/{helper,helper_window,main,shiori_proxy}.rs`（i686 の helper も同じ窓口を使う。窓口と `areka-nar` は純 Rust なので i686 でも組める。helper が引数も `GHOSTDIR` も無いときに自分で検体へ落ちる退避経路（`helper.rs:115-134`）は、`SampleRoot` を**プロセス寿命で保持**する＝`Drop` で複製が消えるため、関数内の一時値にしない）。
 - 各消費クレートの `Cargo.toml`（9 本）: `[dev-dependencies] sample-ghost-kit = { path = "../sample-ghost-kit" }` を 1 行。
 - `crates/log-capture-kit/tests/workspace_scan/mod.rs`（マニフェストの行分解と本番依存表の抽出を `with_default_guard_test.rs` から移し、クレート名を引数化）・`crates/log-capture-kit/tests/with_default_guard_test.rs`（移した関数の呼び出しに置き換えるだけ・判定と例外表は不変）。
 - コメント行だけで旧置き場を綴る 8 ファイル（`research.md` 付録 A-1）は段 ③ で文言を直す。
@@ -215,10 +216,10 @@ flowchart TD
     Acquire[SampleRoot acquire name] --> Lookup{name in SAMPLES}
     Lookup -- no --> ErrUnknown[Err UnknownSample with known list]
     Lookup -- yes --> Target[find target dir from current_exe]
-    Target --> Sweep[sweep work: delete entries whose lock can be removed]
+    Target --> Sweep[sweep work: rename then delete entries whose lock can be removed]
     Sweep --> Stamp[read nar, stamp = len and crc32]
     Stamp --> Hit{cache name-stamp exists}
-    Hit -- no --> Stage[install nar into work pid-seq as a fresh root]
+    Hit -- no --> Stage[open lock file, then install nar into work pid-seq as a fresh root]
     Stage --> Rename{rename stage to cache name-stamp}
     Rename -- ok --> Stale[move stale cache name-other to work then delete]
     Rename -- exists --> Discard[remove own stage, use winner]
@@ -520,7 +521,7 @@ pub(crate) fn build_plan(
 **Responsibilities & Constraints**
 - 作業フォルダ: `root/.nar-work/<pid>-<連番>/<k>/`（`k` は配置の番号）。同じボリューム上なので `rename` で入れ替えられる。開始時に `root/.nar-work/` の残骸を消す（前回の異常終了の後始末。同じ根への同時インストールは製品でも開発でも起きない前提＝節「Risks」）。
 - 組み上げ（配置ごと）: ⑴ 宛先が既に在り `Overlay` なら宛先の木を作業フォルダへ複写、`Replace { keep }` なら宛先の木のうちファイル名（ASCII 大小無視）が `keep` にあるものだけを同じ相対位置へ複写、`Supplement` は常に宛先の木を複写。⑵ アーカイブの内容を上書きで書く（`inflate_entry` の結果をそのまま・変換無し）。
-- 確定（配置ごと・番号順）: 宛先が無ければ `rename(stage → dest)`。在れば `rename(dest → root/.nar-work/<pid>-<連番>/old-<k>)` → `rename(stage → dest)` → `remove_dir_all(old)`。2 つ目の `rename` が失敗したら `old → dest` に戻す。`remove_dir_all(old)` の失敗は確定を取り消さず、`InstallOutcome.leftovers` に残す。
+- 確定（配置ごと・番号順）: 宛先が無ければ `rename(stage → dest)`。在れば `rename(dest → root/.nar-work/<pid>-<連番>/old-<k>)` → `rename(stage → dest)` → `remove_dir_all(old)`。2 つ目の `rename` が失敗したら `old → dest` に戻す。`remove_dir_all(old)` の失敗は確定を取り消さず、`InstallOutcome.leftovers` に残す。全配置の確定後に `root/.nar-work/<pid>-<連番>/` を消す（空のまま残すと開発用の根では原本に写り、全複製に伝播する）。
 - 複数配置（ゴースト＋同梱バルーン）で後の配置の確定が失敗したら、確定済みの配置を逆順に元へ戻す（新規なら削除、入れ替えなら `old` を戻す）。戻せなかったものは `NarError::Io { committed, rolled_back: false }` に列挙する（6.4）。
 - 既存状態の判定: 確定前に宛先が無ければ `New`、在って `Overlay` なら `Overlaid`、在って `Replace` なら `Refreshed`。
 - ファイルは `File::create` → `write_all` → `sync_all` は行わない（フォルダ単位の入れ替えで十分・`FsPersistIo` は 1 ファイルの設定値だから fsync していた）。
@@ -691,10 +692,10 @@ target/nar-samples/
 ```
 
 - 刻印: `.nar` 全体の長さと CRC-32（`areka_nar::crc32`）。`.nar` を丸ごと読むのは展開時にも要るので追加の I/O は無い。
-- 初回の展開（cache miss）: `work/<pid>-<連番>/` を空の根として `NarArchive::install(&InstallRequest { root, target_ghost: None })` を呼び、`rename(work/… → cache/<名>-<刻印>)`。`rename` が失敗し `cache/<名>-<刻印>` が既に在れば別プロセスが勝ったので自分の作業を消して勝者を使う（7.6）。在らず失敗なら `Io`。Windows の `std::fs::rename` は宛先が**空でない**フォルダのときに失敗する（空フォルダなら std 1.98 は置き換える）。原本も宛先も常に空でない木なので、この規則で競合の勝敗が決まる。
-- 古い原本の回収（7.3・7.9）: `cache/<名>-*` のうち刻印が違うものを `work/<pid>-<連番>/` へ `rename` してから `remove_dir_all`（途中で落ちても `cache/` の下に半端な木が残らない＝7.7）。
+- 初回の展開（cache miss）: **必ず `WorkDir`**（札ファイル `work/<pid>-<連番>.lock` を `create_new` で開いてからフォルダを作る型）を 1 つ取り、その `work/<pid>-<連番>/` を空の根として `NarArchive::install(&InstallRequest { root, target_ghost: None })` を呼び、`rename(work/… → cache/<名>-<刻印>)`。展開中も札が開いているので、並走する別プロセスの掃除（下記）に消されない。`rename` で `cache/` へ出した後の `WorkDir` の `Drop` は木が既に無いこと（`NotFound`）を許容し、札だけを閉じて消す。`rename` が失敗し `cache/<名>-<刻印>` が既に在れば別プロセスが勝ったので自分の作業を消して勝者を使う（7.6）。在らず失敗なら `Io`。Windows の `std::fs::rename` は宛先が**空でない**フォルダのときに失敗する（空フォルダなら std 1.98 は置き換える）。原本も宛先も常に空でない木なので、この規則で競合の勝敗が決まる。
+- 古い原本の回収（7.3・7.9）: `cache/<名>-*` のうち刻印が違うものを `work/gc-<pid>-<連番>/` へ `rename` してから `remove_dir_all`（途中で落ちても `cache/` の下に半端な木が残らない＝7.7）。回収の失敗（別プロセスが複写中・ウイルス対策がファイルを掴んでいる）は `warn!` に出して**取得は続行する**（次の取得で再び試みる）。
 - 複製（7.4・7.5）: 札ファイル `work/<pid>-<連番>.lock` を `OpenOptions::new().write(true).create_new(true).share_mode(FILE_SHARE_READ = 1)` で開いてから、`cache/<名>-<刻印>/` の木を `work/<pid>-<連番>/` へ複写して返す。`Drop` で札を閉じ、木を `remove_dir_all`、札を削除。
-- 掃除（7.7・7.9）: 取得のたびに `work/` を走査し、`*.lock` を `remove_file` してみる。消せた札は持ち主が居ないので相方の木を消す。消せない札（共有違反）は生きている利用者の物なので触らない。札の無い木は消す（札を作る前に落ちた残骸）。自分の生きている複製は札が開いているので自分の掃除でも消えない。
+- 掃除（7.7・7.9）: 取得のたびに `work/` を走査し、`*.lock` を `remove_file` してみる。消せた札は持ち主が居ないので相方の木を消す。消せない札のうち**共有違反**は生きている利用者の物なので触らず、**`NotFound`** は別プロセスが同時に回収中なので同じく触らない（生きているとは判定しない）。札の無い木（札を作る前に落ちた残骸・`gc-` 付きの回収途中の木）は消す。孤児の木を消すときも原本と同じく、先に `work/gc-<pid>-<連番>/` へ `rename` してから `remove_dir_all` する（pid が再利用された新プロセスが同名の `work/<pid>-1/` を作る瞬間との競合を消す）。自分の生きている複製と初回展開中の作業フォルダは札が開いているので、他者の掃除でも自分の掃除でも消えない。掃除の失敗は `debug!` に出して取得を続行する。
 - 手動用（1.9・9.7）: `manual/<名>/` を消して `cache/` から複写。掃除の対象にしない。
 - 検体の `.nar` の場所は `concat!(env!("CARGO_MANIFEST_DIR"), "/../../vendors/sample_ghost/")`（本クレートだけが綴る）。
 - 公開の作業フォルダ `WorkDir`: `work/<pid>-<連番>/` を札付きで 1 つ配る型（`WorkDir::new() -> Result<WorkDir, SampleError>`・`path(&self) -> &Path`・`Drop` で削除）。複製の器と同じ型で、`areka-nar` のテストが「空の根」として借りる（OS の一時フォルダを使わずに済ませるための唯一の窓）。
@@ -743,7 +744,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8>;    // CRLF で連結
 ### 見張り `sample_path_guard_test.rs`
 
 - 走査: `walk_workspace_sources()`（`crates/**/*.rs`・`target`／`vendors` 除外）から `crates/sample-ghost-kit/src/` を除いた全ファイルを `scan_tokens`（コメント除去済み）で検査する。
-- 走査語（`concat!` で 2 片に割って書く・姉妹の見張りと同じ約束）: ⑴ `shiori-host-32/fixtures` と `join("shiori-host-32")`（旧置き場）⑵ `vendors/sample_ghost/<名>/`（登記された各名前・`.nar` 名は当たらない）⑶ `nar-samples`（展開先の名前空間）⑷ 同梱バルーンの名前で**パスを組む形**だけ＝`join("emo2-kakukaku")`・`emo2-kakukaku/`・`/emo2-kakukaku"`。窓口の読み口 `balloon("emo2-kakukaku")` の引数としての綴りと、説明文の中の綴り（`"emo2-kakukaku の font.height,28"`）は当たらない（引数で名前を渡すのは 1.3 の正規の使い方であり、禁じるのは「ゴーストのフォルダに名前を継ぎ足して自分でパスを作る」形だけ）。
+- 走査語（`concat!` で 2 片に割って書く・姉妹の見張りと同じ約束）: ⑴ `shiori-host-32/fixtures` と `join("shiori-host-32")`（旧置き場）⑵ `vendors/sample_ghost/<名>/`（登記された各名前・`.nar` 名は当たらない）⑶ `nar-samples`（展開先の名前空間）⑷ 同梱バルーンの名前で**パスを組む形**だけ＝`join("emo2-kakukaku")`・`emo2-kakukaku/`・`/emo2-kakukaku"`・補助関数へ名前を渡してパスを組む `emo2("emo2-kakukaku")`（今日の実体 27 ファイルはこの 4 形で全て当たる。`areka/examples/emo-present/setup.rs:147`・`areka-emo-atlas/src/emo2_e2e.rs:215` が 4 形目）。窓口の読み口 `balloon("emo2-kakukaku")` の引数としての綴りと、説明文の中の綴り（`"emo2-kakukaku の font.height,28"`）は当たらない（引数で名前を渡すのは 1.3 の正規の使い方であり、禁じるのは「ゴーストのフォルダに名前を継ぎ足して自分でパスを作る」形だけ）。
 - 判定: 違反 0 件で緑。較正: 合成入力で各走査語が当たること・`balloon("emo2-kakukaku")` と説明文には当たらないこと・コメント行では当たらないこと・`crates/sample-ghost-kit/src/` に ⑴〜⑷ の実体があること（除外が飾りでない）。
 - 本番依存の見張り: `with_default_guard_test.rs` の私有関数 `manifest_lines`／`production_kit_dependencies`（`with_default_guard_test.rs:257-318`）は `log-capture-kit` の名前を固定で持つので、**走査部品 `workspace_scan/mod.rs` へ移してクレート名を引数に取る形**にし、両方の見張りがそれを呼ぶ（`with_default_guard_test.rs` は呼び出しだけに変わる＝Modified Files に載せる）。判定は `sample-ghost-kit` が `crates/**/Cargo.toml` の `[dependencies]`・`[build-dependencies]`・`[target.*.dependencies]` に現れないこと（自分自身の `Cargo.toml` は除く）。較正は合成マニフェストで赤を作る。
 - 段 ① から置く。段 ① の時点で 38 ファイルが全て窓口へ寄っていることを機械が確かめる。
@@ -790,7 +791,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8>;    // CRLF で連結
 - `names_tests`: ビット 11 あり UTF-8（日本語）・印なし Shift_JIS（日本語のフォルダ名とファイル名）・印なしで不正な列 → `NameUndecodable`（生バイト 16 進を含む）・`..`・`/` 始まり・`C:`・`\\`・`\`・NUL・`CON.txt`・末尾ドット・`<>`・`A.txt` と `a.txt` の衝突・S_IFLNK。
 - `manifest_tests`: `Charset,UTF-8`（大文字キー）・`charset, Shift_JIS`（値の前の空白）・`charset` 無し（ANSI 既定で日本語の `name`）・`Type,Ghost`（大文字の値は拒否・キーだけ大小無視）・4 種の受理・7 種＋未知＋無しの拒否・`directory`／`name` 無し／空・`directory` に `/` `..` `C:`・`accept,` 空・`balloon.directory` のみ（source は同値）・`balloon0` と `balloon1`・`headline.directory` の警告・`type,balloon` に `balloon.directory` の警告・`refresh,1`／`refresh,0`／`refresh,true`・mask の分割と不正要素・`bootghost` の無視。
 - `plan_tests`: 4 種の宛先・同梱バルーンの除外と接頭辞剥がし・取り出し元無し・shell／supplement の宛先無し・supplement の `install.txt` 除外・空フォルダ・フォルダのエントリ無し。
-- `install_tests`（根は OS の一時フォルダではなく `sample_ghost_kit::WorkDir` が配る `target/nar-samples/work/<pid>-<連番>/`）: 新規・`Overlay` で既存ファイルが残り同名が上書き・`Replace` で mask 以外が消える（全階層）・同梱バルーン側の `*.refresh`・途中失敗（読み取り専用の宛先を作って確定を失敗させる）で宛先が無傷・2 配置の 2 つ目の失敗で 1 つ目が戻る・`leftovers`・確定後の各ファイルの実パスが宛先配下・バイト一致。
+- `install_tests`（根は OS の一時フォルダではなく `sample_ghost_kit::WorkDir` が配る `target/nar-samples/work/<pid>-<連番>/`。dev 依存の循環により kit が見る `areka_nar` はテスト対象とは別の写しなので、`areka-nar` 自身のテストは kit から `WorkDir` と `nar_writer` だけを借り、`SampleError::Nar` の中身を `crate::` の型と比べない）: 新規・`Overlay` で既存ファイルが残り同名が上書き・`Replace` で mask 以外が消える（全階層）・同梱バルーン側の `*.refresh`・途中失敗（読み取り専用の宛先を作って確定を失敗させる）で宛先が無傷・2 配置の 2 つ目の失敗で 1 つ目が戻る・`leftovers`・確定後の各ファイルの実パスが宛先配下・バイト一致。
 - `error_tests`: **1 本のテスト**が `nar_writer` で 13 変種それぞれの固定入力を組み、各入力を `open`（または `install`）に通して得た `kind()` の集合が `ALL_KINDS` と**完全一致**することを判定する（集合が空なら当然赤＝母数 0 で緑にならない）。別ファイルの兄弟テストの結果を集めて突き合わせる形にはしない（テスト間で状態を共有できない）。
 - `no_deflate_side_is_called`: `areka-nar/src/*.rs`（兄弟テストを含む）が `miniz_oxide::deflate` を綴らないことを `include_str!` の字面で見張る（10.2 の代替措置）。
 
