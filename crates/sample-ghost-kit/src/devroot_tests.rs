@@ -131,7 +131,7 @@ fn the_lease_refuses_deletion_while_it_is_held() {
     let work = WorkDir::new().expect("作業フォルダは取れるはず");
 
     // 本命: 札は `FILE_SHARE_READ` だけで開いてあるので、持ち主が居る間は削除できない
-    //（この拒否が、後続タスクの掃除で「生きている利用者」と「死んだ残骸」を分ける）。
+    //（この拒否が、掃除で「生きている利用者」と「死んだ残骸」を分ける）。
     let refused = std::fs::remove_file(work.lock_path());
     assert!(
         refused.is_err(),

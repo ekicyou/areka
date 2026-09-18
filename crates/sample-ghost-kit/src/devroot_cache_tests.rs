@@ -25,7 +25,7 @@
 use super::*;
 
 /// 多重プロセスの検査に使う検体。登記の中で `.nar` が一番小さいもの。
-const RACE_SAMPLE: &str = "emo2-kakukaku-wplimit";
+pub(super) const RACE_SAMPLE: &str = "emo2-kakukaku-wplimit";
 
 /// 子として起こされたことを伝える環境変数（値は子の番号）。
 const CHILD_VAR: &str = "SAMPLE_GHOST_KIT_RACE_CHILD";
@@ -34,14 +34,14 @@ const CHILD_VAR: &str = "SAMPLE_GHOST_KIT_RACE_CHILD";
 const CHILD_TEST: &str = "devroot::cache_tests::the_multiprocess_child_acquires_the_master_copy";
 
 /// 他のテストと混ざらない私有の名前空間。破棄で丸ごと消える。
-fn private_namespace() -> WorkDir {
+pub(super) fn private_namespace() -> WorkDir {
     WorkDir::new().expect("私有の名前空間は取れるはず")
 }
 
 /// 最小のゴースト 1 体だけを含む `.nar` を組んで置く。
 ///
 /// `mark` は中身の目印で、長さを変えずに中身だけ変えられる。
-fn tiny_ghost_nar(dir: &Path, name: &str, mark: &[u8]) -> PathBuf {
+pub(super) fn tiny_ghost_nar(dir: &Path, name: &str, mark: &[u8]) -> PathBuf {
     let nar = dir.join(format!("{name}.nar"));
     crate::NarBuilder::new()
         .file("install.txt", &manifest_of(name))
@@ -69,7 +69,10 @@ fn manifest_of(name: &str) -> Vec<u8> {
 ///
 /// 「完全な原本」を 1 ファイルずつ確かめる形は、隣のファイルが落ちていても緑になる。
 /// 完了状態の 2 本はこの写像との等値で judge する。
-fn whole_ghost_tree(name: &str, mark: &[u8]) -> std::collections::BTreeMap<String, Vec<u8>> {
+pub(super) fn whole_ghost_tree(
+    name: &str,
+    mark: &[u8],
+) -> std::collections::BTreeMap<String, Vec<u8>> {
     std::collections::BTreeMap::from([
         (format!("ghost/{name}/install.txt"), manifest_of(name)),
         (
@@ -81,7 +84,7 @@ fn whole_ghost_tree(name: &str, mark: &[u8]) -> std::collections::BTreeMap<Strin
 }
 
 /// 棚の直下の名前を並べる（棚が無ければ空）。
-fn shelf(namespace: &Path, name: &str) -> Vec<String> {
+pub(super) fn shelf(namespace: &Path, name: &str) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(namespace.join(name)) else {
         return Vec::new();
     };
@@ -107,7 +110,7 @@ fn leaf(path: &Path) -> String {
 }
 
 /// 木の中の全ファイルの相対パスとバイト列。木が丸ごと無傷かを 1 つの値で比べる。
-fn contents(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+pub(super) fn contents(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
     let mut out = std::collections::BTreeMap::new();
     let mut stack = vec![(root.to_path_buf(), String::new())];
     while let Some((dir, prefix)) = stack.pop() {
@@ -428,7 +431,7 @@ fn a_half_built_tree_in_the_work_shelf_is_never_taken_as_the_master_copy() {
     assert_eq!(mark_of(&master, "probe-half"), b"one", "答えは完全な木");
     assert!(
         decoy.join("half.txt").is_file(),
-        "囮は答えにも据え付けの材料にもされないこと（片付けは掃除の担当＝後続タスク）"
+        "囮は答えにも据え付けの材料にもされないこと（片付けるのは取得の入口が走らせる掃除で、原本を用意するこの関数ではない）"
     );
 }
 

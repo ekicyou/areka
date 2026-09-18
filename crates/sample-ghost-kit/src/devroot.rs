@@ -39,16 +39,26 @@
 //! 生きている作業フォルダは他のプロセスの掃除から守られる（後続の掃除は、札を消せたか
 //! どうかで持ち主の生死を見分ける）。
 //!
-//! # 掃除（後続タスク）が較正する 3 つの順序
+//! # 掃除——札が生死を分ける
 //!
-//! この 3 つは**今の検査では赤にできない**。どれも「生きている作業フォルダが他プロセスの
-//! 掃除に消されない」ことを守る仕掛けで、掃除そのものが無い間は観測できないからである。
-//! 掃除を建てるタスクは、掃除を書いた後にこの 3 つを壊して赤が出ることを確かめること。
+//! 取得のたびに作業の棚を 1 度走査し、札を消してみる。**消せた札は持ち主が居ない**ので
+//! 相方の木ごと片付ける。消せない札は触らない——共有違反は生きている利用者の物であり、
+//! 既に無いのは別のプロセスが同時に回収している最中で、どちらも「持ち主が居ない」とは
+//! 判定しない。札の無い木（札を作る前に落ちた残骸・回収の途中で落ちた `gc-` の木）は
+//! 片付ける（要件 7.7・7.9）。
 //!
-//! 1. 札を作るのがフォルダを作るより**先**であること（順序を入れ替えても今は全 35 本が緑）。
-//! 2. 原本の組み上げ中も札が開いたままであること（組み上げの間に札を消しても今は全数が緑）。
-//! 3. 札が `FILE_SHARE_READ` だけで開かれていること（これだけは
-//!    `the_lease_refuses_deletion_while_it_is_held` が較正済み）。
+//! だから札を**フォルダより先に**作り、原本の組み上げの**間ずっと**開いたままにする。
+//! どちらを崩しても、札の無い木が一瞬だけ棚に見える窓が開き、並走する掃除に退けられる
+//! （兄弟テスト `a_sweeper_running_alongside_never_disturbs_a_staging_tree_or_a_live_copy`
+//! がその窓を檻にしている）。札が `FILE_SHARE_READ` だけで開かれていることは
+//! `the_lease_refuses_deletion_while_it_is_held` が較正する。
+//!
+//! # 配るのは複製
+//!
+//! 原本は誰にも配らない。取得のたびに札を先に開いてから原本の木をそっくり複写し、その
+//! 複製を配る。`.nar` を展開し直さない（要件 6.5）ので、複製は「原本の複写」であって
+//! 再インストールの経路を通らない。複製は札を開いている間だけ生き、破棄で木と札の両方が
+//! 消える（要件 7.4・7.5・7.9）。
 //!
 //! # 使い方
 //!
@@ -92,6 +102,9 @@ const CACHE: &str = "cache";
 
 /// 読むことだけを共有する（＝削除は拒む）共有モード `FILE_SHARE_READ`。
 const FILE_SHARE_READ: u32 = 1;
+
+/// 生存の札の綴り。木の名前にこれを付けた隣が、その木の札になる。
+const LOCK_SUFFIX: &str = ".lock";
 
 /// 同一プロセス内で単調増加する連番。プロセス間の一意性はプロセス識別子が担う。
 static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
@@ -171,7 +184,7 @@ impl WorkDir {
             std::process::id(),
             NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
         );
-        let lock = work.join(format!("{stem}.lock"));
+        let lock = work.join(format!("{stem}{LOCK_SUFFIX}"));
         let lease = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -207,12 +220,12 @@ impl WorkDir {
         &self.path
     }
 
-    /// 生存の札のパス。掃除の担当（後続タスク）と、札が守られていることを確かめる
-    /// テストが読む。
+    /// 生存の札のパス。札が守られていることを確かめるテストが読む。
     ///
     /// 借り手が使うのは [`WorkDir::path`] だけなので `pub(crate)` に絞りたいところだが、
     /// 今日の呼び手はテストだけなので絞ると本体のビルドで「使われていない」の警告が出る。
-    /// 掃除（後続タスク）が最初の非テストの呼び手になるので、絞るのはそのときでよい。
+    /// 掃除は棚の走査から札の綴りを自分で組むのでこの読み口を通らない——非テストの
+    /// 呼び手が現れたときに絞ればよい。
     pub fn lock_path(&self) -> &Path {
         &self.lock
     }
@@ -273,8 +286,8 @@ fn split_stamp(entry: &str) -> Option<(&str, &str)> {
 /// 検体 1 つの原本（`cache/<検体>-<刻印>/`）を用意して、その絶対パスを返す
 /// （要件 7.2・7.3・7.6・7.7・7.8）。
 ///
-/// 原本は**誰にも配らない**。配るのはここから取る複製で、複製を作るのは後続タスクの
-/// 仕事（この入口がその唯一の呼び手になる）。
+/// 原本は**誰にも配らない**。配るのは [`fresh_root`] がここから取る複製である。
+/// 掃除は取得の入口（[`fresh_root`]）が走らせるので、この関数は棚を片付けない。
 ///
 /// `pub` なのは、今日の呼び手がテストだけで `pub(crate)` にすると本体のビルドで
 /// 「使われていない」の警告が出るからである（[`WorkDir::lock_path`] と同じ事情）。
@@ -356,7 +369,7 @@ fn stage_into_cache(
 /// 同じ検体の刻印違いの原本を回収する（要件 7.3・7.9）。
 ///
 /// 先に `work/gc-…/` へ `rename` してから消すので、途中で落ちても `cache/` の下に
-/// 半端な木は残らない（残るのは `work/` の下の消し残しで、掃除の担当が拾う）。
+/// 半端な木は残らない（残るのは `work/` の下の消し残しで、次の取得の掃除が拾う）。
 ///
 /// 失敗しても**取得は続ける**。別のプロセスが複写中・ウイルス対策が掴んでいる、は
 /// どれも次の取得で消せるようになる一時的な事情で、これで検体が得られないのは損だから。
@@ -381,7 +394,7 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
         };
         let raw = entry.file_name();
         // 名前を読めない・刻印の形をしていないものは、この仕様が置いた原本ではない。
-        // 黙って消さずに残す（消すかどうかを決めるのは掃除の担当）。
+        // 黙って消さずに残す（`cache/` の下は掃除の対象でもない）。
         let Some((sample, stamp)) = raw.to_str().and_then(split_stamp) else {
             continue;
         };
@@ -393,23 +406,172 @@ fn reclaim_stale(namespace: &Path, cache: &Path, name: &str, keep: &str) {
             report_cleanup("回収の棚の作成", Err(err), &shelf);
             continue;
         }
-        let gc = shelf.join(format!(
-            "gc-{}-{}",
-            std::process::id(),
-            NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
-        ));
         // `cache/` の外へ出すのが先。「名前が合う原本は完全」を一瞬も破らない。
-        if let Err(err) = std::fs::rename(&stale, &gc) {
-            report_cleanup("古い原本の退避", Err(err), &stale);
+        discard_tree(&shelf, &stale, "古い原本");
+    }
+}
+
+/// 木を作業の棚の中の `gc-…` へ**先に `rename` してから**消す（要件 7.7・7.9）。
+///
+/// 先に外へ出すので、途中で落ちても半端な木が元の名前で見えることがない。プロセス
+/// 識別子を再利用した新しいプロセスが同じ名前の作業フォルダを作る瞬間との競合も、
+/// 名前を変えた時点で消える。
+///
+/// 実測: Windows は**子孫のファイルが開かれているフォルダの `rename` を拒む**
+/// （共有モードに書き込みと削除を足しても同じ）。掴まれている木は最初の一歩で失敗する
+/// ので無傷のまま残り、次の取得で改めて片付けられる。
+fn discard_tree(shelf: &Path, tree: &Path, what: &str) {
+    let gc = shelf.join(format!(
+        "gc-{}-{}",
+        std::process::id(),
+        NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
+    ));
+    if let Err(err) = std::fs::rename(tree, &gc) {
+        report_cleanup(&format!("{what}の退避"), Err(err), tree);
+        return;
+    }
+    report_cleanup(
+        &format!("退避した{what}の削除"),
+        std::fs::remove_dir_all(&gc),
+        &gc,
+    );
+}
+
+/// 札を消そうとした結果から、相方の木を消してよいかを決める（要件 7.5・7.7）。
+///
+/// `Ok` だけが「持ち主は居ない」。失敗は**どれも触らない**——共有違反は生きている
+/// 利用者が握っている札で、`NotFound` は別のプロセスが同時に回収している最中である。
+/// 後者を「持ち主が居ない」と読むと、回収中の相手の木を横から消してしまう。同じ
+/// ファイルの [`report_cleanup`] が `NotFound` を成功として通すので、この取り違えは
+/// 机上の話ではない（兄弟テストが 3 つの入力を全部通す）。
+fn owner_is_gone(removal: &std::io::Result<()>) -> bool {
+    removal.is_ok()
+}
+
+/// 作業の棚の残骸を片付ける（要件 7.7・7.9）。取得のたびに 1 度走る。
+///
+/// 棚の並び順は決まっていないので、木より先に札を見るとは限らない。札を消してみる
+/// 走査と、木を片付ける走査の 2 段に分ける。生きている利用者の木と組み上げ中の木は
+/// 札が削除を拒むので残る。失敗は人の読める形に出して取得を続ける。
+fn sweep(namespace: &Path) {
+    let shelf = namespace.join(WORK);
+    let entries = match std::fs::read_dir(&shelf) {
+        Ok(entries) => entries,
+        // 棚がまだ無いのは、片付ける残骸が無いのと同じ。
+        Err(err) => return report_cleanup("作業の棚の走査", Err(err), &shelf),
+    };
+    let mut held = std::collections::HashSet::new();
+    let mut trees = Vec::new();
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                report_cleanup("作業の棚の走査", Err(err), &shelf);
+                continue;
+            }
+        };
+        let raw = entry.file_name();
+        // 名前を読めないものは、この仕様が置いた物ではない。黙って消さずに残す。
+        let Some(name) = raw.to_str() else { continue };
+        if let Some(stem) = name.strip_suffix(LOCK_SUFFIX) {
+            if !owner_is_gone(&std::fs::remove_file(entry.path())) {
+                held.insert(stem.to_owned());
+            }
             continue;
         }
-        report_cleanup("退避した原本の削除", std::fs::remove_dir_all(&gc), &gc);
+        match entry.file_type() {
+            Ok(kind) if kind.is_dir() => trees.push((name.to_owned(), entry.path())),
+            // 木でないものも、この仕様が置いた物ではない（上と同じ扱い）。
+            Ok(_) => {}
+            Err(err) => report_cleanup("棚の要素の種別の読み取り", Err(err), &entry.path()),
+        }
     }
+    for (name, tree) in trees {
+        if !held.contains(&name) {
+            discard_tree(&shelf, &tree, "残骸");
+        }
+    }
+}
+
+/// 検体 1 つの**使い捨ての複製**を配る（要件 6.5・7.4・7.5・7.7・7.9）。
+///
+/// 取得のたびに ⑴ 棚を掃除し、⑵ 原本を用意し、⑶ 札を先に開いてから原本を複写する。
+/// 返った値を束縛している間だけ複製が生き、破棄で木と札の両方が消える。
+///
+/// `pub` の事情は [`cached_root`] と同じ。窓口 `SampleRoot::acquire` がこれを内側から
+/// 呼ぶタスクで `pub(crate)` へ絞ること。
+///
+/// # Errors
+///
+/// 原本を用意できないとき [`cached_root`] と同じ失敗、複写できないとき
+/// [`SampleError::Io`]。掃除の失敗は**失敗にしない**（人の読める形に出して続ける）。
+pub fn fresh_root(name: &str) -> Result<WorkDir, SampleError> {
+    fresh_root_in(
+        &namespace_dir()?,
+        name,
+        &nar_dir().join(format!("{name}.nar")),
+    )
+}
+
+/// 名前空間と `.nar` を明示して複製を配る（テストが私有の名前空間を渡す）。
+fn fresh_root_in(namespace: &Path, name: &str, nar: &Path) -> Result<WorkDir, SampleError> {
+    sweep(namespace);
+    let master = cached_root_in(namespace, name, nar)?;
+    // 札はフォルダより先に開かれる（`WorkDir` の約束）。複写はその後なので、組み上がる
+    // 途中の複製が札の無い木として棚に見えることはない。
+    let copy = WorkDir::in_namespace(namespace)?;
+    copy_tree(&master, copy.path())?;
+    Ok(copy)
+}
+
+/// 原本の木をそっくり複写する。
+///
+/// `.nar` を展開し直すのではなく**ファイルを写す**のが要件 6.5 の「開発用の根は
+/// 再インストールの経路を通らない」である（兄弟テストが、原本にだけ在るファイルが
+/// 複製に現れることで判定する）。
+fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
+    let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
+    while let Some((src, dst)) = stack.pop() {
+        std::fs::create_dir_all(&dst).map_err(|source| SampleError::Io {
+            what: "複製のフォルダの作成",
+            path: dst.clone(),
+            source,
+        })?;
+        let entries = std::fs::read_dir(&src).map_err(|source| SampleError::Io {
+            what: "原本の走査",
+            path: src.clone(),
+            source,
+        })?;
+        for entry in entries {
+            let entry = entry.map_err(|source| SampleError::Io {
+                what: "原本の走査",
+                path: src.clone(),
+                source,
+            })?;
+            let kind = entry.file_type().map_err(|source| SampleError::Io {
+                what: "原本の要素の種別の読み取り",
+                path: entry.path(),
+                source,
+            })?;
+            let target = dst.join(entry.file_name());
+            if kind.is_dir() {
+                stack.push((entry.path(), target));
+            } else {
+                std::fs::copy(entry.path(), &target).map_err(|source| SampleError::Io {
+                    what: "原本の複写",
+                    path: target,
+                    source,
+                })?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// 後始末の失敗を必ず人の読める形で残す。
 ///
-/// [`Drop`] と古い原本の回収は失敗を返せない（回収の失敗で取得を止めない＝要件 7.3）ので、
+/// [`Drop`]・古い原本の回収・掃除は失敗を返せない（後始末の失敗で取得を止めない＝
+/// 要件 7.3・7.7）ので、
 /// 呼び手へ伝える道がここしかない。本 crate はテスト専用で記録層に依存しない
 /// （依存を足さない）ため、宛先は標準エラー出力にする。既に無いのは後始末の目的が
 /// 達成された状態なので黙って通す。残った木と札は次の走行が回収する。
@@ -434,3 +596,9 @@ mod tests;
 #[cfg(test)]
 #[path = "devroot_cache_tests.rs"]
 mod cache_tests;
+
+/// 複製と掃除の兄弟テスト。原本の兄弟テストの助けを借りる（固定入力の組み方と木の
+/// 読み方は同じ物を使う）。
+#[cfg(test)]
+#[path = "devroot_sweep_tests.rs"]
+mod sweep_tests;

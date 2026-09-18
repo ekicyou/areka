@@ -282,7 +282,7 @@ pub enum SampleError {
 }
 
 mod devroot;
-pub use devroot::{WorkDir, cached_root};
+pub use devroot::{WorkDir, cached_root, fresh_root};
 
 mod nar_writer;
 pub use nar_writer::{Corrupt, Damage, EntryBuilder, NarBuilder, fold_tree, install_txt};
