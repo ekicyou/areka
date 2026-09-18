@@ -4,6 +4,7 @@
 //! （[`MenuItem`]）、枠ごとに 1 つだけ持つ供給関数（[`Supplier`]）、登記・取り消し・写しの
 //! 取得（[`MenuRegistry`]）。後続 spec（列挙・切替・インストール・更新）はメニュー本体を
 //! 触らず、自分の枠へ供給関数を登記するだけで項目を足せる（要件 6.1）。
+//! 登記の口と、表示 1 枚の旗・照会の返事待ちは [`MenuWiring`] が 1 つの資源として束ねる。
 //!
 //! 配下の module は役割ごとに分かれる: [`plan`]（構造の計算）・[`captions`]（項目名と
 //! 表示可否の照会）・[`trigger`]（引き金と表示の段取り）・[`win32`]（OS 表示）。
@@ -17,9 +18,15 @@ pub(crate) mod plan;
 pub(crate) mod trigger;
 pub(crate) mod win32;
 
+use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::mpsc::Sender;
 
+use areka_kanade::KanadeMsg;
 use bevy_ecs::prelude::*;
+use windows::Win32::Foundation::HWND;
+
+use trigger::PendingQuery;
 
 /// メニューの枠。宣言順がそのまま並び順（①〜⑦・要件 2.1）で、判別値を登記の添字に使う。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -117,6 +124,48 @@ impl MenuRegistry {
                 Some((frame, supplier(world, ctx)))
             })
             .collect()
+    }
+}
+
+/// 窓のクライアント座標を画面座標へ写す関数の型。写せなければ `None`。
+///
+/// 本番は [`win32::client_to_screen`] で、実在する窓ハンドルが要る。テストは実窓を作らずに
+/// 解放ハンドラを通すため、ここへ純粋な関数を差し込む（`input_events` の
+/// `RegionSource::Mock` と同じ考え方の差し替え口）。
+pub(crate) type ToScreen = fn(HWND, i32, i32) -> Option<(i32, i32)>;
+
+/// メニューに要る結線状態（UI スレッドだけが持つ NonSend 資源）。
+///
+/// 登記の口・運行（kanade）への送り口・表示 1 枚の旗・照会の返事待ちを 1 つに束ねる。
+/// 旗と返事待ちを動かすのは [`trigger`] だけである。
+pub(crate) struct MenuWiring {
+    /// 登記の口。後続 spec はここへ供給関数を登記する。
+    pub registry: MenuRegistry,
+    /// 照会（`KanadeMsg::ResourceQuery`）の送り口。
+    kanade: Sender<KanadeMsg>,
+    /// 表示は 1 枚まで。右ボタンの解放で立ち、[`trigger::InFlightGuard`] が落ちると降りる。
+    in_flight: Rc<Cell<bool>>,
+    /// 照会の返事待ち（高々 1 件）。[`trigger::poll_menu_query`] が毎 tick 覗く。
+    pending: Option<PendingQuery>,
+    /// クライアント座標から画面座標への写し。
+    to_screen: ToScreen,
+}
+
+impl MenuWiring {
+    /// 本番の構築子。座標の写しには OS（[`win32::client_to_screen`]）を使う。
+    pub(crate) fn new(kanade: Sender<KanadeMsg>) -> Self {
+        Self::with_to_screen(kanade, win32::client_to_screen)
+    }
+
+    /// 座標の写しを差し替えて組み立てる。本番は [`MenuWiring::new`] 経由でだけ通る。
+    fn with_to_screen(kanade: Sender<KanadeMsg>, to_screen: ToScreen) -> Self {
+        MenuWiring {
+            registry: MenuRegistry::default(),
+            kanade,
+            in_flight: Rc::new(Cell::new(false)),
+            pending: None,
+            to_screen,
+        }
     }
 }
 

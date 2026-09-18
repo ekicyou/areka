@@ -121,6 +121,19 @@ fn poll_step_times_out_after_the_deadline() {
     }
 }
 
+/// 期限ちょうどの時刻は「期限内」に入らない（待つのは `now < deadline` の間だけ）。
+#[test]
+fn poll_step_times_out_exactly_at_the_deadline() {
+    let base = Instant::now();
+    let (_tx, rx) = reply_channel::<QueryReply>();
+    let pending = pending_query(Some(rx), base);
+
+    match poll_step(&pending, base + QUERY_TIMEOUT) {
+        PollOutcome::Decided(Err(QueryFailure::Timeout)) => {}
+        other => panic!("期限ちょうどで未着なら上限超過であるべき: {other:?}"),
+    }
+}
+
 #[test]
 fn poll_step_reports_the_dropped_reply_channel() {
     let base = Instant::now();

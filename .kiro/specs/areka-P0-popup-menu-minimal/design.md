@@ -256,7 +256,7 @@ sequenceDiagram
 - **入口は解放だけ**。押下ハンドラはメニューに関わらない（右ダブルクリックの材料を預けるだけ）。
 - **待ちは tick に乗せる**（開発者裁定 2026-09-18 設計ディスカッション #1）。解放ハンドラは登記の写しを取って kanade へ照会を送るだけで返事を待たない。返事は毎 tick の system `poll_menu_query` が `try_recv` で覗き、届いた tick（または期限）で判定・計画して表示タスクを起こす。**照会を待っている間も tick は回る**（描画・文字送り・まばたきが止まらない）。UI スレッドが同期で待つ区間は無い。
 - **World を借りるのは tick の中だけ**（解放ハンドラ・poll system・動作の再借用）。表示（`TrackPopupMenuEx`）の間は World を借りていない。tick は表示中も回る（要件 7.2）。
-- **表示は 1 枚まで**（`MenuWiring.in_flight`＝解放から動作の終わりまで）。待ちの間や表示中に届いた解放は預かりを捨てて `trace!`。
+- **表示は 1 枚まで**（`MenuWiring.in_flight`＝解放から動作の終わりまで）。待ちの間や表示中に届いた解放は `trace!` で無視する。このとき右ダブルクリックの預かりは**捨てずに残す**（実装タスク 7.3 で確定）。残した預かりの行き先は 2 つある: 返事待ちの間の分は、返事を拾う tick の `decide` が処理する（抑止なら送る・表示なら捨てる）。表示中の分はその後に `decide` の tick が来ないので、`show_task` が戻った後の手順 C が必ず取り出して捨てる。
 - **動作は戻った後に 1 回**。`Weak` の upgrade と窓 entity の `WindowHandle` の有無を確かめてから呼ぶ（要件 1.4／6.5／7.4）。
 
 ### 表示可否と右ダブルクリックの判定（純粋関数 `decide`）
@@ -631,7 +631,7 @@ pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, Que
   1. `state.released.right` でなければ `false`。
   2. `MouseWiring` 不在 → `trace!` で `false`（要件 1.8）。`MenuWiring` 不在も同じ。
   3. `snapshot_drag_state() != Idle` → 預かりを `take` して捨て `trace!`・`false`（要件 1.9）。
-  4. `MenuWiring.in_flight` が立っている → 手順 3 と同じく預かりを `take` して捨て `trace!`・`false`。
+  4. `MenuWiring.in_flight` が立っている → `trace!`・`false`。**預かりは捨てない**（手順 3 と違う）。右ダブルクリックは「押下 1→解放 1→押下 2（預かる）→解放 2」の順に届くので、SHIORI の返事がダブルクリックの間隔より遅いと解放 2 は返事待ちに当たる。ここで捨てると、その後に `visible=0` が返っても送る材料が無く、メニューを抑止するゴーストへ `OnMouseDoubleClick`（Ref5＝1）が届かない（要件 1.10 に反する）。残した預かりは `poll_menu_query` の `decide` が処理する（抑止なら送る・表示なら `trace!` で捨てる）。
   5. `char_scope`、`WindowHandle.hwnd`、`win32::client_to_screen(hwnd, client_point)` を集めて `MenuRequest{scope, entity, hwnd, screen_pos}` を作り、`MenuContext{scope}` で `registry.snapshot` を取り（要件 6.2 の「そのとき」＝右クリックの時点）、`captions::query_ids` → `captions::send_query`。送れたら `in_flight.set(true)` し、`MenuWiring.pending = Some(PendingQuery{request, snapshot, rx, deadline: Instant::now() + QUERY_TIMEOUT})`。送れなければ（`SendFailed`）`rx` 無しの `PendingQuery` を置き、次の tick で全件既定名として扱う（`warn!` 1 行）。`true`。
 - `poll_menu_query`（`Input` スケジュールの system・毎 tick・`dispatch_pointer_events` の後）:
   - `MenuWiring.pending` が `None` なら何もしない（通常の tick のコストはこの 1 判定だけ）。
@@ -639,7 +639,7 @@ pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, Que
   - `Decided` なら `pending` を取り出し、`captions::interpret`、`MouseWiring::take_pending_right_double_click`、`decide`。`Suppress` なら（預かりがあれば `send_pending_right_double_click`）guard を落として終了。`Show` なら `plan::build(snapshot, &captions)` して計画を作り、`EcsWorldSelfRef` の `Weak` の複製と guard を添えて `wintf::executor::spawn_local(show_task(weak, request, plan, guard))`（初回 poll は tick が返った後・`research.md` §7.2）。`EcsWorldSelfRef` 不在は `warn!` で捨てる。
 - `show_task`（async・UI スレッド・World を借りずに始まる）:
   - **B（表示）**: `win32::show(hwnd, screen_pos, &plan)`。`Err` → `error!`（要件 1.7）。`Ok(None)` → `debug!`（要件 8.3）。`Ok(Some(id))` → `info!`（要件 8.2）。
-  - **C（再借用）**: `weak.upgrade()` できない、`try_borrow_mut` が取れない、または `world.get::<WindowHandle>(entity)` が無い → `debug!` で動作を行わない（要件 7.4）。それ以外は、表示中に届いた預かりが残っていれば `take` して捨て（古い材料を次の要求へ持ち越さない）、`plan.action(id)` を 1 回呼ぶ（要件 1.4／6.5）。`in_flight` は guard の `Drop` が全経路で戻す。
+  - **C（再借用）**: `weak.upgrade()` できない、`try_borrow_mut` が取れない、または `world.get::<WindowHandle>(entity)` が無い → `debug!` で動作を行わない（要件 7.4）。それ以外は `plan.action(id)` を 1 回呼ぶ（要件 1.4／6.5）。**World を借りられた全終了経路**（選択・未選択 `Ok(None)`・表示失敗 `Err`・窓が消えていた）で、表示中に届いた預かりが残っていれば `take` して捨てる（手順 4 が表示中の預かりを残すので、ここで捨てないと古い材料が後の無関係な要求の抑止で送られる）。`in_flight` は guard の `Drop` が全経路で戻す。
 - `decide(visibility, pending) -> Decision` は純粋（上の flowchart）。`poll_step` も純粋（`Instant` を引数で受ける・OS を触らない）。
 - 待ちの間に窓が消えた場合: `poll_menu_query` は `request.entity` に `WindowHandle` が無ければ `debug!` で `pending` を捨てる（表示しない）。
 - 表示中に SHIORI が止まった場合（要件 7.3）: tick は回り続けるので `run_ghost_quit_phase`（`emo2_boot/frame.rs`）が表示中に窓を消しうる。C の生存確認で動作を行わず終わる。落ちない。

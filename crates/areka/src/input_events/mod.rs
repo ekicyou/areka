@@ -291,10 +291,6 @@ impl MouseWiring {
     }
 
     /// 預かりを取り出す。取り出した後は空になる。
-    ///
-    /// `#[allow(dead_code)]`: 本番の呼び手はメニュー側（タスク 7.3 の `menu::trigger`）で、
-    /// そこが入ったらこの抑止を外す。
-    #[allow(dead_code)]
     pub(crate) fn take_pending_right_double_click(&mut self) -> Option<PendingDoubleClick> {
         self.pending_right_double_click.take()
     }
@@ -304,11 +300,7 @@ impl MouseWiring {
     /// 中身は [`send_double_click`] を右ボタンで呼ぶだけで、預かる前に押下ハンドラが即送出して
     /// いたときと同じメッセージになる。
     ///
-    /// `#[allow(dead_code)]`: 本番の呼び手はメニュー側（タスク 7.3 の `menu::trigger`）で、
-    /// そこが入ったらこの抑止を外す。
-    ///
     /// [`send_double_click`]: MouseWiring::send_double_click
-    #[allow(dead_code)]
     pub(crate) fn send_pending_right_double_click(&mut self, pending: PendingDoubleClick) {
         self.send_double_click(
             pending.scope,
