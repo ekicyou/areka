@@ -197,3 +197,123 @@
 | 7 | 実機目視の証跡の形 | 要件 4.2 が「読み戻し画像か、無ければ観察記録」と既に二者を許しているので、設計は**どちらを採ったか**を決めて書けばよい |
 | 9 | `face_origin_color` の白縮退（`[disable]` の色味） | 候補の面 0 の (0,0) の α を実測してから。既知の制限として README 申し送り（要件 5.2）に含めるか否かは実機目視の後に確定する |
 | Research Needed 1〜5（§5） | PNG 原寸 6 枚・面 0 の α・`ＭＳ ゴシック` 12px の送り・α 走査の最小述語・`snapshot_on` の更新可否・`verification/` のファイル構成 | いずれも取得後の実測で埋まる。設計の Discovery で実測する |
+
+## 8. 設計フェーズの Discovery（2026-09-18・`/kiro-spec-design`）
+
+### 8.1 要約
+
+- **Feature**: `areka-P0-default-balloon-bundle`
+- **Discovery Scope**: Extension（light discovery）——本番コード変更 0 行・新規依存 0 の「資産＋新規テスト＋文書」なので、統合点（公開 API・保管慣行・台帳の番人）の実測に絞った。
+- **Key Findings**:
+  - 上流 `github.com/ponapalt/StayseeBalloon` を取得できた（HEAD `fe1b02f30d5e263cf30df800c32b2b525a52e3ad`・2021-11-06 05:04:31 +0900＝UTC 2021-11-05・件名「use_input_alpha」）。§5 Research Needed 1〜5 は**すべて実測で埋まった**（8.2）。
+  - 面 6 枚の (0,0) はすべて α＝0 → 起動側の `face_origin_color` は白へ縮退する（`debug!`）。半透明画素（0<α<255）は 6 枚とも 2,000 個超で実在する＝要件 3.4 の α 保持は「半透明画素が焼き込み後にも残る」で固定できる。
+  - `ＭＳ ゴシック` は upem 256・ascent 220・descent 36（`draw_metrics.rs` の実測記録）＝行ボックス比 1.0・半角 0.5em。12px では全角 12・半角 6・行送り 14・行ボックス 12 が期待値。
+  - `roadmap-draft.md` は「表は着手時点の写真」と自ら書いており、行の追加は前例 0（過去 3 spec は `owner_count` の書き換えのみ）。だが台帳の宛先に本 spec を書けば腕 f が `[[spec]]` 行を要求する＝行の追加は必須。`snapshot_on` は据え置き、追加の事実は表の直前の散文に 1 文で残す。
+
+### 8.2 Research Log
+
+#### 上流の取得と保管する 29 本の実測（要件 2.2・2.3・2.5・2.6・5.1・7.1）
+
+- **Context**: §5 の 1・5、要件 2.6 の発動判定。
+- **Sources**: `git clone https://github.com/ponapalt/StayseeBalloon.git`（作業用一時領域・リポジトリ外）・`sha256sum`・`iconv -f SHIFT_JIS`・PNG IHDR の直読み。
+- **Findings**:
+  - ファイルは **29 本**（`LICENSE`・`arrow0/1.png`・`balloonc0〜4.png`・`balloonk0/1.png`・`balloons0〜3.png`・`descript.txt`・`install.txt`・`marker.png`・`online0〜8.png`・`readme.txt`・`sstp.png`・`thumbnail.pnr`）で要件 2.2 の一覧と一致。`.pna` 無し。sha256 は設計時に採取済みで、保管後に `verification/provenance.md` へ写す（保管フォルダから採り直した値と一致することを確認して書く）。
+  - `descript.txt`（Shift_JIS・CRLF）の要点は要件の記述と一致（`charset,Shift_JIS`・`type,balloon`・`name,Balloon for Staysee Syncfield`・`id,StayseeBalloon`・`craftman,SSP BUGTRAQ`・`craftmanw,ばぐとら研究所/整備班`・`craftmanurl,http://ms.shillest.net/`・`homeurl,http://ms.shillest.net/balloon/StayseeBalloon/`・`use_self_alpha,1`・`use_input_alpha,1`・`paint_transparent_region_black,0`・`validrect.left,22`／`top,20`／`right,-26`／`bottom,-47`・`font.height,12`）。要件に挙げていない鍵として `font.color.r/g/b,0/40/100`・`anchor.font.color.*`・`cursor.blendmethod,none`・`cursor.style,square`・`cursor.brush/pen/font.color.*`・`arrow0/1.x/y`・`onlinemarker.*`・`sstpmarker.*`・`sstpmessage.*`・`number.*`・`communicatebox.*` が在る。**要件 2.6 の「食い違い」には当たらない**（要件は「要点」を列挙しており、一覧・LICENSE 種別・要点はすべて一致）。`font.color`・`cursor.*` は areka の読み手（`balloon/parse.rs`）が読む鍵なので、設計の期待値に入れる（文字色 (0,40,100)・選択肢 hover は `cursor.style,square`＝SquareFill 実導出）。
+  - `install.txt`: `charset,Shift_JIS`／`type,balloon`／`name,Balloon for Staysee Syncfield`／`directory,StayseeBalloon`＝descript の `id` と同綴り（要件 7.1）。
+  - `readme.txt`: 作者「ぽな（ばぐとら研究所/整備班）」・「License : CC0 https://creativecommons.org/publicdomain/zero/1.0/deed.ja」・更新履歴 2020/6/26 v1.00・2020/6/27 v1.00A。`LICENSE` は「Creative Commons Legal Code / CC0 1.0 Universal」で始まる法典本文（CRLF）。
+  - リポジトリ直下 `.gitignore`（`*_test.txt`／`*_dump.txt`）に大小無視で当たる名前は **0 件**（要件 2.5）。`git check-attr text vendors/sample_ghost/StayseeBalloon/descript.txt` と `.../balloons0.png` は**フォルダ未作成の時点で `unset`**（要件 2.4・`* -text` が下位へ効く）。
+- **Implications**: 要件 2.6 は発動しない（本文の是正なし）。`verification/provenance.md` に 29 本のハッシュ・コミット・日付（+0900 と UTC の両方）・readme の版を書く。
+
+#### PNG 原寸と α の実測（§5 の 1・3、要件 3.3〜3.5・3.7）
+
+- **Findings**（IHDR 直読み・自前のフィルタ復元で全画素走査）:
+
+  | ファイル | 原寸 | 色種 | (0,0) の RGBA | α＝0 | 0<α<255 | α＝255 |
+  |---|---|---|---|---|---|---|
+  | `balloons0.png` | 335×205 | RGBA8 | (0,0,0,0) | 9,617 | **2,445** | 56,613 |
+  | `balloons1.png` | 335×205 | RGBA8 | (0,0,0,0) | 9,622 | 2,399 | 56,654 |
+  | `balloons2.png` | 335×395 | RGBA8 | (0,0,0,0) | 12,467 | 3,026 | 116,832 |
+  | `balloons3.png` | 335×395 | RGBA8 | (0,0,0,0) | 12,472 | 2,996 | 116,857 |
+  | `balloonk0.png` | 335×135 | RGBA8 | (0,0,0,0) | 8,567 | **2,190** | 34,468 |
+  | `balloonk1.png` | 335×135 | RGBA8 | (0,0,0,0) | 8,572 | 2,186 | 34,467 |
+
+  他: `balloonc0〜4` 405×61 RGBA・`arrow0/1`／`marker` 12×10 RGBA・`online0〜8` 90×90 グレー＋α・`sstp` 12×9 グレー＋α・`thumbnail.pnr` 176×43 パレット。
+- **Implications**:
+  - 文字描画範囲（`TextRegion::resolve`・負値は反対辺基準）: scope 0（335×205）＝left 22・top 20・right **309**・bottom **158**（幅 287・高さ 138）／scope 1（335×135）＝left 22・top 20・right 309・bottom **88**（高さ 68）。折返し基準（`wordwrappoint` 未宣言）は遠辺 309 へ縮退（`debug!` 1 件）。
+  - (0,0) が透明なので `emo2_boot::balloon_background::face_origin_color` は `REASON_NOT_OPAQUE`（トリムで原点が落ちていれば `REASON_ORIGIN_TRIMMED_AWAY`）で白 (255,255,255) へ落ちる（`debug!`・bin クレート内部で外から踏めない）。効くのは `\f[disable]` の混色だけで、表示崩れではない。
+  - α 保持の最小述語: `AtlasTable::resolve(SetId(0), "balloons0.png")` → `entry.placement.uv_rect` の内側を `page.bytes`（premultiplied BGRA・`stride` 明示）で走査し、`0 < A < 255` の画素数 > 0。`entry.original == (335,205)` も併せて固定する。
+
+#### `ＭＳ ゴシック` 12px の計測値（§5 の 2、要件 3.5・3.6・1.3）
+
+- **Sources**: `crates/areka-emo-text/src/draw_metrics.rs` の実測記録（upem 256・ascent 220・descent 36）・`layout.rs`／`choice.rs` の「比ちょうど 1.0」・`state.rs` の `line_pitch = font_height + line_gap(2)`・`layout.rs` `visible_window` の「境界ちょうどは超えていない（> 判定）」。
+- **Findings**: 全角 12・半角 6（0.5em）・行ボックス 12・行送り 14。scope 0 の 1 行に入る字数は全角 **23**（22＋23×12＝298・次で 310>309）・半角 **47**（22＋47×6＝304・次で 310>309）。行数は n 行目の下端 ＝ 20＋14(n−1)＋12 ≤ 遠辺 → scope 0 は **10 行**（下端 158＝境界ちょうど・あふれ非発火）・scope 1 は **5 行**（下端 88）。
+- **Implications**: 既存の実フォント檻の門（「あ」の送り < em）は使えない。門は「半角 `a` の送りがちょうど 6・全角 `あ` が 12・行ボックス 12」を直接固定する（`ＭＳ ゴシック` が無い環境では別書体へ落ちて赤になる＝既存テストの `Yu Gothic UI` 前提と同じ扱い）。**これらは設計時の導出値**であり、実装時に `DWriteMetrics` で実測して較正する（違えば理由を `verification/` に書く）。
+
+#### 台帳と `roadmap-draft.md` の受け口（§5 の 4、要件 6.2〜6.5）
+
+- **Findings**: `spec_checks.rs` 腕 c は `owner_count` を台帳 4 本の数え直しと突き合わせ、腕 f は台帳の全 owner が `[[spec]]` か `[[owner_completed]]` に載ることを要求する。`[[spec]]` 行の欄は `name`／`stage`／`bundle`／`owner_count`／`wave`（`wave` は自由文字列）。`roadmap-draft.md` の散文（「行数が 27 のまま…」の段落）は「表は着手した時点の写真」「`snapshot_on` は行の集合を撮った日」と定めており、**行の追加は前例 0**（`git log` で過去 3 spec は `owner_count` と `reason` の書き換えのみ）。
+- **Implications**: 台帳に owner を書く以上、行の追加は腕 f が要求する必須作業。`snapshot_on` は据え置き（腕は count しか読まない・日付の意味は「写真を撮った日」）、追加の事実と理由は表の直前の散文に 1 文（日付付き）で残す。`[briefs].count` は 28。
+
+#### 新規テストの置き場と到達（§3 Option B／C の決着、要件 3.1・3.2・3.11・8.2）
+
+- **Findings**: `crates/areka-emo-text/Cargo.toml` の通常依存に `areka-emo-present`・`areka-parsers`・`areka-sakura`・`windows`・`wintf`、dev 依存に `areka-emo-atlas`・`log-capture-kit` が在る＝系列解決・WIC bake・α 走査・2 層マージ・領域解決・レイアウト・台本・ログ捕捉のすべてに `Cargo.toml` 変更 0 で届く。同型の既存檻は 397〜820 行。headless GPU の読み戻し＋PNG 符号化は `choice_fixture_test.rs` で約 100 行の追加になる。
+- **Implications**: 決定論側に GPU 読み戻しを**含めない**（8.4 DD1）。1 ファイル約 600〜800 行で 1,000 行の番人に収まる見込み。
+
+### 8.3 Architecture Pattern Evaluation
+
+| Option | 概要 | 強み | 弱み | 判定 |
+|---|---|---|---|---|
+| B: 新規テスト 1 ファイル（`crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs`） | 検体パス定数 1 つ・全観測を 1 ファイルに | 要件 3.2 を構造で満たす・共有 0・番人 1 本 | 1,000 行に近づく | **採用**（GPU 読み戻しを含めないので収まる） |
+| C: 共有モジュール＋2〜3 ファイル | `#[path]` で common を共有 | 行数に余裕 | ファイル数・付け替え先が common の 1 行になる | 不採用。実装で 1,000 行を超えたときの**縮退先**（親ファイルに定数を残し `#[path]` でテーマ分割＝structure.md の規約）としてのみ残す |
+| GPU 読み戻し PNG を決定論側に含める | `choice_fixture_test.rs` 型 | 目視証跡が自動で出る | 実機の色味・DPI 切替は写らない・行数増 | 不採用。要件 4.2 の「読み戻しが無ければ観察記録」を採る |
+
+### 8.4 Design Decisions
+
+#### DD1: 新規テストは 1 ファイル・GPU 読み戻しなし（§7 持ち越し 6・7）
+- **Context**: 要件 3.1／3.2／3.11・4.2。
+- **Alternatives**: Option B／Option C／GPU 読み戻し込み。
+- **Selected**: Option B。実機目視の証跡は観察記録（`verification/signoff-record.md`）。
+- **Rationale**: 要件 3.2「定数 1 か所」を構造で満たす最小形。GPU 経路そのものは `emo2_fixture_e2e_test.rs` 等の既存檻が別検体で踏んでおり、本 spec の観測点は「この検体の値」である。
+- **Trade-offs**: 目視証跡が画像でなく記録になる（要件 4.2 が明示的に許す）。
+- **Follow-up**: 実装で 1,000 行を超えたら Option C の形へ分割（定数は親に残す）。
+
+#### DD2: `type`／`id`／`name`／`directory` は `charset::decode`＋`kv::parse_kv` で読む（§7 で確定済みの再掲）
+- **Selected**: テスト内で `areka_parsers::charset::decode(&bytes, DefaultEncoding::Ansi)` → `areka_parsers::kv::parse_kv`。`BalloonModel` は拡張しない（要件 8.1）。
+- **Rationale**: 本番コードが `id` を消費する場所は現状 0（下流 `baseware-root-layout` が定数で持つ）。
+
+#### DD3: ログ檻は「解決の窓」に限り、scope 1 の `warn!` を **2 件ちょうど**で固定する（§7 持ち越し 5）
+- **Alternatives**: `error!` 0 件のみ／`warn!` 件数固定。
+- **Selected**: `log_capture_kit::capture` の窓に `resolve_balloon_faces`＋`load_scope_balloon_model` だけを入れ、scope 0 は `error!` 0・`warn!` 0、scope 1 は `error!` 0・`warn!` **2**（`surface_id` 2 と 3・`prefix` `balloons`）。bake（WIC）は窓の外（WIC 側の警告の有無を本 spec は主張しない）。
+- **Rationale**: 件数で固定すると面の増減で赤くなる——それは保管フォルダ（要件 2.2 で無改変）が変わった合図であり意図どおり。「`error!` 0 件のみ」は不在主張で恒真に寄る。
+- **Trade-offs**: `resolve_balloon_faces` の R6.2 の文言変更で赤くなる（欄 `surface_id`／`prefix` で判定し、本文の文字列一致にはしない）。
+
+#### DD4: 既定書体の固定粒度（§7 持ち越し 4）
+- **Selected**: ⑴ `model.font().name()` が `None`（宣言なし）・⑵ `ResolvedFont::resolve(&model).name == "ＭＳ ゴシック"`（**リテラル**＝ukadoc 既定の後退検出器）かつ `== DEFAULT_FONT_NAME`（定数との同一性）・`height == 12.0`・⑶ 実 `DWriteMetrics` で `advance('a')==6`・`advance('あ')==12`・`line_box_height(12)==12`・`line_pitch(12)==14`。
+- **Rationale**: 開発者裁定「ukadoc 準拠」により、既定 `ＭＳ ゴシック` からの後退は正典適合の後退そのもの。⑶ は実フォントの門を兼ねる。
+
+#### DD5: `face_origin_color` の白縮退は「既知の制限」に**含めない**（§7 持ち越し 9）
+- **Selected**: README 申し送り文の既知の制限は「半透明前提のバルーンだけが正しく表示される」の 1 つに留める。白縮退は `verification/signoff-record.md` の所見欄に事実として書く。
+- **Rationale**: 効くのは `\f[disable]` の混色だけで、emo2 の台本には無効表示が出ない＝第三者が見る画面に差が出ない。実機目視で色味に所見が出たときだけ 4.3 の経路で扱う。
+
+#### DD6: `roadmap-draft.md` の行追加と `snapshot_on` 据え置き（§5 の 4）
+- **Selected**: `[[spec]]` 行（`name = "areka-P0-default-balloon-bundle"`・`stage = "A"`・`bundle = "絵の重ね方"`・`owner_count = 1`・`wave = "A0"`）を末尾に足し、`[briefs].count = 28`、`snapshot_on` は `"2026-09-13"` のまま。表の直前の散文に「2026-09-18 に本 spec の行を 1 行足した（台帳の宛先に書いたため腕 f が要求する）」を 1 文加える。
+
+#### DD7: `verification/` は 2 本
+- **Selected**: `provenance.md`（取得元・コミット・日付・readme の版・29 本の sha256・`.gitignore` 照合・`check-attr`・`id`＝`directory`・要件 2.6 の判定）と `signoff-record.md`（裁定 1.2 の記録・不採用理由・決定論テストの結果・較正の差・実機目視の観察記録・3.9／4.3 の処理・README 申し送り文・台帳検査の結果・下流申し送りの実施記録）。
+- **Rationale**: 完了 spec の慣行（`charset-canon` の `signoff-record.md`＋`boundary-record.md`）に倣い、出典（機械が照合する値）と判断（人が読む記録）を分ける。
+
+### 8.5 Risks & Mitigations
+
+- **`ＭＳ ゴシック` 12px の導出値が実測とずれる**（半角 6／全角 12／行ボックス 12）— 実装の最初に `DWriteMetrics` で計測し、ずれたら期待値を実測に合わせ、理由（フォントの版・ヒンティング）を `signoff-record.md` に書く。導出の根拠は `draw_metrics.rs` の実測記録。
+- **WIC bake がテストスレッドで COM 初期化を要する** — `emo2_e2e.rs` の `with_com_initialized`（`CoInitializeEx(None, COINIT_MULTITHREADED)`・`RPC_E_CHANGED_MODE` 許容）を新規ファイル内に写す（他のテストファイルから `use` はできない）。
+- **`resolve_balloon_faces` の `warn!` を件数で固定** — 保管フォルダの面が増減すると赤。意図どおり（要件 2.2）。
+- **1,000 行超過** — Option C へ縮退（定数は親に残す）。
+- **`cargo test --workspace` の i686 helper 前提** — 既存手順どおり（記憶 workspace-test-needs-i686-host32-artifacts）。本 spec の新規テストは x64 のみ。
+
+### 8.6 References
+
+- [ponapalt/StayseeBalloon](https://github.com/ponapalt/StayseeBalloon) — 取得元（HEAD `fe1b02f30d5e263cf30df800c32b2b525a52e3ad`）
+- ukadoc `descript_balloon` `font.name,フォント名` — 「デフォルトはＭＳ ゴシック」（`ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1`）
+- `crates/areka-emo-present/src/balloon.rs` — `resolve_balloon_faces`／`load_scope_balloon_model`／`build_balloon_target_from_faces`（公開 API・`UseSelfAlpha::On` 固定）
+- `crates/areka-emo-text/src/draw_metrics.rs` — `ＭＳ ゴシック` upem 256・ascent 220・descent 36 の実測記録
+- `doc/ukadoc-coverage/roadmap-draft.md`・`crates/ukadoc-survey/tests/consistency/spec_checks.rs` — 腕 a〜f
