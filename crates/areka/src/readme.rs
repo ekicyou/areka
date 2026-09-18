@@ -6,10 +6,6 @@
 //!
 //! 開くファイルは決めて渡すだけで、中身も `readme.charset` も読まない（要件 4.7）。
 
-// 説明書の結線（`wire_readme` の呼出・task 4.3）が入るまで本番から呼ばれない。
-// 結線が入った時点でこの許可を外す。
-#![allow(dead_code)]
-
 use std::cell::Cell;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -77,6 +73,8 @@ pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeR
 ///
 /// 無いときは「説明書」を灰色で出すための `false` を返し、**初めて無いと分かったときだけ**
 /// `debug!` で記録する（毎 tick の照会で記録が溢れない）。持ち物が無いときも `false`。
+// task 8.1 のメニュー組込項目が呼ぶ。
+#[allow(dead_code)]
 pub(crate) fn is_available(world: &World) -> bool {
     let Some(wiring) = world.get_non_send::<ReadmeWiring>() else {
         tracing::trace!(

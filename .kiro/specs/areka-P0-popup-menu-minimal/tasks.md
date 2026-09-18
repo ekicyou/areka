@@ -79,7 +79,7 @@
   - _Depends: 3.1_
   - _Boundary: areka menu plan_
 
-- [ ] 4. 説明書
+- [x] 4. 説明書
 - [x] 4.1 説明書のファイルを決めて既定のアプリで開く
   - ゴーストのフォルダの根と定義キーから説明書のパスを決める（キーが無ければ正典の既定名）。中身も文字コードも読まない
   - UI 側の持ち物として、パス・台本からの要求の受信端・「無いことを 1 度だけ記録した」印を持つ資源と、その結線（毎 tick の取り出しを入力の段へ登録）を作る
@@ -96,7 +96,7 @@
   - _Requirements: 4.5, 4.6, 9.5, 10.4_
   - _Depends: 4.1_
 
-- [ ] 4.3 説明書の 2 つの入口を起動時に結ぶ
+- [x] 4.3 説明書の 2 つの入口を起動時に結ぶ
   - 起動成功後の結線で、消費者を運搬の受け手の列に足し、ゴーストの根と定義キーから決めたパスで UI 側の資源を結線する（送出端と受信端を対で作る）
   - 完了状態: 実機起動で台本の説明書コマンドが UI 側へ届く経路が繋がり、既存の結線テスト・背骨テストが緑のまま
   - _Requirements: 4.5_
@@ -212,3 +212,4 @@
 - 3.2: `CaptionMap`（`Default`＋`insert`＝空文字を捨てる＋`get`）は `captions.rs` に先置き済み。5.1 の `interpret` はこの `insert` で組む。`plan::build` は `Frame::ORDER` を参照せず入力の順を前提にする（`ORDER` の入れ替えで赤くなるのは `mod_registry_tests`、群分け・識別子・`&` の摂動で赤くなるのが `plan_tests`＝9.1 の摂動はこの対応で選ぶ）。群番号の付け替えは恒等（`build` は群の不等号しか見ない）なので摂動にならない。
 - 4.1: `readme.rs` 先頭の `#![allow(dead_code)]` は 4.3 の結線で外す。テストは `ReadmeWiring` を直に `insert_non_send` する（`wire_readme` は分岐の無い配線）。`open`（`ShellExecuteW`）へ届くテストは 1 本も無い＝以降のテストでも実ファイルのある状態で `open_from_world`／`drain_readme_requests` を呼ばない（開発者の机でアプリが開く）。`&World` からの `get_non_send` の共有借用どうしは衝突しない。
 - 4.2: `/// ukadoc:` の行は URL を `<…>` で囲まない（解決は完全一致＝`SourceUrlNotInCatalog` で `cargo test -p ukadoc-survey` が 9 本赤になる）。ソースに正典 URL を書いたタスクは必ず `cargo test -p ukadoc-survey -j 4` まで走らせる。`readme_cue.rs` 先頭の `#![allow(dead_code)]` は 4.3 で外す。送出後に `tick_wake::mark` は立てない（門は既定で無効・有効時も 30 コマの心拍で Input 段が回る・立てると `tick_gate_config_producers_tests` の名簿検査が赤）。
+- 4.3: `wire_emo2_boot` には boot 成功まで届く決定論の道具が無い（既存テストは fallback 経路だけ・`spine.rs` は `wire_emo2_boot` を呼ばず自前の sinks 4 本で組む）。成功経路の結線は実機確認 9.3 ⑵ で見る。sinks の並びは `zorder_wiring_tests.rs` の `t_zwi05` が `mod.rs` の字面で固定している。`readme::is_available` だけ狭い `#[allow(dead_code)]` が残る（8.1 で外す）。`spine.rs` のコメント「production は 4 本」は陳腐化（実際は 6 本・本仕様の範囲外）。
