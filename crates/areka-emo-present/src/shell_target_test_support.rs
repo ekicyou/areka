@@ -1,6 +1,6 @@
 //! `shell_target` の檻が共有する受け口（検体・COM 初期化・ログの捕捉窓）。
 //!
-//! 檻は 4 本（`shell_target_load_tests.rs`・`shell_target_base_image_tests.rs`・
+//! 本ファイルを使う檻は 4 本（`shell_target_load_tests.rs`・`shell_target_base_image_tests.rs`・
 //! `shell_target_template_tests.rs`・`shell_target_emo2_tests.rs`）に分かれるが、検体の複製と
 //! COM の初期化は**テストバイナリに 1 つ**で足りる。各ファイルが自前で持つと、その数だけ
 //! 検体の木が複製される（`areka-seriko` の `sample_test_support.rs` と同じ理由）。

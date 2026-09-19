@@ -448,5 +448,9 @@ mod load_tests;
 mod base_image_tests;
 
 #[cfg(test)]
+#[path = "shell_target_template_tests.rs"]
+mod template_tests;
+
+#[cfg(test)]
 #[path = "shell_target_emo2_tests.rs"]
 mod emo2_tests;

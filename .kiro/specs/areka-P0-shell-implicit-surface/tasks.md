@@ -162,7 +162,7 @@
 
 - [ ] 6. 検体 2 体の決定論テストと摂動
 
-- [ ] 6.1 検体 2 体を実物の絵で焼くテストを書く
+- [x] 6.1 検体 2 体を実物の絵で焼くテストを書く
   - `crates/areka-emo-present/src/shell_target_template_tests.rs` を新設する（4.3 の `shell_target_test_support.rs` を使う）
   - `R_POST_and_KOMAINU`: 面 0＝236×462・面 10＝140×160・宣言の無い面 10 が `build_world().surface(10)` で引ける・面 0 の合成結果の左上の画素の α が 0・`bake_errors()` が 0 件
   - `konnoyayame`: 面 0＝260×390・面 10＝200×200・`bake_errors()` が 0 件
