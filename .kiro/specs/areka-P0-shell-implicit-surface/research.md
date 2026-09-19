@@ -241,3 +241,92 @@
 **ほかの妨げの事前確認**（両検体を `RUST_LOG=debug` で 25 秒ずつ実走）: 台本の文字化け 0 件・未対応の台本の命令 0 件・`ERROR` は面 0 の合成失敗に由来する 3 行だけ。`emo2` の `interval,sometimes`／`rarely` は 0 件（`interval` の行は 37 件＝`bind` 30・`bind+random` 3・`random` 4。同じ数え方で `konnoyayame` は 1 件）なので、要件 11 は `emo2` の再生されるアニメーションの集合を変えない。
 
 設計への追加の持ち越し: 読み替えを行う段（`areka-parsers` の間隔の語の読み取りか、`areka-seriko` の `AnimationTable::from_world` か）。どちらでも元の語が記録から読み取れること（要件 11.7）。
+
+## 10. 設計段階の調査（2026-09-19・`/kiro-spec-design`）
+
+調査の型は **light**（既存の仕組みの拡張）。新しい外部クレートは 0 件・`Cargo.toml` の変更は 0 件。コードについての記述は、すべて該当ファイルを読んで確かめた。
+
+### 10.1 WIC は α の無い PNG をどう渡すか（6 節の持ち越し 1・2）
+
+小さな PNG（2×2）を色の型ごとに作り、WPF の `BitmapDecoder`（中身は areka の `WicDecoderArm` と同じ WIC の PNG 復号器・`PreservePixelFormat` 指定）で「変換前の形式」と「`Pbgra32` へ変換した後の 4 画素」を読んだ。
+
+| PNG の形 | 変換前の形式 | `pixel_format_has_alpha` の表に在るか | 変換後の 4 画素（B G R A） |
+|---|---|---|---|
+| グレー 1bit | `BlackWhite` | 無い | `00 00 00 FF`／`FF FF FF FF`… |
+| グレー 8bit | `Gray8` | 無い | `10 10 10 FF`／`80 80 80 FF`… |
+| グレー 16bit | `Gray16` | 無い | `10 10 10 FF`… |
+| グレー 8bit＋`tRNS` | `Indexed8` | 無い | `00 00 00 00`／`80 80 80 FF`…（`tRNS` の色だけ透明） |
+| グレー＋α 8bit | `Bgra32` | **在る** | `10 10 10 FF`／`40 40 40 80`／`00 00 00 00`… |
+| グレー＋α 16bit | `Rgba64` | **在る** | 同上 |
+| RGB 8bit | `Bgr24` | 無い | `FF FF FF FF`／`03 02 01 FF`… |
+| RGB 16bit | `Rgb48` | 無い | `FF FF FF FF`／`03 02 01 FF`…（8bit へ丸められる） |
+| RGB 8bit＋`tRNS` | `Bgra32` | **在る** | `00 00 00 00`／`03 02 01 FF`… |
+| パレット 1／4／8bit | `Indexed1`／`Indexed4`／`Indexed8` | 無い | `00 FF 00 FF`／`30 20 10 FF`… |
+| パレット 8bit＋`tRNS`（0x00・0x80） | `Indexed8` | 無い | `00 00 00 00`／`18 10 08 80`…（乗算済みで届く） |
+
+読み取れること:
+
+1. α チャンネルを持つ PNG（グレー＋α・RGBA・RGB＋`tRNS`）は、どれも表に在る形式で報告される。表から漏れて抜き色の腕へ来る α 付きの形は **0 件**。
+2. 抜き色の腕へ来る形のうち、α≠255 の画素を含むのは「パレットが α を持つ」形（パレット＋`tRNS`・グレー＋`tRNS`）だけである。他は全画素 α=255 で届く。
+3. したがって「届いた 4 バイトを左上の 4 バイトと比べる」は、α=255 の絵では「赤・緑・青の完全な一致」と同じ意味になり、パレット＋`tRNS` の絵では `tRNS` の透明度をそのまま生かす。復号器の変更は 0 で済む。
+4. 16bit の絵は 8bit へ丸められた後で比べることになる（正典は沈黙・areka の裁量として沈黙ルール対応表へ）。
+
+### 10.2 構造体リテラルの広がり（4 節の表の補足）
+
+- `SurfaceSet { … }` のリテラルは **33 ファイル・43 か所**（定義行を除く `grep "SurfaceSet {"`）。欄を足す案は退けた。
+- `NormalizedImage { … }` は 2 ファイル・4 か所、`DecodedImage { … }` は 3 ファイル・4 か所。抜き色の記録のために欄を足す必要は無く、`Normalizer::key_color` を足して `bake` が呼ぶ形で変更 0 にできる。
+- `EmoWorld::build(` の呼び出しは 44 ファイル。`build` を残して `build_with_images` を足すので、既存の呼び手の変更は 0 件。
+
+### 10.3 間隔の語を解析の側で読み替えられない理由
+
+`sometimes` が `Interval::Other("sometimes")` になることを、`areka-parsers` の既存テスト 4 ファイル（`parse_tests.rs`・`decode_tests_pattern_method_tests.rs`・`validation_tests.rs`・`model_tests.rs`）が留めている。`normalize_interval`（`decode.rs`）は欄 1 の語だけを完全一致で見ており、欄の前後の空白は `lexer.rs` が落としている。`plan.rs` の `flatten_surface` は、bind 種でないアニメのコマを無条件に合成へ合流させる（`is_bind_animation` が偽）ので、`Other("sometimes")` のままでもコマは描かれる。読み替えが要るのは「再生の表に採るかどうか」の 1 点だけである。
+
+### 10.4 相手の無いコマは 3 検体に何組在るか
+
+`surfaces.txt` を波括弧・範囲・除外の展開つきで読む小さなスクリプトで数えた（宣言された番号＋直下の `surface*.png` の番号を「在る」とする）。
+
+| 検体 | 宣言された番号 | 面の画像 | 相手の無い組 |
+|---|---|---|---|
+| `emo2` | 59 | 2 | **0** |
+| `konnoyayame` | 10 | 18 | **0** |
+| `R_POST_and_KOMAINU` | 9 | 10 | **0** |
+
+数え方の確かめ: 面の画像を「在る」から外すと、`konnoyayame` は 3 組（面 0 → 1031・1032・1033）と出る。これは areka の畳み込みそのものではない見積もりなので、実装の着地時に `EmoWorld::dangling_pattern_targets` の戻り値で数え直す。
+
+### 10.5 そのほかの実測
+
+- `surface.append` の行: `R_POST_and_KOMAINU` 0・`konnoyayame` 0・`emo2` 5。画像だけの面への追記という形は 3 検体に 0 件。
+- `emo2` の直下の `surface*.png` は `surface0.png`・`surface10.png` の 2 枚。面 0 の `element0` は `surface0.png`・面 10 の `element0` は `CityPop\surface0010.png`。直下の `surface10.png` を名指しする `element` 行は無い（全部焼く案では索引表が 2 枚増える根拠）。
+- `emo2_shell_golden.txt` の行は「セット番号・パス・頁と矩形とずれ・原寸」で、連番を持たない。`null.png` は配置を持たない項目（`EMPTY`）になり詰め込みに入らないので、他の 54 行は変わらない見込み。
+- `AtlasTable::resolve` は `(SetId, 文字列)` の完全一致で引く。面の表の層 0 のパスと、焼く一覧のパスは同じ綴りでなければならない。
+- 要件 9.2 が名指しする `areka-P0-ukadoc-coverage-roadmap` は `.kiro/specs/completed/` に在る（完了済み）。実在する受け皿は `.kiro/specs/areka-P0-coverage-roadmap-refresh/`（`roadmap.md` #45）。
+- 正典の確かめ直し: ukadoc MCP で `sometimes` を引き、C15 の逐語（「そのサーフェスである間毎秒2分の1の確率で再生。」）と URL が要件の表と一致することを確かめた。
+
+## 11. 設計の決定（6 節の持ち越し 9 件と 8 節の「設計で決める」3 件の決着）
+
+| # | 論点 | 決定 | 根拠 |
+|---|---|---|---|
+| a | 「番号 → 土台の絵」の権威の置き場 | 案 C の中で案 B。読み込みの権威は `crates/areka-emo-present/src/shell_target.rs`（`load_shell_target`・`ShellTarget`）、土台の決定は `crates/areka-emo-compose/src/base_image.rs`（`apply_base_images`）。5 か所の複製は権威の呼び出しへ置き換える | 要件 3.6 を構造で守る。並びの入れ替え（面の表 → 焼く）が 1 か所で済む |
+| a′ | 焼く一覧へ画像を載せる方法 | `SurfaceSet` に欄を足さず、使う画像 1 枚につき `element0` 1 行の `Surface` を作って `surfaces` の並びへ足す | 10.2。`derive` は全 `Surface` の `elements` を無条件に集める。バルーンの `synthetic_surfaces_txt` と同じ発想 |
+| b | 抜き色 | 左上の 4 バイト（変換後）と完全に等しい画素を `0,0,0,0` に、他は 1 バイトも変えない。`tRNS` は生かす。`Off` の下は未実装のまま（テスト据え置き）。`On` のときだけ | 10.1 |
+| c | `surface.append`・波括弧の展開と慣習の順序 | 対応は畳み込みの前に確定 → 畳み込みの間、`surface.append` は「面の表に在る」または「対応に在る」番号へ効く（後者は空の面をその場で作る）→ 畳み込みの後に番号ごとに土台を決める | C4・C6。仮の面を先に置かないので「surface id 重複」の偽の警告が 0 件 |
+| d | `warn!` の単位 | 重複の `warn!`（1.5）も相手の無いコマの `warn!`（3.5）も、`load_shell_target` の 1 回につき同じ番号・同じ組で 1 度。1 回の起動で読み込みは 2 回（表示・採寸）。`build_world` と毎フレームの経路からは 0 回 | 要件 3.5 の上限（面の表を組む回数以下）に収まる |
+| e | 一覧の失敗の型と target | `ShellLoadError::List` を新設し、呼び手が既存の `BootWiringError::ShellRead`／`PlacementError::Measure` へ写す（新しい枝 0）。target は各ファイルの今の流儀のまま | `ShellRead` は `path`＋`io::Error` を持ち、形が合う |
+| f | `emo2` の不変の示し方 | 既存の寸法の定数が書き換え 0 で緑／全部の面で A（実物の対応）と B（画像 0 件）の合成結果が一致／期待値の差分が 1 行の追加だけ／α の腕のコードと既存テストの変更 0 | 既存の合成結果のテストはメモリ上の復号器と `EmoWorld::build` を使い、権威を通らない。権威を通る A／B の一致を新設する必要がある |
+| g | 間隔の語の読み替えの段 | `AnimationTable::from_world`。`debug!` の `vocab` 欄に元の語を残す | 10.3 |
+| h | 新しいテストの置き場 | 新しいテスト側のファイル 9 本（テスト 8 本＋共有の受け口 1 本）（`design.md` の File Structure Plan）。`measure_tests.rs`・`assets_tests.rs`・`fold_tests.rs` への追記 0 行 | 1,000 行の目安 |
+
+### 統合の観点（synthesis）
+
+- **一般化**: 要件 3.1〜3.4・3.6〜3.9 は「面の表に載るかどうか」という 1 つの問題の言い換えである。面の表の構築に規則を 1 か所足せば、入口ごとの修正は 0 件になる。名前の判定はバルーンの 3 段判定と同じ問題なので、`face_digits_of` として 1 つの実装を共有する。
+- **作るか借りるか**: 名前の判定・重複時の採り方・「fs を触る入口＋触らない核」の 2 段はバルーンから借りる。焼く一覧への載せ方もバルーンの「`element0` 1 行の面として表す」を借りる。バルーンの `enumerate_file_names` は失敗の型がバルーン専用でフォルダを除かないので借りない。
+- **単純化**: 「`element0` より下」の層の型は作らない（層 0 が必ず空いている）。`SurfaceSet`・`NormalizedImage`・解析の型に欄を足さない。`LoopTrigger` に枝を足さない。仮の面と印の部品は作らない（`fold_append` の存在条件に 1 つ足すだけ）。土台の決定は記録を出さず結果を返し、記録は権威が 1 度だけ出す。
+
+### 残る危険と手当て
+
+| 危険 | 手当て |
+|---|---|
+| 並びの入れ替えで `emo2` の結果が変わる | A／B の全面一致・既存の寸法の定数・期待値の 1 行差分 |
+| 期待値の作り直しで 54 行のどれかが動く | 差分が「追加 1 行・削除 0 行」であることを合否にする。動いた場合は詰め込みの入力順の変化を疑い、作り直しを採用せず原因を調べる |
+| 10.4 の見積もりが実物とずれ、`emo2` に新しい `warn!` が出る | 着地時に実物の照会で数え直す。出ても要件 3.5 が求める記録そのもので、画素には影響しない |
+| 要件 2.6 と 4.9 の読み | 2.6 は土台の決め方の段、4.9 は焼く段の定めとして読む（`design.md`「読みの確定」）。3 検体に `.pna` は 0 件 |
