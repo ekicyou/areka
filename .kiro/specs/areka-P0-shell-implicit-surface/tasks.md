@@ -77,7 +77,7 @@
   - _Depends: 3.1_
   - _Boundary: areka-emo-compose fold_
 
-- [ ] 3.3 相手の面が無いコマを数える照会を足す
+- [x] 3.3 相手の面が無いコマを数える照会を足す
   - `crates/areka-emo-compose/src/world.rs` に `EmoWorld::dangling_pattern_targets() -> BTreeSet<(u32, u32)>` を足す
   - 母集合は全部の面の全部の `animation` の全部の `pattern` のうち、`surface_id >= 0` で、かつメソッドが `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`insert` の**どれでもない**もの（この 7 語は欄 2 が面の番号でなくアニメーションの番号）
   - 語の比べ方は `ComposeMethod::from_name` と同じ（前後の空白を落とし・小文字にし・`-` と `_` を除く）が、`from_name` は未知の語で `warn!` を出すのでこの照会からは**呼ばない**

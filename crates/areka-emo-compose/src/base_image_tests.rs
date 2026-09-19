@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use areka_parsers::shell::{
-    AppendTarget, DefRef, Element, ElementPath, Shell, Surface, SurfaceAppend,
+    Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
+    Surface, SurfaceAppend,
 };
 use bevy_ecs::world::World;
 
@@ -397,4 +398,165 @@ fn brace_after_append_replaces_the_image_only_face() {
 
     assert!(logs.contains("level=WARN"), "重複は WARN: {logs}");
     assert!(logs.contains("重複"), "既存の重複メッセージのまま: {logs}");
+}
+
+/// コマ 1 本（描画メソッドの綴りは原文のまま・位置とウェイトは判定に使わないので 0）。
+fn pattern(index: u32, method: &str, surface_id: i64) -> Pattern {
+    Pattern {
+        index,
+        method: DrawMethod::new(method.to_string()),
+        surface_id,
+        wait: 0,
+        x: 0,
+        y: 0,
+    }
+}
+
+/// コマ群を持つアニメーション 1 本だけを載せた面の定義（element は 0 本）。
+fn surface_with_patterns(id: u32, patterns: Vec<Pattern>) -> Surface {
+    Surface {
+        id,
+        targets: vec![AppendTarget::Single(id)],
+        elements: Vec::new(),
+        collisions: Vec::new(),
+        animations: vec![Animation {
+            id: 0,
+            interval: Interval::Random { k: 2 },
+            patterns,
+        }],
+    }
+}
+
+/// コマ群を持つ面 0 だけの面の表を、渡した画像の対応で組む。
+fn world_with_patterns(patterns: Vec<Pattern>, images: &BTreeMap<u32, String>) -> EmoWorld {
+    EmoWorld::build_with_images(&shell_of(vec![surface_with_patterns(0, patterns)]), images)
+}
+
+/// 停止を表す負の番号は相手に数えず、在る面を指すコマも数えない（要件 3.5）。
+#[test]
+fn dangling_pattern_targets_skips_negative_targets_and_existing_faces() {
+    let world = world_with_patterns(
+        vec![
+            pattern(0, "overlay", 99),
+            pattern(1, "overlay", -1),
+            pattern(2, "overlay", -2),
+            pattern(3, "overlay", 0),
+            // 同じ組を 2 度指しても 1 組に潰れる（鍵は `(u32, u32)` の組）。
+            pattern(4, "overlay", 99),
+        ],
+        &BTreeMap::new(),
+    );
+
+    assert_eq!(
+        world.dangling_pattern_targets(),
+        BTreeSet::from([(0u32, 99u32)]),
+        "負の番号と在る面 0 は含めず、無い面 99 の 1 組だけを返す",
+    );
+}
+
+/// 欄 2 がアニメーションの番号になる 7 語のコマは、面の相手として数えない（要件 3.5）。
+///
+/// 綴りの比べ方は `ComposeMethod::from_name` と同じ（前後の空白を落とし・小文字にし・`-` と `_`
+/// を除く）。`from_name` は未知の語で `warn!` を出すので、この照会からは呼ばない。
+#[test]
+fn dangling_pattern_targets_skips_methods_that_take_animation_ids() {
+    let methods = [
+        "start",
+        "stop",
+        " Alternative_Start ",
+        "alternative-stop",
+        "PARALLELSTART",
+        "parallel_stop",
+        "insert",
+    ];
+    let patterns: Vec<Pattern> = methods
+        .iter()
+        .enumerate()
+        .map(|(i, m)| pattern(i as u32, m, 5))
+        .collect();
+    let world = world_with_patterns(patterns, &BTreeMap::new());
+
+    // 照会そのものは記録を 1 本も出さない（`ComposeMethod::from_name` を呼ぶと未知の語で
+    // `warn!` が出る。出すのは上流の権威の役目）。
+    let mut targets = None;
+    let logs = crate::log_capture::capture_logs(|| {
+        targets = Some(world.dangling_pattern_targets());
+    });
+    assert!(logs.is_empty(), "照会は記録を出さない: {logs}");
+
+    let targets = targets.expect("照会の戻り値");
+    assert!(
+        targets.is_empty(),
+        "`start,5` などは面 5 が無くても 0 組: {targets:?}",
+    );
+
+    // 非空の対照: 同じ番号を描画メソッドで指せば 1 組になる（7 語の除外が効いていることの裏取り）。
+    let drawn = world_with_patterns(vec![pattern(0, "overlay", 5)], &BTreeMap::new());
+    assert_eq!(
+        drawn.dangling_pattern_targets(),
+        BTreeSet::from([(0u32, 5u32)]),
+    );
+}
+
+/// 画像だけで存在する面は「在る」に数える（要件 3.5・C7）。
+#[test]
+fn dangling_pattern_targets_counts_image_only_faces_as_existing() {
+    let patterns = vec![pattern(0, "overlay", 1031)];
+
+    let with_image = world_with_patterns(patterns.clone(), &images(&[(1031, "surface1031.png")]));
+    assert!(
+        with_image.dangling_pattern_targets().is_empty(),
+        "画像だけの面 1031 は相手として在る",
+    );
+
+    let without_image = world_with_patterns(patterns, &BTreeMap::new());
+    assert_eq!(
+        without_image.dangling_pattern_targets(),
+        BTreeSet::from([(0u32, 1031u32)]),
+        "画像を外すと同じコマが相手の無いコマになる",
+    );
+}
+
+/// 検体 `konnoyayame` の実物の `surfaces.txt` で、画像の対応を渡すと 0 組・外すと 3 組になる。
+///
+/// 面 0 のまばたきは面 1031・1032・1033 を指し、この 3 枚は `surfaces.txt` に 1 行も書かれず
+/// ファイル名だけで置かれている（`surface1031.png` ほか）。対応を渡さないと 3 組が相手の無い
+/// コマとして現れる（要件 3.5・設計「`dangling_pattern_targets` の母集合」の数え直し）。
+#[test]
+fn konnoyayame_has_no_dangling_pattern_targets_with_images() {
+    let shell_dir = crate::sample_test_support::konnoyayame_shell_root();
+    let content = std::fs::read_to_string(shell_dir.join("surfaces.txt"))
+        .expect("konnoyayame の surfaces.txt を読めること");
+    let shell = areka_parsers::shell::parse(&content);
+
+    // 面の画像の対応。番号 → ファイル名を決める権威は `areka-emo-present` に在り、本 crate から
+    // は使えないので、テストの中だけで `surface<数字>.png` を拾う（要件 1.1 の慣習のうち、この
+    // 検体に現れる綴りだけ）。
+    let images: BTreeMap<u32, String> = std::fs::read_dir(&shell_dir)
+        .expect("konnoyayame のシェルのフォルダを一覧できること")
+        .filter_map(|entry| {
+            let name = entry.ok()?.file_name().to_string_lossy().into_owned();
+            let digits = name.strip_prefix("surface")?.strip_suffix(".png")?;
+            let id: u32 = digits.parse().ok()?;
+            Some((id, name))
+        })
+        .collect();
+    assert!(
+        images.contains_key(&1031),
+        "検体は面 1031 の画像を持つ: {images:?}",
+    );
+
+    let with_images = EmoWorld::build_with_images(&shell, &images);
+    assert!(
+        with_images.dangling_pattern_targets().is_empty(),
+        "画像の対応を渡すと相手の無いコマは 0 組: {:?}",
+        with_images.dangling_pattern_targets(),
+    );
+
+    let without_images = EmoWorld::build(&shell);
+    assert_eq!(
+        without_images.dangling_pattern_targets(),
+        BTreeSet::from([(0u32, 1031u32), (0, 1032), (0, 1033)]),
+        "対応を外すと面 0 → 1031・1032・1033 の 3 組になる",
+    );
 }

@@ -6,7 +6,7 @@
 //! 定義・構造のみを保持し、合成済みビットマップ（大容量）は World に永続保持しない。本 spec では
 //! Schedule/System を持たず、fold/compose が `&mut World`／`&World` を取る受動データストアとして使う。
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use areka_parsers::shell::{Shell, SortOrder};
 use bevy_ecs::prelude::{Component, Entity, Resource};
@@ -109,6 +109,41 @@ impl EmoWorld {
         self.world.resource::<BaseImageReport>()
     }
 
+    /// 相手の面が存在しないコマの「(コマを持つ面, 相手の番号)」の集合（要件 3.5）。
+    ///
+    /// 母集合は全部の面の全部の `animation` の全部の `pattern` のうち、`surface_id` が 0 以上で、
+    /// かつ描画メソッドが `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・
+    /// `parallelstop`・`insert` の 7 語（欄 2 がアニメーションの番号になる）のどれでもない。停止を表す
+    /// 負の番号（`-1`・`-2`）は相手に数えない。画像だけで存在する面は、構築のときに面の表へ
+    /// 載っているので「在る」に数える（[`EmoWorld::build_with_images`]）。
+    ///
+    /// 面の表を 1 度なめるだけで、毎フレームの経路ではない。本メソッドは記録を 1 本も出さず
+    /// （`warn!` を出すのは上流の権威・design「Monitoring」）、重複を除く鍵は `(u32, u32)` の
+    /// 組で、文字列へ連結しない。
+    pub fn dangling_pattern_targets(&self) -> BTreeSet<(u32, u32)> {
+        let existing: BTreeSet<u32> = self.surface_ids().collect();
+        let mut dangling = BTreeSet::new();
+        for id in &existing {
+            let Some(master) = self.surface(*id) else {
+                continue;
+            };
+            for animation in &master.animations {
+                for pattern in &animation.patterns {
+                    if targets_animation_id(pattern.method.as_str()) {
+                        continue;
+                    }
+                    let Ok(target) = u32::try_from(pattern.surface_id) else {
+                        continue;
+                    };
+                    if !existing.contains(&target) {
+                        dangling.insert((*id, target));
+                    }
+                }
+            }
+        }
+        dangling
+    }
+
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
     ///
     /// 空 `Shell`（surface/append/alias 皆無）に対しては何も積まず、World を空のまま保つ。
@@ -190,6 +225,32 @@ impl EmoWorld {
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
+}
+
+/// コマの欄 2 が面の番号ではなくアニメーションの番号になる描画メソッドか（要件 3.5）。
+///
+/// ukadoc `descript_shell_surfaces` が「サーフェスID…は無視される」と書く `start`・`stop`・
+/// `alternativestart`・`alternativestop`・`parallelstart`・`parallelstop` の 6 語と、着せ替え
+/// グループを挿す `insert` の計 7 語。転記層（`decode_animations`）はメソッドに関係なく欄 2 を
+/// `surface_id` へ入れるので、除かないと正しく書かれたシェルが相手の無いコマとして数えられる。
+///
+/// 綴りの比べ方は [`ComposeMethod::from_name`] と同じ（前後の空白を落とし・小文字にし・`-` と
+/// `_` を除く）。`from_name` は未知の語で `warn!` を出すので、この判定からは呼ばない
+/// （[`EmoWorld::dangling_pattern_targets`] は記録を出さない）。
+///
+/// [`ComposeMethod::from_name`]: crate::method::ComposeMethod::from_name
+fn targets_animation_id(method: &str) -> bool {
+    let canon = method.trim().to_ascii_lowercase().replace(['-', '_'], "");
+    matches!(
+        canon.as_str(),
+        "start"
+            | "stop"
+            | "alternativestart"
+            | "alternativestop"
+            | "parallelstart"
+            | "parallelstop"
+            | "insert"
+    )
 }
 
 #[cfg(test)]
