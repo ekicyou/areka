@@ -48,9 +48,11 @@
 mod workspace_scan;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
 
-use workspace_scan::{read_source, scan_tokens, walk_workspace_sources, workspace_root};
+use workspace_scan::{
+    ManifestLine, manifest_lines, mentions_crate, production_dependencies_on, read_source,
+    scan_tokens, walk_workspace_sources, workspace_manifests,
+};
 
 // ---------------------------------------------------------------------------
 // 走査語（逐語で置かないため 2 片に割る。module doc を参照）
@@ -227,63 +229,6 @@ const FEATURE_ENV_FILTER: &str = "\"env-filter\"";
 /// `env-filter` を宣言してよい唯一の crate。
 const ENV_FILTER_OWNER: &str = "wintf";
 
-/// `Cargo.toml` の 1 行（コメント除去済み・所属セクションつき）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ManifestLine {
-    /// 1 始まりの行番号。
-    line: usize,
-    /// 直近のセクション見出し（角括弧を外した中身）。
-    section: String,
-    /// コメントを除き前後の空白を落とした行。
-    text: String,
-    /// この行自身がセクション見出しか。
-    is_header: bool,
-}
-
-/// TOML の行末コメントを落とす。引用符の内側の `#` はコメントではない。
-fn strip_toml_comment(line: &str) -> &str {
-    let mut in_string = false;
-    for (at, ch) in line.char_indices() {
-        match ch {
-            '"' | '\'' => in_string = !in_string,
-            '#' if !in_string => return &line[..at],
-            _ => {}
-        }
-    }
-    line
-}
-
-/// `Cargo.toml` を「コメントを除いた非空行 ＋ 所属セクション」へ分解する（純関数）。
-fn manifest_lines(src: &str) -> Vec<ManifestLine> {
-    let mut out = Vec::new();
-    let mut section = String::new();
-    for (index, raw) in src.lines().enumerate() {
-        let text = strip_toml_comment(raw).trim().to_string();
-        if text.is_empty() {
-            continue;
-        }
-        let is_header = text.starts_with('[') && text.ends_with(']');
-        if is_header {
-            section = text
-                .trim_matches(|c| c == '[' || c == ']')
-                .trim()
-                .to_string();
-        }
-        out.push(ManifestLine {
-            line: index + 1,
-            section: section.clone(),
-            text,
-            is_header,
-        });
-    }
-    out
-}
-
-/// 製品側の依存表か（`dev-dependencies` 系は含まない）。
-fn is_production_dependency_section(section: &str) -> bool {
-    section.contains("dependencies") && !section.contains("dev-dependencies")
-}
-
 /// 開発側の依存表か。
 fn is_dev_dependency_section(section: &str) -> bool {
     section.contains("dev-dependencies")
@@ -291,27 +236,12 @@ fn is_dev_dependency_section(section: &str) -> bool {
 
 /// 共有 crate を名指ししているか（`-` 表記と `_` 表記の両方）。
 fn mentions_kit(text: &str) -> bool {
-    text.contains(KIT_PACKAGE) || text.contains("log_capture_kit")
+    mentions_crate(text, KIT_PACKAGE)
 }
 
-/// 製品側依存に共有 crate が現れている行を返す（純関数・要件 1.3／11.5）。
-///
-/// `[dependencies]` の中の 1 行という形と、`[dependencies.log-capture-kit]` という
-/// 下位表の形の両方を拾う。下位表は**見出し 1 件**として報告する（見出しが名前を持つ表では
-/// 中身の行も `path = "../log-capture-kit"` のように名前を含みがちで、1 つの依存が
-/// 複数件に膨らむ）。
+/// 製品側依存に共有 crate が現れている行を返す（要件 1.3／11.5）。
 fn production_kit_dependencies(src: &str) -> Vec<ManifestLine> {
-    manifest_lines(src)
-        .into_iter()
-        .filter(|l| is_production_dependency_section(&l.section))
-        .filter(|l| {
-            if l.is_header {
-                mentions_kit(&l.section)
-            } else {
-                !mentions_kit(&l.section) && mentions_kit(&l.text)
-            }
-        })
-        .collect()
+    production_dependencies_on(src, KIT_PACKAGE)
 }
 
 /// 開発側依存に共有 crate が現れているか（純関数・較正の陽性側）。
@@ -333,58 +263,6 @@ fn declares_env_filter_feature(src: &str) -> bool {
             && (mentions_kit(&l.text) || mentions_kit(&l.section))
             && l.text.contains(FEATURE_ENV_FILTER)
     })
-}
-
-/// 列挙から外すディレクトリ名（生成物と外部取り込み）。
-const EXCLUDED_DIRS: &[&str] = &["target", "vendors", ".git"];
-
-/// `crates/**/Cargo.toml` を列挙して `(crate ディレクトリ名, 中身)` を返す。
-///
-/// 共有 crate 自身の manifest は除く（自分の名前を `[package]` に持つので比較の対象外）。
-fn workspace_manifests() -> Vec<(String, String)> {
-    let root = workspace_root();
-    let mut found = Vec::new();
-    collect_manifests(&root.join("crates"), &mut found);
-    let mut out: Vec<(String, String)> = found
-        .into_iter()
-        .filter_map(|path| {
-            let name = path
-                .parent()
-                .and_then(Path::file_name)
-                .expect("Cargo.toml には親ディレクトリがあるはず")
-                .to_string_lossy()
-                .into_owned();
-            if name == KIT_PACKAGE {
-                return None;
-            }
-            let text = std::fs::read_to_string(&path)
-                .unwrap_or_else(|err| panic!("manifest を読めない: {} ({err})", path.display()));
-            Some((name, text))
-        })
-        .collect();
-    out.sort();
-    out
-}
-
-fn collect_manifests(dir: &Path, out: &mut Vec<PathBuf>) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(err) => panic!("列挙できないディレクトリがある: {} ({err})", dir.display()),
-    };
-    for entry in entries {
-        let entry = entry.expect("ディレクトリ項目の読み取りに失敗した");
-        let path = entry.path();
-        let file_type = entry.file_type().expect("種別の判定に失敗した");
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if file_type.is_dir() {
-            if EXCLUDED_DIRS.contains(&name.as_str()) {
-                continue;
-            }
-            collect_manifests(&path, out);
-        } else if file_type.is_file() && name == "Cargo.toml" {
-            out.push(path);
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -593,7 +471,7 @@ const KNOWN_DEV_DEPENDENTS: &[&str] = &[
 #[test]
 fn the_shared_crate_never_appears_in_a_production_dependency_table() {
     let mut violations: Vec<String> = Vec::new();
-    for (name, text) in workspace_manifests() {
+    for (name, text) in workspace_manifests(KIT_PACKAGE) {
         for line in production_kit_dependencies(&text) {
             violations.push(format!(
                 "  crates/{name}/Cargo.toml:{} [{}] {}",
@@ -611,7 +489,7 @@ fn the_shared_crate_never_appears_in_a_production_dependency_table() {
 #[test]
 fn the_shared_crate_is_actually_pulled_in_as_a_dev_dependency() {
     // 較正: 上の検査が「manifest を 1 つも読めていないから空」で通っていないことを示す。
-    let manifests = workspace_manifests();
+    let manifests = workspace_manifests(KIT_PACKAGE);
     assert!(
         manifests.len() > 15,
         "manifest の列挙が極端に少ない＝走査が空振りしている疑い: {} 件",
@@ -636,7 +514,7 @@ fn the_shared_crate_is_actually_pulled_in_as_a_dev_dependency() {
 
 #[test]
 fn only_one_crate_declares_the_env_filter_feature() {
-    let owners: BTreeSet<String> = workspace_manifests()
+    let owners: BTreeSet<String> = workspace_manifests(KIT_PACKAGE)
         .into_iter()
         .filter(|(_, text)| declares_env_filter_feature(text))
         .map(|(name, _)| name)

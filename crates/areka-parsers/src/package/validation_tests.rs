@@ -6,7 +6,7 @@
 //!
 //! resolve_tests.rs は合成 tempdir によるユニット網羅（存在確認・フォールバック・
 //! 失敗型）を担うのに対し、本ファイルは別クレート（`pilot`）配下の実配布形フィクスチャ
-//! `crates/pilot/examples/shiori-host-32/fixtures/emo2/` を「そのまま」入力にした
+//! `検体 emo2` を「そのまま」入力にした
 //! クレート跨ぎの回帰固定を担う。foundation 経由の charset デコード（UTF-8）・既定
 //! フォールバック（shell=master）・未使用フィールドの無影響を、実バイト列で確認する。
 //!
@@ -17,19 +17,11 @@
 use crate::charset::DefaultEncoding;
 
 use super::{MountModel, resolve};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-/// emo2 実フィクスチャのルート（`crates/pilot/examples/shiori-host-32/fixtures/emo2/`）。
-///
-/// `CARGO_MANIFEST_DIR` 相対で組み立てる（クロスプラットフォーム・`Path::join` のみ）。
+/// emo2 実フィクスチャのルート（検体の窓口から得る）。
 fn emo2_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("pilot")
-        .join("examples")
-        .join("shiori-host-32")
-        .join("fixtures")
-        .join("emo2")
+    crate::sample_test_support::emo2_root()
 }
 
 /// emo2 を解決して `MountModel` を得るヘルパ。
@@ -49,7 +41,7 @@ fn resolve_emo2() -> MountModel {
 // ───────────────────────────────────────────────────────────────────
 // レイアウト解決（要件 4.1/4.3/5.2）
 //
-// 採取元: crates/pilot/examples/shiori-host-32/fixtures/emo2/
+// 採取元: 検体 emo2
 //   - ghost/master/descript.txt L7: `shiori,pasta.dll` → shiori.file = "pasta.dll"
 //   - ghost/master/                → shiori.dir = <root>/ghost/master（起点の親）
 //   - shell/master/（実在）        → shell.dir = <root>/shell/master
@@ -80,7 +72,7 @@ fn emo2_resolves_shiori_and_shell_layout() {
 // ───────────────────────────────────────────────────────────────────
 // 名前情報の UTF-8 取得（要件 1.4/1.5）
 //
-// 採取元: crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/descript.txt
+// 採取元: 検体 emo2 の ghost/master/descript.txt
 //   L1: `charset,UTF-8`
 //   L4: `name,えも？？`      （バイト: e38188 e38282 efbc9f efbc9f）
 //   L5: `sakura.name,むらさき`（バイト: e38280 e38289 e38195 e3818d）
@@ -110,9 +102,9 @@ fn emo2_names_decoded_as_utf8() {
 //   descript.txt L3: `id.emo2`（カンマ無し行）
 //   descript.txt L8-10: `craftman` / `craftmanw` / `craftmanurl`
 //   descript.txt L11: `homeurl`
-//   fixtures/emo2/install.txt（NAR 配置マニフェスト・起動時不使用）
-//   fixtures/emo2/emo2-kakukaku/（別サブディレクトリ）
-//   fixtures/emo2/delete.txt
+//   検体 emo2 の install.txt（NAR 配置マニフェスト・起動時不使用）
+//   検体 emo2 の同梱バルーン emo2-kakukaku（別サブディレクトリ）
+//   検体 emo2 の delete.txt
 //
 // 構造保証: `MountModel` には id/craftman/homeurl 等に相当するフィールドが存在せず、
 // これらが漏れ込む先の型が無い（型レベルで排他）。ゆえに本テストは、これらの要素が
@@ -177,7 +169,7 @@ fn emo2_result_invariant_to_default_encoding() {
 // shell dir を解決した後、その descript.txt からも bindgroup default KV を拾って
 // `MountModel.bindgroups` へ転記する（転記のみ・展開しない・parsers 転写層原則）。
 //
-// 採取元: crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/descript.txt
+// 採取元: 検体 emo2 の shell/master/descript.txt
 //   L22: sakura.bindgroup1100.default,1
 //   L34: sakura.bindgroup1207.default,1
 //   L44: sakura.bindgroup1302.default,1

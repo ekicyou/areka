@@ -1,7 +1,7 @@
 use crate::emo2_boot::assets::build_boot_assets;
+use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use areka_emo_text::state::TextLayerConfig;
-use std::path::PathBuf;
 use std::sync::{Arc, mpsc};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
@@ -221,16 +221,6 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
 // が互いに異なる。ゆえに「先頭 scope の定義を全 scope へ配る」実装はこの檻で必ず落ちる。
 // attach は GPU 資源ゲート越しにしか走らないため、檻も headless GPU（WARP 可・MTA）で
 // 本番 [`run_attach_phase`] をそのまま駆動する（シームを噛ませない）。
-
-/// emo2 fixture ルート（`CARGO_MANIFEST_DIR`＝`crates/areka` 相対・assets.rs テストと同一規約）。
-fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
-}
-
-/// emo2 fixture のバルーンルート（assets.rs テストと同一規約）。
-fn emo2_balloon_root() -> PathBuf {
-    emo2_root().join("emo2-kakukaku")
-}
 
 /// [`resnap_world`]（2 スコープ窓＋偽 `WindowHandle`）へ実 GPU 資源を載せた attach 檻の World。
 ///

@@ -1,0 +1,36 @@
+[package]
+name = "areka-nar"
+workspace = "../.."
+description = "`.nar`（ゴースト／バルーンの配布アーカイブ）を読んでベースウェアの根へ入れる本番クレート（spec: areka-P0-nar-install）: コンテナ読取・エントリ名の検証・install.txt の解釈・原子的な展開と拒否語彙"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# install.txt の文字コード判定（charset,<名前> の先読み）と key,value 行の分解。
+# 既存層をそのまま再利用し、areka-parsers 側は変えない。
+areka-parsers = { path = "../areka-parsers" }
+# エントリ名の復号。汎用目的ビット 11 が無い名前を Shift_JIS として読み、
+# 置換文字が出たら黙って通さないために had_errors を見る。
+encoding_rs = { workspace = true }
+# deflate（方式 8）の伸長のみ。2026-09-18 開発者承認の意図的依存追加で、
+# zip コンテナの読み手は本クレートが std だけで持つ（zip・flate2 は入れない）。
+# 既定機能を切り、伸長 API に必須の with-alloc だけを明示する（要件 10.2）。
+# 圧縮側は機能では切れないので、areka-nar/src が miniz_oxide::deflate を
+# 綴らないことを常設の検査で見張る。
+miniz_oxide = { version = "0.9", default-features = false, features = ["with-alloc"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+# 決定論テストの固定入力（nar_writer）と、OS の一時フォルダを使わない
+# 「空の根」（WorkDir）の唯一の出どころ。窓口はパスしか渡さないので型は跨がらない。
+# areka-nar ⇄ sample-ghost-kit は dev 依存の循環で、cargo が許す形。
+sample-ghost-kit = { path = "../sample-ghost-kit" }
+# 記録の捕捉。捕捉先を自前で差すのはワークスペースの常設検査が禁じているので、
+# 「失敗 1 回につき error の記録が 1 件」を測るにはこの窓口を通す。本番の依存
+# （`[dependencies]`）には置かない（要件 10.3）。
+log-capture-kit = { path = "../log-capture-kit" }

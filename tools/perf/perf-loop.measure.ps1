@@ -46,7 +46,8 @@ prepare-ab／measure-ab／compare／followup／final）が呼び出し側の sco
 --------------------------------------------------------------------------------
 較正値・調整値の一覧（変更する場合はここだけを書き換える）
 --------------------------------------------------------------------------------
-  MEASURE_GHOST_ROOT_RELPATH／MEASURE_BALLOON_SUBDIR  -GhostRoot／-BalloonRoot 省略時
+  MEASURE_SAMPLE_NAME／MEASURE_SAMPLE_BALLOON_NAME  -GhostRoot／-BalloonRoot 省略時に
+                               検体の窓口（nar-sample-path）へ尋ねる検体名とバルーン名
   MEASURE_AREKA_*／MEASURE_HELPER_*  A/B ビルドで作って複製するもの（実行体・PDB・
                                32bit SHIORI ヘルパの crate 名・実行体名・ターゲット）
   MEASURE_RUN_RETRY            実走の採り直し回数（1＝合計 2 回まで）
@@ -61,8 +62,8 @@ Set-StrictMode -Version 3.0
 # =============================================================================
 # 較正値・調整値（上の一覧と対応。変更はここだけ）
 # =============================================================================
-$MEASURE_GHOST_ROOT_RELPATH    = 'crates\pilot\examples\shiori-host-32\fixtures\emo2'
-$MEASURE_BALLOON_SUBDIR        = 'emo2-kakukaku'
+$MEASURE_SAMPLE_NAME           = 'emo2'
+$MEASURE_SAMPLE_BALLOON_NAME   = 'emo2-kakukaku'
 $MEASURE_AREKA_PACKAGE         = 'areka'
 $MEASURE_AREKA_EXE             = 'areka.exe'
 $MEASURE_AREKA_PDB             = 'areka.pdb'
@@ -123,13 +124,14 @@ function Get-MeasureGoalArgsPython {
 # =============================================================================
 # 場所（ゴースト・実行体・出力先）と前提
 # =============================================================================
+# 既定の在り処は検体の窓口に尋ねる（Get-NarSamplePath は perf-loop.common.ps1・1 検体 1 回）。
 function Get-MeasureGhostRoot {
-    $path = if ($script:GhostRootArg) { $script:GhostRootArg } else { Join-Path $repoRoot $MEASURE_GHOST_ROOT_RELPATH }
+    $path = if ($script:GhostRootArg) { $script:GhostRootArg } else { Get-NarSamplePath -Sample $MEASURE_SAMPLE_NAME -Key 'folder' }
     return [System.IO.Path]::GetFullPath($path).TrimEnd('\')
 }
 
 function Get-MeasureBalloonRoot {
-    $path = if ($script:BalloonRootArg) { $script:BalloonRootArg } else { Join-Path (Get-MeasureGhostRoot) $MEASURE_BALLOON_SUBDIR }
+    $path = if ($script:BalloonRootArg) { $script:BalloonRootArg } else { Get-NarSamplePath -Sample $MEASURE_SAMPLE_NAME -Key "balloon.$MEASURE_SAMPLE_BALLOON_NAME" }
     return [System.IO.Path]::GetFullPath($path).TrimEnd('\')
 }
 

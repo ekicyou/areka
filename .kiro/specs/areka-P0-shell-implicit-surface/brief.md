@@ -6,7 +6,7 @@
 
 ## Problem
 
-**里々の標準テンプレート『Ｒポストと狛犬』が areka で 1 枚も絵を出せない。** 検体は `vendors/sample_ghost/R_POST_and_KOMAINU/`（`charset-canon` で追跡済み）。SHIORI は応答し、`OnFirstBoot` の挨拶も流れ、終了も正常なのに、合成だけが失敗して検証用ダミー窓へ落ちる。
+**里々の標準テンプレート『Ｒポストと狛犬』が areka で 1 枚も絵を出せない。** 検体は `vendors/sample_ghost/R_POST_and_KOMAINU.nar`（2026-09-19 `nar-install` 着地により配布形で追跡。展開先の絶対パスは `cargo run -p sample-ghost-kit --bin nar-sample-path -- R_POST_and_KOMAINU` の `folder=` 行が教える）。SHIORI は応答し、`OnFirstBoot` の挨拶も流れ、終了も正常なのに、合成だけが失敗して検証用ダミー窓へ落ちる。
 
 失敗の連鎖（`signoff-record.md` 8 節の逐語）:
 
@@ -31,7 +31,7 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
 
 ### A. 対象検体（里々標準テンプレート）の実測
 
-`vendors/sample_ghost/R_POST_and_KOMAINU/shell/master/` 直下の画像（全数）と 0 抑制後の番号:
+展開後の `<folder=>/shell/master/` 直下の画像（全数）と 0 抑制後の番号（2026-09-19 以前の綴りは `vendors/sample_ghost/R_POST_and_KOMAINU/shell/master/`）:
 
 | ファイル | 番号 | 実寸（IHDR） |
 |---|---|---|
@@ -48,7 +48,7 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
 
 ### B. 退化の集合（番人 emo2 で 1 層増える面）
 
-`crates/pilot/examples/shiori-host-32/fixtures/emo2` は**壊してはならない側**。`shell/master/` 直下の `surface*` 画像は 2 本のみ（`.pna` は全域で 0 件）:
+検体 `emo2`（`vendors/sample_ghost/emo2.nar`。2026-09-19 以前は `crates/pilot/examples/shiori-host-32/fixtures/emo2`）は**壊してはならない側**。`shell/master/` 直下の `surface*` 画像は 2 本のみ（`.pna` は全域で 0 件）:
 
 | ファイル | 0 抑制番号 | 実寸 |
 |---|---|---|
@@ -127,7 +127,7 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
 
 ## Existing Spec Touchpoints
 
-- **`areka-P0-nar-install`（未着手・単独枠）— 順序の裁定が要る**。nar-install の brief は `R_POST_and_KOMAINU` を `.nar` へ畳んで展開ツリーを追跡外にすると書いており（同 brief 87・95 行）、**本 spec が参照する `vendors/sample_ghost/R_POST_and_KOMAINU/shell/master/` のパスは nar-install の後に消える**。さらに nar-install は 38 ファイル・9 クレートに触るため並走不可（同 128 行）。⇒ **直列化必須**。推奨は**本 spec が先**（検体パスが安定しているうちに檻を作り、nar-install の側が共有ヘルパへ寄せるときに一緒に付け替える）。
+- **`areka-P0-nar-install`（未着手・単独枠）— 順序の裁定が要る**。nar-install の brief は `R_POST_and_KOMAINU` を `.nar` へ畳んで展開ツリーを追跡外にすると書いており（同 brief 87・95 行）、**本 spec が参照する `vendors/sample_ghost/R_POST_and_KOMAINU/shell/master/` のパスは nar-install の後に消える**。さらに nar-install は 38 ファイル・9 クレートに触るため並走不可（同 128 行）。⇒ **直列化必須**。**順序は 2026-09-18 に反転し、`nar-install` が先に着地した（2026-09-19 完了）。** 「推奨は本 spec が先」という当初の案はもう選べない。検体は最初から共有ヘルパ経由で受けること（下の「2026-09-18 追記（順序の反転）」）。
 - **`areka-P0-surfaces-basepos`（未着手）**— 同じ `areka-parsers/src/shell/{decode,model}.rs` に触る可能性がある。同じ W14 に居るが**同時には走らせない**（直列・後着が rebase）。
 - **`areka-P0-present-gpu-transform-scale`（W13）**— `areka-emo-compose`／`areka-emo-present` に同居しうる。着地後に入る。
 - **`areka-P0-charset-canon`（W13・完了直前）**— シェル本文の復号を持つが面の構築には触れない。共有ファイル 0。
@@ -147,7 +147,7 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
 ## 2026-09-18 追記（順序の反転＝`nar-install` が先）
 
 - 開発者指示「nar 関係は早く進めないとダメ」により、本 spec と `nar-install` の順序を**反転**した（roadmap A0＝`nar-install`・A1-①＝本 spec）。上の「推奨は本 spec が先」は取り下げ。
-- 帰結: 本 spec が参照する検体は `vendors/sample_ghost/R_POST_and_KOMAINU/` の直パスではなく、**nar-install が建てる共有ヘルパ（検体名 → 根）経由**で受ける。`shell/master/` 直下の画像の全数（上の表）は展開後の木で同じ。着手時に file:line と検体パスを引き直すこと。
+- 帰結: 本 spec が参照する検体は `vendors/sample_ghost/R_POST_and_KOMAINU/` の直パス（2026-09-19 に消えた）ではなく、**nar-install が建てる共有ヘルパ（検体名 → 根）経由**で受ける。`shell/master/` 直下の画像の全数（上の表）は展開後の木で同じ。着手時に file:line と検体パスを引き直すこと。
 
 ## 2026-09-19 追記（`popup-menu-minimal` から引き受ける実機確認 1 件）
 

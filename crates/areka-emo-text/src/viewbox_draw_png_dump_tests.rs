@@ -1,5 +1,5 @@
 use super::ViewboxExecutor;
-use super::test_support::{Rig, glyph_items};
+use super::test_support::{Rig, emo2_balloon_root, glyph_items};
 use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, DrawExecutor};
 use crate::layout::{LayoutEngine, WrapPlan};
@@ -154,8 +154,7 @@ fn diag_dump_horizontal_pngs() {
     // 実 fixture（emo2-kakukaku）の balloon model を実ファイルからロードする（Yu Gothic UI・
     // validrect [36,356]×[46,168]＝320×122・wordwrappoint.x=-49）——example の load_balloon_model
     // と同一経路。フォント/折返し/validrect を実機と完全一致させる（既定 ＭＳ ゴシックでない）。
-    let fixture_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku");
+    let fixture_dir = emo2_balloon_root();
     let read_dec = |name: &str| -> String {
         let bytes = std::fs::read(fixture_dir.join(name)).expect("fixture 読取");
         areka_parsers::charset::decode(&bytes, areka_parsers::charset::DefaultEncoding::Utf8)
@@ -387,8 +386,7 @@ fn diag_dump_budoux_wordwrap_pngs() {
     // 実 fixture（emo2-kakukaku）を実ファイルからロード（Yu Gothic UI・validrect 320×122・
     // wordwrappoint.x=-49）——diag_dump_horizontal_pngs と同一経路。狭いバルーンが char-by-char
     // の途中分割を誘発する（＝ON の改善が見える台）。
-    let fixture_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku");
+    let fixture_dir = emo2_balloon_root();
     let read_dec = |name: &str| -> String {
         let bytes = std::fs::read(fixture_dir.join(name)).expect("fixture 読取");
         areka_parsers::charset::decode(&bytes, areka_parsers::charset::DefaultEncoding::Utf8)

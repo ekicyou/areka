@@ -2,7 +2,7 @@ use super::{
     AlphaParams, AtlasTable, BindSet, CommandSender, Composer, CycleState, EmoBoot, EmoPresenter,
     EmoWorld, Entity, PackConfig, PatternState, SHELL_INITIAL_X, SHELL_INITIAL_Y, SetId,
     SurfaceSet, UseSelfAlpha, WicDecoderArm, World, bake, build_balloon_target,
-    compute_balloon_pos, create_balloon_window, create_shell_window, emo2,
+    compute_balloon_pos, create_balloon_window, create_shell_window, emo2, emo2_balloon,
 };
 
 // ---------------------------------------------------------------------------
@@ -144,7 +144,7 @@ fn build_shell_target(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, 
 /// バルーン枠（`balloons0.png`）を `build_balloon_target`（シェルと同一経路）で構築し、
 /// surface 0 の合成外形（物理 px）を添えて返す。失敗時は log-first で `None`。
 fn build_balloon_assets(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, u32, u32)> {
-    let dir = emo2("emo2-kakukaku");
+    let dir = emo2_balloon();
     let (emo_world, atlas) = match build_balloon_target(&dir, decoder, 0) {
         Ok(pair) => pair,
         Err(e) => {

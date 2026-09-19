@@ -5,7 +5,7 @@
 //!
 //! task 11.1（`choice_fixture_test.rs`）は tests 配下の **test-local** 最小 fixture で parse→resolve と
 //! 実フォント render を固定した。task 11.2 は **リポジトリに実在する emo2 fixture**
-//! （`crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/`）の実 descript／実 menu.pasta を
+//! （`検体 emo2 の同梱バルーン emo2-kakukaku`）の実 descript／実 menu.pasta を
 //! 用い、cue 配送 →選択肢描画をエンドツーエンドで検証する（実窓は起動しない・headless readback のみ）。
 //!
 //! ## 実 fixture の実態（2 層バルーン descript ＋ pasta メニュー台本）
@@ -38,6 +38,9 @@
 //! 保持）を保ち、スクロール完全対応は追わない（6.3・短メニュー＝領域内に収まる）。
 
 use std::path::PathBuf;
+use std::sync::LazyLock;
+
+use sample_ghost_kit::SampleRoot;
 
 use areka_emo_text::actor::{
     ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
@@ -58,23 +61,26 @@ use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
 
 // ── 実 emo2 fixture の所在（リポジトリ実在ファイル・test-local でない） ─────────────────────
 
-/// 実 emo2 fixture ルート（`crates/pilot/…/fixtures/emo2/`）。
-/// CARGO_MANIFEST_DIR（=`crates/areka-emo-text`）からの相対で辿る。
-/// バルーン descript は `emo2-kakukaku/` 下・メニュー台本は `ghost/master/dic/` 下に在る。
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+/// emo2 検体のゴーストフォルダ（メニュー台本は `ghost/master/dic/` 下に在る）。
 fn emo2_fixture_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("pilot")
-        .join("examples")
-        .join("shiori-host-32")
-        .join("fixtures")
-        .join("emo2")
+    EMO2.folder().to_path_buf()
 }
 
-/// 実 fixture ファイル（fixtures/emo2 ルートからの相対パス）を読み、`charset` 宣言に従いデコードする
-/// （parser-foundation の decode 経路）。descript／pasta とも UTF-8 ゆえ既定 UTF-8 で読む。
-fn read_fixture(rel: &str) -> String {
-    let mut path = emo2_fixture_root();
+/// emo2 が同時にインストールするバルーンのフォルダ（自分でパスを継ぎ足さない）。
+fn emo2_balloon_root() -> PathBuf {
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
+}
+
+/// 実 fixture ファイル（与えた基準フォルダからの相対パス）を読み、`charset` 宣言に従いデコード
+/// する（parser-foundation の decode 経路）。descript／pasta とも UTF-8 ゆえ既定 UTF-8 で読む。
+fn read_fixture_under(base: PathBuf, rel: &str) -> String {
+    let mut path = base;
     for seg in rel.split('/') {
         path = path.join(seg);
     }
@@ -93,8 +99,8 @@ const IMAGE_SIZE: (u32, u32) = (400, 224);
 /// 実 `descript.txt`（基層）＋`balloons0s.txt`（画像別上書き層）を 2 層マージした BalloonModel。
 /// 実機の balloon-parse と同一機構（`parse_str(descript, Some(image))`）——非退化領域が成立する。
 fn merged_balloon_model() -> BalloonModel {
-    let descript = read_fixture("emo2-kakukaku/descript.txt");
-    let image_layer = read_fixture("emo2-kakukaku/balloons0s.txt");
+    let descript = read_fixture_under(emo2_balloon_root(), "descript.txt");
+    let image_layer = read_fixture_under(emo2_balloon_root(), "balloons0s.txt");
     parse_str(&descript, Some(&image_layer))
 }
 
@@ -104,7 +110,7 @@ fn merged_balloon_model() -> BalloonModel {
 /// `\`（さくらスクリプト開始）より前ゆえ、最初の `\` 以降を取れば純さくらスクリプト断片になる。
 /// メインメニュー本文行は `\q[おしゃべり頻度` と `\q[閉じる` を同時に含む唯一の行で一意に識別できる。
 fn extract_main_menu_sakura() -> String {
-    let pasta = read_fixture("ghost/master/dic/menu.pasta");
+    let pasta = read_fixture_under(emo2_fixture_root(), "ghost/master/dic/menu.pasta");
     let line = pasta
         .lines()
         .find(|l| l.contains("\\q[おしゃべり頻度") && l.contains("\\q[閉じる"))

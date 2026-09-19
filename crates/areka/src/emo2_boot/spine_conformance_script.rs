@@ -210,7 +210,7 @@ pub(super) const FIRST_BOOT_VANISH_COUNT: &str = "0";
 /// `OnBoot` の Ref0（シェル名）。
 ///
 /// 出所: `crates/areka-ghost/src/config.rs:32`（`resolve_shell_name`）が
-/// `crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/descript.txt:3` の `name` を
+/// `検体 emo2 の shell/master/descript.txt:3` の `name` を
 /// 読む。同ファイルは冒頭で `charset,UTF-8` を宣言しており、復号は宣言に従う
 /// （`crates/areka-parsers/src/charset/decode.rs:26-45`）ので、下の逐語がそのまま Ref0 になる。
 pub(super) const SHELL_NAME: &str = "「コンフィズリー」＆「City-Pop'n」";
@@ -306,7 +306,7 @@ pub(super) struct MouseProbe {
 
 /// 撫で（本体側）の注入値。実 fixture の当たり判定矩形の中心を採る。
 ///
-/// 出所: `crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt:23`
+/// 出所: `検体 emo2 の shell/master/surfaces.txt:23`
 /// （`collision0,93,62,271,130,Head`＝本体 `\0` 側）。中心は (182, 96)。
 pub(super) const STROKE_SAKURA: MouseProbe = MouseProbe {
     x: 182,
@@ -345,7 +345,7 @@ pub(super) const MENU_CLICK: MouseProbe = MouseProbe {
 
 /// メインメニューの選択肢 ID（おしゃべり頻度）。
 ///
-/// 出所: `crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/menu.pasta:15`。
+/// 出所: `検体 emo2 の ghost/master/dic/menu.pasta:15`。
 pub(super) const CHOICE_TALK_INTERVAL_MENU: &str = "Onおしゃべり頻度メニュー";
 /// メインメニューの選択肢 ID（エモの位置調整）。出所: 同 `menu.pasta:15`。
 pub(super) const CHOICE_MOVE_MENU: &str = "Onエモの位置調整メニュー";
@@ -400,7 +400,7 @@ pub(super) const STROKE_KERO_TALK: &str = r"\1\s[10]……なに。\e";
 //
 // 実物の辞書は、前置きの地の文を `むらさき：`（sakura・spot 0）に、選択肢の塊を
 // `エモ：`（kero・spot 1）に置く。3 本とも同じ形である
-// （`crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/menu.pasta` の
+// （`検体 emo2 の ghost/master/dic/menu.pasta` の
 // 地の文 `:11`／`:29`／`:58` と選択肢 `:15`／`:33`／`:62`）。演者と spot の対応は同ゴーストの
 // 設定が機械可読な形で宣言している（同 `pasta.toml:33-34` の `[actor."むらさき"] spot = 0`／
 // 同 `:37-38` の `[actor."エモ"] spot = 1`）。pasta が実際にそう分けて発話することは同ゴーストの
@@ -512,7 +512,7 @@ pub(super) const MOVE_APPLY_TALK: &str = r"\1\![move,-353,,,0,base,base]\e";
 ///
 /// `\e` で終わると再生完了は「終了拒否」として扱われ、運行は定常運転へ戻って解放が起きない
 /// （`crates/areka-kanade/src/schedule/close.rs:15-17`）。実物も終了パターンの末尾で
-/// ゴースト終了を出す（`fixtures/emo2/ghost/master/dic/boot.pasta:95`）。
+/// ゴースト終了を出す（`検体 emo2 の ghost/master/dic/boot.pasta:95`）。
 pub(super) const CLOSE_TALK: &str = r"\0\s[0]またね。\-";
 
 /// 一周走行の台本受け口を組む（応答の待ち行列を id ごとに積む）。

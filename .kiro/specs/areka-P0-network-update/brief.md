@@ -7,7 +7,7 @@
 
 **誰の何が困っているか**: ゴーストを入れた第三者。作者が辞書を直して配布サイトを更新しても、areka では受け取れない。
 
-今日の areka には **HTTP クライアントが 1 つも無い**。`Cargo.lock`（242 パッケージ）に `reqwest`／`ureq`／`hyper`／`curl`／`tokio`／`rustls`／`native-tls` は無く、ルート `Cargo.toml` の `windows` 機能一覧に `Win32_Networking_WinHttp`／`WinInet` も無い。`updates2.dau`／`updates.txt` を読むコードも無い（`crates/pilot/examples/shiori-host-32/fixtures/emo2/updates.txt` は検体の中身として存在するだけで、誰も読まない）。`homeurl` の読み手も無い。更新系イベント（`OnUpdateBegin`〜`OnUpdateResult`・束「更新」の `members` 51 件）は全て未対応。
+今日の areka には **HTTP クライアントが 1 つも無い**。`Cargo.lock`（242 パッケージ）に `reqwest`／`ureq`／`hyper`／`curl`／`tokio`／`rustls`／`native-tls` は無く、ルート `Cargo.toml` の `windows` 機能一覧に `Win32_Networking_WinHttp`／`WinInet` も無い。`updates2.dau`／`updates.txt` を読むコードも無い（`updates.txt` は検体 `emo2` の中身として存在するだけで、誰も読まない。2026-09-19 以降の在処は `vendors/sample_ghost/emo2.nar` の中）。`homeurl` の読み手も無い。更新系イベント（`OnUpdateBegin`〜`OnUpdateResult`・束「更新」の `members` 51 件）は全て未対応。
 
 ## Current State（正典の要点・`ukadoc:dev_update`／`ukadoc:manual_update`／`ukadoc:spec_update_file:*`）
 
@@ -98,3 +98,7 @@
 - 1 ファイル 1,000 行。決定論テスト網羅は必達。ログ無し失敗経路の禁止。
 - **裁定候補 ⑸（開発者）**: 定義ファイルの `charset` 無指定時の既定を Shift_JIS に固定するか OS 既定（`GetACP`）にするか。日本語ゴースト前提で **Shift_JIS 固定**を推す（`charset-canon` の既定と揃う）。
 - 規模 **M**。
+
+- **2026-09-18 `nar-install` 設計からの申し送り（使用中の宛先）**: `areka-nar` の展開は「作業フォルダに組んでから宛先と入れ替える」形で、宛先の中のファイル（起動中のゴーストの `shiori.dll` 等）が開かれていると入れ替えが失敗し、宛先は無傷のまま `NarError::Io { phase: Commit, rolled_back: true }` が返る。**エンジンは SHIORI の解放を試みない**。起動中のゴーストへ入れる・更新する・切り替える経路は、呼び出し側が先に SHIORI をアンロード（`OnClose` 相当の終了経路）してから `install` を呼ぶこと。
+
+- **2026-09-19 追記（網羅台帳の引受先を登記した）**: `doc/ukadoc-coverage/ledger/assets.toml` の `descript_install` の「相対パス」（delete.txt の行の書式）1 項目は、備考が「引受先の候補は……まだ起票されていない」と書いたまま宛先が空だった。本仕様は 2026-09-18 に起票済みで、上の「正典の要点」の節がこの項目の id をそのまま引き、範囲の一覧にも `delete.txt`／`delete[数字].txt` を入れている。2026-09-19 にこの 1 項目の宛先を `areka-P0-network-update` で埋め、備考を実態へ直し、`doc/ukadoc-coverage/roadmap-draft.md` に本仕様の行（`stage = "B"`・`bundle = "更新"`・`owner_count = 1`・`wave = "A4"`）を足した。**状態は `absent` のまま**である——`delete.txt` を読む経路はまだ 1 つも無い。着手時にこの 1 項目を実装へ運び、定義箇所へ正典 URL の 1 行（`// ukadoc:`）を置いて状態を `implemented` へ動かし、`cargo run -p ukadoc-survey -- report` と `-- report-summary` を作り直すこと。**宛先の数を増減させたら同じコミットで `roadmap-draft.md` の `owner_count` を追随させる**（登記だけして表を直さないと `cargo test -p ukadoc-survey` がその場で赤になる）。

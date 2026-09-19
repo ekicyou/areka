@@ -598,13 +598,7 @@ mod bindgroup_name_transcription_tests {
     /// Observable（emo2 実 fixture）: 宣言済みの全 (カテゴリ, パーツ) が ID へ解決する。
     #[test]
     fn emo2_declared_names_all_resolve() {
-        let shell_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("pilot")
-            .join("examples")
-            .join("shiori-host-32")
-            .join("fixtures")
-            .join("emo2")
+        let shell_dir = crate::sample_test_support::emo2_root()
             .join("shell")
             .join("master");
         let defaults = read_bindgroup_defaults(&shell_dir, DefaultEncoding::Utf8);
@@ -930,13 +924,7 @@ mod bindoption_options_tests {
     /// いたことが根であった。
     #[test]
     fn emo2_bindoption_categories_discriminated() {
-        let shell_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("pilot")
-            .join("examples")
-            .join("shiori-host-32")
-            .join("fixtures")
-            .join("emo2")
+        let shell_dir = crate::sample_test_support::emo2_root()
             .join("shell")
             .join("master");
         let defaults = read_bindgroup_defaults(&shell_dir, DefaultEncoding::Utf8);

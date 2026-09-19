@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
+use sample_ghost_kit::SampleRoot;
 use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 use wintf::ecs::DPI;
@@ -19,14 +21,18 @@ pub(super) fn with_com_initialized<F: FnOnce()>(f: F) {
     }
 }
 
-/// emo2 fixture ルート（source.rs／measure.rs テストと同一アンカー規約）。
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
 pub(super) fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    EMO2.folder().to_path_buf()
 }
 
-/// emo2 fixture のバルーンルート（task 4.1 テストの規約を踏襲）。
 pub(super) fn balloon_root() -> PathBuf {
-    emo2_root().join("emo2-kakukaku")
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
 }
 
 /// 決定論テスト用の合成 work area（物理 px・resolver T-R 群と同流儀）。

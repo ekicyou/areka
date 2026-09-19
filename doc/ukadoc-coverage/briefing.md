@@ -1026,8 +1026,8 @@ not_applicable = 0
 page = "descript_balloon"
 implemented = 24
 vocabulary_only = 9
-degraded = 6
-absent = 123
+degraded = 7
+absent = 122
 alias = 0
 not_applicable = 0
 

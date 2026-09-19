@@ -50,7 +50,7 @@
 ## Constraints
 
 - 編集集合: `crates/areka-emo-text/src/{writing,region,layout}.rs`（＋兄弟テスト）・`crates/areka-parsers/src/balloon/{parse,model}.rs`・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
-- fixture `crates/pilot/examples/shiori-host-32/fixtures/emo2/` は無改変。
+- fixture は無改変（当時の `crates/pilot/examples/shiori-host-32/fixtures/emo2/`。2026-09-19 の `nar-install` で `vendors/sample_ghost/emo2.nar` へ畳まれ、追跡から外れている）。
 - 規模 M・要件定義は Opus で足りる（裁定は 15 の禁則文字集合の出典 1 件）。
 
 

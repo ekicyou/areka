@@ -14,7 +14,6 @@
 // 反復回数のみによる有界化は 1 つも用いない（Requirements 9.2 / 9.3）。
 // =============================================================================
 
-use std::path::PathBuf;
 use std::sync::mpsc;
 
 use areka_emo_text::state::TextLayerConfig;
@@ -24,6 +23,7 @@ use wintf::ecs::Visual;
 use wintf::ecs::layout::Arrangement;
 
 use crate::emo2_boot::assets::build_boot_assets;
+use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::input_events::balloon::BalloonWiring;
 use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
@@ -34,16 +34,6 @@ use super::*;
 // ---------------------------------------------------------------------------
 // 檻の組み立て
 // ---------------------------------------------------------------------------
-
-/// emo2 fixture ルート（`CARGO_MANIFEST_DIR`＝`crates/areka` 相対・assets.rs テストと同一規約）。
-fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
-}
-
-/// emo2 fixture のバルーンルート（assets.rs テストと同一規約）。
-fn emo2_balloon_root() -> PathBuf {
-    emo2_root().join("emo2-kakukaku")
-}
 
 /// 相順の檻の World（2 スコープ窓＋偽 `WindowHandle`＋全窓 DPI 96＋実 GPU 資源）。
 ///

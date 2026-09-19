@@ -16,7 +16,7 @@ use crate::kv::parse_kv;
 /// `decode` → `parse_kv` に通し、数値に見える値も**文字列のまま**保持される
 /// ことを固定する（数値化・符号解釈しない・R4.7）。
 ///
-/// 採取元: `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/balloons0s.txt`
+/// 採取元: `検体 emo2 の同梱バルーン emo2-kakukaku の balloons0s.txt`
 /// L1 `windowposition.x,266` / L2 `windowposition.y,-129` / L3 空行 / L4 `wordwrappoint.x,-49`
 /// （実測 verbatim・L3 の空行 gap も fixture どおり再現）。
 /// - charset 宣言が無いため、呼び出し側指定の既定 `Utf8` が支配する（R1.4）。

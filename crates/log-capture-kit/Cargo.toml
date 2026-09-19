@@ -21,3 +21,9 @@ tracing-subscriber = { workspace = true, optional = true }
 [features]
 # EnvFilter 濾過つきの捕捉 API を有効にする。既定 off。
 env-filter = ["dep:tracing-subscriber"]
+
+[dev-dependencies]
+# 検体パスの見張り（sample_path_guard_test）が走査語を作るのに登記表 SAMPLES を読む。
+# 名前の一覧を見張り側へ手書きで写すと、検体を 1 つ足した瞬間に見張りが黙って穴を開ける。
+# テスト専用の leaf 同士なので依存の向きは崩れない（本番側には出ない）。
+sample-ghost-kit = { path = "../sample-ghost-kit" }

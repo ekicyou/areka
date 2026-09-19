@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-08-27
+updated_at: 2026-09-19
 ---
 
 # Technology Stack
@@ -34,6 +34,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **ambassador** (0.5.0): トレイト委譲（delegation）マクロ。COM/状態ラッパーのボイラープレート削減に使用
 - **nonmax** (0.5.5): ニッチ最適化された非最大整数型
 - **encoding_rs** (0.8): 伺か資産の charset デコード（`areka-parsers` の `charset` module・意図的依存追加＝2026-07-02 承認済）
+- **miniz_oxide** (0.9): `.nar`（zip コンテナ）の deflate **伸長のみ**（`areka-nar` の `container` module・意図的依存追加＝2026-09-18 承認済）。既定機能を切り `with-alloc` だけを明示する。圧縮側は機能で外せないので、本番クレートが `miniz_oxide::deflate` を綴らないことを常設検査 `crates/areka-nar/src/lib_tests.rs` が見張る。zip コンテナの読み手は `areka-nar` が std だけで持つ（`zip`・`flate2` は入れない）。推移的依存は `adler2` 1 本
 - **pasta_core** (0.1.6): 里々インスパイアの会話DSLエンジン。`[patch.crates-io]` で `vendors/pasta/` のサブモジュールへ差し替え（後述の Key Technical Decisions 参照）
 
 ### dola クレート依存

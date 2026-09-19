@@ -12,8 +12,8 @@
 //! - **画像別上書き層の実観測**: descript 基層＜ `balloons0s.txt`（後勝ち）の 2 層
 //!   マージが変種でも有効である（R11.4・2層マージの実観測）。
 //!
-//! バルーン枠画像は共有 fixture（`crates/pilot/examples/shiori-host-32/fixtures/emo2/
-//! emo2-kakukaku/balloons0.png`・400×224 image px）を再利用し、変種が差し替えるのは
+//! バルーン枠画像は共有 fixture（`検体 emo2 の同梱バルーン
+//! emo2-kakukaku の balloons0.png`・400×224 image px）を再利用し、変種が差し替えるのは
 //! balloon descript の parse 入力（descript.txt＋balloons0s.txt）だけ——本テストの
 //! 画像原寸定数はその共有枠画像の実測原寸である。
 //!

@@ -20,8 +20,9 @@
 //!   window-registry close の二重 despawn 競合）は warn レベルで exit 0 に影響しないため
 //!   assert 対象にしない（tasks.md Implementation Notes・実測済み）。
 
-use std::path::PathBuf;
+use sample_ghost_kit::SampleRoot;
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 /// 子プロセスへ渡す自動 close 遅延（ms）。ダミー窓を開き run ループを一巡させるだけの
@@ -36,10 +37,9 @@ const WATCHDOG_DEADLINE: Duration = Duration::from_secs(60);
 /// `try_wait()` のポーリング周期。
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
-/// emo2 fixture ルート（placement 単体テストと同一アンカー規約・task 4.1）。
-fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
-}
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 
 /// env ゲートを立てた areka バイナリを与えた引数で起動し、番犬締切内の終了を待って
 /// `(status, stdout, stderr)` を返す共通ドライバ（両方向テストで共有）。
@@ -143,8 +143,8 @@ fn skeleton_boots_loops_and_exits_zero_within_watchdog() {
 /// ゆえ `StartPointMissing` は起き得ない＝それ以外のフォールバックは失敗として扱う）。
 #[test]
 fn skeleton_boots_with_real_ghost_windows_and_exits_zero() {
-    let ghost_root = emo2_root();
-    let balloon_root = ghost_root.join("emo2-kakukaku");
+    let ghost_root = EMO2.folder();
+    let balloon_root = EMO2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
     assert!(
         ghost_root.join("ghost/master/descript.txt").exists(),
         "emo2 fixture が見つかりません（in-repo 前提）: {}",
