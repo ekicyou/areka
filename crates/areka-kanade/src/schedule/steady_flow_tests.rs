@@ -105,13 +105,13 @@ fn steady_some_tick_emits_notify() {
 fn steady_none_tick_with_pending_close_begins_handshake() {
     let now = MonotonicMs(1_000);
     let mut s = steady_none(5);
-    s.pending_close = Some(CloseReason::User);
+    s.pending_close = Some(CloseReason::User { scope: 0 });
     let (next, actions) = step(s, Input::Tick { now }, &config());
     assert!(
         matches!(
             next.phase,
             Phase::ClosePending {
-                reason: CloseReason::User
+                reason: CloseReason::User { scope: 0 }
             }
         ),
         "pending_close あり Tick は握手を開始し ClosePending へ"
@@ -125,7 +125,7 @@ fn steady_none_tick_with_pending_close_begins_handshake() {
     assert_eq!(actions.len(), 1);
     assert_shiori(
         &actions[0],
-        &events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE),
+        &events::on_close(CloseReason::User { scope: 0 }, &ExecutionSnapshot::INACTIVE),
     );
     // OnSecondChange は発行しない。
     assert_no_second_change(&actions);
@@ -608,20 +608,20 @@ fn steady_none_close_request_begins_handshake_now() {
     let (next, actions) = step(
         steady_none(5),
         Input::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
         &config(),
     );
     assert!(matches!(
         next.phase,
         Phase::ClosePending {
-            reason: CloseReason::User
+            reason: CloseReason::User { scope: 0 }
         }
     ));
     assert_eq!(actions.len(), 1);
     assert_shiori(
         &actions[0],
-        &events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE),
+        &events::on_close(CloseReason::User { scope: 0 }, &ExecutionSnapshot::INACTIVE),
     );
 }
 
@@ -632,7 +632,7 @@ fn steady_some_close_request_records_pending_only() {
     let (next, actions) = step(
         steady_some(TalkId(3), 6),
         Input::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
         &config(),
     );
@@ -643,7 +643,7 @@ fn steady_some_close_request_records_pending_only() {
         _ => panic!("expected Steady{{Some}} preserved"),
     }
     assert!(
-        matches!(next.pending_close, Some(CloseReason::User)),
+        matches!(next.pending_close, Some(CloseReason::User { scope: 0 })),
         "pending_close に記録される（TalkDone を待つ）"
     );
     assert!(actions.is_empty(), "OnClose はまだ発行しない");

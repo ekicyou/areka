@@ -148,3 +148,8 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
 
 - 開発者指示「nar 関係は早く進めないとダメ」により、本 spec と `nar-install` の順序を**反転**した（roadmap A0＝`nar-install`・A1-①＝本 spec）。上の「推奨は本 spec が先」は取り下げ。
 - 帰結: 本 spec が参照する検体は `vendors/sample_ghost/R_POST_and_KOMAINU/` の直パス（2026-09-19 に消えた）ではなく、**nar-install が建てる共有ヘルパ（検体名 → 根）経由**で受ける。`shell/master/` 直下の画像の全数（上の表）は展開後の木で同じ。着手時に file:line と検体パスを引き直すこと。
+
+## 2026-09-19 追記（`popup-menu-minimal` から引き受ける実機確認 1 件）
+
+- `areka-P0-popup-menu-minimal` の実機確認 9.3 ⑷（里々の `readmebutton.caption` がメニューの項目名に写る・`(&R)` に下線が付く・開き直すと候補が変わりうる）は、本 spec の着地待ちで**未実施**である。`R_POST_and_KOMAINU` は `surface 0 has no layers at all (extent 0x0)` で検証用ダミー窓へ落ち、キャラクター窓が無いのでメニューを出せなかった。
+- 本 spec の実機サインオフで、この検体の絵が出たら右クリック → メニューの 1 項目目が既定名「説明書」でなく辞書（`dic06_String.txt` の 3 候補）の文言になっていることを 1 度見ること。項目名の差し替えそのものは `popup-menu-minimal` の決定論テストが留めているので、欠けているのは実機の目視だけである。

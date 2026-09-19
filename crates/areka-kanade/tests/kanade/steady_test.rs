@@ -112,7 +112,7 @@ fn drive_steady(fixture: Fixture, tick_count: u64, quit_flags: Vec<bool>) -> Dri
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 
@@ -418,7 +418,7 @@ fn active_talk_tick_emits_notify_ref3_zero() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 
@@ -569,7 +569,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 

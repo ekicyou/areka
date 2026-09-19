@@ -51,7 +51,7 @@ fn drive_mouse_steady_none(
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 

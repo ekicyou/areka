@@ -950,7 +950,7 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
         &mut sink,
         &StagePlan {
             stage: close_stage,
-            once: vec![Injection::CloseRequest(CloseReason::User)],
+            once: vec![Injection::CloseRequest(CloseReason::User { scope: 0 })],
             waiting: WaitInjection::DispatcherTickAndKanadeProbe,
         },
         |progress| progress.closed.kanade,

@@ -2351,16 +2351,23 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2creadme_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "E6"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ゴーストに添えられた説明書が開かない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。引数なしの \\![open,readme] を説明書の要求 1 件として送り出し、ゴーストの descript.txt の
+readme が指すファイルを既定の関連付けで開く。
+縮退: 引数付きの \\![open,readme,種類,名前] は、ほかのゴースト・シェル・バルーンを名指して開く形で、
+その列挙が α に無い。受け口は語彙として受理するが warn! を 1 行残して何もしない。
+壊れ方: 引数なしの形は無い。引数付きの形は開かないが、記録は残る。
+ログ: 出る（引数付きを受けたときの警告 1 行、送り先が閉じているときの警告 1 行、開けなかったときの
+エラー 1 行）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::ReadmeSink
+（正準台帳が ("open","readme") の 1 組で登記する）と crates/areka/src/emo2_boot/readme_cue.rs。
+[運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: SSP の管理窓とビューア]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """

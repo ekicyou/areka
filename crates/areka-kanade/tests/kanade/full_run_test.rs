@@ -61,7 +61,7 @@ fn drive_full_run() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 
@@ -160,7 +160,7 @@ fn drive_full_run() {
     // OnClose GET（Ref0=user）が pump 群の後に現れ、記録列の末尾が Unload で閉じる。
     // 通常握手の OnClose は talk 非アクティブ（INACTIVE）で発行される（Status 行なし・begin_close）。
     let onclose = expected_call(events::on_close(
-        CloseReason::User,
+        CloseReason::User { scope: 0 },
         &ExecutionSnapshot::INACTIVE,
     ));
     let onclose_index = recorded

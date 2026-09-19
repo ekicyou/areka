@@ -121,7 +121,7 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     harness
         .sender
         .send(KanadeMsg::ForceQuit {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send ForceQuit");
 
@@ -245,7 +245,7 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
     harness
         .sender
         .send(KanadeMsg::ForceQuit {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send ForceQuit");
 

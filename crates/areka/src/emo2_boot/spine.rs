@@ -906,7 +906,7 @@ impl SpineHarness {
 
         run_bounded("spine ghost shutdown", Duration::from_secs(10), move || {
             // 正規 close（DD-10 と同じ User）。ForceQuit ゆえ OnClose は NOTIFY で消化される。
-            let _ = ghost.shutdown(CloseReason::User);
+            let _ = ghost.shutdown(CloseReason::User { scope: 0 });
         });
         // loop tick 直接注入端の clone を明示 drop（task 9.4）: ghost.shutdown が dispatcher 保持の
         // SerikoSink クローンを drop しても、ハーネス保持の tick_sink clone が生きていると seriko inbox が

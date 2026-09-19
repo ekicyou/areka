@@ -3267,21 +3267,19 @@ areka には説明文を開く画面が無く、その文字コードの宣言�
 """
 
 [entry."ukadoc:descript_ghost:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka には説明文を開く画面が無く、そのファイル名を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄が成り立つには、入れる導線か、右クリックで開く作り付けのメニューが要る。どちらも areka には無い。
+実装済み。areka-parsers の package::resolve がこの欄を読み、マウントの readme として持つ。右クリックのメニューの「説明書」と \\![open,readme] が、その名前をゴーストの置き場に継ぎ足したファイルを既定の関連付けで開く。欄が無いときは readme.txt を使う。
+壊れ方: 無い。欄が指すファイルが実在しないときは、メニューの「説明書」の項目を灰色で出す（枠は消さない）。
+ログ: ファイルが無いときは debug! を、開けなかったときはパスと符号を添えた error! を残す。
+根拠の場所: crates/areka-parsers/src/package/model.rs の MountModel.readme。読む側は crates/areka/src/readme.rs。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_shell の name,シェル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_ghost:recommended.balloon.path_2c_30d1_30b9:1"]

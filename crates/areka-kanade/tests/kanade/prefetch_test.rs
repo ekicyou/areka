@@ -74,7 +74,7 @@ fn drive_prefetch(
     kanade_tx.send(KanadeMsg::Boot).expect("send Boot");
     kanade_tx
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 

@@ -23,5 +23,7 @@ mod mouse_test;
 mod prefetch_test;
 #[path = "kanade/real_helper_test.rs"]
 mod real_helper_test;
+#[path = "kanade/resource_query_test.rs"]
+mod resource_query_test;
 #[path = "kanade/steady_test.rs"]
 mod steady_test;

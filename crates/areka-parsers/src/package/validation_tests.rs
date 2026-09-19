@@ -137,6 +137,7 @@ fn emo2_unused_fields_and_files_do_not_leak() {
         shiori: _,
         shell: _,
         bindgroups: _,
+        readme: _,
     } = &model;
 }
 

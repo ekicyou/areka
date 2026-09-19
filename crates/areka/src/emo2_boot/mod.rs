@@ -23,6 +23,7 @@ pub mod frame;
 pub mod hit_region;
 pub mod hover_inject;
 pub mod move_cue;
+mod readme_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
@@ -84,6 +85,7 @@ use self::adapter::PresentBridge;
 use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use self::frame::{Emo2Wiring, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
+use self::readme_cue::ReadmeCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
 use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
@@ -364,6 +366,15 @@ pub fn wire_emo2_boot(
     // 取り出しの相が行う。
     let (zorder_tx, zorder_rx) = std::sync::mpsc::channel::<ZOrderDirective>();
     let zorder_sink = ZOrderCueSink::new(zorder_tx);
+    // 説明書の channel（move channel と同型の配線・areka-P0-popup-menu-minimal task 4.3）:
+    // talk スレッドの ReadmeCueSink が送出端、UI スレッドの `crate::readme::ReadmeWiring` が
+    // 受信端（Input の段の取り出しが消費）を持つ。受け口は boot へ渡すので boot より前に
+    // 組まねばならず、開くファイルは boot が返す `MountModel.readme` を読まないと決まらない——
+    // ゆえに送出端だけ先に配り、受信端は boot 成立後まで手元に置く（下の「説明書の受信端」）。
+    // boot が倒れた経路では受信端をそのまま落とす。ゴーストが居ない以上 `\![open,readme]` は
+    // 届きようがなく、万一届いても送出側が送れなかったことを記録する（要件 8.4）。
+    let (readme_tx, readme_rx) = std::sync::mpsc::channel::<crate::readme::ReadmeRequest>();
+    let readme_sink = ReadmeCueSink::new(readme_tx);
     let BootAssets {
         shells,
         balloons,
@@ -452,6 +463,9 @@ pub fn wire_emo2_boot(
     // 第 1 引数」で選別して消費し、解釈前のトークン列を zorder channel 経由で UI スレッド
     // （Emo2Wiring の zorder_rx）へ送出する。担当外のコマンドには一切触れない（要件 11.2）ので
     // 既存 4 sink の消費は 1 つも変わらない。文字 cue に依存しないため末尾で構わない。
+    // 第 6 要素の readme_sink（popup-menu-minimal task 4.3）は `\![open,readme]` を「名前＋
+    // 第 1 引数」で選別して消費し、引数なしの 1 件を説明書の要求として送出する（要件 4.5）。
+    // 担当外へは触れないので既存 5 sink の消費は変わらず、文字 cue にも依存しない。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,
@@ -464,6 +478,7 @@ pub fn wire_emo2_boot(
             Box::new(move_sink),
             Box::new(lifecycle_sink),
             Box::new(zorder_sink),
+            Box::new(readme_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir: Some(crate::default_app_profile_dir()),
@@ -541,6 +556,15 @@ pub fn wire_emo2_boot(
     app.world()
         .borrow_mut()
         .add_systems(Update, emo2_frame_system.after(update_typewriters));
+
+    // 説明書の受信端（popup-menu-minimal task 4.3・要件 4.5）。開くファイルはゴーストの根と
+    // 定義の `readme` キーから**起動時に 1 度だけ**決まる（要求ごとには決めない）ので、
+    // `mount()` を読める最初の場所であるここで決めて受信端と一緒に World へ据える。
+    // `wire_emo2_boot` は 1 回の実行につき `main` から 1 度しか呼ばれないため、`wire_readme` が
+    // 行う `Input` の段への登録も 1 度だけである（`wire_choice_drain` と同じ前提）。
+    let readme_path =
+        crate::readme::resolve_path(ghost_root, ghost_runtime.mount().readme.as_deref());
+    crate::readme::wire_readme(app.world().borrow_mut().world_mut(), readme_path, readme_rx);
 
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
     // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
