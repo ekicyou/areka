@@ -2,7 +2,7 @@
 
 > 正本は `requirements.md`（要件）と `design.md`（設計）。コードは「何の定義か（関数名・型名）＋ファイル」で指す。検体は `sample_ghost_kit::SampleRoot::acquire` 経由でのみ受け、`vendors/sample_ghost/<検体名>/` の直パスを書かない（要件 7.11）。新しいテストはすべて新しいファイルに置き、1 ファイル 1,000 行以内に収める。行数の検査（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の例外表には触らない（要件 7.12）。ログを判定する檻は共有機構 `log_capture_kit::capture` を使い、捕捉窓を各所で書き写さない。
 
-- [ ] 1. 基盤: 検体の受け口
+- [x] 1. 基盤: 検体の受け口
 
 - [x] 1.1 `areka-seriko` と `areka` の 2 クレートに検体 2 体の受け口を足す
   - `crates/areka-seriko/src/sample_test_support.rs` と `crates/areka/src/placement/placement_shared_test_support.rs` に、`konnoyayame` と `R_POST_and_KOMAINU` の受け口を、既存の `emo2` と同じ `LazyLock<SampleRoot>` の形で足す
@@ -11,7 +11,7 @@
   - 観測可能な完了: 両クレートで、受け口の返すフォルダに `surfaces.txt` が実在することを確かめるテストが緑になる
   - _Requirements: 7.11, 7.12_
 
-- [ ] 2. 互いに独立な 3 本と、それに追随する `emo2` の期待値
+- [x] 2. 互いに独立な 3 本と、それに追随する `emo2` の期待値
 
 - [x] 2.1 (P) 抜き色の腕を実装する
   - `crates/areka-emo-atlas/src/normalize.rs` に `(UseSelfAlpha::On, AlphaSource::KeyColor)` の腕と `Normalizer::key_color` を足す。`normalize` のシグネチャは変更 0
@@ -54,7 +54,7 @@
   - _Depends: 2.1_
   - _Boundary: areka-emo-atlas emo2 tests_
 
-- [ ] 3. 面の表の構築（土台の絵の決定）
+- [x] 3. 面の表の構築（土台の絵の決定）
 
 - [x] 3.1 `apply_base_images` と `EmoWorld::build_with_images` を実装する
   - `crates/areka-emo-compose/src/base_image.rs` を新設し、`apply_base_images` と `BaseImageReport`（`used`・`shadowed`）を置く。`crates/areka-emo-compose/src/lib.rs` に `pub mod base_image;` と再輸出を足す
@@ -88,7 +88,7 @@
   - _Depends: 3.1_
   - _Boundary: areka-emo-compose world_
 
-- [ ] 4. シェルの読み込みの権威
+- [x] 4. シェルの読み込みの権威
 
 - [x] 4.1 `load_shell_target`・`build_shell_target`・`ShellTarget` の型と核を実装する
   - `shell_target.rs` に、fs を触る入口 `load_shell_target(shell_dir, decoder)` と、fs を触らない核 `build_shell_target(shell, selection, shell_dir, decoder)`、値 `ShellTarget`（`atlas()`・`bake_errors()`・`build_world()`）、`thiserror` の `ShellLoadError`（`List`・`Read`・`Empty`）を置く
@@ -130,7 +130,7 @@
   - _Depends: 4.2, 4.3_
   - _Boundary: areka-emo-present shell_target tests_
 
-- [ ] 5. 呼び手 5 か所を権威へ寄せる（統合）
+- [x] 5. 呼び手 5 か所を権威へ寄せる（統合）
 
 - [x] 5.1 本番 2 か所を `load_shell_target` の呼び出しに置き換える
   - `crates/areka/src/emo2_boot/assets.rs` の `build_boot_assets` を `load_shell_target` 1 回＋scope の数だけ `build_world()` に置き換える。`atlas` は `target.atlas().clone()`。`descript.txt` の読取とバルーンの組み立ては変更 0
@@ -160,7 +160,7 @@
   - _Depends: 5.1, 1.1_
   - _Boundary: areka placement tests_
 
-- [ ] 6. 検体 2 体の決定論テストと摂動
+- [x] 6. 検体 2 体の決定論テストと摂動
 
 - [x] 6.1 検体 2 体を実物の絵で焼くテストを書く
   - `crates/areka-emo-present/src/shell_target_template_tests.rs` を新設する（4.3 の `shell_target_test_support.rs` を使う）
@@ -179,7 +179,7 @@
   - _Requirements: 7.8, 7.9, 7.10_
   - _Depends: 6.1, 5.3, 4.4, 2.2_
 
-- [ ] 7. 実機確認
+- [x] 7. 実機確認
 
 - [x] 7.1 `R_POST_and_KOMAINU` を実機で確かめる
   - 32bit 補助プロセスを先にビルドし、`areka.exe <ゴーストの絶対パス> <StayseeBalloon の絶対パス>` を `AREKA_APP_SMOKE_EXIT_MS` の有界の自動終了で走らせ、`RUST_LOG=info,areka_emo_present::shell_target=debug,areka_emo_atlas=debug,areka_seriko::table=debug` でログを採る。絶対パスは `cargo run -p sample-ghost-kit --bin nar-sample-path -- <検体名>` が教える
@@ -210,7 +210,7 @@
   - _Requirements: 8.4, 10.6_
   - _Depends: 7.1, 7.2, 7.3_
 
-- [ ] 8. 文書と台帳（着地時）
+- [x] 8. 文書と台帳（着地時）
 
 - [x] 8.1 網羅台帳を実測に合わせて直す
   - `doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:descript_shell_surfaces:sometimes:1` と `…:rarely:1` の 2 件に、担当 `areka-P0-shell-implicit-surface` と実測の状態を登記する。新しい行の追加は 0 件
