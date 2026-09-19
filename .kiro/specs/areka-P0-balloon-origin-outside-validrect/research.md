@@ -130,30 +130,73 @@ Some(v) => {
 | 3.4 範囲内・未宣言で 0 件 | 判定 | **既存** | 範囲判定の否定側 |
 | 3.5 無記録の経路を持たない | 解決側の `debug!` | **既存** | 解決側の `debug!` を残せば、登録口の WARN と二重になるが無記録経路は生じない。残す／消すは裁定候補 2 |
 
-### 3.4 要件 4（`\_l` の原点）——全数確認の結果
+### 3.4 要件 4（`\_l` の原点）——全数確認の結果（2026-09-19 引き直し）
 
-`\_l` の数値座標の原点は `cursor_tag.rs::resolve_cursor_axis` が `CursorBasis.origin` から読み、その値は `TextRegion::start()` 由来（COMPAT §8 `:183`）。解決規則を変えれば自動で追随する（要件 4.1 は無改変で成立）。
+`\_l` の数値座標の原点は `cursor_tag.rs` の `resolve_cursor_axis` が `CursorBasis.origin` から読み、その値は `TextRegion::start()` に由来する。開始点の解決規則を変えれば `\_l` は自動で追随するので、要件 4.1 は実装を 1 行も変えずに成立する。
 
-**宣言された `origin` を `TextRegion::resolve` に渡している既存テストの全数**（方法: ⑴ `Origin::new(Some` の全文検索 ⑵ `model(`／`model_rect(`／`model_of(` の呼出で第 1 引数に `(Some(` を持つものの 2 行検索 ⑶ origin を `(0,0)` に固定する補助関数 4 つ〔`layout_hard_limit_tests.rs:100` `model_of`・`viewbox_test_support.rs:25` `model_rect`・`viewbox_draw_test_support.rs:84`・`actor_test_support.rs:55`〕の呼出側の validrect を列挙。対象は `crates/areka-emo-text/{src,tests}` と `crates/areka/src`。`areka-parsers` は解析層のテストで解決を通らないので対象外）:
+**結論（要件 4.3 の 0 の明示）**: 2026-09-19 に下の 4 つの方法で引き直した結果、**`\_l` の原点に宣言された `origin` を使う既存テストのうち、`validrect` の範囲外の値を使うものは 0 本**である。調べた対象は `crates/areka-emo-text/src`・`crates/areka-emo-text/tests`・`crates/areka/src` の 3 つのディレクトリで、この中で `Origin` を組み立てる文字列を含むファイルは 29、その行は 38 行（うち 5 行は説明文の中での言及で、実際に値を組み立てている行は 33）。`areka-parsers` は定義を読む層のテストで開始点の解決を通らないため対象外とした。
 
-| 場所 | 宣言 origin | 解決後 validrect（当該軸） | 判定 |
-|---|---|---|---|
-| `layout_cursor_center_origin_tests.rs:107` `region_declared`（V7・`\_l` の原点テストの本体）・`:559`・`:623` | (50, 20) | left 30／top 8／right 350／bottom 210 | **範囲内** |
-| `layout_cursor_wiring_tests.rs:64` `region_c_declared_origin`（`:193` で使用） | (100, 60) | left 40／top 20／right 360／bottom 200 | **範囲内** |
-| `cursor_tag_tests.rs:48`・`cursor_tag_resolve_tests.rs:836`（`ORIGIN` 定数 (50,20)） | — | `CursorBasis` に直接入れており **`TextRegion::resolve` を通らない** | 対象外（影響なし） |
-| `layout_cursor_tests.rs:13`（`layout_test_support::model`＝validrect 全 None） | (0, 0) | 画像端 0..400／0..224 | **端ちょうど＝範囲内** |
-| `layout_visible_window_tests.rs:282` | (0, 40) | left 0／top 40 | **両成分とも端ちょうど＝範囲内** |
-| `layout_hard_limit_tests.rs:133`／`:136`（`model_of`・origin (0,0) 固定） | (0, 0) | left 0／top 0 | 端ちょうど＝範囲内 |
-| viewbox 系 `canvas_for` 経由 11 か所（`viewbox_dirty_tests.rs` 7・`viewbox_plan_commit_tests.rs` 4） | (0, 0) | すべて left 0／top 0 | 端ちょうど＝範囲内 |
-| `viewbox_scroll_test.rs:131` | (0, 0) | (0, H, 0, W) | 端ちょうど＝範囲内 |
-| `actor_choice_contract_tests.rs:799`・`actor_decoration_tests.rs:31`・`actor_runtime_frame_tests.rs:414`・`actor_test_support.rs:55`・`draw_oracle_tests.rs:566`／`:723`・`viewbox_draw_test_support.rs:84`・`tests/attach_wiring_test.rs:291`・`canvas.rs:488`／`:730` | (0, 0) | validrect 全 None＝画像端 | 端ちょうど＝範囲内 |
-| `region.rs:575`（基層のみ・validrect 全 0） | (0, 0) | [0, 0] | 端ちょうど＝範囲内（退化矩形の warn は別件で不変） |
-| `region.rs:650`・`:693`・`:894`／`:928` | (100,50)／(−100,−100)→(300,124)／(120,70) | 範囲内 | 範囲内 |
-| `region.rs:679`・`region_vertical_canon_tests.rs:446`／`:576`（2 ケース）／`:617` | 範囲外を意図的に使用 | — | **撤去を固定している 4 本＝要件 5.4 の書き直し対象**（`\_l` の原点は見ていない） |
+**この 0 は要件 1.3（範囲の両端を範囲内とみなす）の読みに依存する。** 下で数え上げた宣言つきの呼出しのうち **130 か所**が `origin (0, 0)` と「左辺 0・上辺 0」（または `validrect` 全未宣言＝画像全域）の組で、辺にちょうど重なる値を範囲内とする読みでのみ範囲内になる。両端を範囲外とする読みへ変えれば、これらは一斉に範囲外へ回り、`\_l` のものを含む多数の既存テストの期待値を書き直すことになる。`\_l` 側で端ちょうどに当たるのは `layout_cursor_order_tests.rs`・`layout_cursor_tests.rs`・`layout_cursor_overflow_tests.rs`・`layout_cursor_wiring_tests.rs` が渡す `(0, 0)` の 2 成分と、`cursor_tag_test_support.rs` の定数 `ORIGIN`（`(50, 20)`）の y 成分（同ファイルの `VALID_TOP` が 20）である。一方 `layout_cursor_center_origin_tests.rs` の `(50, 20)`（範囲 left 30・top 8・right 350・bottom 210）と `layout_cursor_wiring_tests.rs` の `(100, 60)`（範囲 left 40・top 20・right 360・bottom 200）は辺に触れておらず、1.3 の読みによらず範囲内である。
 
-結論: **`\_l` の原点に宣言された `origin` を使う既存テストで範囲外の値を使うものは 0 本**（対象 `crates/areka-emo-text/{src,tests}`・`crates/areka/src`・上記 3 手法）。範囲外を使うのは撤去そのものを固定する 4 本だけで、いずれも `\_l` を扱わない。要件 4.2／4.3 はこの表をそのまま記録に流用できる（設計段階で着手時に引き直すこと）。
+#### 方法（4 つ・そのまま再実行できる形）
 
-**副産物**: 「端ちょうど＝範囲内」を前提に書かれたテストが `(0,0)`×`left 0／top 0` の組で 20 か所以上ある。要件 1.3 の両端包含は好みではなく既存資産の生存条件である。
+1. `Origin::new(Some` の全文検索。結果 13 行・12 ファイル（うち `actor_scale_refresh_tests.rs` と `tests/draw_readback_test.rs` の 2 行は説明文の中での言及なので、実際の構築は 11 行・10 ファイル）。
+2. `model(`／`model_rect(`／`model_of(` の呼出しのうち、第 1 引数に `(Some(` を持つものを、前後 2 行の窓で拾う検索。宣言された `origin` を渡す呼出しは 15 ファイルに散る（内訳は下の 2 つ目の表）。
+3. `origin` を `(0, 0)` に固定してしまう補助関数——`layout_hard_limit_tests.rs` の `model_of`・`viewbox_test_support.rs` の `model_rect`・`viewbox_draw_test_support.rs` の `geo_model`・`actor_test_support.rs` の `geo_model`——の呼び手をたどり、それぞれが渡す `validrect` を列挙。
+4. （2026-09-19 に追加）`Origin::new(` の構築点を**全数**、ファイルごとの件数つきで列挙し、引数をそのまま渡すだけの補助関数は**その呼び手まで辿る**。`Origin` の組み立て口は `areka-parsers` の `Origin::new` ただ 1 つで、構造体リテラルや `Default` からの経路は無いことも併せて確かめた（コードの外から入る経路は、実物の定義ファイルを読む `tests/shipped_fixture_region_test.rs` だけ）。
+
+#### 方法 4 の内訳——`Origin::new(` の構築点（ファイルごとの件数）
+
+| 区分 | ファイル | 件数 |
+|---|---|---|
+| 宣言つき（値を直書き） | `src/actor_choice_contract_tests.rs` | 1 |
+| | `src/actor_decoration_tests.rs` | 1 |
+| | `src/actor_runtime_frame_tests.rs` | 1 |
+| | `src/actor_test_support.rs`（`geo_model`） | 1 |
+| | `src/draw_oracle_tests.rs` | 2 |
+| | `src/layout_hard_limit_tests.rs`（`model_of`） | 1 |
+| | `src/viewbox_draw_test_support.rs`（`geo_model`） | 1 |
+| | `src/viewbox_test_support.rs`（`model_rect`） | 1 |
+| | `tests/attach_wiring_test.rs`（`geo_model`） | 1 |
+| | `tests/viewbox_scroll_test.rs`（`model`） | 1 |
+| **小計** | 10 ファイル | **11** |
+| 素通し（引数をそのまま渡す補助関数） | `src/canvas.rs`・`src/draw_oracle_tests.rs`・`src/layout_test_support.rs`（2）・`src/region.rs`・`src/region_vertical_canon_tests.rs`・`tests/pipeline_test.rs`・`tests/scale_invariance_test.rs` | **8** |
+| 未宣言（`None, None`） | `src/actor_scale_refresh_tests.rs`・`src/actor_scroll_retain_tests.rs`・`src/choice_decorate_tests.rs`・`src/choice_tests.rs`・`src/cursor_tag_test_support.rs`・`src/draw_oracle_tests.rs`・`src/draw_test_support.rs`・`src/viewbox_draw_test_support.rs`・`src/wrap.rs`・`src/writing.rs`・`src/writing_decision_tests.rs`・`tests/draw_readback_test.rs`・`tests/viewbox_blit_spike.rs`・`areka/src/input_events/balloon_pure_core_tests.rs` | **14** |
+| 説明文の中での言及（構築ではない） | `src/actor_scale_refresh_tests.rs` 1・`tests/draw_readback_test.rs` 1・`tests/shipped_fixture_region_test.rs` 3 | **5** |
+| **合計** | 29 ファイル | **38 行**（実構築 33） |
+
+#### 素通し補助関数の呼び手（宣言された `origin` を渡すものだけ）
+
+| 補助関数 | 呼び手（ファイル: 件数） | 宣言値 | 当該 `validrect` | 判定 |
+|---|---|---|---|---|
+| `canvas.rs` の `model` | `canvas.rs` 7 | `(0,0)` 6／`(100,50)` 1 | 全未宣言＝画像全域 400×224 | 範囲内（`(0,0)` は端ちょうど） |
+| `draw_oracle_tests.rs` の `geo_model` | `draw_oracle_tests.rs` 9 | `(0,0)` 8／`(20,20)` 1 | 全未宣言 | 範囲内 |
+| `layout_test_support.rs` の `model`（`validrect` は常に未宣言） | `layout_cursor_order_tests.rs` 1・`layout_cursor_tests.rs` 12・`layout_cursor_wiring_tests.rs` 1・`layout_segmented_tests.rs` 14・`layout_styled_tests.rs` 6・`layout_visible_window_tests.rs` 1・`layout_wrap_tests.rs` 13（計 48） | `(0,0)` 47／`(100,50)` 1 | 画像全域 400×224 | 範囲内 |
+| `layout_test_support.rs` の `model_rect` | `layout_cursor_center_origin_tests.rs` 1・`layout_cursor_overflow_tests.rs` 1・`layout_cursor_wiring_tests.rs` 1・`layout_visible_window_tests.rs` 8・`layout_wrap_tests.rs` 1（計 12） | `(50,20)`／`(100,60)`／`(0,40)`／残りは `(0,0)` | 呼び手ごと。`(50,20)` は left 30・top 8・right 350・bottom 210、`(100,60)` は left 40・top 20・right 360・bottom 200、他はすべて left 0・top 0 | 範囲内（前 2 者は内側・他は端ちょうど） |
+| `region.rs` の `model` | `region.rs` 6 | `(0,0)`／`(100,50)`／`(100,0)`／`(-100,-100)`→`(300,124)`／`(120,70)` 2 | 退化矩形〔0,0〕・top 46 bottom −56 left 36 right −44・top 50 bottom 200 left 30 right 330 | `(100,0)` の y だけが範囲外（規則そのものを固定する検査） |
+| `region_vertical_canon_tests.rs` の `model` | `resolve_counting` 経由 9 か所＋`vertical_region_is_invariant_to_wordwrappoint_x` 2 か所 | 範囲内は `(200,60)`（範囲 left 36・top 46・right 356・bottom 168）。範囲外も意図的に渡す | 同上 | 範囲外を渡すのは規則を固定する検査 |
+| `tests/pipeline_test.rs` の `model_rect` | `tests/pipeline_test.rs` 1 | `(0,0)` | top 0・bottom 34・left 0・right 400 | 範囲内（端ちょうど） |
+| `tests/scale_invariance_test.rs` の `model` | 宣言された `origin` を渡す呼び手は 0 件（5 か所すべて未宣言） | — | — | 対象外 |
+
+`origin` を固定したまま `validrect` だけを呼び手から受け取る補助関数は 2 つある。`layout_hard_limit_tests.rs` の `model_of` は呼び手 2 か所でいずれも top 0・left 0。`viewbox_test_support.rs` の `model_rect` は `canvas_for` 1 か所から呼ばれ、その `canvas_for` の呼び手は `viewbox_dirty_tests.rs` 27・`viewbox_plan_commit_tests.rs` 19 の計 **46**（旧記録の「11 か所」は実数と合っていなかった）。渡される `validrect` は全 46 か所とも top 0・left 0 で、`(0,0)` は端ちょうど＝範囲内である。残る固定 `origin` の補助関数（`actor_test_support.rs`・`viewbox_draw_test_support.rs`・`tests/attach_wiring_test.rs` の各 `geo_model`、`tests/viewbox_scroll_test.rs` の `model`）は `validrect` も関数の中で決めており、呼び手によらず判定は 1 つに定まる（前 3 者は全未宣言＝画像全域、最後は top 0・bottom 120・left 0・right 100）。
+
+#### 元の 3 手法が落としていたもの
+
+宣言された `origin` が開始点の解決へ届くのに、2026-09-18 の記録（元の 3 手法）に名前が出てこないファイルが 6 つある——`layout_cursor_order_tests.rs`・`layout_cursor_overflow_tests.rs`・`layout_segmented_tests.rs`・`layout_styled_tests.rs`・`layout_wrap_tests.rs`・`tests/pipeline_test.rs`。設計検証が挙げた 6 つのうち `draw_oracle_tests.rs` と `canvas.rs` は旧記録に名前だけは出ているが、出ているのは値を直書きした 2 か所だけで、素通し補助関数を経由する呼び手（それぞれ 9 件・7 件）は数えられていなかった。代わりに `layout_segmented_tests.rs`（14 件）と `layout_styled_tests.rs`（6 件）が丸ごと抜けており、viewbox 系の件数も 11 ではなく 46 だった。つまり漏れは設計検証の見立てよりも広い。方法 4 はファイルごとの件数を突き合わせる形なので、同じ漏れを繰り返せない。いずれの漏れも値は範囲内（端ちょうどを含む）で、結論の 0 は動かない。
+
+#### 範囲外の値を使う箇所（全数・いずれも `\_l` を通らない）
+
+1. `region.rs` の `out_of_range_origin_component_falls_back_to_start_corner_independently`——宣言 `(100, 0)` に対し範囲の上辺が 46。
+2. `region_vertical_canon_tests.rs` の `declared_origin_outside_validrect_falls_back_to_start_corner_with_one_debug_per_component`・`negative_origin_resolves_from_opposite_edge_then_is_range_checked`・`declared_origin_follows_validrect_only_when_it_leaves_the_range`・`origin_range_table_holds_for_every_mode_and_component`。
+3. `tests/shipped_fixture_region_test.rs` の `offsetdpi_fixture_with_out_of_range_origin_starts_at_writing_corner`——実物の検体 `emo2-kakukaku-offsetdpi` の `origin.x,0`／`origin.y,0`。
+
+いずれも本仕様の規則そのものを固定する検査であり、`\_l` の座標解決を 1 本も通らない。よって要件 4.2 の「期待値を見直す」は発動しない。
+
+#### 併走して確かめたこと（2026-09-19 実測）
+
+`\_l` の既存テスト群——`cursor_tag.rs`（本体）・`cursor_tag_tests.rs`・`cursor_tag_resolve_tests.rs`・`cursor_tag_test_support.rs`・`layout_cursor_tests.rs`・`layout_cursor_order_tests.rs`・`layout_cursor_overflow_tests.rs`・`layout_cursor_wiring_tests.rs`・`layout_cursor_center_origin_tests.rs`・`layout_cursor_vertical_tests.rs`・`layout_cursor_vertical_canon_tests.rs`・`state_cursor_coord_parse_tests.rs`——は本作業で 1 行も触っておらず、12 ファイルの差分は空である。検査は 10 モジュール計 114 件がすべて緑（`cursor_tag::tests` 18・`cursor_tag::resolve_tests` 12・`layout::cursor_tests` 12・`layout::cursor_order_tests` 4・`layout::cursor_overflow_tests` 5・`layout::cursor_wiring_tests` 8・`layout::cursor_center_origin_tests` 5・`layout::cursor_vertical_tests` 15・`layout::cursor_vertical_canon_tests` 11・`state::cursor_coord_parse_tests` 24）。本仕様の期間中にこの群へ入った変更は、タスク 6.1（要件 6.4）が `layout_cursor_wiring_tests.rs` の説明文 1 か所を現在の規則へ言い直した分だけで、検査本体も期待値も動いていない。`cargo test -p areka-emo-text --no-fail-fast` は 17 ターゲット 895 passed・0 failed で、引き直しの前後で変わらない。
+
+**副産物**: 「端ちょうど＝範囲内」を前提に書かれた呼出しが 130 か所ある。内訳は上の 2 つの表のとおりで、素通し補助関数の呼び手が `canvas.rs` 6・`draw_oracle_tests.rs` 8・`layout_test_support.rs` の `model` 47・同 `model_rect` 10・`region.rs` 1・`tests/pipeline_test.rs` 1、`origin` を固定する補助関数が `model_of` 2・`canvas_for` 46、値を直書きした構築点が 9（`actor_choice_contract_tests.rs`・`actor_decoration_tests.rs`・`actor_runtime_frame_tests.rs`・`actor_test_support.rs` の `geo_model`・`draw_oracle_tests.rs` の 2 か所・`viewbox_draw_test_support.rs` の `geo_model`・`tests/attach_wiring_test.rs` の `geo_model`・`tests/viewbox_scroll_test.rs` の `model`）で、6 + 8 + 47 + 10 + 1 + 1 + 2 + 46 + 9 = 130 となる。直書きは全 11 か所あるが、`layout_hard_limit_tests.rs` の `model_of` と `viewbox_test_support.rs` の `model_rect` は `validrect` を呼び手から受け取るため呼び手の側（2・46）で数えており、ここでは重ねない。要件 1.3 の両端包含は好みではなく、既存資産の生存条件である。
 
 ### 3.5 要件 5（決定論テスト）
 
