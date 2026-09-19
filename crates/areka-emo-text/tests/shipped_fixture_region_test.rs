@@ -427,7 +427,8 @@ fn wplimit_copy_resolves_identically_to_shipped_original() {
 /// （面別上書き層の `validrect.left` は sakura 36／kero 24 なので、解決後の宣言値は範囲の
 /// 外に落ちる）。検体は書き換えない。`Drop` が複製を消すのでプロセス寿命で保持する。
 static OFFSETDPI: LazyLock<SampleRoot> = LazyLock::new(|| {
-    SampleRoot::acquire("emo2-kakukaku-offsetdpi").expect("emo2-kakukaku-offsetdpi は登記済みの検体")
+    SampleRoot::acquire("emo2-kakukaku-offsetdpi")
+        .expect("emo2-kakukaku-offsetdpi は登記済みの検体")
 });
 
 /// 範囲外宣言を持つ検体のバルーン定義ディレクトリ（自分でパスを継ぎ足さない）。
