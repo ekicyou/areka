@@ -14,7 +14,7 @@
 
 ## この記録の埋まり具合
 
-この記録は 8 つの節から成り、節ごとに埋める担当タスクが決まっている。下の表は**どの節を誰が埋めるか**の割り当てであって、埋まった節を数え上げたものではない。担当が変わらない限りこの表は古びない。
+この記録は **§0 から §9 までの 10 節**から成り（当初は §1〜§8 の 8 節の予定だったが、§0 の結論とタスク 6 の §9 が加わった）、節ごとに埋める担当タスクが決まっている。下の表は**どの節を誰が埋めるか**の割り当てであって、埋まった節を数え上げたものではない。担当が変わらない限りこの表は古びない。
 
 | 節 | 内容 | 埋める担当タスク |
 |---|---|---|
@@ -391,7 +391,7 @@ thread 'no_source_file_exceeds_the_line_limit_outside_the_allow_table' panicked:
 |---|---|---|
 | 本番コードを変えていない（要件 8.1） | `git diff --numstat 082379b3 \| grep -c '/src/'` | **0** |
 | 既存のテスト・example を変えていない（要件 3.1・3.10） | `git diff --numstat 082379b3 -- crates \| grep -v 'staysee_balloon_fixture'` | 出力なし＝**0 行**。`crates/` 配下で差分が出るのは本仕様の新規 10 ファイルだけ |
-| 依存記述とロックを変えていない（要件 8.2） | `git diff --numstat 082379b3 \| grep -cE 'Cargo\.(toml\|lock)$'` | **0** |
+| 依存記述を変えていない（要件 8.2） | `git diff --numstat 082379b3 \| grep -cE 'Cargo\.(toml\|lock)$'` | **0**。⚠ ただし**ロックファイルについてはこの 0 は根拠にならない**——`Cargo.lock` は `.gitignore` の 2 行目で追跡対象外なので差分は常に 0（恒真）。詳しくは §9.1 ⑵ |
 | 番人の例外表を変えていない（要件 3.11） | `git diff 082379b3 -- crates/log-capture-kit/tests/file_length_guard_test.rs \| wc -l` | **0** |
 | 書式 | `cargo fmt --check` | 終了コード 0（出力なし） |
 
@@ -987,7 +987,7 @@ awk '/^### 6\.1 /{f=1;next} /^### 6\.2 /{f=0} f' "$F" | grep -c \
 
 **判定 ⑵ の探し方に `readme.txt`・`LICENSE`・`.pna` を含めていないのは意図である。** ただし 3 つを外した理由は同じではないので、2 つに分けて書く。
 
-- `readme.txt` と `LICENSE` は、**保管フォルダに実在するファイル名**である（`provenance.md` §3.1 の 29 本の一覧の #1 と #27）。第三者がバルーンのフォルダを開けば実際に目にする名前なので、areka の内部の呼び名ではない。
+- `readme.txt` と `LICENSE` は、**保管フォルダに実在するファイル名**である（`provenance.md` §3.1 の 29 本の一覧の #1 が `LICENSE`・#27 が `readme.txt`）。第三者がバルーンのフォルダを開けば実際に目にする名前なので、areka の内部の呼び名ではない。
 - `.pna` は、**バルーンを作る側が知っている伺かの仕様上の語**であって areka の内部の呼び名ではない。ただし前の 2 つとは違い、**保管フォルダには 1 本も実在しない**。つまり `.pna` を外している理由は「フォルダを開けば目にする名前だから」ではなく、「areka の内部の言葉ではなく、バルーン一般の話として引用ブロックが説明している語だから」である。ブロックの中では「絵と同じ名前の `.pna` ファイル」と意味を添えて書いてある。
 
 `.pna` が 1 本も無いことは `provenance.md` §2 の「上流の作業木の本数 29 本（サブフォルダ 0・`.pna` 0 本）」と同じ事実であり、本節でも採り直した。
@@ -1136,7 +1136,7 @@ find vendors/sample_ghost/StayseeBalloon -type f -printf '%f\n' | sed 's/.*\.//'
 | 主張 | 数え方 | 結果 |
 |---|---|---|
 | 本番コードを 1 行も変えていない（要件 8.1・6.6） | `git diff --numstat \| grep '/src/'`（`-- 'crates/*/src'` 形は変更が実在しても無出力になるため使わない。設計 C8 の実測） | **0 行** |
-| すべての `Cargo.toml`・`Cargo.lock` を変えていない（要件 8.2） | `git diff --numstat \| grep -E 'Cargo\.(toml\|lock)'` | **0 行** |
+| すべての `Cargo.toml` を変えていない（要件 8.2） | `git diff --numstat \| grep -E 'Cargo\.(toml\|lock)'` | **0 行**。⚠ `Cargo.lock` の分は恒真（追跡対象外）。詳しくは §9.1 ⑵ |
 | 台帳の隣の 2 項目を変えていない（要件 6.3） | 上の 7.3 の行を参照 | **0 行** |
 | `doc/COMPAT_ARCHITECTURE.md` を触っていない（タスク 3.1 の担当） | `git status --porcelain` に現れない | **0 件** |
 
@@ -1388,7 +1388,11 @@ git check-ignore -v Cargo.lock
 
 ```
 grep -rl 'CALIBRATION-LINE' . --exclude-dir=target --exclude-dir=.git | wc -l
-# → 0
+# → 走らせた時点では 0。
+# ⚠ この記録が上の命令を逐語で書いた結果、本ファイル自身がその綴りを含むようになり、
+#   いま同じ命令を打つと 1 を返す（当たるのはこのファイルだけ）。自己言及による陳腐化で、
+#   コード・検体・設定に残渣が在るわけではない。本ファイルを外す形で数え直すと 0 に戻る:
+#   grep -rl 'CALIBRATION-LINE' . --exclude-dir=target --exclude-dir=.git \n#     --exclude=signoff-record.md | wc -l  → 0
 
 # 較正: 同じ探し方で実在する綴りを数える
 grep -rl 'StayseeBalloon' . --exclude-dir=target --exclude-dir=.git | wc -l

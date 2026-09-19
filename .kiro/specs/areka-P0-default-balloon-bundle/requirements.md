@@ -155,4 +155,6 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 2. The 本仕様 shall 新規の外部依存を **0** とし、`Cargo.toml` を 1 つも変えない。
 3. The 本仕様 shall `areka-P0-nar-install` が書き換える検体参照ファイルと `areka-P0-popup-menu-minimal` の接触面（`input_events/`・新規 `menu.rs`）に触れず、共有ファイル 0 を保つ。
 4. When 本仕様の変更を取り込んだ, the ワークスペース shall `cargo test --workspace` が着手前と同じ本数で緑になり（i686 helper が要るテストは既存の手順どおり）、`cargo fmt --check` と 1,000 行の番人が緑である。
-5. The 本仕様 shall 保管フォルダ・新規テスト・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳文書（`assets.toml`・`roadmap-draft.md`・`briefing.md` の `[[barrier]]` 2 数値・報告）・隣接 brief への申し送り以外のファイルに触れない。
+5. The 本仕様 shall 保管フォルダ・新規テスト・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳文書（`assets.toml`・`roadmap-draft.md`・`briefing.md` の `[[barrier]]` 2 数値・報告）・隣接 brief への申し送り・**本仕様自身の仕様書（`brief.md`・`requirements.md`・`design.md`・`tasks.md`）**以外のファイルに触れない。
+
+   > **2026-09-19 の最終検証による是正**: 当初この列挙は本仕様自身の仕様書を含んでおらず、**要件 7.1 と衝突していた**——7.1 は「`verification/` と**本仕様の brief** に『既定バルーン id ＝ `StayseeBalloon`』と書き残す」と明示的に命じているのに、8.5 の「隣接 brief」には自分の brief が入らないため、7.1 を守ると 8.5 に触れる形になっていた（起草時の抜け）。あわせて `requirements.md`・`design.md`・`tasks.md` も、実測との食い違いを是正する過程（要件 2.6 が認める行為と同型）と kiro のワークフロー（チェックと Implementation Notes）で実際に変更されている。**列挙の意図は「本仕様と無関係なファイルに触らないこと」**であり、本仕様自身の仕様書がそれに当たるとは読めないので、列挙を実態へそろえた。実際に変更した 4 本の内訳と理由は `verification/signoff-record.md` §9.2 に在る。

@@ -8,13 +8,13 @@
 
 **Users**: 第三者（既定バルーンで喋るゴーストを見る）・開発者（毎回のテストで表示保証を持つ）・下流 spec の実装者（`nar-install`＝畳む対象、`baseware-root-layout`＝既定 id、`alpha-release-signoff`＝zip と README の出典文）。
 
-**Impact**: 本番コード（`crates/*/src/` の非テストファイル）の変更 **0 行**・`Cargo.toml` 変更 0・新規外部依存 0。増えるのは保管フォルダ 1 つ（29 ファイル）・新規テストファイル 1 本・`verification/` 2 本・文書 7 か所（`COMPAT_ARCHITECTURE.md` §8 の 1 行・台帳 1 項目・`roadmap-draft.md` 1 行＋count＋束表 1 欄・`briefing.md` の 2 数値・報告 2 本・隣接 brief 3 本）。
+**Impact**: 本番コード（`crates/*/src/` の非テストファイル）の変更 **0 行**・`Cargo.toml` 変更 0・新規外部依存 0。増えるのは保管フォルダ 1 つ（29 ファイル）・新規テストファイル **10 本**（入口 1 ＋ テーマ別 9。当初は 1 本の見込みだったがタスク 2.3 の分割で増えた）・`verification/` **3 本**（`provenance.md`・`signoff-record.md`・`baseline.md`）・文書 7 か所（`COMPAT_ARCHITECTURE.md` §8 の 1 行・台帳 1 項目・`roadmap-draft.md` 1 行＋count＋束表 1 欄・`briefing.md` の 2 数値・報告 2 本・隣接 brief 3 本）。
 
 ### Goals
 
 - 既定バルーン `StayseeBalloon` の裁定と根拠を後から読める形で残す（1.1〜1.4）。
 - `vendors/sample_ghost/StayseeBalloon/` に原作の 29 ファイルをバイト保存し、出典・ハッシュを記録する（2.1〜2.7・5.1〜5.4）。
-- 起動時の焼き込みと同じ公開 API 経路を踏む決定論テストを**新規ファイル 1 本**で足し、既存ファイルの変更 0 行を保つ（3.1〜3.11・8.1〜8.5）。
+- 起動時の焼き込みと同じ公開 API 経路を踏む決定論テストを**新規ファイルだけ**で足し（着地時点で入口 1 ＋ テーマ別 9 ＝ **10 本**。当初この行は「1 本」と書いていたが、タスク 2.3 の分割で増えた）、既存ファイルの変更 0 行を保つ（3.1〜3.11・8.1〜8.5）。
 - 実機で k=1／k≠1 の 2 通りを目視し、観察記録を残す（4.1〜4.3）。
 - 「`use_self_alpha` は常に 1・`.pna` 非対応」を §8 と台帳に登記し、番人を緑で通す（6.1〜6.6）。
 - 既定バルーン id を下流 3 spec の brief へ申し送る（7.1〜7.4）。
@@ -120,7 +120,7 @@ graph TB
 - **Selected pattern**: 「資産＋外付けの檻」——本番コードには 1 行も触らず、資産を置き、公開 API を外から踏む統合テストで値を固定する。
 - **Domain boundaries**: 資産（`vendors/`）／検証（`tests/` 新規 1 本）／記録（`verification/`）／登記（§8・台帳）／申し送り（brief）の 5 面で、互いにファイルを共有しない。
 - **Existing patterns preserved**: 展開フォルダ保管（`R_POST_and_KOMAINU`）・実物 fixture 檻（`shipped_fixture_region_test.rs`／`kero_menu_capacity_test.rs`）・COM 初期化ヘルパ（`emo2_e2e.rs`）・ログ捕捉（`log_capture_kit::capture`）・`verification/` 記録（`charset-canon`）・§8 の 4 列表・台帳の `degraded` 前例 10 件。
-- **New components rationale**: 新規テスト 1 本（既存ファイルに足すと `nar-install` と共有が生じる＝要件 3.1／8.3）・`verification/` 2 本（機械が照合する出典と、人が読む判断の分離）。
+- **New components rationale**: 新規テストのみ（着地時点で入口 1 ＋ テーマ別 9 ＝ 10 本。既存ファイルに足すと `nar-install` と共有が生じる＝要件 3.1／8.3）・`verification/` 2 本（機械が照合する出典と、人が読む判断の分離）。
 - **Steering compliance**: 依存方向は `areka-parsers → areka-emo-atlas → areka-emo-present → areka-emo-text`（テストは最下流の `areka-emo-text` から上流を読むだけ）。1,000 行の番人・log-first（テスト自身は `panic` で赤にする）・`tests/` の命名規約（`{feature}_fixture_test.rs`）。
 
 ### Technology Stack
@@ -176,6 +176,7 @@ doc/ukadoc-coverage/report/summary.md         # 再生成: cargo run -p ukadoc-s
 - `doc/ukadoc-coverage/briefing.md` — `[[barrier]] page = "descript_balloon"` の `degraded` 6→7・`absent` 123→122 の **2 数値だけ**（`briefing_arms.rs` の `distribution_findings` が台帳の数え直しと機械照合する行。台帳の `absent`→`degraded` で必ず動く）。他の数（`[stage.X]`・`[[after]]`・`[priority_blank]`・`[tally]`・§7「縮退 2」）は優先度か 4 状態の和か `[[template]]` との積で数えるので動かない（設計検証で確認済み）。
 - `doc/ukadoc-coverage/report/assets.md`・`report/summary.md` — 道具で作り直す（手で編集しない）。
 - 隣接 brief 3 本＋本仕様の brief — 末尾追記のみ。
+- **本仕様自身の仕様書 4 本**（2026-09-19 の最終検証で追記）— `requirements.md`（要件 6.1 の是正の註・要件 6 の Objective と Out of scope の文言・要件 8.5 の列挙）・`design.md`（本ファイル。C2 の分割先・C8 と Traceability のパス指定・C3 §6／C4／Non-Goals の `.pna` 文言・本項）・`tasks.md`（チェックと `## Implementation Notes`）・`verification/baseline.md`（タスク 1.1 の基準値）。当初この一覧はこれらを挙げておらず、実測への追随で変更した 4 本が一覧外になっていた。実際に何を・なぜ・どのタスクで変えたかは `verification/signoff-record.md` §9.2 に在る。
 
 **触らないことを明記するファイル**: `crates/*/src/**`（テストファイルを含め 0 行）・全 `Cargo.toml`・`THIRD-PARTY-NOTICES.md`・`README.md`・`vendors/sample_ghost/.gitattributes`／`.gitignore`・既存の `crates/areka-emo-text/tests/*.rs`・既存検体 3 つ・`file_length_guard_test.rs`。
 
@@ -500,7 +501,7 @@ sequenceDiagram
 
 ## Testing Strategy
 
-### Unit / Integration Tests（新規ファイル 1 本・GPU 不要）
+### Unit / Integration Tests（新規ファイルのみ・入口 1 ＋ テーマ別 9 ＝ 10 本・GPU と実窓は不要）
 1. 檻 A・B（純粋・COM 不要）: 29 本の名前集合と IHDR 原寸・descript／install の kv と `BalloonModel` の宣言／未宣言（2.2, 3.3, 5.4, 7.1）。
 2. 檻 C（ログ捕捉）: scope 0／1 の系列と `error!` 0・`warn!` 0／2・使わない資産が載らない（3.4, 3.8）。
 3. 檻 D（WIC・COM MTA）: 両 scope の bake `Ok`・面 0 の原寸・半透明画素 > 0（3.4）。
