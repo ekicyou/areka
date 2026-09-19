@@ -366,7 +366,7 @@ decoration::warn_ignored_origin(&resolved, previous);
 
 実装の変更は無い。research.md §3.4 の全数確認（3 手法・対象 `crates/areka-emo-text/{src,tests}` と `crates/areka/src`）を実装時に引き直し、「`\_l` の原点に宣言された `origin` を使う既存テストで範囲外の値を使うものは 0 本」を、対象・方法・日付とともに同じ場所へ明示して更新する。範囲外の値が見つかったときは期待値を本仕様の規則へ見直す。
 
-引き直しでは手法を 1 つ足す——**`Origin::new(` の構築点を全数**（2026-09-18 実測で `crates/areka-emo-text/{src,tests}` と `crates/areka/src` の 29 ファイル）ファイルごとの件数つきで列挙し、値を素通しする補助関数はその呼び手まで辿る。設計検証が、元の 3 手法では §3.4 から漏れるファイル（`layout_cursor_order_tests.rs`・`layout_cursor_overflow_tests.rs`・`pipeline_test.rs`・`layout_wrap_tests.rs`・`draw_oracle_tests.rs`・`canvas.rs`）を実測で示した。いずれも範囲内の値で結論（0 本）は変わらないが、同じ手法で引き直すと同じ漏れを再現するためである。
+引き直しでは手法を 1 つ足す——**`Origin::new(` の構築点を全数**（2026-09-18 実測で `crates/areka-emo-text/{src,tests}` と `crates/areka/src` の 29 ファイル）ファイルごとの件数つきで列挙し、値を素通しする補助関数はその呼び手まで辿る。設計検証が、元の 3 手法では §3.4 から漏れることを実測で示した。**（2026-09-19 訂正——本段落が当初挙げていた 6 ファイルの内訳は、タスク 6.3 の引き直しで事実と食い違うことが判明した。実際に §3.4 に名前が無かったのは `layout_cursor_order_tests.rs`・`layout_cursor_overflow_tests.rs`・`layout_segmented_tests.rs`・`layout_styled_tests.rs`・`layout_wrap_tests.rs`・`tests/pipeline_test.rs` であり、`draw_oracle_tests.rs` と `canvas.rs` は名前が出ていて漏れではなく、素通し補助関数の呼び手（9 件・7 件）が未計上だったという別種の欠けである。加えて viewbox 系の「11 か所」は実数 46 だった。正本は research.md §3.4。）** いずれも範囲内の値で結論（0 本）は変わらないが、同じ手法で引き直すと同じ漏れを再現するためである。
 
 ## 文書の追随（要件 6）
 
