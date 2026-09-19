@@ -1,7 +1,7 @@
 //! 構築入力（BootAssets）の組立と shell descript からの static bindset 抽出。
 //!
-//! `build_boot_assets`（shell: `surfaces.txt` 読取→`areka_parsers::shell::parse`→bake→scope ごとに
-//! `EmoWorld::build`＋`bind_atlas`／balloon: scope ごとに `resolve_balloon_faces`→
+//! `build_boot_assets`（shell: `areka_emo_present::shell_target::load_shell_target` を 1 回→scope
+//! ごとに `ShellTarget::build_world`／balloon: scope ごとに `resolve_balloon_faces`→
 //! `build_balloon_target_from_faces`＋`load_scope_balloon_model`＝[`BalloonScopeAssets`]／
 //! `SurfaceResolver`＝`alias_snapshot()`／static bindset＝`default_bind_ids`→`build_static_bindset`）と
 //! `default_bind_ids`（`sakura.bindgroup{N}.default==1` の N 抽出・DD-8・ukadoc 正典）を所有する。
@@ -14,14 +14,13 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
-};
+use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, ComposeError, EmoWorld};
 use areka_emo_present::PresentError;
 use areka_emo_present::balloon::{
     build_balloon_target_from_faces, load_scope_balloon_model, resolve_balloon_faces,
 };
+use areka_emo_present::shell_target::load_shell_target;
 use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
@@ -30,7 +29,7 @@ use areka_sakura::ActorKey;
 use areka_seriko::{
     AnimationTable, BindOptionDecls, BindResolver, SurfaceResolver, build_static_bindset,
 };
-use tracing::{error, warn};
+use tracing::error;
 
 use super::BootWiringError;
 use super::balloon_background;
@@ -79,8 +78,6 @@ pub fn default_bind_ids(shell_kv: &BTreeMap<String, String>) -> Vec<u32> {
     ids
 }
 
-/// shell 定義ファイル名（surface ツリー・`shell/<dir>` 配下）。
-const SURFACES_TXT: &str = "surfaces.txt";
 /// descript 定義ファイル名（shell の static bindset 抽出に読む）。
 const DESCRIPT_TXT: &str = "descript.txt";
 /// scope>=1 の初期表示 surface id（DD-9・ukadoc 相方既定サーフェス＝10・placement measure と同値）。
@@ -88,14 +85,14 @@ const KERO_INITIAL_SURFACE_ID: u32 = 10;
 
 /// 1 scope 分のシェル表示資産（`attach_target` へ手渡す 1 組）。
 ///
-/// `emo_world` は scope 専用に `EmoWorld::build` した非 Clone World（装着で move 消費）。
-/// `atlas` は parse/bake を 1 回で済ませた共有アトラス（`AtlasTable` は内部 Arc の安価 Clone）。
+/// `emo_world` は scope 専用に `ShellTarget::build_world` で組んだ非 Clone World（装着で move 消費）。
+/// `atlas` は読み込みを 1 回で済ませた共有アトラス（`AtlasTable` は内部 Arc の安価 Clone）。
 pub struct ScopeAssets {
     /// この資産が対応する scope 番号。
     pub scope: u32,
-    /// scope 専用 build 済みの表示 World（`bind_atlas(SetId(0))` 済み・装着で move 消費）。
+    /// scope 専用 build 済みの表示 World（アトラス装着済み・装着で move 消費）。
     pub emo_world: EmoWorld,
-    /// 共有アトラス（parse/bake 1 回・Clone 共有）。
+    /// 共有アトラス（読み込み 1 回・Clone 共有）。
     pub atlas: AtlasTable,
     /// 初期表示 surface id（scope0=0／scope>=1=10・DD-9）。
     pub initial_surface_id: u32,
@@ -213,10 +210,10 @@ pub struct BootAssets {
 
 /// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
 ///
-/// 組立経路は donor（`examples/emo-present.rs`）と placement measure の実績どおり:
-/// `resolve`（shell dir）→ `surfaces.txt` 読取 → `areka_parsers::shell::parse` → `bake`
-/// （WIC decoder・`UseSelfAlpha::On`・`PackConfig::default()`）を **1 回**行い、scope ごとに
-/// `EmoWorld::build`＋`bind_atlas(SetId(0))`（`EmoWorld` は非 Clone・`AtlasTable` は安価 Clone）。
+/// 組立経路は `resolve`（shell dir）→ シェル読み込みの権威 `load_shell_target` を **1 回**
+/// （フォルダの一覧・`surfaces.txt` の読取と解析・面の画像の決定・bake をすべて権威が行う）→
+/// scope ごとに `ShellTarget::build_world`（`EmoWorld` は非 Clone・装着で move 消費ゆえ scope 数だけ
+/// 組む。`AtlasTable` は安価 Clone）。
 /// balloon は scope ごとに 系列解決（`resolve_balloon_faces`）→ 構築
 /// （`build_balloon_target_from_faces`）→ 定義読込（`load_scope_balloon_model`）を行い
 /// [`BalloonScopeAssets`] へ束ねる（scope 専用の定義を保持する＝共有 1 本を作らない・Req 2.1）。
@@ -244,7 +241,8 @@ pub struct BootAssets {
 /// # 失敗（log-first・panic しない・R7.3）
 /// - `resolve` 失敗 → [`BootWiringError::Mount`]（`StartPointMissing` 系は呼び手が warn 分類）。
 /// - WIC デコーダ生成失敗 → [`BootWiringError::Decoder`]。
-/// - `surfaces.txt`／`descript.txt` 読取失敗 → [`BootWiringError::ShellRead`]。
+/// - シェルのフォルダの一覧失敗／`surfaces.txt`・`descript.txt` 読取失敗
+///   → [`BootWiringError::ShellRead`]（シェル側は `ShellLoadError` からの写し替え・枝の追加 0）。
 /// - `surfaces.txt` が surface を産まない → [`BootWiringError::ShellEmpty`]。
 /// - バルーン系列解決／target 構築失敗（走査失敗・面 0 不在・bake 脱落）
 ///   → [`BootWiringError::Balloon`]（`#[from] PresentError`・真因ログは権威側が既に出す）。
@@ -286,46 +284,21 @@ pub fn build_boot_assets(
 
     let shell_dir = model.shell.dir;
 
-    // シェル: surfaces.txt 読取 → parse → bake を **1 回**（donor build_shell_target・placement measure 同経路）。
-    let surfaces_path = shell_dir.join(SURFACES_TXT);
-    // 文字コードはこのファイル自身の `charset,<名前>` 宣言に従う（未宣言は既定・
-    // 解決できないラベルは既定へ後退・不正な並びは代替文字で吸収）。他のファイルの
-    // 宣言は持ち込まない。バルーン読取（`areka_emo_present::balloon`）と同じ形。
-    let content = std::fs::read(&surfaces_path)
-        .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
-        .map_err(|source| BootWiringError::ShellRead {
-            path: surfaces_path.clone(),
-            source,
-        })?;
-    let shell = areka_parsers::shell::parse(&content);
-    if shell.surfaces.is_empty() {
-        return Err(BootWiringError::ShellEmpty {
-            path: surfaces_path,
-        });
-    }
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: &shell_dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &decoder, PackConfig::default());
-    // emo2 shell は α 無し `purple/a/null.png` 1 枚が normalize seam として脱落する（既知・許容）。
-    // donor／placement measure と同様 warn 継続（初期 surface の表示には無害の可能性）。
-    for err in &baked.errors {
-        warn!(error = %err, "assets: shell bake で脱落した element（既知の α 無し null.png 等・表示には無害の可能性）");
-    }
-    let atlas = baked.table;
+    // シェル: 読み込みの権威を **1 回**呼ぶ（一覧 → surfaces.txt の読取と解析 → 面の表 →
+    // 使う画像 → 焼く）。文字コードの扱い・記録・失敗の種類はすべて権威が持つ
+    // （`areka_emo_present::shell_target`）。採寸（`placement::measure`）も同じ入口を通るので、
+    // 「番号 → 面の画像」の対応・土台の絵・透過の扱いが表示と採寸で食い違わない（要件 3.6）。
+    let target = load_shell_target(&shell_dir, &decoder)?;
+    let atlas = target.atlas().clone();
 
-    // scope ごとに FRESH な EmoWorld を build＋bind_atlas（EmoWorld は非 Clone・装着で move 消費ゆえ
-    // scope 数だけ build。AtlasTable は Clone 共有）。resolver 用 alias スナップショットは scope 非依存
-    // ゆえ最初に build した World から一度だけ採る。
+    // scope ごとに FRESH な EmoWorld を組む（`build_world` が面の表の構築とアトラス装着を行う。
+    // EmoWorld は非 Clone・装着で move 消費ゆえ scope 数だけ組む。AtlasTable は Clone 共有）。
+    // 同じ `ShellTarget` から組むので内容は毎回同じである。resolver 用 alias スナップショットは
+    // scope 非依存ゆえ最初に組んだ World から一度だけ採る。
     let mut shells = Vec::with_capacity(scopes.len());
     let mut resolver_snapshot: Option<BTreeMap<String, Vec<u32>>> = None;
     for &scope in scopes {
-        let mut emo_world = EmoWorld::build(&shell);
-        emo_world.bind_atlas(&atlas, SetId(0));
+        let emo_world = target.build_world();
         if resolver_snapshot.is_none() {
             resolver_snapshot = Some(emo_world.alias_snapshot());
         }

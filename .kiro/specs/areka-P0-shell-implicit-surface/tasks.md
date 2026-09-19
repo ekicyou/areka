@@ -132,7 +132,7 @@
 
 - [ ] 5. 呼び手 5 か所を権威へ寄せる（統合）
 
-- [ ] 5.1 本番 2 か所を `load_shell_target` の呼び出しに置き換える
+- [x] 5.1 本番 2 か所を `load_shell_target` の呼び出しに置き換える
   - `crates/areka/src/emo2_boot/assets.rs` の `build_boot_assets` を `load_shell_target` 1 回＋scope の数だけ `build_world()` に置き換える。`atlas` は `target.atlas().clone()`。`descript.txt` の読取とバルーンの組み立ては変更 0
   - `crates/areka/src/placement/measure.rs` の `build_shell_assets` を `load_shell_target` → `build_world()` 1 回 → `(world, atlas.clone())` に置き換える
   - `crates/areka/src/emo2_boot/mod.rs` に `impl From<ShellLoadError> for BootWiringError` を置く（`List`・`Read` → 既存の `ShellRead`、`Empty` → 既存の `ShellEmpty`。枝の追加 0）。`PlacementError` へは 3 つとも既存の `Measure { scope: 0, reason }`

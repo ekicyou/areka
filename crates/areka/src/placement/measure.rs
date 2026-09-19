@@ -1,9 +1,8 @@
 //! I/O 層: surface／バルーンの原寸採寸（task 4.1・DD5）。
 //!
-//! emo2-boot と同系の公開 API 経路（`areka_parsers::shell::parse` →
-//! `areka_emo_atlas::bake` → `EmoWorld::build`＋`bind_atlas` →
-//! `Composer::compose`・donor: `crates/areka/examples/emo-present.rs` の
-//! `build_shell_target`／`build_balloon_assets`）で、各スコープの初期 surface と
+//! emo2-boot と同じ公開 API 経路（シェル読み込みの権威
+//! `areka_emo_present::shell_target::load_shell_target` → `ShellTarget::build_world` →
+//! `Composer::compose`）で、各スコープの初期 surface と
 //! **そのスコープが解決した**バルーン面 0 を **bind なし合成**し、原寸
 //! （物理 px [`SizePx`]）を得る。
 //!
@@ -27,14 +26,12 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
-};
+use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState, ScaleRatio};
 use areka_emo_present::balloon::{
     ResolvedFace, build_balloon_target_from_faces, resolve_balloon_faces,
 };
-use areka_parsers::charset::{DefaultEncoding, decode};
+use areka_emo_present::shell_target::load_shell_target;
 use tracing::{error, warn};
 
 use super::PlacementError;
@@ -175,7 +172,7 @@ fn measure_native_scope_sizes(
         }
     })?;
 
-    // shell アセット（parse→bake→build＋bind・donor build_shell_target と同経路）。
+    // shell アセット（シェル読み込みの権威 `load_shell_target` を 1 回・起動側と同じ入口）。
     let (shell_world, shell_atlas) = build_shell_assets(shell_dir, &decoder)?;
     let mut composer = Composer::new();
 
@@ -320,66 +317,28 @@ fn scale_size_px(
     Ok(SizePx { w, h })
 }
 
-/// shell dir の surfaces.txt から `(EmoWorld, AtlasTable)` を組む
-/// （donor `build_shell_target` と同経路: read→parse→bake→build＋bind）。
+/// shell dir から採寸用の `(EmoWorld, AtlasTable)` を組む（シェル読み込みの権威を呼ぶだけ）。
 ///
-/// surfaces.txt はそのファイル自身の `charset,<名前>` 宣言に従って復号する
-/// （未宣言は既定・解決できないラベルは既定へ後退・不正な並びは代替文字で吸収）。
-/// 他のファイルの宣言は持ち込まない。emo2 の surfaces.txt は `charset,UTF-8` を
-/// 宣言しているので、この経路の解析結果は従来の UTF-8 読みと同一になる。
-/// `use_self_alpha` は emo2 実測（`seriko.use_self_alpha,1`）
-/// に合わせ `On` 固定（donor 同値・descript 由来のパラメタ化は将来シーム）。
+/// 一覧・`surfaces.txt` の読取と解析・「番号 → 面の画像」の決定・bake はすべて
+/// [`areka_emo_present::shell_target::load_shell_target`] が行う。起動時の資産組立
+/// （`emo2_boot::assets::build_boot_assets`）も同じ入口を通るので、採寸した窓寸と実際に
+/// 合成される枠が食い違わない（要件 3.6——列挙の規則が 2 実装に分かれると実機でしか現れない
+/// 欠陥になる。`measure_balloon_surface0` の説明と同じ理由）。
+///
+/// 失敗の 3 種（一覧・読取・surface 0 個）はいずれも代替の根拠が無いので
+/// [`PlacementError::Measure`]（`scope: 0`）へ畳む。真因のログは権威が `error!` で既に出して
+/// いるため、ここでは出し直さない。
 fn build_shell_assets(
     shell_dir: &Path,
     decoder: &WicDecoderArm,
 ) -> Result<(EmoWorld, AtlasTable), PlacementError> {
-    let surfaces_txt = shell_dir.join("surfaces.txt");
-    let content = std::fs::read(&surfaces_txt)
-        .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
-        .map_err(|e| {
-            error!(
-                path = %surfaces_txt.display(),
-                error = %e,
-                "measure: shell surfaces.txt の読取に失敗"
-            );
-            PlacementError::Measure {
-                scope: 0,
-                reason: format!("surfaces.txt 読取失敗: {}: {e}", surfaces_txt.display()),
-            }
-        })?;
-
-    let shell = areka_parsers::shell::parse(&content);
-    if shell.surfaces.is_empty() {
-        error!(
-            path = %surfaces_txt.display(),
-            "measure: surfaces.txt が surface を 1 つも産まなかった"
-        );
-        return Err(PlacementError::Measure {
+    let target =
+        load_shell_target(shell_dir, decoder).map_err(|reason| PlacementError::Measure {
             scope: 0,
-            reason: format!(
-                "surfaces.txt に surface 定義なし: {}",
-                surfaces_txt.display()
-            ),
-        });
-    }
-
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: shell_dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], decoder, PackConfig::default());
-    // emo2 shell は α 無し `purple/a/null.png` 1 枚が normalize seam として脱落する
-    // （既知・許容・donor 同様 warn 継続。採寸対象 surface0/10 の element には無害）。
-    for err in &baked.errors {
-        warn!(error = %err, "measure: shell bake で脱落した element（採寸には無害の可能性）");
-    }
-
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
-    Ok((world, baked.table))
+            reason: reason.to_string(),
+        })?;
+    let atlas = target.atlas().clone();
+    Ok((target.build_world(), atlas))
 }
 
 /// **当該 scope** が解決したバルーン系列の面 0 を採寸する（要件 3.1・design D2）。
