@@ -45,7 +45,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.8, 2.6, 7.1, 7.12_
   - _Boundary: areka-emo-present shell_target, balloon_
 
-- [ ] 2.4 `emo2` の焼き結果を留めている既存テストと期待値を書き換える
+- [x] 2.4 `emo2` の焼き結果を留めている既存テストと期待値を書き換える
   - 2.1 で `null.png` が焼かれるようになった結果に合わせ、`crates/areka-emo-atlas/src/emo2_e2e.rs` の `emo2_shell_all_elements_baked`・`emo2_balloon_same_bake_path_as_shell` と定数 `SHELL_NORMALIZE_SEAM_KEY` の説明、`emo2_golden.rs` の `emo2_shell_bake_is_deterministic`・`emo2_shell_matches_golden` を、**消さずに**「失敗 0 件・`null.png` は全画素が透明な絵として索引表に載る」を確かめる形へ書き換える
   - `record_golden` で `crates/areka-emo-atlas/src/testdata/emo2_shell_golden.txt` を作り直す
   - 2.1 の着地から本タスクの完了までの間は `cargo test -p areka-emo-atlas` が赤である（2.1 と同じ作業の流れで続けて行う）
