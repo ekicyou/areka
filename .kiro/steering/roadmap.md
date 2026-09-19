@@ -77,7 +77,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - 完了 spec 直下エントリ＝**184**（`.kiro/specs/completed/` 直下・2026-09-17 実数え＝ディレクトリ 183＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
 - M1 実機サインオフ発見 7 件中 #1〜#6 解決済み・#7（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）のうち行 4・行 10 は W13 で解決、行 1 は `dpi-transition-two-tick-bounce`、行 9 は `zorder-chain-residue` A-2。M-dual は退役（e2e 項目 10 で合格・復活させない）。
 
-## spec 台帳（brief 済み 37 本＝2026-09-13 の 30 ＋ 09-18 起票 7。**うち完了 9・α 9・α 後 19**＝2026-09-18 に状態列を実数え・着手は `/kiro-start <名>`）
+## spec 台帳（brief 済み 37 本＝2026-09-13 の 30 ＋ 09-18 起票 7。**うち完了 9・α 9・α 後 19**＝2026-09-18 に状態列を実数え・着手は `/kiro-start <名>`。**加えて #38〜#41 は 2026-09-19 に足した「登記だけの 4 行」で brief を持たない**＝下の節を見よ）
 
 > **段**列: **α**＝M2 のゴールに要る／**α 後**＝brief を保ったまま据え置く（着手は α 完了後の棚卸で並べ直す）。**α に関係しない spec は、並走できてもウェーブに入れない**（2026-09-18 開発者指示・「隙間」枠は廃止）。**規模**は brief の申告。**状態**列は `/kiro-complete` が ✅ に更新し、完了数を実数えで更新する。**Fable**列＝要件定義（design）を Fable で行うべきか（○＝Fable・−＝Opus で足りる）。α 後の行の Wave 列は棚卸⑬当時の番号（W14〜W17）を参考として残す＝**着手順の正本ではない**。
 
@@ -120,6 +120,25 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 34 | `anchor-tag-canon` | α 後 | 正典（`\_a`＋装飾 16） | M | 旧 W17 | #7 ✅・#26・#33 | ○ | ⚪ |
 | 35 | `balloon-lifecycle-events`（residue ⑵） | α 後 | 正典（表示寿命 7〜10） | M | 旧 W17 | #7 ✅・#31・#25 | −（裁定 2 件） | ⚪ |
 | 36 | `tick-gate-adoption` | 保留 | 性能（既定 OFF の門の採否） | M〜L | 保留 | 「長時間試行禁止」と両立する A/B 設計を要件で先に組む（単独） | ○ | ⚪ |
+| 38 | `ukadoc-coverage-custody`（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 調査の番人と統合担当の建て直し（下の節「登記だけの 4 行」を見よ） | S〜M | α 後 | なし（着手は α 完了後の棚卸で just-in-time） | − | ⚪ |
+| 39 | `present-write-coherence` の未達 40 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 性能（完了仕様が「引受先なし・新規仕様の起票が必要」と自ら書いた残量） | L | α 後 | なし。着手前に当時の実測を採り直す | ○ | ⚪ |
+| 40 | 正典語彙の孤児 2 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 正典（`font.outline` の白抜き**描画**／「スタイルシートのキーワード」の所有） | S | α 後 | なし | − | ⚪ |
+| 41 | 配布物を束ねる／作る側の 3 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 正典（`type,package` を解く・`developer_options.txt` を読む側＝配布物を**作る**道具） | XS〜S | α 後 | なし | − | ⚪ |
+
+## 登記だけの 4 行（#38〜#41・2026-09-19・brief なし・α 後）
+
+> **なぜ起票しないのか**: どれも α（第三者がデスクトップマスコットを管理できる）に関係しない。開発者方針「α に関係しない spec は、並走できても
+> ウェーブに入れない」と「spec 工場禁止・起票は just-in-time」に従い、**行だけ立てて brief は書かない**。引受先が消えたまま忘れられることだけを防ぐ。
+> 着手の判断は α 完成宣言のあとの棚卸で行う。**本節の数はすべて 2026-09-19 に数え直した実測で、数え方を併記してある。**
+
+- **#38 `ukadoc-coverage-custody`（仮称）＝網羅台帳の番人と統合担当の建て直し**。いま起きていることは 4 つある。
+  ⑴ **整合検査が「完了した spec が引受先になっている行」を検出できない。** 判定 ⑸ の腕 f は「台帳の非空の宛先がすべて `roadmap-draft.md` の `[[spec]]` か `briefing.md` の `[[owner_completed]]` に在ること」しか見ない。`[[owner_completed]]` は**手書きで凍結した 14 名の一覧**（数え方: `grep -c '^\[\[owner_completed\]\]' doc/ukadoc-coverage/briefing.md ＝ 14）で、`completed/` を走査しない。spec が完了しても `[[spec]]` の行はそのまま残るので、腕 f は緑のまま通る。実際に `completed/` に在る areka-P0- 仕様は **82 本**（数え方: `find .kiro/specs/completed -maxdepth 1 -type d -name 'areka-P0-*' | wc -l`。同ディレクトリの全ディレクトリは 183・areka-P0- 以外が 101）。
+  ⑵ **その穴を 3 つの所見が通り抜けている。** ⓐ 台帳 4 本の宛先に現れる仕様のうち **18 本**が既に `completed/` に在り、そのうち **4 本**（`text-decoration-canon` 16 行・`balloon-font-descript-keys` 7 行・`charset-canon` 5 行・`sylphya-set-ledger` 1 行＝**計 29 行**）は `[[owner_completed]]` の 14 名に入っていない。ⓑ そのうち**状態が `vocabulary-only` のまま＝もう誰も仕上げられない行が 5 行**ある（`text-decoration-canon` 3・`balloon-font-descript-keys` 1・`sylphya-set-ledger` 1。数え方: 台帳 4 本の `status` と `owner` の行を対にして数え、`owner` が `completed/` に在る仕様の行だけを残した）。ⓒ `roadmap-draft.md` の `[[spec]]` **8 行**が、完了済みの仕様を未完として載せている（`text-decoration-canon`・`charset-canon`・`balloon-font-descript-keys`・`sylphya-set-ledger`・`sakura-tag-word-boundary`・`present-gpu-transform-scale`・`kanade-boot-talkdone-drop`・`host32-window-thread-pump`）。
+  ⑶ **台帳 107 項目が「一度も起票されたことのない仕様名」を縮退の根拠に引いている。** `areka-P0-seriko-runtime`・`areka-P0-balloon-loader`・`areka-P0-shiori-host-32` の 3 つで、いずれも `.kiro/specs/` の直下にも `completed/` にも無い（旧ロードマップの名前）。数え方: 台帳 4 本を `[entry.` で区切り、3 つの綴りのどれかを含む区画を数えた＝`assets.toml` 105・`shiori.toml` 2・残り 2 本は 0。
+  ⑷ **統合担当が不在のまま指示だけが残っている。** `doc/ukadoc-coverage/README.md` は「跨いだ関連を書いたら、そのことを統合担当（`ukadoc-coverage-roadmap`）にも申し送ること」と今も書いているが、その仕様は 2026-09-13 に完了して `completed/` に在る。今後どの仕様が台帳を触っても、不在の相手へ申し送ることになる。さらにその成果物のはずだった**「無所有一覧」が作られないまま担当が消えた**ため、`\_` の仲間で角括弧を持たないタグ **8 件**（`\_!`・`\_+`・`\_?`・`\__c`・`\__q`・`\__t`・`\__v`・`\_n`＝`briefing-sakura-script.md`「引受先の候補」の表がこの一覧での裁定を待つと書き、台帳の宛先は 8 件とも空）、さくらスクリプトの台帳で宛先が空の **263 項目**（同台帳の全 342 項目のうち）、および段階が開発者の裁定待ちのまま仮値で置かれた **11 束**（`README.md`「段階（A〜E）は統合担当が付け、台帳へ書き戻してある」）が宙に浮いている。
+- **#39 `present-write-coherence` の未達 40 件**。完了仕様 `.kiro/specs/completed/areka-P0-present-write-coherence/requirements.md`「未達の登記」の節が自ら「**引受先なし**……将来是正する場合は**新規仕様の起票が必要**」と書いている。残量は `visualize_to_write_us` が実測 **210,329〜306,301µs** に対して上限 16,667µs＝**12.6〜18.4 倍**で、上限以下で終わった窓は **32 窓中 0**。これに `flush_total_us` の 8 件を足して**計 40 件**。開発者裁定で「未達のまま GO」済みだが、**この残量はいま `roadmap-history.md` にしか無く、生きた本ファイルからは見えない**（本ファイルの完了サマリは W11 を「4/4」と完了扱いする）。追う仕様が 1 本も無い状態を、この行で可視にしておく。
+- **#40 正典語彙の孤児 2 件**。ⓐ `font.outline`（白抜き）は受け口まで配線済みだが**描画の引受先が未起票**——台帳 `assets.toml` の `descript_balloon:font.outline` の備考が「受け口は白抜きを状態だけ更新して表示は変えない……白抜きの描画の引受先は未起票」と書き、名指しの `text-decoration-canon` は語彙登記で打ち止めかつ `completed/` に在る（さくらスクリプト側の `\f[outline,…]` も同じく `vocabulary-only`・宛先は同じ完了仕様）。ⓑ 「スタイルシートのキーワード」は**所有仕様が 0 本**——`completed/areka-P0-text-decoration-canon/tasks.md` の裁定 9.3 が「`completed/` を含む全 spec を走査して確認」と書いており、追跡先は `doc/COMPAT_ARCHITECTURE.md` §8 の行と台帳の備考だけである。
+- **#41 配布物を束ねる／作る側の 3 件**。台帳 `assets.toml` の `descript_install` の 3 項目が、備考で自ら「引受先がまだ起票されていない」と書いている。内訳は ⓐ `type,package`（複数の配布物を 1 つに束ねた形）を解く仕様 1 件——`areka-nar` は種別を `ghost`・`shell`・`balloon`・`supplement` の 4 つに限り `package` を明示的に拒否する、ⓑ `developer_options.txt` の行の書式 2 件——読む相手はベースウェアではなく**配布物を作る道具**なので、areka が作る側の道具を持ったときにその仕様が引き受ける。いずれも α の外（`ghost-install` の Out・`network-update` の Out に明記）。
 
 **規模と分割の裁定（棚卸⑬・据え置き）**: XL 3 本を分割済み＝`property-query-channels` → ⑴本体／⑵`property-ipc-transport`／⑶`sylphya-set-ledger`、`balloon-canon-residue` → ⑴本体／⑵`balloon-lifecycle-events`／⑶`emo-text-canon-residue`、`text-decoration-canon` → ⑴本体／⑵`text-align-shadow-canon`／⑶`balloon-font-descript-keys`。**L のまま置く 3 本**（`makoto-dll-host`・`sakura-time-directives`・`currentghost-property-tree`）と α の `ghost-shell-balloon-switch` は brief 内のスライスで要件段階に縮める余地を残す。
 

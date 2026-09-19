@@ -3894,14 +3894,14 @@ note = """
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当を空のまま残す理由: この見出しは install.txt ではなく delete.txt——更新のときに消す道を 1 行 1 つ並べるファイル——の行の書式である。areka-P0-nar-install が受け持つのは書庫を開いて入れるところまでで、消す指示は読まない。引受先の候補は本台帳の帰属の文書が段階 B に置く「更新」の束（候補名 areka-P0-network-update）で、まだ起票されていない。
+担当: この見出しは install.txt ではなく delete.txt——更新のときに消す道を 1 行 1 つ並べるファイル——の行の書式である。areka-P0-nar-install が受け持つのは書庫を開いて入れるところまでで、消す指示は読まない。引き受けるのは本台帳の帰属の文書が段階 B に置く「更新」の束の仕様 areka-P0-network-update で、2026-09-18 に起票され説明書が実在する（同書の「正典の要点」の節が delete.txt の行の形としてこの項目の id をそのまま引き、範囲の一覧にも delete.txt を入れている）。2026-09-19 にこの欄をその名前で埋めた。**状態は absent のまま動かしていない**——同仕様はまだ着手しておらず、delete.txt を読む経路は 1 つも無い。
 """
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1"]
