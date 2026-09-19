@@ -2,7 +2,7 @@
 
 > 本文のコードの引用は「何の定義か（関数名・型名＋ファイル）」で指す。行数・件数・寸法は**本ブランチでの実測値（2026-09-19）**であり、設計・実装の着手時に引き直すこと。検体の場所は `cargo run -p sample-ghost-kit --bin nar-sample-path -- <検体名>` の `folder=` 行が教える（以下 `<folder=>` と書く）。
 >
-> **brief.md を読む人へ**: brief の正典の読みは 2 か所で正典の逐語と食い違っており、範囲も 1 か所広がった（開発者裁定 2026-09-19）。正しい読みと裁定は本書の「正典の引き直し」と要件 10 にある。設計は brief ではなく本書に従うこと。
+> **brief.md を読む人へ**: brief の正典の読みは 2 か所で正典の逐語と食い違っており、範囲も 2 度広がった（開発者裁定 2026-09-19＝抜き色・「テンプレートゴーストを動かすのに要る実装は本仕様が巻き込む」）。正しい読みと裁定は本書の「正典の引き直し」と要件 10 にある。設計は brief ではなく本書に従うこと。
 
 ## Introduction
 
@@ -40,11 +40,25 @@
 - したがって、原因 1 だけを直して面 0 が `surface0000.png` に解決されても、その画像は焼く段で落ち、面 0 は今日と同じ外形 0×0 の `EmptyComposition` になる。
 - `emo2` でこの経路を踏む画像は**ちょうど 1 枚**＝`purple/a/null.png`（382×547・色の型 3・`tRNS` あり・全 208,954 画素が左上の画素と同じ色で、復号すると全画素が透明）。今日は焼く段で落ちている（`crates/areka-emo-atlas/src/emo2_e2e.rs` の定数 `SHELL_NORMALIZE_SEAM_KEY` の説明と、テスト `emo2_shell_all_elements_baked` がこの 1 件の脱落を件数で留めている）。この画像を引くのは面 1414 の `element0,overlay,purple/a/null.png,0,0` の 1 行だけ、面 1414 を引くのは面 1000 の `animation1403.pattern2,overlay,1414,0,0,0` の 1 行だけである。
 
+**原因 3: まばたきの間隔の語 `sometimes` を areka は再生しない。**
+
+- `konnoyayame` の面 0 のまばたきは `animation0.interval,sometimes` である。areka が再生を駆動する間隔の語は `random,数値` と `bind+random,数値` の **2 つだけ**で、`sometimes` は値として読むが再生しない（`crates/areka-parsers/src/shell/model.rs` の `Interval::Other`・`crates/areka-seriko/src/table.rs` の `AnimationTable::from_world` が `debug!` を残して採らない）。網羅台帳の `ukadoc:descript_shell_surfaces:sometimes:1` は「語彙のみ」・担当は**空欄**である。
+- したがって、原因 1・2 を直して面 1031〜1033 が解決でき、絵が抜かれても、実機ではまばたきしない。
+- 両検体の `animation*.interval` の語の全数: `konnoyayame` は `sometimes` が 1 件・他の語は **0 件**。`R_POST_and_KOMAINU` は `animation` 行そのものが **0 件**。
+
+**ほかに妨げが無いことの事前確認（2026-09-19・両検体を `RUST_LOG=debug` で 25 秒ずつ実走）**:
+
+- 起動挨拶の台本は 2 体とも正しく復号されている（`konnoyayame`＝`Text("初めまして。")` ほか・`R_POST_and_KOMAINU`＝`Text("はじめまして。")` ほか。文字化け **0 件**）。SHIORI 通信の初期の文字コードが `Shift_JIS`（`source="default"`）でも、`charset,UTF-8` の `konnoyayame` の応答は正しく読めている。
+- 起動挨拶が使う台本の命令は 2 体とも、消去・面の切り替え（`konnoyayame` は面 10・5・6・11・4・1、`R_POST_and_KOMAINU` は面 0・10）・文字・待ち・改行だけで、未対応の命令は **0 件**。
+- `ERROR` は 2 体とも 3 行で、すべて面 0 の合成失敗（原因 1）から来ている。`WARN` のうち窓が無いことに由来しないものは、バルーンの相方側の面 2・3 が本体側の系列へ縮退した 2 行だけで、これは同梱バルーン `StayseeBalloon` の側の既知の縮退であって検体の動作を妨げない。
+- 絵が出た後でなければ見えないもの（まばたき・クリック透過・メニュー・バルーンの左右）は、要件 8 の実機確認で確かめる。
+
 ### 何を変えるか
 
 1. シェルのフォルダ直下にある `surface<数字>.png` を、正典どおり**その番号の面の絵**として扱う。先頭の 0 は無視する（`surface0.png`＝`surface0000.png`）。この解決は、起動時の既定の面・`\s[N]`・アニメーションや着せ替えのコマの相手・窓の採寸・`surface.append` の「既にある面」の判定の**すべてに同じく効く**。`element0` を持つ面では正典どおり画像を使わない。
 2. α チャンネルを持たない絵は、正典どおり**左上の 1 画素と同じ色を透明にして**描く（開発者裁定 2026-09-19・要件 10.1）。
-3. `emo2` は、上の `null.png` 1 枚の扱い（落ちる → 全画素が透明な絵として焼かれる）を除いて何も変わらず、画面に出る画素は 1 つも変わらない。
+3. まばたきの間隔の語 `sometimes`（と、同じ仕組みの `rarely`）を、正典どおりの頻度で再生する（開発者裁定 2026-09-19・要件 10.7・要件 11）。
+4. `emo2` は、上の `null.png` 1 枚の扱い（落ちる → 全画素が透明な絵として焼かれる）を除いて何も変わらず、画面に出る画素は 1 つも変わらない。
 
 ## 正典の引き直し（brief との差分を含む）
 
@@ -66,6 +80,9 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 | C12 | [descript_balloon `use_self_alpha`](https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#use_self_alpha_2c_5024:1) | 「アルファチャンネルも.pnaも存在しない場合は画像左上の色をキー色とする従来挙動になる。」 |
 | C13 | [manual_shell](https://ssp.shillest.net/ukadoc/manual/manual_shell.html)（注記） | 「JPEGについては圧縮によって色がずれやすいため透過色と相性が悪いという弊害もある。」 |
 | C14 | [dev_shell](https://ssp.shillest.net/ukadoc/manual/dev_shell.html) | 「ゴーストとしてキャラクターが一人だけで相方が要らない場合でも、単色で塗り潰した画像(＝全て透明表示。後述)などをsurface10.pngとして用意してください。」 |
+| C15 | [descript_shell_surfaces `sometimes`](https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#sometimes:1) | 「そのサーフェスである間毎秒2分の1の確率で再生。」 |
+| C16 | [descript_shell_surfaces `rarely`](https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#rarely:1) | 「そのサーフェスである間毎秒4分の1の確率で再生。」 |
+| C17 | [descript_shell_surfaces `random,数値`](https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#random_2c_6570_5024:1) | 「そのサーフェスである間毎秒数値分の1の確率で再生。」 |
 
 **brief と違う点（2 件・どちらも正典の逐語で決まる）**:
 
@@ -79,6 +96,8 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
   - 面の土台の絵（ベースサーフェス）が、画像と `element` 行の有無でどう決まるか。
   - その結果が、起動時の既定の面・`\s[N]`・アニメーション／着せ替えのコマの相手・窓の採寸・`surface.append` の対象判定の全部で同じになること。
   - α チャンネルを持たない絵を、左上の 1 画素と同じ色を透明にして描くこと（抜き色）。
+  - アニメーションの間隔の語 `sometimes`・`rarely` を正典どおりの頻度で再生すること（要件 11）。
+  - 実機確認で見つかった、テンプレートゴースト 2 体の動作を妨げる欠陥を直すこと（要件 8.4・要件 10.7）。
   - `emo2` の画面に出る画素と寸法が変わらないこと（合否判定）。
   - 記録・決定論テスト・実機確認 3 体（`R_POST_and_KOMAINU`・`konnoyayame`・`emo2`）。
 - **Out of scope**:
@@ -88,13 +107,15 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
   - PNG 以外の形式（C8 が非推奨と明記）。読まない。アニメ GIF／APNG／WebP の自動アニメーションも持たない。
   - `defaultsurface` の宣言の導出。読む経路は **0 本**のまま、本体側＝面 0・相方側＝面 10 の固定を前提に置く。
   - `alias.txt`・`surfaces*.txt`（追加の定義ファイル）・`surfacetable.txt`。読む道は今日も無く、本仕様も足さない。
-  - `element` 行の `overlay` 以外の描画メソッド。`decode_elements` は `overlay` の行だけを値にし、他は記録なしで読み飛ばす（網羅台帳 `element*` の項＝縮退・担当 `areka-P0-shell-parse`）。本仕様はこの縮退を直さない。
+  - `surfaces.txt` が無いシェル、波括弧が 0 個で画像だけが在るシェル。C1 は成り立つ形として書いているが、今は起動の失敗（`ShellRead`／`ShellEmpty`）になる。3 検体に **0 件**で、テンプレートゴーストを動かすのに要らない（要件 10.7 の物差し）。今の失敗の扱いを変えない（変更 0・引受先の登記は要件 9.5）。
+  - 間隔の語のうち `sometimes`・`rarely` 以外（`always`・`runonce`・`never`・`yen-e`・`talk,数値`・`periodic,数値` など）。再生の仕組みが別に要り、テンプレートゴースト 2 体に **0 件**。今の「値として読むが再生しない・`debug!` を残す」扱いを変えない（変更 0）。
+  - `element` 行の `overlay` 以外の描画メソッド。`decode_elements` は `overlay` の行だけを値にし、他は記録なしで読み飛ばす（網羅台帳 `element*` の項＝縮退・担当 `areka-P0-shell-parse`）。本仕様はこの縮退を直さない。`overlay` 以外で書かれた `element0` は読み飛ばされるので、要件 2.1 の表では「`element0` なし」に数えられる（要件 2.7・3 検体に **0 件**）。
   - 全画素が透明になる面（C14 の「単色で塗り潰した surface10」）を表示の対象にしたときの扱い。3 検体に **0 件**で確かめられない。本仕様は全透明の面の既存の扱いを変えない（要件 4.7・引受先の登記は要件 9.5）。
   - 着せ替え・当たり判定（`collision*`）の意味論そのもの、`point.basepos`（`areka-P0-surfaces-basepos`）。
   - 網羅台帳でページ `dev_shell`・`manual_shell` を項目へ割ること（`areka-P0-ukadoc-coverage-roadmap` の仕事・要件 9）。
-  - 起動挨拶の文字化け・バルーンの左右の自動調整の**修正**。本仕様は絵が出た後に目で見るだけで、化けていたら別件として起票する（要件 8）。
 - **Adjacent expectations**:
   - **前提（完了済み）**: `areka-P0-nar-install`（検体は共有ヘルパ `sample_ghost_kit::SampleRoot::acquire` 経由で受ける。`vendors/sample_ghost/<検体名>/` の直パスはもう無い）・`areka-P0-charset-canon`（シェル本文の復号）・`areka-P0-emo-atlas`（透過の正規化の器と、未実装の腕を型で示す継ぎ目）・`areka-P0-emo2-conformance-e2e`（`emo2` の寸法と合成結果を留めている既存テスト）・`areka-P0-popup-menu-minimal`（右クリックメニュー。実機確認 1 件を本仕様へ引き渡し済み）。
+  - **`areka-P0-seriko-runtime`（完了済み）**: 間隔の語の再生の器（`AnimationTable`・乱数の駆動）を持つ。本仕様は `sometimes`・`rarely` を既存の乱数の駆動へ読み替えるだけで、再生の仕組みそのものは変えない。
   - **直列（同時に走らせない）**: `areka-P0-surfaces-basepos`（同じ `crates/areka-parsers/src/shell/` に触りうる・後着が rebase）。
   - **下流**: 里々／YAYA の実ゴースト適合一般・`areka-P0-alpha-release-signoff`（α の検体 3 体＋既定バルーン）。
   - **バルーン**: バルーンの絵も同じ透過の正規化を通る（`crates/areka-emo-present/src/balloon.rs` の `build_balloon_target_from_faces`）ので、抜き色はバルーンの面にも同じく効く（C12）。リポジトリ内のバルーンで面として焼かれる絵に α の無いものは **0 枚**（`StayseeBalloon` の PNG 24 枚は全て α あり・`emo2-kakukaku` の `balloons0.png`／`balloonk0.png` は色の型 6）なので、既存のバルーンの見た目は変わらない。
@@ -122,7 +143,7 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 
 #### Acceptance Criteria
 
-1. The areka shall 面 N の土台の絵を、面 N の画像（要件 1）と面 N の `element` 行の有無から、次の表のとおりに決める（C3・C4・C5）。「`element0` あり」は `element0,…` の行が在ることを指し、その行の描画メソッドを問わない。
+1. The areka shall 面 N の土台の絵を、面 N の画像（要件 1）と面 N の `element` 行の有無から、次の表のとおりに決める（C3・C4・C5）。「`element0` あり」は、描画メソッド `overlay` で書かれた `element0,…` の行が在ることを指す（`overlay` 以外の扱いは要件 2.7）。
 
    | # | 面 N の画像 | `element0` | `element1` 以降 | 土台の絵 |
    |---|---|---|---|---|
@@ -136,7 +157,7 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 4. While 面 N の画像も `element` 行も無い, the areka shall 現状どおり、その面を表示の対象にしたときは `EmptyComposition`（定義層が皆無で外形 0×0）として失敗させ、既存の記録をそのまま出す。宣言も画像も無い番号は現状どおり「存在しない面」である。
 5. The areka shall 画像を置く位置を面の左上（0,0）とし、`element` 行の位置の読み方は変えない。
 6. The areka shall 同名の `.pna` を**読まない**（Boundary Context）。在っても無くても結果は変わらず、記録も出さない。
-7. The areka shall 表のウにおいて、`element0` の行が `overlay` 以外の描画メソッドで書かれていても画像を使わない。そのとき `element0` 自体が描かれないのは既存の縮退（Boundary Context・`decode_elements`）であり、本仕様は画像で埋め合わせない（正典は「破棄され」と定めており、埋め合わせは正典と違う絵を出す）。
+7. While `element` 行の `overlay` 以外の描画メソッドが読み飛ばされる既存の縮退（Boundary Context・`decode_elements`・担当 `areka-P0-shell-parse`）が残っている, the areka shall `overlay` 以外で書かれた `element0` を「`element0` なし」に数え、面 N の画像が在ればそれを土台にする（表のア・イ）。これは C4・C5（「element0が定義されている場合…破棄され」）からの既知のずれであり、3 検体に **0 件**である。ずれは縮退そのものに由来するので、縮退が直るとき（`overlay` 以外の行が値になるとき）に併せて正典どおりになる。本仕様はそのために解析の結果の型を変えない（開発者裁定 2026-09-19・要件 10.7 の物差し: テンプレートゴーストを動かすのに要らず、満たすには 25〜29 ファイルの追随が要る＝ギャップ分析 4 節）。この既知のずれは要件 9.3 ⑴ の備考と要件 9.5 に記す。
 
 ### Requirement 3: 面を引くすべての入口で同じ結果になる
 
@@ -218,8 +239,9 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 7. The areka shall 要件 3.7・3.8（`surface.append` が画像だけの面には効き、どちらも無い番号には効かない）を確かめる。
 8. The areka shall 要件 5（`emo2`）を、寸法と合成結果の既存のテストが書き換えなしで緑であること、要件 5.6 の書き換えたテストが緑であること、要件 5.8 の摂動（「`element0` が在れば使わない」を外すと赤になる）で示す。
 9. The areka shall 上のテストのうち少なくとも、先頭の 0 の無視・表のウ・コマの相手の解決・抜き色の完全一致の 4 つについて、その判断を壊すと赤になることを摂動で示す。
-10. The areka shall 検体を共有ヘルパ（`sample_ghost_kit::SampleRoot::acquire`）経由で受け、`vendors/sample_ghost/<検体名>/` の直パスを書かない。
-11. The areka shall 新しく足すテストを新しいファイルに置き、1 ファイル 1,000 行以内に収める。`crates/areka/src/placement/measure_tests.rs` は **981 行**・`crates/areka/src/emo2_boot/assets_tests.rs` は **976 行**（2026-09-19 実測）で、どちらにも追記の余地は無い。行数の検査（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の例外表には触らない。
+10. The areka shall 要件 11（間隔の語）を、`sometimes` が `random,2` と・`rarely` が `random,4` と同じ再生の引き金になること、`always` など他の語が今日どおり再生の対象にならず `debug!` に元の語が残ることで確かめ、読み替えを外すと赤になることを摂動で示す。検体 `konnoyayame` を入力に、面 0 の `animation0` が再生の対象として採られること（今日は 0 件）を確かめる。
+11. The areka shall 検体を共有ヘルパ（`sample_ghost_kit::SampleRoot::acquire`）経由で受け、`vendors/sample_ghost/<検体名>/` の直パスを書かない。
+12. The areka shall 新しく足すテストを新しいファイルに置き、1 ファイル 1,000 行以内に収める。`crates/areka/src/placement/measure_tests.rs` は **981 行**・`crates/areka/src/emo2_boot/assets_tests.rs` は **976 行**（2026-09-19 実測）で、どちらにも追記の余地は無い。行数の検査（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の例外表には触らない。
 
 ### Requirement 8: 実機確認
 
@@ -229,8 +251,8 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 
 1. The areka shall 実機確認を、絶対パスでの起動・32bit 補助プロセスの先行ビルド・`AREKA_APP_SMOKE_EXIT_MS` による有界の自動終了・`RUST_LOG` によるログの採取、の定石で行い、確認項目と結果を tasks の完了記録に残す。バルーンを同梱しない検体（`R_POST_and_KOMAINU`・`konnoyayame`）には `vendors/sample_ghost/StayseeBalloon` の絶対パスをバルーンの根として渡す。
 2. The areka shall `R_POST_and_KOMAINU` について次を確かめる: ⑴ 本体側（236×462）と相方側（140×160）の絵が、地色の四角ではなくキャラクターの形に抜かれて出る ⑵ 起動挨拶がバルーンに出る ⑶ 絵の外（抜かれた場所）のクリックが背後の窓へ抜ける ⑷ 右クリックメニューの 1 項目目が既定名「説明書」でなく、辞書 `dic06_String.txt` の 3 候補（「現在のシェルについて(&R)」「取扱説明書(&R)」「Read me(&R)」）のどれかになり、`(&R)` に下線が付く（完了済み `areka-P0-popup-menu-minimal` の実機確認 9.3 ⑷ の引き受け。項目名の差し替えそのものは同仕様の決定論テストが留めているので、欠けているのは目視だけである）。
-3. The areka shall `konnoyayame` について次を確かめる: ⑴ 本体側（260×390）と相方側（200×200）の絵が、キャラクターの形に抜かれて出る ⑵ 本体側がまばたきし、目の周りに四角い地色が出ない（コマの相手 3 枚が慣習で解決でき、抜き色が効いた証拠）⑶ 起動挨拶の文字が文字化けせずにバルーンに出る（SHIORI 通信の初期の文字コードは `Shift_JIS`（`charset_initial`・`source="default"`）・ゴーストの `descript.txt` は `charset,UTF-8` で、絵が出ないうちは目で確かめられず**未確認**のまま残っている）⑷ シェルの `sakura.balloon.alignment,none`／`kero.balloon.alignment,none` が自動調整として効く（キャラクター窓が画面の右半分に居ればバルーンは左隣、左半分なら右隣）。
-4. If 要件 8.3 の ⑶ または ⑷ が期待どおりでなかった, then the 本仕様 shall それを本仕様の不合格とせず、別件として起票して引受先を記録する（どちらも面の解決・抜き色とは別の経路である）。
+3. The areka shall `konnoyayame` について次を確かめる: ⑴ 本体側（260×390）と相方側（200×200）の絵が、キャラクターの形に抜かれて出る ⑵ 本体側がまばたきし、目の周りに四角い地色が出ない（コマの相手 3 枚が慣習で解決でき、抜き色が効き、`sometimes` が再生された証拠）⑶ 起動挨拶の文字が文字化けせずにバルーンに出る（SHIORI 通信の初期の文字コードは `Shift_JIS`（`charset_initial`・`source="default"`）・ゴーストの `descript.txt` は `charset,UTF-8` 。台本の段では 2026-09-19 の実走で文字化け 0 件を確かめてあり、残っているのは画面の上での目視である）⑷ シェルの `sakura.balloon.alignment,none`／`kero.balloon.alignment,none` が自動調整として効く（キャラクター窓が画面の右半分に居ればバルーンは左隣、左半分なら右隣）。
+4. If 要件 8.2・8.3 の確認で、テンプレートゴースト 2 体の動作（起動・絵・起動挨拶・まばたき・クリック透過・メニュー・バルーンの位置・終了）を妨げる欠陥が見つかった, then the 本仕様 shall それを別件へ送らず、要件と設計を改訂して本仕様の中で直す（開発者裁定 2026-09-19・要件 10.7）。直すのに独立した仕様 1 本ぶんの規模が要ると分かったときだけ、黙って先送りせず開発者に諮る。検体 2 体が使っていない機能の欠陥は、この限りでない（引受先を確かめて起票する）。
 5. The areka shall `emo2` について、適用前と同じに見えること（要件 5.9）と、起動時の `warn!`「shell bake で脱落した element」が 0 回であること、`null.png` の「全透明」の `warn!` が出ていること（どちらも要件 5.5）を確かめる。
 6. When ログに「0 件」を根拠として書く（例: `EmptyComposition` が 0 件・脱落の `warn!` が 0 回）, the 本仕様 shall 同じ走行の中に `debug` の行が実在することを併せて示す（`RUST_LOG` は target 名で、未設定や書式の誤りは黙って `info` へ落ちるため）。
 
@@ -240,11 +262,11 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 網羅台帳の担当欄（`owner`）へ新しく登記する項目を **0 件**とする。C1〜C3・C7・C10・C14 を持つページ `dev_shell` と、C8・C9・C13 を持つページ `manual_shell` は、台帳に「ページ 1 枚」の粒度でしか無く（`doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:dev_shell`・`ukadoc:manual_shell`）、台帳の id はカタログに実在しなければならないので、項目の行を本仕様が足すことはできない。
+1. The 本仕様 shall 網羅台帳の担当欄（`owner`）へ新しく登記する項目を、間隔の語の **2 件**（`ukadoc:descript_shell_surfaces:sometimes:1`・`ukadoc:descript_shell_surfaces:rarely:1`。どちらも今日は担当が空欄）だけとし、実装の着地時に状態と担当を実測に合わせて改める。ファイル名の慣習と抜き色については **0 件**である。C1〜C3・C7・C10・C14 を持つページ `dev_shell` と、C8・C9・C13 を持つページ `manual_shell` は、台帳に「ページ 1 枚」の粒度でしか無く（`doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:dev_shell`・`ukadoc:manual_shell`）、台帳の id はカタログに実在しなければならないので、項目の行を本仕様が足すことはできない。
 2. The 本仕様 shall `areka-P0-ukadoc-coverage-roadmap` への依頼「`dev_shell`・`manual_shell` の当該の文（ファイル名の慣習・抜き色）を項目へ割り、担当を本仕様にする」を、完了時の申し送りとして文書に残す。
-3. When 実装が着地した, the 本仕様 shall 台帳の備考のうち本仕様で事実が変わる箇所を実測に合わせて直し、状態と担当は変えない。少なくとも次の 2 項目: ⑴ `descript_shell_surfaces` の `element*`（担当 `areka-P0-shell-parse`・縮退）＝「面の画像と `element0` の関係は正典どおりになった。`overlay` 以外の描画メソッドが読み飛ばされる縮退は残る」 ⑵ `descript_shell` の `seriko.use_self_alpha,値`（未対応）＝「宣言は今も読まず常に `1` 相当。その下で α の無い絵は正典どおり抜き色で描かれるようになった。`.pna` と `full` は未実装のまま」。報告を作り直し、`cargo test -p ukadoc-survey` が緑であることを確かめる。
+3. When 実装が着地した, the 本仕様 shall 台帳の備考のうち本仕様で事実が変わる箇所を実測に合わせて直し、状態と担当は変えない。少なくとも次の 2 項目: ⑴ `descript_shell_surfaces` の `element*`（担当 `areka-P0-shell-parse`・縮退）＝「面の画像と `overlay` の `element0` の関係は正典どおりになった。`overlay` 以外の描画メソッドが読み飛ばされる縮退は残り、その間は `overlay` 以外の `element0` を持つ面で画像が土台に使われる（正典では破棄。要件 2.7 の既知のずれ）」 ⑵ `descript_shell` の `seriko.use_self_alpha,値`（未対応）＝「宣言は今も読まず常に `1` 相当。その下で α の無い絵は正典どおり抜き色で描かれるようになった。`.pna` と `full` は未実装のまま」。報告を作り直し、`cargo test -p ukadoc-survey` が緑であることを確かめる。
 4. When 実装が着地した, the 本仕様 shall 正典が沈黙している点の裁量を `doc/COMPAT_ARCHITECTURE.md` §8 の沈黙ルール対応表へ追記する: 大文字小文字を区別しない（要件 1.4）・同じ番号の重複は辞書順で最小を採る（要件 1.5）・抜き色の許容幅は 0（要件 4.2）・パレットの `tRNS` の扱い（要件 4.8 で設計が定めたもの）。
-5. When 実装が着地した, the 本仕様 shall steering `roadmap.md` に、**引き受け手の居ない残り**として次を登記する（2026-09-19 時点で `roadmap.md` にこれらを引き受ける spec は 0 本。実在しない spec の名前を引受先として書かない）: ⑴ `.pna`（開発者確認済みの方針は「非対応」）⑵ `seriko.use_self_alpha,full`／`use_self_alpha,full` の全面不透明 ⑶ 透過の宣言を読むこと（常に `1` 相当の固定）⑷ 全画素が透明になる面（C14 の単色の `surface10`）を表示の対象にしたときの扱いが、検体 0 件で未確認であること。
+5. When 実装が着地した, the 本仕様 shall steering `roadmap.md` に、**引き受け手の居ない残り**として次を登記する（2026-09-19 時点で `roadmap.md` にこれらを引き受ける spec は 0 本。実在しない spec の名前を引受先として書かない）: ⑴ `.pna`（開発者確認済みの方針は「非対応」）⑵ `seriko.use_self_alpha,full`／`use_self_alpha,full` の全面不透明 ⑶ 透過の宣言を読むこと（常に `1` 相当の固定）⑷ 全画素が透明になる面（C14 の単色の `surface10`）を表示の対象にしたときの扱いが、検体 0 件で未確認であること ⑸ `surfaces.txt` が無い／波括弧が 0 個で画像だけのシェル（C1 は成り立つ形とするが、起動の失敗のまま）⑹ `overlay` 以外の `element0` を持つ面で画像が使われる既知のずれ（要件 2.7。直る時機は `areka-P0-shell-parse` の縮退の解消と同じ）⑺ `sometimes`・`rarely` 以外の間隔の語。
 6. The 本仕様 shall steering `roadmap.md` の本仕様の行にある「裁定 2 件（「element0 より下」の層表現と `surface.append` の順序）」が、どちらも正典の逐語（C4・C5／C6）で決まったことと、範囲に抜き色が加わったこと（要件 10.1）を、完了時に同じ行へ反映する。
 
 ### Requirement 10: 裁定の記録
@@ -259,3 +281,18 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 4. The 本仕様 shall 「画像だけで存在する面にも `surface.append` は効く」（要件 3.7）を採る。根拠は C6 の逐語である（「正典の引き直し」の 2）。
 5. The 本仕様 shall brief が「対象に含めるかは要件で決めてよい」とした、どこからも引かれていない画像（`konnoyayame` の面 1030・1040〜1043）を、特別扱いせず規則のまま面として扱う（要件 3.9）。
 6. Where 開発者が上の裁定を覆した, the 本仕様 shall 該当する要件と設計を同時に改訂する。
+7. The 本仕様 shall 範囲の物差しを「**テンプレートゴースト 2 体（`R_POST_and_KOMAINU`・`konnoyayame`）を動かすのに要る実装は、本仕様が巻き込む**」とする（開発者裁定 2026-09-19・逐語:「この際、テンプレートゴーストを動かすために必要な実装を、本specで巻き込んで対応する方向でスコープ拡大してもらえるか？その前提で他の議題も調整せよ。」）。「要る」とは、検体 2 体のどちらかが、起動から終了まで（要件 8.2・8.3 の確認項目）の道筋で実際に使っていることを指す。この物差しで、要件ディスカッションの 3 議題を次のとおり定めた: ⑴ `sometimes` の再生は**範囲内**（`konnoyayame` のまばたきが使う・要件 11）。`rarely` は検体に 0 件だが、`sometimes` と同じ読み替えの 1 語ぶんで済み、残せば引き受け手の居ない語が 1 つ増えるだけなので併せて入れる ⑵ `overlay` 以外の `element0` は**範囲外**（検体に 0 件・要件 2.7）⑶ `surfaces.txt` が無いシェルは**範囲外**（検体に 0 件・Boundary Context）。触るクレートに `areka-seriko`（または `areka-parsers` の間隔の語の読み取り）が加わり、規模は L の下の端になる。
+
+### Requirement 11: まばたきの間隔の語 `sometimes`・`rarely`
+
+**Objective:** 利用者として、テンプレートゴーストのキャラクターが、絵が出るだけでなく、まばたきをして生きて見えてほしい。
+
+#### Acceptance Criteria
+
+1. While 面が表示されている, the areka shall その面の `animationN.interval,sometimes` のアニメーションを、`interval,random,2` と同じ頻度（毎秒 2 分の 1 の確率）・同じ仕組みで再生する（C15・C17）。
+2. While 面が表示されている, the areka shall その面の `animationN.interval,rarely` のアニメーションを、`interval,random,4` と同じ頻度（毎秒 4 分の 1 の確率）・同じ仕組みで再生する（C16・C17）。
+3. The areka shall `random,数値`・`bind+random,数値`・`bind` の今日の扱いを変えない（変更 0）。
+4. The areka shall `sometimes`・`rarely` 以外の間隔の語（`always`・`runonce`・`never`・`yen-e`・`talk,数値`・`periodic,数値` など）を、今日どおり値として保ち、再生の対象にせず、元の語を添えた `debug!` を残す（変更 0）。
+5. When `konnoyayame` の面 0 が表示されている, the areka shall `animation0`（`pattern0`〜`5`・面 1031〜1033 を位置 93,103 に重ね、終端の `-1` で元へ戻す）を再生し、まばたきとして見せる。
+6. The areka shall `emo2` の再生されるアニメーションの集合を変えない。`emo2` のシェルの `interval,sometimes`・`interval,rarely` は **0 件**である（2026-09-19 実測。`interval` の行は 37 件＝`bind` 30・`bind+random` 3・`random` 4。同じ数え方で `konnoyayame` は 1 件と出ることを確かめてある）。
+7. The areka shall 読み替えをどの段（間隔の語の読み取りか、再生の表の組み立てか）で行うかを設計で定める。どちらで行っても、読み取った元の語（`sometimes`／`rarely`）が記録から読み取れること。
