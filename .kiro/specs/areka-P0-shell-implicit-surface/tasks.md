@@ -4,7 +4,7 @@
 
 - [ ] 1. 基盤: 検体の受け口
 
-- [ ] 1.1 `areka-seriko` と `areka` の 2 クレートに検体 2 体の受け口を足す
+- [x] 1.1 `areka-seriko` と `areka` の 2 クレートに検体 2 体の受け口を足す
   - `crates/areka-seriko/src/sample_test_support.rs` と `crates/areka/src/placement/placement_shared_test_support.rs` に、`konnoyayame` と `R_POST_and_KOMAINU` の受け口を、既存の `emo2` と同じ `LazyLock<SampleRoot>` の形で足す
   - 受け口はシェルのフォルダ（`shell/master/`）の絶対パスを返す。`vendors/sample_ghost/` の直パスは書かない
   - `areka-emo-present` の受け口は、既存の `balloon_test_support.rs` が `pub(super)` で外へ出ないため別に要る。作るのは最初の利用者であるタスク 4.3 で、本タスクの範囲外である
