@@ -1284,3 +1284,348 @@ grep -c '^この節はタスク.*（未記入）' "$F"
 grep -c '（未記入）' "$F"
 # → 0 より大きい（＝上の 0 は「探し方が壊れて何も拾えなかった」結果ではない）
 ```
+
+---
+
+## 9. 非回帰の検査（要件 2.7・3.1・3.10・5.3・6.3・6.6・7.2・8.1〜8.5）
+
+この節は設計 C3 の節構成に無い（C3 が定めているのは §1〜§8 で、どれも別タスクの担当である）。それでも節を 1 つ足したのは、タスク 6 の完了状態が「結果が記録に本数付きで残っている」ことを求めており、既存の 8 節のどこに書いても節の担当と中身が食い違うからである。設計からの逸脱はこの 1 節の追加だけで、§0〜§8 は 1 文字も変えていない。
+
+⚠ 本記録の冒頭「この記録の埋まり具合」の表と「この記録は 8 つの節から成り」という文は §0〜§8 の割り当てを書いたもので、本節を含んでいない。タスク 6 が触ってよいのは本節だけなので冒頭には手を入れていない。冒頭に本節の行を足すかどうかは最終検証の判断に委ねる。
+
+### 9.0 採った条件
+
+| 項目 | 値 | 採り方 |
+|---|---|---|
+| 基準コミット | `082379b3003f3e2096c574585d15b194b369e81e` | `baseline.md` §1。実在は `git cat-file -t` が `commit` を返すことで確かめた |
+| 検査時点の HEAD | `46f1c27df72ea3cd7c8726dbf9a229a35f7c032a`（タスク 5.2 の着地） | `git rev-parse HEAD` |
+| 検査開始時の作業木 | **0 行**（未コミットのものは何も無い） | `git status --porcelain` が無出力 |
+| 基準コミットからの差分 | **55 ファイル** | `git diff --name-only <base>..HEAD` の行数 |
+
+⚠ **パス指定の形について。** `git diff -- 'crates/*/src'` の形は判定になっていない（変更が実在しても無出力・終了コード 0 を返す）。既定のパス指定は道の全体に一致することを要求するので、`crates/*/src` は「末尾が `src` で終わる道」にしか当たらず、その下のファイルには当たらないためである。本節はこの形を 1 か所も使わず、⑴ 全差分を採ってから絞り込む形か、⑵ 実在するディレクトリ名・ファイル名をそのまま与える形だけを使う。
+
+### 9.1 差分検査
+
+**較正のやり方（全検査に共通）**: 検査が当たるはずのファイル群のうち 1 本に 1 行だけ書き足し、同じ命令が 0 でない値を返すことを見てから `git checkout --` で戻し、`git status --porcelain` が 0 行に戻ることを確かめた。較正に使った 7 本は次のとおり。
+
+```
+crates/areka-emo-text/src/region.rs
+crates/areka-emo-text/Cargo.toml
+README.md
+crates/pilot/examples/shiori-host-32/fixtures/emo2-kakukaku-offsetdpi/descript.txt
+vendors/sample_ghost/R_POST_and_KOMAINU/developer_options.txt
+crates/areka-emo-text/tests/attach_wiring_test.rs
+crates/areka/src/input_events/balloon.rs
+```
+
+#### ⑴ 本番コードの変更 0 行（要件 8.1・6.6・7.2）
+
+```
+git diff --numstat 082379b3..HEAD | grep '/src/'
+# → 無出力 ＝ 0 行（grep の終了コード 1 は「0 件」の意味であって失敗ではない）
+
+git diff --numstat 082379b3..HEAD -- ':(glob)crates/*/src/**'
+# → 無出力 ＝ 0 行（別の形でも同じ結論になることの裏取り）
+```
+
+| 欄 | 内容 |
+|---|---|
+| 期待 | 0 行 |
+| 実測 | 0 行（2 つの形で一致） |
+| 判定 | 合格 |
+| 較正 | `crates/areka-emo-text/src/region.rs` と `crates/areka/src/input_events/balloon.rs` に 1 行ずつ足すと、前者の形も後者の形も 2 行を返した。戻した後は両方とも 0 行 |
+| 探す先が空でないこと | 追跡されている道のうち `/src/` を含むものは **940 本**（`git ls-files` を `/src/` で絞って数えた） |
+
+要件 6.6（本番コードに正典 URL のコメントを足さない）と要件 7.2（本番コードに既定バルーン id の定数を置かない）は、上の 0 行で同時に示される。足したなら `/src/` を含む行が差分に現れるからである。念のため綴りの側からも数え直した。
+
+```
+# 既定バルーン id の綴りが本番コードに在るか
+grep -rn 'StayseeBalloon' --include='*.rs' crates/*/src/ | wc -l
+# → 0
+
+# 較正: 同じ探し方を新規テストへ当てる
+grep -rn 'StayseeBalloon' --include='*.rs' crates/areka-emo-text/tests/ | wc -l
+# → 10（0 ではない ＝ この探し方は綴りを拾える）
+
+# 正典の出どころを指すコメントの本数を基準コミットと突き合わせる
+grep -rn 'ukadoc' --include='*.rs' crates/*/src/ | wc -l                        # HEAD → 1342
+git grep -h 'ukadoc' 082379b3 -- ':(glob)crates/*/src/**/*.rs' | wc -l          # 基準 → 1342
+# → 増減 0
+```
+
+#### ⑵ 依存記述とロックファイル（要件 8.2）
+
+```
+git diff --numstat 082379b3..HEAD -- '**/Cargo.toml' Cargo.toml Cargo.lock
+# → 無出力 ＝ 0 行
+```
+
+| 欄 | 内容 |
+|---|---|
+| 期待 | 0 行 |
+| 実測 | 0 行 |
+| 判定 | 合格（**依存記述について**。ロックファイルについては下を読むこと） |
+| 較正 | `crates/areka-emo-text/Cargo.toml` に 1 行足すと `1 0 crates/areka-emo-text/Cargo.toml` を返した。戻した後は 0 行 |
+| 探す先が空でないこと | このパス指定が当たる追跡ファイルは **26 本**（ワークスペース直下 1 ＋ 各 crate 25） |
+
+⚠ **ロックファイルについては、この差分検査は根拠になっていない。** `Cargo.lock` はこのリポジトリでは追跡対象外である（リポジトリ直下 `.gitignore` の 2 行目が `Cargo.lock`）。追跡されていないファイルは `git diff` に現れないので、上の 0 は「変わっていない」ではなく「見えていない」という意味の 0 である。
+
+```
+git ls-files --error-unmatch Cargo.lock
+# → error: pathspec 'Cargo.lock' did not match any file(s) known to git（＝追跡対象外）
+
+# 較正: 同じ問いを Cargo.toml へ当てる
+git ls-files --error-unmatch Cargo.toml
+# → Cargo.toml（＝この問いは追跡されているファイルを見分けられる）
+
+git check-ignore -v Cargo.lock
+# → .gitignore:2:Cargo.lock	Cargo.lock
+```
+
+ロックファイルについて言えるのは次の 2 点である。⑴ 追跡対象外なので、本仕様が届ける差分にロックファイルの変更は 1 行も入らない。⑵ 依存記述（26 本）が 0 行なので、ロックの中身を動かす変更が本仕様には無い。検査の途中で `cargo metadata --format-version 1 --no-deps` が終了コード 0 で通り、ロックが解決できる状態であることも確かめた。
+
+⚠ **この検査で実際に踏んだ罠（後続への申し送り）**: 較正で `Cargo.lock` に 1 行足したとき、`git checkout -- Cargo.lock` は「追跡していない」と言って失敗した。**追跡対象外のファイルへ入れた較正の書き足しは `git status` にも現れないので、残渣が見えないまま残る。** 実際この残渣のせいで `cargo` が「ロックファイルの解析に失敗」と言い、続く 4 つの命令が連続で落ちた（そこで気づいて取り除き、走らせ直した）。取り除いた後、作業木の全域（`target/` と `.git` を除く）に較正の目印が 1 本も残っていないことを確かめた。
+
+```
+grep -rl 'CALIBRATION-LINE' . --exclude-dir=target --exclude-dir=.git | wc -l
+# → 0
+
+# 較正: 同じ探し方で実在する綴りを数える
+grep -rl 'StayseeBalloon' . --exclude-dir=target --exclude-dir=.git | wc -l
+# → 19（0 ではない ＝ この探し方は綴りを拾える）
+```
+
+#### ⑶ 自動生成の第三者告知と開発者向け README（要件 5.3）
+
+```
+git diff --numstat 082379b3..HEAD -- THIRD-PARTY-NOTICES.md README.md
+# → 無出力 ＝ 0 行
+```
+
+| 欄 | 内容 |
+|---|---|
+| 期待 | 0 行 |
+| 実測 | 0 行 |
+| 判定 | 合格 |
+| 較正 | `README.md` に 1 行足すと `1 0 README.md` を返した。戻した後は 0 行 |
+| 探す先が空でないこと | 2 本とも追跡されている（`git ls-files THIRD-PARTY-NOTICES.md README.md` が 2 行を返す） |
+
+#### ⑷ 既存の検体参照ファイル群と既存検体 3 つ（要件 2.7・8.3）
+
+```
+git diff --numstat 082379b3..HEAD -- crates/pilot/examples/shiori-host-32/fixtures \
+                                      vendors/sample_ghost/R_POST_and_KOMAINU
+# → 無出力 ＝ 0 行
+```
+
+| 欄 | 内容 |
+|---|---|
+| 期待 | 0 行 |
+| 実測 | 0 行 |
+| 判定 | 合格 |
+| 較正 | 上の 2 つの道の下のファイルに 1 行ずつ足すと 2 行を返した。戻した後は 0 行 |
+| 探す先が空でないこと | `crates/pilot/examples/shiori-host-32/fixtures` の下は **150 本**、`vendors/sample_ghost/R_POST_and_KOMAINU` の下は **43 本** が追跡されている |
+
+要件 2.7 が名指しする既存検体 3 つ（`R_POST_and_KOMAINU`・`emo2` とその派生バルーン 2 つ）は、この 2 つの道に全部入っている（`fixtures/` の直下は `emo2`・`emo2-kakukaku-offsetdpi`・`emo2-kakukaku-wplimit` の 3 つだけである）。
+
+検体のパスを綴るファイルは `fixtures/` の外にもあるので、綴りの側からも数え直した。
+
+```
+# 検体パスを綴る追跡ファイルの一覧と総数
+git grep -l -E 'sample_ghost|examples/fixtures|shiori-host-32/fixtures' -- '*.rs' '*.toml'
+# → 44 本
+
+# そのうち基準コミットからの差分に現れるもの（両方を sort して comm -12 で交わりを取る）
+# → crates/areka-emo-text/tests/staysee_balloon_fixture/region.rs
+#   crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs
+```
+
+出てきた 2 本はどちらも本仕様が新しく作ったファイルである（新規であることは ⑸ で確かめる）。したがって**既存の検体参照ファイル 42 本は 0 行**。この突合は空振りしていない——交わりが 2 本という 0 でない値を返しているので、突合そのものが働いていることが同じ出力の中で示されている。
+
+#### ⑸ 新規テストのディレクトリ（要件 3.1・3.10・8.3）
+
+```
+git diff --name-status 082379b3..HEAD -- crates/areka-emo-text/tests
+# → 10 行。すべて先頭が A（新規追加）
+```
+
+| 欄 | 内容 |
+|---|---|
+| 期待 | 変更・削除・改名（`M`／`D`／`R`）が 0 本で、新規追加だけ |
+| 実測 | `A` **10 本**・それ以外 **0 本**。追加行の合計 **2,862 行**・削除 **0 行** |
+| 判定 | 合格 |
+| 較正 | 既存の `crates/areka-emo-text/tests/attach_wiring_test.rs` に 1 行足すと `A` 以外が 1 本（`M`）に増えた。戻した後は 0 本 |
+
+10 本の内訳は、入口の `staysee_balloon_fixture_test.rs` と `staysee_balloon_fixture/` 配下の 9 本（`test_support.rs`・`assets.rs`・`definition.rs`・`faces.rs`・`bake.rs`・`region.rs`・`wrapping.rs`・`script.rs`・`scale.rs`）で、設計 Directory Structure が挙げた一式とちょうど同じである（タスク 2.3 がテーマ分割を前倒しで発動した分を含む）。
+
+要件 3.10（既存の検体で固定している期待値を 1 つも緩めない）は、既存テストファイルの変更が 0 行であることと、§9.3 でワークスペース全体が緑であることの 2 つで示される。期待値を緩めるには既存ファイルを変えるしかないからである。
+
+#### ⑹ 台帳の隣 2 項目（要件 6.3）
+
+隣 2 項目の行が差分に現れないことを、差分の読み取りではなく、**基準コミットと HEAD の双方から当該項目の記述の塊を切り出して突き合わせる**形で判定した（差分の読み取りでは、文脈として表示された行と変更された行の区別を人が付ける必要があるためである）。切り出しは行頭の `[entry."<id>"]` から次の `[entry."` の直前までを `awk` で取る形で、3 項目に同じものを当てた。
+
+| 項目 id | 基準 | HEAD | 差分 | 判定 |
+|---|---|---|---|---|
+| `ukadoc:descript_balloon:use_input_alpha_2c_6570_5024:1`（隣・触らない） | 16 行 | 16 行 | **0 行** | 合格 |
+| `ukadoc:descript_balloon:paint_transparent_region_black_2c_6570_5024:1`（隣・触らない） | 19 行 | 19 行 | **0 行** | 合格 |
+| `ukadoc:descript_balloon:use_self_alpha_2c_5024:1`（本仕様が触る） | 20 行 | 18 行 | 18 行 | —（本仕様の変更そのもの） |
+
+較正はこの表自身が兼ねている。**同じ切り出しと同じ比べ方で、触った項目は 18 行の差を返している**。したがって隣 2 項目の 0 は「切り出しが空振りして何も取れなかった」結果ではない。
+
+#### ⑺ 並走する 2 spec の接触面（要件 8.3）
+
+```
+git diff --numstat 082379b3..HEAD | grep -E 'input_events|menu\.rs'
+# → 無出力 ＝ 0 行
+```
+
+| 欄 | 内容 |
+|---|---|
+| 期待 | 0 行 |
+| 実測 | 0 行 |
+| 判定 | 合格 |
+| 較正 | `crates/areka/src/input_events/balloon.rs` に 1 行足すと 1 行を返した。戻した後は 0 行 |
+| 探す先が空でないこと | `crates/areka/src/input_events/` の下は **12 本**が追跡されている |
+
+⚠ **`menu.rs` の側の 0 は、まだ存在しないものについての 0 である。** この綴りのファイルはリポジトリ全体に 1 本も無い（`git ls-files | grep -c 'menu\.rs'` → 0）。`areka-P0-popup-menu-minimal` がこれから作るファイル名なので、上の探し方は「本仕様がそれを先回りして作っていない」ことしか言っていない。接触面について実質的な判定になっているのは `input_events/` の側（12 本・0 行）である。
+
+要件 8.3 の「共有ファイル 0」も同じ差分から言える。`areka-P0-nar-install` が書き換える検体参照ファイルは ⑷ で 42 本すべて 0 行、`areka-P0-popup-menu-minimal` の接触面は本検査で 0 行なので、3 本の spec が同じファイルを触っている箇所は無い。
+
+### 9.2 変更ファイルが設計の一覧に含まれること（要件 8.5）
+
+設計 File Structure Plan（Directory Structure ＋ Modified Files）が挙げる道を 15 本の前方一致の一覧に落とし、基準コミットからの 55 ファイルを 1 本ずつ当てた。
+
+```
+# 一覧（前方一致で判定する）
+vendors/sample_ghost/StayseeBalloon/
+crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs
+crates/areka-emo-text/tests/staysee_balloon_fixture/
+.kiro/specs/areka-P0-default-balloon-bundle/verification/provenance.md
+.kiro/specs/areka-P0-default-balloon-bundle/verification/signoff-record.md
+doc/COMPAT_ARCHITECTURE.md
+doc/ukadoc-coverage/ledger/assets.toml
+doc/ukadoc-coverage/roadmap-draft.md
+doc/ukadoc-coverage/briefing.md
+doc/ukadoc-coverage/report/assets.md
+doc/ukadoc-coverage/report/summary.md
+.kiro/specs/areka-P0-nar-install/brief.md
+.kiro/specs/areka-P0-baseware-root-layout/brief.md
+.kiro/specs/areka-P0-alpha-release-signoff/brief.md
+.kiro/specs/areka-P0-default-balloon-bundle/brief.md
+```
+
+| 欄 | 内容 |
+|---|---|
+| 母数 | 55 ファイル |
+| 一覧に含まれるもの | **51 ファイル**（保管フォルダ 29・新規テスト 10・記録 2・`COMPAT_ARCHITECTURE.md` 1・台帳文書 5・brief 4 ＝ 29＋10＋2＋1＋5＋4。brief は隣接 3 本と本仕様の 1 本） |
+| 一覧に無いもの | **4 ファイル**（下の表） |
+| 較正 | 同じ当て方に一覧外の綴り `crates/areka/src/main.rs` と一覧内の綴り `doc/COMPAT_ARCHITECTURE.md` を与えると、前者だけが「一覧外」と出た（＝この当て方は一覧内と一覧外を見分ける） |
+
+#### 一覧外の 4 ファイル（例外として明記する）
+
+タスク 6 の完了条件は「2.6 が発動して要件書を是正した場合は、その 1 ファイルを一覧外の例外として記録に明記する」と定めている。**要件 2.6 は発動していない**（`provenance.md` §5 のとおり）。それでも一覧外のファイルが 4 本ある。いずれも実測に文書を追随させた是正か、工程そのものの記録で、条文の想定より本数が多いので 4 本すべてを例外として書き出す。
+
+| ファイル | 何を変えたか | なぜ変えたか | どのタスクで |
+|---|---|---|---|
+| `.kiro/specs/areka-P0-default-balloon-bundle/requirements.md` | 要件 6.1 に是正の註を足し、要件 6 の Objective と Out of scope の文言を直した（＋5／−3 行） | 「`.pna` は読まない」という記述が実測と違い、実際は同名 `.pna` の存在だけは見て画素を使わない。読者を是正前の綴りへ送り込まないため | 3.1・5.1 |
+| `.kiro/specs/areka-P0-default-balloon-bundle/design.md` | C2 の分割先の綴りと Directory Structure、C8 と Requirements Traceability のパス指定、C3 §6・C4・Non-Goals の `.pna` の文言（＋22／−8 行） | ⑴ テーマ分割を前倒しした実物に合わせるため、⑵ `git diff -- 'crates/*/src'` が判定になっていないと実測で分かったため、⑶ 上と同じ `.pna` の是正のため | 2.3・2.8・3.1・5.1 |
+| `.kiro/specs/areka-P0-default-balloon-bundle/verification/baseline.md` | 新規（189 行） | タスク 1.1 が「着手前の基準値」を残す先として作った。設計 Directory Structure は `verification/` に `provenance.md` と `signoff-record.md` の 2 本しか挙げていない | 1.1（パス指定の是正は 2.8） |
+| `.kiro/specs/areka-P0-default-balloon-bundle/tasks.md` | 各タスクの済み印と `## Implementation Notes` への申し送り（＋78／−17 行） | 工程の記録そのもの。設計はこのファイルに言及していない | 全タスク |
+
+4 本とも**要件 8.5 が許す範囲の内側**にはある。8.5 は「保管フォルダ・新規テスト・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳文書・隣接 brief への申し送り以外のファイルに触れない」と書いており、`baseline.md` は `verification/` に入る。`requirements.md`・`design.md`・`tasks.md` は本仕様自身の仕様書で、8.5 の列挙には無いが、そこに挙がっているのは「触ってよい成果物」であって仕様書自身の是正を禁じるものではない（禁じるなら、実測と食い違ったまま放置する以外に道が無くなる）。**食い違っているのは設計のファイル一覧の側**なので、一覧を後追いで直すかどうかは最終検証の判断に委ねる。
+
+#### 検査時点の作業木（要件 8.5）
+
+```
+git status --porcelain
+# → 無出力 ＝ 0 行（本節を書き足す前）
+```
+
+⚠ **報告 3 本（`doc/ukadoc-coverage/report/property.md`・`sakura-script.md`・`shiori.md`）について。** タスク 3.2 の申し送りのとおり、`cargo run -p ukadoc-survey -- report` は報告 4 本を必ず書き直すので、この 3 本が `git status` に `M` で現れることがある（中身は HEAD と 1 バイトも違わず、更新時刻が変わって索引の記録が古くなるだけである）。**本タスクは報告を作り直す命令を 1 度も打っていない**ので、実測ではこの 3 本は現れなかった。仮に現れたとしても、`git diff --numstat` が 0 行を返す限り設計のファイル一覧に無くてよい——一覧は「中身が変わるファイル」を挙げたもので、中身が同じなら一覧との食い違いにならないからである。本タスクではその判定を使う必要が無かった（現れなかったので 0 行の主張も要らない）。
+
+本節を書き足した後の作業木は `signoff-record.md` の 1 本だけが変わった状態になる。これは上の一覧に載っている。
+
+### 9.3 ワークスペース全体（要件 8.4）
+
+#### 走らせる前に確かめたこと（i686 の成果物 2 つ）
+
+`cargo test --workspace` は i686 の成果物を 2 つ要求し、片方だけでは通らない。ワークスペースのビルドは helper を x64 版で上書きするので、**テストの直前に置き直す**。順序は ⑴ helper を i686 で作る → ⑵ testdll を i686 で作る → ⑶ `cargo build --workspace --tests -j 4` → ⑷ helper を i686 版で上書き複写 → ⑸ テスト、とした（⑴〜⑶ はいずれも終了コード 0）。
+
+対象機械の欄は、**見出しの位置が実行形式ごとに違う**ので 3 手順を毎回踏んだ（先頭 0x3C の 4 バイトから位置を読む → そこが `P E \0 \0` であることを確かめる → 見出しの先頭 ＋4 バイト目を読む）。
+
+| 実行形式 | 見出しの位置 | 署名 | 対象機械 | 判定 |
+|---|---|---|---|---|
+| `target/debug/shiori-host32-helper.exe` | 240 | `P E \0 \0` | `4c 01` ＝ 0x014C | i686。合格 |
+| `target/i686-pc-windows-msvc/debug/shiori.dll`（testdll） | **248** | `P E \0 \0` | `4c 01` ＝ 0x014C | i686。合格 |
+| `target/debug/areka.exe`（較正） | **232** | `P E \0 \0` | `64 86` ＝ 0x8664 | x64。＝この読み方は i686 と x64 を見分ける |
+
+3 つとも見出しの位置が違う（240／248／232）。位置を流用すると別のバイトを読んで「確かめたつもり」になる。走行の後にも helper を読み直し、`4c 01` のままであること（走行中ずっと i686 版が置かれていたこと）を確かめた。
+
+#### 走行
+
+命令: `cargo test --workspace -j 4 --no-fail-fast`（他の `cargo` を 1 つも並走させず単独で走らせた。壁時計の期限を持つ既存テストが飢餓しないようにするため。旗は `baseline.md` §2.2 と同じにそろえた）。
+
+数え方は走行の全文に対して掛けた（`Select-Object -First N` や `| tail` のような、上流を止めて部分的な緑を全体の緑に見せる形は使っていない）。**走行中のログからは数を採っていない**（走行が終わって終了コードが出てから採った）。
+
+| 数え方 | 着手前（`baseline.md` §2.2） | 着地後 | 差 |
+|---|---|---|---|
+| 走行の終了コード | 0 | **0** | — |
+| `Running` 行の本数 | 81 | **82** | **＋1** |
+| `Doc-tests` 行の本数 | 22 | **22** | 0 |
+| `test result:` 行の本数 | 103 | **104** | ＋1（＝82＋22。取りこぼし 0 の裏取り） |
+| `passed` の合計 | 7,668 | **7,698** | **＋30** |
+| `failed` の合計 | 0 | **0** | 0 |
+| `ignored` の合計 | 40 | **40** | 0 |
+| `filtered out` の合計 | 0 | **0** | 0 |
+| `FAILED` と `error: test failed` の行 | 0 | **0** | 0 |
+
+区分別の内訳:
+
+| 区分 | ターゲット数 | passed | ignored |
+|---|---|---|---|
+| `Running`（単体・結合） | 81 → **82** | 7,647 → **7,677** | 13 → **13** |
+| `Doc-tests` | 22 → **22** | 21 → **21** | 27 → **27** |
+| 合計 | 103 → **104** | 7,668 → **7,698** | 40 → **40** |
+
+#### 差が新規テストの分で説明できること
+
+増えたのは `Running` が 1 本、passed が 30 本である。増えた 1 本は新規テストの入口 `staysee_balloon_fixture_test` で、そのターゲットの結果は `test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out` だった。**＋1 本と＋30 本はこの 1 ターゲットだけで説明が付く**（テーマ別のサブディレクトリは独立したテストターゲットを二重に作っていない）。`ignored` が 40 のまま動いていないことは、既存テストを 1 本も止めていないことの裏取りである。
+
+### 9.4 整形検査と 1,000 行の番人（要件 8.4・3.11）
+
+| 検査 | 命令 | 実測 | 判定 |
+|---|---|---|---|
+| 整形 | `cargo fmt --check` | 終了コード **0**・出力 **0 バイト**（整形の差が 1 件も無い） | 合格 |
+| 1,000 行の番人 | `cargo test -p log-capture-kit --test file_length_guard_test` | `test result: ok. **6 passed**; 0 failed; 0 ignored; 0 measured; 0 filtered out` | 合格 |
+
+番人が本当に効くことの較正はタスク 2.8 で採ってある（`wrapping.rs` を 1,008 行にすると 6 本中 3 本が赤になり、当該ファイルを名指しする）。本タスクは番人の例外表に 1 行も触っていない（⑴ の本番コード 0 行と ⑸ の既存テスト 0 行に含まれる）。
+
+### 9.5 台帳の常設の検査（要件 6.5）
+
+| 命令 | 実測 | 判定 |
+|---|---|---|
+| `cargo test -p ukadoc-survey` | 5 ターゲットの合計 **725 passed**・0 failed（内訳 601／0／6／113／5） | 合格 |
+
+タスク 3.2 が着地時に採った 725 passed・0 failed と同本数である。台帳の宛先を書いて `roadmap-draft.md` を未更新のままにすると `92 passed; 21 failed` になる（タスク 3.2 で実測）ので、この緑は「検査が何も見ていない」結果ではない。
+
+なお、この命令は報告を作り直さない。走行の後に `git status --porcelain` を採ると 0 行のままだった（§9.2 の報告 3 本の件）。
+
+### 9.6 この節の結論
+
+| 検査 | 要件 | 実測 | 判定 |
+|---|---|---|---|
+| 本番コードの変更 | 8.1・6.6・7.2 | 0 行 | 合格 |
+| 依存記述 | 8.2 | 0 行（26 本） | 合格 |
+| ロックファイル | 8.2 | 追跡対象外のため差分では示せない。依存記述 0 行と解決可能であることで代替 | 条件付き（上の註） |
+| 自動生成の第三者告知・開発者向け README | 5.3 | 0 行 | 合格 |
+| 既存の検体参照ファイル群・既存検体 3 つ | 2.7・8.3 | 0 行（42 本＋193 本） | 合格 |
+| 新規テストのディレクトリ | 3.1・3.10・8.3 | 新規 10 本のみ・既存の変更 0 本 | 合格 |
+| 台帳の隣 2 項目 | 6.3 | 0 行 | 合格 |
+| 並走 2 spec の接触面 | 8.3 | `input_events/` 0 行・`menu.rs` は未存在 | 合格（`menu.rs` の註つき） |
+| 変更ファイルが設計の一覧に含まれること | 8.5 | 55 本中 51 本が一覧内・4 本は §9.2 の例外 | 合格（例外を明記） |
+| ワークスペース全体 | 8.4 | 7,698 passed・0 failed・40 ignored・`Running` 82・`test result:` 104 | 合格 |
+| 整形検査 | 8.4 | 差 0 件 | 合格 |
+| 1,000 行の番人 | 8.4・3.11 | 6 passed・0 failed | 合格 |
+| 台帳の常設の検査 | 6.5 | 725 passed・0 failed | 合格 |
+
+最終検証へ渡す判断は 3 つある。⑴ 設計 File Structure Plan の一覧に `requirements.md`・`design.md`・`baseline.md`・`tasks.md` が無いこと（§9.2）。⑵ 本記録の冒頭が「8 つの節」と書いたままであること（本節の冒頭）。⑶ `Cargo.lock` が追跡対象外なので、ロックファイルについての「0 行」は差分では示せないこと（§9.1 ⑵）。
