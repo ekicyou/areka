@@ -1,0 +1,230 @@
+# Implementation Plan
+
+> 正本は `requirements.md`（要件）と `design.md`（設計）。コードは「何の定義か（関数名・型名）＋ファイル」で指す。検体は `sample_ghost_kit::SampleRoot::acquire` 経由でのみ受け、`vendors/sample_ghost/<検体名>/` の直パスを書かない（要件 7.11）。新しいテストはすべて新しいファイルに置き、1 ファイル 1,000 行以内に収める。行数の検査（`crates/log-capture-kit/tests/file_length_guard_test.rs`）の例外表には触らない（要件 7.12）。ログを判定する檻は共有機構 `log_capture_kit::capture` を使い、捕捉窓を各所で書き写さない。
+
+- [ ] 1. 基盤: 検体の受け口
+
+- [ ] 1.1 `areka-seriko` と `areka` の 2 クレートに検体 2 体の受け口を足す
+  - `crates/areka-seriko/src/sample_test_support.rs` と `crates/areka/src/placement/placement_shared_test_support.rs` に、`konnoyayame` と `R_POST_and_KOMAINU` の受け口を、既存の `emo2` と同じ `LazyLock<SampleRoot>` の形で足す
+  - 受け口はシェルのフォルダ（`shell/master/`）の絶対パスを返す。`vendors/sample_ghost/` の直パスは書かない
+  - `areka-emo-present` の受け口は、既存の `balloon_test_support.rs` が `pub(super)` で外へ出ないため別に要る。作るのは最初の利用者であるタスク 4.3 で、本タスクの範囲外である
+  - 観測可能な完了: 両クレートで、受け口の返すフォルダに `surfaces.txt` が実在することを確かめるテストが緑になる
+  - _Requirements: 7.11, 7.12_
+
+- [ ] 2. 互いに独立な 3 本と、それに追随する `emo2` の期待値
+
+- [ ] 2.1 (P) 抜き色の腕を実装する
+  - `crates/areka-emo-atlas/src/normalize.rs` に `(UseSelfAlpha::On, AlphaSource::KeyColor)` の腕と `Normalizer::key_color` を足す。`normalize` のシグネチャは変更 0
+  - 抜き色は受け取った 32bit 乗算済み BGRA バッファの座標 (0,0) の 4 バイト。完全一致（許容幅 0）で比べ、一致した画素に `0,0,0,0` を書き（色を残さない）、一致しない画素は 1 バイトも変えない。行の詰め物を読まないよう `stride` と `width` で行ごとに歩く
+  - 幅か高さが 0 の絵はそのまま渡す。`.pna`・`full`・`Off` の腕は変更 0
+  - `crates/areka-emo-atlas/src/lib.rs` の `bake` に抜き色の `debug!`（`set`・`rel_path`・`b`・`g`・`r`・`a`）を 1 本足す。`AlphaSource::KeyColor` の説明の「未実装」を事実に直す
+  - `crates/areka-emo-atlas/src/normalize_key_color_tests.rs` を新設し、離れた同色も透明・1 成分だけ 1 違う色は不透明のまま 1 バイトも不変・透明にした画素が `0,0,0,0`・全画素同色の絵が `Ok` で全画素透明・α 付きは 1 バイトも不変・`stride > width*4` で詰め物を読まない・`tRNS` 相当（左上が透明・他に半透明）で半透明が残る・`key_color` が `On`＋α なしのときだけ `Some` を返す、を確かめる
+  - 本体内テスト `on_no_alpha_no_pna_selects_keycolor_seam` を消さずに、抜かれた結果を確かめる形へ書き換える。`off_no_pna_selects_keycolor_seam` は据え置く
+  - 観測可能な完了: 新しいテストと書き換えたテストが緑で、許容幅を 1 にすると「1 成分だけ 1 違う色」が赤になる
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 5.4, 6.3, 7.3, 7.12, 10.1, 10.2_
+  - _Boundary: areka-emo-atlas Normalizer_
+
+- [ ] 2.2 (P) 間隔の語 `sometimes`・`rarely` を読み替える
+  - `crates/areka-seriko/src/table.rs` の `AnimationTable::from_world` で、`Interval::Other(語)` の腕の中で `sometimes` を `LoopTrigger::Random { k: 2 }`・`rarely` を `Random { k: 4 }` として既存の手順（`k == 0` の検査・コマの整列・空の検査）へ流す。比べ方は小文字の完全一致。`LoopTrigger` の枝の追加 0・再生の仕組みは変更 0
+  - 読み替えたときに `debug!` を 1 本出す（欄: `surface_id`・`animation_id`・`vocab`＝元の語・`k`）
+  - 冒頭の「採録規則」の説明と `Interval::Other` の腕の注記を「`sometimes`・`rarely` は採る／他の語は元の語つきの `debug!` を出して採らない」へ直す
+  - 本体内テスト `only_random_and_bindrandom_are_recorded_others_debug_logged` を**消さずに**書き換える: 「採らない語」の代表を `Other("sometimes")` から `Other("always")` へ差し替え、面 30 の表が空であることと `vocab="always"` が残ることを引き続き確かめる
+  - `crates/areka-seriko/src/table_interval_words_tests.rs` を新設し、`sometimes` の表の項目が `Random{k:2}` と・`rarely` が `Random{k:4}` と等しいこと、`always`・`runonce`・大文字 `Sometimes` は採られず元の語が `debug!` に残ること、読み替えの `debug!` に `vocab=sometimes` が残ることを確かめる
+  - 検体 `konnoyayame` の `surfaces.txt` から組んだ表で、面 0 のアニメ 0 が採られている（今日は 0 件）ことを確かめる
+  - 観測可能な完了: `cargo test -p areka-seriko` が緑で、読み替えを経路から外すと `sometimes`＝`Random{k:2}` と `konnoyayame` のアニメ 0 の 2 本が赤になる
+  - _Requirements: 7.10, 7.12, 10.7, 11.1, 11.2, 11.3, 11.4, 11.6, 11.7_
+  - _Depends: 1.1_
+  - _Boundary: areka-seriko AnimationTable_
+
+- [ ] 2.3 (P) ファイル名から面の番号を得る判定を実装する
+  - `crates/areka-emo-present/src/balloon.rs` の `face_id_of` の 3 段判定（接頭辞を大小無視で外す → `.png` を外す → 残りが空でなく全部 ASCII 数字）を `pub(crate) fn face_digits_of(prefix, name) -> Option<String>` へ切り出し、`face_id_of` はそれを呼んで `parse::<u32>().ok()` するだけにする。戻り値の変更 0
+  - `crates/areka-emo-present/src/shell_target.rs` を新設し、`select_surface_images`（fs に触らない純粋な関数）と `SurfaceImageSelection`（`images`・`duplicates`・`overflow`）を置く。番号は 10 進として読み、先頭の 0 を無視する。同じ番号に複数あれば辞書順で最小を採り `duplicates` に積む。`u32` に収まらない数字列は `overflow` へ入れる。この段では記録を出さない（出すのは 4.2）
+  - `crates/areka-emo-present/src/lib.rs` に `pub mod shell_target;` と再輸出を足す
+  - `crates/areka-emo-present/src/shell_target_names_tests.rs` を新設し、4 表記がすべて面 0・`surface0010.png` が面 10・要件 1.3 の各形（`menu_background.png`・`surfaces.txt`・`surfacetable.txt`・`surface+0.png`・`surface-1.png`・`surface.png`・`surface0.pna`・`surface0.jpg`）が 0 件・`SURFACE0.PNG` が面 0・重複で `surface0.png` を採り `duplicates` 1 件・`surface99999999999.png` が `overflow` 1 件・入力の順を入れ替えても結果が同じ、を確かめる（純粋な関数なので fixture も検体も要らない）
+  - 観測可能な完了: `cargo test -p areka-emo-present` が緑で、既存の `balloon_series_tests.rs` が書き換え 0 件で緑のまま。数字列を数として読まなくすると 4 表記のテストが赤になる
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.8, 2.6, 7.1, 7.12_
+  - _Boundary: areka-emo-present shell_target, balloon_
+
+- [ ] 2.4 `emo2` の焼き結果を留めている既存テストと期待値を書き換える
+  - 2.1 で `null.png` が焼かれるようになった結果に合わせ、`crates/areka-emo-atlas/src/emo2_e2e.rs` の `emo2_shell_all_elements_baked`・`emo2_balloon_same_bake_path_as_shell` と定数 `SHELL_NORMALIZE_SEAM_KEY` の説明、`emo2_golden.rs` の `emo2_shell_bake_is_deterministic`・`emo2_shell_matches_golden` を、**消さずに**「失敗 0 件・`null.png` は全画素が透明な絵として索引表に載る」を確かめる形へ書き換える
+  - `record_golden` で `crates/areka-emo-atlas/src/testdata/emo2_shell_golden.txt` を作り直す
+  - 2.1 の着地から本タスクの完了までの間は `cargo test -p areka-emo-atlas` が赤である（2.1 と同じ作業の流れで続けて行う）
+  - 観測可能な完了: 期待値の差分が `0<TAB>purple/a/null.png<TAB>EMPTY orig=382x547` の **1 行の追加・削除 0 行**（54 → 55 行）であり、他の 54 行が 1 文字も変わらず、`cargo test -p areka-emo-atlas` が緑に戻る
+  - _Requirements: 5.5, 5.6_
+  - _Depends: 2.1_
+  - _Boundary: areka-emo-atlas emo2 tests_
+
+- [ ] 3. 面の表の構築（土台の絵の決定）
+
+- [ ] 3.1 `apply_base_images` と `EmoWorld::build_with_images` を実装する
+  - `crates/areka-emo-compose/src/base_image.rs` を新設し、`apply_base_images` と `BaseImageReport`（`used`・`shadowed`）を置く。`crates/areka-emo-compose/src/lib.rs` に `pub mod base_image;` と再輸出を足す
+  - `crates/areka-emo-compose/src/world.rs` に `EmoWorld::build_with_images(shell, &BTreeMap<u32, String>)` と `EmoWorld::base_images()` を足し、`EmoWorld::build` を「画像 0 件で `build_with_images` を呼ぶ」に置き換える（既存の呼び手の変更 0 件）
+  - `SurfaceImages(BTreeMap<u32, String>)` と `BaseImageReport` を `Resource` として面の表に置く
+  - 判定は**畳み込み（`fold_shell`）の後・展開後の番号ごと**に下す: 面が無ければ画像 1 枚を層 0 に持つ面を新設（ア）／面が在って層 0 の `NormalizedElement` が無ければ画像を層 0・位置 (0,0)・`Overlay` で足して層の昇順に並べ直す（ア・イ）／層 0 が在れば何もせず `shadowed` に数える（ウ）／画像の無い番号には触らない（エ）。宣言も画像も無い番号は「存在しない面」のままで、`\s[N]` が指したときの既存の `error!`（前の絵を残す）も変更 0
+  - 画素は持たない（`EmoWorld` の既存の不変条件のまま）。新しい層の型・新しい欄は 0 個
+  - `crates/areka-emo-compose/src/base_image_tests.rs` を新設し、複数番号の見出し（`surface0,1`）で面 0 と面 1 がそれぞれ自分の画像を受け取ること、画像 0 件で組むと適用前と同じ面の表になること、`used` と `shadowed` のキーが重ならず和が渡した画像の全体に等しいことを確かめる
+  - 観測可能な完了: `cargo test -p areka-emo-compose` の既存テストが書き換え 0 件で緑のまま、新しいテストも緑になる
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.3, 3.9, 5.1, 5.3, 7.12, 10.3, 10.5_
+  - _Boundary: areka-emo-compose base_image, world_
+
+- [ ] 3.2 `surface.append` が画像だけの面にも効くようにする
+  - `crates/areka-emo-compose/src/fold.rs` の `fold_append` で、対象の番号が `SurfaceIndex` に無く `SurfaceImages` に在るとき、空の `SurfaceMaster`（`elements`・`collisions`・`animations` が空）をその番号で作ってから今と同じ追記を行う
+  - どちらにも無ければ今の `warn!`（「surface.append 対象 id が未存在: 新設せずスキップ」）のまま（変更 0）
+  - 画像だけの面への追記の後に同じ番号の波括弧が来た場合は、既存の全置換の規則と `warn!` のまま（偽の重複警告は 0 件）
+  - `base_image_tests.rs` に、`surface.append` が後から `element0` を足した面が `shadowed` になること（追記で足した層 0 も「在る」に数える）を足す
+  - 観測可能な完了: 画像だけの面への追記が反映された面が `build_with_images` の結果から引け、どちらにも無い番号では面ができず既存の `warn!` が出る
+  - _Requirements: 3.7, 3.8, 10.4_
+  - _Depends: 3.1_
+  - _Boundary: areka-emo-compose fold_
+
+- [ ] 3.3 相手の面が無いコマを数える照会を足す
+  - `crates/areka-emo-compose/src/world.rs` に `EmoWorld::dangling_pattern_targets() -> BTreeSet<(u32, u32)>` を足す
+  - 母集合は全部の面の全部の `animation` の全部の `pattern` のうち、`surface_id >= 0` で、かつメソッドが `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`insert` の**どれでもない**もの（この 7 語は欄 2 が面の番号でなくアニメーションの番号）
+  - 語の比べ方は `ComposeMethod::from_name` と同じ（前後の空白を落とし・小文字にし・`-` と `_` を除く）が、`from_name` は未知の語で `warn!` を出すのでこの照会からは**呼ばない**
+  - 重複を除く鍵は `(u32, u32)` の組で、文字列へ連結しない。画像だけで存在する面は「在る」に数える。表を 1 度なめるだけで、毎フレームの経路ではない
+  - `base_image_tests.rs` に、負の番号を含めないこと・画像だけの面を「在る」に数えること・`start,5` で面 5 が無くても 0 組であることを足す
+  - 観測可能な完了: 画像の対応を渡した `konnoyayame` で 0 組、対応を外すと 3 組（面 0 → 1031・1032・1033）が返る
+  - _Requirements: 3.5_
+  - _Depends: 3.1_
+  - _Boundary: areka-emo-compose world_
+
+- [ ] 4. シェルの読み込みの権威
+
+- [ ] 4.1 `load_shell_target`・`build_shell_target`・`ShellTarget` の型と核を実装する
+  - `shell_target.rs` に、fs を触る入口 `load_shell_target(shell_dir, decoder)` と、fs を触らない核 `build_shell_target(shell, selection, shell_dir, decoder)`、値 `ShellTarget`（`atlas()`・`bake_errors()`・`build_world()`）、`thiserror` の `ShellLoadError`（`List`・`Read`・`Empty`）を置く
+  - 一覧はフォルダ**直下**の**ファイルだけ**（`file_type().is_file()`）。フォルダとサブフォルダの中身は 0 件。バルーンの `enumerate_file_names` は失敗の型がバルーン専用でフォルダを除かないので流用しない
+  - 順序は「一覧 → `surfaces.txt` の読取と解析（`charset::decode(&bytes, DefaultEncoding::Ansi)` は今と同じ）→ 面の表（`build_with_images`）→ 使う画像を聞く → 焼く」。`ShellTarget::build_world` は `build_with_images` → `bind_atlas(SetId(0))` を毎回新しく行う
+  - 焼く絵の一覧は「`shell.surfaces` の複製＋使う画像 1 枚につき `element0 = ファイル名, 0, 0` だけを持つ `Surface` 1 個」。`SurfaceSet`・`ManifestDeriver::derive`・`bake` の変更は 0 件。パスの綴りは層 0 の `ElementPath` と完全一致させる（`AtlasTable::resolve` は文字列の完全一致で引く）
+  - 観測可能な完了: `emo2` のシェルで `load_shell_target` が `Ok` を返し、`bake_errors()` が 0 件・`base_images()` が `used` 0 件／`shadowed` 2 件になる
+  - _Requirements: 1.7, 3.6_
+  - _Depends: 2.3, 3.1, 3.3_
+  - _Boundary: areka-emo-present shell_target_
+
+- [ ] 4.2 権威の記録一式を実装する
+  - すべて `load_shell_target` の中で、**読み込み 1 回につき 1 度だけ**出す。`build_world` は新しい記録を 0 本
+  - 一覧の結果を `info!`（`shell_dir`・`recognized`・`used`・`shadowed`）／`element0` が在って使わなかった画像を面ごとに `debug!`（`surface_id`・`file`）／同じ番号の重複を番号ごとに `warn!`（`surface_id`・`adopted`・`dropped`）／大きすぎる番号を名前ごとに `debug!`（`file`）／相手の無いコマを組ごとに `warn!`（`surface_id`・`target`）／焼く段で落ちた絵を絵ごとに `warn!`（文言に実機確認が数える語「shell bake で脱落した element」を含める）
+  - 失敗は `error!`＋`Err`: フォルダの一覧が取れない（`shell_dir`・`error` 付き）・`surfaces.txt` が読めない・面が 0 個。**一覧の中の 1 件が取れない場合は `warn!` を出して その 1 件を飛ばして続行する**（バルーンと同じ扱い）。記録の無い失敗経路を持たない
+  - 文言はスコープの接頭辞（`shell:`）で始め、値は構造化フィールドで渡す（steering `logging.md`）。target は既定（`areka_emo_present::shell_target`）
+  - 観測可能な完了: `emo2` のシェルで `recognized=2 used=0 shadowed=2` の `info!` が 1 行、使わなかった画像の `debug!` が 2 行、重複・相手の無いコマ・脱落の `warn!` が 0 行になる
+  - _Requirements: 1.5, 1.6, 3.5, 6.1, 6.2, 6.4, 6.5_
+  - _Depends: 4.1_
+  - _Boundary: areka-emo-present shell_target_
+
+- [ ] 4.3 表ア〜エと `surface.append` の結合テストを書く
+  - `crates/areka-emo-present/src/shell_target_test_support.rs` を新設し、一時フォルダ（`balloon_test_support.rs` の `TempDir` と同型）・検体の受け口（`LazyLock<SampleRoot>`）・COM 初期化・ログの捕捉窓（`log_capture_kit::capture` へ委譲するだけ）を置く。捕捉窓の中身は書き写さない
+  - `crates/areka-emo-present/src/shell_target_base_image_tests.rs` を新設し、メモリ上の復号器で `build_shell_target` を通す
+  - 表の 4 通りを、画像の実寸の違いが外形に現れる入力で確かめる: ア＝外形が画像の実寸／イ＝画像と `element1` を合わせた外形で画像が奥／ウ＝`element0`（小）と画像（大・別の絵）で外形が `element0` の実寸／エ＝`EmptyComposition`
+  - `surface.append` が画像だけの面に効くこと、どちらも無い番号では既存の `warn!` が出て面ができないことを確かめる
+  - 観測可能な完了: 4 通りの外形がそれぞれ期待どおりで、層 0 の判定を外すとウが赤になる
+  - _Requirements: 7.2, 7.7, 7.11, 7.12_
+  - _Depends: 4.1, 3.2_
+  - _Boundary: areka-emo-present shell_target tests_
+
+- [ ] 4.4 `emo2` の不変・摂動・記録のテストを書く
+  - `crates/areka-emo-present/src/shell_target_emo2_tests.rs` を新設する（4.3 の `shell_target_test_support.rs` を使う）
+  - `load_shell_target` が返した 1 つの `ShellTarget` に対して、A＝`ShellTarget::build_world()`（権威経由）と、B＝同じ `ShellTarget::atlas()` を装着した `EmoWorld::build(shell)`（画像 0 件）の 2 つの面の表を組み、`surface_ids()` の**全部の面**で外形と全画素が一致することを確かめる。索引表を権威経由にするのは、`flatten_extent` が索引表で引けない層を記録なしで飛ばすため（別に焼くと壊れていても緑になる）
+  - `base_images()` が `used` 0 件・`shadowed` 2 件（面 0・面 10）であることを確かめる
+  - 4.2 の記録を檻に入れる: 捕捉窓の中で `load_shell_target` を 1 回呼び、`info!` が 1 行で `recognized=2`・`used=0`・`shadowed=2` を持つこと、使わなかった画像の `debug!` が 2 行（面 0・面 10）であること、重複・相手の無いコマ・脱落の `warn!` が 0 行であることを判定する（印字するだけにしない）
+  - 観測可能な完了: `apply_base_images` の層 0 の判定を外すと、A の面 10 が 336×400 → 427×463 になり、A／B の一致と記録の `shadowed=2` の両方が赤になる（面 0 の形には頼らない）
+  - _Requirements: 5.1, 5.2, 5.3, 5.8, 6.1, 6.2, 6.4, 7.8, 7.12_
+  - _Depends: 4.2, 4.3_
+  - _Boundary: areka-emo-present shell_target tests_
+
+- [ ] 5. 呼び手 5 か所を権威へ寄せる（統合）
+
+- [ ] 5.1 本番 2 か所を `load_shell_target` の呼び出しに置き換える
+  - `crates/areka/src/emo2_boot/assets.rs` の `build_boot_assets` を `load_shell_target` 1 回＋scope の数だけ `build_world()` に置き換える。`atlas` は `target.atlas().clone()`。`descript.txt` の読取とバルーンの組み立ては変更 0
+  - `crates/areka/src/placement/measure.rs` の `build_shell_assets` を `load_shell_target` → `build_world()` 1 回 → `(world, atlas.clone())` に置き換える
+  - `crates/areka/src/emo2_boot/mod.rs` に `impl From<ShellLoadError> for BootWiringError` を置く（`List`・`Read` → 既存の `ShellRead`、`Empty` → 既存の `ShellEmpty`。枝の追加 0）。`PlacementError` へは 3 つとも既存の `Measure { scope: 0, reason }`
+  - 「既知の α 無し `null.png` が落ちる」の注記を消す
+  - 観測可能な完了: `measure_tests.rs` の `SCOPE0_W`／`SCOPE0_H`／`SCOPE1_W`／`SCOPE1_H`（434／687／336／400）が**書き換え 0 件**で緑のまま、`assets_tests.rs` も書き換え 0 件で緑
+  - _Requirements: 3.1, 3.6, 5.7_
+  - _Depends: 4.2, 2.4_
+  - _Boundary: areka emo2_boot, areka placement_
+
+- [ ] 5.2 `examples` 3 本を同じ置き換えにする
+  - `crates/areka/examples/emo-present/setup.rs`・`crates/areka/examples/collision-probe/setup.rs`・`crates/areka/examples/window-placement.rs` の「読む → 解析 → 焼く → 組む」を `load_shell_target` の呼び出しに置き換える
+  - `read_to_string`（UTF-8 だけ）が本番と同じ文字コードの扱いになる。`emo2` の `surfaces.txt` は `charset,UTF-8` なので結果は同じ
+  - 3 か所の `null.png` の注記を消す
+  - 観測可能な完了: `cargo build --examples -p areka` が通り、3 本の本文に `shell::parse(` の呼び出しが 0 件になる
+  - _Requirements: 5.7_
+  - _Depends: 4.1_
+  - _Boundary: areka examples_
+
+- [ ] 5.3 採寸と表示が同じ結果になることを確かめる
+  - `crates/areka/src/placement/measure_template_tests.rs` を新設する（`measure_tests.rs` は 981 行で追記の余地が無い）
+  - 検体 2 体について、`build_shell_assets` → `compose_size` の外形と、`load_shell_target` → `build_world` → `Composer::compose` の外形が一致することを確かめる
+  - 併せて、`assets.rs` と `measure.rs` の本文に `shell::parse(` の呼び出しが 0 件であること（複製が戻ったら赤になる）を確かめる
+  - 観測可能な完了: `R_POST_and_KOMAINU` の 236×462／140×160 と `konnoyayame` の 260×390／200×200 が、2 つの経路で一致する
+  - _Requirements: 3.6, 7.6, 7.12_
+  - _Depends: 5.1, 1.1_
+  - _Boundary: areka placement tests_
+
+- [ ] 6. 検体 2 体の決定論テストと摂動
+
+- [ ] 6.1 検体 2 体を実物の絵で焼くテストを書く
+  - `crates/areka-emo-present/src/shell_target_template_tests.rs` を新設する（4.3 の `shell_target_test_support.rs` を使う）
+  - `R_POST_and_KOMAINU`: 面 0＝236×462・面 10＝140×160・宣言の無い面 10 が `build_world().surface(10)` で引ける・面 0 の合成結果の左上の画素の α が 0・`bake_errors()` が 0 件
+  - `konnoyayame`: 面 0＝260×390・面 10＝200×200・`bake_errors()` が 0 件
+  - `konnoyayame` の面 0 のまばたきを、`PatternState` に「アニメ 0 → 面 1031・位置 93,103」を入れた合成と入れない合成の比較で確かめる: **違う画素が 1 つ以上在り、違いが矩形 (93,103)〜(165,133) の中だけ**に在る（素通りなら違いが 0 になる）
+  - 観測可能な完了: 両検体で `bake_errors()` が 0 件になり、`konnoyayame` の比較で差分の画素が 0 でない
+  - _Requirements: 3.2, 3.4, 7.4, 7.5, 7.11, 7.12, 11.5_
+  - _Depends: 4.3, 2.1_
+  - _Boundary: areka-emo-present shell_target tests_
+
+- [ ] 6.2 摂動を実行して記録する
+  - 4 つの判断について「その判断を経路から外す」形（値をずらす形ではない）で摂動し、赤になるテストを確かめる: 先頭の 0 を無視しない → 名前の判定の 4 表記／層 0 の判定を外す → 表ウ・`emo2` の A／B・`SCOPE1_W`／`SCOPE1_H`／画像だけの面を作らない → `konnoyayame` のコマの差分・`dangling_pattern_targets`／許容幅を 1 にする → 「1 成分だけ 1 違う色」
+  - 間隔の語の読み替えを外す → `sometimes`＝`Random{k:2}`・`konnoyayame` のアニメ 0 が赤になることも確かめる
+  - 観測可能な完了: 5 つの摂動それぞれについて、赤になったテスト名と出力を tasks の完了記録に残し、摂動を戻して全体が緑に復すること
+  - _Requirements: 7.8, 7.9, 7.10_
+  - _Depends: 6.1, 5.3, 4.4, 2.2_
+
+- [ ] 7. 実機確認
+
+- [ ] 7.1 `R_POST_and_KOMAINU` を実機で確かめる
+  - 32bit 補助プロセスを先にビルドし、`areka.exe <ゴーストの絶対パス> <StayseeBalloon の絶対パス>` を `AREKA_APP_SMOKE_EXIT_MS` の有界の自動終了で走らせ、`RUST_LOG=info,areka_emo_present::shell_target=debug,areka_emo_atlas=debug,areka_seriko::table=debug` でログを採る。絶対パスは `cargo run -p sample-ghost-kit --bin nar-sample-path -- <検体名>` が教える
+  - ⑴ 本体側 236×462・相方側 140×160 の絵がキャラクターの形に抜かれて出る ⑵ 起動挨拶がバルーンに出る ⑶ 絵の外のクリックが背後の窓へ抜ける ⑷ 右クリックメニューの 1 項目目が辞書 `dic06_String.txt` の 3 候補のどれかで `(&R)` に下線が付く
+  - 「0 件」を根拠に書くときは、同じ走行に `debug` の行が実在することを併せて示す。プロセスを pid の決めつけで止めない
+  - 観測可能な完了: 4 項目の結果と、`EmptyComposition` の `ERROR` が 0 行であることを、`debug` の行の実在とともに完了記録に残す
+  - _Requirements: 8.1, 8.2, 8.6_
+  - _Depends: 6.1, 5.1_
+
+- [ ] 7.2 `konnoyayame` を実機で確かめる
+  - 同じ定石で起動する
+  - ⑴ 本体側 260×390・相方側 200×200 がキャラクターの形に抜かれて出る ⑵ 本体側がまばたきし、目の周りに四角い地色が出ない ⑶ 起動挨拶の文字が文字化けせずにバルーンに出る ⑷ `sakura.balloon.alignment,none`／`kero.balloon.alignment,none` が自動調整として効く（窓が画面の右半分ならバルーンは左隣、左半分なら右隣）
+  - 観測可能な完了: 4 項目の結果と、間隔の語の読み替えの `debug!`（`vocab=sometimes`）がログに実在することを完了記録に残す
+  - _Requirements: 8.1, 8.3, 8.6, 11.5_
+  - _Depends: 6.1, 5.1, 2.2_
+
+- [ ] 7.3 `emo2` を実機で確かめる
+  - 同じ定石で起動し、立ち絵・バルーン・撫で・メニュー・終了が適用前と同じに見えることを確かめる
+  - 起動時の `warn!`「shell bake で脱落した element」が 0 回であること、`null.png` の「全透明」の `warn!` が出ていることを確かめる
+  - 観測可能な完了: 3 項目の結果を、`debug` の行の実在とともに完了記録に残す
+  - _Requirements: 5.9, 8.1, 8.5, 8.6_
+  - _Depends: 5.1, 2.4_
+
+- [ ] 7.4 実機で見つかった妨げを本仕様の中で直す
+  - 7.1〜7.3 で、検体 2 体の動作（起動・絵・起動挨拶・まばたき・クリック透過・メニュー・バルーンの位置・終了）を妨げる欠陥が見つかったら、別件へ送らず要件と設計を改訂して本仕様の中で直す
+  - 直すのに独立した仕様 1 本ぶんの規模が要ると分かったときだけ、黙って先送りせず開発者に諮る。検体 2 体が使っていない機能の欠陥は、引受先を確かめて起票する
+  - 観測可能な完了: 見つかった妨げが 0 件ならその旨を、1 件以上なら直した内容と改訂した要件・設計の箇所を完了記録に残す
+  - _Requirements: 8.4, 10.6_
+  - _Depends: 7.1, 7.2, 7.3_
+
+- [ ] 8. 文書と台帳（着地時）
+
+- [ ] 8.1 網羅台帳を実測に合わせて直す
+  - `doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:descript_shell_surfaces:sometimes:1` と `…:rarely:1` の 2 件に、担当 `areka-P0-shell-implicit-surface` と実測の状態を登記する。新しい行の追加は 0 件
+  - 備考 2 項目を要件の文面どおりに直す（状態と担当は変えない）: ⑴ `descript_shell_surfaces` の `element*` ⑵ `descript_shell` の `seriko.use_self_alpha,値`
+  - 報告を作り直す
+  - 観測可能な完了: `cargo test -p ukadoc-survey` が緑になる
+  - _Requirements: 9.1, 9.3_
+  - _Depends: 7.4_
+
+- [ ] 8.2 沈黙ルール対応表・roadmap・申し送りを書く
+  - `doc/COMPAT_ARCHITECTURE.md` §8 に 6 行を足す: 大小無視／重複は辞書順で最小／抜き色の許容幅 0／`tRNS` は生かす／色の比較は 32bit へ変換した後の値で行う／画像だけの面への追記の後に来た波括弧は既存どおり全置換する
+  - `.kiro/steering/roadmap.md` に「引き受け手の居ない残り」7 件を登記する（⑶ に「`UseSelfAlpha::Off` の下の抜き色は未実装のまま」を含める）。実在しない spec の名前は書かない
+  - `roadmap.md` の本仕様の行（#10）を、裁定 2 件が正典の逐語で決まったことと範囲に抜き色が加わったことを反映して直す
+  - `.kiro/specs/areka-P0-coverage-roadmap-refresh/brief.md` へ、「`dev_shell`・`manual_shell` の当該の文を項目へ割り、担当を本仕様にする」依頼を申し送る
+  - 観測可能な完了: 4 つの文書それぞれの差分が存在し、`roadmap.md` に書いた引受先の spec がすべて `.kiro/specs/` に実在して `completed/` の下に無い
+  - _Requirements: 9.2, 9.4, 9.5, 9.6, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
+  - _Depends: 8.1_
