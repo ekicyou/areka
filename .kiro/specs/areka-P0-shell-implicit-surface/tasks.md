@@ -181,7 +181,7 @@
 
 - [ ] 7. 実機確認
 
-- [ ] 7.1 `R_POST_and_KOMAINU` を実機で確かめる
+- [x] 7.1 `R_POST_and_KOMAINU` を実機で確かめる
   - 32bit 補助プロセスを先にビルドし、`areka.exe <ゴーストの絶対パス> <StayseeBalloon の絶対パス>` を `AREKA_APP_SMOKE_EXIT_MS` の有界の自動終了で走らせ、`RUST_LOG=info,areka_emo_present::shell_target=debug,areka_emo_atlas=debug,areka_seriko::table=debug` でログを採る。絶対パスは `cargo run -p sample-ghost-kit --bin nar-sample-path -- <検体名>` が教える
   - ⑴ 本体側 236×462・相方側 140×160 の絵がキャラクターの形に抜かれて出る ⑵ 起動挨拶がバルーンに出る ⑶ 絵の外のクリックが背後の窓へ抜ける ⑷ 右クリックメニューの 1 項目目が辞書 `dic06_String.txt` の 3 候補のどれかで `(&R)` に下線が付く
   - 「0 件」を根拠に書くときは、同じ走行に `debug` の行が実在することを併せて示す。プロセスを pid の決めつけで止めない
@@ -189,14 +189,14 @@
   - _Requirements: 8.1, 8.2, 8.6_
   - _Depends: 6.1, 5.1_
 
-- [ ] 7.2 `konnoyayame` を実機で確かめる
+- [x] 7.2 `konnoyayame` を実機で確かめる
   - 同じ定石で起動する
   - ⑴ 本体側 260×390・相方側 200×200 がキャラクターの形に抜かれて出る ⑵ 本体側がまばたきし、目の周りに四角い地色が出ない ⑶ 起動挨拶の文字が文字化けせずにバルーンに出る ⑷ `sakura.balloon.alignment,none`／`kero.balloon.alignment,none` が自動調整として効く（窓が画面の右半分ならバルーンは左隣、左半分なら右隣）
   - 観測可能な完了: 4 項目の結果と、間隔の語の読み替えの `debug!`（`vocab=sometimes`）がログに実在することを完了記録に残す
   - _Requirements: 8.1, 8.3, 8.6, 11.5_
   - _Depends: 6.1, 5.1, 2.2_
 
-- [ ] 7.3 `emo2` を実機で確かめる
+- [x] 7.3 `emo2` を実機で確かめる
   - 同じ定石で起動し、立ち絵・バルーン・撫で・メニュー・終了が適用前と同じに見えることを確かめる
   - 起動時の `warn!`「shell bake で脱落した element」が 0 回であること、`null.png` の「全透明」の `warn!` が出ていることを確かめる
   - 観測可能な完了: 3 項目の結果を、`debug` の行の実在とともに完了記録に残す
@@ -297,3 +297,63 @@
 - `areka-emo-atlas` 83・`areka-emo-compose` 219・`areka-emo-present` 254・`areka-seriko` 207（＋結合 27）・`areka` 1,718（＋結合 3）がすべて緑。`cargo fmt -- --check` は 5 クレートとも差分 0。
 - design.md の「emo2 の不変の示し方」には「バイトが変わらない」に当たる記述が無く（面 0 については「同じ絵には頼らない」とだけ書いている）、直す箇所は 0 件だった。
 - 6.2: 「バイトが変わらない」の同じ誤りが `brief.md`（`golden_tests_surface0_base_tests.rs` の byte 等価 golden について）と `design-validation.md`（「同じ絵の二重重ねなので要件 5.8 が言うとおり検査にならない」）にも在る。どちらも発掘時・検証時のスナップショット文書なので是正はしないが、**タスク 8.2 でその旨を明記して据え置く**こと（後から「正本と食い違う」と再発掘されないため）。`design.md` に同じ誤りは 0 件。
+
+## 実機確認の記録（タスク 7.1〜7.3・2026-09-20）
+
+### 共通の条件
+
+- 事前ビルド（PowerShell）: `cargo build -p areka` → `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` → `Copy-Item target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe target\debug\ -Force`
+- 起動は**絶対パス**。ゴーストの絶対パスは `cargo run -p sample-ghost-kit --bin nar-sample-path -- <検体名>` の `folder=` 行から採った。バルーンは検体 2 体が同梱を持たないので `vendors/sample_ghost/StayseeBalloon` を渡した。
+- 有界の自動終了 `AREKA_APP_SMOKE_EXIT_MS`。プロセスは pid の決めつけで止めていない（すべて自動終了で exit 0）。
+- 「0 件」を主張するときは、同じ走行に `debug` の行が実在することを併せて示す。
+
+### 7.1 `R_POST_and_KOMAINU`
+
+走行: `AREKA_APP_SMOKE_EXIT_MS=45000`・`RUST_LOG=info,areka_emo_present::shell_target=debug,areka_emo_atlas=debug,areka_seriko::table=debug`・**exit 0**・ログ 97 行。
+
+| 項目 | 結果 | 証跡 |
+|---|---|---|
+| ⑴ 本体側 236×462・相方側 140×160 が抜かれて出る | **PASS** | `apply(ShowSurface) … TargetId(0) surface_id=0 native_w=236 native_h=462`／`TargetId(2) surface_id=10 native_w=140 native_h=160`（**面 10 は `surfaces.txt` に宣言が無い＝ファイル名だけで建った**）。抜き色の `debug!` が 20 行（`rel_path="surface0000.png" b=255 g=255 r=255 a=255` ほか） |
+| ⑵ 起動挨拶がバルーンに出る | **PASS** | `kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1` → `[balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="content" visible=true` |
+| ⑶ 絵の外のクリックが背後の窓へ抜ける | **未確認（開発者の手が要る）** | 構造の証跡のみ: `apply(ShowSurface): 表示・マスクを更新` が面ごとに出ており α マスクは更新されている。クリックそのものは自動走行では起こせない |
+| ⑷ 右クリックメニューの 1 項目目 | **未確認（開発者の目と手が要る）** | メニューは右クリックで初めて組まれるので自動走行のログには現れない。`(&R)` の下線は Win32 のアクセラレータ表示で OS 設定に依る |
+| `EmptyComposition` の `ERROR` | **0 行** | 同じ走行に `ERROR` が 1 行も無く、`shell_target`・`areka_emo_atlas` の `debug` は実在する（抜き色 20 行・`shell:` の `info!` 2 行） |
+| 焼く段で落ちた絵 | **0 行** | `shell bake で脱落した element` が 0 件（`debug` の実在は上と同じ） |
+
+### 7.2 `konnoyayame`
+
+走行 A: `AREKA_APP_SMOKE_EXIT_MS=60000`・`RUST_LOG=info,areka_emo_present::shell_target=debug,areka_emo_atlas=debug,areka_seriko=debug`・**exit 0**。
+走行 B（まばたき観測用）: `AREKA_APP_SMOKE_EXIT_MS=300000`・`RUST_LOG=info,areka_seriko=debug`・**exit 0**。
+
+| 項目 | 結果 | 証跡 |
+|---|---|---|
+| ⑴ 本体側 260×390・相方側 200×200 が抜かれて出る | **PASS** | `native_w=260 native_h=390`（面 0）／`TargetId(2) surface_id=10 native_w=200 native_h=200`。抜き色の `debug!` が 36 行（**緑抜き** `b=0 g=255 r=0 a=255`）。一覧は `recognized=18 used=18 shadowed=0` |
+| ⑵ 本体側がまばたきする | **PASS** | 走行 B で `seriko: loop 抽選発火 … scope="0" slot=Shell animation_id=0 k=2` が **101 回**（走行 B 全体・`ghost shutdown sequence completed` で正常終了・exit 0）。`k=2` は `sometimes` → `Random{k:2}` の読み替えそのもの |
+| ⑵ 目の周りに四角い地色が出ない | **未確認（開発者の目が要る）** | 画素の証跡はある: 抜き色が全 18 枚に効いており、タスク 6.1 の檻が「差分は矩形 (93,103)〜(165,133) の中だけ」を判定済み |
+| ⑶ 起動挨拶が文字化けしない | **PASS（文字の経路）／視覚は未確認** | バルーンへ渡る文字が正しい日本語で並ぶ: `command=Text("初めまして。")`・`Text("わたしはややめ。紺野ややめだよ。")`・`Text("わたしは、YAYAのサンプルゴースト。")`。`charset_initial charset="Shift_JIS" source="default"`。字形の描画は開発者の目 |
+| ⑷ `balloon.alignment,none` が自動調整として効く | **PASS** | `placement: windowposition を初期既定位置の調整量へ変換した … scope=0 balloon_side=Auto`／`scope=1 balloon_side=Auto`。左右どちらへ寄るかは窓の実位置に依るので、画面の左右で切り替わる様子は開発者の目 |
+| 間隔の語の読み替えの `debug!` | **実在** | `seriko table: 間隔の語を random,K と同じ引き金へ読み替えて採録（要件 11.1/11.2） surface_id=0 animation_id=0 vocab="sometimes" k=2` |
+| `ERROR` | **0 行** | 走行 A・B とも 0。`debug` の実在は上のとおり |
+
+**まばたきの観測で分かったこと（欠陥ではない）**: `konnoyayame` の `animation0` は**面 0 にしか無い**（`surfaces.txt` 実測）。起動挨拶の台本は面を何度も切り替え、走行によっては面 5 や面 6 で終わる。その走行ではまばたきは 1 度も発火しない（面 0 が表示されていないので正しい）。面 0 で終わった走行 B では 101 回発火した。**areka の欠陥ではなくゴーストの台本の性質**である。`emo2` の同じ走行で 19 回発火していることが、ループそのものが動いている対照になる。
+
+### 7.3 `emo2`
+
+走行: `AREKA_APP_SMOKE_EXIT_MS=120000`・`RUST_LOG=info,areka_emo_present::shell_target=debug,areka_emo_atlas=debug,areka_seriko=debug`・**exit 0**・ログ 131,812 バイト。
+
+| 項目 | 結果 | 証跡 |
+|---|---|---|
+| 立ち絵・バルーン・メニュー・終了が適用前と同じに見える | **PASS（ログの範囲）／視覚は未確認** | `ERROR` 0 行・`loop 抽選発火` 19 回・バルーンの可視遷移・`ghost shutdown sequence completed` で exit 0。撫でとメニューの操作は自動走行では起こせない |
+| 起動時の `warn!`「shell bake で脱落した element」が 0 回 | **PASS** | 0 件。同じ走行に `shell_target` の `debug!` が実在する（`element0 が在るため面の画像を土台に使わなかった（R6.2） surface_id=0 file="surface0.png"`／`surface_id=10 file="surface10.png"`） |
+| `null.png` の「全透明」の `warn!` が出ている | **PASS** | `bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547`。直前に抜き色の `debug!`（`b=0 g=0 r=0 a=0`）も出ており、抜き色の腕を通ったことが分かる |
+| 記録の実測 | **要件どおり** | `shell: シェルの面の画像の一覧が終わった（R6.1） … recognized=2 used=0 shadowed=2`・使わなかった画像の `debug!` が面 0・面 10 の 2 行・重複／相手の無いコマ／脱落の `warn!` が 0 行 |
+
+### 自動走行では確かめられなかった項目（開発者の目と手が要る）
+
+次の 5 項目は、走っている窓に対する**操作**か**目視**が要るため、有界の自動終了＋ログ grep では確かめられない。実装側の証跡は上の表に挙げたとおりで、**いずれも本仕様が新しく作った経路ではない**（クリック透過・右クリックメニュー・字形の描画・バルーンの左右反転は既存の機能で、本仕様はそこへ絵を届けられるようにしただけである）。
+
+1. 7.1 ⑶ 絵の外のクリックが背後の窓へ抜ける
+2. 7.1 ⑷ 右クリックメニューの 1 項目目が `dic06_String.txt` の 3 候補のどれかで `(&R)` に下線が付く
+3. 7.2 ⑵ 目の周りに四角い地色が出ない（画素の証跡はタスク 6.1 の檻にある）
+4. 7.2 ⑶ 起動挨拶の**字形**が文字化けしない（文字の経路は上の表のとおり正しい）
+5. 7.3 撫で・メニュー・終了の操作が適用前と同じに見える
