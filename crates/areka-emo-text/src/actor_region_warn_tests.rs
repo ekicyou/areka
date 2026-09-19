@@ -53,7 +53,9 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::spawn_reserved_slot;
 use super::{TextLayerRuntime, TextSlotBinding};
+use crate::region::TextRegion;
 use crate::state::TextLayerConfig;
+use crate::writing::WritingMode;
 
 /// 相方側 `balloonk0.png` の原寸（image px）。数値の出所は `region_inline_limit_tests.rs`
 /// および `tests/shipped_fixture_region_test.rs` 冒頭の解決結果の表と同一。
@@ -401,6 +403,8 @@ const IGNORED_ORIGIN_MESSAGE: &str = "origin に指定した文字の書き始�
 const ORIGIN_BOTH_OUTSIDE: &str = concat!("origin.x,0\n", "origin.y,0\n");
 /// x だけが範囲の外（y の 100 は 46..168 の内）。
 const ORIGIN_ONLY_X_OUTSIDE: &str = concat!("origin.x,0\n", "origin.y,100\n");
+/// `ORIGIN_ONLY_X_OUTSIDE` と**無視される x の値だけ**が違う宣言（5 も左辺 36 の外）。
+const ORIGIN_ONLY_X_OUTSIDE_AT_FIVE: &str = concat!("origin.x,5\n", "origin.y,100\n");
 /// 両成分とも範囲の内（100 は 36..356 の内であり 46..168 の内でもある）。
 const ORIGIN_BOTH_INSIDE: &str = concat!("origin.x,100\n", "origin.y,100\n");
 
@@ -712,6 +716,87 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
         SAKURA_TOP,
         SAKURA_WIDER_BOTTOM,
         SAKURA_TOP,
+    );
+}
+
+/// 領域の差が**無視した宣言の値だけ**でも、警告は新しい値で出し直す（要件 3.2）。
+///
+/// 直前の 1 本は面の原寸を変えて値を動かすので、遠辺・折返し基準・原寸も一緒に動く。
+/// それらのどれか 1 つでも判定に効いていれば通ってしまうので、「無視した値が変われば
+/// 出し直す」という主張そのものは固定できていない。本 1 本は**無視した値以外のすべての
+/// 欄が同値**の 2 つの領域を作り、差がその 1 欄だけであることをテストの中で先に確かめて
+/// から、件数と欄を主張する。
+#[test]
+fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_value() {
+    // 前提の確認: 2 つの定義から解決した領域は、無視した宣言の値だけが違う。
+    let resolve = |origin: &str| {
+        TextRegion::resolve(
+            &merged_with_origin(origin, SAKURA_OVERLAY),
+            SAKURA_IMAGE,
+            WritingMode::HorizontalTb,
+        )
+    };
+    let before = resolve(ORIGIN_ONLY_X_OUTSIDE);
+    let after = resolve(ORIGIN_ONLY_X_OUTSIDE_AT_FIVE);
+    let other_fields = |r: &TextRegion| {
+        (
+            r.left(),
+            r.top(),
+            r.right(),
+            r.bottom(),
+            r.start(),
+            r.wrap_threshold(),
+            r.inline_limit(),
+            r.image_size(),
+        )
+    };
+    assert_eq!(
+        other_fields(&before),
+        other_fields(&after),
+        "無視した値以外の欄まで動いてしまうと、この検査は直前の 1 本と同じものに退化する"
+    );
+    assert_eq!(
+        (before.ignored_origin(), after.ignored_origin()),
+        ((Some(0.0), None), (Some(5.0), None)),
+        "動くのは x 成分の無視した値だけ（y の 100 は 46〜168 の内なので無視されない）"
+    );
+
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("0");
+    rt.register_actor_binding(
+        actor.clone(),
+        binding(slot, window, SAKURA_IMAGE),
+        &merged_with_origin(ORIGIN_ONLY_X_OUTSIDE, SAKURA_OVERLAY),
+    );
+
+    // binding は装着時と同値のまま——動かすのはバルーン定義の origin.x だけ。
+    let (changed, warns, errors) = capturing(|| {
+        rt.refresh_actor_binding(
+            &actor,
+            binding(slot, window, SAKURA_IMAGE),
+            &merged_with_origin(ORIGIN_ONLY_X_OUTSIDE_AT_FIVE, SAKURA_OVERLAY),
+        )
+    });
+
+    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
+    assert!(
+        changed,
+        "無視した宣言の値が変われば領域は別物であり、再追従は起きる（前提の確認）"
+    );
+    let ignored = ignored_origin_warns(&warns);
+    assert_eq!(
+        ignored.len(),
+        1,
+        "無視した値が変われば、その成分について 1 件を出し直す（要件 3.2）: {warns:?}"
+    );
+    assert_ignored_origin_warning(
+        ignored[0],
+        "origin.x",
+        5.0,
+        SAKURA_LEFT,
+        SAKURA_RIGHT,
+        SAKURA_LEFT,
     );
 }
 

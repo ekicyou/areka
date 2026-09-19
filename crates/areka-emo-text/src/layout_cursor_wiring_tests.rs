@@ -73,7 +73,7 @@ fn region_c_declared_origin() -> TextRegion {
     assert_eq!(
         region.start(),
         (100.0, 60.0),
-        "宣言された origin 成分は字義どおり（角へ寄せない）"
+        "validrect の範囲内（x は 40〜360・y は 20〜200）に収まる宣言なので宣言値がそのまま書き始めになる"
     );
     region
 }
@@ -177,8 +177,9 @@ fn undeclared_balloon_measures_absolute_cursor_from_the_write_start_corner() {
     assert_eq!(lines[0].rect.top, 56.0, "20 + 3 × line_pitch(12)");
 }
 
-/// **H1 の弁別対照**: 文字描画開始点を角と異なる位置に**宣言**したバルーンでは、絶対座標が
-/// その宣言値から測られる（Requirement 2.9）。
+/// **H1 の弁別対照**: 文字描画開始点を角と異なる位置に**宣言**し、その宣言値が validrect の
+/// 範囲内（x は 40〜360・y は 20〜200）に収まるバルーンでは、絶対座標がその宣言値から測られる
+/// （Requirement 2.9）。範囲の外に宣言した成分なら、絶対座標は書字開始角から測られる。
 ///
 /// 上の檻だけだと「基点を validrect の左上に決め打ちした実装」が素通りしてしまう
 /// （未宣言バルーンでは両者が一致するため）。宣言バルーンを 1 本並べると、基点が本当に
