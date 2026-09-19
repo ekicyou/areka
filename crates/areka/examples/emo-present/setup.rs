@@ -1,8 +1,8 @@
 use super::{
-    AlphaParams, AtlasTable, BindSet, CommandSender, Composer, CycleState, EmoBoot, EmoPresenter,
-    EmoWorld, Entity, PackConfig, PatternState, SHELL_INITIAL_X, SHELL_INITIAL_Y, SetId,
-    SurfaceSet, UseSelfAlpha, WicDecoderArm, World, bake, build_balloon_target,
-    compute_balloon_pos, create_balloon_window, create_shell_window, emo2, emo2_balloon,
+    AtlasTable, BindSet, CommandSender, Composer, CycleState, EmoBoot, EmoPresenter, EmoWorld,
+    Entity, PatternState, SHELL_INITIAL_X, SHELL_INITIAL_Y, WicDecoderArm, World,
+    build_balloon_target, compute_balloon_pos, create_balloon_window, create_shell_window, emo2,
+    emo2_balloon, load_shell_target,
 };
 
 // ---------------------------------------------------------------------------
@@ -32,7 +32,7 @@ fn build_and_spawn(world: &mut World) {
         }
     };
 
-    // シェル・バルーンのアセットを**シェルと同一経路**で構築（parse→bake→build）。
+    // シェル・バルーンのアセットを**本番と同一経路**で構築（シェルは読み込みの権威を 1 回）。
     let shell = build_shell_target(&decoder);
     let balloon = build_balloon_assets(&decoder);
 
@@ -80,45 +80,29 @@ fn build_and_spawn(world: &mut World) {
     tracing::info!("emo-present: 窓生成とアセット構築を完了（GPU 資源到達で表示を装着）");
 }
 
-/// シェル surface（emo2）を **シェル経路**（surfaces.txt→parse→bake→EmoWorld）で構築し、
+/// シェル surface（emo2）を**シェル読み込みの権威**（`load_shell_target`）で構築し、
 /// surface0 の合成外形（物理 px）を添えて返す。失敗時は log-first で `None`。
+///
+/// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
+/// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
+/// 落ちた絵の `warn!` も権威側が持つので、この example は呼ぶだけである——本番（`build_boot_assets`）・
+/// 採寸（`build_shell_assets`）と同じ入口を通るため、この example が見る絵は本番と食い違わない。
 fn build_shell_target(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, u32, u32)> {
     let base = emo2("shell/master");
-    let surfaces_txt = base.join("surfaces.txt");
-    let content = match std::fs::read_to_string(&surfaces_txt) {
-        Ok(c) => c,
+    let target = match load_shell_target(&base, decoder) {
+        Ok(t) => t,
         Err(e) => {
+            // load_shell_target は内部で error! 済み（一覧失敗／読取失敗／面 0 個）。文脈のみ添える。
             tracing::error!(
-                path = %surfaces_txt.display(),
+                dir = %base.display(),
                 error = %e,
-                "emo-present: shell surfaces.txt の読取に失敗"
+                "emo-present: shell の読み込みに失敗"
             );
             return None;
         }
     };
-    let shell = areka_parsers::shell::parse(&content);
-    if shell.surfaces.is_empty() {
-        tracing::error!("emo-present: surfaces.txt が surface を 1 つも産まなかった");
-        return None;
-    }
-
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: &base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], decoder, PackConfig::default());
-    // emo2 shell は α 無し `purple/a/null.png` 1 枚が normalize seam として脱落する（既知・許容）。
-    // surface0 は `surface0.png` のみを使うため合成に影響しない。他の脱落は制作者ミスの兆候ゆえ warn。
-    for err in &baked.errors {
-        tracing::warn!(error = %err, "emo-present: shell bake で脱落した element（surface0 表示には無害）");
-    }
-
-    let mut emo_world = EmoWorld::build(&shell);
-    emo_world.bind_atlas(&baked.table, SetId(0));
-    let atlas = baked.table;
+    let atlas = target.atlas().clone();
+    let emo_world = target.build_world();
 
     // surface0 を一度合成して窓の物理 px 外形を得る（DPI 表示契約: 窓クライアント寸 ≔ surface 原寸）。
     let (w, h) = match Composer::new().compose(

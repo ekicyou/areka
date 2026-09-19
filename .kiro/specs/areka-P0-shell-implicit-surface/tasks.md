@@ -142,7 +142,7 @@
   - _Depends: 4.2, 2.4_
   - _Boundary: areka emo2_boot, areka placement_
 
-- [ ] 5.2 `examples` 3 本を同じ置き換えにする
+- [x] 5.2 `examples` 3 本を同じ置き換えにする
   - `crates/areka/examples/emo-present/setup.rs`・`crates/areka/examples/collision-probe/setup.rs`・`crates/areka/examples/window-placement.rs` の「読む → 解析 → 焼く → 組む」を `load_shell_target` の呼び出しに置き換える
   - `read_to_string`（UTF-8 だけ）が本番と同じ文字コードの扱いになる。`emo2` の `surfaces.txt` は `charset,UTF-8` なので結果は同じ
   - 3 か所の `null.png` の注記を消す
