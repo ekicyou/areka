@@ -15,16 +15,21 @@
 //! `surface` で呼ぶ。ゆえに「バルーンの `face_id_of` と同じ扱いにそろえる」（R1.4）は申し合わせ
 //! ではなく構造で成り立つ。
 //!
-//! # 記録を出さないこと（タスク 4.2 が足すまでの状態）
+//! # 記録を出す場所（要件 6）
 //!
 //! [`select_surface_images`] は fs にも記録にも触れない純粋な関数であり、重複（R1.5 の `warn!`）
-//! と桁溢れ（R1.6 の `debug!`）は**事実として戻り値に載せるだけ**である。記録を出すのは
-//! fs を触る入口（読み込み 1 回につき 1 度だけ出す）の責務である。
+//! と桁溢れ（R1.6 の `debug!`）は**事実として戻り値に載せるだけ**である。同じく
+//! [`build_shell_target`] も記録を出さない（結果を [`ShellTarget`] に載せるだけ）。
 //!
-//! **本モジュールは今のところ記録を 1 本も出さない**——[`load_shell_target`] の失敗の `error!`
-//! も、一覧の 1 件を飛ばすときの `warn!` も、R6.1・R6.2 の `info!`／`debug!` も、まだ無い。
-//! 記録一式はタスク 4.2（要件 6）が本モジュールへ足す。それまでの間、失敗は
-//! [`ShellLoadError`] の値としてのみ観測できる。
+//! **記録を出すのは fs を触る入口 [`load_shell_target`] だけ**で、読み込み 1 回につき
+//! それぞれ 1 度だけ出る——一覧の結果の `info!`（R6.1）・使わなかった画像の `debug!`（R6.2）・
+//! 同じ番号の重複の `warn!`（R1.5）・桁溢れの `debug!`（R1.6）・相手の無いコマの `warn!`（R3.5）・
+//! 焼く段で落ちた絵の `warn!`・3 つの失敗の `error!`（R1.7・R6.4）である。一覧の 1 件だけが
+//! 取れないときは `warn!` を出してその 1 件を飛ばす（[`list_file_names`]）。
+//! [`ShellTarget::build_world`] は新しい記録を 1 本も出さない。
+//!
+//! 宛先は既定の target（`areka_emo_present::shell_target`）、文言はスコープの接頭辞 `shell:`
+//! で始め、値は構造化フィールドで渡す（steering `logging.md`・design「Monitoring」）。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -33,7 +38,7 @@ use areka_emo_atlas::{
     AlphaParams, AtlasTable, BakeError, ElementDecoder, PackConfig, SetId, SurfaceSet,
     UseSelfAlpha, bake,
 };
-use areka_emo_compose::EmoWorld;
+use areka_emo_compose::{BaseImageReport, EmoWorld};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{AppendTarget, Element, ElementPath, Shell, Surface};
 
@@ -166,8 +171,16 @@ pub struct ShellTarget {
     images: BTreeMap<u32, String>,
     /// 焼いた絵の索引表（`element` が名指しする絵＋土台に**使った**面の画像）。
     atlas: AtlasTable,
-    /// 焼く段で落ちた絵（記録を出すのはタスク 4.2）。
+    /// 焼く段で落ちた絵（記録を出すのは [`load_shell_target`]）。
     bake_errors: Vec<BakeError>,
+    /// 土台の絵の決定の結果（R6.1 の数と R6.2 の一覧の出どころ）。
+    ///
+    /// 決めるのに要る面の表は [`build_shell_target`] が既に 1 つ組んでいるので、その結果を
+    /// ここへ写して持つ。入口が記録のために面の表を組み直さないためである（design
+    /// 「頻度の単位」の回数が増えない）。
+    base_images: BaseImageReport,
+    /// 相手の面が存在しないコマの「(コマを持つ面, 相手の番号)」（R3.5・出どころは同上）。
+    dangling: BTreeSet<(u32, u32)>,
 }
 
 impl ShellTarget {
@@ -184,8 +197,9 @@ impl ShellTarget {
     /// 面の表を 1 つ組む（[`EmoWorld::build_with_images`] → `bind_atlas(SetId(0))`）。
     ///
     /// スコープの数だけ呼んでよい。同じ入力から組むので、返る面の表の内容は毎回同じである。
-    /// 本仕様が足す記録はここでは出さない（0 本）——畳み込みと装着の既存の `warn!` は
-    /// 今日と同じく組むたびに出る。
+    /// 本仕様が足す記録はここでは出さない（0 本・要件 6 の記録はすべて [`load_shell_target`]
+    /// が読み込み 1 回につき 1 度だけ出す）——畳み込みと装着の既存の `warn!` は今日と同じく
+    /// 組むたびに出る。
     pub fn build_world(&self) -> EmoWorld {
         let mut world = EmoWorld::build_with_images(&self.shell, &self.images);
         world.bind_atlas(&self.atlas, SetId(0));
@@ -210,8 +224,9 @@ impl ShellTarget {
 ///
 /// # 記録
 ///
-/// 本関数はまだ記録を 1 本も出さない。R6.1・R6.2 の記録と失敗の `error!` はタスク 4.2 が
-/// 本関数へ足す（モジュール冒頭「記録を出さないこと」）。
+/// 要件 6 の記録はすべて本関数が出す（読み込み 1 回につきそれぞれ 1 度だけ・モジュール冒頭
+/// 「記録を出す場所」）。3 つの失敗はいずれも `error!` を伴う（記録の無い失敗経路を持たない・
+/// R6.4）。
 pub fn load_shell_target(
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -219,21 +234,75 @@ pub fn load_shell_target(
     let names = list_file_names(shell_dir)?;
     let selection = select_surface_images(&names);
 
+    // 重複と桁溢れは [`build_shell_target`] へ渡すと消えるので、渡す前に記録する。
+    for (id, adopted, dropped) in &selection.duplicates {
+        tracing::warn!(
+            surface_id = *id,
+            adopted = adopted.as_str(),
+            dropped = ?dropped,
+            "shell: 同じ番号へ解決する面の画像が複数在る（ファイル名の辞書順で最小を採用・R1.5）"
+        );
+    }
+    for file in &selection.overflow {
+        tracing::debug!(
+            file = file.as_str(),
+            "shell: 数字が面の番号として大きすぎるので面の画像と認めない（R1.6）"
+        );
+    }
+
     let surfaces_path = shell_dir.join(SURFACES_TXT);
     let content = std::fs::read(&surfaces_path)
         .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
-        .map_err(|source| ShellLoadError::Read {
-            path: surfaces_path.clone(),
-            source,
+        .map_err(|source| {
+            tracing::error!(
+                path = %surfaces_path.display(),
+                error = %source,
+                "shell: surfaces.txt の読み取りに失敗"
+            );
+            ShellLoadError::Read {
+                path: surfaces_path.clone(),
+                source,
+            }
         })?;
     let shell = areka_parsers::shell::parse(&content);
     if shell.surfaces.is_empty() {
+        tracing::error!(
+            path = %surfaces_path.display(),
+            "shell: surfaces.txt が面を 1 つも産まなかった"
+        );
         return Err(ShellLoadError::Empty {
             path: surfaces_path,
         });
     }
 
-    Ok(build_shell_target(shell, selection, shell_dir, decoder))
+    let target = build_shell_target(shell, selection, shell_dir, decoder);
+
+    for (&surface_id, file) in &target.base_images.shadowed {
+        tracing::debug!(
+            surface_id,
+            file = file.as_str(),
+            "shell: element0 が在るため面の画像を土台に使わなかった（R6.2）"
+        );
+    }
+    for &(surface_id, dangling_target) in &target.dangling {
+        tracing::warn!(
+            surface_id,
+            target = dangling_target,
+            "shell: コマの相手の面が宣言も画像も無い（描かずに続行・R3.5）"
+        );
+    }
+    for error in &target.bake_errors {
+        tracing::warn!(error = %error, "shell: shell bake で脱落した element");
+    }
+    tracing::info!(
+        shell_dir = %shell_dir.display(),
+        recognized = target.images.len(),
+        used = target.base_images.used.len(),
+        shadowed = target.base_images.shadowed.len(),
+        "shell: シェルの面の画像の一覧が終わった（R6.1）"
+    );
+
+    Ok(target)
 }
 
 /// fs を触らない核（復号器を除く）: 面の表を組んで使う画像を決め、焼いて [`ShellTarget`] にする。
@@ -254,14 +323,19 @@ pub fn build_shell_target(
     let images = selection.images;
 
     // どの画像を土台に使うかは面の表を組んで初めて決まる（`element0` が在る面では使わない）。
-    // ここで組む面の表は「使う画像を聞く」ためだけのもので、装着せずに捨てる。
-    let used = EmoWorld::build_with_images(&shell, &images)
-        .base_images()
-        .used
-        .clone();
+    // ここで組む面の表は「使う画像と、相手の無いコマを聞く」ためだけのもので、装着せずに捨てる。
+    // 入口が記録に使う事実もここで採る（記録のために組み直さないため）。
+    let probe = EmoWorld::build_with_images(&shell, &images);
+    let base_images = probe.base_images().clone();
+    let dangling = probe.dangling_pattern_targets();
 
     let mut surfaces = shell.surfaces.clone();
-    surfaces.extend(used.iter().map(|(&id, file)| base_image_surface(id, file)));
+    surfaces.extend(
+        base_images
+            .used
+            .iter()
+            .map(|(&id, file)| base_image_surface(id, file)),
+    );
 
     let set = SurfaceSet {
         surfaces: &surfaces,
@@ -277,6 +351,8 @@ pub fn build_shell_target(
         images,
         atlas: baked.table,
         bake_errors: baked.errors,
+        base_images,
+        dangling,
     }
 }
 
@@ -289,19 +365,45 @@ pub fn build_shell_target(
 /// バルーンの `enumerate_file_names` を流用しないのは、失敗の型がバルーン専用
 /// （`PresentError`）で、フォルダを除かないためである。
 fn list_file_names(shell_dir: &Path) -> Result<Vec<String>, ShellLoadError> {
-    let read_dir = std::fs::read_dir(shell_dir).map_err(|source| ShellLoadError::List {
-        path: shell_dir.to_path_buf(),
-        source,
+    let read_dir = std::fs::read_dir(shell_dir).map_err(|source| {
+        tracing::error!(
+            shell_dir = %shell_dir.display(),
+            error = %source,
+            "shell: シェルのフォルダの一覧に失敗（画像 0 件として先へ進まない・R1.7）"
+        );
+        ShellLoadError::List {
+            path: shell_dir.to_path_buf(),
+            source,
+        }
     })?;
 
     let mut names: Vec<String> = Vec::new();
     for entry in read_dir {
-        // 1 件の取得失敗・種別の読み取り失敗は飛ばして続行する（記録はタスク 4.2）。
-        let Ok(entry) = entry else {
-            continue;
+        // 1 件の取得失敗・種別の読み取り失敗は致命ではない（その 1 件を飛ばして続行・
+        // バルーンの `enumerate_file_names` と同じ扱い）。
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                tracing::warn!(
+                    shell_dir = %shell_dir.display(),
+                    error = %error,
+                    "shell: フォルダの 1 件の取得に失敗（その 1 件を飛ばして続行）"
+                );
+                continue;
+            }
         };
-        if !entry.file_type().is_ok_and(|t| t.is_file()) {
-            continue;
+        match entry.file_type() {
+            Ok(file_type) if file_type.is_file() => {}
+            // フォルダ（とその他の種別）は面の画像と認めない＝失敗ではないので記録しない。
+            Ok(_) => continue,
+            Err(error) => {
+                tracing::warn!(
+                    file = %entry.file_name().to_string_lossy(),
+                    error = %error,
+                    "shell: フォルダの 1 件の種別の読み取りに失敗（その 1 件を飛ばして続行）"
+                );
+                continue;
+            }
         }
         if let Some(name) = entry.file_name().to_str() {
             names.push(name.to_string());

@@ -100,7 +100,7 @@
   - _Depends: 2.3, 3.1, 3.3_
   - _Boundary: areka-emo-present shell_target_
 
-- [ ] 4.2 権威の記録一式を実装する
+- [x] 4.2 権威の記録一式を実装する
   - すべて `load_shell_target` の中で、**読み込み 1 回につき 1 度だけ**出す。`build_world` は新しい記録を 0 本
   - 一覧の結果を `info!`（`shell_dir`・`recognized`・`used`・`shadowed`）／`element0` が在って使わなかった画像を面ごとに `debug!`（`surface_id`・`file`）／同じ番号の重複を番号ごとに `warn!`（`surface_id`・`adopted`・`dropped`）／大きすぎる番号を名前ごとに `debug!`（`file`）／相手の無いコマを組ごとに `warn!`（`surface_id`・`target`）／焼く段で落ちた絵を絵ごとに `warn!`（文言に実機確認が数える語「shell bake で脱落した element」を含める）
   - 失敗は `error!`＋`Err`: フォルダの一覧が取れない（`shell_dir`・`error` 付き）・`surfaces.txt` が読めない・面が 0 個。**一覧の中の 1 件が取れない場合は `warn!` を出して その 1 件を飛ばして続行する**（バルーンと同じ扱い）。記録の無い失敗経路を持たない
@@ -233,3 +233,6 @@
 
 - 2.2: レビュー差し戻しの原因は 2 往復とも「コードと食い違う古い注記の取り残し」だった。振る舞いを変えたら、**モジュール冒頭の説明・変更した関数の公開 rustdoc・分岐の直前の注記・既存テストの doc コメント**の 4 か所を必ず走査して事実へ直すこと。特に公開 rustdoc（`cargo doc` に出る）は見落としやすい。
 - 2.1 → 2.4: 抜き色の腕の着地で `emo2` の `null.png` が焼かれるようになり、`emo2_e2e`・`emo2_golden` の期待値が 1 行増えた（54 → 55 行）。`areka-emo-atlas` の焼き結果に触る変更は golden の作り直し（`record_golden`）が要る。
+- 4.1: 一時フォルダは自作せず共有窓口 `temp_path_kit::TempPath` を使う（`crates/log-capture-kit/tests/temp_path_guard_test.rs` が自作を拒む）。`areka-emo-present` の dev-dep に `temp-path-kit` を追加済み。
+- 4.1: `shell_target.rs` と `shell_target_load_tests.rs` に「記録はタスク 4.2 が足す」「受け口はタスク 4.3 が `shell_target_test_support.rs` へ移す」の前方参照が 10 か所ある。4.2／4.3 の着地時に事実へ直すこと。
+- 4.2: `emo2` の記録の檻（`recognized=2 used=0 shadowed=2`・使わなかった画像の `debug!` 2 行・`warn!` 0 行）は `shell_target_load_tests.rs` に既済。タスク 4.4 は A／B の全画素の一致が残りで、記録の檻を二重に置かないこと。
