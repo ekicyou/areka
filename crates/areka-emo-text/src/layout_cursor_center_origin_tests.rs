@@ -303,12 +303,13 @@ fn the_center_and_origin_fixture_keeps_every_basepoint_candidate_apart() {
         );
     }
 
-    // ⑸ 宣言バルーンでは 3 方向とも start() が宣言値そのもの（角へ寄せない・R2.9）。
+    // ⑸ 宣言値 (50, 20) は validrect（x は 30〜350・y は 8〜210）の範囲内なので、
+    //    3 方向とも start() が宣言値そのものになる（R2.9）。
     for mode in MODES {
         assert_eq!(
             region_declared(mode).start(),
             DECLARED_ORIGIN,
-            "{mode:?}: 宣言された origin 成分は字義どおり（書字開始角へ縮退しない）"
+            "{mode:?}: 範囲内に収まる宣言なので宣言値がそのまま書き始めになる（範囲外の宣言なら書字開始角へ縮退する）"
         );
     }
 }
@@ -540,6 +541,13 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
 /// **V7**: 文字描画開始点を角と異なる位置 `(50, 20)` に**宣言**したバルーンでは、`\_l[0,0]` が
 /// 3 書字方向とも**宣言値から**測られる（Requirement 2.9・design.md 原点表「宣言された
 /// `origin` 成分はそのまま原点になる」）。
+///
+/// 引用元は完了済みの仕様 `.kiro/specs/completed/areka-P0-cursor-tag-canon/design.md` であり、
+/// **引用したその一文は本仕様 `areka-P0-balloon-origin-outside-validrect` が上書きしている**
+/// ——いまは validrect の範囲内（両端を含む）に収まる宣言だけがそのまま原点になり、範囲の外へ
+/// 解決された宣言は未宣言の成分と同じく書字開始角へ落ちる。本検査の宣言値 `(50, 20)` は
+/// validrect（x は 30〜350・y は 8〜210）の範囲内なので、引用の結論はこの条件のもとでは
+/// 変わらない。完了済みの仕様は改訂しない決まりなので、注記は引用する側に置く。
 ///
 /// 手計算（宣言 `origin (50, 20)`・validrect `left 30 / top 8 / right 350 / bottom 210`・font 10）:
 /// - `horizontal_tb`: 着地 `(50 + 0, 20 + 0) = (50, 20)` → 行矩形 `(50, 20, 60, 30)`

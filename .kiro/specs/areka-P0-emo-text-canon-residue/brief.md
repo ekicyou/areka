@@ -50,6 +50,7 @@
 ## Constraints
 
 - 編集集合: `crates/areka-emo-text/src/{writing,region,layout}.rs`（＋兄弟テスト）・`crates/areka-parsers/src/balloon/{parse,model}.rs`・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` §8。
+- 項目 14 の定数 `BALLOON_NAME_PLACEHOLDER` の参照は 2026-09-19 時点で **3 ファイル**（`region.rs` が定義・`actor.rs` と `actor_decoration.rs` が import）・**警告 2 種類**（折返し基準の粗さ `warn_coarse_wrap_threshold`／`origin` が描画範囲の外 `warn_ignored_origin`）へ増えている（`areka-P0-balloon-origin-outside-validrect`）——バルーン名へ差し替えるときは上の編集集合に `actor.rs`・`actor_decoration.rs` を足すこと。
 - fixture は無改変（当時の `crates/pilot/examples/shiori-host-32/fixtures/emo2/`。2026-09-19 の `nar-install` で `vendors/sample_ghost/emo2.nar` へ畳まれ、追跡から外れている）。
 - 規模 M・要件定義は Opus で足りる（裁定は 15 の禁則文字集合の出典 1 件）。
 
