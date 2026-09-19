@@ -442,3 +442,10 @@ fn compose_size(
 #[cfg(test)]
 #[path = "measure_tests.rs"]
 mod tests;
+
+// 採寸と表示の外形の一致（検体 2 体）と、読み込みの複製が戻っていないことの本文走査。
+// `measure_tests.rs` は 1,000 行の上限に余裕が無いので兄弟として置く
+// （spec: areka-P0-shell-implicit-surface 要件 7.12）。
+#[cfg(test)]
+#[path = "measure_template_tests.rs"]
+mod template_tests;
