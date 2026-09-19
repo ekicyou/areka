@@ -49,8 +49,10 @@ pub mod presenter;
 /// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。
 pub mod scale;
-/// シェルの読み込みの権威（`shell_target`）。シェルのフォルダ直下のファイル名から「番号 → 面の画像」を
-/// 決める純粋な判定（`select_surface_images`）を持つ。名前の判定はバルーンの系列解決と同じ 1 つの実装
+/// シェルの読み込みの権威（`shell_target`）。シェルのフォルダから「焼いた絵＋面の表を必要な数だけ
+/// 組める値」（`ShellTarget`）を作る唯一の入口（`load_shell_target`）と、fs を触らない核
+/// （`build_shell_target`）を持つ。シェルのフォルダ直下のファイル名から「番号 → 面の画像」を決める
+/// 純粋な判定（`select_surface_images`）の名前の判定は、バルーンの系列解決と同じ 1 つの実装
 /// （`balloon::face_digits_of`）を接頭辞 `surface` で共有する。
 pub mod shell_target;
 
@@ -65,4 +67,7 @@ pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 pub use presenter::{ClientHit, EmoPresenter, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
-pub use shell_target::{SurfaceImageSelection, select_surface_images};
+pub use shell_target::{
+    ShellLoadError, ShellTarget, SurfaceImageSelection, build_shell_target, load_shell_target,
+    select_surface_images,
+};

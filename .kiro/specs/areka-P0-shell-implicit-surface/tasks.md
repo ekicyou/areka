@@ -90,7 +90,7 @@
 
 - [ ] 4. シェルの読み込みの権威
 
-- [ ] 4.1 `load_shell_target`・`build_shell_target`・`ShellTarget` の型と核を実装する
+- [x] 4.1 `load_shell_target`・`build_shell_target`・`ShellTarget` の型と核を実装する
   - `shell_target.rs` に、fs を触る入口 `load_shell_target(shell_dir, decoder)` と、fs を触らない核 `build_shell_target(shell, selection, shell_dir, decoder)`、値 `ShellTarget`（`atlas()`・`bake_errors()`・`build_world()`）、`thiserror` の `ShellLoadError`（`List`・`Read`・`Empty`）を置く
   - 一覧はフォルダ**直下**の**ファイルだけ**（`file_type().is_file()`）。フォルダとサブフォルダの中身は 0 件。バルーンの `enumerate_file_names` は失敗の型がバルーン専用でフォルダを除かないので流用しない
   - 順序は「一覧 → `surfaces.txt` の読取と解析（`charset::decode(&bytes, DefaultEncoding::Ansi)` は今と同じ）→ 面の表（`build_with_images`）→ 使う画像を聞く → 焼く」。`ShellTarget::build_world` は `build_with_images` → `bind_atlas(SetId(0))` を毎回新しく行う
