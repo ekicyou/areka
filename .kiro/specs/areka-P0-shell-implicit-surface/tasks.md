@@ -350,7 +350,7 @@
 
 | 項目 | 結果 | 証跡 |
 |---|---|---|
-| 立ち絵・バルーン・メニュー・終了が適用前と同じに見える | **PASS（ログの範囲）／視覚は未確認** | `ERROR` 0 行・`loop 抽選発火` 19 回・バルーンの可視遷移・`ghost shutdown sequence completed` で exit 0。撫でとメニューの操作は自動走行では起こせない |
+| 立ち絵・バルーン・メニュー・終了が適用前と同じに見える | **PASS（ログの範囲＋開発者の目視・2026-09-20）** | `ERROR` 0 行・`loop 抽選発火` 19 回・バルーンの可視遷移・`ghost shutdown sequence completed` で exit 0。撫でとメニューの操作は自動走行では起こせない |
 | 起動時の `warn!`「shell bake で脱落した element」が 0 回 | **PASS** | 0 件。同じ走行に `shell_target` の `debug!` が実在する（`element0 が在るため面の画像を土台に使わなかった（R6.2） surface_id=0 file="surface0.png"`／`surface_id=10 file="surface10.png"`） |
 | `null.png` の「全透明」の `warn!` が出ている | **PASS** | `bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547`。直前に抜き色の `debug!`（`b=0 g=0 r=0 a=0`）も出ており、抜き色の腕を通ったことが分かる |
 | 記録の実測 | **要件どおり** | `shell: シェルの面の画像の一覧が終わった（R6.1） … recognized=2 used=0 shadowed=2`・使わなかった画像の `debug!` が面 0・面 10 の 2 行・重複／相手の無いコマ／脱落の `warn!` が 0 行 |
@@ -363,7 +363,7 @@
 2. 7.1 ⑷ 右クリックメニューの 1 項目目が `dic06_String.txt` の 3 候補のどれかで `(&R)` に下線が付く — **2026-09-20 に開発者が目視サインオフ済み**
 3. 7.2 ⑵ 目の周りに四角い地色が出ない（画素の証跡はタスク 6.1 の檻にある） — **2026-09-20 に開発者が目視サインオフ済み**
 4. 7.2 ⑶ 起動挨拶の**字形**が文字化けしない（文字の経路は上の表のとおり正しい） — **2026-09-20 に開発者が目視サインオフ済み**
-5. 7.3 撫で・メニュー・終了の操作が適用前と同じに見える
+5. 7.3 撫で・メニュー・終了の操作が適用前と同じに見える — **2026-09-20 に開発者が目視サインオフ済み（これで 5 件すべて完了）**
 
 ### 7.4 実機で見つかった妨げ
 
@@ -431,3 +431,16 @@ feature 全体の検証で 3 件の申し送りが出たので、その場で直
 **再観測の手順（この項目を次に確かめる人への申し送り）**: `konnoyayame` の `animation0` は面 0 にしか無いので、**起動挨拶が面 0 で終わった走行でしか観測できない**。台本を数えると面 0 で終わる挨拶は `OnBoot` の**「朝」（hour 4〜11）の 3 本中 1 本だけ**で、昼・夕方・夜・深夜の分岐には面 0 終わりが 1 本も無い。撫で反応は面 0 へ戻すが滞在は **2.6 秒**（実測）しかなく、1 秒 1/2 の抽選では 25% の確率で 1 度も出ない。**朝の時間帯に、駐車面が 0 になるまで起動し直す**のが確実な手順である。
 
 **⑶ 起動挨拶の字形（要件 8.2 ⑶）も同日サインオフ済み。** 開発者の判定: 「バルーンで変だったことはない。」本日この検体を 4 度起動し、そのたびに起動挨拶がバルーンへ流れるのを開発者が見ている。文字の経路の証跡（`charset_initial charset="Shift_JIS" source="default"` と `command=Text("初めまして。")` ほか）は 7.2 の表のとおりで、**描かれた字形の側も目視で確かめられた**。
+
+### `emo2`（要件 8.2 ⑸ 撫で・メニュー・終了が適用前と同じに見える）— **問題なし**
+
+走行: `AREKA_APP_SMOKE_EXIT_MS=1800000`（安全網・実際には使われず）・`RUST_LOG=info,areka_emo_present::shell_target=debug,areka_seriko=debug,areka::menu=debug`・1 分 15 秒・**exit 0**。
+
+**開発者の判定: 「挙動に問題はない。」** 併せてログが独立に裏付けたもの:
+
+- **撫でが効いた**——`kanade: active talk 中にマウス由来 Value——単一 slot 置換（新 talk_id 採番） event="steady_talk_replace"` が 2 回。さらにバルーンの選択肢も押されており（`event="choice_accepted" choice_id=Onエモの…` が 2 回 → `選択由来の応答にスクリプト——単一 slot 調停で差し替え再生起動（Req4.1／4.3）` が 4 回）、`talk 完了——定常運転へ復帰` が 4 回。
+- **右クリックメニューが開いて効いた**——`[menu] shown event="menu_shown" scope=0 items=2` → `[menu] selected event="menu_selected" scope=0 frame=Close id=2`。
+- **終了はメニュー経由の正規の経路**——`kanade: reason=Quit——終了系列（Quit）へ event="talk_done_quit" talk_id=11` → `shiori-actor: 正規 clean shutdown 完了（unload → helper 正常終了 exit(0)） event="unload_clean"` → `ghost_quit cause=Quit` → `ghost shutdown sequence completed`。**有界の自動終了（強制終了の経路）は使われていない。**
+- **退化していないことの証跡**——`ERROR` 0 行・`panicked` 0 行・`shell bake で脱落した element` **0 件**・一覧は要件どおり `recognized=2 used=0 shadowed=2`（`emo2` は `element0` を持つので面の画像は土台に使われない）。
+
+**これで「自動走行では確かめられなかった項目」5 件がすべて開発者の目視で片付いた。**要件 4.10（抜き色で透明になった場所はクリックが背後へ抜ける）も 7.1 ⑶ で目視サインオフ済みだが、**檻は今も 1 本も無い**ことは変わらない。
