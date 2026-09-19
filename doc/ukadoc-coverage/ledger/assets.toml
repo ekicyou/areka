@@ -2371,7 +2371,7 @@ links = []
 note = """
 壊れ方: 見た目の差（`0` と書いたバルーンでも 1 として扱う）。記録: なし。
 areka はこの欄を読まない。バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、宣言に何を書いても読まれず、記録も出ない。
-そのうえで焼き方は常に `use_self_alpha,1` 相当に固定されている。areka-emo-present の balloon::build_balloon_target_from_faces が areka-emo-atlas の normalize::UseSelfAlpha::On を決め打ちで渡しており、バルーンの絵をこの値で焼くのはこの 1 か所だけである（areka の emo2_boot::assets も同じ値を決め打ちするが、そちらが焼くのはシェルの絵であって、バルーンの 2 か所目ではない。2026-09-18 に実測して確かめた）。
+そのうえで焼き方は常に `use_self_alpha,1` 相当に固定されている。areka-emo-present の balloon::build_balloon_target_from_faces が areka-emo-atlas の normalize::UseSelfAlpha::On を決め打ちで渡しており、バルーンの絵をこの値で焼くのはこの 1 か所だけである（同じ値を決め打ちする場所がもう 1 つ、同じクレートの shell_target::build_shell_target にあるが、そちらが焼くのはシェルの絵であって、バルーンの 2 か所目ではない。2026-09-18 に実測し、2026-09-20 に綴りを引き直した——シェル側の決め打ちは当時 areka の emo2_boot::assets に在ったが、シェル読み込みの権威へ寄せられた）。
 したがって `use_self_alpha,0` と書いたバルーンも 1 として扱われる。正典どおりに動かない代わりに動きはするので、状態は縮退である。半透明を前提に描かれたバルーンだけが正しく表示される、というのが利用者から見える差である。
 シェルの descript にある `seriko.use_self_alpha` は綴りの違う別の項目である。名前が似ているだけで一緒に扱わないこと。
 裁量: この固定は黙って壊れているのではなく意図した扱いであり、doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」に 1 行で登記してある（開発者裁定 2026-09-18）。
@@ -5947,7 +5947,8 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。
 areka は透過の扱いを宣言で切り替えられない。
-透過の扱いを表す語彙は areka-emo-atlas の normalize::UseSelfAlpha に正典どおり 3 通りそろっているが、どれを使うかは呼ぶ側が決め打ちで渡しており、シェルの descript の宣言からは来ない——起動時に絵を焼く areka の emo2_boot::assets も、寸法を測る areka の placement::measure も、α を採る側の値を固定で渡す（後者は「emo2 の実測に合わせた」と自分の説明に書いている）。だから `1` と書いたゴーストでは結果が偶然そろい、`0` や `full` と書いたゴーストでは宣言と違う扱いになる。
+透過の扱いを表す語彙は areka-emo-atlas の normalize::UseSelfAlpha に正典どおり 3 通りそろっているが、どれを使うかは呼ぶ側が決め打ちで渡しており、シェルの descript の宣言からは来ない。だから `1` と書いたゴーストでは結果が偶然そろい、`0` や `full` と書いたゴーストでは宣言と違う扱いになる。
+2026-09-20 の実測: 宣言は今も読まず常に `1` 相当。その下で α の無い絵は正典どおり抜き色で描かれるようになった。`.pna` と `full` は未実装のまま。シェルの絵を焼くときに α を採る側の値を固定で渡す場所は、2026-09-20 に 1 か所へ寄った——areka-emo-present の shell_target::build_shell_target である（起動の areka の emo2_boot::assets も採寸の areka の placement::measure も、同 shell_target::load_shell_target を通るようになったため、自分では値を渡さない）。抜き色（`UseSelfAlpha::On` かつ α の無い絵で左上の色を透明にする）を実装したのは `areka-P0-shell-implicit-surface`（要件 4）で、`UseSelfAlpha::Off` の下の抜き色は未実装のまま残る。状態と担当はこの実測では変えていない（宣言を読む経路は 1 本も無いままだからである）。
 シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
 沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
 担当 spec は areka-P0-emo-atlas。同 spec の brief は読むべき正典としてシェルの descript のこの欄を名指しし、透過の正規化を自分の範囲に挙げている。ただし担当 spec の記述が古い——同 brief は「この欄はシェルの descript 由来の設定として注ぎ込む」と書いているが、着地した経路は決め打ちの値を渡しており、宣言は届いていない。
@@ -6108,7 +6109,7 @@ priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_animations が忠実に転記し、areka-seriko の table が実際に再生を駆動するのは `random` と `bind+random` の 2 つだけである。`bind` は静的な着せ替えゆえ非駆動、`sometimes`／`always`／`runonce`／`never` などは元の語を添えて非駆動になる。どちらも記録は控えめな段にしか出ず、既定の記録の水準（areka の main が既定とする段）では見えない。見出しの `*` は 1 個以上の数字。
+壊れ方: 黙って壊れる。記録: debug!。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_animations が忠実に転記し、areka-seriko の table が実際に再生を駆動するのは `random`・`bind+random` と、2026-09-20 に加わった `sometimes`・`rarely` の 4 つである（後の 2 つは table::AnimationTable::from_world が `random,2`／`random,4` と同じ引き金へ読み替えて採録する。`areka-P0-shell-implicit-surface` の要件 11.1・11.2）。`bind` は静的な着せ替えゆえ非駆動、`always`／`runonce`／`never` などは元の語を添えて非駆動のままである。どちらも記録は控えめな段にしか出ず、既定の記録の水準（areka の main が既定とする段）では見えない。見出しの `*` は 1 個以上の数字。
 担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として間隔の語を名指ししている。
 束: アニメーションの定義・引き受けたうえで縮めている（控えめな記録）（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 15——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -6967,10 +6968,10 @@ priority = "A18"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。areka-parsers の charset::prescan_charset が大小文字を無視してこの宣言を引き、同 charset::decode がその文字コードで surfaces.txt 全体を復号する。本番でこのファイルを読むのは areka の emo2_boot::assets（起動）と placement::measure（採寸）の 2 か所で、どちらも読んだバイト列をこの復号に通してから解析へ渡す。Shift_JIS で書かれた既存シェルもそのまま読める。
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の charset::prescan_charset が大小文字を無視してこの宣言を引き、同 charset::decode がその文字コードで surfaces.txt 全体を復号する。本番でこのファイルを読むのは areka-emo-present の shell_target::load_shell_target の 1 か所で、読んだバイト列をこの復号に通してから解析へ渡す。起動の areka の emo2_boot::assets も採寸の areka の placement::measure も、2026-09-20 からこの入口を呼ぶ（それまでは 2 か所がそれぞれ読んでいた）。Shift_JIS で書かれた既存シェルもそのまま読める。
 宣言された綴りを解けないときは、呼ぶ側が決めた既定（本番は Shift_JIS）へ静かに落ちる。落とすときに元の綴りを添えた記録が出るが、段は控えめで、areka の main が既定とする記録の水準では見えない。宣言と違う読み方をされたことに利用者は気づけず、文字化けだけが起きる——これが上の段を選んだ根拠である。宣言が無いときも同じ既定になる。優先度の数値は調査当時の見立て（読み取りごと失敗する明示的なエラーの段）のまま据え置いてあり、段の付け直しは統合担当の持ち分である。
 既知の差: BOM で始まる UTF-8 の surfaces.txt では、以前は U+FEFF が 1 行目の先頭に残って その行の解釈を狂わせていたが、復号が BOM を吸収するようになった。areka 同梱の emo2 のシェルは BOM を持たないので、解析の結果は変わらない。
-根拠の場所: crates/areka-parsers/src/charset/prescan.rs の charset キー一致の腕（この宣言を読む唯一の定義箇所。ゴースト・シェル・バルーンの descript と同じ腕を共有する）。読取の 2 か所は crates/areka/src/emo2_boot/assets.rs と crates/areka/src/placement/measure.rs。シェルの surfaces.txt を読む腕は areka-parsers の shell::decode の側にあるが、そちらに charset 専用の腕は無い（未知行として素通しする）ので、宣言の読み手は前走査の 1 か所だけである。
+根拠の場所: crates/areka-parsers/src/charset/prescan.rs の charset キー一致の腕（この宣言を読む唯一の定義箇所。ゴースト・シェル・バルーンの descript と同じ腕を共有する）。読取は crates/areka-emo-present/src/shell_target.rs の 1 か所（呼び手は crates/areka/src/emo2_boot/assets.rs と crates/areka/src/placement/measure.rs）。シェルの surfaces.txt を読む腕は areka-parsers の shell::decode の側にあるが、そちらに charset 専用の腕は無い（未知行として素通しする）ので、宣言の読み手は前走査の 1 か所だけである。
 同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とこの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目は読む経路のある 4 枚のうちシェルの surfaces.txt の側である。名前で引かず、ページを決めてから引くこと。
 担当 spec は areka-P0-charset-canon。
 束: 作者の手控えと書式の宣言・読む経路が通った（先に要る仕組み: シェルの定義ファイルの転記層）。束の順位: 63——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -7026,6 +7027,7 @@ values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。縮退の転記元: 見直し表の `areka-P0-seriko-runtime`。areka-parsers の shell::decode_elements は第 2 欄が `overlay` の行だけを値にし、他の描き方の行は何も記録せずに読み飛ばす。層の番号・画像の道・位置は転記してareka-emo-compose が重ね合わせに使う。見出しの `*` は 1 個以上の数字。
+2026-09-20 の実測: 面の画像と `overlay` の `element0` の関係は正典どおりになった。`overlay` 以外の描画メソッドが読み飛ばされる縮退は残り、その間は `overlay` 以外の `element0` を持つ面で画像が土台に使われる（正典では破棄。`areka-P0-shell-implicit-surface` の要件 2.7 の既知のずれ）。`element0` の無い面にファイル名だけの画像を層 0 として敷くのは areka-emo-compose の base_image::apply_base_images で、`element0` が在る面には手を出さない。状態と担当はこの実測では変えていない（縮退の根は `overlay` 以外の読み飛ばしのままだからである）。
 担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に surfaces.txt の解析を挙げ、その中身として重ね合わせの一覧を名指ししている。
 束: 絵の重ね合わせの行・引き受けたうえで縮めている（記録なし）（先に要る仕組み: emo の合成器）。束の順位: 17——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -7484,18 +7486,20 @@ areka-parsers の shell::normalize_interval が値にし、areka-seriko の tabl
 """
 
 [entry."ukadoc:descript_shell_surfaces:rarely:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-implicit-surface"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
-実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
-落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
-この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+壊れ方: 見た目の差。記録: debug!。areka はこの語を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無い。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、同じページの `random,数値` でも採っている）。ここに出る記録は壊れたときの記録ではなく、読み替えたことを残す記録である。
+areka-parsers の shell::normalize_interval が名前として認めるのは 3 つの語（`bind`・`random`・`bind+random`）だけなので、この語は元の綴りのまま `Interval::Other` へ忠実に転記される。それを areka-seriko の table::AnimationTable::from_world が `random,4` と同じ引き金（毎秒 4 分の 1 の確率）・同じコマの進め方へ読み替えて採録する。比べ方は小文字の完全一致で、`Rarely` のような大文字混じりの綴りは読み替えない。
+読み替えたときに元の綴りを添えた debug! が出る（欄: surface_id・animation_id・vocab・k）ので、どの面のどのアニメーションがどの引き金になったかがログから読める。段は控えめで、areka の main が既定とする記録の水準では見えない。
+実測（2026-09-20）: テンプレートゴースト `konnoyayame` の面 0 のまばたき（`animation0`）が `sometimes` を使っており、実機の走行で `k=2` の抽選が 101 回発火した。`rarely` を使う検体は手元に 0 件だが、読み替えは同じ 1 か所の腕で、`sometimes` と同型に採録される。
+`sometimes`・`rarely` 以外の間隔語（`always`・`runonce`・`never`・`endtalk`・`periodic,数値` など）は今までどおり元の綴りを添えた debug! を残して非駆動である。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:reduce:1"]
@@ -7582,18 +7586,20 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:sometimes:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-implicit-surface"
 priority = "A6"
 values = ["気配"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
-実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
-落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
-この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+壊れ方: 見た目の差。記録: debug!。areka はこの語を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無い。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、同じページの `random,数値` でも採っている）。ここに出る記録は壊れたときの記録ではなく、読み替えたことを残す記録である。
+areka-parsers の shell::normalize_interval が名前として認めるのは 3 つの語（`bind`・`random`・`bind+random`）だけなので、この語は元の綴りのまま `Interval::Other` へ忠実に転記される。それを areka-seriko の table::AnimationTable::from_world が `random,2` と同じ引き金（毎秒 2 分の 1 の確率）・同じコマの進め方へ読み替えて採録する。比べ方は小文字の完全一致で、`Sometimes` のような大文字混じりの綴りは読み替えない。
+読み替えたときに元の綴りを添えた debug! が出る（欄: surface_id・animation_id・vocab・k）ので、どの面のどのアニメーションがどの引き金になったかがログから読める。段は控えめで、areka の main が既定とする記録の水準では見えない。
+実測（2026-09-20）: テンプレートゴースト `konnoyayame` の面 0 のまばたき（`animation0`）が `sometimes` を使っており、実機の走行で `k=2` の抽選が 101 回発火した。`rarely` を使う検体は手元に 0 件だが、読み替えは同じ 1 か所の腕で、`sometimes` と同型に採録される。
+`sometimes`・`rarely` 以外の間隔語（`always`・`runonce`・`never`・`endtalk`・`periodic,数値` など）は今までどおり元の綴りを添えた debug! を残して非駆動である。この 2 語を駆動側へ移したのは `areka-P0-shell-implicit-surface`（要件 11.1・11.2）で、正典 URL はその読み替えの腕（areka-seriko の table::AnimationTable::from_world）に置いた。
 束: アニメーションを始める間隔の語・名前を受けて控えめな記録だけ残す（先に要る仕組み: SERIKO/MAYUNA の再生）。束の順位: 24——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束の名前と順位は、この語が非駆動だった当時の仕分けの綴りをそのまま残している（同じ束の他の間隔語と揃えるため。優先度 A6 は変えていない）。
 """
 
 [entry."ukadoc:descript_shell_surfaces:start_2cID:1"]
@@ -8151,7 +8157,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:manual_translator" },
 ]
 note = """
-壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは shell/master に置くファイル一式（descript.txt・立ち絵の画像・surfaces.txt・分割された surfaces の追加ファイル・alias.txt・surfacetable.txt・サムネイル画像・makoto.dll・メニュー用の画像 3 枚）を並べる。areka が読むのは emo2_boot::assets::SURFACES_TXT が指す 1 つの surfaces.txt までで、分割された追加ファイル・alias.txt・surfacetable.txt・makoto.dll・メニュー用の画像を読む経路が無いので、ページ全体としては満たしていない。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは shell/master に置くファイル一式（descript.txt・立ち絵の画像・surfaces.txt・分割された surfaces の追加ファイル・alias.txt・surfacetable.txt・サムネイル画像・makoto.dll・メニュー用の画像 3 枚）を並べる。areka が読むのは areka-emo-present の shell_target::SURFACES_TXT が指す 1 つの surfaces.txt と、同 shell_target::load_shell_target がシェルのフォルダ直下から拾う `surface<番号>.png` の綴りの立ち絵までで、分割された追加ファイル・alias.txt・surfacetable.txt・makoto.dll・メニュー用の画像を読む経路が無いので、ページ全体としては満たしていない（ファイル名だけの立ち絵を読むようになったのは 2026-09-20・`areka-P0-shell-implicit-surface`。この粒度では状態は変えない）。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
 担当は空。ページ 1 枚をまとめて指すこの粒度を引き受ける spec は無い（担当が決まるのは、このページが並べるファイルのうち、descript.txt と surfaces.txt の中の個々の欄であって、ページ全体ではない）。担当の割り当ては areka-P0-ukadoc-coverage-roadmap に委ねる。
 関連の向き: 正典の本文が相手のページを名指しで指しているとき、指している側にだけ関連を置き、指されている側には戻りの関連を置かない。このページは shell/master に置くファイルを並べる途中で、メニュー用の画像については「オーナードローメニュー」のページ、makoto.dll については「トランスレータ」のページと、同じものをゴースト側にも置けるという話で「ゴースト」のページを名指しで指している。その先をすべて関連に置いた。「全体の構成」のページはここを名指しで指しているが、戻りの関連は置かないので、その関連はあちらにある。
 areka が受け取るのに正典に項目の見出しが無い語が 2 つある——surface.append と kero.surface.alias。どちらも areka-parsers の shell::decode::dispatch_block がブロックの種別として見分けている。2026-09-05 に正典の今の版を直に読んで確かめたところ、surface.append は surfaces.txt のページの節の見出しと説明の文に、kero.surface.alias は同じページの説明の文だけに現れ、どちらも項目の見出しにはなっていない。このページ（シェル）にはどちらの綴りも 1 度も現れず、ここが触れているのは旧仕様の alias.txt が surfaces.txt に統合されたことだけで、綴りが違う。見出しごとに取り出した写しにはこの 2 語がどこにも入っていないので、カタログにも id が無く、この 2 語に対応する行を台帳に作ることはできない。

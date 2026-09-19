@@ -212,7 +212,7 @@
 
 - [ ] 8. 文書と台帳（着地時）
 
-- [ ] 8.1 網羅台帳を実測に合わせて直す
+- [x] 8.1 網羅台帳を実測に合わせて直す
   - `doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:descript_shell_surfaces:sometimes:1` と `…:rarely:1` の 2 件に、担当 `areka-P0-shell-implicit-surface` と実測の状態を登記する。新しい行の追加は 0 件
   - 備考 2 項目を要件の文面どおりに直す（状態と担当は変えない）: ⑴ `descript_shell_surfaces` の `element*` ⑵ `descript_shell` の `seriko.use_self_alpha,値`
   - 報告を作り直す
@@ -242,6 +242,9 @@
 - 4.4: `shell_target_test_support.rs` の冒頭が挙げる「檻は 4 本」のうち `shell_target_template_tests.rs` はタスク 6.1 の持ち物。6.1 の着地でファイル名が変わったらこの 1 行も追随させること。
 - 5.3: 5.1 の着地で採寸側も表示側も `load_shell_target` を通るため、「2 経路の外形が一致する」だけの主張は**今日は構造的にほぼ恒真**である。要件 7.6 を実際に支えているのは ⑴ 要件 3.1 の実数（236×462／140×160／260×390／200×200）を両経路で判定していること ⑵ `assets.rs`・`measure.rs` の本文に `shell::parse(` が 0 件であることの走査、の 2 点。**報告で「2 経路の一致」だけを要件 3.6 の根拠に挙げないこと。**
 - 5.3: 本文走査の自作の走査器は `'"'` の文字リテラルと生文字列を扱えず、本物の呼び出しを静かに見逃す。前提条件を檻で主張して塞いである（持ち込むと赤になる）。走査器を強くせずにこの形式を持ち込まないこと。
+- 8.1: **`doc/ukadoc-coverage/briefing-assets.md` には機械の見張りが 1 つも無い。** このファイルは台帳から機械で組み直した表を貼ったものだと自分で宣言しており（同ファイル「SERIKO/MAYUNA 世代別対応表」の冒頭・「台帳の側を直したら、表も作り直して貼り直すことになる」）、状態の欄も「台帳の状態をそのまま写したもの」と書いてある。ところが `crates/ukadoc-survey/` はこのファイルを**1 行も読まない**（`briefing-assets` を `crates/` 全域に当てて 0 件）。同クレートが名前で読む文書は `linkage.md`・`values.md`・`briefing.md`・`roadmap-draft.md`・`README.md` の 5 本だけで、ドメイン別のブリーフィング 4 本（`briefing-assets.md`・`briefing-property.md`・`briefing-sakura-script.md`・`briefing-shiori.md`）はどれも入っていない。したがって **`cargo test -p ukadoc-survey` が緑でも、`cargo run -p ukadoc-survey -- check` が 0 件でも、台帳と表の食い違いには気付けない**。`briefing.md` のほうは段階と順位・件数・優先度を台帳と突き合わせる腕（`crates/ukadoc-survey/tests/consistency/briefing_checks.rs`・同 `briefing_arms.rs`・同 `spec_checks.rs`）が在るので、同じ種類の取り残しは赤になる。**この非対称がタスク 8.2 の扱う欠落である**（台帳の `status` と表の第 4 欄を id で突き合わせる腕を、ドメイン別ブリーフィング 4 本にも置くかどうか）。
+- 8.1: 上の見張りが無いため、この差し戻しの是正では**手で突き合わせて 0 件を確かめた**。手順は ⑴ `ledger/assets.toml` から `[entry."<id>"]` とその直下の `status` を拾って `ukadoc:descript_shell_surfaces:` で始まる 137 件を取る、⑵ `briefing-assets.md` の表から同じ接頭辞の行を拾って第 4 欄を取る（137 行・重複 0）、⑶ id で突き合わせる、の 3 つ。結果は**食い違い 0 行**、内訳は両側とも 実装済み 7・語彙のみ 55・縮退 4・別名 4・未対応 67。是正したのは表の 3 行（`charset,文字コード` 未対応→実装済み・`rarely` 語彙のみ→実装済み・`sometimes` 語彙のみ→実装済み）と、内訳を書いた 2 か所（表の読み方の段落と ⑶ surfaces.txt の「台帳の内訳」）。実装済み 7 件がソース側に正典 URL の 1 行を持つことは `crates/` を grep して 1 件ずつ確かめた（`areka-emo-compose/src/method.rs:148`・`:149`／`areka-parsers/src/shell/decode.rs:388`・`:502`／`areka-parsers/src/charset/prescan.rs:57`／`areka-seriko/src/table.rs:131`・`:133`。この 7 件以外に同ページの正典 URL は `crates/` に無い）。
+- 8.1: 表の 3 行を直すと、同じファイルの散文 2 か所が**自分の表と矛盾する**ので併せて是正した。⑴ 注記 ⑴「間隔の語は 2 語だけ」——`sometimes`／`rarely` を `random,2`／`random,4` へ読み替える腕が `crates/areka-seriko/src/table.rs:130`〜`:136` に在るので駆動するのは 4 語。⑵ ⑶ surfaces.txt の「このファイルの文字コードの宣言は読まれない」——実際は `crates/areka-emo-present/src/shell_target.rs:254`〜`:255` が `areka-parsers` の `charset::decode`（中で `prescan_charset` を呼ぶ）を通しており、宣言は読まれる。後者は本仕様より前からの誤りで、`main` の `crates/areka/src/emo2_boot/assets.rs` も同じ復号を通していた（`git show main:` で確認）。
 
 ## 摂動の記録（タスク 6.2・2026-09-20）
 

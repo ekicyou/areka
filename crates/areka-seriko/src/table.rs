@@ -128,7 +128,9 @@ impl AnimationTable {
                         // 要件 11.1/11.2）。他の語は今までどおり元語彙込みで記録して非採録＝
                         // 「always と書いたのに動かない」の診断は残る語について生きる（要件 11.4）。
                         let rewritten = match &**vocab {
+                            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#sometimes:1
                             "sometimes" => Some(2),
+                            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#rarely:1
                             "rarely" => Some(4),
                             _ => None,
                         };
