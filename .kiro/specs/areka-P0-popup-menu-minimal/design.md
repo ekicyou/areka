@@ -165,7 +165,7 @@ crates/wintf/src/ecs/pointer/
 crates/areka/src/
 ├── menu/
 │   ├── mod.rs                 # Frame・MenuItem・Supplier・MenuAction・MenuRegistry・MenuWiring・wire_menu・組込 2 項目の登記（約 300 行）
-│   ├── mod_registry_tests.rs  # 登記の置き換え warn・取り消し・組込 2 項目（要件 6.3/6.4/2.2）
+│   ├── mod_registry_tests.rs  # 登記の置き換え warn・取り消し（要件 6.3/6.4。組込 2 項目と終了の送出 1 件は実装では mod_wiring_tests.rs）
 │   ├── plan.rs                # 純粋: 登記の写し＋名前 → MenuPlan（枠順・区切り・識別子・& の写し）（約 200 行）
 │   ├── plan_tests.rs          # 要件 9.1
 │   ├── captions.rs            # リソース名の表・問い合わせる名前の列挙・kanade 往復・返り値の写し・表示可否（約 250 行）
@@ -176,7 +176,7 @@ crates/areka/src/
 ├── readme.rs                  # ReadmeRequest・resolve_path・open（ShellExecuteW）・ReadmeWiring・wire_readme・drain system（約 200 行）
 ├── readme_tests.rs            # 要件 9.4（決め方・有効／無効）
 ├── input_events/
-│   └── input_events_menu_tests.rs  # 右ダブルクリックの預かり・Ctrl+左ダブルクリックの scope（要件 1.10/5.3）
+│   └── input_events_menu_tests.rs  # 右ダブルクリックの預かり・結線済みの Ctrl+左ダブルクリックは終了指示を送らない（要件 1.10/5.3 改訂）
 └── emo2_boot/
     ├── readme_cue.rs          # ReadmeCueSink（\![open,readme] の消費者・引数付きは warn）（約 120 行）
     └── readme_cue_tests.rs    # 要件 9.5
@@ -189,6 +189,8 @@ crates/areka-kanade/tests/kanade/
 └── resource_query_test.rs     # 偽 SHIORI で 4 通り（値／空／204／失敗）（要件 9.2）
 ```
 
+**実装後の実際（2026-09-19 の最終検証で突き合わせ）**: 上の計画に無いテストの兄弟ファイルが 5 本ある——`menu/mod_wiring_tests.rs`（結線）・`menu/trigger_flow_tests.rs`（解放→返事待ち→判定の流れ・1,000 行の上限に収めるため `trigger_tests.rs` から分けた）・`menu/trigger_show_tests.rs`（表示→動作→記録）・`menu/trigger_wired_tests.rs`（本番と同じ順序の結線）・`menu/win32_tests.rs`（`HMENU` の組立の読み戻し。窓もモーダルループも要らないので決定論で置けた＝「win32 は決定論テストなし」の見立ては外れた）。行数の見立ても動いた（`trigger.rs` 約 350→563・`plan.rs` 約 200→135）。下の変更表に無い接触は、`areka-kanade` の `schedule/close.rs`（テストのリテラルだけ）・`tests/kanade/common/common_fixture.rs`（`with_resource_response`）・`tests/kanade.rs`（`mod` 1 行）・`lib.rs` の `resource_get` の再公開、`areka-parsers` の `model_tests.rs`／`validation_tests.rs`（`readme` 欄の追随）。`trigger.rs` の内部の名前は `ReadyMenu`・`handle_release`・`poll_once`・`run_show`／`display`／`finish`（理由は tasks.md の Implementation Notes 7.3／7.4）。
+
 ### 変更ファイル（増分の目安と 1,000 行の余裕）
 
 | ファイル | 現在 | 増分 | 変更 |
@@ -197,7 +199,7 @@ crates/areka-kanade/tests/kanade/
 | `crates/wintf/src/ecs/pointer/buffers.rs` | 506 | +10 | `transfer_buffers_to_world` で `up_received` から独立に `released` を立てる |
 | `crates/wintf/src/ecs/pointer/dispatch/mod.rs` | 260 | +15 | `OnPointerReleased` の配送と末尾のクリア |
 | `crates/wintf/src/ecs/pointer/dispatch/tests.rs` | 362 | +60 | 解放配送・同 tick 押下＋解放・クリアの檻 |
-| `crates/areka/src/input_events/mod.rs` | 475 | +40 | `char_scope` を `pub(crate)`、`MouseWiring` に右ダブルクリックの預かり、`send_close_request` を `pub(crate)`、押下ハンドラの右ダブルクリック分岐を預かりへ、Ctrl+左ダブルクリックに scope |
+| `crates/areka/src/input_events/mod.rs` | 475 | +40 | `char_scope` を `pub(crate)`、`MouseWiring` に右ダブルクリックの預かり、`send_close_request` を `pub(crate)`、押下ハンドラの右ダブルクリック分岐を預かりへ、結線済みの Ctrl+左ダブルクリックの終了指示を除去（タスク 8.2） |
 | `crates/areka/src/input_events/input_events_tests.rs` | 845 | +5 | `CloseReason::User { scope }` の追随（新規檻は兄弟ファイルへ） |
 | `crates/areka/src/main.rs` | 948 | +10 | wired 分岐で `wire_mouse_input` の直後に `menu::wire_menu(app.world().borrow_mut().world_mut(), runtime.kanade().clone())` 1 呼出・窓を生やすクロージャ内の `attach_char_pointer_handlers` の隣に `menu::attach_release_handlers(world)` 1 呼出・`mod menu; mod readme;`・`shutdown(CloseReason::User { scope: 0 })` |
 | `crates/areka/src/emo2_boot/mod.rs` | 654 | +10 | `ReadmeCueSink` を sinks の 6 本目へ・boot 後に `readme::wire_readme` |
@@ -344,7 +346,7 @@ flowchart TD
 | 9.6 | 終了 1 件・Ref1／Ref2 | `trigger_tests.rs`、`input_events_menu_tests.rs`、`events_tests.rs` | 受信側で数える | — |
 | 9.7 | 摂動 | tasks の完了記録 | — | — |
 | 9.8 | 1,000 行 | File Structure Plan | `file_length_guard_test.rs` | — |
-| 9.9 | 実機確認 6 項目 | 実機チェックリスト | — | — |
+| 9.9 | 実機確認 6 項目（⑷ 里々の項目名は `areka-P0-shell-implicit-surface` へ引き渡し・tasks.md 完了記録 9.3） | 実機チェックリスト | — | — |
 | 10.1 | 担当 15 項目 | 台帳の手順 | `owner` | — |
 | 10.2 | 同じコミットで `roadmap-draft.md` | 台帳の手順 | `[[spec]]`・`owner_count` | — |
 | 10.3 | 実装済み 6・語彙のみ 9 | 台帳の手順 | `status` | — |
@@ -493,9 +495,10 @@ pub(crate) struct MenuWiring {
     kanade: Sender<KanadeMsg>,
     in_flight: Rc<Cell<bool>>,                // 表示 1 枚まで（解放〜動作の終わり・guard が Drop で必ず戻す）
     pending: Option<PendingQuery>,            // 照会の返事待ち（trigger::poll_menu_query が毎 tick 覗く）
+    to_screen: fn(HWND, (i32, i32)) -> Option<(i32, i32)>, // テストの差し替え口（本番は win32::client_to_screen・タスク 7.3）
 }
 pub(crate) fn wire_menu(world: &mut World, kanade: Sender<KanadeMsg>);
-/// 全 CharWindowMarker 窓へ OnPointerReleased を装着する（wire_menu が呼ぶ・窓を作り直す spec も呼ぶ）
+/// 全 CharWindowMarker 窓へ OnPointerReleased を装着する（呼び手は main.rs の窓を生やすクロージャ・窓を作り直す spec も呼ぶ。wire_menu は窓に触れない）
 pub(crate) fn attach_release_handlers(world: &mut World);
 /// 後続 spec 向けの便宜: MenuWiring 不在なら warn! で no-op
 pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier);
@@ -685,7 +688,7 @@ async fn show_task(world: Weak<RefCell<EcsWorld>>, request: MenuRequest, plan: M
 | 結線前・ドラッグ中・表示中 | `trace!` | `[menu] ignored release` `reason` |
 
 **Implementation Notes**
-- Validation: `trigger_tests.rs` — `decide` の 4 組（`Show`×預かり有無・`Suppress`×預かり有無）。`poll_step` の 4 通り（返事あり→`Decided(Ok)`・返事なし期限内→`Wait`・返事なし期限超過→`Decided(Err(Timeout))`・送信端 drop→`Decided(Err(Dropped))`・`reply_channel` と `Instant` を注入）。終了の閉包が `rx` に `CloseRequest{User{scope}}` を**1 件**送ること（要件 9.6・`input_events_tests.rs` の `handler_ctrl_left_double_click_sends_one_close_request_and_keeps_the_windows` と同じ観測＝受信側で数える）。World の組み立ては `MouseWiring::new(tx, RegionSource::Mock(_))` を `insert_non_send` する（どちらも `pub(crate)`。`input_events_tests.rs` の `world_with_wiring`／`with_clock` はそのモジュール私有なので借りない）。`run_request` 自体は OS を触るので檻に入れず、A／C の判断は `decide`・`plan`・生存確認の 3 つの純粋部分に寄せる。
+- Validation: `trigger_tests.rs` — `decide` の 4 組（`Show`×預かり有無・`Suppress`×預かり有無）。`poll_step` の 4 通り（返事あり→`Decided(Ok)`・返事なし期限内→`Wait`・返事なし期限超過→`Decided(Err(Timeout))`・送信端 drop→`Decided(Err(Dropped))`・`reply_channel` と `Instant` を注入）。終了の閉包が `rx` に `CloseRequest{User{scope}}` を**1 件**送ること（要件 9.6・受信側で数える）。World の組み立ては `MouseWiring::new(tx, RegionSource::Mock(_))` を `insert_non_send` する（どちらも `pub(crate)`。`input_events_tests.rs` の `world_with_wiring`／`with_clock` はそのモジュール私有なので借りない）。表示の関数（実装では `run_show`／`display`／`finish` に分かれ、OS を触るのは `show_task` が渡す `win32::show` だけ）は檻に入れず、A／C の判断は `decide`・`plan`・生存確認の 3 つの純粋部分に寄せる。
 - Risks: 表示中の入れ子 poll（`research.md` §7.4）。実機 9.9 ⑸ で観察。
 
 #### `menu::win32`（`crates/areka/src/menu/win32.rs`）
@@ -814,7 +817,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 **Responsibilities & Constraints**
 - `msg.rs`: `pub enum CloseReason { User { scope: u32 }, System }`（`Copy` 維持）。`as_ref_str` は `User { .. } => "user"`（不変）。
 - `events.rs` の `on_close(reason, snapshot)`: `references` を `User { scope }` なら `["user", scope, scope]`、`System` なら `["system"]`（既存）。`on_close_notify`（ForceQuit の NOTIFY）は変えない（Ref0 のみ）。冒頭 doc の表（`Ref1/2 省略`）を改める。
-- 構築点: `input_events`（Ctrl＋左ダブルクリック・メニュー「終了」）は `User { scope }`。`main.rs` の `runtime.shutdown(areka_kanade::CloseReason::User)`（窓 0 で `run()` が返る経路）は `User { scope: 0 }`。テスト・spine の `CloseReason::User` リテラルは `User { scope: 0 }` へ。`spine_conformance_script.rs` の `get("OnClose", &[CLOSE_REASON])` は `&[CLOSE_REASON, "0", "0"]`。
+- 構築点: `input_events::send_close_request`（本番の呼び手はメニュー「終了」の `menu::request_close` だけ・Ctrl＋左ダブルクリックの入口はタスク 8.2 で除去）は `User { scope }`。`main.rs` の `runtime.shutdown(areka_kanade::CloseReason::User)`（窓 0 で `run()` が返る経路）は `User { scope: 0 }`。テスト・spine の `CloseReason::User` リテラルは `User { scope: 0 }` へ。`spine_conformance_script.rs` の `get("OnClose", &[CLOSE_REASON])` は `&[CLOSE_REASON, "0", "0"]`。
 - 状態機械（`pending_close: Option<CloseReason>`・`Phase::ClosePending{reason}`）は型が同じなので**本文不変**。
 
 **Contracts**: Event [x]
@@ -823,7 +826,7 @@ fn open(path: &Path) -> windows::core::Result<()>;
 - `OnClose` GET: Ref0＝`user`／`system`、Ref1＝Ref2＝スコープ番号（`user` のときだけ・正典 [OnClose](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnClose:1)）。α では `popupmenu.type` に差を付けないので Ref1＝Ref2。
 
 **Implementation Notes**
-- Validation（要件 9.6）: `events_tests.rs` の `OnClose` 参照列の期待を `["user","1","1"]`（scope 1）へ・`System` は `["system"]` のまま。`input_events` の Ctrl＋左ダブルクリックの檻で `User{scope}` を数える。
+- Validation（要件 9.6）: `events_tests.rs` の `OnClose` 参照列の期待を `["user","1","1"]`（scope 1）へ・`System` は `["system"]` のまま。`User{scope}` はメニューの「終了」のテスト（`trigger_tests.rs`・`trigger_wired_tests.rs`）が受信側で数える（Ctrl＋左ダブルクリックの檻はタスク 8.2 で「終了指示 0 件」へ置き換えた）。
 - Risks: 並走 `nar-install` との 2 ファイルの重なり（Revalidation Triggers）。
 
 ### parsers / ghost
@@ -919,11 +922,11 @@ fn open(path: &Path) -> windows::core::Result<()>;
 ### Unit Tests（決定論・OS 非依存）
 - `menu/plan_tests.rs`（9.1）: 7 枠の順／未登記の枠が出ない／サブメニューの子の順とチェック／無効の写し／識別子の一意性と逆引き／区切りの位置／`&` の写し（リソース由来は素通し・登記由来は `&&`）。
 - `menu/captions_tests.rs`（9.2 の写し・9.3）: `interpret` の 4 通り＋上限超過／`visible` の `0`／`1`／`NoContent`／`Failed`／`query_ids` が第 1 スライスで 3 件／`UNQUERIED_POPUPMENU_RESOURCES` が許可表に無い（3.8）。
-- `menu/trigger_tests.rs`（9.3・9.6）: `decide` の 4 組／`poll_step` の 4 通り（返事・期限内・期限超過・切断）／終了の閉包が `CloseRequest{User{scope}}` を 1 件。
+- `menu/trigger_tests.rs`（9.3・9.6）: `decide` の 4 組／`poll_step` の 4 通り（返事・期限内・期限超過・切断）。終了の閉包が `CloseRequest{User{scope}}` を 1 件送ることは、実装では `menu/mod_wiring_tests.rs` と `menu/trigger_wired_tests.rs` が留める。
 - `areka-actor/src/reply.rs` の `tests`: `try_recv` が空で `Ok(None)`・送信後に `Ok(Some)`・送信端 drop で `Err(Dropped)`。
-- `menu/mod_registry_tests.rs`（6.3・6.4・2.2）: 置き換えの `warn!`／取り消し／組込 2 項目。
+- `menu/mod_registry_tests.rs`（6.3・6.4・2.2）: 置き換えの `warn!`／取り消し（組込 2 項目は実装では `menu/mod_wiring_tests.rs`）。
 - `readme_tests.rs`（9.4）: `resolve_path`／`is_available` と初回 `debug!`。
-- `input_events/input_events_menu_tests.rs`（1.10・5.3）: 右ダブルクリックは送らず預かる／Ctrl＋左ダブルクリックの scope。
+- `input_events/input_events_menu_tests.rs`（1.10・5.3）: 右ダブルクリックは送らず預かる／結線済みの Ctrl＋左ダブルクリックは終了指示 0 件・左ダブルクリック 1 件。
 - `emo2_boot/readme_cue_tests.rs`（9.5）: 引数なし→1 件／引数付き→0 件＋`warn!`／他名→0 件。
 - `areka-kanade/src/actor_resources_tests.rs`: `queryable` が `Steady` だけ `true`。
 - `areka-kanade/src/schedule/events_tests.rs`（9.6）: `OnClose` の参照列 `["user","1","1"]`／`["system"]`。
@@ -946,6 +949,8 @@ fn open(path: &Path) -> windows::core::Result<()>;
 | ⑷ | 里々の `readmebutton.caption`（`(&R)` の下線・開き直すたびに 3 候補が変わりうる） | 毎回問い合わせている |
 | ⑸ | 表示中にまばたき・文字送りが続く・閉じた後も続く・表示中に SHIORI を落としても落ちない | M-2 の入れ子 poll・7.3／7.4 |
 | ⑹ | 閉じた後に見えない窓がキャラクター窓の上に残らない | IME 窓の罠 |
+
+**結果（2026-09-19・tasks.md 完了記録 9.3）**: ⑴⑵⑶⑸⑹ は emo2 で確認済み。⑷ は未実施で、`areka-P0-shell-implicit-surface` の実機サインオフへ引き渡した（`R_POST_and_KOMAINU` は絵を出せずキャラクター窓が生えない＝メニューを出せない。同 spec の `brief.md` に 2026-09-19 の追記あり）。⑸ の「表示中に SHIORI を落とす」は、メニューを開いたままタスクマネージャへフォーカスを移せない（移した瞬間にメニューが閉じる）ので、ログを見張って helper を外から止める形で行った。実機の手順には「左クリックを 1 度した後で右クリックする」を必ず入れること（完了記録 9.3 の欠陥）。
 
 ### 1,000 行の番人（9.8）
 - 新規ファイルはいずれも 300 行前後。変更ファイルの増分は File Structure Plan の表のとおりで、最大の `resolve.rs` は 965 前後・`main.rs` は 958 前後。`cargo test -p log-capture-kit --test file_length_guard_test` で確かめる。

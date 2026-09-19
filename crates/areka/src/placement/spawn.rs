@@ -33,8 +33,9 @@
 //!   `input_events::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
 //!   input_events→placement。placement は `crate::` パスを持たず `super::`／外部 crate のみ
 //!   参照する＝example の `#[path]` include で成立させるため。areka-P0-input-events）。
-//!   Ctrl+左ダブルクリックは**終了指示**（kanade の正規の握手へ入る・窓は握手の完了後に閉じる・
-//!   R15.1）で、Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが強制退避
+//!   **終了指示**（kanade の正規の握手へ入る・窓は握手の完了後に閉じる・R15.1）は右クリック
+//!   メニューの「終了」が送る（結線済みの Ctrl+左ダブルクリックの入口は areka-P0-popup-menu-minimal
+//!   で除去）。Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが強制退避
 //!   （全 `GhostWindowMarker` despawn→window-close funnel→`run()` 正常復帰）である。いずれも
 //!   input_events 側ハンドラ／main.rs の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
 //!   全窓を閉じる操作そのものは本モジュールの [`despawn_ghost_windows`] に寄せてある

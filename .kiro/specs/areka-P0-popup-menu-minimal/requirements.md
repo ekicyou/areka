@@ -194,7 +194,7 @@
 6. The areka shall 「終了」の選択が `CloseRequest{User}` を 1 件送ること、および `OnClose` の Ref1・Ref2 がスコープ番号になること（要件 5.1〜5.3）を、既存の終了テスト（`input_events_tests.rs`）と同じ観測方法（送られた指示を受信側で数える）で確かめる。
 7. The areka shall 上のテストが判断分岐を壊すと赤になることを、少なくとも 1 つの分岐で摂動して示す（記憶 cage-must-walk-the-reachable-path・checks-must-judge-not-just-print）。
 8. The areka shall 新設・改変したファイルを 1 ファイル 1,000 行以内に収める（`input_events/mod.rs` は現 475 行・番人は `crates/log-capture-kit/tests/file_length_guard_test.rs`）。
-9. The areka shall OS の API に触れる部分（表示・位置・閉じ方・既定アプリで開く・IME 窓の罠）を、現行の argv 起動（emo2 の実 pasta と `R_POST_and_KOMAINU` の里々）による実機確認で 1 度確かめ、確認項目と結果を tasks の完了記録に残す: ⑴ 右クリックで出る ⑵ 「説明書」で readme.txt が既定アプリで開く ⑶ 「終了」で終了挨拶が再生されて閉じる ⑷ 里々の `readmebutton.caption` の文言（`(&R)` の下線）が写る（`R_POST_and_KOMAINU` の `dic06_String.txt` は「現在のシェルについて(&R)」「取扱説明書(&R)」「Read me(&R)」の 3 候補から毎回選ぶので、開き直すたびに変わりうる＝要件 3.2 の「毎回問い合わせる」の実機観察でもある。同ファイルの `updatebutton.caption` は枠 ④ が α で未登記のため観察できない）⑸ 表示中に落ちない・閉じた後に会話が続く ⑹ 閉じた後に見えない窓（IME 窓）がキャラクター窓の上に残らない。
+9. The areka shall OS の API に触れる部分（表示・位置・閉じ方・既定アプリで開く・IME 窓の罠）を、現行の argv 起動（emo2 の実 pasta と `R_POST_and_KOMAINU` の里々）による実機確認で 1 度確かめ、確認項目と結果を tasks の完了記録に残す: ⑴ 右クリックで出る ⑵ 「説明書」で readme.txt が既定アプリで開く ⑶ 「終了」で終了挨拶が再生されて閉じる ⑷ 里々の `readmebutton.caption` の文言（`(&R)` の下線）が写る（`R_POST_and_KOMAINU` の `dic06_String.txt` は「現在のシェルについて(&R)」「取扱説明書(&R)」「Read me(&R)」の 3 候補から毎回選ぶので、開き直すたびに変わりうる＝要件 3.2 の「毎回問い合わせる」の実機観察でもある。同ファイルの `updatebutton.caption` は枠 ④ が α で未登記のため観察できない）⑸ 表示中に落ちない・閉じた後に会話が続く ⑹ 閉じた後に見えない窓（IME 窓）がキャラクター窓の上に残らない。（2026-09-19 追記: ⑷ は `R_POST_and_KOMAINU` が絵を出せずキャラクター窓が生えないため本仕様では観察できず、`areka-P0-shell-implicit-surface` の実機サインオフへ引き渡した。項目名の写しそのものは要件 9.2 の決定論テストが留めている。）
 
 ### Requirement 10: 網羅台帳への登記
 

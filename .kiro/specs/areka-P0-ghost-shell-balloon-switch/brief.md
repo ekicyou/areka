@@ -14,7 +14,7 @@
 ## Current State
 
 - **起動**: `areka-ghost` の `boot`（`crates/areka-ghost/src/runtime.rs`）が「マウント → SHIORI 起動 → sink 配線 → sylphya 復元」を 1 回行う。マウントは `crates/areka-parsers/src/package/resolve.rs:41-118`（2 点＝SHIORI 側とシェル側）。
-- **終了**: 利用者操作は Ctrl＋左ダブルクリック（`crates/areka/src/input_events/mod.rs:420-441`）→ `CloseRequest{User}` → ゴーストの `OnClose` 握手 → 終了挨拶 → `\-` → 窓を閉じる（`emo2_boot/frame.rs:168-201`・`event = "ghost_quit"`）。**この握手は切替の前半（`OnGhostChanging` → 204 なら `OnClose`）とほぼ同じ形**である（`ukadoc:list_shiori_event:OnGhostChanging:1`「SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnCloseが発生する」）。
+- **終了**: 利用者操作は右クリックメニューの「終了」（`crates/areka/src/menu/mod.rs` の `request_close`。**2026-09-19 追記**: 起票時の入口だった結線済みの Ctrl＋左ダブルクリックは `areka-P0-popup-menu-minimal` のタスク 8.2 で除去された・開発者裁定）→ `CloseRequest{User{scope}}` → ゴーストの `OnClose` 握手 → 終了挨拶 → `\-` → 窓を閉じる（`emo2_boot/frame.rs:168-201`・`event = "ghost_quit"`）。**この握手は切替の前半（`OnGhostChanging` → 204 なら `OnClose`）とほぼ同じ形**である（`ukadoc:list_shiori_event:OnGhostChanging:1`「SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnCloseが発生する」）。
 - **窓が 0 になるとアプリが終わる**（`main.rs:317`）。切替の間、窓は一度全て消えるので、この「0 で終了」を「切替中は終了しない」へ変える必要がある。これが本仕様で最も大きい構造の変更である。
 - **シェル**: マウント時に `shell/<名>` を 1 つ決める（`resolve.rs`）。切替＝マウントの片側（シェル側）だけを差し替えて emo の資産（アトラス・合成・配置）を作り直す。
 - **バルーン**: argv 第 2 引数で決まり、`areka-emo-present` の balloon 側が読む。切替＝バルーン側の資産だけを作り直す。

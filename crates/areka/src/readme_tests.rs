@@ -191,3 +191,24 @@ fn open_from_world_warns_without_wiring() {
         "不在は warn! レベル（エラー表）: {warned:?}"
     );
 }
+
+/// 開けなかった失敗はパスと符号を添えて `error!` で 1 行記録し、`Err` を返す（要件 4.4）。
+///
+/// 実在しないファイルを渡すので、開発者の机では何も開かない（`ShellExecuteW` は「見つからない」の
+/// 符号 2 を返すだけで、エラーの窓も出さない）。成功側はアプリが開くのでここでは踏まない。
+#[test]
+fn open_records_a_missing_file_as_an_error_and_returns_err() {
+    let dir = TempPath::new("readme-open-failure");
+    let path = dir.child("no-such-readme.txt");
+
+    let mut result = Ok(());
+    let lines = capture(|| result = open(&path));
+
+    assert!(result.is_err(), "開けなければ Err（要件 4.4）");
+    let failed = lines_of(&lines, "readme_open_failed");
+    assert_eq!(failed.len(), 1, "失敗の記録は 1 行: {lines:?}");
+    assert!(
+        failed[0].contains("level=ERROR") && failed[0].contains("no-such-readme.txt"),
+        "error! でパスを添える: {lines:?}"
+    );
+}
