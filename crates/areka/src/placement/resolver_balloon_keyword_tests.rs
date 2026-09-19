@@ -400,6 +400,7 @@ fn t_k6_side_mode_output_is_bit_identical_to_pre_spec_formula() {
                     let pre_base_x = match side {
                         BalloonSide::Left => cx - bs.w,
                         BalloonSide::Right => cx + cs.w,
+                        BalloonSide::Auto => unreachable!("この檻は left／right だけを回す"),
                     };
                     let (ox, oy) = offset.unwrap_or((0, 0));
                     let pre = PointPx {

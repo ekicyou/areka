@@ -164,3 +164,41 @@ fn t_r8_resolver_does_not_clamp_balloon_outside_work_area() {
         );
     }
 }
+
+/// T-R8: `balloon.alignment=none`（自動調整） → キャラ窓の中心が作業領域の中央より左なら
+/// 右隣、それ以外は左隣（ukadoc「バルーンの位置情報」）。左右の両方を踏ませる。
+#[test]
+fn t_r8_balloon_none_picks_the_side_facing_the_area_center() {
+    for dpi in DPIS {
+        let wa = work_area(dpi);
+        let (w, h) = (px(400, dpi), px(600, dpi));
+        let area_center_x = (wa.left + wa.right) / 2;
+        // (default_x, キャラが中央より左に居るか)。右端密着と、左端へクランプされる大きな値。
+        for (default_x, char_is_left) in [(0, false), (px(40000, dpi), true)] {
+            let inp = input(0, w, h);
+            let bw = inp.balloon_size.w;
+            let cfg = cfg_of(vec![(
+                0,
+                scope_cfg_balloon(Some(default_x), BalloonSide::Auto, None),
+            )]);
+
+            let out = resolve_placement(&cfg, wa, &[inp], MEASURE_DPI);
+
+            let cp = out[0].char_pos;
+            assert_eq!(
+                cp.x + w / 2 < area_center_x,
+                char_is_left,
+                "dpi={dpi} default_x={default_x}: 前提（キャラの左右）が崩れている"
+            );
+            let expected_x = if char_is_left { cp.x + w } else { cp.x - bw };
+            assert_eq!(
+                out[0].balloon_pos,
+                PointPx {
+                    x: expected_x,
+                    y: cp.y
+                },
+                "dpi={dpi} default_x={default_x}: none は中央を向く側に置く"
+            );
+        }
+    }
+}
