@@ -715,3 +715,146 @@ fn undeclared_origin_does_move_when_validrect_changes() {
         "未宣言時まで validrect 非依存になっていたら、書字開始角の縮退（要件 3.11）が壊れている"
     );
 }
+
+// ── 全数の表: 3 書字方向 × 2 成分 × 11 場合 ──
+
+/// **`origin` 成分の解決を、3 書字方向 × 2 成分 × 11 場合の全数（66 行）で固定する。**
+///
+/// 上の分岐別の檻（分岐 1〜4）は場合を手で選んでいる。ここでは場合を表に並べ、書字方向と
+/// 成分は繰り返しで掛け合わせて全数を回す——代表を選ばないので、「この組み合わせだけ見て
+/// いなかった」が起こらない（本仕様の要件 5.1）。
+///
+/// 場合は軸ごとに、近い辺の 1 つ外・近い辺ちょうど・内・遠い辺ちょうど・遠い辺の 1 つ外・
+/// 検体と同じ形（0）・負値の 5 通りの計 11 通り。基準の `validrect` は `RECT`（解決後
+/// `[36, 356] × [46, 168]`・画像 400×224）。
+///
+/// 各行が見るのは 5 つ——⑴ 検査する成分の開始点（範囲内なら解決後の値・範囲外なら書字開始角）
+/// ⑵ 他方の成分の開始点が宣言値のまま（成分の独立・要件 1.2）⑶ 無視した宣言値の有無
+/// （範囲外なら当該成分だけ解決後の値・範囲内なら両成分とも無し）⑷ `debug` の件数
+/// （範囲外 1 件・範囲内 0 件）⑸ `warn` 0 件。
+///
+/// 「解決後の値」と内外の別は表に数値で直書きしてある（実装と同じ式で計算し直すと、式が
+/// 壊れたときに期待値も一緒に壊れて赤が出なくなる）。書字開始角も [`start_corner`] が
+/// 方向ごとに直書きしている。
+///
+/// 「近い辺ちょうど」のように宣言値と書字開始角が一致する行は、開始点だけでは内と外を
+/// 見分けられない——⑶ と ⑷ がその区別を担うので、全行でこの 2 つも必ず見る。
+///
+/// 要件 1.7（最寄りの辺ではなく書字開始角）を担うのは「遠い辺の 1 つ外」の 2 行である。
+/// 横書きの `origin.x,357` は左辺 36 へ落ちなければならず、最寄りの右辺 356 では赤になる。
+/// 縦書きの `origin.y,169` も同じく上辺 46 へ落ちる。
+#[test]
+fn origin_range_table_holds_for_every_mode_and_component() {
+    // 検査しない側の成分はこの範囲内の固定値で宣言する（＝開始点は宣言どおり残るはず）。
+    const OTHER_X: i32 = 200;
+    const OTHER_Y: i32 = 60;
+
+    // (場合の名, x の (宣言 → 解決後, 範囲内か), y の (宣言 → 解決後, 範囲内か))。
+    // 負値は画像 400×224 の反対端基準（400+v／224+v）で解決してから内外を判定する。
+    type Case = (i32, f32, bool);
+    let cases: [(&str, Case, Case); 11] = [
+        ("近い辺の 1 つ外", (35, 35.0, false), (45, 45.0, false)),
+        ("近い辺ちょうど", (36, 36.0, true), (46, 46.0, true)),
+        ("内", (200, 200.0, true), (60, 60.0, true)),
+        ("遠い辺ちょうど", (356, 356.0, true), (168, 168.0, true)),
+        ("遠い辺の 1 つ外", (357, 357.0, false), (169, 169.0, false)),
+        ("検体の形", (0, 0.0, false), (0, 0.0, false)),
+        ("負値 → 内", (-100, 300.0, true), (-100, 124.0, true)),
+        (
+            "負値 → 遠い辺ちょうど",
+            (-44, 356.0, true),
+            (-56, 168.0, true),
+        ),
+        (
+            "負値 → 遠い辺の 1 つ外",
+            (-43, 357.0, false),
+            (-55, 169.0, false),
+        ),
+        (
+            "負値 → 近い辺の外",
+            (-380, 20.0, false),
+            (-200, 24.0, false),
+        ),
+        (
+            "負値 → 反対端ちょうど",
+            (-400, 0.0, false),
+            (-224, 0.0, false),
+        ),
+    ];
+
+    let mut rows = 0usize;
+    for (label, x_case, y_case) in cases {
+        for axis in ["origin.x", "origin.y"] {
+            let testing_x = axis == "origin.x";
+            let (declared, resolved, in_range) = if testing_x { x_case } else { y_case };
+            let origin = if testing_x {
+                (Some(declared), Some(OTHER_Y))
+            } else {
+                (Some(OTHER_X), Some(declared))
+            };
+            // 他方の成分は範囲内なので、宣言値がそのまま開始点になる。
+            let other_start = if testing_x {
+                OTHER_Y as f32
+            } else {
+                OTHER_X as f32
+            };
+
+            for mode in ALL_MODES {
+                let (region, counts) = resolve_counting(origin, RECT, mode);
+                assert_capture_alive(&counts);
+                rows += 1;
+
+                let corner = start_corner(mode);
+                let (start_x, start_y) = region.start();
+                let (ignored_x, ignored_y) = region.ignored_origin();
+                let (tested_start, tested_ignored, tested_corner, other_ignored) = if testing_x {
+                    (start_x, ignored_x, corner.0, ignored_y)
+                } else {
+                    (start_y, ignored_y, corner.1, ignored_x)
+                };
+                let row = format!("{label} / {axis},{declared} / {mode:?}");
+
+                // ⑴ 検査する成分の開始点。
+                assert_eq!(
+                    tested_start,
+                    if in_range { resolved } else { tested_corner },
+                    "{row}: 範囲内なら解決後の値 {resolved}・範囲外なら書字開始角 \
+                     {tested_corner}（最寄りの辺ではない）から書き始める"
+                );
+                // ⑵ 他方の成分は宣言値のまま（成分ごとに独立に判定している）。
+                assert_eq!(
+                    if testing_x { start_y } else { start_x },
+                    other_start,
+                    "{row}: 範囲内に宣言した他方の成分まで動いている（成分の独立が壊れている）"
+                );
+                // ⑶ 無視した宣言値。
+                assert_eq!(
+                    tested_ignored,
+                    if in_range { None } else { Some(resolved) },
+                    "{row}: 無視した宣言値は範囲外のときだけ解決後の値を運ぶ"
+                );
+                assert_eq!(
+                    other_ignored, None,
+                    "{row}: 範囲内に宣言した他方の成分は何も無視していない"
+                );
+                // ⑷ 記録件数——範囲外の成分 1 つにつき debug ちょうど 1 件。
+                assert_eq!(
+                    counts.debug,
+                    usize::from(!in_range),
+                    "{row}: debug は範囲外なら 1 件・範囲内なら 0 件"
+                );
+                // ⑸ 解決は作者向けの警告を書かない（警告は装着の登録口の仕事）。
+                assert_eq!(counts.warn, 0, "{row}: 解決は warn を書かない");
+            }
+        }
+    }
+
+    // 繰り返しが本当に全数を回ったことの確認（0 回の繰り返しでも上の主張は緑になる）。
+    assert_eq!(
+        rows,
+        cases.len() * 2 * ALL_MODES.len(),
+        "3 書字方向 × 2 成分 × {} 場合＝66 行を回していない",
+        cases.len()
+    );
+    assert_eq!(rows, 66, "表の行数が 66 行から変わっている");
+}
