@@ -376,3 +376,18 @@
 
 **開発者にお願いしたいこと**: 上の「自動走行では確かめられなかった項目」5 件は、走っている窓に対する操作か目視が要るため、この走行では確かめられていない。いずれも本仕様が新しく作った経路ではない（クリック透過・右クリックメニュー・字形の描画・バルーンの左右反転は既存の機能で、本仕様はそこへ絵を届けられるようにしただけである）が、**α 版の受け入れとしては開発者の目で 1 度確かめてほしい**。再現の手順は上の「共通の条件」のとおりで、`AREKA_APP_SMOKE_EXIT_MS` を長めに取って手で触れば足りる。
 - 8.2: **要件 4.2 の括弧書きを「赤・緑・青の各成分が等しい」から「B・G・R・A の 4 バイトが等しい」へ是正した**（レビュー裁定・2026-09-20）。3 成分だけで比べると、左上が完全透明（乗算済み `0,0,0,0`）のときに黒寄りの不透明な画素まで一致して消え、要件 4.1（それ以外の画素は 1 バイトも変えない）と 4.8（`tRNS` の透明度を生かす）を同時に壊す。実装（`Normalizer::normalize` の `*px == key`）が正しく、要件の文面の側が誤っていた。`doc/COMPAT_ARCHITECTURE.md` §8 の「抜き色の色を比べる値の空間」の根拠欄も同時に追随させた。
+
+## 最終検証の是正（`/kiro-validate-impl`・2026-09-20）
+
+feature 全体の検証で 3 件の申し送りが出たので、その場で直した（3 件とも本仕様の正しさは変えない）。
+
+1. **語の正規化が 2 か所に書かれていた** — `EmoWorld::dangling_pattern_targets` の `targets_animation_id` と `ComposeMethod::from_name` が「前後の空白を落とし・小文字にし・`-` と `_` を除く」を別々に綴っており、逐語同一ではあったが**片方だけ変えても赤が 1 本も立たなかった**。檻を足すのではなく、正規化そのものを `crates/areka-emo-compose/src/method.rs` の `canonical_method_name` 1 本へ寄せて両者が引く形にした（定義が 1 つなのでずれようが無い）。較正: `canonical_method_name` から `-`／`_` の除去を落とすと `dangling_pattern_targets_skips_methods_that_take_animation_ids` と `from_name_maps_simple_methods`・`from_name_maps_blend_family` の **3 本が同時に赤**になる（戻して 219 件緑を再確認）。
+2. **`BaseImageReport::shadowed` の doc が事実より狭かった** — 「層 0 の element が在ったため使わなかった画像」と書いていたが、本来生じない不整合（`SurfaceIndex` が指すのに `SurfaceMaster` が欠ける）で飛ばした画像もここへ入る（不変条件「和は渡した画像の全体」を保つため）。doc を事実へ直した。到達しない枝なので要件 6.2 の `debug!` の文言は据え置く。
+3. **`design.md` の「Allowed Dependencies」が「`Cargo.toml` の変更 0 件」と言い切っていた** — 実際はタスク 4.1 で `areka-emo-present` の `[dev-dependencies]` へ `temp-path-kit` を 1 行足している（一時フォルダの自作は共有の見張りが拒むため）。design.md を事実へ直した。
+
+**直さずに残したもの（判断と理由）**:
+
+- **要件 4.10（抜き色で透明になった場所はクリックが背後へ抜ける）には檻も実機確認も無い。** 当たりマスクは合成後の画素の α から作られ（`crates/areka-emo-present/src/presenter/budget.rs` の `MaskRotation::regenerate`）その経路は変更 0 なので構造上は成り立つはずだが、**赤を立てるものが 1 本も無い**。「テストで言い切れている」と報告してはならない。開発者の目と手が要る 5 項目の ⑴ がまさにこれで、`areka-P0-alpha-release-signoff` の実機一周で潰す想定である。
+- **本文走査（`shell::parse(` が 0 件）は本番 2 ファイルだけを見張り、examples 3 本を見ていない。** design の Testing Strategy が本番 2 ファイルしか求めていないため。examples に自前の解析が戻っても赤にならない（今日の 0 件は手で確かめた）。examples は手動検証の補助でテストの代替ではない（`.kiro/steering/tech.md`）ので据え置く。
+- **`crates/areka/examples/emo-present/setup.rs` の私有 `fn build_shell_target` が、本仕様が新設した公開 `areka_emo_present::build_shell_target` と同名で別物。** 読み手が取り違え得るが、example の中に閉じた私有関数で振る舞いは正しい。改名は次に同ファイルを触るときでよい。
+- **`areka-emo-compose` の `konnoyayame` の受け口だけ較正の檻が無い**（他 2 クレートには在る）。受け口が壊れれば `base_image_tests.rs` が落ちて露見する。

@@ -240,7 +240,9 @@ impl EmoWorld {
 ///
 /// [`ComposeMethod::from_name`]: crate::method::ComposeMethod::from_name
 fn targets_animation_id(method: &str) -> bool {
-    let canon = method.trim().to_ascii_lowercase().replace(['-', '_'], "");
+    // 正規化は `ComposeMethod::from_name` と同じ 1 本（`method::canonical_method_name`）を引く。
+    // `from_name` 自体は未知の語で `warn!` を出すのでこの照会からは呼ばない（要件 3.5）。
+    let canon = crate::method::canonical_method_name(method);
     matches!(
         canon.as_str(),
         "start"

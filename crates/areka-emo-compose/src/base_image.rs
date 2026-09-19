@@ -49,7 +49,9 @@ pub struct SurfaceImages(pub BTreeMap<u32, String>);
 pub struct BaseImageReport {
     /// 層 0 として足した画像（番号 → ファイル名）。
     pub used: BTreeMap<u32, String>,
-    /// 層 0 の element が在ったため使わなかった画像（番号 → ファイル名）。
+    /// 使わなかった画像（番号 → ファイル名）。ほぼすべては「層 0 の element が在ったため」だが、
+    /// 本来生じない不整合（`SurfaceIndex` が指すのに `SurfaceMaster` が欠ける）で飛ばした画像も
+    /// ここへ入る（不変条件「和は渡した画像の全体」を保つため）。その枝は `warn!` を残す。
     pub shadowed: BTreeMap<u32, String>,
 }
 

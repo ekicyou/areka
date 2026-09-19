@@ -53,7 +53,7 @@
 
 - 依存の向きは既存のまま: `areka-parsers` ← `areka-emo-atlas` ← `areka-emo-compose` ← `areka-emo-present` ← `areka`。`areka-seriko` は `areka-emo-compose` に依存する。逆向きの依存を足さない。
 - `shell_target` は `areka-parsers`（`charset::decode`・`shell::parse`）・`areka-emo-atlas`（`bake`・`SurfaceSet`）・`areka-emo-compose`（`EmoWorld`）を使う。ファイルを読むのは `shell_target` だけで、`base_image`・`Normalizer` は読まない。
-- 新しい外部クレートの追加 **0 件**。`Cargo.toml` の変更 **0 件**（触る 6 クレートはどれも `sample-ghost-kit` を `[dev-dependencies]` に既に持つ・`areka-emo-present` は `thiserror` を既に持つ）。
+- 新しい**外部**クレートの追加 **0 件**。`Cargo.toml` の変更は **1 件だけ**——`areka-emo-present` の `[dev-dependencies]` へ ワークスペース内の `temp-path-kit` を足す（2026-09-20 の実装で判明。一時フォルダの自作は共有の見張り `crates/log-capture-kit/tests/temp_path_guard_test.rs` が拒み、窓口を通すしかない。`publish = false` の leaf で 出荷クロージャには届かない）。それ以外は変更 0（触る 6 クレートはどれも `sample-ghost-kit` を `[dev-dependencies]` に既に持つ・`areka-emo-present` は `thiserror` を既に持つ）。
 - 検体は `sample_ghost_kit::SampleRoot::acquire` 経由でのみ受ける。`konnoyayame` のシェルは CC BY-NC-ND であり、畳み直さない・areka の配布物へ同梱しない。
 
 ### Revalidation Triggers
