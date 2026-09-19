@@ -391,3 +391,20 @@ feature 全体の検証で 3 件の申し送りが出たので、その場で直
 - **本文走査（`shell::parse(` が 0 件）は本番 2 ファイルだけを見張り、examples 3 本を見ていない。** design の Testing Strategy が本番 2 ファイルしか求めていないため。examples に自前の解析が戻っても赤にならない（今日の 0 件は手で確かめた）。examples は手動検証の補助でテストの代替ではない（`.kiro/steering/tech.md`）ので据え置く。
 - **`crates/areka/examples/emo-present/setup.rs` の私有 `fn build_shell_target` が、本仕様が新設した公開 `areka_emo_present::build_shell_target` と同名で別物。** 読み手が取り違え得るが、example の中に閉じた私有関数で振る舞いは正しい。改名は次に同ファイルを触るときでよい。
 - **`areka-emo-compose` の `konnoyayame` の受け口だけ較正の檻が無い**（他 2 クレートには在る）。受け口が壊れれば `base_image_tests.rs` が落ちて露見する。
+
+## 開発者の目視サインオフ（2026-09-20）
+
+自動走行では確かめられなかった 5 項目を、開発者が実機を触って確かめた記録。
+
+### `R_POST_and_KOMAINU`（要件 8.2 ⑶⑷・要件 4.10）— **問題なし**
+
+走行: `AREKA_APP_SMOKE_EXIT_MS=1800000`（安全網・実際には使われず）・`RUST_LOG=info,areka_emo_present::shell_target=debug,areka::menu=debug,areka::input_events=debug`・約 3 分 28 秒・**exit 0**・`ERROR` 0 行。
+
+**開発者の判定: 問題なし。** 併せてログが独立に裏付けたもの:
+
+- **右クリックメニューが開いた**——`[menu] shown event="menu_shown" scope=0 items=2` が 2 回（23:28:03 と 23:31:03）。メニューの見出しは SHIORI へ問い合わせて解決しており、既定へ落ちたのは `closebutton.caption` の 1 件だけ（`event="menu_resource_empty" ids=["closebutton.caption"]`）。
+- **1 項目目が実際に効いた**——`[menu] selected event="menu_selected" scope=0 frame=Readme id=1` → `[readme] opened the readme with the default application`。
+- **終了はメニュー経由の正規の経路**——`kanade: reason=Quit——終了系列（Quit）へ event="talk_done_quit" talk_id=3` → `shiori-actor: 正規 clean shutdown 完了（unload → helper 正常終了 exit(0)）` → `ghost_quit cause=Quit`。**終了挨拶の talk を経ており、有界の自動終了（強制終了の経路）ではない。**
+- 面の一覧は `recognized=10 used=10 shadowed=0`、本体側 236×462・相方側は**宣言の無い面 10** の 140×160。
+
+これで要件 8.2 の ⑶（絵の外のクリックが背後へ抜ける＝**要件 4.10 の唯一の検証手段**）と ⑷（右クリックメニューの 1 項目目）、および ⑴⑵ が開発者の目で確かめられた。
