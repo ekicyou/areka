@@ -77,7 +77,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - 完了 spec 直下エントリ＝**184**（`.kiro/specs/completed/` 直下・2026-09-17 実数え＝ディレクトリ 183＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
 - M1 実機サインオフ発見 7 件中 #1〜#6 解決済み・#7（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）のうち行 4・行 10 は W13 で解決、行 1 は `dpi-transition-two-tick-bounce`、行 9 は `zorder-chain-residue` A-2。M-dual は退役（e2e 項目 10 で合格・復活させない）。
 
-## spec 台帳（brief 済み 37 本＝2026-09-13 の 30 ＋ 09-18 起票 7。**うち完了 9・α 9・α 後 19**＝2026-09-18 に状態列を実数え・着手は `/kiro-start <名>`）
+## spec 台帳（brief 済み 40 本＝2026-09-13 の 30 ＋ 09-18 起票 7 ＋ 09-19 起票 3。**うち完了 9・α 9・α 後 22**＝2026-09-19 に状態列を実数え・着手は `/kiro-start <名>`）
 
 > **段**列: **α**＝M2 のゴールに要る／**α 後**＝brief を保ったまま据え置く（着手は α 完了後の棚卸で並べ直す）。**α に関係しない spec は、並走できてもウェーブに入れない**（2026-09-18 開発者指示・「隙間」枠は廃止）。**規模**は brief の申告。**状態**列は `/kiro-complete` が ✅ に更新し、完了数を実数えで更新する。**Fable**列＝要件定義（design）を Fable で行うべきか（○＝Fable・−＝Opus で足りる）。α 後の行の Wave 列は棚卸⑬当時の番号（W14〜W17）を参考として残す＝**着手順の正本ではない**。
 
@@ -120,6 +120,9 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 34 | `anchor-tag-canon` | α 後 | 正典（`\_a`＋装飾 16） | M | 旧 W17 | #7 ✅・#26・#33 | ○ | ⚪ |
 | 35 | `balloon-lifecycle-events`（residue ⑵） | α 後 | 正典（表示寿命 7〜10） | M | 旧 W17 | #7 ✅・#31・#25 | −（裁定 2 件） | ⚪ |
 | 36 | `tick-gate-adoption` | 保留 | 性能（既定 OFF の門の採否） | M〜L | 保留 | 「長時間試行禁止」と両立する A/B 設計を要件で先に組む（単独） | ○ | ⚪ |
+| 38 | `wintf-drag-state-rest-contract`（**09-19 起票**） | α 後 | バグ（構造・潜在＝wintf のドラッグ状態は `JustEnded` で休み続けるのに説明は「1 フレームのみ」・`reset_to_idle` の呼び手が製品に無い。#14 の実機確認でメニューが出なくなる実害 1 件・利用側は是正済み） | S | α 後（単独・いつでも） | #14（`menu/trigger.rs` が main に在ること） | −（直し方 2 案の裁定 1 件） | ⚪ |
+| 39 | `popup-menu-residue`（**09-19 起票**） | α 後 | 台帳（#14 の最終検証の残件 10＝別窓の預かりの誤配・台本の `\![open,readme]` の記録の重さ・文言と接頭辞・テストの穴 2・引受先の無い語彙 4 件） | S | α 後（`menu/` に触る次の spec へ相乗り可） | #14 | − | ⚪ |
+| 40 | `coverage-roadmap-refresh`（**09-19 起票**） | α 後 | 台帳（`doc/ukadoc-coverage/` の検査の外にある手書きの数の棚卸と撮り直し・候補名 `areka-P0-network-update` の重なり・波の欄の旧編成・各 spec の「統合担当への申し送り」の受け皿） | S〜M | α 後（A0 の 3 本が main へ入った直後が最も安い） | #11・#14・#37 | − | ⚪ |
 
 **規模と分割の裁定（棚卸⑬・据え置き）**: XL 3 本を分割済み＝`property-query-channels` → ⑴本体／⑵`property-ipc-transport`／⑶`sylphya-set-ledger`、`balloon-canon-residue` → ⑴本体／⑵`balloon-lifecycle-events`／⑶`emo-text-canon-residue`、`text-decoration-canon` → ⑴本体／⑵`text-align-shadow-canon`／⑶`balloon-font-descript-keys`。**L のまま置く 3 本**（`makoto-dll-host`・`sakura-time-directives`・`currentghost-property-tree`）と α の `ghost-shell-balloon-switch` は brief 内のスライスで要件段階に縮める余地を残す。
 
@@ -201,3 +204,5 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 **2026-09-18 追記(99)（同日 3 度目の再入＝nar-install を先頭へ・α 無関係の spec をウェーブから除外）**: 開発者「次に実施可能な spec は何か。nar 関係は早く進めないとダメ。サンプルゴーストをいろいろ試験するための仕組み作りも nar 関係。α リリース優先のため、並行実施可能な別 spec があっても α に関係なければウェーブに含めない」。①**A0＝`nar-install`（即時着手可・単独）**へ反転。`shell-implicit-surface` の brief「推奨は本 spec が先」を取り下げ（同 brief に追記）＝implicit-surface は共有ヘルパを最初から使う。②**A1＝3 本並走**（implicit-surface ∥ root-layout ∥ balloon-bundle・共有ファイル 0 の見込み・⚠同 crate 別ファイル 2 組）。以降 A2 switch → A3 menu → A4 install→update → A5 signoff（**A0〜A5 の 6 段**）。③**「隙間」枠を廃止**＝`dpi-transition-two-tick-bounce`・`zorder-chain-residue` を α 後へ（仮裁定 11・zorder A-2 は α のテストを実際に赤にした時だけ単独枠に挟む）。④**サンプルゴースト試験の仕組みは別 spec を切らない**（仮裁定 12）＝nar-install の共有ヘルパ（検体名 → 根）と `vendors/sample_ghost/*.nar` の慣行が器。YAYA 検体の追加は `alpha-release-signoff` の要件で裁定（候補 ⑹）。
 
 **2026-09-18 追記(100)（同日 4 度目の再入＝「並走不可」を実測で改訂・A0 を 3 本並走へ）**: 開発者「メニューとサンプルバルーンは最初に実施できないか」→ 実測: nar-install が書き換える 38 ファイルは全て検体パスを参照する既存のテスト・example（`emo2_boot` 6・`areka-emo-text/tests` 5・`placement` 4 …）。`popup-menu-minimal` の接触面（`input_events/`・wintf ポインタ経路・新規 `menu.rs`）は検体参照 0＝共有 0。`default-balloon-bundle` は「保管を展開フォルダで行い（`.nar` 化は nar-install が引き受け）・表示検証は新規テストのみ・既存の検体参照テストを触らない」の 3 条件で共有 0。`THIRD-PARTY-NOTICES.md` は `cargo about` 自動生成で CC0 バルーンは載らない。①**A0＝nar-install ∥ popup-menu-minimal（第 1 スライス＝説明書・終了・caption・visible・`MenuRegistry`）∥ default-balloon-bundle**。②A1＝implicit-surface ∥ root-layout（root-layout が既定バルーン id と列挙サブメニューの登記を足す）。③A3 は空き（番号は据え置き）。④**見た目の採否は今日にでも可能**＝フォルダを置いて argv 第 2 引数で起動（コード変更 0）。⑤教訓: 「N ファイルに触るから並走不可」は**どのファイルかを見てから**言う（記憶 prefer-clean-waves は「干渉するなら分ける」であって「触る本数が多ければ分ける」ではない）。
+
+**2026-09-19 追記(101)（`popup-menu-minimal` の最終検証 GO・引受先の無い問題を 3 本起票）**: 開発者「推奨タスクはツールチップにせず spec に起票・どこにも分類されていない問題は起票」。① **#38 `wintf-drag-state-rest-contract`**＝実機確認 9.3 が見つけた「左クリックを 1 度するとメニューが出なくなる」の根（wintf のドラッグ状態の説明と実装の食い違い）。利用側は #14 で是正済み・契約の是正は wintf の範囲なので別 spec。② **#39 `popup-menu-residue`**＝最終検証の Warning／Note のうち #14 で直さなかった 10 件。③ **#40 `coverage-roadmap-refresh`**＝網羅調査の文書の手書きの数（検査の外）と、各 spec が完了時に残してきた「統合担当への申し送り」の受け皿（他 spec 由来の 4 件は brief に「未検証」と明記）。いずれも α の必須ではない（段は α 後）。**既存 spec への追記 2 件**: `shell-implicit-surface`（里々のメニュー項目名の実機観察 1 件を引き受け）・`alpha-release-signoff`（実機手順の教訓 3 件）。**起票しなかったもの**: main（PR #157）の取り込みと台帳の数え直しは #14 の `/kiro-complete` の手順そのもの／`vendors/sample_ghost/R_POST_and_KOMAINU/ghost/master/profile/` の未追跡の保存データは、検体が `.nar` 保管（#11）へ移れば展開先へ書かれるので再発しない（今ある 1 個は開発者の許可を得て消す）。
