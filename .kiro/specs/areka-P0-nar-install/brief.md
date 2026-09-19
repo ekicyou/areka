@@ -145,3 +145,12 @@
 - `areka-nar` が受理する `install.txt` の `type` は `ghost`・`shell`・`supplement`・`balloon` の 4 つ。他（`plugin`・`headline`・`language`・`calendar*`・`package`）は理由付きで拒否を返す（製品側が `OnInstallFailure` に写す）。
 
 - **並走の条件（2026-09-18 追記）**: 「並走不可」は実測で改訂。書き換えるのは検体パスを参照する既存のテスト・example（38 ファイル）だけなので、**それらに触らず新規ファイルだけ足す spec とは並走できる**（A0 で `popup-menu-minimal`・`default-balloon-bundle` が並走）。`.nar` へ畳む対象に `vendors/sample_ghost/StayseeBalloon/`（`default-balloon-bundle` が展開フォルダで置く）を含める。共有ヘルパの検体名は emo2・R_POST_and_KOMAINU・StayseeBalloon・emo2-kakukaku 派生 2 つ。
+
+---
+
+## 2026-09-19 追記（`default-balloon-bundle` からの申し送り＝保管は完了）
+
+- **保管は終わっている。** `vendors/sample_ghost/StayseeBalloon/`（展開フォルダ・直下 **29 ファイル**・サブフォルダ 0）へ上流無改変で置いた。`.nar` へ畳む対象にこのフォルダを含めること。ファイル 1 本ごとの sha256 と上流との 1 対 1 突合は `.kiro/specs/areka-P0-default-balloon-bundle/verification/provenance.md` の「ハッシュ一覧」の節にある（29 本の一覧・上流との突合・その突合が食い違いを実際に検出できることの確かめ）。畳んだ後に取り出したものが同じであることは、この一覧で確かめられる。
+- **共有ヘルパの検体名は `StayseeBalloon`。** フォルダ名・バルーン定義の `id`・`install.txt` の `directory` が大小を含めて同じ綴りであることを実測済み（同じ `provenance.md` の「既定バルーン id」の節）。
+- **付け替える定数は 1 行だけ。** `crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs` の `STAYSEE_BALLOON_DIR` の定義行（値は `crates/areka-emo-text` から見た相対パス）。この入口ファイルは定数と接続宣言しか持たず、観測の本体は `crates/areka-emo-text/tests/staysee_balloon_fixture/` 配下のテーマ別 9 ファイルに分かれているが、**検体パスを綴っている場所は他に 1 つも無い**（実体化は `staysee_balloon_fixture/test_support.rs` の `staysee_root` が `super::STAYSEE_BALLOON_DIR` から行う）。共有ヘルパへ寄せるときは、この 1 行をヘルパ呼び出しへ替えればよい。
+- **踏みやすい罠（実測）**: `tests/` の直下に置いた `*.rs` は cargo が独立した統合テストのターゲットとして自動で拾う。テーマ別ファイルをそこへ平置きすると、同じテストが入口のターゲットと自分自身のターゲットの **2 か所で走る**。`Cargo.toml` を 1 つも変えずに避けるには、テーマ別ファイルを自動収集の対象外である `tests/<入口名>/` 配下へ置き、入口から `#[path]` で繋ぐ（`default-balloon-bundle` はこの形を採った。同 crate の `decoration_readback_test.rs` ＋ `decoration_readback/` が先例）。共有ヘルパの導入で検体を差し替えるときも同じ制約が掛かる。

@@ -111,3 +111,9 @@
   3. `THIRD-PARTY-NOTICES.md` は `cargo about` の自動生成（手で編集しない）＝CC0 のバルーンは cargo 依存ではないので載らない。資産の出典と CC0 の記載は第三者向け README（`alpha-release-signoff`）と本 spec の `verification/` に置く。
 - **見た目の採否は今日にでも確認できる**: フォルダを置いて `areka.exe <ゴーストの根> <バルーンのフォルダ>`（argv 第 2 引数）で起動すれば、コード変更 0 で表示される。要件段階を待たずに開発者が先に目視してよい。
 - 既定バルーン id の定数と解決順への配線は `baseware-root-layout`（A1-②）側が足す（本 spec は id を brief と `verification/` に書き残すだけ）。
+
+---
+
+## 2026-09-19 追記（要件 7.1）
+
+- **既定バルーン id ＝ `StayseeBalloon`**（バルーン定義の `id`・`install.txt` の `directory`・実フォルダ名が同じ綴り。実測と較正は `verification/provenance.md` の「既定バルーン id」の節）。

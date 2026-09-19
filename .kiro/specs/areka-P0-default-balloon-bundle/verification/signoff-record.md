@@ -1167,4 +1167,120 @@ find vendors/sample_ghost/StayseeBalloon -type f -printf '%f\n' | sed 's/.*\.//'
 
 ## 8. 下流への申し送りの実施記録（要件 7.3・7.4）
 
-この節はタスク 5.2 が埋める（未記入）。申し送り先 3 つの brief が実在することを確かめたことと、追記した内容を書く。
+本節はタスク 5.2 の実施記録である。記入時の HEAD は `0b77d26e`（タスク 5.1 の着地）。命令はすべて作業木の根から打っており、値は本ブランチで採り直した実測である。
+
+### 8.1 追記先の実在確認（要件 7.3）
+
+申し送り先は要件 7.3 が挙げる 3 つ（`nar-install`・`baseware-root-layout`・`alpha-release-signoff`）と、要件 7.1 が定める本仕様の brief の計 4 つである。**書く前に**、4 つとも `.kiro/specs/<名>/brief.md` として実在し、かつ `.kiro/specs/completed/<名>/` へは移っていないことを確かめた。
+
+| # | 追記先の spec | `.kiro/specs/<名>/brief.md` | `.kiro/specs/completed/<名>/` | 判定 |
+|---|---|---|---|---|
+| 1 | `areka-P0-nar-install` | 在る | 無い | 直下の brief へ追記する |
+| 2 | `areka-P0-baseware-root-layout` | 在る | 無い | 同上 |
+| 3 | `areka-P0-alpha-release-signoff` | 在る | 無い | 同上 |
+| 4 | `areka-P0-default-balloon-bundle`（本仕様） | 在る | 無い | 同上 |
+
+打った命令（2 つの場所を 1 度に見る形にしてある。「直下に在る」だけを見ると、`completed/` にも同名が残っている場合を見落とすため）:
+
+```
+for n in areka-P0-nar-install areka-P0-baseware-root-layout \
+         areka-P0-alpha-release-signoff areka-P0-default-balloon-bundle; do
+  [ -f ".kiro/specs/$n/brief.md" ]  && echo "FOUND   $n" || echo "MISSING $n"
+  [ -d ".kiro/specs/completed/$n" ] && echo "  IN_COMPLETED" || echo "  NOT_IN_COMPLETED"
+done
+# → 4 本とも FOUND ＋ NOT_IN_COMPLETED
+```
+
+**この確かめ方が恒真でないことの較正（2 本）**: 上の判定はどちらも「在る／無い」を答えるので、常に同じ答えを返す壊れ方をしうる。両方の側に、答えが反転する実例を当てた。
+
+```
+# 較正 ⑴: 実在しない spec 名を同じ形へ与える（前半の判定が反転すること）
+[ -f ".kiro/specs/areka-P0-this-spec-does-not-exist/brief.md" ] && echo FOUND || echo MISSING
+# → MISSING（＝「在る」を返し続ける壊れ方ではない）
+
+# 較正 ⑵: 実際に completed/ へ移っている spec を同じ形へ与える（後半の判定が反転すること）
+[ -d ".kiro/specs/completed/areka-P0-charset-canon" ] && echo IN_COMPLETED || echo NOT_IN_COMPLETED
+# → IN_COMPLETED
+[ -f ".kiro/specs/areka-P0-charset-canon/brief.md" ] && echo FOUND || echo MISSING
+# → MISSING（移った spec は直下から消えている＝2 つの判定は逆向きに動く）
+```
+
+較正 ⑵ の意味: 移設済みの spec は「`completed/` に在る」かつ「直下に無い」という組になる。今回の 4 本はその逆の組（直下に在る・`completed/` に無い）なので、**両方に在る**（移設が中途半端）でも**どちらにも無い**（名前の綴り違い）でもない。要件 7.4 が想定する分岐条件に当たるものは 1 つも無かった。
+
+### 8.2 どこへ何を追記したか（要件 7.3・5.2・7.1）
+
+4 本とも**末尾への追記のみ**で、既存の記述は 1 行も書き換えていない。書式は各 brief に既に在る追記の形（`---` の区切り＋`## <日付> 追記（…）`＋箇条書き）に合わせた。日付は実際に追記した日（2026-09-19）である。
+
+| # | 追記先 | 追記した見出し | 伝えた内容 | 要件 |
+|---|---|---|---|---|
+| 1 | `areka-P0-nar-install/brief.md` | `## 2026-09-19 追記（default-balloon-bundle からの申し送り＝保管は完了）` | ⑴ 保管済みのフォルダ `vendors/sample_ghost/StayseeBalloon/` と直下 29 ファイル・サブフォルダ 0 ⑵ sha256 と上流との突合の在り処（`provenance.md` の「ハッシュ一覧」の節）⑶ 畳む対象と共有ヘルパの検体名 `StayseeBalloon` ⑷ 付け替える定数 1 行の場所（下の註）⑸ テーマ別ファイルを `tests/` 直下へ平置きすると cargo が二重にテストターゲットを作る罠 | 7.3 |
+| 2 | `areka-P0-baseware-root-layout/brief.md` | `## 2026-09-19 追記（default-balloon-bundle からの申し送り＝既定バルーン id）` | ⑴ 既定バルーン id ＝ `StayseeBalloon`（定義の `id` ＝ `install.txt` の `directory` ＝ 実フォルダ名・裏取りは `provenance.md` の「既定バルーン id」の節）⑵ 定数と解決順への配線は**そちらが足す**（本仕様は本番コードに定数を置かない＝要件 7.2）⑶ 保管先と配布物での置き場 ⑷ 同 brief の裁定候補 ⑴ が決着済みであること | 7.3 |
+| 3 | `areka-P0-alpha-release-signoff/brief.md` | `## 2026-09-19 追記（default-balloon-bundle からの申し送り＝zip の中身と README の出典文）` | ⑴ zip に入れる `balloon/StayseeBalloon/`（29 ファイル無改変）⑵ README の出典文は本記録 **§6.2 の引用ブロックをそのまま写す**・**§6.1 と §6.3 は写す対象ではない**・引用記号の落とし方 ⑶ 「そのまま写せる」ことは §6.3 の判定 2 本と較正で確かめられること ⑷ `THIRD-PARTY-NOTICES.md` は自動生成なので手で編集しないこと（要件 5.3） | 7.3・5.2 |
+| 4 | `areka-P0-default-balloon-bundle/brief.md`（本仕様） | `## 2026-09-19 追記（要件 7.1）` | 「既定バルーン id ＝ `StayseeBalloon`」を 1 行（裏取りの所在を添えた） | 7.1 |
+
+**⑴ の「定数 1 行の場所」を設計 C6 の文面から書き換えた点**: 設計 C6 は付け替え先を「新規テスト `crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs` の定数 `STAYSEE_BALLOON_DIR` 1 行」と書いている。タスク 2.3 でテーマ別ファイルへの分割が入ったため、**現在の構成を確かめてから書いた**。確かめた結果、定数の在り処は設計の記述のままであり（入口ファイルの `STAYSEE_BALLOON_DIR` の定義行）、テーマ別 9 ファイルは `crates/areka-emo-text/tests/staysee_balloon_fixture/` 配下にあって検体パスを 1 つも綴っていない（実体化は `staysee_balloon_fixture/test_support.rs` の `staysee_root` が `super::STAYSEE_BALLOON_DIR` から行う）。追記にはこの構成をそのまま書き、あわせて分割の際に実測した罠（`tests/` 直下の `*.rs` は cargo が独立した統合テストのターゲットとして自動で拾うため、テーマ別ファイルを平置きすると同じテストが 2 か所で走る）を添えた。共有ヘルパへ寄せる側も同じ制約を踏むためである。
+
+```
+# 判定: テーマ別ファイルの側に検体パスが 1 つも綴られていないこと
+grep -rn "vendors/sample_ghost/StayseeBalloon" crates/areka-emo-text/tests/staysee_balloon_fixture/ | wc -l
+# → 0
+
+# 較正: 同じ探し方を入口ファイルへ当てる（0 ではない＝探し方は生きている）
+grep -c "vendors/sample_ghost/StayseeBalloon" crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs
+# → 2。内訳は⑴ 冒頭の説明文（モジュール doc）の 1 行と⑵ `STAYSEE_BALLOON_DIR` の定義行。
+#   **値を持つ（付け替えの対象になる）のは ⑵ だけ**で、それが 1 本であることは次で見る。
+
+# 判定: 値を持つ定義行が 1 本であること
+grep -c 'const STAYSEE_BALLOON_DIR' crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs
+# → 1
+
+# 較正: テーマ別ファイルが定数を名前で参照していること（パスを綴らずに検体へ届いている）
+grep -rn "STAYSEE_BALLOON_DIR" crates/areka-emo-text/tests/staysee_balloon_fixture/ | wc -l
+# → 2（`test_support.rs` の実体化 1 行と、その直前の説明 1 行）
+```
+
+### 8.3 要件 7.4 の分岐は **発動していない（0 件）**
+
+要件 7.4 は「申し送り先が既に `completed/` へ移っていれば、その spec には追記せず `.kiro/steering/roadmap.md` の当該行へ書く」と定める。**この分岐に入った追記先は 0 件**である。
+
+判定根拠は 8.1 の表の右列で、4 本とも `.kiro/specs/completed/<名>/` が存在しない。したがって `roadmap.md` へ書き替える先は 1 つも無く、`.kiro/steering/roadmap.md` は 1 行も変えていない。
+
+```
+# 判定: 本タスクの変更に roadmap.md が現れる本数
+git diff --numstat | grep -c 'steering/roadmap.md'
+# → 0
+
+# 較正: 同じ数え方で、本タスクが実際に触ったファイルの本数を数える（0 ではない）
+git diff --numstat | wc -l
+# → 5（brief 4 本＋本記録）
+```
+
+較正の意味: 同じ命令の形で 5 という 0 でない値が出るので、上の 0 は「差分の採り方が壊れていて何も拾えなかった」結果ではなく、**本当に `roadmap.md` を触っていない**ことを表す。
+
+### 8.4 既存の記述を書き換えていないこと
+
+4 本とも追記のみであることを、差分の削除列で確かめた。
+
+```
+git diff --numstat -- .kiro/specs/areka-P0-nar-install/brief.md \
+                      .kiro/specs/areka-P0-baseware-root-layout/brief.md \
+                      .kiro/specs/areka-P0-alpha-release-signoff/brief.md \
+                      .kiro/specs/areka-P0-default-balloon-bundle/brief.md
+# → 9 0 ／ 9 0 ／ 9 0 ／ 6 0（追加のみ・削除は 4 本とも 0 行）
+```
+
+削除 0 行であることが、並走する別の spec が同じ brief に書いた記述を踏んでいないことの根拠になる。
+
+### 8.5 本節の記入で「未記入」の名乗りが消えること
+
+本記録の冒頭「この記録の埋まり具合」は、未記入の節が行頭から名乗る形を数えて埋まり具合を判定する。本節を埋めたので、その判定は 0 になる。
+
+```
+F=.kiro/specs/areka-P0-default-balloon-bundle/verification/signoff-record.md
+grep -c '^この節はタスク.*（未記入）' "$F"
+# → 0（タスク 5.1 の着地時点では 1＝本節の名乗りだった）
+
+# 較正: 行頭一致にしない形は、この冒頭の説明文を拾うので 0 にならない
+grep -c '（未記入）' "$F"
+# → 0 より大きい（＝上の 0 は「探し方が壊れて何も拾えなかった」結果ではない）
+```
