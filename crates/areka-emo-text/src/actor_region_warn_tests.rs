@@ -32,6 +32,14 @@
 //! 件数を見るテストは捕捉窓の内側で対照の `error!` を 1 件発行し、その 1 件が数えられて
 //! いることを件数の主張と同時に確かめる（`region_inline_limit_tests.rs` と同じ流儀）。
 //!
+//! ## `origin` の警告も同じ登録口が書く（本 spec 要件 3.1〜3.4／5.6）
+//!
+//! 範囲外ゆえ無視した `origin` 宣言の警告も、同じ理由で同じ登録口が書く——件数の規律も
+//! 同じである（装着で成分 1 つにつき 1 件・値の変わらない再追従で 0 件）。同じ捕捉窓に
+//! 2 種類の警告が混ざりうるので、後半の群は文言で選り分けてから数える（総数 0 件を
+//! 主張するときだけは選り分けない）。欄は `balloon`・`key`・`resolved`・`range_min`・
+//! `range_max`・`corner` の 6 つ。
+//!
 //! ## 決定論
 //!
 //! 実 DPI モニタ・実 GPU・実フォント・実窓を要さない。文字列 2 層の写像と純粋層の解決、
@@ -377,4 +385,377 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
         "領域の値が変わった再追従は警告を 1 件記録する（要件 14.2）: {warns:?}"
     );
     assert_coarse_warning(&warns[0], "x", WIDER_WRAP_X, WIDER_RIGHT);
+}
+
+// ── 本 spec 要件 3.1〜3.4／5.6: 無視した `origin` 宣言は成分 1 つにつき 1 件 ──
+//
+// 上の 6 本は `origin` を宣言しない入力なので、下の追加分とは別の警告を見ている。
+// 同じ捕捉窓に 2 種類の警告が混ざりうるため、下の群は**文言で選り分けてから**数える
+// （総数 0 件を主張するときだけは選り分けない——選り分けない 0 のほうが強い主張である）。
+
+/// 無視した `origin` 宣言の警告の文言（`actor_decoration.rs` の発行点と 1 文字も違わないこと
+/// 自体を固定する——折返しの警告と同じ捕捉窓で選り分ける鍵がこの文字列だからである・要件 3.3）。
+const IGNORED_ORIGIN_MESSAGE: &str = "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた";
+
+/// 基層へ足す `origin` 宣言——両成分とも範囲の外（本体側の 36..356／46..168 に対し 0）。
+const ORIGIN_BOTH_OUTSIDE: &str = concat!("origin.x,0\n", "origin.y,0\n");
+/// x だけが範囲の外（y の 100 は 46..168 の内）。
+const ORIGIN_ONLY_X_OUTSIDE: &str = concat!("origin.x,0\n", "origin.y,100\n");
+/// 両成分とも範囲の内（100 は 36..356 の内であり 46..168 の内でもある）。
+const ORIGIN_BOTH_INSIDE: &str = concat!("origin.x,100\n", "origin.y,100\n");
+
+/// 本体側の描画範囲の左辺（`SAKURA_IMAGE` 400×224 と `SAKURA_OVERLAY` の `validrect.left,36`）。
+/// 左 36 ≠ 上 46・右 356 ≠ 下 168 と四辺が非対称なので、成分と辺の対応が入れ替われば露見する。
+const SAKURA_LEFT: f32 = 36.0;
+/// 本体側の上辺（`validrect.top,46`）。
+const SAKURA_TOP: f32 = 46.0;
+/// 本体側の右辺（`validrect.right,-44` → 400−44）。
+const SAKURA_RIGHT: f32 = 356.0;
+/// 本体側の下辺（`validrect.bottom,-56` → 224−56）。
+const SAKURA_BOTTOM: f32 = 168.0;
+
+/// 領域の値を変えるための別原寸（420×240）。遠辺だけが動き、折返し基準 420−49＝371 は
+/// 右辺 420−44＝376 の内に留まる（＝折返しの警告は出ないまま値だけが変わる）。
+const SAKURA_WIDER_IMAGE: (u32, u32) = (420, 240);
+/// 別原寸での右辺（420−44）。
+const SAKURA_WIDER_RIGHT: f32 = 376.0;
+/// 別原寸での下辺（240−56）。
+const SAKURA_WIDER_BOTTOM: f32 = 184.0;
+
+/// 相方側の描画範囲の左辺（`KERO_OVERLAY` の `validrect.left,24`）。
+const KERO_LEFT: f32 = 24.0;
+/// 相方側の上辺（`validrect.top,40`）。
+const KERO_TOP: f32 = 40.0;
+
+/// `origin` 宣言を足した基層と面別上書き層の 2 層マージ（写像経路は `merged` と同じ）。
+fn merged_with_origin(origin: &str, overlay: &str) -> BalloonModel {
+    parse_str(&format!("{DESCRIPT}{origin}"), Some(overlay))
+}
+
+/// 捕捉した WARN のうち、無視した `origin` 宣言の警告だけを取り出す。
+fn ignored_origin_warns(warns: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+    warns
+        .iter()
+        .filter(|e| e.message() == IGNORED_ORIGIN_MESSAGE)
+        .collect()
+}
+
+/// 6 つの欄と文言を丸ごと確かめる（成分名・無視した解決値・範囲の両端・実際に用いた角）。
+///
+/// バルーン名の代替値だけは上流の定数を借りずに綴りを直に書く。定数と突き合わせると
+/// 「上流が空文字へ変わっても両辺が揃って通る」ので、空でないことを何も確かめられない。
+fn assert_ignored_origin_warning(
+    warn: &CapturedEvent,
+    key: &str,
+    resolved: f32,
+    range_min: f32,
+    range_max: f32,
+    corner: f32,
+) {
+    assert_eq!(
+        warn.message(),
+        IGNORED_ORIGIN_MESSAGE,
+        "文言は上流と 1 文字も違ってはならない（要件 3.3）"
+    );
+    assert_eq!(warn.field_str("key"), Some(key), "無視した成分の名前の欄");
+    assert_eq!(
+        number_field(warn, "resolved"),
+        resolved,
+        "無視した宣言の解決値の欄"
+    );
+    assert_eq!(
+        number_field(warn, "range_min"),
+        range_min,
+        "範囲の手前端の欄（x なら左辺・y なら上辺）"
+    );
+    assert_eq!(
+        number_field(warn, "range_max"),
+        range_max,
+        "範囲の奥端の欄（x なら右辺・y なら下辺）"
+    );
+    assert_eq!(
+        number_field(warn, "corner"),
+        corner,
+        "実際に用いた書き始めの角の欄"
+    );
+    assert_eq!(
+        warn.field_str("balloon"),
+        Some("(名前なし)"),
+        "バルーン名の欄は名前が無いときも空にせず代替値を載せる（要件 3.3）"
+    );
+}
+
+/// 両成分が範囲の外のバルーンの装着は、成分 1 つにつき 1 件——ちょうど 2 件を記録する。
+#[test]
+fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_component() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("0");
+
+    let (_, warns, errors) = capturing(|| {
+        rt.register_actor_binding(
+            actor.clone(),
+            binding(slot, window, SAKURA_IMAGE),
+            &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
+        );
+    });
+
+    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
+    let ignored = ignored_origin_warns(&warns);
+    assert_eq!(
+        ignored.len(),
+        2,
+        "両成分が範囲の外なら装着で 2 件（要件 3.1／3.2）: {warns:?}"
+    );
+    assert_ignored_origin_warning(
+        ignored[0],
+        "origin.x",
+        0.0,
+        SAKURA_LEFT,
+        SAKURA_RIGHT,
+        SAKURA_LEFT,
+    );
+    assert_ignored_origin_warning(
+        ignored[1],
+        "origin.y",
+        0.0,
+        SAKURA_TOP,
+        SAKURA_BOTTOM,
+        SAKURA_TOP,
+    );
+}
+
+/// 片方の成分だけが範囲の外なら 1 件だけ——範囲の内の成分は警告を生まない（要件 3.4）。
+#[test]
+fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("0");
+
+    let (_, warns, errors) = capturing(|| {
+        rt.register_actor_binding(
+            actor.clone(),
+            binding(slot, window, SAKURA_IMAGE),
+            &merged_with_origin(ORIGIN_ONLY_X_OUTSIDE, SAKURA_OVERLAY),
+        );
+    });
+
+    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
+    let ignored = ignored_origin_warns(&warns);
+    assert_eq!(
+        ignored.len(),
+        1,
+        "範囲の外の成分は 1 つだけなので 1 件（要件 3.1／3.2）: {warns:?}"
+    );
+    assert_ignored_origin_warning(
+        ignored[0],
+        "origin.x",
+        0.0,
+        SAKURA_LEFT,
+        SAKURA_RIGHT,
+        SAKURA_LEFT,
+    );
+}
+
+/// 範囲の内に宣言したバルーンの装着は WARN を 1 件も出さない——ここだけは文言で選り分けず
+/// **総数**を 0 と主張する（選り分けない 0 のほうが強い主張である・要件 3.4／5.6）。
+#[test]
+fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("0");
+
+    let (_, warns, errors) = capturing(|| {
+        rt.register_actor_binding(
+            actor.clone(),
+            binding(slot, window, SAKURA_IMAGE),
+            &merged_with_origin(ORIGIN_BOTH_INSIDE, SAKURA_OVERLAY),
+        );
+    });
+
+    assert_eq!(
+        errors, 1,
+        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
+    );
+    assert_eq!(
+        warns.len(),
+        0,
+        "範囲の内の宣言は警告を生まない（総数で 0 件・要件 3.4）: {warns:?}"
+    );
+}
+
+/// 値の変わらない再追従を 3 回繰り返しても、無視した `origin` の警告は 1 件も増えない
+/// （毎フレーム走る経路で警告が積み上がらない・要件 3.2）。
+#[test]
+fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("0");
+    // 装着そのものの 2 件は捕捉窓の外で済ませ、以降の追加分だけを数える。
+    rt.register_actor_binding(
+        actor.clone(),
+        binding(slot, window, SAKURA_IMAGE),
+        &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
+    );
+
+    let (changed, warns, errors) = capturing(|| {
+        let mut changed = Vec::new();
+        for _ in 0..3 {
+            changed.push(rt.refresh_actor_binding(
+                &actor,
+                binding(slot, window, SAKURA_IMAGE),
+                &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
+            ));
+        }
+        changed
+    });
+
+    assert_eq!(
+        errors, 1,
+        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
+    );
+    assert_eq!(
+        changed,
+        vec![false, false, false],
+        "判定キー全同値の再追従は no-op（前提の確認）"
+    );
+    assert_eq!(
+        ignored_origin_warns(&warns).len(),
+        0,
+        "値の変わらない再追従では警告を追加しない（要件 3.2）: {warns:?}"
+    );
+}
+
+/// binding だけが変わって領域が同値の再追従は、**再構築は起きる**のに警告は 0 件
+/// （判定が「登録口に達したか」ではなく「領域の値が変わったか」であることを示す・要件 3.2）。
+#[test]
+fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("0");
+    rt.register_actor_binding(
+        actor.clone(),
+        binding(slot, window, SAKURA_IMAGE),
+        &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
+    );
+    let before = rt.layout_input[&actor].region;
+
+    // image 原寸は据え置き（＝領域は同値）で k と物理寸だけを変える。
+    let scaled = TextSlotBinding::new(slot, window, 2.0, (800, 448), SAKURA_IMAGE);
+    let (changed, warns, errors) = capturing(|| {
+        rt.refresh_actor_binding(
+            &actor,
+            scaled,
+            &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
+        )
+    });
+
+    assert_eq!(
+        errors, 1,
+        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
+    );
+    assert!(
+        changed,
+        "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
+    );
+    assert_eq!(
+        rt.layout_input[&actor].region, before,
+        "前提: 領域の値は据え置き"
+    );
+    assert_eq!(
+        ignored_origin_warns(&warns).len(),
+        0,
+        "領域の値が同じなら、登録口に達しても警告は出ない（要件 3.2）: {warns:?}"
+    );
+}
+
+/// 原寸が変わって領域の値も変わる再追従は、成分 1 つにつき 1 件を**新しい値で**出し直す。
+#[test]
+fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("0");
+    rt.register_actor_binding(
+        actor.clone(),
+        binding(slot, window, SAKURA_IMAGE),
+        &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
+    );
+
+    let (changed, warns, errors) = capturing(|| {
+        rt.refresh_actor_binding(
+            &actor,
+            binding(slot, window, SAKURA_WIDER_IMAGE),
+            &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
+        )
+    });
+
+    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
+    assert!(changed, "面実寸が変われば再追従は起きる（前提の確認）");
+    let ignored = ignored_origin_warns(&warns);
+    assert_eq!(
+        ignored.len(),
+        2,
+        "領域の値が変われば成分 1 つにつき 1 件を出し直す（要件 3.2）: {warns:?}"
+    );
+    assert_ignored_origin_warning(
+        ignored[0],
+        "origin.x",
+        0.0,
+        SAKURA_LEFT,
+        SAKURA_WIDER_RIGHT,
+        SAKURA_LEFT,
+    );
+    assert_ignored_origin_warning(
+        ignored[1],
+        "origin.y",
+        0.0,
+        SAKURA_TOP,
+        SAKURA_WIDER_BOTTOM,
+        SAKURA_TOP,
+    );
+}
+
+/// 2 種類の警告が同じ装着で同時に出ても、互いの件数・欄・文言を乱さない（要件 3.3）。
+/// 粗い相方側バルーンに範囲外の `origin` を足すと、折返しの 1 件と `origin` の 2 件で総数 3 件。
+#[test]
+fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("1");
+
+    let (_, warns, errors) = capturing(|| {
+        rt.register_actor_binding(
+            actor.clone(),
+            binding(slot, window, KERO_IMAGE),
+            &merged_with_origin(ORIGIN_BOTH_OUTSIDE, KERO_OVERLAY),
+        );
+    });
+
+    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
+    assert_eq!(
+        warns.len(),
+        3,
+        "折返しの 1 件と origin の 2 件で総数 3 件: {warns:?}"
+    );
+    let ignored = ignored_origin_warns(&warns);
+    assert_eq!(
+        ignored.len(),
+        2,
+        "選り分けた origin の警告は 2 件: {warns:?}"
+    );
+    assert_ignored_origin_warning(
+        ignored[0], "origin.x", 0.0, KERO_LEFT, KERO_RIGHT, KERO_LEFT,
+    );
+    assert_ignored_origin_warning(ignored[1], "origin.y", 0.0, KERO_TOP, KERO_BOTTOM, KERO_TOP);
+
+    let coarse: Vec<&CapturedEvent> = warns
+        .iter()
+        .filter(|e| e.message() == WARN_MESSAGE)
+        .collect();
+    assert_eq!(
+        coarse.len(),
+        1,
+        "折返しの警告は相方の別警告に影響されず 1 件のまま: {warns:?}"
+    );
+    assert_coarse_warning(coarse[0], "x", KERO_WRAP_X, KERO_RIGHT);
 }
