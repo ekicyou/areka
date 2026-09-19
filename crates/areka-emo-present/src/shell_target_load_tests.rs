@@ -10,24 +10,21 @@
 //! 本ファイル後半で判定する。`emo2` の絵の不変（A／B の全画素の一致）はタスク 4.4 が
 //! `shell_target_emo2_tests.rs` で持つ。
 //!
-//! # 受け口の置き場所（タスク 4.3 への申し送り）
+//! # 受け口の置き場所
 //!
-//! 本ファイル末尾の検体の受け口と COM 初期化は、タスク 4.3 が新設する
-//! `shell_target_test_support.rs` へそのまま移すためにここへ最小形で置いてある
-//! （`balloon_test_support.rs` は `pub(super)` がバルーンのモジュール境界で閉じており外から引けない）。
-//! 一時フォルダは移す必要が無い——共通窓口 [`temp_path_kit::TempPath`] をその場で呼べばよい。
+//! 検体の受け口・COM 初期化・ログの捕捉窓は、`shell_target` の檻が共有する
+//! `shell_target_test_support.rs`（[`super::test_support`]）に在る。一時フォルダは共有窓口
+//! [`temp_path_kit::TempPath`] をその場で呼ぶ。
 
 use super::*;
 
 use std::path::PathBuf;
-use std::sync::LazyLock;
 
 use areka_emo_atlas::{MemoryDecoder, SetId, WicDecoderArm};
 use areka_parsers::shell::parse;
-use log_capture_kit::{CapturedEvent, capture};
-use sample_ghost_kit::SampleRoot;
 use temp_path_kit::TempPath;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
+
+use super::test_support::{CapturedEvent, capture_events, emo2_shell_dir, with_com_initialized};
 
 /// 不透明 1×1 PBGRA スペック（bake が placement を必ず産む＝非退化）。
 fn opaque_1x1() -> (u32, u32, u32, Vec<u8>, bool) {
@@ -230,29 +227,6 @@ fn surfaces_txt_without_any_surface_yields_empty_error() {
     }
 }
 
-// ── 受け口（タスク 4.3 が `shell_target_test_support.rs` へ移す）───────────────────
-
-/// COM を初期化して `f` を走らせる（`WicDecoderArm` の前提・`display_gpu_tests.rs` と同型）。
-fn with_com_initialized<F: FnOnce()>(f: F) {
-    unsafe {
-        // 既に初期化済みでも `RPC_E_CHANGED_MODE` を許容して続行する。
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    f();
-    unsafe {
-        CoUninitialize();
-    }
-}
-
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
-
-/// emo2 のシェル（`shell/master/`）のフォルダを窓口から得る（検体の直パスを綴らない・要件 7.11）。
-fn emo2_shell_dir() -> PathBuf {
-    EMO2.folder().join("shell").join("master")
-}
-
 // ── 記録（要件 1.5・1.6・3.5・6.1・6.2・6.4・6.5）──────────────────────────────
 
 /// 本モジュールが出す記録の宛先（既定の target＝モジュールパス・design「Monitoring」）。
@@ -321,7 +295,8 @@ fn every_record_is_emitted_once_per_load() {
         dec.insert(dir.child(name), w, h, stride, bytes.clone(), has_alpha);
     }
 
-    let (target, events) = capture(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
+    let (target, events) =
+        capture_events(|| load_shell_target(dir.path(), &dec).expect("シェルは読める"));
 
     // 6.1: 一覧の結果は 1 行だけ。
     let summary = only_from_shell_target(&events, tracing::Level::INFO, "一覧");
@@ -398,7 +373,7 @@ fn every_record_is_emitted_once_per_load() {
     );
 
     // `build_world` は新しい記録を 0 本出す（design「Monitoring」）。
-    let (world, again) = capture(|| target.build_world());
+    let (world, again) = capture_events(|| target.build_world());
     assert_eq!(
         count_from_shell_target(&again, tracing::Level::WARN)
             + count_from_shell_target(&again, tracing::Level::INFO)
@@ -424,7 +399,7 @@ fn list_failure_is_recorded_before_the_error() {
     let dir = PathBuf::from(r"C:\areka-test\shell-target-records-no-dir");
     let dec = MemoryDecoder::new();
 
-    let (result, events) = capture(|| load_shell_target(&dir, &dec));
+    let (result, events) = capture_events(|| load_shell_target(&dir, &dec));
 
     assert!(matches!(result, Err(ShellLoadError::List { .. })));
     let hit = only_from_shell_target(&events, tracing::Level::ERROR, "一覧");
@@ -441,7 +416,7 @@ fn read_failure_is_recorded_before_the_error() {
     let dir = TempPath::new("shell-target-records-no-surfaces-txt");
     let dec = MemoryDecoder::new();
 
-    let (result, events) = capture(|| load_shell_target(dir.path(), &dec));
+    let (result, events) = capture_events(|| load_shell_target(dir.path(), &dec));
 
     assert!(matches!(result, Err(ShellLoadError::Read { .. })));
     let hit = only_from_shell_target(&events, tracing::Level::ERROR, "読み取り");
@@ -455,7 +430,7 @@ fn empty_failure_is_recorded_before_the_error() {
     std::fs::write(dir.child("surfaces.txt"), "charset,UTF-8\n").expect("記述ファイル作成");
     let dec = MemoryDecoder::new();
 
-    let (result, events) = capture(|| load_shell_target(dir.path(), &dec));
+    let (result, events) = capture_events(|| load_shell_target(dir.path(), &dec));
 
     assert!(matches!(result, Err(ShellLoadError::Empty { .. })));
     let hit = only_from_shell_target(&events, tracing::Level::ERROR, "1 つも産まなかった");
@@ -480,7 +455,7 @@ fn emo2_shell_records_two_shadowed_images_and_no_warnings() {
         let shell_dir = emo2_shell_dir();
 
         let (target, events) =
-            capture(|| load_shell_target(&shell_dir, &dec).expect("emo2 のシェルは読める"));
+            capture_events(|| load_shell_target(&shell_dir, &dec).expect("emo2 のシェルは読める"));
         assert!(target.bake_errors().is_empty(), "前提: 脱落は 0 件");
 
         let summary = only_from_shell_target(&events, tracing::Level::INFO, "一覧");

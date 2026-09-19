@@ -110,7 +110,7 @@
   - _Depends: 4.1_
   - _Boundary: areka-emo-present shell_target_
 
-- [ ] 4.3 表ア〜エと `surface.append` の結合テストを書く
+- [x] 4.3 表ア〜エと `surface.append` の結合テストを書く
   - `crates/areka-emo-present/src/shell_target_test_support.rs` を新設し、一時フォルダ（`balloon_test_support.rs` の `TempDir` と同型）・検体の受け口（`LazyLock<SampleRoot>`）・COM 初期化・ログの捕捉窓（`log_capture_kit::capture` へ委譲するだけ）を置く。捕捉窓の中身は書き写さない
   - `crates/areka-emo-present/src/shell_target_base_image_tests.rs` を新設し、メモリ上の復号器で `build_shell_target` を通す
   - 表の 4 通りを、画像の実寸の違いが外形に現れる入力で確かめる: ア＝外形が画像の実寸／イ＝画像と `element1` を合わせた外形で画像が奥／ウ＝`element0`（小）と画像（大・別の絵）で外形が `element0` の実寸／エ＝`EmptyComposition`
@@ -236,3 +236,5 @@
 - 4.1: 一時フォルダは自作せず共有窓口 `temp_path_kit::TempPath` を使う（`crates/log-capture-kit/tests/temp_path_guard_test.rs` が自作を拒む）。`areka-emo-present` の dev-dep に `temp-path-kit` を追加済み。
 - 4.1: `shell_target.rs` と `shell_target_load_tests.rs` に「記録はタスク 4.2 が足す」「受け口はタスク 4.3 が `shell_target_test_support.rs` へ移す」の前方参照が 10 か所ある。4.2／4.3 の着地時に事実へ直すこと。
 - 4.2: `emo2` の記録の檻（`recognized=2 used=0 shadowed=2`・使わなかった画像の `debug!` 2 行・`warn!` 0 行）は `shell_target_load_tests.rs` に既済。タスク 4.4 は A／B の全画素の一致が残りで、記録の檻を二重に置かないこと。
+- 4.3: `surface.append` にしか現れない絵の綴りは焼かれない（`ManifestDeriver::derive` が `shell.surfaces` だけを読む）。本仕様の着地で生じた欠陥ではなく既存の性質で、焼く一覧の導出は 1 行も変えていない。検体 2 体の `surface.append` は 0 行なので影響は無いが、7.1／7.2 の実機確認で露見したらタスク 7.4 の担当。
+- 4.3: tasks.md が言う `TempDir` は新設せず共有窓口 `temp_path_kit::TempPath` を使った（同型の新設は `temp_path_guard_test.rs` の例外表の編集を強いるため）。レビューで妥当と裁定済み。
