@@ -120,7 +120,7 @@
   - _Depends: 4.1, 3.2_
   - _Boundary: areka-emo-present shell_target tests_
 
-- [ ] 4.4 `emo2` の不変・摂動・記録のテストを書く
+- [x] 4.4 `emo2` の不変・摂動・記録のテストを書く
   - `crates/areka-emo-present/src/shell_target_emo2_tests.rs` を新設する（4.3 の `shell_target_test_support.rs` を使う）
   - `load_shell_target` が返した 1 つの `ShellTarget` に対して、A＝`ShellTarget::build_world()`（権威経由）と、B＝同じ `ShellTarget::atlas()` を装着した `EmoWorld::build(shell)`（画像 0 件）の 2 つの面の表を組み、`surface_ids()` の**全部の面**で外形と全画素が一致することを確かめる。索引表を権威経由にするのは、`flatten_extent` が索引表で引けない層を記録なしで飛ばすため（別に焼くと壊れていても緑になる）
   - `base_images()` が `used` 0 件・`shadowed` 2 件（面 0・面 10）であることを確かめる
@@ -238,3 +238,5 @@
 - 4.2: `emo2` の記録の檻（`recognized=2 used=0 shadowed=2`・使わなかった画像の `debug!` 2 行・`warn!` 0 行）は `shell_target_load_tests.rs` に既済。タスク 4.4 は A／B の全画素の一致が残りで、記録の檻を二重に置かないこと。
 - 4.3: `surface.append` にしか現れない絵の綴りは焼かれない（`ManifestDeriver::derive` が `shell.surfaces` だけを読む）。本仕様の着地で生じた欠陥ではなく既存の性質で、焼く一覧の導出は 1 行も変えていない。検体 2 体の `surface.append` は 0 行なので影響は無いが、7.1／7.2 の実機確認で露見したらタスク 7.4 の担当。
 - 4.3: tasks.md が言う `TempDir` は新設せず共有窓口 `temp_path_kit::TempPath` を使った（同型の新設は `temp_path_guard_test.rs` の例外表の編集を強いるため）。レビューで妥当と裁定済み。
+- 4.4: 要件 5.8 の括弧内「誤って二重に重ねても結果のバイトが変わらず検査にならない」は実測と食い違う。摂動を当てると面 0 も画素は変わる（先頭の差は 827 バイト目）。変わらないのは**外形**だけで、縁が半透明なので重ねると色が変わる。檻は面 10 の外形で較正しているので判定は正しいが、**要件 5.8 の文面と `shell_target_emo2_tests.rs` の `SURFACE10_EXTENT` の doc を「変わらないのは外形だけ」へ直すこと**（タスク 6.2 または要件 9 の文書作業の担当）。
+- 4.4: `shell_target_test_support.rs` の冒頭が挙げる「檻は 4 本」のうち `shell_target_template_tests.rs` はタスク 6.1 の持ち物。6.1 の着地でファイル名が変わったらこの 1 行も追随させること。
