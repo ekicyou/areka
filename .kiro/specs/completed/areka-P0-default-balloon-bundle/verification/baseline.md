@@ -27,7 +27,7 @@ git diff --stat 082379b3003f3e2096c574585d15b194b369e81e..HEAD
 |---|---|---|
 | 本番コード 0 行（8.1, 6.6, 7.2） | ~~`git diff --stat <base>..HEAD -- 'crates/*/src'`~~ → **この形は使えない**（下の註）。採り直した形: `git diff --numstat <base>..HEAD \| grep '/src/'` | 0 行 |
 | 依存記述とロック 0（8.2） | `git diff --stat <base>..HEAD -- '**/Cargo.toml' Cargo.toml Cargo.lock` | 出力なし＝0 |
-| 作業木の未コミット（8.5） | `git status --porcelain` | **この記録を置く前**の値: ` M .kiro/specs/areka-P0-default-balloon-bundle/tasks.md` の 1 行のみ。本ファイルを置いた後は `?? .kiro/specs/areka-P0-default-balloon-bundle/verification/` が増えて 2 行になる（印字した数はその場で古びるので、タスク 6 は必ず自分で採り直すこと） |
+| 作業木の未コミット（8.5） | `git status --porcelain` | **この記録を置く前**の値: ` M .kiro/specs/completed/areka-P0-default-balloon-bundle/tasks.md` の 1 行のみ。本ファイルを置いた後は `?? .kiro/specs/completed/areka-P0-default-balloon-bundle/verification/` が増えて 2 行になる（印字した数はその場で古びるので、タスク 6 は必ず自分で採り直すこと） |
 
 ⚠ **上表の 1 行目の当初の形（`-- 'crates/*/src'`）は判定になっていなかった**（2026-09-18・タスク 2.8 で発覚）。原因は**既定のパス指定が道全体に一致することを要求する**こと。`crates/*/src` は「末尾が `src` で終わる道」にしか当たらず、その下のファイルには当たらないので、**変更が実在しても無出力・exit 0** になる（`*` が `/` を跨がないからではない。実測で `-- 'crates/*region.rs'` は 3 段下の `crates/areka-emo-text/src/region.rs` に当たる）。末尾に `/*` か `/**` を足せば当たる。実測: `crates/areka-emo-text/src/region.rs` に 1 行足した状態でこの形は無出力、`git diff --numstat 082379b3 | grep '/src/'` は `1	0	crates/areka-emo-text/src/region.rs` を返した。
 

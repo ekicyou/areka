@@ -31,7 +31,7 @@
 **まだ埋まっていない節の見分け方**: 未記入の節は、その節の本文自身が行頭から「この節はタスク N が埋める（未記入）」と名乗る。したがって埋まり具合はこの冒頭を読んで確かめるのではなく、**節そのものを開くか、名乗りを機械で数えれば分かる**。
 
 ```
-F=.kiro/specs/areka-P0-default-balloon-bundle/verification/signoff-record.md
+F=.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md
 
 # 判定: 名乗りを行頭一致で数える
 grep -c '^この節はタスク.*（未記入）' "$F"
@@ -960,7 +960,7 @@ CC0 は帰属表示を義務づけない。それでもブロックに作者名�
 「そのまま写せる」は見た目の印象ではなく、次の 2 つが同時に成り立つことと定めた。⑴ 6.2 の中に写せない行（地の文）が混じっていないこと、⑵ ブロックの中に第三者が知らない内部の言葉が無いこと。どちらも機械で数え直せる。
 
 ```
-F=.kiro/specs/areka-P0-default-balloon-bundle/verification/signoff-record.md
+F=.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md
 
 # 判定 ⑴: 6.2 の中で、引用ブロックでも空行でもない行（＝写せない地の文）の本数
 awk '/^### 6\.2 /{f=1;next} /^### 6\.3 /{f=0} f' "$F" | grep -v '^>' | grep -c '[^[:space:]]'
@@ -1151,7 +1151,7 @@ find vendors/sample_ghost/StayseeBalloon -type f -printf '%f\n' | sed 's/.*\.//'
 | `doc/ukadoc-coverage/briefing.md` | 2 数値 | +2／−2 |
 | `doc/ukadoc-coverage/report/assets.md` | 道具の出力 | +5／−5 |
 | `doc/ukadoc-coverage/report/summary.md` | 道具の出力 | +4／−4 |
-| `.kiro/specs/areka-P0-default-balloon-bundle/verification/signoff-record.md`（**この記録自身**） | §7 の記入（`## 7. 台帳の検査` の見出しの下の「未記入」1 行を本節群で置き換えた。差分の塊は `git diff -U0` で **1 つだけ**・位置は §7 の中） | この行の増減だけは記入を終えるまで確定しないので数を書かない（自分自身を数えた数は書いた瞬間に古びる） |
+| `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md`（**この記録自身**） | §7 の記入（`## 7. 台帳の検査` の見出しの下の「未記入」1 行を本節群で置き換えた。差分の塊は `git diff -U0` で **1 つだけ**・位置は §7 の中） | この行の増減だけは記入を終えるまで確定しないので数を書かない（自分自身を数えた数は書いた瞬間に古びる） |
 
 中身が変わっていない 3 本。**HEAD の blob と 1 バイトも違わない**ので、File Structure Plan の一覧には載っていない。
 
@@ -1265,7 +1265,7 @@ git diff --numstat | wc -l
 git diff --numstat -- .kiro/specs/areka-P0-nar-install/brief.md \
                       .kiro/specs/areka-P0-baseware-root-layout/brief.md \
                       .kiro/specs/areka-P0-alpha-release-signoff/brief.md \
-                      .kiro/specs/areka-P0-default-balloon-bundle/brief.md
+                      .kiro/specs/completed/areka-P0-default-balloon-bundle/brief.md
 # → 9 0 ／ 9 0 ／ 9 0 ／ 6 0（追加のみ・削除は 4 本とも 0 行）
 ```
 
@@ -1276,7 +1276,7 @@ git diff --numstat -- .kiro/specs/areka-P0-nar-install/brief.md \
 本記録の冒頭「この記録の埋まり具合」は、未記入の節が行頭から名乗る形を数えて埋まり具合を判定する。本節を埋めたので、その判定は 0 になる。
 
 ```
-F=.kiro/specs/areka-P0-default-balloon-bundle/verification/signoff-record.md
+F=.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md
 grep -c '^この節はタスク.*（未記入）' "$F"
 # → 0（タスク 5.1 の着地時点では 1＝本節の名乗りだった）
 
@@ -1504,8 +1504,8 @@ git diff --numstat 082379b3..HEAD | grep -E 'input_events|menu\.rs'
 vendors/sample_ghost/StayseeBalloon/
 crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs
 crates/areka-emo-text/tests/staysee_balloon_fixture/
-.kiro/specs/areka-P0-default-balloon-bundle/verification/provenance.md
-.kiro/specs/areka-P0-default-balloon-bundle/verification/signoff-record.md
+.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md
+.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md
 doc/COMPAT_ARCHITECTURE.md
 doc/ukadoc-coverage/ledger/assets.toml
 doc/ukadoc-coverage/roadmap-draft.md
@@ -1515,7 +1515,7 @@ doc/ukadoc-coverage/report/summary.md
 .kiro/specs/areka-P0-nar-install/brief.md
 .kiro/specs/areka-P0-baseware-root-layout/brief.md
 .kiro/specs/areka-P0-alpha-release-signoff/brief.md
-.kiro/specs/areka-P0-default-balloon-bundle/brief.md
+.kiro/specs/completed/areka-P0-default-balloon-bundle/brief.md
 ```
 
 | 欄 | 内容 |
@@ -1531,10 +1531,10 @@ doc/ukadoc-coverage/report/summary.md
 
 | ファイル | 何を変えたか | なぜ変えたか | どのタスクで |
 |---|---|---|---|
-| `.kiro/specs/areka-P0-default-balloon-bundle/requirements.md` | 要件 6.1 に是正の註を足し、要件 6 の Objective と Out of scope の文言を直した（＋5／−3 行） | 「`.pna` は読まない」という記述が実測と違い、実際は同名 `.pna` の存在だけは見て画素を使わない。読者を是正前の綴りへ送り込まないため | 3.1・5.1 |
-| `.kiro/specs/areka-P0-default-balloon-bundle/design.md` | C2 の分割先の綴りと Directory Structure、C8 と Requirements Traceability のパス指定、C3 §6・C4・Non-Goals の `.pna` の文言（＋22／−8 行） | ⑴ テーマ分割を前倒しした実物に合わせるため、⑵ `git diff -- 'crates/*/src'` が判定になっていないと実測で分かったため、⑶ 上と同じ `.pna` の是正のため | 2.3・2.8・3.1・5.1 |
-| `.kiro/specs/areka-P0-default-balloon-bundle/verification/baseline.md` | 新規（189 行） | タスク 1.1 が「着手前の基準値」を残す先として作った。設計 Directory Structure は `verification/` に `provenance.md` と `signoff-record.md` の 2 本しか挙げていない | 1.1（パス指定の是正は 2.8） |
-| `.kiro/specs/areka-P0-default-balloon-bundle/tasks.md` | 各タスクの済み印と `## Implementation Notes` への申し送り（＋78／−17 行） | 工程の記録そのもの。設計はこのファイルに言及していない | 全タスク |
+| `.kiro/specs/completed/areka-P0-default-balloon-bundle/requirements.md` | 要件 6.1 に是正の註を足し、要件 6 の Objective と Out of scope の文言を直した（＋5／−3 行） | 「`.pna` は読まない」という記述が実測と違い、実際は同名 `.pna` の存在だけは見て画素を使わない。読者を是正前の綴りへ送り込まないため | 3.1・5.1 |
+| `.kiro/specs/completed/areka-P0-default-balloon-bundle/design.md` | C2 の分割先の綴りと Directory Structure、C8 と Requirements Traceability のパス指定、C3 §6・C4・Non-Goals の `.pna` の文言（＋22／−8 行） | ⑴ テーマ分割を前倒しした実物に合わせるため、⑵ `git diff -- 'crates/*/src'` が判定になっていないと実測で分かったため、⑶ 上と同じ `.pna` の是正のため | 2.3・2.8・3.1・5.1 |
+| `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/baseline.md` | 新規（189 行） | タスク 1.1 が「着手前の基準値」を残す先として作った。設計 Directory Structure は `verification/` に `provenance.md` と `signoff-record.md` の 2 本しか挙げていない | 1.1（パス指定の是正は 2.8） |
+| `.kiro/specs/completed/areka-P0-default-balloon-bundle/tasks.md` | 各タスクの済み印と `## Implementation Notes` への申し送り（＋78／−17 行） | 工程の記録そのもの。設計はこのファイルに言及していない | 全タスク |
 
 4 本とも**要件 8.5 が許す範囲の内側**にはある。8.5 は「保管フォルダ・新規テスト・`verification/`・`COMPAT_ARCHITECTURE.md` §8・台帳文書・隣接 brief への申し送り以外のファイルに触れない」と書いており、`baseline.md` は `verification/` に入る。`requirements.md`・`design.md`・`tasks.md` は本仕様自身の仕様書で、8.5 の列挙には無いが、そこに挙がっているのは「触ってよい成果物」であって仕様書自身の是正を禁じるものではない（禁じるなら、実測と食い違ったまま放置する以外に道が無くなる）。**食い違っているのは設計のファイル一覧の側**なので、一覧を後追いで直すかどうかは最終検証の判断に委ねる。
 

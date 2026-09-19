@@ -31,7 +31,7 @@
 
 ### (c) `spec_checks.rs` 腕 a〜f と台帳変更
 
-- 腕 a: `count = 28` ＝ `[[spec]]` 28 行——設計どおり。腕 b: `.kiro/specs/areka-P0-default-balloon-bundle/` は直下に実在。腕 c: `owner_count = 1` は台帳 4 本で本 spec を宛先に持つ項目 1 件と一致。腕 d: `linkage.md` に `[bundle."絵の重ね方"]` が実在（`linkage.md:2414`）。腕 e: `[[owner_completed]]` は触らない。腕 f: 宛先が `[[spec]]` に載る。`SpecRow` の欄 `name`／`stage`／`bundle`／`owner_count`／`wave` は `documents/parse.rs` が読む欄と一致。**腕 a〜f は緑になる。**
+- 腕 a: `count = 28` ＝ `[[spec]]` 28 行——設計どおり。腕 b: `.kiro/specs/completed/areka-P0-default-balloon-bundle/` は直下に実在。腕 c: `owner_count = 1` は台帳 4 本で本 spec を宛先に持つ項目 1 件と一致。腕 d: `linkage.md` に `[bundle."絵の重ね方"]` が実在（`linkage.md:2414`）。腕 e: `[[owner_completed]]` は触らない。腕 f: 宛先が `[[spec]]` に載る。`SpecRow` の欄 `name`／`stage`／`bundle`／`owner_count`／`wave` は `documents/parse.rs` が読む欄と一致。**腕 a〜f は緑になる。**
 - しかし `cargo test -p ukadoc-survey` は腕 a〜f だけではない——下の Critical Issue 1。
 
 ## Critical Issues

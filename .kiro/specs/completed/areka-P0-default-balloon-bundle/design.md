@@ -152,7 +152,7 @@ crates/areka-emo-text/tests/
     ├── assets.rs  definition.rs  faces.rs  bake.rs
     └── region.rs  wrapping.rs  script.rs  scale.rs
 
-.kiro/specs/areka-P0-default-balloon-bundle/verification/
+.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/
 ├── provenance.md                             # 新規: 取得元・コミット・日付・readme の版・29 本の sha256・.gitignore 照合・check-attr・id＝directory・2.6 の判定
 └── signoff-record.md                         # 新規: 裁定 1.2・不採用理由・決定論テスト結果と較正差・実機目視の観察記録・3.9/4.3 の処理・README 申し送り文・台帳検査・下流申し送りの実施
 
@@ -165,7 +165,7 @@ doc/ukadoc-coverage/report/summary.md         # 再生成: cargo run -p ukadoc-s
 .kiro/specs/areka-P0-nar-install/brief.md              # 変更: 末尾に申し送り 1 段
 .kiro/specs/areka-P0-baseware-root-layout/brief.md     # 変更: 末尾に申し送り 1 段
 .kiro/specs/areka-P0-alpha-release-signoff/brief.md    # 変更: 末尾に申し送り 1 段
-.kiro/specs/areka-P0-default-balloon-bundle/brief.md   # 変更: 「既定バルーン id ＝ StayseeBalloon」を追記（7.1）
+.kiro/specs/completed/areka-P0-default-balloon-bundle/brief.md   # 変更: 「既定バルーン id ＝ StayseeBalloon」を追記（7.1）
 ```
 
 ### Modified Files
