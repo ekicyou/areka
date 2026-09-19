@@ -1,7 +1,8 @@
 //! `EmoWorld`: emo 専用 per-ghost `bevy_ecs` World（wintf 本体 World とは分離）。
 //!
-//! 正規化 Surface 定義の常駐点。`SurfaceIndex`／`AliasMap`／`ShellSettings` をリソースとして、
-//! `SurfaceId`／`SurfaceMaster`／`AtlasBinding` をコンポーネントとして保持する。スケール前提で
+//! 正規化 Surface 定義の常駐点。`SurfaceIndex`／`AliasMap`／`ShellSettings`／`SurfaceImages`／
+//! `BaseImageReport` をリソースとして、`SurfaceId`／`SurfaceMaster`／`AtlasBinding` を
+//! コンポーネントとして保持する。スケール前提で
 //! 定義・構造のみを保持し、合成済みビットマップ（大容量）は World に永続保持しない。本 spec では
 //! Schedule/System を持たず、fold/compose が `&mut World`／`&World` を取る受動データストアとして使う。
 
@@ -11,6 +12,7 @@ use areka_parsers::shell::{Shell, SortOrder};
 use bevy_ecs::prelude::{Component, Entity, Resource};
 use bevy_ecs::world::World;
 
+use crate::base_image::{BaseImageReport, SurfaceImages};
 use crate::normalized::SurfaceMaster;
 
 /// surface 番号（entity のドメインキー・疎 id の明示・要件 1.1）。
@@ -68,10 +70,22 @@ pub struct EmoWorld {
 impl EmoWorld {
     /// `Shell` から single-pass fold で構築する（寛容・非パニック・欠落は warn ログ）。
     ///
-    /// 本 task は骨組み: 既定リソースを備えた空 World を用意し、fold による entity 常駐は
-    /// 後続 task（3.2）が内部 population 段（[`EmoWorld::populate_from_shell`]）へ差し込む。
-    /// 空 `Shell` に対しては entity ゼロの空 World を返す（`surface_ids()` 空・`surface(_)` None）。
+    /// 面の画像 0 件で [`EmoWorld::build_with_images`] を呼ぶのと同じである（ファイル名だけで
+    /// 置かれた絵を持たないシェル＝本仕様の適用前と同じ面の表になる）。空 `Shell` に対しては
+    /// entity ゼロの空 World を返す（`surface_ids()` 空・`surface(_)` None）。
     pub fn build(shell: &Shell) -> EmoWorld {
+        EmoWorld::build_with_images(shell, &BTreeMap::new())
+    }
+
+    /// 面の画像の対応（番号 → ファイル名）を渡して構築する（要件 2.1〜2.5・2.7）。
+    ///
+    /// 畳み込み（[`EmoWorld::populate_from_shell`]）→ 土台の絵の決定
+    /// （[`crate::base_image::apply_base_images`]）の順に進む。判定を畳み込みの**後**に置くので、
+    /// 複数番号の見出し（`surface0,1`）は番号ごとに自分の画像を受け取り、`surface.append` が
+    /// 後から足した層 0 も「層 0 が在る」に数えられる。渡した対応は [`SurfaceImages`]、決定の
+    /// 結果は [`BaseImageReport`] として面の表に常駐し、以後は読むだけである
+    /// （[`EmoWorld::base_images`]）。画素は持たない（要件 10.6 の不変条件のまま）。
+    pub fn build_with_images(shell: &Shell, images: &BTreeMap<u32, String>) -> EmoWorld {
         let mut world = World::new();
         world.insert_resource(SurfaceIndex::default());
         world.insert_resource(AliasMap::default());
@@ -79,10 +93,20 @@ impl EmoWorld {
             animation_sort: shell.animation_sort,
             collision_sort: shell.collision_sort,
         });
+        world.insert_resource(SurfaceImages(images.clone()));
 
         let mut emo = EmoWorld { world };
         emo.populate_from_shell(shell);
+        let report = crate::base_image::apply_base_images(&mut emo.world, images);
+        emo.world.insert_resource(report);
         emo
+    }
+
+    /// 土台の絵の決定の結果（層 0 として使った画像と、`element0` が在って使わなかった画像）。
+    ///
+    /// 構築時に一度決まり、以後変わらない。記録を出すのは上流の権威で、本型は結果を渡すだけである。
+    pub fn base_images(&self) -> &BaseImageReport {
+        self.world.resource::<BaseImageReport>()
     }
 
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。

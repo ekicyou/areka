@@ -56,7 +56,7 @@
 
 - [ ] 3. 面の表の構築（土台の絵の決定）
 
-- [ ] 3.1 `apply_base_images` と `EmoWorld::build_with_images` を実装する
+- [x] 3.1 `apply_base_images` と `EmoWorld::build_with_images` を実装する
   - `crates/areka-emo-compose/src/base_image.rs` を新設し、`apply_base_images` と `BaseImageReport`（`used`・`shadowed`）を置く。`crates/areka-emo-compose/src/lib.rs` に `pub mod base_image;` と再輸出を足す
   - `crates/areka-emo-compose/src/world.rs` に `EmoWorld::build_with_images(shell, &BTreeMap<u32, String>)` と `EmoWorld::base_images()` を足し、`EmoWorld::build` を「画像 0 件で `build_with_images` を呼ぶ」に置き換える（既存の呼び手の変更 0 件）
   - `SurfaceImages(BTreeMap<u32, String>)` と `BaseImageReport` を `Resource` として面の表に置く
