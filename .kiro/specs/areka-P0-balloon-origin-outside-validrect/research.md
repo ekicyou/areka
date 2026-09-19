@@ -307,3 +307,175 @@ Some(v) => {
 | `region_vertical_canon_tests.rs` | 677 | 790〜840 |
 | `actor_region_warn_tests.rs` | 380 | 500〜540 |
 | `tests/shipped_fixture_region_test.rs` | 397 | 445〜465 |
+
+## 9. 要件 5.3 の記録——判断を一時的に壊してテストが赤くなることを確かめた（2026-09-19）
+
+設計 `## Testing Strategy` の `### 規則を固定していることの確認（要件 5.3）と見張り（要件 5.7）` の手順 3 を実施した記録である。目的は「テストが本当にこの規則を固定しているか」を確かめることにあり、判断を壊した実装でテストが緑のままなら、そのテストは規則を固定していないことになる。以下は実際に壊し、実際に赤くなり、元へ戻したことの記録である。
+
+壊し方は 3 つある。9.2 と 9.3 は設計が定める 2 つ、9.4 は後から足した 1 つで、足した理由は 9.4 に書いた。
+
+再現手順はいずれも同じで、対象の 1 か所を書き換えてから次を走らせる。
+
+```
+cargo test -p areka-emo-text --no-fail-fast
+```
+
+### 9.1 出発点（壊す前）
+
+- 走行結果: 対象 17 個すべて ok。合計 895 passed / 0 failed / 2 ignored。
+- `crates/areka-emo-text/src/region.rs` の sha256: `19c7f93378d8afe4d9c8f0641d01f328ff4b041d700a3dd9bc3ede86a21b12af`
+- `crates/areka-emo-text/src/actor_decoration.rs` の sha256: `fd1c8d835c89ac7b031981434d43c69ddbf51cc52ccec9d45f09a21ba7b9a980`
+
+書き換える前に両ファイルをバイト単位で控え、戻すときはその控えからバイトごと複写した（行末の種類が変わると中身が同じでも sha256 が変わるため、文字列置換で戻してはならない）。
+
+### 9.2 壊し方 1——範囲の外に宣言された成分を、そのまま開始点に使う形へ戻す
+
+`crates/areka-emo-text/src/region.rs` の `resolve_origin_component` の、範囲の外と判定したときの返値だけを書き換えた（範囲の判定式・範囲の中の腕・未宣言の腕・`debug` の記録はいずれも触っていない）。
+
+変更前:
+
+```rust
+                (corner, Some(resolved))
+```
+
+変更後（取り下げた旧規則「宣言された値はつねにそのまま使う」への後戻り）:
+
+```rust
+                (resolved, Some(resolved))
+```
+
+赤くなったテスト（走行出力のとおり）:
+
+- ライブラリの対象: 783 passed / 9 failed / 2 ignored
+  - `region::tests::out_of_range_origin_component_falls_back_to_start_corner_independently`
+  - `region::vertical_canon_tests::origin_range_table_holds_for_every_mode_and_component`
+  - `region::vertical_canon_tests::declared_origin_outside_validrect_falls_back_to_start_corner_with_one_debug_per_component`
+  - `region::vertical_canon_tests::negative_origin_resolves_from_opposite_edge_then_is_range_checked`
+  - `region::vertical_canon_tests::declared_origin_follows_validrect_only_when_it_leaves_the_range`
+  - `actor::region_warn_tests::attaching_a_balloon_with_both_origin_components_outside_warns_once_per_component`
+  - `actor::region_warn_tests::attaching_a_balloon_with_only_one_origin_component_outside_warns_once`
+  - `actor::region_warn_tests::refresh_with_a_changed_region_warns_again_with_the_new_values`
+  - `actor::region_warn_tests::ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning`
+- `tests/shipped_fixture_region_test.rs` の対象: 6 passed / 1 failed
+  - `offsetdpi_fixture_with_out_of_range_origin_starts_at_writing_corner`
+
+残る 15 個の対象は ok のままだった。
+
+表のテストは食い違いを 1 件見つけた時点で止まるので、出力に現れた行は 1 行だけである。現れたのは次の行だった。
+
+```
+近い辺の 1 つ外 / origin.x,35 / HorizontalTb: 範囲内なら解決後の値 35・範囲外なら書字開始角 36（最寄りの辺ではない）から書き始める
+  left: 35.0
+ right: 36.0
+```
+
+この走行で観測できたのは上の 1 行だけである。表の場合の一覧は「近い辺の 1 つ外」が先頭で、先頭の行で止まった走行はそれより後の行へ届いていない。
+
+ここで大事なのは、この壊し方が**要件 1.7 の区別には触れていない**ことである。要件 1.7 は「落ちる先は最寄りの辺ではなく書字開始角である」と言うが、この壊し方は落ちる先を宣言値そのものへ変えるだけなので、最寄りの辺と書字開始角のどちらが正しいかは問われない。この 2 つを分ける赤は 9.4 で別に作った。
+
+検体のテストの食い違いは次のとおりで、旧規則では宣言がそのまま開始点になるため `(0, 0)` へ落ちる。
+
+```
+emo2-kakukaku-offsetdpi scope 0 (sakura): 描画開始点
+  left: (0.0, 0.0)
+ right: (36.0, 46.0)
+```
+
+記録の件数を数える 4 本も一緒に赤くなった。これらは無視した宣言の値と実際に用いた角を組で読むため、開始点が変わると読み取る値も変わるからである。壊し方 2 の結果（下記）と合わせて読むと、件数のテストが数えているのは記録の件数だけでなく記録の中身でもあることが分かる。
+
+戻した後: sha256 は `19c7f93378d8afe4d9c8f0641d01f328ff4b041d700a3dd9bc3ede86a21b12af`（出発点と一致）。
+
+### 9.3 壊し方 2——無視した宣言の記録を何もしない形にする
+
+`crates/areka-emo-text/src/actor_decoration.rs` の `warn_ignored_origin` の本体を丸ごと取り除き、引数を捨てるだけの形にした。
+
+変更後:
+
+```rust
+pub(super) fn warn_ignored_origin(resolved: &ResolvedBalloonText, previous: Option<TextRegion>) {
+    let _ = (resolved, previous);
+}
+```
+
+赤くなったテスト（走行出力のとおり）:
+
+- ライブラリの対象: 788 passed / 4 failed / 2 ignored
+  - `actor::region_warn_tests::attaching_a_balloon_with_both_origin_components_outside_warns_once_per_component`
+  - `actor::region_warn_tests::attaching_a_balloon_with_only_one_origin_component_outside_warns_once`
+  - `actor::region_warn_tests::refresh_with_a_changed_region_warns_again_with_the_new_values`
+  - `actor::region_warn_tests::ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning`
+- 残る 16 個の対象はすべて ok のままだった。
+
+装着の場合（設計の T-警告 a）の食い違いは次のとおりで、期待した 2 件に対して 0 件、捕まえた記録の一覧も空だった。
+
+```
+両成分が範囲の外なら装着で 2 件（要件 3.1／3.2）: []
+  left: 0
+ right: 2
+```
+
+「0 件」を主張する側が空振りしていないことは、折返しの警告と同じ捕捉の窓を共有するテストが示している。このテストは総数 3 件（折返し 1 件＋本記録 2 件）を期待しており、壊した実装でも折返しの 1 件は捕まったまま本記録の 2 件だけが消えた。つまり捕捉そのものは生きており、消えたのは記録の側である。
+
+戻した後: sha256 は `fd1c8d835c89ac7b031981434d43c69ddbf51cc52ccec9d45f09a21ba7b9a980`（出発点と一致）。
+
+### 9.4 壊し方 3——最寄りの辺へ寄せる形にする（設計が定める 2 つに加えて足した 1 つ・2026-09-19）
+
+これは設計の手順 3 が定める 2 つの壊し方には**含まれない、後から足した 3 つめ**である。足した理由は次のとおり。
+
+要件 1.7 は「範囲の外に宣言された成分が落ちる先は、**最寄りの辺ではなく書字開始角**である」と言う。これは本仕様でいちばん鋭い主張だが、9.2 と 9.3 のどちらの壊し方もこの区別に触れない——9.2 は落ちる先を宣言値そのものへ変えるだけで、最寄りの辺と書字開始角のどちらが正しいかは問わない。したがってこの主張だけが「壊したら赤くなる」ことを実際に見せていない状態だった。そこで、まさにその区別を壊す形を 1 つ作った。
+
+`crates/areka-emo-text/src/region.rs` の `resolve_origin_component` の、範囲の外と判定したときの返値だけを書き換えた（範囲の判定式・範囲の中の腕・未宣言の腕・`debug` の記録はいずれも触っていない）。第 2 要素は `Some(resolved)` のまま残したので、変わるのは開始点だけである。
+
+変更後（範囲の下側なら下端、上側なら上端＝最寄りの辺へ寄せる）:
+
+```rust
+                (
+                    if resolved < range.0 { range.0 } else { range.1 },
+                    Some(resolved),
+                )
+```
+
+赤くなったテスト（走行出力のとおり）:
+
+- ライブラリの対象: 788 passed / 4 failed / 2 ignored
+  - `region::vertical_canon_tests::origin_range_table_holds_for_every_mode_and_component`
+  - `region::vertical_canon_tests::declared_origin_outside_validrect_falls_back_to_start_corner_with_one_debug_per_component`
+  - `region::vertical_canon_tests::negative_origin_resolves_from_opposite_edge_then_is_range_checked`
+  - `region::vertical_canon_tests::declared_origin_follows_validrect_only_when_it_leaves_the_range`
+- 残る 16 個の対象はすべて ok のままだった。
+
+表のテストに現れた行は次のとおり。
+
+```
+近い辺の 1 つ外 / origin.x,35 / VerticalRl: 範囲内なら解決後の値 35・範囲外なら書字開始角 356（最寄りの辺ではない）から書き始める
+  left: 36.0
+ right: 356.0
+```
+
+現れた行は、あらかじめ見込んでいた「遠い辺の 1 つ外」ではなく「近い辺の 1 つ外」の縦書きの行だった。理由は書字開始角が書字方向で変わることにある。横書きでは x の書字開始角は左辺なので、左の外に宣言された値は最寄りの辺も書字開始角もどちらも左辺 36 になり、この壊し方では区別がつかない。`vertical_rl` では x の書字開始角は**右**辺 356 であるのに、左の外に宣言された値の最寄りの辺は左辺 36 のままで、両者が正反対を向く。表は横書きから縦書きへ順に回るので、この食い違いが先頭の場合で早々に現れた。見込みより鋭い行が先に出たのであって、期待した行を出すために手を入れたことはない。
+
+同じ理由で、9.2 の壊し方では赤くなったのにこの壊し方では緑のまま残るテストが、合わせて 6 本ある。いずれも横書きで、しかも範囲の下側（左辺より左・上辺より上）に外れた値しか使わないため、最寄りの辺と書字開始角が同じ点になってしまうからである。
+
+落ちる先そのものを直に見ている 2 本:
+
+- `region::tests::out_of_range_origin_component_falls_back_to_start_corner_independently`（横書き・`origin.y,0` が上辺 46 の外）
+- `offsetdpi_fixture_with_out_of_range_origin_starts_at_writing_corner`（横書き・検体の `origin` は `(0, 0)` で左上の外）
+
+記録の中身を見ている 4 本も同じく素通りする。いずれも `origin.x,0`／`origin.y,0` を横書きで与えるので、記録の「実際に用いた書き始めの角」の欄は最寄りの辺へ寄せても書字開始角のまま（バルーンの左辺・上辺）で変わらない。9.2 ではこの欄が宣言値 `0.0` になって赤くなった。
+
+- `actor::region_warn_tests::attaching_a_balloon_with_both_origin_components_outside_warns_once_per_component`
+- `actor::region_warn_tests::attaching_a_balloon_with_only_one_origin_component_outside_warns_once`
+- `actor::region_warn_tests::refresh_with_a_changed_region_warns_again_with_the_new_values`
+- `actor::region_warn_tests::ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning`
+
+つまり「最寄りの辺へ寄せる」後戻りを捕まえているのは、縦書きを回す表のテストと縦書きの場合を持つ 3 本だけであり、横書きだけのテストは——落ちる先を見るものも、記録の欄を見るものも——この後戻りを素通りさせる。将来この規則を触る人は、横書きの検体だけで確かめても足りないことを覚えておくとよい。
+
+戻した後: sha256 は `19c7f93378d8afe4d9c8f0641d01f328ff4b041d700a3dd9bc3ede86a21b12af`（9.1 の出発点と一致）。
+
+### 9.5 戻したことの確かめ
+
+3 つの壊し方はいずれも、控えからのバイト単位の複写で元へ戻した。
+
+- 両ファイルの sha256 が 9.1 の値と一致する。
+- `git diff -- crates/` の出力が空である（走らせた書き換えは 1 つも残っていない）。
+- 戻した後の `cargo test -p areka-emo-text --no-fail-fast` は対象 17 個すべて ok、合計 895 passed / 0 failed / 2 ignored で、出発点と同じ。
