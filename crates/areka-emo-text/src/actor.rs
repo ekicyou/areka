@@ -312,6 +312,9 @@ impl TextLayerRuntime {
     /// 折返し基準が描画範囲の遠辺の外に解決されたことを知らせる `warn!` は本口が書く——
     /// 「読み込み（装着）1 回につき 1 件」という意味を持つ層がここだからである
     /// （本ファイルの `warn_coarse_wrap_threshold` の doc に経緯）。
+    ///
+    /// 範囲外ゆえ無視した `origin` 宣言の警告（本 spec 要件 3.1〜3.5）も同じ理由で本口が書く。
+    /// 関数の本体だけは `actor_decoration.rs` に置く（本ファイルの行数の余白のため）。
     pub fn register_actor(
         &mut self,
         actor: ActorKey,
@@ -320,7 +323,9 @@ impl TextLayerRuntime {
     ) {
         debug!(actor = %actor, slot = ?binding.slot, "actor の装着先（予約スロット）を登録した");
         // 前回の解決済み領域（未登録＝装着なら None＝「値が新しく決まった」側）と突き合わせる。
-        warn_coarse_wrap_threshold(&resolved, self.layout_input.get(&actor).map(|it| it.region));
+        let previous = self.layout_input.get(&actor).map(|it| it.region);
+        warn_coarse_wrap_threshold(&resolved, previous);
+        decoration::warn_ignored_origin(&resolved, previous);
         // 2 層（既定・無効表示・選択肢文字色）を純粋状態へ差し込む唯一の点（要件 3.1／4.6）。
         // 装着も再追従もここへ合流するので、`\f[default]`／`\f[disable]` の戻し先は
         // 常に「今装着されているバルーン定義」で解決した値になる。
