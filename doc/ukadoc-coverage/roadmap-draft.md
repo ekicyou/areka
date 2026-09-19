@@ -87,7 +87,7 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 
 ```toml
 [briefs]
-count = 27
+count = 28
 snapshot_on = "2026-09-13"
 ```
 
@@ -110,6 +110,12 @@ snapshot_on = "2026-09-13"
 段階の写しなので、束が決まらなければ段階も決まらない。決まらないものを既定値で埋めると値で
 ない綴りが値のふりをするので、欄ごと省いた（読み手が省略を強制する。束を持つ 13 行は必ず段階を
 持ち、持たない 14 行は必ず持たない）。決まらないことのほうを `reason` に書いた。
+
+**2026-09-18 に `areka-P0-default-balloon-bundle` の行を 1 行足した。**台帳の宛先にこの名前を
+書いたため、宛先の検査（`[[spec]]` にも `[[owner_completed]]` にも無い宛先を赤にする腕）が行を
+要求するからである。足した後の表は **28 行**で、束を持つ行は **14 行**（上の 2026-09-13 の写真の
+13 行＋この 1 行）・束を持たない `none = true` の行は **14 行**のままである——上の段落が書いている
+13／14 は写真を撮った時点の数で、この 1 行はそこに含まれていない。
 
 **ウェーブの欄**は正本のウェーブ編成をそのまま写したもので、本文書は書き換えない。`保留` は
 編成のどのウェーブにも入っていない 1 本である。
@@ -303,6 +309,13 @@ none = true
 reason = "台帳 4 本の宛先の欄をこの名前で引いて 0 件。門の採否は性能の話で、正典の項目に当たる行を持たない"
 owner_count = 0
 wave = "保留"
+
+[[spec]]
+name = "areka-P0-default-balloon-bundle"
+stage = "A"
+bundle = "絵の重ね方"
+owner_count = 1
+wave = "A0"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -333,7 +346,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `areka-P0-balloon-canon-residue`（W14・9 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
 | 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `areka-P0-choice-marker-styling`（W16・39 件） | 第 2 波 |
-| 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `areka-P0-shell-parse`（完了・1 件） | 第 2 波 |
+| 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `areka-P0-shell-parse`（完了・1 件）／`areka-P0-default-balloon-bundle`（A0・1 件） | 第 2 波 |
 | 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件） | 第 2 波 |
 | 17 | 定義ファイルの文字コード | なし（構成 2 件がどちらも実装済みで、作る仕事が残っていない） | **0 本** | 第 2 波 |
 | 17 | 組み込みの置換語 | `areka-P0-builtin-substitution` | **0 本** | 第 2 波 |
