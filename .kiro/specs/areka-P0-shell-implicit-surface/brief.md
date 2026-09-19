@@ -153,3 +153,45 @@ ERROR areka: 窓配置の準備に失敗しました——検証用ダミー窓�
 
 - `areka-P0-popup-menu-minimal` の実機確認 9.3 ⑷（里々の `readmebutton.caption` がメニューの項目名に写る・`(&R)` に下線が付く・開き直すと候補が変わりうる）は、本 spec の着地待ちで**未実施**である。`R_POST_and_KOMAINU` は `surface 0 has no layers at all (extent 0x0)` で検証用ダミー窓へ落ち、キャラクター窓が無いのでメニューを出せなかった。
 - 本 spec の実機サインオフで、この検体の絵が出たら右クリック → メニューの 1 項目目が既定名「説明書」でなく辞書（`dic06_String.txt` の 3 候補）の文言になっていることを 1 度見ること。項目名の差し替えそのものは `popup-menu-minimal` の決定論テストが留めているので、欠けているのは実機の目視だけである。
+
+## 2026-09-19 追記（検体が 2 体になった＝YAYA 標準テンプレート「紺野ややめ」）
+
+同じ原因に当たる検体がもう 1 体、登記された（`vendors/sample_ghost/konnoyayame.nar`・検体名 `konnoyayame`・配布物そのまま。出どころとライセンスは同フォルダの README）。**`surfaces.txt` を持っていても絵は出ない**——里々テンプレートと同じく `element` 行が 1 つも無く、絵をファイル名の慣習だけに任せているからである。
+
+### 実機の結果（2026-09-19・60 秒の有界自動終了・終了コード 0）
+
+- 絵: 出ない。ログは里々の時と同じ 2 行——`定義層が皆無で外形 0×0 の退化データ: EmptyComposition surface_id=0` → `窓配置の準備に失敗しました——検証用ダミー窓へフォールバックします`（理由 `surface 0 has no layers at all (extent 0x0)`）。
+- 連鎖: キャラクター窓が建たないのでバルーンの装着先が解決できず、文字も描かれない（`actor の装着先（予約スロット）が未解決` が scope 0・1 に各 1 件、`chain_finalize … deferrals=600`）。
+- **対話の側は健全**（本 spec の対象外であることの確認）: `yaya.dll`（32bit）は `shiori-host32` 経由で読み込まれ `connect_failed` 0 件・`GET OnFirstBoot` にスクリプトが返って `boot_talk` → 約 19 秒後に `steady_talk_done`・`OnSecondChange` 毎秒・`NOTIFY OnClose` → `unload_clean`。
+- 起動の仕方: `cargo run -p sample-ghost-kit --bin nar-sample-path -- konnoyayame` の `folder=` をゴーストの根に、`vendors/sample_ghost/StayseeBalloon` の絶対パスをバルーンの根に渡す（同梱バルーンは無い）。
+
+### 展開後の `<folder=>/shell/master/` の実測
+
+| ファイル | 番号 | 実寸（IHDR） |
+|---|---|---|
+| `surface0000.png` | 0 | 260×390 |
+| `surface0001.png`〜`surface0007.png` | 1〜7 | — |
+| `surface0010.png` | 10 | 200×200 |
+| `surface0011.png` | 11 | — |
+| `surface1030.png`〜`surface1033.png` | 1030〜1033 | `1031` は 72×30 |
+| `surface1040.png`〜`surface1043.png` | 1040〜1043 | `1041` は 72×30 |
+
+- `.pna` は **0 件**。`menu_*.png` 3 枚は `surface` 接頭辞を持たないので対象外（里々と同じ）。
+- `surfaces.txt` の波括弧は `surface0,1,2,3,4,5,6,7,10,11` の **10 個**。`element` 行は **0**。
+- **宣言あり・画像なし＝0 件**／**画像あり・宣言なし＝8 件（1030〜1033・1040〜1043）**。
+- `defaultsurface` の宣言はシェルにもゴーストにも **0 件**（里々と同じ＝面 0 が既定として解決できることが必須）。
+
+### 里々テンプレートには無かった形が 1 つある
+
+**`animation*` 行が 0 ではない。** `surface0` の波括弧が `animation0.interval,sometimes` と `pattern0`〜`5` を持ち、`overlay` の相手は `1031`・`1032`・`1033`（と終端の `-1`）である。この 3 つは**画像だけが在って宣言が無い番号**なので、
+
+- 面 0 の土台が「ファイル名の慣習」で解決できても、**重ねる側の面も同じ慣習で解決できなければ**まばたきは出ない。上の Approach が決める解決の入口は、表示する面だけでなく `overlay` などの相手として引かれる面にも同じく効く必要がある。
+- 要件段階で確かめること 1 つ: いまの実装で、`pattern` の相手が「宣言の無い番号」のときに何が起きるか（黙って飛ばすのか・失敗にするのか）。里々の検体はこの経路を 1 度も踏まないので、**この検体でしか見えない**。
+- `1030`・`1040`〜`1043` は `surfaces.txt` のどこからも引かれていない（相方側の目の部品と見られるが、`surface10` に `animation` 行は無い）。描けなくても絵は欠けないので、対象に含めるかは要件で決めてよい。
+
+### 本 spec の実機サインオフで、この検体について見ること
+
+1. 本体側（260×390）と相方側（200×200）の絵が出る。
+2. 本体側がまばたきする（`overlay` の 3 枚が慣習で解決できた証拠）。
+3. 起動挨拶の文字が**文字化けせずに**バルーンに出る。今回の走行では SHIORI 通信の初期の文字コードが `Shift_JIS`（`charset_initial`・`source="default"`）で、ゴーストの `descript.txt` は `charset,UTF-8` である。絵が出ないうちは目で確かめられず、info のログに台本の本文も出ないので、**未確認**のまま残っている。化けていたら本 spec ではなく別件として起票する。
+4. `sakura.balloon.alignment,none`／`kero.balloon.alignment,none`（シェルの `descript.txt`）が自動調整として効く＝キャラクター窓が画面の右半分に居ればバルーンは左隣、左半分なら右隣。`none` を未知値として左へ倒していた不具合は同日に直した（`crates/areka/src/placement/config.rs` の `BalloonSide::Auto`・`resolver.rs` の側の判定）。決定論テストは留めてあるので、欠けているのは実機の目視だけである。

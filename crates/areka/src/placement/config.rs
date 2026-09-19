@@ -34,6 +34,10 @@ pub enum BalloonSide {
     Left,
     /// バルーンをキャラ窓の右側へ（emo2 scope1）。
     Right,
+    /// `none`＝自動調整。キャラ窓が画面中央より左なら右側へ、右なら左側へ。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html 「バルーンの位置情報」
+    //   none「自動調整、shellのY座標が画面中央より左なら右、右なら左に表示。」（「Y」は原文のまま）
+    Auto,
 }
 
 /// バルーン水平配置モード（P5 の基本位置分岐・既定 `Side`＝現行挙動）。
@@ -258,6 +262,7 @@ fn resolve_scope(
     let balloon_alignment = match cascade2(ghost_kv, shell_kv, scope, &["balloon.alignment"]) {
         None | Some("left") => BalloonSide::Left,
         Some("right") => BalloonSide::Right,
+        Some("none") => BalloonSide::Auto,
         Some(other) => {
             warn!(
                 scope,
@@ -445,6 +450,10 @@ mod tests {
         // 未指定は既定 Left
         let cfg = build_placement_config(&empty(), &empty());
         assert_eq!(cfg.scopes[&0].balloon_alignment, BalloonSide::Left);
+
+        // 正典の 3 値目 `none`（自動調整）は未知値へ落ちない
+        let cfg = build_placement_config(&empty(), &kv(&[("kero.balloon.alignment", "none")]));
+        assert_eq!(cfg.scopes[&1].balloon_alignment, BalloonSide::Auto);
     }
 
     // ------------------------------------------------------------------

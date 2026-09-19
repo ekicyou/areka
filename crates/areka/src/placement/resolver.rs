@@ -327,9 +327,21 @@ pub fn resolve_placement(
         ) {
             Some(pos) => pos,
             None => {
-                let balloon_base_x = match sc.balloon_alignment {
-                    BalloonSide::Left => x.saturating_sub(input.balloon_size.w),
-                    BalloonSide::Right => x.saturating_add(w),
+                // `Auto`（正典 `none`）: キャラ窓の中心が作業領域の中央より左なら右側、
+                // それ以外は左側。
+                // ponytail: 判定は初期配置の 1 度だけ。ドラッグで中央をまたいでも側は
+                // 替わらない——追従させるなら移動後の再導出にこの式を通す。
+                let char_center_x = x.saturating_add(w / 2);
+                let area_center_x = work_area.left.saturating_add(work_area.right) / 2;
+                let on_right = match sc.balloon_alignment {
+                    BalloonSide::Left => false,
+                    BalloonSide::Right => true,
+                    BalloonSide::Auto => char_center_x < area_center_x,
+                };
+                let balloon_base_x = if on_right {
+                    x.saturating_add(w)
+                } else {
+                    x.saturating_sub(input.balloon_size.w)
                 };
                 PointPx {
                     x: balloon_base_x.saturating_add(ox),

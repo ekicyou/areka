@@ -124,7 +124,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 39 | `present-write-coherence` の未達 40 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 性能（完了仕様が「引受先なし・新規仕様の起票が必要」と自ら書いた残量） | L | α 後 | なし。着手前に当時の実測を採り直す | ○ | ⚪ |
 | 40 | 正典語彙の孤児 2 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 正典（`font.outline` の白抜き**描画**／「スタイルシートのキーワード」の所有） | S | α 後 | なし | − | ⚪ |
 | 41 | 配布物を束ねる／作る側の 3 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 正典（`type,package` を解く・`developer_options.txt` を読む側＝配布物を**作る**道具） | XS〜S | α 後 | なし | − | ⚪ |
-| 42 | 既定バルーンを `.nar` へ畳む（仮称・**未起票**＝brief なし・2026-09-19 登記） | **α** | 資産（`vendors/sample_ghost/StayseeBalloon/` が展開フォルダのまま残っている＝`#37` が `#11` より先に着地したため、どちらの申し送りも実行されなかった。畳んで登記表 `SAMPLES` に 1 行足し、直書きの検体数 2 か所を 4→5 へ直す） | XS | **α・A1 の前に**（着手は `/kiro-discovery` から。手順は `vendors/sample_ghost/README.md`） | #11 ✅・#37 ✅（両方着地済み＝いつでも着手可） | − | ⚪ |
+| 42 | 既定バルーンを `.nar` へ畳む（仮称・**未起票**＝brief なし・2026-09-19 登記） | **α** | 資産（`vendors/sample_ghost/StayseeBalloon/` が展開フォルダのまま残っている＝`#37` が `#11` より先に着地したため、どちらの申し送りも実行されなかった。畳んで登記表 `SAMPLES` に 1 行足し、直書きの検体数 2 か所を 1 つ増やす（09-19 に `konnoyayame` が先に入ったので今は 5→6。既知の名前の一覧 2 か所にも足す）） | XS | **α・A1 の前に**（着手は `/kiro-discovery` から。手順は `vendors/sample_ghost/README.md`） | #11 ✅・#37 ✅（両方着地済み＝いつでも着手可） | − | ⚪ |
 | 43 | `wintf-drag-state-rest-contract`（**09-19 起票**） | α 後 | バグ（構造・潜在＝wintf のドラッグ状態は `JustEnded` で休み続けるのに説明は「1 フレームのみ」・`reset_to_idle` の呼び手が製品に無い。#14 の実機確認でメニューが出なくなる実害 1 件・利用側は是正済み） | S | α 後（単独・いつでも） | #14（`menu/trigger.rs` が main に在ること） | −（直し方 2 案の裁定 1 件） | ⚪ |
 | 44 | `popup-menu-residue`（**09-19 起票**） | α 後 | 台帳（#14 の最終検証の残件 10＝別窓の預かりの誤配・台本の `\![open,readme]` の記録の重さ・文言と接頭辞・テストの穴 2・引受先の無い語彙 4 件） | S | α 後（`menu/` に触る次の spec へ相乗り可） | #14 | − | ⚪ |
 | 45 | `coverage-roadmap-refresh`（**09-19 起票**） | α 後 | 台帳（`doc/ukadoc-coverage/` の検査の外にある手書きの数の棚卸と撮り直し・候補名 `areka-P0-network-update` の重なり・波の欄の旧編成・各 spec の「統合担当への申し送り」の受け皿。**#38（登記だけの行）と守備範囲が重なる**＝合流の可否は α 完成宣言のあとの棚卸で決める） | S〜M | α 後（A0 の 3 本が main へ入った直後が最も安い） | #11・#14・#37 | − | ⚪ |
@@ -157,7 +157,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 やること 3 つ（同じコミットで）: ⑴ `cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/StayseeBalloon`
 で畳む（引数無しの形は使えない）・⑵ 登記表 `SAMPLES` に 1 行足す・⑶ `crates/sample-ghost-kit/src/lib_tests.rs` が
-直書きしている検体数 **2 か所を 4 → 5** へ直す（`every_registered_sample_lands_where_its_registry_row_says` と
+直書きしている検体数 **2 か所を 1 つ増やす**（09-19 に `konnoyayame` が先に入ったので今は 5 → 6。`unknown_sample_fails_with_all_five_known_names` の名前の一覧 2 か所と関数名の数も直す）（`every_registered_sample_lands_where_its_registry_row_says` と
 `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`。母数 0 で緑にならないための較正なので
 消さずに数だけ直す）。⑷ 展開形を追跡から外す。手順の正本は `vendors/sample_ghost/README.md`。
 
@@ -175,7 +175,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 9. 棚卸⑬の仮裁定 1（`zorder` の三重所有）と 3（e2e §13.1 行 3 の据え置き）は据え置き。
 10. **既定バルーン（2026-09-18 開発者裁定）**: `emo2-kakukaku` は癖が強く既定に向かない。SSP 同梱「SSPデフォルト+」は再配布条件が公開されておらず借用の根拠が薄い。候補は SSP 本家の作者が **CC0** で出している `Balloon for Staysee Syncfield`（readme「煮るなり焼くなり好きにしてください」・専用指定なし）。**areka は常に `use_self_alpha,1`・`.pna` 非対応**（開発者確認・`areka-emo-present/src/balloon.rs` の設計と一致）。独立 spec `default-balloon-bundle`（#37・A2 並走）で扱い、見た目の採否は同 spec の要件段階で開発者が実機で決める。次善は自作の無地バルーン。
 11. **α に関係しない spec は、並走できてもウェーブに入れない**（2026-09-18 開発者指示）。「隙間」枠を廃止し、`dpi-transition-two-tick-bounce`・`zorder-chain-residue` を α 後へ戻した。例外は 1 つだけ＝α の spec のテストを実際に赤にした間欠赤（zorder A-2 の壁時計テスト族）は、その時点で A 群だけを単独枠に挟む（先回りしない）。
-12. **nar-install を α の先頭に置く**（2026-09-18 開発者「nar 関係は早く進めないとダメ」）。`shell-implicit-surface` との順序を反転＝implicit-surface は共有ヘルパを最初から使う。**サンプルゴーストを増やして試験する仕組み**は、nar-install の共有ヘルパ（検体名 → 根）と `vendors/sample_ghost/*.nar` の保管慣行がそのまま器になる＝別 spec は切らない（検体を 1 体足す作業は `.nar` 1 つと名前 1 行）。α の検証に使う検体は emo2（pasta）・R_POST_and_KOMAINU（里々）・既定バルーンの 3 つ。YAYA の検体を α に足すかは `alpha-release-signoff` の要件段階で決める（裁定候補 ⑹）。
+12. **nar-install を α の先頭に置く**（2026-09-18 開発者「nar 関係は早く進めないとダメ」）。`shell-implicit-surface` との順序を反転＝implicit-surface は共有ヘルパを最初から使う。**サンプルゴーストを増やして試験する仕組み**は、nar-install の共有ヘルパ（検体名 → 根）と `vendors/sample_ghost/*.nar` の保管慣行がそのまま器になる＝別 spec は切らない（検体を 1 体足す作業は `.nar` 1 つと名前 1 行）。α の検証に使う検体は emo2（pasta）・R_POST_and_KOMAINU（里々）・既定バルーンの 3 つ。~~YAYA の検体を α に足すかは `alpha-release-signoff` の要件段階で決める（裁定候補 ⑹）~~ → **2026-09-19 決着＝足す**（開発者提案）。YAYA 標準テンプレート「紺野ややめ」を `vendors/sample_ghost/konnoyayame.nar` として登記済み（配布物そのまま・シェルは CC BY-NC-ND 2.1 JP＝畳み直さない・areka の配布物へ同梱しない。出どころは同フォルダの README）。**確かめたのは「正しく展開される」までで、areka 上の実走は未実施**＝出た不具合は個別に起票する。
 
 ## ウェーブ編成（着手順の正本・2026-09-18 棚卸⑭・α）
 

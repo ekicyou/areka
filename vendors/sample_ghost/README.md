@@ -8,6 +8,16 @@
 | `R_POST_and_KOMAINU.nar` | ゴースト | 43 | 1,625,603 バイト |
 | `emo2-kakukaku-offsetdpi.nar` | バルーン | 20 | 35,788 バイト |
 | `emo2-kakukaku-wplimit.nar` | バルーン | 20 | 33,906 バイト |
+| `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 125 | 820,368 バイト |
+
+### `konnoyayame.nar` の出どころとライセンス
+
+- 出どころ: <https://github.com/YAYA-shiori/konnoyayame/releases> のタグ `35438213310`（2026-09-19 10:44 UTC 公開・自動リリース）の添付 `konnoyayame.nar`。あちらは辞書のチェックが通るたびに最新版を出し直すので、**タグと次のハッシュで 1 本に固定している**。
+  sha256 `e15637f1e286a016608432216dc3489e1b4a6b4691b277a29b8732c7245d7cd2`
+- ライセンス（書庫の中の `README.md`「ライセンス」節と `shell/master/descript.txt` が出どころ）: 全体は Public Domain (Unlicense)。**ただしシェル `shell/master/` は SATO M 氏（サトウ Ｍ・<http://sgmh.sakura.ne.jp/tcg/>）の作品で CC BY-NC-ND 2.1 JP**（<http://creativecommons.org/licenses/by-nc-nd/2.1/jp/>）。このリポジトリの MIT ライセンスは**この 1 本には及ばない**。
+- だから守ること 2 つ——**畳み直さない**（改変禁止なので `fold-samples` を通さず、ダウンロードしたバイト列をそのまま置いた。全エントリが deflate 圧縮なのはそのため）。**営利の配布物に入れない**（開発用の検体としてだけ使い、areka の配布物へ同梱しない）。
+- 差し替えるとき: 新しいタグの `.nar` をそのまま置き、この節のタグ・ハッシュと上の表の 2 つの数を書き直す。
+- 書庫にはゴースト作者向けの開発キット（`.claude/`・`.mcp.json`・`CLAUDE.md`・`AGENTS.md`・`tools/*.ps1`）が入っており、展開先 `ghost/konnoyayame/` にもそのまま置かれる。areka はこれらを読まない。**展開先のフォルダを作業場所にして Claude Code などを起動しないこと**（よその設定とフックが効いてしまう）。
 
 ## 取り出し方
 
@@ -92,7 +102,7 @@ git check-ignore --no-index crates/areka/dic09_Test.txt                         
 - **`install.txt` が書庫の最上位に在ること。** 包みフォルダ 1 段は黙って剥がさず拒否する（`<名>/install.txt` は最上位ではない）。手順 1 が「フォルダの直下に `install.txt`」と言っているのはこのためである。
 - 名前とその中身が `install.txt` の解釈どおりであること。展開先の写像（同梱バルーンをどこへ置くか）は `install.txt` の `directory`・`*.directory`・`*.source.directory` だけから決まり、登記表の綴りは使わない。
 
-いま置いてある 4 本は**全エントリが無圧縮（圧縮方式 0）**である。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
+ここで畳んだ 4 本（`konnoyayame.nar` 以外）は**全エントリが無圧縮（圧縮方式 0）**である。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
 
 同じ入力からは同じバイト列が出る。走査順を名前順に固定し、書庫に書く日時を 1980-01-01 00:00 に固定してあるので、畳み直しても `.nar` のハッシュは変わらない。
 
