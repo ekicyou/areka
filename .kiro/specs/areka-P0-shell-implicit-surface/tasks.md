@@ -67,7 +67,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 3.3, 3.9, 5.1, 5.3, 7.12, 10.3, 10.5_
   - _Boundary: areka-emo-compose base_image, world_
 
-- [ ] 3.2 `surface.append` が画像だけの面にも効くようにする
+- [x] 3.2 `surface.append` が画像だけの面にも効くようにする
   - `crates/areka-emo-compose/src/fold.rs` の `fold_append` で、対象の番号が `SurfaceIndex` に無く `SurfaceImages` に在るとき、空の `SurfaceMaster`（`elements`・`collisions`・`animations` が空）をその番号で作ってから今と同じ追記を行う
   - どちらにも無ければ今の `warn!`（「surface.append 対象 id が未存在: 新設せずスキップ」）のまま（変更 0）
   - 画像だけの面への追記の後に同じ番号の波括弧が来た場合は、既存の全置換の規則と `warn!` のまま（偽の重複警告は 0 件）

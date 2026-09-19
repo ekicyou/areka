@@ -34,9 +34,10 @@ use crate::world::{SurfaceId, SurfaceIndex};
 
 /// 面の番号 → 面の画像のファイル名（元の綴りのまま）。
 ///
-/// 読み込みの間は変わらない。面の表の中では構築時に 1 度だけ置かれ、以後は読むだけである。
-/// 今日の読み手は 0 か所で（[`apply_base_images`] は引数の対応をそのまま使う）、`fold_append`
-/// が引くようになるのは後続の作業である。ファイル名は焼いた絵の索引表のキーと同じ綴りで
+/// 読み込みの間は変わらない。面の表の中では畳み込みの前に 1 度だけ置かれ、以後は読むだけである。
+/// 読み手は [`crate::fold::fold_append`] の 1 か所で、`surface.append` の対象が波括弧を持たなくても
+/// 画像を持つなら「既にある面」と数えるために引く（要件 3.7）。[`apply_base_images`] は引数の
+/// 対応をそのまま使うので、ここからは引かない。ファイル名は焼いた絵の索引表のキーと同じ綴りで
 /// なければならない（`AtlasTable::resolve` は文字列の完全一致で引く）。
 #[derive(Debug, Default, Clone, Resource)]
 pub struct SurfaceImages(pub BTreeMap<u32, String>);

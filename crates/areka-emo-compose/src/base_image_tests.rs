@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
+use areka_parsers::shell::{
+    AppendTarget, DefRef, Element, ElementPath, Shell, Surface, SurfaceAppend,
+};
 use bevy_ecs::world::World;
 
 use crate::base_image::BaseImageReport;
@@ -223,4 +225,176 @@ fn used_and_shadowed_partition_the_images() {
     assert_eq!(face5.elements[0].path.as_str(), "surface5.png");
     assert!(face5.collisions.is_empty());
     assert!(face5.animations.is_empty());
+}
+
+/// surfaces と appends を、渡した定義順（`definitions`）どおりに並べた `Shell`。
+fn shell_mixed(
+    surfaces: Vec<Surface>,
+    appends: Vec<SurfaceAppend>,
+    definitions: Vec<DefRef>,
+) -> Shell {
+    Shell {
+        surfaces,
+        appends,
+        aliases: Vec::new(),
+        animation_sort: None,
+        collision_sort: None,
+        definitions,
+    }
+}
+
+/// `surface.append` の対象群（ターゲット記述子と追記 element）。
+fn append_def(targets: Vec<AppendTarget>, elements: Vec<Element>) -> SurfaceAppend {
+    SurfaceAppend {
+        targets,
+        elements,
+        collisions: Vec::new(),
+        animations: Vec::new(),
+    }
+}
+
+/// `surface.append` は、波括弧が 1 行も無い「画像だけで存在する面」にも効く（要件 3.7・C6）。
+///
+/// 追記で層 0 を足した面は画像を使わない（`shadowed`）。層 0 を足さなかった面は今までどおり
+/// 画像が層 0 に入る（`used`）。どちらも新設ではないので、重複の `warn!` は 0 件である。
+#[test]
+fn append_reaches_image_only_faces() {
+    let shell = shell_mixed(
+        Vec::new(),
+        vec![
+            // 面 7: 追記が層 0 を足す（画像は使われない＝ウ）。
+            append_def(
+                vec![AppendTarget::Single(7)],
+                vec![elem(0, "add0.png", 0, 0), elem(5, "deco.png", 1, 2)],
+            ),
+            // 面 8: 追記は層 5 だけ（層 0 は空いたままなので画像が入る＝ア）。
+            append_def(
+                vec![AppendTarget::Single(8)],
+                vec![elem(5, "deco.png", 1, 2)],
+            ),
+        ],
+        vec![DefRef::Append(0), DefRef::Append(1)],
+    );
+    let given = images(&[(7, "surface7.png"), (8, "surface8.png")]);
+
+    let mut built = None;
+    let logs = crate::log_capture::capture_logs(|| {
+        built = Some(EmoWorld::build_with_images(&shell, &given));
+    });
+    let world = built.expect("構築された面の表");
+
+    // 面 7: 画像だけの面へ追記が届き、その層 0 が画像を押しのける。
+    let face7 = world.surface(7).expect("画像だけの面 7 へ追記が届く");
+    let layers7: Vec<(u32, &str)> = face7
+        .elements
+        .iter()
+        .map(|e| (e.layer, e.path.as_str()))
+        .collect();
+    assert_eq!(layers7, vec![(0, "add0.png"), (5, "deco.png")]);
+    assert!(face7.collisions.is_empty());
+    assert!(face7.animations.is_empty());
+
+    // 面 8: 層 0 が空いているので画像が最も奥に入る。
+    let face8 = world.surface(8).expect("画像だけの面 8 へ追記が届く");
+    let layers8: Vec<(u32, &str)> = face8
+        .elements
+        .iter()
+        .map(|e| (e.layer, e.path.as_str()))
+        .collect();
+    assert_eq!(layers8, vec![(0, "surface8.png"), (5, "deco.png")]);
+
+    let report = world.base_images();
+    assert_eq!(
+        report.shadowed,
+        images(&[(7, "surface7.png")]),
+        "追記で足した層 0 も「在る」に数える",
+    );
+    assert_eq!(report.used, images(&[(8, "surface8.png")]));
+
+    // 追記のために作った面は「新設」ではないので、重複の警告も未存在の警告も出ない。
+    assert!(
+        !logs.contains("重複"),
+        "画像だけの面への追記で偽の重複警告を出さない: {logs}",
+    );
+    assert!(
+        !logs.contains("未存在"),
+        "画像だけの面は「在る」ので未存在の警告を出さない: {logs}",
+    );
+}
+
+/// 宣言も画像も無い番号への `surface.append` は、今までどおり新設せず `warn!` を出す（要件 3.8・変更 0）。
+#[test]
+fn append_to_unknown_id_still_warns_and_creates_nothing() {
+    let shell = shell_mixed(
+        Vec::new(),
+        vec![append_def(
+            vec![AppendTarget::Single(9)],
+            vec![elem(0, "add0.png", 0, 0)],
+        )],
+        vec![DefRef::Append(0)],
+    );
+
+    let mut built = None;
+    let logs = crate::log_capture::capture_logs(|| {
+        // 画像は面 7 の分だけ渡す（面 9 はどちらにも無い）。
+        built = Some(EmoWorld::build_with_images(
+            &shell,
+            &images(&[(7, "surface7.png")]),
+        ));
+    });
+    let world = built.expect("構築された面の表");
+
+    assert!(world.surface(9).is_none(), "どちらにも無い面 9 はできない");
+    assert!(world.surface(7).is_some(), "画像だけの面 7 はできる");
+    assert!(logs.contains("level=WARN"), "未存在は WARN: {logs}");
+    assert!(
+        logs.contains("id=9"),
+        "未存在 append 対象 id を載せる: {logs}"
+    );
+    assert!(logs.contains("未存在"), "未存在メッセージ: {logs}");
+}
+
+/// 画像だけの面へ追記した後で同じ番号の波括弧が来たら、既存の全置換の規則と `warn!` のまま。
+///
+/// 追記で実際に定義ができた後の置換なので、この警告は事実どおりである（design「面の表の構築の中の順序」）。
+#[test]
+fn brace_after_append_replaces_the_image_only_face() {
+    let shell = shell_mixed(
+        vec![surface_def(
+            7,
+            vec![AppendTarget::Single(7)],
+            vec![elem(0, "brace0.png", 0, 0)],
+        )],
+        vec![append_def(
+            vec![AppendTarget::Single(7)],
+            vec![elem(5, "deco.png", 1, 2)],
+        )],
+        vec![DefRef::Append(0), DefRef::Surface(0)],
+    );
+
+    let mut built = None;
+    let logs = crate::log_capture::capture_logs(|| {
+        built = Some(EmoWorld::build_with_images(
+            &shell,
+            &images(&[(7, "surface7.png")]),
+        ));
+    });
+    let world = built.expect("構築された面の表");
+
+    // 波括弧が全置換するので、追記した層 5 は残らない。
+    let face7 = world.surface(7).expect("面 7 が在る");
+    let layers: Vec<(u32, &str)> = face7
+        .elements
+        .iter()
+        .map(|e| (e.layer, e.path.as_str()))
+        .collect();
+    assert_eq!(layers, vec![(0, "brace0.png")], "波括弧が全置換する");
+    assert_eq!(
+        world.base_images().shadowed,
+        images(&[(7, "surface7.png")]),
+        "ウ: 波括弧の element0 が在るので画像は使わない",
+    );
+
+    assert!(logs.contains("level=WARN"), "重複は WARN: {logs}");
+    assert!(logs.contains("重複"), "既存の重複メッセージのまま: {logs}");
 }
