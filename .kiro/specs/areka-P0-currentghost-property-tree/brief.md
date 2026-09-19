@@ -22,6 +22,7 @@
 - **In**（snapshot 2.8.80 実測の枝別内訳・≈65 項目）:
   - **`currentghost.balloon.scope(ID).*` ×17＋`balloon.汎用`＋`balloon.count`＝19 項目（bvc 縮退登記の指名受け皿・全列挙）**: `background.color`／`basepos.x`／`basepos.y`／`char_width`／`count`／`lines`／`lines.initial`／`num`／`rect`／`scaling`／`validheight`／`validheight.initial`／`validwidth`／`validwidth.initial`／**`vertical`**／`x`／`y`（＋`mousecursor` 系 4 は SET 有効側）。**⚠2.8.83 改訂の適用必須**——`validwidth`＝列が並ぶ方向の幅／`validheight`＝1 列の長さ／`lines`＝収まる列数＝いずれも**画面上の向き**基準（2.8.80 と役割が逆・bvc requirements SC3/SC4/SC13 が正本・ukadoc-mcp snapshot のプロパティ節は旧意味論なので裏取りに使わない）。
   - **`.vertical` の導出規則は bvc が確定済み**——スコープに実際に適用されている書字方向（bvc Requirement 2 の共存規則の確定結果）から導く・`vertical_lr`（areka 拡張）も `1`・未解決スコープは値なし（bvc Requirement 7 の語彙登記が正本・書字方向の確定は起動時 1 回＝bvc Requirement 9）。
+  - **`basepos.x`／`.y` の導出規則は `areka-P0-balloon-origin-outside-validrect` が確定済み**——値は解決後の文字描画開始点（`origin` の宣言が文字を描いてよい範囲の外にある場合は、その宣言を使わず範囲の書き始めの角へ落とした後の点）から導けば足り、あちらでは実装しない（同 spec 要件 7.2・2026-09-19）。
   - `currentghost.scope(ID).*`＋`.scope.count` ×17: `animation.num`・`currentmonitor` ×5・`name`・`rect`・`scaling`・`seriko.defaultsurface`・`surface(ID).rect`・`surface.num`/`x`/`y` 等（SET 有効 3 件を含む）。
   - `currentghost.mousecursor.*` ×6（全 SET 有効）・`currentghost.seriko.*` ×14（cursor/tooltip の当たり判定名セレクタ・**`zorder`**・`sticky-window`・surfacelist）・`currentghost.shelllist.*` ×4・`.status`・`.汎用`。
   - scope ID 集合の列挙規則と未解決スコープの表現（publish の不在 vs 明示——bvc research §6 項目 8 を引受け）。

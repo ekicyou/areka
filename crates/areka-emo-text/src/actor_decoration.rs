@@ -10,12 +10,15 @@
 //!
 //! 2 層を純粋状態へ差し込む点は 1 つだけ——`actor.rs` の
 //! [`TextLayerRuntime::register_actor`]（装着も再追従もそこへ合流する）。
+//!
+//! 範囲外ゆえ無視した `origin` 宣言の作者向け警告（[`warn_ignored_origin`]）も本モジュールが
+//! 持つ——書く時点は登録口のまま、置き場所だけが子である（`actor.rs` の行数の余白のため）。
 
 use std::rc::Rc;
 
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::ActorKey;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use wintf::ecs::GraphicsCore;
 
 use super::{ActorRender, ResolvedBalloonText, TextLayerRuntime};
@@ -23,7 +26,7 @@ use crate::TextLayerError;
 use crate::choice::ResolvedChoiceStyle;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, FontCatalog, ResolvedFont};
 use crate::look::GlyphStyles;
-use crate::region::TextRegion;
+use crate::region::{BALLOON_NAME_PLACEHOLDER, TextRegion};
 use crate::state::{ActorTextState, TextLayerConfig};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::ViewboxExecutor;
@@ -77,6 +80,50 @@ pub(super) fn glyph_styles_of<'a>(
         ids: actor_state.glyph_styles(),
         default: &resolved.font.looks.default,
         current: actor_state.current_look(),
+    }
+}
+
+/// 範囲外ゆえ無視した `origin` 宣言を、装着 1 回につき成分 1 つ 1 件の `warn!` で知らせる
+/// （要件 3.1〜3.5）。
+///
+/// 書く**時点**は登録口（[`TextLayerRuntime::register_actor`]）のままである——「読み込み
+/// （装着）1 回につき 1 件」という意味を持つ層がそこだからで、先例の折返しの警告と同じ決着
+/// である。関数の**置き場所**だけを子モジュールにするのは、`actor.rs` が 1 ファイル 1,000 行の
+/// 見張りの間近にあるため（`build_actor_render` を引き受けたのと同じ理由・同じ形）。
+///
+/// # 件数（要件 3.2）
+///
+/// `previous` は当該 actor の**前回の**解決済み領域（未登録＝装着なら `None`）。領域の値が
+/// 新しく決まったとき——初回、または前回と異なる領域——だけ書く。値の同じ再追従は 0 件で
+/// あり、先例の折返しの警告と同一の件数規律である。
+///
+/// 範囲の内外の判定そのものは**ここでは引き直さない**。純粋層が
+/// [`TextRegion::ignored_origin`] に載せて運んだ値を読むだけである（同じ判定式が 2 か所に
+/// あると、片方だけが直って静かに食い違う）。
+pub(super) fn warn_ignored_origin(resolved: &ResolvedBalloonText, previous: Option<TextRegion>) {
+    let region = resolved.region;
+    if previous == Some(region) {
+        return;
+    }
+    let (ignored_x, ignored_y) = region.ignored_origin();
+    let (corner_x, corner_y) = region.start();
+    let (left, right) = (region.left(), region.right());
+    let (top, bottom) = (region.top(), region.bottom());
+    // 欄の名前・無視した解決値・範囲の両端・実際に用いた角を成分ごとに 1 組ずつ並べる。
+    for (key, ignored, range_min, range_max, corner) in [
+        ("origin.x", ignored_x, left, right, corner_x),
+        ("origin.y", ignored_y, top, bottom, corner_y),
+    ] {
+        let Some(ignored) = ignored else { continue };
+        warn!(
+            balloon = BALLOON_NAME_PLACEHOLDER,
+            key,
+            resolved = ignored,
+            range_min,
+            range_max,
+            corner,
+            "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた"
+        );
     }
 }
 

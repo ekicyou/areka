@@ -79,8 +79,8 @@ impl CursorAxis {
 /// あって、器の側で書式を判断しない。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CursorBasis {
-    /// 絶対座標の原点＝解決後の文字描画開始点（`TextRegion::start()`）。宣言された `origin`
-    /// 成分は字義どおり・未宣言成分は書字開始角へ縮退した後の値である（R2.1〜2.4/2.9）。
+    /// 絶対座標の原点＝解決後の文字描画開始点（`TextRegion::start()`）。範囲内の `origin`
+    /// 宣言は宣言どおり・範囲外の宣言と未宣言成分は書字開始角へ縮退した後の値である（R2.1〜2.4/2.9）。
     pub origin: (f32, f32),
     /// `@` 相対の基点＝現在の文字描画位置（実効位置。次の文字が置かれる位置・R3.1/3.5）。
     pub current: (f32, f32),
