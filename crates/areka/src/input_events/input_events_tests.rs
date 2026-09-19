@@ -1,7 +1,7 @@
 use super::*;
 use crate::emo2_boot::hit_region::HitRegion;
 use crate::placement::spawn::{CharWindowMarker, GhostWindowMarker};
-use areka_kanade::{CloseReason, KanadeMsg, MouseButton, MouseEventKind};
+use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use std::sync::mpsc;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
@@ -23,8 +23,8 @@ fn bubble_pointer(
 
 /// Bubble 相の合成 `PointerState`（Ctrl／Shift を別々に指定する版・R15.1／15.2）。
 ///
-/// [`bubble_pointer`] は Ctrl だけを取る（既存の呼び手 20 箇所以上がそのまま動く）。終了指示と
-/// 強制退避の分岐は Shift の有無で分かれるため、両方を指定できる口をここへ足す。
+/// [`bubble_pointer`] は Ctrl だけを取る（既存の呼び手 20 箇所以上がそのまま動く）。結線済みでは
+/// 強制退避と通常の左ダブルクリックが Shift の有無で分かれるため、両方を指定できる口をここへ足す。
 fn bubble_pointer_mods(
     x: i32,
     y: i32,
@@ -419,17 +419,20 @@ fn handler_middle_xbutton_and_single_click_do_not_send() {
     assert!(rx.try_recv().is_err(), "中/拡張/単発は何も送出しない");
 }
 
-/// 終了指示の檻（R15.1・design D15 の 1）: **結線済み**の Ctrl+左ダブルクリックは
-/// `CloseRequest{User}` をちょうど 1 件送り、窓を 1 枚も閉じない。
+/// 隠しの終了操作を取り除いた檻（要件 5.3・開発者裁定 2026-09-19）: **結線済み**で Shift を
+/// 伴わない Ctrl+左ダブルクリックは終了指示を 1 件も送らず、窓も閉じず、Ctrl の無い左
+/// ダブルクリックと同じ `DoubleClick{Left}` をちょうど 1 件送る。
 ///
-/// 2026-09-07 第 3 回改訂で意味が変わった檻である——以前は「全窓を despawn し何も送らない」
-/// 暫定退避だった。それでは終了挨拶を通らずに窓が消えるため（症状 C）、結線済みの経路は
-/// kanade の正規の握手へ入る側へ改めた。強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。
+/// 以前（タスク 6.1 まで）はここが `CloseRequest{User}` を送る隠し操作だった。実機で
+/// メニューの「終了」が働くことを確かめたので、同じ役目の入口を取り除いた——利用者起因の
+/// 終了指示を送る本番の呼び手はメニューの「終了」（`menu::request_close`）だけになる。
+/// 強制退避は下の 2 本（結線前・Ctrl+Shift）が持つ。
 ///
 /// # 非空虚性
-/// 送出が起きなければ `try_recv` が空で落ち、窓を閉じてしまえば件数の表明が落ちる。
+/// 強制退避の腕へ落ちれば窓が消えて件数の表明が落ち、終了指示を送れば届いた種別の表明が
+/// 落ち、左ダブルクリックとして扱わなければ `try_recv` が空で落ちる。
 #[test]
-fn handler_ctrl_left_double_click_sends_one_close_request_and_keeps_the_windows() {
+fn handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_double_click() {
     let (mut world, rx) = world_with_wiring(
         |_, x, y| HitRegion {
             scope: 0,
@@ -440,30 +443,39 @@ fn handler_ctrl_left_double_click_sends_one_close_request_and_keeps_the_windows(
     );
     world.spawn(GhostWindowMarker);
     world.spawn(GhostWindowMarker);
-    let w0 = world.spawn(GhostWindowMarker).id();
+    let w0 = world
+        .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
+        .id();
     let other = world.spawn_empty().id();
     assert_eq!(ghost_count(&mut world), 3);
 
     let ev = bubble_pointer(10, 20, DoubleClick::Left, true);
     assert!(on_char_pointer_pressed(&mut world, w0, w0, &ev));
 
-    assert!(
-        matches!(
-            rx.try_recv().expect("終了指示が送られる"),
-            KanadeMsg::CloseRequest {
-                reason: CloseReason::User { scope: 0 }
-            }
+    match rx.try_recv().expect("左ダブルクリックが届く") {
+        KanadeMsg::Mouse(m) => assert_eq!(
+            m,
+            MouseInput {
+                scope: 0,
+                x: 10,
+                y: 20,
+                region: Some("Head".to_string()),
+                kind: MouseEventKind::DoubleClick {
+                    button: MouseButton::Left
+                },
+            },
+            "Ctrl は無視され、Ctrl なしの左ダブルクリックと同じものが届く（要件 5.3）"
         ),
-        "結線済みの Ctrl+左ダブルクリックは CloseRequest{{User}} を送る（R15.1）"
-    );
+        _ => panic!("終了指示ではなく左ダブルクリック（Mouse）を期待"),
+    }
     assert!(
         rx.try_recv().is_err(),
-        "終了指示はちょうど 1 件（重複しない）"
+        "届くのは左ダブルクリック 1 件だけ（終了指示は 0 件）"
     );
     assert_eq!(
         ghost_count(&mut world),
         3,
-        "終了指示は窓を閉じない——閉じるのは握手が終わってからである（R15.1）"
+        "結線済みの Ctrl+左は強制退避ではない——窓は 1 枚も閉じない（要件 5.3／5.5）"
     );
     assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
 }
@@ -614,10 +626,11 @@ fn wiring_throttles_scopes_independently_via_hashmap() {
     assert!(rx.try_recv().is_err(), "他に送出はない");
 }
 
-/// 「暫定退避操作でのみ全窓終了が起きる」統合檻（6.1/6.2/6.3・DD-IE-7・task 4.4 NEW）:
-/// 移動・中ボタンダブルクリック・単発クリック・Ctrl なし左ダブルクリックの**いずれも**
-/// `GhostWindowMarker` 窓を despawn しない（非退避操作）。Ctrl+左ダブルクリック**のみ**が
-/// 全窓を despawn する。「でのみ」の排他性を単一 pass/fail で固定する（plain-left 単独の
+/// 「強制退避操作でのみ全窓終了が起きる」統合檻（6.1/6.2/6.3・DD-IE-7・task 4.4 NEW）:
+/// 移動・中ボタンダブルクリック・単発クリック・Ctrl なし左ダブルクリック・結線済みの
+/// Ctrl+左ダブルクリックの**いずれも** `GhostWindowMarker` 窓を despawn しない（非退避操作）。
+/// Ctrl+Shift+左ダブルクリック**のみ**が全窓を despawn する。「でのみ」の排他性を単一
+/// pass/fail で固定する（plain-left 単独の
 /// `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` に対し、非退避操作
 /// 全集合の否定＋退避の肯定を 1 檻へ集約する）。
 #[test]
@@ -657,13 +670,13 @@ fn only_escape_terminates_ghost_windows() {
         "非退避操作（移動/中/拡張/単発/Ctrl なし左）は 1 つも despawn しない"
     );
 
-    // 結線済みの Ctrl+左は終了指示であって退避ではない——窓は 1 枚も減らない（R15.1）。
-    let close_request = bubble_pointer(10, 20, DoubleClick::Left, true);
-    assert!(on_char_pointer_pressed(&mut world, w, w, &close_request));
+    // 結線済みの Ctrl+左は退避ではない——Ctrl は無視され、窓は 1 枚も減らない（要件 5.3）。
+    let wired_ctrl_left = bubble_pointer(10, 20, DoubleClick::Left, true);
+    assert!(on_char_pointer_pressed(&mut world, w, w, &wired_ctrl_left));
     assert_eq!(
         ghost_count(&mut world),
         3,
-        "結線済みの Ctrl+左は終了指示を送るだけで窓を閉じない（R15.1）"
+        "結線済みの Ctrl+左は左ダブルクリックとして扱われ、窓を閉じない（要件 5.3）"
     );
 
     // 強制退避操作（Ctrl+Shift+左）のみが全窓を despawn する（R15.2）。

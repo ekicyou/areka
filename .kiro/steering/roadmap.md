@@ -157,7 +157,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 **干渉台帳（α・2026-09-18・brief の申告に基づく＝着手時に実測で更新）**:
 - **輻輳点**: `crates/areka/src/main.rs`＝A1-② → A2／`crates/areka-ghost/src/runtime.rs`＝A1-② → A2／`crates/areka-kanade/src/schedule/*`＝A2（切替の握手） → A4-①（インストール相） → A4-②（更新相）／`crates/areka/src/input_events/mod.rs`＝A3（右クリック 1 分岐）・A4-①（`WM_DROPFILES` は wintf の窓手続き側）／`MenuRegistry`（A3 の新規ファイル）＝A4-① → A4-②／`crates/areka-sylphya/src/persist/mod.rs`＝A1-②（鍵族 1 つ）／`crates/areka-nar`（A0 新設）＝A4-①・A4-② が呼ぶだけ（触らない）／共有ヘルパ（A0 新設・検体名 → 根）＝A1 の 3 本が呼ぶだけ（③ は検体名を 1 つ登記＝1 行）。
 - **α 後との交差**: `runtime.rs`／`prop_sink.rs`（`property-query-channels`・`property-ipc-transport`）・`kanade/schedule/*`（`translate-pipeline`・`sakura-time-directives`・`balloon-lifecycle-events`）・`emo2_boot/mod.rs`（`status-execution-states`）は α 後が後着＝**α 後の brief の file:line は α 完了時に全数再測定**（棚卸⑬と同じ手順・サブエージェント）。
-- **保存義務**: A3 は既存の終了経路（Ctrl＋左ダブルクリック → `OnClose` 握手 → `ghost_quit`）の決定論テストを 1 本も落とさず、入口（`AppExit`）を 1 つ増やすだけにする。A2 は実機サインオフの「絶対パス起動」（argv 上書き）を残す。
+- **保存義務**: A3 は既存の終了経路（終了指示 `CloseRequest` → `OnClose` 握手 → `ghost_quit`。入口は 2026-09-19 から右クリックメニューの「終了」＝`areka-P0-popup-menu-minimal` が結線済みの Ctrl＋左ダブルクリックの入口を取り除いた）の決定論テストを 1 本も落とさず、入口（`AppExit`）を 1 つ増やすだけにする。A2 は実機サインオフの「絶対パス起動」（argv 上書き）を残す。
 
 ## 直接修正候補（spec なし・任意・S）
 
@@ -177,7 +177,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - Rust 2024・マルチクレート（一覧は structure.md）。**32bit 可搬性の適用範囲＝host-32 系（`shiori-host32-*`／`shiori-abi`）のみ**。wintf/areka 本体は x64＋arm64 ネイティブ。
 - 透過は WUC/DComp GPU 合成上のクリックスルー機構（`WS_EX_TRANSPARENT` 動的トグル＋αマスク）で成立（ULW は撤去済み）。SHIORI 内部唯一 ABI=`IShiori`(COM, HSTRING/UTF-16)。過去互換は 32bit Rust ホスト。
 - 設計判断の変更は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md) を正本として更新。
-- 実機運転の定石: 絶対パス起動（相対は pasta.dll LOAD 失敗）・i686 helper を先ビルド・`AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋`RUST_LOG` grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。自動終了は強制終了の経路で終了挨拶を経ないので、終了挨拶を確かめる走行では自動終了を上限に留め、終了はキャラ窓への Ctrl＋左ダブルクリックで求める（2026-09-17 host32-window-thread-pump の裁定）。**A4 以降はメニューの「終了」も同じ握手**。
+- 実機運転の定石: 絶対パス起動（相対は pasta.dll LOAD 失敗）・i686 helper を先ビルド・`AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋`RUST_LOG` grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。自動終了は強制終了の経路で終了挨拶を経ないので、終了挨拶を確かめる走行では自動終了を上限に留め、終了はキャラ窓の右クリックメニューの「終了」で求める（2026-09-17 host32-window-thread-pump の裁定は Ctrl＋左ダブルクリックだったが、2026-09-19 に `areka-P0-popup-menu-minimal` がその入口を取り除いた。強制退避の Ctrl＋Shift＋左ダブルクリックは残る）。
 - 常時テストは x86 を避け偽境界で純 x64 決定論（記憶 prefer-x64-fake-boundary-tests-not-x86）。**ネットへ出るテストを常時テストに入れない**（`network-update` は偽 `HttpFetch`）。
 
 ## α 後（M2 の残りと M3）

@@ -155,44 +155,47 @@ fn sending_the_pending_one_delivers_the_same_message_as_the_old_immediate_path()
     assert!(take_pending(&mut world).is_none(), "送った預かりは残らない");
 }
 
-/// Ctrl＋左ダブルクリックの終了指示は、操作した窓のスコープを載せる（要件 5.3）。窓は閉じない。
+/// 結線済みで Shift を伴わない Ctrl＋左ダブルクリックは終了指示を送らず、相方側の窓でも
+/// 左ダブルクリックとして届く（要件 5.3・開発者裁定 2026-09-19）。窓は閉じない。
 ///
-/// スコープを固定値 0 のまま送れば相方側の表明が落ちる。
+/// 相方側（スコープ 1）で見る——Ctrl を見て早期に戻れば `rx` が空で落ち、強制退避の腕へ
+/// 落ちれば窓の件数が合わない。
+///
+/// 「終了指示に操作した窓のスコープが載る」性質はメニュー側の檻が持つ
+/// （`menu::mod_wiring_tests::the_close_action_sends_exactly_one_close_request_with_the_window_scope`
+/// と `menu::trigger_wired_tests`）。ここでは重ねない。
 #[test]
-fn ctrl_left_double_click_carries_the_scope_of_the_clicked_window() {
+fn wired_ctrl_left_double_click_sends_no_close_request_on_the_partner_window() {
     let (mut world, rx) = world_with_wiring();
-    let main = world
-        .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
-        .id();
+    world.spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }));
     let partner = world
         .spawn((GhostWindowMarker, CharWindowMarker { scope: 1 }))
         .id();
 
     let ev = pressed(10, 20, DoubleClick::Left, true, false);
     assert!(on_char_pointer_pressed(&mut world, partner, partner, &ev));
-    assert!(
-        matches!(
-            rx.try_recv().expect("終了指示が届く"),
-            KanadeMsg::CloseRequest {
-                reason: CloseReason::User { scope: 1 }
-            }
-        ),
-        "相方側の窓ではスコープ 1"
-    );
-    assert!(rx.try_recv().is_err(), "ちょうど 1 件");
 
-    assert!(on_char_pointer_pressed(&mut world, main, main, &ev));
-    assert!(
-        matches!(
-            rx.try_recv().expect("終了指示が届く"),
-            KanadeMsg::CloseRequest {
-                reason: CloseReason::User { scope: 0 }
-            }
+    match rx.try_recv().expect("左ダブルクリックが届く") {
+        KanadeMsg::Mouse(m) => assert_eq!(
+            m,
+            MouseInput {
+                scope: 1,
+                x: 5,
+                y: 10,
+                region: Some("Bust".to_string()),
+                kind: MouseEventKind::DoubleClick {
+                    button: MouseButton::Left
+                },
+            },
+            "相方側の窓のスコープ 1・面座標で届く"
         ),
-        "本体側の窓ではスコープ 0"
+        _ => panic!("終了指示ではなく左ダブルクリック（Mouse）を期待"),
+    }
+    assert!(
+        rx.try_recv().is_err(),
+        "届くのは左ダブルクリック 1 件だけ（終了指示は 0 件）"
     );
-    assert!(rx.try_recv().is_err(), "ちょうど 1 件");
-    assert_eq!(ghost_count(&mut world), 2, "終了指示は窓を直接閉じない");
+    assert_eq!(ghost_count(&mut world), 2, "窓は 1 枚も閉じない");
     assert!(
         take_pending(&mut world).is_none(),
         "左ダブルクリックは預からない"

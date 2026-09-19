@@ -293,9 +293,9 @@ fn close_item(_world: &World, _ctx: &MenuContext) -> MenuItem {
     }
 }
 
-/// 「終了」の動作。Ctrl+左ダブルクリックと同じ入口（`MouseWiring::send_close_request`）へ、
-/// メニューを出した窓のスコープを載せた終了指示を 1 件送る（要件 5.1・6.6）。メニューだけの
-/// 終了の道は作らない——窓を閉じるのは、終了の握手が終わったことを受けた側である。
+/// 「終了」の動作。既存の終了指示の経路（`MouseWiring::send_close_request`）へ、メニューを
+/// 出した窓のスコープを載せた終了指示を 1 件送る（要件 5.1・6.6）。メニューだけの終了の道は
+/// 作らない——窓を閉じるのは、終了の握手が終わったことを受けた側である。
 fn request_close(world: &mut World, ctx: &MenuContext) {
     let Some(mut wiring) = world.get_non_send_mut::<MouseWiring>() else {
         tracing::warn!(

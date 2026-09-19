@@ -96,7 +96,7 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
         "前提: 起動系列 5 呼出が有界内に発火する: {boot_calls:?}"
     );
 
-    // ── 終了指示（製品では Ctrl+左ダブルクリックが送るのと同じ 1 件） ──
+    // ── 終了指示（製品では右クリックメニューの「終了」が送るのと同じ 1 件） ──
     harness
         .ghost
         .kanade()

@@ -158,7 +158,7 @@
   - _Requirements: 1.1, 1.4, 1.7, 6.5, 7.2, 7.3, 8.1, 8.2, 8.3, 8.5_
   - _Depends: 7.3_
 
-- [ ] 8. 結線と組込の 2 項目
+- [x] 8. 結線と組込の 2 項目
 - [x] 8.1 メニューを起動に結び、説明書と終了を登記する
   - 結線関数が ⑴ メニューの持ち物を World へ挿入し ⑵ 組込の 2 項目を登記し ⑶ 毎 tick の取り出しを配送の後に登録する。解放ハンドラの装着は結線関数では行わず、窓を生やした直後の同じクロージャ内（既存の押下ハンドラの装着の隣）で行う（起動時の窓は結線より後に生える＝Implementation Notes 8.1）
   - 説明書は既定名「説明書」・文言リソース・在否で有効／無効が決まり、選ばれたら説明書を開く。終了は既定名「終了」・文言リソース・常に有効で、選ばれたら既存の終了指示をメニューを出した窓のスコープで送る（メニュー固有の抜け道を作らない）
@@ -167,7 +167,7 @@
   - _Requirements: 2.2, 4.3, 5.1, 6.6, 9.6, 11.4_
   - _Depends: 7.4, 4.1, 4.3, 6.1, 3.1_
 
-- [ ] 8.2 結線済みの Ctrl＋左ダブルクリックの終了指示を取り除く（開発者裁定 2026-09-19）
+- [x] 8.2 結線済みの Ctrl＋左ダブルクリックの終了指示を取り除く（開発者裁定 2026-09-19）
   - 実機確認でメニューの「終了」が働くことを確かめたので、同じ役目の隠し操作を取り除く。押下ハンドラの「結線済み・Shift なしの Ctrl＋左ダブルクリック → 終了指示」の腕を消し、その操作は Ctrl の無い左ダブルクリックと同じに扱う
   - 強制退避（結線前の Ctrl＋左ダブルクリック、および Ctrl＋Shift＋左ダブルクリック）は一字も変えずに残す。利用者起因の終了指示を送る本番の呼び手がメニューの「終了」だけになることを確かめる
   - 終了指示の入口を留めていた既存テストと、6.1 で足したスコープのテストを、新しい規則（終了指示は 0 件・左ダブルクリックが 1 件届く・窓は閉じない）へ書き換える。強制退避のテストは無改変で緑のまま
@@ -291,3 +291,27 @@ P1 で `menu::plan::plan_tests` が緑のままなのは欠陥ではない。`pl
 - **数え直した手書きの数**（引き算はしていない）: `[briefs].count` 27→28／束を持つ `[[spec]]` 行 13→14／宛先が 2 つ以上の束に散る spec 8→9（本仕様は メニュー 13・配布物の素性 1・作り付けの窓 1 に散る）／宛先 0 本の束 36→35／置き場と表の食い違い 3 本・2 本→8 本・8 本／候補 spec 名の案と既存の綴りの一致 2 行→3 行／`briefing.md` の `[[barrier]]` 4 数（`list_shiori_resource` 実装済み 1→5・語彙のみ 158→154、`descript_ghost` 実装済み 9→10・未対応 64→63）。段階表の「依存する既存 spec」の欄は 67 行を台帳と全数照合して食い違い 0（その過程で本仕様と無関係な 2 行＝「窓の配置と重なり」「バルーンの文字」の陳腐化を是正）。
 - **検査**: 台帳だけを編集した直後は `cargo test -p ukadoc-survey` が 91 passed／22 failed（担当が `[[spec]]` に無い・`[[barrier]]` の数・報告の鮮度）。追随後は 601／0／6／113／5 で緑。
 - **統合担当への申し送り（本仕様の範囲外）**: ⑴ `roadmap-draft.md`「先頭ウェーブ」の節は 2026-09-13 の写真で、今日数え直すと 324／84／31 は 324／62／55、「バルーンの文字」の状態の分布と「63 件のうち 45 件」（今日は 22 件）も動く。各束の進行中の件数が 84 の内訳そのものなので部分的に直すと算術が壊れる＝節全体の撮り直しが要る（該当行に注記 1 行を添えた）。⑵ `briefing.md` 5-3 の 416 件／1,333 件は日付付きの作業記録なので触っていない（今日は 433 件／1,316 件）。⑶ 段階 B「更新」の候補 spec 名の案 `areka-P0-network-update` が 09-18 に起票された実在の spec と同名（意図しない重なり・裁定が要る）。⑷ 波の欄は全行が旧編成（W13〜W17）の写しのまま。⑸ 9.3 の実機確認で OS 側（メニュー表示・既定アプリで開く）に欠陥が出たら、実装済み 6 件の状態を再判定する。
+
+### 8.2 結線済みの Ctrl＋左ダブルクリックの終了指示の除去（開発者裁定 2026-09-19・要件 5.1／5.3／5.5 改訂）
+
+- 経緯: 9.3 の実機確認で、相方側のメニューの「終了」から終了の挨拶が再生されて正規に閉じることを開発者が確かめ、「この実装により Ctrl＋ダブルクリックの終了経路は不要になる。除去せよ」と裁定した。取り除いたのは**結線済み・Shift なしの Ctrl＋左ダブルクリック → 終了指示**だけで、強制退避（結線前の Ctrl＋左ダブルクリック・Ctrl＋Shift＋左ダブルクリック）は一字も変えていない。メニューは結線後のキャラクター窓にしか出ず、応答しない SHIORI は終了の握手を拒むので、起動に失敗した・固まったゴーストから抜ける口はこれだけである（同じ実機確認で、絵を出せない里々の検体は検証用ダミー窓へ落ち、メニューを出せなかった）。
+- 実装: `input_events::on_char_pointer_pressed` の Ctrl の腕は強制退避 1 本（条件 `ctrl_down && double_click == Left && (!wired || shift_down)`）だけになり、成り立たなければ Ctrl を無視して左ダブルクリックの経路へ落ちる。利用者起因の終了指示を送る本番の呼び手は `menu::request_close` の 1 つだけ（`send_close_request` をワークスペース全域で検索）。記録 `close_requested` はコード・steering・`doc/` のどこにも残っていない（0 件）。
+- テスト: 書き換えた 2 本（`input_events_tests.rs::handler_wired_ctrl_left_double_click_sends_no_close_request_and_delivers_the_double_click`・`input_events_menu_tests.rs::wired_ctrl_left_double_click_sends_no_close_request_on_the_partner_window`）は、改変前のハンドラに対して「終了指示ではなく左ダブルクリックを期待」で赤（105 passed／2 failed）。較正は両方向: 内側の `if` だけを消す危険な形（Ctrl＋左で常に強制退避）は 3 本が赤（窓が全部消える）、強制退避を丸ごと消す形は強制退避のテストが赤。どちらも戻した後に sha256 が一致。強制退避のテスト 2 本（`handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sending`・`escape_works_without_mouse_wiring`）は差分 0。`only_escape_terminates_ghost_windows` は偽になった説明文と局所名だけを直し、表明は同じ。「終了指示に窓のスコープが載る」は `mod_wiring_tests.rs::the_close_action_sends_exactly_one_close_request_with_the_window_scope`（スコープ 1 と 0）と `trigger_wired_tests.rs` が留める。
+- 関門: `cargo test --workspace -j 4` は exit 0・7,811 passed／0 failed／40 ignored（103＝103）、areka の警告 0、`cargo fmt`・行数の番人とも緑。
+- **9.2 の非回帰 4 番への追記**: 9.2 の時点では「Ctrl／Ctrl＋Shift の入口（5.5）」を無改変で残したが、この裁定で要件 5.5 は「強制退避の入口を残す」へ改まった。強制退避のテスト 2 本が無改変で緑であることが、改訂後の 5.5 の非回帰の根拠である。
+- 追随した文書: 要件 5.1／5.3／5.5、設計の該当 3 か所、steering `roadmap.md` の「終了は Ctrl＋左ダブルクリックで求める」2 か所（実機運転の定石は「メニューの『終了』で求める」へ）、`spine_close_wiring_tests.rs` と `input_events_tests.rs` の偽になった説明 2 行。
+
+### 9.3 実機確認（途中経過・2026-09-19・emo2＝実 pasta・HEAD は 8.1 の結線を含むビルド）
+
+起動は引数 2 つ（ゴーストの根とバルーンの絶対パス）、`RUST_LOG=info,areka::menu=trace,areka::readme=debug`、i686 の helper を `target\debug\` へコピーしてから。起動直後に `[menu] release handlers attached … count=2` →「本物のゴースト窓を開きました scopes=[0, 1]」。2 回の走行とも `ERROR` は 0 行。
+
+| # | 確認 | 結果 | 観察したログ |
+|---|---|---|---|
+| ⑴ | 右クリックで出る・外クリック／Esc で閉じる・2 度目も | 済 | `[menu] shown scope=0 items=2` → `[menu] dismissed scope=0` が本体側 2 回、`scope=1` で相方側 3 回 |
+| ⑴′ | 閉じただけで失敗と記録されないか（7.1 のレビューが挙げた危険） | 済・起きなかった | 未選択 5 回とも `dismissed`。`[menu] TrackPopupMenuEx failed` は 0 件 |
+| ⑵ | 「説明書」で readme.txt が既定のアプリで開く | 済（ログ上） | `[menu] selected scope=0 frame=Readme id=1` → `[readme] opened the readme with the default application … emo2\readme.txt`（2 回） |
+| ⑶ | 「終了」で終了の挨拶が再生されて閉じる | 済（開発者が目視で確認） | `[menu] selected scope=1 frame=Close id=2` → `kanade: OnClose GET を発行し握手を開始 reason="user"` → `close talk を再生起動` →（4.5 秒後）`talk_done_quit` → `unload_clean` → `ghost_quit` → `ghost shutdown sequence completed` |
+| ⑷ | 里々の `readmebutton.caption`（`(&R)` の下線・開き直すと変わる） | **未実施・上流待ち** | `R_POST_and_KOMAINU` は `surface 0 has no layers at all (extent 0x0)` で窓の配置に失敗し、検証用ダミー窓へ落ちた（キャラクター窓が無いのでメニューを出せない）。里々の標準テンプレートの `surfaceNNNN.png` の慣習が未実装（`areka-P0-shell-implicit-surface`・α A1-①）。emo2 の pasta は caption を定義しないので `resource answered empty or no content: using the default labels`（既定名「説明書」「終了」）になる＝これは想定どおり。項目名の差し替えそのものは決定論テスト（`captions_tests.rs`・`resource_query_test.rs` の 4 通り・`trigger_wired_tests.rs` の「取扱説明書(&R)」）が留めている |
+| ⑸ | 表示中も動く・表示中に SHIORI を落としても落ちない | 前半は済（ログ）・後半は未実施 | メニューが開いていた区間（合計 14.2 秒）の中に SERIKO・描画のログが 22 行ある＝表示中も tick が回っている。表示中に helper を落とす確認は未実施 |
+| ⑹ | 閉じた後に見えない窓が残らない | 開発者の目視待ち | （閉じた後の左ダブルクリックは 1 回目の走行で普通に届き、ゴースト自身の選択肢から正常に終了している） |
+| 1.10 | 右ダブルクリックはメニューが出る側では届かない | 未実施 | 2 回の走行とも `double_click=Right` は 0 件 |

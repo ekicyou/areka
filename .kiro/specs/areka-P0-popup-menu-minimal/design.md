@@ -437,7 +437,7 @@ impl MouseWiring {
 - Invariants: 預かりは `OnMouseDoubleClick` の**材料**であり、送るかどうかはメニューのタスクだけが決める（要件 1.10／11.3）。
 
 **Implementation Notes**
-- Validation: 新規 `input_events_menu_tests.rs`（`world_with_wiring` の型）で ⑴ 右ダブルクリックで `rx` に何も届かず預かりが `Some`、⑵ Ctrl＋左ダブルクリックの `CloseRequest` が `User { scope: 1 }`（相方側の窓で）。既存 `input_events_tests.rs` は `CloseReason::User { scope: 0 }` へ追随。
+- Validation: 新規 `input_events_menu_tests.rs`（`world_with_wiring` の型）で ⑴ 右ダブルクリックで `rx` に何も届かず預かりが `Some`、⑵ 結線済みの Ctrl＋左ダブルクリックは（相方側の窓でも）`CloseRequest` を 0 件にし、左ダブルクリックを 1 件届ける（要件 5.3 改訂・タスク 8.2。当初の「`CloseRequest` が `User { scope: 1 }`」はタスク 6.1 で入れて 8.2 で置き換えた。終了指示にスコープが載ることはメニューの「終了」のテストが留める）。既存 `input_events_tests.rs` の強制退避のテストは無改変。
 - Risks: 預かりが取り出されないまま残る経路（解放が来ない＝メニューが出ない）は無い。押下と解放は対で届き、解放が抑止された場合（ドラッグ中・結線前）は預かりを `take` して捨てる（trace）。
 
 ### areka menu
