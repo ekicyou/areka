@@ -36,7 +36,7 @@
   - _Depends: 1.1_
   - _Boundary: areka-seriko AnimationTable_
 
-- [ ] 2.3 (P) ファイル名から面の番号を得る判定を実装する
+- [x] 2.3 (P) ファイル名から面の番号を得る判定を実装する
   - `crates/areka-emo-present/src/balloon.rs` の `face_id_of` の 3 段判定（接頭辞を大小無視で外す → `.png` を外す → 残りが空でなく全部 ASCII 数字）を `pub(crate) fn face_digits_of(prefix, name) -> Option<String>` へ切り出し、`face_id_of` はそれを呼んで `parse::<u32>().ok()` するだけにする。戻り値の変更 0
   - `crates/areka-emo-present/src/shell_target.rs` を新設し、`select_surface_images`（fs に触らない純粋な関数）と `SurfaceImageSelection`（`images`・`duplicates`・`overflow`）を置く。番号は 10 進として読み、先頭の 0 を無視する。同じ番号に複数あれば辞書順で最小を採り `duplicates` に積む。`u32` に収まらない数字列は `overflow` へ入れる。この段では記録を出さない（出すのは 4.2）
   - `crates/areka-emo-present/src/lib.rs` に `pub mod shell_target;` と再輸出を足す
@@ -228,3 +228,8 @@
   - 観測可能な完了: 4 つの文書それぞれの差分が存在し、`roadmap.md` に書いた引受先の spec がすべて `.kiro/specs/` に実在して `completed/` の下に無い
   - _Requirements: 9.2, 9.4, 9.5, 9.6, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
   - _Depends: 8.1_
+
+## Implementation Notes
+
+- 2.2: レビュー差し戻しの原因は 2 往復とも「コードと食い違う古い注記の取り残し」だった。振る舞いを変えたら、**モジュール冒頭の説明・変更した関数の公開 rustdoc・分岐の直前の注記・既存テストの doc コメント**の 4 か所を必ず走査して事実へ直すこと。特に公開 rustdoc（`cargo doc` に出る）は見落としやすい。
+- 2.1 → 2.4: 抜き色の腕の着地で `emo2` の `null.png` が焼かれるようになり、`emo2_e2e`・`emo2_golden` の期待値が 1 行増えた（54 → 55 行）。`areka-emo-atlas` の焼き結果に触る変更は golden の作り直し（`record_golden`）が要る。

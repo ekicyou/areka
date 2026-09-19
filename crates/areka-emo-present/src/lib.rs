@@ -24,8 +24,9 @@
 //!
 //! ## 構成
 //!
-//! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・合成キャッシュ（[`cache`]）・表示の記録
-//! （`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・提示統括（[`presenter`]）を備える。
+//! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・シェルの読み込み（[`shell_target`]）・
+//! 合成キャッシュ（[`cache`]）・表示の記録（`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
+//! 提示統括（[`presenter`]）を備える。
 //! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 
 /// scope 別バルーン系列解決の**単一権威**であり、解決した面画像を **シェルと同一の**
@@ -48,6 +49,10 @@ pub mod presenter;
 /// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。
 pub mod scale;
+/// シェルの読み込みの権威（`shell_target`）。シェルのフォルダ直下のファイル名から「番号 → 面の画像」を
+/// 決める純粋な判定（`select_surface_images`）を持つ。名前の判定はバルーンの系列解決と同じ 1 つの実装
+/// （`balloon::face_digits_of`）を接頭辞 `surface` で共有する。
+pub mod shell_target;
 
 /// 実適用 k の厳密型（上流 `areka-emo-compose` の正本を再輸出）。
 ///
@@ -60,3 +65,4 @@ pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 pub use presenter::{ClientHit, EmoPresenter, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
+pub use shell_target::{SurfaceImageSelection, select_surface_images};
