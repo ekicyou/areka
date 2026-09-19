@@ -21,7 +21,7 @@
 
 ### Non-Goals
 
-- `.pna`・`use_self_alpha,0`・`use_input_alpha`・`paint_transparent_region_black` の実装（読まない・常に 1 の裁量）。台帳の隣 2 項目は触らない（6.3）。
+- `.pna`・`use_self_alpha,0`・`use_input_alpha`・`paint_transparent_region_black` の実装（3 鍵は読まない・`.pna` は画素を使わない・常に 1 の裁量。C4 の是正の註を参照）。台帳の隣 2 項目は触らない（6.3）。
 - `thumbnail.pnr` の透過解釈・`balloonc*`／`arrow*`／`online*`／`marker.png`／`sstp.png`／`sstpmessage.*`／`number.*`／`communicatebox.*` の実装（列挙に載らないことだけを検証する）。
 - 既定バルーン id の定数と解決順への配線（`baseware-root-layout`）・`.nar` 化と共有ヘルパ（`nar-install`）・配布 zip と第三者向け README（`alpha-release-signoff`）・ネットワーク更新・複数既定バルーン・`recommended.balloon`。
 - 縦書き（descript に `vertical` 無し＝横書きのみ・縦書きの検証 0 件）。
@@ -377,7 +377,9 @@ sequenceDiagram
 3. 既知の縮退（事実の記録）: `face_origin_color` の白縮退（(0,0) α＝0）・`wordwrappoint` 未宣言の `debug!`・scope 1 の `warn!` 2 件（DD3・DD5）
 4. 崩れの処理: 3.9／4.3 の発動有無と行き先（直した／引受先の実在確認の記録）
 5. 実機目視の観察記録: 日付・ゴースト（emo2・絶対パス）・バルーンの絶対パス・表示スケール（k=1 と k≠1 の値）・観察項目（半角・全角・選択肢・枠の透け・文字の欠け）・所見（4.2）
-6. README 申し送り文（そのまま写せる形・5.2）: 資産名・作者・CC0・出典 URL・既知の制限「areka は半透明前提のバルーンだけが正しく表示される（`use_self_alpha` は常に 1 として扱い、`.pna` は読まない）」
+6. README 申し送り文（そのまま写せる形・5.2）: 資産名・作者・CC0・出典 URL・既知の制限「areka は半透明前提のバルーンだけが正しく表示される」
+   - ⚠ 当初この行は括弧内を「`use_self_alpha` は常に 1 として扱い、**`.pna` は読まない**」と書いていたが、後者は実測と違う（2026-09-18・タスク 3.1）。実際は**同名 `.pna` の存在だけは見て**おり、画素が使われないだけである。詳細は C4 の §8 の行と要件 6.1 の是正の註を参照。
+   - **README 用の文は第三者が読むもの**なので、内部の鍵名や関数名を持ち込まず、利用者から見える結果（「半透明を前提に作られたバルーンだけが正しく表示されます」）で書くこと。
 7. 台帳検査: `cargo test -p ukadoc-survey` の結果・報告 2 本の再生成（6.5）
 8. 下流申し送りの実施記録: 3 brief の実在確認と追記の commit（7.3, 7.4）
 
@@ -392,7 +394,9 @@ sequenceDiagram
 
 **Contracts**: State [x]
 
-- 行（4 列）: 項目「バルーンの `use_self_alpha`／`use_input_alpha`／`paint_transparent_region_black` と `.pna`」｜裁量「宣言を読まず常に `use_self_alpha,1` 相当（PNG の α をそのまま尊重）で焼く。`.pna` は読まない」｜根拠「開発者裁定 2026-09-18・`areka-emo-present/src/balloon.rs` のモジュール doc と `build_balloon_target_from_faces` の `UseSelfAlpha::On` 固定・`areka/src/emo2_boot/assets.rs` の同固定・既知の制限＝半透明前提のバルーンだけが正しく表示される」｜出典 spec「areka-P0-default-balloon-bundle」。
+- 行（4 列）: 項目「バルーンの `use_self_alpha`／`use_input_alpha`／`paint_transparent_region_black` と `.pna`」｜裁量「宣言を読まず常に `use_self_alpha,1` 相当（PNG の α をそのまま尊重）で焼く。**`.pna` の画素は使わない**」｜根拠「開発者裁定 2026-09-18・`areka-emo-present/src/balloon.rs` のモジュール doc と `build_balloon_target_from_faces` の `UseSelfAlpha::On` 固定・**シェル側の同じ固定**＝`areka/src/emo2_boot/assets.rs`・既知の制限＝半透明前提のバルーンだけが正しく表示される」｜出典 spec「areka-P0-default-balloon-bundle」。
+  - ⚠ 当初この行は裁量欄を「`.pna` は**読まない**」と書いていたが、実測と違う（2026-09-18・タスク 3.1）。実際は**同名 `.pna` の存在だけは見ている**（`areka-emo-atlas` の bake 本体が `probe_pna` を呼ぶ）。画素が使われないだけで、α を持つ PNG では α が勝ち、**α の無い PNG に `.pna` を添えた組合せは理由を載せた失敗になる**（`normalize.rs` の実装腕は `UseSelfAlpha::On` × α チャンネルの 1 本だけ）。着地した `doc/COMPAT_ARCHITECTURE.md` §8 の行と要件 6.1 の是正の註はこの実測どおりに書かれている。
+  - ⚠ 根拠に挙げた `areka/src/emo2_boot/assets.rs` は**シェルの焼き付け経路**であって「バルーンの 2 か所目」ではない（バルーン側は同ファイルが `build_balloon_target_from_faces` へ委譲する）。当初この行は「同固定」とだけ書いていて誤読を招いたので、着地した §8 の行では「シェル側の同じ固定」と明示した。
 - 既存行の間に挟まず表の末尾へ足す（`popup-menu-minimal` 等の別節と衝突しない）。
 
 #### C5 台帳文書（`assets.toml`・`roadmap-draft.md`・`briefing.md`・報告 2 本）

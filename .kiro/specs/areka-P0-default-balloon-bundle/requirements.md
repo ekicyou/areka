@@ -38,7 +38,7 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
   - 裁量の登記: `doc/COMPAT_ARCHITECTURE.md` §8 に 1 行、台帳 `assets.toml` の `use_self_alpha` 項目の状態・備考・宛先、`roadmap-draft.md` の `[[spec]]` 行、`briefing.md` の分布 2 数値、報告の作り直し。
   - 既定バルーン id `StayseeBalloon` の下流への申し送り。
 - **Out of scope**:
-  - `.pna`・`use_self_alpha,0`・`use_input_alpha`・`paint_transparent_region_black` の実装（読まない・常に 1 の裁量）。台帳の `use_input_alpha`・`paint_transparent_region_black` の 2 項目は**触らない**（`absent`・宛先空のまま＝変更 0）。
+  - `.pna`・`use_self_alpha,0`・`use_input_alpha`・`paint_transparent_region_black` の実装（3 鍵は読まない・`.pna` は画素を使わない・常に 1 の裁量。6.1 の是正の註を参照）。台帳の `use_input_alpha`・`paint_transparent_region_black` の 2 項目は**触らない**（`absent`・宛先空のまま＝変更 0）。
   - `thumbnail.pnr` の透過解釈（列挙は `thumbnail.png` のみ・`.pnr` は将来の `baseware-root-layout` 拡張）。
   - 既定バルーン id の定数と解決順への配線（`areka-P0-baseware-root-layout` A1-② が足す）。
   - `.nar` への畳み込みと共有ヘルパ（`areka-P0-nar-install` A0-①）。
@@ -121,7 +121,7 @@ CC0 の既製バルーンを `vendors/sample_ghost/StayseeBalloon/` に原作フ
 
 ### Requirement 6: 透過の扱いの裁量を登記する
 
-**Objective:** バルーンを作る作者と、areka を保守する開発者として、「`use_self_alpha` を 0 と書いても効かない・`.pna` は読まない」が areka の意図した裁量であることを、正典沈黙箇所の対応表と網羅台帳の両方で読めるようにしたい。そうすれば「黙って壊れる」ではなく「意図して固定している」と分かる。
+**Objective:** バルーンを作る作者と、areka を保守する開発者として、「`use_self_alpha` を 0 と書いても効かない・`.pna` の画素は使われない」（当初この行は「`.pna` は読まない」と書いていたが実測と違う。6.1 の是正の註を参照）が areka の意図した裁量であることを、正典沈黙箇所の対応表と網羅台帳の両方で読めるようにしたい。そうすれば「黙って壊れる」ではなく「意図して固定している」と分かる。
 
 #### Acceptance Criteria
 
