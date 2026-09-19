@@ -13,7 +13,7 @@
 
 - [ ] 2. 互いに独立な 3 本と、それに追随する `emo2` の期待値
 
-- [ ] 2.1 (P) 抜き色の腕を実装する
+- [x] 2.1 (P) 抜き色の腕を実装する
   - `crates/areka-emo-atlas/src/normalize.rs` に `(UseSelfAlpha::On, AlphaSource::KeyColor)` の腕と `Normalizer::key_color` を足す。`normalize` のシグネチャは変更 0
   - 抜き色は受け取った 32bit 乗算済み BGRA バッファの座標 (0,0) の 4 バイト。完全一致（許容幅 0）で比べ、一致した画素に `0,0,0,0` を書き（色を残さない）、一致しない画素は 1 バイトも変えない。行の詰め物を読まないよう `stride` と `width` で行ごとに歩く
   - 幅か高さが 0 の絵はそのまま渡す。`.pna`・`full`・`Off` の腕は変更 0
