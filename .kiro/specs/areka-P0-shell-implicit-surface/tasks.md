@@ -172,7 +172,7 @@
   - _Depends: 4.3, 2.1_
   - _Boundary: areka-emo-present shell_target tests_
 
-- [ ] 6.2 摂動を実行して記録する
+- [x] 6.2 摂動を実行して記録する
   - 4 つの判断について「その判断を経路から外す」形（値をずらす形ではない）で摂動し、赤になるテストを確かめる: 先頭の 0 を無視しない → 名前の判定の 4 表記／層 0 の判定を外す → 表ウ・`emo2` の A／B・`SCOPE1_W`／`SCOPE1_H`／画像だけの面を作らない → `konnoyayame` のコマの差分・`dangling_pattern_targets`／許容幅を 1 にする → 「1 成分だけ 1 違う色」
   - 間隔の語の読み替えを外す → `sometimes`＝`Random{k:2}`・`konnoyayame` のアニメ 0 が赤になることも確かめる
   - 観測可能な完了: 5 つの摂動それぞれについて、赤になったテスト名と出力を tasks の完了記録に残し、摂動を戻して全体が緑に復すること
@@ -238,7 +238,62 @@
 - 4.2: `emo2` の記録の檻（`recognized=2 used=0 shadowed=2`・使わなかった画像の `debug!` 2 行・`warn!` 0 行）は `shell_target_load_tests.rs` に既済。タスク 4.4 は A／B の全画素の一致が残りで、記録の檻を二重に置かないこと。
 - 4.3: `surface.append` にしか現れない絵の綴りは焼かれない（`ManifestDeriver::derive` が `shell.surfaces` だけを読む）。本仕様の着地で生じた欠陥ではなく既存の性質で、焼く一覧の導出は 1 行も変えていない。検体 2 体の `surface.append` は 0 行なので影響は無いが、7.1／7.2 の実機確認で露見したらタスク 7.4 の担当。
 - 4.3: tasks.md が言う `TempDir` は新設せず共有窓口 `temp_path_kit::TempPath` を使った（同型の新設は `temp_path_guard_test.rs` の例外表の編集を強いるため）。レビューで妥当と裁定済み。
-- 4.4: 要件 5.8 の括弧内「誤って二重に重ねても結果のバイトが変わらず検査にならない」は実測と食い違う。摂動を当てると面 0 も画素は変わる（先頭の差は 827 バイト目）。変わらないのは**外形**だけで、縁が半透明なので重ねると色が変わる。檻は面 10 の外形で較正しているので判定は正しいが、**要件 5.8 の文面と `shell_target_emo2_tests.rs` の `SURFACE10_EXTENT` の doc を「変わらないのは外形だけ」へ直すこと**（タスク 6.2 または要件 9 の文書作業の担当）。
+- 4.4: 要件 5.8 の括弧内「誤って二重に重ねても結果のバイトが変わらず検査にならない」は実測と食い違う。摂動を当てると面 0 も画素は変わる（先頭の差は 827 バイト目）。変わらないのは**外形**だけで、縁が半透明なので重ねると色が変わる。檻は面 10 の外形で較正しているので判定は正しいが、**要件 5.8 の文面と `shell_target_emo2_tests.rs` の `SURFACE10_EXTENT` の doc を「変わらないのは外形だけ」へ直すこと**（タスク 6.2 または要件 9 の文書作業の担当）。→ **タスク 6.2 で実施済み**。要件 5.8 と `SURFACE10_EXTENT` の doc を「変わらないのは外形だけ・画素は面 0 でも変わる（先頭の差は 827 バイト目）」へ是正した。
 - 4.4: `shell_target_test_support.rs` の冒頭が挙げる「檻は 4 本」のうち `shell_target_template_tests.rs` はタスク 6.1 の持ち物。6.1 の着地でファイル名が変わったらこの 1 行も追随させること。
 - 5.3: 5.1 の着地で採寸側も表示側も `load_shell_target` を通るため、「2 経路の外形が一致する」だけの主張は**今日は構造的にほぼ恒真**である。要件 7.6 を実際に支えているのは ⑴ 要件 3.1 の実数（236×462／140×160／260×390／200×200）を両経路で判定していること ⑵ `assets.rs`・`measure.rs` の本文に `shell::parse(` が 0 件であることの走査、の 2 点。**報告で「2 経路の一致」だけを要件 3.6 の根拠に挙げないこと。**
 - 5.3: 本文走査の自作の走査器は `'"'` の文字リテラルと生文字列を扱えず、本物の呼び出しを静かに見逃す。前提条件を檻で主張して塞いである（持ち込むと赤になる）。走査器を強くせずにこの形式を持ち込まないこと。
+
+## 摂動の記録（タスク 6.2・2026-09-20）
+
+5 つの摂動を 1 つずつ当てて赤を確かめ、そのつど元へ戻した。摂動はすべて「その判断を経路から外す」形で、値をずらしてはいない（唯一の例外は ⑷ で、要件 7.9 が名指しする摂動そのものが「許容幅を 1 にする」である）。摂動を当てる前の緑は `areka-emo-atlas` 83 件・`areka-emo-compose` 219 件・`areka-emo-present` 254 件・`areka-seriko` 207 件（＋結合 27 件）・`areka` 1,718 件（＋結合 3 件）。
+
+### ⑴ 先頭の 0 を無視しない
+
+- 摂動: `crates/areka-emo-present/src/shell_target.rs` の `select_surface_images` で、数字列を 10 進数として読む段を経路から外し、字面の一致（`digits == id.to_string()`）でしか番号を採らないようにした。先頭に 0 の付く綴りは面の画像と認められなくなる。
+- 走らせたコマンド: `cargo test -p areka-emo-present`
+- 赤になったテスト（9 件）: `shell_target::names_tests::leading_zeros_are_ignored_and_digits_read_as_decimal`・`shell_target::names_tests::duplicate_ids_adopt_lexicographic_minimum_and_report_the_dropped`・`shell_target::names_tests::selection_is_independent_of_input_order`・`shell_target::load_tests::used_image_is_baked_under_the_same_spelling_as_layer_zero`・`shell_target::load_tests::directories_are_not_taken_as_surface_images`・`shell_target::load_tests::every_record_is_emitted_once_per_load`・`shell_target::template_tests::r_post_and_komainu_shows_both_scopes_from_file_names_alone`・`shell_target::template_tests::konnoyayame_shows_both_scopes_from_file_names_alone`・`shell_target::template_tests::konnoyayame_blink_frame_changes_pixels_only_inside_the_frame_rect`
+- 出力（抜粋）: `panicked at shell_target_names_tests.rs:23:9: assertion 'left == right' failed: surface00.png は面 0 の画像である` ／ `test result: FAILED. 245 passed; 9 failed`
+- 戻した後: `cargo test -p areka-emo-present` が 254 件緑。
+
+### ⑵ 層 0 の判定を外す
+
+- 摂動: `crates/areka-emo-compose/src/base_image.rs` の `apply_base_images` で、`master.elements.iter().any(|e| e.layer == 0)` の判定を経路から外し（条件を `false` に潰し）、層 0 が在る面にも画像を敷くようにした。
+- 走らせたコマンド: `cargo test -p areka-emo-compose` ／ `cargo test -p areka-emo-present` ／ `cargo test -p areka`
+- 赤になったテスト（`areka-emo-compose` 3 件）: `base_image::tests::used_and_shadowed_partition_the_images`・`base_image::tests::append_reaches_image_only_faces`・`base_image::tests::brace_after_append_replaces_the_image_only_face`
+- 赤になったテスト（`areka-emo-present` 6 件）: `shell_target::base_image_tests::case_c_layer_zero_present_keeps_the_declared_extent`・`shell_target::base_image_tests::every_image_is_either_used_or_shadowed_exactly_once`・`shell_target::load_tests::every_record_is_emitted_once_per_load`・`shell_target::load_tests::emo2_shell_records_two_shadowed_images_and_no_warnings`・`shell_target::load_tests::emo2_shell_loads_with_zero_bake_errors_and_two_shadowed_images`・`shell_target::emo2_tests::emo2_every_surface_is_identical_with_and_without_base_images`
+- 赤になったテスト（`areka` 6 件）: `placement::measure::tests::measure_emo2_fixture_yields_exact_nonzero_sizes`・`placement::measure::tests::measure_emo2_fixture_applies_k_end_to_end`・`placement::prepare_tests::prepare_emo2_returns_two_scope_placements`・`placement::prepare_tests::prepare_emo2_at_dpi_120_places_scopes_adjacent`・`placement::prepare_tests::prepare_emo2_scales_window_sizes_by_k0`・`placement::windowposition_tests::prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120`
+- 出力（抜粋）: `面 0: 画素が違う（先頭の差は 827 バイト目 A=Some(4) B=Some(2)・長さ A=1192632 B=1192632）` ／ `面 10: 外形が違う A=427x463(stride 1708) B=336x400(stride 1344)` ／ `measure_tests.rs:101:9: assertion 'left == right' failed / left: 427 / right: 336`（`SCOPE1_W`）
+- 併せて確かめた事実: 面 0 は**外形が変わらないまま画素だけが変わる**（先頭の差は 827 バイト目）。要件 5.8 と `shell_target_emo2_tests.rs` の `SURFACE10_EXTENT` の doc が「結果のバイトが変わらない」と書いていたのは誤りで、本タスクで「変わらないのは外形だけ」へ直した。
+- 戻した後: `areka-emo-compose` 219 件・`areka-emo-present` 254 件・`areka` 1,718 件が緑。
+
+### ⑶ 画像だけの面を作らない
+
+- 摂動: 同じ `apply_base_images` の「宣言の無い番号を新設する」腕（表ア）を経路から外し、面を作らずに読み飛ばすようにした。
+- 走らせたコマンド: `cargo test -p areka-emo-compose` ／ `cargo test -p areka-emo-present`
+- 赤になったテスト（`areka-emo-compose` 4 件）: `base_image::tests::konnoyayame_has_no_dangling_pattern_targets_with_images`・`base_image::tests::dangling_pattern_targets_counts_image_only_faces_as_existing`・`base_image::tests::used_and_shadowed_partition_the_images`・`base_image::tests::append_to_unknown_id_still_warns_and_creates_nothing`
+- 赤になったテスト（`areka-emo-present` 4 件）: `shell_target::template_tests::konnoyayame_blink_frame_changes_pixels_only_inside_the_frame_rect`・`shell_target::template_tests::r_post_and_komainu_shows_both_scopes_from_file_names_alone`・`shell_target::base_image_tests::case_a_image_only_surface_takes_the_image_extent`・`shell_target::base_image_tests::every_image_is_either_used_or_shadowed_exactly_once`
+- 出力（抜粋）: `base_image_tests.rs:550:5: 画像の対応を渡すと相手の無いコマは 0 組: {(0, 1031), (0, 1032), (0, 1033)}` ／ `shell_target_template_tests.rs:198:9: コマの相手の面 1031 が面の表に居ない（要件 3.4 の解決が効いていない）`
+- 戻した後: `areka-emo-compose` 219 件・`areka-emo-present` 254 件が緑。
+
+### ⑷ 抜き色の許容幅を 1 にする
+
+- 摂動: `crates/areka-emo-atlas/src/normalize.rs` の抜き色の腕で、完全一致（`*px == key`）を成分ごとの差 1 以内の一致へ置き換えた（要件 7.9 が名指しする摂動）。
+- 走らせたコマンド: `cargo test -p areka-emo-atlas`
+- 赤になったテスト（1 件）: `normalize::normalize_key_color_tests::color_off_by_one_in_a_single_component_stays_untouched`
+- 出力（抜粋）: `normalize_key_color_tests.rs:69:5: assertion 'left == right' failed: B が 1 違う色は不透明のまま / left: [0, 0, 0, 0] / right: [11, 20, 30, 255]`
+- 戻した後: `cargo test -p areka-emo-atlas` が 83 件緑。
+
+### ⑸ 間隔の語の読み替えを外す
+
+- 摂動: `crates/areka-seriko/src/table.rs` の `AnimationTable::from_world` で、`Interval::Other(語)` の腕の読み替え（`sometimes` → 2・`rarely` → 4）を経路から外し、どの語も非採録へ落ちるようにした。
+- 走らせたコマンド: `cargo test -p areka-seriko`
+- 赤になったテスト（4 件）: `table::interval_words_tests::sometimes_records_the_same_entry_as_random_2`・`table::interval_words_tests::rarely_records_the_same_entry_as_random_4`・`table::interval_words_tests::rewrite_is_debug_logged_with_the_original_vocab`・`table::interval_words_tests::konnoyayame_surface0_animation0_is_recorded`
+- 出力（抜粋）: `table_interval_words_tests.rs:46:5: assertion 'left == right' failed: sometimes は random,2 と同じ引き金・同じコマ列で採録される / left: [] / right: [LoopAnimation { id: 0, trigger: Random { k: 2 }, frames: [...] }]` ／ `table_interval_words_tests.rs:112:5: konnoyayame の面 0 はまばたき 1 本が採録される … left: 0 / right: 1`
+- 戻した後: `cargo test -p areka-seriko` が 207 件緑（＋結合 27 件）。
+
+### 戻した後の全体
+
+- `git status --porcelain` が空（摂動の残りは 1 行も無い）。
+- `areka-emo-atlas` 83・`areka-emo-compose` 219・`areka-emo-present` 254・`areka-seriko` 207（＋結合 27）・`areka` 1,718（＋結合 3）がすべて緑。`cargo fmt -- --check` は 5 クレートとも差分 0。
+- design.md の「emo2 の不変の示し方」には「バイトが変わらない」に当たる記述が無く（面 0 については「同じ絵には頼らない」とだけ書いている）、直す箇所は 0 件だった。
+- 6.2: 「バイトが変わらない」の同じ誤りが `brief.md`（`golden_tests_surface0_base_tests.rs` の byte 等価 golden について）と `design-validation.md`（「同じ絵の二重重ねなので要件 5.8 が言うとおり検査にならない」）にも在る。どちらも発掘時・検証時のスナップショット文書なので是正はしないが、**タスク 8.2 でその旨を明記して据え置く**こと（後から「正本と食い違う」と再発掘されないため）。`design.md` に同じ誤りは 0 件。
