@@ -78,7 +78,7 @@ const PITCH: u32 = 14;
 /// wordwrap 未指定＝折返し閾値は行末辺（横=right 156／縦=bottom 94）。
 ///
 /// かつては `Origin::new(Some(0), Some(0))` を宣言していたが、これは解決後 validrect
-/// (36,46)-(156,94) の外にあり、撤去された「origin クランプ正準」で書字開始角へ寄せられて
+/// (36,46)-(156,94) の外にあり、範囲外の宣言として書字開始角へ寄せられて
 /// いた。本檻の意図は書字開始角の縮退（そこから始まるインクの観測）なので、正典推奨形の
 /// 未宣言へ直してある（spec `areka-P0-balloon-vertical-canon` の DD5・要件 10.9）。
 fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {

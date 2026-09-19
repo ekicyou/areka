@@ -247,8 +247,8 @@ fn vertical_negative_wordwrap_y_resolves_from_image_bottom_edge() {
 /// 「縦書きの折返し軸選択が `wordwrappoint.y` のみを読む網羅 match である」という
 /// **型による保証**を、人間が読める形へ翻訳したものである（設計 C4）。
 ///
-/// `origin` は未宣言形と validrect 内側の宣言形の両方で見る（撤去された旧「origin クランプ正準」
-/// の発火に依存しない形で書かれており、撤去後もそのまま成立する）。
+/// `origin` は未宣言形と validrect 内側の宣言形の両方で見る（範囲外に宣言された `origin` の扱いに
+/// 一切依存しない形で書かれており、その規則が変わっても本檻はそのまま成立する）。
 /// `wordwrappoint.y` も未宣言形と宣言形の両方で見る（既定経路と宣言経路の双方で不変）。
 #[test]
 fn vertical_region_is_invariant_to_wordwrappoint_x() {
@@ -335,7 +335,7 @@ fn validrect_edges_resolve_identically_across_writing_modes() {
         let resolved: Vec<(f32, f32, f32, f32)> = ALL_MODES
             .iter()
             .map(|mode| {
-                // origin は未宣言（撤去された旧クランプ正準に非依存・要件 3.11 の
+                // origin は未宣言（範囲外に宣言された origin の扱いに非依存・要件 3.11 の
                 // 縮退のみに触れる）。
                 edges(&TextRegion::resolve(
                     &model((None, None), (None, None), rect),
@@ -517,7 +517,7 @@ fn declared_origin_outside_validrect_falls_back_to_start_corner_with_one_debug_p
 }
 
 /// 分岐 3——**未宣言**の成分は書字開始角へ縮退し、成分ごとに `debug!` ちょうど 1 件を
-/// 記録する（要件 3.11・クランプ撤去の前後で完全に同一の挙動）。
+/// 記録する（要件 3.11・範囲外に宣言された origin の扱いが変わっても完全に同一の挙動）。
 #[test]
 fn undeclared_origin_falls_back_to_writing_corner_with_one_debug_per_component() {
     // (ラベル, origin, mode, 期待 start, 期待 debug 件数)
