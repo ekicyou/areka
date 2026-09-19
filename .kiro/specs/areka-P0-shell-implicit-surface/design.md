@@ -169,7 +169,7 @@ crates/
 - `crates/areka-emo-atlas/src/normalize.rs` — 抜き色の腕と `Normalizer::key_color`。`AlphaSource::KeyColor` の説明の「未実装」を直す。本体内テスト `on_no_alpha_no_pna_selects_keycolor_seam` を書き換える。
 - `crates/areka-emo-atlas/src/lib.rs` — `bake` に抜き色の `debug!` を 1 本足す。
 - `crates/areka-emo-atlas/src/emo2_e2e.rs`・`emo2_golden.rs`・`testdata/emo2_shell_golden.txt` — 要件 5.6 の書き換え（期待値は 1 行増える）。
-- `crates/areka-seriko/src/table.rs` — 間隔の語の読み替えと、冒頭の「採録規則」の説明の更新。
+- `crates/areka-seriko/src/table.rs` — 間隔の語の読み替えと、冒頭の「採録規則」の説明の更新。本体内テスト `only_random_and_bindrandom_are_recorded_others_debug_logged` を**消さずに**書き換える: 「採らない語」の代表を `Interval::Other("sometimes")` から `Interval::Other("always")` へ差し替え、面 30 の表が空であることと、`debug!` に `vocab="always"` が残ることを引き続き確かめる。このテストは要件 11.4 を今日留めている唯一の既存テストであり、語を差し替えなければ読み替えの導入で赤になる。
 - `crates/areka/src/emo2_boot/assets.rs`・`crates/areka/src/placement/measure.rs` — 読む → 解析 → 焼く → 組む の並びを `load_shell_target` の呼び出しへ置き換える。`null.png` の注記は消える。
 - `crates/areka/src/emo2_boot/mod.rs` — `impl From<ShellLoadError> for BootWiringError`（既存の枝 `ShellRead`／`ShellEmpty` への写し替え。枝の追加 0）。
 - `crates/areka/examples/emo-present/setup.rs`・`crates/areka/examples/collision-probe/setup.rs`・`crates/areka/examples/window-placement.rs` — 同上。
@@ -213,7 +213,7 @@ sequenceDiagram
 ```
 
 - 今の並び「焼く → 面の表を組む」を「面の表を組む → 使う画像を聞く → 焼く」へ入れ替える。`EmoWorld` の構築は焼いた結果を必要としないので入れ替えられる。入れ替えが要るのは権威の中の 1 か所だけである。
-- `ShellTarget::build_world` は「`EmoWorld::build_with_images` → `bind_atlas(SetId(0))`」を毎回新しく行う（`EmoWorld` は複製できず、装着で消費されるため）。同じ入力から組むので結果は毎回同じである。記録は出さない（0 本）。
+- `ShellTarget::build_world` は「`EmoWorld::build_with_images` → `bind_atlas(SetId(0))`」を毎回新しく行う（`EmoWorld` は複製できず、装着で消費されるため）。同じ入力から組むので結果は毎回同じである。本仕様が足す記録は出さない（0 本）。`fold_shell`・`bind_atlas` の既存の `warn!` は、今日と同じく面の表を組むたびに出る。
 
 ### 面の表の構築の中の順序（`surface.append`・波括弧の展開・ファイル名の慣習）
 
@@ -318,7 +318,7 @@ flowchart TB
 - 名前の判定は `crate::balloon::face_digits_of("surface", name)` を使う。バルーンと同じ 3 段判定（接頭辞を大小無視で外す → `.png` を外す → 残りが空でなく全部 ASCII 数字）を 1 つの実装で共有するので、要件 1.4 の「`face_id_of` と同じ扱い」は構造で成り立つ。数字列が `u32` に収まらないものは `overflow` へ入れる（要件 1.6）。
 - 一覧はフォルダ**直下**の**ファイルだけ**を集める（`file_type().is_file()`）。サブフォルダの中身とフォルダそのものは 0 件（要件 1.3）。バルーンの `enumerate_file_names` は失敗の型がバルーン専用（`PresentError`）で、フォルダを除かないので流用しない。
 - 同じ番号に複数の名前があれば辞書順で最小を採る（`select_faces` と同じ規則）。
-- 記録はすべて `load_shell_target` の中で、**読み込み 1 回につき 1 度だけ**出す。`build_world` は記録を出さない。
+- 本仕様が足す記録はすべて `load_shell_target` の中で、**読み込み 1 回につき 1 度だけ**出す。`build_world` は新しい記録を出さない（0 本）。
 
 **Dependencies**
 
@@ -367,10 +367,13 @@ impl ShellTarget {
 #[derive(Debug, thiserror::Error)]
 pub enum ShellLoadError {
     /// シェルのフォルダの一覧が取れなかった（要件 1.7）。
+    #[error("shell フォルダの一覧に失敗: {path}")]
     List { path: PathBuf, #[source] source: std::io::Error },
     /// `surfaces.txt` が読めなかった（既存の失敗）。
+    #[error("surfaces.txt の読み取りに失敗: {path}")]
     Read { path: PathBuf, #[source] source: std::io::Error },
     /// `surfaces.txt` が面を 1 つも産まなかった（既存の失敗・変更 0）。
+    #[error("surfaces.txt が面を 1 つも産まなかった: {path}")]
     Empty { path: PathBuf },
 }
 ```
@@ -446,7 +449,7 @@ pub struct BaseImageReport {
 - `SurfaceImages(BTreeMap<u32, String>)` と `BaseImageReport` を `Resource` として面の表に置く。構築の後は読むだけである。
 - `fold_append`: 対象の番号が `SurfaceIndex` に無く `SurfaceImages` に在るとき、空の `SurfaceMaster`（`elements`・`collisions`・`animations` が空）をその番号で作ってから、今と同じ追記を行う（要件 3.7・C6）。どちらにも無ければ今の `warn!` のまま（要件 3.8・変更 0）。
 
-**`dangling_pattern_targets` の母集合**: 面の表の全部の面の、全部の `animation` の、全部の `pattern` のうち `surface_id >= 0` のもの。再生されるかどうかでは絞らない（表を 1 度なめるだけで、毎フレームの経路ではない）。重複を除く鍵は `(u32, u32)` の組であり、文字列へ連結しない。3 検体での該当は、`surfaces.txt` を波括弧の展開つきで数えた見積もりで **0 組**（`emo2` 0・`R_POST_and_KOMAINU` 0・`konnoyayame` 0。同じ数え方で画像の対応を外すと `konnoyayame` は 3 組＝面 0 → 1031・1032・1033 と出ることを確かめた）。実装の着地時に、この照会の実物の戻り値で数え直す。
+**`dangling_pattern_targets` の母集合**: 面の表の全部の面の、全部の `animation` の、全部の `pattern` のうち、`surface_id >= 0` で、かつメソッドが下の 7 語の**どれでもない**もの。除く 7 語は `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・`parallelstop`・`insert` で、欄 2 が面の番号ではなくアニメーションの番号である（ukadoc `descript_shell_surfaces` の `start,ID` ほか 5 項「この描画メソッドが指定されたpattern定義では、サーフェスID、ウェイト、XY座標は無視される。」・`insert,ID` の項「指定したID（animation*の*の番号）の着せ替えグループ（intervalがbindのアニメーション）をその位置に挿入する。」 https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#start_2cID:1 ）。`decode_animations` はメソッドに関係なく欄 2 を `surface_id` へ入れるので、除かなければ正しく書かれたシェルに偽の `warn!` が出る。語の比べ方は `ComposeMethod::from_name` と同じ（前後の空白を落とし・小文字にし・`-` と `_` を除く）。`from_name` そのものは未知の語で `warn!` を出すので、この照会からは呼ばない。3 検体の `pattern` のメソッドは全部 `overlay`（`emo2` 47 件・`konnoyayame` 6 件・`R_POST_and_KOMAINU` 0 件）で、除かれるコマは **0 件**。再生されるかどうかでは絞らない（表を 1 度なめるだけで、毎フレームの経路ではない）。重複を除く鍵は `(u32, u32)` の組であり、文字列へ連結しない。3 検体での該当は、`surfaces.txt` を波括弧の展開つきで数えた見積もりで **0 組**（`emo2` 0・`R_POST_and_KOMAINU` 0・`konnoyayame` 0。同じ数え方で画像の対応を外すと `konnoyayame` は 3 組＝面 0 → 1031・1032・1033 と出ることを確かめた）。実装の着地時に、この照会の実物の戻り値で数え直す。
 
 ### areka-emo-atlas
 
@@ -530,6 +533,7 @@ impl Normalizer {
 - 読み替えたときは `debug!` を 1 本出す（欄: `surface_id`・`animation_id`・`vocab`＝元の語・`k`）。これで元の語が記録から読める（要件 11.7）。
 - `LoopTrigger` に新しい枝は足さない（追加 0）。再生の仕組み（乱数の駆動）は変更 0。`plan.rs` の `is_bind_interval` は `Other` を bind 種でないものとして扱うので、コマは今の純 `random` と同じく無条件に合成へ合流する（変更 0）。
 - `emo2` の `interval` の行に `sometimes`・`rarely` は 0 件なので、`emo2` の表の内容は変わらない（要件 11.6）。
+- `table.rs` の冒頭の説明と `Interval::Other` の腕の注記は、完了済みの仕様の裁定「`sometimes` と書いたのに動かない、を記録から診断できるようにする」を引いている。要件 10.7・11 がこの裁定のうち `sometimes`・`rarely` の 2 語ぶんを上書きする。説明は「`sometimes`・`rarely` は採る／他の語は元の語つきの `debug!` を出して採らない」へ直す。
 
 ### areka（呼び手）
 
@@ -567,7 +571,9 @@ impl Normalizer {
 | 焼く段で落ちた絵（4.9 ほか） | `load_shell_target` | `warn!`（`error`） | 絵ごとに 1 度 | その絵だけ落として続行 |
 | 全画素が透明な絵 | `bake`（既存） | `warn!` | 焼くたびに 1 度 | 変更 0 |
 
-**頻度の単位**: 読み込み（`load_shell_target`）は 1 回の起動で **2 回**（表示用に `build_boot_assets` が 1 回・採寸用に `build_shell_assets` が 1 回）。したがって同じ番号・同じ組についての `warn!` は 1 回の起動で高々 2 回で、要件 3.5 の上限（面の表を組む回数以下）に収まる。面の表を組む回数（`build_world`）が増えても記録は増えない。毎フレームの経路からは 0 回である。
+**頻度の単位**: 読み込み（`load_shell_target`）は 1 回の起動で **2 回**（表示用に `build_boot_assets` が 1 回・採寸用に `build_shell_assets` が 1 回）。したがって同じ番号・同じ組についての `warn!` は 1 回の起動で高々 2 回で、要件 3.5 の上限（面の表を組む回数以下）に収まる。面の表を組む回数（`build_world`）が増えても、本仕様が足す記録は増えない。毎フレームの経路からは 0 回である。
+
+**既存の `warn!` の回数**: 権威は使う画像を決めるために面の表を 1 回余分に組む。畳み込みの既存の `warn!`（`surface id 重複` など）が出るシェルでは、1 回の起動での回数が 3 回（表示用 2＋採寸用 1）から 5 回（読み込み 2 回の決定用 2＋表示用 2＋採寸用 1）へ増える。要件 3.5・8.5 が数える文言への影響は 0 件である。
 
 ### Monitoring
 
@@ -591,7 +597,7 @@ impl Normalizer {
 1. **名前の判定**（`shell_target_names_tests.rs`・7.1）: `surface0.png`／`surface00.png`／`surface000.png`／`surface0000.png` がすべて面 0・`surface0010.png` が面 10。要件 1.3 の各形（`menu_background.png`・`surfaces.txt`・`surfacetable.txt`・`surface+0.png`・`surface-1.png`・`surface.png`・`surface0.pna`・`surface0.jpg`）が 0 件。`SURFACE0.PNG` が面 0。`surface0.png` と `surface0000.png` の同居で `surface0.png` を採り `duplicates` に 1 件。`surface99999999999.png` が `overflow` に 1 件。入力の順を入れ替えても結果が同じ（1.8）。
 2. **抜き色**（`normalize_key_color_tests.rs`・7.3）: 離れた場所の同じ色も透明になる／1 成分だけ 1 違う色は不透明のまま 1 バイトも変わらない／透明にした画素が `0,0,0,0`／全画素が同じ色の絵が `Ok` で全画素透明／α 付きの絵は 1 バイトも変わらない／`stride` が `width*4` より大きい入力で詰め物を読まない／`tRNS` 相当（左上が `0,0,0,0`・他に半透明の画素）で半透明が残る。`key_color` が `On`＋α なしのときだけ `Some` を返す。
 3. **間隔の語**（`table_interval_words_tests.rs`・7.10）: `Other("sometimes")` の表の項目が `Random{k:2}` の項目と等しい・`rarely` が `Random{k:4}` と等しい。`always`・`runonce`・`Sometimes`（大文字）は採られず、`debug!` に元の語が残る。読み替えの `debug!` に `vocab=sometimes` が残る。
-4. **面の表の構築**（`base_image_tests.rs`）: 複数番号の見出し（`surface0,1`）で面 0 と面 1 がそれぞれ自分の画像を受け取る／`surface.append` が後から `element0` を足した面は `shadowed`／画像 0 件で組むと適用前と同じ／`dangling_pattern_targets` が負の番号を含めず、画像だけの面を「在る」に数える。
+4. **面の表の構築**（`base_image_tests.rs`）: 複数番号の見出し（`surface0,1`）で面 0 と面 1 がそれぞれ自分の画像を受け取る／`surface.append` が後から `element0` を足した面は `shadowed`／画像 0 件で組むと適用前と同じ／`dangling_pattern_targets` が負の番号を含めず、画像だけの面を「在る」に数え、`start`・`insert` など 7 語のコマを含めない（`start,5` で面 5 が無くても 0 組）。
 
 ### Integration Tests
 
@@ -607,11 +613,11 @@ impl Normalizer {
 | 示すこと | 手段 |
 |---|---|
 | 面 0・面 10 の外形（5.2） | `measure_tests.rs` の `SCOPE0_W`／`SCOPE0_H`／`SCOPE1_W`／`SCOPE1_H`（434／687／336／400）が**書き換え 0 件**で緑 |
-| 全部の面の合成結果（5.1〜5.3） | `shell_target_emo2_tests.rs`: 同じ焼き結果に対して、A＝`build_with_images(shell, 実物の対応)`・B＝`build(shell)`（画像 0 件＝適用前と同じ）の 2 つの面の表を組み、`surface_ids()` の**全部の面**で外形と全画素が一致する。`base_images()` が `used` 0 件・`shadowed` 2 件（面 0・面 10） |
+| 全部の面の合成結果（5.1〜5.3） | `shell_target_emo2_tests.rs`: `load_shell_target` が返した 1 つの `ShellTarget` に対して、A＝`ShellTarget::build_world()`（**権威経由**）・B＝同じ `ShellTarget::atlas()` を装着した `EmoWorld::build(shell)`（画像 0 件）の 2 つの面の表を組み、`surface_ids()` の**全部の面**で外形と全画素が一致する。`base_images()` が `used` 0 件・`shadowed` 2 件（面 0・面 10）。索引表を権威経由にする理由: `flatten_extent`（`crates/areka-emo-compose/src/plan.rs`）は索引表で引けない層を記録なしで飛ばす。`surfaces.txt` の `element` だけから焼いた索引表を使うと、誤って足された `surface10.png` の層が飛ばされ、壊れていても緑のままになる。「画像 0 件で組んだ面の表は適用前と同じ」を留めるのは、`areka-emo-compose` の既存の合成結果のテストが書き換え 0 件で緑であることである |
 | 索引表の変化が 1 行だけ（5.5） | `record_golden` で作り直した `emo2_shell_golden.txt` の差分が「`0<TAB>purple/a/null.png<TAB>EMPTY orig=382x547` の **1 行の追加・削除 0 行**」（54 → 55 行）。期待値の行はパス・頁・矩形・原寸だけを持ち、連番を持たないので、他の 54 行は変わらない |
 | α 付き 57 枚（5.4） | `(On, AlphaChannel)` の腕のコードの変更 0・既存の `on_with_alpha_is_identity_premultiplied` が書き換え 0 件で緑・上の期待値の 54 行が不変 |
 | 失敗 0 件・`null.png` が索引表に載る（5.6） | `emo2_shell_all_elements_baked`・`emo2_balloon_same_bake_path_as_shell`・`emo2_shell_bake_is_deterministic`・`emo2_shell_matches_golden`・`on_no_alpha_no_pna_selects_keycolor_seam` を消さずに書き換える。定数 `SHELL_NORMALIZE_SEAM_KEY` の説明を事実に合わせる |
-| 「`element0` が在れば使わない」が壊れたら赤（5.8） | `apply_base_images` の層 0 の判定を外すと、面 10 が 336×400 → 427×463 になり、A／B の一致と `SCOPE1_W`／`SCOPE1_H` の両方が赤になる。面 0 の形（同じ絵）には頼らない |
+| 「`element0` が在れば使わない」が壊れたら赤（5.8） | `apply_base_images` の層 0 の判定を外すと、権威が `surface10.png` を「使った画像」として焼き、A の面 10 が 336×400 → 427×463 になる。A／B の一致と `SCOPE1_W`／`SCOPE1_H` の両方が赤になる。面 0 の形（同じ絵）には頼らない |
 
 ### 摂動（要件 7.9・7.10）
 
@@ -635,7 +641,7 @@ impl Normalizer {
 ## 文書と台帳（要件 9・着地時の作業）
 
 - **9.1**: `doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:descript_shell_surfaces:sometimes:1`・`…:rarely:1` の 2 件に、担当 `areka-P0-shell-implicit-surface` と実測の状態を登記する。ファイル名の慣習と抜き色についての新しい行は **0 件**。
-- **9.2**: 「`dev_shell`・`manual_shell` の当該の文を項目へ割り、担当を本仕様にする」依頼を申し送る。要件が名指しする `areka-P0-ukadoc-coverage-roadmap` は完了済み（`.kiro/specs/completed/` に在る）で申し送りを消化できないので、**物理的な置き場は、実在する受け皿 `.kiro/specs/areka-P0-coverage-roadmap-refresh/brief.md`**（`roadmap.md` の #45「各 spec の『統合担当への申し送り』の受け皿」）とし、文面に元の宛名を併記する。
+- **9.2**: 「`dev_shell`・`manual_shell` の当該の文を項目へ割り、担当を本仕様にする」依頼を申し送る。宛先は要件 9.2 のとおり **`.kiro/specs/areka-P0-coverage-roadmap-refresh/brief.md`**（`roadmap.md` の #45「各 spec の『統合担当への申し送り』の受け皿」）。もとの統合担当 `areka-P0-ukadoc-coverage-roadmap` は完了済み（`.kiro/specs/completed/` に在る）で申し送りを消化できないため、設計ディスカッションで要件の宛先をこちらへ直した。
 - **9.3**: 台帳の備考 2 項目（`element*`・`seriko.use_self_alpha,値`）を要件の文面どおりに直す。状態と担当は変えない。報告を作り直し、`cargo test -p ukadoc-survey` の緑を確かめる。
 - **9.4**: `doc/COMPAT_ARCHITECTURE.md` §8 に追記する。要件が挙げる 4 行（大小無視・重複は辞書順で最小・許容幅 0・`tRNS` は生かす）に、本設計が定めた沈黙の 2 行（色の比較は 32bit へ変換した後の値で行う／画像だけの面への追記の後に来た波括弧は既存どおり全置換する）を足す。
 - **9.5**: `.kiro/steering/roadmap.md` に「引き受け手の居ない残り」7 件を登記する。⑶（透過の宣言を読むこと）に「`UseSelfAlpha::Off` の下の抜き色は未実装のまま」を含める。実在しない spec の名前は書かない。
