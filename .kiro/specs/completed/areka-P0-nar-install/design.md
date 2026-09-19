@@ -179,7 +179,7 @@ vendors/sample_ghost/
 - steering: `.kiro/steering/tech.md`（`miniz_oxide (0.9): … 意図的依存追加＝日付・承認済`）・`structure.md`（クレート一覧に `areka-nar`・`sample-ghost-kit`、`log-capture-kit` の見張りの節に 4 本目）・`roadmap.md` 「実機運転の定石」に 1 行（絶対パスは `nar-sample-path` で得る）と、`zip` を「承認待ちの依存」と綴る 3 か所（制約の節・仮裁定 5・A0 のウェーブ行）を `miniz_oxide`（承認済）へ直す。
 - 台帳: `doc/ukadoc-coverage/ledger/assets.toml`（`descript_install` の 11 項目に `owner = "areka-P0-nar-install"`、`bootghost`・相対パス系 3 件は `note` に理由）・`doc/ukadoc-coverage/roadmap-draft.md`（`[[spec]]` 行 `name/stage = "B"/bundle = "インストール"/owner_count = 11/wave = "A0"`・`[briefs].count` 27→28・散文 3 か所）・ドメイン別報告と全体報告の作り直し。
 - 謝辞: `THIRD-PARTY-NOTICES.md`（`cargo about generate`・差分に増えるのは `miniz_oxide`・`adler2` のみであることを確認）。
-- 検証報告: `.kiro/specs/areka-P0-nar-install/validation-report.md` 相当に、検体ごとのファイル数とハッシュ・`git check-ignore` 0 件・実機 2 周の `OnFirstBoot` を残す。
+- 検証報告: `.kiro/specs/completed/areka-P0-nar-install/validation-report.md` 相当に、検体ごとのファイル数とハッシュ・`git check-ignore` 0 件・実機 2 周の `OnFirstBoot` を残す。
 
 ## System Flows
 

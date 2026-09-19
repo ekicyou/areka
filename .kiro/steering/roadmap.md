@@ -77,7 +77,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - 完了 spec 直下エントリ＝**184**（`.kiro/specs/completed/` 直下・2026-09-17 実数え＝ディレクトリ 183＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
 - M1 実機サインオフ発見 7 件中 #1〜#6 解決済み・#7（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）のうち行 4・行 10 は W13 で解決、行 1 は `dpi-transition-two-tick-bounce`、行 9 は `zorder-chain-residue` A-2。M-dual は退役（e2e 項目 10 で合格・復活させない）。
 
-## spec 台帳（brief 済み 37 本＝2026-09-13 の 30 ＋ 09-18 起票 7。**うち完了 10・α 8・α 後 18・保留 1**＝2026-09-19 に状態列を実数え（前回の「α 後 19」は α 後 18 と段が「保留」の 1 行を合わせた数だった）・着手は `/kiro-start <名>`。**加えて #38〜#41 は 2026-09-19 に足した「登記だけの 4 行」で brief を持たない**＝下の節を見よ）
+## spec 台帳（**表は 42 行**。うち **brief 済み 37 本**＝2026-09-13 の 30 ＋ 09-18 起票 7、**#38〜#42 の 5 行は brief を持たない「登記だけの行」**＝下の節を見よ。**状態列の実数え（2026-09-19・`/kiro-complete` 時に数え直し）＝完了 11・α 8・α 後 22・保留 1 ＝ 42**。着手は brief 持ちが `/kiro-start <名>`・登記だけの行は `/kiro-discovery` から）
 
 > **段**列: **α**＝M2 のゴールに要る／**α 後**＝brief を保ったまま据え置く（着手は α 完了後の棚卸で並べ直す）。**α に関係しない spec は、並走できてもウェーブに入れない**（2026-09-18 開発者指示・「隙間」枠は廃止）。**規模**は brief の申告。**状態**列は `/kiro-complete` が ✅ に更新し、完了数を実数えで更新する。**Fable**列＝要件定義（design）を Fable で行うべきか（○＝Fable・−＝Opus で足りる）。α 後の行の Wave 列は棚卸⑬当時の番号（W14〜W17）を参考として残す＝**着手順の正本ではない**。
 
@@ -92,7 +92,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 7 | `completed/text-decoration-canon` | ✅ | 正典 | L | W13 | — | ○ | ✅ 完了（2026-09-13） |
 | 8 | `completed/sylphya-set-ledger` | ✅ | 台帳 | S | W13 | — | − | ✅ 完了（2026-09-17） |
 | 9 | `completed/balloon-font-descript-keys` | ✅ | 正典 | S | W13 | — | − | ✅ 完了（2026-09-17） |
-| 11 | `nar-install`（09-12 起票） | **α** | 基盤（`.nar` の読取・`install.txt`・安全な展開＝`areka-nar`・検体を `.nar` 保管・**検体名 → 根の共有ヘルパ＝サンプルゴースト試験の仕組みの種**） | M | **A0-①**（**即時着手可**） | なし。38 ファイル（検体参照のある既存テスト・example）を書き換える＝**それらに触らない spec とは並走可**（09-18 実測で改訂） | ○ | ⚪ |
+| 11 | `completed/nar-install` | ✅ | 基盤（`.nar` の読取・`install.txt`・安全な展開＝`areka-nar`・検体を `.nar` 保管・**検体名 → 根の共有ヘルパ＝サンプルゴースト試験の仕組みの種**） | M | **A0-①**（**即時着手可**） | なし。38 ファイル（検体参照のある既存テスト・example）を書き換える＝**それらに触らない spec とは並走可**（09-18 実測で改訂） | ○ | ✅ 完了（2026-09-19） |
 | 10 | `shell-implicit-surface`（09-13 起票） | **α** | バグ（**里々標準テンプレートが 1 枚も絵を出せない**・第三者の最初の 1 体が里々である前提で α の入口） | M | **A1-①** | `charset-canon` ✅・`present-gpu-transform-scale` ✅・#11（検体は共有ヘルパ経由で受ける＝09-18 に順序を反転） | ○（「element0 より下」の層表現と `surface.append` の順序の裁定 2 件） | ⚪ |
 | 12 | `baseware-root-layout`（**09-18 起票**） | **α** | 基盤（根 `ghost/`・`balloon/`・列挙と素性・最後の選択の記憶・起動解決・「無い」告知） | S〜M | **A1-②** | #11（展開先の形＝根の形・共有ヘルパ） | −（裁定候補 1 件） | ⚪ |
 | 37 | `default-balloon-bundle`（**09-18 起票・2 度目の再入**） | **α** | 資産（既定バルーンの選定・展開フォルダ `vendors/sample_ghost/StayseeBalloon/` で保管（**`.nar` への畳み込みは未了**＝#42 へ登記）・候補 CC0 `Balloon for Staysee Syncfield`・第三者告知・`use_self_alpha` 常時 1 の裁量登記） | S | **A0-③**（**即時着手可**） | なし。#11 と並走＝**既存の検体参照ファイルに触らず新規テストのみ**。id 定数 1 行は #12 が足す・`COMPAT_ARCHITECTURE.md` §8 は #10 と別節 | −（見た目の採否は開発者が実機で・**今日にでも argv で確認可**） | ✅ 完了（2026-09-19） |
@@ -120,13 +120,13 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 34 | `anchor-tag-canon` | α 後 | 正典（`\_a`＋装飾 16） | M | 旧 W17 | #7 ✅・#26・#33 | ○ | ⚪ |
 | 35 | `balloon-lifecycle-events`（residue ⑵） | α 後 | 正典（表示寿命 7〜10） | M | 旧 W17 | #7 ✅・#31・#25 | −（裁定 2 件） | ⚪ |
 | 36 | `tick-gate-adoption` | 保留 | 性能（既定 OFF の門の採否） | M〜L | 保留 | 「長時間試行禁止」と両立する A/B 設計を要件で先に組む（単独） | ○ | ⚪ |
-| 38 | `ukadoc-coverage-custody`（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 調査の番人と統合担当の建て直し（下の節「登記だけの 4 行」を見よ） | S〜M | α 後 | なし（着手は α 完了後の棚卸で just-in-time） | − | ⚪ |
+| 38 | `ukadoc-coverage-custody`（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 調査の番人と統合担当の建て直し（下の節「登記だけの行」を見よ） | S〜M | α 後 | なし（着手は α 完了後の棚卸で just-in-time） | − | ⚪ |
 | 39 | `present-write-coherence` の未達 40 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 性能（完了仕様が「引受先なし・新規仕様の起票が必要」と自ら書いた残量） | L | α 後 | なし。着手前に当時の実測を採り直す | ○ | ⚪ |
 | 40 | 正典語彙の孤児 2 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 正典（`font.outline` の白抜き**描画**／「スタイルシートのキーワード」の所有） | S | α 後 | なし | − | ⚪ |
 | 41 | 配布物を束ねる／作る側の 3 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 正典（`type,package` を解く・`developer_options.txt` を読む側＝配布物を**作る**道具） | XS〜S | α 後 | なし | − | ⚪ |
 | 42 | 既定バルーンを `.nar` へ畳む（仮称・**未起票**＝brief なし・2026-09-19 登記） | **α** | 資産（`vendors/sample_ghost/StayseeBalloon/` が展開フォルダのまま残っている＝`#37` が `#11` より先に着地したため、どちらの申し送りも実行されなかった。畳んで登記表 `SAMPLES` に 1 行足し、直書きの検体数 2 か所を 4→5 へ直す） | XS | **α・A1 の前に**（着手は `/kiro-discovery` から。手順は `vendors/sample_ghost/README.md`） | #11 ✅・#37 ✅（両方着地済み＝いつでも着手可） | − | ⚪ |
 
-## 登記だけの 4 行（#38〜#41・2026-09-19・brief なし・α 後）
+## 登記だけの行（#38〜#42・2026-09-19・brief なし）
 
 > **なぜ起票しないのか**: どれも α（第三者がデスクトップマスコットを管理できる）に関係しない。開発者方針「α に関係しない spec は、並走できても
 > ウェーブに入れない」と「spec 工場禁止・起票は just-in-time」に従い、**行だけ立てて brief は書かない**。引受先が消えたまま忘れられることだけを防ぐ。
@@ -143,6 +143,21 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 **規模と分割の裁定（棚卸⑬・据え置き）**: XL 3 本を分割済み＝`property-query-channels` → ⑴本体／⑵`property-ipc-transport`／⑶`sylphya-set-ledger`、`balloon-canon-residue` → ⑴本体／⑵`balloon-lifecycle-events`／⑶`emo-text-canon-residue`、`text-decoration-canon` → ⑴本体／⑵`text-align-shadow-canon`／⑶`balloon-font-descript-keys`。**L のまま置く 3 本**（`makoto-dll-host`・`sakura-time-directives`・`currentghost-property-tree`）と α の `ghost-shell-balloon-switch` は brief 内のスライスで要件段階に縮める余地を残す。
 
+
+**#42 既定バルーンを `.nar` へ畳む（α・XS・A1 の前に）**
+
+`vendors/sample_ghost/StayseeBalloon/` が**展開フォルダのまま残っている**。#37 が #11 より先にマージされた結果、
+#37 の brief は「`.nar` 化は #11 が引き受ける」と書いて完了し、#11 の brief は「畳み込みは #37 が行う」と書いて
+完了した——**双方が相手を指したまま両方とも着地し、誰も畳まなかった**。#11 の要件 8.1 と
+`vendors/sample_ghost/README.md` が定める「この場所に置くもの」に反する状態である。
+
+やること 3 つ（同じコミットで）: ⑴ `cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/StayseeBalloon`
+で畳む（引数無しの形は使えない）・⑵ 登記表 `SAMPLES` に 1 行足す・⑶ `crates/sample-ghost-kit/src/lib_tests.rs` が
+直書きしている検体数 **2 か所を 4 → 5** へ直す（`every_registered_sample_lands_where_its_registry_row_says` と
+`every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`。母数 0 で緑にならないための較正なので
+消さずに数だけ直す）。⑷ 展開形を追跡から外す。手順の正本は `vendors/sample_ghost/README.md`。
+
+**#37 は完了済みなので先送りを吸収できない**（記憶 deferral-requires-verified-owner）。ゆえにここへ登記した。
 ## 棚卸⑭の仮裁定（2026-09-18・開発者が覆すまで有効）
 
 1. **M2 のゴールは α（第三者が管理できる）であり、表現力の増強ではない。** 段階 A の先頭ウェーブ 6 束（`roadmap-draft.md`）と α 後 19 本は brief を保ったまま据え置く。α 完了後の棚卸で並べ直す（`briefing.md` の順位付けはそのとき再び効く）。
