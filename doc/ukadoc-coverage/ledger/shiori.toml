@@ -11880,19 +11880,20 @@ note = """
 [entry."ukadoc:list_shiori_resource:balloonrootbutton.caption:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
+（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
+（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
+メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
+この名前を引く相手は 0 件である。
+引受先: areka-P0-baseware-root-layout。バルーンの列挙を置く仕様で、その枠を登記した日に実装済みへ
+改める。
+壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
+ログ: 1 行も出ない。引かれない名前は記録にも現れない。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「バルーンの名称」とされ、その項目に出る言
 葉である。
 無いと失うもの: 右クリックのメニューの「バルーン」の項目が、そのゴーストらしい言い回しにならず、
@@ -12178,7 +12179,7 @@ versions 欄で数えると 11 件である。12 は正典本文を正規表現�
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.type:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = [
@@ -12186,14 +12187,15 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_resource:sakura.popupmenu.type:1" },
 ]
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。理由が 2 つ重なる。⑴ 問い合わせないと決めた（本仕様の裁定）——値 1 が指す
+「省略した形」の中身を正典が定めていないので、どの値でも同じメニューを出す。⑵ この名前が
+受け持つ 2 人目以降（n≧2）の窓が α に 1 枚も無い。名前は問い合わせない名前の表
+（crates/areka/src/menu/captions.rs の UNQUERIED_POPUPMENU_RESOURCES）に置き、運行の許可表に
+入っていないことを兄弟テストが確かめている。
+引受先: 省略した形のメニューを作り分ける仕様と、3 人目以降のキャラクター窓を作る仕様。
+2026-09-18 の時点でどちらも起票は 0 本なので、先に起こした側が本欄を引き取る。
+壊れ方: 見た目の差。該当する窓が無いので、今日の利用者に見える違いは無い。
+ログ: 1 行も出ない。引かない名前は記録にも現れない。
 画面の材料: 2 人目以降または \\p[*] 側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
 無いと失うもの: 2 人目以降または \\p[*] 側の右クリックのメニューを通常の形にするか省略した形にするか
 がゴーストの指定どおりにならない。
@@ -12202,7 +12204,7 @@ note = """
 [entry."ukadoc:list_shiori_resource:char_2a.popupmenu.visible:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = [
@@ -12210,14 +12212,14 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_resource:sakura.popupmenu.visible:1" },
 ]
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。理由: α のキャラクター窓はスコープ 0 と 1 の 2 枚だけで、この名前が受け持つ 2 人目以降
+（n≧2）の窓が 1 枚も無い。尋ねる先が無いので引かない。名前は問い合わせない名前の表
+（crates/areka/src/menu/captions.rs の UNQUERIED_POPUPMENU_RESOURCES）に置き、運行の許可表に
+入っていないことを兄弟テストが確かめている。
+引受先: 3 人目以降のキャラクター窓を作る仕様。2026-09-18 の時点で起票は 0 本なので、
+その仕様を起こす人が本欄を引き取る。
+壊れ方: 見た目の差。該当する窓が無いので、今日の利用者に見える違いは無い。
+ログ: 1 行も出ない。引かない名前は記録にも現れない。
 画面の材料: 2 人目以降または \\p[*] 側の右クリックのメニューそのものの出し方。出すか出さないかを決める。
 無いと失うもの: 2 人目以降または \\p[*] 側の右クリックのメニューを出すか出さないかがゴーストの指定ど
 おりにならず、作者が隠したメニューが出てしまう。
@@ -12341,25 +12343,22 @@ areka の素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:closebutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「終了」の
+項目名に使う。値は持ち越さず、出すたびに引き直す。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「終了」に落ち、メニューはそのまま出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由
+（send_failed／timeout／dropped）を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「終了の名称」とされ、その項目に出る言葉で
 ある。
-無いと失うもの: 右クリックのメニューの「終了」の項目が、そのゴーストらしい言い回しにならず、areka の
-素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:collisionvisiblebutton.caption:1"]
@@ -12720,19 +12719,20 @@ note = """
 [entry."ukadoc:list_shiori_resource:ghostinstallbutton.caption:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
+（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
+（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
+メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
+この名前を引く相手は 0 件である。
+引受先: areka-P0-ghost-install。ゴーストの導入を置く仕様で、その枠を登記した日に実装済みへ
+改める。
+壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
+ログ: 1 行も出ない。引かれない名前は記録にも現れない。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「ゴーストインストールの名称」とされ、その
 項目に出る言葉である。
 無いと失うもの: 右クリックのメニューの「ゴーストインストール」の項目が、そのゴーストらしい言い回しに
@@ -12742,19 +12742,20 @@ note = """
 [entry."ukadoc:list_shiori_resource:ghostrootbutton.caption:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
+（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
+（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
+メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
+この名前を引く相手は 0 件である。
+引受先: areka-P0-baseware-root-layout。ゴーストの列挙を置く仕様で、その枠を登記した日に実装済みへ
+改める。
+壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
+ログ: 1 行も出ない。引かれない名前は記録にも現れない。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「ゴーストの名称」とされ、その項目に出る言
 葉である。
 無いと失うもの: 右クリックのメニューの「ゴースト」の項目が、そのゴーストらしい言い回しにならず、
@@ -13058,47 +13059,45 @@ versions 欄で数えると 11 件である。12 は正典本文を正規表現�
 [entry."ukadoc:list_shiori_resource:kero.popupmenu.type:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_resource:sakura.popupmenu.type:1" },
 ]
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。理由: 問い合わせないと決めた（本仕様の裁定）。値 1 が指す「省略した形」の中身を正典が
+定めていないので、どの値でも同じメニューを出す。値で中身が変わらないなら尋ねる意味が無く、
+1 回の表示あたりの往復も増やさない。名前は問い合わせない名前の表
+（crates/areka/src/menu/captions.rs の UNQUERIED_POPUPMENU_RESOURCES）に置き、運行の許可表に
+入っていないことを兄弟テストが確かめている。
+引受先: 省略した形のメニューを作り分ける仕様。2026-09-18 の時点で起票は 0 本なので、
+その仕様を起こす人が本欄を引き取る。
+壊れ方: 見た目の差。どの値でも同じメニューが出る。
+ログ: 1 行も出ない。引かない名前は記録にも現れない。
 画面の材料: 相方側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
 無いと失うもの: 相方側の右クリックのメニューを通常の形にするか省略した形にするかがゴーストの指定どお
 りにならない。
 """
 
 [entry."ukadoc:list_shiori_resource:kero.popupmenu.visible:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_resource:sakura.popupmenu.visible:1" },
 ]
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+実装済み。相方側（スコープ 1）の窓で右クリックしたとき、メニューを組み立てる前にこの名前を引き、
+値が 0 のときだけ出さない。0 以外・空・値なし・失敗・時間切れのときは出す。値は持ち越さず、
+出そうとするたびに引き直す。
+壊れ方: 無い。作者が 0 を返せばメニューは出ない。
+ログ: 0 で抑止したときに info! を 1 行残す。抑止しないときは残さない。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の KERO_POPUPMENU_VISIBLE。
 画面の材料: 相方側の右クリックのメニューそのものの出し方。出すか出さないかを決める。
-無いと失うもの: 相方側の右クリックのメニューを出すか出さないかがゴーストの指定どおりにならず、作者が
-隠したメニューが出てしまう。
 """
 
 [entry."ukadoc:list_shiori_resource:kero.recommendbuttoncaption:1"]
@@ -13853,25 +13852,22 @@ note = """
 """
 
 [entry."ukadoc:list_shiori_resource:readmebutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「説明書」の
+項目名に使う。値は持ち越さず、出すたびに引き直す。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「説明書」に落ち、メニューはそのまま出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由
+（send_failed／timeout／dropped）を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「キャラクタについての名称」とされ、その項
 目に出る言葉である。
-無いと失うもの: 右クリックのメニューの「キャラクタについて」の項目が、そのゴーストらしい言い回しにな
-らず、areka の素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:readmebuttoncaption:1"]
@@ -14137,43 +14133,41 @@ versions 欄で数えると 11 件である。12 は正典本文を正規表現�
 [entry."ukadoc:list_shiori_resource:sakura.popupmenu.type:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。理由: 問い合わせないと決めた（本仕様の裁定）。値 1 が指す「省略した形」の中身を正典が
+定めていないので、どの値でも同じメニューを出す。値で中身が変わらないなら尋ねる意味が無く、
+1 回の表示あたりの往復も増やさない。名前は問い合わせない名前の表
+（crates/areka/src/menu/captions.rs の UNQUERIED_POPUPMENU_RESOURCES）に置き、運行の許可表に
+入っていないことを兄弟テストが確かめている。
+引受先: 省略した形のメニューを作り分ける仕様。2026-09-18 の時点で起票は 0 本なので、
+その仕様を起こす人が本欄を引き取る。
+壊れ方: 見た目の差。どの値でも同じメニューが出る。
+ログ: 1 行も出ない。引かない名前は記録にも現れない。
 画面の材料: 本体側の右クリックのメニューそのものの出し方。通常の形で出すか省略した形で出すかを決める。
 無いと失うもの: 本体側の右クリックのメニューを通常の形にするか省略した形にするかがゴーストの指定どお
 りにならない。
 """
 
 [entry."ukadoc:list_shiori_resource:sakura.popupmenu.visible:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+実装済み。本体側（スコープ 0）の窓で右クリックしたとき、メニューを組み立てる前にこの名前を引き、
+値が 0 のときだけ出さない。0 以外・空・値なし・失敗・時間切れのときは出す。値は持ち越さず、
+出そうとするたびに引き直す。
+壊れ方: 無い。作者が 0 を返せばメニューは出ない。
+ログ: 0 で抑止したときに info! を 1 行残す。抑止しないときは残さない。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の SAKURA_POPUPMENU_VISIBLE。
 画面の材料: 本体側の右クリックのメニューそのものの出し方。出すか出さないかを決める。
-無いと失うもの: 本体側の右クリックのメニューを出すか出さないかがゴーストの指定どおりにならず、作者が
-隠したメニューが出てしまう。
 """
 
 [entry."ukadoc:list_shiori_resource:sakura.portalbuttoncaption:1"]
@@ -14287,19 +14281,20 @@ areka の素の言葉のままになる。
 [entry."ukadoc:list_shiori_resource:shellrootbutton.caption:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
+（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
+（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
+メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
+この名前を引く相手は 0 件である。
+引受先: areka-P0-ghost-shell-balloon-switch。シェルの切替を置く仕様で、その枠を登記した日に
+実装済みへ改める。
+壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
+ログ: 1 行も出ない。引かれない名前は記録にも現れない。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「シェルの名称」とされ、その項目に出る言葉
 である。
 無いと失うもの: 右クリックのメニューの「シェル」の項目が、そのゴーストらしい言い回しにならず、areka
@@ -14991,19 +14986,20 @@ note = """
 [entry."ukadoc:list_shiori_resource:updatebutton.caption:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 見た目の差。名前は語彙として登記してあるが areka は引きに行かないので、ゴーストが用意した
-文言・画像・色は使われず、areka の既定の見た目のままになる。動かなくなるのではなく、そのゴースト
-らしい見え方が出ないという形で現れる。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
+（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
+（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
+メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
+この名前を引く相手は 0 件である。
+引受先: areka-P0-network-update。ネットワーク更新を置く仕様で、その枠を登記した日に実装済みへ
+改める。
+壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
+ログ: 1 行も出ない。引かれない名前は記録にも現れない。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「ネットワーク更新の名称」とされ、その項目
 に出る言葉である。
 無いと失うもの: 右クリックのメニューの「ネットワーク更新」の項目が、そのゴーストらしい言い回しになら

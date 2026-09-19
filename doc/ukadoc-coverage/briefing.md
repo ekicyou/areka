@@ -990,8 +990,8 @@ not_applicable = 0
 
 [[barrier]]
 page = "list_shiori_resource"
-implemented = 1
-vocabulary_only = 158
+implemented = 5
+vocabulary_only = 154
 degraded = 0
 absent = 0
 alias = 0
@@ -1015,10 +1015,10 @@ not_applicable = 0
 ```toml
 [[barrier]]
 page = "descript_ghost"
-implemented = 9
+implemented = 10
 vocabulary_only = 1
 degraded = 0
-absent = 64
+absent = 63
 alias = 0
 not_applicable = 0
 
@@ -1026,8 +1026,8 @@ not_applicable = 0
 page = "descript_balloon"
 implemented = 24
 vocabulary_only = 9
-degraded = 6
-absent = 123
+degraded = 7
+absent = 122
 alias = 0
 not_applicable = 0
 

@@ -194,7 +194,9 @@ VERDICT_PRECEDENCE = (
 # 【この節の出所＝task 3.2 の裁定（`baseline-2026-08-14.md` §5）】
 # 以前ここには `FRAME_INTERVAL_EXPECTED_MS = 172.0` が「期待するコマ間隔」として置いてあり、
 # **それは誤りだった**。emo2 のキャラ（`surface1000`）に掛かる `animation1400`（まばたき）の
-# 定義は `crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt` にあり、
+# 定義は検体 `vendors/sample_ghost/emo2.nar` の中の `shell/master/surfaces.txt` にあり、
+# （展開した実物の道は `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が
+#  出す `folder=` の行の下）、
 # コマの待ち時間は **0 → 150 → 22** である。172 は 150 と 22 の **和＝サイクル全長** であって、
 # コマとコマの間隔ではない。実際のコマ間隔は **150ms と 22ms の 2 種** であり、
 # 「単一の指定間隔」はこのアニメには存在しない。

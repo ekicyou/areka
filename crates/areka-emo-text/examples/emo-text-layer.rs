@@ -27,8 +27,9 @@
 //!
 //! # fixture（R11.4/R11.7）
 //!
-//! - **枠画像**: 共有 fixture `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/`
-//!   （emo-present example と同じ相対パス解決）。**共有 fixture は改変しない**。
+//! - **枠画像**: 共有 fixture `検体 emo2 の同梱バルーン emo2-kakukaku`
+//!   （emo-present example と同じく窓口 `sample-ghost-kit` から得る）。
+//!   **共有 fixture は改変しない**。
 //! - **balloon descript**: 通常起動は共有 fixture の `descript.txt`＋`balloons0s.txt`
 //!   （2 層マージ・マーカー無し既定 `horizontal_tb` の裏取り）。`--vertical` は parse 入力
 //!   だけを example ローカル変種 `examples/fixtures/emo2-vertical/`（`writing_mode,vertical_rl`

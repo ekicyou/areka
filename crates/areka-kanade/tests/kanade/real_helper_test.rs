@@ -231,7 +231,7 @@ fn real_helper_boot_pump_close_completes() {
     }
     kanade_inbox_tx
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 

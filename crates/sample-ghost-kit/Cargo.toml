@@ -1,0 +1,20 @@
+[package]
+name = "sample-ghost-kit"
+workspace = "../.."
+description = "検体ゴースト／バルーンを名前で引く窓口をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-nar-install）: 登記表 SAMPLES と SampleRoot の 3 読み口"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+# 検体の `.nar` を展開して根の原本を作る本番の展開器（段 ② から）。
+# 窓口は install.txt の意味を知らず、根を用意して展開させるだけ。
+areka-nar = { path = "../areka-nar" }
+# 決定論テストの固定入力を組む `nar_writer` の deflate（圧縮）側だけに使う。
+# 本クレートはテスト専用で本番の依存グラフには入らないため、圧縮側を引いてよい
+# （本番の `areka-nar` は伸長側だけを使い、検査がそれを見張る）。
+miniz_oxide = { version = "0.9", default-features = false, features = ["with-alloc"] }

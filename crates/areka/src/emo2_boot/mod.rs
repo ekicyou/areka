@@ -23,6 +23,7 @@ pub mod frame;
 pub mod hit_region;
 pub mod hover_inject;
 pub mod move_cue;
+mod readme_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
@@ -34,6 +35,11 @@ pub mod zorder_cue;
 // 冒頭 doc 参照）。frame フェーズ直接駆動・Tick 注入・GPU readback を in-process で行う。
 #[cfg(test)]
 mod spine;
+
+// emo2 検体の共有の受け口（spec: areka-P0-nar-install 要件 1.6）。`emo2_boot` 配下のテストが
+// 検体をここから引くので、保持（＝段 ③ の複製）はテストバイナリあたり 1 回で済む。
+#[cfg(test)]
+mod sample_test_support;
 
 // タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
@@ -79,6 +85,7 @@ use self::adapter::PresentBridge;
 use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use self::frame::{Emo2Wiring, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
+use self::readme_cue::ReadmeCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
 use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
@@ -359,6 +366,15 @@ pub fn wire_emo2_boot(
     // 取り出しの相が行う。
     let (zorder_tx, zorder_rx) = std::sync::mpsc::channel::<ZOrderDirective>();
     let zorder_sink = ZOrderCueSink::new(zorder_tx);
+    // 説明書の channel（move channel と同型の配線・areka-P0-popup-menu-minimal task 4.3）:
+    // talk スレッドの ReadmeCueSink が送出端、UI スレッドの `crate::readme::ReadmeWiring` が
+    // 受信端（Input の段の取り出しが消費）を持つ。受け口は boot へ渡すので boot より前に
+    // 組まねばならず、開くファイルは boot が返す `MountModel.readme` を読まないと決まらない——
+    // ゆえに送出端だけ先に配り、受信端は boot 成立後まで手元に置く（下の「説明書の受信端」）。
+    // boot が倒れた経路では受信端をそのまま落とす。ゴーストが居ない以上 `\![open,readme]` は
+    // 届きようがなく、万一届いても送出側が送れなかったことを記録する（要件 8.4）。
+    let (readme_tx, readme_rx) = std::sync::mpsc::channel::<crate::readme::ReadmeRequest>();
+    let readme_sink = ReadmeCueSink::new(readme_tx);
     let BootAssets {
         shells,
         balloons,
@@ -447,6 +463,9 @@ pub fn wire_emo2_boot(
     // 第 1 引数」で選別して消費し、解釈前のトークン列を zorder channel 経由で UI スレッド
     // （Emo2Wiring の zorder_rx）へ送出する。担当外のコマンドには一切触れない（要件 11.2）ので
     // 既存 4 sink の消費は 1 つも変わらない。文字 cue に依存しないため末尾で構わない。
+    // 第 6 要素の readme_sink（popup-menu-minimal task 4.3）は `\![open,readme]` を「名前＋
+    // 第 1 引数」で選別して消費し、引数なしの 1 件を説明書の要求として送出する（要件 4.5）。
+    // 担当外へは触れないので既存 5 sink の消費は変わらず、文字 cue にも依存しない。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,
@@ -459,6 +478,7 @@ pub fn wire_emo2_boot(
             Box::new(move_sink),
             Box::new(lifecycle_sink),
             Box::new(zorder_sink),
+            Box::new(readme_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir: Some(crate::default_app_profile_dir()),
@@ -537,6 +557,15 @@ pub fn wire_emo2_boot(
         .borrow_mut()
         .add_systems(Update, emo2_frame_system.after(update_typewriters));
 
+    // 説明書の受信端（popup-menu-minimal task 4.3・要件 4.5）。開くファイルはゴーストの根と
+    // 定義の `readme` キーから**起動時に 1 度だけ**決まる（要求ごとには決めない）ので、
+    // `mount()` を読める最初の場所であるここで決めて受信端と一緒に World へ据える。
+    // `wire_emo2_boot` は 1 回の実行につき `main` から 1 度しか呼ばれないため、`wire_readme` が
+    // 行う `Input` の段への登録も 1 度だけである（`wire_choice_drain` と同じ前提）。
+    let readme_path =
+        crate::readme::resolve_path(ghost_root, ghost_runtime.mount().readme.as_deref());
+    crate::readme::wire_readme(app.world().borrow_mut().world_mut(), readme_path, readme_rx);
+
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
     // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
     // へ届ける。ghost の loop ticker は seriko を一切知らず、クロージャがその継ぎ目（依存方向: areka が
@@ -563,21 +592,11 @@ pub fn wire_emo2_boot(
 
 #[cfg(test)]
 mod wire_tests {
+    use super::sample_test_support::{emo2_balloon_root, emo2_root};
     use super::*;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
     use wintf::WinApp;
-
-    /// emo2 fixture ルート（assets.rs／placement テストと同一アンカー規約）。
-    fn emo2_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../pilot/examples/shiori-host-32/fixtures/emo2")
-    }
-
-    /// emo2 fixture のバルーンルート。
-    fn emo2_balloon_root() -> PathBuf {
-        emo2_root().join("emo2-kakukaku")
-    }
 
     /// 取り違え防止の檻（task 4.3・要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
     /// （`shell_author_dpi`／`balloon_author_dpi`）が [`AuthorDpi`] の各フィールドと

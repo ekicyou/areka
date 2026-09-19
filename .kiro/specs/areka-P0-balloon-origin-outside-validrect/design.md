@@ -33,7 +33,7 @@
 - `TextRegion` に足す欄 `ignored_origin`（範囲外ゆえ無視した宣言の解決値・成分ごと）と、その crate 内の読み口。
 - 登録口 `TextLayerRuntime::register_actor` から呼ぶ警告 `warn_ignored_origin`（水準・件数・欄・文言）。
 - 上の規則を固定するテスト（既存 4 本の期待値の更新・全数の表・検体 `emo2-kakukaku-offsetdpi` の 1 本・WARN 件数）。
-- `region.rs` の doc、`doc/COMPAT_ARCHITECTURE.md` §8 の 3 行、隣接 spec の brief 3 本への 1 行ずつの申し送り。
+- `region.rs` の doc、`doc/COMPAT_ARCHITECTURE.md` §8 の 3 行、隣接 spec の brief 2 本への 1 行ずつの申し送り。
 
 ### Out of Boundary
 
@@ -43,7 +43,7 @@
 - 完了 spec `areka-P0-balloon-vertical-canon`・`areka-P0-emo-text-layer` のアーカイブ本体（無改変。上書きの事実は COMPAT §8 と本仕様に記録する）。
 - 検体 `emo2-kakukaku-offsetdpi` と areka 同梱の全検体のファイル（書き換えない）。
 - ukadoc 網羅台帳（`doc/ukadoc-coverage/ledger/assets.toml` の `origin.x`／`origin.y`）。ukadoc は範囲外の宣言について沈黙しており、台帳の判定（実装済み・正典どおりに読む）は変わらない。台帳を触ると briefing と roadmap-draft の数の検査が連動して赤くなるため、本仕様では触らない。
-- `.kiro/steering/roadmap.md` の台帳行 #38 の完了更新（要件 7.1）は完了手続き（`/kiro-complete`）の作業であり、実装タスクには含めない。
+- `.kiro/steering/roadmap.md` の台帳行 #46 の完了更新（要件 7.1）は完了手続き（`/kiro-complete`）の作業であり、実装タスクには含めない。
 
 ### Allowed Dependencies
 
@@ -58,7 +58,7 @@
 - `TextRegion::resolve` が毎フレーム呼ばれなくなる、または登録口を通らない本番の解決経路が増える変更——警告の置き場所の前提が変わる。
 - 書字開始角の選択（`start_corner`）や `validrect` の解決規則の変更——本仕様の表の期待値（36／46／356）が動く。
 - `BALLOON_NAME_PLACEHOLDER` の差し替え（`areka-P0-emo-text-canon-residue` 項目 14）——参照が 3 ファイル・警告 2 種類になっている点を引き継ぐ。
-- `areka-P0-nar-install` による検体パスの共有ヘルパ化——`tests/shipped_fixture_region_test.rs` の第 3 の検体参照（`emo2-kakukaku-offsetdpi`）を取り込む。
+- 検体の登記表（`sample-ghost-kit` の `SAMPLES`）の変更——`emo2-kakukaku-offsetdpi` の登記が消えるか種別が変わると、T-検体の根の引き方（`SampleRoot::acquire` → `folder()`）が変わる。`areka-P0-nar-install` 自体は 2026-09-19 に着地済み。
 
 ## Architecture
 
@@ -113,7 +113,7 @@ graph TB
 | `crates/areka-emo-text/src/actor_decoration.rs` | `pub(super) fn warn_ignored_origin` の新設（本体＋doc）。`use` は既存の 2 行を広げるだけ（`tracing::warn`・`crate::region::BALLOON_NAME_PLACEHOLDER`）。冒頭 doc に 1〜2 行 | 141 → **175〜190** |
 | `crates/areka-emo-text/src/region_vertical_canon_tests.rs` | 冒頭 doc の分岐 6・8・9 の説明・既存 3 本の期待値と名前・全数の表 1 本の追加 | 677 → **790〜840** |
 | `crates/areka-emo-text/src/actor_region_warn_tests.rs` | WARN 件数のテスト群の追加・冒頭 doc に節を 1 つ | 380 → **500〜540** |
-| `crates/areka-emo-text/tests/shipped_fixture_region_test.rs` | 検体 `emo2-kakukaku-offsetdpi` のテストを**ファイル末尾**へ追加（既存の関数は 1 つも書き換えない）・冒頭 doc に節を 1 つ | 397 → **445〜465** |
+| `crates/areka-emo-text/tests/shipped_fixture_region_test.rs` | 検体 `emo2-kakukaku-offsetdpi` のテストを**ファイル末尾**へ追加（既存の関数は 1 つも書き換えない）・冗頭 doc に節を 1 つ | 409 → **460〜480**（2026-09-19 に main（PR #158）を取り込んで 397 → 409 へ増えた） |
 | `crates/areka-emo-text/src/layout.rs` | 旧規則を現在形で語るコメント 2 か所（冒頭 doc の「行内開始位置の規則」の括弧書き・カーソル基点束のコメント）の「宣言 origin は字義」を「範囲内の宣言は宣言どおり・範囲外と未宣言は書字開始角」へ。**行を増やさない**（語の置き換えだけ） | 973 → **973**（上限 1,000・余白 27） |
 | `crates/areka-emo-text/src/cursor_tag.rs` | `CursorBasis::origin` の doc 1 か所を同じ言い回しへ。同ファイルのほかの `origin` への言及（原点の意味・軸の向き）は別の規則なので触らない | 274 → 274 |
 | `crates/areka-emo-text/tests/choice_fixture_test.rs` | 検体から `origin` を消した是正の doc にある 1 文「宣言が復活すれば……字義どおり `(0,0)` へ落ちて赤くなる」は修正後に偽になる（範囲外の宣言は書字開始角へ落ちるので緑のまま）。事実に合わせて言い直す。テスト本体は無改変 | 行数不変 |
@@ -121,13 +121,12 @@ graph TB
 | `.kiro/specs/areka-P0-balloon-origin-outside-validrect/research.md` | §3.4 の全数確認の引き直し（要件 4.2／4.3 の記録の正本） | — |
 | `.kiro/specs/areka-P0-currentghost-property-tree/brief.md` | 申し送り 1 行（要件 7.2） | +1 |
 | `.kiro/specs/areka-P0-emo-text-canon-residue/brief.md` | 項目 14 への申し送り 1 行（プレースホルダの参照が 3 ファイル・警告 2 種類になった） | +1 |
-| `.kiro/specs/areka-P0-nar-install/brief.md` | 申し送り 1 行（要件 7.3） | +1 |
 
 **`actor.rs` の余白 30 行の扱い（明示）**: 警告の関数は本体 20 行前後＋doc 10 行前後になり、`actor.rs` へ置くと 1,000 行ちょうど付近に達する。ゆえに本体は子モジュール `actor_decoration.rs` に `pub(super)` で置き、`actor.rs` の増分は呼出しと doc の 3〜7 行に抑える。これは同ファイルが `build_actor_render` を引き受けたのと同じ理由・同じ形であり、「警告は登録口 `register_actor` が書く」という決着（research.md §5.1 項目 1）は変わらない——書く**時点**は登録口のまま、関数の**置き場所**だけが子モジュールである。
 
 **走査対象の登録**: 新設ファイルが無いので `lib.rs` の `PURE_SOURCES`／`SOURCES_OUTSIDE_THE_PURE_SCAN` は無改変（`region_vertical_canon_tests.rs` は前者に、`actor_decoration.rs`／`actor_region_warn_tests.rs` は後者に登録済み）。
 
-**`shipped_fixture_region_test.rs` の追加位置**: このファイルは `areka-P0-nar-install` が検体パスを書き換える 38 ファイルの 1 つである。後着側の取り込みを機械的にするため、追加する根パス関数 `offsetdpi_root()` とテストは**ファイル末尾にまとめて**置き、既存の `shipped_root()`／`wplimit_root()` の近傍には手を入れない。パスの書き方は既存と同じ `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2-kakukaku-offsetdpi")` に揃える。
+**`shipped_fixture_region_test.rs` の追加位置と検体の引き方**: 検体の保管形は 2026-09-19 に配布形 `.nar` へ切り替わり（`areka-P0-nar-install`・PR #158）、パスは共有の窓口 `sample_ghost_kit::SampleRoot` から引く形になった。追加するものは、既存の複製検体（`emo2-kakukaku-wplimit`）と**同形**の 2 つ――プロセス寿命で保つ `LazyLock<SampleRoot>`（`SampleRoot::acquire("emo2-kakukaku-offsetdpi")`。検体は登記表 `SAMPLES` に**バルーン種別で登記済み**）と、`folder()` を返す根パス関数 1 つである。`env!("CARGO_MANIFEST_DIR")` や `../pilot/examples/...` のようなパスの継ぎ足しは**書かない**（窓口は呼ぶたびに使い捨ての根を作り直すので、前の走行の永続化ファイルで結果が変わらない）。追加は**ファイル末尾にまとめて**置き、既存の `EMO2`・`WPLIMIT`・`shipped_root()`・`wplimit_root()` の近傍には手を入れない。
 
 ## System Flows
 
@@ -177,9 +176,9 @@ WARN の件数は先例と同じ比較で決まる——登録口に達し、か
 | 6.4 | `region.rs` 冒頭 doc と、旧規則を現在形で語るほかのコメント 4 か所 | OriginResolution／CompatDoc | 同上（「ソース内のコメント」の段落） | 「字義」の全文検索で漏れ 0 |
 | 6.5 | アーカイブ本体は無改変 | — | `.kiro/specs/completed/` に差分なし | 差分の確認 |
 | 6.6 | file:line の裏取り・行番号引用の指し直し | CompatDoc | 触る行の `region.rs:292-294`／`:231-234` を「何の定義行か」へ | — |
-| 7.1 | roadmap #38 の完了更新 | —（完了手続き） | `/kiro-complete` で実施。上書きした要件（`areka-P0-balloon-vertical-canon` 3.10）を明記 | — |
+| 7.1 | roadmap #46 の完了更新 | —（完了手続き） | `/kiro-complete` で実施。上書きした要件（`areka-P0-balloon-vertical-canon` 3.10）を明記 | — |
 | 7.2 | `basepos` の申し送り | Handoffs | `areka-P0-currentghost-property-tree/brief.md` へ 1 行 | — |
-| 7.3 | 検体パスの申し送り | Handoffs | `areka-P0-nar-install/brief.md` へ 1 行（39 本目のファイルは生じない。既に対象の 1 ファイルに第 3 の検体参照が増える） | — |
+| 7.3 | 検体は共有の窓口から引く（申し送りは不要） | FixtureTest | `SampleRoot::acquire("emo2-kakukaku-offsetdpi")` → `folder()` | T-検体（パスを綾る行が 0 であること） |
 
 ## Components and Interfaces
 
@@ -342,7 +341,7 @@ decoration::warn_ignored_origin(&resolved, previous);
 
 ### T-検体: `emo2-kakukaku-offsetdpi`（新設・`tests/shipped_fixture_region_test.rs` の末尾）
 
-- 名前 `offsetdpi_fixture_with_out_of_range_origin_starts_at_writing_corner`。既存の `merged_model`（本番と同じ `decode(Ansi 既定)` → `parse_str(基層, Some(面別上書き層))`）と `assert_region` を使い、sakura は `SAKURA_EDGES`／`SAKURA_START`／`SAKURA_WRAP`、kero は `KERO_EDGES`／`KERO_START`／`KERO_WRAP` を期待する（原本と同じ定数。検体の 2 枚の PNG は IHDR 実測で 400×224／288×203＝原本と同寸）。
+- 名前 `offsetdpi_fixture_with_out_of_range_origin_starts_at_writing_corner`。根は `SampleRoot::acquire("emo2-kakukaku-offsetdpi")` → `folder()`（バルーン種別なので `balloon()` でなく `folder()`。既存の `wplimit_root()` と同形）。既存の `merged_model`（本番と同じ `decode(Ansi 既定)` → `parse_str(基層, Some(面別上書き層)`）と `assert_region` を使い、sakura は `SAKURA_EDGES`／`SAKURA_START`／`SAKURA_WRAP`、kero は `KERO_EDGES`／`KERO_START`／`KERO_WRAP` を期待する（原本と同じ定数。検体の 2 枚の PNG は IHDR 実測で 400×224／288×203＝原本と同寸）。
 - 前提の確認を同じテストの中に置く: ⑴ マージ後のモデルが `origin` を**宣言している**こと（`model.origin().x() == Some(0)`・同 y）——検体から宣言が消えたら、このテストは未宣言の縮退を測るだけになり規則を固定しなくなる。既存の冒頭 doc の禁則（宣言された生値を assert しない）は原本 `emo2-kakukaku` のテストに対するものなので、対象を明記して両立させる ⑵ 2 枚の PNG の IHDR が定数と一致すること ⑶ 横書きへ解決されること。
 - 修正前は開始点が `(0, 0)` に解決されて赤、修正後に緑になる（要件 5.5）。
 

@@ -235,7 +235,7 @@ mod tests {
     fn value_starts_close_talk_then_quit_unloads() {
         let d = 30_000; // 既定。
         let (s1, actions1) = step(
-            close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
+            close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("bye".to_string()),
                 origin: "test",
@@ -372,7 +372,7 @@ mod tests {
     #[test]
     fn no_content_causes_silent_close() {
         let (next, actions) = step(
-            close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
+            close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
                 origin: "test",
@@ -510,7 +510,7 @@ mod tests {
     #[test]
     fn close_pending_tick_updates_last_now_and_stays() {
         let (next, actions) = step(
-            close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
+            close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
             Input::Tick {
                 now: MonotonicMs(2_000),
             },
@@ -520,7 +520,7 @@ mod tests {
             matches!(
                 next.phase,
                 Phase::ClosePending {
-                    reason: CloseReason::User
+                    reason: CloseReason::User { scope: 0 }
                 }
             ),
             "ClosePending を維持"
@@ -560,7 +560,7 @@ mod tests {
     #[test]
     fn close_pending_notified_is_defensive_and_stays() {
         let (next, actions) = step(
-            close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
+            close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
                 origin: "test",
@@ -570,7 +570,7 @@ mod tests {
         assert!(matches!(
             next.phase,
             Phase::ClosePending {
-                reason: CloseReason::User
+                reason: CloseReason::User { scope: 0 }
             }
         ));
         assert!(actions.is_empty());

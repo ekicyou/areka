@@ -22,6 +22,8 @@
 //! 一切依存しない（DD-1）。
 
 pub mod actor;
+// 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
+mod actor_resources;
 pub mod msg;
 // schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
 // schedule 内には後続タスクが埋めるフェーズ分岐スタブが残り lib ビルドから未使用となるため、
@@ -68,7 +70,7 @@ pub mod events {
 /// 運行状態機械の内部（Phase／State／Action／step 本体）は `pub(crate)` のまま非公開に保つ。
 pub mod resources {
     pub use crate::schedule::resources::{
-        ALLOWED_RESOURCE_IDS, ResourceOutcome, ResourceSink, is_allowed_resource_id,
+        ALLOWED_RESOURCE_IDS, ResourceOutcome, ResourceSink, is_allowed_resource_id, resource_get,
         resource_username,
     };
 }

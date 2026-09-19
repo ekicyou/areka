@@ -281,8 +281,8 @@ fn test_dispatch_pressed_gating_requires_main_button() {
 
 #[test]
 fn test_dispatch_clears_button_state_after_dispatch() {
-    // dispatch 後にボタン状態と double_click がクリアされる（次フレーム再発火防止、
-    // dispatch/mod.rs:243-252）。位置・修飾キーはクリアされない。
+    // dispatch 後にボタン状態・double_click・解放の旗がクリアされる（次フレーム再発火防止、
+    // dispatch/mod.rs の末尾のクリア）。位置・修飾キーはクリアされない。
     let mut world = World::new();
     let e = world
         .spawn(PointerState {
@@ -292,6 +292,13 @@ fn test_dispatch_clears_button_state_after_dispatch() {
             xbutton1_down: true,
             xbutton2_down: true,
             double_click: super::super::DoubleClick::Left,
+            released: super::super::ButtonReleased {
+                left: true,
+                right: true,
+                middle: true,
+                xbutton1: true,
+                xbutton2: true,
+            },
             shift_down: true, // 修飾キーは保持されることを確認
             ..Default::default()
         })
@@ -310,7 +317,195 @@ fn test_dispatch_clears_button_state_after_dispatch() {
         super::super::DoubleClick::None,
         "double_click クリア"
     );
+    assert_eq!(
+        s.released,
+        super::super::ButtonReleased::default(),
+        "解放の旗は 1 フレーム限りでクリア"
+    );
+    assert!(!s.released.any(), "any() も偽に戻る");
     assert!(s.shift_down, "修飾キーは dispatch でクリアされない");
+}
+
+#[test]
+fn test_dispatch_released_only_fires_released_handler_once() {
+    // 解放の旗だけが立った tick では OnPointerReleased が Bubble で 1 回配られる。
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static RELEASED_COUNT: AtomicU32 = AtomicU32::new(0);
+
+    fn released_handler(
+        _world: &mut World,
+        _sender: Entity,
+        _entity: Entity,
+        ev: &Phase<PointerState>,
+    ) -> bool {
+        if ev.is_bubble() {
+            RELEASED_COUNT.fetch_add(1, Ordering::SeqCst);
+        }
+        false
+    }
+
+    RELEASED_COUNT.store(0, Ordering::SeqCst);
+
+    let mut world = World::new();
+    world.spawn((
+        PointerState {
+            released: super::super::ButtonReleased {
+                right: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        OnPointerReleased(released_handler),
+    ));
+
+    dispatch_pointer_events(&mut world);
+
+    assert_eq!(
+        RELEASED_COUNT.load(Ordering::SeqCst),
+        1,
+        "解放の旗で Released が 1 回配られる"
+    );
+}
+
+#[test]
+fn test_dispatch_released_flag_absent_does_not_fire() {
+    // 旗が 1 つも立っていなければ Released は配られない（any() のゲート）。
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static RELEASED_COUNT: AtomicU32 = AtomicU32::new(0);
+
+    fn released_handler(
+        _world: &mut World,
+        _sender: Entity,
+        _entity: Entity,
+        _ev: &Phase<PointerState>,
+    ) -> bool {
+        RELEASED_COUNT.fetch_add(1, Ordering::SeqCst);
+        false
+    }
+
+    RELEASED_COUNT.store(0, Ordering::SeqCst);
+
+    let mut world = World::new();
+    world.spawn((PointerState::default(), OnPointerReleased(released_handler)));
+
+    dispatch_pointer_events(&mut world);
+
+    assert_eq!(
+        RELEASED_COUNT.load(Ordering::SeqCst),
+        0,
+        "旗なしでは Released 不発火"
+    );
+}
+
+#[test]
+fn test_dispatch_same_tick_press_and_release_delivers_both() {
+    // 同じ tick に押下と解放が入った場合、Pressed と Released の両方が届く。
+    // 記録順で「押下の配送の後に解放」も固定する。
+    use std::sync::Mutex;
+    static ORDER: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+    fn pressed_handler(
+        _world: &mut World,
+        _sender: Entity,
+        _entity: Entity,
+        ev: &Phase<PointerState>,
+    ) -> bool {
+        if ev.is_bubble() {
+            ORDER.lock().unwrap().push(0);
+        }
+        false
+    }
+    fn released_handler(
+        _world: &mut World,
+        _sender: Entity,
+        _entity: Entity,
+        ev: &Phase<PointerState>,
+    ) -> bool {
+        if ev.is_bubble() {
+            ORDER.lock().unwrap().push(1);
+        }
+        false
+    }
+
+    ORDER.lock().unwrap().clear();
+
+    let mut world = World::new();
+    world.spawn((
+        PointerState {
+            right_down: true,
+            released: super::super::ButtonReleased {
+                right: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        OnPointerPressed(pressed_handler),
+        OnPointerReleased(released_handler),
+    ));
+
+    dispatch_pointer_events(&mut world);
+
+    assert_eq!(
+        *ORDER.lock().unwrap(),
+        vec![0, 1],
+        "同 tick の押下＋解放は Pressed→Released の順で両方届く"
+    );
+}
+
+#[test]
+fn test_dispatch_released_handler_receives_tunnel_then_bubble() {
+    // Released も既存の配送経路（Tunnel: root→sender、Bubble: sender→root）に乗る。
+    use std::sync::Mutex;
+    static ORDER: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+
+    fn root_handler(
+        _world: &mut World,
+        _sender: Entity,
+        _entity: Entity,
+        ev: &Phase<PointerState>,
+    ) -> bool {
+        ORDER
+            .lock()
+            .unwrap()
+            .push(if ev.is_tunnel() { "root-t" } else { "root-b" });
+        false
+    }
+    fn child_handler(
+        _world: &mut World,
+        _sender: Entity,
+        _entity: Entity,
+        ev: &Phase<PointerState>,
+    ) -> bool {
+        ORDER
+            .lock()
+            .unwrap()
+            .push(if ev.is_tunnel() { "child-t" } else { "child-b" });
+        false
+    }
+
+    ORDER.lock().unwrap().clear();
+
+    let mut world = World::new();
+    let root = world.spawn(OnPointerReleased(root_handler)).id();
+    world.spawn((
+        ChildOf(root),
+        PointerState {
+            released: super::super::ButtonReleased {
+                left: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        OnPointerReleased(child_handler),
+    ));
+
+    dispatch_pointer_events(&mut world);
+
+    assert_eq!(
+        *ORDER.lock().unwrap(),
+        vec!["root-t", "child-t", "child-b", "root-b"],
+        "Released は Tunnel（root→sender）→ Bubble（sender→root）"
+    );
 }
 
 #[test]

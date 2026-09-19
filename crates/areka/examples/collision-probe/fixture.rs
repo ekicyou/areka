@@ -1,4 +1,6 @@
 use super::PathBuf;
+use sample_ghost_kit::SampleRoot;
+use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------
 // Constants / fixture paths
@@ -37,16 +39,19 @@ pub(super) const ANCHOR_MARGIN_PX: u32 = 2;
 /// 超過時は探索を諦めて `None` を返す（ログ表現の縮退であって判定には一切関与しない）。
 pub(super) const RATIO_PARTS_MAX_DEN: u32 = 4096;
 
-/// emo2 fixture のゴーストルート（donor と同一アンカー規約）。
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
 ///
-/// アンカーはコンパイル時に埋め込まれる `CARGO_MANIFEST_DIR`（＝`crates/areka` の**絶対パス**）であり、
-/// 続く `../pilot/...` はそのアンカーからの相対要素にすぎない。ゆえに**プロセスの作業ディレクトリに
-/// 依存せず常に絶対解決される**（要件 4.6・ヘッダ「# 起動時のパス（絶対パスの要否）」節）。
+/// 窓口が返すのは**絶対パス**であり、**プロセスの作業ディレクトリに依存しない**
+/// （要件 4.6・ヘッダ「# 起動時のパス（絶対パスの要否）」節）。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
 pub(super) fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    EMO2.folder().to_path_buf()
 }
 
-/// emo2 fixture のバルーンルート（donor と同一規約）。
 pub(super) fn balloon_root() -> PathBuf {
-    emo2_root().join("emo2-kakukaku")
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
 }

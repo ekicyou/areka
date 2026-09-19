@@ -20,6 +20,7 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use bevy_ecs::name::Name;
@@ -49,6 +50,7 @@ use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use sample_ghost_kit::SampleRoot;
 
 // ── 挨拶テキスト（さっきの画像と同じ・boot.pasta 起動朝 由来） ──
 const LINE1: &str = "おっはよー！";
@@ -62,9 +64,15 @@ const CYCLE_SECS: f64 = 5.0;
 /// バルーン窓の初期位置（物理 px・スクリーン座標）。
 const BALLOON_POS: (i32, i32) = (360, 220);
 
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+/// 共有 fixture（emo2 が同時にインストールするバルーン）のディレクトリを窓口から得る。
 fn shared_balloon_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku")
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
 }
 
 fn read_decoded(path: &Path) -> Option<String> {

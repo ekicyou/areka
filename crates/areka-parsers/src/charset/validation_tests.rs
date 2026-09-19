@@ -21,7 +21,7 @@ use crate::kv::parse_kv;
 /// emo2 `descript.txt`（UTF-8）冒頭のリテラルバイト列を既定 `Utf8` で
 /// `decode` → `parse_kv` に通し、`type`／`name` の期待値を固定する。
 ///
-/// 採取元: `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/descript.txt`
+/// 採取元: `検体 emo2 の同梱バルーン emo2-kakukaku の descript.txt`
 /// L1 `charset,UTF-8` / L2 `type,balloon` / L3 `name,kakukaku for emo-gs`（実測 verbatim）。
 /// charset 宣言 `UTF-8` は既定 `Utf8` と一致し、UTF-8 として素直に読める（R7.1）。
 /// 公開 API パス（`decode`→`parse_kv`）を経由する契約固定（R7.4）。

@@ -227,7 +227,7 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 

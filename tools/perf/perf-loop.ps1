@@ -143,10 +143,10 @@ param(
     # measure-ab は bin-A／bin-B を自分で決めるので、ここは使わない
     [string]$BinDir,
 
-    # ゴースト一式のルート（絶対パス。省略時は emo2 fixture）
+    # ゴースト一式のルート（絶対パス。省略時は検体の窓口が教える emo2 の根）
     [string]$GhostRoot,
 
-    # バルーンのルート（絶対パス。省略時は <GhostRoot>\emo2-kakukaku）
+    # バルーンのルート（絶対パス。省略時は検体の窓口が教える emo2 同梱バルーンの場所）
     [string]$BalloonRoot,
 
     # **試験専用**。areka を起動せず、配管（出力先・-Resume・RESULT 行）だけを確かめる。

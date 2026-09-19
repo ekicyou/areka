@@ -170,7 +170,9 @@ mod systems;
 mod window;
 
 use self::balloon::compute_balloon_pos;
-use self::fixture::{AUTHOR_DPI, CYCLE_INTERVAL_SECS, SHELL_INITIAL_X, SHELL_INITIAL_Y, emo2};
+use self::fixture::{
+    AUTHOR_DPI, CYCLE_INTERVAL_SECS, SHELL_INITIAL_X, SHELL_INITIAL_Y, emo2, emo2_balloon,
+};
 use self::input::on_shell_pressed;
 use self::reconcile::{assert_startup_golden, cycle_present_system, reconcile_present_sizes};
 use self::setup::run_setup;

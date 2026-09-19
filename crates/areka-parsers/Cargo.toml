@@ -18,3 +18,7 @@ tracing = { workspace = true }
 # 依存 0（std のみ）の leaf・publish = false・テスト専用。本 crate は host-independent な
 # 純パーサ群なので、[dependencies] へは決して置かない。
 temp-path-kit = { path = "../temp-path-kit" }
+# 検体ゴースト／バルーンを名前で引く唯一の窓口（spec: areka-P0-nar-install 要件 1）。
+# テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
+# 依存方向の規律により [dependencies] へは決して置かない。
+sample-ghost-kit = { path = "../sample-ghost-kit" }

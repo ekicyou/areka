@@ -1,26 +1,13 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use temp_path_kit::TempPath;
 
 use super::*;
 use crate::placement::PlacementError;
+use crate::placement::shared_test_support::{balloon_root, emo2_root};
 use crate::placement::test_support::{ExpectField, capture_logs, expect_one};
-
-/// emo2 実フィクスチャのルート（`crates/pilot/examples/shiori-host-32/fixtures/emo2/`）。
-///
-/// `CARGO_MANIFEST_DIR`（= `.../crates/areka`）相対で組み立てる
-/// （areka-parsers validation_tests と同じ規約・絶対パス埋め込みやフィクスチャ複製をしない）。
-fn emo2_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("pilot")
-        .join("examples")
-        .join("shiori-host-32")
-        .join("fixtures")
-        .join("emo2")
-}
 
 /// このテスト専用の一時ディレクトリを返す。共通窓口 `temp-path-kit` 経由で組むので、
 /// 名前にプロセス識別子と連番が入り**プロセス間でも一意**になる。
@@ -316,7 +303,7 @@ fn load_balloon_author_dpi_reads_dpi_all_patterns() {
 /// emo2 実フィクスチャの balloon（emo2-kakukaku）は `dpi` 無宣言 → 96（既存期待値不変）。
 #[test]
 fn load_balloon_author_dpi_emo2_fixture_is_default_96() {
-    let balloon_root = emo2_root().join("emo2-kakukaku");
+    let balloon_root = balloon_root();
     assert!(
         balloon_root.join("descript.txt").is_file(),
         "emo2 balloon fixture が見つからない: {}",

@@ -352,7 +352,7 @@ fn active_talk_non_mouse_pump_is_notify_no_replacement_dd6_preserved() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 

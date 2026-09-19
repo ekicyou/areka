@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-08-27
+updated_at: 2026-09-19
 ---
 
 # Project Structure
@@ -319,6 +319,13 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
   - 新規の純粋モジュール `look.rs`（1 文字に効く見た目 `TextLook`・2 層 `LookLayers`・装飾の表・`\f` の値の状態機械）／`color.rs`（色指定の解析と無効表示の混色）
   - 純粋層の字面検査（`windows` 系 crate 非依存）の走査対象は `lib.rs` の `PURE_SOURCES`、`@` 前置禁止の走査対象は `draw_format_metrics_tests.rs` の `DRAW_FACADE_SOURCES`——どちらも手保守の一覧だが、**`src/*.rs` の実ファイル集合と突き合わせる検査が両方に付いている**（`lib.rs::every_source_file_is_either_scanned_or_explicitly_excluded` と `draw_format_metrics_tests.rs::draw_facade_sources_cover_every_draw_production_file`）。新設したファイルはどちらかの一覧（純粋層なら `PURE_SOURCES`、そうでなければ `SOURCES_OUTSIDE_THE_PURE_SCAN`）へ載せるまで赤になる。
 
+### NAR Container Crate（areka-nar）
+**Location**: `/crates/areka-nar/`
+**Purpose**: `.nar`（ゴースト／バルーンの配布アーカイブ）を読んでベースウェアの根へ入れる**本番**クレート（`areka-P0-nar-install` 2026-09-18）。コンテナ読取・エントリ名の検証と復号・`install.txt` の解釈・原子的な展開と拒否語彙。
+**Modules**: `container.rs`（EOCD と中央ディレクトリの読取・伸長）／`crc32.rs`／`names.rs`（汎用目的ビット 11 による復号とパス安全性）／`manifest.rs`（`install.txt`）／`plan.rs`・`install.rs`（作業フォルダで組んでから入れ替える 2 段）／`error.rs`（拒否語彙）
+**Dependencies**: `areka-parsers`（`install.txt` の文字コード判定と行分解）・`encoding_rs`・`miniz_oxide`（伸長のみ）・`thiserror`・`tracing`
+**規律**: 書き込み側（圧縮）の API は呼ばない——`src/lib_tests.rs` が本番ソースの字面で見張る（`tech.md` の `miniz_oxide` 登記を参照）。
+
 ### SHIORI ABI Crate
 **Location**: `/crates/shiori-abi/`
 **Purpose**: 脳（SHIORI）との**内部唯一 ABI**。`IShiori`/`IShioriHost` のカスタム COM 定義（HSTRING/UTF-16・IID 既定義）＋エルゴノミック変換層。UI 基盤（wintf）に依存させない最小依存クレート（下流 32bit ホスト/pasta が同 ABI を共有）。x64 native 脳は in-proc COM、過去互換は 32bit Rust ホスト（host-32）が IPC 越しに同 ABI を実装。
@@ -347,7 +354,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Location**: `/crates/log-capture-kit/`
 **Purpose**: ログ捕捉テストの**硬化機構**（`tracing` の有効判定はプロセス共有で先着が焼き付くため、後続の捕捉テストがイベントを 1 件も観測できなくなる。それを捕捉窓の内側で構造的に防ぐ仕組み）を**ワークスペースで唯一定義する**テスト専用 leaf（`areka-P0-test-cage-determinism` 2026-08-27）。定義箇所が 1 つなので「どの流儀が正しいか」を crate ごとに判断し直す必要が無い。**「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は誤り**——スレッド局所なのは捕捉先の差し替えだけで、有効判定のキャッシュはプロセス共有である。
 **Modules**: `probe.rs`（常駐の仕掛けの確立）／`capture.rs`（捕捉窓。窓の内側で対照イベントを発行し、その捕捉を要求して落ちる＝**不在主張が捕捉 0 件のまま静かに緑にならない**）／`event.rs`（正準イベント型と既存の文字列形の再現）／`filter.rs`（`env-filter` feature・濾過指示つき捕捉。有効にしてよいのは `wintf` のみ）／`global.rs`（全スレッド横断の一回限り捕捉。既定 API と混同させないため別窓口とし、両立条件を明記）
-**Tests（`tests/`）**: **ワークスペース全体の見張りの置き場である**（設計判断・ログ捕捉に限らない）。共有機構の迂回検知（`with_default_guard_test.rs`）・**1 ファイル 1,000 行の番人**（`file_length_guard_test.rs`。目安の正本は本文書 Test Naming Conventions の「1 ファイル 1,000 行以下の目安」の項）・**テスト用一時パスの窓口の迂回検知**（`temp_path_guard_test.rs`）の 3 本が、走査部品 `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を共有する。**見張りを別 crate へ分けると走査器が複製される**ため、crate 名がログ捕捉だけを名乗る点との食い違いを承知でこの配置を採っている。較正 `capture_calibration_test.rs` は**わざと硬化なしの直接呼出を使う**ので迂回検知の例外表に載る（外すと較正が空振りする）。各見張りは例外表の件数を別の定数に逐語で持ち、**項目の追加は複数箇所の明示的な編集としてのみ許す**（暗黙に増えない）。
+**Tests（`tests/`）**: **ワークスペース全体の見張りの置き場である**（設計判断・ログ捕捉に限らない）。共有機構の迂回検知（`with_default_guard_test.rs`）・**1 ファイル 1,000 行の番人**（`file_length_guard_test.rs`。目安の正本は本文書 Test Naming Conventions の「1 ファイル 1,000 行以下の目安」の項）・**テスト用一時パスの窓口の迂回検知**（`temp_path_guard_test.rs`）・**検体ゴースト／バルーンの窓口の迂回検知**（`sample_path_guard_test.rs`。旧置き場・展開形の検体フォルダ・展開先の名前空間・同梱バルーンのパス組みの 4 形を、走査語を `sample-ghost-kit` の登記表 `SAMPLES` から組み立てて見張る。`sample-ghost-kit` が本番依存に現れないことも同じ見張りが判定する）の 4 本が、走査部品 `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を共有する。**見張りを別 crate へ分けると走査器が複製される**ため、crate 名がログ捕捉だけを名乗る点との食い違いを承知でこの配置を採っている。較正 `capture_calibration_test.rs` は**わざと硬化なしの直接呼出を使う**ので迂回検知の例外表に載る（外すと較正が空振りする）。各見張りは例外表の件数を別の定数に逐語で持ち、**項目の追加は複数箇所の明示的な編集としてのみ許す**（暗黙に増えない）。
 **Dependencies**: `tracing`（必須）＋ `tracing-subscriber`（`env-filter` feature 時のみの任意依存・既定 off）。**ワークスペース内 crate への依存は 0**（leaf・依存方向の規律＝`wintf` から引いても上位 crate を持ち込まない）・`publish = false`
 **Consumers**: テスト専用（`[dev-dependencies]` のパス依存 1 行）で 10 crate（`areka`・`wintf`・`areka-ghost`・`areka-kanade`・`areka-seriko`・`areka-sylphya`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`）。**`[dependencies]` へは決して置かない**（製品側依存に現れたら `with_default_guard_test.rs` が赤にする）
 
@@ -358,6 +365,14 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Modules**: `lib.rs`（入口・名前組立・破棄）＋ `lib_tests.rs`（自己テスト）
 **Dependencies**: **依存 0**（`[dependencies]` 節そのものが無く std のみ）・`publish = false`
 **Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-ghost`・`areka-parsers`・`areka-sylphya`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
+
+### Sample Ghost Kit Crate（sample-ghost-kit）
+**Location**: `/crates/sample-ghost-kit/`
+**Purpose**: 検体ゴースト／バルーンを**名前で引く窓口をワークスペースで唯一定義する**テスト専用 leaf（`areka-P0-nar-install` 2026-09-18）。検体の保管形は `/vendors/sample_ghost/*.nar` の配布形だけで、消費形は窓口が `target/` の下に展開して配る。テストが在処を自分で綴らなくなるので、置き場を動かしても直すのは登記表 1 か所になる。
+**Pattern**: 登記表 `SAMPLES`（検体を足す作業は `.nar` を 1 つ置いて登記表に 1 行＝2 手で終わる）と `SampleRoot`（原本は刻印つきで作り、配るのは複製・複製は札ファイルを開いている間だけ生き `Drop` で消える）。
+**Modules**: `devroot.rs`（窓口の本体）／`nar_writer.rs`（決定論テストの固定入力を組む＝圧縮側を使う唯一の場所）／`src/bin/nar-sample-path.rs`（実機運転用に検体の絶対パスを印字する bin。呼ぶたびに `manual/<検体>/` を作り直す）
+**Dependencies**: `areka-nar`（展開器）・`miniz_oxide`・`thiserror`・`publish = false`
+**Consumers**: テスト専用（`[dev-dependencies]`）。**`[dependencies]` へは決して置かない**（`log-capture-kit/tests/sample_path_guard_test.rs` が赤にする）。**迂回の検知が別 crate にあるのは `temp-path-kit` と同じ意図的な設計**（走査部品を複製しないため）
 
 ### Vendored: pasta DSL Engine
 **Location**: `/vendors/pasta/`（git サブモジュール）  

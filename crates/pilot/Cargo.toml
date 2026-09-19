@@ -40,3 +40,9 @@ windows-core = { workspace = true }
 [[example]]
 name = "shiori-host-32-helper"
 path = "examples/shiori-host-32/helper.rs"
+
+[dev-dependencies]
+# 検体ゴースト／バルーンを名前で引く唯一の窓口（spec: areka-P0-nar-install 要件 1）。
+# example が検体の在処を自前で綴らないための leaf・純 Rust（i686 helper でも組める）であり、
+# 依存方向の規律により [dependencies] へは決して置かない。
+sample-ghost-kit = { path = "../sample-ghost-kit" }

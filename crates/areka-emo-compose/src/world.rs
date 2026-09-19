@@ -224,8 +224,7 @@ mod tests {
     /// `fold.rs` の `emo2_shell()` と同一の読込経路（`read_to_string`＋`areka_parsers::shell::parse`）。
     /// COM／WIC／atlas bake は経由しない純粋な parse ゆえ headless で走る。
     fn emo2_shell() -> Shell {
-        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt");
+        let path = crate::sample_test_support::emo2_root().join("shell/master/surfaces.txt");
         let content = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
         areka_parsers::shell::parse(&content)

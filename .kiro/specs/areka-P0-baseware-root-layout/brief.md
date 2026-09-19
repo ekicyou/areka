@@ -102,3 +102,12 @@
 ## 2026-09-18 追記（裁定候補 ⑴ の移管）
 
 - 「既定バルーンの同梱」は独立の spec `areka-P0-default-balloon-bundle`（2026-09-18 起票・A2 並走）へ移した。開発者裁定: `emo2-kakukaku` は癖が強く既定に向かない。候補は CC0 の `Balloon for Staysee Syncfield`（作者は SSP 本家）。**areka は常に `use_self_alpha,1`・`.pna` 非対応**（開発者確認）。本 brief の裁定候補 ⑴ は同 spec の要件段階で決める。
+
+---
+
+## 2026-09-19 追記（`default-balloon-bundle` からの申し送り＝既定バルーン id）
+
+- **既定バルーン id ＝ `StayseeBalloon`。** バルーン定義（`descript.txt`）の `id` 行・`install.txt` の `directory` 行・リポジトリに置いた実フォルダ名の 3 つが、大小を含めてバイト一致していることを実測で確かめた（採り方と較正は `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の「既定バルーン id」の節）。配布物の中での置き場は根の下の `balloon/StayseeBalloon/`。
+- **定数と解決順への配線は本 spec が足す。** `default-balloon-bundle` は本番コードに既定バルーン id の定数を**置かない**（同 spec は本番コードの変更 0 行で着地しており、その要件 7.2 が定数の設置を本 spec へ委ねている）。解決順の最後に渡す 1 つをこちらで足すこと。
+- 保管先は `vendors/sample_ghost/StayseeBalloon/`（展開フォルダ・29 ファイル無改変）。`.nar` へ畳むのは `areka-P0-nar-install` が引き受ける。
+- 上の「裁定候補 ⑴」は決着済み: 既定バルーンは CC0 の `Balloon for Staysee Syncfield` を同梱する（開発者裁定 2026-09-18）。半透明の扱いを宣言から読まず常に有効として焼く裁量は `doc/COMPAT_ARCHITECTURE.md` §8 に登記済み。

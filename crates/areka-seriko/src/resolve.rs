@@ -217,8 +217,10 @@ mod tests {
     fn resolves_with_real_emo2_snapshot() {
         use areka_emo_compose::EmoWorld;
 
-        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt");
+        let path = crate::sample_test_support::emo2_root()
+            .join("shell")
+            .join("master")
+            .join("surfaces.txt");
         let content = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
         let shell = areka_parsers::shell::parse(&content);

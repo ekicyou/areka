@@ -572,7 +572,7 @@ fn close_handshake_transition_clears_choice_ledger() {
     let (pending, actions) = step(
         s,
         Input::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
         &cfg,
     );

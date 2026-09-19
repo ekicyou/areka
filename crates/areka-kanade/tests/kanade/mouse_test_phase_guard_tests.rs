@@ -35,7 +35,7 @@ fn phase_ignore_before_boot_no_mouse_get() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
 
@@ -99,7 +99,7 @@ fn phase_ignore_during_close_series_no_mouse_get() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
     // close 系列中（CloseTalkWait）の Mouse 注入（横断アームで無視・GET 不発）。
@@ -182,7 +182,7 @@ fn pending_close_guard_suppresses_mouse_get() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest during greeting");
     // pending_close 成立窓での Mouse 注入 → ガードで GET 不発（release 前ゆえ Mouse は必ずこの窓で処理）。

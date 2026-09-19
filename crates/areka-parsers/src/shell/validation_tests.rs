@@ -305,7 +305,7 @@ fn comment_and_blank_only_input_yields_empty_shell() {
 // --- タスク 6.2: emo2 実物 fixture スモーク（要件 10.3）と subset 外吸収（要件 4.5/5.7/6.3/9.2）---
 //
 // 6.1 の自前適合断片が「唯一の適合基準」（ukadoc）を厳密照合するのに対し、ここでは
-// emo2 実物 fixture（crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt）
+// emo2 実物 fixture（検体 emo2 の shell/master/surfaces.txt）
 // の代表抜粋を**リテラル転記**し、パニックせず・スコープ内機能（surface/element/animation/
 // collision/append/alias）を解釈し切ることを**緩め**に確認する（emo2 は最小適合サンプルであって
 // 書式の聖典ではない・要件 10.2/10.3）。`include_str!` はクレート跨ぎを避けるため用いない。

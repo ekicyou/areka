@@ -115,6 +115,44 @@ function Stop-Run {
 # ⒝ 子プロセスの起動
 # =============================================================================
 
+# 検体の窓口（`cargo run -p sample-ghost-kit --bin nar-sample-path -- <名前>`）を 1 回呼んで
+# 標準出力の `key=value` を表にする（invoke-followup-checks.ps1 と同形。Stop-Run の形だけが違う）。
+# 窓口は呼ぶたびに検体を展開し直すので、1 検体につき 1 回だけ呼んで表を取っておく。
+$script:NarSampleMaps = @{}
+function Get-NarSampleMap {
+    param([Parameter(Mandatory = $true)][string]$Sample)
+    if ($script:NarSampleMaps.ContainsKey($Sample)) { return $script:NarSampleMaps[$Sample] }
+    $cargo = Get-Command 'cargo' -ErrorAction SilentlyContinue
+    if (-not $cargo) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message 'cargo が見つかりません（検体の在り処を尋ねられません）' }
+    $cargoArgs = @('run', '-q', '-p', 'sample-ghost-kit', '--bin', 'nar-sample-path',
+                   '--manifest-path', (Join-Path $repoRoot 'Cargo.toml'), '--', $Sample)
+    $r = Invoke-Child -Exe $cargo.Source -Arguments $cargoArgs -Quiet
+    if ($r.Code -ne 0) {
+        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "検体の窓口が失敗しました（終了コード $($r.Code)・cargo $($cargoArgs -join ' ')）: $($r.LastLine)"
+    }
+    $map = @{}
+    foreach ($line in $r.Out) {
+        $text = "$line".Trim()
+        # 最初の '=' だけで割る（値は Windows の絶対パスで、後ろに '=' が来ても壊さない）
+        $sep = $text.IndexOf('=')
+        if ($sep -lt 1) { continue }
+        $map[$text.Substring(0, $sep)] = $text.Substring($sep + 1)
+    }
+    $script:NarSampleMaps[$Sample] = $map
+    return $map
+}
+
+# 表から 1 つの鍵を取り出す。鍵が無ければ止める——同梱バルーンを持たない検体では
+# `balloon.<名前>=` の行そのものが出ないので、空を掴んだまま進むとパス無しで走ってしまう。
+function Get-NarSamplePath {
+    param([Parameter(Mandatory = $true)][string]$Sample, [Parameter(Mandatory = $true)][string]$Key)
+    $map = Get-NarSampleMap -Sample $Sample
+    if (-not $map.ContainsKey($Key) -or -not $map[$Key]) {
+        Stop-Run -Code $EXIT_MEASURE_FAILED -Message "検体の窓口の出力に '$Key=' の行がありません（検体 '$Sample'・出た鍵: $(($map.Keys | Sort-Object) -join ', ')）"
+    }
+    return $map[$Key]
+}
+
 # python の在り処。単一要素の配列を返すと PowerShell が文字列へ展開するため、
 # 実行体と前置引数を別の項として持つオブジェクトで返す（invoke-followup-checks.ps1 と同形）。
 function Get-PythonCommand {

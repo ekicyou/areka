@@ -277,7 +277,7 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     harness.shutdown_bounded();
 }
 
-/// spine S5（close 握手・R6.1/6.2/6.3・R8.3）: `shutdown(CloseReason::User)`（ForceQuit 経路＝
+/// spine S5（close 握手・R6.1/6.2/6.3・R8.3）: `shutdown(CloseReason::User { scope: 0 })`（ForceQuit 経路＝
 /// OnClose NOTIFY→Unload）で ghost 一式を畳み、(a) OnClose 台本が消化され（`ScriptedShioriHandle` に
 /// `Notify{OnClose}`→`Unload` が順に記録される）、(b) `shutdown` が有界時間で `Ok` を返し、(c) seriko
 /// worker（＋ghost 内部の全ハンドルは `shutdown` が内部 join）が有界 join で完了する（timeout=panic
@@ -318,6 +318,7 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
         shiori_handle,
         text_pump,
         tick_sink,
+        sample,
     } = harness;
 
     // (b) shutdown(User) が有界時間で Ok を返す（hang しない・ForceQuit→OnClose NOTIFY→Unload）。
@@ -325,7 +326,7 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
         "spine s5 ghost shutdown",
         Duration::from_secs(10),
         move || {
-            let result = ghost.shutdown(CloseReason::User);
+            let result = ghost.shutdown(CloseReason::User { scope: 0 });
             assert!(
                 result.is_ok(),
                 "S5: shutdown は close 握手後 Ok を返す（正規 clean shutdown）: {result:?}"
@@ -368,4 +369,6 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     drop(world);
     drop(runtime);
     drop(text_pump);
+    // 検体の複製は最後に捨てる（`shutdown_bounded` と同じ用心・テストの裏付けは無い）。
+    drop(sample);
 }

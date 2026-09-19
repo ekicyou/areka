@@ -2362,23 +2362,21 @@ areka には入力ボックスのバルーンが無く、その半透明化を�
 """
 
 [entry."ukadoc:descript_balloon:use_self_alpha_2c_5024:1"]
-status = "absent"
+status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-default-balloon-bundle"
 priority = "A15"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーン側の透過の扱いを宣言で切り替えられない。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka-emo-atlas の normalize::UseSelfAlpha という同じ意味の切り替えは実在するが、値は呼ぶ側が決め打ちで渡しており、宣言からは来ない。
+壊れ方: 見た目の差（`0` と書いたバルーンでも 1 として扱う）。記録: なし。
+areka はこの欄を読まない。バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、宣言に何を書いても読まれず、記録も出ない。
+そのうえで焼き方は常に `use_self_alpha,1` 相当に固定されている。areka-emo-present の balloon::build_balloon_target_from_faces が areka-emo-atlas の normalize::UseSelfAlpha::On を決め打ちで渡しており、バルーンの絵をこの値で焼くのはこの 1 か所だけである（areka の emo2_boot::assets も同じ値を決め打ちするが、そちらが焼くのはシェルの絵であって、バルーンの 2 か所目ではない。2026-09-18 に実測して確かめた）。
+したがって `use_self_alpha,0` と書いたバルーンも 1 として扱われる。正典どおりに動かない代わりに動きはするので、状態は縮退である。半透明を前提に描かれたバルーンだけが正しく表示される、というのが利用者から見える差である。
 シェルの descript にある `seriko.use_self_alpha` は綴りの違う別の項目である。名前が似ているだけで一緒に扱わないこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。
-担当 spec は areka-P0-emo-atlas。同 spec の brief は、設計に着手するとき正典で必ず読む欄としてこの欄を名指しし、シェル側の同じ名前の欄とは別の定義だから両方読むこと、と書いている。
+裁量: この固定は黙って壊れているのではなく意図した扱いであり、doc/COMPAT_ARCHITECTURE.md の §8「沈黙ルール対応表」に 1 行で登記してある（開発者裁定 2026-09-18）。
+担当 spec は areka-P0-default-balloon-bundle。同 spec が §8 の行とこの記述を書いた。
 束: 透過とはみ出しの描き方・読む経路が無い（先に要る仕組み: emo の合成器）。束の順位: 9——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-宛先: 担当の欄を空にした。宛先だった areka-P0-emo-atlas は完了して封じられた spec で、状態が未対応のこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
 """
 
 [entry."ukadoc:descript_balloon:validrect.bottom_2c_5ea7_6a19_20_2a1:1"]
@@ -3269,21 +3267,19 @@ areka には説明文を開く画面が無く、その文字コードの宣言�
 """
 
 [entry."ukadoc:descript_ghost:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-popup-menu-minimal"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka には説明文を開く画面が無く、そのファイル名を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄が成り立つには、入れる導線か、右クリックで開く作り付けのメニューが要る。どちらも areka には無い。
+実装済み。areka-parsers の package::resolve がこの欄を読み、マウントの readme として持つ。右クリックのメニューの「説明書」と \\![open,readme] が、その名前をゴーストの置き場に継ぎ足したファイルを既定の関連付けで開く。欄が無いときは readme.txt を使う。
+壊れ方: 無い。欄が指すファイルが実在しないときは、メニューの「説明書」の項目を灰色で出す（枠は消さない）。
+ログ: ファイルが無いときは debug! を、開けなかったときはパスと符号を添えた error! を残す。
+根拠の場所: crates/areka-parsers/src/package/model.rs の MountModel.readme。読む側は crates/areka/src/readme.rs。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_shell の name,シェル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_ghost:recommended.balloon.path_2c_30d1_30b9:1"]
@@ -3842,61 +3838,66 @@ note = """
 [entry."ukadoc:descript_install:_2a.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:_2a.refresh_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 更新で消す・残すの指示（要件 8.3 の 14 件）・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:_2a.refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 更新で消す・残すの指示（要件 8.3 の 14 件）・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:_2a.source.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: この見出しは install.txt ではなく delete.txt——更新のときに消す道を 1 行 1 つ並べるファイル——の行の書式である。areka-P0-nar-install が受け持つのは書庫を開いて入れるところまでで、消す指示は読まない。引き受けるのは本台帳の帰属の文書が段階 B に置く「更新」の束の仕様 areka-P0-network-update で、2026-09-18 に起票され説明書が実在する（同書の「正典の要点」の節が delete.txt の行の形としてこの項目の id をそのまま引き、範囲の一覧にも delete.txt を入れている）。2026-09-19 にこの欄をその名前で埋めた。**状態は absent のまま動かしていない**——同仕様はまだ着手しておらず、delete.txt を読む経路は 1 つも無い。
 """
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1"]
@@ -3909,6 +3910,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当を空のまま残す理由: この見出しは install.txt ではなく developer_options.txt——配布物を作る側が置く開発者向けの指示——の行の書式である。読む相手はベースウェアではなく配布物を作る道具なので、読み手の側だけを受け持つ areka-P0-nar-install の範囲に入らない。areka が作る側の道具を持つことになったときに、その仕様が受け持つ。
 """
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2cignore:1"]
@@ -3921,18 +3923,20 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当を空のまま残す理由: この見出しは install.txt ではなく developer_options.txt——配布物を作る側が置く開発者向けの指示——の行の書式である。読む相手はベースウェアではなく配布物を作る道具なので、読み手の側だけを受け持つ areka-P0-nar-install の範囲に入らない。areka が作る側の道具を持つことになったときに、その仕様が受け持つ。
 """
 
 [entry."ukadoc:descript_install:accept_2c_672c_4f53_5074_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:bootghost_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
@@ -3945,12 +3949,13 @@ links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当を空のまま残す理由: この欄は type,package——複数の配布物を 1 つに束ねた形——専用である。areka-P0-nar-install は種別を ghost・shell・balloon・supplement の 4 つに限り、package は受け付けない種別として明示的に拒否する。束ねた形を解く仕様はまだ起票されていないので、引受先が実在しない。起票されたらこの行の担当を書くこと。
 """
 
 [entry."ukadoc:descript_install:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = []
 links = []
@@ -3958,24 +3963,26 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とシェルの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み（surfaces.txt は areka-P0-charset-canon の着地でこちらへ移った）、プラグインとヘッドラインセンサの descript とインストール指示の install.txt とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目はファイルごと開かれない 4 枚のうちインストール指示の install.txt の側である。名前で引かず、ページを決めてから引くこと。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = []
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:name_2c_30aa_30d6_30b8_30a7_30af_30c8_540d:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = []
 links = []
@@ -3983,36 +3990,39 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 同じ綴りの見出しは、ゴースト・シェル・バルーンの descript、インストール指示の install.txt、シェルの surfaces.txt、プラグインとヘッドラインセンサの descript の 7 ページに並ぶ。さらに別ドメインにも同じ綴りがある——プロパティの側（list_propertysystem のページ）とSHIORI の資源の側（list_shiori_resource のページ）である。7 ページは areka の読み手が別々なので状態も割れる——シェル名はareka-ghost の config::resolve_shell_name が読んで起動時のシェル名になり、ゴースト名は areka-parsers の package::resolve が写すだけで誰も読まず、残りはどれも読まれずに終わる。この項目はファイルごと開かれない側で、install.txt に何を書いても読まれない。名前で引かず、ページを決めてから引くこと。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:refresh_2c_6570_5024:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 更新で消す・残すの指示（要件 8.3 の 14 件）・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 束: 更新で消す・残すの指示（要件 8.3 の 14 件）・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_install:type_2c_7a2e_5225:1"]
 status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-nar-install"
 priority = "B1"
 values = []
 links = []
@@ -4020,6 +4030,7 @@ note = """
 壊れ方: 黙って壊れる。記録: なし。areka には install.txt を読む経路がファイルごと無い。areka-parsers の package::resolve は前置きで「install.txt には触れない」と自ら宣言しており、同じ束の package::validation_tests が、試験用ゴーストに置いてあっても解決結果へ一切漏れないことを固定している。ファイル全体が読まれずに終わるので、記述単位の仕訳はしない。
 同じ綴りの見出しがゴースト・シェル・バルーンの descript にもあり、本ページを含めて 5 ページに並ぶ。5 ページとも読まれずに終わるが、そうなる理由は割れる——ゴースト・シェル・バルーンの descript は areka が開いて読むファイルで、その中でこの欄だけが引かれない。プラグインの descript とインストール指示の install.txt はファイルごと開かれない。5 つはページごとに別の項目で、名乗る相手（何の種別か）が違うので、書ける語が同じとはかぎらない。別ドメインに同じ綴りの項目は無い。名前で引かず、ページを決めてから引くこと。
 束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当: 本項目は areka-P0-nar-install が受け持つ。同仕様の areka-nar が書庫最上位の install.txt を読み、許可キーの表とマニフェストの組み立てでこの欄を解釈する。**状態は absent のまま動かしていない**——実装済みを名乗るには定義箇所に正典 URL の 1 行が要り（無ければ検査が ImplementedWithoutEvidence を出す）、その置き先 crates/ はこの欄を登記したタスクの担当範囲（doc/ukadoc-coverage）の外にある。要件 10.6 の「着地後に状態を実測へ更新する」は、その 1 行を置く作業と対で残っている。なお、その 1 行だけでは足りない——本台帳の読み方が定める実装済みは「areka が正典どおりに動く」ことも併せて要るが、areka-nar は本体の areka からまだ辿れない（依存しているのは試験専用の sample-ghost-kit だけである）。本体へ繋ぐ配線が入るまで、URL の 1 行を置いただけで状態を動かしてはならない。
 """
 
 [entry."ukadoc:descript_plugin:charset_2c_6587_5b57_30b3_30fc_30c9:1"]

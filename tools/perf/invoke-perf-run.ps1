@@ -38,8 +38,6 @@ invoke-perf-run.ps1 — 有界実走＋CPU 時系列採取ランナー
   EXIT_WATCHDOG_MARGIN_SEC = 180  有界終了予定時刻からの猶予（超えたら停止させて失敗扱い）
   EARLY_EXIT_TOLERANCE_SEC = 30   予定より早く終わった場合に失敗とみなす差（秒）
   POLL_INTERVAL_MS = 250          終了監視のポーリング間隔（ミリ秒）
-  DEFAULT_BALLOON_SUBDIR          -BalloonRoot 省略時に補うバルーンの相対位置。
-                                  **emo2 fixture 固有の値であり他ゴーストへ流用しないこと**
   LOG_MARKER_SMOKE_GATE           有界自動終了が有効化された証跡のログ文言。
                                   これが実行ログに無い実走は「有界でない」＝採取失敗とみなす
   CSV_HEADER                      CPU 時系列 CSV のヘッダ行（design「CPU 時系列 CSV スキーマ」）
@@ -74,11 +72,11 @@ CPU の「1 コア換算」について:
 使い方:
   pwsh -File tools/perf/invoke-perf-run.ps1 `
       -Profile short -Build dev `
-      -GhostRoot C:\絶対パス\emo2 [-BalloonRoot C:\絶対パス\emo2\emo2-kakukaku] `
+      -GhostRoot <検体の窓口の folder= の値> -BalloonRoot <同じく balloon.emo2-kakukaku= の値> `
       [-OutDir C:\出力先] -ConfirmQuiet
 
   起動せず前提の検証と実行条件の記録だけを行う（配管の確認用）:
-  pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build dev -GhostRoot ... -DryRun
+  pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build dev -GhostRoot ... -BalloonRoot ... -DryRun
 
 --------------------------------------------------------------------------------
 版 1.1.0 で足した引数（既存の呼び方は何も変わらない）
@@ -124,7 +122,8 @@ param(
     [string]$Build,
     # ゴーストのルート（絶対パス必須。相対パスは pasta.dll の読み込みに失敗する既知の要件）
     [string]$GhostRoot,
-    # バルーンのルート（絶対パス。省略時は <GhostRoot>\emo2-kakukaku を補う＝emo2 固有）
+    # バルーンのルート（絶対パス必須。既定は無い＝ゴーストのルートの下には無いので継ぎ足せない。
+    # 得方は nar-sample-path の `balloon.<バルーン名>=` の行）
     [string]$BalloonRoot,
     # 出力先（省略時は %LOCALAPPDATA%\areka-diag\perf-<日時>）
     [string]$OutDir,
@@ -172,7 +171,6 @@ $COUNTER_RETRY_WAIT_SEC         = 2
 $EXIT_WATCHDOG_MARGIN_SEC       = 180
 $EARLY_EXIT_TOLERANCE_SEC       = 30
 $POLL_INTERVAL_MS               = 250
-$DEFAULT_BALLOON_SUBDIR         = 'emo2-kakukaku'
 $LOG_MARKER_SMOKE_GATE          = 'smoke 自動 close ゲート有効'
 $CSV_HEADER                     = 'timestamp,cpu_percent_1core'
 $CHECK_QUIET_SCRIPT             = 'check-quiet.ps1'
@@ -535,15 +533,18 @@ if (-not (Test-Path -LiteralPath $descriptPath -PathType Leaf)) {
     Stop-Run $EXIT_BAD_ARGS "ゴーストの起動起点 $descriptPath が見つかりません。-GhostRoot にはゴースト一式のルート（直下に ghost\master\descript.txt があるフォルダ）を指定してください。"
 }
 
-# バルーンのルート: 省略時は emo2 固有の既定位置を補う
+# バルーンのルート: 絶対パス必須。既定は置かない——バルーンはゴーストのルートの下に無く
+# （検体の窓口が `<根>/ghost/<名前>` と `<根>/balloon/<名前>` へ分けて展開する）、
+# 「ゴーストのルートに名前を継ぎ足す」既定は必ず存在しない場所を指すためである。
 if (-not $BalloonRoot) {
-    $BalloonRoot = Join-Path $ghostRootFull $DEFAULT_BALLOON_SUBDIR
+    # 逐語で出す文なので単引用符で書く（二重引用符だとバッククォートが逃がし記号として食われる）
+    Stop-Run $EXIT_BAD_ARGS '-BalloonRoot が指定されていません。バルーンのルートを絶対パスで指定してください（cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2 の balloon.emo2-kakukaku= の行の値を渡してください）。'
 }
 if (-not [System.IO.Path]::IsPathFullyQualified($BalloonRoot)) {
     Stop-Run $EXIT_BAD_ARGS "-BalloonRoot は絶対パスで指定してください（受け取った値: '$BalloonRoot'）。"
 }
 if (-not (Test-Path -LiteralPath $BalloonRoot -PathType Container)) {
-    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot のフォルダが存在しません: $BalloonRoot（省略時は <GhostRoot>\$DEFAULT_BALLOON_SUBDIR を補います）"
+    Stop-Run $EXIT_BAD_ARGS "-BalloonRoot のフォルダが存在しません: $BalloonRoot"
 }
 $balloonRootFull = [System.IO.Path]::GetFullPath($BalloonRoot).TrimEnd('\')
 
@@ -678,7 +679,6 @@ $calibrationSection = [ordered]@{
     'COUNTER_RETRY_WAIT_SEC'         = $COUNTER_RETRY_WAIT_SEC
     'EXIT_WATCHDOG_MARGIN_SEC'       = $EXIT_WATCHDOG_MARGIN_SEC
     'EARLY_EXIT_TOLERANCE_SEC'       = $EARLY_EXIT_TOLERANCE_SEC
-    'DEFAULT_BALLOON_SUBDIR'         = "$DEFAULT_BALLOON_SUBDIR（emo2 fixture 固有・他ゴーストへ流用しないこと）"
     'LOG_MARKER_SMOKE_GATE'          = $LOG_MARKER_SMOKE_GATE
     'cpu_unit'                       = 'cpu_percent_1core = 1 コアを 100% とする換算値（複数コア使用時は 100 超もあり得る）。1 行は約 1 秒幅の瞬時値で、15 秒の平均ではない'
 }

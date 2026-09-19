@@ -11,7 +11,7 @@
 //!   自己シグナル・永久ブロックしない）。`recv_timeout` は期限超過を [`ReplyError::Timeout`]
 //!   として `Dropped` と区別する。
 
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::time::Duration;
 
 /// request/reply 用の返信チャンネル対を生成する（oneshot 相当・per-request）。
@@ -65,6 +65,19 @@ impl<T: Send> ReplyReceiver<T> {
             RecvTimeoutError::Timeout => ReplyError::Timeout,
             RecvTimeoutError::Disconnected => ReplyError::Dropped,
         })
+    }
+
+    /// 待たずに覗く（`&self`・consume しない）。
+    ///
+    /// 今届いていれば `Ok(Some(value))`、届いていなければ `Ok(None)`、[`ReplySender`] が
+    /// 応答せず drop 済みなら [`ReplyError::Dropped`] を返す（3.2・3.4・UI スレッドを塞がない
+    /// tick 内ポーリング用）。`recv`／`recv_timeout` の待つ振る舞いは変えない。
+    pub fn try_recv(&self) -> Result<Option<T>, ReplyError> {
+        match self.0.try_recv() {
+            Ok(value) => Ok(Some(value)),
+            Err(TryRecvError::Empty) => Ok(None),
+            Err(TryRecvError::Disconnected) => Err(ReplyError::Dropped),
+        }
     }
 }
 
@@ -153,6 +166,34 @@ mod tests {
         let (tx, rx) = reply_channel::<u32>();
         drop(tx);
         match rx.recv_timeout(Duration::from_secs(5)) {
+            Err(ReplyError::Dropped) => {}
+            other => panic!("expected Err(Dropped), got {other:?}"),
+        }
+    }
+
+    // try_recv ケース1: 未着信なら Ok(None)（待たない・Sender は生存中）。
+    #[test]
+    fn try_recv_returns_none_when_empty() {
+        let (tx, rx) = reply_channel::<u32>();
+        assert!(matches!(rx.try_recv(), Ok(None)));
+        drop(tx);
+    }
+
+    // try_recv ケース2: 送信済みなら Ok(Some(value))。
+    #[test]
+    fn try_recv_returns_some_after_send() {
+        let (tx, rx) = reply_channel::<u32>();
+        tx.send(7)
+            .expect("send should succeed while receiver is alive");
+        assert_eq!(rx.try_recv().expect("no error expected"), Some(7));
+    }
+
+    // try_recv ケース3: 送信端 drop 済みなら Err(Dropped)（recv と同じ切断表現）。
+    #[test]
+    fn try_recv_returns_dropped_when_sender_gone() {
+        let (tx, rx) = reply_channel::<u32>();
+        drop(tx);
+        match rx.try_recv() {
             Err(ReplyError::Dropped) => {}
             other => panic!("expected Err(Dropped), got {other:?}"),
         }

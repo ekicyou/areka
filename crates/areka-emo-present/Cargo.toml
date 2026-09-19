@@ -34,3 +34,7 @@ windows = { workspace = true }
 # 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
 # 依存方向の規律により [dependencies] へは決して置かない。
 log-capture-kit = { path = "../log-capture-kit" }
+# 検体ゴースト／バルーンを名前で引く唯一の窓口（spec: areka-P0-nar-install 要件 1）。
+# テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
+# log-capture-kit と同じく [dependencies] へは決して置かない。
+sample-ghost-kit = { path = "../sample-ghost-kit" }

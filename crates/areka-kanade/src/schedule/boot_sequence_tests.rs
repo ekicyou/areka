@@ -323,7 +323,7 @@ fn close_request_during_boot_records_pending_only() {
         let (s, actions) = step(
             s,
             Input::CloseRequest {
-                reason: CloseReason::User,
+                reason: CloseReason::User { scope: 0 },
             },
             &cfg,
         );
@@ -334,7 +334,7 @@ fn close_request_during_boot_records_pending_only() {
         );
         assert!(actions.is_empty(), "握手はここで開始しない（保留のみ）");
         assert!(
-            matches!(s.pending_close, Some(CloseReason::User)),
+            matches!(s.pending_close, Some(CloseReason::User { scope: 0 })),
             "pending_close に理由が記録される"
         );
     }
@@ -658,14 +658,14 @@ fn run_boot_version_talkdone_then_close(reason: crate::talk::TalkEndReason) {
     let (s, actions) = step(
         s,
         Input::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         },
         &cfg,
     );
     assert_eq!(actions.len(), 1, "close 指示で OnClose GET が 1 件出るはず");
     assert_get(
         &actions[0],
-        &events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE),
+        &events::on_close(CloseReason::User { scope: 0 }, &ExecutionSnapshot::INACTIVE),
     );
     assert!(matches!(s.phase, Phase::ClosePending { .. }));
 }

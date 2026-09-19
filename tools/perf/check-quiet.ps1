@@ -437,8 +437,7 @@ function Invoke-SelfTest {
     # 在るだけで落とす名前が 0 件のときも「-」（空文字だと「指定なし」と読めない）。
     $noPresence0 = $empty.Clone()
     $noPresence0['presence_names'] = @()
-    if ((Format-QuietReport $noPresence0) -notmatch 'heavy_process_presence=-
-') {
+    if ((Format-QuietReport $noPresence0) -notmatch 'heavy_process_presence=-\n') {
         $ng += '在るだけで落とす名前 0 件が「-」になりません。'
     }
     if ($emptyText -notmatch 'target_pid_excluded=-\n')    { $ng += 'PID 未指定が「-」になりません。' }

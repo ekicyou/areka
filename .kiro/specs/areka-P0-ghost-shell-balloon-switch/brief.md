@@ -14,7 +14,7 @@
 ## Current State
 
 - **起動**: `areka-ghost` の `boot`（`crates/areka-ghost/src/runtime.rs`）が「マウント → SHIORI 起動 → sink 配線 → sylphya 復元」を 1 回行う。マウントは `crates/areka-parsers/src/package/resolve.rs:41-118`（2 点＝SHIORI 側とシェル側）。
-- **終了**: 利用者操作は Ctrl＋左ダブルクリック（`crates/areka/src/input_events/mod.rs:420-441`）→ `CloseRequest{User}` → ゴーストの `OnClose` 握手 → 終了挨拶 → `\-` → 窓を閉じる（`emo2_boot/frame.rs:168-201`・`event = "ghost_quit"`）。**この握手は切替の前半（`OnGhostChanging` → 204 なら `OnClose`）とほぼ同じ形**である（`ukadoc:list_shiori_event:OnGhostChanging:1`「SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnCloseが発生する」）。
+- **終了**: 利用者操作は右クリックメニューの「終了」（`crates/areka/src/menu/mod.rs` の `request_close`。**2026-09-19 追記**: 起票時の入口だった結線済みの Ctrl＋左ダブルクリックは `areka-P0-popup-menu-minimal` のタスク 8.2 で除去された・開発者裁定）→ `CloseRequest{User{scope}}` → ゴーストの `OnClose` 握手 → 終了挨拶 → `\-` → 窓を閉じる（`emo2_boot/frame.rs:168-201`・`event = "ghost_quit"`）。**この握手は切替の前半（`OnGhostChanging` → 204 なら `OnClose`）とほぼ同じ形**である（`ukadoc:list_shiori_event:OnGhostChanging:1`「SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnCloseが発生する」）。
 - **窓が 0 になるとアプリが終わる**（`main.rs:317`）。切替の間、窓は一度全て消えるので、この「0 で終了」を「切替中は終了しない」へ変える必要がある。これが本仕様で最も大きい構造の変更である。
 - **シェル**: マウント時に `shell/<名>` を 1 つ決める（`resolve.rs`）。切替＝マウントの片側（シェル側）だけを差し替えて emo の資産（アトラス・合成・配置）を作り直す。
 - **バルーン**: argv 第 2 引数で決まり、`areka-emo-present` の balloon 側が読む。切替＝バルーン側の資産だけを作り直す。
@@ -99,3 +99,5 @@
 - 決定論テスト網羅は必達。偽の SHIORI 2 体はテスト DLL ではなく偽境界（記憶 prefer-x64-fake-boundary-tests-not-x86）。実機は emo2 ⇄ R_POST_and_KOMAINU の往復を 1 周（記憶 areka-real-machine-signoff-bounded-auto-exit）。
 - 1 ファイル 1,000 行。`runtime.rs`・`main.rs`・`kanade/schedule/*` の現在行数を着手時に測る。
 - 規模 **L**。要件段階で ①②（寿命＋バルーン）を先行スライスにできる。
+
+- **2026-09-18 `nar-install` 設計からの申し送り（使用中の宛先）**: `areka-nar` の展開は「作業フォルダに組んでから宛先と入れ替える」形で、宛先の中のファイル（起動中のゴーストの `shiori.dll` 等）が開かれていると入れ替えが失敗し、宛先は無傷のまま `NarError::Io { phase: Commit, rolled_back: true }` が返る。**エンジンは SHIORI の解放を試みない**。起動中のゴーストへ入れる・更新する・切り替える経路は、呼び出し側が先に SHIORI をアンロード（`OnClose` 相当の終了経路）してから `install` を呼ぶこと。

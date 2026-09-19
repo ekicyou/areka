@@ -8,7 +8,7 @@
 //! - `build_onboot(ghostdir) -> Vec<u8>`: SHIORI/3.0 `OnBoot` リクエストを UTF-8 で生成（要件 4.1）。
 //! - `parse_value(response) -> Option<String>`: 応答から `Value:`（さくらスクリプト本体）を抽出（要件 4.2/4.4）。
 //!
-//! charset は emo2 の UTF-8 固定（要件 4.4 / fixtures/emo2/ghost/master/descript.txt: `charset,UTF-8`）。
+//! charset は emo2 の UTF-8 固定（要件 4.4 / 検体 emo2 の ghost/master/descript.txt: `charset,UTF-8`）。
 
 #![allow(dead_code)] // x64 親の後続タスク（ParentDriver）で配線するまでの暫定。
 
@@ -73,9 +73,9 @@ mod tests {
 
     #[test]
     fn build_onboot_produces_get_shiori3_request() {
-        let req = build_onboot(Path::new(
-            r"crates\pilot\examples\shiori-host-32\fixtures\emo2\ghost\master",
-        ));
+        // `build_onboot` は ghostdir を捨てる（SHIORI/3.0 の要求に載らない）ので、
+        // ここは実在しなくてよい合成値である。実物の検体は窓口から得る。
+        let req = build_onboot(Path::new("ghost/master"));
         // 有効な UTF-8 であること（要件 4.4: charset UTF-8）。
         let s = std::str::from_utf8(&req).expect("build_onboot output must be valid UTF-8");
 

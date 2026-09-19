@@ -244,13 +244,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn ghostdir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("examples")
-            .join("shiori-host-32")
-            .join("fixtures")
-            .join("emo2")
-            .join("ghost")
-            .join("master")
+        crate::sample_support::emo2_ghost_master()
     }
 
     /// go 基準(1) precursor（requirements 3.1–3.3）: i686 helper 内で pasta.dll をロードし

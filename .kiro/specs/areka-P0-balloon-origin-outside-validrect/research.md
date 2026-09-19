@@ -90,7 +90,7 @@ Some(v) => {
 | `\_l` の縦書き座標系の行 | `:183` | 「クランプ撤去の行は『撤去により areka 内では二択が発生しない』という帰結として SC15 に触れる」・原点＝`TextRegion::start()`〔`region.rs:292-294`〕・書字開始角 `(right, top)`〔同 `:231-234`〕。要件 6.2 の言い直し対象。**引用の行番号 2 か所が既に陳腐化**（現在は `:290-303`／`:286-289`）——「何の定義行か」で指し直す好機 |
 | `\_l[x,y]` の上書き行 | `:209` | 「未宣言成分だけが書字開始角へ落ちる（`region.rs:292-294` の `TextRegion::start()`・書字開始角の分岐は同 `:231-234`）」。要件 6.3 の書き換え対象。同じく行番号が陳腐化 |
 | `region.rs` 冒頭 doc | `:24-37` | 要件 6.4 |
-| roadmap 台帳 | `.kiro/steering/roadmap.md:99`（#38）・`:149`（A0 ウェーブ） | 要件 7.1（完了時） |
+| roadmap 台帳 | `.kiro/steering/roadmap.md` の spec 台帳の #46 の行と、ウェーブ表の A0 の行（番号は 2026-09-19 の main 取り込みで #38 → #46） | 要件 7.1（完了時） |
 | 隣接 spec | `areka-P0-balloon-canon-residue/brief.md:98`（項目 14＝折返し基準の範囲外）・`areka-P0-emo-text-canon-residue/brief.md:11`（項目 14＝`BALLOON_NAME_PLACEHOLDER`）・`areka-P0-currentghost-property-tree/*.md:23`（`balloon.scope(ID).*` 19 項目に `basepos` を含む） | brief の記述どおり実在。要件 7.2 の申し送り先も実在 |
 
 ログ文言の依存: 現行の 2 つの `debug!` 文言（「宣言された origin 成分が validrect の外にある……」「未指定の origin 成分を書字開始角へ寄せる」）を grep している文書・手順書・スクリプトは**無い**（`.md`／`.rs`／`.ps1` 全文検索でヒットは `region.rs` 本体と本仕様の brief のみ）。文言は自由に改められる。

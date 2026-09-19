@@ -384,7 +384,7 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User,
+            reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest during greeting");
 
@@ -425,7 +425,7 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
     //     inbox へ入らず握手の消化点が来ないため OnClose GET は構造的に出得ない（race-free）。即 begin_close
     //     回帰（`pending_close` 迂回）ならここで既に OnClose GET が出ており is_none() が落ちる。
     assert!(
-        onclose_get_index(&harness.shiori.recorded(), CloseReason::User).is_none(),
+        onclose_get_index(&harness.shiori.recorded(), CloseReason::User { scope: 0 }).is_none(),
         "挨拶再生中（release 前）は OnClose GET がまだ現れないはず（close は pending_close で繰延・即握手でない）"
     );
 
@@ -460,7 +460,7 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
     // (b) 通常 close 握手を通った: OnClose GET（Ref0=user・INACTIVE＝Status なし）が現れる。
     //     挨拶中 close は即握手せず、挨拶 TalkDone 着弾で begin_close→OnClose GET が発行される
     //     （＝この GET の存在自体が握手経路＝CloseTalkWait を踏んだ証左・DD-IT-12）。
-    let onclose_index = onclose_get_index(&recorded, CloseReason::User)
+    let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("挨拶 TalkDone 後に OnClose GET（Ref0=user）が現れるはず（挨拶中 close の握手）");
 
     // (c) 別れの close talk が現に起動した（OnClose の Value を受けて再生起動要求を配送した）。

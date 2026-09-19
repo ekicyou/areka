@@ -1,0 +1,4 @@
+charset,Shift_JIS
+type,balloon
+name,Balloon for Staysee Syncfield
+directory,StayseeBalloon

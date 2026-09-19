@@ -1,6 +1,7 @@
 use super::ViewboxExecutor;
 use super::test_support::{
-    Rig, block_axis_ink_span, build, glyph_items, live_diff_model_font, opaque_count,
+    Rig, block_axis_ink_span, build, emo2_balloon_root, glyph_items, live_diff_model_font,
+    opaque_count,
 };
 use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
@@ -566,8 +567,7 @@ fn live_diff_detects_injected_divergence() {
 /// スケジュール（LINE1 0.0／LINE2 0.5／LINE3 1.2／あふれ 2.0）を忠実再現する。
 #[test]
 fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
-    let fixture_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku");
+    let fixture_dir = emo2_balloon_root();
     let read_dec = |name: &str| -> String {
         let bytes = std::fs::read(fixture_dir.join(name))
             .unwrap_or_else(|e| panic!("fixture {name} 読取失敗: {e}"));

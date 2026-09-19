@@ -18,7 +18,7 @@
 //! ／`open_startup_window` の後で `emo2_boot::wire_emo2_boot` を呼び、その成否で実 sink boot
 //! （`wired=true`）／既存 `LogSink`×2 フォールバック boot（`wired=false`）を呼び分ける（task 5.2・
 //! design.md「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）。`run()` 復帰後は
-//! `GhostRuntime::shutdown(CloseReason::User)`（DD-10）→ seriko `ActorHandle::join` で終了を
+//! `GhostRuntime::shutdown(CloseReason::User { scope: 0 })`（DD-10）→ seriko `ActorHandle::join` で終了を
 //! 総仕上げする。boot 失敗は非致命として扱い骨格起動を止めない（要件 7.3・8.2）。
 
 use bevy_ecs::prelude::*;
@@ -70,6 +70,8 @@ mod emo2_boot;
 /// 薄い配線層。現状は `throttle`（送出間引きの純粋判定・task 2.4）のみ。ポインタハンドラ結線と
 /// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
 mod input_events;
+mod menu;
+mod readme;
 
 /// アクタースレッドの役割名の宣言（areka-P0-draw-load-parity task 2.3）。
 /// `areka-actor` のスレッド開始フックを導入し、生成されるアクタースレッド 1 本ごとに
@@ -245,6 +247,11 @@ fn main() -> Result<()> {
         if let Some(runtime) = outcome.ghost.as_ref() {
             let sender = runtime.kanade().clone();
             input_events::wire_mouse_input(app.world().borrow_mut().world_mut(), sender);
+            // 右クリックメニューの結線（areka-P0-popup-menu-minimal）: 終了の項目が上の入力の結線を使う。
+            menu::wire_menu(
+                app.world().borrow_mut().world_mut(),
+                runtime.kanade().clone(),
+            );
             // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
             // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
             // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
@@ -348,7 +355,7 @@ fn main() -> Result<()> {
     // 不改変・R6.2）。失敗は `error!` の上で main 自身の `Result` へ伝播する（genuine な失敗を
     // 黙って exit 0 にしない・R6.3）。
     if let Some(runtime) = ghost_runtime {
-        if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::User) {
+        if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::User { scope: 0 }) {
             tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
             return Err(windows::core::Error::from_hresult(
                 windows::Win32::Foundation::E_FAIL,
@@ -703,6 +710,9 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
                     // input_events 側が担う。spawn 直後の同一 World-mutation クロージャ内で
                     // 同期実行するため、キャラ窓は既に存在し async race はない。
                     input_events::attach_char_pointer_handlers(world);
+                    // 右クリックメニューの解放ハンドラも同じ場所で付ける。このクロージャが動くのは
+                    // `app.run()` の中＝`menu::wire_menu` より後で、結線の無い起動では解放を無視するだけ。
+                    menu::attach_release_handlers(world);
                     // バルーン窓へポインタハンドラを装着（task 6.2・`attach_char_pointer_handlers`
                     // 直後・R4.3/5.5）: `BalloonWindowMarker` 窓へ `OnPointerMoved`／`OnPointerPressed`
                     // を post-spawn 挿入する（標的はバルーン窓のみ＝キャラ窓配線の非退行・R4.3）。同一

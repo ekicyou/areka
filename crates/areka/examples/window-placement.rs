@@ -82,7 +82,9 @@
 //! `BoxStyle`（論理 DIP）・`DragConstraint` を一切使わない。
 
 use bevy_ecs::prelude::*;
+use sample_ghost_kit::SampleRoot;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use tracing_subscriber::EnvFilter;
 use windows::core::Result;
 
@@ -123,15 +125,18 @@ const KERO_INITIAL_SURFACE_ID: u32 = 10;
 /// smoke 自動 close の env ゲート名（main.rs と同名・`AREKA_` 冠規約）。
 const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 
-/// emo2 fixture のゴーストルート（`CARGO_MANIFEST_DIR`＝`crates/areka` 相対・
-/// donor emo-present／placement 統合テストと同一アンカー規約）。
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
 fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    EMO2.folder().to_path_buf()
 }
 
-/// emo2 fixture のバルーンルート（placement task 4.1／6.1 テストの規約を踏襲）。
 fn balloon_root() -> PathBuf {
-    emo2_root().join("emo2-kakukaku")
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
 }
 
 // ---------------------------------------------------------------------------

@@ -26,18 +26,23 @@
 ## 1. 早わかり
 
 ```powershell
-# ① 測る（7 分。測定マシンが静かであることを自分で確かめてから -ConfirmQuiet を付ける）
+# ① 検体の絶対パスを得る（folder= と balloon.emo2-kakukaku= の 2 行が出る）
+# 同時に 2 つの端末から呼ばないこと（展開先を消して作り直すので互いの木が消える）
+cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2
+
+# ② 測る（7 分。測定マシンが静かであることを自分で確かめてから -ConfirmQuiet を付ける）
 pwsh -File tools/perf/invoke-perf-run.ps1 `
     -Profile short -Build release `
-    -GhostRoot C:\絶対パス\emo2 `
+    -GhostRoot <①の folder= の値> `
+    -BalloonRoot <①の balloon.emo2-kakukaku= の値> `
     -OutDir C:\出力先\perf-001 `
     -ConfirmQuiet
 
-# ② 中身を見る（合否は出さない。数字を並べるだけ）
+# ③ 中身を見る（合否は出さない。数字を並べるだけ）
 python tools/perf/judge-perf.py C:\出力先\perf-001\run.log C:\出力先\perf-001\cpu.csv `
     --mode baseline
 
-# ③ 合否を出す
+# ④ 合否を出す
 python tools/perf/judge-perf.py C:\出力先\perf-001\run.log C:\出力先\perf-001\cpu.csv `
     --mode verdict --build release
 ```
@@ -113,15 +118,26 @@ pwsh -File tools/perf/invoke-perf-run.ps1 `
     -Profile short|long `
     -Build dev|release `
     -GhostRoot <ゴースト一式のルート・絶対パス> `
-    [-BalloonRoot <バルーンのルート・絶対パス>] `
+    -BalloonRoot <バルーンのルート・絶対パス> `
     [-OutDir <出力先>] `
     -ConfirmQuiet
 ```
 
 - **パスは必ず絶対パスで**。相対パスで起動すると SHIORI（`pasta.dll`）の読み込みに失敗します。
+- **窓口を 2 つの端末から同時に呼ばないでください。** 呼ぶたびに同じ展開先を消して作り直す
+  ので、後から呼んだ側が先に走っている測定の木を消してしまいます。測定は 1 本ずつ順番に。
+- **2 つのパスは検体の窓口から得ます。** 次の 1 行が `folder=`（ゴースト一式のルート）と
+  `balloon.<バルーン名>=`（バルーンのルート）を絶対パスで出すので、その値をそのまま渡します。
+
+  ```powershell
+  cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2
+  ```
+
 - `-GhostRoot` には、直下に `ghost\master\descript.txt` があるフォルダを指定します。
-- `-BalloonRoot` を省略すると `<GhostRoot>\emo2-kakukaku` を補います。これは計測に使っている
-  ゴースト emo2 に固有の値です。別のゴーストで測るときは明示してください。
+  窓口の `folder=` の値がそれにあたります。
+- `-BalloonRoot` は**省略できません**。バルーンはゴースト一式のルートの下にはなく、窓口が
+  `<根>\ghost\<名前>` と `<根>\balloon\<名前>` へ分けて展開するためです（ゴーストのルートに
+  バルーン名を継ぎ足す昔の既定は、必ず存在しない場所を指すので取り除きました）。
 - `-Build release` で測るには先に `cargo build -p areka --release` が要ります
   （`dev` なら `cargo build -p areka`）。
 - `-OutDir` を省略すると `%LOCALAPPDATA%\areka-diag\perf-<日時>` に作られます。出力先は
@@ -802,7 +818,8 @@ SSP 参考値（§16）が併記されますが、**合否には載りません*
 
 ```powershell
 pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build release `
-    -GhostRoot C:\絶対パス\emo2 -OutDir C:\出力先\rank-001 `
+    -GhostRoot <窓口の folder= の値> -BalloonRoot <窓口の balloon.emo2-kakukaku= の値> `
+    -OutDir C:\出力先\rank-001 `
     -RustLogExtra 'areka::perf=debug' -AutoQuiet -Goal draw-load-parity
 ```
 
