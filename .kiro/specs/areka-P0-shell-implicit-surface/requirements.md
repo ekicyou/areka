@@ -148,7 +148,7 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 2. When 台本の `\s[N]` が、画像だけで存在する面 N を指した, the areka shall その面を表示する（`R_POST_and_KOMAINU` の `\s[10]`・`\s[100]`・`\s[200]` と、波括弧を持つ `\s[1]`〜`\s[6]` のどちらも同じ規則で届く）。
 3. If `\s[N]` が宣言も画像も無い番号を指した, then the areka shall 現状どおり `error!` を出して前の絵を残す（本仕様は変えない）。
 4. When アニメーションまたは着せ替えのコマ（`animation*.pattern*`）の相手の面が、画像だけで存在する面である, the areka shall そのコマを、宣言のある面を相手にしたときと同じに描く（C7）。`konnoyayame` の面 0 は、まばたきのコマとして面 1031・1032・1033 の画像を位置 93,103 に重ねる。
-5. If コマの相手が宣言も画像も無い番号である（停止を表す `-1`・`-2` は除く）, then the areka shall 現状どおりそのコマを描かずに続行し、コマを持つ側の面も起動も失敗させない。いま 0 件の記録を改め、同じ「面 → 相手」の組について `warn!` を 1 回出す（毎フレーム出さない）。
+5. If コマの相手が宣言も画像も無い番号である（停止を表す `-1`・`-2` は除く）, then the areka shall 現状どおりそのコマを描かずに続行し、コマを持つ側の面も起動も失敗させない。いま 0 件の記録を改め、同じ「面 → 相手」の組について `warn!` を出す。出す頻度は「コマを描くたび・毎フレーム」であってはならず、1 回の起動で同じ組について高々数回（面の表を組む回数以下）に収める。面の表は 1 回の起動で 3 回組まれる（2 スコープ＋採寸）ので、「起動で 1 回」にするか「面の表 1 つにつき 1 回」にするかは設計で定める。
 6. The areka shall 窓の採寸と実際の表示で、同じ「番号 → 画像」の対応・同じ土台の絵・同じ透過の扱い（要件 4）を使う。採寸した窓の大きさと表示された絵の外形が食い違わない（バルーンで「列挙の規則が 2 つの実装に分かれると、採寸した窓寸と実際の枠が食い違い、実機でしか現れない欠陥になる」と分かっている＝`crates/areka/src/placement/measure.rs` の `measure_balloon_surface0` の説明）。
 7. When `surface.append` が、画像だけで存在する面を対象に含む, the areka shall その面を「既にある面」と数えて追記を適用する（C6）。
 8. If `surface.append` の対象が宣言も画像も無い番号である, then the areka shall 現状どおり新設せず、既存の `warn!`（「surface.append 対象 id が未存在: 新設せずスキップ」）を出す。
@@ -184,8 +184,9 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 5. The areka shall `emo2` で変わるものを、次の **1 件だけ**にする: `purple/a/null.png`（382×547・α チャンネルなし・全 208,954 画素が左上の画素と同じ色）が、「焼く段で未実装として落ちる（失敗 1 件）」から「全画素が透明な絵として焼かれる（失敗 0 件）」へ変わる。これに伴い、
    - シェルを焼いたときの失敗は 1 件 → **0 件**、索引表に載る絵は 1 枚増える。
    - 起動時と採寸時の `warn!`「shell bake で脱落した element」（`build_boot_assets`・`build_shell_assets`）は、`emo2` では 1 回 → **0 回**になる。
+   - 代わりに、焼く段の**既存の** `warn!`「element が全透明（α=0）でトリム後 0 寸です」（`crates/areka-emo-atlas/src/lib.rs` の `bake`）が、`null.png` について焼くたびに 1 回出るようになる（今日は落ちているので 0 回）。これは全画素が透明な絵に対する既存の扱いそのもので、本仕様は受け入れる。抜き色で全透明になった絵だけを警告から外す特例は足さない（要件 4.7「既存の扱いは変えない」と同じ向き）。
    - 面 1414（この絵だけを持つ）と、それを着せ替えのコマに引く面 1000 の**描かれる画素は変わらない**（今日は「落ちて描かれない」、適用後は「全画素が透明で描かれない」）。面 1000 の外形も変わらない（シェルには同じ原寸 382×547 の部品が他に 32 枚あり、面 1000 のコマ 37 行は全て位置 0,0 なので、`null.png` の原寸が外形に数えられるようになっても 382×547 を超えない）。
-6. When 要件 5.5 の変化を既存のテストへ反映する, the 本仕様 shall この 1 件の脱落を留めているテスト（`crates/areka-emo-atlas/src/emo2_e2e.rs` の `emo2_shell_all_elements_baked` と定数 `SHELL_NORMALIZE_SEAM_KEY` の説明・シェルとバルーンを併せて焼く `emo2_balloon_same_bake_path_as_shell`・`crates/areka-emo-atlas/src/emo2_golden.rs` の `emo2_shell_bake_is_deterministic` の失敗集合の比較）を、**消さずに**「失敗 0 件・`null.png` は全画素が透明な絵として索引表に載る」を確かめる形へ書き換える。「抜き色は未実装として落ちる」を留めている `normalize.rs` の単体テスト 2 本（`on_no_alpha_no_pna_selects_keycolor_seam`・`off_no_pna_selects_keycolor_seam`）も同じく、抜かれた結果を確かめる形へ書き換える。`.pna` と `full` の腕のテストは書き換えない（変更 0）。
+6. When 要件 5.5 の変化を既存のテストへ反映する, the 本仕様 shall この 1 件の脱落を留めているテスト（`crates/areka-emo-atlas/src/emo2_e2e.rs` の `emo2_shell_all_elements_baked` と定数 `SHELL_NORMALIZE_SEAM_KEY` の説明・シェルとバルーンを併せて焼く `emo2_balloon_same_bake_path_as_shell`・`crates/areka-emo-atlas/src/emo2_golden.rs` の `emo2_shell_bake_is_deterministic` の失敗集合の比較・同ファイルの `emo2_shell_matches_golden` と、その期待値 `crates/areka-emo-atlas/src/testdata/emo2_shell_golden.txt`＝今日は 54 行で `null.png` の行は **0 行**・適用後は `null.png` の 1 行が増える）を、**消さずに**「失敗 0 件・`null.png` は全画素が透明な絵として索引表に載る」を確かめる形へ書き換える。「抜き色は未実装として落ちる」を留めている `normalize.rs` の単体テストのうち `on_no_alpha_no_pna_selects_keycolor_seam` も同じく、抜かれた結果を確かめる形へ書き換える。もう 1 本の `off_no_pna_selects_keycolor_seam`（`UseSelfAlpha::Off`）は、`Off` を渡す経路が areka に **0 本**であり、`Off` かつ α チャンネル付きの絵は受け取る画素の形式の都合で正しく抜けないので、`Off` の下の抜き色をどこまで実装するかを設計で定め、その定めに合わせて書き換えるか据え置く（ギャップ分析 7 節の論点 8）。`.pna` と `full` の腕のテストは書き換えない（変更 0）。
 7. The areka shall 「既知の α 無し `null.png` が落ちる」と説明している注記（`build_boot_assets`・`build_shell_assets`・`crates/areka/examples/` の 3 か所）を、事実に合わせて直す。
 8. The areka shall 「`element0` が在れば画像を使わない」が壊れたらテストが赤になることを、面 10 の形（`element0` の画像 336×400 と、面の画像 427×463 が**別の絵**）で示す。面 0 の形（`element0` と面の画像が同じ不透明な絵）では、誤って二重に重ねても結果のバイトが変わらず検査にならないので、面 0 だけに頼らない。
 9. The areka shall 実機で `emo2` を起動し、立ち絵・バルーン・撫で・メニュー・終了が適用前と同じに見えることを 1 度確かめる（要件 8）。
@@ -230,7 +231,7 @@ brief が引いた正典は `dev_shell` の 2 文だけだった。ukadoc の現
 2. The areka shall `R_POST_and_KOMAINU` について次を確かめる: ⑴ 本体側（236×462）と相方側（140×160）の絵が、地色の四角ではなくキャラクターの形に抜かれて出る ⑵ 起動挨拶がバルーンに出る ⑶ 絵の外（抜かれた場所）のクリックが背後の窓へ抜ける ⑷ 右クリックメニューの 1 項目目が既定名「説明書」でなく、辞書 `dic06_String.txt` の 3 候補（「現在のシェルについて(&R)」「取扱説明書(&R)」「Read me(&R)」）のどれかになり、`(&R)` に下線が付く（完了済み `areka-P0-popup-menu-minimal` の実機確認 9.3 ⑷ の引き受け。項目名の差し替えそのものは同仕様の決定論テストが留めているので、欠けているのは目視だけである）。
 3. The areka shall `konnoyayame` について次を確かめる: ⑴ 本体側（260×390）と相方側（200×200）の絵が、キャラクターの形に抜かれて出る ⑵ 本体側がまばたきし、目の周りに四角い地色が出ない（コマの相手 3 枚が慣習で解決でき、抜き色が効いた証拠）⑶ 起動挨拶の文字が文字化けせずにバルーンに出る（SHIORI 通信の初期の文字コードは `Shift_JIS`（`charset_initial`・`source="default"`）・ゴーストの `descript.txt` は `charset,UTF-8` で、絵が出ないうちは目で確かめられず**未確認**のまま残っている）⑷ シェルの `sakura.balloon.alignment,none`／`kero.balloon.alignment,none` が自動調整として効く（キャラクター窓が画面の右半分に居ればバルーンは左隣、左半分なら右隣）。
 4. If 要件 8.3 の ⑶ または ⑷ が期待どおりでなかった, then the 本仕様 shall それを本仕様の不合格とせず、別件として起票して引受先を記録する（どちらも面の解決・抜き色とは別の経路である）。
-5. The areka shall `emo2` について、適用前と同じに見えること（要件 5.9）と、起動時の `warn!`「shell bake で脱落した element」が 0 回であること（要件 5.5）を確かめる。
+5. The areka shall `emo2` について、適用前と同じに見えること（要件 5.9）と、起動時の `warn!`「shell bake で脱落した element」が 0 回であること、`null.png` の「全透明」の `warn!` が出ていること（どちらも要件 5.5）を確かめる。
 6. When ログに「0 件」を根拠として書く（例: `EmptyComposition` が 0 件・脱落の `warn!` が 0 回）, the 本仕様 shall 同じ走行の中に `debug` の行が実在することを併せて示す（`RUST_LOG` は target 名で、未設定や書式の誤りは黙って `info` へ落ちるため）。
 
 ### Requirement 9: 網羅台帳と文書
