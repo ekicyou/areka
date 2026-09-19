@@ -42,6 +42,13 @@
 //! **禁則**: 本ファイルで `model.origin().x() == Some(0)` のような**宣言された生値**を assert
 //! してはならない。task 4.3 で宣言が消えた瞬間に赤くなり、上の証跡が成立しなくなる。
 //!
+//! **禁則の対象**: 上の禁則が掛かるのは**原本 `emo2-kakukaku` とその複製 `emo2-kakukaku-wplimit`
+//! を見る検査**（既存 6 本）である。この 2 つは宣言を削除済みで、宣言の有無に依存しないことが
+//! 証跡の成立条件だからである。`origin` を今も宣言したままの検体 `emo2-kakukaku-offsetdpi` を
+//! 見る検査（ファイル末尾・出典 spec `areka-P0-balloon-origin-outside-validrect`）には掛からない
+//! ——そちらは**宣言が在ること自体が前提**であり、宣言が消えたら「宣言されていないときの縮退」を
+//! 測るだけの検査に静かにすり替わるので、前提として明示的に確かめる。
+//!
 //! ## 決定論（要件 10.6）
 //!
 //! 実 DPI モニタ・実 GPU・実ゴースト・実窓を要さない。ファイル読み込みと純粋層の解決のみで
@@ -405,5 +412,106 @@ fn wplimit_copy_resolves_identically_to_shipped_original() {
         KERO_START,
         KERO_WRAP,
         "emo2-kakukaku-wplimit scope 1 (kero)",
+    );
+}
+
+// ── 檻 5: 範囲外の `origin` を宣言したままの検体 ───────────────────────────
+//
+// 出典 spec: `areka-P0-balloon-origin-outside-validrect`（要件 **1.6**／**2.3**／**5.5**）。
+// 上の 6 本は宣言を削除済みの原本と複製を見る檻であり、**宣言が範囲外に在るときの規則**は
+// どれも固定していない。それを固定するのがここである。
+
+/// 範囲外の `origin` を宣言したままの検体（実機サインオフ用に原本から複製されたバルーン）。
+///
+/// 原本・`wplimit` が宣言を削除した後も `origin.x,0`／`origin.y,0` を持ち続けている
+/// （面別上書き層の `validrect.left` は sakura 36／kero 24 なので、解決後の宣言値は範囲の
+/// 外に落ちる）。検体は書き換えない。`Drop` が複製を消すのでプロセス寿命で保持する。
+static OFFSETDPI: LazyLock<SampleRoot> = LazyLock::new(|| {
+    SampleRoot::acquire("emo2-kakukaku-offsetdpi").expect("emo2-kakukaku-offsetdpi は登記済みの検体")
+});
+
+/// 範囲外宣言を持つ検体のバルーン定義ディレクトリ（自分でパスを継ぎ足さない）。
+///
+/// 窓口の登記ではバルーン種別なので、根は `balloon()` ではなく `folder()` で引く
+/// （既存の `wplimit_root()` と同形）。
+fn offsetdpi_root() -> PathBuf {
+    OFFSETDPI.folder().to_path_buf()
+}
+
+/// 範囲外に宣言された `origin` を持つ実物の検体が、書字開始角から書き始める。
+///
+/// 期待値は原本と同じ定数をそのまま使う——この検体の 2 枚の PNG は原本と同寸で、面別上書き層の
+/// `validrect`／`wordwrappoint` も原本と同じだからである（原本との差分は `windowposition` と
+/// `origin` 宣言の有無のみ）。原本の領域とまるごと比べる形にはせず成分ごとに突合する。
+///
+/// 前提を 3 つ同じ検査の中で確かめる。いずれかが崩れると、この検査は規則ではなく別の何かを
+/// 測るものに静かにすり替わる: ⑴ マージ後のモデルが `origin` を**宣言している**こと
+/// （冒頭 doc「禁則の対象」参照）⑵ 2 枚の PNG の原寸が定数と一致すること（原寸が違えば範囲の
+/// 4 辺が別の値になる）⑶ 横書きへ解決されること（書字開始角がどの隅かは書字方向が決める）
+#[test]
+fn offsetdpi_fixture_with_out_of_range_origin_starts_at_writing_corner() {
+    let dir = offsetdpi_root();
+
+    let sakura_model = merged_model(&dir, SAKURA_OVERLAY);
+    let kero_model = merged_model(&dir, KERO_OVERLAY);
+
+    // 前提 1: 範囲外の宣言が在ること。
+    for (model, what) in [
+        (&sakura_model, "scope 0 (sakura)"),
+        (&kero_model, "scope 1 (kero)"),
+    ] {
+        assert_eq!(
+            model.origin().x(),
+            Some(0),
+            "emo2-kakukaku-offsetdpi {what}: origin.x の宣言が在ることが本検査の前提"
+        );
+        assert_eq!(
+            model.origin().y(),
+            Some(0),
+            "emo2-kakukaku-offsetdpi {what}: origin.y の宣言が在ることが本検査の前提"
+        );
+    }
+
+    // 前提 2: 画像原寸が期待値の定数と一致すること。
+    assert_eq!(
+        png_native_size(&dir.join("balloons0.png")),
+        SAKURA_IMAGE_SIZE,
+        "emo2-kakukaku-offsetdpi: balloons0.png の原寸"
+    );
+    assert_eq!(
+        png_native_size(&dir.join("balloonk0.png")),
+        KERO_IMAGE_SIZE,
+        "emo2-kakukaku-offsetdpi: balloonk0.png の原寸"
+    );
+
+    // 前提 3: 横書きへ解決されること。
+    let sakura_writing = WritingMode::resolve(&sakura_model);
+    let kero_writing = WritingMode::resolve(&kero_model);
+    assert_eq!(
+        sakura_writing,
+        WritingMode::HorizontalTb,
+        "emo2-kakukaku-offsetdpi scope 0 (sakura): 縦書き宣言が無いので横書きへ解決される"
+    );
+    assert_eq!(
+        kero_writing,
+        WritingMode::HorizontalTb,
+        "emo2-kakukaku-offsetdpi scope 1 (kero): 縦書き宣言が無いので横書きへ解決される"
+    );
+
+    // 本題: 範囲外の成分は宣言なしと同じ扱いになり、開始点は書字開始角（横書きなので
+    // validrect の左上）へ落ちる。
+    assert_region(
+        &TextRegion::resolve(&sakura_model, SAKURA_IMAGE_SIZE, sakura_writing),
+        SAKURA_EDGES,
+        SAKURA_START,
+        SAKURA_WRAP,
+        "emo2-kakukaku-offsetdpi scope 0 (sakura)",
+    );
+    assert_region(
+        &TextRegion::resolve(&kero_model, KERO_IMAGE_SIZE, kero_writing),
+        KERO_EDGES,
+        KERO_START,
+        KERO_WRAP,
+        "emo2-kakukaku-offsetdpi scope 1 (kero)",
     );
 }
