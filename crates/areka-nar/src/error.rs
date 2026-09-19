@@ -48,19 +48,19 @@ refuse_reasons! {
     #[error("アーカイブが壊れている: {detail}")]
     CorruptArchive { detail: String },
 
-    /// 伸長の結果が宣言と合わない（要件 2.5）。
+    /// 伸長の結果が宣言と合わない（要件 2.6）。
     #[error("エントリ {index}（{name}）の内容が壊れている: {what}")]
     IntegrityMismatch { index: usize, name: String, what: Integrity },
 
-    /// 読めることになっていない形式のエントリ（要件 2.6）。
+    /// 読めることになっていない形式のエントリ（要件 2.5）。
     #[error("エントリ {index}（{name}）は対応していない: {what}")]
     UnsupportedEntry { index: usize, name: String, what: Unsupported },
 
-    /// エントリ名を復号できない（置換文字が出た＝要件 2.3）。
+    /// エントリ名を復号できない（置換文字が出た＝要件 2.4）。
     #[error("エントリ {index} の名前を {encoding} として復号できない（生バイト {raw_hex}）")]
     NameUndecodable { index: usize, raw_hex: String, encoding: &'static str },
 
-    /// シンボリックリンクのエントリ（要件 4.7）。
+    /// シンボリックリンクのエントリ（要件 2.7）。
     #[error("エントリ {index}（{name}）はシンボリックリンク")]
     SymlinkEntry { index: usize, name: String },
 
@@ -68,7 +68,7 @@ refuse_reasons! {
     #[error("エントリ {index}（{name}）のパスが安全でない: {why}")]
     UnsafePath { index: usize, name: String, why: UnsafeWhy },
 
-    /// 大文字小文字だけが違う名前が同じ宛先で重なる（要件 2.7）。
+    /// 大文字小文字だけが違う名前が同じ宛先で重なる（要件 4.7）。
     #[error("大文字小文字だけが違う名前が重なっている: {a} と {b}")]
     CaseCollision { a: String, b: String },
 

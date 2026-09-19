@@ -14,7 +14,7 @@
 畳んだ `.nar` を自分で開ける必要は無い。窓口は `crates/sample-ghost-kit` である。
 
 - テストから: `sample_ghost_kit::SampleRoot::acquire("emo2")` が起動記録の無い新品の木を配る。返った値を束縛している間だけパスを借りられ、捨てると木も消える。
-- 実機の手順で絶対パスが要るとき: `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2`。標準出力に `root=` ／ `folder=` ／ `balloon.<名>=` の行が出る（`folder=` がゴースト本体の置き場）。未登録の名前は標準出力へ 1 行も出さずに終了コード 2 で断る。
+- 実機の手順で絶対パスが要るとき: `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2`。標準出力に `root=` ／ `folder=` ／ `balloon.<名>=` の行が出る（`folder=` がゴースト本体の置き場）。未登録の名前は標準出力へ 1 行も出さずに終了コード 2 で断る。**このコマンドは呼ぶたびに同じ展開先を消して作り直すので、2 つの端末から同時に呼ぶと互いの走行の木を消してしまう。**実機を 2 周するときは 1 周ずつ順番に回すこと。
 
 ## 検体を 1 本足す手順
 

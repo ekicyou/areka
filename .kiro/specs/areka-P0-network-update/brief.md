@@ -7,7 +7,7 @@
 
 **誰の何が困っているか**: ゴーストを入れた第三者。作者が辞書を直して配布サイトを更新しても、areka では受け取れない。
 
-今日の areka には **HTTP クライアントが 1 つも無い**。`Cargo.lock`（242 パッケージ）に `reqwest`／`ureq`／`hyper`／`curl`／`tokio`／`rustls`／`native-tls` は無く、ルート `Cargo.toml` の `windows` 機能一覧に `Win32_Networking_WinHttp`／`WinInet` も無い。`updates2.dau`／`updates.txt` を読むコードも無い（`crates/pilot/examples/shiori-host-32/fixtures/emo2/updates.txt` は検体の中身として存在するだけで、誰も読まない）。`homeurl` の読み手も無い。更新系イベント（`OnUpdateBegin`〜`OnUpdateResult`・束「更新」の `members` 51 件）は全て未対応。
+今日の areka には **HTTP クライアントが 1 つも無い**。`Cargo.lock`（242 パッケージ）に `reqwest`／`ureq`／`hyper`／`curl`／`tokio`／`rustls`／`native-tls` は無く、ルート `Cargo.toml` の `windows` 機能一覧に `Win32_Networking_WinHttp`／`WinInet` も無い。`updates2.dau`／`updates.txt` を読むコードも無い（`updates.txt` は検体 `emo2` の中身として存在するだけで、誰も読まない。2026-09-19 以降の在処は `vendors/sample_ghost/emo2.nar` の中）。`homeurl` の読み手も無い。更新系イベント（`OnUpdateBegin`〜`OnUpdateResult`・束「更新」の `members` 51 件）は全て未対応。
 
 ## Current State（正典の要点・`ukadoc:dev_update`／`ukadoc:manual_update`／`ukadoc:spec_update_file:*`）
 

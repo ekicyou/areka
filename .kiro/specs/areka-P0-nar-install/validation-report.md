@@ -1059,3 +1059,46 @@ $ git check-ignore -v target/nar-samples/manual/emo2/ghost/emo2/ghost/master/pro
 - **窓口を 2 つ同時に呼んではいない。** 窓口は呼ぶたびに `manual/<検体>/` を消して作り直すので、走行中に別の端末で呼ぶと走っている木が消える。2 周は厳密に逐次で行った（周 1 の終了コードを受け取ってから周 2 の窓口を呼んだ）。6.1 が 6.5 へ送った未検証 ⒞ はこれで消化した。
 - **`tools/perf/` の計測経路には触れていない。** 6.1 が 6.5 へ送った未検証のうち ⒜⒝⒟（実測 3 種での引き渡し・`invoke-followup-checks.ps1` の単独起動・`check-quiet` 経路）は本タスクの `_Boundary: 実機サインオフ` の外である。なお `tools/perf/check-quiet.ps1` の自己較正が HEAD で赤く `perf-loop.ps1 selftest` が終了コード 4 で止まることは既知で、本タスク以前からある事象であり、本走行はその経路を通っていない。
 - **⒜⒝⒟ は「引受先不在の先送り」である。** 6.5 は本 spec の最後のタスクなので、境界の外と判定したこの 3 件を吸収する後続タスクが無い。よって次のとおり名指しして最終検証と開発者へ上げる——⒜ `tools/perf/invoke-perf-run.ps1` へ `-GhostRoot`／`-BalloonRoot` を実測 3 種で渡す経路の実走確認（6.1 で既定値を削除して必須引数にしたため、渡し忘れは起動時に止まる側へ倒してある）、⒝ `tools/perf/invoke-followup-checks.ps1` を perf-loop を介さず**単独起動**したときの窓口経路（perf-loop 経由では measure が必ず両方渡すので通らない）、⒟ `tools/perf/check-quiet.ps1` の経路（32bit ヘルパ・管理者権限・静寂な機械）——⒟は上記の既知の赤（`perf-loop.ps1 selftest` が終了コード 4）を先に解く必要がある。
+
+## 最終検証（2026-09-19）
+
+4 つの観点を並行で確かめ、いずれも中止の根拠は出なかった。
+
+- **テスト**: `cargo test --workspace -j 4` が `test result:` 行 111 本・7,935 passed・0 failed・40 ignored。i686 helper を `target/debug/` へ置いた後に走らせ、途中で出力を切らずに `test result:` 行を数えた（切ると上流が止まって一部のスイートが走らないまま緑に見える）。
+- **受け入れ基準**: 要件 10 節・95 項目のすべてに着地の根拠がある（機械で数え直して 95）。
+- **構造と依存の向き**: 層の逆流は無い。`sample-ghost-kit` は本番の依存グラフに入らず、`areka-nar` は `areka-parsers`・`encoding_rs`・`miniz_oxide`・`thiserror`・`tracing` だけを引く。
+- **古い綴りの残り**: `crates`／`tools`／`doc`／`vendors` に、消した 2 つの木を指す綴りは 0 件。較正は畳む前の実バイトから採った——`git grep -E "(shiori-host-32[/\\]+fixtures|sample_ghost[/\\]+R_POST_and_KOMAINU[/\\]+)" 834739a7^` は `crates/areka-nar/src/manifest_tests.rs` に 3 件など複数の当たりを返す。区切りは `[/\\]+` の文字クラスで書くこと（Rust の生文字列リテラルは `\` を 2 バイトで持つので、1 文字幅のクラスでは黙って取り落とす）。
+
+### 改行コードの片道切符（これまで誰も書き残していない）
+
+畳み込みは **作業ツリーのバイト列**を取り込んだ。旧 emo2 と派生バルーンの 2 系統には `.gitattributes` が無く、このリポジトリは `core.autocrlf=true` なので、作業ツリーの側が CRLF になっていた。結果、`.nar` の中身は git のオブジェクトデータベースの blob と次のようにずれている（実測）。
+
+| 検体 | ファイル数 | バイト一致 | 改行だけ違う |
+|---|---|---|---|
+| `emo2.nar` | 110 | 78 | 32 |
+| `emo2-kakukaku-offsetdpi.nar` | 20 | 15 | 5 |
+| `emo2-kakukaku-wplimit.nar` | 20 | 15 | 5 |
+| `R_POST_and_KOMAINU.nar` | 43 | 43 | 0 |
+| 合計 | 193 | 151 | 42 |
+
+`R_POST_and_KOMAINU` だけが 43/43 でバイト一致なのは、この検体だけが `* -text` の効く場所に置かれていたためである。改行以外で中身が違うファイルは 1 件も無い。
+
+**挙動は保たれている。** 畳む前のテストと実機が読んでいたのも同じ作業ツリーのバイト列であり、そこは変わっていない。今後については `vendors/sample_ghost/.gitattributes` の `* -text` が `.nar` のバイト列を凍結する。
+
+**ただしこれは片道切符である。** 書庫はある 1 台の作業ツリーの状態を封じ込めており、畳む前の木はもう無い。だから `core.autocrlf` の設定が違う環境から、この突き合わせをやり直すことはできない。作り直すなら、畳む前の木を git の履歴（`834739a7^`）から取り出すところから始めることになる。
+
+### 最終検証で直したもの（挙動の変更は無し・文書とコメントのみ）
+
+- **design.md の追随**（タスク 5.4 が予告して未着手だったもの）: ⑴ 見張りの較正の記述を、実際に作られた「4 形それぞれの実体の有無を 4 状態で宣言して判定する」形へ書き直した。⑵ 回収・掃除の失敗の宛先を `warn!`／`debug!` から標準エラー 1 行へ訂正。⑶ 窓口の `debug!`（cache hit／miss・掃除の件数・計時）3 か所は**そもそも到達不可能だった**——Allowed Dependencies が窓口に `tracing` を許していない。3 件とも誰も記録していなかった新規の指摘で、Allowed Dependencies の登記が拘束力を持つ旨を本文に書き添えた。
+- **古い引用**: `install_commit_tests.rs` の「設計は `share_mode(0)` と書いている」を現行の `share_mode(1)` へ（0 が使えない理由は残した）。`error.rs` の要件番号 4 件が 2 組で入れ替わっていたのを正した（`IntegrityMismatch` 2.5→2.6・`UnsupportedEntry` 2.6→2.5・`SymlinkEntry` 4.7→2.7・`CaseCollision` 2.7→4.7）。`sample_support.rs` の「依存は `thiserror` のみ」を実測の依存一覧へ（純 Rust であるという肝心の主張は正しいので残した）。
+- **同時に呼ぶと壊れる話を、読み手が開く 4 か所へ**: 窓口は呼ぶたびに `manual/<検体>/` を消して作り直すので、2 つ目のプロセスが走っている木を消す。この警告は `roadmap.md` の 1 か所にしかなかった。`nar-sample-path.rs` の説明・`tools/perf/README.md`・`crates/pilot/examples/shiori-host-32/README.md`・`vendors/sample_ghost/README.md` に 1〜2 文ずつ足した。
+- **生きている 6 本の brief の古い綴り**: 要件 10.5 の掃除範囲が `tools/`／`doc/` だったため `.kiro/specs/` は掃かれておらず、6 本のうち 1 本しか直っていなかった。残りを日付つきの最小の書き換えで直した。`shell-implicit-surface` の「本 spec が先」という順序の推奨は、2026-09-18 の反転と本 spec の着地で**もう選べない**ので、その旨を書いた。
+- **次の spec への地雷**: `crates/sample-ghost-kit/src/lib_tests.rs` の 2 本のテストが `SAMPLES.len()` を 4 と直書きしている。`StayseeBalloon` を登記すると両方赤になるので、`default-balloon-bundle` の brief の追記節に「登記の行を足す同じコミットで 2 か所の数も直すこと」を 1 行足した。
+
+### 引受先の無い先送り（担当を決めていただきたい）
+
+1. **台帳 11 行の `status` を `absent` から起こすこと**（6.3 の記録）。本体 `areka` の依存グラフへ `areka-nar` を繋ぐのは `areka-P0-ghost-install` だが、同 spec の brief には台帳のことが 1 文字も書かれていない。配線が着地したときに誰が台帳を起こすのかが決まっていない。
+2. **`areka-nar` にパス長・要素長の上限が無いこと**（実装メモ 3.2 が自ら「設計の穴」と書いている）。30 万文字の要素名が受理される。利用者が渡す `.nar` を受け取る `ghost-install` が自然な引受先である。
+3. **`tools/perf` の未検証 ⒜⒝⒟**（6.5 の記録）。⒟ は `perf-loop.ps1 selftest` が終了コード 4 で止まる**本 spec 以前からある赤**を先に解く必要がある（`tools/perf/check-quiet.ps1` は本 spec で 1 度も変更していない＝この範囲のコミット 0 件）。
+4. **`CommitError` に作業フォルダのパスを載せるかどうか**（実装メモ 4.3 が 4.4 へ問い、答えが記録されていない）。載せないと、巻き戻せなかったとき利用者は元の木がどこに生き残っているかを知る手段が無い。
+5. **失敗の記録の `work` 欄が未検査であること**（実装メモ 4.4）。13 の固定入力はすべて `WorkArea::create` より手前で拒否されるので、この欄については「空であること」しか主張できていない。確定の段の失敗を `NarArchive::install` 経由で踏むテストを作るときに、実在するフォルダを指していることを判定すること。

@@ -694,9 +694,9 @@ target/nar-samples/
 
 - 刻印: `.nar` 全体の長さと CRC-32（`areka_nar::crc32`）。`.nar` を丸ごと読むのは展開時にも要るので追加の I/O は無い。
 - 初回の展開（cache miss）: **必ず `WorkDir`**（札ファイル `work/<pid>-<連番>.lock` を `create_new` で開いてからフォルダを作る型）を 1 つ取り、その `work/<pid>-<連番>/` を空の根として `NarArchive::install(&InstallRequest { root, target_ghost: None })` を呼び、`rename(work/… → cache/<名>-<刻印>)`。展開中も札が開いているので、並走する別プロセスの掃除（下記）に消されない。`rename` で `cache/` へ出した後の `WorkDir` の `Drop` は木が既に無いこと（`NotFound`）を許容し、札だけを閉じて消す。`rename` が失敗し `cache/<名>-<刻印>` が既に在れば別プロセスが勝ったので自分の作業を消して勝者を使う（7.6）。在らず失敗なら `Io`。Windows の `std::fs::rename` は宛先が**空でない**フォルダのときに失敗する（空フォルダなら std 1.98 は置き換える）。原本も宛先も常に空でない木なので、この規則で競合の勝敗が決まる。
-- 古い原本の回収（7.3・7.9）: `cache/<名>-*` のうち刻印が違うものを `work/gc-<pid>-<連番>/` へ `rename` してから `remove_dir_all`（途中で落ちても `cache/` の下に半端な木が残らない＝7.7）。回収の失敗（別プロセスが複写中・ウイルス対策がファイルを掴んでいる）は `warn!` に出して**取得は続行する**（次の取得で再び試みる）。
+- 古い原本の回収（7.3・7.9）: `cache/<名>-*` のうち刻印が違うものを `work/gc-<pid>-<連番>/` へ `rename` してから `remove_dir_all`（途中で落ちても `cache/` の下に半端な木が残らない＝7.7）。回収の失敗（別プロセスが複写中・ウイルス対策がファイルを掴んでいる）は**標準エラーへ 1 行**出して**取得は続行する**（次の取得で再び試みる）。窓口は記録層に依存しない（下の Allowed Dependencies が拘束する登記に `tracing` が無く、そちらが正である）ので、後始末の失敗を人へ伝える道は標準エラーしかない（`devroot.rs` の `report_cleanup`）。
 - 複製（7.4・7.5）: 札ファイル `work/<pid>-<連番>.lock` を `OpenOptions::new().write(true).create_new(true).share_mode(FILE_SHARE_READ = 1)` で開いてから、`cache/<名>-<刻印>/` の木を `work/<pid>-<連番>/` へ複写して返す。`Drop` で札を閉じ、木を `remove_dir_all`、札を削除。
-- 掃除（7.7・7.9）: 取得のたびに `work/` を走査し、`*.lock` を `remove_file` してみる。消せた札は持ち主が居ないので相方の木を消す。消せない札のうち**共有違反**は生きている利用者の物なので触らず、**`NotFound`** は別プロセスが同時に回収中なので同じく触らない（生きているとは判定しない）。札の無い木（札を作る前に落ちた残骸・`gc-` 付きの回収途中の木）は消す。孤児の木を消すときも原本と同じく、先に `work/gc-<pid>-<連番>/` へ `rename` してから `remove_dir_all` する（pid が再利用された新プロセスが同名の `work/<pid>-1/` を作る瞬間との競合を消す）。自分の生きている複製と初回展開中の作業フォルダは札が開いているので、他者の掃除でも自分の掃除でも消えない。掃除の失敗は `debug!` に出して取得を続行する。
+- 掃除（7.7・7.9）: 取得のたびに `work/` を走査し、`*.lock` を `remove_file` してみる。消せた札は持ち主が居ないので相方の木を消す。消せない札のうち**共有違反**は生きている利用者の物なので触らず、**`NotFound`** は別プロセスが同時に回収中なので同じく触らない（生きているとは判定しない）。札の無い木（札を作る前に落ちた残骸・`gc-` 付きの回収途中の木）は消す。孤児の木を消すときも原本と同じく、先に `work/gc-<pid>-<連番>/` へ `rename` してから `remove_dir_all` する（pid が再利用された新プロセスが同名の `work/<pid>-1/` を作る瞬間との競合を消す）。自分の生きている複製と初回展開中の作業フォルダは札が開いているので、他者の掃除でも自分の掃除でも消えない。掃除の失敗も回収と同じく標準エラーへ 1 行出して取得を続行する。
 - 手動用（1.9・9.7）: `manual/<名>/` を消して `cache/` から複写。掃除の対象にしない。
 - 検体の `.nar` の場所は `concat!(env!("CARGO_MANIFEST_DIR"), "/../../vendors/sample_ghost/")`（本クレートだけが綴る）。
 - 公開の作業フォルダ `WorkDir`: `work/<pid>-<連番>/` を札付きで 1 つ配る型（`WorkDir::new() -> Result<WorkDir, SampleError>`・`path(&self) -> &Path`・`Drop` で削除）。複製の器と同じ型で、`areka-nar` のテストが「空の根」として借りる（OS の一時フォルダを使わずに済ませるための唯一の窓）。
@@ -746,7 +746,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8>;    // CRLF で連結
 
 - 走査: `walk_workspace_sources()`（`crates/**/*.rs`・`target`／`vendors` 除外）から `crates/sample-ghost-kit/src/` を除いた全ファイルを `scan_tokens`（コメント除去済み）で検査する。
 - 走査語（`concat!` で 2 片に割って書く・姉妹の見張りと同じ約束）: ⑴ `shiori-host-32/fixtures` と `join("shiori-host-32")`（旧置き場）⑵ `vendors/sample_ghost/<名>/`（登記された各名前・`.nar` 名は当たらない）⑶ `nar-samples`（展開先の名前空間）⑷ 同梱バルーンの名前で**パスを組む形**だけ＝`join("emo2-kakukaku")`・`emo2-kakukaku/`・`/emo2-kakukaku"`・補助関数へ名前を渡してパスを組む `emo2("emo2-kakukaku")`（今日の実体 27 ファイルはこの 4 形で全て当たる。`areka/examples/emo-present/setup.rs:147`・`areka-emo-atlas/src/emo2_e2e.rs:215` が 4 形目）。窓口の読み口 `balloon("emo2-kakukaku")` の引数としての綴りと、説明文の中の綴り（`"emo2-kakukaku の font.height,28"`）は当たらない（引数で名前を渡すのは 1.3 の正規の使い方であり、禁じるのは「ゴーストのフォルダに名前を継ぎ足して自分でパスを作る」形だけ）。
-- 判定: 違反 0 件で緑。較正: 合成入力で各走査語が当たること・`balloon("emo2-kakukaku")` と説明文には当たらないこと・コメント行では当たらないこと・`crates/sample-ghost-kit/src/` に ⑴〜⑷ の実体があること（除外が飾りでない）。
+- 判定: 違反 0 件で緑。較正: 合成入力で各走査語が当たること・`balloon("emo2-kakukaku")` と説明文には当たらないこと・コメント行では当たらないこと・除外領域 `crates/sample-ghost-kit/src/` における ⑴〜⑷ の実体の有無を**形ごとに 4 状態で宣言し、宣言どおりであること**を判定する（`sample_path_guard_test.rs` の `EXCLUSION_FORMS`）。2026-09-18 の実測では実体があるのは ⑶ だけで、⑵ と ⑷ は窓口が登記表の名前を実行時に継ぎ足してパスを組むので逐語の綴りが生まれず、⑴ は段 ③ で窓口が旧置き場を綴らなくなって消えた。実体の無い形を表から落とすと較正が恒真になるので、理由を添えて表に残し、実体が現れたら赤にする（前提が変わった合図・後戻りの合図）。
 - 本番依存の見張り: `with_default_guard_test.rs` の私有関数 `manifest_lines`／`production_kit_dependencies`（`with_default_guard_test.rs:257-318`）は `log-capture-kit` の名前を固定で持つので、**走査部品 `workspace_scan/mod.rs` へ移してクレート名を引数に取る形**にし、両方の見張りがそれを呼ぶ（`with_default_guard_test.rs` は呼び出しだけに変わる＝Modified Files に載せる）。判定は `sample-ghost-kit` が `crates/**/Cargo.toml` の `[dependencies]`・`[build-dependencies]`・`[target.*.dependencies]` に現れないこと（自分自身の `Cargo.toml` は除く）。較正は合成マニフェストで赤を作る。
 - 段 ① から置く。段 ① の時点で 38 ファイルが全て窓口へ寄っていることを機械が確かめる。
 
@@ -782,7 +782,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8>;    // CRLF で連結
 
 ### Monitoring
 
-- `error!` は `lib.rs` の 2 つの公開関数の出口だけ。`warn!` はマニフェストの警告と `leftovers`。`info!` は `install` 成功時に要素の数と宛先。窓口は `debug!` で cache hit／miss と掃除の件数を出す。
+- `error!` は `lib.rs` の 2 つの公開関数の出口だけ。`warn!` はマニフェストの警告と `leftovers`。`info!` は `install` 成功時に要素の数と宛先。窓口（`sample-ghost-kit`）は記録を**一切出さない**。Allowed Dependencies が窓口に `tracing` を許していないためで、そちらの登記が拘束力を持つ。後始末の失敗だけは黙って消えては困るので、標準エラーへ 1 行出す（`report_cleanup`）——これが窓口の唯一の記録である。cache hit／miss と掃除の件数は記録に残らない。
 
 ## Testing Strategy
 
@@ -813,7 +813,7 @@ pub fn install_txt(lines: &[&str]) -> Vec<u8>;    // CRLF で連結
 
 ### Performance
 
-- emo2 の初回展開（6.6 MB・110 ファイル）1 秒未満・複製 200 ms 未満を目安に `debug!` で計時を出す（判定はしない）。
+- emo2 の初回展開（6.6 MB・110 ファイル）1 秒未満・複製 200 ms 未満を目安とする（判定はしない）。計時を記録へ出すことはしない——窓口は記録層に依存せず（Allowed Dependencies）、計るときは呼び手の側で計る。
 
 ## Security Considerations
 

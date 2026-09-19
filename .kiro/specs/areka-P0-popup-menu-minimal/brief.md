@@ -9,7 +9,7 @@
 
 今日の右クリックは**ダブルクリックとしてしか SHIORI に届かない**（`crates/areka/src/input_events/mod.rs:444-450`＝`MouseEventKind::DoubleClick{Left|Right}` → `OnMouseDoubleClick`）。シングルクリックは意図して送っていない（`input_events/mod.rs:396`）。オーナードローメニューは「実装しない（7.4）」と明記されている（`input_events/mod.rs:398`）。`TrackPopupMenu`／`CreatePopupMenu`／`HMENU`／`WM_CONTEXTMENU` は `crates/` に 0 件。
 
-M1 の E2E で「メニュー」と呼んでいたものは**ゴースト側が用意した選択肢バルーン**である（`OnMouseDoubleClick` → `MAIN_MENU_TALK`・`crates/areka/src/emo2_boot/spine_conformance_script.rs:540`・辞書 `fixtures/emo2/ghost/master/dic/menu.pasta`）。里々や YAYA の第三者ゴーストは、ベースウェアの右クリックメニューがあることを前提に書かれており、ゴースト側のメニューを持たないものが多い。
+M1 の E2E で「メニュー」と呼んでいたものは**ゴースト側が用意した選択肢バルーン**である（`OnMouseDoubleClick` → `MAIN_MENU_TALK`・`crates/areka/src/emo2_boot/spine_conformance_script.rs:540`・辞書 `ghost/master/dic/menu.pasta`（`emo2` 検体の中。2026-09-19 以降は `vendors/sample_ghost/emo2.nar`））。里々や YAYA の第三者ゴーストは、ベースウェアの右クリックメニューがあることを前提に書かれており、ゴースト側のメニューを持たないものが多い。
 
 終了は Ctrl＋左ダブルクリック（`input_events/mod.rs:420-441`）で、第三者には見つけられない。
 
