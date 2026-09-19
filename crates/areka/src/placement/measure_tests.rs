@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::placement::PlacementError;
+use crate::placement::shared_test_support::{balloon_root, emo2_root};
 use crate::placement::test_support::{ExpectField, capture_logs, expect_one};
 
 /// COM 初期化下でクロージャを実行する（`WicDecoderArm` は COM 必須・
@@ -21,12 +22,9 @@ fn with_com_initialized<F: FnOnce()>(f: F) {
     }
 }
 
-/// emo2 fixture ルートを `CARGO_MANIFEST_DIR`（`crates/areka`）相対で解決する
-/// （source.rs／emo-present example と同一アンカー規約）。
+/// emo2 検体のゴーストフォルダ配下を `rel` で引く。
 fn emo2(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
-        .join(rel)
+    emo2_root().join(rel)
 }
 
 // ── テスト用一時ディレクトリ（emo-present balloon.rs と同じ std-only 最小実装）──
@@ -85,7 +83,7 @@ fn measure_emo2_fixture_yields_exact_nonzero_sizes() {
     with_com_initialized(|| {
         let out = measure_scope_sizes(
             &emo2("shell/master"),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0, 1],
             &MeasureScaling::IDENTITY,
         )
@@ -132,7 +130,7 @@ fn measure_emo2_fixture_yields_per_scope_balloon_sizes() {
     with_com_initialized(|| {
         let out = measure_scope_sizes(
             &emo2("shell/master"),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0, 1],
             &MeasureScaling::IDENTITY,
         )
@@ -162,7 +160,7 @@ fn measure_emo2_fixture_scales_per_scope_balloon_independently() {
     with_com_initialized(|| {
         let out = measure_scope_sizes(
             &emo2("shell/master"),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0, 1],
             &MeasureScaling {
                 shell: ScaleRatio::ONE,
@@ -200,7 +198,7 @@ fn scope_n_ge_2_measures_interim_id10() {
     with_com_initialized(|| {
         let out = measure_scope_sizes(
             &emo2("shell/master"),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0, 1, 2],
             &MeasureScaling::IDENTITY,
         )
@@ -240,7 +238,7 @@ fn failed_scope_substitutes_scope0_size() {
 
         let out = measure_scope_sizes(
             shell.path(),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0, 1],
             &MeasureScaling::IDENTITY,
         )
@@ -265,7 +263,7 @@ fn missing_surfaces_txt_is_measure_error() {
 
         match measure_scope_sizes(
             empty_shell.path(),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0],
             &MeasureScaling::IDENTITY,
         ) {
@@ -289,7 +287,7 @@ fn balloonk_absent_yields_identical_size_for_all_scopes() {
         // 本体側 1 枚だけのバルーンを組む（実 PNG は emo2 fixture から複写）。
         let balloon = TempDir::new();
         std::fs::copy(
-            emo2("emo2-kakukaku/balloons0.png"),
+            balloon_root().join("balloons0.png"),
             balloon.path().join("balloons0.png"),
         )
         .expect("balloons0.png の複写");
@@ -330,7 +328,7 @@ fn scope0_balloon_size_matches_pre_spec_fixed_name_measurement() {
         // 対照: 本体側 1 枚だけのバルーン（＝適用前の固定名採寸と同値になる検体）。
         let control_dir = TempDir::new();
         std::fs::copy(
-            emo2("emo2-kakukaku/balloons0.png"),
+            balloon_root().join("balloons0.png"),
             control_dir.path().join("balloons0.png"),
         )
         .expect("balloons0.png の複写");
@@ -345,7 +343,7 @@ fn scope0_balloon_size_matches_pre_spec_fixed_name_measurement() {
         // 実 fixture（相方側 `balloonk0.png` を併せ持つ）。
         let actual = measure_scope_sizes(
             &emo2("shell/master"),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0, 1],
             &MeasureScaling::IDENTITY,
         )
@@ -872,7 +870,7 @@ fn scope_beyond_u32_is_measure_error() {
         let huge = usize::MAX;
         match measure_scope_sizes(
             &emo2("shell/master"),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[huge],
             &MeasureScaling::IDENTITY,
         ) {
@@ -894,7 +892,7 @@ fn measure_emo2_fixture_applies_k_end_to_end() {
     with_com_initialized(|| {
         let out = measure_scope_sizes(
             &emo2("shell/master"),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0, 1],
             &MeasureScaling {
                 shell: k(2, 1),
@@ -946,7 +944,7 @@ fn placement_read_honours_the_files_own_charset_declaration() {
 
         let out = measure_scope_sizes(
             shell.path(),
-            &emo2("emo2-kakukaku"),
+            &balloon_root(),
             &[0],
             &MeasureScaling::IDENTITY,
         )

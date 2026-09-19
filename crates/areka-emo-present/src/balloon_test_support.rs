@@ -1,7 +1,10 @@
 use super::*;
 
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU32, Ordering};
+
+use sample_ghost_kit::SampleRoot;
 
 // ── テスト用一時ディレクトリ（新規 dev-dep を避け std のみで構成）─────────────
 // `std::env::temp_dir()` 配下へプロセス id ＋単調カウンタで一意なサブディレクトリを作り、
@@ -108,13 +111,17 @@ pub(super) fn capture_events<T>(f: impl FnOnce() -> T) -> (T, Vec<CapturedEvent>
 // ── 檻 8: scope 別バルーン定義の 2 層マージ（`load_scope_balloon_model`・R2.1/2.2/2.3/2.4/2.5・
 //          R6.3/6.4・D8）─────────────────────────────────────────────────────────────
 
-/// emo2 バルーン fixture（`emo2-kakukaku`）を `CARGO_MANIFEST_DIR`（`crates/areka-emo-present`）
-/// 相対で解決する（areka 側 placement/assets テストと同一アンカー規約）。
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+/// emo2 が同時にインストールするバルーンのフォルダを窓口から得る（自分でパスを継ぎ足さない）。
 ///
 /// 本 fixture は実資産である——`descript.txt`（基層）・`balloons0s.txt`（本体側の面別上書き層）・
 /// `balloonk0s.txt`（相方側の面別上書き層）に加え、面画像 `balloons0.png` / `balloonk0.png` を
 /// 併せ持つため、scope 0 / 1 が**別の面を採用し別の上書き層へ辿り着く**ことを実データで固定できる。
 pub(super) fn emo2_balloon_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku")
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
 }

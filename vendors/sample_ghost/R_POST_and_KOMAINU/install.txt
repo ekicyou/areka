@@ -1,4 +1,0 @@
-charset, Shift_JIS
-type,ghost
-name,‚qƒ|ƒXƒg‚ÆŒ¢
-directory,R_POST_and_KOMAINU

@@ -29,21 +29,21 @@
 //!
 //! | 役 | ディレクトリ（リポジトリ相対） |
 //! |---|---|
-//! | ゴースト | `crates/pilot/examples/shiori-host-32/fixtures/emo2` |
-//! | バルーン | `crates/pilot/examples/shiori-host-32/fixtures/emo2-kakukaku-offsetdpi` |
+//! | ゴースト | `検体 emo2` |
+//! | バルーン | `検体 emo2-kakukaku-offsetdpi` |
 //!
 //! バルーンは **scope 0 がキーワード指定（`windowposition.x,center`）・scope 1 が数値指定
 //! （`windowposition.x,-190`）** の混成である。§3 の必須の手は、素の追従スコープ（手 2）と
 //! キーワード指定スコープ（手 3）の**両方**を要求する。片側しか持たない検体では手順を
 //! 最後まで回せない——
 //!
-//! - `fixtures/emo2/emo2-kakukaku`（原本）: 両スコープとも数値指定でキーワードが無い。
+//! - `検体 emo2 の同梱バルーン emo2-kakukaku`（原本）: 両スコープとも数値指定でキーワードが無い。
 //!   判定 ⑷ の母数が空になり「揃えを 1 度も測れていない」の**偽の赤**が出る。
-//! - `fixtures/emo2-kakukaku-wplimit`: 両スコープともキーワードで素の追従が無い。
+//! - `検体 emo2-kakukaku-wplimit`: 両スコープともキーワードで素の追従が無い。
 //!   判定 ⑶ の母数が空になり得て「低い拡大率側で追随が出ていない」の**偽の赤**が出る。
 //!
 //! 混成検体の由来（どちらの複製で、どの 2 ファイルだけが違うか）は
-//! `fixtures/emo2-kakukaku-offsetdpi/readme.txt` に書いてある。
+//! `検体 emo2-kakukaku-offsetdpi の readme.txt` に書いてある。
 //!
 //! # 2. 採取の準備と観測の点灯
 //!
@@ -99,8 +99,10 @@
 //! 消す対象は、次のファイルの `[balloon-offset.*]` の節（在るものすべて）である。
 //!
 //! ```text
-//! crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/profile/areka/sylphya.toml
+//! <検体 emo2 の根>\ghost\master\profile\areka\sylphya.toml
 //! ```
+//!
+//! 根の絶対パスは §2.4 と同じく `nar-sample-path` の `folder=` の行から得る。
 //!
 //! *理由*: 保存値が効いたスコープでは、キーワード再導出の素材が落ちる
 //! （`crates/areka/src/placement/persist.rs:388` 付近の規約。保存値優先の順位が静かに
@@ -133,10 +135,9 @@
 //! `merge_scope` が刷る）。判定そのものはこの行を読まないので、足しても合否は変わらない。
 //!
 //! 同じファイルの `[window.*]` の節は**消さなくてよい**（起動位置は保ってよい。判定に効く
-//! のはバルーンオフセットの側だけである）。このファイルは実行時に作られる追跡外の
-//! プロファイルなので（`crates/pilot/examples/shiori-host-32/.gitignore:3` が
-//! `fixtures/emo2/ghost/master/profile/` を除外している）、消してもリポジトリの差分には
-//! ならない。
+//! のはバルーンオフセットの側だけである）。このファイルは、窓口が配った検体の複製の
+//! 中に実行時に作られるものであり、リポジトリが追跡している `.nar` の外側なので、
+//! 消してもリポジトリの差分にはならない。
 //!
 //! ## 2.4 観測を点灯して採取する
 //!
@@ -144,8 +145,11 @@
 //!
 //! ```text
 //! $AREKA   = "<リポジトリの絶対パス>\target\debug\areka.exe"
-//! $GHOST   = "<リポジトリの絶対パス>\crates\pilot\examples\shiori-host-32\fixtures\emo2"
-//! $BALLOON = "<リポジトリの絶対パス>\crates\pilot\examples\shiori-host-32\fixtures\emo2-kakukaku-offsetdpi"
+//! # 検体の絶対パスは窓口のコマンドが刷る（`folder=` の 1 行を読む）。
+//! $GHOST   = (cargo run -q -p sample-ghost-kit --bin nar-sample-path -- emo2 |
+//!             Select-String '^folder=').Line.Substring(7)
+//! $BALLOON = (cargo run -q -p sample-ghost-kit --bin nar-sample-path -- `
+//!             emo2-kakukaku-offsetdpi | Select-String '^folder=').Line.Substring(7)
 //! $LOG     = "<絶対パス>\signoff.log"
 //! $env:RUST_LOG = "wintf::transition=debug"
 //! & $AREKA $GHOST $BALLOON 2>&1 | Tee-Object -FilePath $LOG
@@ -219,7 +223,7 @@
 //!    本検体は scope 0 を `windowposition.x,center` にしてあり、`center` の正典は「シェルの中央上座標に
 //!    バルーンの中央下座標が接する」——**重なりゼロで頭上に浮く**のが正しい姿である（ukadoc
 //!    `\![set,balloonalign,ID]`・実装は `resolver.rs` の `CenterTop`＝`char_y - balloon_h`）。原本
-//!    `fixtures/emo2/emo2-kakukaku` は数値指定ゆえ重なって見えるので、見比べると欠陥に見えてしまう。
+//!    `検体 emo2 の同梱バルーン emo2-kakukaku` は数値指定ゆえ重なって見えるので、見比べると欠陥に見えてしまう。
 //!    **本検体の scope 0 は、位置の見栄えと移動量のどちらの観測点にもならない**（画面内維持の
 //!    関門にも掛かりやすい）。目視は scope 1 で行うこと。
 //! 5. **先行仕様の残所見を目で確かめる**（要件 8.4 の目視側）: 低い拡大率の側で、バルーンが

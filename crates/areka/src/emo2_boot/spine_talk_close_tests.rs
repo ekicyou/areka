@@ -318,6 +318,7 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
         shiori_handle,
         text_pump,
         tick_sink,
+        sample,
     } = harness;
 
     // (b) shutdown(User) が有界時間で Ok を返す（hang しない・ForceQuit→OnClose NOTIFY→Unload）。
@@ -368,4 +369,6 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     drop(world);
     drop(runtime);
     drop(text_pump);
+    // 検体の複製は最後に捨てる（`shutdown_bounded` と同じ用心・テストの裏付けは無い）。
+    drop(sample);
 }

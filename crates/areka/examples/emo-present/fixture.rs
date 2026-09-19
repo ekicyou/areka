@@ -1,4 +1,6 @@
 use super::PathBuf;
+use sample_ghost_kit::SampleRoot;
+use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------
 // Constants / fixture paths
@@ -19,11 +21,16 @@ pub(super) const CYCLE_INTERVAL_SECS: f64 = 2.5;
 /// （`attach_target` 側だけ変えて golden 側が古い分母のまま残る、という食い違いを構造的に潰す）。
 pub(super) const AUTHOR_DPI: u16 = 96;
 
-/// fixture ルート（emo2）を `CARGO_MANIFEST_DIR`（`crates/areka`）相対で解決する。
-/// fixtures は別クレート `crates/pilot` 配下ゆえワークスペース相対 `../pilot/...` を辿る
-/// （emo-atlas の emo2 統合テストと同一アンカー規約）。
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
 pub(super) fn emo2(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
-        .join(rel)
+    EMO2.folder().join(rel)
+}
+
+pub(super) fn emo2_balloon() -> PathBuf {
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
 }

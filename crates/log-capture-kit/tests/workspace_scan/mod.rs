@@ -18,6 +18,13 @@
 //! `crates/wintf/src/ecs/types.rs`）が走査語 `set_default` ＋開き括弧に部分一致して
 //! 偽陽性になる。
 //!
+//! アンカーが効くのは**語の 1 文字目が `[A-Za-z0-9_]` のとき**だけである。区切り文字から
+//! 始まる語（例: パスの区切りを先頭に置いて「名前を継ぎ足した形」だけを狙う語）にまで
+//! アンカーを適用すると、直前が識別子文字である限り**絶対に当たらない**語になり、
+//! 見張りが黙って恒真になる。判定は [`needs_left_anchor`] が持ち、較正は
+//! `workspace_scan_test.rs` の
+//! `scan_tokens_anchors_only_tokens_that_start_with_an_identifier_char` が縛る。
+//!
 //! **本ファイルは走査語を開き括弧まで含めた形で 1 度も書かない。** 走査の対象そのものなので、
 //! 逐語で置くと ⑴ 迂回検知の見張り（要件 8）が自分自身を拾い ⑵ 着手前インベントリの
 //! `rg -l` による捕捉サイト計数の母数が動く。以下の doc も同じ約束で書く。
@@ -340,8 +347,11 @@ pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
         let mut prev_is_ident = false;
         let mut skip_until = 0usize;
         for (at, ch) in line.char_indices() {
-            if at >= skip_until && !prev_is_ident {
+            if at >= skip_until {
                 for token in &order {
+                    if prev_is_ident && needs_left_anchor(token) {
+                        continue;
+                    }
                     if line[at..].starts_with(token) {
                         hits.push((index + 1, (*token).to_string()));
                         skip_until = at + token.len();
@@ -353,4 +363,155 @@ pub fn scan_tokens(src: &str, tokens: &[&str]) -> Vec<(usize, String)> {
         }
     }
     hits
+}
+
+// ---------------------------------------------------------------------------
+// `Cargo.toml` の行分解と本番依存表の抽出（要件 10.3）
+// ---------------------------------------------------------------------------
+//
+// `with_default_guard_test.rs` が私有で持っていた部品を、クレート名を引数に取る形へ移した
+// もの。共有 crate の見張り（要件 1.3・11.5）と検体 crate の見張り（要件 1.7）が同じ部品を
+// 呼ぶ。判定と例外表は消費側の見張りが持つ。
+
+/// `Cargo.toml` の 1 行（コメント除去済み・所属セクションつき）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManifestLine {
+    /// 1 始まりの行番号。
+    pub line: usize,
+    /// 直近のセクション見出し（角括弧を外した中身）。
+    pub section: String,
+    /// コメントを除き前後の空白を落とした行。
+    pub text: String,
+    /// この行自身がセクション見出しか。
+    pub is_header: bool,
+}
+
+/// TOML の行末コメントを落とす。引用符の内側の `#` はコメントではない。
+fn strip_toml_comment(line: &str) -> &str {
+    let mut in_string = false;
+    for (at, ch) in line.char_indices() {
+        match ch {
+            '"' | '\'' => in_string = !in_string,
+            '#' if !in_string => return &line[..at],
+            _ => {}
+        }
+    }
+    line
+}
+
+/// `Cargo.toml` を「コメントを除いた非空行 ＋ 所属セクション」へ分解する（純関数）。
+pub fn manifest_lines(src: &str) -> Vec<ManifestLine> {
+    let mut out = Vec::new();
+    let mut section = String::new();
+    for (index, raw) in src.lines().enumerate() {
+        let text = strip_toml_comment(raw).trim().to_string();
+        if text.is_empty() {
+            continue;
+        }
+        let is_header = text.starts_with('[') && text.ends_with(']');
+        if is_header {
+            section = text
+                .trim_matches(|c| c == '[' || c == ']')
+                .trim()
+                .to_string();
+        }
+        out.push(ManifestLine {
+            line: index + 1,
+            section: section.clone(),
+            text,
+            is_header,
+        });
+    }
+    out
+}
+
+/// 製品側の依存表か（`dev-dependencies` 系は含まない）。
+pub fn is_production_dependency_section(section: &str) -> bool {
+    section.contains("dependencies") && !section.contains("dev-dependencies")
+}
+
+/// `package` の crate を名指ししているか（`-` 表記と `_` 表記の両方）。
+pub fn mentions_crate(text: &str, package: &str) -> bool {
+    text.contains(package) || text.contains(&package.replace('-', "_"))
+}
+
+/// 製品側依存に `package` の crate が現れている行を返す（純関数・要件 1.3／11.5／10.3）。
+///
+/// `[dependencies]` の中の 1 行という形と、`[dependencies.<package>]` という
+/// 下位表の形の両方を拾う。下位表は**見出し 1 件**として報告する（見出しが名前を持つ表では
+/// 中身の行も `path = "../<package>"` のように名前を含みがちで、1 つの依存が
+/// 複数件に膨らむ）。
+pub fn production_dependencies_on(src: &str, package: &str) -> Vec<ManifestLine> {
+    manifest_lines(src)
+        .into_iter()
+        .filter(|l| is_production_dependency_section(&l.section))
+        .filter(|l| {
+            if l.is_header {
+                mentions_crate(&l.section, package)
+            } else {
+                !mentions_crate(&l.section, package) && mentions_crate(&l.text, package)
+            }
+        })
+        .collect()
+}
+
+/// 語の左端をアンカーすべきか（＝1 文字目が識別子文字か）。
+///
+/// 区切り文字から始まる語をアンカーすると恒真の走査語になる（module doc を参照）。
+pub fn needs_left_anchor(token: &str) -> bool {
+    token.chars().next().is_some_and(is_ident_char)
+}
+
+// ---------------------------------------------------------------------------
+// `crates/**/Cargo.toml` の列挙（要件 10.3）
+// ---------------------------------------------------------------------------
+
+/// `crates/**/Cargo.toml` を列挙して `(crate ディレクトリ名, 中身)` を返す。
+///
+/// `skip_crate` と同じディレクトリ名の manifest は除く。見張られる側の crate は自分の名前を
+/// `[package]` に持つので、比較の対象に入れると必ず当たってしまう。
+pub fn workspace_manifests(skip_crate: &str) -> Vec<(String, String)> {
+    let root = workspace_root();
+    let mut found = Vec::new();
+    collect_manifests(&root.join("crates"), &mut found);
+    let mut out: Vec<(String, String)> = found
+        .into_iter()
+        .filter_map(|path| {
+            let name = path
+                .parent()
+                .and_then(Path::file_name)
+                .expect("Cargo.toml には親ディレクトリがあるはず")
+                .to_string_lossy()
+                .into_owned();
+            if name == skip_crate {
+                return None;
+            }
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|err| panic!("manifest を読めない: {} ({err})", path.display()));
+            Some((name, text))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+fn collect_manifests(dir: &Path, out: &mut Vec<PathBuf>) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) => panic!("列挙できないディレクトリがある: {} ({err})", dir.display()),
+    };
+    for entry in entries {
+        let entry = entry.expect("ディレクトリ項目の読み取りに失敗した");
+        let path = entry.path();
+        let file_type = entry.file_type().expect("種別の判定に失敗した");
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if file_type.is_dir() {
+            if EXCLUDED_DIRS.contains(&name.as_str()) {
+                continue;
+            }
+            collect_manifests(&path, out);
+        } else if file_type.is_file() && name == "Cargo.toml" {
+            out.push(path);
+        }
+    }
 }

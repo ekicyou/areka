@@ -15,14 +15,14 @@
 //! `CARGO_BIN_EXE_areka`（Cargo が統合テスト用に先ビルドして渡す**実バイナリ**のパス）を、
 //! emo2 fixture を位置引数に子プロセス起動する（smoke ドナー `tests/smoke_boot_loop_exit.rs` と同型・
 //! 純 std `std::process::Command`＋番犬・**新規依存を追加しない**・R10.5）:
-//! - argv[1] = ghost_root（`crates/pilot/examples/shiori-host-32/fixtures/emo2`）
+//! - argv[1] = ghost_root（`検体 emo2`）
 //! - argv[2] = balloon_root（同 fixture 下 `emo2/emo2-kakukaku`）
 //! - env `AREKA_APP_SMOKE_EXIT_MS` = [`SMOKE_EXIT_MS`]（自動 close で exit 0 を無人観測可能にする）
 //! - env `RUST_LOG` = `info,kanade=trace`（wire 成立／attach 完了マーカー・折返し ON 解決の証跡は
 //!   いずれも `info!` ゆえ確実に捕捉する。design.md「実機確認セット」Trigger 手順に一致させる）
 //!
 //! 折返しモードの実機証跡について: balloon descript 基層 fixture
-//! `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/descript.txt` に
+//! `検体 emo2 の同梱バルーン emo2-kakukaku の descript.txt` に
 //! `budoux_newline,1` を追記してある（sakura／kero 両バルーンへ効く基層 1 行）。ゆえに実バイナリが
 //! 実 balloon model を解決してテキスト供給面を装着した時点で、task 5 の装着 info! が
 //! `wrap=BudouxWordWrap` を残す（＝折返し ON として解決された証跡・R9.1）。
@@ -45,8 +45,9 @@
 //!   成立せず attach 完了マーカーが出ない（＝本テストは headless では成立しない）。これは env-gate
 //!   opt-in の設計意図どおりであり、実表示のある実機でのみ緑になる。
 
-use std::path::PathBuf;
+use sample_ghost_kit::SampleRoot;
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 /// 実走を有効化する opt-in 環境変数（未設定／空なら即 skip・R9.2・DoD 非前提）。
@@ -65,10 +66,9 @@ const WATCHDOG_DEADLINE: Duration = Duration::from_secs(120);
 /// `try_wait()` のポーリング周期（smoke ドナーと同一）。
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
-/// emo2 fixture ルート（smoke ドナー `emo2_root` と同一アンカー規約・`CARGO_MANIFEST_DIR` 相対）。
-fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
-}
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 
 // ===========================================================================
 // 実 DPI 人間サインオフ手順（R9.3）
@@ -93,7 +93,7 @@ fn emo2_root() -> PathBuf {
 //      （会話が途中で切れず・後片付けが行われる・R6.1/R6.2）。
 //
 // ## 折返し（budoux_newline）の目視について（本 spec 固有・R9.1）
-// balloon descript 基層 fixture（`crates\pilot\examples\shiori-host-32\fixtures\emo2\emo2-kakukaku\
+// balloon descript 基層 fixture（`検体 emo2 の同梱バルーン emo2-kakukaku の
 // descript.txt`）に `budoux_newline,1` を追記済みゆえ、実機では sakura／kero 両バルーンとも折返し ON で
 // 起動する。目視では **バルーンのテキストが単語（分かち書き）境界で折り返り、語中で不自然に切れない**
 // ことを確認する（OFF の 1 文字ずつ折返しとの差）。ON として解決された機械可読の証跡は本ファイルの
@@ -108,8 +108,9 @@ fn emo2_root() -> PathBuf {
 //       $env:RUST_LOG="info,kanade=trace"; $env:AREKA_APP_SMOKE_EXIT_MS="180000"; `
 //         target\<profile>\areka.exe <emo2 ghost_root> <emo2 balloon_root>
 //
-//   （`<emo2 ghost_root>` = `crates\pilot\examples\shiori-host-32\fixtures\emo2`、
-//     `<emo2 balloon_root>` = 同下 `emo2-kakukaku`）。3 分の間に 1〜4＋折返しを目視し、観察後に窓を
+//   （`<emo2 ghost_root>`／`<emo2 balloon_root>` の絶対パスは
+//     `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が刷る
+//     `folder=`／`balloon.emo2-kakukaku=` の行から得る）。3 分の間に 1〜4＋折返しを目視し、観察後に窓を
 //     閉じて 4（OnClose 経由の静かな終了）を確認する。close せず放置しても 3 分で自動終了する。
 //   ※ `180000` は**この人間 opt-in の直接起動専用**であり、番犬（[`WATCHDOG_DEADLINE`]＝120s）を持たない。
 //     本ファイルの `#[test]` の自動 close（[`SMOKE_EXIT_MS`]）は番犬締切より十分小さく保つこと
@@ -139,8 +140,8 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
     }
 
     // --- 実走（R9.1）: emo2 fixture を位置引数に実バイナリを起動する ---
-    let ghost_root = emo2_root();
-    let balloon_root = ghost_root.join("emo2-kakukaku");
+    let ghost_root = EMO2.folder();
+    let balloon_root = EMO2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
     assert!(
         ghost_root.join("ghost/master/descript.txt").exists(),
         "emo2 fixture が見つかりません（in-repo 前提）: {}",

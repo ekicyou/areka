@@ -26,8 +26,8 @@
 mod workspace_scan;
 
 use workspace_scan::{
-    FileLines, LINE_LIMIT, line_count, over_limit, scan_tokens, strip_comments,
-    walk_workspace_sources,
+    FileLines, LINE_LIMIT, line_count, needs_left_anchor, over_limit, production_dependencies_on,
+    scan_tokens, strip_comments, walk_workspace_sources,
 };
 
 /// 走査語（逐語で置かないため 2 片に割る。上の module doc を参照）。
@@ -376,4 +376,82 @@ fn walk_result_is_sorted_and_free_of_duplicates() {
         found, sorted,
         "列挙は昇順・重複無しで返るはず（失敗の再現性のため）"
     );
+}
+
+/// 較正: 本番依存表の抽出は**引数のクレート名**で答えを変える（要件 10.3）。
+///
+/// 移す前は `log-capture-kit` の名前を関数が固定で持っていた。引数がただの飾りだと
+/// 「どの名前を渡しても同じ答え」になるので、同じ見本に 2 つの名前を渡して**違う答え**が
+/// 返ることを固定する。
+#[test]
+fn production_dependencies_on_answers_for_the_crate_name_it_is_given() {
+    let src = "[package]
+name = \"demo\"
+
+[dependencies]
+sample-ghost-kit = { path = \"../sample-ghost-kit\" }
+";
+
+    let hit = production_dependencies_on(src, "sample-ghost-kit");
+    assert_eq!(hit.len(), 1, "渡した名前の依存は拾うはず: {hit:?}");
+    assert_eq!(hit[0].line, 5, "行番号は元の manifest のもの");
+
+    assert_eq!(
+        production_dependencies_on(src, "log-capture-kit"),
+        Vec::new(),
+        "渡していない名前の依存を拾ってはいけない（引数が飾りになっている）"
+    );
+
+    // `_` 表記の別名も同じ名前として拾う（`-` を `_` に置いた形）。
+    let underscore = "[dependencies]
+demo = { package = \"sample_ghost_kit\" }
+";
+    assert_eq!(
+        production_dependencies_on(underscore, "sample-ghost-kit").len(),
+        1,
+        "`_` 表記の名前を拾えていない"
+    );
+}
+
+/// 左端のアンカーは**識別子で始まる語にだけ**効く（要件 1.8）。
+///
+/// 区切り文字から始まる語（＝「名前を継ぎ足した形」だけを狙う語）にまでアンカーを
+/// 適用すると、直前が識別子文字である限り絶対に当たらない恒真の走査語になる。
+/// 検体パスの見張り（`sample_path_guard_test.rs`）の ⑷ がこの形の語を持つ。
+#[test]
+fn scan_tokens_anchors_only_tokens_that_start_with_an_identifier_char() {
+    // 区切りから始まる語: 直前が識別子文字でも当たる。
+    let sep_token = "/name\"";
+    assert_eq!(
+        scan_tokens(
+            "    let p = root.join(\"ghost/emo2/name\");
+",
+            &[sep_token]
+        ),
+        vec![(1usize, sep_token.to_string())],
+        "区切りから始まる語がアンカーで潰されている（恒真の走査語になる）"
+    );
+    assert!(!needs_left_anchor(sep_token));
+
+    // 識別子から始まる語: 従来どおりアンカーが効く。
+    let ident_token = "name(";
+    assert_eq!(
+        scan_tokens(
+            "    let p = filename(1);
+",
+            &[ident_token]
+        ),
+        Vec::new(),
+        "識別子で始まる語のアンカーが外れている（末尾がたまたま同じ助走関数を拾う）"
+    );
+    assert_eq!(
+        scan_tokens(
+            "    let p = name(1);
+",
+            &[ident_token]
+        ),
+        vec![(1usize, ident_token.to_string())],
+        "対の陽性が当たらない＝上の 0 件は何も意味しない"
+    );
+    assert!(needs_left_anchor(ident_token));
 }

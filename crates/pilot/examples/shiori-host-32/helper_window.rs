@@ -428,11 +428,5 @@ pub fn selftest_loop(secs: u64) -> Result<(), String> {
 
 /// selftest 用の既定 ghostdir（本番 run_helper では親が env/arg で渡す・process_host.rs 参照）。
 pub fn default_fixture_ghostdir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join("shiori-host-32")
-        .join("fixtures")
-        .join("emo2")
-        .join("ghost")
-        .join("master")
+    crate::sample_support::emo2_ghost_master()
 }

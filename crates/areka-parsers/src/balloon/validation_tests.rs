@@ -28,23 +28,22 @@
 use super::parse::parse_str;
 use crate::charset::{DefaultEncoding, decode};
 
-/// emo2-kakukaku fixture ディレクトリ（本クレート manifest 相対）。
+/// emo2 が同時にインストールするバルーンの fixture ディレクトリ（検体の窓口から得る）。
 ///
-/// fixture は `pilot` クレート配下に checked-in されているが、コンパイル時 `include_str!` では
-/// クレートをビルド時結合してしまうため、実行時に manifest 相対パスで `std::fs` 読みする
-/// （`charset` validation_tests の「クレート跨ぎ include_str! 不使用」流儀に倣う）。
-const FIXTURE_DIR: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/"
-);
+/// コンパイル時 `include_str!` ではクレートをビルド時結合してしまうため、実行時に `std::fs`
+/// 読みする（`charset` validation_tests の「クレート跨ぎ include_str! 不使用」流儀に倣う）。
+fn fixture_dir() -> std::path::PathBuf {
+    crate::sample_test_support::emo2_balloon_root()
+}
 
 /// fixture ファイルを実物バイトで読み、charset デコードして文字列化する。
 ///
 /// `charset,UTF-8` 宣言（descript.txt L1）どおり `Utf8` 既定でデコードする（画像別 .txt は
 /// ASCII ゆえ同じく素通り）。これは実パイプライン（charset→kv→balloon）の忠実な上流消費。
 fn load_decoded(file: &str) -> String {
-    let path = format!("{FIXTURE_DIR}{file}");
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("fixture readable: {path}: {e}"));
+    let path = fixture_dir().join(file);
+    let bytes = std::fs::read(&path)
+        .unwrap_or_else(|e| panic!("fixture readable: {}: {e}", path.display()));
     decode(&bytes, DefaultEncoding::Utf8)
 }
 

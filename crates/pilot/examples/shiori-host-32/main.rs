@@ -31,6 +31,10 @@ mod process_host;
 #[path = "parent_window.rs"]
 mod parent_window;
 
+// 検体を窓口から取得し**プロセス寿命で保持**する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
+#[path = "sample_support.rs"]
+mod sample_support;
+
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -69,8 +73,10 @@ fn main() {
     let _ = ipc::DEFAULT_TIMEOUT;
     let _ = shiori3::module_loaded();
 
-    // ghostdir は SHIORI `load` 対象（design.md §320）。本フォルダ相対の固定パス。
-    let ghostdir = Path::new("crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master");
+    // ghostdir は SHIORI `load` 対象（design.md §320）。検体の窓口から**絶対パス**で得る
+    // （実走は絶対パスが定石＝相対だと pasta.dll の LOAD が 0x8007007E で落ちる）。
+    let ghostdir = sample_support::emo2_ghost_master();
+    let ghostdir = ghostdir.as_path();
 
     // --- 異常系セルフテストモード（task 5.2・design.md §521 IPC / §528 helper 異常終了）---
     // `--selftest-errors` で 2 つの異常系を観測する:

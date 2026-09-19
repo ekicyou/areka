@@ -1,4 +1,6 @@
 use super::{BalloonModel, DefaultEncoding, PathBuf, decode, error, parse_str};
+use sample_ghost_kit::SampleRoot;
+use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------
 // 定数・fixture パス解決
@@ -11,11 +13,16 @@ pub(super) const KERO_GAP_Y: i32 = 32;
 /// シナリオ全体の watchdog（talk 起点相対秒・超過は FAIL）。
 pub(super) const WATCHDOG_SECS: f64 = 30.0;
 
-/// 共有 fixture（emo2 バルーン）ディレクトリを `CARGO_MANIFEST_DIR` 相対で解決する
-/// （emo-present example と同一アンカー規約・R11.7 共有 fixture 非改変）。
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+/// 共有 fixture（emo2 が同時にインストールするバルーン）のディレクトリを窓口から得る
+/// （自分でパスを継ぎ足さない・R11.7 共有 fixture 非改変）。
 pub(super) fn shared_balloon_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku")
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
 }
 
 /// example ローカル fixture 変種（縦書き観測用・task 9.1 成果）。

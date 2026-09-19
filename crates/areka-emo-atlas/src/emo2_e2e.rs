@@ -40,12 +40,9 @@ fn with_com_initialized<F: FnOnce()>(f: F) {
     }
 }
 
-/// emo2 fixture 実資産のパスを組む。
-/// `CARGO_MANIFEST_DIR` = `crates/areka-emo-atlas`。fixtures はパイロット crate 配下。
+/// emo2 検体の実資産のパスを組む（在処は窓口 `sample-ghost-kit` が持つ）。
 fn emo2(rel: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
-        .join(rel)
+    crate::sample_test_support::emo2_root().join(rel)
 }
 
 /// emo2 の shell/master 基準 dir（surfaces.txt の element 相対パス起点）。
@@ -212,7 +209,7 @@ fn emo2_balloon_same_bake_path_as_shell() {
     assert!(!shell.surfaces.is_empty());
 
     let shell_base = shell_master_dir();
-    let balloon_base = emo2("emo2-kakukaku");
+    let balloon_base = crate::sample_test_support::emo2_balloon_root();
 
     // balloon の surface 表現を手組み（本層外の適応をテストが肩代わり・D1）。
     let balloon_surfaces = vec![

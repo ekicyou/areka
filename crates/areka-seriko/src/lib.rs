@@ -32,6 +32,10 @@ mod state;
 mod table;
 mod timeline;
 
+// 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
+#[cfg(test)]
+mod sample_test_support;
+
 pub use actor::{SerikoMsg, SerikoSink, spawn_seriko};
 pub use bind::{
     BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, accumulate,

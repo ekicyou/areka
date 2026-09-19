@@ -11,10 +11,25 @@ use areka_parsers::balloon::{
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
+use sample_ghost_kit::SampleRoot;
+use std::path::PathBuf;
+use std::sync::LazyLock;
 use windows::UI::Composition::Compositor;
 use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
 use wintf::com::wuc::create_dispatcher_queue_controller;
 use wintf::ecs::{GraphicsCore, Visual};
+
+/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
+/// 保持を本ファイル 1 か所に束ねてあるので、段 ③ の複製も lib テストバイナリあたり 1 回で済む。
+static EMO2: LazyLock<SampleRoot> =
+    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+
+/// emo2 が同時にインストールするバルーンのフォルダ（自分でパスを継ぎ足さない）。
+pub(super) fn emo2_balloon_root() -> PathBuf {
+    EMO2.balloon("emo2-kakukaku")
+        .expect("emo2 の同梱バルーン")
+        .to_path_buf()
+}
 
 /// テスト用 WUC apartment/dispatcher（surface.rs/draw.rs テストと同一方針:
 /// COM 未初期化のテストスレッドでは ASTA 第一候補・NONE 保険）。

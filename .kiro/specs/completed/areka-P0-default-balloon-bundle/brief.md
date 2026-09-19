@@ -11,7 +11,7 @@
 
 ## Current State
 
-- **areka のバルーン資産**: 検体は作者自作の `emo2-kakukaku`（emo2 同梱・`crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/`）と、その検証用派生 2 つ（`emo2-kakukaku-offsetdpi`・`emo2-kakukaku-wplimit`）。`nar-install`（A1）がこれらを `.nar` に畳んで `vendors/sample_ghost/` へ集約する予定。
+- **areka のバルーン資産**: 検体は作者自作の `emo2-kakukaku`（emo2 同梱）と、その検証用派生 2 つ（`emo2-kakukaku-offsetdpi`・`emo2-kakukaku-wplimit`）。`nar-install`（A0）が 2026-09-19 にこれらを `.nar` へ畳んで `vendors/sample_ghost/` へ集約済み（旧 `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/` は消えた）。
 - **αの描画前提（2026-09-18 開発者確認）**: **areka は常に `use_self_alpha,1` 相当で bake する**（`crates/areka-emo-present/src/balloon.rs:18-20`「PNG α 尊重（R5.2）: `use_self_alpha,1` 相当＝`UseSelfAlpha::On` で bake する」・`crates/areka/src/emo2_boot/assets.rs:310` も `UseSelfAlpha::On` 固定）。**`.pna` 対応は行わない**（同 `balloon.rs:19-20` は `.pna` を `probe_pna` の既存 seam に委ねて追加しないと明記。開発者「pna 対応は不要」）。バルーンの `descript.txt` の `use_self_alpha`／`use_input_alpha`／`paint_transparent_region_black` は読んでいない（`crates/` の本番コードで 0 件。読むキーは `crates/areka-parsers/src/balloon/parse.rs` の 51 個＝`font.*`・`disable.font.*`・`cursor.*`・`origin.*`・`validrect.*`・`wordwrappoint.*`・`windowposition.*`・`vertical`）。**読まなくても挙動は「常に 1」で正しい**（台帳 `doc/ukadoc-coverage/ledger/assets.toml:2364` の項目 `ukadoc:descript_balloon:use_self_alpha_2c_5024:1` は「切るか切らないかだけを言う欄」）。
 - **`thumbnail.pnr`**（左上 1 ドットと同色を透過する png の改名）は読んでいない（`crates/` で `pnr` 0 件）。`baseware-root-layout` の列挙は `thumbnail.png` の有無だけを見る予定。
 
@@ -106,12 +106,28 @@
 ## 2026-09-18 追記（A0 へ前倒し・保管は展開フォルダ）
 
 - 開発者「サンプルバルーンは最初に実施できないか」→ できる。条件 3 つ:
-  1. **保管は展開フォルダ** `vendors/sample_ghost/StayseeBalloon/`（`R_POST_and_KOMAINU` と同じ現行慣行）。`.nar` への畳み込みは並走する `nar-install` が引き受ける（畳む対象が 1 つ増えるだけ・原作ファイル無改変の規律は同じ）。
+  1. **保管は展開フォルダ** `vendors/sample_ghost/StayseeBalloon/`（`R_POST_and_KOMAINU` と同じ当時の慣行）。`.nar` への畳み込みは並走する `nar-install` が引き受ける（畳む対象が 1 つ増えるだけ・原作ファイル無改変の規律は同じ）。→ **2026-09-19 取り下げ**: `nar-install` が展開フォルダを追跡する慣行そのものを廃した（追跡するのは `.nar` だけ）。畳み込みも本 spec の作業に戻る（下の 2026-09-19 追記）。
   2. **表示検証は新規テストファイルのみ**。`crates/areka/src/emo2_boot/*` など検体パスを参照する既存テストは触らない（`nar-install` の書き換え対象＝実測 38 ファイルと共有 0 にする）。検体パスの参照は 1 か所（新規テストの定数）に留め、`nar-install` が共有ヘルパへ寄せるときに一緒に付け替えられる形にする。
   3. `THIRD-PARTY-NOTICES.md` は `cargo about` の自動生成（手で編集しない）＝CC0 のバルーンは cargo 依存ではないので載らない。資産の出典と CC0 の記載は第三者向け README（`alpha-release-signoff`）と本 spec の `verification/` に置く。
 - **見た目の採否は今日にでも確認できる**: フォルダを置いて `areka.exe <ゴーストの根> <バルーンのフォルダ>`（argv 第 2 引数）で起動すれば、コード変更 0 で表示される。要件段階を待たずに開発者が先に目視してよい。
 - 既定バルーン id の定数と解決順への配線は `baseware-root-layout`（A1-②）側が足す（本 spec は id を brief と `verification/` に書き残すだけ）。
 
+## 2026-09-19 追記（`nar-install` から申し送り・畳み込みは本 spec が行う）
+
+- `nar-install` のタスク 5.1（検体の畳み込み）を実施した時点で `vendors/sample_ghost/StayseeBalloon/` は**存在しなかった**。よって `nar-install` は `StayseeBalloon.nar` を作らず、共有ヘルパの登記表 `SAMPLES` にも `StayseeBalloon` を足していない（要件 8.5 の「存在しなければ登記しない」）。
+- **畳み込みは本 spec が行う**。`nar-install` の要件 10.10 の手順（`vendors/sample_ghost/README.md`）に従って `StayseeBalloon.nar` を作り、展開形を追跡から外し、共有ヘルパの登記表に 1 行足す。上の 2026-09-18 追記の条件 1「`.nar` への畳み込みは並走する `nar-install` が引き受ける」は、着地の順序が入れ替わったため**本 spec 側の作業に戻る**。
+- 畳む手順は使い捨ての実行体 `crates/sample-ghost-kit/examples/fold-samples.rs` が持つ。**畳むフォルダを引数で渡す形**で呼ぶこと。
+
+  ```
+  cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/StayseeBalloon
+  ```
+
+  これ 1 回で、追跡ファイルだけを集めた `vendors/sample_ghost/StayseeBalloon.nar` を作り、空の根へ展開して元のツリーとバイト単位で突き合わせるところまで終わる。
+- **登記表 `SAMPLES` の 1 行は畳んだ「後」に足す**。引数無しで呼ぶ形（登記表の検体を全部畳む形）は、本 spec が着地する頃には**使えない**——`nar-install` のタスク 5.6 が他の 4 検体の展開形（`crates/pilot/examples/shiori-host-32/fixtures/` と `vendors/sample_ghost/R_POST_and_KOMAINU/`）を消しているため、最初の検体で「追跡ファイルが 0 件」になって落ちる。`--from` の形は登記表を見ないので、まだ登記していない検体でも畳める。
+- **登記表に 1 行足すと、検体の数を直書きしている検査 2 本が赤になる。** `crates/sample-ghost-kit/src/lib_tests.rs` の `every_registered_sample_lands_where_its_registry_row_says` と `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares` が、どちらも冒頭で `SAMPLES.len()` を **4** と突き合わせている（母数 0 で緑にならないための較正）。`StayseeBalloon` を登記する**同じコミットで、この 2 か所の数も 5 へ直すこと**。
+
+- **バイト保存の罠は 2 件とも解消済み**（`nar-install` タスク 5.1 で実測）。`vendors/sample_ghost/.gitattributes` の `* -text` が `.nar` にも効いており（`git check-attr text` が `unset`）、`.gitignore` の `*_test.txt`／`*_dump.txt` は同フォルダの否定規則で打ち消されている。StayseeBalloon の同梱ファイル名に `*_test.txt`／`*_dump.txt` に当たるものは無い想定だが、畳んだ後に中身の全ファイル名へ `git check-ignore --no-index` を当てて 0 件を確かめること。
+=======
 ---
 
 ## 2026-09-19 追記（要件 7.1）

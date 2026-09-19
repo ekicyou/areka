@@ -191,6 +191,10 @@ pub use bake::Baker;
 // 診断可能なエラー型（bake パイプラインの脱落集約・R2.2）。
 pub use error::BakeError;
 
+// 検体を窓口から取得しプロセス寿命で保持する共有の受け口（spec: areka-P0-nar-install 要件 1.6）。
+#[cfg(test)]
+mod sample_test_support;
+
 // emo2 fixture を用いた統合テスト（shell・balloon 横断・task 3.2）。
 #[cfg(test)]
 mod emo2_e2e;
