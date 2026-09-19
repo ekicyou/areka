@@ -36,22 +36,23 @@
 //! **本ファイルではこの件について新しい檻を作らない**（設計 C4「新規の檻は作らず、
 //! COMPAT §8 で『既に実装され固定されている挙動』として登記する」）。
 //!
-//! ## origin の解決 4 分岐と「validrect は返値に影響しない」不変条件
+//! ## origin の解決 4 分岐と「範囲から出た宣言だけが validrect に従う」規則
 //!
 //! 上の 4 点（要件 3.4〜3.6）を見る檻は `origin` の宣言を **validrect の内側**に置くか
 //! **未宣言**にするかのどちらかに限っている——そこは書字方向とは別の関心事であり、
 //! origin の規約が変わっても偽の赤を出さないためである。
 //!
 //! それとは別に、本ファイルは `origin` 解決そのものの判断分岐も固定する
-//! （本仕様の要件 3.10／3.11・設計 C3 の Validation）——
+//! （本仕様の要件 3.11 と、これを上書きする spec
+//! `areka-P0-balloon-origin-outside-validrect` の要件 1.1・1.2・1.7・2.1）——
 //!
-//! 5. **validrect 内の宣言**＝字義位置・記録 0 件。
-//! 6. **validrect 外の宣言**＝**字義位置**（寄せない）・成分ごとに `debug!` ちょうど 1 件。
+//! 5. **validrect 内の宣言**＝宣言どおりの位置・記録 0 件。
+//! 6. **validrect 外の宣言**＝**書字開始角へ落ちる**・成分ごとに `debug!` ちょうど 1 件。
 //! 7. **未宣言**＝書字開始角へ縮退・成分ごとに `debug!` ちょうど 1 件（要件 3.11・不変）。
-//! 8. **負値宣言**＝反対端基準で絶対値化してから字義（要件 3.7）。
-//! 9. **不変条件**——宣言された `origin` の解決結果は `validrect` を変えても動かない。
-//!    これが areka 独自の「origin クランプ正準」（`clamp(resolve(origin), validrect)`）が
-//!    もう残っていないことの、読み手向けの証拠である。クランプを戻すと 6. と 9. が赤になる。
+//! 8. **負値宣言**＝反対端基準で絶対値化してから範囲の内外を判定する（要件 3.7）。
+//! 9. **宣言が `validrect` に従うのは範囲から出たときだけ**——範囲に留まる宣言は
+//!    `validrect` を差し替えても動かず、範囲から出る矩形では書字開始角へ落ちる。
+//!    「常に宣言どおり」「常に書字開始角」のどちら片側へ退行しても 6. か 9. が赤になる。
 //!
 //! ## 0 件主張の規律（恒真の禁止）
 //!
@@ -379,7 +380,7 @@ fn writing_mode_still_separates_start_corner_while_edges_agree() {
     );
 }
 
-// ── 要件 3.10／3.11: origin 解決の 4 分岐と validrect 非依存の不変条件（設計 C3） ──
+// ── origin 解決の 4 分岐と「範囲から出た宣言だけが validrect に従う」規則 ──
 
 /// 対照イベント専用の宛先（本番コードがここへ発火することは無い）。
 const CONTROL_TARGET: &str = "areka_emo_text::region_vertical_canon_tests::control";
@@ -410,6 +411,14 @@ fn resolve_counting(
     })
 }
 
+/// 基準 `RECT` の書字開始角（方向ごとに直書きする——実装と同じ式で導き直さない）。
+fn start_corner(mode: WritingMode) -> (f32, f32) {
+    match mode {
+        WritingMode::HorizontalTb | WritingMode::VerticalLr => (RECT_LEFT, RECT_TOP),
+        WritingMode::VerticalRl => (RECT_RIGHT, RECT_TOP),
+    }
+}
+
 /// 捕捉窓が生きていたことを対照イベントの件数で示す（件数主張の前提条件）。
 fn assert_capture_alive(counts: &LevelCounts) {
     assert_eq!(
@@ -437,29 +446,30 @@ fn declared_origin_inside_validrect_is_literal_and_unrecorded() {
     }
 }
 
-/// 分岐 2——**validrect の外**に宣言された `origin` も**字義どおり**用いられ、
-/// 成分ごとに `debug!` ちょうど 1 件を記録する（要件 3.10 後半）。
+/// 分岐 2——**validrect の外**に宣言された `origin` は宣言なしと同じ扱いで
+/// **書字開始角**へ落ち、成分ごとに `debug!` ちょうど 1 件を記録する
+/// （spec `areka-P0-balloon-origin-outside-validrect` の要件 1.1・1.7）。
 ///
-/// **これが撤去の本体である**。旧「origin クランプ正準」が残っていれば期待値は
-/// 書字開始角（横書き (36,46)／`vertical_rl` (356,46)）になり、本檻は赤くなる。
+/// 落ちる先は最寄りの辺ではなく書字開始角（横書きと `vertical_lr` は (36,46)・
+/// `vertical_rl` は (356,46)）であり、宣言値がそのまま返れば本検査は赤くなる。
 #[test]
-fn declared_origin_outside_validrect_is_literal_with_one_debug_per_component() {
+fn declared_origin_outside_validrect_falls_back_to_start_corner_with_one_debug_per_component() {
     // (ラベル, origin, mode, 期待 start, 期待 debug 件数)
     let cases = [
-        // y(0) だけが top(46) より上＝範囲外。x(200) は範囲内なので記録は 1 件だけ。
+        // y(0) だけが top(46) より上＝範囲外。x(200) は範囲内なので宣言どおり残る。
         (
             "y のみ範囲外",
             (Some(200), Some(0)),
             WritingMode::HorizontalTb,
-            (200.0, 0.0),
+            (200.0, 46.0),
             1,
         ),
-        // x(400) だけが right(356) より右＝範囲外。
+        // x(400) だけが right(356) より右＝範囲外。左辺 36 へ落ちる（最寄りの右辺ではない）。
         (
             "x のみ範囲外",
             (Some(400), Some(60)),
             WritingMode::HorizontalTb,
-            (400.0, 60.0),
+            (36.0, 60.0),
             1,
         ),
         // 両成分とも範囲外（フィクスチャがかつて宣言していた形）。
@@ -467,22 +477,22 @@ fn declared_origin_outside_validrect_is_literal_with_one_debug_per_component() {
             "両成分が範囲外・横書き",
             (Some(0), Some(0)),
             WritingMode::HorizontalTb,
-            (0.0, 0.0),
+            (36.0, 46.0),
             2,
         ),
-        // 縦書きでも寄せない——クランプが残っていれば (356,46) になる。
+        // 縦書き右送りの書字開始角は右上＝落ちる先も x が右端側になる。
         (
             "両成分が範囲外・vertical_rl",
             (Some(0), Some(0)),
             WritingMode::VerticalRl,
-            (0.0, 0.0),
+            (356.0, 46.0),
             2,
         ),
         (
             "両成分が範囲外・vertical_lr",
             (Some(0), Some(0)),
             WritingMode::VerticalLr,
-            (0.0, 0.0),
+            (36.0, 46.0),
             2,
         ),
     ];
@@ -492,8 +502,8 @@ fn declared_origin_outside_validrect_is_literal_with_one_debug_per_component() {
         assert_eq!(
             region.start(),
             expected_start,
-            "{label} / {mode:?}: validrect 外の宣言は寄せずに字義どおり用いる\
-             （書字開始角へ寄っていたら旧クランプ正準が残っている）"
+            "{label} / {mode:?}: validrect 外の宣言は使わず書字開始角から書き始める\
+             （宣言値がそのまま返っていたら範囲の判定が効いていない）"
         );
         assert_eq!(
             counts.debug, expected_debug,
@@ -501,7 +511,7 @@ fn declared_origin_outside_validrect_is_literal_with_one_debug_per_component() {
         );
         assert_eq!(
             counts.warn, 0,
-            "{label} / {mode:?}: 範囲外宣言は warn ではない（記録水準表・要件 3.10）"
+            "{label} / {mode:?}: 範囲外宣言は warn ではない（純粋層は warn を書かない）"
         );
     }
 }
@@ -570,18 +580,25 @@ fn undeclared_origin_falls_back_to_writing_corner_with_one_debug_per_component()
     }
 }
 
-/// 分岐 4——**負値の宣言**は反対端基準（`extent + v`）で絶対値化してから字義どおり
-/// 用いられる（要件 3.7）。範囲内なら記録 0 件・範囲外なら成分ごとに debug 1 件。
+/// 分岐 4——**負値の宣言**は反対端基準（`extent + v`）で絶対値化してから、その解決後の
+/// 値で範囲の内外を判定する（要件 3.7）。範囲内なら解決後の値がそのまま開始点になり
+/// 記録 0 件・範囲外なら書字開始角へ落ちて成分ごとに debug 1 件。
 #[test]
-fn negative_origin_resolves_from_opposite_edge_then_is_used_literally() {
-    // (ラベル, origin, 期待 start, 期待 debug 件数)。画像は 400×224。
+fn negative_origin_resolves_from_opposite_edge_then_is_range_checked() {
+    // (ラベル, origin, 期待 start（None＝範囲外につき方向ごとの書字開始角）, 期待 debug 件数)。
+    // 画像は 400×224。
     let cases = [
         // 400-100=300 ∈ [36,356]・224-100=124 ∈ [46,168] ＝ 両成分とも範囲内。
-        ("範囲内へ解決", (Some(-100), Some(-100)), (300.0, 124.0), 0),
-        // 400-380=20 < 36・224-200=24 < 46 ＝ 両成分とも範囲外でも寄せない。
-        ("範囲外へ解決", (Some(-380), Some(-200)), (20.0, 24.0), 2),
+        (
+            "範囲内へ解決",
+            (Some(-100), Some(-100)),
+            Some((300.0, 124.0)),
+            0,
+        ),
+        // 400-380=20 < 36・224-200=24 < 46 ＝ 両成分とも範囲外。
+        ("範囲外へ解決", (Some(-380), Some(-200)), None, 2),
         // 反対端ちょうど（0）——負値規約の境界。両成分とも範囲外。
-        ("反対端ちょうど", (Some(-400), Some(-224)), (0.0, 0.0), 2),
+        ("反対端ちょうど", (Some(-400), Some(-224)), None, 2),
     ];
     for (label, origin, expected_start, expected_debug) in cases {
         for mode in ALL_MODES {
@@ -589,8 +606,9 @@ fn negative_origin_resolves_from_opposite_edge_then_is_used_literally() {
             assert_capture_alive(&counts);
             assert_eq!(
                 region.start(),
-                expected_start,
-                "{label} / {mode:?}: 負値は反対端基準で解決してから字義どおり用いる"
+                expected_start.unwrap_or_else(|| start_corner(mode)),
+                "{label} / {mode:?}: 負値は反対端基準で解決してから範囲の内外を判定する\
+                 （範囲内なら解決後の値・範囲外なら書字開始角）"
             );
             assert_eq!(
                 counts.debug, expected_debug,
@@ -607,37 +625,59 @@ fn negative_origin_resolves_from_opposite_edge_then_is_used_literally() {
     }
 }
 
-/// 不変条件——**宣言された `origin` の解決結果は `validrect` を変えても動かない**。
+/// **宣言された `origin` が `validrect` に従うのは、範囲から出たときだけである**。
 ///
-/// `resolve_origin_component` の `range` 引数は記録の判定にのみ使われ、返す値には影響
-/// しない（設計 C3 の Invariants）。これが「クランプが残っていない」ことの読み手向けの
-/// 証拠である。**宣言が在る場合のみの主張**であることに注意——未宣言のときは書字開始角
-/// そのものが `validrect` から決まるため、下の対照テストのとおり当然に動く。
+/// 宣言が範囲に留まる矩形では `validrect` を差し替えても開始点は動かず、宣言が範囲外に
+/// なる矩形では書字開始角へ動く（spec `areka-P0-balloon-origin-outside-validrect` の
+/// 要件 1.1・2.1）。「常に宣言どおり」「常に書字開始角」のどちら片側へ退行しても、
+/// どれかの矩形で赤になる。**宣言が在る場合のみの主張**であることに注意——未宣言のときは
+/// 書字開始角そのものが `validrect` から決まるため、下の対照テストのとおり当然に動く。
+///
+/// 全 0 の退化矩形の期待値は規則の自然な帰結として書いてあるだけで、本検査が保証する
+/// 対象ではない（退化した矩形への分岐は実装に無い）。
 #[test]
-fn declared_origin_resolution_is_independent_of_validrect() {
-    // 宣言は固定。validrect だけを差し替える（origin が内側になる形・外側になる形・
-    // 画像全域へ縮退する形・全 0 の退化形——退化形は warn を出すが値は動かない）。
-    let variants: [(&str, (Option<i32>, Option<i32>, Option<i32>, Option<i32>)); 4] = [
-        ("基準（origin は内側）", RECT),
+fn declared_origin_follows_validrect_only_when_it_leaves_the_range() {
+    // 宣言は固定。validrect だけを差し替える。第 3 要素は期待する開始点——
+    // None＝宣言 (200,60) のまま・Some((横書きと vertical_lr の角, vertical_rl の角))
+    // ＝宣言が範囲外になるので書字開始角へ落ちる。
+    type Rect = (Option<i32>, Option<i32>, Option<i32>, Option<i32>);
+    let variants: [(&str, Rect, Option<((f32, f32), (f32, f32))>); 4] = [
+        ("基準（origin は内側）", RECT, None),
         // top100／bottom 224-10=214／left210／right 400-10=390 ＝ origin (200,60) は外側。
         (
             "origin が外側になる矩形",
             (Some(100), Some(-10), Some(210), Some(-10)),
+            Some(((210.0, 100.0), (390.0, 100.0))),
         ),
-        ("全未宣言（画像端へ縮退）", (None, None, None, None)),
-        ("全 0（退化矩形）", (Some(0), Some(0), Some(0), Some(0))),
+        ("全未宣言（画像端へ縮退）", (None, None, None, None), None),
+        // 全 0 の退化矩形では範囲が 1 点に潰れるので、宣言は必ず範囲外になる。
+        (
+            "全 0（退化矩形）",
+            (Some(0), Some(0), Some(0), Some(0)),
+            Some(((0.0, 0.0), (0.0, 0.0))),
+        ),
     ];
     let declared = (Some(200), Some(60));
 
     let mut seen_edges = Vec::new();
-    for (label, rect) in variants {
+    for (label, rect, corner) in variants {
         for mode in ALL_MODES {
             let (region, _) = resolve_counting(declared, rect, mode);
+            let expected = match corner {
+                None => (200.0, 60.0),
+                Some((left_top, right_top)) => {
+                    if matches!(mode, WritingMode::VerticalRl) {
+                        right_top
+                    } else {
+                        left_top
+                    }
+                }
+            };
             assert_eq!(
                 region.start(),
-                (200.0, 60.0),
-                "{label} / {mode:?}: validrect を変えても宣言 origin の解決結果は動かない\
-                 （動いたなら validrect が返値に効いている＝クランプが残っている）"
+                expected,
+                "{label} / {mode:?}: 宣言が範囲に留まる矩形では宣言どおり・範囲から出る\
+                 矩形では書字開始角へ動く"
             );
         }
         seen_edges.push(edges(
@@ -653,7 +693,7 @@ fn declared_origin_resolution_is_independent_of_validrect() {
             (0.0, 0.0, 400.0, 224.0),
             (0.0, 0.0, 0.0, 0.0),
         ],
-        "差し替えた validrect が解決後も同一だと、上の不変条件は何も主張しない"
+        "差し替えた validrect が解決後も同一だと、上の主張は何も見ていない"
     );
 }
 

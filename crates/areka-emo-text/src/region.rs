@@ -691,22 +691,18 @@ mod tests {
         assert_eq!(region.start(), (36.0, 46.0));
     }
 
-    /// 宣言された成分は x・y それぞれ独立に**字義どおり**返る——範囲内でも範囲外でも
-    /// 値は同じ扱いで、validrect は寄せ先として使われない（要件 3.10・クランプ撤去後の姿）。
-    ///
-    /// かつてこの檻は「範囲外成分だけが開始角へ寄る（成分独立クランプ）」を見ていた。
-    /// 撤去でその規約自体が無くなったため、**成分独立性**という残る関心だけを引き継ぎ、
-    /// 見るものを「独立に字義位置が返る」へ差し替えてある。
+    /// 範囲外の成分だけが書字開始角へ落ち、他方の成分は宣言どおり残る
+    /// （spec `areka-P0-balloon-origin-outside-validrect` の要件 1.1・1.2）。
     #[test]
-    fn origin_components_resolve_literally_and_independently() {
+    fn out_of_range_origin_component_falls_back_to_start_corner_independently() {
         let m = model(
             (Some(100), Some(0)), // x は範囲内・y(0) は top(46) より上＝範囲外
             (None, None),
             (Some(46), Some(-56), Some(36), Some(-44)),
         );
         let region = TextRegion::resolve(&m, FIXTURE_IMAGE_SIZE, WritingMode::HorizontalTb);
-        // y は 46 へ寄らない（寄っていたら旧クランプが残っている）。
-        assert_eq!(region.start(), (100.0, 0.0));
+        // y だけが validrect.top(46)＝書字開始角の y へ落ち、x は宣言どおり 100 のまま。
+        assert_eq!(region.start(), (100.0, 46.0));
     }
 
     /// origin の負値は反対辺基準で解決してから範囲の内外を判定する（要件 3.7）。
