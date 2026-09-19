@@ -204,7 +204,12 @@ fn handle_release(world: &mut World, entity: Entity, state: &PointerState, now: 
     {
         return ignore_release(world, "not wired");
     }
-    if !matches!(snapshot_drag_state(), DragStateSnapshot::Idle) {
+    // `JustEnded` は「ドラッグ中」ではない。製品では左ボタンを 1 度離すとこの状態で休み続ける
+    // （`reset_to_idle` の呼び手は無い）ので、待機と同じに扱う（wintf の透過制御と同じ読み方）。
+    if !matches!(
+        snapshot_drag_state(),
+        DragStateSnapshot::Idle | DragStateSnapshot::JustEnded { .. }
+    ) {
         return ignore_release(world, "dragging");
     }
 

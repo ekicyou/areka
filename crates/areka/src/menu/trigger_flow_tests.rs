@@ -14,7 +14,7 @@ use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use log_capture_kit::{LineFormat, capture_lines};
 use windows::Win32::Foundation::HINSTANCE;
-use wintf::ecs::drag::{DragState, update_drag_state};
+use wintf::ecs::drag::{DragState, end_dragging, start_preparing, update_drag_state};
 use wintf::ecs::pointer::ButtonReleased;
 use wintf::ecs::{Point, WindowHandle};
 
@@ -325,24 +325,39 @@ struct ResetDragState;
 
 impl Drop for ResetDragState {
     fn drop(&mut self) {
+        // 捕捉の持ち主は借用の外で手放す（wintf の `end_dragging` の規律）。
+        end_dragging(Point { x: 0, y: 0 }, true);
         update_drag_state(|state| *state = DragState::Idle);
     }
 }
 
-/// ドラッグの状態が待機でない間の右解放は、預かりを捨てて記録し何もしない（要件 1.9）。
+/// 左ボタンを 1 度押して離した後（ドラッグの状態は `JustEnded` で休む）の右解放はメニューへ進む。
+///
+/// 製品には状態を待機へ戻す呼び手が無いので、`JustEnded` を「ドラッグ中」と読むと、最初の
+/// 左クリック以降メニューが二度と出なくなる（実機確認 9.3 で発覚）。押下→解放は製品と同じ関数で踏む。
+#[test]
+fn a_release_after_a_finished_left_click_still_opens_the_menu() {
+    let mut f = fixture();
+    let _reset = ResetDragState;
+    start_preparing(f.window, Point { x: 0, y: 0 }, HWND::default());
+    end_dragging(Point { x: 0, y: 0 }, false);
+
+    assert!(handle_release(
+        &mut f.world,
+        f.window,
+        &right_released(),
+        Instant::now()
+    ));
+    assert!(menu_wiring(&f.world).pending.is_some());
+}
+
+/// ドラッグの途中（左ボタンを押したまま）の右解放は、預かりを捨てて記録し何もしない（要件 1.9）。
 #[test]
 fn a_release_while_dragging_is_ignored_and_drops_the_deferred_double_click() {
     let mut f = fixture();
     defer_double_click(&mut f.world);
     let _reset = ResetDragState;
-    let dragged = f.window;
-    update_drag_state(|state| {
-        *state = DragState::JustEnded {
-            entity: dragged,
-            position: Point { x: 0, y: 0 },
-            cancelled: false,
-        }
-    });
+    start_preparing(f.window, Point { x: 0, y: 0 }, HWND::default());
 
     let (handled, lines) = capture_lines(LineFormat::LevelFields, || {
         handle_release(&mut f.world, f.window, &right_released(), Instant::now())

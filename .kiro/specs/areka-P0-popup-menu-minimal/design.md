@@ -631,7 +631,7 @@ pub(crate) fn interpret(result: Result<Vec<(&'static str, ResourceOutcome)>, Que
 - `on_char_pointer_released`（`PointerEventHandler` 署名・Bubble のみ）:
   1. `state.released.right` でなければ `false`。
   2. `MouseWiring` 不在 → `trace!` で `false`（要件 1.8）。`MenuWiring` 不在も同じ。
-  3. `snapshot_drag_state() != Idle` → 預かりを `take` して捨て `trace!`・`false`（要件 1.9）。
+  3. `snapshot_drag_state()` が `Preparing`／`JustStarted`／`Dragging`（左ボタンを押している間）→ 預かりを `take` して捨て `trace!`・`false`（要件 1.9）。`JustEnded` は待機と同じに扱う——製品には `reset_to_idle` の呼び手が無く、左ボタンを 1 度離すと状態は `JustEnded` で休み続けるため、「`Idle` でなければドラッグ中」と読むと最初の左クリック以降メニューが出なくなる（実機確認 9.3 で発覚・2026-09-19 是正）。
   4. `MenuWiring.in_flight` が立っている → `trace!`・`false`。**預かりは捨てない**（手順 3 と違う）。右ダブルクリックは「押下 1→解放 1→押下 2（預かる）→解放 2」の順に届くので、SHIORI の返事がダブルクリックの間隔より遅いと解放 2 は返事待ちに当たる。ここで捨てると、その後に `visible=0` が返っても送る材料が無く、メニューを抑止するゴーストへ `OnMouseDoubleClick`（Ref5＝1）が届かない（要件 1.10 に反する）。残した預かりは `poll_menu_query` の `decide` が処理する（抑止なら送る・表示なら `trace!` で捨てる）。
   5. `char_scope`、`WindowHandle.hwnd`、`win32::client_to_screen(hwnd, client_point)` を集めて `MenuRequest{scope, entity, hwnd, screen_pos}` を作り、`MenuContext{scope}` で `registry.snapshot` を取り（要件 6.2 の「そのとき」＝右クリックの時点）、`captions::query_ids` → `captions::send_query`。送れたら `in_flight.set(true)` し、`MenuWiring.pending = Some(PendingQuery{request, snapshot, rx, deadline: Instant::now() + QUERY_TIMEOUT})`。送れなければ（`SendFailed`）`rx` 無しの `PendingQuery` を置き、次の tick で全件既定名として扱う（`warn!` 1 行）。`true`。
 - `poll_menu_query`（`Input` スケジュールの system・毎 tick・`dispatch_pointer_events` の後）:

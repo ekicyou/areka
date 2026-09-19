@@ -177,7 +177,7 @@
   - _Depends: 8.1_
   - _Boundary: areka input_events_
 
-- [ ] 9. 検証と登記
+- [x] 9. 検証と登記
 - [x] 9.1 檻が判断を測っていることを摂動で示す
   - 枠の並びの 2 要素を入れ替えて構造テストが赤になること、抑止の腕を表示に変えて判定テストが赤になることを実際に走らせて確かめ、元に戻す
   - 完了状態: 赤の出力（テスト名と失敗内容）と復元の確認をタスクの完了記録に残す
@@ -192,7 +192,7 @@
   - _Requirements: 1.5, 1.6, 5.4, 7.1, 8.4, 9.8, 11.1, 11.2_
   - _Depends: 8.1_
 
-- [ ] 9.3 実機で OS に触れる部分を確かめる
+- [x] 9.3 実機で OS に触れる部分を確かめる
   - 現行の argv 起動で実ゴースト 2 種を立ち上げ、⑴ 右クリックで出て外クリック／Esc で閉じる ⑵ 説明書が既定アプリで開く ⑶ 終了で終了挨拶が再生されて閉じる ⑷ 里々の項目名（アクセラレータの下線・開き直すと候補が変わりうる）が写る ⑸ 表示中にまばたき・文字送りが続き、表示中に SHIORI を落としても落ちない ⑹ 閉じた後に見えない窓がキャラクター窓の上に残らない を確認する
   - あわせて、Esc／メニュー外クリックで閉じたときに `[menu] TrackPopupMenuEx failed` の `error!` が出ないことを見る（表示中も tick が同じスレッドで回るので、その間に失敗した Win32 呼び出しが最終エラーを汚すと素の「未選択」が失敗と記録されうる＝Implementation Notes 7.1。出るなら設計の判定規則を見直す）
   - 完了状態: 6 項目それぞれの確認手順と結果（観察したログ行・見えた文言）をタスクの完了記録に残す
@@ -230,7 +230,7 @@
 - 7.2: `poll_step` は OS にも World にも触れないが、`try_recv` は返事を channel から**取り出す**（`Decided(Ok(..))` は 1 度きり・捨てると返事を失い、同じ tick に 2 回呼ぶと `Timeout` へ落ちる）。`InFlightGuard` は `Clone` しない。同じ旗への二重 `engage` は呼び手の誤り（解放ハンドラが旗で門番する）。`QueryFailure` は `PartialEq` を持たないのでテストは `match`。
 - 7.3: **設計を改めた**: 返事待ち中（表示 1 枚の旗が立っている間）の解放は、右ダブルクリックの預かりを**捨てずに残す**。右ダブルクリックは「押下 1→解放 1→押下 2（預かる）→解放 2」の順に届き、SHIORI の返事がダブルクリックの間隔より遅いと解放 2 が返事待ちに当たるので、そこで捨てると `visible=0` のゴーストへ届かない（要件 1.10）。返事が速い通常経路は「要求 1 が預かり無しで決着→押下 2 で預かる→解放 2 が要求 2 として受理→要求 2 の判定が送る」。受理した解放も預かりに触れない（どちらもテストで固定・design.md 追随済み）。
 - 7.3: 7.4 への必須事項: 表示中の預かりはその後に判定の tick が来ないので、`show_task` の手順 C が **World を借りられた全終了経路**（選択・未選択・表示失敗・窓が消えていた）で取り出して捨てる。落とすと古い預かりが後の無関係な要求の抑止で送られる。`ReadyMenu.guard` は保持するだけのフィールドで、7.4 が表示タスクへ移す（`poll_menu_query` は今は `drop(poll_once(..))`）。
-- 7.3: 8.1 への必須事項: `poll_menu_query` は `dispatch_pointer_events` の後に並べる。`menu/mod.rs` の module 全体の許可を外した時点で、`input_events` の `take_pending_right_double_click`／`send_pending_right_double_click` が本番から到達していることを `cargo build -p areka` の警告 0 で確かめる。差し替え口は `MenuWiring.to_screen`（本番は `win32::client_to_screen`）の 1 つだけ。ドラッグ状態のテストは wintf の `update_drag_state`／`DragState::JustEnded` を置き、`Drop` で Idle へ戻す。
+- 7.3: 8.1 への必須事項: `poll_menu_query` は `dispatch_pointer_events` の後に並べる。`menu/mod.rs` の module 全体の許可を外した時点で、`input_events` の `take_pending_right_double_click`／`send_pending_right_double_click` が本番から到達していることを `cargo build -p areka` の警告 0 で確かめる。差し替え口は `MenuWiring.to_screen`（本番は `win32::client_to_screen`）の 1 つだけ。ドラッグ状態のテストは wintf の `start_preparing`（窓ハンドルは null）で `Preparing` を作り、`Drop` で Idle へ戻す（当初は `DragState::JustEnded` を置いていたが、それは製品の休みの状態で「ドラッグ中」ではなかった＝完了記録 9.3 の欠陥）。
 - 7.4: 表示の関数は `MenuWiring` の欄でなく内側の `run_show`／`display` の引数（`show_task` が `win32::show` を渡すだけ）。`[menu] shown` は OS の表示を呼ぶ**直前**に出す（`TrackPopupMenuEx` はメニューが閉じるまで戻らない）＝失敗時は shown の後に error が続く。World を借りられない 2 経路は `[menu] world unavailable after menu`（`reason="world dropped"／"world busy"`）の `debug!` で、預かりは捨てられない。`spawn_local` は実行器の窓へ起床を投函するだけで同期 poll しない・tick 中に UI スレッドでメッセージを汲む者もいないので、通常の流れで「world busy」は起きない（レビューで wintf と実行器の実ソースを確認）。完了状態の実機の半分（右クリックで出る・動作 1 回）は 8.1 の結線後に 9.3 で見る。
 - 8.1: **設計を改めた**: `open_startup_window` は窓を同期では作らない。World を書き換えるクロージャを積むだけで、適用は `app.run()` の tick の中（`drain_task_pool_commands`）＝`menu::wire_menu` より後。当初の設計どおり `wire_menu` の中で装着すると本番では 0 枚に付き（レビューの探針で `count=0` を実測）、メニューが出ず、6.1 以降は右ダブルクリックも届かなくなる。装着は `main.rs` の窓を生やすクロージャ内、`attach_char_pointer_handlers` の隣の `menu::attach_release_handlers(world)` で行う（是正後の有界実走で「実 sink 結線で起動しました」→ `menu_release_handlers_attached count=2` →「本物のゴースト窓を開きました scopes=[0, 1]」を実装者・レビュアーの双方が確認）。窓を作り直す spec は両方の装着を掛け直す。
 - 8.1: `main.rs` の装着の 1 行を消しても決定論テストは気付かない（隣の `attach_char_pointer_handlers` と同じ性質）。気付くのは ⑴ 警告 0 のビルド（消すと dead_code が 14 件出る）⑵ 有界実走の `count=2` の行 ⑶ 実機確認 9.3。0 枚装着の `warn!` が捕まえるのは呼び出しの**順序違い**であって行の削除ではない。有界実走は引数 2 つ（ゴーストの根とバルーンの絶対パス）が要り、`target\debug\shiori-host32-helper.exe` は cargo が x64 で上書きするので i686 版を毎回コピーする。`main.rs` は 958 行。残した狭い `#[allow(dead_code)]` は後続 spec の口 3 つ（`register`・`MenuRegistry::unregister`・`ItemBody::Submenu`）と `captions::UNQUERIED_POPUPMENU_RESOURCES`（証拠行を本番ソースに保つ表・読むのは兄弟テスト）。
@@ -301,7 +301,7 @@ P1 で `menu::plan::plan_tests` が緑のままなのは欠陥ではない。`pl
 - **9.2 の非回帰 4 番への追記**: 9.2 の時点では「Ctrl／Ctrl＋Shift の入口（5.5）」を無改変で残したが、この裁定で要件 5.5 は「強制退避の入口を残す」へ改まった。強制退避のテスト 2 本が無改変で緑であることが、改訂後の 5.5 の非回帰の根拠である。
 - 追随した文書: 要件 5.1／5.3／5.5、設計の該当 3 か所、steering `roadmap.md` の「終了は Ctrl＋左ダブルクリックで求める」2 か所（実機運転の定石は「メニューの『終了』で求める」へ）、`spine_close_wiring_tests.rs` と `input_events_tests.rs` の偽になった説明 2 行。
 
-### 9.3 実機確認（途中経過・2026-09-19・emo2＝実 pasta・HEAD は 8.1 の結線を含むビルド）
+### 9.3 実機確認（2026-09-19・emo2＝実 pasta・4 回の走行・⑷ だけ上流待ちで引き渡し）
 
 起動は引数 2 つ（ゴーストの根とバルーンの絶対パス）、`RUST_LOG=info,areka::menu=trace,areka::readme=debug`、i686 の helper を `target\debug\` へコピーしてから。起動直後に `[menu] release handlers attached … count=2` →「本物のゴースト窓を開きました scopes=[0, 1]」。2 回の走行とも `ERROR` は 0 行。
 
@@ -312,6 +312,11 @@ P1 で `menu::plan::plan_tests` が緑のままなのは欠陥ではない。`pl
 | ⑵ | 「説明書」で readme.txt が既定のアプリで開く | 済（ログ上） | `[menu] selected scope=0 frame=Readme id=1` → `[readme] opened the readme with the default application … emo2\readme.txt`（2 回） |
 | ⑶ | 「終了」で終了の挨拶が再生されて閉じる | 済（開発者が目視で確認） | `[menu] selected scope=1 frame=Close id=2` → `kanade: OnClose GET を発行し握手を開始 reason="user"` → `close talk を再生起動` →（4.5 秒後）`talk_done_quit` → `unload_clean` → `ghost_quit` → `ghost shutdown sequence completed` |
 | ⑷ | 里々の `readmebutton.caption`（`(&R)` の下線・開き直すと変わる） | **未実施・上流待ち** | `R_POST_and_KOMAINU` は `surface 0 has no layers at all (extent 0x0)` で窓の配置に失敗し、検証用ダミー窓へ落ちた（キャラクター窓が無いのでメニューを出せない）。里々の標準テンプレートの `surfaceNNNN.png` の慣習が未実装（`areka-P0-shell-implicit-surface`・α A1-①）。emo2 の pasta は caption を定義しないので `resource answered empty or no content: using the default labels`（既定名「説明書」「終了」）になる＝これは想定どおり。項目名の差し替えそのものは決定論テスト（`captions_tests.rs`・`resource_query_test.rs` の 4 通り・`trigger_wired_tests.rs` の「取扱説明書(&R)」）が留めている |
-| ⑸ | 表示中も動く・表示中に SHIORI を落としても落ちない | 前半は済（ログ）・後半は未実施 | メニューが開いていた区間（合計 14.2 秒）の中に SERIKO・描画のログが 22 行ある＝表示中も tick が回っている。表示中に helper を落とす確認は未実施 |
-| ⑹ | 閉じた後に見えない窓が残らない | 開発者の目視待ち | （閉じた後の左ダブルクリックは 1 回目の走行で普通に届き、ゴースト自身の選択肢から正常に終了している） |
-| 1.10 | 右ダブルクリックはメニューが出る側では届かない | 未実施 | 2 回の走行とも `double_click=Right` は 0 件 |
+| ⑸ | 表示中も動く・表示中に SHIORI を落としても落ちない | 済 | 前半: メニューが開いていた区間（合計 14.2 秒）の中に SERIKO・描画のログが 22 行ある＝表示中も tick が回っている。後半（4 回目の走行）: メニューを開いたまま 8 秒後に helper を外から止めた（タスクマネージャへフォーカスを移すとメニューが閉じるので、ログの `menu_shown` を見張る番人が自分の起こした helper を止めた）→ `helper_exited exit=Abnormal(-1)` → `shiori_down`（終了系列 Fault）→ `[menu] dismissed scope=0` → `ghost shutdown sequence completed`・プロセスは exit 0。窓が先に消えるので `menu_null_post_failed`（`debug!`・無効な窓ハンドル）が 1 行出る＝記録付きで無害 |
+| ⑹ | 閉じた後に見えない窓が残らない | 済（開発者が操作して「特に問題なし」） | 4 回目の走行で、メニューを閉じた後の左ダブルクリック 2 回がどちらも `OnMouseDoubleClick` の台詞へ届いている |
+| 1.10 | 右ダブルクリックはメニューが出る側では届かない | 済 | 3・4 回目の走行とも `origin="OnMouseDoubleClick"` の件数は左ダブルクリックの件数と同じ（2＝2）＝右からは 1 件も届いていない。素早い右 2 連打は「表示 → 2 打目の押下がメニューを閉じる → 2 打目の解放で再表示」（`shown` → `dismissed` → 0.1 秒後に `shown`）になり、2 打目の押下はメニューのモーダルループが食うので `double_click=Right` 自体がほぼ起きない |
+| 8.2 | 結線済みの Ctrl＋左ダブルクリックでは閉じない | 済（開発者が操作して「特に問題なし」） | 4 回目の走行で `mouse_escape_close` は 0 件・左ダブルクリック 2 回はどちらも普通のダブルクリックの台詞になった |
+
+**実機確認が見つけた欠陥 1 件（同日是正）**: 3 回目の走行で、左クリックを 1 度した後は右クリックでメニューが出なくなった（以後の解放がすべて `[menu] ignored release reason="dragging"`）。wintf のドラッグの状態は左ボタンを離すと `JustEnded` で休み、製品には待機へ戻す `reset_to_idle` の呼び手が無い。`trigger` は「`Idle` でなければドラッグ中」と読んでいた。1・2 回目の走行は右クリックしかしなかったので踏まなかった。決定論テストは「ドラッグ中」の代役に `JustEnded` を置いていた（捕捉の持ち主が要らない唯一の状態だった）ので、欠陥そのものを合格条件に固定していた。是正: `JustEnded` を待機と同じに扱う（wintf の透過制御と同じ読み方）。テストは製品と同じ関数（`start_preparing` → `end_dragging`）で「左クリックの後」を作る 1 本を足し、ドラッグ中のテストは `Preparing`（左ボタンを押したまま）へ置き直した。是正を外すと足した 1 本が赤になることを確かめた。4 回目の走行で、左ダブルクリックの 4 秒後に `[menu] shown` が出ることを確認。
+
+**⑷ の引き渡し**: 引受先 `areka-P0-shell-implicit-surface`（brief のみ・α A1-①）の `brief.md` に 2026-09-19 の追記として「実機サインオフで里々の項目名を 1 度見ること」を書いた。
