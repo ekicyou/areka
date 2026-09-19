@@ -1,6 +1,6 @@
 //! # region — バルーン座標の画像空間解決と DPI/スケール契約（純粋層）
 //!
-//! origin／wordwrappoint／validrect の「負値=反対辺基準」解決・宣言 origin の字義解決・
+//! origin／wordwrappoint／validrect の「負値=反対辺基準」解決・宣言 origin の範囲内外の解決・
 //! `TextRegion`／`ScaleContract`（画像座標空間と物理座標空間の 2 空間のみ・論理 px 不在）を担う。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
@@ -21,20 +21,22 @@
 //! `resolve(v, extent) = if v >= 0 { v } else { extent + v }`
 //! （「マイナス座標はベース画像の右下からの相対」）。
 //!
-//! ## 描画開始点は宣言どおり（spec `areka-P0-balloon-vertical-canon` が正典）
+//! ## 描画開始点（spec `areka-P0-balloon-origin-outside-validrect` が正典）
 //!
-//! 描画開始点＝`resolve(origin)`。宣言された成分は validrect の内外を問わず**宣言どおりの
-//! 位置**を用いる（同 spec の要件 3.10）——validrect の外にある宣言は `debug!` で記録する
-//! だけで、位置は動かさない。成分 `None` のときだけ書字開始角
-//! （horizontal_tb/vertical_lr＝validrect 左上・vertical_rl＝右上）へ縮退する（同 3.11）。
+//! 描画開始点＝`resolve(origin)`。ただし解決後の値が validrect の当該軸の範囲（**両端を
+//! 含む**）の外にある成分は、**宣言されていないものとして扱い**、書字開始角
+//! （horizontal_tb/vertical_lr＝validrect 左上・vertical_rl＝右上）を用いる。範囲内の
+//! 宣言は宣言どおりの位置、成分 `None` も書字開始角である。判定は x と y で独立に行い、
+//! 無視した宣言の解決値は [`TextRegion::ignored_origin`] が運ぶ（警告は登録口が書く）。
 //!
-//! **撤去された規約**: かつては areka 独自の「origin クランプ正準」
-//! （`clamp(resolve(origin), validrect)`）を採っており、完了 spec
-//! `areka-P0-emo-text-layer` の design.md（`:464` と `:716`）がそれを正典と称していた。
-//! 2026-08-27 の開発者裁定で撤去——正典 ukadoc は `origin.x` について
-//! 「通常は指定せず validrect の定義に任せる」と述べるだけで、範囲外宣言を寄せることを
-//! 求めていないためである。アーカイブ済み spec 本体は非改変とし、上書きの事実は
-//! `areka-P0-balloon-vertical-canon` が `doc/COMPAT_ARCHITECTURE.md` §8 へ登記する。
+//! **撤去と取り下げの経緯**: かつて areka は「範囲外に解決された origin 成分を書字開始角へ
+//! 寄せる」規約を持っていたが、2026-08-27 の開発者裁定で撤去し、宣言は validrect の内外を
+//! 問わず宣言どおりとした（完了 spec `areka-P0-balloon-vertical-canon` の要件 3.10）。
+//! 2026-09-18 にこの撤去を取り下げ、上の規則へ戻した——撤去の前提だった「範囲外の宣言は
+//! ほかのベースウェアでも壊れた定義である」が、範囲外に origin を宣言した第三者のバルーンが
+//! SSP では読めるのに areka では行頭が 1 文字欠ける、という実機目視で反証されたためである。
+//! アーカイブ済み spec 本体は非改変とし、取り下げの事実は `doc/COMPAT_ARCHITECTURE.md`
+//! §8 へ登記する。
 
 use areka_parsers::balloon::BalloonModel;
 
@@ -193,7 +195,8 @@ pub struct TextRegion {
     right: f32,
     /// validrect 絶対矩形の下辺（image px）。
     bottom: f32,
-    /// 描画開始点（宣言された origin は字義・未宣言成分は書字開始角・image px）。
+    /// 描画開始点（範囲内の origin 宣言は宣言どおり・範囲外の宣言と未宣言成分は
+    /// 書字開始角・image px）。
     start: (f32, f32),
     /// 折返し閾値（行内軸・image px。横書き＝x 値・縦書き＝y 値）。
     wrap_threshold: f32,
@@ -201,6 +204,9 @@ pub struct TextRegion {
     inline_limit: f32,
     /// バルーン画像の原寸（幅, 高さ・image px）。`resolve` の入口で受け取った値そのもの。
     image_size: (f32, f32),
+    /// 範囲外ゆえ無視した origin 宣言の解決値（x, y。範囲内の宣言と未宣言は `None`）。
+    /// 作者へ知らせる警告は actor の登録口が書く——本層は値を運ぶだけである。
+    ignored_origin: (Option<f32>, Option<f32>),
 }
 
 /// 折返し基準が描画範囲の外に解決されたときの警告で、バルーン名の欄に載せる代替値。
@@ -239,8 +245,9 @@ impl TextRegion {
     ///
     /// - validrect: 負値=反対辺基準で絶対値化。成分 `None` は画像全域の辺へ縮退
     ///   （`debug!` 記録）。退化矩形（幅/高さ ≤ 0）は `warn!`＋そのまま返す（縮退継続）。
-    /// - 描画開始点: 宣言された origin 成分は字義どおり（validrect 外なら `debug!` 記録・
-    ///   位置は動かさない）。`None` 成分のみ書字開始角へ縮退（`debug!` 記録）。
+    /// - 描画開始点: validrect の範囲内（両端を含む）へ解決された origin 成分は宣言どおり。
+    ///   範囲外へ解決された成分と `None` 成分は書字開始角へ縮退する（どちらも `debug!` 記録）。
+    ///   無視した宣言の解決値は [`ignored_origin`](Self::ignored_origin) が運ぶ。
     /// - 折返し閾値: 横書き＝`wordwrappoint.x`（負値=右辺基準）・縦書き＝`wordwrappoint.y`
     ///   （負値=下辺基準）。`None` は行内軸の validrect 遠辺へ縮退（領域端での自然折返し）。
     /// - 描画範囲の行内軸の遠辺（[`inline_limit`](Self::inline_limit)）: 横書き＝解決後の
@@ -282,19 +289,19 @@ impl TextRegion {
             );
         }
 
-        // ── 描画開始点: 宣言は字義・未宣言のみ書字開始角へ（書字開始角は正準表参照） ──
+        // ── 描画開始点: 範囲内の宣言は宣言どおり・範囲外と未宣言は書字開始角へ（正準表参照） ──
         let start_corner = match mode {
             WritingMode::HorizontalTb | WritingMode::VerticalLr => (left, top),
             WritingMode::VerticalRl => (right, top),
         };
-        let start_x = resolve_origin_component(
+        let (start_x, ignored_x) = resolve_origin_component(
             model.origin().x(),
             width,
             (left, right),
             start_corner.0,
             "origin.x",
         );
-        let start_y = resolve_origin_component(
+        let (start_y, ignored_y) = resolve_origin_component(
             model.origin().y(),
             height,
             (top, bottom),
@@ -328,6 +335,7 @@ impl TextRegion {
             wrap_threshold,
             inline_limit,
             image_size: (width, height),
+            ignored_origin: (ignored_x, ignored_y),
         }
     }
 
@@ -351,9 +359,17 @@ impl TextRegion {
         self.bottom
     }
 
-    /// 描画開始点（宣言された origin は字義・未宣言成分は書字開始角・image px）。
+    /// 描画開始点（範囲内の origin 宣言は宣言どおり・範囲外の宣言と未宣言成分は
+    /// 書字開始角・image px）。
     pub fn start(&self) -> (f32, f32) {
         self.start
+    }
+
+    /// 範囲外ゆえ無視した origin 宣言の解決値（x, y）——作者向けの警告を書く登録口専用。
+    /// 成分が `Some` であることと、その成分の [`start`](Self::start) が書字開始角であり
+    /// かつ宣言が在ったことは同値である（範囲内の宣言と未宣言では `None`）。
+    pub(crate) fn ignored_origin(&self) -> (Option<f32>, Option<f32>) {
+        self.ignored_origin
     }
 
     /// 折返し閾値（行内軸・image px。横書き＝x 値・縦書き＝y 値）。
@@ -418,24 +434,29 @@ fn resolve_or(v: Option<i32>, extent: f32, fallback: f32, key: &'static str) -> 
     }
 }
 
-/// origin 成分の解決（spec `areka-P0-balloon-vertical-canon` の要件 3.10／3.11）:
+/// origin 成分の解決（spec `areka-P0-balloon-origin-outside-validrect` が正典）。
 ///
-/// - `Some`: 負値=反対辺基準で絶対値化し、**宣言どおりの位置をそのまま返す**。
-///   解決後の値が validrect の当該軸（`range`・両端含む）の外にあるときは `debug!` を
-///   1 件記録するだけで、位置は動かさない。
-/// - `None`: 書字開始角へ縮退する（`debug!` 記録・要件 3.11・撤去前と完全に同一）。
+/// 返値は「開始点の成分」と「範囲外ゆえ無視した宣言の解決値」の対であり、第 2 要素は
+/// **宣言が在り、かつ解決後の値が `range`（validrect の当該軸・両端を含む）の外**に
+/// あったときだけ `Some` になる。
 ///
-/// **不変条件**: `range` は**返す値に影響しない**（記録の判定にのみ用いる）。これが
-/// 撤去された「origin クランプ正準」がもう残っていないことの、読み手向けの証拠である
-/// （檻: `region_vertical_canon_tests.rs` の
-/// `declared_origin_resolution_is_independent_of_validrect`）。
+/// | `v` | 解決後の値 | 返す開始点 | 第 2 要素 | `debug!` |
+/// |---|---|---|---|---|
+/// | `None` | — | `corner` | `None` | 1 件 |
+/// | `Some`・範囲内 | `resolve_coord(v, extent)` | 解決後の値 | `None` | 0 件（何も落としていない） |
+/// | `Some`・範囲外 | 同上 | `corner` | `Some(解決後の値)` | 1 件 |
+///
+/// 負値は先に反対辺基準で絶対値化し（`areka-P0-balloon-vertical-canon` の要件 3.7・不変）、
+/// **その解決後の値**で範囲の内外を判定する。判定は x と y で独立であり、片方の成分が
+/// 範囲外でも他方は宣言どおりに残る。作者向けの警告（`warn!`）は本関数では書かない——
+/// 本関数は毎フレーム呼ばれるので、「装着 1 回につき 1 件」を数えられるのは登録口だけである。
 fn resolve_origin_component(
     v: Option<i32>,
     extent: f32,
     range: (f32, f32),
     corner: f32,
     key: &'static str,
-) -> f32 {
+) -> (f32, Option<f32>) {
     match v {
         Some(v) => {
             let resolved = resolve_coord(v, extent);
@@ -445,14 +466,17 @@ fn resolve_origin_component(
                     resolved,
                     range_min = range.0,
                     range_max = range.1,
-                    "宣言された origin 成分が validrect の外にある——宣言どおりの位置を用いる"
+                    corner,
+                    "宣言された origin 成分が文字を描いてよい範囲の外にある——宣言を使わず書き始めの角を用いる"
                 );
+                (corner, Some(resolved))
+            } else {
+                (resolved, None)
             }
-            resolved
         }
         None => {
             tracing::debug!(key, corner, "未指定の origin 成分を書字開始角へ寄せる");
-            corner
+            (corner, None)
         }
     }
 }
@@ -629,7 +653,7 @@ mod tests {
         assert_eq!(region.wrap_threshold(), 351.0); // 400 + (-49)
     }
 
-    // ── 描画開始点の解決（宣言は字義・未宣言は書字開始角） ──
+    // ── 描画開始点の解決（範囲内の宣言は宣言どおり・範囲外と未宣言は書字開始角） ──
 
     /// origin を宣言しない fixture は書字開始角 (left,top)=(36,46) から書き始める
     /// （要件 3.11 の縮退・SSP 表示実態と整合する期待座標）。
@@ -685,7 +709,8 @@ mod tests {
         assert_eq!(region.start(), (100.0, 0.0));
     }
 
-    /// origin の負値も反対辺基準で解決してから字義どおり用いる（要件 3.7）。
+    /// origin の負値は反対辺基準で解決してから範囲の内外を判定する（要件 3.7）。
+    /// 本例の解決値は範囲内なので、そのまま描画開始点になる。
     #[test]
     fn negative_origin_resolves_from_opposite_edge() {
         // origin.x,-100 → 400-100=300・origin.y,-100 → 224-100=124。
