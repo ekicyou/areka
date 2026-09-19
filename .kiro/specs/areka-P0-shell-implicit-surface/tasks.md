@@ -24,7 +24,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 5.4, 6.3, 7.3, 7.12, 10.1, 10.2_
   - _Boundary: areka-emo-atlas Normalizer_
 
-- [ ] 2.2 (P) 間隔の語 `sometimes`・`rarely` を読み替える
+- [x] 2.2 (P) 間隔の語 `sometimes`・`rarely` を読み替える
   - `crates/areka-seriko/src/table.rs` の `AnimationTable::from_world` で、`Interval::Other(語)` の腕の中で `sometimes` を `LoopTrigger::Random { k: 2 }`・`rarely` を `Random { k: 4 }` として既存の手順（`k == 0` の検査・コマの整列・空の検査）へ流す。比べ方は小文字の完全一致。`LoopTrigger` の枝の追加 0・再生の仕組みは変更 0
   - 読み替えたときに `debug!` を 1 本出す（欄: `surface_id`・`animation_id`・`vocab`＝元の語・`k`）
   - 冒頭の「採録規則」の説明と `Interval::Other` の腕の注記を「`sometimes`・`rarely` は採る／他の語は元の語つきの `debug!` を出して採らない」へ直す
