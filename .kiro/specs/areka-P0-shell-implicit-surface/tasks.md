@@ -444,3 +444,26 @@ feature 全体の検証で 3 件の申し送りが出たので、その場で直
 - **退化していないことの証跡**——`ERROR` 0 行・`panicked` 0 行・`shell bake で脱落した element` **0 件**・一覧は要件どおり `recognized=2 used=0 shadowed=2`（`emo2` は `element0` を持つので面の画像は土台に使われない）。
 
 **これで「自動走行では確かめられなかった項目」5 件がすべて開発者の目視で片付いた。**要件 4.10（抜き色で透明になった場所はクリックが背後へ抜ける）も 7.1 ⑶ で目視サインオフ済みだが、**檻は今も 1 本も無い**ことは変わらない。
+
+### `emo2.nar` を最新版へ差し替え、⑸ を取り直した（2026-09-20）
+
+開発者が `emo2` の新しい配布物を作ったため、`vendors/sample_ghost/emo2.nar` を差し替えた（置き元は開発者の手元の `ghost_dev/release/emo2/emo2.nar`）。**上の ⑸ のサインオフは差し替え前の版に対するものだったので、同じ日に取り直した。**
+
+**差分の実測**（旧 6,631,325 → 新 4,560,408 バイト。縮んだのは梱包の違いで、**ファイルの増減は 0 件**——差の 18 件はフォルダ登記だけである）:
+
+| 変わったもの | 中身 |
+|---|---|
+| `ghost/master/pasta.dll` | 3,821,568 → 3,832,832 バイト |
+| `ghost/master/scripts/pasta/shiori/event/boot.lua` | 37 → 70 行。`OnFirstBoot` のハンドラを新設し、`OnBoot`／`OnFirstBoot` の双方が新しい `apply_baseware_policy` を通る。その中身は **`if sender ~= "areka" then return end`** ——areka のときだけ actor の `budoux` を外す（バルーン側 `budoux_newline,1` で areka が実測の行幅で折り返すため、ゴースト側が先に `\n` を入れると余計に割れる） |
+| `updates.txt`・`ghost/master/updates.txt` | ハッシュ表の作り直し（109 行のまま・2 本はバイト一致のまま） |
+| `emo2-kakukaku/descript.txt` | 末尾の空行 1 つ削除 |
+
+**シェル（絵）は 1 バイトも変わっていない。**よって面の画素・外形に依る檻（`shell_target_emo2_tests.rs` ほか）と ⑴〜⑷ のサインオフは影響を受けない。文書が主張する不変条件も実測で保たれている（`updates.txt` 109 行・2 本がバイト一致・`install.txt` 6 行・`budoux_newline,1` 健在）。
+
+**取り直した ⑸ の走行**: 1 分 22 秒・**exit 0**。**開発者の判定: 「OK」。** ログが独立に裏付けたもの:
+
+- **撫でとダブルクリックが効いた**——`OnMouseMove` 2 回・`OnMouseDoubleClick` 1 回。talk は `steady_talk` が 6 回起動し `steady_talk_done` 5 回＋`steady_talk_done_close` 1 回で畳まれている。
+- **バルーンの選択肢が効いた**——`choice_selected` → `choice_accepted` → `choice_resolved` が 1 組。
+- **右クリックメニューが 3 回開き、2 つの項目が両方効いた**——`[menu] shown … items=2` が 3 回、`[menu] selected … frame=Readme id=1`（→ `[readme] opened the readme with the default application`）と `frame=Close id=2`。
+- **終了は正規の経路**——`close_talk_start` → `talk_done_quit` → `unload_clean` → `ghost_quit cause=Quit` → `ghost shutdown sequence completed`。有界の自動終了は使われていない。
+- **退化なし**——`ERROR` 0 行・`panicked` 0 行・`shell bake で脱落した element` **0 件**・`recognized=2 used=0 shadowed=2`（差し替え前と同じ値）。
