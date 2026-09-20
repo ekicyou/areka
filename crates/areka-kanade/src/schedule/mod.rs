@@ -513,9 +513,11 @@ fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
 
 /// 終了系列（Quit）の共通終端: Unloading{Quit}＋ShioriUnload。
 ///
-/// 到達点は 2 つある——台本が `\-` に辿り着いた完了（`talk_done_quit`）と、利用者の中断で
-/// 止めた台本が終了を予約していた完了（`talk_done_break_quit`）である。どちらも同じ遷移を採る
-/// （設計「終了の予約」）。`at` は対象トークの完了かつ close 系遷移の掃除点（C4 規則 7）の識別子。
+/// 到達点は 3 つある——台本が `\-` に辿り着いた完了（`talk_done_quit`）、利用者の中断で
+/// 止めた台本が終了を予約していた完了（`talk_done_break_quit`）、そして別れの台詞の完了
+/// （[`close`] の `close_talk_done_quit`・終わり方を問わない）である。いずれも同じ遷移を採る
+/// （設計「終了の予約」「close の規則改訂」）。`at` は対象トークの完了かつ close 系遷移の
+/// 掃除点（C4 規則 7）の識別子。
 fn to_unloading_quit(mut state: State, at: &'static str) -> (State, Vec<Action>) {
     state.phase = Phase::Unloading {
         cause: TermCause::Quit,
@@ -537,8 +539,8 @@ fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
 
 /// reason（3 値）・talk_id 突合。既知 talk の `TalkEndReason::Quit` は横断的に終了系列（Quit）へ。
 ///
-/// `Ended` と `Interrupted` はいずれも非 quit としてフェーズ固有遷移（定常復帰・close 終了拒否）
-/// へ委譲する（設計「kanade schedule の 3 値写像」）。例外は 1 つだけで、利用者の中断で止めた
+/// `Ended` と `Interrupted` はいずれも非 quit としてフェーズ固有遷移（定常復帰・別れの台詞の
+/// 終了）へ委譲する（設計「kanade schedule の 3 値写像」）。例外は 1 つだけで、利用者の中断で止めた
 /// 台本が終了を予約していた `Interrupted`（[`user_break::take_user_break_quit`] が真）は `Quit` と
 /// 同じ終了系列へ進む。dispatcher の slot 差替に伴う `Interrupted` は dispatcher が stale として
 /// 破棄するため、ここへ届く `Interrupted` は利用者の中断か選択肢の時間切れの解除である。

@@ -508,11 +508,11 @@ pub(super) const MOVE_MENU_TALK: &str = concat!(
 /// 既存の決定論テストが同じ逐語で着地を固定している（`spine_move_cue_tests.rs:89`）。
 pub(super) const MOVE_APPLY_TALK: &str = r"\1\![move,-353,,,0,base,base]\e";
 
-/// 終了挨拶（`OnClose` の応答）。**`\-`（終了指令）で終わることが要点**である。
+/// 終了挨拶（`OnClose` の応答）。実物と同じく **`\-`（終了指令）で終わる**。
 ///
-/// `\e` で終わると再生完了は「終了拒否」として扱われ、運行は定常運転へ戻って解放が起きない
-/// （`crates/areka-kanade/src/schedule/close.rs:15-17`）。実物も終了パターンの末尾で
-/// ゴースト終了を出す（`検体 emo2 の ghost/master/dic/boot.pasta:95`）。
+/// なお運行側は別れの台詞を末尾に `\-` が在るのと同じ結果として扱うため、`\e` で終わっても
+/// 終了へ進む（`crates/areka-kanade/src/schedule/close.rs` の `fn on_close_talk_wait`）。
+/// 実物も終了パターンの末尾でゴースト終了を出す（`検体 emo2 の ghost/master/dic/boot.pasta:95`）。
 pub(super) const CLOSE_TALK: &str = r"\0\s[0]またね。\-";
 
 /// 一周走行の台本受け口を組む（応答の待ち行列を id ごとに積む）。

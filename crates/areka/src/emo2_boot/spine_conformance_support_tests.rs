@@ -613,8 +613,9 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
         // 消化に毎秒の変化通知が要る＝本檻が測りたい経路と別の非決定が混ざる。
         .get("OnBoot", Ok(None))
         .notify("basewareversion", Ok(()))
-        // 終了段の応答は `\-`（ゴースト終了）で終える。`\e` で終えると「終了拒否」として定常運転へ
-        // 戻り解放が起きない（tasks.md Implementation Notes・`schedule/close.rs:15-17`）。
+        // 終了段の応答は実物に合わせて `\-`（ゴースト終了）で終える。運行側は別れの台詞を
+        // 末尾に `\-` が在るのと同じ結果として扱うので、`\e` で終えても終了へ進む
+        // （`crates/areka-kanade/src/schedule/close.rs` の `fn on_close_talk_wait`）。
         .get("OnClose", Ok(Some(r"\0\s[0]またね。\-".to_string())))
         .unload(Ok(ExitKind::Clean))
         .build();

@@ -444,6 +444,40 @@ fn next_tick_after_user_break_asks_for_the_next_talk() {
     );
 }
 
+/// 別れの台詞の最中の中断は、終了の予約が無くてもただちに終了へ進む（要件 3.7）。
+///
+/// 受理（判断分岐 ⑴）と別れの台詞の新しい規則（判断分岐 ⑻）の合成である。予約が無いので
+/// `fn on_talk_done` の予約の腕は通らず、終了の握手の腕がそのまま終了を決める。
+#[test]
+fn user_break_during_the_farewell_talk_ends_the_ghost() {
+    let cfg = config();
+    let (accepted, actions) = step(
+        playing(Phase::CloseTalkWait {
+            talk_id: TalkId(3),
+            deadline: Some(MonotonicMs(30_500)),
+        }),
+        Input::UserBreak { scope: 0 },
+        &cfg,
+    );
+    assert_eq!(actions.len(), 1, "前提: 別れの台詞の中断も受け入れられる");
+
+    let (next, actions) = step(accepted, interrupted(false), &cfg);
+    assert!(
+        matches!(
+            next.phase,
+            Phase::Unloading {
+                cause: TermCause::Quit
+            }
+        ),
+        "別れの台詞を中断したら予約の有無によらず終了へ進む（要件 3.7）"
+    );
+    assert!(
+        matches!(actions.as_slice(), [Action::ShioriUnload]),
+        "終了の要求を 1 件だけ出す。実際の件数={}",
+        actions.len()
+    );
+}
+
 /// 不変条件: 中断の帳簿は現行トークの完了で必ず空になる（終わり方を問わない）。
 #[test]
 fn user_break_ledger_is_emptied_by_any_completion_of_the_current_talk() {

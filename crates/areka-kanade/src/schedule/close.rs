@@ -13,8 +13,10 @@
 //!   （DD-11: 204 は拒否ではない・OnCloseAll は発行しない）。追加イベントを発行せず
 //!   `Unloading{CloseSilent}` へ直行する（Req 4.6）。
 //! - `CloseTalkWait{talk_id}` + `TalkDone{talk_id, reason: Ended | Interrupted}` →
-//!   **終了拒否**（Req 4.5）。終了させず `Steady{None}` へ復帰し、次 Tick で pump が再開する。
-//!   （`Quit` は横断アームが `Unloading{Quit}` へ送るため本層には届かない。）
+//!   **終了へ進む**（Req 3.6・3.7）。別れの台詞は末尾に `\-` が在るのと同じ結果として扱うため、
+//!   最後まで再生されても中断されても `Unloading{Quit}`＋`ShioriUnload` になる。よって close 握手
+//!   から `Steady` へ戻る経路は **0 本**である（完了 spec `areka-P0-kanade` の Req 4.5 を上書きする
+//!   2026-09-20 開発者裁定）。（`Quit` は横断アームが `Unloading{Quit}` へ送るため本層には届かない。）
 //! - `CloseTalkWait` + `Tick` → 再生完了待ちに時刻基準の上限（deadline）を設け、上限超過を
 //!   判定して超過なら `error!` の上で `Unloading{DeadlineExceeded}` へ進む（Req 4.7）。
 //!   握手入口で `last_now` が None（Tick 未受領）だった場合は deadline を None のまま入り、
@@ -23,7 +25,7 @@
 //! # ログ規律（steering: areka-log-first-no-silent-failure）
 //! すべての遷移・防御アームは `tracing` を発行する。沈黙の失敗経路は存在しない。
 
-use super::{Action, Input, Phase, State, TermCause};
+use super::{Action, Input, Phase, State, TermCause, to_unloading_quit};
 use crate::msg::{KanadeConfig, MonotonicMs, ShioriOutcome};
 use crate::talk::{StartTalk, TalkId};
 
@@ -106,8 +108,8 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
 
 /// `CloseTalkWait`（close talk 再生完了待ち／期限判定）の遷移。
 ///
-/// - `TalkDone{reason: Ended | Interrupted}` → **終了拒否**・`Steady{None}` へ復帰
-///   （Req 4.5・次 Tick で pump 再開）。
+/// - `TalkDone{reason: Ended | Interrupted}` → **終了へ進む**・`Unloading{Quit}`＋`ShioriUnload`
+///   （Req 3.6・3.7・終わり方で振り分けない）。
 /// - `Tick{now}` → 期限判定（Req 4.7・注入時刻のみで決定的）:
 ///   - deadline 未設定（None）→ 本 Tick を起点に設定・維持。
 ///   - `now >= deadline` → error!＋`Unloading{DeadlineExceeded}`（終了系列継続）。
@@ -129,12 +131,12 @@ fn on_close_talk_wait(
 
     match input {
         Input::TalkDone(done) => {
-            // mod.rs は既知 talk の Ended／Interrupted（非 quit）のみを委譲する（Quit は
-            // 横断アームで Unloading{Quit}）。ゆえに本アームは close talk 完了＝終了拒否のみを受ける。
-            let _ = done; // talk_id 突合は mod.rs 済み。
-            tracing::info!(target: "kanade", event = "close_refused", talk_id = talk_id.0, "close talk 完了・非 quit——終了拒否・定常運転へ復帰");
-            state.phase = Phase::Steady { talk: None };
-            (state, Vec::new())
+            // mod.rs は既知 talk の Ended／Interrupted のみを委譲する（Quit と「利用者の中断＋
+            // 終了の予約」は横断アームが先に終了系列へ送る）。別れの台詞は末尾に `\-` が在るのと
+            // 同じ結果として扱うので、どの終わり方で届いてもここで終了へ進む（Req 3.6・3.7）。
+            // talk_id 突合は mod.rs 済み。
+            tracing::info!(target: "kanade", event = "close_talk_done_quit", talk_id = talk_id.0, reason = ?done.reason, "別れの台詞の再生が終わった——終わり方によらず終了系列（Quit）へ");
+            to_unloading_quit(state, "close_talk_done_quit")
         }
         Input::Tick { now } => {
             state.last_now = Some(now);
@@ -183,9 +185,11 @@ fn deadline_from(last_now: Option<MonotonicMs>, config: &KanadeConfig) -> Option
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::msg::{CloseReason, ShioriCall};
+    use crate::msg::CloseReason;
+    use crate::schedule::log_capture::{capture, logged_once};
     use crate::schedule::step;
     use crate::talk::{TalkDone, TalkEndReason};
+    use tracing::Level;
 
     fn config() -> KanadeConfig {
         KanadeConfig::new("master", "1.0.0")
@@ -287,10 +291,12 @@ mod tests {
         assert!(matches!(actions2.as_slice(), [Action::ShioriUnload]));
     }
 
-    // === 分岐2: 応答スクリプトあり（reason=Ended）→ 終了拒否→定常復帰→pump 再開 ===
+    // === 分岐2: 応答スクリプトあり（reason=Ended）→ 終了へ進む（要件 3.6） ===
+    // 別れの台詞は末尾に `\-` が在るのと同じ結果として扱う。台本が最後まで再生されても
+    // 終了へ進み、終了の握手から定常運転へ戻る経路は 1 本も無い。
 
     #[test]
-    fn value_then_ended_refuses_close_and_resumes_pump() {
+    fn value_then_ended_proceeds_to_quit() {
         let (s1, _a1) = step(
             close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
@@ -304,45 +310,53 @@ mod tests {
             _ => panic!("expected CloseTalkWait"),
         };
 
-        // TalkDone{reason:Ended}（既知 talk）→ 終了拒否・Steady{None} へ復帰。
-        let (s2, actions2) = step(
-            s1,
-            Input::TalkDone(TalkDone {
-                talk_id,
-                reason: TalkEndReason::Ended,
-                quit_reserved: false,
-            }),
-            &config(),
+        // TalkDone{reason:Ended}（既知 talk）→ 終了へ進む（Unloading{Quit}＋解放要求）。
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(step(
+                s1,
+                Input::TalkDone(TalkDone {
+                    talk_id,
+                    reason: TalkEndReason::Ended,
+                    quit_reserved: false,
+                }),
+                &config(),
+            ));
+        });
+        let (s2, actions2) = out.expect("step は必ず結果を返す");
+        assert!(
+            matches!(
+                s2.phase,
+                Phase::Unloading {
+                    cause: TermCause::Quit
+                }
+            ),
+            "別れの台詞が最後まで終わっても終了へ進む（要件 3.6）"
         );
         assert!(
-            matches!(s2.phase, Phase::Steady { talk: None }),
-            "終了拒否で定常復帰"
+            matches!(actions2.as_slice(), [Action::ShioriUnload]),
+            "終了の要求が出る"
         );
-        assert!(actions2.is_empty(), "TalkDone 自体は副作用なし");
 
-        // 続く Tick で OnSecondChange GET（pump 再開・Req 4.5/3.4）。
-        let now = MonotonicMs(9_000);
-        let (s3, actions3) = step(s2, Input::Tick { now }, &config());
-        assert!(matches!(s3.phase, Phase::Steady { talk: None }));
-        assert_eq!(actions3.len(), 1);
-        match &actions3[0] {
-            Action::ShioriRequest(ShioriCall::Get { id, .. }) => {
-                assert_eq!(
-                    id.as_str(),
-                    "OnSecondChange",
-                    "定常復帰後に pump が再開する"
-                );
-            }
-            _ => panic!("expected OnSecondChange GET after resume"),
-        }
+        // 終了へ進んだことを相手の talk_id と終わり方つきで 1 行記録する。
+        let logged = logged_once(&ev, Level::INFO, "close_talk_done_quit");
+        assert_eq!(
+            logged.fields.get("talk_id").map(String::as_str),
+            Some("5"),
+            "記録は別れの台詞の talk_id を持つ。\n捕捉={ev:#?}"
+        );
+        assert_eq!(
+            logged.fields.get("reason").map(String::as_str),
+            Some("Ended"),
+            "記録はどの終わり方で来たかを持つ。\n捕捉={ev:#?}"
+        );
     }
 
-    // === 分岐2b: 応答スクリプトあり（reason=Interrupted）→ Ended と同一経路で終了拒否 ===
-    // kanade の 3 値ルーティング網羅（本タスクの担当）: Interrupted は防御的に非 quit 扱いへ
-    // 振られ、close talk 完了としては Ended と同じ「終了拒否・定常復帰」を辿る。
+    // === 分岐2b: 応答スクリプトあり（reason=Interrupted）→ Ended と同じ腕で終了へ ===
+    // 中断で終わっても結論は変わらない（要件 3.6・3.7）。終わり方で振り分けない。
 
     #[test]
-    fn value_then_interrupted_refuses_close_same_as_ended() {
+    fn value_then_interrupted_proceeds_to_quit_same_as_ended() {
         let (s1, _a1) = step(
             close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
@@ -366,10 +380,18 @@ mod tests {
             &config(),
         );
         assert!(
-            matches!(s2.phase, Phase::Steady { talk: None }),
-            "Interrupted も Ended と同じく終了拒否・定常復帰"
+            matches!(
+                s2.phase,
+                Phase::Unloading {
+                    cause: TermCause::Quit
+                }
+            ),
+            "Interrupted も Ended と同じ腕で終了へ進む（要件 3.6・3.7）"
         );
-        assert!(actions2.is_empty(), "TalkDone 自体は副作用なし");
+        assert!(
+            matches!(actions2.as_slice(), [Action::ShioriUnload]),
+            "終了の要求が出る"
+        );
     }
 
     // === 分岐3: 応答なし（204）→ 無言終了 ===

@@ -333,7 +333,8 @@ fn boot_greeting_talkdone_resumes_get_pump() {
 /// boot 挨拶再生中に受領した close 指示は即握手せず `pending_close` に記録され、挨拶 TalkDone
 /// 着弾で通常 talk と同じ close 握手（OnClose GET→別れの Value→close talk）が始まることを観測する
 /// （DD-IT-12「挨拶中 close は通常 talk と同じ CloseTalkWait」）。既存の
-/// `close_refused_...`／full_run の close 握手（`Steady{None}` からの即握手）に対し、本 cage は
+/// `farewell_talk_without_quit_tag_still_terminates`／full_run の close 握手
+/// （`Steady{None}` からの即握手）に対し、本 cage は
 /// **`Steady{Some(挨拶)}` からの繰延握手**（active 挨拶中の close）を統合層で埋める。
 ///
 /// # 識別性（本 cage が狙う回帰を捕捉するための discriminative な 2 点・release 前に確定する）
