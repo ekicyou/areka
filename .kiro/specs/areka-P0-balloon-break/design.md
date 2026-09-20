@@ -13,7 +13,7 @@
 1. バルーン窓の押下ハンドラが、ダブルクリックを示す欄を初めて読む。
 2. 表示の側に「中断を禁じる旗」と「中断で隠した後は次のトークまで出し直さない」という記憶が 1 つずつ増える。
 3. 会話の運行の側（kanade）に入力が 1 種増え、再生中なら場面を問わず既存の停止経路へ流す。
-4. **終了の規則が変わる**: 終了イベント（`OnClose`）の別れの台詞は `\-` の有無にかかわらず必ず終了で終わる。`\-` を含む台本を利用者が中断したら、ただちに終了する（完了 spec `areka-P0-kanade` の要件 4.5 を上書き）。
+4. **終了の規則が変わる**: 終了イベント（`OnClose`）の別れの台詞は `\-` の有無にかかわらず必ず終了で終わる。`\-` を含む台本を利用者が中断したら、ただちに終了する（完了 spec `areka-P0-kanade` の要件 4.5 と、完了 spec `areka-P0-popup-menu-minimal` の要件 5.4 を上書き）。この後、終了の握手が定常運転へ戻る経路は **0 本**になる——右クリックメニューの「終了」も、ゴーストに引き止められることが無くなる。
 
 ### Goals
 - バルーンの左ダブルクリック 1 回で「再生停止」と「全バルーンの即時非表示」が対で起きる（要件 1〜4）。
@@ -57,7 +57,7 @@
 - `areka_talk::TalkDone` の欄の増減（全構築点が追随する）。
 - `enum TalkLifecycleSignal`／`enum VisibilityTrigger` の値の増減（`trigger` の語は実機ログの検索語）。
 - `KanadeMsg`／`schedule::Input` の値の増減。
-- `CloseTalkWait` の終わり方の規則の変更（完了 spec `areka-P0-kanade` 要件 4.5 を上書きした箇所）。
+- `CloseTalkWait` の終わり方の規則の変更（完了 spec `areka-P0-kanade` 要件 4.5 と `areka-P0-popup-menu-minimal` 要件 5.4 を上書きした箇所）。
 - `wire_emo2_boot` の受け口の登録順の変更（旗の順序保証が依存する・後述「旗の順序」）。
 - `crates/areka-sakura/src/compile.rs` が「内容を持つ台本の先頭に `ClearAll` を 1 件前置する」規則の変更（掛け金を解く順序が依存する）。
 
@@ -168,8 +168,10 @@ crates/areka-sakura/src/
 
 ### Modified Files（上に載らないもの）
 - `TalkDone { … }` を組み立てている全箇所 — 欄 `quit_reserved: false` を足す機械的な追随。2026-09-20 時点で `TalkDone {` の出現は **45 行・17 ファイル**（型定義の 1 行を含む）。製品コードの構築点は `crates/areka-sakura/src/drive.rs` の `fn send_done`・`fn send_interrupted` の **2 つ**で、残りはテストと模擬（`crates/areka-kanade/tests/kanade/common/common_mock_sakura.rs` ほか）。コンパイラが漏れを止める。
+- `State { … }` を直に組み立てている全箇所 — 欄 `user_break_talk: None` を足す機械的な追随。`choice_prev_talk:` を手がかりに数えて **22 行・8 ファイル**（型定義 1・`fn initial` 1・残りはテスト）。こちらもコンパイラが漏れを止める。
 - `crates/areka-kanade/tests/kanade/close_test_handshake_tests.rs` の `close_refused_resumes_pump_then_terminates_via_resumed_talk` と `crates/areka-kanade/tests/kanade/close_test.rs` のモジュール doc — 旧規則（別れの台詞が `\-` 無しで終わったら定常へ戻る）を固定している統合テスト。新規則（終了へ進む）を固定する形へ書き換える。**要件 7.7 が挙げる 2 本に加えて 1 本**ある（後述「要件本文との差」）。
 - 旧規則を説明しているコメント 3 か所（テストは `\-` で終わる台本を使っており、緑のまま）— `crates/areka/src/emo2_boot/spine_close_wiring_tests.rs`・`spine_conformance_script.rs`・`spine_conformance_support_tests.rs`。「`\e` で終わると終了しない」という説明を新規則に合わせる。
+- 旧規則・旧テスト名・「4 種」に触れているコメント（テストの緑・赤には影響しない）— `crates/areka-kanade/tests/kanade/close_test_boot_greeting_tests.rs`（`close_refused_…` の名を引く説明）・`crates/areka-kanade/tests/kanade/steady_test.rs` の 2 か所（同）・`crates/areka/src/emo2_boot/balloon_visibility_tests.rs`（「中断のみを理由とする即時非表示は無い」の説明）・`enum VisibilityTrigger` の説明の「4 種」（5 種になる）。
 - `crates/areka-kanade/src/schedule/mod.rs` の `enum Action` の `CancelChoice` の doc — 発行点が 2 つ（選択肢の時間切れの解除・利用者の中断）になったことを書く。
 - `doc/COMPAT_ARCHITECTURE.md` — 3 行を足し 1 行を直す（後述「互換対応表」）。
 - `doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/ukadoc-coverage/roadmap-draft.md`・`doc/ukadoc-coverage/report/` — 要件 8。
@@ -183,6 +185,8 @@ crates/areka-sakura/src/
 | `emo2_boot/balloon_visibility.rs` | 770 | +70 前後 | 収まる。テストは兄弟ファイル |
 | `schedule/mod.rs` | 713 | +50 前後 | 収まる |
 | `schedule/close.rs` | 609 | ±0 前後 | 収まる |
+| `schedule/schedule_tests.rs` | 935 | 最大 +9（`TalkDone {` 8 か所＋`State` 1 か所の追随） | 収まる（最大 944） |
+| `schedule/steady_flow_tests.rs` | 924 | 最大 +7（同 4＋3） | 収まる（最大 931） |
 
 ## System Flows
 
@@ -241,7 +245,7 @@ sequenceDiagram
 | 2.3 | 無効化の区間は止めず隠さず `debug!` | judge_press | `PressVerdict::Disabled` | — |
 | 2.4 | 二重に止めない | kanade user_break | `State.user_break_talk` | — |
 | 2.5 | 場面・スコープで変えない | kanade user_break | `fn current_talk_id` の 3 場面を一律に扱う | — |
-| 2.6 | 選択待ちの破棄・`OnChoiceTimeout` を送らない | 既存の掃除 | `clear_choice_ledger(state, "steady_talk_done")` | — |
+| 2.6 | 選択待ちの破棄・`OnChoiceTimeout` を送らない | kanade user_break | 受理の時点で `clear_choice_ledger(state, "user_break")`（掃除点を 1 つ足す） | — |
 | 2.7 | 出してある要求の応答は捨てない | —（足す仕組み 0） | `fn drive` の同期往復 | — |
 | 2.8 | 隠れたのに再生が続く状態を作らない | judge_press・kanade user_break | 分担の不変条件 | 中断の流れ |
 | 3.1 | 後ろを 1 つも実行しない | 既存 | `fn on_close`（不変） | — |
@@ -291,7 +295,7 @@ sequenceDiagram
 | 9.1 | 裁定 1: `OnBalloonBreak` は入れない | kanade user_break | 返す `Action` に `ShioriRequest` が 0 件 | — |
 | 9.2 | 裁定 2: `nouserbreakmode` を入れる | NoUserBreakCueSink・UserBreakWiring | 旗 1 本 | 旗の順序 |
 | 9.3 | 裁定 3: 選択肢の行の上では中断しない | judge_press | `ConsumedBySelection` | — |
-| 9.4 | 裁定 4: 選択待ち中の余白は中断・`OnChoiceTimeout` は送らない | judge_press・既存の掃除 | 1.6・2.6 と同じ | — |
+| 9.4 | 裁定 4: 選択待ち中の余白は中断・`OnChoiceTimeout` は送らない | judge_press・kanade user_break | 1.6・2.6 と同じ | — |
 | 9.5 | 裁定 5: 居残りのバルーンは隠すだけ | judge_press・kanade user_break | 2.2・4.2 と同じ | — |
 | 9.6 | 裁定 6: 別れの台詞の中断はただちに終了 | close・TalkDone | 3.6〜3.8 と同じ | — |
 | 9.7 | 裁定 7: 閉じ忘れは次のトークの始まりまでに解く | NoUserBreakCueSink・fold | `NoUserBreakSignal::TalkStarted` | 旗の順序 |
@@ -324,7 +328,7 @@ sequenceDiagram
 - `Clone` は手書きにし、複製で `started` を `false` へ戻す（`BalloonLifecycleSink` と同じ）。複製後の最初の `emit`（どの cue でもよい）で `TalkStarted` を 1 回だけ送る。
 - 旗の状態は持たない（入れ子・区間外の判定は UI の `fold_no_user_break` が下す）。受け口は運ぶだけ。
 - `enter`／`leave` の第 1 引数が `nouserbreakmode` 以外（`onlinemode` など）は担当外（要件 8.2）。
-- 内容を 1 つも持たない台本（裸の `\e` など）は指示を 1 件も配らないので `TalkStarted` も出ない。こういう台本は画面に何も出さず、旗を立てることもできないので、要件 5.4 の「次のトーク」は「内容を持つ次のトーク」と読む（閉じ忘れが無ければ差は 0）。
+- 内容を 1 つも持たない台本（裸の `\e` など）は指示を 1 件も配らないので `TalkStarted` も出ない。こういう台本は画面に何も出さず、旗を立てることもできないので、要件 5.4 の「次のトーク」は「指示を 1 件でも配る次のトーク」と読む（閉じ忘れが無ければ差は 0・要件 5.4 へ反映済み）。例外が 1 つある: 起動記録だけのトーク（`fn to_baseware_version` の「応答なし・かつ結びの指示が非空」の腕）は、`fn append_epilogue` が空の台本へ運搬の指示を 1 件足すので、指示を 1 件配り（`TalkStarted` が出て旗は解ける）、先頭は `ClearAll` ではない。文字を 1 つも持たないので、掛け金と旗の結論は変わらない。
 
 **Contracts**: Event [x]
 
@@ -490,7 +494,7 @@ pub(super) fn take_user_break_quit(state: &mut State, done: &TalkDone) -> bool;
 
 | 状態 | 結果 | 記録 |
 |---|---|---|
-| `fn current_talk_id` が `Some(id)`（`Steady{Some}`・`BootVersion{Some}`・`CloseTalkWait`）かつ `user_break_talk != Some(id)` | `user_break_talk = Some(id)`・`[Action::CancelChoice { talk_id: id }]` | `info!(event = "balloon_break_accepted", scope, talk_id, phase)`（要件 6.1） |
+| `fn current_talk_id` が `Some(id)`（`Steady{Some}`・`BootVersion{Some}`・`CloseTalkWait`）かつ `user_break_talk != Some(id)` | `user_break_talk = Some(id)`・`clear_choice_ledger(state, "user_break")`・`[Action::CancelChoice { talk_id: id }]` | `info!(event = "balloon_break_accepted", scope, talk_id, phase)`（要件 6.1） |
 | 同上だが `user_break_talk == Some(id)`（同じ操作の 2 件目） | 状態不変・`Action` なし（要件 2.4） | `debug!(event = "balloon_break_no_talk", scope, reason = "already_breaking")` |
 | `current_talk_id` が `None`（それ以外の全場面） | 状態不変・`Action` なし（要件 2.2） | `debug!(event = "balloon_break_no_talk", scope, reason = "not_playing", phase)`（要件 6.2） |
 
@@ -503,7 +507,7 @@ pub(super) fn take_user_break_quit(state: &mut State, done: &TalkDone) -> bool;
 
 **`BootVersion{Some}` について（研究項目 R-6）**: `fn drive` が同期で回るため、起動の挨拶の `StartTalk` と `basewareversion` の往復は 1 メッセージの処理の中で完結し、メッセージの切れ目では挨拶の場面は既に `Steady{Some}` になっている。`BootVersion{Some}` のまま中断の要求を受けるのは `basewareversion` に想定外の応答が返ったときだけだが、`on_user_break` は `fn current_talk_id` を見るので同じ規則で止まる。止めた後の `TalkDone{Interrupted}` は `boot::step` の既存の腕（終わり方で選別していない）が `BootVersion{None}` へ進める。場面別の分岐は **0**。
 
-**選択待ちの最中（要件 2.6・2.7・研究項目 R-4）**: `fn drive` の同期往復により、メッセージの切れ目で選択の帳簿が `Cascading`／`TimeoutInFlight` であることは無い（`Waiting` か無しのどちらか）。したがって「中断の後に、出してあった要求の応答が遅れて届く」ことは構造上起きない。止めた後の `TalkDone{Interrupted}` で既存の `clear_choice_ledger(state, "steady_talk_done")` が帳簿を消し、`fn fire_choice_timeout_if_due` は二度と発火しない。足す仕組みは **0**。なお UI から「選択の確定」→「中断」の順に 2 件届いた場合は、先の確定が応答のトークを起こし、後の中断がそれを止めうる——これを防ぐのが UI 側の `prev_press_selected` である。
+**選択待ちの最中（要件 2.6・2.7・研究項目 R-4）**: `fn drive` の同期往復により、メッセージの切れ目で選択の帳簿が `Cascading`／`TimeoutInFlight` であることは無い（`Waiting` か無しのどちらか）。したがって「中断の後に、出してあった要求の応答が遅れて届く」ことは構造上起きない。選択の帳簿は**受理の時点で** `clear_choice_ledger(&mut state, "user_break")` で消す（掃除点を **1 つ**足す・`fn on_user_break` の中の 1 行）。完了通知を待って消す形だと、受理から `TalkDone` が戻るまでの間に期限を過ぎた `Tick` が届いたとき、`fn fire_choice_timeout_if_due`（`crates/areka-kanade/src/schedule/steady.rs`・「中断を出した後か」は見ない）が `OnChoiceTimeout` を SHIORI へ送ってしまう（要件 2.6・3.9 の破れ・設計検証の指摘 1）。利用者は選ばずに終わらせると決めたのだから、帳簿はその時点で役目を終えている。後から届く `TalkDone` の側の既存の掃除は空振りになるだけで害は無い。なお UI から「選択の確定」→「中断」の順に 2 件届いた場合は、先の確定が応答のトークを起こし、後の中断がそれを止めうる——これを防ぐのが UI 側の `prev_press_selected` である。
 
 #### 終了の予約（研究項目 R-8）
 
@@ -532,7 +536,7 @@ pub struct TalkDone {
 
 #### close の規則改訂（`crates/areka-kanade/src/schedule/close.rs`）
 
-- `fn on_close_talk_wait` の `Input::TalkDone` の腕を「終了を拒んで `Steady{None}` へ戻る」から「**終了へ進む**」（`Unloading { cause: TermCause::Quit }`・`[Action::ShioriUnload]`）へ改める。`Ended` も `Interrupted` も同じ腕。`Quit` は従来どおり横断の腕が先に拾う。結果として別れの台詞は 3 通りの終わり方のすべてで終了する（要件 3.6）。台本の文字列には触れない。
+- `fn on_close_talk_wait` の `Input::TalkDone` の腕を「終了を拒んで `Steady{None}` へ戻る」から「**終了へ進む**」（`Unloading { cause: TermCause::Quit }`・`[Action::ShioriUnload]`）へ改める。`Ended` も `Interrupted` も同じ腕。`Quit` は従来どおり横断の腕が先に拾う。結果として別れの台詞は 3 通りの終わり方のすべてで終了する（要件 3.6）。台本の文字列には触れない。終了の握手が `Steady` へ戻る口はこの腕だけだったので、改訂後は**戻る経路が 0 本**になる。完了 spec `areka-P0-popup-menu-minimal` の要件 5.4（握手が拒まれたらメニューの「終了」でも終了しない）は、拒まれる場面そのものが無くなるので上書きになる（同 spec の tasks.md「非回帰 6 項目」の 3 行目が根拠に挙げる 3 本のテストは、本仕様が書き換える 3 本と同じ）。
 - ログは `close_refused` を廃し、`info!(event = "close_talk_done_quit", talk_id, reason)` に置き換える（**既存ログ行の変更はこの 1 行**）。
 - モジュール doc の状態遷移の説明と、`schedule/mod.rs` の `fn on_talk_done` の doc（「close 終了拒否」）を新規則へ直す。
 - 期限超過（`close_deadline_exceeded`）は無改変。
@@ -588,7 +592,7 @@ pub struct TalkDone {
 |---|---|---|
 | ⑴ 再生中 → 止まる | `schedule/user_break_tests.rs` | `Steady{Some}`・`BootVersion{Some}`・`CloseTalkWait` のそれぞれで `[CancelChoice{現行}]` だけが返る（`ShioriRequest` が 0 件＝要件 3.9） |
 | ⑵ 再生中でない → 隠すだけ | 同上＋`balloon_visibility_user_break_tests.rs` | kanade は `Action` 0 件・状態不変。判断中核は再生の有無を入力に持たず、合図だけで隠す |
-| ⑶ 選択待ちの余白 | `schedule/user_break_tests.rs` | 帳簿 `Waiting` のまま受理 → `TalkDone{Interrupted}` で帳簿が消える → 期限を過ぎた `Tick` で `OnChoiceTimeout` が出ない |
+| ⑶ 選択待ちの余白 | `schedule/user_break_tests.rs` | 帳簿 `Waiting` のまま受理 → **その時点で帳簿が消えている** → 完了通知より**先に**届いた期限後の `Tick` でも、完了通知の後の `Tick` でも `OnChoiceTimeout` が出ない |
 | ⑷ 無効化の区間 | `input_events/user_break_tests.rs` | `judge_press(.., no_user_break = true)` が `Disabled`。`on_left_press` がどちらの線へも 0 件 |
 | ⑸ 選択肢の行の上の 2 打目 | 同上 | `prev_press_selected = true` で `ConsumedBySelection`。`selected_now = true` でも同じ |
 | ⑹ 隠した後の出し直し | `balloon_visibility_user_break_tests.rs` | 中断の後に可視グリフ数が増えても `Show` が出ない／`TalkStarted` の後に増えたら出る |
@@ -614,17 +618,19 @@ pub struct TalkDone {
 |---|---|
 | 追加 | バルーンの中断の操作。ukadoc に操作そのものの項は無い。areka は左ダブルクリック固定・受理の規則は要件 2。areka 裁量 |
 | 追加 | `nouserbreakmode` の閉じ忘れ。正典は沈黙。areka は次のトークの始まりで解く。その間の居残りバルーンは消せず、30 秒のタイムアウトで消える。areka 裁量 |
-| 追加 | 終了イベントの別れの台詞は `\-` の有無にかかわらず必ず終了で終わる。選択肢で引き止める演出は効かない。`\-` を含む台本の利用者による中断は終了する。SSP の観察（終了イベントでも `\-` が無ければ終了しない）には合わせない。開発者裁定 2026-09-20 |
+| 追加 | 終了イベントの別れの台詞は `\-` の有無にかかわらず必ず終了で終わる。選択肢で引き止める演出は効かず、右クリックメニューの「終了」も引き止められない。`\-` を含む台本の利用者による中断は終了する。SSP の観察（終了イベントでも `\-` が無ければ終了しない）には合わせない。開発者裁定 2026-09-20 |
 | 修正 | 「会話が中断で終わったときのタイムアウト起点」の行の「中断のみを理由とする即時非表示の経路は実装に存在せず」を、利用者の中断だけは即時に隠す、へ直す（選択肢の時間切れの解除など残りの中断は従来どおり） |
 
 同じ趣旨で、`fn decide_timeout` の中のコメント「中断のみを理由とする即時非表示の経路はここに存在しない」に、利用者の中断は `fn decide` の別の段が扱う旨を足す。
 
-## 要件本文との差（設計ディスカッションで要件側へ反映を求める点）
+## 要件本文との差（設計ディスカッションで要件側へ反映済み）
 
-設計を止める矛盾ではないが、要件の本文が実測と合わない箇所が 2 つある。`requirements.md` は本フェーズでは書き換えていない。
+設計の生成時に、要件の本文が実測と合わない箇所が 4 つ見つかった。いずれも設計を止める矛盾ではなく、設計ディスカッション（2026-09-20）で `requirements.md` へ反映した。
 
-1. **要件 7.7「書き換える既存テストは 2 本」**: 旧規則を固定しているテストは `close.rs` の 2 本のほかに、統合テスト `close_refused_resumes_pump_then_terminates_via_resumed_talk`（`crates/areka-kanade/tests/kanade/close_test_handshake_tests.rs`）が 1 本ある。要件 3.6 を満たすと必ず赤になるので、本設計は **3 本**を書き換える。
-2. **要件 3.6 の注記（研究項目 R-9）**: 別れの台詞が選択肢を含むときの帰結（上の「close の規則改訂」の最後の項）を要件 3.6 へ足すことが `research.md` §11 で予告されている。
+1. **要件 7.7「書き換える既存テストは 2 本」→ 3 本**: 旧規則を固定しているテストは `close.rs` の 2 本のほかに、統合テスト `close_refused_resumes_pump_then_terminates_via_resumed_talk`（`crates/areka-kanade/tests/kanade/close_test_handshake_tests.rs`）が 1 本ある。要件 3.6 を満たすと必ず赤になる。4 本目は **0 本**（設計検証で確認）。
+2. **要件 3.6 の注記（研究項目 R-9）**: 別れの台詞が選択肢を含むときの帰結（上の「close の規則改訂」の最後の項）。
+3. **上書きする完了済み要件がもう 1 つ**: `areka-P0-popup-menu-minimal` の要件 5.4（設計検証の指摘 2）。要件の Boundary Context と要件 3.6 に足した。
+4. **要件 5.4 の「次のトーク」**: 「指示を 1 件でも配る次のトーク」と読む（NoUserBreakCueSink の節）。
 
 ## Risks
 
@@ -632,5 +638,8 @@ pub struct TalkDone {
 |---|---|---|
 | 中断と同時に kanade が別のトークへ差し替えていた（マウスの応答など）。UI は古いバルーンを隠し、kanade は新しいトークを止める。新しいトークの `TalkStarted` が掛け金を解いているので、止まった新しいトークのバルーンが途中の文のまま残りうる | まれ。「隠れたのに再生が続く」ではなく「止まったが残っている」側で、30 秒のタイムアウトか再度のダブルクリック（裁定 5）で消える | 互いの `talk_id` を UI へ写す二重帳簿は作らない。実機で目立つようなら別 spec |
 | 押下から閉じ指示が再生スレッドへ届くまでの数ミリ秒〜数十ミリ秒に指示が進む | 別スレッドへの伝達の下限。要件 3.1 の「中断した位置」は再生の側が止めた位置 | バルーンは先に隠れ、掛け金が文字の出し直しを塞ぐので利用者には見えない |
-| `TalkDone` の欄の追加が 17 ファイルに波及する | 機械的でコンパイラが漏れを止める | 1 タスクにまとめ、他の変更と混ぜない |
+| 先頭に `\![enter,nouserbreakmode]` を置いたトークが、最初の指示を配る前（最大で再生の刻み 50 ミリ秒＋画面更新 1 回）に、**前のトークの居残りバルーン**へのダブルクリックで 1 文字も出さずに止められる | 裁定 8（隠す判断と止める判断を分ける）の帰結。選択肢から始まる流れは `prev_press_selected` が守るので、踏むのは「居残りバルーンを消そうとした瞬間に守られたトークが始まった」場合だけ | 受け入れる。旗の写しを kanade へ持たせる形（裁定 8 が退けた形）には戻さない |
+| 受理から完了通知までの数ミリ秒に kanade が別のトークへ差し替えると、古いトークの `TalkDone{Interrupted}` が `unknown_talk_done` の `error!` になり、終了の予約も失われる | 選択肢の時間切れの解除が既に持っている競合と同じ種類 | 受け入れる。1 世代の照合（`choice_prev_talk`）は広げない |
+| `UserBreakWiring` が表示の合図の線の送出端を持ち続けるので、`fn drain_lifecycle` の切断検出（`error!` 1 回）が本番で到達しなくなる | dispatcher が落ちたときは `talk_command_send_failed` など他の記録が出るので実害は小さい | 受け入れる |
+| `TalkDone` の欄の追加が 17 ファイル、`State` の欄の追加が 8 ファイルに波及する | 機械的でコンパイラが漏れを止める | 1 タスクにまとめ、他の変更と混ぜない |
 | `schedule/` を触る並走 spec（`areka-P0-balloon-lifecycle-events` ほか 2 本）との衝突 | `steady.rs` を触らないことで面を小さくしてある | 要件どおり並走させない |
