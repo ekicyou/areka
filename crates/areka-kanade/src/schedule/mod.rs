@@ -37,6 +37,7 @@ pub(crate) mod log_capture;
 /// submit ガードはイベント許可 ∨ リソース許可で判定する（`crate::actor` の egress チョークポイント）。
 pub mod resources;
 pub(crate) mod steady;
+pub(crate) mod user_break;
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。
 /// `ShioriReply` が `KanadeMsg` に存在しないため、応答注入経路はシェル内部に閉じる。
@@ -83,6 +84,13 @@ pub(crate) enum Input {
         choice_ids: Vec<String>,
         display_end: MonotonicMs,
         timeout_directive_secs: Option<f64>,
+    },
+    /// 利用者の中断（バルーンの左ダブルクリック・UI 配線層 → kanade）。
+    ///
+    /// `scope` は「どのバルーンで起きたか」を運ぶだけで、受理の判断には使わない。
+    /// 受理の規則は [`user_break::on_user_break`] が持ち、場面を問わず横断の腕から呼ぶ。
+    UserBreak {
+        scope: u32,
     },
 }
 
@@ -184,6 +192,8 @@ pub(crate) struct State {
     /// （カスケード Value・タイムアウト Value）、消去点は現 talk の `TalkDone` 到達と
     /// 次の slot 差替（マウス由来の置換を含む）である。
     pub choice_prev_talk: Option<TalkId>,
+    /// 利用者の中断を出した相手のトーク（止めた応答＝完了通知を待っている間だけ `Some`）。
+    pub user_break_talk: Option<TalkId>,
 }
 
 impl State {
@@ -199,6 +209,7 @@ impl State {
             pending_close: None,
             choice: None,
             choice_prev_talk: None,
+            user_break_talk: None,
         }
     }
 
@@ -418,6 +429,9 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
                 (state, Vec::new())
             }
         },
+
+        // UserBreak: 場面で振り分けず、受理の規則ごと user_break::on_user_break へ渡す。
+        Input::UserBreak { scope } => user_break::on_user_break(state, scope),
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 

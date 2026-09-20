@@ -189,6 +189,13 @@ pub enum KanadeMsg {
         /// `Some(v <= 0.0)`＝無効化・`Some(v > 0.0)`＝明示秒指定。写像は kanade（DD-8）。
         timeout_directive_secs: Option<f64>,
     },
+    /// 利用者の中断（バルーンの左ダブルクリック・UI 配線層 → kanade）。additive 増分。
+    ///
+    /// `scope` は「どのバルーンで起きたか」を運ぶだけで、止めるかどうかは再生中かどうかだけで決まる。
+    UserBreak {
+        /// ダブルクリックされたバルーンのスコープ番号。
+        scope: u32,
+    },
     /// SHIORI リソースの複数件照会（UI → kanade）。additive 増分。
     ///
     /// 状態機械を経ず殻がその場で答える（`actor_resources`）。応答は `ids` と同じ順・同じ長さで
@@ -497,6 +504,8 @@ mod tests {
                 KanadeMsg::ChoiceWaiting { .. } => "ChoiceWaiting",
                 // 殻で答える複数件のリソース照会（additive・既存の判別結果を変えない）。
                 KanadeMsg::ResourceQuery { ids: _, reply: _ } => "ResourceQuery",
+                // 利用者の中断（additive・既存の判別結果を変えない）。
+                KanadeMsg::UserBreak { scope: _ } => "UserBreak",
             }
         }
         let existing = [
@@ -507,6 +516,7 @@ mod tests {
             KanadeMsg::TalkDone(crate::talk::TalkDone {
                 talk_id: crate::talk::TalkId(1),
                 reason: crate::talk::TalkEndReason::Ended,
+                quit_reserved: false,
             }),
             KanadeMsg::CloseRequest {
                 reason: CloseReason::User { scope: 0 },

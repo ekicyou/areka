@@ -507,7 +507,11 @@ where
 
     /// 自然終端の `TalkDone{reason}` を送出する（受信端 drop は error ログ・黙殺しない・R11.1/11.4）。
     fn send_done(&self, talk_id: TalkId, reason: TalkEndReason) {
-        let done = TalkDone { talk_id, reason };
+        let done = TalkDone {
+            talk_id,
+            reason,
+            quit_reserved: false,
+        };
         if self.done.send(D::from(done)).is_err() {
             tracing::error!(talk_id = talk_id.0, "TalkDone done receiver dropped");
         }
@@ -518,6 +522,7 @@ where
         let done = TalkDone {
             talk_id,
             reason: TalkEndReason::Interrupted,
+            quit_reserved: false,
         };
         if self.done.send(D::from(done)).is_err() {
             tracing::error!(

@@ -404,6 +404,7 @@ fn choice_after_timeout_cancel_is_rejected() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(3),
             reason: TalkEndReason::Interrupted,
+            quit_reserved: false,
         }),
         &cfg,
     );
@@ -491,6 +492,7 @@ fn talk_done_of_target_talk_clears_choice_ledger() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(3),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -512,6 +514,7 @@ fn talk_done_quit_clears_choice_ledger() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(3),
             reason: TalkEndReason::Quit,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -587,6 +590,7 @@ fn close_handshake_transition_clears_choice_ledger() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(3),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         }),
         &cfg,
     );
@@ -834,6 +838,7 @@ fn choice_happy_path_emits_no_error_level_logs() {
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(3),
                 reason: TalkEndReason::Ended,
+                quit_reserved: false,
             }),
             &cfg,
         );

@@ -27,6 +27,7 @@ mod readme_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
+pub(crate) mod user_break_cue;
 pub mod zorder_cue;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部

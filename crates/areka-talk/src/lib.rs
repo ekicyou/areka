@@ -112,6 +112,9 @@ pub enum TalkEndReason {
 pub struct TalkDone {
     pub talk_id: TalkId,
     pub reason: TalkEndReason,
+    /// 閉じ指示で止まった時点で、台本が終了（`\-`）を予約していたか。
+    /// `reason == Interrupted` のときだけ意味を持つ。自然に終わったときは false。
+    pub quit_reserved: bool,
 }
 
 #[cfg(test)]

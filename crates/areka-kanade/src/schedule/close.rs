@@ -207,6 +207,7 @@ mod tests {
             pending_close: None,
             choice: None,
             choice_prev_talk: None,
+            user_break_talk: None,
         }
     }
 
@@ -224,6 +225,7 @@ mod tests {
             pending_close: None,
             choice: None,
             choice_prev_talk: None,
+            user_break_talk: None,
         }
     }
 
@@ -272,6 +274,7 @@ mod tests {
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(5),
                 reason: TalkEndReason::Quit,
+                quit_reserved: false,
             }),
             &config(),
         );
@@ -307,6 +310,7 @@ mod tests {
             Input::TalkDone(TalkDone {
                 talk_id,
                 reason: TalkEndReason::Ended,
+                quit_reserved: false,
             }),
             &config(),
         );
@@ -357,6 +361,7 @@ mod tests {
             Input::TalkDone(TalkDone {
                 talk_id,
                 reason: TalkEndReason::Interrupted,
+                quit_reserved: false,
             }),
             &config(),
         );

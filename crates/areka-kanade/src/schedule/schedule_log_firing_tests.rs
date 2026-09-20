@@ -16,6 +16,7 @@ fn state_in(phase: Phase) -> State {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     }
 }
 
@@ -73,6 +74,7 @@ fn error_unknown_talk_done_logs() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(999),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         }),
     );
     assert_logged(&ev, Level::ERROR, "unknown_talk_done");
@@ -107,6 +109,7 @@ fn error_close_deadline_exceeded_logs() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let ev = capture(|| {
         let _ = step(
@@ -640,6 +643,7 @@ fn info_talk_done_interrupted_as_non_quit_logs() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(5),
             reason: TalkEndReason::Interrupted,
+            quit_reserved: false,
         }),
     );
     assert_logged(&ev, Level::INFO, "talk_done_interrupted_as_non_quit");

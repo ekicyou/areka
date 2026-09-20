@@ -270,6 +270,7 @@ fn cancel_choice_forwards_close_and_keeps_slot_so_talkdone_reaches_kanade() {
     fx.feed(DispatcherMsg::Done(TalkDone {
         talk_id,
         reason: TalkEndReason::Interrupted,
+        quit_reserved: false,
     }));
     match fx
         .kanade_rx

@@ -100,6 +100,7 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
         .send(KanadeMsg::TalkDone(TalkDone {
             talk_id: TalkId(1),
             reason: TalkEndReason::Interrupted,
+            quit_reserved: false,
         }))
         .expect("send TalkDone{Interrupted} (Close funnel の完了通知)");
     // (4) 復帰後の pump——Steady{None} なら GET（Ref3=1）になる。

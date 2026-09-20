@@ -170,6 +170,7 @@ fn talk_done_carries_id_and_reason_ended() {
     let done = TalkDone {
         talk_id: TalkId(9),
         reason: TalkEndReason::Ended,
+        quit_reserved: false,
     };
     assert_eq!(done.talk_id, TalkId(9));
     assert_eq!(done.reason, TalkEndReason::Ended);
@@ -180,6 +181,7 @@ fn talk_done_carries_id_and_reason_quit() {
     let done = TalkDone {
         talk_id: TalkId(10),
         reason: TalkEndReason::Quit,
+        quit_reserved: false,
     };
     assert_eq!(done.talk_id, TalkId(10));
     assert_eq!(done.reason, TalkEndReason::Quit);
@@ -190,6 +192,7 @@ fn talk_done_carries_id_and_reason_interrupted() {
     let done = TalkDone {
         talk_id: TalkId(11),
         reason: TalkEndReason::Interrupted,
+        quit_reserved: false,
     };
     assert_eq!(done.talk_id, TalkId(11));
     assert_eq!(done.reason, TalkEndReason::Interrupted);
@@ -200,6 +203,7 @@ fn talk_done_is_copy() {
     let done = TalkDone {
         talk_id: TalkId(1),
         reason: TalkEndReason::Ended,
+        quit_reserved: false,
     };
     let copied = done;
     // Copy ゆえ done も引き続き有効。
@@ -212,14 +216,17 @@ fn talk_done_supports_equality() {
     let a = TalkDone {
         talk_id: TalkId(5),
         reason: TalkEndReason::Quit,
+        quit_reserved: false,
     };
     let b = TalkDone {
         talk_id: TalkId(5),
         reason: TalkEndReason::Quit,
+        quit_reserved: false,
     };
     let c = TalkDone {
         talk_id: TalkId(5),
         reason: TalkEndReason::Interrupted,
+        quit_reserved: false,
     };
     assert_eq!(a, b);
     assert_ne!(a, c);

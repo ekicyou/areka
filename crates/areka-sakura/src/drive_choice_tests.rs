@@ -399,7 +399,8 @@ fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
         done,
         TalkDone {
             talk_id,
-            reason: TalkEndReason::Interrupted
+            reason: TalkEndReason::Interrupted,
+            quit_reserved: false
         },
         "Close は既存どおり Interrupted ACK（通知の追加で中断経路は変わらない）"
     );
@@ -544,7 +545,8 @@ fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
         second,
         TalkNotice::Done(TalkDone {
             talk_id,
-            reason: TalkEndReason::Ended
+            reason: TalkEndReason::Ended,
+            quit_reserved: false
         }),
         "2 通目は TalkDone{{Ended}}（解決後に ChoiceWaiting が再送されない）"
     );
@@ -636,7 +638,8 @@ fn script_without_choices_never_notifies_choice_waiting() {
         first,
         TalkNotice::Done(TalkDone {
             talk_id,
-            reason: TalkEndReason::Ended
+            reason: TalkEndReason::Ended,
+            quit_reserved: false
         }),
         "選択肢の無い台本の 1 通目は TalkDone{{Ended}}（ChoiceWaiting は出ない）"
     );

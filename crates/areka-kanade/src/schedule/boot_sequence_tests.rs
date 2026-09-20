@@ -217,6 +217,7 @@ fn boot_main_no_content_emits_no_talk() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let (s, actions) = step(
         s,
@@ -257,6 +258,7 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let (s1, actions1) = step(
         s1,
@@ -281,6 +283,7 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let (s2, actions2) = step(
         s2,
@@ -318,6 +321,7 @@ fn close_request_during_boot_records_pending_only() {
             pending_close: None,
             choice: None,
             choice_prev_talk: None,
+            user_break_talk: None,
         };
         let phase_before = std::mem::discriminant(&s.phase);
         let (s, actions) = step(
@@ -434,6 +438,7 @@ fn baseware_version_status_reflects_greeting_tracking() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let (_, actions) = step(
         greeting,
@@ -457,6 +462,7 @@ fn baseware_version_status_reflects_greeting_tracking() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let (_, actions) = step(
         no_greeting,
@@ -556,6 +562,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(1),
                 reason: TalkEndReason::Ended,
+                quit_reserved: false,
             }),
             &cfg,
         );
@@ -607,6 +614,7 @@ fn assert_boot_version_talkdone_accepted(
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(1),
                 reason,
+                quit_reserved: false,
             }),
             cfg,
         ));
