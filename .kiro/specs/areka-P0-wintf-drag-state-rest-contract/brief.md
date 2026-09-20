@@ -2,6 +2,19 @@
 
 起票: 2026-09-19（`areka-P0-popup-menu-minimal` の実機確認 9.3 と最終検証が発見・開発者指示「推奨タスクはツールチップにせず spec に起票」）
 
+## 2026-09-20 棚卸⑮の再測定
+
+**実測（main `fe157df1`）**: 本文の主張はすべてそのまま成り立つ。`reset_to_idle` の製品の呼び手は 0（定義と再輸出のほかはテスト 3 か所）・`is_button_held`／`is_dragging` は `crates/` 全域で 0 件・areka 側の読み手は `crates/areka/src/menu/trigger.rs` の 1 か所。
+
+**相乗り 2 件（`areka-P0-popup-menu-residue` の残件 1・2 を本仕様へ移した）**
+
+本仕様と同じ `crates/areka/src/menu/trigger.rs` を触り、性質も同じ「右クリックの引き金の潜在バグ」なので、別々に走らせると必ず直列になる。1 本にまとめる。
+
+1. **別の窓の預かりの誤配。** `trigger.rs` は `take_deferred_double_click` で預かりを取り、`let scope = request.scope;` としながら、抑止の枝で `deferred.scope` と比べずに `send_pending_right_double_click(deferred)` を呼ぶ。`PendingDoubleClick`（`crates/areka/src/input_events/mod.rs`）は `scope` を持っている＝**比べる材料は在る**。直しは 1 条件＋兄弟テスト 1 本。実害の条件は「返事待ち 1 秒未満に別の窓で 1 クリック＋押下」で実質届かないが、届けば別の窓へ誤配する。
+2. **台本の `\![open,readme]` の記録が重い。** `crates/areka/src/readme.rs` の `open_from_world` は実在を見ずに `open(&wiring.path)` を呼び、無ければ `error!` になる。メニューの側は `wiring.path.exists()` で灰色にしている。説明書の無いゴーストは普通に在るので、`error!` は障害調査を誤らせる。記録の水準の裁定 1 件＋テスト 1 本。
+
+相乗りを含めた規模は **S（タスク 5〜7 本）**。
+
 ## Problem
 
 wintf のドラッグの状態（スレッドごとの値・`crates/wintf/src/ecs/drag/state/mod.rs`）を読む側は、「待機（`Idle`）でなければドラッグ中」と読むと間違える。説明と実装が食い違っているからである。

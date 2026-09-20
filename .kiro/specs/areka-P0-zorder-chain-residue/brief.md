@@ -2,6 +2,16 @@
 
 > **起票 2026-09-02（棚卸⑫・Path C・台帳 spec）**: 完了 spec `scope-zorder-pinning`（zsp・PR#126・2026-09-02）が research §13.8／§13.9 に「裁定待ちの残件 9 件」として登記したうち、**引受先の実在検証で所有者ゼロと確定した 8 件**の受け皿。`balloon-canon-residue`／`status-execution-states` と同じ**台帳 spec**（列挙なき所有者なしを防ぐための登記先であり、着手は開発者裁定）。9 件中の残り 1 件（§13.9 #7＝COMPAT §8 の 5 行が roadmap の空行を指す）は棚卸⑫で **doc 側を直接是正して消化済み**（`doc/COMPAT_ARCHITECTURE.md:160-165` の `roadmap.md:132` 引用を台帳 spec／residue 項目番号への引用に差替）。
 
+## 2026-09-20 棚卸⑮の再測定
+
+**A 群は性質が変わった（main `fe157df1` での実測）。**
+
+- **A-1（実窓の重なり順の間欠赤）は隔離済み。** `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` の該当 2 本は `#[ignore]`＋環境変数 `AREKA_WINTF_REAL_WINDOW_ZORDER` で明示実行する形になっており、既定の `cargo test --workspace` をもう汚さない。本文の「e2e DoD への影響: あり（間欠）」は既定の走行では成り立たない。測定条件の問題か欠陥かの決着は未了のまま。
+- **A-2 の vblank の側も隔離済み**（`crates/wintf/src/runtime/tick_bridge.rs`・`AREKA_WINTF_VBLANK_DEADLINE`）。本文が引く行は別物（役割名待ちの 5 秒の期限）。
+- **A-2 の spine の族だけが生きている。** `SPIN_WAIT = 30 秒`（`crates/areka/src/emo2_boot/spine.rs`）を `spine_seriko_loop_tests.rs`・`spine_display_tests.rs`・`spine_talk_close_tests.rs`・`spine_text_scale_tests.rs`・`spine_boot_smoke_tests.rs` の 5 ファイルが使い、`#[ignore]` は 0 件。
+- **2026-09-11 以降の main で、この族が実際に赤を出した記録は 0 件**（`.kiro/specs/completed/*/verification/` を `flaky|再実行で緑|間欠赤` で引き、PR#157〜#167 の 6 spec を個別に確かめた。同じ検索は completed 全体で 20 ファイル以上に当たる）。roadmap の例外条項（α の spec のテストを実際に赤にしたら A 群だけを挟む）の発動条件は満たされていない＝**先回りしない**。
+- **B-6 は消化済みの見込み。** `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` の冒頭の説明は既に 3 つの仕組みを述べている。着手時に 1 行で確かめて閉じる。
+
 ## Problem
 
 zsp は「所有の鎖」でスコープ窓の重なりを構造保証して着地したが、完成検証（2026-08-31）と実機サインオフが掘り当てた**テスト側・文書側の穴 8 件**は、6 候補（`zorder-property`・`tick-gate-adoption`・`balloon-canon-residue`・`status-execution-states`・完了 spec `ghost-window-zorder`／`test-cage-determinism`）のいずれも引き受けを明示的に拒否している（各 brief の Out 節が根拠）。所有者ゼロのまま放置すると、**次に `zorder_pair_maintain*.rs`／`zorder_chain*.rs`／`tick_bridge.rs` を触る spec が申し送りを読めない**（記憶 deferral-requires-verified-owner）。うち 2 件（§13.8 ①②）はワークスペース全体テストの**間欠赤**であり、`emo2-conformance-e2e` の DoD（`cargo test --workspace` exit 0）を直接脅かす。

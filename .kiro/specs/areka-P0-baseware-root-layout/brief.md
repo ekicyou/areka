@@ -3,6 +3,28 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。開発者の指示「α 版として第三者に使い始めてもらえる機能セット＝ゴースト・シェル・バルーンのファイル管理、インストール、ネットワーク更新、最低限のメニュー。つまりアプリとしてのデスクトップマスコット管理」。
 > 本文の file:line は**起票時の実測値**（2026-09-18・サブエージェント探索）。着手時に必ず引き直すこと（roadmap「着手手順」）。
 
+## 2026-09-20 棚卸⑮の再測定
+
+**崩れた前提 3 つ（main `fe157df1` での実測・要件の議題になる）**
+
+1. **Desired Outcome 4（`warn!` で起動を続ける経路を消し、`MessageBoxW` で告知する）は、常設のテストを赤にする。** `crates/areka/tests/smoke_boot_loop_exit.rs` の `skeleton_boots_loops_and_exits_zero_within_watchdog` は引数無しで起動し、「既定の根が不在 → `warn!` → ダミー窓 → exit 0」を期待している。しかもモーダルの告知は子プロセスのテストを止める。**告知を抑える入口**（環境変数か、smoke のときの抑止）と、**このテストの扱い**（陳腐化として除くか、更新するか——記憶 obsolete-vs-broken-test-policy）を要件で決める。
+2. **「最後のシェルの記憶」は、起動時に効かせる口が無い。** シェルを決める `resolve()`（`crates/areka-parsers/src/package/resolve.rs`）は `seriko.defaultsurfacedirectoryname`、無ければ `master` しか見ず、4 か所から独立に呼ばれる。**本仕様は鍵の定義と書き込みまで**とし、起動時の適用は `areka-P0-shell-balloon-switch` へ回す。
+3. **列挙に `resolve()` は流用できない。** `MountModel`（`crates/areka-parsers/src/package/model.rs`）は `craftman`・`id`・`type`・`menu` を持たず、`resolve` は `shell/<名>` の実在を要求して失敗するので走査にも向かない。流用できるのは `charset::decode` と `kv::parse_kv` で、列挙は `areka-ghost` 側の新規ファイルになる。
+
+**順序の罠**: sylphya のアクターはゴーストごとに `boot` の中で起きる（`crates/areka-ghost/src/runtime.rs`）。ゴーストを選ぶ**前**に App スコープを読むには、公開関数 `areka_sylphya::load_scope`（`crates/areka-sylphya/src/persist/mod.rs`）を直接呼ぶ形になる。
+
+**範囲の整理**
+
+- **メニューへのサブメニューの登記は本仕様の範囲外**（本文の Out のとおり）。roadmap の旧 A1 行は本仕様に割り当てていたが、切替の動作（`SwitchRequest`）が無いと項目を作れないので、切替の 2 本が持つ。**本仕様は `crates/areka/src/menu/` に触らない。**
+- 既定バルーンを `.nar` へ畳む仕事は `areka-P0-default-balloon-nar-fold`（台帳 #42）が持つ。本文の「`.nar` へ畳むのは `areka-P0-nar-install` が引き受ける」は、同 spec が畳まずに完了したので**偽になった**。本仕様は窓口 `sample_ghost_kit::SampleRoot` を呼ぶだけで、登記表 `SAMPLES` には触らない。
+- `crates/areka-ghost/src/runtime.rs` は**触らずに済む見込み**（起動成功時に「最後に使った」を書くのは `runtime.sylphya_publisher()` 経由で `main.rs` から行える）。
+
+**並走の条件**: `areka-P0-app-lifetime-separation` と `crates/areka/src/main.rs`（958 行）の別の関数・`crates/areka/tests/smoke_boot_loop_exit.rs` を共有する＝**実装は同 spec の着地後**。要件と設計は先行してよい。`main.rs` と `crates/areka-sylphya/src/persist/mod.rs`（934 行）は 1,000 行の上限が近く、テストの別ファイル化か切り出しが必須。
+
+**0 件の確認**（同じ書式の検索が `OnClose` で 63 ファイルに当たる）: `ghostpathlist|installedghostname|balloonpathlist` 0・`AREKA_ROOT` 0・`MessageBoxW` 0・`BasewareRoot|SwitchRequest|AppExit` 0。
+
+**規模と担当**: 想定タスク 13〜17 本＝分割は要らない。ただし裁定候補が 1 件から 3 件へ増え、根の形は後ろの α の spec 全部が乗る契約なので、要件と設計は **Fable** を推す。
+
 ## Problem
 
 **誰の何が困っているか**: areka を初めて手にする第三者（ゴーストの利用者）と、その人に配る開発者。

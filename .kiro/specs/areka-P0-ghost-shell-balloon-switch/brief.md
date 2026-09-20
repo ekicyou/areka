@@ -3,6 +3,32 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 2 の束「切替」（候補名 `areka-P0-shell-balloon-switch`）を、ゴースト切替まで含めて引き受ける。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-20 棚卸⑮の再測定
+
+**本仕様は 3 本に分かれた。** 想定タスクが 30〜40 本で 1 spec の上限（20 本）を大きく超えたためである。本 brief は名前を変えずに**真ん中の 1 本**として残す——完了 spec 7 本とソースのコメント（`crates/areka/src/menu/mod.rs`）と網羅台帳（`doc/ukadoc-coverage/ledger/shiori.toml`）がこの名前を引受先として指しており、完了 spec は書き換えられないからである。
+
+| 段 | spec | 中身 | 本 brief の対応箇所 |
+|---|---|---|---|
+| 1 | `areka-P0-app-lifetime-separation`（台帳 #49） | アプリの寿命を窓の数から切り離す | Approach ①。**本 brief からは外れた** |
+| 2 | **本仕様**（台帳 #13） | 切替要求の入口の型 `SwitchRequest`・台本の `change` の消費者・名前解決（`random`／`sequential`／`lastinstalled`）・**ゴースト切替**（`OnGhostChanging`／`OnGhostChanged`・降ろして起こし直す仕組み）・メニューの「ゴースト」枠への登記 | Approach ④・Desired Outcome 1・4・5・6 |
+| 3 | `areka-P0-shell-balloon-switch`（台帳 #50） | シェル切替・バルーン切替・メニューの「シェル」「バルーン」枠への登記・起動時の「最後のシェル」の適用 | Approach ②③・Desired Outcome 2・3。**本 brief からは外れた** |
+
+順序は 1 → `areka-P0-baseware-root-layout` → 2 → 3。親 brief の「②バルーンが最軽量 → ③ → ④」の段取りは**コードから支持されなかった**（下の「崩れた前提」3）。降ろして起こし直す仕組み（本仕様）が一般形で、シェルとバルーンの切替はその「SHIORI を残す版」になるので、本仕様が先である。分割後の規模は **M〜L（タスク 15〜18 本）**。
+
+**崩れた前提（main `fe157df1` での実測）**
+
+1. **「窓 0 で終了」の所在は `main.rs` ではなく wintf**（`crates/wintf/src/runtime/mod.rs` の `wire_shutdown_hook`）。詳細は `areka-P0-app-lifetime-separation` の brief。
+2. **消費者の登記は 5 行ではなく 8 行**（`crates/areka/src/emo2_boot/consumer_ledger.rs` の `canonical()`）。本文が挙げる 5 つに `(open,readme)`・`(enter,nouserbreakmode)`・`(leave,nouserbreakmode)` が加わった。選別子は第 1 引数までしか見ないので、`(change,ghost)`・`(change,shell)`・`(change,balloon)` は別々の登記になる＝本仕様は `(change,ghost)` だけを足せる。
+3. **シェルとバルーンは「資産を作り直すだけ」ではない。** 出し先（sink）は起動時に値で渡されて固定され、走っている最中に差し替える語彙が 4 アクターのどこにも無い。詳細は `areka-P0-shell-balloon-switch` の brief。
+4. **`KanadeStopped` は「終了」と「切替」を区別しない。** `KanadeStopCause`（`crates/areka-kanade/src/msg.rs`・5 値）に値を足すか、UI 側で切替の予約を持つかを要件で決める。`stop_cause_of`（`crates/areka-kanade/src/actor.rs`）は wildcard を置いていないので、値を足すとコンパイルがここで止まる＝漏れは構造が止める。
+5. **終了の経路は `areka-P0-balloon-break`（PR#164）で形が変わった。** 中断のあとの終了を新設の `crates/areka-kanade/src/schedule/user_break.rs` が引き受け、終了の握手が定常へ戻る経路は 0 本になった。本文の「終了」の記述はその前の形である。
+
+**本仕様が触るファイル（実測・確度の高いもの）**: `crates/areka/src/main.rs`（`app.run()` の後ろの終了順序を、繰り返し入れる単位へ括り出す）・`boot_config.rs`・`emo2_boot/mod.rs`（`add_systems` を 2 度呼んでも壊れない形に・`Emo2Wiring` の載せ替え）・`emo2_boot/frame.rs`・`emo2_boot/consumer_ledger.rs`・入力／メニュー／選択肢／永続の結線のやり直し・kanade の `schedule/close.rs` と 5 ファイル（`msg.rs`・`actor.rs`・`schedule/{mod,events,steady}.rs`）・`crates/areka/src/menu/mod.rs`（`#[allow(dead_code)]` 3 か所を外す最初の登記者になる）・網羅台帳と生成物。
+
+**後ろの 3 本（`shell-balloon-switch`・`ghost-install`・`network-update`）を軽くする設計の提案**（確認済みの事実ではない）: イベントを足す spec は毎回 kanade の 5 ファイルに触る。本仕様が**汎用の通知の入口を 1 本**作れば、後続の接触は `schedule/events.rs` の許可表（`ALLOWED_EVENT_IDS`）の数行に縮む。`schedule/steady.rs` は 935 行で上限が近く、相を足した spec が分割を強いられる。
+
+**規模と担当**: 要件と設計は **Fable**。α で最も大きい構造の変更は、分割したあとも本仕様に残っている（繰り返し起動できる形への括り出し）。
+
 ## Problem
 
 **誰の何が困っているか**: 2 体目のゴーストを入れた第三者。着せ替えではなく「別のシェル」を持つゴーストの利用者。バルーンを入れ替えたい利用者。

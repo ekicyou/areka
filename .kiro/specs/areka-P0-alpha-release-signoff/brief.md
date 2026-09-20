@@ -3,6 +3,17 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。M1 の `areka-P0-emo2-conformance-e2e`（完成宣言の器）と同じ役割を α で担う——**配布物を作り、第三者の手順で一周し、開発者が署名する**。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-20 棚卸⑮の再測定
+
+**実測の追記（main `fe157df1`）**
+
+- ライセンスのファイル名は `LICENSE` ではなく **`LICENSE-MIT`**。
+- `scripts/` は実在しない＝新規。既存の道具の置き場は `tools/perf`。
+- 本文の検証項目は 12 項目。roadmap の 3 か所が「11 項目」と書いていたのを、本日 12 へ直した。
+- **zip へ入れる既定バルーン 29 ファイルの出どころが変わる。** `areka-P0-default-balloon-nar-fold`（台帳 #42）が着地すると `vendors/sample_ghost/StayseeBalloon/` は消え、`StayseeBalloon.nar` になる。zip を作るスクリプトは `.nar` を展開して入れる（窓口 `sample_ghost_kit` か `areka-nar` を呼ぶ）。
+- **片道だった申し送りを受け取る。** 完了 `areka-P0-shell-implicit-surface` は、開発者の目と手が要る 5 項目（⑴ 絵の外のクリックが背後の窓へ抜ける ⑵ 右クリックメニューの 1 項目目の表示 ⑶ `konnoyayame` の目の周りに四角い地色が出ない ⑷ 起動挨拶の字形が文字化けしない ⑸ `emo2` の撫で・メニュー・終了が適用前と同じに見える）を「本仕様の実機一周で見る」と書いたが、本文に該当の記述が 0 件だった。**第三者の手順の実機一周に、検体 3 体それぞれで ⑴ を、テンプレート 2 体で ⑶⑷ を含める。** ⑴ は `areka-P0-keycolor-clickthrough-coverage`（台帳 #53）が決定論テストで退行を止めるが、実機の確認は外さない。
+- 前提の spec は分割で増えた: `baseware-root-layout`・`app-lifetime-separation`・`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`update-engine`・`network-update`・`default-balloon-nar-fold`。
+
 ## Problem
 
 **誰の何が困っているか**: 開発者。「α 版として第三者に使い始めてもらえる」と言える根拠が、個々の spec の緑の寄せ集めでは作れない。M1 が e2e の 20 項目で完成を宣言したように、α も**第三者の手順そのものを検証項目にした実機サインオフ**が要る。
