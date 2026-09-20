@@ -560,7 +560,7 @@ fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
         .iter()
         .filter_map(|signal| match signal {
             TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
-            TalkLifecycleSignal::TalkStarted => None,
+            TalkLifecycleSignal::TalkStarted | TalkLifecycleSignal::UserBreak => None,
         })
         .collect();
     assert!(

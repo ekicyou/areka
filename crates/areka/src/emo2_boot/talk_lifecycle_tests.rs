@@ -58,7 +58,7 @@ fn ends(rx: &std::sync::mpsc::Receiver<TalkLifecycleSignal>) -> Vec<f64> {
         .into_iter()
         .filter_map(|s| match s {
             TalkLifecycleSignal::DisplayEndAt(h) => Some(h),
-            TalkLifecycleSignal::TalkStarted => None,
+            TalkLifecycleSignal::TalkStarted | TalkLifecycleSignal::UserBreak => None,
         })
         .collect()
 }
@@ -435,7 +435,7 @@ fn ends_of(signals: &[TalkLifecycleSignal]) -> Vec<f64> {
         .iter()
         .filter_map(|s| match s {
             TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
-            TalkLifecycleSignal::TalkStarted => None,
+            TalkLifecycleSignal::TalkStarted | TalkLifecycleSignal::UserBreak => None,
         })
         .collect()
 }

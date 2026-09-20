@@ -163,7 +163,11 @@ pub fn spawn_mock_sakura(
                 let reason = quit_policy.reason_for(index);
                 index += 1;
                 // TalkDone 返送。kanade 停止済みで送れなくても無害（続行）。
-                let _ = kanade_tx.send(KanadeMsg::TalkDone(TalkDone { talk_id, reason }));
+                let _ = kanade_tx.send(KanadeMsg::TalkDone(TalkDone {
+                    talk_id,
+                    reason,
+                    quit_reserved: false,
+                }));
             }
         })
         .expect("spawn mock-sakura thread");
@@ -320,7 +324,11 @@ pub fn spawn_mock_sakura_gated(
                 let reason = quit_policy.reason_for(index);
                 let this_index = index;
                 index += 1;
-                let done = TalkDone { talk_id, reason };
+                let done = TalkDone {
+                    talk_id,
+                    reason,
+                    quit_reserved: false,
+                };
                 if hold_indices.contains(&this_index) {
                     // 保留: TalkDone を park し、解放シグナルまで送らない（active talk 窓を作る）。
                     // park のたびに releaser を起こす（「解放済み かつ 全 park 到着」を再評価させる・

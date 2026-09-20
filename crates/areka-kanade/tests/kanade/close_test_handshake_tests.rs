@@ -2,93 +2,56 @@ use super::test_support::onclose_get_index;
 use super::{
     CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT,
     FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy,
-    RecordedCall, drive_ticks_until_disconnect, events, expected_call, expected_unload,
-    join_bounded, spawn_harness, spawn_harness_gated,
+    RecordedCall, events, expected_call, expected_unload, join_bounded, spawn_harness,
+    spawn_harness_gated,
 };
 
 // ============================================================================
-// シナリオ 1: 終了拒否 → 定常復帰 → pump 再開（Req 4.5・3.4）
+// シナリオ 1: 別れの台詞は `\-` 無しで終わっても終了する（Req 3.6・3.7）
 // ============================================================================
 
-/// OnClose が別れの Value を返すが close talk の TalkDone が quit:false のとき、kanade は
-/// 終了せず定常運転へ復帰し、以降の Tick で pump（OnSecondChange GET）が再開する。
+/// OnClose の別れの台詞が `\-` に辿り着かずに終わっても（TalkDone が quit:false）、kanade は
+/// 定常運転へ戻らずそのまま終了系列を完走する。終了の握手から定常へ戻る経路は 1 本も無い
+/// （完了 spec `areka-P0-kanade` の要件 4.5 を上書きする 2026-09-20 開発者裁定）。
 ///
-/// # 決定的な駆動（バリア駆動・join 後表明・talk 駆動終了）
-/// 終了拒否後の pump 再開を、**再開後の pump が起こす talk を quit:true にして終了系列を駆動する**
-/// ことで観測する。Tick 供給は反復回数上限でなく `drive_ticks_until_disconnect`（inbox 切断バリア＋
-/// 壁時計 deadline）へ一本化し、kanade が復帰後 pump talk で終了して inbox を切断するまで 1 秒刻みの
-/// Tick を供給する。これにより、cross-thread な TalkDone 到着順に依らず「切断＝終了＝全記録確定」の
-/// 後に join 後の最終表明で記録を検証できる（poll も sleep も不要・full_run_test.rs / steady_test.rs と
-/// 同じ枠組み）:
+/// # 決定的な駆動（Tick 0 本・deadline 無効）
+/// 1. Boot → 挨拶なし boot（`Steady{None}` 直行・挨拶 talk の TalkDone 競合を断つ）。
+/// 2. CloseRequest{User}（active talk なし＝即握手）→ OnClose GET → 別れの Value →
+///    close talk（受領 index 0・quit:false＝`Ended`）。
+/// 3. close talk の TalkDone{Ended} 着弾 → **終了へ進む** → Unload → StopSelf。
 ///
-/// 1. Boot → 挨拶なし boot（`Steady{None}` 直行）→ pre-close Tick（`Steady{None}`・OnSecondChange
-///    204＝talk なし）。
-/// 2. CloseRequest{User}（即握手）→ OnClose GET → 別れの Value → close talk（受領 index 0・
-///    quit:false）→ **終了拒否**・`Steady{None}` 復帰（kanade は close talk の TalkDone を待って
-///    CloseTalkWait に留まり、到着で復帰する）。
-/// 3. 復帰後の Tick で OnSecondChange GET（pump 再開・Req 3.4）→ fixture が Value（steady_value_indices
-///    に「復帰後にだけ現れる GET 出現」を仕込む）→ steady talk（受領 index 1・quit:true）→ 終了系列完走。
-///
-/// close talk（index 0）で終了せず、その後の steady talk（index 1）で初めて終了する構成ゆえ、
-/// 「終了拒否点で停止していない・pump が再開した」ことが終了到達それ自体で保証される。挨拶なし boot
-/// （`without_boot_greeting`）で boot→`Steady{None}` へ直行させ、pre-close Tick を確実に GET index 0
-/// にする（DD-IT-12 の挨拶 talk race を断つ）。
+/// Tick を 1 本も送らないので `last_now` は None のまま＝握手入口の deadline も None のままで、
+/// 再生完了待ちの上限は永久に設定されない（`close_talk_deadline_ms` も `u64::MAX` にしてある）。
+/// ゆえに終了へ至る道は TalkDone の腕しか無く、期限超過（シナリオ 3）との取り違えが起き得ない。
 ///
 /// # 非空虚性
 /// - close 握手を通らなければ OnClose GET が現れず (a) が落ちる。
-/// - pump が再開しなければ復帰後 GET → steady talk が起きず、終了系列が駆動されない。kanade が終了せず
-///   inbox が切断されないため Tick send が成功し続け、`drive_ticks_until_disconnect` が DEFAULT_TIMEOUT の
-///   壁時計 deadline に達して panic する（＝終了拒否点で停止＝復帰しなかったことを決定論的に検出する）。
-/// - 復帰後 pump が GET でなく NOTIFY だと Value が破棄され steady talk が起きず、同様に終了しない。
+/// - 旧規則（quit:false は終了を拒んで `Steady{None}` へ復帰）なら kanade は終了せず、Tick も
+///   来ないため CloseTalkWait のまま留まり、join が DEFAULT_TIMEOUT で panic する。
+/// - 復帰してしまえば (c) の「OnClose 以降は Unload だけ」も同時に落ちる。
 #[test]
-fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
-    // steady_value_indices=[1]: OnSecondChange GET の 2 度目の出現（0 始まり index 1）に Value。
-    // 1 度目の GET 出現（index 0）は close 前の pre-close Tick で消費し 204、2 度目の GET 出現は
-    // close 拒否→復帰後の pump で現れ Value を返す（＝pump 再開の直接証左）。挨拶なし boot ゆえ
-    // pre-close Tick は確実に GET index 0 になる（DD-IT-12 の race を断つ）。
-    let fixture = Fixture::quitting()
-        .with_steady_value_indices([1])
-        .without_boot_greeting();
+fn farewell_talk_without_quit_tag_still_terminates() {
+    // 別れの Value を返す fixture・挨拶なし boot（`Steady{None}` 直行）。
+    let fixture = Fixture::quitting().without_boot_greeting();
 
-    // close 握手の deadline を実質無限にする。本シナリオは close talk を「拒否」で復帰させる意図であり、
-    // CloseTalkWait で TalkDone を待つ間に注入する poll Tick が既定 deadline（last_now+30_000ms）を
-    // 超えると DeadlineExceeded で終了してしまい、拒否→復帰を観測できない（Tick の now は増え続けるため
-    // 負荷下で TalkDone が遅れると容易に超過する）。deadline を巨大値にして期限判定を無効化し、復帰は
-    // 純粋に close talk の TalkDone{quit:false} で起こす（deadline 超過はシナリオ 3 の担当）。
+    // 再生完了待ちの上限を実質無限にする。終了が期限超過ではなく TalkDone の腕で起きることを
+    // 一意にするための封じ（期限超過はシナリオ 3 の担当）。
     let mut config = KanadeConfig::new("master", "1.0.0");
     config.close_talk_deadline_ms = u64::MAX;
 
-    // quit_flags: close(index0)=false（終了拒否）・steady(index1)=true（終了駆動）。挨拶なし boot ゆえ
-    // boot talk は無く、close talk が先頭 StartTalk＝index 0・resumed steady talk が index 1。
-    let harness = spawn_harness(config, fixture, QuitPolicy::PerTalk(vec![false, true]));
+    // quit_flags: close talk（index 0・挨拶なし boot ゆえ先頭 StartTalk）=false＝`Ended` で終わる
+    // ＝台本が `\-` に辿り着かなかった場合そのものである。
+    let harness = spawn_harness(config, fixture, QuitPolicy::PerTalk(vec![false]));
 
-    // 起動 → pre-close Tick（GET 出現 index 0＝204・talk なし）。
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send pre-close Tick");
 
-    // close 指示（active talk なし＝即握手・OnClose GET→別れの Value→close talk→quit:false→拒否）。
+    // close 指示（active talk なし＝即握手・OnClose GET→別れの Value→close talk→quit:false）。
     harness
         .sender
         .send(KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
         })
         .expect("send CloseRequest");
-
-    // 終了拒否→定常復帰後の pump を駆動する。close talk の TalkDone{quit:false} は非保留 sakura が
-    // 別スレッドから即返すため、その到着は test スレッドの Tick と inbox 上で競合する（別 Sender）。
-    // 復帰前（CloseTalkWait）に届いた Tick は pump しない（last_now 更新のみ）ため、復帰後の pump（GET
-    // 出現 value_indices=[1]）が Value を返し steady talk（quit:true）を起こすまで Tick を供給し続ける
-    // 必要がある。これを反復回数上限でなく inbox 切断バリア＋壁時計 deadline で駆動する共有ヘルパーへ
-    // 一本化する: kanade が復帰後 pump talk（quit:true）で終了して inbox を切断するまで 1 秒刻みの Tick を
-    // 供給し、切断で戻る（＝復帰→終了の完了バリア）。既存の開始秒を保存（開始秒 2）。復帰しなければ
-    // kanade は終了せず Tick send は成功し続けるため、DEFAULT_TIMEOUT の壁時計 deadline に達した時点で
-    // ヘルパーが panic し、「拒否点で停止＝復帰しなかった」欠陥を決定論的な失敗へ変換する。
-    drive_ticks_until_disconnect(&harness.sender, 2, "close_refused resume drive");
 
     let Harness {
         sender,
@@ -97,14 +60,14 @@ fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
         sakura,
     } = harness;
 
-    // 終了系列完走（復帰後 pump→steady talk quit:true→Unload→StopSelf）まで期限付き join。
-    // ここで join が成功すること自体が「終了拒否点で停止せず pump が再開した」ことの保証である。
-    join_bounded("kanade close-refuse join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade resumes after close-reject and terminates via the resumed pump talk");
+    // close talk の TalkDone{Ended} だけで終了系列が完走する（Tick は 1 本も送っていない）。
+    join_bounded("kanade farewell-quit join", DEFAULT_TIMEOUT, kanade)
+        .expect("kanade terminates when the farewell talk ends without a quit tag (Req 3.6)");
 
     drop(sender);
+    // mock sakura は起動要求を記録してから TalkDone を返すので、join 成功時点で記録は確定している。
     let started = sakura.started();
-    sakura.join_bounded("mock-sakura close-refuse join", DEFAULT_TIMEOUT);
+    sakura.join_bounded("mock-sakura farewell-quit join", DEFAULT_TIMEOUT);
 
     let recorded = shiori.recorded();
 
@@ -123,64 +86,46 @@ fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
         started
     );
 
-    // (c) 終了拒否後に pump が再開した: OnClose GET より後に OnSecondChange GET が ≥1 本現れる。
-    let post_close_pumps = recorded
+    // (c) 定常へ戻る経路は 0 本: OnClose GET より後に現れる記録は Unload 1 件だけで、pump
+    //     （OnSecondChange）も追加イベントも一切無い。
+    let after_close: Vec<&RecordedCall> = recorded
         .iter()
         .enumerate()
-        .filter(|(i, c)| {
-            *i > onclose_index && c.method == CallMethod::Get && c.id == "OnSecondChange"
-        })
-        .count();
-    assert!(
-        post_close_pumps >= 1,
-        "終了拒否→定常復帰後に OnSecondChange GET（pump）が再開するはず（Req 3.4）: {:?}",
+        .filter(|(i, _)| *i > onclose_index)
+        .map(|(_, c)| c)
+        .collect();
+    assert_eq!(
+        after_close.len(),
+        1,
+        "OnClose の後に現れるのは Unload だけ（終了の握手から定常へ戻る経路は 0 本）: {:?}",
         recorded
     );
-
-    // GET pump の Reference 構成が events 表の正典（Ref3="1"）と一致する 1 件を確認する。
-    let resumed_get = recorded
-        .iter()
-        .enumerate()
-        .find(|(i, c)| {
-            *i > onclose_index && c.method == CallMethod::Get && c.id == "OnSecondChange"
-        })
-        .map(|(_, c)| c)
-        .expect("再開後の OnSecondChange GET が存在するはず");
     assert_eq!(
-        resumed_get.references.len(),
-        4,
-        "OnSecondChange の References は 4 要素"
-    );
-    assert_eq!(
-        resumed_get.references[3], "1",
-        "再開 pump の Ref3 は \"1\"（GET・talk 再生可能）"
+        *after_close[0],
+        expected_unload(),
+        "OnClose の後の 1 件は Unload"
     );
 
-    // (d) 復帰後 pump が Value を起こし steady talk が終了を駆動した証拠: close talk とは別の
-    //     steady script talk が 1 本現れる（＝拒否点で停止していなければ到達し得ない）。
-    let steady_started = started
-        .iter()
-        .filter(|s| s.script == FIXED_STEADY_SCRIPT)
-        .count();
+    // (d) 定常の talk も起動しない: sink に届くのは別れの close talk 1 本のみ。
+    assert!(
+        started.iter().all(|s| s.script != FIXED_STEADY_SCRIPT),
+        "定常へ戻らないので steady talk は起動しないはず: {:?}",
+        started
+    );
     assert_eq!(
-        steady_started, 1,
-        "復帰後 pump の Value で steady talk が 1 本起動し終了を駆動するはず: {:?}",
+        started.len(),
+        1,
+        "sink に届くのは別れの close talk 1 本のみ: {:?}",
         started
     );
 
-    // 終了系列: 末尾は Unload（正規終了経路）で閉じる。OnClose→…→Unload の順。
+    // 終了系列: 末尾は Unload（正規終了経路）で 1 度だけ。
     let last = recorded.last().expect("記録列は空でない");
     assert_eq!(
         *last,
         expected_unload(),
-        "末尾は Unload（復帰後 pump talk quit:true の終了系列完走）で閉じるはず"
+        "末尾は Unload（別れの台詞の完了で駆動された終了系列の完走）で閉じるはず"
     );
-    assert!(
-        onclose_index < recorded.len() - 1,
-        "OnClose（{onclose_index}）は Unload（{}）より前に現れるはず",
-        recorded.len() - 1
-    );
-    // Unload は終了系列で 1 度だけ（末尾のみ）。
     let unload_count = recorded
         .iter()
         .filter(|c| c.method == CallMethod::Unload)

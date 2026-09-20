@@ -267,7 +267,8 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
 // -------------------------------------------------------------------------
 
 /// 左シングルクリックの合成 `PointerState`（client 物理 px・left_down=true）を組む。
-/// `double_click` フィールドは既定 `None` のまま——押下ハンドラは**参照しない**（DD-CI-9）。
+/// `double_click` フィールドは既定 `None` のまま——選択の確定は `double_click` を見ない（DD-CI-9）。
+/// 押下ハンドラが `double_click` を読むのは、末尾で中断の入口へ渡すときだけである。
 fn bubble_left_press(x: i32, y: i32) -> Phase<PointerState> {
     Phase::Bubble(PointerState {
         client_point: Point { x, y },
@@ -300,7 +301,7 @@ fn pressed_tunnel_phase_is_noop_false() {
 }
 
 /// 非左押下は素通し（R5.1）: 右/中ボタン down（left_down=false）は確定でないため `false`・零 send。
-/// `double_click` を一切参照しないことを、既定 None のまま処理が left_down のみで分岐することで担保する。
+/// 左でない押下は `left_down` の分岐で先に戻るので、選択の確定にも中断の入口にも届かない。
 #[test]
 fn pressed_non_left_button_is_noop_false() {
     let mut world = World::new();
@@ -755,4 +756,49 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             );
         }
     }
+}
+
+/// 押下ハンドラの末尾は、中断の入口（`super::user_break::on_left_press`）を必ず通る
+/// （areka-P0-balloon-break 要件 1.1）。GPU 無しではバルーンを出せないので受理までは進まないが、
+/// 左ダブルクリックの検出の記録が出ることで、この 1 行の呼び出しを固定する。
+#[test]
+fn pressed_left_double_click_reaches_the_user_break_entry() {
+    use crate::input_events::user_break::UserBreakWiring;
+    use wintf::ecs::pointer::DoubleClick;
+
+    let mut world = World::new();
+    let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
+    let (bw, _selection_rx) = wiring_with_inbox();
+    world.insert_non_send(bw);
+    let (_flag_tx, flag_rx) = mpsc::channel();
+    let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
+    let (kanade_tx, kanade_rx) = mpsc::channel();
+    world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade_tx));
+
+    let ev = Phase::Bubble(PointerState {
+        client_point: Point { x: 10, y: 20 },
+        left_down: true,
+        double_click: DoubleClick::Left,
+        ..Default::default()
+    });
+    let logs = capture_logs(|| {
+        assert!(
+            !on_balloon_pointer_pressed(&mut world, e, e, &ev),
+            "バルーンが出ていないので中断は受理されず、選択も成立しない＝false"
+        );
+    });
+
+    assert!(
+        logs.iter()
+            .any(|l| l.contains("level=TRACE") && l.contains("balloon_break_detected")),
+        "押下ハンドラの末尾から中断の入口が呼ばれ、左ダブルクリックの検出が記録される: {logs:?}"
+    );
+    assert!(
+        lifecycle_rx.try_recv().is_err() && kanade_rx.try_recv().is_err(),
+        "バルーンが出ていないので、どちらの線へも送らない（要件 1.9）"
+    );
 }

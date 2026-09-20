@@ -209,6 +209,7 @@ fn explicit_stale_done_after_replacement_is_discarded_without_disturbing_current
     tx.send(DispatcherMsg::Done(TalkDone {
         talk_id: talk_a,
         reason: TalkEndReason::Interrupted,
+        quit_reserved: false,
     }))
     .expect("send manual stale Done(A)");
 

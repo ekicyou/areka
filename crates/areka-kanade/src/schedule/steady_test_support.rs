@@ -12,6 +12,7 @@ pub(super) fn steady_none(next_id: u64) -> State {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     }
 }
 
@@ -30,6 +31,7 @@ pub(super) fn steady_some(talk_id: TalkId, next_id: u64) -> State {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     }
 }
 

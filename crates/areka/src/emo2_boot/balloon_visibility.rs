@@ -14,6 +14,7 @@
 //!
 //! - 表示: ある scope の**可視グリフ数が増えた**フレームで、かつその scope が**現に不可視**のとき
 //!   だけ表示する（Requirement 2.1 / 2.5）。起動時・会話開始時・scope 切替時に別条件を設けない。
+//!   ただし利用者の中断で隠した後は、次のトークが始まるまで見送る（areka-P0-balloon-break 要件 4.8）。
 //! - 非表示（会話開始側）: 可視グリフ数が**ゼロへ下降した**フレームで、かつ現に可視のときだけ
 //!   非表示にする（Requirement 3.1）。会話がどの scope から始まるかを先読みしない（Requirement 3.6）。
 //!
@@ -157,9 +158,10 @@ pub(crate) fn configured_timeout_secs() -> f64 {
 
 /// 表示・非表示が起きた契機の種別（ログの `trigger` フィールド・design 決定 D10）。
 ///
-/// D10 の語彙 `content` / `clear` / `timeout` / `explicit` の 4 種をそのまま持つ。前 3 者は
-/// 判断中核が導き、[`VisibilityTrigger::Explicit`] だけは配線層が前フレームとの差分から導く
-/// （判断中核は自分が発行していない遷移を知らない）。
+/// D10 の語彙 `content` / `clear` / `timeout` / `explicit` の 4 種に、利用者の中断
+/// `user_break`（areka-P0-balloon-break 要件 4.4）を足した 5 種を持つ。
+/// [`VisibilityTrigger::Explicit`] 以外は判断中核が導き、`Explicit` だけは配線層が前フレームとの
+/// 差分から導く（判断中核は自分が発行していない遷移を知らない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum VisibilityTrigger {
     /// 可視コンテンツの配置（可視グリフ数の増加・Requirement 2.1 / 4.7）。
@@ -173,6 +175,9 @@ pub(crate) enum VisibilityTrigger {
     /// 配線層が前フレームの [`ScopeVisibility::prev_visible`] と本フレームの観測との差分から
     /// 検出する（Requirement 8.1 の「明示指令」）。判断中核はこの契機を作らない。
     Explicit,
+    /// 利用者がバルーンを左ダブルクリックして再生を中断した
+    /// （areka-P0-balloon-break 要件 4.1・[`TalkLifecycleSignal::UserBreak`] の畳み込み）。
+    UserBreak,
 }
 
 impl VisibilityTrigger {
@@ -183,6 +188,7 @@ impl VisibilityTrigger {
             VisibilityTrigger::Clear => "clear",
             VisibilityTrigger::Timeout => "timeout",
             VisibilityTrigger::Explicit => "explicit",
+            VisibilityTrigger::UserBreak => "user_break",
         }
     }
 }
@@ -282,11 +288,11 @@ pub(crate) enum VisibilityAction {
 /// [`decide`] の返り値。行動とログを分けて返し、発行もログ出力も配線層に委ねる。
 #[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct VisibilityDecision {
-    /// 発行する行動。並びは「全消去の非表示 → 表示 → 満了の非表示」で、
+    /// 発行する行動。並びは「中断の非表示 → 全消去の非表示 → 表示 → 満了の非表示」で、
     /// 各行動の中の scope は昇順で固定する。
     pub(crate) actions: Vec<VisibilityAction>,
-    /// ログ用の事象。並びは「信号の畳み込み → 可視コンテンツ駆動の遷移（scope 昇順）→
-    /// 計測と満了」で固定する。
+    /// ログ用の事象。並びは「信号の畳み込み → 中断の非表示（scope 昇順）→ 可視コンテンツ駆動の
+    /// 遷移（scope 昇順）→ 計測と満了」で固定する。
     pub(crate) logs: Vec<VisibilityLogEvent>,
 }
 
@@ -389,6 +395,13 @@ pub(crate) struct BalloonVisibilityState {
     display_end: Option<f64>,
     /// 非表示の満了予定（talk 相対秒）。`None` は計測なし。
     deadline: Option<f64>,
+    /// 利用者の中断でバルーンを隠したので、内容の増加では出し直さない
+    /// （areka-P0-balloon-break 要件 4.8）。次の会話開始の信号で解く。
+    ///
+    /// 止めた台本の文字は、再生を止めた後も時刻の進行だけで見える数が増えうる
+    /// （`crates/areka-emo-text/src/state.rs` の `RevealSchedule` が先の時刻まで決まっているため）。
+    /// この掛け金が無いと、文の途中で止めたときだけ消えたバルーンが次の描画で戻ってくる。
+    break_latch: bool,
     /// 前フレームの抑止の成否（抑止解除エッジの検出用・Requirement 5.3）。
     prev_suppressed: bool,
     /// 抑止による見送りのログを今回の抑止で既に 1 回出したか（Requirement 8.3）。
@@ -408,10 +421,11 @@ pub(crate) struct BalloonVisibilityState {
 
 /// 本フレームの可視性遷移を決める（純関数・`World` / GPU / 時計に触れない）。
 ///
-/// 判定は 3 段で、この順に依存する——⑴ 表示ライフサイクル信号の畳み込み（会話の開始と占有
-/// 終端）、⑵ 可視コンテンツ駆動の表示・非表示、⑶ タイムアウトの計測・抑止・満了。⑶ が ⑵ の
-/// 後にあるのは、満了で消す対象が「本フレームの発行を反映したあとに可視である scope」だから
-/// である。
+/// 判定は 4 段で、この順に依存する——⑴ 表示ライフサイクル信号の畳み込み（会話の開始・占有
+/// 終端・利用者の中断）、⑵ 利用者の中断による非表示、⑶ 可視コンテンツ駆動の表示・非表示、
+/// ⑷ タイムアウトの計測・抑止・満了。⑵ が ⑶ より前にあるのは、中断で隠した scope を ⑶ 以降が
+/// 不可視として扱うためである。⑷ が最後にあるのは、満了で消す対象が「本フレームの発行を
+/// 反映したあとに可視である scope」だからである。
 ///
 /// `now_talk_time` は talk 相対秒の現在時刻（`resolve_talk_time` と同型で `None` は起点未確立）。
 /// `None` のフレームではタイムアウトの評価そのものを行わない——時刻が分からないまま満了を
@@ -424,15 +438,32 @@ pub(crate) fn decide(
 ) -> VisibilityDecision {
     let mut logs: Vec<VisibilityLogEvent> = Vec::new();
 
-    apply_lifecycle_signals(state, obs, now_talk_time, &mut logs);
-    let content = decide_content(state, obs, &mut logs);
-    let timed_out = decide_timeout(state, obs, now_talk_time, timeout_secs, &content, &mut logs);
+    let broke = apply_lifecycle_signals(state, obs, now_talk_time, &mut logs);
+    let broken = decide_user_break(state, obs, broke, &mut logs);
+    let content = decide_content(state, obs, &broken, &mut logs);
+    let timed_out = decide_timeout(
+        state,
+        obs,
+        now_talk_time,
+        timeout_secs,
+        &broken,
+        &content,
+        &mut logs,
+    );
 
-    // 並びは「全消去の非表示 → 表示 → 満了の非表示」で固定する。同一フレームで複数が立つのは
-    // 別々の scope に限られる（1 つの scope が増加エッジとゼロ下降エッジを同時に満たすことは
-    // なく、本フレームに表示した scope は満了の対象から外してある）ため意味上の依存は無いが、
-    // 出力の並びを入力から一意に決めるために順序を決め打つ。
+    // 並びは「中断の非表示 → 全消去の非表示 → 表示 → 満了の非表示」で固定する。中断で隠した
+    // scope を同じフレームで表示し直すことはありうる（中断と次の会話の開始が同じフレームに
+    // 届いた場合）ので、その 1 組だけは順序に意味がある——古い表示が消えてから新しい会話の
+    // バルーンが出る。残りは別々の scope に限られる（1 つの scope が増加エッジとゼロ下降エッジを
+    // 同時に満たすことはなく、本フレームに表示した scope は満了の対象から外してある）ため意味上の
+    // 依存は無いが、出力の並びを入力から一意に決めるために順序を決め打つ。
     let mut actions: Vec<VisibilityAction> = Vec::new();
+    if !broken.is_empty() {
+        actions.push(VisibilityAction::HideScopes {
+            scopes: broken,
+            trigger: VisibilityTrigger::UserBreak,
+        });
+    }
     if !content.cleared.is_empty() {
         actions.push(VisibilityAction::HideScopes {
             scopes: content.cleared,
@@ -463,15 +494,19 @@ struct ContentDecisions {
     cleared: Vec<u32>,
 }
 
-/// 表示ライフサイクル信号を会話単位の状態へ畳み込む（Requirements 4.1 / 4.5）。
+/// 表示ライフサイクル信号を会話単位の状態へ畳み込み、**本フレームに利用者の中断があったか**を
+/// 返す（Requirements 4.1 / 4.5・areka-P0-balloon-break 要件 4.1 / 4.7）。
 ///
 /// 信号の受け取りは配線層の仕事だが、受け取った信号が計測へ及ぼす作用は判断である。
+/// 畳み込みは**線の上の到着順どおり**に進める——同じフレームに中断と次の会話の開始が届いた
+/// 場合、掛け金の最終値は後から届いた側で決まる。
 fn apply_lifecycle_signals(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
     now_talk_time: Option<f64>,
     logs: &mut Vec<VisibilityLogEvent>,
-) {
+) -> bool {
+    let mut broke = false;
     for signal in &obs.lifecycle {
         match *signal {
             TalkLifecycleSignal::TalkStarted => {
@@ -484,8 +519,17 @@ fn apply_lifecycle_signals(
                 }
                 state.display_end = None;
                 state.signal_gap_warned = false;
+                // 次の会話が始まったので、中断の掛け金を解く（areka-P0-balloon-break 要件 4.7）。
+                state.break_latch = false;
                 // `per_scope.last_glyphs` は**保持する**。直後に届く全消去の観測がゼロへの
                 // 下降エッジとして読まれ、会話冒頭の全非表示を導く（design の Data Models）。
+            }
+            TalkLifecycleSignal::UserBreak => {
+                // 利用者がバルーンを左ダブルクリックした。本フレームで出ているバルーンを
+                // すべて隠し、次の会話が始まるまで内容では出し直さない
+                // （areka-P0-balloon-break 要件 4.1 / 4.8）。
+                broke = true;
+                state.break_latch = true;
             }
             TalkLifecycleSignal::DisplayEndAt(end) => {
                 // 送出側の畳み込み種は負の無限大であり（`talk_lifecycle.rs:89`）、非有限値は
@@ -513,12 +557,57 @@ fn apply_lifecycle_signals(
             }
         }
     }
+    broke
+}
+
+/// 利用者の中断で非表示にする scope を返す（areka-P0-balloon-break 要件 4.1 / 4.2 / 4.3）。
+///
+/// 対象は**現に出ているバルーンすべて**で、中断の合図が起きた scope だけではない。既に隠れて
+/// いる scope は載せない（隠す指示を重ねて出さない）。抑止（ドラッグ・ポインタの滞在・選択肢の
+/// 表示中）は**見ない**——抑止はタイムアウトだけの規則であり、ダブルクリックした利用者は必ず
+/// バルーンの上に居るためである。
+fn decide_user_break(
+    state: &mut BalloonVisibilityState,
+    obs: &VisibilityObservations,
+    broke: bool,
+    logs: &mut Vec<VisibilityLogEvent>,
+) -> Vec<u32> {
+    if !broke {
+        return Vec::new();
+    }
+
+    let mut hidden: Vec<u32> = Vec::new();
+    for (&scope, observed) in &obs.scopes {
+        if !observed.visible {
+            continue;
+        }
+        // 初見の scope でも遷移は成立する（装着直後に外から出ているバルーンを隠す形）。
+        state
+            .per_scope
+            .entry(scope)
+            .or_insert(ScopeVisibility {
+                last_glyphs: 0,
+                prev_visible: false,
+            })
+            .prev_visible = false;
+        hidden.push(scope);
+        logs.push(VisibilityLogEvent::Transition {
+            scope,
+            trigger: VisibilityTrigger::UserBreak,
+            visible: false,
+        });
+    }
+    hidden
 }
 
 /// 可視コンテンツの増減から表示・非表示を導く（Requirements 2.1〜2.7 / 3.1 / 3.2 / 3.6）。
+///
+/// `broken` は本フレームに利用者の中断で隠した scope（scope 昇順）。ここから先は**隠した後の
+/// 姿**で判断する——観測値に本フレームの発行を重ねる既存の流儀と同じである。
 fn decide_content(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
+    broken: &[u32],
     logs: &mut Vec<VisibilityLogEvent>,
 ) -> ContentDecisions {
     let mut shown: Vec<u32> = Vec::new();
@@ -527,25 +616,31 @@ fn decide_content(
     // 走査は scope 昇順（`BTreeMap`）。行動とログの並びが観測可能である以上、走査順そのものを
     // 決定論の一部として固定する。
     for (&scope, observed) in &obs.scopes {
+        // 中断で隠した scope は、この先すべて不可視として扱う。
+        let visible = observed.visible && !broken.contains(&scope);
+
         // 初見の scope は「まだ 1 文字も置かれていない」ところから始める。装着直後の観測が
         // ゼロなら以後もエッジは立たず、そのまま不可視で据え置かれる（Requirement 1.1 と整合）。
         let previous = state.per_scope.entry(scope).or_insert(ScopeVisibility {
             last_glyphs: 0,
-            prev_visible: observed.visible,
+            prev_visible: visible,
         });
 
         let Some(glyphs) = observed.visible_glyphs else {
             // 観測が取れなかったフレーム。増加とも下降とも読まず、`last_glyphs` も据え置く
             // ——観測できないことを「消えた」と読むと表示を失う側へ倒れる。
-            previous.prev_visible = observed.visible;
+            previous.prev_visible = visible;
             continue;
         };
 
         let last_glyphs = previous.last_glyphs;
         previous.last_glyphs = glyphs;
 
-        if glyphs > last_glyphs && !observed.visible {
+        if glyphs > last_glyphs && !visible && !state.break_latch {
             // 表示: 可視グリフ数の増加エッジ、かつ現に不可視のときだけ（Requirement 2.1 / 2.5）。
+            // 中断の掛け金が掛かっている間は見送る——止めた台本の文字は再生を止めた後も時刻の
+            // 進行だけで増えうるため（areka-P0-balloon-break 要件 4.8）。見送りでは記録を 1 件も
+            // 作らず（毎フレームの判定は無音という既存規律）、`last_glyphs` は上で更新済みである。
             previous.prev_visible = true;
             shown.push(scope);
             logs.push(VisibilityLogEvent::Transition {
@@ -553,7 +648,7 @@ fn decide_content(
                 trigger: VisibilityTrigger::Content,
                 visible: true,
             });
-        } else if glyphs == 0 && last_glyphs > 0 && observed.visible {
+        } else if glyphs == 0 && last_glyphs > 0 && visible {
             // 非表示: ゼロへの下降エッジ、かつ現に可視のときだけ（Requirement 3.1）。
             // ゼロ以外への下降（部分消去）は契機にしない。
             previous.prev_visible = false;
@@ -565,7 +660,7 @@ fn decide_content(
             });
         } else {
             // 遷移なし。ここで何も積まないことが Requirement 8.6（毎フレームの判定は無音）を成す。
-            previous.prev_visible = observed.visible;
+            previous.prev_visible = visible;
         }
     }
 
@@ -579,6 +674,7 @@ fn decide_timeout(
     obs: &VisibilityObservations,
     now_talk_time: Option<f64>,
     timeout_secs: f64,
+    broken: &[u32],
     content: &ContentDecisions,
     logs: &mut Vec<VisibilityLogEvent>,
 ) -> Vec<u32> {
@@ -589,15 +685,18 @@ fn decide_timeout(
     };
 
     // 本フレームの発行を反映した可視 scope。真実源はあくまで観測値で、そこへ本フレームに
-    // 発行した表示・非表示を重ねる（第 2 の可視性帳簿を作らない）。
+    // 発行した表示・非表示を重ねる（第 2 の可視性帳簿を作らない）。表示は最後の行動なので、
+    // 中断や全消去で隠した直後に出し直した scope は可視として数える。
     let visible: Vec<u32> = obs
         .scopes
         .iter()
         .filter(|(scope, observed)| {
-            if content.cleared.contains(scope) {
+            if content.shown.contains(scope) {
+                true
+            } else if content.cleared.contains(scope) || broken.contains(scope) {
                 false
             } else {
-                content.shown.contains(scope) || observed.visible
+                observed.visible
             }
         })
         .map(|(&scope, _)| scope)
@@ -650,7 +749,9 @@ fn decide_timeout(
         // 終わってから」）。「計測が成り立った最初のフレームの現在時刻 + 既定時間」ではない
         // ——観測はフレーム単位で飛び飛びに入るため、そちらを採ると観測の遅れがそのまま
         // 満了のずれになる。中断による終了（Requirement 4.6）も占有終端が起点で、中断のみを
-        // 理由とする即時非表示の経路はここに存在しない。
+        // 理由とする即時非表示の経路はこの段には無い。利用者のダブルクリックによる中断だけは
+        // 例外で、[`decide`] の別の段（[`decide_user_break`]）が占有終端を待たずに隠す
+        // （areka-P0-balloon-break 要件 4.1）。
         let deadline = display_end + timeout_secs;
         state.deadline = Some(deadline);
         logs.push(VisibilityLogEvent::MeasurementStarted {
@@ -762,6 +863,10 @@ mod content_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_timeout_suppression_tests.rs"]
 mod timeout_suppression_tests;
+
+#[cfg(test)]
+#[path = "balloon_visibility_user_break_tests.rs"]
+mod user_break_tests;
 
 // 会話終了観測から判断中核までの端から端（task 6.6）。実台本の再生から占有終端が計測起点に
 // なるところまでを 1 本で通す。判断中核の私有状態を読むため親の内側に置く。

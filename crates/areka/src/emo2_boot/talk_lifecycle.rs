@@ -36,7 +36,10 @@ use dola::cue::TalkCue;
 use tracing::warn;
 use wintf::ecs::world::tick_wake;
 
-/// talk スレッドから UI スレッドへ流れる表示ライフサイクル信号（design「Event Contract」）。
+/// UI スレッドの可視性コントローラへ流れる表示ライフサイクル信号（design「Event Contract」）。
+///
+/// 送り手は 2 つある——talk スレッドの受け口 [`BalloonLifecycleSink`]（会話の開始と占有終端）と、
+/// UI スレッドの押下ハンドラ（利用者の中断）。どちらも同じ 1 本の線へ流す。
 ///
 /// 時刻軸は **talk 相対秒**（`TalkClock::talk_time` と同一軸）。
 ///
@@ -55,6 +58,11 @@ pub(crate) enum TalkLifecycleSignal {
     /// 待機を含む占有区間の終端（talk 相対秒）。既知最大が更新されたときだけ届く
     /// （Requirement 4.1）。
     DisplayEndAt(f64),
+    /// 利用者がバルーンを左ダブルクリックして再生を中断した（areka-P0-balloon-break 要件 4.1）。
+    ///
+    /// 送り手は UI スレッドの押下ハンドラで、この信号は `BalloonLifecycleSink` を経由しない。
+    /// 受信側は現に出ているバルーンをすべて隠し、次の会話が始まるまで内容では出し直さない。
+    UserBreak,
 }
 
 /// 会話の表示終了時刻を UI へ届ける broadcast sink（`GhostBootOptions.sinks` の 4 本目・D4＝α）。

@@ -15,6 +15,7 @@ fn state_in(phase: Phase) -> State {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     }
 }
 
@@ -38,6 +39,7 @@ fn known_quit_from_steady_goes_to_unloading_quit() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(5),
             reason: TalkEndReason::Quit,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -62,6 +64,7 @@ fn known_quit_from_close_talk_wait_goes_to_unloading_quit() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(9),
             reason: TalkEndReason::Quit,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -86,6 +89,7 @@ fn known_interrupted_from_steady_is_routed_as_non_quit() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(5),
             reason: TalkEndReason::Interrupted,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -175,6 +179,7 @@ fn unknown_talk_id_keeps_phase_and_emits_nothing() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(999),
             reason: TalkEndReason::Quit,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -484,6 +489,7 @@ fn input_variants_are_existing_eight_plus_choice_two() {
             Input::ShioriReply { .. } => "ShioriReply",
             Input::Choice(_) => "Choice",
             Input::ChoiceWaiting { .. } => "ChoiceWaiting",
+            Input::UserBreak { .. } => "UserBreak",
         }
     }
     assert_eq!(tag(&Input::Boot), "Boot");
@@ -859,6 +865,7 @@ fn stale_choice_talk_done_is_demoted_to_info_and_keeps_state() {
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(3),
                 reason: TalkEndReason::Ended,
+                quit_reserved: false,
             }),
             &cfg,
         ));
@@ -891,6 +898,7 @@ fn truly_unknown_talk_done_still_logs_error() {
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(777),
                 reason: TalkEndReason::Ended,
+                quit_reserved: false,
             }),
             &cfg,
         ));
@@ -911,6 +919,7 @@ fn current_talk_done_clears_the_one_generation_stale_slot() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(9),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         }),
         &cfg,
     );
@@ -926,6 +935,7 @@ fn current_talk_done_clears_the_one_generation_stale_slot() {
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(3),
                 reason: TalkEndReason::Ended,
+                quit_reserved: false,
             }),
             &cfg,
         ));

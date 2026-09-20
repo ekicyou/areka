@@ -487,8 +487,9 @@ pub(crate) fn on_balloon_pointer_moved(
 /// バルーン窓のポインタ押下ハンドラ（Bubble のみ処理・確定クリック発行・R2.1/2.3/2.4/2.5/2.6/3.1/3.2/4.2/5.1/8.4）。
 ///
 /// wintf `PointerEventHandler` 署名（移動ハンドラの鏡写し）。**Bubble 相のみ処理し Tunnel は伝播続行の
-/// ため即 `false`**。**左シングルクリック限定**＝`state.left_down` のみを確定として扱い、`double_click`
-/// フィールドは**一切参照しない**（DBLCLK 2 打目も独立 press として扱う・DD-CI-9）。右・中ボタン down は
+/// ため即 `false`**。**左シングルクリック限定**＝`state.left_down` のみを確定として扱い、選択の確定は
+/// `double_click` フィールドを見ない（DBLCLK 2 打目も独立 press として扱う・DD-CI-9）。`double_click` は
+/// 末尾で利用者の中断の入口 `fn on_left_press`（`user_break.rs`）へ渡すだけである。右・中ボタン down は
 /// 確定でないため `false` 素通し（wheel/keyboard は本 spec 未実装・R5.1）。
 ///
 /// 単一クリック二重発行は wintf dispatch のエッジ検出（dispatch 後 `left_down` クリア）が構造的に防止し、
@@ -515,7 +516,8 @@ pub(crate) fn on_balloon_pointer_moved(
 /// ではない）。シェルの「点 ÷k」とは逆向きだが等価に正しく、本経路へ ÷k を足すと二重縮約になり正常
 /// 動作を壊す（R5.6/5.7・R6.4。詳細は [`hit_choice_row`] の座標契約 doc）。
 ///
-/// **戻り値**: `ChoiceSelection` を発行したときのみ `true`（棄却・縮退・非左押下・Tunnel 時は `false`）。
+/// **戻り値**: `ChoiceSelection` を発行したとき、または利用者の中断を受け入れたとき `true`
+/// （棄却・縮退・非左押下・Tunnel 時は `false`。途中の早期復帰では中断も作らない）。
 ///
 /// 本番到達済み——[`attach_balloon_pointer_handlers`]（`main.rs` から呼ばれる）が
 /// `BalloonWindowMarker` 窓へ `OnPointerPressed` として挿入する。
@@ -532,7 +534,7 @@ pub(crate) fn on_balloon_pointer_pressed(
     };
 
     // (2) 左シングルクリック限定（R5.1）。left_down 以外（右・中 down 等の非左押下）は確定でないため
-    // false 素通し。double_click フィールドは参照しない（DBLCLK 2 打目も独立 press 扱い・DD-CI-9）。
+    // false 素通し。選択の確定は double_click を見ない（DBLCLK 2 打目も独立 press 扱い・DD-CI-9）。
     if !state.left_down {
         return false;
     }
@@ -601,7 +603,7 @@ pub(crate) fn on_balloon_pointer_pressed(
     // ここで不変借用（Ref）は解放済み。
 
     // (4) 純関数の決定を適用する（resolve_choice は呼ばない＝発行まで・R2.6/5.4／自前描画なし）。
-    match selection {
+    let selected_now = match selection {
         // 非表示（active=false）or 非ヒット → 棄却（非発行・R2.3/3.1）。理由を弁別して debug 発火。
         None => {
             let reason = if !active { "inactive" } else { "no_hit" };
@@ -647,7 +649,11 @@ pub(crate) fn on_balloon_pointer_pressed(
                 false
             }
         }
-    }
+    };
+
+    // (5) 利用者の中断（areka-P0-balloon-break）。選択を確定した押下とその続きは中断にしない。
+    let accepted = super::user_break::on_left_press(world, scope, state.double_click, selected_now);
+    selected_now || accepted
 }
 
 // ---------------------------------------------------------------------------

@@ -55,8 +55,9 @@
 //!   足さず、StartTalk として下流へ配送する（新規 SHIORI イベント id を増やさない）。
 //! - `talk_completion_resumes_get_pump_ref3_one_status_none`（#12・Req 4.4）: steady talk 完了（TalkDone
 //!   着弾）後の次 Tick で `OnSecondChange` GET pump（Ref3=1・Status なし）が再開することを統合層で検証する。
-//!   `active_talk_tick_emits_notify_ref3_zero` は NOTIFY 窓までしか観測せず、close_test の close 拒否復帰は
-//!   `CloseTalkWait` 由来ゆえ、`Steady{Some}`→TalkDone→`Steady{None}` の復帰は本 cage が埋める（純粋状態
+//!   `active_talk_tick_emits_notify_ref3_zero` は NOTIFY 窓までしか観測せず、close_test の別れの台詞は
+//!   `CloseTalkWait` から終了へ進んで定常へ戻らないゆえ、`Steady{Some}`→TalkDone→`Steady{None}` の
+//!   復帰は本 cage が埋める（純粋状態
 //!   機械では `steady.rs::steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
 
 use std::collections::HashSet;
@@ -772,8 +773,9 @@ fn spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour() {
 /// （Ref3=1・Status なし・Req 4.4・Testing Strategy #12）。
 ///
 /// `active_talk_tick_emits_notify_ref3_zero` は active talk 窓での NOTIFY までを観測するが、TalkDone
-/// 着弾後の GET 再開（次 Tick）は観測しない。close_test の `close_refused_resumes_...` は close 拒否
-/// （`CloseTalkWait`）からの復帰を観測するが、**steady talk 完了**（`Steady{Some}`→TalkDone→`Steady{None}`）
+/// 着弾後の GET 再開（次 Tick）は観測しない。close_test の
+/// `farewell_talk_without_quit_tag_still_terminates` は別れの台詞（`CloseTalkWait`）が定常へ戻らず
+/// 終了することを観測するもので、**steady talk 完了**（`Steady{Some}`→TalkDone→`Steady{None}`）
 /// からの GET 再開は統合層で未観測ゆえ、本 cage が additive に埋める（純粋状態機械では
 /// `steady.rs::steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
 ///

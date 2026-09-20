@@ -116,14 +116,27 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 「撮った日そのもの」という読み方は、後から足した行が 4 本に達した時点で実態と離れるため、
 合流の時点で改めた）。
 
-**2026-09-20 の追加**: `areka-P0-shell-implicit-surface` の行を 1 行足して、表は **32 行**に
-なった。理由は上の ⑴ ⑵ ⑶ と同じで、同日この spec が台帳 `ledger/assets.toml` の間隔の語
+**2026-09-20 の追加**: `areka-P0-balloon-break` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、
+同 spec が台帳 `ledger/sakura-script.toml` の `\![enter,nouserbreakmode]`・
+`\![leave,nouserbreakmode]` の 2 項目を自分の宛先として登記したからである。足した行の中身は
+`stage = "A"`・`bundle = "動作モードの出入り"`・`owner_count = 2`・
+`wave = "α 後"` で、段階は「動作モードの出入り」が順位表で
+置かれている段階の写し、ウェーブは正本のロードマップの写しである（正本の #47 は段が「α 後」で
+ウェーブ番号を持たず、開発者指示で着手した行である）。**この行は本流とは別の枝で足していたので、ここに書いていた行数は合流前の途中の姿である**
+——いまの数は下の「合流」の段落が正本である。
+
+**2026-09-20 の追加**: `areka-P0-shell-implicit-surface` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、同日この spec が台帳 `ledger/assets.toml` の間隔の語
 `sometimes`・`rarely` の 2 項目を自分の宛先として登記したからである。2 項目はどちらも
 `linkage.md` の `[bundle."サーフェスアニメーション"]` に属するので、束の欄はその名前になる。
 足した行の中身は `stage = "A"`・`bundle = "サーフェスアニメーション"`・`owner_count = 2`・
-`wave = "A1"` で、ウェーブは正本のロードマップの写しである。束を持つ行は **18 行**・
-`none = true` の行は **14 行**のままで、`snapshot_on` は行の集合に最後に手を入れた日として
-**2026-09-20** にした。
+`wave = "A1"` で、ウェーブは正本のロードマップの写しである。
+**この行も本流とは別の枝で足していたので、ここに書いていた行数は合流前の途中の姿である。**
+
+**2026-09-20 の合流（数え直した）**: 上の 2 つの追加は別々の枝で足していたので、どちらの
+「32 行」も合流前の途中の姿であり、いまの数ではない。合流した後に数え直した実数は **33 行**
+（`[[spec]]` の塊を数えた）で、うち束を持つ行が **19 行**・`none = true` の行が **14 行**である
+（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 33 に合わせ、
+`snapshot_on` は行の集合に最後に手を入れた日として **2026-09-20** のままにした。
 
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
@@ -158,7 +171,7 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 
 ```toml
 [briefs]
-count = 32
+count = 33
 snapshot_on = "2026-09-20"
 ```
 
@@ -299,6 +312,13 @@ stage = "A"
 bundle = "動作モードの出入り"
 owner_count = 4
 wave = "W15"
+
+[[spec]]
+name = "areka-P0-balloon-break"
+stage = "A"
+bundle = "動作モードの出入り"
+owner_count = 2
+wave = "α 後"
 
 [[spec]]
 name = "areka-P0-shell-implicit-surface"
@@ -456,7 +476,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
 | 14 | 選択肢の目印 | `areka-P0-choice-marker-rest`（残余） | `areka-P0-choice-marker-styling`（W16・39 件） | 第 2 波 |
 | 15 | 絵の重ね方 | `areka-P0-surface-composition-canon` | `areka-P0-shell-parse`（完了・1 件）／`areka-P0-default-balloon-bundle`（A0・1 件） | 第 2 波 |
-| 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件） | 第 2 波 |
+| 16 | 動作モードの出入り | `areka-P0-passive-mode-states` | `areka-P0-status-execution-states`（W15・2 件）／`areka-P0-balloon-break`（α 後・2 件） | 第 2 波 |
 | 17 | 定義ファイルの文字コード | なし（構成 2 件がどちらも実装済みで、作る仕事が残っていない） | **0 本** | 第 2 波 |
 | 17 | 組み込みの置換語 | `areka-P0-builtin-substitution` | **0 本** | 第 2 波 |
 | 18 | SHIORI の要求と応答 | `areka-P0-shiori-request-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-status-execution-states`（W15・1 件） | 第 2 波 |

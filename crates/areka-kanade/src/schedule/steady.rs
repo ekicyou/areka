@@ -883,7 +883,7 @@ fn on_close_request(mut state: State, reason: CloseReason) -> (State, Vec<Action
 /// close 握手開始: `OnClose` GET を発行し `ClosePending{reason}` へ遷移する。
 ///
 /// この Steady→ClosePending 遷移は本タスク（2.4）の責務である。ClosePending 以降の握手
-/// （応答処理・CloseTalkWait・期限・quit:false→Steady・204→無言終了）は close.rs（タスク
+/// （応答処理・CloseTalkWait・期限・別れの台詞の完了→終了・204→無言終了）は close.rs（タスク
 /// 2.5）が実装する。
 fn begin_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "close_handshake_begin", reason = reason.as_ref_str(), "OnClose GET を発行し握手を開始");

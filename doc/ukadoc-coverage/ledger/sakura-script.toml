@@ -1008,16 +1008,25 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2cnouserbreakmode_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-break"
 priority = "A16"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、利用者の割り込みを禁じる状態へ入れず、会話は途中で止められるままになる）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。この綴りが台本に現れると、利用者がバルーンを左ダブルクリックしても再生中の台本を
+止めない区間に入る。区間の中では止めも隠しもせず、退けたことを 1 行記録する。区間に入ったまま
+もう一度この綴りが現れても入れ子は数えず、区間に入ったままとして扱う。
+閉じ忘れ: 対になる \\![leave,nouserbreakmode] が現れないまま台本が終わったときは、次のトークが
+始まる時点で区間を解く（正典は沈黙・areka の裁量として doc/COMPAT_ARCHITECTURE.md に登記済み）。
+壊れ方: 無い（区間に入り、中断が退けられる）。
+ログ: 出る（区間で中断を退けたときの debug! 1 行）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UserBreakSink
+（正準台帳が ("enter","nouserbreakmode") の 1 組で登記する）・
+crates/areka/src/emo2_boot/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
+crates/areka/src/input_events/user_break.rs の fold_no_user_break（区間の出入りの判断）。
+[運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 動作モードの出入り]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![enter。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -1593,16 +1602,23 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2cnouserbreakmode_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-break"
 priority = "A16"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、割り込みを禁じる状態から抜ける指定も届かない。入る側も効かないので、抜ける相手がそもそも無い）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+実装済み。この綴りが台本に現れると、\\![enter,nouserbreakmode] で入った区間から出て、
+バルーンの左ダブルクリックでふたたび台本を止められるようになる。区間に入っていないのに
+現れたときは何もせず 1 行記録する。
+壊れ方: 無い（区間から出る）。
+ログ: 出る（区間の外でこの綴りを受けたときの debug! 1 行）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UserBreakSink
+（正準台帳が ("leave","nouserbreakmode") の 1 組で登記する）・
+crates/areka/src/emo2_boot/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
+crates/areka/src/input_events/user_break.rs の fold_no_user_break（区間の出入りの判断）。
+[運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 動作モードの出入り]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![leave。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """

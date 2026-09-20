@@ -1,13 +1,14 @@
-//! close 握手・quit 分岐・期限・強制終了の統合検証（Req 3.4・4.2・4.4・4.5・4.6・4.7）。
+//! close 握手・quit 分岐・期限・強制終了の統合検証（Req 3.4・4.2・4.4・4.6・4.7・別れの台詞の
+//! 新規則 3.6／3.7）。
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、close
 //! 握手の 4 シナリオを個別の `#[test]` として決定的に観測する（実時間 sleep なし・時刻は注入
 //! [`MonotonicMs`] Tick のみ・全 join は期限付き）:
 //!
-//! 1. **終了拒否 → 定常復帰 → pump 再開**（Req 4.5・3.4）: OnClose が別れの Value を返すが
-//!    close talk の TalkDone が quit:false → kanade は終了せず `Steady{None}` へ復帰し、以降の
-//!    Tick で OnSecondChange GET（pump）が再開する。再開後の pump が起こす steady talk を quit:true に
-//!    することで終了系列を駆動し、「拒否点で停止していない・pump 再開」を終了到達それ自体で保証する。
+//! 1. **別れの台詞は `\-` 無しで終わっても終了する**（Req 3.6・3.7）: OnClose が別れの Value を
+//!    返し、close talk の TalkDone が quit:false（＝`Ended`）でも、kanade は定常運転へ戻らず
+//!    終了系列を完走する。Tick を 1 本も送らない構成ゆえ期限超過とも取り違えようがなく、
+//!    OnClose の後に現れる記録が Unload 1 件だけであることで「定常へ戻る経路は 0 本」を示す。
 //! 2. **無言終了**（Req 4.6）: OnClose が 204 → 追加イベントなしで終了系列へ直行し、記録列の末尾は
 //!    `[.., OnClose GET, Unload]`（OnCloseAll 非発行・close talk 非起動）。
 //! 3. **再生完了待ちの時間超過**（Req 4.7）: 保留ハーネスで close talk の TalkDone を差し止め、

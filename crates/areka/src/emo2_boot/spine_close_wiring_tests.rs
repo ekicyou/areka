@@ -27,10 +27,11 @@ use super::{
 use crate::emo2_boot::frame::run_ghost_quit_phase;
 use crate::placement::spawn::GhostWindowMarker;
 
-/// 終了挨拶（`OnClose` の応答）。**`\-`（終了指令）で終わることが要点**である。
+/// 終了挨拶（`OnClose` の応答）。実物と同じく **`\-`（終了指令）で終わる**。
 ///
-/// `\e` で終わると再生完了は「終了拒否」として扱われ、運行は定常運転へ戻って解放が起きない
-/// （`crates/areka-kanade/src/schedule/close.rs` の拒否アーム）。一周テストの台本
+/// なお運行側は別れの台詞を末尾に `\-` が在るのと同じ結果として扱うため、`\e` で終わっても
+/// 終了へ進む（`crates/areka-kanade/src/schedule/close.rs` の `fn on_close_talk_wait`）。
+/// 本檻が `\-` を書くのは実物の逐語に合わせるためであって、解放の条件ではない。一周テストの台本
 /// （`spine_conformance_script.rs` の `CLOSE_TALK`）と同一の逐語だが、**写して持つ**——
 /// 一周テストの 3 台帳は 1 バイトも動かさない約束であり、そちらの定数へ依存を張ると本檻の
 /// 都合が台帳側の改変理由になり得るためである。

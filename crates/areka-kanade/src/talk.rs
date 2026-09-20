@@ -25,6 +25,7 @@ mod tests {
         let done = TalkDone {
             talk_id: TalkId(1),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         };
         assert_eq!(done.reason, TalkEndReason::Ended);
     }

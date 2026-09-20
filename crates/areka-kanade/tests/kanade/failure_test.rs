@@ -220,6 +220,7 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
         .send(KanadeMsg::TalkDone(TalkDone {
             talk_id: TalkId(9_999),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         }))
         .expect("send unknown TalkDone");
 

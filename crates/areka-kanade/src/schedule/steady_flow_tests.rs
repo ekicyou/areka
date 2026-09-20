@@ -142,6 +142,7 @@ fn boot_phase_tick_emits_no_second_change() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let (_next, actions) = step(
         s,
@@ -167,6 +168,7 @@ fn close_pending_tick_emits_no_second_change() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let (_next, actions) = step(
         s,
@@ -191,6 +193,7 @@ fn close_talk_wait_tick_emits_no_second_change() {
         pending_close: None,
         choice: None,
         choice_prev_talk: None,
+        user_break_talk: None,
     };
     let (_next, actions) = step(
         s,
@@ -470,6 +473,7 @@ fn talk_ids_never_reused_across_mixed_origins() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(5),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -521,6 +525,7 @@ fn steady_talk_done_ended_resumes_steady_and_pump_restarts() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(3),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -558,6 +563,7 @@ fn steady_talk_done_interrupted_resumes_steady_same_as_ended() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(3),
             reason: TalkEndReason::Interrupted,
+            quit_reserved: false,
         }),
         &config(),
     );
@@ -579,6 +585,7 @@ fn steady_talk_done_with_pending_close_begins_handshake() {
         Input::TalkDone(TalkDone {
             talk_id: TalkId(3),
             reason: TalkEndReason::Ended,
+            quit_reserved: false,
         }),
         &config(),
     );

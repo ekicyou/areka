@@ -10,6 +10,7 @@
 pub(crate) mod balloon;
 pub(crate) mod choice_drain;
 pub(crate) mod throttle;
+pub(crate) mod user_break;
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;

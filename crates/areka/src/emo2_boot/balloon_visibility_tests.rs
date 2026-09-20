@@ -391,8 +391,10 @@ fn armed_state() -> BalloonVisibilityState {
 /// （Requirement 4.1 の正典起点「スクリプトの表示が終わってから」）。観測はフレーム単位で
 /// 飛び飛びに入るため、現在時刻を起点に採ると観測の遅れの分だけ満了がずれる。
 ///
-/// 中断による終了（Requirement 4.6）も起点は同じ占有終端であり、中断のみを理由とする即時
-/// 非表示の経路は判断中核に存在しない——起点が 1 つしかないことを、この期待値が押さえる。
+/// 中断による終了（Requirement 4.6）も起点は同じ占有終端である——計測の起点が 1 つしかない
+/// ことを、この期待値が押さえる。利用者のダブルクリックによる中断だけは計測を経ずに隠すが、
+/// それは `decide` の別の段の仕事で、ここで固定している起点には関わらない
+/// （`balloon_visibility_user_break_tests.rs`）。
 #[test]
 fn deadline_is_anchored_on_display_end_not_on_the_first_eligible_frame() {
     let mut state = BalloonVisibilityState::default();
