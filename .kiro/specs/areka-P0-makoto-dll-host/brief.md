@@ -4,6 +4,7 @@
 > **種別**: 互換機能の新設（32bit MAKOTO DLL・任意 charset・付け外し命令）。emo2 は使わない＝**M2 ゲート扱い**。
 > **ブリーフィング段階の裁定（2026-09-02・開発者）**: ⑷ 実機サインオフは**本物の MAKOTO DLL 1 本**（YAYA as MAKOTO の UTF-8 改良版）＋自前テスト DLL ⑸ **任意の charset 対応は常に欲しい**（当初は SHIORI 側 wire も本 spec で広げる裁定＝**rebase 時に同日起票の [areka-P0-charset-canon](../areka-P0-charset-canon/brief.md)（追記(91)・SHIORI/3 の Charset 交渉＋surfaces.txt）が SHIORI 側を所有していると判明**→本 spec は charset-canon を**上流**に据えてその符号化器と交渉規則を MAKOTO wire に再利用し、SHIORI 側の配線は持たない） ⑹ **シェル側 MAKOTO も含める**（ゴースト側→シェル側の鎖）⑺ spec 名は本名で確定。
 > ⚠ **一次資料**: MAKOTO/2.0 の wire 規格ページは ukadoc に無い（`spec_makoto.html` は 404・MCP スナップショットにも無し）。正典は materia（偽春菜）の原典 `usada.sakura.vg/contents/makoto.html`（サイトは消滅・Wayback 2008-02-10 のスナップショット http://web.archive.org/web/20080210074700id_/http://usada.sakura.vg/contents/makoto.html）。**要求行は `EXECUTE MAKOTO/2.0`**。Mac 互換ベースウェア Ourin が使う `TRANSLATE Sentence MAKOTO/2.0` は Ourin 独自（GitHub 全検索で Ourin 以外に 0 件・自身のコメントも「ninix の挙動参照に留め」）＝採用しない。「§ 原典の追記」節に詳細。
+> ⚠ **2026-09-20 移管**: 切れ端 ⓐ「helper の `loadu` 優先」は [areka-P0-shiori-loadu](../areka-P0-shiori-loadu/brief.md) へ移した（`loadu` は DLL 共通仕様＝SHIORI の入口であり、makoto を待つ理由が無い）。本文に残る `loadu` の記述は移管先が正本で、本 spec は `ShioriByteProxy` を流用して結果だけを受け取る＝`shiori_proxy.rs` は本 spec の編集集合から外れる。
 
 ## Problem
 
@@ -54,12 +55,12 @@ x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DL
 
 ## Scope
 
-- **In**: descript `makoto,`（ghost／shell）・`MakotoMount`・MAKOTO/2.0 codec（charset-canon の符号化器を呼ぶ）・helper の `loadu` 優先・`MakotoConnection`（第 2/3 helper）・鎖と順序・`Translator` フックへの差し込み・命令 3 種と消費者台帳 3 行・`shiori-host32-makoto-testdll` 新設・e2e・実機サインオフ・COMPAT §5（MAKOTO ホスティング）／§8（裁量 4 件＝複数値拒否・load 失敗は非致命・命令は鎖全体・charset 追随規則）・`boot_config.rs`（helper exe の再利用）。
+- **In**: descript `makoto,`（ghost／shell）・`MakotoMount`・MAKOTO/2.0 codec（charset-canon の符号化器を呼ぶ）・`MakotoConnection`（第 2/3 helper）・鎖と順序・`Translator` フックへの差し込み・命令 3 種と消費者台帳 3 行・`shiori-host32-makoto-testdll` 新設・e2e・実機サインオフ・COMPAT §5（MAKOTO ホスティング）／§8（裁量 4 件＝複数値拒否・load 失敗は非致命・命令は鎖全体・charset 追随規則）・`boot_config.rs`（helper exe の再利用）。
 - **Out**: `OnTranslate`・翻訳の継ぎ目・展開順序（前半 spec）・**SHIORI/3 wire の charset 交渉・`shiori.encoding`／`forceencoding` の解析・surfaces.txt の decode**（`charset-canon`）・シェル切替時の鎖の付け替え（切替自体が未実装）・SAORI／PLUGIN／HEADLINE・`\![reload,shiori]`（本 spec の reload 機構で書けるようになるが起票は別・追跡登記）・MAKOTO/1.0（`execute`・生台詞）・符号の自動判別。
 
 ## Boundary Candidates
 
-- ⓐ **helper の `loadu` 優先**（XS・独立 PR 可・SHIORI DLL にも効く・挙動不変を e2e で担保）。
+- ⓐ ~~helper の `loadu` 優先~~ → **`areka-P0-shiori-loadu` へ移管（2026-09-20）**。本 spec の上流。
 - ⓑ **第 2 helper のライフサイクル＋MAKOTO codec＋descript＋鎖**（L・本体・charset-canon の後）。
 - ⓒ **付け外し命令 3 種**（M・ゴースト側へ届く cue 消費者の初出＝配線の型を決める）。
 - 分割の裁定は開発者（推奨: ⓑⓒ を 1 PR・ⓐ は任意で先行）。
