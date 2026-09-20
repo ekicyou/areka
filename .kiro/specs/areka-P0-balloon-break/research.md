@@ -377,3 +377,23 @@ kanade の投函端（`Sender<KanadeMsg>`）は `areka_ghost::boot_with_kanade_s
 ## 10. 次の一歩
 
 要件ディスカッションで判断項目 1・2・5 の 3 つ（互いに連動する）を先に決め、続いて 3・4・7 を決める。そのうえで `/kiro-design areka-P0-balloon-break` へ進む。
+
+## 11. 要件ディスカッションの裁定記録（2026-09-20）
+
+### 議題 1: 判断項目 1・2・5 と 4 の一部（開発者裁定）
+
+- **判断項目 2 → ⑴ 字義どおり**。要件 4.5 は緩めない。押下と同じ描画のうちに隠す。
+- **判断項目 1 → 方式 B の改良形**。§4.1 の方式 B の欠点「旗が 2 か所に写る」は、**旗を UI だけが持ち、UI が旗を見てから合図を送る**ことで消える。
+  - UI（押下ハンドラ）: 旗が立っていれば何もしない（`debug!`）。立っていなければ、その場で「中断された」を可視性の判断中核へ入れ（§4.3 D1）、同時に kanade へ中断の要求を送る。
+  - kanade: 再生中なら場面を問わず止める／再生中でなければ `debug!` で何もしない。**旗を持たず、「隠せ」も出さない。**
+  - 「再生中でなくても隠す」（裁定 5）のおかげで UI は再生中かを知らなくてよい＝判断材料がスレッドの持ち主ごとにきれいに割れる。
+- **判断項目 5 → F1**（受け口 → UI・既存 6 本と同型の 7 本目）。取り出しは `Input` の段で `dispatch_pointer_events` の**前**に置く（同じフレームの押下判定より先に旗を反映する）。F2 を採らないので **R-3（旗を据える前に cue が届く窓）は消滅**する。
+- **§4.6 の F1 の空白期間は受け入れる**: 要件 5.4 を「遅くとも次のトークの始まりまでに解く」へ改訂した。`TalkStarted` の畳み込み（`fn apply_lifecycle_signals`）に 1 行足すだけで済み、`TalkLifecycleSignal` に「終わった」を足さない。閉じ忘れた台本の後の居残りバルーンは 30 秒のタイムアウトまで消せない（要件 5.4 に明記）。
+- **判断項目 4 → 再生中の場面はすべて受理**（要件 2.5・2.8）: `Steady{talk: Some}`・`BootVersion{talk: Some}`・`CloseTalkWait`。`ClosePending` その他は止める対象が無いので `debug!` のみ。方式 B 改では UI が無条件に隠すので、kanade が場面で断ると「隠れたのに再生が続く」が生じる——ゆえに場面で断らない。
+- **不採用になった線**: kanade → UI の「隠せ」（方式 A）・再生 → kanade の旗（F2）。どちらも敷かない。
+- **後続 spec への帰結**: `areka-P0-status-execution-states` が `nouserbreak` を立てるときは、UI → kanade に「旗が変わった」を 1 種足す（既存の向き）。本仕様は作らない（要件 5.7）。
+
+### 設計へ持ち越す調査項目の追加
+
+- **R-6**: `BootVersion{talk: Some}` で中断の要求を受理する経路。現状 `Input::Mouse` は Steady 以外で捨てられる（横断アーム）。中断の要求は別の入力として、アクティブな talk を運ぶ phase（`crates/areka-kanade/src/schedule/mod.rs` の `fn on_talk_done` が突合対象にしている `Steady{Some}`／`BootVersion{Some}`／`CloseTalkWait`）で受理する。起動の挨拶が `Interrupted` で終わったときに boot 系列が Steady へ正しく進むか（完了 spec `kanade-boot-talkdone-drop` が直した箇所）を設計で確かめる。
+- **R-7**: 旗の取り出しを `dispatch_pointer_events` の前に登録する新例の置き方（既存 2 本は後）。
