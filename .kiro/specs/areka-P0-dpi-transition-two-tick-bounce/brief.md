@@ -2,6 +2,14 @@
 
 > **起票 2026-09-11**（`/kiro-discovery`・開発者「起票候補はすべて起票せよ」）。出所: `areka-P0-emo2-conformance-e2e` 走行 D（2026-09-10 23:26〜23:36・拡大率 200%↔150% を 4 往復）。登記: 同 spec `verification/acceptance-record.md` §13.1 行 1（判定に載せない・**引受先なし**のままだった）・§9／§12（読み分け 3 行目）。開発者裁定（2026-09-10）「DPI 切替は頻繁に起こらないため許容」＝M1 の判定には載せない。本 spec はその「引受先なし」を埋める。
 
+## 2026-09-20 棚卸⑮の再測定
+
+**実測（main `fe157df1`）**
+
+- `run_dpi_phase`（`crates/areka/src/emo2_boot/frame/dpi.rs`）と `refresh_scale`（`crates/areka-emo-present/src/presenter/refresh.rs`）は行番号のずれ 0。上流の `present-gpu-transform-scale` は完了したが、**跳ねが残るかは測り直していない**。
+- **判定器の穴は、spec を立てずに直す**（roadmap「直接修正候補」）。`crates/areka/src/placement/transition_judge_verdict.rs` の窓ごとの書込の上限（要件 4.5）は `summary.writes_per_window` をそのまま回し、見送りの窓を除いていない。ところが同じファイルに「見送りの窓を除いた、書込のあった窓」を返す `judged_windows` が**既に在り**、被覆の検査だけが使っている。直しは「上限の検査でも `judged_windows` を回す」＋兄弟テスト 1 本で、`dpi.rs` には触らない。
+- 残る本体（2 ティックの跳ねの相の順）は開発者裁定「拡大率の切替は頻繁に起こらないため許容」のまま据え置く。
+
 ## Problem
 
 拡大率が変わったとき、**最初のティックで窓の位置が動き、次のティックでシェルの寸法が直る**。150%→200% では二体が一瞬跳ねて見える。機械判定（`transition_signoff`）の実機専用系統は 8 遷移すべてで「可視化から書込まで 100〜267 ms ＞ 上限 16.7 ms」「一括書込の総所要 64〜202 ms ＞ 16.7 ms」で FAIL（決定論系統は PASS＝フレーム単位の量は満たしている）。

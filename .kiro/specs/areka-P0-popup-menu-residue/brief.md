@@ -2,6 +2,14 @@
 
 起票: 2026-09-19（`areka-P0-popup-menu-minimal` の最終検証が「重大ではないが引受先が無い」と数えた残件の受け皿・開発者指示「どこにも分類されていない問題は起票」）
 
+## 2026-09-20 棚卸⑮の再測定
+
+**残件 1・2 は `areka-P0-wintf-drag-state-rest-contract`（台帳 #43）へ移した。** どちらも潜在バグで、同 spec と同じ `crates/areka/src/menu/trigger.rs` を触るためである。本仕様に残るのは 3〜10 の 8 件（記録の文言と接頭辞 4・5・6・7／テストの穴 3・8／語彙 4 件の引受先 9／World 借用中の `ShellExecuteW` 10）＝いずれも α にもバグ修正にも属さないので、当面着手しない。
+
+**実測（main `fe157df1`）**: 残件 3〜10 は全件が実在する。ただし 7 番（`crates/areka/src/emo2_boot/spine.rs` の「現在は 4 本」「4-sink 構成」）は、本文の「実際は 6 本」も古くなった——`areka-P0-balloon-break` の `no_user_break_sink` で **7 本**（`crates/areka/src/emo2_boot/mod.rs` の `sinks: vec![…]`）。
+
+サブメニューの登記は `areka-P0-ghost-shell-balloon-switch`（「ゴースト」枠）と `areka-P0-shell-balloon-switch`（「シェル」「バルーン」枠）が行う。`baseware-root-layout` は行わない。
+
 ## Problem
 
 `areka-P0-popup-menu-minimal`（右クリックメニューの第 1 スライス）は最終検証 GO で閉じるが、検証とレビューが挙げた「直すほどではない／範囲外」の指摘が、tasks.md の記録に書かれただけで**引受先を持っていない**。完了アーカイブへ入ると、その記録は誰も読まなくなる（完了済み spec への先送りは消化不能）。利用者から見える影響は小さいものばかりだが、1 件は条件が揃うと別の窓へ右ダブルクリックが届く誤配で、1 件は無害な場面で `error!` が出る記録の重さの誤りである。

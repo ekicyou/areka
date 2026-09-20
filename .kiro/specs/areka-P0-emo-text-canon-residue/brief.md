@@ -2,6 +2,15 @@
 
 > 起票: 2026-09-11（棚卸⑬・`areka-P0-balloon-canon-residue` の 3 軸分割 ⑶＝emo-text 帰属の項目 11・12・14・15 を独立 spec に切り出し）。項目本文の正本は分割元 brief（11・12 は「`balloon-vertical-canon` からの追加登記」節、14・15 は「`emo-text-line-height-canon` からの追加登記」節）。ここでは所有と着地条件だけを書く。
 
+## 2026-09-20 棚卸⑮の再測定
+
+**実測（main `fe157df1`）**
+
+- 本文が「先に着地させる」と書く上流は両方とも完了した（`areka-P0-text-decoration-canon`・`areka-P0-balloon-font-descript-keys`）。`draw.rs` は 988 → 750 行、`actor_decoration.rs` が分かれた。**同居できない待ちは解けている。**
+- **項目 12（未知の `writing_mode` の警告の文言が実際の挙動と食い違う）は、spec を立てずに直す**（roadmap「直接修正候補」）。`crates/areka-emo-text/src/writing.rs` の 1 ファイルで閉じ、文言と、逐語で固定しているテスト `unknown_value_falls_back_to_horizontal_tb_with_warn` を同時に直す。他の 3 項目と共有するファイルは 0。直ったら本仕様から外す。
+- 残る 11・14・15 はテストの穴と正典の追加で、α にもバグ修正にも属さないので当面着手しない。
+- `layout.rs` 973・`actor.rs` 975・`region.rs` 977 行＝1,000 行の上限の直前。足すときは新規ファイルで。
+
 ## Problem
 
 完了 spec `balloon-vertical-canon`（bvc）と `emo-text-line-height-canon` が emo-text 側に残した 4 件が所有者不在のまま `balloon-canon-residue` の台帳に同居していた。系列解決（emo-present）とも表示寿命（kanade）とも軸が違う:

@@ -3,6 +3,24 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「更新」（候補名 `areka-P0-network-update`＝同名）。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-20 棚卸⑮の再測定
+
+**本仕様は 2 本に分かれた。** 想定タスクが 24〜30 本で 1 spec の上限（20 本）を超えたためである。分け方は `areka-P0-nar-install`（エンジン）と `areka-P0-ghost-install`（結線）の前例に倣う。
+
+| spec | 中身 | 本 brief の対応箇所 |
+|---|---|---|
+| `areka-P0-update-engine`（台帳 #51・**今日着手できる**） | 定義ファイルの読み手・差分・`HttpFetch`・WinHTTP 実装・MD5・一時フォルダからの全か無かの確定・`delete.txt` | Approach ①②⑤。**本 brief からは外れた** |
+| **本仕様**（台帳 #16） | kanade の「更新」の相（`OnUpdate*`／`OnUpdateOther*` の全列と Ref）・台本の入口 3 つ・メニュー登記・`OnUpdateProcessExec`・`useorigin1`・`\![execute,install,url,…]`・更新後の読み直し・**網羅台帳の状態の更新** | Approach ③④ |
+
+分割後の規模は **M（タスク 12〜15 本）**。本仕様は `areka-P0-update-engine`・`areka-P0-ghost-shell-balloon-switch`（読み直しは同じゴーストへの切替で代用）・`areka-P0-ghost-install`（`execute,install,url` は同 spec が作る受け口ファイルを改変する形になる）を待つ。
+
+**実測の追記（main `fe157df1`）**
+
+- `md-5` の依存は、エンジン側の裁定で要らなくなる見込み（OS の CNG を推す）。決着はエンジンの要件段階。
+- 台本の入口 3 つは `crates/areka/src/emo2_boot/consumer_ledger.rs` と `emo2_boot/mod.rs` の 4 点（消費者の変種・`canonical()` の登記・mod 宣言・sink の組み立て）に足す。雛形は `crates/areka/src/emo2_boot/readme_cue.rs`。
+- `MenuRegistry` の「更新」の枠は既に切ってある（`crates/areka/src/menu/mod.rs` の 7 枠）。登記は `menu/` の外から `menu::register` を呼ぶだけで、`menu/mod.rs` には触らない。
+- `Cargo.lock` の 242 パッケージは、PR#166（`pasta_core` 撤去）で 241 になった。
+
 ## Problem
 
 **誰の何が困っているか**: ゴーストを入れた第三者。作者が辞書を直して配布サイトを更新しても、areka では受け取れない。

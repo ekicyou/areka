@@ -3,6 +3,18 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「インストール」の**製品側**（利用者が `.nar` を渡す体験）と、順位 4 の束「投げ込み」（`OnFileDrop2` 等）のうち窓へ落とす経路を引き受ける。エンジン（コンテナ読取・`install.txt` 解釈・安全な展開）は `areka-P0-nar-install` が持つ。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-20 棚卸⑮の再測定
+
+**実測の追記（main `fe157df1`）**
+
+- **名前の衝突。** 本文の `InstallRequest { path }`／`InstallOutcome` は、`areka_nar::{InstallRequest, InstallOutcome}`（`crates/areka-nar/src/lib.rs`・`install.rs`）と同名で意味が違う。要件段階で改名する。
+- 「`Shell::` の呼び出しは 0 件」は、いま 1 件（`crates/areka/src/readme.rs` の `ShellExecuteW`）。
+- ファイル選択に要る `Win32_UI_Controls_Dialogs` は未有効（根の `Cargo.toml` に在るのは `Win32_UI_Controls` のみ）＝機能を 1 行足す。
+- `WM_DROPFILES` の受け口は `crates/wintf/src/ecs/window_proc/mod.rs` の振り分けの表に 1 分岐足す形。表に `WM_DROPFILES` は 0 行。
+- **申し送り 4 件のうち 2〜4 番（長さの上限・巻き戻せなかったときの元の木の在りか・`work` の欄の検査）は `areka-P0-nar-install-hardening`（台帳 #52）へ移した。** 本仕様に残るのは 1 番（網羅台帳 `descript_install` の 11 行を実装済みへ動かす）と、`crates/areka-nar/src` への正典 URL のコメント行の追記。
+- 切替の相手は 2 本に分かれた: ゴーストの `.nar` を入れた直後の切替は `areka-P0-ghost-shell-balloon-switch`、シェル・バルーンの `.nar` は `areka-P0-shell-balloon-switch`。**本仕様は両方の着地を待つ。**
+- 分割後の想定タスクは 17〜20 本（上限の内側）。台本の入口は `consumer_ledger.rs` と `emo2_boot/mod.rs` の 4 点・kanade の 5 ファイル・網羅台帳を触る＝切替の 2 本と `network-update` とは必ず直列。
+
 ## Problem
 
 **誰の何が困っているか**: 配布サイトから `.nar` を落としてきた第三者。
