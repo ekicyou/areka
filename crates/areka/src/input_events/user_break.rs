@@ -3,12 +3,57 @@
 //! 中断を禁じる旗・直前の押下の記憶・送出端を持ち、押下のたびに「中断にするか」を決めて、
 //! 表示の側へ「隠せ」、kanade へ `KanadeMsg::UserBreak` を 1 件ずつ送る層がここへ入る。
 //!
-//! 本 mod は現状、判断だけを担う純関数 2 本（[`judge_press`]・[`fold_no_user_break`]）を収める。
-//! 持ち物（`UserBreakWiring`）・押下の入口・旗の取り出し・結線は後続の task で本 mod へ増設される。
+//! 判断は純関数 2 本（[`judge_press`]・[`fold_no_user_break`]）が担い、持ち物
+//! [`UserBreakWiring`]・旗の取り出し [`drain_no_user_break_signals`]・押下の入口 [`on_left_press`] が
+//! それを World の上で動かす。持ち物を World へ据えて取り出しを登録する結線は後続の task で
+//! 本 mod へ増設される。
 
+use std::sync::mpsc::{Receiver, Sender};
+
+use areka_kanade::KanadeMsg;
+use bevy_ecs::world::World;
 use wintf::ecs::pointer::DoubleClick;
 
+use crate::emo2_boot::frame::Emo2Wiring;
+use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
+use crate::emo2_boot::target_map::balloon_target;
 use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
+
+/// 中断の配線の持ち物（NonSend・UI スレッド所有）。
+pub(crate) struct UserBreakWiring {
+    /// 旗の線の受信端（talk スレッドの受け口 `NoUserBreakCueSink` と対）。
+    flag_rx: Receiver<NoUserBreakSignal>,
+    /// 中断を禁じる旗（要件 5）。
+    no_user_break: bool,
+    /// 表示の合図の線の送出端の複製（「中断された」を送る）。
+    lifecycle_tx: Sender<TalkLifecycleSignal>,
+    /// 運行（kanade）への送出端の複製。
+    kanade: Sender<KanadeMsg>,
+    /// 直前の左押下が選択の確定だったか（要件 1.5）。
+    prev_press_selected: bool,
+}
+
+impl UserBreakWiring {
+    /// 3 本の線の端から組む（旗は下りた状態・直前の押下の記憶は「確定でない」から始まる）。
+    pub(crate) fn new(
+        flag_rx: Receiver<NoUserBreakSignal>,
+        lifecycle_tx: Sender<TalkLifecycleSignal>,
+        kanade: Sender<KanadeMsg>,
+    ) -> Self {
+        Self {
+            flag_rx,
+            no_user_break: false,
+            lifecycle_tx,
+            kanade,
+            prev_press_selected: false,
+        }
+    }
+
+    /// 旗の読み口（要件 5.7）。読む者はまだ居ないので、運行の側への通知は作っていない。
+    pub(crate) fn no_user_break(&self) -> bool {
+        self.no_user_break
+    }
+}
 
 /// 押下 1 回の結論（design「UserBreakWiring と judge_press」）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +107,146 @@ pub(crate) fn fold_no_user_break(flag: bool, signal: NoUserBreakSignal) -> (bool
         NoUserBreakSignal::Enter => (true, false),
         NoUserBreakSignal::Leave => (false, !flag),
         NoUserBreakSignal::TalkStarted => (false, false),
+    }
+}
+
+/// 旗の線に溜まった合図を全部取り出して旗へ畳み込む（入力の段で毎巡走る）。
+///
+/// 旗が変わったときと、区間外の「出る」を記録する（要件 5.6・6.3）。持ち物が無い（結線前）は
+/// 取り出す線そのものが無いので、何もしない。
+pub(crate) fn drain_no_user_break_signals(world: &mut World) {
+    let Some(mut wiring) = world.get_non_send_mut::<UserBreakWiring>() else {
+        return;
+    };
+    while let Ok(signal) = wiring.flag_rx.try_recv() {
+        let (value, leave_outside) = fold_no_user_break(wiring.no_user_break, signal);
+        if value != wiring.no_user_break {
+            wiring.no_user_break = value;
+            tracing::debug!(
+                event = "no_user_break_changed",
+                value,
+                "中断を禁じる旗が変わった"
+            );
+        }
+        if leave_outside {
+            tracing::debug!(
+                event = "no_user_break_leave_outside",
+                "区間外の leave,nouserbreakmode: 旗は下りたまま"
+            );
+        }
+    }
+}
+
+/// バルーン窓の押下ハンドラ（`fn on_balloon_pointer_pressed`・`balloon.rs`）の末尾から呼ばれる入口。
+/// 中断を受け入れたら `true`。
+///
+/// 「バルーンが出ているか」を表示層へ照会し、残りを [`press_with_visibility`] に任せる。
+/// `Emo2Wiring` が無い・表示層に相手が居ないはどちらも「観測できない」で、作らない側へ倒れる
+/// （要件 1.9）。
+pub(crate) fn on_left_press(
+    world: &mut World,
+    scope: usize,
+    double_click: DoubleClick,
+    selected_now: bool,
+) -> bool {
+    // 型合わせのみ（スコープの実値は小さい。隣の `fn to_choice_input`・`choice_drain.rs` と同じ流儀）。
+    let balloon_visible = world
+        .get_non_send::<Emo2Wiring>()
+        .and_then(|w| w.presenter().target_visible(balloon_target(scope as u32)));
+    press_with_visibility(world, scope, double_click, selected_now, balloon_visible)
+}
+
+/// 押下 1 回の本体。照会の結果を引数に取るのは、GPU 無しでは可視のバルーンを作れず、
+/// 受理の経路を照会ごとテストできないためである。
+///
+/// 送る順は「隠せ」→「止めろ」で、1 件ずつ。どちらの失敗も記録し、もう一方の送出はやめない
+/// ——止める要求だけ落ちると「バルーンは消えたのに再生が続く」になるので、隣の
+/// `fn send_selection` より重い水準で記録する（要件 1.7・2.8）。
+fn press_with_visibility(
+    world: &mut World,
+    scope: usize,
+    double_click: DoubleClick,
+    selected_now: bool,
+    balloon_visible: Option<bool>,
+) -> bool {
+    let Some(mut wiring) = world.get_non_send_mut::<UserBreakWiring>() else {
+        tracing::trace!(
+            event = "balloon_break_no_wiring",
+            "中断の持ち物が無い（結線前）: 何もしない"
+        );
+        return false;
+    };
+    // 読んでから上書きする。単押しでも上書きするのは、選択を確定した 1 打目が単押しとして届くため。
+    let prev_press_selected = wiring.prev_press_selected;
+    wiring.prev_press_selected = selected_now;
+    if double_click != DoubleClick::Left {
+        return false;
+    }
+    tracing::trace!(
+        event = "balloon_break_detected",
+        scope,
+        "バルーンの左ダブルクリックを検出"
+    );
+
+    match judge_press(
+        double_click,
+        selected_now,
+        prev_press_selected,
+        balloon_visible,
+        wiring.no_user_break,
+    ) {
+        PressVerdict::NotDoubleClick => false,
+        PressVerdict::ConsumedBySelection => {
+            tracing::debug!(
+                event = "balloon_break_ignored",
+                scope,
+                reason = "selection",
+                "選択の確定の続きの押下: 中断にしない"
+            );
+            false
+        }
+        PressVerdict::BalloonHidden => {
+            tracing::trace!(
+                event = "balloon_break_ignored",
+                scope,
+                reason = "balloon_hidden",
+                "バルーンが出ていない・観測できない: 中断にしない"
+            );
+            false
+        }
+        PressVerdict::Disabled => {
+            tracing::debug!(
+                event = "balloon_break_rejected",
+                scope,
+                reason = "no_user_break",
+                "中断を禁じる区間: 止めず隠さない"
+            );
+            false
+        }
+        PressVerdict::Break => {
+            if wiring
+                .lifecycle_tx
+                .send(TalkLifecycleSignal::UserBreak)
+                .is_err()
+            {
+                tracing::error!(
+                    event = "balloon_break_hide_send_failed",
+                    scope,
+                    "表示の側へ「中断された」を渡せない（受け手が消えている）"
+                );
+            }
+            let msg = KanadeMsg::UserBreak {
+                scope: scope as u32,
+            };
+            if wiring.kanade.send(msg).is_err() {
+                tracing::error!(
+                    event = "balloon_break_send_failed",
+                    scope,
+                    "運行の側へ中断の要求を渡せない（受け手が消えている）: 再生は止まらない"
+                );
+            }
+            true
+        }
     }
 }
 
