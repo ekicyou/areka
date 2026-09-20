@@ -409,4 +409,57 @@ kanade の投函端（`Sender<KanadeMsg>`）は `areka_ghost::boot_with_kanade_s
 ### 設計へ持ち越す調査項目の追加（議題 2）
 
 - **R-8**: 「中断で終わった・ただし終了の予約あり」を kanade へどう運ぶか。`fn on_close` は ⑴ 新しいトークによる差し替え（dispatcher の `fn close_active_if_any`・ACK は slot 差し替えで stale 棄却されると読める——要確認）⑵ 選択肢の時間切れの解除（`fn on_cancel_choice`・ACK は kanade へ届く）⑶ 利用者の中断、の 3 つで共用される。要件 3.8 は ⑶ だけで終了を効かせる。候補: `TalkDone` に予約の有無を載せ、**自分が利用者の中断を出したと知っている kanade** が ⑶ のときだけ終了へ進む（`TalkEndReason` を 4 値にするか欄を足すかは設計）。`fn on_close` の停止の意味論そのもの（残りを捨てる）は変えない。
-- **R-9**: 別れの台詞が選択肢（「本当に終了する？」）を含むゴースト。要件 3.6 により、選んだ応答で引き止める演出は areka では効かず必ず終了する（開発者裁定の帰結）。`CloseTalkWait` 中の選択の確定・選択肢の時間切れが既存のルーティングでどう流れ、終了までに何が再生されるかを設計で確かめ、結果を要件 3.6 の注記に足す。
+- **R-9**（→ §12 で解決）: 別れの台詞が選択肢（「本当に終了する？」）を含むゴースト。要件 3.6 により、選んだ応答で引き止める演出は areka では効かず必ず終了する（開発者裁定の帰結）。`CloseTalkWait` 中の選択の確定・選択肢の時間切れが既存のルーティングでどう流れ、終了までに何が再生されるかを設計で確かめ、結果を要件 3.6 の注記に足す。
+
+## 12. 設計フェーズの調査記録（2026-09-20）
+
+### 12.1 調査の種類と範囲
+
+- **種類: light（既存システムへの拡張）**。新しい crate・外部依存・外部サービスは **0**。調べたのは結線点・既存パターン・順序の保証だけである。
+- 読んだ実ファイル: `crates/areka/src/input_events/{balloon.rs,mod.rs,choice_drain.rs}`・`crates/areka/src/emo2_boot/{mod.rs,balloon_visibility.rs,balloon_visibility_phase.rs,talk_lifecycle.rs,readme_cue.rs,consumer_ledger.rs,frame.rs}`・`crates/areka/src/readme.rs`・`crates/areka-kanade/src/{actor.rs,msg.rs}`・`crates/areka-kanade/src/schedule/{mod.rs,steady.rs,close.rs,boot.rs}`・`crates/areka-ghost/src/dispatcher.rs`・`crates/areka-sakura/src/{drive.rs,compile.rs}`・`crates/areka-talk/src/lib.rs`・`crates/wintf/src/ecs/{world/mod.rs,world/tick_wake.rs,window_proc/mouse_dblclick_wheel.rs,clickthrough/}`・`crates/areka-emo-present/src/mount.rs`。
+- 正典の逐語確認: ukadoc MCP で `\![enter,nouserbreakmode]`／`\![leave,nouserbreakmode]` の 2 項を引き直し、要件の引用と一致することを確かめた。**正典の記述例はタグを台本の先頭に置いている**（§12.3 の順序の問題の根拠）。
+
+### 12.2 研究項目の結論
+
+| 項目 | 結論 | 根拠（定義箇所） |
+|---|---|---|
+| **R-1** 隠れたバルーンに押下は届くか | 配線上は届かない見込みだが、保証としては扱わない。→ 押下の判定が可視性を照会して自衛する（判断項目 6 → ⑵） | 隠すと当たり判定も切られる（`fn set_visible`・`crates/areka-emo-present/src/mount.rs`）。ダブルクリックは当たり判定に当たったときだけ押下の状態を作る（`fn handle_double_click_message`）。ただしどちらも別 crate の内部で、クリック透過の切り替えは巡の後に非同期で評価される（`crates/wintf/src/ecs/clickthrough/controller.rs` のモジュール doc）。照会の口 `EmoPresenter::target_visible` は既に在る |
+| **R-2** `TalkStarted` は最初の文字より先に取り出されるか | される。掛け金を `TalkStarted` で解いてよい | 内容を持つ台本の最初の指示は必ず `ClearAll`（`fn compile` の末尾）。`BalloonLifecycleSink` は最初の指示の配信の中で `TalkStarted` を送る。文字を運ぶ指示は同じスレッドがそれより後に送る。UI の 1 巡は表示指令の適用 → 表示の合図の取り出しの順（`fn run_balloon_visibility_phase` の doc） |
+| **R-3** | 消滅済み（旗を kanade へ運ばない） | §11 |
+| **R-4** 中断の後に望まないトークが始まらないか | 始まらない。足す仕組みは 0 | `fn drive`（`crates/areka-kanade/src/actor.rs`）は SHIORI の往復を同期で回すので、メッセージの切れ目で選択の帳簿が `Cascading`／`TimeoutInFlight` であることが無い。残るのは「選択の確定 → 中断」の 2 件が続けて届く順序で、これは UI 側の「直前の押下が選択の確定だったか」の記憶で塞ぐ |
+| **R-5** 隠した直後の `no_visible_scope` の 1 行 | 既存の記録。要件 4.6 が明文で許している。本仕様は足しも消しもしない | `fn decide_timeout` の「消す対象が 1 つも無くなったら計測を捨てる」の腕。計測が立っていたとき（居残りのバルーンを消したとき）だけ出る |
+| **R-6** 起動の挨拶の最中の受理 | 場面別の分岐は 0。`fn current_talk_id` を見る 1 本の規則で足りる | `fn to_baseware_version` が返す `[StartTalk, basewareversion]` は `fn drive` の 1 回の中で `Steady{talk}` まで進む。メッセージの切れ目で `BootVersion{Some}` が残るのは想定外の応答のときだけ。そこで止めた場合も `boot::step` の `TalkDone` の腕は終わり方で選別していないので `BootVersion{None}` へ進む |
+| **R-7** 取り出しを `dispatch_pointer_events` の前に置く | `add_systems(Input, 取り出し.before(dispatch_pointer_events))`。循環しない | `dispatch_pointer_events` は `drain_task_pool_commands` の後に登録されているだけ（`crates/wintf/src/ecs/world/mod.rs` の既定システムの登録）。`crates/areka/src` の製品コードに `.before(` の前例は 0 件（同じ検索で `.after(` は 5 件当たる。テストには `zorder_wiring_tests.rs` に実使用が 1 件ある）。順序指定は同じ段（`Input`）の中なので有効である——段をまたぐ指定が書けないことは `frame_schedule_tests.rs` が固定している |
+| **R-8** 終了の予約の運び方 | `areka_talk::TalkDone` に `quit_reserved: bool` を足す。`fn on_close` が `end == Quit` を載せる。kanade は「自分が利用者の中断を出した相手」（`State.user_break_talk`）と一致したときだけ終了へ進む | 差し替えの完了通知は `fn close_active_if_any` が枠を先に空けるので `fn on_done` が捨てる＝kanade へ届かない。時間切れの解除の完了通知は届くが `user_break_talk` が空。`TalkEndReason` を 4 値にする案は要件 3.3 に反する。kanade が台本から `\-` を探す案は解析器への依存が要る（`areka-kanade` の依存は `areka-actor`・`areka-talk`・`shiori-host32-host` の 3 つ） |
+| **R-9** 別れの台詞が選択肢を含むとき | 変更 0。選択は効かず、30 秒の上限か余白のダブルクリックで終了する | `schedule::step` の横断の腕が非 `Steady` の `ChoiceWaiting`／`Choice` を `warn!` で棄却する。帳簿が立たないので時間切れも出ない。上限は `KanadeConfig::close_talk_deadline_ms`（既定 30,000） |
+
+### 12.3 設計で見つけた順序の問題（§11 の覚え書きの訂正）
+
+§11 は「旗は `TalkStarted` の畳み込み（`fn apply_lifecycle_signals`）に 1 行足して解く」と書いたが、この形は成り立たない。旗の線は `Input` の段、表示の合図の線は `Update` の段で取り出すので、台本の先頭に `\![enter,nouserbreakmode]` がある普通の台本で、同じ巡に届いた `Enter`（先に処理）と `TalkStarted`（後に処理）が逆順になり、入ったばかりの区間が解かれる。
+
+**採った形**: 7 本目の受け口が `BalloonLifecycleSink` と同じ手口でトークの境界を自分で検出し、`TalkStarted`・`Enter`・`Leave` を同じ 1 本の線に流す。裁定の中身（旗は UI だけが持つ・次のトークの始まりまでに解く・「トークが終わった」の合図は足さない）は変わらない。変わるのは「どの線の `TalkStarted` で解くか」だけである。
+
+### 12.4 設計判断項目の結論
+
+| 項目 | 結論 |
+|---|---|
+| 3 隠した直後の出し直し | ⑴ 掛け金（`BalloonVisibilityState.break_latch`）。`UserBreak` で掛け、表示の合図の線の `TalkStarted` で解く。文字層の変更 0 行 |
+| 6 要件 1.9 | ⑵ 自衛（`judge_press` の入力に可視性を取る） |
+| 7 停止指示の運び方 | S1（`Action::CancelChoice` の再利用）。dispatcher の製品コードの変更 0 行 |
+| 8 隠す対象 | 観測で現に可視の scope だけを昇順で 1 件の `HideScopes` に載せる。抑止（ドラッグ・滞在・選択肢）は見ない |
+| 9 要件 1.7 の水準 | 要件どおり `error!`。隣の `choice_selection_send_failed`（`warn!`）は変えない。中断の取りこぼしは要件 2.8 の唯一の破れだからである |
+
+### 12.5 統合の 3 つの見方
+
+- **一般化**: 「再生中のトークを止める」は選択肢の時間切れの解除と利用者の中断で同じ操作なので、`Action::CancelChoice` → `fn on_cancel_choice` を共用する。「トークの境界を受け口が自分で検出する」も `BalloonLifecycleSink` と同じ手口を使い回す。新しい抽象は作らない。
+- **作るか借りるか**: 借りたもの＝運搬 cue の受け口の骨格（`ReadmeCueSink`）・NonSend 資源＋`Input` の取り出し（`wire_readme`）・判断中核の純関数（`fn decide`）・単一の閉じ口。作ったもの＝受け口 1・UI 資源 1・kanade の兄弟モジュール 1。
+- **削ったもの**: kanade → UI の「隠せ」の線／talk → kanade の旗の線／`Action`・`TalkCommand`・`DispatcherMsg` の 4 値目／`TalkEndReason` の 4 値目／「トークが終わった」の合図／旗が変わったことの通知／起床の旗／場面別の受理の分岐。いずれも **0**。
+
+### 12.6 要件本文との差（設計ディスカッションへ）
+
+- 要件 7.7 は書き換える既存テストを 2 本と数えているが、旧規則（別れの台詞が `\-` 無しで終わったら定常へ戻る）を固定しているテストはもう 1 本ある: `close_refused_resumes_pump_then_terminates_via_resumed_talk`（`crates/areka-kanade/tests/kanade/close_test_handshake_tests.rs`）。検索は `close_refused` と「終了拒否」の 2 語で `crates/`・`doc/`・`.kiro/steering/` を見た（検索が効くことは、同じ検索で `close_talk_start` が 1 件当たることで確かめた）。旧規則を**説明しているだけ**のコメントは `crates/areka/src/emo2_boot/` の 3 ファイルにあり、テスト自体は `\-` で終わる台本を使っているので緑のまま。`doc/` に同旨の記述は **0 件**。
+- 要件 3.6 へ足す予定だった R-9 の帰結は、本フェーズでは `design.md` と互換対応表の計画に書いた（`requirements.md` は書き換えていない）。
+
+### 12.7 リスク
+
+`design.md` の Risks 節を正本とする（差し替えと中断の同時発生／スレッド間の伝達の下限／`TalkDone` の欄の波及 17 ファイル／`schedule/` の並走）。
