@@ -127,7 +127,7 @@
 - **登記表に 1 行足すと、検体の数を直書きしている検査 2 本が赤になる。** `crates/sample-ghost-kit/src/lib_tests.rs` の `every_registered_sample_lands_where_its_registry_row_says` と `every_sample_nar_installs_exactly_the_elements_its_registry_row_declares` が、どちらも冒頭で `SAMPLES.len()` を **4** と突き合わせている（母数 0 で緑にならないための較正）。`StayseeBalloon` を登記する**同じコミットで、この 2 か所の数も 5 へ直すこと**。
 
 - **バイト保存の罠は 2 件とも解消済み**（`nar-install` タスク 5.1 で実測）。`vendors/sample_ghost/.gitattributes` の `* -text` が `.nar` にも効いており（`git check-attr text` が `unset`）、`.gitignore` の `*_test.txt`／`*_dump.txt` は同フォルダの否定規則で打ち消されている。StayseeBalloon の同梱ファイル名に `*_test.txt`／`*_dump.txt` に当たるものは無い想定だが、畳んだ後に中身の全ファイル名へ `git check-ignore --no-index` を当てて 0 件を確かめること。
-=======
+
 ---
 
 ## 2026-09-19 追記（要件 7.1）
