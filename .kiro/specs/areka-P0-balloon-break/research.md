@@ -397,3 +397,16 @@ kanade の投函端（`Sender<KanadeMsg>`）は `areka_ghost::boot_with_kanade_s
 
 - **R-6**: `BootVersion{talk: Some}` で中断の要求を受理する経路。現状 `Input::Mouse` は Steady 以外で捨てられる（横断アーム）。中断の要求は別の入力として、アクティブな talk を運ぶ phase（`crates/areka-kanade/src/schedule/mod.rs` の `fn on_talk_done` が突合対象にしている `Steady{Some}`／`BootVersion{Some}`／`CloseTalkWait`）で受理する。起動の挨拶が `Interrupted` で終わったときに boot 系列が Steady へ正しく進むか（完了 spec `kanade-boot-talkdone-drop` が直した箇所）を設計で確かめる。
 - **R-7**: 旗の取り出しを `dispatch_pointer_events` の前に登録する新例の置き方（既存 2 本は後）。
+
+### 議題 2: 別れの台詞の中断と終了の予約（開発者裁定）
+
+- **裁定**: ⑴ 終了イベント（`OnClose`）の別れの台詞は `\-` の有無にかかわらず必ず終了で終わる（末尾に `\-` を自動で付けたのと同じ結果）⑵ 終了イベント以外でも、`\-` を含む台本を利用者が中断したら終了する。判断項目 4 の既定案のうち「`CloseTalkWait` で受理すると終了拒否へ落ちる」は**破棄**（受理して終了へ進む）。
+- **§2.2 の記述の失効**: 「終了挨拶の最中（要件 3.6）…終了拒否・`Steady{None}` へ復帰…既存テストが固定済み」は旧規則。`fn on_close_talk_wait`（`crates/areka-kanade/src/schedule/close.rs`）の `TalkDone{Ended | Interrupted}` → 終了拒否の腕は、**終了へ進む**腕に変わる。モジュール doc の状態遷移の説明（Req 4.5 の行）と、テスト `value_then_ended_refuses_close_and_resumes_pump`／`value_then_interrupted_refuses_close_same_as_ended` の 2 本を新規則へ改める。
+- **上書きされる完了要件**: `.kiro/specs/completed/areka-P0-kanade/requirements.md` の要件 4.5（完了 spec の文書は書き換えない。本仕様の要件 3.6 と、`doc/` に同旨の記述があればそこを直す——設計で `終了拒否` を `doc/` とソース全域で grep する）。
+- **文字列の継ぎ足しは不可**: SHIORI の返す台本は `\e` で終わるのが通例で、`crates/areka-sakura/src/compile.rs` は `\e`／`\-` の検出で走査を打ち切る。`script + "\-"` は `\e` の後ろに落ちて実行されない。**別れの台詞については、kanade の `CloseTalkWait` が「どの終わり方でも終了へ進む」と決めれば足りる**（再生側へ何も運ばなくてよい・最小）。
+- **別れの台詞以外の「終了の予約」**: `\-` の有無は `compile` が再生前に `TalkEndReason::Quit` として確定し、`TalkPhase::Driving` の `end` が持ち回っている。ところが `fn on_close`（`crates/areka-sakura/src/drive.rs`）は `end` を見ずに常に `Interrupted` を返す＝予約が捨てられている。
+
+### 設計へ持ち越す調査項目の追加（議題 2）
+
+- **R-8**: 「中断で終わった・ただし終了の予約あり」を kanade へどう運ぶか。`fn on_close` は ⑴ 新しいトークによる差し替え（dispatcher の `fn close_active_if_any`・ACK は slot 差し替えで stale 棄却されると読める——要確認）⑵ 選択肢の時間切れの解除（`fn on_cancel_choice`・ACK は kanade へ届く）⑶ 利用者の中断、の 3 つで共用される。要件 3.8 は ⑶ だけで終了を効かせる。候補: `TalkDone` に予約の有無を載せ、**自分が利用者の中断を出したと知っている kanade** が ⑶ のときだけ終了へ進む（`TalkEndReason` を 4 値にするか欄を足すかは設計）。`fn on_close` の停止の意味論そのもの（残りを捨てる）は変えない。
+- **R-9**: 別れの台詞が選択肢（「本当に終了する？」）を含むゴースト。要件 3.6 により、選んだ応答で引き止める演出は areka では効かず必ず終了する（開発者裁定の帰結）。`CloseTalkWait` 中の選択の確定・選択肢の時間切れが既存のルーティングでどう流れ、終了までに何が再生されるかを設計で確かめ、結果を要件 3.6 の注記に足す。
