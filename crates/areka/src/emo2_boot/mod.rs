@@ -63,6 +63,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use areka_emo_present::shell_target::ShellLoadError;
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
@@ -94,7 +95,7 @@ use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
-/// 各段（mount／shell 読取＋parse／bake／balloon 組立／UI アクター spawn）の失敗を
+/// 各段（mount／shell 読み込み＝一覧＋読取＋parse＋bake／balloon 組立／UI アクター spawn）の失敗を
 /// `#[from]` 変換で集約し、呼び手（`wire_emo2_boot`）が `MountError::StartPointMissing` 系は
 /// `warn!`・他は `error!` に分類して `LogSink`×2 フォールバック boot へ倒す（design.md
 /// 「Error Categories and Responses」）。
@@ -123,7 +124,9 @@ pub enum BootWiringError {
     #[error("WIC デコーダの生成に失敗（COM 未初期化？）")]
     Decoder(#[source] windows::core::Error),
 
-    /// shell ファイル（`surfaces.txt`／`descript.txt`）の読み取り失敗（I/O）。
+    /// shell の読み取り失敗（I/O）。`surfaces.txt`／`descript.txt` のほか、シェルの
+    /// フォルダそのものの一覧に失敗した場合もここへ畳む（`path` はそのフォルダになる・
+    /// 下の `From<ShellLoadError>`）。
     #[error("shell ファイルの読み取りに失敗: {path}")]
     ShellRead {
         /// 読み取れなかったファイルのパス。
@@ -155,6 +158,27 @@ pub enum BootWiringError {
     /// `UiSpawnError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[source]` で連鎖する。
     #[error("バルーン文字層 UI アクターの spawn に失敗")]
     SpawnUi(#[source] areka_actor::UiSpawnError),
+}
+
+/// シェル読み込みの権威の失敗を、起動結線の既存の枝へ写す（枝の追加 **0 件**）。
+///
+/// 対応は次のとおりで、失敗の真因のログは権威（`areka_emo_present::shell_target`）が
+/// 既に `error!` で出している（ここでは出し直さない・log-first の二重記録を作らない）。
+///
+/// - [`ShellLoadError::List`]（シェルのフォルダの一覧が取れない）→ [`BootWiringError::ShellRead`]。
+///   `path` はシェルのフォルダそのものになる（読めなかった対象がファイルではなくフォルダ）。
+/// - [`ShellLoadError::Read`]（`surfaces.txt` が読めない）→ [`BootWiringError::ShellRead`]。
+/// - [`ShellLoadError::Empty`]（`surfaces.txt` が surface を 1 つも産まない）
+///   → [`BootWiringError::ShellEmpty`]。
+impl From<ShellLoadError> for BootWiringError {
+    fn from(error: ShellLoadError) -> Self {
+        match error {
+            ShellLoadError::List { path, source } | ShellLoadError::Read { path, source } => {
+                BootWiringError::ShellRead { path, source }
+            }
+            ShellLoadError::Empty { path } => BootWiringError::ShellEmpty { path },
+        }
+    }
 }
 
 // ===========================================================================

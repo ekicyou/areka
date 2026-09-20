@@ -23,7 +23,7 @@
 | 9 | 語彙のみで登記した 4 件に引受先 spec が無い: `char*.popupmenu.visible`（n≧2）と `*.popupmenu.type` 3 件（台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の備考「引受先: 省略した形のメニューを作り分ける仕様と、3 人目以降のキャラクター窓を作る仕様。2026-09-18 の時点でどちらも起票は 0 本なので、先に起こした側が本欄を引き取る」） | `crates/areka/src/menu/captions.rs` の `UNQUERIED_POPUPMENU_RESOURCES` | 3 体目以降のキャラクターのメニュー抑止が効かない（α は scope 0／1 のみ）。`popupmenu.type` は値 1 が指す「省略した形」の中身を正典が定めていない（どの値でも同じメニューを出している） |
 | 10 | `ShellExecuteW` を World を借りたまま呼ぶ（起動の待ち時間ぶん 1 tick が止まりうる・設計で受容済み・入れ子の tick は `try_borrow_mut` の失敗で飛ばすので安全） | `readme.rs` の `drain_readme_requests`・メニューの動作 | 説明書を開く瞬間に一瞬だけ描画が止まりうる（実機では未観測） |
 
-本 brief に**含めないもの**（引受先が別にある）: 里々の項目名の実機観察（→ `areka-P0-shell-implicit-surface` の brief 2026-09-19 追記）・wintf のドラッグ状態の契約（→ `areka-P0-wintf-drag-state-rest-contract`）・網羅台帳の文書の写真の撮り直し（→ `areka-P0-coverage-roadmap-refresh`）。
+本 brief に**含めないもの**（引受先が別にある）: 里々の項目名の実機観察（→ `areka-P0-shell-implicit-surface` の brief 2026-09-19 追記。同 spec は 2026-09-20 に完了し `.kiro/specs/completed/areka-P0-shell-implicit-surface/brief.md` に在る）・wintf のドラッグ状態の契約（→ `areka-P0-wintf-drag-state-rest-contract`）・網羅台帳の文書の写真の撮り直し（→ `areka-P0-coverage-roadmap-refresh`）。
 
 ## Desired Outcome
 

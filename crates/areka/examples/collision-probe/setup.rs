@@ -2,9 +2,8 @@ use super::fixture::{PLACEHOLDER_SIZE, balloon_root, emo2_root};
 use super::pointer::on_probe_pointer_moved;
 use super::state::{ProbeBoot, ProbePhase};
 use super::{
-    AlphaParams, AtlasTable, CommandSender, EmoPresenter, EmoWorld, OnPointerMoved, PackConfig,
-    Path, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, World, bake, placement,
-    spawn_ghost_windows,
+    AtlasTable, CommandSender, EmoPresenter, EmoWorld, OnPointerMoved, Path, WicDecoderArm, World,
+    load_shell_target, placement, spawn_ghost_windows,
 };
 
 // ---------------------------------------------------------------------------
@@ -82,7 +81,7 @@ fn build_and_spawn(world: &mut World) {
         .entity_mut(char_window)
         .insert(OnPointerMoved(on_probe_pointer_moved));
 
-    // shell アセット構築（emo-present donor と同経路: parse→bake→EmoWorld::build→bind_atlas）。
+    // shell アセット構築（emo-present donor と同経路: 読み込みの権威 → 面の表を 1 つ組む）。
     let decoder = match WicDecoderArm::new() {
         Ok(d) => d,
         Err(e) => {
@@ -109,41 +108,27 @@ fn build_and_spawn(world: &mut World) {
     );
 }
 
-/// shell dir の surfaces.txt から scope0 装着用の `(EmoWorld, AtlasTable)` を構築する（emo-present donor
-/// `build_shell_target` と同経路）。失敗時は log-first で `None`。
+/// shell dir から scope0 装着用の `(EmoWorld, AtlasTable)` を**シェル読み込みの権威**
+/// （`load_shell_target`）で構築する（emo-present donor `build_shell_target` と同経路）。
+/// 失敗時は log-first で `None`。
+///
+/// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
+/// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
+/// 落ちた絵の `warn!` も権威側が持つので、この probe は呼ぶだけである——本番（`build_boot_assets`）・
+/// 採寸（`build_shell_assets`）と同じ入口を通るため、この probe が見る絵は本番と食い違わない。
 fn build_shell_target(shell_dir: &Path, decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable)> {
-    let surfaces_txt = shell_dir.join("surfaces.txt");
-    let content = match std::fs::read_to_string(&surfaces_txt) {
-        Ok(c) => c,
+    let target = match load_shell_target(shell_dir, decoder) {
+        Ok(t) => t,
         Err(e) => {
+            // load_shell_target は内部で error! 済み（一覧失敗／読取失敗／面 0 個）。文脈のみ添える。
             tracing::error!(
-                path = %surfaces_txt.display(),
+                dir = %shell_dir.display(),
                 error = %e,
-                "collision-probe: shell surfaces.txt の読取に失敗"
+                "collision-probe: shell の読み込みに失敗"
             );
             return None;
         }
     };
-    let shell = areka_parsers::shell::parse(&content);
-    if shell.surfaces.is_empty() {
-        tracing::error!("collision-probe: surfaces.txt が surface を 1 つも産まなかった");
-        return None;
-    }
-
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: shell_dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], decoder, PackConfig::default());
-    // emo2 shell は α 無し `purple/a/null.png` 1 枚が normalize seam として脱落する（既知・許容）。
-    for err in &baked.errors {
-        tracing::warn!(error = %err, "collision-probe: shell bake で脱落した element（surface1000 表示には無害）");
-    }
-
-    let mut emo_world = EmoWorld::build(&shell);
-    emo_world.bind_atlas(&baked.table, SetId(0));
-    Some((emo_world, baked.table))
+    let atlas = target.atlas().clone();
+    Some((target.build_world(), atlas))
 }

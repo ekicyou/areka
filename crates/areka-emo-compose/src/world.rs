@@ -1,16 +1,18 @@
 //! `EmoWorld`: emo 専用 per-ghost `bevy_ecs` World（wintf 本体 World とは分離）。
 //!
-//! 正規化 Surface 定義の常駐点。`SurfaceIndex`／`AliasMap`／`ShellSettings` をリソースとして、
-//! `SurfaceId`／`SurfaceMaster`／`AtlasBinding` をコンポーネントとして保持する。スケール前提で
+//! 正規化 Surface 定義の常駐点。`SurfaceIndex`／`AliasMap`／`ShellSettings`／`SurfaceImages`／
+//! `BaseImageReport` をリソースとして、`SurfaceId`／`SurfaceMaster`／`AtlasBinding` を
+//! コンポーネントとして保持する。スケール前提で
 //! 定義・構造のみを保持し、合成済みビットマップ（大容量）は World に永続保持しない。本 spec では
 //! Schedule/System を持たず、fold/compose が `&mut World`／`&World` を取る受動データストアとして使う。
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use areka_parsers::shell::{Shell, SortOrder};
 use bevy_ecs::prelude::{Component, Entity, Resource};
 use bevy_ecs::world::World;
 
+use crate::base_image::{BaseImageReport, SurfaceImages};
 use crate::normalized::SurfaceMaster;
 
 /// surface 番号（entity のドメインキー・疎 id の明示・要件 1.1）。
@@ -68,10 +70,22 @@ pub struct EmoWorld {
 impl EmoWorld {
     /// `Shell` から single-pass fold で構築する（寛容・非パニック・欠落は warn ログ）。
     ///
-    /// 本 task は骨組み: 既定リソースを備えた空 World を用意し、fold による entity 常駐は
-    /// 後続 task（3.2）が内部 population 段（[`EmoWorld::populate_from_shell`]）へ差し込む。
-    /// 空 `Shell` に対しては entity ゼロの空 World を返す（`surface_ids()` 空・`surface(_)` None）。
+    /// 面の画像 0 件で [`EmoWorld::build_with_images`] を呼ぶのと同じである（ファイル名だけで
+    /// 置かれた絵を持たないシェル＝本仕様の適用前と同じ面の表になる）。空 `Shell` に対しては
+    /// entity ゼロの空 World を返す（`surface_ids()` 空・`surface(_)` None）。
     pub fn build(shell: &Shell) -> EmoWorld {
+        EmoWorld::build_with_images(shell, &BTreeMap::new())
+    }
+
+    /// 面の画像の対応（番号 → ファイル名）を渡して構築する（要件 2.1〜2.5・2.7）。
+    ///
+    /// 畳み込み（[`EmoWorld::populate_from_shell`]）→ 土台の絵の決定
+    /// （[`crate::base_image::apply_base_images`]）の順に進む。判定を畳み込みの**後**に置くので、
+    /// 複数番号の見出し（`surface0,1`）は番号ごとに自分の画像を受け取り、`surface.append` が
+    /// 後から足した層 0 も「層 0 が在る」に数えられる。渡した対応は [`SurfaceImages`]、決定の
+    /// 結果は [`BaseImageReport`] として面の表に常駐し、以後は読むだけである
+    /// （[`EmoWorld::base_images`]）。画素は持たない（要件 10.6 の不変条件のまま）。
+    pub fn build_with_images(shell: &Shell, images: &BTreeMap<u32, String>) -> EmoWorld {
         let mut world = World::new();
         world.insert_resource(SurfaceIndex::default());
         world.insert_resource(AliasMap::default());
@@ -79,10 +93,55 @@ impl EmoWorld {
             animation_sort: shell.animation_sort,
             collision_sort: shell.collision_sort,
         });
+        world.insert_resource(SurfaceImages(images.clone()));
 
         let mut emo = EmoWorld { world };
         emo.populate_from_shell(shell);
+        let report = crate::base_image::apply_base_images(&mut emo.world, images);
+        emo.world.insert_resource(report);
         emo
+    }
+
+    /// 土台の絵の決定の結果（層 0 として使った画像と、`element0` が在って使わなかった画像）。
+    ///
+    /// 構築時に一度決まり、以後変わらない。記録を出すのは上流の権威で、本型は結果を渡すだけである。
+    pub fn base_images(&self) -> &BaseImageReport {
+        self.world.resource::<BaseImageReport>()
+    }
+
+    /// 相手の面が存在しないコマの「(コマを持つ面, 相手の番号)」の集合（要件 3.5）。
+    ///
+    /// 母集合は全部の面の全部の `animation` の全部の `pattern` のうち、`surface_id` が 0 以上で、
+    /// かつ描画メソッドが `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・
+    /// `parallelstop`・`insert` の 7 語（欄 2 がアニメーションの番号になる）のどれでもない。停止を表す
+    /// 負の番号（`-1`・`-2`）は相手に数えない。画像だけで存在する面は、構築のときに面の表へ
+    /// 載っているので「在る」に数える（[`EmoWorld::build_with_images`]）。
+    ///
+    /// 面の表を 1 度なめるだけで、毎フレームの経路ではない。本メソッドは記録を 1 本も出さず
+    /// （`warn!` を出すのは上流の権威・design「Monitoring」）、重複を除く鍵は `(u32, u32)` の
+    /// 組で、文字列へ連結しない。
+    pub fn dangling_pattern_targets(&self) -> BTreeSet<(u32, u32)> {
+        let existing: BTreeSet<u32> = self.surface_ids().collect();
+        let mut dangling = BTreeSet::new();
+        for id in &existing {
+            let Some(master) = self.surface(*id) else {
+                continue;
+            };
+            for animation in &master.animations {
+                for pattern in &animation.patterns {
+                    if targets_animation_id(pattern.method.as_str()) {
+                        continue;
+                    }
+                    let Ok(target) = u32::try_from(pattern.surface_id) else {
+                        continue;
+                    };
+                    if !existing.contains(&target) {
+                        dangling.insert((*id, target));
+                    }
+                }
+            }
+        }
+        dangling
     }
 
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
@@ -166,6 +225,34 @@ impl EmoWorld {
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
+}
+
+/// コマの欄 2 が面の番号ではなくアニメーションの番号になる描画メソッドか（要件 3.5）。
+///
+/// ukadoc `descript_shell_surfaces` が「サーフェスID…は無視される」と書く `start`・`stop`・
+/// `alternativestart`・`alternativestop`・`parallelstart`・`parallelstop` の 6 語と、着せ替え
+/// グループを挿す `insert` の計 7 語。転記層（`decode_animations`）はメソッドに関係なく欄 2 を
+/// `surface_id` へ入れるので、除かないと正しく書かれたシェルが相手の無いコマとして数えられる。
+///
+/// 綴りの比べ方は [`ComposeMethod::from_name`] と同じ（前後の空白を落とし・小文字にし・`-` と
+/// `_` を除く）。`from_name` は未知の語で `warn!` を出すので、この判定からは呼ばない
+/// （[`EmoWorld::dangling_pattern_targets`] は記録を出さない）。
+///
+/// [`ComposeMethod::from_name`]: crate::method::ComposeMethod::from_name
+fn targets_animation_id(method: &str) -> bool {
+    // 正規化は `ComposeMethod::from_name` と同じ 1 本（`method::canonical_method_name`）を引く。
+    // `from_name` 自体は未知の語で `warn!` を出すのでこの照会からは呼ばない（要件 3.5）。
+    let canon = crate::method::canonical_method_name(method);
+    matches!(
+        canon.as_str(),
+        "start"
+            | "stop"
+            | "alternativestart"
+            | "alternativestop"
+            | "parallelstart"
+            | "parallelstop"
+            | "insert"
+    )
 }
 
 #[cfg(test)]

@@ -1,0 +1,28 @@
+{
+  "feature_name": "areka-P0-shell-implicit-surface",
+  "created_at": "2026-09-19T13:28:22Z",
+  "updated_at": "2026-09-20T00:14:45Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "generated": true,
+      "approved": true,
+      "completed": true,
+      "completed_at": "2026-09-20T00:14:45Z"
+    }
+  },
+  "ready_for_implementation": true
+}

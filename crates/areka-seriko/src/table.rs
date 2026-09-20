@@ -6,12 +6,16 @@
 //!
 //! # 採録規則（要件 8.1/8.2）
 //!
-//! `Interval::Random{k}`／`BindRandom{k}` のみ採録する（[`LoopTrigger`] 2 種）。`Interval::Bind`
-//! （静的着せ替え）・`Interval::Other(語彙)`（未駆動 interval 語彙）および `#[non_exhaustive]` の
-//! 将来 variant は**採録せず `debug!` で記録**する。`Other` は**元語彙文字列込み**で記録するため、
-//! 「sometimes と書いたのに動かない」が診断可能になる（討議 #1 裁定）。口パク（`interval,talk`）・
-//! `\i[N]`・動的 bind・talk cue は構造的に `Random`/`BindRandom` の interval アニメではないため、
-//! この採録フィルタが自然に除外する（要件 8.3）。
+//! `Interval::Random{k}`／`BindRandom{k}` を採録する（[`LoopTrigger`] 2 種）。加えて
+//! `Interval::Other(語彙)` のうち **`sometimes`・`rarely` の 2 語は採録する**: `sometimes` は
+//! `random,2`・`rarely` は `random,4` と同じ引き金へ読み替え、以降の手順（`k == 0` の検査・コマの
+//! 整列・空の検査）へそのまま流す（小文字の完全一致・spec: areka-P0-shell-implicit-surface
+//! 要件 11.1/11.2）。読み替えたときは元の語（`vocab`）と読み替え先の `k` を `debug!` に残す
+//! （要件 11.7）。`Interval::Bind`（静的着せ替え）・**それ以外の** `Other` の語彙・`#[non_exhaustive]`
+//! の将来 variant は**採録せず `debug!` で記録**する。非採録の `Other` は**元語彙文字列込み**で記録
+//! するため、「`always` と書いたのに動かない」が診断可能になる（討議 #1 裁定・要件 11.4）。
+//! 口パク（`interval,talk`）・`\i[N]`・動的 bind・talk cue は構造的に `Random`/`BindRandom` の
+//! interval アニメではないため、この採録フィルタが自然に除外する（要件 8.3）。
 //!
 //! # 縮退ガード（要件 8.3・構築時 1 回・log-first）
 //!
@@ -87,8 +91,10 @@ impl AnimationTable {
 
     /// [`EmoWorld`] から read-only スナップショットを一度きり構築する（要件 8.1-8.4）。
     ///
-    /// 全 surface を昇順に走査し、各 surface の SERIKO animation 群から `Random`/`BindRandom` のみを
-    /// 採録する。`Bind`/`Other`/将来 variant は `debug!` で記録して非採録（`Other` は元語彙込み）。
+    /// 全 surface を昇順に走査し、各 surface の SERIKO animation 群から `Random`/`BindRandom` と、
+    /// `random,2`／`random,4` へ読み替える `Other("sometimes")`／`Other("rarely")` を採録する
+    /// （要件 11.1/11.2）。`Bind`・それ以外の `Other`・将来 variant は `debug!` で記録して非採録
+    /// （`Other` は元語彙込み）。
     /// `k == 0`・コマ列空は `warn!` で記録して非採録。method は [`ComposeMethod::from_name`] で構築時
     /// 1 回解決し、コマ列は pattern index 昇順へ整列する。面種非依存（シェル/バルーン双方に同型適用）。
     pub fn from_world(world: &EmoWorld) -> AnimationTable {
@@ -100,8 +106,9 @@ impl AnimationTable {
             };
 
             for anim in &master.animations {
-                // 採録は Random/BindRandom のみ。Bind/Other/将来 variant は debug! で非採録
-                // （要件 8.2・match は Bind/Other 明示腕＋catch-all で将来 additive シームを保つ）。
+                // 採録は Random/BindRandom と、読み替える Other("sometimes")／Other("rarely") のみ。
+                // Bind・それ以外の Other・将来 variant は debug! で非採録（要件 8.2・11.1/11.2・
+                // match は Bind/Other 明示腕＋catch-all で将来 additive シームを保つ）。
                 let trigger = match &anim.interval {
                     areka_parsers::shell::Interval::Random { k } => LoopTrigger::Random { k: *k },
                     areka_parsers::shell::Interval::BindRandom { k } => {
@@ -116,14 +123,38 @@ impl AnimationTable {
                         continue;
                     }
                     areka_parsers::shell::Interval::Other(vocab) => {
-                        // 元語彙文字列込みで記録＝「sometimes と書いたのに動かない」が診断可能（討議 #1）。
-                        tracing::debug!(
-                            surface_id,
-                            animation_id = anim.id,
-                            vocab = &**vocab,
-                            "seriko table: 未駆動 interval 語彙ゆえ非採録（元語彙保持・要件 8.2）"
-                        );
-                        continue;
+                        // `sometimes`／`rarely` は `random,2`／`random,4` と同じ引き金へ読み替えて
+                        // 採録する（小文字の完全一致・spec: areka-P0-shell-implicit-surface
+                        // 要件 11.1/11.2）。他の語は今までどおり元語彙込みで記録して非採録＝
+                        // 「always と書いたのに動かない」の診断は残る語について生きる（要件 11.4）。
+                        let rewritten = match &**vocab {
+                            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#sometimes:1
+                            "sometimes" => Some(2),
+                            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#rarely:1
+                            "rarely" => Some(4),
+                            _ => None,
+                        };
+                        match rewritten {
+                            Some(k) => {
+                                tracing::debug!(
+                                    surface_id,
+                                    animation_id = anim.id,
+                                    vocab = &**vocab,
+                                    k,
+                                    "seriko table: 間隔の語を random,K と同じ引き金へ読み替えて採録（要件 11.1/11.2）"
+                                );
+                                LoopTrigger::Random { k }
+                            }
+                            None => {
+                                tracing::debug!(
+                                    surface_id,
+                                    animation_id = anim.id,
+                                    vocab = &**vocab,
+                                    "seriko table: 未駆動 interval 語彙ゆえ非採録（元語彙保持・要件 8.2/11.4）"
+                                );
+                                continue;
+                            }
+                        }
                     }
                     other => {
                         tracing::debug!(
@@ -194,6 +225,10 @@ impl AnimationTable {
         self.0.is_empty()
     }
 }
+
+#[cfg(test)]
+#[path = "table_interval_words_tests.rs"]
+mod interval_words_tests;
 
 #[cfg(test)]
 mod tests {
@@ -268,8 +303,10 @@ mod tests {
     // ── 3 点完了ケージ (1): 採録フィルタ ──────────────────────────────────────
 
     /// (1) kero(`interval,random,4`)＋sakura(`interval,bind+random,4`)＋非駆動(Bind/Other) を含む
-    /// 世界から、採録されるのは Random/BindRandom の 2 アニメのみ。Bind/Other は非採録かつ `debug!`
-    /// で記録され、`Other` は元語彙 `sometimes` を含む（要件 8.1/8.2・討議 #1）。
+    /// 世界から、採録されるのは Random/BindRandom の 2 アニメのみ。Bind と**読み替えの対象でない**
+    /// `Other` は非採録かつ `debug!` で記録され、`Other` は元語彙 `always` を含む（要件 8.1/8.2・
+    /// 討議 #1）。読み替えの対象 2 語（`sometimes`・`rarely`）は採録側であり、別の檻
+    /// `table_interval_words_tests.rs` が留める（要件 11.1/11.2/11.4）。
     #[test]
     fn only_random_and_bindrandom_are_recorded_others_debug_logged() {
         // kero: surface10・animation0・random,4・疎 index 0/1/3（frames 2106→2110→-1 停止）。
@@ -298,14 +335,14 @@ mod tests {
                 ],
             )],
         );
-        // 非駆動: surface30 に Bind（静的着せ替え）と Other("sometimes")（未駆動語彙）。
+        // 非駆動: surface30 に Bind（静的着せ替え）と Other("always")（読み替えの対象でない語彙）。
         let non_driven = surface_with(
             30,
             vec![
                 anim(1, Interval::Bind, vec![pat(0, "overlay", 1100, 0, 0, 0)]),
                 anim(
                     2,
-                    Interval::Other("sometimes".into()),
+                    Interval::Other("always".into()),
                     vec![pat(0, "overlay", 1200, 0, 0, 0)],
                 ),
             ],
@@ -362,7 +399,7 @@ mod tests {
         // 全体で採録アニメは 2 本のみ（kero+sakura）。
         assert!(!table.is_empty());
 
-        // debug! ログ: Bind と Other が非採録として記録され、Other は元語彙 sometimes を含む。
+        // debug! ログ: Bind と Other が非採録として記録され、Other は元語彙 always を含む。
         assert!(
             logs.contains("level=DEBUG"),
             "非採録は debug! で記録: {logs}"
@@ -372,11 +409,11 @@ mod tests {
             "Bind の非採録が debug! 記録される: {logs}"
         );
         assert!(
-            logs.contains("sometimes"),
-            "Other の元語彙 sometimes が debug! に記録される（討議 #1）: {logs}"
+            logs.contains("always"),
+            "Other の元語彙 always が debug! に記録される（討議 #1）: {logs}"
         );
         assert!(
-            logs.contains("vocab=\"sometimes\""),
+            logs.contains("vocab=\"always\""),
             "元語彙は discriminating field vocab として載る: {logs}"
         );
     }

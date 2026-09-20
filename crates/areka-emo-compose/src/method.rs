@@ -122,6 +122,15 @@ pub enum BlendKind {
     Luminosity,
 }
 
+/// メソッド名の正規化（前後の空白を落とし・小文字にし・`-` と `_` を除く）。
+///
+/// [`ComposeMethod::from_name`] と [`crate::world::EmoWorld::dangling_pattern_targets`] が
+/// **同じ規則**で語を比べるための唯一の定義である。`from_name` は未知の語で `warn!` を出すので
+/// 照会の側からは呼べない（要件 3.5）が、正規化だけはここを共有する。
+pub(crate) fn canonical_method_name(name: &str) -> String {
+    name.trim().to_ascii_lowercase().replace(['-', '_'], "")
+}
+
 impl ComposeMethod {
     /// このメソッドが実挙動を持つ（実装済みである）か。
     ///
@@ -140,9 +149,9 @@ impl ComposeMethod {
     /// [`Overlay`]: ComposeMethod::Overlay
     /// [`Unknown`]: ComposeMethod::Unknown
     pub fn from_name(name: &str) -> ComposeMethod {
-        let lower = name.trim().to_ascii_lowercase();
-        // ハイフン／アンダースコアを吸収してから照合する（`overlay-fast`/`overlayfast` 等）。
-        let canon = lower.replace(['-', '_'], "");
+        // 正規化は [`canonical_method_name`] 1 か所に置く（同じ規則を引く
+        // `EmoWorld::dangling_pattern_targets` と静かにずれないため）。
+        let canon = canonical_method_name(name);
         match canon.as_str() {
             // overlay 同義群（ukadoc 同義明文）。
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#overlay:1

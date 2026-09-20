@@ -3,8 +3,9 @@
 //! 設計決定 **D5 / D8**（要件 **R3**）。
 //!
 //! 伺かの透過規則（優先順位 α ＞ `.pna` ＞ キーカラー）を契約として定義する。
-//! ukadoc 2×2（`use_self_alpha` × `.pna` 有無）動作表のうち emo2 実装腕＝
-//! `use_self_alpha=1` かつ `.pna` 無し（α チャンネル採用）のみを実装し、他はシーム。
+//! ukadoc 2×2（`use_self_alpha` × `.pna` 有無）動作表のうち実装済みは
+//! `use_self_alpha=1`（`On`）の 2 腕＝α チャンネル採用と抜き色（キーカラー）で、
+//! `.pna`・`full`・`Off` はシーム（spec: areka-P0-shell-implicit-surface 要件 4）。
 //! 契約は「Normalizer 出力は常に premultiplied BGRA」で、premultiplied 統一点は
 //! デコード腕出力（WIC PBGRA）で既に成立、シーム腕実装時は本段末尾で premultiply する。
 //!
@@ -36,10 +37,11 @@ pub enum UseSelfAlpha {
     Off,
 }
 
-/// 採用された透過ソース（型シーム・emo2 は `AlphaChannel` のみ実装・3.5）。
+/// 採用された透過ソース（3.5）。
 ///
-/// 動作表（D5）の選択結果を表す。`AlphaChannel` 以外の腕は実装せず型の口のみで、
-/// 到達時は `NormalizeError::Unsupported` にこの値を載せて「どの腕が選択されたか」を
+/// 動作表（D5）の選択結果を表す。実装済みは `use_self_alpha=On` の下の
+/// `AlphaChannel` と `KeyColor` の 2 腕で、残りは型の口のみ。シーム腕への到達時は
+/// `NormalizeError::Unsupported` にこの値を載せて「どの腕が選択されたか」を
 /// 呼び出し側へ示す（優先順位 3.3 の検証に用いる）。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,7 +50,12 @@ pub enum AlphaSource {
     AlphaChannel,
     /// 同名 `.pna` グレースケールを α として採用（シーム・未実装）。
     Pna,
-    /// 画像左上ピクセルをキー色とするキーカラー透過（シーム・未実装）。
+    /// 画像左上ピクセルをキー色とするキーカラー透過。
+    ///
+    /// `use_self_alpha=On`（areka が常に渡す値）の下では実装済みで、左上の 1 画素と
+    /// 同じ 4 バイトの画素をすべて完全に透明にする（spec: areka-P0-shell-implicit-surface
+    /// 要件 4.1〜4.8）。`Off` の下の抜き色は未実装のまま（`Off` を渡す経路が 0 本で、
+    /// α 付きの絵が乗算済みで届くため正しく抜けない・同仕様 設計 areka-emo-atlas 節）。
     KeyColor,
     /// 全面不透明（`full` かつ α 無し・キー色透過しない）（シーム・未実装）。
     Opaque,
@@ -132,13 +139,35 @@ impl Normalizer {
         }
     }
 
+    /// 抜き色の腕が選ばれ、かつ左上の画素が在るときだけ抜き色（`[b, g, r, a]`）を返す。
+    ///
+    /// [`Normalizer::normalize`] はこの答えで腕を決めるので、抜き色かどうかの判断は
+    /// 1 か所にある。`bake` は正規化の前にこれを呼び、抜いた色を記録する（要件 6.3）。
+    /// 純粋関数（副作用なし・ファイル I/O なし）。
+    pub fn key_color(img: &DecodedImage, params: AlphaParams, has_pna: bool) -> Option<[u8; 4]> {
+        let source = Self::select_source(params, img.has_alpha, has_pna);
+        if !matches!(
+            (params.use_self_alpha, source),
+            (UseSelfAlpha::On, AlphaSource::KeyColor)
+        ) {
+            return None;
+        }
+        // 幅か高さが 0 の絵（左上の画素が無い）は抜き色を持てない（要件 4.1 の前提）。
+        if img.width == 0 || img.height == 0 {
+            return None;
+        }
+        img.bgra.get(0..4)?.try_into().ok()
+    }
+
     /// デコード済み画像を透過解釈し premultiplied BGRA へ統一する。
     ///
-    /// emo2 実装腕＝`use_self_alpha=On` かつ α チャンネル有り（採用ソース＝
-    /// `AlphaChannel`）のみ実装（3.1）。この腕はデコード出力が既に premultiplied
-    /// （WIC PBGRA・D8）ゆえ実質恒等で、画素変換を一切行わずバッファを move する。
-    /// 他の全組合せはシーム（`.pna`／キーカラー／`full`／不透明）で、選択された
-    /// `AlphaSource` を載せた `NormalizeError::Unsupported` を返す（3.2/3.5）。
+    /// 実装腕は `use_self_alpha=On` の 2 つ。⑴ α チャンネル有り（採用ソース＝
+    /// `AlphaChannel`）はデコード出力が既に premultiplied（WIC PBGRA・D8）ゆえ実質
+    /// 恒等で、画素変換を一切行わずバッファを move する（3.1）。⑵ α チャンネル無し
+    /// かつ `.pna` 無し（採用ソース＝`KeyColor`）は、左上の 1 画素と同じ 4 バイトの
+    /// 画素をすべて `0,0,0,0` にして返す（要件 4.1〜4.8）。残るシーム（`.pna`／`full`／
+    /// `Off`）は、選択された `AlphaSource` を載せた `NormalizeError::Unsupported` を
+    /// 返す（3.2/3.5・要件 4.9）。
     /// 透過パラメータは入力として受け、自ら設定を読みに行かない（3.6）。
     pub fn normalize(
         &self,
@@ -158,6 +187,44 @@ impl Normalizer {
                 stride: img.stride,
                 pbgra: img.bgra,
             }),
+            // 抜き色腕: 左上の 1 画素と同じ 4 バイトの画素を完全に透明にする
+            // （spec: areka-P0-shell-implicit-surface 要件 4.1〜4.3・4.6〜4.8）。
+            // 届く画素は既に乗算済み BGRA なので、抜いた後も乗算済みのまま（D8）。
+            (UseSelfAlpha::On, AlphaSource::KeyColor) => {
+                // 抜き色が取れない絵（幅か高さが 0）はそのまま渡す（要件 4.7 の手前）。
+                let key = Self::key_color(&img, params, has_pna);
+                let DecodedImage {
+                    width,
+                    height,
+                    stride,
+                    mut bgra,
+                    ..
+                } = img;
+                if let Some(key) = key {
+                    // 行の詰め物（`stride > width * 4`）を読まないよう行ごとに歩く。
+                    let row_bytes = width as usize * 4;
+                    for y in 0..height as usize {
+                        let start = y * stride as usize;
+                        let Some(row) = bgra.get_mut(start..start + row_bytes) else {
+                            break;
+                        };
+                        let (pixels, _) = row.as_chunks_mut::<4>();
+                        for px in pixels {
+                            // 完全一致（許容幅 0・要件 4.2）。一致しない画素は 1 バイトも
+                            // 変えず、一致した画素には色を残さない（要件 4.6）。
+                            if *px == key {
+                                *px = [0, 0, 0, 0];
+                            }
+                        }
+                    }
+                }
+                Ok(NormalizedImage {
+                    width,
+                    height,
+                    stride,
+                    pbgra: bgra,
+                })
+            }
             // シーム腕（未実装）: 選択ソースを載せて明示エラー（3.2/3.5）。
             (_, other) => Err(NormalizeError::Unsupported(other)),
         }
@@ -241,13 +308,36 @@ mod tests {
         }
     }
 
-    /// シーム（3.2/3.3/3.5）: On + α 無し + .pna 無し → Unsupported(KeyColor)。
+    /// 抜き色腕（3.3・要件 4.1/4.2/4.6）: On + α 無し + .pna 無し → 左上と同じ色を抜く。
+    ///
+    /// かつては `Unsupported(KeyColor)` のシームだった腕（spec:
+    /// areka-P0-shell-implicit-surface 要件 5.6 で抜かれた結果を確かめる形へ書き換え）。
+    /// `img(false)` の左上は `0,0,128,128`。同じ 4 バイトの画素は他に無いので、
+    /// 左上だけが `0,0,0,0` になり、残りの 3 画素は 1 バイトも変わらない。
     #[test]
     fn on_no_alpha_no_pna_selects_keycolor_seam() {
-        match Normalizer.normalize(img(false), params(UseSelfAlpha::On), false) {
-            Err(NormalizeError::Unsupported(src)) => assert_eq!(src, AlphaSource::KeyColor),
-            other => panic!("expected Unsupported(KeyColor), got {other:?}"),
-        }
+        let src = img(false);
+        assert_eq!(
+            Normalizer::key_color(&src, params(UseSelfAlpha::On), false),
+            Some([0, 0, 128, 128]),
+            "抜き色は左上の 4 バイト"
+        );
+        let expected = src.bgra.clone();
+
+        let out = Normalizer
+            .normalize(src, params(UseSelfAlpha::On), false)
+            .expect("On + α 無し + .pna 無しは抜き色腕（要件 4.1）");
+
+        assert_eq!(
+            &out.pbgra[0..4],
+            &[0, 0, 0, 0],
+            "左上は完全に透明で色が残らない"
+        );
+        assert_eq!(
+            &out.pbgra[4..],
+            &expected[4..],
+            "他の画素は 1 バイトも変わらない"
+        );
     }
 
     /// シーム: full + α 有り → Unsupported(AlphaChannel)（full 腕は未実装）。
@@ -307,3 +397,7 @@ mod tests {
         assert_eq!(out.pbgra.len(), (out.stride * out.height) as usize);
     }
 }
+
+#[cfg(test)]
+#[path = "normalize_key_color_tests.rs"]
+mod normalize_key_color_tests;
