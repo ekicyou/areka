@@ -45,9 +45,9 @@ areka の 32bit 助け手は `load`・`unload`・`request` の 3 つしか名前
 6. 決定論テスト（下記）・`cargo test --workspace` 緑（i686 先ビルド）・1,000 行未満。
 7. 台帳 `ukadoc:spec_dll` の記述を実装に合わせる（`status` は `degraded` のまま＝SAORI・MAKOTO・PLUGIN が残る）。派生文書は `ukadoc-survey` の生成器で撮り直す（手で直さない）。
 
-### 要件定義で裁定する点（推奨つき・いずれも正典が沈黙＝`doc/COMPAT_ARCHITECTURE.md` §8 に登記）
+### 裁定済みの 3 点（2026-09-20・開発者が 3 件とも推奨どおり承認。いずれも正典が沈黙＝`doc/COMPAT_ARCHITECTURE.md` §8 に登記。要件定義で再び議題にしない）
 
-| # | 分かれ目 | 利用者から見える差 | 推奨 |
+| # | 分かれ目 | 利用者から見える差 | 裁定 |
 |---|---|---|---|
 | 1 | `loadu` だけ在って `load` が無い DLL | 拒むと「新しい作法だけで書いた SHIORI」が起動しない | **受け入れる**（`loadu`／`load` のどちらか 1 つが在ればよい。両方無ければ今日と同じ `EntryNotFound`） |
 | 2 | `loadu` が偽を返した | `load` へ落ちると同じ DLL を 2 度初期化する | **落ちない**＝`LoadReturnedFalse`。正典の落ちる条件は「実装されていない場合」だけ |
