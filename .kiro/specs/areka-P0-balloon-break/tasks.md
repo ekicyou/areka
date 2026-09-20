@@ -81,7 +81,7 @@
   - _Depends: 1.1_
   - _Boundary: areka-kanade schedule/user_break, schedule/mod の横断の腕と帳簿_
 
-- [ ] 4.2 終了の予約を利用者の中断のときだけ終了へ結ぶ
+- [x] 4.2 終了の予約を利用者の中断のときだけ終了へ結ぶ
   - 現行トークの完了を受けた時点で帳簿を必ず空にし、「利用者の中断で終わり、かつ終了の予約があった」ときだけ真を返す判定を置く
   - 完了通知の「中断で終わった」の腕でその判定を先に呼び、真なら `\-` に辿り着いたのと同じ終了の遷移へ進めて 1 行記録する。偽なら既存どおり定常へ戻る
   - 差し替え・選択肢の時間切れの解除で止まったときは終了しない（帳簿が空なので偽になる）
@@ -128,3 +128,4 @@
 - 3.2: GPU 無しのテストでは可視のバルーンを作れない（表示が一度も確立していない target は `show_target` が失敗する）。そのため `on_left_press` は表示層への照会だけをして、非公開の `press_with_visibility(.., balloon_visible)` へ任せる形にした。照会先が `balloon_target(scope)` であることと、押下ハンドラの末尾から入口が呼ばれることは、実機サインオフ（5.3）で確かめる。
 - 3.2: `UserBreakWiring` を World に据えるテストは `insert_non_send_resource(UserBreakWiring::new(..))`。ログの有無は `crate::placement::test_support::capture_logs` で見る（「無い」は同じ捕捉の中の「有る」と対にする）。
 - 3.3: 順序指定を外しても振る舞いのテストは実行器の並び次第で緑になりうる。そのため登録順のテストは、スケジュールの依存グラフに「取り出し → ポインタの配送」の辺が在ることも併せて確かめている（bevy_ecs の `Schedule::graph()`・最初の `run_schedule` より前に読む）。`wire_emo2_boot` が `wire_user_break` を実際に呼ぶことは、受け口の並びのソース照合（`t_zwi05_…`）と実機サインオフ（5.3）で確かめる。
+- 4.2: `TalkDone` は場面を問わず `schedule::step` の横断の腕から `fn on_talk_done` を通る（`fn current_talk_id` が `Some` を返す `Steady{Some}`・`BootVersion{Some}`・`CloseTalkWait` の 3 場面すべて）。したがって「利用者の中断＋終了の予約」は別れの台詞の最中でも `fn on_talk_done` の中で先に終了へ進み、そのときの記録は `talk_done_break_quit` になる（`close.rs` へは届かない）。

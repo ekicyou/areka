@@ -511,6 +511,19 @@ fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     (state, vec![notify, Action::ShioriUnload])
 }
 
+/// 終了系列（Quit）の共通終端: Unloading{Quit}＋ShioriUnload。
+///
+/// 到達点は 2 つある——台本が `\-` に辿り着いた完了（`talk_done_quit`）と、利用者の中断で
+/// 止めた台本が終了を予約していた完了（`talk_done_break_quit`）である。どちらも同じ遷移を採る
+/// （設計「終了の予約」）。`at` は対象トークの完了かつ close 系遷移の掃除点（C4 規則 7）の識別子。
+fn to_unloading_quit(mut state: State, at: &'static str) -> (State, Vec<Action>) {
+    state.phase = Phase::Unloading {
+        cause: TermCause::Quit,
+    };
+    clear_choice_ledger(&mut state, at);
+    (state, vec![Action::ShioriUnload])
+}
+
 /// 呼出失敗・死活報告の共通終端: Unloading{Fault}＋ShioriUnload（unload は best-effort）。
 fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
     state.phase = Phase::Unloading {
@@ -525,26 +538,31 @@ fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
 /// reason（3 値）・talk_id 突合。既知 talk の `TalkEndReason::Quit` は横断的に終了系列（Quit）へ。
 ///
 /// `Ended` と `Interrupted` はいずれも非 quit としてフェーズ固有遷移（定常復帰・close 終了拒否）
-/// へ委譲する（設計「kanade schedule の 3 値写像」）。M1 には user-interrupt 配線が無く、かつ
-/// dispatcher の slot 差替に伴う `Interrupted` は dispatcher が stale として破棄するため、
-/// `Interrupted` が kanade まで到達することは想定されない。到達した場合も専用状態は起こさず
-/// `Ended` と同一経路（非 quit）へ防御的に委譲し、`info!` でどの reason だったかを観測する。
+/// へ委譲する（設計「kanade schedule の 3 値写像」）。例外は 1 つだけで、利用者の中断で止めた
+/// 台本が終了を予約していた `Interrupted`（[`user_break::take_user_break_quit`] が真）は `Quit` と
+/// 同じ終了系列へ進む。dispatcher の slot 差替に伴う `Interrupted` は dispatcher が stale として
+/// 破棄するため、ここへ届く `Interrupted` は利用者の中断か選択肢の時間切れの解除である。
+/// いずれの場合も専用状態は起こさず、`info!` でどの reason だったかを観測する。
 fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (State, Vec<Action>) {
     match current_talk_id(&state.phase) {
         Some(active) if active == done.talk_id => {
             // 現 talk の完了に到達した時点で 1 世代 stale 帳簿の役目は終わる（C4 規則 9）。
             // 保持を延長すると「1 世代のみ」の契約が壊れ、真に未知の id まで info へ降格し得る。
             state.choice_prev_talk = None;
+            // 現行トークの完了なので中断の帳簿はここで必ず空になる（終わり方を問わない・不変条件）。
+            // 空にした結果が「利用者の中断で終わり、かつ終了の予約があった」かを持ち帰る（Req 3.8）。
+            let break_quit = user_break::take_user_break_quit(&mut state, &done);
             match done.reason {
                 TalkEndReason::Quit => {
                     // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
                     tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
-                    state.phase = Phase::Unloading {
-                        cause: TermCause::Quit,
-                    };
-                    // 対象トークの完了かつ close 系遷移の掃除点（C4 規則 7）。
-                    clear_choice_ledger(&mut state, "talk_done_quit");
-                    (state, vec![Action::ShioriUnload])
+                    to_unloading_quit(state, "talk_done_quit")
+                }
+                TalkEndReason::Interrupted if break_quit => {
+                    // 利用者の中断で止めた台本が終了を予約していた——`\-` に辿り着いたのと
+                    // 同じ終了へ進む（Req 3.8・設計「終了の予約」）。
+                    tracing::info!(target: "kanade", event = "talk_done_break_quit", talk_id = done.talk_id.0, "利用者の中断で止めた台本が終了を予約していた——終了系列（Quit）へ");
+                    to_unloading_quit(state, "talk_done_break_quit")
                 }
                 TalkEndReason::Interrupted => {
                     // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で

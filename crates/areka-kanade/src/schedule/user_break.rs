@@ -8,6 +8,7 @@
 //! （要件 3.2）。中断を理由とする SHIORI への要求は 1 件も積まない（要件 3.9・裁定 1）。
 
 use super::{Action, State, clear_choice_ledger, current_talk_id, phase_label};
+use crate::talk::{TalkDone, TalkEndReason};
 
 /// 利用者の中断の要求を受ける。再生中なら停止の指示を 1 件返し、相手を帳簿に控える。
 ///
@@ -53,6 +54,20 @@ pub(super) fn on_user_break(mut state: State, scope: u32) -> (State, Vec<Action>
     // SHIORI へ送ってしまう。利用者は選ばずに終わらせると決めたのだから、帳簿はここで役目を終える。
     clear_choice_ledger(&mut state, "user_break");
     (state, vec![Action::CancelChoice { talk_id }])
+}
+
+/// 現行トークの完了を受けた時点で中断の帳簿を空にし、終了へ進むべきかを返す。
+///
+/// 真になるのは「利用者の中断で終わり（控えた相手と一致する `Interrupted`）、かつ止めた時点で
+/// 台本が終了を予約していた（`quit_reserved`）」ときだけである（要件 3.8）。帳簿を空にするのは
+/// 終わり方に依らない——呼び手（[`super::on_talk_done`]）が現行トークの完了と突合した後に
+/// 1 度だけ呼ぶので、ここが不変条件「帳簿は現行トークの完了で必ず空になる」の単一の履行点である。
+///
+/// 新しいトークによる差し替えと選択肢の時間切れの解除は、帳簿が空なので偽になる——終了の予約は
+/// 利用者の中断のときだけ効く（設計「終了の予約」の場面の表）。
+pub(super) fn take_user_break_quit(state: &mut State, done: &TalkDone) -> bool {
+    let by_user_break = state.user_break_talk.take() == Some(done.talk_id);
+    by_user_break && done.reason == TalkEndReason::Interrupted && done.quit_reserved
 }
 
 #[cfg(test)]

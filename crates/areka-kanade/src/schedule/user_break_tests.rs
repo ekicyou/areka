@@ -6,7 +6,7 @@
 // 写して渡す。ここでは `step` を直に呼び、返る状態と指示を見る。
 
 use super::super::{
-    Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, log_capture, step,
+    Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, log_capture, step,
 };
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriCall};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
@@ -333,4 +333,142 @@ fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
         &cfg,
     );
     assert_no_choice_timeout(&late_tick, "完了通知の後の刻み");
+}
+
+// --- 判断分岐 ⑺: 終了の予約（要件 3.4・3.8・7.2） ---
+
+/// 中断を受け入れた状態（定常で `TalkId(3)` を再生中 → 中断 1 件）を組む。
+fn after_user_break(cfg: &KanadeConfig) -> State {
+    let (accepted, actions) = step(
+        playing(Phase::Steady {
+            talk: Some(active(TalkId(3))),
+        }),
+        Input::UserBreak { scope: 0 },
+        cfg,
+    );
+    assert_eq!(actions.len(), 1, "前提: 中断は受け入れられている");
+    accepted
+}
+
+/// 中断で終わった完了通知を組む。
+fn interrupted(quit_reserved: bool) -> Input {
+    Input::TalkDone(TalkDone {
+        talk_id: TalkId(3),
+        reason: TalkEndReason::Interrupted,
+        quit_reserved,
+    })
+}
+
+/// 利用者の中断で止めた台本が終了を予約していたら、`\-` に辿り着いたのと同じ終了へ進む（要件 3.8）。
+#[test]
+fn user_break_with_reserved_quit_ends_the_ghost() {
+    let cfg = config();
+    let (next, actions, ev) = step_capturing(after_user_break(&cfg), interrupted(true), &cfg);
+    assert!(
+        matches!(
+            next.phase,
+            Phase::Unloading {
+                cause: TermCause::Quit
+            }
+        ),
+        "予約ありの中断は終了の場面へ進む（要件 3.8）"
+    );
+    assert!(
+        matches!(actions.as_slice(), [Action::ShioriUnload]),
+        "終了の要求を 1 件だけ出す（`\\-` と同じ遷移）。実際の件数={}",
+        actions.len()
+    );
+    assert!(
+        next.user_break_talk.is_none(),
+        "現行トークの完了で中断の帳簿は空になる"
+    );
+    let logged = logged_once(&ev, Level::INFO, "talk_done_break_quit");
+    assert_eq!(
+        logged.fields.get("talk_id").map(String::as_str),
+        Some("3"),
+        "予約どおり終了へ進んだことを相手の talk_id つきで記録する。\n捕捉={ev:#?}"
+    );
+}
+
+/// 予約が無ければ、中断は従来どおり定常へ戻るだけで終了しない（要件 3.4）。
+#[test]
+fn user_break_without_reserved_quit_returns_to_steady() {
+    let cfg = config();
+    let (next, actions) = step(after_user_break(&cfg), interrupted(false), &cfg);
+    assert!(
+        matches!(next.phase, Phase::Steady { talk: None }),
+        "予約なしの中断は定常へ戻る（要件 3.4）"
+    );
+    assert!(actions.is_empty(), "終了の要求は出さない");
+    assert!(next.user_break_talk.is_none(), "中断の帳簿は空になる");
+}
+
+/// 利用者の中断を出していないのに予約つきで止まったとき（選択肢の時間切れの解除など）は
+/// 終了しない——終了が効くのは利用者の中断のときだけである（要件 3.8 の対偶）。
+#[test]
+fn reserved_quit_without_user_break_does_not_end_the_ghost() {
+    let cfg = config();
+    let playing_without_break = playing(Phase::Steady {
+        talk: Some(active(TalkId(3))),
+    });
+    assert!(
+        playing_without_break.user_break_talk.is_none(),
+        "前提: 中断は出していない"
+    );
+    let (next, actions) = step(playing_without_break, interrupted(true), &cfg);
+    assert!(
+        matches!(next.phase, Phase::Steady { talk: None }),
+        "中断を出していなければ予約つきでも定常へ戻る（要件 3.8）"
+    );
+    assert!(actions.is_empty(), "終了の要求は出さない");
+}
+
+/// 要件 7.2: 中断で定常へ戻った後、次の刻みで普通に次のトークの要求が出る。
+#[test]
+fn next_tick_after_user_break_asks_for_the_next_talk() {
+    let cfg = config();
+    let (returned, _) = step(after_user_break(&cfg), interrupted(false), &cfg);
+    let (_next, actions) = step(
+        returned,
+        Input::Tick {
+            now: MonotonicMs(41_000),
+        },
+        &cfg,
+    );
+    assert!(
+        matches!(
+            actions.as_slice(),
+            [Action::ShioriRequest(ShioriCall::Get { id, .. })] if id.as_str() == "OnSecondChange"
+        ),
+        "中断の後も次のトークの問い合わせは普通に出る（要件 7.2）"
+    );
+}
+
+/// 不変条件: 中断の帳簿は現行トークの完了で必ず空になる（終わり方を問わない）。
+#[test]
+fn user_break_ledger_is_emptied_by_any_completion_of_the_current_talk() {
+    let cfg = config();
+    for (label, reason) in [
+        ("Ended", TalkEndReason::Ended),
+        ("Quit", TalkEndReason::Quit),
+        ("Interrupted", TalkEndReason::Interrupted),
+    ] {
+        let mut state = playing(Phase::Steady {
+            talk: Some(active(TalkId(3))),
+        });
+        state.user_break_talk = Some(TalkId(3));
+        let (next, _actions) = step(
+            state,
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(3),
+                reason,
+                quit_reserved: false,
+            }),
+            &cfg,
+        );
+        assert!(
+            next.user_break_talk.is_none(),
+            "{label}: 現行トークの完了で中断の帳簿は空になる"
+        );
+    }
 }
