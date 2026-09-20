@@ -2026,6 +2026,7 @@ SOFTWARE.
 - temp-path-kit 0.0.1
 - ukadoc-survey 0.0.1
 - wintf 0.0.1
+- pasta_core 0.3.5
 - ambassador 0.5.1
 - block2 0.6.2
 - dispatch2 0.3.1
@@ -2033,7 +2034,6 @@ SOFTWARE.
 - objc2-encode 4.1.0
 - objc2-io-kit 0.3.2
 - objc2 0.6.4
-- pasta_core 0.3.4
 - r-efi 6.0.0
 - taffy 0.13.0
 - winapi-i686-pc-windows-gnu 0.4.0
