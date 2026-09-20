@@ -99,7 +99,7 @@
   - _Depends: 4.2_
 
 - [ ] 5. 仕上げ: 摂動・台帳・実機
-- [ ] 5.1 檻が赤になることを 1 つの分岐で示す
+- [x] 5.1 檻が赤になることを 1 つの分岐で示す
   - 判断分岐 ⑺ の「中断を出した相手か」の条件を常に真へ置き換える（平行移動ではなく経路から外す形）と、「予約ありでも中断を出していない → 定常へ戻る」のテストが赤になることを示す
   - 摂動は戻し、赤になったテスト名と 2 回の走行の結果を完了記録に残す
   - 完了状態: 摂動で赤・復帰で緑の 2 回の走行の記録が残っている
@@ -129,3 +129,11 @@
 - 3.2: `UserBreakWiring` を World に据えるテストは `insert_non_send_resource(UserBreakWiring::new(..))`。ログの有無は `crate::placement::test_support::capture_logs` で見る（「無い」は同じ捕捉の中の「有る」と対にする）。
 - 3.3: 順序指定を外しても振る舞いのテストは実行器の並び次第で緑になりうる。そのため登録順のテストは、スケジュールの依存グラフに「取り出し → ポインタの配送」の辺が在ることも併せて確かめている（bevy_ecs の `Schedule::graph()`・最初の `run_schedule` より前に読む）。`wire_emo2_boot` が `wire_user_break` を実際に呼ぶことは、受け口の並びのソース照合（`t_zwi05_…`）と実機サインオフ（5.3）で確かめる。
 - 4.2: `TalkDone` は場面を問わず `schedule::step` の横断の腕から `fn on_talk_done` を通る（`fn current_talk_id` が `Some` を返す `Steady{Some}`・`BootVersion{Some}`・`CloseTalkWait` の 3 場面すべて）。したがって「利用者の中断＋終了の予約」は別れの台詞の最中でも `fn on_talk_done` の中で先に終了へ進み、そのときの記録は `talk_done_break_quit` になる（`close.rs` へは届かない）。
+
+## 完了記録
+
+### 5.1 摂動の記録（要件 7.5・2026-09-20）
+- 摂動: `fn take_user_break_quit`（`crates/areka-kanade/src/schedule/user_break.rs`）の「中断を出した相手か」の条件 `by_user_break` を常に真へ置き換えた（値をずらすのではなく、条件を経路から外す形）。
+- 走行 1（摂動あり）`cargo test -p areka-kanade --lib` → `test result: FAILED. 311 passed; 1 failed`。赤になったのは `schedule::user_break::tests::reserved_quit_without_user_break_does_not_end_the_ghost`（「予約ありでも中断を出していない → 定常へ戻る」）の 1 本だけ。
+- 走行 2（復帰後）同じコマンド → `test result: ok. 312 passed; 0 failed`。`git status --porcelain` は 0 行（摂動は残っていない）。
+- 同じ摂動は 4.2 の実装係と査読係もそれぞれ独立に走らせ、同じ 1 本だけが赤になることを確かめている。
