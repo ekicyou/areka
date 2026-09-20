@@ -43,7 +43,7 @@ UI → KanadeMsg → schedule::step → Action::CancelChoice{talk_id}
 ```
 
 - `fn on_cancel_choice` は **`close_active_if_any` を使わない**（slot を保持したまま `Close` を転送する）。これは意図的で、即 join して slot を空けると中断 ACK が `fn on_done` の一致判定で stale 扱いになり kanade が復帰できなくなるため、と doc に明記がある。**中断にはこの性質がそのまま要る。**
-- 停止の意味論（`player.stop()` で未発火の cue を捨てる＝以降のタグ・文字・待ちを 1 つも実行しない）は `fn on_close` の doc と決定論テスト（`crates/areka-sakura/src/drive_lifecycle_tests.rs`）で既に固定済み。要件 6a の「再テストしない」に一致する。
+- 停止の意味論（`player.stop()` で未発火の cue を捨てる＝以降のタグ・文字・待ちを 1 つも実行しない）は `fn on_close` の doc と決定論テスト（`crates/areka-sakura/src/drive_lifecycle_tests.rs`）で既に固定済み。要件 7.7 の「再テストしない」に一致する。
 - **選択待ちの掃除は自動で付いてくる**: `TalkDone{Interrupted}` は `fn on_talk_done`（`crates/areka-kanade/src/schedule/mod.rs`）が `talk_done_interrupted_as_non_quit` を記録して steady へ委譲し、`fn on_talk_done`（steady）が `clear_choice_ledger` を呼んでから `Steady{None}` へ戻す。`OnChoiceTimeout` は `fn fire_choice_timeout_if_due` が Tick で判定するもので、帳簿が消えていれば二度と発火しない。
 - **終了挨拶の最中（要件 3.6）**: `Phase::CloseTalkWait` で `TalkDone{Interrupted}` を受けると `fn on_close_talk_wait`（`crates/areka-kanade/src/schedule/close.rs`）が「終了拒否・`Steady{None}` へ復帰」へ落とす。既存テスト `value_then_interrupted_refuses_close_same_as_ended` が固定済み。ただし**`CloseTalkWait` で中断の合図を受け付けるかどうかは未定**（現状 `Input::Mouse` は Steady 以外では trace して捨てる）。→ 判断項目 4。
 
@@ -261,7 +261,7 @@ kanade の投函端（`Sender<KanadeMsg>`）は `areka_ghost::boot_with_kanade_s
 | 1.9 出ていないバルーン | クリック透過の登録あり | **Unknown（R-1）**: 非表示時に押下が届くか未確認 |
 | 2.1〜2.5 受理規則 | `Phase::Steady{talk}` が「再生中か」の正本 | **Missing**: 中断要求の入力とアーム |
 | 2.6 選択待ちの破棄・`OnChoiceTimeout` を出さない | `clear_choice_ledger`（`steady_talk_done` 掃除点）・`fn fire_choice_timeout_if_due` | **追加不要**（既存経路で自動的に満たされる・§2.2） |
-| 3.1〜3.3 その場で止まる | `fn on_close`（`drive.rs`）＋`TalkEndReason::Interrupted` | 追加なし（既に決定論テスト済み・要件 6a） |
+| 3.1〜3.3 その場で止まる | `fn on_close`（`drive.rs`）＋`TalkEndReason::Interrupted` | 追加なし（既に決定論テスト済み・要件 7.7） |
 | 3.4 定常へ戻る | `fn on_talk_done`（steady） | 追加なし |
 | 3.5 面を戻さない | `player.stop()` は面へ触れない | 追加なし（不作為の確認） |
 | 3.6 別れの台詞の中断 | `fn on_close_talk_wait`＋既存テスト | **Constraint**: `CloseTalkWait` で要求を受理する経路を通すか（判断項目 4） |
@@ -275,11 +275,11 @@ kanade の投函端（`Sender<KanadeMsg>`）は `areka_ghost::boot_with_kanade_s
 | 5.7 `status` の読み口を塞がない | `ExecutionSnapshot` の SEAM 注記 | **Constraint**: 旗が kanade にあれば欄 1 本で届く（F2 の利点） |
 | 5.8 SSTP の判定を置かない | — | 追加なし（零の明示） |
 | 6.1〜6.6 記録 | `.kiro/steering/logging.md`・既存の `event = "…"` 規約 | **Missing**: 語彙 4〜5 種 |
-| 7.1〜7.6 決定論テスト | 兄弟ファイル配置の前例多数 | **Missing**: 5 分岐＋摂動 |
-| 7.7 1,000 行 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | **Constraint**: §6 |
+| 7.1〜7.7 決定論テスト | 兄弟ファイル配置の前例多数 | **Missing**: 6 分岐＋摂動 |
+| 7.8 1,000 行 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | **Constraint**: §6 |
 | 8.1〜8.4 台帳 | `doc/ukadoc-coverage/ledger/sakura-script.toml`・`ConsumerLedger::canonical`（6 行・件数テストあり） | **Missing**: 台帳 2 行＋消費者台帳 2 行＋件数の更新＋`roadmap-draft.md` の数え直し |
 
-## 6. 1 ファイル 1,000 行の番人（要件 7.7）
+## 6. 1 ファイル 1,000 行の番人（要件 7.8）
 
 番人は `crates/log-capture-kit/tests/file_length_guard_test.rs`（例外表 10 件・`OVER_LIMIT_ALLOWED_COUNT = 10`）。例外表は「今そこにある超過」だけを表す決まりなので、**新しいファイルを例外表へ足す道は事実上無い**（表の項目は「今も超過している」ことを別のテストが要求する＝足すには先に超過させる必要があり、規律に反する）。
 

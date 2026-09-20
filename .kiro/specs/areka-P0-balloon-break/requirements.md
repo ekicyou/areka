@@ -99,6 +99,7 @@ areka の利用者。**喋っている途中のゴーストを黙らせる手段
 4. When 中断の合図が既に受け入れられた直後に、同じ操作の合図がもう 1 件届いた, the areka shall 止める対象が無いものとして扱い（要件 2.2 と同じ）、二重に止めない。
 5. The areka shall 中断を受け入れるかどうかを**再生中かどうか**だけで決め、どのスコープのバルーンがダブルクリックされたかでは変えない。スコープ番号は「どこで起きたか」を伝えるためだけに運ばれる（下流 #35 が `OnBalloonBreak` の Reference1 に使う）。
 6. When 選択肢を待っている最中に中断が受け入れられた, the areka shall 待っていた選択肢を破棄して定常へ戻し、選択肢の時間切れの扱い（`OnChoiceTimeout` の発火）を**行わない**（**仮の裁定・裁定 4**）。利用者は選ばずに会話を終わらせたのであって、時間切れになったのではない。
+7. The areka shall 中断で止めるものを**いま再生している台本だけ**とする。中断の時点で既に SHIORI へ出してある要求（選択の確定・選択肢の時間切れの通知）の応答が後から届いたときは、既存の規則のまま扱い（応答に台本があれば次のトークとして始まる）、中断を理由にその応答を捨てる仕組みを **1 つも足さない**。利用者が自分で選んだ選択肢の応答は、利用者が求めたものだからである。
 
 ### Requirement 3: 再生がその場で止まる
 
@@ -120,13 +121,14 @@ areka の利用者。**喋っている途中のゴーストを黙らせる手段
 
 #### Acceptance Criteria
 
-1. When 中断が受け入れられた, the areka shall **全スコープ**のバルーンを隠す。中断の合図が起きたスコープのバルーンだけを隠すのではない。
+1. When 中断が受け入れられた, the areka shall **そのとき画面に出ているバルーンをすべて**隠す（本文の「全スコープ」はこの意味で使う）。中断の合図が起きたスコープのバルーンだけを隠すのではない。既に隠れているバルーンへは隠す指示を重ねて出さない。
 2. When 中断の合図が届いて止める再生が無かった（要件 2.2）, the areka shall 同じく全スコープのバルーンを隠す。
 3. The areka shall 隠すまでに既定 30 秒のタイムアウト（`DEFAULT_BALLOON_TIMEOUT_SECS`）を待たない。
 4. The areka shall 「中断された」をバルーンを隠す理由の 1 つとして持ち、既存の理由（内容による表示・消去・時間切れ・明示的な指示）の意味を変えない。
 5. The areka shall 隠す時刻の決め方を設計に委ねる。ただし**「1 フレーム遅らせる」形の解は採らない**（開発者方針・記憶 no-frame-delay-fixes-change-the-state-shape）。要件が定めるのは「利用者がダブルクリックしてから、次に画面が描かれるときにはもうバルーンが無い」ことである。
-6. When 中断でバルーンを隠した後にタイムアウトの時刻が来た, the areka shall 既に隠れているバルーンをもう一度隠そうとせず、余計な記録も出さない。
+6. When 中断でバルーンを隠した後にタイムアウトの時刻が来た, the areka shall 既に隠れているバルーンをもう一度隠そうとせず、**本仕様が新しく足す記録を 1 行も出さない**。可視性の既存規則が元から出している記録（出ているバルーンが無くなったのでタイムアウトの計測を捨てた、の 1 行）は既存どおりで、本仕様は足しも消しもしない。
 7. When 中断の後に次のトークが始まった, the areka shall そのトークのバルーンを通常どおり表示する（中断は次の表示を妨げない）。
+8. While 中断でバルーンを隠してから次のトークが始まるまでの間, the areka shall 隠したバルーンを**独りでに出し直さない**。止めた台本の文字のうち既に表示側へ届いていた分は、再生を止めた後も時刻の進行だけで見える文字数が増えうる（文字の出る時刻は塊が届いた時点で先まで決まっている＝`crates/areka-emo-text/src/state.rs` の `RevealSchedule`）。バルーンを出す既存規則は「見える文字数が増えた、かつ今は隠れている」（`crates/areka/src/emo2_boot/balloon_visibility.rs` の `fn decide_content`）なので、塞がなければ**文の途中で止めたときだけ、消えたバルーンが次の描画で戻ってくる**（待ちの最中に止めたときは起きない＝走行ごとに出たり出なかったりする）。塞ぎ方は設計が決める。
 
 ### Requirement 5: 中断の無効化（`nouserbreakmode`）
 
@@ -162,20 +164,21 @@ areka の利用者。**喋っている途中のゴーストを黙らせる手段
 
 #### Acceptance Criteria
 
-1. The areka shall 次の **5 つの判断分岐**を決定論テストで固定する（記憶 test-only-decision-branches-not-proven-wiring・既に証明済みの配線は再テストしない）:
+1. The areka shall 次の **6 つの判断分岐**を決定論テストで固定する（記憶 test-only-decision-branches-not-proven-wiring・既に証明済みの配線は再テストしない）:
    ⑴ 再生中 → 止まる（要件 2.1・3.1）
    ⑵ 再生中でない → 止める対象が無く、隠すだけ（要件 2.2）
    ⑶ 選択肢を待っている最中の余白 → 止まり、`OnChoiceTimeout` を送らない（要件 2.6）
    ⑷ 無効化の区間 → 止まらず隠れない（要件 2.3・5.3）
    ⑸ 選択肢の行の上の 2 打目 → 合図を作らない（要件 1.5）
+   ⑹ 中断で隠した後、次のトークが始まる前に見える文字数が増えた → 出し直さない／次のトークが始まった後に増えた → 出す（要件 4.8・4.7）
 2. The areka shall 「中断の後に次のトークが普通に始まる」ことを決定論テストで確かめる（要件 3.4）。
 3. The areka shall 無効化の区間の出入り（入る・出る・閉じ忘れたままトークが終わる・区間外の `leave`）を決定論テストで確かめる（要件 5.1・5.2・5.4・5.6）。
 4. The areka shall 「全スコープのバルーンが隠れる」こと（要件 4.1）を、画面を描かずに確かめられる形（隠す指示の観測）で固定する。
 5. The areka shall 上のテストが判断分岐を壊すと赤になることを、少なくとも 1 つの分岐で摂動して示す（記憶 cage-must-walk-the-reachable-path・checks-must-judge-not-just-print・mutate-by-replacing-not-translating＝平行移動ではなく経路から外す形で摂動する）。
 6. The areka shall テストを実装と同じディレクトリの兄弟ファイルへ置く（記憶 areka-bin-crate-internal-tests-in-crate。既存の `crates/areka/src/input_events/balloon_pointer_handler_tests.rs`・`crates/areka-kanade/src/schedule/steady_choice_tests.rs` 等と同じ並び）。
-6a. The areka shall 既に決定論テストで固定されている配線を**もう一度テストしない**（記憶 test-only-decision-branches-not-proven-wiring）。零も明示する＝再テストしないのは次の 2 つである: ⑴ 閉じ指示 → 再生停止 →「中断で終わった」を返す経路（`crates/areka-sakura/src/drive_lifecycle_tests.rs`）⑵ 別れの台詞が「中断で終わった」ときに終了を拒む同一視（`crates/areka-kanade/src/schedule/close.rs` のテスト `value_then_interrupted_refuses_close_same_as_ended`）。
-7. The areka shall 新設・改変したファイルを 1 ファイル 1,000 行以内に収める（番人は `crates/log-capture-kit/tests/file_length_guard_test.rs`）。**2026-09-20 時点で `crates/areka/src/input_events/balloon.rs` は 917 行・`crates/areka-kanade/src/schedule/steady.rs` は 935 行**であり、いずれも残りが 100 行を切っている。行を足せない場合の分割は設計が決める。
-8. The areka shall 実機サインオフを **1 件**行い、確認項目と結果を tasks の完了記録に残す: emo2（絶対パス起動・記憶 areka-emo2-signoff-needs-absolute-paths）で長い台詞の途中にバルーンを左ダブルクリックし、⑴ 文字送りがその場で止まる ⑵ バルーンが即座に消える（30 秒待たない）⑶ その後に次のランダムトークが普通に出る、の 3 点を確かめる。
+7. The areka shall 既に決定論テストで固定されている配線を**もう一度テストしない**（記憶 test-only-decision-branches-not-proven-wiring）。零も明示する＝再テストしないのは次の 2 つである: ⑴ 閉じ指示 → 再生停止 →「中断で終わった」を返す経路（`crates/areka-sakura/src/drive_lifecycle_tests.rs`）⑵ 別れの台詞が「中断で終わった」ときに終了を拒む同一視（`crates/areka-kanade/src/schedule/close.rs` のテスト `value_then_interrupted_refuses_close_same_as_ended`）。
+8. The areka shall 新設・改変したファイルを 1 ファイル 1,000 行以内に収める（番人は `crates/log-capture-kit/tests/file_length_guard_test.rs`）。**2026-09-20 時点で `crates/areka/src/input_events/balloon.rs` は 917 行・`crates/areka-kanade/src/schedule/steady.rs` は 935 行**であり、いずれも残りが 100 行を切っている。行を足せない場合の分割は設計が決める。
+9. The areka shall 実機サインオフを **1 件**行い、確認項目と結果を tasks の完了記録に残す: emo2（絶対パス起動・記憶 areka-emo2-signoff-needs-absolute-paths）で長い台詞の途中にバルーンを左ダブルクリックし、⑴ 文字送りがその場で止まる ⑵ バルーンが即座に消える（30 秒待たない）⑶ その後に次のランダムトークが普通に出る、の 3 点を確かめる。
 
 ### Requirement 8: 網羅台帳への登記
 
