@@ -137,3 +137,13 @@
 - 走行 1（摂動あり）`cargo test -p areka-kanade --lib` → `test result: FAILED. 311 passed; 1 failed`。赤になったのは `schedule::user_break::tests::reserved_quit_without_user_break_does_not_end_the_ghost`（「予約ありでも中断を出していない → 定常へ戻る」）の 1 本だけ。
 - 走行 2（復帰後）同じコマンド → `test result: ok. 312 passed; 0 failed`。`git status --porcelain` は 0 行（摂動は残っていない）。
 - 同じ摂動は 4.2 の実装係と査読係もそれぞれ独立に走らせ、同じ 1 本だけが赤になることを確かめている。
+
+### 5.3 実機サインオフと行数の番人（2026-09-20・**実機の 4 点は未了**）
+- 行数: 本仕様が触った `.rs` の最大は `spine_conformance_lap_tests.rs` 990 行・`balloon_visibility_tests.rs` 982 行・`schedule_tests.rs` 945 行・`steady_flow_tests.rs` 931 行・`input_events/balloon.rs` 923 行（着手時 917）・`balloon_visibility.rs` 875 行（着手時 770）・`schedule/mod.rs` 749 行（着手時 713）。番人 `cargo test -p log-capture-kit --test file_length_guard_test` は `6 passed`。
+- 無人の有界走行（`AREKA_APP_SMOKE_EXIT_MS=20000`・emo2 を絶対パスで起動・記録は `C:\home\maz\tmp\bbreak\run1-boot.log`）: `exit=0`・`ERROR` 0 行・`connect_failed` 0 行・起動の挨拶（`boot_talk talk_id=1`）が約 17 秒かけて最後まで再生され `steady_talk_done`・バルーンは `trigger="content"` で scope 0／1 とも表示。7 本目の受け口と旗の取り出しを足した後も、起動と通常の再生に後退は無い。
+- 前提の罠（本仕様の欠陥ではない）: workspace のビルドが `target\debug\shiori-host32-helper.exe` を x64 で上書きするので、そのまま起動すると helper が `LoadLibraryFailed 0x800700C1` を返して SHIORI に繋がらない。実機の前に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` の成果物を `target\debug\` へ複製する。
+- **実機の 4 点は開発者の手で確かめる**（自動操作の許可が下りなかったため未了）。手順:
+  1. 上の helper の複製を済ませ、`cargo run -q -p sample-ghost-kit --bin nar-sample-path -- emo2` の `folder=`／`balloon.emo2-kakukaku=` を引数に、`$env:RUST_LOG="info,kanade=trace,areka=debug"` で `target\debug\areka.exe <folder> <balloon>` を起動し、出力を記録へ落とす。
+  2. 起動の挨拶（約 17 秒）の途中でバルーンを左ダブルクリックする → ⑴ 文字送りがその場で止まる ⑵ バルーンが即座に消える（30 秒待たない）。検索語: `balloon_break_accepted`・`trigger="user_break"`。
+  3. そのまま待つ → ⑶ 次のランダムトークが普通に出る。検索語: `steady_talk`・`trigger="content"`。
+  4. 右クリックメニューの「終了」を選び、別れの台詞の途中でバルーンを左ダブルクリックする → ⑷ ただちに終了する。検索語: `close_talk_done_quit`（または `talk_done_break_quit`）・`unload_clean`。
