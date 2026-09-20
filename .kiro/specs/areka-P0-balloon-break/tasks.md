@@ -98,7 +98,7 @@
   - _Requirements: 3.6, 3.7, 7.1, 7.7, 9.6_
   - _Depends: 4.2_
 
-- [ ] 5. 仕上げ: 摂動・台帳・実機
+- [x] 5. 仕上げ: 摂動・台帳・実機
 - [x] 5.1 檻が赤になることを 1 つの分岐で示す
   - 判断分岐 ⑺ の「中断を出した相手か」の条件を常に真へ置き換える（平行移動ではなく経路から外す形）と、「予約ありでも中断を出していない → 定常へ戻る」のテストが赤になることを示す
   - 摂動は戻し、赤になったテスト名と 2 回の走行の結果を完了記録に残す
@@ -115,7 +115,7 @@
   - _Requirements: 8.1, 8.2, 8.3_
   - _Depends: 3.3, 4.3_
 
-- [ ] 5.3 実機サインオフと行数の番人
+- [x] 5.3 実機サインオフと行数の番人
   - 触った全ファイルが 1 ファイル 1,000 行以内であることを番人のテストで確かめる（入力ハンドラと運行の 2 ファイルは残りが 100 行を切っているので、着手時と着地時に引き直す）
   - emo2 を絶対パスで起動し、長い台詞の途中でバルーンを左ダブルクリックして ⑴ 文字送りがその場で止まる ⑵ バルーンが即座に消える（30 秒待たない）⑶ その後に次のランダムトークが普通に出る を確かめる
   - 別れの台詞を返すゴーストで右クリックメニューの「終了」を選び、⑷ 台詞の途中の左ダブルクリックでただちに終了する を確かめる
@@ -138,15 +138,17 @@
 - 走行 2（復帰後）同じコマンド → `test result: ok. 312 passed; 0 failed`。`git status --porcelain` は 0 行（摂動は残っていない）。
 - 同じ摂動は 4.2 の実装係と査読係もそれぞれ独立に走らせ、同じ 1 本だけが赤になることを確かめている。
 
-### 5.3 実機サインオフと行数の番人（2026-09-20・**実機の 4 点は未了**）
+### 5.3 実機サインオフと行数の番人（2026-09-20）
 - 行数: 本仕様が触った `.rs` の最大は `spine_conformance_lap_tests.rs` 990 行・`balloon_visibility_tests.rs` 982 行・`schedule_tests.rs` 945 行・`steady_flow_tests.rs` 931 行・`input_events/balloon.rs` 923 行（着手時 917）・`balloon_visibility.rs` 875 行（着手時 770）・`schedule/mod.rs` 749 行（着手時 713）。番人 `cargo test -p log-capture-kit --test file_length_guard_test` は `6 passed`。
 - 無人の有界走行（`AREKA_APP_SMOKE_EXIT_MS=20000`・emo2 を絶対パスで起動・記録は `C:\home\maz\tmp\bbreak\run1-boot.log`）: `exit=0`・`ERROR` 0 行・`connect_failed` 0 行・起動の挨拶（`boot_talk talk_id=1`）が約 17 秒かけて最後まで再生され `steady_talk_done`・バルーンは `trigger="content"` で scope 0／1 とも表示。7 本目の受け口と旗の取り出しを足した後も、起動と通常の再生に後退は無い。
 - 前提の罠（本仕様の欠陥ではない）: workspace のビルドが `target\debug\shiori-host32-helper.exe` を x64 で上書きするので、そのまま起動すると helper が `LoadLibraryFailed 0x800700C1` を返して SHIORI に繋がらない。実機の前に `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` の成果物を `target\debug\` へ複製する。
-- **実機の 4 点は開発者の手で確かめる**（自動操作の許可が下りなかったため未了）。手順:
-  1. 上の helper の複製を済ませ、`cargo run -q -p sample-ghost-kit --bin nar-sample-path -- emo2` の `folder=`／`balloon.emo2-kakukaku=` を引数に、`$env:RUST_LOG="info,kanade=trace,areka=debug"` で `target\debug\areka.exe <folder> <balloon>` を起動し、出力を記録へ落とす。
-  2. 起動の挨拶（約 17 秒）の途中でバルーンを左ダブルクリックする → ⑴ 文字送りがその場で止まる ⑵ バルーンが即座に消える（30 秒待たない）。検索語: `balloon_break_accepted`・`trigger="user_break"`。
-  3. そのまま待つ → ⑶ 次のランダムトークが普通に出る。検索語: `steady_talk`・`trigger="content"`。
-  4. 右クリックメニューの「終了」を選び、別れの台詞の途中でバルーンを左ダブルクリックする → ⑷ ただちに終了する。検索語: `close_talk_done_quit`（または `talk_done_break_quit`）・`unload_clean`。
+- **実機の 4 点（要件 7.9）は開発者の操作で確認済み**。emo2 を絶対パスで起動し、記録は `RUST_LOG="info,kanade=trace,areka::input_events=trace"`（判定の分岐は `trace` なので、この水準まで開けないと弾かれた理由が記録に残らない）。走行の記録は `C:\home\maz\tmp\bbreak\signoff2.log`・`exit=0`・`ERROR` 0 行（`WARN` は emo2 の素材由来の既知のもの 6 行のみ・本仕様と無関係）。中断が弾かれた記録（`balloon_break_ignored`／`balloon_break_rejected`／`balloon_break_no_talk`）は 0 件。
+  1. ⑴ 文字送りがその場で止まる: 起動の挨拶（`boot_talk talk_id=1`・約 17 秒）の 3.9 秒地点で左ダブルクリック → `balloon_break_detected scope=0` → `balloon_break_accepted scope=0 talk_id=1 phase="Steady"`（08:59:36.035439）→ `steady_talk_done`（.035651・0.2ms 後）。残りは再生されない。
+  2. ⑵ バルーンが即座に消える: 同じ打鍵で `trigger="user_break" visible=false` が scope 0（.035998）と scope 1（.036028）に出る＝**喋っていない側も含めて同一フレームで消える**。30 秒の時間切れは待っていない。
+  3. ⑶ 次のランダムトークが普通に出る: 中断の後に `steady_talk` が talk_id=2（`OnMouseMove`）・3・4（`OnSecondChange`）と 3 回出て、いずれも `trigger="content" visible=true` でバルーンが出た。中断の後に表示を見送る掛け金（要件 4.8）が次のトークで解けている。talk_id=2 の中断では scope 0 だけが消え scope 1 は動かない＝**そのとき見えているバルーンだけを消す**。
+  4. ⑷ 別れの台詞の途中の中断でただちに終了する: `close_talk_start talk_id=5`（09:00:11.521812）→ 台詞の表示（scope 1・.594203）の 1.2 秒後に左ダブルクリック → `balloon_break_detected scope=1` → `balloon_break_accepted scope=1 talk_id=5 phase="CloseTalkWait"`（09:00:12.810219）→ `talk_done_break_quit talk_id=5`（.810387）→ `trigger="user_break" visible=false`（.810910）→ `unload_clean`（.858260）。**中断から正規の終了完了まで 48ms**。
+- 実機だけが証明できる 2 点も、この走行で確定した: 表示層への照会先が `balloon_target(scope)` で合っていること（間違っていれば `balloon_break_ignored reason="balloon_hidden"` で止まり `accepted` に届かない）と、起動の結線が `wire_user_break` を実際に呼んでいること（呼ばれていなければ `balloon_break_no_wiring` で止まる）。どちらの記録も 0 件で、`accepted` が 5 回出ている。
+- 実機の手順で踏んだ落とし穴（次に実機を回す人へ）: ⑷ は**別れの台詞が出る側のバルーン**を狙う必要がある。1 回目の走行では台詞が scope 1 に出たのに scope 0（前のトークの文字を出したまま時間切れ待ちだった側）を叩いてしまい、中断が起きないまま台詞が最後まで再生されて `talk_done_quit` で終わった。別れの台詞は表示から完了まで約 1.4 秒しかないので、先にその位置へカーソルを置いてから「終了」を選ぶ。
 
 ### 機能全体の検証で足したもの（2026-09-20）
 - 押下ハンドラの末尾が中断の入口を呼ぶ 1 行を固定するテスト `pressed_left_double_click_reaches_the_user_break_entry`（`crates/areka/src/input_events/balloon_pointer_handler_tests.rs`）を足した。GPU 無しではバルーンを出せないので受理までは進まないが、左ダブルクリックの検出の記録（`balloon_break_detected`）が出ることで呼び出しを固定する。摂動（呼び出しを外す）で赤・復帰で緑を確認済み。
