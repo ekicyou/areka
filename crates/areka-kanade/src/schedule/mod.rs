@@ -328,7 +328,11 @@ pub(crate) enum Action {
     },
     /// 選択待ちの解除＋トーク終了指示（→ [`TalkCommand::CancelChoice`](crate::talk::TalkCommand)）。
     ///
-    /// タイムアウト後に SHIORI が応答を返さなかった場合の解除（Req7.5）。発行点はタスク 4.5。
+    /// 発行点は 2 つある。⑴ タイムアウト後に SHIORI が応答を返さなかった場合の解除（Req7.5）。
+    /// ⑵ 利用者の中断の受理（[`user_break::on_user_break`]）——再生中のトークを止める唯一の指示で
+    /// ある。dispatcher の受け口は選択の状態を見ず、現行の枠と `talk_id` が一致すれば閉じ指示を
+    /// 転送するだけなので、選択待ちでないトークに使っても副作用は無い。名前が「選択」を指すのは
+    /// ⑴ が先にあったためで、⑵ は同じ単一の閉じ口を再利用している。
     CancelChoice {
         talk_id: TalkId,
     },
