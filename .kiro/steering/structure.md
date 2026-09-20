@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-09-19
+updated_at: 2026-09-20
 ---
 
 # Project Structure
@@ -70,7 +70,7 @@ updated_at: 2026-09-19
 **3. Graphics Resources** (`graphics/`)
 - 責務: Direct2D/WUC（Windows.UI.Composition）リソースのライフサイクル管理
 - 代表的なコンポーネント: `GraphicsCore`, `WindowGraphics`, `Visual`, `Surface`, `DeviceContext`
-- サブモジュール: `wuc_resource.rs`（WUC リソース・UI スレッド固定）, `compositor.rs`（`WindowD3D11Compositor` — ULW 専用・除去予定）, `compositor_systems/`（同・ULW 専用）, `visual_manager.rs`（Visualの挿入・管理API）, `command_list.rs`（D2Dコマンドリスト）
+- サブモジュール: `wuc_resource.rs`（WUC リソース・UI スレッド固定）, `visual_manager.rs`（Visualの挿入・管理API）, `command_list.rs`（D2Dコマンドリスト）
 - 特徴: デバイスロスト対応、遅延初期化、階層的描画
 
 **4. Layout System** (`layout/`)
@@ -259,7 +259,14 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### Application Binary Crate
 **Location**: `/crates/areka/`  
 **Purpose**: デスクトップマスコット・プラットフォーム本体  
-**Status**: 試作実装（シェル+バルーン2ウィンドウ表示、ドラッグ移動、ダブルクリック終了）＋ SHIORI 契約チェーン e2e（`shiori_host`/`shiori_session`/`reference_brain`＝native 脳デモ・`shiori_create` 入口）  
+**Status**: M1 完成（2026-09-11）・α（M2）進行中。`areka.exe <ghost root> [<balloon root>]` の位置引数で実ゴーストを起動する（構成入力の解決は `boot_config.rs`・本番 env は `AREKA_` 冠）。SHIORI 契約チェーン e2e（`shiori_host`/`shiori_session`/`reference_brain`＝native 脳デモ・`shiori_create` 入口）も同居  
+**Modules（役割のパターン）**:
+- `emo2_boot/` - **統合の背骨**（エンジン群の実 sink 差し替え・窓装着・毎フレーム駆動 `frame.rs`・起動〜終了の `spine.rs`）。名前は M-boot の経緯で、今は emo2 専用ではない（検体 3 体が同じ経路を通る）
+  - **cue の受け口は `*_cue.rs` の同型**（`zorder_cue`／`move_cue`／`readme_cue`）: 台本の cue は全員へ配られるので、受け口は ⑴ **自己選別**（自分の担当のコマンド名だけ受理・他は良性の読み飛ばし）と ⑵ **送り出し**（UI 側へ要求を運ぶだけ）に限る。担当の重複・取りこぼしは `consumer_ledger.rs`（消費者台帳）が見張る。新しい `\!` コマンドの消費者を足すときはこの型に倣う
+- `placement/` - 窓の生成・既定位置・ドラッグ・バルーン追従・DPI 追従（`follow.rs` はファサード形式の代表例）
+- `input_events/` - ポインタ入力 → SHIORI マウスイベント／メニューの引き金
+- `menu/` - 右クリックメニュー（`areka-P0-popup-menu-minimal` 2026-09-19）。**枠 7 種に供給関数を登記する口**（`MenuRegistry`）を持ち、後続 spec（列挙・切替・インストール・更新）は**メニュー本体を触らず自分の枠へ登記するだけ**で項目を足す。`plan`（構造の計算・純粋）／`captions`（項目名の SHIORI リソース照会）／`trigger`（引き金と段取り）／`win32`（`TrackPopupMenuEx`＝OS ネイティブ・自前窓なし・**`unsafe` はこのファイルに閉じる**）
+- `readme.rs` - 説明書を既定アプリで開く葉 module（メニューにも入力配線にも依存しない）
 **Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 
 ### Parser Crate
@@ -298,7 +305,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 
 ### Engine Crates（⓪③④⑤＋talk 契約・固有名は roadmap のエンジン表参照）
 - **`areka-ghost`（⓪・結線層）**: descript.txt 起点のマウント解決（`areka_parsers::package::resolve`）を入力に、shiori 通信層（host-32 経由）・kanade・sakura・ticker を起動順に結線し、終了時は逆順で統括する最上位 owner。
-- **`areka-kanade`（③・conductor）**: **運行表（scheduling state machine）の正本**。ghost の boot/steady/close 各フェーズの運行判断。純粋状態機械＋アクターシェル＋メッセージ境界差し替えの三層構造。**sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）。
+- **`areka-kanade`（③・conductor）**: **運行表（scheduling state machine）の正本**。ghost の boot/steady/close 各フェーズの運行判断。純粋状態機械＋アクターシェル＋メッセージ境界差し替えの三層構造。**sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）。UI（右クリックメニュー）からの複数件の SHIORI リソース照会（`KanadeMsg::ResourceQuery`）は**運行状態機械を経ずにアクターの殻で答える**（`actor_resources.rs`）——会話できる状態（`Phase::Steady`）のときだけ往復し、起動・終了系列の固定の呼出順へ割り込まない。送出の許可表は 1 か所のまま。
 - **`areka-sakura`（④・さくらスクリプト再生）**: SHIORI が返す Value を時間軸上で再生する **per-talk transient** エンジン＝`areka_parsers::sakura::parse` の `Instruction` 列から dola `CueSheet` へのコンパイラ。再生制御そのもの（状態機械・horizon・broadcast）は **dola `cue` が唯一のエンジン**（dola 節参照）。
 - **`areka-seriko`（⑤・SERIKO アニメ）**: サーフェス解決・状態・発行・構築・アクターを責務別モジュールへ分割。公開 API は crate root の `pub use` re-export に集約（唯一の公開面）。
 - **`areka-talk`（talk 契約 leaf）**: talk 授受契約の**物理正本**（`TalkId`／`StartTalk`／`TalkDone`／`TalkEndReason`／`TalkCommand`／`ChoiceWaiting`）。kanade（③）⇄ sakura（④）間契約の唯一の物理定義。**依存ゼロ（std のみ）**・エンジン知識を持ち込まない。
@@ -307,8 +314,9 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Location**: `/crates/areka-emo-atlas/`・`/crates/areka-emo-compose/`・`/crates/areka-emo-present/`・`/crates/areka-emo-text/`
 **Pattern**（自前コンポジタの三段直列チェーン・入力=(surface id, BindSet)・wintf へは完成品のみ）:
 - **`areka-emo-atlas`（1/3・pure）**: 素材基盤層＝bake パイプライン。アトラス正本（premultiplied BGRA・`Placement` 解決済み `AtlasTable`）。
-- **`areka-emo-compose`（2/3・pure）**: `areka-parsers::shell` の忠実転記モデル＋`AtlasTable` を入力に、静的合成済みビットマップ `ComposedSurface` を生成する純粋層。
-- **`areka-emo-present`（3/3・提示段）**: `ComposedSurface` を wintf の WUC 表示面へアップロード・提示し、当たり判定用 AlphaMask を供給。`presenter/show.rs` の `apply_show` が単一漏斗（k 導出・合成/キャッシュ・アップロード・マスク同期・可視化）。
+- **`areka-emo-compose`（2/3・pure）**: `areka-parsers::shell` の忠実転記モデル＋`AtlasTable` を入力に、静的合成済みビットマップ `ComposedSurface` を生成する純粋層。`base_image.rs` は**ファイル名の慣習だけで置かれた面の画像を「層 0 が空いているときだけ」土台として足す**（畳み込み `fold` の後に判定・新しい層の型は足さない）。
+- **`areka-emo-present`（3/3・提示段）**: `ComposedSurface` を wintf の WUC 表示面へアップロード・提示し、当たり判定用 AlphaMask を供給。`presenter/show.rs` の `apply_show` が単一漏斗（k 導出・合成/キャッシュ・アップロード・マスク同期・可視化）。**`shell_target.rs` がシェルのフォルダの読み込みの権威**（`areka-P0-shell-implicit-surface` 2026-09-20）: `surface<数字>.png` の名前判定はバルーンの面と**同じ 1 つの実装**（`balloon::face_digits_of`）を接頭辞違いで呼ぶ。fs を触るのは `load_shell_target` だけで、核 `build_shell_target` はメモリ上で通せる。
+- **記録を出す場所の型（emo 三段共通）**: 純粋な核（名前判定・土台の決定・核の組み立て）は fs にも記録にも触れず、**事実を戻り値（`…Report`）に載せるだけ**。`info!`／`warn!`／`error!` を出すのは **fs を触る入口 1 か所**で、読み込み 1 回につき 1 度だけ出す。
 - **`areka-emo-text`（テキスト層）**: バルーン文字レンダリング（spec 名は `areka-P0-emo-text-layer`・atlas/compose/present の単一トークン命名に倣う）。
   **主要ファイルと接続**（`areka-P0-text-decoration-canon` 2026-09-13 の分割後・接続はいずれも親ファイル内の `#[path = "…"] mod` 宣言＝`lib.rs` の `pub mod` は親だけを並べる）:
   - `draw.rs`（COM 層のファサード＝`ResolvedFont`／`DirectionRecipe`／`create_text_format`）＋ `draw_metrics.rs`（文字送り幅の計測 `DWriteMetrics`）／`draw_line_store.rs`（行レイアウトの保持庫 `LineLayoutStore`）／`draw_catalog.rs`（フォント候補列の解決 `FontCatalog`）
@@ -369,10 +377,17 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### Sample Ghost Kit Crate（sample-ghost-kit）
 **Location**: `/crates/sample-ghost-kit/`
 **Purpose**: 検体ゴースト／バルーンを**名前で引く窓口をワークスペースで唯一定義する**テスト専用 leaf（`areka-P0-nar-install` 2026-09-18）。検体の保管形は `/vendors/sample_ghost/*.nar` の配布形だけで、消費形は窓口が `target/` の下に展開して配る。テストが在処を自分で綴らなくなるので、置き場を動かしても直すのは登記表 1 か所になる。
+**検体の顔ぶれ**（正本は `vendors/sample_ghost/README.md`）: ゴースト 3 体＝`emo2`（pasta）・`R_POST_and_KOMAINU`（里々標準テンプレート）・`konnoyayame`（YAYA 標準テンプレート「紺野ややめ」）＋バルーン 2 本。**SHIORI 3 系統を 1 体ずつ**持つ。`konnoyayame.nar` だけは**配布物のバイト列そのまま**（シェルが CC BY-NC-ND＝畳み直さない・areka の配布物へ同梱しない）。同梱の既定バルーン `vendors/sample_ghost/StayseeBalloon/`（CC0）は**展開フォルダのまま**で登記表に載っていない（畳むのは roadmap 台帳 #42）。
 **Pattern**: 登記表 `SAMPLES`（検体を足す作業は `.nar` を 1 つ置いて登記表に 1 行＝2 手で終わる）と `SampleRoot`（原本は刻印つきで作り、配るのは複製・複製は札ファイルを開いている間だけ生き `Drop` で消える）。
 **Modules**: `devroot.rs`（窓口の本体）／`nar_writer.rs`（決定論テストの固定入力を組む＝圧縮側を使う唯一の場所）／`src/bin/nar-sample-path.rs`（実機運転用に検体の絶対パスを印字する bin。呼ぶたびに `manual/<検体>/` を作り直す）
 **Dependencies**: `areka-nar`（展開器）・`miniz_oxide`・`thiserror`・`publish = false`
 **Consumers**: テスト専用（`[dev-dependencies]`）。**`[dependencies]` へは決して置かない**（`log-capture-kit/tests/sample_path_guard_test.rs` が赤にする）。**迂回の検知が別 crate にあるのは `temp-path-kit` と同じ意図的な設計**（走査部品を複製しないため）
+
+### ukadoc Survey Toolkit Crate（ukadoc-survey）
+**Location**: `/crates/ukadoc-survey/`（データは `/doc/ukadoc-coverage/`）
+**Purpose**: ukadoc（SSP 公式仕様書）の項目について「正典の写し（カタログ）」と「areka の判定（台帳）」を建て、その整合を常時走るテスト（`tests/consistency.rs`）で守る**調査道具**（`areka-P0-ukadoc-survey-toolkit`）。**areka の実行時コードからは 1 行も参照されない leaf**・`publish = false`。
+**Pattern**: 純粋層（文字列と値だけ）と入出力層（`io`・判断を持たない）の 2 層。入口は実行ファイル（`cli`）と常時テストの 2 つで、判定の実体は純粋層に 1 つ。互換機能を着地させた spec は、同じ PR で `doc/ukadoc-coverage/ledger/*.toml` の該当項目の判定も更新している（実例: PR#159・PR#162）。
+**Dependencies**: `toml`（読み取りのみ・書き出しは自前 `tomlout.rs`）・`thiserror`・`serde_json`
 
 ### Vendored: pasta DSL Engine
 **Location**: `/vendors/pasta/`（git サブモジュール）  

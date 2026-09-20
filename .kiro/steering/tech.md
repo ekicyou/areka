@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-09-19
+updated_at: 2026-09-20
 ---
 
 # Technology Stack
@@ -100,6 +100,9 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **構造化ログ**: `tracing` を全体規約とし、subscriber初期化はアプリ層で行う
 - **pasta のベンダリング**: 外部依存だった `pasta_core` を git サブモジュール（`vendors/pasta/`）として同梱し、`[patch.crates-io]` でローカルパスへ差し替える。wintf/dola/areka とDSLエンジンを同一ワークスペースで協調開発するための運用。クローン時は `git submodule update --init` が必要
 - **ukadoc互換ベースウェア戦略（2026-06-26）**: areka を ukadoc準拠の互換ベースウェア（SSP代替）として確立する。SERIKO/MAYUNA完全マップ＋さくらスクリプト優先度順。SERIKO/さくらスクリプトランナーは「タイミング特化の下位層 dola」の上に建てる上位層。SERIKOを平坦サブセットに内包する**階層サーフェスエンジン**（エレメント→別サーフェス定義参照・wintf visual-tree＋dola nested-storyboard）。SHIORIは内部唯一ABI=`IShiori`(COM, HSTRING/UTF-16)、ネイティブ=in-proc COM、過去互換=32bit Rustホスト（flat-C/HGLOBAL/charset/SAORI同居/自前IPC。**IPC は WM_COPYDATA 一本化＋再入 RESPONSE・x64⟷x86 を跨ぐのは生バイト列のみ**＝`areka-P0-host32-ipc` 2026-07-02 完了・3クレート `shiori-host32-ipc`/`-host`/`-helper`）。詳細の正本は `doc/COMPAT_ARCHITECTURE.md`
+- **右クリックメニューは OS ネイティブ（2026-09-19・`areka-P0-popup-menu-minimal`）**: `CreatePopupMenu`＋`TrackPopupMenuEx`（`TPM_RETURNCMD`）で出し、持ち主はキャラクター窓そのもの。**自前の窓もオーナードローも持たない**（描画・キーボード操作・外側クリックで閉じる作法は OS 任せ＝α の表現力据え置き方針）。項目名は SHIORI リソースを照会し、会話できない状態や答えが無いときは既定名で出す。
+- **シェルの面はファイル名の慣習でも建つ（2026-09-20・`areka-P0-shell-implicit-surface`）**: `surfaces.txt` に `element` 行が無くても `surface<数字>.png` を面の層 0 として認める（里々／YAYA 標準テンプレートの流儀）。透過は **areka は宣言に依らず常に `use_self_alpha,1` 相当**で、α チャンネルの無い絵は**左上 1 画素と 32bit 完全一致の色を抜く**（許容幅 0）。`.pna`・`full`・`0` は型の口だけのシーム（未実装）。
+- **検体は配布形 `.nar` のまま保管し、テストは窓口越しに引く**: `vendors/sample_ghost/*.nar`＋`sample-ghost-kit`（structure.md）。第三者の検体は出どころとライセンスを同フォルダの README に登記し、**改変禁止のものは畳み直さず areka の配布物へも入れない**（`konnoyayame`）。配布物へ入れてよいのは CC0 の既定バルーン `StayseeBalloon` のように再配布条件が明確なものだけ。**`THIRD-PARTY-NOTICES.md` は `cargo about` の自動生成で cargo 依存でない資産は載らない**ので、資産の出典告知は第三者向け README（`areka-P0-alpha-release-signoff`）が担う。
 
 ---
 Document standards and patterns, not every dependency.

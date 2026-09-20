@@ -4,7 +4,7 @@
 
 | ファイル | 種別 | 中のファイル数 | 大きさ |
 |---|---|---|---|
-| `emo2.nar` | ゴースト（同梱バルーン `emo2-kakukaku`） | 110 | 6,631,325 バイト |
+| `emo2.nar` | ゴースト（同梱バルーン `emo2-kakukaku`） | 110 | 4,560,408 バイト |
 | `R_POST_and_KOMAINU.nar` | ゴースト | 43 | 1,625,603 バイト |
 | `emo2-kakukaku-offsetdpi.nar` | バルーン | 20 | 35,788 バイト |
 | `emo2-kakukaku-wplimit.nar` | バルーン | 20 | 33,906 バイト |
