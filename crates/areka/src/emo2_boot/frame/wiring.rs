@@ -68,6 +68,8 @@ pub struct Emo2Wiring {
     /// 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す（design 決定 D4＝α）。会話の開始
     /// （[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端
     /// （[`TalkLifecycleSignal::DisplayEndAt`]）が talk 相対秒で FIFO に届く。
+    /// 送り手はもう 1 つある: UI スレッドの押下ハンドラが、送出端の複製から利用者の中断
+    /// （[`TalkLifecycleSignal::UserBreak`]）を同じ線へ流す（areka-P0-balloon-break）。
     ///
     /// 取り出しは可視性相の `try_iter` による**全件 drain**。受信前の信号はチャネル
     /// 自身が保留バッファとして預かるため、attach 前に始まった会話の信号も落ちない。

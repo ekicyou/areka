@@ -175,7 +175,7 @@ crates/areka-sakura/src/
 - `crates/areka-kanade/src/schedule/mod.rs` の `enum Action` の `CancelChoice` の doc — 発行点が 2 つ（選択肢の時間切れの解除・利用者の中断）になったことを書く。
 - `doc/COMPAT_ARCHITECTURE.md` — 3 行を足し 1 行を直す（後述「互換対応表」）。
 - `doc/ukadoc-coverage/ledger/sakura-script.toml`・`doc/ukadoc-coverage/roadmap-draft.md`・`doc/ukadoc-coverage/report/` — 要件 8。
-- 触らないことを明示するもの（**変更 0 行**）: `crates/areka-kanade/src/schedule/steady.rs`（935 行）・`crates/areka-kanade/src/status.rs`・`crates/areka-ghost/src/dispatcher.rs` の製品コード・`crates/areka/src/emo2_boot/balloon_visibility_phase.rs`・`crates/areka/src/main.rs`・`crates/areka/src/placement/spawn.rs`。
+- 触らないことを明示するもの（**変更 0 行**。ただし `steady.rs` は、旧規則「quit:false→Steady」を語っていた `fn begin_close` の doc の 1 語だけを新規則へ直した＝コードの変更 0 行・行数の増減 0）: `crates/areka-kanade/src/schedule/steady.rs`（935 行）・`crates/areka-kanade/src/status.rs`・`crates/areka-ghost/src/dispatcher.rs` の製品コード・`crates/areka/src/emo2_boot/balloon_visibility_phase.rs`・`crates/areka/src/main.rs`・`crates/areka/src/placement/spawn.rs`。
 
 ### 行数の見立て（要件 7.8）
 | ファイル | 現在 | 増分の見立て | 判定 |
