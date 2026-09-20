@@ -1,7 +1,9 @@
 //! single-pass fold: parser の登場順定義ストリームを `EmoWorld` へ畳み込む。
 //!
-//! plain `surfaceN,M`／`N-M` は全 id を新設・`surface.append` は既存 id のみへ追記
-//! （存在条件付き・ukadoc 意味論）。ターゲット記述子の単一・列挙・範囲を展開し、除外指定
+//! plain `surfaceN,M`／`N-M` は全 id を新設・`surface.append` は既にある id のみへ追記
+//! （存在条件付き・ukadoc 意味論）。「既にある」には、波括弧が 1 行も無くてもファイル名だけで
+//! 置かれた絵を持つ番号（`SurfaceImages`）を含む（要件 3.7）。ターゲット記述子の単一・列挙・
+//! 範囲を展開し、除外指定
 //! （`!N`／`!a-b`）を展開時に減算適用する。複数定義が同一 surface に効く場合は登場順を保った
 //! 順序で決定的に適用し、append ブロックが持つ element・collision・animation を対象 surface へ
 //! 反映しつつ alias を収集する。参照 id が存在しない場合はパニックせず `warn` 以上で観測可能に扱う。
@@ -9,8 +11,10 @@
 use areka_parsers::shell::{
     AppendTarget, DefRef, Element, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
+use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 
+use crate::base_image::SurfaceImages;
 use crate::method::ComposeMethod;
 use crate::normalized::{NormalizedElement, SurfaceMaster, Transform};
 use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
@@ -18,8 +22,8 @@ use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
 /// `Shell.definitions` を登場順に single-pass で走査し `World` へ畳み込む（要件 1.7）。
 ///
 /// plain `surface` ヘッダ（[`DefRef::Surface`]）は全 id 新設、`surface.append`
-/// （[`DefRef::Append`]）は展開後その時点でツリーに存在する id のみへ追記する（存在条件付き・
-/// 要件 2.2）。登場順で走査するため、append は「その時点までに積まれた状態」に対して効き、後続で
+/// （[`DefRef::Append`]）は展開後その時点で既にある id のみへ追記する（存在条件付き・要件 2.2。
+/// 「既にある」は画像だけで存在する面を含む＝[`fold_append`]）。登場順で走査するため、append は「その時点までに積まれた状態」に対して効き、後続で
 /// 定義される surface へは遡及しない（要件 2.3・前方参照なし）。alias（[`DefRef::Alias`]）は
 /// `AliasMap` へ収集し、同一キーは登場順で後勝ちとする（要件 3.1/3.2）。
 ///
@@ -83,11 +87,13 @@ fn fold_plain_surface(world: &mut World, surface: &Surface) {
     }
 }
 
-/// `surface.append` 定義 1 件を展開し、**その時点で既存の id のみ**へ追記する（要件 2.2/2.4）。
+/// `surface.append` 定義 1 件を展開し、**その時点で既にある id のみ**へ追記する（要件 2.2/2.4/3.7）。
 ///
 /// ターゲット記述子を plain と同一規則で展開し（単一・列挙・両端含む範囲・[`expand_targets`]）、
-/// 各 id が [`SurfaceIndex`] に存在する場合のみ対象 [`SurfaceMaster`] を in-place マージする
-/// （despawn/respawn しない）。非存在 id は新設せず `warn` でスキップする（要件 1.4/2.2）。
+/// 各 id が [`SurfaceIndex`] に存在する場合は対象 [`SurfaceMaster`] を in-place マージする
+/// （despawn/respawn しない）。波括弧が 1 行も無くても [`SurfaceImages`] に画像が在る番号は
+/// 「既にある面」に数え、空の [`SurfaceMaster`] をその場で作ってから同じ追記を行う（要件 3.7・C6）。
+/// どちらにも無い id は新設せず `warn` でスキップする（要件 1.4/2.2/3.8）。
 /// 登場順の走査（[`fold_shell`]）ゆえ、後続で定義される surface へは遡及しない（要件 2.3）。
 fn fold_append(world: &mut World, append: &SurfaceAppend) {
     // 追記 element は plain と同一の正規化（x,y→Transform・method=Overlay）で用意する。
@@ -95,14 +101,33 @@ fn fold_append(world: &mut World, append: &SurfaceAppend) {
         append.elements.iter().map(normalize_element).collect();
 
     for id in expand_targets(&append.targets) {
-        // 存在条件: その時点でツリーに存在する id のみ対象（非存在は新設しない・要件 2.2）。
-        let Some(entity) = world.resource::<SurfaceIndex>().0.get(&id).copied() else {
-            tracing::warn!(
-                target: "areka_emo_compose",
-                id,
-                "surface.append 対象 id が未存在: 新設せずスキップ（存在条件付き）"
-            );
-            continue;
+        // 存在条件: その時点でツリーに在る id と、ファイル名だけで置かれた絵を持つ id が対象
+        // （どちらにも無ければ新設しない・要件 2.2/3.7/3.8）。
+        let entity = match world.resource::<SurfaceIndex>().0.get(&id).copied() {
+            Some(entity) => entity,
+            None if has_base_image(world, id) => {
+                // 画像だけで存在する面。空の master を置いてから、既存の面と同じ追記を行う。
+                // 画像そのものは畳み込みの後の `apply_base_images` が層 0 へ敷く（追記が層 0 を
+                // 足していればそちらが優先され、画像は `shadowed` に数えられる）。
+                upsert_surface(
+                    world,
+                    id,
+                    SurfaceMaster {
+                        id,
+                        elements: Vec::new(),
+                        collisions: Vec::new(),
+                        animations: Vec::new(),
+                    },
+                )
+            }
+            None => {
+                tracing::warn!(
+                    target: "areka_emo_compose",
+                    id,
+                    "surface.append 対象 id が未存在: 新設せずスキップ（存在条件付き）"
+                );
+                continue;
+            }
         };
         let Some(mut master) = world.get_mut::<SurfaceMaster>(entity) else {
             // SurfaceIndex に載るが component 欠落（本来生じない不整合）。観測可能化してスキップ。
@@ -124,6 +149,17 @@ fn fold_append(world: &mut World, append: &SurfaceAppend) {
         // animation: 同一 id は後勝ち置換（+warn）・新 id は追加（要件 2.4）。
         merge_animations(id, &mut master.animations, &append.animations);
     }
+}
+
+/// 番号 `id` が、ファイル名だけで置かれた絵を持つか（要件 3.7）。
+///
+/// [`SurfaceImages`] は面の表を組む入口（[`crate::EmoWorld::build_with_images`]）が畳み込みの前に
+/// 置く。[`fold_shell`] を直に呼ぶテストは置かないことがあるので、欠けていれば「画像 0 件」と
+/// 読む（畳み込みだけを通した素の結果＝本仕様の適用前と同じ振る舞い）。
+fn has_base_image(world: &World, id: u32) -> bool {
+    world
+        .get_resource::<SurfaceImages>()
+        .is_some_and(|images| images.0.contains_key(&id))
 }
 
 /// `kero.surface.alias` の 1 エントリを `AliasMap` へ収集する（要件 3.1/3.2）。
@@ -251,8 +287,9 @@ fn normalize_element(element: &Element) -> NormalizedElement {
     }
 }
 
-/// id→entity を登録する。既存 id は全置換（後勝ち）＋ `warn`（要件 2.1・ukadoc 明文規則なし＝de-facto）。
-fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster) {
+/// id→entity を登録し、その entity を返す。既存 id は全置換（後勝ち）＋ `warn`
+/// （要件 2.1・ukadoc 明文規則なし＝de-facto）。
+fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster) -> Entity {
     let existing = world.resource::<SurfaceIndex>().0.get(&id).copied();
     if let Some(old_entity) = existing {
         tracing::warn!(
@@ -265,6 +302,7 @@ fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster) {
     }
     let entity = world.spawn((SurfaceId(id), master)).id();
     world.resource_mut::<SurfaceIndex>().0.insert(id, entity);
+    entity
 }
 
 #[cfg(test)]

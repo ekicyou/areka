@@ -27,7 +27,7 @@
 
 「登場した版」は、その項目が正典で最初に現れた版である。カタログがその項目に版を 1 つも記録していないときは `—` と書いた——**66 項目**がこれに当たる。版が記録されているのは **71 項目**で、最も古いものが 2.3.53、最も新しいものが 2.8.52 である。カタログが 2 つ以上の版を記録している項目はこのページに 2 つあり（`element*` と `animation*.pattern*`）、どちらも最も古い版を採った。この選び方は台帳の冒頭に書いてある規則そのままである。
 
-「areka の状態」は台帳の状態をそのまま写したもので、語の意味は報告 `doc/ukadoc-coverage/report/assets.md` と同じである。このページの内訳は 実装済み 4・語彙のみ 57・縮退 4・別名 4・未対応 68 の合わせて 137 件で、**対象外は 0 件、未分類も 0 件**である。実装済みの 4 件は `overlay`・`add`・`random,数値`・`animation-sort,ソート順序` で、この 4 つだけがソース側に正典 URL の 1 行を持っている。
+「areka の状態」は台帳の状態をそのまま写したもので、語の意味は報告 `doc/ukadoc-coverage/report/assets.md` と同じである。このページの内訳は 実装済み 7・語彙のみ 55・縮退 4・別名 4・未対応 67 の合わせて 137 件で、**対象外は 0 件、未分類も 0 件**である。実装済みの 7 件は `overlay`・`add`・`random,数値`・`animation-sort,ソート順序`・`charset,文字コード`・`sometimes`・`rarely` で、この 7 つだけがソース側に正典 URL の 1 行を持っている（`crates/areka-emo-compose/src/method.rs:148`・同 `:149`、`crates/areka-parsers/src/shell/decode.rs:388`・同 `:502`、`crates/areka-parsers/src/charset/prescan.rs:57`、`crates/areka-seriko/src/table.rs:131`・同 `:133`。2026-09-20 に `crates/` を当たって数え直した）。
 
 | 項目 id | 見出し | 登場した版 | areka の状態 |
 | --- | --- | --- | --- |
@@ -108,7 +108,7 @@
 | `ukadoc:descript_shell_surfaces:blend-subtract:1` | `blend-subtract` | `2.8.40` | 未対応 |
 | `ukadoc:descript_shell_surfaces:blend-vivid-light-fast:1` | `blend-vivid-light-fast` | `2.8.40` | 未対応 |
 | `ukadoc:descript_shell_surfaces:blend-vivid-light:1` | `blend-vivid-light` | `2.8.40` | 未対応 |
-| `ukadoc:descript_shell_surfaces:charset_2c_6587_5b57_30b3_30fc_30c9:1` | `charset,文字コード` | — | 未対応 |
+| `ukadoc:descript_shell_surfaces:charset_2c_6587_5b57_30b3_30fc_30c9:1` | `charset,文字コード` | — | 実装済み |
 | `ukadoc:descript_shell_surfaces:collision-sort_2c_30bd_30fc_30c8_9806_5e8f:1` | `collision-sort,ソート順序` | — | 語彙のみ |
 | `ukadoc:descript_shell_surfaces:collision_2a_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y_2cID:1` | `collision*,始点X,始点Y,終点X,終点Y,ID` | — | 縮退 |
 | `ukadoc:descript_shell_surfaces:collisionex_2a_2cID_2c_30bf_30a4_30d7_2c_5ea7_6a191_2c_5ea7_6a192...:1` | `collisionex*,ID,タイプ,座標1,座標2...` | `2.5.19` | 未対応 |
@@ -144,14 +144,14 @@
 | `ukadoc:descript_shell_surfaces:point.kinoko.centerx_2c_5ea7_6a19:1` | `point.kinoko.centerx,座標` | — | 未対応 |
 | `ukadoc:descript_shell_surfaces:point.kinoko.centery_2c_5ea7_6a19:1` | `point.kinoko.centery,座標` | — | 未対応 |
 | `ukadoc:descript_shell_surfaces:random_2c_6570_5024:1` | `random,数値` | — | 実装済み |
-| `ukadoc:descript_shell_surfaces:rarely:1` | `rarely` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:rarely:1` | `rarely` | — | 実装済み |
 | `ukadoc:descript_shell_surfaces:reduce:1` | `reduce` | — | 語彙のみ |
 | `ukadoc:descript_shell_surfaces:replace:1` | `replace` | — | 語彙のみ |
 | `ukadoc:descript_shell_surfaces:runonce:1` | `runonce` | — | 語彙のみ |
 | `ukadoc:descript_shell_surfaces:sakura.balloon.offsetx_2c_5ea7_6a19:1` | `sakura.balloon.offsetx,座標` | — | 未対応 |
 | `ukadoc:descript_shell_surfaces:sakura.balloon.offsety_2c_5ea7_6a19:1` | `sakura.balloon.offsety,座標` | — | 未対応 |
 | `ukadoc:descript_shell_surfaces:scaling:1` | `scaling` | `2.7.28` | 未対応 |
-| `ukadoc:descript_shell_surfaces:sometimes:1` | `sometimes` | — | 語彙のみ |
+| `ukadoc:descript_shell_surfaces:sometimes:1` | `sometimes` | — | 実装済み |
 | `ukadoc:descript_shell_surfaces:start_2cID:1` | `start,ID` | — | 未対応 |
 | `ukadoc:descript_shell_surfaces:starttalk:1` | `starttalk` | `2.7.26` | 語彙のみ |
 | `ukadoc:descript_shell_surfaces:stop_2cID:1` | `stop,ID` | — | 未対応 |
@@ -171,7 +171,7 @@
 
 ### 表に添える 4 つの注記
 
-**⑴ アニメーションを動かす間隔の語は 2 語だけである。** `animation*.interval` の 2 つめの欄に書く語を、areka は 2 か所で扱う。転記側は `areka-parsers` の `shell::normalize_interval`（`crates/areka-parsers/src/shell/decode.rs:385`）で、`bind`（`:387`）・`random`（`:389`）・`bind+random`（`:392`）の 3 語をそれぞれの値にし、それ以外の語（`sometimes`・`always` など）は綴りを保ったまま持ち上げる（`:396`）。駆動側は `areka-seriko` の `AnimationTable::from_world` の中の振り分け（`crates/areka-seriko/src/table.rs:105`〜`:137`）で、ここで再生を動かすものとして採るのは `random`（`:106`）と `bind+random`（`:107`〜`:109`）の **2 つだけ**である。**`bind` は駆動しない**——採らずに控えめな段の記録を 1 行残して次へ進む（`:110`〜`:117`）。それ以外の語も同じく採らない（`:118`〜`:127`）。控えめな段は既定では見えない（前掲・`crates/areka/src/main.rs:141`）ので、`interval,bind` や `interval,sometimes` と書いた宣言は、利用者から見ると何も起きずに終わる。表で `bind` と、それ以外の間隔語が「語彙のみ」になっているのはこのためである。
+**⑴ アニメーションを動かす間隔の語は 4 語である（2026-09-20 に 2 語から増えた）。** `animation*.interval` の 2 つめの欄に書く語を、areka は 2 か所で扱う。転記側は `areka-parsers` の `shell::normalize_interval`（`crates/areka-parsers/src/shell/decode.rs:385`）で、`bind`（`:387`）・`random`（`:389`）・`bind+random`（`:392`）の 3 語をそれぞれの値にし、それ以外の語（`sometimes`・`always` など）は綴りを保ったまま持ち上げる（`:396`）。駆動側は `areka-seriko` の `AnimationTable::from_world` の中の振り分け（`crates/areka-seriko/src/table.rs:112`〜`:168`。本節の行番号のうちこの関数の分だけは 2026-09-20 に測り直した）で、ここで再生を動かすものとして採るのは `random`（`:113`）・`bind+random`（`:114`〜`:116`）と、`random,2`／`random,4` と同じ引き金へ読み替える `sometimes`（`:132`）・`rarely`（`:134`）の **4 つ**である。読み替えは小文字の完全一致で、`Sometimes` のような大文字混じりの綴りは当たらない。**`bind` は駆動しない**——採らずに控えめな段の記録を 1 行残して次へ進む（`:117`〜`:124`）。読み替えに当たらない語（`always`・`periodic`・`runonce` など）も同じく採らない（`:148`〜`:156`）。控えめな段は既定では見えない（前掲・`crates/areka/src/main.rs:141`）ので、`interval,bind` や `interval,always` と書いた宣言は、利用者から見ると何も起きずに終わる。表で `bind` と、読み替えに当たらない間隔語が「語彙のみ」に、`sometimes` と `rarely` が「実装済み」になっているのはこのためである。
 
 **⑵ `bind+random` には正典の項目が無いので、表に行を作っていない。** 駆動する 2 語の一方であるこの綴りは、カタログの ukadoc 1,749 件のどの見出しにも無い（2026-09-06 に数え直して 0 件）。正典の文書を本文まで含めて検索しても当たらない（同日・0 件）。台帳に載る項目の数（542 件）とページ（24 ページ）は正典の側で決まっているので、areka だけが持つ綴りのために新しい行を作ることはしない。代わりに、駆動するもう一方の `random,数値`（`ukadoc:descript_shell_surfaces:random_2c_6570_5024:1`）の備考に、この綴りも同じく駆動する旨を書いた。この注記がもう 1 つの置き場である。
 
@@ -269,10 +269,10 @@
 
 - **分類**: 黙って捨てる。
 - **根拠**: `crates/areka-parsers/src/shell/decode.rs` が塊の見出しで振り分ける（`dispatch_block`・`:115`）。受けるのは 4 語だけで、`descript`（`:118`・中身ごと捨てる）・`kero.surface.alias`（`:122`）・`surface.append*`（`:127`）・`surfaceNNN`（`:132`）である。**どれにも当たらない見出しの塊は `:156` で何も積まずに終わる。** 塊の外の行は、並べ方の 2 語（`animation-sort`・`collision-sort`）だけが値になり、それ以外は `:91`〜`:93` と `:492`（`decode_sort_key`）で何もされない。塊の中でも、重ね合わせの行は第 2 欄が `overlay` のときだけ値になり（`:197`〜`:199`・`decode_elements`）、当たり判定の行は `collision` に続く部分が数字だけのときに限られる（`:234`〜`:236`・`decode_collisions`）——円・楕円・多角形を書く `collisionex` はここで**何も記録せずに読み飛ばされる**。
-- **記録**: なし。ただし 2 つ、押さえておくことがある。1 つめ。アニメーションを起こす間隔の語だけは、転記のあと下流で記録が出る（`crates/areka-seriko/src/table.rs:111`・`:120`・`:129`）。段は控えめで既定の水準では見えないので、壊れ方は「黙って壊れる」である（要件 3.5a）。2 つめ。**このファイルの文字コードの宣言は読まれない。** ゴースト・シェル・バルーンの descript が前走査を通るのに対し、surfaces.txt を本番で読む 2 か所（`crates/areka/src/emo2_boot/assets.rs:279` の `build_boot_assets` と `crates/areka/src/placement/measure.rs:333` の `build_shell_assets`）はどちらも標準ライブラリの読み取りで UTF-8 として読む。UTF-8 以外で書かれたシェルは読み取りの段で失敗し、その失敗はエラー段に記録される（`measure.rs:334`・`emo2_boot/mod.rs:220`）。起動はそこで止まらず、シェルを出さないまま続く。宣言そのものは黙って消えるが、その帰結は既定の水準で見える。
+- **記録**: なし。ただし 2 つ、押さえておくことがある。1 つめ。アニメーションを起こす間隔の語だけは、転記のあと下流で記録が出る（`crates/areka-seriko/src/table.rs:111`・`:120`・`:129`）。段は控えめで既定の水準では見えないので、壊れ方は「黙って壊れる」である（要件 3.5a）。2 つめ。**このファイルの文字コードの宣言は読まれる。** 本番でこのファイルを読む入口は `areka-emo-present` の `shell_target::load_shell_target`（`crates/areka-emo-present/src/shell_target.rs:230`。読み取りは `:254`、復号は `:255`）の 1 か所で、ゴースト・シェル・バルーンの descript と同じ前走査を通す（`areka-parsers` の `charset::decode` が `charset::prescan_charset` を呼び、宣言された文字コードで全体を復号する）。起動の `build_boot_assets`（`crates/areka/src/emo2_boot/assets.rs:291`）も採寸の `build_shell_assets`（`crates/areka/src/placement/measure.rs:336`）も、この 1 つの入口を呼ぶ。Shift_JIS で書かれた既存シェルもそのまま読める。綴りを解けないときだけ、呼ぶ側の決めた既定（本番は Shift_JIS）へ静かに落ちて控えめな段の記録が出る（`charset/decode.rs:35`）ので、そこは ⑴・⑵・⑷ と同じ例外である。台帳がこのページの `charset,文字コード` を実装済みとしているのはこのためである（**この段落は 2026-09-20 に測り直した。** 以前は「宣言は読まれず UTF-8 として読む」と書いてあったが、読み取りの入口が 1 か所へ寄る前から復号は前走査を通っており、当時の記述が誤っていた）。
 - **その記述を読むのは誰か**: 転記層では止まらない。`areka-parsers` の `shell::parse` が組んだものを、`areka-seriko` がアニメーションの表へ、`areka-emo-compose` と `areka-emo-atlas` が絵の重ね合わせへ、`areka` の窓の配置が採寸へ使う。読み飛ばされた行は転記層にも残らない。
 - **成立に要る基盤**: emo の合成器 69 件・SERIKO/MAYUNA の再生 26 件・マウスの矢印の差し替え 15 件が大きく、ほかに窓の配置と重なりの解決 12 件・当たり判定の形の拡張 5 件・シェルの定義ファイルの転記層 4 件が続く。
-- **台帳の内訳**: 137 件（実装済み 4・語彙のみ 57・縮退 4・別名 4・未対応 68・対象外 0）。
+- **台帳の内訳**: 137 件（実装済み 7・語彙のみ 55・縮退 4・別名 4・未対応 67・対象外 0）。
 
 #### ⑷ バルーンの descript（`balloon/<系列>/descript.txt`）
 

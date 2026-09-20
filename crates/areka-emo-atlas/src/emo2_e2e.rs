@@ -76,20 +76,23 @@ fn hand_surface(id: u32, rel: &str) -> Surface {
 
 /// emo2 shell の実測フィクスチャ事実（本統合テストが依拠する）。
 ///
-/// `surfaces.txt` が参照する 55 の distinct element 画像は全て実在するが、そのうち
-/// ちょうど 1 枚 `purple/a/null.png` は **α チャンネルを持たない** PNG（かつ同名
-/// `.pna` 兄弟も無い）。`use_self_alpha=On` の下では正規化器が優先順位（α ＞ .pna ＞
-/// キーカラー）に従い KeyColor 腕を選ぶが、本層は AlphaChannel 腕のみ実装ゆえ、この
-/// 1 エントリだけが `BakeError::Normalize { source: Unsupported(KeyColor) }` として
-/// 分離される（R2.2/5.6 の per-entry 分離を実 fixture で行使）。他の全 element は生存する。
+/// `surfaces.txt` が参照する 55 の distinct element 画像は全て実在する。そのうち
+/// ちょうど 1 枚 `purple/a/null.png`（382×547）は **α チャンネルを持たない** PNG
+/// （かつ同名 `.pna` 兄弟も無い）ゆえ、`use_self_alpha=On` の下では正規化器が
+/// 優先順位（α ＞ .pna ＞ キーカラー）に従い**抜き色の腕**を選ぶ。この絵は全画素が
+/// 左上の画素と同じ色なので、抜き色の結果は**全画素が透明**になり、トリム後 0 寸の
+/// 空エントリ（`placement == None`）として索引表に載る。失敗ではない（R5.5/5.6）。
+/// 残る 54 枚は α チャンネルの腕を通る。すなわち本 fixture の bake は**失敗 0 件**で、
+/// 55 の manifest key が全て索引表に載る。
 const SHELL_NORMALIZE_SEAM_KEY: &str = "purple/a/null.png";
 
-/// テスト①: emo2 shell — 全 element が（ドキュメント済み seam 1 件を除き）索引表に載り
-/// 頁が生成される（1.1/6.1/6.2＋2.2/5.6 を実 fixture で行使）。
+/// テスト①: emo2 shell — 全 element が索引表に載り頁が生成される（1.1/6.1/6.2＋
+/// 5.5/5.6 を実 fixture で行使）。
 ///
 /// 実 `surfaces.txt` を parse → SurfaceSet として bake。参照 element は全て実在するため
-/// デコード失敗は無く、唯一 α 無しの `purple/a/null.png` のみ正規化 seam として分離され、
-/// 他の全 manifest key は生存・resolve→Some、頁生成、surface0.png が配置される。
+/// デコード失敗は無く、α 無しの `purple/a/null.png` も抜き色の腕を通って全透明の絵として
+/// 載るので、**失敗は 0 件**・全 manifest key が resolve→Some、頁生成、surface0.png が
+/// 配置される。
 #[test]
 fn emo2_shell_all_elements_baked() {
     let content = std::fs::read_to_string(emo2("shell/master/surfaces.txt"))
@@ -121,13 +124,13 @@ fn emo2_shell_all_elements_baked() {
             .any(|k| k.set == SetId(0) && k.rel_path == "surface0.png"),
         "manifest contains known key surface0.png"
     );
-    // fixture 事実の前提: seam key が manifest に含まれる（含まれなければ本テストの前提が崩れる）。
+    // fixture 事実の前提: α 無しの key が manifest に含まれる（含まれなければ本テストの前提が崩れる）。
     assert!(
         manifest
             .keys
             .iter()
             .any(|k| k.set == SetId(0) && k.rel_path == SHELL_NORMALIZE_SEAM_KEY),
-        "manifest contains the documented normalize-seam key {SHELL_NORMALIZE_SEAM_KEY}"
+        "manifest contains the documented key-color key {SHELL_NORMALIZE_SEAM_KEY}"
     );
 
     with_com_initialized(|| {
@@ -140,42 +143,45 @@ fn emo2_shell_all_elements_baked() {
         };
         let result = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
 
-        // 実在ファイルのみ参照ゆえデコード失敗は 0。唯一の失敗は α 無し null.png の
-        // 正規化 seam（KeyColor）で、それ以外は生存する（per-entry 分離・R2.2）。
-        for e in &result.errors {
-            match e {
-                BakeError::Normalize { key, .. }
-                    if key.set == SetId(0) && key.rel_path == SHELL_NORMALIZE_SEAM_KEY => {}
-                other => panic!(
-                    "unexpected bake error (only the documented null.png normalize seam is tolerated): {other:?}"
-                ),
-            }
-        }
-
-        // 索引表は「全 manifest key − 失敗数」= 生存件数で密に構築される（1.1 の全列挙＋
-        // per-entry 分離）。null.png 1 件のみ脱落する前提を件数で固定する。
-        assert_eq!(
-            result.table.len(),
-            manifest.keys.len() - result.errors.len(),
-            "survivors = all manifest keys minus isolated failures"
+        // 実在ファイルのみ参照ゆえデコード失敗は 0。α 無しの null.png も抜き色の腕を
+        // 通るので正規化の失敗も 0。すなわち失敗は 1 件も出ない（R5.5/5.6）。
+        assert!(
+            result.errors.is_empty(),
+            "emo2 shell bakes with zero failures, got {:?}",
+            result.errors
         );
 
-        // seam key を除く全 manifest key が resolve→Some（他エントリの継続・往復整合）。
+        // 索引表は全 manifest key で密に構築される（1.1 の全列挙・脱落 0 件）。
+        assert_eq!(
+            result.table.len(),
+            manifest.keys.len(),
+            "every manifest key is present in the table (no drop-outs)"
+        );
+
+        // 全 manifest key が resolve→Some（往復整合）。
         for key in &manifest.keys {
-            if key.set == SetId(0) && key.rel_path == SHELL_NORMALIZE_SEAM_KEY {
-                // seam entry は索引表に不在（分離された）。
-                assert_eq!(
-                    result.table.resolve(key.set, &key.rel_path),
-                    None,
-                    "the normalize-seam key is absent from the table"
-                );
-            } else {
-                assert!(
-                    result.table.resolve(key.set, &key.rel_path).is_some(),
-                    "manifest key {key:?} resolves in the table (continuation)"
-                );
-            }
+            assert!(
+                result.table.resolve(key.set, &key.rel_path).is_some(),
+                "manifest key {key:?} resolves in the table"
+            );
         }
+
+        // α 無しの null.png は「全画素が透明な絵」として載る＝索引表に在り、原寸は
+        // 382×547 のまま、トリム後 0 寸ゆえ placement は None（R5.5）。
+        let null_id = result
+            .table
+            .resolve(SetId(0), SHELL_NORMALIZE_SEAM_KEY)
+            .unwrap_or_else(|| panic!("{SHELL_NORMALIZE_SEAM_KEY} resolves in the table"));
+        let null_entry = result.table.entry(null_id);
+        assert_eq!(
+            (null_entry.original.w, null_entry.original.h),
+            (382, 547),
+            "{SHELL_NORMALIZE_SEAM_KEY} keeps its original extent"
+        );
+        assert!(
+            null_entry.placement.is_none(),
+            "{SHELL_NORMALIZE_SEAM_KEY} is fully transparent after key-color → empty placement"
+        );
 
         // 頁が生成されている（6.1）。
         assert!(
@@ -234,17 +240,13 @@ fn emo2_balloon_same_bake_path_as_shell() {
         // shell(set0) と balloon(set1) を 1 度の bake で同一機構により処理（1.4）。
         let result = bake(&[shell_set, balloon_set], &dec, PackConfig::default());
 
-        // balloon 画像（RGBA）はデコード・正規化を通過。shell 側の既知 seam
-        // （null.png・set0）だけは分離されるが、balloon 側（set1）に失敗は出ない。
-        for e in &result.errors {
-            match e {
-                BakeError::Normalize { key, .. }
-                    if key.set == SetId(0) && key.rel_path == SHELL_NORMALIZE_SEAM_KEY => {}
-                other => panic!(
-                    "combined bake: only the documented shell null.png seam is tolerated, got {other:?}"
-                ),
-            }
-        }
+        // balloon 画像（RGBA）はデコード・正規化を通過。shell 側の α 無し null.png も
+        // 抜き色の腕を通るので、併せて焼いても失敗は 1 件も出ない（R5.5/5.6）。
+        assert!(
+            result.errors.is_empty(),
+            "combined shell+balloon bake has zero failures, got {:?}",
+            result.errors
+        );
 
         // shell 側代表 key（set0）。
         let shell_id = result

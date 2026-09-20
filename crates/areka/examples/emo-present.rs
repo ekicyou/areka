@@ -133,14 +133,13 @@ use wintf::ecs::{
 };
 use wintf::*;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
-};
+use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{
     BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, ScaleRatio,
 };
 use areka_emo_present::{
     EmoPresenter, PresentCommand, ScalePolicy, TargetId, build_balloon_target, derive_scale,
+    load_shell_target,
 };
 
 // ---------------------------------------------------------------------------

@@ -210,11 +210,9 @@ use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::{FrameFinalize, GraphicsCore, WindowHandle, WucGraphicsResource};
 use wintf::*;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
-};
+use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, EmoWorld, PatternState};
-use areka_emo_present::{EmoPresenter, PresentCommand, ScaleRatio, TargetId};
+use areka_emo_present::{EmoPresenter, PresentCommand, ScaleRatio, TargetId, load_shell_target};
 
 /// scope→`TargetId` 写像の正本を私有 include する（`super::target_map` 解決の要ゆえクレートルート宣言）。
 #[path = "../src/emo2_boot/target_map.rs"]

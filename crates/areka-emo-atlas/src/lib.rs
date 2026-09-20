@@ -84,6 +84,10 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
 
         let has_pna = decoder.probe_pna(&path);
 
+        // 抜き色の腕が選ばれたときの抜いた色（正規化の前＝画像を move する前に聞く）。
+        // spec: areka-P0-shell-implicit-surface 要件 6.3。
+        let key_color = Normalizer::key_color(&decoded, set.alpha_params, has_pna);
+
         // 正規化（emo2 経路では成功・シーム到達は診断可能に集約・継続・3.5）。
         let normalized = match Normalizer.normalize(decoded, set.alpha_params, has_pna) {
             Ok(n) => n,
@@ -95,6 +99,20 @@ pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackCon
                 continue;
             }
         };
+
+        // 抜き色で扱った絵は、抜いた色を記録する（要件 6.3）。
+        if let Some([b, g, r, a]) = key_color {
+            tracing::debug!(
+                target: "areka_emo_atlas",
+                set = key.set.0,
+                rel_path = key.rel_path.as_str(),
+                b = b,
+                g = g,
+                r = r,
+                a = a,
+                "bake: element を抜き色（左上の 1 画素と同じ色）で透過しました"
+            );
+        }
 
         // トリム（全透明→空エントリ／それ以外→配置エントリ）。生存確定＝密採番へ加える。
         let trim = Trimmer.trim(&normalized);

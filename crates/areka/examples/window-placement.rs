@@ -92,11 +92,11 @@ use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::{FrameFinalize, GraphicsCore, WucGraphicsResource};
 use wintf::*;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
-};
+use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, EmoWorld, PatternState};
-use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, build_balloon_target};
+use areka_emo_present::{
+    EmoPresenter, PresentCommand, ShellTarget, TargetId, build_balloon_target, load_shell_target,
+};
 
 /// 窓配置機構本体（`crates/areka/src/placement/`）を example の私有モジュールとして include する。
 ///
@@ -279,16 +279,17 @@ fn build_and_spawn(world: &mut World) {
         }
     };
 
-    // shell アセットの素材（parse＋bake）は一度だけ組む。`EmoWorld` は Clone 不可・
-    // `attach_target` が move 消費するため、target ごとに `EmoWorld::build`＋`bind_atlas` で
-    // 組み直す（`AtlasTable` は Arc 共有ゆえ clone は安価）。
+    // シェルの読み込みは一度だけ行う。`EmoWorld` は Clone 不可・`attach_target` が move 消費する
+    // ため、target ごとに `ShellTarget::build_world` で組み直す（`AtlasTable` は Arc 共有ゆえ
+    // clone は安価）。
     let shell_dir = ghost_root.join("shell/master"); // emo2 の shell dir（donor と同一）
-    let Some((shell_parsed, shell_table)) = build_shell_material(&shell_dir, &decoder) else {
+    let Some(shell_target) = build_shell_material(&shell_dir, &decoder) else {
         tracing::error!(
             "window-placement: shell アセット素材の構築に失敗 — 装着を中止（窓は配置済み）"
         );
         return;
     };
+    let shell_table = shell_target.atlas().clone();
 
     let mut pending = Vec::new();
     for scope in windows.scopes().collect::<Vec<_>>() {
@@ -309,8 +310,7 @@ fn build_and_spawn(world: &mut World) {
 
         // キャラ窓 target（TargetId = 2*scope）。
         if let Some(char_e) = windows.char_window(scope) {
-            let mut emo_world = EmoWorld::build(&shell_parsed);
-            emo_world.bind_atlas(&shell_table, SetId(0));
+            let emo_world = shell_target.build_world();
             pending.push(PendingTarget {
                 target: TargetId((scope as u32) * 2),
                 window: char_e,
@@ -350,44 +350,30 @@ fn build_and_spawn(world: &mut World) {
     tracing::info!("window-placement: 窓配置とアセット構築を完了（GPU 資源到達で表示を装着）");
 }
 
-/// shell dir の surfaces.txt から装着素材（parse 済み `Shell`＋bake 済み `AtlasTable`）を組む
-/// （donor `build_shell_target` と同経路: read→parse→bake。`EmoWorld` の build＋bind は
-/// target ごとに呼び手が行う）。失敗時は log-first で `None`。
+/// shell dir から装着素材（[`ShellTarget`]＝焼いた絵と、面の表を必要な数だけ組めるもの）を
+/// **シェル読み込みの権威**（`load_shell_target`）で組む（donor `build_shell_target` と同経路。
+/// 面の表の `build_world` は target ごとに呼び手が行う）。失敗時は log-first で `None`。
+///
+/// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
+/// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
+/// 落ちた絵の `warn!` も権威側が持つので、この example は呼ぶだけである——本番（`build_boot_assets`）・
+/// 採寸（`build_shell_assets`）と同じ入口を通るため、この example が見る絵は本番と食い違わない。
 fn build_shell_material(
     shell_dir: &std::path::Path,
     decoder: &WicDecoderArm,
-) -> Option<(areka_parsers::shell::Shell, AtlasTable)> {
-    let surfaces_txt = shell_dir.join("surfaces.txt");
-    let content = match std::fs::read_to_string(&surfaces_txt) {
-        Ok(c) => c,
+) -> Option<ShellTarget> {
+    match load_shell_target(shell_dir, decoder) {
+        Ok(target) => Some(target),
         Err(e) => {
+            // load_shell_target は内部で error! 済み（一覧失敗／読取失敗／面 0 個）。文脈のみ添える。
             tracing::error!(
-                path = %surfaces_txt.display(),
+                dir = %shell_dir.display(),
                 error = %e,
-                "window-placement: shell surfaces.txt の読取に失敗"
+                "window-placement: shell の読み込みに失敗"
             );
-            return None;
+            None
         }
-    };
-    let shell = areka_parsers::shell::parse(&content);
-    if shell.surfaces.is_empty() {
-        tracing::error!("window-placement: surfaces.txt が surface を 1 つも産まなかった");
-        return None;
     }
-
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: shell_dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], decoder, PackConfig::default());
-    // emo2 shell は α 無し `purple/a/null.png` 1 枚が normalize seam として脱落する（既知・許容）。
-    for err in &baked.errors {
-        tracing::warn!(error = %err, "window-placement: shell bake で脱落した element（surface0/10 表示には無害）");
-    }
-    Some((shell, baked.table))
 }
 
 // ---------------------------------------------------------------------------

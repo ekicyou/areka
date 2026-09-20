@@ -41,6 +41,8 @@ pub use pattern::{PatternFrame, PatternState};
 pub mod world;
 pub use world::{AliasMap, AtlasBinding, EmoWorld, ShellSettings, SurfaceId, SurfaceIndex};
 pub mod atlas_bind;
+pub mod base_image;
+pub use base_image::{BaseImageReport, SurfaceImages};
 pub mod fold;
 pub mod plan;
 pub use plan::BlitOp;

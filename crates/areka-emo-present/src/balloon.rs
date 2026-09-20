@@ -42,6 +42,7 @@ use areka_parsers::charset::{DefaultEncoding, decode};
 use crate::command::PresentError;
 
 /// 面画像の拡張子（小文字比較）。接頭辞は scope 番号から連鎖として導出するため定数を持たない。
+/// シェル側の面画像（`surface{ID}.png`）も同じ拡張子で、判定 [`face_digits_of`] ごと共有する。
 const FRAME_SUFFIX: &str = ".png";
 /// バルーン既定設定ファイル名（2 層マージの**基層**・シェル側 descript と同名別物）。
 const DESCRIPT_TXT: &str = "descript.txt";
@@ -218,7 +219,7 @@ impl ResolvedFace {
     }
 }
 
-/// `{prefix}{ID}.png`（大小無視）なら面 ID を返す。バルーン面でなければ `None`（R1.5）。
+/// `{prefix}{数字列}.png`（大小無視）なら**数字列そのもの**を返す。面でなければ `None`。
 ///
 /// 判定は**厳密 3 段**である——
 ///
@@ -230,7 +231,12 @@ impl ResolvedFace {
 /// 構造的に起こり得ない。装飾用の `arrow*` / `marker*` / `online*` も吹き出し族のどの接頭辞にも
 /// 一致しない。3 段目を `u32::parse` 任せにせず全数字を明示検査するのは、`parse` が符号
 /// （`balloons+0.png` の `+0`）を受理してしまうためで、正典の面 ID 表記は符号を持たない。
-fn face_id_of(prefix: &str, name: &str) -> Option<u32> {
+///
+/// 数を返さず**数字列**を返すのは、シェル側の面画像判定
+/// （[`crate::shell_target::select_surface_images`]・接頭辞 `surface`）と同じ 3 段を 1 つの実装で
+/// 共有するためである。シェル側は `u32` に収まらない数字列を「桁溢れ」として別に数える必要が
+/// あり（シェル側 spec areka-P0-shell-implicit-surface 要件 1.6）、数へ畳んだ戻りではその区別が付かない。
+pub(crate) fn face_digits_of(prefix: &str, name: &str) -> Option<String> {
     let lower = name.to_ascii_lowercase();
     // (1) 接頭辞 strip（大小無視）→ (2) 拡張子 strip。
     let digits = lower
@@ -240,7 +246,15 @@ fn face_id_of(prefix: &str, name: &str) -> Option<u32> {
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
-    digits.parse::<u32>().ok()
+    Some(digits.to_string())
+}
+
+/// `{prefix}{ID}.png`（大小無視）なら面 ID を返す。バルーン面でなければ `None`（R1.5）。
+///
+/// 判定そのものは [`face_digits_of`] が持ち、本関数は得た数字列を 10 進数として読むだけである
+/// （先頭の 0 は無視される）。`u32` に収まらない数字列はバルーンでは面と認めない（`None`）。
+fn face_id_of(prefix: &str, name: &str) -> Option<u32> {
+    face_digits_of(prefix, name)?.parse::<u32>().ok()
 }
 
 /// ファイル名リストと接頭辞連鎖から採用面列を決める**純核**（fs 非依存・R1.2/1.3/1.4/1.5）。

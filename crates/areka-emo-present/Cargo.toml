@@ -38,3 +38,7 @@ log-capture-kit = { path = "../log-capture-kit" }
 # テスト・example が検体の在処を自前で綴らないための leaf・テスト専用であり、
 # log-capture-kit と同じく [dependencies] へは決して置かない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元
+# （spec: areka-P0-test-cage-determinism 要件 12）。依存 0（std のみ）の leaf・
+# publish = false・テスト専用であり、log-capture-kit と同じく [dependencies] へは決して置かない。
+temp-path-kit = { path = "../temp-path-kit" }

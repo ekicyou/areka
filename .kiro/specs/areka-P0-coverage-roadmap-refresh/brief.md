@@ -23,6 +23,18 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 - 台帳の備考の「語境界の欠陥」の記述の陳腐化（`sakura-tag-word-boundary` の完了時の指摘）
 - 常設の検査は「縮退の根拠の実在」を見張っていない（`ukadoc-survey-sakura-script` の完了時の指摘）
 
+
+### `areka-P0-shell-implicit-surface` からの申し送り（2026-09-20・実在を確かめたうえで）
+
+上の「引受先なし」の一覧の 1 つ目の箇条にある 3 つ目（`shell-implicit-surface` からの `dev_shell` の粒度化の依頼）を、実測で裏取りしたうえで正式な依頼として置き直す。**依頼の中身**: 台帳 `doc/ukadoc-coverage/ledger/assets.toml` の `ukadoc:dev_shell` と `ukadoc:manual_shell` の当該の文を項目の粒度へ割り、担当（`owner`）を `areka-P0-shell-implicit-surface` にしてほしい。
+
+**⚠ 2026-09-20 追記**: 依頼元の `areka-P0-shell-implicit-surface` は同日に完了し `.kiro/specs/completed/areka-P0-shell-implicit-surface/` へ退避した。**完了した spec は先送りを吸収できない**ので、`owner` にその名前を書くと「もう誰も仕上げられない行」が増える（`.kiro/steering/roadmap.md` の所見 ⓑ と同じ形）。本 spec の要件段階で、⑴ 生きた引受先へ付け替えるか ⑵ 実装済みとして状態ごと畳むかを決めること。
+
+- **なぜ本仕様が自分で足せなかったか**: 台帳の id はカタログに実在しなければならない。ところがこの 2 ページは、台帳に**ページ 1 枚の粒度でしか無い**（2026-09-20 実測＝`[entry."ukadoc:dev_shell"]` と `[entry."ukadoc:manual_shell"]` が各 1 件。`ukadoc:dev_shell_error` は別のページ）。両方とも `status = "absent"`・`owner = ""` のままである。項目の行を足すことは、カタログの側を触らずにはできない。
+- **割ってほしい文（本仕様が実装し終えたもの）**: `dev_shell` 側＝⑴ 「surface○○.png という名前の画像を用意するか、surfaces.txt で複数の画像を合成する」⑵ 「surface0000.png、surface0010.png 等の様に記述しても surface0.png、surface10.png と同様に認識されます」⑶ 「surface\*.png のような名前の png 画像は、element0 より下のパーツとみなされる」⑷ コマの相手の面の指し方（アニメーション編）⑸ 「サーフェス画像では左上端の 1 ドットが透過色として表示上透過されます」⑹ 「単色で塗り潰した画像（＝全て透明表示）などを surface10.png として用意してください」。`manual_shell` 側＝⑺ 「画像左上の 1 ドット（座標 0,0）と同色の領域は透過色（抜き色）とされ、表示上透過される」⑻ 対応画像形式の注記 ⑼ 「JPEG については圧縮によって色がずれやすいため透過色と相性が悪い」。
+- **担当を本仕様にしてよい根拠**: ⑴〜⑶・⑸・⑺ は実装済み（ファイル名の慣習・先頭の 0・`element0` との関係・抜き色）。⑷ も実装済み（画像だけで存在する面をコマの相手にできる）。⑹ は未確認のままで（検体 3 体に「単色で塗り潰した surface10」が 0 件）、steering `roadmap.md` の「引き受け手の居ない残り」に登記してある。⑻ と ⑼ は正典側の注意書きで、areka には画像形式ごとの分岐が無い——面の画像として名前で認めるのは `.png` だけ（要件 1.3）で、`element` 行が名指しするファイルの復号は WIC 任せ、抜き色の腕は形式によらず同じ 1 本である。**粒度を割ったあとで状態を分けられる**ようにするのがこの依頼の目的で、今のページ 1 枚の粒度では「実装済みの文と未対応の文が同じ 1 行に同居していて `absent` と表示される」状態が続く。
+- **本仕様が台帳へ新しく足した行は 0 件**である。担当を登記したのは既存の 2 行（`ukadoc:descript_shell_surfaces:sometimes:1`・`…:rarely:1`）だけで、どちらも 2026-09-20 に `implemented` へ改めてある。
+
 ## Desired Outcome
 
 - 写真の節は「いつの写真か」が機械で読める形になっているか、道具が数え直して書く形になっている（手で引き算しない）。
