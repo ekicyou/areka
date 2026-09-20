@@ -19,10 +19,18 @@
 // （表示が一度も確立していない target は可視化できない）。そこで送り出しのテストは照会の結果を
 // 引数に取る内側の関数 `press_with_visibility` を直接呼ぶ。外側の `on_left_press` は照会だけを
 // 足した薄い包みで、照会が効いていること（可視を決め打ちしていないこと）は 1 本で確かめる。
+//
+// 結線 `wire_user_break` について確かめること: 旗の取り出しがポインタの配送より前に登録されて
+// いて、押下と同じ巡に届いた合図がその押下の判定に効く（要件 4.5・5.1）。入力の段は wintf が
+// 組んだ本物を使い、押下は本物の配送を通す。
 
 use std::sync::mpsc::{self, Receiver};
 
+use bevy_ecs::entity::Entity;
+use bevy_ecs::schedule::{InternedSystemSet, IntoSystemSet, NodeId, SystemSet};
 use tracing::Level;
+use wintf::ecs::pointer::{OnPointerPressed, Phase, PointerState};
+use wintf::ecs::world::EcsWorld;
 
 use super::*;
 use crate::placement::test_support::{LogEvent, capture_logs};
@@ -433,4 +441,96 @@ fn drain_without_wiring_does_nothing() {
     let mut world = World::new();
     drain_no_user_break_signals(&mut world);
     assert!(world.get_non_send::<UserBreakWiring>().is_none());
+}
+
+// ---------------------------------------------------------------- 結線と取り出しの登録順
+
+/// 押下ハンドラの代役。バルーンが出ているものとして、届いた押下を入口の本体へそのまま渡す
+/// （本物のバルーン窓のハンドラは GPU 無しでは可視のバルーンを作れず、受理まで進めない）。
+fn press_on_visible_balloon(
+    world: &mut World,
+    _sender: Entity,
+    _entity: Entity,
+    ev: &Phase<PointerState>,
+) -> bool {
+    let Phase::Bubble(state) = ev else {
+        return false;
+    };
+    press_with_visibility(world, 0, state.double_click, false, Some(true))
+}
+
+/// 左ダブルクリックの押下 1 回ぶんの入力（ポインタの配送が 1 巡で消費する）。
+fn left_double_click() -> PointerState {
+    PointerState {
+        left_down: true,
+        double_click: DoubleClick::Left,
+        ..Default::default()
+    }
+}
+
+/// 入力の段の順序の表に「旗の取り出し → ポインタの配送」の順序指定が載っているか。
+///
+/// 走らせた結果だけでは、順序指定を外しても実行器がたまたま同じ順に並べれば通ってしまう。
+/// そこで指定そのものを表から読む。系は自分の関数の型を名前とする集合に属するので、
+/// 「取り出しの集合に属する系」から「配送の集合」へ向かう辺を探す（系を実行器へ移す初回の
+/// 走行より前に呼ぶこと）。
+fn drain_is_ordered_before_dispatch(world: &World) -> bool {
+    let schedules = world.resource::<Schedules>();
+    let graph = schedules.get(Input).expect("入力の段は在る").graph();
+    let set_of = |set: InternedSystemSet| graph.system_sets.get_key(set).map(NodeId::Set);
+    let (Some(drain), Some(dispatch)) = (
+        set_of(drain_no_user_break_signals.into_system_set().intern()),
+        set_of(dispatch_pointer_events.into_system_set().intern()),
+    ) else {
+        return false;
+    };
+    graph.systems.iter().any(|(key, ..)| {
+        let system = NodeId::System(key);
+        graph.hierarchy().graph().contains_edge(drain, system)
+            && graph.dependency().graph().contains_edge(system, dispatch)
+    })
+}
+
+/// 旗の取り出しは、同じ巡のポインタの配送より前に走る: 押下と同じ巡に届いた「入る」で
+/// その押下が退けられ、押下と同じ巡に届いた「出る」でその押下が受理になる（要件 4.5・5.1）。
+///
+/// 入力の段は wintf が組んだ本物（`EcsWorld::new` がポインタの配送を登録済み）で、そこへ結線
+/// `wire_user_break` が取り出しを足す。登録を「配送の後」へ変えると、1 巡目の押下は旗が
+/// 上がる前に判定されて受理になり、ここが赤になる。順序指定を外しただけのときは走行の結果が
+/// 変わらないことがあるので、指定そのものを先に確かめる。
+#[test]
+fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
+    let (flag_tx, flag_rx) = mpsc::channel();
+    let (lifecycle_tx, lifecycle_rx) = mpsc::channel();
+    let (kanade_tx, kanade_rx) = mpsc::channel();
+    let mut ecs = EcsWorld::new();
+    let world = ecs.world_mut();
+    wire_user_break(world, flag_rx, lifecycle_tx, kanade_tx);
+    let window = world.spawn(OnPointerPressed(press_on_visible_balloon)).id();
+    assert!(
+        drain_is_ordered_before_dispatch(world),
+        "取り出しに「ポインタの配送より前」の順序指定が付いている"
+    );
+
+    // 1 巡目: 「入る」と押下が同じ巡に届く → 退ける。退けた記録が、押下が判定まで届いた証拠。
+    flag_tx.send(NoUserBreakSignal::Enter).unwrap();
+    world.entity_mut(window).insert(left_double_click());
+    let (_, events) = capture_logs(|| world.run_schedule(Input));
+    assert_eq!(
+        named(&events, "balloon_break_rejected").len(),
+        1,
+        "同じ巡の「入る」が押下の判定に効く: {events:?}"
+    );
+    assert!(lifecycle_rx.try_recv().is_err(), "隠さない");
+    assert!(kanade_rx.try_recv().is_err(), "止めない");
+
+    // 2 巡目: 「出る」と押下が同じ巡に届く → 受理。
+    flag_tx.send(NoUserBreakSignal::Leave).unwrap();
+    world.entity_mut(window).insert(left_double_click());
+    world.run_schedule(Input);
+    assert_eq!(
+        lifecycle_rx.try_iter().collect::<Vec<_>>(),
+        vec![TalkLifecycleSignal::UserBreak]
+    );
+    assert_eq!(kanade_rx.try_iter().count(), 1, "止める要求はちょうど 1 件");
 }

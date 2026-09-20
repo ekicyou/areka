@@ -296,9 +296,9 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     );
     assert!(
         squeezed.contains(
-            "sinks: vec![ Box::new(surface_sink), Box::new(clocked_text_sink), Box::new(move_sink), Box::new(lifecycle_sink), Box::new(zorder_sink), Box::new(readme_sink), ],"
+            "sinks: vec![ Box::new(surface_sink), Box::new(clocked_text_sink), Box::new(move_sink), Box::new(lifecycle_sink), Box::new(zorder_sink), Box::new(readme_sink), Box::new(no_user_break_sink), ],"
         ),
-        "入口の登録（配送の sinks）が既存 4 本＋重なりの受け口＋説明書の受け口の形になっていない"
+        "入口の登録（配送の sinks）が既存 4 本＋重なりの受け口＋説明書の受け口＋中断を禁じる旗の受け口の形になっていない"
     );
     assert!(
         squeezed.contains("lifecycle_rx, zorder_rx,"),

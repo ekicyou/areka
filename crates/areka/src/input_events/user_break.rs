@@ -5,14 +5,15 @@
 //!
 //! 判断は純関数 2 本（[`judge_press`]・[`fold_no_user_break`]）が担い、持ち物
 //! [`UserBreakWiring`]・旗の取り出し [`drain_no_user_break_signals`]・押下の入口 [`on_left_press`] が
-//! それを World の上で動かす。持ち物を World へ据えて取り出しを登録する結線は後続の task で
-//! 本 mod へ増設される。
+//! それを World の上で動かす。持ち物を World へ据えて取り出しを登録する結線が [`wire_user_break`]。
 
 use std::sync::mpsc::{Receiver, Sender};
 
 use areka_kanade::KanadeMsg;
+use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
-use wintf::ecs::pointer::DoubleClick;
+use wintf::ecs::Input;
+use wintf::ecs::pointer::{DoubleClick, dispatch_pointer_events};
 
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
@@ -50,6 +51,8 @@ impl UserBreakWiring {
     }
 
     /// 旗の読み口（要件 5.7）。読む者はまだ居ないので、運行の側への通知は作っていない。
+    // 要件 5.7 が「開けておく」と定めた読み口で、本番にまだ読み手が無い。読むのは兄弟テストだけである。
+    #[allow(dead_code)]
     pub(crate) fn no_user_break(&self) -> bool {
         self.no_user_break
     }
@@ -135,6 +138,30 @@ pub(crate) fn drain_no_user_break_signals(world: &mut World) {
             );
         }
     }
+}
+
+/// 中断の持ち物を World へ入れ、旗の取り出しを毎巡の入力の段へ登録する（`fn wire_readme`・
+/// `crates/areka/src/readme.rs` と同型）。
+///
+/// 並びは `dispatch_pointer_events` の**前**——押下と同じ巡に届いた「入る」「出る」を、その
+/// 押下の判定より先に旗へ畳み込むためである（要件 4.5・5.1）。後ろに置くと、旗が 1 巡遅れて
+/// 効く。`dispatch_pointer_events` 自身は wintf の既定の登録（`EcsWorld::new`・
+/// `crates/wintf/src/ecs/world/mod.rs`）で `drain_task_pool_commands` の後に置かれているだけ
+/// なので、前に 1 本置いても順序は循環しない。隣の取り出し（`fn wire_readme`・
+/// `fn wire_choice_drain`）はどれも「後」で、「前」はここだけである。
+///
+/// 呼び手は boot 成功後の `wire_emo2_boot`（1 回の実行につき 1 度だけ）。
+pub(crate) fn wire_user_break(
+    world: &mut World,
+    flag_rx: Receiver<NoUserBreakSignal>,
+    lifecycle_tx: Sender<TalkLifecycleSignal>,
+    kanade: Sender<KanadeMsg>,
+) {
+    world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade));
+    world.resource_mut::<Schedules>().add_systems(
+        Input,
+        drain_no_user_break_signals.before(dispatch_pointer_events),
+    );
 }
 
 /// バルーン窓の押下ハンドラ（`fn on_balloon_pointer_pressed`・`balloon.rs`）の末尾から呼ばれる入口。

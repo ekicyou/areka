@@ -89,6 +89,7 @@ use self::move_cue::{MoveCueSink, MoveDirective};
 use self::readme_cue::ReadmeCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
 use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use self::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
@@ -359,6 +360,9 @@ pub fn wire_emo2_boot(
     // task 4.4 が全件 drain）を保持する。会話の開始と、待機を含む占有区間の終端が talk 相対秒で
     // 届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
     let (lifecycle_tx, lifecycle_rx) = std::sync::mpsc::channel::<TalkLifecycleSignal>();
+    // 送出端の複製（areka-P0-balloon-break task 3.3）: 中断を受け入れた UI が同じ線へ
+    // 「中断された」を送る。受信端は 1 本のままなので、バルーン可視性相が同じ取り出しで読む。
+    let user_break_lifecycle_tx = lifecycle_tx.clone();
     let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx);
     // 重なりの channel（move channel と同型の配線・areka-P0-scope-zorder-pinning task 6.2）:
     // talk スレッドの ZOrderCueSink が送出端、UI スレッドの Emo2Wiring が受信端（frame 相の
@@ -376,6 +380,14 @@ pub fn wire_emo2_boot(
     // 届きようがなく、万一届いても送出側が送れなかったことを記録する（要件 8.4）。
     let (readme_tx, readme_rx) = std::sync::mpsc::channel::<crate::readme::ReadmeRequest>();
     let readme_sink = ReadmeCueSink::new(readme_tx);
+    // 中断を禁じる旗の channel（説明書の channel と同型の配線・areka-P0-balloon-break task 3.3）:
+    // talk スレッドの NoUserBreakCueSink が送出端、UI スレッドの
+    // `crate::input_events::user_break::UserBreakWiring` が受信端（Input の段の取り出しが消費）を
+    // 持つ。持ち物は運行（kanade）への送出端も要り、それは boot が返すまで手に入らない——
+    // ゆえに送出端だけ先に配り、受信端は boot 成立後まで手元に置く（下の「中断の持ち物」）。
+    // それまでに届いた合図は線が溜めておく（起動の挨拶の `enter` を取りこぼさない）。
+    let (no_user_break_tx, no_user_break_rx) = std::sync::mpsc::channel::<NoUserBreakSignal>();
+    let no_user_break_sink = NoUserBreakCueSink::new(no_user_break_tx);
     let BootAssets {
         shells,
         balloons,
@@ -467,6 +479,11 @@ pub fn wire_emo2_boot(
     // 第 6 要素の readme_sink（popup-menu-minimal task 4.3）は `\![open,readme]` を「名前＋
     // 第 1 引数」で選別して消費し、引数なしの 1 件を説明書の要求として送出する（要件 4.5）。
     // 担当外へは触れないので既存 5 sink の消費は変わらず、文字 cue にも依存しない。
+    // 第 7 要素の no_user_break_sink（areka-P0-balloon-break task 3.3）は
+    // `\![enter,nouserbreakmode]`／`\![leave,nouserbreakmode]` を「名前＋第 1 引数」で選別して
+    // 消費し、トークの始まりと合わせて 3 値を 1 本の線で送出する（要件 5.1・5.4）。担当外へは
+    // 触れないので既存 6 sink の消費は変わらず、文字 cue にも依存しないため末尾で構わない。
+    // 既存 6 本の並びは変えない（旗の順序の保証がこの並びに依る）。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,
@@ -480,6 +497,7 @@ pub fn wire_emo2_boot(
             Box::new(lifecycle_sink),
             Box::new(zorder_sink),
             Box::new(readme_sink),
+            Box::new(no_user_break_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir: Some(crate::default_app_profile_dir()),
@@ -566,6 +584,16 @@ pub fn wire_emo2_boot(
     let readme_path =
         crate::readme::resolve_path(ghost_root, ghost_runtime.mount().readme.as_deref());
     crate::readme::wire_readme(app.world().borrow_mut().world_mut(), readme_path, readme_rx);
+
+    // 中断の持ち物（areka-P0-balloon-break task 3.3・要件 4.5・5.1）。運行（kanade）への送出端は
+    // boot が返した `GhostRuntime` から複製する（マウスの結線と同じ投函端）。`wire_user_break` が
+    // 行う `Input` の段への登録も、`wire_readme` と同じ理由で 1 度だけである。
+    crate::input_events::user_break::wire_user_break(
+        app.world().borrow_mut().world_mut(),
+        no_user_break_rx,
+        user_break_lifecycle_tx,
+        ghost_runtime.kanade().clone(),
+    );
 
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
     // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
