@@ -52,8 +52,6 @@ crates/pilot/examples/
 2. `main.rs` に探索コードを、`README.md` の 3 幕（動機 / 概要 / 検証結果）を埋める。
 3. `cargo run -p pilot --example <spec-name>` で実行・検証する。
 
-> 注: worktree で examples を実際にビルド/実行する際は、submodule（`vendors/pasta`）未populate を
-> 避けるため前段で `git submodule update --init --recursive` を要する（既知制約）。
 
 ## README 一次記録（3 幕）
 

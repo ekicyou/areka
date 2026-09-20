@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (213 crate)
+- MIT License (211 crate)
 - BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
@@ -2033,7 +2033,6 @@ SOFTWARE.
 - objc2-encode 4.1.0
 - objc2-io-kit 0.3.2
 - objc2 0.6.4
-- pasta_core 0.3.4
 - r-efi 6.0.0
 - taffy 0.13.0
 - winapi-i686-pc-windows-gnu 0.4.0
@@ -2396,37 +2395,6 @@ THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
 SOFTWARE.
-
-```
-
----
-## MIT License
-
-対象 crate:
-- fast_radix_trie 1.2.0
-
-```
-The MIT License
-
-Copyright (c) 2017 Takeru Ohta <phjgt308@gmail.com> and Evan Cameron <cameron.evan@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
 
 ```
 
