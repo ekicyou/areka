@@ -404,21 +404,27 @@ where
     /// `Break` する。phase は取り出しで Idle へ差し替わるため二度目の ACK は不能（通算高々 1 回・
     /// R6.4/R7.5）。`Idle`（`Start` 前の防御枝・自然終端後は既にスレッド消滅で Close 未達）は
     /// 二度目の TalkDone を送らずログのみ。
+    ///
+    /// いずれの場面でも、止めた時点の状態が持ち回っている終わり方（[`TalkEndReason::Quit`]＝
+    /// 台本が `\-` で終了を予約している）を読み、`quit_reserved` として完了通知に載せる
+    /// （本仕様 areka-P0-balloon-break 要件 3.3/3.8）。終わり方そのものは `Interrupted` のままで
+    /// 種類は増やさず、予約を終了へ結び付けるかどうかは運行の側（areka-kanade）が判断する。
     fn on_close(&mut self) -> ControlFlow<()> {
         match std::mem::replace(&mut self.phase, TalkPhase::Idle) {
             TalkPhase::Driving {
                 talk_id,
                 mut player,
+                end,
                 ..
             } => {
                 // 残 entry を破棄（以降配送しない・R7.2）。interrupt-vs-natural の区別は本層が持つ。
                 player.stop();
-                self.send_interrupted(talk_id);
+                self.send_interrupted(talk_id, end == TalkEndReason::Quit);
                 ControlFlow::Break(())
             }
-            TalkPhase::Armed { talk_id, .. } => {
+            TalkPhase::Armed { talk_id, end, .. } => {
                 // 初回 Tick 前の中断: CuePlayer 未構築ゆえ stop 対象なし。ACK のみ返す。
-                self.send_interrupted(talk_id);
+                self.send_interrupted(talk_id, end == TalkEndReason::Quit);
                 ControlFlow::Break(())
             }
             TalkPhase::Idle => {
@@ -518,11 +524,14 @@ where
     }
 
     /// 中断の `TalkDone{Interrupted}` を送出する（受信端 drop は error ログ・R11.1/11.4）。
-    fn send_interrupted(&self, talk_id: TalkId) {
+    ///
+    /// `quit_reserved` は止めた時点で台本が終了を予約していたか（呼び出し側が phase の
+    /// 終わり方から判定する・要件 3.8）。
+    fn send_interrupted(&self, talk_id: TalkId, quit_reserved: bool) {
         let done = TalkDone {
             talk_id,
             reason: TalkEndReason::Interrupted,
-            quit_reserved: false,
+            quit_reserved,
         };
         if self.done.send(D::from(done)).is_err() {
             tracing::error!(

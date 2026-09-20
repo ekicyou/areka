@@ -275,6 +275,74 @@ fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
     );
 }
 
+/// **中断の完了通知が「終了の予約」を運ぶ**（判断分岐 ⑺ の再生側・要件 3.3/3.8）。
+///
+/// `fn on_close` は再生中の状態（`Armed`／`Driving`）が持ち回っている終わり方を読み、
+/// それが `TalkEndReason::Quit`（台本に `\-` が在る）かどうかを `TalkDone.quit_reserved`
+/// に載せる。終わり方そのものは `Interrupted` のままで、種類は増やさない（要件 3.3）。
+/// 予約を終了へ結び付けるかどうかは運行の側の判断であり、本層は報告するだけである。
+#[test]
+fn close_reports_quit_reservation_from_script_while_reason_stays_interrupted() {
+    // 与えた注入時刻まで駆動してから閉じ、返ってきた完了通知を渡すヘルパ。
+    // 空の注入時刻列は初回 Tick 前（`Armed`）の中断になる。
+    let close_after = |script: &str, talk_id: TalkId, ticks: &[f64]| -> TalkDone {
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+        let start = StartTalk {
+            epilogue: Vec::new(),
+            script: script.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+        for t in ticks {
+            handle.inbox.send(SakuraMsg::Tick(*t)).expect("Tick 投函");
+        }
+        handle.inbox.send(SakuraMsg::Close).expect("Close 投函");
+        let done = recv_done(&done_rx, Duration::from_secs(5)).expect("中断で TalkDone が返るべき");
+        handle.actor.join().expect("body は Break 後に正常終了する");
+        done
+    };
+
+    // 末尾だけが違う 2 本を、同じ手順（初回 Tick(0.0) で刻印し `world`@0.75 の手前で閉じる）で中断する。
+    let quit = close_after(r"\s[10]hello\_w[500]world\-", TalkId(103), &[0.0]);
+    assert_eq!(
+        quit.reason,
+        TalkEndReason::Interrupted,
+        "予約が在っても終わり方は Interrupted のまま（新しい種類を増やさない・要件 3.3）"
+    );
+    assert!(
+        quit.quit_reserved,
+        "`\\-` を含む台本を閉じたら終了の予約ありと報告する（要件 3.8）"
+    );
+
+    let ended = close_after(r"\s[10]hello\_w[500]world\e", TalkId(104), &[0.0]);
+    assert_eq!(
+        ended.reason,
+        TalkEndReason::Interrupted,
+        "`\\-` の無い台本の中断も Interrupted"
+    );
+    assert!(
+        !ended.quit_reserved,
+        "`\\-` を含まない台本は終了の予約なし（要件 3.4）"
+    );
+
+    // 初回 Tick 前（`Armed`）で閉じても、同じ台本なら同じ予約を報告する。
+    let quit_before_tick = close_after(r"\s[10]hello\_w[500]world\-", TalkId(105), &[]);
+    assert_eq!(
+        quit_before_tick.reason,
+        TalkEndReason::Interrupted,
+        "初回 Tick 前の中断も Interrupted"
+    );
+    assert!(
+        quit_before_tick.quit_reserved,
+        "初回 Tick 前に閉じても `\\-` の予約は報告される（要件 3.8）"
+    );
+}
+
 /// 自然終端後に中断（Close）を受けても追加の `TalkDone` が発生しないこと（R6.4/R7.5）。
 /// 自然終端後はアクタースレッドが消えており `inbox.send(Close)` が `Err`＝二重終端不能の構造的証。
 #[test]
