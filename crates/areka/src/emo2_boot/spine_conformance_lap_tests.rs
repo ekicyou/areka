@@ -247,6 +247,8 @@ impl StageSink for LapSink<'_> {
                         observed.talk_horizon_ms = observed.talk_horizon_ms.max(reported);
                         observed.max_horizon_ms = observed.max_horizon_ms.max(reported);
                     }
+                    // 利用者の中断は押下の線から届くもので、本テストは押下を作らない。
+                    TalkLifecycleSignal::UserBreak => {}
                 }
             }
             // 移動指令の受信端を実 frame 相で drain し、対象窓の位置を読み直す（design D1 位置調整段）。
