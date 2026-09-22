@@ -124,13 +124,13 @@ crates/wintf/src/runtime/
 
 crates/areka/src/
 ├── app_exit.rs            # 新規: ExitOrigin・quit_app・私有 despawn_app_windows
-├── app_exit_tests.rs      # 新規: main_seam_tests.rs から移す 3 本（本文は不変・関数名だけ追随）
+├── app_exit_tests.rs      # 新規: main_seam_tests.rs から移す 3 本（判断は不変・関数名と打ち切り行の相名 [quit_app] だけ追随）
 ├── main.rs                # 変更: mod app_exit・with_exit_policy(Explicit)・on_dummy_pressed と smoke クロージャの 1 行化・despawn_smoke_targets の削除・doc の追随
 ├── main_seam_tests.rs     # 変更: despawn_smoke_targets_* 3 本を app_exit_tests.rs へ移す
 ├── main_startup_window_tests.rs  # 変更: ダミー窓ダブルクリックの検査へ受け口を挿す
 ├── emo2_boot/frame.rs     # 変更: run_ghost_quit_phase が quit_app を呼ぶ・import と doc の追随
 ├── emo2_boot/frame_ghost_quit_tests.rs  # 変更: World 構築ヘルパへ受け口を挿す・終了の指示の確認 2 行
-├── input_events/mod.rs    # 変更: 強制退避の腕が quit_app を呼ぶ・import の追随
+├── input_events/mod.rs    # 変更: 強制退避の腕が quit_app を呼ぶ・import の追随・on_char_pointer_pressed の doc と腕のコメント（「window-close funnel → run() 復帰」）の追随
 ├── input_events/input_events_tests.rs   # 変更: World 構築ヘルパと素の World の 2 本へ受け口を挿す
 └── placement/spawn.rs     # 変更: despawn_ghost_windows の削除（呼び手 0）・モジュール doc の追随
 
@@ -144,7 +144,8 @@ crates/areka/tests/
 - `crates/areka/src/app_exit.rs`（新規） — 統合操作。
 - `crates/areka/src/main.rs` — `WinApp::with_exit_policy(ExitPolicy::Explicit)?`（**段取りの最後に入れる 1 行**）。`on_dummy_pressed`・smoke クロージャは `quit_app` を 1 行で呼ぶ。`despawn_smoke_targets` は削除。行数は 958 から減る（4.5）。
 - `crates/areka/src/emo2_boot/frame.rs` — `run_ghost_quit_phase` の `despawn_ghost_windows(world)` を `quit_app(world, ExitOrigin::KanadeStopped(stopped.cause))` へ。`ghost_quit`／`ghost_quit_no_windows` の記録は据え置き。
-- `crates/areka/src/input_events/mod.rs` — 強制退避の腕の `despawn_ghost_windows(world)` を `quit_app(world, ExitOrigin::Escape)` へ。
+- `crates/areka/src/input_events/mod.rs` — 強制退避の腕の `despawn_ghost_windows(world)` を `quit_app(world, ExitOrigin::Escape)` へ。`on_char_pointer_pressed` の doc と腕のコメントにある「window-close funnel（`run()` 復帰→main shutdown→`ForceQuit` 系列）」を「`quit_app`（全窓破棄＋終了の指示）→ `run()` 復帰」へ。
+- **doc 追随の全数**（タスク生成で取りこぼさないための一覧）: `emo2_boot/frame.rs`（`run_ghost_quit_phase` の doc）、`input_events/mod.rs`（上記）、`main.rs`（`on_dummy_pressed` の doc・`app.run()` 直前のコメント）、`placement/spawn.rs`（モジュール doc の「全 `GhostWindowMarker` despawn→window-close funnel→`run()` 正常復帰」の行）、`placement/spawn_cleanup_tests.rs`（doc 1 行）、`tests/smoke_boot_loop_exit.rs`（モジュール doc「自動 despawn → `WindowRegistry` 空遷移 → `run()` 復帰」の行）。いずれも本文の判断は変えない。
 - `crates/areka/src/placement/spawn.rs` — `despawn_ghost_windows` を削除（`app_exit` の私有部品へ吸収・外から呼べる全窓破棄を残さない）。モジュール doc の該当行を「全窓を閉じて終了を指示する操作は `app_exit::quit_app` が持つ」へ。干渉台帳（A1）の登記外だが他 spec との重なりは 0（完了時に台帳へ追記）。
 - `crates/areka/src/placement/spawn_cleanup_tests.rs` — doc コメント 1 行（`despawn_smoke_targets` の名を `app_exit::quit_app` へ）。テスト本文は不変。
 - 変更しないと明記するもの: `crates/wintf/src/runtime/window_registry.rs`・`crates/wintf/src/ecs/app.rs`・`crates/wintf/src/lib.rs`（`pub use runtime::*` で `ExitPolicy`／`AppExit` は自動で公開される）・kanade の `schedule/*`・`crates/areka-ghost/src/runtime.rs`・example 14 本。
@@ -294,7 +295,7 @@ impl AppExit {
     pub(crate) fn signal(&self) -> &event_listener::Event;
 }
 ```
-- Preconditions: なし（どのスレッドでも作れるが、World へ挿すのは UI スレッド）。
+- Preconditions: `new()` は無し（どのスレッドでも作れるが、World へ挿すのは UI スレッド）。`request_exit` は**窓を閉じてから呼ぶ**（残った窓は `run()` が壊すが、entity の資源は `WinApp` の drop まで残る——doc に明記）。
 - Postconditions: `request_exit` 後は `is_requested() == true` が恒久に成り立つ。戻す口は無い。
 - Invariants: 記録は 1 回目が `info!("[AppExit] exit requested")`、2 回目以降が `debug!("[AppExit] exit already requested — ignored")`。
 
@@ -345,6 +346,7 @@ impl WinApp {
 **Responsibilities & Constraints**
 - `run()` の手順 4（`block_on(ShutdownPolicy::shutdown_future(self.exit.clone()))`）の直後に置く。World を `borrow_mut` し、`remove_non_send::<ProdWindowRegistry>()` で登録表ごと取り出して drop する。`Window<WndState>` の drop が `DestroyWindow` を呼ぶ。空でなければ `info!("[WinApp::run] exit requested while windows remained open — destroying them before returning")` を 1 行残す。
 - 新しい API は足さない（`WindowRegistry` は変更 0 行）。`run()` を 2 度呼ぶ運用は今も想定外（`wire_new_path` の doc）なので、登録表を取り去って戻って差し支えない。`WinApp` の drop は今までどおり World を drop するだけになる。
+- **公開面の契約を doc に書く（テストは足さない・5.3）**: `WinApp::run` の doc に「明示の指示で戻るとき、登録表に残った窓を壊してから戻る。戻った後の `run()` は再入できない（登録表が World に無い）」。`AppExit::request_exit` の doc に「窓は閉じて（despawn して）から呼ぶこと。残った窓は `run()` が壊すが、その entity の資源（`WindowHandle`・WUC）は `WinApp` の drop まで World に残る」。areka では `quit_app` が構造でこの前提を守るので起きないが、wintf 単体の利用者と後続（ゴースト切替）が `request_exit` を「閉じる前に呼んでよい口」と読まないための明文化。
 - World を借りたまま壊すのは `reconcile_window_registry` と同じ条件。ウィンドウ手続きは `try_borrow` の失敗で読み飛ばす（`wndproc_bridge.rs`）。
 - 手順 5 の防御的 notify は `ShutdownPolicy::notify_shutdown(self.exit.signal())` として据え置く（意味は変えない）。
 
@@ -379,7 +381,7 @@ impl ShutdownPolicy {
 | Requirements | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 6.2 |
 
 **Responsibilities & Constraints**
-- `crates/areka/src/app_exit.rs`（新規・`main.rs` から `mod app_exit;`）。`quit_app` は ⑴ 私有の `despawn_app_windows`（`Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>`・今日の `despawn_smoke_targets` の本文そのまま＝連鎖破棄済みの標的を `DESPAWNED_SKIP_TAG` の `debug!` で打ち切り残りを処理し切る）を呼び、⑵ World から `AppExit` を取り、`info!(event = "app_exit", origin = ?origin, closed, "[quit_app] 全窓を閉じ、終了を指示した")` の上で `request_exit()` を呼ぶ。閉じた数が 0 でも指示する（3.2・分岐を置かない）。
+- `crates/areka/src/app_exit.rs`（新規・`main.rs` から `mod app_exit;`）。`quit_app` は ⑴ 私有の `despawn_app_windows`（`Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>`・今日の `despawn_smoke_targets` の判断そのまま＝連鎖破棄済みの標的を `DESPAWNED_SKIP_TAG` の `debug!` で打ち切り残りを処理し切る。記録の相名は「smoke 自動 close」から `[quit_app]` へ改める——4 出所共通の部品が smoke と名乗らないため）を呼び、⑵ World から `AppExit` を取り、`info!(event = "app_exit", origin = ?origin, closed, "[quit_app] 全窓を閉じ、終了を指示した")` の上で `request_exit()` を呼ぶ。閉じた数が 0 でも指示する（3.2・分岐を置かない）。
 - 受け口が World に無いとき（本番では `WinApp` が必ず挿すので配線の誤り）: `error!(event = "app_exit_unwired", origin = ?origin, closed, "[quit_app] 終了の受け口が World に無い——窓は閉じたが終了を指示できない")` を残して戻る。記録無しの失敗経路を作らない。素の `World` で走る既存テストはこの経路を踏まないよう受け口を挿す（§Testing Strategy）。
 - `despawn_ghost_windows`（`placement/spawn.rs`）と `despawn_smoke_targets`（`main.rs`）は削除し、この私有部品へ吸収する。**全窓を閉じるだけの操作はクレート内のどこからも呼べない**（3.6 を構造で守る）。後続のゴースト切替が要る「閉じるが終了しない」操作は本仕様で作らない（Out of scope）。後続は `ExitPolicy::Explicit` の上に自分の操作を足す。
 - `ExitOrigin::KanadeStopped(cause)` は既存の `KanadeStopCause` をそのまま包む。`Debug` 出力は `KanadeStopped(Quit)` のように `ghost_quit` の `cause` と同じ語になる（記録の語彙を揃える・3.7）。
@@ -442,7 +444,7 @@ fn despawn_app_windows(world: &mut World) -> usize;   // 私有
 - **`run()` が戻る時点で窓が残っている**: 失敗ではなく想定内（Flow 2）。`info` 1 行の上で壊す。
 
 ### Monitoring
-- 実機ログの検索語: `event="app_exit"`（areka・`origin`・`closed` 付き）、`[AppExit] exit requested`（wintf）、`windows remained open`（wintf・残存窓破棄）、`event="app_exit_unwired"`（出てはならない）。
+- 実機ログの検索語: `event="app_exit"`（areka・`origin`・`closed` 付き）、`[quit_app]`（areka・全窓破棄の相名。連鎖破棄済み標的の打ち切りも同じ相名で `debug`）、`[AppExit] exit requested`（wintf）、`windows remained open`（wintf・残存窓破棄）、`event="app_exit_unwired"`（出てはならない）。
 
 ## Testing Strategy
 
@@ -465,11 +467,11 @@ fn despawn_app_windows(world: &mut World) -> usize;   // 私有
 
 | 置き場 | 追随 |
 |---|---|
-| `crates/wintf/src/runtime/mod.rs` `tests`（`new_wires_registry_shutdown_hook_to_notify_event`・`close_to_reconcile_to_shutdown_chain_wakes_listener`・`new_owns_unfired_shutdown_signal`） | `app.shutdown.listen()` → `app.exit.signal().listen()`（欄の置き換えのみ） |
+| `crates/wintf/src/runtime/mod.rs` `tests`（`new_wires_registry_shutdown_hook_to_notify_event`・`close_to_reconcile_to_shutdown_chain_wakes_listener`・`new_owns_unfired_shutdown_signal`） | `app.shutdown.listen()` → `app.exit.signal().listen()`（欄の置き換えのみ）。`new_owns_unfired_shutdown_signal` には `assert!(!app.exit.is_requested())` を 1 行並べ、「構築直後は指示されていない」を待ち時間でなく状態で固定する |
 | `crates/areka/src/emo2_boot/frame_ghost_quit_tests.rs`（4 本） | `world_with_ghost_windows` が `wintf::AppExit::new()` を `insert_non_send` する。テスト 1（通知 1 件）とテスト 4（窓 0）に「受け口が `is_requested()` になっている」の確認を 1 行ずつ足す（3.1・3.2 の契約の追随。テスト 4 の「`ERROR` 0 行」はそのまま） |
 | `crates/areka/src/input_events/input_events_tests.rs`（強制退避 3 本） | `world_with_wiring` と素の `World` を組む 2 本（`escape_works_without_mouse_wiring`・`handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sending`）へ受け口を挿す。後者に `is_requested()` の確認を 1 行（3.3） |
 | `crates/areka/src/main_startup_window_tests.rs`（`double_click_left_despawns_all_dummy_windows`） | 受け口を挿し、`is_requested()` の確認を 1 行（3.4）。無関係 entity が残る確認はそのまま |
-| `crates/areka/src/main_seam_tests.rs` の `despawn_smoke_targets_*` 3 本 | `crates/areka/src/app_exit_tests.rs` へ移し、対象を私有の `despawn_app_windows` にする。本文（標的の種類・空 World の no-op・連鎖破棄済み標的の打ち切りと対照アーム）は不変 |
+| `crates/areka/src/main_seam_tests.rs` の `despawn_smoke_targets_*` 3 本 | `crates/areka/src/app_exit_tests.rs` へ移し、対象を私有の `despawn_app_windows` にする。判断（標的の種類・空 World の no-op・連鎖破棄済み標的の打ち切りと対照アーム）は不変。**打ち切り行の相名だけ追随**: 今日の `despawn_smoke_targets` は「smoke 自動 close: 標的 entity は既に破棄済み…」と名乗るが、私有部品は 4 出所共通なので相名を `[quit_app]` へ改め、`contains("smoke 自動 close")` の主張も `contains("[quit_app]")` へ変える（smoke 以外の終了で記録が「smoke」と名乗らないため） |
 | `crates/wintf/src/runtime/window_registry.rs`（3 本）・`message_loop.rs`（4 本）・`crates/wintf/tests/win_app.rs`（2 本） | 変更なし |
 | `crates/areka/tests/smoke_boot_loop_exit.rs`（2 本） | 変更なし（doc コメント 1 行の追随のみ）。`AREKA_APP_SMOKE_EXIT_MS=500`・60 秒の見張り・終了コード 0・経路の目印はそのまま。**「窓が無いのにプロセスが残る」壊れ方（受け口不在・指示の送り忘れ・`shutdown_future` の取りこぼし）はこの見張りが赤にする**（5.4） |
 
