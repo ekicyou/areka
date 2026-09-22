@@ -55,7 +55,7 @@
 - **Adjacent expectations**:
   - kanade の終了の握手（`crates/areka-kanade/src/schedule/close.rs`・`user_break.rs`）は変えない。本仕様が変えるのは、握手の完了通知を受けた**あと**だけ。握手の決定論テストは 1 本も変えない。
   - `crates/areka-ghost/src/runtime.rs` の `fn shutdown` は変えない。
-  - `areka-P0-baseware-root-layout` は `crates/areka/src/main.rs` の別の関数と `crates/areka/tests/smoke_boot_loop_exit.rs` を共有する。本仕様が先に着地し、相手は要件と設計だけ先行する。`main.rs` は 1 ファイル 1,000 行の目安に近い（958 行）ので、本仕様の変更後も目安の内側に収める。
+  - `areka-P0-baseware-root-layout` は `crates/areka/src/main.rs` の別の関数と `crates/areka/tests/smoke_boot_loop_exit.rs` を共有する。本仕様が先に着地し、相手は要件と設計だけ先行する。`main.rs` は 1 ファイル 1,000 行の目安に近い（958 行）ので、本仕様の変更後も目安の内側に収める。**相手への申し送り**: 相手の brief は引数なし起動（フォールバック方向）の smoke テストを陳腐化候補としているが、本仕様の要件 5.4 はこのテストを「窓が無いのにプロセスが残る」壊れ方を赤にする常設の見張りとして残す。相手が起動経路の目印（マーカー）を変えるのは構わないが、60 秒の見張りと終了コード 0 の判定は残すこと。
   - 後続のゴースト切替は、本仕様が wintf に足す「窓 0 で終了しない」設定の上で「窓を全部閉じて開き直す」を組む。本仕様はそのための口を用意するだけで、切替の順序や通知は持たない。
 
 ## Requirements
@@ -68,7 +68,7 @@
 
 1. While areka が動作中, when 終了の指示が出されないまま窓の数が 0 になる, the areka shall 終了せず動作を続ける（メッセージループから戻らない）。
 2. When 終了の指示が出される, the areka shall メッセージループから戻り、今日と同じ後始末（SERIKO の再生ループの停止 → ゴースト実行環境の終了統括 → SERIKO アクターの合流 → 性能報告の出力）を同じ順序で行い、終了コード 0 でプロセスを終える。
-3. When 終了の指示が出される and 画面に窓が残っている, the areka shall 残っている窓もすべて閉じてからプロセスを終える（利用者の画面に窓を残さない）。
+3. When 終了の指示が出される and 画面に窓が残っている, the areka shall 残っている窓をすべて閉じ終えてからメッセージループから戻る（後始末①〜④の間に利用者の画面へ窓を残さない＝今日、合図が鳴る時点で窓が既に無いのと同じ見え方を保つ）。
 4. If 終了の指示が 2 回以上出される, then the areka shall 1 回目と同じ終わり方をし、2 回目以降で失敗や二重の後始末を起こさない。
 5. If 終了の指示がメッセージループの開始より前に出される, then the areka shall ループの開始後ただちに終わる（指示を取りこぼしてプロセスが残ることがない）。
 
@@ -108,7 +108,7 @@
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall wintf の example 7 本（`clip_demo`・`dcomp_demo`・`dcomp_taffy_demo`・`graphics_reinit_test`・`postmessage_click_test`・`taffy_flex_demo`・`typewriter_demo`）を 1 本も書き換えない。
+1. The 本仕様 shall `WinApp::new()`＋`run()` の形で終了を窓 0 に任せている example をすべて 1 本も書き換えない（2026-09-23 実測: wintf の 7 本＝`clip_demo`・`dcomp_demo`・`dcomp_taffy_demo`・`graphics_reinit_test`・`postmessage_click_test`・`taffy_flex_demo`・`typewriter_demo`、加えて同じ形の `crates/areka/examples/` 5 本と `crates/areka-emo-text/examples/` 2 本）。
 2. The 本仕様 shall kanade の終了の握手（`schedule/close.rs`・`schedule/user_break.rs`）とその決定論テストを 1 本も変えない。
 3. The 本仕様 shall `crates/areka-ghost/src/runtime.rs` の `fn shutdown` を変えない。
 4. The 本仕様 shall wintf と areka の既存の決定論テスト（登録表の空遷移で合図が鳴ること・終了系列の完了通知で全ゴースト窓が閉じること・強制退避で全ゴースト窓が閉じることを含む）を 1 本も落とさない。
