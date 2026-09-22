@@ -162,4 +162,109 @@ wintf 側は**既存ファイルの中**で済ませる（`ExitPolicy`・`AppExi
 - **議題 4 は要件側で縛った。** 要件 1.3 を「残っている窓をすべて閉じ終えてからメッセージループから戻る」へ改めた（後始末①〜④の間に窓を残さない＝今日と同じ見え方）。⑵（`WinApp` drop に任せる）は要件に反するので**採らない**。⑴ の実現手段（`run()` の復帰直前に登録表を空にする等）は設計で決める。
 - **議題 9 は要件側へ転記済み。** 要件の Adjacent expectations に `baseware-root-layout` への申し送り（マーカーは変えてよい・60 秒の見張りと終了コード 0 の判定は残す）を書いた。相手の brief への追記は本仕様の完了時（roadmap の干渉台帳の更新と同時）に行う。
 - **要件 4.1 の example の数を実測で改めた。** `WinApp::new()`＋`run()` の形は wintf 7 本に加え `crates/areka/examples/` 5 本・`crates/areka-emo-text/examples/` 2 本（§2.4）。要件は数ではなく「その形の example すべて」で縛る。
-- 議題 1・2・3・5・6・7・8・10・11 は設計フェーズ（`/kiro-spec-design`）で解決する。
+- 議題 1・2・3・5・6・7・8・10・11 は設計フェーズ（`/kiro-spec-design`）で解決する（→ 下の §8 で解決済み）。
+
+---
+
+## 7. 設計フェーズの調査（2026-09-23・拡張型の軽い調査）
+
+> `design.md` の生成に先立って実ファイルを読み直したもの。分類は **Extension（既存系の拡張）**＝統合点に絞った調査。外部依存の追加は 0 なので Web 調査は行っていない。サブエージェントは使わず、主文脈で全ファイルを読んだ。
+
+### 7.1 窓が消える経路の全段（要件 1.3 の実現手段を決めるため）
+
+- **Context**: 明示の終了の指示のあと、まだ画面に残っている窓を「誰が・いつ」壊すか。
+- **Sources**: `crates/wintf/src/ecs/window/window_handle.rs` の `fn on_window_handle_remove`・`crates/wintf/src/ecs/window_proc/lifecycle.rs` の `fn WM_CLOSE`・`crates/wintf/src/runtime/wndproc_bridge.rs` の `fn make_wndproc`・`crates/wintf/src/runtime/window_registry.rs` の `fn reconcile_window_registry`・`crates/wintf/src/runtime/mod.rs` の `fn run`。
+- **Findings**:
+  - `world.despawn(窓)` → `on_window_handle_remove`（`WindowHandle` の除去フック）が `App::on_window_destroyed` を呼び、`PostMessageW(WM_CLOSE)` を投函する。実際の `DestroyWindow` は **同 tick の `FrameFinalize`** で `reconcile_window_registry` が `Window<WndState>` を drop したときに起きる。
+  - `WM_CLOSE` の受け手（`lifecycle.rs`）は `try_borrow_mut` が取れれば entity を despawn し、既に無ければ `DESPAWNED_SKIP_TAG` の `debug!` で打ち切る。借用できなければ何もしない。
+  - ウィンドウ手続き（`make_wndproc`）は World を `try_borrow` で試し、失敗なら既定手続きへ委譲する。`reconcile_window_registry` は tick の中（World 借用中）で `DestroyWindow` を呼んでいるので、**World を借りたまま窓を壊す**のは今日の経路が毎回踏んでいる条件である。
+  - `run()` は `block_on` の復帰後に `ShutdownPolicy::notify_shutdown` を撃って `Ok(())` を返すだけで、登録表を見ない。
+- **Implications**: `run()` が戻る直前に `remove_non_send::<ProdWindowRegistry>()` で登録表ごと取り出して drop すれば、残った窓は `DestroyWindow` される。新しい API（`WindowRegistry::clear` 等）は要らない。`run()` を 2 度呼ぶ運用は今も想定外（`wire_new_path` の doc）なので登録表を取り去って差し支えない。`DestroyWindow` はその窓宛ての未処理メッセージを捨てるので、投函済みの `WM_CLOSE` が後から届く経路も無い。
+
+### 7.2 指示が出るタイミングと tick の関係（Flow 1／Flow 2 の根拠）
+
+- **Context**: 指示のあとに reconcile が走るかどうかは、指示が tick の中で出るか外で出るかで変わる。
+- **Sources**: `crates/areka/src/emo2_boot/frame.rs` の `fn emo2_frame_system`（`Update` 段・排他 system）・`crates/areka/src/main.rs` の `fn open_startup_window` 内 smoke クロージャ（`wintf::executor::spawn_local`）・`crates/wintf/src/runtime/message_loop.rs` の `MessageLoopDriver::block_on` の doc。
+- **Findings**: `run_ghost_quit_phase`・強制退避・ダミー窓は tick の中（ポインタ配送も tick の `Input` 段）で動くので、同じ tick の `FrameFinalize` が窓を壊してから `block_on` が future を見る。smoke クロージャは tick の外の async タスクなので、`block_on` が先に戻り得る。
+- **Implications**: 要件 1.3 が実際に効くのは smoke 経路（Flow 2）。実機確認ではこの走行で「windows remained open」の行が出るかを見る（出なくても reconcile が先に走っただけで正常）。
+
+### 7.3 `block_on` と `spawn_local` の振る舞い（決定論テストの単位を決めるため）
+
+- **Sources**: `message_loop.rs` の `block_on_ready_future_returns_value`・`MessageLoopDriver::block_on` の doc（「`spawn_local` で投入済みの UI タスクも並行に駆動される」）・`crates/wintf/src/runtime/mod.rs` の `wire_click_through_starts_and_inserts_registry_handle`（`spawn_local` をループ非実行下で投入して安全）。
+- **Findings**: 完了済み future を渡した `block_on` は正常に戻る。投入済みタスクは `block_on` の中で駆動される。`run()` 自体を headless で回した実績は無い（VSync スレッド・クリック透過ワーカを起こす）。
+- **Implications**: 要件 1.5／5.2／1.4 のテストは `MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(exit))` の単位で組める（§6 議題 10 の ⑵）。`run()` 直接のテストは作らない。
+
+### 7.4 素の `World` で終了経路を叩く既存テストの全数（受け口不在の扱いを決めるため）
+
+- **Sources**: `crates/areka/src/emo2_boot/frame_ghost_quit_tests.rs`（4 本・`world_with_ghost_windows` ヘルパ・テスト 4 は `level=ERROR` 0 行を主張）、`crates/areka/src/input_events/input_events_tests.rs`（`world_with_wiring` ヘルパ経由 1 本＋素の `World` 2 本が強制退避を踏む）、`crates/areka/src/main_startup_window_tests.rs`（`double_click_left_despawns_all_dummy_windows`）、`crates/areka/src/main_seam_tests.rs`（`despawn_smoke_targets_*` 3 本・対照アーム付き）。
+- **Findings**: 終了経路を踏むのは上の 4 ファイル。いずれも `WinApp` を建てない素の `World`。`log-capture-kit` は `[dev-dependencies]`（`crates/areka/Cargo.toml`）。
+- **Implications**: 受け口不在を `error!` にすると `frame_ghost_quit_tests` のテスト 4 が赤になる。ヘルパへ `wintf::AppExit::new()` を挿す（本番の意味論は曲げない）。`despawn_smoke_targets_*` は関数が私有部品へ移るので置き場を `app_exit_tests.rs` へ移す（本文不変）。
+
+### 7.5 呼び手と参照の全数（削除の安全確認）
+
+- **Sources**: `git grep` で `despawn_ghost_windows`／`despawn_smoke_targets` を `crates/` 全域。
+- **Findings**: 本体 2 か所と呼び手 3 か所（`frame.rs`・`input_events/mod.rs`・`main.rs` smoke クロージャ）、テスト 3 本（`main_seam_tests.rs`）、doc コメント 1 行（`placement/spawn_cleanup_tests.rs`）のほかに参照は無い。example の `#[path]` include は `placement/spawn.rs` を含むが、関数を削除しても参照が無いので壊れない。`spawn.rs` の `debug!`／`DESPAWNED_SKIP_TAG` は他の場所でも使われており、削除後に未使用 import は出ない。
+
+### 7.6 `ClickThroughRegistryHandle` の形（受け口の先例）
+
+- **Sources**: `crates/wintf/src/ecs/clickthrough/controller.rs` の `pub struct ClickThroughRegistryHandle { registry: Rc<RefCell<…>> }`・`pub(crate) fn new`・`pub fn register/remove/len`。`crates/wintf/src/runtime/mod.rs` の `fn wire_click_through` が `insert_non_send` する。
+- **Implications**: `AppExit` も「`Rc` を中に持つ `pub struct`・`WinApp` が World へ挿す・利用側は `get_non_send` で取る」の同型で組める。`new()` だけは areka のテストが headless で建てるため `pub` にする（先例は `pub(crate)`）。
+
+## 8. 設計判断（`design.md` に転記済み・ここは根拠の控え）
+
+### Decision: 口の形（§6 項目 1）
+- **Alternatives**: ⑴ `ExitPolicy` enum＋`with_exit_policy` ／ ⑵ `WinAppOptions` 構造体 ／ ⑶ ビルダー。
+- **Selected**: ⑴。`new()` は `with_exit_policy(OnLastWindowClose)` へ委譲。
+- **Rationale**: 選択肢が 2 つしか無い。将来 2 つ目の設定値が現れたら ⑵ へ移るのは容易で、今は器を作らない。
+- **Trade-offs**: なし（`new()` の署名不変・example 14 本を触らない）。
+
+### Decision: 指示の届け方（§6 項目 2）
+- **Selected**: ⑴ `WinApp` が World へ挿す NonSend `AppExit`。
+- **Rationale**: areka の 4 か所はどれも `&mut World` しか持たない。`ClickThroughRegistryHandle` と同型で配線 0。⑵（ハンドルを `Emo2Wiring` 等へ持ち回る）は 3 経路の配線が増える。
+
+### Decision: 指示済みビットと完了機構の一本化（§6 項目 3）
+- **Selected**: `AppExit { requested: Rc<Cell<bool>>, signal: Rc<Event> }` を `message_loop.rs` に置き、`shutdown_future` は arm → 確認 → await。既定ポリシーの空遷移フックも `request_exit` を呼ぶ。`WinApp` の `shutdown: Rc<Event>` は `exit: AppExit` へ置き換える（既存テストの `app.shutdown.listen()` 3 か所は `app.exit.signal().listen()` へ・意味不変）。2 回目以降の指示は `debug!`。
+- **Rationale**: `event-listener` 5.4.2 はリスナ不在の通知を失うので記憶が要る（要件 1.4・1.5）。フックを `request_exit` に寄せると終了の完了機構が 1 本になり、既定と明示で振る舞いが分かれない。
+- **Trade-offs**: example の終了時に `info` が 1 行増える。`WinApp` の欄を 1 つ置き換えるので wintf 内テスト 3 行が追随する。
+- **Follow-up**: 実装で `Rc` を 2 本にするか `Rc<ExitState>` 1 本にするかは自由（公開面は同じ）。
+
+### Decision: 残存窓の破棄（要件 1.3・§6 項目 4 の実現手段）
+- **Selected**: `run()` が `block_on` 復帰直後に `remove_non_send::<ProdWindowRegistry>()` で登録表ごと drop する。World を借りたまま行う（`reconcile_window_registry` と同条件）。空でなければ `info` 1 行。
+- **Rationale**: 新 API 0・`window_registry.rs` 変更 0 行。1 フレーム待つ解を採らない。
+
+### Decision: 統合操作の置き場（§6 項目 5）
+- **Selected**: 新モジュール `crates/areka/src/app_exit.rs` に `quit_app(world, origin) -> usize`。`despawn_ghost_windows`／`despawn_smoke_targets` は削除し私有部品 `despawn_app_windows` へ吸収（両マーカーを 1 本の query で狙う）。
+- **Rationale**: `placement` は `crate::` パスを持てず、`main.rs` は 958 行。「終了とは何か」を 1 か所へ集めると読み手に優しく、並走 spec の `main.rs` 圧力も下がる。外から呼べる全窓破棄を残さないことが裁定 2 の構造的な守りになる。
+
+### Decision: 受け口不在の扱い（§6 項目 6）
+- **Selected**: ⑴ テスト側が `AppExit::new()` を挿す。本番の不在は `error!(event="app_exit_unwired")`＋指示なし。
+- **Rationale**: 本番では `WinApp` が必ず挿すので不在は配線の誤り。記録無しの失敗経路を作らない。テストのために本番の記録レベルを下げない。
+
+### Decision: 出所の記録（§6 項目 7）
+- **Selected**: ⑴ 層ごとに 1 行。areka `info!(event="app_exit", origin=?ExitOrigin, closed)`・wintf `info!("[AppExit] exit requested")`。
+- **Rationale**: wintf は areka の語彙を知らない。`ExitOrigin::KanadeStopped(cause)` の `Debug` は `ghost_quit` の `cause` と同じ語を出す。
+
+### Decision: `"[App] Last window closed."`（§6 項目 8）
+- **Selected**: ⑴ 触らない。
+- **Rationale**: 文は事実（最後の窓が閉じた）を述べているだけで終了を含意しない。`App` は旧経路のカウンタで本仕様の範囲外。
+
+### Decision: 要件 1.5 のテストの単位（§6 項目 10）
+- **Selected**: ⑵ `block_on(shutdown_future(exit))` の単位。`run()` 直接のテストは作らない。
+- **Rationale**: 判断分岐（arm → 確認 → await）はこの単位で固定できる。`run()` は VSync スレッドとワーカを起こし headless の実績が無い。`run()` の貫通は smoke テストが実プロセスで踏む。要件 5.3（足すテストを判断分岐に限る）にも合う。
+
+### Decision: 実機確認の手順（§6 項目 11）
+- **Selected**: smoke の自動終了（Flow 2）とメニューの「終了」（Flow 1）の 2 走行。強制退避は任意。ダミー窓は引数なし smoke テストが踏む。`RUST_LOG=info,wintf::runtime=debug`・`Start-Process -PassThru` の PID だけを `HasExited` で見る。
+- **Rationale**: 2 走行で「tick の中の指示」「tick の外の指示」の両方を踏む。判定の分岐（2 回目の指示の `debug!`）まで記録が出る level にする。
+
+## 9. 総合（設計合成の 3 つの視点）
+
+- **一般化**: 終了操作 6 種は「全窓を閉じて終了を指示する」1 つの操作の変種で、違いは出所だけ。`quit_app(world, origin)` の 1 関数に集め、出所は値（`ExitOrigin`）で渡す。wintf 側の既定（窓 0 で終了）と明示の指示も、`request_exit` 1 本を通る同じ完了機構の 2 つの入口として一般化した。
+- **作るか採るか**: 新しい依存は 0。`event-listener`（既存）・`Cell<bool>`（std）・`remove_non_send`（bevy 既存）・`block_on`（既存）だけで組む。
+- **単純化**: 設定値の構造体・ビルダー・トレイト・`WindowRegistry` の新 API・`run()` 直接の headless テスト・時間の安全網・「閉じるが終了しない」操作は、いずれも今の要件が求めないので作らない。
+
+## 10. リスクと備え（設計後）
+
+- `run()` の残存窓破棄が World 借用中に `DestroyWindow` を呼ぶ — 今日の `reconcile_window_registry` と同じ条件で新しい再入は無い。実機の smoke 走行で確認。
+- `spawn_local` から `request_exit` するテスト（5.2）が `block_on` の中で駆動されない — `MessageLoopDriver::block_on` の doc と `wire_click_through` の先例が「投入済みタスクは駆動される」と述べている。赤になれば `block_on(async { exit.request_exit(); shutdown_future(exit).await })` の形へ退避しても判断分岐の固定は保てる。
+- 既定ポリシーの終了時に `info` が 1 行増える — example と wintf 単体の利用者の終了結果（exit 0）は変わらない。
+- `main.rs` の行数 — `despawn_smoke_targets`（doc 込み約 50 行）と `on_dummy_pressed` の本体が出て、`mod app_exit;` と 1 行化が入るので 958 から減る。実装後に `wc -l` で確かめる。
