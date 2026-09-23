@@ -42,7 +42,7 @@
   - 2.2 の赤の確認が同じ examples に一時的な行を書いて戻すので、2.2 の後に行う（同時に走らせると戻しが改名を巻き込む）
   - _Requirements: 3.3, 3.4_
 
-- [ ] 3. 途中の段で抜いた α が落ちるとテストが赤になることの実証（差し替えは製品コードに残さない）
+- [x] 3. 途中の段で抜いた α が落ちるとテストが赤になることの実証（差し替えは製品コードに残さない）
 - [x] 3.1 焼く段の差し替えで赤を示し、戻して赤 0 を確かめる
   - 抜き色の正規化の腕（抜き色を用いて画素を透明にする腕）が受け取る抜き色を「無し」に置き換え、腕が画素を変えずに返す形にする（経路から外す形・平行移動は用いない）
   - 走らせ方: `cargo test -p areka-emo-atlas`・`cargo test -p areka-emo-compose`・`cargo test -p areka-emo-present` の 3 本
@@ -59,7 +59,7 @@
   - 完了状態: 3 面すべて赤の記録と、戻した後の赤 0 の記録が完了記録に残っている
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 3.3 マスク段の差し替えで赤を示し、戻して赤 0 を確かめる
+- [x] 3.3 マスク段の差し替えで赤を示し、戻して赤 0 を確かめる
   - 表示の適用でマスク生成へ渡す表示バッファを、同じ長さの全画素不透明のバッファに置き換える
   - 走らせ方・記録・戻し方は 3.1 と同じ。マスクの輪番を直に叩くテストが影響を受けないことも記録する
   - 完了状態: 3 面すべて赤の記録と、戻した後の赤 0 の記録が完了記録に残っている
@@ -116,3 +116,21 @@
     - 見込みに無かった赤（5 本・いずれも検体の前提か陽性対照の主張で止まる）: `cache::tests::mask_generated_once_from_composed_bytes_and_correct`・`cache::tests::insert_after_take_recycled_preserves_approved_semantics`（「fixture は透明画素を含む」）・`display::gpu_tests::identity_offscreen_roundtrip_equals_composed_native_bytes`（α=0 と中間 α の同居の前提）・`presenter::display_failure_tests::display_failure_on_a_same_shape_reshow_keeps_every_previous_value`（陽性対照の `assert_ne`・再表示前後のマスクが同一）・`presenter::fractional_scale_tests::alpha_mask_bits_come_from_native_bytes`（「期待マスクが一様」）
     - 3.1 で赤だった `shell_target::template_tests::r_post_and_komainu_shows_both_scopes_from_file_names_alone` は緑（面 0 の左上はトリム後の矩形の外で α 0 のまま）
 - ⑹ 戻した後: `git checkout -- crates/areka-emo-compose/src/blit.rs` で戻し、同ファイルの `git diff --stat` は空。atlas 83 passed / 1 ignored・compose 220 passed・present 255 passed、赤 0。
+
+### 3.3 マスク段の差し替え（2026-09-24）
+
+- ⑴ 差し替えた箇所: `crates/areka-emo-present/src/presenter/show.rs` の `apply_show` にあるマスク生成の呼び出し `target.budget.regenerate_mask(retired_mask, display.bytes(), display.width(), display.height(), display.stride())` の第 2 引数（マスクを作る元の表示バッファ）。表示バッファの代わりに同じ長さの全画素不透明のバッファを渡す形。着手前の同ファイルの `git diff --stat` は空（HEAD `a63bdcd5`）・置き換える行は grep で 1 件。
+- ⑵ 置き換えた 1 行: 前 `display.bytes(),` → 後 `&vec![255u8; display.bytes().len()],`
+- ⑶ 走らせたコマンド: `cargo test -p areka-emo-atlas --no-fail-fast`・`cargo test -p areka-emo-compose --no-fail-fast`・`cargo test -p areka-emo-present --no-fail-fast`
+- ⑷ 赤になった通しテスト: `presenter::keycolor_clickthrough_tests::keyed_out_pixels_leave_the_hit_mask_and_the_rest_stay_inside`。前提の主張はすべて通り、3 面を集めた最後の「食い違い 0」の主張で赤:
+  - `R_POST_and_KOMAINU 面 0: 抜き色の判定とマスクが 59831 画素で食い違う（先頭 5 件 (x, y, 期待は内か): [(0, 0, false), (1, 0, false), (2, 0, false), (3, 0, false), (4, 0, false)]）`
+  - `R_POST_and_KOMAINU 面 10: 抜き色の判定とマスクが 11816 画素で食い違う（先頭 5 件 …: [(0, 0, false), (1, 0, false), (2, 0, false), (3, 0, false), (4, 0, false)]）`
+  - `konnoyayame 面 0: 抜き色の判定とマスクが 70574 画素で食い違う（先頭 5 件 …: [(0, 0, false), (1, 0, false), (2, 0, false), (3, 0, false), (4, 0, false)]）`
+  - 件数は 3 面とも抜かれた画素の数そのもの（全画素が「内」になる）。
+- ⑸ 道連れで赤になった既存テスト（全件）:
+  - areka-emo-atlas: 赤 0（83 passed / 1 ignored）・areka-emo-compose: 赤 0（220 passed）。どちらもマスクより上流。
+  - areka-emo-present（250 passed / 5 failed）:
+    - 見込みどおり: 本テスト・`presenter::budget_equivalence_tests::the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_path`（「スロットのマスクが表示バイト由来の独立再現と違う」）・`…::repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent`（「ヒット経路のマスクが便宜経路と違う」）。同ファイルの `the_rotating_face_fixture_differs_in_bytes_and_outnumbers_the_cache` はマスクを見ないので緑。
+    - 見込みに無かった赤（2 本）: `presenter::display_failure_tests::display_failure_on_a_same_shape_reshow_keeps_every_previous_value`（陽性対照の `assert_ne`・再表示前後のマスクが同じ全面「内」になる）・`presenter::fractional_scale_tests::alpha_mask_bits_come_from_native_bytes`（「αマスク (1,0) のビットが原寸の合成バイト由来でない」）
+    - `presenter/budget_tests.rs`（`presenter::budget::tests`）16 本はすべて緑。マスクの輪番を自前の画素で直に叩くので影響しない（要件 4.2）。
+- ⑹ 戻した後: `git checkout -- crates/areka-emo-present/src/presenter/show.rs` で戻し、同ファイルの `git diff --stat` は空。atlas 83 passed / 1 ignored・compose 220 passed・present 255 passed、赤 0。
