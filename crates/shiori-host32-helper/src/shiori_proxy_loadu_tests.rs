@@ -283,7 +283,10 @@ fn testdll_loadu_false_is_load_returned_false_without_falling_back() {
     }
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 1, "記録は 1 行のはず: {text:?}");
-    assert!(lines[0].starts_with("loadu\t"), "記録が loadu でない: {text:?}");
+    assert!(
+        lines[0].starts_with("loadu\t"),
+        "記録が loadu でない: {text:?}"
+    );
     assert_eq!(
         lines.iter().filter(|l| l.starts_with("load\t")).count(),
         0,
