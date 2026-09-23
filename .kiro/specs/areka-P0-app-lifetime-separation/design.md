@@ -120,7 +120,7 @@ graph TB
 **Architecture Integration**:
 - Selected pattern: **既存ファイルの中で拡張（wintf）＋統合操作の新モジュール 1 本（areka）**（`research.md` §4 案 C）。wintf は 3 つの定義（`ExitPolicy`・`AppExit`・`with_exit_policy`）を既存テストの隣に足す。areka は「終了とは何か」を 1 か所へ集める。
 - Domain boundaries: wintf は「いつメッセージループを終えるか」だけを決め、areka の語彙（`ExitOrigin`）を知らない。areka は「どの窓を閉じ、どこから終了が来たか」だけを知り、ループの終え方を知らない。
-- Existing patterns preserved: NonSend の受け口を `WinApp` が World へ据える（`ClickThroughRegistryHandle` と同型）。`listen → await` の通知取りこぼし防止規律（`AsyncTickTask` と同形）に「arm → 指示済みの確認 → await」を足す。**窓に関数を差す部品**は `OnDragEnd(EventHandler<DragEndEvent>)`（`crates/wintf/src/ecs/drag/dispatch.rs`）と同型の `OnCloseRequest(fn(&mut World, Entity))`。areka の OS 閉鎖要求の受け手は、メニューの「終了」（`crates/areka/src/menu/mod.rs` の `fn request_close`）と同じ `MouseWiring::send_close_request(CloseReason::User { scope })` を呼ぶだけ＝**終了系列は増やさない**。
+- Existing patterns preserved: NonSend の受け口を `WinApp` が World へ据える（`ClickThroughRegistryHandle` と同型）。`listen → await` の通知取りこぼし防止規律（`AsyncTickTask` と同形）に「arm → 指示済みの確認 → await」を足す。**窓に関数を差す部品**は `OnDragEnd(EventHandler<DragEndEvent>)`（`crates/wintf/src/ecs/drag/dispatch.rs`）と同型の `OnCloseRequest(fn(&mut World, Entity))`。areka の OS 閉鎖要求の受け手は、メニューの「終了」（`crates/areka/src/menu/mod.rs` の `fn request_close`）と同じ `MouseWiring::send_close_request(CloseReason::User { scope })` を呼ぶだけ＝**終了系列は増やさない**（kanade 未結線の起動だけは `quit_app(OsClose)` で直ちに閉じる・3.10）。
 - New components rationale: `AppExit` は「指示済み」の記憶と終了シグナルを 1 つにまとめ、既定ポリシーのフックも同じ `request_exit` を通す＝**終了の完了機構が 1 本**になる。`quit_app` は裁定 2（片方だけ呼べない形）を構造で守る唯一の置き場。
 - Steering compliance: ライフサイクル事象は `info!`、2 回目以降の指示や正常系の打ち切りは `debug!`、配線の誤りは `error!`＋記録（`logging.md`・記録無しの失敗経路を作らない）。1 ファイル 1,000 行の目安（`main.rs` は減る）。
 
@@ -254,7 +254,7 @@ sequenceDiagram
 ダミー窓は `OnCloseRequest(on_dummy_os_close)` を持ち、受け手は `quit_app(world, ExitOrigin::OsClose)` を 1 行呼ぶだけ（Flow 2 の smoke と同じ経路）。部品を持たない窓（example）は `WM_CLOSE` で従来どおり despawn される。
 
 **Flow-level decisions**:
-- OS の閉鎖要求は **窓を消さない**。ゴースト窓では終了要求を kanade へ送るだけで、窓を閉じるのは従来どおり終了の握手が終わったことを受けた側（`run_ghost_quit_phase` → `quit_app`）。メニューの「終了」と同じ 1 本の終了系列に乗る（終了経路は正規実装のまま・新しい終わり方を増やさない）。
+- OS の閉鎖要求は **窓を消さない**（例外: `MouseWiring` が無い kanade 未結線の起動では別れの台詞を流す相手がいないので、`quit_app(OsClose)` で直ちに閉じる・3.10）。ゴースト窓では終了要求を kanade へ送るだけで、窓を閉じるのは従来どおり終了の握手が終わったことを受けた側（`run_ghost_quit_phase` → `quit_app`）。メニューの「終了」と同じ 1 本の終了系列に乗る（終了経路は正規実装のまま・新しい終わり方を増やさない）。
 - `taskkill /IM areka.exe`（`/F` なし）や「タスクの終了」は各トップレベル窓へ `WM_CLOSE` を投げるので、ゴースト窓 4 枚へ終了要求が 4 件届く。2 件目以降の扱いはメニューの「終了」を連打したときと同じで、kanade の握手（`schedule/close.rs`）に委ねる（変更 0 行・4.2）。
 - 指示が tick の中で出ても外で出ても、`run()` が戻る時点で画面に窓は無い。tick の中なら同じ tick の `FrameFinalize` が壊し、外なら `run()` の残存窓破棄が壊す。どちらの経路も「1 フレーム待つ」解を使わない。
 - `run()` の残存窓破棄は World を借りたまま行う（`reconcile_window_registry` と同じ条件）。ウィンドウ手続きは `try_borrow` の失敗で読み飛ばすので再入で壊れない。`DestroyWindow` はその窓宛ての未処理メッセージ（投函済み `WM_CLOSE`）を捨てるので、後から届く経路も無い。
@@ -289,7 +289,7 @@ sequenceDiagram
 | 3.7 | 出所を info で記録 | quit_app | `info!(event="app_exit", origin, closed)` | — |
 | 3.8 | 後始末の順序と exit 0 は不変 | main（不変） | — | Flow 1・2・3 |
 | 3.9 | ゴースト窓の閉鎖要求 → 終了要求を kanade へ | on_ghost_os_close・attach_os_close_request | `MouseWiring::send_close_request(CloseReason::User { scope })` | Flow 3 |
-| 3.10 | MouseWiring 不在なら送らず記録 | on_ghost_os_close | `warn!(event = "os_close_no_mouse_wiring")` | — |
+| 3.10 | MouseWiring 不在なら記録して全窓を閉じ終了を指示 | on_ghost_os_close | `warn!(event = "os_close_no_mouse_wiring")` → `quit_app(ExitOrigin::OsClose)` | — |
 | 3.11 | ダミー窓の閉鎖要求 → 閉じて指示 | on_dummy_os_close → quit_app | `ExitOrigin::OsClose` | Flow 3 |
 | 3.12 | 閉鎖要求を受けたことを記録 | fn WM_CLOSE（wintf）・受け手（areka） | `info!(event = "os_close_request")` | Flow 3 |
 | 4.1 | example を触らない | `new()` の意味不変 | — | — |
@@ -316,7 +316,7 @@ sequenceDiagram
 | ExitPolicy / WinApp::with_exit_policy | wintf runtime | 構築時に「窓 0 で終了するか」を選ぶ | 1.1, 2.1, 2.2, 2.3, 2.4, 2.8, 6.1 | WindowRegistry hook (P0) | Service |
 | WinApp::run 残存窓破棄 | wintf runtime | 指示で戻る前に残った窓を壊す | 1.2, 1.3 | WindowRegistry (P0), wndproc try_borrow (P1) | Service |
 | ShutdownPolicy::shutdown_future | wintf runtime | 指示済みなら即完了・そうでなければ通知を待つ | 1.5, 5.2 | AppExit (P0) | Service |
-| quit_app / ExitOrigin | areka | 全窓破棄と終了の指示を 1 操作に | 3.1–3.7, 3.11, 6.2 | AppExit (P0), markers (P0) | Service |
+| quit_app / ExitOrigin | areka | 全窓破棄と終了の指示を 1 操作に | 3.1–3.7, 3.10, 3.11, 6.2 | AppExit (P0), markers (P0) | Service |
 | 呼び手 4 か所 | areka | 各終了操作を `quit_app` 1 行へ | 3.1, 3.3, 3.4, 3.5 | quit_app (P0) | — |
 | OnCloseRequest / fn WM_CLOSE の分岐 | wintf ecs | OS の閉鎖要求を窓ごとの関数へ渡す（無ければ従来どおり消す） | 2.9, 2.10, 2.11, 3.12 | window_proc dispatch (P0) | Service |
 | on_ghost_os_close / on_dummy_os_close / attach_os_close_request | areka | OS の閉鎖要求を終了系列へ乗せる | 3.9, 3.10, 3.11, 3.12, 6.3 | MouseWiring (P0), quit_app (P0), OnCloseRequest (P0) | Service |
@@ -473,7 +473,7 @@ pub struct OnCloseRequest(pub fn(world: &mut World, entity: Entity));
 
 **Responsibilities & Constraints**
 - `crates/areka/src/app_exit.rs` に置く（終了の入口は 1 モジュールに集める）。
-- `on_ghost_os_close(world, entity)`: entity の `CharWindowMarker { scope }` か `BalloonWindowMarker { scope }` からスコープを読み（どちらも無ければ `warn!(event = "os_close_unknown_window")` で戻る）、`world.get_non_send_mut::<MouseWiring>()` が在れば `info!(event = "os_close_request", scope, kind = "ghost")` の上で `send_close_request(CloseReason::User { scope })`。無ければ `warn!(event = "os_close_no_mouse_wiring", scope)` で戻る（`menu::request_close` と同じ扱い・3.10）。**窓は消さない**——閉じるのは終了の握手が終わったことを受けた `run_ghost_quit_phase` → `quit_app`。
+- `on_ghost_os_close(world, entity)`: entity の `CharWindowMarker { scope }` か `BalloonWindowMarker { scope }` からスコープを読み（どちらも無ければ `warn!(event = "os_close_unknown_window")` で戻る）、`world.get_non_send_mut::<MouseWiring>()` が在れば `info!(event = "os_close_request", scope, kind = "ghost")` の上で `send_close_request(CloseReason::User { scope })`。無ければ `warn!(event = "os_close_no_mouse_wiring", scope)` を残して `quit_app(world, ExitOrigin::OsClose)` で直ちに閉じる（別れの台詞を流す相手がいない・3.10）。`MouseWiring` が在るときは**窓は消さない**——閉じるのは終了の握手が終わったことを受けた `run_ghost_quit_phase` → `quit_app`。
 - `on_dummy_os_close(world, _entity)`: `info!(event = "os_close_request", kind = "dummy")` の上で `quit_app(world, ExitOrigin::OsClose)`。
 - `attach_os_close_request`: `Query<Entity, (With<GhostWindowMarker>, Added<WindowHandle>)>` で HWND が付いた瞬間のゴースト窓へ `OnCloseRequest(on_ghost_os_close)` を挿す system。`register_ghost_windows_click_through`（`placement/spawn.rs`）と同じ捉え方で、同じ段（`main.rs` の `open_startup_window` が結線する `FrameFinalize`）に登録する。`placement` が `crate::` パスを持てないため差し込みは `placement` の外で行う。
 - ダミー窓は `main.rs` の `spawn_dummy_window` が bundle に `OnCloseRequest(app_exit::on_dummy_os_close)` を直接足す（`main.rs` は `crate::` パスを持てる）。
@@ -482,7 +482,7 @@ pub struct OnCloseRequest(pub fn(world: &mut World, entity: Entity));
 
 ##### Service Interface
 ```rust
-pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity);   // 終了要求を kanade へ。窓は消さない
+pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity);   // 終了要求を kanade へ。窓は消さない（MouseWiring 不在なら quit_app）
 pub(crate) fn on_dummy_os_close(world: &mut World, entity: Entity);   // quit_app(world, ExitOrigin::OsClose)
 pub(crate) fn attach_os_close_request(
     mut commands: Commands,
@@ -490,7 +490,7 @@ pub(crate) fn attach_os_close_request(
 );
 ```
 - Preconditions: `on_ghost_os_close` は `OnCloseRequest` 経由で wintf から呼ばれる（World 借用中）。
-- Postconditions: ゴースト窓: `KanadeMsg::CloseRequest { reason: User { scope } }` が 1 件送られる（`MouseWiring` が在るとき）。ダミー窓: `DummyWindowMarker` を持つ entity は 0・`AppExit::is_requested()` は真。
+- Postconditions: ゴースト窓: `KanadeMsg::CloseRequest { reason: User { scope } }` が 1 件送られる（`MouseWiring` が在るとき）。`MouseWiring` が無いとき: ダミー窓と同じく全窓が閉じ `AppExit::is_requested()` は真。ダミー窓: `DummyWindowMarker` を持つ entity は 0・`AppExit::is_requested()` は真。
 - Invariants: OS の閉鎖要求で新しい終了系列は生まれない（ゴースト窓はメニューの「終了」と同じ経路、ダミー窓はダブルクリックと同じ経路）。
 
 #### quit_app と ExitOrigin
@@ -521,7 +521,7 @@ pub(crate) enum ExitOrigin {
     Escape,                                        // Ctrl+Shift+左ダブルクリック
     DummyWindow,                                   // ダミー窓の左ダブルクリック
     Smoke,                                         // AREKA_APP_SMOKE_EXIT_MS
-    OsClose,                                       // ダミー窓への OS の閉鎖要求（ゴースト窓の閉鎖要求は KanadeStopped 経由で来る）
+    OsClose,                                       // ダミー窓への OS の閉鎖要求・kanade 未結線の起動でのゴースト窓への OS の閉鎖要求（結線済みなら KanadeStopped 経由で来る）
 }
 
 /// 全窓（ダミー窓＋ゴースト窓）を閉じ、終了を指示する。戻り値は標的として拾った窓の数。
@@ -563,11 +563,11 @@ fn despawn_app_windows(world: &mut World) -> usize;   // 私有
 - **閉じる窓が無い**: 正常系。`quit_app` は指示を出し、`run_ghost_quit_phase` は従来どおり `ghost_quit_no_windows` を `debug!` で残す（3.2）。
 - **連鎖破棄済みの標的**: 従来どおり `DESPAWNED_SKIP_TAG` の `debug!` で打ち切り、残りを処理し切る。
 - **`run()` が戻る時点で窓が残っている**: 失敗ではなく想定内（Flow 2）。`info` 1 行の上で壊す。
-- **OS の閉鎖要求でゴースト窓の `MouseWiring` が無い**: `warn!(event = "os_close_no_mouse_wiring")` で戻る（メニューの「終了」と同じ）。窓は消えず終了もしないが、記録は残る。kanade が結線されていない起動（ダミー窓）は `on_dummy_os_close` の経路なのでここへは来ない。
+- **OS の閉鎖要求でゴースト窓の `MouseWiring` が無い**: `warn!(event = "os_close_no_mouse_wiring")` を残し、`quit_app(world, ExitOrigin::OsClose)` で全窓を閉じて終了を指示する。この状態は「ゴースト窓の準備は成功したが `wire_emo2_boot` が失敗した（`wired=false`）」起動で実際に起きる（`wire_mouse_input` は `main.rs` の `outcome.wired` の腕でだけ走る）。旧設計の「未結線の起動はダミー窓の経路なのでここへは来ない」は誤りで、送らず戻るだけではこの起動が Alt＋F4／`taskkill` で閉じられなかった（裁定 3 に反する）。09-23 開発者承認で改訂。
 - **OS の閉鎖要求が握手の途中に重ねて届く**（`taskkill` が 4 枚へ同時に投げる・Alt＋F4 の連打）: メニューの「終了」の連打と同じで、kanade の握手（`schedule/close.rs`）の既存の扱いに委ねる。本仕様は変えない（4.2）。
 
 ### Monitoring
-- 実機ログの検索語: `event="app_exit"`（areka・`origin`・`closed` 付き）、`[quit_app]`（areka・全窓破棄の相名。連鎖破棄済み標的の打ち切りも同じ相名で `debug`）、`[AppExit] exit requested`（wintf）、`windows remained open`（wintf・残存窓破棄）、`event="os_close_request"`（wintf の `WM_CLOSE` と areka の受け手・`kind` 付き）、`event="os_close_no_mouse_wiring"`（本番では出ない）、`event="app_exit_unwired"`（出てはならない）。
+- 実機ログの検索語: `event="app_exit"`（areka・`origin`・`closed` 付き）、`[quit_app]`（areka・全窓破棄の相名。連鎖破棄済み標的の打ち切りも同じ相名で `debug`）、`[AppExit] exit requested`（wintf）、`windows remained open`（wintf・残存窓破棄）、`event="os_close_request"`（wintf の `WM_CLOSE` と areka の受け手・`kind` 付き）、`event="os_close_no_mouse_wiring"`（kanade 未結線の起動でだけ出て、直後に `origin=OsClose` の `app_exit` が続く）、`event="app_exit_unwired"`（出てはならない）。
 
 ## Testing Strategy
 
@@ -582,7 +582,7 @@ fn despawn_app_windows(world: &mut World) -> usize;   // 私有
 | 3 | 同上 | `exit_requested_before_the_loop_starts_completes_immediately` | `request_exit()` を先に呼んでから `block_on(shutdown_future(exit))` が戻る | arm → 確認の順が無く、リスナ不在の通知を失う（1.5） |
 | 4 | 同上 | `second_request_is_ignored_and_the_future_still_completes` | `request_exit()` を 2 回呼んでも panic せず `is_requested()` は真のまま・`block_on(shutdown_future(exit))` が戻る | 2 回目で失敗や二重処理を起こす（1.4） |
 | 5 | `crates/wintf/src/ecs/window_proc/lifecycle_tests.rs`（新規・兄弟ファイル） | `wm_close_calls_on_close_request_instead_of_despawning` | `OnCloseRequest(記録する関数)` を付けた entity と付けない entity の 2 つを World に置き、両方へ `fn WM_CLOSE` を呼ぶ → 付けた方は生存したまま関数が 1 回呼ばれ、付けない方は despawn される。戻り値は両方 `Some(LRESULT(0))`。World の器は `window_pos_tests.rs` と同じ | 分岐が無く両方 despawn する／両方呼ぶ（2.10・2.11） |
-| 6 | `crates/areka/src/app_exit_tests.rs` | `ghost_os_close_sends_close_request_with_the_window_scope` | `MouseWiring::new(tx, RegionSource::Mock(..))`（`pub(crate)`・`input_events_tests.rs` の `world_with_wiring` は私有なので流用せず `app_exit_tests.rs` で直接組む）を挿した World に `CharWindowMarker { scope: 1 }` の窓を置き `on_ghost_os_close` → 受信側に `KanadeMsg::CloseRequest { reason: User { scope: 1 } }` が 1 件・窓 entity は生存。対照アーム: `MouseWiring` 無しの素の World では送信 0 件で panic しない（3.10） | スコープを落とす／窓を消してしまう／不在で落ちる（3.9・3.10） |
+| 6 | `crates/areka/src/app_exit_tests.rs` | `ghost_os_close_sends_close_request_with_the_window_scope` | `MouseWiring::new(tx, RegionSource::Mock(..))`（`pub(crate)`・`input_events_tests.rs` の `world_with_wiring` は私有なので流用せず `app_exit_tests.rs` で直接組む）を挿した World に `CharWindowMarker { scope: 1 }` の窓を置き `on_ghost_os_close` → 受信側に `KanadeMsg::CloseRequest { reason: User { scope: 1 } }` が 1 件・窓 entity は生存。`AppExit` は未指示。対照アーム: `MouseWiring` 無し・`AppExit` 付きの World では窓が消え `is_requested()` が真（3.10） | スコープを落とす／窓を消してしまう／未結線で閉じられない（3.9・3.10） |
 
 - 1 の対照は既存の `close_to_reconcile_to_shutdown_chain_wakes_listener`（既定ポリシーで同じ構築のまま listener が起きる）。同じ構造で結論だけが逆なので、両方が緑なら分岐が効いている。
 - 2・3 は `block_on` を使うが実窓は作らない。既存の `block_on_ready_future_returns_value` が同じ道具で通っている。

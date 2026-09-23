@@ -176,7 +176,7 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
 /// **要件 3.9・3.10（OS の閉鎖要求・ゴースト窓）**: 送り口付きの World でスコープ 1 の
 /// キャラ窓へ受け手を呼ぶと、メニューの「終了」と同じ `CloseReason::User { scope: 1 }` の
 /// 終了要求が kanade へちょうど 1 件届き、窓は消えない（閉じるのは終了の握手の完了後）。
-/// 対照アーム: 送り口の無い World では送信 0 件で panic しない。
+/// 対照アーム: 送り口の無い World（kanade 未結線の起動）では窓を閉じて終了を指示する。
 ///
 /// 送り口は `pub(crate)` の構築関数でここに直接組む（`input_events_tests.rs` の
 /// `world_with_wiring` は私有で流用できない）。当たり判定は受け手が読まないので代役で足りる。
@@ -199,6 +199,7 @@ fn ghost_os_close_sends_close_request_with_the_window_scope() {
     let (tx, rx) = mpsc::channel::<KanadeMsg>();
     let mut world = World::new();
     world.insert_non_send(MouseWiring::new(tx, RegionSource::Mock(no_hit)));
+    world.insert_non_send(AppExit::new());
     let window = world
         .spawn((GhostWindowMarker, CharWindowMarker { scope: 1 }))
         .id();
@@ -217,11 +218,22 @@ fn ghost_os_close_sends_close_request_with_the_window_scope() {
         "窓は消さない（閉じるのは終了の握手の完了後）"
     );
 
-    // 対照アーム: 送り口の無い World では送らず（送り先が無い）、panic もしない。
+    assert!(
+        !world.non_send::<AppExit>().is_requested(),
+        "結線済みでは受け手は終了を指示しない（指示は終了系列の完了後）"
+    );
+
+    // 対照アーム（要件 3.10）: 送り口の無い World（kanade 未結線の起動）では、別れの台詞を
+    // 流す相手がいないので全窓を閉じて終了を指示する——標準の道具で閉じられるアプリのまま。
     let mut bare = World::new();
+    bare.insert_non_send(AppExit::new());
     let window = bare
         .spawn((GhostWindowMarker, CharWindowMarker { scope: 1 }))
         .id();
     on_ghost_os_close(&mut bare, window);
-    assert!(bare.get_entity(window).is_ok());
+    assert!(bare.get_entity(window).is_err(), "未結線では窓を閉じる");
+    assert!(
+        bare.non_send::<AppExit>().is_requested(),
+        "未結線では終了を指示する"
+    );
 }

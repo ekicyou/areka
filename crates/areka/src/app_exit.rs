@@ -31,7 +31,8 @@ pub(crate) enum ExitOrigin {
     DummyWindow,
     /// smoke の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）。
     Smoke,
-    /// ダミー窓への OS の閉鎖要求（ゴースト窓の閉鎖要求は `KanadeStopped` 経由で来る）。
+    /// ダミー窓への OS の閉鎖要求、および kanade 未結線の起動でのゴースト窓への OS の閉鎖要求
+    /// （結線済みならゴースト窓の閉鎖要求は `KanadeStopped` 経由で来る）。
     OsClose,
 }
 
@@ -101,7 +102,9 @@ fn despawn_app_windows(world: &mut World) -> usize {
 /// 窓のキャラ／バルーンの印からスコープを読み、メニューの「終了」（`menu::request_close`）と
 /// 同じ `CloseReason::User { scope }` の終了要求を kanade へ 1 件送る——終了系列は増やさない。
 /// **窓は消さない**: 閉じるのは終了の握手の完了を受けた終了系列の完了通知 → [`quit_app`]。
-/// 送り口（[`MouseWiring`]）が無ければ送らずに `warn!` で戻る（要件 3.10）。
+/// 送り口（[`MouseWiring`]）が無い（窓は出たが kanade との結線に失敗した起動）なら、
+/// 別れの台詞を流す相手がいないので `warn!` を残して [`quit_app`] で直ちに閉じる（要件 3.10・
+/// 裁定 3「標準の道具で閉じられないアプリにしない」）。
 pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
     let scope = if let Some(m) = world.get::<CharWindowMarker>(entity) {
         m.scope
@@ -119,8 +122,9 @@ pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
         tracing::warn!(
             event = "os_close_no_mouse_wiring",
             scope,
-            "[os_close] MouseWiring absent: the close request is not sent"
+            "[os_close] MouseWiring が無い（kanade 未結線）: 別れの台詞なしで全窓を閉じて終了を指示する"
         );
+        quit_app(world, ExitOrigin::OsClose);
         return;
     };
     tracing::info!(
