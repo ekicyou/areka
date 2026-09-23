@@ -47,7 +47,7 @@
   - _Requirements: 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 5.2, 5.3, 6.4, 8.4, 9.4, 9.6_
   - _Boundary: shiori_proxy, shiori_proxy_loadu_tests_
 
-- [ ] 4. 2 本目の偽 DLL を i686 で実際に読むテスト
+- [x] 4. 2 本目の偽 DLL を i686 で実際に読むテスト
   - 兄弟テストに i686 限定（既存の ignore の作法）の 2 本を足す。所在の解決は自前（テスト専用 env の上書き → i686 の debug／release 成果物 → 無ければ 2 本目の先ビルドの命令を書いて panic）、env を触るテストの直列化も自前で持つ（既存の私有の解決器と直列化には触らない）
   - 一時の置き場所は既定コードページに無い字を含む名前にする。1 本目は確立が成功し、記録が `loadu\t<置き場所の UTF-8 の 16 進>` の 1 行だけで `load\t` の行が 0。2 本目は偽返却の注入で「初期化が偽を返した」失敗になり、記録は `loadu` の 1 行で `load\t` の行が 0
   - 完了の状態: PowerShell で `cargo build -p shiori-host32-helper -p shiori-host32-testdll -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` の後、`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で 2 本が緑、選択の優先順を一時的に逆にすると 1 本目が赤（記録が `load` になる）ことを一度確かめている

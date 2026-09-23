@@ -5,8 +5,11 @@
 //! テストゆえ i686 に限らない（要件 9.5）。
 //! 群 C（x64 常時）: 表せない字の検出の決定論（要件 3.3・3.4・6.5）。
 //! 群 B（x64 常時）: `loadu` の枝の UTF-8 固定バイト列と入口名の語（要件 2.1・2.2・2.4・4.3・6.4）。
+//! 群 D（i686 限定）: 2 本目の偽 DLL `shiori_loadu.dll` を実際に読む 2 本（要件 6.6・6.7・6.9・9.5）。
 
 use super::*;
+use std::path::PathBuf;
+use std::sync::Mutex;
 
 // ---------------------------------------------------------------------
 // 群 A: 入口の選択の判断表 4 行（x64 常時）
@@ -149,4 +152,141 @@ fn loadu_init_bytes_are_utf8_verbatim_no_nul() {
 fn init_entry_name_is_fixed_word() {
     assert_eq!(InitEntry::Loadu(loadu_fn()).name(), "loadu");
     assert_eq!(InitEntry::Load(load_fn()).name(), "load");
+}
+
+// ---------------------------------------------------------------------
+// 群 D: 2 本目の偽 DLL を i686 で実際に読む（要件 6.6・6.7・6.9・9.5）
+// ---------------------------------------------------------------------
+// env `HOST32_TESTDLL_LOADU_*` はプロセス global。既存 `mod tests` の fixture の env とは重ならないので
+// 既存 `TESTDLL_SERIAL` とは共用せず、群 D の 2 本だけを自前の mutex で直列化する。
+
+/// 群 D の直列化（汚染ロックは無視して継続）。
+static LOADU_SERIAL: Mutex<()> = Mutex::new(());
+
+/// 記録ファイルのパスを fixture へ渡す env（テスト専用）。
+const ENV_LOADU_RECORD: &str = "HOST32_TESTDLL_LOADU_RECORD";
+/// `loadu` の偽返却を注入する env（テスト専用）。
+const ENV_LOADU_FAIL: &str = "HOST32_TESTDLL_LOADU_FAIL";
+
+/// 2 本目の偽 DLL `shiori_loadu.dll` の所在。env `HOST32_TESTDLL_LOADU_DLL` → i686 の debug／release
+/// 成果物 → 無ければ先ビルドの命令を書いて panic（黙って飛ばさない・要件 6.9）。
+fn resolve_loadu_testdll() -> PathBuf {
+    if let Ok(p) = std::env::var("HOST32_TESTDLL_LOADU_DLL") {
+        let path = PathBuf::from(p);
+        assert!(
+            path.is_file(),
+            "HOST32_TESTDLL_LOADU_DLL={} が実ファイルでない",
+            path.display()
+        );
+        return path;
+    }
+    let target_root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/i686-pc-windows-msvc");
+    for profile in ["debug", "release"] {
+        let candidate = target_root.join(profile).join("shiori_loadu.dll");
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    panic!(
+        "shiori_loadu.dll が見つからない。まず PowerShell で \
+         `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を実行するか、\
+         env HOST32_TESTDLL_LOADU_DLL に絶対パスを設定すること。探索した base: {}",
+        target_root.display()
+    );
+}
+
+/// 既定コードページ（CP932 等）に無い字 `😀` を含む一時フォルダを `load_dir` として作り、記録と偽返却の
+/// env を設定して `ShioriByteProxy::load` を 1 回呼ぶ。戻りは (load の結果の Ok/Err, 記録の中身, load_dir)。
+/// proxy は結果を返す前に drop する（unload→FreeLibrary）。一時フォルダと env は後始末する。
+fn load_loadu_testdll(fail: bool) -> (Result<(), ProxyError>, String, PathBuf) {
+    let _serial = LOADU_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dll = resolve_loadu_testdll();
+    let load_dir = std::env::temp_dir().join(format!(
+        "host32_loadu_test_{}_{}_ゴースト😀",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&load_dir).expect("create temp load_dir");
+    // 毎回新しいフォルダの中に置くので、記録は必ずこの呼出の分だけになる（追記の持ち越し無し）。
+    let record = load_dir.join("record.txt");
+
+    // SAFETY: edition 2024 では set_var／remove_var は unsafe（プロセス global）。これらの env を
+    // 読み書きするのは群 D だけで、LOADU_SERIAL で直列化している。
+    unsafe {
+        std::env::set_var(ENV_LOADU_RECORD, &record);
+        if fail {
+            std::env::set_var(ENV_LOADU_FAIL, "1");
+        } else {
+            std::env::remove_var(ENV_LOADU_FAIL);
+        }
+    }
+    let result = ShioriByteProxy::load(&dll, &load_dir).map(drop);
+    // SAFETY: 同上（LOADU_SERIAL 保持中）。
+    unsafe {
+        std::env::remove_var(ENV_LOADU_RECORD);
+        std::env::remove_var(ENV_LOADU_FAIL);
+    }
+    let text = std::fs::read_to_string(&record).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&load_dir);
+    (result, text, load_dir)
+}
+
+/// `load_dir` の UTF-8 の小文字 16 進（fixture の記録の書式と同じ）。
+fn utf8_hex(p: &Path) -> String {
+    p.to_str()
+        .expect("一時フォルダは UTF-8 で表せる")
+        .bytes()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// D-1: 両方持つ DLL で `loadu` だけが実際に呼ばれ、UTF-8 のパスを受け取る（要件 6.6）。
+/// 選択の優先順を逆にすると記録が `load\t…` になって赤。
+#[test]
+#[cfg_attr(
+    not(target_arch = "x86"),
+    ignore = "i686 専用: 32bit の shiori_loadu.dll を読むため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
+)]
+fn testdll_loadu_is_called_with_utf8_and_load_is_not() {
+    let (result, text, load_dir) = load_loadu_testdll(false);
+    if let Err(e) = result {
+        panic!("shiori_loadu.dll の確立が失敗した: {e:?}（記録: {text:?}）");
+    }
+    assert_eq!(
+        text,
+        format!("loadu\t{}\n", utf8_hex(&load_dir)),
+        "記録は loadu の 1 行だけで、受け取ったのは load_dir の UTF-8 そのもの"
+    );
+    assert_eq!(
+        text.lines().filter(|l| l.starts_with("load\t")).count(),
+        0,
+        "load が呼ばれた"
+    );
+}
+
+/// D-2: `loadu` が偽を返すと「初期化が偽を返した」失敗になり、`load` へは落ちない（要件 6.7）。
+#[test]
+#[cfg_attr(
+    not(target_arch = "x86"),
+    ignore = "i686 専用: 32bit の shiori_loadu.dll を読むため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
+)]
+fn testdll_loadu_false_is_load_returned_false_without_falling_back() {
+    let (result, text, _) = load_loadu_testdll(true);
+    match result {
+        Err(ProxyError::LoadReturnedFalse) => {}
+        Err(e) => panic!("expected LoadReturnedFalse, got {e:?}（記録: {text:?}）"),
+        Ok(()) => panic!("loadu の偽返却を注入したのに確立が成功した（記録: {text:?}）"),
+    }
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 1, "記録は 1 行のはず: {text:?}");
+    assert!(lines[0].starts_with("loadu\t"), "記録が loadu でない: {text:?}");
+    assert_eq!(
+        lines.iter().filter(|l| l.starts_with("load\t")).count(),
+        0,
+        "loadu の偽返却のあと load へ落ちた"
+    );
 }
