@@ -8,6 +8,7 @@ mod fetch;
 mod outcome;
 #[cfg(test)]
 mod testkit;
+mod urlpath;
 
 pub use error::{
     DeleteWhy, FailReason, FetchError, InvalidWhy, Stage, Stuck, UpdateError, UpdateWarning,
