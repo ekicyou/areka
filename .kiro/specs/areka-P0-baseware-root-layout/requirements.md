@@ -201,7 +201,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 5. When 実機で確認する, the 開発者 shall ① `AREKA_ROOT` に検体の根を渡し argv なしで起動して同梱バルーンで会話が出ること、② 記憶が書かれ（アプリの `profile/areka/sylphya.toml` の `[last] ghost`・ゴーストの `ghost/master/profile/areka/sylphya.toml` の `[last] balloon`／`shell`）再起動で同じゴーストと同じバルーンが立つこと、③ 空の根で起動して告知が出て終了コードが 0 以外であること、④ 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）の後にプロセスが残っていないこと、を見る。
 6. While 実機で確認する, the 開発者 shall 自分が起こしたと確認できたプロセス以外を止めない。
 
-### Requirement 9: 裁定候補（要件ディスカッションで確定）
+### Requirement 9: 裁定（2026-09-23 要件ディスカッションで確定済み）
 
 **Objective:** As a 開発者, I want brief が挙げた裁定候補と要件化で増えた分かれ目を要件の段階で確定しておくこと, so that 設計がこの形で進む
 
