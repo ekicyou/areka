@@ -430,6 +430,8 @@ fn spawn_dummy_window(world: &mut World) -> Entity {
             },
             // ダブルクリックで自身を閉じられるようにする。
             OnPointerPressed(on_dummy_pressed),
+            // OS の閉鎖要求（Alt＋F4・taskkill）も同じく全窓を閉じて終了を指示する（裁定 3）。
+            wintf::ecs::window::OnCloseRequest(app_exit::on_dummy_os_close),
         ))
         .id();
 
@@ -603,14 +605,15 @@ struct StartupDescriptValues {
 ///
 /// - 成功時: `spawn_ghost_windows` を既存 ECS コマンド経路（`EcsWorld::spawn` の async
 ///   タスク → `CommandSender` → Input スケジュールで World 適用＝ダミー窓と同経路）で
-///   実行し、`register_ghost_windows_click_through` を `FrameFinalize` schedule へ結線する
-///   （emo-present donor と同じ結線位置・task 5.2）。
+///   実行し、`register_ghost_windows_click_through` と `app_exit::attach_os_close_request`
+///   を同じ `FrameFinalize` schedule へ結線する（emo-present donor と同じ結線位置・task 5.2）。
 /// - 失敗時（fixture 不在等）: `MountError::StartPointMissing` 系は `warn!`・他は `error!`
 ///   の上で `spawn_dummy_window` へフォールバックする（DD14・骨格の boot→loop→exit と
 ///   smoke 完走を維持。`spawn_dummy_window`／`DummyWindowMarker` は退役せず残置）。
-/// - **暫定の終了手段**（design「main.rs seam」note）: emo2-boot 装着前の本物ゴースト窓は
-///   描画内容なし＝WUC/DComp GPU 合成で不可視・ヒットなしのため、対話的 close 不能が
-///   正しい状態。終了は smoke ゲート（`AREKA_APP_SMOKE_EXIT_MS`）または Ctrl+C。
+/// - 終了: ゴースト窓はメニューの「終了」も OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの
+///   終了」）も同じ終了要求を kanade へ送り（`app_exit::on_ghost_os_close`・窓はその場で消さない）、
+///   終了の握手の完了後に `quit_app` → `run()` 復帰となる。smoke ゲート
+///   （`AREKA_APP_SMOKE_EXIT_MS`）は別の自動終了の経路。
 ///
 /// 準備（`prepare_ghost_windows`）は同期実行し、I/O はここで完結・Send な値のみを ECS
 /// コマンドへ運ぶ。呼び出しスレッドは `WinApp::new()` 済みの MTA UI スレッド＝COM
@@ -642,6 +645,10 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
                 FrameFinalize,
                 placement::spawn::register_ghost_windows_click_through,
             );
+            // OS の閉鎖要求の受け手を同じ捉え方・同じ確定段で差す（裁定 3・placement の外）。
+            app.world()
+                .borrow_mut()
+                .add_systems(FrameFinalize, app_exit::attach_os_close_request);
 
             // ゴースト窓ペアの重なり管理を同じ確定段へ結線（areka-P0-ghost-window-zorder
             // task 3.2・要件 1.1/5.6/6.1）。実行時ストラテジ（既定＝案 A・補助浮上なし）の

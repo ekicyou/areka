@@ -6,13 +6,16 @@
 //!
 //! 出所 [`ExitOrigin`] は記録の語彙であり、受け手は出所で分岐しない（要件 3.7）。
 
-use areka_kanade::KanadeStopCause;
+use areka_kanade::{CloseReason, KanadeStopCause};
 use bevy_ecs::prelude::*;
 use wintf::AppExit;
+use wintf::ecs::WindowHandle;
+use wintf::ecs::window::OnCloseRequest;
 
 use crate::DummyWindowMarker;
+use crate::input_events::MouseWiring;
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
-use crate::placement::spawn::GhostWindowMarker;
+use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
 
 /// どの終了操作から来たか（記録の語彙・受け手は分岐しない）。
 ///
@@ -91,6 +94,68 @@ fn despawn_app_windows(world: &mut World) -> usize {
         world.despawn(e);
     }
     count
+}
+
+/// ゴースト窓への OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの終了」）の受け手（裁定 3）。
+///
+/// 窓のキャラ／バルーンの印からスコープを読み、メニューの「終了」（`menu::request_close`）と
+/// 同じ `CloseReason::User { scope }` の終了要求を kanade へ 1 件送る——終了系列は増やさない。
+/// **窓は消さない**: 閉じるのは終了の握手の完了を受けた終了系列の完了通知 → [`quit_app`]。
+/// 送り口（[`MouseWiring`]）が無ければ送らずに `warn!` で戻る（要件 3.10）。
+pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
+    let scope = if let Some(m) = world.get::<CharWindowMarker>(entity) {
+        m.scope
+    } else if let Some(m) = world.get::<BalloonWindowMarker>(entity) {
+        m.scope
+    } else {
+        tracing::warn!(
+            event = "os_close_unknown_window",
+            entity = ?entity,
+            "[os_close] キャラ／バルーンの印が無い窓への閉鎖要求: 終了要求は送らない"
+        );
+        return;
+    };
+    let Some(mut wiring) = world.get_non_send_mut::<MouseWiring>() else {
+        tracing::warn!(
+            event = "os_close_no_mouse_wiring",
+            scope,
+            "[os_close] MouseWiring absent: the close request is not sent"
+        );
+        return;
+    };
+    tracing::info!(
+        event = "os_close_request",
+        scope,
+        kind = "ghost",
+        "[os_close] OS の閉鎖要求をメニューの「終了」と同じ終了要求として kanade へ送る"
+    );
+    wiring.send_close_request(CloseReason::User {
+        scope: scope as u32,
+    });
+}
+
+/// ダミー窓への OS の閉鎖要求の受け手: 全窓を閉じて終了を指示する（ダブルクリックと同じ経路）。
+pub(crate) fn on_dummy_os_close(world: &mut World, _entity: Entity) {
+    tracing::info!(
+        event = "os_close_request",
+        kind = "dummy",
+        "[os_close] ダミー窓への OS の閉鎖要求: 全窓を閉じて終了を指示する"
+    );
+    quit_app(world, ExitOrigin::OsClose);
+}
+
+/// HWND が付いた瞬間のゴースト窓へ [`on_ghost_os_close`] を差す system。
+///
+/// `register_ghost_windows_click_through` と同じ `Added<WindowHandle>` の捉え方で、同じ
+/// `FrameFinalize` 段に登録する。`placement` は `crate::` パスを持てない（example の `#[path]`
+/// include）ため、差し込みは `placement` の外のここで行う。
+pub(crate) fn attach_os_close_request(
+    mut commands: Commands,
+    new_windows: Query<Entity, (With<GhostWindowMarker>, Added<WindowHandle>)>,
+) {
+    for e in &new_windows {
+        commands.entity(e).insert(OnCloseRequest(on_ghost_os_close));
+    }
 }
 
 #[cfg(test)]

@@ -172,3 +172,56 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
         skipped.message()
     );
 }
+
+/// **要件 3.9・3.10（OS の閉鎖要求・ゴースト窓）**: 送り口付きの World でスコープ 1 の
+/// キャラ窓へ受け手を呼ぶと、メニューの「終了」と同じ `CloseReason::User { scope: 1 }` の
+/// 終了要求が kanade へちょうど 1 件届き、窓は消えない（閉じるのは終了の握手の完了後）。
+/// 対照アーム: 送り口の無い World では送信 0 件で panic しない。
+///
+/// 送り口は `pub(crate)` の構築関数でここに直接組む（`input_events_tests.rs` の
+/// `world_with_wiring` は私有で流用できない）。当たり判定は受け手が読まないので代役で足りる。
+#[test]
+fn ghost_os_close_sends_close_request_with_the_window_scope() {
+    use crate::emo2_boot::hit_region::HitRegion;
+    use crate::input_events::{MouseWiring, RegionSource};
+    use crate::placement::spawn::CharWindowMarker;
+    use areka_kanade::{CloseReason, KanadeMsg};
+    use std::sync::mpsc;
+
+    fn no_hit(scope: u32, _x: i64, _y: i64) -> HitRegion {
+        HitRegion {
+            scope,
+            region: None,
+            surface_point: (0, 0),
+        }
+    }
+
+    let (tx, rx) = mpsc::channel::<KanadeMsg>();
+    let mut world = World::new();
+    world.insert_non_send(MouseWiring::new(tx, RegionSource::Mock(no_hit)));
+    let window = world
+        .spawn((GhostWindowMarker, CharWindowMarker { scope: 1 }))
+        .id();
+
+    on_ghost_os_close(&mut world, window);
+
+    match rx.try_recv().expect("終了要求が 1 件届く") {
+        KanadeMsg::CloseRequest {
+            reason: CloseReason::User { scope },
+        } => assert_eq!(scope, 1, "窓のスコープがそのまま載る"),
+        _ => panic!("CloseRequest{{User}} を期待"),
+    }
+    assert!(rx.try_recv().is_err(), "終了要求はちょうど 1 件");
+    assert!(
+        world.get_entity(window).is_ok(),
+        "窓は消さない（閉じるのは終了の握手の完了後）"
+    );
+
+    // 対照アーム: 送り口の無い World では送らず（送り先が無い）、panic もしない。
+    let mut bare = World::new();
+    let window = bare
+        .spawn((GhostWindowMarker, CharWindowMarker { scope: 1 }))
+        .id();
+    on_ghost_os_close(&mut bare, window);
+    assert!(bare.get_entity(window).is_ok());
+}
