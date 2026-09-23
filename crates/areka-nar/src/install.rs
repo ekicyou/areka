@@ -352,13 +352,6 @@ pub(crate) struct CommitError {
     pub committed: Vec<InstalledElement>,
     pub rolled_back: bool,
     /// 元へ戻せなかった宛先ごとの、元の木が残っている退避先。`rolled_back` が真なら空。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "公開面への写し（lib.rs の place・タスク 4.1）が読むまでの間"
-        )
-    )]
     pub survivors: Vec<SurvivingTree>,
 }
 

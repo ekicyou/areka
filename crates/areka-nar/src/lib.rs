@@ -172,10 +172,9 @@ impl NarArchive {
 
     /// 計画 → 組み上げ → 確定。記録は出さない（出口は [`NarArchive::install`] 1 つ）。
     ///
-    /// 作業フォルダを掘ったら、その場所を `work` へ置く。`rolled_back` が偽のとき、
-    /// 利用者の元の木はその下の `old-<k>/` に残っている——[`NarError`] はその場所を持つ
-    /// 形をしていない（設計の逐語）ので、呼び手が記録の欄として出す。失敗の型に足すと
-    /// 公開面の形が設計から離れるので、戻り値ではなく預かり先で渡す。
+    /// 作業フォルダを掘ったら、その場所を `work` へ置く（呼び手が記録の欄として出す）。
+    /// `rolled_back` が偽のとき、利用者の元の木が残っている場所は失敗の値の
+    /// `survivors` が持ち、いずれも `work` の配下に在る。
     fn place(
         &self,
         request: &InstallRequest<'_>,
@@ -205,7 +204,7 @@ impl NarArchive {
             source: failure.source,
             committed: failure.committed,
             rolled_back: failure.rolled_back,
-            survivors: Box::default(),
+            survivors: failure.survivors.into_boxed_slice(),
         })
     }
 
@@ -226,8 +225,8 @@ impl NarArchive {
 /// 失敗の記録を 1 回だけ出し、受け取った失敗をそのまま返す（要件 9.1・6.4）。
 ///
 /// `NarError` の表示は確定済みの件数も巻き戻せたかも持たない（設計の逐語）ので、
-/// 要件 6.4 が見えることを求めている 2 つは欄として足す。`work` は巻き戻せなかった
-/// ときに利用者の元の木が残っている作業フォルダ（`rolled_back` が真なら空）。
+/// 要件 6.4 が見えることを求めている 2 つは欄として足す。`work` はこの走行が作業
+/// フォルダを掘ったなら、巻き戻せたかに関わらずその場所（掘る前の失敗と拒否では空）。
 fn log_failure(failure: NarError, work: Option<PathBuf>) -> NarError {
     let (archive, committed, rolled_back) = match &failure {
         // 拒否は書く前に止まっているので、確定は 0 件・宛先は呼ぶ前のまま。

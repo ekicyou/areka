@@ -56,8 +56,8 @@
   - _Boundary: install.rs（WorkArea・prepare_shelf・next_address・is_retained）, install_tests.rs_
   - _Depends: 3.1_
 
-- [ ] 4. 公開の入口への結線
-- [ ] 4.1 確定の失敗の生き残りを公開の失敗の値へ写し、公開の入口で確定を本当に失敗させるテストを置く
+- [x] 4. 公開の入口への結線
+- [x] 4.1 確定の失敗の生き残りを公開の失敗の値へ写し、公開の入口で確定を本当に失敗させるテストを置く
   - 確定の失敗を公開の失敗の値へ写す箇所で、生き残りを空ではなく確定の失敗が運んだものにする
   - 記録の `work` の欄の注釈を「作業フォルダを掘ったなら巻き戻せたかに関わらずその場所・掘る前の失敗と拒否では空」に改める（記録の欄の集合と実装は変えない）
   - 公開面のテストに、宛先の中のファイルをテスト自身が読みだけ共有して開いたまま `open` → `install` する 1 本を足す: 失敗の値が確定の段・巻き戻し済み・対象は掴んだ宛先・確定済み 0・生き残り 0 で、宛先が呼ぶ前とバイト列で同一
@@ -85,3 +85,4 @@
 - 1.1: `NarError::Io.survivors` は `Vec` でなく `Box<[SurvivingTree]>`。`Vec` だと `sample-ghost-kit` の `SampleError`（`NarError` を包む）が clippy `result_large_err` の閾値に達し警告 18 件。内部の `CommitError.survivors` は `Vec` のまま、`place` で `into_boxed_slice` して写す（design.md 追随済み）。
 - 2.2: 変異実験で退避コピーを `cp -p` で戻すと mtime が古いまま cargo が再ビルドせず、変異後のコードで走る（偽の赤）。戻したら `touch` する。
 - 3.1: `CommitError.survivors` に一時の `#[cfg_attr(not(test), expect(dead_code, …))]` を置いた。4.1 で `place` が読んだら外す（外さないと期待外れの警告になる）。
+- 4.1: 公開の入口から巻き戻しを決定論的に失敗させる手段は無く、`place` の生き残りの写し（1 行の配線）は公開面のテストで見張られない。空でない生き残りは `install_commit_tests.rs` の単体（3.1）が固定する（要件 2.6 の許す形）。
