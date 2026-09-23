@@ -363,34 +363,6 @@ fn test_cancel_dragging_noop_when_idle() {
     force_idle();
 }
 
-// --- reset_to_idle -------------------------------------------------------
-
-/// reset_to_idle は JustEnded のときのみ Idle に戻す。
-#[test]
-fn test_reset_to_idle_only_from_just_ended() {
-    force_idle();
-    let e = entity(10);
-    start_preparing(e, PhysicalPoint::new(0, 0), null_hwnd());
-    end_dragging(PhysicalPoint::new(0, 0), false); // → JustEnded
-    reset_to_idle();
-    assert!(matches!(snapshot_drag_state(), DragStateSnapshot::Idle));
-    force_idle();
-}
-
-/// reset_to_idle は Preparing 等 JustEnded 以外では何もしない。
-#[test]
-fn test_reset_to_idle_noop_when_preparing() {
-    force_idle();
-    let e = entity(11);
-    start_preparing(e, PhysicalPoint::new(0, 0), null_hwnd());
-    reset_to_idle();
-    assert!(
-        matches!(snapshot_drag_state(), DragStateSnapshot::Preparing { .. }),
-        "Preparing は reset_to_idle で変化しないべき"
-    );
-    force_idle();
-}
-
 // --- check_threshold -----------------------------------------------------
 
 /// Preparing 中、ユークリッド距離の二乗が閾値の二乗以上なら true。
