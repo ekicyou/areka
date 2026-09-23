@@ -165,6 +165,8 @@ brief の表と食い違うのは **pasta の 1 件だけ**。YAYA・里々は�
 
 ## 8. 設計判断の議題（要件ディスカッションへ）
 
+> **要件ディスカッション（2026-09-23）の仕分け**: 1〜7・11・12 は how の判断＝**設計フェーズ（`/kiro-spec-design`）で決める**。8 は解決済み（pasta の `loadu` は上流で検証済み＝§4.2・要件 7.1〜7.2 を改訂）。9 は要件 8.3 の改訂で決着。10 の前半（steering `structure.md`）は要件 8.6 として要件に入れ、後半（`THIRD-PARTY-NOTICES.md`）は `/kiro-complete` の仕事のまま。開発者に問う議題は 0 件。
+
 1. **表せない字の検出法**: (a) `WideCharToMultiByte` に `WC_NO_BEST_FIT_CHARS` と `lpUsedDefaultChar` を渡す＋`GetACP()` が 65001 なら検出を飛ばす（UTF-8 に表せない字は無い）／(b) 変換後に `MultiByteToWideChar` で戻して元の UTF-16 と比べる（コードページを問わず同じ手順・「最も近い字へ寄せる」置換も検出できる・OS 呼び出しが 1 回増える）。どちらも新しい依存無し。**(b) を推奨**（分岐が 1 つ減り、要件 3.4・6.5 の「コードページに依存しない判定」がそのまま満たせる）。
 2. **符号化の関数の形**: 本番は `CP_ACP` 固定のまま、テストのためにコードページを引数で受ける内側の関数（例: `fn encode_with_codepage(cp: u32, path) -> Result<(Vec<u8>, bool /* 置換あり */), _>`）を置くか。置けば要件 6.5 を `20127`（US-ASCII・全機に常在）と `65001` で機械に依存せず固定できる。置かないと CP932 の有無に縛られる。**置くのを推奨**。
 3. **入口名の 1 行をどこで出すか**: (a) proxy が呼ぶ直前に `eprintln!("[helper] …")`（proxy 初のログ行。成功・失敗を問わず 1 回で要件 4.2 を自然に満たす）／(b) `ShioriByteProxy::load` の戻りに使った入口を載せて `main.rs` が出す（失敗時は `ProxyError` にも入口を載せる必要があり variant が増える）。**(a) を推奨**。
@@ -176,6 +178,8 @@ brief の表と食い違うのは **pasta の 1 件だけ**。YAYA・里々は�
 9. **要件 8.3 の読み替え**: `briefing-shiori.md` の群 14c を **手で**直し（正本）、台帳冒頭の注釈（写し）と `[entry."ukadoc:spec_dll"]` の `note` 2 段落を揃え、`cargo run -p ukadoc-survey -- report` と `report-summary` で `report/*.md` を撮り直す（数字は変わらない見込み）。`cargo test -p ukadoc-survey` を通す。
 10. **steering の追随**: `.kiro/steering/structure.md`「Test DLL Fixture Crates」の節に 2 本目を 1 行足す（要件 6.9 の「全ての場所」に含めるか）。`THIRD-PARTY-NOTICES.md` は `/kiro-complete` の License Gate が撮り直す（本仕様のタスクには入れない）。
 11. **`unload` の型変更の範囲**: `UnloadFn -> u8` に変えても Drop は結果を捨てるだけ（要件 5.4）。既存 testdll の `unload() -> bool` と ABI が 1 バイトで一致するので無改変で通る。確認だけ。
+12. **`loadu` へ渡すパスが UTF-8 にできないとき**（§7 の調査項目 3）: `Path::to_str()` が `None`（argv が不正な UTF-16）の経路。実際には起きないが、ログ無し失敗経路 0 本（要件 9.6）から見て「符号化失敗」として 1 行残すか、`to_string_lossy` で置き換えて渡すか。要件 3.6 の「符号化失敗」と同じ扱いに寄せるのが素直。
+13. **表せない字の検出（議題 1）は要件 3.1 の改訂で制約が 1 つ増えた**: 似た字への置き換え（best-fit）も「表せない」に数え、かつ `load` へ渡すバイト列は今日と同一（変換フラグを変えない）。(a) の `WC_NO_BEST_FIT_CHARS` を本番の変換に掛けると渡すバイト列が変わるので、(a) を採るなら判定専用の 2 回目の変換になる。(b) の往復比較は本番の変換をそのまま使えるので、この制約とも素直に合う。
 
 ## 9. requirements.md と食い違う点
 
