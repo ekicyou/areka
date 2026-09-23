@@ -10,7 +10,7 @@
 **Users**: 切替を実装する開発者（後続 spec `areka-P0-ghost-shell-balloon-switch`）。areka の利用者から見える終わり方は今までと区別が付かない。
 
 **Impact**: 変わるのは 3 点。
-1. **wintf**: アプリの構築時に「窓 0 で終了する／しない」を選べる口（`ExitPolicy`）と、明示の終了を指示する口（`AppExit::request_exit`）が増える。既定は従来どおり「窓 0 で終了」で、`WinApp::new()` の意味は変わらない（example 14 本は 1 文字も触らない）。
+1. **wintf**: アプリの構築時に「窓 0 で終了する／しない」を選べる口（`ExitPolicy`）と、明示の終了を指示する口（`AppExit::request_exit`）が増える。既定は従来どおり「窓 0 で終了」で、`WinApp::new()` の意味は変わらない（example 15 本は 1 文字も触らない）。
 2. **areka**: 終了操作 6 種の合流点 4 か所が、それぞれ「全窓を閉じて終了を指示する」1 つの操作 `quit_app` を 1 行で呼ぶ形になる。全窓を閉じるだけの操作は外から呼べなくなる。
 3. **`run()` の戻り方**: 明示の終了の指示を受けたとき、まだ画面に残っている窓を `run()` が戻る前に壊す。後始末①〜④の間に利用者の画面へ窓が残らない（要件 1.3）。
 4. **OS からの閉鎖要求が 7 種目の終了操作になる**（裁定 3）: wintf に「`WM_CLOSE` が来たら窓を消す代わりに呼ぶ関数」を窓へ差す部品 `OnCloseRequest` が増える。areka はゴースト窓にメニューの「終了」と同じ終了要求を送る関数を、ダミー窓に `quit_app` を呼ぶ関数を差す。Alt＋F4・`taskkill`（`/F` なし）・「タスクの終了」で areka は別れの台詞を言って終わる。部品を付けない example の窓は今までどおり消える。
@@ -47,7 +47,7 @@
 - `crates/areka-ghost/src/runtime.rs` の `fn shutdown`。変更 0 行（4.3）。
 - `fn main` の後始末①〜④（`crates/areka/src/main.rs`）。順序・終了コードは不変（1.2・3.8）。
 - `crates/wintf/src/ecs/app.rs` の `App::on_window_destroyed`（旧経路の窓数カウンタ・終了を駆動しない）。変更 0 行。
-- example 14 本（wintf 7・areka 5・areka-emo-text 2）。変更 0 行（4.1）。
+- example 15 本（wintf 8＝research.md の 7 本＋`multi_window_test`・areka 5・areka-emo-text 2。実装時に数え直して訂正）。変更 0 行（4.1）。
 
 ### Allowed Dependencies
 - wintf 内: `runtime/message_loop.rs`（`AppExit`・`ShutdownPolicy`）← `runtime/mod.rs`（`WinApp`・`ExitPolicy`）。`ecs/` から `runtime/` への上向き依存は作らない（既存の方針）。
@@ -174,7 +174,7 @@ crates/areka/tests/
 - **doc 追随の全数**（タスク生成で取りこぼさないための一覧）: `emo2_boot/frame.rs`（`run_ghost_quit_phase` の doc）、`input_events/mod.rs`（上記）、`main.rs`（`on_dummy_pressed` の doc・`app.run()` 直前のコメント）、`placement/spawn.rs`（モジュール doc の「全 `GhostWindowMarker` despawn→window-close funnel→`run()` 正常復帰」の行）、`placement/spawn_cleanup_tests.rs`（doc 1 行）、`tests/smoke_boot_loop_exit.rs`（モジュール doc「自動 despawn → `WindowRegistry` 空遷移 → `run()` 復帰」の行）。いずれも本文の判断は変えない。
 - `crates/areka/src/placement/spawn.rs` — `despawn_ghost_windows` を削除（`app_exit` の私有部品へ吸収・外から呼べる全窓破棄を残さない）。モジュール doc の該当行を「全窓を閉じて終了を指示する操作は `app_exit::quit_app` が持つ」へ。干渉台帳（A1）の登記外だが他 spec との重なりは 0（完了時に台帳へ追記）。
 - `crates/areka/src/placement/spawn_cleanup_tests.rs` — doc コメント 1 行（`despawn_smoke_targets` の名を `app_exit::quit_app` へ）。テスト本文は不変。
-- 変更しないと明記するもの: `crates/wintf/src/runtime/window_registry.rs`・`crates/wintf/src/ecs/app.rs`・`crates/wintf/src/lib.rs`（`pub use runtime::*` で `ExitPolicy`／`AppExit` は自動で公開される）・kanade の `schedule/*`・`crates/areka-ghost/src/runtime.rs`・example 14 本。
+- 変更しないと明記するもの: `crates/wintf/src/runtime/window_registry.rs`・`crates/wintf/src/ecs/app.rs`・`crates/wintf/src/lib.rs`（`pub use runtime::*` で `ExitPolicy`／`AppExit` は自動で公開される）・kanade の `schedule/*`・`crates/areka-ghost/src/runtime.rs`・example 15 本。
 
 ## System Flows
 
@@ -376,7 +376,7 @@ impl AppExit {
 
 **Responsibilities & Constraints**
 - `crates/wintf/src/runtime/mod.rs`。`ExitPolicy` は `OnLastWindowClose`（既定）と `Explicit` の 2 値。**フィールドに保持しない**——`wire_shutdown_hook` がフックを仕込むか否かを決めるだけで、以後は参照されない（2.8 を「読める場所が無い」形で守る）。
-- `WinApp::new()` は `Self::with_exit_policy(ExitPolicy::OnLastWindowClose)` へ委譲する。署名は不変（example 14 本は触らない）。
+- `WinApp::new()` は `Self::with_exit_policy(ExitPolicy::OnLastWindowClose)` へ委譲する。署名は不変（example 15 本は触らない）。
 - `wire_shutdown_hook(world, exit, policy)`: ⑴ `ProdWindowRegistry` が無ければ挿す（従来どおり）、⑵ `exit.clone()` を World の NonSend として挿す（**両ポリシーで**・2.6）、⑶ `OnLastWindowClose` のときだけ `set_shutdown_hook(move || exit.request_exit())` を仕込む。`Explicit` のとき `reconcile_window_registry` は空遷移でフック `None` を見て何もしない（既存の分岐・変更 0 行）。登録表は空でも `insert` を受けるので「後で窓を開ける」は自然に成り立つ（2.4）。
 - 既定ポリシーのフックが `Event::notify` を直接撃つ今の形は捨て、`request_exit` を通す＝終了の完了機構が 1 本になる。副作用は「最後の窓が閉じたとき `info` が 1 行増える」だけ。
 
@@ -447,7 +447,7 @@ impl ShutdownPolicy {
 - `crates/wintf/src/ecs/window/components.rs` に `pub struct OnCloseRequest(pub fn(&mut World, Entity))`（`Component`・SparseSet・`Clone, Copy`）。`OnDragEnd(EventHandler<DragEndEvent>)` と同型だが、閉鎖要求はバブリングしないので `Phase` も `sender` も持たない最小の署名。
 - `crates/wintf/src/ecs/window_proc/lifecycle.rs` の `fn WM_CLOSE`: 生存 entity の腕を「`w.world().get::<OnCloseRequest>(entity).copied()` が `Some(cb)` なら `info!(event = "os_close_request", entity = ?entity, "[WM_CLOSE] 閉鎖要求を利用側の関数へ渡す")` の上で `(cb.0)(w.world_mut(), entity)`、`None` なら従来どおり `despawn`」に分ける。破棄済み entity の打ち切りと戻り値 `Some(LRESULT(0))`（既定手続きの `DestroyWindow` 抑止）は不変。
 - 関数は World を `try_borrow_mut` で借りた中で呼ばれる（今日の `despawn` と同じ条件）。関数の中で窓を despawn してもよい（`on_dummy_os_close` がそうする）し、しなくてもよい（`on_ghost_os_close`）。
-- 部品を付けない窓（example 14 本・wintf 内のテスト窓）の振る舞いは 1 文字も変わらない（2.11）。
+- 部品を付けない窓（example 15 本・wintf 内のテスト窓）の振る舞いは 1 文字も変わらない（2.11）。
 
 **Contracts**: Service [x]
 

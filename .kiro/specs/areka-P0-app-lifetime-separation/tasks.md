@@ -77,11 +77,11 @@
   - _Requirements: 3.9, 3.10, 3.11, 3.12, 5.3, 6.3_
   - _Depends: 2, 3.1_
 
-- [ ] 4. areka を「明示の指示でだけ終了」へ切り替え、変えない範囲を確かめる
+- [x] 4. areka を「明示の指示でだけ終了」へ切り替え、変えない範囲を確かめる
   - `main` のアプリ構築を「明示の指示でだけ終了」の選択に切り替える（段取りの最後の 1 行）。実行呼び出し直前のコメントを「終了の指示で戻る」へ、smoke テストのモジュール doc 1 行を追随させる
   - 後始末①〜④の順序と終了コードは変えない
   - `cargo test -p wintf` と `cargo test -p areka`（smoke テスト 2 本を含む）を通す
-  - 変えない範囲を差分で確かめる: example 14 本・kanade の終了の握手（`schedule/close.rs`・`user_break.rs`）とそのテスト・ゴースト実行環境の終了統括・登録表の空遷移の検知に差分が 0
+  - 変えない範囲を差分で確かめる: example 15 本・kanade の終了の握手（`schedule/close.rs`・`user_break.rs`）とそのテスト・ゴースト実行環境の終了統括・登録表の空遷移の検知に差分が 0
   - 完了時: 両 crate のテストが緑、`main.rs` が 1,000 行未満、上記の変えない範囲の `git diff` が空（pathspec が実在することを確かめたうえで）
   - _Requirements: 1.1, 1.2, 3.8, 4.1, 4.2, 4.3, 4.4, 4.5, 5.4, 6.4_
   - _Depends: 1.3, 3.3, 3.4_
@@ -100,3 +100,4 @@
 - 1.1: 実行器は投入済みタスクを `block_on` の future より先に回す。「待ちの後に指示が届く」経路を踏ませるテストは、待ちが立った印を見るまで譲ってから指示する形にする。新しいループのテストには 5 秒の見張り（`WM_QUIT` で `block_on` を panic させる）を付け、壊れたとき止まらず赤にする
 - 2: `OnCloseRequest` の公開パスは `wintf::ecs::window::OnCloseRequest`（`lib.rs` は `ecs` を再公開しない）。design の記述を訂正済み
 - 3.2: `quit_app` を通る経路を回すテスト World には `wintf::AppExit::new()` を `insert_non_send` で据える（無いと `app_exit_unwired` の error が出るが、ログを見ないテストは緑のまま通ってしまう）。`spine.rs` の `make_world_with_gpu` にも据えた
+- 4: `WinApp::new()` を使う example は 15 本（wintf 8・areka 5・areka-emo-text 2。`wuc_spike` は doc で触れるだけ）。design／tasks の「14 本」を訂正した

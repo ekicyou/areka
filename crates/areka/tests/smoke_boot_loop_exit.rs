@@ -1,8 +1,8 @@
 //! 骨格 boot→loop→exit の統合 smoke テスト（task 4.2・R4.1/R2.4、task 6.2 で両方向へ拡張）。
 //!
 //! env ゲート（`AREKA_APP_SMOKE_EXIT_MS`・task 2.3）を立てた areka バイナリの子プロセスを
-//! 起動し、起動窓を開いて `app.run()` ループを回した後に自動 despawn → `WindowRegistry`
-//! 空遷移 → `run()` 復帰 → **exit 0** で正常終了する経路を実プロセスで踏破・証明する。
+//! 起動し、起動窓を開いて `app.run()` ループを回した後に自動終了（`quit_app`＝全窓 despawn
+//! → 終了の指示）→ `run()` 復帰 → **exit 0** で正常終了する経路を実プロセスで踏破・証明する。
 //!
 //! window-placement task 6.2（`open_startup_window` 差し替え・要件 1.4）以降は **両方向**を張る:
 //! - **フォールバック方向**（引数なし）: 既定プレースホルダ root は不在 → `warn!` の上で
@@ -104,7 +104,7 @@ fn run_smoke(args: &[&str]) -> (ExitStatus, String, String) {
 
 /// フォールバック方向（task 6.2・DD14）: 引数なし＝既定プレースホルダ root は不在のため、
 /// `warn!`（`StartPointMissing` は良性分類）の上で検証用ダミー窓へフォールバックし、
-/// 自動 close → 空遷移 → **exit 0** で完走することを実プロセスで証明する。
+/// 自動終了（`quit_app`）→ 終了の指示 → **exit 0** で完走することを実プロセスで証明する。
 #[test]
 fn skeleton_boots_loops_and_exits_zero_within_watchdog() {
     let (status, out, err) = run_smoke(&[]);
@@ -135,7 +135,7 @@ fn skeleton_boots_loops_and_exits_zero_within_watchdog() {
 
 /// 本物方向（task 6.2・要件 1.4 の観測可能な完了状態）: emo2 fixture のパスを位置引数で
 /// 供給し、`prepare_ghost_windows` 成功 → 本物のゴースト窓構成（2 スコープ）で
-/// 自動 close → 空遷移 → **exit 0** で完走することを実プロセスで証明する。
+/// 自動終了（`quit_app`）→ 終了の指示 → **exit 0** で完走することを実プロセスで証明する。
 ///
 /// 環境寛容（placement mod.rs `prepare_ghost_windows_uses_primary_monitor` と同流儀）:
 /// モニタ 0 台の headless 環境では `PlacementError::Monitor` → `error!` フォールバックが

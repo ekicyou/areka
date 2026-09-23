@@ -6,15 +6,15 @@
 //! この骨格は「アプリ起動の器」に徹する:
 //! - 構造化ロギング初期化（RUST_LOG フォールバック）・パニックハンドラ設定
 //! - 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（マウントはしない）
-//! - UI ランタイム起動（`WinApp::new()`）・SHIORI 実走デモの env-gate 呼び口
+//! - UI ランタイム起動（`WinApp::with_exit_policy(ExitPolicy::Explicit)`）・SHIORI 実走デモの env-gate 呼び口
 //! - 起動窓シーム（`open_startup_window`・window-placement task 6.2 で本物のゴースト窓生成へ
 //!   差し替え済み。準備失敗時は検証用ダミー窓へフォールバック）
-//! - `main` 自身が所有するメッセージループ（`app.run()`）と起動窓 close での正常終了
+//! - `main` 自身が所有するメッセージループ（`app.run()`）と終了の指示（`app_exit::quit_app`）での正常終了
 //!
 //! 座標・配置ロジックは `placement` モジュール（areka-P0-window-placement）が所有し、
 //! 骨格自身は座標を一切持たない。旧モック UI は `examples/mock-shell.rs` へ退避済み。
 //!
-//! `main` は `open_startup_window`／ダミー窓／smoke ゲートを不変に保ったまま、`WinApp::new()`
+//! `main` は `open_startup_window`／ダミー窓／smoke ゲートを不変に保ったまま、`WinApp` 構築
 //! ／`open_startup_window` の後で `emo2_boot::wire_emo2_boot` を呼び、その成否で実 sink boot
 //! （`wired=true`）／既存 `LogSink`×2 フォールバック boot（`wired=false`）を呼び分ける（task 5.2・
 //! design.md「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）。`run()` 復帰後は
@@ -186,10 +186,11 @@ fn main() -> Result<()> {
     // `LogSink` フォールバック boot 経路の双方が使うため main で保持する・DD-7）。
     let helper_exe = default_helper_exe_path();
 
-    // UI ランタイム起動（COM/DPI 初期化・World 生成・shutdown hook 結線）（R2.4）。
-    // DD-7/R7.1: 実 sink 結線（`wire_emo2_boot`）は UI 基盤の後に行うため、`WinApp::new()` を
+    // UI ランタイム起動（COM/DPI 初期化・World 生成・終了の受け口 `AppExit` の据え付け）（R2.4）。
+    // DD-7/R7.1: 実 sink 結線（`wire_emo2_boot`）は UI 基盤の後に行うため、`WinApp` 構築を
     // すべての boot より前へ移動した（旧・task 3.3 の boot 先行順序を再編）。
-    let app = WinApp::new()?;
+    // `Explicit`: 窓 0 では終了せず、`quit_app` の終了の指示でだけ `run()` が戻る（要件 1.1）。
+    let app = WinApp::with_exit_policy(ExitPolicy::Explicit)?;
 
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
     tick_gate_config::apply_from_env(&mut app.world().borrow_mut());
@@ -323,8 +324,8 @@ fn main() -> Result<()> {
         (ghost, None, None)
     };
 
-    // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。ダミー窓／ゴースト窓が
-    // 閉じられると `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する（DD7 改定）。
+    // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。窓が 0 になっても戻らず、
+    // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が `Ok` を返す。
     app.run()?;
 
     // 終了順序（task 9.5・design「結線・資産・実機経路（main.rs）」）:
@@ -401,7 +402,7 @@ fn main() -> Result<()> {
 ///
 /// UI ランタイム起動と正常終了の観測目的に限る最小の窓を spawn する。窓が存在するために
 /// 必要な最小コンポーネント（`Window`・`WindowStyle`・可視/クリック可能な最小 `BoxStyle`
-/// サイズ・ダブルクリック despawn の observer）だけを与え、`DummyWindowMarker` で識別する。
+/// サイズ・ダブルクリックで `quit_app` を呼ぶ observer）だけを与え、`DummyWindowMarker` で識別する。
 ///
 /// **配置・座標・DPI を一切主張しない**: `WindowPos` の位置（`position`）を設定せず、座標
 /// ロジックも持たない（既定位置で開く）。placement は window-placement の領分であり、ダミー窓は
@@ -616,7 +617,7 @@ struct StartupDescriptValues {
 ///   （`AREKA_APP_SMOKE_EXIT_MS`）は別の自動終了の経路。
 ///
 /// 準備（`prepare_ghost_windows`）は同期実行し、I/O はここで完結・Send な値のみを ECS
-/// コマンドへ運ぶ。呼び出しスレッドは `WinApp::new()` 済みの MTA UI スレッド＝COM
+/// コマンドへ運ぶ。呼び出しスレッドは `WinApp` 構築済みの MTA UI スレッド＝COM
 /// 初期化済み（measure の WIC 前提を満たす）。署名は `(&WinApp, &ConfigInputs)`
 /// （design の Revalidation Trigger として本タスクで変更）。
 ///
@@ -760,7 +761,7 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
     // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
     // `wintf::executor::spawn_local`＋world `Weak` 作法で **一発の** async タスクを投入する
     // （ECS システムではない）。env 未設定・不正なら発火せず、ダミー窓は利用者の
-    // ダブルクリック despawn（task 2.2 経路）を待ち続ける。
+    // ダブルクリック（`quit_app`）か OS の閉鎖要求を待ち続ける。
     if let Some(ms) = smoke_exit_ms() {
         // WinApp が strong 所有者を保持するため、この Weak は shutdown まで upgrade 可能。
         let world_weak = std::rc::Rc::downgrade(&app.world());
