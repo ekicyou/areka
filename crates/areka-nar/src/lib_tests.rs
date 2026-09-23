@@ -1,6 +1,6 @@
 //! 公開面（`lib.rs`）の兄弟テスト。
 //!
-//! ここが判定するのは 6 つ。
+//! ここが判定するのは 7 つ。
 //!
 //! ⑴ `open` は 1 バイトも書かない——固定入力を全て通した前後で根の木が 1 つも
 //!    変わらないことを、実際に歩いて突き合わせる（走査そのものの較正を 3 本持つ）。
@@ -10,6 +10,7 @@
 //! ⑷ 記録は公開面の 2 つの関数だけが出す——本番のソースの字面で見張る。
 //! ⑸ 伸長器の書き込み側の名前を本番のソースが綴らない（要件 10.2）。
 //! ⑹ 新設したファイルが 1,000 行未満（要件 10.8）。
+//! ⑺ 名前・パスの長さの上限（200 単位）の境界を公開の入口 `open` で測る。
 //!
 //! 語彙の全数対応と「失敗のたびに記録が 1 回」は [`vocabulary`] が持つ。
 //!
@@ -148,7 +149,7 @@ fn open_changes_nothing_under_the_root() {
 
     let before = tree(root);
     assert!(
-        before.len() >= 14,
+        before.len() >= 15,
         "固定入力が置かれていない根で突き合わせても何も測れない: {}",
         before.len()
     );
@@ -180,6 +181,121 @@ fn the_tree_snapshot_notices_every_kind_of_change() {
 
     fs::remove_dir(root.join("sub")).expect("消せる");
     assert_ne!(tree(root), before, "消えたフォルダを見落とした");
+}
+
+// ---- 名前・パスの長さの上限（本仕様 要件 1.3・1.4・1.5・1.9） ----
+
+/// `ghost_with_balloon()`（4 件）の後ろに `name` のファイルを 1 件足して `open` する。
+/// 足した 1 件のエントリ番号は 4。
+fn open_with_file(name: &str) -> Result<(), NarError> {
+    let work = WorkDir::new().expect("根を借りられる");
+    let path = put(
+        work.path(),
+        "long.nar",
+        &ghost_with_balloon().file(name, b"x").done(),
+    );
+    NarArchive::open(&path).map(|_| ())
+}
+
+/// `directory` の値だけを `value` にした書庫を `open` する。
+fn open_with_directory(value: &str) -> Result<(), NarError> {
+    let work = WorkDir::new().expect("根を借りられる");
+    let manifest = install_txt(&["type,ghost", "name,テスト", &format!("directory,{value}")]);
+    let nar = NarBuilder::new().file("install.txt", &manifest).done();
+    NarArchive::open(&put(work.path(), "dir.nar", &nar)).map(|_| ())
+}
+
+/// ちょうど 200 単位の相対パスは `open` を通る。
+#[test]
+fn a_path_of_exactly_the_limit_opens() {
+    let name = format!("g/{}", "a".repeat(198));
+    assert_eq!(name.encode_utf16().count(), 200);
+    open_with_file(&name).expect("上限ちょうどは通る");
+}
+
+/// 201 単位は「長すぎる」で拒否され、理由の表示が名前の全体を含まない。
+#[test]
+fn a_path_one_over_the_limit_is_refused_without_its_full_name() {
+    let name = format!("g/{}", "a".repeat(199));
+    let error = open_with_file(&name).expect_err("上限＋1 は拒否");
+    let NarError::Refused { reason, .. } = &error else {
+        panic!("拒否のはず: {error}");
+    };
+    assert!(
+        matches!(
+            reason,
+            RefuseReason::PathTooLong {
+                index: 4,
+                length: 201,
+                limit: 200,
+                ..
+            }
+        ),
+        "{reason:?}"
+    );
+    assert!(
+        !error.to_string().contains(&name),
+        "表示が名前の全体を含む: {error}"
+    );
+}
+
+/// 文字数は 200 だが BMP 外の文字で UTF-16 が 201 になる名前は拒否される（数え方の較正）。
+#[test]
+fn the_length_is_counted_in_utf16_units_not_chars() {
+    let name = format!("g/{}𠮷", "a".repeat(197));
+    assert_eq!(name.chars().count(), 200);
+    let error = open_with_file(&name).expect_err("UTF-16 で 201 は拒否");
+    assert!(
+        matches!(
+            &error,
+            NarError::Refused {
+                reason: RefuseReason::PathTooLong { length: 201, .. },
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}
+
+/// フォルダのエントリは末尾の `/` を除いて測る——200 単位＋`/` は通る（要件 1.1）。
+#[test]
+fn a_directory_entry_is_measured_without_its_trailing_slash() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let name = format!("g/{}", "a".repeat(198));
+    let path = put(
+        work.path(),
+        "dir.nar",
+        &ghost_with_balloon().dir(name.as_str()),
+    );
+    NarArchive::open(&path).expect("末尾の / は長さに入らない");
+}
+
+/// `install.txt` のフォルダ名も 200 単位なら通る。
+#[test]
+fn a_directory_name_of_exactly_the_limit_opens() {
+    open_with_directory(&"a".repeat(200)).expect("上限ちょうどは通る");
+}
+
+/// 201 単位のフォルダ名は「フォルダ名が使えない」で拒否され、値は全体を含まず
+/// 測った長さと上限を含む。
+#[test]
+fn a_directory_name_one_over_the_limit_is_refused_with_a_bounded_value() {
+    let full = "a".repeat(201);
+    let error = open_with_directory(&full).expect_err("上限＋1 は拒否");
+    let NarError::Refused {
+        reason: RefuseReason::InvalidDirectoryName { key, value },
+        ..
+    } = &error
+    else {
+        panic!("InvalidDirectoryName のはず: {error:?}");
+    };
+    assert_eq!(key, "directory");
+    assert!(!value.contains(&full), "値が全体を含む: {value}");
+    assert!(value.contains("201") && value.contains("200"), "{value}");
+    assert!(
+        !error.to_string().contains(&full),
+        "表示が全体を含む: {error}"
+    );
 }
 
 // ---- `install` は伸長をやり直さない（設計 `container`） ----
