@@ -6,7 +6,7 @@
 ## Tasks
 
 - [ ] 1. 永続に鍵の族 `[last]` を足す
-- [ ] 1.1 永続のテストを兄弟ファイルへ移すだけの下ごしらえ
+- [x] 1.1 永続のテストを兄弟ファイルへ移すだけの下ごしらえ
   - `persist/mod.rs` 末尾の `mod tests` の本体を `persist/persist_tests.rs` へそのまま移し、`#[cfg(test)] #[path = "persist_tests.rs"] mod tests;` で繋ぐ
   - テストの本文・本数・名前を 1 字も変えない（挙動 0 変更・独立にレビューできる 1 コミット）
   - 完了の姿: `cargo test -p areka-sylphya` が移設前と同じ本数で緑、`persist/mod.rs` が 1,000 行の目安の内側
