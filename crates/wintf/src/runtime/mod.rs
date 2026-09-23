@@ -320,8 +320,16 @@ impl WinApp {
     ///    で、終了の指示（利用側の [`AppExit::request_exit`]、または registry 空遷移 hook）まで
     ///    OS メッセージループを駆動する。ループ開始前に出た指示でもただちに戻る。future 完了でループが **先行 quit せず** 正常復帰する
     ///    （"received unexpected quit message" panic を構造的に回避）。
+    /// 4.5. 窓の登録表を World から取り出して破棄し、残っていた窓を壊す（残っていたときだけ
+    ///    `info!` を 1 行残す）。
     /// 5. 復帰時、ローカルの `VsyncEventBridge` が drop（VSync stop→join）し、tick の
     ///    `JoinHandle` も drop される。tail race 補填として終了時に防御的 notify を撃つ。
+    ///
+    /// # 契約: 指示で戻るとき
+    /// 終了の指示で戻るときは、登録表に残っていた窓を壊してから戻る。戻った後の `run()` は
+    /// 再入できない（登録表が World に無い）。残っていた窓の entity の資源（`WindowHandle`・
+    /// WUC）は `WinApp` の drop まで World に残るので、窓は閉じてから指示すること
+    /// （[`AppExit`] の契約）。
     ///
     /// # 戻り値
     /// 正常終了時 `Ok(())`。COM/DPI は `new()` で初期化済み。
@@ -371,6 +379,22 @@ impl WinApp {
 
         // 4. shutdown future が完了するまでメッセージループを駆動（先行 quit せず復帰）。
         MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(self.exit.clone()));
+
+        // 4.5. 残存窓の破棄。tick の外で指示が出ると、reconcile より先にここへ来て窓が
+        //      残り得る。登録表ごと取り出して drop し、`Window<WndState>` の drop で
+        //      `DestroyWindow` を呼ぶ。World を借りたまま壊すのは reconcile と同じ条件で、
+        //      ウィンドウ手続きは `try_borrow` 失敗で読み飛ばす。
+        {
+            let mut ecs = self.world.borrow_mut();
+            if let Some(registry) = ecs.world_mut().remove_non_send::<ProdWindowRegistry>()
+                && !registry.is_empty()
+            {
+                info!(
+                    "[WinApp::run] exit requested while windows remained open — destroying them before returning"
+                );
+                drop(registry);
+            }
+        }
 
         // 5. tail race 補填の防御的 notify（冪等・arm 済みリスナのみ起床）。
         ShutdownPolicy::notify_shutdown(self.exit.signal());
