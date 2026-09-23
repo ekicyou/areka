@@ -58,6 +58,8 @@ fn world_with_wiring(
     let wiring = MouseWiring::with_clock(tx, RegionSource::Mock(region), clock);
     let mut world = World::new();
     world.insert_non_send(wiring);
+    // 終了の受け口（本番では `WinApp` が必ず挿す）。強制退避は統合操作で終了を指示する。
+    world.insert_non_send(wintf::AppExit::new());
     (world, rx)
 }
 
@@ -507,6 +509,13 @@ fn handler_ctrl_shift_left_double_click_despawns_all_ghost_windows_without_sendi
         0,
         "Ctrl+Shift は強制退避＝全ゴースト窓が despawn される（R15.2）"
     );
+    assert!(
+        world
+            .get_non_send::<wintf::AppExit>()
+            .expect("world_with_wiring が受け口を挿している")
+            .is_requested(),
+        "強制退避は窓を閉じた上で終了を指示する（要件 3.3）"
+    );
     assert!(world.get_entity(other).is_ok(), "無関係 entity は残る");
     assert!(rx.try_recv().is_err(), "強制退避は kanade へ何も送らない");
 }
@@ -561,6 +570,7 @@ fn handlers_self_gate_when_mouse_wiring_absent() {
 #[test]
 fn escape_works_without_mouse_wiring() {
     let mut world = World::new();
+    world.insert_non_send(wintf::AppExit::new());
     world.spawn(GhostWindowMarker);
     let w = world.spawn(GhostWindowMarker).id();
     assert_eq!(ghost_count(&mut world), 2);

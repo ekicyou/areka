@@ -20,9 +20,10 @@ use areka_kanade::{CloseReason, KanadeMsg, MouseButton, MouseEventKind, MouseInp
 use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, PointerState};
 
+use crate::app_exit::{ExitOrigin, quit_app};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::hit_region::{HitRegion, resolve_hit_region};
-use crate::placement::spawn::{CharWindowMarker, despawn_ghost_windows};
+use crate::placement::spawn::CharWindowMarker;
 use throttle::{MouseMoveThrottle, plan_mouse_move};
 
 /// UI スレッド所有のマウス入力配信資源（NonSend・DD-IE-9）。
@@ -445,8 +446,8 @@ pub(crate) fn on_char_pointer_moved(
 /// キャラ窓のポインタ押下ハンドラ（Bubble のみ処理・1.2/3.3・6.2/6.3・7.1/7.3/7.4）。
 ///
 /// - **Ctrl+左ダブルクリック（結線前）／Ctrl+Shift+左ダブルクリック → 強制退避**（要件 5.5）:
-///   全 `GhostWindowMarker` 窓を despawn し、wintf の window-close funnel（`run()` 復帰→main
-///   shutdown→`ForceQuit` 系列）へ委ねる。起動に失敗した・固まったゴーストから抜ける口として残す。true。
+///   統合操作 [`quit_app`]（出所 `Escape`）で全窓を閉じて終了を指示し、`run()` 復帰→main
+///   shutdown→`ForceQuit` 系列へ委ねる。起動に失敗した・固まったゴーストから抜ける口として残す。true。
 /// - **Ctrl+左ダブルクリック（結線済み・Shift 非押下）→ Ctrl は無視する**（要件 5.3・開発者裁定
 ///   2026-09-19）: 終了指示は送らない。下の「左ダブルクリック（Ctrl なし）」とまったく同じに扱う。
 ///   利用者起因の終了指示を送るのはメニューの「終了」（`menu::request_close`）だけである。
@@ -476,9 +477,9 @@ pub(crate) fn on_char_pointer_pressed(
 
     // 強制退避（Ctrl+左ダブルクリック・要件 5.5）。腕は 1 つだけである。
     //
-    // 結線前（ghost boot 失敗・boot 前）、または Ctrl+**Shift** のとき、全 GhostWindowMarker 窓を
-    // despawn し、wintf の window-close funnel（`run()` 復帰→main shutdown→`ForceQuit` 系列）へ
-    // 委ねる。起動に失敗した・固まったゴーストから抜ける唯一の口である。
+    // 結線前（ghost boot 失敗・boot 前）、または Ctrl+**Shift** のとき、統合操作で全窓を閉じて
+    // 終了を指示し、`run()` 復帰→main shutdown→`ForceQuit` 系列へ委ねる。起動に失敗した・
+    // 固まったゴーストから抜ける唯一の口である。
     //
     // 結線済み（`MouseWiring` 在）で Shift 非押下なら Ctrl は無視し、下の左ダブルクリックの経路へ
     // そのまま落とす——かつてここに置いていた隠しの終了指示は、メニューの「終了」が同じ役目を
@@ -491,7 +492,7 @@ pub(crate) fn on_char_pointer_pressed(
             shift = state.shift_down,
             "Ctrl+左ダブルクリック（強制退避）: 全ゴースト窓を閉じる"
         );
-        despawn_ghost_windows(world);
+        quit_app(world, ExitOrigin::Escape);
         return true;
     }
 

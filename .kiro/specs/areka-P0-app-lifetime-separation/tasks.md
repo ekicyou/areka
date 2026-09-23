@@ -52,7 +52,7 @@
   - _Requirements: 3.6, 3.7, 4.4, 6.2_
   - _Depends: 1.1_
 
-- [ ] 3.2 終了系列の完了と強制退避を統合操作へ乗せ替える
+- [x] 3.2 終了系列の完了と強制退避を統合操作へ乗せ替える
   - 終了系列の完了通知の受け手と強制退避の腕を、それぞれ統合操作の 1 行呼びにする。既存の `ghost_quit`／`ghost_quit_no_windows`／`mouse_escape_close` の記録は据え置く
   - ゴースト窓だけを閉じる既存関数を削除し、呼び手が 0 であることを確かめる
   - 既存テストの World に受け口を挿し、終了系列の完了（通知 1 件・窓 0）と強制退避のテストに「指示済みになっている」の確認を 1 行ずつ足す
@@ -99,3 +99,4 @@
 
 - 1.1: 実行器は投入済みタスクを `block_on` の future より先に回す。「待ちの後に指示が届く」経路を踏ませるテストは、待ちが立った印を見るまで譲ってから指示する形にする。新しいループのテストには 5 秒の見張り（`WM_QUIT` で `block_on` を panic させる）を付け、壊れたとき止まらず赤にする
 - 2: `OnCloseRequest` の公開パスは `wintf::ecs::window::OnCloseRequest`（`lib.rs` は `ecs` を再公開しない）。design の記述を訂正済み
+- 3.2: `quit_app` を通る経路を回すテスト World には `wintf::AppExit::new()` を `insert_non_send` で据える（無いと `app_exit_unwired` の error が出るが、ログを見ないテストは緑のまま通ってしまう）。`spine.rs` の `make_world_with_gpu` にも据えた

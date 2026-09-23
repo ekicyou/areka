@@ -93,8 +93,8 @@ use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 #[allow(unused_imports)]
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
-// 終了相（R15.4）と強制退避（`input_events`）が共有する「全ゴースト窓を閉じる」操作。
-use crate::placement::spawn::despawn_ghost_windows;
+// 終了相（R15.4）の出口＝終了の統合操作（全窓を閉じてから終了を指示する）。
+use crate::app_exit::{ExitOrigin, quit_app};
 
 use super::assets::{BalloonScopeAssets, BootAssets, ScopeAssets};
 // 可視性の相（design 決定 D5）。相順の所有者は本モジュールなので、呼び出しはここから行う。
@@ -166,14 +166,14 @@ pub(super) use self::scale_text::resolve_talk_time;
 /// - 受信端が無い（結線していない構成・既存の試験）→ 何もせず `false`。
 /// - 届いていない → 何もせず `false`（定常フレームは無操作）。
 /// - 1 件以上届いた → `try_recv` で**全件**取り出し、`info!(event = "ghost_quit")` の上で
-///   [`despawn_ghost_windows`] を 1 度だけ呼び `true`。2 件目以降と、既に窓が無い場合は
-///   `debug!` で打ち切る（終了処理の正常系であって失敗ではない——`main.rs` の smoke 掃除が
-///   破棄済み標的に対して敷いているのと同じ区別）。
+///   統合操作 [`quit_app`]（出所 `KanadeStopped`）を 1 度だけ呼び `true`。2 件目以降と、
+///   既に窓が無い場合は `debug!` で打ち切る（終了処理の正常系であって失敗ではない——
+///   統合操作が破棄済み標的に対して敷いているのと同じ区別）。
 /// - 送出端が全て落ちた（`Disconnected`）→ 溜まっていた通知は上と同じに扱い、無ければ何もしない。
 ///   ghost boot に失敗した構成でも受信端だけは生き得るので、切断そのものは異常ではない。
 ///
-/// 窓が 0 になると wintf の `run()` が戻り、`main.rs` の終了統括が走る。そこは既に冪等である
-/// （kanade は停止済みゆえ `ForceQuit` の送出が失敗し `debug!` で流れる）。
+/// 統合操作が全窓を閉じて終了を指示すると wintf の `run()` が戻り、`main.rs` の終了統括が走る。
+/// そこは既に冪等である（kanade は停止済みゆえ `ForceQuit` の送出が失敗し `debug!` で流れる）。
 pub(super) fn run_ghost_quit_phase(wiring: &mut Emo2Wiring, world: &mut World) -> bool {
     let Some(rx) = wiring.kanade_stop.as_ref() else {
         return false;
@@ -202,7 +202,7 @@ pub(super) fn run_ghost_quit_phase(wiring: &mut Emo2Wiring, world: &mut World) -
         cause = ?stopped.cause,
         "kanade の終了系列が完了した: 全ゴースト窓を閉じる"
     );
-    let closed = despawn_ghost_windows(world);
+    let closed = quit_app(world, ExitOrigin::KanadeStopped(stopped.cause));
     if closed == 0 {
         tracing::debug!(
             event = "ghost_quit_no_windows",
