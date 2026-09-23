@@ -53,7 +53,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 4.1, 4.3_
   - _Depends: 1.2, 2.1_
 
-- [ ] 3.2 合成段の差し替えで赤を示し、戻して赤 0 を確かめる
+- [x] 3.2 合成段の差し替えで赤を示し、戻して赤 0 を確かめる
   - 転写ループで転写した画素の α を捨てて不透明で書く形に置き換える（トリム後の矩形の内側にも抜かれた画素が、本テストの 3 面すべてで在るので赤になる見込み。要件 2.1 の「4 面」は research.md §2.3 で実測した面の数で、本テストが見るのはそのうち 3 面）
   - 走らせ方・記録・戻し方は 3.1 と同じ。道連れの見込み（転写のテスト・合成の golden 群・予算等価テスト）を実際の出力と突き合わせて記録する
   - 完了状態: 3 面すべて赤の記録と、戻した後の赤 0 の記録が完了記録に残っている
@@ -97,3 +97,22 @@
   - areka-emo-compose: 赤 0（220 passed）。`base_image::tests::konnoyayame_has_no_dangling_pattern_targets_with_images` は見込みどおり緑
   - areka-emo-present（253 passed / 2 failed）: 本テスト・`shell_target::template_tests::r_post_and_komainu_shows_both_scopes_from_file_names_alone`（面 0 の左上の α が 255）
 - ⑹ 戻した後: `git checkout -- crates/areka-emo-atlas/src/normalize.rs` で戻し、同ファイルの `git diff --stat` は空。同じ 3 本で atlas 83 passed / 1 ignored・compose 220 passed・present 255 passed、赤 0。
+
+### 3.2 合成段の差し替え（2026-09-24）
+
+- ⑴ 差し替えた箇所: `crates/areka-emo-compose/src/blit.rs` の `pub(crate) fn execute` の転写ループで、転写した画素の α を書く行（乗算済み SourceOver を α に当てる行）。転写した画素の α を捨てて不透明で書く形。着手前の同ファイルの `git diff --stat` は空（HEAD `14e48624`）・置き換える行は grep で 1 件。
+- ⑵ 置き換えた 1 行: 前 `dst[di + 3] = source_over_channel(src_a, dst_a, inv_src_a);` → 後 `dst[di + 3] = 255;`（ビルドは通り、`dst_a` 未使用の警告 1 件のみ）
+- ⑶ 走らせたコマンド: `cargo test -p areka-emo-atlas --no-fail-fast`・`cargo test -p areka-emo-compose --no-fail-fast`・`cargo test -p areka-emo-present --no-fail-fast`
+- ⑷ 赤になった通しテスト: `presenter::keycolor_clickthrough_tests::keyed_out_pixels_leave_the_hit_mask_and_the_rest_stay_inside`。前提の主張はすべて通り、3 面を集めた最後の「食い違い 0」の主張で赤:
+  - `R_POST_and_KOMAINU 面 0: 抜き色の判定とマスクが 24959 画素で食い違う（先頭 5 件 (x, y, 期待は内か): [(20, 50, false), (21, 50, false), (22, 50, false), (23, 50, false), (24, 50, false)]）`
+  - `R_POST_and_KOMAINU 面 10: 抜き色の判定とマスクが 8712 画素で食い違う（先頭 5 件 …: [(0, 16, false), (1, 16, false), (2, 16, false), (3, 16, false), (4, 16, false)]）`
+  - `konnoyayame 面 0: 抜き色の判定とマスクが 51984 画素で食い違う（先頭 5 件 …: [(7, 47, false), (8, 47, false), (9, 47, false), (10, 47, false), (11, 47, false)]）`
+  - 件数は 3 面ともトリム後の矩形の内側にある抜かれた画素の数（design の目安）と一致。先頭の座標はどの面もトリム後の矩形の左上の角から始まる（矩形の外は透明のまま「外」）。
+- ⑸ 道連れで赤になった既存テスト（全件）:
+  - areka-emo-atlas: 赤 0（83 passed / 1 ignored）
+  - areka-emo-compose: **赤 0（220 passed）＝design の見込み（SourceOver のテスト・合成の golden 群が赤）は外れた**。これらのテストは不透明な下地に重ねるか全画素不透明の検体しか使わず、転写後の α がもともと 255 になるため。compose クレートの中には転写した画素の α を捨てる退行を止めるテストが無く、止めるのは本テストと下の present のテストだけである。
+  - areka-emo-present（246 passed / 9 failed）:
+    - 見込みどおり: 本テスト・`presenter::budget_equivalence_tests::the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_path`・`…::the_rotating_face_fixture_differs_in_bytes_and_outnumbers_the_cache`・`…::repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent`（3 本とも `assert_expected_is_not_empty` の「期待マスクが一様」で止まる）
+    - 見込みに無かった赤（5 本・いずれも検体の前提か陽性対照の主張で止まる）: `cache::tests::mask_generated_once_from_composed_bytes_and_correct`・`cache::tests::insert_after_take_recycled_preserves_approved_semantics`（「fixture は透明画素を含む」）・`display::gpu_tests::identity_offscreen_roundtrip_equals_composed_native_bytes`（α=0 と中間 α の同居の前提）・`presenter::display_failure_tests::display_failure_on_a_same_shape_reshow_keeps_every_previous_value`（陽性対照の `assert_ne`・再表示前後のマスクが同一）・`presenter::fractional_scale_tests::alpha_mask_bits_come_from_native_bytes`（「期待マスクが一様」）
+    - 3.1 で赤だった `shell_target::template_tests::r_post_and_komainu_shows_both_scopes_from_file_names_alone` は緑（面 0 の左上はトリム後の矩形の外で α 0 のまま）
+- ⑹ 戻した後: `git checkout -- crates/areka-emo-compose/src/blit.rs` で戻し、同ファイルの `git diff --stat` は空。atlas 83 passed / 1 ignored・compose 220 passed・present 255 passed、赤 0。
