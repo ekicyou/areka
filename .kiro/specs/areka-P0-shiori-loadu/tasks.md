@@ -74,7 +74,7 @@
   - _Boundary: ukadoc-coverage ledger_
   - _Depends: 3.3_
 
-- [ ] 6. 全体の検証と実機確認
+- [x] 6. 全体の検証と実機確認
 - [x] 6.1 workspace 全体の回帰と無改変の確認
   - i686 の先ビルド（助け手・既存の偽 DLL・2 本目の偽 DLL）の後に `cargo test --workspace` を回す
   - 既存の偽 DLL クレート・助け手の `main.rs` と兄弟テスト群（`main_*.rs`）・親クレートの src と e2e・完了 spec の文書について、ブランチの差分が 0 であることを git で確かめる（pathspec の実在も確かめる）。変更される `shiori_proxy.rs` の中の既存 `mod tests` は、ブロックの中身を分岐元の版と比べて一致を確かめる。新しい依存クレートと本番 env の追加が 0 であることも確かめる
@@ -82,7 +82,7 @@
   - _Requirements: 4.5, 6.2, 6.8, 6.10, 8.5, 9.1, 9.2_
   - _Depends: 4, 5.1, 5.2_
 
-- [ ] 6.2 実機確認（両方の枝と表せない字のフォルダ）
+- [x] 6.2 実機確認（両方の枝と表せない字のフォルダ）
   - 実機の直前に検体 3 体の入口を `dumpbin /exports` で取り直して表と一致を確かめる。x64 の areka を build し、i686 の助け手を PowerShell で build してその実行ファイルの隣へ複製し（workspace の x64 ビルドが同名の助け手を上書きする罠に注意）、有界 auto-exit で起動し、親の `RUST_LOG` を判定の分岐の水準まで開ける
   - `konnoyayame`・`emo2` → stderr に `SHIORI 初期化の入口: loadu` が 1 行・`入口: load` が 0 行・ゴーストが喋る。`R_POST_and_KOMAINU` → `入口: load` が 1 行・警告 0 行
   - タスク 1 と同じ既定コードページに無い字のフォルダで `konnoyayame` → `loadu`・喋る。同じ場所の里々 → `入口: load` 1 行＋警告 1 行

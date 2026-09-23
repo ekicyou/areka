@@ -333,3 +333,101 @@ $env:RUST_LOG = "info,kanade=trace,areka_kanade=trace,shiori-actor=trace,shiori-
 
 - design「実機」節の 1 は今日の壊れ方を「里々: 黙って辞書を見失う・警告 0 行／YAYA・pasta: `load` に化けたパスが渡る」と書く。実測は **その通り**で、YAYA と pasta の見え方は次のとおり分かれた: YAYA は `load` が真・`request` が全て失敗（`RequestFailed`→500→Fault）、pasta は `load` が偽（`LoadReturnedFalse`→`connect_failed`→Fault）。どちらもゴーストは喋らず、原因がパスの文字化けだと示す行は無い。
 - 要件・設計の改訂は不要（入口の表は一致・想定した壊れ方も一致）。
+
+## 12. 実装後の実機確認（2026-09-24・タスク 6.2）
+
+実装を入れた後のコード（HEAD `7c1b091d`）で、§11 と同じ配置・同じコマンドを取り直した記録。要件 7.1〜7.5。§11 のログと検体の複製は残したまま、別の場所（`C:\home\maz\tmp\loadu2\`）に新しく展開して走らせた。
+
+### 12.1 検体は展開し直した
+
+§11 の走行で、ASCII フォルダの複製には保存ファイル（`yaya_variable.cfg`・`satori_savedata.txt`）が書かれている。前回の保存が残ったまま比べると条件が揃わないため、`vendors/sample_ghost/<名>.nar` を新しい場所へ展開し直した。
+
+- 対照: `C:\home\maz\tmp\loadu2\ascii\<名>\`
+- 表せない字を含むフォルダ: `C:\home\maz\tmp\loadu2\ゴースト😀\<名>\`（§11 と同じ `😀`＝U+1F600。親フォルダ名が `loadu` → `loadu2` で 1 字長いだけ）
+- バルーン: §11 と同じ（`emo2` は同梱の `emo2-kakukaku`、他の 2 体は `vendors/sample_ghost/StayseeBalloon` を同じ親フォルダへ複製）
+- 走行前の確認: 両フォルダとも `yaya_variable.cfg`・`satori_savedata.txt` は **0 件**。
+
+### 12.2 入口の表の取り直し（要件 7.4）
+
+走行の直前に、展開し直した `ascii` 側の 3 本を VS2022 Professional 14.44.35207 の `Hostx64\x86\dumpbin.exe /exports` で取り直した。序数は `ordinal` 列（`hint` 列ではない）。
+
+| 検体 | DLL（大きさ） | 機械 | `loadu` | `load` | `unload` | `request` |
+|---|---|---|---|---|---|---|
+| `konnoyayame`（YAYA） | `yaya.dll`（909,312 B） | `14C`（x86） | あり（序数 4） | あり（序数 3） | あり（序数 13） | あり（序数 12） |
+| `R_POST_and_KOMAINU`（里々） | `satori.dll`（720,896 B） | `14C`（x86） | **なし** | あり（序数 2） | あり（序数 4） | あり（序数 3） |
+| `emo2`（pasta） | `pasta.dll`（3,832,832 B） | `14C`（x86） | あり（序数 137） | あり（序数 136） | あり（序数 152） | あり（序数 140） |
+
+§11.2 の表・Introduction の表と **一致**。要件 7.1〜7.2 の期待値は改めない。
+
+### 12.3 成果物と環境
+
+- x64: PowerShell で `cargo build -p areka` → `target\debug\areka.exe`。
+- i686: 続けて PowerShell で `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`（cargo は「最新」と判定＝今のソースから建てたもの）→ `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` を `target\debug\` へ複製（x64 を先に建ててから複製・§11.1 と同じ罠の回避）。
+- 複製先の確認: PE 見出し位置 240・署名 `PE`・機械 `0x14C`。SHA-256 は複製元と一致（`D15836D9…DAB0E0`）。§11 の助け手（`3A2E1131…B71D`）とは別物。
+- 今のソースから建てた証拠: 複製した exe のバイト列に固定語句 `SHIORI 初期化の入口` の UTF-8 が含まれる（§11 の時点のコードには無い語句）。exe の更新時刻（09-24 0:40:19）は `crates/shiori-host32-helper/src/shiori_proxy.rs` の最終更新（0:40:04）より後。その後の助け手への変更はテストファイル（`shiori_proxy_loadu_tests.rs`）と tasks.md だけ。
+- 既定コードページ: §11.1 と同じ 932。
+
+### 12.4 コマンド（要件 7.5）
+
+§11.3 のコマンドを置き場所だけ変えて使った。`RUST_LOG` も同じ（親の判定の分岐＝`shiori-actor` の `connect_failed`・`kanade` の `shiori_failed`／`boot_talk` が捨てられない水準）。助け手の `[helper]` 行は `eprintln!` で `RUST_LOG` に依らず出る。
+
+```powershell
+$env:AREKA_APP_SMOKE_EXIT_MS = "45000"
+$env:RUST_LOG = "info,kanade=trace,areka_kanade=trace,shiori-actor=trace,shiori-charset=debug,shiori_host32_host=trace,ghost-boot=debug"
+& target\debug\areka.exe <絶対ゴースト根> <絶対バルーン根> *> C:\home\maz\tmp\loadu2\logs\<ascii|emoji>-<名>.log
+```
+
+走らせた順: ascii の `konnoyayame`・`R_POST_and_KOMAINU`・`emo2` → 絵文字の同じ 3 体。6 走行とも終了コード 0・所要 45.2〜47.1 秒（有界 auto-exit まで走り切った）。
+
+### 12.5 数え方
+
+ANSI 色コードと行末の CR を落としてから、**固定語句**を数えた。フォルダ名に `loadu` の綴りがあるので素の `loadu` では数えない（§11.4 の注意）。
+
+- 入口 `loadu` の行: 正規表現 `\[helper\] SHIORI 初期化の入口: loadu$`
+- 入口 `load` の行: 正規表現 `\[helper\] SHIORI 初期化の入口: load$`（行末で止めるので `loadu` の行は数えない）
+- 警告の行: 固定文字列 `[helper] 警告: load_dir に既定コードページで表せない字があり別の字へ置き換えた（loadu が無いため load へ渡す）: `（`shiori_proxy.rs` の警告の固定語句の定義そのもの）
+- 他は固定文字列（`grep -F`）: `[helper]`・`LOAD 失敗`・`REQUEST 駆動失敗`・`connect_failed`・`event="shiori_failed"`・`cause=Fault`・`event="boot_talk"`・`steady_talk_done`・` ERROR `
+
+数え方の確かめ: 同じ数え方を §11 のログ（`C:\home\maz\tmp\loadu\logs\`）にかけ、§11.4 の表と同じ数（`[helper]` 行 0／3／0／0／0／1、`REQUEST 駆動失敗` は絵文字の YAYA だけ 3、`LOAD 失敗`・`connect_failed` は絵文字の pasta だけ 1 など）が出ることを確かめた。なお `[helper]` を正規表現のまま数えると角括弧が文字の集合として働き、パスの字に当たって 140 前後の数になる（最初に一度踏んだ・固定文字列に直した）。
+
+### 12.6 結果（6 走行）
+
+| 走行 | 入口 `loadu` の行 | 入口 `load` の行 | 警告の行 | `[helper]` 行（全部） | `LOAD 失敗` | `REQUEST 駆動失敗` | `connect_failed` | `shiori_failed` | `cause=Fault` | ` ERROR ` | `boot_talk` | `steady_talk_done` | 起動の挨拶の長さ | `username` |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ascii・`konnoyayame` | **1** | **0** | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 19.42 s | `no_content` |
+| ascii・`R_POST_and_KOMAINU` | **0** | **1** | **0** | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 6.36 s | `value` |
+| ascii・`emo2` | **1** | **0** | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 17.16 s | `no_content` |
+| 絵文字・`konnoyayame` | **1** | **0** | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | **19.39 s** | `no_content` |
+| 絵文字・`R_POST_and_KOMAINU` | **0** | **1** | **1** | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0.042 s | `no_content` |
+| 絵文字・`emo2` | **1** | **0** | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | **17.20 s** | `no_content` |
+
+- 6 走行とも `LOAD 失敗`・`REQUEST 駆動失敗`・`connect_failed`・`shiori_failed`・`cause=Fault`・` ERROR ` は **0 行**。
+- `[helper]` 行は入口名の行（と絵文字の里々の警告の行）だけ。それ以外の `[helper]` 行は 6 走行とも **0 行**。
+- 起動の挨拶の長さは `event="boot_talk"` の行から `steady_talk_done` の行までの時刻差。`username` は `shiori resource prefetch done id="username"` の `outcome`（YAYA と pasta は対照の ASCII でも `no_content`＝このゴーストが `username` を返さないだけで、§11 の対照と同じ）。
+- 終了時の保存ファイル: ascii の `konnoyayame\ghost\master\yaya_variable.cfg`・ascii の `R_POST_and_KOMAINU\ghost\master\satori_savedata.txt`・両フォルダの `emo2\ghost\master\profile\pasta\save\save.json` に加え、**絵文字フォルダの `konnoyayame\ghost\master\yaya_variable.cfg` も書かれた**（§11 では書かれなかった）。絵文字フォルダの `R_POST_and_KOMAINU\ghost\master\satori_savedata.txt` は書かれない（**0 件**・下記）。
+
+絵文字の里々の警告の行（全文）:
+
+```text
+[helper] 警告: load_dir に既定コードページで表せない字があり別の字へ置き換えた（loadu が無いため load へ渡す）: C:\home\maz\tmp\loadu2\ゴースト😀\R_POST_and_KOMAINU\ghost/master
+```
+
+- 警告には元のパス（化ける前）がそのまま出るので、利用者はどのフォルダ名が原因か読める。末尾の `ghost/master` の区切りが `/` なのは、助け手が受け取った `load_dir` の綴りそのまま（`crates/areka-parsers/src/package/resolve.rs` の `ghost/master` の定数をゴースト根へ継いだ綴り。本仕様の前からの綴りで、同じ解決を通る ASCII フォルダの里々は辞書を読めている＝`username` が `value`・保存ファイルあり）。
+
+### 12.7 前後の比較（§11 の赤 → 今）
+
+| 検体 × フォルダ | §11（実装前） | 今（実装後） | 判定 |
+|---|---|---|---|
+| `konnoyayame` × ASCII | 喋る・入口の行なし（語句が無かった） | 喋る（19.42 s）・`loadu` の行 1・`load` の行 0 | 要件 7.1 を満たす |
+| **`konnoyayame` × 絵文字** | **0.47 秒で Fault**（`REQUEST 駆動失敗` 3・`shiori_failed` 1・`boot_talk` 0・保存ファイルなし） | **喋る**（19.39 s＝ASCII と同じ長さ）・`loadu` の行 1・`load` の行 0・失敗の行 0・`yaya_variable.cfg` が書かれる | **直った**（要件 7.3） |
+| `R_POST_and_KOMAINU` × ASCII | 喋る（6.35 s）・警告なし | 喋る（6.36 s）・`load` の行 1・警告 0 | 要件 7.2 を満たす |
+| `R_POST_and_KOMAINU` × 絵文字 | 黙って辞書を見失う（挨拶 0.023 s・`username` が `no_content`・保存ファイルなし）・**原因を示す行 0** | 同じく辞書を見失う（挨拶 0.042 s・`no_content`・保存ファイルなし）が、**警告が 1 行**出て原因のフォルダ名が読める | 仕様どおり（要件 3.1・7.3＝警告して渡す。`satori.dll` に `loadu` が無いので辞書は救えない） |
+| `emo2` × ASCII | 喋る（17.20 s） | 喋る（17.16 s）・`loadu` の行 1・`load` の行 0 | 要件 7.1 を満たす |
+| **`emo2` × 絵文字** | **1.7 秒で Fault**（`LOAD 失敗` 1・`connect_failed` 1・`shiori_failed` 1・`boot_talk` 0） | **喋る**（17.20 s＝ASCII と同じ長さ）・`loadu` の行 1・`load` の行 0・失敗の行 0・`save.json` が書かれる | **直った**（pasta の `loadu` の枝） |
+
+- `loadu` を持つ 2 体（YAYA・pasta）は、表せない字のフォルダでも ASCII のフォルダと同じ長さの挨拶を喋り、保存ファイルも書いた＝辞書と保存先を見失っていない。
+- `loadu` を持たない里々は、壊れ方は変わらない（本仕様の範囲外＝SHIORI 側が `loadu` を持たない限り救えない）が、「ログ上は正常に見える」状態から「警告 1 行で原因が読める」状態になった。
+
+### 12.8 design.md の想定との差
+
+- 無し。入口の選択（YAYA・pasta＝`loadu`／里々＝`load`）、警告が `load` の枝で表せない字があるときだけ 1 行出ること、`loadu` の枝では警告が出ないこと（絵文字の YAYA・pasta で 0 行）、いずれも design の想定どおり。要件・設計の改訂は不要。
