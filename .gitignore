@@ -8,3 +8,7 @@ tmpclaude*
 # Python のバイトコードキャッシュ（tools/perf/ の判定スクリプトと fixture 生成器が作る）
 __pycache__/
 *.py[cod]
+# ゴーストとシェルの profile フォルダ（SHIORI とベースウェアが実行中に書く保存データ・キャッシュ・ログ）。
+# ukadoc「インストール」は配布物に含めないよう求めている。リポジトリ内の検体を直接起動すると作られる。
+**/ghost/*/profile/
+**/shell/*/profile/
