@@ -203,3 +203,78 @@ zip の中央ディレクトリの名前の長さ欄は **16 bit**（`container.
   - §6 の調査 3 件（`\?\` の自動付与・`FILE_SHARE_DELETE` で開いた子を持つフォルダの `rename`・`existing_target_ghost` への副作用は明記して受け入れる）。
 - **開発者と決めた**: §7-2 片付けの例外 → **7 日の期限付きで残す**（要件 2.7〜2.10）。開発者の条件は「手で消さない限り永久に残るのは不可・期限があって消えるなら可」。期限は展開の開始時の片付けでだけ判定する。設計へ持ち越すのは、失敗した時刻を何で持つか（作業フォルダの更新時刻・名前に刻む・印のファイル）と、テストで実際の日数を待たずに期限の内外を作る方法（時刻を渡す口か、フォルダの時刻を書き換えるか）。
 - **`ghost-install` へ申し送った**: 巻き戻せなかった元の木を利用者にどう見せるか（在りかを告知に載せるか・「7 日後に自動で消える」と伝えるか・連番付きの別ゴーストとして救い出す形を採るか）。
+
+## 10. 設計段階の調査と決定（2026-09-23・`design.md` の根拠）
+
+> 設計の入力は §1〜§9。ここでは §6 の調査 3 件の実測と、§9 で「設計へ持ち越す」とした 5 件の決定を記す。実測は本ブランチ（HEAD `50c3fef5`・rustc 1.98.1・Windows 11・`HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1`）で、使い捨ての小さな実行体（scratch）を 1 回走らせて取った。結論は `design.md` に再掲してあり、本節は背景。
+
+### 10.1 調査の結果（Research Log）
+
+#### 長い絶対パスに対する Rust 標準ライブラリの挙動（§6-1）
+
+- **Context**: §8 の根拠を「areka 自身が落ちる」と書くか「読む側が落ちる」と書くか。
+- **Sources**: 実測（UTF-16 で 431 単位の絶対パス）・Rust std の Windows 実装（長い絶対パスへ `\\?\` を自動で付ける）。
+- **Findings**: `create_dir_all`・`write`・`rename`（フォルダ）・`remove_dir_all` の 4 つが全て成功した。ただし本機は OS の設定 `LongPathsEnabled` も 1 なので、「設定が 0 の機体で std の自動付与だけで通るか」は本機では切り分けられない（std の実装上は通るはず）。
+- **Implications**: §8 の根拠は「areka 自身の書き込みは 260 を超えても通り得る。上限の意味は、長いパスに対応しない読む側（`LoadLibrary` 等）を守ることと、異常な名前を入口で見つけること」と書く。上限の値（200）の算術（要件 付録 B）は変えない。
+
+#### `FILE_SHARE_DELETE` で開いた子を持つフォルダの `rename`／削除（§6-2）
+
+- **Context**: 「確定は通るが巻き戻しは失敗」を `commit_all` 越しに 1 本の走行で作れるか（要件 2.6 のテストを公開の入口まで引き上げられるか）。
+- **Findings**: 子を `FILE_SHARE_READ` だけで開いた場合: 親フォルダの `rename` は os error 5・`remove_dir_all` は os error 32（既存のテストの前提どおり）。子を `FILE_SHARE_READ | FILE_SHARE_DELETE` で開いた場合: 親フォルダの `rename` は**やはり os error 5**・`remove_dir_all` は成功（子はその場で名前空間から消える）。
+- **Implications**: 確定の `rename` と巻き戻しの `rename` は同じ操作なので、テストが先に開いたハンドルはどちらも同じように塞ぐ。共有モードを変えても非対称は作れない。要件 2.6 が許す「確定の部品の単位」（`roll_back` を直接呼ぶ）で固定する（`design.md` 在りかの収集）。
+
+#### `is_valid_one_level_name` の長さが `existing_target_ghost` に及ぶ副作用（§6-3）
+
+- **Findings**: `plan.rs` の `existing_target_ghost` は同じ土台を使うので、200 単位を超える名前のゴーストは宛先に選べなくなる。そうしたゴーストは要件 1.5 を通らないと作れない。`TargetGhostMissing.target` は呼び手が渡す値で書庫由来ではない。
+- **Implications**: 明記して受け入れる（`plan.rs` は変更 0・`target` は有界にしない）。
+
+### 10.2 設計決定（Design Decisions）
+
+#### 決定 1: 拒否の語は新しい変種 `PathTooLong`（§7-4・V1）
+
+- **Alternatives**: V1 新しい語 `PathTooLong { index, length, limit, head }`／V2 `UnsafeWhy::TooLong` で `UnsafePath.name` をこの場合だけ切り詰める。
+- **Selected**: V1。宣言の位置は `NameUndecodable` の直後（検査の順序＝復号 → 長さ）。
+- **Rationale**: `UnsafePath.name` の契約（全体を載せる）を割らない。`kind()` が独立の語になり `ghost-install` がそのまま写せる。手書きの数（4 ファイル 7 か所）は同じ変更で改め、`ALL_KINDS` との突合が漏れを赤にする。
+- **Trade-offs**: 語彙が 14 になり、完了 spec の文書の「13」は動かさない（完了 spec は書き換えない）。
+
+#### 決定 2: 検査の位置は復号の直後（§7-6・P1）
+
+- **Selected**: `validate_one` の復号直後・NUL の前。測る対象は末尾の `/` を除いた名前。
+- **Rationale**: 長い名前を後段の `UnsafePath { name: 全体 }` へ一度も写さない（要件 1.4 の趣旨）。受理される名前では末尾の `/` を除いた形と正規化後の `path` が一致するので、1.1 の「正規化を終えた全体」と同じ長さになる。
+- **Follow-up**: `names_tests.rs` の順序のテストに「長さが全ての理由より先に勝つ」を 1 本。モジュール注釈の順序の列挙を改める。
+
+#### 決定 3: 在りかは `Vec<SurvivingTree { destination, path }>`（§7-3 の表し方）
+
+- **Alternatives**: `Vec<PathBuf>`（`old` だけ）／宛先との組。
+- **Selected**: 宛先との組を持つ小さな公開型。`unwind` が躓いた `Restore` ごとに `old.is_dir()` を見て集め、`Unwound { stuck, survivors }` → `roll_back` → `CommitError.survivors` → `place` → `NarError::Io.survivors`。
+- **Rationale**: 呼び手が「どのゴーストの元の木がどこに在るか」を対で利用者へ伝えられる。`Undo::Remove` の躓きは元の木が無いので集めない（要件 2.3）。`old` が実在しない躓きも集めない（要件 2.2 の「実在する」を型の値で守る。実運用で起きるのは外から消された場合だけ）。
+- **Trade-offs**: `CommitError` にも欄が増え、`install_commit_tests.rs` の既存 4 場合は `..` で受けているので追随不要。記録の欄は増やさない（在りかは `work` の配下＝要件 2.4）。
+
+#### 決定 4: `InvalidDirectoryName.value` は形を変えず中身を有界にする（§7-5）
+
+- **Selected**: `names.rs` の `bounded_value`（上限の内側なら全体・超えていれば先頭 32 単位＋測った長さ＋上限）を `check_one_level` と `parse_mask` の `value` に通す。
+- **Rationale**: 既存の理由の形（欄）を変えない（付録 A の「足すだけ」）。`InvalidMaskEntry` の警告も同じ助手を通し、記録に載る値をどの出口でも有界にする。
+- **Trade-offs**: `value` の意味が「値または有界の表示」になる。注釈で断り、`bounded_value(v) == v`（上限の内側）を不変条件として書いた。
+
+#### 決定 5: 保持の時刻は作業フォルダの更新時刻・テストは `now` を引数で渡す・自分の番地は避ける（§7-2 の細部）
+
+- **Alternatives**（時刻の根拠）: ⑴ 作業フォルダ `<pid>-<連番>/` の更新時刻／⑵ `old-<k>/` の更新時刻／⑶ 印のファイル／⑷ 名前への刻印。
+- **Selected**: ⑴。`old-<k>` は作業フォルダの直下へ `rename` で入るので、直下が最後に変わった時刻＝失敗した走行の最後の操作の時刻（失敗の直前）。⑵ は `rename` でフォルダ自身の更新時刻が変わらないため利用者のゴーストの最終更新時刻になり不適。⑶⑷ は失敗の経路に新しい書き込みを足す。
+- **Alternatives**（テストでの時刻）: 時刻を引数で渡す／フォルダの更新時刻を書き換える。
+- **Selected**: `WorkArea::create_at(root, now)`（本番の `create` は `SystemTime::now()` を渡す薄い皮）。更新時刻の書き換えは新しい依存かフォルダのハンドルの書き込み権が要るので採らない。
+- **Alternatives**（自分の番地が保持中）: ⒜ `StageError` で止める／⒝ 連番を進めて別の番地を取る。
+- **Selected**: ⒝ `next_address(shelf, now, serial)`。連番の供給源を閉包で受け、テストは 0 始まりの閉包で「`<pid>-0` が保持中なら `<pid>-1`」を決定論で判定する（`NEXT_SERIAL` はプロセス全体で共有され並走するテストが進めるので、値を予測するテストは書けない）。
+- **Rationale**: ⒜ はプロセス識別子の再利用と連番 0 の一致で、利用者が最長 7 日その根へ入れられなくなる。⒝ は数行で、保持されていない自分の番地が消せないときの既存の失敗はそのまま残る。
+- **Trade-offs**: 更新時刻は失敗の時刻の近似（同じ走行の中）。期限切れ後の削除が途中で失敗すると更新時刻が進み再び保持側に倒れ得るが、消せない物は元々 `residue` に載るので利用者の見える結果は同じ。
+
+### 10.3 統合の 3 つの見方（Synthesis）
+
+- **一般化**: 4 か所（書庫のエントリ名・`install.txt` の `directory` 系・mask の要素・宛先ゴーストの名前）に同じ 1 つの定数と同じ数え方が効く。定数と数え方と有界の表示を `names.rs` に集め、他は呼ぶだけ。
+- **作るか採るか**: 数え方は `str::encode_utf16().count()`（std）。時刻は `std::time`＋`Metadata::modified`。新しい crate 0。
+- **簡素化**: 新しいファイル 0・新しい記録の欄 0・失敗の経路での残り物の報告 0・「最新の 1 件だけ残す」規則 0・印のファイル 0。`Unwound` と `SurvivingTree` の 2 つの小さな型だけを足す。
+
+### 10.4 残るリスク（Risks & Mitigations）
+
+- 復号できない 65,535 バイトの名前は `NameUndecodable.raw_hex` が 131,070 文字を記録に載せる（付録 A により本仕様は触らない）→ `design.md` の Open Questions に記し、`ghost-install` の告知の設計時に再検討。
+- `doc/COMPAT_ARCHITECTURE.md` §8 の末尾は `shiori-loadu` と競合し得る → 後着が取り込む（要件どおり）。
+- 手書きの数（13→14）の直し漏れ → `ALL_KINDS` との完全一致の判定と `all_kinds_matches_every_variant_in_declaration_order` が赤にする。
