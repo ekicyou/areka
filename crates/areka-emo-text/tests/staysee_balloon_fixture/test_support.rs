@@ -1,12 +1,14 @@
 //! テーマ間で共有する小ヘルパと、保管フォルダの期待値。
 //!
-//! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**3.2**／**5.4**・設計 **C2**）。
+//! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**5.4**。根の取り方は
+//! `areka-P0-default-balloon-nar-fold` 要件 **4.1**〜**4.3**）。
 //!
 //! 複数のテーマが同じ値・同じ読み方を使う項目はここへ**集約**する（複製すると、片方だけ
 //! 直したときに本文の同一性が黙って壊れる）。テーマ 1 つでしか使わない項目はそのテーマの
 //! ファイルに置く。
 
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use areka_emo_present::balloon::{ResolvedFace, resolve_balloon_faces};
 use areka_emo_text::actor::ResolvedBalloonText;
@@ -14,14 +16,18 @@ use areka_emo_text::draw::DWriteMetrics;
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
+use sample_ghost_kit::SampleRoot;
 use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
 use wintf::com::dwrite::dwrite_create_factory;
 
-/// [`crate::STAYSEE_BALLOON_DIR`] を実体化する。
-///
-/// 検体パスの綴りを持つのは親ファイルの定数だけなので、ここでは `super::` で引くに留める。
+/// 既定バルーンの検体。プロセス寿命で保持する（`SampleRoot` は破棄で複製の木を消すため）。
+static STAYSEE: LazyLock<SampleRoot> = LazyLock::new(|| {
+    SampleRoot::acquire("StayseeBalloon").expect("StayseeBalloon は登記済みの検体")
+});
+
+/// 既定バルーンのフォルダ `<根>/balloon/StayseeBalloon/`。
 pub(crate) fn staysee_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(super::STAYSEE_BALLOON_DIR)
+    STAYSEE.folder().to_path_buf()
 }
 
 // ── 保管フォルダの期待値（要件 2.2・5.4）──────────────────────────────────────
