@@ -47,8 +47,12 @@ fn wiring_with_stop(rx: Option<Receiver<KanadeStopped>>) -> Emo2Wiring {
 }
 
 /// `GhostWindowMarker` 窓を `count` 枚並べた素の World を組む（無関係 entity を 1 つ混ぜる）。
+///
+/// 終了の受け口（`wintf::AppExit`）も挿す——本番では `WinApp` が必ず挿すので、無ければ
+/// 統合操作は配線の誤りとして `error!` を残す。
 fn world_with_ghost_windows(count: usize) -> World {
     let mut world = World::new();
+    world.insert_non_send(wintf::AppExit::new());
     for _ in 0..count {
         world.spawn(GhostWindowMarker);
     }
@@ -62,6 +66,14 @@ fn ghost_count(world: &mut World) -> usize {
         .query_filtered::<Entity, With<GhostWindowMarker>>()
         .iter(world)
         .count()
+}
+
+/// 終了の受け口が「指示済み」になっているか。
+fn exit_requested(world: &World) -> bool {
+    world
+        .get_non_send::<wintf::AppExit>()
+        .expect("world_with_ghost_windows が受け口を挿している")
+        .is_requested()
 }
 
 /// 停止通知 1 件で全ゴースト窓が閉じ、`info!(event="ghost_quit")` が 1 行残る（R15.4）。
@@ -84,6 +96,10 @@ fn one_notification_closes_every_ghost_window_and_logs_once() {
 
     assert!(consumed, "通知を消化したフレームは以後の相を飛ばす");
     assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓が閉じる（R15.4）");
+    assert!(
+        exit_requested(&world),
+        "窓を閉じた上で終了を指示する（要件 3.1）"
+    );
     let quit_lines: Vec<&String> = logs
         .iter()
         .filter(|l| l.contains("event=\"ghost_quit\"") || l.contains("event=ghost_quit"))
@@ -195,6 +211,10 @@ fn a_notification_with_no_windows_left_is_cut_off_as_a_normal_case() {
     });
 
     assert!(consumed, "通知は消化する（窓の有無に依らない）");
+    assert!(
+        exit_requested(&world),
+        "閉じる窓が 0 でも終了を指示する（要件 3.2）"
+    );
     assert_eq!(
         logs.iter()
             .filter(|l| l.contains("ghost_quit_no_windows"))

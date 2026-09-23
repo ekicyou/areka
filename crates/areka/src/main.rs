@@ -6,15 +6,15 @@
 //! この骨格は「アプリ起動の器」に徹する:
 //! - 構造化ロギング初期化（RUST_LOG フォールバック）・パニックハンドラ設定
 //! - 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（マウントはしない）
-//! - UI ランタイム起動（`WinApp::new()`）・SHIORI 実走デモの env-gate 呼び口
+//! - UI ランタイム起動（`WinApp::with_exit_policy(ExitPolicy::Explicit)`）・SHIORI 実走デモの env-gate 呼び口
 //! - 起動窓シーム（`open_startup_window`・window-placement task 6.2 で本物のゴースト窓生成へ
 //!   差し替え済み。準備失敗時は検証用ダミー窓へフォールバック）
-//! - `main` 自身が所有するメッセージループ（`app.run()`）と起動窓 close での正常終了
+//! - `main` 自身が所有するメッセージループ（`app.run()`）と終了の指示（`app_exit::quit_app`）での正常終了
 //!
 //! 座標・配置ロジックは `placement` モジュール（areka-P0-window-placement）が所有し、
 //! 骨格自身は座標を一切持たない。旧モック UI は `examples/mock-shell.rs` へ退避済み。
 //!
-//! `main` は `open_startup_window`／ダミー窓／smoke ゲートを不変に保ったまま、`WinApp::new()`
+//! `main` は `open_startup_window`／ダミー窓／smoke ゲートを不変に保ったまま、`WinApp` 構築
 //! ／`open_startup_window` の後で `emo2_boot::wire_emo2_boot` を呼び、その成否で実 sink boot
 //! （`wired=true`）／既存 `LogSink`×2 フォールバック boot（`wired=false`）を呼び分ける（task 5.2・
 //! design.md「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）。`run()` 復帰後は
@@ -70,6 +70,10 @@ mod emo2_boot;
 /// 薄い配線層。現状は `throttle`（送出間引きの純粋判定・task 2.4）のみ。ポインタハンドラ結線と
 /// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
 mod input_events;
+
+/// 終了の統合操作（areka-P0-app-lifetime-separation）。全窓を閉じてから終了を指示する
+/// `quit_app` と出所の語彙 `ExitOrigin` を持つ。
+mod app_exit;
 mod menu;
 mod readme;
 
@@ -182,10 +186,11 @@ fn main() -> Result<()> {
     // `LogSink` フォールバック boot 経路の双方が使うため main で保持する・DD-7）。
     let helper_exe = default_helper_exe_path();
 
-    // UI ランタイム起動（COM/DPI 初期化・World 生成・shutdown hook 結線）（R2.4）。
-    // DD-7/R7.1: 実 sink 結線（`wire_emo2_boot`）は UI 基盤の後に行うため、`WinApp::new()` を
+    // UI ランタイム起動（COM/DPI 初期化・World 生成・終了の受け口 `AppExit` の据え付け）（R2.4）。
+    // DD-7/R7.1: 実 sink 結線（`wire_emo2_boot`）は UI 基盤の後に行うため、`WinApp` 構築を
     // すべての boot より前へ移動した（旧・task 3.3 の boot 先行順序を再編）。
-    let app = WinApp::new()?;
+    // `Explicit`: 窓 0 では終了せず、`quit_app` の終了の指示でだけ `run()` が戻る（要件 1.1）。
+    let app = WinApp::with_exit_policy(ExitPolicy::Explicit)?;
 
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
     tick_gate_config::apply_from_env(&mut app.world().borrow_mut());
@@ -319,8 +324,8 @@ fn main() -> Result<()> {
         (ghost, None, None)
     };
 
-    // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。ダミー窓／ゴースト窓が
-    // 閉じられると `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する（DD7 改定）。
+    // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。窓が 0 になっても戻らず、
+    // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が `Ok` を返す。
     app.run()?;
 
     // 終了順序（task 9.5・design「結線・資産・実機経路（main.rs）」）:
@@ -397,7 +402,7 @@ fn main() -> Result<()> {
 ///
 /// UI ランタイム起動と正常終了の観測目的に限る最小の窓を spawn する。窓が存在するために
 /// 必要な最小コンポーネント（`Window`・`WindowStyle`・可視/クリック可能な最小 `BoxStyle`
-/// サイズ・ダブルクリック despawn の observer）だけを与え、`DummyWindowMarker` で識別する。
+/// サイズ・ダブルクリックで `quit_app` を呼ぶ observer）だけを与え、`DummyWindowMarker` で識別する。
 ///
 /// **配置・座標・DPI を一切主張しない**: `WindowPos` の位置（`position`）を設定せず、座標
 /// ロジックも持たない（既定位置で開く）。placement は window-placement の領分であり、ダミー窓は
@@ -426,6 +431,8 @@ fn spawn_dummy_window(world: &mut World) -> Entity {
             },
             // ダブルクリックで自身を閉じられるようにする。
             OnPointerPressed(on_dummy_pressed),
+            // OS の閉鎖要求（Alt＋F4・taskkill）も同じく全窓を閉じて終了を指示する（裁定 3）。
+            wintf::ecs::window::OnCloseRequest(app_exit::on_dummy_os_close),
         ))
         .id();
 
@@ -462,14 +469,12 @@ fn spawn_dummy_window(world: &mut World) -> Entity {
     dummy
 }
 
-/// OnPointerPressed ハンドラ: ダブルクリック（左）でダミー窓を despawn する（task 2.2）。
+/// OnPointerPressed ハンドラ: ダブルクリック（左）で全窓を閉じて終了を指示する（task 2.2）。
 ///
-/// `Phase::Bubble` で `DoubleClick::Left` を検出し、`DummyWindowMarker` を持つ全 entity を
-/// despawn して true を返す。それ以外は false。`Phase::Tunnel` は無視する。
-/// despawn → `on_window_handle_remove`（wintf
-/// `crates/wintf/src/ecs/window/window_handle.rs`）→ `PostMessageW(WM_CLOSE)` → `DestroyWindow`
-/// → `WindowRegistry` 空遷移 → `run()` 復帰、という wintf の作法に委ねる（自前 wndproc も
-/// 手書き `PostMessageW(WM_CLOSE)` も書かない）。
+/// `Phase::Bubble` で `DoubleClick::Left` を検出し、[`app_exit::quit_app`]
+/// （`ExitOrigin::DummyWindow`）へ渡して true を返す。それ以外は false。`Phase::Tunnel` は無視する。
+/// 窓の破棄は wintf の作法（despawn → `WM_CLOSE` → `DestroyWindow`）に委ね、`run()` は
+/// 窓の数でなく終了の指示で戻る（自前 wndproc も手書き `PostMessageW(WM_CLOSE)` も書かない）。
 fn on_dummy_pressed(
     world: &mut World,
     _sender: Entity,
@@ -481,17 +486,7 @@ fn on_dummy_pressed(
         Phase::Bubble(state) => {
             if state.double_click == DoubleClick::Left {
                 tracing::info!("ダミー窓ダブルクリック検出 — ダミー窓を閉じます");
-
-                // ダミー窓 entity を収集して despawn（on_window_handle_remove → WM_CLOSE →
-                // DestroyWindow → WindowRegistry 空遷移 → run() 復帰）。
-                let dummies: Vec<Entity> = world
-                    .query_filtered::<Entity, With<DummyWindowMarker>>()
-                    .iter(world)
-                    .collect();
-                for e in dummies {
-                    world.despawn(e);
-                }
-
+                app_exit::quit_app(world, app_exit::ExitOrigin::DummyWindow);
                 return true;
             }
             false
@@ -611,17 +606,18 @@ struct StartupDescriptValues {
 ///
 /// - 成功時: `spawn_ghost_windows` を既存 ECS コマンド経路（`EcsWorld::spawn` の async
 ///   タスク → `CommandSender` → Input スケジュールで World 適用＝ダミー窓と同経路）で
-///   実行し、`register_ghost_windows_click_through` を `FrameFinalize` schedule へ結線する
-///   （emo-present donor と同じ結線位置・task 5.2）。
+///   実行し、`register_ghost_windows_click_through` と `app_exit::attach_os_close_request`
+///   を同じ `FrameFinalize` schedule へ結線する（emo-present donor と同じ結線位置・task 5.2）。
 /// - 失敗時（fixture 不在等）: `MountError::StartPointMissing` 系は `warn!`・他は `error!`
 ///   の上で `spawn_dummy_window` へフォールバックする（DD14・骨格の boot→loop→exit と
 ///   smoke 完走を維持。`spawn_dummy_window`／`DummyWindowMarker` は退役せず残置）。
-/// - **暫定の終了手段**（design「main.rs seam」note）: emo2-boot 装着前の本物ゴースト窓は
-///   描画内容なし＝WUC/DComp GPU 合成で不可視・ヒットなしのため、対話的 close 不能が
-///   正しい状態。終了は smoke ゲート（`AREKA_APP_SMOKE_EXIT_MS`）または Ctrl+C。
+/// - 終了: ゴースト窓はメニューの「終了」も OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの
+///   終了」）も同じ終了要求を kanade へ送り（`app_exit::on_ghost_os_close`・窓はその場で消さない）、
+///   終了の握手の完了後に `quit_app` → `run()` 復帰となる。smoke ゲート
+///   （`AREKA_APP_SMOKE_EXIT_MS`）は別の自動終了の経路。
 ///
 /// 準備（`prepare_ghost_windows`）は同期実行し、I/O はここで完結・Send な値のみを ECS
-/// コマンドへ運ぶ。呼び出しスレッドは `WinApp::new()` 済みの MTA UI スレッド＝COM
+/// コマンドへ運ぶ。呼び出しスレッドは `WinApp` 構築済みの MTA UI スレッド＝COM
 /// 初期化済み（measure の WIC 前提を満たす）。署名は `(&WinApp, &ConfigInputs)`
 /// （design の Revalidation Trigger として本タスクで変更）。
 ///
@@ -650,6 +646,10 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
                 FrameFinalize,
                 placement::spawn::register_ghost_windows_click_through,
             );
+            // OS の閉鎖要求の受け手を同じ捉え方・同じ確定段で差す（裁定 3・placement の外）。
+            app.world()
+                .borrow_mut()
+                .add_systems(FrameFinalize, app_exit::attach_os_close_request);
 
             // ゴースト窓ペアの重なり管理を同じ確定段へ結線（areka-P0-ghost-window-zorder
             // task 3.2・要件 1.1/5.6/6.1）。実行時ストラテジ（既定＝案 A・補助浮上なし）の
@@ -761,7 +761,7 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
     // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
     // `wintf::executor::spawn_local`＋world `Weak` 作法で **一発の** async タスクを投入する
     // （ECS システムではない）。env 未設定・不正なら発火せず、ダミー窓は利用者の
-    // ダブルクリック despawn（task 2.2 経路）を待ち続ける。
+    // ダブルクリック（`quit_app`）か OS の閉鎖要求を待ち続ける。
     if let Some(ms) = smoke_exit_ms() {
         // WinApp が strong 所有者を保持するため、この Weak は shutdown まで upgrade 可能。
         let world_weak = std::rc::Rc::downgrade(&app.world());
@@ -778,11 +778,11 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
                 tracing::debug!("smoke 自動 close: world 既に drop 済み（shutdown）— no-op");
                 return;
             };
-            // await を跨いで borrow を保持しない TIGHT スコープで despawn する。
+            // await を跨いで borrow を保持しない TIGHT スコープで全窓を閉じ、終了を指示する。
             {
                 let mut ecs = world.borrow_mut();
                 let w = ecs.world_mut();
-                let count = despawn_smoke_targets(w);
+                let count = app_exit::quit_app(w, app_exit::ExitOrigin::Smoke);
                 tracing::info!(
                     count,
                     "smoke 自動 close: 起動窓（ダミー窓／ゴースト窓）を despawn しました"
@@ -792,55 +792,6 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
     }
 
     startup
-}
-
-/// smoke 自動 close の despawn 標的を despawn する（task 6.2 で
-/// `Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>` へ拡張・design「main.rs seam」）。
-///
-/// ダミー窓（フォールバック経路）と本物のゴースト窓（placement 経路）のどちらの構成でも
-/// CI smoke（`AREKA_APP_SMOKE_EXIT_MS`）が完走できるよう、両 marker を単一 query で狙う。
-/// 標的として拾った件数を返す（標的なしは 0・no-op 安全）。bare `World` だけで動き headless
-/// 単体テスト可能（`seam_tests`）。
-///
-/// # 存在確認（task 7.3・Req 6.2/6.3・design「変更ファイル > main.rs」）
-///
-/// query で集めた標的は**ループ実行中に**破棄済みへ変わり得る——bevy の連鎖 despawn
-/// （`Children` は `LINKED_SPAWN` の関係対象＝親の despawn が子孫へ再帰する）を先行の
-/// 1 体が引き起こせば、後続のイテレーションは既に無効な `Entity` を叩く。`World::despawn`
-/// はその場合 `log` の `warn!`（`Could not despawn entity: …`）を出す（`bevy_ecs-0.18.1`
-/// `src/world/mod.rs:1462-1469`）。**これは終了処理の正常終了系**であり、警告として残すと
-/// 良性ノイズが本物の異常を埋める（Req 6.2）。
-///
-/// task 3.2 が消費側 4 入口（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・
-/// `frame.rs` の `resnap_with`／`reconcile_reported_sizes`）へ敷いたのと**同じ区別**を
-/// despawn の**呼出点そのもの**へも敷く: entity 不在＝正常終了系ゆえ
-/// [`DESPAWNED_SKIP_TAG`](placement::diag::DESPAWNED_SKIP_TAG) の `debug!` で当該標的を
-/// 打ち切り、**残りの標的は処理し切る**（Req 6.3）。
-///
-/// 戻り値の意味は「標的として拾った件数」のまま変えない——連鎖で消えた標的も掃除後には
-/// 存在しないため、`smoke 自動 close` の `count=` が示す「消えた起動窓の数」は不変である。
-fn despawn_smoke_targets(world: &mut World) -> usize {
-    let targets: Vec<Entity> = world
-        .query_filtered::<Entity, Or<(
-            With<DummyWindowMarker>,
-            With<placement::spawn::GhostWindowMarker>,
-        )>>()
-        .iter(world)
-        .collect();
-    let count = targets.len();
-    for e in targets {
-        if world.get_entity(e).is_err() {
-            tracing::debug!(
-                entity = ?e,
-                "{} smoke 自動 close: 標的 entity は既に破棄済み（despawn・連鎖破棄）→ \
-                 正常系として打ち切り（残りの標的は継続）",
-                placement::diag::DESPAWNED_SKIP_TAG
-            );
-            continue;
-        }
-        world.despawn(e);
-    }
-    count
 }
 
 /// `PlacementError` を「起点不在（良性・`warn!` どまり）」と「それ以外（予期しない・`error!`）」
@@ -900,8 +851,8 @@ mod startup_window_tests;
 ///
 /// シーム結線そのもの（`open_startup_window`）は生きた `WinApp` を要するため、
 /// TDD は headless で駆動可能な決定論部品——フォールバック分類
-/// `is_benign_placement_error` と smoke 自動 close の despawn 標的
-/// `despawn_smoke_targets`——で回す。結線の実証は実プロセス smoke
+/// `is_benign_placement_error`——で回す（全窓破棄の標的のテストは `app_exit_tests.rs`
+/// へ移した）。結線の実証は実プロセス smoke
 /// （`tests/smoke_boot_loop_exit.rs`・両方向）が担う。
 #[cfg(test)]
 #[path = "main_seam_tests.rs"]

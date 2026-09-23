@@ -122,6 +122,19 @@ unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
 // ============================================================================
+// OnCloseRequest
+// ============================================================================
+
+/// OS の閉鎖要求（`WM_CLOSE`＝Alt＋F4・`taskkill`（`/F` なし）・「タスクの終了」）が来たとき、
+/// 窓を消す代わりに呼ぶ関数。付けなければ従来どおり窓が消える（despawn）。
+///
+/// `OnDragEnd` と同型の「窓に関数を差す部品」だが、閉鎖要求はバブリングしないので
+/// `Phase` も `sender` も持たない最小の署名。関数は World 借用中に呼ばれる。
+#[derive(Component, Clone, Copy)]
+#[component(storage = "SparseSet")]
+pub struct OnCloseRequest(pub fn(world: &mut World, entity: Entity));
+
+// ============================================================================
 // WindowStyle
 // ============================================================================
 

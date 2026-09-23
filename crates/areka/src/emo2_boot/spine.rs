@@ -479,6 +479,9 @@ fn make_world_with_gpu() -> World {
     let mut world = World::new();
     world.insert_resource(core);
     world.insert_resource(wuc);
+    // 終了系列の完了は `quit_app` を通る。本番の `WinApp` と同じく受け口を据える
+    // （無いと `app_exit_unwired` の error を残す）。
+    world.insert_non_send(wintf::AppExit::new());
     world
 }
 

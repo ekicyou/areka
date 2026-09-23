@@ -85,7 +85,7 @@ fn t_v1_despawn_balloon_window_removes_same_scope_entry() {
 
 /// T-V1: 対の**後追い** despawn は no-op（panic せず・他 scope を巻き込まない・6.1）。
 ///
-/// 終了処理（`despawn_smoke_targets`）は同一 World 変異内で対を一括 despawn する＝
+/// 終了処理（`app_exit::quit_app`）は同一 World 変異内で対を一括 despawn する＝
 /// 2 個目の hook は必ず「既に除去済みの scope」を引く。ここが panic すると終了経路が
 /// 落ちるため、良性であることを構造で固定する。
 #[test]
