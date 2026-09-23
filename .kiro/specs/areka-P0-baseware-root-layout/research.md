@@ -196,3 +196,102 @@ Research Needed（設計で確定する）:
 
 - ukadoc: 「全体の構成」（`manual_directory`）・`descript_shell` `menu,hidden`・`descript_balloon` `type`／`id`・`descript_install` `*.directory`（要件本文の表と同じ）。
 - 記憶: areka-log-first-no-silent-failure（`error!`＋`Err`）・obsolete-vs-broken-test-policy（陳腐化テストは除く・壊れたら更新）・test-only-decision-branches-not-proven-wiring（配線の再テストをしない）・areka-runtime-env-naming（`AREKA_` 名前空間）・areka-real-machine-signoff-bounded-auto-exit・cite-by-what-it-is-not-by-line-number。
+
+---
+
+# 設計フェーズの記録（kiro-spec-design・2026-09-24）
+
+> §1〜§7 はギャップ分析（2026-09-23）の記録としてそのまま残す。以下は設計生成で新たに確かめたことと、§5・§6.1 で設計へ送られた議題の決定。決定の本文は design.md「設計判断（確定）」が正本で、ここには根拠と選ばなかった案を置く。
+
+## 8. Summary
+
+- **Feature**: `areka-P0-baseware-root-layout`
+- **Discovery Scope**: Extension（既存システムの拡張・light discovery）。外部ライブラリの新規採用は 0 なので WebSearch は行っていない。
+- **Key Findings**:
+  - `WinApp`（`crates/wintf/src/runtime/mod.rs`）は `Drop` を実装しておらず、COM は `CoUninitialize` しない方針（同ファイルの P30 の NOTE）。`WinApp` 構築後に `main` が `Err` を返す経路は今日も `app.run()?` と終了統括の失敗で在る → R3 は「安全」で確定。
+  - sylphya のアクター（`crates/areka-sylphya/src/actor.rs` の `fn run_actor`）は `rx.recv()` の FIFO で 1 件ずつ処理し、`Effect::Stop`（`Close`）に達した時点で `return` する。`GhostRuntime::shutdown`（`runtime.rs`）の手順 10 は `barrier()` → `close()` → join。boot 直後に投函した `PersistPut` は `Close` より前に必ず処理される → R1 は「追加の barrier 不要」で確定。
+  - `sample_path_guard_test.rs`（`crates/log-capture-kit/tests/`）の走査語 ⑵ は `vendors/sample_ghost/<検体名>` の綴り、⑷ はゴースト検体の `balloons` にバルーン名を継ぎ足す形だけ。本番の定数 `"StayseeBalloon"` も `join("StayseeBalloon")` もどちらにも当たらず、`StayseeBalloon` はバルーン種別の検体で `balloons` を持たない → R8 は「着地順に依らず緑」で確定。
+  - 台帳 `doc/ukadoc-coverage/ledger/assets.toml` では シェルの `name` が既に `implemented`（owner `areka-P0-ghost-setup`）、ゴーストの `name`・`readme` も実装済み。本仕様が動かすのは未実装の欄だけ（R7）。
+  - `crates/areka` の bin テストで `log_capture_kit` を直接使っている前例は `readme_tests.rs`（`alert_tests.rs` はこれに倣う）。
+
+## 9. Research Log（設計で引き直した点）
+
+### `AREKA_ROOT` の読み口と `current_exe()` 失敗
+- **Context**: 要件 1.4 が `"."` への寛容フォールバックを禁じる一方、`default_app_profile_dir`／`default_helper_exe_path` は今日も `"."` へ倒れる（要件 1.7 で変えない）。
+- **Findings**: 根だけを厳格にすればよい。`resolve_root_from(env: Option<PathBuf>, exe: Option<PathBuf>)` の純粋関数にすると 5 通りが env を書かずに踏める（既存 7 か所の「`xxx_from` ＋ `xxx()`」の型）。
+- **Implications**: `boot_config.rs` に `RootError`／`RootSource` を置き、`main_config_input_tests.rs` を置き換える。
+
+### `install.txt` の読み手（R4）
+- **Sources Consulted**: `crates/areka-nar/src/manifest.rs` の `parse_manifest`（`pub(crate)`・`name`／`directory` 必須で `RefuseReason`）・`lowercased_keys`。
+- **Findings**: `areka-nar` は `areka`／`areka-ghost` の本番依存ではない。`parse_manifest` は展開時の受理判定であって、展開済みゴーストの `install.txt` を読む用途には厳しすぎる（要件 5.7 の「無ければ `warn!` で次へ」と合わない）。
+- **Implications**: `catalog::companion_balloon` が `decode`＋`parse_kv`＋鍵の小文字化＋`balloon.directory` の 1 鍵取り出しを自前で持つ（数行）。番号付きは読まない（Out of scope のとおり）。
+
+### 鍵の大小と値の比較（R5）
+- **Findings**: `parse_kv` は鍵の大小を保持・値は trim。`areka-nar` は鍵を `to_ascii_lowercase()`。ukadoc の綴りは小文字。
+- **Implications**: 列挙は鍵を ASCII 小文字化して引き、`menu`／`type` の値は trim＋ASCII 小文字化で `hidden`／`balloon` と比べる。素性の値は無加工。
+
+### 並びと非 UTF-8 のフォルダ名（R6）
+- **Findings**: 記憶の値は `String`（`PersistKey` の値ドメインは文字列）。`OsString` の並びを採ると記憶へ書けない名前が列挙に載る。
+- **Implications**: `Identity.folder: String`・`String::cmp` のバイト順。非 UTF-8 名は `warn!` で除外（argv なら起動できる）。
+
+### `open_startup_window` の失敗で `Err` を返す（R3）
+- **Findings**: `WinApp` に `Drop` 無し・COM は初期化したまま（P30）・`perf_report` の最後の 1 枚は既存の早期 `Err` 経路でも出ない（`main.rs` の ④ の doc に既述）。`open_startup_window` の `Err` アームは system の登録（`add_systems`）より前に抜けるので登録の取り消しは要らない。
+- **Implications**: `open_startup_window` は `Result<StartupDescriptValues, PlacementError>` を返し、smoke の自動終了の投入は成功時だけ。
+
+### `MessageBoxW` の呼び出し
+- **Sources Consulted**: `windows` 0.62.2 の `MessageBoxW(hwnd: Option<HWND>, lptext: P1, lpcaption: P2, utype)`。`main.rs` の `use windows::Win32::UI::WindowsAndMessaging::*;`。`readme.rs` の `ShellExecuteW`（UTF-16 の終端 0 付き `Vec<u16>` → `PCWSTR`・`unsafe` を 1 関数に閉じる作法）。
+- **Implications**: `alert.rs` は `readme.rs` と同じ作法で `unsafe` を `raise` の 1 か所に閉じる。新規依存 0・feature 追加 0。
+
+## 10. Architecture Pattern Evaluation（設計で確定）
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| A 既存の拡張だけ | `resolve_config_inputs` を広げる | 差分最小 | `boot_config.rs` に根・解決順・告知が同居し 300 行超・13 分岐が 1 関数 | 不採用 |
+| B 新規コンポーネント | `catalog`／`boot_resolve`／`alert` を新ファイルへ | 分岐ごとにテストが独立 | 新規 3〜4 ファイル | — |
+| **C ハイブリッド（採用）** | B の分割＋根の読み口は `boot_config.rs` の `default_app_profile_dir` の隣 | 触る既存ファイルが最小・`runtime.rs`／`menu/`／`resolve` の呼び手に触らない | 配線（`main`）が最後に集中 | 段取りは design.md「実装の段取り」 |
+
+## 11. Design Decisions（design.md「設計判断（確定）」の根拠）
+
+### Decision: 列挙と記憶の読みは argv が無い側でだけ行う
+- **Context**: 要件 4.1・5.1「記憶と列挙を見ない」。列挙は fs を読み `warn!` を出しうる。
+- **Alternatives Considered**: 1. argv の有無によらず列挙して判断で無視する — 実機の argv 起動の記録に根の下の他ゴーストの `warn!` が混ざる。2. **argv があれば列挙も記憶も読まない**。
+- **Selected Approach**: 2。告知の「置くべき場所」は根から組めるので列挙は要らない。argv のゴーストは `is_ghost_dir` の 1 検査（要件 4.8）。
+- **Trade-offs**: `resolve_*` の入力に空の `listed` を渡す形になる（Preconditions に明記）。
+- **Follow-up**: smoke ① の記録に `catalog_*` の `warn!` が 0 件であることを確かめる。
+
+### Decision: 無作為の添字を注入する
+- **Context**: 要件 4.9・5.10「純粋な判断」と 4.5・5.6 の無作為。
+- **Alternatives Considered**: 1. `rand` crate（外部依存が増える・要件 7.7 違反）。2. `std::hash::RandomState` で本番の添字を作り、判断関数には `FnOnce(usize) -> usize` を注入。
+- **Selected Approach**: 2。テストは固定添字で「選ばれたものが列挙に含まれる」を確かめる。
+- **Trade-offs**: 乱数の質は問わない（初回起動の 1 回だけ・以後は記憶で固定）。
+
+### Decision: 抑止の環境変数は `AREKA_NO_ALERT`（設定されていれば抑える・`0` は出す）
+- **Context**: 要件 6.5「`AREKA_` 名前空間で 1 つ」・裁定 2「自動終了とは別の関心」。
+- **Alternatives Considered**: `AREKA_ALERT=0`（既定 ON を 0 で切る・二重否定になりにくいが「設定されている」の読みから遠い）／`AREKA_QUIET=1`（ログまで抑えるように読める）／`AREKA_NO_ALERT`。
+- **Selected Approach**: `AREKA_NO_ALERT`。値の判定は `suppressed_from(Option<&str>)` の純粋関数（None／空／空白／`0` → 出す）。
+- **Follow-up**: 配布物の起動には設定しない旨を実機手順に明記（release は `windows_subsystem = "windows"` でコンソールが無い）。
+
+### Decision: `is_benign_placement_error` は退役・`is_benign_boot_error` は doc 書換のみ（#8）
+- **Context**: 要件 6.4 で準備失敗は全て終了。`is_benign_boot_error` は `wire_emo2_boot` のフォールバック（範囲外）が使う。
+- **Selected Approach**: 前者は関数と `main_seam_tests.rs` の 2 本を消す。後者は「起動解決が起点の実在を確かめてから boot するので、ここでの `StartPointMissing` は解決後の消失に限られる」へ根拠を書き換える。
+- **Trade-offs**: `main_ghost_wiring_tests.rs` の `is_benign_boot_error` のテストはそのまま残る（分類は変えない）。
+
+### Decision: `persist` のテストは先に移設だけ（#14）
+- **Selected Approach**: `persist/persist_tests.rs`（`structure.md` の導出規則: `mod.rs` の stem は親ディレクトリ名）へ本体を逐語で移し、`#[cfg(test)] #[path = "persist_tests.rs"] mod tests;` で接続。挙動 0 変更のタスクとして独立にレビューする。その後の族の追加で往復テストを足す。
+
+### Decision: `catalog` の型は `areka-ghost` の公開型・判断関数は名前だけを受ける（#13）
+- **Selected Approach**: `Identity`（7 項目・それ以外を足さない）と `GhostEntry`／`ShellEntry`／`BalloonEntry` を `areka_ghost::catalog` で公開。bin の `resolve_ghost`／`resolve_balloon` は `&[String]` を受ける。
+- **Rationale**: 後続の切替 2 spec と `property-catalog-lists` が同じ型を引ける。判断は名前だけで決まるので供給源が変わっても判断は変わらない。
+
+## 12. Synthesis（generalization／build-vs-adopt／simplification）
+
+- **Generalization**: ゴーストとバルーンの解決順は「argv → 記憶 → （同梱）→ 唯一 → 既定 → 無作為 → 0」の同じ骨格だが、段の数と入力が違う（バルーンだけ同梱がある）ので **1 つの汎用関数にはしない**。共通なのは `pick` の注入と「指す先が無ければ `warn!` で次へ」の作法だけで、それは各関数の中で同じ形に揃える。
+- **Build vs. Adopt**: `MessageBoxW`（OS 標準・採用）・`RandomState`（std・採用）・`areka-nar::parse_manifest`（不採用・R4）・`fn resolve`（列挙には不採用・要件 2.10）。
+- **Simplification**: 設定ファイル・`BasewareRoot` へのメソッド増設（列挙をメソッドにしない＝関数のまま）・列挙結果のキャッシュ・複数の根・`ExitOrigin` の新 variant（告知は `main` の `Err` で終わるので終了操作ではない）は置かない。
+
+## 13. Risks & Mitigations（設計時点）
+
+- 記憶の反映が smoke の 500 ms 自動終了より遅れる — `shutdown` の手順 10 の `barrier()` → `close()` で確定してから join するので遅れない（R1）。実機 ② で `[last]` を目視。
+- 告知を抑止したまま配布物を起動すると何も見えない — 抑止は自動テストと実機 ③ だけの道具と手順に明記。
+- `main.rs` の行数 — 退役分（約 140 行）に対して配線の追加は約 60 行の見込み（約 830 行）。超えそうなら告知の呼び出しを `boot_resolve` 側のヘルパへ寄せる。
+- 走査語の番人 — `catalog_test_support` は偽のゴースト／バルーンを `TempPath` の下に組み、`vendors/sample_ghost/…` の綴りも `SAMPLES` の `balloons` の継ぎ足しも書かない。
