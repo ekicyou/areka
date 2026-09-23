@@ -46,7 +46,9 @@
 use std::path::Path;
 
 use windows::Win32::Foundation::{FreeLibrary, GlobalFree, HGLOBAL, HMODULE};
-use windows::Win32::Globalization::{CP_ACP, WideCharToMultiByte};
+use windows::Win32::Globalization::{
+    CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar, WideCharToMultiByte,
+};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
 use windows::core::{HSTRING, PCSTR, s};
@@ -325,22 +327,35 @@ fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     Ok(h)
 }
 
-/// `path` を **ANSI(CP_ACP)** バイト列へ符号化する（design §347・research §9.3・pasta `to_ansi_str`
-/// と対称の `WideCharToMultiByte(CP_ACP, ..)`）。
+/// コードページ符号化の結果（design「`encode_with_codepage`／`CodepageEncoded`／`ansi_encode`」）。
+struct CodepageEncoded {
+    /// 入口へ渡すバイト列（`cp = CP_ACP` なら今日の `ansi_encode` と同一・NUL 無し）。
+    bytes: Vec<u8>,
+    /// 往復で元に戻らない字が 1 つ以上あった（既定文字への置き換えも best-fit も含む・要件 3.1）。
+    lossy: bool,
+}
+
+/// `path` をコードページ `cp` のバイト列へ符号化し、同じ `cp` で UTF-16 へ戻して元と比べる
+/// （要件 3.1〜3.4・3.6・6.5）。本番は `CP_ACP` で呼び、テストは 20127／65001 を渡す。
 ///
-/// まず `OsStr` → UTF-16、次に CP_ACP へ。空パスは空バイト列を返す。失敗（長さ問い合わせ／変換が
-/// 0 以下）→[`ProxyError::EncodingFailed`]。
-fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
+/// 変換の作法は今日のまま（`WideCharToMultiByte` の 2 回呼び・フラグ 0・既定文字は OS 既定）。
+/// 検出はコードページの値で分岐しない（65001 の機械でも同じ手順）。往路が 0 以下→
+/// [`ProxyError::EncodingFailed`]（3.6）。戻す側が 0 以下（判定できない）→ `lossy = true` に寄せる。
+/// 空パスは空・`lossy = false`。
+fn encode_with_codepage(cp: u32, path: &Path) -> Result<CodepageEncoded, ProxyError> {
     use std::os::windows::ffi::OsStrExt;
-    // OsStr → UTF-16（NUL 終端は付けない＝正味の文字列長を CP_ACP へ渡す）。
+    // OsStr → UTF-16（NUL 終端は付けない＝正味の文字列長を渡す）。
     let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
     if wide.is_empty() {
-        return Ok(Vec::new());
+        return Ok(CodepageEncoded {
+            bytes: Vec::new(),
+            lossy: false,
+        });
     }
 
     // 必要バイト数を問い合わせる（出力バッファ None＝長さ問い合わせ）。
     // SAFETY: `wide` は有効な UTF-16 スライス。出力 None＝長さ問い合わせモード。既定フラグ(0)。
-    let needed = unsafe { WideCharToMultiByte(CP_ACP, 0, &wide, None, PCSTR::null(), None) };
+    let needed = unsafe { WideCharToMultiByte(cp, 0, &wide, None, PCSTR::null(), None) };
     if needed <= 0 {
         return Err(ProxyError::EncodingFailed);
     }
@@ -348,13 +363,32 @@ fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
     let mut buf = vec![0u8; needed as usize];
     // SAFETY: `buf` は `needed` バイトの可変領域（i8 として渡す）。`wide` は有効な UTF-16 スライス。
     // WideCharToMultiByte は `&mut [u8]` を i8 バッファとして受ける（windows 0.62.2 の Some(&mut buf)）。
-    let written =
-        unsafe { WideCharToMultiByte(CP_ACP, 0, &wide, Some(&mut buf), PCSTR::null(), None) };
+    let written = unsafe { WideCharToMultiByte(cp, 0, &wide, Some(&mut buf), PCSTR::null(), None) };
     if written <= 0 {
         return Err(ProxyError::EncodingFailed);
     }
     buf.truncate(written as usize);
-    Ok(buf)
+
+    // 往復比較: 同じ cp で UTF-16 へ戻し、元と一致しなければ表せない字あり。
+    // SAFETY: `buf` は有効なバイト列。出力 None＝長さ問い合わせモード。既定フラグ(0)。
+    let back_len = unsafe { MultiByteToWideChar(cp, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), &buf, None) };
+    let lossy = if back_len <= 0 {
+        true
+    } else {
+        let mut back = vec![0u16; back_len as usize];
+        // SAFETY: `back` は `back_len` 要素の可変領域。`buf` は有効なバイト列。既定フラグ(0)。
+        let got = unsafe {
+            MultiByteToWideChar(cp, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), &buf, Some(&mut back))
+        };
+        got <= 0 || back[..got as usize] != wide[..]
+    };
+    Ok(CodepageEncoded { bytes: buf, lossy })
+}
+
+/// `path` を **ANSI(CP_ACP)** バイト列へ符号化する（既存の署名を保つ薄い包み・既存テスト 3 本が固定）。
+/// `encode_with_codepage(CP_ACP, path).map(|e| e.bytes)`。
+fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
+    encode_with_codepage(CP_ACP, path).map(|e| e.bytes)
 }
 
 #[cfg(test)]
