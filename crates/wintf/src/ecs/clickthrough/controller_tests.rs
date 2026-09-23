@@ -355,7 +355,7 @@ fn eval_diff_guard_stable_on_repeat() {
 #[test]
 fn eval_honors_drag_snapshot_just_ended_reconverges() {
     use crate::ecs::drag::DragState;
-    use crate::ecs::drag::{reset_to_idle, snapshot_drag_state, update_drag_state};
+    use crate::ecs::drag::{snapshot_drag_state, update_drag_state};
 
     let mut world = World::new();
     let window = world_with_hittable_window(&mut world);
@@ -390,8 +390,9 @@ fn eval_honors_drag_snapshot_just_ended_reconverges() {
         );
     }));
 
-    // thread_local を Idle に戻す（他テストへの汚染防止）。JustEnded→reset_to_idle。
-    reset_to_idle();
+    // thread_local を Idle に戻す（他テストへの汚染防止）。JustEnded は capture_guard を
+    // 持たないので、借用の中で代入しても ReleaseCapture は走らない。
+    update_drag_state(|s| *s = DragState::Idle);
     destroy_test_hwnd(hwnd);
     if let Err(e) = result {
         std::panic::resume_unwind(e);

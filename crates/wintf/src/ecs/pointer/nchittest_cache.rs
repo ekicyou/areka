@@ -24,7 +24,7 @@ const HTCLIENT: i32 = 1;
 /// WM_NCHITTEST でクライアント領域外（透明領域）を示す定数。
 /// WM_MOUSELEAVE ハンドラ実装済み（handlers.rs L820-876）により、
 /// HTTRANSPARENT 返却後も PointerState は正常にクリーンアップされる。
-/// ドラッグ中は DragState ガードで HTCLIENT を強制返却する。
+/// 左ボタンを押している間は DragState ガードで HTCLIENT を強制返却する。
 const HTTRANSPARENT: i32 = -1;
 
 // ============================================================================
@@ -135,21 +135,14 @@ pub fn cached_nchittest(
         }
     };
 
-    // DragState ガード: ドラッグ中は透明領域でも HTCLIENT を強制返却
+    // DragState ガード: 左ボタンを押している間は透明領域でも HTCLIENT を強制返却
     // （ドラッグ操作の継続性を保証するため）
-    let is_dragging = crate::ecs::drag::read_drag_state(|state| {
-        matches!(
-            state,
-            crate::ecs::drag::DragState::Preparing { .. }
-                | crate::ecs::drag::DragState::JustStarted { .. }
-                | crate::ecs::drag::DragState::Dragging { .. }
-        )
-    });
+    let button_held = crate::ecs::drag::read_drag_state(|state| state.is_button_held());
 
     // WM_MOUSELEAVE ハンドラ実装済み（handlers.rs L820-876）により、
     // HTTRANSPARENT 返却後も PointerState は正常にクリーンアップされる。
-    // ドラッグ中は DragState ガードで HTCLIENT を強制返却する。
-    let lresult = if is_dragging || hit_result.is_some() {
+    // 左ボタンを押している間は DragState ガードで HTCLIENT を強制返却する。
+    let lresult = if button_held || hit_result.is_some() {
         LRESULT(HTCLIENT as isize)
     } else {
         LRESULT(HTTRANSPARENT as isize)
