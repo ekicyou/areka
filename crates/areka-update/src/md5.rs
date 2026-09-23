@@ -1,6 +1,4 @@
 //! バイト列の MD5 を OS の CNG で計算する（要件 2.1・2.2・10.2）。
-// ponytail: 本番の呼び手（diff・lib）が付くまでの間だけ。diff から呼んだら外す。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use std::fmt::Write as _;
 

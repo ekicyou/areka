@@ -1,7 +1,5 @@
 //! 定義の相対パスとローカルパスの橋渡し（要件 1.13・5.6・6.3）。
 //! 読み手・差分・確定・削除・作業場所が借りる。`manifest`・`md5` は見ない。
-// ponytail: `local_path`・`resolves_under` の本番の呼び手（diff 以降）が付くまでの間だけ。呼んだら外す。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};

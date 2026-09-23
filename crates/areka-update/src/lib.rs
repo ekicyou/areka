@@ -3,6 +3,7 @@
 //! 更新定義ファイル（`updates2.dau`／`updates.txt`）を読み、手元との差分だけを
 //! 取得・照合して、ファイル単位で確定する。失敗したら逆順に戻す。
 
+mod diff;
 mod error;
 mod fetch;
 mod manifest;
