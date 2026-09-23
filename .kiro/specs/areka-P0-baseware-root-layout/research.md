@@ -157,7 +157,7 @@
 Research Needed（設計で確定する）:
 
 - **R1 書き込みの反映保証**: `persist_put` 直後に `publisher.barrier()` を挟むか、`GhostRuntime::shutdown` が sylphya のアクターを join して未処理の `PersistPut` を流し切るかを `runtime.rs`／`actor.rs` で確かめる（`shutdown` の順序は本仕様で変えない＝要件 7.2）。
-- **R2 パス比較の作法**: `std::fs::canonicalize` の戻り（`\\?\C:\…`）同士の `parent()` 比較で足りるか、`dunce` 等の外部依存は入れない（要件 7.7）ので std だけで決める。大小の違いは `canonicalize` が実体の綴りへ揃える。
+- **R2 パス比較の作法（2026-09-23 裁定 5 で不要）**: `std::fs::canonicalize` の戻り（`\\?\C:\…`）同士の `parent()` 比較で足りるか、`dunce` 等の外部依存は入れない（要件 7.7）ので std だけで決める。大小の違いは `canonicalize` が実体の綴りへ揃える。
 - **R3 `WinApp` 構築後の早期 return**: `open_startup_window` の失敗で `Err` を返したときに `WinApp` の drop が安全か（`wintf` の `WinApp` の Drop 実装と `ExitPolicy::Explicit` の相互作用）。代替は「準備を `WinApp` 構築の前に済ませる」だが、準備（`prepare_ghost_windows`）は WIC＝COM 初期化済みスレッドを要する（`open_startup_window` の doc）ので順序は変えられない。
 - **R4 `install.txt` の読み手**: §1.6 の (a)（数行の自前読み）か (b)（`areka-nar` を本番依存へ・`parse_manifest` を `pub` へ）。(b) は `ghost-install` が同じ依存を足す予定なので二重にはならないが、拒否条件の厳しさが要件 5.7（無ければ `warn!` で次へ）と合わない。
 - **R5 鍵の大小**: `menu,hidden`・`type,balloon` の鍵と値の大小（`parse_kv` は保持・`areka-nar` は鍵を小文字化）。ukadoc の綴りは小文字。設計で「鍵は小文字化して引く／値は trim のみ」等を 1 行で決める。
@@ -187,7 +187,7 @@ Research Needed（設計で確定する）:
 | 9（記憶を書く時点） | (a) `areka_ghost::boot` が `Ok` を返した時点、と要件 3.1 に定義（`main` の順序上、起動窓の準備はその前に済む） | 確定 |
 | 10（抑止 env の名） | 設計判断（要件 6.5 のとおり） | `/kiro-spec-design` |
 | 11（`current_exe()` 失敗時の根） | 要件 1.4 に「根が決まらない」として告知に含めた | 確定 |
-| 12（argv で根の内側のパス） | 裁定 5 と統合して開発者議題へ | 要件 9.5 |
+| 12（argv で根の内側のパス） | 裁定 5 で「argv 起動は記憶を書かない」と確定。**R2（パス比較）は不要になった** | 確定（要件 3.2・3.3・3.5） |
 | 13（素性の型の公開形）・14（テスト移設の順序）・R1〜R8 | 設計判断 | `/kiro-spec-design` |
 | 裁定 3（複数から 1 つ） | 既定ゴースト `emo2`（配布物に必ず同梱）→ 無作為。名前順は使わない | 確定（要件 4.4・4.5・4.11） |
 | 裁定 4（バルーンの記憶） | `Ghost` スコープ・記憶 → 同梱。**設計への含意**: 起動前に起動するゴーストの `Ghost` スコープ（`sylphya_wiring::profile_areka_root(<ghost>/ghost/master)`）を `load_scope(PersistScope::Ghost, …)` で直接読む口が要る（§1.4 の App スコープの読みと同型・R1 の反映保証は両スコープに効く） | 確定（要件 3.1・5.2・5.3） |
