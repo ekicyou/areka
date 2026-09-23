@@ -55,13 +55,14 @@ use windows::core::{HSTRING, PCSTR, s};
 /// `GMEM_FIXED` ではハンドル＝先頭ポインタゆえ `h.0 as *mut u8` で直接書き込める。
 const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 
-/// flat-C cdecl 署名（design §351-355・research §9.2 でバイト正確に固定）。
+/// `loadu`／`load` 共通の flat-C cdecl 署名（design §351-355・research §9.2 でバイト正確に固定）。
 ///
-/// `i686-pc-windows-msvc` では C ABI＝cdecl。pasta の `extern "C"` と ABI 同一。戻り `bool` は
-/// **Rust bool 1 byte**（Win32 BOOL(i32) ではない）。
-type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> bool;
-/// `unload() -> bool`（引数なし・cdecl）。Drop の courtesy unload で呼ぶ。
-type UnloadFn = unsafe extern "C" fn() -> bool;
+/// `i686-pc-windows-msvc` では C ABI＝cdecl。pasta の `extern "C"` と ABI 同一。戻りは **1 バイト整数**
+/// （0 = 失敗・0 以外 = 成功・`== 1` とは判定しない）。Rust `bool` で受けると 0／1 以外の値が未定義動作に
+/// なり、`i32` で受けると Rust `bool` を返す DLL（pasta）の不定な上位 24 bit を読むため、`u8` で受ける。
+type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> u8;
+/// `unload() -> u8`（引数なし・cdecl）。Drop の courtesy unload で呼び、戻りは捨てる（要件 5.4）。
+type UnloadFn = unsafe extern "C" fn() -> u8;
 /// `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（`len` は in/out）。
 /// **本仕様では解決のみ・呼出しない**（呼出 API は下流 host32-request が追加する）。
 type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
@@ -82,15 +83,41 @@ pub enum ProxyError {
     RequestFailed,
 }
 
+/// 選ばれた初期化の入口（`loadu` 優先・要件 1.1〜1.3）。fn ポインタを 1 つだけ持つので、
+/// `loadu` と `load` の両方を呼ぶ経路は型の上で存在しない（要件 1.5）。
+enum InitEntry {
+    Loadu(LoadFn),
+    Load(LoadFn),
+}
+
+impl InitEntry {
+    /// 選ばれた入口の fn ポインタ（呼出側はこれを 1 回だけ呼ぶ）。
+    fn func(&self) -> LoadFn {
+        match *self {
+            InitEntry::Loadu(f) | InitEntry::Load(f) => f,
+        }
+    }
+}
+
+/// 「`loadu` の有無 × `load` の有無」の 4 通りから呼ぶ入口を 1 つ選ぶ純関数（要件 1.1〜1.4・1.8）。
+/// 判断はここだけ。両方無いときの名札は既存テスト `kernel32_yields_entry_not_found` が固定する
+/// `"load"`。`Loadu` を選んだときの `load` は捨てる（保持しない）。
+fn choose_init_entry(loadu: Option<LoadFn>, load: Option<LoadFn>) -> Result<InitEntry, ProxyError> {
+    match (loadu, load) {
+        (Some(u), _) => Ok(InitEntry::Loadu(u)),
+        (None, Some(l)) => Ok(InitEntry::Load(l)),
+        (None, None) => Err(ProxyError::EntryNotFound("load")),
+    }
+}
+
 /// SHIORI DLL の常設プロキシ（design §339-388）。
 ///
-/// `Ok` = 3 fn ポインタ常設保持＋`load`→true 済み（＝「load 済み」プロキシ）。`request` fn は保持
-/// のみ（呼出 API は下流 host32-request が追加）。Drop が唯一の teardown 経路（明示メソッド非公開）。
+/// `Ok` = `unload`／`request` の fn ポインタ常設保持＋初期化の入口（`loadu`／`load`）が成功済み
+/// （＝「load 済み」プロキシ）。`request` fn は保持のみ（呼出 API は下流 host32-request が追加）。
+/// Drop が唯一の teardown 経路（明示メソッド非公開）。
 pub struct ShioriByteProxy {
     /// ロード元モジュールハンドル。Drop の courtesy unload の後に `FreeLibrary` する。
     module: HMODULE,
-    /// 解決済み `load` エントリ（確立時に呼出済み・保持は teardown 対称性のためではなく記録）。
-    load: LoadFn,
     /// 解決済み `unload` エントリ。Drop の courtesy unload で呼ぶ（R2.2）。
     unload: UnloadFn,
     /// 解決済み `request` エントリ。**本仕様では保持のみ・呼出しない**（下流 host32-request が消費）。
@@ -117,29 +144,37 @@ impl ShioriByteProxy {
         // Err を返す（下で map）。ここで module のライフサイクル所有が本関数へ確立する。
         let module = unsafe { LoadLibraryW(&wide) }.map_err(ProxyError::LoadLibraryFailed)?;
 
-        // --- 手順 2: 3 エクスポート解決（無装飾名）---
+        // --- 手順 2: エクスポート解決（無装飾名）---
+        // 初期化の入口 `loadu`→`load` を任意で引いて選択の純関数へ渡し（判断は choose_init_entry だけ）、
+        // その後で `unload`・`request` を必須で引く（要件 1.7）。この順ゆえ何も持たない DLL の最初の失敗は
+        // 今日と同じ `EntryNotFound("load")`。
         // 途中失敗は module を FreeLibrary してから Err を返すため、クロージャで解決→失敗時解放を集約。
         // SAFETY(全体): `module` は直前にロードした有効ハンドル。各シンボルは DLL 側が
         // `#[unsafe(no_mangle)] pub extern "cdecl"` で公開（research §9・testdll 同形）＝装飾なし C 名。
-        // GetProcAddress は未解決時 None を返す（unwrap せず ok_or で観測エラー化）。
-        let resolve = || -> Result<(LoadFn, UnloadFn, RequestFn), ProxyError> {
-            let load_raw = unsafe { GetProcAddress(module, s!("load")) }
-                .ok_or(ProxyError::EntryNotFound("load"))?;
+        // GetProcAddress は未解決時 None を返す（unwrap せず Option／ok_or で扱う）。
+        let resolve = || -> Result<(InitEntry, UnloadFn, RequestFn), ProxyError> {
+            // SAFETY: 解決した FARPROC を research §9 でバイト照合済みの flat-C cdecl 署名へ transmute
+            // する（cdecl・HGLOBAL/usize 幅）。戻りは `u8` で受ける: cdecl の戻り値は EAX にあり、
+            // Rust `bool`（pasta）を返す DLL は下位 1 バイト（AL）だけを書くので、下位 1 バイトだけを読む
+            // `u8` が上位 24 bit の不定値を読まない最小の型。天井: C 製 DLL が Win32 `BOOL` として下位
+            // バイト 0・上位 bit 非 0 の値（例 `0x100`）を返すと失敗と判定される（正典どおり TRUE(1)／
+            // FALSE(0) を返す限り問題無い）。FARPROC は unsafe extern fn() の確定値。
+            let as_load = |raw| unsafe { std::mem::transmute::<_, LoadFn>(raw) };
+            let loadu = unsafe { GetProcAddress(module, s!("loadu")) }.map(as_load);
+            let load = unsafe { GetProcAddress(module, s!("load")) }.map(as_load);
+            let entry = choose_init_entry(loadu, load)?;
+
             let unload_raw = unsafe { GetProcAddress(module, s!("unload")) }
                 .ok_or(ProxyError::EntryNotFound("unload"))?;
             let request_raw = unsafe { GetProcAddress(module, s!("request")) }
                 .ok_or(ProxyError::EntryNotFound("request"))?;
-
-            // SAFETY: 解決した FARPROC を research §9 でバイト照合済みの flat-C cdecl 署名へ transmute
-            // する。DLL 側実体（testdll／pasta）と ABI（cdecl・bool 1byte・HGLOBAL/usize 幅）が一致する
-            // ことを実装前照合で固定済み（Task 1）。FARPROC は Option<unsafe extern fn()> ゆえ確定値。
-            let load: LoadFn = unsafe { std::mem::transmute::<_, LoadFn>(load_raw) };
+            // SAFETY: 上と同じ根拠（`unload` の戻りも `u8`・`request` の署名は不変・要件 5.5）。
             let unload: UnloadFn = unsafe { std::mem::transmute::<_, UnloadFn>(unload_raw) };
             let request: RequestFn = unsafe { std::mem::transmute::<_, RequestFn>(request_raw) };
-            Ok((load, unload, request))
+            Ok((entry, unload, request))
         };
 
-        let (load, unload, request) = match resolve() {
+        let (entry, unload, request) = match resolve() {
             Ok(fns) => fns,
             Err(e) => {
                 // 半構築を残さない: module を解放してから Err（design §358）。
@@ -154,10 +189,9 @@ impl ShioriByteProxy {
 
         // --- 手順 3〜5: ANSI 符号化 → GlobalAlloc → load 同期呼出 ---
         // これらの失敗も module を FreeLibrary してから Err を返す（半構築を残さない）。
-        match Self::encode_alloc_and_load(load, load_dir) {
+        match Self::encode_alloc_and_load(entry, load_dir) {
             Ok(()) => Ok(Self {
                 module,
-                load,
                 unload,
                 request,
             }),
@@ -175,21 +209,23 @@ impl ShioriByteProxy {
 
     /// 手順 3〜5: `load_dir` を ANSI(CP_ACP) 符号化 → `GlobalAlloc(GMEM_FIXED)` へ書込 → `load` 同期
     /// 呼出（design §347）。**入力 HGLOBAL は callee 解放規約ゆえ自ら解放しない**（R4.5）。
-    fn encode_alloc_and_load(load: LoadFn, load_dir: &Path) -> Result<(), ProxyError> {
+    fn encode_alloc_and_load(entry: InitEntry, load_dir: &Path) -> Result<(), ProxyError> {
         // 手順 3: ANSI(CP_ACP) 符号化。失敗→EncodingFailed。
+        // 一時状態: `loadu` にも既定コードページのバイト列が渡る（入口別の符号化は Task 3.3 で入る）。
         let ansi = ansi_encode(load_dir)?;
 
         // 手順 4: GMEM_FIXED バッファ確保＋書込。確保失敗→EncodingFailed。
         let hdir = global_alloc_copy(&ansi)?;
         let len = ansi.len();
 
-        // 手順 5: load(hdir, len) 同期呼出。
+        // 手順 5: 選ばれた入口 (hdir, len) を 1 回だけ同期呼出（要件 1.5）。
         // SAFETY: `hdir` は `len` バイトの有効 HGLOBAL（GMEM_FIXED ゆえハンドル＝先頭ポインタ）。
         // DLL(callee) は受領ハンドルを `GlobalFree` する規約（research §9.3・testdll の load が実演）
-        // ＝ホストは以後 hdir に触れず・解放もしない（二重解放禁止・R4.5）。所有権は load へ move する。
-        // 呼出は同期で bool を返す（DLL 内部スレッドに前提を置かない・R4.7）。
-        let ok = unsafe { load(hdir, len) };
-        if ok {
+        // ＝ホストは以後 hdir に触れず・解放もしない（二重解放禁止・R4.5）。所有権は入口へ move する。
+        // 呼出は同期で 1 バイト整数を返す（DLL 内部スレッドに前提を置かない・R4.7）。
+        let ret = unsafe { entry.func()(hdir, len) };
+        // 0 = 初期化が偽を返した失敗・0 以外は成功（`== 1` とは判定しない・要件 5.1〜5.3）。
+        if ret != 0 {
             Ok(())
         } else {
             Err(ProxyError::LoadReturnedFalse)
@@ -582,3 +618,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&load_dir);
     }
 }
+
+#[cfg(test)]
+#[path = "shiori_proxy_loadu_tests.rs"]
+mod loadu_tests;
