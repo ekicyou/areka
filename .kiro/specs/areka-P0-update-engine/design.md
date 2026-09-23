@@ -105,7 +105,7 @@ graph TB
 
 **依存の向き**（左から右へだけ import する。逆向きはレビューで誤りとする）:
 
-`error`／`outcome`（型） → `urlpath` → `manifest` → `md5` → `paths` → `diff` → `fetch` → `work` → `commit` → `delete` → `lib`（`run`）。`winhttp` は `fetch`・`error` だけを見る。`testkit`（`#[cfg(test)]`）は何にでも依存してよいが、本番からは参照しない。
+`error`／`outcome`（型） → `urlpath` → `paths` → `manifest` → `md5` → `diff` → `fetch` → `work` → `commit` → `delete` → `lib`（`run`）。`winhttp` は `fetch`・`error` だけを見る。`testkit`（`#[cfg(test)]`）は何にでも依存してよいが、本番からは参照しない。`paths` を `manifest` より左に置くのは、読み手が作業場所の名前（`WORK_DIR`）と区切りの正規化を `paths` から借りるため（`paths` は `manifest`・`md5` を見ない）。
 
 ### Technology Stack
 
@@ -791,7 +791,7 @@ pub(crate) fn commit(target: &Path, target_real: &Path, area: &WorkArea, files: 
 
 **Implementation Notes**
 - Integration: 定義に無いローカルのファイルは一切触らない（`files` の側だけ歩く＝2.3）。
-- Validation: `commit_tests.rs` の注入 ⑴ 宛先を `hold`（読み共有で開いたまま）→ 退避の `rename` が失敗 → `Write`・木がバイト単位で同一（9.4・5.7） ⑵ 2 件目を `hold`・1 件目は無い親フォルダの下 → 1 件目は置かれ親も作られる → 失敗で親フォルダごと消えて同一（5.4） ⑶ **戻せなかった**の固定入力: `FakeFetch` の取得時の口（`on_get`）で 2 件目の取得時に `new/1 件目` を読み取り専用にし、2 件目の宛先を `hold` → 1 件目は置かれる → 2 件目で失敗 → `unwind` の `remove_file(宛先 1)` が読み取り専用で失敗 → `RollbackFailed { stuck: [1 件目] }`・`work` に作業場所（7.4 の全数対応・5.5） ⑷ 差分の後・確定の前に、2 件目の親フォルダを対象の外を指すジャンクション（`cmd /c mklink /J`）に置き換える（`on_get` で注入）→ `Escapes`・外側には何も作られていない・1 件目は戻されて木が同一（5.6）。`work_tests` に ⑸ 戻せなかった走行の作業場所（`old/` に中身）が残る状態でもう 1 周 `create` しても消えず残骸に列挙される（5.5）。
+- Validation: `commit_tests.rs` の注入 ⑴ 宛先を `hold`（読み共有で開いたまま）→ 退避の `rename` が失敗 → `Write`・木がバイト単位で同一（9.4・5.7） ⑵ 2 件目を `hold`・1 件目は無い親フォルダの下 → 1 件目は置かれ親も作られる → 失敗で親フォルダごと消えて同一（5.4） ⑶ **戻せなかった**の固定入力: `commit` を呼ぶ前に、置いた 1 件目の削除を拒む仕掛けを仕込み（読み取り専用は Rust 1.86 以降の Windows の `remove_file` が消してしまう恐れがあるので、手段は実装の最初に現行の道具で較正して決める＝削除を拒む ACL 等）、2 件目の宛先を `hold` → 1 件目は置かれる → 2 件目で失敗 → `unwind` の `remove_file(宛先 1)` が失敗 → `RollbackFailed { stuck: [1 件目] }`・`work` に作業場所（7.4 の全数対応・5.5） ⑷ 差分の後・確定の前に、2 件目の親フォルダを対象の外を指すジャンクション（`cmd /c mklink /J`）に置き換える（`commit` を呼ぶ前に仕込む）→ `Escapes`・外側には何も作られていない・1 件目は戻されて木が同一（5.6）。`run_tests` 版の ⑶ ⑷ だけ `FakeFetch` の `on_get` で 2 件目の取得時に仕込む。`work_tests` に ⑸ 戻せなかった走行の作業場所（`old/` に中身）が残る状態でもう 1 周 `create` しても消えず残骸に列挙される（5.5）。
 - Risks: `rename` は同じボリュームでのみメタデータ操作。作業場所を対象フォルダ直下に固定しているので前提は構造で守られる。
 
 #### `delete`（`delete.txt` の適用）
@@ -899,7 +899,7 @@ pub(crate) fn sjis(s: &str) -> Vec<u8>;
 - `paths_tests`: `resolves_under` が配下で真・`cmd /c mklink /J` で作ったジャンクションが対象の外を指すとき偽（`EscapesTarget` の固定入力）。
 - `diff_tests`（9.2）: 無い／同じ／違う／定義に無いローカルのファイル、の 4 形。定義に無いファイルが `tree` で前後同一。読めないファイル（`hold` では読める。読み取り不能はフォルダを同名で置く）→ `Unreadable`。
 - `work_tests`: 作成・`put`・`cleanup` で消える・他の走行の残骸を消す／消せなければ残骸。
-- `commit_tests`（9.4・5.2・5.4・5.5・5.7）: 上の「Validation」の注入 3 本。各々 `tree` で「同一」または「戻せなかった状態」を判定。作った親フォルダが失敗で消える。
+- `commit_tests`（9.4・5.2・5.4・5.5・5.7）: 上の「Validation」の注入 4 本（⑴〜⑷）。各々 `tree` で「同一」または「戻せなかった状態」を判定。作った親フォルダが失敗で消える。
 - `delete_tests`（9.5）: 3 種の拒否・作業場所の行・フォルダの行が中身ごと消える・ファイルの行がフォルダを指す／フォルダの行がファイルを指す → 残る＋`DeleteKindMismatch`・無い物 → 何もしない・`delete.txt` → `delete1.txt` → `delete10.txt` の順（`delete2.txt` を `delete10.txt` より先に）・Shift_JIS の行の復号（`charset` の引き継ぎ）・読めない `delete.txt` → 警告して続行。
 - `error_tests`: `kind()` と `ALL_KINDS` の宣言順・`Display` が期待と実際を両方持つ・`rolled_back()`／`file()`。
 
@@ -916,7 +916,7 @@ pub(crate) fn sjis(s: &str) -> Vec<u8>;
 - 取得失敗: 2 件目に `Connect` を注入 → `FileFetch`・`Stage::Download { 1, n }`・3 件目は呼ばれない・木が同一。
 - MD5 不一致: `Md5Compared { matched: false }` の後に `Md5Mismatch`・`Stage::Verify`・以降を取得しない・木が同一。
 - 確定の途中失敗（`hold`）→ `CommitWrite`・`rolled_back()` 真・木が同一・作業場所が消えている。
-- 戻せなかった（読み取り専用の注入）→ `RollbackFailed`・`work` が在る・作業場所が残る。
+- 戻せなかった（削除を拒む注入・手段は `commit_tests` ⑶ で較正した物）→ `RollbackFailed`・`work` が在る・作業場所が残る。
 - 対象フォルダ無し／URL 不正 → 取得口の呼出 0 回・`TargetMissing`／`InvalidHomeurl`。
 - 末尾 `/` 無し → 補われた URL で呼ばれる・`warn` 1 件。
 - 作業場所を作れない（`.update-work` を同名のファイルで塞ぐ）→ `WorkArea`。
