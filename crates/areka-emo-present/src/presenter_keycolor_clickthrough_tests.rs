@@ -93,14 +93,15 @@ fn keyed_pixels(decoder: &WicDecoderArm, png: &Path) -> (Vec<bool>, u32, u32) {
 }
 
 /// 面の外形の全画素について、抜かれた画素では `is_hit` が false・抜かれなかった画素では true で
-/// あることを主張する。食い違いがあれば件数と先頭 5 件の座標を失敗の文言に出す。
-fn assert_keyed_out_pixels_leave_the_mask(
+/// あるかを調べる。食い違いがあれば件数と先頭 5 件の座標を載せた失敗の文言を返す（3 面すべての
+/// 結果を 1 回の走行で見せるため、ここでは止めずにテスト本体の最後でまとめて主張する）。
+fn keyed_out_mismatch(
     at: &str,
     mask: &AlphaMask,
     keyed: &[bool],
     w: u32,
     h: u32,
-) {
+) -> Option<String> {
     assert_eq!(
         (mask.width(), mask.height()),
         (w, h),
@@ -115,12 +116,13 @@ fn assert_keyed_out_pixels_leave_the_mask(
             }
         }
     }
-    assert!(
-        mismatches.is_empty(),
-        "{at}: 抜き色の判定とマスクが {} 画素で食い違う（先頭 5 件 (x, y, 期待は内か): {:?}）",
-        mismatches.len(),
-        &mismatches[..mismatches.len().min(5)]
-    );
+    (!mismatches.is_empty()).then(|| {
+        format!(
+            "{at}: 抜き色の判定とマスクが {} 画素で食い違う（先頭 5 件 (x, y, 期待は内か): {:?}）",
+            mismatches.len(),
+            &mismatches[..mismatches.len().min(5)]
+        )
+    })
 }
 
 /// 抜き色で透明になった場所のクリックが背後へ抜けることを固定する（完了 spec
@@ -186,6 +188,7 @@ fn keyed_out_pixels_leave_the_hit_mask_and_the_rest_stay_inside() {
         show_ok(&mut presenter, &mut world, target, surface_id);
     }
 
+    let mut failures = Vec::new();
     for (target, _, dir, _, png, at) in faces {
         let (keyed, w, h) = keyed_pixels(&decoder, &dir.join(png));
         let surface_entity = mount_entities(&presenter, target).0;
@@ -194,6 +197,7 @@ fn keyed_out_pixels_leave_the_hit_mask_and_the_rest_stay_inside() {
             .unwrap_or_else(|| panic!("{at}: 面 entity に AlphaMaskResource が載っていない"))
             .mask()
             .unwrap_or_else(|| panic!("{at}: マスクが供給されていない（表示が成立していない）"));
-        assert_keyed_out_pixels_leave_the_mask(at, mask, &keyed, w, h);
+        failures.extend(keyed_out_mismatch(at, mask, &keyed, w, h));
     }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

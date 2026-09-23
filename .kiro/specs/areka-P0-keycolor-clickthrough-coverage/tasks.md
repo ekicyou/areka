@@ -43,7 +43,7 @@
   - _Requirements: 3.3, 3.4_
 
 - [ ] 3. 途中の段で抜いた α が落ちるとテストが赤になることの実証（差し替えは製品コードに残さない）
-- [ ] 3.1 焼く段の差し替えで赤を示し、戻して赤 0 を確かめる
+- [x] 3.1 焼く段の差し替えで赤を示し、戻して赤 0 を確かめる
   - 抜き色の正規化の腕（抜き色を用いて画素を透明にする腕）が受け取る抜き色を「無し」に置き換え、腕が画素を変えずに返す形にする（経路から外す形・平行移動は用いない）
   - 走らせ方: `cargo test -p areka-emo-atlas`・`cargo test -p areka-emo-compose`・`cargo test -p areka-emo-present` の 3 本
   - 記録: 差し替えたファイルと「その箇所が何を定義しているか」・置き換えの前後 1 行・走らせたコマンド・赤になった通しテストの名前と失敗の文言（食い違いの件数と先頭 5 件）・道連れで赤になった既存テストの一覧（抜き色の腕のテスト・合成後の左上の α を見るテスト等を隠さない）
@@ -78,3 +78,22 @@
 ## Implementation Notes
 
 - `crates/areka` は bin だけのパッケージで `--lib` は「no library targets found」で走らない。placement のテストは `cargo test -p areka --bin areka placement` で走らせる（tasks.md・design.md のコマンドを 2.2 で訂正済み）。
+- 通しテストは面ごとに止めず、3 面の食い違いを集めて最後に 1 回だけ主張する（3.1 で改訂）。面ごとに止めると差し替えの赤が 1 面目しか観測できないため。design.md の判定の節も `keyed_out_mismatch` へ追随済み。
+
+## 完了記録
+
+### 3.1 焼く段の差し替え（2026-09-24）
+
+- ⑴ 差し替えた箇所: `crates/areka-emo-atlas/src/normalize.rs` の `Normalizer::normalize` の `(UseSelfAlpha::On, AlphaSource::KeyColor)` の腕（抜き色の正規化の腕）が受け取る抜き色。腕の入力を「無し」に置き換え、腕は画素を変えずに返す（経路から外す形）。着手前の `git diff --stat -- crates/areka-emo-atlas/src/normalize.rs` は空（HEAD `526873b9`）。
+- ⑵ 置き換えた 1 行: 前 `let key = Self::key_color(&img, params, has_pna);` → 後 `let key: Option<[u8; 4]> = None;`
+- ⑶ 走らせたコマンド: `cargo test -p areka-emo-atlas --no-fail-fast`・`cargo test -p areka-emo-compose --no-fail-fast`・`cargo test -p areka-emo-present --no-fail-fast`
+- ⑷ 赤になった通しテスト: `presenter::keycolor_clickthrough_tests::keyed_out_pixels_leave_the_hit_mask_and_the_rest_stay_inside`。前提の主張（焼き落ち 0・α 無し・0 < 抜かれた画素 < 全画素・外形一致・マスク在り）はすべて通り、自身の「食い違い 0」の主張で赤。失敗の文言（3 面を集めて主張する形で観測）:
+  - `R_POST_and_KOMAINU 面 0: 抜き色の判定とマスクが 59831 画素で食い違う（先頭 5 件 (x, y, 期待は内か): [(0, 0, false), (1, 0, false), (2, 0, false), (3, 0, false), (4, 0, false)]）`
+  - `R_POST_and_KOMAINU 面 10: 抜き色の判定とマスクが 11816 画素で食い違う（先頭 5 件 …: [(0, 0, false), (1, 0, false), (2, 0, false), (3, 0, false), (4, 0, false)]）`
+  - `konnoyayame 面 0: 抜き色の判定とマスクが 70574 画素で食い違う（先頭 5 件 …: [(0, 0, false), (1, 0, false), (2, 0, false), (3, 0, false), (4, 0, false)]）`
+  - 件数は 3 面とも抜かれた画素の数（design の目安）と一致。
+- ⑸ 道連れで赤になった既存テスト（全件・見込みと完全一致・見込み外 0）:
+  - areka-emo-atlas（78 passed / 5 failed / 1 ignored）: `normalize::tests::on_no_alpha_no_pna_selects_keycolor_seam`・`normalize::normalize_key_color_tests::color_off_by_one_in_a_single_component_stays_untouched`・`…::distant_pixels_of_the_key_color_become_transparent`・`…::image_of_a_single_color_is_ok_and_fully_transparent`・`…::row_padding_is_neither_read_nor_written`
+  - areka-emo-compose: 赤 0（220 passed）。`base_image::tests::konnoyayame_has_no_dangling_pattern_targets_with_images` は見込みどおり緑
+  - areka-emo-present（253 passed / 2 failed）: 本テスト・`shell_target::template_tests::r_post_and_komainu_shows_both_scopes_from_file_names_alone`（面 0 の左上の α が 255）
+- ⑹ 戻した後: `git checkout -- crates/areka-emo-atlas/src/normalize.rs` で戻し、同ファイルの `git diff --stat` は空。同じ 3 本で atlas 83 passed / 1 ignored・compose 220 passed・present 255 passed、赤 0。

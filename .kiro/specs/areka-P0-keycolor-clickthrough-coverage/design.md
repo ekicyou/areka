@@ -189,7 +189,7 @@ sequenceDiagram
 | 1.1 | 同じ入口で読み・面の表を組み・装着し・`ShowSurface` を適用 | 通しテスト | `load_shell_target`・`build_world`・`attach_target`・`apply(ShowSurface)`（`show_ok`） | System Flows |
 | 1.2 | wintf が読むのと同じ場所からマスクを読む | 通しテスト | `mount_entities(&presenter, target).0` → `world.get::<AlphaMaskResource>(entity).mask()` | 同上 |
 | 1.3 | 正解は同じ PNG を復号した生の画素から | 正解の決め方 `keyed_pixels` | `WicDecoderArm::decode` → `DecodedImage { bgra, stride, width, height, has_alpha }` | 同上 |
-| 1.4 | 全画素で「外」「内」を判定し食い違い 0 | 判定 `assert_keyed_out_pixels_leave_the_mask` | `AlphaMask::is_hit`／`width`／`height` | 同上 |
+| 1.4 | 全画素で「外」「内」を判定し食い違い 0 | 判定 `keyed_out_mismatch` | `AlphaMask::is_hit`／`width`／`height` | 同上 |
 | 1.5 | 較正: 0 < 抜かれた画素 < 全画素 | 同上 | — | — |
 | 1.6 | 面 10 と `konnoyayame` 面 0 | 通しテストの `FACES` 3 本 | 同上 | 同上 |
 | 1.7 | 検体は受け口経由のみ・複製なし | `shell_target_test_support.rs` の受け口 2 口（`pub(crate)`） | `r_post_and_komainu_shell_dir`・`konnoyayame_shell_dir` | — |
@@ -221,7 +221,7 @@ sequenceDiagram
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | 通しテスト `presenter_keycolor_clickthrough_tests` | present のクレート内テスト | 3 面で「抜かれた画素＝外・残った画素＝内」を主張 | 1.1〜1.9 | 製品の経路（P0）・受け口 2 口（P0）・presenter 補助 4 本（P0） | State（読むだけ） |
 | 正解の決め方 `keyed_pixels` | 同ファイル内の私有 fn | 同じ PNG を復号し、左上と 4 バイト一致の画素を「抜かれた」と定める | 1.3, 1.5 | `WicDecoderArm`（P0） | — |
-| 判定 `assert_keyed_out_pixels_leave_the_mask` | 同ファイル内の私有 fn | 全画素で `is_hit` と正解を突き合わせ、食い違い 0 を主張 | 1.4, 1.6 | `AlphaMask`（P0） | — |
+| 判定 `keyed_out_mismatch` | 同ファイル内の私有 fn | 全画素で `is_hit` と正解を突き合わせ、食い違いを文言で返す（主張はテスト本体が 3 面まとめて行う） | 1.4, 1.6 | `AlphaMask`（P0） | — |
 | 可視性の書き換え | テスト専用の受け口 | 受け口 2 口を presenter 配下のテストへ届かせる | 1.7, 1.10 | — | — |
 | 差し替え 3 段 | 実装作業の手順（コードに残さない） | テストが赤になることの実証 | 2.1〜2.4, 5.4 | — | — |
 | 相乗り ①②③ | compose のテスト・placement のテスト・examples | 完了 spec の残りの穴 3 件 | 3.1〜3.4 | — | — |
@@ -247,7 +247,7 @@ sequenceDiagram
   | `konnoyayame` | 0（パレット形式の PNG） | `surface0000.png` | 260×390 |
 
   ファイル名は受け口が返すシェルのフォルダに `join` する（`vendors/sample_ghost/` の直パスは綴らない）。
-- 順序: `make_world_with_gpu()` → `WicDecoderArm::new()` → 検体ごとに `load_shell_target(&shell_dir, &decoder)`（`bake_errors()` が空であることを前提として主張）→ 面ごとに `spawn_window_with_dpi(&mut world, 96)`・`attach_target(&mut world, TargetId(n), window, target.build_world(), target.atlas().clone(), 96)`・`show_ok(&mut presenter, &mut world, TargetId(n), surface_id)` → 面ごとに `keyed_pixels` と `assert_keyed_out_pixels_leave_the_mask`。
+- 順序: `make_world_with_gpu()` → `WicDecoderArm::new()` → 検体ごとに `load_shell_target(&shell_dir, &decoder)`（`bake_errors()` が空であることを前提として主張）→ 面ごとに `spawn_window_with_dpi(&mut world, 96)`・`attach_target(&mut world, TargetId(n), window, target.build_world(), target.atlas().clone(), 96)`・`show_ok(&mut presenter, &mut world, TargetId(n), surface_id)` → 面ごとに `keyed_pixels` と `keyed_out_mismatch`、最後に 3 面の結果をまとめて主張。
 - 主張しないこと: 「絵の内側は全部『内』」。主張するのは規則そのもの（左上と 4 バイト一致 ⇔ 外）。
 
 **Dependencies**
@@ -274,16 +274,17 @@ fn keyed_pixels(decoder: &WicDecoderArm, png: &Path) -> (Vec<bool>, u32, u32)
 - 較正（要件 1.5）: 抜かれた画素の数 `n` が `0 < n < width*height` であることを主張する（実測の目安: `R_POST_and_KOMAINU` 面 0 で 59,831／109,032・面 10 で 11,816／22,400・`konnoyayame` 面 0 で 70,574／101,400。テストは目安の数を固定しない——固定すると検体の絵の差し替えで赤になり、本テストの目的である退行検出と混ざる）。
 - 復号器は製品と共通だが、要件 1.3 が「導かない」と定めた 4 段の外である。復号器が壊れて全画素が同色になれば上の較正が止める。
 
-##### 判定 `assert_keyed_out_pixels_leave_the_mask`
+##### 判定 `keyed_out_mismatch`
 
 ```rust
 /// 面の外形の全画素について、抜かれた画素では `is_hit` が false・抜かれなかった画素では true で
-/// あることを主張する。食い違いがあれば件数と先頭 5 件の座標を失敗の文言に出す。
-fn assert_keyed_out_pixels_leave_the_mask(at: &str, mask: &AlphaMask, keyed: &[bool], w: u32, h: u32)
+/// あるかを調べる。食い違いがあれば件数と先頭 5 件の座標を載せた失敗の文言を返す。
+fn keyed_out_mismatch(at: &str, mask: &AlphaMask, keyed: &[bool], w: u32, h: u32) -> Option<String>
 ```
-- `assert_eq!((mask.width(), mask.height()), (w, h), "{at}: マスクの外形が PNG の外形と違う")`。
+- `assert_eq!((mask.width(), mask.height()), (w, h), "{at}: マスクの外形が PNG の外形と違う")`（前提なのでここで止める）。
 - `for y in 0..h { for x in 0..w { let want_hit = !keyed[(y*w + x) as usize]; if mask.is_hit(x, y) != want_hit { mismatches.push((x, y, want_hit)); } } }`。
-- `assert!(mismatches.is_empty(), "{at}: 抜き色の判定とマスクが {} 画素で食い違う（先頭 5 件 (x, y, 期待は内か): {:?}）", mismatches.len(), &mismatches[..mismatches.len().min(5)])`。先頭 5 件の形は `shell_target_template_tests.rs` の前例に揃える。
+- 食い違いがあれば `"{at}: 抜き色の判定とマスクが {} 画素で食い違う（先頭 5 件 (x, y, 期待は内か): {:?}）"` を返す。先頭 5 件の形は `shell_target_template_tests.rs` の前例に揃える。
+- テスト本体は 3 面の文言を集め、最後に `assert!(failures.is_empty(), "{}", failures.join("\n"))` で 1 回だけ主張する（実装 3.1 で改訂: 面ごとに止めると 1 面目の赤しか観測できず、要件 2 の差し替えで「3 面すべて赤」を 1 回の走行で示せないため）。
 - `at` は「`R_POST_and_KOMAINU` 面 0」のように検体名と面の番号を持つ。
 
 **Implementation Notes**
