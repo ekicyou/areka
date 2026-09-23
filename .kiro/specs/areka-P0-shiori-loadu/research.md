@@ -165,6 +165,7 @@ brief の表と食い違うのは **pasta の 1 件だけ**。YAYA・里々は�
 
 ## 8. 設計判断の議題（要件ディスカッションへ）
 
+> **設計フェーズ（2026-09-23・`/kiro-spec-design`）で 1〜7・11〜13 は全て決めた**——決定は design.md 末尾「設計判断の対応」の表が正本、経緯は本文書 §10。
 > **要件ディスカッション（2026-09-23）の仕分け**: 1〜7・11・12 は how の判断＝**設計フェーズ（`/kiro-spec-design`）で決める**。8 は解決済み（pasta の `loadu` は上流で検証済み＝§4.2・要件 7.1〜7.2 を改訂）。9 は要件 8.3 の改訂で決着。10 の前半（steering `structure.md`）は要件 8.6 として要件に入れ、後半（`THIRD-PARTY-NOTICES.md`）は `/kiro-complete` の仕事のまま。開発者に問う議題は 0 件。
 
 1. **表せない字の検出法**: (a) `WideCharToMultiByte` に `WC_NO_BEST_FIT_CHARS` と `lpUsedDefaultChar` を渡す＋`GetACP()` が 65001 なら検出を飛ばす（UTF-8 に表せない字は無い）／(b) 変換後に `MultiByteToWideChar` で戻して元の UTF-16 と比べる（コードページを問わず同じ手順・「最も近い字へ寄せる」置換も検出できる・OS 呼び出しが 1 回増える）。どちらも新しい依存無し。**(b) を推奨**（分岐が 1 つ減り、要件 3.4・6.5 の「コードページに依存しない判定」がそのまま満たせる）。
@@ -190,3 +191,42 @@ brief の表と食い違うのは **pasta の 1 件だけ**。YAYA・里々は�
 3. **要件 9.4 の行数**: 「現在 585 行」は実測 **584 行**（`wc -l`）。結論に影響しない。
 
 （要件 1.4 と 6.8 の名札の件は食い違いではなく設計で吸収できる制約＝議題 4。）
+
+## 10. 設計フェーズの記録（2026-09-23・`/kiro-spec-design`）
+
+> ディスカバリの種別: **拡張（light）**。§1〜§7 の調査で対象の 2 関数・既存の作法・fixture の雛形が揃っていたので、追加の調査は `windows` 0.62.2 の API 形（`MultiByteToWideChar(codepage, flags, &[u8], Option<&mut [u16]>) -> i32`・`WideCharToMultiByte` の最後の引数が `Option<*mut BOOL>`・`GetACP`・`CP_UTF8`・`WC_NO_BEST_FIT_CHARS` が `Globalization/mod.rs` に在ること）の確認と、helper の `Cargo.toml` に `tracing` が無い（観測は全て `eprintln!`）ことの確認だけ。外部調査（WebSearch）は行っていない（新技術 0・正典は要件に逐語で載っている）。
+
+### 10.1 統合（synthesis）の結果
+
+- **一般化**: `loadu` と `load` は「同じ署名・同じ所有権規約・違うのはパスの文字コードだけ」なので、fn ポインタの型は `LoadFn` 1 つに統一し、違いは `InitEntry` の変種（`Loadu`／`Load`）に載せる。符号化は「入口 → バイト列」の 1 関数 `init_bytes` に畳む。`encode_with_codepage` はコードページを引数に取る形にしたが、実装は `CP_ACP` 1 つしか使わない（一般化は境界だけ・実装は今の要件の範囲）。
+- **作る／借りる**: 表せない字の検出は Win32 の既存 API（`MultiByteToWideChar`）で往復比較するだけ。crate は足さない。`lpUsedDefaultChar` は UTF-8 既定機で関数自体が失敗するので借りない（§1・§8-1）。
+- **簡素化**: (i) 入口名の行は proxy から直接 `eprintln!`（`ProxyError` に入口を載せて `main.rs` へ運ぶ案は variant が増え、`main.rs` と 2 ファイルの改変になる）。(ii) `struct ShioriByteProxy` の `load: LoadFn` 欄は読む者が無いので外す。(iii) 2 本目の fixture の `request` は 400 固定（既存の `parse_request` を写さない）。(iv) `resolve_testdll` の統合は要件 6.8 が既存テストの改変を禁じるので行わず、新テストファイルに 1 つだけ置く。
+
+### 10.2 決定（§8 の議題 1〜7・11〜13）
+
+| # | 決定 | 捨てた案と理由 |
+|---|---|---|
+| 1 | **(b) 往復比較**。本番の `WideCharToMultiByte(cp, 0, …)` は今日のまま、`MultiByteToWideChar(cp, 0, &bytes, …)` で戻して元の UTF-16 と比べ、違えば `lossy = true`。戻せない（0 以下）ときも `lossy = true`（警告して渡す） | (a) `lpUsedDefaultChar`＋`GetACP()==65001` の分岐: 65001 で関数が失敗する罠・分岐が 1 つ増える・best-fit を捕まえるには判定専用の 2 回目の変換が要る（§8-13） |
+| 2 | **置く**。`fn encode_with_codepage(cp: u32, path: &Path) -> Result<CodepageEncoded { bytes, lossy }, ProxyError>`。`ansi_encode` は `.map(\|e\| e.bytes)` の薄い包みで署名不変 | 置かない: 検出のテストが機械の CP932 の有無に縛られる（要件 6.5 を満たせない） |
+| 3 | **(a) proxy が呼ぶ直前に `eprintln!`**。固定語句 `[helper] SHIORI 初期化の入口: {loadu\|load}`。`main.rs` は 0 行変更 | (b) 戻り値で運ぶ: `ProxyError` の全 variant に入口を載せる必要があり、`main.rs` の `{e:?}` の出力も変わる |
+| 4 | **`"load"`**。`choose_init_entry` の `(None, None)` は `EntryNotFound("load")`。variant の doc に明記 | `"loadu/load"`: 既存テスト `kernel32_yields_entry_not_found` の改変が要る（要件 6.8 違反） |
+| 5 | `crates/shiori-host32-testdll-loadu`・`[lib] name = "shiori_loadu"` → `shiori_loadu.dll`。**戻りは `i32`（Win32 `BOOL` 4 バイト）**＝既存 fixture の Rust `bool` 1 バイトと対にして、helper の `u8` 受けが両方で正しいことを偽 DLL で踏む | `shiori.dll` の再利用: 出力名の衝突（同じ target フォルダで後勝ち）＋既存 6 か所の解決器が拾う |
+| 6 | env `HOST32_TESTDLL_LOADU_RECORD=<ファイル>` に `<入口名>\t<小文字 16 進>\n` を追記（`loadu`・`load` とも同じファイル）。`HOST32_TESTDLL_LOADU_FAIL=1` で `loadu` が 0。`unload` は 1 固定・`request` は 400 固定 | 生バイトをそのまま書く: 改行や任意バイトで行の境界が壊れる。`load` を別ファイルに: 「呼ばれなかった」の判定が「ファイルが無い」になり、書き忘れと区別できない |
+| 7 | **統合しない**。新テストファイルに `resolve_loadu_testdll()` を 1 つ置く（7 か所目）。steering `structure.md` の `<stem>_test_support.rs` への集約は、要件 6.8 の凍結（既存テスト無改変）が解けた次の機会に既存 6 か所と一緒に行う | 今統合する: 既存 `mod tests`・`main_loopback_tests.rs` の改変になる（6.8 違反）。1 消費者のための support ファイルは指向の無い間接になる |
+| 11 | `UnloadFn -> u8`・`Drop` は `let _ = (self.unload)()` のまま。既存 fixture の `unload() -> bool` と 1 バイトで ABI 一致（確認のみ・改変 0） | — |
+| 12 | `Path::to_str()` が `None` → `EncodingFailed`（`main.rs` の既存の 1 行が出る） | `to_string_lossy` で置き換えて渡す: 「置き換えない」（要件 2.4）と矛盾 |
+| 13 | 1 の往復比較で同時に満たす（本番の変換に `WC_NO_BEST_FIT_CHARS` を掛けない・渡すバイト列は今日と同一） | — |
+
+### 10.3 境界の決定と根拠
+
+- **`main.rs` を触らない**（決定 3 の帰結）。並走 `areka-P0-property-ipc-transport` が `main.rs` を触る見込み（§2.4）なので、同じファイルを触らないことで合流の衝突を 0 にする。
+- **既存 `mod tests` と `main_loopback_tests.rs` を触らない**（要件 6.8）。新テストは兄弟ファイル `shiori_proxy_loadu_tests.rs`（`shiori_proxy.rs` 末尾の `#[cfg(test)] #[path] mod loadu_tests;`）。env が既存 fixture と重ならないので直列化の鍵も自前（`LOADU_SERIAL`）。
+- **`ProxyError` の variant を増やさない**。増やすと `main.rs` の `{e:?}` の語彙が変わり、失敗種別の grep（要件 4.4）と下流 `makoto-dll-host` の期待が動く。
+- **観測の 2 行の位置**: 警告は符号化の直後（`Load` の枝だけ）、入口名は呼ぶ直前。符号化・確保で失敗したときは入口を呼ばないので入口名の行は出ない（要件 4.1 の主語は「呼んだ」入口）。失敗の種別は `main.rs` の既存の 1 行が出す。
+
+### 10.4 リスクと手当て
+
+- **20127（US-ASCII）が無効な機械**: 往路の `WideCharToMultiByte` が 0 以下を返し `Err` になるので、群 C のテストは黙って緑にならず赤で気付く。そのときは 1252 に差し替える（設計 `encode_with_codepage` の Implementation Notes）。
+- **fixture の戻りを `i32` にしたことで既存 fixture と型が揃わない**: 意図的（5.1 の両側を踏む）。`lib.rs` の冒頭 doc に理由を書く。
+- **pasta の `loadu` の実機**: 上流で検証済み（§4.2）。実機確認 7.1 で念押し。
+- **UTF-8 既定機（`GetACP()==65001`）**: 本番の変換は今日のままなので `load` の枝は壊れず、往復は一致するので警告 0 行。設計で 1 度だけ `encode_with_codepage(65001, …)` を群 C で踏む（機械を切り替えずに同じ経路を通る）。
