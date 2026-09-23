@@ -234,11 +234,10 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 ## 直接修正候補（spec なし・任意・S）
 
-> **2026-09-20 棚卸⑮**: 下の 1 件目と 2 件目は**バグ修正**＝優先度の先頭。どちらも 1 ファイルで閉じ、A1 のどの spec とも重ならないので、spec を立てずにいつでも直せる（1 件 1 PR）。**2026-09-24 に 2 件を追記**（`choice.rs` の `#[cfg(test)]` 漏れ＝バグ修正・見張りの末尾 `/` の穴＝任意）。
+> **2026-09-20 棚卸⑮**: 下の 1 件目と 2 件目は**バグ修正**＝優先度の先頭。どちらも 1 ファイルで閉じ、A1 のどの spec とも重ならないので、spec を立てずにいつでも直せる（1 件 1 PR）。**2026-09-24**: `choice.rs` の `#[cfg(test)]` 漏れ（試験の補助 9 個が本番 lib に入っていた）は `default-balloon-nar-fold` のブランチで直した（1 行）。見張りの末尾 `/` の穴（任意）を追記。
 
 - `crates/areka-emo-text/src/writing.rs` の未知 `writing_mode` 警告文言（「horizontal_tb へフォールバック」→ 実挙動は「指定なしとして扱う」）。逐語固定のインラインテスト `unknown_value_falls_back_to_horizontal_tb_with_warn` と同時修正。`emo-text-canon-residue` 項目 12 と同一＝先に直せば同 spec から外す。
 - `crates/areka/src/placement/transition_judge_verdict.rs` の窓ごとの書込の上限の検査（完了 `placement` 系の要件 4.5）が、見送りの窓を除かずに `summary.writes_per_window` をそのまま回している。同じファイルに「見送りの窓を除いた、書込のあった窓」を返す `judged_windows` が**既に在り**、被覆の検査だけが使っている＝上限の検査でも同じものを回す＋兄弟テスト 1 本。`dpi-transition-two-tick-bounce`（#18）から 2026-09-20 に切り出した。`dpi.rs` には触らない。
-- **（2026-09-24 登記・バグ修正）** `crates/areka-emo-text/src/choice.rs` の `#[path = "choice_decorate_tests.rs"] mod decorate_tests;` に `#[cfg(test)]` が無く、直前の `bands_of` には `#[cfg(test)]` が 2 つ重なっている（mod に付くはずの 1 つがずれたとみられる）。その結果、試験の補助関数・定数 9 個が本番の lib に入り、`cargo build -p areka-emo-text` で「never used」の警告が 9 件出る（2026-09-24 実測）。直し方は重なった `#[cfg(test)]` を `mod decorate_tests;` の上へ移す 1 行。来歴は完了 `text-decoration-canon`（#148）。同じファイルを触る `choice-marker-styling`（#33）は α 後なので待たない。
 - **（2026-09-24 登記・任意・実害なし）** 見張り `crates/log-capture-kit/tests/sample_path_guard_test.rs` の `Form::tokens` は、展開形の検体フォルダを末尾 `/` 付きの `vendors/sample_ghost/<名>/` でしか拾わず、末尾 `/` の無い綴り（例 `join("vendors/sample_ghost/<名>")`）を見逃す。`default-balloon-nar-fold`（#42）で全検体が `.nar` になり読み先のフォルダが消えたので、取り残しは結合テストが赤にする。同 spec が「塞ぐのは本仕様の外」とした穴で、完了アーカイブに埋もれないようここに置く。
 - `.kiro/steering/roadmap-history.md` の `\w[ms]` 記述（history は非改変ゆえ据え置き・`doc/ukadoc-coverage/briefing-sakura-script.md` 側は 2026-09-11 に注記を追加済み）。
 - `crates/areka/src/main.rs:167-177` の「ゴーストの根が実在しなくても `warn!` で起動を続ける」経路（記憶 areka-log-first-no-silent-failure に反する）＝`baseware-root-layout` が置き換えるので**先に直さない**（二度触らない）。
