@@ -153,6 +153,7 @@ doc/ukadoc-coverage/report/summary.md   # 生成器で撮り直し（手で直�
 - `doc/COMPAT_ARCHITECTURE.md` — §8 の表に 3 行追記（8.1）。
 - `doc/ukadoc-coverage/briefing-shiori.md` → `doc/ukadoc-coverage/ledger/shiori.toml`（この順・正本→写し）— 「loadu は引かない」「3 つを名前で引く」の記述を実装に合わせる（8.2・8.3）。
 - `.kiro/steering/structure.md` — fixture 節に `shiori-host32-testdll-loadu` を 1 項目（8.6）。
+- `crates/log-capture-kit/tests/temp_path_guard_test.rs` —（実装時に追加・タスク 6.1）一時パスの見張りの例外表 `ALLOWED_ENTRY_POINT_USES` に `shiori_proxy_loadu_tests.rs` と偽 DLL の `lib.rs` を `Why::ProcessUnique` で 2 件足し、件数の定数を合わせる。両ファイルは名前にプロセス識別子と時刻を織り込んで一時パスを直に組む（群 D・fixture の単体テスト）。共通窓口 temp-path-kit へ寄せると両 crate に dev-dependency が要り 9.1 と衝突するため、見張りが用意する例外の道を使う（6.10）。
 
 ## System Flows
 
