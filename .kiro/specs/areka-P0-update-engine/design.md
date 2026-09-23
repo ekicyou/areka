@@ -522,7 +522,9 @@ pub struct UpdateError {
     // 要取得の一覧は持たない: 差分の段を越えた失敗なら `Progress::DiffDecided` で既に渡している（2.6）。
 }
 impl UpdateError {
-    /// 原因のファイル名（分かるとき）。
+    /// 原因のファイル名（分かるとき）。名前空間は対象フォルダからの相対名 1 つ（`OnUpdateFailure` の Ref1 へ写すので絶対パスは出さない）。
+    /// 名前を持つ理由はその名前、パスを持つ理由は `path.strip_prefix(target)`（空・配下でない・UTF-8 でない → `None`）。
+    /// パスを持つ理由の `path` は `target_real` でなく `target.join(rel)` で組む。フォルダ単位の理由は `None`。
     pub fn file(&self) -> Option<&str>;
     /// `RollbackFailed` 以外は真。
     pub fn rolled_back(&self) -> bool;
