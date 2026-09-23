@@ -142,7 +142,7 @@
 2. **（決着済み・要件 1.5 へ反映）「1 フレーム」の語彙を `state/mod.rs` の外でも消すか**: `controller.rs` の `resolve_transition` doc 1 項・`docs/click_through.md` の 1 段落。消すなら「閾値到達から次の tick の `dispatch_drag_events` まで」へ。消さないなら要件 1.5 に「`JustStarted` の『1 フレーム』は残す」と書いて 0 件を明示する。
 3. **契約テストの形**: ⒜ 新テスト 1 本で解放と中断の両方を踏む／⒝ 解放 1 本＋中断 1 本の兄弟 2 本（要件 3.4 はどちらも許す）。既存の `test_start_preparing_allowed_from_just_ended` は「`JustEnded` から次の押下を受け付ける」を既に固定しているので、新テストが足すのは「述語が偽」と「他の関数を 1 つも呼ばない」の 2 点。既存テストに assert を足す手もあるが要件 6.5（既存テスト不変）に反するので新設。
 4. **相乗り 1 の比較の置き場**: **C1** `decide(visibility, deferred.as_ref().filter(|d| d.scope == scope))` と、絞られて落ちたときの `trace!` を `poll_once` に置く（`decide` 不変・既存テスト緑）／**C2** `decide` の引数に `scope` を足す（判断が本当に 1 か所になるが `trigger_tests.rs` の見本 2 本を直す＝要件 6.5 の例外）／**C3** `Suppress` の腕の中で比べる（判断が 2 か所＝要件 4.4 違反・却下）。推奨は C1。C1 でも「送る／送らない」を決めるのは `decide` のままで、窓の比較は `decide` への入力（要件 4.4 の文言どおり）。
-5. **相乗り 2 の記録の水準**（要件の確認事項 2）: `warn!`（推奨・`logging.md` の表「回復可能なエラー・フォールバック」）／`debug!`（メニュー側 `readme_missing` と揃う・利用者の障害調査では見えない）／`info!`（ライフサイクルの表に合わない）。`error!` は要件が既に除外。
+5. **（決着済み・2026-09-23 開発者裁定＝`warn!`）相乗り 2 の記録の水準**（要件の確認事項 2）: `warn!`（推奨・`logging.md` の表「回復可能なエラー・フォールバック」）／`debug!`（メニュー側 `readme_missing` と揃う・利用者の障害調査では見えない）／`info!`（ライフサイクルの表に合わない）。`error!` は要件が既に除外。
 6. **相乗り 2 の実在チェックの書き方**: `wiring.path.exists()` を `open_from_world` に直に書く（推奨・`is_available` は `missing_logged` を消費するので呼ばない＝要件 5.4 を守る）。`is_available` と `open_from_world` で `exists()` が 2 か所になるが、片方は「灰色にする」もう片方は「開かない」で問いが違う。
 
 ## 7. Research Needed
