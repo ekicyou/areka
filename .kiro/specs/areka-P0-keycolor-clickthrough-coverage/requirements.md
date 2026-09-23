@@ -27,9 +27,9 @@
 
 - 公開 API: `load_shell_target`・`ShellTarget::build_world`／`atlas`・`EmoPresenter::attach_target`／`apply`・wintf の `AlphaMaskResource::mask`・`AlphaMask::is_hit`。
 - 既存テストが既に踏んでいる読み口: `crates/areka-emo-present/src/presenter_budget_equivalence_tests.rs` は本物の `apply` を駆動した後、target の装着情報から面 entity を引き、`AlphaMaskResource::mask()` で「当たり判定へ供給されたマスク」を読んでいる。実窓は作らず、窓は `DPI` component を持つ素の entity（`presenter_test_support.rs` の `spawn_window_with_dpi`）、GPU 資源は `make_world_with_gpu`（既存の常時テストと同じ前提）で載せる。
-- 読み戻し（GPU → CPU）は要らない: マスクは CPU 上の合成バイトから作られるので、オフスクリーンの D2D ターゲットも読み戻しも **0 回**である。
+- 読み戻し（GPU → CPU）は要らない: マスクは CPU 上の合成バイトから作られるので、オフスクリーンの D2D ターゲットも読み戻しも **0 回**である。ただし `show.rs` の表示の記録（`record_display`）が合成バイトから D2D bitmap を作るので、CPU → GPU の**転送**は既存の presenter 系テストと同じく起きる。
 
-製品コード（`crates/areka-emo-atlas`・`crates/areka-emo-compose`・`crates/areka-emo-present`・`crates/wintf` の非テストファイル）を触る必要は無い。唯一の細工は、検体の共有受け口（`crates/areka-emo-present/src/shell_target_test_support.rs`・`pub(super)`）が `shell_target` モジュールの外から見えないことで、これはテスト専用コードの可視性の話であり、設計で「可視性を広げる／共有の形を選ぶ」を決める（受け口の複製は作らない）。
+製品コード（`crates/areka-emo-atlas`・`crates/areka-emo-compose`・`crates/areka-emo-present`・`crates/wintf` の非テストファイル）の振る舞いを触る必要は無い。新しいテストを繋ぐ `#[cfg(test)] #[path = "…"] mod …;` の接続宣言だけは、`.kiro/steering/structure.md` の規約どおり本番ファイルへ足す（数え方は要件 1.10）。唯一の細工は、検体の共有受け口（`crates/areka-emo-present/src/shell_target_test_support.rs`・`pub(super)`）が `shell_target` モジュールの外から見えないことで、これはテスト専用コードの可視性の話であり、設計で「可視性を広げる／共有の形を選ぶ」を決める（受け口の複製は作らない）。
 
 ### テストの置き場（決定: `crates/areka-emo-present` のクレート内テスト）
 
@@ -70,14 +70,14 @@
 
 1. The 通しテスト shall 検体 `R_POST_and_KOMAINU` のシェル（`shell/master`）を、起動側と採寸側が通るのと同じ読み込みの入口（`load_shell_target`）で実物の絵ごと読み、面の表を組み、presenter に target として装着し、`ShowSurface` の指令を適用して面 0 の表示を成立させる。焼く・合成する・マスクを作る の 3 段を、製品と同じ順で、製品と同じ入口から通す。
 2. The 通しテスト shall 判定に使うマスクを、wintf の当たり判定が読むのと同じ場所——装着した窓の面 entity に載る `AlphaMaskResource` の `mask()`——から読む。キャッシュのスロットが束ねるマスクだけを読んで済ませない。
-3. The 通しテスト shall 「抜かれた画素」の正解を、テスト自身が同じ PNG を復号した生の画素から定める: 左上（座標 0,0）の画素と 4 バイトが完全に一致する画素が「抜かれた画素」、それ以外が「抜かれなかった画素」。正解は正規化・焼き・合成・マスクのどの段の出力からも導かない。
+3. The 通しテスト shall 「抜かれた画素」の正解を、テスト自身が同じ PNG を復号した生の画素から定める: 左上（座標 0,0）の画素と 4 バイトが完全に一致する画素が「抜かれた画素」、それ以外が「抜かれなかった画素」。正解は正規化・焼き・合成・マスクのどの段の出力からも導かない。抜き色と一致する画素は絵の内側に在っても抜かれる（`R_POST_and_KOMAINU` の抜き色は白、`konnoyayame` は緑）ので、テストは「絵の内側は全部『内』」とは主張せず、この規則そのものを主張する。
 4. When 面 0 の表示が成立した, the 通しテスト shall 面の外形（236×462）の**全画素**について、抜かれた画素の位置ではマスクが「外」（`is_hit` が `false`）、抜かれなかった画素の位置では「内」（`is_hit` が `true`）であることを判定し、食い違う位置の数が **0** であることを主張する。食い違いがあれば、その位置と件数を失敗の文言に出す。
 5. The 通しテスト shall 較正として、抜かれた画素の数が 0 より大きく全画素数より小さいことを併せて主張する（全画素が透明・全画素が不透明のどちらでも 4 の主張が恒真になるため）。
 6. The 通しテスト shall 同じ判定（3〜5）を、`R_POST_and_KOMAINU` の面 10（140×160・`surfaces.txt` に宣言の無い面）と、`konnoyayame` の面 0（260×390・パレット形式の PNG）にも行う。面 10 は起動時に相方側へ出る面であり、宣言の無い面が同じ扱いを受けることを固定する。`konnoyayame` は PNG の形が違う（パレット）のに同じ抜き色の腕を通ることを固定する。
 7. The 通しテスト shall 検体を `sample_ghost_kit::SampleRoot` 経由でのみ取り、`vendors/sample_ghost/` の直パスを 1 か所も綴らない。検体の受け口は既存の共有受け口を使い、テストバイナリの中に受け口の複製を新設しない。
 8. The 通しテスト shall 常時テストとして走る: 実窓を作らない、他プロセスの可視窓を作らない、壁時計を合否に使わない、`#[ignore]` も環境変数のゲートも持たない。GPU 資源の前提は既存の presenter 系テストと同一で、GPU からの読み戻しは 0 回である。
 9. The 通しテスト shall 名前と説明文で「抜き色で透明になった場所のクリックが背後へ抜けることを固定するテスト」であることを平易に述べ、完了 spec `areka-P0-shell-implicit-surface` の要件 4.10 を指す。
-10. The areka shall 本テストの追加にあたり、焼く・合成する・マスクを作る各段の製品コード（`crates/areka-emo-atlas`・`crates/areka-emo-compose`・`crates/areka-emo-present`・`crates/wintf` の非テストファイル）を **0 行**変えない。変えてよいのはテストとテスト専用の補助（`#[cfg(test)]` の中）だけである。
+10. The areka shall 本テストの追加にあたり、焼く・合成する・マスクを作る各段の製品コード（`crates/areka-emo-atlas`・`crates/areka-emo-compose`・`crates/areka-emo-present`・`crates/wintf` の非テストファイル）を **0 行**変えない。変えてよいのはテストとテスト専用の補助（`#[cfg(test)]` の中）だけである。数え方: 「`#[cfg(test)]` の付いた項目の外で変わった行」を製品コードの変更行数とし、これが 0 である。新しいテストを繋ぐ接続宣言（`#[cfg(test)] #[path = "…"] mod …;`）と、テスト専用ファイルの可視性の書き換え（`pub(super)` → `pub(crate)` など）はこの数に含めず、それぞれの件数を別に報告する。
 
 ### Requirement 2: 途中の段で抜いた α が落ちるとテストが赤になることの実証
 
@@ -85,7 +85,7 @@
 
 #### Acceptance Criteria
 
-1. The 実装作業 shall 焼く・合成する・マスクを作る の **3 段それぞれ**に、抜いた α を**経路から外す差し替え**を 1 つずつ当て、要件 1 のテストが**自身の主張（要件 1.4）で**赤になることを実際に走らせて示す。差し替えは「透明を運ぶ段の入力や出力を別の物に置き換える」形とし、座標や値を少しずらす形（平行移動）は用いない。候補は次のとおりで、確定は設計が行う: 焼く＝抜き色の腕が画素を変えずに返す／合成する＝転写が元の α を捨てて全画素を不透明で書く／マスク＝マスク生成へ表示バッファの代わりに全画素不透明のバッファを渡す。
+1. The 実装作業 shall 焼く・合成する・マスクを作る の **3 段それぞれ**に、抜いた α を**経路から外す差し替え**を 1 つずつ当て、要件 1 のテストが**自身の主張（要件 1.4）で**赤になることを実際に走らせて示す。差し替えは「透明を運ぶ段の入力や出力を別の物に置き換える」形とし、座標や値を少しずらす形（平行移動）は用いない。候補は次のとおりで、確定は設計が行う: 焼く＝抜き色の腕が画素を変えずに返す／合成する＝転写した画素の α を捨てて不透明で書く（転写はトリム後の矩形の内側しか書かないので不透明になるのは矩形の内側だけだが、矩形の内側にも抜かれた画素が 4 面すべてで在るため赤になる）／マスク＝マスク生成へ表示バッファの代わりに全画素不透明のバッファを渡す。
 2. The 実装作業 shall 各差し替えについて、差し替えた箇所（ファイルと、その箇所が何を定義しているか）・赤になったテスト名・失敗の文言を記録に残す。併せて、その差し替えで**既存の**テストのうち赤になったものも列挙する（例: 焼く段の差し替えで `normalize_key_color_tests.rs` が赤になるのは想定どおりで、それを隠さない）。
 3. When 差し替えを元へ戻した, the 実装 shall 要件 1 のテストと、`cargo test` で走る当該クレートの既存テストが全て緑であることを確かめ、赤の数が **0** であることを記録する。差し替えを製品コードに残さない。
 4. The 実装作業 shall 差し替えの記録を、tasks.md の完了記録または検証報告に、後から読み返して再現できる粒度（差し替えの定義・走らせ方）で書く。
@@ -98,8 +98,8 @@
 
 1. The areka shall `crates/areka-emo-compose` の検体の共有受け口（`sample_test_support.rs` の `emo2_root`・`konnoyayame_shell_root`）について、指す先が実在すること（`konnoyayame_shell_root` は `surfaces.txt` を持つフォルダ、`emo2_root` は `shell/master` を持つゴーストのフォルダ）を判定するテストを 1 本持つ。受け口が壊れたとき、それを使う既存テストが「読めない」で赤になるより先に、受け口側の較正が原因を名指しする。
 2. The areka shall `crates/areka/src/placement/measure_template_tests.rs` の本文走査（`shell::parse` が本文に 0 件であることの見張り）の対象に、`load_shell_target` を呼ぶ examples 3 本——`crates/areka/examples/emo-present/setup.rs`・`crates/areka/examples/collision-probe/setup.rs`・`crates/areka/examples/window-placement.rs`——を足す。3 本とも今日の本文の `shell::parse` は 0 件で、走査器が拒む生文字列も 0 件なので、走査器そのものは変えない。
-3. The areka shall `crates/areka/examples/emo-present/setup.rs` と `crates/areka/examples/collision-probe/setup.rs` の私有 `fn build_shell_target` を、公開の `areka_emo_present::build_shell_target` と取り違えない名前へ改める。改名は名前と呼び出し箇所だけを変え、ロジックの変更は **0 行**である。改名後も `cargo build -p areka --examples` が通る。
-4. The areka shall 相乗り 3 件で触るファイルを、`crates/areka-emo-compose` のテスト・`crates/areka/src/placement/measure_template_tests.rs`・上の examples 2 本に限る。A1 で並走する他の spec が触るファイルとの重なりは 0 である（roadmap の干渉台帳）。
+3. The areka shall `crates/areka/examples/emo-present/setup.rs` と `crates/areka/examples/collision-probe/setup.rs` の私有 `fn build_shell_target` を、公開の `areka_emo_present::build_shell_target` と取り違えない名前へ改める。改名は名前・呼び出し箇所・旧名を指す説明文だけを変え、ロジックの変更は **0 行**である。旧名を指す説明文は、2 本それぞれの中の説明文に加えて `crates/areka/examples/collision-probe.rs` の冒頭説明文（doc リンク）と `crates/areka/examples/window-placement.rs` の説明文に在り、これらも新しい名前へ改める（旧名を指したまま残さない）。改名後も `cargo build -p areka --examples` が通る。
+4. The areka shall 相乗り 3 件で触るファイルを、`crates/areka-emo-compose` のテスト・`crates/areka/src/placement/measure_template_tests.rs`・上の examples 2 本・説明文だけを改める `crates/areka/examples/collision-probe.rs` と `crates/areka/examples/window-placement.rs` に限る。A1 で並走する他の spec が触るファイルとの重なりは 0 である（roadmap の干渉台帳）。
 
 ### Requirement 4: 変えないもの
 
@@ -121,6 +121,6 @@
 #### Acceptance Criteria
 
 1. The 報告 shall 「抜き色で透明になった場所のクリックが背後へ抜けることを固定するテスト」と平易に書き、プロジェクト内の符牒を使わない。
-2. The 報告 shall 製品コードの変更行数が 0 であること、GPU からの読み戻しが 0 回であること、拡大率 k ≠ 1 の水準が 0 本であること（理由: マスクは原寸で作られ ÷k は wintf 側）を、数として明示する。
-3. The 報告 shall 「実機の確認は不要になった」とは書かない。本テストが止めるのは退行であり、`alpha-release-signoff` の目視は残る。
+2. The 報告 shall 製品コードの変更行数が 0 であること（数え方は要件 1.10。接続宣言と可視性の書き換えの件数は別に書く）、GPU からの読み戻しが 0 回であること、拡大率 k ≠ 1 の水準が 0 本であること（理由: マスクは原寸で作られ ÷k は wintf 側）を、数として明示する。CPU → GPU の転送は起きるので「GPU に触れない」とは書かない。
+3. The 報告 shall 「実機の確認は不要になった」とは書かない。本テストが止めるのは退行であり、`alpha-release-signoff` の目視は残る。また「キャラクターの外が抜ける」と言い換えず、「左上の画素と同じ色の画素が抜ける」と書く（抜き色は絵の内側の画素にも当たる）。
 4. The 報告 shall 要件 2 の差し替えの記録（3 段 × 1 件・各件の赤の証跡・戻した後の赤 0）を含む。
