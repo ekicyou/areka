@@ -47,7 +47,7 @@
 - `areka`（bin） → `areka-ghost`（`catalog`・`sylphya_wiring::profile_areka_root`）・`areka-sylphya`（`load_scope`／`FsPersistIo`／`PersistKey`／`SylphyaPublisher::persist_put`）・`areka-parsers`（`package::MountError` の参照のみ）・`windows`（`MessageBoxW`＝既存 feature `Win32_UI_WindowsAndMessaging`）。すべて既存の path 依存。
 - `areka-ghost::catalog` → `areka-parsers::{charset::decode, kv::parse_kv}`・`std::fs`。**`areka-nar`・`areka-sylphya` には依存しない**（列挙は記憶を知らない）。
 - テスト → `temp-path-kit`・`sample-ghost-kit`・`log-capture-kit`（すべて `[dev-dependencies]` 登記済み）。
-- 依存方向（左から右へのみ import する）: `areka-parsers` → `areka-sylphya` → `areka-ghost::catalog` → `areka::{boot_config, boot_resolve, alert}` → `areka::main`。
+- 依存方向（左は右を import しない）: `areka-parsers` → `areka-sylphya` → `areka-ghost::catalog` → `areka::{boot_config, boot_resolve, alert}` → `areka::main`。`catalog` 自身が import するのは `areka-parsers` だけで、`areka-sylphya` を引くのは bin の `boot_resolve`。
 - 新規の外部依存 0（要件 7.7）。乱数は `std::hash::RandomState` から取る。
 
 ### Revalidation Triggers
@@ -158,14 +158,15 @@ crates/areka/src/
 └── placement/{mod,measure,spawn}.rs # 変更: doc コメントの「ダミー窓へフォールバック」の言及を消す（コードは触らない）
 
 crates/areka/tests/
-└── smoke_boot_loop_exit.rs         # 変更: run_smoke に env の口・3 方向（本物／根／0 体）
+├── smoke_boot_loop_exit.rs         # 変更: run_smoke に env の口・3 方向（本物／根／0 体）
+└── emo2_real_run.rs                # 変更: 子プロセスへ AREKA_NO_ALERT=1 を渡す（モーダルで見張りまで止まらない）
 
 doc/ukadoc-coverage/ledger/assets.toml  # 変更: 読むようになった欄の status/owner/note
 ```
 
 ### Modified Files（要点）
 - `main.rs`: 存在確認ループ・`spawn_dummy_window`・`on_dummy_pressed`・`DummyWindowMarker`・`is_benign_placement_error` と不要な `use`（`D2D1_COLOR_F`・`BoxSize`／`BoxStyle`／`Dimension`・`DoubleClick`／`OnPointerPressed`／`Phase`／`PointerState`・`Brushes`・`Rectangle`・`ChildOf`）を消す。`open_startup_window` は `Result<StartupDescriptValues, placement::PlacementError>` を返し、smoke の自動終了の投入は成功時だけ行う。`main` は失敗を `alert::raise` → `Err` へ写す。見積り約 830 行。
-- `boot_config.rs`: 既定パス 2 関数と `resolve_config_inputs` を消し、`resolve_root_from(env: Option<PathBuf>, exe: Option<PathBuf>) -> Result<PathBuf, RootError>` と env を読む `resolve_root()` を足す。`ConfigInputs`・`default_helper_exe_path`・`default_app_profile_dir`・`ghost_boot_options`・`is_benign_boot_error` は残す。
+- `boot_config.rs`: 既定パス 2 関数と `resolve_config_inputs` を消し、`resolve_root_from(env: Option<PathBuf>, exe: Option<PathBuf>) -> Result<(PathBuf, RootSource), RootError>` と env を読む `resolve_root()` を足す。`ConfigInputs`・`default_helper_exe_path`・`default_app_profile_dir`・`ghost_boot_options`・`is_benign_boot_error` は残す。
 - `app_exit.rs`: `use crate::DummyWindowMarker;` を消し、`despawn_app_windows` の query を `With<GhostWindowMarker>` へ。`quit_app` の形は不変（要件 7.2）。
 
 ## System Flows
@@ -453,12 +454,12 @@ pub(crate) fn resolve_root_from(env: Option<PathBuf>, exe: Option<PathBuf>) -> R
 pub(crate) fn resolve_root() -> Result<(PathBuf, RootSource), RootError>;
 ```
 - Preconditions: なし。
-- Postconditions: `Ok` のパスは `is_dir()` が真。`AREKA_ROOT` があるとき `exe` は見ない（要件 1.3）。`exe` が `None` で env も無ければ `ExeLocationUnavailable`（`"."` へ倒さない・要件 1.4）。
+- Postconditions: `Ok` のパスは `is_dir()` が真で、かつ**絶対パス**（`std::path::absolute` で組む。`canonicalize` は使わない＝長いパスの接頭辞と失敗の口を持ち込まない・`sample-ghost-kit` の `devroot` と同じ作法）。相対の `AREKA_ROOT` はカレントディレクトリ基準で絶対化してから実在を検査する（要件 6.1 の告知が絶対パスを載せるため。`RootError::NotADirectory` の `dir` も絶対）。`AREKA_ROOT` があるとき `exe` は見ない（要件 1.3）。`exe` が `None` で env も無ければ `ExeLocationUnavailable`（`"."` へ倒さない・要件 1.4）。
 - Invariants: `default_app_profile_dir` の `"."` フォールバックは**変えない**（要件 1.7）。根だけが厳格になる。
 
 **Implementation Notes**
 - Integration: `main` は `resolve_root()` の `Err` を `AlertScene::RootMissing(err)` へ写す。`Ok((dir, source))` は `info!(event = "root_resolved", root, source)` を残し `BasewareRoot::new(dir)` にする。
-- Validation: `main_config_input_tests.rs` を「`resolve_root_from` の 5 通り（env あり実在／env あり不在／env 無し exe あり実在／env 無し exe あり不在／env 無し exe 無し）」へ置き換える。一時フォルダは `temp-path-kit`。プロセスの env は書かない（要件 8.2）。
+- Validation: `main_config_input_tests.rs` を「`resolve_root_from` の 6 通り（env あり実在／env あり不在／env 無し exe あり実在／env 無し exe あり不在／env 無し exe 無し／相対の env が絶対で返る）」へ置き換える。一時フォルダは `temp-path-kit`。プロセスの env は書かない（要件 8.2）。
 - Risks: `is_benign_boot_error` の doc（「`default_ghost_root()` はプレースホルダで不在が常態」）は根拠を失う → 「起動解決が `ghost/master/descript.txt` の実在を確かめてから boot するので、ここでの `StartPointMissing` は解決後の消失（起動中の削除等）に限られる。分類は `wire_emo2_boot` のフォールバック（本仕様の範囲外）が使い続けるため残す」へ書き換える（#8 と同じ扱い）。
 
 #### `boot_resolve`（`crates/areka/src/boot_resolve.rs`）
@@ -634,6 +635,7 @@ pub(crate) fn raise(scene: &AlertScene, suppressed: bool);
 - ② 根方向: argv なし・`AREKA_ROOT=EMO2.root()`・`AREKA_PROFILE_DIR=TempPath::new("smoke-root-profile")`。目印「起動するゴーストを決めました」＋`route=Only`、「バルーンを決めました」＋`route=Companion`（パスは綴らない＝走査語 ⑷ に当たらない）、「wire 成立」・終了コード 0。
 - ③ 0 体方向: argv なし・`AREKA_ROOT=TempPath::new("smoke-empty-root")`（空のフォルダ）・`AREKA_PROFILE_DIR` も ② と同じく一時フォルダ（前回の実走の記憶を読まない）。目印「ゴーストが見つかりません」（`alert` の `error!` の本文の冒頭）・終了コード **非 0**・「本物のゴースト窓を開きました」を含まない。
 - モニタ 0 台: ①② は「起動窓を開けない」の `error!`（本文に「モニタ」）と非 0 終了を受理する（今日の「ダミー窓で完走を受理」の置き換え）。
+- `tests/emo2_real_run.rs`（`AREKA_EMO2_REAL_RUN` で点く開発者向けの実走）も子プロセスへ `AREKA_NO_ALERT=1` を渡す。argv 起動なので根・ゴースト・バルーンの告知は出ないが、モニタ 0 台では「起動窓を開けない」の告知が見張りの 60 秒までモーダルで止まるため。見え方（要件 7.1）は変わらず、env が 1 つ増えるだけ。
 
 ## Data Models
 
@@ -699,7 +701,7 @@ shell = "master"
 ### Unit Tests（判断分岐だけ・配線は再テストしない＝要件 8.4）
 - `catalog_tests.rs`（要件 2・8.1）: 検体の根（`SampleRoot::acquire("emo2")`＝ゴースト 1・バルーン 1・`companion_balloon` が `emo2-kakukaku`）と、`catalog_test_support` が一時フォルダに組む根（ゴースト 2 体・`menu,hidden` を含むシェル 2 つ・`type,balloon` のバルーン・`type,plugin` のフォルダ・`descript.txt` の無いフォルダ・フォルダ名 `StayseeBalloon` の偽のバルーン・`Shift_JIS` 宣言の `name`／`craftmanw`）で件数と 7 項目を突き合わせる。格納フォルダ不在 → 0 件。読めない descript → `warn!`＋除外（`log_capture_kit`）。並びはバイト順。
 - `boot_resolve_tests.rs`（要件 4.9・5.10・8.3）: ゴースト 6 分岐＋記憶の指す先が無い場合、バルーン 7 分岐＋記憶・同梱の指す先が無い場合。`pick` は固定添字。`LastUsed::record` は `spawn_sylphya`＋`FakePersistIo` で argv／非 argv の書き分けを読み戻す。
-- `main_config_input_tests.rs`（要件 8.2）: `resolve_root_from` の 5 通り（env を書かない）。
+- `main_config_input_tests.rs`（要件 8.2）: `resolve_root_from` の 6 通り（env を書かない）。
 - `alert_tests.rs`（要件 6.7）: 4 場面の `error!` 1 件ずつ・本文に絶対パス・`suppressed_from` の 5 通り。
 - `persist_tests.rs`（要件 3.7）: 3 鍵の往復・無い鍵は返らない・`[last]` だけ保存しても他の表が残る・`parse_dotted` との往復。既存 4 族のテストは移設のみ。
 
@@ -729,7 +731,7 @@ shell = "master"
 | **R4** `install.txt` の読み手 | **(a) 自前**（`catalog::companion_balloon`＝`decode`＋`parse_kv`＋小文字化＋1 鍵） | `areka-nar` の `parse_manifest` は `name`／`directory` 必須で拒否し、壊れた `install.txt` で同梱が引けなくなる（要件 5.7 と合わない）。本番依存も増やさない |
 | **R5** 鍵の大小 | **鍵は ASCII 小文字化して引く。`menu`／`type` の値は trim＋ASCII 小文字化で `hidden`／`balloon` と比べる。素性の値（`name` 等）は無加工** | `areka-nar` と同じ流儀。ukadoc の綴りは小文字 |
 | **R6** 並びと非 UTF-8 名 | **`String` のバイト順（`Ord`）。非 UTF-8 のフォルダ名は `warn!` で列挙から除く**（argv なら起動できる） | 記憶の値が `String`。列挙に載せても記憶に書けない |
-| **R7** 台帳の更新範囲 | 実装 PR で `doc/ukadoc-coverage/ledger/assets.toml` の次の欄を `status = "implemented"`・`owner = "areka-P0-baseware-root-layout"` へ: バルーン `name`／`craftman`／`craftmanw`／`id`／`type`／`readme`、シェル `craftman`／`craftmanw`／`id`／`readme`／`menu,hidden`、ゴースト `craftman`／`craftmanw`／`id`。既に実装済みの欄（ゴースト `name`・`readme`、シェル `name`＝owner `areka-P0-ghost-setup`）は status と owner を動かさず note に列挙の読み手（`areka-ghost` の `catalog`）を追記するだけ。`readme` は「所在の解決のみ・開く経路はゴーストだけ」と note に書く。`craftmanurl`／`homeurl`／`recommended.*`／`thumbnail.pnr`／`readme.md`／`readme.charset` は触らない | `cargo test -p ukadoc-survey` が整合を見張る。実装した欄だけを動かす（記憶 no-auto-tracking） |
+| **R7** 台帳の更新範囲 | 実装 PR で `doc/ukadoc-coverage/ledger/assets.toml` の次の欄を `status = "implemented"`・`owner = "areka-P0-baseware-root-layout"` へ: バルーン `name`／`craftman`／`craftmanw`／`id`／`type`／`readme`、シェル `craftman`／`craftmanw`／`id`／`readme`／`menu,hidden`、ゴースト `name`／`craftman`／`craftmanw`／`id`（ゴースト `name` は台帳では `vocabulary-only`・owner 無し＝`GhostNames::name` へ写すだけで読む本番の経路が無く、`catalog::list_ghosts` が最初の読み手になる）。既に実装済みの欄（ゴースト `readme`＝owner `areka-P0-popup-menu-minimal`、シェル `name`＝owner `areka-P0-ghost-setup`）は status と owner を動かさず note に列挙の読み手（`areka-ghost` の `catalog`）を追記するだけ。`readme` は「所在の解決のみ・開く経路はゴーストだけ」と note に書く。`craftmanurl`／`homeurl`／`recommended.*`／`thumbnail.pnr`／`readme.md`／`readme.charset` は触らない | `cargo test -p ukadoc-survey` が整合を見張る。実装した欄だけを動かす（記憶 no-auto-tracking） |
 | **R8** `default-balloon-nar-fold` との順序 | **どちらが先でも赤にならない** | 走査語 ⑵ は `vendors/sample_ghost/<名>` の形（本番の `"StayseeBalloon"` は接頭辞を持たない）、⑷ はゴースト検体の `balloons` だけから組む（`StayseeBalloon` はバルーン種別で `balloons` を持たない）。テストの偽バルーンは `TempPath` の下に組む |
 
 ## 実装の段取り（タスク生成の指針）

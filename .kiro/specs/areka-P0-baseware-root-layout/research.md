@@ -211,7 +211,7 @@ Research Needed（設計で確定する）:
   - `WinApp`（`crates/wintf/src/runtime/mod.rs`）は `Drop` を実装しておらず、COM は `CoUninitialize` しない方針（同ファイルの P30 の NOTE）。`WinApp` 構築後に `main` が `Err` を返す経路は今日も `app.run()?` と終了統括の失敗で在る → R3 は「安全」で確定。
   - sylphya のアクター（`crates/areka-sylphya/src/actor.rs` の `fn run_actor`）は `rx.recv()` の FIFO で 1 件ずつ処理し、`Effect::Stop`（`Close`）に達した時点で `return` する。`GhostRuntime::shutdown`（`runtime.rs`）の手順 10 は `barrier()` → `close()` → join。boot 直後に投函した `PersistPut` は `Close` より前に必ず処理される → R1 は「追加の barrier 不要」で確定。
   - `sample_path_guard_test.rs`（`crates/log-capture-kit/tests/`）の走査語 ⑵ は `vendors/sample_ghost/<検体名>` の綴り、⑷ はゴースト検体の `balloons` にバルーン名を継ぎ足す形だけ。本番の定数 `"StayseeBalloon"` も `join("StayseeBalloon")` もどちらにも当たらず、`StayseeBalloon` はバルーン種別の検体で `balloons` を持たない → R8 は「着地順に依らず緑」で確定。
-  - 台帳 `doc/ukadoc-coverage/ledger/assets.toml` では シェルの `name` が既に `implemented`（owner `areka-P0-ghost-setup`）、ゴーストの `name`・`readme` も実装済み。本仕様が動かすのは未実装の欄だけ（R7）。
+  - 台帳 `doc/ukadoc-coverage/ledger/assets.toml` では シェルの `name` が既に `implemented`（owner `areka-P0-ghost-setup`）、ゴーストの `readme` も `implemented`（owner `areka-P0-popup-menu-minimal`）。ゴーストの `name` は `vocabulary-only`・owner 無し（設計検証 2026-09-24 の指摘 1 で訂正。`catalog::list_ghosts` が最初の本番の読み手）。本仕様が動かすのは未実装の欄だけ（R7）。
   - `crates/areka` の bin テストで `log_capture_kit` を直接使っている前例は `readme_tests.rs`（`alert_tests.rs` はこれに倣う）。
 
 ## 9. Research Log（設計で引き直した点）
@@ -295,3 +295,17 @@ Research Needed（設計で確定する）:
 - 告知を抑止したまま配布物を起動すると何も見えない — 抑止は自動テストと実機 ③ だけの道具と手順に明記。
 - `main.rs` の行数 — 退役分（約 140 行）に対して配線の追加は約 60 行の見込み（約 830 行）。超えそうなら告知の呼び出しを `boot_resolve` 側のヘルパへ寄せる。
 - 走査語の番人 — `catalog_test_support` は偽のゴースト／バルーンを `TempPath` の下に組み、`vendors/sample_ghost/…` の綴りも `SAMPLES` の `balloons` の継ぎ足しも書かない。
+
+## 14. 設計ディスカッション（2026-09-24）の記録
+
+設計検証（`design-validation.md`・GO）の指摘 2 件と軽微 2 件、設計精査で増えた 1 件を精査した。開発者の判断を要する議題は **0 件**（要件 9 の裁定 1〜5 と §6.1 の持ち越し 12 件は design.md「設計判断（確定）」で決まっており、残りはすべて文書内の整合か既存の作法への合わせ込み）。
+
+| # | 種別 | 内容 | 反映先 |
+|---|---|---|---|
+| A1 | 検証の指摘 1 | R7 のゴースト `name` は台帳で `vocabulary-only`・owner 無し（実装済みではない）。`implemented`・owner 本仕様へ動かす欄に加え、据え置きはゴースト `readme`・シェル `name` の 2 欄に直した | design.md R7・本書 §8 |
+| A2 | 検証の指摘 2 | `resolve_root_from` の戻り値を Modified Files でも `Result<(PathBuf, RootSource), RootError>` に揃えた | design.md Modified Files |
+| A3 | 検証の軽微 | 依存方向の鎖に「`catalog` が import するのは `areka-parsers` だけ」を補った | design.md Allowed Dependencies |
+| A4 | 検証の軽微 | `tests/emo2_real_run.rs` も `AREKA_NO_ALERT=1` を渡す（モニタ 0 台でモーダルが見張りまで止まらない） | design.md smoke 節・File Structure |
+| A5 | 精査で増加 | 要件 6.1 は告知に**絶対パス**を載せるが、相対の `AREKA_ROOT` を絶対化する決め事が無かった。`resolve_root_from` の事後条件に `std::path::absolute`（`canonicalize` は使わない・`sample-ghost-kit` の `devroot` と同じ）を足し、決定論テストを 6 通りにした | design.md `boot_config` 節・Testing Strategy |
+
+裏取り（設計検証が触れていなかった既存コードの主張）: `default_app_profile_dir` が `AREKA_PROFILE_DIR` を読むこと・`GhostRuntime::mount()`／`sylphya_publisher()` が公開されていること・`SampleRoot::acquire` が走行ごとの使い捨て複製を配ること（smoke ② の `route=Companion` が 2 回目の走行で `Memory` に変わらない）・`std::path::absolute` の前例（`devroot.rs`）を実物で確認した。
