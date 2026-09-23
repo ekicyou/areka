@@ -135,7 +135,7 @@ doc/COMPAT_ARCHITECTURE.md      # §8 の表の末尾に 1 行
 - `crates/areka-nar/src/install.rs` — `SURVIVOR_RETENTION`・`is_retained(entry, now)`・`next_address(shelf, now, serial)`・`WorkArea::create_at(root, now)`（`create` はこれに `SystemTime::now()` を渡す薄い皮）・`prepare_shelf(shelf, dir, now)` の削除前の判定・`unwind` の戻り値に `survivors`・`CommitError.survivors`。
 - `crates/areka-nar/src/lib.rs` — `read`・`io`・`place` の `NarError::Io` に `survivors`（前 2 つは空、`place` は `failure.survivors`）。`place` と `log_failure` の注釈を 2.5 の意味に改める（実装は変えない）。
 - `crates/areka-nar/src/lib_tests.rs` — `before.len() >= 14` → `>= 15`。境界テスト 5 本・確定の失敗 1 本・`hold` の写し（`OpenOptionsExt`）。
-- `crates/areka-nar/src/lib_vocabulary_tests.rs` — `cases()` に `PathTooLong` の固定入力・`observed.len() == 13` → `14`・注釈 3 か所。
+- `crates/areka-nar/src/lib_vocabulary_tests.rs` — `cases()` に `PathTooLong` の固定入力・`observed.len() == 13` → `14`・注釈 4 か所（モジュール注釈・`cases()` の注釈・テストの注釈・「13 件はすべて拒否」の行）。
 - `crates/areka-nar/src/error_tests.rs` — `samples_in_declaration_order` に `PathTooLong`・`all_kinds_has_thirteen_entries` → `all_kinds_has_fourteen_entries`（14）・`Io` の見本 2 か所に `survivors`・`PathTooLong` の表示が `head` と `length` と `limit` を落とさないこと。
 - `crates/areka-nar/src/names_tests.rs` — 順序（長さが NUL・`\`・`..`・予約名より先に勝つ）1 本・`is_valid_one_level_name` の 200／201 の境界 1 本。
 - `crates/areka-nar/src/install_tests.rs` — 保持の 3 本。
@@ -162,6 +162,7 @@ flowchart TD
 ```
 
 - 「自分の番地」は `next_address` が保持中の番地を避けて取るので、`Keep` の腕に自分の番地が来ることは無い。`Stop` の腕は既存のまま（保持されていない自分の番地が消せない＝前回の木が混ざる）。
+- **成功した展開の後片付けに失敗した作業フォルダも同じ規則に乗る**（設計検証の指摘 1）。`commit_all` は全配置を確定した後に作業フォルダを 1 回だけ消しにいき、消せなくても確定は取り消さず `leftovers` に載せる（既存）。このとき入れ替え済みの旧木 `old-<k>/` が残るので、上の判定はそれを「巻き戻せなかった元の木」と区別せず、更新時刻から 7 日守る。旧木は入れ替え前の中身そのままなので利用者にとっての価値は同じであり、区別するには成功経路で `old-<k>` を先に消す 1 手が要って手順の変更（2.11）に触れるため、区別しない。利用者から見える差は「成功した展開の残り物の警告が最長 7 日続く（今は次の展開で消せれば消える）」だけで、期限で有界。
 - 時刻の根拠は**作業フォルダ `<pid>-<連番>/` の更新時刻**。`old-<k>` はその直下へ `rename` で入るので、作業フォルダの直下が最後に変わった時刻＝失敗した走行が最後に作業フォルダを触った時刻（失敗の直前）になる。`old-<k>` 自身の更新時刻は使わない（`rename` はフォルダ自身の更新時刻を変えないので、利用者のゴーストの最終更新時刻になってしまう）。時計が戻っていて更新時刻が `now` より未来なら経過 0 として扱う（保持側へ倒す）。
 
 ### 在りかの運び方（`unwind` → `NarError::Io`・要件 2.1〜2.4）
@@ -306,7 +307,7 @@ survivors: Vec<SurvivingTree>,
 **Implementation Notes**
 - Integration: `pub use error::SurvivingTree` を `lib.rs` の公開面に足す。組み立て箇所は `lib.rs` の 3 か所と `error_tests.rs` の見本 2 か所（crate の外は 0）。
 - Validation: `error_tests.rs` の `samples_in_declaration_order` に `PathTooLong` を宣言順の位置で足す（足し忘れは `all_kinds_matches_every_variant_in_declaration_order` が赤にする）。`all_kinds_has_thirteen_entries` は `all_kinds_has_fourteen_entries`（14）に。`PathTooLong` の表示が `head`・`length`・`limit` を含み、`head` が 32 単位を超えないことを 1 本。
-- Risks: 手書きの数の変更は 4 ファイル 7 か所（`error.rs` 注釈・`error_tests.rs` 関数名と数と注釈・`lib_vocabulary_tests.rs` 注釈 3 か所と `observed.len()`・`lib_tests.rs` の `>= 14`）。同じ変更で改め、生成器（`ALL_KINDS`）との突合で漏れを赤にする。
+- Risks: 手書きの数の変更は 4 ファイル 8 か所（`error.rs` 注釈・`error_tests.rs` 関数名と数と注釈・`lib_vocabulary_tests.rs` 注釈 4 か所と `observed.len()`・`lib_tests.rs` の `>= 14`）。同じ変更で改め、生成器（`ALL_KINDS`）との突合で漏れを赤にする。
 
 ### 確定と片付け（`install.rs`）
 
@@ -383,7 +384,7 @@ fn prepare_shelf(shelf: &Path, dir: &Path, now: SystemTime) -> Result<Vec<PathBu
 ```
 
 - Preconditions: `create_at` は根が実在すること（既存）。`now` は判定にだけ使い、ファイルには書かない。
-- Postconditions: 保持中の項目は 1 バイトも触られず `residue` に載る（→ 成功時に `InstallOutcome.leftovers` → `lib.rs` の warn「work folder left behind」。**新しい記録の出口は足さない**）。期限を過ぎた項目・`old-` を持たない項目は既存どおり消す。`create_at` が返す番地は保持中の項目と一致しない。保持されていない自分の番地が消せないときは既存どおり `StageError`。
+- Postconditions: 保持中の項目は 1 バイトも触られず `residue` に載る（→ 成功時に `InstallOutcome.leftovers` → `lib.rs` の warn「work folder left behind」。**新しい記録の出口は足さない**）。期限を過ぎた項目・`old-` を持たない項目は既存どおり消す。保持の判定は「なぜ `old-` が残ったか」を見ない: 巻き戻せなかった走行の作業フォルダも、成功したが後片付けに失敗した走行の作業フォルダも、`old-` を直下に持てば同じく 7 日守る。`create_at` が返す番地は保持中の項目と一致しない。保持されていない自分の番地が消せないときは既存どおり `StageError`。
 - Invariants: 判定の契機は `create_at` だけ（2.9）。保持の期限は 1 定数（2.7）。
 
 **Implementation Notes**
@@ -471,7 +472,7 @@ fn prepare_shelf(shelf: &Path, dir: &Path, now: SystemTime) -> Result<Vec<PathBu
 
 ## Open Questions / Risks
 
-- **復号できない名前の `raw_hex`**: `NameUndecodable` は生バイト全体の 16 進を載せるので、復号できない 65,535 バイトの名前は記録の 1 行が 131,070 文字になる。要件の付録 A（完了 spec 2.4 は触らない・長さは復号の後）に従い本仕様は変えない。塞ぐなら `raw_hex` を先頭の有界の一部に切り詰める 1 行だが、既存の理由の中身を変える判断なので別途扱う（`ghost-install` の告知の設計時に再検討）。
+- **長い名前が記録の 1 行に丸ごと載る穴は 2 か所残る**（本仕様の範囲外・登記のみ）。⑴ `NameUndecodable.raw_hex`: 生バイト全体の 16 進を載せるので、復号できない 65,535 バイトの名前は記録の 1 行が 131,070 文字になる。要件の付録 A（完了 spec 2.4 は触らない・長さは復号の後）に従い本仕様は変えない。⑵ `UnsupportedEntry.name`: `container.rs` の `unsupported` が `String::from_utf8_lossy(name_raw)`（名前の全体）を載せ、これは `read_central_directory` の中＝長さの検査（`validate_entry_names`）より**前**に起きる。暗号化・zip64・非対応の圧縮方式を持つ 65,535 バイトの名前は本仕様の後も丸ごと載る（`IntegrityMismatch.name` は名前の検査の後なので上限の内側）。塞ぐなら ⑴ は `raw_hex` を、⑵ は `from_utf8_lossy` の写しを先頭の有界の一部に切る各 1 行だが、⑵ は `container` → `names` の向きの都合で `bounded_value` を使えず、切り詰めの助手を `error.rs` に置く形になる。どちらも既存の理由の中身を変える判断なので別途扱う（`ghost-install` の告知の設計時に再検討）。
 - **長いパスの実測**: このツールチェーン（rustc 1.98.1・Windows 11・`LongPathsEnabled = 1`）では UTF-16 で 431 単位の絶対パスの `create_dir_all`／`write`／`rename`／`remove_dir_all` が全て通った。Rust の標準ライブラリが長い絶対パスに `\\?\` を付けるためで、OS の設定が 0 の機体でも areka 自身の書き込みは通り得る。上限の意味は「areka が落ちないため」ではなく「長いパスに対応しない読む側（`LoadLibrary` で `shiori.dll` を読む等）を守る」「異常な名前を入口で見つける」ことにある。§8 の根拠にこの旨を書く。
 - **更新時刻の近似**: 保持の期限は作業フォルダの更新時刻から数える（失敗の時刻の近似）。印のファイルや名前への刻印は、失敗の経路に新しい書き込みを足すことになるので採らない。
 - **並走**: `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾は `areka-P0-shiori-loadu` も行を足す。後着が取り込む（要件どおり）。
