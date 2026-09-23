@@ -9,7 +9,7 @@
   - 完了の状態: research.md に「入口の表の再確認の結果」と「今日の赤（配置・コマンド・ログの抜粋）」が追記されている。表が食い違えば要件 7.1〜7.2 の期待値を実物に合わせて改めたことも記録されている
   - _Requirements: 7.3, 7.4, 7.5_
 
-- [ ] 2. (P) `loadu` を持つ 2 本目の偽 32bit DLL
+- [x] 2. (P) `loadu` を持つ 2 本目の偽 32bit DLL
   - 新しい fixture クレートを作り（`[lib] name = "shiori_loadu"`＝出力は既存の `shiori.dll` と衝突しない `shiori_loadu.dll`・cdylib・publish しない）、`loadu`・`load`・`unload`・`request` の 4 つを公開する。`loadu`／`load` は受け取ったバイト列をコピーしてから入力メモリを自分で解放し、`<入口名>\t<小文字 16 進>\n` を記録 env が指すファイルへ追記する
   - `loadu` は偽返却の注入 env が `1` のとき 0、それ以外は 1 を返す。`load` と `unload` は常に 1、`request` は固定の 400 応答を新しいメモリで返す。戻りは Win32 `BOOL` と同じ 4 バイト整数
   - 注入 env は既存と同じ `HOST32_TESTDLL_` 接頭辞のテスト専用 2 つ（記録・偽返却）。依存は既存 fixture と同じもののみ。unsafe の各ブロックに Safety 根拠を書く
