@@ -8,7 +8,7 @@
 
 **Users**: ゴーストを既定コードページで表せない字を含むフォルダに置いている利用者（`loadu` を持つ SHIORI＝YAYA・pasta なら辞書を見失わなくなる。里々のような `loadu` の無い SHIORI では原因が警告として残る）、`loadu` だけを実装した SHIORI を使いたいゴースト作者、実機確認と障害調査でログを grep する開発者。
 
-**Impact**: 変更は `crates/shiori-host32-helper/src/shiori_proxy.rs` の 2 関数（`ShioriByteProxy::load` の `resolve` クロージャ・`encode_alloc_and_load`）と型定義 2 行に閉じる。親（`shiori-host32-host`）・凍結した受け渡し（`MsgTag`・load-ack 1 バイト）・`main.rs`・既存の偽 DLL・既存テストは **1 行も変えない**。新設は 2 本目の偽 DLL クレートと兄弟テストファイルの 2 つ。
+**Impact**: 変更は `crates/shiori-host32-helper/src/shiori_proxy.rs` の 1 ファイルに閉じる（既存 2 関数＝`ShioriByteProxy::load` の `resolve` クロージャ・`encode_alloc_and_load` の拡張、型定義 2 行、新設の小さな関数 3 つ＝`choose_init_entry`・`encode_with_codepage`・`init_bytes`）。親（`shiori-host32-host`）・凍結した受け渡し（`MsgTag`・load-ack 1 バイト）・`main.rs`・既存の偽 DLL・既存テストは **1 行も変えない**。新設は 2 本目の偽 DLL クレートと兄弟テストファイルの 2 つ。
 
 ### Goals
 - `loadu` の有無 × `load` の有無の 4 通りの判断を、DLL を読まずに検証できる純関数 1 つに閉じる（1.8）。
@@ -45,7 +45,7 @@
 ### Allowed Dependencies
 - `windows` 0.62.2 の `Win32_Globalization`（`WideCharToMultiByte`・`MultiByteToWideChar`・`CP_ACP`・`CP_UTF8`）——helper の `Cargo.toml` で既に有効（`features` に `Win32_Globalization` が在ることを確認済み）。**新しい依存クレート・feature・OS 呼び出しの種類は増やさない**（9.1。`MultiByteToWideChar` は同じ feature の既存 API）。
 - 2 本目の偽 DLL は既存 fixture と同じ依存（`windows` の `Win32_Foundation`＋`Win32_System_Memory`）だけ。
-- 本番の env 変数は 0 件追加（9.2）。新設 env は fixture の `HOST32_TESTDLL_LOADU_RECORD`・`HOST32_TESTDLL_LOADU_FAIL` の 2 つのみ。
+- 本番の env 変数は 0 件追加（9.2）。新設 env は 3 つのみ・全てテスト専用: fixture が読む `HOST32_TESTDLL_LOADU_RECORD`・`HOST32_TESTDLL_LOADU_FAIL` と、テスト側の `resolve_loadu_testdll` が読む所在の上書き `HOST32_TESTDLL_LOADU_DLL`。
 - 依存方向: `shiori-host32-testdll-loadu`（leaf・誰にも依存されない cdylib）← テストが `target/i686-pc-windows-msvc/` の成果物としてだけ読む。helper 本体は fixture クレートに依存しない。
 
 ### Revalidation Triggers
@@ -119,7 +119,7 @@ graph TB
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
-| helper 本体 | Rust（edition 2024・i686-pc-windows-msvc）＋ `windows` 0.62.2 `Win32_Globalization`／`Win32_System_LibraryLoader`／`Win32_System_Memory` | `GetProcAddress` で `loadu` を任意解決・`WideCharToMultiByte`／`MultiByteToWideChar` で符号化と往復比較 | 新依存 0・feature 追加 0。`MultiByteToWideChar(codepage, flags, &[u8], Option<&mut [u16]>) -> i32` の形で使える（windows 0.62.2 の `Globalization/mod.rs` で確認） |
+| helper 本体 | Rust（edition 2024・i686-pc-windows-msvc）＋ `windows` 0.62.2 `Win32_Globalization`／`Win32_System_LibraryLoader`／`Win32_System_Memory` | `GetProcAddress` で `loadu` を任意解決・`WideCharToMultiByte`／`MultiByteToWideChar` で符号化と往復比較 | 新依存 0・feature 追加 0。`MultiByteToWideChar(codepage, flags, &[u8], Option<&mut [u16]>) -> i32` の形で使える（windows 0.62.2 の `Globalization/mod.rs` で確認）。ただし第 2 引数 `flags` は newtype `MULTI_BYTE_TO_WIDE_CHAR_FLAGS` で、`WideCharToMultiByte` の `dwflags: u32` とは型が違う（`MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0)` と書く） |
 | fixture | Rust cdylib（i686）＋ `windows` `Win32_Foundation`／`Win32_System_Memory` | `loadu`／`load`／`unload`／`request` の 4 公開・記録と注入 | 既存 fixture と同じ依存 |
 | テスト | `cargo test`（x64 常時＋ `--target i686-pc-windows-msvc` 限定） | 純関数の決定論・fixture 実読 | 既存の `#[cfg_attr(ignore)]` の作法 |
 | 文書・台帳 | Markdown・TOML・`ukadoc-survey` の `report`／`report-summary` | 裁定の登記・台帳の追随 | 生成物は生成器で撮り直す |
@@ -140,7 +140,7 @@ crates/
     └── src/lib.rs                      # loadu／load／unload／request の 4 公開・記録 env・偽返却 env
 crates/shiori-host32-host/README.md     # 変更: 「手順（コピペ可）」① に 2 本目の先ビルドを 1 行
 doc/COMPAT_ARCHITECTURE.md              # 変更: §8 の表の末尾に裁定 3 行
-doc/ukadoc-coverage/briefing-shiori.md  # 変更（正本・手で）: 群 14c の「判断の根拠の場所」「共通 note」・「足りない物」⑴
+doc/ukadoc-coverage/briefing-shiori.md  # 変更（正本・手で）: 群 14c の「判断の根拠の場所」「共通 note」・「今ある物」・「足りない物」⑴・2026-09-06 の経緯段落 2 か所
 doc/ukadoc-coverage/ledger/shiori.toml  # 変更（写し・手で）: 冒頭注釈 群 14c・[entry."ukadoc:spec_dll"] の note（「壊れ方:」「ログ:」「根拠の場所:」）
 doc/ukadoc-coverage/report/shiori.md    # 生成器で撮り直し（手で直さない）
 doc/ukadoc-coverage/report/summary.md   # 生成器で撮り直し（手で直さない）
@@ -318,7 +318,7 @@ fn choose_init_entry(loadu: Option<LoadFn>, load: Option<LoadFn>) -> Result<Init
 
 **Responsibilities & Constraints**
 - **本番の変換は今日のまま**: `WideCharToMultiByte(cp, 0, &wide, …, PCSTR::null(), None)` の 2 回呼び（フラグ 0・既定文字は OS 既定）。`cp = CP_ACP` のとき返す `bytes` は今日の `ansi_encode` と 1 バイトも変わらない（3.2）。
-- **検出は変換の後の比較**: `MultiByteToWideChar(cp, 0, &bytes, …)` で UTF-16 に戻し、元の `wide` と比べる。一致しなければ `lossy = true`。既定文字への置き換え（`?`）も、似た字への置き換え（best-fit）も、戻せば元と違うので同じ手順で捕まる（3.1）。コードページの値で分岐しないので、`GetACP()` が 65001 の機械でも同じ手順で `lossy = false` になる（3.4。`lpUsedDefaultChar` は 65001 で関数自体が失敗する＝採らない）。
+- **検出は変換の後の比較**: `MultiByteToWideChar(cp, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), &bytes, …)` で UTF-16 に戻し、元の `wide` と比べる。一致しなければ `lossy = true`。既定文字への置き換え（`?`）も、似た字への置き換え（best-fit）も、戻せば元と違うので同じ手順で捕まる（3.1）。コードページの値で分岐しないので、`GetACP()` が 65001 の機械でも同じ手順で `lossy = false` になる（3.4。`lpUsedDefaultChar` は 65001 で関数自体が失敗する＝採らない）。
 - 戻す側の変換が 0 以下を返した（判定できない）ときは `lossy = true` に寄せる（警告して渡す＝確立は止めない・ログ無しにしない）。変換の側（往路）が 0 以下なら今日と同じ `Err(EncodingFailed)`（3.6）。
 - 空パスは `bytes` 空・`lossy = false`（今日と同じ）。
 
@@ -398,7 +398,7 @@ const LOSSY_PATH_WARN_PREFIX: &str = "[helper] 警告: load_dir に既定コー�
 | Intent | `loadu`／`load` を任意で、`unload`／`request` を必須で引く。戻り値の型を `u8` に |
 | Requirements | 1.7, 5.1, 5.4, 5.5 |
 
-- `resolve` の戻りは `(InitEntry, UnloadFn, RequestFn)`。`transmute` の対象型が `-> bool` から `-> u8` へ変わるだけで、Safety の根拠（cdecl・EAX の下位 1 バイト・HGLOBAL/usize 幅）は同じ文で書き直す。
+- `resolve` の戻りは `(InitEntry, UnloadFn, RequestFn)`。`transmute` の対象型が `-> bool` から `-> u8` へ変わるだけで、Safety の根拠（cdecl・EAX の下位 1 バイト・HGLOBAL/usize 幅）は同じ文で書き直す。Safety 文には `u8` 受けの天井も 1 文残す: C 製の DLL が Win32 `BOOL` として下位バイト 0・上位 bit 非 0 の値（例 `0x100`）を返すと失敗と判定される。正典どおり `TRUE`(1)／`FALSE`(0) を返す限り問題無く、逆に `i32` で受けると Rust `bool` を返す DLL（pasta）の不定な上位 24 bit を読んでしまうので、`u8` が正しい最小の選択。
 - `Drop` は `let _ = (self.unload)();` のまま（戻りを捨てる・5.4）。既存 fixture の `unload() -> bool` は 1 バイトで ABI が一致するので無改変で通る（設計判断 11・確認のみ）。
 - `RequestFn` は触らない（5.5）。
 
@@ -454,7 +454,7 @@ const LOSSY_PATH_WARN_PREFIX: &str = "[helper] 警告: load_dir に既定コー�
 ### 文書・台帳
 
 - `doc/COMPAT_ARCHITECTURE.md` §8 の表の末尾に 3 行（8.1）。列は「項目・裁量・根拠・出典 spec」。項目は ⑴ `loadu` だけ在って `load` が無い DLL → 受け入れる（正典「loadu関数」「load関数」の節は片方だけの DLL に沈黙）、⑵ `loadu` が偽を返した → `load` へ落ちない＝`LoadReturnedFalse`（正典の落ちる条件は「実装されていない場合」だけ）、⑶ `load` へ落ちてパスが表せない → 警告して渡す（正典は既定コードページで表せない字に沈黙）。出典は `areka-P0-shiori-loadu`（要件 1.2・1.6・3.1〜3.2）。
-- `doc/ukadoc-coverage/briefing-shiori.md`（正本・手で・8.3）: 群 14c「判断の根拠の場所」の「`load`・`unload`・`request` の 3 つを名前で引く。正典の 4 つのうち `loadu` は引かない」と、「共通 `note`」の「壊れ方:」「ログ:」「根拠の場所:」の該当文、「足りない物」⑴ を、実装（`loadu` 優先・無ければ `load`・表せない字の警告・4 つの入口）に合わせる。
+- `doc/ukadoc-coverage/briefing-shiori.md`（正本・手で・8.3）: 群 14c「判断の根拠の場所」の「`load`・`unload`・`request` の 3 つを名前で引く。正典の 4 つのうち `loadu` は引かない」と、「共通 `note`」の「壊れ方:」「ログ:」「根拠の場所:」の該当文、「今ある物」（「`load`・`unload`・`request` の 3 つを名前で引いてから呼んでいる」）、「足りない物」⑴ を、実装（`loadu` 優先・無ければ `load`・表せない字の警告・4 つの入口）に合わせる。群 14c 末尾と「ukadoc へのフィードバック候補」4 にある 2026-09-06 の書き直しの経緯段落（「『3 つ』は areka の助け手が名前で引いている入口の数でしかない」）は日付付きの記録なので消さず、「（2026-09-23 以降は 4 つ全てを引く）」の 1 句を足す。実装後に `briefing-shiori.md` を `loadu` と「3 つ」で grep し、事実と違う文が残っていないことを確かめる。
 - `doc/ukadoc-coverage/ledger/shiori.toml`（写し・手で・8.2）: 冒頭注釈「群 14c」を正本と同文に、`[entry."ukadoc:spec_dll"]` の `note` の「壊れ方:」「ログ:」「根拠の場所:」の該当文を同じく改める。`status = "degraded"` は不変。
 - 生成器: `cargo run -p ukadoc-survey -- report` と `report-summary` で `report/shiori.md`・`report/summary.md` を撮り直す（数字は変わらない見込み）。`cargo test -p ukadoc-survey` を緑に。
 - `crates/shiori-host32-host/README.md`「手順（コピペ可）」①（6.9）・`.kiro/steering/structure.md`「Test DLL Fixture Crates」（8.6）・`shiori_proxy.rs` 冒頭（8.4）。
@@ -497,8 +497,10 @@ const LOSSY_PATH_WARN_PREFIX: &str = "[helper] 警告: load_dir に既定コー�
 1. `choose_init_entry` の 4 行（両方→`Loadu` で `loadu` の fn／`loadu` のみ→`Loadu`／`load` のみ→`Load`／両方無い→`EntryNotFound("load")`）。優先を逆にすると 1 行目が赤（6.3）。
 2. `Loadu` の枝のバイト列が `r"C:\ゴースト😀\master"` の `as_bytes` と一致・NUL 無し（6.4・2.1・2.2）。
 3. `encode_with_codepage(20127, …)`: ASCII だけ→`lossy=false`・恒等／非 ASCII→`lossy=true`。`encode_with_codepage(65001, 絵文字)`→`lossy=false`・UTF-8 一致（6.5・3.3・3.4）。
-4. `ansi_encode` の既存 3 本が無改変で緑（`ansi_encode` の署名と CP_ACP のバイト列が不変＝3.2・6.8）。
+4. `ansi_encode` の既存 3 本が無改変で緑（`ansi_encode` の署名と CP_ACP のバイト列が不変＝3.2・6.8）。既存の `ansi_encode_mixed_japanese_is_multibyte` は既定コードページが 65001 の機械では本仕様と無関係に元から赤（CP_ACP のバイト列が UTF-8 と一致するため）。6.8 の「無改変で緑」は CP932 機での話であり、実装記録にその旨を 1 行残す。
 5. fixture 単体: `loadu` を直接呼ぶと記録が `loadu\t<hex>` の 1 行・`HOST32_TESTDLL_LOADU_FAIL=1` で `0`・`load` は `1` と `load\t…` の行。
+
+観測の 2 行（入口名の行 4.1〜4.3・警告の行 3.1）には決定論の檻を作らない。`eprintln!` は同一プロセスのテストでは捕まえられず、host の e2e は 6.8 で無改変のため。判定そのもの（`InitEntry` の選択・`lossy`）は群 A〜C で固定し、行は判定からの配線として実機の grep（7.1〜7.3）で確かめる（本プロジェクトの規律「檻に入れるのは判断分岐のみ」）。
 
 ### Integration（i686 限定・群 D）
 1. D-1: 2 本目の fixture を UTF-8 でしか表せない一時フォルダから読み、`Ok`・記録は `loadu` 1 行のみ・バイト列が UTF-8 と一致（6.6）。
