@@ -24,7 +24,16 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
 - **テスト資産。** 偽 32bit DLL `crates/shiori-host32-testdll`（出力 `shiori.dll`）は `load`・`unload`・`request` の 3 つだけを公開し、`HOST32_TESTDLL_LOAD_FAIL=1` で `load` が偽を返し、`HOST32_TESTDLL_UNLOAD_MARKER` で `unload` の実呼出をファイルに残す。`loadu` を持つ偽 DLL は **無い**。brief と一致。
 - **台帳。** `doc/ukadoc-coverage/ledger/shiori.toml` の `[entry."ukadoc:spec_dll"]`（`status = "degraded"`）の `note` が「loadu は引かない」と書き、同じ文が台帳冒頭の注釈（群 14c）と生成物 `doc/ukadoc-coverage/briefing-shiori.md` にも写っている。brief と一致。
 - **brief からのずれ 1 件。** brief は裁定 3 件を「`doc/COMPAT_ARCHITECTURE.md` §8 に登記」と書くが、§8 の表に `loadu`・`spec_dll` を含む行は **0 件**（2026-09-23 grep）。登記は**まだ行われていない**＝本仕様の作業として要件 8 に含める。
-- **未再検証の項目。** 検体 3 体（`konnoyayame`＝YAYA・`R_POST_and_KOMAINU`＝里々・`emo2`＝pasta）の入口の有無は brief の粗い走査（入口名の NUL 区切り一致）のままで、正規の道具（`dumpbin /exports` 等）では取り直していない（要件 7.4）。「今日どう壊れるか」の実機の赤も未実測（要件 7.3）。
+- **検体 3 体の入口（2026-09-23・`dumpbin /exports` で取り直し・research.md §4.1）。** brief の表と **pasta の 1 件が食い違う**:
+
+  | 検体 | DLL | `loadu` | `load` | `unload` | `request` |
+  |---|---|---|---|---|---|
+  | `konnoyayame`（YAYA） | `yaya.dll` | あり | あり | あり | あり |
+  | `R_POST_and_KOMAINU`（里々） | `satori.dll` | **なし** | あり | あり | あり |
+  | `emo2`（pasta） | `pasta.dll` | **あり**（brief は「なし」） | あり | あり | あり |
+
+  emo2 の `pasta.dll` は pasta `v0.3.5`（`48c42fc3`）のリリース版と **バイト単位で同一**（git の blob `0ecfafde…` が一致）。そのソース `crates/pasta_shiori/src/windows.rs` は `loadu` を UTF-8 で読み、`loadu` で初期化済みのときの `load` は何もせず真を返す（正典の「望ましい」作法どおり）。上流に FFI テスト `tests/ffi_loadu_test.rs` が在る。＝実装後は emo2 も `loadu` の枝を踏み、**`load` の枝を実機で踏む検体は里々だけ**になる。なお本ブランチの `vendors/pasta` の作業木は記録された版より古い `048d646c` のまま（`loadu` の無い版）で、上の確認は記録された版 `48c42fc3` を取得して読んだもの。
+- **未実測の項目。** 「今日どう壊れるか」の実機の赤（要件 7.3）。
 
 ### 正典（ukadoc）の位置づけ
 
@@ -57,7 +66,7 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
   - `loadu`・`load`・`unload` の戻り値の受け方（1 バイト整数・0 か否か）。
   - `loadu` を持つ 2 本目の偽 32bit DLL と、それを読む決定論テスト。i686 先ビルド手順に fixture を 1 つ足すこと（手順を書いている全ての場所）。
   - 実機確認（検体 3 体＋既定コードページに無い字を含むフォルダ）。
-  - `doc/COMPAT_ARCHITECTURE.md` §8 への裁定 3 件の登記、台帳 `ukadoc:spec_dll` の記述の追随と派生文書の生成器による撮り直し、`shiori_proxy.rs` 冒頭の「確立シーケンス」の説明の更新。
+  - `doc/COMPAT_ARCHITECTURE.md` §8 への裁定 3 件の登記、台帳 `ukadoc:spec_dll` の記述の追随（手書きの正本 `briefing-shiori.md` → 台帳の写し → 生成器が書く `report/*.md` の撮り直し）、`shiori_proxy.rs` 冒頭の「確立シーケンス」の説明の更新、steering `structure.md` の fixture 節の追随。
 - **Out of scope**（**変更 0**。以下は本仕様で 1 行も変えない）:
   - MAKOTO・SAORI・PLUGIN の DLL の読み込み（`areka-P0-makoto-dll-host` ほか）。台帳 `ukadoc:spec_dll` の `status` は `degraded` の**まま**（SAORI・MAKOTO・PLUGIN が残るため）。
   - `request` の文字コード（完了 `areka-P0-charset-canon`）。
@@ -86,7 +95,7 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
 
 1. When SHIORI DLL が `loadu` と `load` の両方を公開している, the 助け手 shall `loadu` だけを呼び、`load` は呼ばない。
 2. When SHIORI DLL が `loadu` を公開し `load` を公開していない, the 助け手 shall その DLL を受け入れて `loadu` を呼ぶ（裁定 1・`loadu`／`load` のどちらか 1 つが在ればよい）。
-3. When SHIORI DLL が `load` を公開し `loadu` を公開していない, the 助け手 shall 今日と同じく `load` を呼ぶ（既存の検体＝里々・pasta と既存のテストは挙動不変）。
+3. When SHIORI DLL が `load` を公開し `loadu` を公開していない, the 助け手 shall 今日と同じく `load` を呼ぶ（`loadu` を持たない検体＝里々と、既存の偽 DLL を読む既存のテストは挙動不変。pasta は `loadu` を持つので要件 1.1 の側へ移る）。
 4. If SHIORI DLL が `loadu` も `load` も公開していない, then the 助け手 shall 今日と同じ「入口が無い」失敗（`EntryNotFound` 相当）として確立を失敗させ、失敗を 1 行記録し、親へは今日と同じ ack `[0]` を返す。
 5. The 助け手 shall 1 回の確立で `loadu` と `load` を **合わせて最大 1 回**しか呼ばない（両方を呼ぶ経路は存在しない）。
 6. If `loadu` が偽（0）を返した, then the 助け手 shall 確立を「初期化が偽を返した」失敗（今日 `load` が偽を返したときと同じ種別）として扱い、`load` へは **落ちない**（裁定 2・正典の落ちる条件は「実装されていない場合」だけ）。
@@ -111,8 +120,8 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
 
 #### Acceptance Criteria
 
-1. When 助け手が `load` を呼び、かつ パスに既定コードページで表せない字が 1 つ以上含まれる, the 助け手 shall 警告を **1 行**（`warn` 相当・既存の `[helper]` 行と同じ経路）に、元のパスと「表せない字があり既定文字へ置き換えた」旨を書く。
-2. When 上記の警告を出した, the 助け手 shall それでも置き換え済みのバイト列を `load` へ **渡し**、確立を止めない（裁定 3・DLL が自分で偽を返せば要件 1.6 と同じ「初期化が偽を返した」失敗になる）。
+1. When 助け手が `load` を呼び、かつ パスに既定コードページで表せない字が 1 つ以上含まれる, the 助け手 shall 警告を **1 行**（`warn` 相当・既存の `[helper]` 行と同じ経路）に、元のパスと「表せない字があり別の字へ置き換えた」旨を書く。「表せない」には、既定文字（`?`）への置き換えに加え、似た字への置き換え（変換を逆にかけても元の字に戻らない置き換え）も含む。
+2. When 上記の警告を出した, the 助け手 shall それでも置き換え済みのバイト列を `load` へ **渡し**、確立を止めない（裁定 3・DLL が自分で偽を返せば要件 1.6 と同じ「初期化が偽を返した」失敗になる）。`load` へ渡すバイト列は今日と **同一**とし、警告のために変換の作法（置き換えの仕方）を変えない。
 3. When 助け手が `load` を呼び、かつ パスの全ての字が既定コードページで表せる, the 助け手 shall 警告を **0 行**出す（今日と同じ）。
 4. The 助け手 shall 表せない字の判定を「実行中の既定コードページで表せるか」で行い、CP932 を前提にしない（日本語以外のロケールでも正しく判定する）。
 5. When 助け手が `loadu` を呼ぶ, the 助け手 shall 表せない字の判定を **行わない**（UTF-8 に表せない字は無い＝この警告は `load` の枝だけに存在する）。
@@ -156,7 +165,7 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
 6. When i686 で 2 本目の偽 DLL を実際に読む, the テスト shall `loadu` が呼ばれ `load` は呼ばれないこと、受け取ったバイト列が渡したパスの UTF-8 と一致することを確認し、優先順を逆にすると赤になる（記録が `load` に変わる）。
 7. When i686 で `loadu` が偽を返す注入を有効にする, the テスト shall 確立が「初期化が偽を返した」失敗になり、かつ `load` が呼ばれた記録が **無い**ことを確認する（裁定 2）。
 8. The 本仕様 shall 既存の helper 単体テストと `crates/shiori-host32-host/tests/*_e2e.rs` を **無改変**で緑に保つ（`load` の枝の不変の証拠）。
-9. The 本仕様 shall i686 の先ビルド手順（`crates/shiori-host32-host/README.md`・テストの panic 文言・e2e の doc コメントなど、手順を書いている **全ての場所**）に 2 本目の偽 DLL のビルドを足す。
+9. The 本仕様 shall i686 の先ビルド手順のうち、2 本目の偽 DLL を必要とするテストの前提を書いている **全ての場所**（workspace 全体の手順＝`crates/shiori-host32-host/README.md` の「手順」と、2 本目を読む helper のテストの panic 文言）に 2 本目のビルドを足す。2 本目を読まないテスト（`crates/shiori-host32-host/tests/*_e2e.rs`）の doc コメントと panic 文言には **足さない**（要件 6.8 の無改変を守る。足すと事実と違う前提を書くことになる）。
 10. The 本仕様 shall `cargo test --workspace`（i686 先ビルド済み）を緑にする。
 
 ### Requirement 7: 実機確認
@@ -165,10 +174,10 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
 
 #### Acceptance Criteria
 
-1. When `konnoyayame`（YAYA・`loadu` 持ち）を有界 auto-exit で起動する, the 助け手のログ shall 要件 4.1 の行に `loadu` を記録し、`load` の記録を含まない。
-2. When `R_POST_and_KOMAINU`（里々）と `emo2`（pasta）を有界 auto-exit で起動する, the 助け手のログ shall 要件 4.1 の行に `load` を記録し、警告（要件 3.1）を含まない。
+1. When `konnoyayame`（YAYA）と `emo2`（pasta `v0.3.5`）＝いずれも `loadu` 持ち、を有界 auto-exit で起動する, the 助け手のログ shall 要件 4.1 の行に `loadu` を記録し、`load` の記録を含まず、ゴーストが喋る。
+2. When `R_POST_and_KOMAINU`（里々・`loadu` なし）を有界 auto-exit で起動する, the 助け手のログ shall 要件 4.1 の行に `load` を記録し、警告（要件 3.1）を含まない。
 3. When 既定コードページに無い字を含むフォルダの下へ `konnoyayame` を置いて起動する, the ゴースト shall 喋る（辞書を見失わない）。同じ場所の里々では要件 3.1 の警告が **1 行**出る。実装の前に、**今日どう壊れるか**を同じ配置で赤として記録する（未実測）。
-4. The 本仕様 shall 着手時に検体 3 体の入口の有無を正規の道具（`dumpbin /exports` 等）で取り直し、brief の表（YAYA＝`loadu` あり／里々・pasta＝`loadu` なし）と一致することを確認する。一致しなければ要件 7.1〜7.2 の期待値を実物に合わせて改める。
+4. The 本仕様 shall 実機確認の直前に、検体 3 体の入口の有無を正規の道具（`dumpbin /exports` 等）で取り直し、Introduction の表（2026-09-23 実測・YAYA と pasta＝`loadu` あり／里々＝`loadu` なし）と一致することを確認する。一致しなければ要件 7.1〜7.2 の期待値を実物に合わせて改める（2026-09-23 に一度この手順で改めた＝pasta を `load` から `loadu` の側へ移した）。
 5. The 実機確認 shall 判定の分岐が出すログの水準まで開けて走らせる（要件 4.1 の行と要件 3.1 の警告が捨てられないこと）。
 
 ### Requirement 8: 文書・台帳の追随
@@ -179,9 +188,10 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
 
 1. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 の表に裁定 3 件（`loadu` だけの DLL を受け入れる／`loadu` が偽でも `load` へ落ちない／`load` へ落ちて表せない字があれば警告して渡す）を、根拠（正典の沈黙箇所）と出典 spec 付きで **3 行**追記する。
 2. The 本仕様 shall 台帳 `doc/ukadoc-coverage/ledger/shiori.toml` の `[entry."ukadoc:spec_dll"]` の `note` と、台帳冒頭の注釈（群 14c）から「loadu は引かない」の記述を取り去り、実装（`loadu` 優先・`load` へのフォールバック・表せない字の警告）に合わせる。`status` は `degraded` の **まま**（SAORI・MAKOTO・PLUGIN が残る）。
-3. The 本仕様 shall 派生文書（`doc/ukadoc-coverage/briefing-shiori.md` ほか）を `ukadoc-survey` の生成器で撮り直し、**手で直さない**。
+3. The 本仕様 shall `doc/ukadoc-coverage/briefing-shiori.md`（人が書く **正本**＝群の索引の正本。`ukadoc-survey` の生成器はこの文書を書かない）の群 14c と「足りない物」の該当箇所を手で直し、次に写しである台帳冒頭の注釈を正本に揃える（正本 → 写しの順・完了 spec `areka-P0-ukadoc-survey-shiori` の記録どおり）。生成器が書く文書（`doc/ukadoc-coverage/report/shiori.md`・`report/summary.md`）は生成器で撮り直し、**手で直さない**。最後に `cargo test -p ukadoc-survey` を緑にする。
 4. The 本仕様 shall `shiori_proxy.rs` 冒頭の「確立シーケンス」の説明を 4 つの入口（`loadu`／`load`／`unload`／`request`）と入口の選択に合わせて書き直す。
 5. The 本仕様 shall 完了 spec の文書（`.kiro/specs/completed/areka-P0-host32-shiori-load/` ほか）を **改変しない**（上書きは本 requirements と COMPAT §8 に書く）。
+6. The 本仕様 shall `.kiro/steering/structure.md` の「Test DLL Fixture Crates」の節（今は既存 fixture を「`load`/`unload`/`request` 3 エクスポート」とだけ書く）に 2 本目の偽 DLL を足す。
 
 ### Requirement 9: 制約（非機能）
 
@@ -192,6 +202,6 @@ areka の利用者のうち、**ゴーストを Windows の既定コードペー
 1. The 本仕様 shall 新しい依存クレート・新しい技術を **0 件**とする。
 2. The 本仕様 shall 本番の env 変数を **追加しない**（新設は fixture の注入 env のみで、接頭辞は既存の `HOST32_TESTDLL_`）。
 3. The 本仕様 shall unsafe を `shiori_proxy.rs` に集約し、各ブロックに Safety 根拠を書く（steering）。
-4. The 本仕様 shall 1 ファイルを 1,000 行未満に保つ（`shiori_proxy.rs` は現在 585 行＝テストが膨らむなら兄弟ファイルへ）。
+4. The 本仕様 shall 1 ファイルを 1,000 行未満に保つ（`shiori_proxy.rs` は 2026-09-23 に 584 行＝テストが膨らむなら兄弟ファイルへ）。
 5. The 本仕様 shall 32bit 可搬性の適用範囲を host-32 系（helper は i686）に限り、純関数のテストは x64 で常時、DLL を読むテストは i686 限定（既存の `#[cfg_attr(not(target_arch = "x86"), ignore)]` の作法）とする。
 6. The 本仕様 shall 全ての失敗経路がログを残すこと（`error!`／`warn!`／helper の `eprintln!("[helper] …")`）を保ち、黙って失敗する経路を **0 本**にする。

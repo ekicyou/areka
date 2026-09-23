@@ -105,7 +105,10 @@ brief の表と食い違うのは **pasta の 1 件だけ**。YAYA・里々は�
 - `vendors/pasta` の作業木（`048d646c`・`v0.1.6-1`）の `crates/pasta_shiori/src/windows.rs` に `loadu` は無い（`pub extern "C" fn load(hdir: HGLOBAL, len: usize) -> bool` のみ）。
 - ローカルに在る全 ref（タグ `v0.3.4` まで）を `git grep loadu` しても **ソースに 1 件も無い**。`git log --all -S loadu` が当てるのは `release/hello-pasta/ghost/master/pasta.dll` などの **バイナリ**だけ（`v0.2.3`・`v0.3.2` のリリースビルド）。
 - emo2.nar の `pasta.dll`（3,832,832 B）は各タグの `release/…/pasta.dll`（`v0.3.4` で 3,821,568 B）のどれとも一致しない＝**手元のどのタグより新しい（または別の）ビルド**。
-- 結論: emo2 の pasta は `loadu` を公開しているが、その実装（UTF-8 のパスを正しく扱うか・戻り値の書き方が `load` と同じ 1 バイトか）は手元で読めない。実機確認（要件 7）が唯一の検証手段。設計フェーズで `vendors/pasta` の submodule を最新へ進めて読めるか確認する価値がある（開発者方針: `vendors/pasta` は調査資料として最新維持）。
+- ~~結論: 手元で読めない~~ → **要件ディスカッション（2026-09-23）で解決**: 本ブランチの `vendors/pasta` の作業木が、本流の記録する版（`48c42fc3`＝`release: v0.3.5 (#34)`）より古い `048d646c` に取り残されていただけだった。`git -C vendors/pasta fetch` で記録された版を取得して読むと:
+  - emo2.nar の `pasta.dll` は `48c42fc3` の `release/hello-pasta/ghost/master/pasta.dll` と **blob が一致**（`0ecfafdead1972225ee5658fbe2666fd5f12031d`・3,832,832 B）。
+  - `crates/pasta_shiori/src/windows.rs` の `pub extern "C" fn loadu(hdir: HGLOBAL, len: usize) -> bool` は `load_entry("loadu", …, DirEncoding::Utf8)`。戻りは `load` と同じ Rust の `bool`（1 バイト）。`loadu` で初期化済みのとき後続の `load` は HGLOBAL を解放して何もせず真を返す（正典の「望ましい」作法）。上流に `tests/ffi_loadu_test.rs` と `windows_tests.rs` の検証がある。
+  - ＝emo2 の `loadu` の枝は上流で検証済みの実装を踏む。実機確認（要件 7.1）は念押しとして残る。
 
 ### 4.3 i686 限定テストと fixture の所在（§2.2 の裏取り）
 
@@ -175,6 +178,8 @@ brief の表と食い違うのは **pasta の 1 件だけ**。YAYA・里々は�
 11. **`unload` の型変更の範囲**: `UnloadFn -> u8` に変えても Drop は結果を捨てるだけ（要件 5.4）。既存 testdll の `unload() -> bool` と ABI が 1 バイトで一致するので無改変で通る。確認だけ。
 
 ## 9. requirements.md と食い違う点
+
+> **要件ディスカッション（2026-09-23）で 3 件とも requirements.md へ反映済み**（1: 要件 1.3・7.1・7.2・7.4 と Introduction の検体表／2: 要件 8.3 を「正本を手で → 写し → `report/*.md` は生成器」に改訂／3: 要件 9.4 を 584 行に）。
 
 1. **要件 7.2・Introduction の検体表・brief の表**: emo2 の `pasta.dll` は `loadu` を**公開している**（§4.1・`dumpbin /exports`）。要件 7.2「`emo2`（pasta）… `load` を記録」は実物と合わない。要件 7.4 が改訂の手順を先に書いているので、ディスカッションで 7.1〜7.2 を「`konnoyayame`・`emo2` → `loadu`／`R_POST_and_KOMAINU` → `load`」に改める。同時に要件 1.3 の括弧「既存の検体＝里々・pasta と既存のテストは挙動不変」の「pasta」は外れる（pasta は挙動が変わる）。
 2. **要件 8.3**: 「派生文書（`briefing-shiori.md` ほか）を `ukadoc-survey` の生成器で撮り直し、手で直さない」は現物と合わない。`briefing-shiori.md` は人が書く正本で、生成器に書く副手続きが無い（§2.3）。生成器で撮り直せるのは `report/shiori.md`・`report/summary.md` だけ。文言を「`briefing-shiori.md`（正本）と台帳（写し・項目）を手で揃え、`report/*.md` を生成器で撮り直す」に改める必要がある。
