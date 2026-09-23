@@ -37,7 +37,7 @@
 - 登記表 `SAMPLES`（`crates/sample-ghost-kit/src/lib.rs`）の `StayseeBalloon` の行と、同 crate の自己テスト `lib_tests.rs` の検体数・名前の一覧・doc の数。
 - `crates/areka-emo-text/tests/staysee_balloon_fixture/test_support.rs` の `staysee_root()` の**本体**（根をどこから取るか）と、入口 `staysee_balloon_fixture_test.rs` の定数 `STAYSEE_BALLOON_DIR` の削除。
 - 既定バルーンの保管を語る文書の綴り（steering 2 本・進行中 brief 2 本・roadmap #42・`fold-samples.rs` の doc の例）。
-- 要件 1.4 の照合記録（`.kiro/specs/areka-P0-default-balloon-nar-fold/verification/`）。
+- 要件 1.4 の照合記録（`.kiro/specs/completed/areka-P0-default-balloon-nar-fold/verification/`）。
 
 ### Out of Boundary
 
@@ -134,7 +134,7 @@ crates/areka-emo-text/tests/
 - `.kiro/specs/areka-P0-alpha-release-signoff/brief.md` — 「zip に入れるもの」の出どころを「`vendors/sample_ghost/StayseeBalloon.nar` を窓口で展開した `balloon/StayseeBalloon/` の 29 ファイル」へ。冒頭の「着地すると…になる」の予告文は「着地済み」の現在形へ（5.3）。
 - `.kiro/specs/areka-P0-baseware-root-layout/brief.md` — 「保管先は `vendors/sample_ghost/StayseeBalloon/`（展開フォルダ…）。`.nar` へ畳むのは `areka-P0-nar-install` が引き受ける」→「保管先は `vendors/sample_ghost/StayseeBalloon.nar`（登記表 `SAMPLES` 経由・`SampleRoot::acquire("StayseeBalloon")` で引く）」。冒頭の追記「畳む仕事は `areka-P0-default-balloon-nar-fold`（台帳 #42）が**持つ**…**偽になった**」は「#42 が畳んだ（着地済み）」の過去形へ（5.3。この 1 文は `/` 付きの綴りを持たないので 5.6 の検索には掛からない＝手で直す）。
 - `.kiro/steering/roadmap.md` — 台帳 #42 の行: 状態列と段列を ✅ に・名前を `completed/default-balloon-nar-fold` に（5.4。台帳の注記どおり `/kiro-complete` が行う）。本文は #37 の行と同じく経緯として残す。#37 の行と `roadmap-history.md` は触らない。
-- `.kiro/specs/areka-P0-default-balloon-nar-fold/verification/nar-roundtrip.md` — 新規。1.4 の照合記録。
+- `.kiro/specs/completed/areka-P0-default-balloon-nar-fold/verification/nar-roundtrip.md` — 新規。1.4 の照合記録。
 
 ## Requirements Traceability
 
