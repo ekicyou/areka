@@ -21,7 +21,7 @@
   - 完了状態: `cargo test -p areka-emo-present --lib keycolor_clickthrough` で通しテスト 1 本が緑になり、3 面すべてで食い違い 0 を主張している。同クレートの既存テストも全て緑
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9_
 
-- [ ] 2. 同じ完了 spec が残したテストの穴 3 件の相乗り
+- [x] 2. 同じ完了 spec が残したテストの穴 3 件の相乗り
 - [x] 2.1 (P) compose の検体の受け口に「指す先が実在する」の較正テストを 1 本足す
   - compose のテスト専用の受け口ファイルの中に、`konnoyayame` の受け口が `surfaces.txt` を持つフォルダを、`emo2` の受け口が `shell/master` を持つゴーストのフォルダを指すことを判定するテストを足す（present 側の既存の較正と同じ形）。失敗の文言に受け口の名前と指す先のパスを添える
   - 完了状態: `cargo test -p areka-emo-compose --lib every_sample_receptor` で 1 本が緑。受け口を存在しない先へ向けると赤になることを一度走らせて確かめ、元へ戻す
@@ -35,7 +35,7 @@
   - _Requirements: 3.2, 3.4_
   - _Boundary: placement の採寸テスト_
 
-- [ ] 2.3 examples 2 本の私有関数を、公開の同名関数と取り違えない名前へ改める
+- [x] 2.3 examples 2 本の私有関数を、公開の同名関数と取り違えない名前へ改める
   - `emo-present` の組み立てと `collision-probe` の組み立ての私有関数（今日は公開の焼き関数と同名）を `load_shell_assets` へ改名する。定義・呼び出し・旧名を指す説明文だけを変え、ロジックは 0 行変えない
   - 旧名を指す説明文を、`collision-probe` の冒頭説明文（doc リンク・リンクの形は保つ）と `window-placement` の説明文でも新しい名前へ改める
   - 完了状態: `cargo build -p areka --examples` が通り、examples フォルダの中で旧名の出現が 0 件（grep）。差分に改名以外の行が無い

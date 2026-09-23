@@ -351,7 +351,7 @@ fn build_and_spawn(world: &mut World) {
 }
 
 /// shell dir から装着素材（[`ShellTarget`]＝焼いた絵と、面の表を必要な数だけ組めるもの）を
-/// **シェル読み込みの権威**（`load_shell_target`）で組む（donor `build_shell_target` と同経路。
+/// **シェル読み込みの権威**（`load_shell_target`）で組む（donor `load_shell_assets` と同経路。
 /// 面の表の `build_world` は target ごとに呼び手が行う）。失敗時は log-first で `None`。
 ///
 /// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
