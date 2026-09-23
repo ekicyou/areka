@@ -36,6 +36,7 @@
 - **Adjacent expectations**:
   - 窓口 `sample-ghost-kit` は「`.nar` を 1 つ置いて登記表に 1 行」で検体が増やせる作り（完了 spec `areka-P0-nar-install` 要件 1.5）である。本仕様はその手順（`vendors/sample_ghost/README.md`「検体を 1 本足す手順」）に従うだけで、窓口には手を入れない。
   - 常設の見張り `sample_path_guard_test.rs` は、登記した検体の展開フォルダを `/` 付きで綴った形が窓口の外に残っていれば赤にする。本仕様はこれを書き換えない（末尾 `/` の無い裸のフォルダ名を拾わない穴は、本仕様の後は読み先のフォルダが消えて結合テストが赤になるので実害が無い。塞ぐのは本仕様の外）。
+  - 中身のバイト列を常設のテストで固定することは**しない**（要件ディスカッション議題 1・2026-09-23 裁定）。本仕様の目的は保管形の切り替えで、中身の保証は完了 spec `areka-P0-default-balloon-bundle` が持つ（常設の判定はファイル名 29 本と画像の縦横で、今日と同じ強さ）。中身を変えるには `.nar` を作り直すしかなく、その差分は PR に必ず現れる。中身の照合は要件 1.4 の一度きりの照合で行う。
   - 本仕様は完了 spec `areka-P0-default-balloon-bundle` の要件 3.2（検体パスは定数 1 か所）と設計 C2（`STAYSEE_BALLOON_DIR` を `CARGO_MANIFEST_DIR` 基点で組む）を**上書きする**。以後の取り出し方は「窓口から名前で引く」である。完了アーカイブは書き換えない。
   - 完了 spec `areka-P0-default-balloon-bundle` が保証した「29 ファイル無改変・表示が正しい」は、本仕様の後も同じ結合テスト（`staysee_balloon_fixture_test`）が同じ期待値で守り続ける。
   - 下流 `areka-P0-baseware-root-layout` は既定バルーンを id `StayseeBalloon` で窓口から引くだけで、登記表には触らない。下流 `areka-P0-alpha-release-signoff` は zip に入れる 29 ファイルを `.nar` の展開結果から採る。
