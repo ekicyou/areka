@@ -75,7 +75,7 @@
   - _Depends: 3.3_
 
 - [ ] 6. 全体の検証と実機確認
-- [ ] 6.1 workspace 全体の回帰と無改変の確認
+- [x] 6.1 workspace 全体の回帰と無改変の確認
   - i686 の先ビルド（助け手・既存の偽 DLL・2 本目の偽 DLL）の後に `cargo test --workspace` を回す
   - 既存の偽 DLL クレート・助け手の `main.rs` と兄弟テスト群（`main_*.rs`）・親クレートの src と e2e・完了 spec の文書について、ブランチの差分が 0 であることを git で確かめる（pathspec の実在も確かめる）。変更される `shiori_proxy.rs` の中の既存 `mod tests` は、ブロックの中身を分岐元の版と比べて一致を確かめる。新しい依存クレートと本番 env の追加が 0 であることも確かめる
   - 完了の状態: `cargo test --workspace` が緑で、上記の無改変の確認がすべて差分 0
@@ -93,3 +93,4 @@
 ## Implementation Notes
 
 - 3.2: 既存 `ansi_encode_mixed_japanese_is_multibyte` は既定コードページが 65001 の機械では本仕様と無関係に元から赤（`assert_ne!(bytes, UTF-8)` が、CP_ACP=65001 では CP_ACP のバイト列が UTF-8 と一致するため失敗する）。6.8 の「無改変で緑」は CP932 機での確認（本機 ACP=932・レジストリ `Nls\CodePage\ACP` で確認）。
+- 6.1: 初回の `cargo test --workspace` で `crates/log-capture-kit/tests/temp_path_guard_test.rs` が赤（新しい 2 ファイルが一時パスの窓口 temp-path-kit を通さず `std::env::temp_dir()` を直に叩く）。窓口へ寄せると両 crate に dev-dependency が要り要件 9.1 と衝突するため、例外表へ `Why::ProcessUnique` で 2 件追加（件数 16→18・一意化 13→15）。`cargo test --workspace` は途中の赤で後続の binary を走らせないので、回帰の確認は `--no-fail-fast` で行う（113 本・8,256 passed・0 failed）。
