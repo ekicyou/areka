@@ -389,6 +389,63 @@ fn decoding_runs_before_the_safety_checks() {
     );
 }
 
+// ---- 長さの上限（要件 1.1〜1.7） ----
+
+/// 長さは復号の直後・NUL より先。NUL・`\`・`..`・予約名を同時に持つ 200 単位超の
+/// 名前でも「長すぎる」が勝ち、理由は先頭 32 単位と測った長さだけを持つ。
+#[test]
+fn an_overlong_name_is_refused_for_its_length_before_any_other_reason() {
+    let prefix = "\u{0}..\\CON.txt";
+    let name = format!("{prefix}{}", "a".repeat(200));
+
+    assert_eq!(
+        refusal_of(name.as_bytes().to_vec()),
+        RefuseReason::PathTooLong {
+            index: 0,
+            length: 211,
+            limit: 200,
+            head: format!("{prefix}{}", "a".repeat(21)),
+        },
+        "長さの検査が NUL より後ろにあるか、外れている"
+    );
+}
+
+/// 1 階層の名前の判定は UTF-16 の単位で 200 まで真・201 で偽。BMP 外の文字は
+/// 2 単位で数える（文字数でも UTF-8 のバイト数でもない）。
+#[test]
+fn a_one_level_name_is_valid_up_to_200_utf16_units() {
+    assert!(is_valid_one_level_name(&"a".repeat(200)));
+    assert!(!is_valid_one_level_name(&"a".repeat(201)));
+
+    let wide = "\u{1F600}".repeat(100); // 100 文字・200 単位・400 バイト
+    assert!(is_valid_one_level_name(&wide));
+    assert!(!is_valid_one_level_name(&format!("{wide}a")));
+}
+
+/// 先頭は 32 単位を超えず、BMP 外の文字を途中で切らない。有界の値は上限の内側なら
+/// 全体、超えていれば全体を持たず長さと上限を綴る。
+#[test]
+fn the_head_never_splits_a_surrogate_pair_and_bounded_values_hide_the_whole() {
+    assert_eq!(
+        head_utf16(&format!("{}\u{1F600}b", "a".repeat(31))),
+        "a".repeat(31)
+    );
+    assert_eq!(
+        head_utf16(&format!("{}\u{1F600}b", "a".repeat(30))),
+        format!("{}\u{1F600}", "a".repeat(30))
+    );
+
+    assert_eq!(bounded_value(&"a".repeat(200)), "a".repeat(200));
+    let long = format!("{}z", "a".repeat(300));
+    let shown = bounded_value(&long);
+    assert!(shown.starts_with(&"a".repeat(32)), "{shown}");
+    assert!(shown.contains("301") && shown.contains("200"), "{shown}");
+    assert!(
+        !shown.contains('z') && shown.len() < 80,
+        "全体が載っている: {shown}"
+    );
+}
+
 // ---- シンボリックリンク（要件 2.7） ----
 
 /// 外部属性の上位 16 bit が `S_IFLNK` のエントリは拒否する。
