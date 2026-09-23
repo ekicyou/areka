@@ -1,10 +1,12 @@
 //! `updates2.dau`／`updates.txt` の読み手（純関数・要件 1.5〜1.10）。
-// ponytail: 本番の呼び手（run）が付くまでの間だけ。試験でも `url_path` を読むのは
-// 符号化の判定（2.5）からなので無条件にしている。run から呼んだら外す。
-#![allow(dead_code)]
+// ponytail: 本番の呼び手（run）が付くまでの間だけ。run から呼んだら外す。
+#![cfg_attr(not(test), allow(dead_code))]
 
-use crate::error::UpdateWarning;
+use crate::error::{InvalidWhy, UpdateWarning};
 use crate::outcome::ManifestName;
+use crate::paths::{is_in_work_area, normalize_separators};
+use crate::urlpath;
+use std::collections::HashMap;
 
 /// 既定の文字コード（1.9）。
 pub(crate) const DEFAULT_CHARSET: &encoding_rs::Encoding = encoding_rs::SHIFT_JIS;
@@ -34,9 +36,14 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
     // BOM があれば BOM を優先（encoding_rs の規則）。実際に使った方を delete.txt へ引き継ぐ。
     let (text, used, _) = charset.decode(bytes);
 
-    let mut entries = Vec::new();
+    // (行番号, `/` に揃えたパス, 小文字の MD5)。
+    let mut valid = Vec::new();
     for (i, line) in text.split('\n').enumerate() {
         let line = line.strip_suffix('\r').unwrap_or(line);
+        // 0 文字の行は数えない。中身の無い `file,` 行は数える（黙って捨てない＝NoMd5）。
+        if line.is_empty() {
+            continue;
+        }
         let body = match name {
             ManifestName::Updates2Dau => line,
             // `charset,` 行は先読みで済んでいる。どちらでもない行は無視（1.6）。
@@ -45,28 +52,95 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
                 None => continue,
             },
         };
-        if body.is_empty() {
-            continue;
-        }
         // 位置 0＝パス・位置 1＝MD5・位置 2 以降の拡張欄は読み飛ばす（1.7）。
         let mut fields = body.split('\x01');
-        let path = fields.next().unwrap_or_default();
+        let path = normalize_separators(fields.next().unwrap_or_default());
         let md5 = fields.next().unwrap_or_default();
-        // 無効の検査・符号化の判定・MD5 の小文字化・重複の後勝ちはタスク 2.5 でここに入る。
-        entries.push(Entry {
-            line: i + 1,
-            local: path.to_owned(),
-            url_path: path.to_owned(),
-            md5: md5.to_owned(),
-        });
+        let why = if md5.is_empty() {
+            Some(InvalidWhy::NoMd5)
+        } else if md5.len() != 32 || !md5.bytes().all(|c| c.is_ascii_hexdigit()) {
+            Some(InvalidWhy::BadMd5)
+        } else {
+            invalid_path(&path, name)
+        };
+        match why {
+            Some(why) => warnings.push(UpdateWarning::InvalidEntry { line: i + 1, why }),
+            None => valid.push((i + 1, path, md5.to_ascii_lowercase())),
+        }
+    }
+
+    // 符号化の判定は有効な全エントリで 1 回（1.15）。
+    let all_encoded = valid.iter().all(|(_, path, _)| urlpath::is_encoded(path));
+    let mut slots: Vec<Option<Entry>> = Vec::with_capacity(valid.len());
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    for (line, path, md5) in valid {
+        let (local, url_path) = if all_encoded {
+            let bytes = urlpath::decode(&path);
+            let local = match String::from_utf8(bytes) {
+                Ok(s) => s,
+                Err(e) => used
+                    .decode_without_bom_handling(e.as_bytes())
+                    .0
+                    .into_owned(),
+            };
+            // `%2E%2E`・`%5C`・`%00` は復号して初めて見える。復号後も同じ検査を通す。
+            let local = normalize_separators(&local);
+            if let Some(why) = invalid_path(&local, name) {
+                warnings.push(UpdateWarning::InvalidEntry { line, why });
+                continue;
+            }
+            (local, path)
+        } else {
+            let url_path = urlpath::encode(&path);
+            (path, url_path)
+        };
+        // 重複は小文字の鍵で後勝ち（1.14）。
+        if let Some(old) = seen.insert(local.to_lowercase(), slots.len())
+            && let Some(old) = slots[old].take()
+        {
+            warnings.push(UpdateWarning::DuplicateEntry {
+                line: old.line,
+                path: old.local,
+            });
+        }
+        slots.push(Some(Entry {
+            line,
+            local,
+            url_path,
+            md5,
+        }));
     }
 
     let manifest = Manifest {
         name,
         charset: used,
-        entries,
+        entries: slots.into_iter().flatten().collect(),
     };
     (manifest, warnings)
+}
+
+/// パスの無効（1.11・1.12）。`\` は `/` に揃え済み。MD5 の 2 種の後を、定めた順に検査する。
+fn invalid_path(path: &str, name: ManifestName) -> Option<InvalidWhy> {
+    let b = path.as_bytes();
+    let why = if path.contains('\0') {
+        InvalidWhy::Nul
+    } else if path.starts_with('/') || (b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':')
+    {
+        InvalidWhy::Absolute
+    } else if path.ends_with('/') {
+        InvalidWhy::FolderEntry
+    } else if path.split('/').any(|c| c.is_empty() || c == ".") {
+        InvalidWhy::EmptyComponent
+    } else if path.split('/').any(|c| c == "..") {
+        InvalidWhy::DotDot
+    } else if path.eq_ignore_ascii_case(name.file_name()) {
+        InvalidWhy::SelfReference
+    } else if is_in_work_area(path) {
+        InvalidWhy::InsideWorkArea
+    } else {
+        return None;
+    };
+    Some(why)
 }
 
 /// 文字コードの指定を生のバイト列から先読みする（1.8）。指定が無ければ `None`。

@@ -1,6 +1,4 @@
 //! パスのパーセント符号化の判定・復号・符号化（純関数・要件 1.15）。
-// ponytail: 本番の呼び手（manifest）が付くまでの間だけ。manifest から呼んだら外す。
-#![cfg_attr(not(test), allow(dead_code))]
 
 /// 全文字 ASCII かつ `%` が必ず 16 進 2 桁を伴うときだけ「符号化済み」。
 pub(crate) fn is_encoded(path: &str) -> bool {
