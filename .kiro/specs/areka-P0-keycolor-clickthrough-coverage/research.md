@@ -161,3 +161,48 @@ roadmap の干渉台帳（A1・2026-09-20）で ④ の触るファイルは「�
 
 1. **`with_com_initialized` と `make_world_with_gpu` の併用**: 前者は末尾で `CoUninitialize` を呼び、後者は初期化だけで解放しない。案 A で `WicDecoderArm::new` を `make_world_with_gpu` の後に置けば前者は不要になる見込みだが、テストの並列実行（各テスト専用スレッド）で COM の参照回数が崩れないことを 1 度確かめる。
 2. **実行時間**: 実物の PNG を 2 検体ぶん焼き（既存の template テストと同量）、GPU 付き World を 1〜3 個作る（既存の equivalence テストは DPI 3 水準で 3 個）。既存の枠内に収まる見込みだが、面ごとに World を作り直す案（§6 の 6）を採るなら計測しておく。
+
+## 9. 設計フェーズの記録（2026-09-23・`/kiro-spec-design`）
+
+> 対象は本ブランチ HEAD `0c63a0f6`（製品コードは main `92f5f448` と同一）。§6 の 10 項目と §8 の 2 項目をここで閉じた。引用した定義はすべて実物を Grep／Read で再確認した。
+
+### 9.1 発見の範囲
+
+- **Discovery Scope**: Extension（既存の presenter 系テストと同じ読み口で組む・新しい技術 0・外部調査 0）。`design-discovery-light.md` の手順で、統合点（3 段の入口と読み口）・既存パターン（兄弟ファイル＋接続宣言・受け口の共有）・互換性（可視性の壁）だけを見た。
+- **Key Findings**:
+  1. §2.2 の可視性の壁は関数 2 本だけでは越えられない。`shell_target.rs` が繋ぐ `mod test_support;` は**私有モジュール**なので、中の関数を `pub(crate)` にしても `presenter` 配下からは届かない（Rust の可視性はモジュールの経路ごとに検査される）。`mod` 宣言そのものを `pub(crate) mod test_support;` にする 1 行が追加で要る。この 1 行は `#[cfg(test)]` の付いた項目なので要件 1.10 の製品コードの変更行数には含めず、可視性の書き換えとして数える（合計 3 行＝`mod` 1・関数 2）。
+  2. `ShellTarget::build_world` は「スコープの数だけ呼んでよい」（同関数の doc）、`atlas()` は `&AtlasTable` で `AtlasTable` は `#[derive(Clone)]`（`Arc` 共有・安価）。ゆえに `konnoyayame` に別の wintf World は要らず、GPU 付き World 1 個・presenter 1 個に target 3 本を装着すれば足りる（§6 の 6 の「別の World が要る」は面の表＝`EmoWorld` の話であり、`build_world` を target ごとに呼べば済む）。
+  3. `make_world_with_gpu` は `CoInitializeEx(None, COINIT_MULTITHREADED)` を呼び解放しない。`WicDecoderArm::new` は「COM は呼び出しスレッドで初期化済みでなければならない」（同関数の doc・`CoCreateInstance`）。ゆえに `make_world_with_gpu` の**後**に `WicDecoderArm::new` を呼べば `with_com_initialized` は要らない。
+
+### 9.2 設計で決めた項目（§6）の裁定
+
+| § | 項目 | 裁定 | 理由 |
+|---|---|---|---|
+| 6-1 | 置き場と可視性 | **案 A**: `crates/areka-emo-present/src/presenter_keycolor_clickthrough_tests.rs`（`presenter.rs` に接続宣言 3 行）＋ `shell_target.rs` の `mod test_support` を `pub(crate) mod` へ（1 行）＋ `shell_target_test_support.rs` の `r_post_and_komainu_shell_dir`・`konnoyayame_shell_dir` を `pub(crate)` へ（2 行） | 広げる数が 3。案 B は presenter 側の補助 4 本＋`mod` 1 の 5 で多く、`presenter_test_support.rs` が `use super::*;` で presenter の束縛に依存している点でも不利。案 C は両方を広げる必要があり採る理由が無い |
+| 6-2 | 正解の復号器 | **`WicDecoderArm::decode`**（`DecodedImage` の公開欄 `bgra`/`stride`/`width`/`height`/`has_alpha`） | 新しい依存 0・チャンネル順とパレット展開が製品と同じ・要件 1.3 の「復号した生の画素」そのもの。復号は要件が「導かない」と定めた 4 段（正規化・焼き・合成・マスク）の外。復号器が壊れて全画素が同色になれば要件 1.5 の較正が止める。`image` crate は承認事項かつ並べ替え・パレット展開をテストが担うことになるので不採用 |
+| 6-3 | 面 entity の引き方 | **`mount_entities(&presenter, target).0`**（`presenter_test_support.rs`・`presenter.targets` を読む） | `presenter_budget_equivalence_tests.rs` の ⑶ と同じ読み口。案 A なら `pub(super)` のまま届く。World の走査は書く量が増えるだけで利点が無い |
+| 6-4 | 数え方 | 要件 1.10 で解決済み | — |
+| 6-5 | 差し替え 3 段 | 焼く＝`normalize.rs` の `(On, KeyColor)` の腕の `let key = Self::key_color(&img, params, has_pna);` → `let key: Option<[u8; 4]> = None;`／合成＝`blit.rs` の `execute` の `dst[di + 3] = source_over_channel(src_a, dst_a, inv_src_a);` → `dst[di + 3] = 255;`（転写した画素の α を捨てて不透明で書く）／マスク＝`show.rs` の `apply_show` の `regenerate_mask` 第 2 引数 `display.bytes()` → `&vec![255u8; display.bytes().len()]`。走らせ方は 3 クレートの `cargo test`。記録の形式は design.md の表 | いずれも「透明を運ぶ段の入力や出力を別の物に置き換える」形。焼く段を `key_color` 側でなく腕の入力で外すのは、`bake` の `debug!` の記録がそのまま出る＝記録だけでは退行に気付けないことを同時に示すため |
+| 6-6 | 3 面の通し方 | **World 1 個・presenter 1 個・target 3 本**（`TargetId(0)`＝`R_POST` 面 0・`TargetId(1)`＝同 面 10・`TargetId(2)`＝`konnoyayame` 面 0・窓 entity は target ごとに DPI 96）。`R_POST` は `load_shell_target` 1 回・`build_world()` 2 回 | 起動側 `build_boot_assets` がスコープごとに面の表を組むのと同じ形（面 0 と面 10 は本番でも別の target）。外形変化＋輪番の経路は `presenter_resize_report_tests.rs` 等が既に持つので本テストで踏まない。判定の独立性は target 単位で保たれる |
+| 6-7 | 食い違いの報告 | 件数＋先頭 5 件の `(x, y, 期待は内か)` | `shell_target_template_tests.rs` の前例に揃える |
+| 6-8 | 本文走査の対象 | `load_shell_target` を**呼ぶ** 3 本だけ（`emo-present/setup.rs`・`collision-probe/setup.rs`・`window-placement.rs`） | 要件 3.2 の定めどおり。`use` だけの 2 本は含めない（含める理由が要件に無い） |
+| 6-9 | 改名後の名前 | **`load_shell_assets`** | 公開の `build_shell_target`・`measure.rs` の `build_shell_assets`・`window-placement.rs` の `build_shell_material` のどれとも異なる。リポジトリ内の同名は 0 件（実測） |
+| 6-10 | 較正の置き場 | `crates/areka-emo-compose/src/sample_test_support.rs` の中 | 触るファイル 1 本・present 側と同じ形 |
+
+### 9.3 持ち越し（§8）の解決
+
+1. **`with_com_initialized` と `make_world_with_gpu` の併用**: 併用しない。`make_world_with_gpu()` を最初に呼び（MTA 初期化・解放なし）、その後に同じスレッドで `WicDecoderArm::new()` を呼ぶ。`with_com_initialized` は末尾で `CoUninitialize` を呼ぶので、GPU 資源が生きている間に COM を解放する形を避ける。各テストは専用スレッドで走り、COM の参照回数はスレッドごとなので他のテストと交差しない（既存の presenter 系テスト 15 本と `display_gpu_tests.rs` の `gpu_dc` が同じ形）。
+2. **実行時間**: 較正の実測（2026-09-23・本ブランチ・`cargo test -p areka-emo-present --lib -- template_tests budget_equivalence_tests`）＝実物の焼き 2 検体 × 3 テスト＋GPU 付き World 3 個 × 2 テストの 6 本が **0.86 秒**で完了。本テストは World 1 個・焼き 2 検体・`ShowSurface` 3 回・復号 3 枚・約 233,000 画素の比較で、その 1 テストぶん未満。追加の計測は要らない。
+
+### 9.4 統合（synthesis）の結果
+
+- **一般化**: しない。3 面の判定は同じ私有 fn 2 本（正解の決め方・判定）で回すが、テストファイルの外へ出す補助は 0（本テスト以外に使い手が無い）。
+- **Build vs Adopt**: 既存の補助（`make_world_with_gpu`・`spawn_window_with_dpi`・`show_ok`・`mount_entities`・受け口 2 口）と既存の復号器（`WicDecoderArm`）を採る。新設 0・新しい依存 0。
+- **簡素化**: `with_com_initialized`・`emo2_shell_dir`・`capture_events` は広げない（使わない）。実測の画素数（59,831 等）はテストに固定しない（検体の絵の差し替えで赤になり退行検出と混ざる）。面ごとの World 作り直しはしない。
+
+### 9.5 リスクと対策
+
+- `make_world_with_gpu` が HARDWARE デバイスを要る — 既存の 15 本と同じ前提であり本仕様で増える前提ではない。
+- `konnoyayame` 面 0 の `animation0`（まばたき・`sometimes`）— `PatternState::default()` で適用すればコマは重ならない（`shell_target_template_tests.rs` の前提と同じ）。
+- 検体の PNG が α 付きに差し替わる — `has_alpha == false` の前提の主張で止まり、原因が名指しされる。
+- 差し替えを戻し忘れる — 手順に `git checkout -- <ファイル>` と `git diff --stat` が空であることの記録を含める。
