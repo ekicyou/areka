@@ -1,6 +1,8 @@
 # Design Document: areka-P0-update-engine
 
 > 2026-09-23 設計。入力は確定済みの `requirements.md`（10 要件・78 受入基準）と `research.md`（ギャップ分析＋設計判断 15 項目）。要件段階の裁定 ⑴ MD5＝OS の CNG・⑵ 既定の文字コード＝Shift_JIS 固定・⑶ `areka-nar` の部品は再利用しない、と要件ディスカッションで決着した項目 4（置き場＝対象フォルダ直下）・10（`delete.txt` の文字コード）・12（語彙 3 語の追加）・13（差分 0 の周は定義ファイルを置かない）はそのまま採る。残る項目（作業場所の名前と下位構造・ファイル単位の確定の手順・取得した内容の持ち方・取得の境界の型・WinHTTP の細部・パーセント復号後の文字コード・観測者の形・失敗の語彙の全数・後退した周の古い `updates2.dau`・実機の一周の器・クレート名と登記）を本書で確定する。既存コードへの言及は 2026-09-23 に本ブランチで file:定義 を引き直した（`research.md` §10）。正典の引用は ukadoc の項目名で示す。
+>
+> 2026-09-24 設計ディスカッション（`design-validation.md` の重大 2 件＋軽微 7 件を反映）: 確定は「配下の検査 → 親フォルダ → 退避 → 置く」の順に改め（重大 2）、棚の片付けは `old/` に中身が残るフォルダを消さない（重大 1）。`UpdateWarning` は 7 変種（`Undeletable`・`Leftover` は結果の一覧から `run` が直接 `warn!` に写す・`DeleteKindMismatch`・`DeleteFileUnreadable` を追加）。`charset=` の先読みは先頭エントリの最後の欄だけ。要件 1.12・7.3・8.3・9.1 を同時に直した。
 
 ## Overview
 
@@ -211,12 +213,12 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    S[次のファイル] --> P{親フォルダは在るか}
+    S[次のファイル] --> CK{実パスが対象フォルダの配下か 最も深い実在する祖先で判定}
+    CK -- 否 --> UW
+    CK -- 是 --> P{親フォルダは在るか}
     P -- 無い --> MK[create_dir_all して作った段を Undo RemoveDir に積む]
-    P -- 在る --> CK
-    MK --> CK{実パスが対象フォルダの配下か}
-    CK -- 否 --> FAIL[失敗 EscapesTarget]
-    CK -- 是 --> EX{宛先に既存があるか}
+    P -- 在る --> EX
+    MK --> EX{宛先に既存があるか}
     EX -- 在る --> RT[rename 宛先 から old rel へ Undo Restore]
     EX -- 無い --> PL
     RT --> PL[rename new rel から 宛先へ Undo Remove]
@@ -227,10 +229,11 @@ flowchart TD
     RT -- 失敗 --> UW
     MK -- 失敗 --> UW
     UW --> RB{全部戻せたか}
-    RB -- 是 --> CW[失敗 CommitWrite rolled_back true]
+    RB -- 是 --> CW[失敗 CommitWrite または EscapesTarget rolled_back true]
     RB -- 否 --> RF[失敗 RollbackFailed 作業場所を残す]
 ```
 
+- 配下の検査を親フォルダの作成より**先**に置く（5.6「外へ解決されるパスを決して作らない」）。`resolves_under` は最も深い実在する祖先を見るので、作る前に呼べる。差分の段の検査から確定までの間に取得（数秒〜数分）が挟まるため、ここでもう一度検査する。
 - 退避を先にするのは、`std::fs::rename` がファイル相手だと既存を置き換えるためである（`library/std/src/fs.rs` の `rename` の説明「replacing the original file if `to` already exists」・Windows 実装は `MoveFileExW(…, MOVEFILE_REPLACE_EXISTING)`）。退避を挟まないと元の内容が消え、戻せない。
 - 作業場所は対象フォルダと同じボリュームなので `rename` は複写にならず、置く手は 1 件あたり 1 回のメタデータ操作で済む。
 - 定義ファイル自身（`updates2.dau` または `updates.txt`）は確定の最後の 1 件として同じ手順で置く（5.3）。
@@ -288,9 +291,9 @@ flowchart TD
 | 6.1 | 確定後に `delete.txt` → `delete[数字].txt` | delete | `delete_files`・`apply` | 一周の進行 |
 | 6.2 | 行の読み方・文字コードの引き継ぎ | delete・manifest | `apply(charset)` | — |
 | 6.3 | 3 種の拒否＋作業場所 | delete・paths・error | `DeleteWhy::{Absolute, DotDot, EscapesTarget, InsideWorkArea}` | — |
-| 6.4 | フォルダの行・ファイルの行がフォルダ | delete・error | `remove_tree`・`UpdateWarning::DeleteFileLineIsFolder` | — |
+| 6.4 | フォルダの行・ファイルの行がフォルダ | delete・error | `remove_dir_all`・`UpdateWarning::DeleteKindMismatch` | — |
 | 6.5 | 無い物は何もしない | delete | `apply` | — |
-| 6.6 | 取り除けなくても成否は変えない | delete・outcome | `Undeletable`・`UpdateWarning::Undeletable` | — |
+| 6.6 | 取り除けなくても成否は変えない | delete・outcome | `Undeletable`（`run` が `warn!` に写す）・`UpdateWarning::DeleteFileUnreadable` | — |
 | 6.7 | 取り除いた一覧 | outcome | `Updated::removed`・`Progress::Deleted` | — |
 | 7.1 | 6 種の進捗を起きた順に | outcome・lib | `Progress`・観測者 `&mut dyn FnMut(&Progress)` | 一周の進行 |
 | 7.2 | 成功 2 形（0 件／n 件）と 4 つの一覧 | outcome | `UpdateOutcome::{Unchanged, Updated}` | — |
@@ -377,7 +380,7 @@ pub fn run(
 ) -> Result<UpdateOutcome, UpdateError>;
 ```
 
-- Preconditions: `request.target` は絶対パス。呼び出し側が UI スレッドの外で呼ぶ。起動中のゴーストなら SHIORI を先に解放している。
+- Preconditions: `request.target` は絶対パス。呼び出し側が UI スレッドの外で呼ぶ。起動中のゴーストなら SHIORI を先に解放している。同じ対象フォルダへの走行を同時に 2 つ起こさない（起こせば棚の片付けが相手の作業場所を消し得る。呼び出し側が 1 対象ずつ呼ぶ＝要件の Out of scope）。
 - Postconditions: `Ok(Unchanged)` なら対象フォルダは 1 バイトも変わらない。`Ok(Updated)` なら要取得の全件と定義ファイルが置かれ、`delete.txt` が適用済み。`Err` で `rolled_back()` が真なら対象フォルダの内容（作業場所を除く）は開始前と同一。`Err` で偽なら `work` に元の内容が残る作業場所のパスがある。
 - Invariants: 取得の間、対象フォルダの木（作業場所を除く）は変わらない。観測者への通知は起きた順で、`Md5Compared` は不一致でも通知してから失敗にする。
 
@@ -390,11 +393,11 @@ pub fn run(
 5. `Stage::Download { index: 0, total }`: `WorkArea::create(target)`。`Err` → `WorkArea { path, source }`。
 6. 各要取得 `i`（定義の順）: `Progress::DownloadBegin`。`get(file_url)` の `Err` → `FileFetch`（`Stage::Download { i, total }`）。`md5_hex` で照合し `Progress::Md5Compared`。不一致 → `Md5Mismatch`（`Stage::Verify { i, total }`）。`area.put(rel, bytes)` の `Err` → `WorkArea`。バイト列はここで手放す（メモリに全件を溜めない）。
 7. 定義ファイルの生バイト列を `area.put(manifest.name.file_name(), …)`。
-8. `Stage::Commit`: `commit::commit(target, target_real, &area, files ＋ 定義ファイル名)`。`Ok(placed)` → `Progress::Committed`。`Err(Write)` → `CommitWrite`（戻せた）。`Err(Escapes)` → `EscapesTarget`。`Err(RollbackFailed)` → `RollbackFailed`・作業場所は片付けず `work = Some(area.dir())`。
-9. `delete::apply(target, target_real, manifest.charset)` → 警告を `warn!`・`Progress::Deleted { removed }`。削除は一周を失敗にしない（6.6）。
+8. `Stage::Commit`: `commit::commit(target, target_real, &area, files ＋ 定義ファイル名)`。`Ok(placed)` → `Progress::Committed`。`Err(Write)` → `CommitWrite`（戻せた）。`Err(Escapes)` → `EscapesTarget`（それまでに置いた分は戻せた）。`Err(RollbackFailed)` → `RollbackFailed`・作業場所は片付けず `work = Some(area.dir())`。
+9. `delete::apply(target, target_real, manifest.charset)` → `warnings` を `warn!`・`undeletable` も 1 件 1 行の `warn!`・`Progress::Deleted { removed }`。削除は一周を失敗にしない（6.6）。
 10. `area.cleanup()` → 残骸を `Updated::leftovers` に入れ、各 1 件 `warn!`。`info!` で終了（成功・件数）。`Ok(Updated { … })`。
 
-失敗時は 8 の `RollbackFailed` を除き `area.cleanup()`（作っていれば）を行い、残骸を `UpdateError::leftovers` に入れ、`log_failure` で `error!` を 1 回出して `Err`。
+失敗時は 8 の `RollbackFailed` を除き `area.cleanup()`（作っていれば）を行い、残骸を `UpdateError::leftovers` に入れ、`log_failure` で `error!` を 1 回出して `Err`。失敗の終了は `error!` の 1 行が兼ね、`info!` を重ねない（`areka-nar/src/lib.rs` の `install` と同じ形＝8.3）。
 
 ##### Event Contract（観測者）
 
@@ -407,7 +410,7 @@ pub fn run(
 |---|---|---|
 | 開始 | `info!` | `homeurl`・`target` |
 | 終了 | `info!` | `outcome`（`unchanged`／`updated`）・`placed`（件数）・`removed`（件数）・`leftovers`（件数） |
-| 警告（`UpdateWarning` 1 件につき 1 行） | `warn!` | `kind`（変種名）・変種の欄（`line`・`path`・`name`・`file`・`error` 等） |
+| 警告（`UpdateWarning` 1 件・取り除けなかった物（`Undeletable`）1 件・残骸（`leftovers`）1 件につき 1 行） | `warn!` | `kind`（変種名・`undeletable`・`leftover`）・変種の欄（`line`・`path`・`name`・`file`・`error` 等） |
 | 失敗（`log_failure`・1 行） | `error!` | `homeurl`・`target`・`stage`・`reason`（`kind()`）・`detail`（`Display`）・`file`・`rolled_back`・`work`・`leftovers`（件数） |
 
 #### `error`・`outcome`（契約の型）
@@ -516,6 +519,7 @@ pub struct UpdateError {
     pub leftovers: Vec<PathBuf>,
     /// 戻せなかったときだけ。元の内容が残る作業場所。
     pub work: Option<PathBuf>,
+    // 要取得の一覧は持たない: 差分の段を越えた失敗なら `Progress::DiffDecided` で既に渡している（2.6）。
 }
 impl UpdateError {
     /// 原因のファイル名（分かるとき）。
@@ -525,6 +529,8 @@ impl UpdateError {
 }
 
 /// 拒否ではないが黙って通さないもの（8.2）。`run` が 1 件 1 行の `warn!` に写す。
+/// 取り除けなかった物と残骸は結果の一覧（`undeletable`・`leftovers`）が正本で、
+/// `run` がそこから直接 `warn!` に写す（`io::Error` は `Clone` できないので 2 か所に持たない）。
 #[derive(Debug)]
 pub enum UpdateWarning {
     HomeurlSlashAppended,
@@ -532,9 +538,10 @@ pub enum UpdateWarning {
     InvalidEntry { line: usize, why: InvalidWhy },
     DuplicateEntry { line: usize, path: String },
     DeleteLineIgnored { file: String, line: usize, why: DeleteWhy },
-    DeleteFileLineIsFolder { file: String, line: usize, path: PathBuf },
-    Undeletable { path: PathBuf, source: std::io::Error },
-    Leftover { path: PathBuf },
+    /// 行の種別（ファイル／フォルダ）と実体の種別が違う → 取り除かない（6.4・両方向）。
+    DeleteKindMismatch { file: String, line: usize, path: PathBuf },
+    /// `delete.txt`／`delete<N>.txt` が読めない → そのファイルを飛ばす（6.6）。
+    DeleteFileUnreadable { file: String, source: std::io::Error },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InvalidWhy {
@@ -587,12 +594,12 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
 
 **判断の規則**（`parse` の中身・順序どおり）:
 
-1. **先読み**（1.8）: `updates2.dau` は先頭行（CRLF／LF まで）を `\x01` で分け、位置 2 以降の ASCII の `charset=<名前>` を探す。`updates.txt` は行頭 `charset,` の行（ASCII）を探す。名前は `Encoding::for_label` で解決し、解決できなければ `UnknownCharset` を警告して `DEFAULT_CHARSET`（1.9・1.10）。`GetACP` 等の OS 設定は読まない。
+1. **先読み**（1.8）: `updates2.dau` は先頭行（CRLF／LF まで）を `\x01` で分け、**最後の欄**が ASCII の `charset=<名前>` なら採る（先頭エントリの末尾にあるときだけ＝1.7・1.8。他の位置の `charset=` は拡張欄として読み飛ばす）。`updates.txt` は行頭 `charset,` の行（ASCII）を探す。名前は `Encoding::for_label` で解決し、解決できなければ `UnknownCharset` を警告して `DEFAULT_CHARSET`（1.9・1.10）。`GetACP` 等の OS 設定は読まない。
 2. **復号**: 解決した文字コードの `Encoding::decode(bytes)`（BOM があれば BOM を優先＝`encoding_rs` の規則）。
 3. **行**: `\n` で分け、末尾の `\r` を落とす（1.5）。0 文字の行は数えない（末尾の改行の後の空を無効エントリにしない）。`updates.txt` は `file,` の後ろを `updates2.dau` の 1 行として読み、`charset,` 行はここでは読み飛ばし、どちらでもない行は無視する（1.6）。
 4. **欄**（1.7）: `\x01` で分け、位置 0＝パス・位置 1＝MD5・位置 2 以降＝`key=value`。`size=`・`date=`・その他の鍵は読み飛ばす。`charset=` は先読みでしか使わない。
 5. **無効**（1.11・1.12・順序どおり・最初に当たった理由 1 つを `InvalidEntry { line, why }` に）: `NoMd5`（位置 1 が無い・空）→ `BadMd5`（32 桁の 16 進でない）→ `Nul` → `Absolute`（`/`・`\` 始まり・`X:`・`\\`）→ `FolderEntry`（末尾 `/`・`\`）→ `EmptyComponent`（空・`//`・`/./` 相当の空要素）→ `DotDot`（区切り要素 `..`）→ `SelfReference`（大小無視で `name.file_name()` に一致）→ `InsideWorkArea`（先頭要素が `.update-work`＝作業場所を定義から書き換えさせない・本仕様の追加）。区切りは `\` を `/` に正規化してから検査する（1.13）。
-6. **符号化の判定**（1.15）: 有効な全エントリのパスが `urlpath::is_encoded`（全文字 ASCII・`%` は必ず 16 進 2 桁を伴う）なら、`url_path` は書かれたまま、`local` は `urlpath::decode` のバイト列を **UTF-8 として読み、UTF-8 でなければ定義ファイルの文字コードで読む**（research §6-9 ⒜。理由は「Design Decisions」）。そうでなければ `local` は書かれたまま、`url_path` は `urlpath::encode`（UTF-8 のバイト列を `%XX` 大文字で符号化・未予約文字 `A-Z a-z 0-9 - . _ ~` と `/` は残す）。
+6. **符号化の判定**（1.15）: 有効な全エントリのパスが `urlpath::is_encoded`（全文字 ASCII・`%` は必ず 16 進 2 桁を伴う）なら、`url_path` は書かれたまま、`local` は `urlpath::decode` のバイト列を **UTF-8 として読み、UTF-8 でなければ定義ファイルの文字コードで読む**（research §6-9 ⒜。理由は「Design Decisions」）。そうでなければ `local` は書かれたまま、`url_path` は `urlpath::encode`（UTF-8 のバイト列を `%XX` 大文字で符号化・未予約文字 `A-Z a-z 0-9 - . _ ~` と `/` は残す。1.15 の「使えない文字」より広く、パスで使える `!`・`(`・`,`・`=`・`@` 等も符号化するが、サーバは同じに復号するので結果は変わらない＝方針として固定）。
 7. **重複**（1.14）: `local` を小文字にした鍵で後勝ち。捨てた先の行を `DuplicateEntry { line, path }` に。
 8. MD5 は小文字に正規化して持つ（2.2）。
 
@@ -727,6 +734,8 @@ pub(crate) struct WorkArea { dir: PathBuf, residue: Vec<PathBuf> }
 impl WorkArea {
     /// 棚 `.update-work/` に残る他の走行の残骸を先に消し（消せなければ `residue`）、自分の
     /// フォルダを `create_dir_all` で作る。失敗は `(触ったパス, io::Error)`。
+    /// ただし `old/` に中身が残るフォルダ（戻せなかった走行が残した元の内容＝5.5）は消さず
+    /// `residue` に列挙する（次の走行が利用者の復旧の手がかりを消さない）。
     pub(crate) fn create(target: &Path) -> Result<WorkArea, (PathBuf, std::io::Error)>;
     pub(crate) fn dir(&self) -> &Path;
     pub(crate) fn fresh(&self, rel: &str) -> PathBuf;     // new/<rel>
@@ -742,7 +751,7 @@ impl WorkArea {
 
 - State model: 作業場所は一周の間だけ在る。差分 0 の周では作らない（2.5）。
 - Persistence & consistency: 対象フォルダと同じボリューム（`rename` が複写にならない・`temp_path_guard_test` が OS の一時フォルダを禁じる）。
-- Concurrency strategy: 名前に `std::process::id()` と連番を含め、同時の走行が別のフォルダを使う。他の走行の残骸は「消せなければ残骸に列挙して止めない」（`areka-nar` の `prepare_shelf` と同じ）。
+- Concurrency strategy: 名前に `std::process::id()` と連番を含め、同時の走行が別のフォルダを使う。他の走行の残骸は「消せなければ残骸に列挙して止めない」（`areka-nar` の `prepare_shelf` と同じ）。`old/` に中身が残るフォルダは**消さない**で残骸に列挙する（戻せなかった走行の元の内容。利用者が手で復旧するまで毎周 `leftover` の警告に出る＝黙らない）。同じ対象への同時の走行は呼び出し側が起こさない（`run` の前提条件）。
 
 #### `commit`（ファイル単位の確定と戻し）
 
@@ -758,7 +767,7 @@ impl WorkArea {
 pub(crate) enum CommitFailure {
     /// 置けなかったが全部戻せた（対象フォルダは開始前と同一）。
     Write { path: PathBuf, source: std::io::Error },
-    /// 実パスが配下に無かった（何も置いていないか、置いた分は戻した）。
+    /// 実パスが配下に無かった（外には何も作っていない。それまでに置いた分は戻した。戻せなければ `RollbackFailed`）。
     Escapes { path: PathBuf },
     /// 戻しにも失敗した。
     RollbackFailed { path: PathBuf, source: std::io::Error, restored: Vec<String>, stuck: Vec<Stuck> },
@@ -776,13 +785,13 @@ pub(crate) fn commit(target: &Path, target_real: &Path, area: &WorkArea, files: 
 ##### Batch / Job Contract
 
 - Trigger: `run` が要取得の全件の照合を終えた後に 1 回（5.1）。
-- Input / validation: 各 `rel` について ⑴ 親フォルダが無ければ `create_dir_all`（作った段を外側から `RemoveDir` に積む）⑵ `resolves_under(target_real, 宛先)` が偽なら `Escapes`（5.6＝「確定の前にも」）⑶ 宛先が在れば `rename(宛先, old/rel)` → `Restore` を積む ⑷ `rename(new/rel, 宛先)` → `Remove` を積む。
-- Output / destination: 全件で `Ok(files)`。失敗で `unwind`: `Undo` を逆順に全部試み（途中で失敗しても続ける）、`Remove` → `remove_file`・`Restore` → `rename(old, dest)`・`RemoveDir` → `remove_dir`（空でなければ何もしない）。全部通れば `Write`、1 つでも残れば `RollbackFailed { restored, stuck }`。
-- Idempotency & recovery: 戻せなかったときは作業場所を残し（`WorkArea::keep`）、`old/` に元の内容・`new/` に落とした内容が残る。利用者への案内は `network-update` が `UpdateError::work` から組む。
+- Input / validation: 各 `rel` について、この順で ⑴ `resolves_under(target_real, 宛先)` が偽なら `Escapes`（5.6＝「確定の前にも」・外側には何も作らない）⑵ 親フォルダが無ければ `create_dir_all`（作った段を外側から `RemoveDir` に積む）⑶ 宛先が在れば `rename(宛先, old/rel)` → `Restore` を積む ⑷ `rename(new/rel, 宛先)` → `Remove` を積む。
+- Output / destination: 全件で `Ok(files)`。失敗（`Escapes` を含む）で `unwind`: `Undo` を逆順に全部試み（途中で失敗しても続ける）、`Remove` → `remove_file`・`Restore` → `rename(old, dest)`・`RemoveDir` → `remove_dir`（空でなければ何もしない）。全部通れば `Write`／`Escapes`、1 つでも残れば `RollbackFailed { restored, stuck }`。
+- Idempotency & recovery: 戻せなかったときは作業場所を残し（`WorkArea::keep`）、`old/` に元の内容・`new/` に落とした内容が残る。次の走行の棚の片付けはこのフォルダを消さない（`WorkArea::create`）。利用者への案内は `network-update` が `UpdateError::work` から組む。確定の完了から `delete.txt` の適用までの間で落ちた場合、次の走行は差分 0 になり `delete.txt` を読まない（6.1 の決定。作者が定義ファイルを次に変えるまで削除は適用されない＝既知の窓・小さい）。
 
 **Implementation Notes**
 - Integration: 定義に無いローカルのファイルは一切触らない（`files` の側だけ歩く＝2.3）。
-- Validation: `commit_tests.rs` の注入 ⑴ 宛先を `hold`（読み共有で開いたまま）→ 退避の `rename` が失敗 → `Write`・木がバイト単位で同一（9.4・5.7） ⑵ 2 件目を `hold`・1 件目は無い親フォルダの下 → 1 件目は置かれ親も作られる → 失敗で親フォルダごと消えて同一（5.4） ⑶ **戻せなかった**の固定入力: `FakeFetch` の取得時の口（`on_get`）で 2 件目の取得時に `new/1 件目` を読み取り専用にし、2 件目の宛先を `hold` → 1 件目は置かれる → 2 件目で失敗 → `unwind` の `remove_file(宛先 1)` が読み取り専用で失敗 → `RollbackFailed { stuck: [1 件目] }`・`work` に作業場所（7.4 の全数対応・5.5）。
+- Validation: `commit_tests.rs` の注入 ⑴ 宛先を `hold`（読み共有で開いたまま）→ 退避の `rename` が失敗 → `Write`・木がバイト単位で同一（9.4・5.7） ⑵ 2 件目を `hold`・1 件目は無い親フォルダの下 → 1 件目は置かれ親も作られる → 失敗で親フォルダごと消えて同一（5.4） ⑶ **戻せなかった**の固定入力: `FakeFetch` の取得時の口（`on_get`）で 2 件目の取得時に `new/1 件目` を読み取り専用にし、2 件目の宛先を `hold` → 1 件目は置かれる → 2 件目で失敗 → `unwind` の `remove_file(宛先 1)` が読み取り専用で失敗 → `RollbackFailed { stuck: [1 件目] }`・`work` に作業場所（7.4 の全数対応・5.5） ⑷ 差分の後・確定の前に、2 件目の親フォルダを対象の外を指すジャンクション（`cmd /c mklink /J`）に置き換える（`on_get` で注入）→ `Escapes`・外側には何も作られていない・1 件目は戻されて木が同一（5.6）。`work_tests` に ⑸ 戻せなかった走行の作業場所（`old/` に中身）が残る状態でもう 1 周 `create` しても消えず残骸に列挙される（5.5）。
 - Risks: `rename` は同じボリュームでのみメタデータ操作。作業場所を対象フォルダ直下に固定しているので前提は構造で守られる。
 
 #### `delete`（`delete.txt` の適用）
@@ -803,7 +812,7 @@ pub(crate) struct DeleteReport {
 }
 /// 対象フォルダ直下の `delete.txt` と `delete<N>.txt`（N は 10 進 1 桁以上）を、`delete.txt` → N の昇順に並べる。
 pub(crate) fn delete_files(target: &Path) -> Vec<PathBuf>;
-/// 全ファイルを順に適用する。読めないファイルは警告して飛ばす（削除は一周を失敗にしない＝6.6）。
+/// 全ファイルを順に適用する。読めないファイルは `DeleteFileUnreadable` を警告して飛ばす（削除は一周を失敗にしない＝6.6）。
 pub(crate) fn apply(target: &Path, target_real: &Path, charset: &'static encoding_rs::Encoding) -> DeleteReport;
 ```
 
@@ -811,7 +820,7 @@ pub(crate) fn apply(target: &Path, target_real: &Path, charset: &'static encodin
 
 - Trigger: `run` が確定に成功した直後（6.1）。差分 0 の周では呼ばない。
 - Input / validation: 各行は `charset` で復号（6.2）、末尾の `\r` を落とし、空行と空白だけの行を無視。`\` と `/` を区切り、末尾の区切りはフォルダ。拒否は順に `Absolute`（`\`・`/` 始まり・ドライブ文字・UNC）→ `DotDot` → `EscapesTarget`（`resolves_under` が偽）→ `InsideWorkArea`（先頭要素が `.update-work`）。拒否は `DeleteLineIgnored { file, line, why }` の警告（6.3）。
-- Output / destination: フォルダの行は `remove_dir_all`（6.4）。ファイルの行で在るのがフォルダなら取り除かず `DeleteFileLineIsFolder`。無ければ何もしない（6.5）。取り除けなければ `undeletable` と `Undeletable` の警告（6.6）。取り除いた物は `removed`（6.7）。
+- Output / destination: 先に `symlink_metadata` で実体の種別を見る。フォルダの行で在るのがフォルダなら `remove_dir_all`、ファイルの行で在るのがファイルなら `remove_file`（6.4）。行の種別と実体の種別が違えば（ファイルの行にフォルダ・フォルダの行にファイル）取り除かず `DeleteKindMismatch`（std の `remove_dir_all` はファイル相手だと `ERROR_DIRECTORY` で失敗するが、理由の分かる警告にするため先に見る）。無ければ何もしない（6.5）。取り除けなければ `undeletable`（`run` が `warn!` に写す＝6.6）。取り除いた物は `removed`（6.7）。
 - Idempotency & recovery: 既に無い物は成功扱い。再実行しても同じ結果。
 
 ### 試験の道具（`testkit.rs`・`#[cfg(test)]`）
@@ -891,14 +900,14 @@ pub(crate) fn sjis(s: &str) -> Vec<u8>;
 - `diff_tests`（9.2）: 無い／同じ／違う／定義に無いローカルのファイル、の 4 形。定義に無いファイルが `tree` で前後同一。読めないファイル（`hold` では読める。読み取り不能はフォルダを同名で置く）→ `Unreadable`。
 - `work_tests`: 作成・`put`・`cleanup` で消える・他の走行の残骸を消す／消せなければ残骸。
 - `commit_tests`（9.4・5.2・5.4・5.5・5.7）: 上の「Validation」の注入 3 本。各々 `tree` で「同一」または「戻せなかった状態」を判定。作った親フォルダが失敗で消える。
-- `delete_tests`（9.5）: 3 種の拒否・作業場所の行・フォルダの行が中身ごと消える・ファイルの行がフォルダを指す → 残る＋警告・無い物 → 何もしない・`delete.txt` → `delete1.txt` → `delete10.txt` の順（`delete2.txt` を `delete10.txt` より先に）・Shift_JIS の行の復号（`charset` の引き継ぎ）・読めない `delete.txt` → 警告して続行。
+- `delete_tests`（9.5）: 3 種の拒否・作業場所の行・フォルダの行が中身ごと消える・ファイルの行がフォルダを指す／フォルダの行がファイルを指す → 残る＋`DeleteKindMismatch`・無い物 → 何もしない・`delete.txt` → `delete1.txt` → `delete10.txt` の順（`delete2.txt` を `delete10.txt` より先に）・Shift_JIS の行の復号（`charset` の引き継ぎ）・読めない `delete.txt` → 警告して続行。
 - `error_tests`: `kind()` と `ALL_KINDS` の宣言順・`Display` が期待と実際を両方持つ・`rolled_back()`／`file()`。
 
 ### Integration Tests（`src/run_tests.rs`・`FakeFetch` で一周・9.3）
 
 各経路で、戻り値の形・観測者が受けた `Progress` の列・`count_levels` の件数（8.4）・`tree` の同一性を同時に判定する。
 
-- 成功（更新 n 件）: `DiffDecided` → `DownloadBegin`×n → `Md5Compared`×n → `Committed` → `Deleted` の順・`placed` が定義の順・定義ファイルが対象直下に置かれる・`delete.txt` が適用される・作業場所が消えている・`error` 0 件。
+- 成功（更新 n 件）: `ManifestFetched` → `DiffDecided` → (`DownloadBegin` → `Md5Compared`)×n（1 件ごとに交互）→ `Committed` → `Deleted` の順・`placed` が定義の順・定義ファイルが対象直下に置かれる・`delete.txt` が適用される・作業場所が消えている・`error` 0 件。
 - 差分 0: 取得口の呼出が定義ファイルの 1 回だけ・対象フォルダが 1 バイトも変わらない・作業場所が作られない・`delete.txt` が読まれない（あっても消えない）・`Unchanged`。
 - 有効エントリ 0（空の定義ファイル）→ `Unchanged`。
 - 定義ファイルが無い: 呼出が `updates2.dau`・`updates.txt` の 2 回 → `ManifestMissing`。
@@ -950,4 +959,5 @@ pub(crate) fn sjis(s: &str) -> Vec<u8>;
 - 判断（本書で確定・覆すときは要件 1.15 と同時に）: パーセント復号後のバイト列は UTF-8 → 定義ファイルの文字コードの順で読む。
 - 判断（本書で確定）: `Updated::placed` に定義ファイル自身は含めない（`manifest` 欄が示す）。`network-update` が Ref に足したければ `file_name()` を継ぎ足せる。
 - 判断（本書で確定）: `Stage` に削除の段は無い（6.6 で失敗にしないため到達しない腕を持たない）。
+- 既知の事項（2026-09-24 設計ディスカッション）: ⒜ 確定の完了から `delete.txt` の適用までの間で落ちると、次の走行は差分 0 で `delete.txt` を読まない（`commit` の Idempotency & recovery）。⒝ 戻せなかった走行の作業場所は利用者が手で消すまで残り、毎周 `leftover` の警告に出る（`work` の Concurrency strategy）。
 - 開いた問いは無い。
