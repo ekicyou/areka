@@ -82,11 +82,12 @@ fn dummy_window_has_visible_rectangle_child() {
     );
 }
 
-/// ダブルクリック（左）でマーカー付きダミー窓を despawn し true を返す。
+/// ダブルクリック（左）でマーカー付きダミー窓を despawn し、終了を指示して true を返す。
 /// マーカーを持たない entity は残す。
 #[test]
 fn double_click_left_despawns_all_dummy_windows() {
     let mut world = World::new();
+    world.insert_non_send(AppExit::new());
     let dummy = world.spawn(DummyWindowMarker).id();
     let dummy2 = world.spawn(DummyWindowMarker).id();
     let other = world.spawn_empty().id();
@@ -97,6 +98,10 @@ fn double_click_left_despawns_all_dummy_windows() {
     assert!(handled);
     assert!(world.get_entity(dummy).is_err());
     assert!(world.get_entity(dummy2).is_err());
+    assert!(
+        world.get_non_send::<AppExit>().unwrap().is_requested(),
+        "ダミー窓のダブルクリックは窓を閉じた上で終了を指示する（要件 3.4）"
+    );
     assert!(world.get_entity(other).is_ok());
 }
 

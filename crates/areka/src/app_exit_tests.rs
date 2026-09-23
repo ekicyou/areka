@@ -1,7 +1,7 @@
 //! `app_exit` の決定論テスト（areka-P0-app-lifetime-separation）。
 //!
 //! 全窓破棄の私有部品 `despawn_app_windows` の 3 本は `main_seam_tests.rs` の
-//! `despawn_smoke_targets_*` から移した（task 3.1）。判断は不変で、対象の関数名と
+//! smoke 用の全窓破棄関数のテストから移した（task 3.1）。判断は不変で、対象の関数名と
 //! 打ち切り行の相名（`[quit_app]`）だけを追随させた。
 
 use super::*;

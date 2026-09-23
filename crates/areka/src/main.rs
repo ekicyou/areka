@@ -466,14 +466,12 @@ fn spawn_dummy_window(world: &mut World) -> Entity {
     dummy
 }
 
-/// OnPointerPressed ハンドラ: ダブルクリック（左）でダミー窓を despawn する（task 2.2）。
+/// OnPointerPressed ハンドラ: ダブルクリック（左）で全窓を閉じて終了を指示する（task 2.2）。
 ///
-/// `Phase::Bubble` で `DoubleClick::Left` を検出し、`DummyWindowMarker` を持つ全 entity を
-/// despawn して true を返す。それ以外は false。`Phase::Tunnel` は無視する。
-/// despawn → `on_window_handle_remove`（wintf
-/// `crates/wintf/src/ecs/window/window_handle.rs`）→ `PostMessageW(WM_CLOSE)` → `DestroyWindow`
-/// → `WindowRegistry` 空遷移 → `run()` 復帰、という wintf の作法に委ねる（自前 wndproc も
-/// 手書き `PostMessageW(WM_CLOSE)` も書かない）。
+/// `Phase::Bubble` で `DoubleClick::Left` を検出し、[`app_exit::quit_app`]
+/// （`ExitOrigin::DummyWindow`）へ渡して true を返す。それ以外は false。`Phase::Tunnel` は無視する。
+/// 窓の破棄は wintf の作法（despawn → `WM_CLOSE` → `DestroyWindow`）に委ね、`run()` は
+/// 窓の数でなく終了の指示で戻る（自前 wndproc も手書き `PostMessageW(WM_CLOSE)` も書かない）。
 fn on_dummy_pressed(
     world: &mut World,
     _sender: Entity,
@@ -485,17 +483,7 @@ fn on_dummy_pressed(
         Phase::Bubble(state) => {
             if state.double_click == DoubleClick::Left {
                 tracing::info!("ダミー窓ダブルクリック検出 — ダミー窓を閉じます");
-
-                // ダミー窓 entity を収集して despawn（on_window_handle_remove → WM_CLOSE →
-                // DestroyWindow → WindowRegistry 空遷移 → run() 復帰）。
-                let dummies: Vec<Entity> = world
-                    .query_filtered::<Entity, With<DummyWindowMarker>>()
-                    .iter(world)
-                    .collect();
-                for e in dummies {
-                    world.despawn(e);
-                }
-
+                app_exit::quit_app(world, app_exit::ExitOrigin::DummyWindow);
                 return true;
             }
             false
@@ -782,11 +770,11 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
                 tracing::debug!("smoke 自動 close: world 既に drop 済み（shutdown）— no-op");
                 return;
             };
-            // await を跨いで borrow を保持しない TIGHT スコープで despawn する。
+            // await を跨いで borrow を保持しない TIGHT スコープで全窓を閉じ、終了を指示する。
             {
                 let mut ecs = world.borrow_mut();
                 let w = ecs.world_mut();
-                let count = despawn_smoke_targets(w);
+                let count = app_exit::quit_app(w, app_exit::ExitOrigin::Smoke);
                 tracing::info!(
                     count,
                     "smoke 自動 close: 起動窓（ダミー窓／ゴースト窓）を despawn しました"
@@ -796,55 +784,6 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
     }
 
     startup
-}
-
-/// smoke 自動 close の despawn 標的を despawn する（task 6.2 で
-/// `Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>` へ拡張・design「main.rs seam」）。
-///
-/// ダミー窓（フォールバック経路）と本物のゴースト窓（placement 経路）のどちらの構成でも
-/// CI smoke（`AREKA_APP_SMOKE_EXIT_MS`）が完走できるよう、両 marker を単一 query で狙う。
-/// 標的として拾った件数を返す（標的なしは 0・no-op 安全）。bare `World` だけで動き headless
-/// 単体テスト可能（`seam_tests`）。
-///
-/// # 存在確認（task 7.3・Req 6.2/6.3・design「変更ファイル > main.rs」）
-///
-/// query で集めた標的は**ループ実行中に**破棄済みへ変わり得る——bevy の連鎖 despawn
-/// （`Children` は `LINKED_SPAWN` の関係対象＝親の despawn が子孫へ再帰する）を先行の
-/// 1 体が引き起こせば、後続のイテレーションは既に無効な `Entity` を叩く。`World::despawn`
-/// はその場合 `log` の `warn!`（`Could not despawn entity: …`）を出す（`bevy_ecs-0.18.1`
-/// `src/world/mod.rs:1462-1469`）。**これは終了処理の正常終了系**であり、警告として残すと
-/// 良性ノイズが本物の異常を埋める（Req 6.2）。
-///
-/// task 3.2 が消費側 4 入口（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・
-/// `frame.rs` の `resnap_with`／`reconcile_reported_sizes`）へ敷いたのと**同じ区別**を
-/// despawn の**呼出点そのもの**へも敷く: entity 不在＝正常終了系ゆえ
-/// [`DESPAWNED_SKIP_TAG`](placement::diag::DESPAWNED_SKIP_TAG) の `debug!` で当該標的を
-/// 打ち切り、**残りの標的は処理し切る**（Req 6.3）。
-///
-/// 戻り値の意味は「標的として拾った件数」のまま変えない——連鎖で消えた標的も掃除後には
-/// 存在しないため、`smoke 自動 close` の `count=` が示す「消えた起動窓の数」は不変である。
-fn despawn_smoke_targets(world: &mut World) -> usize {
-    let targets: Vec<Entity> = world
-        .query_filtered::<Entity, Or<(
-            With<DummyWindowMarker>,
-            With<placement::spawn::GhostWindowMarker>,
-        )>>()
-        .iter(world)
-        .collect();
-    let count = targets.len();
-    for e in targets {
-        if world.get_entity(e).is_err() {
-            tracing::debug!(
-                entity = ?e,
-                "{} smoke 自動 close: 標的 entity は既に破棄済み（despawn・連鎖破棄）→ \
-                 正常系として打ち切り（残りの標的は継続）",
-                placement::diag::DESPAWNED_SKIP_TAG
-            );
-            continue;
-        }
-        world.despawn(e);
-    }
-    count
 }
 
 /// `PlacementError` を「起点不在（良性・`warn!` どまり）」と「それ以外（予期しない・`error!`）」
