@@ -29,7 +29,7 @@
   - 完了の姿: `cargo build -p areka-ghost` が通り、根を渡すと 3 種の目録がバイト順で返る
   - _Requirements: 1.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 5.3, 7.3, 7.7_
   - _Boundary: areka-ghost catalog_
-- [ ] 2.2 目録の決定論テストと一時の根の組み立てヘルパ
+- [x] 2.2 目録の決定論テストと一時の根の組み立てヘルパ
   - 一時フォルダに根を組むヘルパ（ゴースト 2 体・`menu,hidden` を含むシェル 2 つ・`type,balloon` のバルーン・`type,plugin` のフォルダ・`descript.txt` の無いフォルダ・フォルダ名 `StayseeBalloon` の偽バルーン・`Shift_JIS` 宣言の `name`／`craftmanw`）を `temp-path-kit` の下に置く
   - 検体の根（`SampleRoot::acquire("emo2")`＝ゴースト 1・バルーン 1・同梱 `emo2-kakukaku`）と一時の根の両方で、件数・採否・7 項目・バイト順・`Shift_JIS` の復号を突き合わせる
   - 格納フォルダ不在 → 0 件、読めない descript → `warn!` 1 件＋除外（`log-capture-kit`）、ゴーストの判定の真偽を踏む
@@ -122,4 +122,4 @@
 ## Implementation Notes
 
 - 1.2: `format.rs` の既存テスト `round_trip_preserves_all_string_values` は `FormatDoc` を全欄で書くため、欄の追加でコンパイルのための追随が要った（既存 4 族の値と比較は不変）。構造体リテラルで全欄を並べるテストは族を足すたびに同じ追随が要る。
-- 2.1: 空の値（`type,`）は今「balloon 以外」として `warn!`＋除外、`name,` は `Some("")`。readme だけ空＝無し扱い。仕様は空の値を定めていない（2.2 で揃えるなら「空＝無し」）。
+- 2.1→2.2: 空の値（trim 後に空）はどの鍵も「無し」に揃えた（`catalog.rs` の `lowercased` の 1 か所）。`type,` はバルーンとして残り、`menu,` は隠さない。design R5 に追記済み。

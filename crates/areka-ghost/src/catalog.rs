@@ -163,9 +163,7 @@ pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
             return None;
         }
     };
-    lowercased(&bytes)
-        .remove("balloon.directory")
-        .filter(|v| !v.is_empty())
+    lowercased(&bytes).remove("balloon.directory")
 }
 
 /// `<dir>/ghost/master/descript.txt` が実在するか（argv のゴーストの検査＝要件 4.8）。
@@ -245,9 +243,12 @@ fn read_descript(path: &Path) -> Option<BTreeMap<String, String>> {
 }
 
 /// 既存の charset 復号（要件 2.8）＋`parse_kv` の上で鍵を ASCII 小文字化する（R5）。
+/// 空の値（`name,`・`type,` 等）は鍵ごと落とす＝どの鍵でも「無し」と同じに扱う
+/// （仕様は空の値を定めない・task 2.2 の裁定）。
 fn lowercased(bytes: &[u8]) -> BTreeMap<String, String> {
     parse_kv(&decode(bytes, DefaultEncoding::Ansi))
         .into_iter()
+        .filter(|(_, v)| !v.is_empty())
         .map(|(k, v)| (k.to_ascii_lowercase(), v))
         .collect()
 }
@@ -263,7 +264,6 @@ fn identity(folder: String, top: &Path, descript: &BTreeMap<String, String>) -> 
     let readme_name = descript
         .get("readme")
         .map(String::as_str)
-        .filter(|v| !v.is_empty())
         .unwrap_or(DEFAULT_README);
     // 最上位のファイル名だけを受ける（`sub/x.txt`・`..` は最上位でないので無し）。
     let readme = (Path::new(readme_name).file_name() == Some(readme_name.as_ref()))
@@ -280,6 +280,9 @@ fn identity(folder: String, top: &Path, descript: &BTreeMap<String, String>) -> 
     }
 }
 
+#[cfg(test)]
+#[path = "catalog_test_support.rs"]
+mod test_support;
 #[cfg(test)]
 #[path = "catalog_tests.rs"]
 mod tests;
