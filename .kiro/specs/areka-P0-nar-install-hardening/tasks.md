@@ -87,3 +87,4 @@
 - 3.1: `CommitError.survivors` に一時の `#[cfg_attr(not(test), expect(dead_code, …))]` を置いた。4.1 で `place` が読んだら外す（外さないと期待外れの警告になる）。
 - 4.1: 公開の入口から巻き戻しを決定論的に失敗させる手段は無く、`place` の生き残りの写し（1 行の配線）は公開面のテストで見張られない。空でない生き残りは `install_commit_tests.rs` の単体（3.1）が固定する（要件 2.6 の許す形）。
 - 5.2: main（#170 shiori-loadu・#171 既定バルーンの .nar 化）を取り込んで検証。§8 の表の末尾は loadu の 3 行の後ろに本仕様の 1 行（後着が取り込む）。登記済みの検体は 6 本になり、`sample-ghost-kit` のテストで全て受理。
+- 最終検証（kiro-validate-impl）: GO。指摘の文書のずれ 3 件（§8 の行で `install.txt` のフォルダ名は `InvalidDirectoryName`・`residue`／`leftovers` の注釈に保持分・design.md の `Vec::new()` 残り）を是正。`lib_tests.rs` の rustfmt 崩れ（4.1 由来）も整形。`refreshundeletemask` の長い要素の警告値が有界である配線はテスト無し（判定本体と `bounded_value` は固定済み・配線は再テストしない方針）。

@@ -428,7 +428,10 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
     assert_eq!(failed, &destination, "対象は掴んだ宛先");
     assert!(*rolled_back, "巻き戻し済み");
     assert!(committed.is_empty(), "確定済みは 0: {committed:?}");
-    assert!(survivors.is_empty(), "巻き戻せたので生き残りは 0: {survivors:?}");
+    assert!(
+        survivors.is_empty(),
+        "巻き戻せたので生き残りは 0: {survivors:?}"
+    );
     assert_eq!(tree(&destination), before, "宛先は 1 バイトも変わらない");
 
     let errors: Vec<_> = records
@@ -439,7 +442,11 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
     let recorded = errors[0].field("work").expect("work の欄がある");
     assert!(!recorded.is_empty(), "作業フォルダを掘ったのに work が空");
     let recorded = Path::new(recorded);
-    assert!(recorded.is_dir(), "work が実在しない: {}", recorded.display());
+    assert!(
+        recorded.is_dir(),
+        "work が実在しない: {}",
+        recorded.display()
+    );
     assert!(
         recorded.starts_with(root.join(".nar-work")),
         "work が根の .nar-work の配下にない: {}",

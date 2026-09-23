@@ -189,7 +189,7 @@ flowchart TD
 | 1.11 | 上限の内側で OS が落ちる場合は変えない | `stage_placement`（変更 0） | `NarError::Io { phase: Stage }` | — |
 | 2.1 | 戻せなかった宛先ごとの生き残りを全て取り出せる | `unwind`・`SurvivingTree`・`NarError::Io.survivors` | `SurvivingTree` | 在りかの運び方 |
 | 2.2 | 取り出せるフォルダは実在し元の中身を持つ | `unwind`（`old.is_dir()` の判定）・失敗経路で片付けない既存の性質 | — | 在りかの運び方 4 |
-| 2.3 | 戻せた・掘る前・`Remove` だけの躓きは 0 件 | `unwind`（`Remove` は集めない）・`read`／`io` は空 | `Vec` が空 | 在りかの運び方 1 |
+| 2.3 | 戻せた・掘る前・`Remove` だけの躓きは 0 件 | `unwind`（`Remove` は集めない）・`read`／`io` は空 | 空（`Box::default()`） | 在りかの運び方 1 |
 | 2.4 | 在りかは `work` の配下 | `WorkArea::retired`（`old-<k>` は `area.path()` 直下） | — | — |
 | 2.5 | `work` は掘ったならその場所・拒否と掘る前は空 | `place`・`log_failure` の注釈（実装は変更 0） | 記録の `work` 欄 | — |
 | 2.6 | 欄を外すと赤・本当に戻せなかった巻き戻しで実在を判定 | `install_commit_tests.rs` `roll_back` 直接呼び＋`hold`＋`tree` | — | — |
@@ -402,7 +402,7 @@ fn prepare_shelf(shelf: &Path, dir: &Path, now: SystemTime) -> Result<Vec<PathBu
 | Requirements | 2.3, 2.5 |
 
 **Implementation Notes**
-- Integration: `read`（`Read`）と `io`（`Stage`）は `survivors: Vec::new()`、`place` は `survivors: failure.survivors`。`log_failure` の記録の欄は変えない（`work` の配下に在るので新しい欄は要らない・全数対応のテストの欄の集合の判定を変えない）。
+- Integration: `read`（`Read`）と `io`（`Stage`）は `survivors: Box::default()`、`place` は `survivors: failure.survivors.into_boxed_slice()`。`log_failure` の記録の欄は変えない（`work` の配下に在るので新しい欄は要らない・全数対応のテストの欄の集合の判定を変えない）。
 - Validation: 注釈の側は `lib_tests.rs` の確定の失敗のテスト（`rolled_back == true` で `work` が非空）が固定する。
 - Risks: 無し（実装の変更は欄の写し 3 行）。
 

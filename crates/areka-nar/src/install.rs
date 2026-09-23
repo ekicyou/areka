@@ -71,7 +71,8 @@ fn at<T>(path: &Path, result: io::Result<T>) -> Result<T, StageError> {
 #[derive(Debug)]
 pub(crate) struct WorkArea {
     dir: PathBuf,
-    /// 棚に残っていて消せなかった物。[`InstallOutcome::leftovers`] に合流する。
+    /// 棚に残っていて消せなかった物と、生き残りを持つため期限まで消さずに残した物。
+    /// [`InstallOutcome::leftovers`] に合流する。
     residue: Vec<PathBuf>,
 }
 
@@ -124,7 +125,7 @@ impl WorkArea {
         self.dir.join(format!("old-{k}"))
     }
 
-    /// 棚に残っていて消せなかった物。
+    /// 棚に残っていて消せなかった物と、生き残りを持つため期限まで消さずに残した物。
     pub(crate) fn residue(&self) -> &[PathBuf] {
         &self.residue
     }
@@ -335,7 +336,8 @@ pub struct InstallOutcome {
     pub warnings: Vec<ManifestWarning>,
     /// 片付けられずに残った場所（人が消す所）。中身は⑴最後の後片付けが失敗した
     /// ときの作業フォルダ（退避した木も組み上げた木もこの下に居る）と、⑵開始時に
-    /// 棚から消せなかった他の走行の置き土産。
+    /// 棚から消せなかった他の走行の置き土産、および巻き戻せなかった元の木（`old-`）を
+    /// 持つため保持の期限（7 日）まで消さずに残した作業フォルダ。
     pub leftovers: Vec<PathBuf>,
 }
 
