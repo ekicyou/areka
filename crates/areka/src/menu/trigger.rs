@@ -20,7 +20,7 @@ use areka_actor::ReplyReceiver;
 use bevy_ecs::prelude::{Entity, World};
 use windows::Win32::Foundation::HWND;
 use wintf::ecs::WindowHandle;
-use wintf::ecs::drag::{DragStateSnapshot, snapshot_drag_state};
+use wintf::ecs::drag::snapshot_drag_state;
 use wintf::ecs::pointer::{Phase, PointerState};
 use wintf::ecs::world::{EcsWorld, EcsWorldSelfRef};
 
@@ -204,12 +204,9 @@ fn handle_release(world: &mut World, entity: Entity, state: &PointerState, now: 
     {
         return ignore_release(world, "not wired");
     }
-    // `JustEnded` は「ドラッグ中」ではない。製品では左ボタンを 1 度離すとこの状態で休み続ける
-    // （`reset_to_idle` の呼び手は無い）ので、待機と同じに扱う（wintf の透過制御と同じ読み方）。
-    if !matches!(
-        snapshot_drag_state(),
-        DragStateSnapshot::Idle | DragStateSnapshot::JustEnded { .. }
-    ) {
+    // `JustEnded` は押していない状態（左ボタンを離してから次の左押下まで休む状態）なので、
+    // 待機と同じに扱う。押している間だけを「ドラッグ中」として解放を無視する。
+    if snapshot_drag_state().is_button_held() {
         return ignore_release(world, "dragging");
     }
 
