@@ -5,13 +5,13 @@
 
 ## Tasks
 
-- [ ] 1. 永続に鍵の族 `[last]` を足す
+- [x] 1. 永続に鍵の族 `[last]` を足す
 - [x] 1.1 永続のテストを兄弟ファイルへ移すだけの下ごしらえ
   - `persist/mod.rs` 末尾の `mod tests` の本体を `persist/persist_tests.rs` へそのまま移し、`#[cfg(test)] #[path = "persist_tests.rs"] mod tests;` で繋ぐ
   - テストの本文・本数・名前を 1 字も変えない（挙動 0 変更・独立にレビューできる 1 コミット）
   - 完了の姿: `cargo test -p areka-sylphya` が移設前と同じ本数で緑、`persist/mod.rs` が 1,000 行の目安の内側
   - _Requirements: 3.6, 7.3, 7.6_
-- [ ] 1.2 鍵 3 つ（`areka.last.ghost`／`areka.last.balloon`／`areka.last.shell`）と TOML の表 `[last]` を足す
+- [x] 1.2 鍵 3 つ（`areka.last.ghost`／`areka.last.balloon`／`areka.last.shell`）と TOML の表 `[last]` を足す
   - `PersistKey` に `LastGhost`／`LastBalloon`／`LastShell` を足し、正準名の写像・`apply_entry`・`doc_to_entries`・`all_families()` を追随させる
   - `FormatDoc` に 3 欄を足し、`[last]` の直列化と読取・`is_all_absent` へ含める（値が無ければ表を書かない）。`load_scope` の返り順の末尾は ghost → balloon → shell
   - `persist_tests.rs` に「3 鍵を書いて読み戻す往復」「無い鍵は返らない」「`[last]` だけ保存しても `[window]` 等が残る」「`parse_dotted` との往復」を足す。既存 4 族のテストは触らない
@@ -118,3 +118,7 @@
   - 裁定 1〜5 を覆す必要が見えたら実装を止め、開発者へ議題として上げる
   - 完了の姿: 回帰が緑で、実機 4 点の結果（ログ抜粋と終了コード）が記録に残る
   - _Requirements: 7.3, 7.7, 8.5, 8.6, 9.6_
+
+## Implementation Notes
+
+- 1.2: `format.rs` の既存テスト `round_trip_preserves_all_string_values` は `FormatDoc` を全欄で書くため、欄の追加でコンパイルのための追随が要った（既存 4 族の値と比較は不変）。構造体リテラルで全欄を並べるテストは族を足すたびに同じ追随が要る。

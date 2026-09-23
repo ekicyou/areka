@@ -23,6 +23,9 @@ fn all_families() -> Vec<PersistKey> {
         },
         PersistKey::BootCount,
         PersistKey::VanishCount,
+        PersistKey::LastGhost,
+        PersistKey::LastBalloon,
+        PersistKey::LastShell,
     ]
 }
 
@@ -555,4 +558,164 @@ fn absent_file_loads_empty() {
         ..ScopeRoots::default()
     };
     assert!(load_scope(PersistScope::Ghost, &roots, &io).is_empty());
+}
+
+// === 族 [last]（areka-P0-baseware-root-layout 要件 3.1・3.6・3.7）===
+
+#[test]
+fn last_family_canonical_key_exact_strings() {
+    assert_eq!(PersistKey::LastGhost.to_canonical_key(), "areka.last.ghost");
+    assert_eq!(
+        PersistKey::LastBalloon.to_canonical_key(),
+        "areka.last.balloon"
+    );
+    assert_eq!(PersistKey::LastShell.to_canonical_key(), "areka.last.shell");
+}
+
+// --- 3 鍵を書いて読み戻す往復（表 [last] に載り、返り順は ghost → balloon → shell）---
+#[test]
+fn last_family_put_load_round_trip() {
+    let io = FakePersistIo::new();
+    let path = PathBuf::from("/g/sylphya.toml");
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
+    // 書く順を返り順と逆にしても、読み戻しは ghost → balloon → shell。
+    let outcome = save_scope(
+        PersistScope::Ghost,
+        &roots,
+        &io,
+        vec![
+            (PersistKey::LastShell, "master".into()),
+            (PersistKey::LastBalloon, "StayseeBalloon".into()),
+            (PersistKey::LastGhost, "emo2".into()),
+        ],
+    );
+    assert_eq!(outcome, PersistOutcome::Saved);
+    let serialized = io.read(&path).unwrap().unwrap();
+    assert!(serialized.contains("[last]"), "serialized=\n{serialized}");
+    assert!(
+        serialized.contains("ghost = \"emo2\""),
+        "serialized=\n{serialized}"
+    );
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &io),
+        vec![
+            (PersistKey::LastGhost, "emo2".to_string()),
+            (PersistKey::LastBalloon, "StayseeBalloon".to_string()),
+            (PersistKey::LastShell, "master".to_string()),
+        ]
+    );
+}
+
+// --- 無い鍵は返らない（ghost だけ書けば balloon／shell は返らず、表にも現れない）---
+#[test]
+fn last_family_absent_keys_are_not_returned() {
+    let io = FakePersistIo::new();
+    let path = PathBuf::from("/app/sylphya.toml");
+    let roots = ScopeRoots {
+        app: Some(PathBuf::from("/app")),
+        ..ScopeRoots::default()
+    };
+    save_scope(
+        PersistScope::App,
+        &roots,
+        &io,
+        vec![(PersistKey::LastGhost, "emo2".into())],
+    );
+    assert_eq!(
+        load_scope(PersistScope::App, &roots, &io),
+        vec![(PersistKey::LastGhost, "emo2".to_string())]
+    );
+    let serialized = io.read(&path).unwrap().unwrap();
+    assert!(!serialized.contains("balloon"), "serialized=\n{serialized}");
+    assert!(!serialized.contains("shell"), "serialized=\n{serialized}");
+}
+
+// --- 値が無ければ表 [last] を書かない ---
+#[test]
+fn last_table_is_not_written_without_values() {
+    let io = FakePersistIo::new();
+    let path = PathBuf::from("/g/sylphya.toml");
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
+    save_scope(
+        PersistScope::Ghost,
+        &roots,
+        &io,
+        vec![(PersistKey::BootCount, "1".into())],
+    );
+    let serialized = io.read(&path).unwrap().unwrap();
+    assert!(!serialized.contains("[last]"), "serialized=\n{serialized}");
+}
+
+// --- [last] だけ保存しても [window]／[boot] が残る（read-modify-write）---
+#[test]
+fn saving_only_last_preserves_other_tables() {
+    let io = FakePersistIo::new();
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
+    let window_x = PersistKey::WindowPos {
+        scope: 0,
+        axis: Axis::X,
+    };
+    save_scope(
+        PersistScope::Ghost,
+        &roots,
+        &io,
+        vec![(window_x, "7".into()), (PersistKey::BootCount, "2".into())],
+    );
+    save_scope(
+        PersistScope::Ghost,
+        &roots,
+        &io,
+        vec![
+            (PersistKey::LastBalloon, "StayseeBalloon".into()),
+            (PersistKey::LastShell, "master".into()),
+        ],
+    );
+    let loaded = load_scope(PersistScope::Ghost, &roots, &io);
+    assert!(
+        loaded.contains(&(window_x, "7".into())),
+        "[last] の保存で [window] が消えた: {loaded:?}"
+    );
+    assert!(
+        loaded.contains(&(PersistKey::BootCount, "2".into())),
+        "[last] の保存で [boot] が消えた: {loaded:?}"
+    );
+    // 既存族のあとに last が並ぶ（window → boot → last）。
+    assert_eq!(
+        loaded,
+        vec![
+            (window_x, "7".to_string()),
+            (PersistKey::BootCount, "2".to_string()),
+            (PersistKey::LastBalloon, "StayseeBalloon".to_string()),
+            (PersistKey::LastShell, "master".to_string()),
+        ]
+    );
+}
+
+// --- 手書きの [last] を読む（型外れの値は当該鍵のみ不在）---
+#[test]
+fn last_table_hand_written_is_read_and_type_mismatch_is_absent() {
+    let io = FakePersistIo::new();
+    let path = PathBuf::from("/g/sylphya.toml");
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
+    io.commit(
+        &path,
+        "format-version = 1\n[last]\nballoon = \"b\"\nshell = 3\n",
+    )
+    .unwrap();
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &roots, &io),
+        vec![(PersistKey::LastBalloon, "b".to_string())]
+    );
 }

@@ -23,6 +23,11 @@
 //!
 //! [vanish]             # areka.vanish.count
 //! count = "0"
+//!
+//! [last]               # areka.last.ghost|balloon|shell（値のある欄だけ・無ければ表ごと省く）
+//! ghost = "emo2"
+//! balloon = "StayseeBalloon"
+//! shell = "master"
 //! ```
 //!
 //! - `format-version` は最上位の **整数 key**（本バージョン = [`FORMAT_VERSION`] = 1）。
@@ -73,6 +78,12 @@ pub struct FormatDoc {
     pub boot_count: Option<String>,
     /// vanish 回数。正準 key `areka.vanish.count`。
     pub vanish_count: Option<String>,
+    /// 前回のゴーストのフォルダ名。正準 key `areka.last.ghost`・表 `[last]` ghost。
+    pub last_ghost: Option<String>,
+    /// 前回のバルーンのフォルダ名。正準 key `areka.last.balloon`・表 `[last]` balloon。
+    pub last_balloon: Option<String>,
+    /// 前回のシェルのフォルダ名。正準 key `areka.last.shell`・表 `[last]` shell。
+    pub last_shell: Option<String>,
 }
 
 impl FormatDoc {
@@ -84,6 +95,9 @@ impl FormatDoc {
             && self.balloon_offset.is_empty()
             && self.boot_count.is_none()
             && self.vanish_count.is_none()
+            && self.last_ghost.is_none()
+            && self.last_balloon.is_none()
+            && self.last_shell.is_none()
     }
 }
 
@@ -124,6 +138,20 @@ pub fn to_toml_string(doc: &FormatDoc) -> String {
     }
     if let Some(c) = &doc.vanish_count {
         root.insert("vanish".into(), count_table(c));
+    }
+    // [last]: 値のある欄だけ書く（1 つも無ければ表を書かない）。
+    let mut last = toml::Table::new();
+    for (field, value) in [
+        ("ghost", &doc.last_ghost),
+        ("balloon", &doc.last_balloon),
+        ("shell", &doc.last_shell),
+    ] {
+        if let Some(v) = value {
+            last.insert(field.into(), toml::Value::String(v.clone()));
+        }
+    }
+    if !last.is_empty() {
+        root.insert("last".into(), toml::Value::Table(last));
     }
 
     // toml の直列化は本 Table 構造では失敗しない（全値が String/Integer/Table）。万一の
@@ -202,7 +230,12 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
     }
 
     // 有効バージョン: 存在する key のみ採用（欠落・型外れは当該 key 不在・warn なし）。
+    let last = table.get("last").and_then(toml::Value::as_table);
+    let read_last = |field| last.and_then(|t| read_str(t, field));
     FormatDoc {
+        last_ghost: read_last("ghost"),
+        last_balloon: read_last("balloon"),
+        last_shell: read_last("shell"),
         window: read_axis_map(&table, "window"),
         balloon_offset: read_axis_map(&table, "balloon-offset"),
         boot_count: read_count(&table, "boot"),
@@ -273,6 +306,9 @@ mod tests {
             )]),
             boot_count: Some("3".into()),
             vanish_count: Some("0".into()),
+            last_ghost: Some("emo2".into()),
+            last_balloon: Some("StayseeBalloon".into()),
+            last_shell: Some("master".into()),
         };
 
         let toml = to_toml_string(&doc);
@@ -348,6 +384,27 @@ mod tests {
     #[test]
     fn empty_content_yields_all_absent() {
         assert!(read_toml_str("").is_all_absent());
+    }
+
+    #[test]
+    fn last_only_is_not_all_absent() {
+        // [last] の 3 欄は 1 つずつ is_all_absent に効く。
+        for doc in [
+            FormatDoc {
+                last_ghost: Some("g".into()),
+                ..Default::default()
+            },
+            FormatDoc {
+                last_balloon: Some("b".into()),
+                ..Default::default()
+            },
+            FormatDoc {
+                last_shell: Some("s".into()),
+                ..Default::default()
+            },
+        ] {
+            assert!(!doc.is_all_absent());
+        }
     }
 
     #[test]

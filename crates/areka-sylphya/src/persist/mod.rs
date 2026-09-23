@@ -139,6 +139,15 @@ pub enum PersistKey {
     BootCount,
     /// vanish 回数 → 正準 key `areka.vanish.count`・TOML `[vanish]` count。
     VanishCount,
+    /// 前回起動したゴーストのフォルダ名 → 正準 key `areka.last.ghost`・TOML `[last]` ghost。
+    /// 載せるスコープは呼び手の契約（本番は App）。
+    LastGhost,
+    /// 前回使ったバルーンのフォルダ名 → 正準 key `areka.last.balloon`・TOML `[last]` balloon。
+    /// 載せるスコープは呼び手の契約（本番は Ghost＝ゴーストごとの選択）。
+    LastBalloon,
+    /// 前回使ったシェルのフォルダ名 → 正準 key `areka.last.shell`・TOML `[last]` shell。
+    /// 載せるスコープは呼び手の契約（本番は Ghost）。
+    LastShell,
 }
 
 impl PersistKey {
@@ -157,6 +166,9 @@ impl PersistKey {
             }
             PersistKey::BootCount => "areka.boot.count".to_string(),
             PersistKey::VanishCount => "areka.vanish.count".to_string(),
+            PersistKey::LastGhost => "areka.last.ghost".to_string(),
+            PersistKey::LastBalloon => "areka.last.balloon".to_string(),
+            PersistKey::LastShell => "areka.last.shell".to_string(),
         }
     }
 }
@@ -179,7 +191,7 @@ pub enum PersistOutcome {
 ///   へ変換する。非数値スコープ ID（typed [`u32`] に載らない）は debug ＋ 当該エントリskip（寛容）。
 ///
 /// 返り値は決定論的順序（[`FormatDoc`] は [`std::collections::BTreeMap`] ゆえ scope ID 昇順、
-/// window → balloon-offset → boot → vanish、各 pair は x → y）。
+/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell）、各 pair は x → y）。
 pub fn load_scope(
     scope: PersistScope,
     roots: &ScopeRoots,
@@ -302,6 +314,9 @@ fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: String) {
         }
         PersistKey::BootCount => doc.boot_count = Some(value),
         PersistKey::VanishCount => doc.vanish_count = Some(value),
+        PersistKey::LastGhost => doc.last_ghost = Some(value),
+        PersistKey::LastBalloon => doc.last_balloon = Some(value),
+        PersistKey::LastShell => doc.last_shell = Some(value),
     }
 }
 
@@ -335,6 +350,15 @@ fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, Stri
     }
     if let Some(v) = &doc.vanish_count {
         out.push((PersistKey::VanishCount, v.clone()));
+    }
+    for (key, value) in [
+        (PersistKey::LastGhost, &doc.last_ghost),
+        (PersistKey::LastBalloon, &doc.last_balloon),
+        (PersistKey::LastShell, &doc.last_shell),
+    ] {
+        if let Some(v) = value {
+            out.push((key, v.clone()));
+        }
     }
 
     out
