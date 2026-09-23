@@ -101,3 +101,8 @@
 - 2: `OnCloseRequest` の公開パスは `wintf::ecs::window::OnCloseRequest`（`lib.rs` は `ecs` を再公開しない）。design の記述を訂正済み
 - 3.2: `quit_app` を通る経路を回すテスト World には `wintf::AppExit::new()` を `insert_non_send` で据える（無いと `app_exit_unwired` の error が出るが、ログを見ないテストは緑のまま通ってしまう）。`spine.rs` の `make_world_with_gpu` にも据えた
 - 4: `WinApp::new()` を使う example は 15 本（wintf 8・areka 5・areka-emo-text 2。`wuc_spike` は doc で触れるだけ）。design／tasks の「14 本」を訂正した
+- 5（09-23 途中経過・`target\debug\areka.exe`＋`nar-sample-path emo2` の絶対パス）:
+  - 走行 1（smoke 8 秒）: `origin=Smoke closed=4` → `[AppExit] exit requested` → `windows remained open — destroying them` → `unload_clean` → `ghost shutdown sequence completed`。`HasExited=True`・終了コード 0
+  - 走行 3 の `taskkill`（`/F` なし・自分の PID のみ）: `[WM_CLOSE] … event="os_close_request"` → `[os_close] … scope=1 kind="ghost"` → `close_handshake_begin` → `close_talk_start` → 約 2.2 秒後 `talk_done_quit` → `origin=KanadeStopped(Quit) closed=4`（台詞の間は 4 窓とも生存）→ `[AppExit] exit requested` → 終了。`HasExited=True`（終了コードは Get-Process 経由で取れず）
+  - `app_exit_unwired` は 3 走行とも 0 行
+  - **未実施**: 走行 2（メニューの「終了」）と走行 3 の Alt＋F4 は画面操作が要り、computer-use の許可が下りなかったため開発者の手で行う

@@ -170,7 +170,7 @@ impl WinApp {
 
         debug!(
             ?policy,
-            "WinApp initialized (COM/DPI ready, world created, shutdown hook wired)"
+            "WinApp initialized (COM/DPI ready, world created, exit wired per policy)"
         );
 
         Ok(Self { world, exit })
