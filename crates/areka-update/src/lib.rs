@@ -14,6 +14,7 @@ mod paths;
 mod testkit;
 mod urlpath;
 mod winhttp;
+mod work;
 
 pub use error::{
     DeleteWhy, FailReason, FetchError, InvalidWhy, Stage, Stuck, UpdateError, UpdateWarning,
