@@ -230,3 +230,106 @@ brief の表と食い違うのは **pasta の 1 件だけ**。YAYA・里々は�
 - **fixture の戻りを `i32` にしたことで既存 fixture と型が揃わない**: 意図的（5.1 の両側を踏む）。`lib.rs` の冒頭 doc に理由を書く。
 - **pasta の `loadu` の実機**: 上流で検証済み（§4.2）。実機確認 7.1 で念押し。
 - **UTF-8 既定機（`GetACP()==65001`）**: 本番の変換は今日のままなので `load` の枝は壊れず、往復は一致するので警告 0 行。設計で 1 度だけ `encode_with_codepage(65001, …)` を群 C で踏む（機械を切り替えずに同じ経路を通る）。
+
+## 11. 実装前の実機の赤（2026-09-23・タスク 1）
+
+助け手に手を入れる**前**に、今日のコード（HEAD `f3d70e79`）のまま取った記録。要件 7.3〜7.5。ログと検体の複製はリポジトリ外（`C:\home\maz\tmp\loadu\`）に置き、ここには抜粋だけを写す。
+
+### 11.1 成果物と環境
+
+- x64: PowerShell で `cargo build -p areka` → `target\debug\areka.exe`。
+- i686: PowerShell で `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` → `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` を `target\debug\` へ複製（x64 のビルドが同名の x64 版で上書きする罠のため、x64 を先に建ててから複製）。複製先の PE: 見出し位置 240・署名 `PE`・機械 `0x14C`。SHA-256 は複製元と一致（`3A2E1131…B71D`）。
+- 既定コードページ: `[System.Text.Encoding]::Default.CodePage` = **932**、レジストリ `Nls\CodePage` の `ACP` = 932・`OEMCP` = 932。
+
+### 11.2 入口の表の再確認の結果（要件 7.4）
+
+`vendors/sample_ghost/<名>.nar` を `C:\home\maz\tmp\loadu\ascii\<名>\` へ手で展開し、VS2022 Professional 14.44.35207 の `Hostx64\x86\dumpbin.exe /exports` で取り直した。3 本とも `14C machine (x86)`。
+
+| 検体 | DLL（大きさ） | `loadu` | `load` | `unload` | `request` |
+|---|---|---|---|---|---|
+| `konnoyayame`（YAYA） | `ghost\master\yaya.dll`（909,312 B） | あり（序数 4） | あり（序数 3） | あり | あり |
+| `R_POST_and_KOMAINU`（里々） | `ghost\master\satori.dll`（720,896 B） | **なし** | あり（序数 2） | あり | あり |
+| `emo2`（pasta） | `ghost\master\pasta.dll`（3,832,832 B） | あり（序数 137） | あり（序数 136） | あり | あり |
+
+- Introduction の表（YAYA・pasta＝`loadu` あり／里々＝なし）と **一致**。要件 7.1〜7.2 の期待値は改めない。
+- `pasta.dll` の `git hash-object` は `0ecfafdead1972225ee5658fbe2666fd5f12031d`＝§4.2 の pasta `v0.3.5`（`48c42fc3`）の blob と一致。
+
+### 11.3 配置とコマンド
+
+- 対照（ASCII だけの浅いフォルダ）: `C:\home\maz\tmp\loadu\ascii\<名>\`
+- 表せない字を含むフォルダ: `C:\home\maz\tmp\loadu\ゴースト😀\<名>\`（`😀`＝U+1F600 は CP932 に無い。`ゴースト` は CP932 で表せる）。対照と同じ展開物をそのまま複製した。参考として .NET の `Encoding.GetEncoding(932)` で往復させると `C:\home\maz\tmp\loadu\ゴースト??\emo2\ghost\master\` になる（助け手が実際に作るバイト列そのものではない）。
+- バルーン: `emo2` は同梱の `emo2\emo2-kakukaku`、他の 2 体は `vendors/sample_ghost/StayseeBalloon` を同じ親フォルダへ複製したもの。
+- コマンド（PowerShell・パスは `Resolve-Path` で絶対化・どの走行も同じ）:
+
+```powershell
+$env:AREKA_APP_SMOKE_EXIT_MS = "45000"
+$env:RUST_LOG = "info,kanade=trace,areka_kanade=trace,shiori-actor=trace,shiori-charset=debug,shiori_host32_host=trace,ghost-boot=debug"
+& target\debug\areka.exe <絶対ゴースト根> <絶対バルーン根> *> C:\home\maz\tmp\loadu\logs\<ascii|emoji>-<名>.log
+```
+
+- `RUST_LOG` の開け方（要件 7.5）: 確立の成否を決める分岐の記録は `shiori-actor`（`connect_failed`・`unload_*`・`error`）と `kanade`（`shiori_request` は `trace`・`shiori_failed`／`boot_talk` は `error`／`info`）。助け手の `[helper]` 行は `eprintln!` で `RUST_LOG` に依らず親の標準エラー出力に混ざる。
+
+### 11.4 結果（6 走行）
+
+件数は ANSI 色コードを落とした素の部分文字列の `grep -c`。
+
+| 走行 | 終了コード・所要 | `[helper]` 行 | `LOAD 失敗` | `REQUEST 駆動失敗` | `connect_failed` | `event="shiori_failed"` | `cause=Fault` | `event="boot_talk"` | 起動の挨拶の長さ | 喋ったか |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ascii・`konnoyayame` | 0・47.8 s | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 19.4 s | 喋る（`steady_talk_done` まで） |
+| **絵文字・`konnoyayame`** | 0・**0.47 s** | **3** | 0 | **3** | 0 | **1** | **1** | **0** | — | **喋らない** |
+| ascii・`R_POST_and_KOMAINU` | 0・45.3 s | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 6.35 s | 喋る |
+| **絵文字・`R_POST_and_KOMAINU`** | 0・45.6 s | **0** | 0 | 0 | 0 | 0 | 0 | 1 | **0.023 s** | 実質喋らない（下記） |
+| ascii・`emo2` | 0・46.5 s | 0 | 0 | 0 | 0 | 0 | 0 | 1 | （`steady_talk_done` 1） | 喋る |
+| **絵文字・`emo2`** | 0・**1.7 s** | **1** | **1** | 0 | **1** | **1** | **1** | **0** | — | **喋らない** |
+
+- 6 走行とも、表せない字の警告（`[helper] 警告`・`既定コードページ`）は **0 行**、入口名の行（`初期化の入口`）も **0 行**（どちらも今日は存在しない）。
+- 終了コードは 6 走行とも 0（Fault で終わった走行も `quit_app` 経由の正規終了で 0 を返す＝終了コードでは壊れ方を判定できない）。
+- ⚠ 置き場所のフォルダ名に `loadu` の綴りが入っているため、素の `loadu` の grep は 6 本とも 13 件（全てパス）当たる。実装後の grep は固定語句 `SHIORI 初期化の入口: loadu` で数える。
+
+### 11.5 今日の赤（ログの抜粋）
+
+**YAYA（`konnoyayame`）— `load` は真を返し、以後の `request` が全て失敗して起動から 0.5 秒で落ちる**
+
+```text
+[helper] REQUEST 駆動失敗（観測・500 返送）: RequestFailed
+… kanade: SHIORI 送出 event="shiori_request" method=GET id=username …
+[helper] REQUEST 駆動失敗（観測・500 返送）: RequestFailed
+… areka_kanade::resource: username リソース照会が失敗——warn＋Failed を sink へ渡し boot 続行 … SHIORI error status 500
+… kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None
+[helper] REQUEST 駆動失敗（観測・500 返送）: RequestFailed
+… ERROR … kanade: SHIORI 呼出失敗——終了系列（Fault）へ event="shiori_failed" error=… SHIORI error status 500
+… areka::emo2_boot::frame: kanade の終了系列が完了した: 全ゴースト窓を閉じる event="ghost_quit" cause=Fault
+```
+
+- 確立は成功扱い（`LOAD 失敗` 0 行）。化けたパスを受けた `yaya.dll` は `load` で真を返しながら、`request` で null を返す（助け手の `RequestFailed`）。ログに原因（パスが化けた）を指す行は無い。
+- 対照の ASCII フォルダでは終了時に `ghost\master\yaya_variable.cfg` が書かれるが、絵文字フォルダでは **書かれない**。
+
+**pasta（`emo2`）— `load` が偽を返し確立に失敗して 1.7 秒で落ちる**
+
+```text
+… kanade: 起動指示を受領——OnInitialize NOTIFY を発行 event="boot_start"
+[helper] LOAD 失敗（観測・ack[0]）: LoadReturnedFalse
+… ERROR … shiori-actor: SHIORI 接続確立に失敗——死活報告（ShioriDown）し受信ループに入らず終了 event="connect_failed" reason=SHIORI の LOAD が成功 ack [1] を返さなかった（proxy 未確立）: [0]
+… ERROR … kanade: SHIORI 呼出失敗——終了系列（Fault）へ event="shiori_failed" error=shiori ipc failure: shiori reply dropped
+… areka::emo2_boot::frame: kanade の終了系列が完了した: 全ゴースト窓を閉じる event="ghost_quit" cause=Fault
+```
+
+- 失敗の種別は残るが、`LoadReturnedFalse` からは「パスが化けたため」とは読めない。
+
+**里々（`R_POST_and_KOMAINU`）— 黙って辞書を見失う（ログ上は正常に見える）**
+
+```text
+（ascii）  … shiori resource prefetch done id="username" outcome="value"
+（ascii）  14:55:17.891 boot_talk → 14:55:24.242 steady_talk_done（6.35 s）
+（絵文字） … shiori resource prefetch done id="username" outcome="no_content"
+（絵文字） 14:56:03.565 boot_talk → 14:56:03.588 steady_talk_done（0.023 s）
+```
+
+- `[helper]` 行 0・`ERROR` 0・Fault 0。確立も要求も成功し、有界 auto-exit まで走り切る。
+- ただし対照との差が 3 つ: `username` が `value` → `no_content`、起動の挨拶が 6.35 秒 → 0.023 秒（中身がほぼ空）、終了時の `ghost\master\satori_savedata.txt` が **書かれない**。＝化けたパスで辞書と保存先を見失っているのに、それを示す行は 1 行も無い。
+- 実装後もこの枝は `load` のまま（`satori.dll` に `loadu` が無い）なので、変わるのは要件 3.1 の警告が 1 行出ることだけ（要件 7.3）。
+
+### 11.6 design.md の想定との差
+
+- design「実機」節の 1 は今日の壊れ方を「里々: 黙って辞書を見失う・警告 0 行／YAYA・pasta: `load` に化けたパスが渡る」と書く。実測は **その通り**で、YAYA と pasta の見え方は次のとおり分かれた: YAYA は `load` が真・`request` が全て失敗（`RequestFailed`→500→Fault）、pasta は `load` が偽（`LoadReturnedFalse`→`connect_failed`→Fault）。どちらもゴーストは喋らず、原因がパスの文字化けだと示す行は無い。
+- 要件・設計の改訂は不要（入口の表は一致・想定した壊れ方も一致）。
