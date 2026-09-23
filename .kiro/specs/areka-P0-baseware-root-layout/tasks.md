@@ -19,7 +19,7 @@
   - _Requirements: 3.1, 3.6, 3.7, 9.4_
 
 - [ ] 2. 根の下の目録と根の決め方
-- [ ] 2.1 (P) 目録 `catalog` の本体（根の値型・3 種の列挙・素性・同梱バルーン・ゴーストの判定）
+- [x] 2.1 (P) 目録 `catalog` の本体（根の値型・3 種の列挙・素性・同梱バルーン・ゴーストの判定）
   - `areka-ghost` に `BasewareRoot`（根と `ghost/`・`balloon/` のパスを組むだけ・実在検査はしない）と `Identity`（7 項目）・`GhostEntry`／`ShellEntry`／`BalloonEntry` を置き、`lib.rs` から公開する
   - ゴースト・シェル・バルーンの列挙を直下 1 段の走査で返す: ゴーストは `ghost/master/descript.txt` の有無、シェルは `descript.txt` の有無と `menu,hidden` の除外、バルーンは `type` が無いか `balloon` のものだけ（他の値は `warn!`＋除外）
   - descript は既存の charset 復号と `parse_kv` で読み、鍵は ASCII 小文字化、`menu`／`type` の値は trim＋小文字化で比べる。素性の値は無加工。説明書の所在は `readme` 鍵（無ければ `readme.txt`）が最上位に実在するときだけ、`thumbnail.png` は有無だけ
@@ -122,3 +122,4 @@
 ## Implementation Notes
 
 - 1.2: `format.rs` の既存テスト `round_trip_preserves_all_string_values` は `FormatDoc` を全欄で書くため、欄の追加でコンパイルのための追随が要った（既存 4 族の値と比較は不変）。構造体リテラルで全欄を並べるテストは族を足すたびに同じ追随が要る。
+- 2.1: 空の値（`type,`）は今「balloon 以外」として `warn!`＋除外、`name,` は `Some("")`。readme だけ空＝無し扱い。仕様は空の値を定めていない（2.2 で揃えるなら「空＝無し」）。
