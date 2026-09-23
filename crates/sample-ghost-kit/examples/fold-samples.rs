@@ -4,8 +4,8 @@
 //! # 呼び方
 //!
 //! ```text
-//! cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/StayseeBalloon
-//! cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/StayseeBalloon --check
+//! cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/<展開フォルダ>
+//! cargo run -p sample-ghost-kit --example fold-samples -- --from vendors/sample_ghost/<展開フォルダ> --check
 //! ```
 //!
 //! - `--from <展開形のフォルダ>`: そのフォルダ 1 本を畳む。登記表を見ないので、まだ

@@ -99,7 +99,7 @@
 vendors/sample_ghost/
 ├── StayseeBalloon.nar                      # 新規（追跡）: 畳んだ既定バルーン・29 ファイル
 ├── StayseeBalloon/                         # 削除（追跡 29 本 → 0 本・実体も消す）
-└── README.md                               # 表に 1 行・「畳んだ 4 本」→ 5 本・出どころの 1 行
+└── README.md                               # 表に 1 行・「畳んだ 4 本」を実物どおり名指し・出どころの 1 行
 crates/sample-ghost-kit/
 ├── src/lib.rs                              # SAMPLES に 1 行
 ├── src/lib_tests.rs                        # 数 5→6（assert 2・doc 3）・名前の一覧 2 か所・関数名・種別テストに 1 名
@@ -123,7 +123,7 @@ crates/areka-emo-text/tests/
 
 - `vendors/sample_ghost/StayseeBalloon.nar` — `fold-samples -- --from vendors/sample_ghost/StayseeBalloon` の生成物をそのまま追跡（1.1・1.3）。
 - `vendors/sample_ghost/StayseeBalloon/`（29 本） — `git rm -r --cached` の後に実体を消す（1.2）。
-- `vendors/sample_ghost/README.md` — 先頭の表に `StayseeBalloon.nar | バルーン（areka の既定バルーン・CC0） | 29 | <実走のバイト数>` の行、「ここで畳んだ 4 本」→「5 本」、出どころの 1 行（後述の決定 B）（5.1）。
+- `vendors/sample_ghost/README.md` — 先頭の表に `StayseeBalloon.nar | バルーン（areka の既定バルーン・CC0） | 29 | <実走のバイト数>` の行、「ここで畳んだ 4 本」を無圧縮の 4 本（`StayseeBalloon.nar` を含む）の名指しと deflate の 2 本（`konnoyayame.nar`・`emo2.nar`）の区別へ（2026-09-24 実装時の訂正: `emo2.nar` は 2026-09-20 の最新版への差し替えで全エントリが deflate になっており、「5 本」と書くと偽になる）、出どころの 1 行（後述の決定 B）（5.1）。
 - `crates/sample-ghost-kit/src/lib.rs` — `SAMPLES` の末尾に `Sample { name: "StayseeBalloon", kind: SampleKind::Balloon, balloons: &[] }`（2.1）。
 - `crates/sample-ghost-kit/src/lib_tests.rs` — 後述「登記の自己テストの追随」（3.1〜3.5・2.1 の直接の判定）。
 - `crates/sample-ghost-kit/examples/fold-samples.rs` — module doc「呼び方」の 2 行を `--from vendors/sample_ghost/<展開フォルダ>` の置き換えに（5.5）。
@@ -161,7 +161,7 @@ crates/areka-emo-text/tests/
 | 4.3 | プロセス中ずっと同じ位置 | `static STAYSEE: LazyLock<SampleRoot>` | — | — |
 | 4.4 | 結合テスト緑 | — | — | 手順 ⑤ |
 | 4.5 | 見張り 0 件で緑 | 見張り（0 変更） | `Form::tokens` | 手順 ⑤ |
-| 5.1 | README の表と「5 本」 | README | — | 手順 ⑥ |
+| 5.1 | README の表と無圧縮 4 本の名指し | README | — | 手順 ⑥ |
 | 5.2 | steering 2 本 | product.md・structure.md | — | 手順 ⑥ |
 | 5.3 | brief 2 本 | 2 brief | — | 手順 ⑥ |
 | 5.4 | roadmap #42 | roadmap.md | — | 手順 ⑥ |

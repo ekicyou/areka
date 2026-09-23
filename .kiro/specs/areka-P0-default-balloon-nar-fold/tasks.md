@@ -14,9 +14,9 @@
   - 完了状態: `vendors/sample_ghost/StayseeBalloon.nar` が追跡され `git ls-files vendors/sample_ghost/StayseeBalloon` が 0 行、`lib_tests.rs` で検体数として「5」を語る箇所が 0、結合テストの入口と `test_support.rs` に `vendors/sample_ghost/StayseeBalloon` の綴りと消えた定数への言及が 0、上の 3 本が全件緑、照合記録が在り、これら全てが 1 つのコミットに入っている
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 2. 既定バルーンの保管を語る文書を追随させ、完了判定の検索で確かめる
-- [ ] 2.1 保管の綴りを語る文書と道具の doc の例を `.nar`＋登記表経由へ改める
-  - 検体フォルダの README: 先頭の表に `StayseeBalloon.nar` の行（種別・29・実走のバイト数）を足し、「ここで畳んだ 4 本」を 5 本へ改め、出どころの箇条書きを 1 行だけ足す（CC0・上流・既定バルーン・畳み直し可・同梱可・ハッシュは完了 spec の provenance §1・§3 へのポインタ。節は設けない＝設計の決定 B）
+- [x] 2. 既定バルーンの保管を語る文書を追随させ、完了判定の検索で確かめる
+- [x] 2.1 保管の綴りを語る文書と道具の doc の例を `.nar`＋登記表経由へ改める
+  - 検体フォルダの README: 先頭の表に `StayseeBalloon.nar` の行（種別・29・実走のバイト数）を足し、「ここで畳んだ 4 本」を無圧縮の 4 本（`StayseeBalloon.nar` を含む）の名指しと deflate の 2 本の区別へ改め（2026-09-24 実装時の訂正: `emo2.nar` は 2026-09-20 の最新版への差し替えで全エントリが deflate になっており、「5 本」と書くと偽になる）、出どころの箇条書きを 1 行だけ足す（CC0・上流・既定バルーン・畳み直し可・同梱可・ハッシュは完了 spec の provenance §1・§3 へのポインタ。節は設けない＝設計の決定 B）
   - steering: `product.md` の既定バルーンの保管の記述を `.nar`＋登記表経由へ、`structure.md` の「検体の顔ぶれ」のバルーンを 3 本へ改め「展開フォルダのままで登記表に載っていない」の文を削除する
   - 進行中 brief 2 本（`alpha-release-signoff`・`baseware-root-layout`）: 出どころを `.nar` を窓口で展開した結果へ改め、「`nar-install` が引き受ける」の申し送りを消し、予告の文を着地済みの形へ改める
   - 畳む道具の module doc の呼び方の例を `<展開フォルダ>` の置き換えへ改める（doc コメントだけ・振る舞い 0 変更）
@@ -25,7 +25,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.5_
   - _Depends: 1_
 
-- [ ] 2.2 完了判定の検索 2 本を走らせ、期待どおりの当たりであることを確かめる
+- [x] 2.2 完了判定の検索 2 本を走らせ、期待どおりの当たりであることを確かめる
   - ⒜ `grep -rn "sample_ghost/StayseeBalloon" crates/` が 0 件（テストの綴り・消えた定数・道具の doc の例の取り残しを拾う）
   - ⒝ `grep -rn "vendors/sample_ghost/StayseeBalloon/" .kiro/steering .kiro/specs/*/brief.md vendors/sample_ghost/README.md` の当たりが `roadmap.md` の #37・#42 の行と `roadmap-history.md` の 2 行の計 4 件だけで、それ以外は 0 件
   - 完了状態: ⒜ 0 件・⒝ 期待の 4 件ちょうどで、文書の変更がコミット済み（タスク 1 と同じコミットか、その後のコミット）
@@ -35,3 +35,7 @@
 ## 実装タスクに載せない要件
 
 - **5.4（roadmap 台帳 #42 の完了の反映）**: 台帳の注記「状態列は `/kiro-complete` が ✅ に更新」の慣例どおり、`/kiro-complete` が状態列・段列を ✅ にし名前を `completed/` の形へ改める（設計 Modified Files）。本文は #37 の行と同じく経緯として残すので、実装タスクでは書き換えない。タスク 2.2 ⒝ が #42 の行の当たりを期待値に含めるのはこのため。
+
+## Implementation Notes
+
+- 2.1: 設計は README の「畳んだ 4 本」を「5 本」へ改めるとしていたが、`emo2.nar` は 2026-09-20（`a7b7eb19`）の最新版への差し替えで全エントリが deflate になっていた。無圧縮は `fold_tree` で畳んだ 4 本（`StayseeBalloon.nar` を含む）で、要件 5.1・設計・タスクの文言を実物に合わせて訂正した。文書の数を書く前に `.nar` の中身（圧縮方式）を実物から読むこと。

@@ -98,7 +98,7 @@
 
 #### Acceptance Criteria
 
-1. The `vendors/sample_ghost/README.md` shall 先頭の表に `StayseeBalloon.nar` の行（種別・中のファイル数 29・大きさ）を持ち、「ここで畳んだ 4 本（`konnoyayame.nar` 以外）は全エントリが無圧縮」の数を 5 本へ改める。
+1. The `vendors/sample_ghost/README.md` shall 先頭の表に `StayseeBalloon.nar` の行（種別・中のファイル数 29・大きさ）を持ち、「ここで畳んだ 4 本（`konnoyayame.nar` 以外）は全エントリが無圧縮」の記述を実物に合わせ、`fold_tree` で畳んだ無圧縮の 4 本（`StayseeBalloon.nar` を含む）を名指しし、deflate 圧縮の 2 本（`konnoyayame.nar`・`emo2.nar`）と区別して語る（2026-09-24 実装時の訂正: `emo2.nar` は 2026-09-20 の最新版への差し替えで全エントリが deflate になっており、「5 本」と書くと偽になる）。
 2. The `.kiro/steering/product.md` と `.kiro/steering/structure.md` shall 既定バルーンの保管を `.nar`＋登記表経由として語り、「展開フォルダのまま」「登記表に載っていない」の記述を **0 か所**持つ。`structure.md`「検体の顔ぶれ」の「バルーン 2 本」は 3 本へ改める。
 3. The `.kiro/specs/areka-P0-alpha-release-signoff/brief.md` と `.kiro/specs/areka-P0-baseware-root-layout/brief.md` shall 既定バルーンの出どころを `vendors/sample_ghost/StayseeBalloon.nar`（窓口で展開した結果）として語り、「`.nar` へ畳むのは `nar-install` が引き受ける」の申し送りを持たない。
 4. The `.kiro/steering/roadmap.md` の台帳 #42 の行 shall 本 spec の完了を反映する（経緯を記した #37 の行と `roadmap-history.md` は書き換えない）。
