@@ -56,7 +56,7 @@
   - _Depends: 2, 3.3_
 
 - [ ] 5. 文書・台帳の追随
-- [ ] 5.1 (P) 裁定の登記・先ビルド手順・steering
+- [x] 5.1 (P) 裁定の登記・先ビルド手順・steering
   - `doc/COMPAT_ARCHITECTURE.md` §8 の表末尾に裁定 3 行（`loadu` だけの DLL を受け入れる／`loadu` が偽でも `load` へ落ちない／`load` へ落ちて表せない字があれば警告して渡す）を、正典の沈黙箇所と出典 spec 付きで足す
   - 親クレートの README の「手順（コピペ可）」に 2 本目の先ビルドを 1 行足す。親の e2e の doc コメントと panic 文言には足さない
   - steering `structure.md` の「Test DLL Fixture Crates」に 2 本目の fixture を 1 項目足す
