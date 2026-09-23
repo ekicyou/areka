@@ -6,6 +6,7 @@
 mod error;
 mod fetch;
 mod outcome;
+mod paths;
 #[cfg(test)]
 mod testkit;
 mod urlpath;
