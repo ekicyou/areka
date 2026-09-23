@@ -4,9 +4,13 @@
 //! 取得・照合して、ファイル単位で確定する。失敗したら逆順に戻す。
 
 mod error;
+mod fetch;
 mod outcome;
+#[cfg(test)]
+mod testkit;
 
 pub use error::{
     DeleteWhy, FailReason, FetchError, InvalidWhy, Stage, Stuck, UpdateError, UpdateWarning,
 };
+pub use fetch::Fetch;
 pub use outcome::{ManifestName, Progress, Undeletable, UpdateOutcome};
