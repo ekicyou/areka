@@ -1,9 +1,12 @@
 //! `shell_target` の檻が共有する受け口（検体・COM 初期化・ログの捕捉窓）。
 //!
-//! 本ファイルを使う檻は 4 本（`shell_target_load_tests.rs`・`shell_target_base_image_tests.rs`・
-//! `shell_target_template_tests.rs`・`shell_target_emo2_tests.rs`）に分かれるが、検体の複製と
+//! 本ファイルを使う檻は 5 本（`shell_target_load_tests.rs`・`shell_target_base_image_tests.rs`・
+//! `shell_target_template_tests.rs`・`shell_target_emo2_tests.rs`・
+//! `presenter_keycolor_clickthrough_tests.rs`）に分かれるが、検体の複製と
 //! COM の初期化は**テストバイナリに 1 つ**で足りる。各ファイルが自前で持つと、その数だけ
 //! 検体の木が複製される（`areka-seriko` の `sample_test_support.rs` と同じ理由）。
+//! 最後の 1 本だけは `presenter` の配下に在るので、本モジュールと、それが使う受け口 2 口
+//! （`r_post_and_komainu_shell_dir`・`konnoyayame_shell_dir`）をクレート内公開にしている。
 //!
 //! `balloon_test_support.rs` を流用できないのは、あちらの受け口が `pub(super)` でバルーンの
 //! モジュール境界の内側に閉じており、外から引けないためである。
@@ -74,12 +77,12 @@ pub(super) fn emo2_shell_dir() -> PathBuf {
 }
 
 /// `R_POST_and_KOMAINU` のシェル（`shell/master/`）のフォルダ。
-pub(super) fn r_post_and_komainu_shell_dir() -> PathBuf {
+pub(crate) fn r_post_and_komainu_shell_dir() -> PathBuf {
     R_POST_AND_KOMAINU.folder().join("shell").join("master")
 }
 
 /// `konnoyayame` のシェル（`shell/master/`）のフォルダ。
-pub(super) fn konnoyayame_shell_dir() -> PathBuf {
+pub(crate) fn konnoyayame_shell_dir() -> PathBuf {
     KONNOYAYAME.folder().join("shell").join("master")
 }
 
