@@ -65,6 +65,79 @@ pub(crate) fn resolve_config_inputs(args: &[String]) -> ConfigInputs {
 }
 
 // ---------------------------------------------------------------------------
+// ベースウェアの根（areka-P0-baseware-root-layout task 2.3）
+// ---------------------------------------------------------------------------
+// 消費者（`main` の起動解決）は task 5.1 で結線する。それまでは檻だけが呼ぶので、
+// 本番ビルドの dead_code を各項目に限って許す（5.1 で `allow` ごと外す）。
+
+/// 根が決まらない理由（利用者向けの告知と `error!` の両方に載せる・要件 1.4）。
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RootError {
+    /// `AREKA_ROOT` が無く、`current_exe()` の場所が取れない。
+    ExeLocationUnavailable,
+    /// 決まった根が実在しない（フォルダでない）。`source` は `AREKA_ROOT` か exe の隣か。
+    NotADirectory {
+        dir: std::path::PathBuf,
+        source: RootSource,
+    },
+}
+
+/// 根の出所。
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RootSource {
+    /// 環境変数 `AREKA_ROOT`（要件 1.3）。
+    EnvVar,
+    /// 実行ファイルのあるフォルダ（要件 1.2・裁定 1＝要件 9.1）。
+    ExeDir,
+}
+
+/// 根を決めて実在を検査する純粋な判断（env もプロセス引数も読まない・要件 8.2）。
+///
+/// - `env`: `AREKA_ROOT` の値（`None`＝未設定）。あれば `exe` は見ない（要件 1.3）。
+///   空の値は `AREKA_PROFILE_DIR` と同じく「設定あり」として扱い、exe の隣へは倒さない
+///   （空は絶対化できないので `NotADirectory { dir: "" }` になる＝黙らず告知へ届く）。
+/// - `exe`: `current_exe()` の結果（実行ファイルそのもののパス・`None`＝失敗）。根はその親。
+///   env も exe も無ければ `ExeLocationUnavailable`（`"."` へ倒さない・要件 1.4）。
+///
+/// `Ok` のパスは絶対で `is_dir()` が真。相対の値はカレント基準で `std::path::absolute` により
+/// 絶対化してから検査する（`canonicalize` は使わない＝長いパスの接頭辞と失敗の口を持ち込まない）。
+/// `NotADirectory` の `dir` も絶対（絶対化できない空の値だけは元の綴り）。
+#[allow(dead_code)]
+pub(crate) fn resolve_root_from(
+    env: Option<std::path::PathBuf>,
+    exe: Option<std::path::PathBuf>,
+) -> Result<(std::path::PathBuf, RootSource), RootError> {
+    let (dir, source) = match env {
+        Some(dir) => (dir, RootSource::EnvVar),
+        None => {
+            let dir = exe
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .filter(|dir| !dir.as_os_str().is_empty())
+                .ok_or(RootError::ExeLocationUnavailable)?;
+            (dir.to_path_buf(), RootSource::ExeDir)
+        }
+    };
+    let dir = std::path::absolute(&dir).unwrap_or(dir);
+    if dir.is_dir() {
+        Ok((dir, source))
+    } else {
+        Err(RootError::NotADirectory { dir, source })
+    }
+}
+
+/// env（`AREKA_ROOT`）と `current_exe()` を読んで [`resolve_root_from`] へ渡す薄い口。
+#[allow(dead_code)]
+pub(crate) fn resolve_root() -> Result<(std::path::PathBuf, RootSource), RootError> {
+    resolve_root_from(
+        std::env::var_os("AREKA_ROOT").map(std::path::PathBuf::from),
+        std::env::current_exe().ok(),
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Ghost Wiring (task 3.3)
 // ---------------------------------------------------------------------------
 

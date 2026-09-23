@@ -18,7 +18,7 @@
   - 完了の姿: 追加テストと既存の全テストが緑、`actor.rs`・`prop_sink.rs`・`placement/persist.rs` に差分が無い
   - _Requirements: 3.1, 3.6, 3.7, 9.4_
 
-- [ ] 2. 根の下の目録と根の決め方
+- [x] 2. 根の下の目録と根の決め方
 - [x] 2.1 (P) 目録 `catalog` の本体（根の値型・3 種の列挙・素性・同梱バルーン・ゴーストの判定）
   - `areka-ghost` に `BasewareRoot`（根と `ghost/`・`balloon/` のパスを組むだけ・実在検査はしない）と `Identity`（7 項目）・`GhostEntry`／`ShellEntry`／`BalloonEntry` を置き、`lib.rs` から公開する
   - ゴースト・シェル・バルーンの列挙を直下 1 段の走査で返す: ゴーストは `ghost/master/descript.txt` の有無、シェルは `descript.txt` の有無と `menu,hidden` の除外、バルーンは `type` が無いか `balloon` のものだけ（他の値は `warn!`＋除外）
@@ -35,7 +35,7 @@
   - 格納フォルダ不在 → 0 件、読めない descript → `warn!` 1 件＋除外（`log-capture-kit`）、ゴーストの判定の真偽を踏む
   - 完了の姿: `cargo test -p areka-ghost catalog` が緑で、要件 8.1 の各構成が 1 本以上のテストに現れる
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 5.3, 8.1, 8.4_
-- [ ] 2.3 (P) 根の決め方（`AREKA_ROOT` → 実行ファイルの隣・実在検査）
+- [x] 2.3 (P) 根の決め方（`AREKA_ROOT` → 実行ファイルの隣・実在検査）
   - `boot_config` に、env の値と実行ファイルの場所を注入して根を決める純粋な口と、env と `current_exe()` を読むだけの薄い口を足す。根の出所（環境変数／exe の隣）と、決まらない理由（exe の場所が取れない／フォルダでない）を型で返す
   - `AREKA_ROOT` があれば exe を見ない。相対の値はカレント基準で `std::path::absolute` により絶対化してから検査する（`canonicalize` は使わない）。exe が取れず env も無ければ `"."` へ倒さず失敗
   - アプリの記憶の保存先の既定（`"."` フォールバックを含む）は変えない
@@ -123,3 +123,4 @@
 
 - 1.2: `format.rs` の既存テスト `round_trip_preserves_all_string_values` は `FormatDoc` を全欄で書くため、欄の追加でコンパイルのための追随が要った（既存 4 族の値と比較は不変）。構造体リテラルで全欄を並べるテストは族を足すたびに同じ追随が要る。
 - 2.1→2.2: 空の値（trim 後に空）はどの鍵も「無し」に揃えた（`catalog.rs` の `lowercased` の 1 か所）。`type,` はバルーンとして残り、`menu,` は隠さない。design R5 に追記済み。
+- 2.3: 空の `AREKA_ROOT` は「設定あり」（`AREKA_PROFILE_DIR` と同じ）→ `NotADirectory { dir: "", source: EnvVar }`。`dir` が絶対でない唯一の例外なので、告知（3）は空のとき「環境変数 AREKA_ROOT が空です」の類いの文言にする。`RootError` 等の item 単位 `#[allow(dead_code)]` は 5.1 で外す。
