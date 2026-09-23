@@ -4,22 +4,29 @@
 //! 常設プロキシ。SHIORI3/SHIORI4 ロジックは一切持たず、所有権・charset 規約を守って
 //! 「意味を持たない生バイト列」を FFI 境界の向こうへ運ぶだけに徹する（要件 6.1）。
 //!
-//! ## 確立シーケンス（design §347）
+//! ## 確立シーケンス（`areka-P0-shiori-loadu` design「System Flows」）
+//! 正典の入口は 4 つ（`loadu`／`load`／`unload`／`request`）。初期化の入口は `loadu`／`load` の
+//! どちらか 1 つを選んで 1 回だけ呼ぶ。
 //! 1. `LoadLibraryW(dll_path)`（呼出側が `load_dir\<shiori_name>` を組んだ **絶対パス**を渡す＝
-//!    DLL 検索パス曖昧性の排除）。失敗→[`ProxyError::LoadLibraryFailed`]（R6.1）。
-//! 2. `GetProcAddress` で `load`/`unload`/`request` の **3 エクスポートすべて**を解決し fn ポインタ
-//!    保持（R4.2）。いずれか欠落→[`ProxyError::EntryNotFound`]（R6.2）。
-//! 3. `load_dir` を **ANSI(CP_ACP)**（`WideCharToMultiByte`）で符号化（R4.4）。失敗→
-//!    [`ProxyError::EncodingFailed`]。
+//!    DLL 検索パス曖昧性の排除）。失敗→[`ProxyError::LoadLibraryFailed`]。
+//! 2. `GetProcAddress` で初期化の入口 `loadu`・`load` を **任意で**引き、[`choose_init_entry`] で
+//!    1 つ選ぶ（`loadu` 優先・`load` だけでも `loadu` だけでも可）。両方無い→
+//!    [`ProxyError::EntryNotFound`]`("load")`。続けて `unload`・`request` を **必須で**引く。欠落→
+//!    `EntryNotFound("unload")`／`("request")`。
+//! 3. 入口別のバイト列を作る（[`init_bytes`]）: `loadu` なら `load_dir` の UTF-8 そのもの、`load` なら
+//!    既定コードページ（CP_ACP・`WideCharToMultiByte`）。`load` の枝で表せない字があれば警告を 1 行
+//!    出してそれでも渡す。符号化失敗→[`ProxyError::EncodingFailed`]。
 //! 4. `GlobalAlloc(GMEM_FIXED)` バッファへ書き込み。確保失敗→[`ProxyError::EncodingFailed`]。
-//! 5. `load(hdir, len)` **同期**呼出（R4.4）。戻り `false`→[`ProxyError::LoadReturnedFalse`]（R6.3）。
+//! 5. 入口名の行（`[helper] SHIORI 初期化の入口: loadu|load`）を 1 行出し、選んだ入口 `(hdir, len)` を
+//!    **同期で 1 回だけ**呼ぶ。戻り 0→[`ProxyError::LoadReturnedFalse`]（`loadu` が 0 でも `load` へは
+//!    落ちない）。0 以外は成功。
 //!
 //! ## 所有権規約（design §348・research §9.3・R4.5）
-//! `load` へ渡した入力 HGLOBAL は **DLL(callee) が `GlobalFree` する**。ホスト（本モジュール）は
-//! **自ら解放しない**（二重解放禁止）。確保したハンドルは `load` 呼出で callee へ move する。
+//! `loadu`／`load` へ渡した入力 HGLOBAL は **DLL(callee) が `GlobalFree` する**。ホスト（本モジュール）は
+//! **自ら解放しない**（二重解放禁止）。確保したハンドルは入口の呼出で callee へ move する。
 //!
 //! ## charset（design §347・research §9.3）
-//! `load` の dir は **ANSI(CP_ACP)**（pasta `to_ansi_str()`＝`MultiByteToWideChar` と対称ゆえ本
+//! `loadu` の dir は **UTF-8**、`load` の dir は **ANSI(CP_ACP)**（pasta `to_ansi_str()`＝`MultiByteToWideChar` と対称ゆえ本
 //! モジュールは `WideCharToMultiByte(CP_ACP, ..)` で符号化）。`request` は**任意の文字コードのバイト列**（意味は x64 側＝`areka-P0-charset-canon` の交渉結果。本モジュールは解釈しない）。
 //!
 //! ## Drop teardown（design §358・R2.1/2.2/2.3）
@@ -28,7 +35,9 @@
 //! 確立途中（手順 2〜5）の失敗は内部で `FreeLibrary` してから `Err` を返す（半構築を露出しない）。
 //!
 //! ## 観測契約（design §357・R4.7）
-//! 「`load` の同期 bool 結果＋無クラッシュ」のみ。DLL 内部スレッド等に前提を置かない。
+//! 「初期化の入口の同期 1 バイト結果（0 か否か）＋無クラッシュ」のみ。DLL 内部スレッド等に前提を置かない。
+//! 本モジュールが出す行は入口名の 1 行と、`load` の枝の表せない字の警告 1 行だけ（`eprintln!`・
+//! 無条件）。失敗の種別の 1 行は `main.rs` が出す。
 //!
 //! ## unsafe 集約
 //! SHIORI FFI の `unsafe` 境界は本モジュールへ集約し、各ブロックに Safety 根拠を文書化する
@@ -46,7 +55,9 @@
 use std::path::Path;
 
 use windows::Win32::Foundation::{FreeLibrary, GlobalFree, HGLOBAL, HMODULE};
-use windows::Win32::Globalization::{CP_ACP, WideCharToMultiByte};
+use windows::Win32::Globalization::{
+    CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar, WideCharToMultiByte,
+};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
 use windows::core::{HSTRING, PCSTR, s};
@@ -55,13 +66,14 @@ use windows::core::{HSTRING, PCSTR, s};
 /// `GMEM_FIXED` ではハンドル＝先頭ポインタゆえ `h.0 as *mut u8` で直接書き込める。
 const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 
-/// flat-C cdecl 署名（design §351-355・research §9.2 でバイト正確に固定）。
+/// `loadu`／`load` 共通の flat-C cdecl 署名（design §351-355・research §9.2 でバイト正確に固定）。
 ///
-/// `i686-pc-windows-msvc` では C ABI＝cdecl。pasta の `extern "C"` と ABI 同一。戻り `bool` は
-/// **Rust bool 1 byte**（Win32 BOOL(i32) ではない）。
-type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> bool;
-/// `unload() -> bool`（引数なし・cdecl）。Drop の courtesy unload で呼ぶ。
-type UnloadFn = unsafe extern "C" fn() -> bool;
+/// `i686-pc-windows-msvc` では C ABI＝cdecl。pasta の `extern "C"` と ABI 同一。戻りは **1 バイト整数**
+/// （0 = 失敗・0 以外 = 成功・`== 1` とは判定しない）。Rust `bool` で受けると 0／1 以外の値が未定義動作に
+/// なり、`i32` で受けると Rust `bool` を返す DLL（pasta）の不定な上位 24 bit を読むため、`u8` で受ける。
+type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> u8;
+/// `unload() -> u8`（引数なし・cdecl）。Drop の courtesy unload で呼び、戻りは捨てる（要件 5.4）。
+type UnloadFn = unsafe extern "C" fn() -> u8;
 /// `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（`len` は in/out）。
 /// **本仕様では解決のみ・呼出しない**（呼出 API は下流 host32-request が追加する）。
 type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
@@ -71,26 +83,61 @@ type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
 pub enum ProxyError {
     /// `LoadLibraryW` 失敗（DLL 不在・ロード失敗・ビットネス不一致など・R6.1）。
     LoadLibraryFailed(windows::core::Error),
-    /// `GetProcAddress` が `load`/`unload`/`request` のいずれかを引けなかった（R6.2）。
+    /// 入口が無い。名札は `"load"`（初期化の入口 `loadu`・`load` が **両方無い**とき・片方在れば
+    /// この失敗にならない）・`"unload"`・`"request"` の 3 値（R6.2・`areka-P0-shiori-loadu` 要件 1.4・1.7）。
     EntryNotFound(&'static str),
-    /// `load_dir` の ANSI(CP_ACP) 符号化失敗、または `GlobalAlloc` 確保失敗。
+    /// `load_dir` の符号化失敗（`loadu` の UTF-8 化・`load` の ANSI(CP_ACP) 化）、または `GlobalAlloc` 確保失敗。
     EncodingFailed,
-    /// `load` が `false` を返した（クラッシュはせず失敗を返した・R6.3）。
+    /// 初期化の入口（`loadu`／`load`）が 0 を返した（クラッシュはせず失敗を返した・R6.3）。
     LoadReturnedFalse,
     /// `request` が null／無効 HGLOBAL を返した（応答確保失敗等・クラッシュせず失敗を返した）。
     /// silent failure を避けるため他 variant と区別可能な形で返す（R3.2〜3.4 request 失敗面）。
     RequestFailed,
 }
 
+/// 選ばれた初期化の入口（`loadu` 優先・要件 1.1〜1.3）。fn ポインタを 1 つだけ持つので、
+/// `loadu` と `load` の両方を呼ぶ経路は型の上で存在しない（要件 1.5）。
+enum InitEntry {
+    Loadu(LoadFn),
+    Load(LoadFn),
+}
+
+impl InitEntry {
+    /// 入口名（入口名の行と fixture の記録の語・要件 4.3）。
+    fn name(&self) -> &'static str {
+        match self {
+            InitEntry::Loadu(_) => "loadu",
+            InitEntry::Load(_) => "load",
+        }
+    }
+
+    /// 選ばれた入口の fn ポインタ（呼出側はこれを 1 回だけ呼ぶ）。
+    fn func(&self) -> LoadFn {
+        match *self {
+            InitEntry::Loadu(f) | InitEntry::Load(f) => f,
+        }
+    }
+}
+
+/// 「`loadu` の有無 × `load` の有無」の 4 通りから呼ぶ入口を 1 つ選ぶ純関数（要件 1.1〜1.4・1.8）。
+/// 判断はここだけ。両方無いときの名札は既存テスト `kernel32_yields_entry_not_found` が固定する
+/// `"load"`。`Loadu` を選んだときの `load` は捨てる（保持しない）。
+fn choose_init_entry(loadu: Option<LoadFn>, load: Option<LoadFn>) -> Result<InitEntry, ProxyError> {
+    match (loadu, load) {
+        (Some(u), _) => Ok(InitEntry::Loadu(u)),
+        (None, Some(l)) => Ok(InitEntry::Load(l)),
+        (None, None) => Err(ProxyError::EntryNotFound("load")),
+    }
+}
+
 /// SHIORI DLL の常設プロキシ（design §339-388）。
 ///
-/// `Ok` = 3 fn ポインタ常設保持＋`load`→true 済み（＝「load 済み」プロキシ）。`request` fn は保持
-/// のみ（呼出 API は下流 host32-request が追加）。Drop が唯一の teardown 経路（明示メソッド非公開）。
+/// `Ok` = `unload`／`request` の fn ポインタ常設保持＋初期化の入口（`loadu`／`load`）が成功済み
+/// （＝「load 済み」プロキシ）。`request` fn は保持のみ（呼出 API は下流 host32-request が追加）。
+/// Drop が唯一の teardown 経路（明示メソッド非公開）。
 pub struct ShioriByteProxy {
     /// ロード元モジュールハンドル。Drop の courtesy unload の後に `FreeLibrary` する。
     module: HMODULE,
-    /// 解決済み `load` エントリ（確立時に呼出済み・保持は teardown 対称性のためではなく記録）。
-    load: LoadFn,
     /// 解決済み `unload` エントリ。Drop の courtesy unload で呼ぶ（R2.2）。
     unload: UnloadFn,
     /// 解決済み `request` エントリ。**本仕様では保持のみ・呼出しない**（下流 host32-request が消費）。
@@ -98,14 +145,15 @@ pub struct ShioriByteProxy {
 }
 
 impl ShioriByteProxy {
-    /// `LoadLibraryW` → 3 解決 → ANSI 符号化 → `load` 呼出まで。成功時のみ `Self`（=load 済み）を返す
-    /// （design §374-375）。
+    /// `LoadLibraryW` → 入口の解決と選択 → 入口別の符号化 → 初期化の入口の呼出まで。成功時のみ
+    /// `Self`（=load 済み）を返す（design §374-375）。
     ///
     /// - `dll_path`: **絶対パス**（呼出側 Task 6 が `load_dir.join(shiori_name)` を渡す前提）。本
     ///   モジュールは受け取った絶対パスを `LoadLibraryW` で開く＝DLL 検索パス曖昧性の排除（design §381）。
-    /// - `load_dir`: `load` の同期引数（リソース根）。**ANSI(CP_ACP)** で符号化して渡す（R4.4）。
+    /// - `load_dir`: 初期化の入口の同期引数（リソース根）。`loadu` へは UTF-8、`load` へは
+    ///   **ANSI(CP_ACP)** で符号化して渡す（[`init_bytes`]）。
     ///
-    /// 確立途中（3 解決／符号化／確保／load）の失敗は内部で `FreeLibrary(module)` してから `Err` を
+    /// 確立途中（解決／符号化／確保／入口の呼出）の失敗は内部で `FreeLibrary(module)` してから `Err` を
     /// 返す（半構築を残さない・design §358「Err = HMODULE 解放済み・状態残さず」）。
     ///
     /// Preconditions: `dll_path` は絶対パス。呼出は helper UI スレッド（WndProc）上。
@@ -117,29 +165,37 @@ impl ShioriByteProxy {
         // Err を返す（下で map）。ここで module のライフサイクル所有が本関数へ確立する。
         let module = unsafe { LoadLibraryW(&wide) }.map_err(ProxyError::LoadLibraryFailed)?;
 
-        // --- 手順 2: 3 エクスポート解決（無装飾名）---
+        // --- 手順 2: エクスポート解決（無装飾名）---
+        // 初期化の入口 `loadu`→`load` を任意で引いて選択の純関数へ渡し（判断は choose_init_entry だけ）、
+        // その後で `unload`・`request` を必須で引く（要件 1.7）。この順ゆえ何も持たない DLL の最初の失敗は
+        // 今日と同じ `EntryNotFound("load")`。
         // 途中失敗は module を FreeLibrary してから Err を返すため、クロージャで解決→失敗時解放を集約。
         // SAFETY(全体): `module` は直前にロードした有効ハンドル。各シンボルは DLL 側が
         // `#[unsafe(no_mangle)] pub extern "cdecl"` で公開（research §9・testdll 同形）＝装飾なし C 名。
-        // GetProcAddress は未解決時 None を返す（unwrap せず ok_or で観測エラー化）。
-        let resolve = || -> Result<(LoadFn, UnloadFn, RequestFn), ProxyError> {
-            let load_raw = unsafe { GetProcAddress(module, s!("load")) }
-                .ok_or(ProxyError::EntryNotFound("load"))?;
+        // GetProcAddress は未解決時 None を返す（unwrap せず Option／ok_or で扱う）。
+        let resolve = || -> Result<(InitEntry, UnloadFn, RequestFn), ProxyError> {
+            // SAFETY: 解決した FARPROC を research §9 でバイト照合済みの flat-C cdecl 署名へ transmute
+            // する（cdecl・HGLOBAL/usize 幅）。戻りは `u8` で受ける: cdecl の戻り値は EAX にあり、
+            // Rust `bool`（pasta）を返す DLL は下位 1 バイト（AL）だけを書くので、下位 1 バイトだけを読む
+            // `u8` が上位 24 bit の不定値を読まない最小の型。天井: C 製 DLL が Win32 `BOOL` として下位
+            // バイト 0・上位 bit 非 0 の値（例 `0x100`）を返すと失敗と判定される（正典どおり TRUE(1)／
+            // FALSE(0) を返す限り問題無い）。FARPROC は unsafe extern fn() の確定値。
+            let as_load = |raw| unsafe { std::mem::transmute::<_, LoadFn>(raw) };
+            let loadu = unsafe { GetProcAddress(module, s!("loadu")) }.map(as_load);
+            let load = unsafe { GetProcAddress(module, s!("load")) }.map(as_load);
+            let entry = choose_init_entry(loadu, load)?;
+
             let unload_raw = unsafe { GetProcAddress(module, s!("unload")) }
                 .ok_or(ProxyError::EntryNotFound("unload"))?;
             let request_raw = unsafe { GetProcAddress(module, s!("request")) }
                 .ok_or(ProxyError::EntryNotFound("request"))?;
-
-            // SAFETY: 解決した FARPROC を research §9 でバイト照合済みの flat-C cdecl 署名へ transmute
-            // する。DLL 側実体（testdll／pasta）と ABI（cdecl・bool 1byte・HGLOBAL/usize 幅）が一致する
-            // ことを実装前照合で固定済み（Task 1）。FARPROC は Option<unsafe extern fn()> ゆえ確定値。
-            let load: LoadFn = unsafe { std::mem::transmute::<_, LoadFn>(load_raw) };
+            // SAFETY: 上と同じ根拠（`unload` の戻りも `u8`・`request` の署名は不変・要件 5.5）。
             let unload: UnloadFn = unsafe { std::mem::transmute::<_, UnloadFn>(unload_raw) };
             let request: RequestFn = unsafe { std::mem::transmute::<_, RequestFn>(request_raw) };
-            Ok((load, unload, request))
+            Ok((entry, unload, request))
         };
 
-        let (load, unload, request) = match resolve() {
+        let (entry, unload, request) = match resolve() {
             Ok(fns) => fns,
             Err(e) => {
                 // 半構築を残さない: module を解放してから Err（design §358）。
@@ -152,18 +208,17 @@ impl ShioriByteProxy {
             }
         };
 
-        // --- 手順 3〜5: ANSI 符号化 → GlobalAlloc → load 同期呼出 ---
+        // --- 手順 3〜5: 入口別の符号化 → GlobalAlloc → 初期化の入口の同期呼出 ---
         // これらの失敗も module を FreeLibrary してから Err を返す（半構築を残さない）。
-        match Self::encode_alloc_and_load(load, load_dir) {
+        match Self::encode_alloc_and_load(entry, load_dir) {
             Ok(()) => Ok(Self {
                 module,
-                load,
                 unload,
                 request,
             }),
             Err(e) => {
                 // SAFETY: `module` は本関数でロードした有効ハンドルで、Ok を返すまで所有は本関数。
-                // 入力 HGLOBAL は encode_alloc_and_load 内で load(callee) へ move 済み（自ら解放しない・
+                // 入力 HGLOBAL は encode_alloc_and_load 内で入口(callee) へ move 済み（自ら解放しない・
                 // R4.5）。ここで解放するのは module のみ。結果は best-effort で無視。
                 unsafe {
                     let _ = FreeLibrary(module);
@@ -173,23 +228,28 @@ impl ShioriByteProxy {
         }
     }
 
-    /// 手順 3〜5: `load_dir` を ANSI(CP_ACP) 符号化 → `GlobalAlloc(GMEM_FIXED)` へ書込 → `load` 同期
-    /// 呼出（design §347）。**入力 HGLOBAL は callee 解放規約ゆえ自ら解放しない**（R4.5）。
-    fn encode_alloc_and_load(load: LoadFn, load_dir: &Path) -> Result<(), ProxyError> {
-        // 手順 3: ANSI(CP_ACP) 符号化。失敗→EncodingFailed。
-        let ansi = ansi_encode(load_dir)?;
+    /// 手順 3〜5: 入口別のバイト列（[`init_bytes`]）→ `GlobalAlloc(GMEM_FIXED)` へ書込 → 入口名の行 →
+    /// 選んだ入口を同期で 1 回だけ呼出。**入力 HGLOBAL は callee 解放規約ゆえ自ら解放しない**（R4.5）。
+    /// 符号化・確保で失敗したときは入口を呼ばないので入口名の行も出ない（失敗の 1 行は `main.rs`）。
+    fn encode_alloc_and_load(entry: InitEntry, load_dir: &Path) -> Result<(), ProxyError> {
+        // 手順 3: 入口別のバイト列。失敗→EncodingFailed。
+        let bytes = init_bytes(&entry, load_dir)?;
 
         // 手順 4: GMEM_FIXED バッファ確保＋書込。確保失敗→EncodingFailed。
-        let hdir = global_alloc_copy(&ansi)?;
-        let len = ansi.len();
+        let hdir = global_alloc_copy(&bytes)?;
+        let len = bytes.len();
 
-        // 手順 5: load(hdir, len) 同期呼出。
+        // 手順 5: 入口名の行を呼ぶ直前に 1 回（成功・失敗を問わず・要件 4.1〜4.3）→
+        // 選ばれた入口 (hdir, len) を 1 回だけ同期呼出（要件 1.5）。
+        eprintln!("{INIT_ENTRY_LOG_PREFIX}{}", entry.name());
         // SAFETY: `hdir` は `len` バイトの有効 HGLOBAL（GMEM_FIXED ゆえハンドル＝先頭ポインタ）。
         // DLL(callee) は受領ハンドルを `GlobalFree` する規約（research §9.3・testdll の load が実演）
-        // ＝ホストは以後 hdir に触れず・解放もしない（二重解放禁止・R4.5）。所有権は load へ move する。
-        // 呼出は同期で bool を返す（DLL 内部スレッドに前提を置かない・R4.7）。
-        let ok = unsafe { load(hdir, len) };
-        if ok {
+        // ＝ホストは以後 hdir に触れず・解放もしない（二重解放禁止・R4.5）。所有権は入口へ move する。
+        // 呼出は同期で 1 バイト整数を返す（DLL 内部スレッドに前提を置かない・R4.7）。
+        let ret = unsafe { entry.func()(hdir, len) };
+        // 0 = 初期化が偽を返した失敗・0 以外は成功（`== 1` とは判定しない・要件 5.1〜5.3）。
+        // `loadu` が 0 でも `load` へは落ちない（要件 1.6）。
+        if ret != 0 {
             Ok(())
         } else {
             Err(ProxyError::LoadReturnedFalse)
@@ -250,10 +310,10 @@ impl ShioriByteProxy {
 impl Drop for ShioriByteProxy {
     /// courtesy `unload()`（best-effort・結果無視）→ `FreeLibrary`（design §358・R2.1/2.2/2.3）。
     ///
-    /// 明示 teardown メソッドを公開しないため、これが唯一の後始末経路。unload の bool 結果は
+    /// 明示 teardown メソッドを公開しないため、これが唯一の後始末経路。unload の 1 バイト整数の結果は
     /// 無視し（エラーとして扱わない・ハングはプロセス lifecycle=下流の領分）、続けて DLL を解放する。
     fn drop(&mut self) {
-        // SAFETY: `unload` は確立時に解決した有効な flat-C エントリ。引数なし cdecl。結果 bool は
+        // SAFETY: `unload` は確立時に解決した有効な flat-C エントリ。引数なし cdecl。結果（`u8`）は
         // best-effort で無視する（R2.2・courtesy unload）。DLL 内部スレッドに前提を置かない（R4.7）。
         unsafe {
             let _ = (self.unload)();
@@ -289,22 +349,35 @@ fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     Ok(h)
 }
 
-/// `path` を **ANSI(CP_ACP)** バイト列へ符号化する（design §347・research §9.3・pasta `to_ansi_str`
-/// と対称の `WideCharToMultiByte(CP_ACP, ..)`）。
+/// コードページ符号化の結果（design「`encode_with_codepage`／`CodepageEncoded`／`ansi_encode`」）。
+struct CodepageEncoded {
+    /// 入口へ渡すバイト列（`cp = CP_ACP` なら今日の `ansi_encode` と同一・NUL 無し）。
+    bytes: Vec<u8>,
+    /// 往復で元に戻らない字が 1 つ以上あった（既定文字への置き換えも best-fit も含む・要件 3.1）。
+    lossy: bool,
+}
+
+/// `path` をコードページ `cp` のバイト列へ符号化し、同じ `cp` で UTF-16 へ戻して元と比べる
+/// （要件 3.1〜3.4・3.6・6.5）。本番は `CP_ACP` で呼び、テストは 20127／65001 を渡す。
 ///
-/// まず `OsStr` → UTF-16、次に CP_ACP へ。空パスは空バイト列を返す。失敗（長さ問い合わせ／変換が
-/// 0 以下）→[`ProxyError::EncodingFailed`]。
-fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
+/// 変換の作法は今日のまま（`WideCharToMultiByte` の 2 回呼び・フラグ 0・既定文字は OS 既定）。
+/// 検出はコードページの値で分岐しない（65001 の機械でも同じ手順）。往路が 0 以下→
+/// [`ProxyError::EncodingFailed`]（3.6）。戻す側が 0 以下（判定できない）→ `lossy = true` に寄せる。
+/// 空パスは空・`lossy = false`。
+fn encode_with_codepage(cp: u32, path: &Path) -> Result<CodepageEncoded, ProxyError> {
     use std::os::windows::ffi::OsStrExt;
-    // OsStr → UTF-16（NUL 終端は付けない＝正味の文字列長を CP_ACP へ渡す）。
+    // OsStr → UTF-16（NUL 終端は付けない＝正味の文字列長を渡す）。
     let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
     if wide.is_empty() {
-        return Ok(Vec::new());
+        return Ok(CodepageEncoded {
+            bytes: Vec::new(),
+            lossy: false,
+        });
     }
 
     // 必要バイト数を問い合わせる（出力バッファ None＝長さ問い合わせ）。
     // SAFETY: `wide` は有効な UTF-16 スライス。出力 None＝長さ問い合わせモード。既定フラグ(0)。
-    let needed = unsafe { WideCharToMultiByte(CP_ACP, 0, &wide, None, PCSTR::null(), None) };
+    let needed = unsafe { WideCharToMultiByte(cp, 0, &wide, None, PCSTR::null(), None) };
     if needed <= 0 {
         return Err(ProxyError::EncodingFailed);
     }
@@ -312,13 +385,59 @@ fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
     let mut buf = vec![0u8; needed as usize];
     // SAFETY: `buf` は `needed` バイトの可変領域（i8 として渡す）。`wide` は有効な UTF-16 スライス。
     // WideCharToMultiByte は `&mut [u8]` を i8 バッファとして受ける（windows 0.62.2 の Some(&mut buf)）。
-    let written =
-        unsafe { WideCharToMultiByte(CP_ACP, 0, &wide, Some(&mut buf), PCSTR::null(), None) };
+    let written = unsafe { WideCharToMultiByte(cp, 0, &wide, Some(&mut buf), PCSTR::null(), None) };
     if written <= 0 {
         return Err(ProxyError::EncodingFailed);
     }
     buf.truncate(written as usize);
-    Ok(buf)
+
+    // 往復比較: 同じ cp で UTF-16 へ戻し、元と一致しなければ表せない字あり。
+    // SAFETY: `buf` は有効なバイト列。出力 None＝長さ問い合わせモード。既定フラグ(0)。
+    let back_len = unsafe { MultiByteToWideChar(cp, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), &buf, None) };
+    let lossy = if back_len <= 0 {
+        true
+    } else {
+        let mut back = vec![0u16; back_len as usize];
+        // SAFETY: `back` は `back_len` 要素の可変領域。`buf` は有効なバイト列。既定フラグ(0)。
+        let got = unsafe {
+            MultiByteToWideChar(cp, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), &buf, Some(&mut back))
+        };
+        got <= 0 || back[..got as usize] != wide[..]
+    };
+    Ok(CodepageEncoded { bytes: buf, lossy })
+}
+
+/// `path` を **ANSI(CP_ACP)** バイト列へ符号化する（既存の署名を保つ薄い包み・既存テスト 3 本が固定）。
+/// `encode_with_codepage(CP_ACP, path).map(|e| e.bytes)`。
+fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
+    encode_with_codepage(CP_ACP, path).map(|e| e.bytes)
+}
+
+/// 入口名の行の固定語句（実機確認の grep が判定に使う・要件 4.3）。後ろに `loadu`／`load` が付く。
+const INIT_ENTRY_LOG_PREFIX: &str = "[helper] SHIORI 初期化の入口: ";
+/// `load` の枝で表せない字があったときの警告の固定語句（要件 3.1）。後ろに元のパスが付く。
+const LOSSY_PATH_WARN_PREFIX: &str = "[helper] 警告: load_dir に既定コードページで表せない字があり別の字へ置き換えた（loadu が無いため load へ渡す）: ";
+
+/// 入口別のバイト列（呼出の前段・fn ポインタは呼ばない・要件 2.1〜2.5・3.1・3.2・3.5）。
+///
+/// - `Loadu`: `load_dir` の UTF-8 そのもの（標準ライブラリのみ・置き換え無し・NUL 無し）。UTF-8 に
+///   できない（不正な UTF-16）なら [`ProxyError::EncodingFailed`]。表せない字の検出は行わない。
+/// - `Load`: 既定コードページ（`encode_with_codepage(CP_ACP, ..)`・今日と同一のバイト列）。表せない字が
+///   あれば警告を 1 行（元のパス付き）出し、それでも同じバイト列を返す（確立は止めない）。
+fn init_bytes(entry: &InitEntry, load_dir: &Path) -> Result<Vec<u8>, ProxyError> {
+    match entry {
+        InitEntry::Loadu(_) => load_dir
+            .to_str()
+            .map(|s| s.as_bytes().to_vec())
+            .ok_or(ProxyError::EncodingFailed),
+        InitEntry::Load(_) => {
+            let e = encode_with_codepage(CP_ACP, load_dir)?;
+            if e.lossy {
+                eprintln!("{LOSSY_PATH_WARN_PREFIX}{}", load_dir.display());
+            }
+            Ok(e.bytes)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -582,3 +701,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&load_dir);
     }
 }
+
+#[cfg(test)]
+#[path = "shiori_proxy_loadu_tests.rs"]
+mod loadu_tests;
