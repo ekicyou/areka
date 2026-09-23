@@ -178,6 +178,18 @@ Research Needed（設計で確定する）:
 13. **列挙の素性の型と後続への供給形。** `property-catalog-lists`（`ghostlist`／`balloonlist`・α 後）が provider（`areka-ghost` の `sylphya_wiring`）から引ける形にするため、素性の型を `areka-ghost` の公開型にする（Option C ⑴）。bin 側の解決順は `&[GhostEntry]` を受ける純粋関数にすれば、供給源が変わっても判断は変わらない。
 14. **`persist/mod.rs` のテスト移設のタイミング。** 族の追加と同じタスクで移すか（差分が大きい）、先に移設だけの機械的タスク（挙動 0 変更・`git mv` 相当）を切るか。1,000 行の番人は着手時点で赤にならない（934 行）が、族を足した瞬間に超えるので順序は「移設 → 追加」が安全。
 
+### 6.1 要件ディスカッション（2026-09-23）での処理状況
+
+| 議題 | 処理 | 行き先 |
+|---|---|---|
+| 7（`wired=false` フォールバック boot） | 本仕様の範囲外と確定。要件の Out of scope に明記 | doc の根拠の書き換えだけ設計（8 と同じ箇所） |
+| 8（`is_benign_placement_error`／`main_seam_tests.rs`） | 設計判断 | `/kiro-spec-design` |
+| 9（記憶を書く時点） | (a) `areka_ghost::boot` が `Ok` を返した時点、と要件 3.1 に定義（`main` の順序上、起動窓の準備はその前に済む） | 確定 |
+| 10（抑止 env の名） | 設計判断（要件 6.5 のとおり） | `/kiro-spec-design` |
+| 11（`current_exe()` 失敗時の根） | 要件 1.4 に「根が決まらない」として告知に含めた | 確定 |
+| 12（argv で根の内側のパス） | 裁定 5 と統合して開発者議題へ | 要件 9.5 |
+| 13（素性の型の公開形）・14（テスト移設の順序）・R1〜R8 | 設計判断 | `/kiro-spec-design` |
+
 ## 7. 参照した正典・記憶
 
 - ukadoc: 「全体の構成」（`manual_directory`）・`descript_shell` `menu,hidden`・`descript_balloon` `type`／`id`・`descript_install` `*.directory`（要件本文の表と同じ）。

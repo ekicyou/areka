@@ -66,6 +66,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
   - 既定バルーンを `.nar` へ畳んで検体に登記すること（`areka-P0-default-balloon-nar-fold`）・配布 zip の形（`areka-P0-alpha-release-signoff`）。
   - `install.txt` の番号付きバルーン（`balloon0.directory`…）・`thumbnail.pnr`・`readme.md` の解釈（α では読まない＝0）。
   - アプリの記憶の保存先（`AREKA_PROFILE_DIR`・既定 `<exe のフォルダ>/profile/areka/`）の変更。
+  - `wire_emo2_boot` が `wired=false` を返したときの `LogSink` フォールバック boot（`fn main` の else アーム）の存廃。本仕様は触らない（`is_benign_boot_error` の doc が既定パスの不在を根拠にしている箇所の書き換えだけ設計で扱う）。
 - **Adjacent expectations**:
   - `areka-P0-app-lifetime-separation`（着地済み）: 終了の指示 `quit_app` と終了操作 7 種の形は変えない。ダミー窓に紐づく終了操作（ダブルクリック・ダミー窓への OS の閉鎖要求）は窓ごと退役する＝同 spec 要件 3.4・3.11 は退役、その他は不変。
   - `areka-P0-nar-install`（着地済み）: 展開先の形＝根の形。`SampleRoot` の 3 つの読み口（`root()`・`folder()`・`balloon()`）は変えない。登記表 `SAMPLES` には触らない。
@@ -85,7 +86,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 1. The areka shall ベースウェアの根を 1 つ持ち、その直下の `ghost/` をゴースト格納フォルダ、`balloon/` をバルーン格納フォルダとする（`<根>/ghost/<フォルダ名>/`・`<根>/balloon/<フォルダ名>/`）。
 2. When 環境変数 `AREKA_ROOT` が設定されていない, the areka shall 実行ファイルのあるフォルダを根とする。
 3. When 環境変数 `AREKA_ROOT` が設定されている, the areka shall その値のフォルダを根とし、実行ファイルのあるフォルダは見ない。
-4. If 根として決まったフォルダが実在しない, then the areka shall `error!` と利用者向けの告知（要件 6）を出し、0 以外の終了コードで終える。
+4. If 根として決まったフォルダが実在しない, or `AREKA_ROOT` が無く実行ファイルの場所（`current_exe()`）が取れない, then the areka shall `error!` と利用者向けの告知（要件 6）を出し、0 以外の終了コードで終える（カレントディレクトリ `"."` へ黙って倒さない）。
 5. The areka shall `CARGO_MANIFEST_DIR` 相対の既定パス（`fn default_ghost_root`・`fn default_balloon_root`）を持たない（配布した exe で実在しない既定を残さない）。
 6. The areka shall 検体の根（`SampleRoot::root()`）を `AREKA_ROOT` に渡すだけで、テストと実機が同じ根の形で起動できる。
 7. The areka shall アプリの記憶の保存先（`AREKA_PROFILE_DIR`・既定 `<exe のフォルダ>/profile/areka/`）を変えない。
@@ -113,7 +114,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 
 #### Acceptance Criteria
 
-1. The areka shall アプリの記憶（`App` スコープ）に鍵 `areka.last.ghost`（ゴーストのフォルダ名）と `areka.last.balloon`（バルーンのフォルダ名）を、ゴーストの記憶（`Ghost` スコープ）に鍵 `areka.last.shell`（シェルのフォルダ名）を持つ（既存の 4 族に 1 族を足す・記憶のファイルの表は `[last]`）。
+1. The areka shall アプリの記憶（`App` スコープ）に鍵 `areka.last.ghost`（ゴーストのフォルダ名）と `areka.last.balloon`（バルーンのフォルダ名）を、ゴーストの記憶（`Ghost` スコープ）に鍵 `areka.last.shell`（シェルのフォルダ名）を持つ（既存の 4 族に 1 族を足す・記憶のファイルの表は `[last]`）。本要件で「ゴーストの起動が成功する」とは、起動窓の準備（`fn open_startup_window`）が通った後に `areka_ghost::boot` が `Ok` を返した時点を指す（wired／fallback の両経路で 1 か所）。
 2. When ゴーストの起動が成功する and 選ばれたゴーストのフォルダが `<根>/ghost/` の直下にある, the areka shall `areka.last.ghost` にそのフォルダ名を書く。
 3. When ゴーストの起動が成功する and 選ばれたバルーンのフォルダが `<根>/balloon/` の直下にある, the areka shall `areka.last.balloon` にそのフォルダ名を書く。
 4. When ゴーストの起動が成功する, the areka shall 起動に使ったシェルのフォルダ名（`seriko.defaultsurfacedirectoryname`、無ければ `master`＝`fn resolve` が決めたもの）を、そのゴーストの記憶の `areka.last.shell` に書く。
@@ -152,7 +153,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 6. When 2〜5 が当たらない and 根に列挙されるバルーンが 2 つ以上, the areka shall 列挙の並び（要件 2.5）の先頭を使い、複数から選んだことを記録に残す（info）。
 7. If 記憶 `areka.last.balloon` の指すバルーンが根に無い, or `install.txt` の `balloon.directory` の指すバルーンが根に無い, then the areka shall その旨を `warn!` に残して次の段へ進む。
 8. If argv の第 2 引数が無い and 根に列挙されるバルーンが 0, then the areka shall `error!` と利用者向けの告知（要件 6）を出し、0 以外の終了コードで終える。
-9. The areka shall 既定バルーンの id `StayseeBalloon` を本番コードの定数 1 つで持ち、解決順の最後（5）だけがそれを使う。
+9. The areka shall 既定バルーンの id `StayseeBalloon`（フォルダ名と id はバイト一致＝完了 spec `areka-P0-default-balloon-bundle` で実測済み・列挙はフォルダ名で照合する）を本番コードの定数 1 つで持ち、解決順の段 5 だけがそれを使う。
 10. The areka shall 上の解決を純粋な判断として持ち、argv／同梱／記憶／1 つ／既定／複数の先頭／0 の 7 分岐と、同梱・記憶の指す先が無い場合を決定論テストで踏む（既定の分岐は、フォルダ名 `StayseeBalloon` の偽のバルーンを置いた根で確かめる＝検体の登記に依存しない）。
 11. When バルーンが決まる, the areka shall どの経路で決まったか（argv／同梱／記憶／唯一／既定／複数の先頭）と決まったフォルダを記録に残す（info）。
 
@@ -179,8 +180,8 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 1. The 本仕様 shall argv で絶対パスを渡す起動（実機サインオフ・`tests/emo2_real_run.rs`・`examples/`）の見え方を変えない。
 2. The 本仕様 shall `crates/areka/src/menu/`・`crates/areka-ghost/src/runtime.rs`・kanade の終了の握手・`fn quit_app` の終了の指示の形を変えない（ダミー窓の消去に伴う私有関数の対象縮小＝ゴースト窓だけ、を除く）。
 3. The 本仕様 shall `fn resolve` の 4 つの本番の呼び手と、既存の永続化の 4 族の決定論テストを 1 本も変えない。
-4. The 本仕様 shall ダミー窓に依存する既存テスト（`main_startup_window_tests.rs` の 5 本・`app_exit_tests.rs` のダミー窓の検査）を「退役した検証対象」として除き、意味の残る検査（`fn quit_app` がゴースト窓を全て閉じて終了を指示する）は更新して残す（記憶 obsolete-vs-broken-test-policy）。
-5. The 本仕様 shall 常設の smoke テスト `crates/areka/tests/smoke_boot_loop_exit.rs` の 60 秒の見張りと終了コードの判定を残し、3 方向で張る: ① **本物方向**（argv・終了コード 0・目印は今までどおり）／② **根方向**（argv なし・`AREKA_ROOT` に検体 `emo2` の根・記憶なし・唯一のゴーストと同梱バルーンで起動し終了コード 0）／③ **0 体方向**（argv なし・空の根・告知を抑止・`error!` の目印と 0 以外の終了コード・見張りの内側で終わる）。旧「フォールバック方向」（ダミー窓）は ③ に置き換える。3 方向とも告知を抑止して起動し、モニタ 0 台の環境では ①② について要件 6.4 の `error!` と 0 以外の終了コードを受理する（今日の「ダミー窓へのフォールバックを受理」の置き換え）。
+4. The 本仕様 shall ダミー窓に依存する既存テスト（`main_startup_window_tests.rs` の 5 本・`app_exit_tests.rs` のダミー窓の検査）と、撤去する既定パス（要件 1.5）を直接参照する `main_config_input_tests.rs` の 4 本を「退役した検証対象」として除き、意味の残る検査（`fn quit_app` がゴースト窓を全て閉じて終了を指示する）は更新して残す（記憶 obsolete-vs-broken-test-policy）。
+5. The 本仕様 shall 常設の smoke テスト `crates/areka/tests/smoke_boot_loop_exit.rs` の 60 秒の見張りと終了コードの判定を残し、3 方向で張る: ① **本物方向**（argv・終了コード 0・目印は今までどおり）／② **根方向**（argv なし・`AREKA_ROOT` に検体 `emo2` の根・`AREKA_PROFILE_DIR` を一時フォルダ（`temp-path-kit`）へ向けて記憶なしを保証・唯一のゴーストと同梱バルーンで起動し終了コード 0。同梱バルーンで起動したことはパスを綴らず要件 5.11 の記録の目印で見る）／③ **0 体方向**（argv なし・空の根・告知を抑止・`error!` の目印と 0 以外の終了コード・見張りの内側で終わる）。旧「フォールバック方向」（ダミー窓）は ③ に置き換える。3 方向とも告知を抑止して起動し、モニタ 0 台の環境では ①② について要件 6.4 の `error!` と 0 以外の終了コードを受理する（今日の「ダミー窓へのフォールバックを受理」の置き換え）。
 6. The 本仕様 shall 変更後も `crates/areka/src/main.rs`・`boot_config.rs`・`crates/areka-sylphya/src/persist/mod.rs` を 1 ファイル 1,000 行の目安の内側に収める（`persist/mod.rs` はテストを別ファイルへ移す）。
 7. The 本仕様 shall 新規の外部依存を足さない。
 
