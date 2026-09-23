@@ -377,7 +377,7 @@ fn assert_keyed_out_pixels_leave_the_mask(at: &str, mask: &AlphaMask, keyed: &[b
 - **相乗り**: ① `every_sample_receptor_points_at_a_real_folder`（compose）／② `the_examples_do_not_parse_the_shell_themselves`（placement）／③ `cargo build -p areka --examples` と `grep` 0 件。
 - **弱めない・消さない**: `normalize_key_color_tests.rs`・`presenter/budget_tests.rs`・`shell_target_template_tests.rs` は 1 行も触らない。
 - **常時テストの条件**: 実窓 0・他プロセスの可視窓 0・壁時計を合否に使わない・`#[ignore]` 無し・環境変数ゲート無し。GPU 資源の前提は `make_world_with_gpu`（既存の 15 本と同一）。
-- **最終確認**: `cargo test -p areka-emo-atlas`・`cargo test -p areka-emo-compose`・`cargo test -p areka-emo-present`・`cargo test -p areka --lib placement`・`cargo build -p areka --examples` がすべて緑。`git diff --stat` で触ったファイルが File Structure Plan の表と一致する。
+- **最終確認**: `cargo test -p areka-emo-atlas`・`cargo test -p areka-emo-compose`・`cargo test -p areka-emo-present`・`cargo test -p areka --bin areka placement`・`cargo build -p areka --examples` がすべて緑。`git diff --stat` で触ったファイルが File Structure Plan の表と一致する。
 
 ## Performance & Scalability
 

@@ -28,10 +28,10 @@
   - _Requirements: 3.1, 3.4_
   - _Boundary: compose のテスト専用の受け口_
 
-- [ ] 2.2 (P) 本文走査（シェルを自前で解析していないことの見張り）の対象に examples 3 本を足す
+- [x] 2.2 (P) 本文走査（シェルを自前で解析していないことの見張り）の対象に examples 3 本を足す
   - 採寸テストのファイルに、`emo-present` の組み立て・`collision-probe` の組み立て・`window-placement` の 3 本を対象とする本文走査のテストを 1 本足し、既存の走査器（生文字列の拒否 → コード部分の抽出 → シェルの解析呼び出しが 0 件）をそのまま使う。走査器は変えない。名前を持ち込むだけの 2 本は対象に含めない
   - 同ファイルの走査器の説明文にある「走査対象のファイル数」の記述を、対象が増えても正しい言い方へ改める
-  - 完了状態: `cargo test -p areka --lib placement` で新しいテストを含めて緑。3 本のどれかにシェルの解析呼び出しを一時的に書くと赤になることを一度走らせて確かめ、元へ戻す
+  - 完了状態: `cargo test -p areka --bin areka placement` で新しいテストを含めて緑。3 本のどれかにシェルの解析呼び出しを一時的に書くと赤になることを一度走らせて確かめ、元へ戻す
   - _Requirements: 3.2, 3.4_
   - _Boundary: placement の採寸テスト_
 
@@ -67,10 +67,14 @@
 
 - [ ] 4. 最終確認と報告の数
 - [ ] 4.1 全体を走らせ、触ったファイルと数を確かめて報告の材料をそろえる
-  - `cargo test -p areka-emo-atlas`・`cargo test -p areka-emo-compose`・`cargo test -p areka-emo-present`・`cargo test -p areka --lib placement`・`cargo build -p areka --examples` がすべて緑
+  - `cargo test -p areka-emo-atlas`・`cargo test -p areka-emo-compose`・`cargo test -p areka-emo-present`・`cargo test -p areka --bin areka placement`・`cargo build -p areka --examples` がすべて緑
   - `git diff --stat main...` で触ったファイルが design.md の変更の全数の表と一致し、抜き色の正規化・マスクの輪番・wintf・既存の両端のテストと合成後の α を見るテスト・`.kiro/specs/completed/` 配下・`areka-P0-alpha-release-signoff` の文書に差分が無いことを確かめる
   - 数を確かめる: 製品コードの変更行数 0（`#[cfg(test)]` の付いた項目の外）・接続宣言 3 行・可視性の書き換え 3 行・GPU からの読み戻し 0 回・拡大率 k ≠ 1 の水準 0 本（理由: マスクは原寸で作られ ÷k は wintf 側）・CPU から GPU への転送は起きる
   - 報告の文言の決まり（平易な語・「実機の確認は不要になった」と書かない・「左上の画素と同じ色の画素が抜ける」と書く・差し替え 3 段の記録と戻した後の赤 0 を含める）に沿って、本ファイルの完了記録に数と記録を書く
   - 完了状態: 上の 5 本がすべて緑で、完了記録に数（0 行・3 行・3 行・0 回・0 本）と差し替え 3 段の記録が揃っている
   - _Requirements: 1.10, 2.3, 2.4, 3.4, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4_
   - _Depends: 2.2, 2.3, 3.3_
+
+## Implementation Notes
+
+- `crates/areka` は bin だけのパッケージで `--lib` は「no library targets found」で走らない。placement のテストは `cargo test -p areka --bin areka placement` で走らせる（tasks.md・design.md のコマンドを 2.2 で訂正済み）。
