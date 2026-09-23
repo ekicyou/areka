@@ -661,7 +661,6 @@ mod tests;
 #[path = "choice_style_resolve_tests.rs"]
 mod style_resolve_tests;
 
-#[cfg(test)]
 /// 全行に同じ帯を配る試験の補助（`tests` と `decorate_tests` の共有・行ごとの帯の導出そのものは
 /// `choice_tests.rs` の `line_bands` の試験が見張る）。
 #[cfg(test)]
@@ -669,5 +668,6 @@ fn bands_of(extent: f32, offset: f32) -> Vec<LineBand> {
     vec![LineBand { extent, offset }; 16]
 }
 
+#[cfg(test)]
 #[path = "choice_decorate_tests.rs"]
 mod decorate_tests;

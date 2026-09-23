@@ -1829,7 +1829,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- rand 0.10.2
+- rand 0.10.3
 
 ```
 Copyright 2018 Developers of the Rand project

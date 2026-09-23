@@ -10,7 +10,7 @@
 - ライセンスのファイル名は `LICENSE` ではなく **`LICENSE-MIT`**。
 - `scripts/` は実在しない＝新規。既存の道具の置き場は `tools/perf`。
 - 本文の検証項目は 12 項目。roadmap の 3 か所が「11 項目」と書いていたのを、本日 12 へ直した。
-- **zip へ入れる既定バルーン 29 ファイルの出どころが変わる。** `areka-P0-default-balloon-nar-fold`（台帳 #42）が着地すると `vendors/sample_ghost/StayseeBalloon/` は消え、`StayseeBalloon.nar` になる。zip を作るスクリプトは `.nar` を展開して入れる（窓口 `sample_ghost_kit` か `areka-nar` を呼ぶ）。
+- **zip へ入れる既定バルーン 29 ファイルの出どころが変わった。** `areka-P0-default-balloon-nar-fold`（台帳 #42）が着地し、既定バルーンは展開フォルダではなく `vendors/sample_ghost/StayseeBalloon.nar` として保管されている（登記表 `SAMPLES` に `StayseeBalloon` の名前で登記済み）。zip を作るスクリプトは `.nar` を展開して入れる（窓口 `sample_ghost_kit` か `areka-nar` を呼ぶ）。
 - **片道だった申し送りを受け取る。** 完了 `areka-P0-shell-implicit-surface` は、開発者の目と手が要る 5 項目（⑴ 絵の外のクリックが背後の窓へ抜ける ⑵ 右クリックメニューの 1 項目目の表示 ⑶ `konnoyayame` の目の周りに四角い地色が出ない ⑷ 起動挨拶の字形が文字化けしない ⑸ `emo2` の撫で・メニュー・終了が適用前と同じに見える）を「本仕様の実機一周で見る」と書いたが、本文に該当の記述が 0 件だった。**第三者の手順の実機一周に、検体 3 体それぞれで ⑴ を、テンプレート 2 体で ⑶⑷ を含める。** ⑴ は `areka-P0-keycolor-clickthrough-coverage`（台帳 #53）が決定論テストで退行を止めるが、実機の確認は外さない。
 - 前提の spec は分割で増えた: `baseware-root-layout`・`app-lifetime-separation`・`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`update-engine`・`network-update`・`default-balloon-nar-fold`。
 
@@ -112,7 +112,7 @@ M1 の完成宣言（`.kiro/specs/completed/areka-P0-emo2-conformance-e2e/verifi
 
 ## 2026-09-19 追記（`default-balloon-bundle` からの申し送り＝zip の中身と README の出典文）
 
-- **zip に入れるもの**: 根の下の `balloon/StayseeBalloon/`。中身は `vendors/sample_ghost/StayseeBalloon/` の **29 ファイルを無改変で**（原作の `readme.txt` と `LICENSE` を含める・告知ファイルを中に足さない）。取り出したものが上流と同一であることは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の「ハッシュ一覧」の節（29 本の sha256）で確かめられる。
+- **zip に入れるもの**: 根の下の `balloon/StayseeBalloon/`。中身は `vendors/sample_ghost/StayseeBalloon.nar` を窓口 `sample_ghost_kit` で展開した `balloon/StayseeBalloon/` の **29 ファイルを無改変で**（原作の `readme.txt` と `LICENSE` を含める・告知ファイルを中に足さない）。取り出したものが上流と同一であることは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の「ハッシュ一覧」の節（29 本の sha256）で確かめられる。
 - **README の出典文は書き起こさず、そのまま写す**: 写す対象は `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md` の **§6.2「README へそのまま写す本文」の引用ブロック**である。行頭の引用記号（本文の行は `> `、ブロック内の空行は素の `>`）を落として貼ればよく、中身を書き直す必要はない。**§6.1 と §6.3 は写す対象ではない**（§6.1 は使い方と裏取りの対応表、§6.3 は確かめ方）。ブロックには作者名・CC0・出典 URL・配布サイト・同梱した版・取得コミットと日付に加え、既知の制限（半透明を前提に作られたバルーンだけが正しく表示されること・`.pna` は置いてあるかを見るだけで中身を表示に使わないこと・相方用の枠が 3 種類目と 4 種類目では本体用の絵を借りること）が入っている。
 - **「そのまま写せる」ことは §6.3 の判定 2 本で確かめられる**: ⑴ §6.2 の中に引用ブロックでも空行でもない行（＝写せない地の文）が 0 行であること、⑵ 引用ブロックの中に第三者が知らない内部の言葉が 0 件であること。どちらも打つ命令と、その 0 が探し方の壊れでないことを示す較正（同じ採り方を §6.1 に当てると 0 でない値が出る）が §6.3 に並べてある。写す前と写した後にそのまま打てる。
 - **`THIRD-PARTY-NOTICES.md` は手で編集しない。** 同ファイルは cargo の依存から自動生成されるもので、cargo 依存でない同梱資産は載らない（`default-balloon-bundle` は同ファイルを 1 行も変えていない）。第三者向けの出典表示は、上の本文を README へ写すことで果たす。
