@@ -307,7 +307,7 @@ fn assert_keyed_out_pixels_leave_the_mask(at: &str, mask: &AlphaMask, keyed: &[b
 
 | 段 | 差し替える箇所（定義） | 差し替えの内容（経路から外す形） | 本テストが赤になる理由 | 道連れで赤になる既存テスト（見込み・隠さず記録する） |
 |---|---|---|---|---|
-| 焼く | `crates/areka-emo-atlas/src/normalize.rs` の `Normalizer::normalize` の `(UseSelfAlpha::On, AlphaSource::KeyColor)` の腕にある `let key = Self::key_color(&img, params, has_pna);` | `let key: Option<[u8; 4]> = None;` に置き換える（腕の入力＝抜き色を無しに置き換え、腕は画素を変えずに返す。`bake` 側の `Normalizer::key_color` の呼び出しと `debug!` の記録はそのまま出る＝記録だけでは退行に気付けないことも同時に示す） | 抜かれるはずの全画素が α=255 のまま合成されマスクで「内」になる → 食い違い＝抜かれた画素の数（`R_POST_and_KOMAINU` 面 0 で 59,831 の目安）・3 面すべてで赤 | `normalize.rs` 内の抜き色の腕のテスト・`normalize_key_color_tests.rs`・`shell_target_template_tests.rs` の `r_post_and_komainu_shows_both_scopes_from_file_names_alone`（左上の α=0 の主張） |
+| 焼く | `crates/areka-emo-atlas/src/normalize.rs` の `Normalizer::normalize` の `(UseSelfAlpha::On, AlphaSource::KeyColor)` の腕にある `let key = Self::key_color(&img, params, has_pna);` | `let key: Option<[u8; 4]> = None;` に置き換える（腕の入力＝抜き色を無しに置き換え、腕は画素を変えずに返す。`bake` 側の `Normalizer::key_color` の呼び出しと `debug!` の記録はそのまま出る＝記録だけでは退行に気付けないことも同時に示す） | 抜かれるはずの全画素が α=255 のまま合成されマスクで「内」になる → 食い違い＝抜かれた画素の数（`R_POST_and_KOMAINU` 面 0 で 59,831 の目安）・3 面すべてで赤 | `normalize.rs` 内の抜き色の腕のテスト・`normalize_key_color_tests.rs`・`shell_target_template_tests.rs` の `r_post_and_komainu_shows_both_scopes_from_file_names_alone`（左上の α=0 の主張）。compose 側で `konnoyayame` を読む `base_image_tests.rs` の `konnoyayame_has_no_dangling_pattern_targets_with_images` は `surfaces.txt` の解析と画像名の一覧だけで焼かないので、道連れにならない |
 | 合成する | `crates/areka-emo-compose/src/blit.rs` の `pub(crate) fn execute` の転写ループにある `dst[di + 3] = source_over_channel(src_a, dst_a, inv_src_a);` | `dst[di + 3] = 255;` に置き換える（**転写した画素の α を捨てて不透明で書く**。転写はトリム後の矩形の内側しか書かないので不透明になるのは矩形の内側だけだが、矩形の内側にも抜かれた画素が 3 面すべてで在る＝`R_POST_and_KOMAINU` 面 0 で 24,959・面 10 で 8,712・`konnoyayame` 面 0 で 51,984 の目安） | 矩形の内側の抜かれた画素がマスクで「内」になる → 3 面すべてで赤 | `blit.rs` 内の SourceOver のテスト・`areka-emo-compose` の合成 golden 群・`presenter_budget_equivalence_tests.rs`（便宜経路も同じ `execute` を通るので両者は一致するが、`assert_expected_is_not_empty` の「マスクに hit と非 hit の両方が在る」で止まる） |
 | マスク | `crates/areka-emo-present/src/presenter/show.rs` の `apply_show` にある `target.budget.regenerate_mask(retired_mask, display.bytes(), …)` の第 2 引数 `display.bytes()` | `&vec![255u8; display.bytes().len()]` に置き換える（マスク生成へ表示バッファの代わりに全画素不透明のバッファを渡す） | 全画素が「内」になる → 食い違い＝抜かれた画素の数・3 面すべてで赤 | `presenter_budget_equivalence_tests.rs`（スロットのマスク・供給されたマスクの両方が独立再現と食い違う）。`budget_tests.rs` は `MaskRotation` を自前の画素で直に叩くので影響しない |
 
@@ -315,6 +315,7 @@ fn assert_keyed_out_pixels_leave_the_mask(at: &str, mask: &AlphaMask, keyed: &[b
 - 走らせ方（各差し替えごと）: `cargo test -p areka-emo-atlas`／`cargo test -p areka-emo-compose`／`cargo test -p areka-emo-present` の 3 本。道連れの赤はこの 3 本の出力にすべて現れる（`crates/areka` 側の `measure_template_tests.rs` は外形しか見ないので焼く段の差し替えでも緑のまま）。
 - 記録の形式（tasks.md の完了記録または検証報告・要件 2.2／2.4／5.4）: 差し替えごとに ⑴ ファイルと「その箇所が何を定義しているか」 ⑵ 置き換えた前後の 1 行 ⑶ 走らせたコマンド ⑷ 赤になった本テストの名前と失敗の文言（食い違いの件数と先頭 5 件） ⑸ 道連れで赤になった既存テストの一覧 ⑹ 戻した後に同じ 3 本を走らせて赤 0 であること（`git diff --stat` が空であることを添える）。
 - 差し替えは製品コードに残さない。作業は「差し替え → 走らせる → 記録 → `git checkout -- <ファイル>` で戻す → 走らせる → 赤 0 を記録」の順で 1 段ずつ行う。
+- `git checkout -- <ファイル>` で戻せるのは、差し替える 3 ファイル（`normalize.rs`・`blit.rs`・`show.rs`）に本仕様の意図した変更が 1 行も無いからである。実装中にこれらのファイルへ別の変更を置かない（置くと戻す手順ごと消える）。
 
 ### 相乗り 3 件（要件 3）
 
@@ -340,7 +341,7 @@ fn assert_keyed_out_pixels_leave_the_mask(at: &str, mask: &AlphaMask, keyed: &[b
 - 触る箇所（ロジックの変更 0 行）:
   - `crates/areka/examples/emo-present/setup.rs`: 定義 `fn build_shell_target(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, u32, u32)>`・呼び出し `let shell = build_shell_target(&decoder);`・説明文「log は build_shell_target 側で出済み」。
   - `crates/areka/examples/collision-probe/setup.rs`: 定義 `fn build_shell_target(shell_dir: &Path, decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable)>`・呼び出し `build_shell_target(&shell_dir, &decoder)`・説明文「emo-present donor `build_shell_target` と同経路」。
-  - `crates/areka/examples/collision-probe.rs`: 冒頭説明文の ``[`build_shell_target`]``（doc リンク）。
+  - `crates/areka/examples/collision-probe.rs`: 冒頭説明文の ``[`build_shell_target`]``（doc リンク）。リンクの形は変えない——指す先は改名の前後とも `collision-probe/setup.rs` の私有関数で、`cargo doc` は関門ではない（`structure.md`）。要件 3.3 が求めるのは旧名を指したまま残さないことである。
   - `crates/areka/examples/window-placement.rs`: `fn build_shell_material` の説明文「donor `build_shell_target` と同経路」。
 - 確認: `cargo build -p areka --examples` が通る。`grep -rn build_shell_target crates/areka/examples/` が 0 件になる。
 
