@@ -140,26 +140,25 @@
 
 番号は要件の「裁定候補」を引き継ぎ、本分析で新たに見つけた項目を続ける。
 
-1. **⑴ MD5 の出どころ**（要件 10.2／10.3 が分岐）。実測で加わった材料: ⒜ CNG は `BCryptHash`＋`BCRYPT_MD5_ALG_HANDLE`（擬似ハンドル）で **1 呼出・unsafe 20 行前後**、依存 0、`Win32_Security_Cryptography` の機能 1 行。⒝ `md-5 0.11.0` はレジストリに在り（`digest 0.11`・`cfg-if`）、`deny.toml` を通るが、推移的依存の全数は `cargo tree` の実測待ち・`tech.md` 登記と NOTICES の差分確認が要る。⒞ 自前は `crc32.rs` と同じ書き方で 100 行前後＋RFC 1321 の較正 7 本。**どの案でも決定論テストは「既知の入力 → 既知の 32 桁」の較正を 1 つ持つ**（要件の逐語）。
-2. **⑵ 既定の文字コード**。実測: ワークスペースの `GetACP` 呼出 0・`DefaultEncoding::Ansi → SHIFT_JIS` の固定写像が全層の前例。⒝ OS 既定を採る場合だけ `Win32_Globalization` の機能とロケールを読む 1 か所が増える。
-3. **⑶ `areka-nar` の再利用**。実測（§2.2）: 公開しても使えるのは `WorkArea` 80 行前後だけ・`names.rs` は `\` の扱いが逆・#52 と `crates/areka-nar/src/` を共有する。**Option B（⒝）を推す**。二重化する 80 行を将来まとめるなら追跡先を決める（先送りには実在の spec が要る）。
-4. **作業場所の置き方**（要件 4.1／4.8／5.5 の実体）。番人が OS の一時フォルダを禁じるので**対象フォルダの直下**（例 `<対象>/.update-work/<pid>-<連番>/`）が既定の候補。決めること: 名前・退避の下位フォルダ（`old/<相対パス>`）・他の走行の残骸の扱い（`prepare_shelf` と同じく「消せなければ結果に列挙・止めない」）・`delete.txt` の行がこのフォルダを指したときの扱い（確定後に自分で消すので拒否は不要だが、警告を出すか）。
+1. **⑴ MD5 の出どころ — 裁定済み（09-23）＝⒜ CNG**（要件 10.2 に織り込み・依存 0・`md-5` の推移的依存の実測は不要になった）。以下は材料の記録。実測で加わった材料: ⒜ CNG は `BCryptHash`＋`BCRYPT_MD5_ALG_HANDLE`（擬似ハンドル）で **1 呼出・unsafe 20 行前後**、依存 0、`Win32_Security_Cryptography` の機能 1 行。⒝ `md-5 0.11.0` はレジストリに在り（`digest 0.11`・`cfg-if`）、`deny.toml` を通るが、推移的依存の全数は `cargo tree` の実測待ち・`tech.md` 登記と NOTICES の差分確認が要る。⒞ 自前は `crc32.rs` と同じ書き方で 100 行前後＋RFC 1321 の較正 7 本。**どの案でも決定論テストは「既知の入力 → 既知の 32 桁」の較正を 1 つ持つ**（要件の逐語）。
+2. **⑵ 既定の文字コード — 裁定済み（09-23）＝Shift_JIS 固定**（要件 1.9・棚卸⑭仮裁定 8 ⑸「推奨で進めて構わない」）。実測: ワークスペースの `GetACP` 呼出 0・`DefaultEncoding::Ansi → SHIFT_JIS` の固定写像が全層の前例。⒝ OS 既定を採る場合だけ `Win32_Globalization` の機能とロケールを読む 1 か所が増える。
+3. **⑶ `areka-nar` の再利用 — 裁定済み（09-23）＝⒝ 新クレート内にファイル単位の確定を持つ（Option B・`crates/areka-nar/src/` との共有 0）**。実測（§2.2）: 公開しても使えるのは `WorkArea` 80 行前後だけ・`names.rs` は `\` の扱いが逆・#52 と `crates/areka-nar/src/` を共有する。棚の管理 80 行前後の二重化は「単位が違う仕組み」として許容し、まとめるための追跡 spec は切らない（要望が出た時点で起票）。
+4. **作業場所の置き方**（要件 4.1／4.8／5.5 の実体）。番人が OS の一時フォルダを禁じるので**対象フォルダの直下**（例 `<対象>/.update-work/<pid>-<連番>/`）が既定の候補。決めること: 名前・退避の下位フォルダ（`old/<相対パス>`）・他の走行の残骸の扱い（`prepare_shelf` と同じく「消せなければ結果に列挙・止めない」）・`delete.txt` の行がこのフォルダを指したときは無視して警告（要件 6.3 で決着）。**置き場は「対象フォルダ直下」と要件 4.1 で固定した**（残るのは名前と下位構造）。
 5. **ファイル単位の確定の手順**（要件 5.2／5.4）。候補: ⒜ 既存あり＝`rename(dest → old/rel)` → `rename(work/rel → dest)` の 2 手・既存なし＝1 手＋親フォルダの作成（作った親フォルダも戻しで消すか）。⒝ `ReplaceFileW`（OS の原子的置換・バックアップ名付き）。⒜ は `commit_one` の写しで前例が実証済み。**`std::fs::rename` はファイル相手だと既存を置き換える**ので、退避を先に置く順序が要る（§2.2）。
 6. **取得した内容の持ち方**（要件 4.1／4.7）。`areka-nar` は伸長済みの全内容をメモリに持つ。更新はシェルの絵が数十 MB になり得るので、**1 件ごとに作業場所へ書き、MD5 はバイト列から取ってから書く**（メモリに全件を溜めない）のが候補。上限（本文の最大サイズ）を持つかは設計。
 7. **取得の境界の型**（要件 3.1・3.5・3.6）。候補: `trait Fetch { fn get(&self, url: &str) -> Result<Vec<u8>, FetchError> }`・`FetchError` は閉じた語彙（`NotFound`・`Status(u16)`・`NameResolution`・`Connect`・`Timeout`・`Tls`・`Other(code)`）で WinHTTP のエラー番号（`ERROR_WINHTTP_*`）から写像。偽実装は「URL → バイト列の固定表＋失敗の注入」（要件 3.2）で test 側に置く（本番に `#[cfg(test)]` 以外の偽実装を置かない）。
 8. **WinHTTP の細部（研究項目・設計で決める）**: ⒜ 転送の方針＝WinHTTP の既定は `DISALLOW_HTTPS_TO_HTTP`（https → http の降格を拒む）。要件 3.4 の「3xx に追随」に降格を含めるか。⒝ プロキシ種別＝`AUTOMATIC_PROXY`（Windows 8.1 以降）か `DEFAULT_PROXY`。⒞ 時間切れの値（`WinHttpSetTimeouts` の 4 つ）。⒟ 本文の受け方（`WinHttpReadData` の反復・Content-Length を信じない）。⒠ `User-Agent` 文字列。⒡ セッション（`WinHttpOpen`）を一周で 1 つ持ち回るか。
 9. **パーセント符号化の復号後の文字コード**（要件 1.15・正典が沈黙）。全エントリが符号化済みのとき、復号した**バイト列**をローカルパスにするには文字コードが要る。候補: ⒜ UTF-8 として読み、失敗なら定義ファイルの文字コードへ後退／⒝ 定義ファイルの文字コードで読む／⒞ UTF-8 固定。URL 側の符号化を UTF-8 と決めた（要件の逐語）ことと対称にするなら ⒜ か ⒞。
-10. **`delete.txt` の文字コードの取り方**（要件 6.2「定義ファイルと同じ規則」の読み）。⒜ 定義ファイルで**解決した**文字コードを引き継ぐ／⒝ `delete.txt` 単独で再判定（正典の `delete.txt` に `charset` 行は無いので事実上「既定」）。どちらかを設計で明記する。
+10. **`delete.txt` の文字コードの取り方 — 決着（09-23）＝⒜ 定義ファイルで解決した文字コードを引き継ぐ**（要件 6.2 に明記。⒝ 単独で再判定は、`delete.txt` に `charset` 行が無いので事実上「常に既定」となり、`charset=UTF-8` の配布物で日本語パスが読めなくなる）。
 11. **進捗の観測者の形**（要件 7.1）。候補: ⒜ `enum Progress { … }`＋`&mut dyn FnMut(&Progress)`（最小）／⒝ `trait UpdateObserver` の 6 メソッド。`network-update` がイベントへ写すだけなので ⒜ で足りる見込み。
-12. **失敗の閉じた語彙の全数**（要件 7.4）。要件の 7 項目＋実測から加わる候補: 「更新先 URL が不正（`WinHttpCrackUrl` が拒む）」「対象フォルダが実在しない」「作業場所を作れない」「片付け失敗」。`refuse_reasons!` の型で 1 宣言に閉じ、`ALL_KINDS` の完全一致テストを写す。
-13. **定義ファイルを対象フォルダへ置く際の名前**（要件 5.3）。`updates.txt` へ後退した周では古い `updates2.dau` が対象に残り得る。残す（触らない＝要件 2.3 の精神）で足りるか。
+12. **失敗の閉じた語彙の全数**（要件 7.4）。要件 7.4 は 10 項目（09-23 に「対象フォルダが無い」「更新先 URL が不正」「作業場所を作れない」を足した＝要件 1.17 の入口の検査）。残る候補「片付け失敗」は結果の一覧（残骸）で表すので語彙に入れない見込み。`refuse_reasons!` の型で 1 宣言に閉じ、`ALL_KINDS` の完全一致テストを写す。
+13. **定義ファイルを対象フォルダへ置く際の名前**（要件 5.3）。`updates.txt` へ後退した周では古い `updates2.dau` が対象に残り得る。残す（触らない＝要件 2.3 の精神）で足りるか。差分 0 の周では定義ファイルを置かないことは要件 2.5 で固定した（09-23）。
 14. **実機の一周の器**（要件 9.7）。⒜ `crates/pilot/examples/update-engine/` に `std::net::TcpListener` の静的配信（60 行前後）＋`SampleRoot::acquire` の複製を対象にする／⒝ 外部のサーバ（`python -m http.server`）を手順に書く。⒜ は cargo だけで再現でき、README 3 幕に記録を残せる。
-15. **クレート名と登記**（要件 10.6）。`areka-update`（brief）で衝突無し。`structure.md` の 5 行の型・`tech.md`（⑴ が ⒝ のときだけ「意図的依存追加」、⒜⒞ のとき「`md-5` は採らなかった」）。
+15. **クレート名と登記**（要件 10.6）。`areka-update`（brief）で衝突無し。`structure.md` の 5 行の型・`tech.md` は Key Technical Decisions の 1 行（要件 10.2・09-23 決着）。
 
 ## 7. 設計フェーズへの申し送り（Research Needed）
 
 - WinHTTP: 転送方針の既定値・`AUTOMATIC_PROXY` の可用性・時間切れの推奨値・`WinHttpReadData` の反復と本文の上限（§6-8）。
-- `md-5 0.11` の推移的依存の全数（`cargo tree -p md-5` の実測）と NOTICES の差分（⑴ が ⒝ に決まったときだけ）。
 - `BCryptHash`＋擬似ハンドルの最小対応 OS（Windows 10 以降で可の見込み・製品の下限と照合）。
 - パーセント復号後の文字コード（§6-9）と、正典 `spec_update_file` の「URL エンコード」節の逐語の再確認（ukadoc MCP の id は親 brief の `ukadoc:spec_update_file:*` 系）。
 - `std::fs::rename` のファイル相手の置換の挙動（Windows・`MOVEFILE_REPLACE_EXISTING`）を設計の試験方針に逐語で書く。
@@ -170,4 +169,4 @@
 
 ## 9. 次の段
 
-`/kiro-requirements-discussion areka-P0-update-engine` で §6 の 15 項目を裁き、`/kiro-design areka-P0-update-engine` へ進む。
+`/kiro-requirements-discussion areka-P0-update-engine`（2026-09-23 実施）で §6 の ⑴⑵⑶・4（置き場）・10・12（3 語の追加）・13（差分 0 の周）を裁いた。残る 4（名前と下位構造）・5〜9・11・12（全数）・13（後退した周の古い `updates2.dau`）・14・15 は `/kiro-design areka-P0-update-engine` で決める。
