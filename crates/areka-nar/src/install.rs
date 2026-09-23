@@ -28,12 +28,16 @@ use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, SystemTime};
 
 /// 根の直下に掘る作業フォルダの棚。入れ替えが `rename` で済むよう根と同じボリュームに置く。
 const WORK: &str = ".nar-work";
 
 /// 同一プロセス内で単調増加する連番。プロセス間の一意性はプロセス識別子が担う。
 static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
+
+/// 巻き戻せなかった元の木を含む作業フォルダを片付けから守る期間（要件 2.7）。
+pub(crate) const SURVIVOR_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// 展開の要求。根の場所は呼び出し側が決める（要件 5.1）。
 pub struct InstallRequest<'a> {
@@ -79,6 +83,16 @@ impl WorkArea {
     /// 根が実在しないとき（根を勝手に作らない＝設計の事前条件）、この走行の番地を
     /// 空にできないとき、作業フォルダを作れないとき [`StageError`]。
     pub(crate) fn create(root: &Path) -> Result<WorkArea, StageError> {
+        WorkArea::create_at(root, SystemTime::now())
+    }
+
+    /// [`WorkArea::create`] の時刻を受け取る形。`now` は棚の保持の期限の判定にだけ使う
+    /// （テストが実際の日数を待たずに期限の内外を渡す口＝要件 2.10）。
+    ///
+    /// # Errors
+    ///
+    /// [`WorkArea::create`] と同じ。
+    pub(crate) fn create_at(root: &Path, now: SystemTime) -> Result<WorkArea, StageError> {
         if !root.is_dir() {
             return Err(StageError {
                 path: root.to_path_buf(),
@@ -86,12 +100,8 @@ impl WorkArea {
             });
         }
         let shelf = root.join(WORK);
-        let dir = shelf.join(format!(
-            "{}-{}",
-            std::process::id(),
-            NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
-        ));
-        let residue = prepare_shelf(&shelf, &dir)?;
+        let dir = next_address(&shelf, now, || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed));
+        let residue = prepare_shelf(&shelf, &dir, now)?;
         at(&dir, std::fs::create_dir_all(&dir))?;
         Ok(WorkArea { dir, residue })
     }
@@ -120,6 +130,43 @@ impl WorkArea {
     }
 }
 
+/// この走行の番地 `<プロセス識別子>-<連番>` を、保持中の項目を避けて取る。
+///
+/// 片付けは保持中の項目を消さないので、そこを自分の番地にすると前回の木が混ざる。
+/// `serial` は連番の供給源（本番はプロセス全体の連番、テストは 0 始まりの閉包）。
+fn next_address(shelf: &Path, now: SystemTime, mut serial: impl FnMut() -> u32) -> PathBuf {
+    loop {
+        let dir = shelf.join(format!("{}-{}", std::process::id(), serial()));
+        if !is_retained(&dir, now) {
+            return dir;
+        }
+    }
+}
+
+/// 棚の項目が、`old-` で始まるフォルダ（巻き戻せなかった元の木の退避先）を直下に持ち、
+/// 更新時刻から [`SURVIVOR_RETENTION`] 未満か（要件 2.7・2.8）。
+///
+/// 時刻の根拠は項目自身の更新時刻。`old-<k>` は `rename` で直下へ入るので、項目の直下が
+/// 最後に変わった時刻＝失敗した走行が最後に触った時刻になる（`old-<k>` 自身の更新時刻は
+/// 利用者のゴーストの最終更新時刻のまま）。読めない・時刻が取れない項目は偽で、今までどおり
+/// 消しにいく。時計が戻って更新時刻が `now` より未来なら経過 0 として真に倒す。
+fn is_retained(entry: &Path, now: SystemTime) -> bool {
+    let Ok(children) = std::fs::read_dir(entry) else {
+        return false;
+    };
+    let holds_survivor = children.flatten().any(|child| {
+        child.file_type().is_ok_and(|kind| kind.is_dir())
+            && child.file_name().to_string_lossy().starts_with("old-")
+    });
+    if !holds_survivor {
+        return false;
+    }
+    let Ok(modified) = std::fs::metadata(entry).and_then(|meta| meta.modified()) else {
+        return false;
+    };
+    now.duration_since(modified).unwrap_or(Duration::ZERO) < SURVIVOR_RETENTION
+}
+
 /// 棚の残骸を片付け、この走行の番地だけは必ず空にする。
 ///
 /// 他の走行の置き土産（`<別のプロセス識別子>-<連番>/`）は、この走行の木に混ざりようが
@@ -128,7 +175,11 @@ impl WorkArea {
 ///
 /// 一方、この走行の番地そのものが残っていて消せないのは（Windows のプロセス識別子の
 /// 再利用で起こり得る）前回の木が完成形に混ざる状態なので、そこだけは失敗を返す。
-fn prepare_shelf(shelf: &Path, dir: &Path) -> Result<Vec<PathBuf>, StageError> {
+///
+/// 保持の期限の内側にある元の木入りの項目（[`is_retained`]）は 1 バイトも触らず、
+/// 残っている物として返す（要件 2.7）。自分の番地は [`next_address`] が保持中の項目を
+/// 避けて取るので、ここへは来ない。
+fn prepare_shelf(shelf: &Path, dir: &Path, now: SystemTime) -> Result<Vec<PathBuf>, StageError> {
     let mut residue = Vec::new();
     let entries = match std::fs::read_dir(shelf) {
         Ok(entries) => entries,
@@ -148,6 +199,10 @@ fn prepare_shelf(shelf: &Path, dir: &Path) -> Result<Vec<PathBuf>, StageError> {
             continue;
         };
         let path = entry.path();
+        if is_retained(&path, now) {
+            residue.push(path);
+            continue;
+        }
         let removed = match entry.file_type() {
             Ok(kind) if kind.is_dir() => std::fs::remove_dir_all(&path),
             Ok(_) => std::fs::remove_file(&path),
