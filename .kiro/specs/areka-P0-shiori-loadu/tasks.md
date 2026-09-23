@@ -55,7 +55,7 @@
   - _Boundary: shiori_proxy_loadu_tests_
   - _Depends: 2, 3.3_
 
-- [ ] 5. 文書・台帳の追随
+- [x] 5. 文書・台帳の追随
 - [x] 5.1 (P) 裁定の登記・先ビルド手順・steering
   - `doc/COMPAT_ARCHITECTURE.md` §8 の表末尾に裁定 3 行（`loadu` だけの DLL を受け入れる／`loadu` が偽でも `load` へ落ちない／`load` へ落ちて表せない字があれば警告して渡す）を、正典の沈黙箇所と出典 spec 付きで足す
   - 親クレートの README の「手順（コピペ可）」に 2 本目の先ビルドを 1 行足す。親の e2e の doc コメントと panic 文言には足さない
@@ -65,7 +65,7 @@
   - _Boundary: COMPAT_ARCHITECTURE, host README, steering_
   - _Depends: 2_
 
-- [ ] 5.2 (P) 台帳の正本 → 写し → 生成物の撮り直し
+- [x] 5.2 (P) 台帳の正本 → 写し → 生成物の撮り直し
   - 正本 `briefing-shiori.md` の群 14c（判断の根拠の場所・共通 note の壊れ方／ログ／根拠の場所）・「今ある物」・「足りない物」⑴ を実装（`loadu` 優先・無ければ `load`・表せない字の警告・4 つの入口）に合わせて手で直し、2026-09-06 の経緯段落 2 か所には「（2026-09-23 以降は 4 つ全てを引く）」を足す
   - 次に写しの台帳 `shiori.toml` の冒頭注釈（群 14c）と `ukadoc:spec_dll` の `note` を正本に揃える。`status` は `degraded` のまま
   - 生成器で `report/shiori.md`・`report/summary.md` を撮り直し（手で直さない）、正本を `loadu` と「3 つ」で grep して事実と違う文が残っていないことを確かめる
