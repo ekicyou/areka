@@ -55,7 +55,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.4_
   - _Boundary: readme_
 
-- [ ] 3. 全体の回帰と静的な確認
+- [x] 3. 全体の回帰と静的な確認
   - `cargo test -p wintf` と `cargo test -p areka` が緑で、既存テストの本文の変更は要件 3.5 の除外 2 本と後片付け 1 か所だけ（`git diff` で確認。2.2 の預かりヘルパの委譲はテストの本文ではないので許容）
   - `rg reset_to_idle crates/ docs/` が 0 件
   - `rg "1 ?フレーム"` が状態の説明（`state/mod.rs`）・判定関数の説明（`controller.rs`）・`docs/click_through.md` の「ドラッグ中の透過抑止」の段落で 0 件（`runtime/mod.rs` の別の文脈は対象外）
