@@ -352,6 +352,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Location**: `/crates/shiori-host32-testdll/`・`/crates/shiori4-testdll/`
 **Purpose**: 実 SHIORI 境界を踏む決定論テストの fixture DLL 群（いずれも cdylib・テスト専用）:
 - **`shiori-host32-testdll`**: 最小 SHIORI DLL fixture（出力名 `shiori.dll`・**i686**）。pasta 非依存の決定的 LOAD／request E2E を成立させる host-32 トラック所有の最小実装（flat-C の `load`/`unload`/`request` 3 エクスポート・署名正確源は `vendors/pasta` の windows.rs）。
+- **`shiori-host32-testdll-loadu`**（`/crates/shiori-host32-testdll-loadu/`）: 2 本目の最小 SHIORI DLL fixture（出力名 `shiori_loadu.dll`・**i686**）。flat-C の `loadu`/`load`/`unload`/`request` 4 エクスポートで、初期化の入口のどちらが呼ばれ何を受け取ったかを env `HOST32_TESTDLL_LOADU_RECORD` のファイルへ記録し、`HOST32_TESTDLL_LOADU_FAIL=1` で `loadu` が偽を返す。helper の i686 限定テスト（`crates/shiori-host32-helper/src/shiori_proxy_loadu_tests.rs`）だけが読む（所在は env `HOST32_TESTDLL_LOADU_DLL` で上書き可）。既存の `shiori-host32-testdll` は無改変のまま並べる（`areka-P0-shiori-loadu`）。
 - **`shiori4-testdll`**: **x64** SHIORI4 決定論テスト DLL。正典イベント集合へ実 emo2 pasta 採取のゴールデンスナップショットを決定論 replay する「脳」（ReplayBrain・`shiori_factory` export）。
 
 ### Pilot (Two-Tunnel Knowledge) Crate

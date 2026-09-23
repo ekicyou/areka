@@ -43,7 +43,7 @@
 //! - [`a_fixed_name_built_from_the_entry_point_is_detected`] ほか — 合成入力で、入口から
 //!   固定名を組む式が実際に当たること（実ファイルを汚さずに済む）。
 //! - [`every_exception_still_has_a_real_hit`] — 表の全項目に**今も**当たりがあること。
-//!   列挙が空振りしていれば 16 件すべてが「実体無し」になって必ず赤になる。
+//!   列挙が空振りしていれば表の全件が「実体無し」になって必ず赤になる。
 //!   （この検査は飾りではない——タスク 10.7 が `areka-sylphya/src/persist/io.rs` を窓口へ
 //!   寄せた直後、表に残っていた同ファイルの項目をこの検査が名指しで赤にした。）
 //! - [`the_measurement_is_not_vacuous_and_matches_the_allow_table`] — 実測した集合が表と
@@ -132,7 +132,7 @@ enum Why {
 ///
 /// 本表が数えるのは「窓口の `src/` の外で入口を叩くファイル」——実測 16 ファイル・20 箇所、
 /// 内訳は一意化 13・読み出しのみ 2・固定名が仕様 1。**総数がたまたま同じ 16 なので取り違え
-/// やすい**が別の集合であり、「一意化している」と名乗る項目は 13 件しかない。起草の 16 を
+/// やすい**が別の集合であり、初期値で「一意化している」と名乗る項目は 13 件しかない。起草の 16 を
 /// [`PROCESS_UNIQUE_COUNT`] へそのまま写してはならない。
 ///
 /// なお 10.7 の**前**の実測は 17 ファイル・23 箇所だった。差の 1 ファイル・3 箇所は
@@ -231,6 +231,25 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         Why::ProcessUnique,
         "プロセス識別子＋単調連番で一意化済み。要件 12.2 の移行対象外",
     ),
+    // ── ⒜ の追加 2 件（2026-09-24・areka-P0-shiori-loadu）─────────────────────
+    //
+    // 窓口へ寄せるには両 crate に temp-path-kit の dev-dependency を足すことになるが、
+    // 同仕様の要件 9.1 が新しい依存クレートを 0 件と定め、2 本目の偽 DLL の依存は既存の
+    // 偽 DLL と同じものに限ると設計が定めている。どちらも名前にプロセス識別子と時刻の
+    // ナノ秒を織り込んでおり（兄弟の main_loopback_tests.rs・既存の偽 DLL の作法と同型）、
+    // 衝突の観点では既に正しいので表に載せる。
+    (
+        "crates/shiori-host32-helper/src/shiori_proxy_loadu_tests.rs",
+        Why::ProcessUnique,
+        "プロセス識別子＋時刻のナノ秒で一意化済み。窓口へ寄せると helper に新しい dev-dependency が要り、\
+         areka-P0-shiori-loadu 要件 9.1（新しい依存 0 件）と衝突する",
+    ),
+    (
+        "crates/shiori-host32-testdll-loadu/src/lib.rs",
+        Why::ProcessUnique,
+        "偽 DLL 自身の単体テスト（#[cfg(test)] 内）。プロセス識別子＋時刻のナノ秒で一意化済み。依存は既存の \
+         偽 DLL と同じものに限る（areka-P0-shiori-loadu 要件 9.1・設計）ので窓口へは寄せない",
+    ),
     // ── ⒝ 読み出しのみの 2 件（要件 12.2・設計 C8 が名指しで対象外と定めた）───────
     (
         "crates/areka/src/placement/placement_monitor_tests.rs",
@@ -256,13 +275,13 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 16;
+const ALLOWED_COUNT: usize = 18;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
 /// という書き換えが通ってしまう。3 つに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 13;
+const PROCESS_UNIQUE_COUNT: usize = 15;
 /// 同上（読み出しのみ）。
 const READ_ONLY_COUNT: usize = 2;
 /// 同上（固定名が仕様）。
