@@ -136,7 +136,7 @@ graph TB
 **wintf（状態の契約）**
 - `crates/wintf/src/ecs/drag/state/mod.rs` — ⑴ module doc と `DragState` の型 doc・5 variant の doc を「入る出来事／出る出来事」で書き直す（§Components「DragState の契約」の表の文言）。⑵ `DragStateSnapshot` の型 doc に「各 variant の意味は `DragState` と同じ」を 1 行足す。⑶ `impl DragState` と `impl DragStateSnapshot` に `is_button_held` を各 1 つ。⑷ `start_preparing` の判定式を `state.is_button_held()` へ。⑸ `reset_to_idle` の定義を削除。
 - `crates/wintf/src/ecs/drag/mod.rs` — `pub use state::{…}` から `reset_to_idle` を外す。
-- `crates/wintf/src/ecs/pointer/nchittest_cache.rs` — `cached_nchittest` の `read_drag_state(|state| matches!(…))` を `read_drag_state(|state| state.is_button_held())` へ。ローカル変数名は `is_dragging` から `button_held` へ（`Preparing` は「ドラッグ中」ではないので名前も揃える）。module doc と `HTTRANSPARENT` の定数 doc の「ドラッグ中は DragState ガードで」は「左ボタンを押している間は」へ。
+- `crates/wintf/src/ecs/pointer/nchittest_cache.rs` — `cached_nchittest` の `read_drag_state(|state| matches!(…))` を `read_drag_state(|state| state.is_button_held())` へ。ローカル変数名は `is_dragging` から `button_held` へ（`Preparing` は「ドラッグ中」ではないので名前も揃える）。`HTTRANSPARENT` の定数 doc 1 か所と `cached_nchittest` の中のコメント 2 か所（「DragState ガード: ドラッグ中は透明領域でも…」「ドラッグ中は DragState ガードで…」）の「ドラッグ中」は「左ボタンを押している間」へ（module doc にこの語は無い）。
 - `crates/wintf/src/ecs/clickthrough/controller.rs` — `resolve_transition` の doc の判定順序 1 で `JustStarted` を「直前 1 フレーム」と書く箇所を「閾値到達から次の tick の `dispatch_drag_events` まで」へ。判定式は触らない。
 - `docs/click_through.md` — 「ドラッグ中の透過抑止」の段落の同じ語を同じ文言へ。
 
@@ -383,7 +383,7 @@ impl DragStateSnapshot {
 
 **Responsibilities & Constraints**
 - `state/tests.rs`: `test_reset_to_idle_only_from_just_ended`・`test_reset_to_idle_noop_when_preparing` を区切りコメント（`// --- reset_to_idle ---`）ごと削除（陳腐化）。
-- `controller_tests.rs` の `eval_honors_drag_snapshot_just_ended_reconverges`: 後片付けの `reset_to_idle();` を `update_drag_state(|s| *s = DragState::Idle);` へ。`JustEnded` は `CaptureGuard` を持たないので借用の中で代入しても `ReleaseCapture` は走らない（`trigger_flow_tests.rs` の `ResetDragState` と同じ作法・そこは `end_dragging` で戻すが、ここは `JustEnded` からなので直接代入が正しい）。`use` 行から `reset_to_idle` を外す。確かめる内容（`JustEnded` で現在の当たりへ再収束）は変えない。
+- `controller_tests.rs` の `eval_honors_drag_snapshot_just_ended_reconverges`: 後片付けの `reset_to_idle();` を `update_drag_state(|s| *s = DragState::Idle);` へ。`JustEnded` は `CaptureGuard` を持たないので借用の中で代入しても `ReleaseCapture` は走らない（`trigger_flow_tests.rs` の `ResetDragState` は `end_dragging` で捕捉を借用の外へ出してから `update_drag_state` で `Idle` を代入する 2 段。ここは後片付けの時点で既に `JustEnded`＝捕捉なしなので、代入の 1 段だけで同じ作法になる）。`use` 行から `reset_to_idle` を外す。確かめる内容（`JustEnded` で現在の当たりへ再収束）は変えない。
 - それ以外の既存テストは 1 本も変えない。
 
 ### areka: 相乗り
