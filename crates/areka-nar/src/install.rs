@@ -21,7 +21,7 @@
 //! 見ない。兄弟テストは `refresh,1` を書いたサプリメントを**マニフェストから通して**
 //! 重ね置きになることを確かめる。
 
-use crate::error::{ExistingState, InstalledElement, IoPhase, ManifestWarning};
+use crate::error::{ExistingState, InstalledElement, IoPhase, ManifestWarning, SurvivingTree};
 use crate::manifest::{ExistingPolicy, InstallManifest};
 use crate::plan::Placement;
 use std::ffi::OsStr;
@@ -296,6 +296,15 @@ pub(crate) struct CommitError {
     /// 失敗までに確定した配置。`rolled_back` が真ならこれらは元へ戻っている。
     pub committed: Vec<InstalledElement>,
     pub rolled_back: bool,
+    /// 元へ戻せなかった宛先ごとの、元の木が残っている退避先。`rolled_back` が真なら空。
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "公開面への写し（lib.rs の place・タスク 4.1）が読むまでの間"
+        )
+    )]
+    pub survivors: Vec<SurvivingTree>,
 }
 
 /// 確定済みの配置を元へ戻す 1 手。確定した順に積み、逆順に解く。
@@ -410,14 +419,17 @@ fn roll_back(
     committed: Vec<InstalledElement>,
     failure: StageError,
 ) -> CommitError {
-    match unwind(undo) {
-        // 全て元へ戻った。報告するのは確定を止めた失敗そのもの。
+    let Unwound { stuck, survivors } = unwind(undo);
+    match stuck {
+        // 全て元へ戻った。報告するのは確定を止めた失敗そのもの。躓きが無いので
+        // 生き残りも集まっていない（空）。
         None => CommitError {
             phase: IoPhase::Commit,
             path: failure.path,
             source: failure.source,
             committed,
             rolled_back: true,
+            survivors,
         },
         // 戻せなかった。呼び手が手を打てるのは戻せなかった宛先なので、そちらを名指す。
         Some(stuck) => CommitError {
@@ -426,15 +438,30 @@ fn roll_back(
             source: stuck.source,
             committed,
             rolled_back: false,
+            survivors,
         },
     }
 }
 
-/// 積んだ手を逆順に解く。最初に戻せなかった宛先と理由を返す（戻せていれば `None`）。
+/// [`unwind`] の結果。
+struct Unwound {
+    /// 最初に戻せなかった宛先と理由（戻せていれば `None`）。
+    stuck: Option<StageError>,
+    /// 戻せなかった「元へ戻す」手ごとの、元の木が残っている退避先。
+    survivors: Vec<SurvivingTree>,
+}
+
+/// 積んだ手を逆順に解く。最初に戻せなかった宛先と、元の木の生き残りを全て返す。
 ///
 /// 1 つ戻せなくても残りは戻す。戻せる宛先を巻き添えで壊さないため。
-fn unwind(undo: Vec<Undo>) -> Option<StageError> {
+///
+/// 生き残りに載せるのは、躓いた「元へ戻す」手のうち退避先がフォルダとして実在するもの
+/// だけ（要件 2.1〜2.3）。どちらの手で躓いても退避先には触れていないので、元の木は
+/// そのまま残っている。新規の宛先を消す手の躓きは、宛先がもともと無かった＝元の木が
+/// 無いので載せない。
+fn unwind(undo: Vec<Undo>) -> Unwound {
     let mut stuck = None;
+    let mut survivors = Vec::new();
     for step in undo.into_iter().rev() {
         let (dest, result) = match step {
             Undo::Remove(dest) => {
@@ -445,6 +472,12 @@ fn unwind(undo: Vec<Undo>) -> Option<StageError> {
                 // 新しく置いた木が在れば先に退ける。2 手目の `rename` が失敗した直後は
                 // 宛先が空いているので、その場合は何もせずに戻しへ進む。
                 let result = remove_tree(&dest).and_then(|()| std::fs::rename(&old, &dest));
+                if result.is_err() && old.is_dir() {
+                    survivors.push(SurvivingTree {
+                        destination: dest.clone(),
+                        path: old,
+                    });
+                }
                 (dest, result)
             }
         };
@@ -452,7 +485,7 @@ fn unwind(undo: Vec<Undo>) -> Option<StageError> {
             stuck.get_or_insert(StageError { path: dest, source });
         }
     }
-    stuck
+    Unwound { stuck, survivors }
 }
 
 /// 木ごと消す。既に無いのは消えている状態として通す。
