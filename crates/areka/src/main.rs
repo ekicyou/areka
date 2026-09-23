@@ -70,6 +70,10 @@ mod emo2_boot;
 /// 薄い配線層。現状は `throttle`（送出間引きの純粋判定・task 2.4）のみ。ポインタハンドラ結線と
 /// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
 mod input_events;
+
+/// 終了の統合操作（areka-P0-app-lifetime-separation）。全窓を閉じてから終了を指示する
+/// `quit_app` と出所の語彙 `ExitOrigin` を持つ。
+mod app_exit;
 mod menu;
 mod readme;
 
@@ -900,8 +904,8 @@ mod startup_window_tests;
 ///
 /// シーム結線そのもの（`open_startup_window`）は生きた `WinApp` を要するため、
 /// TDD は headless で駆動可能な決定論部品——フォールバック分類
-/// `is_benign_placement_error` と smoke 自動 close の despawn 標的
-/// `despawn_smoke_targets`——で回す。結線の実証は実プロセス smoke
+/// `is_benign_placement_error`——で回す（全窓破棄の標的のテストは `app_exit_tests.rs`
+/// へ移した）。結線の実証は実プロセス smoke
 /// （`tests/smoke_boot_loop_exit.rs`・両方向）が担う。
 #[cfg(test)]
 #[path = "main_seam_tests.rs"]
