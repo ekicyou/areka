@@ -233,7 +233,11 @@ fn open_from_world_skips_a_missing_file_with_a_warning_and_no_os_call() {
         "開いた記録も 0 行: {lines:?}"
     );
     let skipped = lines_of(&lines, "readme_open_skipped_missing");
-    assert_eq!(skipped.len(), 1, "要求 1 件につき 1 行（要件 5.1）: {lines:?}");
+    assert_eq!(
+        skipped.len(),
+        1,
+        "要求 1 件につき 1 行（要件 5.1）: {lines:?}"
+    );
     assert!(
         skipped[0].contains("level=WARN") && skipped[0].contains("readme.txt"),
         "warn! でパスを添える（要件 5.1）: {skipped:?}"
