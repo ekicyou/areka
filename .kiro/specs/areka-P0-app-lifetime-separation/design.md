@@ -148,8 +148,7 @@ crates/wintf/src/ecs/
 crates/areka/src/
 ├── app_exit.rs            # 新規: ExitOrigin・quit_app・私有 despawn_app_windows・on_ghost_os_close・on_dummy_os_close・attach_os_close_request（system）
 ├── app_exit_tests.rs      # 新規: main_seam_tests.rs から移す 3 本（判断は不変・関数名と打ち切り行の相名 [quit_app] だけ追随）＋ on_ghost_os_close のテスト 1 本（新）
-├── main.rs                # 変更: mod app_exit・with_exit_policy(Explicit)・on_dummy_pressed と smoke クロージャの 1 行化・despawn_smoke_targets の削除・spawn_dummy_window に OnCloseRequest(on_dummy_os_close) を 1 行・doc の追随
-├── emo2_boot/mod.rs       # 変更: attach_os_close_request を register_ghost_windows_click_through の隣へ登録（1 行）
+├── main.rs                # 変更: mod app_exit・with_exit_policy(Explicit)・on_dummy_pressed と smoke クロージャの 1 行化・despawn_smoke_targets の削除・spawn_dummy_window に OnCloseRequest(on_dummy_os_close) を 1 行・open_startup_window で attach_os_close_request を register_ghost_windows_click_through の隣（FrameFinalize）へ登録・doc の追随
 ├── main_seam_tests.rs     # 変更: despawn_smoke_targets_* 3 本を app_exit_tests.rs へ移す
 ├── main_startup_window_tests.rs  # 変更: ダミー窓ダブルクリックの検査へ受け口を挿す
 ├── emo2_boot/frame.rs     # 変更: run_ghost_quit_phase が quit_app を呼ぶ・import と doc の追随
@@ -169,7 +168,7 @@ crates/areka/tests/
 - `crates/wintf/src/ecs/window_proc/lifecycle.rs` — `fn WM_CLOSE` の生存 entity の腕を「`OnCloseRequest` があれば `(cb.0)(world, entity)` を呼ぶ／無ければ従来どおり `despawn`」に。破棄済み entity の打ち切り（`DESPAWNED_SKIP_TAG`）と戻り値 `Some(LRESULT(0))` は不変。呼ぶ側で `info!(event = "os_close_request", entity, "[WM_CLOSE] 閉鎖要求を利用側の関数へ渡す")` を 1 行。
 - `crates/areka/src/app_exit.rs`（新規） — 統合操作と、OS の閉鎖要求の受け手 2 つ・差し込み system。
 - `crates/areka/src/main.rs` — `WinApp::with_exit_policy(ExitPolicy::Explicit)?`（**段取りの最後に入れる 1 行**）。`on_dummy_pressed`・smoke クロージャは `quit_app` を 1 行で呼ぶ。`despawn_smoke_targets` は削除。`spawn_dummy_window` の bundle に `OnCloseRequest(app_exit::on_dummy_os_close)` を 1 行。行数は 958 から減る（4.5）。
-- `crates/areka/src/emo2_boot/mod.rs` — `app_exit::attach_os_close_request` を `register_ghost_windows_click_through` と同じ段へ登録（1 行）。
+- `crates/areka/src/main.rs` の `fn open_startup_window`（準備成功の腕） — `app_exit::attach_os_close_request` を `register_ghost_windows_click_through` と同じ `FrameFinalize` 段へ登録（`add_systems` 1 呼び）。※設計初版は登録先を `emo2_boot/mod.rs` と書いたが、クリック透過の登録は実物では `open_startup_window` に在る（タスク生成時の独立レビューで判明・2026-09-23 訂正）。
 - `crates/areka/src/emo2_boot/frame.rs` — `run_ghost_quit_phase` の `despawn_ghost_windows(world)` を `quit_app(world, ExitOrigin::KanadeStopped(stopped.cause))` へ。`ghost_quit`／`ghost_quit_no_windows` の記録は据え置き。
 - `crates/areka/src/input_events/mod.rs` — 強制退避の腕の `despawn_ghost_windows(world)` を `quit_app(world, ExitOrigin::Escape)` へ。`on_char_pointer_pressed` の doc と腕のコメントにある「window-close funnel（`run()` 復帰→main shutdown→`ForceQuit` 系列）」を「`quit_app`（全窓破棄＋終了の指示）→ `run()` 復帰」へ。
 - **doc 追随の全数**（タスク生成で取りこぼさないための一覧）: `emo2_boot/frame.rs`（`run_ghost_quit_phase` の doc）、`input_events/mod.rs`（上記）、`main.rs`（`on_dummy_pressed` の doc・`app.run()` 直前のコメント）、`placement/spawn.rs`（モジュール doc の「全 `GhostWindowMarker` despawn→window-close funnel→`run()` 正常復帰」の行）、`placement/spawn_cleanup_tests.rs`（doc 1 行）、`tests/smoke_boot_loop_exit.rs`（モジュール doc「自動 despawn → `WindowRegistry` 空遷移 → `run()` 復帰」の行）。いずれも本文の判断は変えない。
@@ -476,7 +475,7 @@ pub struct OnCloseRequest(pub fn(world: &mut World, entity: Entity));
 - `crates/areka/src/app_exit.rs` に置く（終了の入口は 1 モジュールに集める）。
 - `on_ghost_os_close(world, entity)`: entity の `CharWindowMarker { scope }` か `BalloonWindowMarker { scope }` からスコープを読み（どちらも無ければ `warn!(event = "os_close_unknown_window")` で戻る）、`world.get_non_send_mut::<MouseWiring>()` が在れば `info!(event = "os_close_request", scope, kind = "ghost")` の上で `send_close_request(CloseReason::User { scope })`。無ければ `warn!(event = "os_close_no_mouse_wiring", scope)` で戻る（`menu::request_close` と同じ扱い・3.10）。**窓は消さない**——閉じるのは終了の握手が終わったことを受けた `run_ghost_quit_phase` → `quit_app`。
 - `on_dummy_os_close(world, _entity)`: `info!(event = "os_close_request", kind = "dummy")` の上で `quit_app(world, ExitOrigin::OsClose)`。
-- `attach_os_close_request`: `Query<Entity, (With<GhostWindowMarker>, Added<WindowHandle>)>` で HWND が付いた瞬間のゴースト窓へ `OnCloseRequest(on_ghost_os_close)` を挿す system。`register_ghost_windows_click_through`（`placement/spawn.rs`）と同じ捉え方で、同じ段（`emo2_boot/mod.rs`）に登録する。`placement` が `crate::` パスを持てないため差し込みは `placement` の外で行う。
+- `attach_os_close_request`: `Query<Entity, (With<GhostWindowMarker>, Added<WindowHandle>)>` で HWND が付いた瞬間のゴースト窓へ `OnCloseRequest(on_ghost_os_close)` を挿す system。`register_ghost_windows_click_through`（`placement/spawn.rs`）と同じ捉え方で、同じ段（`main.rs` の `open_startup_window` が結線する `FrameFinalize`）に登録する。`placement` が `crate::` パスを持てないため差し込みは `placement` の外で行う。
 - ダミー窓は `main.rs` の `spawn_dummy_window` が bundle に `OnCloseRequest(app_exit::on_dummy_os_close)` を直接足す（`main.rs` は `crate::` パスを持てる）。
 
 **Contracts**: Service [x]
@@ -583,7 +582,7 @@ fn despawn_app_windows(world: &mut World) -> usize;   // 私有
 | 3 | 同上 | `exit_requested_before_the_loop_starts_completes_immediately` | `request_exit()` を先に呼んでから `block_on(shutdown_future(exit))` が戻る | arm → 確認の順が無く、リスナ不在の通知を失う（1.5） |
 | 4 | 同上 | `second_request_is_ignored_and_the_future_still_completes` | `request_exit()` を 2 回呼んでも panic せず `is_requested()` は真のまま・`block_on(shutdown_future(exit))` が戻る | 2 回目で失敗や二重処理を起こす（1.4） |
 | 5 | `crates/wintf/src/ecs/window_proc/lifecycle_tests.rs`（新規・兄弟ファイル） | `wm_close_calls_on_close_request_instead_of_despawning` | `OnCloseRequest(記録する関数)` を付けた entity と付けない entity の 2 つを World に置き、両方へ `fn WM_CLOSE` を呼ぶ → 付けた方は生存したまま関数が 1 回呼ばれ、付けない方は despawn される。戻り値は両方 `Some(LRESULT(0))`。World の器は `window_pos_tests.rs` と同じ | 分岐が無く両方 despawn する／両方呼ぶ（2.10・2.11） |
-| 6 | `crates/areka/src/app_exit_tests.rs` | `ghost_os_close_sends_close_request_with_the_window_scope` | `input_events_tests.rs` の `world_with_wiring`（テスト用 Sender）と同じ器に `CharWindowMarker { scope: 1 }` の窓を置き `on_ghost_os_close` → 受信側に `KanadeMsg::CloseRequest { reason: User { scope: 1 } }` が 1 件・窓 entity は生存。対照アーム: `MouseWiring` 無しの素の World では送信 0 件で panic しない（3.10） | スコープを落とす／窓を消してしまう／不在で落ちる（3.9・3.10） |
+| 6 | `crates/areka/src/app_exit_tests.rs` | `ghost_os_close_sends_close_request_with_the_window_scope` | `MouseWiring::new(tx, RegionSource::Mock(..))`（`pub(crate)`・`input_events_tests.rs` の `world_with_wiring` は私有なので流用せず `app_exit_tests.rs` で直接組む）を挿した World に `CharWindowMarker { scope: 1 }` の窓を置き `on_ghost_os_close` → 受信側に `KanadeMsg::CloseRequest { reason: User { scope: 1 } }` が 1 件・窓 entity は生存。対照アーム: `MouseWiring` 無しの素の World では送信 0 件で panic しない（3.10） | スコープを落とす／窓を消してしまう／不在で落ちる（3.9・3.10） |
 
 - 1 の対照は既存の `close_to_reconcile_to_shutdown_chain_wakes_listener`（既定ポリシーで同じ構築のまま listener が起きる）。同じ構造で結論だけが逆なので、両方が緑なら分岐が効いている。
 - 2・3 は `block_on` を使うが実窓は作らない。既存の `block_on_ready_future_returns_value` が同じ道具で通っている。
@@ -631,7 +630,7 @@ Select-String -Path .\areka-smoke.log -Pattern 'event="app_exit"|\[AppExit\] exi
 - `areka-P0-baseware-root-layout`: 本仕様が `main.rs` から `despawn_smoke_targets` と `on_dummy_pressed` の本体を出すので、相手が触る `main()` の根の解決との距離が広がる。`tests/smoke_boot_loop_exit.rs` の目印（マーカー）は変えてよいが、**60 秒の見張りと終了コード 0 の判定は残す**（要件の Adjacent expectations に転記済み）。相手の brief への追記は本仕様の完了時（roadmap の干渉台帳の更新と同時）。
 - `areka-P0-ghost-shell-balloon-switch`: 本仕様は「窓を全部閉じるが終了しない」操作を作らない。後続は `ExitPolicy::Explicit` の上に自分の操作（例: ゴースト窓だけを閉じて開き直す）を足し、その操作は `quit_app` を通らない。
 - キーボード入力を持つ spec（A1 ② `wintf-drag-state-rest-contract` が `ecs/window_proc/keyboard.rs` に触る）: 本仕様は Alt＋F4 を **`WM_CLOSE` として受けた後**だけを定める。Alt＋F4 のキー入力そのものを `OnKeyPress` として SHIORI へ渡すかは相手の判断。`DefWindowProc` が `WM_SYSKEYDOWN`（F4）を `WM_SYSCOMMAND SC_CLOSE` → `WM_CLOSE` に変えるので、キー処理で既定手続きを止めると本仕様の経路には来ない——相手がそうするなら申し送りが要る。
-- 干渉台帳（A1）への追記（完了時）: 本仕様は登記済みの 5 ファイルに加え `crates/wintf/src/runtime/message_loop.rs`・`crates/wintf/src/ecs/window/components.rs`・`crates/wintf/src/ecs/window_proc/lifecycle.rs`（＋新規 `lifecycle_tests.rs`）・`crates/areka/src/placement/spawn.rs`・`crates/areka/src/emo2_boot/mod.rs`・新規 `crates/areka/src/app_exit{,_tests}.rs` に触る。A1 ①〜④⑥⑦の登記ファイルとの重なりは 0 のまま（② は `ecs/window_proc/{mouse_click,keyboard}.rs`・本仕様は `lifecycle.rs`）。
+- 干渉台帳（A1）への追記（完了時）: 本仕様は登記済みの 5 ファイルに加え `crates/wintf/src/runtime/message_loop.rs`・`crates/wintf/src/ecs/window/components.rs`・`crates/wintf/src/ecs/window_proc/lifecycle.rs`（＋新規 `lifecycle_tests.rs`）・`crates/areka/src/placement/spawn.rs`・新規 `crates/areka/src/app_exit{,_tests}.rs` に触る。A1 ①〜④⑥⑦の登記ファイルとの重なりは 0 のまま（② は `ecs/window_proc/{mouse_click,keyboard}.rs`・本仕様は `lifecycle.rs`）。
 
 ## §8 設計判断の一覧（`research.md` §6 の項目番号）
 
