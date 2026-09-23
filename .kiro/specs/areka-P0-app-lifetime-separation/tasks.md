@@ -86,7 +86,7 @@
   - _Requirements: 1.1, 1.2, 3.8, 4.1, 4.2, 4.3, 4.4, 4.5, 5.4, 6.4_
   - _Depends: 1.3, 3.3, 3.4_
 
-- [ ] 5. 実機で終了操作の見え方を確かめる
+- [x] 5. 実機で終了操作の見え方を確かめる
   - `RUST_LOG=info,wintf::runtime=debug`・引数は絶対パス・`Start-Process -PassThru` で起動し、その PID だけを見る（他のプロセスは止めない）
   - 走行 1（smoke の自動終了）: `origin=Smoke` の記録 → 指示の記録 → 後始末の記録の順に出て、プロセスが終了コード 0 で終わり、`app_exit_unwired` が 0 行
   - 走行 2（メニューの「終了」）: 別れの台詞の後に `origin=KanadeStopped(Quit)` → 指示の記録が出て、プロセスが終わる
@@ -105,5 +105,5 @@
   - 走行 1（smoke 8 秒）: `origin=Smoke closed=4` → `[AppExit] exit requested` → `windows remained open — destroying them` → `unload_clean` → `ghost shutdown sequence completed`。`HasExited=True`・終了コード 0
   - 走行 3 の `taskkill`（`/F` なし・自分の PID のみ）: `[WM_CLOSE] … event="os_close_request"` → `[os_close] … scope=1 kind="ghost"` → `close_handshake_begin` → `close_talk_start` → 約 2.2 秒後 `talk_done_quit` → `origin=KanadeStopped(Quit) closed=4`（台詞の間は 4 窓とも生存）→ `[AppExit] exit requested` → 終了。`HasExited=True`（終了コードは Get-Process 経由で取れず）
   - `app_exit_unwired` は 3 走行とも 0 行
-  - **未実施**: 走行 2（メニューの「終了」）と走行 3 の Alt＋F4 は画面操作が要り、computer-use の許可が下りなかったため開発者の手で行う
+  - 走行 2（メニューの「終了」）と走行 3 の Alt＋F4: 画面操作が要るため開発者の手で実施し、09-23 に「2 点確認、OK」を得た
 - 検証後の是正（09-23・開発者承認）: ゴースト窓の準備は成功し kanade との結線だけ失敗した起動（`wired=false`）では `MouseWiring` が据わらず、旧 3.10（送らず warn で戻る）のままだと Alt＋F4／`taskkill` で閉じられなかった（裁定 3 に反する）。受け手は `os_close_no_mouse_wiring` の warn の後 `quit_app(OsClose)` で直ちに閉じる形へ改め、要件 3.10・design のエラー処理節・テストの対照アームを追随させた
