@@ -3,6 +3,8 @@
 //!
 //! 群 A（x64 常時）: 入口の選択の判断表 4 行（要件 1.1〜1.4・1.8・6.3）。DLL を読まない純関数の
 //! テストゆえ i686 に限らない（要件 9.5）。
+//! 群 C（x64 常時）: 表せない字の検出の決定論（要件 3.3・3.4・6.5）。
+//! 群 B（x64 常時）: `loadu` の枝の UTF-8 固定バイト列と入口名の語（要件 2.1・2.2・2.4・4.3・6.4）。
 
 use super::*;
 
@@ -126,4 +128,25 @@ fn empty_path_is_empty_and_not_lossy() {
     let e = encode_with_codepage(CP_US_ASCII, Path::new("")).expect("空は空へ");
     assert!(e.bytes.is_empty());
     assert!(!e.lossy);
+}
+
+// ---------------------------------------------------------------------
+// 群 B: `loadu` の枝の UTF-8 固定バイト列（x64 常時・要件 2.1・2.2・2.4・6.4）
+// ---------------------------------------------------------------------
+
+/// CP932 に在る字（ゴースト）と無い字（😀）を含むパス → `loadu` の前段が返すバイト列は文字列の
+/// UTF-8 そのもの（置き換え無し・NUL 無し）。fn ポインタは呼ばれないのでダミーでよい。
+#[test]
+fn loadu_init_bytes_are_utf8_verbatim_no_nul() {
+    let p = r"C:\ゴースト😀\master";
+    let bytes = init_bytes(&InitEntry::Loadu(loadu_fn()), Path::new(p)).expect("UTF-8 にできる");
+    assert_eq!(bytes, p.as_bytes());
+    assert!(!bytes.contains(&0u8), "NUL が混ざった");
+}
+
+/// 入口名の行の語は `loadu`／`load`（要件 4.3・fixture の記録の語と同じ）。
+#[test]
+fn init_entry_name_is_fixed_word() {
+    assert_eq!(InitEntry::Loadu(loadu_fn()).name(), "loadu");
+    assert_eq!(InitEntry::Load(load_fn()).name(), "load");
 }
