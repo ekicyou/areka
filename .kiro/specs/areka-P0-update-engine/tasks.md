@@ -42,7 +42,7 @@
   - 完了: RFC 1321 の既知のベクトル 3 本以上（空・`abc`・`message digest`）と一致するテストが緑
   - _Requirements: 2.1, 2.2, 10.2, 10.3_
   - _Boundary: md5_
-- [ ] 2.4 定義ファイルの文字コード解決・復号・行と欄の分解を実装する
+- [x] 2.4 定義ファイルの文字コード解決・復号・行と欄の分解を実装する
   - `updates2.dau` は先頭エントリの最後の欄の `charset=` だけを先読みし、`updates.txt` は `charset,` 行を探す。解決できない名前は警告して既定の Shift_JIS に倒し、OS のロケールは読まない
   - BOM を優先して復号し、CRLF／LF の行に分け、`\x01` の欄を位置で読む（拡張欄は読み飛ばす）。`updates.txt` の `file,` 行・`charset,` 行・その他の行を正典どおりに扱う
   - 完了: 拡張欄あり／なし・Shift_JIS の日本語パス（指定あり／なしで同じ結果）・`charset=UTF-8`・CRLF／LF・`updates.txt` の 3 種の行・解決できない名前（警告 1 件と既定）・空ファイル（エントリ 0）の固定入力テストが緑
@@ -149,3 +149,4 @@
 ## Implementation Notes
 - 1.2: `UpdateError::file()` は対象フォルダからの相対名だけを返す。パスを持つ失敗は `target.join(rel)`（`/` 区切りの相対名をそのまま join）から組むこと。`target_real` から組むと `None` になる。
 - 1.3: `testkit::tree` はジャンクションを含む木で panic する（`fs::read` がジャンクションを読む）。ジャンクションを作るテストは、`tree` をジャンクションの無い木に対して取るか、ジャンクションを扱う分岐を足すこと。`FakeFetch` は `new`／`serve`／`fail`／`on_get`／`calls` で組む。
+- 2.4: `Manifest.charset` は実際に使った文字コード（BOM が勝つ）で、`delete.txt` はこれを引き継ぐ。`manifest.rs` の `allow(dead_code)` は `run` が読み手を呼んだら外す。中身の無い `file,` 行は今は黙って飛ばされる（2.5 で無効エントリにするか決める）。
