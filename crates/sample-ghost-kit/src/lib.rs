@@ -122,6 +122,11 @@ pub const SAMPLES: &[Sample] = &[
         kind: SampleKind::Ghost,
         balloons: &[],
     },
+    Sample {
+        name: "StayseeBalloon",
+        kind: SampleKind::Balloon,
+        balloons: &[],
+    },
 ];
 
 /// 取得した検体。**この値を束縛している間だけ**パスを借りられる。
