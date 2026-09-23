@@ -16,7 +16,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 - **ベースウェア直下の `ghost/`・`balloon/` を知っているコードは 1 行も無い。** `ghostpathlist`／`installedghostname`／`balloonpathlist`・`AREKA_ROOT`・`BasewareRoot`・`menu,hidden` はいずれも `crates/**/*.rs` で 0 件。`crates/areka-parsers/src/package/resolve.rs` の `fn resolve` が知るのは **1 体のゴーストの内側**（`ghost/master/descript.txt` と `shell/<名>/`）だけで、読む鍵は `name`・`sakura.name`・`sakura.name2`・`kero.name`・`shiori`・`shiori.encoding`・`shiori.forceencoding`・`seriko.defaultsurfacedirectoryname`・`readme` の 9 つ。`craftman`・`craftmanw`・`id`・`type`・`menu` は読まない。`fn resolve` は `shell/<名>/` の実在を要求して失敗する（`MountError::ShellDirMissing`）ので走査には流用できず、本番の呼び手は 4 か所（`emo2_boot/assets.rs`・`placement/persist.rs`・`placement/source.rs`・`areka-ghost/src/runtime.rs`）が独立に呼ぶ。流用できる部品は `charset::decode`（バイト列→文字列）と `kv::parse_kv`（文字列→鍵と値の表）の 2 つ。
 - **バルーンの `descript.txt` の読み手（`crates/areka-parsers/src/balloon/parse.rs` の `fn parse`）は幾何とフォントの鍵だけを読む。** `type`・`id`・`name`・`craftman` は読まない。
 - **「前回どのゴーストとバルーンを使ったか」を覚える場所が無い。** `crates/areka-sylphya/src/persist/mod.rs` の永続化は `App | Ghost | Shell | Balloon` の 4 スコープ（`PersistScope`）を持ち、`App` スコープの保存先は `boot_config.rs` の `fn default_app_profile_dir`（環境変数 `AREKA_PROFILE_DIR`、無ければ `<exe のフォルダ>/profile/areka/`）から `GhostBootOptions.app_profile_dir` を経て配線済み。鍵の族（`PersistKey`）は 4 つ（窓位置 `areka.window.scope(ID).x|y`・バルーン offset `areka.balloon.offset.scope(ID).x|y`・起動回数 `areka.boot.count`・消滅回数 `areka.vanish.count`）で**全て `Ghost` スコープに書かれ、`App` スコープに載る鍵は今日 0 個**。ファイルはどのスコープも `<スコープの根>/sylphya.toml`（TOML の表 `[window."ID"]`・`[balloon-offset."ID"]`・`[boot]`・`[vanish]`・全値は文字列）。書き込みは一時ファイルへ全書き→`rename` の原子的確定（`persist/io.rs` の `FsPersistIo::commit`）。
-- **順序の罠**: sylphya のアクターはゴーストごとに `areka-ghost` の `fn boot_with_kanade_stop` の中で起きる。ゴーストを選ぶ**前**に `App` スコープの記憶を読む口は、公開関数 `areka_sylphya::persist::load_scope` を直接呼ぶ形しか無い。書く口はゴーストの起動後に `runtime.sylphya_publisher()`（`persist_put(scope, entries)`）で取れる。
+- **順序の罠**: sylphya のアクターはゴーストごとに `areka-ghost` の `fn boot_with_kanade_stop` の中で起きる。ゴーストを選ぶ**前**に `App` スコープの記憶を読む口、およびバルーンを選ぶ**前**（＝起動前）にそのゴーストの `Ghost` スコープの記憶（`<ゴースト>/ghost/master/profile/areka/sylphya.toml`）を読む口は、公開関数 `areka_sylphya::persist::load_scope` を直接呼ぶ形しか無い。書く口はゴーストの起動後に `runtime.sylphya_publisher()`（`persist_put(scope, entries)`）で取れる。
 - **検体の根はすでに「根の形」をしている。** `crates/sample-ghost-kit` の `SampleRoot::acquire(名)` は `vendors/sample_ghost/<名>.nar` を展開した使い捨ての複製を配り、`root()` が**ベースウェアの根**（直下に `ghost/`・`balloon/`）、`folder()` が `<根>/ghost/<名>/`、`balloon(名)` が `<根>/balloon/<名>/` を返す。登記済みの検体は `emo2`（ゴースト・同梱バルーン `emo2-kakukaku`・`install.txt` に `balloon.directory,emo2-kakukaku`）・`R_POST_and_KOMAINU`（ゴースト・バルーン同梱なし）・`konnoyayame`（ゴースト・バルーン同梱なし）・`emo2-kakukaku-offsetdpi`／`emo2-kakukaku-wplimit`（バルーン）の 5 体。展開先の形（`<根>/ghost/<directory>/`・`<根>/balloon/<balloon.directory>/`・最上位の `install.txt` は `supplement` 以外で残る）は `.nar` インストールのエンジンが決めたもので、**これがそのまま本仕様の根の形になる**。
 - **既定バルーン `StayseeBalloon`（CC0）は `vendors/sample_ghost/StayseeBalloon/` に展開フォルダのまま在り、検体の登記表 `SAMPLES` には載っていない。** `descript.txt` は `type,balloon`・`id,StayseeBalloon`・`name,Balloon for Staysee Syncfield`・`craftman,SSP BUGTRAQ`・`craftmanw,…`・`charset,Shift_JIS`、サムネイルは `thumbnail.pnr`（`.png` は無い）。`.nar` へ畳んで登記するのは並走 spec `areka-P0-default-balloon-nar-fold` の仕事。**本番コードに既定バルーン id の定数を置き、解決順の最後へ渡すのは本仕様の仕事**（完了 spec `areka-P0-default-balloon-bundle` 要件 7.2 の申し送り）。
 - **常設の smoke テスト `crates/areka/tests/smoke_boot_loop_exit.rs`** は環境変数 `AREKA_APP_SMOKE_EXIT_MS=500` で areka を起こし、60 秒の見張りの中で終了コードと起動ログの目印を確かめる 2 本＝**フォールバック方向**（引数なし・目印「窓配置の準備起点が見つかりません」「検証用ダミー窓を開きました（placement フォールバック）」・終了コード 0）と**本物方向**（`emo2` の `folder()` と `balloon("emo2-kakukaku")` を argv で渡す・目印「emo2-boot: 実 sink 結線が成立しました（wire 成立）」「本物のゴースト窓を開きました」・終了コード 0。モニタ 0 台の環境ではダミー窓へのフォールバックを受理する）。完了 spec `areka-P0-app-lifetime-separation` からの申し送り: **このテストの 60 秒の見張りと終了コード 0 の判定は残す**（「窓が無いのにプロセスが残る」壊れ方を赤にする唯一の常設検査）。目印を変えるのは構わない。
@@ -43,14 +43,14 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 
 ### 何を変えるか
 
-**areka.exe は「根」を 1 つ持つアプリになる。** 既定は exe の隣、開発時は環境変数 `AREKA_ROOT` で差し替える。根の直下の `ghost/`・`balloon/` を走査してゴースト・シェル・バルーンを素性付きで列挙し、最後に使ったゴースト・バルーン（アプリの記憶）とゴーストごとの最後のシェル（ゴーストの記憶）を覚え、起動時は **argv の上書き → 記憶 → 根に 1 体だけ → 既定ゴースト `emo2`（配布物に必ず同梱）→ 無作為に 1 体 → 0 体なら「どこに何を置けば良いか」を告げて終了**の順で決める。バルーンはさらにゴーストの同梱と既定バルーン `StayseeBalloon` を経る。無いときに `warn!` で起動を続ける経路と検証用ダミー窓は退役し、失敗は `error!`＋利用者向けの告知＋0 以外の終了コードで終わる。
+**areka.exe は「根」を 1 つ持つアプリになる。** 既定は exe の隣、開発時は環境変数 `AREKA_ROOT` で差し替える。根の直下の `ghost/`・`balloon/` を走査してゴースト・シェル・バルーンを素性付きで列挙し、最後に使ったゴースト（アプリの記憶）とゴーストごとの最後のバルーン・シェル（ゴーストの記憶）を覚え、起動時は **argv の上書き → 記憶 → 根に 1 体だけ → 既定ゴースト `emo2`（配布物に必ず同梱）→ 無作為に 1 体 → 0 体なら「どこに何を置けば良いか」を告げて終了**の順で決める。バルーンは **argv → そのゴーストの記憶 → ゴーストの同梱 → 1 つ → 既定バルーン `StayseeBalloon` → 無作為 → 0 なら告知**。無いときに `warn!` で起動を続ける経路と検証用ダミー窓は退役し、失敗は `error!`＋利用者向けの告知＋0 以外の終了コードで終わる。
 
 ## Boundary Context
 
 - **In scope**:
   - 根の解決（既定＝exe の隣・`AREKA_ROOT` で差し替え）と `ghost/`・`balloon/` の走査。
   - ゴースト・シェル・バルーンの列挙と素性（フォルダ名・`name`・`craftman`・`craftmanw`・`id`・`readme` の所在・`thumbnail.png` の有無・`menu,hidden`・`type`）。
-  - 「最後に使った」鍵 3 つ（アプリの記憶に `areka.last.ghost`・`areka.last.balloon`、ゴーストの記憶に `areka.last.shell`）の定義と、起動成功時の書き込み。**シェルの記憶を起動時に効かせる口は作らない**（`areka-P0-shell-balloon-switch` の仕事）。
+  - 「最後に使った」鍵 3 つ（アプリの記憶に `areka.last.ghost`、ゴーストの記憶に `areka.last.balloon`・`areka.last.shell`）の定義と、起動成功時の書き込み。**シェルの記憶を起動時に効かせる口は作らない**（`areka-P0-shell-balloon-switch` の仕事）。
   - 起動解決の置き換え（ゴースト・バルーンそれぞれの解決順）と、argv の上書きの存続。
   - 既定バルーン id `StayseeBalloon` と既定ゴースト `emo2` の定数と、解決順への配線。
   - 「根が無い／ゴーストが無い／バルーンが無い／起動窓を開けない」の利用者向け告知（メッセージボックス）と、告知を抑える口。
@@ -71,7 +71,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
   - `areka-P0-app-lifetime-separation`（着地済み）: 終了の指示 `quit_app` と終了操作 7 種の形は変えない。ダミー窓に紐づく終了操作（ダブルクリック・ダミー窓への OS の閉鎖要求）は窓ごと退役する＝同 spec 要件 3.4・3.11 は退役、その他は不変。
   - `areka-P0-nar-install`（着地済み）: 展開先の形＝根の形。`SampleRoot` の 3 つの読み口（`root()`・`folder()`・`balloon()`）は変えない。登記表 `SAMPLES` には触らない。
   - `areka-P0-default-balloon-nar-fold`（並走）: 既定バルーンを検体に登記するのは相手。本仕様の決定論テストは相手の着地に依存せず、フォルダ名 `StayseeBalloon` の偽のバルーンを置いた根で既定の採用を確かめる。
-  - `areka-P0-shell-balloon-switch`／`areka-P0-ghost-shell-balloon-switch`（後続）: 切替後の選択は本仕様の鍵へ書き、列挙は本仕様の関数から取る。起動時にシェルの記憶を効かせる口は後続が作る。
+  - `areka-P0-shell-balloon-switch`／`areka-P0-ghost-shell-balloon-switch`（後続）: 切替後の選択は本仕様の鍵へ書き、列挙は本仕様の関数から取る。起動時にシェルの記憶を効かせる口は後続が作る。**バルーンの鍵 `areka.last.balloon` はゴーストの記憶（`Ghost` スコープ）にある**（2026-09-23 裁定 4）ので、同 spec の brief が鍵をアプリの記憶に置いて書いていれば改める。
   - `areka-P0-alpha-release-signoff`（並走）: 2026-09-23 裁定「areka の配布物には必ず `emo2` を同梱する」により、同 spec の brief の「配布 zip の `ghost/` は空・emo2 は 2 体目として `.nar` で入れる」前提は改まる（配布物の中身と第三者の手順の項目 1・4 を同 spec の要件段階で整合させる）。本仕様が置くのは定数 `emo2` と解決順だけで、zip に何を入れるかは相手の仕事。
   - `areka-P0-nar-install-hardening`（並走）: 相手が根の下に置く作業フォルダ（`<根>/.nar-work/`）は `ghost/`・`balloon/` の外なので列挙に影響しない。
   - `areka-P0-status-execution-states`（α 後）: `emo2_boot/mod.rs` を共有しうるが α 後なので順序で解決。
@@ -115,9 +115,9 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 
 #### Acceptance Criteria
 
-1. The areka shall アプリの記憶（`App` スコープ）に鍵 `areka.last.ghost`（ゴーストのフォルダ名）と `areka.last.balloon`（バルーンのフォルダ名）を、ゴーストの記憶（`Ghost` スコープ）に鍵 `areka.last.shell`（シェルのフォルダ名）を持つ（既存の 4 族に 1 族を足す・記憶のファイルの表は `[last]`）。本要件で「ゴーストの起動が成功する」とは、起動窓の準備（`fn open_startup_window`）が通った後に `areka_ghost::boot` が `Ok` を返した時点を指す（wired／fallback の両経路で 1 か所）。
+1. The areka shall アプリの記憶（`App` スコープ）に鍵 `areka.last.ghost`（ゴーストのフォルダ名）を、ゴーストの記憶（`Ghost` スコープ）に鍵 `areka.last.balloon`（バルーンのフォルダ名）と `areka.last.shell`（シェルのフォルダ名）を持つ（既存の 4 族に 1 族を足す・記憶のファイルの表は `[last]`。バルーンの記憶がゴーストごとなのは 2026-09-23 裁定 4）。本要件で「ゴーストの起動が成功する」とは、起動窓の準備（`fn open_startup_window`）が通った後に `areka_ghost::boot` が `Ok` を返した時点を指す（wired／fallback の両経路で 1 か所）。
 2. When ゴーストの起動が成功する and 選ばれたゴーストのフォルダが `<根>/ghost/` の直下にある, the areka shall `areka.last.ghost` にそのフォルダ名を書く。
-3. When ゴーストの起動が成功する and 選ばれたバルーンのフォルダが `<根>/balloon/` の直下にある, the areka shall `areka.last.balloon` にそのフォルダ名を書く。
+3. When ゴーストの起動が成功する and 選ばれたバルーンのフォルダが `<根>/balloon/` の直下にある, the areka shall そのゴーストの記憶の `areka.last.balloon` にそのフォルダ名を書く。
 4. When ゴーストの起動が成功する, the areka shall 起動に使ったシェルのフォルダ名（`seriko.defaultsurfacedirectoryname`、無ければ `master`＝`fn resolve` が決めたもの）を、そのゴーストの記憶の `areka.last.shell` に書く。
 5. When 選ばれたゴーストまたはバルーンのフォルダが根の外にある（argv で根の外のパスを渡した）, the areka shall 対応する記憶を書き換えず、その旨を記録に残す（info）。
 6. The areka shall 記憶の書き込みを既存の永続化と同じ経路（原子的確定・既存の鍵と同じファイル）で行い、既存の 4 族の読み書きと決定論テストを 1 本も変えない。
@@ -149,16 +149,16 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 #### Acceptance Criteria
 
 1. When 起動時に argv の第 2 引数（バルーンのフォルダのパス）が与えられている, the areka shall そのフォルダをバルーンとし、以下の解決を見ない（開発者の上書き）。
-2. When argv の第 2 引数が無い and 起動するゴーストの最上位の `install.txt` に `balloon.directory` があり、その名のバルーンが根に列挙される, the areka shall そのバルーンを使う（ゴーストの同梱）。
-3. When 2 が当たらない and 記憶 `areka.last.balloon` が根に実在するバルーンを指す, the areka shall そのバルーンを使う。
+2. When argv の第 2 引数が無い and 起動するゴーストの記憶 `areka.last.balloon` が根に実在するバルーンを指す, the areka shall そのバルーンを使う（利用者の選択はゴーストごと・同梱より優先＝2026-09-23 裁定 4。起動するゴーストの記憶は起動前に `load_scope` で読む）。
+3. When 2 が当たらない and 起動するゴーストの最上位の `install.txt` に `balloon.directory` があり、その名のバルーンが根に列挙される, the areka shall そのバルーンを使う（ゴーストの同梱）。
 4. When 2・3 が当たらない and 根に列挙されるバルーンが 1 つ, the areka shall その 1 つを使う。
 5. When 2〜4 が当たらない and 根に既定バルーン（フォルダ名 `StayseeBalloon`）が列挙される, the areka shall 既定バルーンを使う。
 6. When 2〜5 が当たらない and 根に列挙されるバルーンが 2 つ以上, the areka shall 列挙の中から 1 つを無作為に選んで使い、無作為に選んだことを記録に残す（info。ゴースト＝要件 4.5 と同じ規則）。
 7. If 記憶 `areka.last.balloon` の指すバルーンが根に無い, or `install.txt` の `balloon.directory` の指すバルーンが根に無い, then the areka shall その旨を `warn!` に残して次の段へ進む。
 8. If argv の第 2 引数が無い and 根に列挙されるバルーンが 0, then the areka shall `error!` と利用者向けの告知（要件 6）を出し、0 以外の終了コードで終える。
 9. The areka shall 既定バルーンの id `StayseeBalloon`（フォルダ名と id はバイト一致＝完了 spec `areka-P0-default-balloon-bundle` で実測済み・列挙はフォルダ名で照合する）を本番コードの定数 1 つで持ち、解決順の段 5 だけがそれを使う。
-10. The areka shall 上の解決を純粋な判断として持ち、argv／同梱／記憶／1 つ／既定／無作為／0 の 7 分岐と、同梱・記憶の指す先が無い場合を決定論テストで踏む（既定の分岐は、フォルダ名 `StayseeBalloon` の偽のバルーンを置いた根で確かめる＝検体の登記に依存しない。無作為の分岐は「選ばれたものが列挙に含まれる」ことを確かめる）。
-11. When バルーンが決まる, the areka shall どの経路で決まったか（argv／同梱／記憶／唯一／既定／無作為）と決まったフォルダを記録に残す（info）。
+10. The areka shall 上の解決を純粋な判断として持ち、argv／記憶／同梱／1 つ／既定／無作為／0 の 7 分岐と、記憶・同梱の指す先が無い場合を決定論テストで踏む（既定の分岐は、フォルダ名 `StayseeBalloon` の偽のバルーンを置いた根で確かめる＝検体の登記に依存しない。無作為の分岐は「選ばれたものが列挙に含まれる」ことを確かめる）。
+11. When バルーンが決まる, the areka shall どの経路で決まったか（argv／記憶／同梱／唯一／既定／無作為）と決まったフォルダを記録に残す（info）。
 
 ### Requirement 6: 無いときに黙らない
 
@@ -198,7 +198,7 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 2. The 本仕様 shall 根の解決（`AREKA_ROOT` あり／なし・実在しない根）を決定論テストで確かめる（環境変数の読み口は値を注入できる形にし、プロセスの env を書き換えない）。
 3. The 本仕様 shall 起動解決の分岐（要件 4.9・5.10）を、プロセスを起こさず純粋な判断として踏む決定論テストで確かめる。
 4. The 本仕様 shall 足すテストを判断分岐（列挙の採否・記憶の往復・解決順・告知の場面）に限り、既に確かめられている配線（マウント→SHIORI→sink・窓の配置・終了の指示）を再テストしない。
-5. When 実機で確認する, the 開発者 shall ① `AREKA_ROOT` に検体の根を渡し argv なしで起動して同梱バルーンで会話が出ること、② 記憶が書かれ（`profile/areka/sylphya.toml` の `[last]`）再起動で同じゴーストが立つこと、③ 空の根で起動して告知が出て終了コードが 0 以外であること、④ 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）の後にプロセスが残っていないこと、を見る。
+5. When 実機で確認する, the 開発者 shall ① `AREKA_ROOT` に検体の根を渡し argv なしで起動して同梱バルーンで会話が出ること、② 記憶が書かれ（アプリの `profile/areka/sylphya.toml` の `[last] ghost`・ゴーストの `ghost/master/profile/areka/sylphya.toml` の `[last] balloon`／`shell`）再起動で同じゴーストと同じバルーンが立つこと、③ 空の根で起動して告知が出て終了コードが 0 以外であること、④ 有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）の後にプロセスが残っていないこと、を見る。
 6. While 実機で確認する, the 開発者 shall 自分が起こしたと確認できたプロセス以外を止めない。
 
 ### Requirement 9: 裁定候補（要件ディスカッションで確定）
@@ -210,6 +210,6 @@ areka を初めて手にする第三者（ゴーストの利用者）と、そ�
 1. The 本仕様 shall **裁定候補 1（根の既定・brief の候補 ⑵）**として、根の既定を「exe の隣」（ポータブル・zip を展開して起動＝SSP と同じ体験・書き込み権限の問題が起きない場所へ利用者が置く）とし、`%APPDATA%\areka\` は α では採らない（要件 1.2）。
 2. The 本仕様 shall **裁定候補 2（smoke テストとダミー窓・brief の崩れた前提 1）**として、smoke テストを「陳腐化として除く」のではなく 3 方向へ**更新**し（要件 7.5）、検証用ダミー窓を退役させ（要件 6.6）、告知の抑止は `AREKA_` 名前空間の環境変数 1 つで行う（要件 6.5。`AREKA_APP_SMOKE_EXIT_MS` の有無に相乗りしない＝自動終了と告知の抑止は別の関心）。
 3. The 本仕様 shall **裁定 3（複数から 1 つを選ぶ規則・2026-09-23 確定）**として、記憶が無く候補が 2 つ以上のとき「告知して終了」ではなく、ゴーストは**既定ゴースト `emo2`（areka の配布物に必ず同梱）を起動し、居なければ無作為に 1 体**（要件 4.4・4.5・4.11）、バルーンは既定バルーンの後に無作為に 1 つ（要件 5.6）とする。第三者が切替メニュー（後続 spec）を持たない段階で止めてしまうと出口が無いため。列挙の並び（要件 2.5）は解決順に使わない。
-4. The 本仕様 shall **裁定候補 4（バルーンの記憶の置き場と順序）**として、brief のとおり `areka.last.balloon` を**アプリの記憶（`App` スコープ）**に置き、解決順を**同梱 → 記憶**とする（要件 3.1・5.2・5.3）。代案は「ゴーストの記憶（`Ghost` スコープ）に置き、記憶 → 同梱の順」＝利用者が選んだバルーンが同じゴーストの再起動で同梱へ戻らず、別のゴーストへ替えたとき前のゴーストの選択が持ち越されない。代案を採るなら要件 3.1・5.2・5.3・後続 `shell-balloon-switch` の brief の鍵の所在を改める。
+4. The 本仕様 shall **裁定 4（バルーンの記憶の置き場と順序・2026-09-23 確定）**として、brief の「アプリの記憶・同梱 → 記憶」を覆し、`areka.last.balloon` を**ゴーストの記憶（`Ghost` スコープ）**に置き、解決順を**記憶 → 同梱**とする（要件 3.1・3.3・5.2・5.3）。開発者裁定「ゴーストごとに選択バルーンは異なる」＝利用者が選んだバルーンは同じゴーストの再起動で同梱へ戻らず、別のゴーストへ替えたとき前のゴーストの選択は持ち越されない。後続 `shell-balloon-switch` の brief の鍵の所在（Adjacent expectations）もこれに従う。
 5. The 本仕様 shall **裁定候補 5（記憶を書く条件）**として、選ばれたフォルダが根の直下にあるときだけ記憶を書き、根の外（argv の絶対パス）は書かない（要件 3.2・3.3・3.5）。根の外のパスをフォルダ名で覚えても次回の起動で見つからず、開発者の実機起動が第三者向けの記憶を汚さないため。
 6. Where 設計・実装の途中で裁定 1〜5 のいずれかを覆す必要が判明する, the 本仕様 shall 開発者へ議題として上げ、確定を待ってから要件・設計の該当箇所を改める。
