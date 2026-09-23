@@ -32,7 +32,7 @@
 
 - `names.rs` の検査の並びに足す「長さ」の項と、その上限の定数 `MAX_ENTRY_PATH_UTF16`（＝200）・数え方（UTF-16 の単位）・理由に載せる先頭の有界の一部の長さ。
 - 拒否語彙の変種 **`PathTooLong`**（14 番目）と、`InvalidDirectoryName`・`InvalidMaskEntry` の `value` に載せる値を有界にする規則。
-- `NarError::Io` の欄 **`survivors: Vec<SurvivingTree>`** と公開型 `SurvivingTree`、およびそれを `unwind` → `roll_back` → `CommitError` → `place` と運ぶ経路。
+- `NarError::Io` の欄 **`survivors: Box<[SurvivingTree]>`** と公開型 `SurvivingTree`、およびそれを `unwind` → `roll_back` → `CommitError` → `place` と運ぶ経路。
 - 棚 `<根>/.nar-work/` の片付けにおける保持の規則（`old-` で始まる子を持つ作業フォルダは、その更新時刻から `SURVIVOR_RETENTION`＝7 日のあいだ消さない）と、自分の番地が保持中のときに別の番地を取る規則。
 - 失敗の記録の `work` の欄の意味（掘ったなら巻き戻せたかに関わらずその場所）の注釈と、それを固定するテスト。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の 1 行。
@@ -130,7 +130,7 @@ doc/COMPAT_ARCHITECTURE.md      # §8 の表の末尾に 1 行
 ### Modified Files
 
 - `crates/areka-nar/src/names.rs` — 定数と数え方の唯一の定義点。`validate_one` の復号直後に長さの検査（`PathTooLong`）。`is_valid_one_level_name` に `utf16_len(name) <= MAX_ENTRY_PATH_UTF16` の 1 条件。`head_utf16`（先頭 `HEAD_UTF16`＝32 単位）と `bounded_value`（上限の内側なら全体、超えていれば先頭＋測った長さ＋上限）。モジュール注釈の順序の列挙を「復号 → 長さ → NUL → …」に改める。
-- `crates/areka-nar/src/error.rs` — `refuse_reasons!` に `PathTooLong { index, length, limit, head }` を `NameUndecodable` の直後に 1 変種。`SurvivingTree { destination, path }` を新設し公開。`NarError::Io` に `survivors: Vec<SurvivingTree>`。注釈「13 変種」→「14 変種」。
+- `crates/areka-nar/src/error.rs` — `refuse_reasons!` に `PathTooLong { index, length, limit, head }` を `NameUndecodable` の直後に 1 変種。`SurvivingTree { destination, path }` を新設し公開。`NarError::Io` に `survivors: Box<[SurvivingTree]>`（`Vec` でなく `Box<[_]>`＝包む側 `SampleError` を clippy `result_large_err` の閾値の下に保つ・2026-09-24 実装で判明）。注釈「13 変種」→「14 変種」。
 - `crates/areka-nar/src/manifest.rs` — `check_one_level` の `value: value.to_owned()` と `parse_mask` の `value: element.to_owned()` を `bounded_value(...)` に（判定そのものは `is_valid_one_level_name` の側で効く）。
 - `crates/areka-nar/src/install.rs` — `SURVIVOR_RETENTION`・`is_retained(entry, now)`・`next_address(shelf, now, serial)`・`WorkArea::create_at(root, now)`（`create` はこれに `SystemTime::now()` を渡す薄い皮）・`prepare_shelf(shelf, dir, now)` の削除前の判定・`unwind` の戻り値に `survivors`・`CommitError.survivors`。
 - `crates/areka-nar/src/lib.rs` — `read`・`io`・`place` の `NarError::Io` に `survivors`（前 2 つは空、`place` は `failure.survivors`）。`place` と `log_failure` の注釈を 2.5 の意味に改める（実装は変えない）。
@@ -169,7 +169,7 @@ flowchart TD
 
 1. `unwind` は積んだ手を逆順に解く（既存）。躓いた手が `Undo::Restore { old, dest }` で、かつ `old` がフォルダとして実在するとき、`SurvivingTree { destination: dest, path: old }` を集める。`Undo::Remove` の躓きは集めない（宛先はもともと無かった＝2.3）。最初の躓きを `stuck` に取る既存の動きは変えない。
 2. `roll_back` は `unwind` の戻り値（`stuck` と `survivors`）を `CommitError` に写す。`rolled_back: true` のとき `survivors` は必ず空（躓きが無ければ集まらない）。
-3. `place` は `CommitError` を `NarError::Io` に写す（既存の 5 欄＋`survivors`）。`read`・`io` は空の `Vec` を置く。
+3. `place` は `CommitError` を `NarError::Io` に写す（既存の 5 欄＋`survivors`）。`read`・`io` は空（`Box::default()`）を置く。`place` は `Vec` を `into_boxed_slice` で写す。
 4. 失敗の経路では作業フォルダを片付けない（既存）ので、`survivors` の各 `path` は失敗の値を受け取った時点で実在し、元の中身をバイト列そのままで含む（2.2）。全て `work`（＝`area.path()`）の配下（2.4）。
 
 ## Requirements Traceability
@@ -297,7 +297,7 @@ pub struct SurvivingTree {
 // NarError::Io に 1 欄足す（既存の 6 欄は変えない）。
 /// 元へ戻せなかった宛先ごとの生き残り。巻き戻せた・掘る前・新規の宛先を消す手だけが
 /// 躓いた場合は空。全て失敗の記録の work の配下に在る。
-survivors: Vec<SurvivingTree>,
+survivors: Box<[SurvivingTree]>,
 ```
 
 - State model: `RefuseReason` は 14 変種で閉じる。`ALL_KINDS` は宣言から自動で伸びる。`SurvivingTree` は `InstalledElement` と同じく `error.rs` に置く（`NarError::Io` が持つ型は語彙と同じ場所）。
@@ -424,7 +424,7 @@ fn prepare_shelf(shelf: &Path, dir: &Path, now: SystemTime) -> Result<Vec<PathBu
 | `RefuseReason` | `PathTooLong { index: usize, length: usize, limit: usize, head: String }` を `NameUndecodable` の直後に追加（14 変種） |
 | `InvalidDirectoryName { key, value }`・`InvalidMaskEntry { key, value }` | 形は変えない。`value` は上限の内側なら全体、超えていれば `bounded_value` の形 |
 | `SurvivingTree` | 新設（`destination: PathBuf`・`path: PathBuf`）。`Clone`・`Debug`・`PartialEq`・`Eq` |
-| `NarError::Io` | `survivors: Vec<SurvivingTree>` を追加 |
+| `NarError::Io` | `survivors: Box<[SurvivingTree]>` を追加 |
 | `CommitError`（crate 内） | `survivors: Vec<SurvivingTree>` を追加 |
 | 失敗の記録の欄 | 変更 0（`archive`・`committed`・`message`・`reason`・`rolled_back`・`work`） |
 

@@ -55,7 +55,7 @@ mod plan;
 pub use crc32::crc32;
 pub use error::{
     ElementKind, ExistingState, InstalledElement, Integrity, IoPhase, ManifestWarning, NarError,
-    RefuseReason, UnsafeWhy, Unsupported,
+    RefuseReason, SurvivingTree, UnsafeWhy, Unsupported,
 };
 pub use install::{InstallOutcome, InstallRequest};
 pub use manifest::{Companion, ExistingPolicy, InstallKind, InstallManifest};
@@ -146,6 +146,7 @@ impl NarArchive {
             source,
             committed: Vec::new(),
             rolled_back: true,
+            survivors: Box::default(),
         })?;
 
         let raw = read_central_directory(&bytes).map_err(refused)?;
@@ -204,6 +205,7 @@ impl NarArchive {
             source: failure.source,
             committed: failure.committed,
             rolled_back: failure.rolled_back,
+            survivors: Box::default(),
         })
     }
 
@@ -216,6 +218,7 @@ impl NarArchive {
             source,
             committed: Vec::new(),
             rolled_back: true,
+            survivors: Box::default(),
         }
     }
 }
