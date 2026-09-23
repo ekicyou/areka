@@ -234,10 +234,11 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 ## 直接修正候補（spec なし・任意・S）
 
-> **2026-09-20 棚卸⑮**: 下の 1 件目と 2 件目は**バグ修正**＝優先度の先頭。どちらも 1 ファイルで閉じ、A1 のどの spec とも重ならないので、spec を立てずにいつでも直せる（1 件 1 PR）。
+> **2026-09-20 棚卸⑮**: 下の 1 件目と 2 件目は**バグ修正**＝優先度の先頭。どちらも 1 ファイルで閉じ、A1 のどの spec とも重ならないので、spec を立てずにいつでも直せる（1 件 1 PR）。**2026-09-24 追記**: 3 件目（`WM_ACTIVATE` の `JustStarted`）も同じ扱いのバグ修正＝1 ファイル＋テスト 1 本で閉じる。
 
 - `crates/areka-emo-text/src/writing.rs` の未知 `writing_mode` 警告文言（「horizontal_tb へフォールバック」→ 実挙動は「指定なしとして扱う」）。逐語固定のインラインテスト `unknown_value_falls_back_to_horizontal_tb_with_warn` と同時修正。`emo-text-canon-residue` 項目 12 と同一＝先に直せば同 spec から外す。
 - `crates/areka/src/placement/transition_judge_verdict.rs` の窓ごとの書込の上限の検査（完了 `placement` 系の要件 4.5）が、見送りの窓を除かずに `summary.writes_per_window` をそのまま回している。同じファイルに「見送りの窓を除いた、書込のあった窓」を返す `judged_windows` が**既に在り**、被覆の検査だけが使っている＝上限の検査でも同じものを回す＋兄弟テスト 1 本。`dpi-transition-two-tick-bounce`（#18）から 2026-09-20 に切り出した。`dpi.rs` には触らない。
+- **（2026-09-24 登記・バグ＝潜在）** `crates/wintf/src/ecs/window_proc/keyboard.rs` の `WM_ACTIVATE`（非アクティブ化の枝）が、ドラッグの状態が `Dragging`・`Preparing` のときは `cancel_dragging` を呼ぶのに、`JustStarted`（閾値到達から次の tick の `dispatch_drag_events` まで）のときは `_ => {}` で何もしない。同じファイルの `WM_KEYDOWN`（Esc）・`WM_CANCELMODE`・`WM_CAPTURECHANGED` は 3 状態とも中断する＝この枝だけ非対称。閾値に達した直後の短い間に窓が非アクティブになると、マウスの捕捉が解かれずドラッグが続く。直し方＝`JustStarted` を `Dragging` の腕へ足す（`JustStarted` は `Started` の遷移を既に積んでいるので、`Dragging` と同じく `Ended { cancelled: true }` を積んでから中断する）＋`zorder_pair_sink_tests.rs` の「本番と同じ配送表で `WM_ACTIVATE` を 1 通送る」作法で決定論テスト 1 本（`start_preparing` → `start_dragging` → 非アクティブ化 → 写しが `JustEnded`）。`wintf-drag-state-rest-contract`（#43）の調査で見つけ、同 spec は範囲外として触らなかった（同 spec の `research.md` §2.2・`design.md` の Open Questions）。同じ関数の後半にある沈降観測の目印（`zorder` 系）には触らない。
 - `.kiro/steering/roadmap-history.md` の `\w[ms]` 記述（history は非改変ゆえ据え置き・`doc/ukadoc-coverage/briefing-sakura-script.md` 側は 2026-09-11 に注記を追加済み）。
 - `crates/areka/src/main.rs:167-177` の「ゴーストの根が実在しなくても `warn!` で起動を続ける」経路（記憶 areka-log-first-no-silent-failure に反する）＝`baseware-root-layout` が置き換えるので**先に直さない**（二度触らない）。
 
