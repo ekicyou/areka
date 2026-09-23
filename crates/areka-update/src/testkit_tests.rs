@@ -95,7 +95,10 @@ fn rename_fails_while_held_and_succeeds_after_release() {
     fs::write(&from, b"x").unwrap();
 
     let handle = hold(&from);
-    assert!(fs::rename(&from, &to).is_err(), "掴んでいる間は rename できない");
+    assert!(
+        fs::rename(&from, &to).is_err(),
+        "掴んでいる間は rename できない"
+    );
     // 読みは共有しているので中身は読める（読み込まれた DLL と同じ状態）。
     assert_eq!(fs::read(&from).unwrap(), b"x");
 

@@ -5,6 +5,7 @@
 
 mod error;
 mod fetch;
+mod md5;
 mod outcome;
 mod paths;
 #[cfg(test)]
