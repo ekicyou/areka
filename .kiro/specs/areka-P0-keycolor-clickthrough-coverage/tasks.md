@@ -65,8 +65,8 @@
   - 完了状態: 3 面すべて赤の記録と、戻した後の赤 0 の記録が完了記録に残っている
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 4.2_
 
-- [ ] 4. 最終確認と報告の数
-- [ ] 4.1 全体を走らせ、触ったファイルと数を確かめて報告の材料をそろえる
+- [x] 4. 最終確認と報告の数
+- [x] 4.1 全体を走らせ、触ったファイルと数を確かめて報告の材料をそろえる
   - `cargo test -p areka-emo-atlas`・`cargo test -p areka-emo-compose`・`cargo test -p areka-emo-present`・`cargo test -p areka --bin areka placement`・`cargo build -p areka --examples` がすべて緑
   - `git diff --stat main...` で触ったファイルが design.md の変更の全数の表と一致し、抜き色の正規化・マスクの輪番・wintf・既存の両端のテストと合成後の α を見るテスト・`.kiro/specs/completed/` 配下・`areka-P0-alpha-release-signoff` の文書に差分が無いことを確かめる
   - 数を確かめる: 製品コードの変更行数 0（`#[cfg(test)]` の付いた項目の外）・接続宣言 3 行・可視性の書き換え 3 行・GPU からの読み戻し 0 回・拡大率 k ≠ 1 の水準 0 本（理由: マスクは原寸で作られ ÷k は wintf 側）・CPU から GPU への転送は起きる
@@ -134,3 +134,30 @@
     - 見込みに無かった赤（2 本）: `presenter::display_failure_tests::display_failure_on_a_same_shape_reshow_keeps_every_previous_value`（陽性対照の `assert_ne`・再表示前後のマスクが同じ全面「内」になる）・`presenter::fractional_scale_tests::alpha_mask_bits_come_from_native_bytes`（「αマスク (1,0) のビットが原寸の合成バイト由来でない」）
     - `presenter/budget_tests.rs`（`presenter::budget::tests`）16 本はすべて緑。マスクの輪番を自前の画素で直に叩くので影響しない（要件 4.2）。
 - ⑹ 戻した後: `git checkout -- crates/areka-emo-present/src/presenter/show.rs` で戻し、同ファイルの `git diff --stat` は空。atlas 83 passed / 1 ignored・compose 220 passed・present 255 passed、赤 0。
+
+### 4.1 最終確認と報告（2026-09-24）
+
+- ⑴ 走らせたコマンドと結果（HEAD `7e322eb5`・赤 0）
+  - `cargo test -p areka-emo-atlas`: 83 passed / 1 ignored
+  - `cargo test -p areka-emo-compose`: 220 passed（`sample_test_support::every_sample_receptor_points_at_a_real_folder` を含む）
+  - `cargo test -p areka-emo-present`: 255 passed（`presenter::keycolor_clickthrough_tests::keyed_out_pixels_leave_the_hit_mask_and_the_rest_stay_inside` を含む）
+  - `cargo test -p areka --bin areka placement`: 913 passed / 2 ignored（`placement::measure::template_tests::the_examples_do_not_parse_the_shell_themselves` を含む）
+  - `cargo build -p areka --examples`: 成功（終了コード 0）
+- ⑵ 触ったファイル（`git diff --stat main...HEAD`・起点は合流元 `92f5f448`）: design.md「変更の全数」の表の 10 本と完全一致。ほかは本 spec の文書だけ
+  - `crates/areka-emo-present/src/presenter.rs`・`presenter_keycolor_clickthrough_tests.rs`（新規）・`shell_target.rs`・`shell_target_test_support.rs`
+  - `crates/areka-emo-compose/src/sample_test_support.rs`
+  - `crates/areka/src/placement/measure_template_tests.rs`
+  - `crates/areka/examples/emo-present/setup.rs`・`collision-probe/setup.rs`・`collision-probe.rs`・`window-placement.rs`
+- ⑶ 差分が無いこと（どのパスも実在を確かめたうえで `git diff --stat main...HEAD -- <パス>` が空）: 抜き色の正規化 `crates/areka-emo-atlas/src/normalize.rs`・マスクの輪番 `crates/areka-emo-present/src/presenter/budget.rs`（`MaskRotation` の定義）・`crates/wintf/` 全体・`normalize_key_color_tests.rs`・`presenter/budget_tests.rs`・`shell_target_template_tests.rs`・`.kiro/specs/completed/` 配下・`.kiro/specs/areka-P0-alpha-release-signoff/`。差し替えに使った `blit.rs`・`show.rs` も差分なし
+- ⑷ 数
+  - 製品コード（`#[cfg(test)]` の付いた項目の外）の変更行数: **0 行**。`src/` の中で変わった行は、テストのときだけ読み込まれるファイル（新しいテストファイル・`shell_target_test_support.rs`・`sample_test_support.rs`・`measure_template_tests.rs`）の中か、`#[cfg(test)]` の付いた項目（`presenter.rs` の接続宣言・`shell_target.rs` の `mod` 宣言）だけ。examples 4 本は製品コードではなく、改名と説明文だけでロジックは 0 行
+  - 接続宣言: **3 行**（`presenter.rs` の `#[cfg(test)]`・`#[path = …]`・`mod keycolor_clickthrough_tests;`）
+  - 可視性の書き換え: **3 行**（`shell_target.rs` の `mod test_support` → `pub(crate) mod` 1 行・`shell_target_test_support.rs` の受け口 2 口 `pub(super)` → `pub(crate)` 2 行）
+  - GPU からの読み戻し: **0 回**（新しいテストとそれが使う補助に `read_back`・`replay_and_read_back` の呼び出しは 0 件）
+  - 拡大率 k ≠ 1 の水準: **0 本**（DPI 96 だけ。マスクは原寸で作られ、÷k はマスクを読む側の wintf の当たり判定 `alpha_mask_hit` が行うため）
+  - CPU から GPU への転送: **起きる**（表示の記録 `record_display` が原寸のバイト列を `CreateBitmap` で GPU へ送る）
+- ⑸ 報告
+  - 抜き色で透明になった場所のクリックが背後の窓へ抜けることを固定するテストを 1 本足した。検体 2 体の 3 面（`R_POST_and_KOMAINU` 面 0・面 10、`konnoyayame` 面 0）を製品と同じ順（焼く → 合成する → 当たり判定用のマスクを作る）で通し、左上の画素と同じ色の画素が抜ける（マスクで「外」になる）こと、それ以外の画素は「内」のままであることを全画素で確かめる。抜き色は絵の内側の画素（白や緑）にも当たる。正解は、テスト自身が同じ PNG を読み直して決めている。
+  - 途中の 3 段を 1 つずつわざと壊すと、このテストは 3 面すべてで失敗した。焼く段で抜き色を渡さないと 59831／11816／70574 画素、合成段で α を捨てると 24959／8712／51984 画素、マスクを作る段に全面不透明を渡すと 59831／11816／70574 画素の食い違いが出た。どの段も元に戻したあとは失敗 0 に戻った（詳細は 3.1〜3.3）。
+  - 見つかった穴: 合成段を壊しても compose クレート自身のテストは 1 本も失敗しなかった（3.2 に記録）。この退行を止めるのは、本テストと present クレートの一部のテストだけである。compose クレートの中に止めるテストを足す作業は、別件として提案済み。
+  - このテストが止めるのは、今日通っている動きの退行だけである。実機での目視の確認（`areka-P0-alpha-release-signoff` の目視項目）はこれまでどおり残る。
