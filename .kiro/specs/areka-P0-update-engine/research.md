@@ -169,4 +169,102 @@
 
 ## 9. 次の段
 
-`/kiro-requirements-discussion areka-P0-update-engine`（2026-09-23 実施）で §6 の ⑴⑵⑶・4（置き場）・10・12（3 語の追加）・13（差分 0 の周）を裁いた。残る 4（名前と下位構造）・5〜9・11・12（全数）・13（後退した周の古い `updates2.dau`）・14・15 は `/kiro-design areka-P0-update-engine` で決める。
+`/kiro-requirements-discussion areka-P0-update-engine`（2026-09-23 実施）で §6 の ⑴⑵⑶・4（置き場）・10・12（3 語の追加）・13（差分 0 の周）を裁いた。残る 4（名前と下位構造）・5〜9・11・12（全数）・13（後退した周の古い `updates2.dau`）・14・15 は **§10（2026-09-23 設計フェーズ）で全て確定し、`design.md` に書いた**。
+
+## 10. 設計フェーズの記録（2026-09-23・`/kiro-spec-design`）
+
+### Summary
+
+- **Feature**: `areka-P0-update-engine`
+- **Discovery Scope**: New Feature（新規クレート）だが、外部依存は 0 で OS の機能 2 系統（WinHTTP・CNG）の束縛だけが新しいので、**light discovery**（既存の型と束縛の再確認・WinHTTP と CNG の細部の裁定）で足りた。ネットへは出ていない。
+- **Key Findings**:
+  - 要る束縛は全て `windows 0.62.2` に在り、引数の型まで確認した（`BCryptHash(BCRYPT_ALG_HANDLE, Option<&[u8]>, &[u8], &mut [u8]) -> NTSTATUS`・`BCRYPT_MD5_ALG_HANDLE = BCRYPT_ALG_HANDLE(33 as _)`・`WinHttpQueryHeaders` は `WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER` で数値・`WinHttpSetTimeouts` は ms の `i32` 4 つ・`windows_core::Error::from_thread()`＝`windows-result 0.4.1`・`NTSTATUS::ok()`）。
+  - `std::fs::rename` はファイル相手だと既存を置き換える（`library/std/src/fs.rs` の `rename` の説明・Windows 実装 `sys/fs/windows.rs` は `MoveFileExW(…, MOVEFILE_REPLACE_EXISTING)`）＝退避を先に置く順序が要る（design「確定と戻し」）。
+  - 「戻せなかった」の固定入力は、偽の取得口の**取得時の口**（`on_get`）で 2 件目の取得時に `new/1 件目` を読み取り専用にし、2 件目の宛先を読み共有で掴む、で決定論的に組める（`remove_file` は読み取り専用で失敗し、`rename` の上書きも失敗する）。`areka-nar` が一度も検査できなかった経路（roadmap #52 の 3 件目）を本仕様は最初から持てる。
+  - 実機の一周の器は `crates/pilot` ではなく本クレートの `#[ignore]` テストに置く（先進坑は「捨てる前提の探索」＝`two-tunnel.md`。サインオフの器は本坑に残す物で、`pilot/Cargo.toml` に依存を足す必要も消える）。
+
+### Research Log
+
+#### WinHTTP の細部（§6-8）
+- **Context**: 転送の既定・プロキシ種別・時間切れ・本文の受け方・UA・セッションの持ち方が未決だった。
+- **Sources Consulted**: `windows-0.62.2/src/Windows/Win32/Networking/WinHttp/mod.rs`（関数 12 本・定数）、WinHTTP の仕様（`WINHTTP_OPTION_REDIRECT_POLICY` の既定は `DISALLOW_HTTPS_TO_HTTP`＝https → http 以外の 3xx は自動追随・上限は `WINHTTP_OPTION_MAX_HTTP_AUTOMATIC_REDIRECTS` の既定 10・受信の時間切れは 1 回の受信操作に対する上限）。
+- **Findings**: ⒜ 転送＝既定のまま（降格だけ拒む。降格は `ERROR_WINHTTP_REDIRECT_FAILED` 12156）。⒝ プロキシ＝`WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY`（Windows 8.1 以降・製品の下限 Windows 10 の内側・利用者のプロキシ設定に従う）。⒞ 時間切れ＝名前解決 10 s・接続 15 s・送信 30 s・受信 60 s（受信は 1 回の読み取りの上限なので大きなファイルでも流れていれば切れない）。⒟ 本文＝`WinHttpQueryDataAvailable` → `WinHttpReadData` を 0 まで反復・`Content-Length` を信じない・上限 256 MiB（`FetchError::TooLarge`）。⒠ UA＝`areka/<CARGO_PKG_VERSION>`。⒡ セッション＝`WinHttpFetch` の値が 1 つ持ち回り、一周ごとに呼び出し側が作る。⒢ 圧縮の自動伸長は使わない（MD5 は落としたバイト列そのもの）。⒣ 失敗の写し＝`from_thread().code().0 & 0xFFFF` を `ERROR_WINHTTP_*` の番号で分ける。
+- **Implications**: `winhttp.rs` は 100〜150 行・unsafe はこのファイルだけ・常時テストは呼ばない。
+
+#### CNG の擬似ハンドル（§7）
+- **Context**: `BCryptHash`＋`BCRYPT_MD5_ALG_HANDLE` の最小 OS と入力長の上限。
+- **Findings**: 擬似ハンドルは Windows 10 以降で使える（製品の下限と同じ）。束縛は `&[u8]` の長さを `u32` に `try_into().unwrap()` するので **4 GiB 超は panic** になる → ローカルの読みは `diff` で 4 GiB 超を `LocalUnreadable` にし、取得の本文は 256 MiB で止める（設計の前提条件として `md5_hex` に書く）。`NTSTATUS` の失敗は OS の暗号基盤の破損＝致命（panic）。
+- **Implications**: `md5.rs` は 20 行前後・RFC 1321 A.5 の 3 本で較正。
+
+#### パーセント復号後の文字コード（§6-9）
+- **Context**: 正典 `spec_update_file` URL エンコード「全エントリがパーセントエンコード済みの場合はデコードして使用する。そうでない場合は URL 側のみエンコードされる」は復号後のバイト列の文字コードに沈黙。
+- **Findings**: 候補 ⒜ UTF-8 → 失敗なら定義ファイルの文字コード／⒝ 定義ファイルの文字コード固定／⒞ UTF-8 固定。⒞ は Shift_JIS のバイト列を符号化した配布物で日本語のパスが化けて**黙って別名に落ちる**（安全側でない）。⒝ は URL の符号化の慣行（UTF-8）で作られた配布物を化けさせる。Shift_JIS の 2 バイト列（先導 0x81〜0x9F・0xE0〜0xEF＋0x40〜0xFC）が偶然 UTF-8 として通る確率は低い。
+- **Implications**: **⒜ を採る**（要件 1.15 が URL 側の符号化を UTF-8 と決めたことと対称・固定入力は UTF-8 の符号化と Shift_JIS の符号化の 2 本）。
+
+#### 作業場所と確定の手順（§6-4・§6-5・§6-6）
+- **Findings**: 名前 `.update-work/<pid>-<連番>/`、下位 `new/<相対パス>`（落とした物）と `old/<相対パス>`（退避）。確定は ⒜ `rename` 2 手（`areka-nar` の `commit_one` の写し・単位をファイルに）。`ReplaceFileW` は退避名を自動で持つが、親フォルダの作成と戻しを別に書く必要が消えず、`rename` 2 手より unsafe が増えるので採らない。取得した内容は 1 件ごとに MD5 を取ってから作業場所へ書き、メモリに全件を溜めない。
+- **Implications**: `work.rs`・`commit.rs` は合わせて 350 行前後。`delete.txt` の行が `.update-work` を指すときは無視（要件 6.3）、定義ファイルのエントリが `.update-work` で始まるときも無効（設計の追加＝作業場所を定義から書き換えさせない）。
+
+#### 取得の境界と観測者（§6-7・§6-11）
+- **Findings**: `trait Fetch { fn get(&self, url: &str) -> Result<Vec<u8>, FetchError> }`・`FetchError` は 8 語で `Clone`＋`PartialEq`（偽の固定表に置ける）。観測者は `&mut dyn FnMut(&Progress)` の閉包 1 つ（`network-update` はイベントへ写すだけ）。`Progress` は所有値（`Vec<String>`）で持ち、借用の寿命を呼び出し側に押し付けない。
+- **Implications**: 偽実装は `testkit.rs`（`#[cfg(test)]`）に置き、本番に `#[cfg(test)]` 以外の偽実装を置かない。
+
+#### 失敗の語彙の全数（§6-12）
+- **Findings**: 要件 7.4 の 10 語＋`EscapesTarget`（実パスが対象フォルダの外へ解決される＝要件 5.6・6.3 の判定を失敗として返す語）で **11 語**。「片付け失敗」は残骸の一覧で表すので語にしない。「戻せなかった」は理由の語（`RollbackFailed`・確定を止めた失敗を中に持つ）とし、`rolled_back()` はそこから導く。段 `Stage` に削除の段は置かない（要件 6.6 で失敗にしないので到達しない腕を持たない＝開発規律 cage-must-walk-the-reachable-path）。
+- **Implications**: `fail_reasons!` マクロ（`areka-nar` の `refuse_reasons!` の写し）で 1 宣言に閉じ、`ALL_KINDS` 完全一致テストを `lib_tests.rs` に持つ。
+
+#### 後退した周の古い `updates2.dau`（§6-13）
+- **Findings**: `updates.txt` へ後退した周では、対象に残る古い `updates2.dau` は定義に無いので触らない（要件 2.3 の精神）。作者が消したければ `delete.txt` に書ける。
+- **Implications**: `run_tests.rs` の後退の経路で「古い `updates2.dau` が残る」を固定する。
+
+#### 実機の一周の器（§6-14）
+- **Findings**: ⒜ `pilot` の example／⒝ 外部サーバ／**⒞ 本クレートの `#[ignore]` テスト**（`std::net::TcpListener` の静的配信を同じテストの別スレッドに立て、`SampleRoot::acquire("emo2")` の複製 2 つで配信側と対象側を作る）。⒞ は cargo だけで再現でき、`md5_hex` で `updates2.dau` を組めて、`pilot/Cargo.toml` に触らない。`cargo test --release` は `bench` プロファイル（`[profile.release]` を継承）で走る。
+- **Implications**: `winhttp_real_tests.rs` に置き、`/r/` 前置きで 302 を返して転送の追随も通す。
+
+#### クレート名と登記（§6-15）
+- **Findings**: `areka-update`（`crates/` に衝突無し）。`Cargo.toml` は `pilot` と同じく `[dependencies] windows = { workspace = true, features = ["Win32_Foundation", "Win32_Networking_WinHttp", "Win32_Security_Cryptography"] }`（クレートは Windows 専用なので `cfg(windows)` の分岐は持たない）。登記は `tech.md` の 1 行・`structure.md` の 5 行・NOTICES の再生成。
+
+### Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 段を純関数に分け外界を 4 モジュールに限る（採用） | `manifest`／`diff` は I/O 無し、`fetch`・`work`・`commit`・`delete` だけが外界に触る、`lib` が束ねて記録 | 決定論テストが純関数と偽の口で全経路を踏める・記録の発火点 1 つ | モジュール数 12（1,000 行の内側に収めるため） | `areka-nar` と同じ形 |
+| 1 つの `Engine` 構造体に状態機械 | 段を状態として持つ | 進捗の型が状態と一致 | 中断（キャンセル）が無い今は過剰 | 不採用 |
+| `areka-nar` 拡張（Option A）／部品の公開（Option C） | §4 | — | #52 と共有・依存が増える | 裁定 ⑶ で不採用 |
+
+### Design Decisions
+
+#### Decision: 実パスの配下判定を差分と確定の 2 回行い、失敗の語 `EscapesTarget` を足す
+- **Context**: 要件 5.6「確定の前にも確かめ」・6.3「解決した実パスが対象フォルダの外へ出る」。定義のパスの字面検査（`..`・絶対）だけではジャンクション／シンボリックリンク越しの脱出を捕まえられない。
+- **Alternatives Considered**: 1. 字面検査だけ（脱出を許す） 2. 途中の要素に reparse point があれば全部拒む（内側を指すジャンクションまで拒む） 3. 最も深い実在する祖先を `canonicalize` して対象の実パスから始まるか（採用）。
+- **Selected Approach**: 3。`paths::resolves_under` を `diff`・`commit`・`delete` が共有する。
+- **Rationale**: 内側を指すリンクは許し、外へ出る物だけ落とす。5 行で書ける。
+- **Trade-offs**: 固定入力にジャンクションが要る → `cmd /c mklink /J`（NTFS・権限不要）。作れなければ赤（黙って飛ばさない）。
+- **Follow-up**: `sample_path_guard_test`／`temp_path_guard_test` はこのテストに当たらない（一時パスの入口を呼ばない・検体のパスを綴らない）ことを実装時に確認。
+
+#### Decision: 記録の発火点を `lib.rs` に閉じ、他のモジュールは警告をデータで返す
+- **Context**: 要件 8.1（`error!` 1 件）・8.2（warn）・8.4（件数判定）。
+- **Selected Approach**: `UpdateWarning` を各段が `Vec` で返し、`run` が 1 件 1 行の `warn!` に写す。失敗は `log_failure` 1 か所。`lib_tests.rs` が「`tracing::` は `lib.rs` だけ・`error!` 1 か所」を字面で判定。
+- **Rationale**: `areka-nar` で実証済みの形。純関数の段がテストしやすい。
+- **Trade-offs**: 警告の型が 1 つ増える。
+
+#### Decision: `Updated::placed` に定義ファイル自身を含めない
+- **Context**: 要件 5.3（定義ファイルも置く）・5.8（置いた一覧）。
+- **Selected Approach**: `placed` は定義のエントリだけ。どちらの定義ファイルを置いたかは `manifest` 欄。
+- **Rationale**: `OnUpdateComplete` の Ref1 は「更新されたファイル」の一覧で、定義ファイルは作者の一覧に無い。足したければ `file_name()` を継ぎ足せる。
+- **Follow-up**: `network-update` の要件で Ref の形を決めるときに再確認。
+
+### Risks & Mitigations
+
+- WinHTTP の unsafe に前例が無い — 1 ファイルに隔離・ハンドル 3 つ・実機の一周で 2xx／404／302 を通す。
+- 4 GiB 超のローカルファイル — `LocalUnreadable` にして panic を避ける（`md5_hex` の前提条件を `diff` が守る）。
+- ジャンクションの固定入力が NTFS 前提 — `target/` は NTFS。作れなければ赤。
+- `updates.txt` の `charset,` 行が先頭付近に無い配布物 — 先読みは全行を見る（ASCII の行なので復号前に探せる）。
+
+### References
+
+- ukadoc `spec_update_file`（行フォーマット・行種別・拡張フィールド・文字コード・セキュリティチェック・URL エンコード）・`manual_update`（`delete.txt`・`delete[数字].txt`）・`dev_update`（上書きであって同期ではない）・`descript_install`（相対パス）。
+- `windows 0.62.2` の束縛（`Win32/Networking/WinHttp/mod.rs`・`Win32/Security/Cryptography/mod.rs`・`extensions/Win32/Foundation/NTSTATUS.rs`）・`windows-result 0.4.1`（`Error::from_thread`）。
+- Rust std `library/std/src/fs.rs`（`rename` の説明）・`sys/fs/windows.rs`（`MoveFileExW` `MOVEFILE_REPLACE_EXISTING`）。
+- RFC 1321 A.5（MD5 のテストベクトル）。
+- 前例: `crates/areka-nar/src/{install.rs, error.rs, lib.rs, lib_tests.rs, lib_vocabulary_tests.rs, install_commit_tests.rs, names.rs}`・`crates/pilot/Cargo.toml`・`.kiro/steering/two-tunnel.md`。
