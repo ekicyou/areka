@@ -143,3 +143,14 @@ pub(crate) fn staysee_root() -> PathBuf {
 - **要件へ反映済み（自明な修正）**: 項目 1（見張りの穴＝要件書の記述を訂正し、見張りは触らない。本仕様の後は読み先のフォルダが消えるので、裸のフォルダ名が残っても結合テストが赤にする＝実害が無い）・項目 2（要件 4.1 はコメントを含めて 0 か所）・項目 4（`fold-samples.rs` の doc の例は `<展開フォルダ>` へ＝要件 5.5）・項目 7（`lib_tests.rs` の「5」＝要件 3.4、README の「4 本」＝要件 5.1、`structure.md` の「2 本」＝要件 5.2）・§3.9（完了 spec `default-balloon-bundle` 要件 3.2／設計 C2 の上書きを Adjacent expectations に明記）。要件 1.4 は「畳んだ直後の照合＋記録」と読める形に直した。
 - **設計フェーズへ持ち越し**: 項目 3（`registry_records_kind_and_bundled_balloons` に 1 行足すか）・項目 6（README の出どころを節にするかポインタにするか）。どちらも how で、要件の判定は他の受入基準で既に立つ。
 - **開発者と議論**: 項目 5（中身が無改変であることを常設の検査で固定するか）。→ **固定しない**（2026-09-23 裁定）。目的は保管形の切り替えで、中身の保証は今日と同じ強さのまま据え置く。
+
+## 9. 設計フェーズの記録（2026-09-23・`/kiro-spec-design -y`）
+
+- **Discovery Scope**: Simple Addition（既存の手順と雛形の写し）。正式なディスカバリと外部調査は行わず、主要ファイルを読み直す軽い確認だけ。サブエージェントの派遣は 0。
+- **読み直しで確かめた事実（設計に効いたもの）**: `SAMPLES` は 5 行（`lib.rs` の定義）／`known_sample_names()`・`manual_paths` はどちらも `SAMPLES` から導く＝登記 1 行で 2.4・2.5 が成り立つ／`staysee_root()` を直接呼ぶのは `assets.rs`・`bake.rs`・`faces.rs` と `test_support.rs` 内の 2 関数で、他のテーマは `staysee_model()`・`resolve_staysee()` 経由＝戻り型 `PathBuf` を保てばテーマ別 8 ファイルは 0 行変更／`static EMO2: LazyLock<SampleRoot>`（`areka-emo-compose/src/sample_test_support.rs`）が同じ形で既にコンパイルされている／`install.txt` は `type,balloon`・`directory,StayseeBalloon`／`LICENSE` は CC0 1.0 の法典本文／`sha256sum` は Git Bash に在る。
+- **Synthesis**: 一般化＝無し（要件は全て「1 検体を既存の形へ揃える」の 1 問題）。Build vs Adopt＝全て既存の採用（`fold-samples`・`SampleRoot`・`LazyLock` 雛形・完了 spec の provenance 表）で、新規の実装 0。単純化＝案 B（共有ヘルパ）と案 C（見張りの語形追加）を却下、新しいテスト関数 0・新規ファイルは照合記録の 1 本だけ。
+- **設計判断（持ち越し 2 件の決着）**:
+  - 決定 A（項目 3）: `registry_records_kind_and_bundled_balloons` のバルーンのループに `"StayseeBalloon"` を 1 語足す。2.1「種別はバルーン・同梱 0 本」の直接の判定をこの 1 語で得られ、既存の assert 文言 `"{name} は同梱バルーン 0"` が 0 を明示的に書く。新しい assert は 0。`konnoyayame` が同テストに無い点は本仕様の外。
+  - 決定 B（項目 6）: README は節を設けず、表の 1 行＋出どころの箇条書き 1 行（CC0・上流 URL・畳み直し可・配布物へ同梱可・ハッシュと突合は完了 spec の `verification/provenance.md` §1・§3 へのポインタ）。`konnoyayame` の節は禁止事項（畳み直さない・配布物へ入れない）を伝えるためのもので、`StayseeBalloon` には禁止が 0。sha256 の表を README にも写すと 2 か所目が黙って古びる。`tech.md`「出どころとライセンスを README に登記」は 1 行で満たす。
+- **レビューゲート**: 要件 ID 27 個すべてが design.md に現れる／境界 4 節・File Structure Plan は実パスで埋まっている／コンポーネント 6 つ全てにファイルの対応がある／符牒・placeholder 0。修正パス 0 回で通過。要件の隙間や矛盾は見つからなかった。
+- **リスク（設計後も残るもの）**: ⑴ 作業順を守らないと途中状態が赤（畳むのはフォルダが在るうち・追跡から外すのは判定の前）→ design.md「作業順」に固定。⑵ `.nar` を作り直したときに中身が変わっても常設の判定は名前と縦横だけ（裁定どおり・PR の差分が唯一の検出）。⑶ `shell-balloon-switch` が検体を足すと逐語の `6` の追随が再発（Revalidation Triggers に明記）。
