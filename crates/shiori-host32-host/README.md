@@ -55,6 +55,7 @@ i686 は x86 の MSVC ツールセットで足りる。
 # ① i686 helper と testdll を先にビルド（統合テストが spawn/load する成果物を用意）
 cargo build -p shiori-host32-helper  --target i686-pc-windows-msvc
 cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc
+cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc
 
 # ② host 側テスト（単体 ＋ 統合）。統合テストは ① の成果物を要する
 cargo test -p shiori-host32-host

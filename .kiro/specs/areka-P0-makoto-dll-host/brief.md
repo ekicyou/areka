@@ -4,7 +4,7 @@
 > **種別**: 互換機能の新設（32bit MAKOTO DLL・任意 charset・付け外し命令）。emo2 は使わない＝**M2 ゲート扱い**。
 > **ブリーフィング段階の裁定（2026-09-02・開発者）**: ⑷ 実機サインオフは**本物の MAKOTO DLL 1 本**（YAYA as MAKOTO の UTF-8 改良版）＋自前テスト DLL ⑸ **任意の charset 対応は常に欲しい**（当初は SHIORI 側 wire も本 spec で広げる裁定＝**rebase 時に同日起票の [areka-P0-charset-canon](../areka-P0-charset-canon/brief.md)（追記(91)・SHIORI/3 の Charset 交渉＋surfaces.txt）が SHIORI 側を所有していると判明**→本 spec は charset-canon を**上流**に据えてその符号化器と交渉規則を MAKOTO wire に再利用し、SHIORI 側の配線は持たない） ⑹ **シェル側 MAKOTO も含める**（ゴースト側→シェル側の鎖）⑺ spec 名は本名で確定。
 > ⚠ **一次資料**: MAKOTO/2.0 の wire 規格ページは ukadoc に無い（`spec_makoto.html` は 404・MCP スナップショットにも無し）。正典は materia（偽春菜）の原典 `usada.sakura.vg/contents/makoto.html`（サイトは消滅・Wayback 2008-02-10 のスナップショット http://web.archive.org/web/20080210074700id_/http://usada.sakura.vg/contents/makoto.html）。**要求行は `EXECUTE MAKOTO/2.0`**。Mac 互換ベースウェア Ourin が使う `TRANSLATE Sentence MAKOTO/2.0` は Ourin 独自（GitHub 全検索で Ourin 以外に 0 件・自身のコメントも「ninix の挙動参照に留め」）＝採用しない。「§ 原典の追記」節に詳細。
-> ⚠ **2026-09-20 移管**: 切れ端 ⓐ「helper の `loadu` 優先」は [areka-P0-shiori-loadu](../areka-P0-shiori-loadu/brief.md) へ移した（`loadu` は DLL 共通仕様＝SHIORI の入口であり、makoto を待つ理由が無い）。本文に残る `loadu` の記述は移管先が正本で、本 spec は `ShioriByteProxy` を流用して結果だけを受け取る＝`shiori_proxy.rs` は本 spec の編集集合から外れる。
+> ⚠ **2026-09-20 移管**: 切れ端 ⓐ「helper の `loadu` 優先」は [areka-P0-shiori-loadu](../completed/areka-P0-shiori-loadu/brief.md) へ移した（`loadu` は DLL 共通仕様＝SHIORI の入口であり、makoto を待つ理由が無い）。本文に残る `loadu` の記述は移管先が正本で、本 spec は `ShioriByteProxy` を流用して結果だけを受け取る＝`shiori_proxy.rs` は本 spec の編集集合から外れる。
 
 ## Problem
 
