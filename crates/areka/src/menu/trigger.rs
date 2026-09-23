@@ -323,8 +323,8 @@ pub(crate) fn poll_menu_query(world: &mut World) {
 ///
 /// 返事待ちが無い tick は最初の判定で戻る（通常の tick の費用はこれだけ）。返事も期限もまだなら
 /// 返事待ちを残して戻る。決着したら返事待ちを取り出し、⑴ 窓が既に無ければ記録して捨てる、
-/// ⑵ 表示が抑止されていれば預かっていた右ダブルクリックを送って終える、⑶ それ以外は預かりを
-/// 捨てて計画を作る。⑴⑵ では旗の持ち主がここで落ちるので、表示 1 枚の旗はその場で降りる。
+/// ⑵ 表示が抑止されていれば預かっていた右ダブルクリックを送って終える（別の窓の預かりは送らずに
+/// 捨てる）、⑶ それ以外は預かりを捨てて計画を作る。⑴⑵ では旗の持ち主がここで落ちるので、表示 1 枚の旗はその場で降りる。
 fn poll_once(world: &mut World, now: Instant) -> Option<ReadyMenu> {
     let result = match poll_step(world.get_non_send::<MenuWiring>()?.pending.as_ref()?, now) {
         PollOutcome::Wait => return None,
@@ -351,6 +351,19 @@ fn poll_once(world: &mut World, now: Instant) -> Option<ReadyMenu> {
     }
 
     let scope = request.scope;
+    // 別の窓の預かりは、この要求の決着では送らない。`decide` へ渡す前に捨てる（要件 4.2）。
+    let deferred = deferred.filter(|d| {
+        let same_window = d.scope == scope;
+        if !same_window {
+            tracing::trace!(
+                event = "menu_deferred_double_click_scope_mismatch",
+                request_scope = scope,
+                deferred_scope = d.scope,
+                "[menu] dropped the deferred right double-click: it belongs to another window"
+            );
+        }
+        same_window
+    });
     let interpreted = captions::interpret(result, captions::visible_resource_for(scope), scope);
     match decide(interpreted.visibility, deferred.as_ref()) {
         // 抑止の記録（`info!`）は `interpret` が出している。
