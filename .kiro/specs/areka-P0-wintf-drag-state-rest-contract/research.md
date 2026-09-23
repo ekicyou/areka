@@ -138,6 +138,8 @@
 
 ## 6. 設計で決める分かれ目（要件ディスカッションへ）
 
+> **2026-09-23 設計フェーズで決着**（§9）: 6-1＝A-1・`is_button_held`／6-3＝兄弟 2 本＋真偽表 1 本／6-4＝C1／6-6＝`exists()` 直書き。6-2・6-5 は要件で決着済み。
+
 1. **述語の名前と置き場**（§4 A-1／A-2／A-3）。名前の候補: `is_button_held`（brief の例・「押している間」の直訳）／`is_left_button_held`（右・中ボタンのドラッグは範囲外だが名前で限定する）。推奨は A-1＋`is_button_held`（差分最小・並びは定義 2 か所のみ）。
 2. **（決着済み・要件 1.5 へ反映）「1 フレーム」の語彙を `state/mod.rs` の外でも消すか**: `controller.rs` の `resolve_transition` doc 1 項・`docs/click_through.md` の 1 段落。消すなら「閾値到達から次の tick の `dispatch_drag_events` まで」へ。消さないなら要件 1.5 に「`JustStarted` の『1 フレーム』は残す」と書いて 0 件を明示する。
 3. **契約テストの形**: ⒜ 新テスト 1 本で解放と中断の両方を踏む／⒝ 解放 1 本＋中断 1 本の兄弟 2 本（要件 3.4 はどちらも許す）。既存の `test_start_preparing_allowed_from_just_ended` は「`JustEnded` から次の押下を受け付ける」を既に固定しているので、新テストが足すのは「述語が偽」と「他の関数を 1 つも呼ばない」の 2 点。既存テストに assert を足す手もあるが要件 6.5（既存テスト不変）に反するので新設。
@@ -154,3 +156,48 @@
 - 案 A・述語は A-1（`is_button_held` を `DragState` と `DragStateSnapshot` に各 1 行）・相乗り 1 は C1・相乗り 2 は `exists()` 直書き＋`warn!`。
 - 要件 1.1 の `JustStarted` の出口の文言を先に直す（§5-1）。設計の状態遷移図はこの訂正を前提に描く。
 - タスクは 5〜7 本の見立てどおり: ①doc＋述語＋撤去（wintf）②読み手 3 か所③契約テスト＋既存テスト追随④相乗り 1＋テスト⑤相乗り 2＋テスト（⑥ `docs/click_through.md` の語彙は §6-2 の裁定次第）。
+
+## 9. 設計フェーズの記録（2026-09-23・`design.md` 生成時）
+
+### 9.1 要約
+
+- **Discovery Scope**: Extension（既存システムの拡張・軽量ディスカバリ）。外部調査 0・サブエージェント 0。§2 の実測を設計時に `Read`／`Grep` で再確認し、食い違いは 0。
+- **Key Findings**（設計を形作った 3 点）:
+  1. `decide` の既存テストの見本が「預かり scope 1・要求 scope 0」で組まれている（§2.3）。窓の比較を `decide` の引数に入れると要件 6.5 と衝突するので、`decide` へ渡す前に絞る（C1）以外に無理の無い置き場が無い。
+  2. `is_available` は `missing_logged` を消費する（§2.4）。`open_from_world` から再利用すると要件 5.4 に抵触するので、`exists()` を直に書く。
+  3. `JustEnded` は `CaptureGuard` を持たない（§2.1）。`controller_tests.rs` の後片付けは借用の中で `*s = DragState::Idle` を代入して安全（`ReleaseCapture` は走らない）。
+
+### 9.2 設計の決定
+
+#### Decision: 述語の置き場と名前（§6-1）
+- **Alternatives**: A-1（両型に `matches!` 1 行ずつ）／A-2（写しにだけ置き `DragState` は `snapshot()` 経由）／A-3（A-1＋thread_local を読む自由関数）。
+- **Selected**: A-1・名前は `is_button_held`。
+- **Rationale**: 差分最小。A-2 は `WM_NCHITTEST` の cache miss 経路に写しの費用を乗せる（実測不能だが理由が無い）。A-3 の自由関数は読み手 3 か所がどれも 1 行で書けるので足す理由が無い。「left」を名前に入れないのは `DragState` 自身がボタンの種類を持たないため（doc で左ボタンと明記）。
+- **Trade-offs**: variant の並びが述語の定義 2 か所に残るが、それは定義そのもので要件 2.5 の対象ではない。
+
+#### Decision: 契約テストの形（§6-3）
+- **Alternatives**: ⒜ 1 本で解放と中断の両方／⒝ 解放 1 本＋中断 1 本の兄弟。
+- **Selected**: ⒝ ＋ 述語の真偽表 1 本（計 3 本）。
+- **Rationale**: 赤になったとき解放と中断のどちらが後退したかが名前で分かる。真偽表は要件 2.1・2.2 の 5 状態×両型を製品の関数で踏む唯一の場所。既存 `test_start_preparing_allowed_from_just_ended` に assert を足す案は要件 6.5（既存テスト不変）に反するので採らない。
+
+#### Decision: 相乗り 1 の比較の置き場（§6-4）
+- **Alternatives**: C1（`decide` へ渡す前に絞る）／C2（`decide` の引数に scope）／C3（`Suppress` の腕で比べる）。
+- **Selected**: C1。
+- **Rationale**: `decide` と既存テスト 2 本が不変（要件 6.5）。判断は `decide` 1 か所のまま（要件 4.4 の文言「比較を判断の入力として扱う」どおり）。C3 は判断が 2 か所になる。
+- **Trade-offs**: 絞り込みが返事の種類より前なので、**表示に決着したときも窓が異なる預かりは `scope_mismatch` の行で捨てる**（`dropped` の行は出ない）。要件 4.3 は「送らない」だけを求め、記録の水準はどちらも `trace!`。同じ窓＋表示は今日どおり。この差は `design.md` の System Flows に明記した。
+
+#### Decision: 相乗り 2 の実在チェック（§6-6）
+- **Selected**: `open_from_world` に `wiring.path.exists()` を直に書く。記録は `warn!`・要求 1 件につき 1 行（初回だけにしない）。
+- **Rationale**: `is_available` の再利用は `missing_logged` を奪う（要件 5.4）。毎回記録するのは、台本が「無いものを開け」と言った回数が障害調査の材料になるため（メニュー側の毎 tick 照会と違い、台本の要求は頻度が低い）。
+
+### 9.3 合成（design-synthesis の 3 つのレンズ）
+
+- **一般化**: 「押している間か」の 3 読み手は同じ問いの変奏 → 述語 1 つに集約。「移動中か」（`resolve_transition`）は問いが違うので一般化しない（読み手 1 か所・要件 Out of scope）。
+- **作るか採るか**: 新しい部品は無い。使うのは既存の `matches!`・`log_capture_kit`・`temp_path_kit`・`update_drag_state`。
+- **単純化**: 述語用の module（案 B）・thread_local の自由関数（A-3）・相乗りの別 spec 化（案 C）を却下。新規ファイル 0・新規依存 0・新しい抽象 0。
+
+### 9.4 リスクと緩和
+
+- `trigger_flow_tests.rs` の余裕が最小（863 行）— 新テスト＋ヘルパを 60 行以内に。超えるなら `trigger_flow_scope_tests.rs` へ兄弟分割。
+- `reset_to_idle` の撤去とテスト 3 か所の追随を別コミットにすると中間状態で compile が落ちる — 同じタスク・同じコミットで行う。
+- 範囲外の報告: `WM_ACTIVATE` が `JustStarted` で `cancel_dragging` を呼ばない非対称（§2.2）。本仕様では触らず、台帳へ渡す候補。
