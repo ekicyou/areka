@@ -1,7 +1,7 @@
 # Requirements Document
 
 > 本文の実測は **2026-09-23・本ブランチ**（main `92f5f448` 相当）のもの。コードは「何の定義か」（関数名・型名＋ファイルパス）で指し、行番号では指さない。
-> **要件ディスカッションで確認する項目は末尾「確認事項」に 4 件**（うち裁定が要るのは 2 件: 直し方の案の確定・説明書が無いときの記録の水準）。
+> **末尾「確認事項」は 4 件**。要件ディスカッション（2026-09-23）で 1・3・4 は実測の根拠どおり決定済み、2（説明書が無いときの記録の水準）は開発者の裁定。
 
 ## Introduction
 
@@ -71,11 +71,11 @@ wintf のドラッグの状態を読む開発者（areka のメニュー・今�
 
 #### Acceptance Criteria
 
-1. The wintf shall `DragState` の 5 つの状態それぞれに「どの出来事でこの状態に入り、どの出来事で出るか」を説明に書き、フレーム数（「1 フレームのみ」等）で説明しない（`JustStarted` は次のポインタ移動で `Dragging` へ、`JustEnded` は次の左押下で `Preparing` へ）。
+1. The wintf shall `DragState` の 5 つの状態それぞれに「どの出来事でこの状態に入り、どの出来事で出るか」を説明に書き、フレーム数（「1 フレームのみ」等）で説明しない（`JustStarted` は閾値到達の後の次の tick の `dispatch_drag_events`（`crates/wintf/src/ecs/drag/dispatch.rs`）で `Dragging` へ、解放・中断なら `JustEnded` へ。`JustEnded` は次の左押下で `Preparing` へ）。
 2. The wintf shall `JustEnded` の説明に「解放または中断のあと、次の左押下までここで休む。製品コードがこの状態を `Idle` へ戻すことは無い」ことを書く。
-3. The wintf shall 製品コードから呼ばれない状態遷移関数 `reset_to_idle` を撤去し、撤去後の wintf の公開 API に「製品の呼び手が 0 件で、説明が製品の時機（『dispatch_drag_events 後』等）を語る関数」を 0 件にする。
+3. The wintf shall 製品コードから呼ばれない状態遷移関数 `reset_to_idle` を撤去し、撤去後の wintf の公開 API に「製品の呼び手が 0 件で、説明が製品の時機（『dispatch_drag_events 後』等）を語る関数」を 0 件にする（`check_threshold` も製品の呼び手は 0 件だが、説明は閾値判定を語るだけで製品の時機を語らないので撤去の対象外）。
 4. When 左ボタンが押されて離される（`start_preparing` → `end_dragging`）, the wintf shall 解放後の状態を今日と同じ（`JustEnded`・次の左押下まで変わらない）に保ち、製品コードの状態遷移を 1 つも足さず 1 つも減らさない（挙動は 1 ビットも変えない）。
-5. The wintf shall `crates/wintf/src/runtime/mod.rs` と `crates/wintf/src/ecs/clickthrough/controller.rs` の「`JustEnded` 再収束（R5.2）」の説明を、本仕様の説明と矛盾しない文言（「終了直後の周で押下中の固定が外れ、現在の当たりへ戻る」の意味）に保つ。
+5. The wintf shall `crates/wintf/src/runtime/mod.rs` と `crates/wintf/src/ecs/clickthrough/controller.rs` の「`JustEnded` 再収束（R5.2）」の説明を、本仕様の説明と矛盾しない文言（「終了直後の周で押下中の固定が外れ、現在の当たりへ戻る」の意味）に保つ。あわせて `controller.rs` の `resolve_transition` の説明と `docs/click_through.md`（「ドラッグ中の透過抑止」の段落）が `JustStarted` を「直前 1 フレーム」と書く箇所（2 か所）を、要件 1.1 と同じ出来事の語（「閾値到達から次の tick の `dispatch_drag_events` まで」）へ直す。透過制御の判定規則は変えない（要件 6.2）。
 
 ### Requirement 2: 「左ボタンを押している間か」を 1 つの述語で聞ける
 
@@ -102,7 +102,7 @@ wintf のドラッグの状態を読む開発者（areka のメニュー・今�
 4. The wintf shall 中断（`cancel_dragging`）を踏んだ場合についても同じ契約（述語が偽・次の押下を受け付ける）を同じテストまたは兄弟の 1 本で確かめる。
 5. The wintf shall `reset_to_idle` を確かめていた既存テスト 2 本（`test_reset_to_idle_only_from_just_ended`・`test_reset_to_idle_noop_when_preparing`）を陳腐化として除外し、後片付けに `reset_to_idle` を使っていた `controller_tests.rs` の 1 か所を `update_drag_state` で `Idle` へ戻す形に置き換える（`crates/areka/src/menu/trigger_flow_tests.rs` の `ResetDragState` と同じ作法）。
 6. The areka shall `trigger_flow_tests.rs` の `a_release_after_a_finished_left_click_still_opens_the_menu` を意図を変えずに緑のまま保つ。
-7. The wintf shall テストファイルを 1 ファイル 1,000 行以内に保つ（`state/tests.rs` は現在 445 行）。
+7. The wintf shall テストファイルを 1 ファイル 1,000 行以内に保つ（`state/tests.rs` は現在 499 行・総行数）。
 
 ### Requirement 4: 預かった右ダブルクリックは同じ窓の抑止でしか送らない（相乗り 1）
 
@@ -113,8 +113,8 @@ wintf のドラッグの状態を読む開発者（areka のメニュー・今�
 1. When 照会の返事が「抑止」に決着する and 預かった右ダブルクリックがある and 預かりの窓（`PendingDoubleClick.scope`）が要求の窓（`MenuRequest.scope`）と同じ, the areka shall 今日と同じく預かりを `OnMouseDoubleClick`（右ボタン・Ref5＝1）として送る。
 2. When 照会の返事が「抑止」に決着する and 預かった右ダブルクリックがある and 預かりの窓が要求の窓と異なる, the areka shall 預かりを送らずに捨て、両方の窓番号を添えて `trace!` で 1 行記録する。
 3. When 照会の返事が「表示」に決着する, the areka shall 今日と同じく預かりを捨てる（窓が同じでも異なっても送らない）。
-4. The areka shall 「送る／送らない」を決める場所を引き続き 1 か所（`decide` の判断）に保ち、窓の比較をその判断の入力として扱う（判断の場所を 2 つにしない）。
-5. The areka shall `crates/areka/src/menu/trigger_flow_tests.rs`（または 1,000 行を超えるなら同じ接頭辞の兄弟ファイル・現在 776 行）に、「窓 1 の預かり＋窓 0 の要求＋抑止の返事」で kanade へ何も届かず預かりが残らず記録の行が出ることを確かめる決定論テストを 1 本置く。
+4. The areka shall 「送る／送らない」を決める場所を引き続き 1 か所（`decide` の判断）に保ち、窓の比較をその判断の入力として扱う（判断の場所を 2 つにしない）。比較の置き場は設計で決めるが、`crates/areka/src/menu/trigger_tests.rs` の `decide` の既存テストを変えずに済む形を取る（要件 6.5）。
+5. The areka shall `crates/areka/src/menu/trigger_flow_tests.rs`（または 1,000 行を超えるなら同じ接頭辞の兄弟ファイル・現在 863 行・総行数）に、「窓 1 の預かり＋窓 0 の要求＋抑止の返事」で kanade へ何も届かず預かりが残らず記録の行が出ることを確かめる決定論テストを 1 本置く。
 6. The areka shall 「同じ窓の預かり＋抑止の返事」で送られる既存の確認を緑のまま保つ。
 
 ### Requirement 5: 説明書の無いゴーストで台本の `\![open,readme]` が重い記録を出さない（相乗り 2）
@@ -127,7 +127,7 @@ wintf のドラッグの状態を読む開発者（areka のメニュー・今�
 2. When 「説明書を開いて」の要求が届く and ファイルが存在する, the areka shall 今日と同じく OS の開く処理を呼ぶ。
 3. When OS の開く処理が失敗する（ファイルは在ったが開けない）, the areka shall 今日と同じくパスと符号を添えて `error!`（`readme_open_failed`）で記録する（本当の失敗の記録は落とさない）。
 4. The areka shall メニュー側の振る舞い（ファイルが無ければ「説明書」を灰色にし、「無い」を初回だけ `debug!` で記録する）を変えない。
-5. The areka shall `crates/areka/src/readme_tests.rs`（現在 182 行）に、ファイルの無い一時フォルダで `open_from_world` を呼ぶと `readme_open_failed` が 0 行・要件 5.1 の記録が 1 行（水準つき）であることを確かめる決定論テストを 1 本置く。
+5. The areka shall `crates/areka/src/readme_tests.rs`（現在 214 行・総行数）に、ファイルの無い一時フォルダで `open_from_world` を呼ぶと `readme_open_failed` が 0 行・要件 5.1 の記録が 1 行（水準つき）であることを確かめる決定論テストを 1 本置く。
 
 ### Requirement 6: 変えないこと
 
@@ -143,7 +143,7 @@ wintf のドラッグの状態を読む開発者（areka のメニュー・今�
 
 ## 確認事項（要件ディスカッションで確認する）
 
-1. **直し方は案 A（説明を実装に合わせる）＋`reset_to_idle` の撤去で進める（要 確認）。** 根拠: `reset_to_idle` の製品の呼び手 0 件・`JustEnded` の値を読む製品コード 0 件・透過制御 R5.2 は `JustEnded` の観測に依存しない（`resolve_transition` は `Idle` と同じ枝）・案 B は挙動変更かつ「1 フレーム後に戻す」形。brief は「明記するかテスト専用へ格下げ」も許すが、テスト専用にすると再輸出も `cfg(test)` にする手間が増えるだけで守るものが無いので撤去を推す。
+1. **直し方は案 A（説明を実装に合わせる）＋`reset_to_idle` の撤去で進める（決定済み・2026-09-23 要件ディスカッション）。** 根拠: `reset_to_idle` の製品の呼び手 0 件・`JustEnded` の値を読む製品コード 0 件・透過制御 R5.2 は `JustEnded` の観測に依存しない（`resolve_transition` は `Idle` と同じ枝）・案 B は挙動変更かつ「1 フレーム後に戻す」形。brief は「明記するかテスト専用へ格下げ」も許すが、テスト専用にすると再輸出も `cfg(test)` にする手間が増えるだけで守るものが無いので撤去を推す。
 2. **説明書が無いときの台本の `\![open,readme]` の記録の水準（裁定）。** 推奨は **`warn!`**（要求 1 件につき 1 行）。理由: ゴーストの台本が「無いものを開け」と言った＝ゴースト側の作りの問題で、利用者から見ると「何も起きなかった」ので原因を記録に残す価値がある。`logging.md` の基準では「回復可能なエラー・フォールバック」＝`warn!`。対案は `debug!`（メニュー側の `readme_missing` と揃える）と `info!`。`error!` のままにはしない。
-3. **読み手の寄せ替えは brief の「wintf 内 3 か所」と異なる（報告）。** brief は `resolve_transition`・`start_preparing`・`keyboard.rs` を挙げるが、実測では `resolve_transition` は別の問い（「移動中か」・`Preparing` を含めない）で、`keyboard.rs` の `WM_CAPTURECHANGED` は捕捉の持ち主を可変で触るので写しの述語では足りない。どちらも述語へ寄せると挙動が変わるか書けない。代わりに `nchittest_cache.rs` の当たり判定の読み手が「押している間か」だけを聞いている。寄せる先は `start_preparing`・`nchittest_cache.rs`・`trigger.rs` の 3 か所。
+3. **読み手の寄せ替えは brief の「wintf 内 3 か所」と異なる（報告・ギャップ分析で見落とし 0 件を確認済み）。** brief は `resolve_transition`・`start_preparing`・`keyboard.rs` を挙げるが、実測では `resolve_transition` は別の問い（「移動中か」・`Preparing` を含めない）で、`keyboard.rs` の `WM_CAPTURECHANGED` は捕捉の持ち主を可変で触るので写しの述語では足りない。どちらも述語へ寄せると挙動が変わるか書けない。代わりに `nchittest_cache.rs` の当たり判定の読み手が「押している間か」だけを聞いている。寄せる先は `start_preparing`・`nchittest_cache.rs`・`trigger.rs` の 3 か所。
 4. **窓の異なる預かりは「捨てて `trace!`」に決めた（報告）。** `areka-P0-popup-menu-residue` の brief は「捨てるか残すか」を要件で決めるとしていた。残すと、後の無関係な要求の抑止で送られる（`trigger.rs` の `ignore_release` の説明が禁じる形）ので捨てる。

@@ -128,6 +128,8 @@
 
 ## 5. 要件がコードと食い違う箇所（要件ディスカッションで文言を直す）
 
+> **2026-09-23 要件ディスカッションで反映済み**: 1（要件 1.1 の `JustStarted` の出口）・2（行数を総行数へ）・3（要件 4.4 に「`decide` の既存テストを変えずに済む形」を追記・置き場は §6-4 で設計が決める）・4（要件 1.5 に `resolve_transition` の説明と `docs/click_through.md` の「直前 1 フレーム」2 か所の書き直しを追加＝§6-2 は決着）。
+
 1. **要件 1.1 の括弧「`JustStarted` は次のポインタ移動で `Dragging` へ」**は実装と違う。`JustStarted` → `Dragging` は `crates/wintf/src/ecs/drag/dispatch.rs` の `dispatch_drag_events`（`DragTransition::Started` の腕で `update_dragging` を呼ぶ・`Input` スケジュールの tick）で起きる。`WM_MOUSEMOVE`（`mouse_move.rs`）には `JustStarted` の腕が無い。直し: 「`JustStarted` は次の tick の `dispatch_drag_events` で `Dragging` へ（解放・中断なら `JustEnded` へ）」。
 2. **行数の単位**: 要件 3.7・4.5・5.5 の 445／776／182 は空行を除いた数。総行数は 499／863／214（§2.5）。上限判定には影響しない（どれも 1,000 未満）が、単位を「総行数」に揃えるか「空行を除く」と明記する。
 3. **要件 4.4「判断の場所を 2 つにしない」と要件 6.5「既存テストを 1 本も変えない」の両立**: `decide` の引数に scope を足すと `trigger_tests.rs` の `decide_sends_the_double_click_only_when_suppressed_and_deferred`（預かり scope 1・要求 scope 0）が赤になる。要件そのものの矛盾ではなく、設計の置き場を縛る（§6-4）。要件の文言を「窓の比較は `decide` へ渡す預かりを絞る形でもよい」と緩めるか、`decide` の引数を変えて既存テスト 2 本の見本を直すか（6.5 の例外に加える）のどちらか。
@@ -137,7 +139,7 @@
 ## 6. 設計で決める分かれ目（要件ディスカッションへ）
 
 1. **述語の名前と置き場**（§4 A-1／A-2／A-3）。名前の候補: `is_button_held`（brief の例・「押している間」の直訳）／`is_left_button_held`（右・中ボタンのドラッグは範囲外だが名前で限定する）。推奨は A-1＋`is_button_held`（差分最小・並びは定義 2 か所のみ）。
-2. **「1 フレーム」の語彙を `state/mod.rs` の外でも消すか**: `controller.rs` の `resolve_transition` doc 1 項・`docs/click_through.md` の 1 段落。消すなら「閾値到達から次の tick の `dispatch_drag_events` まで」へ。消さないなら要件 1.5 に「`JustStarted` の『1 フレーム』は残す」と書いて 0 件を明示する。
+2. **（決着済み・要件 1.5 へ反映）「1 フレーム」の語彙を `state/mod.rs` の外でも消すか**: `controller.rs` の `resolve_transition` doc 1 項・`docs/click_through.md` の 1 段落。消すなら「閾値到達から次の tick の `dispatch_drag_events` まで」へ。消さないなら要件 1.5 に「`JustStarted` の『1 フレーム』は残す」と書いて 0 件を明示する。
 3. **契約テストの形**: ⒜ 新テスト 1 本で解放と中断の両方を踏む／⒝ 解放 1 本＋中断 1 本の兄弟 2 本（要件 3.4 はどちらも許す）。既存の `test_start_preparing_allowed_from_just_ended` は「`JustEnded` から次の押下を受け付ける」を既に固定しているので、新テストが足すのは「述語が偽」と「他の関数を 1 つも呼ばない」の 2 点。既存テストに assert を足す手もあるが要件 6.5（既存テスト不変）に反するので新設。
 4. **相乗り 1 の比較の置き場**: **C1** `decide(visibility, deferred.as_ref().filter(|d| d.scope == scope))` と、絞られて落ちたときの `trace!` を `poll_once` に置く（`decide` 不変・既存テスト緑）／**C2** `decide` の引数に `scope` を足す（判断が本当に 1 か所になるが `trigger_tests.rs` の見本 2 本を直す＝要件 6.5 の例外）／**C3** `Suppress` の腕の中で比べる（判断が 2 か所＝要件 4.4 違反・却下）。推奨は C1。C1 でも「送る／送らない」を決めるのは `decide` のままで、窓の比較は `decide` への入力（要件 4.4 の文言どおり）。
 5. **相乗り 2 の記録の水準**（要件の確認事項 2）: `warn!`（推奨・`logging.md` の表「回復可能なエラー・フォールバック」）／`debug!`（メニュー側 `readme_missing` と揃う・利用者の障害調査では見えない）／`info!`（ライフサイクルの表に合わない）。`error!` は要件が既に除外。
