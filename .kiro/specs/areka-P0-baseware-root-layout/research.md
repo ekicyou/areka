@@ -96,7 +96,7 @@
 | 3.2〜3.5 起動成功時の書き込みと根の内外の判定 | `runtime.sylphya_publisher().persist_put(scope, entries)`・`GhostRuntime::mount().shell.dir` | 「起動成功」の時点の定義・根の直下かの判定（Windows のパス比較）・書き込みの反映を終了前に保証するか（`barrier`） | Unknown |
 | 3.6〜3.7 同じ経路・往復の檻 | `save_scope` の read-modify-write・`FakePersistIo`・`main_persist_wiring_seam_tests.rs` の前例 | なし（前例をなぞる） | — |
 | 3.8 シェルの記憶を起動に使わない | `resolve` は `seriko.defaultsurfacedirectoryname` しか見ない | なし（後続 spec の口） | — |
-| 4.1〜4.9 ゴーストの解決順 | `resolve_config_inputs` の argv 採用 | 純粋な判断関数（argv／記憶／唯一／複数の先頭／0 体・記憶の指す先が無い）と経路の info | Missing |
+| 4.1〜4.11 ゴーストの解決順 | `resolve_config_inputs` の argv 採用 | 純粋な判断関数（argv／記憶／唯一／既定 `emo2`／無作為／0 体・記憶の指す先が無い・2026-09-23 裁定 3 で改定）と経路の info | Missing |
 | 5.1〜5.11 バルーンの解決順 | `SampleRoot::balloon` が示す「`install.txt` の `balloon.directory` → `<根>/balloon/<名>/`」の対応 | `install.txt` の読み手（§1.6 の (a)/(b)）・既定バルーン id の定数・7 分岐の純粋関数 | Missing |
 | 6.1〜6.3・6.5 告知 | `MessageBoxW` 結線済み・env の 2 段の型 | 告知関数（4 場面・日本語文面・絶対パス）・抑止 env 名・`error!` との対 | Missing |
 | 6.4 起動窓を開けない | `open_startup_window` の `Err` アーム・`PlacementError` 4 variant | ダミー窓フォールバック → 非 0 終了へ。`smoke_exit_ms` の投入位置の移動。`None` を受けて続行する `main` 側の縮退分岐（作者基準 DPI）の撤去 | Constraint |
@@ -131,7 +131,7 @@
 - `areka/src/boot_resolve.rs`（`AREKA_ROOT` の読み口・ゴーストとバルーンの解決順の純粋関数・経路の enum）＋ `boot_resolve_tests.rs`。`ConfigInputs` はこの関数の出力として残す。
 - `areka/src/alert.rs`（4 場面の enum・日本語文面の組み立て・`MessageBoxW` の 1 呼び出し・抑止フラグ）＋ `alert_tests.rs`。
 - `persist/mod.rs` へ族追加（ここは拡張以外の選択肢が無い）＋ `persist_tests.rs` へテスト移設。
-- ✅ 判断分岐ごとに檻が独立し、要件 4.8／5.10／6.7／8.2 が 1 対 1 で対応する。`main.rs` は配線だけ。
+- ✅ 判断分岐ごとに檻が独立し、要件 4.9／5.10／6.7／8.2 が 1 対 1 で対応する。`main.rs` は配線だけ。
 - ❌ 新規 3〜4 ファイル。`main.rs` と `boot_config.rs` の doc・`mod` 宣言の更新。
 
 ### Option C: ハイブリッド（推奨の候補）
@@ -170,7 +170,7 @@ Research Needed（設計で確定する）:
 要件 9 の裁定候補 1〜5 に加えて、コードの実測から増えた分かれ目。番号は要件 9 の続き（6 は「覆す必要が出たら議題に」の条項なので 7 から）。
 
 7. **`wired=false` の `LogSink` フォールバック boot を残すか。** 今日の `main` は `wire_emo2_boot` が `wired=false` を返すと `LogSink`×2 の boot へ倒して起動を続ける（`main.rs` の `else` アーム）。ダミー窓が消え「起動窓を開けない＝終了」になっても、この経路は「窓は開いたが実 sink の結線が倒れた」場合に残る。要件はこの経路に触れていない。残すなら `is_benign_boot_error` の doc の根拠（既定パスの不在が常態）だけを書き換える。退役させるなら要件 6 に 5 つ目の場面が要る。
-8. **`is_benign_placement_error`／`main_seam_tests.rs`（2 本）の扱い。** 要件 6.4 で準備失敗は全て `error!`＋終了になるため「良性（`warn!`）」の分類は使い道を失う。退役（陳腐化として除く）か、`MountError::StartPointMissing` を「ゴーストが無い（要件 4.7 と同じ告知）」と「その他（要件 6.4 の告知）」の文面の分岐として残すか。
+8. **`is_benign_placement_error`／`main_seam_tests.rs`（2 本）の扱い。** 要件 6.4 で準備失敗は全て `error!`＋終了になるため「良性（`warn!`）」の分類は使い道を失う。退役（陳腐化として除く）か、`MountError::StartPointMissing` を「ゴーストが無い（要件 4.8 と同じ告知）」と「その他（要件 6.4 の告知）」の文面の分岐として残すか。
 9. **記憶を書く時点。** 「ゴーストの起動が成功する」（要件 3.2〜3.4）を (a) `areka_ghost::boot` が `Ok` を返した時点、(b) 本物のゴースト窓が開いた時点（`open_startup_window` の Ok アーム＋boot Ok）、のどちらで取るか。(a) は wired／fallback 両経路で 1 か所（`insert_persist_wiring` と同じ場所）に置ける。(b) は窓の生成が ECS コマンド経由の非同期なので「開いた」の観測点が `FrameFinalize` の後になる。
 10. **告知を抑止する env の名。** 候補: `AREKA_ALERT=0`（`AREKA_TICK_GATE=1|0` と同型）／`AREKA_NO_ALERT=1`／`AREKA_QUIET=1`。要件 6.5 は「`AREKA_` 名前空間で 1 つ」とだけ定める。smoke 3 方向と実機 ③ で使う。
 11. **`current_exe()` が失敗したときの根。** 今日は `default_app_profile_dir`／`default_helper_exe_path` が `"."` へ寛容に倒れる。根も同じにすると要件 1.4 の「実在しない根」検査が `"."`（カレントディレクトリ）に対して走り、意図しない場所を根として受理しうる。`current_exe()` 失敗を「根が決まらない」として要件 1.4 の告知に含めるか。
