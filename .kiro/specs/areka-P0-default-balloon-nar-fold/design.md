@@ -128,12 +128,12 @@ crates/areka-emo-text/tests/
 - `crates/sample-ghost-kit/src/lib_tests.rs` — 後述「登記の自己テストの追随」（3.1〜3.5・2.1 の直接の判定）。
 - `crates/sample-ghost-kit/examples/fold-samples.rs` — module doc「呼び方」の 2 行を `--from vendors/sample_ghost/<展開フォルダ>` の置き換えに（5.5）。
 - `crates/areka-emo-text/tests/staysee_balloon_fixture/test_support.rs` — 後述「`staysee_root()` の契約」（4.1〜4.3）。
-- `crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs` — 定数 `STAYSEE_BALLOON_DIR` とその見出し・doc を削除。module doc の「このテストが塞ぐ穴」の `vendors/sample_ghost/StayseeBalloon/` の綴りと「検体パスは 1 定数だけが持つ（要件 3.2）」の節を、「検体は窓口 `sample-ghost-kit` から `StayseeBalloon` の名前で引く（出典 spec `areka-P0-default-balloon-nar-fold`）」の 1 節に置き換える。テーマ別ファイルの表と「置き場がディレクトリである理由」は残す（4.1）。
+- `crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs` — 定数 `STAYSEE_BALLOON_DIR` とその見出し・doc を削除。module doc の「このテストが塞ぐ穴」の `vendors/sample_ghost/StayseeBalloon/` の綴りと「検体パスは 1 定数だけが持つ（要件 3.2）」の節を、「検体は窓口 `sample-ghost-kit` から `StayseeBalloon` の名前で引く（出典 spec `areka-P0-default-balloon-nar-fold`）」の 1 節に置き換える。消える定数を語る文は module doc に **2 つ**あり、どちらも書き換える: 「付け替えるのは [`STAYSEE_BALLOON_DIR`] の 1 行だけで済む形にしてある」→「付け替えるのは `test_support.rs` の `staysee_root()` の本体だけ」・「本ファイルは検体パス定数と接続宣言だけを持つ入口である」→「本ファイルは接続宣言だけを持つ入口である」。テーマ別ファイルの表と「置き場がディレクトリである理由」は残す（4.1）。
 - `.kiro/steering/product.md` — 既定バルーンの節「`vendors/sample_ghost/StayseeBalloon/` に無改変で保管」→「`vendors/sample_ghost/StayseeBalloon.nar` に無改変で保管・登記表経由」（5.2）。
 - `.kiro/steering/structure.md` — Sample Ghost Kit の「検体の顔ぶれ」: 「バルーン 2 本」→「3 本（`StayseeBalloon`＝areka の既定バルーン・CC0 を含む）」、末尾の「展開フォルダのままで登記表に載っていない（畳むのは roadmap 台帳 #42）」の文を削除（5.2）。
 - `.kiro/specs/areka-P0-alpha-release-signoff/brief.md` — 「zip に入れるもの」の出どころを「`vendors/sample_ghost/StayseeBalloon.nar` を窓口で展開した `balloon/StayseeBalloon/` の 29 ファイル」へ。冒頭の「着地すると…になる」の予告文は「着地済み」の現在形へ（5.3）。
-- `.kiro/specs/areka-P0-baseware-root-layout/brief.md` — 「保管先は `vendors/sample_ghost/StayseeBalloon/`（展開フォルダ…）。`.nar` へ畳むのは `areka-P0-nar-install` が引き受ける」→「保管先は `vendors/sample_ghost/StayseeBalloon.nar`（登記表 `SAMPLES` 経由・`SampleRoot::acquire("StayseeBalloon")` で引く）」（5.3）。
-- `.kiro/steering/roadmap.md` — 台帳 #42 の状態列を完了へ（5.4。#37 の行と `roadmap-history.md` は触らない）。
+- `.kiro/specs/areka-P0-baseware-root-layout/brief.md` — 「保管先は `vendors/sample_ghost/StayseeBalloon/`（展開フォルダ…）。`.nar` へ畳むのは `areka-P0-nar-install` が引き受ける」→「保管先は `vendors/sample_ghost/StayseeBalloon.nar`（登記表 `SAMPLES` 経由・`SampleRoot::acquire("StayseeBalloon")` で引く）」。冒頭の追記「畳む仕事は `areka-P0-default-balloon-nar-fold`（台帳 #42）が**持つ**…**偽になった**」は「#42 が畳んだ（着地済み）」の過去形へ（5.3。この 1 文は `/` 付きの綴りを持たないので 5.6 の検索には掛からない＝手で直す）。
+- `.kiro/steering/roadmap.md` — 台帳 #42 の行: 状態列と段列を ✅ に・名前を `completed/default-balloon-nar-fold` に（5.4。台帳の注記どおり `/kiro-complete` が行う）。本文は #37 の行と同じく経緯として残す。#37 の行と `roadmap-history.md` は触らない。
 - `.kiro/specs/areka-P0-default-balloon-nar-fold/verification/nar-roundtrip.md` — 新規。1.4 の照合記録。
 
 ## Requirements Traceability
@@ -156,7 +156,7 @@ crates/areka-emo-text/tests/
 | 3.4 | doc 3 か所・assert 文言 2 か所 | `lib_tests.rs` | — | — |
 | 3.5 | 逐語の数（引き算しない） | `lib_tests.rs` | — | — |
 | 3.6 | `cargo test -p sample-ghost-kit` 緑 | — | — | 手順 ⑤ |
-| 4.1 | 窓口から根・綴り 0 か所 | `test_support.rs`・入口ファイル | `staysee_root() -> PathBuf` | — |
+| 4.1 | 窓口から根・綴り 0 か所 | `test_support.rs`・入口ファイル | `staysee_root() -> PathBuf` | 手順 ⑦ ⒜ |
 | 4.2 | `EXPECTED_FILE_NAMES` 29 本のまま | `test_support.rs`（該当部は 0 変更） | — | — |
 | 4.3 | プロセス中ずっと同じ位置 | `static STAYSEE: LazyLock<SampleRoot>` | — | — |
 | 4.4 | 結合テスト緑 | — | — | 手順 ⑤ |
@@ -165,8 +165,8 @@ crates/areka-emo-text/tests/
 | 5.2 | steering 2 本 | product.md・structure.md | — | 手順 ⑥ |
 | 5.3 | brief 2 本 | 2 brief | — | 手順 ⑥ |
 | 5.4 | roadmap #42 | roadmap.md | — | 手順 ⑥ |
-| 5.5 | `fold-samples.rs` の doc の例 | examples | — | 手順 ⑥ |
-| 5.6 | 現在形の綴り 0 件 | 検索（後述） | `grep` | 手順 ⑦ |
+| 5.5 | `fold-samples.rs` の doc の例 | examples | — | 手順 ⑥・⑦ ⒜ |
+| 5.6 | 現在形の綴り 0 件 | 検索（「文書の追随」の 2 本・期待ヒット明記） | `grep` | 手順 ⑦ ⒝ |
 
 ## Components and Interfaces
 
@@ -290,13 +290,16 @@ pub(crate) fn staysee_root() -> PathBuf {
 - Trigger: `.nar` を畳んだ直後（手順 ②）。
 - Input: `cargo run -p sample-ghost-kit --bin nar-sample-path -- StayseeBalloon` が印字する `folder=` の 29 本（2.4 の確認を兼ねる）。
 - Method: `sha256sum` を 29 本に当て、完了 spec `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` §3.1 の表（ファイル名・バイト数・sha256）と行単位で突き合わせる。
-- Output: 29 行の突き合わせ結果と「不一致 0 件」、使った命令、`fold-samples` の印字（`.nar` のバイト数を含む）、`git check-attr text -- vendors/sample_ghost/StayseeBalloon.nar` の `text: unset`。
+- Output: 29 行の突き合わせ結果と「不一致 0 件」、使った命令、`fold-samples` の印字（`.nar` のバイト数を含む）、`nar-sample-path -- StayseeBalloon` の印字 2 行（`root=`／`folder=`）と終了コード 0 を逐語で（2.4 の直接の証跡）、`git check-attr text -- vendors/sample_ghost/StayseeBalloon.nar` の `text: unset`。
 - 常設化: しない（2026-09-23 裁定）。
 
 ### 文書の追随
 
 - **決定 B**（research.md §8 の持ち越し項目 6）: `vendors/sample_ghost/README.md` には**節を設けず、表の 1 行＋出どころの箇条書き 1 行**にする。書くのは「CC0（`LICENSE`・`readme.txt`）・上流 `https://github.com/ponapalt/StayseeBalloon`・areka の既定バルーン・畳み直し可・配布物へ同梱可・29 本のハッシュと上流との突合は `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` §1・§3」。理由: `konnoyayame.nar` の節が在るのは、読む人が守らねばならない禁止（畳み直さない・配布物へ入れない）を持つからで、`StayseeBalloon` にはその禁止が 0。29 本の sha256 を README にも写すと同じ表が 2 か所になり、片方が黙って古びる。`tech.md`「第三者の検体は出どころとライセンスを同フォルダの README に登記」は 1 行で満たす（出どころとライセンスは書き、詳細はポインタ）。
-- 要件 5.6 の検索（手順 ⑦）: `grep -rn "vendors/sample_ghost/StayseeBalloon/" .kiro/steering .kiro/specs/*/brief.md vendors/sample_ghost/README.md crates/ --include=*.md --include=*.rs`（`.kiro/specs/completed/`・`roadmap-history.md`・本 spec の 4 文書は除く）。現在形の記述 0 件を判定してから完了とする。`roadmap.md` #37 の行は経緯（「展開フォルダ…で保管（`.nar` への畳み込みは未了＝#42 へ登記）」）なので現在形ではなく、残してよい。
+- 完了判定の検索（手順 ⑦・要件 4.1／5.5／5.6）は **2 本**で、それぞれ期待する結果を先に書いておく（2026-09-23 の設計ディスカッションで確定。着手前の実測は下の「今日の当たり」）。
+  - ⒜ **末尾 `/` の無い綴り・ソース全域**: `grep -rn "sample_ghost/StayseeBalloon" crates/` → **0 件**。要件 4.1（テストの綴り 0 か所・コメント込み）と 5.5（`fold-samples.rs` の doc の例）の直接の判定。定数 `STAYSEE_BALLOON_DIR` の値は `/` で終わらないので、見張り（`/` 付きの語形）にも ⒝ にも掛からない＝削除漏れはこの ⒜ だけが拾う。今日の当たり: 入口 `staysee_balloon_fixture_test.rs` の module doc 1 行と定数 1 行・`fold-samples.rs` の module doc 2 行の計 4 件。
+  - ⒝ **末尾 `/` 付きの綴り・文書**: `grep -rn "vendors/sample_ghost/StayseeBalloon/" .kiro/steering .kiro/specs/*/brief.md vendors/sample_ghost/README.md` → 当たってよいのは **`roadmap.md` の #37 の行と #42 の行、`roadmap-history.md` の 2 行の計 4 件だけ**で、それ以外は **0 件**。4 件はいずれも要件 5.6 が除外する「経緯の記録」である。台帳の完了した行は本文を残して状態列を ✅ にする慣例（`roadmap.md` の台帳の注記「状態列は `/kiro-complete` が ✅ に更新」・#37 の行がその実例）なので、#42 の行の本文「展開フォルダのまま残っている」は書き換えず、状態列が ✅ になった時点で経緯の記録になる。今日の当たり: 上の 4 件に加えて `product.md`・`structure.md`・brief 2 本（`alpha-release-signoff` は 2 行）・入口ファイルの module doc の計 6 件（すべて本設計の Modified Files で直す）。
+  - `.kiro/specs/completed/` と本 spec の自身の文書は要件どおり検索に含めない。
 
 ## System Flows
 
@@ -310,7 +313,7 @@ pub(crate) fn staysee_root() -> PathBuf {
 4. **追跡から外す**: `git rm -r --cached vendors/sample_ghost/StayseeBalloon` → 実体のフォルダを消す（1.2。`.gitignore` は当たらないので、消さなければ未追跡として `git status` に残る）。
 5. **判定**: `cargo test -p sample-ghost-kit`／`cargo test -p areka-emo-text --test staysee_balloon_fixture_test`／`cargo test -p log-capture-kit --test sample_path_guard_test` の 3 本が全件緑（3.6・4.4・4.5）。
 6. **文書**: README・`product.md`・`structure.md`・brief 2 本・`fold-samples.rs` の doc・roadmap #42（5.1〜5.5）。
-7. **検索**: 5.6 の `grep` が現在形 0 件。
+7. **検索**: 「文書の追随」の 2 本——⒜ `crates/` の `/` 無しの綴りが 0 件、⒝ 文書の `/` 付きの綴りが `roadmap.md` #37・#42 と `roadmap-history.md` の 4 件以外 0 件。
 
 順序の要点: ①は展開フォルダが**在るうち**にしか出来ない。②の照合は登記後でなければ `nar-sample-path` が断る。④は⑤の前——フォルダが残っていると付け替え漏れが赤にならない。
 
