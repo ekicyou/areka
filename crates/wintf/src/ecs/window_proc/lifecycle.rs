@@ -12,9 +12,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::Entity;
-use tracing::debug;
+use tracing::{debug, info};
 use windows::Win32::Foundation::*;
 
+use crate::ecs::window::OnCloseRequest;
 use crate::ecs::window::transition_diag::{self, MSG_DISPLAYCHANGE, MsgRecord};
 use crate::ecs::world::EcsWorld;
 
@@ -94,6 +95,13 @@ pub(super) fn WM_PAINT(
 /// **`WM_CLOSE` の投函契約と窓破棄の正準シグナル（`world.despawn(entity)`・
 /// `clickthrough/controller.rs:90`）は変更していない**（D16 帰結⑶）——変えたのは受け手が
 /// 陳腐化 id をどう報告するかだけであり、生存 entity に対する挙動は従来と同一である。
+///
+/// # OS の閉鎖要求を利用側へ渡す（app-lifetime-separation 要件 2.9〜2.11・3.12）
+///
+/// 生存 entity が [`OnCloseRequest`] を持つときは、窓を消さずにその関数を呼ぶ
+/// （Alt＋F4・`taskkill`（`/F` なし）・「タスクの終了」を利用側の終了操作へ乗せる口）。
+/// 持たない窓は従来どおり despawn する。破棄済み entity の打ち切りと戻り値
+/// `Some(LRESULT(0))` はどちらの腕でも変わらない。
 #[inline]
 pub(super) fn WM_CLOSE(
     world: &Rc<RefCell<EcsWorld>>,
@@ -109,6 +117,13 @@ pub(super) fn WM_CLOSE(
                 "{DESPAWNED_SKIP_TAG} WM_CLOSE: 対象 entity は既に破棄済み（despawn）→ \
                  除去要求を正常系として打ち切り"
             );
+        } else if let Some(cb) = w.world().get::<OnCloseRequest>(entity).copied() {
+            info!(
+                event = "os_close_request",
+                entity = ?entity,
+                "[WM_CLOSE] 閉鎖要求を利用側の関数へ渡す"
+            );
+            (cb.0)(w.world_mut(), entity);
         } else {
             w.world_mut().despawn(entity);
         }
@@ -393,3 +408,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "lifecycle_tests.rs"]
+mod lifecycle_tests;

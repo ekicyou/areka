@@ -51,7 +51,7 @@
 
 ### Allowed Dependencies
 - wintf 内: `runtime/message_loop.rs`（`AppExit`・`ShutdownPolicy`）← `runtime/mod.rs`（`WinApp`・`ExitPolicy`）。`ecs/` から `runtime/` への上向き依存は作らない（既存の方針）。
-- areka: `app_exit.rs` → `wintf::AppExit`・`wintf::OnCloseRequest`・`areka_kanade::KanadeStopCause`・`areka_kanade::CloseReason`・`crate::input_events::MouseWiring`・`crate::placement::spawn::{GhostWindowMarker, CharWindowMarker, BalloonWindowMarker}`・`crate::placement::diag::DESPAWNED_SKIP_TAG`・`crate::DummyWindowMarker`。呼び手（`emo2_boot/frame.rs`・`input_events/mod.rs`・`main.rs`）→ `app_exit.rs`。**`placement` は `app_exit` に依存しない**（`placement` は `crate::` パスを持てない・example の `#[path]` include のため）。ゆえにゴースト窓への `OnCloseRequest` の差し込みは `placement` の外（`app_exit.rs` の system・`Added<WindowHandle>`×`With<GhostWindowMarker>`＝`register_ghost_windows_click_through` と同じ捉え方）で行う。
+- areka: `app_exit.rs` → `wintf::AppExit`・`wintf::ecs::window::OnCloseRequest`・`areka_kanade::KanadeStopCause`・`areka_kanade::CloseReason`・`crate::input_events::MouseWiring`・`crate::placement::spawn::{GhostWindowMarker, CharWindowMarker, BalloonWindowMarker}`・`crate::placement::diag::DESPAWNED_SKIP_TAG`・`crate::DummyWindowMarker`。呼び手（`emo2_boot/frame.rs`・`input_events/mod.rs`・`main.rs`）→ `app_exit.rs`。**`placement` は `app_exit` に依存しない**（`placement` は `crate::` パスを持てない・example の `#[path]` include のため）。ゆえにゴースト窓への `OnCloseRequest` の差し込みは `placement` の外（`app_exit.rs` の system・`Added<WindowHandle>`×`With<GhostWindowMarker>`＝`register_ghost_windows_click_through` と同じ捉え方）で行う。
 - wintf 内: `ecs/window_proc/lifecycle.rs` → `ecs/window/components.rs`（`OnCloseRequest` を読む）。既存の `ecs/window_proc` → `ecs/window` の向きのまま。
 - 新しい crate: 0。新しい外部依存: 0。`Cargo.toml` の変更: 0（`event-listener` 5.4.2・`wintf-winmsg-executor` =0.0.5・`bevy_ecs` 0.19 はいずれも既存）。
 
@@ -164,7 +164,7 @@ crates/areka/tests/
 ### Modified Files
 - `crates/wintf/src/runtime/message_loop.rs` — `AppExit` を `ShutdownPolicy` の隣に置く（終了規律の状態そのもの）。`shutdown_future(exit: AppExit)` は「arm → 指示済みなら即完了 → await」。
 - `crates/wintf/src/runtime/mod.rs` — `pub enum ExitPolicy`、`pub use message_loop::AppExit`、`WinApp { world, exit: AppExit }`（`shutdown: Rc<Event>` を置き換え）、`with_exit_policy`、`new()` の委譲、`wire_shutdown_hook` の分岐、`run()` の残存窓破棄。既存テストの `app.shutdown.listen()` 3 か所を `app.exit.signal().listen()` へ（意味は不変）。
-- `crates/wintf/src/ecs/window/components.rs` — `pub struct OnCloseRequest(pub fn(&mut World, Entity))`（`Component`・`Clone, Copy`・SparseSet）。`ecs/window/mod.rs` の `pub use components::*` で `wintf::OnCloseRequest` になる（`lib.rs` は触らない）。
+- `crates/wintf/src/ecs/window/components.rs` — `pub struct OnCloseRequest(pub fn(&mut World, Entity))`（`Component`・`Clone, Copy`・SparseSet）。`ecs/window/mod.rs` の `pub use components::*` で `wintf::ecs::window::OnCloseRequest` になる（`lib.rs` は `ecs` を再公開しないので、areka は `wintf::ecs::drag::OnDragEnd` と同じく `ecs::` 経由で引く。`lib.rs` は触らない）。
 - `crates/wintf/src/ecs/window_proc/lifecycle.rs` — `fn WM_CLOSE` の生存 entity の腕を「`OnCloseRequest` があれば `(cb.0)(world, entity)` を呼ぶ／無ければ従来どおり `despawn`」に。破棄済み entity の打ち切り（`DESPAWNED_SKIP_TAG`）と戻り値 `Some(LRESULT(0))` は不変。呼ぶ側で `info!(event = "os_close_request", entity, "[WM_CLOSE] 閉鎖要求を利用側の関数へ渡す")` を 1 行。
 - `crates/areka/src/app_exit.rs`（新規） — 統合操作と、OS の閉鎖要求の受け手 2 つ・差し込み system。
 - `crates/areka/src/main.rs` — `WinApp::with_exit_policy(ExitPolicy::Explicit)?`（**段取りの最後に入れる 1 行**）。`on_dummy_pressed`・smoke クロージャは `quit_app` を 1 行で呼ぶ。`despawn_smoke_targets` は削除。`spawn_dummy_window` の bundle に `OnCloseRequest(app_exit::on_dummy_os_close)` を 1 行。行数は 958 から減る（4.5）。
