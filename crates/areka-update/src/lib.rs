@@ -13,9 +13,11 @@ mod paths;
 #[cfg(test)]
 mod testkit;
 mod urlpath;
+mod winhttp;
 
 pub use error::{
     DeleteWhy, FailReason, FetchError, InvalidWhy, Stage, Stuck, UpdateError, UpdateWarning,
 };
 pub use fetch::Fetch;
 pub use outcome::{ManifestName, Progress, Undeletable, UpdateOutcome};
+pub use winhttp::{MAX_BODY_BYTES, WinHttpFetch};

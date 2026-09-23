@@ -100,7 +100,7 @@ graph TB
 - Selected pattern: 純関数の段（読む・差分）＋外界に触る段（取得・作業場所・確定・削除）を `run` が直列に束ねる。取得の境界は trait 1 つ（実装は本物 1・偽 1）。
 - Domain/feature boundaries: 定義ファイルの解釈（`manifest`・`urlpath`）／木との照合（`diff`・`md5`・`paths`）／外界（`fetch`・`winhttp`）／書き換え（`work`・`commit`・`delete`）／契約（`error`・`outcome`）／進行と記録（`lib`）。
 - Existing patterns preserved: 作業場所で組んでから入れ替える・`Err` の直前に `error!` 1 回・閉じた語彙をマクロで 1 宣言に・固定入力の決定論テスト・検体は `sample-ghost-kit` 経由。
-- New components rationale: WinHTTP と CNG の unsafe はワークスペースに前例が無いので、それぞれ 1 ファイルに隔離し、常時テストから切り離す（`winhttp.rs` は `#[ignore]` の実機テストだけが通す・`md5.rs` は RFC 1321 のベクトルで較正）。
+- New components rationale: WinHTTP と CNG の unsafe はワークスペースに前例が無いので、それぞれ 1 ファイルに隔離し、常時テストから切り離す（`winhttp.rs` の OS 呼出は `#[ignore]` の実機テストだけが通し、純粋な判定＝エラー番号の表と状態コードは `winhttp_tests.rs` が常時テストで固定する・`md5.rs` は RFC 1321 のベクトルで較正）。
 - Steering compliance: `tracing` の規約（構造化フィールド・スコープ接頭辞 `[areka_update]`）・`thiserror` の構造化 enum・`unsafe` は OS 呼出だけ・1,000 行・OS の一時フォルダ不使用。
 
 **依存の向き**（左から右へだけ import する。逆向きはレビューで誤りとする）:
@@ -129,7 +129,7 @@ crates/areka-update/
 ├── Cargo.toml                 # 依存 4 本（encoding_rs・thiserror・tracing・windows＋機能 3 つ）・dev 依存 2 本
 └── src/
     ├── lib.rs                 # 公開面・run()・記録の唯一の発火点（info/warn/error）・log_failure
-    ├── lib_tests.rs           # 字面の見張り（tracing:: は lib.rs だけ／error! 1 か所／WinHttp は winhttp.rs だけ）・語彙の全数対応・記録の件数
+    ├── lib_tests.rs           # 字面の見張り（tracing:: は lib.rs だけ／error! 1 か所／WinHTTP の API は winhttp.rs だけ）・語彙の全数対応・記録の件数
     ├── run_tests.rs           # 偽の取得口で回す一周の全経路（9.3・9.4）
     ├── error.rs               # fail_reasons! マクロ → FailReason＋ALL_KINDS・FetchError・Stage・UpdateError・UpdateWarning
     ├── error_tests.rs
@@ -145,7 +145,8 @@ crates/areka-update/
     ├── diff.rs                # 要取得の選別（2）
     ├── diff_tests.rs          # 9.2
     ├── fetch.rs               # trait Fetch（境界）
-    ├── winhttp.rs             # WinHttpFetch（本物の実装・unsafe はこのファイルだけ）
+    ├── winhttp.rs             # WinHttpFetch（本物の実装・unsafe は md5.rs の 1 呼出とこのファイルだけ）
+    ├── winhttp_tests.rs       # エラー番号の表・状態コードの判定・空の URL（純関数だけ・OS を呼ばない）
     ├── winhttp_real_tests.rs  # #[ignore] 実機の一周（ローカル HTTP＋検体の複製・9.7）
     ├── work.rs                # WorkArea（<対象>/.update-work/<pid>-<連番>/{new,old}）
     ├── work_tests.rs
@@ -695,27 +696,30 @@ const TIMEOUTS_MS: (i32, i32, i32, i32) = (10_000, 15_000, 30_000, 60_000);
 const USER_AGENT: &str = concat!("areka/", env!("CARGO_PKG_VERSION"));
 
 /// セッション（`WinHttpOpen`）を 1 つ持ち回る。呼び出し側が一周ごとに作る。
-pub struct WinHttpFetch { session: *mut core::ffi::c_void }
+pub struct WinHttpFetch { session: Handle }
+/// 非公開。WinHTTP のハンドル 1 つ（session／connect／request 共通）。`Drop` で `WinHttpCloseHandle`。
+struct Handle(*mut core::ffi::c_void);
 impl WinHttpFetch {
     /// `WinHttpOpen(USER_AGENT, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, None, None, 0)` → `WinHttpSetTimeouts`。
     pub fn new() -> Result<WinHttpFetch, FetchError>;
 }
 impl Fetch for WinHttpFetch { /* 下の手順 */ }
-impl Drop for WinHttpFetch { /* WinHttpCloseHandle */ }
+impl Drop for Handle { /* WinHttpCloseHandle */ }
 ```
 
 **`get` の手順**（束縛は全て `windows 0.62.2` `src/Windows/Win32/Networking/WinHttp/mod.rs`）:
 
-1. `WinHttpCrackUrl` で scheme・host・port・path＋query を分ける。
+1. 空の URL は OS を呼ぶ前に `Other { code: 12005 }`（`ERROR_WINHTTP_INVALID_URL`）にする（長さ 0 は `WinHttpCrackUrl` が「NUL 終端まで読む」と解するため）。`WinHttpCrackUrl` で scheme・host・port・path＋query を分ける。
 2. `WinHttpConnect(session, host, port, 0)` → `WinHttpOpenRequest(connect, "GET", path, 版は既定（null）, referer 無し（null）, accept は既定（null）, https なら WINHTTP_FLAG_SECURE)`。
 3. 転送の方針は WinHTTP の既定（`WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP`・自動追随・上限 10 回）を変えない＝3xx に追随し、https → http の降格だけ拒む（降格は `ERROR_WINHTTP_REDIRECT_FAILED` → `Other { code: 12156 }`）。圧縮の自動伸長（`WINHTTP_OPTION_DECOMPRESSION`）は使わない（MD5 は落としたバイト列そのもの）。
 4. `WinHttpSendRequest` → `WinHttpReceiveResponse` → `WinHttpQueryHeaders(WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER)` で状態コードを数値で取る。`404` → `NotFound`、2xx 以外 → `Status { code }`（3xx は自動追随の後なので現れない）。
 5. `WinHttpQueryDataAvailable` → `WinHttpReadData` を 0 バイトまで繰り返し `Vec<u8>` に足す。`Content-Length` は信じない。`MAX_BODY_BYTES` を超えたら `TooLarge`。
-6. `WinHttpCloseHandle` を request・connect の順に必ず呼ぶ（成功・失敗とも）。
+6. ハンドルは非公開の `Handle` の `Drop` が閉じる。順は request → connect（`get` を抜けるとき）→ session（`WinHttpFetch` を落とすとき）で、成功・失敗のどの経路でも必ず閉じる。
 7. 失敗は `windows_core::Error::from_thread()` の `code().0 as u32 & 0xFFFF`（`HRESULT_FROM_WIN32` の下位 16 ビット）を `ERROR_WINHTTP_*` に写す: `12007` → `NameResolution`・`12029`／`12030` → `Connect`・`12002` → `Timeout`・`12175`／`12188` → `Tls`・それ以外 → `Other { code }`。
 
 - `Send`／`Sync` は実装しない（同期・呼び出し側のスレッドで作って使う）。
-- 常時テストは `winhttp.rs` を 1 度も呼ばない。呼ぶのは `winhttp_real_tests.rs`（`#[ignore]`）だけ。`lib_tests.rs` が「本番ソースで `WinHttp` を綴るのは `winhttp.rs` だけ」を字面で判定する（3.1・3.3 の静的な側）。
+- 常時テストは `winhttp.rs` を通して OS を 1 度も呼ばない。OS を呼ぶのは `winhttp_real_tests.rs`（`#[ignore]`）だけ。純粋な判定（エラー番号の表 `from_win32`・`from_os` の下位 16 ビット・状態コードの判定・空の URL）は `winhttp_tests.rs` が常時テストで固定する。
+- `lib_tests.rs` が「本番ソースで WinHTTP の API（`WinHttp[A-Z]` のうち公開型名 `WinHttpFetch` を除くもの、または `windows::Win32::Networking::WinHttp` の取り込み）を綴るのは `winhttp.rs` だけ」を字面で判定する（3.1・3.3 の静的な側。`lib.rs` の `pub use winhttp::WinHttpFetch` は対象外）。
 
 ### 書き換え
 
@@ -929,7 +933,7 @@ pub(crate) fn sjis(s: &str) -> Vec<u8>;
 ### 字面の見張り（`lib_tests.rs`）
 
 - 本番ソースで `tracing::` を綴るのは `lib.rs` だけ・`tracing::error!` は 1 か所（`areka-nar/src/lib_tests.rs` の `only_the_public_surface_writes_records` の写し）。
-- 本番ソースで `WinHttp` を綴るのは `winhttp.rs` だけ・`unsafe` を綴るのは `winhttp.rs` と `md5.rs` だけ。
+- 本番ソースで WinHTTP の API（`WinHttp[A-Z]` のうち `WinHttpFetch` を除く、または `windows::Win32::Networking::WinHttp` の取り込み）を綴るのは `winhttp.rs` だけ・`unsafe` を綴るのは `winhttp.rs` と `md5.rs` だけ。
 - `Cargo.toml` の `[dependencies]` に `log-capture-kit`・`sample-ghost-kit` が無い（10.8。`sample_path_guard_test` も同じ物を見る）。
 
 ### E2E（実機・9.7・完了前 1 回）
