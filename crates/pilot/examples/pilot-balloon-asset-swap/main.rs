@@ -12,6 +12,8 @@
 //! 窓の器は手本 `crates/areka/examples/emo-present.rs`（とその同名フォルダ）から
 //! バルーン窓 1 つ分を写した。起動は `run()` の前に同期で組む（手本の非同期投函は使わない）。
 
+mod observe;
+
 use std::path::Path;
 use std::time::{Duration, Instant};
 
