@@ -233,3 +233,103 @@ OS 側の実際のクリック透過（`WS_EX_TRANSPARENT` の付け外し）は
 - **議題 3・4（§6）→ 案 B（実際の画面の取り込み）**（2026-09-24）。1 フレーム＝OS が画面を 1 回更新すること。絵は取り込んだ画面で判別し、当たり判定は画面の更新の直前にアプリが済ませたフレームのものと突き合わせる。取りこぼし・覆い隠し・見分け不能は「測れない」。取り込みの手段（Desktop Duplication を第一候補）・標本点・突き合わせの規則は設計で決める（§7 の調べ物 1・3・4）。理由: 本命の版（消してから出す）で最も起こりそうな崩れは「消した直後の何も無い状態が 1 回合成される」チラつきで、アプリの中の状態では原理的に見えない。
 - **議題 6（§6）の後半→「大きさの食い違い」を 4 種目の崩れとして別に数え、較正にも入れる**（2026-09-24）。較正は窓の大きさの合わせ直しを 1 回飛ばして作る。
 - **開発者の追加の指摘（同日）: バルーンの切り替えはさくらスクリプトのバルーン番号の切り替え（`b[ID]`）でも日常的に起こり、シームレスに動く必要がある。** 本番の経路は `DisplayCommand::ShowBalloon` → `PresentCommand::ShowSurface`（`crates/areka/src/emo2_boot/adapter.rs` の `map_display_command` の定義）で、同じ表示先へ別の面を出す。面の大きさが変われば `pending_resize` → 窓寸の合わせ直し（`crates/areka/src/emo2_boot/frame.rs` の第 2 経路）を通るので、「大きさの食い違い」は資産の差し替えと共通の危険であり、案 A を選んでも残る。検体 `StayseeBalloon.nar` には `balloons0.png` 335×205 と `balloons2.png` 335×395（`balloons1`＝335×205・`balloons3`＝335×395）があり、同じバルーンの中で大きさの違う面への切り替えを実験できる（`.nar` の PNG の IHDR を読んで確かめた）。要件 2.6・2.7 として、この切り替えも同じ観測で数え、崩れが出れば本番の既存の欠陥として学びに記録する。
+
+---
+
+## 10. 設計フェーズの調査と決定（2026-09-24）
+
+### 10.1 要約
+
+- **Discovery Scope**: Extension（既存の crate をそのまま使う側に留まる example・軽い調査）。サブエージェントは使わず、コードと `windows` crate の実物で裏を取った。
+- **Key Findings**:
+  - `VisualGraphics` の `on_remove` フック（`crates/wintf/src/ecs/graphics/components.rs` の `on_visual_graphics_remove`）が、component の除去（despawn を含む）の時点で親の `ContainerVisual.Children().Remove(visual)` を呼ぶ。§7 の調べ物 2 の答え＝**despawn した瞬間に WUC の木から外れる**。同じ tick の後段で新しい visual を作れば、除去と追加が 1 回の暗黙の反映に載る（本命の版の構造的な根拠。実測は example が行う）。
+  - `windows` 0.62.2（`c:\rust\cargo\registry\src\…\windows-0.62.2`）に feature `Win32_Graphics_Dxgi` があり、`IDXGIOutputDuplication` と `DXGI_OUTDUPL_FRAME_INFO { LastPresentTime: i64, LastMouseUpdateTime: i64, AccumulatedFrames: u32, .. }` が入っている。workspace 既定と `wintf` の `Cargo.toml` には無いので `crates/pilot/Cargo.toml` の `windows` feature に足す。
+  - `hit_test_entity` の α マスク分岐（`crates/wintf/src/ecs/layout/hit_test/mod.rs`）は `HitTest.mode`・`GlobalArrangement.bounds`・`AlphaMaskResource` だけを見て `Visual.is_visible` を見ない。ゆえに「絵は A・当たり判定は B」の較正は、B の子を不可視のまま `HitTest` だけ `alpha_mask()` へ書き換えれば作れる（`AlphaMask` を自前で組む必要が無い）。
+  - `WinApp::new()` が `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` を設定する（`crates/wintf/src/runtime/mod.rs`）ので、`GetWindowRect` と Desktop Duplication の画素座標は同じ物理 px。`WinApp::new()` は COM も初期化するので、`WicDecoderArm` を `main` で同期に作れる（手本の非同期投函は要らない）。
+  - `resolve_balloon_faces`（`crates/areka-emo-present/src/balloon.rs`）は面 ID を接頭辞の後ろの数字から取るので、`ShowSurface { surface_id: 2 }` が `balloons2.png`（335×395）を出す。面の切り替えは `attach_target` を触らずに済む。
+  - `ExitPolicy` の既定は `OnLastWindowClose`。窓を despawn すれば `run()` が戻る。終了コードは `run()` の後で `std::process::exit` に渡せる。
+
+### 10.2 調査記録
+
+#### despawn した entity の WUC visual はいつ木から外れるか（§7 調べ物 2）
+- **Context**: 本命の版（消してから出す）が 0 フレームで成り立つかの構造的な根拠。
+- **Sources**: `crates/wintf/src/ecs/graphics/components.rs` の `#[component(on_remove = on_visual_graphics_remove)]`、`crates/wintf/src/ecs/graphics/systems/visual_sync.rs` の `visual_hierarchy_sync_system`（未同期の子がある親は `RemoveAll` → `Children` 順に `InsertAtBottom` で組み直す）。
+- **Findings**: 除去はフックで即時。追加は同じ tick の `Composition` で `RemoveAll` → 組み直し。WUC への反映は暗黙（`CommitComposition` は空）。
+- **Implications**: `Update` に置いた本命の版は「古い visual を外す」「新しい visual を作って繋ぐ」が同じ tick に収まる。`FrameFinalize` に置くと、外すのは今の tick・繋ぐのは次の tick になり、空の 1 フレームが構造として出る（比較の版として観測する）。
+
+#### WUC の暗黙の反映の単位（§7 調べ物 1）
+- **Findings**: コードからは決められない（`CommitComposition` は空の schedule・DispatcherQueue 経由の暗黙反映）。実験が答えを出す事項として、design は「合成器の遅れによる混在 1 フレーム」を観測の限界として README に書く前提で組んだ。
+- **Implications**: 突き合わせの規則（画面更新 T 以前に終わった最新の tick）は要件 3.2 の定めどおりにし、混在の内訳（絵は古い・当たり判定は新しい）と `present_qpc − ended_qpc` を `debug!` に出して、開発者が版の崩れと合成器の遅れを見分けられるようにする。
+
+#### Desktop Duplication の組み立てと取りこぼしの検出（§7 調べ物 3）
+- **Sources**: `windows` 0.62.2 の `Win32/Graphics/Dxgi/mod.rs`（`IDXGIOutputDuplication::AcquireNextFrame`／`ReleaseFrame`・`DXGI_OUTDUPL_FRAME_INFO`）。既存の `crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs`（D3D11 device を自前で作る前例）。
+- **Findings**: `AcquireNextFrame(timeout)` は変化があったときだけフレームを返す。`AccumulatedFrames > 1` は取りこぼし。`LastPresentTime == 0` は絵の更新なし（マウスだけ）。`DXGI_ERROR_ACCESS_LOST` は複製の作り直し。フレームの texture は `ReleaseFrame` まで有効なので、矩形を staging へ写してから読む。
+- **Implications**: 取り込みは別スレッドで自前の D3D11 device を持つ（wintf の `GraphicsCore` を借りない）。取りこぼし・喪失・出力の外はすべて「測れない」に落とす（要件 3.6）。`DwmGetCompositionTimingInfo` は使わない（`AccumulatedFrames` で足りる）。
+
+#### 取り込み画像での判別の規則（§7 調べ物 4）
+- **Findings**: 拡大率 k≠1.0 では標本点の座標が k 倍にずれる。先進坑の範囲では k=1.0 だけを観測し、k≠1.0 は「測れない」とする（`EmoPresenter::applied_scale` が 1.0 でなければ全フレームを測れないに）。色は premultiplied BGRA の α=255 の点だけを標本に選ぶので、合成の値と画面の値は等しいはず（SDR・色管理なしの前提。外れれば較正が赤になる）。
+- **Implications**: 判別は「標本点の色の一致の割合」で行い、外形照合や画像比較は作らない（design §Observer の閾値）。
+
+#### 文字層の古い子が当たり判定に影響しないこと（§7 調べ物 5）
+- **Findings**: `emo-text-layer-slot` は `Visual::on_add` の既定 `Arrangement`（寸 0）を持つので `GlobalArrangement.bounds` は 0 面積。`hit_test_entity` は bounds の `contains` で先に外れる。ただし実測はしていない。
+- **Implications**: example は当たった entity の `Name` を見て、`emo-text-layer-slot` なら「測れない」に落として記録する（想定が外れたら数に出る）。
+
+#### 終了コードの返し方（§7 調べ物 6）
+- **Findings**: `WinApp::run()` は `Result<()>` を返し、`ExitPolicy::OnLastWindowClose`（既定）では最後の窓が消えると戻る。`crates/areka/examples/collision-probe/smoke.rs` の `install_smoke_exit` は `async_io::Timer` を使うが、pilot は `async-io` を持たない。
+- **Implications**: 上限時間は tick ごとに `Instant` で調べる（system の中・非同期タスク不要）。到達したら窓を despawn し、`run()` の後で `std::process::exit(code)`。
+
+### 10.3 案の評価（観測の置き方）
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| 案 A World の状態で数える | tick ごとに World を読む | 依存最小・決定論 | 要件 3.2 を満たさない | 不採用（裁定 §9.3） |
+| 案 B Desktop Duplication | 画面更新ごとに 1 枚受け取り窓の矩形を判別 | 要件 3.2 を文字どおり満たす・取りこぼしが分かる | tick との突き合わせが要る・k≠1.0 と覆いは測れない | **採用** |
+| 案 C 両方 | A で数えて B で照らす | 見落としを二重に拾う | 作る物が最多・S を超える | 不採用 |
+| Windows.Graphics.Capture | 窓単位の取り込み | 覆いの影響を受けにくい | WinRT の組み立てが重い・フレームの時刻の意味が違う | 不採用 |
+
+### 10.4 設計の決定
+
+#### Decision: 差し替えは 1 つの system を `Update` と `FrameFinalize` に登録し、台本が段を選ぶ
+- **Context**: 版 (iv)＝差し替えの時点の違いを、コードの複製なしで比べたい。
+- **Alternatives**: (1) 段ごとに別の system を書く (2) 1 つの system を 2 段に登録し台本で選ぶ。
+- **Selected**: (2)。段は登録時のクロージャで閉じ込める。
+- **Rationale**: 版の差が「段」だけになり、比較の意味が明確。
+- **Trade-offs**: `FrameFinalize` の差し替えの後に tick 記録が来るよう `.after` が要る。
+- **Follow-up**: 実装時に `Update` の差し替えが `PostLayout` より前に走ることをログの tick 番号で確かめる。
+
+#### Decision: 較正は「実際の窓に崩れを作る」5 項目で、既存の公開部品だけを使う
+- **Context**: 要件 4.1（作った記録を規則に当てるだけの較正は不可）。
+- **Selected**: 空＝`Hide`／混在＝2 つ目の target を不可視で仕込み `HitTest` だけ付け替える／残り＝揃った後に古い子の `Visual` を可視へ戻す／大きさ＝`take_pending_resize` を捨てる／静止＝窓を 1px 動かして戻す（画面更新を起こすため）。
+- **Rationale**: いずれも wintf・present の公開の口（`HitTest`・`Visual`・`PresentCommand`・`WindowPos`）で作れ、`AlphaMask` を自前で組む必要が無い。
+- **Trade-offs**: 較正の「仕込み」に 2 つ目の `TargetId` を使うので、その後の戻しで必ず `despawn_mounts` を通す。
+
+#### Decision: 当たり判定の「両方」を 4 つ目の値として持ち「混在」に数える
+- **Context**: 基準の版では古いマスクと新しいマスクが同時に効く。要件 3.3 の 3 値では表せない。
+- **Selected**: `HitClass::Both` を足し、`Both` を含む組はすべて混在。README にも書く。
+- **Rationale**: 「新しい絵と同じ当たり判定」ではない状態を 0 と数えないため。
+- **Follow-up**: 要件 3.3 の語彙への追記は設計ディスカッションで確認する（作業は変わらない）。
+
+#### Decision: 拡大率 k≠1.0 は観測しない
+- **Selected**: `applied_scale != 1.0` なら全フレームを「測れない」。
+- **Rationale**: 標本点の座標を k 倍に写す仕組みは先進坑の問いに関係が無い（差し替えの崩れは k に依らず現れる）。
+
+#### 同型化・簡素化（design-synthesis）
+- **同型化**: 資産の差し替え・面の切り替え・較正 5 項はすべて「判別対 (P, Q)・出発・到達・要求 tick」を持つ 1 種類の `Observation` で扱う。数え方の規則も 1 つ。
+- **作る vs 使う**: 画面取り込みは OS（Desktop Duplication）を使う。絵の判別は自前（標本点の色の一致）だが画像比較ライブラリは足さない。
+- **簡素化**: 抽象化なし（版は enum の match）。取り込みは 1 スレッド・共有は `Mutex` 1 つ。`REPORT.md` は作らず README に数を載せる（数が 20 行程度で収まるため）。
+
+### 10.5 危険と対処
+
+- 合成器の遅れが混在 1 フレームとして数に出る（版に依らない）→ 内訳と時刻差を `debug!` に出し、README の「分からないこと」に書く。
+- 机の背景が検体の色と近い → 較正（静止・空）で露見。README に較正の合否として出る。
+- `despawn_mounts` が `Name` の文字列に依存 → 消した数が 2 でなければ `error!`＋「測れない」。
+- Desktop Duplication がセキュアデスクトップや保護コンテンツで失敗 → 「測れない」＋`error!`。
+- 上限時間内に終わらない → 打ち切りとそれまでの数（要件 6.6）。既定 90 秒は約 20 本の観測に対して 2 倍以上の余裕。
+
+### 10.6 参照
+- `crates/wintf/src/ecs/graphics/components.rs` — `on_visual_graphics_remove`
+- `crates/wintf/src/ecs/layout/hit_test/mod.rs` — `hit_test_in_window`・`alpha_mask_hit`
+- `crates/wintf/src/ecs/world/mod.rs` — 13 段の順序と各 system の登録段
+- `crates/areka-emo-present/src/presenter/hub.rs`・`mount.rs`・`balloon.rs` — 再登録・装着・面の解決
+- `crates/areka/examples/emo-present.rs` とそのフォルダ — 器の手本
+- `windows` 0.62.2 `src/Windows/Win32/Graphics/Dxgi/mod.rs` — Desktop Duplication の型
