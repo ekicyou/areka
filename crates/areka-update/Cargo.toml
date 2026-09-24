@@ -1,0 +1,31 @@
+[package]
+name = "areka-update"
+workspace = "../.."
+description = "ネットワーク更新の本番クレート（spec: areka-P0-update-engine）: 更新定義ファイル（updates2.dau／updates.txt）の読み手・差分・WinHTTP による取得・MD5 照合・ファイル単位の確定と戻し・delete.txt"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# 更新定義ファイルの文字コード判定と復号（Shift_JIS／UTF-8）。
+encoding_rs = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+# HTTP は WinHTTP、MD5 は CNG（BCryptHash）で、どちらも OS の機能で賄う。
+# 機能はクレート自身で上乗せし、根の [workspace.dependencies.windows] は変えない
+# （要件 10.4・crates/dola/Cargo.toml の前例）。HTTP クレートも md-5 も足さない。
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Networking_WinHttp",
+    "Win32_Security_Cryptography",
+] }
+
+[dev-dependencies]
+# 記録の捕捉。捕捉先を自前で差すのはワークスペースの常設検査が禁じているので、
+# 記録の件数を測るにはこの窓口を通す。本番の依存には置かない（要件 10.8）。
+log-capture-kit = { path = "../log-capture-kit" }
+# 検体の複製と、OS の一時フォルダを使わない作業場所（WorkDir）の出どころ。
+sample-ghost-kit = { path = "../sample-ghost-kit" }
