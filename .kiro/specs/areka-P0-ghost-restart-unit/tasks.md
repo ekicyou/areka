@@ -86,7 +86,7 @@
   - _Depends: 4.3_
   - _Requirements: 2.5_
 
-- [ ] 5. 同じプロセスで 2 周する決定論テストを足す
+- [x] 5. 同じプロセスで 2 周する決定論テストを足す
   - 4.2 で作った `ghost_session_restart_tests.rs` へ足す
   - 台: 素の World に `Schedules`・終了の指示・窓の代わりの entity 2 つ。作業プールは挿さない
   - 偽の SHIORI（台本つき）・検体の複製・時計なし・記憶の置き場なしで入力の束を組み、周ごとに新しい台本と新しい複製を使う
@@ -112,3 +112,4 @@
 - 4.1: fallback で新たに登録される系の見え方は「状態が無ければ無操作」だが、バルーンの離脱の系だけは `BalloonWiring` 不在で `error!(balloon_wiring_missing)` の枝を持つ（fallback のバルーン窓は `HitTest::none()` で `PointerLeave` が立たず届かない）。4.4 で `register_systems` の doc と design「明示する差 1 件」をこの事実（と `emo2_frame_system` も fallback で登録されること）に合わせて直す。
 - 4.2: `crates/areka/examples/window-placement.rs` の doc にも `open_startup_window` の名が残るが、examples は要件 5.4 で無改変＝4.4 の grep「0 件」の対象から examples を外す。
 - 4.4: 「1 度」系の正規表現は「`wire_*` が系を登録する」「`main` から呼ぶ」型の古い前提を拾わない（差し戻し 1 回）。呼び手が移った doc は語でなく「呼び手の名」で洗う。
+- 5: 「前のものが残っていない」型の判定は前のものが最初から無くても緑になる。1 周目の面（結線ありの腕を通った証）も控えて同じ判定に入れる（差し戻し 1 回・fallback 変異で実証）。
