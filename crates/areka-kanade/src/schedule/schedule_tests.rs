@@ -140,12 +140,20 @@ fn shiori_down_goes_to_unloading_fault() {
         },
         &config(),
     );
-    assert!(matches!(
-        next.phase,
-        Phase::Unloading {
-            cause: TermCause::Fault
+    // 死活報告の種類と理由がそのまま終了原因へ載る（要件 2.2）。
+    let Phase::Unloading {
+        cause: TermCause::Fault(fault),
+    } = &next.phase
+    else {
+        panic!("expected Unloading{{Fault}}");
+    };
+    assert_eq!(
+        *fault,
+        crate::msg::ShioriFault {
+            kind: crate::msg::ShioriFaultKind::Disconnected,
+            reason: "helper crashed".to_string(),
         }
-    ));
+    );
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 
@@ -161,12 +169,20 @@ fn shiori_reply_failed_goes_to_unloading_fault() {
         },
         &config(),
     );
-    assert!(matches!(
-        next.phase,
-        Phase::Unloading {
-            cause: TermCause::Fault
+    // 呼出失敗の種類と理由（`error=` と同じ Display の文言）が終了原因へ載る（要件 2.2）。
+    let Phase::Unloading {
+        cause: TermCause::Fault(fault),
+    } = &next.phase
+    else {
+        panic!("expected Unloading{{Fault}}");
+    };
+    assert_eq!(
+        *fault,
+        crate::msg::ShioriFault {
+            kind: crate::msg::ShioriFaultKind::Timeout,
+            reason: "shiori request timeout: 30s".to_string(),
         }
-    ));
+    );
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 

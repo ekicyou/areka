@@ -35,7 +35,7 @@ use areka_actor::{ActorHandle, ReplyError, reply_channel, run_inbox, spawn_actor
 
 use crate::msg::{
     EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped, ShioriCall, ShioriFailure,
-    ShioriMsg, ShioriOutcome,
+    ShioriFault, ShioriMsg, ShioriOutcome,
 };
 use crate::schedule::resources::ResourceSink;
 use crate::schedule::{Action, Input, Phase, State, TermCause, step};
@@ -445,6 +445,7 @@ fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
 }
 
 /// 運行状態が終了系列（`Unloading{cause}`）に居るなら、その原因を公開語彙へ写す（R15.3）。
+/// 運行状態は手放さないので、原因は clone して写す（Fault は種類と理由ごと）。
 ///
 /// 写すのはここ 1 箇所だけである——内部の `TermCause` は `pub(crate)` に閉じたままで、公開面へ
 /// 出るのは [`KanadeStopCause`] の 5 値だけになる（DD-9 の露出規律）。終了系列でなければ `None`。
@@ -459,7 +460,7 @@ fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
         TermCause::Forced => KanadeStopCause::Forced,
         TermCause::CloseSilent => KanadeStopCause::CloseSilent,
         TermCause::DeadlineExceeded => KanadeStopCause::DeadlineExceeded,
-        TermCause::Fault => KanadeStopCause::Fault,
+        TermCause::Fault(fault) => KanadeStopCause::Fault(fault.clone()),
     })
 }
 
@@ -472,7 +473,7 @@ fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
 ///
 /// `cause` が `None` になるのは、`Unloading` を経ずに `StopSelf` が現れた場合だけである
 /// （現在の運行表には存在しない経路）。その場合も通知は出す——窓を閉じる合図としての意味は
-/// 原因に依らないためで、原因不明であることは記録に残す。
+/// 原因に依らないためで、原因不明であることは記録に残し、種類 `Unknown` の Fault として送る。
 fn notify_stop(sink: Option<&Sender<KanadeStopped>>, cause: Option<KanadeStopCause>) {
     let Some(tx) = sink else {
         return;
@@ -484,12 +485,13 @@ fn notify_stop(sink: Option<&Sender<KanadeStopped>>, cause: Option<KanadeStopCau
             "終了系列の原因を控えられないまま StopSelf に至った——Fault として通知する"
         );
     }
-    let cause = cause.unwrap_or(KanadeStopCause::Fault);
-    if tx.send(KanadeStopped { cause }).is_err() {
+    let cause = cause.unwrap_or_else(|| KanadeStopCause::Fault(ShioriFault::unknown()));
+    // 送出に失敗した値は SendError に載って戻るので、記録にはそれを使う（clone しない）。
+    if let Err(std::sync::mpsc::SendError(unsent)) = tx.send(KanadeStopped { cause }) {
         tracing::warn!(
             target: "kanade",
             event = "stop_notify_failed",
-            cause = ?cause,
+            cause = ?unsent.cause,
             "停止通知の送出に失敗（受信端＝UI は既に切断）——停止は完走する"
         );
     }

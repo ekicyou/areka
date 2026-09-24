@@ -54,7 +54,7 @@ impl CloseReason {
 /// 写し**である。内部型をそのまま公開すると運行状態機械の内部（`Phase`／`Action`／`step`）まで
 /// 公開面へ引きずり出されるため（DD-9 の露出規律）、5 値だけを持つ独立の enum を置く。
 /// 値の対応は 1 対 1 で、写す点は [`crate::actor`] の停止通知だけである。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KanadeStopCause {
     /// 終了挨拶が終了指令（`\-`）で終わった正規の終了。
     Quit,
@@ -64,8 +64,8 @@ pub enum KanadeStopCause {
     CloseSilent,
     /// 終了挨拶の再生完了待ちが期限を超えた。
     DeadlineExceeded,
-    /// SHIORI 呼出失敗・死活異常による終了。
-    Fault,
+    /// SHIORI 呼出失敗・死活異常による終了（失敗の種類と理由を運ぶ）。
+    Fault(ShioriFault),
 }
 
 /// kanade の終了系列が完了したことの UI への通知（R15.3・D15 の 2）。
@@ -73,7 +73,7 @@ pub enum KanadeStopCause {
 /// `Action::StopSelf` の実行点（[`crate::actor`]）から**非ブロッキングに 1 度だけ**送る。
 /// 受け手（UI スレッドの毎フレーム結線）はこれを合図に全ゴースト窓を閉じる。原因を問わず
 /// 送る——終了挨拶を終えた正規終了も、期限超過も、強制終了も、窓を閉じる点では同じ扱いである。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KanadeStopped {
     /// 終了系列の起因（記録の語彙・受け手は分岐しない）。
     pub cause: KanadeStopCause,

@@ -19,8 +19,8 @@ use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindow
 /// どの終了操作から来たか（記録の語彙・受け手は分岐しない）。
 ///
 /// `Debug` 出力がそのまま実機ログの検索語になる（`origin=KanadeStopped(Quit)` のように
-/// `ghost_quit` の `cause` と同じ語に揃う）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `ghost_quit` の `cause` と同じ語に揃う）。Fault は種類と理由（`String`）を運ぶので `Copy` ではない。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ExitOrigin {
     /// kanade の終了系列の完了（メニューの終了・別れの台詞のあと・中断のあと）。
     KanadeStopped(KanadeStopCause),
