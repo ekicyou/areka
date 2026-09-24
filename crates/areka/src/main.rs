@@ -220,10 +220,16 @@ fn main() -> Result<()> {
     // 渡す（要件 6.4）。main 自身の送出端は分岐の後で落とす。
     let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
     let outcome = emo2_boot::wire_emo2_boot(
-        &app,
-        &cfg.ghost_root,
-        &cfg.balloon_root,
-        &helper_exe,
+        app.world().borrow_mut().world_mut(),
+        emo2_boot::Emo2BootInputs {
+            ghost_root: cfg.ghost_root.clone(),
+            balloon_root: cfg.balloon_root.clone(),
+            shiori: areka_ghost::ShioriWiring::Helper {
+                helper_exe: helper_exe.clone(),
+            },
+            ticker: areka_ghost::TickerMode::Real(Default::default()),
+            app_profile_dir: Some(default_app_profile_dir()),
+        },
         author_dpi,
         zorder_raw.as_deref(),
         kanade_stop_tx.clone(),
@@ -324,7 +330,7 @@ fn main() -> Result<()> {
     drop(kanade_stop_tx);
 
     // 停止通知の受け口と終了相の据え付け（起動の 2 経路で共通・起動の分岐の後・`run()` の前に 1 回）。
-    emo2_boot::wire_kanade_stop(&app, kanade_stop_rx);
+    emo2_boot::wire_kanade_stop(app.world().borrow_mut().world_mut(), kanade_stop_rx);
 
     // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。窓が 0 になっても戻らず、
     // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が戻る。

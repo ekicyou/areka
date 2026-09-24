@@ -372,7 +372,7 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        code.contains("app.world().borrow_mut().world_mut().insert_non_send(wiring);"),
+        code.contains("world.insert_non_send(wiring);"),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(
@@ -496,10 +496,7 @@ fn t_zwi09_the_boot_seats_the_descript_base_before_inserting_the_wiring() {
         &squeezed,
         "wiring.seed_zorder_descript_base(zorder_descript);",
     );
-    let insert_at = index_of(
-        &squeezed,
-        "app.world().borrow_mut().world_mut().insert_non_send(wiring);",
-    );
+    let insert_at = index_of(&squeezed, "world.insert_non_send(wiring);");
     assert!(
         seed_at < insert_at,
         "基底を据える段が結線状態を World へ載せるより後ろに在る（seed={seed_at}・insert={insert_at}）"

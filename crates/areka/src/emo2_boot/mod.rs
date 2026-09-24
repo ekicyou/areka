@@ -77,9 +77,9 @@ use areka_seriko::{
     AnimationTable, BindResolver, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
     spawn_seriko,
 };
-use bevy_ecs::schedule::IntoScheduleConfigs;
+use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
+use bevy_ecs::world::World;
 use tracing::{error, info, warn};
-use wintf::WinApp;
 use wintf::ecs::{Update, update_typewriters};
 
 use crate::placement::AuthorDpi;
@@ -206,6 +206,25 @@ pub struct Emo2BootOutcome {
     pub loop_ticker: Option<std::sync::mpsc::Sender<TickerMsg>>,
 }
 
+/// `wire_emo2_boot` の入力の束（ゴーストごとに変わる値と、SHIORI の結線の差し替え口）。
+///
+/// `GhostBootOptions` には欄を足さず、`ghost_root`・`shiori`・`ticker`・`app_profile_dir` の
+/// 値の出所をここへ移すだけである（要件 5.7）。本番は `Helper { helper_exe }`・`Real` 既定・
+/// `Some(default_app_profile_dir())` を詰め、テストは偽の SHIORI（`Custom`）を差す。
+/// `ShioriWiring::Custom` は複製できないので値渡しで受ける。
+pub struct Emo2BootInputs {
+    /// ゴーストの根。
+    pub ghost_root: PathBuf,
+    /// バルーンの根。
+    pub balloon_root: PathBuf,
+    /// SHIORI の結線（本番 `Helper`・テスト `Custom`）。
+    pub shiori: ShioriWiring,
+    /// ticker の起動方式（本番 `Real`・テスト `Disabled`）。
+    pub ticker: TickerMode,
+    /// アプリのプロファイルの置き場（本番 `Some`・テスト `None`）。
+    pub app_profile_dir: Option<PathBuf>,
+}
+
 /// M-boot の scope 集合を導出する（design DD-12・line 460「placement と同じ入力から自前導出」）。
 ///
 /// emo2 fixture は sakura（scope0）＋kero（scope1）の 2 scope 構成であり、placement の
@@ -305,13 +324,13 @@ const _: fn() = || {
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`Emo2Wiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. [`areka_ghost::boot`]（`surface_sink`＝[`SerikoSink`] を直渡し・`text_sink`＝`ClockedTextSink`・
-///    `shiori`＝`Helper`・`ticker`＝`Real`）。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
+///    `shiori`／`ticker`／`app_profile_dir` は [`Emo2BootInputs`] の値＝本番は `Helper`／`Real`）。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false` フォールバック。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
 ///    作らない・受け口の据え付けは [`wire_kanade_stop`]）。
 /// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
 ///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入・
-///    `add_systems(Update, emo2_frame_system)`（self-gating）。載せ方は**上流の
+///    [`register_emo2_frame_system`] で `Update` へ登録（self-gating）。載せ方は**上流の
 ///    `Update` 鎖の最後の系（`update_typewriters`）より後**という 1 点だけを指定する
 ///    （同じ巡のうちに絵を着地させるため・要件 2.4）。成立時
 ///    `info!`「wire 成立」マーカーを発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
@@ -323,10 +342,8 @@ const _: fn() = || {
 /// spawn 済み seriko は、boot 失敗時 `surface_sink` drop で inbox 切断→worker 自然終了ゆえ handle を
 /// drop（非 RAII・detach）して打ち切る（hang させない）。
 pub fn wire_emo2_boot(
-    app: &WinApp,
-    ghost_root: &Path,
-    balloon_root: &Path,
-    helper_exe: &Path,
+    world: &mut World,
+    inputs: Emo2BootInputs,
     author_dpi: AuthorDpi,
     zorder_descript: Option<&str>,
     kanade_stop: Sender<KanadeStopped>,
@@ -341,13 +358,21 @@ pub fn wire_emo2_boot(
         }
     }
 
+    let Emo2BootInputs {
+        ghost_root,
+        balloon_root,
+        shiori,
+        ticker,
+        app_profile_dir,
+    } = inputs;
+
     // 手順1: 構築入力の一括組立（scopes は placement と同じ入力から自前導出・DD-12）。
     // 失敗（fixture 不在等）は分類 warn/error の上 wired=false フォールバックへ倒す（R7.3）。
     let scopes = derive_scopes();
     // 作者基準 DPI（design Flow 3 手順1）は placement の準備が **1 度だけ**読んだ値を
     // `main` シームから受け取る（採寸 k₀ と attach が同じ宣言を見る・task 4.3）。
     // 隣接 u16 2 引数への落とし込みは [`build_boot_assets_for`] 1 箇所に閉じる。
-    let assets = match build_boot_assets_for(ghost_root, balloon_root, &scopes, author_dpi) {
+    let assets = match build_boot_assets_for(&ghost_root, &balloon_root, &scopes, author_dpi) {
         Ok(assets) => assets,
         Err(err) => {
             classify_wiring_error(&err);
@@ -514,11 +539,9 @@ pub fn wire_emo2_boot(
     // 触れないので既存 6 sink の消費は変わらず、文字 cue にも依存しないため末尾で構わない。
     // 既存 6 本の並びは変えない（旗の順序の保証がこの並びに依る）。
     let boot_options = GhostBootOptions {
-        ghost_root: ghost_root.to_path_buf(),
+        ghost_root: ghost_root.clone(),
         default_encoding: DefaultEncoding::Ansi,
-        shiori: ShioriWiring::Helper {
-            helper_exe: helper_exe.to_path_buf(),
-        },
+        shiori,
         sinks: vec![
             Box::new(surface_sink),
             Box::new(clocked_text_sink),
@@ -529,8 +552,8 @@ pub fn wire_emo2_boot(
             Box::new(no_user_break_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
-        app_profile_dir: Some(crate::default_app_profile_dir()),
-        ticker: TickerMode::Real(Default::default()),
+        app_profile_dir,
+        ticker,
     };
     // ── 停止通知の送出端（R15.4・design D15 の 3） ──
     // kanade スレッドが終了系列の完了時に送出端へ 1 件送り、UI スレッドの終了相が World の受け口
@@ -563,8 +586,7 @@ pub fn wire_emo2_boot(
     };
 
     // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を Update へ登録（self-gating）。
-    // EcsWorld は insert_non_send を直接持たないため world_mut() 経由で bevy World へ載せる
-    // （add_systems は EcsWorld 直メソッド）。
+    // 受け取った bevy World へ直接載せる（登録は [`register_emo2_frame_system`]）。
     let mut wiring = Emo2Wiring::new(
         presenter,
         rx,
@@ -581,24 +603,8 @@ pub fn wire_emo2_boot(
     // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
-    app.world().borrow_mut().world_mut().insert_non_send(wiring);
-    // 相の登録先は `Update`——上流の `Update` 鎖（表示構成の検知 → モニタ表の更新 → 依存する
-    // 部品の無効化 → 文字送りの更新）の**最後の系より後**という 1 点だけを指定する
-    // （裁定 2026-09-12・要件 2.4）。1 巡のスケジュールは
-    // `Input → Update → PreLayout → Layout → PostLayout → UISetup → GraphicsSetup → Draw
-    //  → PreRenderSurface → RenderSurface → Composition → CommitComposition → FrameFinalize`
-    // の順で回るので、相がここで挿した描画命令と配置は、同じ巡の伝播（`PostLayout`）・面の
-    // 生成（`PreRenderSurface`）・描画（`RenderSurface`）が拾う。末尾の段に載せると絵の着地が
-    // 次の巡へずれ、文字だけが 1 コマ先に出る。
-    // 重なりの鎖の適用系（末尾の段の 3 本目）との前後は、`.before` ではなくこの相順そのものが
-    // 担う（段をまたぐ順序指定は書けない）——`Update` は末尾の段より前なので、相が組んだ
-    // 望む鎖は同じ巡のうちに適用系が読む（要件 14.5 の「そのイベントへの応答としての完了」）。
-    // 上流の鎖より後に置くのは、拡大率の相が読むモニタ表がその巡の最新であるためで、DPI 遷移の
-    // 原子性（完了 spec `dpi-transition-atomicity`「モニタ表更新 → emo の相 → 窓書込の flush」）を
-    // 移動の前後で変えない。
-    app.world()
-        .borrow_mut()
-        .add_systems(Update, emo2_frame_system.after(update_typewriters));
+    world.insert_non_send(wiring);
+    register_emo2_frame_system(world);
 
     // 説明書の受信端（popup-menu-minimal task 4.3・要件 4.5）。開くファイルはゴーストの根と
     // 定義の `readme` キーから**起動時に 1 度だけ**決まる（要求ごとには決めない）ので、
@@ -606,14 +612,14 @@ pub fn wire_emo2_boot(
     // `wire_emo2_boot` は 1 回の実行につき `main` から 1 度しか呼ばれないため、`wire_readme` が
     // 行う `Input` の段への登録も 1 度だけである（`wire_choice_drain` と同じ前提）。
     let readme_path =
-        crate::readme::resolve_path(ghost_root, ghost_runtime.mount().readme.as_deref());
-    crate::readme::wire_readme(app.world().borrow_mut().world_mut(), readme_path, readme_rx);
+        crate::readme::resolve_path(&ghost_root, ghost_runtime.mount().readme.as_deref());
+    crate::readme::wire_readme(world, readme_path, readme_rx);
 
     // 中断の持ち物（areka-P0-balloon-break task 3.3・要件 4.5・5.1）。運行（kanade）への送出端は
     // boot が返した `GhostRuntime` から複製する（マウスの結線と同じ投函端）。`wire_user_break` が
     // 行う `Input` の段への登録も、`wire_readme` と同じ理由で 1 度だけである。
     crate::input_events::user_break::wire_user_break(
-        app.world().borrow_mut().world_mut(),
+        world,
         no_user_break_rx,
         user_break_lifecycle_tx,
         ghost_runtime.kanade().clone(),
@@ -643,26 +649,46 @@ pub fn wire_emo2_boot(
     }
 }
 
+/// 毎フレームの相（`emo2_frame_system`）を `Update` へ登録する（self-gating）。
+///
+/// 相の登録先は `Update`——上流の `Update` 鎖（表示構成の検知 → モニタ表の更新 → 依存する
+/// 部品の無効化 → 文字送りの更新）の**最後の系より後**という 1 点だけを指定する
+/// （裁定 2026-09-12・要件 2.4）。1 巡のスケジュールは
+/// `Input → Update → PreLayout → Layout → PostLayout → UISetup → GraphicsSetup → Draw
+///  → PreRenderSurface → RenderSurface → Composition → CommitComposition → FrameFinalize`
+/// の順で回るので、相がここで挿した描画命令と配置は、同じ巡の伝播（`PostLayout`）・面の
+/// 生成（`PreRenderSurface`）・描画（`RenderSurface`）が拾う。末尾の段に載せると絵の着地が
+/// 次の巡へずれ、文字だけが 1 コマ先に出る。
+/// 重なりの鎖の適用系（末尾の段の 3 本目）との前後は、`.before` ではなくこの相順そのものが
+/// 担う（段をまたぐ順序指定は書けない）——`Update` は末尾の段より前なので、相が組んだ
+/// 望む鎖は同じ巡のうちに適用系が読む（要件 14.5 の「そのイベントへの応答としての完了」）。
+/// 上流の鎖より後に置くのは、拡大率の相が読むモニタ表がその巡の最新であるためで、DPI 遷移の
+/// 原子性（完了 spec `dpi-transition-atomicity`「モニタ表更新 → emo の相 → 窓書込の flush」）を
+/// 移動の前後で変えない。
+pub fn register_emo2_frame_system(world: &mut World) {
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Update, emo2_frame_system.after(update_typewriters));
+}
+
 /// 停止通知の受け口を World に据え、終了相を `Update` に登録する（起動の 2 経路で共通・1 回だけ・
 /// 要件 6.4）。
 ///
 /// `main` が起動の分岐の後・`run()` の前に 1 回呼ぶ。終了相は毎フレームの相より前に走る。
 /// LogSink 側の起動では毎フレームの相が登録されないが、順序の相手が居ないだけで登録は通る
 /// （`frame_schedule_tests` の 1 本がこの形を固定する）。
-pub fn wire_kanade_stop(app: &WinApp, rx: Receiver<KanadeStopped>) {
-    let world = app.world();
-    let mut world = world.borrow_mut();
-    world.world_mut().insert_non_send(KanadeStopRx(rx));
-    world.add_systems(Update, ghost_quit_system.before(emo2_frame_system));
+pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeStopped>) {
+    world.insert_non_send(KanadeStopRx(rx));
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Update, ghost_quit_system.before(emo2_frame_system));
 }
 
 #[cfg(test)]
 mod wire_tests {
     use super::sample_test_support::{emo2_balloon_root, emo2_root};
     use super::*;
-    use std::path::Path;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-    use wintf::WinApp;
 
     /// 取り違え防止の檻（task 4.3・要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
     /// （`shell_author_dpi`／`balloon_author_dpi`）が [`AuthorDpi`] の各フィールドと
@@ -703,22 +729,25 @@ mod wire_tests {
     /// `wire_emo2_boot` は `wired=false`（`LogSink` フォールバックへ委ねる・R7.3）を返し、
     /// ghost／seriko ハンドルは `None` となる（実 sink 結線を成立させない決定分岐の檻）。
     ///
-    /// `WinApp::new()` は headless 構築可能（`crates/wintf/tests/win_app.rs` 実績・COM/DPI のみ・
-    /// 窓/ループなし）。`build_boot_assets` が `resolve` 起点不在で早期 `Err` を返すため、
-    /// spawn_emo_text／spawn_seriko／boot へは一切到達せず（＝アクタースレッドを起こさない）
-    /// 決定論的に判定できる。
+    /// 素の `World::new()` で足りる。`build_boot_assets` が `resolve` 起点不在で早期 `Err` を返すため、
+    /// World には一切触れず、spawn_emo_text／spawn_seriko／boot へも到達しない（＝アクタースレッドを
+    /// 起こさない）ので決定論的に判定できる。
     #[test]
     fn wire_emo2_boot_falls_back_to_unwired_on_missing_ghost_root() {
-        let app = WinApp::new().expect("headless WinApp::new は成功する（COM/DPI のみ）");
-        let missing_ghost = Path::new("C:/areka-nonexistent-ghost-root-emo2boot-5v1");
-        let missing_balloon = Path::new("C:/areka-nonexistent-balloon-root-emo2boot-5v1");
-        let helper = Path::new("shiori-host32-helper.exe");
+        let mut world = World::new();
+        let inputs = Emo2BootInputs {
+            ghost_root: PathBuf::from("C:/areka-nonexistent-ghost-root-emo2boot-5v1"),
+            balloon_root: PathBuf::from("C:/areka-nonexistent-balloon-root-emo2boot-5v1"),
+            shiori: ShioriWiring::Helper {
+                helper_exe: PathBuf::from("shiori-host32-helper.exe"),
+            },
+            ticker: TickerMode::Disabled,
+            app_profile_dir: None,
+        };
 
         let outcome = wire_emo2_boot(
-            &app,
-            missing_ghost,
-            missing_balloon,
-            helper,
+            &mut world,
+            inputs,
             AuthorDpi::DEFAULT,
             None,
             std::sync::mpsc::channel().0,
