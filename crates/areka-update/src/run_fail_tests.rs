@@ -110,6 +110,36 @@ fn work_area_blocked_by_a_file_of_the_same_name_fails_before_fetching_files() {
 }
 
 #[test]
+fn writing_a_fetched_file_into_the_work_area_fails_with_its_name() {
+    let f = fixture();
+    let (fetch, _) = three_ending_with_existing(&f, b"A");
+    // 2 件目を取る最中に、作業場所の書き先を同名のフォルダで塞ぐ。
+    let fetch = {
+        let (shelf, x_url) = (f.target.join(WORK_DIR), url("sub/x.txt"));
+        fetch.on_get(move |u| {
+            if u == x_url {
+                let dir = fs::read_dir(&shelf).unwrap().next().unwrap().unwrap();
+                fs::create_dir_all(dir.path().join("new/sub/x.txt")).unwrap();
+            }
+        })
+    };
+    let before = tree(&f.target);
+
+    let ran = go(HOME, &f.target, &fetch);
+
+    let err = ran.failed();
+    assert_eq!(err.reason.kind(), "WorkArea", "{err}");
+    assert_eq!(err.stage, Stage::Download { index: 1, total: 3 });
+    assert_eq!(err.file(), Some("sub/x.txt"));
+    assert!(err.rolled_back() && err.work.is_none() && err.leftovers.is_empty());
+    assert_eq!(tree(&f.target), before, "作業場所まで開始前と同一");
+    let mut seen = head(&["a.dll", "sub/x.txt", "b.txt"]);
+    seen.extend(fetched("a.dll", b"A", 0, 3));
+    seen.extend(fetched("sub/x.txt", b"x", 1, 3));
+    ran.expect(&seen, [1, 0, 1]);
+}
+
+#[test]
 fn junction_out_of_the_target_fails_at_the_diff_stage() {
     let f = fixture();
     fs::write(f.target.join("keep.txt"), b"keep").unwrap();

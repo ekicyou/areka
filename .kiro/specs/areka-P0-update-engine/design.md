@@ -105,7 +105,7 @@ graph TB
 
 **依存の向き**（左から右へだけ import する。逆向きはレビューで誤りとする）:
 
-`error`／`outcome`（型） → `urlpath` → `paths` → `manifest` → `md5` → `diff` → `fetch` → `work` → `commit` → `delete` → `lib`（`run`）。`winhttp` は `fetch`・`error` だけを見る。`testkit`（`#[cfg(test)]`）は何にでも依存してよいが、本番からは参照しない。`paths` を `manifest` より左に置くのは、読み手が作業場所の名前（`WORK_DIR`）と区切りの正規化を `paths` から借りるため（`paths` は `manifest`・`md5` を見ない）。
+`error`／`outcome`（型） → `urlpath` → `paths` → `manifest` → `md5` → `diff` → `fetch` → `work` → `commit` → `delete` → `lib`（`run`）。`winhttp` は `fetch`・`error` だけを見る。`testkit`（`#[cfg(test)]`）は何にでも依存してよいが、本番からは参照しない。`paths` を `manifest` より左に置くのは、読み手が作業場所の名前（`WORK_DIR`）と区切りの正規化を `paths` から借りるため（`paths` は `manifest`・`md5` を見ない）。例外は 1 つ: `error` は `UpdateError::file()` で作業場所の `new/<rel>` を剥がすために定数 `paths::WORK_DIR` だけを借りる（`paths` は `error` を見ないので循環しない・実装時に追加）。
 
 ### Technology Stack
 
@@ -130,7 +130,9 @@ crates/areka-update/
 └── src/
     ├── lib.rs                 # 公開面・run()・記録の唯一の発火点（info/warn/error）・log_failure
     ├── lib_tests.rs           # 字面の見張り（tracing:: は lib.rs だけ／error! 1 か所／WinHTTP の API は winhttp.rs だけ）・語彙の全数対応・記録の件数
-    ├── run_tests.rs           # 偽の取得口で回す一周の全経路（9.3・9.4）
+    ├── run_tests.rs           # 偽の取得口で回す一周の全経路（9.3・9.4）と共有の判定の道具
+    ├── run_fail_tests.rs      # run_tests の子（mod fail）: 取得失敗・MD5 不一致・作業場所・差分／確定の段の配下の外
+    ├── testkit_tests.rs       # 試験の道具そのものの自己テスト
     ├── error.rs               # fail_reasons! マクロ → FailReason＋ALL_KINDS・FetchError・Stage・UpdateError・UpdateWarning
     ├── error_tests.rs
     ├── outcome.rs             # ManifestName・Progress・UpdateOutcome・Undeletable
@@ -257,7 +259,7 @@ flowchart TD
 | 1.12 | 追加の無効 5 種＋作業場所 | manifest・error | `InvalidWhy::{BadMd5, Absolute, EmptyComponent, Nul, SelfReference, InsideWorkArea}` | — |
 | 1.13 | `\` も区切り | manifest・paths | `normalize_separators` | — |
 | 1.14 | 重複は後勝ち・警告 | manifest・error | `UpdateWarning::DuplicateEntry` | — |
-| 1.15 | 符号化の判定・復号・URL 側の符号化 | urlpath・manifest | `is_all_encoded`・`decode`・`encode` | — |
+| 1.15 | 符号化の判定・復号・URL 側の符号化 | urlpath・manifest | `is_encoded`・`decode`・`encode` | — |
 | 1.16 | 有効 0 件は差分 0 | lib・diff | `UpdateOutcome::Unchanged` | 一周の進行 |
 | 1.17 | 入口の検査（対象フォルダ・URL） | lib・error | `FailReason::{TargetMissing, InvalidHomeurl}`・`Stage::Entry` | 一周の進行 |
 | 2.1 | 無い／違う → 要取得、同じ → 対象外 | diff・md5 | `plan` | — |
@@ -394,7 +396,7 @@ pub fn run(
 5. `Stage::Download { index: 0, total }`: `WorkArea::create(target)`。`Err` → `WorkArea { path, source }`。
 6. 各要取得 `i`（定義の順）: `Progress::DownloadBegin`。`get(file_url)` の `Err` → `FileFetch`（`Stage::Download { i, total }`）。`md5_hex` で照合し `Progress::Md5Compared`。不一致 → `Md5Mismatch`（`Stage::Verify { i, total }`）。`area.put(rel, bytes)` の `Err` → `WorkArea`。バイト列はここで手放す（メモリに全件を溜めない）。
 7. 定義ファイルの生バイト列を `area.put(manifest.name.file_name(), …)`。`Err` → `WorkArea`（`Stage::Commit`＝確定の準備。対象フォルダにはまだ触っていない）。
-8. `Stage::Commit`: `commit::commit(target, target_real, &area, files ＋ 定義ファイル名)`。`Ok(placed)` → `Progress::Committed`。`Err(Write)` → `CommitWrite`（戻せた）。`Err(Escapes)` → `EscapesTarget`（それまでに置いた分は戻せた）。`Err(RollbackFailed)` → `RollbackFailed`・作業場所は片付けず `work = Some(area.dir())`。
+8. `Stage::Commit`: `commit::commit(target, target_real, &area, files ＋ 定義ファイル名)`。`Ok(placed)` → `Progress::Committed`。`Err(Write)` → `CommitWrite`（戻せた）。`Err(Escapes)` → `EscapesTarget`（それまでに置いた分は戻せた）。`Err(RollbackFailed)` → `RollbackFailed`・作業場所は片付けず `area.keep()` で得たパスを `work = Some(…)` にする（`WorkArea::dir()` はテスト専用）。
 9. `delete::apply(target, target_real, manifest.charset)` → `warnings` を `warn!`・`undeletable` も 1 件 1 行の `warn!`・`Progress::Deleted { removed }`。削除は一周を失敗にしない（6.6）。
 10. `area.cleanup()` → 残骸を `Updated::leftovers` に入れ、各 1 件 `warn!`。`info!` で終了（成功・件数）。`Ok(Updated { … })`。
 
@@ -411,8 +413,8 @@ pub fn run(
 |---|---|---|
 | 開始 | `info!` | `homeurl`・`target` |
 | 終了 | `info!` | `outcome`（`unchanged`／`updated`）・`placed`（件数）・`removed`（件数）・`leftovers`（件数） |
-| 警告（`UpdateWarning` 1 件・取り除けなかった物（`Undeletable`）1 件・残骸（`leftovers`）1 件につき 1 行） | `warn!` | `kind`（変種名・`undeletable`・`leftover`）・`detail`（変種の全ての欄を `Debug` で 1 欄に。`line`・`path`・`name`・`file`・`error` 等） |
-| 失敗（`log_failure`・1 行） | `error!` | `homeurl`・`target`・`stage`・`reason`（`kind()`）・`detail`（`Display`）・`file`・`rolled_back`・`work`・`leftovers`（件数） |
+| 警告（`UpdateWarning` 1 件・取り除けなかった物（`Undeletable`）1 件・残骸（`leftovers`）1 件につき 1 行） | `warn!` | `kind`（変種名・`undeletable`・`leftover`）・`detail`（変種の全ての欄を `Debug` で 1 欄に。`line`・`path`・`name`・`file`・`error` 等）。`undeletable`・`leftover` の行は `detail` の代わりに `path`（と `error`）の欄 |
+| 失敗（`log_failure`・1 行） | `error!` | `homeurl`・`target`・`stage`・`reason`（`kind()`）・`detail`（`Display`。`RollbackFailed` は戻せた一覧 `restored` と戻せなかった一覧 `stuck` を名前で持つ＝5.5）・`file`・`rolled_back`・`work`・`leftovers`（件数） |
 
 #### `error`・`outcome`（契約の型）
 
@@ -502,7 +504,7 @@ fail_reasons! {
     Md5Mismatch { file: String, expected: String, actual: String },
     EscapesTarget { path: PathBuf },                                   // 実パスが対象フォルダの外へ解決される
     CommitWrite { path: PathBuf, source: std::io::Error },             // 確定で置けない（戻せた）
-    RollbackFailed {                                                   // 戻せなかった
+    RollbackFailed {                                                   // 戻せなかった（表示は restored・stuck を名前で並べる＝5.5）
         path: PathBuf, source: std::io::Error,                         // 確定を止めた失敗
         restored: Vec<String>, stuck: Vec<Stuck>,
     },
@@ -525,7 +527,9 @@ pub struct UpdateError {
 impl UpdateError {
     /// 原因のファイル名（分かるとき）。名前空間は対象フォルダからの相対名 1 つ（`OnUpdateFailure` の Ref1 へ写すので絶対パスは出さない）。
     /// 名前を持つ理由はその名前、パスを持つ理由は `path.strip_prefix(target)`（空・配下でない・UTF-8 でない → `None`）。
-    /// パスを持つ理由の `path` は `target_real` でなく `target.join(rel)` で組む。フォルダ単位の理由は `None`。
+    /// パスを持つ理由の `path` は `target_real` でなく `target.join(rel)` で組む。`WorkArea` は書き先が
+    /// `<target>/.update-work/<走行>/new/<rel>` なら `<rel>`（`new/` は対象と同じ相対名で並ぶ）、作業場所そのものなら `None`。
+    /// フォルダ単位の理由（`TargetMissing`・`InvalidHomeurl`・`ManifestMissing`）は `None`。
     pub fn file(&self) -> Option<&str>;
     /// `RollbackFailed` 以外は真。
     pub fn rolled_back(&self) -> bool;
@@ -577,7 +581,7 @@ pub(crate) const DEFAULT_CHARSET: &encoding_rs::Encoding = encoding_rs::SHIFT_JI
 
 pub(crate) struct Manifest {
     pub name: ManifestName,
-    /// 解決した文字コード（`delete.txt` へ引き継ぐ＝6.2）。
+    /// 実際に復号に使った文字コード（BOM があれば BOM が勝つ）。`delete.txt` へ引き継ぐ（6.2）。
     pub charset: &'static encoding_rs::Encoding,
     /// 有効なエントリ（定義の順・重複は後勝ち）。
     pub entries: Vec<Entry>,
@@ -711,7 +715,7 @@ impl Drop for Handle { /* WinHttpCloseHandle */ }
 
 **`get` の手順**（束縛は全て `windows 0.62.2` `src/Windows/Win32/Networking/WinHttp/mod.rs`）:
 
-1. 空の URL は OS を呼ぶ前に `Other { code: 12005 }`（`ERROR_WINHTTP_INVALID_URL`）にする（長さ 0 は `WinHttpCrackUrl` が「NUL 終端まで読む」と解するため）。`WinHttpCrackUrl` で scheme・host・port・path＋query を分ける。
+1. 空の URL は OS を呼ぶ前に `Other { code: 12005 }`（`ERROR_WINHTTP_INVALID_URL`）にする。分解した scheme が http／https 以外なら `Other { code: 12006 }`（`ERROR_WINHTTP_UNRECOGNIZED_SCHEME`・`run` は入口で弾くので届かないが `Fetch` は公開のため）（長さ 0 は `WinHttpCrackUrl` が「NUL 終端まで読む」と解するため）。`WinHttpCrackUrl` で scheme・host・port・path＋query を分ける。
 2. `WinHttpConnect(session, host, port, 0)` → `WinHttpOpenRequest(connect, "GET", path, 版は既定（null）, referer 無し（null）, accept は既定（null）, https なら WINHTTP_FLAG_SECURE)`。
 3. 転送の方針は WinHTTP の既定（`WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP`・自動追随・上限 10 回）を変えない＝3xx に追随し、https → http の降格だけ拒む（降格は `ERROR_WINHTTP_REDIRECT_FAILED` → `Other { code: 12156 }`）。圧縮の自動伸長（`WINHTTP_OPTION_DECOMPRESSION`）は使わない（MD5 は落としたバイト列そのもの）。
 4. `WinHttpSendRequest` → `WinHttpReceiveResponse` → `WinHttpQueryHeaders(WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER)` で状態コードを数値で取る。`404` → `NotFound`、2xx 以外 → `Status { code }`（3xx は自動追随の後なので現れない）。
@@ -781,10 +785,13 @@ pub(crate) enum CommitFailure {
     RollbackFailed { path: PathBuf, source: std::io::Error, restored: Vec<String>, stuck: Vec<Stuck> },
 }
 enum Undo {
-    RemoveDir(PathBuf),                          // 確定で作った親フォルダ（空なら消す）
-    Remove(PathBuf),                             // 置いた宛先
-    Restore { old: PathBuf, dest: PathBuf },     // 退避した元の内容を戻す
+    RemoveDir(String),   // 確定で作った親フォルダ（空なら消す）
+    Remove(String),      // 置いた宛先
+    Restore(String),     // 退避した元の内容（old/<rel>）を宛先へ戻す
 }
+// 実装時に確定: 手は `/` 区切りの相対名で持ち、戻すときに `local_path`／`area.retired` でパスを組む
+// （restored・stuck が相対名のまま出る）。消せなかった親フォルダも stuck に 1 件として載る。
+// 同じファイルの Remove と Restore が両方失敗しても stuck には 1 件だけ載る。
 /// `files` は `/` 区切りの相対パス（定義の順・最後は定義ファイル名）。成功で置いた一覧を返す。
 pub(crate) fn commit(target: &Path, target_real: &Path, area: &WorkArea, files: &[String])
     -> Result<Vec<String>, CommitFailure>;
@@ -819,7 +826,9 @@ pub(crate) struct DeleteReport {
     pub warnings: Vec<UpdateWarning>,
 }
 /// 対象フォルダ直下の `delete.txt` と `delete<N>.txt`（N は 10 進 1 桁以上）を、`delete.txt` → N の昇順に並べる。
-pub(crate) fn delete_files(target: &Path) -> Vec<PathBuf>;
+// 実装時に確定: 対象フォルダを列挙できなければ Err。apply が
+// DeleteFileUnreadable { file: "delete*.txt" } の警告にする（黙って 0 件にしない）。
+pub(crate) fn delete_files(target: &Path) -> std::io::Result<Vec<PathBuf>>;
 /// 全ファイルを順に適用する。読めないファイルは `DeleteFileUnreadable` を警告して飛ばす（削除は一周を失敗にしない＝6.6）。
 pub(crate) fn apply(target: &Path, target_real: &Path, charset: &'static encoding_rs::Encoding) -> DeleteReport;
 ```

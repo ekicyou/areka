@@ -631,6 +631,16 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
         stuck.iter().map(|s| s.file.as_str()).collect::<Vec<_>>(),
         ["a.dll"]
     );
+    // 戻せた一覧と戻せなかった一覧は error の記録にも載る（5.5）。
+    let record = ran
+        .records
+        .iter()
+        .find(|e| e.level == tracing::Level::ERROR);
+    let detail = record.and_then(|e| e.field("detail")).unwrap_or_default();
+    assert!(
+        detail.contains("a.dll") && detail.contains("sub/x.txt"),
+        "{detail}"
+    );
     assert_eq!(err.stage, Stage::Commit);
     assert!(!err.rolled_back());
     let work = err.work.as_ref().expect("作業場所のパスを返す");
@@ -657,6 +667,91 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
             ("old/", b""),
         ])
     );
+}
+
+/// 1 回の成功した周で警告の 7 種と、取り除けなかった物・残骸を全て出し、種ごとに
+/// warn がちょうど 1 行で理由の欄を持つことを判定する（8.2）。
+#[test]
+fn every_warning_kind_is_recorded_once() {
+    let f = fixture();
+    // 取り除けない物・種別の食い違い（ファイルの行に同名のフォルダ）・読めない delete2.txt。
+    fs::write(f.target.join("held.txt"), b"held").unwrap();
+    fs::create_dir(f.target.join("dir.txt")).unwrap();
+    fs::create_dir(f.target.join("delete2.txt")).unwrap();
+    // 戻せなかった他の走行の元の内容＝棚に残す残骸（4.8・5.5）。
+    let other = f.target.join(WORK_DIR).join("9-9");
+    fs::create_dir_all(other.join("old")).unwrap();
+    fs::write(other.join("old/b.txt"), b"b").unwrap();
+    let delete: &[u8] = b"../x.txt\r\ndir.txt\r\nheld.txt\r\n";
+    let manifest = dau(
+        &[
+            &["a.txt", &md5_hex(b"A"), "charset=bogus"],
+            &["a.txt", &md5_hex(b"A")],
+            &["bad.txt"],
+            &["delete.txt", &md5_hex(delete)],
+        ],
+        true,
+    );
+    let fetch = FakeFetch::new()
+        .serve(&url("updates2.dau"), &manifest)
+        .serve(&url("a.txt"), b"A")
+        .serve(&url("delete.txt"), delete);
+    let held = hold(&f.target.join("held.txt"));
+
+    let ran = go("http://example.test/ghost", &f.target, &fetch);
+    drop(held);
+
+    match ran.result.as_ref().expect("警告だけの周は成功") {
+        UpdateOutcome::Updated {
+            undeletable,
+            leftovers,
+            ..
+        } => {
+            assert_eq!(
+                undeletable.iter().map(|u| &u.path).collect::<Vec<_>>(),
+                [&f.target.join("held.txt")]
+            );
+            assert_eq!(leftovers, &[other]);
+        }
+        outcome => panic!("{outcome:?}"),
+    }
+    let names = ["a.txt", "delete.txt"];
+    let mut seen = head(&names);
+    seen.extend(fetched("a.txt", b"A", 0, 2));
+    seen.extend(fetched("delete.txt", delete, 1, 2));
+    seen.push(Progress::Committed {
+        placed: names.map(String::from).to_vec(),
+    });
+    seen.push(Progress::Deleted { removed: vec![] });
+    ran.expect(&seen, [2, 9, 0]);
+    let warns: Vec<&CapturedEvent> = ran
+        .records
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    let mut kinds: BTreeMap<&str, usize> = BTreeMap::new();
+    for w in &warns {
+        *kinds.entry(w.field_str("kind").unwrap_or("?")).or_default() += 1;
+        assert!(
+            w.field("detail").or(w.field("path")).is_some(),
+            "理由の欄が無い: {w:?}"
+        );
+    }
+    let expected: BTreeMap<&str, usize> = [
+        "HomeurlSlashAppended",
+        "UnknownCharset",
+        "InvalidEntry",
+        "DuplicateEntry",
+        "DeleteLineIgnored",
+        "DeleteKindMismatch",
+        "DeleteFileUnreadable",
+        "undeletable",
+        "leftover",
+    ]
+    .into_iter()
+    .map(|k| (k, 1))
+    .collect();
+    assert_eq!(kinds, expected);
 }
 
 #[path = "run_fail_tests.rs"]

@@ -5,7 +5,8 @@
 //! 期待と実際）を落とさずに持つ。
 
 use crate::outcome::ManifestName;
-use std::path::PathBuf;
+use crate::paths::WORK_DIR;
+use std::path::{Path, PathBuf};
 
 /// 失敗の語彙を 1 か所の宣言から組み立てる（`areka-nar` の `refuse_reasons!` と同じ形）。
 ///
@@ -121,8 +122,9 @@ fail_reasons! {
     #[error("確定で書けない（元へ戻した）: {path}: {source}")]
     CommitWrite { path: PathBuf, source: std::io::Error },
 
-    /// 戻せなかった。`path`／`source` は確定を止めた失敗。
-    #[error("確定で書けず、戻せなかった: {path}: {source}（戻せた {} 件・戻せなかった {} 件）", restored.len(), stuck.len())]
+    /// 戻せなかった。`path`／`source` は確定を止めた失敗。表示は両方の一覧を名前で持つ
+    /// （error の記録の `detail` がこの表示＝5.5）。
+    #[error("確定で書けず、戻せなかった: {path}: {source}（戻せた {restored:?}・戻せなかった {stuck:?}）")]
     RollbackFailed {
         path: PathBuf,
         source: std::io::Error,
@@ -162,23 +164,34 @@ impl UpdateError {
     ///   `path` から `target` を剥がした残り。残りが空（対象フォルダそのもの）・`target` の
     ///   配下でない・UTF-8 でない、のときは `None`。相対名を取り戻せるよう、これらの
     ///   `path` は `target_real` からでなく `target.join(rel)` で組むこと。
-    /// - フォルダ単位の理由（`TargetMissing`・`InvalidHomeurl`・`ManifestMissing`・`WorkArea`）は `None`。
+    /// - `WorkArea` は落とした物の書き先（`<target>/.update-work/<走行>/new/<rel>`）なら `<rel>`
+    ///   （作業場所の `new/` は対象フォルダと同じ相対名で並ぶ）。作業場所そのものなら `None`。
+    /// - フォルダ単位の理由（`TargetMissing`・`InvalidHomeurl`・`ManifestMissing`）は `None`。
     pub fn file(&self) -> Option<&str> {
+        fn rel<'a>(path: &'a Path, base: &Path) -> Option<&'a str> {
+            path.strip_prefix(base)
+                .ok()
+                .and_then(|rel| rel.to_str())
+                .filter(|rel| !rel.is_empty())
+        }
         match &self.reason {
             FailReason::ManifestFetch { name, .. } => Some(name.file_name()),
             FailReason::FileFetch { file, .. } | FailReason::Md5Mismatch { file, .. } => Some(file),
             FailReason::LocalUnreadable { path, .. }
             | FailReason::EscapesTarget { path }
             | FailReason::CommitWrite { path, .. }
-            | FailReason::RollbackFailed { path, .. } => path
-                .strip_prefix(&self.target)
-                .ok()
-                .and_then(|rel| rel.to_str())
-                .filter(|rel| !rel.is_empty()),
+            | FailReason::RollbackFailed { path, .. } => rel(path, &self.target),
+            FailReason::WorkArea { path, .. } => {
+                let mut run = path
+                    .strip_prefix(self.target.join(WORK_DIR))
+                    .ok()?
+                    .components();
+                run.next()?;
+                rel(run.as_path(), Path::new("new"))
+            }
             FailReason::TargetMissing { .. }
             | FailReason::InvalidHomeurl { .. }
-            | FailReason::ManifestMissing {}
-            | FailReason::WorkArea { .. } => None,
+            | FailReason::ManifestMissing {} => None,
         }
     }
 
