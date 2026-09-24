@@ -57,6 +57,8 @@
 - 終了コードの契約（Fault で 1）: smoke ①②④・`alpha-release-signoff` #17 の既知の制限一覧。
 - 告知の題名が場面ごとに変わる形: `ghost-install` #15 は `alert_text` の戻り `(title, body)` をそのまま使う。
 - エラー応答が 204 相当になる: `BootPrefetch` の `username` 照会の失敗の写し先が `ResourceOutcome::NoContent` に変わる（sylphya 側の扱いは「204・失敗→None」で同じ）。
+- `shiori-host32-ipc` の期限切れが `IpcError::Timeout` として実際に返るようになった（7.1・`Display` の文言も変わった）: `IpcError` を種類で分ける利用者（`shiori-host32-host` の `map_send_error`・helper の `log_response_send_failure`）。旧い文言に依存する箇所はリポジトリ内に無い。
+- wintf の `WinApp::run` から戻った後はフレーム・VSync 中継・クリック透過の判定が回らない（7.2）: `run()` の後で何かを回す利用者（#58 `ghost-restart-unit` の再起動の形・`run()` の後にモーダルを出すもの）は、`run()` の後にフレームが回らない前提で組む。
 
 ## Architecture
 
@@ -128,10 +130,12 @@ graph TB
 - `crates/areka-kanade/tests/kanade/choice_test_stage_failure_tests.rs` — 2 本が注入しているエラー応答（`FailKind::Shiori`）を `Ipc` へ替える（エラー応答が返事なしになると、選択肢の往復中の 204 扱いの腕を踏まず、選択肢以外の失敗の Fault も起きなくなるため・タスク生成の査読で判明）。
 - `crates/areka-kanade/tests/kanade/common/common_harness.rs` — `spawn_harness_failing` に停止通知の投函端つきの派生を 1 つ足す（既存 `spawn_harness_with_stop_sink` と同型）。
 - `crates/areka-kanade/tests/kanade/prefetch_test.rs` — 影響なし（`Timeout` を使う）。
+- 実装で足した・変えた（計画外）: `crates/areka-kanade/src/actor_error_response_tests.rs`（新規・兄弟＝`round_trip_request` のエラー応答の写しを GET／NOTIFY／他の失敗で固定・`actor_tests.rs` の 1,000 行の上限を守るため別ファイル）、`crates/areka-kanade/src/shiori/mod.rs`（接続失敗後もアクターが応答し続ける旨の説明）、`crates/log-capture-kit/tests/with_default_guard_test.rs`（`failure_test.rs` を全スレッド捕捉の例外表へ登録＝kanade のアクタースレッドで出る記録を数えるため）、`crates/areka/src/emo2_boot/zorder_wiring_tests.rs`（t_zwi08 が照合する `main.rs` の字面の追随）。
+- 計画に載せたが変更が要らなかった: `schedule/close.rs`・`user_break_tests.rs`・`real_idle_tests.rs`・`close_test_stop_notify_tests.rs`・areka-ghost の `spine_e2e_test_s3_helper_liveness_detected.rs`・`real_pasta_test.rs`（`{ .. }` で書かれていて追随不要）。
 
 ### Modified Files（shiori-host32-ipc・2026-09-25 開発者裁定の例外）
 
-- `crates/shiori-host32-ipc/src/lib.rs` — `send_copydata_with` は `SendMessageTimeoutW` の直前に last error を消し、戻り 0 のうち `GetLastError() == ERROR_TIMEOUT` だけを `IpcError::Timeout` に写す（存在しない窓・応答なしの打ち切りなど他は `SendFailed` のまま）。直す前は期限切れも `SendFailed` → `RequestError::Ipc` → `ShioriFailure::Ipc` となり、i686 helper 経路の期限切れが「通信が切れた」と告知されていた（実機 1 回目）。`IpcError` と送出関数の説明も合わせて直す。
+- `crates/shiori-host32-ipc/src/lib.rs` — `send_copydata_with` は `SendMessageTimeoutW` の直前に last error を消し、戻り 0 のうち `GetLastError() == ERROR_TIMEOUT` だけを `IpcError::Timeout` に写す（存在しない窓・応答なしの打ち切りなど他は `SendFailed` のまま）。直す前は期限切れも `SendFailed` → `RequestError::Ipc` → `ShioriFailure::Ipc` となり、i686 helper 経路の期限切れが「通信が切れた」と告知されていた（実機 1 回目）。`IpcError` と送出関数の説明も合わせて直す。あわせて `crates/shiori-host32-helper/src/main.rs` の `log_response_send_failure` の説明に「期限切れ（last error 1460）は `IpcError::Timeout` として別に届く」を 1 行足す（説明だけ・コード無改変）。
 - `crates/shiori-host32-ipc/src/send_timeout_tests.rs`（新規・兄弟）— 別スレッドの message-only 窓が `WM_COPYDATA` の手続きで眠る → 短い期限で送ると `Timeout`、壊した窓へ送ると `SendFailed`（写しを戻すと前者が赤）。
 
 ### Modified Files（wintf・2026-09-25 開発者裁定の例外）
@@ -609,7 +613,7 @@ classDiagram
 
 ## Open Questions / Risks
 
-- 要件 2.1・7.1 の「6 語」は討議前の綴りで、要件 1.4・8.3 の **5 語**が確定。設計は 5 語で書いた（要件文の綴りの直しはディスカッションで拾う・設計を止めない）。
+- 失敗の種類の語は要件 1.4・2.1・7.1 とも **5 語**で揃っている（討議前の「6 語」の綴りは直し済み）。
 - 実機 ② の `AREKA_SHIORI_REQUEST_TIMEOUT_MS` の値は静的に決められない（上の実機の節に手順を書いた）。
 - `HOST32_TESTDLL_LOADU_FAIL` が helper へ届くことは `Command` の既定（環境を継ぐ）で読めるが、④ が最初の走行で実証する。届かなければ要件 4.4 の逃げ道（検証用 DLL を env なしで偽に）。
 - smoke ①② の自動終了 500 ms は据え置きなので、500 ms より遅い接続失敗はこの 2 本では見えない（④ が同じ検体の形で塞ぐ）。
