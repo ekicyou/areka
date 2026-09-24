@@ -39,20 +39,12 @@ pub(crate) enum ExitOrigin {
 /// （[`AppExit::request_exit`] の「最初が勝つ」と同じ規則）。`run()` の後で `main` が読み、
 /// [`fault_of`] で告知と終了コードを決める。
 #[derive(Resource)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "中身は main の後始末（告知・終了コード）が読む")
-)]
 pub(crate) struct FirstExit(pub(crate) ExitOrigin);
 
 /// 告知するか・終了コードを 1 にするかの判定（呼び手は分けて判断しない）。
 ///
 /// 失敗の中身を返すのは「kanade の停止で原因が Fault」だけ。他の停止原因・強制退避・smoke の
 /// 自動終了・OS の閉鎖要求は `None`（告知なし・終了コード 0）。
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "main の後始末（告知・終了コード）が呼ぶ")
-)]
 pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     match origin {
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f)) => Some(f),

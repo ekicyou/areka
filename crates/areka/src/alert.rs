@@ -36,10 +36,6 @@ pub(crate) enum AlertScene {
     /// 起動窓を開けない（要件 6.4）。`reason` は失敗の内容（`PlacementError` の表示）。
     StartupWindow { reason: String },
     /// SHIORI が動かなくなった（起動時か会話中かは載せない）。
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "main の後始末（告知・終了コード）が組む")
-    )]
     ShioriFault {
         ghost_name: Option<String>,
         ghost_root: PathBuf,
