@@ -1,8 +1,9 @@
-//! 一周の入口・定義ファイル・差分 0・n 件の更新・確定の失敗の経路
-//! （要件 1.1〜1.4・1.16・1.17・2.5・2.6・4.2〜4.8・5.1・5.3・5.8・6.1・6.7・7.1・8.1〜8.3・9.3）。
+//! 一周の入口・定義ファイル・差分 0・n 件の更新・確定の途中失敗・戻せなかった経路
+//! （要件 1.1〜1.4・1.16・1.17・2.5・2.6・4.2〜4.8・5.1・5.3・5.5・5.8・6.1・6.7・7.1・8.1〜8.4・9.3・9.4）。
+//! 残りの失敗の経路は `run_fail_tests.rs`（道具はここに 1 か所）。
 //!
 //! 各経路で、戻り値の形・観測者が受けた進捗の列・レベル別の記録件数・取得口の呼出・
-//! 木のバイト単位の同一性を同時に判定する。
+//! 木のバイト単位の同一性を同時に判定する（[`Ran::expect`]・[`Ran::failed`]）。
 
 use super::*;
 use crate::md5::md5_hex;
@@ -20,18 +21,24 @@ const HOME: &str = "http://example.test/ghost/";
 const MD5_ABC: &str = "900150983cd24fb0d6963f7d28e17f72";
 
 struct Fixture {
-    _work: WorkDir,
+    work: WorkDir,
     target: PathBuf,
+}
+
+impl Fixture {
+    /// 対象フォルダの外（同じ作業フォルダの中の兄弟）。ジャンクションの行き先に使う。
+    fn outside(&self) -> PathBuf {
+        let outside = self.work.path().join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        outside
+    }
 }
 
 fn fixture() -> Fixture {
     let work = WorkDir::new().expect("作業フォルダ");
     let target = work.path().join("target");
     fs::create_dir_all(&target).unwrap();
-    Fixture {
-        _work: work,
-        target,
-    }
+    Fixture { work, target }
 }
 
 struct Ran {
@@ -43,6 +50,43 @@ struct Ran {
 impl Ran {
     fn count(&self, level: tracing::Level) -> usize {
         self.records.iter().filter(|e| e.level == level).count()
+    }
+
+    /// 観測者が受けた進捗の列と、記録の件数 `[info, warn, error]` を同時に判定する（7.1・8.4）。
+    /// 失敗 1 回につき error 1 件・警告 1 件につき warn 1 件を、呼び手が件数で書く。
+    fn expect(&self, seen: &[Progress], [info, warn, error]: [usize; 3]) {
+        assert_eq!(self.seen, seen, "進捗の列");
+        use tracing::Level;
+        assert_eq!(
+            [Level::INFO, Level::WARN, Level::ERROR].map(|l| self.count(l)),
+            [info, warn, error],
+            "記録の件数 [info, warn, error]: {:#?}",
+            self.records
+        );
+    }
+
+    /// 失敗を取り出し、error の記録の欄が戻り値と一致することも判定する（8.1）。
+    fn failed(&self) -> &UpdateError {
+        let err = self.result.as_ref().expect_err("失敗のはず");
+        let record = self
+            .records
+            .iter()
+            .find(|e| e.level == tracing::Level::ERROR)
+            .unwrap_or_else(|| panic!("error の記録が無い: {err}"));
+        assert_eq!(record.field_str("reason"), Some(err.reason.kind()));
+        assert_eq!(
+            record.field("stage"),
+            Some(format!("{:?}", err.stage).as_str())
+        );
+        assert_eq!(
+            record.field_str("file"),
+            Some(err.file().unwrap_or_default())
+        );
+        assert_eq!(
+            record.field("rolled_back"),
+            Some(err.rolled_back().to_string().as_str())
+        );
+        err
     }
 }
 
@@ -65,6 +109,44 @@ fn go(homeurl: &str, target: &Path, fetch: &FakeFetch) -> Ran {
 
 fn url(name: &str) -> String {
     format!("{HOME}{name}")
+}
+
+/// `updates2.dau` を取って差分が `files` に決まるまでの進捗 2 つ。
+fn head(files: &[&str]) -> Vec<Progress> {
+    vec![
+        Progress::ManifestFetched {
+            name: ManifestName::Updates2Dau,
+        },
+        Progress::DiffDecided {
+            files: files.iter().map(|s| s.to_string()).collect(),
+        },
+    ]
+}
+
+/// 要取得 1 件分の進捗 2 つ（`DownloadBegin` → `Md5Compared`・一致）。
+fn fetched(file: &str, bytes: &[u8], index: usize, total: usize) -> [Progress; 2] {
+    let md5 = md5_hex(bytes);
+    [
+        Progress::DownloadBegin {
+            file: file.to_owned(),
+            index,
+            total,
+        },
+        Progress::Md5Compared {
+            file: file.to_owned(),
+            expected: md5.clone(),
+            actual: md5,
+            matched: true,
+        },
+    ]
+}
+
+/// 相対名 → バイト列の木（フォルダは末尾 `/`・値は空）。
+fn tree_of(entries: &[(&str, &[u8])]) -> BTreeMap<String, Vec<u8>> {
+    entries
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_vec()))
+        .collect()
 }
 
 #[test]
@@ -94,23 +176,8 @@ fn no_difference_writes_nothing_and_does_not_read_delete_txt() {
         before,
         "対象フォルダが 1 バイトでも変わった（作業場所・定義ファイル・delete.txt の適用を含む）"
     );
-    assert_eq!(
-        ran.seen,
-        vec![
-            Progress::ManifestFetched {
-                name: ManifestName::Updates2Dau
-            },
-            Progress::DiffDecided { files: vec![] },
-        ]
-    );
-    assert_eq!(ran.count(tracing::Level::ERROR), 0, "{:?}", ran.records);
-    assert_eq!(ran.count(tracing::Level::WARN), 0, "{:?}", ran.records);
-    assert_eq!(
-        ran.count(tracing::Level::INFO),
-        2,
-        "開始と終了の 2 件: {:?}",
-        ran.records
-    );
+    // info は開始と終了の 2 件。
+    ran.expect(&head(&[]), [2, 0, 0]);
 }
 
 #[test]
@@ -131,46 +198,41 @@ fn zero_valid_entries_is_unchanged_and_each_invalid_entry_is_warned_once() {
             manifest: ManifestName::Updates2Dau
         })
     ));
+    assert_eq!(fetch.calls(), vec![url("updates2.dau")]);
     assert_eq!(tree(&f.target), before);
-    assert_eq!(
-        ran.count(tracing::Level::WARN),
-        2,
-        "無効 1 件につき warn 1 件: {:?}",
-        ran.records
-    );
-    assert_eq!(ran.count(tracing::Level::ERROR), 0);
+    // 無効 1 件につき warn 1 件。
+    ran.expect(&head(&[]), [2, 2, 0]);
 }
 
 #[test]
 fn empty_manifest_is_unchanged() {
     let f = fixture();
+    let before = tree(&f.target);
     let fetch = FakeFetch::new().serve(&url("updates2.dau"), b"");
 
     let ran = go(HOME, &f.target, &fetch);
 
     assert!(matches!(ran.result, Ok(UpdateOutcome::Unchanged { .. })));
-    assert_eq!(ran.seen[1], Progress::DiffDecided { files: vec![] });
+    assert_eq!(fetch.calls(), vec![url("updates2.dau")]);
+    assert_eq!(tree(&f.target), before);
+    ran.expect(&head(&[]), [2, 0, 0]);
 }
 
 #[test]
 fn neither_manifest_is_manifest_missing_and_recorded_once() {
     let f = fixture();
+    let before = tree(&f.target);
     let fetch = FakeFetch::new();
 
     let ran = go(HOME, &f.target, &fetch);
 
-    let err = ran.result.as_ref().expect_err("両方無ければ失敗");
+    let err = ran.failed();
     assert_eq!(err.reason.kind(), "ManifestMissing");
     assert_eq!(err.stage, Stage::Manifest);
     assert_eq!(fetch.calls(), vec![url("updates2.dau"), url("updates.txt")]);
-    assert!(ran.seen.is_empty(), "{:?}", ran.seen);
-    assert_eq!(ran.count(tracing::Level::ERROR), 1, "{:?}", ran.records);
-    assert_eq!(
-        ran.count(tracing::Level::INFO),
-        1,
-        "開始の 1 件だけ（失敗の終了に info を重ねない）: {:?}",
-        ran.records
-    );
+    assert_eq!(tree(&f.target), before);
+    // info は開始の 1 件だけ（失敗の終了に info を重ねない）。
+    ran.expect(&[], [1, 0, 1]);
     let error = ran
         .records
         .iter()
@@ -191,49 +253,69 @@ fn neither_manifest_is_manifest_missing_and_recorded_once() {
             "work"
         ]
     );
-    assert_eq!(error.field_str("reason"), Some("ManifestMissing"));
 }
 
 #[test]
 fn falls_back_to_updates_txt_only_when_updates2_dau_is_absent() {
     let f = fixture();
-    fs::write(f.target.join("a.txt"), b"abc").unwrap();
-    let fetch = FakeFetch::new().serve(
-        &url("updates.txt"),
-        &txt(&[&format!("file,a.txt\x01{MD5_ABC}")]),
-    );
+    fs::write(f.target.join("a.txt"), b"old").unwrap();
+    // 手元の古い updates2.dau は定義に無いローカルのファイル＝触らない。
+    fs::write(f.target.join("updates2.dau"), b"stale").unwrap();
+    let manifest = txt(&[&format!("file,a.txt\x01{MD5_ABC}")]);
+    let fetch = FakeFetch::new()
+        .serve(&url("updates.txt"), &manifest)
+        .serve(&url("a.txt"), b"abc");
 
     let ran = go(HOME, &f.target, &fetch);
 
-    assert!(
-        matches!(
-            ran.result,
-            Ok(UpdateOutcome::Unchanged {
-                manifest: ManifestName::UpdatesTxt
-            })
-        ),
-        "{:?}",
-        ran.result
-    );
-    assert_eq!(fetch.calls(), vec![url("updates2.dau"), url("updates.txt")]);
+    match ran.result.as_ref().expect("後退した周の更新は成功") {
+        UpdateOutcome::Updated {
+            manifest: ManifestName::UpdatesTxt,
+            placed,
+            ..
+        } => assert_eq!(placed, &["a.txt"]),
+        other => panic!("{other:?}"),
+    }
     assert_eq!(
-        ran.seen[0],
-        Progress::ManifestFetched {
-            name: ManifestName::UpdatesTxt
-        }
+        fetch.calls(),
+        vec![url("updates2.dau"), url("updates.txt"), url("a.txt")]
     );
+    assert_eq!(
+        tree(&f.target),
+        tree_of(&[
+            ("a.txt", b"abc"),
+            ("updates.txt", &manifest),
+            ("updates2.dau", b"stale"),
+        ]),
+        "置かれる定義ファイルは updates.txt・古い updates2.dau はそのまま"
+    );
+    let mut seen = vec![
+        Progress::ManifestFetched {
+            name: ManifestName::UpdatesTxt,
+        },
+        Progress::DiffDecided {
+            files: vec!["a.txt".into()],
+        },
+    ];
+    seen.extend(fetched("a.txt", b"abc", 0, 1));
+    seen.push(Progress::Committed {
+        placed: vec!["a.txt".into()],
+    });
+    seen.push(Progress::Deleted { removed: vec![] });
+    ran.expect(&seen, [2, 0, 0]);
 }
 
 #[test]
 fn network_failure_on_updates2_dau_does_not_fall_back() {
     let f = fixture();
+    let before = tree(&f.target);
     let fetch = FakeFetch::new()
         .fail(&url("updates2.dau"), FetchError::Timeout)
         .serve(&url("updates.txt"), b"");
 
     let ran = go(HOME, &f.target, &fetch);
 
-    let err = ran.result.as_ref().expect_err("通信失敗は失敗");
+    let err = ran.failed();
     assert!(
         matches!(
             err.reason,
@@ -244,29 +326,32 @@ fn network_failure_on_updates2_dau_does_not_fall_back() {
         ),
         "{err}"
     );
+    assert_eq!(err.stage, Stage::Manifest);
     assert_eq!(err.file(), Some("updates2.dau"));
     assert_eq!(fetch.calls(), vec![url("updates2.dau")]);
-    assert_eq!(ran.count(tracing::Level::ERROR), 1, "{:?}", ran.records);
+    assert_eq!(tree(&f.target), before);
+    ran.expect(&[], [1, 0, 1]);
 }
 
 #[test]
 fn missing_target_fails_at_entry_without_fetching() {
     let f = fixture();
+    let before = tree(&f.target);
     let missing = f.target.join("nope");
     let fetch = FakeFetch::new();
 
     let ran = go(HOME, &missing, &fetch);
 
-    let err = ran.result.as_ref().expect_err("対象が無ければ失敗");
+    let err = ran.failed();
     assert!(
         matches!(&err.reason, FailReason::TargetMissing { path } if path == &missing),
         "{err}"
     );
     assert_eq!(err.stage, Stage::Entry);
     assert!(fetch.calls().is_empty());
-    assert!(ran.seen.is_empty());
-    assert_eq!(ran.count(tracing::Level::ERROR), 1, "{:?}", ran.records);
-    assert_eq!(ran.count(tracing::Level::INFO), 0, "{:?}", ran.records);
+    assert_eq!(tree(&f.target), before, "対象フォルダを作らない");
+    // 開始の info より前に止まる。
+    ran.expect(&[], [0, 0, 1]);
 }
 
 #[test]
@@ -274,41 +359,51 @@ fn target_that_is_a_file_fails_at_entry() {
     let f = fixture();
     let file = f.target.join("file.txt");
     fs::write(&file, b"x").unwrap();
+    let before = tree(&f.target);
     let fetch = FakeFetch::new();
 
     let ran = go(HOME, &file, &fetch);
 
-    assert_eq!(
-        ran.result.as_ref().unwrap_err().reason.kind(),
-        "TargetMissing"
-    );
+    let err = ran.failed();
+    assert_eq!(err.reason.kind(), "TargetMissing");
+    assert_eq!(err.stage, Stage::Entry);
     assert!(fetch.calls().is_empty());
+    assert_eq!(tree(&f.target), before);
+    ran.expect(&[], [0, 0, 1]);
 }
 
 #[test]
 fn non_http_homeurl_fails_at_entry_without_fetching() {
     let f = fixture();
+    let before = tree(&f.target);
     let fetch = FakeFetch::new();
 
     let ran = go("ftp://example.test/ghost/", &f.target, &fetch);
 
-    let err = ran.result.as_ref().expect_err("http／https 以外は失敗");
+    let err = ran.failed();
     assert_eq!(err.reason.kind(), "InvalidHomeurl");
     assert_eq!(err.stage, Stage::Entry);
     assert!(fetch.calls().is_empty());
-    assert_eq!(ran.count(tracing::Level::ERROR), 1, "{:?}", ran.records);
+    assert_eq!(tree(&f.target), before);
+    ran.expect(&[], [0, 0, 1]);
 }
 
 #[test]
 fn missing_trailing_slash_is_appended_and_warned_once() {
     let f = fixture();
+    let before = tree(&f.target);
     let fetch = FakeFetch::new().serve(&url("updates2.dau"), b"");
 
     let ran = go("http://example.test/ghost", &f.target, &fetch);
 
-    assert!(ran.result.is_ok(), "{:?}", ran.result);
+    assert!(
+        matches!(ran.result, Ok(UpdateOutcome::Unchanged { .. })),
+        "{:?}",
+        ran.result
+    );
     assert_eq!(fetch.calls(), vec![url("updates2.dau")]);
-    assert_eq!(ran.count(tracing::Level::WARN), 1, "{:?}", ran.records);
+    assert_eq!(tree(&f.target), before);
+    ran.expect(&head(&[]), [2, 1, 0]);
     let warn = ran
         .records
         .iter()
@@ -336,24 +431,6 @@ fn run_does_not_spawn_a_thread() {
     .unwrap();
 
     assert_eq!(threads, vec![caller, caller]);
-}
-
-/// 要取得 1 件分の進捗 2 つ（`DownloadBegin` → `Md5Compared`・一致）。
-fn fetched(file: &str, bytes: &[u8], index: usize, total: usize) -> [Progress; 2] {
-    let md5 = md5_hex(bytes);
-    [
-        Progress::DownloadBegin {
-            file: file.to_owned(),
-            index,
-            total,
-        },
-        Progress::Md5Compared {
-            file: file.to_owned(),
-            expected: md5.clone(),
-            actual: md5,
-            matched: true,
-        },
-    ]
 }
 
 #[test]
@@ -422,41 +499,28 @@ fn n_files_are_committed_in_definition_order_then_delete_txt_is_applied() {
         ],
         "URL は更新先＋符号化済みのパス・同じ物は取らない"
     );
-    let mut expected = vec![
-        Progress::ManifestFetched {
-            name: ManifestName::Updates2Dau,
-        },
-        Progress::DiffDecided {
-            files: names.clone(),
-        },
-    ];
+    let mut expected = head(&files.map(|(n, _)| n));
     for (i, (name, bytes)) in files.iter().enumerate() {
         expected.extend(fetched(name, bytes, i, files.len()));
     }
     expected.push(Progress::Committed { placed: names });
     expected.push(Progress::Deleted { removed });
-    assert_eq!(ran.seen, expected);
+    ran.expect(&expected, [2, 0, 0]);
     // 作業場所が消え、定義ファイルが対象直下に届いたバイト列のまま置かれ、old.txt が消えた。
-    let after: BTreeMap<String, Vec<u8>> = [
-        ("a.txt", &b"A"[..]),
+    let after = tree_of(&[
+        ("a.txt", b"A"),
         ("b.txt", b"new b"),
         ("c.txt", b"abc"),
         ("delete.txt", b"old.txt\r\n"),
         ("updates2.dau", &manifest),
         ("日本/", b""),
         (jp, b"JP"),
-    ]
-    .into_iter()
-    .map(|(k, v)| (k.to_owned(), v.to_vec()))
-    .collect();
+    ]);
     assert_eq!(tree(&f.target), after);
-    assert_eq!(ran.count(tracing::Level::ERROR), 0, "{:?}", ran.records);
-    assert_eq!(ran.count(tracing::Level::WARN), 0, "{:?}", ran.records);
-    assert_eq!(ran.count(tracing::Level::INFO), 2, "{:?}", ran.records);
 }
 
-/// `a.dll`（新規）→ `sub/x.txt`（新規・親を作る）→ `b.txt`（既存）の順の定義。
-fn three_ending_with_existing(f: &Fixture, a_bytes: &[u8]) -> FakeFetch {
+/// `a.dll`（新規）→ `sub/x.txt`（新規・親を作る）→ `b.txt`（既存）の順の定義と、その定義ファイル。
+fn three_ending_with_existing(f: &Fixture, a_bytes: &[u8]) -> (FakeFetch, Vec<u8>) {
     let manifest = dau(
         &[
             &["a.dll", &md5_hex(a_bytes)],
@@ -466,17 +530,27 @@ fn three_ending_with_existing(f: &Fixture, a_bytes: &[u8]) -> FakeFetch {
         true,
     );
     fs::write(f.target.join("b.txt"), b"old b").unwrap();
-    FakeFetch::new()
+    let fetch = FakeFetch::new()
         .serve(&url("updates2.dau"), &manifest)
         .serve(&url("a.dll"), a_bytes)
         .serve(&url("sub/x.txt"), b"x")
-        .serve(&url("b.txt"), b"new b")
+        .serve(&url("b.txt"), b"new b");
+    (fetch, manifest)
+}
+
+/// [`three_ending_with_existing`] の 3 件を全部取って照合し終えるまでの進捗。
+fn three_fetched(a_bytes: &[u8]) -> Vec<Progress> {
+    let mut seen = head(&["a.dll", "sub/x.txt", "b.txt"]);
+    seen.extend(fetched("a.dll", a_bytes, 0, 3));
+    seen.extend(fetched("sub/x.txt", b"x", 1, 3));
+    seen.extend(fetched("b.txt", b"new b", 2, 3));
+    seen
 }
 
 #[test]
 fn failure_mid_commit_rolls_back_and_cleans_up_the_work_area() {
     let f = fixture();
-    let fetch = three_ending_with_existing(&f, b"A");
+    let (fetch, _) = three_ending_with_existing(&f, b"A");
     let before = tree(&f.target);
     // 退避の `rename` が拒まれる＝3 件目で確定が止まる（5.2・5.4）。
     let held = hold(&f.target.join("b.txt"));
@@ -484,7 +558,7 @@ fn failure_mid_commit_rolls_back_and_cleans_up_the_work_area() {
     let ran = go(HOME, &f.target, &fetch);
     drop(held);
 
-    let err = ran.result.as_ref().expect_err("確定の途中で失敗");
+    let err = ran.failed();
     assert_eq!(err.reason.kind(), "CommitWrite", "{err}");
     assert_eq!(err.stage, Stage::Commit);
     assert_eq!(err.file(), Some("b.txt"));
@@ -495,15 +569,8 @@ fn failure_mid_commit_rolls_back_and_cleans_up_the_work_area() {
         before,
         "置いた 2 件・作った親・作業場所まで開始前と同一"
     );
-    assert!(
-        !ran.seen
-            .iter()
-            .any(|p| matches!(p, Progress::Committed { .. } | Progress::Deleted { .. })),
-        "{:?}",
-        ran.seen
-    );
-    assert_eq!(ran.count(tracing::Level::ERROR), 1, "{:?}", ran.records);
-    assert_eq!(ran.count(tracing::Level::INFO), 1, "{:?}", ran.records);
+    // `Committed`・`Deleted` は来ない。
+    ran.expect(&three_fetched(b"A"), [1, 0, 1]);
 }
 
 #[test]
@@ -511,7 +578,9 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     let f = fixture();
     // 1 件目は PE。3 件目を取る時点で `new/a.dll` を写したまま持ち、置いた後の削除を拒ませる
     // （較正は commit_tests・tasks.md 4.2）。3 件目は掴まれていて確定が止まる。
-    let fetch = three_ending_with_existing(&f, &pe_image());
+    let pe = pe_image();
+    let (fetch, manifest) = three_ending_with_existing(&f, &pe);
+    let before = tree(&f.target);
     let pinned: Rc<RefCell<Option<Pinned>>> = Rc::default();
     let shelf = f.target.join(WORK_DIR);
     let fetch = {
@@ -535,7 +604,7 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     let was_pinned = pinned.borrow_mut().take().is_some();
 
     assert!(was_pinned, "注入が走っていない");
-    let err = ran.result.as_ref().expect_err("戻せなかった");
+    let err = ran.failed();
     let FailReason::RollbackFailed {
         stuck, restored, ..
     } = &err.reason
@@ -554,5 +623,27 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     assert!(work.is_dir(), "{}", work.display());
     assert_eq!(work.parent(), Some(shelf.as_path()));
     assert!(err.leftovers.is_empty(), "{err:?}");
-    assert_eq!(ran.count(tracing::Level::ERROR), 1, "{:?}", ran.records);
+    ran.expect(&three_fetched(&pe), [1, 0, 1]);
+    // 作業場所の外は、消せなかった a.dll だけが開始前と違う（sub/x.txt と sub/ は戻した）。
+    let mut expected = before;
+    expected.insert("a.dll".into(), pe);
+    let outside_work: BTreeMap<String, Vec<u8>> = tree(&f.target)
+        .into_iter()
+        .filter(|(k, _)| !k.starts_with(&format!("{WORK_DIR}/")))
+        .collect();
+    assert_eq!(outside_work, expected);
+    // 作業場所には、まだ置いていない b.txt と定義ファイルが届いた中身のまま残る。
+    assert_eq!(
+        tree(work),
+        tree_of(&[
+            ("new/", b""),
+            ("new/b.txt", b"new b"),
+            ("new/sub/", b""),
+            ("new/updates2.dau", &manifest),
+            ("old/", b""),
+        ])
+    );
 }
+
+#[path = "run_fail_tests.rs"]
+mod fail;
