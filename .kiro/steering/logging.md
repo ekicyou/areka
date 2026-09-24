@@ -1,7 +1,7 @@
 ---
 inclusion: fileMatch
 fileMatchPattern: '**/*.rs'
-updated_at: 2026-07-02
+updated_at: 2026-09-24
 ---
 
 # Logging Guidelines (tracing)
@@ -62,7 +62,6 @@ debug!(x = pos.x, y = pos.y, "position");
 info!("[GraphicsCore] Initialization completed");
 debug!(entity = %name, "[init_window_graphics] WindowGraphics created");
 info!("[ClipDemo] Creating DComp clip windows");
-trace!(frame = frame_count.0, "[commit_composition] DComp device not available");
 ```
 
 - フレームワーク内部は関数名ベースのプレフィックスを優先する
@@ -112,10 +111,10 @@ $env:RUST_LOG="info"; cargo run -p areka
 $env:RUST_LOG="debug"; cargo run -p wintf --example clip_demo
 
 # wintfクレートのみtrace
-$env:RUST_LOG="wintf=trace"; cargo run -p wintf --example taffy_flex_demo_old
+$env:RUST_LOG="wintf=trace"; cargo run -p wintf --example taffy_flex_demo
 
 # 特定モジュールのみ
-$env:RUST_LOG="wintf::ecs::graphics=debug"; cargo run -p wintf --example multi_backend_demo
+$env:RUST_LOG="wintf::ecs::graphics=debug"; cargo run -p wintf --example multi_window_test
 ```
 
 ## ライブラリ vs アプリケーション
@@ -124,5 +123,7 @@ $env:RUST_LOG="wintf::ecs::graphics=debug"; cargo run -p wintf --example multi_b
 - **アプリケーション（areka, examples）**: `tracing-subscriber`を使用してSubscriberを初期化し、`RUST_LOG` で出力を制御する。
 
 これにより、ライブラリ使用時にSubscriber未設定であればログ出力はゼロコストとなる。
+
+- **テストでログを捕捉するときは `log-capture-kit` を通す**（`tracing::subscriber::with_default` を直に呼ぶと `crates/log-capture-kit/tests/with_default_guard_test.rs` が赤にする。捕捉窓は対照イベントを要求し、「出ていない」の主張が捕捉 0 件のまま静かに緑にならない＝structure.md の log-capture-kit 節）
 
 Document logging patterns, not every call site.
