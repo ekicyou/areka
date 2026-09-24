@@ -334,3 +334,47 @@ fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
         "受け口の有無に依らず最初の出所を残す"
     );
 }
+
+/// **要件 6.2・4.2・4.3**: 起こし直しのために全窓を閉じても終了は指示しない。
+///
+/// ゴースト窓 3 枚＋印の無い entity 1 つ＋受け口（`AppExit`）の World で
+/// `close_windows_for_restart` を呼び、⑴ ゴースト窓 0 枚 ⑵ 印の無い entity は残る
+/// ⑶ 終了の指示は立っていない ⑷ 閉じた枚数 3 ⑸ 記録は `windows_closed_for_restart`（info）で
+/// `app_exit` は出ない、を集めてから 1 回で判定する（面ごとに止めると赤が 1 面しか見えない）。
+#[test]
+fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
+    use crate::placement::test_support::capture_logs;
+
+    let mut world = World::new();
+    world.insert_non_send(AppExit::new());
+    for _ in 0..3 {
+        world.spawn(GhostWindowMarker);
+    }
+    let other = world.spawn_empty().id();
+
+    let (closed, events) = capture_logs(|| close_windows_for_restart(&mut world).closed());
+
+    let windows_left = world
+        .query_filtered::<Entity, With<GhostWindowMarker>>()
+        .iter(&world)
+        .count();
+    let restart_logged_at_info = events.iter().any(|e| {
+        e.field_str("event") == Some("windows_closed_for_restart")
+            && e.level == tracing::Level::INFO
+    });
+    let app_exit_logged = events
+        .iter()
+        .any(|e| e.field_str("event") == Some("app_exit"));
+    assert_eq!(
+        (
+            windows_left,
+            world.get_entity(other).is_ok(),
+            world.non_send::<AppExit>().is_requested(),
+            closed,
+            restart_logged_at_info,
+            app_exit_logged,
+        ),
+        (0, true, false, 3, true, false),
+        "(残った窓, 印の無い entity が残る, 終了の指示, 閉じた枚数, 起こし直しの info, app_exit の記録): {events:?}"
+    );
+}
