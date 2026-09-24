@@ -135,6 +135,8 @@
 ## 6. 設計判断の議題（要件ディスカッションへ）
 
 > **2026-09-24 要件ディスカッションの反映（裁定 3 を覆した）**: エラー応答（`ShioriFailure::Shiori`＝400・500・`ErrorLevel` 付き）は致命の失敗から外し、起動時・会話中のどの相でも 204 と同じ扱いで会話を続ける（要件 6.1）。設計への影響: ⑴ `crates/areka-kanade/src/schedule/mod.rs` の `on_shiori_reply` で `Failed(ShioriFailure::Shiori(..))` を `to_unloading_fault` へ倒さず、`steady.rs` の `choice_shiori_failed_as_204` と同じ「返事なし」の道へ写す（全相＝1 か所の分岐で足りるか、相ごとの腕が要るかは設計で確かめる）。記録は残す（`error!` のままか `warn!` か）。⑵ 失敗の種類の語彙は 5 語（「エラーを返した」は無し）＝`ShioriFailure` 5 種から Fault の種類への写しは `Shiori` の腕を持たない（到達しない腕を置かない・wildcard も置かない＝写しの入口を「Fault へ入る 4 種」に絞った型にする）。⑶ smoke ④ と実機 ① の検体は `HOST32_TESTDLL_LOADU_FAIL=1` の `loadu` 偽（＝接続できなかった）でしか作れない。§5 の Research Needed 3（env が helper の子へ届くか）が**前提条件**になる＝届かないなら検証用 DLL（test crate）を env なしで偽を返す形に直す（要件 4.4）。⑷ 出どころの実測「YAYA が最初の問い合わせの 500 で 0.47 秒で終了」の形は、この spec の後は「ゴーストは出るが起動の台詞が無い・記録 1 件」になる。
+>
+> **同日の反映（裁定 5・6 を覆した＝2 件とも本仕様で拾う）**: ⑸ #57＝`fn main` の `app.run()?` の `?` を外し、`Ok`／`Err` どちらでも後始末 ①〜④ を通してから終了コードを決める（`Err` は 0 以外）。「`run()` の結果を受けて後始末へ進む」判断を関数に切り出す（#58 が後で括り出す関数の芽になる）。panic は対象外。⑹ LogSink 側の起動（`fn main` の `else` 腕＝`areka_ghost::boot`＝`boot_with_kanade_stop(options, None)`）にも停止通知の受け口を通す。`wire_emo2_boot` は `mpsc::channel::<KanadeStopped>()` を作って `wiring.set_kanade_stop(rx)` に置くので、受け口（`run_ghost_quit_phase` が読む `Receiver`）を結線の成否より前に作り、`else` 腕でも `boot_with_kanade_stop(.., Some(tx))` を渡す形が最小。受け口の置き場（`Emo2Wiring` の中か World の Resource か）は設計で決める。§6 の議題 4 は消滅（登記先の選択は不要）。規模は 7〜9 タスク。
 
 
 1. **失敗の種類と理由の載せ方（案 A／C）**: `KanadeStopped` に `fault: Option<ShioriFault>` を足して `cause` の 5 値と `Debug` の検索語を保つか、`KanadeStopCause::Fault(kind)` に変えて `Copy` を保つか。推奨は前者（理由の一行を運べる・検索語が変わらない）。
