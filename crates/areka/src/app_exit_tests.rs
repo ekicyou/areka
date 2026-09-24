@@ -260,7 +260,10 @@ fn fault_of_returns_the_fault_only_for_kanade_stopped_fault() {
     let rows: [(ExitOrigin, Option<&areka_kanade::ShioriFault>); 8] = [
         (ExitOrigin::KanadeStopped(KanadeStopCause::Quit), None),
         (ExitOrigin::KanadeStopped(KanadeStopCause::Forced), None),
-        (ExitOrigin::KanadeStopped(KanadeStopCause::CloseSilent), None),
+        (
+            ExitOrigin::KanadeStopped(KanadeStopCause::CloseSilent),
+            None,
+        ),
         (
             ExitOrigin::KanadeStopped(KanadeStopCause::DeadlineExceeded),
             None,
@@ -307,7 +310,9 @@ fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
     assert_eq!(again.len(), 1, "app_exit_again はちょうど 1 件: {events:?}");
     assert_eq!(again[0].level, tracing::Level::DEBUG);
     assert!(
-        again[0].field("origin").is_some_and(|o| o.contains("Escape")),
+        again[0]
+            .field("origin")
+            .is_some_and(|o| o.contains("Escape")),
         "app_exit_again は 2 度目の出所を名乗る: {:?}",
         again[0]
     );

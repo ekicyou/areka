@@ -13,6 +13,7 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
 use crate::boot_config::{RootError, RootSource};
+use areka_kanade::{ShioriFault, ShioriFaultKind};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -173,4 +174,137 @@ fn suppressed_from_reads_the_value() {
     assert!(!suppressed_from(Some(" 0 ")), "trim 後の \"0\" は出す");
     assert!(suppressed_from(Some("1")), "\"1\" は抑える");
     assert!(suppressed_from(Some(" 1 ")), "\" 1 \" は抑える");
+}
+
+// ---------------------------------------------------------------- SHIORI が動かなくなった
+
+/// 題名が起動失敗と別であることを、既存 4 場面の側からも確かめる（要件 1.3・5.2）。
+#[test]
+fn startup_scenes_keep_the_startup_title() {
+    let scenes = [
+        AlertScene::RootMissing(RootError::ExeLocationUnavailable),
+        AlertScene::GhostMissing {
+            ghost_store: abs("root").join("ghost"),
+            argv: None,
+        },
+        AlertScene::BalloonMissing {
+            balloon_store: abs("root").join("balloon"),
+        },
+        AlertScene::StartupWindow {
+            reason: "x".to_owned(),
+        },
+    ];
+    for scene in scenes {
+        assert_eq!(alert_text(&scene).0, "areka を起動できません", "{scene:?}");
+    }
+}
+
+/// SHIORI の失敗の告知を組み、文面と記録を確かめる。`phrase` は種類の 5 語をそのまま書く
+/// （`fault_kind_text` を通さない＝写しの取り違えが赤になる）（要件 1.3・1.4・1.5・1.9・3.5・7.1）。
+fn assert_shiori_fault(kind: ShioriFaultKind, phrase: &str, name: Option<&str>) {
+    let root = abs("root").join("ghost").join("emily");
+    let reason = "shiori handshake failure: 接続が拒否されました";
+    let scene = AlertScene::ShioriFault {
+        ghost_name: name.map(str::to_owned),
+        ghost_root: root.clone(),
+        fault: ShioriFault {
+            kind,
+            reason: reason.to_owned(),
+        },
+    };
+    let who = match name {
+        Some(n) => format!("ゴースト: {n}（{}）", root.display()),
+        None => format!("ゴースト: {}", root.display()),
+    };
+    let expected = format!("{who}\n失敗の種類: {phrase}\n理由: {reason}");
+
+    let (title, body) = alert_text(&scene);
+    assert_eq!(title, "SHIORI が動かなくなりました");
+    assert_eq!(body, expected);
+
+    // 告知と同じ題名・本文が error! の 1 件に載る（抑止しても記録は残る）。
+    let events = raise_suppressed(&scene);
+    assert_eq!(only_alert_body(&events), expected);
+    assert_eq!(
+        events[0].field_str("title"),
+        Some("SHIORI が動かなくなりました")
+    );
+}
+
+#[test]
+fn shiori_fault_connect_failed_with_name() {
+    assert_shiori_fault(
+        ShioriFaultKind::ConnectFailed,
+        "SHIORI に接続できなかった",
+        Some("エミリ"),
+    );
+}
+
+#[test]
+fn shiori_fault_connect_failed_without_name() {
+    assert_shiori_fault(
+        ShioriFaultKind::ConnectFailed,
+        "SHIORI に接続できなかった",
+        None,
+    );
+}
+
+#[test]
+fn shiori_fault_timeout_with_name() {
+    assert_shiori_fault(
+        ShioriFaultKind::Timeout,
+        "SHIORI の応答が期限内に返らなかった",
+        Some("エミリ"),
+    );
+}
+
+#[test]
+fn shiori_fault_timeout_without_name() {
+    assert_shiori_fault(
+        ShioriFaultKind::Timeout,
+        "SHIORI の応答が期限内に返らなかった",
+        None,
+    );
+}
+
+#[test]
+fn shiori_fault_disconnected_with_name() {
+    assert_shiori_fault(
+        ShioriFaultKind::Disconnected,
+        "SHIORI との通信が切れた",
+        Some("エミリ"),
+    );
+}
+
+#[test]
+fn shiori_fault_disconnected_without_name() {
+    assert_shiori_fault(
+        ShioriFaultKind::Disconnected,
+        "SHIORI との通信が切れた",
+        None,
+    );
+}
+
+#[test]
+fn shiori_fault_internal_with_name() {
+    assert_shiori_fault(
+        ShioriFaultKind::Internal,
+        "areka 側の内部の失敗",
+        Some("エミリ"),
+    );
+}
+
+#[test]
+fn shiori_fault_internal_without_name() {
+    assert_shiori_fault(ShioriFaultKind::Internal, "areka 側の内部の失敗", None);
+}
+
+#[test]
+fn shiori_fault_unknown_with_name() {
+    assert_shiori_fault(ShioriFaultKind::Unknown, "原因不明", Some("エミリ"));
+}
+
+#[test]
+fn shiori_fault_unknown_without_name() {
+    assert_shiori_fault(ShioriFaultKind::Unknown, "原因不明", None);
 }

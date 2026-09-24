@@ -1,6 +1,7 @@
 //! 無いときの告知（areka-P0-baseware-root-layout 要件 6）。
 //!
-//! 起動を止める 4 場面（根なし／ゴーストなし／バルーンなし／起動窓を開けない）を
+//! 起動を止める 4 場面（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
+//! SHIORI が動かなくなった場面（areka-P0-shiori-fault-notice 要件 1・5）を
 //! [`AlertScene`] 1 つの型で数え、利用者向けのメッセージボックス（`MessageBoxW`）と
 //! 同じ内容の `error!` を出す。文面は [`alert_text`] が純粋に組む（テストで固定する）。
 //! 告知は環境変数 `AREKA_NO_ALERT` で抑えられる（自動テストでモーダルが止まらない）。
@@ -10,6 +11,7 @@
 
 use std::path::PathBuf;
 
+use areka_kanade::{ShioriFault, ShioriFaultKind};
 use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
 use windows::core::HSTRING;
 
@@ -33,10 +35,22 @@ pub(crate) enum AlertScene {
     BalloonMissing { balloon_store: PathBuf },
     /// 起動窓を開けない（要件 6.4）。`reason` は失敗の内容（`PlacementError` の表示）。
     StartupWindow { reason: String },
+    /// SHIORI が動かなくなった（起動時か会話中かは載せない）。
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "main の後始末（告知・終了コード）が組む")
+    )]
+    ShioriFault {
+        ghost_name: Option<String>,
+        ghost_root: PathBuf,
+        fault: ShioriFault,
+    },
 }
 
-/// 題名（4 場面で共通）。
+/// 題名（起動を止める 4 場面で共通）。
 const TITLE: &str = "areka を起動できません";
+/// SHIORI が動かなくなった場面の題名（smoke の目印でもある）。
+const SHIORI_FAULT_TITLE: &str = "SHIORI が動かなくなりました";
 
 /// 根を渡す道（根の場所そのものが綴れないとき）。
 const ROOT_BY_ENV: &str =
@@ -45,8 +59,20 @@ const ROOT_SHAPE: &str = "置くもの: ghost フォルダと balloon フォル�
 const GHOST_SHAPE: &str = r"置くもの: ghost\master\descript.txt を持つゴーストのフォルダ";
 const BALLOON_SHAPE: &str = "置くもの: descript.txt を持つバルーンのフォルダ";
 
-/// 題名と本文（純粋・テストで文面を固定する）。本文は「何が無いか」「置くべき場所の絶対パス」
-/// 「置くものの形」の 3 行構成（起動窓の場面は「何が起きたか」「失敗の内容」「確かめること」）。
+/// 失敗の種類を利用者向けの平易な語へ写す（純粋）。
+pub(crate) fn fault_kind_text(kind: ShioriFaultKind) -> &'static str {
+    match kind {
+        ShioriFaultKind::ConnectFailed => "SHIORI に接続できなかった",
+        ShioriFaultKind::Timeout => "SHIORI の応答が期限内に返らなかった",
+        ShioriFaultKind::Disconnected => "SHIORI との通信が切れた",
+        ShioriFaultKind::Internal => "areka 側の内部の失敗",
+        ShioriFaultKind::Unknown => "原因不明",
+    }
+}
+
+/// 題名と本文（純粋・テストで文面を固定する）。題名は場面ごと。本文は「何が無いか」
+/// 「置くべき場所の絶対パス」「置くものの形」の 3 行構成（起動窓の場面は「何が起きたか」
+/// 「失敗の内容」「確かめること」、SHIORI の場面は「どのゴーストか」「失敗の種類」「理由」）。
 pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
     let lines: [String; 3] = match scene {
         AlertScene::RootMissing(RootError::ExeLocationUnavailable) => [
@@ -95,8 +121,27 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
             format!("失敗の内容: {reason}"),
             "モニタの接続とゴーストのファイルを確かめてください。".to_owned(),
         ],
+        AlertScene::ShioriFault {
+            ghost_name,
+            ghost_root,
+            fault,
+        } => [
+            match ghost_name {
+                Some(name) => format!("ゴースト: {name}（{}）", ghost_root.display()),
+                None => format!("ゴースト: {}", ghost_root.display()),
+            },
+            format!("失敗の種類: {}", fault_kind_text(fault.kind)),
+            format!("理由: {}", fault.reason),
+        ],
     };
-    (TITLE.to_owned(), lines.join("\n"))
+    let title = match scene {
+        AlertScene::ShioriFault { .. } => SHIORI_FAULT_TITLE,
+        AlertScene::RootMissing(_)
+        | AlertScene::GhostMissing { .. }
+        | AlertScene::BalloonMissing { .. }
+        | AlertScene::StartupWindow { .. } => TITLE,
+    };
+    (title.to_owned(), lines.join("\n"))
 }
 
 /// 値から抑止を判断する純粋な口（None／""／空白のみ／"0"（trim 後）→ false・それ以外 → true）。
@@ -124,7 +169,7 @@ pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
         title = title.as_str(),
         body = body.as_str(),
         suppressed,
-        "[alert] 起動できないことを利用者へ告げます"
+        "[alert] 利用者へ告げます"
     );
     if suppressed {
         return;
