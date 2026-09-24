@@ -134,7 +134,7 @@
   - 1 回目（2026-09-25）で出た 2 件の欠陥は 7.1・7.2 で直してから取り直す（`signoff.md` の 1 回目の記録は残す）
 
 - [ ] 7. 実機で見つかった欠陥を根本で直す（2026-09-25 開発者裁定＝推奨どおり境界を広げて直す）
-- [ ] 7.1 (P) i686 helper 経路の期限切れを「期限内に返らなかった」に写す
+- [x] 7.1 (P) i686 helper 経路の期限切れを「期限内に返らなかった」に写す
   - `crates/shiori-host32-ipc/src/lib.rs` の `send_copydata_with` で、`SendMessageTimeoutW` の直前に `SetLastError(ERROR_SUCCESS)` を呼び、戻り 0 のうち `GetLastError() == ERROR_TIMEOUT` だけを `IpcError::Timeout` にする（存在しない窓・応答なしの打ち切りなど他は従来どおり `SendFailed`）。同じファイルの説明を直す
   - 同じ crate に決定論的なテストを足す: 別スレッドの message-only 窓が `WM_COPYDATA` の手続きで眠る → 短い期限で送ると `Timeout`、存在しない窓へ送ると `SendFailed`。写しを戻すと前者が赤
   - i686 の helper を建て直し、host32 の既存テストと kanade のテストが緑

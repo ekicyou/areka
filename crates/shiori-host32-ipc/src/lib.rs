@@ -23,7 +23,9 @@
 use core::cell::RefCell;
 use core::time::Duration;
 
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{
+    ERROR_SUCCESS, ERROR_TIMEOUT, GetLastError, HWND, LPARAM, LRESULT, SetLastError, WPARAM,
+};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{
     SEND_MESSAGE_TIMEOUT_FLAGS, SMTO_ABORTIFHUNG, SMTO_NORMAL, SendMessageTimeoutW, WM_COPYDATA,
@@ -162,8 +164,8 @@ pub enum FramingError {
 /// 送信・往復トランスポート層の構造化エラー（要件 5.2 / 5.3・design.md §486-506）。
 ///
 /// **一様な失敗報告**: peer の生死やハングを distinct なバリアントで区別せず、
-/// 到達不能・timeout・ハング peer の中断（`SMTO_ABORTIFHUNG`）は一律
-/// `Timeout` / `SendFailed` に集約する（distinct な PeerGone は設けない）。
+/// 期限切れは `Timeout`、到達不能・ハング peer の中断（`SMTO_ABORTIFHUNG`）は
+/// `SendFailed` に集約する（distinct な PeerGone は設けない）。
 /// ハング打ち切りが起きうるのは**要求方向だけ**である（旗は送出の向きで決まる・
 /// [`send_flags`]・要件 16.1）。
 /// peer の生死は送信結果に混ぜず、上位の `ExitKind`（ProcessHost・別タスク）で
@@ -174,12 +176,13 @@ pub enum FramingError {
 /// （task 2.1 CONCERNS 統合）。
 #[derive(thiserror::Error, Debug)]
 pub enum IpcError {
-    /// 応答が上限時間内に返らなかった（要件 5.2）、または
-    /// 要求方向の送出でハング peer が `SMTO_ABORTIFHUNG` で中断された（要件 5.3）。
-    /// 応答方向にはこの旗が付かない（要件 16.1）。
-    #[error("ipc request timed out or peer was hung")]
+    /// 応答が上限時間内に返らなかった（要件 5.2）: `SendMessageTimeoutW` が上限時間で
+    /// 打ち切られた（戻り 0 かつ last error が `ERROR_TIMEOUT`）か、往復の応答が受け皿に
+    /// 届かなかった（[`send_request`]）。
+    #[error("ipc request timed out")]
     Timeout,
-    /// `SendMessageTimeoutW` が 0 を返した（送出そのものの失敗）。
+    /// `SendMessageTimeoutW` が期限切れ以外の理由で 0 を返した（宛先の窓が無い・
+    /// 要求方向の送出でハング peer が `SMTO_ABORTIFHUNG` で中断された（要件 5.3）など）。
     #[error("ipc send failed")]
     SendFailed,
     /// 受信フレームが framing 規約に整合しない（未知タグ・長さ不整合など）。
@@ -292,8 +295,8 @@ pub const fn send_flags(flavor: SendFlavor) -> SEND_MESSAGE_TIMEOUT_FLAGS {
 /// （要件 2.1 / 5.3 / 16.1・design.md §315・D16）。
 ///
 /// 旗は [`send_flags`]`(`[`SendFlavor::Request`]`)`＝`SMTO_ABORTIFHUNG` ＋上限時間。送出先が
-/// ハング中でも上限時間で復帰する（無限待機の構造的排除）。戻り 0（失敗 / timeout /
-/// hung peer）は一律 [`IpcError::SendFailed`] とする。
+/// ハング中でも上限時間で復帰する（無限待機の構造的排除）。戻り 0 のうち期限切れは
+/// [`IpcError::Timeout`]、それ以外（失敗 / hung peer）は [`IpcError::SendFailed`] とする。
 ///
 /// 応答方向は [`send_copydata_response`] を使う（旗が異なる）。
 ///
@@ -352,7 +355,7 @@ pub fn send_copydata_response(
 /// 向きを明示して片道送出する共通本体（[`send_copydata`]／[`send_copydata_response`] の実体）。
 ///
 /// 旗以外は両方向で同一である（COPYDATASTRUCT の組み立て・timeout の飽和変換・戻り 0 の
-/// [`IpcError::SendFailed`] 写像）。
+/// 写像＝期限切れは [`IpcError::Timeout`]・他は [`IpcError::SendFailed`]）。
 ///
 /// # Safety
 /// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
@@ -372,6 +375,9 @@ fn send_copydata_with(
     let timeout_ms = timeout_millis(timeout);
 
     let mut result: usize = 0;
+    // 戻り 0 のとき SendMessageTimeoutW は last error を必ずしも設定しないので、前の値を消しておく。
+    // SAFETY: スレッド局所のエラー値を書くだけ。
+    unsafe { SetLastError(ERROR_SUCCESS) };
     // SAFETY: target は有効 HWND 前提。&cds は本呼び出し中生存し、その lpData が指す
     // payload も同期送信中生存する。timeout_ms により無期限ブロックしない（要件 5.3）。
     // 旗は向きで決まる（要件 16.1/16.2・応答方向は SMTO_ABORTIFHUNG を付けない）。
@@ -387,9 +393,14 @@ fn send_copydata_with(
         )
     };
 
-    // 戻り 0 = 送出失敗 / timeout / hung peer の中断。一律失敗として報告する
-    // （distinct PeerGone を設けない・design.md §286）。
+    // 戻り 0 = 送出失敗 / timeout / hung peer の中断。期限切れ（last error が ERROR_TIMEOUT）
+    // だけを Timeout に、他は SendFailed に写す（distinct PeerGone を設けない・design.md §286）。
+    // hung peer の中断は last error 0 のまま返るので SendFailed に残る。
     if ret.0 == 0 {
+        // SAFETY: 直前の SendMessageTimeoutW が残したスレッド局所のエラー値を読むだけ。
+        if unsafe { GetLastError() } == ERROR_TIMEOUT {
+            return Err(IpcError::Timeout);
+        }
         return Err(IpcError::SendFailed);
     }
     Ok(())
@@ -429,6 +440,9 @@ pub fn send_request(
     // ③ 復帰後に受領済み応答を取り出す。未受領（None）は timeout。
     slot.take().ok_or(IpcError::Timeout)
 }
+
+#[cfg(test)]
+mod send_timeout_tests;
 
 #[cfg(test)]
 mod slot_error_tests {

@@ -21,7 +21,7 @@
 
 ### Non-Goals
 
-- SHIORI の失敗そのものを減らすこと。helper／host 側の失敗の種類と記録。
+- SHIORI の失敗そのものを減らすこと。helper／host 側の失敗の種類と記録（例外 1 か所: i686 helper 経路の期限切れが「通信が切れた」に化けていたのを「応答が期限内に返らなかった」に直す＝`shiori-host32-ipc` の `send_copydata_with` の期限切れの分類だけ・2026-09-25 開発者裁定）。
 - 接続の失敗・期限切れ・通信の切断・内部の失敗・死活報告を Fault にする判断を変えること（運ぶ内容が増えるだけ）。
 - 切替先のゴーストが起動できない場合（#13）・ゴーストの根が無い場合（完了 #12）・照会の往復の失敗の記録の文言（#44）。
 - 失敗したゴーストを別のゴーストで起こし直すこと・告知に押されたボタンを返すこと（#15）・main スレッドの panic の後始末（`catch_unwind` も `Drop` も置かない）。
@@ -39,7 +39,7 @@
 ### Out of Boundary
 
 - `crates/areka-kanade/src/schedule/{mod,boot,steady,close}.rs` の各腕が Fault へ倒す判断（エラー応答以外）。`unloading_reply`・`choice_shiori_failed_as_204` の腕。
-- `crates/shiori-host32-host`／`-helper`／`shiori-abi`（失敗の種類・記録・`HOST32_TESTDLL_LOADU_FAIL` の読み手は test crate のまま）。
+- `crates/shiori-host32-host`／`-helper`／`shiori-abi`（失敗の種類・記録・`HOST32_TESTDLL_LOADU_FAIL` の読み手は test crate のまま）。`crates/shiori-host32-ipc` も同じく外だが、例外として `send_copydata_with` の戻り 0 の分類 1 か所だけ本 spec で直す（期限切れ＝`ERROR_TIMEOUT` を `IpcError::Timeout` に・他は従来どおり `SendFailed`。2026-09-25 開発者裁定・実機 1 回目で判明）。
 - `crates/areka-ghost/src/runtime.rs` の `boot_with_kanade_stop` の形（無改変。相乗り 1 件＝`GhostBootError` の doc の「ダミー窓」1 行だけ直す）。
 - `run_ghost_quit_phase` に「停止原因によって終了しない」分岐を足すこと（#13）。`fn main` の起動経路の括り出し（#58）。
 - wintf（無改変）。本番コードが読む環境変数の追加（0 件）。
@@ -128,6 +128,11 @@ graph TB
 - `crates/areka-kanade/tests/kanade/choice_test_stage_failure_tests.rs` — 2 本が注入しているエラー応答（`FailKind::Shiori`）を `Ipc` へ替える（エラー応答が返事なしになると、選択肢の往復中の 204 扱いの腕を踏まず、選択肢以外の失敗の Fault も起きなくなるため・タスク生成の査読で判明）。
 - `crates/areka-kanade/tests/kanade/common/common_harness.rs` — `spawn_harness_failing` に停止通知の投函端つきの派生を 1 つ足す（既存 `spawn_harness_with_stop_sink` と同型）。
 - `crates/areka-kanade/tests/kanade/prefetch_test.rs` — 影響なし（`Timeout` を使う）。
+
+### Modified Files（shiori-host32-ipc・2026-09-25 開発者裁定の例外）
+
+- `crates/shiori-host32-ipc/src/lib.rs` — `send_copydata_with` は `SendMessageTimeoutW` の直前に last error を消し、戻り 0 のうち `GetLastError() == ERROR_TIMEOUT` だけを `IpcError::Timeout` に写す（存在しない窓・応答なしの打ち切りなど他は `SendFailed` のまま）。直す前は期限切れも `SendFailed` → `RequestError::Ipc` → `ShioriFailure::Ipc` となり、i686 helper 経路の期限切れが「通信が切れた」と告知されていた（実機 1 回目）。`IpcError` と送出関数の説明も合わせて直す。
+- `crates/shiori-host32-ipc/src/send_timeout_tests.rs`（新規・兄弟）— 別スレッドの message-only 窓が `WM_COPYDATA` の手続きで眠る → 短い期限で送ると `Timeout`、壊した窓へ送ると `SendFailed`（写しを戻すと前者が赤）。
 
 ### Modified Files（areka-ghost）
 
@@ -547,7 +552,7 @@ classDiagram
 | 失敗 | 入口 | 種類 | 利用者に見えるもの | 終了コード |
 |---|---|---|---|---|
 | DLL が読めない・入口が無い・初期化が偽・確立の期限切れ | `spawn_shiori_actor`（`ShioriDown ConnectFailed`）／`map_error`（`Handshake`） | 接続できなかった | 告知＋終了 | 1 |
-| 応答の期限切れ（`AREKA_SHIORI_REQUEST_TIMEOUT_MS`） | `map_error`（`Timeout`） | 応答が期限内に返らなかった | 告知＋終了 | 1 |
+| 応答の期限切れ（`AREKA_SHIORI_REQUEST_TIMEOUT_MS`） | `map_error`（`Timeout`。i686 helper 経路は `send_copydata_with` の `ERROR_TIMEOUT` → `IpcError::Timeout` → `RequestError::Timeout` を経る） | 応答が期限内に返らなかった | 告知＋終了 | 1 |
 | helper の異常終了・切断・送出失敗・応答の切断 | `report_exit_once`（`HelperExited`）／`map_error`（`Ipc`）／`round_trip` の 3 腕 | 通信が切れた | 告知＋終了 | 1 |
 | 送出禁止 ID などの内部規律違反 | `round_trip_request`（`Internal`） | areka 側の内部の失敗 | 告知＋終了 | 1 |
 | 原因を控えられずに止まった | `notify_stop`（`stop_cause_unknown`） | 原因不明 | 告知＋終了 | 1 |
