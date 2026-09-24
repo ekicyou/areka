@@ -125,6 +125,7 @@ graph TB
 - 構築点・照合点の追随（判断なし・機械的）: `KanadeMsg::ShioriDown` を綴るテスト（`schedule/{schedule_tests,schedule_log_firing_tests,steady_choice_timeout_tests}.rs`・`shiori/{real_tests,real_idle_tests}.rs`・`tests/kanade/{failure_test,idle_pump_test,real_helper_test}.rs`・`tests/kanade/common/common_window_actor.rs`）、`TermCause::Fault` を綴るテスト（`actor_resources_tests.rs`・`actor_stop_notify_tests.rs`・`schedule/{close,schedule_tests,schedule_log_firing_tests,steady_choice_timeout_tests,user_break_tests}.rs`）、`tests/kanade/close_test_stop_notify_tests.rs`。
 - `crates/areka-kanade/src/actor_stop_notify_tests.rs` — 5 値の写し（`Fault` は中身つき）と原因不明＝`Unknown`。
 - `crates/areka-kanade/tests/kanade/failure_test.rs` — ケース 1 から `Shiori` を外し、⑴ 入口ごとの停止通知の中身（`Handshake`／`Timeout`／`Ipc`／`Internal`・`ShioriDown` 2 種）を停止通知の投函端つきハーネスで固定、⑵ エラー応答が起動時（`OnInitialize`＝NOTIFY）でも会話中（`OnSecondChange`＝GET）でも Fault にならず会話が続き `shiori_error_response` が 1 件残ることを固定（要件 7.3）。
+- `crates/areka-kanade/tests/kanade/choice_test_stage_failure_tests.rs` — 2 本が注入しているエラー応答（`FailKind::Shiori`）を `Ipc` へ替える（エラー応答が返事なしになると、選択肢の往復中の 204 扱いの腕を踏まず、選択肢以外の失敗の Fault も起きなくなるため・タスク生成の査読で判明）。
 - `crates/areka-kanade/tests/kanade/common/common_harness.rs` — `spawn_harness_failing` に停止通知の投函端つきの派生を 1 つ足す（既存 `spawn_harness_with_stop_sink` と同型）。
 - `crates/areka-kanade/tests/kanade/prefetch_test.rs` — 影響なし（`Timeout` を使う）。
 
