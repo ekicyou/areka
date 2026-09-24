@@ -67,11 +67,24 @@ impl BasewareRoot {
 pub struct Identity {
     /// フォルダ名（UTF-8。非 UTF-8 名は `warn!` で除外＝R6）。
     pub folder: String,
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#name_2c_30b4_30fc_30b9_30c8_540d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#name_2c_30d0_30eb_30fc_30f3_540d:1
     pub name: Option<String>,
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#craftman_2c_4f5c_8005_540d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#craftman_2c_4f5c_8005_540d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#craftman_2c_4f5c_8005_540d:1
     pub craftman: Option<String>,
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#craftmanw_2c_4f5c_8005_540d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#craftmanw_2c_4f5c_8005_540d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#craftmanw_2c_4f5c_8005_540d:1
     pub craftmanw: Option<String>,
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#id_2cID_540d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#id_2cID_540d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#id_2cID_540d:1
     pub id: Option<String>,
     /// descript の `readme`（無ければ `readme.txt`）がフォルダ最上位に実在すればそのパス。
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#readme_2c_30d5_30a1_30a4_30eb_540d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#readme_2c_30d5_30a1_30a4_30eb_540d:1
     pub readme: Option<PathBuf>,
     /// `<フォルダ>/thumbnail.png` の有無。
     pub has_thumbnail: bool,
@@ -115,6 +128,7 @@ pub fn list_shells(ghost_dir: &Path) -> Vec<ShellEntry> {
         .into_iter()
         .filter_map(|(folder, dir)| {
             let descript = read_descript(&dir.join(DESCRIPT_FILE))?;
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#menu_2chidden:1
             if folded(&descript, "menu").as_deref() == Some("hidden") {
                 return None;
             }
@@ -131,6 +145,7 @@ pub fn list_balloons(root: &BasewareRoot) -> Vec<BalloonEntry> {
         .into_iter()
         .filter_map(|(folder, dir)| {
             let descript = read_descript(&dir.join(DESCRIPT_FILE))?;
+            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#type_2c_7a2e_5225:1
             if let Some(r#type) = folded(&descript, "type").filter(|t| t != "balloon") {
                 tracing::warn!(
                     event = "catalog_type_not_balloon",

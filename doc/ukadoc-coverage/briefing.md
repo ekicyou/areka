@@ -1015,28 +1015,28 @@ not_applicable = 0
 ```toml
 [[barrier]]
 page = "descript_ghost"
-implemented = 10
-vocabulary_only = 1
+implemented = 14
+vocabulary_only = 0
 degraded = 0
-absent = 63
+absent = 60
 alias = 0
 not_applicable = 0
 
 [[barrier]]
 page = "descript_balloon"
-implemented = 24
+implemented = 30
 vocabulary_only = 9
 degraded = 7
-absent = 122
+absent = 116
 alias = 0
 not_applicable = 0
 
 [[barrier]]
 page = "descript_shell"
-implemented = 11
+implemented = 16
 vocabulary_only = 2
 degraded = 0
-absent = 89
+absent = 84
 alias = 0
 not_applicable = 0
 
@@ -1052,7 +1052,7 @@ not_applicable = 0
 
 ### 4-3. 0 と書いた欄
 
-上の 2 つの囲みには 0 の欄が 15 ある（`not_applicable` 6・`degraded` 4・`alias` 4・`absent` 1）。
+上の 2 つの囲みには 0 の欄が 16 ある（`not_applicable` 6・`degraded` 4・`alias` 4・`absent` 1・`vocabulary_only` 1）。
 0 は「調べていない」ではなく「数えて 1 件も無かった」の印なので、内訳と理由を書く。数え方は
 いずれもこの節の冒頭と同じで、ページ別に数え直した結果である。
 
@@ -1064,6 +1064,9 @@ not_applicable = 0
 - `alias` は `list_shiori_resource`・`descript_ghost`・`descript_balloon`・`descript_shell` の
   4 行が 0 である。別名の項目がこの 4 ページに 1 件も無い。
 - `absent` は `list_shiori_resource` の 1 行が 0 である。理由は 4-1 に書いた。
+- `vocabulary_only` は `descript_ghost` の 1 行が 0 である。このページで語彙のみだった唯一の項目
+  `name,ゴースト名` を、2026-09-24 に `areka-P0-baseware-root-layout` がゴーストの列挙の読み手
+  （`areka-ghost` の `catalog::list_ghosts`）を置いて実装済みへ移したからである。
 
 ## 5. 根拠表への参照
 

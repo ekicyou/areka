@@ -1017,20 +1017,19 @@ areka には通信ボックスそのものが無く、その位置・大きさ�
 """
 
 [entry."ukadoc:descript_balloon:craftman_2c_4f5c_8005_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの作者の情報を読む経路を持たない。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがゴースト・シェル・プラグインの descript にもあり、SHIORI の資源の側にも同名の項目がある（そちらは別ドメインの台帳の持ち物で、areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_balloons がバルーンの列挙の素性としてこの欄を読み、Identity の craftman として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い（シェル・バルーンを切り替えるメニューは areka-P0-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのバルーンを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.craftman。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、SHIORI の資源の側にも同名の項目がある（別ドメインの台帳の持ち物）。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_balloon:craftmanurl_2cURL:1"]
@@ -1051,20 +1050,19 @@ areka はバルーンの作者の連絡先を読む経路を持たない。
 """
 
 [entry."ukadoc:descript_balloon:craftmanw_2c_4f5c_8005_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの作者の表示名を読む経路を持たない。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがゴースト・シェル・プラグインの descript にもあり、SHIORI の資源の側にも同名の項目がある（そちらは別ドメインの台帳の持ち物で、areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_balloons がバルーンの列挙の素性としてこの欄を読み、Identity の craftmanw として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い（シェル・バルーンを切り替えるメニューは areka-P0-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのバルーンを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.craftmanw。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、SHIORI の資源の側にも同名の項目がある（別ドメインの台帳の持ち物）。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_balloon:cursor.blendmethod_2c_30b3_30de_30f3_30c9:1"]
@@ -1738,20 +1736,19 @@ areka にはネットワークから更新を取ってくる仕組みが無く�
 """
 
 [entry."ukadoc:descript_balloon:id_2cID_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの識別名を読む経路を持たない。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがゴースト・シェル・プラグインの descript にもあり、別ドメインのプロパティにもある。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_balloons がバルーンの列挙の素性としてこの欄を読み、Identity の id として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い（シェル・バルーンを切り替えるメニューは areka-P0-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのバルーンを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.id。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、別ドメインのプロパティの側にもある。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_balloon:marker.filename_2c_30d5_30a1_30a4_30eb_540d:1"]
@@ -1825,20 +1822,19 @@ areka はマウスの矢印の絵を差し替える仕組みを持たず、こ�
 """
 
 [entry."ukadoc:descript_balloon:name_2c_30d0_30eb_30fc_30f3_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はバルーンの名前を読む経路を持たない。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがゴーストとシェルの descript にもあり、そちらは読まれる——シェル側は areka-ghost の config::resolve_shell_name が、ゴースト側は areka-parsers の package::resolve が引く。3 つは別の項目で状態が割れるので、名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_balloons がバルーンの列挙の素性としてこの欄を読み、Identity の name として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い（シェル・バルーンを切り替えるメニューは areka-P0-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのバルーンを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.name。
+同じ名前の見出しがゴーストとシェルの descript にもあり、ゴースト側は同じ catalog::list_ghosts が、シェル側は areka-ghost の config::resolve_shell_name と catalog::list_shells が引く。3 つは別の項目なので、名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_balloon:number.font.color.b_2c_6570_5024:1"]
@@ -2101,21 +2097,20 @@ areka には説明文を開く画面が無く、その文字コードの宣言�
 """
 
 [entry."ukadoc:descript_balloon:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka には説明文を開く画面が無く、そのファイル名を読む経路も無い。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-この欄が成り立つには、インストールの導線か、右クリックで出る作り付けのメニューが要る。どちらも areka には無い。
-同じ名前の見出しがゴースト・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み（所在の解決のみ）。areka-ghost の catalog::list_balloons がこの欄を読み（無ければ readme.txt）、それがバルーンのフォルダ最上位に実在するときだけその所在を Identity の readme として持つ。最上位でない名前（sub/x.txt・..）は「無し」とする。
+開く経路はゴーストの説明書だけで（右クリックのメニューと \\![open,readme]）、バルーンの説明書を開く経路は無い。
+壊れ方: 無い。記録: なし（ファイルが無いのは異常ではない）。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.readme。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグイン・ヘッドラインの descript のそれぞれにある。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_balloon:recommended.ghost.path_2c_30d1_30b9:1"]
@@ -2329,20 +2324,19 @@ areka には他のソフトから届いた伝言を出す仕組みが無く、�
 """
 
 [entry."ukadoc:descript_balloon:type_2c_7a2e_5225:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はファイルセットの種別を読む経路を持たない。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+実装済み。areka-ghost の catalog::list_balloons がこの欄を読み、値を trim＋ASCII 小文字化して balloon と比べる。欄が無いか balloon のフォルダだけをバルーンとして列挙する。
+壊れ方: 無い。balloon 以外の値のフォルダはバルーンの列挙から除き、warn!（event = catalog_type_not_balloon・パスと値を添える）を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の fn list_balloons の type の判定。
 同じ名前の見出しがゴースト・シェル・プラグイン・インストール指示の descript にもある。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-baseware-root-layout（要件 2.3）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_balloon:use_input_alpha_2c_6570_5024:1"]
@@ -2728,20 +2722,19 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:craftman_2c_4f5c_8005_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "A4"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はゴーストの作者名を読む経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインの SHIORI の資源の側にも同名の項目がある（そちらは別の台帳の持ち物で、areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_ghosts がゴーストの列挙の素性としてこの欄を読み、Identity の craftman として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い（ゴーストを切り替えるメニューは areka-P0-ghost-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのゴーストを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.craftman。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、SHIORI の資源の側にも同名の項目がある（別ドメインの台帳の持ち物）。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_ghost:craftmanurl_2cURL:1"]
@@ -2762,20 +2755,19 @@ areka はゴーストの作者の連絡先を読む経路を持たない。
 """
 
 [entry."ukadoc:descript_ghost:craftmanw_2c_4f5c_8005_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "A4"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はゴーストの作者の表示名を読む経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインのプロパティの側（areka-sylphya の vocab::GENERIC_PROP_NAMES）にも SHIORI の資源の側（同じクレートの vocab::shiori_resource）にも同名の項目がある。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_ghosts がゴーストの列挙の素性としてこの欄を読み、Identity の craftmanw として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い（ゴーストを切り替えるメニューは areka-P0-ghost-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのゴーストを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.craftmanw。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、SHIORI の資源の側にも同名の項目がある（別ドメインの台帳の持ち物）。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_ghost:cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1"]
@@ -2922,20 +2914,19 @@ areka は通知領域にゴーストの絵を出す画面を持たず、この�
 """
 
 [entry."ukadoc:descript_ghost:id_2cID_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "A4"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はゴーストの識別名を読む経路を持たない。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがバルーン・シェル・プラグインの descript にもあり、別ドメインのプロパティの側にもある。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_ghosts がゴーストの列挙の素性としてこの欄を読み、Identity の id として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い（ゴーストを切り替えるメニューは areka-P0-ghost-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのゴーストを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.id。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、別ドメインのプロパティの側にもある。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_ghost:install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1"]
@@ -3234,18 +3225,19 @@ areka はシェル側の名前で上書きしてよいかの宣言を受け取�
 """
 
 [entry."ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "A3"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。areka-parsers の package::resolve が `GhostNames::name` へ写すだけで、この欄を読む本番の経路が 1 つも無い（読むのは同クレートのテストのみ）。名前は登記されているが受け取っても何もしない。
-この綴りは重なりがいちばん広い——同じ綴りの見出しが本台帳の別ページ（バルーン・シェル・ヘッドライン・インストール指示・プラグイン・surfaces.txt）にもあり、別ドメインのプロパティ（areka-sylphya の vocab::GENERIC_PROP_NAMES）と SHIORI の資源（同じクレートの vocab::shiori_resource）にもある。areka の読み手が別々なので状態も割れる——ゴースト名はここへ写されるだけで誰も読まない、シェル名は areka-ghost の config::resolve_shell_name が読んで起動時のシェル名になる、バルーン名はどこからも読まれない。名前で引かず、ページを決めてから引くこと。
-担当 spec は areka-P0-package-mount。同 spec の brief は範囲の In に、起点の descript から読む欄としてこの綴りを名指しで挙げている。
-束: 配布物の素性と説明文・名前だけ受けて使わない（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 53——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-宛先: 担当の欄を空にした。宛先だった areka-P0-package-mount は完了して封じられた spec で、状態が語彙のみのこの項目を引き受けられないからである（規則と件数は briefing.md「宛先の欄の整理」の節にある）。上に残る担当の記述は当時の経緯として消さずに置く。
+実装済み。areka-ghost の catalog::list_ghosts がゴーストの列挙の素性としてこの欄を読み、Identity の name として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い（ゴーストを切り替えるメニューは areka-P0-ghost-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのゴーストを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.name。
+areka-parsers の package::resolve も同じ欄を GhostNames::name へ写すが、そちらを読む本番の経路は無い。同じ綴りの見出しが本台帳の別ページ（バルーン・シェル・ヘッドライン・インストール指示・プラグイン・surfaces.txt）にもあり、別ドメインのプロパティ（areka-sylphya の vocab::GENERIC_PROP_NAMES）と SHIORI の資源（同じクレートの vocab::shiori_resource）にもある。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「名前だけ受けて使わない」（順位 53）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_ghost:readme.charset_2c_6587_5b57_30b3_30fc_30c9:1"]
@@ -3278,6 +3270,7 @@ note = """
 壊れ方: 無い。欄が指すファイルが実在しないときは、メニューの「説明書」の項目を灰色で出す（枠は消さない）。
 ログ: ファイルが無いときは debug! を、開けなかったときはパスと符号を添えた error! を残す。
 根拠の場所: crates/areka-parsers/src/package/model.rs の MountModel.readme。読む側は crates/areka/src/readme.rs。
+列挙の読み手: areka-ghost の catalog::list_ghosts もこの欄を読み（無ければ readme.txt）、ゴーストのフォルダ最上位に実在するときだけその所在を Identity の readme として持つ（所在の解決のみで開かない・areka-P0-baseware-root-layout 要件 2.4）。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
 束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_shell の name,シェル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
@@ -4541,20 +4534,19 @@ note = """
 """
 
 [entry."ukadoc:descript_shell:craftman_2c_4f5c_8005_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はシェルの作者名を読む経路を持たない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがゴースト・バルーン・プラグインの descript にもある。別ドメインの SHIORI の資源の側にも同名の項目がある（areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_shells がシェルの列挙の素性としてこの欄を読み、Identity の craftman として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い。catalog::list_shells には本番の呼び手がまだ無く、呼ぶのはテストだけである（シェル・バルーンを切り替えるメニューは areka-P0-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのシェルを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.craftman。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、SHIORI の資源の側にも同名の項目がある（別ドメインの台帳の持ち物）。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_shell:craftmanurl_2cURL:1"]
@@ -4575,20 +4567,19 @@ areka はシェルの作者の連絡先を読む経路を持たない。
 """
 
 [entry."ukadoc:descript_shell:craftmanw_2c_4f5c_8005_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はシェルの作者の表示名を読む経路を持たない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがゴースト・バルーン・プラグインの descript にもある。別ドメインのプロパティの側にも同名の項目がある（areka-sylphya の vocab::GENERIC_PROP_NAMES が語彙として持っている）。別ドメインの SHIORI の資源の側にも同名の項目がある（areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_shells がシェルの列挙の素性としてこの欄を読み、Identity の craftmanw として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い。catalog::list_shells には本番の呼び手がまだ無く、呼ぶのはテストだけである（シェル・バルーンを切り替えるメニューは areka-P0-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのシェルを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.craftmanw。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、SHIORI の資源の側にも同名の項目がある（別ドメインの台帳の持ち物）。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_shell:homeurl_2cURL:1"]
@@ -4610,20 +4601,19 @@ areka にはシェルを配布元から取り直す仕組みが無く、その�
 """
 
 [entry."ukadoc:descript_shell:id_2cID_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka はシェルの識別名を読む経路を持たない。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがゴースト・バルーン・プラグインの descript にもある。別ドメインのプロパティの側にも同名の項目がある。名前で引かず、ページを決めてから引くこと。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。areka-ghost の catalog::list_shells がシェルの列挙の素性としてこの欄を読み、Identity の id として持つ（欄が無いか値が空なら「無し」）。値は無加工で、文字コードは areka-parsers の charset::decode の既定の規則で解く。いまこの値を画面に出す読み手は無い。catalog::list_shells には本番の呼び手がまだ無く、呼ぶのはテストだけである（シェル・バルーンを切り替えるメニューは areka-P0-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（欄が無いのは異常ではない）。descript.txt が読めないときはそのシェルを列挙から除き、warn! を残す。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.id。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグインの descript のそれぞれにあり、別ドメインのプロパティの側にもある。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_shell:kero.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1"]
@@ -5407,21 +5397,20 @@ areka には作り付けのメニューが無く、その脇に置く画像の�
 """
 
 [entry."ukadoc:descript_shell:menu_2chidden:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "A11"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka にはシェルを切り替えるメニューが無く、そこにこのシェルを出さないと宣言するこの欄を読む経路も無い。
-この欄が成り立つには、ゴーストのシェルを切り替えるメニューが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+実装済み。areka-ghost の catalog::list_shells がこの欄を読み、値を trim＋ASCII 小文字化して hidden のシェルをシェルの列挙から除く。
+いまシェルの列挙を画面に出す読み手は無い。catalog::list_shells には本番の呼び手がまだ無く、呼ぶのはテストだけである（シェルを切り替えるメニューは areka-P0-shell-balloon-switch が作る）。
+壊れ方: 無い。記録: なし（隠すと宣言したシェルを隠すのは正典どおり）。
+根拠の場所: crates/areka-ghost/src/catalog.rs の fn list_shells の menu の判定。
 同じ綴りの項目が別ドメインのプロパティの側にもある（areka-sylphya の vocab::GENERIC_PROP_NAMES）。同じページの `sakura.menu` 系は着せ替えのメニューの話で、この欄とは別である。名前で引かず、ページを決めてから引くこと。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
-束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+担当 spec は areka-P0-baseware-root-layout（要件 2.2）。
+束: 作り付けのメニュー・読む経路が無い（先に要る仕組み: 作り付けのメニュー（自前描画））。束の順位: 49——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したが、この束には実装済みの行の先例が無いので下位区分と順位は元の綴りのまま置いた。priority の欄は道具（priority-apply）が書き戻す値なので手で触っていない。付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_shell:name_2c_30b7_30a7_30eb_540d:1"]
@@ -5434,6 +5423,7 @@ links = []
 note = """
 壊れ方: 見た目の差。記録: なし。areka はこの項目を正典どおりに読んで使うので、正典どおりに書かれた宣言については崩れる先が無く、記録も出ない（正典から外れた値を書いたときに記録が出る項目では、その記録をこの下の行に書く）。三段のうち最も弱い段を選び、実際にはその差も出ないことをここに書く（同じ書き方を、正典自身が値を使わないと注記する `maxwidth,ピクセル` でも採っている）。
 areka-ghost の config::resolve_shell_name が読み、`KanadeConfig::shell_name` としてOnBoot の 0 番目の参照に載る（areka-kanade の schedule::events）。欠落時はシェルの置き場所の名前へ落として記録を残す。同じ綴りがゴーストの descript にもあるが、そちらは別の項目で状態も別に決まる。
+列挙の読み手: areka-ghost の catalog::list_shells もこの欄を読み、Identity の name として持つ（値は無加工・areka-P0-baseware-root-layout 要件 2.4）。
 担当 spec は areka-P0-ghost-setup。同 spec の brief は範囲の In に `KanadeConfig` の値の出どころを解くことを挙げ、シェル名はシェルの descript の名前の欄から採ると書いている。
 束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
@@ -5457,21 +5447,20 @@ areka には説明文を開く画面が無く、その文字コードの宣言�
 """
 
 [entry."ukadoc:descript_shell:readme_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-baseware-root-layout"
 priority = "B7"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka には説明文を開く画面が無く、そのファイル名を読む経路も無い。
-この欄が成り立つには、入れる導線か、右クリックで開く作り付けのメニューが要る。どちらも areka には無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-同じ名前の見出しがゴースト・バルーン・プラグイン・ヘッドラインの descript にもある。名前で引かず、ページを決めてから引くこと。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み（所在の解決のみ）。areka-ghost の catalog::list_shells がこの欄を読み（無ければ readme.txt）、それがシェルのフォルダ最上位に実在するときだけその所在を Identity の readme として持つ。最上位でない名前（sub/x.txt・..）は「無し」とする。
+開く経路はゴーストの説明書だけで（右クリックのメニューと \\![open,readme]）、シェルの説明書を開く経路は無い。また catalog::list_shells には本番の呼び手がまだ無く、呼ぶのはテストだけである。
+壊れ方: 無い。記録: なし（ファイルが無いのは異常ではない）。
+根拠の場所: crates/areka-ghost/src/catalog.rs の Identity.readme。
+同じ名前の見出しがゴースト・シェル・バルーン・プラグイン・ヘッドラインの descript のそれぞれにある。名前で引かず、ページを決めてから引くこと。
+担当 spec は areka-P0-baseware-root-layout（要件 2.4）。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の readme,ファイル名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_shell:sakura.balloon.alignment_2c_4f4d_7f6e_60c5_5831:1"]

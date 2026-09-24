@@ -106,7 +106,7 @@
   - `tests/emo2_real_run.rs` の子プロセスにも `AREKA_NO_ALERT=1` を渡す（見え方は変えない）
   - 完了の姿: `cargo test -p areka --test smoke_boot_loop_exit` が 3 方向とも緑
   - _Requirements: 1.6, 7.1, 7.5, 9.2_
-- [ ] 6.2 (P) 台帳「配布物の素性」の判定を更新する
+- [x] 6.2 (P) 台帳「配布物の素性」の判定を更新する
   - `doc/ukadoc-coverage/ledger/assets.toml` で読むようになった欄（バルーン `name`／`craftman`／`craftmanw`／`id`／`type`／`readme`、シェル `craftman`／`craftmanw`／`id`／`readme`／`menu,hidden`、ゴースト `name`／`craftman`／`craftmanw`／`id`）を `implemented`・owner 本仕様へ。既に実装済みのゴースト `readme`・シェル `name` は note に列挙の読み手を足すだけ。読まない欄は触らない
   - 完了の姿: `cargo test -p ukadoc-survey` が緑
   - _Requirements: 2.4, 2.9_
@@ -127,3 +127,4 @@
 - 5.1: 解決は `boot_config::resolve_boot(_from)` に置いた（main.rs 1,000 行のため・design に追記）。argv 起動でも根は先に決める（設計の流れどおり・`AREKA_ROOT` が不在ならargv 起動も止まる）。
 - 5.2: `emo2_boot/zorder_wiring_tests.rs` の t_zwi08 は main.rs の本文を文字列で照合するので、`open_startup_window` の形を変えると追随が要る。`areka-ghost/src/runtime.rs` の doc に「ダミー窓」が 1 か所残る（要件 7.2 で不変のため意図的）。smoke のフォールバック方向の目印は 6.1 まで死んでいる。
 - 6.1: 子の tracing は pipe でも着色されるので smoke は `NO_COLOR=1` を渡す。smoke の各方向は自前の `SampleRoot` 複製を使う（② のゴースト側の記憶が次の走行を `route=Memory` へ変えないため）。
+- 6.2: 台帳を `implemented` にするとソースの `// ukadoc:` URL コメント・報告の作り直し・`briefing.md` の数・`roadmap-draft.md` の spec 行と段階の表の「依存する既存 spec」欄まで追随が要る（`cargo test -p ukadoc-survey` が見張る）。

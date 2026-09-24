@@ -138,6 +138,19 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 （3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 33 に合わせ、
 `snapshot_on` は行の集合に最後に手を入れた日として **2026-09-20** のままにした。
 
+**2026-09-24 の追加**: `areka-P0-baseware-root-layout` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、
+同日この spec が台帳 `ledger/assets.toml` の 15 項目（バルーンの `name`・`craftman`・`craftmanw`・
+`id`・`type`・`readme`、シェルの `craftman`・`craftmanw`・`id`・`readme`・`menu,hidden`、ゴーストの
+`name`・`craftman`・`craftmanw`・`id`）を列挙の読み手を置いて実装済みへ移し、自分の宛先として
+登記したからである。15 項目は `linkage.md` の 4 つの束にまたがる（「配布物の素性」10・
+「起動と挨拶」3・「名前の記憶」1・「メニュー」1）ので、束の欄にはいちばん多い「配布物の素性」を
+書いた。段階ごとの表の「依存する既存 spec」の欄も、この 4 つの束の行にこの spec を件数付きで足した。
+足した行の中身は `stage = "B"`・`bundle = "配布物の素性"`・`owner_count = 15`・
+`wave = "A1 後段"` で、段階は「配布物の素性」が順位表で置かれている段階の写し、ウェーブは正本の
+ロードマップの写しである。行数は **34 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が
+**20 行**・`none = true` の行が **14 行**である。`[briefs].count` はこの 34 に合わせ、`snapshot_on` は
+行の集合に最後に手を入れた日として **2026-09-24** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -171,8 +184,8 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 
 ```toml
 [briefs]
-count = 33
-snapshot_on = "2026-09-20"
+count = 34
+snapshot_on = "2026-09-24"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -445,6 +458,13 @@ stage = "A"
 bundle = "絵の重ね方"
 owner_count = 1
 wave = "A0"
+
+[[spec]]
+name = "areka-P0-baseware-root-layout"
+stage = "B"
+bundle = "配布物の素性"
+owner_count = 15
+wave = "A1 後段"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -459,8 +479,8 @@ spec 台帳で、この表はそれを写した写真である。
 | ---: | --- | --- | --- | --- |
 | 1 | 会話 | `areka-P0-talk-script-canon` | `areka-P0-balloon-canon-residue`（W14・5 件）／`areka-P0-sakura-time-directives`（W16・5 件）／`areka-P0-anchor-tag-canon`（W17・1 件）／`areka-P0-status-execution-states`（W15・1 件）／`areka-P0-kero-balloon`（完了・2 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 2 | 窓の配置と重なり | `areka-P0-window-placement-canon` | `areka-P0-currentghost-property-tree`（W15・16 件）／`areka-P0-surfaces-basepos`（W13 任意／W14・2 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-zorder-property`（W15・1 件）／`areka-P0-scope-zorder-pinning`（完了・3 件）／`areka-P0-windowposition-limit`（完了・3 件）／`areka-P0-balloon-offset-dpi`（完了・2 件）／`areka-P0-sylphya-set-ledger`（完了・1 件） | 第 1 波（先頭ウェーブ） |
-| 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件） | 第 1 波（先頭ウェーブ） |
-| 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件） | 第 1 波（先頭ウェーブ） |
+| 3 | 名前の記憶 | `areka-P0-user-name-memory` | `areka-P0-currentghost-property-tree`（W15・1 件）／`areka-P0-package-mount`（完了・2 件）／`areka-P0-sylphya`（完了・2 件）／`areka-P0-sakura-dialogue-tags`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 1 波（先頭ウェーブ） |
+| 4 | 起動と挨拶 | `areka-P0-boot-greeting-canon` | `areka-P0-charset-canon`（完了・2 件）／`areka-P0-package-mount`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・3 件） | 第 1 波（先頭ウェーブ） |
 | 5 | バルーンの文字 | `areka-P0-balloon-font-canon`（残余） | `areka-P0-currentghost-property-tree`（W15・13 件）／`areka-P0-text-align-shadow-canon`（W15・9 件）／`areka-P0-text-decoration-canon`（完了・16 件）／`areka-P0-balloon-font-descript-keys`（完了・7 件）／`areka-P0-balloon-parse`（完了・5 件）／`areka-P0-balloon-vertical-canon`（完了・4 件）／`areka-P0-cursor-tag-canon`（完了・1 件） | 第 1 波（先頭ウェーブ） |
 | 6 | サーフェスアニメーション | `areka-P0-seriko-animation-canon` | `areka-P0-currentghost-property-tree`（W15・6 件）／`areka-P0-shell-parse`（完了・2 件） | 第 1 波（先頭ウェーブ） |
 | 7 | 入力窓とダイアログ | `areka-P0-inputbox-dialog` | **0 本** | 第 2 波 |
@@ -470,7 +490,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 10 | descript の転記 | `areka-P0-descript-transcribe` | `areka-P0-balloon-canon-residue`（W14・4 件）／`areka-P0-package-mount`（完了・1 件） | 第 2 波 |
 | 10 | バルーンのリンク | `areka-P0-anchor-tag-canon`（既存 spec がそのまま引受先・構成 60 件の全数を `owner` に持つ） | `areka-P0-anchor-tag-canon`（W17・60 件） | 第 2 波 |
 | 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `areka-P0-currentghost-property-tree`（W15・15 件） | 第 2 波 |
-| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・13 件）／`areka-P0-property-catalog-lists`（W16・4 件） | 第 2 波 |
+| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・13 件）／`areka-P0-property-catalog-lists`（W16・4 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 2 波 |
 | 12 | 撫で | `areka-P0-touch-events-canon` | `areka-P0-currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件） | 第 2 波 |
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `areka-P0-balloon-canon-residue`（W14・9 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
@@ -499,7 +519,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 5 | 好感度の絵柄 | `areka-P0-favorite-rate-record`（残余） | `areka-P0-property-catalog-lists`（W16・24 件） | 第 3 波 |
 | 5 | 着せ替え | `areka-P0-dressup-bind-canon` | `areka-P0-mayuna-compose`（完了・3 件）／`areka-P0-bindoption-exclusivity`（完了・2 件） | 第 3 波 |
 | 6 | `ukadoc:manual_balloon` | `areka-P0-balloon-package-layout` | **0 本** | 第 3 波 |
-| 7 | 配布物の素性 | `areka-P0-package-identity` | `areka-P0-popup-menu-minimal`（A0・1 件）／`areka-P0-ghost-setup`（完了・1 件） | 第 3 波 |
+| 7 | 配布物の素性 | `areka-P0-package-identity` | `areka-P0-popup-menu-minimal`（A0・1 件）／`areka-P0-ghost-setup`（完了・1 件）／`areka-P0-baseware-root-layout`（A1 後段・10 件） | 第 3 波 |
 | 8 | `ukadoc:manual_directory` | `areka-P0-package-directory-layout` | **0 本** | 第 3 波 |
 | 8 | `ukadoc:manual_ghost` | `areka-P0-package-directory-layout` | **0 本** | 第 3 波 |
 
