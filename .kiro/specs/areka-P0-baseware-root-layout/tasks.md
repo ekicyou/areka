@@ -99,7 +99,7 @@
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 9.5_
 
 - [ ] 6. 実プロセスの検査
-- [ ] 6.1 常設 smoke テストを 3 方向へ更新する
+- [x] 6.1 常設 smoke テストを 3 方向へ更新する
   - 起動の口を「引数と env の組」を受ける形へ広げ、全方向で `AREKA_APP_SMOKE_EXIT_MS=500`・`AREKA_NO_ALERT=1`。60 秒の見張りと終了コードの判定は残す
   - ① 本物方向（argv 絶対パス・目印は今までどおり・終了コード 0）、② 根方向（argv なし・`AREKA_ROOT` に検体の根・`AREKA_PROFILE_DIR` は一時フォルダ・目印は `route=Only`／`route=Companion`・終了コード 0）、③ 0 体方向（空の一時の根・終了コード非 0・「ゴーストが見つかりません」を含み本物の窓の目印を含まない）
   - モニタ 0 台では ①② が「起動窓を開けない」の `error!` と非 0 終了を受理する（旧フォールバック方向を置き換える）
@@ -126,3 +126,4 @@
 - 2.3: 空の `AREKA_ROOT` は「設定あり」（`AREKA_PROFILE_DIR` と同じ）→ `NotADirectory { dir: "", source: EnvVar }`。`dir` が絶対でない唯一の例外なので、告知（3）は空のとき「環境変数 AREKA_ROOT が空です」の類いの文言にする。`RootError` 等の item 単位 `#[allow(dead_code)]` は 5.1 で外す。
 - 5.1: 解決は `boot_config::resolve_boot(_from)` に置いた（main.rs 1,000 行のため・design に追記）。argv 起動でも根は先に決める（設計の流れどおり・`AREKA_ROOT` が不在ならargv 起動も止まる）。
 - 5.2: `emo2_boot/zorder_wiring_tests.rs` の t_zwi08 は main.rs の本文を文字列で照合するので、`open_startup_window` の形を変えると追随が要る。`areka-ghost/src/runtime.rs` の doc に「ダミー窓」が 1 か所残る（要件 7.2 で不変のため意図的）。smoke のフォールバック方向の目印は 6.1 まで死んでいる。
+- 6.1: 子の tracing は pipe でも着色されるので smoke は `NO_COLOR=1` を渡す。smoke の各方向は自前の `SampleRoot` 複製を使う（② のゴースト側の記憶が次の走行を `route=Memory` へ変えないため）。

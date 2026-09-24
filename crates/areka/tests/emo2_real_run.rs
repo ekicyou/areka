@@ -154,6 +154,9 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
         .arg(balloon_root.to_str().expect("fixture パスは UTF-8"))
         // 自動 close（無人で exit 0 を観測可能にする・R6.4/R9.1）。
         .env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)
+        // 告知のメッセージボックスを抑える（モニタ 0 台で「起動窓を開けない」の告知がモーダルのまま
+        // 番犬の締切まで止まらないように）。argv 起動の見え方は変わらない（baseware-root-layout 要件 7.1）。
+        .env("AREKA_NO_ALERT", "1")
         // wire 成立／attach 完了マーカー、および折返し ON 解決の証跡（`wrap=BudouxWordWrap`）は
         // いずれも info! ゆえ RUST_LOG を明示し確実に捕捉する（人間の shell の RUST_LOG が warn 等でも
         // 取りこぼさない）。design.md「実機確認セット」Trigger 手順に合わせ `kanade=trace` も併せて有効化する

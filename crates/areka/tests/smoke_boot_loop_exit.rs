@@ -1,31 +1,47 @@
-//! 骨格 boot→loop→exit の統合 smoke テスト（task 4.2・R4.1/R2.4、task 6.2 で両方向へ拡張）。
+//! 骨格 boot→loop→exit の統合 smoke テスト（task 4.2・R4.1/R2.4、baseware-root-layout task 6.1 で
+//! 3 方向へ更新）。
 //!
 //! env ゲート（`AREKA_APP_SMOKE_EXIT_MS`・task 2.3）を立てた areka バイナリの子プロセスを
 //! 起動し、起動窓を開いて `app.run()` ループを回した後に自動終了（`quit_app`＝全窓 despawn
-//! → 終了の指示）→ `run()` 復帰 → **exit 0** で正常終了する経路を実プロセスで踏破・証明する。
+//! → 終了の指示）→ `run()` 復帰 → 終了コードで終わる経路を実プロセスで踏破・証明する。
 //!
-//! window-placement task 6.2（`open_startup_window` 差し替え・要件 1.4）以降は **両方向**を張る:
-//! - **フォールバック方向**（引数なし）: 既定プレースホルダ root は不在 → `warn!` の上で
-//!   検証用ダミー窓へフォールバックして完走する（DD14）
-//! - **本物方向**（emo2 fixture パスを引数で供給）: `prepare_ghost_windows` 成功 →
-//!   本物のゴースト窓構成（2 スコープ×キャラ窓＋バルーン窓）で完走する
+//! 3 方向（areka-P0-baseware-root-layout 要件 7.5・1.6・design「smoke 3 方向」）:
+//! - **① 本物方向**（emo2 検体のゴースト／バルーンを argv の絶対パスで供給）: 本物のゴースト窓
+//!   構成（2 スコープ×キャラ窓＋バルーン窓）で完走し **exit 0**（要件 7.1＝argv 起動の見え方）。
+//! - **② 根方向**（argv なし・`AREKA_ROOT` に検体の根）: 根の下の 1 体を `route=Only` で、
+//!   同梱バルーンを `route=Companion` で決め、本物のゴースト窓で完走し **exit 0**（要件 1.6）。
+//! - **③ 0 体方向**（argv なし・空の一時の根）: 「ゴーストが見つかりません」の告知（`error!`）を
+//!   残し、本物の窓を開かずに **非 0** で終わる（窓 0 で居座らない）。
+//!
+//! 全方向で `AREKA_NO_ALERT=1`（告知のモーダルで番犬の締切まで止まらない・要件 9.2）。
+//! ②③ の `AREKA_PROFILE_DIR` は一時フォルダ（開発者のアプリの記憶を読まず・書かない）。
+//!
+//! モニタ 0 台（headless）では ①② の起動窓の準備が `PlacementError::Monitor` で失敗し、
+//! 「起動窓を開けません」の告知＋非 0 終了が契約どおりの挙動になる。その場合だけ非 0 を受理する
+//! （旧「ダミー窓で完走を受理」の置き換え。ダミー窓は退役済み）。
 //!
 //! 実装規律:
 //! - 子プロセスは `cargo run` ではなく Cargo が用意する `CARGO_BIN_EXE_areka`（統合テスト用に
 //!   Cargo が bin を先にビルドして渡すパス）を直接起動する。再コンパイルによるノイズを避ける。
 //! - タイムアウト番犬は純 std（`std::process` + `std::thread`/`std::time`・新規依存なし・R6.1）。
 //!   `try_wait()` を短周期でポーリングし、寛大な締切内に終了しなければ `kill()` してテスト失敗。
-//! - **合否は exit 0＋経路マーカー（tracing の info/warn メッセージ本文）で判定する**。
+//! - **合否は終了コード＋経路マーカー（tracing のメッセージ本文と `route=` 欄）で判定する**。
+//!   子へ `NO_COLOR=1` を渡し、欄の名前と値の間に ANSI の着色が挟まらないようにする
+//!   （`route=Only` をそのまま照合できる）。
 //!   良性の teardown warn（`WARN ... Could not despawn entity ... generation 1`・smoke timer と
 //!   window-registry close の二重 despawn 競合）は warn レベルで exit 0 に影響しないため
 //!   assert 対象にしない（tasks.md Implementation Notes・実測済み）。
+//! - 検体は**テストごとに** `SampleRoot::acquire` する（使い捨ての複製）。① と ② は並走しうるので
+//!   同じ複製を共有させない（② がゴーストの記憶 `last.balloon` を複製へ書くため、共有すると同じ
+//!   複製での後続の起動が `route=Memory` へ変わりうる）。複製は取得のたびに新品なので、実行を
+//!   何度重ねても ② は `route=Companion` のまま。
 
 use sample_ghost_kit::SampleRoot;
 use std::process::{Command, ExitStatus, Stdio};
-use std::sync::LazyLock;
 use std::time::{Duration, Instant};
+use temp_path_kit::TempPath;
 
-/// 子プロセスへ渡す自動 close 遅延（ms）。ダミー窓を開き run ループを一巡させるだけの
+/// 子プロセスへ渡す自動 close 遅延（ms）。起動窓を開き run ループを一巡させるだけの
 /// 十分小さな値。0 でも受理されるが（即時発火）、窓生成と run 立ち上げの前後関係を
 /// 現実的にするため小さな正値を与える。
 const SMOKE_EXIT_MS: &str = "500";
@@ -37,13 +53,15 @@ const WATCHDOG_DEADLINE: Duration = Duration::from_secs(60);
 /// `try_wait()` のポーリング周期。
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+/// wire 成立マーカー（`emo2_boot` の `info!`・実 sink 結線が end-to-end で踏まれた証跡・task 7.1）。
+const WIRED: &str = "emo2-boot: 実 sink 結線が成立しました（wire 成立）";
 
-/// env ゲートを立てた areka バイナリを与えた引数で起動し、番犬締切内の終了を待って
-/// `(status, stdout, stderr)` を返す共通ドライバ（両方向テストで共有）。
-fn run_smoke(args: &[&str]) -> (ExitStatus, String, String) {
+/// 本物のゴースト窓を開いたマーカー（`main` の `open_startup_window` 成功アーム）。
+const REAL_WINDOWS: &str = "本物のゴースト窓を開きました";
+
+/// env ゲートを立てた areka バイナリを与えた引数と env で起動し、番犬締切内の終了を待って
+/// `(status, stdout, stderr)` を返す共通ドライバ（3 方向で共有）。
+fn run_smoke(args: &[&str], envs: &[(&str, &str)]) -> (ExitStatus, String, String) {
     let bin = env!("CARGO_BIN_EXE_areka");
 
     // 子プロセス起動: env ゲートを立て、診断用に stdout/stderr を捕捉する。
@@ -53,6 +71,12 @@ fn run_smoke(args: &[&str]) -> (ExitStatus, String, String) {
         .env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)
         // 告知のメッセージボックスを抑える（モーダルで番犬の締切まで止まらず、非 0 で即座に終わる）。
         .env("AREKA_NO_ALERT", "1")
+        // 欄の着色を切る（`route=Only` を ANSI に分断されずに照合する）。
+        .env("NO_COLOR", "1")
+        // 開発者のシェルの根・記憶の場所を持ち込まない（方向ごとに envs で与える）。
+        .env_remove("AREKA_ROOT")
+        .env_remove("AREKA_PROFILE_DIR")
+        .envs(envs.iter().copied())
         // RUST_LOG は明示しない（骨格既定 info でよい）。診断は捕捉出力から得る。
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -104,108 +128,157 @@ fn run_smoke(args: &[&str]) -> (ExitStatus, String, String) {
     (status, out, err)
 }
 
-/// フォールバック方向（task 6.2・DD14）: 引数なし＝既定プレースホルダ root は不在のため、
-/// `warn!`（`StartPointMissing` は良性分類）の上で検証用ダミー窓へフォールバックし、
-/// 自動終了（`quit_app`）→ 終了の指示 → **exit 0** で完走することを実プロセスで証明する。
-#[test]
-fn skeleton_boots_loops_and_exits_zero_within_watchdog() {
-    let (status, out, err) = run_smoke(&[]);
-
+/// `message` を本文に持つ行に `field` が載っていることを確かめる（経路の目印・要件 4.10・5.11）。
+/// パスは綴らない（検体の置き場に依存しない）。
+fn assert_line_has(all: &str, message: &str, field: &str) {
+    let line = all
+        .lines()
+        .find(|l| l.contains(message))
+        .unwrap_or_else(|| panic!("「{message}」の行がありません。\n--- child output ---\n{all}"));
     assert!(
-        status.success(),
-        "smoke プロセスは exit 0 で終了すべきですが status={status:?} でした。\
-         \n--- child stdout ---\n{out}\n--- child stderr ---\n{err}"
-    );
-
-    // 経路マーカー（task 6.2 拡張）: warn! フォールバック → ダミー窓（本物窓は開かない）。
-    // tracing のメッセージ本文はフィールド着色（ANSI）に分断されない（決定論）。
-    let all = format!("{out}\n{err}");
-    assert!(
-        all.contains("窓配置の準備起点が見つかりません"),
-        "フォールバック方向は StartPointMissing の warn! を出すべき。\
-         \n--- child output ---\n{all}"
-    );
-    assert!(
-        all.contains("検証用ダミー窓を開きました（placement フォールバック）"),
-        "フォールバック方向はダミー窓を開くべき。\n--- child output ---\n{all}"
-    );
-    assert!(
-        !all.contains("本物のゴースト窓を開きました"),
-        "フォールバック方向で本物のゴースト窓が開くのは契約外。\n--- child output ---\n{all}"
+        line.contains(field),
+        "「{message}」の行に `{field}` がありません: {line}\n--- child output ---\n{all}"
     );
 }
 
-/// 本物方向（task 6.2・要件 1.4 の観測可能な完了状態）: emo2 fixture のパスを位置引数で
-/// 供給し、`prepare_ghost_windows` 成功 → 本物のゴースト窓構成（2 スコープ）で
-/// 自動終了（`quit_app`）→ 終了の指示 → **exit 0** で完走することを実プロセスで証明する。
-///
-/// 環境寛容（placement mod.rs `prepare_ghost_windows_uses_primary_monitor` と同流儀）:
-/// モニタ 0 台の headless 環境では `PlacementError::Monitor` → `error!` フォールバックが
-/// 契約どおりの挙動のため、その場合のみフォールバック完走を受理する（fixture は in-repo
-/// ゆえ `StartPointMissing` は起き得ない＝それ以外のフォールバックは失敗として扱う）。
-#[test]
-fn skeleton_boots_with_real_ghost_windows_and_exits_zero() {
-    let ghost_root = EMO2.folder();
-    let balloon_root = EMO2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
-    assert!(
-        ghost_root.join("ghost/master/descript.txt").exists(),
-        "emo2 fixture が見つかりません（in-repo 前提）: {}",
-        ghost_root.display()
+/// モニタ 0 台（headless）なら「起動窓を開けません」の告知と非 0 終了を受理して `true` を返す
+/// （①② 共通）。モニタがある環境では `false`（呼び手が本物の窓と exit 0 を判定する）。
+fn accepted_as_no_monitor(status: ExitStatus, all: &str) -> bool {
+    if !(all.contains("起動窓を開けません") && all.contains("モニタ列挙に失敗")) {
+        return false;
+    }
+    eprintln!(
+        "note: モニタ 0 台環境のため「起動窓を開けません」＋非 0 終了で受理（Monitor エラー）"
     );
+    assert!(
+        !status.success(),
+        "起動窓を開けないときは非 0 で終わるべきですが status={status:?} でした。\
+         \n--- child output ---\n{all}"
+    );
+    assert!(
+        !all.contains(REAL_WINDOWS),
+        "起動窓を開けないのに本物のゴースト窓が開いたのは契約外。\n--- child output ---\n{all}"
+    );
+    true
+}
 
-    let (status, out, err) = run_smoke(&[
-        ghost_root.to_str().expect("fixture パスは UTF-8"),
-        balloon_root.to_str().expect("fixture パスは UTF-8"),
-    ]);
-
+/// モニタがある環境の完走判定（①② 共通）: exit 0・wire 成立・本物のゴースト窓。
+fn assert_real_windows_and_exit_zero(status: ExitStatus, all: &str) {
     assert!(
         status.success(),
         "smoke プロセスは exit 0 で終了すべきですが status={status:?} でした。\
-         \n--- child stdout ---\n{out}\n--- child stderr ---\n{err}"
-    );
-
-    let all = format!("{out}\n{err}");
-
-    // wire 成立マーカーの存在 assert（task 7.1・R7.3 観測境界・S6 撤回に伴う存在チェック）:
-    // `main` は起動窓（`open_startup_window`）の後で `emo2_boot::wire_emo2_boot` を **無条件に**
-    // 呼ぶ。実 fixture を供給したこの経路では構築入力の組立→`spawn_seriko`→`areka_ghost::boot` が
-    // 成立して `wired=true` を返し、`add_systems(FrameFinalize, emo2_frame_system)` の直後に
-    // `emo2_boot::mod.rs` がこのマーカーを `info!` で発火する。捕捉出力にこの文言が含まれることを
-    // assert することで、**実結線経路（`emo2_frame_system` の schedule 登録）が end-to-end で
-    // 少なくとも 1 回踏まれた**ことを固定する（決定論檻ではなく存在チェック）。
-    //
-    // 配置とは独立: wire 成立は placement／モニタ可用性に依存しない（`wire_emo2_boot` は monitor を
-    // 列挙せず、`boot` は actor spawn で完了し SHIORI 接続の成否を待たない——実測でも 32bit SHIORI
-    // helper の LOAD 失敗より前に `wired=true` へ到達）。ゆえにモニタ 0 台の headless フォール
-    // バック分岐より **前** で無条件に検証する。フォールバック boot 経路（引数なし smoke）は本
-    // マーカーを一切出さない（代わりに「LogSink フォールバックへ委ねる」を出す）ため、本 assert は
-    // `wired=true` 経路に一意であり非 wired 経路では必ず失敗する（RED 実証済み）。
-    assert!(
-        all.contains("emo2-boot: 実 sink 結線が成立しました（wire 成立）"),
-        "実 fixture 経路は emo2-boot の実 sink 結線（wire 成立）マーカーを出すべき\
-         （`emo2_frame_system` の schedule 登録が end-to-end で踏まれた証跡・task 7.1）。\
          \n--- child output ---\n{all}"
     );
-
-    if all.contains("窓配置の準備に失敗しました") && all.contains("モニタ") {
-        // モニタ 0 台環境（headless CI）: Monitor エラー→ error! フォールバックが契約どおり。
-        eprintln!(
-            "note: モニタ 0 台環境のため本物方向はフォールバック完走で受理（Monitor エラー）"
-        );
-        assert!(
-            all.contains("検証用ダミー窓を開きました（placement フォールバック）"),
-            "Monitor エラー時はダミー窓フォールバックで完走すべき。\n--- child output ---\n{all}"
-        );
-        return;
-    }
-
-    // 通常環境: 本物のゴースト窓構成（scopes=[0, 1]）で完走し、フォールバックしない。
+    // wire 成立マーカーの存在 assert（task 7.1・R7.3 観測境界）: `main` は起動窓の後で
+    // `emo2_boot::wire_emo2_boot` を呼び、実 fixture では `wired=true` で本マーカーを `info!` する。
+    // `emo2_frame_system` の schedule 登録が end-to-end で少なくとも 1 回踏まれたことを固定する。
     assert!(
-        all.contains("本物のゴースト窓を開きました"),
-        "fixture あり環境では本物のゴースト窓を開くべき。\n--- child output ---\n{all}"
+        all.contains(WIRED),
+        "実 fixture 経路は emo2-boot の実 sink 結線（wire 成立）マーカーを出すべき。\
+         \n--- child output ---\n{all}"
     );
     assert!(
-        !all.contains("フォールバックします"),
-        "fixture あり環境でフォールバックが発火するのは契約外。\n--- child output ---\n{all}"
+        all.contains(REAL_WINDOWS),
+        "検体あり環境では本物のゴースト窓を開くべき。\n--- child output ---\n{all}"
+    );
+}
+
+/// ① 本物方向（要件 7.1）: emo2 検体のゴースト／バルーンを argv の絶対パスで供給し、
+/// 本物のゴースト窓構成（2 スコープ）で自動終了 → **exit 0** で完走する。
+#[test]
+fn argv_direction_boots_real_ghost_windows_and_exits_zero() {
+    let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+    let ghost_root = emo2.folder();
+    let balloon_root = emo2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
+    assert!(
+        ghost_root.is_absolute() && ghost_root.join("ghost/master/descript.txt").exists(),
+        "emo2 検体が見つかりません（絶対パス前提）: {}",
+        ghost_root.display()
+    );
+
+    let (status, out, err) = run_smoke(
+        &[
+            ghost_root.to_str().expect("検体パスは UTF-8"),
+            balloon_root.to_str().expect("検体パスは UTF-8"),
+        ],
+        &[],
+    );
+    let all = format!("{out}\n{err}");
+
+    // argv の経路で決まる（列挙も記憶も見ない・要件 4.1・5.1）。
+    assert_line_has(&all, "起動するゴーストを決めました", "route=Argv");
+    assert_line_has(&all, "バルーンを決めました", "route=Argv");
+
+    if accepted_as_no_monitor(status, &all) {
+        return;
+    }
+    assert_real_windows_and_exit_zero(status, &all);
+}
+
+/// ② 根方向（要件 1.6）: argv なし・`AREKA_ROOT` に検体の根をそのまま渡す。根の下の唯一の
+/// ゴースト（`route=Only`）と同梱バルーン（`install.txt` の `balloon.directory`＝`route=Companion`）で
+/// 本物のゴースト窓を開き、自動終了 → **exit 0** で完走する。
+#[test]
+fn root_direction_resolves_only_ghost_and_companion_balloon() {
+    let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+    let root = emo2.root();
+    assert!(root.is_absolute(), "検体の根は絶対パス: {}", root.display());
+    let profile = TempPath::new("smoke-root-profile");
+
+    let (status, out, err) = run_smoke(
+        &[],
+        &[
+            ("AREKA_ROOT", root.to_str().expect("検体パスは UTF-8")),
+            (
+                "AREKA_PROFILE_DIR",
+                profile.path().to_str().expect("一時パスは UTF-8"),
+            ),
+        ],
+    );
+    let all = format!("{out}\n{err}");
+
+    assert_line_has(&all, "起動するゴーストを決めました", "route=Only");
+    assert_line_has(&all, "バルーンを決めました", "route=Companion");
+
+    if accepted_as_no_monitor(status, &all) {
+        return;
+    }
+    assert_real_windows_and_exit_zero(status, &all);
+}
+
+/// ③ 0 体方向（要件 7.5）: argv なし・空の一時の根。「ゴーストが見つかりません」の告知を残し、
+/// 本物の窓を開かずに **非 0** で終わる（モニタの有無によらない＝窓を開く前に止まる）。
+#[test]
+fn empty_root_direction_alerts_ghost_missing_and_exits_nonzero() {
+    let root = TempPath::new("smoke-empty-root");
+    let profile = TempPath::new("smoke-empty-profile");
+
+    let (status, out, err) = run_smoke(
+        &[],
+        &[
+            (
+                "AREKA_ROOT",
+                root.path().to_str().expect("一時パスは UTF-8"),
+            ),
+            (
+                "AREKA_PROFILE_DIR",
+                profile.path().to_str().expect("一時パスは UTF-8"),
+            ),
+        ],
+    );
+    let all = format!("{out}\n{err}");
+
+    assert!(
+        !status.success(),
+        "ゴースト 0 体の根では非 0 で終わるべきですが status={status:?} でした。\
+         \n--- child output ---\n{all}"
+    );
+    assert!(
+        all.contains("ゴーストが見つかりません"),
+        "ゴースト 0 体の根では「ゴーストが見つかりません」を告げるべき。\n--- child output ---\n{all}"
+    );
+    assert!(
+        !all.contains(REAL_WINDOWS),
+        "ゴースト 0 体で本物のゴースト窓が開くのは契約外。\n--- child output ---\n{all}"
     );
 }
