@@ -175,7 +175,7 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 
 ### 8.1 要約
 - **Discovery Scope**: Extension（既存の部品の並べ替え・新しい機構なし）。外部依存の追加なし。
-- **選んだ案**: **案 C（折衷）**。各 `wire_*` は元のファイルの中で「載せ替え（`wire_*`・名前は今日のまま）」と「登録（`register_*`・新設）」に分け、新ファイル `crates/areka/src/ghost_session.rs` に登録の入口 `register_systems` と起こし直しの単位（`open_ghost_windows`／`reopen_ghost_windows`・`boot_ghost`／`reboot_ghost`・`GhostSession::shutdown`・`finish_run`）だけを置く。
+- **選んだ案**: **案 C（折衷）**。各 `wire_*` は元のファイルの中で「載せ替え（`wire_*`・名前は今日のまま）」と「登録（`register_*`・新設）」に分け、新ファイル `crates/areka/src/ghost_session.rs` に登録の入口 `register_systems` と起こし直しの単位（`open_ghost_windows`／`reopen_ghost_windows`・`boot_ghost`〔2 度目以降も同じ関数〕・`GhostSession::shutdown`・`finish_run`）だけを置く。
 - **主な発見**:
   - `pub(in path)` は祖先モジュールにしか絞れない（Rust の可視性の規則）。`app_exit.rs` の項目を兄弟の `ghost_session` へ絞る ⒝ は不可能。
   - `wire_zorder_pair`（`placement/spawn.rs`）の「状態」`ZOrderPairStrategy` はプロセスに 1 回の設定値で、ゴーストごとの状態を持たない＝分割の対象ではなく登録側そのもの。字面テスト（`spawn_zorder_chain_wiring_tests.rs`）は無変更で緑。
@@ -190,7 +190,7 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 - **Context**: 要件 4.4「呼び手を限定する形」。
 - **Sources**: Rust Reference「Visibility and Privacy」——`pub(in path)` の `path` は現在のモジュールの祖先でなければならない。
 - **Findings**: `crate::app_exit` の祖先は `crate` だけ。`pub(in crate::ghost_session)` は書けない。`app_exit` を `ghost_session` の子に移せば書けるが、#55 と共有するファイルを動かすことになる。
-- **Implications**: ⒜（戻り値の証 `WindowsClosed`・`#[must_use]`・消費先は `reopen_ghost_windows`／`reboot_ghost` の 2 つ）を採る。
+- **Implications**: ⒜（戻り値の証 `WindowsClosed`・`#[must_use]`・消費先は `reopen_ghost_windows` の 1 つ）を採る。設計レビュー（2026-09-24）で「値渡しの証は 1 回しか消費できないのに 2 か所で消費する」矛盾が見つかり、`reboot_ghost` を撤去して消費先を 1 つにした。
 
 #### 窓を作る側を素の `&mut World` から積めるか（議題 2）
 - **Context**: `open_startup_window` は `app.world().borrow().spawn(...)` で非同期コマンドに積む。
@@ -200,7 +200,7 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 
 #### 2 周テストで 1 周目と 2 周目の状態を見分ける面
 - **Context**: 要件 6.1 ⑵「前のものが残っていない」。
-- **Findings**: 検体の複製は周ごとに別のフォルダ → `ReadmeWiring.path` が周を語る。`MenuRegistry` に 1 周目だけ余分な登記を入れれば新品かどうかが分かる（議題 4 の契約の実演にもなる）。`Receiver` を持つ状態（`Emo2Wiring.kanade_stop`・`UserBreakWiring.flag_rx`）は 1 周目の送出端（kanade・dispatcher の sink）が 1 周目の終了で落ちるので `Disconnected` と `Empty` で見分けられる。kanade の `Sender` を持つ状態（`MouseWiring`・`MenuWiring` の送り口・`ChoiceForwarder`）と sylphya の投函端（`PersistWiring`）には副作用無しで生死を問う口が無い（std の `Sender` に生死の照会は無い）。
+- **Findings**: 検体の複製は周ごとに別のフォルダ → `ReadmeWiring.path` が周を語る。`MenuRegistry` に 1 周目だけ余分な登記を入れれば新品かどうかが分かる（議題 4 の契約の実演にもなる）。`Receiver` を持つ状態（`Emo2Wiring.kanade_stop`・`UserBreakWiring.flag_rx`）は 1 周目の送出端（kanade・dispatcher の sink）が 1 周目の終了で落ちるので `Disconnected` と `Empty` で見分けられる——ただし 1 周目の受信端には未読の値（`KanadeStopped`・`TalkStarted`）が残るので、**空になるまで `try_recv` を回して最後の `Err` を見る**（設計レビューの指摘 1。1 度の `try_recv` では古い受信端も `Ok(_)` を返す）。kanade の `Sender` を持つ状態（`MouseWiring`・`MenuWiring` の送り口・`ChoiceForwarder`）と sylphya の投函端（`PersistWiring`）には副作用無しで生死を問う口が無い（std の `Sender` に生死の照会は無い）。
 - **Implications**: 証拠の面は 4（path・登記・停止通知の受信端・旗の受信端）、面が無い状態は 0 面と明示。4 面は wired の腕の直線の手順で挿されるので、4 面が新しければ同じ手順を通ったことになる。
 
 #### `GhostDecision`／`BalloonDecision` の合成（議題 7）
@@ -225,9 +225,9 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 
 #### 決定 3: 呼び手の限定は戻り値の証（⒜）
 - **Alternatives**: ⒝ 可視性（不可能）・⒞ doc と `#[must_use]` だけ。
-- **Selected**: `close_windows_for_restart(world) -> WindowsClosed`（欄は私有・`#[must_use]`）。消費先は `reopen_ghost_windows` と `reboot_ghost` だけ。
+- **Selected**: `close_windows_for_restart(world) -> WindowsClosed`（欄は私有・`#[must_use]`）。消費先は `reopen_ghost_windows` だけ（設計レビュー後に `reboot_ghost` を撤去）。
 - **Rationale**: 続きを組まざるを得ない形。`despawn_app_windows` は私有のまま・`quit_app` は不変・終了経路に呼び手を置かない＝完了 spec 3.6 の上書きではない。
-- **Trade-offs**: `#[must_use]` は警告どまり。構造の限定は「消費先が 2 つ」が本体。
+- **Trade-offs**: `#[must_use]` は警告どまり。構造の限定は「消費先が 1 つ」が本体。
 
 #### 決定 5: 2 周テストは `wire_emo2_boot` 本体を通す
 - **Alternatives**: ⒝ `SpineHarness` の手順を 2 度回す（本体を通さない）。
@@ -250,7 +250,8 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 - 2 周テストの hang — 全待機を有界（`run_bounded`）にし、後片付けの順を `SpineHarness::shutdown_bounded` と同じにする（`GhostSession::shutdown` の ①②③ がその順）。
 - fallback の起動で `Input` の 5 系が登録されたまま無操作になる — 自己防御（NonSend 不在で `trace!`）で見え方は不変。design に明示済み。
 - `app_profile_dir: None` での `LastUsed::record` の縮退の記録 — テストは記録を判定しないが、実装時に `error!` が出ないことを 1 度目視する。
-- `#[must_use]` は警告どまり — 消費先が 2 つしか無いことが限定の本体。
+- `#[must_use]` は警告どまり — 消費先が 1 つしか無いことが限定の本体。
+- `OpenWindowsError::TaskPoolMissing` は新しい判断分岐 — 作業プールの有無を配置の準備より先に確かめ、素の `World` で `Err` を主張する決定論テスト 1 本を足す（設計レビューの申し送り）。
 
 ### 8.6 参照
 - Rust Reference「Visibility and Privacy」（`pub(in path)` の祖先制約）。

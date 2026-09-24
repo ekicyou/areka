@@ -26,7 +26,7 @@
 ## Boundary Commitments
 
 ### This Spec Owns
-- 起こし直しの単位 `crates/areka/src/ghost_session.rs`（新規）: 系の登録の入口 `register_systems`・窓を作る `open_ghost_windows`／`reopen_ghost_windows`・ゴーストごとの結線 `boot_ghost`／`reboot_ghost`・降ろす `GhostSession::shutdown`・`app.run()` の後始末 `finish_run`。
+- 起こし直しの単位 `crates/areka/src/ghost_session.rs`（新規）: 系の登録の入口 `register_systems`・窓を作る `open_ghost_windows`／`reopen_ghost_windows`・ゴーストごとの結線 `boot_ghost`（2 度目以降も同じ関数）・降ろす `GhostSession::shutdown`・`app.run()` の後始末 `finish_run`。
 - 8 か所の結線の「登録」と「載せ替え」の分離（各ファイルの中で行い、登録関数は元のファイルに残す）。
 - `app_exit.rs` の `close_windows_for_restart` と、その戻り値の型 `WindowsClosed`。
 - `fn main` の並び（登録 → 窓 → smoke → 結線 → `run` → 後始末 → perf）。
@@ -45,7 +45,7 @@
 - 既存の試験台: `emo2_boot::spine` の台本つき偽 SHIORI（`ScriptedShioriBackend`・`ScriptedShioriHandle`・`SpineHarness::standard_backend`）・有界待機（`run_bounded`・`spin_wait_until`）・`sample_test_support::acquire_emo2`。可視性を `pub(crate)` へ広げるだけで中身は変えない。
 
 ### Revalidation Triggers
-- `boot_ghost`／`reboot_ghost`／`GhostSession::shutdown`／`close_windows_for_restart` の署名が変わる（#13・#50・#15 が乗る契約）。
+- `boot_ghost`／`reopen_ghost_windows`／`GhostSession::shutdown`／`close_windows_for_restart` の署名が変わる（#13・#50・#15 が乗る契約）。
 - `register_systems` に載せる系の集合か順序が変わる（`frame_schedule_tests.rs`・`zorder_wiring_tests.rs` の字面の追随が要る）。
 - `Emo2BootInputs` の欄が変わる（`wire_emo2_boot` の入口）。
 - `MenuWiring` を新品にしない形へ変える（議題 4 の契約が崩れる）。
@@ -135,7 +135,7 @@ crates/areka/src/
 ```
 
 ### Modified Files（責務）
-- `ghost_session.rs`: 起こし直しの単位。`register_systems`／`open_ghost_windows`／`reopen_ghost_windows`／`boot_ghost`／`reboot_ghost`／`GhostSession`／`finish_run`／`StartupDescriptValues`（`main.rs` から移す）／`GhostBootInputs`／`OpenWindowsError`。
+- `ghost_session.rs`: 起こし直しの単位。`register_systems`／`open_ghost_windows`／`reopen_ghost_windows`／`boot_ghost`／`GhostSession`／`finish_run`／`StartupDescriptValues`（`main.rs` から移す）／`GhostBootInputs`／`OpenWindowsError`。
 - `main.rs`: 器に徹する。`fn main` は「解決 → `WinApp` → 登録 → 窓 → smoke → 結線 → `run` → 後始末 → perf」。`open_startup_window`・終了順序・wired／fallback の腕を撤去し、`restore_merged_placements`・`boot_monitor_snapshot`・`insert_persist_wiring`・`on_boot_ok`・`smoke_exit_ms*` は残す。
 - `emo2_boot/mod.rs`: `wire_emo2_boot` の署名を `&mut World`＋`Emo2BootInputs` にし、`add_systems(Update, …)` の 1 行を `register_emo2_frame_system` へ出す。`GhostBootOptions` のリテラルは欄を足さず、`shiori`／`ticker`／`app_profile_dir` の値だけを入力から取る。
 - `app_exit.rs`: `close_windows_for_restart` を足す。`despawn_app_windows` は私有のまま、`quit_app` と共有する。
@@ -178,8 +178,10 @@ sequenceDiagram
     C->>A: close_windows_for_restart(world)
     A->>W: despawn_app_windows（AppExit は立てない）
     A-->>C: WindowsClosed
-    C->>G: reopen_ghost_windows(world, cfg, closed) / reboot_ghost(world, closed, …)
-    G->>W: 1 度目と同じ手順で窓を積み、状態を載せ替える
+    C->>G: reopen_ghost_windows(world, cfg, closed)
+    G->>W: 証を消費し、1 度目と同じ手順で窓を積む
+    C->>G: boot_ghost(world, …)
+    G->>W: 状態を載せ替える（1 度目と同じ関数）
 ```
 
 流れの決め: **降ろしてから載せ替える**（逆だと降ろす途中の送出が新しい受信端へ届く）。`register_systems` はこの順に現れない＝起こし直しは登録を通らない。
@@ -209,7 +211,7 @@ sequenceDiagram
 | 4.1 | 閉じるが終了しない操作 | app_exit | `close_windows_for_restart` | 起こし直し |
 | 4.2 | AppExit を立てない・戻り値 | app_exit | `WindowsClosed` | 起こし直し |
 | 4.3 | 別の語彙で info | app_exit | `event = "windows_closed_for_restart"` | — |
-| 4.4 | 呼び手の限定 | app_exit・ghost_session | `#[must_use] WindowsClosed` の唯一の消費先 | — |
+| 4.4 | 呼び手の限定 | app_exit・ghost_session | `#[must_use] WindowsClosed` の唯一の消費先＝`reopen_ghost_windows` | — |
 | 4.5 | 同じ私有部品 | app_exit | `despawn_app_windows` | — |
 | 4.6 | 終了経路は変えない | — | 無変更 | — |
 | 5.1 | 起動の見え方（窓の順序と位置・記憶の書き込み・説明書とメニュー）不変 | open_ghost_windows・boot_ghost | 今日の手順を本文ごと移す | 1 度目 |
@@ -237,7 +239,7 @@ sequenceDiagram
 |---|---|---|---|---|---|
 | register_systems | ghost_session | 8 か所の登録側をプロセスに 1 回・1 か所から呼ぶ | 2.1, 2.2, 3.3 | 各 `register_*`（P0） | Service |
 | open_ghost_windows / reopen_ghost_windows | ghost_session | 窓を作る側。1 度目も 2 度目も同じ手順 | 3.3, 3.4, 4.4 | `placement::prepare_ghost_windows`（P0）・`WintfTaskPool`（P0） | Service |
-| boot_ghost / reboot_ghost | ghost_session | ゴーストごとの結線と状態の載せ替え（wired／fallback） | 2.3, 2.4, 2.6, 3.2, 4.4 | `wire_emo2_boot`（P0）・`on_boot_ok`（P0） | Service, State |
+| boot_ghost | ghost_session | ゴーストごとの結線と状態の載せ替え（wired／fallback・2 度目以降も同じ関数） | 2.3, 2.4, 2.6, 3.2 | `wire_emo2_boot`（P0）・`on_boot_ok`（P0） | Service, State |
 | GhostSession | ghost_session | 3 ハンドルの入れ物と「降ろす」 | 1.1〜1.7 | `GhostRuntime::shutdown`（P0）・`ActorHandle::join`（P0） | Service |
 | finish_run | ghost_session | `app.run()` の結果と降ろす結果を合わせる | 1.2, 1.4, 7.1 | GhostSession（P0） | Service |
 | wire_emo2_boot + Emo2BootInputs | emo2_boot | 起動の結線を `&mut World` で | 3.1, 5.7 | `GhostBootOptions`（P0） | Service |
@@ -281,21 +283,21 @@ pub(crate) enum OpenWindowsError {
 pub(crate) fn open_ghost_windows(world: &mut World, cfg: &ConfigInputs)
     -> Result<StartupDescriptValues, OpenWindowsError>;
 pub(crate) fn reopen_ghost_windows(world: &mut World, cfg: &ConfigInputs, closed: WindowsClosed)
-    -> Result<StartupDescriptValues, OpenWindowsError>;   // closed を消費してから open_ghost_windows へ委譲
+    -> Result<StartupDescriptValues, OpenWindowsError>;   // 証の唯一の消費先。debug!(closed = n) を 1 行残してから open_ghost_windows へ委譲
 ```
 - 前提: `register_systems` 済み（`Added<WindowHandle>` 駆動の系は窓より先に登録されていても取りこぼさない＝今日と同じ）。
-- 手順は今日の `open_startup_window` から登録と smoke を抜いたもの: `prepare_ghost_windows` → `boot_monitor_snapshot` → `restore_merged_placements` → `world.get_resource::<WintfTaskPool>()` に `tx.send(Box::new(move |world| { 2 源の挿入 → spawn_ghost_windows → clear_default_char_pos → attach_char_pointer_handlers → menu::attach_release_handlers → attach_balloon_pointer_handlers → info!("本物のゴースト窓を開きました…") }))` を積む。`info!` の本文は smoke の目印（`REAL_WINDOWS`）なので 1 文字も変えない。
+- 手順は今日の `open_startup_window` から登録と smoke を抜いたもの。**最初に** `world.get_resource::<WintfTaskPool>()` の有無を確かめ（無ければ配置の準備に入る前に `Err(TaskPoolMissing)`＝素の `World` で決定論的に踏める）、あれば `prepare_ghost_windows` → `boot_monitor_snapshot` → `restore_merged_placements` → `world.get_resource::<WintfTaskPool>()` に `tx.send(Box::new(move |world| { 2 源の挿入 → spawn_ghost_windows → clear_default_char_pos → attach_char_pointer_handlers → menu::attach_release_handlers → attach_balloon_pointer_handlers → info!("本物のゴースト窓を開きました…") }))` を積む。`info!` の本文は smoke の目印（`REAL_WINDOWS`）なので 1 文字も変えない。
 - 事後: `StartupDescriptValues` を返す（`wire_emo2_boot` へ運ぶ値の出所を 1 度の読取に揃える点は今日と同じ）。
 - 失敗: `PlacementError` はそのまま包んで返す（`main` は今日と同じく「起動窓を開けません」を告知して終了コード 1）。`WintfTaskPool` が無い（本番では `EcsWorld::new` が必ず挿すので配線の誤り）は `error!(event = "task_pool_missing")` の上で `Err(TaskPoolMissing)`——`EcsWorld::spawn` が黙って何もしない形は log-first に反するので踏襲しない。
 
 **議題 2 の答え（窓を作る側の経路）**: ⒜ を採る。素の `&mut World` から `WintfTaskPool` を引いて今日と同じ非同期コマンドに積む。理由: ⑴ 1 度目の見え方が変わらない（smoke と実機の再確認が要らない）、⑵ フレームの系の中から積んでも World の借用が衝突しない、⑶ 要件 3.4「1 度目と同じ手順」を字義どおり満たす。2 度目以降は積んだ次の tick の `Input`（`drain_task_pool_commands`）で窓が出る——これは今日の 1 度目と同じ経路であり、遅らせる細工ではない。同期経路（⒝）は見え方の再確認が要るので採らない。#13 が同期を要すると分かったときは、コマンドの中身が既に `fn(&mut World)` の並びなので、その並びを直接呼ぶ関数を足すだけで済む（本仕様では作らない）。
 
-#### boot_ghost / reboot_ghost
+#### boot_ghost
 
 | Field | Detail |
 |---|---|
 | Intent | ゴーストごとの結線と状態の載せ替え。wired の腕と fallback の腕を今日と同じ順・同じ記録で |
-| Requirements | 2.3, 2.4, 2.6, 3.2, 4.4 |
+| Requirements | 2.3, 2.4, 2.6, 3.2 |
 
 **Service Interface**
 ```rust
@@ -311,16 +313,12 @@ impl GhostBootInputs {
 pub(crate) fn boot_ghost(
     world: &mut World, inputs: GhostBootInputs, descript: &StartupDescriptValues,
     ghost: &GhostDecision, balloon: &BalloonDecision,
-) -> GhostSession;
-pub(crate) fn reboot_ghost(
-    world: &mut World, closed: WindowsClosed, inputs: GhostBootInputs, descript: &StartupDescriptValues,
-    ghost: &GhostDecision, balloon: &BalloonDecision,
-) -> GhostSession;   // closed を消費して boot_ghost へ委譲
+) -> GhostSession;   // 1 度目も 2 度目以降も同じ関数。証は取らない（証は窓を作る側 reopen_ghost_windows が消費する）
 ```
 - 手順（wired）: `wire_emo2_boot(world, inputs.wiring, descript.author_dpi, descript.zorder_raw.as_deref())` → `info!("実 sink 結線で起動しました…")` → `wire_mouse_input` → `wire_menu` → `on_boot_ok` → `wire_balloon_choice` → `wire_choice_drain`。手順（fallback）: `areka_ghost::boot(ghost_boot_options(ghost_root, helper_exe))` → `info!("LogSink フォールバックで起動しました…")`／`warn!`／`error!` → `on_boot_ok`。すべて今日の `main` の腕を本文ごと移す（記録の本文は不変）。
 - 載せ替えの意味論（要件 2.3）: 各状態（`Emo2Wiring`・`ReadmeWiring`・`UserBreakWiring`・`MouseWiring`・`MenuWiring`・`PersistWiring`・`BalloonWiring`／`ChoiceSelectionInbox`・`ChoiceForwarder`）は `insert_non_send` で置き換わり、古い値は落ちる。`Receiver` を持つ状態は古い受信端が落ち、古いゴーストの送出端は `Err` を返すようになる。前提として**呼び手は先に `GhostSession::shutdown` を済ませる**（下の流れ）。
 - `MenuWiring` は新品になる（要件 2.3・議題 4 ⒜）。`MenuRegistry` の型 doc（`menu/mod.rs`）に「ゴーストを起こすたびに `MenuWiring` は新品になるので、登記は起こすたびにやり直す（`ghost-shell-balloon-switch` の契約）」を 1 行足す。位置を型 doc にするのは、登記の口（`register`）を読む人が必ず型を先に見るため。
-- `reboot_ghost` は `WindowsClosed` を受け取って捨てるだけ（中で `debug!(closed = n)` を 1 行）。1 度目の `boot_ghost` は証を要しない。
+- 2 度目以降の載せ替えに別名の関数（`reboot_ghost`）は置かない。証を受け取って捨てるだけの包みになり、証が 1 回しか消費できない（値渡し・`Clone` なし）のに `reopen_ghost_windows` と 2 か所で消費する矛盾を生むため（設計レビューの指摘 2）。載せ替えは `boot_ghost` そのものが n 回呼べる。
 
 **議題 7 の答え（`GhostDecision`／`BalloonDecision` の合成）**: 合成して `on_boot_ok` を本当に通す。`GhostDecision { route: GhostRoute::Argv, dir: <検体の根>, folder: None }`・`BalloonDecision { route: BalloonRoute::Argv, dir: <同梱バルーン>, folder: None }` は `pub(crate)` の欄だけの構造体で、テストから直に組める（`boot_resolve.rs`）。`app_profile_dir: None` にすると App スコープの記憶は書く先が無く（`SpineHarness` の既存の使い方と同じ縮退）、Ghost スコープの記憶は使い捨ての検体の複製に書かれて捨てられる。`insert_persist_wiring` だけを通す形は採らない——載せ替えの単位の本文を 2 周テストと本番で違えないため。
 
@@ -406,8 +404,8 @@ pub fn register_emo2_frame_system(world: &mut World);   // add_systems(Update, e
 **Service Interface**
 ```rust
 /// 起こし直しのために全窓を閉じた証。作れるのは close_windows_for_restart だけ（欄は私有）。
-/// 消費先は ghost_session::reopen_ghost_windows と ghost_session::reboot_ghost の 2 つに限る。
-#[must_use = "閉じた窓は起こし直しへ続けること（reopen_ghost_windows / reboot_ghost へ渡す）"]
+/// 消費先は ghost_session::reopen_ghost_windows の 1 つに限る（値渡し・Clone なし＝1 回しか消費できない）。
+#[must_use = "閉じた窓は起こし直しへ続けること（reopen_ghost_windows へ渡す）"]
 pub(crate) struct WindowsClosed { closed: usize }
 impl WindowsClosed { pub(crate) fn closed(&self) -> usize; }
 
@@ -416,7 +414,7 @@ pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed;
 - 本文: `let closed = despawn_app_windows(world);`（`quit_app` と同じ私有部品・要件 4.5）→ `info!(event = "windows_closed_for_restart", closed, "[close_windows_for_restart] 起こし直しのために全窓を閉じた（終了は指示しない）")` → `WindowsClosed { closed }`。`AppExit` には触れない（要件 4.2）。語彙は `app_exit` 事象と別（要件 4.3）。
 - 事後条件: `GhostWindowMarker` を持つ entity は 0・`AppExit::is_requested()` は呼ぶ前と同じ。
 
-**議題 3 の答え（呼び手の限定の形）**: ⒜ を採る。⒝（`pub(in crate::ghost_session)`）は Rust の可視性が**祖先モジュールにしか絞れない**ため、`app_exit.rs` の項目を兄弟の `ghost_session` へ絞ることはできない（`app_exit` を `ghost_session` の子に移せば可能だが、#55 と共有するファイルを動かすことになる）。⒞（doc と `#[must_use]` だけ）は続きを組ませる力が無い。⒜ は「呼べるが、戻り値の唯一の消費先が起こし直しの側なので、続きを組まざるを得ない」形で、`quit_app` の代わりに呼んで終わりにする使い方が `#[must_use]` の警告と型の消費先の無さで露わになる。完了 `app-lifetime-separation` 要件 3.6「片方だけを呼ぶ形を残さない」は、`despawn_app_windows` が私有のまま・`quit_app` は不変・新しい口は終了経路のどこからも呼ばれない（`main`・`frame.rs`・`app_exit.rs` の終了経路に呼び手を置かない）ことで守る＝上書きではないので `doc/COMPAT_ARCHITECTURE.md` §8 には書かない（要件 7.2）。
+**議題 3 の答え（呼び手の限定の形）**: ⒜ を採る。⒝（`pub(in crate::ghost_session)`）は Rust の可視性が**祖先モジュールにしか絞れない**ため、`app_exit.rs` の項目を兄弟の `ghost_session` へ絞ることはできない（`app_exit` を `ghost_session` の子に移せば可能だが、#55 と共有するファイルを動かすことになる）。⒞（doc と `#[must_use]` だけ）は続きを組ませる力が無い。⒜ は「呼べるが、戻り値の唯一の消費先が起こし直しの側なので、続きを組まざるを得ない」形で、`quit_app` の代わりに呼んで終わりにする使い方が `#[must_use]` の警告と型の消費先の無さで露わになる。証は値渡しで 1 回しか消費できないので、消費先は `reopen_ghost_windows` の 1 つに定める（載せ替え側は証を取らない）。完了 `app-lifetime-separation` 要件 3.6「片方だけを呼ぶ形を残さない」は、`despawn_app_windows` が私有のまま・`quit_app` は不変・新しい口は終了経路のどこからも呼ばれない（`main`・`frame.rs`・`app_exit.rs` の終了経路に呼び手を置かない）ことで守る＝上書きではないので `doc/COMPAT_ARCHITECTURE.md` §8 には書かない（要件 7.2）。
 
 ## Data Models
 
@@ -434,7 +432,7 @@ pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed;
 - `finish_run` は `run` の `Err` を優先して返す（降ろす側の `Err` は記録に残った上で捨てる）。両方 `Err` でも非 0 は変わらない。
 
 ### Monitoring
-- 記録の本文は移すだけで変えない（smoke の目印 `WIRED`・`REAL_WINDOWS`・起動解決の行・`app_exit` 事象）。新しい語彙は `windows_closed_for_restart`（info）・`task_pool_missing`（error）・`reboot_ghost` の `debug!` の 3 つで、いずれも今日の経路には現れない。
+- 記録の本文は移すだけで変えない（smoke の目印 `WIRED`・`REAL_WINDOWS`・起動解決の行・`app_exit` 事象）。新しい語彙は `windows_closed_for_restart`（info）・`task_pool_missing`（error）・`reopen_ghost_windows` の `debug!(closed = n)` の 3 つで、いずれも今日の経路には現れない。
 
 ## Testing Strategy
 
@@ -445,14 +443,16 @@ pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed;
 1. **2 周テスト**（`ghost_session_restart_tests.rs`・要件 6.1・3.2・1.6）
    - 台: `CoInitializeEx(MTA)` → `World::new()`＋`init_resource::<Schedules>()`＋`insert_non_send(AppExit::new())`＋`GhostWindowMarker` の entity を 2 つ（窓の代わり）。`WintfTaskPool` は挿さない（窓を作る側は通さない）。
    - 偽の SHIORI と偽の資産: `spine::SpineHarness::standard_backend("\\s[0]\\e")`（`ScriptedShioriBackend`＋`ScriptedShioriHandle`）を `ShioriWiring::Custom` で、`sample_test_support::acquire_emo2()` の複製を根に、`TickerMode::Disabled`・`app_profile_dir: None` で `GhostBootInputs` を組む。周ごとに新しい台本と新しい複製を使う（複製は起動記録の無い新品なので毎周 `OnFirstBoot` から始まる）。
-   - 手順: `register_systems` → 各段の `systems_len()` を控える → 1 周目 `boot_ghost` → 1 周目の `MenuWiring` へ余分な登記を 1 つ入れる（`menu::register`）→ `run_bounded` で `session.shutdown(User { scope: 0 })` → `close_windows_for_restart` → 2 周目 `reboot_ghost`（証を渡す）。
-   - 判定（集めてから 1 回・面ごとに止めない）: ⑴ `Input`／`Update`／`FrameFinalize` の `systems_len()` が控えと同じ／⑵ `ReadmeWiring::path()` が 2 周目の根の下・`MenuWiring` の登記が組込 2 項目だけ（1 周目の余分な登記が消えている）・`Emo2Wiring` の停止通知の受信端と `UserBreakWiring` の旗の受信端がつながっている（1 周目の値なら送出端が 1 周目の終了で落ちて `Disconnected` になる）／⑶ `AppExit::is_requested() == false`。判定は 1 つの `assert!` に失敗の一覧を渡す形で行う。
+   - 手順: `register_systems` → 各段の `systems_len()` を控える → 1 周目 `boot_ghost` → 1 周目の `MenuWiring` へ余分な登記を 1 つ入れる（`menu::register`）→ `run_bounded` で `session.shutdown(User { scope: 0 })` → `close_windows_for_restart`（窓を作る側は通さないので、証は `closed()` を読んで束縛のまま落とす＝`let` に束縛した値は `#[must_use]` の警告対象にならない。証の消費先の型検査は本番の呼び手側で効く）→ 2 周目 `boot_ghost`。
+   - 判定（集めてから 1 回・面ごとに止めない）: ⑴ `Input`／`Update`／`FrameFinalize` の `systems_len()` が控えと同じ／⑵ `ReadmeWiring::path()` が 2 周目の根の下・`MenuWiring` の登記が組込 2 項目だけ（1 周目の余分な登記が消えている）・`Emo2Wiring` の停止通知の受信端と `UserBreakWiring` の旗の受信端がつながっている。**「つながっている」の定義**: `try_recv` を `Err` が出るまで回し、最後の `Err` が `Empty` なら新しい（送出端が生きている）・`Disconnected` なら古い（1 周目の送出端は 1 周目の終了で落ちた）。1 周目の受信端には未読の値が残る（kanade は終了系列で `KanadeStopped` を必ず 1 件送る・`NoUserBreakCueSink` はトークごとに `TalkStarted` を送る）ので、「1 度の `try_recv` が `Disconnected` でなければ新しい」では古い受信端も `Ok(_)` を返して緑になってしまう（設計レビューの指摘 1）／⑶ `AppExit::is_requested() == false`。判定は 1 つの `assert!` に失敗の一覧を渡す形で行う。
    - 証拠の面が無い状態（`MouseWiring`・`ChoiceForwarder`・`PersistWiring`・`BalloonWiring`／`ChoiceSelectionInbox`）は **0 面**である——kanade の送出端や sylphya の投函端には副作用無しで生死を問う口が無い。これらは上の 4 面と同じ直線の手順（`boot_ghost` の wired の腕）で挿されるので、4 面が新しければ同じ手順を通ったことになる。
    - 後片付け: 2 周目の `session.shutdown` → `close_windows_for_restart`（証は捨てる）。すべて有界（`run_bounded`）。実時計の loop ticker は `shutdown` ① が止める。
    - `pub(crate)` へ広げるもの: `emo2_boot::spine`（`mod` 自体）・`ScriptedShioriBackend`／`ScriptedShioriHandle`／`SpineHarness::standard_backend`／`run_bounded`／`spin_wait_until`・`sample_test_support::acquire_emo2`。中身は変えない。`spine.rs` は 971 行なので行を足さない（可視性の語を足すだけ）。
-   - 足す小さな口（テスト専用・`#[cfg(test)]`）: `ReadmeWiring::path(&self) -> &Path`・`Emo2Wiring::kanade_stop_connected(&mut self) -> bool`・`UserBreakWiring::flag_source_connected(&mut self) -> bool`・`MenuRegistry::registered_frames(&self) -> Vec<Frame>`。
+   - 足す小さな口（テスト専用・`#[cfg(test)]`）: `ReadmeWiring::path(&self) -> &Path`・`Emo2Wiring::kanade_stop_connected(&mut self) -> bool`・`UserBreakWiring::flag_source_connected(&mut self) -> bool`（2 つとも本文は上の「空になるまで回して最後の `Err` を見る」）・`MenuRegistry::registered_frames(&self) -> Vec<Frame>`。
+   - 較正: 実装時に**載せ替えをわざと省いた状態**（2 周目の `boot_ghost` を呼ばない）で 1 度赤を確認してから戻す（検証の道具そのものが壊れていないことを既知の赤で確かめる・戻したら touch）。
 2. **閉じても終了しない**（`app_exit_tests.rs`・要件 6.2・4.2）: `GhostWindowMarker` の窓 3 枚＋印の無い entity 1 つ＋`AppExit::new()` の World で `close_windows_for_restart` → 集めて 1 回で判定: 窓 0 枚・印の無い entity は残る・`is_requested() == false`・`closed() == 3`。
-3. **失敗の腕でも降ろす**（`ghost_session_restart_tests.rs`・要件 6.3・1.4）: 1 周テストと同じ台で `boot_ghost` → `finish_run(Err(E_FAIL), session)` → 判定: 戻り値が `Err`・台本の発火列に `OnClose`／`Unload` がある（降ろす関数が本当に走った証拠）。`WinApp::run` は触らず、`Result` を引数に取る純粋な関数で偽の失敗を作る（要件 5.4）。
+3. **失敗の腕でも降ろす**（`ghost_session_restart_tests.rs`・要件 6.3・1.4）: 1 周テストと同じ台で `boot_ghost` → `finish_run(Err(E_FAIL), session)` → 判定: 戻り値が `Err`・台本の発火列に `OnClose`／`Unload` がある（降ろす関数が本当に走った証拠）。`WinApp::run` は触らず、`Result` を引数に取る純粋な関数で偽の失敗を作る（要件 5.4）。`finish_run` の本文は `run.and(session.shutdown(...))` と書く（`Result::and` は引数の値を先に評価するので降ろす側は必ず走る）。`run.and_then(|_| ...)` にすると `Err` の腕で降ろさなくなるので書かない。
+4. **作業プールが無ければ窓を作らず失敗する**（`ghost_session_restart_tests.rs`・log-first の新しい判断分岐）: `WintfTaskPool` を挿していない素の `World` で `open_ghost_windows` を呼び、`Err(OpenWindowsError::TaskPoolMissing)` を主張する。上の「最初に有無を確かめる」順序のおかげで配置の準備（モニタ・DPI）に入らずに決定論で踏める。
 
 ### 既存テストの追随（要件 6.5・削除しない）
 - `emo2_boot/zorder_wiring_tests.rs` `t_zwi08`: 走査先を `include_str!("../ghost_session.rs")` に替え、押さえる字面を `let zorder_raw = prepared.zorder_raw.clone();`・`open_ghost_windows` の戻りを受ける行・`descript.author_dpi, descript.zorder_raw.as_deref(), );`（`wire_emo2_boot` への末尾 2 引数）に改める。対照の語（「説明文が落ちていない」の番兵）は `ghost_session.rs` の doc に用意する。`t_zwi06` は `app.world().borrow_mut().world_mut().insert_non_send(wiring);` を `world.insert_non_send(wiring);` に改める。`t_zwi05`・`t_zwi09` は `mod.rs` 内の字面（channel・sink・`sinks: vec![…]`・`seed_zorder_descript_base` の位置）が動かないので不変。
@@ -460,6 +460,7 @@ pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed;
 - `placement/spawn_zorder_chain_wiring_tests.rs`: `wire_zorder_pair` の署名も `FrameFinalize, (…).chain(),` も動かさないので**無変更で緑**（追随の対象だが編集は 0 件）。
 - `emo2_boot/mod.rs` `wire_tests`: `WinApp::new()` → `World::new()`。
 - 常設 smoke `tests/smoke_boot_loop_exit.rs` 3 方向: 記録の本文と順序を変えないので緑（要件 5.3）。
+- 実装時の申し送り: ⑴ `open_startup_window` の名は doc の中でも参照されている（`input_events/mod.rs`・`menu/mod.rs`・`placement/chain_finalize.rs`・`placement/spawn.rs`・`emo2_boot/mod.rs` の `derive_scopes` doc）ので、要件 2.5 の grep 語に `open_startup_window` も足して言い換える。⑵ `register_emo2_frame_system` の登録行は `t_n10`／`t_zwi06` が `add_systems(Update, emo2_frame_system.after(update_typewriters));` の 1 行として押さえる——`world.resource_mut::<Schedules>().add_systems(...)` へ書き換えると rustfmt が鎖を折るので、`frame_schedule_tests.rs` の `register_like_the_boot` と同じ折り方で末尾の 1 行を保ち、実装後に両テストを回す。
 
 ### 実機
 - 実機の再確認は要らない（1 度目の経路は今日と同じ）。念のため `cargo run -p areka` で起動 → メニューの「終了」→ 終了コード 0 と `app_exit` 事象の 1 走行を実装完了の証跡に添える。
@@ -467,4 +468,4 @@ pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed;
 ## Open Questions / Risks
 - **hang の危険**: 2 周テストは実検体＋実スレッド（seriko・文字層の UI アクター・実時計の loop ticker）を同じプロセスで 2 度起こす。後片付けは `SpineHarness::shutdown_bounded` の順（shutdown → 送出端の drop → seriko の有界 join）を `GhostSession::shutdown` が自然に踏む（① で ticker を止め、② で dispatcher 側の送出端が落ち、③ で join）。文字層の UI アクターは `spawn_local` の使い捨てで、pump を回さない限り何もせず落ちる（`areka_actor::spawn_ui` の doc）。
 - **`LastUsed::record` の縮退**: `app_profile_dir: None` で App スコープの記憶を書くと sylphya 側の記録（縮退の `debug!`／`warn!`）が出る。テストは記録を判定しないので無害だが、実装時に赤い `error!` が出ないことを 1 度目視する。
-- **`#[must_use]` は警告**: 証を捨てる呼び手はコンパイル警告になる（`-D warnings` ではない）。構造の限定は「消費先が 2 つしか無い」ことが本体で、警告は補助。
+- **`#[must_use]` は警告**: 証を式文として捨てる呼び手はコンパイル警告になる（`-D warnings` ではない・`let` に束縛して落とすと警告は出ない）。構造の限定は「消費先が `reopen_ghost_windows` の 1 つしか無い」ことが本体で、警告は補助。
