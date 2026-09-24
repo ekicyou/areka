@@ -73,7 +73,7 @@
   - _Requirements: 2.2, 2.6, 3.1, 3.5, 3.7, 4.8, 5.4, 5.5, 6.1, 6.4, 6.5_
   - _Depends: 2.3, 2.4, 3.2_
 
-- [ ] 4.2 README 3 幕を書き、読み戻して確かめる
+- [x] 4.2 README 3 幕を書き、読み戻して確かめる
   - 動機の幕に本坑 `areka-P0-shell-balloon-switch` を名指しし、案 A／案 B のどちらが安いかの材料であることを書く
   - 概要の幕に作った物・実行法（`cargo run -p pilot --example pilot-balloon-asset-swap`）・上限時間の与え方・観測の窓（30／180 tick）・数え方の規則の平易な写しを書く
   - 検証結果の幕に、較正の結果・版ごと差し替えごとの 4 種と反映待ち（0 も明示）・面の切り替えの数を版と分けて・床・標本点の数・分かることと分からないこと（「P だけ」が無い対の限界・反映待ちは較正で 0 と確かめられない・k≠1.0 は未観測）・学び（design の候補を事実で確かめてから）・日付を書く
@@ -93,7 +93,7 @@
 - 2.3: 画面取り込みはスクリーンセーバー（入力デスクトップ `Screen-saver`）中は `DuplicateOutput` が `E_ACCESSDENIED` で初期化に失敗し終了コード 2。09-24 開発者がスクリーンセーバーとロックを 4.1 まで止めた。フレームは tick より多く来ることがある（他の画面更新でも来る・1 つの tick に複数のフレームが付く）。`main.rs` の `log_records` は 2.4 の集計で置き換える仮の要約。
 - 2.4: 観測の API は `Observer::open(pair, kind, name, from, to, request_tick)`／`is_closed()`。窓は「窓の外の tick のフレームが届く」か「窓の終わり＋12 tick の猶予」で閉じる。猶予で閉じた後に届いた窓の中のフレームは `late_dropped` として `error!` と行に出す（数えない）。判定の対が違う tick のフレームは `Why::OtherPair` で測れない。
 - 2.4→3.1 への申し送り: (1) 面の切り替えの前の戻しで `active = PAIR_FACE` にしておく（しないと直前のフレームが `OtherPair` で測れないになる。A0 は両対で P なので戻しの判定は変わらない）。(2) 台本の完了で `summarize(false)` を呼び、その結果を `completed_reason` に通して終了コード 0／3 を決める。(3) `temp_observation_system` を消す。
-- 3.1: 設計は「各観測の後に A へ戻す」だが B→A・A2→A0 は B0／A2 から始める必要があるので、各観測の前に観測しない下ごしらえ（emo-* を全部消す → 出発の面を `TargetId(1)` で装着・表示・窓寸合わせ → 最新のフレーム・当たり判定・寸法が揃うのを 5〜60 tick 待つ）を置いた。面の切り替えの前の下ごしらえで `active = PAIR_FACE`。資産は `swap::needs(&script())` で起動時に作り置き（A=14・B=12）。`apply` は戻り値が無いので表示の失敗は `current_surface_id` の不一致で検出。
+- 3.1: 設計は「各観測の後に A へ戻す」だが B→A・A2→A0 は B0／A2 から始める必要があるので、各観測の前に観測しない下ごしらえ（emo-* を全部消す → 出発の面を `TargetId(1)` で装着・表示・窓寸合わせ → 最新のフレーム・当たり判定・寸法が揃うのを 5〜60 tick 待つ）を置いた。面の切り替えの前の下ごしらえで `active = PAIR_FACE`。資産は `swap::needs(&script())` で起動時に作り置き（3.1 時点 A=14・B=12、3.2 で較正を足して A=19・B=14）。`apply` は戻り値が無いので表示の失敗は `current_surface_id` の不一致で検出。
 - 3.1: wintf は `WindowPos` の変更を tick の中では積むだけで、`SetWindowPos` は tick の後に流す（`flush_window_pos_commands`）。tick の記録の矩形は `GetWindowRect` でなく、UISetup の `apply_window_pos_changes` の後で積まれた変更から予測した「その tick の後に効く矩形」を使う（`queued_rect_system`・次の tick の実物と照合し外れたら `error!`）。Update の書き込みは同じ tick、FrameFinalize の書き込みは次の tick に効く。
 - 3.1: 残る「大きさの食い違い」は反映待ちのフレーム（古い絵 × 新しい窓寸）に載り、本命の版と面の切り替えでは size＝pending。画面で本当に食い違ったかは画素から証明できない（層つき窓の縁は透明・`ended_qpc` は流す前に打つので 2〜6 ms の隙間がある）→ README の「分からないこと」へ。`@finalize` の本命の版の empty は本物（FrameFinalize の despawn で古い visual が即外れ、新しい visual は次の tick に作られる）。
 - 3.1: 実走中に他のアプリの窓（「えも2DEBUG」）がバルーンに重なると、その間は Covered で測れない・観測は未完になる。4.1 の実走では (160,160) 付近に窓を置かない。
