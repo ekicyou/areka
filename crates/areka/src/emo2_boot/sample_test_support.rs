@@ -22,7 +22,7 @@ use sample_ghost_kit::SampleRoot;
 static EMO2: LazyLock<SampleRoot> = LazyLock::new(acquire_emo2);
 
 /// emo2 検体の**使い捨ての複製**を 1 つ取得する（要件 7.4・起動を伴うテスト向け）。
-pub(super) fn acquire_emo2() -> SampleRoot {
+pub(crate) fn acquire_emo2() -> SampleRoot {
     SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体")
 }
 

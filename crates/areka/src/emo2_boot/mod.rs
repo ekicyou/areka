@@ -35,12 +35,12 @@ pub mod zorder_cue;
 // モジュールとして置く（設計 File Structure の tests/emo2_boot_spine_test.rs との差分は spine.rs
 // 冒頭 doc 参照）。frame フェーズ直接駆動・Tick 注入・GPU readback を in-process で行う。
 #[cfg(test)]
-mod spine;
+pub(crate) mod spine;
 
 // emo2 検体の共有の受け口（spec: areka-P0-nar-install 要件 1.6）。`emo2_boot` 配下のテストが
 // 検体をここから引くので、保持（＝段 ③ の複製）はテストバイナリあたり 1 回で済む。
 #[cfg(test)]
-mod sample_test_support;
+pub(crate) mod sample_test_support;
 
 // タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
