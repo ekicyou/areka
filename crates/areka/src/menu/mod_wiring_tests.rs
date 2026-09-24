@@ -398,3 +398,48 @@ fn registering_after_the_wiring_places_the_frame_in_order() {
     let frames: Vec<Frame> = snapshot(&world, 0).into_iter().map(|(f, _)| f).collect();
     assert_eq!(frames, [Frame::Shell, Frame::Readme, Frame::Close]);
 }
+
+// ---------------------------------------------------------------- 登録と登記の一覧（areka-P0-ghost-restart-unit 要件 2.1・2.3）
+
+/// 登録専用の関数は単独で呼べ、入力の段へ返事の取り出しをちょうど 1 つ足し、持ち物は置かない。
+#[test]
+fn register_menu_poll_alone_adds_one_system_without_wiring() {
+    let mut world = empty_world();
+
+    register_menu_poll(&mut world);
+
+    let input = world
+        .resource::<Schedules>()
+        .get(Input)
+        .map_or(0, |s| s.systems_len());
+    assert_eq!(input, 1, "返事の取り出しの 1 本だけが載る");
+    assert!(
+        world.get_non_send::<MenuWiring>().is_none(),
+        "登録は持ち物を置かない"
+    );
+}
+
+/// 結線した直後の登記の一覧は組込の 2 項目（説明書・終了）だけで、枠の並び順に並ぶ。
+/// 余分な登記を足すと一覧に現れる（2 周テストが「前のゴーストの登記が残った」を見分ける前提）。
+#[test]
+fn registered_frames_after_wiring_are_the_two_builtin_items() {
+    let (mut world, _rx) = wired_world();
+    let frames_of = |world: &World| {
+        world
+            .get_non_send::<MenuWiring>()
+            .expect("MenuWiring は結線で入る")
+            .registry
+            .registered_frames()
+    };
+
+    let builtin = frames_of(&world);
+    register(&mut world, Frame::Shell, shell_supplier());
+
+    assert_eq!(
+        (builtin, frames_of(&world)),
+        (
+            vec![Frame::Readme, Frame::Close],
+            vec![Frame::Shell, Frame::Readme, Frame::Close]
+        )
+    );
+}

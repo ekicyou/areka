@@ -99,6 +99,8 @@ pub(crate) enum ItemBody {
 }
 
 /// 登記の口。枠ごとに供給関数を高々 1 つ持つ。
+///
+/// ゴーストを起こすたびに `MenuWiring` は新品になるので、登記は起こすたびにやり直す（`ghost-shell-balloon-switch` の契約）。
 #[derive(Default)]
 pub(crate) struct MenuRegistry {
     slots: [Option<Supplier>; 7],
@@ -131,6 +133,15 @@ impl MenuRegistry {
                 let supplier = self.slots[frame as usize].as_ref()?;
                 Some((frame, supplier(world, ctx)))
             })
+            .collect()
+    }
+
+    /// 登記のある枠を [`Frame::ORDER`] の順に返す（テスト専用の読み口・供給関数は呼ばない）。
+    #[cfg(test)]
+    pub(crate) fn registered_frames(&self) -> Vec<Frame> {
+        Frame::ORDER
+            .into_iter()
+            .filter(|&frame| self.slots[frame as usize].is_some())
             .collect()
     }
 }
@@ -202,6 +213,13 @@ fn wire_menu_with(world: &mut World, mut wiring: MenuWiring) {
         .register(Frame::Readme, Rc::new(readme_item));
     wiring.registry.register(Frame::Close, Rc::new(close_item));
     world.insert_non_send(wiring);
+    register_menu_poll(world);
+}
+
+/// 照会の返事の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
+///
+/// 並びは `dispatch_pointer_events` の後（[`wire_menu_with`] の doc のとおり）。
+pub(crate) fn register_menu_poll(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         trigger::poll_menu_query.after(dispatch_pointer_events),
