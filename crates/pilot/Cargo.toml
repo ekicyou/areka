@@ -24,12 +24,15 @@ event-listener = "5"
 #   （pasta の HGLOBAL 規約・GMEM_FIXED）。
 # - Win32_Globalization: 同 proxy の WideCharToMultiByte(CP_ACP)＝ghostdir を ANSI(Shift_JIS)
 #   エンコード（pasta to_ansi_str との charset 対称・design §493）。
+# - Win32_Graphics_Dxgi: 先進坑 pilot-balloon-asset-swap の画面取り込み（Desktop Duplication＝
+#   IDXGIOutputDuplication・DXGI_OUTDUPL_FRAME_INFO）。D3D11 はワークスペース既定で供給済。
 # LoadLibraryW/GetProcAddress/FreeLibrary（Win32_System_LibraryLoader）と HGLOBAL/HMODULE
 # （Win32_Foundation）はワークスペース既定で供給済。
 windows = { workspace = true, features = [
     "Win32_System_DataExchange",
     "Win32_System_Memory",
     "Win32_Globalization",
+    "Win32_Graphics_Dxgi",
 ] }
 windows-core = { workspace = true }
 
@@ -46,3 +49,16 @@ path = "examples/shiori-host-32/helper.rs"
 # example が検体の在処を自前で綴らないための leaf・純 Rust（i686 helper でも組める）であり、
 # 依存方向の規律により [dependencies] へは決して置かない。
 sample-ghost-kit = { path = "../sample-ghost-kit" }
+
+# 先進坑 pilot-balloon-asset-swap 用（使い捨て前提）: バルーン窓（wintf）・提示（present）・
+# 合成（compose）・復号（atlas）・ECS・ログ。依存は pilot → 既存 crate の一方向のみ。
+# wintf は i686 で組めない（SetWindowLongPtrW の型が 32bit で異なる）ため x86 を除外し、
+# i686 helper（shiori-host-32-helper）のビルドに dev-dependencies が波及しないようにする。
+[target.'cfg(not(target_arch = "x86"))'.dev-dependencies]
+wintf = { path = "../wintf" }
+areka-emo-present = { path = "../areka-emo-present" }
+areka-emo-compose = { path = "../areka-emo-compose" }
+areka-emo-atlas = { path = "../areka-emo-atlas" }
+bevy_ecs = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

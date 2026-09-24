@@ -33,7 +33,8 @@ use crate::ticker::{TickerConfig, TickerMsg, spawn_ticker};
 ///
 /// マウント解決の失敗（起点不在／読取不能／shell 不在・`MountError` の各
 /// variant）を包む。呼び出し側（areka main）はこれを非致命として扱い、
-/// ダミー窓・smoke ゲート等の骨格起動を継続する（要件 2.5・8.2）。e2e は
+/// 先に開いた本物の起動窓（キャラ窓＋バルーン窓）・smoke ゲート等を保ったまま、ゴーストの
+/// 実行環境なしで起動を継続する（要件 2.5・8.2）。e2e は
 /// 明示 fail として扱う（design.md 該当節）。
 ///
 /// 後続タスクで新たな起動失敗種別が増える可能性に備え `#[non_exhaustive]`

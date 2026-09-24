@@ -35,7 +35,7 @@ use areka_actor::{ActorHandle, ReplyError, reply_channel, run_inbox, spawn_actor
 
 use crate::msg::{
     EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped, ShioriCall, ShioriFailure,
-    ShioriMsg, ShioriOutcome,
+    ShioriFault, ShioriMsg, ShioriOutcome,
 };
 use crate::schedule::resources::ResourceSink;
 use crate::schedule::{Action, Input, Phase, State, TermCause, step};
@@ -116,7 +116,7 @@ pub fn spawn_kanade_with_stop_sink(
                 KanadeMsg::TalkDone(td) => Input::TalkDone(td),
                 KanadeMsg::CloseRequest { reason } => Input::CloseRequest { reason },
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
-                KanadeMsg::ShioriDown { reason } => Input::ShioriDown { reason },
+                KanadeMsg::ShioriDown { kind, reason } => Input::ShioriDown { kind, reason },
                 KanadeMsg::Mouse(m) => Input::Mouse(m),
                 // 選択系 2 入力（additive・Req 4.4）。境界型をそのまま状態機械の入力へ写す
                 // （シェルは判断しない——受領検証・帳簿確立は schedule 層の責務）。
@@ -302,6 +302,8 @@ fn execute_actions(
 ///   既存の fault 経路で処理＝檻専用の応答を発明しない・panic しない・宙吊りにしない）。
 /// - 許可集合内: 送出前に Method・イベント ID・参照値・実行状態の wire 証跡を `trace!`（event=
 ///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
+/// - SHIORI のエラー応答（`Failed(ShioriFailure::Shiori)`）は、GET なら `NoContent`、NOTIFY なら
+///   `Notified` に写して返し、`warn!`（event=`shiori_error_response`）を 1 件残す（会話を続ける）。
 pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
     // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
@@ -359,15 +361,40 @@ pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -
         "SHIORI 送出"
     );
 
+    // エラー応答の記録に載せるため、call を渡す前に ID を控える（固定 ID なら複製は無料）。
+    let event_id = event_id.clone();
     let (reply_tx, reply_rx) = reply_channel::<ShioriOutcome>();
-    round_trip(
+    let outcome = round_trip(
         shiori,
         ShioriMsg::Request {
             call,
             reply: reply_tx,
         },
         reply_rx,
-    )
+    );
+
+    // エラー応答（400・500 など）は致命の失敗にせず「返事なし」に写す（shiori-fault-notice
+    // 要件 6.1・裁定 3）: GET は 204 相当の NoContent、NOTIFY は Notified として再投入する。
+    // 運行表は応答が GET か NOTIFY かを知らないので、種別を知るここで写す。回数の閾値は置かない。
+    // 他の 4 種（接続・期限切れ・通信・内部）は Failed のまま（Fault の判断は運行表のまま）。
+    match outcome {
+        ShioriOutcome::Failed(ShioriFailure::Shiori(e)) => {
+            tracing::warn!(
+                target: "kanade",
+                event = "shiori_error_response",
+                method,
+                id = %event_id.as_str(),
+                error = %e,
+                "SHIORI がエラー応答——返事なし（204）と同じ扱いで会話を続ける"
+            );
+            if method == "GET" {
+                ShioriOutcome::NoContent
+            } else {
+                ShioriOutcome::Notified
+            }
+        }
+        other => other,
+    }
 }
 
 /// unload の同期往復（送出＋応答受領）。失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
@@ -445,6 +472,7 @@ fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
 }
 
 /// 運行状態が終了系列（`Unloading{cause}`）に居るなら、その原因を公開語彙へ写す（R15.3）。
+/// 運行状態は手放さないので、原因は clone して写す（Fault は種類と理由ごと）。
 ///
 /// 写すのはここ 1 箇所だけである——内部の `TermCause` は `pub(crate)` に閉じたままで、公開面へ
 /// 出るのは [`KanadeStopCause`] の 5 値だけになる（DD-9 の露出規律）。終了系列でなければ `None`。
@@ -459,7 +487,7 @@ fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
         TermCause::Forced => KanadeStopCause::Forced,
         TermCause::CloseSilent => KanadeStopCause::CloseSilent,
         TermCause::DeadlineExceeded => KanadeStopCause::DeadlineExceeded,
-        TermCause::Fault => KanadeStopCause::Fault,
+        TermCause::Fault(fault) => KanadeStopCause::Fault(fault.clone()),
     })
 }
 
@@ -472,7 +500,7 @@ fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
 ///
 /// `cause` が `None` になるのは、`Unloading` を経ずに `StopSelf` が現れた場合だけである
 /// （現在の運行表には存在しない経路）。その場合も通知は出す——窓を閉じる合図としての意味は
-/// 原因に依らないためで、原因不明であることは記録に残す。
+/// 原因に依らないためで、原因不明であることは記録に残し、種類 `Unknown` の Fault として送る。
 fn notify_stop(sink: Option<&Sender<KanadeStopped>>, cause: Option<KanadeStopCause>) {
     let Some(tx) = sink else {
         return;
@@ -484,12 +512,13 @@ fn notify_stop(sink: Option<&Sender<KanadeStopped>>, cause: Option<KanadeStopCau
             "終了系列の原因を控えられないまま StopSelf に至った——Fault として通知する"
         );
     }
-    let cause = cause.unwrap_or(KanadeStopCause::Fault);
-    if tx.send(KanadeStopped { cause }).is_err() {
+    let cause = cause.unwrap_or_else(|| KanadeStopCause::Fault(ShioriFault::unknown()));
+    // 送出に失敗した値は SendError に載って戻るので、記録にはそれを使う（clone しない）。
+    if let Err(std::sync::mpsc::SendError(unsent)) = tx.send(KanadeStopped { cause }) {
         tracing::warn!(
             target: "kanade",
             event = "stop_notify_failed",
-            cause = ?cause,
+            cause = ?unsent.cause,
             "停止通知の送出に失敗（受信端＝UI は既に切断）——停止は完走する"
         );
     }
@@ -505,3 +534,8 @@ mod tests;
 #[cfg(test)]
 #[path = "actor_stop_notify_tests.rs"]
 mod stop_notify_tests;
+
+// エラー応答の写しの檻（shiori-fault-notice 要件 6.1・7.3）。
+#[cfg(test)]
+#[path = "actor_error_response_tests.rs"]
+mod error_response_tests;

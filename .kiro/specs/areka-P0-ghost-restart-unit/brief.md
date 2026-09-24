@@ -62,7 +62,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: 完了 `areka-P0-app-lifetime-separation`（`ExitPolicy::Explicit`・`quit_app`・`despawn_app_windows`）・完了 `areka-P0-baseware-root-layout`（`on_boot_ok`）・`areka-P0-shiori-fault-notice`（#55・`main.rs` と `app_exit.rs` を共有するので**先に着地**）。
+- **Upstream**: 完了 `areka-P0-app-lifetime-separation`（`ExitPolicy::Explicit`・`quit_app`・`despawn_app_windows`）・完了 `areka-P0-baseware-root-layout`（`on_boot_ok`）・完了 `completed/areka-P0-shiori-fault-notice`（#55・2026-09-25 完了。`run()` の後は wintf がフレームを回さない守りと `finish_after_run` を入れた＝design の Revalidation Triggers を見よ・`main.rs` と `app_exit.rs` を共有するので**先に着地**）。
 - **Downstream**: `areka-P0-ghost-shell-balloon-switch`（#13・本仕様の上に kanade の握手を建てる）・`areka-P0-shell-balloon-switch`（#50）・`areka-P0-ghost-install`（#15）。
 
 ## Existing Spec Touchpoints

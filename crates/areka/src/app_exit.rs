@@ -6,7 +6,7 @@
 //!
 //! 出所 [`ExitOrigin`] は記録の語彙であり、受け手は出所で分岐しない（要件 3.7）。
 
-use areka_kanade::{CloseReason, KanadeStopCause};
+use areka_kanade::{CloseReason, KanadeStopCause, ShioriFault};
 use bevy_ecs::prelude::*;
 use wintf::AppExit;
 use wintf::ecs::WindowHandle;
@@ -19,8 +19,8 @@ use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindow
 /// どの終了操作から来たか（記録の語彙・受け手は分岐しない）。
 ///
 /// `Debug` 出力がそのまま実機ログの検索語になる（`origin=KanadeStopped(Quit)` のように
-/// `ghost_quit` の `cause` と同じ語に揃う）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `ghost_quit` の `cause` と同じ語に揃う）。Fault は種類と理由（`String`）を運ぶので `Copy` ではない。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ExitOrigin {
     /// kanade の終了系列の完了（メニューの終了・別れの台詞のあと・中断のあと）。
     KanadeStopped(KanadeStopCause),
@@ -33,13 +33,50 @@ pub(crate) enum ExitOrigin {
     OsClose,
 }
 
+/// 最初に終了を指示した出所（World に 1 つ・書き込みは 1 度）。
+///
+/// [`quit_app`] が無ければ挿し、2 度目以降は上書きせず `debug!(event="app_exit_again")` で流す
+/// （[`AppExit::request_exit`] の「最初が勝つ」と同じ規則）。`run()` の後で `main` が読み、
+/// [`fault_of`] で告知と終了コードを決める。
+#[derive(Resource)]
+pub(crate) struct FirstExit(pub(crate) ExitOrigin);
+
+/// 告知するか・終了コードを 1 にするかの判定（呼び手は分けて判断しない）。
+///
+/// 失敗の中身を返すのは「kanade の停止で原因が Fault」だけ。他の停止原因・強制退避・smoke の
+/// 自動終了・OS の閉鎖要求は `None`（告知なし・終了コード 0）。
+pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
+    match origin {
+        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f)) => Some(f),
+        ExitOrigin::KanadeStopped(
+            KanadeStopCause::Quit
+            | KanadeStopCause::Forced
+            | KanadeStopCause::CloseSilent
+            | KanadeStopCause::DeadlineExceeded,
+        )
+        | ExitOrigin::Escape
+        | ExitOrigin::Smoke
+        | ExitOrigin::OsClose => None,
+    }
+}
+
 /// 全窓（ゴースト窓）を閉じ、終了を指示する。戻り値は標的として拾った窓の数。
 ///
 /// 閉じた数が 0 でも指示する（要件 3.2・分岐を置かない）。出所と閉じた数は `info` で残す。
+/// 最初の出所は受け口の有無に依らず [`FirstExit`] に残す（2 度目は `debug` で流すだけ）。
 /// 受け口 [`AppExit`] が World に無いとき（本番では `WinApp` が必ず挿すので配線の誤り）は
 /// `error!` を残して戻る——窓は閉じたが終了は指示できない。
 pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
     let closed = despawn_app_windows(world);
+    if world.contains_resource::<FirstExit>() {
+        tracing::debug!(
+            event = "app_exit_again",
+            origin = ?origin,
+            "[quit_app] 終了は指示済み——最初の出所を残し、この出所は記録だけ"
+        );
+    } else {
+        world.insert_resource(FirstExit(origin.clone()));
+    }
     let Some(exit) = world.get_non_send::<AppExit>() else {
         tracing::error!(
             event = "app_exit_unwired",

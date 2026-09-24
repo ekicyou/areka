@@ -501,7 +501,9 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
     let _ = receiver1.recv().expect("reply 1 received");
 
     match on_down_rx.recv_timeout(BOUND) {
-        Ok(KanadeMsg::ShioriDown { reason }) => {
+        Ok(KanadeMsg::ShioriDown { kind, reason }) => {
+            // 種類は型で運ぶ（理由の綴りで判別しない）。
+            assert_eq!(kind, crate::msg::ShioriDownKind::HelperExited);
             assert!(
                 reason.contains("Abnormal"),
                 "reason に終了種別を含む: {reason}"
@@ -620,16 +622,19 @@ fn all_senders_dropped_terminates_runner() {
     );
 }
 
-// --- 接続失敗: ShioriDown 死活報告＋受信ループ非突入（helper 不要）--------
+// --- 接続失敗: ShioriDown 死活報告＋要求には接続の失敗で答える（helper 不要）--------
 
 #[test]
-fn connect_failure_reports_shiori_down_and_does_not_loop() {
+fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
     let (shiori_tx, handle) = spawn_shiori_actor(|| Err("boom".to_string()), on_down_tx);
 
     // 死活報告を有界時間内に受領する（KanadeMsg は Debug 非実装ゆえ variant を明示照合）。
     match on_down_rx.recv_timeout(BOUND) {
-        Ok(KanadeMsg::ShioriDown { reason }) => assert_eq!(reason, "boom"),
+        Ok(KanadeMsg::ShioriDown { kind, reason }) => {
+            assert_eq!(kind, crate::msg::ShioriDownKind::ConnectFailed);
+            assert_eq!(reason, "boom");
+        }
         Ok(_) => panic!("expected ShioriDown variant"),
         Err(RecvTimeoutError::Timeout) => panic!("ShioriDown not reported within bound"),
         Err(RecvTimeoutError::Disconnected) => {
@@ -637,22 +642,39 @@ fn connect_failure_reports_shiori_down_and_does_not_loop() {
         }
     }
 
-    // 受信ループに入っていないこと: Request を送っても応答は来ない（reply が drop され Err）。
+    // 死活報告より先に kanade が要求を送っても、答えは「通信が切れた」ではなく接続の失敗
+    // （同じ理由）になる。放置もしない（要件 2.2・2.4）。
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
-    let _ = shiori_tx.send(ShioriMsg::Request {
-        call: ShioriCall::Get {
-            id: EventId::Static("OnBoot"),
-            references: Vec::new(),
-            status: inactive_status(),
-        },
-        reply,
-    });
-    assert!(
-        receiver.recv().is_err(),
-        "接続失敗後は受信ループに入らない——Request は処理されず reply は切断される"
-    );
+    shiori_tx
+        .send(ShioriMsg::Request {
+            call: ShioriCall::Get {
+                id: EventId::Static("OnBoot"),
+                references: Vec::new(),
+                status: inactive_status(),
+            },
+            reply,
+        })
+        .expect("接続失敗後も要求は受け取られる");
+    match receiver.recv_timeout(BOUND) {
+        Ok(ShioriOutcome::Failed(ShioriFailure::Handshake(reason))) => {
+            assert_eq!(reason, "boom")
+        }
+        Ok(other) => panic!("expected Failed(Handshake), got {}", describe(&other)),
+        Err(e) => panic!("接続失敗後の要求に答えが来ない: {e:?}"),
+    }
 
-    // アクターは有界時間内に join する（ループに入らず終了）。
+    // 何も読み込んでいないので、Unload は失敗扱いにせず Unloaded で答える。
+    let (reply, receiver) = reply_channel::<ShioriOutcome>();
+    shiori_tx
+        .send(ShioriMsg::Unload { reply })
+        .expect("接続失敗後も Unload は受け取られる");
+    match receiver.recv_timeout(BOUND) {
+        Ok(ShioriOutcome::Unloaded) => {}
+        Ok(other) => panic!("expected Unloaded, got {}", describe(&other)),
+        Err(e) => panic!("接続失敗後の Unload に答えが来ない: {e:?}"),
+    }
+
+    // 送信端をすべて手放せば、アクターは有界時間内に join する。
     drop(shiori_tx);
     let (join_tx, join_rx) = mpsc::sync_channel::<()>(0);
     std::thread::spawn(move || {

@@ -158,7 +158,7 @@ fn down_before(rx: &std::sync::mpsc::Receiver<KanadeMsg>, deadline: Instant) -> 
     loop {
         let wait = deadline.saturating_duration_since(Instant::now());
         match rx.recv_timeout(wait) {
-            Ok(KanadeMsg::ShioriDown { reason }) => return Some(reason),
+            Ok(KanadeMsg::ShioriDown { reason, .. }) => return Some(reason),
             Ok(_) => continue,
             Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => return None,
         }

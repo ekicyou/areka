@@ -16,7 +16,7 @@ use std::sync::mpsc;
 use tracing::Level;
 
 use super::{notify_stop, stop_cause_of};
-use crate::msg::{KanadeStopCause, KanadeStopped, MonotonicMs};
+use crate::msg::{KanadeStopCause, KanadeStopped, MonotonicMs, ShioriFault, ShioriFaultKind};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::{Phase, State, TermCause};
 
@@ -29,8 +29,13 @@ fn state_in(phase: Phase) -> State {
 }
 
 /// `Unloading{cause}` の 5 値が公開語彙へ 1 対 1 で写る（R15.3 の「原因を問わず」）。
+/// Fault は種類と理由をそのまま運ぶ（要件 2.1）。
 #[test]
 fn unloading_cause_maps_to_the_public_vocabulary_for_all_five_values() {
+    let fault = ShioriFault {
+        kind: ShioriFaultKind::ConnectFailed,
+        reason: "connect refused".to_string(),
+    };
     let pairs = [
         (TermCause::Quit, KanadeStopCause::Quit),
         (TermCause::Forced, KanadeStopCause::Forced),
@@ -39,7 +44,10 @@ fn unloading_cause_maps_to_the_public_vocabulary_for_all_five_values() {
             TermCause::DeadlineExceeded,
             KanadeStopCause::DeadlineExceeded,
         ),
-        (TermCause::Fault, KanadeStopCause::Fault),
+        (
+            TermCause::Fault(fault.clone()),
+            KanadeStopCause::Fault(fault),
+        ),
     ];
     for (internal, public) in pairs {
         let state = state_in(Phase::Unloading { cause: internal });
@@ -118,4 +126,21 @@ fn notify_stop_warns_once_when_the_receiver_is_gone_and_does_not_panic() {
         Some("DeadlineExceeded"),
         "警告は原因を載せる: {warned:#?}"
     );
+}
+
+/// 原因を控えられないまま止まったときは、原因不明の Fault を送り `warn!` を 1 件残す（要件 2.2）。
+#[test]
+fn notify_stop_without_a_cause_sends_an_unknown_fault() {
+    let (tx, rx) = mpsc::channel::<KanadeStopped>();
+
+    let events = capture(|| notify_stop(Some(&tx), None));
+
+    assert_eq!(
+        rx.try_recv(),
+        Ok(KanadeStopped {
+            cause: KanadeStopCause::Fault(ShioriFault::unknown())
+        }),
+        "原因不明は種類 Unknown の Fault として届く"
+    );
+    logged_once(&events, Level::WARN, "stop_cause_unknown");
 }

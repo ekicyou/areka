@@ -20,7 +20,7 @@
 //! `WinApp` の drop に生存期間が委譲される。本タスクの時点では結線は行わず、
 //! ブリッジ自身が自前のスレッドを所有し Drop で join する。
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -172,14 +172,17 @@ impl AsyncTickTask {
     /// - `event`: `VsyncEventBridge::event()` から得た共有 vblank 通知（`Arc<Event>`）。
     /// - `world`: 共有 World への `Weak`（強参照を持たない・設計 State Management）。
     ///   shutdown 時は `upgrade()` が `None` を返し、ループは安全に終了する。
+    /// - `running`: `WinApp::run` のループがまだ回っているか。下りた後の起床では
+    ///   フレームを回さずに終える（[`run_async_tick`] 参照）。
     ///
     /// 投入のみ行い実行はメッセージループ（`block_on`/`MessageLoop::run`）に委ねる。
     // `WinApp::run`（task 4.3 結線済み）が呼ぶ。
     pub(crate) fn spawn(
         event: Arc<Event>,
         world: Weak<RefCell<EcsWorld>>,
+        running: Rc<Cell<bool>>,
     ) -> crate::executor::JoinHandle<()> {
-        crate::executor::spawn_local(run_async_tick(event, world))
+        crate::executor::spawn_local(run_async_tick(event, world, running))
     }
 }
 
@@ -265,22 +268,36 @@ fn tick_one_frame_with(
 ///
 /// notify 取りこぼし防止規律（設計）: await の **前** に `listener = event.listen()` を
 /// arm する。これにより `tick_one_frame` 実行中に届いた notify も次の `listener.await`
-/// で捕捉でき、1 フレームを取りこぼさない。World の `Weak` は毎フレーム `upgrade()` し、
-/// `None`（shutdown で strong 所有者が drop 済み）なら安全にループを終了する。
-async fn run_async_tick(event: Arc<Event>, world: Weak<RefCell<EcsWorld>>) {
+/// で捕捉でき、1 フレームを取りこぼさない。
+///
+/// 起きたらまず `running`（`WinApp::run` のループがまだ回っているか）を見る。`run()` は
+/// `block_on` から戻った直後にこれを下ろし、その後で窓の登録表を World から取り除く。
+/// 戻った後も起床のメッセージが残っていれば、利用側のモーダルなダイアログ等がそれを配る
+/// ——下りていればフレームを回さずに終える（登録表の無い World を回さない）。
+///
+/// World は `Weak` のまま待ち、起きてから `upgrade()` する（待ちの間に強参照を握らない）。
+/// `None`（strong 所有者が drop 済み）でも終える。
+async fn run_async_tick(
+    event: Arc<Event>,
+    world: Weak<RefCell<EcsWorld>>,
+    running: Rc<Cell<bool>>,
+) {
     debug!("AsyncTickTask started (vblank-driven UI-thread tick loop)");
     loop {
         // 先に listen() を arm（処理中に届く notify を落とさない）。
         let listener = event.listen();
 
-        // strong 所有者が生存しているか確認。None なら shutdown — 終了。
+        // 起床を待機（次 vblank notify まで UI スレッドを譲る）。
+        listener.await;
+
+        if !running.get() {
+            debug!("AsyncTickTask stopping (message loop has returned)");
+            return;
+        }
         let Some(world) = world.upgrade() else {
             debug!("AsyncTickTask stopping (world dropped — shutdown)");
             return;
         };
-
-        // 起床を待機（次 vblank notify まで UI スレッドを譲る）。
-        listener.await;
 
         // 1 フレーム実行（13 本スケジュール）。再入・借用失敗は安全側スキップ。
         tick_one_frame(&world);
@@ -538,6 +555,58 @@ mod tests {
         assert!(
             !crate::ecs::world::is_tick_flush_in_progress(),
             "guard drop 後は false へ戻る"
+        );
+    }
+
+    // ── run() 復帰後に回さない（areka-P0-shiori-fault-notice task 7.2） ──
+
+    /// `run()` が戻った後に届いた起床では、tick タスクはフレームを回さずに終わる。
+    /// 待ちの間は World の強参照を握らない。
+    ///
+    /// 本番では `run()` 復帰後に利用側が出したモーダルなダイアログが、残っていた起床の
+    /// メッセージを配り、登録表の抜けた World でフレームが回って panic した（2026-09-25 実機）。
+    /// `block_on` は投入順（メッセージの到着順）にタスクを回すので、通知の後の
+    /// `block_on(async {})` は「起床したタスクを 1 度回してから戻る」になる。
+    #[test]
+    fn tick_task_stops_without_a_frame_once_the_loop_has_returned() {
+        let _lock = crate::ecs::world::TICK_WAKE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let world = Rc::new(RefCell::new(crate::ecs::world::EcsWorld::new()));
+        let event = Arc::new(Event::new());
+        let running = Rc::new(Cell::new(true));
+        let frame = || world.borrow().world().resource::<FrameCount>().0;
+
+        let _task = AsyncTickTask::spawn(
+            Arc::clone(&event),
+            Rc::downgrade(&world),
+            Rc::clone(&running),
+        );
+        crate::executor::block_on(async {}); // 待ちを立てさせる
+        let held_while_waiting = Rc::strong_count(&world) - 1;
+
+        // 対照: ループが回っている間の起床は 1 フレーム回す（起床が届く仕掛けの確認）。
+        let before = frame();
+        event.notify(usize::MAX);
+        crate::executor::block_on(async {});
+        assert_eq!(
+            frame(),
+            before + 1,
+            "ループが回っている間の起床は 1 フレーム回すはず"
+        );
+
+        // ループが戻った後の起床。
+        running.set(false);
+        let before = frame();
+        event.notify(usize::MAX);
+        crate::executor::block_on(async {});
+        let advanced_after_return = frame() - before;
+
+        assert_eq!(
+            (held_while_waiting, advanced_after_return),
+            (0, 0),
+            "(待ちの間に握っていた World の強参照の数, ループが戻った後に回ったフレーム数) は両方 0 のはず"
         );
     }
 }

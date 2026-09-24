@@ -176,6 +176,43 @@ pub fn spawn_harness_failing(
     }
 }
 
+/// 停止通知の投函端つき失敗注入ハーネスを組み立てる（[`spawn_harness_failing`] の派生・
+/// [`spawn_harness_with_stop_sink`] と同型）。
+///
+/// 失敗の入口ごとに、停止通知が Fault の種類と理由を運ぶことを統合層で観測するのに使う
+/// （areka-P0-shiori-fault-notice 要件 2.1・2.2・7.3）。
+pub fn spawn_harness_failing_with_stop_sink(
+    config: KanadeConfig,
+    fixture: Fixture,
+    quit_policy: QuitPolicy,
+    fail_on: FailOn,
+    stop_sink: Option<Sender<KanadeStopped>>,
+) -> Harness {
+    let shiori = spawn_mock_shiori_failing(fixture, fail_on);
+
+    // kanade→sakura の TalkCommand チャンネルを 1 本張る（DD-5・起動と選択解決が同一チャンネル）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
+
+    // kanade を起動（inbox 送信端を得る）。boot prefetch の照会結果は消費しないので no-op sink。
+    let (kanade_tx, kanade_handle) = spawn_kanade_with_stop_sink(
+        config,
+        shiori.sender.clone(),
+        talk_tx,
+        Box::new(|_, _| {}),
+        stop_sink,
+    );
+
+    // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す。
+    let sakura = spawn_mock_sakura(talk_rx, kanade_tx.clone(), quit_policy);
+
+    Harness {
+        sender: kanade_tx,
+        kanade: kanade_handle,
+        shiori,
+        sakura,
+    }
+}
+
 /// 保留 sakura ＋失敗注入 shiori の駆動ハーネスを組み立てる（6.1 専用・両派生の合成）。
 ///
 /// [`spawn_harness_gated`]（保留機能付き sink）と [`spawn_harness_failing`]（失敗注入 shiori）を

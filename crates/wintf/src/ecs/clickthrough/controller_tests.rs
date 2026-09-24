@@ -603,6 +603,7 @@ fn start_then_drop_joins_worker_without_hanging() {
         StdRc::downgrade(&world),
         StdRc::clone(&registry),
         Arc::clone(&wake),
+        StdRc::new(std::cell::Cell::new(true)),
     );
 
     // handle 経由の register/remove が共有レジストリへ反映されること。
@@ -640,4 +641,62 @@ fn shutdown_condition_world_weak_upgrade_none() {
         weak.upgrade().is_none(),
         "world drop 後は Weak upgrade が None（ループはこの契機で終了する）"
     );
+}
+
+/// `run()` が戻った後に届いた起床では、判定ループは判定を回さずに終わる。待ちの間は
+/// World とカーソル監視の強参照を握らない（`run()` の終わりで `ClickThroughHandle` を捨てれば、
+/// 唯一の強参照が落ちてワーカが止まる）。areka-P0-shiori-fault-notice task 7.2。
+///
+/// 判定が回ったかは「World に居ない窓の対象がレジストリから刈られたか」で見る（判定の最初の
+/// 手順が `prune_dead_targets`）。`block_on` は届いた順にタスクを回すので、起床の後の
+/// `block_on(async {})` は「起きたループを 1 度回してから戻る」になる。
+#[test]
+fn eval_loop_stops_without_a_check_once_the_loop_has_returned() {
+    let world = StdRc::new(StdRefCell::new(EcsWorld::new()));
+    let registry = StdRc::new(StdRefCell::new(ClickThroughRegistry::new()));
+    let wake = Arc::new(Event::new());
+    let running = StdRc::new(std::cell::Cell::new(true));
+    // 一度建てて消した entity＝World に居ない窓（判定が回れば刈られる）。
+    let gone = {
+        let mut ecs = world.borrow_mut();
+        let e = ecs.world_mut().spawn_empty().id();
+        ecs.world_mut().despawn(e);
+        e
+    };
+
+    let handle = ClickThroughController::start(
+        StdRc::downgrade(&world),
+        StdRc::clone(&registry),
+        Arc::clone(&wake),
+        StdRc::clone(&running),
+    );
+    crate::executor::block_on(async {}); // 待ちを立てさせる
+    let held_while_waiting = (
+        StdRc::strong_count(&world) - 1,
+        StdRc::strong_count(&handle.monitor) - 1,
+    );
+
+    // 対照: ループが回っている間の起床は判定を回す（起床が届く仕掛けの確認）。
+    registry.borrow_mut().register(gone, HWND::default());
+    wake.notify(usize::MAX);
+    crate::executor::block_on(async {});
+    assert!(
+        registry.borrow().is_empty(),
+        "ループが回っている間の起床は判定を回して居ない窓を刈るはず"
+    );
+
+    // ループが戻った後の起床。
+    registry.borrow_mut().register(gone, HWND::default());
+    running.set(false);
+    wake.notify(usize::MAX);
+    crate::executor::block_on(async {});
+    let checked_after_return = registry.borrow().is_empty();
+
+    assert_eq!(
+        (held_while_waiting, checked_after_return),
+        ((0, 0), false),
+        "((待ちの間に握っていた World の強参照, カーソル監視の強参照), ループが戻った後に判定が回ったか) \
+         は ((0, 0), false) のはず"
+    );
+    drop(handle);
 }

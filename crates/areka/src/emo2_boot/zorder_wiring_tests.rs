@@ -454,7 +454,7 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
         "起動窓の戻り値から重なりの生の値を受け取る行が本文に無い"
     );
     assert!(
-        squeezed.contains("author_dpi, zorder_raw.as_deref(), );"),
+        squeezed.contains("author_dpi, zorder_raw.as_deref(), kanade_stop_tx.clone(), );"),
         "重なりの生の値が結線（wire_emo2_boot）へ渡されていない＝設定が台帳へ届かない: {squeezed}"
     );
 

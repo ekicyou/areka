@@ -155,15 +155,21 @@ use self::scale_text::reconcile_reported_sizes;
 // 別式で組むと「観測したグリフ数」と「実際に描かれる文字」が食い違う。
 pub(super) use self::scale_text::resolve_talk_time;
 
+/// kanade の停止通知の受け口（World の NonSend 資源・`Receiver` は `Sync` でない）。
+///
+/// 実 sink 結線（`wire_emo2_boot`）と LogSink 側の起動とで同じ 1 つを共有する（要件 6.4）。
+/// 取り出すのは [`run_ghost_quit_phase`] の 1 か所だけ。
+pub(crate) struct KanadeStopRx(pub(crate) Receiver<KanadeStopped>);
+
 /// 終了相: kanade の停止通知を取り出し、届いていれば全ゴースト窓を閉じる（R15.4・design D15 の 4）。
 ///
-/// 相順の**先頭**（作業領域源の同期より前）に置く。終了が決まったフレームで他の相を走らせても、
-/// これから閉じる窓のために描き直すだけだからである。返り値は「通知を消化したか」で、`true` の
-/// フレームは呼び手が以後の相を飛ばす。
+/// [`ghost_quit_system`] として毎フレームの相（[`emo2_frame_system`]）より前に走る。終了が
+/// 決まったフレームで他の相を走らせても、これから閉じる窓のために描き直すだけだからである。
+/// 返り値は「通知を消化したか」。
 ///
 /// # 判断
 ///
-/// - 受信端が無い（結線していない構成・既存の試験）→ 何もせず `false`。
+/// - 受け口 [`KanadeStopRx`] が World に無い（結線していない構成・既存の試験）→ 何もせず `false`。
 /// - 届いていない → 何もせず `false`（定常フレームは無操作）。
 /// - 1 件以上届いた → `try_recv` で**全件**取り出し、`info!(event = "ghost_quit")` の上で
 ///   統合操作 [`quit_app`]（出所 `KanadeStopped`）を 1 度だけ呼び `true`。2 件目以降と、
@@ -174,14 +180,17 @@ pub(super) use self::scale_text::resolve_talk_time;
 ///
 /// 統合操作が全窓を閉じて終了を指示すると wintf の `run()` が戻り、`main.rs` の終了統括が走る。
 /// そこは既に冪等である（kanade は停止済みゆえ `ForceQuit` の送出が失敗し `debug!` で流れる）。
-pub(super) fn run_ghost_quit_phase(wiring: &mut Emo2Wiring, world: &mut World) -> bool {
-    let Some(rx) = wiring.kanade_stop.as_ref() else {
+///
+/// 原因（Fault を含む）によって終わらない分岐は置かない（要件 6.5）。
+pub(super) fn run_ghost_quit_phase(world: &mut World) -> bool {
+    let Some(rx) = world.get_non_send::<KanadeStopRx>() else {
         return false;
     };
     let mut first: Option<KanadeStopped> = None;
     let mut extra = 0usize;
     // 全件取り出す（`Disconnected` も「もう来ない」だけで異常ではない＝溜まっていた分は消化する）。
-    while let Ok(stopped) = rx.try_recv() {
+    // 取り出し終えてから `quit_app` へ World を渡す（受け口の借用はここで切れる）。
+    while let Ok(stopped) = rx.0.try_recv() {
         match first {
             None => first = Some(stopped),
             Some(_) => extra += 1,
@@ -212,6 +221,13 @@ pub(super) fn run_ghost_quit_phase(wiring: &mut Emo2Wiring, world: &mut World) -
     true
 }
 
+/// 終了相 [`run_ghost_quit_phase`] を呼ぶだけの排他 system（起動の 2 経路で共有する）。
+///
+/// `Update` への登録は `wire_kanade_stop` の 1 か所（[`emo2_frame_system`] より前）。
+pub(super) fn ghost_quit_system(world: &mut World) {
+    run_ghost_quit_phase(world);
+}
+
 /// `Update` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
@@ -234,13 +250,6 @@ pub fn emo2_frame_system(world: &mut World) {
     let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
         return;
     };
-    // 終了相（R15.4・design D15 の 4）: **すべての相より前**に置く。kanade の終了系列が完了して
-    // いたら全ゴースト窓を閉じ、以後の相は走らせずに戻る（これから消える窓のために描き直さない）。
-    // 通知が無いフレームは即座に false で抜ける＝定常フレームは無操作である。
-    if run_ghost_quit_phase(&mut wiring, world) {
-        world.insert_non_send(wiring);
-        return;
-    }
     // 作業領域源の実行時同期（atom 設計 C6・要件 5.1／5.4／5.5）: **各相より前**に置く。
     // 拡大率の相が読む作業領域源を同一フレームの先頭で新しくしておくと、相は新しい下端へ
     // 1 回で書ける（相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる）。
@@ -393,6 +402,12 @@ mod work_area_resnap_hold_tests;
 #[cfg(test)]
 #[path = "frame_ghost_quit_tests.rs"]
 mod ghost_quit_tests;
+
+// LogSink 側の起動（実 sink 結線なし）でも停止通知が終了の指示まで届くこと
+// （areka-P0-shiori-fault-notice タスク 3.3）。
+#[cfg(test)]
+#[path = "frame_ghost_quit_logsink_tests.rs"]
+mod ghost_quit_logsink_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]

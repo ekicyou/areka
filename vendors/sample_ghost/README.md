@@ -10,6 +10,7 @@
 | `emo2-kakukaku-wplimit.nar` | バルーン | 20 | 33,906 バイト |
 | `konnoyayame.nar` | ゴースト（YAYA 標準テンプレート「紺野ややめ」・**配布物そのまま**） | 125 | 820,368 バイト |
 | `StayseeBalloon.nar` | バルーン（areka の既定バルーン・CC0） | 29 | 73,021 バイト |
+| `claudia.nar` | ゴースト（YAYA・「悪役令嬢クローディア」・同梱バルーン `claudia`／`claudia_vertical`・**配布物そのまま**） | 135 | 3,651,357 バイト |
 
 - `StayseeBalloon.nar` の出どころとライセンス: CC0（書庫の中の `LICENSE`・`readme.txt`）。上流は <https://github.com/ponapalt/StayseeBalloon>。areka の既定バルーンで、畳み直してよく、areka の配布物へ同梱してよい。29 本のハッシュと上流との突き合わせは `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の §1・§3 にある。
 
@@ -21,6 +22,16 @@
 - だから守ること 2 つ——**畳み直さない**（改変禁止なので `fold-samples` を通さず、ダウンロードしたバイト列をそのまま置いた。全エントリが deflate 圧縮なのはそのため）。**営利の配布物に入れない**（開発用の検体としてだけ使い、areka の配布物へ同梱しない）。
 - 差し替えるとき: 新しいタグの `.nar` をそのまま置き、この節のタグ・ハッシュと上の表の 2 つの数を書き直す。
 - 書庫にはゴースト作者向けの開発キット（`.claude/`・`.mcp.json`・`CLAUDE.md`・`AGENTS.md`・`tools/*.ps1`）が入っており、展開先 `ghost/konnoyayame/` にもそのまま置かれる。areka はこれらを読まない。**展開先のフォルダを作業場所にして Claude Code などを起動しないこと**（よその設定とフックが効いてしまう）。
+
+### `claudia.nar` の出どころとライセンス
+
+- 出どころ: <https://github.com/ponapalt/claudia/releases> のタグ `35799705884` の添付 `claudia.nar`（2026-09-22 23:55 UTC 公開・`github-actions[bot]` の自動リリース・2026-09-24 取得）。`konnoyayame` から作られたゴーストで、同じく出し直されるので、**タグと次のハッシュで 1 本に固定している**。
+  **上流は最新の 1 本しかリリースを残さない。** 2026-09-24 に確かめたところ、両リポジトリともリリースは 1 本だけで、上の `konnoyayame` の固定タグ `35438213310` は既に 404 だった。検体を「URL とハッシュだけ記録して取得時にダウンロードする」形にしないのはこのためである（数日で取れなくなる）。
+  sha256 `93a34c502231581c550c236052a64e1a915d8e3dac277153caed6774d23a790a`
+- ライセンス（書庫の中の `README.md`「ライセンス」節が出どころ）: 辞書・シェル画像・同梱バルーン 2 つを含め全体が Unlicense（パブリックドメイン）。改変・再配布・二次利用は自由。
+- 手元で畳み直していない（ダウンロードしたバイト列をそのまま置いた。全エントリが deflate 圧縮）。Unlicense なので畳み直してもよいが、揃える利得が無い。
+- 同梱バルーンが 2 つ（`balloon0.directory,claudia`・`balloon1.directory,claudia_vertical`）で、**同梱が複数の検体はこれが唯一**。
+- 差し替えるとき: `konnoyayame` と同じく、新しいタグの `.nar` をそのまま置き、この節のタグ・ハッシュと上の表の 2 つの数を書き直す。
 
 ## 取り出し方
 
@@ -105,7 +116,7 @@ git check-ignore --no-index crates/areka/dic09_Test.txt                         
 - **`install.txt` が書庫の最上位に在ること。** 包みフォルダ 1 段は黙って剥がさず拒否する（`<名>/install.txt` は最上位ではない）。手順 1 が「フォルダの直下に `install.txt`」と言っているのはこのためである。
 - 名前とその中身が `install.txt` の解釈どおりであること。展開先の写像（同梱バルーンをどこへ置くか）は `install.txt` の `directory`・`*.directory`・`*.source.directory` だけから決まり、登記表の綴りは使わない。
 
-ここで畳んだ 4 本（`R_POST_and_KOMAINU.nar`・`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`StayseeBalloon.nar`）は**全エントリが無圧縮（圧縮方式 0）**である（`konnoyayame.nar` と、2026-09-20 に最新版へ差し替えた `emo2.nar` は全エントリが deflate 圧縮）。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
+ここで畳んだ 4 本（`R_POST_and_KOMAINU.nar`・`emo2-kakukaku-offsetdpi.nar`・`emo2-kakukaku-wplimit.nar`・`StayseeBalloon.nar`）は**全エントリが無圧縮（圧縮方式 0）**である（`konnoyayame.nar`・`claudia.nar` と、2026-09-20 に最新版へ差し替えた `emo2.nar` は全エントリが deflate 圧縮）。`fold_tree` が圧縮を掛けないためで、git 自身の zlib が既に同じ仕事をしているので掛ける利得がほとんど無い（実測で差は 3.2%）。読み手は方式 0 と方式 8（deflate）の両方を読めるので、外から貰った `.nar` をそのまま置く分には圧縮されていて構わない。
 
 同じ入力からは同じバイト列が出る。走査順を名前順に固定し、書庫に書く日時を 1980-01-01 00:00 に固定してあるので、畳み直しても `.nar` のハッシュは変わらない。
 

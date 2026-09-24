@@ -254,7 +254,7 @@ fn real_helper_boot_pump_close_completes() {
     // は自然に drop されている（Disconnected）。万一 ShioriDown が届いていた場合は接続確立失敗
     // または実行中の死活検出であり、上の kanade join が既に終了系列（Unloading{Fault}）を
     // 通っているはずだが、原因を明示するため down_rx を最後に確認する。
-    if let Ok(KanadeMsg::ShioriDown { reason }) = down_rx.try_recv() {
+    if let Ok(KanadeMsg::ShioriDown { reason, .. }) = down_rx.try_recv() {
         panic!("実 helper への接続確立に失敗した（ShioriDown）: {reason}");
     }
 }

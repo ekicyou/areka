@@ -41,7 +41,7 @@ fn all_phases() -> Vec<Phase> {
             cause: TermCause::Quit,
         },
         Phase::Unloading {
-            cause: TermCause::Fault,
+            cause: TermCause::Fault(crate::msg::ShioriFault::unknown()),
         },
         Phase::Stopped,
     ]
