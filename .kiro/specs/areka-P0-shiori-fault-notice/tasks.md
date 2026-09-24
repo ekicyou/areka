@@ -129,9 +129,25 @@
   - ① 失敗する検体（抑止なし）で告知の題名・ゴースト名・「SHIORI に接続できなかった」・理由が出て、OK で終了コード 1・プロセスが残らない。② emo2 に短い応答期限で「応答が期限内に返らなかった」の告知が出て同様に終わる（使った値を記す）。③ ① に抑止と自動終了 20 秒で窓が出ずに 1 で終わる
   - `RUST_LOG` は判定の分岐（`shiori_down`／`shiori_failed`／`ghost_quit`／`app_exit`／`alert`）の水準まで開ける
   - spec フォルダの `signoff.md` に 3 走行のコマンド・終了コード・目印の件数が残っている
-  - _Depends: 5.3_
+  - _Depends: 5.3, 7.1, 7.2_
   - _Requirements: 7.7, 7.8_
-  - _Blocked: 実機で 2 件の欠陥が出て開発者の裁定待ち（2026-09-25）。(1) i686 helper 経路で応答の期限切れが「通信が切れた」に写り「期限内に返らなかった」に届かない＝`crates/shiori-host32-ipc` の `send_copydata_with` が `SendMessageTimeoutW` の戻り 0 を理由を見ずに `SendFailed` にする（直す先は design の境界外の host32 送信層）。(2) 告知の箱のモーダルループの中で `run()` 復帰後のフレームが 1 回まわり `reconcile_window_registry` が取り除き済みの NonSend を要求して panic＝wintf の tick タスクが `run()` 後も生きている（直す先は design が「無改変」とした wintf）。詳細は `signoff.md`_
+  - 1 回目（2026-09-25）で出た 2 件の欠陥は 7.1・7.2 で直してから取り直す（`signoff.md` の 1 回目の記録は残す）
+
+- [ ] 7. 実機で見つかった欠陥を根本で直す（2026-09-25 開発者裁定＝推奨どおり境界を広げて直す）
+- [ ] 7.1 (P) i686 helper 経路の期限切れを「期限内に返らなかった」に写す
+  - `crates/shiori-host32-ipc/src/lib.rs` の `send_copydata_with` で、`SendMessageTimeoutW` の直前に `SetLastError(ERROR_SUCCESS)` を呼び、戻り 0 のうち `GetLastError() == ERROR_TIMEOUT` だけを `IpcError::Timeout` にする（存在しない窓・応答なしの打ち切りなど他は従来どおり `SendFailed`）。同じファイルの説明を直す
+  - 同じ crate に決定論的なテストを足す: 別スレッドの message-only 窓が `WM_COPYDATA` の手続きで眠る → 短い期限で送ると `Timeout`、存在しない窓へ送ると `SendFailed`。写しを戻すと前者が赤
+  - i686 の helper を建て直し、host32 の既存テストと kanade のテストが緑
+  - design の Out of Boundary・Non-Goals に「期限切れの分類 1 か所だけ本 spec で直す」例外を記す
+  - _Requirements: 1.4, 2.2, 7.7_
+  - _Boundary: shiori-host32-ipc, design_
+
+- [ ] 7.2 (P) wintf の `run()` から戻った後にフレームを回さない
+  - `crates/wintf/src/runtime/tick_bridge.rs` の tick タスクに「ループはまだ回っているか」の旗を渡し、起きたらまず旗を見て下りていればフレームを回さずに終える。World の強参照を待ちの間握らない（`upgrade` を待ちの後へ）。`crates/wintf/src/runtime/mod.rs` の `WinApp::run` で旗を作り、`block_on` から戻った直後・登録表を取り除く前に下ろす（同じ形の VSync 中継タスクにも渡す）
+  - `tick_bridge.rs` のテストに、旗を下ろした後の通知ではフレーム数が進まないことを固定する 1 本を足す（修正前は赤）
+  - design の Out of Boundary の「wintf（無改変）」と関連する表・リスク欄を「`run()` 復帰後にフレームを回さない守り 1 か所のみ改変」に改める
+  - _Requirements: 1.11, 8.4_
+  - _Boundary: wintf, design_
 
 ## Implementation Notes
 
