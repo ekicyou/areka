@@ -13,7 +13,7 @@
 //!
 //! # 検査の順序（最初に当たった理由で拒否）
 //!
-//! 復号 → NUL → `\` → 絶対の形 → `..` → 空の要素 → Windows で作れない名前 →
+//! 復号 → 長さ → NUL → `\` → 絶対の形 → `..` → 空の要素 → Windows で作れない名前 →
 //! シンボリックリンク → 大小の衝突、の順。1 つの名前が複数の違反を持ち得るので、
 //! どの理由を返すかは順序で決まる（`..\CON.txt` は `\` で拒否される）。順序は
 //! 兄弟テストが複数違反の検体で測っている。
@@ -41,6 +41,14 @@ const RESERVED_STEMS: &[&str] = &[
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
+/// 書庫の 1 要素の相対パスと `install.txt` のフォルダ名に共通の、パスの長さの
+/// 上限（UTF-16 の単位・要件 1.1・1.2・1.5・1.6）。要素ごとの上限は持たない
+/// （全体 ≤ 200 < 255 なので NTFS の要素の上限は自動で満たす＝要件 1.7）。
+pub(crate) const MAX_ENTRY_PATH_UTF16: usize = 200;
+
+/// 理由と警告に載せる名前の先頭の長さ（UTF-16 の単位）。表示のための長さで、上限ではない。
+const HEAD_UTF16: usize = 32;
+
 /// Unix の外部属性のうち、種別を取り出す覆い。
 const S_IFMT: u32 = 0o170000;
 
@@ -63,6 +71,36 @@ pub(crate) struct EntryName {
 /// 生バイトを小文字の 16 進に写す（区切り無し）。拒否の理由に入れる。
 fn to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// UTF-16 の単位で数えた長さ（BMP の文字は 1・それ以外は 2）。
+pub(crate) fn utf16_len(name: &str) -> usize {
+    name.encode_utf16().count()
+}
+
+/// 名前の先頭の有界の一部（最大 [`HEAD_UTF16`] 単位）。文字の途中では切らない。
+fn head_utf16(name: &str) -> String {
+    let mut used = 0;
+    name.chars()
+        .take_while(|ch| {
+            used += ch.len_utf16();
+            used <= HEAD_UTF16
+        })
+        .collect()
+}
+
+/// 理由と警告に載せる値（要件 1.4・1.5）。上限の内側なら全体、超えていれば
+/// 先頭と測った長さと上限だけを綴り、全体は載せない。
+pub(crate) fn bounded_value(name: &str) -> String {
+    let length = utf16_len(name);
+    if length <= MAX_ENTRY_PATH_UTF16 {
+        name.to_owned()
+    } else {
+        format!(
+            "{}…（{length} 単位・上限 {MAX_ENTRY_PATH_UTF16}）",
+            head_utf16(name)
+        )
+    }
 }
 
 /// `UnsafePath` の拒否を組む。
@@ -122,10 +160,15 @@ fn is_usable_windows_name(component: &str) -> bool {
 /// `install.txt` の `directory`・`*.directory`・`*.source.directory` と、
 /// `refreshundeletemask` の各要素が満たすべき規則。エントリ名と同じ
 /// [`is_usable_windows_name`] を土台にして、そこに含まれない 3 つ——空・`/`・`\`
-/// ——だけを足す。`..` は末尾がドット、`C:` は禁止文字の `:`、NUL は制御文字と
-/// して、いずれも土台の側で撥ねられる（二重に書くと片方だけ直る）。
+/// ——と長さの上限（[`MAX_ENTRY_PATH_UTF16`]・要件 1.5）だけを足す。`..` は末尾が
+/// ドット、`C:` は禁止文字の `:`、NUL は制御文字として、いずれも土台の側で撥ねられる
+/// （二重に書くと片方だけ直る）。
 pub(crate) fn is_valid_one_level_name(name: &str) -> bool {
-    !name.is_empty() && !name.contains('/') && !name.contains('\\') && is_usable_windows_name(name)
+    !name.is_empty()
+        && utf16_len(name) <= MAX_ENTRY_PATH_UTF16
+        && !name.contains('/')
+        && !name.contains('\\')
+        && is_usable_windows_name(name)
 }
 
 /// 名前が `X:` の形（ドライブレター）で始まるか。
@@ -147,6 +190,19 @@ fn validate_one(entry: &RawEntry) -> Result<EntryName, RefuseReason> {
     let name = decode_entry_name(entry)?;
     let refuse = |why| unsafe_path(entry.index, &name, why);
 
+    // フォルダのエントリの末尾の `/` だけを落とす。`a//` は空の要素として残る。
+    let trimmed = name.strip_suffix('/').unwrap_or(&name);
+    // 長さは復号の直後。名前の全体は理由に載せない（要件 1.3・1.4）。
+    let length = utf16_len(trimmed);
+    if length > MAX_ENTRY_PATH_UTF16 {
+        return Err(RefuseReason::PathTooLong {
+            index: entry.index,
+            length,
+            limit: MAX_ENTRY_PATH_UTF16,
+            head: head_utf16(trimmed),
+        });
+    }
+
     if name.contains('\0') {
         return Err(refuse(UnsafeWhy::Nul));
     }
@@ -158,8 +214,6 @@ fn validate_one(entry: &RawEntry) -> Result<EntryName, RefuseReason> {
         return Err(refuse(UnsafeWhy::Absolute));
     }
 
-    // フォルダのエントリの末尾の `/` だけを落とす。`a//` は空の要素として残る。
-    let trimmed = name.strip_suffix('/').unwrap_or(&name);
     let components: Vec<String> = trimmed.split('/').map(str::to_owned).collect();
 
     if components.iter().any(|component| component == "..") {

@@ -1,6 +1,6 @@
 ---
 name: kiro-complete
-description: 'Kiro仕様駆動開発のSpec完了ワークフローを実行する。DoDゲート検証→コミット→completedフォルダ移動→spec.json更新→参照パス修正（spec文書＋ソース全域）→ROADMAP更新→スキルドキュメント同期→最終コミット→移動後テスト再実行→PR作成→squashマージまでを中断なく完遂する。mainへの統合はこのPRが唯一の経路（直push禁止）。Use when: 実装完了を承認する, 承認してください, 完了を承認, spec承認, approve implementation, kiro承認完了。DO NOT USE when: 実装が完了したのみ（承認の明示がない場合）、タスクが終わっただけ'
+description: 'Kiro仕様駆動開発のSpec完了ワークフローを実行する。未起票の未解決問題の起票（/kiro-discovery）→DoDゲート検証→コミット→completedフォルダ移動→spec.json更新→参照パス修正（spec文書＋ソース全域）→ROADMAP更新→スキルドキュメント同期→最終コミット→移動後テスト再実行→PR作成→squashマージまでを中断なく完遂する。mainへの統合はこのPRが唯一の経路（直push禁止）。Use when: 実装完了を承認する, 承認してください, 完了を承認, spec承認, approve implementation, kiro承認完了。DO NOT USE when: 実装が完了したのみ（承認の明示がない場合）、タスクが終わっただけ'
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion
 argument-hint: <feature-name>
 ---
@@ -66,6 +66,19 @@ argument-hint: <feature-name>
 ---
 
 ## 手順
+
+### 冒頭ステップ: 未起票の未解決問題の起票（`/kiro-discovery`）
+
+DoD ゲートより前に、**実装中に発生した未解決問題のうち未起票のもの**を `/kiro-discovery` で起票する。完了してアーカイブした後では拾い漏れに気付けなくなるので、必ず最初に行う（繰り返し仕様でも行う）。
+
+1. **未解決問題を洗い出す**。拾う元は次の通り。
+   - `tasks.md` の `## Implementation Notes`・`_Blocked:_` の付いたタスク
+   - `design.md` の Open Questions / Risks
+   - 実装・レビュー・最終検証（`/kiro-validate-impl`）の報告に残った未対応の指摘・先送り
+   - 会話の中で「別 spec で」「後で」と決めたもの
+2. **起票済みかを確かめる**。`.kiro/specs/`（`completed/` を含む）の brief.md と `.kiro/steering/roadmap.md` を検索し、既に担当 spec・roadmap の行があるものは除く。本 spec の中で解決済みのものも除く。
+3. **未起票のものを `/kiro-discovery` で起票する**。Skill ツールで `kiro-discovery` を起動する。1 件ずつでも、まとめて 1 回でもよい。
+4. 起票した brief.md・roadmap.md の変更はステップ2でまとめてコミットする。**未起票が 0 件なら「0 件」と明示して記録する**（黙って飛ばさない）。
 
 ### ステップ0: 決定的解決（portable context）
 
@@ -375,6 +388,7 @@ PR の**作成またはマージ（API）が失敗**した場合（コンフリ�
 ## 完了チェックリスト
 
 ```
+- [ ] 冒頭ステップ: 実装中の未解決問題のうち未起票のものを `/kiro-discovery` で起票済み（0 件なら「0 件」と記録）
 - [ ] DoD ベースラインゲート通過（Spec / Format / Test / License。workflow.md が存在すれば追加ゲートも）
 - [ ] Format Gate: `cargo fmt --all` 実行後 `cargo fmt --all -- --check` が終了コード 0（Test Gate より前）
 - [ ] cargo test --workspace 成功（または直近の実行結果により省略）

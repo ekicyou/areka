@@ -1,6 +1,6 @@
 //! 公開面（`lib.rs`）の兄弟テスト。
 //!
-//! ここが判定するのは 6 つ。
+//! ここが判定するのは 7 つ。
 //!
 //! ⑴ `open` は 1 バイトも書かない——固定入力を全て通した前後で根の木が 1 つも
 //!    変わらないことを、実際に歩いて突き合わせる（走査そのものの較正を 3 本持つ）。
@@ -10,15 +10,20 @@
 //! ⑷ 記録は公開面の 2 つの関数だけが出す——本番のソースの字面で見張る。
 //! ⑸ 伸長器の書き込み側の名前を本番のソースが綴らない（要件 10.2）。
 //! ⑹ 新設したファイルが 1,000 行未満（要件 10.8）。
+//! ⑺ 名前・パスの長さの上限（200 単位）の境界を公開の入口 `open` で測る。
+//! ⑻ 確定の段の失敗を公開の入口 `install` で本当に起こし、失敗の値と記録の両方が
+//!    正しい場所を指す。
 //!
 //! 語彙の全数対応と「失敗のたびに記録が 1 回」は [`vocabulary`] が持つ。
 //!
 //! 根は OS の一時フォルダではなく [`WorkDir`] が配る（要件 7.10）。
 
 use super::*;
+use log_capture_kit::capture;
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 use std::collections::BTreeMap;
 use std::fs;
+use std::os::windows::fs::OpenOptionsExt;
 
 /// 語彙の全数対応と記録の判定。1 ファイル 1,000 行の上限に収めるために分けただけで、
 /// 助手はここから借りる。
@@ -148,7 +153,7 @@ fn open_changes_nothing_under_the_root() {
 
     let before = tree(root);
     assert!(
-        before.len() >= 14,
+        before.len() >= 15,
         "固定入力が置かれていない根で突き合わせても何も測れない: {}",
         before.len()
     );
@@ -180,6 +185,121 @@ fn the_tree_snapshot_notices_every_kind_of_change() {
 
     fs::remove_dir(root.join("sub")).expect("消せる");
     assert_ne!(tree(root), before, "消えたフォルダを見落とした");
+}
+
+// ---- 名前・パスの長さの上限（本仕様 要件 1.3・1.4・1.5・1.9） ----
+
+/// `ghost_with_balloon()`（4 件）の後ろに `name` のファイルを 1 件足して `open` する。
+/// 足した 1 件のエントリ番号は 4。
+fn open_with_file(name: &str) -> Result<(), NarError> {
+    let work = WorkDir::new().expect("根を借りられる");
+    let path = put(
+        work.path(),
+        "long.nar",
+        &ghost_with_balloon().file(name, b"x").done(),
+    );
+    NarArchive::open(&path).map(|_| ())
+}
+
+/// `directory` の値だけを `value` にした書庫を `open` する。
+fn open_with_directory(value: &str) -> Result<(), NarError> {
+    let work = WorkDir::new().expect("根を借りられる");
+    let manifest = install_txt(&["type,ghost", "name,テスト", &format!("directory,{value}")]);
+    let nar = NarBuilder::new().file("install.txt", &manifest).done();
+    NarArchive::open(&put(work.path(), "dir.nar", &nar)).map(|_| ())
+}
+
+/// ちょうど 200 単位の相対パスは `open` を通る。
+#[test]
+fn a_path_of_exactly_the_limit_opens() {
+    let name = format!("g/{}", "a".repeat(198));
+    assert_eq!(name.encode_utf16().count(), 200);
+    open_with_file(&name).expect("上限ちょうどは通る");
+}
+
+/// 201 単位は「長すぎる」で拒否され、理由の表示が名前の全体を含まない。
+#[test]
+fn a_path_one_over_the_limit_is_refused_without_its_full_name() {
+    let name = format!("g/{}", "a".repeat(199));
+    let error = open_with_file(&name).expect_err("上限＋1 は拒否");
+    let NarError::Refused { reason, .. } = &error else {
+        panic!("拒否のはず: {error}");
+    };
+    assert!(
+        matches!(
+            reason,
+            RefuseReason::PathTooLong {
+                index: 4,
+                length: 201,
+                limit: 200,
+                ..
+            }
+        ),
+        "{reason:?}"
+    );
+    assert!(
+        !error.to_string().contains(&name),
+        "表示が名前の全体を含む: {error}"
+    );
+}
+
+/// 文字数は 200 だが BMP 外の文字で UTF-16 が 201 になる名前は拒否される（数え方の較正）。
+#[test]
+fn the_length_is_counted_in_utf16_units_not_chars() {
+    let name = format!("g/{}𠮷", "a".repeat(197));
+    assert_eq!(name.chars().count(), 200);
+    let error = open_with_file(&name).expect_err("UTF-16 で 201 は拒否");
+    assert!(
+        matches!(
+            &error,
+            NarError::Refused {
+                reason: RefuseReason::PathTooLong { length: 201, .. },
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}
+
+/// フォルダのエントリは末尾の `/` を除いて測る——200 単位＋`/` は通る（要件 1.1）。
+#[test]
+fn a_directory_entry_is_measured_without_its_trailing_slash() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let name = format!("g/{}", "a".repeat(198));
+    let path = put(
+        work.path(),
+        "dir.nar",
+        &ghost_with_balloon().dir(name.as_str()),
+    );
+    NarArchive::open(&path).expect("末尾の / は長さに入らない");
+}
+
+/// `install.txt` のフォルダ名も 200 単位なら通る。
+#[test]
+fn a_directory_name_of_exactly_the_limit_opens() {
+    open_with_directory(&"a".repeat(200)).expect("上限ちょうどは通る");
+}
+
+/// 201 単位のフォルダ名は「フォルダ名が使えない」で拒否され、値は全体を含まず
+/// 測った長さと上限を含む。
+#[test]
+fn a_directory_name_one_over_the_limit_is_refused_with_a_bounded_value() {
+    let full = "a".repeat(201);
+    let error = open_with_directory(&full).expect_err("上限＋1 は拒否");
+    let NarError::Refused {
+        reason: RefuseReason::InvalidDirectoryName { key, value },
+        ..
+    } = &error
+    else {
+        panic!("InvalidDirectoryName のはず: {error:?}");
+    };
+    assert_eq!(key, "directory");
+    assert!(!value.contains(&full), "値が全体を含む: {value}");
+    assert!(value.contains("201") && value.contains("200"), "{value}");
+    assert!(
+        !error.to_string().contains(&full),
+        "表示が全体を含む: {error}"
+    );
 }
 
 // ---- `install` は伸長をやり直さない（設計 `container`） ----
@@ -249,6 +369,95 @@ fn the_inflate_call_appears_once_outside_its_definition() {
             .count(),
         0
     );
+}
+
+// ---- 確定の失敗を公開の入口で起こす（本仕様 要件 3.1〜3.4） ----
+
+/// 読むことだけを共有して開いたまま持つ（起動中の `shiori.dll` の再現）。
+///
+/// `install_commit_tests.rs` の同名の助手と同じ形。あちらは `install` の私的な
+/// テストモジュールの中に在り、ここからは届かない。共有を 0 にすると組み上げの段の
+/// 複写が先に落ちて確定まで届かないので、読みだけを共有する（`FILE_SHARE_READ`）。
+fn hold(path: &Path) -> fs::File {
+    fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1 /* FILE_SHARE_READ */)
+        .open(path)
+        .unwrap_or_else(|err| panic!("{} を掴めるはず: {err}", path.display()))
+}
+
+/// 宛先の中のファイルを掴んだまま `open` → `install` すると、確定の段で失敗し、
+/// 巻き戻して宛先は呼ぶ前のまま。記録はちょうど 1 件で、`work` の欄は根の
+/// `.nar-work` の配下に実在するフォルダを指す。
+///
+/// 記録の欄は 1 つずつ読んで比べる。連結した綴りで比べると、区切りが値の側に
+/// 現れたときに別々の欄の食い違いが同じ綴りへ潰れる。
+#[test]
+fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let root = work.path();
+    let destination = root.join("ghost").join("tester");
+    fs::create_dir_all(&destination).expect("宛先を掘れる");
+    fs::write(destination.join("shiori.dll"), b"loaded").expect("置ける");
+    fs::write(destination.join("descript.txt"), b"old descript").expect("置ける");
+    let before = tree(&destination);
+    let path = put(root, "ghost.nar", &ghost_with_balloon());
+    let archive = NarArchive::open(&path).expect("開ける");
+    let handle = hold(&destination.join("shiori.dll"));
+
+    let (result, records) = capture(|| {
+        archive.install(&InstallRequest {
+            root,
+            target_ghost: None,
+        })
+    });
+    let error = result.expect_err("使用中なので確定できない");
+
+    let NarError::Io {
+        phase,
+        path: failed,
+        committed,
+        rolled_back,
+        survivors,
+        ..
+    } = &error
+    else {
+        panic!("I/O の失敗のはず: {error:?}");
+    };
+    assert_eq!(*phase, IoPhase::Commit, "確定の段で失敗した");
+    assert_eq!(failed, &destination, "対象は掴んだ宛先");
+    assert!(*rolled_back, "巻き戻し済み");
+    assert!(committed.is_empty(), "確定済みは 0: {committed:?}");
+    assert!(
+        survivors.is_empty(),
+        "巻き戻せたので生き残りは 0: {survivors:?}"
+    );
+    assert_eq!(tree(&destination), before, "宛先は 1 バイトも変わらない");
+
+    let errors: Vec<_> = records
+        .iter()
+        .filter(|event| event.level == tracing::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 1, "失敗 1 回につき記録 1 件: {records:?}");
+    let recorded = errors[0].field("work").expect("work の欄がある");
+    assert!(!recorded.is_empty(), "作業フォルダを掘ったのに work が空");
+    let recorded = Path::new(recorded);
+    assert!(
+        recorded.is_dir(),
+        "work が実在しない: {}",
+        recorded.display()
+    );
+    assert!(
+        recorded.starts_with(root.join(".nar-work")),
+        "work が根の .nar-work の配下にない: {}",
+        recorded.display()
+    );
+    assert_eq!(
+        errors[0].field("rolled_back"),
+        Some("true"),
+        "記録の巻き戻せたかが値と違う"
+    );
+    drop(handle);
 }
 
 // ---- 何度呼んでも同じ結果（設計 `install`） ----

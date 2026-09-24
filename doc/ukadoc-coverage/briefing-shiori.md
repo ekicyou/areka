@@ -571,8 +571,9 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 - **テーマ**: 空（`[]`）
 - **優先度**: `E1`（仮置き）
 - **判断の根拠の場所**: `crates/shiori-host32-helper/src/shiori_proxy.rs` の `ShioriByteProxy::load`
-  （絶対パスで読み込み、`load`・`unload`・`request` の 3 つを名前で引く。正典の 4 つのうち `loadu`
-  は引かない）と `ShioriByteProxy::request`。SAORI・MAKOTO の語は
+  （絶対パスで読み込み、正典の 4 つの入口 `loadu`・`load`・`unload`・`request` を全て名前で引く。
+  初期化の入口は `choose_init_entry` が `loadu` を優先して 1 つ選び、入口ごとのパスの渡し方と表せない
+  字の警告は `init_bytes` が持つ）と `ShioriByteProxy::request`。SAORI・MAKOTO の語は
   `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `areka-P0-makoto-dll-host`。
 - **共通 `note`**:
 
@@ -581,10 +582,14 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   DLL の入口は、生存期間の loadu（SSP 2.6.92 以降・置き場所のパスを UTF-8 で受け取る。ベースウェアは
   こちらを優先する）と load（従来版・同じパスを既定の各国語コードページで受け取る）と unload、そして
   要求の request である。SHIORI の DLL については areka の 32bit の助け手が絶対パスで読み込み、この
-  うち load・unload・request の 3 つを名前で引いてから呼んでいる（loadu は引かない）。同じ決まりを
+  4 つを全て名前で引いてから呼んでいる。初期化は loadu が在れば loadu だけを、無ければ load を 1 回
+  だけ呼ぶ（loadu が偽を返しても load で初期化し直さない）。load へ渡すパスに既定のコードページで
+  表せない字があれば、警告を 1 行残して、置き換え済みのパスをそのまま渡す。同じ決まりを
   共有する SAORI・MAKOTO・PLUGIN の DLL は、読み込む呼び出しそのものが無いので同居できない。
-  ログ: DLL が開けない・3 つの入口のいずれかが引けない・load が偽を返したときは、いずれも失敗として
-  呼び出し元へ返り、起動が黙って先へ進むことはない。一方 SAORI・MAKOTO・PLUGIN については、読み込もう
+  ログ: DLL が開けない・初期化の入口（loadu と load）が両方とも無い・unload か request が引けない・
+  初期化の入口へ渡すパスを変換できないか渡す領域を確保できない・初期化の入口が偽を返したときは、
+  いずれも失敗として呼び出し元へ返り、起動が黙って先へ進むことはない。初期化の入口を呼ぶ直前には、
+  選んだ入口の名前（loadu か load）を 1 行残す。一方 SAORI・MAKOTO・PLUGIN については、読み込もう
   とする場所が無いのでログは 1 行も出ない。
   SAORI: areka はプロトコルを実装せず、実装の主体は SHIORI 側である。成立の条件は 32bit の同じ
   プロセスに同居すること・作業ディレクトリ・DLL の探索パスの 3 つ。ukadoc に SAORI の独立したページは
@@ -592,16 +597,18 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
   「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
   粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
-  根拠の場所: crates/shiori-host32-helper/src/shiori_proxy.rs の ShioriByteProxy::load と
-  ShioriByteProxy::request。
+  根拠の場所: crates/shiori-host32-helper/src/shiori_proxy.rs の ShioriByteProxy::load（絶対パスで
+  読み込み、4 つの入口を名前で引く。入口の選択は choose_init_entry、入口ごとのパスの渡し方と表せない
+  字の警告は init_bytes）と ShioriByteProxy::request。
   ```
 
   **上の共通 `note` を書き直した（2026-09-06・タスク 7.3）**: 以前の文面は「DLL の入口の決まり
   （load・unload・request の 3 つ）」と書いており、**正典が定める入口の数を 3 つと述べる形**に
   なっていた。これは事実として誤りである。正典（`spec_dll` の「ライフサイクル関数」の節と
   「request関数」の節）が定める入口は、`loadu`・`load`・`unload` の 3 つの生存期間の関数と、
-  要求の `request` である。「3 つ」は **areka の助け手が名前で引いている入口の数**でしかない。
-  正典を引き直したうえで上の共通 `note` を書き直し、台帳の該当行 1 件へも同じ文面を写した。
+  要求の `request` である。「3 つ」は **areka の助け手が名前で引いている入口の数**でしかない
+  （2026-09-23 以降は 4 つ全てを引く）。正典を引き直したうえで上の共通 `note` を書き直し、
+  台帳の該当行 1 件へも同じ文面を写した。
   同じ行の別の段落（「内容:」で始まる段落）が以前から 4 つの入口と両者の違いを書いており、
   今回の書き直しで冒頭の段落もそれと揃った。
 
@@ -1103,14 +1110,16 @@ PLUGIN の DLL は読み込む呼び出しそのものが無いので同居で�
 
 **その群を成立させる最小の基盤**
 
-- **今ある物**: 32bit の助け手が絶対パスで DLL を読み込み、`load`・`unload`・`request` の 3 つを
-  名前で引いてから呼んでいる。読み込みに失敗したときは黙って先へ進まず、失敗として呼び出し元へ
-  返る。
-- **足りない物**: ⑴ 正典が定める 4 つ目の入口 `loadu` を名前で引く枝（正典はこちらを優先して使う
-  ことにしており、`load` との違いは置き場所のパスの文字コードである——`loadu` は UTF-8、`load` は
-  既定の各国語コードページ）、⑵ SAORI・MAKOTO・PLUGIN の DLL を読み込む側。MAKOTO の担当は
-  `areka-P0-makoto-dll-host` である。SAORI については areka がプロトコルを実装するのではなく、
-  32bit の同じプロセスに同居できること・作業ディレクトリ・DLL の探索パスの 3 つが条件になる。
+- **今ある物**: 32bit の助け手が絶対パスで DLL を読み込み、正典の 4 つの入口 `loadu`・`load`・
+  `unload`・`request` を全て名前で引いてから呼んでいる。初期化は `loadu` を優先し（置き場所の
+  パスを UTF-8 のまま渡す）、`loadu` が無い DLL には `load` を呼ぶ（パスは既定の各国語コード
+  ページ。表せない字があれば警告を 1 行残して、置き換え済みのパスをそのまま渡す）。読み込みに
+  失敗したときは黙って先へ進まず、失敗として呼び出し元へ返る。
+- **足りない物**: SAORI・MAKOTO・PLUGIN の DLL を読み込む側（以前ここに⑴として挙げていた
+  `loadu` を名前で引く枝は、2026-09-23 に `areka-P0-shiori-loadu` が加えたので今ある物へ
+  移した）。MAKOTO の担当は `areka-P0-makoto-dll-host` である。SAORI については areka が
+  プロトコルを実装するのではなく、32bit の同じプロセスに同居できること・作業ディレクトリ・DLL の
+  探索パスの 3 つが条件になる。
 
 **台帳の項目 id**
 
@@ -1370,7 +1379,8 @@ OnSecondChange, basewareversion
 3. **`\![enter,selectrect]`／`\![leave,selectrect]` の綴り**（申し送り⑵）は正典側の誤りなので、
    ukadoc へのフィードバックの候補である。
 4. **台帳の `ukadoc:spec_dll` の行の 1 段落は、2026-09-06 に直した（送り先は無い）。** 以前は
-   DLL の入口を「load・unload・request の 3 つ」と書いており、areka が名前で引いている数ではなく
+   DLL の入口を「load・unload・request の 3 つ」と書いており、areka が名前で引いている数
+   （2026-09-23 以降は 4 つ全てを引く）ではなく
    **正典が定める入口の決まりそのものを 3 つと述べる形**になっていて、事実として誤りだった。
    正典が定める入口は `loadu`・`load`・`unload` の 3 つの生存期間の関数と、要求の `request` で
    ある。この台帳と索引は本 spec の持ち物であって送り先の担当が居ないので、候補として残さず、

@@ -212,3 +212,34 @@ fn open_records_a_missing_file_as_an_error_and_returns_err() {
         "error! でパスを添える: {lines:?}"
     );
 }
+
+/// 説明書のファイルが無ければ OS を呼ばず、パスを添えて `warn!` で 1 行記録する（要件 5.1・5.5）。
+///
+/// `readme_open_failed`（`error!`）も `readme_opened`（`info!`）も出ない＝`open` を通っていない。
+#[test]
+fn open_from_world_skips_a_missing_file_with_a_warning_and_no_os_call() {
+    let dir = TempPath::new("readme-open-missing");
+    let mut world = World::new();
+    let _tx = wired(&mut world, dir.child("readme.txt"));
+
+    let lines = capture(|| open_from_world(&world));
+
+    assert!(
+        lines_of(&lines, "readme_open_failed").is_empty(),
+        "無いファイルで OS を呼ばない＝error! は 0 行（要件 5.1）: {lines:?}"
+    );
+    assert!(
+        lines_of(&lines, "readme_opened").is_empty(),
+        "開いた記録も 0 行: {lines:?}"
+    );
+    let skipped = lines_of(&lines, "readme_open_skipped_missing");
+    assert_eq!(
+        skipped.len(),
+        1,
+        "要求 1 件につき 1 行（要件 5.1）: {lines:?}"
+    );
+    assert!(
+        skipped[0].contains("level=WARN") && skipped[0].contains("readme.txt"),
+        "warn! でパスを添える（要件 5.1）: {skipped:?}"
+    );
+}

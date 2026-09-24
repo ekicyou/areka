@@ -19,7 +19,7 @@
 //! （[`tree`] は相対パスとバイト列そのもので写す）。「まだ在る」では何も証明できない。
 
 use super::*;
-use crate::error::ElementKind;
+use crate::error::{ElementKind, SurvivingTree};
 use std::os::windows::fs::OpenOptionsExt;
 
 // ---- 助手 ----
@@ -590,18 +590,24 @@ fn leftovers_name_the_work_folder_when_the_cleanup_cannot_finish() {
 /// 手が解けなくなる状況を 1 本の走行の中では作れない。そこで解く手そのものが失敗する形
 /// （退避先が消えている）で与え、判断の側を踏む。
 ///
-/// 3 手を積んで、⑴逆順に解くこと⑵最初に躓いた宛先を名指すこと⑶1 つ躓いても残りを
+/// 4 手を積んで、⑴逆順に解くこと⑵最初に躓いた宛先を名指すこと⑶1 つ躓いても残りを
 /// 解くことを同時に見る。解く順は「積んだ順の逆」なので、名指されるのは**最後に積んだ**
 /// 宛先になる（順が前向きなら別の宛先が名指されて赤になる）。
+///
+/// 躓きは 2 種類あり、どちらも生き残りには載らない（要件 2.3）。退避先が実在しない
+/// 「元へ戻す」手（戻すべき元の木がそもそも無い）と、新規の宛先を消す手（宛先は
+/// もともと無かった）。後者は宛先の中のファイルを掴んで消せなくする。
 #[test]
 fn a_rollback_that_cannot_finish_reports_the_first_stuck_destination() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let removable = work.path().join("ghost").join("test-extra");
     let first_stuck = work.path().join("ghost").join("test-ghost");
     let last_stuck = work.path().join("balloon").join("test-balloon");
-    for tree in [&removable, &first_stuck, &last_stuck] {
+    let held_new = work.path().join("ghost").join("test-held");
+    for tree in [&removable, &first_stuck, &last_stuck, &held_new] {
         make_tree(tree, &[("descript.txt", b"new descript")]);
     }
+    let handle = hold(&held_new.join("descript.txt"));
     let missing_old = work.path().join(".nar-work").join("no-such-old");
     let committed = vec![element(
         ElementKind::Ghost,
@@ -613,6 +619,8 @@ fn a_rollback_that_cannot_finish_reports_the_first_stuck_destination() {
 
     let failure = roll_back(
         vec![
+            // 最初に積んだ手＝最後に解く手なので、名指される宛先を変えない。
+            Undo::Remove(held_new.clone()),
             Undo::Remove(removable.clone()),
             Undo::Restore {
                 old: missing_old.clone(),
@@ -644,6 +652,61 @@ fn a_rollback_that_cannot_finish_reports_the_first_stuck_destination() {
         !removable.exists(),
         "1 つ躓いても残りは解く（解ける宛先を巻き添えにしない）"
     );
+    assert!(held_new.is_dir(), "新規の宛先を消す手も躓いている");
+    assert_eq!(
+        failure.survivors,
+        vec![],
+        "退避先が実在しない躓きも、新規の宛先を消す手の躓きも生き残りに載らない"
+    );
+    drop(handle);
+}
+
+/// 本当に戻せなかった巻き戻しで、生き残りが退避先を指し、元の木をそのまま持つ
+/// （要件 2.1・2.2・2.6）。
+///
+/// 退避先に元の木、宛先に新しい木を置き、宛先の中のファイルを掴む。元へ戻す手は
+/// 新しい木を先に退けようとして失敗するので、退避先は 1 バイトも動かないまま残る。
+/// 「まだ在る」でなく、置いた元の木とバイト列で突き合わせる。
+#[test]
+fn a_rollback_that_cannot_restore_reports_where_the_original_tree_survives() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("ghost").join("test-ghost");
+    let old = work.path().join(".nar-work").join("1-0").join("old-0");
+    make_tree(
+        &old,
+        &[
+            ("descript.txt", b"old descript"),
+            ("ghost/master/shiori.dll", b"old shiori"),
+        ],
+    );
+    let original = tree(&old);
+    make_tree(&destination, &[("descript.txt", b"new descript")]);
+    let handle = hold(&destination.join("descript.txt"));
+
+    let failure = roll_back(
+        vec![Undo::Restore {
+            old: old.clone(),
+            dest: destination.clone(),
+        }],
+        vec![],
+        StageError {
+            path: work.path().join("elsewhere"),
+            source: io::Error::other("確定を止めた失敗"),
+        },
+    );
+
+    assert!(!failure.rolled_back, "元には戻っていない");
+    assert_eq!(failure.path, destination, "戻せなかった宛先を名指す");
+    assert_eq!(
+        failure.survivors,
+        vec![SurvivingTree {
+            destination: destination.clone(),
+            path: old.clone(),
+        }],
+        "生き残りはちょうど 1 件で、退避先を指す"
+    );
+    assert_eq!(tree(&old), original, "退避先は置いた元の木のまま");
+    drop(handle);
 }
 
 /// 他の走行の置き土産が消せなくても止めず、残り物として結果に載せる。

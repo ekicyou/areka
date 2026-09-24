@@ -16,7 +16,7 @@
 **範囲の整理**
 
 - **メニューへのサブメニューの登記は本仕様の範囲外**（本文の Out のとおり）。roadmap の旧 A1 行は本仕様に割り当てていたが、切替の動作（`SwitchRequest`）が無いと項目を作れないので、切替の 2 本が持つ。**本仕様は `crates/areka/src/menu/` に触らない。**
-- 既定バルーンを `.nar` へ畳む仕事は `areka-P0-default-balloon-nar-fold`（台帳 #42）が持つ。本文の「`.nar` へ畳むのは `areka-P0-nar-install` が引き受ける」は、同 spec が畳まずに完了したので**偽になった**。本仕様は窓口 `sample_ghost_kit::SampleRoot` を呼ぶだけで、登記表 `SAMPLES` には触らない。
+- 既定バルーンは `areka-P0-default-balloon-nar-fold`（台帳 #42）が `.nar` へ畳んだ（着地済み）。`areka-P0-nar-install` は畳まずに完了しており、本文の保管先の行もそれに合わせて書き直した。本仕様は窓口 `sample_ghost_kit::SampleRoot` を呼ぶだけで、登記表 `SAMPLES` には触らない。
 - `crates/areka-ghost/src/runtime.rs` は**触らずに済む見込み**（起動成功時に「最後に使った」を書くのは `runtime.sylphya_publisher()` 経由で `main.rs` から行える）。
 
 **並走の条件**: `areka-P0-app-lifetime-separation` と `crates/areka/src/main.rs`（958 行）の別の関数・`crates/areka/tests/smoke_boot_loop_exit.rs` を共有する＝**実装は同 spec の着地後**。要件と設計は先行してよい。`main.rs` と `crates/areka-sylphya/src/persist/mod.rs`（934 行）は 1,000 行の上限が近く、テストの別ファイル化か切り出しが必須。
@@ -131,5 +131,5 @@
 
 - **既定バルーン id ＝ `StayseeBalloon`。** バルーン定義（`descript.txt`）の `id` 行・`install.txt` の `directory` 行・リポジトリに置いた実フォルダ名の 3 つが、大小を含めてバイト一致していることを実測で確かめた（採り方と較正は `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/provenance.md` の「既定バルーン id」の節）。配布物の中での置き場は根の下の `balloon/StayseeBalloon/`。
 - **定数と解決順への配線は本 spec が足す。** `default-balloon-bundle` は本番コードに既定バルーン id の定数を**置かない**（同 spec は本番コードの変更 0 行で着地しており、その要件 7.2 が定数の設置を本 spec へ委ねている）。解決順の最後に渡す 1 つをこちらで足すこと。
-- 保管先は `vendors/sample_ghost/StayseeBalloon/`（展開フォルダ・29 ファイル無改変）。`.nar` へ畳むのは `areka-P0-nar-install` が引き受ける。
+- 保管先は `vendors/sample_ghost/StayseeBalloon.nar`（29 ファイル無改変・登記表 `SAMPLES` 経由・`SampleRoot::acquire("StayseeBalloon")` で引く）。
 - 上の「裁定候補 ⑴」は決着済み: 既定バルーンは CC0 の `Balloon for Staysee Syncfield` を同梱する（開発者裁定 2026-09-18）。半透明の扱いを宣言から読まず常に有効として焼く裁量は `doc/COMPAT_ARCHITECTURE.md` §8 に登記済み。

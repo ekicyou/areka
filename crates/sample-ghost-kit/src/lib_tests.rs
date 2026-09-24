@@ -3,7 +3,7 @@
 //!
 //! 窓口は `vendors/sample_ghost/<名>.nar` を展開した原本から**使い捨ての複製**を作って配る。
 //! だから主張は 7 本——登記した検体が登記どおりの位置（`<根>/ghost/<名>`・
-//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 5 つを
+//! `<根>/balloon/<名>`）に実在し、値を捨てると複製ごと消える／未登録名は既知の 6 つを
 //! 含む失敗になる／同梱していないバルーン名は既知の一覧を含む失敗になる／展開結果が
 //! 登記と食い違えば理由付きの失敗になる／種別と同梱バルーンが登記されている／登記した
 //! 各 `.nar` を空の根へ展開すると要素が登記の 1 行とちょうど一致する（登記の往復）／
@@ -114,14 +114,14 @@ fn refused(
     (shown, expected, installed)
 }
 
-/// 登記した 5 つの検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
+/// 登記した 6 つの検体は、登記の行から導いた位置に実在し、値を捨てると複製ごと消える
 /// （要件 1.1・1.2・1.3・7.4）。
 ///
 /// 位置は `<根>/<格納先>/<名>` の等式で判定する。検体ごとの第 2 の表や専用関数があれば
 /// この等式は破れる（要件 1.5）。
 #[test]
 fn every_registered_sample_lands_where_its_registry_row_says() {
-    assert_eq!(SAMPLES.len(), 5, "登記は検体 5 つ");
+    assert_eq!(SAMPLES.len(), 6, "登記は検体 6 つ");
     for sample in SAMPLES {
         let acquired = SampleRoot::acquire(sample.name).expect("登記済みの名前は取得できるはず");
 
@@ -175,9 +175,9 @@ fn every_registered_sample_lands_where_its_registry_row_says() {
     }
 }
 
-/// 未登録の検体名は、既知の名前 5 つを含む理由付きの失敗になる（要件 1.4）。
+/// 未登録の検体名は、既知の名前 6 つを含む理由付きの失敗になる（要件 1.4）。
 #[test]
-fn unknown_sample_fails_with_all_five_known_names() {
+fn unknown_sample_fails_with_all_six_known_names() {
     let err = SampleRoot::acquire("no-such-ghost").expect_err("未登録名は失敗するはず");
     let SampleError::UnknownSample { requested, known } = &err else {
         panic!("未登録名の失敗は UnknownSample であるはず: {err:?}");
@@ -191,6 +191,7 @@ fn unknown_sample_fails_with_all_five_known_names() {
             "emo2-kakukaku-offsetdpi",
             "emo2-kakukaku-wplimit",
             "konnoyayame",
+            "StayseeBalloon",
         ]
     );
     let shown = err.to_string();
@@ -200,6 +201,7 @@ fn unknown_sample_fails_with_all_five_known_names() {
         "emo2-kakukaku-offsetdpi",
         "emo2-kakukaku-wplimit",
         "konnoyayame",
+        "StayseeBalloon",
     ] {
         assert!(shown.contains(name), "失敗の表示に {name} が無い: {shown}");
     }
@@ -346,7 +348,11 @@ fn registry_records_kind_and_bundled_balloons() {
         by_name("R_POST_and_KOMAINU").balloons.is_empty(),
         "R_POST_and_KOMAINU は同梱バルーン 0"
     );
-    for name in ["emo2-kakukaku-offsetdpi", "emo2-kakukaku-wplimit"] {
+    for name in [
+        "emo2-kakukaku-offsetdpi",
+        "emo2-kakukaku-wplimit",
+        "StayseeBalloon",
+    ] {
         assert_eq!(by_name(name).kind, SampleKind::Balloon);
         assert!(by_name(name).balloons.is_empty(), "{name} は同梱バルーン 0");
     }
@@ -401,8 +407,8 @@ fn declared_elements_with_kind(sample: &Sample) -> Vec<String> {
 fn every_sample_nar_installs_exactly_the_elements_its_registry_row_declares() {
     assert_eq!(
         SAMPLES.len(),
-        5,
-        "登記は検体 5 つ（母数 0 で緑にならない較正）"
+        6,
+        "登記は検体 6 つ（母数 0 で緑にならない較正）"
     );
     for sample in SAMPLES {
         let root = WorkDir::new().expect("空の根は取れるはず");
