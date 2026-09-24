@@ -98,7 +98,7 @@
   - 完了の姿: `cargo build -p areka` が通り、書き込みの呼び出しが boot `Ok` の直後の 1 か所だけ
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 9.5_
 
-- [ ] 6. 実プロセスの検査
+- [x] 6. 実プロセスの検査
 - [x] 6.1 常設 smoke テストを 3 方向へ更新する
   - 起動の口を「引数と env の組」を受ける形へ広げ、全方向で `AREKA_APP_SMOKE_EXIT_MS=500`・`AREKA_NO_ALERT=1`。60 秒の見張りと終了コードの判定は残す
   - ① 本物方向（argv 絶対パス・目印は今までどおり・終了コード 0）、② 根方向（argv なし・`AREKA_ROOT` に検体の根・`AREKA_PROFILE_DIR` は一時フォルダ・目印は `route=Only`／`route=Companion`・終了コード 0）、③ 0 体方向（空の一時の根・終了コード非 0・「ゴーストが見つかりません」を含み本物の窓の目印を含まない）
@@ -112,7 +112,7 @@
   - _Requirements: 2.4, 2.9_
   - _Boundary: ukadoc-coverage ledger_
   - _Depends: 2.1_
-- [ ] 6.3 全体の回帰と実機確認
+- [x] 6.3 全体の回帰と実機確認
   - ワークスペースのテスト（既存の永続 4 族・`fn resolve` の 4 呼び手のテストを含む）が緑であること、新規の外部依存が 0 であること（`Cargo.lock` に新しい crate が無い）を確かめる
   - 実機 4 点: ① `AREKA_ROOT` に検体の根・argv なしで同梱バルーンの会話が出る（`balloon_resolved route=Companion`）② 終了後にアプリとゴーストの `sylphya.toml` の `[last]` を確認し、再起動で `route=Memory` ③ 空の根で告知が出て閉じると終了コード非 0（`AREKA_NO_ALERT` は設定しない）④ 有界終了後にプロセスが残らない。止めるのは自分が起こしたと確認できたプロセスだけ
   - 裁定 1〜5 を覆す必要が見えたら実装を止め、開発者へ議題として上げる
@@ -128,3 +128,4 @@
 - 5.2: `emo2_boot/zorder_wiring_tests.rs` の t_zwi08 は main.rs の本文を文字列で照合するので、`open_startup_window` の形を変えると追随が要る。`areka-ghost/src/runtime.rs` の doc に「ダミー窓」が 1 か所残る（要件 7.2 で不変のため意図的）。smoke のフォールバック方向の目印は 6.1 まで死んでいる。
 - 6.1: 子の tracing は pipe でも着色されるので smoke は `NO_COLOR=1` を渡す。smoke の各方向は自前の `SampleRoot` 複製を使う（② のゴースト側の記憶が次の走行を `route=Memory` へ変えないため）。
 - 6.2: 台帳を `implemented` にするとソースの `// ukadoc:` URL コメント・報告の作り直し・`briefing.md` の数・`roadmap-draft.md` の spec 行と段階の表の「依存する既存 spec」欄まで追随が要る（`cargo test -p ukadoc-survey` が見張る）。
+- 6.3: `log-capture-kit` の `temp_path_guard_test` は `std::env::temp_dir()` の直呼びを禁じる（実在を問わないパスでも）。純粋テストの架空パスは固定の絶対パスで書く。

@@ -18,7 +18,7 @@ use crate::boot_config::{RootError, RootSource};
 
 /// 実在を問わない絶対パス（本文に綴られることだけを見る）。
 fn abs(leaf: &str) -> PathBuf {
-    std::env::temp_dir().join("areka-alert-tests").join(leaf)
+    PathBuf::from(r"C:\areka-alert-tests").join(leaf)
 }
 
 /// 抑止ありで `raise` を呼び、捕まえた記録を全件返す。

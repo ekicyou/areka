@@ -724,7 +724,7 @@ shell = "master"
 | 議題 | 決定 | 理由 |
 |---|---|---|
 | **#8** `is_benign_placement_error`／`main_seam_tests.rs` | **退役**（関数もテスト 2 本も消す）。`is_benign_boot_error` は残し、doc の根拠だけ書き換える | 要件 6.4 で準備失敗は全て `error!`＋告知＋終了になり「良性」の分岐に消費者が無い。`is_benign_boot_error` は `wire_emo2_boot` のフォールバック（範囲外）が使い続ける |
-| **#10** 抑止の環境変数 | **`AREKA_NO_ALERT`**（設定されていれば抑える。未設定・空・`0` は出す。smoke と実機 ③ は `AREKA_NO_ALERT=1` で渡す） | 要件 6.5 の「設定されている」を有無で読む最も単純な形。`0` で切れるのは `AREKA_TICK_GATE` と同じ作法。`AREKA_APP_SMOKE_EXIT_MS` に相乗りしない（裁定 2） |
+| **#10** 抑止の環境変数 | **`AREKA_NO_ALERT`**（設定されていれば抑える。未設定・空・`0` は出す。smoke は `AREKA_NO_ALERT=1` で渡す。実機 ③ は告知そのものを見るので設定しない＝要件 8.5） | 要件 6.5 の「設定されている」を有無で読む最も単純な形。`0` で切れるのは `AREKA_TICK_GATE` と同じ作法。`AREKA_APP_SMOKE_EXIT_MS` に相乗りしない（裁定 2） |
 | **#13** 素性の型と供給形 | `areka_ghost::catalog` の公開型（`Identity`・3 つの `Entry`）。bin の判断関数は `&[String]`（フォルダ名）を受ける | 後続 3 spec が同じ型を引ける。判断は名前だけで決まるので供給源が変わっても変わらない |
 | **#14** テスト移設の順序 | **先に移設だけ**（`persist/persist_tests.rs`・挙動 0 変更）→ 族の追加 | 934 行に族を足した瞬間に 1,000 行を超える。移設は機械的で独立にレビューできる |
 | **R1** 書き込みの反映保証 | **追加の `barrier()` は置かない**。`GhostRuntime::shutdown` の手順 10（`barrier()` → `close()` → join）と FIFO に任せる | `persist_put` は boot 直後に投函され `Close` より前に処理される。`shutdown` は本仕様で変えない（要件 7.2） |

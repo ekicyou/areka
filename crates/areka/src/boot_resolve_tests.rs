@@ -16,7 +16,7 @@ use super::*;
 
 /// 実在を問わない根（判断は fs を見ないので実在は要らない）。
 fn root() -> BasewareRoot {
-    BasewareRoot::new(std::env::temp_dir().join("areka-boot-resolve-tests"))
+    BasewareRoot::new(PathBuf::from(r"C:\areka-boot-resolve-tests"))
 }
 
 fn names(v: &[&str]) -> Vec<String> {
