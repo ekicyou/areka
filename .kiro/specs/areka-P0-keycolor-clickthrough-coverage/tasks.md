@@ -159,5 +159,13 @@
 - ⑸ 報告
   - 抜き色で透明になった場所のクリックが背後の窓へ抜けることを固定するテストを 1 本足した。検体 2 体の 3 面（`R_POST_and_KOMAINU` 面 0・面 10、`konnoyayame` 面 0）を製品と同じ順（焼く → 合成する → 当たり判定用のマスクを作る）で通し、左上の画素と同じ色の画素が抜ける（マスクで「外」になる）こと、それ以外の画素は「内」のままであることを全画素で確かめる。抜き色は絵の内側の画素（白や緑）にも当たる。正解は、テスト自身が同じ PNG を読み直して決めている。
   - 途中の 3 段を 1 つずつわざと壊すと、このテストは 3 面すべてで失敗した。焼く段で抜き色を渡さないと 59831／11816／70574 画素、合成段で α を捨てると 24959／8712／51984 画素、マスクを作る段に全面不透明を渡すと 59831／11816／70574 画素の食い違いが出た。どの段も元に戻したあとは失敗 0 に戻った（詳細は 3.1〜3.3）。
-  - 見つかった穴: 合成段を壊しても compose クレート自身のテストは 1 本も失敗しなかった（3.2 に記録）。この退行を止めるのは、本テストと present クレートの一部のテストだけである。compose クレートの中に止めるテストを足す作業は、別件として提案済み。
+  - 見つかった穴: 合成段を壊しても compose クレート自身のテストは 1 本も失敗しなかった（3.2 に記録）。この退行を止めるのは、本テストと present クレートの一部のテストだけである。この穴は同じブランチの追記（下記）で塞いだ。
   - このテストが止めるのは、今日通っている動きの退行だけである。実機での目視の確認（`areka-P0-alpha-release-signoff` の目視項目）はこれまでどおり残る。
+
+### 追記: compose クレートの穴を塞ぐテスト（2026-09-24・`81f4e89f`）
+
+- 3.2 で見つかった穴（合成段で転写した画素の α を捨てても compose クレートのテストが 1 本も赤にならない）を塞ぐため、`crates/areka-emo-compose/src/blit_transparent_alpha_tests.rs` に `blit::transparent_alpha_tests::copied_alpha_is_kept_on_a_cleared_output` を 1 本足した。α=0・α=128・α=255 の 3 画素を全透明にクリアした合成先へ転写し、合成先の画素（α を含む）が元の画素と一致することを主張する。
+- 接続は `blit.rs` の末尾の `#[cfg(test)]`・`#[path = "blit_transparent_alpha_tests.rs"]`・`mod transparent_alpha_tests;` の 3 行（製品コードの変更行数は 0 のまま。接続宣言は本 spec 全体で 3 行 → 6 行）。
+- 赤の確認: 3.2 と同じ差し替え（`blit.rs` の `execute` の α を書く行を `dst[di + 3] = 255;`）で `cargo test -p areka-emo-compose --no-fail-fast` は 220 passed / 1 failed（足したテストだけが「全透明の合成先へ転写した画素が元の画素（α を含む）と違う」で赤）。`git checkout -- crates/areka-emo-compose/src/blit.rs` で戻し、同ファイルの `git diff --stat` は空・`cargo test -p areka-emo-compose` は 221 passed。
+- 4.1 の「触ったファイルは design の表の 10 本」は、この追記で 12 本（`blit.rs`・`blit_transparent_alpha_tests.rs` を追加）になる。
+- main 同期（`c7e1e895`・origin/main `d39c12d2` を取り込み・衝突なし）の後、`cargo test -p areka-emo-atlas`（83 passed / 1 ignored）・`-p areka-emo-compose`（221）・`-p areka-emo-present`（255）・`-p areka --bin areka placement`（913 / 2 ignored）・`cargo build -p areka --examples` がすべて緑。
