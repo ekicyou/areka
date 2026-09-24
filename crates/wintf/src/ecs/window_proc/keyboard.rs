@@ -138,7 +138,11 @@ pub(super) fn WM_ACTIVATE(
     // ドラッグ中なら状態を確認してキャンセル
     let state_snapshot = crate::ecs::drag::snapshot_drag_state();
     match state_snapshot {
+        // JustStarted は Started を既に積んでいるので、Dragging と同じく Ended を積んで閉じる。
         crate::ecs::drag::DragStateSnapshot::Dragging {
+            entity, start_pos, ..
+        }
+        | crate::ecs::drag::DragStateSnapshot::JustStarted {
             entity, start_pos, ..
         } => {
             tracing::info!(
@@ -253,3 +257,7 @@ pub(super) fn WM_CAPTURECHANGED(
 
     None // DefWindowProcWに委譲
 }
+
+#[cfg(test)]
+#[path = "keyboard_tests.rs"]
+mod keyboard_tests;

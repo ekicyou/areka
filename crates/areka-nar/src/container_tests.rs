@@ -586,3 +586,21 @@ fn the_mutation_scan_catches_every_spelling_it_claims_to_watch() {
         "バイト列を読むだけの行は拾わない（走査が何にでも当たるのでは意味が無い）"
     );
 }
+
+/// 対応外で拒否する長い名前は、`PathTooLong` と同じく先頭の有界の一部と測った長さだけを載せる
+/// （この拒否は名前の長さの検査より前に起きる）。
+#[test]
+fn an_unsupported_long_name_is_bounded_in_the_reason() {
+    let long = format!("{}.txt", "a".repeat(300));
+    let nar = NarBuilder::new()
+        .file(long.as_str(), b"type,ghost")
+        .encrypted_flag()
+        .done()
+        .bytes();
+
+    let reason = refusal(&nar);
+    let RefuseReason::UnsupportedEntry { ref name, .. } = reason else {
+        panic!("対応外として拒否されるはず: {reason}");
+    };
+    assert_eq!(name, &format!("{}…（304 単位・上限 200）", "a".repeat(32)));
+}

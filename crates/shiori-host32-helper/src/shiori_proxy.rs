@@ -45,12 +45,7 @@
 //! で自然に閉じる）。
 //!
 //! ## consume 点
-//! 本モジュールは Task 5.1（proxy 本体）で新設され、WndProc からの結線（LOAD トリガ→proxy 確立→
-//! `load`→ack 返送）は **Task 6** が行う。それまでは未使用ゆえ [`allow(dead_code)]`。
-
-// Task 6 が WndProc（`main.rs`）から本モジュールを consume するまで、proxy 本体は未使用。
-// それによる dead_code 警告を抑止する（結線時に消費される）。
-#![allow(dead_code)]
+//! WndProc（`main.rs`）が LOAD トリガ→proxy 確立→初期化の入口→ack 返送の順で本モジュールを使う。
 
 use std::path::Path;
 
@@ -79,6 +74,8 @@ type UnloadFn = unsafe extern "C" fn() -> u8;
 type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
 
 /// SHIORI DLL 確立の失敗種別（design §366-371）。観測可能な形で返す（panic しない）。
+// 中身は失敗の 1 行（`main.rs` の `{e:?}`）でだけ読む。rustc は derive した `Debug` を読み手に数えない。
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum ProxyError {
     /// `LoadLibraryW` 失敗（DLL 不在・ロード失敗・ビットネス不一致など・R6.1）。
@@ -407,8 +404,9 @@ fn encode_with_codepage(cp: u32, path: &Path) -> Result<CodepageEncoded, ProxyEr
     Ok(CodepageEncoded { bytes: buf, lossy })
 }
 
-/// `path` を **ANSI(CP_ACP)** バイト列へ符号化する（既存の署名を保つ薄い包み・既存テスト 3 本が固定）。
+/// `path` を **ANSI(CP_ACP)** バイト列へ符号化する（既存の署名を保つ薄い包み・既存テストが固定）。
 /// `encode_with_codepage(CP_ACP, path).map(|e| e.bytes)`。
+#[cfg(test)]
 fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
     encode_with_codepage(CP_ACP, path).map(|e| e.bytes)
 }
@@ -444,7 +442,7 @@ fn init_bytes(entry: &InitEntry, load_dir: &Path) -> Result<Vec<u8>, ProxyError>
 mod tests {
     //! Task 5.2: プロキシの i686 単体テスト（design §387 Validation・Testing Strategy Unit #6・
     //! 確定設計判断 (d)）。3 本立て:
-    //! 1. 純関数部（ANSI(CP_ACP) 符号化）の決定的検証。
+    //! 1. 純関数部（コードページ符号化）の決定的検証。
     //! 2. `kernel32.dll` への load で `EntryNotFound` を決定的に証明（エクスポート欠落態様・R6.2）。
     //! 3. testdll を直接 `load`→`drop` し、courtesy unload の実呼出（観測マーカー）と無 panic を確認
     //!    （R2.2・E2E では Drop 経路が実行されない補完）。
@@ -463,7 +461,7 @@ mod tests {
     static TESTDLL_SERIAL: Mutex<()> = Mutex::new(());
 
     // ---------------------------------------------------------------------
-    // 1. 純関数部の検証: ANSI(CP_ACP) 符号化
+    // 1. 純関数部の検証: コードページ符号化
     // ---------------------------------------------------------------------
 
     /// ASCII パスは CP_ACP でも同一バイト列に符号化される（NUL 終端は付けない＝正味長）。
@@ -486,18 +484,17 @@ mod tests {
         assert!(bytes.is_empty());
     }
 
-    /// 日本語混じりは CP_ACP(=日本語ロケールで Shift_JIS)の複数バイトへ符号化され、ASCII 部と
-    /// 混在する。バイト内容はロケール依存ゆえ「非空・ASCII 区切り '\\' を含む・元 UTF-8 と異なる」
-    /// のみ決定的に確認する（環境依存の強い部分は緩く・純関数が panic せず往復する証拠）。
+    /// 日本語混じりは Shift_JIS（コードページ 932）の複数バイトへ符号化され、ASCII 部と混在する。
+    /// 機械の既定コードページ（CP_ACP）に依らないよう、932 を明示して渡す。
     #[test]
-    fn ansi_encode_mixed_japanese_is_multibyte() {
+    fn mixed_japanese_encodes_to_shift_jis_multibyte() {
         let p = Path::new(r"C:\ゴースト");
-        let bytes = ansi_encode(p).expect("mixed path must encode without panic");
-        assert!(!bytes.is_empty());
-        // ASCII 前置部（`C:\`）はそのまま先頭に載る。
-        assert_eq!(&bytes[..3], br"C:\");
-        // CP_ACP は UTF-8 と異なる符号化ゆえバイト列は元 UTF-8 と一致しない（SJIS 等）。
-        assert_ne!(bytes, r"C:\ゴースト".as_bytes().to_vec());
+        let encoded = encode_with_codepage(932, p).expect("mixed path must encode without panic");
+        assert_eq!(
+            encoded.bytes,
+            b"C:\\\x83\x53\x81\x5B\x83\x58\x83\x67".to_vec()
+        );
+        assert!(!encoded.lossy);
     }
 
     // ---------------------------------------------------------------------
@@ -515,7 +512,7 @@ mod tests {
         let result = ShioriByteProxy::load(dll, &load_dir);
         match result {
             Err(ProxyError::EntryNotFound(sym)) => {
-                // 最初に解決を試みるのは "load"（3 解決の先頭）。
+                // 初期化の入口 `loadu`・`load` が両方無いときの名札は "load"。
                 assert_eq!(sym, "load", "kernel32 は SHIORI load を持たない");
             }
             // Ok は kernel32 が SHIORI エクスポートを持たない以上あり得ない。他 ProxyError も不可。

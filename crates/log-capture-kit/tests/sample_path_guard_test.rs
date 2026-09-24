@@ -124,7 +124,12 @@ impl Form {
             Form::OldLocation => vec![TOKEN_OLD_PATH.to_owned(), TOKEN_OLD_JOIN.to_owned()],
             Form::CheckedInTree => SAMPLES
                 .iter()
-                .map(|s| format!("{VENDOR_PARENT}/{}/", s.name))
+                .flat_map(|s| {
+                    [
+                        format!("{VENDOR_PARENT}/{}/", s.name),
+                        format!("{VENDOR_PARENT}/{}\"", s.name),
+                    ]
+                })
                 .collect(),
             Form::Namespace => vec![TOKEN_NAMESPACE.to_owned()],
             Form::BundledBalloonPath => SAMPLES
@@ -501,6 +506,18 @@ fn the_checked_in_sample_tree_is_detected_but_the_nar_file_name_is_not() {
         scan_text(&positive),
         vec![(1usize, token.clone())],
         "展開形の検体フォルダを検知できていない"
+    );
+
+    // 末尾 `/` を付けずにフォルダで閉じる綴りも同じ形である。
+    let bare = format!("{VENDOR_PARENT}/{name}\"");
+    let positive = format!(
+        "    let dir = repo.join(\"{bare});
+"
+    );
+    assert_eq!(
+        scan_text(&positive),
+        vec![(1usize, bare)],
+        "末尾 `/` の無い展開形の検体フォルダを検知できていない"
     );
 
     // `.nar` の保管場所を名指しするのは禁じていない（要件 1.8）。

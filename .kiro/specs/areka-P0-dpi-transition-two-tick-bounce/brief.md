@@ -7,6 +7,7 @@
 **実測（main `fe157df1`）**
 
 - `run_dpi_phase`（`crates/areka/src/emo2_boot/frame/dpi.rs`）と `refresh_scale`（`crates/areka-emo-present/src/presenter/refresh.rs`）は行番号のずれ 0。上流の `present-gpu-transform-scale` は完了したが、**跳ねが残るかは測り直していない**。
+- **2026-09-24: 判定器の見送り窓は直さない（本仕様の範囲から外した）。** 見送り窓を書込上限から除くと、見送り窓の上で「大きさと位置を別々に書く」本物の欠陥が見えなくなる。偽の違反は実機 15 遷移で 0 件。裁定は `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §13.1、開発者が 09-24 に再確認。下の Desired Outcome 3・Scope の judge 相は当時の記述で、**無効**。
 - **判定器の穴は、spec を立てずに直す**（roadmap「直接修正候補」）。`crates/areka/src/placement/transition_judge_verdict.rs` の窓ごとの書込の上限（要件 4.5）は `summary.writes_per_window` をそのまま回し、見送りの窓を除いていない。ところが同じファイルに「見送りの窓を除いた、書込のあった窓」を返す `judged_windows` が**既に在り**、被覆の検査だけが使っている。直しは「上限の検査でも `judged_windows` を回す」＋兄弟テスト 1 本で、`dpi.rs` には触らない。
 - 残る本体（2 ティックの跳ねの相の順）は開発者裁定「拡大率の切替は頻繁に起こらないため許容」のまま据え置く。
 
@@ -23,7 +24,7 @@
 
 1. 拡大率の切替で、位置と寸法が**同じ画面更新**で変わる（目視で跳ねない）。
 2. 機械判定の実機専用系統（`visualize_to_write_us` ≤ 16,667・`flush_total_us` ≤ 16,667）が静かな機械で全遷移 PASS。上限は動かさない（e2e R6.2／6.3）。
-3. 判定器の既知の限界（見送り窓を `writes_per_window` から除いていない・e2e 手順書 §6.2）を直し、非表示中のバルーンの追従書込が違反に数えられないようにする。
+3. ~~判定器の既知の限界（見送り窓を `writes_per_window` から除いていない・e2e 手順書 §6.2）を直し、非表示中のバルーンの追従書込が違反に数えられないようにする。~~（09-24 取り下げ・冒頭の注記）
 
 ## Approach
 

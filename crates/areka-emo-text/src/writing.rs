@@ -298,7 +298,7 @@ fn classify_vertical(raw: Option<&str>) -> VerticalDecl {
 /// 拡張キー `writing_mode` の生値を分類する（未知値はここで `warn!` 1 件・R5.4／R2.7）。
 ///
 /// 語彙は snake_case 完全一致（trim は parser の kv 層で済んでいる前提・R5.1）。
-/// 警告の文言と件数は現行のまま（既存インラインテストが逐語固定している）。
+/// 警告は 1 件で、文言は実挙動どおり「指定なしとして扱う」（`vertical` の宣言と合流する）。
 fn classify_writing_mode(raw: Option<&str>) -> WritingModeDecl {
     match raw {
         None => WritingModeDecl::Undeclared,
@@ -308,7 +308,7 @@ fn classify_writing_mode(raw: Option<&str>) -> WritingModeDecl {
         Some(unknown) => {
             tracing::warn!(
                 value = unknown,
-                "未知の writing_mode 値のため horizontal_tb へフォールバックする（受理語彙: horizontal_tb / vertical_rl / vertical_lr）"
+                "未知の writing_mode 値のため指定なしとして扱う（受理語彙: horizontal_tb / vertical_rl / vertical_lr）"
             );
             WritingModeDecl::Unknown
         }
@@ -419,6 +419,24 @@ mod tests {
         let (mode, warns) = resolve_counting_warns(Some("diagonal_bt"));
         assert_eq!(mode, WritingMode::HorizontalTb);
         assert_eq!(warns, 1, "未知値はちょうど 1 回 warn を記録する");
+    }
+
+    /// 警告の文言は実挙動（「指定なし」として `vertical` と合流）と一致する——
+    /// 横書きになるのは両キーとも無効なときだけなので「horizontal_tb へ」とは言わない。
+    #[test]
+    fn unknown_value_warn_says_treated_as_undeclared() {
+        let (_, events) =
+            log_capture_kit::capture(|| WritingMode::resolve(&model(Some("diagonal_bt"))));
+        let messages: Vec<&str> = events.iter().map(|e| e.message()).collect();
+        assert_eq!(messages.len(), 1, "warn はちょうど 1 件: {messages:?}");
+        assert!(
+            messages[0].contains("指定なしとして扱う"),
+            "文言が実挙動を言う: {messages:?}"
+        );
+        assert!(
+            !messages[0].contains("フォールバック"),
+            "横書きへの固定を言わない: {messages:?}"
+        );
     }
 
     /// 語彙は snake_case 完全一致（R5.1）——ハイフン形（CSS 原表記）や大文字・空白は未知値扱い。

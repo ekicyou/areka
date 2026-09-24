@@ -266,6 +266,63 @@ pub enum ManifestWarning {
     InvalidMaskEntry { key: String, value: String },
 }
 
+/// 書庫の 1 要素の相対パスと `install.txt` のフォルダ名に共通の、パスの長さの
+/// 上限（UTF-16 の単位・要件 1.1・1.2・1.5・1.6）。要素ごとの上限は持たない
+/// （全体 ≤ 200 < 255 なので NTFS の要素の上限は自動で満たす＝要件 1.7）。
+pub(crate) const MAX_ENTRY_PATH_UTF16: usize = 200;
+
+/// 理由と警告に載せる名前の先頭の長さ（UTF-16 の単位）。表示のための長さで、上限ではない。
+const HEAD_UTF16: usize = 32;
+
+/// 生バイトを小文字の 16 進に写す（区切り無し）。拒否の理由に入れる。
+fn to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// UTF-16 の単位で数えた長さ（BMP の文字は 1・それ以外は 2）。
+pub(crate) fn utf16_len(name: &str) -> usize {
+    name.encode_utf16().count()
+}
+
+/// 名前の先頭の有界の一部（最大 [`HEAD_UTF16`] 単位）。文字の途中では切らない。
+pub(crate) fn head_utf16(name: &str) -> String {
+    let mut used = 0;
+    name.chars()
+        .take_while(|ch| {
+            used += ch.len_utf16();
+            used <= HEAD_UTF16
+        })
+        .collect()
+}
+
+/// 理由と警告に載せる値（要件 1.4・1.5）。上限の内側なら全体、超えていれば
+/// 先頭と測った長さと上限だけを綴り、全体は載せない。
+pub(crate) fn bounded_value(name: &str) -> String {
+    let length = utf16_len(name);
+    if length <= MAX_ENTRY_PATH_UTF16 {
+        name.to_owned()
+    } else {
+        format!(
+            "{}…（{length} 単位・上限 {MAX_ENTRY_PATH_UTF16}）",
+            head_utf16(name)
+        )
+    }
+}
+
+/// 理由に載せる生バイトの 16 進（要件 1.4 と同じ規則）。上限の内側なら全体、超えていれば
+/// 先頭 [`HEAD_UTF16`] バイトと測った長さだけを綴る（長さの検査は復号の後なので、ここで縛る）。
+pub(crate) fn bounded_hex(bytes: &[u8]) -> String {
+    if bytes.len() <= MAX_ENTRY_PATH_UTF16 {
+        to_hex(bytes)
+    } else {
+        format!(
+            "{}…（{} バイト）",
+            to_hex(&bytes[..HEAD_UTF16]),
+            bytes.len()
+        )
+    }
+}
+
 #[cfg(test)]
 #[path = "error_tests.rs"]
 mod tests;

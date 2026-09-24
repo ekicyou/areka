@@ -20,7 +20,7 @@
 //! 作り直せなくなる。エラーの表示に使う名前だけは、診断のために非可逆な写し
 //! （[`String::from_utf8_lossy`]）を作る。
 
-use crate::error::{Integrity, RefuseReason, Unsupported};
+use crate::error::{Integrity, RefuseReason, Unsupported, bounded_value};
 use std::ops::Range;
 
 /// 終端記録（End Of Central Directory）の署名。
@@ -362,7 +362,8 @@ fn unsupported(name_raw: &[u8], index: usize, what: Unsupported) -> RefuseReason
     let name = if name_raw.is_empty() {
         WHOLE_ARCHIVE.to_string()
     } else {
-        String::from_utf8_lossy(name_raw).into_owned()
+        // 名前の長さの検査より前に起きる拒否なので、ここで縛る。
+        bounded_value(&String::from_utf8_lossy(name_raw))
     };
     RefuseReason::UnsupportedEntry { index, name, what }
 }
