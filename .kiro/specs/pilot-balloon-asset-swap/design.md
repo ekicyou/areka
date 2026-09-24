@@ -137,12 +137,15 @@ crates/pilot/
 └── examples/pilot-balloon-asset-swap/           # 新規（_template を写して着手）
     ├── main.rs        # 起動（検体・資産・窓・presenter・system 登録・取り込み開始）と終了コード
     ├── swap.rs        # 台本（観測の並び）・差し替えの版 3 種・面の切り替え・較正の作り方・観測の前の用意（戻し）
-    ├── observe.rs     # 標本点の導出・tick 記録（当たり判定・矩形・覆い）・突き合わせ・4 種の数え・集計ログ
+    ├── observe.rs     # tick 記録（当たり判定・矩形・覆い）・突き合わせ・4 種の数え・集計ログ
+    ├── observe_tests.rs   # observe.rs の検査（完了時に 1,000 行の目安へ収めるため分割）
+    ├── signature.rs   # 標本点の導出・絵と当たり判定の判別の規則（完了時に observe.rs から切り出し）
+    ├── signature_tests.rs # signature.rs の検査
     ├── capture.rs     # Desktop Duplication スレッド・窓の矩形の切り出し・絵の判別
     └── README.md      # 3 幕（動機・概要・検証結果）
 ```
 
-`main.rs` がフォルダの中にあるので、子は素の `mod swap;` で同じフォルダの `swap.rs` に解決される（`#[path]` は要らない・`crate::` パスも使わない）。
+`main.rs` がフォルダの中にあるので、子は素の `mod swap;` で同じフォルダの `swap.rs` に解決される（`#[path]` は要らない・`crate::` パスも使わない）。検査の兄弟ファイル `observe_tests.rs`・`signature_tests.rs` だけは `#[cfg(test)] #[path = "…_tests.rs"] mod tests;` で読む（完了時の分割）。
 
 ### Modified Files
 
@@ -216,7 +219,7 @@ sequenceDiagram
 | 2.7 | 面の切り替えの数を分けて示す | observe.rs 集計・README | `Kind::FaceSwitch` | Summary |
 | 3.1 | 直前のフレームから揃った後 30 tick まで | observe.rs `Observation` | `SETTLE_TICKS`・`GIVE_UP_TICKS`・`GRACE_TICKS` | 突き合わせ |
 | 3.2 | 実際の画面を取り込み直前の tick と突き合わせ | capture.rs・observe.rs | `TickRecord`・`FrameRecord` | 突き合わせ |
-| 3.3 | 絵と当たり判定の判別 | observe.rs `Signature`・`classify_picture`・`classify_hit` | `Class` | 突き合わせ |
+| 3.3 | 絵と当たり判定の判別 | signature.rs `Signature`・`classify_picture`・`classify_hit`（observe.rs が再公開） | `Class` | 突き合わせ |
 | 3.4 | 4 種の崩れ・重複計上 | observe.rs `judge_frame` | `Counts` | 突き合わせ |
 | 3.5 | 0 を明示したログ | observe.rs `row` | — | Summary |
 | 3.6 | 測れない | capture.rs・observe.rs | `Unmeasurable` 理由 | 突き合わせ |

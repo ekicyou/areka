@@ -14,6 +14,7 @@
 
 mod capture;
 mod observe;
+mod signature;
 mod swap;
 
 use std::path::Path;
