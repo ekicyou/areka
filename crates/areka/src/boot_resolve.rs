@@ -15,18 +15,15 @@ use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
 
-// 消費者（`main` の起動解決）は task 5.1・5.3 で結線する。それまでは檻だけが呼ぶので、
-// 本番ビルドの dead_code を各項目に限って許す（5.1 で外す）。
+// 判断と記憶の直読みの消費者は起動前の解決（`boot_config::resolve_boot`）。記憶の書き込み
+// （[`LastUsed`]）は task 5.3 で結線するので、それまでは項目に限って dead_code を許す（5.3 で外す）。
 
 /// 既定ゴースト（要件 4.4・4.11。配布物に必ず同梱＝裁定 3）。
-#[allow(dead_code)]
 pub(crate) const DEFAULT_GHOST_FOLDER: &str = "emo2";
 /// 既定バルーン（要件 5.5・5.9。フォルダ名と id はバイト一致＝完了 spec で実測済み）。
-#[allow(dead_code)]
 pub(crate) const DEFAULT_BALLOON_FOLDER: &str = "StayseeBalloon";
 
 /// ゴーストが決まった経路（要件 4.10 の記録に載せる）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GhostRoute {
     Argv,
@@ -37,7 +34,6 @@ pub(crate) enum GhostRoute {
 }
 
 /// バルーンが決まった経路（要件 5.11 の記録に載せる）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BalloonRoute {
     Argv,
@@ -50,7 +46,6 @@ pub(crate) enum BalloonRoute {
 
 /// 決まったゴースト（argv なら渡されたパスそのもの・それ以外は `<根>/ghost/<folder>`）。
 /// argv の経路だけ `folder` が `None`（根の外かもしれないので名前を持たない）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GhostDecision {
     pub route: GhostRoute,
@@ -59,7 +54,6 @@ pub(crate) struct GhostDecision {
 }
 
 /// 決まったバルーン（argv なら渡されたパスそのもの・それ以外は `<根>/balloon/<folder>`）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BalloonDecision {
     pub route: BalloonRoute,
@@ -68,14 +62,12 @@ pub(crate) struct BalloonDecision {
 }
 
 /// 0 体（要件 4.7）。告知の文面に置くべき場所を載せるため格納フォルダを持つ。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NoGhost {
     pub ghost_store: PathBuf,
 }
 
 /// 0（要件 5.8）。告知の文面に置くべき場所を載せるため格納フォルダを持つ。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NoBalloon {
     pub balloon_store: PathBuf,
@@ -83,7 +75,6 @@ pub(crate) struct NoBalloon {
 
 /// ゴーストの判断の入力（要件 4.9「argv・記憶の値・列挙の結果だけ」）。
 /// `argv` があるとき `memory`／`listed` は読まない（空でよい）。
-#[allow(dead_code)]
 pub(crate) struct GhostInputs<'a> {
     pub root: &'a BasewareRoot,
     /// argv[1]
@@ -95,7 +86,6 @@ pub(crate) struct GhostInputs<'a> {
 }
 
 /// バルーンの判断の入力。`argv` があるとき他は読まない（空でよい）。
-#[allow(dead_code)]
 pub(crate) struct BalloonInputs<'a> {
     pub root: &'a BasewareRoot,
     /// argv[2]
@@ -114,7 +104,6 @@ fn find<'a>(listed: &'a [String], name: &str) -> Option<&'a str> {
 }
 
 /// 段 1〜5＋0 体（要件 4.1〜4.7）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
-#[allow(dead_code)]
 pub(crate) fn resolve_ghost(
     inputs: &GhostInputs<'_>,
     pick: impl FnOnce(usize) -> usize,
@@ -171,7 +160,6 @@ pub(crate) fn resolve_ghost(
 }
 
 /// 段 1〜6＋0（要件 5.1〜5.8）。`pick` は「候補数 n（≥ 2）→ 0..n の添字」。純粋。
-#[allow(dead_code)]
 pub(crate) fn resolve_balloon(
     inputs: &BalloonInputs<'_>,
     pick: impl FnOnce(usize) -> usize,
@@ -241,7 +229,6 @@ pub(crate) fn resolve_balloon(
 
 /// 本番の添字（std の `RandomState` のプロセスごとの鍵から。新規依存 0）。
 /// 質は問わない（初回起動の 1 回だけ・その後は記憶で固定＝design の Risks）。`n == 0` は呼ばれない。
-#[allow(dead_code)]
 pub(crate) fn pick_index(n: usize) -> usize {
     (RandomState::new().hash_one(n) % n as u64) as usize
 }
@@ -257,7 +244,6 @@ fn read_last(scope: PersistScope, roots: &ScopeRoots, key: PersistKey) -> Option
 }
 
 /// 起動前の記憶の直読み（App スコープ `areka.last.ghost`・要件 4.2）。無ければ `None`。
-#[allow(dead_code)]
 pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
     let roots = ScopeRoots {
         app: Some(app_profile_dir.to_path_buf()),
@@ -268,7 +254,6 @@ pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
 
 /// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.balloon`・要件 5.2・裁定 4）。
 /// 根は boot が据える場所と同じ `profile_areka_root(<ゴースト>/ghost/master)`。無ければ `None`。
-#[allow(dead_code)]
 pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
     let roots = ScopeRoots {
         ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),

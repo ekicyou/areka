@@ -458,6 +458,7 @@ pub(crate) fn resolve_root() -> Result<(PathBuf, RootSource), RootError>;
 - Invariants: `default_app_profile_dir` の `"."` フォールバックは**変えない**（要件 1.7）。根だけが厳格になる。
 
 **Implementation Notes**
+- 実装 5.1 の追記: 根 → ゴースト → バルーン → `ConfigInputs` の解決は `main.rs` の 1,000 行を守るため `boot_config::resolve_boot`／`resolve_boot_from`（純粋な口に根・argv・App の記憶の場所・添字を注入）へ置いた。`main` は `Err(AlertScene)` を `alert::raise` → `Err(E_FAIL)` へ写すだけ。`root_resolved`／`ghost_resolved`／`balloon_resolved` の target は `areka::boot_config`（smoke と実機手順は文言と `route=` で見るので影響なし）。
 - Integration: `main` は `resolve_root()` の `Err` を `AlertScene::RootMissing(err)` へ写す。`Ok((dir, source))` は `info!(event = "root_resolved", root, source)` を残し `BasewareRoot::new(dir)` にする。
 - Validation: `main_config_input_tests.rs` を「`resolve_root_from` の 6 通り（env あり実在／env あり不在／env 無し exe あり実在／env 無し exe あり不在／env 無し exe 無し／相対の env が絶対で返る）」へ置き換える。一時フォルダは `temp-path-kit`。プロセスの env は書かない（要件 8.2）。
 - Risks: `is_benign_boot_error` の doc（「`default_ghost_root()` はプレースホルダで不在が常態」）は根拠を失う → 「起動解決が `ghost/master/descript.txt` の実在を確かめてから boot するので、ここでの `StartPointMissing` は解決後の消失（起動中の削除等）に限られる。分類は `wire_emo2_boot` のフォールバック（本仕様の範囲外）が使い続けるため残す」へ書き換える（#8 と同じ扱い）。

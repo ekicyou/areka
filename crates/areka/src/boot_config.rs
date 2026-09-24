@@ -1,13 +1,13 @@
 //! 起動時の構成入力解決と ghost 結線ヘルパ（`main.rs` から切り出し）。
 //!
 //! `main.rs` が 1,000 行規約（`.kiro/steering/structure.md`）を超えたため、
-//! 相互に凝集した「起動引数・既定パスの解決」と「`GhostBootOptions` の組み立て」を
-//! 本モジュールへ移した。**挙動は 1 ビットも変えていない**（可視性を `pub(crate)` へ
-//! 広げただけで、式・分岐・doc の主張はすべて移設前と逐語同一）。
+//! 相互に凝集した「構成入力（根 → ゴースト → バルーン）の起動前の解決」と「`GhostBootOptions` の組み立て」を
+//! 本モジュールに置く。根の決め方（`resolve_root_from`）は areka-P0-baseware-root-layout が
+//! `CARGO_MANIFEST_DIR` 相対の既定パスと置き換えた（要件 1.5）。
 //!
 //! 消費者は `main.rs`（`pub(crate) use` で crate 直下へ再輸出）と `emo2_boot`
 //! （`crate::default_app_profile_dir` / `crate::is_benign_boot_error`）、および
-//! 既存の檻 `main_config_input_tests.rs` / `main_ghost_wiring_tests.rs`。
+//! 檻 `main_config_input_tests.rs` / `main_ghost_wiring_tests.rs`。
 
 // ---------------------------------------------------------------------------
 // Config Inputs (task 2.1)
@@ -15,63 +15,20 @@
 
 /// 構成入力（解決済みルートパス）。
 ///
-/// ゴースト／バルーンのルートパスを保持する。決定のみで実在は保証しない
-/// （マウント・descript.txt 読取・`areka-parsers` 呼び出しは一切行わない・R6.1）。
+/// ゴースト／バルーンのルートパスを保持する。値は `main` の起動前の解決（根 → ゴースト →
+/// バルーン）が決めたもので、この型自身はマウントも読取もしない（R6.1）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConfigInputs {
     pub(crate) ghost_root: std::path::PathBuf,
     pub(crate) balloon_root: std::path::PathBuf,
 }
 
-/// ゴーストルートの既定パス（`CARGO_MANIFEST_DIR` 相対・DD1）。
-///
-/// `crates/areka` 配下には現状ゴースト fixture が無いため（emo2 fixture は別クレート
-/// `crates/pilot/...` にありクロスクレート `../` 参照は脆いので採らない）、ukadoc 標準の
-/// ルート配置 `ghost/master` を **プレースホルダ subpath** として採用する。実在は検証せず、
-/// 実マウント対象の確定は下流 ghost-setup の領分（本仕様スコープ外）。
-pub(crate) fn default_ghost_root() -> std::path::PathBuf {
-    std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/ghost/master"))
-}
-
-/// バルーンルートの既定パス（`CARGO_MANIFEST_DIR` 相対・DD1）。
-///
-/// ゴースト既定と同じく `env!("CARGO_MANIFEST_DIR")` 相対のプレースホルダ subpath
-/// `balloon/master` を採用する（実在検証なし・下流 ghost-setup が実体を確定）。
-pub(crate) fn default_balloon_root() -> std::path::PathBuf {
-    std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/balloon/master"))
-}
-
-/// 起動引数（位置引数）と既定パスから構成入力を決定する。純粋・副作用なし。
-///
-/// - `args[0]` は実行ファイル名。`args[1]` = ghost root、`args[2]` = balloon root。
-/// - 位置引数が与えられていれば採用し（R3.3）、欠落時は `CARGO_MANIFEST_DIR` 相対の
-///   既定へフォールバックする（R3.4・DD1）。
-/// - `args` を入力に取ることで `std::env::args()` を内部で呼ばず、実プロセス引数に触れずに
-///   単体テスト可能な純粋関数に保つ。std（`std::path`・`env!`）のみに依存し、マウントも
-///   descript.txt 読取も行わない（R6.1）。
-pub(crate) fn resolve_config_inputs(args: &[String]) -> ConfigInputs {
-    let ghost_root = args
-        .get(1)
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(default_ghost_root);
-    let balloon_root = args
-        .get(2)
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(default_balloon_root);
-    ConfigInputs {
-        ghost_root,
-        balloon_root,
-    }
-}
-
 // ---------------------------------------------------------------------------
 // ベースウェアの根（areka-P0-baseware-root-layout task 2.3）
 // ---------------------------------------------------------------------------
-// 消費者（`main` の起動解決）は task 5.1 で結線する。それまでは檻だけが呼ぶので、
-// 本番ビルドの dead_code を各項目に限って許す（5.1 で `allow` ごと外す）。
+// 消費者は下の起動前の解決（`resolve_boot`）。
 
 /// 根が決まらない理由（利用者向けの告知と `error!` の両方に載せる・要件 1.4）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RootError {
     /// `AREKA_ROOT` が無く、`current_exe()` の場所が取れない。
@@ -84,7 +41,6 @@ pub(crate) enum RootError {
 }
 
 /// 根の出所。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RootSource {
     /// 環境変数 `AREKA_ROOT`（要件 1.3）。
@@ -104,7 +60,6 @@ pub(crate) enum RootSource {
 /// `Ok` のパスは絶対で `is_dir()` が真。相対の値はカレント基準で `std::path::absolute` により
 /// 絶対化してから検査する（`canonicalize` は使わない＝長いパスの接頭辞と失敗の口を持ち込まない）。
 /// `NotADirectory` の `dir` も絶対（絶対化できない空の値だけは元の綴り）。
-#[allow(dead_code)]
 pub(crate) fn resolve_root_from(
     env: Option<std::path::PathBuf>,
     exe: Option<std::path::PathBuf>,
@@ -129,12 +84,116 @@ pub(crate) fn resolve_root_from(
 }
 
 /// env（`AREKA_ROOT`）と `current_exe()` を読んで [`resolve_root_from`] へ渡す薄い口。
-#[allow(dead_code)]
 pub(crate) fn resolve_root() -> Result<(std::path::PathBuf, RootSource), RootError> {
     resolve_root_from(
         std::env::var_os("AREKA_ROOT").map(std::path::PathBuf::from),
         std::env::current_exe().ok(),
     )
+}
+
+// ---------------------------------------------------------------------------
+// 起動前の解決（areka-P0-baseware-root-layout task 5.1・`main` が WinApp 構築の前に呼ぶ）
+// ---------------------------------------------------------------------------
+
+/// 起動前に決まったもの: 構成入力と、ゴースト・バルーンの決定（経路とフォルダ）。
+pub(crate) type BootResolved = (
+    ConfigInputs,
+    crate::boot_resolve::GhostDecision,
+    crate::boot_resolve::BalloonDecision,
+);
+
+/// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）と `current_exe()` を読んで [`resolve_boot_from`] へ渡す薄い口。
+pub(crate) fn resolve_boot(args: &[String]) -> Result<BootResolved, crate::alert::AlertScene> {
+    resolve_boot_from(
+        resolve_root(),
+        args,
+        &default_app_profile_dir(),
+        crate::boot_resolve::pick_index,
+    )
+}
+
+/// 根 → ゴースト → バルーン → `ConfigInputs`（design「起動解決」）。決まらなければ告知の場面を返す。
+///
+/// argv がある側は列挙も記憶も読まない（要件 4.1・5.1）。argv のゴーストは「ゴーストか」の 1 検査
+/// だけ（要件 4.8）。決まるたびに経路と場所を info に残す（要件 4.10・5.11）。
+pub(crate) fn resolve_boot_from(
+    root: Result<(std::path::PathBuf, RootSource), RootError>,
+    args: &[String],
+    app_profile_dir: &std::path::Path,
+    pick: fn(usize) -> usize,
+) -> Result<BootResolved, crate::alert::AlertScene> {
+    use crate::alert::AlertScene;
+    use crate::boot_resolve::{self, BalloonInputs, GhostInputs, NoBalloon, NoGhost};
+    use areka_ghost::catalog;
+
+    let (dir, source) = root.map_err(AlertScene::RootMissing)?;
+    tracing::info!(event = "root_resolved", root = %dir.display(), source = ?source, "ベースウェアの根を決めました");
+    let root = areka_ghost::BasewareRoot::new(dir);
+    let (argv_ghost, argv_balloon) = (
+        args.get(1).map(std::path::Path::new),
+        args.get(2).map(std::path::Path::new),
+    );
+
+    if let Some(argv) = argv_ghost.filter(|argv| !catalog::is_ghost_dir(argv)) {
+        return Err(AlertScene::GhostMissing {
+            ghost_store: root.ghost_store(),
+            argv: Some(argv.to_path_buf()),
+        });
+    }
+    let (memory, listed): (_, Vec<String>) = match argv_ghost {
+        Some(_) => (None, Vec::new()),
+        None => (
+            boot_resolve::read_last_ghost(app_profile_dir),
+            catalog::list_ghosts(&root)
+                .into_iter()
+                .map(|e| e.identity.folder)
+                .collect(),
+        ),
+    };
+    let ghost = boot_resolve::resolve_ghost(
+        &GhostInputs {
+            root: &root,
+            argv: argv_ghost,
+            memory: memory.as_deref(),
+            listed: &listed,
+        },
+        pick,
+    )
+    .map_err(|NoGhost { ghost_store }| AlertScene::GhostMissing {
+        ghost_store,
+        argv: None,
+    })?;
+    tracing::info!(event = "ghost_resolved", route = ?ghost.route, dir = %ghost.dir.display(), "起動するゴーストを決めました");
+
+    let (memory, companion, listed): (_, _, Vec<String>) = match argv_balloon {
+        Some(_) => (None, None, Vec::new()),
+        None => (
+            boot_resolve::read_last_balloon(&ghost.dir),
+            catalog::companion_balloon(&ghost.dir),
+            catalog::list_balloons(&root)
+                .into_iter()
+                .map(|e| e.identity.folder)
+                .collect(),
+        ),
+    };
+    let balloon = boot_resolve::resolve_balloon(
+        &BalloonInputs {
+            root: &root,
+            argv: argv_balloon,
+            memory: memory.as_deref(),
+            companion: companion.as_deref(),
+            listed: &listed,
+        },
+        pick,
+    )
+    .map_err(|NoBalloon { balloon_store }| AlertScene::BalloonMissing { balloon_store })?;
+    tracing::info!(event = "balloon_resolved", route = ?balloon.route, dir = %balloon.dir.display(), "バルーンを決めました");
+
+    let cfg = ConfigInputs {
+        ghost_root: ghost.dir.clone(),
+        balloon_root: balloon.dir.clone(),
+    };
+    Ok((cfg, ghost, balloon))
 }
 
 // ---------------------------------------------------------------------------
@@ -215,8 +274,9 @@ pub(crate) fn ghost_boot_options(
 /// `GhostBootError` を「起点不在（良性・`warn!` どまり）」と「それ以外（予期しない・`error!`）」
 /// へ分類する純粋関数（design.md「main の ghost boot／shutdown 結線」・要件 8.2）。
 ///
-/// `default_ghost_root()` はプレースホルダ subpath であり、この開発サンドボックスでは
-/// 実在しないのが常態（＝`MountError::StartPointMissing` は想定内の事象）。読取不能
+/// 起動前の解決（`boot_config::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
+/// boot するので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に
+/// 限られる。分類は `wire_emo2_boot` のフォールバックが使い続けるため残す。読取不能
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
 /// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
 ///

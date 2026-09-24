@@ -118,7 +118,7 @@ mod boot_config;
 
 pub(crate) use boot_config::{
     ConfigInputs, default_app_profile_dir, default_helper_exe_path, ghost_boot_options,
-    is_benign_boot_error, resolve_config_inputs,
+    is_benign_boot_error, resolve_boot,
 };
 
 /// 無いときの告知（根なし／ゴーストなし／バルーンなし／起動窓を開けない）と
@@ -126,7 +126,7 @@ pub(crate) use boot_config::{
 mod alert;
 
 /// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 7 分岐）と既定の定数。
-/// 呼び出しの結線は task 5.1・5.3。
+/// 起動前の解決は `boot_config::resolve_boot` が結線する（記憶の書き込みの結線は task 5.3）。
 mod boot_resolve;
 
 // ---------------------------------------------------------------------------
@@ -167,28 +167,20 @@ fn main() -> Result<()> {
     // 起こさない（既定運転の費用 0）。取っ手は終了直前まで持ち回り、最後の 1 枚を出す。
     let perf_report = perf_thread_report::start();
 
-    // 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（R3.1/3.3/3.4・マウントしない）。
+    // 起動前の解決（baseware-root-layout design「起動解決（WinApp 構築の前）」）:
+    // 根 → ゴースト → バルーン → 構成入力。決まらなければ告知して終了コード 1 で終える
+    // （要件 1.4・4.7・4.8・5.8・6.3）。`warn!` で起動を続ける経路は作らない（要件 6.6）。
+    // 決まった経路とフォルダは boot の分岐まで持ち越す（task 5.3 が記憶の書き込みに使う）。
     let args: Vec<String> = std::env::args().collect();
-    let cfg = resolve_config_inputs(&args);
-    tracing::info!(
-        ghost_root = %cfg.ghost_root.display(),
-        balloon_root = %cfg.balloon_root.display(),
-        "resolved config inputs"
-    );
-
-    // 存在検証は warn どまり・強制しない（R3 は「パスの決定とログ」でありマウント/存在保証ではない）。
-    // 回復可能事象は `warn!` で記録して継続する（`areka-log-first-no-silent-failure`）。異常終了経路を作らない。
-    for (label, root) in [
-        ("ghost_root", &cfg.ghost_root),
-        ("balloon_root", &cfg.balloon_root),
-    ] {
-        if !root.exists() {
-            tracing::warn!(
-                path = %root.display(),
-                "{label} が存在しません（決定のみでマウントはしない・継続します）"
-            );
+    let (cfg, _ghost_decision, _balloon_decision) = match resolve_boot(&args) {
+        Ok(resolved) => resolved,
+        Err(scene) => {
+            alert::raise(&scene, alert::suppressed());
+            return Err(windows::core::Error::from_hresult(
+                windows::Win32::Foundation::E_FAIL,
+            ));
         }
-    }
+    };
 
     // 実行ファイル隣接の 32bit SHIORI helper パスを一度だけ解決する（実 sink 結線経路と
     // `LogSink` フォールバック boot 経路の双方が使うため main で保持する・DD-7）。
@@ -296,10 +288,10 @@ fn main() -> Result<()> {
         (outcome.ghost, outcome.seriko, outcome.loop_ticker)
     } else {
         // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
-        // relocate したもの。失敗は非致命——`default_ghost_root()` はこのサンドボックスでは
-        // 常態的に不在（`MountError::StartPointMissing`）であり、`warn!` の上で `None` として
-        // 骨格起動を継続する（要件 8.2）。それ以外の予期しない失敗（読取不能・shell 不在等）は
-        // `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
+        // relocate したもの。失敗は非致命——起動前の解決が `ghost/master/descript.txt` の実在を
+        // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
+        // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
+        // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
         let ghost_options = ghost_boot_options(cfg.ghost_root.clone(), helper_exe.clone());
         let ghost = match areka_ghost::boot(ghost_options) {
             Ok(runtime) => {
@@ -805,8 +797,8 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
 /// `PlacementError` を「起点不在（良性・`warn!` どまり）」と「それ以外（予期しない・`error!`）」
 /// へ分類する純粋関数（task 6.2・design「main.rs seam」・DD14）。
 ///
-/// `default_ghost_root()` はプレースホルダ subpath であり、この開発サンドボックスでは
-/// 実在しないのが常態（＝`MountError::StartPointMissing` は想定内の事象）。それ以外
+/// 起動前の解決が `ghost/master/descript.txt` の実在を確かめてから準備するので、
+/// `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に限られる。それ以外
 /// （読取不能・shell 不在・descript I/O・採寸失敗・モニタ 0 台・将来追加の
 /// `#[non_exhaustive]` variant）は真に予期しない失敗として区別する
 /// （`is_benign_boot_error` と同じ分類方針）。

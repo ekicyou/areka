@@ -1,59 +1,5 @@
-// `default_ghost_root`／`default_balloon_root` の消費者は本檻だけなので、crate 直下の
-// 再輸出には載せず定義元 `boot_config` から直接引く（本番ビルドで unused にならない）。
-use super::{ConfigInputs, resolve_config_inputs};
-use crate::boot_config::{default_balloon_root, default_ghost_root};
+use super::ConfigInputs;
 use std::path::PathBuf;
-
-/// argv[1]/argv[2] が両方あるとき、両ルートを引数値でそのまま採用する（R3.3）。
-#[test]
-fn both_args_present_adopts_both() {
-    let args = vec![
-        "areka.exe".to_string(),
-        "C:/custom/ghost".to_string(),
-        "C:/custom/balloon".to_string(),
-    ];
-    let cfg = resolve_config_inputs(&args);
-    assert_eq!(cfg.ghost_root, PathBuf::from("C:/custom/ghost"));
-    assert_eq!(cfg.balloon_root, PathBuf::from("C:/custom/balloon"));
-}
-
-/// 引数なし（argv[0] のみ）のとき、両ルートとも既定へフォールバックする（R3.4）。
-#[test]
-fn no_args_uses_both_defaults() {
-    let args = vec!["areka.exe".to_string()];
-    let cfg = resolve_config_inputs(&args);
-    assert_eq!(cfg.ghost_root, default_ghost_root());
-    assert_eq!(cfg.balloon_root, default_balloon_root());
-}
-
-/// ghost のみ引数ありのとき、ghost は採用・balloon は既定にフォールバックする（R3.3/3.4）。
-#[test]
-fn ghost_only_arg_adopts_ghost_defaults_balloon() {
-    let args = vec!["areka.exe".to_string(), "C:/custom/ghost".to_string()];
-    let cfg = resolve_config_inputs(&args);
-    assert_eq!(cfg.ghost_root, PathBuf::from("C:/custom/ghost"));
-    assert_eq!(cfg.balloon_root, default_balloon_root());
-}
-
-/// 既定パスが `CARGO_MANIFEST_DIR` 相対で決定的に生成される（R3.4・DD1）。
-#[test]
-fn defaults_are_cargo_manifest_dir_relative_and_deterministic() {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // 既定は CARGO_MANIFEST_DIR 配下にある（相対アンカー）。
-    assert!(
-        default_ghost_root().starts_with(&manifest),
-        "ghost default must be under CARGO_MANIFEST_DIR: {:?}",
-        default_ghost_root()
-    );
-    assert!(
-        default_balloon_root().starts_with(&manifest),
-        "balloon default must be under CARGO_MANIFEST_DIR: {:?}",
-        default_balloon_root()
-    );
-    // 決定的: 呼び出しごとに同一値を返す。
-    assert_eq!(default_ghost_root(), default_ghost_root());
-    assert_eq!(default_balloon_root(), default_balloon_root());
-}
 
 /// `ConfigInputs` は解決済みルートパスを保持する（型の存在確認）。
 #[test]
@@ -158,5 +104,109 @@ mod root {
         let expected = std::env::current_dir().expect("カレント取得").join("src");
         assert_eq!(got, Ok((expected.clone(), RootSource::EnvVar)));
         assert!(expected.is_absolute());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 起動前の解決の判断（task 5.1・要件 4.1・4.7・4.8・5.1）
+// ---------------------------------------------------------------------------
+// `resolve_boot_from` へ根と argv を注入して、argv の有無で分かれる判断だけを踏む
+// （ゴースト・バルーンの 13 分岐は `boot_resolve_tests.rs`、実プロセスの配線は smoke）。
+
+mod boot {
+    use crate::alert::AlertScene;
+    use crate::boot_config::RootSource;
+    use crate::boot_config::resolve_boot_from;
+    use crate::boot_resolve::{BalloonRoute, GhostRoute};
+    use log_capture_kit::capture;
+    use std::path::Path;
+    use temp_path_kit::TempPath;
+
+    /// 呼ばれない添字（この檻の入力では無作為の段へ届かない）。
+    fn no_pick(n: usize) -> usize {
+        panic!("無作為の段へ届いてはならない（候補 {n}）")
+    }
+
+    fn args(rest: &[&Path]) -> Vec<String> {
+        std::iter::once("areka.exe".to_owned())
+            .chain(rest.iter().map(|p| p.display().to_string()))
+            .collect()
+    }
+
+    /// argv のフォルダに `ghost/master/descript.txt` が無ければ、argv 付きの「ゴーストなし」（要件 4.8）。
+    #[test]
+    fn argv_ghost_without_master_descript_is_ghost_missing_with_argv() {
+        let root = TempPath::new("boot-argv-not-ghost");
+        let given = root.child("not-a-ghost");
+        std::fs::create_dir_all(&given).expect("フォルダを組む");
+        let got = resolve_boot_from(
+            Ok((root.path().to_path_buf(), RootSource::EnvVar)),
+            &args(&[&given]),
+            root.path(),
+            no_pick,
+        );
+        assert_eq!(
+            got.map(|_| ()),
+            Err(AlertScene::GhostMissing {
+                ghost_store: root.path().join("ghost"),
+                argv: Some(given),
+            })
+        );
+    }
+
+    /// argv が両方あれば argv のとおりに決まり、列挙も記憶も読まない（要件 4.1・5.1・7.1）。
+    /// 根には読めば warn になる罠（指す先の無い記憶・`type,plugin` のバルーン）を置く。
+    #[test]
+    fn argv_both_resolves_without_listing_or_reading_memory() {
+        let root = TempPath::new("boot-argv-both");
+        let ghost = root.child("elsewhere-ghost");
+        let master = ghost.join("ghost").join("master");
+        std::fs::create_dir_all(&master).expect("フォルダを組む");
+        std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
+        let balloon = root.child("elsewhere-balloon");
+        let plugin = root.child("balloon").join("plugin");
+        std::fs::create_dir_all(&plugin).expect("フォルダを組む");
+        std::fs::write(plugin.join("descript.txt"), "charset,UTF-8\ntype,plugin\n")
+            .expect("descript");
+        std::fs::write(
+            root.child("sylphya.toml"),
+            "format-version = 1\n[last]\nghost = \"gone\"\n",
+        )
+        .expect("記憶");
+        let (got, events) = capture(|| {
+            resolve_boot_from(
+                Ok((root.path().to_path_buf(), RootSource::EnvVar)),
+                &args(&[&ghost, &balloon]),
+                root.path(),
+                no_pick,
+            )
+        });
+        let (cfg, g, b) = got.expect("argv で決まる");
+        assert_eq!((g.route, b.route), (GhostRoute::Argv, BalloonRoute::Argv));
+        assert_eq!((cfg.ghost_root, cfg.balloon_root), (ghost, balloon));
+        let warned: Vec<_> = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .collect();
+        assert!(warned.is_empty(), "列挙・記憶を読んだ痕跡: {warned:?}");
+    }
+
+    /// argv が無く根にゴーストが 0 体なら、argv 無しの「ゴーストなし」（要件 4.7）。
+    #[test]
+    fn no_argv_and_empty_root_is_ghost_missing_without_argv() {
+        let root = TempPath::new("boot-empty-root");
+        let got = resolve_boot_from(
+            Ok((root.path().to_path_buf(), RootSource::EnvVar)),
+            &args(&[]),
+            root.path(),
+            no_pick,
+        );
+        assert_eq!(
+            got.map(|_| ()),
+            Err(AlertScene::GhostMissing {
+                ghost_store: root.path().join("ghost"),
+                argv: None,
+            })
+        );
     }
 }

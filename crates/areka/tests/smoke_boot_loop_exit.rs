@@ -51,6 +51,8 @@ fn run_smoke(args: &[&str]) -> (ExitStatus, String, String) {
     let mut child = Command::new(bin)
         .args(args)
         .env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)
+        // 告知のメッセージボックスを抑える（モーダルで番犬の締切まで止まらず、非 0 で即座に終わる）。
+        .env("AREKA_NO_ALERT", "1")
         // RUST_LOG は明示しない（骨格既定 info でよい）。診断は捕捉出力から得る。
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

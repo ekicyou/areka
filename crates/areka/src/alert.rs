@@ -15,16 +15,11 @@ use windows::core::HSTRING;
 
 use crate::boot_config::{RootError, RootSource};
 
-// 消費者（`main` の起動解決）は task 5.1・5.2 で結線する。それまでは檻だけが呼ぶので、
-// 本番ビルドの dead_code を各項目に限って許す（5.1/5.2 で外す）。
-
 /// 告知を抑える環境変数（要件 6.5・裁定 2）。設定されていれば抑える。
 /// ただし未設定・空・空白だけ・"0" は「設定されていない」と読む（`AREKA_TICK_GATE=0` と同じく 0 で切れる）。
-#[allow(dead_code)]
 pub(crate) const NO_ALERT_ENV: &str = "AREKA_NO_ALERT";
 
 /// 告知の場面（要件 6.1・6.4）。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AlertScene {
     /// 根が決まらない（要件 1.4）。
@@ -37,6 +32,8 @@ pub(crate) enum AlertScene {
     /// バルーンが無い（要件 5.8）。
     BalloonMissing { balloon_store: PathBuf },
     /// 起動窓を開けない（要件 6.4）。`reason` は失敗の内容（`PlacementError` の表示）。
+    /// 消費者（`open_startup_window` の失敗）は task 5.2 で結線する（そこで `allow` を外す）。
+    #[allow(dead_code)]
     StartupWindow { reason: String },
 }
 
@@ -52,7 +49,6 @@ const BALLOON_SHAPE: &str = "置くもの: descript.txt を持つバルーンの
 
 /// 題名と本文（純粋・テストで文面を固定する）。本文は「何が無いか」「置くべき場所の絶対パス」
 /// 「置くものの形」の 3 行構成（起動窓の場面は「何が起きたか」「失敗の内容」「確かめること」）。
-#[allow(dead_code)]
 pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
     let lines: [String; 3] = match scene {
         AlertScene::RootMissing(RootError::ExeLocationUnavailable) => [
@@ -106,14 +102,12 @@ pub(crate) fn alert_text(scene: &AlertScene) -> (String, String) {
 }
 
 /// 値から抑止を判断する純粋な口（None／""／空白のみ／"0"（trim 後）→ false・それ以外 → true）。
-#[allow(dead_code)]
 pub(crate) fn suppressed_from(value: Option<&str>) -> bool {
     value.is_some_and(|v| !matches!(v.trim(), "" | "0"))
 }
 
 /// env `AREKA_NO_ALERT` を読んで [`suppressed_from`] へ渡す薄い口。
 /// 非 UTF-8 の値も「設定されている」と読む（抑える）。
-#[allow(dead_code)]
 pub(crate) fn suppressed() -> bool {
     match std::env::var(NO_ALERT_ENV) {
         Ok(v) => suppressed_from(Some(&v)),
@@ -124,7 +118,6 @@ pub(crate) fn suppressed() -> bool {
 
 /// `error!(event = "alert")` を必ず 1 件残し、`suppressed` が偽なら `MessageBoxW` を出す
 /// （`hwnd` 無し＝`WinApp` の有無を問わない）。戻ったら呼び手が `Err` を返す。
-#[allow(dead_code)]
 pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
     let (title, body) = alert_text(scene);
     tracing::error!(

@@ -76,7 +76,7 @@
   - _Depends: 1.2_
 
 - [ ] 5. `main` への結線とダミー窓の退役
-- [ ] 5.1 起動前の解決の結線と既定パスの撤去
+- [x] 5.1 起動前の解決の結線と既定パスの撤去
   - `main` の構成入力の位置（`WinApp` 構築の前）を「根 → 列挙 → ゴースト解決 → バルーン解決 → `ConfigInputs`」へ置き換える。argv がある側は列挙も記憶も読まず、argv のゴーストは「ゴーストか」の 1 検査だけ
   - 根・ゴースト・バルーンが決まらなければ告知の口を呼んで `Err(E_FAIL)`（終了コード 1）を返す。`root_resolved`・`ghost_resolved`・`balloon_resolved`（経路と場所）の `info!` を残す
   - 「根が無くても `warn!` で続ける」存在確認ループ・既定パス 2 関数・`resolve_config_inputs` を消し、それを直接見る `main_config_input_tests.rs` の既定パス 4 本を除く。`is_benign_boot_error` の doc と、`default_ghost_root()` を根拠に挙げる `main.rs`・`emo2_boot/mod.rs` のコメントを「解決後の消失に限られる」へ書き換える（`emo2_boot` はコメントだけでコードは触らない）
@@ -124,3 +124,4 @@
 - 1.2: `format.rs` の既存テスト `round_trip_preserves_all_string_values` は `FormatDoc` を全欄で書くため、欄の追加でコンパイルのための追随が要った（既存 4 族の値と比較は不変）。構造体リテラルで全欄を並べるテストは族を足すたびに同じ追随が要る。
 - 2.1→2.2: 空の値（trim 後に空）はどの鍵も「無し」に揃えた（`catalog.rs` の `lowercased` の 1 か所）。`type,` はバルーンとして残り、`menu,` は隠さない。design R5 に追記済み。
 - 2.3: 空の `AREKA_ROOT` は「設定あり」（`AREKA_PROFILE_DIR` と同じ）→ `NotADirectory { dir: "", source: EnvVar }`。`dir` が絶対でない唯一の例外なので、告知（3）は空のとき「環境変数 AREKA_ROOT が空です」の類いの文言にする。`RootError` 等の item 単位 `#[allow(dead_code)]` は 5.1 で外す。
+- 5.1: 解決は `boot_config::resolve_boot(_from)` に置いた（main.rs 1,000 行のため・design に追記）。argv 起動でも根は先に決める（設計の流れどおり・`AREKA_ROOT` が不在ならargv 起動も止まる）。
