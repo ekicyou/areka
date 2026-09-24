@@ -3,7 +3,7 @@
 > 先進坑（使い捨て）。規模 S。変更は `crates/pilot/` の下だけ（要件 1.3）。数え方の規則は design.md §Observer が唯一の定義。go／違う／直す の判定は開発者が README を見て下す（Claude Code は go を宣言しない）。
 
 - [ ] 1. 器の準備
-- [ ] 1.1 先進坑の example の器を作り、依存を足す
+- [x] 1.1 先進坑の example の器を作り、依存を足す
   - `_template` を spec 名と同じフォルダへ写し、起動して何もせず終わるだけの example にする
   - pilot の dev-dependencies に、窓・提示・合成・復号・ECS・ログの crate を path／workspace で足す。画面取り込みに要る Dxgi の feature は、既に宣言のある `[dependencies]` の `windows` の features に理由のコメントつきで 1 つだけ足す（D3D11 は既存）
   - 他の crate の Cargo.toml には一切触れない（pilot への被依存を作らない）
@@ -80,3 +80,7 @@
   - 見立てを本命の版の数を主な根拠に「反映待ち以外の崩れ」と「床と比べた反映待ち」の両方で添え、1 フレーム遅らせる版は直し方に数えず、判定の欄は空欄のまま開発者に委ねる
   - 完了の姿: README を読み戻し、3 幕が揃って切り詰めが無く、4.1 のログの数と README の数が一致している
   - _Requirements: 1.6, 2.7, 5.6, 5.8, 5.9, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
+
+## Implementation Notes
+
+- 1.1: wintf は i686 で組めない（`SetWindowLongPtrW` の型差）。example は dev-dependencies を全部引くので、追加の 7 crate は `[target.'cfg(not(target_arch = "x86"))'.dev-dependencies]` に置いた（既存の i686 helper を壊さないため）。本 example は x64 専用。
