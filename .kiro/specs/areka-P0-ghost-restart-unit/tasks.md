@@ -98,7 +98,7 @@
   - _Depends: 1.1, 1.2, 1.3, 2, 3.2, 4.3_
   - _Requirements: 1.6, 2.2, 2.3, 2.4, 3.2, 6.1, 6.4, 6.6_
 
-- [ ] 6. 全体の検証
+- [x] 6. 全体の検証
   - `tools/test-all.ps1` を回して全体が緑（既存の決定論テストを 1 本も落としていない・`spawn_zorder_chain_wiring_tests.rs` は無変更で緑）
   - 触ったファイルがすべて 1,000 行の内側、kanade・`areka-ghost`・wintf・examples の差分が 0、切替の語彙が持ち込まれていないことを、git の差分と grep で確かめる
   - 実機で起動 → メニューの「終了」→ 終了コード 0 と `app_exit` 事象を 1 走行で確かめ、SHIORI 失敗の smoke（告知 1 件・終了コード 1）の緑を添える
@@ -113,3 +113,4 @@
 - 4.2: `crates/areka/examples/window-placement.rs` の doc にも `open_startup_window` の名が残るが、examples は要件 5.4 で無改変＝4.4 の grep「0 件」の対象から examples を外す。
 - 4.4: 「1 度」系の正規表現は「`wire_*` が系を登録する」「`main` から呼ぶ」型の古い前提を拾わない（差し戻し 1 回）。呼び手が移った doc は語でなく「呼び手の名」で洗う。
 - 5: 「前のものが残っていない」型の判定は前のものが最初から無くても緑になる。1 周目の面（結線ありの腕を通った証）も控えて同じ判定に入れる（差し戻し 1 回・fallback 変異で実証）。
+- 6: `tools/test-all.ps1` 全段緑（07d1d875）。kanade・areka-ghost・wintf・examples の差分 0・触ったファイルは最大 971 行・切替の語彙 0。実機は emo2 を argv で起動し、OS の閉鎖要求（taskkill・非強制＝ログ上「メニューの「終了」と同じ終了要求として kanade へ送る」）で終了コード 0・`event="app_exit"`・①ticker Close→②終了統括・ERROR 0 を確認。メニューを実際にクリックする走行は画面操作の許可が下りず未実施（開発者の 1 クリックで補える）。SHIORI 失敗の smoke（fault_direction）は test-all と各タスクで緑。
