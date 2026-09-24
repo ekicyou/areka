@@ -82,6 +82,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 # Build: cargo build
 # Build (Release最適化): cargo build --release
 # Test: cargo test
+# Full test (DoD gate・i686 の準備込み・PowerShell): pwsh -NoProfile -File tools/test-all.ps1 [-License]
 ```
 
 ## Key Technical Decisions
