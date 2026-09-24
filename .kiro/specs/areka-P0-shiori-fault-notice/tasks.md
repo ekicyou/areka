@@ -100,7 +100,7 @@
   - _Requirements: 1.1, 1.2, 1.6, 1.10, 1.11, 1.12, 3.1, 3.2, 3.3, 6.3, 6.4, 8.1, 8.4_
 
 - [ ] 5. 常設 smoke で無人の走行を確かめる
-- [ ] 5.1 i686 の 2 成果物を建てる
+- [x] 5.1 i686 の 2 成果物を建てる
   - PowerShell で `cargo build -p shiori-host32-helper -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を走らせる（smoke ①②④ と実機が使う helper と検証用 DLL）
   - `target/i686-pc-windows-msvc/debug/` に `shiori-host32-helper.exe` と `shiori_loadu.dll` の 2 つがあり、どちらも最新のソースから建っている（2026-09-24 のタスク生成時点で建て済み。target を掃除したら建て直す）
   - _Requirements: 4.1, 4.4_
