@@ -107,7 +107,7 @@ graph TB
 ### Key Decisions
 
 1. **起動は `main` で同期に行う**（`WinApp::new()` が COM と DPI を初期化するので、検体の取得・資産の構築・窓の生成を `run()` の前に行える）。失敗はそこで `error!` を出して終了コード 2 で終わる（`run()` に入らない）。手本の非同期投函は使わない。
-2. **差し替えは 1 つの排他 system を `Update` と `FrameFinalize` の両方に登録し、台本（`Script`）が「今の tick でどの段が動くか」を決める**。段の違いだけが版 (iv) の差になる。`FrameFinalize` の差し替えの後に tick 記録 system を置く（`.after`）ので、tick の終わりの当たり判定は差し替え後の状態で記録される。
+2. **差し替えは 1 つの排他 system を `Update` と `FrameFinalize` の両方に登録し、台本（`swap::Driver` が持つ `Step` の列）が「今の tick でどの段が動くか」を決める**。段の違いだけが版 (iv) の差になる。`FrameFinalize` の差し替えの後に tick 記録 system を置く（`FrameFinalize` の chain の順）ので、tick の終わりの当たり判定は差し替え後の状態で記録される。
 3. **絵は Desktop Duplication で取る**（別スレッド・自前の D3D11 device）。`AcquireNextFrame` が返す各フレームについて `LastPresentTime`（QPC）と `AccumulatedFrames` を読み、窓の矩形を staging texture へ写して CPU で読む。`AccumulatedFrames > 1` は取りこぼしとして「測れない」に数える。
 4. **突き合わせの規則**（要件 3.2）: 取り込んだフレームの `LastPresentTime` を T とし、`T` 以前に終わった最新の tick の記録（当たり判定・窓の矩形）と組にする。tick の記録は `FrameFinalize` の最後で `QueryPerformanceCounter` を読んで残す。この規則で「差し替え → 反映 → 表示」の合成器の遅れ（tick が終わって当たり判定が新しくなってから、OS がその絵を出すまでの画面更新 1 回）が、版に依らず「絵は古い・当たり判定は新しい」の混在 1 として数に現れ得る。これを**反映待ち**と呼び、混在の内訳として別に数える（開発者裁定 2026-09-24・下記 §Observer）。床は本番で既に通っている経路 `face-switch@update` の反映待ちの数で測り、README の見立てはその床を差し引いて読む。
 5. **絵と当たり判定の見分けは標本点で行う**。2 つの検体の面 0 を `Composer::compose` して premultiplied BGRA を得、共通範囲の中で「P だけ不透明」「Q だけ不透明」「両方不透明で色の差が 48 以上」の 3 集合から 16×16 の格子の升ごとに 1 点ずつ選ぶ（実装 2.2 で 8×8 から改訂）。絵は取り込み画素と合成の色の一致（各チャネル許容 12）の割合、当たり判定は `hit_test_in_window` の当たりの割合で判別する。拡大率 k≠1.0 なら標本点の座標が合わないので全フレームを「測れない」にする。
@@ -115,7 +115,7 @@ graph TB
 7. **終了コード**: 0＝全観測完了かつ較正合格、1＝上限時間で打ち切り、2＝初期化の失敗、3＝較正不合格。終了の理由は必ず `info!`／`error!` に出す。
 8. **数の定義**（要件 3.4）: 観測の窓は「要求の直前のフレーム」から「揃った最初のフレーム」の後さらに **30 tick 分の時間**まで。揃ったフレームが **180 tick** 以内に来なければ打ち切って「未完」とし、それまでの数を出す。「1 フレーム」は OS の画面更新なので、画面が変わらない時間には数えるフレームが無い（それは崩れが無いことと同義）。
 9. **当たり判定の「両方」**: 基準の版では古いマスクと新しいマスクが同時に効く（和になる）。これを 4 つ目の値「両方」として持ち、「混在」に数える（新しい絵と同じ当たり判定ではないため）。要件 3.3 の列挙と 3.4 の「混在」にも同じ語を足した（設計ディスカッションで追記）。README にも書く。
-10. **既定の上限時間は 90 秒**（`AREKA_APP_SMOKE_EXIT_MS` で上書き）。観測は約 20 本（較正 5・版 6×往復 2・面の切り替え 2）で、1 本あたり揃うまで＋30 tick＋戻しで 1〜2 秒。
+10. **既定の上限時間は 90 秒**（`AREKA_APP_SMOKE_EXIT_MS` で上書き）。観測は約 20 本（較正 5・版 6×往復 2・面の切り替え 2）で、1 本あたり用意（戻し）＋揃うまで＋30 tick で 1〜2 秒。
 
 ### Technology Stack
 
@@ -136,7 +136,7 @@ crates/pilot/
 ├── Cargo.toml                                   # [dev-dependencies] と windows feature を足す（変更）
 └── examples/pilot-balloon-asset-swap/           # 新規（_template を写して着手）
     ├── main.rs        # 起動（検体・資産・窓・presenter・system 登録・取り込み開始）と終了コード
-    ├── swap.rs        # 台本（観測の並び）・差し替えの版 3 種・面の切り替え・較正の作り方・戻し
+    ├── swap.rs        # 台本（観測の並び）・差し替えの版 3 種・面の切り替え・較正の作り方・観測の前の用意（戻し）
     ├── observe.rs     # 標本点の導出・tick 記録（当たり判定・矩形・覆い）・突き合わせ・4 種の数え・集計ログ
     ├── capture.rs     # Desktop Duplication スレッド・窓の矩形の切り出し・絵の判別
     └── README.md      # 3 幕（動機・概要・検証結果）
@@ -157,20 +157,20 @@ stateDiagram-v2
     [*] --> Boot: 検体取得 資産構築 窓生成
     Boot --> Settle0: GPU 資源が揃ったら attach A と ShowSurface 0
     Settle0 --> CalibStatic: 絵 A 当たり A が揃う
-    CalibStatic --> CalibEmpty
-    CalibEmpty --> CalibMixed
-    CalibMixed --> CalibStale
-    CalibStale --> CalibSize
-    CalibSize --> Versions: 戻し（A を 1 面だけ）
-    Versions --> Versions: 版 6 種 × 往復（各差し替えの後に戻し）
-    Versions --> FaceSwitch: 面 0 と面 2 の往復
+    CalibStatic --> CalibEmpty: 用意 A0
+    CalibEmpty --> CalibMixed: 用意 A0
+    CalibMixed --> CalibStale: 用意 A0
+    CalibStale --> CalibSize: 用意 A0（対 A0,A2）
+    CalibSize --> Versions: 用意 A0
+    Versions --> Versions: 版 6 種 × 往復（各観測の前に出発の面 A0／B0 を用意）
+    Versions --> FaceSwitch: 用意 A0／A2（対 A0,A2）して面 0 と面 2 の往復
     FaceSwitch --> Summary: 較正と本番を並べて出す
     Summary --> [*]: 窓を消す 終了コード
     Boot --> [*]: 失敗は終了コード 2
     Versions --> [*]: 上限時間で打ち切り 終了コード 1
 ```
 
-- 各観測は「要求 → 揃うのを待つ（最大 180 tick）→ さらに 30 tick → 集計ログ → 戻し（観測しない）→ 戻しが揃うのを待つ」の 1 単位。戻しは常に「窓の `emo-*` 子を全部 despawn → `attach_target(TargetId(1), A)` → `ShowSurface 0` → 窓寸合わせ」で、台本のどの版の後でも状態を同じにする。
+- 各観測は「用意（観測しない）→ 用意が揃うのを待つ → 要求 → 揃うのを待つ（最大 180 tick）→ さらに 30 tick → 集計ログ」の 1 単位。用意（`Step::Prep { face, pair }`）は「窓の `emo-*` 子を全部 despawn → 出発の面（A0・B0・A2 のどれか）を `attach_target(TargetId(1), …)` → `ShowSurface` → 窓寸合わせ」で、直前の版や較正が何を残していても出発の状態を同じにする。用意の後は最新のフレームの絵・当たり判定・窓寸が出発の面に揃うのを 5〜60 tick 待つ。面の切り替えと較正の大きさの前の用意は、当たり判定に当てる対を `(A0, A2)`（`PAIR_FACE`）へ切り替える。（実装 3.1 で改訂: 当初は「各観測の後に A へ戻す」だったが、B→A・A2→A0 は A 以外から始まるので、戻し先を観測の出発の面にして各観測の前へ移した。）
 - 上限時間は tick ごとに `Instant` で調べ、到達したら「打ち切り」とそれまでの数を出して窓を despawn する（`ExitPolicy::OnLastWindowClose` で `run()` が戻る）。
 
 ### フレームの突き合わせ
@@ -182,8 +182,10 @@ sequenceDiagram
     participant Cap as 取り込みスレッド
     participant DWM as DWM
     UI->>UI: Update で差し替え（版により FrameFinalize）
-    UI->>UI: FrameFinalize の最後に当たり判定 3 集合の標本点と GetWindowRect と覆いの検査
-    UI->>Shared: TickRecord { tick, ended_qpc, rect, hit }
+    UI->>UI: UISetup で積まれた WindowPos から tick の後に効く矩形を予測（QueuedRect）
+    UI->>UI: FrameFinalize の最後に当たり判定 3 集合の標本点と予測した矩形と覆いの検査
+    UI->>Shared: TickRecord { tick, pair, ended_qpc, rect, hit }
+    UI->>UI: tick の後に wintf が SetWindowPos を流す
     DWM->>Cap: AcquireNextFrame（LastPresentTime T, AccumulatedFrames）
     Cap->>Shared: T 以前に終わった最新の TickRecord を引く
     Cap->>Cap: その rect を staging へ写し標本点の色を判別
@@ -192,6 +194,7 @@ sequenceDiagram
 ```
 
 - 「揃った」＝ 観測の要求より後のフレームで、絵＝到達先 ∧ 当たり判定＝到達先 となる最初のもの（要件 3.1 の定義どおり。大きさは別に数えるので揃ったの条件に入れない）。
+- tick の記録の矩形は `GetWindowRect` の値ではなく、その tick の後に効く矩形の予測である（実装 3.1 で改訂）。wintf は tick の中では `SetWindowPos` を積むだけで（`apply_window_pos_changes`・`UISetup`）、実際に流すのは tick の後（`flush_window_pos_commands`）なので、`FrameFinalize` の `GetWindowRect` はまだ前の寸を返す。そこで `UISetup` の `apply_window_pos_changes` の後に置いた `queued_rect_system` が積まれた `WindowPos` を同じ変換で写し（`QueuedRect`）、`tick_record_system` はこの tick に積まれた移動があればその後の矩形、無ければ `GetWindowRect` の値を記録する（`effective_rect`）。`GetWindowRect` は前の tick の予測が実際と合っているかの照合にだけ使い、外れたら `error!` を出す。`Update` で書いた `WindowPos` は同じ tick に、`FrameFinalize` で書いた `WindowPos` は次の tick に付く。
 - 取り込みスレッドは `AcquireNextFrame(16ms)` を回し、timeout は素通り、`DXGI_ERROR_ACCESS_LOST` は複製を作り直して以後のフレームまで「測れない」に数える。停止は `AtomicBool`。
 
 ## Requirements Traceability
@@ -205,42 +208,42 @@ sequenceDiagram
 | 1.5 | 品質は緩めてよいが隔離は守る | Boundary | — | — |
 | 1.6 | 成果物は知見 | README.md | — | — |
 | 2.1 | 検体 2 つを窓口から引き一方で表示 | main.rs `boot` | `Assets` | Boot |
-| 2.2 | 往復の差し替え | swap.rs `Script` | `SwapMethod` | Versions |
-| 2.3 | 窓もプロセスも作り直さない | swap.rs | `apply_swap` | Versions |
+| 2.2 | 往復の差し替え | swap.rs `Driver`・`script()` | `Method` | Versions |
+| 2.3 | 窓もプロセスも作り直さない | swap.rs | `Driver::swap` | Versions |
 | 2.4 | 差し替えのログ | swap.rs | `info!` 要求 tick・時刻・from→to・版 | Versions |
 | 2.5 | 失敗は理由をログ＋0 以外で終了 | main.rs | 終了コード 2 | Boot |
-| 2.6 | 面 0 ↔ 面 2 の切り替え | swap.rs `FaceSwitch` | `Observation.pair` | FaceSwitch |
-| 2.7 | 面の切り替えの数を分けて示す | observe.rs 集計・README | `ObservationKind::FaceSwitch` | Summary |
-| 3.1 | 直前のフレームから揃った後 30 tick まで | observe.rs `Observation` | `WINDOW_AFTER_TICKS`・`SETTLE_TIMEOUT_TICKS` | 突き合わせ |
+| 2.6 | 面 0 ↔ 面 2 の切り替え | swap.rs `Step::FaceSwitch` | `Observation.pair` | FaceSwitch |
+| 2.7 | 面の切り替えの数を分けて示す | observe.rs 集計・README | `Kind::FaceSwitch` | Summary |
+| 3.1 | 直前のフレームから揃った後 30 tick まで | observe.rs `Observation` | `SETTLE_TICKS`・`GIVE_UP_TICKS`・`GRACE_TICKS` | 突き合わせ |
 | 3.2 | 実際の画面を取り込み直前の tick と突き合わせ | capture.rs・observe.rs | `TickRecord`・`FrameRecord` | 突き合わせ |
-| 3.3 | 絵と当たり判定の判別 | observe.rs `Signature`・`classify_picture`・`classify_hit` | `PictureClass`・`HitClass` | 突き合わせ |
+| 3.3 | 絵と当たり判定の判別 | observe.rs `Signature`・`classify_picture`・`classify_hit` | `Class` | 突き合わせ |
 | 3.4 | 4 種の崩れ・重複計上 | observe.rs `judge_frame` | `Counts` | 突き合わせ |
-| 3.5 | 0 を明示したログ | observe.rs `log_observation` | — | Summary |
+| 3.5 | 0 を明示したログ | observe.rs `row` | — | Summary |
 | 3.6 | 測れない | capture.rs・observe.rs | `Unmeasurable` 理由 | 突き合わせ |
 | 3.7 | 実際の画面に出し続ける | main.rs `create_balloon_window` | `WS_VISIBLE`・`WS_EX_TOPMOST` | Boot |
-| 4.1 | 実際の窓に崩れを作る較正 | swap.rs `Calibration` | `make_calibration` | Calib* |
-| 4.2 | 混在の較正 | swap.rs `CalibMixed` | `HitTest` の付け替え | CalibMixed |
-| 4.3 | 空の較正 | swap.rs `CalibEmpty` | `PresentCommand::Hide` | CalibEmpty |
-| 4.4 | 古い絵の残りの較正 | swap.rs `CalibStale` | `Visual::set_visible` | CalibStale |
-| 4.5 | 大きさの食い違いの較正 | swap.rs `CalibSize` | `take_pending_resize` を捨てる | CalibSize |
-| 4.6 | 静止で 4 種とも 0 | swap.rs `CalibStatic` | 窓を 1px 動かして戻す | CalibStatic |
-| 4.7 | 較正の失敗で本番を無効 | observe.rs `Summary`・main.rs 終了コード 3 | `CalibrationVerdict` | Summary |
-| 4.8 | 較正と本番を並べて出す | observe.rs `log_summary` | — | Summary |
-| 5.1 | 基準の版 | swap.rs `SwapMethod::Reattach` | `attach_target` 再登録 | Versions |
-| 5.2 | 本命の版 | swap.rs `SwapMethod::RemoveThenAttach` | despawn → 再登録 → 表示 | Versions |
-| 5.3 | 隠すだけの版＋時点の版 | swap.rs `SwapMethod::AttachNewHideOld`・`Stage` | `TargetId` の新規割当・`Hide` | Versions |
-| 5.4 | 基準の結果に依らず全版を観測 | swap.rs `Script` | 台本は固定 | Versions |
+| 4.1 | 実際の窓に崩れを作る較正 | swap.rs `Step::Calib` | `Driver::calib`・`calib_follow_up` | Calib* |
+| 4.2 | 混在の較正 | swap.rs `Calib::Mixed` | `HitTest` の付け替え | CalibMixed |
+| 4.3 | 空の較正 | swap.rs `Calib::Empty` | `PresentCommand::Hide` | CalibEmpty |
+| 4.4 | 古い絵の残りの較正 | swap.rs `Calib::Stale` | `Visual::set_visible` | CalibStale |
+| 4.5 | 大きさの食い違いの較正 | swap.rs `Calib::Size` | `take_pending_resize` を捨てる | CalibSize |
+| 4.6 | 静止で 4 種とも 0 | swap.rs `Calib::Static` | 窓を 1px 動かして戻す | CalibStatic |
+| 4.7 | 較正の失敗で本番を無効 | observe.rs `calibration_verdict`・main.rs 終了コード 3 | `Verdict` | Summary |
+| 4.8 | 較正と本番を並べて出す | observe.rs `Observer::summarize` | — | Summary |
+| 5.1 | 基準の版 | swap.rs `Method::Reattach` | `attach_target` 再登録 | Versions |
+| 5.2 | 本命の版 | swap.rs `Method::RemoveThenAttach` | despawn → 再登録 → 表示 | Versions |
+| 5.3 | 隠すだけの版＋時点の版 | swap.rs `Method::AttachNewHideOld`・`Stage` | `TargetId` の新規割当・`Hide` | Versions |
+| 5.4 | 基準の結果に依らず全版を観測 | swap.rs `Driver`・`script()` | 台本は固定 | Versions |
 | 5.5 | 版の名前つきログ | observe.rs | `Observation.name` | Summary |
 | 5.6 | 1 フレーム遅らせる版は直し方に数えない | README 見立て・`Stage::FrameFinalize` は比較の版 | — | — |
 | 5.7 | 内部の物を外から消してよい・正規の口は学び | swap.rs `despawn_mounts` | `Name` で探す | Versions |
 | 5.8 | 既存 crate の変更が要るなら学び | README 学び | — | — |
 | 5.9 | 本命の版の数を主な根拠に | README 検証結果 | — | — |
-| 6.1 | 上限時間の内側で自分で終わる | main.rs・observe.rs `Deadline` | `Instant` | Summary |
+| 6.1 | 上限時間の内側で自分で終わる | main.rs `deadline_system` | `Run.deadline`（`Instant`） | Summary |
 | 6.2 | 環境変数で上限 | main.rs | `AREKA_APP_SMOKE_EXIT_MS` | — |
 | 6.3 | 既定の上限 | main.rs | `DEFAULT_EXIT_MS = 90_000` | — |
-| 6.4 | 観測を終えたら待たずに終了 | swap.rs `Script::Done` | 窓を despawn | Summary |
+| 6.4 | 観測を終えたら待たずに終了 | swap.rs `Step::Done` | 窓を despawn | Summary |
 | 6.5 | 終了の理由をログ | main.rs | `ExitReason` | Summary |
-| 6.6 | 打ち切りはそれまでの数と共に | observe.rs `log_summary(partial)` | — | Summary |
+| 6.6 | 打ち切りはそれまでの数と共に | observe.rs `Observer::summarize(true, …)` | — | Summary |
 | 7.1 | README 3 幕 | README.md | — | — |
 | 7.2 | 動機の幕で本坑を名指し | README.md | — | — |
 | 7.3 | 概要の幕に実行法と上限の与え方 | README.md | — | — |
@@ -254,7 +257,7 @@ sequenceDiagram
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | Runner（`main.rs`） | 起動と終了 | 検体・資産・窓・presenter を組み、system と取り込みを起動し、終了コードを返す | 1.x, 2.1, 2.5, 3.7, 6.1〜6.3, 6.5 | wintf `WinApp`（P0）・sample-ghost-kit（P0）・areka-emo-present（P0） | Service |
-| SwapDriver（`swap.rs`） | 差し替えと較正 | 台本に従い差し替えの版・面の切り替え・較正・戻しを World に書く | 2.2〜2.4, 2.6, 4.1〜4.6, 5.1〜5.4, 5.7, 6.4 | EmoPresenter（P0）・wintf ECS（P0） | Service, State |
+| SwapDriver（`swap.rs`） | 差し替えと較正 | 台本に従い差し替えの版・面の切り替え・較正・観測の前の用意（戻し）を World に書く | 2.2〜2.4, 2.6, 4.1〜4.6, 5.1〜5.4, 5.7, 6.4 | EmoPresenter（P0）・wintf ECS（P0） | Service, State |
 | Observer（`observe.rs`） | 観測と集計 | 標本点・tick 記録・突き合わせ・4 種の数え・ログ・較正の合否 | 3.1〜3.6, 4.7, 4.8, 5.5, 6.6, 2.7 | wintf `hit_test_in_window`（P0）・Capture（P0） | Service, State |
 | Capture（`capture.rs`） | 画面取り込み | Desktop Duplication で各画面更新を取り、窓の矩形を切り出して絵を判別する | 3.2, 3.3, 3.6 | windows Dxgi／D3D11（P0） | Service |
 | README（`README.md`） | 一次記録 | 3 幕 | 1.6, 2.7, 5.6, 5.8, 5.9, 7.x | — | — |
@@ -269,10 +272,10 @@ sequenceDiagram
 | Requirements | 1.1, 1.2, 1.3, 2.1, 2.5, 3.7, 6.1, 6.2, 6.3, 6.5 |
 
 **Responsibilities & Constraints**
-- 順序: `tracing` 初期化 → `WinApp::new()` → `SampleRoot::acquire("StayseeBalloon")` と `SampleRoot::acquire("emo2")?.balloon("emo2-kakukaku")` → `WicDecoderArm::new()` → `build_balloon_target(dir, &decoder, 0)` ×2 → 面 0（と Staysee の面 2）を `Composer::compose` して寸法と標本点の元を得る → 窓を 1 つ spawn（A の原寸・固定位置 (160, 160)・`WS_EX_TOPMOST`）→ `EmoPresenter::new()` と `Script`・`Observer` を NonSend で World へ → system 登録（`Update`: `swap_system`、`FrameFinalize`: クリック透過登録・`swap_system`・`tick_record_system.after(swap_system)`）→ `Capture::start` → `run()` → `ExitReason` を読んで `std::process::exit`。
+- 順序: `tracing` 初期化 → `WinApp::new()` → `SampleRoot::acquire("StayseeBalloon")` と `SampleRoot::acquire("emo2")?.balloon("emo2-kakukaku")` → `WicDecoderArm::new()` → `build_balloon_target(dir, &decoder, 0)` ×2 → 面 0（と Staysee の面 2）を `Composer::compose` して寸法と標本点の元を得る → 2 対の標本点を導出 → 台本（`swap::script()`）が要る数（`swap::needs`）だけ資産を作り置く → 窓を 1 つ spawn（A の原寸・固定位置 (160, 160)・`WS_EX_TOPMOST`）→ `swap::Driver`（中に `EmoPresenter`・台本・作り置きの資産）だけを NonSend で、`Observer`・`Run`（上限時間と終了の理由）・`QueuedRect` を Resource で World へ → system 登録（`UISetup`: `queued_rect_system.after(apply_window_pos_changes)`、`Update`: `swap_system_for(Update)`、`FrameFinalize`: `register_click_through → deadline_system → swap_system_for(FrameFinalize) → tick_record_system → observe_system` の chain）→ `Capture::start` → `run()` → `Run.exit` を読んで `std::process::exit`。（実装 2.2・3.1 で改訂: 当初は `EmoPresenter`・`Script`・`Observer` をそれぞれ NonSend で置く計画だった。）
 - `SampleRoot` 2 つは `main` のローカルとして `run()` の後まで生かす（`Drop` で複製の木が消える）。
 - 失敗（検体・復号・構築・取り込みの初期化）は `error!` を出して `run()` に入らず終了コード 2。
-- 上限時間: `AREKA_APP_SMOKE_EXIT_MS`（空・非数値は既定）→ 既定 90,000 ms。`Deadline` として `Observer` へ渡す。
+- 上限時間: `AREKA_APP_SMOKE_EXIT_MS`（空・非数値は既定）→ 既定 90,000 ms。`Run.deadline` に置き、`deadline_system` が唯一の時計として調べる（到達したら `Observer::summarize(true, …)` で打ち切りの並べ出しをして窓を消す）。
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
 
@@ -292,11 +295,11 @@ enum ExitReason { Completed, CalibrationFailed, Deadline, InitFailure }
 fn exit_code(reason: ExitReason) -> i32; // 0 / 3 / 1 / 2
 ```
 - Preconditions: UI スレッド（`main`）で `WinApp::new()` 済み。
-- Postconditions: `run()` が戻ったとき `Observer` に `ExitReason` が入っている（打ち切り・完了・較正不合格のいずれか）。
+- Postconditions: `run()` が戻ったとき `Run.exit` に `ExitReason` が入っている（打ち切り・完了・較正不合格のいずれか）。
 
 **Implementation Notes**
 - `attach_target` は `EmoWorld`／`AtlasTable` を move で消費する。`EmoWorld` は `Clone` でない（実装 1.2 で判明・当初の「手本と同じく clone」は誤り）ので、台本で要る分の資産は起動時にまとめて `build_balloon_target` で作っておく（差し替えの tick に復号の時間を入れないため）。
-- 起動の 1 回目の `attach_target`＋`ShowSurface` は GPU 資源（`GraphicsCore`・`WucGraphicsResource::is_valid`）が揃ってから（手本 `boot_present_system` と同じ待ち方）。これは `Script::Boot` の中で行う。
+- 起動の 1 回目の `attach_target`＋`ShowSurface` は GPU 資源（`GraphicsCore`・`WucGraphicsResource::is_valid`）が揃ってから（手本 `boot_present_system` と同じ待ち方）。これは台本の `Step::Boot` の中で行う。
 
 ### 差し替えと較正
 
@@ -308,7 +311,7 @@ fn exit_code(reason: ExitReason) -> i32; // 0 / 3 / 1 / 2
 | Requirements | 2.2, 2.3, 2.4, 2.6, 4.1〜4.6, 5.1〜5.4, 5.7, 6.4 |
 
 **Responsibilities & Constraints**
-- `swap_system(world: &mut World)` は `Update` と `FrameFinalize` の両方に登録され、`Script` が「この tick のこの段で何をする」と決めた場合だけ動く。両段とも同じ関数で、`Stage` を World の `FrameCount` と自分の登録段から知る（登録時にクロージャで段を固定する）。
+- `swap_system_for(stage)` が返す排他 system は `Update` と `FrameFinalize` の両方に登録され、`Driver` の台本が「この tick のこの段で何をする」と決めた場合だけ動く（`act_stage(step)` が段を決める）。両段とも同じ関数で、`Stage` を World の `FrameCount` と自分の登録段から知る（登録時にクロージャで段を固定する）。
 - 差し替えの 3 版（`from`＝今の資産、`to`＝到達先、`window`＝バルーン窓、`presenter`）:
   - `Reattach`（基準・5.1）: `attach_target(TargetId(1), window, to)` → `ShowSurface{ surface_id: 0 }` → `take_pending_resize(TargetId(1))` を `WindowPos` へ。
   - `RemoveThenAttach`（本命・5.2）: `despawn_mounts(window)` → 上と同じ 3 手。**1 回の system 呼び出しの中で**行う。
@@ -321,7 +324,7 @@ fn exit_code(reason: ExitReason) -> i32; // 0 / 3 / 1 / 2
   - `CalibMixed`（4.2）: B を `TargetId(2)` として `attach_target`＋`ShowSurface`＋`Hide`（見えない・当たらない B の子ができる）を仕込んでおき、要求 tick で A の `emo-surface` の `HitTest` を `none()`、B の `emo-surface` の `HitTest` を `alpha_mask()` へ書き換える（`Visual` は触らない）。絵は A・当たり判定は B。**当たり判定だけの書き換えでは画面が更新されずフレームが来ないので、要求 tick に静止と同じ 1px の移動を足し、10 tick 後に当たり判定を A へ戻して窓も戻す**（移動だけで崩れが出ないことは静止の較正と、付け替えを外すと混在 0 になる反転で確かめた・実装 3.2）。B の仕込みは要求 tick の中で行う。期待: 混在 ≥ 1。
   - `CalibStale`（4.4）: `Hide{ TargetId(1) }` → B を `TargetId(2)` で `attach_target`＋`ShowSurface`（揃った＝絵 B・当たり B）→ 揃った tick の 10 tick 後（観測の窓の内側）に A の `emo-surface` と `emo-text-layer-slot` の `Visual::set_visible(true)`（`HitTest` は `none()` のまま）。A が上に描かれて残る。期待: 古い絵の残り ≥ 1。
   - `CalibSize`（4.5）: A のまま `ShowSurface{ surface_id: 2 }` を出し、`take_pending_resize` は読んで**捨てる**（`WindowPos` を書かない）。窓 335×205 に 335×395 の絵。判別対＝`(A0, A2)`・from＝A0・to＝A2（面の切り替えと同じ対）。期待: 大きさの食い違い ≥ 1。
-- 各較正・各差し替えの後は `reset_to_a`（`despawn_mounts` → `attach_target(TargetId(1), A)` → `ShowSurface 0` → 窓寸合わせ）で戻し、`Observer` が「絵 A0・当たり A0・寸法一致」を見るまで次へ進まない（戻しは観測しない）。同じ絵へ戻る戻しでは画面が変わらず新しいフレームが来ないことがあるので、この判定は「最新のフレーム」の絵と、今の tick の当たり判定・矩形で行う。戻しの要求から 60 tick 以内に揃わなければ `error!` を出して次へ進む（次の観測の「直前のフレーム」に戻しの失敗が写る）。
+- 各観測の前には `Driver::prep`（用意・観測しない: `despawn_mounts` → 出発の面を `attach_target(TargetId(1), …)` → `ShowSurface` → 窓寸合わせ・当たり判定に当てる対 `Observer.active` を観測の対へ）を置き、`Driver::prep_settled` が「最新のフレームの絵・直前の tick の当たり判定が出発の面・矩形が出発の面の原寸」を見るまで観測を開かない。同じ絵へ戻る用意では画面が変わらず新しいフレームが来ないことがあるので、この判定は「最新のフレーム」の絵で行い、用意の tick の絵が取り込みに届くまで最低 5 tick 待つ。用意から 60 tick 以内に揃わなければ `error!` を出して次へ進む（次の観測の「直前のフレーム」に用意の失敗が写る）。（実装 3.1 で改訂: 当初は各観測の後に A へ戻す `reset_to_a` だった。）
 - ログ（2.4）: 要求のたびに `info!(tick, qpc, version, stage, from, to, "swap: 要求")`。
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]
@@ -329,38 +332,59 @@ fn exit_code(reason: ExitReason) -> i32; // 0 / 3 / 1 / 2
 ##### Service Interface
 ```rust
 #[derive(Clone, Copy)] enum Balloon { A, B }                   // A=Staysee, B=kakukaku
-#[derive(Clone, Copy)] enum Face { A0, A2, B0 }               // 判別対の要素
-#[derive(Clone, Copy)] enum SwapMethod { Reattach, RemoveThenAttach, AttachNewHideOld }
+#[derive(Clone, Copy)] enum Face { A0, A2, B0 }               // 判別対の要素（A0 は両対で P）
+#[derive(Clone, Copy)] enum Method { Reattach, RemoveThenAttach, AttachNewHideOld }
 #[derive(Clone, Copy)] enum Stage { Update, FrameFinalize }
-#[derive(Clone, Copy)] enum Calibration { Static, Empty, Mixed, Stale, Size }
+use observe::Calib;                                           // { Static, Empty, Mixed, Stale, Size }
 enum Step {
-    Boot,
-    Calib(Calibration),
-    Swap { method: SwapMethod, stage: Stage, from: Balloon, to: Balloon },
-    FaceSwitch { from_face: Face, to_face: Face },     // A0→A2, A2→A0
-    Reset,                                            // 観測しない戻し
-    Done,
+    Boot,                                             // GPU 資源を待って A0 を表示し揃うのを待つ
+    Calib(Calib),
+    Prep { face: Face, pair: usize },                 // 観測しない用意（出発の面を装着・対を切り替え）
+    Swap { method: Method, stage: Stage, from: Balloon, to: Balloon },
+    FaceSwitch { from: Face, to: Face },              // A0→A2, A2→A0
+    Done,                                             // 最終の並べ出し → 終了の理由 → 窓を消す
 }
-struct Script { steps: Vec<Step>, cursor: usize, current_id: TargetId, next_id: u32, armed: Option<(Stage, u32 /*tick*/)> }
+fn script() -> Vec<Step>;                                      // 固定の台本（Boot → 較正 5 → 版 12 → 面 2 → Done）
+fn obs_name(step: Step) -> Option<String>;                    // 行の名前（観測しない段は None）
+fn observed(step: Step) -> Option<(usize /*pair*/, Class /*from*/, Class /*to*/)>;
+fn act_stage(step: Step) -> Stage;                            // Swap は自分の段・Done は FrameFinalize・他は Update
+fn needs(steps: &[Step]) -> (usize, usize);                   // 作り置く資産の数（A, B）
+/// 台本・presenter・作り置きの資産（NonSend・UI スレッド専有）。
+struct Driver {
+    presenter: EmoPresenter, window: Entity,
+    pool_a: Vec<(EmoWorld, AtlasTable)>, pool_b: Vec<(EmoWorld, AtlasTable)>,
+    steps: Vec<Step>, cursor: usize, phase: Phase /* Act | Wait(tick) */,
+    current_id: TargetId, next_id: u32, sizes: [(u32, u32); 3],
+    calib_a: Vec<Entity>, calib_b_surface: Option<Entity>, followed: bool,   // 較正の仕込みと追い打ち
+}
+impl Driver {
+    fn new(window: Entity, steps: Vec<Step>, pool_a: Vec<(EmoWorld, AtlasTable)>, pool_b: Vec<(EmoWorld, AtlasTable)>, sizes: [(u32, u32); 3]) -> Self;
+    fn prep(&mut self, world: &mut World, face: Face, pair: usize, now: u32);
+    fn prep_settled(&self, world: &World, face: Face, pair: usize, since: u32, now: u32) -> bool;
+    fn swap(&mut self, world: &mut World, step: Step, method: Method, stage: Stage, to: Balloon, now: u32);
+    fn face_switch(&mut self, world: &mut World, step: Step, to: Face, now: u32);
+    fn calib(&mut self, world: &mut World, step: Step, c: Calib, now: u32);              // 仕込みと要求
+    fn calib_follow_up(&mut self, world: &mut World, c: Calib, since: u32, now: u32);    // 追い打ち
+    fn done(&mut self, world: &mut World, now: u32);
+}
 fn swap_system_for(stage: Stage) -> impl FnMut(&mut World);   // 登録用。段を閉じ込める
-fn apply_swap(world, presenter, window, method, to: &Assets, current_id) -> TargetId;  // 新しい「今の id」
 fn despawn_mounts(world: &mut World, window: Entity) -> usize;                        // 消した数
-fn reset_to_a(world, presenter, window, assets) -> TargetId;
-fn make_calibration(world, presenter, window, assets, which: Calibration, phase: u8);  // 仕込み／要求／追い打ち
 ```
-- `Balloon` と `Face` の対応: `A → A0`・`B → B0`（観測の `from`／`to` は `Face` で持つ）。`attach_target` の `author_dpi` は手本と同じ 96 固定。
+- `Balloon` と `Face` の対応: `A → A0`・`B → B0`。観測の `from`／`to` は判別対の中の `Class`（`P`／`Q`／`Neither`）で持つ（`observed`）。`attach_target` の `author_dpi` は手本と同じ 96 固定（`DEFAULT_AUTHOR_DPI`）。
 - Preconditions: `Boot` 完了（`TargetId(1)` に A が表示済み）。`Observer` が前の観測を閉じている。
-- Postconditions: `Step::Swap`／`FaceSwitch`／`Calib` の要求 tick で `Observer::open(observation)` が呼ばれている（要求 tick・pair・from・to・名前つき）。
-- Invariants: `Reset` の後は窓の `emo-*` 子が 2 つだけ・`current_id == TargetId(1)`・`next_id` は単調増加。
+- Postconditions: `Step::Swap`／`FaceSwitch`／`Calib` の要求 tick で `Observer::open(pair, kind, name, from, to, request_tick)` が呼ばれている。
+- Invariants: `Prep` の後は窓の `emo-*` 子が 2 つだけ・`current_id == TargetId(1)`・`next_id` は単調増加（較正の `TargetId(2)` とは分けて 3 から）。
+
+（実装 3.1・3.2 で改訂: 当初の `Script`・`SwapMethod`・`Calibration`・`Step::Reset`・`apply_swap`・`reset_to_a`・`make_calibration` は、presenter と作り置きの資産を抱えた `Driver` とそのメソッド、`Method`・`observe::Calib`・`Step::Prep` になった。）
 
 ##### State Management
-- State model: `Script` は NonSend リソース。`cursor` が進むのは「観測が閉じた（`Observer::is_closed`）かつ戻しが揃った」ときだけ。
+- State model: `Driver` は NonSend リソース（`EmoPresenter` を持つため）。`cursor` が進むのは、用意（`Boot`・`Prep`）なら `prep_settled` が真のとき、観測（`Swap`・`FaceSwitch`・`Calib`）なら `Observer::is_closed` のときだけで、どちらも `Update` で調べる。
 - Concurrency: UI スレッド専有。取り込みスレッドは触らない。
 
 **Implementation Notes**
-- Integration: `FrameFinalize` の `swap_system` は `tick_record_system` より前（`.after` を tick 記録側に付ける）。`Update` の `swap_system` は順序指定なし（同じ tick の `PostLayout` より前であれば足りる）。
-- Validation: `apply_swap` の直後に `presenter.current_surface_id(id)` と `target_physical_size(id)` を `debug!` で出し、`Observer` の期待寸（判別対の到達先の原寸）と一致することを確かめる。
-- Risks: `despawn_mounts` は `Name` の文字列に依存する。名前が変わると消せず、本命の版が基準の版と同じ挙動になる——本命の版の差し替えでは直前の子は必ず 2 つなので、`despawn_mounts` の戻り値が 2 でなければ `error!` を出し、その観測を「測れない」にする。戻し（`reset_to_a`）では直前の版や較正により 2 か 4 なので、消した数はログに出すだけで判定しない。
+- Integration: `FrameFinalize` の `swap_system_for(FrameFinalize)` は `tick_record_system` より前（`FrameFinalize` の chain の順）。`Update` の `swap_system_for(Update)` は順序指定なし（同じ tick の `PostLayout` より前であれば足りる）。
+- Validation: 差し替えの直後（`Driver::after_change`）に `presenter.current_surface_id(id)` と `target_physical_size(id)` を `debug!` で出し、到達先の面の原寸と違えば `error!` を出す。`apply` は戻り値を持たないので、表示の失敗は `current_surface_id` が要求の面でないことで検出する。
+- Risks: `despawn_mounts` は `Name` の文字列に依存する。名前が変わると消せず、本命の版が基準の版と同じ挙動になる——本命の版の差し替えでは直前の子は必ず 2 つなので、`despawn_mounts` の戻り値が 2 でなければ `error!` を出し、その観測を「測れない」にする。用意（`prep`）では直前の版や較正により 2 か 4 なので、消した数はログに出すだけで判定しない。
 
 ### 観測と集計
 
@@ -373,10 +397,10 @@ fn make_calibration(world, presenter, window, assets, which: Calibration, phase:
 
 **Responsibilities & Constraints**
 - 標本点（`Signature`）は判別対 `(P, Q)` ごとに起動時に導出する。対は `(A0, B0)`（資産の差し替え・較正の静止・空・混在・残り）と `(A0, A2)`（面の切り替え・較正の大きさ）の 2 つ。導出: 共通範囲（幅・高さの小さい方）を 16×16 の格子に切り、各升から「P だけ不透明（α≥128）」「Q だけ不透明」「両方不透明で色差（各チャネルの差の最大）≥ 48」の点を 1 つずつ拾う（升に無ければ飛ばす・各集合の上限 256 点）。**格子は当初 8×8 だったが、実装 2.2 で実物を升に割ると `(A0, A2)` が「A2 だけ」10 升・「両方」11 升で条件を満たさず起動時に落ちたため 16×16 に改めた**（下限 16 点は 1 点のずれが 1/16 に収まる粗さとして据え置く）。
-  - 見分けられる条件: 「Q だけ」と「両方」の 2 集合がそれぞれ 16 点以上。「P だけ」は 16 点以上あれば使い、足りなければ**無し**として扱う（片方の面が他方を含む対に耐えるため）。検体の実物（合成後・α=255 の点）を数えた結果、`(A0, A2)` は共通範囲 335×205 で「A0 だけ」が 108 画素しか無く（A2 の上 205 行は A0 をほぼ含む）、16×16 の升で「A0 だけ」2／「A2 だけ」35／「両方」21、`(A0, B0)` は 47／28／76（8×8 では 1／10／11 と 19／16／33。設計検証の 3／18／21・26／21／38 升は升の数え方の誤り）。条件を満たさなければ「見分けられない」として、その対の観測はすべて「測れない」。
+  - 見分けられる条件: 「Q だけ」と「両方」の 2 集合がそれぞれ 16 点以上。「P だけ」は 16 点以上あれば使い、足りなければ**無し**として扱う（片方の面が他方を含む対に耐えるため）。検体の実物（合成後・α=255 の点）を数えた結果、`(A0, A2)` は共通範囲 335×205 で「A0 だけ」が 108 画素しか無く（A2 の上 205 行は A0 をほぼ含む）、16×16 の升で「A0 だけ」2／「A2 だけ」35／「両方」21、`(A0, B0)` は 47／28／76（8×8 では 1／10／11 と 19／16／33。設計検証の 3／18／21・26／21／38 升は升の数え方の誤り）。条件を満たさなければ「見分けられない」として、起動時に `error!` を出して `run()` に入らず終了コード 2 で終わる（§Error Handling・実装 2.2）。
   - 導出した点の数（対ごと・集合ごと）を `info!` に出し、README の検証結果にも書く。
   - 「P だけ」が無い対では、絵の「両方」は P が Q の上に描かれたときだけ見分けられ（Q が P の上なら Q と区別できない）、当たり判定の「両方」（2 つのマスクの和）は Q と区別できない。この限界は README の「分からないこと」に書く。面の切り替えは同じ装着の面を入れ替えるだけで子が 2 組にならないので、そこで「両方」は起きない見込み。
-- `tick_record_system`（`FrameFinalize` の最後）: `QueryPerformanceCounter` → `GetWindowRect(hwnd)` → 3 集合の各点で `hit_test_in_window(world, window, point)`（k≠1.0 なら記録だけして `k_ok=false`）→ 当たった entity の `Name` が `emo-text-layer-slot` なら `slot_hit=true`（文字層の古い子が当たり判定に影響した証拠・「測れない」）→ 覆いの検査（z 順で自窓より上の可視窓の矩形が自窓と交わるか・`GetWindow(GW_HWNDPREV)` を辿る）→ `TickRecord` を共有記録へ push。
+- `tick_record_system`（`FrameFinalize` の chain の `observe_system` の前）: `QueryPerformanceCounter` → 矩形＝この tick の後に効く矩形の予測（`effective_rect`: この tick に積まれた移動があれば `QueuedRect` の値、無ければ `GetWindowRect(hwnd)`・§System Flows フレームの突き合わせ。`GetWindowRect` は前の tick の予測の照合にも使い、外れたら `error!`）→ 今の対 `Observer.active` の 3 集合の各点で `hit_test_in_window(world, window, point)`（点は画素の中心 (x+0.5, y+0.5)。k≠1.0 なら記録だけして `k_ok=false`）→ 当たった entity の `Name` が `emo-text-layer-slot` なら `slot_hit=true`（文字層の古い子が当たり判定に影響した証拠・「測れない」）→ 覆いの検査（z 順で自窓より上の可視窓の矩形が自窓と交わるか・`GetWindow(GW_HWNDPREV)` を辿る）→ `TickRecord`（当てた対 `pair` つき）を共有記録へ push。取り込み側は `TickRecord.pair` と同じ対で絵を判別する。
 - 絵の判別（取り込みスレッドで実行・関数は本ファイルに置く）: 取り込んだ矩形の各標本点の色と、P／Q の合成色（premultiplied・α=255 の点だけを標本に選ぶので色そのもの）を各チャネル許容 12 で比べる。a＝「P だけ」集合で P の色に一致した割合、b＝「Q だけ」集合で Q の色に一致した割合、ab_p／ab_q＝「両方」集合で P／Q の色に一致した割合。矩形の外に出た点は割合の分母から外す。
   - `P`: a≥0.9 ∧ ab_p≥0.9 ∧ b≤0.1
   - `Q`: b≥0.9 ∧ ab_q≥0.9 ∧ a≤0.1
@@ -393,42 +417,66 @@ fn make_calibration(world, presenter, window, assets, which: Calibration, phase:
   - 古い絵の残り: 揃ったフレームより後で、絵が `from` または `Both`（`from == to` の観測では数えない）。
   - 大きさの食い違い: 絵が `P` または `Q` で、その面の原寸（k=1.0 なので物理寸に等しい）と `rect` の幅・高さが違う。
 - 観測の窓（3.1）: 要求 tick の直前に取り込まれた最後のフレームを先頭に含める（無ければ「直前のフレーム無し」と記す）。揃ったフレーム（絵＝to ∧ 当たり判定＝to。大きさは条件に入れない）が来たら、その tick から 30 tick 後に閉じる。要求から 180 tick 以内に揃わなければ「未完」として閉じる。未完で閉じるときは、最後のフレームの（絵, 当たり判定）の組と矩形を `info!` に出し、README の行にも「未完（最後: 絵=…・当たり判定=…）」と書く。基準の版のように古い子が消えず揃わない場合、その状態は「古い絵の残り」の数ではなく（揃っていないので数えない）「未完」と最後の組として現れる。
-- 集計ログ（3.5・5.5）: 観測ごとに `info!(name, frames, missed, unmeasurable, mixed, pending, empty, stale, size, settled_after_frames, settled_after_ticks)`。0 も出す（`pending` は `mixed` の内訳）。混在のフレームごとの組（`picture`／`hit`）と `present_qpc − ended_qpc` は `debug!` に出す。
+  - 閉じる時点（実装 2.4 で追加）: フレームは取り込みの遅れだけ後から共有の記録に届くので、窓の最後の tick（揃った tick＋30、揃う前は要求＋180）を過ぎても、窓の外の tick と組のフレームが届くか、窓の最後の tick から **12 tick の猶予**（`GRACE_TICKS`・約 100 ms）が経つまでは閉じない。窓の外のフレームで閉じたなら窓の中のフレームは届き切っている。猶予で閉じた後に届いた窓の中の tick と組のフレームは、数えずに 1 枚ごと `error!` を出し、その観測の `late_dropped` に数えて集計の行に出す（黙って失われることはない・数えなかったフレームがあったことの印）。
+  - 判別対の違うフレーム（実装 2.4 で追加）: 組になった tick の `pair` が観測の対と違うフレーム（対を切り替える前の tick の直前のフレーム）は、絵を `Unmeasurable(OtherPair)` として「測れない」に数える。
+- 集計ログ（3.5・5.5）: 観測ごとに 1 行（`row`）で `name, pair, 閉じ方, frames, missed, unmeasurable, mixed, pending, empty, stale, size, late_dropped, settled_after_frames, settled_after_ticks` と、直前のフレームが無ければその旨。0 も出す（`pending` は `mixed` の内訳）。混在のフレームごとの組（`picture`／`hit`）と `present_qpc − ended_qpc` は `debug!` に出す。
 - 床（5.9・7.5）: `face-switch@update` の 2 観測の `pending` の大きい方を「反映待ちの床」として最終ログと README に出す。README の見立ての規則: 本命の版が「`pending` 以外の崩れが 0 かつ `pending` ≤ 床」なら「直す」の条件を満たす、と書く。`calib-static` は差し替えを含まないので反映待ちを較正できない——「反映待ちの数は較正で 0 と確かめられない」を README の「分からないこと」に書く。
-- 較正の合否（4.7）: `Static` は 4 種 0 ∧ frames≥1、`Empty` は空≥1、`Mixed` は混在≥1、`Stale` は残り≥1、`Size` は大きさ≥1。1 つでも外れたら `CalibrationVerdict::Failed(list)`。
+- 較正の合否（4.7）: `Static` は 4 種 0 ∧ frames≥1、`Empty` は空≥1、`Mixed` は混在≥1、`Stale` は残り≥1、`Size` は大きさ≥1。1 つでも外れたら `Verdict::Failed(names)`（`calibration_verdict`）。
 - 最終ログ（4.8・6.6）: 較正 5 行 → 本番 12 行 → 面の切り替え 2 行を同じ形で並べ、較正不合格なら先頭に「本番の数は無効」を `error!` で出す。打ち切りのときは「打ち切り」とそれまでの行を出す。
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]
 
 ##### Service Interface
 ```rust
-struct Signature { pair: (Face, Face), only_p: Vec<(u32,u32,[u8;3])>, only_q: Vec<(u32,u32,[u8;3])>, both: Vec<(u32,u32,[u8;3],[u8;3])>, size_p: (u32,u32), size_q: (u32,u32) }
+struct Signature { only_p: Vec<(u32,u32,[u8;3])>, only_q: Vec<(u32,u32,[u8;3])>, both: Vec<(u32,u32,[u8;3],[u8;3])>, size_p: (u32,u32), size_q: (u32,u32) }
+// Signature::has_only_p(): 「P だけ」が 16 点以上あるか。2 対は Observer.sigs: Arc<[Signature; 2]> に PAIR_ASSET(0)・PAIR_FACE(1) の添字で置く
 fn derive_signature(p: &ComposedSurface, q: &ComposedSurface) -> Result<Signature, String>;
-#[derive(Clone, Copy, PartialEq)] enum PictureClass { P, Q, Both, Neither, Unmeasurable(Why) }
-#[derive(Clone, Copy, PartialEq)] enum HitClass { P, Q, Both, Neither, Unmeasurable(Why) }
-#[derive(Clone, Copy)] enum Why { Ambiguous, Covered, ScaleNotOne, SlotHit, Dropped, CaptureLost, OutsideOutput }
-struct TickRecord { tick: u32, ended_qpc: i64, rect: RECT, hit: HitClass, h_p: f32, h_q: f32, covered: bool, k_ok: bool, slot_hit: bool }
+#[derive(Clone, Copy, PartialEq, Eq)] enum Class { P, Q, Both, Neither, Unmeasurable(Why) }
+type PictureClass = Class; type HitClass = Class;            // 同じ値の集合なので 1 つにした（実装 2.1）
+#[derive(Clone, Copy)] enum Why { Ambiguous, Covered, ScaleNotOne, SlotHit, Dropped, CaptureLost, OutsideOutput, OtherPair }
+struct TickRecord { tick: u32, pair: usize, ended_qpc: i64, rect: RECT /* tick の後に効く矩形の予測 */, hit: HitClass, h_p: f32, h_q: f32, h_both: f32, covered: bool, k_ok: bool, slot_hit: bool }
 struct FrameRecord { present_qpc: i64, accumulated: u32, tick: Option<u32>, picture: PictureClass, a: f32, b: f32, ab_p: f32, ab_q: f32 }
 struct Counts { frames: u32, missed: u32, unmeasurable: u32, mixed: u32, pending: u32 /* mixed の内訳: 反映待ち */, empty: u32, stale: u32, size: u32 }
-struct Observation { name: String, pair: (Face, Face), from: Face, to: Face, request_tick: u32, settled: Option<(u32 /*frame idx*/, u32 /*tick*/)>, close_at_tick: Option<u32>, deadline_tick: u32, counts: Counts, complete: bool }
-struct Shared { ticks: Vec<TickRecord>, frames: Vec<FrameRecord>, signature_for: fn(&Observation) -> &Signature }
+enum Kind { Calib(Calib), Swap, FaceSwitch }
+enum End { Done, Incomplete(Option<(Class, Class, RECT)> /* 最後の組と矩形 */), Unmeasurable(&'static str) /* 差し替えの失敗 */ }
+struct Observation {
+    name: String, kind: Kind, pair: usize, from: Class, to: Class, size_p: (u32,u32), size_q: (u32,u32),
+    request_tick: u32, settled: Option<(u32 /*frame idx*/, u32 /*tick*/)>, counts: Counts,
+    no_prev: bool, end: Option<End> /* None は開いたまま */, late_dropped: u32,
+}
+struct Shared { ticks: Vec<TickRecord>, frames: Vec<FrameRecord> }
 fn classify_picture(sig: &Signature, rect: &RECT, pixels: &[u8], stride: usize) -> (PictureClass, f32, f32, f32, f32);
-fn classify_hit(world: &World, window: Entity, sig: &Signature) -> (HitClass, f32, f32);
+fn classify_hit(world: &World, window: Entity, sig: &Signature) -> (HitClass, f32, f32, f32, bool /*slot_hit*/);
 fn judge_frame(obs: &mut Observation, frame: &FrameRecord, tick: &TickRecord);
-fn tick_record_system(world: &mut World);   // FrameFinalize の最後
-fn log_observation(obs: &Observation);
-fn log_summary(all: &[Observation], calib: &CalibrationVerdict, partial: bool);
+#[derive(Resource)] struct QueuedRect(Option<(u32 /*tick*/, RECT)>);
+fn queued_rect_system(..);                   // UISetup・apply_window_pos_changes の後
+fn effective_rect(queued: Option<(u32, RECT)>, tick: u32, actual: RECT) -> RECT;
+fn tick_record_system(world: &mut World);   // FrameFinalize の chain（observe_system の前）
+fn observe_system(..);                       // FrameFinalize の chain の最後: 届いたフレームを数え、窓が終われば閉じる
+#[derive(Resource)] struct Observer { window: Entity, sigs: Arc<[Signature; 2]>, active: usize, shared: Arc<Mutex<Shared>>, /* 開いている観測・閉じた観測・猶予後の見張り */ .. }
+impl Observer {
+    fn open(&mut self, pair: usize, kind: Kind, name: &str, from: Class, to: Class, request_tick: u32);
+    fn abort(&mut self, why: &'static str);  // 差し替えの失敗: 数えずに「測れない」で閉じる
+    fn is_closed(&self) -> bool;
+    fn settled_tick(&self) -> Option<u32>;
+    fn summarize(&mut self, partial: bool, now: u32) -> Verdict;   // 最終の並べ出し
+}
+enum Verdict { Passed, Failed(Vec<String>) }
+fn calibration_verdict(done: &[Observation]) -> Verdict;
+fn floor(done: &[Observation]) -> Option<u32>;
+fn row(o: &Observation) -> String;           // 集計の 1 行（0 も書く）
 ```
+（実装 2.1〜2.4 で改訂: 当初の `PictureClass`／`HitClass` の 2 つの enum・`Shared.signature_for`・`Observation.complete`／`close_at_tick`／`deadline_tick`・`log_observation`／`log_summary`／`CalibrationVerdict` は上の形になった。判別対は `TickRecord.pair` で運ぶ。）
 - Preconditions: `Signature` の導出が成功している（失敗なら起動時に終了コード 2）。
-- Postconditions: `Observation.complete` は「揃って 30 tick 経った」か「180 tick で未完」のどちらかで `true` になり、`counts` はその時点で確定する。
+- Postconditions: `Observation.end` は「揃って 30 tick 経った」（`Done`）か「180 tick で未完」（`Incomplete`）か「差し替えの失敗」（`Unmeasurable`）で `Some` になり、`counts` はその時点で確定する（猶予の後に届いたフレームは `late_dropped` にだけ足す）。
 - Invariants: `Shared.ticks` は tick 番号の昇順・`ended_qpc` の昇順。突き合わせは「`present_qpc` 以前に終わった最新の tick」で一意。
 
 ##### State Management
-- State model: `Observer`（NonSend）が `Arc<Mutex<Shared>>` を持ち、取り込みスレッドと共有する。
+- State model: `Observer` は普通の Resource（NonSend ではない・実装 2.2 で改訂）で、`Arc<Mutex<Shared>>` を持ち、取り込みスレッドと共有する。
 - Concurrency: `Mutex` は tick の末尾と取り込みの 1 フレームごとに短く取る。取り込みスレッドは `ticks` を読み `frames` に足すだけ。
 
 **Implementation Notes**
-- Validation: 数え方の規則（`judge_frame`）には `#[cfg(test)]` の小さな検査を 1 本だけ付ける——合成した `(PictureClass, HitClass)` の並びから 4 種の数が規則どおり出ること。これは較正の代わりではない（較正は実際の窓で行う・4.1）。
+- Validation: 数え方の規則（`judge_frame`）と、それを取り巻く純粋な判定（判別の閾値・観測の窓の開閉と猶予・較正の合否・床・集計の行・矩形の予測）には `#[cfg(test)]` の小さな検査を付ける——合成した `(Class, Class)` の並びから 4 種の数が規則どおり出ること等（当初は 1 本の計画・実装で `observe.rs` に 13 本へ増えた）。これは較正の代わりではない（較正は実際の窓で行う・4.1）。
 - Risks: 合成器の遅れ（差し替えを載せた tick が終わってから DWM がその絵を出すまで 1〜2 回の画面更新）が突き合わせの規則により「絵は古い・当たり判定は新しい」の混在として数に出る。これは版に依らず、面の切り替えにも同じだけ出るので、`pending` として内訳に分け、`face-switch@update` の値を床として README に並べる（上記）。本命の版の `pending` が床より大きければ、それは差し替えに固有の遅れであり見立てに書く。
 - Risks: 机の背景が検体の色と近いと「透明のはずの点が一致」して判別が狂う。較正（`Empty`・`Static`）で露見するので、結果は「較正の合否」として README に出る。
 
@@ -453,7 +501,7 @@ fn log_summary(all: &[Observation], calib: &CalibrationVerdict, partial: bool);
 ```rust
 struct Capture { stop: Arc<AtomicBool>, thread: Option<JoinHandle<()>> }
 impl Capture {
-    fn start(shared: Arc<Mutex<Shared>>) -> Result<Capture, String>;  // 初期化の失敗は Err（起動時に確かめる）
+    fn start(shared: Arc<Mutex<Shared>>, sigs: Arc<[Signature; 2]>) -> Result<Capture, String>;  // 初期化の失敗は Err（起動時に確かめる）・絵は TickRecord.pair の対で判別
     fn stop(self);
 }
 ```
@@ -461,7 +509,7 @@ impl Capture {
 - Postconditions: 取得した各フレームについて `FrameRecord` を 1 件残す。取りこぼしは `accumulated` に残す。
 
 **Implementation Notes**
-- Integration: 取り込みは窓の位置に依存しない（矩形は tick 記録から引く）。窓寸が変わる tick では `rect` が新しい寸になっているので、そのフレームの標本点はそのまま当てる（切れた絵は「大きさの食い違い」として出る）。
+- Integration: 取り込みは窓の位置に依存しない（矩形は tick 記録から引く）。窓寸が変わる tick では `rect` が新しい寸になっている（tick の記録の矩形は `GetWindowRect` でなく、その tick に積まれた `SetWindowPos` が tick の後に流れた後の矩形の予測だから・§System Flows フレームの突き合わせ）ので、そのフレームの標本点はそのまま当てる（切れた絵は「大きさの食い違い」として出る）。
 - Risks: 保護コンテンツやセキュアデスクトップで `AcquireNextFrame` が失敗する。すべて「測れない」に落とし、`error!` で理由を出す。
 
 ## Data Models
@@ -491,7 +539,7 @@ impl Capture {
 ### Error Strategy
 - 起動時の失敗（検体・復号・構築・標本点・取り込み）は `error!` → `run()` に入らず終了コード 2（2.5）。
 - 観測中の失敗（取りこぼし・覆い・見分け不能・k≠1.0・文字層の子が当たった・取り込みの喪失）は「測れない」として理由つきで数え、0 とは決して書かない（3.6）。
-- 差し替えの失敗（`attach_target`／`apply` の `Err`・`despawn_mounts` が 2 未満）は `error!` を出し、その観測を「測れない」で閉じて台本は続ける（他の版の数は独立に価値がある）。
+- 差し替えの失敗（`attach_target` の `Err`・`apply` の後の今の面が要求と違う・本命の版で `despawn_mounts` が 2 でない）は `error!` を出し、その観測を「測れない」で閉じて台本は続ける（他の版の数は独立に価値がある）。
 - 上限時間: 到達したら「打ち切り」とそれまでの数を出し（6.6）、窓を despawn して `run()` を戻し終了コード 1。
 - 較正不合格: 本番の数を「無効」と明記し（4.7）、終了コード 3。数そのものはログに残す（原因の切り分けに使う）。
 
@@ -500,8 +548,8 @@ impl Capture {
 
 ## Testing Strategy
 
-- **較正（実際の窓）**: 4.2〜4.6 の 5 項が本 example の「検査」そのもの。合否は `CalibrationVerdict` として本番の数と並ぶ。
-- **数え方の規則の検査（in-source・1 本）**: `observe.rs` の `#[cfg(test)]` で、合成した `(PictureClass, HitClass, rect)` の並びを `judge_frame` に通し、「揃った」の位置と 4 種の数が規則どおり出ること（`Both` が混在に入る・残りは揃った後だけ・測れないは 4 種に入らない）。
+- **較正（実際の窓）**: 4.2〜4.6 の 5 項が本 example の「検査」そのもの。合否は `Verdict` として本番の数と並ぶ。
+- **数え方の規則の検査（in-source・純粋な判定だけ）**: 中心は `observe.rs` の `#[cfg(test)]` で、合成した `(Class, Class, rect)` の並びを `judge_frame` に通し、「揃った」の位置と 4 種の数が規則どおり出ること（`Both` が混在に入る・残りは揃った後だけ・測れないは 4 種に入らない）。実装では同じ種類の小さな検査が各ファイルに付いた（当初は 1 本の計画・実装で改訂）: `observe.rs` 13 本（判別の閾値・観測の窓の開閉と猶予と `late_dropped`・較正の合否・床・行・矩形の予測）、`swap.rs` 5 本（台本の並び・各観測の前の用意・較正の対・段・作り置きの数）、`capture.rs` 2 本（突き合わせの tick の選び方・出力の外）、`main.rs` 2 本（上限時間の読み取り・終了コード）。World や OS に触れる部分は検査せず、較正と実走で確かめる。
 - **手動の目視（補助・3.7）**: 実行中に窓が画面に出続け、往復が見える。README の検証結果に「目視で見えたこと」を 1 行添える。
 - **数え方の規則の検査には反映待ちの例も含める**: 揃う前の `(from, to)` が `mixed` と `pending` の両方に入り、揃った後の `(from, to)` は `pending` に入らないこと。
 - **ビルド検査**: `cargo build -p pilot --example pilot-balloon-asset-swap` と、`crates/pilot` の `lib` が空のままであること（`cargo metadata` で `pilot` への被依存が 0 なのは `log-capture-kit` の見張りと人手レビューの領分）。

@@ -2,7 +2,7 @@
 //!
 //! 規則の唯一の定義は design.md §Observer。ここはそれを写しただけで、閾値を変えるなら先に design を直す。
 //! World を読む部分（tick の記録・当たり判定の採取）と、観測の窓・集計ログ・較正の合否もここ。
-#![allow(dead_code)] // Kind::FaceSwitch・Calib の他の項などは 3.x の台本が使う
+#![allow(dead_code)] // TickRecord の h_p・h_q・h_both（Debug 出力のログでしか読まない）
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
