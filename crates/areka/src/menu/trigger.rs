@@ -20,7 +20,7 @@ use areka_actor::ReplyReceiver;
 use bevy_ecs::prelude::{Entity, World};
 use windows::Win32::Foundation::HWND;
 use wintf::ecs::WindowHandle;
-use wintf::ecs::drag::{DragStateSnapshot, snapshot_drag_state};
+use wintf::ecs::drag::snapshot_drag_state;
 use wintf::ecs::pointer::{Phase, PointerState};
 use wintf::ecs::world::{EcsWorld, EcsWorldSelfRef};
 
@@ -204,12 +204,9 @@ fn handle_release(world: &mut World, entity: Entity, state: &PointerState, now: 
     {
         return ignore_release(world, "not wired");
     }
-    // `JustEnded` は「ドラッグ中」ではない。製品では左ボタンを 1 度離すとこの状態で休み続ける
-    // （`reset_to_idle` の呼び手は無い）ので、待機と同じに扱う（wintf の透過制御と同じ読み方）。
-    if !matches!(
-        snapshot_drag_state(),
-        DragStateSnapshot::Idle | DragStateSnapshot::JustEnded { .. }
-    ) {
+    // `JustEnded` は押していない状態（左ボタンを離してから次の左押下まで休む状態）なので、
+    // 待機と同じに扱う。押している間だけを「ドラッグ中」として解放を無視する。
+    if snapshot_drag_state().is_button_held() {
         return ignore_release(world, "dragging");
     }
 
@@ -326,8 +323,8 @@ pub(crate) fn poll_menu_query(world: &mut World) {
 ///
 /// 返事待ちが無い tick は最初の判定で戻る（通常の tick の費用はこれだけ）。返事も期限もまだなら
 /// 返事待ちを残して戻る。決着したら返事待ちを取り出し、⑴ 窓が既に無ければ記録して捨てる、
-/// ⑵ 表示が抑止されていれば預かっていた右ダブルクリックを送って終える、⑶ それ以外は預かりを
-/// 捨てて計画を作る。⑴⑵ では旗の持ち主がここで落ちるので、表示 1 枚の旗はその場で降りる。
+/// ⑵ 表示が抑止されていれば預かっていた右ダブルクリックを送って終える（別の窓の預かりは送らずに
+/// 捨てる）、⑶ それ以外は預かりを捨てて計画を作る。⑴⑵ では旗の持ち主がここで落ちるので、表示 1 枚の旗はその場で降りる。
 fn poll_once(world: &mut World, now: Instant) -> Option<ReadyMenu> {
     let result = match poll_step(world.get_non_send::<MenuWiring>()?.pending.as_ref()?, now) {
         PollOutcome::Wait => return None,
@@ -354,6 +351,19 @@ fn poll_once(world: &mut World, now: Instant) -> Option<ReadyMenu> {
     }
 
     let scope = request.scope;
+    // 別の窓の預かりは、この要求の決着では送らない。`decide` へ渡す前に捨てる（要件 4.2）。
+    let deferred = deferred.filter(|d| {
+        let same_window = d.scope == scope;
+        if !same_window {
+            tracing::trace!(
+                event = "menu_deferred_double_click_scope_mismatch",
+                request_scope = scope,
+                deferred_scope = d.scope,
+                "[menu] dropped the deferred right double-click: it belongs to another window"
+            );
+        }
+        same_window
+    });
     let interpreted = captions::interpret(result, captions::visible_resource_for(scope), scope);
     match decide(interpreted.visibility, deferred.as_ref()) {
         // 抑止の記録（`info!`）は `interpret` が出している。

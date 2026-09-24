@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (211 crate)
+- MIT License (212 crate)
 - BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
@@ -1829,7 +1829,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- rand 0.10.2
+- rand 0.10.3
 
 ```
 Copyright 2018 Developers of the Rand project
@@ -2022,6 +2022,7 @@ SOFTWARE.
 - shiori-host32-host 0.0.1
 - shiori-host32-ipc 0.0.1
 - shiori-host32-testdll 0.0.1
+- shiori-host32-testdll-loadu 0.0.1
 - shiori4-testdll 0.0.1
 - temp-path-kit 0.0.1
 - ukadoc-survey 0.0.1
@@ -2310,8 +2311,8 @@ SOFTWARE.
 - serde_json 1.0.151
 - syn 2.0.119
 - syn 3.0.6
-- thiserror-impl 2.0.20
-- thiserror 2.0.20
+- thiserror-impl 2.0.21
+- thiserror 2.0.21
 - typeid 1.0.3
 - unicode-ident 1.0.26
 - zmij 1.0.23

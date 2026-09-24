@@ -21,19 +21,23 @@
 //! 見ない。兄弟テストは `refresh,1` を書いたサプリメントを**マニフェストから通して**
 //! 重ね置きになることを確かめる。
 
-use crate::error::{ExistingState, InstalledElement, IoPhase, ManifestWarning};
+use crate::error::{ExistingState, InstalledElement, IoPhase, ManifestWarning, SurvivingTree};
 use crate::manifest::{ExistingPolicy, InstallManifest};
 use crate::plan::Placement;
 use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, SystemTime};
 
 /// 根の直下に掘る作業フォルダの棚。入れ替えが `rename` で済むよう根と同じボリュームに置く。
 const WORK: &str = ".nar-work";
 
 /// 同一プロセス内で単調増加する連番。プロセス間の一意性はプロセス識別子が担う。
 static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
+
+/// 巻き戻せなかった元の木を含む作業フォルダを片付けから守る期間（要件 2.7）。
+pub(crate) const SURVIVOR_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// 展開の要求。根の場所は呼び出し側が決める（要件 5.1）。
 pub struct InstallRequest<'a> {
@@ -67,7 +71,8 @@ fn at<T>(path: &Path, result: io::Result<T>) -> Result<T, StageError> {
 #[derive(Debug)]
 pub(crate) struct WorkArea {
     dir: PathBuf,
-    /// 棚に残っていて消せなかった物。[`InstallOutcome::leftovers`] に合流する。
+    /// 棚に残っていて消せなかった物と、生き残りを持つため期限まで消さずに残した物。
+    /// [`InstallOutcome::leftovers`] に合流する。
     residue: Vec<PathBuf>,
 }
 
@@ -79,6 +84,16 @@ impl WorkArea {
     /// 根が実在しないとき（根を勝手に作らない＝設計の事前条件）、この走行の番地を
     /// 空にできないとき、作業フォルダを作れないとき [`StageError`]。
     pub(crate) fn create(root: &Path) -> Result<WorkArea, StageError> {
+        WorkArea::create_at(root, SystemTime::now())
+    }
+
+    /// [`WorkArea::create`] の時刻を受け取る形。`now` は棚の保持の期限の判定にだけ使う
+    /// （テストが実際の日数を待たずに期限の内外を渡す口＝要件 2.10）。
+    ///
+    /// # Errors
+    ///
+    /// [`WorkArea::create`] と同じ。
+    pub(crate) fn create_at(root: &Path, now: SystemTime) -> Result<WorkArea, StageError> {
         if !root.is_dir() {
             return Err(StageError {
                 path: root.to_path_buf(),
@@ -86,12 +101,8 @@ impl WorkArea {
             });
         }
         let shelf = root.join(WORK);
-        let dir = shelf.join(format!(
-            "{}-{}",
-            std::process::id(),
-            NEXT_SERIAL.fetch_add(1, Ordering::Relaxed)
-        ));
-        let residue = prepare_shelf(&shelf, &dir)?;
+        let dir = next_address(&shelf, now, || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed));
+        let residue = prepare_shelf(&shelf, &dir, now)?;
         at(&dir, std::fs::create_dir_all(&dir))?;
         Ok(WorkArea { dir, residue })
     }
@@ -114,10 +125,47 @@ impl WorkArea {
         self.dir.join(format!("old-{k}"))
     }
 
-    /// 棚に残っていて消せなかった物。
+    /// 棚に残っていて消せなかった物と、生き残りを持つため期限まで消さずに残した物。
     pub(crate) fn residue(&self) -> &[PathBuf] {
         &self.residue
     }
+}
+
+/// この走行の番地 `<プロセス識別子>-<連番>` を、保持中の項目を避けて取る。
+///
+/// 片付けは保持中の項目を消さないので、そこを自分の番地にすると前回の木が混ざる。
+/// `serial` は連番の供給源（本番はプロセス全体の連番、テストは 0 始まりの閉包）。
+fn next_address(shelf: &Path, now: SystemTime, mut serial: impl FnMut() -> u32) -> PathBuf {
+    loop {
+        let dir = shelf.join(format!("{}-{}", std::process::id(), serial()));
+        if !is_retained(&dir, now) {
+            return dir;
+        }
+    }
+}
+
+/// 棚の項目が、`old-` で始まるフォルダ（巻き戻せなかった元の木の退避先）を直下に持ち、
+/// 更新時刻から [`SURVIVOR_RETENTION`] 未満か（要件 2.7・2.8）。
+///
+/// 時刻の根拠は項目自身の更新時刻。`old-<k>` は `rename` で直下へ入るので、項目の直下が
+/// 最後に変わった時刻＝失敗した走行が最後に触った時刻になる（`old-<k>` 自身の更新時刻は
+/// 利用者のゴーストの最終更新時刻のまま）。読めない・時刻が取れない項目は偽で、今までどおり
+/// 消しにいく。時計が戻って更新時刻が `now` より未来なら経過 0 として真に倒す。
+fn is_retained(entry: &Path, now: SystemTime) -> bool {
+    let Ok(children) = std::fs::read_dir(entry) else {
+        return false;
+    };
+    let holds_survivor = children.flatten().any(|child| {
+        child.file_type().is_ok_and(|kind| kind.is_dir())
+            && child.file_name().to_string_lossy().starts_with("old-")
+    });
+    if !holds_survivor {
+        return false;
+    }
+    let Ok(modified) = std::fs::metadata(entry).and_then(|meta| meta.modified()) else {
+        return false;
+    };
+    now.duration_since(modified).unwrap_or(Duration::ZERO) < SURVIVOR_RETENTION
 }
 
 /// 棚の残骸を片付け、この走行の番地だけは必ず空にする。
@@ -128,7 +176,11 @@ impl WorkArea {
 ///
 /// 一方、この走行の番地そのものが残っていて消せないのは（Windows のプロセス識別子の
 /// 再利用で起こり得る）前回の木が完成形に混ざる状態なので、そこだけは失敗を返す。
-fn prepare_shelf(shelf: &Path, dir: &Path) -> Result<Vec<PathBuf>, StageError> {
+///
+/// 保持の期限の内側にある元の木入りの項目（[`is_retained`]）は 1 バイトも触らず、
+/// 残っている物として返す（要件 2.7）。自分の番地は [`next_address`] が保持中の項目を
+/// 避けて取るので、ここへは来ない。
+fn prepare_shelf(shelf: &Path, dir: &Path, now: SystemTime) -> Result<Vec<PathBuf>, StageError> {
     let mut residue = Vec::new();
     let entries = match std::fs::read_dir(shelf) {
         Ok(entries) => entries,
@@ -148,6 +200,10 @@ fn prepare_shelf(shelf: &Path, dir: &Path) -> Result<Vec<PathBuf>, StageError> {
             continue;
         };
         let path = entry.path();
+        if is_retained(&path, now) {
+            residue.push(path);
+            continue;
+        }
         let removed = match entry.file_type() {
             Ok(kind) if kind.is_dir() => std::fs::remove_dir_all(&path),
             Ok(_) => std::fs::remove_file(&path),
@@ -280,7 +336,8 @@ pub struct InstallOutcome {
     pub warnings: Vec<ManifestWarning>,
     /// 片付けられずに残った場所（人が消す所）。中身は⑴最後の後片付けが失敗した
     /// ときの作業フォルダ（退避した木も組み上げた木もこの下に居る）と、⑵開始時に
-    /// 棚から消せなかった他の走行の置き土産。
+    /// 棚から消せなかった他の走行の置き土産、および巻き戻せなかった元の木（`old-`）を
+    /// 持つため保持の期限（7 日）まで消さずに残した作業フォルダ。
     pub leftovers: Vec<PathBuf>,
 }
 
@@ -296,6 +353,8 @@ pub(crate) struct CommitError {
     /// 失敗までに確定した配置。`rolled_back` が真ならこれらは元へ戻っている。
     pub committed: Vec<InstalledElement>,
     pub rolled_back: bool,
+    /// 元へ戻せなかった宛先ごとの、元の木が残っている退避先。`rolled_back` が真なら空。
+    pub survivors: Vec<SurvivingTree>,
 }
 
 /// 確定済みの配置を元へ戻す 1 手。確定した順に積み、逆順に解く。
@@ -410,14 +469,17 @@ fn roll_back(
     committed: Vec<InstalledElement>,
     failure: StageError,
 ) -> CommitError {
-    match unwind(undo) {
-        // 全て元へ戻った。報告するのは確定を止めた失敗そのもの。
+    let Unwound { stuck, survivors } = unwind(undo);
+    match stuck {
+        // 全て元へ戻った。報告するのは確定を止めた失敗そのもの。躓きが無いので
+        // 生き残りも集まっていない（空）。
         None => CommitError {
             phase: IoPhase::Commit,
             path: failure.path,
             source: failure.source,
             committed,
             rolled_back: true,
+            survivors,
         },
         // 戻せなかった。呼び手が手を打てるのは戻せなかった宛先なので、そちらを名指す。
         Some(stuck) => CommitError {
@@ -426,15 +488,30 @@ fn roll_back(
             source: stuck.source,
             committed,
             rolled_back: false,
+            survivors,
         },
     }
 }
 
-/// 積んだ手を逆順に解く。最初に戻せなかった宛先と理由を返す（戻せていれば `None`）。
+/// [`unwind`] の結果。
+struct Unwound {
+    /// 最初に戻せなかった宛先と理由（戻せていれば `None`）。
+    stuck: Option<StageError>,
+    /// 戻せなかった「元へ戻す」手ごとの、元の木が残っている退避先。
+    survivors: Vec<SurvivingTree>,
+}
+
+/// 積んだ手を逆順に解く。最初に戻せなかった宛先と、元の木の生き残りを全て返す。
 ///
 /// 1 つ戻せなくても残りは戻す。戻せる宛先を巻き添えで壊さないため。
-fn unwind(undo: Vec<Undo>) -> Option<StageError> {
+///
+/// 生き残りに載せるのは、躓いた「元へ戻す」手のうち退避先がフォルダとして実在するもの
+/// だけ（要件 2.1〜2.3）。どちらの手で躓いても退避先には触れていないので、元の木は
+/// そのまま残っている。新規の宛先を消す手の躓きは、宛先がもともと無かった＝元の木が
+/// 無いので載せない。
+fn unwind(undo: Vec<Undo>) -> Unwound {
     let mut stuck = None;
+    let mut survivors = Vec::new();
     for step in undo.into_iter().rev() {
         let (dest, result) = match step {
             Undo::Remove(dest) => {
@@ -445,6 +522,12 @@ fn unwind(undo: Vec<Undo>) -> Option<StageError> {
                 // 新しく置いた木が在れば先に退ける。2 手目の `rename` が失敗した直後は
                 // 宛先が空いているので、その場合は何もせずに戻しへ進む。
                 let result = remove_tree(&dest).and_then(|()| std::fs::rename(&old, &dest));
+                if result.is_err() && old.is_dir() {
+                    survivors.push(SurvivingTree {
+                        destination: dest.clone(),
+                        path: old,
+                    });
+                }
                 (dest, result)
             }
         };
@@ -452,7 +535,7 @@ fn unwind(undo: Vec<Undo>) -> Option<StageError> {
             stuck.get_or_insert(StageError { path: dest, source });
         }
     }
-    stuck
+    Unwound { stuck, survivors }
 }
 
 /// 木ごと消す。既に無いのは消えている状態として通す。

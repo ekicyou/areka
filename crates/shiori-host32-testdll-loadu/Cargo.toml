@@ -1,0 +1,20 @@
+[package]
+name = "shiori-host32-testdll-loadu"
+description = "host-32 second SHIORI DLL fixture (flat-C loadu/load/unload/request) that records which init entry was called"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "shiori_loadu"           # 出力を shiori_loadu.dll にする（既存 fixture の shiori.dll と衝突させない）
+crate-type = ["cdylib"]
+
+[dependencies.windows]
+version = "0.62.2"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Memory",
+]

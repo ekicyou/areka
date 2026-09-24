@@ -40,7 +40,7 @@ use super::{ClickThroughRegistry, CursorMonitorBridge, DesiredState};
 ///    時のみ `Some(Opaque)`（透過を外して掴み維持）、同一なら `None`。
 ///    - 抑止対象は「ドラッグ移動中」の状態。design（§System Flows「ゲーティング順序」）は
 ///      抑止スコープを *ドラッグ中* と規定する。本実装では `Dragging`（閾値到達・移動中）に
-///      加え、その直前 1 フレームの `JustStarted`（移動が始まった直後・掴み確定）も抑止対象と
+///      加え、閾値到達から次の tick の `dispatch_drag_events` までの `JustStarted`（移動が始まった直後・掴み確定）も抑止対象と
 ///      する。両者はボタン押下＋ドラッグ開始済みの「移動中」フェーズであり、ここで透過 ON に
 ///      なると掴みが崩れる（R5.1 のアンチフリッカ意図）。一方 `Preparing`（押下のみ・閾値未到達）は
 ///      まだドラッグ開始前なので非ドラッグ写像に委ねる。

@@ -99,6 +99,9 @@ pub(crate) fn is_available(world: &World) -> bool {
 ///
 /// メニューの「説明書」と台本の `\![open,readme]` の両方がここへ届く。開けなかった失敗は
 /// [`open`] が記録済みなので、ゴーストの動作はそのまま続ける（要件 4.4）。
+///
+/// 説明書のファイルが無ければ OS を呼ばず、要求 1 件につき 1 行を `warn!` で記録して戻る
+/// （要件 5.1）。[`is_available`] は呼ばない——メニュー側の初回だけの `debug!` を奪うため（要件 5.4）。
 pub(crate) fn open_from_world(world: &World) {
     let Some(wiring) = world.get_non_send::<ReadmeWiring>() else {
         tracing::warn!(
@@ -107,6 +110,14 @@ pub(crate) fn open_from_world(world: &World) {
         );
         return;
     };
+    if !wiring.path.exists() {
+        tracing::warn!(
+            event = "readme_open_skipped_missing",
+            path = %wiring.path.display(),
+            "[readme] readme file not found: nothing to open, the ghost keeps running"
+        );
+        return;
+    }
     let _ = open(&wiring.path);
 }
 
