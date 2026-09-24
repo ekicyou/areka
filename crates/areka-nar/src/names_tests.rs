@@ -739,3 +739,13 @@ fn the_mutation_scan_catches_every_spelling_it_claims_to_watch() {
         "拒否語彙の変種名で赤になるなら、走査は本体を書けなくするだけで何も守らない"
     );
 }
+
+/// 復号できない長い名前でも、理由の 16 進は先頭の有界の一部と測った長さだけを載せる
+/// （長さの検査は復号の後なので、上限 200 の規則はここへ届かない）。
+#[test]
+fn an_undecodable_long_name_carries_only_a_bounded_hex() {
+    let RefuseReason::NameUndecodable { raw_hex, .. } = refusal_of(vec![0xFF; 1000]) else {
+        panic!("復号できない名前として拒否されるはず");
+    };
+    assert_eq!(raw_hex, format!("{}…（1000 バイト）", "ff".repeat(32)));
+}
