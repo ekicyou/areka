@@ -601,7 +601,7 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
 2. **復号**: 解決した文字コードの `Encoding::decode(bytes)`（BOM があれば BOM を優先＝`encoding_rs` の規則）。
 3. **行**: `\n` で分け、末尾の `\r` を落とす（1.5）。0 文字の行は数えない（末尾の改行の後の空を無効エントリにしない）。`updates.txt` は `file,` の後ろを `updates2.dau` の 1 行として読み、`charset,` 行はここでは読み飛ばし、どちらでもない行は無視する（1.6）。
 4. **欄**（1.7）: `\x01` で分け、位置 0＝パス・位置 1＝MD5・位置 2 以降＝`key=value`。`size=`・`date=`・その他の鍵は読み飛ばす。`charset=` は先読みでしか使わない。
-5. **無効**（1.11・1.12・順序どおり・最初に当たった理由 1 つを `InvalidEntry { line, why }` に）: `NoMd5`（位置 1 が無い・空）→ `BadMd5`（32 桁の 16 進でない）→ `Nul` → `Absolute`（`/`・`\` 始まり・`X:`・`\\`）→ `FolderEntry`（末尾 `/`・`\`）→ `EmptyComponent`（空・`//`・`/./` 相当の空要素）→ `DotDot`（区切り要素 `..`）→ `SelfReference`（大小無視で `name.file_name()` に一致）→ `InsideWorkArea`（先頭要素が `.update-work`＝作業場所を定義から書き換えさせない・本仕様の追加）。区切りは `\` を `/` に正規化してから検査する（1.13）。
+5. **無効**（1.11・1.12・順序どおり・最初に当たった理由 1 つを `InvalidEntry { line, why }` に）: `NoMd5`（位置 1 が無い・空）→ `BadMd5`（32 桁の 16 進でない）→ `Nul` → `Absolute`（`/`・`\` 始まり・`X:`・`\\`）→ `FolderEntry`（末尾 `/`・`\`）→ `EmptyComponent`（空・`//`・`/./` 相当の空要素）→ `DotDot`（区切り要素 `..`）→ `SelfReference`（大小無視で `name.file_name()` に一致）→ `InsideWorkArea`（先頭要素が `.update-work`＝作業場所を定義から書き換えさせない・本仕様の追加）。区切りは `\` を `/` に正規化してから検査する（1.13）。Windows は区切り要素の末尾の `.`・空白を落とし（`updates2.dau.`→`updates2.dau`・`.update-work./x`→作業場所）、`:` を NTFS のストリーム指定として読むので、`:` を含むパスは位置を問わず `Absolute`、末尾が `.` か空白の要素（`..` そのものは除く）は `EmptyComponent` とする（2026-09-24 レビューで判明・`paths::unsafe_component` を `delete` と共有）。
 6. **符号化の判定**（1.15）: 有効な全エントリのパスが `urlpath::is_encoded`（全文字 ASCII・`%` は必ず 16 進 2 桁を伴う）なら、`url_path` は書かれたまま、`local` は `urlpath::decode` のバイト列を **UTF-8 として読み、UTF-8 でなければ定義ファイルの文字コードで読む**（research §6-9 ⒜。理由は「Design Decisions」）。そうでなければ `local` は書かれたまま、`url_path` は `urlpath::encode`（UTF-8 のバイト列を `%XX` 大文字で符号化・未予約文字 `A-Z a-z 0-9 - . _ ~` と `/` は残す。1.15 の「使えない文字」より広く、パスで使える `!`・`(`・`,`・`=`・`@` 等も符号化するが、サーバは同じに復号するので結果は変わらない＝方針として固定）。復号した `local` は `\` を `/` に揃えてから 5. のパスの検査（`Nul` 以降）をもう一度通し、当たれば `InvalidEntry` の警告を出してそのエントリを捨てる（`%2E%2E/`・`%5C`・`%00` は復号して初めて見えるため。実装時に追加）。
 7. **重複**（1.14）: `local` を小文字にした鍵で後勝ち。捨てた先の行を `DuplicateEntry { line, path }` に。
 8. MD5 は小文字に正規化して持つ（2.2）。
@@ -654,6 +654,8 @@ pub(crate) const WORK_DIR: &str = ".update-work";
 pub(crate) fn local_path(target: &Path, rel: &str) -> PathBuf;
 /// `candidate` の最も深い実在する祖先を `canonicalize` し、`target_real` から始まるかを返す。
 /// ジャンクションやシンボリックリンクで外へ解決されるパスを捕まえる（5.6・6.3）。
+/// 実パスが作業場所（`target_real` 直下の先頭要素が `WORK_DIR`・大小無視）の中なら偽: 8.3 短縮名（`UPDATE~1`）や
+/// 作業場所を指すジャンクションは綴りの検査（`is_in_work_area`）を抜けるため（2026-09-24 レビューで判明・diff／commit／delete を一度に守る）。
 pub(crate) fn resolves_under(target_real: &Path, candidate: &Path) -> std::io::Result<bool>;
 /// 先頭の区切り要素が `WORK_DIR`（大小無視）か。
 pub(crate) fn is_in_work_area(rel: &str) -> bool;
@@ -825,7 +827,7 @@ pub(crate) fn apply(target: &Path, target_real: &Path, charset: &'static encodin
 ##### Batch / Job Contract
 
 - Trigger: `run` が確定に成功した直後（6.1）。差分 0 の周では呼ばない。
-- Input / validation: 各行は `charset` で復号（6.2）、末尾の `\r` を落とし、空行と空白だけの行を無視。`\` と `/` を区切り、末尾の区切りはフォルダ。拒否は順に `Absolute`（`\`・`/` 始まり・ドライブ文字・UNC）→ `DotDot` → `EscapesTarget`（`resolves_under` が偽）→ `InsideWorkArea`（先頭要素が `.update-work`）。拒否は `DeleteLineIgnored { file, line, why }` の警告（6.3）。
+- Input / validation: 各行は `charset` で復号（6.2）、末尾の `\r` を落とし、空行と空白だけの行を無視。`\` と `/` を区切り、末尾の区切りはフォルダ。拒否は順に `Absolute`（`\`・`/` 始まり・ドライブ文字・UNC）→ `DotDot` → `EscapesTarget`（綴りの危ない要素・下記）→ `InsideWorkArea`（先頭要素が `.update-work`）→ `EscapesTarget`（`resolves_under` が偽。実パスで作業場所に届く別名＝8.3 短縮名・ジャンクションもここで捕まる。綴りどおりの作業場所に理由の分かる `InsideWorkArea` を返すため、綴りの検査を実パスの検査より先に置く）。拒否は `DeleteLineIgnored { file, line, why }` の警告（6.3）。`..` の後・実パスの検査の前に、空・`.`・末尾が `.` か空白・`:` を含む要素（Windows が綴りと違う物を開く＝`. /` が対象フォルダそのもの、`.update-work./` が作業場所になる）を `EscapesTarget` として拒む（2026-09-24 レビューで判明・`paths::unsafe_component` を `manifest` と共有）。
 - Output / destination: 先に `symlink_metadata` で実体の種別を見る。フォルダの行で在るのがフォルダなら `remove_dir_all`、ファイルの行で在るのがファイルなら `remove_file`（6.4）。行の種別と実体の種別が違えば（ファイルの行にフォルダ・フォルダの行にファイル）取り除かず `DeleteKindMismatch`（std の `remove_dir_all` はファイル相手だと `ERROR_DIRECTORY` で失敗するが、理由の分かる警告にするため先に見る）。無ければ何もしない（6.5）。取り除けなければ `undeletable`（`run` が `warn!` に写す＝6.6）。取り除いた物は `removed`（6.7）。
 - Idempotency & recovery: 既に無い物は成功扱い。再実行しても同じ結果。
 

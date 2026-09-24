@@ -178,5 +178,24 @@ pub(crate) fn junction(link: &Path, target: &Path) {
     );
 }
 
+/// `path` の 8.3 短縮名（`cmd /c dir /x` の短縮名の欄）。ボリュームが作っていなければ `None`。
+pub(crate) fn short_name(path: &Path) -> Option<String> {
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    let out = std::process::Command::new("cmd")
+        .args(["/c", "dir", "/x", "/a"])
+        .arg(path.parent()?)
+        .output()
+        .expect("cmd を起こせる");
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(|line| {
+            let tokens: Vec<&str> = line.split_whitespace().collect();
+            match tokens[..] {
+                [.., short, long] if long == name && short.contains('~') => Some(short.to_owned()),
+                _ => None,
+            }
+        })
+}
+
 #[path = "testkit_tests.rs"]
 mod tests;

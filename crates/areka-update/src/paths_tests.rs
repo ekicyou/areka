@@ -119,3 +119,67 @@ fn a_dangling_junction_is_not_under() {
 
     assert!(!resolves_under(&f.target_real, &link.join("b.txt")).unwrap());
 }
+
+#[test]
+fn paths_resolving_into_the_work_area_are_not_under() {
+    let f = fixture();
+    let area = f.target.join(WORK_DIR);
+    fs::create_dir_all(area.join("1-0")).unwrap();
+    let link = f.target.join("to-area");
+    junction(&link, &area);
+
+    // 綴りでは見抜けない入口（ジャンクション）。在る物も、まだ無い物も。
+    assert!(!resolves_under(&f.target_real, &link).unwrap());
+    assert!(!resolves_under(&f.target_real, &link.join("1-0")).unwrap());
+    assert!(!resolves_under(&f.target_real, &link.join("new/x.txt")).unwrap());
+    // 綴りどおりの作業場所も、大小違いも。
+    assert!(!resolves_under(&f.target_real, &area).unwrap());
+    assert!(!resolves_under(&f.target_real, &f.target.join(".UPDATE-WORK/x")).unwrap());
+    // 較正: 名前の頭が同じだけの隣は配下。
+    assert!(resolves_under(&f.target_real, &f.target.join(".update-workx/a")).unwrap());
+}
+
+#[test]
+fn the_short_name_of_the_work_area_is_not_under() {
+    let f = fixture();
+    let area = f.target.join(WORK_DIR);
+    fs::create_dir_all(&area).unwrap();
+    let Some(short) = crate::testkit::short_name(&area) else {
+        // 決定論の檻は上のジャンクション版が持つ。ここは短縮名のあるボリュームでだけ判定する。
+        eprintln!(
+            "SKIP: {} に 8.3 短縮名が無い（ボリュームが作らない設定）",
+            area.display()
+        );
+        return;
+    };
+    assert!(!resolves_under(&f.target_real, &f.target.join(&short)).unwrap());
+    assert!(!resolves_under(&f.target_real, &f.target.join(&short).join("x.txt")).unwrap());
+}
+
+// ---- Windows が綴りと違う物を開く区切り要素 ----
+
+#[test]
+fn unsafe_component_catches_what_windows_rewrites() {
+    for bad in [
+        "",
+        " ",
+        ".",
+        ". ",
+        "...",
+        "a//b",
+        "a/./b",
+        "sub/.. ",
+        "a./b",
+        "a /b",
+        "x.",
+        "x ",
+        "a:b",
+        ".update-work::$INDEX_ALLOCATION",
+    ] {
+        assert!(unsafe_component(bad), "{bad:?} は危ないはず");
+    }
+    // `..` そのものは呼び手が `DotDot` として先に拒む（ここでは数えない）。
+    for ok in ["a", "a/b.txt", "..", "a/../b", ".hidden", "a.b/c d.txt"] {
+        assert!(!unsafe_component(ok), "{ok:?} は通るはず");
+    }
+}

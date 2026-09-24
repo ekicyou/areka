@@ -107,6 +107,28 @@ fn size_limit_passes_at_the_limit_and_fails_one_past_it() {
     assert!(check_size(u64::from(u32::MAX) + 1, MAX_LOCAL_BYTES).is_err());
 }
 
+/// 綴りの検査（`InsideWorkArea`）を抜ける別名（ジャンクション・8.3 短縮名）で作業場所へ届く
+/// エントリも外扱い（作業場所を定義から書き換えさせない）。
+#[test]
+fn an_entry_reaching_the_work_area_through_a_junction_fails_as_escaping() {
+    let f = fixture();
+    let area = f.target.join(crate::paths::WORK_DIR);
+    fs::create_dir_all(area.join("1-0")).unwrap();
+    fs::write(area.join("1-0/x.txt"), b"abc").unwrap();
+    junction(&f.target.join("link"), &area);
+    let m = manifest(&[&["plain.txt", MD5_ABC], &["link/1-0/x.txt", MD5_EMPTY]]);
+
+    match plan(&f.target, &f.target_real, &m) {
+        Err(DiffFailure::Escapes { path }) => {
+            assert_eq!(path, local_path(&f.target, "link/1-0/x.txt"));
+        }
+        Err(DiffFailure::Unreadable { path, source }) => {
+            panic!("読めないと誤判定: {}: {source}", path.display())
+        }
+        Ok(need) => panic!("作業場所のファイルを比較してしまった: {need:?}"),
+    }
+}
+
 #[test]
 fn an_entry_under_a_junction_to_outside_fails_as_escaping() {
     let f = fixture();

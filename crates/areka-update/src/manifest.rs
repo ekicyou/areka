@@ -4,7 +4,7 @@
 
 use crate::error::{InvalidWhy, UpdateWarning};
 use crate::outcome::ManifestName;
-use crate::paths::{is_in_work_area, normalize_separators};
+use crate::paths::{is_in_work_area, normalize_separators, unsafe_component};
 use crate::urlpath;
 use std::collections::HashMap;
 
@@ -121,15 +121,15 @@ pub(crate) fn parse(name: ManifestName, bytes: &[u8]) -> (Manifest, Vec<UpdateWa
 
 /// パスの無効（1.11・1.12）。`\` は `/` に揃え済み。MD5 の 2 種の後を、定めた順に検査する。
 fn invalid_path(path: &str, name: ManifestName) -> Option<InvalidWhy> {
-    let b = path.as_bytes();
     let why = if path.contains('\0') {
         InvalidWhy::Nul
-    } else if path.starts_with('/') || (b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':')
-    {
+    } else if path.starts_with('/') || path.contains(':') {
+        // ドライブ文字（`C:`）に加え、それ以外の `:` も NTFS のストリーム指定なので同じ扱い。
         InvalidWhy::Absolute
     } else if path.ends_with('/') {
         InvalidWhy::FolderEntry
-    } else if path.split('/').any(|c| c.is_empty() || c == ".") {
+    } else if unsafe_component(path) {
+        // 空・`.`・末尾の `.`／空白（Win32 が落とす）。`:` は上で済み、`..` は下の `DotDot`。
         InvalidWhy::EmptyComponent
     } else if path.split('/').any(|c| c == "..") {
         InvalidWhy::DotDot

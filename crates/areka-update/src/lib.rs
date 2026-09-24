@@ -4,6 +4,7 @@
 //! 取得・照合して、ファイル単位で確定する。失敗したら逆順に戻す。
 
 mod commit;
+mod delete;
 mod diff;
 mod error;
 mod fetch;

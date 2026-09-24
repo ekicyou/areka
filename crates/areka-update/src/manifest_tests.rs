@@ -408,3 +408,64 @@ fn decoded_local_is_checked_again() {
     assert_eq!(w.len(), 3);
     assert_eq!(urls(&m), vec![(4, "ok/y.txt", "ok%2Fy.txt")]);
 }
+
+/// Windows は区切り要素の末尾の `.`・空白を落とし、`:` は NTFS のストリーム指定になる。
+/// 末尾の `.`・空白は `EmptyComponent`、`:` は `Absolute`（`..` そのものは `DotDot` のまま）。
+#[test]
+fn windows_trailing_dot_space_and_colon_are_invalid() {
+    use InvalidWhy::*;
+    let bytes = dau(
+        &[
+            &["updates2.dau.", M1],
+            &[".update-work./x", M1],
+            &["a. /b", M1],
+            &["a /b", M1],
+            &["ab:c", M1],
+            &["..", M1],
+            &["ok.txt", M2],
+        ],
+        true,
+    );
+    let (m, w) = parse(ManifestName::Updates2Dau, &bytes);
+    assert_eq!(
+        invalids(&w),
+        vec![
+            (1, EmptyComponent),
+            (2, EmptyComponent),
+            (3, EmptyComponent),
+            (4, EmptyComponent),
+            (5, Absolute),
+            (6, DotDot),
+        ]
+    );
+    assert_eq!(w.len(), 6);
+    assert_eq!(rows(&m), vec![(7, "ok.txt", M2)]);
+}
+
+/// 復号して初めて見える末尾の空白・`.`・`:` も復号後の検査で捕まえる。
+#[test]
+fn decoded_trailing_dot_space_and_colon_are_invalid() {
+    use InvalidWhy::*;
+    let bytes = dau(
+        &[
+            &["a%20/b.txt", M1],
+            &["updates2.dau%2E", M1],
+            &["%2Eupdate-work%2E/x", M1],
+            &["ab%3Ac", M1],
+            &["ok.txt", M2],
+        ],
+        true,
+    );
+    let (m, w) = parse(ManifestName::Updates2Dau, &bytes);
+    assert_eq!(
+        invalids(&w),
+        vec![
+            (1, EmptyComponent),
+            (2, EmptyComponent),
+            (3, EmptyComponent),
+            (4, Absolute),
+        ]
+    );
+    assert_eq!(w.len(), 4);
+    assert_eq!(rows(&m), vec![(5, "ok.txt", M2)]);
+}
