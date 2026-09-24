@@ -109,7 +109,7 @@ graph TB
 1. **起動は `main` で同期に行う**（`WinApp::new()` が COM と DPI を初期化するので、検体の取得・資産の構築・窓の生成を `run()` の前に行える）。失敗はそこで `error!` を出して終了コード 2 で終わる（`run()` に入らない）。手本の非同期投函は使わない。
 2. **差し替えは 1 つの排他 system を `Update` と `FrameFinalize` の両方に登録し、台本（`Script`）が「今の tick でどの段が動くか」を決める**。段の違いだけが版 (iv) の差になる。`FrameFinalize` の差し替えの後に tick 記録 system を置く（`.after`）ので、tick の終わりの当たり判定は差し替え後の状態で記録される。
 3. **絵は Desktop Duplication で取る**（別スレッド・自前の D3D11 device）。`AcquireNextFrame` が返す各フレームについて `LastPresentTime`（QPC）と `AccumulatedFrames` を読み、窓の矩形を staging texture へ写して CPU で読む。`AccumulatedFrames > 1` は取りこぼしとして「測れない」に数える。
-4. **突き合わせの規則**（要件 3.2）: 取り込んだフレームの `LastPresentTime` を T とし、`T` 以前に終わった最新の tick の記録（当たり判定・窓の矩形）と組にする。tick の記録は `FrameFinalize` の最後で `QueryPerformanceCounter` を読んで残す。この規則で「差し替え → 反映 → 表示」の合成器の遅れが 1 フレームの混在として数に現れ得ることは、README の「分からないこと」に書く（下記 Risks）。
+4. **突き合わせの規則**（要件 3.2）: 取り込んだフレームの `LastPresentTime` を T とし、`T` 以前に終わった最新の tick の記録（当たり判定・窓の矩形）と組にする。tick の記録は `FrameFinalize` の最後で `QueryPerformanceCounter` を読んで残す。この規則で「差し替え → 反映 → 表示」の合成器の遅れ（tick が終わって当たり判定が新しくなってから、OS がその絵を出すまでの画面更新 1 回）が、版に依らず「絵は古い・当たり判定は新しい」の混在 1 として数に現れ得る。これを**反映待ち**と呼び、混在の内訳として別に数える（開発者裁定 2026-09-24・下記 §Observer）。床は本番で既に通っている経路 `face-switch@update` の反映待ちの数で測り、README の見立てはその床を差し引いて読む。
 5. **絵と当たり判定の見分けは標本点で行う**。2 つの検体の面 0 を `Composer::compose` して premultiplied BGRA を得、共通範囲の中で「P だけ不透明」「Q だけ不透明」「両方不透明で色の差が 48 以上」の 3 集合から各 64 点を格子状に選ぶ。絵は取り込み画素と合成の色の一致（各チャネル許容 12）の割合、当たり判定は `hit_test_in_window` の当たりの割合で判別する。拡大率 k≠1.0 なら標本点の座標が合わないので全フレームを「測れない」にする。
 6. **較正は実際の窓へ崩れを作って行う**（要件 4.1）。作り方は §Components の `swap.rs` に列挙する。較正の 1 項でも期待と違えば終了コード 3 とし、本番の数を「無効」と明記して出す。
 7. **終了コード**: 0＝全観測完了かつ較正合格、1＝上限時間で打ち切り、2＝初期化の失敗、3＝較正不合格。終了の理由は必ず `info!`／`error!` に出す。
@@ -388,11 +388,13 @@ fn make_calibration(world, presenter, window, assets, which: Calibration, phase:
 - 1 フレームの判定 `judge_frame(obs, frame, tick)`（3.4・重複計上あり）:
   - 測れない: 絵か当たり判定が `Unmeasurable`、`covered`、`!k_ok`、`slot_hit`、取りこぼし（`AccumulatedFrames−1` 枚を別に数える）。測れないフレームは 4 種に数えない。
   - 混在: (絵, 当たり判定) が `(P,P)`・`(Q,Q)`・`(Neither,Neither)` のいずれでもない（`Both` を含む組はすべて混在）。
+  - 反映待ち（混在の内訳・重複計上）: 揃ったフレームより前で、絵＝`from` ∧ 当たり判定＝`to` の組。`mixed` と `pending` の両方に数える。逆向きの組（絵＝`to` ∧ 当たり判定＝`from`）は反映待ちではなく、突き合わせの前提（WUC の反映は tick が終わって message loop に戻った後に起きる）が外れた証拠なので、出たら `error!` で組と `present_qpc − ended_qpc` を出す。
   - 空: 絵が `Neither`。
   - 古い絵の残り: 揃ったフレームより後で、絵が `from` または `Both`（`from == to` の観測では数えない）。
   - 大きさの食い違い: 絵が `P` または `Q` で、その面の原寸（k=1.0 なので物理寸に等しい）と `rect` の幅・高さが違う。
 - 観測の窓（3.1）: 要求 tick の直前に取り込まれた最後のフレームを先頭に含める（無ければ「直前のフレーム無し」と記す）。揃ったフレーム（絵＝to ∧ 当たり判定＝to。大きさは条件に入れない）が来たら、その tick から 30 tick 後に閉じる。要求から 180 tick 以内に揃わなければ「未完」として閉じる。未完で閉じるときは、最後のフレームの（絵, 当たり判定）の組と矩形を `info!` に出し、README の行にも「未完（最後: 絵=…・当たり判定=…）」と書く。基準の版のように古い子が消えず揃わない場合、その状態は「古い絵の残り」の数ではなく（揃っていないので数えない）「未完」と最後の組として現れる。
-- 集計ログ（3.5・5.5）: 観測ごとに `info!(name, frames, missed, unmeasurable, mixed, empty, stale, size, settled_after_frames, settled_after_ticks)`。0 も出す。混在は内訳（`picture`／`hit` の組）を `debug!` に出す。
+- 集計ログ（3.5・5.5）: 観測ごとに `info!(name, frames, missed, unmeasurable, mixed, pending, empty, stale, size, settled_after_frames, settled_after_ticks)`。0 も出す（`pending` は `mixed` の内訳）。混在のフレームごとの組（`picture`／`hit`）と `present_qpc − ended_qpc` は `debug!` に出す。
+- 床（5.9・7.5）: `face-switch@update` の 2 観測の `pending` の大きい方を「反映待ちの床」として最終ログと README に出す。README の見立ての規則: 本命の版が「`pending` 以外の崩れが 0 かつ `pending` ≤ 床」なら「直す」の条件を満たす、と書く。`calib-static` は差し替えを含まないので反映待ちを較正できない——「反映待ちの数は較正で 0 と確かめられない」を README の「分からないこと」に書く。
 - 較正の合否（4.7）: `Static` は 4 種 0 ∧ frames≥1、`Empty` は空≥1、`Mixed` は混在≥1、`Stale` は残り≥1、`Size` は大きさ≥1。1 つでも外れたら `CalibrationVerdict::Failed(list)`。
 - 最終ログ（4.8・6.6）: 較正 5 行 → 本番 12 行 → 面の切り替え 2 行を同じ形で並べ、較正不合格なら先頭に「本番の数は無効」を `error!` で出す。打ち切りのときは「打ち切り」とそれまでの行を出す。
 
@@ -407,7 +409,7 @@ fn derive_signature(p: &ComposedSurface, q: &ComposedSurface) -> Result<Signatur
 #[derive(Clone, Copy)] enum Why { Ambiguous, Covered, ScaleNotOne, SlotHit, Dropped, CaptureLost, OutsideOutput }
 struct TickRecord { tick: u32, ended_qpc: i64, rect: RECT, hit: HitClass, h_p: f32, h_q: f32, covered: bool, k_ok: bool, slot_hit: bool }
 struct FrameRecord { present_qpc: i64, accumulated: u32, tick: Option<u32>, picture: PictureClass, a: f32, b: f32, ab_p: f32, ab_q: f32 }
-struct Counts { frames: u32, missed: u32, unmeasurable: u32, mixed: u32, empty: u32, stale: u32, size: u32 }
+struct Counts { frames: u32, missed: u32, unmeasurable: u32, mixed: u32, pending: u32 /* mixed の内訳: 反映待ち */, empty: u32, stale: u32, size: u32 }
 struct Observation { name: String, pair: (Face, Face), from: Face, to: Face, request_tick: u32, settled: Option<(u32 /*frame idx*/, u32 /*tick*/)>, close_at_tick: Option<u32>, deadline_tick: u32, counts: Counts, complete: bool }
 struct Shared { ticks: Vec<TickRecord>, frames: Vec<FrameRecord>, signature_for: fn(&Observation) -> &Signature }
 fn classify_picture(sig: &Signature, rect: &RECT, pixels: &[u8], stride: usize) -> (PictureClass, f32, f32, f32, f32);
@@ -427,7 +429,7 @@ fn log_summary(all: &[Observation], calib: &CalibrationVerdict, partial: bool);
 
 **Implementation Notes**
 - Validation: 数え方の規則（`judge_frame`）には `#[cfg(test)]` の小さな検査を 1 本だけ付ける——合成した `(PictureClass, HitClass)` の並びから 4 種の数が規則どおり出ること。これは較正の代わりではない（較正は実際の窓で行う・4.1）。
-- Risks: 合成器の遅れ（差し替えを載せた tick が終わってから DWM がその絵を出すまで 1〜2 回の画面更新）が突き合わせの規則により「絵は古い・当たり判定は新しい」の混在 1 フレームとして数に出る可能性がある。これは版に依らず、面の切り替えにも同じだけ出る。README の「分からないこと」に書き、混在の内訳（`picture=from, hit=to`）と `present_qpc − ended_qpc` を `debug!` に出して開発者が見分けられるようにする。
+- Risks: 合成器の遅れ（差し替えを載せた tick が終わってから DWM がその絵を出すまで 1〜2 回の画面更新）が突き合わせの規則により「絵は古い・当たり判定は新しい」の混在として数に出る。これは版に依らず、面の切り替えにも同じだけ出るので、`pending` として内訳に分け、`face-switch@update` の値を床として README に並べる（上記）。本命の版の `pending` が床より大きければ、それは差し替えに固有の遅れであり見立てに書く。
 - Risks: 机の背景が検体の色と近いと「透明のはずの点が一致」して判別が狂う。較正（`Empty`・`Static`）で露見するので、結果は「較正の合否」として README に出る。
 
 ### 画面取り込み
@@ -501,6 +503,7 @@ impl Capture {
 - **較正（実際の窓）**: 4.2〜4.6 の 5 項が本 example の「検査」そのもの。合否は `CalibrationVerdict` として本番の数と並ぶ。
 - **数え方の規則の検査（in-source・1 本）**: `observe.rs` の `#[cfg(test)]` で、合成した `(PictureClass, HitClass, rect)` の並びを `judge_frame` に通し、「揃った」の位置と 4 種の数が規則どおり出ること（`Both` が混在に入る・残りは揃った後だけ・測れないは 4 種に入らない）。
 - **手動の目視（補助・3.7）**: 実行中に窓が画面に出続け、往復が見える。README の検証結果に「目視で見えたこと」を 1 行添える。
+- **数え方の規則の検査には反映待ちの例も含める**: 揃う前の `(from, to)` が `mixed` と `pending` の両方に入り、揃った後の `(from, to)` は `pending` に入らないこと。
 - **ビルド検査**: `cargo build -p pilot --example pilot-balloon-asset-swap` と、`crates/pilot` の `lib` が空のままであること（`cargo metadata` で `pilot` への被依存が 0 なのは `log-capture-kit` の見張りと人手レビューの領分）。
 
 ## README に残す学びの候補（実装時に事実で確かめてから書く）
@@ -510,5 +513,5 @@ impl Capture {
 - wintf の兄弟の重なり順が描画（先頭の子が上）と当たり判定（最後の子から）で逆。窓に面を 2 枚重ねる場面で必ず食い違う（範囲外の既存の食い違い・起票は `/kiro-complete` の棚卸しで）。
 - `VisualGraphics` の `on_remove` が WUC の親から自分を外すので、despawn と新規装着を同じ tick に入れれば 1 回の反映に載る（本命の版の根拠。実測で確かめる）。
 - `\b[ID]` の面の切り替えで崩れが出たなら、それは本番で既に通っている経路の既存の欠陥（2.7）。
-- 合成器の遅れによる混在 1 フレームが出るなら、それは版に依らない観測の限界であり、README の「分からないこと」に書く。
+- 合成器の遅れによる「反映待ち」（絵は古い・当たり判定は新しい）は版に依らず出る。本番の面の切り替えの値を床として並べ、床は較正で 0 と確かめられないことを README の「分からないこと」に書く。
 - 拡大率 k≠1.0 は未観測（本先進坑の範囲外）。
