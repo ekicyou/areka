@@ -363,34 +363,6 @@ fn test_cancel_dragging_noop_when_idle() {
     force_idle();
 }
 
-// --- reset_to_idle -------------------------------------------------------
-
-/// reset_to_idle は JustEnded のときのみ Idle に戻す。
-#[test]
-fn test_reset_to_idle_only_from_just_ended() {
-    force_idle();
-    let e = entity(10);
-    start_preparing(e, PhysicalPoint::new(0, 0), null_hwnd());
-    end_dragging(PhysicalPoint::new(0, 0), false); // → JustEnded
-    reset_to_idle();
-    assert!(matches!(snapshot_drag_state(), DragStateSnapshot::Idle));
-    force_idle();
-}
-
-/// reset_to_idle は Preparing 等 JustEnded 以外では何もしない。
-#[test]
-fn test_reset_to_idle_noop_when_preparing() {
-    force_idle();
-    let e = entity(11);
-    start_preparing(e, PhysicalPoint::new(0, 0), null_hwnd());
-    reset_to_idle();
-    assert!(
-        matches!(snapshot_drag_state(), DragStateSnapshot::Preparing { .. }),
-        "Preparing は reset_to_idle で変化しないべき"
-    );
-    force_idle();
-}
-
 // --- check_threshold -----------------------------------------------------
 
 /// Preparing 中、ユークリッド距離の二乗が閾値の二乗以上なら true。
@@ -495,5 +467,73 @@ fn test_read_drag_state_observes_current_state() {
     start_preparing(e, PhysicalPoint::new(0, 0), null_hwnd());
     let observed_preparing = read_drag_state(|s| matches!(s, DragState::Preparing { .. }));
     assert!(observed_preparing);
+    force_idle();
+}
+
+// --- 休止の契約（解放・中断のあとは次の左押下まで休む） -------------------
+
+/// 状態そのものと写しの両方の `is_button_held` が期待どおりで、写しの variant も一致する。
+fn assert_held(expected_variant: &str, expected_held: bool) {
+    assert_eq!(variant_name(&snapshot_drag_state()), expected_variant);
+    assert_eq!(
+        read_drag_state(|s| s.is_button_held()),
+        expected_held,
+        "DragState::is_button_held（{expected_variant}）"
+    );
+    assert_eq!(
+        snapshot_drag_state().is_button_held(),
+        expected_held,
+        "DragStateSnapshot::is_button_held（{expected_variant}）"
+    );
+}
+
+/// 述語の真偽表: 製品と同じ遷移関数で 5 状態を順に組み、
+/// Preparing・JustStarted・Dragging で真、Idle・JustEnded で偽。
+#[test]
+fn test_is_button_held_truth_table_over_product_transitions() {
+    force_idle();
+    assert_held("Idle", false);
+    start_preparing(entity(20), PhysicalPoint::new(0, 0), null_hwnd());
+    assert_held("Preparing", true);
+    start_dragging(PhysicalPoint::new(8, 0));
+    assert_held("JustStarted", true);
+    update_dragging(PhysicalPoint::new(9, 0), None);
+    assert_held("Dragging", true);
+    end_dragging(PhysicalPoint::new(9, 0), false);
+    assert_held("JustEnded", false);
+    force_idle();
+}
+
+/// 解放の契約: 解放の直後は JustEnded・述語は偽で、他の関数を呼ばずに
+/// 別の entity の左押下がそのまま受け付けられる。
+#[test]
+fn test_release_rests_until_next_press() {
+    force_idle();
+    start_preparing(entity(21), PhysicalPoint::new(1, 1), null_hwnd());
+    end_dragging(PhysicalPoint::new(1, 1), false);
+    assert_held("JustEnded", false);
+
+    start_preparing(entity(22), PhysicalPoint::new(2, 2), null_hwnd());
+    match snapshot_drag_state() {
+        DragStateSnapshot::Preparing { entity: e, .. } => assert_eq!(e, entity(22)),
+        other => panic!("expected Preparing, got {}", variant_name(&other)),
+    }
+    force_idle();
+}
+
+/// 中断の契約: 移動を始めてからの中断でも、解放と同じく次の左押下まで休む。
+#[test]
+fn test_cancel_rests_until_next_press() {
+    force_idle();
+    start_preparing(entity(23), PhysicalPoint::new(1, 1), null_hwnd());
+    start_dragging(PhysicalPoint::new(9, 1));
+    cancel_dragging();
+    assert_held("JustEnded", false);
+
+    start_preparing(entity(24), PhysicalPoint::new(2, 2), null_hwnd());
+    match snapshot_drag_state() {
+        DragStateSnapshot::Preparing { entity: e, .. } => assert_eq!(e, entity(24)),
+        other => panic!("expected Preparing, got {}", variant_name(&other)),
+    }
     force_idle();
 }
