@@ -86,6 +86,8 @@ impl Signature {
 #[derive(Clone, Copy, Debug)]
 pub struct TickRecord {
     pub tick: u32,
+    /// 当たり判定に当てた判別対（`Observer::sigs` の添字）。取り込み側は同じ対で絵を判別する。
+    pub pair: usize,
     pub ended_qpc: i64,
     pub rect: RECT,
     pub hit: HitClass,
@@ -285,26 +287,17 @@ pub fn classify_picture(
         let i = y as usize * stride + x as usize * 4;
         pixels.get(i..i + 3).map(|s| [s[0], s[1], s[2]])
     };
-    let a = ratio(
-        sig.only_p
-            .iter()
-            .map(|&(x, y, c)| at(x, y).map(|px| near(px, c))),
-    );
-    let b = ratio(
-        sig.only_q
-            .iter()
-            .map(|&(x, y, c)| at(x, y).map(|px| near(px, c))),
-    );
-    let ab_p = ratio(
-        sig.both
-            .iter()
-            .map(|&(x, y, c, _)| at(x, y).map(|px| near(px, c))),
-    );
-    let ab_q = ratio(
-        sig.both
-            .iter()
-            .map(|&(x, y, _, c)| at(x, y).map(|px| near(px, c))),
-    );
+    let check = |x: u32, y: u32, c: Bgr| {
+        at(x, y).map(|px| {
+            let m = near(px, c);
+            trace!(x, y, ?px, ?c, m, "標本点の色");
+            m
+        })
+    };
+    let a = ratio(sig.only_p.iter().map(|&(x, y, c)| check(x, y, c)));
+    let b = ratio(sig.only_q.iter().map(|&(x, y, c)| check(x, y, c)));
+    let ab_p = ratio(sig.both.iter().map(|&(x, y, c, _)| check(x, y, c)));
+    let ab_q = ratio(sig.both.iter().map(|&(x, y, _, c)| check(x, y, c)));
     (
         picture_rule(sig.has_only_p(), a, b, ab_p, ab_q),
         a,
@@ -384,11 +377,7 @@ pub fn classify_hit(
 ) -> (HitClass, f32, f32, f32, bool) {
     let mut slot_hit = false;
     let mut probe = |x: u32, y: u32| {
-        let e = hit_test_in_window(
-            world,
-            window,
-            PointF::new(x as f32 + 0.5, y as f32 + 0.5),
-        );
+        let e = hit_test_in_window(world, window, PointF::new(x as f32 + 0.5, y as f32 + 0.5));
         trace!(x, y, ?e, "標本点の当たり");
         slot_hit |= e
             .and_then(|e| world.get::<Name>(e))
@@ -467,11 +456,11 @@ pub fn tick_record_system(world: &mut World) {
     }
     let dpi = world.get::<DPI>(obs.window).copied();
     let k_ok = dpi.is_some_and(|d| d.dpi_x == 96 && d.dpi_y == 96);
-    let (hit, h_p, h_q, h_both, slot_hit) =
-        classify_hit(world, obs.window, &obs.sigs[obs.active]);
+    let (hit, h_p, h_q, h_both, slot_hit) = classify_hit(world, obs.window, &obs.sigs[obs.active]);
     let cover = covering_window(hwnd, &rect);
     let rec = TickRecord {
         tick,
+        pair: obs.active,
         ended_qpc,
         rect,
         hit,
@@ -498,7 +487,11 @@ pub fn tick_record_system(world: &mut World) {
         }
     }
     if last.is_some_and(|l| l.tick >= tick || l.ended_qpc > ended_qpc) {
-        error!(?last, ?rec, "tick の記録が昇順でない — 突き合わせの前提が外れた");
+        error!(
+            ?last,
+            ?rec,
+            "tick の記録が昇順でない — 突き合わせの前提が外れた"
+        );
     }
     trace!(?rec, "tick の記録");
     shared.ticks.push(rec);
@@ -671,6 +664,7 @@ mod tests {
     ) {
         let mut t = TickRecord {
             tick,
+            pair: PAIR_ASSET,
             ended_qpc: tick as i64 * 100,
             rect: RECT {
                 left: 10,

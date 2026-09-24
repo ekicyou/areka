@@ -12,6 +12,7 @@
 //! 窓の器は手本 `crates/areka/examples/emo-present.rs`（とその同名フォルダ）から
 //! バルーン窓 1 つ分を写した。起動は `run()` の前に同期で組む（手本の非同期投函は使わない）。
 
+mod capture;
 mod observe;
 
 use std::path::Path;
@@ -302,6 +303,23 @@ fn deadline_system(
     }
 }
 
+/// 記録の件数と絵の判別の内訳（2.4 の集計が入るまでの確かめ用）。
+fn log_records(shared: &Mutex<observe::Shared>) {
+    let s = shared
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut by = std::collections::BTreeMap::<String, u32>::new();
+    for f in &s.frames {
+        *by.entry(format!("{:?}", f.picture)).or_default() += 1;
+    }
+    tracing::info!(
+        ticks = s.ticks.len(),
+        frames = s.frames.len(),
+        ?by,
+        "tick とフレームの記録の件数（絵の判別の内訳）"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Entry Point
 // ---------------------------------------------------------------------------
@@ -340,7 +358,7 @@ fn boot_and_run() -> Result<ExitReason, String> {
     let assets = build_assets(&decoder, staysee.folder(), kakukaku_dir)?;
     let first = build_balloon_target(staysee.folder(), &decoder, 0)
         .map_err(|e| format!("StayseeBalloon の資産（最初の表示用）の構築に失敗: {e}"))?;
-    let sigs = Arc::new([
+    let sigs: Arc<[observe::Signature; 2]> = Arc::new([
         signature("(A0,B0)", &assets.face_a0, &assets.face_b0)?,
         signature("(A0,A2)", &assets.face_a0, &assets.face_a2)?,
     ]);
@@ -397,7 +415,7 @@ fn boot_and_run() -> Result<ExitReason, String> {
         });
         w.world_mut().insert_resource(observe::Observer {
             window,
-            sigs,
+            sigs: sigs.clone(),
             active: observe::PAIR_ASSET,
             shared: shared.clone(),
         });
@@ -415,12 +433,12 @@ fn boot_and_run() -> Result<ExitReason, String> {
         );
     }
 
+    let capture = capture::Capture::start(shared.clone(), sigs)?;
+    let ran = app.run();
+    capture.stop();
     // run() の失敗は初期化ではないが、窓も記録も失われているので初期化の失敗と同じ 2 に倒す。
-    app.run().map_err(|e| format!("run() が失敗: {e}"))?;
-    tracing::info!(
-        ticks = shared.lock().map_or(0, |s| s.ticks.len()),
-        "tick の記録の件数"
-    );
+    ran.map_err(|e| format!("run() が失敗: {e}"))?;
+    log_records(&shared);
 
     let reason = world.borrow().world().resource::<Run>().exit;
     drop((staysee, emo2));
