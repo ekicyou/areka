@@ -329,10 +329,9 @@ const _: fn() = || {
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
 ///    作らない・受け口の据え付けは [`wire_kanade_stop`]）。
 /// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
-///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入・
-///    [`register_emo2_frame_system`] で `Update` へ登録（self-gating）。載せ方は**上流の
-///    `Update` 鎖の最後の系（`update_typewriters`）より後**という 1 点だけを指定する
-///    （同じ巡のうちに絵を着地させるため・要件 2.4）。成立時
+///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入（毎フレームの相の
+///    `Update` への登録は [`register_emo2_frame_system`] が `ghost_session::register_systems` から
+///    プロセスに 1 回行う・self-gating）。成立時
 ///    `info!`「wire 成立」マーカーを発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
 /// 7. `Emo2BootOutcome{ ghost: Some, seriko: Some, wired: true }` を返す。
 ///
@@ -585,8 +584,8 @@ pub fn wire_emo2_boot(
         }
     };
 
-    // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を Update へ登録（self-gating）。
-    // 受け取った bevy World へ直接載せる（登録は [`register_emo2_frame_system`]）。
+    // 手順6: Emo2Wiring を NonSend 挿入（emo2_frame_system の登録は [`register_emo2_frame_system`]）。
+    // 受け取った bevy World へ直接載せる。
     let mut wiring = Emo2Wiring::new(
         presenter,
         rx,
@@ -604,20 +603,18 @@ pub fn wire_emo2_boot(
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
     world.insert_non_send(wiring);
-    register_emo2_frame_system(world);
 
     // 説明書の受信端（popup-menu-minimal task 4.3・要件 4.5）。開くファイルはゴーストの根と
     // 定義の `readme` キーから**起動時に 1 度だけ**決まる（要求ごとには決めない）ので、
     // `mount()` を読める最初の場所であるここで決めて受信端と一緒に World へ据える。
-    // `wire_emo2_boot` は 1 回の実行につき `main` から 1 度しか呼ばれないため、`wire_readme` が
-    // 行う `Input` の段への登録も 1 度だけである（`wire_choice_drain` と同じ前提）。
+    // `Input` の段への登録は `ghost_session::register_systems` が別に 1 度だけ行う。
     let readme_path =
         crate::readme::resolve_path(&ghost_root, ghost_runtime.mount().readme.as_deref());
     crate::readme::wire_readme(world, readme_path, readme_rx);
 
     // 中断の持ち物（areka-P0-balloon-break task 3.3・要件 4.5・5.1）。運行（kanade）への送出端は
-    // boot が返した `GhostRuntime` から複製する（マウスの結線と同じ投函端）。`wire_user_break` が
-    // 行う `Input` の段への登録も、`wire_readme` と同じ理由で 1 度だけである。
+    // boot が返した `GhostRuntime` から複製する（マウスの結線と同じ投函端）。`Input` の段への
+    // 登録は `wire_readme` と同じく `ghost_session::register_systems` が行う。
     crate::input_events::user_break::wire_user_break(
         world,
         no_user_break_rx,
@@ -674,9 +671,9 @@ pub fn register_emo2_frame_system(world: &mut World) {
 /// 停止通知の受け口を World に据え、終了相を `Update` に登録する（起動の 2 経路で共通・1 回だけ・
 /// 要件 6.4）。
 ///
-/// `main` が起動の分岐の後・`run()` の前に 1 回呼ぶ。終了相は毎フレームの相より前に走る。
-/// LogSink 側の起動では毎フレームの相が登録されないが、順序の相手が居ないだけで登録は通る
-/// （`frame_schedule_tests` の 1 本がこの形を固定する）。
+/// `ghost_session::register_systems` がプロセスに 1 回、[`register_emo2_frame_system`] の直後に
+/// 呼ぶ。終了相は毎フレームの相より前に走る。順序の相手（毎フレームの相）が登録されていない
+/// World でも登録は通る（`frame_schedule_tests` の 1 本がこの形を固定する）。
 pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeStopped>) {
     world.insert_non_send(KanadeStopRx(rx));
     world

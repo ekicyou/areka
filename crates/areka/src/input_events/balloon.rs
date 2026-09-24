@@ -868,9 +868,8 @@ pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
     }
 }
 
-/// mpsc チャネルを生成し `BalloonWiring`＋`ChoiceSelectionInbox` を NonSend 挿入し、さらに
-/// `clear_balloon_hover_on_leave` を Input スケジュール（`dispatch_pointer_events` 後）へ登録する
-/// （donor `wire_mouse_input`＋main.rs clickthrough 登録の合成・design Option A・R5.5/6.6）。
+/// mpsc チャネルを生成し `BalloonWiring`＋`ChoiceSelectionInbox` を NonSend 挿入する
+/// （`clear_balloon_hover_on_leave` の登録は [`register_balloon_leave_system`]・donor `wire_mouse_input`＋main.rs clickthrough 登録の合成・design Option A・R5.5/6.6）。
 ///
 /// 本番到達済み——`main.rs` から `wire_mouse_input` と同型に **1 回・同期**（schedule 実行外）で
 /// 呼ばれる。同期呼出ゆえ実行中スケジュールを触らず、`Schedules` 資源が既在の World（`EcsWorld` 内
@@ -881,7 +880,6 @@ pub(crate) fn wire_balloon_choice(world: &mut World) {
     let (tx, rx) = channel::<ChoiceSelection>();
     world.insert_non_send(BalloonWiring::new(tx));
     world.insert_non_send(ChoiceSelectionInbox(rx));
-    register_balloon_leave_system(world);
 }
 
 /// `clear_balloon_hover_on_leave` を Input スケジュール（`dispatch_pointer_events` 後）へ登録する
@@ -890,10 +888,9 @@ pub(crate) fn wire_balloon_choice(world: &mut World) {
 /// 高速離脱時の hover 残置は登録漏れとして実機目視でしか検出できないため、登録は本関数に集約し
 /// スケジュール登録檻が開発時に捕捉する（design Testing Strategy Integration Test 7）。ordering は
 /// `dispatch_pointer_events` の後（FrameFinalize の `clear_transient_pointer_state` による `PointerLeave`
-/// 除去より前は Input スケジュール内であることで成立）。`wire_balloon_choice` から呼ばれるヘルパ
-/// （登録の入口から単独でも呼べるよう `pub(crate)`）。
+/// 除去より前は Input スケジュール内であることで成立）。
 ///
-/// 本番到達済み——唯一の呼び手 [`wire_balloon_choice`] が `main.rs` から呼ばれるため間接に到達する。
+/// 本番到達済み——呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
 pub(crate) fn register_balloon_leave_system(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,

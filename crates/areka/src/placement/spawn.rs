@@ -652,9 +652,8 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 /// 載せる場所を決めるのは areka 側という既存の流儀）。どちらの system も Win32 を呼ぶため
 /// UI スレッド固定であり、その担保は system 側の `NonSendMarker` が持つ。
 ///
-/// 呼び手は main.rs の起動窓シーム（`open_startup_window`）で、`Schedules` 資源が既在の
-/// World（`EcsWorld` 内 World）に対し、schedule 実行外で 1 回だけ同期に呼ぶ
-/// （クリック透過登録と同じ作法）。
+/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）で、`Schedules` 資源が既在の
+/// World（`EcsWorld` 内 World）に対し、schedule 実行外で同期に呼ぶ（クリック透過登録と同じ作法）。
 pub fn wire_zorder_pair(world: &mut World) {
     // 挿入と記録は**同じ束縛**から行う（要件 5.6・task 5.1 の観測条項）。値を 2 度書くと
     // 片方だけ変えたときに記録が静かに嘘をつく——起動時ログは「どの方式で動いているか」を
@@ -708,8 +707,8 @@ impl ClickThroughRegistrar for ClickThroughRegistryHandle {
 /// 登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
 /// `ClickThroughRegistryHandle` は `WinApp::run` の結線で NonSend リソース
 /// として挿入される。ごく初期の tick で未挿入の可能性へ `Option` で防御する
-/// （headless でも no-op で安全）。schedule への結線は main.rs シーム
-/// `open_startup_window`（task 6.2）が `FrameFinalize` へ行う。
+/// （headless でも no-op で安全）。schedule への結線は `ghost_session::register_systems`
+/// が `FrameFinalize` へ行う。
 pub fn register_ghost_windows_click_through(
     new_windows: Query<(Entity, &WindowHandle), (With<GhostWindowMarker>, Added<WindowHandle>)>,
     handle: Option<NonSend<ClickThroughRegistryHandle>>,

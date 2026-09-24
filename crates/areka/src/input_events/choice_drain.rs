@@ -110,27 +110,26 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
     forward_all(&inbox.0, &forwarder.kanade);
 }
 
-/// kanade 投函端を NonSend 挿入し、drain 排他システムを Input スケジュールへ登録する
-/// （design C1 Contracts・donor `wire_mouse_input` 同型）。
+/// kanade 投函端を NonSend 挿入する（design C1 Contracts・donor `wire_mouse_input` 同型）。
+/// drain 排他システムの登録は [`register_choice_drain`] が行う。
 ///
 /// main.rs の `wire_balloon_choice` 呼出**直後**から `wire_mouse_input` と同型に **1 回・同期**
 /// （schedule 実行外の World 変更）で呼ばれる。同期呼出ゆえ実行中スケジュールを触らず、
 /// `Schedules` 資源が既在の World で成立する。
 ///
-/// ordering は `dispatch_pointer_events` の**後**——押下ハンドラが同一フレームで発行した
-/// [`ChoiceSelection`] をそのフレームのうちに転送する（1 フレーム遅延を作らない・
-/// `register_balloon_leave_system` と同じ ordering 作法）。
-///
 /// Precondition: `wire_balloon_choice` 済み（[`ChoiceSelectionInbox`] 存在）。
 /// Postcondition: 以降のフレームで受信済み通知は全件送出試行済み・失敗は warn 記録。
 pub(crate) fn wire_choice_drain(world: &mut World, kanade: Sender<KanadeMsg>) {
     world.insert_non_send(ChoiceForwarder { kanade });
-    register_choice_drain(world);
 }
 
 /// 受信口の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
 ///
-/// 並びは `dispatch_pointer_events` の後（[`wire_choice_drain`] の doc のとおり）。
+/// ordering は `dispatch_pointer_events` の**後**——押下ハンドラが同一フレームで発行した
+/// [`ChoiceSelection`] をそのフレームのうちに転送する（1 フレーム遅延を作らない・
+/// `register_balloon_leave_system` と同じ ordering 作法）。
+///
+/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
 pub(crate) fn register_choice_drain(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
@@ -161,6 +160,25 @@ mod tests {
         assert!(
             world.get_non_send::<ChoiceForwarder>().is_none(),
             "登録は持ち物を置かない"
+        );
+    }
+
+    /// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`）。
+    #[test]
+    fn wire_choice_drain_inserts_the_forwarder_without_registering() {
+        let mut world = World::new();
+        world.init_resource::<Schedules>();
+        let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
+
+        wire_choice_drain(&mut world, kanade_tx);
+
+        assert!(
+            !world.resource::<Schedules>().contains(Input),
+            "結線は系を登録しない"
+        );
+        assert!(
+            world.get_non_send::<ChoiceForwarder>().is_some(),
+            "結線は持ち物を置く"
         );
     }
 

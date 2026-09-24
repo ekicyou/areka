@@ -190,13 +190,12 @@ impl MenuWiring {
 
 /// メニューを起動に結ぶ。boot 成功後に `main.rs` から 1 回だけ呼ぶ（入力の結線の直後）。
 ///
-/// 行うのは結線状態の挿入・組込 2 項目の登記・返事の取り出しの登録までで、**窓には触れない**。
-/// 呼ばれるのは `app.run()` の前で、キャラクター窓はまだ 1 枚も無いからである（窓を作る
+/// 行うのは結線状態の挿入・組込 2 項目の登記までで、**窓には触れない**（返事の取り出しの
+/// 登録は [`register_menu_poll`]）。呼ばれるのは `app.run()` の前で、キャラクター窓はまだ 1 枚も無いからである（窓を作る
 /// クロージャは `app.run()` の最初の数 tick で動く）。解放ハンドラはそのクロージャが
 /// [`attach_release_handlers`] で付ける。
 ///
-/// `Schedules` 資源は在る前提（`wire_choice_drain` と同じ）。運行（kanade）への送り口は
-/// 照会（`KanadeMsg::ResourceQuery`）に使う。
+/// 運行（kanade）への送り口は照会（`KanadeMsg::ResourceQuery`）に使う。
 pub(crate) fn wire_menu(world: &mut World, kanade: Sender<KanadeMsg>) {
     wire_menu_with(world, MenuWiring::new(kanade));
 }
@@ -204,21 +203,21 @@ pub(crate) fn wire_menu(world: &mut World, kanade: Sender<KanadeMsg>) {
 /// 結線の中身。結線状態を受け取るのは、テストが画面座標への写しを差し替えた状態
 /// （[`MenuWiring::with_to_screen`]）で同じ手順を通せるようにするためである。
 ///
-/// 手順は ⑴ 組込の 2 項目を登記して結線状態を World へ入れる、⑵ 照会の返事の取り出しを
-/// 毎 tick の入力の段へ登録する。⑵ の並びは `dispatch_pointer_events` の後——解放ハンドラが
-/// 同じ tick に預けた返事待ちを、その tick のうちに 1 度覗けるようにする。
+/// 手順は組込の 2 項目を登記して結線状態を World へ入れるだけ。
 fn wire_menu_with(world: &mut World, mut wiring: MenuWiring) {
     wiring
         .registry
         .register(Frame::Readme, Rc::new(readme_item));
     wiring.registry.register(Frame::Close, Rc::new(close_item));
     world.insert_non_send(wiring);
-    register_menu_poll(world);
 }
 
-/// 照会の返事の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
+/// 照会の返事の取り出しを毎 tick の入力の段へ登録する（登録だけ・持ち物は置かない）。
 ///
-/// 並びは `dispatch_pointer_events` の後（[`wire_menu_with`] の doc のとおり）。
+/// 並びは `dispatch_pointer_events` の後——解放ハンドラが同じ tick に預けた返事待ちを、
+/// その tick のうちに 1 度覗けるようにする。
+///
+/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
 pub(crate) fn register_menu_poll(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,

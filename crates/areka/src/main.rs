@@ -23,7 +23,6 @@
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
 use windows::core::Result;
-use wintf::ecs::FrameFinalize;
 use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::*;
 
@@ -69,6 +68,9 @@ mod input_events;
 mod app_exit;
 mod menu;
 mod readme;
+
+/// 起こし直しの単位（areka-P0-ghost-restart-unit）。系の登録の入口 `register_systems` を持つ。
+mod ghost_session;
 
 /// アクタースレッドの役割名の宣言（areka-P0-draw-load-parity task 2.3）。
 /// `areka-actor` のスレッド開始フックを導入し、生成されるアクタースレッド 1 本ごとに
@@ -174,6 +176,12 @@ fn main() -> Result<()> {
     // `Explicit`: 窓 0 では終了せず、`quit_app` の終了の指示でだけ `run()` が戻る（要件 1.1）。
     let app = WinApp::with_exit_policy(ExitPolicy::Explicit)?;
 
+    // 系の登録（プロセスに 1 回・ここ 1 か所・areka-P0-ghost-restart-unit 要件 2.1／2.2）。
+    // 停止通知の channel は 1 本だけ作り、受信端をここで受け口へ据え、送出端の写しを下の起動の
+    // 2 経路へ渡す（要件 6.4）。main 自身の送出端は起動の分岐の後で落とす。
+    let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
+    ghost_session::register_systems(app.world().borrow_mut().world_mut(), kanade_stop_rx);
+
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
     tick_gate_config::apply_from_env(&mut app.world().borrow_mut());
 
@@ -216,9 +224,6 @@ fn main() -> Result<()> {
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
     // 終了処理へ運ぶ。`wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォール
     // バック boot へ倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
-    // 停止通知の channel は 1 本だけ作り、送出端の写しを起動の 2 経路へ、受信端を下の据え付けへ
-    // 渡す（要件 6.4）。main 自身の送出端は分岐の後で落とす。
-    let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
     let outcome = emo2_boot::wire_emo2_boot(
         app.world().borrow_mut().world_mut(),
         emo2_boot::Emo2BootInputs {
@@ -328,9 +333,6 @@ fn main() -> Result<()> {
 
     // main 自身の送出端を落とす（受け口に残る送出端は起動の 2 経路が持つ写しだけになる）。
     drop(kanade_stop_tx);
-
-    // 停止通知の受け口と終了相の据え付け（起動の 2 経路で共通・起動の分岐の後・`run()` の前に 1 回）。
-    emo2_boot::wire_kanade_stop(app.world().borrow_mut().world_mut(), kanade_stop_rx);
 
     // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。窓が 0 になっても戻らず、
     // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が戻る。
@@ -602,8 +604,7 @@ struct StartupDescriptValues {
 ///
 /// - 成功時: `spawn_ghost_windows` を既存 ECS コマンド経路（`EcsWorld::spawn` の async
 ///   タスク → `CommandSender` → Input スケジュールで World 適用）で
-///   実行し、`register_ghost_windows_click_through` と `app_exit::attach_os_close_request`
-///   を同じ `FrameFinalize` schedule へ結線する（emo-present donor と同じ結線位置・task 5.2）。
+///   実行する（`FrameFinalize` への系の結線は `ghost_session::register_systems` が先に済ませる）。
 ///   smoke の自動終了もここでだけ投入する。
 /// - 失敗時（モニタ 0 台・起動中の削除等）: [`placement::PlacementError`] をそのまま返す。
 ///   呼び手（`main`）が「起動窓を開けない」を告知して終了コード 1 で終える
@@ -637,25 +638,9 @@ fn open_startup_window(
     // **正典出力点**・D12）。既定 OFF・診断 `RUST_LOG` でのみ点灯する。
     let sources = boot_monitor_snapshot(&wintf::ecs::window::monitor::enumerate_monitors());
 
-    // clickthrough 登録 system を FrameFinalize へ結線（task 5.2 の donor slot・
-    // emo-present と同位置）。`Added<WindowHandle>` 駆動のため窓 spawn より先に
-    // 結線しても取りこぼさない（registry NonSend は WinApp::run が挿入・5.2 learnings）。
-    app.world().borrow_mut().add_systems(
-        FrameFinalize,
-        placement::spawn::register_ghost_windows_click_through,
-    );
-    // OS の閉鎖要求の受け手を同じ捉え方・同じ確定段で差す（裁定 3・placement の外）。
-    app.world()
-        .borrow_mut()
-        .add_systems(FrameFinalize, app_exit::attach_os_close_request);
-
-    // ゴースト窓ペアの重なり管理を同じ確定段へ結線（areka-P0-ghost-window-zorder
-    // task 3.2・要件 1.1/5.6/6.1）。実行時ストラテジ（既定＝案 A・補助浮上なし）の
-    // 明示挿入と、確立系 → ペア維持系 → 鎖の適用系の順での `FrameFinalize` 登録を
-    // `wire_zorder_pair` 1 本にまとめてある（登録内容と理由は同関数の doc）。
-    // clickthrough 登録と同じく `Added<WindowHandle>` 起点ゆえ、窓 spawn より
-    // 先に結線しても取りこぼさない。
-    placement::spawn::wire_zorder_pair(app.world().borrow_mut().world_mut());
+    // clickthrough 登録・OS の閉鎖要求の受け手・重なり順の対の `FrameFinalize` への結線は
+    // `ghost_session::register_systems` が済ませてある（どれも `Added<WindowHandle>` 起点ゆえ、
+    // 窓 spawn より先に結線しても取りこぼさない）。
 
     // 復元マージ（design C4・要件 1.4）: snapshot 構築直後・spawn closure へ渡す前に、
     // 永続先読み（load_restored_state）→ 純関数 merge（apply_restored_placements）で

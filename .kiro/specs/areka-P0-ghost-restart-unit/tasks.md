@@ -51,7 +51,7 @@
   - _Requirements: 6.6_
 
 - [ ] 4. 起こし直しの単位を新しいモジュールに建て、`fn main` をその上へ組み直す
-- [ ] 4.1 系の登録の入口を 1 本にする
+- [x] 4.1 系の登録の入口を 1 本にする
   - 起こし直しの単位の新しいモジュールを作り、系の登録を順に呼ぶ入口を置く（`Update` ← 起動のフレームの系 → 停止通知の受け口／`Input` ← 説明書 → 中断 → メニュー → バルーンの離脱 → 選択肢の送り／`FrameFinalize` ← クリック透過 → OS の閉鎖要求 → 重なり順の対）
   - 1.x と 3.1 で結線関数が呼んでいた登録関数の呼び出しを外し、結線関数を状態の挿入だけにする
   - 起動窓の関数から系の登録 2 つと重なり順の対を外し、`fn main` は `WinApp` を作った直後に登録の入口を 1 度だけ呼ぶ（停止通知の受信端もここへ渡す）
@@ -109,3 +109,4 @@
 ## Implementation Notes
 
 - 1.3: `MenuRegistry` は 1 枠に供給関数 1 つ（`register` は置き換え）なので、5 の 2 周テストで 1 周目に入れる余分な登記は組込の使わない枠（例 `Frame::Shell`）へ入れる。`Readme`／`Close` へ入れると残っても `registered_frames()` に見えない。
+- 4.1: fallback で新たに登録される系の見え方は「状態が無ければ無操作」だが、バルーンの離脱の系だけは `BalloonWiring` 不在で `error!(balloon_wiring_missing)` の枝を持つ（fallback のバルーン窓は `HitTest::none()` で `PointerLeave` が立たず届かない）。4.4 で `register_systems` の doc と design「明示する差 1 件」をこの事実（と `emo2_frame_system` も fallback で登録されること）に合わせて直す。

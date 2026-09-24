@@ -134,8 +134,8 @@ fn hover_tracks_last_injected_ordinal_per_scope() {
 //     装着され、キャラ窓のハンドラ集合は不変であること（非退行・donor attach 檻同型）。
 // (2) NonSend 結線檻: wire_balloon_choice 後に BalloonWiring＋ChoiceSelectionInbox が NonSend
 //     資源として存在すること（donor wire_mouse_input 同型）。
-// (3) スケジュール登録檻（Integration Test 7）: wire_balloon_choice が clear_balloon_hover_on_leave を
-//     Input スケジュールへ登録すること——構造（systems_len）と行動（Input 実行で hover 解除）の双方で
+// (3) スケジュール登録檻（Integration Test 7）: register_balloon_leave_system が
+//     clear_balloon_hover_on_leave を Input スケジュールへ登録すること（wire_balloon_choice は登録しない）——構造（systems_len）と行動（Input 実行で hover 解除）の双方で
 //     固定する。登録漏れは高速離脱時の hover 残置として実機目視でしか検出できないため（1.3, 6.6）。
 // -------------------------------------------------------------------------
 
@@ -256,7 +256,7 @@ fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
 #[test]
 fn wire_inserts_both_non_sends() {
     let mut world = World::new();
-    world.init_resource::<Schedules>(); // wire は schedule 登録も行うため Schedules 既在が前提。
+    world.init_resource::<Schedules>();
 
     assert!(
         world.get_non_send::<BalloonWiring>().is_none(),
@@ -277,16 +277,21 @@ fn wire_inserts_both_non_sends() {
         world.get_non_send::<ChoiceSelectionInbox>().is_some(),
         "wire 後は ChoiceSelectionInbox が NonSend 挿入されている（発行 seam・5.3）"
     );
+    assert!(
+        !world.resource::<Schedules>().contains(Input),
+        "wire は系を登録しない（登録は ghost_session::register_systems・要件 2.1）"
+    );
 }
 
-/// スケジュール登録檻・構造（Integration Test 7・R6.6）: wire が clear_balloon_hover_on_leave を
-/// Input スケジュールへ 1 件登録する。
+/// スケジュール登録檻・構造（Integration Test 7・R6.6）: 結線の後に登録を呼ぶと（本番は
+/// `ghost_session::register_systems`）clear_balloon_hover_on_leave が Input スケジュールへ 1 件載る。
 #[test]
-fn wire_registers_leave_system_into_input_schedule() {
+fn wire_then_register_puts_leave_system_into_input_schedule() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
 
     wire_balloon_choice(&mut world);
+    register_balloon_leave_system(&mut world);
 
     let schedules = world.resource::<Schedules>();
     assert!(schedules.contains(Input), "Input スケジュールが存在する");
@@ -331,8 +336,9 @@ fn registered_leave_system_runs_in_input_schedule_and_clears_balloon_hover() {
     let runtime = runtime_with_active_choice("0");
     world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
 
-    // wire で BalloonWiring／Inbox 挿入＋leave system 登録。
+    // wire で BalloonWiring／Inbox 挿入、続けて leave system 登録。
     wire_balloon_choice(&mut world);
+    register_balloon_leave_system(&mut world);
     // wire が挿入した BalloonWiring に前回注入値 Some(2) を仕込む（解除対象）。
     world
         .get_non_send_mut::<BalloonWiring>()

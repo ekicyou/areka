@@ -495,7 +495,7 @@ fn drain_is_ordered_before_dispatch(world: &World) -> bool {
 /// その押下が退けられ、押下と同じ巡に届いた「出る」でその押下が受理になる（要件 4.5・5.1）。
 ///
 /// 入力の段は wintf が組んだ本物（`EcsWorld::new` がポインタの配送を登録済み）で、そこへ結線
-/// `wire_user_break` が取り出しを足す。登録を「配送の後」へ変えると、1 巡目の押下は旗が
+/// `wire_user_break` が持ち物を入れ、登録 `register_user_break_drain` が取り出しを足す。登録を「配送の後」へ変えると、1 巡目の押下は旗が
 /// 上がる前に判定されて受理になり、ここが赤になる。順序指定を外しただけのときは走行の結果が
 /// 変わらないことがあるので、指定そのものを先に確かめる。
 #[test]
@@ -506,6 +506,7 @@ fn signal_arriving_in_the_same_round_is_drained_before_the_press_is_judged() {
     let mut ecs = EcsWorld::new();
     let world = ecs.world_mut();
     wire_user_break(world, flag_rx, lifecycle_tx, kanade_tx);
+    register_user_break_drain(world);
     let window = world.spawn(OnPointerPressed(press_on_visible_balloon)).id();
     assert!(
         drain_is_ordered_before_dispatch(world),
@@ -557,6 +558,24 @@ fn register_user_break_drain_alone_adds_one_system_to_the_input_schedule() {
     assert!(
         world.get_non_send::<UserBreakWiring>().is_none(),
         "登録は持ち物を置かない"
+    );
+}
+
+/// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`）。
+#[test]
+fn wire_user_break_inserts_the_wiring_without_registering() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    let (_flag_tx, flag_rx) = mpsc::channel();
+    let (lifecycle_tx, _lifecycle_rx) = mpsc::channel();
+    let (kanade_tx, _kanade_rx) = mpsc::channel();
+
+    wire_user_break(&mut world, flag_rx, lifecycle_tx, kanade_tx);
+
+    assert_eq!(input_systems_len(&world), 0, "結線は系を登録しない");
+    assert!(
+        world.get_non_send::<UserBreakWiring>().is_some(),
+        "結線は持ち物を置く"
     );
 }
 

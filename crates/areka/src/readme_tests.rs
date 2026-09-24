@@ -14,8 +14,8 @@ use temp_path_kit::TempPath;
 
 use super::*;
 
-/// 説明書の持ち物を World へ直に入れる（結線 `wire_readme` はスケジュール登録を伴うので、
-/// 判断分岐だけを見るここでは通さない）。送出端は要求を送るために返す。
+/// 説明書の持ち物を World へ直に入れる（判断分岐だけを見るここでは結線 `wire_readme` を
+/// 通さない）。送出端は要求を送るために返す。
 fn wired(world: &mut World, path: PathBuf) -> Sender<ReadmeRequest> {
     let (tx, rx) = mpsc::channel::<ReadmeRequest>();
     world.insert_non_send(ReadmeWiring {
@@ -64,16 +64,16 @@ fn register_readme_drain_alone_adds_one_system_to_the_input_schedule() {
     );
 }
 
-/// 今の結線は持ち物を置き、登録の数は今日と同じ 1 つのまま（task 4.1 までの過渡の姿）。
+/// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`・要件 2.1）。
 #[test]
-fn wire_readme_inserts_the_wiring_and_registers_once() {
+fn wire_readme_inserts_the_wiring_without_registering() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     let (_tx, rx) = mpsc::channel::<ReadmeRequest>();
 
     wire_readme(&mut world, PathBuf::from("readme.txt"), rx);
 
-    assert_eq!(input_systems_len(&world), 1, "登録の数は今日と同じ");
+    assert_eq!(input_systems_len(&world), 0, "結線は系を登録しない");
     let wiring = world
         .get_non_send::<ReadmeWiring>()
         .expect("結線は持ち物を置く");

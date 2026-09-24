@@ -220,8 +220,8 @@ fn raise_the_dirty_mark(mut plan: ResMut<ZOrderChainPlan>) {
 
 /// 本番と同じ順序で確定段を組んだ World（`wire_zorder_pair` が 3 本を先に載せる）。
 ///
-/// 本番も `open_startup_window`（`wire_zorder_pair`）→ `wire_emo2_boot`（相の登録）の順で
-/// あり、**登録の順は適用系のほうが先**である。順序指定を落とすと相は後ろへ回る。
+/// 本番の登録の入口（`ghost_session::register_systems`）も `wire_zorder_pair` で確定段へ 3 本を
+/// 載せる。同じ段に後から載せる仕事は、順序指定を落とすと適用系との前後が定まらない。
 fn wired_finalize_world() -> World {
     let mut world = World::new();
     world.init_resource::<Schedules>();

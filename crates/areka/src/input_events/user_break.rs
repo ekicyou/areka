@@ -155,15 +155,8 @@ pub(crate) fn drain_no_user_break_signals(world: &mut World) {
     }
 }
 
-/// 中断の持ち物を World へ入れ、旗の取り出しを毎巡の入力の段へ登録する（`fn wire_readme`・
-/// `crates/areka/src/readme.rs` と同型）。
-///
-/// 並びは `dispatch_pointer_events` の**前**——押下と同じ巡に届いた「入る」「出る」を、その
-/// 押下の判定より先に旗へ畳み込むためである（要件 4.5・5.1）。後ろに置くと、旗が 1 巡遅れて
-/// 効く。`dispatch_pointer_events` 自身は wintf の既定の登録（`EcsWorld::new`・
-/// `crates/wintf/src/ecs/world/mod.rs`）で `drain_task_pool_commands` の後に置かれているだけ
-/// なので、前に 1 本置いても順序は循環しない。隣の取り出し（`fn wire_readme`・
-/// `fn wire_choice_drain`）はどれも「後」で、「前」はここだけである。
+/// 中断の持ち物を World へ入れる（`fn wire_readme`・`crates/areka/src/readme.rs` と同型）。
+/// 旗の取り出しの登録は [`register_user_break_drain`] が行う。
 ///
 /// 呼び手は boot 成功後の `wire_emo2_boot`（1 回の実行につき 1 度だけ）。
 pub(crate) fn wire_user_break(
@@ -173,12 +166,18 @@ pub(crate) fn wire_user_break(
     kanade: Sender<KanadeMsg>,
 ) {
     world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade));
-    register_user_break_drain(world);
 }
 
-/// 旗の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
+/// 旗の取り出しを毎巡の入力の段へ登録する（登録だけ・持ち物は置かない）。
 ///
-/// 並びは `dispatch_pointer_events` の前（[`wire_user_break`] の doc のとおり）。
+/// 並びは `dispatch_pointer_events` の**前**——押下と同じ巡に届いた「入る」「出る」を、その
+/// 押下の判定より先に旗へ畳み込むためである（要件 4.5・5.1）。後ろに置くと、旗が 1 巡遅れて
+/// 効く。`dispatch_pointer_events` 自身は wintf の既定の登録（`EcsWorld::new`・
+/// `crates/wintf/src/ecs/world/mod.rs`）で `drain_task_pool_commands` の後に置かれているだけ
+/// なので、前に 1 本置いても順序は循環しない。隣の取り出し（`fn register_readme_drain`・
+/// `fn register_choice_drain`）はどれも「後」で、「前」はここだけである。
+///
+/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
 pub(crate) fn register_user_break_drain(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
