@@ -11,6 +11,9 @@ use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
 
 use areka_ghost::BasewareRoot;
+use areka_ghost::sylphya_wiring::profile_areka_root;
+use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
 
 // 消費者（`main` の起動解決）は task 5.1・5.3 で結線する。それまでは檻だけが呼ぶので、
 // 本番ビルドの dead_code を各項目に限って許す（5.1 で外す）。
@@ -241,6 +244,115 @@ pub(crate) fn resolve_balloon(
 #[allow(dead_code)]
 pub(crate) fn pick_index(n: usize) -> usize {
     (RandomState::new().hash_one(n) % n as u64) as usize
+}
+
+// ---------------------------------------------------------------- 記憶の直読みと書き込み（要件 3）
+
+/// `scope` の記憶ファイルを実 fs から直接読み、`key` の値を拾う（アクター不在の起動前用）。
+/// 読めなければ無し（`load_scope` が不在・読取失敗を空へ縮退し、失敗は warn を残す）。
+fn read_last(scope: PersistScope, roots: &ScopeRoots, key: PersistKey) -> Option<String> {
+    load_scope(scope, roots, &FsPersistIo)
+        .into_iter()
+        .find_map(|(k, v)| (k == key).then_some(v))
+}
+
+/// 起動前の記憶の直読み（App スコープ `areka.last.ghost`・要件 4.2）。無ければ `None`。
+#[allow(dead_code)]
+pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
+    let roots = ScopeRoots {
+        app: Some(app_profile_dir.to_path_buf()),
+        ..ScopeRoots::default()
+    };
+    read_last(PersistScope::App, &roots, PersistKey::LastGhost)
+}
+
+/// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.balloon`・要件 5.2・裁定 4）。
+/// 根は boot が据える場所と同じ `profile_areka_root(<ゴースト>/ghost/master)`。無ければ `None`。
+#[allow(dead_code)]
+pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
+    let roots = ScopeRoots {
+        ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
+        ..ScopeRoots::default()
+    };
+    read_last(PersistScope::Ghost, &roots, PersistKey::LastBalloon)
+}
+
+/// 起動成功時に書く内容（要件 3.2〜3.5・裁定 5）。
+#[allow(dead_code)]
+pub(crate) struct LastUsed<'a> {
+    pub ghost: &'a GhostDecision,
+    pub balloon: &'a BalloonDecision,
+    /// `mount().shell.dir` の末尾（`seriko.defaultsurfacedirectoryname` か `master`）
+    pub shell_folder: &'a str,
+}
+
+impl LastUsed<'_> {
+    /// App へ `LastGhost`（argv 以外のとき）、Ghost へ `LastBalloon`（argv 以外のとき）＋`LastShell`
+    /// （常に）を投函する。argv で決まった側は書かず info を残す。投函だけで待たない
+    /// （反映は `GhostRuntime::shutdown` の barrier に任せる＝design R1）。
+    /// `areka.last.shell` は書くだけで起動の解決には使わない（要件 3.8）。
+    #[allow(dead_code)]
+    pub(crate) fn record(&self, publisher: &SylphyaPublisher) {
+        let ghost = remembered(
+            self.ghost.route == GhostRoute::Argv,
+            "ghost",
+            &self.ghost.dir,
+            &self.ghost.folder,
+        );
+        let balloon = remembered(
+            self.balloon.route == BalloonRoute::Argv,
+            "balloon",
+            &self.balloon.dir,
+            &self.balloon.folder,
+        );
+        if let Some(folder) = ghost {
+            publisher.persist_put(
+                PersistScope::App,
+                vec![(PersistKey::LastGhost, folder.to_owned())],
+            );
+        }
+        let mut entries: Vec<_> = balloon
+            .map(|folder| (PersistKey::LastBalloon, folder.to_owned()))
+            .into_iter()
+            .collect();
+        entries.push((PersistKey::LastShell, self.shell_folder.to_owned()));
+        publisher.persist_put(PersistScope::Ghost, entries);
+        tracing::info!(
+            event = "last_used_recorded",
+            ghost = ghost.unwrap_or("-"),
+            balloon = balloon.unwrap_or("-"),
+            shell = self.shell_folder,
+            "[boot_resolve] 最後に使ったものを記憶へ書きました（- は argv なので書いていない）"
+        );
+    }
+}
+
+/// argv で決まった側は `None`（書かない旨を info に残す＝要件 3.5）。それ以外はフォルダ名。
+fn remembered<'a>(
+    argv: bool,
+    side: &str,
+    dir: &Path,
+    folder: &'a Option<String>,
+) -> Option<&'a str> {
+    if argv {
+        tracing::info!(
+            event = "last_used_skipped_argv",
+            side,
+            dir = %dir.display(),
+            "[boot_resolve] argv で決まったので記憶を書き換えません"
+        );
+        return None;
+    }
+    if folder.is_none() {
+        // resolve_* は argv 以外で必ず folder を持つ。来たら型の約束が崩れている。
+        tracing::warn!(
+            event = "last_used_folder_missing",
+            side,
+            dir = %dir.display(),
+            "[boot_resolve] argv でないのにフォルダ名が無いので記憶を書きません"
+        );
+    }
+    folder.as_deref()
 }
 
 #[cfg(test)]

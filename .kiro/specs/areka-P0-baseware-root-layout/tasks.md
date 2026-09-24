@@ -55,7 +55,7 @@
   - _Requirements: 6.1, 6.2, 6.5, 6.7, 7.7, 9.2_
   - _Depends: 2.3_
 
-- [ ] 4. 起動解決の判断と記憶の読み書き `boot_resolve`
+- [x] 4. 起動解決の判断と記憶の読み書き `boot_resolve`
 - [x] 4.1 ゴースト 6 分岐・バルーン 7 分岐の純粋な判断
   - 既定の定数 `DEFAULT_GHOST_FOLDER = "emo2"`・`DEFAULT_BALLOON_FOLDER = "StayseeBalloon"` をこのファイルだけに置き、ゴーストは段 4・バルーンは段 5 だけが参照する
   - ゴースト: argv → 記憶（列挙に在れば）→ 唯一 → 既定 → 無作為 → 0 体。バルーン: argv → 記憶 → 同梱 → 唯一 → 既定 → 無作為 → 0。argv があれば記憶・列挙を見ない
@@ -66,7 +66,7 @@
   - 完了の姿: 分岐テストが全部緑で、既定の定数への参照がそれぞれ 1 段だけ
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.9, 4.11, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 8.3, 8.4, 9.3, 9.4_
   - _Depends: 2.1_
-- [ ] 4.2 起動前の記憶の直読みと、起動成功時の記憶の書き込み
+- [x] 4.2 起動前の記憶の直読みと、起動成功時の記憶の書き込み
   - 起動前（アクター不在）に `load_scope` を `FsPersistIo` で直接呼び、App スコープの `areka.last.ghost` と、起動するゴーストの Ghost スコープ（boot と同じ `profile_areka_root(<ゴースト>/ghost/master)`）の `areka.last.balloon` を読む口を置く。読めなければ無し
   - 起動成功時に書く内容を 1 つの値にまとめ、App へ `LastGhost`（argv 以外のとき）、Ghost へ `LastBalloon`（argv 以外のとき）＋`LastShell`（常に）を `persist_put` で投函する。argv の側は書かず `info!(event = "last_used_skipped_argv")`、書いたら `last_used_recorded`
   - 追加の `barrier()` は置かない（反映は `shutdown` の手順 10 に任せる）。`areka.last.shell` は起動時の解決に使わない
