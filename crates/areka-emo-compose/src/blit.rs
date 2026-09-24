@@ -776,3 +776,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "blit_transparent_alpha_tests.rs"]
+mod transparent_alpha_tests;
