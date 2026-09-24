@@ -1,8 +1,8 @@
-//! `error` の兄弟テスト。拒否語彙が 13 で閉じていること、短い語が重複しないこと、
+//! `error` の兄弟テスト。拒否語彙が 14 で閉じていること、短い語が重複しないこと、
 //! 宣言順の一覧と実際の変種が双方向で一致すること、詳細を持つ変種の表示が
 //! その詳細を落とさないことを判定する（要件 9.2）。
 //!
-//! ここでは固定入力の `.nar` を通さない。実物のアーカイブから 13 変種すべてに
+//! ここでは固定入力の `.nar` を通さない。実物のアーカイブから 14 変種すべてに
 //! 到達できることの判定はタスク 4.4 が `ALL_KINDS` と突き合わせて行う。
 
 use super::*;
@@ -35,6 +35,12 @@ fn samples_in_declaration_order() -> Vec<RefuseReason> {
             index: 4,
             raw_hex: "8140fe".to_string(),
             encoding: "Shift_JIS",
+        },
+        RefuseReason::PathTooLong {
+            index: 9,
+            length: 201,
+            limit: 200,
+            head: "g/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
         },
         RefuseReason::SymlinkEntry {
             index: 5,
@@ -71,11 +77,11 @@ fn samples_in_declaration_order() -> Vec<RefuseReason> {
 }
 
 #[test]
-fn all_kinds_has_thirteen_entries() {
+fn all_kinds_has_fourteen_entries() {
     assert_eq!(
         RefuseReason::ALL_KINDS.len(),
-        13,
-        "拒否語彙は 13 変種で閉じる（要件 9.2）"
+        14,
+        "拒否語彙は 14 変種で閉じる（要件 9.2・長すぎる名前＝要件 1.4）"
     );
 }
 
@@ -191,6 +197,34 @@ fn name_undecodable_display_carries_raw_bytes_and_encoding() {
     );
 }
 
+/// 長すぎる名前の表示は、番号・測った長さ・上限・先頭の一部を全て持ち、
+/// 名前の全体は持たない（先頭は 32 単位まで＝要件 1.4・1.8）。
+#[test]
+fn path_too_long_display_carries_index_length_limit_and_a_bounded_head() {
+    let head = "g/".to_string() + &"a".repeat(30);
+    assert!(
+        head.encode_utf16().count() <= 32,
+        "見本の先頭が 32 単位を超えている"
+    );
+    let reason = RefuseReason::PathTooLong {
+        index: 9,
+        length: 201,
+        limit: 200,
+        head: head.clone(),
+    };
+    assert_eq!(reason.kind(), "PathTooLong");
+    let shown = reason.to_string();
+    assert!(shown.contains('9'), "エントリ番号が落ちている: {shown}");
+    assert!(shown.contains("201"), "測った長さが落ちている: {shown}");
+    assert!(shown.contains("200"), "上限が落ちている: {shown}");
+    assert!(shown.contains(&head), "先頭の一部が落ちている: {shown}");
+    // 先頭の一部の後ろに名前の続き（a が 31 個以上）が出ていない。
+    assert!(
+        !shown.contains(&"a".repeat(31)),
+        "名前の全体が載っている: {shown}"
+    );
+}
+
 #[test]
 fn unsafe_path_display_carries_the_reason_detail() {
     let shown = RefuseReason::UnsafePath {
@@ -287,6 +321,7 @@ fn io_display_carries_phase_path_and_source() {
         source: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "使用中"),
         committed: Vec::new(),
         rolled_back: true,
+        survivors: Box::default(),
     }
     .to_string();
     // ここも設計の逐語の書式。2 つの `PathBuf` が引用符無しで出る。
@@ -306,6 +341,10 @@ fn io_keeps_what_was_committed_and_whether_it_was_rolled_back() {
         target_ghost: None,
         existing: ExistingState::New,
     };
+    let survivor = SurvivingTree {
+        destination: PathBuf::from(r"C:\root\ghost\emo2"),
+        path: PathBuf::from(r"C:\root\.nar-work\1-0\old-0"),
+    };
     let err = NarError::Io {
         archive: PathBuf::from(r"C:\samples\emo2.nar"),
         phase: IoPhase::Rollback,
@@ -313,17 +352,20 @@ fn io_keeps_what_was_committed_and_whether_it_was_rolled_back() {
         source: std::io::Error::other("失敗"),
         committed: vec![element.clone()],
         rolled_back: false,
+        survivors: vec![survivor.clone()].into(),
     };
     match err {
         NarError::Io {
             phase,
             committed,
             rolled_back,
+            survivors,
             ..
         } => {
             assert_eq!(phase, IoPhase::Rollback);
             assert_eq!(committed, vec![element]);
             assert!(!rolled_back);
+            assert_eq!(*survivors, [survivor]);
         }
         other => panic!("Io を期待した: {other}"),
     }

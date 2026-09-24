@@ -24,6 +24,7 @@ use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::time::{Duration, SystemTime};
 
 /// 確定（要件 5.10・5.11・6.4・6.6）の兄弟テスト。1 ファイル 1,000 行の上限に
 /// 収めるために分けただけで、助手も固定入力もここから借りる。
@@ -658,7 +659,8 @@ fn fails_when_this_runs_own_work_folder_cannot_be_swept() {
         .open(&held)
         .expect("掴んだままのファイルを作れる");
 
-    let failure = prepare_shelf(&shelf, &mine).expect_err("番地を空にできないので失敗する");
+    let failure = prepare_shelf(&shelf, &mine, SystemTime::now())
+        .expect_err("番地を空にできないので失敗する");
 
     assert_eq!(failure.path, mine, "失敗したパスが分かる");
     assert!(held.exists(), "掴まれた物は消えていない");
@@ -673,10 +675,97 @@ fn a_stale_work_folder_is_swept_even_when_the_name_is_this_runs_own() {
     let mine = shelf.join(format!("{}-0", std::process::id()));
     make_tree(&mine, &[("0/leftover.txt", b"leftover")]);
 
-    let residue = prepare_shelf(&shelf, &mine).expect("消せるので通る");
+    let residue = prepare_shelf(&shelf, &mine, SystemTime::now()).expect("消せるので通る");
 
     assert_eq!(residue, Vec::<std::path::PathBuf>::new(), "残り物は無い");
     assert!(!mine.exists(), "番地は空になっている");
+}
+
+/// 巻き戻せなかった元の木（`old-` の退避先）を持つ作業フォルダは、期限の内側なら
+/// 片付けで消さず、残り物として報告する（要件 2.7）。
+#[test]
+fn a_work_folder_holding_a_surviving_tree_is_kept_within_the_retention() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let kept = work.path().join(".nar-work").join("999999-0");
+    make_tree(&kept, &[("old-0/descript.txt", b"original")]);
+
+    let area = WorkArea::create_at(work.path(), SystemTime::now()).expect("作業フォルダを作れる");
+
+    assert_eq!(
+        tree(&kept),
+        expect_tree(&[("old-0/", b""), ("old-0/descript.txt", b"original")]),
+        "元の木はバイト列のまま残る"
+    );
+    assert_eq!(
+        area.residue(),
+        std::slice::from_ref(&kept),
+        "残っている物として報告される"
+    );
+    assert_ne!(area.path(), kept.as_path(), "自分の番地とは別");
+}
+
+/// 期限を 1 秒でも過ぎたら、元の木を含んでいても今までどおり消す（要件 2.8・2.10）。
+///
+/// 期限の起点は作業フォルダの更新時刻なので、それを読んで「期限＋1 秒」の時刻を渡す。
+/// 実際の日数は待たない。
+#[test]
+fn a_work_folder_holding_a_surviving_tree_is_swept_once_the_retention_has_passed() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let expired = work.path().join(".nar-work").join("999999-0");
+    make_tree(&expired, &[("old-0/descript.txt", b"original")]);
+    let modified = fs::metadata(&expired)
+        .and_then(|meta| meta.modified())
+        .expect("更新時刻を読める");
+    let now = modified + SURVIVOR_RETENTION + Duration::from_secs(1);
+
+    let area = WorkArea::create_at(work.path(), now).expect("作業フォルダを作れる");
+
+    assert!(!expired.exists(), "期限を過ぎた作業フォルダは消える");
+    assert_eq!(area.residue(), &[] as &[std::path::PathBuf], "残り物は無い");
+}
+
+/// 更新時刻が今より未来（時計の巻き戻し）なら経過 0 として保持側へ倒し、
+/// ちょうど期限に達したら消す側へ倒す。
+#[test]
+fn a_future_mtime_is_kept_and_the_exact_retention_is_swept() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let entry = work.path().join(".nar-work").join("999999-0");
+    make_tree(&entry, &[("old-0/descript.txt", b"original")]);
+    let modified = fs::metadata(&entry)
+        .and_then(|meta| meta.modified())
+        .expect("更新時刻を読める");
+
+    assert!(
+        is_retained(&entry, modified - Duration::from_secs(3600)),
+        "未来の更新時刻は保持"
+    );
+    assert!(
+        !is_retained(&entry, modified + SURVIVOR_RETENTION),
+        "ちょうど期限に達したら保持しない"
+    );
+}
+
+/// 自分の番地の候補が保持中なら、それを避けて次の番地を取る。
+///
+/// 連番の供給源を 0 始まりの閉包で渡し、プロセス全体の連番（並走するテストが進める）に
+/// 依らずに判定する。
+#[test]
+fn the_own_address_skips_a_candidate_that_is_being_kept() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let shelf = work.path().join(".nar-work");
+    let pid = std::process::id();
+    make_tree(&shelf.join(format!("{pid}-0")), &[("old-0/", b"")]);
+
+    let mut serial = 0..;
+    let address = next_address(&shelf, SystemTime::now(), || {
+        serial.next().expect("連番は尽きない")
+    });
+
+    assert_eq!(
+        address,
+        shelf.join(format!("{pid}-1")),
+        "保持中の番地を避ける"
+    );
 }
 
 /// 棚の場所がフォルダでなければ、黙って続けずに失敗を返す。

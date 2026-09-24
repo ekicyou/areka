@@ -32,7 +32,7 @@
 //! 持たない（兄弟テストが字面で見張る）。
 
 use crate::error::{ManifestWarning, RefuseReason};
-use crate::names::{EntryName, is_valid_one_level_name};
+use crate::names::{EntryName, bounded_value, is_valid_one_level_name};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
 use std::collections::{BTreeMap, BTreeSet};
@@ -227,7 +227,7 @@ fn check_one_level(key: &str, value: &str) -> Result<(), RefuseReason> {
     } else {
         Err(RefuseReason::InvalidDirectoryName {
             key: key.to_owned(),
-            value: value.to_owned(),
+            value: bounded_value(value),
         })
     }
 }
@@ -288,7 +288,7 @@ fn parse_mask(key: &str, value: &str, warnings: &mut Vec<ManifestWarning>) -> Ve
         } else {
             warnings.push(ManifestWarning::InvalidMaskEntry {
                 key: key.to_owned(),
-                value: element.to_owned(),
+                value: bounded_value(element),
             });
         }
     }

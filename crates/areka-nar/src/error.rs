@@ -18,7 +18,7 @@ macro_rules! refuse_reasons {
         $(#[$variant_attr:meta])*
         $variant:ident { $( $(#[$field_attr:meta])* $field:ident : $ty:ty ),* $(,)? }
     ),* $(,)?) => {
-        /// 拒否の理由。13 変種で閉じる（要件 9.2）。
+        /// 拒否の理由。14 変種で閉じる（要件 9.2）。
         ///
         /// `kind()` が返す短い語をそのまま `OnInstallFailure` の理由に写せる。
         #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -59,6 +59,10 @@ refuse_reasons! {
     /// エントリ名を復号できない（置換文字が出た＝要件 2.4）。
     #[error("エントリ {index} の名前を {encoding} として復号できない（生バイト {raw_hex}）")]
     NameUndecodable { index: usize, raw_hex: String, encoding: &'static str },
+
+    /// エントリ名が長すぎる（要件 1.1〜1.4）。名前の全体は持たず、先頭の有界の一部だけを持つ。
+    #[error("エントリ {index} の名前が長すぎる（{length} 単位・上限 {limit}・先頭 {head}…）")]
+    PathTooLong { index: usize, length: usize, limit: usize, head: String },
 
     /// シンボリックリンクのエントリ（要件 2.7）。
     #[error("エントリ {index}（{name}）はシンボリックリンク")]
@@ -202,6 +206,15 @@ pub struct InstalledElement {
     pub existing: ExistingState,
 }
 
+/// 巻き戻せなかった宛先 1 つぶんの、元の中身が生き残っている場所（要件 2.1）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SurvivingTree {
+    /// 元へ戻せなかった宛先（利用者から見えるインストール済みフォルダ）。
+    pub destination: PathBuf,
+    /// その宛先の確定前の中身がそのまま残っているフォルダ（作業フォルダの直下 old-<k>）。
+    pub path: PathBuf,
+}
+
 /// `.nar` の読取・展開が返す失敗。
 ///
 /// `std::io::Error` を持つので `Clone`／`PartialEq` は導出できない。
@@ -226,6 +239,10 @@ pub enum NarError {
         committed: Vec<InstalledElement>,
         /// `committed` を元に戻せたか。
         rolled_back: bool,
+        /// 元へ戻せなかった宛先ごとの生き残り。巻き戻せた・掘る前・新規の宛先を消す手だけが
+        /// 躓いた場合は空。全て失敗の記録の work の配下に在る。`Vec` でなく `Box<[_]>` なのは、
+        /// `NarError` を包む呼び手の失敗の型を clippy の `result_large_err` の閾値の下に保つため。
+        survivors: Box<[SurvivingTree]>,
     },
 }
 
