@@ -75,7 +75,7 @@
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.8, 4.2, 5.2, 9.4, 9.5_
   - _Depends: 1.2_
 
-- [ ] 5. `main` への結線とダミー窓の退役
+- [x] 5. `main` への結線とダミー窓の退役
 - [x] 5.1 起動前の解決の結線と既定パスの撤去
   - `main` の構成入力の位置（`WinApp` 構築の前）を「根 → 列挙 → ゴースト解決 → バルーン解決 → `ConfigInputs`」へ置き換える。argv がある側は列挙も記憶も読まず、argv のゴーストは「ゴーストか」の 1 検査だけ
   - 根・ゴースト・バルーンが決まらなければ告知の口を呼んで `Err(E_FAIL)`（終了コード 1）を返す。`root_resolved`・`ghost_resolved`・`balloon_resolved`（経路と場所）の `info!` を残す
@@ -93,7 +93,7 @@
   - ダミー窓とフォールバックに触れる doc（`main.rs` 冒頭・smoke 自動終了のログ文言・placement の doc コメント）を言い換える（コードは placement では触らない）
   - 完了の姿: `cargo test -p areka --bins` が緑で、`DummyWindow`／`spawn_dummy_window`／`is_benign_placement_error` の出現が `crates/` で 0 件、`main.rs`・`boot_config.rs` が 1,000 行の目安の内側
   - _Requirements: 6.4, 6.6, 7.2, 7.4, 7.6, 9.2_
-- [ ] 5.3 boot 成功の直後に記憶を書く
+- [x] 5.3 boot 成功の直後に記憶を書く
   - wired／fallback の両アームで、boot が `Ok` を返した直後（`insert_persist_wiring` と同じ場所）に起動成功時の記憶の書き込みを 1 回呼ぶ。シェルのフォルダ名は `mount().shell.dir` の末尾を写す
   - 完了の姿: `cargo build -p areka` が通り、書き込みの呼び出しが boot `Ok` の直後の 1 か所だけ
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 9.5_

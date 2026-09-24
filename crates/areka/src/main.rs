@@ -119,7 +119,7 @@ pub(crate) use boot_config::{
 mod alert;
 
 /// 起動解決の純粋な判断（ゴースト 6 分岐・バルーン 7 分岐）と既定の定数。
-/// 起動前の解決は `boot_config::resolve_boot` が結線する（記憶の書き込みの結線は task 5.3）。
+/// 起動前の解決は `boot_config::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
 mod boot_resolve;
 
 // ---------------------------------------------------------------------------
@@ -152,9 +152,9 @@ fn main() -> Result<()> {
     // 起動前の解決（baseware-root-layout design「起動解決（WinApp 構築の前）」）:
     // 根 → ゴースト → バルーン → 構成入力。決まらなければ告知して終了コード 1 で終える
     // （要件 1.4・4.7・4.8・5.8・6.3）。`warn!` で起動を続ける経路は作らない（要件 6.6）。
-    // 決まった経路とフォルダは boot の分岐まで持ち越す（task 5.3 が記憶の書き込みに使う）。
+    // 決まった経路とフォルダは boot の分岐まで持ち越す（boot 成功直後の記憶の書き込みに使う）。
     let args: Vec<String> = std::env::args().collect();
-    let (cfg, _ghost_decision, _balloon_decision) = match resolve_boot(&args) {
+    let (cfg, ghost_decision, balloon_decision) = match resolve_boot(&args) {
         Ok(resolved) => resolved,
         Err(scene) => {
             alert::raise(&scene, alert::suppressed());
@@ -243,10 +243,12 @@ fn main() -> Result<()> {
             // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
             // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
             // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
-            // write-through 導管を確立する。
-            insert_persist_wiring(
+            // write-through 導管を確立する。続けて起動成功時の記憶を書く（baseware-root-layout 要件 3）。
+            on_boot_ok(
                 app.world().borrow_mut().world_mut(),
-                runtime.sylphya_publisher().clone(),
+                runtime,
+                &ghost_decision,
+                &balloon_decision,
             );
         }
         // バルーン選択肢対話配線を World へ結線（task 6.2・design「main.rs＋wire_balloon_choice」・
@@ -282,9 +284,12 @@ fn main() -> Result<()> {
                 // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
                 // 生きた runtime があれば wired 経路と同型に PersistWiring（NonSend）を同一 World へ
                 // 挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。
-                insert_persist_wiring(
+                // 起動成功時の記憶の書き込みも wired 経路と同じ 1 か所で行う（baseware-root-layout 要件 3）。
+                on_boot_ok(
                     app.world().borrow_mut().world_mut(),
-                    runtime.sylphya_publisher().clone(),
+                    &runtime,
+                    &ghost_decision,
+                    &balloon_decision,
                 );
                 Some(runtime)
             }
@@ -440,6 +445,37 @@ fn restore_merged_placements(
 /// を薄く包み `#[cfg(test)]` の檻に入れる）。
 fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
     world.insert_non_send(placement::persist::PersistWiring { publisher });
+}
+
+/// boot が `Ok` を返した直後の結線（wired／fallback の両アームが呼ぶ 1 か所）。
+///
+/// 位置永続の導管を挿入し（[`insert_persist_wiring`]）、続けて起動成功時の記憶を書く
+/// （baseware-root-layout 要件 3.2〜3.5・design「起動窓の準備と記憶の書き込み」）。書き込みは
+/// 投函だけで待たない（反映は `shutdown` の barrier に任せる＝design R1）。シェルのフォルダ名は
+/// `mount().shell.dir` の末尾（非 UTF-8 は `to_string_lossy` で写す＝design の Integration）。
+fn on_boot_ok(
+    world: &mut World,
+    runtime: &areka_ghost::GhostRuntime,
+    ghost: &boot_resolve::GhostDecision,
+    balloon: &boot_resolve::BalloonDecision,
+) {
+    insert_persist_wiring(world, runtime.sylphya_publisher().clone());
+    let shell_dir = &runtime.mount().shell.dir;
+    let Some(shell_folder) = shell_dir.file_name().map(|n| n.to_string_lossy()) else {
+        // `<ゴースト>/shell/<名>` の形で末尾が無いことは起きない。来たら書かずに残す。
+        tracing::error!(
+            event = "last_used_shell_folder_missing",
+            shell_dir = %shell_dir.display(),
+            "[main] シェルのフォルダ名が取れないので記憶を書きません"
+        );
+        return;
+    };
+    boot_resolve::LastUsed {
+        ghost,
+        balloon,
+        shell_folder: &shell_folder,
+    }
+    .record(runtime.sylphya_publisher());
 }
 
 /// 起動時モニタスナップショットの構築＋出力シーム（areka-P0-dpi-window-vanish task 1.2・

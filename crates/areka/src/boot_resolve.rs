@@ -16,7 +16,7 @@ use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
 
 // 判断と記憶の直読みの消費者は起動前の解決（`boot_config::resolve_boot`）。記憶の書き込み
-// （[`LastUsed`]）は task 5.3 で結線するので、それまでは項目に限って dead_code を許す（5.3 で外す）。
+// （[`LastUsed`]）の消費者は boot 成功直後の `main::on_boot_ok`。
 
 /// 既定ゴースト（要件 4.4・4.11。配布物に必ず同梱＝裁定 3）。
 pub(crate) const DEFAULT_GHOST_FOLDER: &str = "emo2";
@@ -263,7 +263,6 @@ pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
 }
 
 /// 起動成功時に書く内容（要件 3.2〜3.5・裁定 5）。
-#[allow(dead_code)]
 pub(crate) struct LastUsed<'a> {
     pub ghost: &'a GhostDecision,
     pub balloon: &'a BalloonDecision,
@@ -276,7 +275,6 @@ impl LastUsed<'_> {
     /// （常に）を投函する。argv で決まった側は書かず info を残す。投函だけで待たない
     /// （反映は `GhostRuntime::shutdown` の barrier に任せる＝design R1）。
     /// `areka.last.shell` は書くだけで起動の解決には使わない（要件 3.8）。
-    #[allow(dead_code)]
     pub(crate) fn record(&self, publisher: &SylphyaPublisher) {
         let ghost = remembered(
             self.ghost.route == GhostRoute::Argv,
