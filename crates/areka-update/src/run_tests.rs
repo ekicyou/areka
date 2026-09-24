@@ -1,14 +1,20 @@
-//! 一周の入口・定義ファイル・差分 0 の経路（要件 1.1〜1.4・1.16・1.17・2.5・2.6・7.1・8.1〜8.3・9.3）。
+//! 一周の入口・定義ファイル・差分 0・n 件の更新・確定の失敗の経路
+//! （要件 1.1〜1.4・1.16・1.17・2.5・2.6・4.2〜4.8・5.1・5.3・5.8・6.1・6.7・7.1・8.1〜8.3・9.3）。
 //!
 //! 各経路で、戻り値の形・観測者が受けた進捗の列・レベル別の記録件数・取得口の呼出・
 //! 木のバイト単位の同一性を同時に判定する。
 
 use super::*;
-use crate::testkit::{FakeFetch, dau, tree, txt};
+use crate::md5::md5_hex;
+use crate::paths::WORK_DIR;
+use crate::testkit::{FakeFetch, Pinned, dau, hold, pe_image, pin, tree, txt};
 use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::WorkDir;
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 const HOME: &str = "http://example.test/ghost/";
 const MD5_ABC: &str = "900150983cd24fb0d6963f7d28e17f72";
@@ -330,4 +336,223 @@ fn run_does_not_spawn_a_thread() {
     .unwrap();
 
     assert_eq!(threads, vec![caller, caller]);
+}
+
+/// 要取得 1 件分の進捗 2 つ（`DownloadBegin` → `Md5Compared`・一致）。
+fn fetched(file: &str, bytes: &[u8], index: usize, total: usize) -> [Progress; 2] {
+    let md5 = md5_hex(bytes);
+    [
+        Progress::DownloadBegin {
+            file: file.to_owned(),
+            index,
+            total,
+        },
+        Progress::Md5Compared {
+            file: file.to_owned(),
+            expected: md5.clone(),
+            actual: md5,
+            matched: true,
+        },
+    ]
+}
+
+#[test]
+fn n_files_are_committed_in_definition_order_then_delete_txt_is_applied() {
+    let f = fixture();
+    fs::write(f.target.join("b.txt"), b"old b").unwrap();
+    fs::write(f.target.join("c.txt"), b"abc").unwrap();
+    fs::write(f.target.join("old.txt"), b"stale").unwrap();
+    let jp = "日本/a b.txt";
+    // delete.txt は更新で届く＝確定の後に適用しないと `old.txt` は消えない（6.1）。
+    let files: [(&str, &[u8]); 4] = [
+        ("a.txt", b"A"),
+        (jp, b"JP"),
+        ("b.txt", b"new b"),
+        ("delete.txt", b"old.txt\r\n"),
+    ];
+    let md5s: Vec<String> = files.iter().map(|(_, b)| md5_hex(b)).collect();
+    let manifest = dau(
+        &[
+            &["a.txt", &md5s[0], "charset=UTF-8"],
+            &[jp, &md5s[1]],
+            &["b.txt", &md5s[2]],
+            &["c.txt", MD5_ABC],
+            &["delete.txt", &md5s[3]],
+        ],
+        true,
+    );
+    let jp_url = url("%E6%97%A5%E6%9C%AC/a%20b.txt");
+    let fetch = FakeFetch::new()
+        .serve(&url("updates2.dau"), &manifest)
+        .serve(&url("a.txt"), files[0].1)
+        .serve(&jp_url, files[1].1)
+        .serve(&url("b.txt"), files[2].1)
+        .serve(&url("c.txt"), b"abc")
+        .serve(&url("delete.txt"), files[3].1);
+
+    let ran = go(HOME, &f.target, &fetch);
+
+    let names: Vec<String> = files.iter().map(|(n, _)| n.to_string()).collect();
+    let removed = vec![f.target.join("old.txt")];
+    match ran.result.as_ref().expect("n 件の更新は成功") {
+        UpdateOutcome::Updated {
+            manifest: ManifestName::Updates2Dau,
+            placed,
+            removed: r,
+            undeletable,
+            leftovers,
+        } => {
+            assert_eq!(
+                placed, &names,
+                "置いた一覧は定義の順・定義ファイルを含まない"
+            );
+            assert_eq!(r, &removed);
+            assert!(undeletable.is_empty() && leftovers.is_empty());
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(
+        fetch.calls(),
+        vec![
+            url("updates2.dau"),
+            url("a.txt"),
+            jp_url,
+            url("b.txt"),
+            url("delete.txt")
+        ],
+        "URL は更新先＋符号化済みのパス・同じ物は取らない"
+    );
+    let mut expected = vec![
+        Progress::ManifestFetched {
+            name: ManifestName::Updates2Dau,
+        },
+        Progress::DiffDecided {
+            files: names.clone(),
+        },
+    ];
+    for (i, (name, bytes)) in files.iter().enumerate() {
+        expected.extend(fetched(name, bytes, i, files.len()));
+    }
+    expected.push(Progress::Committed { placed: names });
+    expected.push(Progress::Deleted { removed });
+    assert_eq!(ran.seen, expected);
+    // 作業場所が消え、定義ファイルが対象直下に届いたバイト列のまま置かれ、old.txt が消えた。
+    let after: BTreeMap<String, Vec<u8>> = [
+        ("a.txt", &b"A"[..]),
+        ("b.txt", b"new b"),
+        ("c.txt", b"abc"),
+        ("delete.txt", b"old.txt\r\n"),
+        ("updates2.dau", &manifest),
+        ("日本/", b""),
+        (jp, b"JP"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_owned(), v.to_vec()))
+    .collect();
+    assert_eq!(tree(&f.target), after);
+    assert_eq!(ran.count(tracing::Level::ERROR), 0, "{:?}", ran.records);
+    assert_eq!(ran.count(tracing::Level::WARN), 0, "{:?}", ran.records);
+    assert_eq!(ran.count(tracing::Level::INFO), 2, "{:?}", ran.records);
+}
+
+/// `a.dll`（新規）→ `sub/x.txt`（新規・親を作る）→ `b.txt`（既存）の順の定義。
+fn three_ending_with_existing(f: &Fixture, a_bytes: &[u8]) -> FakeFetch {
+    let manifest = dau(
+        &[
+            &["a.dll", &md5_hex(a_bytes)],
+            &["sub/x.txt", &md5_hex(b"x")],
+            &["b.txt", &md5_hex(b"new b")],
+        ],
+        true,
+    );
+    fs::write(f.target.join("b.txt"), b"old b").unwrap();
+    FakeFetch::new()
+        .serve(&url("updates2.dau"), &manifest)
+        .serve(&url("a.dll"), a_bytes)
+        .serve(&url("sub/x.txt"), b"x")
+        .serve(&url("b.txt"), b"new b")
+}
+
+#[test]
+fn failure_mid_commit_rolls_back_and_cleans_up_the_work_area() {
+    let f = fixture();
+    let fetch = three_ending_with_existing(&f, b"A");
+    let before = tree(&f.target);
+    // 退避の `rename` が拒まれる＝3 件目で確定が止まる（5.2・5.4）。
+    let held = hold(&f.target.join("b.txt"));
+
+    let ran = go(HOME, &f.target, &fetch);
+    drop(held);
+
+    let err = ran.result.as_ref().expect_err("確定の途中で失敗");
+    assert_eq!(err.reason.kind(), "CommitWrite", "{err}");
+    assert_eq!(err.stage, Stage::Commit);
+    assert_eq!(err.file(), Some("b.txt"));
+    assert!(err.rolled_back());
+    assert!(err.work.is_none() && err.leftovers.is_empty(), "{err:?}");
+    assert_eq!(
+        tree(&f.target),
+        before,
+        "置いた 2 件・作った親・作業場所まで開始前と同一"
+    );
+    assert!(
+        !ran.seen
+            .iter()
+            .any(|p| matches!(p, Progress::Committed { .. } | Progress::Deleted { .. })),
+        "{:?}",
+        ran.seen
+    );
+    assert_eq!(ran.count(tracing::Level::ERROR), 1, "{:?}", ran.records);
+    assert_eq!(ran.count(tracing::Level::INFO), 1, "{:?}", ran.records);
+}
+
+#[test]
+fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
+    let f = fixture();
+    // 1 件目は PE。3 件目を取る時点で `new/a.dll` を写したまま持ち、置いた後の削除を拒ませる
+    // （較正は commit_tests・tasks.md 4.2）。3 件目は掴まれていて確定が止まる。
+    let fetch = three_ending_with_existing(&f, &pe_image());
+    let pinned: Rc<RefCell<Option<Pinned>>> = Rc::default();
+    let shelf = f.target.join(WORK_DIR);
+    let fetch = {
+        let (pinned, shelf, b_url) = (pinned.clone(), shelf.clone(), url("b.txt"));
+        fetch.on_get(move |u| {
+            if u == b_url {
+                let dir = fs::read_dir(&shelf)
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .path();
+                *pinned.borrow_mut() = Some(pin(&dir.join("new").join("a.dll")));
+            }
+        })
+    };
+    let held = hold(&f.target.join("b.txt"));
+
+    let ran = go(HOME, &f.target, &fetch);
+    drop(held);
+    let was_pinned = pinned.borrow_mut().take().is_some();
+
+    assert!(was_pinned, "注入が走っていない");
+    let err = ran.result.as_ref().expect_err("戻せなかった");
+    let FailReason::RollbackFailed {
+        stuck, restored, ..
+    } = &err.reason
+    else {
+        panic!("{err}");
+    };
+    // 定義ファイルは最後の 1 件＝止まった時点ではまだ置いていない（5.3）。
+    assert_eq!(restored, &["sub/x.txt"]);
+    assert_eq!(
+        stuck.iter().map(|s| s.file.as_str()).collect::<Vec<_>>(),
+        ["a.dll"]
+    );
+    assert_eq!(err.stage, Stage::Commit);
+    assert!(!err.rolled_back());
+    let work = err.work.as_ref().expect("作業場所のパスを返す");
+    assert!(work.is_dir(), "{}", work.display());
+    assert_eq!(work.parent(), Some(shelf.as_path()));
+    assert!(err.leftovers.is_empty(), "{err:?}");
+    assert_eq!(ran.count(tracing::Level::ERROR), 1, "{:?}", ran.records);
 }
