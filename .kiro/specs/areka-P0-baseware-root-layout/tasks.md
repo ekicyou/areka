@@ -56,7 +56,7 @@
   - _Depends: 2.3_
 
 - [ ] 4. 起動解決の判断と記憶の読み書き `boot_resolve`
-- [ ] 4.1 ゴースト 6 分岐・バルーン 7 分岐の純粋な判断
+- [x] 4.1 ゴースト 6 分岐・バルーン 7 分岐の純粋な判断
   - 既定の定数 `DEFAULT_GHOST_FOLDER = "emo2"`・`DEFAULT_BALLOON_FOLDER = "StayseeBalloon"` をこのファイルだけに置き、ゴーストは段 4・バルーンは段 5 だけが参照する
   - ゴースト: argv → 記憶（列挙に在れば）→ 唯一 → 既定 → 無作為 → 0 体。バルーン: argv → 記憶 → 同梱 → 唯一 → 既定 → 無作為 → 0。argv があれば記憶・列挙を見ない
   - 記憶・同梱の指す先が列挙に無ければ `warn!`（`last_ghost_not_found`／`last_balloon_not_found`／`companion_balloon_not_found`）して次の段へ、無作為は `info!`（`ghost_picked_randomly`／`balloon_picked_randomly`）を残す
