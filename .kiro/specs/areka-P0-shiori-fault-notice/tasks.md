@@ -131,6 +131,7 @@
   - spec フォルダの `signoff.md` に 3 走行のコマンド・終了コード・目印の件数が残っている
   - _Depends: 5.3_
   - _Requirements: 7.7, 7.8_
+  - _Blocked: 実機で 2 件の欠陥が出て開発者の裁定待ち（2026-09-25）。(1) i686 helper 経路で応答の期限切れが「通信が切れた」に写り「期限内に返らなかった」に届かない＝`crates/shiori-host32-ipc` の `send_copydata_with` が `SendMessageTimeoutW` の戻り 0 を理由を見ずに `SendFailed` にする（直す先は design の境界外の host32 送信層）。(2) 告知の箱のモーダルループの中で `run()` 復帰後のフレームが 1 回まわり `reconcile_window_registry` が取り除き済みの NonSend を要求して panic＝wintf の tick タスクが `run()` 後も生きている（直す先は design が「無改変」とした wintf）。詳細は `signoff.md`_
 
 ## Implementation Notes
 
