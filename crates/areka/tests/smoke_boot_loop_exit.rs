@@ -12,6 +12,8 @@
 //!   同梱バルーンを `route=Companion` で決め、本物のゴースト窓で完走し **exit 0**（要件 1.6）。
 //! - **③ 0 体方向**（argv なし・空の一時の根）: 「ゴーストが見つかりません」の告知（`error!`）を
 //!   残し、本物の窓を開かずに **非 0** で終わる（窓 0 で居座らない）。
+//! - **④ 失敗方向**（SHIORI を `loadu` が偽を返す検証用 DLL にした emo2 の複製）: 告知の記録を
+//!   1 件残して **非 0** で終わる（areka-P0-shiori-fault-notice 要件 4.3〜4.5）。
 //!
 //! 全方向で `AREKA_NO_ALERT=1`（告知のモーダルで番犬の締切まで止まらない・要件 9.2）。
 //! ②③ の `AREKA_PROFILE_DIR` は一時フォルダ（開発者のアプリの記憶を読まず・書かない）。
@@ -379,5 +381,71 @@ fn empty_root_direction_alerts_ghost_missing_and_exits_nonzero() {
     assert!(
         !all.contains(REAL_WINDOWS),
         "ゴースト 0 体で本物のゴースト窓が開くのは契約外。\n--- child output ---\n{all}"
+    );
+}
+
+/// ④ 失敗方向（要件 4.3〜4.5）: emo2 の複製の SHIORI を検証用 DLL（`shiori_loadu.dll`）へ差し替え、
+/// `HOST32_TESTDLL_LOADU_FAIL=1` で `loadu` を偽にして起動する。自動終了（20 秒）より先に
+/// 「接続できなかった」が起き、告知は抑止のうえ記録だけ残して **非 0** で終わる。
+#[test]
+fn fault_direction_shiori_connect_failure_exits_nonzero_with_one_alert() {
+    ensure_helper_beside_areka();
+    let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
+    let ghost_root = emo2.folder();
+    let balloon_root = emo2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
+    let master = ghost_root.join("ghost/master");
+    // SHIORI を検証用 DLL にした最小の descript（本番コードに口を足さない・要件 4.4）。
+    std::fs::write(
+        master.join("descript.txt"),
+        "charset,UTF-8\r\nname,emo2-fault\r\nshiori,shiori_loadu.dll\r\n\
+         seriko.defaultsurfacedirectoryname,master\r\n",
+    )
+    .expect("descript.txt の差し替え");
+    ensure_i686_artifact("shiori_loadu.dll", "HOST32_TESTDLL_LOADU_DLL", &master);
+    let profile = TempPath::new("smoke-fault-profile");
+
+    let (status, out, err) = run_smoke(
+        &[
+            ghost_root.to_str().expect("検体パスは UTF-8"),
+            balloon_root.to_str().expect("検体パスは UTF-8"),
+        ],
+        &[
+            ("HOST32_TESTDLL_LOADU_FAIL", "1"),
+            // 失敗（数秒）を自動終了より先に起こす。見張り 60 秒の内側（要件 4.5）。
+            ("AREKA_APP_SMOKE_EXIT_MS", "20000"),
+            (
+                "AREKA_PROFILE_DIR",
+                profile.path().to_str().expect("一時パスは UTF-8"),
+            ),
+        ],
+    );
+    let all = format!("{out}\n{err}");
+
+    if accepted_as_no_monitor(status, &all) {
+        return;
+    }
+    assert!(
+        !status.success(),
+        "SHIORI の失敗で終わるときは非 0 で終わるべきですが status={status:?} でした。\
+         \n--- child output ---\n{all}"
+    );
+    // 告知の記録（`event="alert"` の行）のうち題名を持つものだけを数える（要件 3.5）。
+    // ④ の失敗は `loadu` の偽なので、種類は「接続できなかった」でなければならない（要件 4.4）。
+    let n = all
+        .lines()
+        .filter(|l| {
+            l.contains("event=\"alert\"")
+                && l.contains(SHIORI_FAULT_TITLE)
+                && l.contains("SHIORI に接続できなかった")
+        })
+        .count();
+    assert_eq!(
+        n, 1,
+        "「{SHIORI_FAULT_TITLE}」の告知の記録はちょうど 1 件のはずが {n} 件。\
+         \n--- child output ---\n{all}"
+    );
+    assert!(
+        all.contains(REAL_WINDOWS),
+        "窓は出てから閉じるはず（本物のゴースト窓の目印なし）。\n--- child output ---\n{all}"
     );
 }

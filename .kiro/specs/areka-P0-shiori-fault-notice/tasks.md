@@ -99,7 +99,7 @@
   - x64 で `cargo build -p areka` と areka の全テストが緑。Fault 以外の終了経路の終了コード 0 は変わらない
   - _Requirements: 1.1, 1.2, 1.6, 1.10, 1.11, 1.12, 3.1, 3.2, 3.3, 6.3, 6.4, 8.1, 8.4_
 
-- [ ] 5. 常設 smoke で無人の走行を確かめる
+- [x] 5. 常設 smoke で無人の走行を確かめる
 - [x] 5.1 i686 の 2 成果物を建てる
   - PowerShell で `cargo build -p shiori-host32-helper -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` を走らせる（smoke ①②④ と実機が使う helper と検証用 DLL）
   - `target/i686-pc-windows-msvc/debug/` に `shiori-host32-helper.exe` と `shiori_loadu.dll` の 2 つがあり、どちらも最新のソースから建っている（2026-09-24 のタスク生成時点で建て済み。target を掃除したら建て直す）
@@ -111,7 +111,7 @@
   - i686 の helper がある環境で ①②③ が緑
   - _Requirements: 4.1, 4.2_
 
-- [ ] 5.3 ④ 失敗方向を足す
+- [x] 5.3 ④ 失敗方向を足す
   - 同梱の emo2 の複製の descript を「SHIORI は検証用 DLL」の最小内容に差し替え、検証用 DLL を複製の中へ置き、`loadu` を偽にする環境変数・告知の抑止・自動終了 20 秒・一時のプロファイルで起動する
   - 判定: モニタ 0 台なら既存の受理で返る。そうでなければ見張り 60 秒の内側で終わり、終了コードが 0 以外、告知の題名を含む行がちょうど 1 件、窓の目印あり
   - 環境変数が helper へ届かず終了コード 0 で赤になったら、本番コードに口を足さず検証用 DLL（test crate）の側を環境変数なしで `loadu` が偽を返す形に直す
