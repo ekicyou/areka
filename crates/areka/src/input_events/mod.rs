@@ -35,10 +35,10 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 ///
 /// 本 struct と送出ヘルパは task 2.6 の範囲。ポインタハンドラ（`on_char_pointer_moved` /
 /// `on_char_pointer_pressed`）と強制退避（Ctrl+左ダブルクリック）は task 2.7。`wire_mouse_input`
-/// による World 挿入（main.rs の boot 成功後呼出）は task 3.1 で結線済み＝`new` は本番から到達可能。
+/// による World 挿入（`ghost_session::boot_ghost` の boot 成功後呼出）は task 3.1 で結線済み＝`new` は本番から到達可能。
 /// 送出ヘルパ群はポインタハンドラ経由でのみ参照される。ハンドラのキャラ窓登録は本モジュールの
 /// [`attach_char_pointer_handlers`]（依存方向 input_events→placement。stand-in `on_ghost_pressed`
-/// を退役して差し替え・main.rs が spawn 直後に呼ぶ）で完了済み＝本番消費者が到達したため
+/// を退役して差し替え・`ghost_session::open_ghost_windows` が spawn 直後に呼ぶ）で完了済み＝本番消費者が到達したため
 /// dead_code 抑止は不要になった。
 ///
 /// 例外はメニュー側（`menu`）から呼ばれる 3 つである: 右ダブルクリックの預かりの取り出しと送出
@@ -314,10 +314,11 @@ impl MouseWiring {
     }
 }
 
-/// boot 成功後に main から呼ぶ（task 3.1・DD-IE-9）。
+/// boot 成功後に `ghost_session::boot_ghost` からゴーストごとに呼ぶ（状態の載せ替え＝n 回・系は
+/// 登録しない・task 3.1・DD-IE-9）。
 ///
 /// kanade Sender クローンで `MouseWiring`（NonSend・`RegionSource::Presenter`）を World へ挿入する。
-/// `Emo2Wiring` 挿入と同型（emo2_boot/mod.rs:341-345）・self-gating＝窓 spawn と挿入の順序に
+/// `Emo2Wiring` 挿入（`wire_emo2_boot` の `insert_non_send`）と同型・self-gating＝窓 spawn と挿入の順序に
 /// 依存しない（click-through 登録と同型）。窓へのポインタハンドラ登録は task 3.2（spawn.rs）。
 ///
 /// `wire_emo2_boot` 成功時（`wired=true`）に呼ばれる前提で `Presenter` を選ぶ。boot 成功時は
@@ -343,7 +344,7 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 /// # タイミング契約
 ///
 /// `spawn_ghost_windows` の**直後**に同一 `&mut World` クロージャ内で呼ぶこと
-/// （キャラ窓が既に存在する状態・main.rs の `open_startup_window` 結線）。同一
+/// （キャラ窓が既に存在する状態・`ghost_session::open_ghost_windows` の窓を作るクロージャ）。同一
 /// World-mutation 内で同期実行するため async race はない。
 pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
     // `&mut World` を借用中にクエリで別の可変借用を取れないため、まず対象 entity を
@@ -366,7 +367,7 @@ pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
 // 署名は `fn(&mut World, sender: Entity, entity: Entity, ev: &Phase<PointerState>) -> bool`
 // （`wintf::ecs::pointer::PointerEventHandler`）。Bubble 相のみ処理し Tunnel は no-op false
 // （伝播続行）。キャラ窓への登録は本モジュールの `attach_char_pointer_handlers`（依存方向
-// input_events→placement・main.rs が spawn 直後に呼ぶ）で行う＝stand-in `on_ghost_pressed`
+// input_events→placement・`ghost_session::open_ghost_windows` が spawn 直後に呼ぶ）で行う＝stand-in `on_ghost_pressed`
 // を退役して `OnPointerMoved`／`OnPointerPressed` へ差し替え。
 // ---------------------------------------------------------------------------
 

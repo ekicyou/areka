@@ -342,9 +342,10 @@ fn finish_after_run(
 
 /// 復元マージのシーム抽出（task 6.1・design C4・要件 1.4/1.5/5.1/6.1）。
 ///
-/// `open_startup_window` の Ok アームが `spawn_ghost_windows` へ渡す placements を、起動時に
-/// 先読みした永続 entries で差し替える（保存位置優先・毎起動 live 再射影）。`open_startup_window`
-/// は実 `WinApp` を要してテスト困難ゆえ、純粋シーム（load→apply）を本ヘルパへ抽出し単体で
+/// `ghost_session::open_ghost_windows` が `spawn_ghost_windows` へ渡す placements を、起動時に
+/// 先読みした永続 entries で差し替える（保存位置優先・毎起動 live 再射影）。
+/// `ghost_session::open_ghost_windows` は実モニタの列挙と作業プール（`WintfTaskPool`）を要して
+/// テスト困難ゆえ、純粋シーム（load→apply）を本ヘルパへ抽出し単体で
 /// 檻に入れる（IO は [`placement::persist::load_restored_state`] の 1 点のみ・merge は純関数）。
 ///
 /// `default_encoding` は boot 結線・`source.rs` と同一の [`areka_parsers::charset::DefaultEncoding`]
@@ -446,7 +447,7 @@ fn on_boot_ok(
 /// 両者の食い違いは grep 突合で検出できる（D12: 専用の突合機構は新設しない）。
 ///
 /// 観測を足すだけで snapshot の中身は一切変えない（D2: 観測増設は Req 2.7 の
-/// 「変更」に数えない）。生きた `WinApp` を要する `open_startup_window` から切り出した
+/// 「変更」に数えない）。実モニタを列挙する `ghost_session::open_ghost_windows` から切り出した
 /// シームゆえ、合成モニタで headless 檻に入る。
 ///
 /// # 2 源を同じ構築関数で作る（atom task 5.1・要件 5.1）
@@ -493,7 +494,7 @@ fn smoke_exit_ms() -> Option<u64> {
 
 /// smoke の自動終了ゲート（task 2.3）の headless 単体テスト。
 ///
-/// ランタイム結線（`open_startup_window`）は生きた `WinApp` を要し headless では駆動できないため、
+/// ランタイム結線（`fn main` の自動終了の仕掛け）は生きた `WinApp` を要し headless では駆動できないため、
 /// 判断を持つ `smoke_exit_ms_from` だけを純粋・env 非依存で検証する（結線は実プロセス smoke が担う）。
 #[cfg(test)]
 #[path = "main_startup_window_tests.rs"]
@@ -515,8 +516,8 @@ mod ghost_wiring_tests;
 
 /// 復元マージシーム（task 6.1・design C4・要件 1.4/1.5）の headless 単体テスト。
 ///
-/// `open_startup_window` は実 `WinApp`（実 UI ランタイム）を要するためテスト困難ゆえ、
-/// その Ok アームが `spawn_ghost_windows` へ渡す placements を作る純粋シーム
+/// `ghost_session::open_ghost_windows` は実モニタの列挙と作業プールを要するためテスト困難ゆえ、
+/// それが `spawn_ghost_windows` へ渡す placements を作る純粋シーム
 /// （`restore_merged_placements`＝`load_restored_state`→`apply_restored_placements`）を
 /// 抽出して檻に入れる。植えた sylphya.toml の保存位置が既定位置に優先して merge 済み
 /// placements の char_pos へ載ること（1.4）／永続不在なら既定 placement に恒等（1.5）を
@@ -528,7 +529,7 @@ mod restore_seam_tests;
 /// `PersistWiring` 挿入シーム（task 6.2・design C4/C5・要件 1.9）の headless 単体テスト。
 ///
 /// wired／fallback 両経路が使う挿入ヘルパ `insert_persist_wiring` を檻に入れる。
-/// シーム結線そのもの（`main` の boot 経路分岐）は生きた `WinApp` を要するため、TDD は
+/// シーム結線そのもの（`ghost_session::boot_ghost` の boot 経路分岐）は実 boot を伴うため、TDD は
 /// headless で駆動可能な挿入ヘルパで回す。実 publisher（`spawn_sylphya`＋共有 fake IO）を
 /// headless World へ挿入し、(a) NonSend リソース `PersistWiring` が存在すること、(b) その
 /// World 越しの `persist_entries` 投函が barrier 後に別ハンドルの `load_scope` で読み戻せる
@@ -541,7 +542,7 @@ mod persist_wiring_seam_tests;
 /// 起動時モニタスナップショット出力シーム（areka-P0-dpi-window-vanish task 1.2・
 /// 要件 1.1・design D12「areka 構築点を正典」）の headless 単体テスト。
 ///
-/// `open_startup_window` は生きた `WinApp` を要してテスト困難ゆえ、その Ok アームが
+/// `ghost_session::open_ghost_windows` は実モニタを列挙してテスト困難ゆえ、それが
 /// `MonitorSnapshot` を組む点＝**placement の全判断が読む権威の構築点**を
 /// [`boot_monitor_snapshot`] へ抽出し、合成モニタ（混在 DPI・負座標・3200 超）で檻に入れる。
 /// 実モニタも実 GPU も要さない。

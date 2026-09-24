@@ -188,11 +188,14 @@ impl MenuWiring {
     }
 }
 
-/// メニューを起動に結ぶ。boot 成功後に `main.rs` から 1 回だけ呼ぶ（入力の結線の直後）。
+/// メニューを起動に結ぶ。boot 成功後に `ghost_session::boot_ghost` からゴーストごとに呼ぶ
+/// （入力の結線の直後・状態の載せ替え＝n 回。系の登録は [`register_menu_poll`] を
+/// `ghost_session::register_systems` からプロセスに 1 回）。
 ///
 /// 行うのは結線状態の挿入・組込 2 項目の登記までで、**窓には触れない**（返事の取り出しの
-/// 登録は [`register_menu_poll`]）。呼ばれるのは `app.run()` の前で、キャラクター窓はまだ 1 枚も無いからである（窓を作る
-/// クロージャは `app.run()` の最初の数 tick で動く）。解放ハンドラはそのクロージャが
+/// 登録は [`register_menu_poll`]）。呼ばれるのは窓を作るクロージャが動くより前（1 度目は
+/// `app.run()` の前）で、キャラクター窓はまだ 1 枚も無いからである（窓を作る
+/// クロージャは `app.run()` の中の tick で動く）。解放ハンドラはそのクロージャが
 /// [`attach_release_handlers`] で付ける。
 ///
 /// 運行（kanade）への送り口は照会（`KanadeMsg::ResourceQuery`）に使う。
@@ -229,9 +232,11 @@ pub(crate) fn register_menu_poll(world: &mut World) {
 ///
 /// # タイミング契約
 ///
-/// キャラクター窓を作った**直後**に、同じ `&mut World` クロージャの中で呼ぶこと（`main.rs` の
-/// `open_startup_window` が `input_events::attach_char_pointer_handlers` の隣で呼ぶ）。付くのは
-/// 呼ばれた時点に在る窓だけなので、窓を作り直す spec は作り直した窓へもう一度呼ぶ。既に付いて
+/// キャラクター窓を作った**直後**に、同じ `&mut World` クロージャの中で呼ぶこと
+/// （`ghost_session::open_ghost_windows` の窓を作るクロージャが
+/// `input_events::attach_char_pointer_handlers` の隣で呼ぶ）。付くのは呼ばれた時点に在る窓
+/// だけだが、窓を作り直す `ghost_session::reopen_ghost_windows` も同じ `open_ghost_windows` を
+/// 通るので、作り直した窓へもこのクロージャが付け直す。既に付いて
 /// いる窓へ呼んでも、同じハンドラで置き換わるだけで害は無い。
 ///
 /// [`wire_menu`] との前後は問わない。ハンドラは結線（`MenuWiring`／`MouseWiring`）が無ければ

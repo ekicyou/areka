@@ -5,7 +5,8 @@
 //!
 //! 判断は純関数 2 本（[`judge_press`]・[`fold_no_user_break`]）が担い、持ち物
 //! [`UserBreakWiring`]・旗の取り出し [`drain_no_user_break_signals`]・押下の入口 [`on_left_press`] が
-//! それを World の上で動かす。持ち物を World へ据えて取り出しを登録する結線が [`wire_user_break`]。
+//! それを World の上で動かす。持ち物を World へ据える結線が [`wire_user_break`]（ゴーストごと）、
+//! 取り出しの登録が [`register_user_break_drain`]（`ghost_session::register_systems` からプロセスに 1 回）。
 
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -158,7 +159,8 @@ pub(crate) fn drain_no_user_break_signals(world: &mut World) {
 /// 中断の持ち物を World へ入れる（`fn wire_readme`・`crates/areka/src/readme.rs` と同型）。
 /// 旗の取り出しの登録は [`register_user_break_drain`] が行う。
 ///
-/// 呼び手は boot 成功後の `wire_emo2_boot`（1 回の実行につき 1 度だけ）。
+/// 呼び手は boot 成功後の `wire_emo2_boot`（`ghost_session::boot_ghost` からゴーストごとに n 回＝
+/// 状態の載せ替え。系の登録は `ghost_session::register_systems` からプロセスに 1 回）。
 pub(crate) fn wire_user_break(
     world: &mut World,
     flag_rx: Receiver<NoUserBreakSignal>,

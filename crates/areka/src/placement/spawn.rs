@@ -37,7 +37,7 @@
 //!   メニューの「終了」が送る（結線済みの Ctrl+左ダブルクリックの入口は areka-P0-popup-menu-minimal
 //!   で除去）。Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが強制退避
 //!   （終了の統合操作＝全窓を閉じてから終了を指示する→`run()` 正常復帰）である。いずれも
-//!   input_events 側ハンドラ／main.rs の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
+//!   input_events 側ハンドラ／`ghost_session` の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
 //!   全窓を閉じる操作は本モジュールには置かず、終了の指示と 1 つにした `app_exit::quit_app`
 //!   に限る（全窓を閉じるだけの操作はクレート内に無い）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
@@ -67,7 +67,7 @@
 //! [`wire_zorder_pair`] が実行時ストラテジ（既定＝案 A・補助浮上なし）を明示挿入し、
 //! **挿入した当の値を起動時ログへ 1 行残し**（要件 5.6・実機ゲートの結論をバイナリ自身が
 //! 名乗る）、wintf の確立系 → ペア維持系 → 鎖の適用系を clickthrough 登録と同じ確定段
-//! （`FrameFinalize`）へこの順で載せる。呼び手は main.rs の起動窓シーム（同 1.1／5.6／6.1）。
+//! （`FrameFinalize`）へこの順で載せる。呼び手は `ghost_session::register_systems`（プロセスに 1 回・同 1.1／5.6／6.1）。
 //! 3 本目の鎖の適用系は areka-P0-scope-zorder-pinning task 3.2 の追加であり、順序と
 //! 同期点の両方に意味がある（[`wire_zorder_pair`] の doc「なぜ順序を付けるのか」）。
 
@@ -361,7 +361,8 @@ impl GhostWindows {
     /// 連鎖の再解決から常に除外され、既定位置へ引き戻されない。未知スコープは no-op
     /// （panic せず `false`）。
     ///
-    /// 呼び手は復元マージを行う `main.rs` の起動シームのみ（保存位置が入り込む唯一の経路）。
+    /// 呼び手は復元マージの結果を受ける `ghost_session::open_ghost_windows` の窓を作るクロージャのみ
+    /// （保存位置が入り込む唯一の経路）。
     pub fn clear_default_char_pos(&mut self, scope: usize) -> bool {
         match self.windows.get_mut(&scope) {
             Some(w) => {
@@ -532,7 +533,8 @@ pub fn spawn_ghost_windows(
         // 宣言はスコープ内ペアにのみ張り、スコープ間には一切張らない——これが
         // 「スコープ間の上下関係を固定規則で決めない」（要件 3.1）と「是正時に当該
         // スコープの 2 窓しか動かさない」（要件 3.4）の構造的な根拠である。
-        // 宣言を消費する確立系・維持系（wintf 側）の結線は main.rs が行う。
+        // 宣言を消費する確立系・維持系（wintf 側）の登録は `wire_zorder_pair` が
+        // `ghost_session::register_systems` からプロセスに 1 回行う。
         //
         // **この宣言がスコープ間を張らないことは今も変わらない**が、スコープ間の列が
         // engine の中に一切現れない、という意味ではなくなった——作者が `\![set,zorder,…]`
@@ -559,7 +561,7 @@ pub fn spawn_ghost_windows(
                 char_window,
                 balloon_window,
                 // spawn へ渡る placements が resolver 既定である前提で `Some` を置く。
-                // 保存位置が復元された場合は起動シーム（`main.rs`）が直後に
+                // 保存位置が復元された場合は起動シーム（`ghost_session::open_ghost_windows`）が直後に
                 // `clear_default_char_pos` で `None` へ落とす（scg 7.3）。
                 default_char_pos: Some(p.char_pos),
             },

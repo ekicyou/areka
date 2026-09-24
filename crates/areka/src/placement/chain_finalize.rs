@@ -156,7 +156,7 @@ pub fn moved_default_pos(current: PointPx, new_x: i32) -> PointPx {
 /// 診断を出すまでに待つフレーム数（有界の待ち・scg 6.5）。
 ///
 /// 呼び手（`emo2_boot::frame::emo2_frame_system`）は 60Hz の tick ループから毎フレーム確定を
-/// 試みるため、**約 10 秒**ぶんに相当する。窓は `open_startup_window` の時点で既に生えており、
+/// 試みるため、**約 10 秒**ぶんに相当する。窓は起動窓（`ghost_session::open_ghost_windows`）の時点で既に生えており、
 /// この待ちで残るのは GPU 装着と初回 `ShowSurface` の landing だけゆえ、正常起動が閾値に届く
 /// ことはない（＝正常系で診断が出ない余裕を持たせた値）。
 pub const CHAIN_FINALIZE_STALL_FRAMES: u32 = 600;

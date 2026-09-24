@@ -8,7 +8,7 @@
 //! 依存方向（レイヤ規律・design.md「依存方向（レイヤ規律）」）:
 //! `target_map`（純粋・std のみ）→ `adapter`（seriko/emo-present 型）→ `talk_clock`（sakura 型＋clock）
 //! → `assets`（parsers/atlas/compose/seriko/emo-present）→ `frame`（bevy_ecs World・emo-present/emo-text 駆動）
-//! → `main.rs`（全結線）。左のモジュールは右を import しない。
+//! → `ghost_session.rs`／`main.rs`（全結線）。左のモジュールは右を import しない。
 //!
 //! 本ファイル群は Foundation タスク（tasks.md task 1）の骨格であり、各サブモジュールの
 //! 機能実装は後続タスク（2〜6）が担う。
@@ -187,7 +187,8 @@ impl From<ShellLoadError> for BootWiringError {
 // wire_emo2_boot」）— 完成済み 5 トラックを束ねる最後の一結線（M-boot の心臓部）。
 // ===========================================================================
 
-/// `wire_emo2_boot` の結果（design「Service Interface」・main が終了処理で消費する）。
+/// `wire_emo2_boot` の結果（design「Service Interface」・`ghost_session::boot_ghost` が
+/// `GhostSession` へ束ね、終了処理（`GhostSession::shutdown`）で消費する）。
 ///
 /// - `ghost`: boot 成立時の [`areka_ghost::GhostRuntime`]（フォールバック時は `None`）。
 /// - `seriko`: seriko アクターの [`areka_actor::ActorHandle`]（フォールバック時は `None`）。
@@ -201,7 +202,7 @@ pub struct Emo2BootOutcome {
     /// 実 sink 結線が成立したか（`false` = `LogSink` フォールバック）。
     pub wired: bool,
     /// SERIKO ループ ticker（16ms 実時計・[`spawn_loop_ticker`]）の停止端。
-    /// `main`（task 9.5）の終了処理が [`TickerMsg::Close`] を送って ticker を止める
+    /// 終了処理（`GhostSession::shutdown`・task 9.5）が [`TickerMsg::Close`] を送って ticker を止める
     /// （フォールバック時は ticker を起こさないため `None`）。
     pub loop_ticker: Option<std::sync::mpsc::Sender<TickerMsg>>,
 }
@@ -229,7 +230,7 @@ pub struct Emo2BootInputs {
 ///
 /// emo2 fixture は sakura（scope0）＋kero（scope1）の 2 scope 構成であり、placement の
 /// `detect_scopes`（scope0 常設・`kero.*` 存在で scope1）も emo2 に対し `[0, 1]` を返す。
-/// placement の実結果は `open_startup_window` の async クロージャへ move 済みで同期参照不能
+/// placement の実結果は `ghost_session::open_ghost_windows` の async クロージャへ move 済みで同期参照不能
 /// （DD-12）ゆえ、本関数が同じ scope 集合を独立に導出する。導出の二元性（placement の動的
 /// `detect_scopes` との厳密一致は取らない）は M1 受容トレードオフとして増分申し送り（design
 /// line 460）。窓と資産の不一致は [`frame::plan_attachments`]（DD-12）が missing/unused へ分類し
@@ -315,7 +316,7 @@ const _: fn() = || {
 /// 1. [`build_boot_assets_for`]（`scopes` は [`derive_scopes`] で placement と同じ入力から自前導出・
 ///    DD-12。作者基準 DPI は引数 `author_dpi`＝placement の準備が読んだ値をそのまま搬送・
 ///    task 4.3）。`Err` は [`classify_wiring_error`]（起点不在＝`warn!`・他＝`error!`・R7.3）の上
-///    `wired=false` を返し、呼び手（`main`）の `LogSink`×2 フォールバック boot へ委ねる。
+///    `wired=false` を返し、呼び手（`ghost_session::boot_ghost`）の `LogSink`×2 フォールバック boot へ委ねる。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
 ///    （UI スレッド前提。`Err` は [`BootWiringError::SpawnUi`] 分類＋`wired=false` フォールバック）。
 /// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入）／[`ClockedTextSink::new`]。
@@ -337,7 +338,7 @@ const _: fn() = || {
 ///
 /// # 失敗（log-first・panic しない・R7.3）
 /// いずれの手順の失敗も `warn!`／`error!`＋`Emo2BootOutcome{ ghost: None, seriko: None,
-/// wired: false }` へ縮退し、`main` の現行 `LogSink`×2 boot（既存 smoke 温存）へ委ねる。boot 成立後の
+/// wired: false }` へ縮退し、`ghost_session::boot_ghost` の `LogSink`×2 boot（既存 smoke 温存）へ委ねる。boot 成立後の
 /// spawn 済み seriko は、boot 失敗時 `surface_sink` drop で inbox 切断→worker 自然終了ゆえ handle を
 /// drop（非 RAII・detach）して打ち切る（hang させない）。
 pub fn wire_emo2_boot(
@@ -347,7 +348,7 @@ pub fn wire_emo2_boot(
     zorder_descript: Option<&str>,
     kanade_stop: Sender<KanadeStopped>,
 ) -> Emo2BootOutcome {
-    /// 実 sink 結線を成立させないフォールバック結果（`main` の `LogSink`×2 boot へ委ねる・R7.3）。
+    /// 実 sink 結線を成立させないフォールバック結果（`ghost_session::boot_ghost` の `LogSink`×2 boot へ委ねる・R7.3）。
     fn fallback() -> Emo2BootOutcome {
         Emo2BootOutcome {
             ghost: None,
@@ -369,7 +370,7 @@ pub fn wire_emo2_boot(
     // 失敗（fixture 不在等）は分類 warn/error の上 wired=false フォールバックへ倒す（R7.3）。
     let scopes = derive_scopes();
     // 作者基準 DPI（design Flow 3 手順1）は placement の準備が **1 度だけ**読んだ値を
-    // `main` シームから受け取る（採寸 k₀ と attach が同じ宣言を見る・task 4.3）。
+    // `main` から `ghost_session::boot_ghost` 経由で受け取る（採寸 k₀ と attach が同じ宣言を見る・task 4.3）。
     // 隣接 u16 2 引数への落とし込みは [`build_boot_assets_for`] 1 箇所に閉じる。
     let assets = match build_boot_assets_for(&ghost_root, &balloon_root, &scopes, author_dpi) {
         Ok(assets) => assets,
@@ -597,8 +598,8 @@ pub fn wire_emo2_boot(
         wiring_assets,
     );
     // shell 設定（`seriko.zorder`）由来の基底を、World へ載せる前に据える（要件 5.1／5.2／
-    // 5.3／5.4・areka-P0-scope-zorder-pinning task 6.3）。ここはまだ最初の `Update` の
-    // 手前であり、取り出しの相も 1 度も走っていない——ゆえに基底は**タグの実行を待たずに**
+    // 5.3／5.4・areka-P0-scope-zorder-pinning task 6.3）。ここはまだこの結線状態で走る
+    // 最初の `Update` の手前であり、取り出しの相も 1 度も走っていない——ゆえに基底は**タグの実行を待たずに**
     // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
@@ -668,11 +669,11 @@ pub fn register_emo2_frame_system(world: &mut World) {
         .add_systems(Update, emo2_frame_system.after(update_typewriters));
 }
 
-/// 停止通知の受け口を World に据え、終了相を `Update` に登録する（起動の 2 経路で共通・1 回だけ・
+/// 停止通知の受け口を World に据え、終了相を `Update` に登録する（受け口はプロセスに 1 つ・
 /// 要件 6.4）。
 ///
-/// `ghost_session::register_systems` がプロセスに 1 回、[`register_emo2_frame_system`] の直後に
-/// 呼ぶ。終了相は毎フレームの相より前に走る。順序の相手（毎フレームの相）が登録されていない
+/// 呼び手は `ghost_session::register_systems` で、プロセスに 1 回、[`register_emo2_frame_system`] の
+/// 直後に呼ぶ。終了相は毎フレームの相より前に走る。順序の相手（毎フレームの相）が登録されていない
 /// World でも登録は通る（`frame_schedule_tests` の 1 本がこの形を固定する）。
 pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeStopped>) {
     world.insert_non_send(KanadeStopRx(rx));

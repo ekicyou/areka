@@ -40,8 +40,12 @@ use crate::{ConfigInputs, default_app_profile_dir, ghost_boot_options, is_benign
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
 ///
-/// 今日との差は 1 件: `Input` の 5 系は LogSink の起動でも登録される。5 系はどれも状態が
-/// 無ければ `trace!` だけで戻るので、見え方は変わらない。
+/// 今日との差: `Input` の 5 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
+/// 起動でも登録される。どれも状態（`NonSend`）が無ければ無操作で戻る（記録は `trace!` か無し）
+/// ので、見え方は変わらない。バルーンの離脱の系だけは `BalloonWiring` 不在で
+/// `error!(balloon_wiring_missing)` の枝を持つが、そこへは `PointerLeave` が立ったときにしか
+/// 進まず、LogSink の起動のバルーン窓は `HitTest::none()` のまま（当たり判定の面は結線ありの
+/// 起動でだけ装着する）なので `PointerLeave` が立たず届かない。
 pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<KanadeStopped>) {
     emo2_boot::register_emo2_frame_system(world);
     emo2_boot::wire_kanade_stop(world, kanade_stop_rx);

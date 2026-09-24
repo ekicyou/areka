@@ -25,7 +25,7 @@ use super::balloon::{ChoiceSelection, ChoiceSelectionInbox};
 /// `Sender<KanadeMsg>` 単体は `Send` だが、受信口 [`ChoiceSelectionInbox`]（`Receiver` ゆえ
 /// `!Sync`）と対で UI スレッド固定運用ゆえ NonSend 資源として挿入する（`MouseWiring` 前例）。
 pub(crate) struct ChoiceForwarder {
-    /// `GhostRuntime::kanade()` クローン（main.rs 結線・std mpsc）。
+    /// `GhostRuntime::kanade()` クローン（`ghost_session::boot_ghost` 結線・std mpsc）。
     kanade: Sender<KanadeMsg>,
 }
 
@@ -113,9 +113,10 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
 /// kanade 投函端を NonSend 挿入する（design C1 Contracts・donor `wire_mouse_input` 同型）。
 /// drain 排他システムの登録は [`register_choice_drain`] が行う。
 ///
-/// main.rs の `wire_balloon_choice` 呼出**直後**から `wire_mouse_input` と同型に **1 回・同期**
-/// （schedule 実行外の World 変更）で呼ばれる。同期呼出ゆえ実行中スケジュールを触らず、
-/// `Schedules` 資源が既在の World で成立する。
+/// `ghost_session::boot_ghost` の `wire_balloon_choice` 呼出**直後**から `wire_mouse_input` と
+/// 同型にゴーストごとに**同期**（schedule 実行外の World 変更）で呼ばれる（状態の載せ替え＝n 回。
+/// 系の登録は `ghost_session::register_systems` からプロセスに 1 回）。同期呼出ゆえ実行中
+/// スケジュールを触らない。
 ///
 /// Precondition: `wire_balloon_choice` 済み（[`ChoiceSelectionInbox`] 存在）。
 /// Postcondition: 以降のフレームで受信済み通知は全件送出試行済み・失敗は warn 記録。
