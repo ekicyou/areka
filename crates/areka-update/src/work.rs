@@ -3,8 +3,6 @@
 //! `<対象>/.update-work/<プロセス識別子>-<連番>/` に、落とした物（`new/<相対パス>`）と
 //! 退避した元の内容（`old/<相対パス>`）を置く。`areka-nar` の `.nar-work` と同じ置き方。
 //! 記録はしない（残骸はデータで返し、`lib.rs` が `warn!` に写す）。
-// ponytail: 本番の呼び手（run・commit）が付くまでの間だけ。run から呼んだら外す。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use crate::paths::WORK_DIR;
 use std::fs;
@@ -45,6 +43,7 @@ impl WorkArea {
         Ok(WorkArea { dir, residue })
     }
 
+    #[cfg(test)]
     pub(crate) fn dir(&self) -> &Path {
         &self.dir
     }

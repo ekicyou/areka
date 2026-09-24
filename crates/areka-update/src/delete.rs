@@ -2,8 +2,6 @@
 //!
 //! 確定の後始末なので一周を失敗にしない。拒否・種別の食い違い・読めないファイルは警告、
 //! 取り除けなかった物は `undeletable` に列挙して返す（記録は `lib.rs`）。
-// ponytail: 本番の呼び手（run）が付くまでの間だけ。run から呼んだら外す。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use crate::error::{DeleteWhy, UpdateWarning};
 use crate::outcome::Undeletable;

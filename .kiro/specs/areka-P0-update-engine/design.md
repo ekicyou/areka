@@ -393,7 +393,7 @@ pub fn run(
 4. `Stage::Diff`: `fs::canonicalize(target)` を `target_real` とし（失敗は `LocalUnreadable { path: target }`）、`diff::plan`。`Err` → `LocalUnreadable` または `EscapesTarget`。`Progress::DiffDecided { files }`。要取得 0 件 → `info!` で終了を記録し `Ok(Unchanged { manifest })`（2.5・1.16）。
 5. `Stage::Download { index: 0, total }`: `WorkArea::create(target)`。`Err` → `WorkArea { path, source }`。
 6. 各要取得 `i`（定義の順）: `Progress::DownloadBegin`。`get(file_url)` の `Err` → `FileFetch`（`Stage::Download { i, total }`）。`md5_hex` で照合し `Progress::Md5Compared`。不一致 → `Md5Mismatch`（`Stage::Verify { i, total }`）。`area.put(rel, bytes)` の `Err` → `WorkArea`。バイト列はここで手放す（メモリに全件を溜めない）。
-7. 定義ファイルの生バイト列を `area.put(manifest.name.file_name(), …)`。
+7. 定義ファイルの生バイト列を `area.put(manifest.name.file_name(), …)`。`Err` → `WorkArea`（`Stage::Commit`＝確定の準備。対象フォルダにはまだ触っていない）。
 8. `Stage::Commit`: `commit::commit(target, target_real, &area, files ＋ 定義ファイル名)`。`Ok(placed)` → `Progress::Committed`。`Err(Write)` → `CommitWrite`（戻せた）。`Err(Escapes)` → `EscapesTarget`（それまでに置いた分は戻せた）。`Err(RollbackFailed)` → `RollbackFailed`・作業場所は片付けず `work = Some(area.dir())`。
 9. `delete::apply(target, target_real, manifest.charset)` → `warnings` を `warn!`・`undeletable` も 1 件 1 行の `warn!`・`Progress::Deleted { removed }`。削除は一周を失敗にしない（6.6）。
 10. `area.cleanup()` → 残骸を `Updated::leftovers` に入れ、各 1 件 `warn!`。`info!` で終了（成功・件数）。`Ok(Updated { … })`。
@@ -411,7 +411,7 @@ pub fn run(
 |---|---|---|
 | 開始 | `info!` | `homeurl`・`target` |
 | 終了 | `info!` | `outcome`（`unchanged`／`updated`）・`placed`（件数）・`removed`（件数）・`leftovers`（件数） |
-| 警告（`UpdateWarning` 1 件・取り除けなかった物（`Undeletable`）1 件・残骸（`leftovers`）1 件につき 1 行） | `warn!` | `kind`（変種名・`undeletable`・`leftover`）・変種の欄（`line`・`path`・`name`・`file`・`error` 等） |
+| 警告（`UpdateWarning` 1 件・取り除けなかった物（`Undeletable`）1 件・残骸（`leftovers`）1 件につき 1 行） | `warn!` | `kind`（変種名・`undeletable`・`leftover`）・`detail`（変種の全ての欄を `Debug` で 1 欄に。`line`・`path`・`name`・`file`・`error` 等） |
 | 失敗（`log_failure`・1 行） | `error!` | `homeurl`・`target`・`stage`・`reason`（`kind()`）・`detail`（`Display`）・`file`・`rolled_back`・`work`・`leftovers`（件数） |
 
 #### `error`・`outcome`（契約の型）
@@ -890,7 +890,7 @@ pub(crate) fn sjis(s: &str) -> Vec<u8>;
 | 定義ファイル | `ManifestMissing`・`ManifestFetch` | `Manifest` | 触らない |
 | 差分 | `LocalUnreadable`・`EscapesTarget` | `Diff` | 触らない |
 | 取得と照合 | `WorkArea`・`FileFetch`・`Md5Mismatch` | `Download`／`Verify` | 作業場所だけ（片付ける） |
-| 確定 | `CommitWrite`・`EscapesTarget` | `Commit` | 戻した（同一） |
+| 確定 | `WorkArea`（定義ファイルを作業場所へ書けない）・`CommitWrite`・`EscapesTarget` | `Commit` | `WorkArea` は触らない・他は戻した（同一） |
 | 戻し | `RollbackFailed` | `Commit` | 半端・作業場所を残す |
 
 ### Monitoring

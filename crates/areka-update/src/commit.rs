@@ -4,8 +4,6 @@
 //! 既存の退避 → 置く、の順に進め、各手の取り消しを積む。途中で失敗したら積んだ手を
 //! 逆順に全部試みる。歩くのは `files` だけ＝定義に無いローカルのファイルには触らない（2.3）。
 //! 記録はしない（失敗はデータで返し、`lib.rs` が記録する）。
-// ponytail: 本番の呼び手（run）が付くまでの間だけ。run から呼んだら外す。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use crate::error::Stuck;
 use crate::paths::{local_path, resolves_under};

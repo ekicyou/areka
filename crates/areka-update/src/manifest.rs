@@ -1,6 +1,4 @@
 //! `updates2.dau`／`updates.txt` の読み手（純関数・要件 1.5〜1.10）。
-// ponytail: 本番の呼び手（run）が付くまでの間だけ。run から呼んだら外す。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use crate::error::{InvalidWhy, UpdateWarning};
 use crate::outcome::ManifestName;

@@ -1,6 +1,4 @@
 //! 要取得の選別（要件 2.1・2.3・2.4・2.6）。定義の側だけを定義の順に歩く。
-// ponytail: 本番の呼び手（run）が付くまでの間だけ。run から呼んだら外す。
-#![cfg_attr(not(test), allow(dead_code))]
 
 use crate::manifest::Manifest;
 use crate::md5::md5_hex;
