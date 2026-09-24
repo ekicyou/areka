@@ -1,10 +1,10 @@
 //! 観測の規則: 見分け方（標本点・絵と当たり判定の判別）と数え方（1 フレームの判定）。
 //!
 //! 規則の唯一の定義は design.md §Observer。ここはそれを写しただけで、閾値を変えるなら先に design を直す。
-//! World を読む部分（tick の記録・当たり判定の採取）もここ。観測の窓と集計ログは 2.4 が足す。
-#![allow(dead_code)] // 2.3〜2.4 で使う
+//! World を読む部分（tick の記録・当たり判定の採取）と、観測の窓・集計ログ・較正の合否もここ。
+#![allow(dead_code)] // Kind::FaceSwitch・Calib の他の項などは 3.x の台本が使う
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use areka_emo_compose::ComposedSurface;
 use bevy_ecs::name::Name;
@@ -62,6 +62,8 @@ pub enum Why {
     Dropped,
     CaptureLost,
     OutsideOutput,
+    /// 観測と違う判別対で判別したフレーム（対を切り替える前の tick の直前のフレーム）。
+    OtherPair,
 }
 
 /// 判別対 (P, Q) の標本点。座標は窓（＝面）の左上からの物理 px。色は α=255 の点だけなので色そのもの。
@@ -125,10 +127,40 @@ pub struct Counts {
     pub size: u32,
 }
 
-/// 1 本の観測。窓の開け閉め（30／180 tick）と `complete` は 2.4 が足す。
+/// 較正の項（design §SwapDriver `Calibration`）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Calib {
+    Static,
+    Empty,
+    Mixed,
+    Stale,
+    Size,
+}
+
+/// 観測の種類（最終の並べ出しの順: 較正 → 本番 → 面の切り替え）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Calib(Calib),
+    Swap,
+    FaceSwitch,
+}
+
+/// 観測の閉じ方。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum End {
+    /// 揃って 30 tick 経った。
+    Done,
+    /// 180 tick で揃わなかった。最後に数えたフレームの（絵, 当たり判定, 矩形）。
+    Incomplete(Option<(Class, Class, RECT)>),
+}
+
+/// 1 本の観測。
 #[derive(Debug)]
 pub struct Observation {
     pub name: String,
+    pub kind: Kind,
+    /// 判別対（`Observer::sigs` の添字）。
+    pub pair: usize,
     /// 出発と到達（`Class::P` か `Class::Q`）。
     pub from: Class,
     pub to: Class,
@@ -139,12 +171,20 @@ pub struct Observation {
     /// 揃った最初のフレーム（観測の中の通し番号, tick）。
     pub settled: Option<(u32, u32)>,
     pub counts: Counts,
+    /// 要求の直前のフレームが無かった。
+    pub no_prev: bool,
+    /// `None` は開いたまま（打ち切りの並べ出しでは「途中」）。
+    pub end: Option<End>,
+    /// 猶予で閉じた後に届いた、窓の中の tick と組のフレームの数（数えていない＝取りこぼしと同じく 0 と書かない印）。
+    pub late_dropped: u32,
 }
 
 impl Observation {
     pub fn new(name: &str, sig: &Signature, from: Class, to: Class, request_tick: u32) -> Self {
         Self {
             name: name.to_string(),
+            kind: Kind::Swap,
+            pair: PAIR_ASSET,
             from,
             to,
             size_p: sig.size_p,
@@ -152,6 +192,9 @@ impl Observation {
             request_tick,
             settled: None,
             counts: Counts::default(),
+            no_prev: false,
+            end: None,
+            late_dropped: 0,
         }
     }
 }
@@ -419,15 +462,41 @@ pub struct Shared {
     pub frames: Vec<FrameRecord>,
 }
 
-/// tick の記録に要るもの。
+/// 判別対の名前（行の `pair=`・P／Q の読み替え用）。
+pub const PAIR_NAMES: [&str; 2] = ["(A0,B0)", "(A0,A2)"];
+
+fn lock(m: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
+    m.lock().unwrap_or_else(|p| {
+        error!("共有の記録を持ったまま別のスレッドが panic した — 記録はそのまま使う");
+        p.into_inner()
+    })
+}
+
+/// tick の記録と観測の窓・集計に要るもの。
 #[derive(Resource)]
 pub struct Observer {
     pub window: Entity,
     /// 判別対の標本点（`PAIR_ASSET`・`PAIR_FACE`）。取り込みスレッドも同じものを使う。
     pub sigs: Arc<[Signature; 2]>,
-    /// 今の tick の当たり判定に当てる対。観測が開くまでは `PAIR_ASSET`。
+    /// 今の tick の当たり判定に当てる対。`open` で観測の対に切り替わる。
     pub active: usize,
     pub shared: Arc<Mutex<Shared>>,
+    /// 開いている観測（同時に 1 本だけ）。
+    open: Option<Open>,
+    /// 閉じた観測（閉じた順）。
+    done: Vec<Observation>,
+    /// 猶予で閉じた観測の後から届くフレームの見張り。
+    late: Option<Late>,
+    /// 最終の並べ出しを済ませた（以後は数えない）。
+    finished: bool,
+}
+
+/// 猶予で閉じた観測（`done[done_idx]`）の窓の最後の tick と、次に読む `Shared::frames` の添字。
+#[derive(Clone, Copy, Debug)]
+struct Late {
+    done_idx: usize,
+    last_tick: u32,
+    cursor: usize,
 }
 
 /// 各 tick の最後に、時刻・窓の矩形・実際の当たり判定・覆い・拡大率を共有の記録へ足す。
@@ -472,10 +541,7 @@ pub fn tick_record_system(world: &mut World) {
         slot_hit,
     };
 
-    let mut shared = obs.shared.lock().unwrap_or_else(|p| {
-        error!("共有の記録を持ったまま別のスレッドが panic した — 記録はそのまま使う");
-        p.into_inner()
-    });
+    let mut shared = lock(&obs.shared);
     let last = shared.ticks.last().copied();
     if last.is_none_or(|l| l.k_ok != k_ok) {
         info!(tick, k_ok, ?dpi, "拡大率（k_ok=false の tick は測れない）");
@@ -627,6 +693,378 @@ pub fn judge_frame(obs: &mut Observation, frame: &FrameRecord, tick: &TickRecord
     if native.is_some_and(|s| s != rect_size(&tick.rect)) {
         obs.counts.size += 1;
     }
+}
+
+// ---------------------------------------------------------------------------
+// 観測の窓（design Key Decision 8・§Observer 観測の窓）
+// ---------------------------------------------------------------------------
+
+/// 揃った tick の後に数え続ける tick 数。
+pub const SETTLE_TICKS: u32 = 30;
+/// 要求から揃うまで待つ tick 数（超えたら「未完」）。
+pub const GIVE_UP_TICKS: u32 = 180;
+/// 窓の最後の tick より後のフレームが来ない（画面が変わらない）ときに閉じるまでの猶予の tick 数。
+///
+/// フレームは取り込みの遅れ（`AcquireNextFrame` の待ち 16 ms＋判別）だけ後から共有の記録に届く。
+/// 窓の外のフレームが 1 枚来れば猶予を待たずに閉じる。実測で約 120 tick/s なので 12 tick ≒ 100 ms。
+pub const GRACE_TICKS: u32 = 12;
+
+/// 開いている観測と、共有の記録のどこまで数えたか。
+#[derive(Debug)]
+pub struct Open {
+    obs: Observation,
+    /// 次に読む `Shared::frames` の添字。
+    cursor: usize,
+    /// 要求より前の tick と組になった最後のフレーム（窓の先頭に含める）。
+    prev: Option<(FrameRecord, TickRecord)>,
+    /// 窓の先頭（直前のフレーム）を数え終えた。
+    started: bool,
+    /// 窓の最後の tick より後のフレームが来た（それまでのフレームは届き切っている）。
+    beyond: bool,
+    /// 最後に数えたフレームの（絵, 当たり判定, 矩形）。
+    last: Option<(Class, Class, RECT)>,
+}
+
+impl Open {
+    /// 開いた時点で最後に取り込まれたフレームから読む（要求より前の tick なら直前のフレームの候補。
+    /// 後から遅れて届いた要求より前のフレームがあれば、それに置き換わる）。
+    pub fn new(obs: Observation, s: &Shared) -> Self {
+        Self {
+            obs,
+            cursor: s.frames.len().saturating_sub(1),
+            prev: None,
+            started: false,
+            beyond: false,
+            last: None,
+        }
+    }
+
+    /// 窓の最後の tick（揃ったら揃った tick＋30、揃う前は要求＋180）。
+    fn end_tick(&self) -> u32 {
+        match self.obs.settled {
+            Some((_, t)) => t + SETTLE_TICKS,
+            None => self.obs.request_tick + GIVE_UP_TICKS,
+        }
+    }
+
+    /// 届いたフレームを数え、閉じてよければ `true`。`now` は今の tick。
+    pub fn step(&mut self, s: &Shared, now: u32) -> bool {
+        while !self.beyond && self.cursor < s.frames.len() {
+            let f = s.frames[self.cursor];
+            let t = f.tick.and_then(|n| {
+                s.ticks
+                    .binary_search_by_key(&n, |t| t.tick)
+                    .ok()
+                    .map(|i| s.ticks[i])
+            });
+            let Some(t) = t else {
+                error!(name = %self.obs.name, ?f, "フレームと組の tick の記録が無い — 数えない");
+                self.cursor += 1;
+                continue;
+            };
+            if t.tick < self.obs.request_tick {
+                self.prev = Some((f, t));
+            } else if t.tick > self.end_tick() {
+                self.beyond = true;
+                break;
+            } else {
+                self.start();
+                self.judge(f, t);
+            }
+            self.cursor += 1;
+        }
+        self.beyond || now >= self.end_tick() + GRACE_TICKS
+    }
+
+    /// 窓の先頭として直前のフレームを数える（1 回だけ）。
+    fn start(&mut self) {
+        if std::mem::replace(&mut self.started, true) {
+            return;
+        }
+        match self.prev.take() {
+            Some((f, t)) => self.judge(f, t),
+            None => {
+                self.obs.no_prev = true;
+                info!(name = %self.obs.name, "直前のフレーム無し");
+            }
+        }
+    }
+
+    fn judge(&mut self, mut f: FrameRecord, t: TickRecord) {
+        if t.pair != self.obs.pair {
+            f.picture = Class::Unmeasurable(Why::OtherPair);
+        }
+        judge_frame(&mut self.obs, &f, &t);
+        self.last = Some((f.picture, t.hit, t.rect));
+    }
+
+    /// 閉じる（揃っていれば「完了」、揃っていなければ「未完」）。集計の 1 行を出す。
+    pub fn close(mut self) -> Observation {
+        self.start();
+        self.obs.end = Some(match self.obs.settled {
+            Some(_) => End::Done,
+            None => End::Incomplete(self.last),
+        });
+        info!("観測: {}", row(&self.obs));
+        self.obs
+    }
+}
+
+impl Observer {
+    pub fn new(window: Entity, sigs: Arc<[Signature; 2]>, shared: Arc<Mutex<Shared>>) -> Self {
+        Self {
+            window,
+            sigs,
+            active: PAIR_ASSET,
+            shared,
+            open: None,
+            done: Vec::new(),
+            late: None,
+            finished: false,
+        }
+    }
+
+    /// 要求 tick で観測を開く。当たり判定はこの tick の記録から `pair` で判別する
+    /// （tick の記録より前の段で呼ぶこと）。前の観測が開いたままなら、それを閉じてから開く。
+    pub fn open(
+        &mut self,
+        pair: usize,
+        kind: Kind,
+        name: &str,
+        from: Class,
+        to: Class,
+        request_tick: u32,
+    ) {
+        self.scan_late(&lock(&self.shared.clone()));
+        if self.open.is_some() {
+            error!(next = name, "前の観測が開いたまま次を開く — 前のを今閉じる");
+            self.close_open();
+        }
+        let obs = Observation {
+            kind,
+            pair,
+            ..Observation::new(name, &self.sigs[pair], from, to, request_tick)
+        };
+        self.active = pair;
+        self.open = Some(Open::new(obs, &lock(&self.shared)));
+        info!(name, pair = PAIR_NAMES[pair], request_tick, "観測を開いた");
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.open.is_none()
+    }
+
+    /// 届いたフレームを開いている観測に数え、窓が終わっていれば閉じる。
+    pub fn step(&mut self, now: u32) {
+        if self.finished {
+            return;
+        }
+        let close = {
+            let shared = self.shared.clone();
+            let s = lock(&shared);
+            self.scan_late(&s);
+            self.open.as_mut().is_some_and(|o| o.step(&s, now))
+        };
+        if close {
+            self.close_open();
+        }
+    }
+
+    /// 開いている観測を閉じる。窓の外のフレームを見ずに（猶予で）閉じたなら、後から届く窓の中の
+    /// フレームを見張る（窓の外のフレームで閉じたなら、それより前のフレームは届き切っている）。
+    fn close_open(&mut self) {
+        let Some(o) = self.open.take() else { return };
+        let late = (!o.beyond).then(|| Late {
+            done_idx: self.done.len(),
+            last_tick: o.end_tick(),
+            cursor: o.cursor,
+        });
+        self.done.push(o.close());
+        if late.is_some() {
+            self.late = late;
+        }
+    }
+
+    /// 猶予で閉じた観測の後に届いた、窓の中の tick と組のフレームを数えて `error!` に出す。
+    fn scan_late(&mut self, s: &Shared) {
+        let Some(mut l) = self.late.take() else {
+            return;
+        };
+        while let Some(f) = s.frames.get(l.cursor) {
+            if f.tick.is_some_and(|t| t > l.last_tick) {
+                return; // 窓の外のフレームが来た: 窓の中のフレームはもう来ない
+            }
+            let o = &mut self.done[l.done_idx];
+            o.late_dropped += 1;
+            error!(
+                name = %o.name,
+                tick = ?f.tick,
+                late_dropped = o.late_dropped,
+                "窓の中のフレームが閉じた後に届いた — 数えていない"
+            );
+            l.cursor += 1;
+        }
+        self.late = Some(l);
+    }
+
+    /// 最終の並べ出し（4.8・6.6）。`partial` は上限時間での打ち切り（開いている観測は「途中」で並べる）。
+    pub fn summarize(&mut self, partial: bool, now: u32) -> Verdict {
+        self.finished = true;
+        let (ticks, frames) = {
+            let shared = self.shared.clone();
+            let s = lock(&shared);
+            self.scan_late(&s);
+            if let Some(o) = self.open.as_mut() {
+                o.step(&s, now);
+            }
+            (s.ticks.len(), s.frames.len())
+        };
+        let open = self.open.take().map(|mut o| {
+            o.start();
+            o.obs
+        });
+        let verdict = calibration_verdict(&self.done);
+        if let Verdict::Failed(names) = &verdict {
+            error!(failed = ?names, "本番の数は無効（較正が期待と違う）");
+        }
+        if partial {
+            info!(
+                closed = self.done.len(),
+                open = open.as_ref().map_or("無し", |o| o.name.as_str()),
+                "打ち切り: 上限時間までに閉じた観測と、開いていた観測（途中）を並べる"
+            );
+        }
+        let group = |k: Kind| match k {
+            Kind::Calib(_) => 0,
+            Kind::Swap => 1,
+            Kind::FaceSwitch => 2,
+        };
+        for (g, label) in ["較正", "本番", "面の切り替え"].into_iter().enumerate() {
+            let rows: Vec<String> = self
+                .done
+                .iter()
+                .chain(open.as_ref())
+                .filter(|o| group(o.kind) == g)
+                .map(row)
+                .collect();
+            info!("{label} {} 行", rows.len());
+            for r in rows {
+                info!("  {r}");
+            }
+        }
+        match floor(&self.done) {
+            Some(f) => info!(
+                floor = f,
+                "反映待ちの床（面の切り替えの pending の大きい方）"
+            ),
+            None => info!("反映待ちの床: 閉じた面の切り替えの観測が無い — 床は無し"),
+        }
+        let calib_run = self
+            .done
+            .iter()
+            .filter(|o| matches!(o.kind, Kind::Calib(_)))
+            .count();
+        match &verdict {
+            Verdict::Passed => info!(
+                calib_run,
+                "較正: 合格（閉じた較正の項の数。0 項も合格とする）"
+            ),
+            Verdict::Failed(names) => error!(calib_run, failed = ?names, "較正: 不合格"),
+        }
+        info!(ticks, frames, "tick とフレームの記録の件数");
+        verdict
+    }
+}
+
+/// 各 tick の最後（tick の記録の後）に、届いたフレームを観測に数える。
+pub fn observe_system(mut observer: ResMut<Observer>, frame: Res<FrameCount>) {
+    observer.step(frame.0);
+}
+
+// ---------------------------------------------------------------------------
+// 較正の合否・床・集計の行
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    Passed,
+    /// 期待と違った較正の観測の名前。
+    Failed(Vec<String>),
+}
+
+/// 閉じた較正の観測から合否を決める（design §Observer 較正の合否）。較正が 0 項なら合格。
+pub fn calibration_verdict(done: &[Observation]) -> Verdict {
+    let failed: Vec<String> = done
+        .iter()
+        .filter(|o| {
+            let c = o.counts;
+            match o.kind {
+                Kind::Calib(Calib::Static) => {
+                    c.frames == 0 || c.mixed + c.empty + c.stale + c.size != 0
+                }
+                Kind::Calib(Calib::Empty) => c.empty == 0,
+                Kind::Calib(Calib::Mixed) => c.mixed == 0,
+                Kind::Calib(Calib::Stale) => c.stale == 0,
+                Kind::Calib(Calib::Size) => c.size == 0,
+                Kind::Swap | Kind::FaceSwitch => false,
+            }
+        })
+        .map(|o| o.name.clone())
+        .collect();
+    if failed.is_empty() {
+        Verdict::Passed
+    } else {
+        Verdict::Failed(failed)
+    }
+}
+
+/// 反映待ちの床: 閉じた面の切り替えの観測の `pending` の大きい方。無ければ `None`。
+pub fn floor(done: &[Observation]) -> Option<u32> {
+    done.iter()
+        .filter(|o| o.kind == Kind::FaceSwitch)
+        .map(|o| o.counts.pending)
+        .max()
+}
+
+/// 集計の 1 行（観測を閉じたときと最終の並べ出しで同じ形）。0 も書く。
+pub fn row(o: &Observation) -> String {
+    let c = o.counts;
+    let end = match o.end {
+        None => "途中".to_string(),
+        Some(End::Done) => "完了".to_string(),
+        Some(End::Incomplete(None)) => "未完（フレーム無し）".to_string(),
+        Some(End::Incomplete(Some((p, h, r)))) => {
+            let (w, hh) = rect_size(&r);
+            format!(
+                "未完（最後: 絵={p:?}・当たり判定={h:?}・矩形={w}x{hh}@({},{})）",
+                r.left, r.top
+            )
+        }
+    };
+    let (sf, st) = match o.settled {
+        Some((i, t)) => (i.to_string(), t.saturating_sub(o.request_tick).to_string()),
+        None => ("-".to_string(), "-".to_string()),
+    };
+    format!(
+        "{} pair={} {end} frames={} missed={} unmeasurable={} mixed={} pending={} empty={} \
+         stale={} size={} late_dropped={} settled_after_frames={sf} settled_after_ticks={st}{}",
+        o.name,
+        PAIR_NAMES[o.pair],
+        c.frames,
+        c.missed,
+        c.unmeasurable,
+        c.mixed,
+        c.pending,
+        c.empty,
+        c.stale,
+        c.size,
+        o.late_dropped,
+        if o.no_prev {
+            " 直前のフレーム無し"
+        } else {
+            ""
+        }
+    )
 }
 
 #[cfg(test)]
@@ -830,6 +1268,305 @@ mod tests {
             picture_rule(false, nan, 0.49, 0.5, 0.0),
             Unmeasurable(Why::Ambiguous)
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // 観測の窓・較正の合否・床・集計の行（2.4）
+    // ---------------------------------------------------------------------
+
+    fn tick_rec(tick: u32, hit: Class) -> TickRecord {
+        TickRecord {
+            tick,
+            pair: PAIR_ASSET,
+            ended_qpc: tick as i64 * 100,
+            rect: RECT {
+                left: 160,
+                top: 160,
+                right: 160 + SQ.0 as i32,
+                bottom: 160 + SQ.1 as i32,
+            },
+            hit,
+            h_p: 0.0,
+            h_q: 0.0,
+            h_both: 0.0,
+            covered: false,
+            k_ok: true,
+            slot_hit: false,
+        }
+    }
+
+    fn frame_at(tick: u32, picture: Class) -> FrameRecord {
+        FrameRecord {
+            present_qpc: tick as i64 * 100 + 50,
+            accumulated: 1,
+            tick: Some(tick),
+            picture,
+            a: 0.0,
+            b: 0.0,
+            ab_p: 0.0,
+            ab_q: 0.0,
+        }
+    }
+
+    /// tick 1..=300 の記録（要求 tick 10 より前は当たり判定 P、以後は Q）。
+    fn shared_p_then_q() -> Shared {
+        Shared {
+            ticks: (1..=300)
+                .map(|t| tick_rec(t, if t < 10 { P } else { Q }))
+                .collect(),
+            frames: Vec::new(),
+        }
+    }
+
+    fn open_p_to_q(s: &Shared) -> Open {
+        let obs = Observation::new("t A0→B0", &sig(), P, Q, 10);
+        Open::new(obs, s)
+    }
+
+    #[test]
+    fn window_starts_at_last_frame_before_request_and_closes_30_ticks_after_settling() {
+        let mut s = shared_p_then_q();
+        s.frames.push(frame_at(8, P));
+        s.frames.push(frame_at(9, P));
+        let mut o = open_p_to_q(&s);
+        // 要求より前の tick のフレームが遅れて届いたら、それが「直前のフレーム」になる（空）。
+        s.frames.push(frame_at(9, Neither));
+        s.frames.push(frame_at(10, P)); // 反映待ち
+        s.frames.push(frame_at(11, Q)); // 揃った（tick 11）→ 閉じるのは tick 41
+        s.frames.push(frame_at(20, Q));
+        s.frames.push(frame_at(41, Q)); // 窓の最後の tick は数える
+        assert!(
+            !o.step(&s, 41),
+            "41 より後のフレームも猶予も無いうちは閉じない"
+        );
+        s.frames.push(frame_at(42, Q)); // 窓の外: 数えないが、閉じてよい印になる
+        assert!(o.step(&s, 42));
+        let obs = o.close();
+        assert_eq!(obs.settled, Some((2, 11)));
+        assert!(!obs.no_prev);
+        assert_eq!(obs.end, Some(End::Done));
+        // 直前（空・当たり P）は空かつ混在、tick 10（絵 P・当たり Q・矩形は Q の寸）は反映待ちかつ大きさの食い違い。
+        assert_eq!(
+            obs.counts,
+            Counts {
+                frames: 5,
+                mixed: 2,
+                pending: 1,
+                empty: 1,
+                size: 1,
+                ..Counts::default()
+            }
+        );
+    }
+
+    #[test]
+    fn window_closes_after_grace_when_no_later_frame_arrives() {
+        let mut s = shared_p_then_q();
+        s.ticks[4].pair = PAIR_FACE; // tick 5 は別の対で記録された
+        s.frames.push(frame_at(5, P));
+        let mut o = open_p_to_q(&s);
+        s.frames.push(frame_at(11, Q)); // 揃った → 閉じるのは tick 41
+        assert!(!o.step(&s, 41 + GRACE_TICKS - 1));
+        assert!(o.step(&s, 41 + GRACE_TICKS));
+        let obs = o.close();
+        assert_eq!(obs.end, Some(End::Done));
+        assert_eq!(obs.settled, Some((1, 11)));
+        // 別の対で判別した直前のフレームは測れない。
+        assert_eq!(
+            obs.counts,
+            Counts {
+                frames: 2,
+                unmeasurable: 1,
+                ..Counts::default()
+            }
+        );
+    }
+
+    #[test]
+    fn window_gives_up_180_ticks_after_request_and_keeps_the_last_pair() {
+        let mut s = shared_p_then_q();
+        s.ticks[99].covered = true; // tick 100 は覆われている
+        let mut o = open_p_to_q(&s); // 直前のフレーム無し
+        s.frames.push(frame_at(100, Q)); // 絵も当たり判定も到達先だが測れない → 揃ったにならない
+        for t in (110..=190).step_by(10) {
+            s.frames.push(frame_at(t, P)); // 反映待ちのまま
+        }
+        assert!(!o.step(&s, 190));
+        s.frames.push(frame_at(191, P));
+        assert!(o.step(&s, 191));
+        let obs = o.close();
+        assert!(obs.no_prev);
+        assert_eq!(obs.settled, None);
+        assert_eq!(
+            obs.end,
+            Some(End::Incomplete(Some((P, Q, tick_rec(190, Q).rect))))
+        );
+        assert_eq!(obs.counts.frames, 10);
+        assert_eq!(obs.counts.unmeasurable, 1);
+        assert_eq!(obs.counts.pending, 9);
+        // 猶予でも閉じる（フレームが 1 枚も来ない）。
+        let s = shared_p_then_q();
+        let mut o = open_p_to_q(&s);
+        assert!(!o.step(&s, 10 + GIVE_UP_TICKS + GRACE_TICKS - 1));
+        assert!(o.step(&s, 10 + GIVE_UP_TICKS + GRACE_TICKS));
+        assert_eq!(o.close().end, Some(End::Incomplete(None)));
+    }
+
+    /// 猶予で閉じた後に届いた窓の中のフレームは、数えずに「遅着」として観測の行に出る。
+    #[test]
+    fn frames_arriving_after_a_grace_close_are_reported_as_late() {
+        let shared = Arc::new(Mutex::new(shared_p_then_q()));
+        let push = |t, pic| shared.lock().unwrap().frames.push(frame_at(t, pic));
+        let mut ob = Observer::new(
+            Entity::PLACEHOLDER,
+            Arc::new([sig(), sig()]),
+            shared.clone(),
+        );
+        ob.open(PAIR_ASSET, Kind::Swap, "t A0→B0", P, Q, 10);
+        push(11, Q); // 揃った → 窓の最後は tick 41
+        ob.step(11);
+        ob.step(41 + GRACE_TICKS); // 窓の外のフレームが来ないまま猶予で閉じる
+        assert!(ob.is_closed());
+        assert_eq!(ob.done[0].counts.frames, 1); // 直前のフレーム無し・tick 11 の 1 枚
+        push(40, Q); // 窓の中 → 遅着
+        ob.step(41 + GRACE_TICKS + 1);
+        push(41, P); // 窓の中 → 遅着（最終の並べ出しでも拾う）
+        ob.summarize(false, 41 + GRACE_TICKS + 2);
+        push(41, Q); // 並べ出しの後は数えない
+        ob.step(41 + GRACE_TICKS + 3);
+        let o = &ob.done[0];
+        assert_eq!(o.late_dropped, 2);
+        assert_eq!(o.counts.frames, 1, "遅着は 4 種にも frames にも数えない");
+        assert!(row(o).contains(" late_dropped=2 "), "{}", row(o));
+
+        // 窓の外のフレームで閉じたときは、後から来るのは窓の外だけなので遅着は 0。
+        let shared = Arc::new(Mutex::new(shared_p_then_q()));
+        let push = |t| shared.lock().unwrap().frames.push(frame_at(t, Q));
+        let mut ob = Observer::new(
+            Entity::PLACEHOLDER,
+            Arc::new([sig(), sig()]),
+            shared.clone(),
+        );
+        ob.open(PAIR_ASSET, Kind::Swap, "t A0→B0", P, Q, 10);
+        push(11);
+        push(42);
+        ob.step(42);
+        assert!(ob.is_closed());
+        push(43);
+        ob.step(43);
+        assert_eq!(ob.done[0].late_dropped, 0);
+    }
+
+    fn closed(kind: Kind, name: &str, counts: Counts) -> Observation {
+        Observation {
+            kind,
+            counts,
+            end: Some(End::Done),
+            ..Observation::new(name, &sig(), P, Q, 0)
+        }
+    }
+
+    #[test]
+    fn calibration_verdict_follows_design() {
+        let c = |f: fn(&mut Counts)| {
+            let mut c = Counts {
+                frames: 3,
+                ..Counts::default()
+            };
+            f(&mut c);
+            c
+        };
+        let good = vec![
+            closed(Kind::Calib(Calib::Static), "calib-static", c(|_| {})),
+            closed(Kind::Calib(Calib::Empty), "calib-empty", c(|c| c.empty = 1)),
+            closed(Kind::Calib(Calib::Mixed), "calib-mixed", c(|c| c.mixed = 2)),
+            closed(Kind::Calib(Calib::Stale), "calib-stale", c(|c| c.stale = 1)),
+            closed(Kind::Calib(Calib::Size), "calib-size", c(|c| c.size = 1)),
+            // 本番の行は合否に関わらない。
+            closed(Kind::Swap, "reattach@update A→B", c(|c| c.mixed = 9)),
+        ];
+        assert_eq!(calibration_verdict(&good), Verdict::Passed);
+        assert_eq!(calibration_verdict(&[]), Verdict::Passed, "較正 0 項は合格");
+
+        let bad = vec![
+            closed(
+                Kind::Calib(Calib::Static),
+                "calib-static",
+                c(|c| c.size = 1),
+            ),
+            closed(
+                Kind::Calib(Calib::Static),
+                "calib-static-0",
+                Counts::default(),
+            ),
+            closed(Kind::Calib(Calib::Empty), "calib-empty", c(|c| c.mixed = 1)),
+            closed(Kind::Calib(Calib::Mixed), "calib-mixed", c(|c| c.empty = 1)),
+            closed(Kind::Calib(Calib::Stale), "calib-stale", c(|c| c.size = 1)),
+            closed(Kind::Calib(Calib::Size), "calib-size", c(|c| c.stale = 1)),
+        ];
+        assert_eq!(
+            calibration_verdict(&bad),
+            Verdict::Failed(vec![
+                "calib-static".into(),
+                "calib-static-0".into(),
+                "calib-empty".into(),
+                "calib-mixed".into(),
+                "calib-stale".into(),
+                "calib-size".into(),
+            ])
+        );
+    }
+
+    #[test]
+    fn floor_is_the_larger_pending_of_face_switches() {
+        let p = |n| Counts {
+            pending: n,
+            ..Counts::default()
+        };
+        assert_eq!(floor(&[closed(Kind::Swap, "x", p(5))]), None);
+        assert_eq!(
+            floor(&[
+                closed(Kind::FaceSwitch, "face-switch@update A0→A2", p(1)),
+                closed(Kind::Swap, "x", p(5)),
+                closed(Kind::FaceSwitch, "face-switch@update A2→A0", p(2)),
+            ]),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn row_spells_out_every_count_including_zeros() {
+        let mut o = closed(
+            Kind::Swap,
+            "remove-then-attach@update A→B",
+            Counts {
+                frames: 7,
+                ..Counts::default()
+            },
+        );
+        o.request_tick = 10;
+        o.settled = Some((2, 13));
+        assert_eq!(
+            row(&o),
+            "remove-then-attach@update A→B pair=(A0,B0) 完了 frames=7 missed=0 unmeasurable=0 \
+             mixed=0 pending=0 empty=0 stale=0 size=0 late_dropped=0 settled_after_frames=2 \
+             settled_after_ticks=3"
+        );
+        o.settled = None;
+        o.no_prev = true;
+        o.end = Some(End::Incomplete(Some((P, Both, tick_rec(1, P).rect))));
+        let r = row(&o);
+        assert!(
+            r.contains("未完（最後: 絵=P・当たり判定=Both・矩形=400x224@(160,160)）"),
+            "{r}"
+        );
+        assert!(
+            r.contains("settled_after_frames=- settled_after_ticks=-"),
+            "{r}"
+        );
+        assert!(r.ends_with("直前のフレーム無し"), "{r}");
+        o.end = None;
+        assert!(row(&o).contains(" 途中 "));
     }
 
     /// 当たり判定の閾値の境（0.9 と 0.1 は含む）。

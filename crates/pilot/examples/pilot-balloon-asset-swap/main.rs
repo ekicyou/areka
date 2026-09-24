@@ -32,7 +32,7 @@ use wintf::WinApp;
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::{
-    FrameFinalize, GraphicsCore, Point, SizeI, Update, Window, WindowHandle, WindowPos,
+    FrameCount, FrameFinalize, GraphicsCore, Point, SizeI, Update, Window, WindowHandle, WindowPos,
     WindowStyle, WucGraphicsResource,
 };
 
@@ -57,7 +57,7 @@ const BALLOON_TARGET: TargetId = TargetId(1);
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // Completed／CalibrationFailed は 2.4・3.1 で使う
+#[allow(dead_code)] // Completed／CalibrationFailed は 3.1 の台本の終わり（completed_reason）で使う
 enum ExitReason {
     Completed,
     CalibrationFailed,
@@ -71,6 +71,15 @@ fn exit_code(reason: ExitReason) -> i32 {
         ExitReason::Deadline => 1,
         ExitReason::InitFailure => 2,
         ExitReason::CalibrationFailed => 3,
+    }
+}
+
+/// 台本を終えたときの終了の理由（較正不合格なら 3）。3.1 の台本の終わりが使う。
+#[allow(dead_code)]
+fn completed_reason(verdict: &observe::Verdict) -> ExitReason {
+    match verdict {
+        observe::Verdict::Passed => ExitReason::Completed,
+        observe::Verdict::Failed(_) => ExitReason::CalibrationFailed,
     }
 }
 
@@ -274,11 +283,12 @@ fn fit_window(stage: &mut Stage, world: &mut World) {
     }
 }
 
-/// 上限時間の検査（唯一の時計）。到達したら理由を出して窓を消し、`run()` を戻す。
-///
-/// 2.4 は打ち切りの集計（それまでの数）をここへ差し込む。
+/// 上限時間の検査（唯一の時計）。到達したら理由と打ち切りの集計（それまでの数）を出して窓を消し、
+/// `run()` を戻す。
 fn deadline_system(
     mut run: ResMut<Run>,
+    mut observer: ResMut<observe::Observer>,
+    frame: Res<FrameCount>,
     windows: Query<(Entity, Option<&WindowHandle>), With<BalloonWindow>>,
     mut commands: Commands,
 ) {
@@ -290,6 +300,7 @@ fn deadline_system(
         limit_ms = run.limit_ms,
         "終了: 上限時間に到達（打ち切り）— 窓を消す"
     );
+    observer.summarize(true, frame.0);
     for (e, wh) in &windows {
         if let Some(wh) = wh {
             // 窓が最後まで画面に出ていたことの控え（要件 3.7）。
@@ -303,21 +314,30 @@ fn deadline_system(
     }
 }
 
-/// 記録の件数と絵の判別の内訳（2.4 の集計が入るまでの確かめ用）。
-fn log_records(shared: &Mutex<observe::Shared>) {
-    let s = shared
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let mut by = std::collections::BTreeMap::<String, u32>::new();
-    for f in &s.frames {
-        *by.entry(format!("{:?}", f.picture)).or_default() += 1;
+/// 使い捨ての仮の観測（2.4 の完了の確かめ）: 最初の表示から 30 tick 後に、静止の観測を 1 本開く。
+/// 3.1 で台本の呼び出し（`Observer::open`）に置き換え、この system ごと消す。
+fn temp_observation_system(
+    stage: Option<NonSend<Stage>>,
+    frame: Res<FrameCount>,
+    mut observer: ResMut<observe::Observer>,
+    mut shown_at: Local<Option<u32>>,
+    mut opened: Local<bool>,
+) {
+    if *opened || stage.is_none_or(|s| s.first.is_some()) {
+        return;
     }
-    tracing::info!(
-        ticks = s.ticks.len(),
-        frames = s.frames.len(),
-        ?by,
-        "tick とフレームの記録の件数（絵の判別の内訳）"
-    );
+    let now = frame.0;
+    if now >= *shown_at.get_or_insert(now) + 30 {
+        *opened = true;
+        observer.open(
+            observe::PAIR_ASSET,
+            observe::Kind::Calib(observe::Calib::Static),
+            "temp-static A0→A0",
+            observe::Class::P,
+            observe::Class::P,
+            now,
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -413,20 +433,17 @@ fn boot_and_run() -> Result<ExitReason, String> {
             limit_ms,
             exit: None,
         });
-        w.world_mut().insert_resource(observe::Observer {
-            window,
-            sigs: sigs.clone(),
-            active: observe::PAIR_ASSET,
-            shared: shared.clone(),
-        });
-        w.add_systems(Update, first_show_system);
+        w.world_mut()
+            .insert_resource(observe::Observer::new(window, sigs.clone(), shared.clone()));
+        w.add_systems(Update, (first_show_system, temp_observation_system).chain());
         w.add_systems(
             FrameFinalize,
             (
                 register_click_through,
                 deadline_system,
-                // tick の最後（窓を消した tick は記録しない）。
-                observe::tick_record_system
+                // tick の最後（窓を消した tick は記録しない）→ 届いたフレームを観測に数える。
+                (observe::tick_record_system, observe::observe_system)
+                    .chain()
                     .after(register_click_through)
                     .after(deadline_system),
             ),
@@ -438,7 +455,6 @@ fn boot_and_run() -> Result<ExitReason, String> {
     capture.stop();
     // run() の失敗は初期化ではないが、窓も記録も失われているので初期化の失敗と同じ 2 に倒す。
     ran.map_err(|e| format!("run() が失敗: {e}"))?;
-    log_records(&shared);
 
     let reason = world.borrow().world().resource::<Run>().exit;
     drop((staysee, emo2));
@@ -458,5 +474,12 @@ mod tests {
         assert_eq!(exit_ms_from(Some("")), DEFAULT_EXIT_MS);
         assert_eq!(exit_ms_from(Some("abc")), DEFAULT_EXIT_MS);
         assert_eq!(exit_ms_from(Some("5000")), 5000);
+    }
+
+    #[test]
+    fn calibration_failure_turns_completion_into_exit_3() {
+        let passed = completed_reason(&observe::Verdict::Passed);
+        let failed = completed_reason(&observe::Verdict::Failed(vec!["calib-empty".into()]));
+        assert_eq!((exit_code(passed), exit_code(failed)), (0, 3));
     }
 }
