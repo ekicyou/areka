@@ -334,6 +334,13 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Dependencies**: `areka-parsers`（`install.txt` の文字コード判定と行分解）・`encoding_rs`・`miniz_oxide`（伸長のみ）・`thiserror`・`tracing`
 **規律**: 書き込み側（圧縮）の API は呼ばない——`src/lib_tests.rs` が本番ソースの字面で見張る（`tech.md` の `miniz_oxide` 登記を参照）。
 
+### Update Engine Crate（areka-update）
+**Location**: `/crates/areka-update/`
+**Purpose**: ネットワーク更新の**本番**クレート（`areka-P0-update-engine` 2026-09-23）。更新定義ファイル（`updates2.dau`／`updates.txt`）を読み、ローカルの木との差分を MD5 で導き、要るファイルだけを取得・照合してファイル単位で置き換える（失敗したら置いた分を元へ戻す）。`delete.txt` による削除も同じ一周で行う。入口は `run` 1 つで、呼び出し側（`network-update`）は `run`・`WinHttpFetch`・`Progress`・`UpdateOutcome`・`UpdateError` だけを使う。
+**Modules**: `lib.rs`（入口と記録）／`error.rs`・`outcome.rs`（失敗と結果の語彙）／`fetch.rs`（取得口の trait）・`winhttp.rs`（その本物の実装）／`urlpath.rs`（パスのパーセント符号化の判定・復号・符号化）・`paths.rs`（定義の相対パスとローカルパスの橋渡し）／`md5.rs`（CNG で MD5）／`manifest.rs`（定義ファイルの読み手）・`diff.rs`（差分）／`work.rs`（作業フォルダ）・`commit.rs`（確定と戻し）・`delete.rs`（`delete.txt`）。テストは各ファイルの隣の `*_tests.rs`（`testkit.rs` はテスト専用の部品）
+**Dependencies**: `encoding_rs`・`thiserror`・`tracing`・`windows`（`Win32_Networking_WinHttp`・`Win32_Security_Cryptography` を自分の `Cargo.toml` で上乗せ）。外部クレートの追加は 0（`tech.md` の登記を参照）。`areka-nar` の部品は使わない（考え方と語彙だけを写す）
+**規律**: 本番ソースで記録（`tracing::`）を綴るのは `lib.rs` だけ・失敗の記録（`tracing::error!`）は 1 か所、WinHTTP の API を綴るのは `winhttp.rs` だけ、`unsafe` を綴るのは `winhttp.rs` と `md5.rs` だけ——`src/lib_tests.rs` が本番ソースの字面で見張る。本物のネットワークを通すテストは `#[ignore]`（`winhttp_real_tests.rs`）で、常時テストは偽の取得口で回す。
+
 ### SHIORI ABI Crate
 **Location**: `/crates/shiori-abi/`
 **Purpose**: 脳（SHIORI）との**内部唯一 ABI**。`IShiori`/`IShioriHost` のカスタム COM 定義（HSTRING/UTF-16・IID 既定義）＋エルゴノミック変換層。UI 基盤（wintf）に依存させない最小依存クレート（下流 32bit ホスト/pasta が同 ABI を共有）。x64 native 脳は in-proc COM、過去互換は 32bit Rust ホスト（host-32）が IPC 越しに同 ABI を実装。

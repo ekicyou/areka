@@ -138,7 +138,7 @@
   - _Depends: 3, 5.2_
   - _Requirements: 3.3, 3.4, 3.5, 9.7_
 
-- [ ] 7. 登記とワークスペース全体の関門
+- [x] 7. 登記とワークスペース全体の関門
   - 先に `cargo about` と `cargo deny` が使えることを確かめ版を記録する。無ければ止めて報告し、第三者ライセンスの一覧を手で直さない
   - steering の技術方針に「HTTP と MD5 は OS の機能で賄い、HTTP クレートも MD5 クレートも足さない」の 1 行を足す
   - steering の構造にクレートの項（場所・目的・モジュール・依存・規律）を既存の項と同じ型で足す
@@ -159,3 +159,6 @@
 - 6.3 実機の一周（2026-09-24）: `cargo test -p areka-update --release winhttp_real -- --ignored --nocapture` が緑（1 passed・1.4〜1.8 秒）。ローカル 127.0.0.1 の配信で、全要求が `/r/…` の 302 を経て取得された。404 は `NotFound`、500 は `Status{500}` になった。
   - 1 周目は `Updated`。`placed` は `delete.txt`・`ghost/master/dic/talk.pasta`・`ghost/master/日本 語.txt` の 3 件で、`readme.txt` を 1 件取り除いた。段は `ManifestFetched` → `DiffDecided`（3 件）→ (`DownloadBegin` → `Md5Compared`)×3 → `Committed` → `Deleted` の順。記録は info 2・warn 0・error 0。日本語と空白のパスは `%E6%97%A5%E6%9C%AC%20%E8%AA%9E.txt` で要求され、中身がバイト単位で一致した。
   - 2 周目は `Unchanged`。要求は定義ファイルだけで、記録は info 2。WinHTTP 側の欠陥は 0 件。
+- 7（2026-09-24）: 道具は `cargo about` 0.9.2 と `cargo deny` 0.20.2。
+  - `THIRD-PARTY-NOTICES.md` は `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md` で作り直した。`rand`・`thiserror` の版が上がったのは手元の `Cargo.lock`（追跡していない）のためで、合流の後にもう一度作り直すこと。
+  - 関門の結果は、`cargo deny check` が ok、`cargo clippy --workspace` が exit 0、`cargo test --workspace` が 8,374 passed・0 failed・41 ignored。先に i686 の helper と testdll を組んでから走らせた。
