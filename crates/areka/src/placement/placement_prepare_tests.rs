@@ -230,8 +230,8 @@ fn prepared_placement_is_send() {
     assert_send::<PreparedPlacement>();
 }
 
-/// 準備段階の失敗（ghost_root 不在→Mount）はこの関数内でフォールバックせず
-/// `PlacementError` として呼び手（シーム）へ返る（DD14 の分担）。
+/// 準備段階の失敗（ghost_root 不在→Mount）は
+/// `PlacementError` として呼び手へ返る（告知と終了は呼び手の `main` の分担）。
 /// 失敗は load（モニタ列挙より前）で起きるため headless でも決定論。
 #[test]
 fn prepare_missing_root_returns_mount_err_to_caller() {

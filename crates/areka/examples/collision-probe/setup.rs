@@ -20,7 +20,7 @@ pub(super) async fn run_setup(tx: CommandSender) {
 /// 配置準備（placement 本体）→ placeholder 誤寸 spawn（placement 本体）→ `OnPointerMoved` 装着 →
 /// 装着アセット構築（probe 側）→ `ProbeBoot` 挿入を一括で行う（UI スレッド）。
 ///
-/// 失敗は log-first（`error!`）で中断する（受け入れ probe ゆえダミー窓フォールバックは持たない——失敗を
+/// 失敗は log-first（`error!`）で中断する（受け入れ probe ゆえ失敗を
 /// loud に観測させる。終了は Ctrl+C／smoke env）。
 fn build_and_spawn(world: &mut World) {
     let ghost_root = emo2_root();

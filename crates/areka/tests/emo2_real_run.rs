@@ -41,8 +41,8 @@
 //!   失敗より前に wire 成立へ到達する）ため、helper 不在でも wire 成立マーカー自体は出るが、実発話・
 //!   実 typewriter の**目視サインオフ**には実 helper が要る。
 //! - **実表示・実 DPI（≠96）**: attach 完了マーカーは `GhostWindows`＋GPU 資源ゲート成立フレームで
-//!   初めて発火する。モニタ 0 台の headless 環境ではゴースト窓がダミー窓へフォールバックしゲートが
-//!   成立せず attach 完了マーカーが出ない（＝本テストは headless では成立しない）。これは env-gate
+//!   初めて発火する。モニタ 0 台の headless 環境では「起動窓を開けません」の `error!` を残して
+//!   終了コード 1 で終わり attach 完了マーカーが出ない（＝本テストは headless では成立しない）。これは env-gate
 //!   opt-in の設計意図どおりであり、実表示のある実機でのみ緑になる。
 
 use sample_ghost_kit::SampleRoot;
@@ -154,6 +154,9 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
         .arg(balloon_root.to_str().expect("fixture パスは UTF-8"))
         // 自動 close（無人で exit 0 を観測可能にする・R6.4/R9.1）。
         .env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)
+        // 告知のメッセージボックスを抑える（モニタ 0 台で「起動窓を開けない」の告知がモーダルのまま
+        // 番犬の締切まで止まらないように）。argv 起動の見え方は変わらない（baseware-root-layout 要件 7.1）。
+        .env("AREKA_NO_ALERT", "1")
         // wire 成立／attach 完了マーカー、および折返し ON 解決の証跡（`wrap=BudouxWordWrap`）は
         // いずれも info! ゆえ RUST_LOG を明示し確実に捕捉する（人間の shell の RUST_LOG が warn 等でも
         // 取りこぼさない）。design.md「実機確認セット」Trigger 手順に合わせ `kanade=trace` も併せて有効化する
@@ -223,7 +226,7 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
 
     // (3) attach 完了マーカー（`emo2_boot::frame::run_attach_phase`＝frame.rs・GPU 資源＋GhostWindows
     //     ゲート成立フレームで装着計画を実行し info! 発火・R1.2/DD-12）。実表示への装着が end-to-end で
-    //     少なくとも 1 回踏まれた証跡（headless/モニタ 0 台ではダミー窓フォールバックゆえ出ない＝
+    //     少なくとも 1 回踏まれた証跡（headless/モニタ 0 台では起動窓を開けず終了するゆえ出ない＝
     //     実表示のある実機でのみ緑＝env-gate opt-in の設計意図どおり）。
     assert!(
         all.contains("emo2 attach: 装着計画を実行"),

@@ -796,7 +796,7 @@ fn drag_handlers_ignore_events_targeting_other_entities() {
     );
 }
 
-/// (+) MonitorSnapshot 不在（main.rs フォールバック経路）: ポリシーは identity
+/// (+) MonitorSnapshot 不在（未挿入）: ポリシーは identity
 /// へ縮退し、窓は生ドラッグ座標のまま単一ライターで移動する（move_window=false
 /// でもドラッグ追従が生きる縮退・吸着なし・panic なし）。
 #[test]

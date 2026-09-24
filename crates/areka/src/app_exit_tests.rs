@@ -1,29 +1,30 @@
 //! `app_exit` の決定論テスト（areka-P0-app-lifetime-separation）。
 //!
-//! 全窓破棄の私有部品 `despawn_app_windows` の 3 本は `main_seam_tests.rs` の
+//! 全窓破棄の私有部品 `despawn_app_windows` の 3 本は旧 `main.rs` シームの
 //! smoke 用の全窓破棄関数のテストから移した（task 3.1）。判断は不変で、対象の関数名と
 //! 打ち切り行の相名（`[quit_app]`）だけを追随させた。
 
 use super::*;
 
-/// 全窓破棄の標的は `Or<(With<DummyWindowMarker>,
-/// With<GhostWindowMarker>)>`（task 6.2 拡張）: ダミー窓・ゴースト窓の両方を
-/// despawn し、無関係 entity は残す。
+/// 全窓破棄の標的は `With<GhostWindowMarker>`: ゴースト窓だけを despawn し、
+/// 無印の窓（`Window` だけを持つ entity）と無関係 entity は残す。
 #[test]
-fn despawn_app_windows_hits_dummy_and_ghost_only() {
+fn despawn_app_windows_hits_ghost_windows_only() {
     let mut world = World::new();
-    let dummy = world.spawn(DummyWindowMarker).id();
     let ghost = world.spawn(GhostWindowMarker).id();
+    let ghost2 = world.spawn(GhostWindowMarker).id();
+    let plain_window = world.spawn(wintf::ecs::Window::default()).id();
     let other = world.spawn_empty().id();
 
     let count = despawn_app_windows(&mut world);
 
-    assert_eq!(
-        count, 2,
-        "ダミー窓＋ゴースト窓の 2 entity を despawn すべき"
-    );
-    assert!(world.get_entity(dummy).is_err());
+    assert_eq!(count, 2, "ゴースト窓の 2 entity を despawn すべき");
     assert!(world.get_entity(ghost).is_err());
+    assert!(world.get_entity(ghost2).is_err());
+    assert!(
+        world.get_entity(plain_window).is_ok(),
+        "印の無い窓は標的にしない"
+    );
     assert!(world.get_entity(other).is_ok());
 }
 
@@ -93,7 +94,12 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
         let leaf = world.spawn(GhostWindowMarker).id();
         world.entity_mut(root).add_children(&[mid]);
         world.entity_mut(mid).add_children(&[leaf]);
-        let later = world.spawn(DummyWindowMarker).id();
+        // `later` は連鎖 3 体より後に生まれる archetype（キャラ窓の印を併せ持つゴースト窓）に置き、
+        // 処理順で `mid` より後になるようにする（素の `GhostWindowMarker` だと最初の archetype
+        // に入り先頭で処理され、「打ち切りは後続を止めない」の主張が空虚になる）。
+        let later = world
+            .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
+            .id();
         (world, root, mid, leaf, later)
     }
 
@@ -101,7 +107,7 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
     /// 同じ列を見ていることを構造で保証する）。
     fn targets_of(world: &mut World) -> Vec<Entity> {
         world
-            .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>>()
+            .query_filtered::<Entity, With<GhostWindowMarker>>()
             .iter(world)
             .collect()
     }

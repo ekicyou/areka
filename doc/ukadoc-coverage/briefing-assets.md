@@ -438,6 +438,8 @@
 | `seriko.defaultsurfacedirectoryname,ディレクトリ名` | `ukadoc:descript_ghost:seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1` | 実装済み |
 | `name,ゴースト名` | `ukadoc:descript_ghost:name_2c_30b4_30fc_30b9_30c8_540d:1` | 語彙のみ |
 
+> **⚠ 2026-09-24 の追記——上の表の `name,ゴースト名` の状態はもう現状ではない。** 仕様 `areka-P0-baseware-root-layout` がゴーストの列挙の読み手（`areka-ghost` の `catalog::list_ghosts`）を置き、網羅台帳のこの項目を**実装済み**へ移して自分を担当として登記した。この追記で直したのはその 1 行の状態を知らせることだけで、表と下の「areka のいま」の数の測り直しはしていない。測り直しは網羅台帳の統合担当（`ukadoc-coverage-roadmap`）の仕事である。
+
 - **最小で何ができれば成り立つか**: 置かれた木からゴーストの定義を読み、頭脳の入れ物を起こし、立ち絵の置き場を決めて絵を出せること。
 - **areka のいま**: **6 段のうちここだけが立っている。**`areka-parsers` の `package::resolve` が、展開済みの根から `ghost/master/descript.txt` を起点にして、頭脳のファイル名と立ち絵の置き場を解決する。ページ全体の 3 件（`manual_ghost`・`manual_shell`・`manual_balloon`）はいずれも未対応だが、これはページが並べるファイルのうち読まないものが残っているためで、起動そのものは通る。台帳の内訳では、ゴーストの descript 74 件のうち実装済み 7・語彙のみ 1・未対応 66、シェルの descript 102 件のうち実装済み 11・語彙のみ 2・未対応 89 である。
 - **実例**: 試験用ゴースト `emo2` そのもの（配布形は `vendors/sample_ghost/emo2.nar`。展開した実物の絶対パスは `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が出す `folder=` の行が教える）。①②③ を人手で済ませた状態のものを渡している、というのがいまの形である。

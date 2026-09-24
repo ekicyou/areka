@@ -361,7 +361,7 @@ fn enumerate_file_names(balloon_dir: &Path) -> Result<Vec<String>, PresentError>
 /// （placement / boot）それぞれが独自に面 0 の有無を判定する必要をなくし、無言で空の
 /// バルーンを表示するログ無し経路を構造的に作らない。返した [`PresentError::Compose`]
 /// （[`ComposeError::EmptyComposition`]）は消費者側の既存の縮退経路（バルーン未配線・
-/// ダミー窓）へそのまま伝播する——プロセス終了ポリシー自体は本関数で変更しない。
+/// 起動窓を開けない告知と終了）へそのまま伝播する——プロセス終了ポリシー自体は本関数で変更しない。
 ///
 /// # 観測（R6.1/R6.2）
 ///
