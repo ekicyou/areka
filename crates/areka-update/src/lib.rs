@@ -375,3 +375,7 @@ mod run_tests;
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod lib_tests;
+
+#[cfg(test)]
+#[path = "winhttp_real_tests.rs"]
+mod winhttp_real_tests;
