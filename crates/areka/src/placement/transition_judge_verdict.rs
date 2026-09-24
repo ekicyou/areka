@@ -464,6 +464,14 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
     }
 
     // ⑷ 窓ごとの書込回数（要件 4.5）。
+    //
+    // 見送り窓（`skipped_windows`）を**わざと除いていない**。⑼ のように `judged_windows` を
+    // 回せば「見送り窓が位置は定刻・寸は表示時にと 2 本書く」形の偽の違反は消えるが、同時に
+    // 「大きさと位置を別々に書く」本物の欠陥（task 5.3 が直したもの）も見送り窓の上では
+    // 見えなくなる。偽の違反は実機 15 遷移で 0 件だった。裁定と根拠は
+    // `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §13.1（2026-09-24 に再確認して取り下げ）。
+    // 直すなら丸ごと除くのではなく「見送り窓は遷移のフレームで書いた回数だけを数える」形にし、
+    // この裁定を固定している既存テスト 3 本（台帳 §13.1 に列挙）の期待値ごと改める。
     if let Some(max) = bounds.writes_per_window_max {
         for (window, writes) in &summary.writes_per_window {
             if *writes > max {
