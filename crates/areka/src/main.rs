@@ -388,6 +388,31 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// `run()` の結果を受けて後始末へ進む判断（#58 が終了順序を関数へ括り出すときの芽）。
+///
+/// 後始末は成否によらず必ず 1 回通す。`run` の失敗・後始末の失敗・Fault のどれか 1 つでも
+/// あれば `Err`（終了コード 1）、なければ `Ok`（0）。後始末の失敗は後始末の中で、Fault は
+/// `quit_app` の `app_exit` で記録済みなので、ここで記録するのは `run` の失敗だけ。
+#[cfg_attr(not(test), expect(dead_code, reason = "main の末尾（task 4.2）が呼ぶ"))]
+fn finish_after_run(
+    run: Result<()>,
+    fault: bool,
+    cleanup: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    if let Err(err) = &run {
+        tracing::error!(error = %err, "メッセージループが失敗で戻りました（後始末は続けます）");
+    }
+    let cleaned = cleanup();
+    run?;
+    cleaned?;
+    if fault {
+        return Err(windows::core::Error::from_hresult(
+            windows::Win32::Foundation::E_FAIL,
+        ));
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Startup Window
 // ---------------------------------------------------------------------------
@@ -778,3 +803,8 @@ mod persist_wiring_seam_tests;
 #[cfg(test)]
 #[path = "main_monitor_snapshot_seam_tests.rs"]
 mod monitor_snapshot_seam_tests;
+
+/// `finish_after_run`（task 4.1・要件 3.1・3.2・6.3）の単体テスト。
+#[cfg(test)]
+#[path = "main_finish_after_run_tests.rs"]
+mod finish_after_run_tests;
