@@ -39,7 +39,8 @@
 //!   （終了の統合操作＝全窓を閉じてから終了を指示する→`run()` 正常復帰）である。いずれも
 //!   input_events 側ハンドラ／`ghost_session` の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
 //!   全窓を閉じる操作は本モジュールには置かず、終了の指示と 1 つにした `app_exit::quit_app`
-//!   に限る（全窓を閉じるだけの操作はクレート内に無い）
+//!   に限る（全窓を閉じるだけの `app_exit::close_windows_for_restart` は起こし直し専用で、
+//!   終了経路からは呼ばない）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
 //!   相対位置記憶（4.8・DD16・task 8.3）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ

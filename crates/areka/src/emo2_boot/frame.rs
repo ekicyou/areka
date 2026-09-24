@@ -240,8 +240,8 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 ///
 /// `Emo2Wiring` 未挿入（`wire_emo2_boot`＝task 5.1 前・フォールバック boot 経路）なら早期 return の
 /// no-op（安全・panic しない）。schedule への登録
-/// （`add_systems(Update, emo2_frame_system.after(update_typewriters))`）は `wire_emo2_boot`
-/// （task 5.1）が行い、本関数はここでは定義のみ（登録しない）。載せ先が `Update`＝上流の
+/// （`add_systems(Update, emo2_frame_system.after(update_typewriters))`）は `register_emo2_frame_system`
+/// （`ghost_session::register_systems` からプロセスに 1 回）が行い、本関数はここでは定義のみ（登録しない）。載せ先が `Update`＝上流の
 /// `Update` 鎖の最後の系より後なのは、本 system が挿した描画命令と配置を同じ巡の伝播
 /// （`PostLayout`）・面の生成（`PreRenderSurface`）・描画（`RenderSurface`）に拾わせるため
 /// である（裁定 2026-09-12・要件 2.4。末尾の段に載せると絵の着地が次の巡へずれる）。
