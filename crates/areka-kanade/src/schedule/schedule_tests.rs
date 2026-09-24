@@ -135,6 +135,7 @@ fn shiori_down_goes_to_unloading_fault() {
     let (next, actions) = step(
         state_in(steady_with_talk(TalkId(5))),
         Input::ShioriDown {
+            kind: crate::msg::ShioriDownKind::HelperExited,
             reason: "helper crashed".to_string(),
         },
         &config(),

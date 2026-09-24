@@ -73,7 +73,7 @@ pub fn spawn_window_actor() -> WindowActor {
         Ok(hwnd) => hwnd,
         Err(e) => {
             let down = match down_rx.try_recv() {
-                Ok(KanadeMsg::ShioriDown { reason }) => format!("ShioriDown: {reason}"),
+                Ok(KanadeMsg::ShioriDown { reason, .. }) => format!("ShioriDown: {reason}"),
                 Ok(_) => "ShioriDown 以外の通知".to_string(),
                 Err(_) => "なし".to_string(),
             };

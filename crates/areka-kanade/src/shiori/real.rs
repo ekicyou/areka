@@ -28,7 +28,7 @@ use shiori_host32_host::{
     Shiori3Client, ShutdownError,
 };
 
-use crate::msg::{KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
+use crate::msg::{KanadeMsg, ShioriCall, ShioriDownKind, ShioriFailure, ShioriMsg, ShioriOutcome};
 
 /// 接続済み SHIORI 一式（`!Send` 資材はスレッド内で connect が生成する）。
 ///
@@ -212,6 +212,7 @@ fn report_exit_once(
                 "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
             );
             let _ = on_down.send(KanadeMsg::ShioriDown {
+                kind: ShioriDownKind::HelperExited,
                 reason: format!("helper exited unexpectedly: {kind:?}"),
             });
         }
@@ -344,7 +345,10 @@ pub fn spawn_shiori_actor(
                     "SHIORI 接続確立に失敗——死活報告（ShioriDown）し受信ループに入らず終了"
                 );
                 // 死活報告後、on_down はスコープ終了で drop される（保持しない）。
-                let _ = on_down.send(KanadeMsg::ShioriDown { reason });
+                let _ = on_down.send(KanadeMsg::ShioriDown {
+                    kind: ShioriDownKind::ConnectFailed,
+                    reason,
+                });
                 // 受信ループには入らず終了（rx はここで drop→残る Sender の送信は Err で観測される）。
             }
         }

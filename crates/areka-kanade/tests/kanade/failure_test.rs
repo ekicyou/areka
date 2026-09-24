@@ -153,6 +153,7 @@ fn shiori_down_drives_observable_stop() {
     harness
         .sender
         .send(KanadeMsg::ShioriDown {
+            kind: areka_kanade::ShioriDownKind::HelperExited,
             reason: "helper crashed".to_string(),
         })
         .expect("send ShioriDown");

@@ -640,6 +640,7 @@ fn shiori_down_clears_choice_ledger() {
     let (next, actions) = step(
         s,
         Input::ShioriDown {
+            kind: crate::msg::ShioriDownKind::HelperExited,
             reason: "helper crashed".to_string(),
         },
         &config(),

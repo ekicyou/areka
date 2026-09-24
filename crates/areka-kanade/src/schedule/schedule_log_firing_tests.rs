@@ -47,6 +47,7 @@ fn error_shiori_down_logs() {
     let ev = run_step(
         steady_with_talk(TalkId(5)),
         Input::ShioriDown {
+            kind: crate::msg::ShioriDownKind::HelperExited,
             reason: "helper crashed".to_string(),
         },
     );

@@ -54,6 +54,7 @@ pub(crate) enum Input {
         reason: CloseReason,
     },
     ShioriDown {
+        kind: crate::msg::ShioriDownKind,
         reason: String,
     },
     /// マウス入力（移動／ダブルクリック）。Steady のみ `steady::on_mouse` へ委譲し、
@@ -353,7 +354,7 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
         Input::ForceQuit { reason } => force_quit(state, reason),
 
         // 死活報告（暫定 seam・DD-4）: error! 記録の上 Unloading{Fault} へ（Req 5.4）。
-        Input::ShioriDown { reason } => {
+        Input::ShioriDown { kind: _, reason } => {
             tracing::error!(target: "kanade", event = "shiori_down", reason = %reason, "SHIORI 死活報告を受領——終了系列（Fault）へ");
             to_unloading_fault(state)
         }

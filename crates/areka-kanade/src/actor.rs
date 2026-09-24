@@ -116,7 +116,7 @@ pub fn spawn_kanade_with_stop_sink(
                 KanadeMsg::TalkDone(td) => Input::TalkDone(td),
                 KanadeMsg::CloseRequest { reason } => Input::CloseRequest { reason },
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
-                KanadeMsg::ShioriDown { reason } => Input::ShioriDown { reason },
+                KanadeMsg::ShioriDown { kind, reason } => Input::ShioriDown { kind, reason },
                 KanadeMsg::Mouse(m) => Input::Mouse(m),
                 // 選択系 2 入力（additive・Req 4.4）。境界型をそのまま状態機械の入力へ写す
                 // （シェルは判断しない——受領検証・帳簿確立は schedule 層の責務）。

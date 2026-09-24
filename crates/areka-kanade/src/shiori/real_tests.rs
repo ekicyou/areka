@@ -501,7 +501,9 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
     let _ = receiver1.recv().expect("reply 1 received");
 
     match on_down_rx.recv_timeout(BOUND) {
-        Ok(KanadeMsg::ShioriDown { reason }) => {
+        Ok(KanadeMsg::ShioriDown { kind, reason }) => {
+            // 種類は型で運ぶ（理由の綴りで判別しない）。
+            assert_eq!(kind, crate::msg::ShioriDownKind::HelperExited);
             assert!(
                 reason.contains("Abnormal"),
                 "reason に終了種別を含む: {reason}"
@@ -629,7 +631,10 @@ fn connect_failure_reports_shiori_down_and_does_not_loop() {
 
     // 死活報告を有界時間内に受領する（KanadeMsg は Debug 非実装ゆえ variant を明示照合）。
     match on_down_rx.recv_timeout(BOUND) {
-        Ok(KanadeMsg::ShioriDown { reason }) => assert_eq!(reason, "boom"),
+        Ok(KanadeMsg::ShioriDown { kind, reason }) => {
+            assert_eq!(kind, crate::msg::ShioriDownKind::ConnectFailed);
+            assert_eq!(reason, "boom");
+        }
         Ok(_) => panic!("expected ShioriDown variant"),
         Err(RecvTimeoutError::Timeout) => panic!("ShioriDown not reported within bound"),
         Err(RecvTimeoutError::Disconnected) => {

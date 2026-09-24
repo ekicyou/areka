@@ -164,7 +164,11 @@ pub enum KanadeMsg {
     /// 強制終了指示（OS シャットダウン・デバッグ）。quit ゲートを迂回し終了系列へ直行。
     ForceQuit { reason: CloseReason },
     /// SHIORI 死活の暫定 seam（DD-4・lifecycle 正本確定時に実型へ差し替え）。
-    ShioriDown { reason: String },
+    /// 種類は型で運ぶ（理由の綴りで判別しない）。
+    ShioriDown {
+        kind: ShioriDownKind,
+        reason: String,
+    },
     /// マウス入力（移動／ダブルクリック）。Steady でのみ受理され、他フェーズでは安全に
     /// 無視される（横断ルーティングは schedule 層・DD-IE-8）。additive 増分（Req 4.4）。
     Mouse(MouseInput),
@@ -568,7 +572,7 @@ mod tests {
                 KanadeMsg::TalkDone(_) => "TalkDone",
                 KanadeMsg::CloseRequest { reason: _ } => "CloseRequest",
                 KanadeMsg::ForceQuit { reason: _ } => "ForceQuit",
-                KanadeMsg::ShioriDown { reason: _ } => "ShioriDown",
+                KanadeMsg::ShioriDown { kind: _, reason: _ } => "ShioriDown",
                 KanadeMsg::Mouse(_) => "Mouse",
                 KanadeMsg::Close => "Close",
                 // 新 2 variant（Task 1.3）。
@@ -597,6 +601,7 @@ mod tests {
                 reason: CloseReason::System,
             },
             KanadeMsg::ShioriDown {
+                kind: ShioriDownKind::HelperExited,
                 reason: "pipe closed".to_string(),
             },
             KanadeMsg::Mouse(MouseInput {
