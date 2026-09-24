@@ -54,6 +54,7 @@
 - `VisualMount` が spawn する子の名前（`emo-surface`・`emo-text-layer-slot`）や親子の形が変わったとき（本命の版の「消す」が外れる）。
 - wintf の tick の段の順序（13 段）や、`VisualGraphics` の `on_remove` が WUC の親から自分を外す挙動が変わったとき。
 - `hit_test_in_window` の座標系（窓 client の物理座標）が変わったとき。
+- wintf の tick の門（`EcsWorld` の `tick_gate_enabled`）の既定が変わったとき。今は既定で無効・`AREKA_TICK_GATE` を読むのは本体 `areka` だけなので pilot では画面更新ごとに tick が来るが、有効になると 30／180 tick の窓の意味が変わる。
 - 検体 2 つの寸法・色・α の形が変わったとき（標本点の導出は実行時に行うので追随するが、見分けの閾値は見直す）。
 
 ## Architecture
@@ -113,7 +114,7 @@ graph TB
 6. **較正は実際の窓へ崩れを作って行う**（要件 4.1）。作り方は §Components の `swap.rs` に列挙する。較正の 1 項でも期待と違えば終了コード 3 とし、本番の数を「無効」と明記して出す。
 7. **終了コード**: 0＝全観測完了かつ較正合格、1＝上限時間で打ち切り、2＝初期化の失敗、3＝較正不合格。終了の理由は必ず `info!`／`error!` に出す。
 8. **数の定義**（要件 3.4）: 観測の窓は「要求の直前のフレーム」から「揃った最初のフレーム」の後さらに **30 tick 分の時間**まで。揃ったフレームが **180 tick** 以内に来なければ打ち切って「未完」とし、それまでの数を出す。「1 フレーム」は OS の画面更新なので、画面が変わらない時間には数えるフレームが無い（それは崩れが無いことと同義）。
-9. **当たり判定の「両方」**: 要件 3.3 は当たり判定を「一方・他方・どちらでもない」と列挙するが、基準の版では古いマスクと新しいマスクが同時に効く（和になる）。これを 4 つ目の値「両方」として持ち、「混在」に数える（新しい絵と同じ当たり判定ではないため）。要件の語彙の追加であり、README にも書く。
+9. **当たり判定の「両方」**: 基準の版では古いマスクと新しいマスクが同時に効く（和になる）。これを 4 つ目の値「両方」として持ち、「混在」に数える（新しい絵と同じ当たり判定ではないため）。要件 3.3 の列挙と 3.4 の「混在」にも同じ語を足した（設計ディスカッションで追記）。README にも書く。
 10. **既定の上限時間は 90 秒**（`AREKA_APP_SMOKE_EXIT_MS` で上書き）。観測は約 20 本（較正 5・版 6×往復 2・面の切り替え 2）で、1 本あたり揃うまで＋30 tick＋戻しで 1〜2 秒。
 
 ### Technology Stack
@@ -319,8 +320,8 @@ fn exit_code(reason: ExitReason) -> i32; // 0 / 3 / 1 / 2
   - `CalibEmpty`（4.3）: `Hide{ TargetId(1) }`。期待: 空 ≥ 1。
   - `CalibMixed`（4.2）: B を `TargetId(2)` として `attach_target`＋`ShowSurface`＋`Hide`（見えない・当たらない B の子ができる）を仕込んでおき、要求 tick で A の `emo-surface` の `HitTest` を `none()`、B の `emo-surface` の `HitTest` を `alpha_mask()` へ書き換える（`Visual` は触らない）。絵は A・当たり判定は B。期待: 混在 ≥ 1。
   - `CalibStale`（4.4）: `Hide{ TargetId(1) }` → B を `TargetId(2)` で `attach_target`＋`ShowSurface`（揃った＝絵 B・当たり B）→ 揃った tick の 10 tick 後（観測の窓の内側）に A の `emo-surface` と `emo-text-layer-slot` の `Visual::set_visible(true)`（`HitTest` は `none()` のまま）。A が上に描かれて残る。期待: 古い絵の残り ≥ 1。
-  - `CalibSize`（4.5）: A のまま `ShowSurface{ surface_id: 2 }` を出し、`take_pending_resize` は読んで**捨てる**（`WindowPos` を書かない）。窓 335×205 に 335×395 の絵。期待: 大きさの食い違い ≥ 1。
-- 各較正・各差し替えの後は `reset_to_a`（`despawn_mounts` → `attach_target(TargetId(1), A)` → `ShowSurface 0` → 窓寸合わせ）で戻し、`Observer` が「絵 A・当たり A・寸法一致」を見るまで次へ進まない（戻しは観測しない）。
+  - `CalibSize`（4.5）: A のまま `ShowSurface{ surface_id: 2 }` を出し、`take_pending_resize` は読んで**捨てる**（`WindowPos` を書かない）。窓 335×205 に 335×395 の絵。判別対＝`(A0, A2)`・from＝A0・to＝A2（面の切り替えと同じ対）。期待: 大きさの食い違い ≥ 1。
+- 各較正・各差し替えの後は `reset_to_a`（`despawn_mounts` → `attach_target(TargetId(1), A)` → `ShowSurface 0` → 窓寸合わせ）で戻し、`Observer` が「絵 A0・当たり A0・寸法一致」を見るまで次へ進まない（戻しは観測しない）。同じ絵へ戻る戻しでは画面が変わらず新しいフレームが来ないことがあるので、この判定は「最新のフレーム」の絵と、今の tick の当たり判定・矩形で行う。戻しの要求から 60 tick 以内に揃わなければ `error!` を出して次へ進む（次の観測の「直前のフレーム」に戻しの失敗が写る）。
 - ログ（2.4）: 要求のたびに `info!(tick, qpc, version, stage, from, to, "swap: 要求")`。
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]
@@ -359,7 +360,7 @@ fn make_calibration(world, presenter, window, assets, which: Calibration, phase:
 **Implementation Notes**
 - Integration: `FrameFinalize` の `swap_system` は `tick_record_system` より前（`.after` を tick 記録側に付ける）。`Update` の `swap_system` は順序指定なし（同じ tick の `PostLayout` より前であれば足りる）。
 - Validation: `apply_swap` の直後に `presenter.current_surface_id(id)` と `target_physical_size(id)` を `debug!` で出し、`Observer` の期待寸（判別対の到達先の原寸）と一致することを確かめる。
-- Risks: `despawn_mounts` は `Name` の文字列に依存する。名前が変わると消せず、本命の版が基準の版と同じ挙動になる——`despawn_mounts` の戻り値が 2 でなければ `error!` を出し、その観測を「測れない」にする。
+- Risks: `despawn_mounts` は `Name` の文字列に依存する。名前が変わると消せず、本命の版が基準の版と同じ挙動になる——本命の版の差し替えでは直前の子は必ず 2 つなので、`despawn_mounts` の戻り値が 2 でなければ `error!` を出し、その観測を「測れない」にする。戻し（`reset_to_a`）では直前の版や較正により 2 か 4 なので、消した数はログに出すだけで判定しない。
 
 ### 観測と集計
 
@@ -371,7 +372,10 @@ fn make_calibration(world, presenter, window, assets, which: Calibration, phase:
 | Requirements | 2.7, 3.1〜3.6, 4.7, 4.8, 5.5, 6.6 |
 
 **Responsibilities & Constraints**
-- 標本点（`Signature`）は判別対 `(P, Q)` ごとに起動時に導出する。対は `(A0, B0)`（資産の差し替え・較正）と `(A0, A2)`（面の切り替え）の 2 つ。導出: 共通範囲（幅・高さの小さい方）を 8×8 の格子に切り、各升から「P だけ不透明（α≥128）」「Q だけ不透明」「両方不透明で色差（各チャネルの差の最大）≥ 48」の点を 1 つずつ拾い、各集合 64 点を目標にする（升に無ければ飛ばす）。どれかの集合が 16 点未満なら「見分けられない」として、その対の観測はすべて「測れない」。導出した点の数を `info!` に出す。
+- 標本点（`Signature`）は判別対 `(P, Q)` ごとに起動時に導出する。対は `(A0, B0)`（資産の差し替え・較正の静止・空・混在・残り）と `(A0, A2)`（面の切り替え・較正の大きさ）の 2 つ。導出: 共通範囲（幅・高さの小さい方）を 8×8 の格子に切り、各升から「P だけ不透明（α≥128）」「Q だけ不透明」「両方不透明で色差（各チャネルの差の最大）≥ 48」の点を 1 つずつ拾い、各集合 64 点を目標にする（升に無ければ飛ばす）。
+  - 見分けられる条件: 「Q だけ」と「両方」の 2 集合がそれぞれ 16 点以上。「P だけ」は 16 点以上あれば使い、足りなければ**無し**として扱う（片方の面が他方を含む対に耐えるため）。設計検証で検体の実物を数えた結果、`(A0, A2)` は共通範囲 335×205 で「A0 だけ」が 108 画素・約 3 升しか無く（A2 の上 205 行は A0 をほぼ含む）、「A2 だけ」18 升・「両方」21 升。`(A0, B0)` は 26／21／38 升。条件を満たさなければ「見分けられない」として、その対の観測はすべて「測れない」。
+  - 導出した点の数（対ごと・集合ごと）を `info!` に出し、README の検証結果にも書く。
+  - 「P だけ」が無い対では、絵の「両方」は P が Q の上に描かれたときだけ見分けられ（Q が P の上なら Q と区別できない）、当たり判定の「両方」（2 つのマスクの和）は Q と区別できない。この限界は README の「分からないこと」に書く。面の切り替えは同じ装着の面を入れ替えるだけで子が 2 組にならないので、そこで「両方」は起きない見込み。
 - `tick_record_system`（`FrameFinalize` の最後）: `QueryPerformanceCounter` → `GetWindowRect(hwnd)` → 3 集合の各点で `hit_test_in_window(world, window, point)`（k≠1.0 なら記録だけして `k_ok=false`）→ 当たった entity の `Name` が `emo-text-layer-slot` なら `slot_hit=true`（文字層の古い子が当たり判定に影響した証拠・「測れない」）→ 覆いの検査（z 順で自窓より上の可視窓の矩形が自窓と交わるか・`GetWindow(GW_HWNDPREV)` を辿る）→ `TickRecord` を共有記録へ push。
 - 絵の判別（取り込みスレッドで実行・関数は本ファイルに置く）: 取り込んだ矩形の各標本点の色と、P／Q の合成色（premultiplied・α=255 の点だけを標本に選ぶので色そのもの）を各チャネル許容 12 で比べる。a＝「P だけ」集合で P の色に一致した割合、b＝「Q だけ」集合で Q の色に一致した割合、ab_p／ab_q＝「両方」集合で P／Q の色に一致した割合。矩形の外に出た点は割合の分母から外す。
   - `P`: a≥0.9 ∧ ab_p≥0.9 ∧ b≤0.1
@@ -379,14 +383,15 @@ fn make_calibration(world, presenter, window, assets, which: Calibration, phase:
   - `Both`: a≥0.5 ∧ b≥0.5
   - `Neither`: a≤0.1 ∧ b≤0.1 ∧ ab_p≤0.1 ∧ ab_q≤0.1
   - それ以外: `Unmeasurable(Ambiguous)`
-- 当たり判定の判別: h_p＝「P だけ」集合の当たりの割合、h_q＝「Q だけ」集合の当たりの割合。`P`: h_p≥0.9 ∧ h_q≤0.1、`Q`: 対称、`Both`: 両方 ≥0.9、`Neither`: 両方 ≤0.1、それ以外 `Unmeasurable`。
+  - 「P だけ」が無い対では a の条件を外し、`Both` は b≥0.5 ∧ ab_p≥0.5 とする。
+- 当たり判定の判別: h_p＝「P だけ」集合の当たりの割合、h_q＝「Q だけ」集合の当たりの割合。`P`: h_p≥0.9 ∧ h_q≤0.1、`Q`: 対称、`Both`: 両方 ≥0.9、`Neither`: 両方 ≤0.1、それ以外 `Unmeasurable`。「P だけ」が無い対では h_both（「両方」集合の当たりの割合）を使い、`P`: h_q≤0.1 ∧ h_both≥0.9、`Q`: h_q≥0.9 ∧ h_both≥0.9、`Neither`: 両方 ≤0.1、それ以外 `Unmeasurable`（`Both` は Q と区別できないので出ない）。
 - 1 フレームの判定 `judge_frame(obs, frame, tick)`（3.4・重複計上あり）:
   - 測れない: 絵か当たり判定が `Unmeasurable`、`covered`、`!k_ok`、`slot_hit`、取りこぼし（`AccumulatedFrames−1` 枚を別に数える）。測れないフレームは 4 種に数えない。
   - 混在: (絵, 当たり判定) が `(P,P)`・`(Q,Q)`・`(Neither,Neither)` のいずれでもない（`Both` を含む組はすべて混在）。
   - 空: 絵が `Neither`。
   - 古い絵の残り: 揃ったフレームより後で、絵が `from` または `Both`（`from == to` の観測では数えない）。
   - 大きさの食い違い: 絵が `P` または `Q` で、その面の原寸（k=1.0 なので物理寸に等しい）と `rect` の幅・高さが違う。
-- 観測の窓（3.1）: 要求 tick の直前に取り込まれた最後のフレームを先頭に含める（無ければ「直前のフレーム無し」と記す）。揃ったフレーム（絵＝to ∧ 当たり判定＝to。大きさは条件に入れない）が来たら、その tick から 30 tick 後に閉じる。要求から 180 tick 以内に揃わなければ「未完」として閉じる。
+- 観測の窓（3.1）: 要求 tick の直前に取り込まれた最後のフレームを先頭に含める（無ければ「直前のフレーム無し」と記す）。揃ったフレーム（絵＝to ∧ 当たり判定＝to。大きさは条件に入れない）が来たら、その tick から 30 tick 後に閉じる。要求から 180 tick 以内に揃わなければ「未完」として閉じる。未完で閉じるときは、最後のフレームの（絵, 当たり判定）の組と矩形を `info!` に出し、README の行にも「未完（最後: 絵=…・当たり判定=…）」と書く。基準の版のように古い子が消えず揃わない場合、その状態は「古い絵の残り」の数ではなく（揃っていないので数えない）「未完」と最後の組として現れる。
 - 集計ログ（3.5・5.5）: 観測ごとに `info!(name, frames, missed, unmeasurable, mixed, empty, stale, size, settled_after_frames, settled_after_ticks)`。0 も出す。混在は内訳（`picture`／`hit` の組）を `debug!` に出す。
 - 較正の合否（4.7）: `Static` は 4 種 0 ∧ frames≥1、`Empty` は空≥1、`Mixed` は混在≥1、`Stale` は残り≥1、`Size` は大きさ≥1。1 つでも外れたら `CalibrationVerdict::Failed(list)`。
 - 最終ログ（4.8・6.6）: 較正 5 行 → 本番 12 行 → 面の切り替え 2 行を同じ形で並べ、較正不合格なら先頭に「本番の数は無効」を `error!` で出す。打ち切りのときは「打ち切り」とそれまでの行を出す。
@@ -501,6 +506,7 @@ impl Capture {
 ## README に残す学びの候補（実装時に事実で確かめてから書く）
 
 - 再登録（`attach_target` の同じ id）は古い子を消さず、可視性の所有者（`External` → 既定）と窓寸の要求（`applied`／`native_size`）も初期化する。本坑で present に「古い装着を片付ける口」を足す必要がある（5.7・5.8）。
+- presenter には登録を消す口も無いので、較正や隠すだけの版で使った `TargetId` の登録は（装着の entity を消した後も）表に残る。害は無いが、本坑の「片付ける口」の範囲に入る。
 - wintf の兄弟の重なり順が描画（先頭の子が上）と当たり判定（最後の子から）で逆。窓に面を 2 枚重ねる場面で必ず食い違う（範囲外の既存の食い違い・起票は `/kiro-complete` の棚卸しで）。
 - `VisualGraphics` の `on_remove` が WUC の親から自分を外すので、despawn と新規装着を同じ tick に入れれば 1 回の反映に載る（本命の版の根拠。実測で確かめる）。
 - `\b[ID]` の面の切り替えで崩れが出たなら、それは本番で既に通っている経路の既存の欠陥（2.7）。
