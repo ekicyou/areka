@@ -209,3 +209,20 @@ OS 側の実際のクリック透過（`WS_EX_TRANSPARENT` の付け外し）は
 - 差し替えの system は **`Update` に置く**のが本番（`emo2_frame_system`）と揃い、1 tick のずれを持ち込まない。手本の `FrameFinalize` 置きは版 (iv) として比べる側に回すのが見通しがよい。
 - 版は (i) 素の再登録（基準）・(ii) 古い子の除去あり・(iii) 別 id＋`Hide` の 3 つを最初から並べるのが、要件 5.2 の条件分岐を待たずに「直す／違う」の材料を揃える近道。ただし議題 1・2 の裁定次第。
 - 観測は議題 3・4 の裁定で案 A／B／C が決まる。要件 3.2 を文字どおり守るなら案 B が最小。
+
+---
+
+## 9. 要件ディスカッションでの整理（2026-09-24）
+
+### 9.1 査読の 2 周目（メインでの裏取り）
+
+- §2.1 の「描画と当たり判定で兄弟の重なり順が逆」を実物で確かめた。`crates/wintf/src/ecs/graphics/systems/visual_sync.rs` の `visual_hierarchy_sync_system` のコメントは「最初の子が最上」、`crates/wintf/src/ecs/common/tree_iter.rs` の `DepthFirstReversePostOrder` の doc は「Children 配列の最後の要素（最前面）から走査」。読みは正しい。
+- §2.1 の「`attach_target` は World に触れない」も `crates/areka-emo-present/src/presenter/hub.rs` の `attach_target` の定義（引数 `_world`・`self.targets.insert` だけ）で確かめた。
+
+### 9.2 設計フェーズで決める事項（カテゴリ B）
+
+1. 差し替えが揃った後に観測を続けるフレームの数（要件 3.1）と、既定の上限時間（要件 6.3）。どちらも README に書く。
+2. 較正で崩れたフレームを実際の窓にどう作るか（要件 4・§6 議題 7 の「どの段で」は 4.1 の改訂で「実際の窓」に決着。作り方は設計）。候補: 残り＝古い子を残したまま新しい面を足す・空＝`Hide`・混在＝pilot が `AlphaMaskResource` を書き換える。
+3. 観測の組み立て（§7 の調べ物 1〜6）。
+4. README の学びに残す事実の候補: 再登録が可視性の所有者（`External` → 既定）と窓寸の要求を初期化すること（§6 議題 8）。
+5. wintf の兄弟の重なり順の食い違い（§6 議題 9）は本先進坑の範囲外の既存の食い違い。README の学びに書き、起票は `/kiro-complete` の棚卸しで扱う（本 spec では直さない）。
