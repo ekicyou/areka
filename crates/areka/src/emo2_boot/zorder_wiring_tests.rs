@@ -449,7 +449,7 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
     );
     assert!(
         squeezed.contains(
-            "let zorder_raw = startup.as_ref().and_then(|prep| prep.zorder_raw.clone());"
+            "let StartupDescriptValues { author_dpi, zorder_raw, } = match open_startup_window(&app, &cfg) {"
         ),
         "起動窓の戻り値から重なりの生の値を受け取る行が本文に無い"
     );
@@ -460,7 +460,7 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        code.contains("fn open_startup_window(app: &WinApp, cfg: &ConfigInputs)"),
+        code.contains("fn open_startup_window("),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(

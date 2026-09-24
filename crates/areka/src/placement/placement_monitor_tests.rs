@@ -243,7 +243,7 @@ fn monitor_snapshot_call_site_tags_are_distinct() {
 /// スナップショットを出す（要件 1.1）。
 ///
 /// 出力は列挙の直後＝準備段の失敗より**手前**に置く。不在 root（`Mount` で落ちる
-/// 最短経路）でもモニタ構成が残ることが、フォールバック窓へ落ちた運転のログからも
+/// 最短経路）でもモニタ構成が残ることが、起動窓を開けずに終わった運転のログからも
 /// モニタ構成を再構成できる条件である。
 #[test]
 fn prepare_ghost_windows_logs_snapshot_with_its_own_call_site_tag() {

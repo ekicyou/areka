@@ -92,8 +92,8 @@ use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_
 /// 配置準備パイプライン（resolve→descript 読込→採寸→解決）の観測可能な失敗。
 ///
 /// design「Error Handling」準拠: 安易な panic 禁止・失敗は `error!`＋`Err`。
-/// すべて main.rs シームで捕捉され `spawn_dummy_window` フォールバックへ
-/// 落ちる（DD14・log-first）。
+/// すべて main.rs シームを経て呼び手の `main` へ返り、「起動窓を開けない」の告知と
+/// 終了コード 1 になる（log-first）。
 #[allow(dead_code)] // scaffold（task 1）: 利用側は後続タスクで実装
 #[derive(Debug, thiserror::Error)]
 pub enum PlacementError {
@@ -123,8 +123,8 @@ pub enum PlacementError {
     },
 
     /// モニタ列挙が 0 台で primary work area の出所がない（2.12 の基準を
-    /// 満たせない）。架空の既定矩形は発明せず呼び手（シーム）のフォールバックへ
-    /// 委ねる（DD14）。task 6.1 で追加（mod.rs＝準備関数の置き場は本タスク境界内）。
+    /// 満たせない）。架空の既定矩形は発明せず呼び手へ返す（`main` が「起動窓を開けない」
+    /// を告知して終える）。task 6.1 で追加（mod.rs＝準備関数の置き場は本タスク境界内）。
     #[error("モニタ列挙に失敗: {reason}")]
     Monitor {
         /// 失敗理由（列挙結果の状況を文字列化）。
@@ -376,8 +376,8 @@ fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> (Me
 /// 準備パイプラインの work area 非依存部を同期実行する:
 /// `load_descript_source` → `build_placement_config` → `measure_scope_sizes`。
 ///
-/// 失敗はフォールバックせず [`PlacementError`] のまま呼び手へ返す（DD14:
-/// `spawn_dummy_window` フォールバックは main.rs シームの分担）。
+/// 失敗は [`PlacementError`] のまま呼び手へ返す（告知と終了は
+/// 呼び手の `main` の分担）。
 /// 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11・テストで固定）。
 ///
 /// `primary_dpi` は起動時 k₀ の分子（primary モニタ DPI・物理 DPI 値）。取得不能
@@ -723,8 +723,8 @@ fn scope_windowposition(
 /// `resolve_placement` の順に**同期実行**し、Send な結果のみの
 /// [`PreparedPlacement`] を返す。
 ///
-/// - 準備段階の失敗は `Err(PlacementError)` のまま返す（本関数はフォールバック
-///   しない・DD14: フォールバックは呼び手＝main.rs シームの分担）
+/// - 準備段階の失敗は `Err(PlacementError)` のまま返す（告知と終了は呼び手の `main` の
+///   分担）
 /// - 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11）
 /// - 呼び出しスレッドは COM 初期化済みであること（measure の `WicDecoderArm`
 ///   前提・本番は MTA UI スレッド）
@@ -734,7 +734,7 @@ pub fn prepare_ghost_windows(
 ) -> Result<PreparedPlacement, PlacementError> {
     let monitors = enumerate_monitors();
     // 観測（areka-P0-dpi-window-vanish 要件 1.1）: 列挙の**直後**＝準備段の失敗より手前で
-    // 出す。fixture 不在等でダミー窓へフォールバックした運転のログからも、その運転が
+    // 出す。準備が倒れて起動窓を開けずに終わった運転のログからも、その運転が
     // どのモニタ構成を見ていたかを再構成できることが事後診断の条件である。
     // 呼出点タグで正典出力点（main.rs 構築点）と弁別する（D12）。
     diag::log_monitor_snapshot(&monitor_records(&monitors), PREPARE_GHOST_WINDOWS_CONTEXT);
@@ -801,7 +801,7 @@ fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
 /// - `work_area`（`RECT`・物理 px）を **単位変換なしで忠実転写**する
 ///   （U 契約: どちらも物理 px 通貨）
 /// - `None`（モニタ 0 台）: `error!`＋`Err(PlacementError::Monitor)`（架空の既定矩形は
-///   発明しない・フォールバックはシームの分担）
+///   発明しない・告知と終了は呼び手の分担）
 fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
     let Some(monitor) = monitor else {
         error!("モニタが 1 台も列挙されない——primary work area の出所がない");

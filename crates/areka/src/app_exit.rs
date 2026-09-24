@@ -12,7 +12,6 @@ use wintf::AppExit;
 use wintf::ecs::WindowHandle;
 use wintf::ecs::window::OnCloseRequest;
 
-use crate::DummyWindowMarker;
 use crate::input_events::MouseWiring;
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
@@ -27,16 +26,14 @@ pub(crate) enum ExitOrigin {
     KanadeStopped(KanadeStopCause),
     /// 強制退避（Ctrl+Shift+左ダブルクリック）。
     Escape,
-    /// ダミー窓の左ダブルクリック。
-    DummyWindow,
     /// smoke の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）。
     Smoke,
-    /// ダミー窓への OS の閉鎖要求、および kanade 未結線の起動でのゴースト窓への OS の閉鎖要求
+    /// kanade 未結線の起動でのゴースト窓への OS の閉鎖要求
     /// （結線済みならゴースト窓の閉鎖要求は `KanadeStopped` 経由で来る）。
     OsClose,
 }
 
-/// 全窓（ダミー窓＋ゴースト窓）を閉じ、終了を指示する。戻り値は標的として拾った窓の数。
+/// 全窓（ゴースト窓）を閉じ、終了を指示する。戻り値は標的として拾った窓の数。
 ///
 /// 閉じた数が 0 でも指示する（要件 3.2・分岐を置かない）。出所と閉じた数は `info` で残す。
 /// 受け口 [`AppExit`] が World に無いとき（本番では `WinApp` が必ず挿すので配線の誤り）は
@@ -62,7 +59,7 @@ pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
     closed
 }
 
-/// 全窓（`DummyWindowMarker`／`GhostWindowMarker`）を despawn する私有部品。
+/// 全窓（`GhostWindowMarker`）を despawn する私有部品。
 /// 戻り値は標的として拾った件数（標的なしは 0・no-op 安全）。bare `World` だけで動く。
 ///
 /// # 存在確認
@@ -78,7 +75,7 @@ pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
 /// 「消えた窓の数」と一致する。
 fn despawn_app_windows(world: &mut World) -> usize {
     let targets: Vec<Entity> = world
-        .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>>()
+        .query_filtered::<Entity, With<GhostWindowMarker>>()
         .iter(world)
         .collect();
     let count = targets.len();
@@ -136,16 +133,6 @@ pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
     wiring.send_close_request(CloseReason::User {
         scope: scope as u32,
     });
-}
-
-/// ダミー窓への OS の閉鎖要求の受け手: 全窓を閉じて終了を指示する（ダブルクリックと同じ経路）。
-pub(crate) fn on_dummy_os_close(world: &mut World, _entity: Entity) {
-    tracing::info!(
-        event = "os_close_request",
-        kind = "dummy",
-        "[os_close] ダミー窓への OS の閉鎖要求: 全窓を閉じて終了を指示する"
-    );
-    quit_app(world, ExitOrigin::OsClose);
 }
 
 /// HWND が付いた瞬間のゴースト窓へ [`on_ghost_os_close`] を差す system。

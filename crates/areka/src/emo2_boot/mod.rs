@@ -244,14 +244,15 @@ fn build_boot_assets_for(
 /// [`BootWiringError`] を「起点不在（良性・`warn!`）」と「それ以外（予期しない・`error!`）」へ
 /// 分類して log-first 観測する（design「Error Categories and Responses」構築時・R7.3）。
 ///
-/// `default_ghost_root()` はプレースホルダ subpath でこのサンドボックスでは常態的に不在
-/// （＝`MountError::StartPointMissing` は想定内）ゆえ `warn!` どまり。他（読取不能／bake／
+/// 起動前の解決（`boot_config::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
+/// 結線するので、`MountError::StartPointMissing` は解決後の消失（起動中の削除等）に限られ
+/// `warn!` どまり。他（読取不能／bake／
 /// balloon／`spawn_ui` 失敗等）は真に予期しない失敗として `error!` で区別する（main の
-/// `is_benign_placement_error`/`is_benign_boot_error` と同じ分類方針）。boot 自体の
+/// `is_benign_boot_error` と同じ分類方針）。boot 自体の
 /// `GhostBootError` は別途 [`crate::is_benign_boot_error`]（R7.4）が分類する。
 fn classify_wiring_error(err: &BootWiringError) {
     match err {
-        // fixture 不在等の想定内（このサンドボックスでは常態）は warn どまり。
+        // 解決後の消失（起動中の削除等）に限られる起点不在は warn どまり。
         BootWiringError::Mount(MountError::StartPointMissing { .. }) => {
             warn!(
                 error = %err,

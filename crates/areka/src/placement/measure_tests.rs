@@ -255,7 +255,7 @@ fn failed_scope_substitutes_scope0_size() {
 }
 
 /// surfaces.txt が読めない（scope0 の採寸自体が成立しない）場合は
-/// `PlacementError::Measure`（代替根拠なし→シームがフォールバック・DD14）。
+/// `PlacementError::Measure`（代替根拠なし→呼び手の `main` が「起動窓を開けない」を告知して終える）。
 #[test]
 fn missing_surfaces_txt_is_measure_error() {
     with_com_initialized(|| {
