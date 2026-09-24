@@ -15,8 +15,8 @@
 //! - 合成失敗したスコープは scope0 の寸法で代替し `warn!`（窓自体は生やす——
 //!   寸法だけ暫定・design「Error Handling」）
 //! - scope0 の採寸自体／いずれかのスコープのバルーン面 0 の採寸が成立しない場合は
-//!   代替の根拠が無いため [`PlacementError::Measure`]（log-first・シームが
-//!   フォールバック・DD14）
+//!   代替の根拠が無いため [`PlacementError::Measure`]（log-first・呼び手の `main` が
+//!   「起動窓を開けない」を告知して終える）
 //! - 採寸に使ったアセット（`EmoWorld`／`AtlasTable`／WIC デコーダ）は本関数の
 //!   ローカルとして採寸後に**破棄**される。戻り値は素の数値（[`ScopeInput`]）のみ
 //!   （アセット所有・装着は emo2-boot の領分＝二重ロードは M1 受容トレードオフ）
@@ -118,7 +118,7 @@ impl SizeKind {
 /// - 合成失敗したスコープは scope0 の寸法で代替し `warn!`（窓自体は生やす）
 /// - scope0 の採寸自体（shell アセット構築含む）・いずれかのスコープのバルーン面 0 の
 ///   採寸が成立しない場合は代替根拠が無いため `Err(PlacementError::Measure)`
-///   （log-first・シームが `spawn_dummy_window` へフォールバック・DD14）。
+///   （log-first・呼び手の `main` が「起動窓を開けない」を告知して終える）。
 ///   balloon 起因の失敗は `reason` に `balloon:` 接頭辞を付け、**当該スコープ番号**で
 ///   報告する（バルーン専用 variant は持たない・task 1 の失敗型を消費）
 /// - 採寸に使ったアセットは本関数のローカルとして return 時に破棄される

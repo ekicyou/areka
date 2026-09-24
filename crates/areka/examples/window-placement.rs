@@ -231,8 +231,8 @@ async fn run_setup(tx: CommandSender) {
 /// 配置準備（placement 本体）→窓生成（placement 本体）→装着アセット構築（example 側）→
 /// `PlacementBoot` 挿入を一括で行う（UI スレッド）。
 ///
-/// 失敗は log-first（`error!`）で中断する（受け入れ example ゆえダミー窓フォールバックは
-/// 持たない——失敗を loud に観測させる。終了は Ctrl+C）。
+/// 失敗は log-first（`error!`）で中断する（受け入れ example ゆえ
+/// 失敗を loud に観測させる。終了は Ctrl+C）。
 fn build_and_spawn(world: &mut World) {
     let ghost_root = emo2_root();
     let balloon_dir = balloon_root();

@@ -61,7 +61,7 @@ fn bottom_snap_policy_resolves_per_monitor() {
 #[test]
 fn bottom_snap_policy_degrades_to_identity() {
     let raw = PointPx { x: 1207, y: 217 };
-    // snapshot 不在（main.rs フォールバック経路）
+    // snapshot 不在（未挿入）
     assert_eq!(BottomSnapPolicy.resolve(raw, CHAR_SIZE, None), raw);
     // 空 snapshot
     let empty = MonitorSnapshot { work_areas: vec![] };

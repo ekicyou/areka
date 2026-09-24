@@ -86,7 +86,7 @@
   - 完了の姿: `cargo test -p areka --bins` が緑で、`default_ghost_root`／`default_balloon_root`／`resolve_config_inputs` の出現が `crates/` で 0 件（常設 smoke の旧「引数なし」方向は 6.1 まで赤＝非 0 で即座に落ちる。5.1〜5.3 の間は `--workspace` と smoke を完了判定に使わない）
   - _Requirements: 1.4, 1.5, 4.7, 4.8, 4.10, 5.8, 5.11, 6.3, 6.6, 7.1, 7.4_
   - _Depends: 2.3, 3, 4.1, 4.2_
-- [ ] 5.2 起動窓の失敗を終了へ写し、ダミー窓一式を退役させる
+- [x] 5.2 起動窓の失敗を終了へ写し、ダミー窓一式を退役させる
   - `open_startup_window` は準備の失敗をそのまま返し、`main` は「起動窓を開けない」の告知＋`Err(E_FAIL)` にする。smoke の自動終了の投入は成功時だけに移す。「作者基準 DPI を既定へ縮退」の分岐は消える
   - `spawn_dummy_window`・`on_dummy_pressed`・`DummyWindowMarker`・`is_benign_placement_error` と不要になった `use` を消し、`main_seam_tests.rs` を削除、`main_startup_window_tests.rs` のダミー窓 5 本を除く（smoke 自動終了の 6 本は残す）
   - `app_exit` から `ExitOrigin::DummyWindow`・`on_dummy_os_close` を消し、窓の一括消去をゴースト窓だけへ縮める。`app_exit_tests.rs` のダミー窓の 2 か所をゴースト窓へ差し替える。`quit_app` の形・`menu/`・`runtime.rs`・kanade の握手は触らない
@@ -125,3 +125,4 @@
 - 2.1→2.2: 空の値（trim 後に空）はどの鍵も「無し」に揃えた（`catalog.rs` の `lowercased` の 1 か所）。`type,` はバルーンとして残り、`menu,` は隠さない。design R5 に追記済み。
 - 2.3: 空の `AREKA_ROOT` は「設定あり」（`AREKA_PROFILE_DIR` と同じ）→ `NotADirectory { dir: "", source: EnvVar }`。`dir` が絶対でない唯一の例外なので、告知（3）は空のとき「環境変数 AREKA_ROOT が空です」の類いの文言にする。`RootError` 等の item 単位 `#[allow(dead_code)]` は 5.1 で外す。
 - 5.1: 解決は `boot_config::resolve_boot(_from)` に置いた（main.rs 1,000 行のため・design に追記）。argv 起動でも根は先に決める（設計の流れどおり・`AREKA_ROOT` が不在ならargv 起動も止まる）。
+- 5.2: `emo2_boot/zorder_wiring_tests.rs` の t_zwi08 は main.rs の本文を文字列で照合するので、`open_startup_window` の形を変えると追随が要る。`areka-ghost/src/runtime.rs` の doc に「ダミー窓」が 1 か所残る（要件 7.2 で不変のため意図的）。smoke のフォールバック方向の目印は 6.1 まで死んでいる。

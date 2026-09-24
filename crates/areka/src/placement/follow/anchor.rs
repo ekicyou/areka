@@ -21,7 +21,7 @@ pub trait DragPositionPolicy {
     /// 生ドラッグ座標 `raw` に対する実窓位置を返す（物理 px・純粋）。
     ///
     /// - `size`: 窓寸法（物理 px）。非正値は「寸法不明」を意味する
-    /// - `snapshot`: モニタ work area 集合。`None`＝フォールバック経路（未挿入）
+    /// - `snapshot`: モニタ work area 集合。`None`＝未挿入（起動窓の生成前・素の `World` の檻）
     fn resolve(&self, raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -> PointPx;
 }
 
@@ -32,7 +32,7 @@ pub trait DragPositionPolicy {
 /// 跨いだら跨いだ先の下端へ自然に再吸着する（4.7 後段）。
 ///
 /// graceful degradation（identity＝`raw` 素通し・panic しない・架空矩形を発明しない）:
-/// - `snapshot` 不在: main.rs フォールバック経路は挿入しない設計（8.1 note）。
+/// - `snapshot` 不在: 起動窓の生成前・素の `World` の檻では挿入されていない（8.1 note）。
 ///   ドラッグ移動イベントごとに発火する経路ゆえ `warn!` は spam——`debug!` に留める
 /// - 空 snapshot: [`work_area_for_window`] が `None`
 /// - 非正寸法: `WindowPos::default()` の size は `CW_USEDEFAULT`（負のセンチネル）で、
@@ -42,7 +42,7 @@ pub struct BottomSnapPolicy;
 impl DragPositionPolicy for BottomSnapPolicy {
     fn resolve(&self, raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -> PointPx {
         let Some(snapshot) = snapshot else {
-            debug!("MonitorSnapshot 未挿入（フォールバック経路）のため identity 縮退");
+            debug!("MonitorSnapshot 未挿入（起動窓の前・素の World）のため identity 縮退");
             return raw;
         };
         if size.w <= 0 || size.h <= 0 {
@@ -127,7 +127,7 @@ pub fn project_anchor(
     let Some(snapshot) = snapshot else {
         debug!(
             ?anchor,
-            "MonitorSnapshot 未挿入（フォールバック経路）のため identity 縮退"
+            "MonitorSnapshot 未挿入（起動窓の前・素の World）のため identity 縮退"
         );
         return raw;
     };

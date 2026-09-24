@@ -144,7 +144,7 @@ pub struct GhostWindowMarker;
 /// component を覗けてしまうが、ここでそれをやってはならない。
 ///
 /// 除去成立も no-op も `debug!` 止まり（正常終了系＝良性ノイズを作らない・要件 6.2 の前提）。
-/// Resource 未挿入（ダミー窓フォールバック経路・素の `World` の檻）は静かに no-op。
+/// Resource 未挿入（素の `World` の檻）は静かに no-op。
 fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
     let entity = hook.entity;
     // Resource 未挿入は no-op（`resource_mut` だと panic するので `get_resource_mut`）。
@@ -395,7 +395,7 @@ impl GhostWindows {
 
 /// 解決済み配置からキャラ窓・バルーン窓 entity を組み立てる（design「placement::spawn」）。
 ///
-/// bare `World` だけで動く（`spawn_dummy_window` と同型・headless テスト可）。
+/// bare `World` だけで動く（headless テスト可）。
 /// 位置・寸法は **`placements`（[`ScopePlacement`]・物理 px）由来のみ**を
 /// `WindowPos` へ転記し、座標リテラルを一切持たない（1.5・U1）。
 /// スコープごとにバルーン窓を先に spawn し（`BalloonFollow.balloon` が entity を

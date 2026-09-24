@@ -32,8 +32,6 @@ pub(crate) enum AlertScene {
     /// バルーンが無い（要件 5.8）。
     BalloonMissing { balloon_store: PathBuf },
     /// 起動窓を開けない（要件 6.4）。`reason` は失敗の内容（`PlacementError` の表示）。
-    /// 消費者（`open_startup_window` の失敗）は task 5.2 で結線する（そこで `allow` を外す）。
-    #[allow(dead_code)]
     StartupWindow { reason: String },
 }
 

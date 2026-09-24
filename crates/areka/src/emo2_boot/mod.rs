@@ -248,7 +248,7 @@ fn build_boot_assets_for(
 /// 結線するので、`MountError::StartPointMissing` は解決後の消失（起動中の削除等）に限られ
 /// `warn!` どまり。他（読取不能／bake／
 /// balloon／`spawn_ui` 失敗等）は真に予期しない失敗として `error!` で区別する（main の
-/// `is_benign_placement_error`/`is_benign_boot_error` と同じ分類方針）。boot 自体の
+/// `is_benign_boot_error` と同じ分類方針）。boot 自体の
 /// `GhostBootError` は別途 [`crate::is_benign_boot_error`]（R7.4）が分類する。
 fn classify_wiring_error(err: &BootWiringError) {
     match err {

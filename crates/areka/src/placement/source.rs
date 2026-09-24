@@ -146,7 +146,7 @@ pub fn load_descript_source(ghost_root: &Path) -> Result<DescriptSource, Placeme
     let ghost_descript = model.shiori.dir.join(DESCRIPT_FILE);
     let ghost_kv = read_kv_lenient(&ghost_descript);
 
-    // shell descript: 読取失敗は致命（→シームがフォールバック・DD14）。
+    // shell descript: 読取失敗は致命（→呼び手の `main` が「起動窓を開けない」を告知して終える）。
     let shell_descript = model.shell.dir.join(DESCRIPT_FILE);
     let shell_kv = match std::fs::read(&shell_descript) {
         Ok(bytes) => parse_kv(&decode(&bytes, DefaultEncoding::Ansi)),
