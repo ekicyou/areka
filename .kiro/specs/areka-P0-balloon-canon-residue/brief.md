@@ -88,6 +88,7 @@
 
 > **📌 2026-09-02 棚卸⑫（XL＝3 軸分割推奨・項目 12 はバグ確定）**——アンカー再測定: `balloon.rs:62` `SeriesFamily` ✅・COMPAT §8 :141/:144 ✅・`attach.rs:364 surface_id: 0` ✅・e2e brief:98 ✅。**ずれ**: `talk_lifecycle.rs:184`→**:188**（enum・`#[allow(dead_code)]` は :187）・kero-balloon requirements :28-34→**:25-39** に散在・`writing.rs` の文言は **:311**。
 > **項目 12 は現行 main の挙動バグ（唯一）**: `writing.rs:311` は「未知の writing_mode 値のため horizontal_tb へフォールバックする」と言うが、実挙動は同ファイル `:32` のとおり「**指定なしとして扱う**」（`vertical` 宣言があればそちらが採られる）。表示影響なし・ログ文言のみ・**S・前提なし・単独着地可**（roadmap ⓪ の任意項目＝直接修正可）。
+> **→ 2026-09-24 消化済み（PR#178・直接修正）**: `crates/areka-emo-text/src/writing.rs` の警告文言を「指定なしとして扱う」へ直し、文言を固定するテストを足した。**本 brief の項目 12 はバグでなくなった**＝残る項目にバグの混入は 0 件（棚卸⑯で再確認）。`emo-text-canon-residue` の brief にも同じ追記がある。
 > **項目 13（新規・zsp research §13.9 #7 由来）**: COMPAT §8 の 5 行（`:160-165`）が `roadmap.md:132` の空行を指していた件は **棚卸⑫で doc 側を直接是正済み**（本 brief の項目 7/8/9 番号と `status-execution-states` brief への引用に差替）＝消化済み・本 brief の作業なし（記録のみ）。
 > **分割の継ぎ目（開発者裁定）**: ⑴ 系列解決 1〜6（emo 帰属・`balloon.rs` `SeriesFamily`＋多面 fixture）／⑵ 表示寿命 7〜10（kanade＋UI 配線・8 と 10 は一体・7 の compile 側は `sakura-time-directives`・9 は decoration 供給が前提）／⑶ bvc 残 11〜12（emo-text 帰属・11＝縦書き字形の観測檻・12＝S）。前提: M1 外（e2e #14 の検出 or M2）・項目 12 のみ前提なし。
 

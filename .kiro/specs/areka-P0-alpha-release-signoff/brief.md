@@ -3,6 +3,23 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。M1 の `areka-P0-emo2-conformance-e2e`（完成宣言の器）と同じ役割を α で担う——**配布物を作り、第三者の手順で一周し、開発者が署名する**。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-24 棚卸⑯の再測定（main `0b01f654`）
+
+想定 **8〜10 タスク**・分割不要。Rust のソースはほぼ 0（`nar-sample-path` で足りなければ展開用の小さな bin を 1 本）。前提は α の残り全部（#55・#58・#13・#59・#50・#15・#16）。
+
+**崩れた／変わった前提**
+
+1. **根の `README.md` は開発者向け**（ビルド手順・クレート構成・「57 件の仕様を完了」・「ぱすたさん」を目標に掲げるなど古い）＝第三者向け README は**別ファイルとして新規に作る**。さらに **README のライセンス表記「MIT OR Apache-2.0」とバッジのリンク先 `LICENSE`（存在しない）が実物と合っていない**——実物は `Cargo.toml` の `license = "MIT"` と `LICENSE-MIT` だけ（09-24 に較正済み）。直し方は議題 2 の答えで決まる。
+2. **アプリの記憶の既定の置き場所は「exe の隣」ではなく `<exe のフォルダ>/profile/areka/sylphya.toml`**（`boot_config.rs` の `default_app_profile_dir`・完了 #12 要件 1.7・9.5）。下の 09-24 追記の「既定は exe の隣」はこの細部だけ違う。helper は exe の隣の `shiori-host32-helper.exe` 固定（`boot_config.rs` の `default_helper_exe_path`）。
+3. **新しい論点: `emo2.nar` の同梱バルーンは `emo2-kakukaku`**（`SAMPLES` の `balloons`）。バルーンは「記憶 → 同梱（`install.txt` の `balloon.directory`）」の順で決まる（`boot_resolve.rs` の `BalloonRoute::Companion`）ので、zip に `emo2-kakukaku` を入れると**初回は StayseeBalloon ではなく emo2-kakukaku で立つ**。開発者は emo2-kakukaku を「癖が強く既定に向かない」と裁定している（議題 1）。
+4. `LICENSE-MIT`・`about.toml`・`about.hbs`・`THIRD-PARTY-NOTICES.md` は在る。`scripts/` は無い。`tools/` の直下は `perf/` だけ（置き場所は判断）。
+
+**用意済みの部品**: `SAMPLES`（`crates/sample-ghost-kit/src/lib.rs`）の 6 体＝`emo2`・`R_POST_and_KOMAINU`・`emo2-kakukaku-offsetdpi`・`emo2-kakukaku-wplimit`・`konnoyayame`・`StayseeBalloon`。任意の宛先へ展開する公開関数は**無い**——使えるのは `pub fn manual_paths(name)` と、それを包む bin `nar-sample-path`（`target/nar-samples/manual/<名>/` へ展開して `root=`／`folder=`／`balloon.<dir>=` を出力。`tools/perf/invoke-followup-checks.ps1` が既にこの出力を読んでいる＝PowerShell から呼ぶ前例）、または `areka_nar` の `install(&InstallRequest{root, target_ghost})`（根へ入れる正規の経路・CLI の bin は無い）。スクリプトは `nar-sample-path` を呼んでコピーすればコードを 0 行で済ませられる。既知の制限で既に書かれたもの＝`completed/areka-P0-default-balloon-bundle/verification/signoff-record.md` §6.2・`doc/COMPAT_ARCHITECTURE.md` §8（charset の「既知の限界」など）・`completed/areka-P0-emo2-conformance-e2e/verification/m1-completion.md` の「持ち越した事項」の表。
+
+**触るファイル**: 高＝`scripts/package-alpha.ps1`（新規・置き場所は判断）・配布用 README（新規）・`verification/acceptance-record.md`・`verification/alpha-completion.md`（新規）・`THIRD-PARTY-NOTICES.md`（再生成）。中＝根の `README.md`（ライセンス表記の是正）。
+
+**要件段階の議題**: ⑴ zip に `emo2-kakukaku` を入れるか（入れると初回の既定が StayseeBalloon でなくなる）。⑵ **ライセンスは MIT 単独か MIT OR Apache-2.0 か**——後者なら `LICENSE-APACHE` の追加と `Cargo.toml` の修正、前者なら README の修正（どちらも小さいが**開発者の決めごと**なので棚卸⑯では触っていない）。⑶ 検証項目 1 と 4 の差し替え先（空の根で確かめる手順と 2 体目の検体）。⑷ #55 が α までに着地しない場合、「SHIORI が動かないとアプリが黙って消える」を既知の制限に載せるか（B1 で着地する予定なので通常は不要）。**未測定**: `nar-sample-path` で展開した木を zip にコピーしても同梱バルーンの判定（Companion）が効くか／`emo2.nar` の中身（i686 の pasta.dll を同梱しているか）と再配布ライセンス。
+
 ## 2026-09-20 棚卸⑮の再測定
 
 **実測の追記（main `fe157df1`）**

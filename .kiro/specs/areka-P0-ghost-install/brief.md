@@ -3,6 +3,28 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「インストール」の**製品側**（利用者が `.nar` を渡す体験）と、順位 4 の束「投げ込み」（`OnFileDrop2` 等）のうち窓へ落とす経路を引き受ける。エンジン（コンテナ読取・`install.txt` 解釈・安全な展開）は `areka-P0-nar-install` が持つ。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-24 棚卸⑯の再測定（main `0b01f654`）
+
+**#15 と #16 は直列のまま**（共有するソースファイル 12 本＝`crates/areka/Cargo.toml`・`main.rs`・`emo2_boot/{consumer_ledger,mod}.rs`・`emo2_boot/install_cue.rs`（本仕様が作り #16 が改変する＝消費者台帳の登記の単位は「名前＋第 1 引数」なので `\![execute,install,path]` と `\![execute,install,url]` は同じ鍵 `("execute", Some("install"))` になり同じ受け口でしか扱えない＝**構造上確定**）・`alert.rs`・`areka-ghost/src/catalog.rs`・kanade `msg.rs`／`actor.rs`／`schedule/{mod,events}.rs`・`Input` の網羅 match を持つ kanade のテスト支援。文書類＝台帳 3 本・`roadmap-draft.md`・生成物・§8）。**実装は #13・#50 の着地待ち**（両方とも brief だけ）。要件と設計は先行できる。想定 **17〜19 タスク**（手続きの段が縮んだ分と `alert` の拡張・`accept` の読み手が増えた分がほぼ相殺）。20 を超えそうなら「投げ込み」（wintf の `WM_DROPFILES`・`OnFileDrop2`／`OnDirectoryDrop`）を別 spec へ切り出す（wintf と入力系が中心で #16 との共有なし）。
+
+**崩れた／変わった前提**
+
+1. **フォルダを落としたときの正典は `OnDirectoryDrop`**（ukadoc で確認・束「投げ込み」の members にも在る）。Desired Outcome 6「ファイル・フォルダを `OnFileDrop2` へ」はずれている＝要件で `OnDirectoryDrop` を足す。
+2. **`accept` の照合に要る値が目録に無い。** 正典の照合相手は `sakura.name` か受け手ゴーストの `install.accept`。`areka_ghost::catalog::Identity` は 7 項目で閉じ（#12 要件 2.9 が `sakura.name` を明示的に除外）、どちらも持たない。前例 `catalog::companion_balloon`（1 つの鍵だけを読む関数）と同じ形の読み手を足せば `Identity` を変えずに済む。
+3. **Approach 段 ① `install(root, path) -> InstallOutcome` は不要。** `NarArchive::open(path)`（全部を検証し、まだ何も書かない）→ `.manifest()`（`accept`・`kind`・`name` が取れる＝ここで照合して `OnInstallBegin` を送れる）→ `.install(&InstallRequest{root, target_ghost})` の 3 段が既に在る。成功時は `InstallOutcome.installed: Vec<InstalledElement{kind,name,path,target_ghost,existing}>` を `OnInstallCompleteEx` の Ref0〜2 へ写せる。`OnInstallFailure` の理由は `RefuseReason::kind()`（`ALL_KINDS` も公開済み）。
+4. **09-19 の申し送り 2〜4 は #52 で完了**（長さ上限 200＝UTF-16 の単位・超えたら `RefuseReason::PathTooLong` で書庫全体を拒否／巻き戻せなかった元の木＝`NarError::Io.survivors: Box<[SurvivingTree{destination,path}]>`・作業フォルダは 7 日保持／確定の段の失敗で `work` の欄を見るテスト）。下の 09-19 節の 2〜4 番は**古い**。残る仕事は在りかを告知に載せるかどうかと文面だけ（議題 2）。
+5. **利用者向け告知 `crates/areka/src/alert.rs` はそのままでは使えない**（すべて `pub(crate)`・場面は起動専用の 4 つ・題名「areka を起動できません」固定・`MB_OK|MB_ICONERROR` のみで `raise` は押されたボタンを返さない）。`terms.txt` の受諾／拒否（OK／キャンセル）と失敗告知には拡張が要る。**#55 `shiori-fault-notice`（B1）が先に一般化する**ので本仕様はそれに乗る。
+6. **`Win32_UI_Controls_Dialogs` は未有効**（根は `Win32_UI_Controls`・`Win32_UI_Shell` のみ）。前例は「クレート側で機能を上乗せ」（`crates/areka-update/Cargo.toml`・`dola`）＝根ではなく `crates/areka/Cargo.toml` に書く。
+7. **`WM_DROPFILES`／`DragAcceptFiles`／`DragQueryFile`／`IDropTarget`／`OnFileDrop` は `crates/` で 0 件**（較正: `WM_ACTIVATE` は 7 ファイル）。振り分けの表は `crates/wintf/src/ecs/window_proc/mod.rs` の `dispatch_window_message` の `match msg.msg`（受け手は `fn(world, entity, hwnd, wparam, lparam) -> Option<LRESULT>`・表に無いものは `_ => None` で既定処理へ）。足し方は「1 腕＋受け手関数」で、置き場所は既存の子 module（`keyboard.rs` など）か新しいファイル。areka の層へ届ける ECS の型は wintf 側に新しく要る。`DragAcceptFiles` は窓を作った直後（`main.rs` の `open_startup_window` 近辺）。
+8. **メニューの枠と項目名は済み**＝`menu::Frame::Install` と `captions::FRAME_CAPTIONS` の `ghostinstallbutton.caption`／既定名「インストール…」。本仕様は `menu::register(world, Frame::Install, supplier)` を呼ぶだけ（`register` の最初の呼び手は #13）。
+9. **本体からはまだ辿れない**（`crates/areka/Cargo.toml` に `areka-nar` 無し。依存を持つのは `sample-ghost-kit` と **`areka-update`**＝新事実）。`// ukadoc:` は `crates/areka-nar/src/` に 0 行（較正: リポジトリ全体 322・`crates/` 233）。台帳 `assets.toml` の `descript_install` 11 行は `status="absent"`・`owner="areka-P0-nar-install"` のまま／`roadmap-draft.md` に `areka-P0-ghost-install` の行は無く（`nar-install` の行が `owner_count = 11`）、`shiori.toml` の `OnInstallBegin`・`OnFileDrop2` などは `owner=""`。`[[spec]]` に行を足すなら `[briefs].count` も +1（検査の腕 a／c／f が赤で知らせる）。
+10. **背景処理は `WintfTaskPool` でなくてよい。** 同 pool（`crates/wintf/src/ecs/widget/bitmap_source/task_pool.rs`）の戻り道は ECS のコマンドで areka の利用者は 0。areka の前例は `std::thread::spawn`（`emo2_boot/spine.rs`・`shiori_host.rs`）＝イベントは kanade へ `Sender<KanadeMsg>` で送るので専用スレッドが素直。
+11. **固定 `.nar` の fixture はファイルとして存在しない**＝`sample_ghost_kit::nar_writer` の組み立て器でテストの中で作る（areka は dev-dependency に持っている）。
+12. kanade: `msg.rs` 771・`actor.rs` 507・`schedule/mod.rs` 751・`schedule/events.rs` 431・`steady.rs` 935（相は入らない＝新しい相のファイル・前例 `schedule/user_break.rs` 75 行）。前例 balloon-break では `Input` の変種 1 つでテスト支援・偽の sakura を含む 22 ファイルに波及した。`main.rs` は 774 行。
+13. 名前の衝突（`areka_nar::{InstallRequest, InstallOutcome}`・`install.rs`・`lib.rs` から再公開）は**残っている**＝要件で改名。
+
+**要件段階の議題**: ⑴ 起動中のゴーストへ入れる（同じゴーストを上書きする）とき、`OnInstallBegin` → 降ろす → `install` → 起こし直す → `OnInstallComplete` の順序を #13／#58 の「降ろして起こし直す」仕組みにどこまで任せるか（#13 の設計が固まるまで決まらず、本仕様のタスク数を動かす）。⑵ 巻き戻せなかったときの告知に、在りかのパス・「7 日後に消える」の一文・連番付きの別ゴーストとして救い出す案（採ると 1〜2 タスク増）のどれを載せるか。**未測定**: `DragAcceptFiles` をした窓（WUC 合成・クリック透過のトグルあり）に `WM_DROPFILES` が実際に届くか／UI スレッドで `MessageBoxW` の入れ子のモーダルが出ている間の ECS の刻み。束の件数は `linkage.md` の members で「インストール」40・「投げ込み」10（brief の 41 とずれ・原因未確認）。
+
 ## 2026-09-20 棚卸⑮の再測定
 
 **実測の追記（main `fe157df1`）**

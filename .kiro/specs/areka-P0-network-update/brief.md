@@ -3,6 +3,26 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「更新」（候補名 `areka-P0-network-update`＝同名）。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-24 棚卸⑯の再測定（main `0b01f654`＝#51 `update-engine` の着地後）
+
+**#15 の後の直列のまま**（共有ファイルの全数は #15 の brief の同じ節）。**実装は #13・#50・#15 の着地待ち**。要件と設計は先行できる。想定 **12〜14 タスク**・分割不要。
+
+**崩れた／変わった前提（brief を改める箇所）**
+
+1. **HTTP・MD5・確定・`delete.txt` は `crates/areka-update` に揃った**（29 ファイル・5,848 行・テストでない本体は約 1,400 行）。入口は `run(&UpdateRequest{homeurl, target}, &dyn Fetch, &mut dyn FnMut(&Progress)) -> Result<UpdateOutcome, UpdateError>`（同期・スレッドは起こさない）。取得の境界は **`Fetch::get(&str) -> Result<Vec<u8>, FetchError>`**（brief の `HttpFetch` は古い名前）。進捗 `Progress`（0 始まり）＝`ManifestFetched`／`DiffDecided`／`DownloadBegin{index,total}`／`Md5Compared{matched}`／`Committed`／`Deleted`。成功 `UpdateOutcome`＝`Unchanged`／`Updated`。失敗 `UpdateError{stage, reason, leftovers, work}`＋`.file()`・`.rolled_back()`・理由の短い語は `FailReason::kind()`。**Desired Outcome 2〜4 はエンジンが済ませた**。Problem の「HTTP クライアントが 1 つも無い」「`Cargo.lock` 242」、Approach／Constraints の「`md-5` を 1 本足す・`tech.md` 登記・承認・`cargo deny`」は**削る**。裁定候補 ⑸ は決着済み（`manifest.rs` の `DEFAULT_CHARSET = SHIFT_JIS`）。
+2. **`crates/areka/Cargo.toml` はまだ `areka-update` に依存していない。** `Win32_Networking_WinHttp` は `crates/areka-update/Cargo.toml` にだけあり本体に機能を足す必要は無い。`areka-update` は `areka-nar` に依存している（新事実）。
+3. **`WinHttpFetch::new()` は失敗しても記録を出さない**（`winhttp.rs` に `tracing` 0 件）＝本仕様の側で `error!`。**https は未確認**（`winhttp_real_two_rounds_update_then_unchanged` は `#[ignore]`・ローカルの http）。
+4. **`delete.rs` の読み手には `// ukadoc:` の 1 行が在る**（`areka-update/src` で唯一）が本体から辿れないので、台帳の「相対パス」行は `status="absent"`・`owner="areka-P0-network-update"` のまま。`roadmap-draft` の行は `owner_count = 1`・`wave = "A4"`。`OnUpdateBegin`／`updatebymyself` の台帳行は `owner=""`。
+5. **`homeurl` の読み手は 0**（語彙が sylphya に在るだけ・#12 要件 2.9 が目録から除外）＝`catalog::companion_balloon` と同じ形の単独の読み手を足す。**`homeurl`／`useorigin1`／`other_homeurl_override` のリソース照会は既存の仕組みに乗る**＝`KanadeMsg::ResourceQuery` と `schedule/resources.rs` の `ALLOWED_RESOURCE_IDS` に 3 行足すだけ（「薄い読み手を新設」は不要）。
+6. **失敗の参照値は写すだけ**＝`OnUpdateFailure` の Ref1 は `UpdateError::file()`・Ref0 は `reason.kind()`。
+7. **メニューの枠と項目名は済み**＝`Frame::Update` と「ネットワーク更新」（`updatebutton.caption`）。`menu::register` を呼ぶだけ（呼び手 0・`#[allow(dead_code)]`・最初の呼び手は #13 の予定）。
+8. **`schedule/events.rs`（431 行）は更新系で約 24 本、#15 の約 10 本を足すと 1,000 行に迫る**＝`events_update.rs` への分割を推す。
+9. 束の件数は `linkage.md` の members で「更新」**50**（brief の 51 とずれ・原因未確認）。
+
+**触るファイル**: `crates/areka/Cargo.toml`・`main.rs`・`emo2_boot/{consumer_ledger,mod}.rs`・新規 `update_cue.rs`（`updatebymyself`／`update`／`updateother`）・**#15 の `install_cue.rs` の改変**（`\![execute,install,url]`＝同じ鍵）・kanade `msg.rs`／`actor.rs`／`schedule/mod.rs`／`schedule/resources.rs`／`events.rs`（分割）／新しい相のファイル・中＝`alert.rs`（失敗告知）と `areka-ghost/src/catalog.rs`（`homeurl` の読み手）・台帳 `assets.toml`（1 行）／`shiori.toml`（束「更新」のうち引き受ける分の `owner`）／`sakura-script.toml`・`roadmap-draft.md` の `owner_count`・生成物・§8。
+
+**要件段階の議題（Fable）**: ⑴ **更新中のイベントと SHIORI の解放が噛み合わない**——エンジンの前提は「確定の前に SHIORI を解放しておく」（完了 `update-engine` 設計の前提条件）だが、`run` は取得から確定までを 1 回の呼び出しで行い、その間に `OnUpdate.OnDownloadBegin` や MD5 照合の進捗を出す＝SHIORI に送るにはゴーストが起きている必要がある。選択肢: (a) `run` を「取得と照合」と「確定」の 2 段に割る（**完了クレートの改修**）／(b) 読み込み中の DLL の改名が通ることに賭け SHIORI を生かしたまま更新して後で読み直す（**未実走**）／(c) 進捗イベントを後からまとめて送る。答えで作業が完了クレートの改修になるかどうかが変わる。
+
 ## 2026-09-20 棚卸⑮の再測定
 
 **本仕様は 2 本に分かれた。** 想定タスクが 24〜30 本で 1 spec の上限（20 本）を超えたためである。分け方は `areka-P0-nar-install`（エンジン）と `areka-P0-ghost-install`（結線）の前例に倣う。
