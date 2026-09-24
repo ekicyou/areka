@@ -14,7 +14,7 @@
 
 ### 2.1 終了順序（要件 1）
 
-`fn main`（`crates/areka/src/main.rs`）の `app.run()?;` の後ろは次の 4 段で、すべて `main` のローカル変数を消費する。
+`fn main`（`crates/areka/src/main.rs`）の `app.run()` の後ろは次の 4 段で、すべて `main` のローカル変数を消費する。**2026-09-25 再突合（main `216dc2ca`・#55 着地後）**: 4 段は `finish_after_run(run, fault, cleanup)` の `cleanup` の中に入り、`run` が `Err` でも通る（#57 は #55 で修正済み）。① と ② の間に SHIORI の失敗の告知（`alert::raise`）が入り、告知の場面は `run()` の直後に `FirstExit`／`fault_of` とゴースト名（`GhostRuntime::mount().names.name`）から組む。
 
 | 段 | 消費する値 | 型 | 出所 |
 |---|---|---|---|
@@ -26,7 +26,7 @@
 - `GhostRuntime::shutdown(self, reason: CloseReason)`（`crates/areka-ghost/src/runtime.rs`）は self を消費し `Result<(), GhostShutdownError>` を返す。`ReportHandle::stop_and_report_final(self)`（`perf_thread_report.rs`）も self を消費する。
 - ②③ の失敗は `error!` の上で `Err(E_FAIL)` を返し以降を飛ばす（要件 1.5 はこれを変えない）。① の失敗は `debug!` で流す。
 - **④は「プロセスに 1 回」の性質**（報告スレッドはプロセス寿命）で、①〜③（ゴーストごと）とは寿命が違う。要件 1.1 は 4 段を「1 つの関数」と書くが、④をゴーストごとの関数に含めると 2 周目で報告スレッドが既に無い。→ 議題 1。
-- `app.run()` は `WinApp::run(&self) -> Result<()>`（`crates/wintf/src/runtime/mod.rs`）。doc の契約に「戻った後の `run()` は再入できない（登録表が World に無い）」とある。**本仕様の「2 周」は `run()` の中で起こる前提**（切替は `run()` を抜けない）であり、`run()` を 2 度回すことではない。決定論テストは `run()` を回さず World を直に駆動する（`SpineHarness` と同じ）。
+- `app.run()` は `WinApp::run(&self) -> Result<()>`（`crates/wintf/src/runtime/mod.rs`）。doc の契約に「戻った後の `run()` は再入できない（登録表が World に無い）」とある。**本仕様の「2 周」は `run()` の中で起こる前提**（切替は `run()` を抜けない）であり、`run()` を 2 度回すことではない。決定論テストは `run()` を回さず World を直に駆動する（`SpineHarness` と同じ）。#55 が wintf に「`run()` から戻った後はフレーム・VSync 中継・クリック透過の判定が回らない」守りを入れた（#55 design の Revalidation Triggers）——`run()` の後で窓を作り直す形は成り立たないので、起こし直しが `run()` の中で起こる本仕様の前提と矛盾しない。
 
 ### 2.2 「1 回だけ登録する」結線 8 か所（要件 2）
 
@@ -43,18 +43,19 @@
 | 7 | `placement::spawn::wire_zorder_pair`（`placement/spawn.rs`） | `ZOrderPairStrategy` を `insert_resource`＋起動時ログ | `FrameFinalize` へ 3 本の `.chain()` | あり（「schedule 実行外で 1 回だけ同期に呼ぶ」） |
 | 8 | `open_startup_window`（`main.rs`） | 監視の 2 源（`insert_resource` ×2）・窓の生成・受け口の装着・復元（非同期コマンドの中） | `FrameFinalize` へ `register_ghost_windows_click_through`・`attach_os_close_request`、および #7 の呼出。smoke の自動終了 | なし（doc に「同じ `FrameFinalize` schedule へ結線する」） |
 | 9 | `input_events::wire_mouse_input`（`input_events/mod.rs`） | `MouseWiring` を `insert_non_send` のみ | なし | — |
+| 10 | `emo2_boot::wire_kanade_stop`（`emo2_boot/mod.rs`・#55・2026-09-25 追記） | `KanadeStopRx` を `insert_non_send`（**プロセスに 1 つ**・ゴーストごとではない。送出端の写しは各 boot が kanade へ渡す） | `Update` へ `ghost_quit_system.before(emo2_frame_system)` | あり（「1 回だけ」）＝#7 と同じく分割せず登録側として呼ぶ |
 
 観察:
 
 - **系の登録はすべて `world.resource_mut::<Schedules>().add_systems(...)` 1 行**（#1 のみ `EcsWorld::add_systems` 経由だが中身は同じ `Schedules` への委譲）。分離は「その 1 行を別関数へ移す」に尽きる。
-- **状態の載せ替えは `insert_non_send`／`insert_resource` の意味論で無料**（bevy は同型の既存資源を置き換えて古い方を drop する）。`Receiver` を持つ状態（`ReadmeWiring.rx`・`UserBreakWiring.flag_rx`・`ChoiceSelectionInbox`・`Emo2Wiring` の 5 本の受信端）は置き換えで古い受信端が落ち、古いゴーストの送出端は `Err` を返すようになる。**順序の制約**: 古いゴーストを降ろしてから載せ替える（逆だと降ろす途中の送出が新しい受信端へ届く）。
+- **状態の載せ替えは `insert_non_send`／`insert_resource` の意味論で無料**（bevy は同型の既存資源を置き換えて古い方を drop する）。`Receiver` を持つ状態（`ReadmeWiring.rx`・`UserBreakWiring.flag_rx`・`ChoiceSelectionInbox`・`Emo2Wiring` の 4 本の受信端。停止通知の受信端は #55 で `Emo2Wiring` から World の `KanadeStopRx` へ移り、ゴーストごとの状態ではなくなった）は置き換えで古い受信端が落ち、古いゴーストの送出端は `Err` を返すようになる。**順序の制約**: 古いゴーストを降ろしてから載せ替える（逆だと降ろす途中の送出が新しい受信端へ届く）。
 - 系はすべて自己防御（`get_non_send` が `None` なら `trace!`＋無操作）なので、**登録したまま状態だけ入れ替えても系は新しい状態を見る**。`emo2_frame_system` は `remove_non_send::<Emo2Wiring>()`→戻すの形で、載せ替え後も同じ。
-- 「1 度」の前提コメントは実測 **7 か所**（要件は「6 か所」と書く。上の表の #1〜#7）。要件 2.5 は数ではなく「明記しているコメントすべて」と読めば矛盾しない。
+- 「1 度」の前提コメントは実測 **7 か所**（要件は「6 か所」と書く。上の表の #1〜#7）。2026-09-25: #55 で #10（`wire_kanade_stop` doc）と `main.rs` の据え付けの注記が加わり **9 か所**。要件 2.5 は数ではなく「明記しているコメントすべて」と読めば矛盾しない。
 - #2 `MenuRegistry` は後続 spec が「ゴースト」枠へ登記する口（`menu::register`）を持つ。**載せ替えで `MenuWiring` を新品に置き換えると、本仕様の範囲外の登記も消える**。今日は登記者が本体の 2 項目だけなので害は無いが、#13 が乗るときの契約を設計で決めておく必要がある（→ 議題 4）。
 
 ### 2.3 起動の結線の借用の形（要件 3）
 
-- `wire_emo2_boot(app: &WinApp, …)` は `app.world().borrow_mut()` を 4 回行う（手順 6 の `insert_non_send`・`add_systems`・`wire_readme`・`wire_user_break`）。4 回とも `world_mut()` で得た `&mut World` を渡すか `EcsWorld::add_systems` を呼ぶだけ。**`&WinApp` を `&mut World` に替えても他の引数・戻り値は変えずに済む。**
+- `wire_emo2_boot(app: &WinApp, …, kanade_stop: Sender<KanadeStopped>)`（末尾の送出端は #55）は `app.world().borrow_mut()` を 4 回行う（手順 6 の `insert_non_send`・`add_systems`・`wire_readme`・`wire_user_break`）。4 回とも `world_mut()` で得た `&mut World` を渡すか `EcsWorld::add_systems` を呼ぶだけ。**`&WinApp` を `&mut World` に替えても他の引数・戻り値は変えずに済む。**
 - `open_startup_window(app: &WinApp, cfg: &ConfigInputs)` が `WinApp` を要する理由は 3 つ: ⑴ `app.world().borrow_mut().add_systems(...)`（`&mut World` で代替可）、⑵ `app.world().borrow().spawn(|tx: CommandSender| async move { … })`（`EcsWorld::spawn` は `self.world.get_resource::<WintfTaskPool>()` を引いて `task_pool.spawn(f)` するだけなので、**素の `&mut World` からも同じ資源を引いて同じことができる**）、⑶ smoke の `Rc::downgrade(&app.world())`（`Rc<RefCell<EcsWorld>>` の弱参照が要る＝これだけは `WinApp` 側に残す。要件 3.5 が「1 度目でだけ」と定めているので矛盾しない）。
 - 非同期コマンドの中身（`insert_resource(snapshot/dpi_table)` → `spawn_ghost_windows` → `clear_default_char_pos` → `attach_char_pointer_handlers` → `menu::attach_release_handlers` → `attach_balloon_pointer_handlers`）は**全部 `&mut World` を取る関数**。つまり「窓を作る」本体は既に `fn(&mut World)` の形で、非同期コマンドは単にそれを最初の tick へ運ぶ包み。
 - `menu::attach_release_handlers` の doc は既に「窓を作り直す spec は作り直した窓へもう一度呼ぶ」と書いている（2 度目の呼出を想定済み）。
@@ -93,20 +94,20 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 
 ### 2.8 行数（要件 5.6）
 
-`main.rs` 774・`emo2_boot/mod.rs` 727・`frame.rs` 459・`frame/wiring.rs` 352・`app_exit.rs` 154（`wc -l` 実測・要件と一致）。`main.rs` から終了順序と `open_startup_window` の「窓を作る」側を出せば **150〜250 行減る**見込み。
+`main.rs` 847・`emo2_boot/mod.rs` 740・`frame.rs` 474・`frame/wiring.rs` 320・`app_exit.rs` 191（2026-09-25・main `216dc2ca` で `wc -l` 再実測。09-24 の 774・727・459・352・154 から #55 で増減）。`main.rs` から終了順序と `open_startup_window` の「窓を作る」側を出せば **150〜250 行減る**見込み。
 
 ## 3. 要件と資産の対応（ギャップの印: Missing／Unknown／Constraint）
 
 | 要件 | 既存資産 | ギャップ |
 |---|---|---|
 | 1.1〜1.3・1.6 終了順序を関数へ | `main.rs` の 4 段・`Emo2BootOutcome`（3 ハンドル） | **Missing**: 3 ハンドルを束ねる型（または引数 3 つの関数）と、`main` からの呼出 |
-| 1.4・7.1 `app.run()` 失敗の腕 | `app.run()?` の `?` | **Missing**: `let run = app.run(); <降ろす>; run?` の形。#55 は要件未生成（brief のみ・2026-09-24 実測）なので裁定 1 の前提は成立している |
+| 1.4・7.1 `app.run()` 失敗の腕 | `finish_after_run(run, fault, cleanup)`（#55・2026-09-25） | **済み**: #55 が先に採って着地。本仕様は `cleanup` の中身を降ろす関数に替えるだけ（要件 7.1 の判定・§8.7） |
 | 1.5 段の失敗の扱い | 各段の `error!`＋`Err` | 変更なし |
 | 1.7 `Drop` を採らない | `GhostRuntime` は `Drop` 未実装 | 変更なし（採らない） |
 | 2.1・2.2 8 か所の分離 | 上の表 #1〜#8 | **Missing**: 各関数の `add_systems` 行を別関数へ。2 度目の扱い（無視＋記録 or 1 度しか呼ばれない形）は設計 |
 | 2.3 前の状態を残さない | `insert_non_send` の置換意味論 | **Constraint**: 降ろしてから載せ替える順序。`MenuWiring` の登記の扱い（議題 4） |
 | 2.4 `wire_mouse_input` | 状態のみ | 変更なし（載せ替えの単位から呼ぶだけ） |
-| 2.5 コメント書き換え | 7 か所（要件は 6） | **Missing**: 書き換え。数は「該当箇所すべて」 |
+| 2.5 コメント書き換え | 9 か所（09-24 は 7・#55 で 2 増） | **Missing**: 書き換え。数は「該当箇所すべて」 |
 | 2.6 `on_boot_ok` | `&mut World` 済み | 変更なし |
 | 3.1・3.2 `&mut World` 化 | `wire_emo2_boot` の 4 回の借用 | **Missing**: 署名変更。`main_ghost_wiring_tests`／`wire_tests` の呼出も追随（`wire_emo2_boot_falls_back_to_unwired_on_missing_ghost_root` は `WinApp::new()` を作って渡している→ `app.world().borrow_mut().world_mut()` に変えるだけ） |
 | 3.3・3.4 `open_startup_window` の分割 | 非同期コマンドの中身は `&mut World` 関数群 | **Missing**: 「登録」と「窓を作る」の 2 関数。窓を作る側の経路（同期／非同期コマンド）は議題 2 |
@@ -115,11 +116,11 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 | 4.6 終了経路を変えない | `quit_app`・`run_ghost_quit_phase`・`on_ghost_os_close`・smoke | 変更なし |
 | 5.1〜5.3 見え方不変・smoke 緑 | smoke 3 方向・実機ログの語彙 | **Constraint**: ログの語彙と順序を 1 文字も変えない（`info!` の本文は smoke の目印） |
 | 5.4 kanade・ghost・wintf・examples 不変 | — | **Constraint**: `EcsWorld::spawn` を使わず `WintfTaskPool` を直接引く場合も wintf は無変更で済む（`pub struct WintfTaskPool`・`pub fn spawn`） |
-| 5.6 1,000 行 | 774／727 | 減る方向 |
+| 5.6 1,000 行 | 847／740（2026-09-25） | 減る方向 |
 | 5.7 `GhostBootOptions` に欄を足さない | 構造体リテラル 27 か所・16 ファイル（`grep` 実測・要件と一致） | 変更なし |
 | 6.1 2 周テスト | `SpineHarness`・`ScriptedShioriBackend`・`systems_len`・`AppExit::new` | **Missing**: テスト本体。試験台の再利用の形は議題 5 |
 | 6.2 窓だけ閉じるテスト | `frame_ghost_quit_tests.rs` の `world_with_ghost_windows` と同型 | **Missing**: テスト 1 本（`app_exit_tests.rs` へ） |
-| 6.3 失敗の腕のテスト | — | **Missing**: `app.run()` の結果を引数に取る純粋な関数（`Result<()>` を渡す）にすれば偽の `Err` を渡せる。`WinApp::run` は改変不可（要件 5.4） |
+| 6.3 失敗の腕のテスト | `main_finish_after_run_tests.rs`（#55・5 本） | **済み**: 足さない（§8.7） |
 | 6.5 字面テスト 3 本の追随 | 2.6 節 | **Constraint**: 新しい字面へ更新。登録の行を別ファイルへ移すなら走査先も移す |
 | 6.6 兄弟ファイル配置 | structure.md の `<stem>_<モジュール名>.rs` | 変更なし |
 | 7.2・7.3 完了 spec 3.6 を上書きしない | `despawn_app_windows` は私有のまま | 議題 3 の形次第。「`quit_app` と同じ私有部品を使う」（4.5）は関数を同じファイルに置けば自然に満たす |
@@ -175,7 +176,7 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 
 ### 8.1 要約
 - **Discovery Scope**: Extension（既存の部品の並べ替え・新しい機構なし）。外部依存の追加なし。
-- **選んだ案**: **案 C（折衷）**。各 `wire_*` は元のファイルの中で「載せ替え（`wire_*`・名前は今日のまま）」と「登録（`register_*`・新設）」に分け、新ファイル `crates/areka/src/ghost_session.rs` に登録の入口 `register_systems` と起こし直しの単位（`open_ghost_windows`／`reopen_ghost_windows`・`boot_ghost`〔2 度目以降も同じ関数〕・`GhostSession::shutdown`・`finish_run`）だけを置く。
+- **選んだ案**: **案 C（折衷）**。各 `wire_*` は元のファイルの中で「載せ替え（`wire_*`・名前は今日のまま）」と「登録（`register_*`・新設）」に分け、新ファイル `crates/areka/src/ghost_session.rs` に登録の入口 `register_systems` と起こし直しの単位（`open_ghost_windows`／`reopen_ghost_windows`・`boot_ghost`〔2 度目以降も同じ関数〕・`GhostSession::shutdown`）だけを置く（`finish_run` は 2026-09-25 の再突合で撤回＝#55 の `finish_after_run` を使う・§8.7）。
 - **主な発見**:
   - `pub(in path)` は祖先モジュールにしか絞れない（Rust の可視性の規則）。`app_exit.rs` の項目を兄弟の `ghost_session` へ絞る ⒝ は不可能。
   - `wire_zorder_pair`（`placement/spawn.rs`）の「状態」`ZOrderPairStrategy` はプロセスに 1 回の設定値で、ゴーストごとの状態を持たない＝分割の対象ではなく登録側そのもの。字面テスト（`spawn_zorder_chain_wiring_tests.rs`）は無変更で緑。
@@ -257,3 +258,25 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 - Rust Reference「Visibility and Privacy」（`pub(in path)` の祖先制約）。
 - `crates/wintf/src/ecs/world/mod.rs`（`EcsWorld::new`・`EcsWorld::spawn`・`EcsWorld::add_systems`）／`crates/wintf/src/ecs/widget/bitmap_source/task_pool.rs`（`WintfTaskPool::spawn`）／`crates/wintf/src/runtime/message_loop.rs`（`AppExit`）。
 - `crates/areka/src/emo2_boot/spine.rs`（`SpineHarness::boot_with`・`shutdown_bounded`・`standard_backend`）／`crates/areka-actor/src/ui.rs`（`spawn_ui` の Risks）。
+
+### 8.7 #55 着地後の再突合（2026-09-25・main `216dc2ca`）
+
+`shiori-fault-notice`（#55）が 2026-09-25 に main へ入った（PR #183・squash `216dc2ca`）。共有ファイル（`main.rs`・`app_exit.rs`・`emo2_boot/mod.rs`・`emo2_boot/frame.rs`）を引き直し、設計を次のとおり改めた。
+
+#### 決定 8: `app.run()` の後始末は #55 の `finish_after_run` を使い、`finish_run` は作らない
+- **Findings**: `main.rs` に `finish_after_run(run, fault, cleanup)` が入り、`run` の成否によらず `cleanup` を 1 回通してから `run` → 後始末 → Fault の順で `Err` を決める。兄弟テスト `main_finish_after_run_tests.rs`（5 本）が固定。#55 の要件ディスカッションで #57 を「本仕様で拾う」に覆した記録あり（#55 requirements 7.6）。
+- **Selected**: 要件 7.1 の規則どおり「#55 が先に採った」と判定し、要件 1.4・6.3 は既に満たされているとする。本仕様は `cleanup` の中身を `GhostSession::shutdown` に替えるだけで、`finish_after_run` と兄弟テストは触らない。設計の `finish_run`（`run.and(shutdown)`）と決定論テスト「失敗の腕でも降ろす」は撤回。
+- **告知の位置**: #55 は告知を ① の直後・② の前に置いた（ゴースト名を消費前に読む／②③ の失敗に巻き込まれない／告知中に ticker が指令を溜めない）。①②③ を 1 関数にすると ① と ② の間に割り込めないので、告知は降ろす関数の**後**へ動かす。3 つの理由は ⑴ `session.ghost_name()` を `run()` の直後に読む ⑵ 降ろす結果を `let down = …` に受けて告知の後で `down?` ⑶ ① で ticker は止まっている、で保つ。降ろす前に出す案は ⑶ を失う。見える差は Fault の終わり方で告知が ②③ の後に出ることだけ（②③ は既に止まった kanade への要求と join で速やかに戻る）。
+
+#### 決定 9: 停止通知の受け口はプロセスに 1 つ・送出端の写しをゴーストごとに渡す
+- **Findings**: #55 で `Emo2Wiring::set_kanade_stop` は退役し、受け口は World の NonSend `KanadeStopRx`（`wire_kanade_stop(&WinApp, rx)` が挿す＝`Update` へ `ghost_quit_system` の登録も同じ関数）。channel は `main` が 1 本作り、`wire_emo2_boot(…, kanade_stop: Sender)` と fallback の `boot_with_kanade_stop(…, Some(tx.clone()))` の両方へ写しを渡す。`run_ghost_quit_phase` は `Disconnected` を「もう来ない」とだけ扱う。
+- **Selected**: `wire_kanade_stop` は `wire_zorder_pair` と同じ「状態がプロセスに 1 つ」の登録側として分割せず、`register_systems(world, kanade_stop_rx)` から呼ぶ（`&WinApp` → `&mut World` にするだけ。`frame_schedule_tests.rs` の `QUIT_REGISTRATION` の字面は `mod.rs` に残る）。送出端の写しは `GhostBootInputs.kanade_stop` に載せ、`boot_ghost` が wired と fallback の両方へ渡す。`wire_emo2_boot` の末尾の引数は #55 の形のまま（`Emo2BootInputs` には入れない＝fallback も同じ写しを使うため）。
+- **2 周テストの面**: 停止通知の受信端は `Emo2Wiring` の面ではなくなったが、`KanadeStopRx` を「テストが持つ送出端の写しを落としてから空になるまで回して `Empty`」で見れば、2 周目の kanade が写しを持って起動したことを語る（1 周目の写しは 1 周目の終了で落ちる・未読の `KanadeStopped` を掃く必要は変わらない）。面は 4 のまま。`Emo2Wiring::kanade_stop_connected` の口は不要になった。
+
+#### 決定 10: `run()` の後で窓を作り直す形は取らない（確認）
+- #55 が wintf に「`run()` から戻った後はフレーム・VSync 中継・クリック透過の判定が回らない」守りを入れた。本仕様の起こし直しは `run()` の中で起こる前提（§2.1）なので矛盾しない。#13 もこの前提で組む。
+
+#### 再実測
+- 行数: `main.rs` 847・`emo2_boot/mod.rs` 740・`frame.rs` 474・`frame/wiring.rs` 320・`app_exit.rs` 191。
+- 「1 度」の前提コメント: 9 か所（#55 で `wire_kanade_stop` の doc と `main.rs` の据え付けの注記が加わった）。
+- `app_exit.rs` に `FirstExit`／`fault_of` が増えたが `quit_app`・`despawn_app_windows` の形は不変＝`close_windows_for_restart` の設計に影響なし（`FirstExit` は挿さない・触らない）。
