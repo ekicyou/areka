@@ -7,6 +7,7 @@
 **実測（main `fe157df1`）**
 
 - 本文が「先に着地させる」と書く上流は両方とも完了した（`areka-P0-text-decoration-canon`・`areka-P0-balloon-font-descript-keys`）。`draw.rs` は 988 → 750 行、`actor_decoration.rs` が分かれた。**同居できない待ちは解けている。**
+- **2026-09-24: 項目 12 は直接修正で直した**（警告の文言を「指定なしとして扱う」へ・文言を固定するテストを足した。既存の `unknown_value_falls_back_to_horizontal_tb_with_warn` は件数しか見ておらず逐語固定ではなかった）。本仕様の範囲は 11・14・15 の 3 項目。以下は当時の記述。
 - **項目 12（未知の `writing_mode` の警告の文言が実際の挙動と食い違う）は、spec を立てずに直す**（roadmap「直接修正候補」）。`crates/areka-emo-text/src/writing.rs` の 1 ファイルで閉じ、文言と、逐語で固定しているテスト `unknown_value_falls_back_to_horizontal_tb_with_warn` を同時に直す。他の 3 項目と共有するファイルは 0。直ったら本仕様から外す。
 - 残る 11・14・15 はテストの穴と正典の追加で、α にもバグ修正にも属さないので当面着手しない。
 - `layout.rs` 973・`actor.rs` 975・`region.rs` 977 行＝1,000 行の上限の直前。足すときは新規ファイルで。

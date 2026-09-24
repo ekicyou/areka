@@ -7,6 +7,7 @@
 **実測（main `fe157df1`）**
 
 - `run_dpi_phase`（`crates/areka/src/emo2_boot/frame/dpi.rs`）と `refresh_scale`（`crates/areka-emo-present/src/presenter/refresh.rs`）は行番号のずれ 0。上流の `present-gpu-transform-scale` は完了したが、**跳ねが残るかは測り直していない**。
+- **2026-09-24: 判定器の穴は spec を立てずには直せないと分かった**（roadmap「直接修正候補」の注記＝既存テスト 3 本が、見送られたバルーンの書込 2 回も違反として数えることを固定している。要件 4.5 と 4.6 のどちらを優先するかの裁定待ち）。以下は当時の記述。
 - **判定器の穴は、spec を立てずに直す**（roadmap「直接修正候補」）。`crates/areka/src/placement/transition_judge_verdict.rs` の窓ごとの書込の上限（要件 4.5）は `summary.writes_per_window` をそのまま回し、見送りの窓を除いていない。ところが同じファイルに「見送りの窓を除いた、書込のあった窓」を返す `judged_windows` が**既に在り**、被覆の検査だけが使っている。直しは「上限の検査でも `judged_windows` を回す」＋兄弟テスト 1 本で、`dpi.rs` には触らない。
 - 残る本体（2 ティックの跳ねの相の順）は開発者裁定「拡大率の切替は頻繁に起こらないため許容」のまま据え置く。
 
