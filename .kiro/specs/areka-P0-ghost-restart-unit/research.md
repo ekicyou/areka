@@ -151,12 +151,12 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 ## 5. 設計フェーズへ持ち越す議題
 
 1. ~~**perf の最終報告（④）の置き場。**~~ **要件ディスカッションで解決済み（2026-09-24）**: 要件 1.1 を「ゴーストごとの 3 段（①②③）を関数に・④はプロセスに 1 回なので `fn main` の末尾（関数の直後）に残す」へ改めた。`Option<ReportHandle>` を 2 周目に `None` で渡す形は「1 回きり」を引数で表すことになるので採らない。
-2. **「窓を作る」側の経路。** ⒜ 今日どおり `WintfTaskPool` の非同期コマンドに積む（素の `&mut World` から `get_resource::<WintfTaskPool>()` で同じ経路を使える。1 度目の見え方が変わらない。2 度目以降は「次の tick で窓が出る」＝フレームの系の中から積んでも借用が衝突しない）。⒝ `&mut World` へ同期に直接 `spawn_ghost_windows` する（HWND の生成は `run()` の reconcile で起きるので画面上の順序は変わらない見込みだが、`Added<WindowHandle>` を捉える系の登録より先に spawn しても取りこぼさないことは既に doc が保証している。**見え方が変わらないことは smoke と実機で確かめる必要がある**）。要件 3.4「1 度目と同じ手順」は ⒜ の方が字義どおり。
-3. **要件 4 の操作の呼び手の限定の形。** ⒜ 引数に「直後に起こすための入力」（起動の入力の束）を取り、戻り値の型を「閉じた枚数」ではなく「次の起動を続けるための証」にする（`quit_app` の代わりに呼んで終わりにできない）。⒝ 可視性を `pub(in crate::ghost_session)`（案 B）で絞る（`app_exit.rs` の外からは起こし直しの単位しか呼べない。最も短い）。⒞ 型で証を返さず、doc と `#[must_use]` だけ。要件 4.4「終了経路のどこからも呼べない」は ⒝ が構造で満たし、⒜ は「呼べるが続きを組まざるを得ない」形。
+2. **「窓を作る」側の経路。** → **設計で決定（§8 決定 2）: ⒜。** ⒜ 今日どおり `WintfTaskPool` の非同期コマンドに積む（素の `&mut World` から `get_resource::<WintfTaskPool>()` で同じ経路を使える。1 度目の見え方が変わらない。2 度目以降は「次の tick で窓が出る」＝フレームの系の中から積んでも借用が衝突しない）。⒝ `&mut World` へ同期に直接 `spawn_ghost_windows` する（HWND の生成は `run()` の reconcile で起きるので画面上の順序は変わらない見込みだが、`Added<WindowHandle>` を捉える系の登録より先に spawn しても取りこぼさないことは既に doc が保証している。**見え方が変わらないことは smoke と実機で確かめる必要がある**）。要件 3.4「1 度目と同じ手順」は ⒜ の方が字義どおり。
+3. **要件 4 の操作の呼び手の限定の形。** → **設計で決定（§8 決定 3）: ⒜（証を返す形）。⒝ は Rust の可視性が祖先モジュールにしか絞れないので兄弟には使えない。** ⒜ 引数に「直後に起こすための入力」（起動の入力の束）を取り、戻り値の型を「閉じた枚数」ではなく「次の起動を続けるための証」にする（`quit_app` の代わりに呼んで終わりにできない）。⒝ 可視性を `pub(in crate::ghost_session)`（案 B）で絞る（`app_exit.rs` の外からは起こし直しの単位しか呼べない。最も短い）。⒞ 型で証を返さず、doc と `#[must_use]` だけ。要件 4.4「終了経路のどこからも呼べない」は ⒝ が構造で満たし、⒜ は「呼べるが続きを組まざるを得ない」形。
 4. **`MenuWiring` の載せ替えと登記の扱い。** 新品に置き換えると後続 spec の登記（`menu::register`）も消える。⒜ 載せ替えで新品にし、登記は「ゴーストを起こすたびに登記し直す」を #13 側の契約にする（`MenuRegistry` の doc に 1 行）。⒝ `MenuWiring` のうち kanade の送出端だけを差し替える口を足す（本仕様の範囲外の機能を足すことになる）。本仕様は登記者が 2 項目（本体）だけなので ⒜ が最小。**要件ディスカッション（2026-09-24）の整理**: 要件 2.3 が `MenuWiring` を「新しいゴーストのもので置き換え、前のものを残さない」と定めているので、要件の側は既に ⒜ を選んでいる。設計で決めるのは残り＝「ゴーストを起こすたびに登記し直す」を #13 の契約として `MenuRegistry`（または `menu::register`）の doc に 1 行で書く位置。⒝ は本仕様の範囲外の機能になるので採らない。
-5. **2 周テストの試験台。** ⒜ `SpineHarness` を拡張して `wire_emo2_boot` 本体を呼ぶ（要件 3.2 に直接応える。`spawn_loop_ticker` の実時計 ticker が起きるので `TickerMsg::Close` で必ず止める。`SpineHarness` は今 `wire_emo2_boot` を写しているが本体は呼ばない）。⒝ `SpineHarness` の手順をそのまま 2 度回し、`wire_emo2_boot` 本体は「`&mut World` で呼ぶ 1 本の別テスト」（存在しない根で fallback を返す `wire_tests` の既存テストを `&mut World` に変えるだけ）で要件 3.2 を満たす。⒝ は `wire_emo2_boot` の本体を 2 周に含めないので「本体が 2 度呼べる」の証拠は弱い。
-6. **登録の 2 度目の扱い（要件 2.2）。** ⒜ 登録関数は `main` から 1 度だけ呼ばれる形にし、実行時の見張りは持たない（最小）。⒝ 登録済みの印（Resource 1 つ）を置き、2 度目は `warn!`（または `debug!`）で無視する（判断分岐が 1 つ増え、そのテストが 1 本要る）。2 周テストの判定式（`systems_len()` が同じ）は ⒜⒝ どちらでも成り立つ。
-7. **`GhostDecision`／`BalloonDecision` の合成。** 2 周テストが `on_boot_ok` を通すには起動前の解決の結果が要る。合成しやすい形か（`boot_resolve.rs`）は未確認→調査項目。通さない（`insert_persist_wiring` だけを通す）なら要件 2.6 の「載せ替えの単位から呼べる形に保つ」はコンパイルで示せる。
+5. **2 周テストの試験台。** → **設計で決定（§8 決定 5）: `wire_emo2_boot` 本体を `boot_ghost` 経由で 2 度呼ぶ。`SpineHarness` は拡張せず、台本つき偽 SHIORI・検体・有界待機の部品だけを `pub(crate)` で借りる。** ⒜ `SpineHarness` を拡張して `wire_emo2_boot` 本体を呼ぶ（要件 3.2 に直接応える。`spawn_loop_ticker` の実時計 ticker が起きるので `TickerMsg::Close` で必ず止める。`SpineHarness` は今 `wire_emo2_boot` を写しているが本体は呼ばない）。⒝ `SpineHarness` の手順をそのまま 2 度回し、`wire_emo2_boot` 本体は「`&mut World` で呼ぶ 1 本の別テスト」（存在しない根で fallback を返す `wire_tests` の既存テストを `&mut World` に変えるだけ）で要件 3.2 を満たす。⒝ は `wire_emo2_boot` の本体を 2 周に含めないので「本体が 2 度呼べる」の証拠は弱い。
+6. **登録の 2 度目の扱い（要件 2.2）。** → **設計で決定（§8 決定 6）: ⒜。** ⒜ 登録関数は `main` から 1 度だけ呼ばれる形にし、実行時の見張りは持たない（最小）。⒝ 登録済みの印（Resource 1 つ）を置き、2 度目は `warn!`（または `debug!`）で無視する（判断分岐が 1 つ増え、そのテストが 1 本要る）。2 周テストの判定式（`systems_len()` が同じ）は ⒜⒝ どちらでも成り立つ。
+7. **`GhostDecision`／`BalloonDecision` の合成。** → **設計で決定（§8 決定 7）: 合成して `on_boot_ok` を本当に通す。** 2 周テストが `on_boot_ok` を通すには起動前の解決の結果が要る。合成しやすい形か（`boot_resolve.rs`）は未確認→調査項目。通さない（`insert_persist_wiring` だけを通す）なら要件 2.6 の「載せ替えの単位から呼べる形に保つ」はコンパイルで示せる。
 
 ## 6. 調査項目（Research Needed）
 
@@ -168,3 +168,91 @@ structure.md の規約「`include_str!` で本番ファイル本文を読む構�
 ## 7. 次の段階
 
 `/kiro-design areka-P0-ghost-restart-unit` で設計へ。設計は上の議題 1〜7 に答え、案 A／B／C のいずれか（推しは **案 B または C**＝登録の入口が 1 本・起こし直しの単位が 1 ファイル）を選ぶ。実装は #55 `shiori-fault-notice` の着地後（B2）で、着手時に本文書の 2 節を settled main で引き直す。
+
+→ 2026-09-24 設計生成済み（`design.md`）。決定は §8。
+
+## 8. 設計フェーズの調査と決定（2026-09-24）
+
+### 8.1 要約
+- **Discovery Scope**: Extension（既存の部品の並べ替え・新しい機構なし）。外部依存の追加なし。
+- **選んだ案**: **案 C（折衷）**。各 `wire_*` は元のファイルの中で「載せ替え（`wire_*`・名前は今日のまま）」と「登録（`register_*`・新設）」に分け、新ファイル `crates/areka/src/ghost_session.rs` に登録の入口 `register_systems` と起こし直しの単位（`open_ghost_windows`／`reopen_ghost_windows`・`boot_ghost`／`reboot_ghost`・`GhostSession::shutdown`・`finish_run`）だけを置く。
+- **主な発見**:
+  - `pub(in path)` は祖先モジュールにしか絞れない（Rust の可視性の規則）。`app_exit.rs` の項目を兄弟の `ghost_session` へ絞る ⒝ は不可能。
+  - `wire_zorder_pair`（`placement/spawn.rs`）の「状態」`ZOrderPairStrategy` はプロセスに 1 回の設定値で、ゴーストごとの状態を持たない＝分割の対象ではなく登録側そのもの。字面テスト（`spawn_zorder_chain_wiring_tests.rs`）は無変更で緑。
+  - クレートの根（`main.rs`）の私有関数（`on_boot_ok`・`restore_merged_placements`・`boot_monitor_snapshot`・`insert_persist_wiring`）は子モジュールから見える（`emo2_boot` が `crate::is_benign_boot_error` を呼ぶのと同じ規則）。兄弟テストが `main.rs` に繋がっているので動かさない。
+  - `wire_emo2_boot` に偽の SHIORI を入れるには `GhostBootOptions` の `shiori`／`ticker`／`app_profile_dir` の 3 値を入力から取る必要がある（今日は関数の中で固定）。`GhostBootOptions` の欄は足さず（要件 5.7）、入口の型 `Emo2BootInputs` を `emo2_boot` に置く（依存方向を保つため）。
+  - `areka_actor::spawn_ui`（文字層の UI アクター）は同じスレッドで何度でも `spawn_local` できる。pump を回さなければ何もせず、drop で落ちる（doc の Risks の記述）。
+  - `EcsWorld::new`（`crates/wintf/src/ecs/world/mod.rs`）が `WintfTaskPool` を必ず挿す。`WintfTaskPool::spawn` は `pub`。素の `World` には無い。
+
+### 8.2 調査ログ
+
+#### 可視性で呼び手を絞れるか（議題 3 ⒝）
+- **Context**: 要件 4.4「呼び手を限定する形」。
+- **Sources**: Rust Reference「Visibility and Privacy」——`pub(in path)` の `path` は現在のモジュールの祖先でなければならない。
+- **Findings**: `crate::app_exit` の祖先は `crate` だけ。`pub(in crate::ghost_session)` は書けない。`app_exit` を `ghost_session` の子に移せば書けるが、#55 と共有するファイルを動かすことになる。
+- **Implications**: ⒜（戻り値の証 `WindowsClosed`・`#[must_use]`・消費先は `reopen_ghost_windows`／`reboot_ghost` の 2 つ）を採る。
+
+#### 窓を作る側を素の `&mut World` から積めるか（議題 2）
+- **Context**: `open_startup_window` は `app.world().borrow().spawn(...)` で非同期コマンドに積む。
+- **Sources**: `EcsWorld::spawn`（`crates/wintf/src/ecs/world/mod.rs`）＝`self.world.get_resource::<WintfTaskPool>()` → `task_pool.spawn(f)`。`WintfTaskPool::spawn`（`crates/wintf/src/ecs/widget/bitmap_source/task_pool.rs`）は `pub`。
+- **Findings**: 同じ資源を `world.get_resource::<WintfTaskPool>()` で引けば同じ経路。資源が無いとき `EcsWorld::spawn` は黙って何もしない。
+- **Implications**: 1 度目・2 度目とも同じ経路（⒜）。資源が無いときは `error!`＋`Err(TaskPoolMissing)`（log-first）。
+
+#### 2 周テストで 1 周目と 2 周目の状態を見分ける面
+- **Context**: 要件 6.1 ⑵「前のものが残っていない」。
+- **Findings**: 検体の複製は周ごとに別のフォルダ → `ReadmeWiring.path` が周を語る。`MenuRegistry` に 1 周目だけ余分な登記を入れれば新品かどうかが分かる（議題 4 の契約の実演にもなる）。`Receiver` を持つ状態（`Emo2Wiring.kanade_stop`・`UserBreakWiring.flag_rx`）は 1 周目の送出端（kanade・dispatcher の sink）が 1 周目の終了で落ちるので `Disconnected` と `Empty` で見分けられる。kanade の `Sender` を持つ状態（`MouseWiring`・`MenuWiring` の送り口・`ChoiceForwarder`）と sylphya の投函端（`PersistWiring`）には副作用無しで生死を問う口が無い（std の `Sender` に生死の照会は無い）。
+- **Implications**: 証拠の面は 4（path・登記・停止通知の受信端・旗の受信端）、面が無い状態は 0 面と明示。4 面は wired の腕の直線の手順で挿されるので、4 面が新しければ同じ手順を通ったことになる。
+
+#### `GhostDecision`／`BalloonDecision` の合成（議題 7）
+- **Findings**: `boot_resolve.rs` の両型は `pub(crate)` の欄だけ（`route: GhostRoute{Argv,…}`・`dir: PathBuf`・`folder: Option<String>`）。`LastUsed::record` は publisher へ投函するだけ。`app_profile_dir: None` は `SpineHarness` の既存の使い方。
+- **Implications**: 合成して `on_boot_ok` を本当に通す。
+
+### 8.3 案の評価
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|---|---|---|---|---|
+| 案 A | 既存ファイルの中だけで分ける | 字面テストの走査先を動かさない | `main` が登録を 8 回呼ぶ＝「登録は 1 回」が構造で読めない | 不採用 |
+| 案 B | 登録関数の定義も新ファイルへ | 起こし直しの単位が 1 ファイル | 字面テスト（`t_zwi06`・`t_n10`・spawn）の走査先が増える | 不採用 |
+| **案 C** | 分割は元のファイル・入口と単位だけ新ファイル | 登録の入口 1 本・字面テストの追随は `t_zwi08`・`t_zwi06` の 2 か所 | 新ファイル 1 つ | **採用** |
+
+### 8.4 設計判断
+
+#### 決定 2: 窓を作る側は今日と同じ非同期コマンドの経路（⒜）
+- **Alternatives**: ⒝ `&mut World` へ同期に `spawn_ghost_windows`。
+- **Selected**: 素の `&mut World` から `WintfTaskPool` を引いて積む。無ければ `error!`＋`Err`。
+- **Rationale**: 1 度目の見え方が変わらない・フレームの系の中から積んでも借用が衝突しない・要件 3.4 を字義どおり満たす。
+- **Trade-offs**: 2 度目以降は次の tick で窓が出る（今日の 1 度目と同じ）。同期が要ると分かれば、コマンドの中身が既に `fn(&mut World)` の並びなのでその並びを直接呼ぶ関数を足すだけ（本仕様では作らない）。
+
+#### 決定 3: 呼び手の限定は戻り値の証（⒜）
+- **Alternatives**: ⒝ 可視性（不可能）・⒞ doc と `#[must_use]` だけ。
+- **Selected**: `close_windows_for_restart(world) -> WindowsClosed`（欄は私有・`#[must_use]`）。消費先は `reopen_ghost_windows` と `reboot_ghost` だけ。
+- **Rationale**: 続きを組まざるを得ない形。`despawn_app_windows` は私有のまま・`quit_app` は不変・終了経路に呼び手を置かない＝完了 spec 3.6 の上書きではない。
+- **Trade-offs**: `#[must_use]` は警告どまり。構造の限定は「消費先が 2 つ」が本体。
+
+#### 決定 5: 2 周テストは `wire_emo2_boot` 本体を通す
+- **Alternatives**: ⒝ `SpineHarness` の手順を 2 度回す（本体を通さない）。
+- **Selected**: `boot_ghost` を 2 度呼ぶ。偽の SHIORI は `Emo2BootInputs.shiori = ShioriWiring::Custom(台本つき)`、`ticker = Disabled`、`app_profile_dir = None`。`SpineHarness` は拡張せず、`spine` の部品（`ScriptedShioriBackend`・`standard_backend`・`run_bounded`・`spin_wait_until`）と `acquire_emo2` を `pub(crate)` に広げて借りる。
+- **Rationale**: 要件 3.2 は「その形で呼ぶ決定論テスト（要件 6.1）」と明記する。⒝ では本体が 2 度呼べる証拠が無い。
+- **Follow-up**: 実時計の loop ticker が周ごとに起きる——`shutdown` ① が必ず止める。hang 対策は `run_bounded`。
+
+#### 決定 6: 登録の 2 度目は見張らない（⒜）
+- **Selected**: `register_systems` の呼び手は `main` の 1 か所。起こし直しの経路に登録は無い。
+- **Rationale**: 見張り（Resource＋`warn!`）は判断分岐が 1 つ増えテストが 1 本要るが、構造で読める。2 周テストの ⑴（`systems_len()` が同じ）が「載せ替え側は系を足さない」を固定する。
+
+#### 決定 7: 起動前の解決の結果を合成して `on_boot_ok` を通す
+- **Selected**: `GhostDecision { route: Argv, dir: 検体の根, folder: None }`・`BalloonDecision { route: Argv, dir: 同梱バルーン, folder: None }`。
+- **Rationale**: 載せ替えの単位の本文を 2 周テストと本番で違えない。
+
+#### 追加の決定: `Emo2BootInputs` は `emo2_boot` に置く
+- **Rationale**: `ghost_session` → `emo2_boot` の依存方向を保つ（型を `ghost_session` に置くと `emo2_boot` が上向きに import する）。`ShioriWiring::Custom` は複製できないので値渡し。fallback（LogSink）の boot は `GhostBootInputs.helper_exe` から `ghost_boot_options` を組む（今日と同じ）。
+
+### 8.5 リスクと対策
+- 2 周テストの hang — 全待機を有界（`run_bounded`）にし、後片付けの順を `SpineHarness::shutdown_bounded` と同じにする（`GhostSession::shutdown` の ①②③ がその順）。
+- fallback の起動で `Input` の 5 系が登録されたまま無操作になる — 自己防御（NonSend 不在で `trace!`）で見え方は不変。design に明示済み。
+- `app_profile_dir: None` での `LastUsed::record` の縮退の記録 — テストは記録を判定しないが、実装時に `error!` が出ないことを 1 度目視する。
+- `#[must_use]` は警告どまり — 消費先が 2 つしか無いことが限定の本体。
+
+### 8.6 参照
+- Rust Reference「Visibility and Privacy」（`pub(in path)` の祖先制約）。
+- `crates/wintf/src/ecs/world/mod.rs`（`EcsWorld::new`・`EcsWorld::spawn`・`EcsWorld::add_systems`）／`crates/wintf/src/ecs/widget/bitmap_source/task_pool.rs`（`WintfTaskPool::spawn`）／`crates/wintf/src/runtime/message_loop.rs`（`AppExit`）。
+- `crates/areka/src/emo2_boot/spine.rs`（`SpineHarness::boot_with`・`shutdown_bounded`・`standard_backend`）／`crates/areka-actor/src/ui.rs`（`spawn_ui` の Risks）。
