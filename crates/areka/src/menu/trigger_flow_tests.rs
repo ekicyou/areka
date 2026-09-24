@@ -120,13 +120,18 @@ fn right_released() -> PointerState {
     })
 }
 
-/// 右ダブルクリックを 1 件預ける（押下ハンドラが置くのと同じ形）。
+/// 右ダブルクリックを窓 0 で 1 件預ける（押下ハンドラが置くのと同じ形）。
 fn defer_double_click(world: &mut World) {
+    defer_double_click_from(world, 0);
+}
+
+/// 右ダブルクリックを指定の窓で 1 件預ける。
+fn defer_double_click_from(world: &mut World, scope: u32) {
     world
         .get_non_send_mut::<MouseWiring>()
         .expect("MouseWiring は挿入済み")
         .defer_right_double_click(PendingDoubleClick {
-            scope: 0,
+            scope,
             surface_pos: (7, 4),
             region: Some("Bust".to_string()),
         });
@@ -665,6 +670,43 @@ fn a_suppressed_tick_without_a_deferred_double_click_sends_nothing() {
 
     assert!(f.kanade.try_recv().is_err(), "何も送らない");
     assert!(!in_flight(&f.world));
+}
+
+/// 窓 1 の預かりは、窓 0 の要求が抑止に決着しても送らずに捨て、両方の窓番号を記録する（要件 4.2・4.5）。
+#[test]
+fn a_suppressed_tick_drops_a_deferred_double_click_of_another_window() {
+    let mut f = fixture();
+    let now = Instant::now();
+    assert!(handle_release(
+        &mut f.world,
+        f.window,
+        &right_released(),
+        now
+    ));
+    let (_ids, reply) = take_query(&f.kanade);
+    defer_double_click_from(&mut f.world, 1);
+    reply
+        .send(vec![value("sakura.popupmenu.visible", "0")])
+        .expect("受け口は生きている");
+
+    let (ready, lines) = capture_lines(LineFormat::LevelFields, || poll_once(&mut f.world, now));
+
+    assert!(ready.is_none(), "抑止の tick では計画ができない");
+    assert!(f.kanade.try_recv().is_err(), "別の窓の預かりは送らない");
+    assert!(
+        !deferred_double_click_remains(&mut f.world),
+        "預かりは残らない"
+    );
+    assert!(!in_flight(&f.world));
+    let traces = menu_lines(&lines, "TRACE");
+    assert_eq!(traces.len(), 1, "{lines:?}");
+    assert!(
+        traces[0].contains("menu_deferred_double_click_scope_mismatch")
+            && traces[0].contains("request_scope=0")
+            && traces[0].contains("deferred_scope=1"),
+        "{:?}",
+        traces[0]
+    );
 }
 
 /// メニューを出すなら、預かっていた右ダブルクリックは送らずに捨てる（要件 1.10）。

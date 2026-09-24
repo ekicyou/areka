@@ -433,7 +433,7 @@ fn base_image_surface(id: u32, file: &str) -> Surface {
 
 #[cfg(test)]
 #[path = "shell_target_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 
 #[cfg(test)]
 #[path = "shell_target_names_tests.rs"]

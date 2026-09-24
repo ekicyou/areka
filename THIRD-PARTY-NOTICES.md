@@ -2023,6 +2023,7 @@ SOFTWARE.
 - shiori-host32-host 0.0.1
 - shiori-host32-ipc 0.0.1
 - shiori-host32-testdll 0.0.1
+- shiori-host32-testdll-loadu 0.0.1
 - shiori4-testdll 0.0.1
 - temp-path-kit 0.0.1
 - ukadoc-survey 0.0.1

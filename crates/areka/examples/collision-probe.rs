@@ -98,7 +98,7 @@
 //!      （`source.rs:197-201`・作者基準 DPI の取得）——起点が `descript.txt` であることは
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
 //!    - **shell の `surfaces.txt` と面画像**（採寸側 `placement/measure.rs:328-345` ＋ probe 自身の
-//!      [`build_shell_target`]）
+//!      [`load_shell_assets`]）
 //!    - **バルーンパッケージの面定義・面画像**（`measure.rs:221` の `measure_balloon_surface0`）と
 //!      **`windowposition` 定義**（`placement/mod.rs:341` の `apply_scope_windowpositions`）
 //!

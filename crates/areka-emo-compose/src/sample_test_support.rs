@@ -26,3 +26,22 @@ static KONNOYAYAME: LazyLock<SampleRoot> =
 pub(crate) fn konnoyayame_shell_root() -> PathBuf {
     KONNOYAYAME.folder().join("shell/master")
 }
+
+/// 受け口そのものの較正（spec: areka-P0-keycolor-clickthrough-coverage 要件 3.1）——検体の登記名や
+/// 木の形が変わると、これを使うテストは「読めない」の一言で赤くなって原因が見えなくなる。
+/// ここが先に赤くなれば、原因が受け口側だと分かる。
+#[test]
+fn every_sample_receptor_points_at_a_real_folder() {
+    let shell = konnoyayame_shell_root();
+    assert!(
+        shell.join("surfaces.txt").is_file(),
+        "konnoyayame の受け口が指す先に surfaces.txt が無い: {}",
+        shell.display()
+    );
+    let ghost = emo2_root();
+    assert!(
+        ghost.join("shell").join("master").is_dir(),
+        "emo2 の受け口が指す先に shell/master が無い: {}",
+        ghost.display()
+    );
+}

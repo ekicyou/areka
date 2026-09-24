@@ -90,7 +90,7 @@ fn build_and_spawn(world: &mut World) {
         }
     };
     let shell_dir = ghost_root.join("shell/master");
-    let Some((emo_world, atlas)) = build_shell_target(&shell_dir, &decoder) else {
+    let Some((emo_world, atlas)) = load_shell_assets(&shell_dir, &decoder) else {
         tracing::error!("collision-probe: shell アセット構築に失敗 — 中止（窓は配置済み）");
         return;
     };
@@ -109,14 +109,14 @@ fn build_and_spawn(world: &mut World) {
 }
 
 /// shell dir から scope0 装着用の `(EmoWorld, AtlasTable)` を**シェル読み込みの権威**
-/// （`load_shell_target`）で構築する（emo-present donor `build_shell_target` と同経路）。
+/// （`load_shell_target`）で構築する（emo-present donor `load_shell_assets` と同経路）。
 /// 失敗時は log-first で `None`。
 ///
 /// 一覧・`surfaces.txt` の読取と解析・面の画像の決定・焼くまでは権威が 1 回で行う
 /// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
 /// 落ちた絵の `warn!` も権威側が持つので、この probe は呼ぶだけである——本番（`build_boot_assets`）・
 /// 採寸（`build_shell_assets`）と同じ入口を通るため、この probe が見る絵は本番と食い違わない。
-fn build_shell_target(shell_dir: &Path, decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable)> {
+fn load_shell_assets(shell_dir: &Path, decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable)> {
     let target = match load_shell_target(shell_dir, decoder) {
         Ok(t) => t,
         Err(e) => {

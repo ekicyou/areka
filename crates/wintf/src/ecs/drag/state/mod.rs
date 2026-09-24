@@ -1,6 +1,9 @@
 //! ドラッグ状態管理
 //!
 //! thread_local! + RefCellパターンでwndproc層のドラッグ状態を管理する。
+//!
+//! 各状態には「どの出来事で入り、どの出来事で出るか」を書く（[`DragState`]）。
+//! 解放・中断のあとは `JustEnded` で次の左押下まで休み、`Idle` へは戻らない。
 
 use crate::ecs::Point;
 use crate::ecs::drag::DragConstraint;
@@ -15,12 +18,23 @@ use windows::Win32::Foundation::HWND;
 ///
 /// `CaptureGuard` を内包するため Clone 不可。
 /// 読み取り専用スナップショットが必要な場合は [`DragStateSnapshot`] / [`snapshot_drag_state`] を使用する。
+///
+/// 左ボタンを押している間か（`Preparing`・`JustStarted`・`Dragging`）は
+/// variant を並べずに [`DragState::is_button_held`] で聞く。
 #[derive(Debug)]
 pub enum DragState {
-    /// アイドル状態、ドラッグなし
+    /// 押下の無い状態。
+    ///
+    /// - 入る: 起動時の初期値。製品コードがここへ戻す遷移は無い。
+    /// - 出る: 左押下（[`start_preparing`]）で `Preparing` へ。
     Idle,
 
-    /// マウス押下済み、閾値未到達
+    /// 左ボタンを押したが、まだ閾値に達していない状態。
+    ///
+    /// - 入る: 左押下（[`start_preparing`]・`crates/wintf/src/ecs/window_proc/mouse_click.rs`
+    ///   の `handle_button_message`）。このときマウスキャプチャを取得する。
+    /// - 出る: 閾値到達（[`start_dragging`]・`mouse_move.rs`）で `JustStarted` へ／
+    ///   解放（[`end_dragging`]）・中断（[`cancel_dragging`]）で `JustEnded` へ。
     Preparing {
         /// ドラッグ対象エンティティ
         entity: Entity,
@@ -32,7 +46,12 @@ pub enum DragState {
         capture_guard: CaptureGuard,
     },
 
-    /// ドラッグ開始直後（1フレームのみ）
+    /// 閾値に達し、ドラッグ開始をまだ配っていない状態。
+    ///
+    /// - 入る: 閾値到達（[`start_dragging`]）。
+    /// - 出る: 次の tick の `dispatch_drag_events`（`crates/wintf/src/ecs/drag/dispatch.rs`・
+    ///   `DragTransition::Started` の腕）が [`update_dragging`] を呼んで `Dragging` へ／
+    ///   解放（[`end_dragging`]）・中断（[`cancel_dragging`]）で `JustEnded` へ。
     JustStarted {
         /// ドラッグ対象エンティティ
         entity: Entity,
@@ -46,7 +65,11 @@ pub enum DragState {
         capture_guard: CaptureGuard,
     },
 
-    /// ドラッグ中、閾値到達済み
+    /// ドラッグ中（閾値到達済み・ドラッグ開始を配り終えた）の状態。
+    ///
+    /// - 入る: `JustStarted` からの [`update_dragging`]。
+    /// - 出る: `WM_MOUSEMOVE` の [`update_dragging`] では位置を更新して `Dragging` のまま／
+    ///   解放（[`end_dragging`]）・中断（[`cancel_dragging`]）で `JustEnded` へ。
     Dragging {
         /// ドラッグ対象エンティティ
         entity: Entity,
@@ -71,7 +94,12 @@ pub enum DragState {
         capture_guard: CaptureGuard,
     },
 
-    /// ドラッグ終了直後（1フレームのみ）
+    /// 解放または中断のあと、次の左押下までここで休む状態。
+    ///
+    /// - 入る: 解放（[`end_dragging`]）または中断（[`cancel_dragging`]）。
+    ///   マウスキャプチャは解放済み。
+    /// - 出る: 次の左押下（[`start_preparing`]）で `Preparing` へ。それまでここで休む。
+    ///   製品コードがこの状態を `Idle` へ戻すことは無い。
     JustEnded {
         /// ドラッグ対象エンティティ
         entity: Entity,
@@ -86,6 +114,7 @@ pub enum DragState {
 ///
 /// `CaptureGuard` を含まないため Clone 可能。
 /// WndProc ハンドラが状態を判定するために使用する。
+/// 各 variant の意味は [`DragState`] の同名の variant と同じ。
 #[derive(Debug, Clone)]
 pub enum DragStateSnapshot {
     Idle,
@@ -118,7 +147,27 @@ pub enum DragStateSnapshot {
     },
 }
 
+impl DragStateSnapshot {
+    /// [`DragState::is_button_held`] と同じ真偽表（写しから聞く）。
+    pub fn is_button_held(&self) -> bool {
+        matches!(
+            self,
+            Self::Preparing { .. } | Self::JustStarted { .. } | Self::Dragging { .. }
+        )
+    }
+}
+
 impl DragState {
+    /// 左ボタン（製品で [`start_preparing`] を呼ぶのは左押下のみ）を押している間か。
+    /// `Preparing`・`JustStarted`・`Dragging` で真、`Idle`・`JustEnded` で偽。
+    /// 「ドラッグ中か」ではない（`Preparing` は閾値未到達だが押している）。
+    pub fn is_button_held(&self) -> bool {
+        matches!(
+            self,
+            Self::Preparing { .. } | Self::JustStarted { .. } | Self::Dragging { .. }
+        )
+    }
+
     /// 読み取り専用スナップショットを生成する。
     pub fn snapshot(&self) -> DragStateSnapshot {
         match self {
@@ -222,14 +271,9 @@ pub fn snapshot_drag_state() -> DragStateSnapshot {
 #[inline]
 pub fn start_preparing(entity: Entity, pos: PhysicalPoint, hwnd: HWND) {
     update_drag_state(|state| {
-        // 既にドラッグ中の場合は無視（複数ボタン同時ドラッグ禁止）
+        // 既に押している間は無視（複数ボタン同時ドラッグ禁止）
         // JustEndedは許可（前回のドラッグが終了した後の新しいドラッグ）
-        if matches!(
-            state,
-            DragState::Preparing { .. }
-                | DragState::JustStarted { .. }
-                | DragState::Dragging { .. }
-        ) {
+        if state.is_button_held() {
             tracing::debug!("[drag] Already dragging, ignoring new button press");
             return;
         }
@@ -486,16 +530,6 @@ pub fn cancel_dragging() {
         _ => None,
     });
     // _guard がここでドロップ
-}
-
-/// ドラッグ状態をIdleにリセット（dispatch_drag_events後）
-#[inline]
-pub fn reset_to_idle() {
-    update_drag_state(|state| {
-        if matches!(state, DragState::JustEnded { .. }) {
-            *state = DragState::Idle;
-        }
-    });
 }
 
 /// ドラッグ準備中をDraggingに遷移させるか判定する

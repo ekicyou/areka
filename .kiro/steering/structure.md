@@ -359,6 +359,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Location**: `/crates/shiori-host32-testdll/`・`/crates/shiori4-testdll/`
 **Purpose**: 実 SHIORI 境界を踏む決定論テストの fixture DLL 群（いずれも cdylib・テスト専用）:
 - **`shiori-host32-testdll`**: 最小 SHIORI DLL fixture（出力名 `shiori.dll`・**i686**）。pasta 非依存の決定的 LOAD／request E2E を成立させる host-32 トラック所有の最小実装（flat-C の `load`/`unload`/`request` 3 エクスポート・署名正確源は `vendors/pasta` の windows.rs）。
+- **`shiori-host32-testdll-loadu`**（`/crates/shiori-host32-testdll-loadu/`）: 2 本目の最小 SHIORI DLL fixture（出力名 `shiori_loadu.dll`・**i686**）。flat-C の `loadu`/`load`/`unload`/`request` 4 エクスポートで、初期化の入口のどちらが呼ばれ何を受け取ったかを env `HOST32_TESTDLL_LOADU_RECORD` のファイルへ記録し、`HOST32_TESTDLL_LOADU_FAIL=1` で `loadu` が偽を返す。helper の i686 限定テスト（`crates/shiori-host32-helper/src/shiori_proxy_loadu_tests.rs`）だけが読む（所在は env `HOST32_TESTDLL_LOADU_DLL` で上書き可）。既存の `shiori-host32-testdll` は無改変のまま並べる（`areka-P0-shiori-loadu`）。
 - **`shiori4-testdll`**: **x64** SHIORI4 決定論テスト DLL。正典イベント集合へ実 emo2 pasta 採取のゴールデンスナップショットを決定論 replay する「脳」（ReplayBrain・`shiori_factory` export）。
 
 ### Pilot (Two-Tunnel Knowledge) Crate
@@ -384,7 +385,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### Sample Ghost Kit Crate（sample-ghost-kit）
 **Location**: `/crates/sample-ghost-kit/`
 **Purpose**: 検体ゴースト／バルーンを**名前で引く窓口をワークスペースで唯一定義する**テスト専用 leaf（`areka-P0-nar-install` 2026-09-18）。検体の保管形は `/vendors/sample_ghost/*.nar` の配布形だけで、消費形は窓口が `target/` の下に展開して配る。テストが在処を自分で綴らなくなるので、置き場を動かしても直すのは登記表 1 か所になる。
-**検体の顔ぶれ**（正本は `vendors/sample_ghost/README.md`）: ゴースト 3 体＝`emo2`（pasta）・`R_POST_and_KOMAINU`（里々標準テンプレート）・`konnoyayame`（YAYA 標準テンプレート「紺野ややめ」）＋バルーン 2 本。**SHIORI 3 系統を 1 体ずつ**持つ。`konnoyayame.nar` だけは**配布物のバイト列そのまま**（シェルが CC BY-NC-ND＝畳み直さない・areka の配布物へ同梱しない）。同梱の既定バルーン `vendors/sample_ghost/StayseeBalloon/`（CC0）は**展開フォルダのまま**で登記表に載っていない（畳むのは roadmap 台帳 #42）。
+**検体の顔ぶれ**（正本は `vendors/sample_ghost/README.md`）: ゴースト 3 体＝`emo2`（pasta）・`R_POST_and_KOMAINU`（里々標準テンプレート）・`konnoyayame`（YAYA 標準テンプレート「紺野ややめ」）＋バルーン 3 本（`StayseeBalloon`＝areka の既定バルーン・CC0 を含む）。**SHIORI 3 系統を 1 体ずつ**持つ。`konnoyayame.nar` だけは**配布物のバイト列そのまま**（シェルが CC BY-NC-ND＝畳み直さない・areka の配布物へ同梱しない）。
 **Pattern**: 登記表 `SAMPLES`（検体を足す作業は `.nar` を 1 つ置いて登記表に 1 行＝2 手で終わる）と `SampleRoot`（原本は刻印つきで作り、配るのは複製・複製は札ファイルを開いている間だけ生き `Drop` で消える）。
 **Modules**: `devroot.rs`（窓口の本体）／`nar_writer.rs`（決定論テストの固定入力を組む＝圧縮側を使う唯一の場所）／`src/bin/nar-sample-path.rs`（実機運転用に検体の絶対パスを印字する bin。呼ぶたびに `manual/<検体>/` を作り直す）
 **Dependencies**: `areka-nar`（展開器）・`miniz_oxide`・`thiserror`・`publish = false`
