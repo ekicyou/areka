@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-09-20
+updated_at: 2026-09-24
 ---
 
 # Focus - ロードマップ管理
@@ -28,7 +28,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 | 状態 | 配置先 |
 | ------ | ------ |
 | アクティブ（P0） | `.kiro/specs/` 直下 |
-| 待機（P1-P3） | `.kiro/specs/backlog/` |
+| 待機（α 後など・当面着手しない） | `.kiro/specs/` 直下に brief のまま置き、段は `roadmap.md` の台帳で持つ（`backlog/` は 2026-09 時点で使っていない） |
 | 完了 | `.kiro/specs/completed/` |
 | 却下 | `.kiro/specs/_rejected/` |
 
@@ -39,14 +39,13 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 | 配置 | 計上区分 |
 | ------ | ------ |
 | `.kiro/specs/` 直下（completed/backlog/_rejected 以外） | アクティブ（P0） |
-| `.kiro/specs/backlog/` | 待機（P1-P3） |
 | `.kiro/specs/completed/` | 完了 |
 | `.kiro/specs/_rejected/` | 却下（集計対象外・参考） |
 | `spec.json` を持たないディレクトリ（例: `shape-*`） | 構想段階（Phase 0）として別掲 |
 
 - 直下に `phase=completed` のまま残る仕様（例: 旧メタ仕様）があれば `completed/` への移動候補として棚卸しに挙げる
 - **過去の棚卸しの基準実数（2026-06-28〜2026-07-29 の 26 行）は `roadmap-history.md` の末尾「旧・focus.md 棚卸しの基準実数ログ」へ退避した**（2026-09-20）。本ファイルには**最新の 1 行だけ**を置き、更新するときは古い行をそちらへ足してから置き換える（常時読み込みのファイルを履歴で太らせない）。
-- 棚卸しの基準実数（2026-09-24 更新㉕・棚卸⑯の実測・`main` `0b01f654` 基準）: 完了 **198**（`completed/` 実測ディレクトリ数）/ **spec.json 有りの active = 0** / **brief-only = 29**（`.kiro/specs/` 直下実測＝更新㉔の 34 − 09-24 完了 8 ＋ `shiori-fault-notice` 起票 1 ＋ 棚卸⑯の起票 2＝`ghost-restart-unit`・`pilot-balloon-asset-swap`）。open PR 0 本＝着手中の spec は 0。M1 は 2026-09-11 に完成宣言済み・現行は α（M2・`roadmap.md` B1〜B7）。**着手の優先度は「バグ修正 → α に要る機能」**（2026-09-20 開発者指示・`roadmap.md`「棚卸⑮の裁定」）。棚卸の経緯の正本は `roadmap.md`／`roadmap-history.md`。
+- 棚卸しの基準実数（2026-09-24 更新㉕・棚卸⑯の実測・`main` `0b01f654` 基準）: 完了 **198**（`completed/` 直下の実測エントリ数＝ディレクトリ 197＋`graphics-rendering-stability.md` 1）/ **spec.json 有りの active = 0** / **brief-only = 29**（`.kiro/specs/` 直下実測＝更新㉔の 34 − 09-24 完了 8 ＋ `shiori-fault-notice` 起票 1 ＋ 棚卸⑯の起票 2＝`ghost-restart-unit`・`pilot-balloon-asset-swap`）。open PR 0 本＝着手中の spec は 0。M1 は 2026-09-11 に完成宣言済み・現行は α（M2・`roadmap.md` B1〜B7）。**着手の優先度は「バグ修正 → α に要る機能」**（2026-09-20 開発者指示・`roadmap.md`「棚卸⑮の裁定」）。棚卸の経緯の正本は `roadmap.md`／`roadmap-history.md`。
 
 ## 運用上の注意
 
