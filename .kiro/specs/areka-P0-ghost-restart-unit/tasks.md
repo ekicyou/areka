@@ -3,7 +3,7 @@
 > 各タスクは完了時点でクレートのテストが緑であること（字面で形を固定しているテスト `zorder_wiring_tests.rs`・`frame_schedule_tests.rs`・`spawn_zorder_chain_wiring_tests.rs` は、字面を動かしたタスクの中で追随させる）。`areka` は bin だけなので `cargo test -p areka --bin areka` で回す。`finish_run`・`reboot_ghost`・`Emo2Wiring::kanade_stop_connected` は作らない（design「GhostSession（と `finish_after_run` からの呼び方）」・research §8.7）。
 
 - [ ] 1. 各結線から系の登録を別関数へ括り出す（振る舞いは不変）
-- [ ] 1.1 (P) 説明書の結線から登録を括り出す
+- [x] 1.1 (P) 説明書の結線から登録を括り出す
   - 説明書の要求を捌く系の登録 1 行を登録専用の関数へ移し、今の結線関数はしばらくその関数を呼ぶ形にして、登録の数と順序を今日と同じに保つ
   - 説明書の経路を読むテスト専用の小さな口を足す（2 周テストの判定 ⑵ が使う）
   - 完了の姿: 説明書の既存テストが緑で、登録専用の関数が単独で呼べる

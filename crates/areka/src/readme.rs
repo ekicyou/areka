@@ -64,9 +64,24 @@ pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeR
         rx,
         missing_logged: Cell::new(false),
     });
+    register_readme_drain(world);
+}
+
+/// 要求の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
+///
+/// 並びは `dispatch_pointer_events` の後（[`wire_readme`] の doc のとおり）。
+pub(crate) fn register_readme_drain(world: &mut World) {
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, drain_readme_requests.after(dispatch_pointer_events));
+}
+
+impl ReadmeWiring {
+    /// 起動時に決めた説明書のファイル（テスト専用の読み口）。
+    #[cfg(test)]
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 /// 説明書のファイルがあるか（要件 4.3・11.4）。

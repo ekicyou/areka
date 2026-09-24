@@ -37,6 +37,49 @@ fn lines_of<'a>(lines: &'a [String], event: &str) -> Vec<&'a String> {
     lines.iter().filter(|l| l.contains(event)).collect()
 }
 
+/// 入力の段に載っている system の数（段がまだ無ければ 0）。
+fn input_systems_len(world: &World) -> usize {
+    world
+        .resource::<Schedules>()
+        .get(Input)
+        .map_or(0, |input| input.systems_len())
+}
+
+// -------------------------------------------------------------------------
+// 登録と結線（areka-P0-ghost-restart-unit 要件 2.1）
+// -------------------------------------------------------------------------
+
+/// 登録専用の関数は単独で呼べ、入力の段へ取り出しの system をちょうど 1 つ足す。
+#[test]
+fn register_readme_drain_alone_adds_one_system_to_the_input_schedule() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+
+    register_readme_drain(&mut world);
+
+    assert_eq!(input_systems_len(&world), 1, "取り出しの 1 本だけが載る");
+    assert!(
+        world.get_non_send::<ReadmeWiring>().is_none(),
+        "登録は持ち物を置かない"
+    );
+}
+
+/// 今の結線は持ち物を置き、登録の数は今日と同じ 1 つのまま（task 4.1 までの過渡の姿）。
+#[test]
+fn wire_readme_inserts_the_wiring_and_registers_once() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    let (_tx, rx) = mpsc::channel::<ReadmeRequest>();
+
+    wire_readme(&mut world, PathBuf::from("readme.txt"), rx);
+
+    assert_eq!(input_systems_len(&world), 1, "登録の数は今日と同じ");
+    let wiring = world
+        .get_non_send::<ReadmeWiring>()
+        .expect("結線は持ち物を置く");
+    assert_eq!(wiring.path(), Path::new("readme.txt"), "決めた経路を持つ");
+}
+
 // -------------------------------------------------------------------------
 // resolve_path（要件 4.1）
 // -------------------------------------------------------------------------
