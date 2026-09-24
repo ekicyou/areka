@@ -139,6 +139,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 54 | `tools/perf` の自己検査の赤（仮称・**未起票**＝brief なし・2026-09-20 登記） | α 後 | 道具のバグ（`perf-loop.ps1 selftest` が終了コード 4 で止まる・`nar-install` 以前からの赤。未検証の 3 経路。利用者には無関係＝性能改善ループを次に回す前に直す。下の節を見よ） | S | α 後 | なし | − | ⚪ |
 | 55 | `shiori-fault-notice`（**09-24 起票**・`shiori-loadu` の実機確認で見えた・引受先がどこにも無かった） | **バグ** | バグ（利用者から見える実害。SHIORI が動かないと〔DLL が読めない・初期化が偽・エラー応答・応答の期限切れ〕、アプリが起動から 0.5〜2 秒で**黙って消える**。ログに `ERROR` は残るが利用者向けの表示は 0 件・終了コードは 0。2026-09-23 に `konnoyayame`・`emo2` で実測。`loadu` でその 2 体は直ったが、形そのものは第三者のどのゴーストでも起きる。#12 は「根が無い」、#13 は「切替先が起動できない」だけを持つ） | S（4〜7 タスク） | **A1 後段の後・A2 の前**（単独） | **#12**（利用者向け告知の仕組み・`main.rs` と `smoke_boot_loop_exit.rs` を共有）・#48（出どころ）・#49 ✅ | ○（議題＝エラー応答でアプリを終えるべきか・終了コードを非 0 にして完了 `app-lifetime-separation` 要件 3.8 を上書きするか） | ⚪ |
 | 56 | SHIORI へ渡す置き場所のパスの形（仮称・**未起票**＝brief なし・2026-09-24 登記） | α 後 | 互換（潜在。下の節を見よ） | XS | α 後 | なし | − | ⚪ |
+| 57 | 起動後の途中終了で記憶の確定が飛ぶ（仮称・**未起票**＝brief なし・2026-09-24 登記） | α 後 | バグ（潜在。下の節を見よ） | XS | α 後 | なし | − | ⚪ |
 
 ## 登記だけの行（#38〜#41・#54・#56・brief なし）
 
@@ -164,6 +165,8 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - **#54 `tools/perf` の自己検査の赤（2026-09-20 登記）**。完了 `areka-P0-nar-install` の最終検証（`.kiro/specs/completed/areka-P0-nar-install/validation-report.md` の「引受先の無い先送り」）が挙げた 5 件のうち、名指しの引受先が無かった 1 件。⑴ `tools/perf/perf-loop.ps1 selftest` が終了コード 4 で止まる（同 spec はこのファイルを 1 度も変更していない＝以前からの赤）。⑵ 未検証の 3 経路＝`invoke-perf-run.ps1` へ `-GhostRoot`／`-BalloonRoot` を渡す実走・`invoke-followup-checks.ps1` の単独起動・`check-quiet.ps1`。バグではあるが利用者にも α にも関係しない開発側の計測の道具なので、brief は書かない。**性能改善ループを次に回す前に直す**（回らない道具で測った数は信用できない）。
 
 - **#56 SHIORI へ渡す置き場所のパスの形（2026-09-24 登記）**。`areka-P0-shiori-loadu` の実機確認で、`load`／`loadu` へ渡すパスが `C:\…\R_POST_and_KOMAINU\ghost/master` の形だと分かった。区切りが `\` と `/` の混在で、末尾に区切りが無い。混在の出どころは `crates/areka-parsers/src/package/resolve.rs` の定数 `GHOST_MASTER`（`"ghost/master"`）を `Path::join` で繋ぐ組み立てで、`shiori-loadu` 以前からある。同 spec の brief は「パスの末尾区切りの作法を SSP に合わせるかどうか」を範囲外と明記し、引受先を書かなかった。**正典 ukadoc の DLL 共通仕様は「モジュールのディレクトリパス」とだけ書き、区切りの向きにも末尾の区切りにも沈黙している**（2026-09-24 に `ukadoc:spec_dll` の全文で確認）。検体 3 体（YAYA・里々・pasta）はどれもこの形で辞書を読めているので、**実害は観測されていない**。ただし第三者の SHIORI が受け取ったパスへ区切り無しでファイル名を継ぎ足すと、読むべきファイルを見失う。α 後の棚卸で扱いを決める。直すなら `\` に揃え、末尾に `\` を付けるかは裁量として `doc/COMPAT_ARCHITECTURE.md` §8 に記す。SSP の挙動を実測して合わせることはしない（記憶 no-ssp-measurement-import-semantics-from-ukadoc）。
+
+- **#57 起動後の途中終了で記憶の確定が飛ぶ（2026-09-24 登記）**。`areka-P0-baseware-root-layout` の完了時に見えた、同 spec 以前からの性質。`crates/areka/src/main.rs` の `fn main` は `app.run()?;` の**後**で ② `ghost.shutdown`（`crates/areka-ghost/src/runtime.rs` の `GhostRuntime::shutdown`＝手順 10 の `barrier()` → `close()` → join）を呼ぶ。`app.run()` が `Err` を返すと `?` で早期に抜け、main スレッドが panic しても同様に shutdown を通らない。`GhostRuntime` は `Drop` を実装しない。そのため boot 直後に投函した記憶（`areka.last.*`）や、動かした窓の位置の永続化が、sylphya のアクターに処理される前にプロセスごと消えうる。**実害は観測されていない**（書き込みは `app.run()` に入る前に投函され、通常の終了・smoke の自動終了・実機 4 点ではすべて確定した）。相乗りの 1 件＝同じ `runtime.rs` の `GhostBootError` の doc が退役済みの「ダミー窓」を今の挙動として書いている（`baseware-root-layout` は要件 7.2 で同ファイルを変えなかった）。α には効かないので brief は書かない。直すなら `app.run()` の `Err` の腕でも ②③ の終了順序を通す（`Drop` での自動 shutdown は終了理由を持てないので採らない方がよい）。
 
 ## 引き受け手の居ない残り（`shell-implicit-surface` の着地で残した 7 件・2026-09-20）
 

@@ -116,3 +116,11 @@ M1 の完成宣言（`.kiro/specs/completed/areka-P0-emo2-conformance-e2e/verifi
 - **README の出典文は書き起こさず、そのまま写す**: 写す対象は `.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md` の **§6.2「README へそのまま写す本文」の引用ブロック**である。行頭の引用記号（本文の行は `> `、ブロック内の空行は素の `>`）を落として貼ればよく、中身を書き直す必要はない。**§6.1 と §6.3 は写す対象ではない**（§6.1 は使い方と裏取りの対応表、§6.3 は確かめ方）。ブロックには作者名・CC0・出典 URL・配布サイト・同梱した版・取得コミットと日付に加え、既知の制限（半透明を前提に作られたバルーンだけが正しく表示されること・`.pna` は置いてあるかを見るだけで中身を表示に使わないこと・相方用の枠が 3 種類目と 4 種類目では本体用の絵を借りること）が入っている。
 - **「そのまま写せる」ことは §6.3 の判定 2 本で確かめられる**: ⑴ §6.2 の中に引用ブロックでも空行でもない行（＝写せない地の文）が 0 行であること、⑵ 引用ブロックの中に第三者が知らない内部の言葉が 0 件であること。どちらも打つ命令と、その 0 が探し方の壊れでないことを示す較正（同じ採り方を §6.1 に当てると 0 でない値が出る）が §6.3 に並べてある。写す前と写した後にそのまま打てる。
 - **`THIRD-PARTY-NOTICES.md` は手で編集しない。** 同ファイルは cargo の依存から自動生成されるもので、cargo 依存でない同梱資産は載らない（`default-balloon-bundle` は同ファイルを 1 行も変えていない）。第三者向けの出典表示は、上の本文を README へ写すことで果たす。
+
+## 2026-09-24 追記（`baseware-root-layout` の完了で変わった前提 3 件）
+
+`areka-P0-baseware-root-layout` の完了（2026-09-24）で、Desired Outcome の前提が次のとおり変わった。本仕様の要件段階で揃えること（正本は `.kiro/specs/completed/areka-P0-baseware-root-layout/requirements.md` 要件 9 の裁定 3〜5）。
+
+- **zip の `ghost/` は空ではない**（Desired Outcome 1 の「`ghost/` は空」と検証項目 1・4 を改める）。裁定 3＝既定ゴースト `emo2` は areka の配布物に**必ず同梱**する。記憶が無くゴーストが複数あるときは `emo2` を選び、無ければ無作為に 1 体。したがって検証項目 1「『ゴーストが無い』告知で止まる」は同梱 zip では起きない（空の根で確かめる手順に置き換える）。検証項目 4「2 体目（`emo2.nar`）を窓へ落とす」は別の検体（例 `R_POST_and_KOMAINU.nar`・`konnoyayame.nar`）へ差し替える。
+- **告知にフォルダを開く手段は無い**（検証項目 2）。`baseware-root-layout` の告知（`crates/areka/src/alert.rs` の `alert_text`）は `MessageBoxW` の `MB_OK` で、本文 3 行に「何が無いか」「置く場所の絶対パス」「置くものの形」を書くだけ。フォルダを開く手段を足すなら本仕様か別 spec の範囲で、`alert` の 4 場面の文面（smoke の目印「ゴーストが見つかりません」を含む）を壊さないこと。
+- **記憶の置き場所**（検証項目 10）: 最後のゴーストはアプリの記憶（`AREKA_PROFILE_DIR`／既定は exe の隣）の `sylphya.toml` の `[last] ghost`、最後のバルーンとシェルは**ゴーストごとの記憶**（`<ゴースト>/ghost/master/profile/areka/sylphya.toml` の `[last] balloon`／`shell`）。argv で起動したときは記憶を書かない（裁定 5）ので、実機一周は argv なし（根の下に置いて起動）で回すこと。
