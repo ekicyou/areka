@@ -10,6 +10,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::Path;
+use windows::Win32::Foundation::{FreeLibrary, HMODULE};
+use windows::Win32::System::LibraryLoader::{LOAD_LIBRARY_AS_IMAGE_RESOURCE, LoadLibraryExW};
+use windows::core::HSTRING;
 
 /// 固定表の 1 行の答え。
 type Answer = Result<Vec<u8>, FetchError>;
@@ -102,6 +105,33 @@ pub(crate) fn hold(path: &Path) -> fs::File {
         .share_mode(SHARE_READ)
         .open(path)
         .unwrap_or_else(|err| panic!("{} を掴めるはず: {err}", path.display()))
+}
+
+/// PE 形式のバイト列（この試験の実行ファイルの写し）。[`pin`] で削除を拒ませる物の中身に使う。
+pub(crate) fn pe_image() -> Vec<u8> {
+    fs::read(std::env::current_exe().expect("実行ファイルの場所")).expect("実行ファイルを読める")
+}
+
+/// 画像セクションとして写したまま持つ。落とすと写しを解く。
+pub(crate) struct Pinned(HMODULE);
+
+impl Drop for Pinned {
+    fn drop(&mut self) {
+        // SAFETY: `pin` が得た有効なモジュールを 1 度だけ解く。
+        unsafe { FreeLibrary(self.0) }.expect("写しを解ける");
+    }
+}
+
+/// `path`（PE）を画像セクションとして写したまま持ち、削除を拒ませる。持っている間も
+/// `rename` は通り、移った先で `remove_file` が拒まれる（較正は `commit_tests`）。
+/// 読み取り専用属性は Rust 1.86 以降の Windows の `remove_file` が外して消すので使えず、
+/// ファイルに削除を拒む ACL を付けると `rename` まで拒まれるので使えない。
+pub(crate) fn pin(path: &Path) -> Pinned {
+    // SAFETY: 資源としての読み込み（コードは走らない）。
+    let module =
+        unsafe { LoadLibraryExW(&HSTRING::from(path), None, LOAD_LIBRARY_AS_IMAGE_RESOURCE) }
+            .unwrap_or_else(|err| panic!("{} を写せるはず: {err}", path.display()));
+    Pinned(module)
 }
 
 /// `updates2.dau` の固定入力: 欄を `\x01` で、行を CRLF（`crlf`）か LF で終える。
