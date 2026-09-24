@@ -85,7 +85,7 @@ use crate::placement::AuthorDpi;
 
 use self::adapter::PresentBridge;
 use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
-use self::frame::{Emo2Wiring, emo2_frame_system};
+use self::frame::{Emo2Wiring, KanadeStopRx, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::readme_cue::ReadmeCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
@@ -579,10 +579,13 @@ pub fn wire_emo2_boot(
     // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
-    // 停止通知の受信端を据える（R15.4）。`insert_non_send` より前・最初の `Update` より前の
-    // 1 回だけであり、以後 UI は終了相でこの端を読む。据えなければ通知は誰にも届かず窓は閉じない。
-    wiring.set_kanade_stop(kanade_stop_rx);
     app.world().borrow_mut().world_mut().insert_non_send(wiring);
+    // 停止通知の受け口を World の資源として据える（R15.4・要件 6.4）。最初の `Update` より前の
+    // 1 回だけであり、以後 UI は終了相でこの端を読む。据えなければ通知は誰にも届かず窓は閉じない。
+    app.world()
+        .borrow_mut()
+        .world_mut()
+        .insert_non_send(KanadeStopRx(kanade_stop_rx));
     // 相の登録先は `Update`——上流の `Update` 鎖（表示構成の検知 → モニタ表の更新 → 依存する
     // 部品の無効化 → 文字送りの更新）の**最後の系より後**という 1 点だけを指定する
     // （裁定 2026-09-12・要件 2.4）。1 巡のスケジュールは

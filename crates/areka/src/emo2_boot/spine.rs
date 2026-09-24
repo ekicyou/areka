@@ -90,8 +90,8 @@ use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use super::adapter::PresentBridge;
 use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use super::frame::{
-    Emo2Wiring, run_attach_phase, run_dpi_phase, run_move_drain_phase, run_text_phase,
-    run_text_scale_phase,
+    Emo2Wiring, KanadeStopRx, run_attach_phase, run_dpi_phase, run_move_drain_phase,
+    run_text_phase, run_text_scale_phase,
 };
 use super::move_cue::{MoveCueSink, MoveDirective};
 use super::talk_clock::{ClockedTextSink, TalkClock};
@@ -830,7 +830,7 @@ impl SpineHarness {
             ticker: TickerMode::Disabled,
         };
         // 停止通知の channel（R15.4・本番 `wire_emo2_boot` と同型）: 送出端は kanade へ、受信端は
-        // 下の `Emo2Wiring` へ渡す。終了相を回さないテストでは受信端が読まれないだけで無害である。
+        // World の受け口（`KanadeStopRx`）へ挿す。終了相を回さないテストでは読まれないだけで無害である。
         let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeStopped>();
         let ghost = boot_with_kanade_stop(options, Some(kanade_stop_tx))
             .expect("scripted boot は解決可能な emo2 ghost_root で成功する");
@@ -839,7 +839,7 @@ impl SpineHarness {
         // Emo2Wiring は move の受信端 move_rx を保持し frame 相 drain（run_move_drain_phase・task 9.2）に
         // 備える。move の spine e2e（task 9.3）は上の実 MoveCueSink 経由で cue→channel→drain を通す。
         // 表示ライフサイクルの受信端 lifecycle_rx も同様に保持し、可視性相（task 4.4）の drain に備える。
-        let mut wiring = Emo2Wiring::new(
+        let wiring = Emo2Wiring::new(
             presenter,
             rx,
             move_rx,
@@ -849,7 +849,7 @@ impl SpineHarness {
             clock,
             wiring_assets,
         );
-        wiring.set_kanade_stop(kanade_stop_rx);
+        world.insert_non_send(KanadeStopRx(kanade_stop_rx));
 
         SpineHarness {
             world,

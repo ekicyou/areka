@@ -142,6 +142,10 @@ pub struct Emo2Wiring {
     /// 窓を閉じる——終了挨拶の再生が終わってから窓が消える、という順序はこの一点で決まる。
     ///
     /// [`run_ghost_quit_phase`]: super::run_ghost_quit_phase
+    #[expect(
+        dead_code,
+        reason = "受け口は World の資源へ移った。欄は設定口と共に shiori-fault-notice 3.2 で退役する"
+    )]
     pub(super) kanade_stop: Option<Receiver<KanadeStopped>>,
     /// `Changed<DPI>` 観測の**永続** [`SystemState`]（[`run_dpi_phase`]・emo-dpi-scaling task 4.2）。
     ///
@@ -210,6 +214,10 @@ impl Emo2Wiring {
     /// （`with_` の名で値を返さない形は取り違えを招く）。役割は設計のとおりである。
     ///
     /// [`seed_zorder_descript_base`]: Self::seed_zorder_descript_base
+    #[expect(
+        dead_code,
+        reason = "呼び手は World の資源へ移った。shiori-fault-notice 3.2 で退役する"
+    )]
     pub(in crate::emo2_boot) fn set_kanade_stop(&mut self, rx: Receiver<KanadeStopped>) {
         self.kanade_stop = Some(rx);
     }
