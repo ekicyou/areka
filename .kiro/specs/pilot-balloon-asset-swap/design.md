@@ -295,7 +295,7 @@ fn exit_code(reason: ExitReason) -> i32; // 0 / 3 / 1 / 2
 - Postconditions: `run()` が戻ったとき `Observer` に `ExitReason` が入っている（打ち切り・完了・較正不合格のいずれか）。
 
 **Implementation Notes**
-- `attach_target` は `EmoWorld`／`AtlasTable` を move で消費するので、往復のたびに要る資産は `Assets` を `clone` して渡す（`EmoWorld: Clone`・`AtlasTable: Clone` は手本と同じ）。
+- `attach_target` は `EmoWorld`／`AtlasTable` を move で消費する。`EmoWorld` は `Clone` でない（実装 1.2 で判明・当初の「手本と同じく clone」は誤り）ので、台本で要る分の資産は起動時にまとめて `build_balloon_target` で作っておく（差し替えの tick に復号の時間を入れないため）。
 - 起動の 1 回目の `attach_target`＋`ShowSurface` は GPU 資源（`GraphicsCore`・`WucGraphicsResource::is_valid`）が揃ってから（手本 `boot_present_system` と同じ待ち方）。これは `Script::Boot` の中で行う。
 
 ### 差し替えと較正

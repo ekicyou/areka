@@ -10,7 +10,7 @@
   - 完了の姿: `cargo build -p pilot --example pilot-balloon-asset-swap` が通り、`git diff --stat` に `crates/pilot/` の外のファイルが 1 つも無い
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 1.2 検体 2 つを引いてバルーン窓を 1 つ出し、上限時間で自分で終わる起動部を作る
+- [x] 1.2 検体 2 つを引いてバルーン窓を 1 つ出し、上限時間で自分で終わる起動部を作る
   - 検体の窓口から StayseeBalloon と emo2 同梱の emo2-kakukaku を引き、2 つの資産と、判別に使う 3 つの面（Staysee 面 0・面 2、kakukaku 面 0）の合成結果を起動時に同期で作る
   - 窓を固定位置・最前面・可視で 1 つ出し、GPU 資源が揃ってから StayseeBalloon の面 0 を表示し、窓寸を絵に合わせる（クリック透過の登録も手本どおり）。この最初の表示は仮置きで、3.1 で台本の起動の段へ移す
   - 上限時間を環境変数（空・非数値は既定）→ 既定 90 秒で決め、到達したら理由をログに出して窓を消し `run()` を戻す。上限時間の検査はこの 1 か所だけとし、2.4 はここへ打ち切りの集計を差し込む（2 つ目の時計を作らない）
@@ -84,3 +84,5 @@
 ## Implementation Notes
 
 - 1.1: wintf は i686 で組めない（`SetWindowLongPtrW` の型差）。example は dev-dependencies を全部引くので、追加の 7 crate は `[target.'cfg(not(target_arch = "x86"))'.dev-dependencies]` に置いた（既存の i686 helper を壊さないため）。本 example は x64 専用。
+- 1.2: `EmoWorld` は `Clone` でない。台本で使う資産は起動時に必要な数だけ `build_balloon_target` で作り置く（差し替えの tick で復号しない）。design の Runner の Implementation Notes を修正済み。
+- 1.2: 開発機の画面は既定 200%（k=2）。k≠1.0 は全フレーム「測れない」になるので、開発者裁定（09-24）で 2.2〜4.1 の間は画面の拡大を 100% にしてもらう。実走のたびに起動ログの拡大率が 1 であることを確かめ、2 なら走行を捨てる。
