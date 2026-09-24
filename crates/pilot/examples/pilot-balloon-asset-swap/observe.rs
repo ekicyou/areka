@@ -937,6 +937,11 @@ impl Observer {
         self.open.is_none()
     }
 
+    /// 開いている観測が揃った tick（揃う前・閉じた後は `None`）。
+    pub fn settled_tick(&self) -> Option<u32> {
+        self.open.as_ref()?.obs.settled.map(|(_, t)| t)
+    }
+
     /// 届いたフレームを開いている観測に数え、窓が終わっていれば閉じる。
     pub fn step(&mut self, now: u32) {
         if self.finished {

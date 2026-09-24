@@ -317,8 +317,8 @@ fn exit_code(reason: ExitReason) -> i32; // 0 / 3 / 1 / 2
 - 面の切り替え（2.6）: A のまま `ShowSurface{ surface_id: 2 }` → `take_pending_resize` → `WindowPos`、戻りは `surface_id: 0`。段は `Update` だけ（本番と同じ）。
 - 較正の作り方（4.1〜4.6・いずれも実際の窓に出す）:
   - `CalibStatic`（4.6）: `WindowPos.position` を x+1 して次の tick で戻す。絵は変えない。pair＝(A, B)・from＝A・to＝A。期待: 4 種とも 0・観測フレーム ≥ 1。
-  - `CalibEmpty`（4.3）: `Hide{ TargetId(1) }`。期待: 空 ≥ 1。
-  - `CalibMixed`（4.2）: B を `TargetId(2)` として `attach_target`＋`ShowSurface`＋`Hide`（見えない・当たらない B の子ができる）を仕込んでおき、要求 tick で A の `emo-surface` の `HitTest` を `none()`、B の `emo-surface` の `HitTest` を `alpha_mask()` へ書き換える（`Visual` は触らない）。絵は A・当たり判定は B。期待: 混在 ≥ 1。
+  - `CalibEmpty`（4.3）: `Hide{ TargetId(1) }`。到達先は「どちらでもない」（絵・当たり判定とも `Neither` で揃い、30 tick 後に閉じる。A のままだと揃わず未完になる・実装 3.2）。期待: 空 ≥ 1。
+  - `CalibMixed`（4.2）: B を `TargetId(2)` として `attach_target`＋`ShowSurface`＋`Hide`（見えない・当たらない B の子ができる）を仕込んでおき、要求 tick で A の `emo-surface` の `HitTest` を `none()`、B の `emo-surface` の `HitTest` を `alpha_mask()` へ書き換える（`Visual` は触らない）。絵は A・当たり判定は B。**当たり判定だけの書き換えでは画面が更新されずフレームが来ないので、要求 tick に静止と同じ 1px の移動を足し、10 tick 後に当たり判定を A へ戻して窓も戻す**（移動だけで崩れが出ないことは静止の較正と、付け替えを外すと混在 0 になる反転で確かめた・実装 3.2）。B の仕込みは要求 tick の中で行う。期待: 混在 ≥ 1。
   - `CalibStale`（4.4）: `Hide{ TargetId(1) }` → B を `TargetId(2)` で `attach_target`＋`ShowSurface`（揃った＝絵 B・当たり B）→ 揃った tick の 10 tick 後（観測の窓の内側）に A の `emo-surface` と `emo-text-layer-slot` の `Visual::set_visible(true)`（`HitTest` は `none()` のまま）。A が上に描かれて残る。期待: 古い絵の残り ≥ 1。
   - `CalibSize`（4.5）: A のまま `ShowSurface{ surface_id: 2 }` を出し、`take_pending_resize` は読んで**捨てる**（`WindowPos` を書かない）。窓 335×205 に 335×395 の絵。判別対＝`(A0, A2)`・from＝A0・to＝A2（面の切り替えと同じ対）。期待: 大きさの食い違い ≥ 1。
 - 各較正・各差し替えの後は `reset_to_a`（`despawn_mounts` → `attach_target(TargetId(1), A)` → `ShowSurface 0` → 窓寸合わせ）で戻し、`Observer` が「絵 A0・当たり A0・寸法一致」を見るまで次へ進まない（戻しは観測しない）。同じ絵へ戻る戻しでは画面が変わらず新しいフレームが来ないことがあるので、この判定は「最新のフレーム」の絵と、今の tick の当たり判定・矩形で行う。戻しの要求から 60 tick 以内に揃わなければ `error!` を出して次へ進む（次の観測の「直前のフレーム」に戻しの失敗が写る）。

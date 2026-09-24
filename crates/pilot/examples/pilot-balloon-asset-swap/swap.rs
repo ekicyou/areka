@@ -16,8 +16,10 @@ use windows::Win32::System::Performance::QueryPerformanceCounter;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 use areka_emo_present::{DEFAULT_AUTHOR_DPI, EmoPresenter, PresentCommand, TargetId};
-use wintf::ecs::{FrameCount, GraphicsCore, SizeI, WindowPos, WucGraphicsResource};
+use wintf::ecs::layout::HitTest;
+use wintf::ecs::{FrameCount, GraphicsCore, SizeI, Visual, WindowPos, WucGraphicsResource};
 
+pub use crate::observe::Calib;
 use crate::observe::{self, Class, Kind, Observer, PAIR_ASSET, PAIR_FACE};
 
 /// 用意の後、揃ったと見るまでに最低限待つ tick 数（用意の tick の絵が取り込みに届くまで・約 40 ms）。
@@ -26,6 +28,12 @@ const PREP_MIN_TICKS: u32 = 5;
 const PREP_GIVE_UP_TICKS: u32 = 60;
 /// 用意と差し替えの基準の版が使う表示先 id。
 const BASE_TARGET: TargetId = TargetId(1);
+/// 較正の混在・古い絵の残りが B を装着する表示先 id（design §SwapDriver 較正の作り方）。
+const CALIB_TARGET: TargetId = TargetId(2);
+/// 較正の混在: 当たり判定を B にしておく tick 数（その後 A に戻して揃わせ、観測を閉じられるようにする）。
+const MIXED_TICKS: u32 = 10;
+/// 較正の古い絵の残り: 揃った tick から A の子を見える状態へ戻すまでの tick 数（観測の窓 30 tick の内側）。
+const STALE_AFTER_SETTLED_TICKS: u32 = 10;
 
 // ---------------------------------------------------------------------------
 // 台本の語彙
@@ -115,6 +123,8 @@ impl Stage {
 pub enum Step {
     /// GPU 資源を待って最初の表示（A0）をし、揃うのを待つ。
     Boot,
+    /// わざと崩したフレームを実際の窓に出す較正（4.1〜4.6・`Update` だけ）。
+    Calib(Calib),
     /// 観測しない用意（戻し）: 子を全部消して `face` を装着し、`pair` で揃うのを待つ。
     Prep { face: Face, pair: usize },
     Swap {
@@ -129,21 +139,38 @@ pub enum Step {
     Done,
 }
 
-/// 固定の台本（5.4: 基準の結果に依らず全版を観測する）。
+/// 較正の順（design §System Flows 台本）。
+const CALIBS: [Calib; 5] = [
+    Calib::Static,
+    Calib::Empty,
+    Calib::Mixed,
+    Calib::Stale,
+    Calib::Size,
+];
+
+/// 固定の台本（較正 5 項を先頭に置く・5.4: 基準の結果に依らず全版を観測する）。
 pub fn script() -> Vec<Step> {
     let mut steps = vec![Step::Boot];
+    for c in CALIBS {
+        if c != Calib::Static {
+            let (pair, _, _) = observed(Step::Calib(c)).expect("較正は観測");
+            steps.push(Step::Prep {
+                face: Face::A0,
+                pair,
+            });
+        }
+        steps.push(Step::Calib(c));
+    }
     for method in [
         Method::Reattach,
         Method::RemoveThenAttach,
         Method::AttachNewHideOld,
     ] {
         for stage in [Stage::Update, Stage::FrameFinalize] {
-            if steps.len() > 1 {
-                steps.push(Step::Prep {
-                    face: Face::A0,
-                    pair: PAIR_ASSET,
-                });
-            }
+            steps.push(Step::Prep {
+                face: Face::A0,
+                pair: PAIR_ASSET,
+            });
             for (from, to) in [(Balloon::A, Balloon::B), (Balloon::B, Balloon::A)] {
                 if from == Balloon::B {
                     steps.push(Step::Prep {
@@ -185,7 +212,37 @@ pub fn obs_name(step: Step) -> Option<String> {
             stage.name()
         )),
         Step::FaceSwitch { from, to } => Some(format!("face-switch@update {from:?}→{to:?}")),
+        Step::Calib(c) => Some(
+            match c {
+                Calib::Static => "calib-static",
+                Calib::Empty => "calib-empty",
+                Calib::Mixed => "calib-mixed",
+                Calib::Stale => "calib-stale",
+                Calib::Size => "calib-size",
+            }
+            .to_string(),
+        ),
         _ => None,
+    }
+}
+
+/// 観測する段の（判別対, 出発, 到達）。観測しない段は `None`。
+///
+/// 較正（design §SwapDriver 較正の作り方）: 静止と混在は A のまま（混在は当たり判定を B にした後 A へ戻して
+/// 揃わせる）、空は「どちらでもない」に揃う、古い絵の残りは B に揃った後に A を出す、大きさは面の切り替えと
+/// 同じ対で A2 に揃う（窓寸は A0 のまま）。
+pub fn observed(step: Step) -> Option<(usize, Class, Class)> {
+    use Class::{Neither, P, Q};
+    match step {
+        Step::Swap { from, to, .. } => Some((PAIR_ASSET, from.face().class(), to.face().class())),
+        Step::FaceSwitch { from, to } => Some((PAIR_FACE, from.class(), to.class())),
+        Step::Calib(c) => Some(match c {
+            Calib::Static | Calib::Mixed => (PAIR_ASSET, P, P),
+            Calib::Empty => (PAIR_ASSET, P, Neither),
+            Calib::Stale => (PAIR_ASSET, P, Q),
+            Calib::Size => (PAIR_FACE, P, Q),
+        }),
+        Step::Boot | Step::Prep { .. } | Step::Done => None,
     }
 }
 
@@ -194,7 +251,7 @@ pub fn act_stage(step: Step) -> Stage {
     match step {
         Step::Swap { stage, .. } => stage,
         Step::Done => Stage::FrameFinalize,
-        Step::Boot | Step::Prep { .. } | Step::FaceSwitch { .. } => Stage::Update,
+        Step::Boot | Step::Prep { .. } | Step::FaceSwitch { .. } | Step::Calib(_) => Stage::Update,
     }
 }
 
@@ -210,7 +267,8 @@ pub fn needs(steps: &[Step]) -> (usize, usize) {
             Step::Boot => add(Balloon::A),
             Step::Prep { face, .. } => add(face.balloon()),
             Step::Swap { to, .. } => add(to),
-            Step::FaceSwitch { .. } | Step::Done => {}
+            Step::Calib(Calib::Mixed | Calib::Stale) => add(Balloon::B),
+            Step::Calib(_) | Step::FaceSwitch { .. } | Step::Done => {}
         }
     }
     n
@@ -245,6 +303,12 @@ pub struct Driver {
     next_id: u32,
     /// 期待する原寸（A0・A2・B0）。
     sizes: [(u32, u32); 3],
+    /// 較正の混在・古い絵の残りで、要求の時点で窓に居た A の子（`emo-surface`・`emo-text-layer-slot`）と
+    /// 仕込んだ B の `emo-surface`。
+    calib_a: Vec<Entity>,
+    calib_b_surface: Option<Entity>,
+    /// 較正の追い打ち（古い絵の残りで A を出す）を済ませた。
+    followed: bool,
 }
 
 impl Driver {
@@ -264,8 +328,12 @@ impl Driver {
             cursor: 0,
             phase: Phase::Act,
             current_id: BASE_TARGET,
-            next_id: BASE_TARGET.0 + 1,
+            // 較正の id とは分ける。
+            next_id: CALIB_TARGET.0 + 1,
             sizes,
+            calib_a: Vec::new(),
+            calib_b_surface: None,
+            followed: false,
         }
     }
 
@@ -276,6 +344,9 @@ impl Driver {
     fn step(&mut self, world: &mut World, stage: Stage) {
         let now = world.resource::<FrameCount>().0;
         if let Phase::Wait(since) = self.phase {
+            if let (Step::Calib(c), Stage::Update) = (self.steps[self.cursor], stage) {
+                self.calib_follow_up(world, c, since, now);
+            }
             if stage != Stage::Update || !self.finished(world, since, now) {
                 return;
             }
@@ -301,12 +372,10 @@ impl Driver {
             }
             Step::Prep { face, pair } => self.prep(world, face, pair, now),
             Step::Swap {
-                method,
-                stage,
-                from,
-                to,
-            } => self.swap(world, step, method, stage, from, to, now),
-            Step::FaceSwitch { from, to } => self.face_switch(world, step, from, to, now),
+                method, stage, to, ..
+            } => self.swap(world, step, method, stage, to, now),
+            Step::FaceSwitch { to, .. } => self.face_switch(world, step, to, now),
+            Step::Calib(c) => self.calib(world, step, c, now),
             Step::Done => return self.done(world, now),
         }
         self.phase = Phase::Wait(now);
@@ -317,7 +386,9 @@ impl Driver {
         match self.steps[self.cursor] {
             Step::Boot => self.prep_settled(world, Face::A0, PAIR_ASSET, since, now),
             Step::Prep { face, pair } => self.prep_settled(world, face, pair, since, now),
-            Step::Swap { .. } | Step::FaceSwitch { .. } => world.resource::<Observer>().is_closed(),
+            Step::Swap { .. } | Step::FaceSwitch { .. } | Step::Calib(_) => {
+                world.resource::<Observer>().is_closed()
+            }
             Step::Done => false,
         }
     }
@@ -373,35 +444,16 @@ impl Driver {
         false
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn swap(
         &mut self,
         world: &mut World,
         step: Step,
         method: Method,
         stage: Stage,
-        from: Balloon,
         to: Balloon,
         now: u32,
     ) {
-        let name = obs_name(step).expect("差し替えは観測");
-        info!(
-            tick = now,
-            qpc = qpc(),
-            version = method.name(),
-            stage = stage.name(),
-            ?from,
-            ?to,
-            "swap: 要求"
-        );
-        world.resource_mut::<Observer>().open(
-            PAIR_ASSET,
-            Kind::Swap,
-            &name,
-            from.face().class(),
-            to.face().class(),
-            now,
-        );
+        let name = open(world, step, Kind::Swap, method.name(), stage, now);
         let r = match method {
             // 基準（5.1）: 同じ id へ再登録するだけ（古い子は残る）。
             Method::Reattach => self
@@ -435,23 +487,13 @@ impl Driver {
         }
     }
 
-    fn face_switch(&mut self, world: &mut World, step: Step, from: Face, to: Face, now: u32) {
-        let name = obs_name(step).expect("面の切り替えは観測");
-        info!(
-            tick = now,
-            qpc = qpc(),
-            version = "face-switch",
-            stage = Stage::Update.name(),
-            ?from,
-            ?to,
-            "swap: 要求"
-        );
-        world.resource_mut::<Observer>().open(
-            PAIR_FACE,
+    fn face_switch(&mut self, world: &mut World, step: Step, to: Face, now: u32) {
+        let name = open(
+            world,
+            step,
             Kind::FaceSwitch,
-            &name,
-            from.class(),
-            to.class(),
+            "face-switch",
+            Stage::Update,
             now,
         );
         let r = self.show(world, self.current_id, to.surface());
@@ -460,6 +502,136 @@ impl Driver {
         if let Err(e) = r {
             error!(%name, error = %e, "面の切り替えに失敗 — この観測は測れない");
             world.resource_mut::<Observer>().abort("面の切り替えに失敗");
+        }
+    }
+
+    /// 較正の要求（design §SwapDriver 較正の作り方）。本番と同じ観測の経路（取り込み・tick の記録・
+    /// 同じ規則）で数える。混在は当たり判定しか変えず画面が更新されないので、静止の較正と同じ 1px の
+    /// 移動を足してフレームを出させる（移動そのものが崩れを生まないことは静止の較正が示す）。
+    fn calib(&mut self, world: &mut World, step: Step, c: Calib, now: u32) {
+        let name = open(
+            world,
+            step,
+            Kind::Calib(c),
+            "calibration",
+            Stage::Update,
+            now,
+        );
+        self.followed = false;
+        let r = match c {
+            // 静止（4.6）: 窓を 1px 動かし、次の tick で戻す。絵は変えない。
+            Calib::Static => {
+                self.nudge(world, 1);
+                Ok(())
+            }
+            // 空（4.3）: A を隠す。
+            Calib::Empty => {
+                self.hide(world, BASE_TARGET);
+                Ok(())
+            }
+            // 混在（4.2）: 見えない・当たらない B の子を仕込み、A の面の当たり判定を止めて B の面に付け替える
+            // （`Visual` は触らない）。
+            Calib::Mixed => {
+                self.calib_a = mounts(world, self.window);
+                self.attach(world, CALIB_TARGET, Balloon::B)
+                    .and_then(|()| self.show(world, CALIB_TARGET, 0))
+                    .map(|()| self.hide(world, CALIB_TARGET))
+                    .and_then(|()| {
+                        let b = mounts(world, self.window)
+                            .into_iter()
+                            .find(|e| !self.calib_a.contains(e) && is_surface(world, *e));
+                        self.calib_b_surface = b;
+                        let a = self.calib_a.iter().copied().find(|&e| is_surface(world, e));
+                        match (a, b) {
+                            (Some(a), Some(b)) => {
+                                set_hit(world, a, HitTest::none());
+                                set_hit(world, b, HitTest::alpha_mask());
+                                self.nudge(world, 1);
+                                Ok(())
+                            }
+                            _ => Err(format!(
+                                "A／B の emo-surface が見つからない（A={a:?}・B={b:?}）"
+                            )),
+                        }
+                    })
+            }
+            // 古い絵の残り（4.4）: A を隠して B を別の id で出す。揃った 10 tick 後に A を見える状態へ戻す。
+            Calib::Stale => {
+                self.calib_a = mounts(world, self.window);
+                self.hide(world, BASE_TARGET);
+                self.current_id = CALIB_TARGET;
+                let r = self
+                    .attach(world, CALIB_TARGET, Balloon::B)
+                    .and_then(|()| self.show(world, CALIB_TARGET, 0));
+                self.fit(world, CALIB_TARGET);
+                self.after_change(&name, Face::B0);
+                r.and_then(|()| match self.calib_a.len() {
+                    2 => Ok(()),
+                    n => Err(format!("A の子が 2 でなく {n}")),
+                })
+            }
+            // 大きさの食い違い（4.5）: 面 2 を出し、窓寸合わせを 1 回捨てる（`WindowPos` を書かない）。
+            Calib::Size => {
+                let r = self.show(world, BASE_TARGET, Face::A2.surface());
+                let dropped = self.presenter.take_pending_resize(BASE_TARGET);
+                info!(%name, ?dropped, "窓寸合わせを捨てた（窓は A0 の寸のまま）");
+                self.after_change(&name, Face::A2);
+                r
+            }
+        };
+        if let Err(e) = r {
+            error!(%name, error = %e, "較正の仕込みに失敗 — この観測は測れない");
+            world.resource_mut::<Observer>().abort("較正の仕込みに失敗");
+        }
+    }
+
+    /// 較正の追い打ち（要求の後の tick の `Update`）。
+    fn calib_follow_up(&mut self, world: &mut World, c: Calib, since: u32, now: u32) {
+        match c {
+            Calib::Static if now == since + 1 => {
+                self.nudge(world, -1);
+                info!(tick = now, "calib-static: 窓を戻した");
+            }
+            Calib::Mixed if now == since + MIXED_TICKS => {
+                // A に戻して揃わせる（移動で画面を更新させる）。
+                if let Some(a) = self.calib_a.iter().copied().find(|&e| is_surface(world, e)) {
+                    set_hit(world, a, HitTest::alpha_mask());
+                }
+                if let Some(b) = self.calib_b_surface {
+                    set_hit(world, b, HitTest::none());
+                }
+                self.nudge(world, -1);
+                info!(tick = now, "calib-mixed: 当たり判定を A に戻し、窓を戻した");
+            }
+            Calib::Stale if !self.followed => {
+                let settled = world.resource::<Observer>().settled_tick();
+                if settled.is_some_and(|t| now >= t + STALE_AFTER_SETTLED_TICKS) {
+                    self.followed = true;
+                    for &e in &self.calib_a {
+                        match world.get_mut::<Visual>(e) {
+                            Some(mut v) => v.set_visible(true),
+                            None => error!(?e, "calib-stale: A の子に Visual が無い"),
+                        }
+                    }
+                    info!(
+                        tick = now,
+                        ?settled,
+                        "calib-stale: A の子を見える状態へ戻した（当たり判定は止めたまま）"
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// 窓を横へ `dx` px 動かす（大きさは変えない）。
+    fn nudge(&mut self, world: &mut World, dx: i32) {
+        match world.get_mut::<WindowPos>(self.window) {
+            Some(mut wp) => match wp.position.as_mut() {
+                Some(p) => p.x += dx,
+                None => error!("窓の WindowPos に位置が無い — 動かせない"),
+            },
+            None => error!(window = ?self.window, "窓に WindowPos が無い — 動かせない"),
         }
     }
 
@@ -552,11 +724,36 @@ impl Driver {
     }
 }
 
-/// 窓の子のうち present の装着（`emo-surface`・`emo-text-layer-slot`）を消す。消した数を返す。
-///
-/// presenter の内部の物を外から消している（5.7）。本坑では present に正規の片付けの口が要る。
-fn despawn_mounts(world: &mut World, window: Entity) -> usize {
-    let mounts: Vec<Entity> = world
+/// 要求を記録して観測を開く（`Observer::open` は tick の記録より前の段で呼ぶ）。観測の名前を返す。
+fn open(
+    world: &mut World,
+    step: Step,
+    kind: Kind,
+    version: &str,
+    stage: Stage,
+    now: u32,
+) -> String {
+    let name = obs_name(step).expect("観測する段");
+    let (pair, from, to) = observed(step).expect("観測する段");
+    info!(
+        tick = now,
+        qpc = qpc(),
+        version,
+        stage = stage.name(),
+        %name,
+        ?from,
+        ?to,
+        "swap: 要求"
+    );
+    world
+        .resource_mut::<Observer>()
+        .open(pair, kind, &name, from, to, now);
+    name
+}
+
+/// 窓の子のうち present の装着（`emo-surface`・`emo-text-layer-slot`）。
+fn mounts(world: &World, window: Entity) -> Vec<Entity> {
+    world
         .get::<Children>(window)
         .map(|c| {
             c.iter()
@@ -567,7 +764,27 @@ fn despawn_mounts(world: &mut World, window: Entity) -> usize {
                 })
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+fn is_surface(world: &World, e: Entity) -> bool {
+    world
+        .get::<Name>(e)
+        .is_some_and(|n| n.as_str() == "emo-surface")
+}
+
+fn set_hit(world: &mut World, e: Entity, mode: HitTest) {
+    match world.get_mut::<HitTest>(e) {
+        Some(mut h) => *h = mode,
+        None => error!(?e, "HitTest が無い — 当たり判定を書き換えられない"),
+    }
+}
+
+/// 窓の子のうち present の装着を消す。消した数を返す。
+///
+/// presenter の内部の物を外から消している（5.7）。本坑では present に正規の片付けの口が要る。
+fn despawn_mounts(world: &mut World, window: Entity) -> usize {
+    let mounts = mounts(world, window);
     for &e in &mounts {
         world.despawn(e);
     }
@@ -600,10 +817,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn script_observes_six_versions_both_ways_then_two_face_switches() {
+    fn script_calibrates_five_items_first_then_six_versions_both_ways_then_two_face_switches() {
         let steps = script();
         let names: Vec<String> = steps.iter().filter_map(|s| obs_name(*s)).collect();
-        let mut want = Vec::new();
+        let mut want: Vec<String> = [
+            "calib-static",
+            "calib-empty",
+            "calib-mixed",
+            "calib-stale",
+            "calib-size",
+        ]
+        .map(String::from)
+        .to_vec();
         for m in ["reattach", "remove-then-attach", "attach-new-hide-old"] {
             for st in ["update", "finalize"] {
                 want.push(format!("{m}@{st} A→B"));
@@ -618,18 +843,21 @@ mod tests {
     }
 
     #[test]
-    fn every_observation_starts_from_a_settled_prep_of_its_from_face() {
+    fn every_observation_starts_from_a_settled_prep_of_its_from_face_and_pair() {
         let steps = script();
+        let mut seen = 0;
         for w in steps.windows(2) {
-            let start = match w[1] {
-                Step::Swap { from, .. } => from.face(),
-                Step::FaceSwitch { from, .. } => from,
-                _ => continue,
+            let Some((pair, from, _)) = observed(w[1]) else {
+                continue;
             };
-            let pair = if matches!(w[1], Step::FaceSwitch { .. }) {
-                PAIR_FACE
-            } else {
-                PAIR_ASSET
+            seen += 1;
+            let start = match from {
+                Class::P => Face::A0,
+                _ => match w[1] {
+                    Step::Swap { from, .. } => from.face(),
+                    Step::FaceSwitch { from, .. } => from,
+                    other => panic!("P 以外から始まる観測は差し替えか面の切り替えだけ: {other:?}"),
+                },
             };
             match w[0] {
                 Step::Boot => assert_eq!((start, pair), (Face::A0, PAIR_ASSET)),
@@ -637,6 +865,31 @@ mod tests {
                 other => panic!("観測の前が戻しでない: {other:?} → {:?}", w[1]),
             }
         }
+        assert_eq!(seen, 5 + 12 + 2);
+    }
+
+    #[test]
+    fn calibrations_observe_the_pairs_and_ends_of_the_design() {
+        use Class::{Neither, P, Q};
+        let got: Vec<_> = [
+            Calib::Static,
+            Calib::Empty,
+            Calib::Mixed,
+            Calib::Stale,
+            Calib::Size,
+        ]
+        .map(|c| observed(Step::Calib(c)))
+        .to_vec();
+        assert_eq!(
+            got,
+            vec![
+                Some((PAIR_ASSET, P, P)),
+                Some((PAIR_ASSET, P, Neither)),
+                Some((PAIR_ASSET, P, P)),
+                Some((PAIR_ASSET, P, Q)),
+                Some((PAIR_FACE, P, Q)),
+            ]
+        );
     }
 
     #[test]
@@ -663,11 +916,13 @@ mod tests {
             Stage::Update
         );
         assert_eq!(act_stage(Step::Done), Stage::FrameFinalize);
+        assert_eq!(act_stage(Step::Calib(Calib::Stale)), Stage::Update);
     }
 
     #[test]
     fn prebuilt_asset_sets_cover_every_attach_in_the_script() {
-        // A: 起動 1・B→A 6・版の間の戻し A0 5・面の用意 A0／A2 2。B: A→B 6・用意 B0 6。
-        assert_eq!(needs(&script()), (14, 12));
+        // A: 起動 1・較正の前の用意 A0 4・版の前の用意 A0 6・B→A 6・面の用意 A0／A2 2。
+        // B: 較正（混在の仕込み・残り）2・A→B 6・用意 B0 6。
+        assert_eq!(needs(&script()), (19, 14));
     }
 }
