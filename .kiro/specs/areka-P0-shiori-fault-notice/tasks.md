@@ -133,7 +133,7 @@
   - _Requirements: 7.7, 7.8_
   - 1 回目（2026-09-25）で出た 2 件の欠陥は 7.1・7.2 で直してから取り直す（`signoff.md` の 1 回目の記録は残す）
 
-- [ ] 7. 実機で見つかった欠陥を根本で直す（2026-09-25 開発者裁定＝推奨どおり境界を広げて直す）
+- [x] 7. 実機で見つかった欠陥を根本で直す（2026-09-25 開発者裁定＝推奨どおり境界を広げて直す）
 - [x] 7.1 (P) i686 helper 経路の期限切れを「期限内に返らなかった」に写す
   - `crates/shiori-host32-ipc/src/lib.rs` の `send_copydata_with` で、`SendMessageTimeoutW` の直前に `SetLastError(ERROR_SUCCESS)` を呼び、戻り 0 のうち `GetLastError() == ERROR_TIMEOUT` だけを `IpcError::Timeout` にする（存在しない窓・応答なしの打ち切りなど他は従来どおり `SendFailed`）。同じファイルの説明を直す
   - 同じ crate に決定論的なテストを足す: 別スレッドの message-only 窓が `WM_COPYDATA` の手続きで眠る → 短い期限で送ると `Timeout`、存在しない窓へ送ると `SendFailed`。写しを戻すと前者が赤
@@ -142,8 +142,8 @@
   - _Requirements: 1.4, 2.2, 7.7_
   - _Boundary: shiori-host32-ipc, design_
 
-- [ ] 7.2 (P) wintf の `run()` から戻った後にフレームを回さない
-  - `crates/wintf/src/runtime/tick_bridge.rs` の tick タスクに「ループはまだ回っているか」の旗を渡し、起きたらまず旗を見て下りていればフレームを回さずに終える。World の強参照を待ちの間握らない（`upgrade` を待ちの後へ）。`crates/wintf/src/runtime/mod.rs` の `WinApp::run` で旗を作り、`block_on` から戻った直後・登録表を取り除く前に下ろす（同じ形の VSync 中継タスクにも渡す）
+- [x] 7.2 (P) wintf の `run()` から戻った後にフレームを回さない
+  - `crates/wintf/src/runtime/tick_bridge.rs` の tick タスクに「ループはまだ回っているか」の旗を渡し、起きたらまず旗を見て下りていればフレームを回さずに終える。World の強参照を待ちの間握らない（`upgrade` を待ちの後へ）。`crates/wintf/src/runtime/mod.rs` の `WinApp::run` で旗を作り、`block_on` から戻った直後・登録表を取り除く前に下ろす（同じ形の VSync 中継タスクと、クリック透過の判定ループ `run_click_through` にも渡す＝実装時に拡張。待ちの間は World とカーソル監視を強く握らず、`run()` の終わりでカーソル監視の作業スレッドが止まる）
   - `tick_bridge.rs` のテストに、旗を下ろした後の通知ではフレーム数が進まないことを固定する 1 本を足す（修正前は赤）
   - design の Out of Boundary の「wintf（無改変）」と関連する表・リスク欄を「`run()` 復帰後にフレームを回さない守り 1 か所のみ改変」に改める
   - _Requirements: 1.11, 8.4_

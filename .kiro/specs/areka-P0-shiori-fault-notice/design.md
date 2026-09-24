@@ -42,7 +42,7 @@
 - `crates/shiori-host32-host`／`-helper`／`shiori-abi`（失敗の種類・記録・`HOST32_TESTDLL_LOADU_FAIL` の読み手は test crate のまま）。`crates/shiori-host32-ipc` も同じく外だが、例外として `send_copydata_with` の戻り 0 の分類 1 か所だけ本 spec で直す（期限切れ＝`ERROR_TIMEOUT` を `IpcError::Timeout` に・他は従来どおり `SendFailed`。2026-09-25 開発者裁定・実機 1 回目で判明）。
 - `crates/areka-ghost/src/runtime.rs` の `boot_with_kanade_stop` の形（無改変。相乗り 1 件＝`GhostBootError` の doc の「ダミー窓」1 行だけ直す）。
 - `run_ghost_quit_phase` に「停止原因によって終了しない」分岐を足すこと（#13）。`fn main` の起動経路の括り出し（#58）。
-- wintf（無改変）。本番コードが読む環境変数の追加（0 件）。
+- wintf（`run()` 復帰後にフレームもクリック透過の判定も回さない 1 種類の守り（フレーム・VSync 中継・クリック透過の判定の 3 つの待ちループが、`run()` の中で下ろす旗を起きたら先に見る）だけを改変＝2026-09-25 開発者裁定・実機 1 回目で判明。他は無改変）。本番コードが読む環境変数の追加（0 件）。
 
 ### Allowed Dependencies
 
@@ -67,7 +67,7 @@
 - **終了は `quit_app` 1 か所**（`crates/areka/src/app_exit.rs`）: 全窓 despawn → `info!(event="app_exit", origin)` → `AppExit::request_exit()`。2 度目の指示は `AppExit` が流す（最初が勝つ）。出所は記録に残るだけで後から読めない。
 - **`fn main` は `app.run()?` の後に後始末 ①〜④**（loop ticker の Close → `GhostRuntime::shutdown` → seriko の join → 性能報告）を通り、`run()` が正常なら理由を問わず 0。`Err` なら `?` で後始末を飛ばす（#57）。
 - **告知の部品は起動専用**: `crates/areka/src/alert.rs` の `AlertScene` 4 場面・題名は定数 `TITLE`・`raise` は `error!(event="alert")` を必ず 1 件残し `AREKA_NO_ALERT` で抑える。`alert_tests.rs` 9 本。
-- **wintf の `WinApp::run` は登録表に残った窓を壊してから戻る**（`crates/wintf/src/runtime/mod.rs` の `run` の手順「残存窓の破棄」）＝`run()` の後に出す告知の背後にゴーストの窓は残らない（要件 1.11）。
+- **wintf の `WinApp::run` は登録表に残った窓を壊してから戻る**（`crates/wintf/src/runtime/mod.rs` の `run` の手順「残存窓の破棄」）＝`run()` の後に出す告知の背後にゴーストの窓は残らない（要件 1.11）。ただし直す前は、`run()` が戻った後も tick タスクが生きており、告知の `MessageBoxW` が残っていた起床のメッセージを配ると、登録表を取り除いた World でフレームが回って panic した（実機 1 回目）。`run()` は `block_on` から戻った直後・登録表を取り除く前に「ループはまだ回っているか」の旗を下ろし、tick タスク・VSync 中継・クリック透過の判定ループは下りた後の起床ではフレームも判定も回さずに終える（下の File Structure Plan の wintf の節）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -108,7 +108,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
 | kanade（`areka-kanade`） | Rust 2024・`thiserror` 2 | 失敗の種類と理由の公開語彙・送出点でのエラー応答の写し | 新規依存なし |
-| areka bin | `bevy_ecs` 0.19（`Resource`／NonSend）・`wintf::AppExit` | 受け口と最初の出所を World に置く・終了の指示 | wintf 無改変。`.before(system)` の相手が schedule に無いとき bevy 0.19 は辺を作らないだけで失敗しない（`bevy_ecs-0.19.1/src/schedule/node.rs` の `SystemSets::check_type_set_ambiguity` は同型 system が複数あるときだけ拒む・`schedule.rs` の `build_schedule` はそれを呼ぶ側・§7 で確認） |
+| areka bin | `bevy_ecs` 0.19（`Resource`／NonSend）・`wintf::AppExit` | 受け口と最初の出所を World に置く・終了の指示 | wintf は `run()` 復帰後にフレームもクリック透過の判定も回さない 1 種類の守り（フレーム・VSync 中継・クリック透過の判定の 3 つの待ちループが、`run()` の中で下ろす旗を起きたら先に見る）だけを改変（2026-09-25 開発者裁定）。`.before(system)` の相手が schedule に無いとき bevy 0.19 は辺を作らないだけで失敗しない（`bevy_ecs-0.19.1/src/schedule/node.rs` の `SystemSets::check_type_set_ambiguity` は同型 system が複数あるときだけ拒む・`schedule.rs` の `build_schedule` はそれを呼ぶ側・§7 で確認） |
 | 告知 | `MessageBoxW`（`MB_OK\|MB_ICONERROR`） | 既存 `alert::raise` をそのまま使う | 場面ごとの題名は `alert_text` の戻りで運ぶ |
 | テスト | `sample-ghost-kit`・`temp-path-kit`・`log-capture-kit`・`shiori-host32-testdll-loadu`（i686） | smoke ④ の検体・実機 ① の検体 | すべて dev-dependencies 済み・本番コードに口を足さない |
 
@@ -133,6 +133,13 @@ graph TB
 
 - `crates/shiori-host32-ipc/src/lib.rs` — `send_copydata_with` は `SendMessageTimeoutW` の直前に last error を消し、戻り 0 のうち `GetLastError() == ERROR_TIMEOUT` だけを `IpcError::Timeout` に写す（存在しない窓・応答なしの打ち切りなど他は `SendFailed` のまま）。直す前は期限切れも `SendFailed` → `RequestError::Ipc` → `ShioriFailure::Ipc` となり、i686 helper 経路の期限切れが「通信が切れた」と告知されていた（実機 1 回目）。`IpcError` と送出関数の説明も合わせて直す。
 - `crates/shiori-host32-ipc/src/send_timeout_tests.rs`（新規・兄弟）— 別スレッドの message-only 窓が `WM_COPYDATA` の手続きで眠る → 短い期限で送ると `Timeout`、壊した窓へ送ると `SendFailed`（写しを戻すと前者が赤）。
+
+### Modified Files（wintf・2026-09-25 開発者裁定の例外）
+
+- `crates/wintf/src/runtime/tick_bridge.rs` — `AsyncTickTask::spawn`／`run_async_tick` に「ループはまだ回っているか」の旗（`Rc<Cell<bool>>`）を渡す。起きたらまず旗を見て、下りていればフレームを回さずに終える。World は `Weak` のまま待ち、起きてから `upgrade()` する（待ちの間に強参照を握らない）。直す前は `run()` が戻った後も tick タスクが World を握ったまま生きており、利用側のモーダルなダイアログ（告知の `MessageBoxW`）が残っていた起床のメッセージを配ると、登録表の無い World でフレームが回って panic した（実機 1 回目）。同じファイルのテストに、旗を下ろした後の起床ではフレーム数が進まないこと・待ちの間に World の強参照を握らないことを固定する 1 本を足す（直す前は赤・旗が上がっている間の起床は 1 フレーム回ることを対照に置く）。
+- `crates/wintf/src/runtime/mod.rs` — `WinApp::run` で旗を作って tick タスク・VSync 中継タスク・クリック透過の判定ループ（`wire_click_through` 経由）に渡し、`block_on` から戻った直後・登録表を取り除く前に下ろす。ループが回っている間の挙動は変えない。
+- `crates/wintf/src/ecs/clickthrough/controller.rs` — `ClickThroughController::start`／`run_click_through` に同じ旗を渡す。起きたらまず旗を見て、下りていれば判定を回さずに終える。World とカーソル監視は `Weak` のまま待ち、起きてから `upgrade()` する。直す前は待ちの間にカーソル監視の強参照を握っていたため、`run()` の終わりで `ClickThroughHandle` を捨ててもカーソル監視のスレッドが止まらず、告知の箱の間もカーソルの移動で判定が回り得た（直した後は handle が唯一の強参照＝`run()` の終わりで止まって join される）。
+- `crates/wintf/src/ecs/clickthrough/controller_tests.rs` — 旗を下ろした後の起床では判定が回らないこと（World に居ない窓の対象が刈られずに残る）・待ちの間に World とカーソル監視の強参照を握らないことを固定する 1 本を足す（直す前は赤・旗が上がっている間の起床で刈られることを対照に置く）。
 
 ### Modified Files（areka-ghost）
 
@@ -378,7 +385,7 @@ impl ShioriFault {
 **Implementation Notes**
 - Integration: `spine.rs` のハーネスは `world.insert_non_send(KanadeStopRx(rx))` に替える。
 - Validation: `frame_ghost_quit_tests.rs` の 4 本を World の資源で組み直し、Fault の場合（`app_exit` の記録に `kind`・`reason` が載る・`FirstExit` が `KanadeStopped(Fault(..))`）を 1 本足す。`frame_ghost_quit_logsink_tests.rs` は `Emo2Wiring` 無しの World で `boot_with_kanade_stop(Custom(Err), Some(tx))` → 有界に `run_ghost_quit_phase` を回して `AppExit::is_requested()` と `FirstExit` を見る。
-- Risks: なし（wintf 無改変・system の登録は 1 か所）。
+- Risks: なし（wintf の改変は `run()` 復帰後にフレームもクリック透過の判定も回さない 1 種類の守り（3 つの待ちループが同じ旗を見る）だけ・system の登録は 1 か所）。
 
 #### `wire_kanade_stop`・`wire_emo2_boot`（`crates/areka/src/emo2_boot/mod.rs`）
 

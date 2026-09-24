@@ -11,7 +11,7 @@
 //!    `spawn_local` で UI スレッドに投入する二重起床（カーソル移動 notify／VSync tick）
 //!    の listen-before-work ループと、その生存期間を束ねる RAII ハンドル。
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
@@ -267,14 +267,17 @@ impl ClickThroughController {
     /// - `registry`: 共有レジストリ（start 後の登録／除去を許すため `Rc<RefCell<..>>`）。
     /// - `wake_event`: 二重起床の単一 wake event。ワーカが notify し、VSync tick 源
     ///   （task 3.2）も同一 event を post-tick で notify する。
+    /// - `running`: `WinApp::run` のループがまだ回っているか。下りた後の起床では判定を
+    ///   回さずに終える（[`run_click_through`] 参照）。
     ///
     /// # Postconditions
     /// カーソルワーカ稼働・async ループ稼働。返した `ClickThroughHandle` の drop で
-    /// 機構停止（ワーカ join・async ループは world drop で終了）。
+    /// 機構停止（ワーカ join・async ループは `run()` が旗を下ろした後の最初の起床か、world drop で終了）。
     pub(crate) fn start(
         world: Weak<RefCell<EcsWorld>>,
         registry: Rc<RefCell<ClickThroughRegistry>>,
         wake_event: Arc<Event>,
+        running: Rc<Cell<bool>>,
     ) -> ClickThroughHandle {
         // ワーカは同一 wake event で起床通知する（カーソル移動 → notify）。
         // ワーカは handle（RAII で唯一の強所有・drop で stop/join）と async ループ（座標読み）
@@ -291,6 +294,7 @@ impl ClickThroughController {
             Weak::clone(&world),
             Rc::clone(&registry),
             Rc::downgrade(&monitor),
+            running,
         ));
 
         debug!("ClickThroughController started (UI-thread eval loop + cursor worker)");
@@ -407,8 +411,10 @@ impl ClickThroughRegistryHandle {
 ///
 /// `run_async_tick` と同一の listen-before-work 規律: await の **前** に
 /// `listener = wake_event.listen()` を arm する（処理中に届く notify を落とさない・
-/// 二重起床の取りこぼし防止）。World の `Weak` は毎起床 `upgrade()` し、`None`
-/// （shutdown で strong 所有者 drop 済み）なら安全にループを終了する。
+/// 二重起床の取りこぼし防止）。起きたらまず `running`（`WinApp::run` のループがまだ
+/// 回っているか）を見て、下りていれば判定を回さずに終える。World とカーソル監視の `Weak` は
+/// 起きてから `upgrade()` し（待ちの間に強参照を握らない）、`None`（shutdown で strong
+/// 所有者 drop 済み）でも終える。
 ///
 /// 起床後は当該フレームの **ECS tick 完了後（post-tick）** の settled World を 1 回だけ
 /// 評価する。wake event を tick 源が post-tick で notify する結線は task 3.2 の責務で
@@ -418,12 +424,22 @@ async fn run_click_through(
     world: Weak<RefCell<EcsWorld>>,
     registry: Rc<RefCell<ClickThroughRegistry>>,
     monitor: Weak<CursorMonitorBridge>,
+    running: Rc<Cell<bool>>,
 ) {
     debug!("ClickThrough eval loop started (dual-wake: cursor notify + VSync tick)");
     loop {
         // 先に listen() を arm（処理中に届く notify を落とさない）。
         let listener = wake_event.listen();
 
+        // 起床を待機（カーソル移動 notify or VSync tick まで UI スレッドを譲る）。
+        // 待ちの間は `Weak` のまま（強参照を握ると handle drop でワーカが止まらない）。
+        listener.await;
+
+        // `WinApp::run` のループが戻った後の起床では判定を回さない（tick タスクと同じ守り）。
+        if !running.get() {
+            debug!("ClickThrough eval loop stopping (message loop has returned)");
+            return;
+        }
         // strong 所有者が生存しているか確認。いずれか None なら shutdown — 終了。
         // - world: UI スレッド World の strong 所有者 drop（アプリ終了）。
         // - monitor: handle drop（ワーカは既に stop/join 済み）。
@@ -431,9 +447,6 @@ async fn run_click_through(
             debug!("ClickThrough eval loop stopping (world/handle dropped — shutdown)");
             return;
         };
-
-        // 起床を待機（カーソル移動 notify or VSync tick まで UI スレッドを譲る）。
-        listener.await;
 
         // ワーカ最新カーソル座標を読み（store→notify 規律で最新を観測）、settled World を
         // 1 回評価する。World 借用に失敗（tick 進行中等）した場合は当該サイクルを安全側
