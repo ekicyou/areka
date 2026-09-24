@@ -117,7 +117,7 @@ graph TB
 ```
 crates/areka/src/
 ├── ghost_session.rs                 # 新規: 登録の入口・窓を作る・起こす・降ろす・run の後始末
-├── ghost_session_restart_tests.rs   # 新規: 2 周テスト（要件 6.1）＋失敗の腕のテスト（要件 6.3）
+├── ghost_session_restart_tests.rs   # 新規: 2 周テスト（要件 6.1）＋作業プール欠落のテスト（要件 6.3 は #55 で済み・足さない）
 ├── main.rs                          # 変更: fn main の並び替え・open_startup_window の撤去・smoke を main へ（finish_after_run と告知は不変）
 ├── app_exit.rs                      # 変更: close_windows_for_restart・WindowsClosed
 ├── app_exit_tests.rs                # 変更: 閉じても終了しないテスト（要件 6.2）
