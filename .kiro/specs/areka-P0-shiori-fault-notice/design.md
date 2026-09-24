@@ -121,7 +121,7 @@ graph TB
 - `crates/areka-kanade/src/lib.rs` — `ShioriFault`・`ShioriFaultKind`・`ShioriDownKind` の再輸出。
 - `crates/areka-kanade/src/schedule/mod.rs` — `TermCause::Fault(ShioriFault)`（`TermCause` に `Clone`）・`to_unloading_fault(state, fault)`・`Input::ShioriDown { kind, reason }` の腕（`from_down`）・`on_shiori_reply` の横断の腕（`from_failure`）。判断は変えない。
 - `crates/areka-kanade/src/actor.rs` — `round_trip_request` の末尾でエラー応答を「返事なし」に写す（GET→`NoContent`・NOTIFY→`Notified`・`warn!(event="shiori_error_response")`）。`stop_cause_of` は `TermCause` を clone して写す。`notify_stop` は原因不明を `Fault(ShioriFault { kind: Unknown, .. })` で送る。
-- `crates/areka-kanade/src/shiori/real.rs` — `spawn_shiori_actor` の接続失敗は `ShioriDown { kind: ConnectFailed, reason }`、`report_exit_once` は `ShioriDown { kind: HelperExited, reason }`。
+- `crates/areka-kanade/src/shiori/real.rs` — `spawn_shiori_actor` の接続失敗は `ShioriDown { kind: ConnectFailed, reason }` を送ったあと受信端を捨てず、以後の要求に同じ理由の `Failed(Handshake)` で、`Unload` に `Unloaded` で答え、`Close` か全送信端の drop で終わる（`answer_after_connect_failure`。受信端を捨てると、`ShioriDown` より先に届いた起動の要求が「通信が切れた」に化けるため・実装で判明）。`report_exit_once` は `ShioriDown { kind: HelperExited, reason }`。
 - 構築点・照合点の追随（判断なし・機械的）: `KanadeMsg::ShioriDown` を綴るテスト（`schedule/{schedule_tests,schedule_log_firing_tests,steady_choice_timeout_tests}.rs`・`shiori/{real_tests,real_idle_tests}.rs`・`tests/kanade/{failure_test,idle_pump_test,real_helper_test}.rs`・`tests/kanade/common/common_window_actor.rs`）、`TermCause::Fault` を綴るテスト（`actor_resources_tests.rs`・`actor_stop_notify_tests.rs`・`schedule/{close,schedule_tests,schedule_log_firing_tests,steady_choice_timeout_tests,user_break_tests}.rs`）、`tests/kanade/close_test_stop_notify_tests.rs`。
 - `crates/areka-kanade/src/actor_stop_notify_tests.rs` — 5 値の写し（`Fault` は中身つき）と原因不明＝`Unknown`。
 - `crates/areka-kanade/tests/kanade/failure_test.rs` — ケース 1 から `Shiori` を外し、⑴ 入口ごとの停止通知の中身（`Handshake`／`Timeout`／`Ipc`／`Internal`・`ShioriDown` 2 種）を停止通知の投函端つきハーネスで固定、⑵ エラー応答が起動時（`OnInitialize`＝NOTIFY）でも会話中（`OnSecondChange`＝GET）でも Fault にならず会話が続き `shiori_error_response` が 1 件残ることを固定（要件 7.3）。
@@ -178,6 +178,7 @@ sequenceDiagram
     Main-->>Main: Err E_FAIL 終了コード 1
 ```
 
+- 図の最初の矢印（`ShioriDown`）は入口の 1 つにすぎない。起動の `Boot` が `ShioriDown` より先に kanade へ届くと（ほぼ常にこちら）、最初の要求に shiori actor が同じ理由の `Failed(Handshake)` で答え、`from_failure` で同じく `ConnectFailed` になる（理由は `"shiori handshake failure: <接続失敗の理由>"`）。どちらが先でも種類は「接続できなかった」で、理由は届いた入口の記録と同じ文言になる（要件 2.1・2.4）。
 - 告知は後始末 ①（再生ループの停止）の**直後・② の前**に出す（`research.md` 議題 8 の「後始末の前」を設計検証の指摘で 1 段ずらした）: ① は `GhostRuntime` を消費しないのでゴースト名を `GhostRuntime::mount().names.name` から読めるうちに組め、②③ の失敗（記録して止める・今日どおり）に巻き込まれず、利用者が告知を閉じるまでのあいだ SERIKO の loop ticker（16 ms）が誰も取り出さないチャネルへ指令を溜め続けることもない。終了コードは後始末の**後**に決める（要件 3.2）。
 - 起動時か会話中かは載せない（要件 1.9）。図の入口が `Failed(..)`（期限切れ・切断・内部）でも `KanadeStopped` 以降は同じ。
 

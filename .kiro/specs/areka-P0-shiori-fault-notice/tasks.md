@@ -41,12 +41,12 @@
   - _Requirements: 2.1, 2.2, 7.3_
 
 - [ ] 2. 判定・告知・x64 の接続失敗を固定する
-- [ ] 2.1 (P) x64 の接続失敗で停止通知に種類と理由が載ることを固定する
+- [x] 2.1 (P) x64 の接続失敗で停止通知に種類と理由が載ることを固定する
   - 接続に失敗する SHIORI（`ShioriWiring::Custom` が Err を返す）での起動を停止通知の投函端つきに替え、停止通知が「接続できなかった」と接続失敗の理由で届くことを足す
   - ゴースト起動の失敗型の doc にある古い「ダミー窓」の 1 行を今の挙動に直す（コード無改変）
   - areka-ghost の接続失敗の e2e テストが緑
   - _Requirements: 2.4, 7.5_
-  - _Boundary: areka-ghost_
+  - _Boundary: areka-ghost, areka-kanade（shiori/real.rs）_
 
 - [ ] 2.2 (P) 最初の終了の出所を残し、告知と終了コードを 1 つの判定で決める
   - 終了の指示が最初の出所を World の資源に 1 度だけ残し、2 度目以降は debug の記録 `app_exit_again` で流す（最初が勝つ）
@@ -136,3 +136,4 @@
 
 - 1 ファイル 1,000 行の見張り（`log-capture-kit` の `file_length_guard_test`）がある。テストを足すたびに `cargo test -p log-capture-kit -j 4` も回し、超えるなら兄弟ファイルへ分ける（`OVER_LIMIT_ALLOWED` には足さない）。
 - 別スレッド（kanade のアクター等）で出る記録を統合テストで数えるには全スレッドの捕捉が要り、`log-capture-kit/tests/with_default_guard_test.rs` の例外表への登録が要る。単体で数えられるならスレッド局所の `capture` を使う。
+- 2.1 のデバッグ: 接続に失敗した SHIORI アクターが受信端を捨てると、kanade へ直送の Boot が死活報告より先に着き「通信が切れた」になっていた（順序の保証なし）。接続失敗後もアクターが受信を続け、要求に `Handshake(理由)`・Unload に `Unloaded` を返す形にした＝どちらが先でも種類は「接続できなかった」。理由の文言は着順で「shiori handshake failure: 〜」／素の理由に揺れる（どちらも対応する `error!` と同じ）ので、後続（3.3・5.3）は種類で判定し、理由は含有で見る。
