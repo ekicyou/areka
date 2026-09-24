@@ -17,34 +17,34 @@ use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-const HOME: &str = "http://example.test/ghost/";
-const MD5_ABC: &str = "900150983cd24fb0d6963f7d28e17f72";
+pub(super) const HOME: &str = "http://example.test/ghost/";
+pub(super) const MD5_ABC: &str = "900150983cd24fb0d6963f7d28e17f72";
 
-struct Fixture {
-    work: WorkDir,
-    target: PathBuf,
+pub(super) struct Fixture {
+    pub(super) work: WorkDir,
+    pub(super) target: PathBuf,
 }
 
 impl Fixture {
     /// 対象フォルダの外（同じ作業フォルダの中の兄弟）。ジャンクションの行き先に使う。
-    fn outside(&self) -> PathBuf {
+    pub(super) fn outside(&self) -> PathBuf {
         let outside = self.work.path().join("outside");
         fs::create_dir_all(&outside).unwrap();
         outside
     }
 }
 
-fn fixture() -> Fixture {
+pub(super) fn fixture() -> Fixture {
     let work = WorkDir::new().expect("作業フォルダ");
     let target = work.path().join("target");
     fs::create_dir_all(&target).unwrap();
     Fixture { work, target }
 }
 
-struct Ran {
-    result: Result<UpdateOutcome, UpdateError>,
-    seen: Vec<Progress>,
-    records: Vec<CapturedEvent>,
+pub(super) struct Ran {
+    pub(super) result: Result<UpdateOutcome, UpdateError>,
+    pub(super) seen: Vec<Progress>,
+    pub(super) records: Vec<CapturedEvent>,
 }
 
 impl Ran {
@@ -65,14 +65,28 @@ impl Ran {
         );
     }
 
-    /// 失敗を取り出し、error の記録の欄が戻り値と一致することも判定する（8.1）。
-    fn failed(&self) -> &UpdateError {
+    /// 失敗を取り出し、error の記録がちょうど 1 件で、その欄（更新先・対象・段・理由・
+    /// 原因のファイル・戻せたか・作業場所）が戻り値と一致することも判定する（8.1）。
+    pub(super) fn failed(&self) -> &UpdateError {
         let err = self.result.as_ref().expect_err("失敗のはず");
-        let record = self
+        let errors: Vec<&CapturedEvent> = self
             .records
             .iter()
-            .find(|e| e.level == tracing::Level::ERROR)
-            .unwrap_or_else(|| panic!("error の記録が無い: {err}"));
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .collect();
+        let [record] = errors[..] else {
+            panic!("error の記録は 1 件のはず: {err}: {errors:#?}");
+        };
+        assert_eq!(record.field("homeurl"), Some(err.homeurl.as_str()));
+        assert_eq!(
+            record.field("target"),
+            Some(err.target.display().to_string().as_str())
+        );
+        let work = err.work.as_deref().map(|w| w.display().to_string());
+        assert_eq!(
+            record.field("work"),
+            Some(work.unwrap_or_default().as_str())
+        );
         assert_eq!(record.field_str("reason"), Some(err.reason.kind()));
         assert_eq!(
             record.field("stage"),
@@ -91,7 +105,7 @@ impl Ran {
 }
 
 #[allow(clippy::result_large_err)] // 公開の失敗の型をそのまま受ける（lib.rs の run と同じ）。
-fn go(homeurl: &str, target: &Path, fetch: &FakeFetch) -> Ran {
+pub(super) fn go(homeurl: &str, target: &Path, fetch: &FakeFetch) -> Ran {
     let mut seen = Vec::new();
     let (result, records) = capture(|| {
         run(
@@ -107,7 +121,7 @@ fn go(homeurl: &str, target: &Path, fetch: &FakeFetch) -> Ran {
     }
 }
 
-fn url(name: &str) -> String {
+pub(super) fn url(name: &str) -> String {
     format!("{HOME}{name}")
 }
 
@@ -520,7 +534,7 @@ fn n_files_are_committed_in_definition_order_then_delete_txt_is_applied() {
 }
 
 /// `a.dll`（新規）→ `sub/x.txt`（新規・親を作る）→ `b.txt`（既存）の順の定義と、その定義ファイル。
-fn three_ending_with_existing(f: &Fixture, a_bytes: &[u8]) -> (FakeFetch, Vec<u8>) {
+pub(super) fn three_ending_with_existing(f: &Fixture, a_bytes: &[u8]) -> (FakeFetch, Vec<u8>) {
     let manifest = dau(
         &[
             &["a.dll", &md5_hex(a_bytes)],

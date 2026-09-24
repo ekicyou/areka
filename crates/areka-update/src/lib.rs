@@ -371,3 +371,7 @@ fn log_failure(err: UpdateError) -> UpdateError {
 #[cfg(test)]
 #[path = "run_tests.rs"]
 mod run_tests;
+
+#[cfg(test)]
+#[path = "lib_tests.rs"]
+mod lib_tests;
