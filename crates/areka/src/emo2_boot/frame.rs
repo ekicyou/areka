@@ -403,6 +403,12 @@ mod work_area_resnap_hold_tests;
 #[path = "frame_ghost_quit_tests.rs"]
 mod ghost_quit_tests;
 
+// LogSink 側の起動（実 sink 結線なし）でも停止通知が終了の指示まで届くこと
+// （areka-P0-shiori-fault-notice タスク 3.3）。
+#[cfg(test)]
+#[path = "frame_ghost_quit_logsink_tests.rs"]
+mod ghost_quit_logsink_tests;
+
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]
 mod attach_tests;
