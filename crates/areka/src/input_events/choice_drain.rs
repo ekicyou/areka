@@ -125,6 +125,13 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
 /// Postcondition: 以降のフレームで受信済み通知は全件送出試行済み・失敗は warn 記録。
 pub(crate) fn wire_choice_drain(world: &mut World, kanade: Sender<KanadeMsg>) {
     world.insert_non_send(ChoiceForwarder { kanade });
+    register_choice_drain(world);
+}
+
+/// 受信口の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
+///
+/// 並びは `dispatch_pointer_events` の後（[`wire_choice_drain`] の doc のとおり）。
+pub(crate) fn register_choice_drain(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         drain_choice_selections.after(dispatch_pointer_events),
@@ -136,6 +143,26 @@ mod tests {
     use super::*;
     use log_capture_kit::{LineFormat, capture_lines};
     use std::sync::mpsc::{self, TryRecvError};
+
+    /// 登録専用の関数は単独で呼べ、入力の段へ取り出しをちょうど 1 つ足し、持ち物は置かない
+    /// （areka-P0-ghost-restart-unit 要件 2.1）。
+    #[test]
+    fn register_choice_drain_alone_adds_one_system_without_forwarder() {
+        let mut world = World::new();
+        world.init_resource::<Schedules>();
+
+        register_choice_drain(&mut world);
+
+        let input = world
+            .resource::<Schedules>()
+            .get(Input)
+            .map_or(0, |s| s.systems_len());
+        assert_eq!(input, 1, "取り出しの 1 本だけが載る");
+        assert!(
+            world.get_non_send::<ChoiceForwarder>().is_none(),
+            "登録は持ち物を置かない"
+        );
+    }
 
     /// 不透明転写の弁別に足る「汚い」値を持つ選択確定通知を組む。
     ///

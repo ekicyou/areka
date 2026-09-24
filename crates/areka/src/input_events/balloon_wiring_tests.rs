@@ -298,6 +298,26 @@ fn wire_registers_leave_system_into_input_schedule() {
     );
 }
 
+/// 登録専用の関数は単独で呼べ、離脱の系をちょうど 1 つ足し、持ち物は置かない
+/// （areka-P0-ghost-restart-unit 要件 2.1）。
+#[test]
+fn register_leave_system_alone_adds_one_system_without_wiring() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+
+    register_balloon_leave_system(&mut world);
+
+    let input = world
+        .resource::<Schedules>()
+        .get(Input)
+        .map_or(0, |s| s.systems_len());
+    assert_eq!(input, 1, "離脱の系の 1 本だけが載る");
+    assert!(
+        world.get_non_send::<BalloonWiring>().is_none(),
+        "登録は持ち物を置かない"
+    );
+}
+
 /// スケジュール登録檻・行動（Integration Test 7・R1.3/6.6）: 登録済みシステムが Input 実行で走り、
 /// バルーン所有 leave の hover を解除する（登録が「clear_balloon_hover_on_leave」であることの行動的証明・
 /// debug feature 非依存）。

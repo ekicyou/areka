@@ -56,6 +56,21 @@ impl UserBreakWiring {
     pub(crate) fn no_user_break(&self) -> bool {
         self.no_user_break
     }
+
+    /// 旗の線の受信端が今の送出端につながっているか（テスト専用の読み口）。
+    ///
+    /// 未読の値が残っていても 1 度の `try_recv` では生死が分からないので、`Err` が出るまで
+    /// 回して最後の `Err` を見る: `Empty` なら生きている・`Disconnected` なら古い。
+    /// 取り出した値は捨てる（読むのはテストだけ）。
+    #[cfg(test)]
+    pub(crate) fn flag_source_connected(&mut self) -> bool {
+        loop {
+            match self.flag_rx.try_recv() {
+                Ok(_) => continue,
+                Err(err) => return err == std::sync::mpsc::TryRecvError::Empty,
+            }
+        }
+    }
 }
 
 /// 押下 1 回の結論（design「UserBreakWiring と judge_press」）。
@@ -158,6 +173,13 @@ pub(crate) fn wire_user_break(
     kanade: Sender<KanadeMsg>,
 ) {
     world.insert_non_send(UserBreakWiring::new(flag_rx, lifecycle_tx, kanade));
+    register_user_break_drain(world);
+}
+
+/// 旗の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
+///
+/// 並びは `dispatch_pointer_events` の前（[`wire_user_break`] の doc のとおり）。
+pub(crate) fn register_user_break_drain(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         drain_no_user_break_signals.before(dispatch_pointer_events),

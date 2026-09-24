@@ -890,10 +890,11 @@ pub(crate) fn wire_balloon_choice(world: &mut World) {
 /// 高速離脱時の hover 残置は登録漏れとして実機目視でしか検出できないため、登録は本関数に集約し
 /// スケジュール登録檻が開発時に捕捉する（design Testing Strategy Integration Test 7）。ordering は
 /// `dispatch_pointer_events` の後（FrameFinalize の `clear_transient_pointer_state` による `PointerLeave`
-/// 除去より前は Input スケジュール内であることで成立）。`wire_balloon_choice` から呼ばれる私有ヘルパ。
+/// 除去より前は Input スケジュール内であることで成立）。`wire_balloon_choice` から呼ばれるヘルパ
+/// （登録の入口から単独でも呼べるよう `pub(crate)`）。
 ///
 /// 本番到達済み——唯一の呼び手 [`wire_balloon_choice`] が `main.rs` から呼ばれるため間接に到達する。
-fn register_balloon_leave_system(world: &mut World) {
+pub(crate) fn register_balloon_leave_system(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         clear_balloon_hover_on_leave.after(dispatch_pointer_events),
