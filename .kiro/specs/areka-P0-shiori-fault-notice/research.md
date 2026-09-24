@@ -161,7 +161,7 @@
   1. エラー応答を「返事なし」に写す場所は運行表（`schedule/*.rs`）には置けない。`BootInit`（`OnInitialize`＝NOTIFY）は `Notified` だけを次へ進め、`NoContent` は「想定外」で相を維持する（`crates/areka-kanade/src/schedule/boot.rs` の `BootInit` の腕）。応答が GET か NOTIFY かを知っているのは送出点 `round_trip_request`（`actor.rs`）だけ＝写しはそこに置く（design Flow 2）。
   2. `HOST32_TESTDLL_LOADU_FAIL` は helper の子へ届く: `crates/shiori-host32-host/src/process_host.rs` の `spawn` は `Command::new(helper_exe)` に `.env(..)` 3 つを足すだけで `env_clear` を掛けない＝親の環境を継ぐ（§5 の Research Needed 3 は静的に解けた・④ が実証する）。
   3. LogSink 側の起動には `Emo2Wiring` も無い（`emo2_frame_system` は `remove_non_send::<Emo2Wiring>()` が `None` で即戻る）ので、受け口を `Emo2Wiring` に置いたままでは 2 経路で共有できない。受け口は World の NonSend 資源 `KanadeStopRx` に移し、読む system を `emo2_frame_system` から独立させる。
-  4. bevy 0.19.1 は `.before(system)` の相手が schedule に無くても失敗しない: `ScheduleGraph::check_type_set_ambiguity`（`bevy_ecs-0.19.1/src/schedule/schedule.rs`）が拒むのは同型 system が**複数**ある set への辺だけで、空の set は辺を持たないだけ。LogSink 側の起動（`emo2_frame_system` 未登録）で `ghost_quit_system.before(emo2_frame_system)` を登録しても安全。
+  4. bevy 0.19.1 は `.before(system)` の相手が schedule に無くても失敗しない: `SystemSets::check_type_set_ambiguity`（`bevy_ecs-0.19.1/src/schedule/node.rs`・`schedule.rs` の `build_schedule` が呼ぶ）が拒むのは同型 system が**複数**ある set への辺だけで、空の set は辺を持たないだけ。LogSink 側の起動（`emo2_frame_system` 未登録）で `ghost_quit_system.before(emo2_frame_system)` を登録しても安全。
   5. `WinApp::run` は「exit requested while windows remained open — destroying them before returning」（`crates/wintf/src/runtime/mod.rs` の `run` の手順「残存窓の破棄」）＝`run()` の後に出す告知の背後にゴースト窓は残らない（§5 の Research Needed 1 の静的な裏取り・実機 ① で目視）。
 
 ### 7.2 調査の記録
@@ -236,8 +236,8 @@
 - **Rationale**: `AppExit::request_exit` の「最初が勝つ」と同じ規則＝要件 4.5「自動終了が先なら 0」・議題 3 の推奨と整合。
 - **Trade-offs**: なし。
 
-#### 決定 5: 告知は後始末の前・終了コードは後始末の後・`fn main` は `Result<()>` のまま
-- **Selected**: `let run = app.run();`（`?` を外す）→ `FirstExit` → 告知 → `finish_after_run(run, fault, cleanup)` → `Err(E_FAIL)`＝1。後始末 ①〜④ の順序と「②③ の失敗は記録して止める」は今日どおり。
+#### 決定 5: 告知は後始末 ① の直後（② の前）・終了コードは後始末の後・`fn main` は `Result<()>` のまま
+- **Selected**: `let run = app.run();`（`?` を外す）→ `FirstExit` → `finish_after_run(run, fault, cleanup)`（`cleanup` の中で ① → 告知 → ②③④。設計討議 2026-09-24 で「後始末の前」から ① の直後へ 1 段ずらした＝loop ticker が告知の間に指令を溜めない・費用 0）→ `Err(E_FAIL)`＝1。後始末 ①〜④ の順序と「②③ の失敗は記録して止める」は今日どおり。
 - **Rationale**: 名前を控えずに済む・後始末の失敗に告知が巻き込まれない（議題 8 の推奨）。値は既存の失敗と同じ 1（議題 7・要件 3.1 が許す）。
 - **Trade-offs**: debug ビルドで `Error: ..` が stderr に 1 行（既存と同じ）。
 - **Follow-up**: #58 が終了順序を括り出すとき `finish_after_run` ごと運ぶ。
@@ -261,5 +261,5 @@
 
 - [SHIORI/3.0 ステータスコード](https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html) — エラー応答は「失敗」と定めるだけでベースウェアの振る舞いに沈黙（§8 の 2 行目の根拠）。
 - [DLL 共通仕様 `loadu`／`load`](https://ssp.shillest.net/ukadoc/manual/spec_dll.html) — 初期化の失敗は DLL が返す。
-- `bevy_ecs-0.19.1/src/schedule/schedule.rs` の `check_type_set_ambiguity` — 空の system-type set への辺は許される。
+- `bevy_ecs-0.19.1/src/schedule/node.rs` の `SystemSets::check_type_set_ambiguity`（`schedule.rs` の `build_schedule` が呼ぶ） — 空の system-type set への辺は許される。
 - 完了 spec `areka-P0-shiori-loadu` の `research.md` §11〜§12 — 実機の手順・i686 の建て方・失敗の実測（0.47 秒／1.7 秒）。

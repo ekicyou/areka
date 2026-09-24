@@ -108,7 +108,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
 | kanade（`areka-kanade`） | Rust 2024・`thiserror` 2 | 失敗の種類と理由の公開語彙・送出点でのエラー応答の写し | 新規依存なし |
-| areka bin | `bevy_ecs` 0.19（`Resource`／NonSend）・`wintf::AppExit` | 受け口と最初の出所を World に置く・終了の指示 | wintf 無改変。`.before(system)` の相手が schedule に無いとき bevy 0.19 は辺を作らないだけで失敗しない（`ScheduleGraph` の `check_type_set_ambiguity` は同型 system が複数あるときだけ拒む・§7 で確認） |
+| areka bin | `bevy_ecs` 0.19（`Resource`／NonSend）・`wintf::AppExit` | 受け口と最初の出所を World に置く・終了の指示 | wintf 無改変。`.before(system)` の相手が schedule に無いとき bevy 0.19 は辺を作らないだけで失敗しない（`bevy_ecs-0.19.1/src/schedule/node.rs` の `SystemSets::check_type_set_ambiguity` は同型 system が複数あるときだけ拒む・`schedule.rs` の `build_schedule` はそれを呼ぶ側・§7 で確認） |
 | 告知 | `MessageBoxW`（`MB_OK\|MB_ICONERROR`） | 既存 `alert::raise` をそのまま使う | 場面ごとの題名は `alert_text` の戻りで運ぶ |
 | テスト | `sample-ghost-kit`・`temp-path-kit`・`log-capture-kit`・`shiori-host32-testdll-loadu`（i686） | smoke ④ の検体・実機 ① の検体 | すべて dev-dependencies 済み・本番コードに口を足さない |
 
@@ -142,6 +142,8 @@ graph TB
 - `crates/areka/src/emo2_boot/mod.rs` — `wire_emo2_boot(.., kanade_stop: Sender<KanadeStopped>)`（channel を作らず受け取った送出端を `boot_with_kanade_stop` へ渡す）・`wire_kanade_stop(app: &WinApp, rx)`（`KanadeStopRx` を挿し `ghost_quit_system.before(emo2_frame_system)` を `Update` に登録・起動の 2 経路で共通の 1 か所）。`ghost_quit_system` の再輸出。
 - `crates/areka/src/emo2_boot/frame_ghost_quit_tests.rs` — 受け口を World の資源に組み替え（既存 4 本の判断は不変）、Fault の場合（種類と理由が `app_exit` の記録と `FirstExit` に届く）を足す（要件 7.4）。
 - `crates/areka/src/emo2_boot/frame_ghost_quit_logsink_tests.rs`（新規・兄弟）— 実 sink 結線なし（`Emo2Wiring` 無し）の World に `KanadeStopRx` を挿し、`boot_with_kanade_stop(Custom(Err), Some(tx))` の接続失敗で停止通知が受け口に届き `quit_app` まで進む（`AppExit::is_requested`・`FirstExit`＝`Fault(ConnectFailed)`）ことを固定（要件 7.6 後半）。検体は `spine_e2e_test_s2_connect_failure.rs` と同じ最小の一時フォルダ。
+- `crates/areka/src/emo2_boot/frame_schedule_tests.rs` — 据え付けの形を踏むテストを 1 本足す（設計検証 論点 3）: 素の World に `AppExit` と `KanadeStopRx` を挿し、`emo2_frame_system` を登録**せずに** `wire_kanade_stop` と同じ登録（`ghost_quit_system.before(emo2_frame_system)`）を行い、停止通知を 1 件送って `Update` を 1 回走らせ、`AppExit::is_requested()` と `FirstExit` を見る。schedule の組み立てで落ちれば赤・届かなければ赤（bevy の版が変わってこの前提が崩れたとき、本番の LogSink 側の起動だけが落ちるのを防ぐ）。
+- `crates/areka/src/emo2_boot/spine_close_wiring_tests.rs` — `run_ghost_quit_phase(&mut harness.wiring, &mut harness.world)` の呼び出しを新しい署名 `run_ghost_quit_phase(&mut world)` に追随（判断なし・機械的）。
 - `crates/areka/src/emo2_boot/spine.rs` — ハーネスの `set_kanade_stop(rx)` を `world.insert_non_send(KanadeStopRx(rx))` に替える（判断なし）。
 - `crates/areka/src/alert.rs` — `AlertScene::ShioriFault { ghost_name: Option<String>, ghost_root: PathBuf, fault: ShioriFault }`・題名を場面ごとに返す（既存 4 場面は `TITLE` のまま・新場面は `SHIORI_FAULT_TITLE`）・`fault_kind_text(ShioriFaultKind) -> &'static str`（5 語）・`raise` の message を場面に依らない文言にする（判断なし）。
 - `crates/areka/src/alert_tests.rs` — 既存 9 本は無改変。5 種類 × ゴースト名の有無の 10 本を足す（要件 7.1）。
@@ -175,7 +177,7 @@ sequenceDiagram
     Main-->>Main: Err E_FAIL 終了コード 1
 ```
 
-- 告知は後始末の**前**に出す（`research.md` 議題 8）: ゴースト名を `GhostRuntime::mount().names.name` から読めるうちに組め、後始末の失敗（記録して止める・今日どおり）に巻き込まれない。終了コードは後始末の**後**に決める（要件 3.2）。
+- 告知は後始末 ①（再生ループの停止）の**直後・② の前**に出す（`research.md` 議題 8 の「後始末の前」を設計検証の指摘で 1 段ずらした）: ① は `GhostRuntime` を消費しないのでゴースト名を `GhostRuntime::mount().names.name` から読めるうちに組め、②③ の失敗（記録して止める・今日どおり）に巻き込まれず、利用者が告知を閉じるまでのあいだ SERIKO の loop ticker（16 ms）が誰も取り出さないチャネルへ指令を溜め続けることもない。終了コードは後始末の**後**に決める（要件 3.2）。
 - 起動時か会話中かは載せない（要件 1.9）。図の入口が `Failed(..)`（期限切れ・切断・内部）でも `KanadeStopped` 以降は同じ。
 
 ### Flow 2: エラー応答は送出点で「返事なし」になる
@@ -250,7 +252,7 @@ flowchart TD
 | 8.4 | 裁定 4（告知の場所） | `fn main` の末尾（`run()` の後） | — | Flow 1 |
 | 8.5 | 裁定 5（LogSink 側の穴） | 6.4 と同じ | — | — |
 | 8.6 | 裁定 6（#57） | 6.3 と同じ・完了時に台帳 #57 の行を更新 | — | — |
-| 8.7 | 覆すなら議題へ | 設計中に覆した裁定は 0 件（§7 決定 1 は載せ方の選択であり裁定 2 の範囲内） | — | — |
+| 8.7 | 覆すなら議題へ | 開発者の裁定 1〜6 を覆した点は 0 件（§7 決定 1 は載せ方の選択であり裁定 2 の範囲内）。research §6 反映 ⑵ の「型を絞る」（討議後の推論）だけは採らず、`from_failure` の `Shiori` の腕を `Internal` として残す（設計討議 2026-09-24 で明記） | — | — |
 
 ## Components and Interfaces
 
@@ -301,7 +303,8 @@ impl ShioriFault {
 
 **Implementation Notes**
 - Integration: 構築点は `msg.rs`（1）・`actor.rs`（写し・`notify_stop`）・`real.rs`（2 送出）・`schedule/mod.rs`（2 腕）。テストの綴りの追随は File Structure Plan の一覧のとおり（判断なし）。
-- Validation: `msg_fault_tests.rs` で `from_failure` 5 腕・`from_down` 2 腕・`unknown` を固定。
+- Validation: `msg_fault_tests.rs` で `from_failure` の届く 4 腕（`Handshake`・`Timeout`・`Ipc`・`Internal`）・`from_down` 2 腕・`unknown` を固定。`Shiori` の腕は送出点の契約により届かないので判断のテストにはしない（コードのコメントで契約を記す）。
+- research §6 の「2026-09-24 討議の反映 ⑵」が書いた「写しの入口を Fault へ入る 4 種に絞った型にする」は**採らない**（設計検証 論点 2）: `ShioriOutcome::Failed(ShioriFailure)` は mock と本番の共通の境界型で、失敗の enum をもう 1 つ増やす割に合わない。腕を残し `Internal` に写す形で、契約が破れたときも記録に見える。この注記は開発者の裁定（「500 は致命ではない」）の範囲内で、覆したのは要件討議の後に書いた推論の側だけ。
 - Risks: `Copy` を失うので `KanadeStopCause` を値で使っていた箇所は `clone()` か参照へ（コンパイルが指す・7 ファイル）。
 
 #### エラー応答の写し（`crates/areka-kanade/src/actor.rs` `round_trip_request`）
@@ -394,7 +397,7 @@ pub fn wire_emo2_boot(app, ghost_root, balloon_root, helper_exe, author_dpi, zor
 - `.before(emo2_frame_system)` の相手が LogSink 側の起動では schedule に無い。bevy 0.19 は同型 system が**複数**ある set への辺だけを拒み、空の set は辺を作らないだけ（`research.md` §7）。
 
 **Implementation Notes**
-- Validation: `wire_emo2_boot_falls_back_to_unwired_on_missing_ghost_root` は引数の追随のみ。据え付けそのものは配線（再テストしない・要件 7.6）。
+- Validation: `wire_emo2_boot_falls_back_to_unwired_on_missing_ghost_root` は引数の追随のみ。据え付けの**形**（`emo2_frame_system` 無しでの `.before(..)` 登録＝bevy の挙動に依る 1 点）だけは `frame_schedule_tests.rs` の 1 本で踏む（設計検証 論点 3）。それ以外の据え付けは配線（再テストしない・要件 7.6）。
 - Risks: なし。
 
 #### `FirstExit`・`fault_of`・`quit_app`（`crates/areka/src/app_exit.rs`）
@@ -466,7 +469,7 @@ fn finish_after_run(
     cleanup: impl FnOnce() -> windows::core::Result<()>,
 ) -> windows::core::Result<()>;
 ```
-- `fn main` の流れ（`app.run()` の後）: `let run = app.run();` → `FirstExit` を World から読む → `fault_of` が `Some` なら `alert::raise(&AlertScene::ShioriFault { ghost_name: ghost_runtime.as_ref().and_then(|r| r.mount().names.name.clone()), ghost_root: cfg.ghost_root.clone(), fault: f.clone() }, alert::suppressed())` → `finish_after_run(run, fault, || { ①〜④ })`。
+- `fn main` の流れ（`app.run()` の後）: `let run = app.run();` → `FirstExit` を World から読む → `fault_of` が `Some` なら告知の場面 `AlertScene::ShioriFault { ghost_name: ghost_runtime.as_ref().and_then(|r| r.mount().names.name.clone()), ghost_root: cfg.ghost_root.clone(), fault: f.clone() }` を組む → `finish_after_run(run, fault, || { ① → （場面があれば `alert::raise(&scene, alert::suppressed())`）→ ②〜④ })`。告知は ① の直後・② の前（Flow 1 の注記）で、`cleanup` の失敗にはならない。
 - 後始末 ①〜④ の中身と順序は無改変。② `shutdown`・③ `join` の失敗は今日どおり `error!` の上で止める（残りを飛ばす）＝「記録して止める」を選ぶ（要件 6.3 の設計裁量）。
 - 終了コードは `Result<()>` の `Err(E_FAIL)`（Rust の `Termination` が 1 にする）＝起動前の失敗と同じ値（要件 3.1 が許す）。`fn main` の戻り型は変えない。
 - 告知の前に窓が無いこと: `quit_app` が全ゴースト窓を despawn し、`WinApp::run` は登録表に残った窓を壊してから戻る。
@@ -487,13 +490,13 @@ fn finish_after_run(
 **Contracts**: Batch [x]
 
 ##### Batch / Job Contract
-- 前提の充足（4.1）: `ensure_i686_artifact(name)`＝`areka.exe` の隣（`CARGO_BIN_EXE_areka` の親）に `shiori-host32-helper.exe` が無ければ `HOST32_HELPER_EXE` → `<workspace>/target/i686-pc-windows-msvc/{debug,release}` の順で探して複製、無ければ PowerShell の建て方（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`）を案内して失敗（`real_helper_test.rs` の `resolve_helper_exe`・`main_loopback_tests.rs` の `resolve_testdll` と同型）。④ の `shiori_loadu.dll` も同じ関数（探索先は `HOST32_TESTDLL_LOADU_DLL` → 同じ target）。
+- 前提の充足（4.1）: `ensure_i686_artifact(name)`＝`areka.exe` の隣（`CARGO_BIN_EXE_areka` の親）に `shiori-host32-helper.exe` が無ければ `HOST32_HELPER_EXE` → `<workspace>/target/i686-pc-windows-msvc/{debug,release}` の順で探して複製、無ければ PowerShell の建て方（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`）を案内して失敗（`real_helper_test.rs` の `resolve_helper_exe`・`main_loopback_tests.rs` の `resolve_testdll` と同型）。④ の `shiori_loadu.dll` も同じ関数で**探索**する（探索先は `HOST32_TESTDLL_LOADU_DLL` → 同じ target）が、**置き先は別**（検体の複製の中＝テストごとに使い捨て）。helper の置き先 `target/debug/` は ①②④ の 3 本で共有され、`cargo test` は同じバイナリのテストをスレッドで並走させるので、複製は `std::sync::OnceLock` で**同じプロセス内で 1 度**に絞り（隣に既にあれば複製しない）、書く側は一時名へ書いてから改名する（書きかけを別のテストの子プロセスが起動しにいく形を作らない＝設計検証 論点 1）。案内には `cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc` も載せる（本ワークツリーは helper だけが建っており DLL は無い＝④ は最初の走行でこの案内に当たる）。
 - ①②（4.2）: 既存の判定に「`SHIORI が動かなくなりました` を含む行が 0 件」を足す（モニタ 0 台の受理でも 0 件は成り立つので無条件）。自動終了 500 ms は据え置き＝500 ms より遅い失敗はこの 2 本では見えない（盲点は ④ が塞ぐ）。
 - ④（4.3〜4.5）: `SampleRoot::acquire("emo2")` の複製の `ghost/master/descript.txt` を UTF-8 の最小内容（`charset,UTF-8`／`name,emo2-fault`／`shiori,shiori_loadu.dll`／`seriko.defaultsurfacedirectoryname,master`）で上書きし、`ghost/master/` に `shiori_loadu.dll` を複製。argv（ゴースト・同梱バルーン）で起動し、envs に `HOST32_TESTDLL_LOADU_FAIL=1`・`AREKA_APP_SMOKE_EXIT_MS=20000`（失敗＝約 2 秒を自動終了より先に起こす・見張り 60 秒の内側）・一時の `AREKA_PROFILE_DIR`。判定: モニタ 0 台なら `accepted_as_no_monitor` で返る。そうでなければ終了コード非 0・目印の行がちょうど 1 件・`REAL_WINDOWS` あり（窓は出てから閉じる）。
 - env の到達（`research.md` 議題・Research Needed 3）: `crates/shiori-host32-host/src/process_host.rs` の `spawn` は `Command::new(helper_exe)` に `env_clear` を掛けない＝親の環境をそのまま継ぐ。届かなければ ④ は「exit 0」で赤になり、要件 4.4 のとおり検証用 DLL 側を env なしで偽を返す形に直す（本番に口は足さない）。
 
 **Implementation Notes**
-- Risks: `run_smoke` の `.env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)` は後の `.envs(envs)` で上書きできる（`Command` は後勝ち）。④ は ①② と並走しうるが複製は使い捨てで共有しない。
+- Risks: `run_smoke` の `.env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)` は後の `.envs(envs)` で上書きできる（`Command` は後勝ち）。④ は ①② と並走しうる。検体の複製は使い捨てで共有しないが、helper の複製先は共有＝`OnceLock` で 1 度・一時名→改名（上の Batch 契約）。
 
 ## Data Models
 
@@ -558,7 +561,7 @@ classDiagram
 
 ### Unit Tests（判断の分岐だけ・配線は再テストしない）
 
-- `msg_fault_tests.rs`: `from_failure` 5 腕（`Shiori` → `Internal` を含む）・`from_down` 2 腕・`unknown`（要件 7.3）。
+- `msg_fault_tests.rs`: `from_failure` の届く 4 腕・`from_down` 2 腕・`unknown`（要件 7.3）。`Shiori → Internal` の腕は届かない契約なので判断のテストにしない。
 - `actor_stop_notify_tests.rs`: 5 値の写しで `Fault` の中身が保たれる・原因不明は `Fault(Unknown)`（要件 2.2）。
 - `alert_tests.rs`: 5 種類 × 名前の有無＝10 本。題名が `SHIORI_FAULT_TITLE`・本文 3 行・理由の一行がそのまま載る（要件 7.1）。既存 9 本無改変。
 - `app_exit_tests.rs`: `fault_of` の表 8 行・`FirstExit` は最初が勝つ（要件 7.2・4.5）。
