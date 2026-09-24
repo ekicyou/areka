@@ -142,8 +142,9 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | 57 | 起動後の途中終了で記憶の確定が飛ぶ（仮称・**未起票**＝brief なし・2026-09-24 登記） | α 後 | バグ（潜在。下の節を見よ。**棚卸⑯: #55 か #58 への相乗り候補**＝どちらも `fn main` の `app.run()` の後ろを書き換えるので、`Err` の腕でも終了順序を通す形を同じ手で入れれば 1〜2 タスクで閉じる。要件で決める・brief は書かない） | XS | α 後（相乗りなら B1 か B2） | なし | − | ⚪ |
 | 58 | `ghost-restart-unit`（**09-24 棚卸⑯起票**・#13 から括り出し） | **α** | 基盤（同じプロセスの中でゴーストを降ろして起こし直せる形にする＝**振る舞いを変えない括り出し**。`fn main` の終了順序を関数へ／`wire_*` 8 か所の「1 回だけ登録」と「ゴーストごとの状態」の分離／`wire_emo2_boot` の `&mut World` 化と `open_startup_window` の分割／「全窓を閉じるが終了しない」操作。正典の語彙は持たない・kanade に触らない） | M（6〜7 タスク） | **B2**（単独） | #49 ✅・#12 ✅・**#55**（`main.rs`・`app_exit.rs`・`frame.rs` を共有＝直列） | ○（括り出しの形が後ろの切替 3 本の建て方を決める・#49 と同じ種類の基盤） | ⚪ |
 | 59 | `pilot-balloon-asset-swap`（**09-24 棚卸⑯起票**・先進坑・#50 の go ゲート） | **α** | 先進坑（SHIORI を生かしたまま present のバルーン資産だけを差し替えて 1 フレームも崩れずに表示が続くか＝`EmoPresenter::attach_target` の置き換えで足りるか。成果物は知見＝README 3 幕・go 判定は開発者） | S（3〜5 タスク） | **B1-②**（並走。触るのは `crates/pilot/` と `crates/pilot/Cargo.toml` だけ＝共有 0） | なし | −（答えは実験が出す） | ⚪ |
+| 60 | wintf の兄弟の重なり順が描画と当たり判定で逆（仮称・**未起票**＝brief なし・2026-09-24 登記） | α 後 | バグ（潜在。下の節を見よ。**#50 の本命の経路〔消してから再登録〕では兄弟が 2 組にならないので表に出ない**＝#50 が「古い装着を残したまま新しい装着を足す」形を選んだときだけ相乗りを検討） | XS〜S | α 後 | なし | − | ⚪ |
 
-## 登記だけの行（#38〜#41・#54・#56・#57・brief なし）
+## 登記だけの行（#38〜#41・#54・#56・#57・#60・brief なし）
 
 > **なぜ起票しないのか**: どれも α（第三者がデスクトップマスコットを管理できる）に関係しない。開発者方針「α に関係しない spec は、並走できても
 > ウェーブに入れない」と「spec 工場禁止・起票は just-in-time」に従い、**行だけ立てて brief は書かない**。引受先が消えたまま忘れられることだけを防ぐ。
@@ -169,6 +170,8 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - **#56 SHIORI へ渡す置き場所のパスの形（2026-09-24 登記）**。`areka-P0-shiori-loadu` の実機確認で、`load`／`loadu` へ渡すパスが `C:\…\R_POST_and_KOMAINU\ghost/master` の形だと分かった。区切りが `\` と `/` の混在で、末尾に区切りが無い。混在の出どころは `crates/areka-parsers/src/package/resolve.rs` の定数 `GHOST_MASTER`（`"ghost/master"`）を `Path::join` で繋ぐ組み立てで、`shiori-loadu` 以前からある。同 spec の brief は「パスの末尾区切りの作法を SSP に合わせるかどうか」を範囲外と明記し、引受先を書かなかった。**正典 ukadoc の DLL 共通仕様は「モジュールのディレクトリパス」とだけ書き、区切りの向きにも末尾の区切りにも沈黙している**（2026-09-24 に `ukadoc:spec_dll` の全文で確認）。検体 3 体（YAYA・里々・pasta）はどれもこの形で辞書を読めているので、**実害は観測されていない**。ただし第三者の SHIORI が受け取ったパスへ区切り無しでファイル名を継ぎ足すと、読むべきファイルを見失う。α 後の棚卸で扱いを決める。直すなら `\` に揃え、末尾に `\` を付けるかは裁量として `doc/COMPAT_ARCHITECTURE.md` §8 に記す。SSP の挙動を実測して合わせることはしない（記憶 no-ssp-measurement-import-semantics-from-ukadoc）。
 
 - **#57 起動後の途中終了で記憶の確定が飛ぶ（2026-09-24 登記）**。`areka-P0-baseware-root-layout` の完了時に見えた、同 spec 以前からの性質。`crates/areka/src/main.rs` の `fn main` は `app.run()?;` の**後**で ② `ghost.shutdown`（`crates/areka-ghost/src/runtime.rs` の `GhostRuntime::shutdown`＝手順 10 の `barrier()` → `close()` → join）を呼ぶ。`app.run()` が `Err` を返すと `?` で早期に抜け、main スレッドが panic しても同様に shutdown を通らない。`GhostRuntime` は `Drop` を実装しない。そのため boot 直後に投函した記憶（`areka.last.*`）や、動かした窓の位置の永続化が、sylphya のアクターに処理される前にプロセスごと消えうる。**実害は観測されていない**（書き込みは `app.run()` に入る前に投函され、通常の終了・smoke の自動終了・実機 4 点ではすべて確定した）。相乗りの 1 件＝同じ `runtime.rs` の `GhostBootError` の doc が退役済みの「ダミー窓」を今の挙動として書いている（`baseware-root-layout` は要件 7.2 で同ファイルを変えなかった）。α には効かないので brief は書かない。直すなら `app.run()` の `Err` の腕でも ②③ の終了順序を通す（`Drop` での自動 shutdown は終了理由を持てないので採らない方がよい）。
+
+- **#60 wintf の兄弟の重なり順が描画と当たり判定で逆（2026-09-24 登記）**。先進坑 `pilot-balloon-asset-swap` の完了時の棚卸で拾った既存の食い違い。`crates/wintf` の `visual_hierarchy_sync_system`（`visual_sync.rs`）は `Children` を前から `InsertAtBottom` するので**先頭の子が最上に描かれる**。一方 `hit_test`（`hit_test/mod.rs`）は `DepthFirstReversePostOrder` で**最後の子から調べる**。窓に面を 2 枚重ねると「絵は古い方が上・当たり判定は新しい方が優先」になる。先進坑の実機走行で目視でも確かめた（同じ id の `attach_target` 再登録の B→A で、古い kakukaku が Staysee の上に描かれた）。本番の現行経路では、バルーンの子は `emo-text-layer-slot`（当たり判定なし）と `emo-surface` の 1 組だけなので表に出ていない。直すならどちらの順に揃えるかの裁定が要る（描画に合わせるか当たり判定に合わせるか）ので、brief は書かず α 後の棚卸で決める。数え方: 先進坑 README の「学び」と `design.md` の Existing Architecture Analysis。
 
 ## 引き受け手の居ない残り（`shell-implicit-surface` の着地で残した 7 件・2026-09-20）
 
