@@ -6,11 +6,13 @@
 //! 済ませ、状態は後から入れ替えても系は新しい状態を見る。
 //!
 //! 今ここに在るのは登録の入口 [`register_systems`] と、窓を作る側 [`open_ghost_windows`]・
-//! 閉じた証を受けて窓を作り直す [`reopen_ghost_windows`] である。登録の呼び手は `fn main` の
+//! 閉じた証を受けて窓を作り直す [`reopen_ghost_windows`]、ゴーストごとの結線 [`boot_ghost`] と
+//! その 3 ハンドルを降ろす [`GhostSession::shutdown`] である。登録の呼び手は `fn main` の
 //! 1 か所（`WinApp` を作った直後・起動窓の前）。各結線（`wire_*`）は状態の挿入だけを行い、
 //! 系を登録しない。
 
-use std::sync::mpsc::Receiver;
+use std::path::PathBuf;
+use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_kanade::KanadeStopped;
 use bevy_ecs::schedule::Schedules;
@@ -18,13 +20,14 @@ use bevy_ecs::world::World;
 use wintf::ecs::FrameFinalize;
 use wintf::ecs::widget::bitmap_source::{CommandSender, WintfTaskPool};
 
-use crate::ConfigInputs;
 use crate::app_exit::{self, WindowsClosed};
+use crate::boot_resolve::{BalloonDecision, GhostDecision};
 use crate::emo2_boot;
 use crate::input_events;
 use crate::menu;
 use crate::placement;
 use crate::readme;
+use crate::{ConfigInputs, default_app_profile_dir, ghost_boot_options, is_benign_boot_error};
 
 /// 系の登録をプロセスに 1 回・1 か所から行う（要件 2.1・2.2・3.3）。
 ///
@@ -215,6 +218,231 @@ pub(crate) fn reopen_ghost_windows(
         "[reopen_ghost_windows] 閉じた窓の後に窓を作り直す"
     );
     open_ghost_windows(world, cfg)
+}
+
+/// ゴーストごとの結線の入力の束（design「boot_ghost」）。
+pub(crate) struct GhostBootInputs {
+    /// 起動の結線の入力（ゴーストの根・バルーンの根・SHIORI の結線・時計の種類・記憶の置き場）。
+    pub wiring: emo2_boot::Emo2BootInputs,
+    /// fallback（`LogSink`）の起動が使う 32bit SHIORI helper のパス。
+    pub helper_exe: PathBuf,
+    /// 停止通知の送出端の写し（結線あり・fallback の両方の起動へ渡る・#55）。
+    pub kanade_stop: Sender<KanadeStopped>,
+}
+
+impl GhostBootInputs {
+    /// 本番の値: SHIORI は `Helper { helper_exe }`・時計は `Real` 既定・記憶の置き場は
+    /// `Some(default_app_profile_dir())`・根は構成入力のもの。
+    pub(crate) fn production(
+        cfg: &ConfigInputs,
+        helper_exe: PathBuf,
+        kanade_stop: Sender<KanadeStopped>,
+    ) -> Self {
+        Self {
+            wiring: emo2_boot::Emo2BootInputs {
+                ghost_root: cfg.ghost_root.clone(),
+                balloon_root: cfg.balloon_root.clone(),
+                shiori: areka_ghost::ShioriWiring::Helper {
+                    helper_exe: helper_exe.clone(),
+                },
+                ticker: areka_ghost::TickerMode::Real(Default::default()),
+                app_profile_dir: Some(default_app_profile_dir()),
+            },
+            helper_exe,
+            kanade_stop,
+        }
+    }
+}
+
+/// 1 体のゴーストの 3 ハンドル（ゴースト実行系・seriko・loop ticker）。
+///
+/// **落としても何も起きない。降ろすのは必ず [`GhostSession::shutdown`] を呼ぶこと**
+/// （`Drop` は終了の理由を持てないので実装しない・要件 1.7）。
+pub(crate) struct GhostSession {
+    ghost: Option<areka_ghost::GhostRuntime>,
+    seriko: Option<areka_actor::ActorHandle>,
+    loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
+}
+
+impl GhostSession {
+    /// 告知の場面が使うゴースト名（fallback の起動に失敗して実行系が無ければ `None`）。
+    pub(crate) fn ghost_name(&self) -> Option<String> {
+        self.ghost
+            .as_ref()
+            .and_then(|r| r.mount().names.name.clone())
+    }
+
+    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止 → ② ゴースト実行系の終了
+    /// （`reason` を渡す）→ ③ seriko の join。無い段は飛ばし、②③ の失敗は `error!` の上で
+    /// `Err` を返して以降を飛ばす。perf の最終報告はプロセスに 1 回なので呼び手が後で行う。
+    pub(crate) fn shutdown(self, reason: areka_kanade::CloseReason) -> windows::core::Result<()> {
+        // ① loop ticker Close（本ブロック）: SERIKO ループ ticker の worker スレッドは closure 内へ
+        // `SerikoSink` クローン（tick_sink）を握る。これを先に停止させないと seriko inbox が ticker 経由で
+        // 生き続け、③ の join が「全 Sender drop」を永遠に待って hang する。停止端 Sender へ
+        // `TickerMsg::Close` を送ると worker は `recv_timeout` から `Ok(Close)` で return し、その closure＝
+        // tick_sink が drop される（inbox 切断の片翼が外れる。残る片翼＝ghost 側 SerikoSink は ② が外す）。
+        // 呼び手は ticker の JoinHandle を持たない（`wire_emo2_boot` が保持せず drop 済み）ため直接 join でき
+        // ないが、③ の seriko join が全 Sender drop まで block するため実質 ticker worker の終端を待つ形に
+        // なり hang しない（Close 未達で worker が既に終端していても drop で disconnected 経路へ倒れる）。
+        // 失敗（既に終端済み）は shutdown 期待事象ゆえ `debug!`（silent failure 禁止・非致命・R7.5）。
+        if let Some(ticker) = self.loop_ticker {
+            match ticker.send(areka_ghost::ticker::TickerMsg::Close) {
+                Ok(()) => tracing::info!(
+                    "seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止）"
+                ),
+                Err(_) => tracing::debug!(
+                    "seriko: loop ticker は既に終端済み（Close 送信先なし・shutdown 期待事象）"
+                ),
+            }
+            // 送信の成否に依らず停止端 Sender をここで drop し、確実に制御チャンネルを disconnected にする。
+            drop(ticker);
+        }
+
+        // ② 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: boot 済み（`Some`）のときのみ
+        // `shutdown` を呼ぶ。終了理由は呼び手が渡す（`fn main` は `CloseReason::User { scope: 0 }`＝
+        // 全窓 close funnel はユーザ操作起点）。OnClose 応答の再生完了待ちは kanade の `ForceQuit`
+        // 終了系列内で処理される（本仕様は `shutdown` を呼ぶだけ・不改変・R6.2）。失敗は `error!` の上で
+        // 呼び手へ `Err` を返す（genuine な失敗を黙って exit 0 にしない・R6.3）。
+        if let Some(runtime) = self.ghost {
+            if let Err(err) = runtime.shutdown(reason) {
+                tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
+                return Err(windows::core::Error::from_hresult(
+                    windows::Win32::Foundation::E_FAIL,
+                ));
+            }
+        }
+
+        // ③ seriko アクターの join（design「終了握手（R6）」・R6.3）。seriko inbox への送信端は 2 本ある:
+        // (a) ghost 側の `SerikoSink`（surface_sink・②の `shutdown` が drop）と (b) loop ticker closure の
+        // `tick_sink`（①の Close→worker return で drop）。①②で両端が drop されて inbox が切断され、seriko
+        // worker は自然終了する。呼び手は自前の `SerikoSink` クローンを保持しない（sink は `wire_emo2_boot`
+        // が boot／ticker へ move 済み）ため、この `join` は両端 drop 完了（＝ticker worker 終端）まで block
+        // したうえで速やかに戻る（①で ticker を先に Close したことが hang 回避の要）。join 失敗（worker
+        // panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
+        if let Some(seriko) = self.seriko {
+            if let Err(err) = seriko.join() {
+                tracing::error!(error = %err, "seriko アクターの join に失敗しました");
+                return Err(windows::core::Error::from_hresult(
+                    windows::Win32::Foundation::E_FAIL,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// ゴーストごとの結線と状態の載せ替え（要件 2.3・2.4・2.6・design「boot_ghost」）。
+///
+/// 起動の結線（`wire_emo2_boot`）が成立すれば実 sink の腕（入力・メニュー・記憶・バルーンの
+/// 選択・選択肢の送り）を、成立しなければ `LogSink`×2 の fallback の腕を通す。各状態は
+/// `insert_non_send` で置き換わるので n 回呼べる（呼び手は先に [`GhostSession::shutdown`] で
+/// 前のゴーストを降ろしておくこと）。証は取らない（証は [`reopen_ghost_windows`] が消費する）。
+pub(crate) fn boot_ghost(
+    world: &mut World,
+    inputs: GhostBootInputs,
+    descript: &StartupDescriptValues,
+    ghost: &GhostDecision,
+    balloon: &BalloonDecision,
+) -> GhostSession {
+    let GhostBootInputs {
+        wiring,
+        helper_exe,
+        kanade_stop,
+    } = inputs;
+    // fallback の腕が使う根（結線の入力は `wire_emo2_boot` へ move するので先に写す）。
+    let ghost_root = wiring.ghost_root.clone();
+
+    // emo2 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）:
+    // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
+    // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
+    // 終了処理へ運ぶ。`wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォール
+    // バック boot へ倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
+    let outcome = emo2_boot::wire_emo2_boot(
+        world,
+        wiring,
+        descript.author_dpi,
+        descript.zorder_raw.as_deref(),
+        kanade_stop.clone(),
+    );
+    if outcome.wired {
+        tracing::info!(
+            "実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）"
+        );
+        // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
+        // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
+        // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
+        // 成立する（Emo2Wiring 挿入と同位置・同型・self-gating）。窓へのハンドラ登録は task 3.2。
+        if let Some(runtime) = outcome.ghost.as_ref() {
+            let sender = runtime.kanade().clone();
+            input_events::wire_mouse_input(world, sender);
+            // 右クリックメニューの結線（areka-P0-popup-menu-minimal）: 終了の項目が上の入力の結線を使う。
+            menu::wire_menu(world, runtime.kanade().clone());
+            // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
+            // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
+            // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
+            // write-through 導管を確立する。続けて起動成功時の記憶を書く（baseware-root-layout 要件 3）。
+            crate::on_boot_ok(world, runtime, ghost, balloon);
+        }
+        // バルーン選択肢対話配線を World へ結線（task 6.2・design「main.rs＋wire_balloon_choice」・
+        // R4.3/5.5/8.1）: mpsc チャネル生成＋`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入。
+        // 離脱の系の登録は [`register_systems`] が済ませてある。ハンドラ装着は [`open_ghost_windows`] の
+        // spawn 直後（`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `Emo2Wiring` を
+        // self-gate するため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating・DD-IE-9 前例）。
+        input_events::balloon::wire_balloon_choice(world);
+        // 選択確定通知の受信結線（areka-P0-choice-select-events task 5・design C1 ChoiceDrain・
+        // Req1.1/1.2/1.5/1.6/3.7）: 直上 `wire_balloon_choice` が挿入した `ChoiceSelectionInbox`
+        // （precondition）を毎フレーム drain し kanade へ全件転送する系（登録は [`register_systems`]）の
+        // 送り口を置く。位置・様式は `wire_mouse_input`（上方の同 boot スロット）と同型——kanade Sender
+        // クローンを持つ NonSend 資源挿入。
+        if let Some(runtime) = outcome.ghost.as_ref() {
+            input_events::choice_drain::wire_choice_drain(world, runtime.kanade().clone());
+        }
+        GhostSession {
+            ghost: outcome.ghost,
+            seriko: outcome.seriko,
+            loop_ticker: outcome.loop_ticker,
+        }
+    } else {
+        // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
+        // relocate したもの。失敗は非致命——起動前の解決が `ghost/master/descript.txt` の実在を
+        // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
+        // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
+        // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
+        let ghost_options = ghost_boot_options(ghost_root, helper_exe);
+        // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
+        let runtime = match areka_ghost::boot_with_kanade_stop(ghost_options, Some(kanade_stop)) {
+            Ok(runtime) => {
+                tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
+                // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
+                // 生きた runtime があれば wired 経路と同型に PersistWiring（NonSend）を同一 World へ
+                // 挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。
+                // 起動成功時の記憶の書き込みも wired 経路と同じ 1 か所で行う（baseware-root-layout 要件 3）。
+                crate::on_boot_ok(world, &runtime, ghost, balloon);
+                Some(runtime)
+            }
+            Err(err) => {
+                if is_benign_boot_error(&err) {
+                    tracing::warn!(
+                        error = %err,
+                        "ghost 結線層の起動起点が見つかりません（決定のみで継続・骨格起動は阻害しません）"
+                    );
+                } else {
+                    tracing::error!(
+                        error = %err,
+                        "ghost 結線層の起動に失敗しました（継続・骨格起動は阻害しません）"
+                    );
+                }
+                None
+            }
+        };
+        // フォールバック経路に seriko アクター・loop ticker はない（実 sink 結線が成立していない）。
+        GhostSession {
+            ghost: runtime,
+            seriko: None,
+            loop_ticker: None,
+        }
+    }
 }
 
 #[cfg(test)]

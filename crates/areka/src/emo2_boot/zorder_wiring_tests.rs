@@ -439,8 +439,9 @@ fn t_zwi07_the_frame_calls_the_zorder_drain_right_after_the_move_drain() {
 /// 映らない。運ぶ側の字面をここが唯一押さえる。
 #[test]
 fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
-    // 窓を作る側（重なりの生の値の写し）は `ghost_session.rs`、その戻りを受けて結線へ渡す
-    // 行は `fn main`（`main.rs`）に在る（areka-P0-ghost-restart-unit task 4.2）。
+    // 窓を作る側（重なりの生の値の写し）と結線へ渡す行は `ghost_session.rs`、その戻りを受けて
+    // ゴーストごとの結線へ運ぶ行は `fn main`（`main.rs`）に在る（areka-P0-ghost-restart-unit
+    // task 4.2・4.3）。
     let session_raw = include_str!("../ghost_session.rs");
     let session_code = code_only(session_raw);
     let session = squeeze(&session_code);
@@ -453,13 +454,19 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
     );
     assert!(
         squeezed.contains(
-            "let opened = ghost_session::open_ghost_windows(app.world().borrow_mut().world_mut(), &cfg); let ghost_session::StartupDescriptValues { author_dpi, zorder_raw, } = match opened {"
+            "let opened = ghost_session::open_ghost_windows(app.world().borrow_mut().world_mut(), &cfg); let descript = match opened {"
         ),
         "起動窓の戻り値から重なりの生の値を受け取る行が本文に無い"
     );
     assert!(
-        squeezed.contains("author_dpi, zorder_raw.as_deref(), kanade_stop_tx.clone(), );"),
-        "重なりの生の値が結線（wire_emo2_boot）へ渡されていない＝設定が台帳へ届かない: {squeezed}"
+        squeezed.contains("&descript, &ghost_decision, &balloon_decision, );"),
+        "起動窓の戻り値がゴーストごとの結線（boot_ghost）へ渡されていない: {squeezed}"
+    );
+    assert!(
+        session.contains(
+            "descript.author_dpi, descript.zorder_raw.as_deref(), kanade_stop.clone(), );"
+        ),
+        "重なりの生の値が結線（wire_emo2_boot）へ渡されていない＝設定が台帳へ届かない: {session}"
     );
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
