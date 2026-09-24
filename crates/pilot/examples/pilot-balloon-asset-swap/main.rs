@@ -15,6 +15,7 @@
 mod observe;
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bevy_ecs::name::Name;
@@ -142,6 +143,25 @@ fn build_assets(
         a,
         b,
     })
+}
+
+/// 判別対の標本点を導出し、点の数を集合ごとに出す。見分けられない対は `Err`（終了コード 2）。
+fn signature(
+    pair: &str,
+    p: &ComposedSurface,
+    q: &ComposedSurface,
+) -> Result<observe::Signature, String> {
+    let sig =
+        observe::derive_signature(p, q).map_err(|e| format!("判別対 {pair} の標本点: {e}"))?;
+    tracing::info!(
+        pair,
+        only_p = sig.only_p.len(),
+        only_q = sig.only_q.len(),
+        both = sig.both.len(),
+        uses_only_p = sig.has_only_p(),
+        "判別対の標本点"
+    );
+    Ok(sig)
 }
 
 // ---------------------------------------------------------------------------
@@ -320,6 +340,11 @@ fn boot_and_run() -> Result<ExitReason, String> {
     let assets = build_assets(&decoder, staysee.folder(), kakukaku_dir)?;
     let first = build_balloon_target(staysee.folder(), &decoder, 0)
         .map_err(|e| format!("StayseeBalloon の資産（最初の表示用）の構築に失敗: {e}"))?;
+    let sigs = Arc::new([
+        signature("(A0,B0)", &assets.face_a0, &assets.face_b0)?,
+        signature("(A0,A2)", &assets.face_a0, &assets.face_a2)?,
+    ]);
+    let shared = Arc::new(Mutex::new(observe::Shared::default()));
 
     let world = app.world();
     {
@@ -370,12 +395,32 @@ fn boot_and_run() -> Result<ExitReason, String> {
             limit_ms,
             exit: None,
         });
+        w.world_mut().insert_resource(observe::Observer {
+            window,
+            sigs,
+            active: observe::PAIR_ASSET,
+            shared: shared.clone(),
+        });
         w.add_systems(Update, first_show_system);
-        w.add_systems(FrameFinalize, (register_click_through, deadline_system));
+        w.add_systems(
+            FrameFinalize,
+            (
+                register_click_through,
+                deadline_system,
+                // tick の最後（窓を消した tick は記録しない）。
+                observe::tick_record_system
+                    .after(register_click_through)
+                    .after(deadline_system),
+            ),
+        );
     }
 
     // run() の失敗は初期化ではないが、窓も記録も失われているので初期化の失敗と同じ 2 に倒す。
     app.run().map_err(|e| format!("run() が失敗: {e}"))?;
+    tracing::info!(
+        ticks = shared.lock().map_or(0, |s| s.ticks.len()),
+        "tick の記録の件数"
+    );
 
     let reason = world.borrow().world().resource::<Run>().exit;
     drop((staysee, emo2));
