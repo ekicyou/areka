@@ -142,7 +142,7 @@ DoD ゲートより前に、**実装中に発生した未解決問題のうち�
    - **Test Gate**: テストスイートが全通過していること（下記4）。
    - **License Gate**: 依存グラフのライセンス健全性を検証し、配布用の第三者謝辞を最新化すること（下記5。設定ファイルを持つリポジトリのみ）。
    - workflow.md がある場合は、そこで定義された追加ゲート（例: Doc / Steering 等）も順に検証する。
-3. **Format Gate**: Test Gate より**前に**ワークスペース全体を整形する（テストは整形後のコードに対して回す）。
+3. **Format Gate**: Test Gate より**前に**ワークスペース全体を整形する（テストは整形後のコードに対して回す）。**`tools/test-all.ps1 -Format`（下記4）が「`cargo fmt --all` で整形 → `--check` で確認」をテストの前の段で行う**ので、スクリプトがあるリポジトリでは個別に回さない。中身は次の 2 つ:
    ```powershell
    cargo fmt --all
    cargo fmt --all -- --check   # 終了コード 0 を確認
@@ -150,15 +150,16 @@ DoD ゲートより前に、**実装中に発生した未解決問題のうち�
    - **整形差分が出た場合**: 差分はステップ2のコミットに自然に取り込まれるため、ここで個別コミットはしない。
    - **`cargo fmt` が構文エラーで失敗した場合**: ワークフローを中断し開発者に報告（コンパイルできないコードが残っている）。
    - **Rust ワークスペースでないリポジトリ**: スキップし、チェックリストに「(整形対象不在により省略)」と注記する。
-4. **Test Gate**: 全テストは**必ず全体テストのスクリプト `tools/test-all.ps1` で実行する**。`cargo test --workspace` を直に叩かない——i686 の成果物が無いと host-32 の e2e が panic し、i686 でしか走らないテストは回らず、`| Select-String` で絞れば終了コードが失われて赤でも通って見える。スクリプトはこれらを 1 本で片付け、段が赤でも最後まで回して末尾に段ごとの合否を一覧し、1 つでも赤なら終了コード 1 で終わる。**下記5の License Gate も同じ 1 回で済ませるため `-License` を付ける**（deny／about をテストと同時に回すと rustc がメモリ不足で落ちるので、スクリプトが最後に直列で回す）。
+4. **Test Gate**: 全テストは**必ず全体テストのスクリプト `tools/test-all.ps1` で実行する**。`cargo test --workspace` を直に叩かない——i686 の成果物が無いと host-32 の e2e が panic し、i686 でしか走らないテストは回らず、`| Select-String` で絞れば終了コードが失われて赤でも通って見える。スクリプトはこれらを 1 本で片付け、段が赤でも最後まで回して末尾に段ごとの合否を一覧し、1 つでも赤なら終了コード 1 で終わる。**上記3の Format Gate と下記5の License Gate も同じ 1 回で済ませるため `-Format -License` を付ける**（deny／about をテストと同時に回すと rustc がメモリ不足で落ちるので、スクリプトが最後に直列で回す）。
    ```powershell
-   pwsh -NoProfile -File tools/test-all.ps1 -License   # 終了コード 0 を確認（赤の段は末尾の一覧に FAIL で出る）
+   pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # 終了コード 0 を確認（赤の段は末尾の一覧に FAIL で出る）
    ```
-   - **段**: i686 ターゲット導入 → i686 成果物ビルド（helper・偽 DLL 2 つ）→ fmt --check → x64 ワークスペース全テスト（`--no-fail-fast -j 4`）→ i686 テスト（host-32 系）→ `cargo deny check` → `cargo about generate`。
+   - **段**: i686 ターゲット導入 → i686 成果物ビルド（helper・偽 DLL 2 つ）→ `cargo fmt --all`（整形）→ fmt --check → x64 ワークスペース全テスト（`--no-fail-fast -j 4`）→ i686 テスト（host-32 系）→ `cargo deny check` → `cargo about generate`。
+   - **末尾の一覧の見出しに「検査したコミット」と「開始時の未コミットの変更の件数」が出る**。`THIRD-PARTY-NOTICES.md` に差分が出たときも末尾で知らせる（差分はステップ2/7のコミットに含める）。
    - **長い**: 初回ビルド込みで約 19 分（2026-09-24 実測・x64 全テストだけで 838 秒）。Bash／PowerShell ツールの `run_in_background` で回して完了通知を待つ。前面で回すとツールの時間切れで途中の結果しか残らない。
    - **判定は終了コードと末尾の一覧だけで行う**。ログの途中の `test result:` を拾って合否を決めない。赤の段があれば、その段のログを読んで原因を報告する。
    - **スクリプトが無いリポジトリ**（このスキルを別のリポジトリへ移したとき）: `cargo test --workspace --no-fail-fast` を回して終了コードで判定し、License Gate は下記5の 2 コマンドを個別に回す。
-   - **スキップ可**: 直近のターンで同じ Test Gate が実行され全段の緑を確認済みで、その後にテスト対象コードの変更が無い場合は再実行を省略してよい。スキップ時は完了チェックリストに「(直近の実行結果により省略)」と注記する。
+   - **スキップ可**: 直近に同じ `-Format -License` の実行が全段緑で終わっており、その一覧の「検査したコミット」が今の `git rev-parse --short HEAD` と一致し、以後テスト対象コードの変更が無い（`git status --porcelain` が空、または変更が spec 文書だけ）場合は再実行を省略してよい。一致を確かめずに「さっき緑だった」で省かない。スキップ時は完了チェックリストに「(直近の実行結果により省略)」と注記する。
    - 判断に迷う場合は実行する。`kiro-verify-completion` スキルがある場合は、その fresh-evidence ゲートに委ねてもよい。
 5. **License Gate**: MIT 配布を守るライセンス健全性ゲート。ルートに設定ファイルが存在する場合のみ実行し、無ければスキップする（ポータビリティ確保）。**`tools/test-all.ps1 -License`（上記4）がこの 2 コマンドを回す**ので、スクリプトがあるリポジトリでは個別に回さない。中身は次の 2 つ:
 
@@ -409,8 +410,8 @@ PR の**作成またはマージ（API）が失敗**した場合（コンフリ�
 ```
 - [ ] 冒頭ステップ: 実装中の未解決問題のうち未起票のものを棚卸し済み——軽微・直ちに実施可能なものはその場で解決（バグはテスト付き・1 件 1 コミット・Implementation Notes に記録）、残りは `/kiro-discovery` で起票済み（解決件数・起票件数をそれぞれ記録。0 件なら「0 件」）
 - [ ] DoD ベースラインゲート通過（Spec / Format / Test / License。workflow.md が存在すれば追加ゲートも）
-- [ ] Format Gate: `cargo fmt --all` 実行後 `cargo fmt --all -- --check` が終了コード 0（Test Gate より前）
-- [ ] Test Gate: `pwsh -NoProfile -File tools/test-all.ps1 -License` が終了コード 0（全テストは必ずこのスクリプトで回す。無いリポジトリは `cargo test --workspace --no-fail-fast`。または直近の実行結果により省略）
+- [ ] Format Gate（下の `-Format` が回す）: `cargo fmt --all` 実行後 `cargo fmt --all -- --check` が終了コード 0（Test Gate より前）
+- [ ] Test Gate: `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` が終了コード 0（全テストは必ずこのスクリプトで回す。無いリポジトリは `cargo test --workspace --no-fail-fast`。または直近の実行結果により省略＝一覧の「検査したコミット」が今の HEAD と一致することを確認済み）
 - [ ] License Gate（上の `-License` が回す）: `cargo deny check` 成功 + `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md` で謝辞再生成（deny.toml/about.toml があるリポジトリ。無ければ「設定不在により省略」）
 - [ ] 未コミットファイルをコミット済み（ステップ2）
 - [ ] completedフォルダへ移動済み（ステップ3）※繰り返し仕様はスキップ

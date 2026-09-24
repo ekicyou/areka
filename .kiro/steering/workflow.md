@@ -32,7 +32,7 @@ Kiro仕様駆動開発における作業フロー・ブランチ戦略・完了�
 ### Step 1. DoDゲート検証
 
 - **Spec Gate**: 当該 spec の `tasks.md` が全 `[x]` 完了。
-- **Test Gate**: `pwsh -NoProfile -File tools/test-all.ps1` が終了コード 0（i686 の導入と成果物のビルド・fmt --check・x64 の全テスト・i686 でしか走らないテストを 1 本で回す。直近の実行で全段緑かつ以降コード変更がなければ省略可）。
+- **Test Gate**: `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` が終了コード 0（整形・i686 の導入と成果物のビルド・fmt --check・x64 の全テスト・i686 でしか走らないテストを 1 本で回す。直近の実行で全段緑かつ以降コード変更がなければ省略可）。
 - いずれか失敗時はワークフローを中断し開発者へ報告。
 
 ### Step 2. 実装コミット
