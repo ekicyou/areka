@@ -73,7 +73,7 @@
   - _Depends: 2.2_
   - _Requirements: 1.2, 2.5, 6.5, 7.4_
 
-- [ ] 3.2 統合: 受け口の据え付けを 1 か所にし、実 sink 結線と fn main をつなぎ替える
+- [x] 3.2 統合: 受け口の据え付けを 1 か所にし、実 sink 結線と fn main をつなぎ替える
   - 受け口を World に挿し、終了相の system を「フレームの system より前」で Update に登録する据え付け関数を 1 つ置く（起動の 2 経路で共通・1 回だけ）。フレームの system から終了相の呼び出しを外し、実 sink 結線の受け口の欄と設定口を退役させる
   - 実 sink 結線は内部で channel を作らず、引数で受け取った送出端を起動へ渡す。既存の結線テストは引数の追随だけ
   - `fn main` に最小の結線を入れる: 停止通知の channel を 1 本作り、実 sink 結線へ送出端を渡し、起動の分岐の後・run の前に据え付けを 1 回呼ぶ（LogSink 側の起動への配り・run の後の処理は 4.2）
@@ -137,3 +137,4 @@
 - 1 ファイル 1,000 行の見張り（`log-capture-kit` の `file_length_guard_test`）がある。テストを足すたびに `cargo test -p log-capture-kit -j 4` も回し、超えるなら兄弟ファイルへ分ける（`OVER_LIMIT_ALLOWED` には足さない）。
 - 別スレッド（kanade のアクター等）で出る記録を統合テストで数えるには全スレッドの捕捉が要り、`log-capture-kit/tests/with_default_guard_test.rs` の例外表への登録が要る。単体で数えられるならスレッド局所の `capture` を使う。
 - 2.1 のデバッグ: 接続に失敗した SHIORI アクターが受信端を捨てると、kanade へ直送の Boot が死活報告より先に着き「通信が切れた」になっていた（順序の保証なし）。接続失敗後もアクターが受信を続け、要求に `Handshake(理由)`・Unload に `Unloaded` を返す形にした＝どちらが先でも種類は「接続できなかった」。理由の文言は着順で「shiori handshake failure: 〜」／素の理由に揺れる（どちらも対応する `error!` と同じ）ので、後続（3.3・5.3）は種類で判定し、理由は含有で見る。
+- 3.2 の時点で `main` は停止通知の送出端を `wire_emo2_boot` へそのまま移している。4.2 で LogSink 側へも配るときは `tx.clone()` に変え、`zorder_wiring_tests.rs` の t_zwi08 が照合する字面も合わせて直す。

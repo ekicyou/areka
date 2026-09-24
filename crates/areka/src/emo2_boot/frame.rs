@@ -163,9 +163,9 @@ pub(crate) struct KanadeStopRx(pub(crate) Receiver<KanadeStopped>);
 
 /// 終了相: kanade の停止通知を取り出し、届いていれば全ゴースト窓を閉じる（R15.4・design D15 の 4）。
 ///
-/// 相順の**先頭**（作業領域源の同期より前）に置く。終了が決まったフレームで他の相を走らせても、
-/// これから閉じる窓のために描き直すだけだからである。返り値は「通知を消化したか」で、`true` の
-/// フレームは呼び手が以後の相を飛ばす。
+/// [`ghost_quit_system`] として毎フレームの相（[`emo2_frame_system`]）より前に走る。終了が
+/// 決まったフレームで他の相を走らせても、これから閉じる窓のために描き直すだけだからである。
+/// 返り値は「通知を消化したか」。
 ///
 /// # 判断
 ///
@@ -222,10 +222,8 @@ pub(super) fn run_ghost_quit_phase(world: &mut World) -> bool {
 }
 
 /// 終了相 [`run_ghost_quit_phase`] を呼ぶだけの排他 system（起動の 2 経路で共有する）。
-#[expect(
-    dead_code,
-    reason = "Update への登録は受け口の据え付け（shiori-fault-notice 3.2）で入る"
-)]
+///
+/// `Update` への登録は `wire_kanade_stop` の 1 か所（[`emo2_frame_system`] より前）。
 pub(super) fn ghost_quit_system(world: &mut World) {
     run_ghost_quit_phase(world);
 }
@@ -252,13 +250,6 @@ pub fn emo2_frame_system(world: &mut World) {
     let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
         return;
     };
-    // 終了相（R15.4・design D15 の 4）: **すべての相より前**に置く。kanade の終了系列が完了して
-    // いたら全ゴースト窓を閉じ、以後の相は走らせずに戻る（これから消える窓のために描き直さない）。
-    // 通知が無いフレームは即座に false で抜ける＝定常フレームは無操作である。
-    if run_ghost_quit_phase(world) {
-        world.insert_non_send(wiring);
-        return;
-    }
     // 作業領域源の実行時同期（atom 設計 C6・要件 5.1／5.4／5.5）: **各相より前**に置く。
     // 拡大率の相が読む作業領域源を同一フレームの先頭で新しくしておくと、相は新しい下端へ
     // 1 回で書ける（相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる）。

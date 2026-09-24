@@ -25,11 +25,15 @@
 // 両方向の対照を置いてある）。
 // =============================================================================
 
+use std::sync::mpsc;
+
+use areka_kanade::{KanadeStopCause, KanadeStopped};
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, IntoSystemSet, ScheduleLabel, Schedules};
 use wintf::ecs::{FrameFinalize, Update, update_typewriters};
 
-use super::frame::emo2_frame_system;
+use super::frame::{KanadeStopRx, emo2_frame_system, ghost_quit_system};
+use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::placement::spawn::wire_zorder_pair;
 
 // ---------------------------------------------------------------- 道具立て
@@ -193,5 +197,63 @@ fn t_n10_before_the_registration_the_update_stage_holds_nothing() {
     assert!(
         !world.resource::<Schedules>().contains(Update),
         "前提: 鎖の結線は `Update` の段を作らない（この World は wintf の既定システムを持たない）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ⑶ 終了相の据え付け（areka-P0-shiori-fault-notice 3.2・要件 6.4・設計検証 論点 3）
+// ---------------------------------------------------------------------------
+
+/// 本番（`wire_kanade_stop`）の終了相の登録の字面。下のテストはこの写しを素の World で行う。
+const QUIT_REGISTRATION: &str = "add_systems(Update, ghost_quit_system.before(emo2_frame_system));";
+
+/// 毎フレームの相を登録しない World（＝LogSink 側の起動と同じ形）でも、終了相の登録は
+/// bevy に受け入れられ、停止通知 1 件 → `Update` 1 回で終了が指示され最初の出所が残る。
+///
+/// 順序の相手（`emo2_frame_system`）が schedule に無い登録の形は bevy の挙動に依る 1 点なので、
+/// 版が変わってこの形が拒まれたら（schedule の組み立てで落ちたら）ここが赤くなる。
+/// 本番の登録から行ごと消す・順序指定を外すと字面の確認が赤くなる。
+#[test]
+fn ghost_quit_system_without_the_frame_system_quits_on_one_notice() {
+    assert!(
+        squeeze(&code_only(include_str!("mod.rs"))).contains(QUIT_REGISTRATION),
+        "終了相の登録が本番の据え付けに無い、または順序指定が変わっている: {QUIT_REGISTRATION}"
+    );
+
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    world.insert_non_send(wintf::AppExit::new());
+    let (tx, rx) = mpsc::channel::<KanadeStopped>();
+    world.insert_non_send(KanadeStopRx(rx));
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Update, ghost_quit_system.before(emo2_frame_system));
+    assert_eq!(
+        world
+            .resource::<Schedules>()
+            .get(Update)
+            .expect("登録後は `Update` の段が在る")
+            .systems_len(),
+        1,
+        "`Update` に載るのは終了相 1 本だけ（毎フレームの相は載せない）"
+    );
+
+    tx.send(KanadeStopped {
+        cause: KanadeStopCause::Quit,
+    })
+    .expect("停止通知を投函できる");
+    world.run_schedule(Update);
+
+    assert!(
+        world
+            .get_non_send::<wintf::AppExit>()
+            .expect("受け口を挿してある")
+            .is_requested(),
+        "停止通知 1 件 → `Update` 1 回で終了が指示される"
+    );
+    assert_eq!(
+        world.get_resource::<FirstExit>().map(|f| f.0.clone()),
+        Some(ExitOrigin::KanadeStopped(KanadeStopCause::Quit)),
+        "最初の出所が残る"
     );
 }

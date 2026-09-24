@@ -216,6 +216,8 @@ fn main() -> Result<()> {
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
     // 終了処理へ運ぶ。`wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォール
     // バック boot へ倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
+    // 停止通知の channel は 1 本だけ作り、送出端を起動へ、受信端を下の据え付けへ渡す（要件 6.4）。
+    let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
     let outcome = emo2_boot::wire_emo2_boot(
         &app,
         &cfg.ghost_root,
@@ -223,6 +225,7 @@ fn main() -> Result<()> {
         &helper_exe,
         author_dpi,
         zorder_raw.as_deref(),
+        kanade_stop_tx,
     );
     let (ghost_runtime, seriko_handle, loop_ticker) = if outcome.wired {
         tracing::info!(
@@ -311,6 +314,9 @@ fn main() -> Result<()> {
         // フォールバック経路に seriko アクター・loop ticker はない（実 sink 結線が成立していない）。
         (ghost, None, None)
     };
+
+    // 停止通知の受け口と終了相の据え付け（起動の 2 経路で共通・起動の分岐の後・`run()` の前に 1 回）。
+    emo2_boot::wire_kanade_stop(&app, kanade_stop_rx);
 
     // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。窓が 0 になっても戻らず、
     // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が `Ok` を返す。
