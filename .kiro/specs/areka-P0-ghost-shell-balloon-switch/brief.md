@@ -3,6 +3,30 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 2 の束「切替」（候補名 `areka-P0-shell-balloon-switch`）を、ゴースト切替まで含めて引き受ける。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-24 棚卸⑯の再測定（main `0b01f654`）
+
+**本仕様はもう 1 本を前に切り出した＝台帳 #58 `areka-P0-ghost-restart-unit`（振る舞いを変えない括り出し・M・6〜7 タスク）。** 理由は、下の実測で想定タスクが **19〜22 本**に膨らみ、1 spec 20 本の上限を超える恐れが出たため。切る場所は「kanade に触るかどうか」——前半（#58）は `crates/areka` の bin だけ、後半（本仕様）は kanade の握手が中心で、共有は `emo2_boot/mod.rs` と `frame.rs` に絞れる。順序は **#55 → #58 → 本仕様 → #50**。分割後の本仕様は **L（13〜15 タスク）**。
+
+**崩れた／変わった前提（main `0b01f654`・サブエージェント再測定）**
+
+1. **「窓 0 で終了」は #49 で解決済み。** `WinApp::with_exit_policy(ExitPolicy::Explicit)` で `run()` は `quit_app` の指示でしか戻らない。Approach の段 ①（寿命の分離・検証 1 本を含む）と Constraints の「α 最大の構造変更＝寿命の分離」は**本仕様から丸ごと外れた**。`main.rs` は 958 行 → 774 行。
+2. **終了順序の括り出しは未着手のまま。** `fn main` の `app.run()?` の後ろに、loop ticker の Close → `GhostRuntime::shutdown(CloseReason::User{scope:0})` → seriko の join → perf の最終報告が並んでいる。#49 も #12 も関数にしていない。→ **#58 が持つ**。
+3. **新しく入った一本道: 停止通知を受けると必ず終了へ進む。** `emo2_boot/frame.rs` の `run_ghost_quit_phase` は `KanadeStopped` を 1 件でも受けると無条件に `quit_app(world, ExitOrigin::KanadeStopped(cause))` を呼ぶ。切替で停止通知を流すとそのままプロセスが終わる。ここへ「切替なら終了しない」分岐を足すのが本仕様の必須作業（#49 の design の申し送り「切替は `quit_app` を通らない」と一致）。`ExitOrigin`（`crates/areka/src/app_exit.rs`）は `KanadeStopped(KanadeStopCause)`・`Escape`・`Smoke`・`OsClose` の 4 値（`DummyWindow` は #12 で退役）。
+4. **全窓を消す部品 `despawn_app_windows`（`app_exit.rs`）は私有**で、#49 の要件 3.6 により単独では呼べない。「窓を閉じるが終了しない」操作は別に作る。→ **#58 が持つ**。
+5. **`wire_*` の「1 回だけ登録する」前提が 8 か所ある**（`wire_emo2_boot`・`menu::wire_menu_with`・`readme::wire_readme`・`input_events::user_break::wire_user_break`・`input_events::choice_drain::wire_choice_drain`・`input_events::balloon::wire_balloon_choice`・`placement::spawn::wire_zorder_pair`・`main.rs` の `open_startup_window`）。うち 3 か所（readme・user_break・choice_drain）はコメントで「`main` から 1 度しか呼ばれない」を前提と明記。ゴーストごとに差し替えが要る窓ごとの状態は 5 つ（`MouseWiring`・`MenuWiring`・choice_drain の kanade 送り口・`PersistWiring`・readme の経路）。→ **登録と状態の分離は #58 が持つ**。
+6. **`wire_emo2_boot` は `&WinApp` を取り、中で `app.world().borrow_mut()` する。** フレームの系の中（World を借りている最中）から呼ぶと二重借用で落ちる。切替は系の外（`CommandSender` か `spawn_local`）で実行するか、`&mut World` を取る形へ組み替える。→ **組み替えは #58、系の外での実行は本仕様**。
+7. **brief の触るファイル一覧に無かったもの 3 件**: ⓐ `\+`／`\_+` は `crates/areka-parsers/src/sakura/decode.rs` の `decode_bare` の既定の腕で `Raw` になり compile の catch-all で捨てられる＝parsers と areka-sakura の compile に触る。ⓑ `OnGhostChanged` → 204 → `OnBoot` は起動系列の変種＝`crates/areka-kanade/src/schedule/boot.rs` に触る。ⓒ 起動元の情報（直前のゴースト名・切替時の台本）を boot へ渡す口＝`GhostBootOptions` は構造体リテラルが 27 か所なので欄を足さず、`boot_with_kanade_stop` 型の派生関数で渡す。
+8. **`KanadeStopped` が運ぶのは `cause` だけ。** `OnGhostChanged` の Ref1（直前のゴーストの切替時の台本）を運ぶ器はどこにも無い（`KanadeStopCause` 5 値・`stop_cause_of` は網羅 match のまま＝前提 4 は不変）。
+9. **中断の規則が新たに絡む。** 正典「`--option=raise-event` のときはバルーンブレークで中止も可能」が、`schedule/user_break.rs` の `on_user_break`（09-20 の「中断しても終了で終わる」裁定）と交差する（議題 1）。
+10. **Ref0 の本体側の名前（`sakura.name`）は目録の素性に無い。** `catalog::Identity` は 7 項目で、#12 の要件 2.9 が「足さない」と決めた。切替先の `sakura.name` は `catalog::companion_balloon` と同じ形の単独の読み手で読む。
+11. 前提 2（`canonical()` 8 行・`(change,ghost)` 無し）・前提 5・`GhostRuntime`（683 行）・kanade 8 ファイルは `fe157df1` から**不変**。
+
+**#49／#12 が用意済みで仕事が減る部品**: 列挙は `areka_ghost::catalog`（`BasewareRoot`・`list_ghosts`・`list_shells`・`list_balloons`・`companion_balloon`・`GhostEntry`・`Identity`）＝`random`／`sequential` はその上の純関数 1 本。記憶は `PersistKey::{LastGhost(App), LastBalloon(Ghost), LastShell(Ghost)}` と `boot_resolve.rs` の `LastUsed::record`＝新ゴーストの送り口で呼び直すだけ。切替先のバルーン決めは `boot_resolve::resolve_balloon`（7 分岐・純粋）と `read_last_balloon` を流用。起動成功時の後処理 `main.rs` の `on_boot_ok` が繰り返し呼べる単位の芯。告知は `alert.rs` の `AlertScene`・`raise` に場面を 1 つ足すだけ。メニューは `Frame::Ghost` と文言 `ghostrootbutton.caption`＝「ゴースト」が既にあり、登記 0 件（`#[allow(dead_code)]` 3 か所＝`ItemBody::Submenu`・`MenuRegistry::unregister`・`menu::register`）。
+
+**本仕様（分割後）が触るファイル**: `emo2_boot/mod.rs`（`change` の受け口）・`frame.rs`（`run_ghost_quit_phase` の切替分岐）・`frame/wiring.rs`（`Emo2Wiring` の載せ替え）・`consumer_ledger.rs`・`boot_config.rs`／`boot_resolve.rs`（切替先の解決）・`menu/mod.rs`（最初の登記者）・kanade `msg.rs`（771）・`actor.rs`・`schedule/{mod,events,steady（935）,close,boot}.rs`・`schedule/user_break.rs`（議題 1 しだい）・`areka-ghost/src/runtime.rs`（派生関数）・`areka-parsers/src/sakura/decode.rs`＋areka-sakura の compile・`alert.rs`・網羅台帳 `shiori.toml`（`OnGhostChanging`／`OnGhostChanged` は `absent`・owner 空）と `sakura-script.toml`（`\![change,ghost…]`・`\+`・`\_+`）と生成物。**1,000 行の上限**: `steady.rs` 935（相を足すと超える恐れ大＝相は新ファイルへ・前例 `user_break.rs`）・テスト側 `runtime_tests.rs` 986・`schedule_tests.rs` 945・`steady_flow_tests.rs` 931。陳腐化 1 件: `shiori.toml` の `shellrootbutton.caption` の備考が引受先を本仕様と書くが、分割後は #50 の担当（#50 が直す）。
+
+**要件段階の議題（答えで作業が変わるもの・Fable）**: ⑴ `OnGhostChanging` の台詞をバルーンの中断で止めたら切替を**中止**する（正典）か、09-20 の終了の裁定に倣って**切替へ進む**か——中止を取ると kanade に「元の定常へ戻る」経路が 1 本増える（#47 で 0 本にした種類）。⑵ 切替の目印をどこに持つか——`KanadeStopCause` に「切替」を足して停止通知で運ぶか、UI 側に切替の予約を持つか。Ref1（台本）の器の置き場所も同時に決まる。⑶ 新ゴーストが起動できないとき、元へ戻す（推し・元の再起動も失敗した場合の着地が要る）か告知して終了か。⑷ `lastinstalled` は #15 が後着なので本仕様の時点では常に「該当なし → 無視」——受け皿を本仕様で用意するか #15 へ送るか。**未確認**: `OnGhostChanged` と `OnFirstBoot` の関係（ukadoc の 2 項目からは決まらない・設計で引き直す）／`sequential` の順序は正典に定義が無い（目録の昇順を使う想定・#12 裁定 3「列挙の並びは判断に使わない」は起動の解決の話で切替に及ぶかは未確認）／降ろして起こし直す間に UI スレッドが止まる時間は未実測。
+
 ## 2026-09-20 棚卸⑮の再測定
 
 **本仕様は 3 本に分かれた。** 想定タスクが 30〜40 本で 1 spec の上限（20 本）を大きく超えたためである。本 brief は名前を変えずに**真ん中の 1 本**として残す——完了 spec 7 本とソースのコメント（`crates/areka/src/menu/mod.rs`）と網羅台帳（`doc/ukadoc-coverage/ledger/shiori.toml`）がこの名前を引受先として指しており、完了 spec は書き換えられないからである。

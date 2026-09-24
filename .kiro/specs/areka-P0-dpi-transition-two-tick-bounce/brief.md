@@ -8,7 +8,7 @@
 
 - `run_dpi_phase`（`crates/areka/src/emo2_boot/frame/dpi.rs`）と `refresh_scale`（`crates/areka-emo-present/src/presenter/refresh.rs`）は行番号のずれ 0。上流の `present-gpu-transform-scale` は完了したが、**跳ねが残るかは測り直していない**。
 - **2026-09-24: 判定器の見送り窓は直さない（本仕様の範囲から外した）。** 見送り窓を書込上限から除くと、見送り窓の上で「大きさと位置を別々に書く」本物の欠陥が見えなくなる。偽の違反は実機 15 遷移で 0 件。裁定は `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §13.1、開発者が 09-24 に再確認。下の Desired Outcome 3・Scope の judge 相は当時の記述で、**無効**。
-- **判定器の穴は、spec を立てずに直す**（roadmap「直接修正候補」）。`crates/areka/src/placement/transition_judge_verdict.rs` の窓ごとの書込の上限（要件 4.5）は `summary.writes_per_window` をそのまま回し、見送りの窓を除いていない。ところが同じファイルに「見送りの窓を除いた、書込のあった窓」を返す `judged_windows` が**既に在り**、被覆の検査だけが使っている。直しは「上限の検査でも `judged_windows` を回す」＋兄弟テスト 1 本で、`dpi.rs` には触らない。
+- ~~**判定器の穴は、spec を立てずに直す**（roadmap「直接修正候補」）。`crates/areka/src/placement/transition_judge_verdict.rs` の窓ごとの書込の上限（要件 4.5）は `summary.writes_per_window` をそのまま回し、見送りの窓を除いていない。ところが同じファイルに「見送りの窓を除いた、書込のあった窓」を返す `judged_windows` が**既に在り**、被覆の検査だけが使っている。直しは「上限の検査でも `judged_windows` を回す」＋兄弟テスト 1 本で、`dpi.rs` には触らない。~~ → **2026-09-24 棚卸⑯で取り下げを確定**（上の 09-24 の項と同じ裁定。PR#178 が同ファイルの当該の検査に「意図どおり」の理由をコメントで残した。roadmap「直接修正候補」からも消えている＝再登記しない）。
 - 残る本体（2 ティックの跳ねの相の順）は開発者裁定「拡大率の切替は頻繁に起こらないため許容」のまま据え置く。
 
 ## Problem
