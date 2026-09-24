@@ -61,7 +61,7 @@
   - 完了の姿: 登録の入口の呼び手が `fn main` の 1 か所だけで、クレートのテストと常設 smoke が緑
   - _Depends: 1.1, 1.2, 1.3, 3.1_
   - _Requirements: 2.1, 2.2, 3.3_
-- [ ] 4.2 窓を作る側を括り出す
+- [x] 4.2 窓を作る側を括り出す
   - 起動窓の関数から「準備 → 監視の 2 源 → 復元 → 窓の生成と受け口の装着を作業プールへ積む」を新しいモジュールの窓を作る関数へ移し、起動窓の関数を撤去する（smoke の目印の記録本文は 1 文字も変えない）
   - 窓を作る関数は最初に作業プールの有無を確かめ、無ければ配置の準備に入らず `error!(event = "task_pool_missing")` の上で失敗を返す
   - 閉じた証を受け取る「窓を作り直す」関数を置き、証の唯一の消費先にする（`debug!` を 1 行残して窓を作る関数へ委譲）
@@ -110,3 +110,4 @@
 
 - 1.3: `MenuRegistry` は 1 枠に供給関数 1 つ（`register` は置き換え）なので、5 の 2 周テストで 1 周目に入れる余分な登記は組込の使わない枠（例 `Frame::Shell`）へ入れる。`Readme`／`Close` へ入れると残っても `registered_frames()` に見えない。
 - 4.1: fallback で新たに登録される系の見え方は「状態が無ければ無操作」だが、バルーンの離脱の系だけは `BalloonWiring` 不在で `error!(balloon_wiring_missing)` の枝を持つ（fallback のバルーン窓は `HitTest::none()` で `PointerLeave` が立たず届かない）。4.4 で `register_systems` の doc と design「明示する差 1 件」をこの事実（と `emo2_frame_system` も fallback で登録されること）に合わせて直す。
+- 4.2: `crates/areka/examples/window-placement.rs` の doc にも `open_startup_window` の名が残るが、examples は要件 5.4 で無改変＝4.4 の grep「0 件」の対象から examples を外す。

@@ -7,14 +7,14 @@
 //! - 構造化ロギング初期化（RUST_LOG フォールバック）・パニックハンドラ設定
 //! - 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（マウントはしない）
 //! - UI ランタイム起動（`WinApp::with_exit_policy(ExitPolicy::Explicit)`）・SHIORI 実走デモの env-gate 呼び口
-//! - 起動窓シーム（`open_startup_window`・本物のゴースト窓を開く。準備が通らなければ
+//! - 起動窓シーム（`ghost_session::open_ghost_windows`・本物のゴースト窓を開く。準備が通らなければ
 //!   「起動窓を開けない」の告知の上で終了コード 1 で終える）
 //! - `main` 自身が所有するメッセージループ（`app.run()`）と終了の指示（`app_exit::quit_app`）での正常終了
 //!
 //! 座標・配置ロジックは `placement` モジュール（areka-P0-window-placement）が所有し、
 //! 骨格自身は座標を一切持たない。旧モック UI は `examples/mock-shell.rs` へ退避済み。
 //!
-//! `main` は `WinApp` 構築／`open_startup_window` の後で `emo2_boot::wire_emo2_boot` を呼び、その成否で実 sink boot
+//! `main` は `WinApp` 構築／`ghost_session::open_ghost_windows` の後で `emo2_boot::wire_emo2_boot` を呼び、その成否で実 sink boot
 //! （`wired=true`）／既存 `LogSink`×2 フォールバック boot（`wired=false`）を呼び分ける（task 5.2・
 //! design.md「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）。`run()` 復帰後は
 //! `GhostRuntime::shutdown(CloseReason::User { scope: 0 })`（DD-10）→ seriko `ActorHandle::join` で終了を
@@ -23,7 +23,6 @@
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
 use windows::core::Result;
-use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::*;
 
 /// areka 本体側 `IShioriHost` 実装（単一 sink・突合枠・メールボックス投函）。
@@ -44,7 +43,7 @@ mod reference_brain;
 mod shiori_demo;
 
 /// 窓配置機構（areka-P0-window-placement）。ゴースト定義からキャラ窓・バルーン窓の
-/// 初期配置を解決し窓 entity を組み立てる配置パイプライン。`open_startup_window`
+/// 初期配置を解決し窓 entity を組み立てる配置パイプライン。`ghost_session::open_ghost_windows`
 /// シーム（task 6.2）が `prepare_ghost_windows`→`spawn_ghost_windows` を結線する。
 mod placement;
 
@@ -201,10 +200,12 @@ fn main() -> Result<()> {
     // （→`attach_target`）の双方へ渡り、採寸と表示が別々の宣言を見る食い違いを構造的に
     // 排除する。shell の `seriko.zorder` も同じ搬送に乗せる（areka-P0-scope-zorder-pinning
     // 要件 5.1／5.2）——重なりの基底の出所を配置と同じ 1 度の読取に揃えるためである。
-    let StartupDescriptValues {
+    // 配置の失敗と作業プールの欠落はどちらも同じ告知＋終了コード 1。
+    let opened = ghost_session::open_ghost_windows(app.world().borrow_mut().world_mut(), &cfg);
+    let ghost_session::StartupDescriptValues {
         author_dpi,
         zorder_raw,
-    } = match open_startup_window(&app, &cfg) {
+    } = match opened {
         Ok(startup) => startup,
         Err(err) => {
             alert::raise(
@@ -218,6 +219,38 @@ fn main() -> Result<()> {
             ));
         }
     };
+
+    // env ゲート付き自動 close 機構（CI smoke・task 2.3・R4.1）。
+    // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
+    // `wintf::executor::spawn_local`＋world `Weak` 作法で **一発の** async タスクを投入する
+    // （ECS システムではない）。投入は 1 度目の窓の準備が通ったとき（ここ）だけ
+    // （areka-P0-ghost-restart-unit 要件 3.5）。env 未設定・不正なら
+    // 発火せず、ゴースト窓はメニューの「終了」か OS の閉鎖要求を待ち続ける。
+    if let Some(ms) = smoke_exit_ms() {
+        // WinApp が strong 所有者を保持するため、この Weak は shutdown まで upgrade 可能。
+        let world_weak = std::rc::Rc::downgrade(&app.world());
+        tracing::info!(
+            env = SMOKE_EXIT_ENV,
+            delay_ms = ms,
+            "smoke 自動 close ゲート有効 — ゴースト窓を指定 ms 後に despawn します"
+        );
+        wintf::executor::spawn_local(async move {
+            // 指定 ms を async スリープ（async-io は既存依存・tokio 不要）。
+            async_io::Timer::after(std::time::Duration::from_millis(ms)).await;
+            // shutdown 済みなら strong 所有者は消えており upgrade は None ＝ no-op。
+            let Some(world) = world_weak.upgrade() else {
+                tracing::debug!("smoke 自動 close: world 既に drop 済み（shutdown）— no-op");
+                return;
+            };
+            // await を跨いで borrow を保持しない TIGHT スコープで全窓を閉じ、終了を指示する。
+            {
+                let mut ecs = world.borrow_mut();
+                let w = ecs.world_mut();
+                let count = app_exit::quit_app(w, app_exit::ExitOrigin::Smoke);
+                tracing::info!(count, "smoke 自動 close: ゴースト窓を despawn しました");
+            }
+        });
+    }
 
     // emo2 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）:
     // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
@@ -270,7 +303,7 @@ fn main() -> Result<()> {
         // R4.3/5.5/8.1）: mpsc チャネル生成＋`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入＋
         // `clear_balloon_hover_on_leave` の Input スケジュール登録（`dispatch_pointer_events` 後）を
         // 1 回・同期で行う（`wire_mouse_input` と同じ boot スロット＝schedule 実行外の World 変更ゆえ
-        // `Schedules` 変更が安全に成立する）。ハンドラ装着は `open_startup_window` の spawn 直後
+        // `Schedules` 変更が安全に成立する）。ハンドラ装着は `ghost_session::open_ghost_windows` の spawn 直後
         // （`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `Emo2Wiring` を self-gate する
         // ため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating・DD-IE-9 前例）。
         input_events::balloon::wire_balloon_choice(app.world().borrow_mut().world_mut());
@@ -584,167 +617,6 @@ fn boot_monitor_snapshot(
         placement::MONITOR_SNAPSHOT_CONTEXT,
     );
     placement::follow::MonitorSources::from_monitors(monitors)
-}
-
-/// 起動窓の準備が descript から**1 度だけ**読み取った値のうち、呼び手（`main`）が下流へ
-/// 配るもの（areka-P0-emo-dpi-scaling task 4.3・areka-P0-scope-zorder-pinning 要件 5.1／5.2）。
-///
-/// どちらも `wire_emo2_boot` へ渡る搬送値であり、[`open_startup_window`] 自身は解釈しない。
-/// 戻り口を 2 つに増やさず 1 つの型へまとめるのは、「同じ 1 度の読取から来た」という出所を
-/// 型で示すためである——別々に読み直す余地を残すと、配置と重なりが違う宣言を見る日が来る。
-struct StartupDescriptValues {
-    /// 採寸 k₀ と attach（`attach_target`）が共有する作者基準 DPI。
-    author_dpi: placement::AuthorDpi,
-    /// shell descript の `seriko.zorder` の生の値（未指定なら `None`）。解釈は台帳の層が行う。
-    zorder_raw: Option<String>,
-}
-
-/// 起動窓シーム（task 6.2・要件 1.4・design「main.rs seam」）: `prepare_ghost_windows`
-/// が通れば本物のゴースト窓（キャラ窓＋バルーン窓）を生成する。
-///
-/// - 成功時: `spawn_ghost_windows` を既存 ECS コマンド経路（`EcsWorld::spawn` の async
-///   タスク → `CommandSender` → Input スケジュールで World 適用）で
-///   実行する（`FrameFinalize` への系の結線は `ghost_session::register_systems` が先に済ませる）。
-///   smoke の自動終了もここでだけ投入する。
-/// - 失敗時（モニタ 0 台・起動中の削除等）: [`placement::PlacementError`] をそのまま返す。
-///   呼び手（`main`）が「起動窓を開けない」を告知して終了コード 1 で終える
-///   （baseware-root-layout 要件 6.4・窓を開かずに居座らない＝要件 6.6）。
-/// - 終了: ゴースト窓はメニューの「終了」も OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの
-///   終了」）も同じ終了要求を kanade へ送り（`app_exit::on_ghost_os_close`・窓はその場で消さない）、
-///   終了の握手の完了後に `quit_app` → `run()` 復帰となる。smoke ゲート
-///   （`AREKA_APP_SMOKE_EXIT_MS`）は別の自動終了の経路。
-///
-/// 準備（`prepare_ghost_windows`）は同期実行し、I/O はここで完結・Send な値のみを ECS
-/// コマンドへ運ぶ。呼び出しスレッドは `WinApp` 構築済みの MTA UI スレッド＝COM
-/// 初期化済み（measure の WIC 前提を満たす）。署名は `(&WinApp, &ConfigInputs)`
-/// （design の Revalidation Trigger として本タスクで変更）。
-///
-/// 戻り値は準備が descript から**1 度だけ**読んだ値の組（[`StartupDescriptValues`]）。
-/// 作者基準 DPI は (a) 採寸の k₀ と (b) 呼び手（`main`）経由で
-/// `wire_emo2_boot`→`attach_target` の双方へ配られ、shell の `seriko.zorder` は同じ経路で
-/// 重なりの台帳へ配られる（design Flow 3 手順1「1 度だけ読む」）。
-fn open_startup_window(
-    app: &WinApp,
-    cfg: &ConfigInputs,
-) -> std::result::Result<StartupDescriptValues, placement::PlacementError> {
-    let prepared = placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root)?;
-    // モニタ 2 源（task 8.1・atom task 5.1）: 起動時の実モニタから忠実転写した
-    // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
-    // （4.7・task 8.2）と拡大率の相が消費する。
-    // **セッション内固定ではない**（DD15 撤回・atom 要件 5.1）——毎フレーム先頭の
-    // 同期段（`emo2_boot::frame::work_area_sync`）が実行時のモニタ表から作り直す。
-    // ここが作るのは起動時の初期値であり、構築関数は同期段と同一である。
-    // 構築と同時に全モニタの観測を 1 回出す（areka-P0-dpi-window-vanish 要件 1.1 の
-    // **正典出力点**・D12）。既定 OFF・診断 `RUST_LOG` でのみ点灯する。
-    let sources = boot_monitor_snapshot(&wintf::ecs::window::monitor::enumerate_monitors());
-
-    // clickthrough 登録・OS の閉鎖要求の受け手・重なり順の対の `FrameFinalize` への結線は
-    // `ghost_session::register_systems` が済ませてある（どれも `Added<WindowHandle>` 起点ゆえ、
-    // 窓 spawn より先に結線しても取りこぼさない）。
-
-    // 復元マージ（design C4・要件 1.4）: snapshot 構築直後・spawn closure へ渡す前に、
-    // 永続先読み（load_restored_state）→ 純関数 merge（apply_restored_placements）で
-    // 保存位置を反映した placements を得る。`prepared` を placements/titles へ分解し、
-    // merge 済み placements（value 渡し）と titles を closure へ move する
-    // （default_encoding は boot 結線・source.rs と同一の Ansi＝mount 解決の一貫性）。
-    // 作者基準 DPI は `prepared` 分解の前に取り出して呼び手へ返す（`Copy` 値の転記）。
-    let author_dpi = prepared.author_dpi;
-    // 重なりの基底の生の値も同じ読取から取り出す（解釈は結線の先＝台帳の層が行う・
-    // areka-P0-scope-zorder-pinning 要件 5.2）。`prepared` を分解する前に写す。
-    let zorder_raw = prepared.zorder_raw.clone();
-    // 復元は**起動時の作業領域源を 1 度だけ**読む（atom 要件 5.7）。以後の同期段は
-    // この判定へ効かせない——拡大率をまたぐ保存位置の追従は行わない裁定
-    // （`windowposition-limit` の開発者裁定）を踏襲する。
-    let (placements, restored_scopes) = restore_merged_placements(
-        &cfg.ghost_root,
-        prepared.placements,
-        &sources.snapshot,
-        areka_parsers::charset::DefaultEncoding::Ansi,
-    );
-    let titles = prepared.titles;
-
-    // `EcsWorld::spawn` の async タスク → CommandSender → Input スケジュールで
-    // World 適用という既存 ECS コマンド経路で本物窓を組み立てる。
-    app.world().borrow().spawn(|tx: CommandSender| async move {
-        let _ = tx.send(Box::new(move |world: &mut World| {
-            // 2 源は同時に挿す（片方だけ古い運転を作らない・atom C6）。
-            world.insert_resource(sources.snapshot);
-            world.insert_resource(sources.dpi_table);
-            let windows = placement::spawn::spawn_ghost_windows(
-                world,
-                &placements,
-                &titles,
-            );
-            // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
-            // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
-            // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
-            // 挿した実体を直接標す（戻り値の clone を触っても Resource へは効かない）。
-            if !restored_scopes.is_empty()
-                && let Some(mut gw) =
-                    world.get_resource_mut::<placement::spawn::GhostWindows>()
-            {
-                for scope in &restored_scopes {
-                    gw.clear_default_char_pos(*scope);
-                }
-            }
-            // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→
-            // placement）: placement は `crate::` パスを持てない（example の `#[path]`
-            // include で成立させるため）ゆえ、キャラ窓へのポインタハンドラ結線は
-            // input_events 側が担う。spawn 直後の同一 World-mutation クロージャ内で
-            // 同期実行するため、キャラ窓は既に存在し async race はない。
-            input_events::attach_char_pointer_handlers(world);
-            // 右クリックメニューの解放ハンドラも同じ場所で付ける。このクロージャが動くのは
-            // `app.run()` の中＝`menu::wire_menu` より後で、結線の無い起動では解放を無視するだけ。
-            menu::attach_release_handlers(world);
-            // バルーン窓へポインタハンドラを装着（task 6.2・`attach_char_pointer_handlers`
-            // 直後・R4.3/5.5）: `BalloonWindowMarker` 窓へ `OnPointerMoved`／`OnPointerPressed`
-            // を post-spawn 挿入する（標的はバルーン窓のみ＝キャラ窓配線の非退行・R4.3）。同一
-            // `&mut World` クロージャ内で同期実行するためバルーン窓は既に存在し async race は
-            // ない（キャラ窓ハンドラ装着と同型のタイミング契約）。
-            input_events::balloon::attach_balloon_pointer_handlers(world);
-            let scopes: Vec<usize> = windows.scopes().collect();
-            tracing::info!(
-                ?scopes,
-                "本物のゴースト窓を開きました（placement シーム・スコープごとにキャラ窓＋バルーン窓）"
-            );
-        }));
-    });
-
-    // env ゲート付き自動 close 機構（CI smoke・task 2.3・R4.1）。
-    // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
-    // `wintf::executor::spawn_local`＋world `Weak` 作法で **一発の** async タスクを投入する
-    // （ECS システムではない）。投入は準備が通ったとき（ここ）だけ。env 未設定・不正なら
-    // 発火せず、ゴースト窓はメニューの「終了」か OS の閉鎖要求を待ち続ける。
-    if let Some(ms) = smoke_exit_ms() {
-        // WinApp が strong 所有者を保持するため、この Weak は shutdown まで upgrade 可能。
-        let world_weak = std::rc::Rc::downgrade(&app.world());
-        tracing::info!(
-            env = SMOKE_EXIT_ENV,
-            delay_ms = ms,
-            "smoke 自動 close ゲート有効 — ゴースト窓を指定 ms 後に despawn します"
-        );
-        wintf::executor::spawn_local(async move {
-            // 指定 ms を async スリープ（async-io は既存依存・tokio 不要）。
-            async_io::Timer::after(std::time::Duration::from_millis(ms)).await;
-            // shutdown 済みなら strong 所有者は消えており upgrade は None ＝ no-op。
-            let Some(world) = world_weak.upgrade() else {
-                tracing::debug!("smoke 自動 close: world 既に drop 済み（shutdown）— no-op");
-                return;
-            };
-            // await を跨いで borrow を保持しない TIGHT スコープで全窓を閉じ、終了を指示する。
-            {
-                let mut ecs = world.borrow_mut();
-                let w = ecs.world_mut();
-                let count = app_exit::quit_app(w, app_exit::ExitOrigin::Smoke);
-                tracing::info!(count, "smoke 自動 close: ゴースト窓を despawn しました");
-            }
-        });
-    }
-
-    Ok(StartupDescriptValues {
-        author_dpi,
-        zorder_raw,
-    })
 }
 
 /// 自動 close ゲートを有効化する環境変数名（`AREKA_` 冠規約・記憶 areka-runtime-env-naming）。

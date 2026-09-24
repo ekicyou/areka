@@ -109,8 +109,6 @@ pub(crate) struct WindowsClosed {
 
 impl WindowsClosed {
     /// 閉じた窓の枚数（標的として拾った件数・[`despawn_app_windows`] の戻り値）。
-    // 本番の読み手は後続（task 4.2）の `reopen_ghost_windows`。それまでは test からだけ読む。
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn closed(&self) -> usize {
         self.closed
     }
@@ -123,7 +121,7 @@ impl WindowsClosed {
 /// `app_exit` とは別の語彙 `windows_closed_for_restart`（要件 4.3）。
 /// 終了経路（`quit_app`・停止通知からの終了・OS の閉鎖要求・強制退避・smoke）からは呼ばない
 /// （要件 4.4・4.6・完了 `app-lifetime-separation` 要件 3.6 の意図）。
-// 本番の呼び手は後続（task 4.2）の起こし直しの経路。それまでは test からだけ呼ぶ。
+// 本番の呼び手は #13（ゴーストの切替）の起こし直しの経路。それまでは test からだけ呼ぶ。
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     let closed = despawn_app_windows(world);
