@@ -105,7 +105,7 @@
   - `target/i686-pc-windows-msvc/debug/` に `shiori-host32-helper.exe` と `shiori_loadu.dll` の 2 つがあり、どちらも最新のソースから建っている（2026-09-24 のタスク生成時点で建て済み。target を掃除したら建て直す）
   - _Requirements: 4.1, 4.4_
 
-- [ ] 5.2 i686 成果物を自分で揃え、①② に「SHIORI の失敗で終わっていない」を足す
+- [x] 5.2 i686 成果物を自分で揃え、①② に「SHIORI の失敗で終わっていない」を足す
   - `areka.exe` の隣に helper が無ければ環境変数 → workspace の i686 target（debug・release）の順で探して複製し、無ければ建て方（helper と検証用 DLL の 2 つの `cargo build --target i686-pc-windows-msvc`）を案内して失敗する。複製はプロセス内で 1 度に絞り、一時名へ書いてから改名する（並走するテストが書きかけを起動しない）
   - ①② の判定に「告知の題名を含む行が 0 件」を足す（終了コード 0 の判定は既存）。③ は無改変
   - i686 の helper がある環境で ①②③ が緑
@@ -138,3 +138,4 @@
 - 別スレッド（kanade のアクター等）で出る記録を統合テストで数えるには全スレッドの捕捉が要り、`log-capture-kit/tests/with_default_guard_test.rs` の例外表への登録が要る。単体で数えられるならスレッド局所の `capture` を使う。
 - 2.1 のデバッグ: 接続に失敗した SHIORI アクターが受信端を捨てると、kanade へ直送の Boot が死活報告より先に着き「通信が切れた」になっていた（順序の保証なし）。接続失敗後もアクターが受信を続け、要求に `Handshake(理由)`・Unload に `Unloaded` を返す形にした＝どちらが先でも種類は「接続できなかった」。理由の文言は着順で「shiori handshake failure: 〜」／素の理由に揺れる（どちらも対応する `error!` と同じ）ので、後続（3.3・5.3）は種類で判定し、理由は含有で見る。
 - 3.2 の時点で `main` は停止通知の送出端を `wire_emo2_boot` へそのまま移している。4.2 で LogSink 側へも配るときは `tx.clone()` に変え、`zorder_wiring_tests.rs` の t_zwi08 が照合する字面も合わせて直す。
+- （開発者依頼 2026-09-24）最終検証（`/kiro-validate-impl`）まで進んだら main を取り込む（スキルの調整が入っているため）。

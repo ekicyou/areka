@@ -49,7 +49,7 @@
 - 一致: 上の表の全項目。`alert_tests.rs` 9 本。`REQUEST_TIMEOUT` 60 秒と `AREKA_SHIORI_REQUEST_TIMEOUT_MS`（`crates/shiori-host32-host/src/process_host.rs`）。`shiori_loadu.dll` は `HOST32_TESTDLL_LOADU_FAIL=1` で `loadu` が 0・`request` は常に `400 Bad Request`（`crates/shiori-host32-testdll-loadu/src/lib.rs`）。
 - 補足 1: `KanadeMsg::ShioriDown { reason: String }` の構築・照合は本番 4 か所（`actor.rs` の写し・`real.rs` の 2 送出・`schedule/mod.rs` の腕）＋テスト 9 ファイル＝計 21 行。`KanadeStopped { .. }` の構築は本番 1（`notify_stop`）＋テスト 3 ファイル。公開型に欄を足すとこれらが動く。
 - 補足 2: brief の「相乗り 1 件」（`GhostBootError` の doc が退役済みの「ダミー窓」を今の挙動として書く）は `crates/areka-ghost/src/runtime.rs` の `GhostBootError` の doc に実在する（1 行の直し・本仕様で拾うかは自由）。
-- 補足 3: 本ワークツリーには `target/debug/shiori-host32-helper.exe`（areka.exe の隣）と `target/i686-pc-windows-msvc/debug/shiori-host32-helper.exe`・`shiori.dll` が置かれている。`shiori_loadu.dll` の i686 成果物は無い（smoke ④ で要る）。
+- 補足 3: 本ワークツリーには `target/debug/shiori-host32-helper.exe`（areka.exe の隣）と `target/i686-pc-windows-msvc/debug/shiori-host32-helper.exe`・`shiori.dll` が置かれている。`shiori_loadu.dll` の i686 成果物は無い（smoke ④ で要る）。（実装時注記 2026-09-24: `target/debug/` の隣の helper は `cargo build --workspace` が置く **x64** だった＝i686 ではない。smoke は PE の種別で見分けて置き換える。）
 - 補足 4: emo2 検体の `ghost/master/descript.txt` は `shiori,pasta.dll`（32bit）を宣言する＝smoke ①② は helper が隣に無いと `real_connect` の spawn で失敗し、今日は「Fault → 終了コード 0」で緑になっている（要件 4.2 が塞ぐ盲点そのもの）。
 
 ## 2. 要件ごとの実現性と欠け

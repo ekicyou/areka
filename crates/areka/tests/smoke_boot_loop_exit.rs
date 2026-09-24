@@ -16,6 +16,11 @@
 //! 全方向で `AREKA_NO_ALERT=1`（告知のモーダルで番犬の締切まで止まらない・要件 9.2）。
 //! ②③ の `AREKA_PROFILE_DIR` は一時フォルダ（開発者のアプリの記憶を読まず・書かない）。
 //!
+//! ①② は i686 の `shiori-host32-helper.exe` が `areka.exe` の隣にあることを前提にし、テストが
+//! 自分で揃える（`ensure_helper_beside_areka`・x64 の helper は置き換える）。そのうえで
+//! 「SHIORI が動かなくなりました」の行が 0 件＝SHIORI の失敗で終わっていないことも見る
+//! （areka-P0-shiori-fault-notice 要件 4.1・4.2）。
+//!
 //! モニタ 0 台（headless）では ①② の起動窓の準備が `PlacementError::Monitor` で失敗し、
 //! 「起動窓を開けません」の告知＋非 0 終了が契約どおりの挙動になる。その場合だけ非 0 を受理する
 //! （旧「ダミー窓で完走を受理」の置き換え。ダミー窓は退役済み）。
@@ -37,7 +42,9 @@
 //!   何度重ねても ② は `route=Companion` のまま。
 
 use sample_ghost_kit::SampleRoot;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use temp_path_kit::TempPath;
 
@@ -128,6 +135,94 @@ fn run_smoke(args: &[&str], envs: &[(&str, &str)]) -> (ExitStatus, String, Strin
     (status, out, err)
 }
 
+/// PE の機械種別が i386（0x014c）かを見る。`cargo build --workspace` は x64 の helper を
+/// `areka.exe` の隣へ置くので、「隣にある」だけでは i686 の前提を満たさない（x64 の helper は
+/// 32bit の SHIORI DLL を読めず接続に失敗する）。
+fn is_i686_pe(path: &Path) -> bool {
+    let Ok(b) = std::fs::read(path) else {
+        return false;
+    };
+    let at = |i: usize, n: usize| b.get(i..i + n);
+    let Some(pe) = at(0x3c, 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()) as usize) else {
+        return false;
+    };
+    at(pe + 4, 2) == Some(&[0x4c, 0x01][..])
+}
+
+/// i686 成果物 `name` を `dest_dir` に揃えてそのパスを返す（要件 4.1）。`dest_dir` に i686 の
+/// `name` があればそのまま。無ければ env `env_var` → `<target>/i686-pc-windows-msvc/{debug,release}`
+/// の順で探し、一時名へ書いてから改名で置く（並走するテストの子が書きかけを起動しない）。
+/// どこにも無ければ建て方を案内して失敗する。
+fn ensure_i686_artifact(name: &str, env_var: &str, dest_dir: &Path) -> PathBuf {
+    let dest = dest_dir.join(name);
+    if is_i686_pe(&dest) {
+        return dest;
+    }
+    // CARGO_BIN_EXE_areka＝<target>/<profile>/areka.exe → <target>
+    let target = Path::new(env!("CARGO_BIN_EXE_areka"))
+        .ancestors()
+        .nth(2)
+        .expect("areka.exe の 2 つ上は target")
+        .join("i686-pc-windows-msvc");
+    // 環境変数で指したのに無い／i686 でないなら、黙って target へ移らず止める（既存の探索と同じ）。
+    let explicit = std::env::var_os(env_var).map(PathBuf::from).inspect(|p| {
+        assert!(
+            is_i686_pe(p),
+            "{env_var}={} が指すファイルが無いか i686 ではありません（i686 の {name} を先にビルド）",
+            p.display()
+        )
+    });
+    let src = explicit
+        .into_iter()
+        .chain(["debug", "release"].map(|p| target.join(p).join(name)))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| {
+            panic!(
+                "i686 の {name} が見つかりません（env {env_var} → {}\\{{debug,release}}）。\
+                 PowerShell で先に建ててください: \
+                 cargo build -p shiori-host32-helper --target i686-pc-windows-msvc ; \
+                 cargo build -p shiori-host32-testdll-loadu --target i686-pc-windows-msvc",
+                target.display()
+            )
+        });
+    let tmp = dest_dir.join(format!("{name}.{}.tmp", std::process::id()));
+    std::fs::copy(&src, &tmp)
+        .unwrap_or_else(|e| panic!("{} → {} の複製に失敗: {e}", src.display(), tmp.display()));
+    std::fs::rename(&tmp, &dest)
+        .unwrap_or_else(|e| panic!("{} → {} の改名に失敗: {e}", tmp.display(), dest.display()));
+    dest
+}
+
+/// `areka.exe` の隣に i686 の `shiori-host32-helper.exe` を揃える（①② の前提・要件 4.1）。
+/// 置き先は同じバイナリの並走するテストで共有されるので、同じプロセス内で 1 度だけ行う。
+fn ensure_helper_beside_areka() {
+    static DONE: OnceLock<PathBuf> = OnceLock::new();
+    DONE.get_or_init(|| {
+        let dir = Path::new(env!("CARGO_BIN_EXE_areka"))
+            .parent()
+            .expect("areka.exe の親");
+        ensure_i686_artifact("shiori-host32-helper.exe", "HOST32_HELPER_EXE", dir)
+    });
+}
+
+/// SHIORI の失敗の告知の題名（`alert.rs` の `SHIORI_FAULT_TITLE` と同じ綴り・bin crate の定数は
+/// テストから参照できないので写す）。これを含む行の数で「SHIORI の失敗で終わったか」を見る。
+const SHIORI_FAULT_TITLE: &str = "SHIORI が動かなくなりました";
+
+/// SHIORI の失敗で終わっていないこと＝告知の題名を含む行が 0 件（①② 共通・要件 4.2）。
+/// モニタ 0 台の受理でも成り立つので、受理の判定より先に無条件で確かめる。
+fn assert_no_shiori_fault(all: &str) {
+    let n = all
+        .lines()
+        .filter(|l| l.contains(SHIORI_FAULT_TITLE))
+        .count();
+    assert_eq!(
+        n, 0,
+        "SHIORI の失敗で終わっています（「{SHIORI_FAULT_TITLE}」の行が {n} 件）。\
+         \n--- child output ---\n{all}"
+    );
+}
+
 /// `message` を本文に持つ行に `field` が載っていることを確かめる（経路の目印・要件 4.10・5.11）。
 /// パスは綴らない（検体の置き場に依存しない）。
 fn assert_line_has(all: &str, message: &str, field: &str) {
@@ -187,6 +282,7 @@ fn assert_real_windows_and_exit_zero(status: ExitStatus, all: &str) {
 /// 本物のゴースト窓構成（2 スコープ）で自動終了 → **exit 0** で完走する。
 #[test]
 fn argv_direction_boots_real_ghost_windows_and_exits_zero() {
+    ensure_helper_beside_areka();
     let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
     let ghost_root = emo2.folder();
     let balloon_root = emo2.balloon("emo2-kakukaku").expect("emo2 の同梱バルーン");
@@ -208,6 +304,7 @@ fn argv_direction_boots_real_ghost_windows_and_exits_zero() {
     // argv の経路で決まる（列挙も記憶も見ない・要件 4.1・5.1）。
     assert_line_has(&all, "起動するゴーストを決めました", "route=Argv");
     assert_line_has(&all, "バルーンを決めました", "route=Argv");
+    assert_no_shiori_fault(&all);
 
     if accepted_as_no_monitor(status, &all) {
         return;
@@ -220,6 +317,7 @@ fn argv_direction_boots_real_ghost_windows_and_exits_zero() {
 /// 本物のゴースト窓を開き、自動終了 → **exit 0** で完走する。
 #[test]
 fn root_direction_resolves_only_ghost_and_companion_balloon() {
+    ensure_helper_beside_areka();
     let emo2 = SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体");
     let root = emo2.root();
     assert!(root.is_absolute(), "検体の根は絶対パス: {}", root.display());
@@ -239,6 +337,7 @@ fn root_direction_resolves_only_ghost_and_companion_balloon() {
 
     assert_line_has(&all, "起動するゴーストを決めました", "route=Only");
     assert_line_has(&all, "バルーンを決めました", "route=Companion");
+    assert_no_shiori_fault(&all);
 
     if accepted_as_no_monitor(status, &all) {
         return;
