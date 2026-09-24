@@ -247,7 +247,7 @@ const CHAR_QUOTE_LITERAL: &str = "'\"'";
 ///
 /// 走査器はコメントと通常の文字列リテラルしか落とせない。二重引用符の文字リテラルや生文字列が
 /// 混ざると本物の呼び出しを静かに見逃すので、見逃しが起こり得る形式が 0 件であることを
-/// 本文の判定の**前**に確かめる。走査対象の 4 ファイルは今日どちらも 0 件である。
+/// 本文の判定の**前**に確かめる。走査対象のファイルは今日すべて、どちらの形式も 0 件である。
 fn assert_no_blind_spot_literals(raw: &str, file: &str) {
     assert!(
         !raw.contains(CHAR_QUOTE_LITERAL),
@@ -333,4 +333,35 @@ fn the_boot_side_does_not_parse_the_shell_itself() {
         !code.contains(SHELL_PARSE),
         "assets.rs の本文にシェルの解析が戻っている（読み込みの権威は load_shell_target 1 本）"
     );
+}
+
+/// 要件 3.2: `load_shell_target` を呼ぶ examples 3 本も自前でやり直していない。
+///
+/// examples は製品と同じ入口で絵を読むことが前提の手元確認の道具であり、ここで自前の解析へ
+/// 戻ると、目視で見た絵と製品の絵が静かに別物になる。名前を持ち込むだけの
+/// `emo-present.rs`・`collision-probe.rs` は読み込みをしないので対象に含めない。
+#[test]
+fn the_examples_do_not_parse_the_shell_themselves() {
+    let files = [
+        (
+            "examples/emo-present/setup.rs",
+            include_str!("../../examples/emo-present/setup.rs"),
+        ),
+        (
+            "examples/collision-probe/setup.rs",
+            include_str!("../../examples/collision-probe/setup.rs"),
+        ),
+        (
+            "examples/window-placement.rs",
+            include_str!("../../examples/window-placement.rs"),
+        ),
+    ];
+    for (file, raw) in files {
+        assert_no_blind_spot_literals(raw, file);
+        let code = code_only(raw);
+        assert!(
+            !code.contains(SHELL_PARSE),
+            "{file} の本文にシェルの解析が戻っている（読み込みの権威は load_shell_target 1 本）"
+        );
+    }
 }

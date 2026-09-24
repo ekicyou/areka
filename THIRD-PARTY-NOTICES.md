@@ -2311,8 +2311,8 @@ SOFTWARE.
 - serde_json 1.0.151
 - syn 2.0.119
 - syn 3.0.6
-- thiserror-impl 2.0.21
-- thiserror 2.0.21
+- thiserror-impl 2.0.20
+- thiserror 2.0.20
 - typeid 1.0.3
 - unicode-ident 1.0.26
 - zmij 1.0.23

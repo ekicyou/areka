@@ -33,7 +33,7 @@ fn build_and_spawn(world: &mut World) {
     };
 
     // シェル・バルーンのアセットを**本番と同一経路**で構築（シェルは読み込みの権威を 1 回）。
-    let shell = build_shell_target(&decoder);
+    let shell = load_shell_assets(&decoder);
     let balloon = build_balloon_assets(&decoder);
 
     // どちらも構築できなければ表示する窓が無い（log-first・誤成功なし）。
@@ -70,7 +70,7 @@ fn build_and_spawn(world: &mut World) {
             boot.balloon_assets = Some((b_world, b_atlas));
         }
     } else if let Some((b_world, b_atlas, bw, bh)) = balloon {
-        // シェル無しでもバルーンだけは表示する（degrade・log は build_shell_target 側で出済み）。
+        // シェル無しでもバルーンだけは表示する（degrade・log は load_shell_assets 側で出済み）。
         boot.balloon_window =
             create_balloon_window(world, SHELL_INITIAL_X, SHELL_INITIAL_Y, bw, bh);
         boot.balloon_assets = Some((b_world, b_atlas));
@@ -87,7 +87,7 @@ fn build_and_spawn(world: &mut World) {
 /// （`areka_emo_present::shell_target`）。文字コードの扱い（`charset` 宣言に従う）・焼く段で
 /// 落ちた絵の `warn!` も権威側が持つので、この example は呼ぶだけである——本番（`build_boot_assets`）・
 /// 採寸（`build_shell_assets`）と同じ入口を通るため、この example が見る絵は本番と食い違わない。
-fn build_shell_target(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, u32, u32)> {
+fn load_shell_assets(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, u32, u32)> {
     let base = emo2("shell/master");
     let target = match load_shell_target(&base, decoder) {
         Ok(t) => t,
