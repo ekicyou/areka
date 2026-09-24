@@ -47,6 +47,8 @@ i686 は x86 の MSVC ツールセットで足りる。
 
 ### 手順（コピペ可）
 
+ワークスペース全体を回すなら `pwsh -NoProfile -File tools/test-all.ps1` が下の ① ③ と i686 の導入をまとめて行う（kiro-complete の Test Gate の正本）。以下は host-32 だけを個別に回す手順。
+
 統合 E2E テスト（`shiori_load_e2e` / `shiori_request_e2e`）は **実 i686 helper exe を spawn** し
 **実 i686 testdll（`shiori.dll`）を load** するため、helper と testdll を先にビルドしてから
 親テストを走らせる 2 段階になる。

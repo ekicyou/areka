@@ -17,7 +17,7 @@
 5. **正典の見落とし 2 件**（ukadoc `\![change,shell,…]`／`\![change,balloon,…]`）: シェル名・バルーン名として `random`／`lastinstalled` も受ける／`raise-event` のときはバルーンブレークで切替を中止できる。どちらも In に無い（議題 4）。
 6. 差し替えの語彙 0 件は不変（較正の `pub enum` 4 種は 4 件。seriko の場所は `crates/areka-seriko`・`SerikoMsg` は `src/actor.rs`＝brief の `areka-emo-seriko` は誤記）。現状: `SerikoMsg` Cue／Tick／Close・`TextMsg` Cue／Close・`PresentCommand` ShowSurface／Hide／InvalidateCache・`DispatcherMsg` 7 腕。**`EmoPresenter::attach_target`（`areka-emo-present/src/presenter/hub.rs`）は同じ id を再登録すると表示コンテキストごと置き換える**＝差し替えの最小の部品になり得る（先進坑が確かめる対象）。
 7. **`OnShellChang|OnBalloonChange` は crates/ 全体で 0 件**（ukadoc-survey も含む。`OnGhostChang` は `diff_tests.rs` で 7 件＝検索は効いている）。
-8. **検体**: `R_POST_and_KOMAINU.nar` のシェルは `master` 1 つ（43 ファイル）。`SAMPLES` は 6 件・`lib_tests.rs` に `SAMPLES.len(), 6` が 2 か所とコメント「6 つ」2 か所・`vendors/sample_ghost/README.md` の表にファイル数と大きさ。**実機で応答を観測できる検体がある**: R_POST の `dic02_Event.txt` は `OnShellChanging`／`OnShellChanged` に、emo2 の `update.pasta` は `OnBalloonChange` に、konnoyayame は 3 つすべてに応答する。
+8. **検体**: `R_POST_and_KOMAINU.nar` のシェルは `master` 1 つ（43 ファイル）。`SAMPLES` は 7 件（2026-09-24 に `claudia` が入った）・`lib_tests.rs` に `SAMPLES.len(), 7` が 2 か所とコメント「7 つ」3 か所・`vendors/sample_ghost/README.md` の表にファイル数と大きさ。**実機で応答を観測できる検体がある**: R_POST の `dic02_Event.txt` は `OnShellChanging`／`OnShellChanged` に、emo2 の `update.pasta` は `OnBalloonChange` に、konnoyayame は 3 つすべてに応答する。
 9. メニュー: `Frame::Shell`／`Frame::Balloon` と文言（`shellrootbutton.caption`／`balloonrootbutton.caption`・`captions.rs`）は在り、登記は `wire_menu_with` の Readme・Close の 2 つだけ。`menu::register` の外からの呼び手は 0。
 10. kanade 5 ファイル: `msg.rs` 771／`actor.rs` 507／`schedule/mod.rs` 751／`schedule/events.rs` 431／`schedule/steady.rs` **935**。`emo2_boot/` の関わるファイル: `assets.rs` 409・`frame/attach.rs` 441・`frame.rs` 459・`consumer_ledger.rs` 726・`placement/spawn.rs` 765・`source.rs` 287・`persist.rs` 512。`wire_emo2_boot` は今も一発の構築（本番の呼び出しは `main.rs` の 1 か所）。
 11. 陳腐化 1 件（本仕様が直す）: `doc/ukadoc-coverage/ledger/shiori.toml` の `shellrootbutton.caption` の備考が引受先を `areka-P0-ghost-shell-balloon-switch` と書いている＝分割後は本仕様の担当。
@@ -25,6 +25,16 @@
 **タスク数**: #13（と #58）が汎用の通知の入口と `SwitchRequest` を用意してから着手すれば **13〜16 本**（brief の 12〜15 とほぼ同じ）。待たずに着手すると通知の入口の自作＋kanade 3 ファイルで +3〜4、`random`／`lastinstalled` で +1〜2＝17〜20 で M を超える。**分割は不要**（「シェル名の運搬と起動時の適用」4〜5 本は独立しているが `boot_config.rs`／`main.rs` を #13 と共有するので直列のまま）。
 
 **要件段階の議題（Fable）**: ⑴ 2 つ目のシェルの検体をどう用意するか——`R_POST_and_KOMAINU.nar` を畳み直す（README の表と `lib_tests` の数が変わる・改変してよいかのライセンス確認が要る）か、テストのときに展開先で `shell/master` を複製する（`.nar` は変わらないが実機の往復は手作業）か。⑵ `\![change,shell,名]` の「名」をフォルダ名と descript の `name` のどちらで引くか（記憶の鍵はフォルダ名）。⑶ 会話の途中で切り替えたとき、表示中のバルーンの文字と残りの台本を引き継ぐか消すか（「1 フレームも崩さない」保証の形がこれで決まる）。⑷ `random`／`lastinstalled`（シェルとバルーン）と `raise-event` 時のバルーンブレークによる中止を In に入れるか。案 A／B の選択は**先進坑 #59 の go 判定で決める**（要件の前）。
+
+## 2026-09-24 先進坑 #59 の判定「直す」と申し送り
+
+**開発者判定＝直す**（`.kiro/specs/completed/pilot-balloon-asset-swap/`・一次記録は `crates/pilot/examples/pilot-balloon-asset-swap/README.md`）。本仕様の `_Depends(confirmed): pilot-balloon-asset-swap` はこれで満たされた。**案 B（present・seriko・text に「資産を差し替えろ」の語を足す）で進める。**
+
+1. **同じ id の `attach_target` 再登録だけ（基準の版）は使えない。** 古い装着の子（`emo-surface`・`emo-text-layer-slot`）が World に残り、9 走行とも古い絵と新しい絵が重なったまま揃わなかった（混在が 1 観測あたり 104〜269 枚）。
+2. **古い装着を消してから同じ呼び出しの中で再登録・表示・窓寸合わせ（本命の版・`Update` の段）なら、反映待ち以外の崩れは 9 走行とも 0。** 反映待ち（当たり判定と窓寸が絵より画面更新 1 回ぶん先に新しくなる 1 枚）は静かな走行で 0〜1 枚＝本番の `[ID]` の切り替えと同じ（床 1）。先進坑は古い子を名前で探して外から despawn した——**本仕様で present に「古い装着を片付ける正規の口」を足す**（先進坑の要件 5.7・5.8）。presenter には登録（`TargetId`）を消す口も無いので同じ範囲に入れる。
+3. **差し替えは配置が決まる前（`Update`）に置く。** 画面への反映の後（`FrameFinalize`）で消すと、古い visual は即座に外れ新しい visual は次の tick に作られるので、絵が空のフレームが 1〜2 枚出た（隠すだけの版は当たり判定が空＝クリックが素通りするフレームが 1〜2 枚）。
+4. **`EmoWorld` は `Clone` でない**（`attach_target` は消費する）。往復のたびに資産が要るなら、どこで作り直すか（`build_balloon_target` の復号を差し替えの tick に入れない）を設計で決める。
+5. **未観測**: 画面の拡大率が 1 でない場合（開発機の既定は 200%）。先進坑は 100% でしか測っていない。wintf の兄弟の重なり順が描画と当たり判定で逆（台帳 #60・登記だけ）は、2 の形なら兄弟が 2 組にならないので表に出ない。
 
 ## Problem
 
