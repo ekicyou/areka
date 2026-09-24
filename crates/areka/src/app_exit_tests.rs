@@ -243,3 +243,89 @@ fn ghost_os_close_sends_close_request_with_the_window_scope() {
         "未結線では終了を指示する"
     );
 }
+
+fn connect_failed() -> areka_kanade::ShioriFault {
+    areka_kanade::ShioriFault {
+        kind: areka_kanade::ShioriFaultKind::ConnectFailed,
+        reason: "helper に接続できない".to_string(),
+    }
+}
+
+/// **要件 1.7・1.8・3.3（判定の表・要件 7.2）**: 失敗の中身を返すのは「kanade の停止で原因が
+/// Fault」の 1 行だけ。他の停止原因 4 値・強制退避・smoke の自動終了・OS の閉鎖要求の 7 行は
+/// 何も返さない（告知なし・終了コード 0）。
+#[test]
+fn fault_of_returns_the_fault_only_for_kanade_stopped_fault() {
+    let fault = connect_failed();
+    let rows: [(ExitOrigin, Option<&areka_kanade::ShioriFault>); 8] = [
+        (ExitOrigin::KanadeStopped(KanadeStopCause::Quit), None),
+        (ExitOrigin::KanadeStopped(KanadeStopCause::Forced), None),
+        (ExitOrigin::KanadeStopped(KanadeStopCause::CloseSilent), None),
+        (
+            ExitOrigin::KanadeStopped(KanadeStopCause::DeadlineExceeded),
+            None,
+        ),
+        (
+            ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault.clone())),
+            Some(&fault),
+        ),
+        (ExitOrigin::Escape, None),
+        (ExitOrigin::Smoke, None),
+        (ExitOrigin::OsClose, None),
+    ];
+    for (origin, expected) in &rows {
+        assert_eq!(fault_of(origin), *expected, "出所 {origin:?} の判定");
+    }
+}
+
+/// **要件 1.12・4.5・2.5（最初が勝つ・要件 7.2）**: `quit_app` を 2 度呼んでも `FirstExit` は
+/// 最初の出所のまま。2 度目は debug の `app_exit_again` がちょうど 1 件で、上書きはしない。
+/// 最初の `app_exit` の出所には失敗の種類と理由が載る。
+/// 対照アーム: 受け口（`AppExit`）の無い World でも最初の出所は残す。
+#[test]
+fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
+    use crate::placement::test_support::capture_logs;
+
+    let first = ExitOrigin::KanadeStopped(KanadeStopCause::Fault(connect_failed()));
+    let mut world = World::new();
+    world.insert_non_send(AppExit::new());
+
+    let (_, events) = capture_logs(|| {
+        quit_app(&mut world, first.clone());
+        quit_app(&mut world, ExitOrigin::Escape);
+    });
+
+    assert_eq!(
+        world.resource::<FirstExit>().0,
+        first,
+        "2 度目の出所で上書きしない"
+    );
+    let again: Vec<_> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("app_exit_again"))
+        .collect();
+    assert_eq!(again.len(), 1, "app_exit_again はちょうど 1 件: {events:?}");
+    assert_eq!(again[0].level, tracing::Level::DEBUG);
+    assert!(
+        again[0].field("origin").is_some_and(|o| o.contains("Escape")),
+        "app_exit_again は 2 度目の出所を名乗る: {:?}",
+        again[0]
+    );
+    let exit = events
+        .iter()
+        .find(|e| e.field_str("event") == Some("app_exit"))
+        .expect("app_exit の記録");
+    let origin = exit.field("origin").expect("origin 欄");
+    assert!(
+        origin.contains("ConnectFailed") && origin.contains("helper に接続できない"),
+        "app_exit の出所に種類と理由が載る: {origin}"
+    );
+
+    let mut bare = World::new();
+    quit_app(&mut bare, ExitOrigin::Smoke);
+    assert_eq!(
+        bare.resource::<FirstExit>().0,
+        ExitOrigin::Smoke,
+        "受け口の有無に依らず最初の出所を残す"
+    );
+}
