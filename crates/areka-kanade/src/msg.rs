@@ -323,6 +323,78 @@ pub enum ShioriFailure {
     Internal(String),
 }
 
+/// SHIORI が動かなくなったときの失敗の種類（5 値・記録の語彙）。
+///
+/// 利用者へ見せる平易な文面は持たない（文面は areka 側の告知が決める）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShioriFaultKind {
+    /// 接続できなかった。
+    ConnectFailed,
+    /// 応答が期限内に返らなかった。
+    Timeout,
+    /// 通信が切れた。
+    Disconnected,
+    /// areka 側の内部の失敗。
+    Internal,
+    /// 原因不明（停止の原因を控えられなかった）。
+    Unknown,
+}
+
+/// 失敗の種類と理由の一行（値オブジェクト）。
+///
+/// `reason` は対応する `error!` の記録と同じ文言（呼出失敗は `Display`、死活報告は理由そのもの）。
+/// 種類への写しはこの型の関連関数だけが持つ。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShioriFault {
+    pub kind: ShioriFaultKind,
+    pub reason: String,
+}
+
+/// 死活報告の種類（2 値・理由の綴りで判別しないための型）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShioriDownKind {
+    /// helper へ接続できなかった。
+    ConnectFailed,
+    /// helper が終了した。
+    HelperExited,
+}
+
+impl ShioriFault {
+    /// 呼出失敗から種類と理由へ写す（wildcard なし）。
+    pub fn from_failure(failure: &ShioriFailure) -> ShioriFault {
+        let kind = match failure {
+            ShioriFailure::Handshake(_) => ShioriFaultKind::ConnectFailed,
+            ShioriFailure::Timeout(_) => ShioriFaultKind::Timeout,
+            ShioriFailure::Ipc(_) => ShioriFaultKind::Disconnected,
+            // エラー応答は送出点で「返事なし」へ写すので、ここへは届かない契約。
+            // 届いたら契約が破れているので、内部の失敗として記録に残す。
+            ShioriFailure::Shiori(_) => ShioriFaultKind::Internal,
+            ShioriFailure::Internal(_) => ShioriFaultKind::Internal,
+        };
+        ShioriFault {
+            kind,
+            reason: failure.to_string(),
+        }
+    }
+
+    /// 死活報告から種類と理由へ写す（理由はそのまま運ぶ）。
+    pub fn from_down(kind: ShioriDownKind, reason: String) -> ShioriFault {
+        let kind = match kind {
+            ShioriDownKind::ConnectFailed => ShioriFaultKind::ConnectFailed,
+            ShioriDownKind::HelperExited => ShioriFaultKind::Disconnected,
+        };
+        ShioriFault { kind, reason }
+    }
+
+    /// 停止の原因を控えられなかったときの値。
+    pub fn unknown() -> ShioriFault {
+        ShioriFault {
+            kind: ShioriFaultKind::Unknown,
+            reason: "stop cause unknown".to_string(),
+        }
+    }
+}
+
 /// 運行構成（結線側が供給。既定値は [`KanadeConfig::new`] で提供）。
 pub struct KanadeConfig {
     /// OnBoot Ref0（package-mount 由来・ハーネスは "master"）。
@@ -769,3 +841,7 @@ mod tests {
         };
     }
 }
+
+#[cfg(test)]
+#[path = "msg_fault_tests.rs"]
+mod fault_tests;
