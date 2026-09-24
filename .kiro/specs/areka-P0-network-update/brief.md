@@ -119,4 +119,12 @@
 
 - **2026-09-18 `nar-install` 設計からの申し送り（使用中の宛先）**: `areka-nar` の展開は「作業フォルダに組んでから宛先と入れ替える」形で、宛先の中のファイル（起動中のゴーストの `shiori.dll` 等）が開かれていると入れ替えが失敗し、宛先は無傷のまま `NarError::Io { phase: Commit, rolled_back: true }` が返る。**エンジンは SHIORI の解放を試みない**。起動中のゴーストへ入れる・更新する・切り替える経路は、呼び出し側が先に SHIORI をアンロード（`OnClose` 相当の終了経路）してから `install` を呼ぶこと。
 
+- **2026-09-24 `update-engine` 完了からの申し送り**（`.kiro/specs/completed/areka-P0-update-engine/`）: 新クレートは `crates/areka-update/`。入口は `run(&UpdateRequest, &dyn Fetch, &mut dyn FnMut(&Progress)) -> Result<UpdateOutcome, UpdateError>` の 1 つで、スレッドは起こさない（呼び出し側のスレッドで同期に回る）。本仕様への引き継ぎは次のとおり。
+  - **`md-5` は足さない。** MD5 は OS の CNG（`BCryptHash`）で賄う。`tech.md` に登記済み。上の Approach と Constraints に残る「`md-5` を 1 本足す」「登記と承認が要る」は古い。
+  - **`WinHttpFetch::new()` の失敗は記録されない。** `run` より前に起きるので、本仕様の側で `error!` を出すこと。
+  - **https は実機で未確認。** エンジンの実機の一周（`winhttp_real_tests.rs`・`#[ignore]`）はローカルの http で回した。3xx の追随・404・500・日本語パスの符号化は確認済み。本仕様の実機サインオフで、一度 https の更新先を通すこと。
+  - **失敗の原因ファイル名は `UpdateError::file()` で取る。** 返るのは対象フォルダからの相対名で、フォルダ単位の失敗では `None`。`OnUpdateFailure` の Ref1 へそのまま写せる。
+  - **番号は 0 始まり。** `Progress` の番号は `DownloadBegin { index, total }` などで 0 から数える。`useorigin1` への読み替えは本仕様の役目。
+  - **戻せなかったときは作業場所が残る。** `UpdateError.work` が `Some(<対象>/.update-work/<走行>/)` になり、元の内容は `old/` に残る。次の一周でもこのフォルダは消されず、残骸として `warn!` に出る。
+  - **`delete.txt` の実装は済んだ。** `crates/areka-update/src/delete.rs` の読み手の定義行に `// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html` を置いた。ただしエンジンは要件で網羅台帳に触らないので、下の追記にある `descript_install` の「相対パス」項目はまだ `absent` のまま。状態を動かし `ukadoc-survey` の報告を作り直すのは本仕様の役目。
 - **2026-09-19 追記（網羅台帳の引受先を登記した）**: `doc/ukadoc-coverage/ledger/assets.toml` の `descript_install` の「相対パス」（delete.txt の行の書式）1 項目は、備考が「引受先の候補は……まだ起票されていない」と書いたまま宛先が空だった。本仕様は 2026-09-18 に起票済みで、上の「正典の要点」の節がこの項目の id をそのまま引き、範囲の一覧にも `delete.txt`／`delete[数字].txt` を入れている。2026-09-19 にこの 1 項目の宛先を `areka-P0-network-update` で埋め、備考を実態へ直し、`doc/ukadoc-coverage/roadmap-draft.md` に本仕様の行（`stage = "B"`・`bundle = "更新"`・`owner_count = 1`・`wave = "A4"`）を足した。**状態は `absent` のまま**である——`delete.txt` を読む経路はまだ 1 つも無い。着手時にこの 1 項目を実装へ運び、定義箇所へ正典 URL の 1 行（`// ukadoc:`）を置いて状態を `implemented` へ動かし、`cargo run -p ukadoc-survey -- report` と `-- report-summary` を作り直すこと。**宛先の数を増減させたら同じコミットで `roadmap-draft.md` の `owner_count` を追随させる**（登記だけして表を直さないと `cargo test -p ukadoc-survey` がその場で赤になる）。
