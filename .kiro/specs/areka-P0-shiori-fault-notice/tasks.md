@@ -25,7 +25,7 @@
   - `cargo build --workspace --tests` が通り、kanade・areka-ghost・areka の既存テストが緑
   - _Requirements: 2.1, 2.2, 2.3, 8.2_
 
-- [ ] 1.4 エラー応答を送出点で「返事なし」に写して会話を続ける
+- [x] 1.4 エラー応答を送出点で「返事なし」に写して会話を続ける
   - 送出点の往復の末尾で、エラー応答の失敗だけを GET なら返事なし（204 相当）、NOTIFY なら通知済みに写して再投入し、警告の記録 `shiori_error_response` を 1 往復に 1 件残す。他の 4 種は Failed のまま（回数の閾値は置かない）
   - 起動時の `username` 照会・選択肢の往復中の腕は無改変（前者はエラー応答なら返事なしとして sink へ渡る）
   - kanade の失敗テストで、起動時（`OnInitialize`＝NOTIFY）と会話中（`OnSecondChange`＝GET）の両方にエラー応答を注入し、kanade が止まらず次の呼出が記録され `shiori_error_response` が 1 件であることを固定する。既存の「失敗の語彙ごとに終了する」テストからエラー応答を外す
@@ -131,3 +131,8 @@
   - spec フォルダの `signoff.md` に 3 走行のコマンド・終了コード・目印の件数が残っている
   - _Depends: 5.3_
   - _Requirements: 7.7, 7.8_
+
+## Implementation Notes
+
+- 1 ファイル 1,000 行の見張り（`log-capture-kit` の `file_length_guard_test`）がある。テストを足すたびに `cargo test -p log-capture-kit -j 4` も回し、超えるなら兄弟ファイルへ分ける（`OVER_LIMIT_ALLOWED` には足さない）。
+- 別スレッド（kanade のアクター等）で出る記録を統合テストで数えるには全スレッドの捕捉が要り、`log-capture-kit/tests/with_default_guard_test.rs` の例外表への登録が要る。単体で数えられるならスレッド局所の `capture` を使う。

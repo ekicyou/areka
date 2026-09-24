@@ -3,10 +3,11 @@
 //! mock 結線（`super::common` のハーネス）で、kanade の失敗・停止・回復各経路を統合層で
 //! 決定的に観測する（実時間 sleep なし・全 join は期限付き・宙吊りしない）。検証する 4 系:
 //!
-//! 1. **区別語彙ごとの呼出失敗 → 観測可能な終了**（Req 6.1）: [`ShioriFailure`] の 5 語彙
-//!    （Handshake／Timeout／Ipc／Shiori／Internal）それぞれについて、boot 最初の呼出（`OnInitialize`）を
-//!    その語彙で失敗させ、kanade が終了系列（Unloading{Fault}→best-effort Unload→Stopped）へ
-//!    倒れて停止すること（kanade の期限付き join 成功＋Unload 記録）を観測する。
+//! 1. **区別語彙ごとの呼出失敗 → 観測可能な終了**（Req 6.1）: [`ShioriFailure`] のうち終了へ
+//!    倒れる 4 語彙（Handshake／Timeout／Ipc／Internal）それぞれについて、boot 最初の呼出
+//!    （`OnInitialize`）をその語彙で失敗させ、kanade が終了系列（Unloading{Fault}→best-effort
+//!    Unload→Stopped）へ倒れて停止すること（kanade の期限付き join 成功＋Unload 記録）を観測する。
+//!    エラー応答（`Shiori`）は終了へ倒れないので 5 で別に見る。
 //! 2. **死活報告 → 観測可能な停止**（Req 5.4）: boot 定常化後に `KanadeMsg::ShioriDown` を注入し、
 //!    kanade が Unloading{Fault}→Unload→Stopped で停止すること（join 成功＋Unload 記録）を観測する。
 //! 3. **未知 talk_id の再生完了通知 → 運行継続**（Req 2.5・6.2）: 採番されていない talk_id の
@@ -15,15 +16,21 @@
 //! 4. **全ての指示送信元切断 → 宙吊りにならず正常終了・停止観測**（Req 4.8・4.9・6.2）: kanade
 //!    inbox の全 Sender を drop すると `run_inbox` が切断で正常終了し、kanade の期限付き join が
 //!    成功する（受信待ちのままハングしない・4.9 の構造保証）。
+//! 5. **エラー応答 → 会話を続ける**（本仕様 要件 6.1・7.3）: SHIORI のエラー応答（400・500 など）は
+//!    起動時（`OnInitialize`＝NOTIFY）でも会話中（`OnSecondChange`＝GET）でも止めず、返事なしと
+//!    同じ扱いで次の呼出へ進む。記録 `shiori_error_response` は 1 往復に 1 件。
 
 use areka_kanade::{
     CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriFailure, TalkDone, TalkEndReason,
     TalkId,
 };
 
+use log_capture_kit::install_global_capture_all;
+
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, FailKind, FailOn, Fixture, Harness, QuitPolicy, SinklessHarness,
-    join_bounded, spawn_harness, spawn_harness_failing, spawn_harness_no_sink,
+    CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FailKind, FailOn, Fixture, Harness,
+    QuitPolicy, RecordedCall, SinklessHarness, join_bounded, spawn_harness, spawn_harness_failing,
+    spawn_harness_no_sink,
 };
 
 /// 記録列に Unload（正規終了経路の best-effort unload）がちょうど 1 度現れることを確認する。
@@ -47,8 +54,8 @@ fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
 // ケース 1: 区別語彙ごとの呼出失敗 → 観測可能な終了（Req 6.1）
 // ============================================================================
 
-/// [`ShioriFailure`] の 5 語彙それぞれについて、boot 最初の呼出（`OnInitialize`）を当該語彙で
-/// 失敗させると kanade が終了系列（Unloading{Fault}→Unload→Stopped）へ倒れて停止する。
+/// [`ShioriFailure`] のうち終了へ倒れる 4 語彙それぞれについて、boot 最初の呼出（`OnInitialize`）を
+/// 当該語彙で失敗させると kanade が終了系列（Unloading{Fault}→Unload→Stopped）へ倒れて停止する。
 ///
 /// # 駆動と観測（決定的・sleep なし）
 /// Boot → `OnInitialize` NOTIFY で `Failed(kind)` を返す → 応答待ち（BootInit）で Failed を受領
@@ -60,19 +67,20 @@ fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
 /// - Failed が終了を駆動しなければ kanade は BootInit で応答待ちのまま止まらず、join が期限超過して
 ///   panic する（＝失敗が観測可能な終了へ写像されていないことを検出する）。
 /// - Fault 経路が Unload を発行しなければ `assert_unload_recorded_once` が落ちる。
-/// - 5 語彙をループで網羅し、いずれか 1 つでも終了しなければそのイテレーションで panic する。
+/// - 4 語彙をループで網羅し、いずれか 1 つでも終了しなければそのイテレーションで panic する。
+///   エラー応答（`Shiori`）は終了へ倒れない（本仕様 要件 6.1）ので、ケース 5 で別に見る。
 #[test]
 fn each_failure_vocabulary_drives_observable_termination() {
-    // 5 語彙を静的に網羅する。ShioriFailure は非 Clone ゆえ Copy な FailKind で回し、mock 内で
+    // 終了へ倒れる 4 語彙を網羅する。ShioriFailure は非 Clone ゆえ Copy な FailKind で回し、mock 内で
     // その都度 fresh に構築する（Fixture/FailOn は Copy／Clone で複製可能）。
     for kind in [
         FailKind::Handshake,
         FailKind::Timeout,
         FailKind::Ipc,
-        FailKind::Shiori,
         FailKind::Internal,
     ] {
-        // 網羅の非空虚性を型で担保: 各 kind は実 ShioriFailure のバリアントに 1:1 対応する。
+        // 網羅の非空虚性を型で担保: 各 kind は実 ShioriFailure のバリアントに 1:1 対応する
+        // （`Shiori` の腕はケース 5 が受け持つ）。
         // `FailKind::Internal`（DD-IT-11・kanade 内部規律違反＝ホワイトリスト違反で choke が返す語彙）
         // も本ループで掃引し、`Failed(Internal)` が外部4語彙と同じく既存 fault 終端（Unloading{Fault}
         // →Unload→Stopped）へ合流することを統合層で確認する（設計 Testing Strategy #7・DD-IT-11:
@@ -81,7 +89,7 @@ fn each_failure_vocabulary_drives_observable_termination() {
             FailKind::Handshake => ShioriFailure::Handshake(String::new()),
             FailKind::Timeout => ShioriFailure::Timeout(String::new()),
             FailKind::Ipc => ShioriFailure::Ipc(String::new()),
-            FailKind::Shiori => ShioriFailure::Shiori(String::new()),
+            FailKind::Shiori => unreachable!("エラー応答はケース 5 で見る"),
             FailKind::Internal => ShioriFailure::Internal(String::new()),
         };
 
@@ -326,4 +334,272 @@ fn all_command_senders_dropped_terminates_normally_without_hang() {
     // mock shiori は kanade が StopSelf を経ないため Close を受けない。送信端 drop で自然終了させる
     // （記録は不要・停止観測はここまでで完了）。
     drop(shiori);
+}
+
+// ============================================================================
+// ケース 5: エラー応答 → 返事なしと同じ扱いで会話を続ける（本仕様 要件 6.1・7.3）
+// ============================================================================
+
+/// 記録 `shiori_error_response`（`kanade` の warn）のうち、`id` の往復で注入したエラー応答のものを数える。
+///
+/// 記録は kanade のアクタースレッドで出るので、全スレッド捕捉の蓄積先から拾う。同じテスト
+/// バイナリの他のテストの記録も混ざるので、注入の文言（`FailKind::Shiori` が作る
+/// `"injected shiori error"`）と `id` で絞る（このケース以外にエラー応答を注入するテストは無い）。
+fn count_error_response_records(
+    buffer: &std::sync::Mutex<Vec<log_capture_kit::CapturedEvent>>,
+    id: &str,
+) -> usize {
+    buffer
+        .lock()
+        .expect("capture buffer mutex")
+        .iter()
+        .filter(|ev| {
+            ev.level == tracing::Level::WARN
+                && ev.target == "kanade"
+                && ev.field_str("event") == Some("shiori_error_response")
+                && ev.field("id") == Some(id)
+                && ev
+                    .field("error")
+                    .is_some_and(|e| e.contains("injected shiori error"))
+        })
+        .count()
+}
+
+/// 記録列で `method` の `id` の呼出が最初に現れる位置。
+fn position_of(recorded: &[RecordedCall], method: CallMethod, id: &str) -> Option<usize> {
+    recorded
+        .iter()
+        .position(|c| c.method == method && c.id == id)
+}
+
+/// close 指示で終わったこと（Fault で止まっていないこと）を確かめる。
+///
+/// OnClose GET が記録され、別れの talk が 1 本起き、Unload は末尾に 1 件だけ。エラー応答が
+/// Fault へ倒れていれば OnClose も別れの talk も現れない。
+fn assert_ended_by_driven_close(recorded: &[RecordedCall], started: &[areka_kanade::StartTalk]) {
+    assert!(
+        position_of(recorded, CallMethod::Get, "OnClose").is_some(),
+        "close 指示の OnClose GET が記録されるはず（Fault で止まれば現れない）: {recorded:?}"
+    );
+    assert_eq!(
+        started
+            .iter()
+            .filter(|s| s.script == FIXED_FAREWELL_SCRIPT)
+            .count(),
+        1,
+        "close 指示で別れの talk が 1 本起きるはず: {started:?}"
+    );
+    assert_unload_recorded_once(recorded);
+    assert_eq!(
+        recorded.last().map(|c| &c.method),
+        Some(&CallMethod::Unload),
+        "末尾は Unload（close 指示→別れの talk quit:true 由来）: {recorded:?}"
+    );
+}
+
+/// 起動時の `OnInitialize`（NOTIFY）がエラー応答でも kanade は止まらず起動を続け、その後の
+/// close 指示で初めて終わる。記録 `shiori_error_response` は 1 件。
+///
+/// # 駆動と観測（決定的・sleep なし）
+/// 挨拶なし boot（`OnBoot`→204）で `Steady{None}` へ直行させ、close 指示（`OnClose` Value→別れの
+/// talk quit:true→Unload）で終える。kanade の期限付き join 成功時点で記録列は確定している。
+///
+/// # 非空虚性
+/// エラー応答が Fault へ倒れていれば、`OnInitialize` の直後に Unload が来て `OnBoot` も `OnClose` も
+/// 記録されず、別れの talk も起きない。
+#[test]
+fn error_response_at_boot_notify_continues_as_notified() {
+    // アクター起動前に据え付ける（別スレッドで出る warn を拾う）。
+    let buffer = install_global_capture_all();
+
+    let harness = spawn_harness_failing(
+        KanadeConfig::new("master", "1.0.0"),
+        Fixture::quitting().without_boot_greeting(),
+        QuitPolicy::PerTalk(vec![true]),
+        FailOn::on_initialize(FailKind::Shiori),
+    );
+
+    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    harness
+        .sender
+        .send(KanadeMsg::CloseRequest {
+            reason: CloseReason::User { scope: 0 },
+        })
+        .expect("send CloseRequest");
+
+    let Harness {
+        sender,
+        kanade,
+        shiori,
+        sakura,
+    } = harness;
+
+    join_bounded("kanade boot-error-response join", DEFAULT_TIMEOUT, kanade)
+        .expect("kanade terminates via the driven close, not via the error response");
+    drop(sender);
+    let started = sakura.started();
+    sakura.join_bounded("mock-sakura boot-error-response join", DEFAULT_TIMEOUT);
+    let recorded = shiori.recorded();
+
+    // (1) エラー応答のあとも起動が進んだ: OnInitialize の後に OnBoot GET が記録される。
+    let init = position_of(&recorded, CallMethod::Notify, "OnInitialize")
+        .expect("OnInitialize NOTIFY が記録されるはず");
+    let boot = position_of(&recorded, CallMethod::Get, "OnBoot").unwrap_or_else(|| {
+        panic!("エラー応答で止まらなければ OnBoot GET まで進むはず: {recorded:?}")
+    });
+    assert!(
+        init < boot,
+        "起動は OnInitialize の後に進むはず: {recorded:?}"
+    );
+
+    // (2) 終わりは close 指示から（Fault で止まっていない）。
+    assert_ended_by_driven_close(&recorded, &started);
+
+    // (3) 記録は 1 往復に 1 件。
+    assert_eq!(
+        count_error_response_records(&buffer, "OnInitialize"),
+        1,
+        "OnInitialize のエラー応答の記録 shiori_error_response は 1 件のはず"
+    );
+}
+
+/// 会話中の `OnSecondChange`（GET）がエラー応答でも kanade は止まらず、次の Tick の
+/// `OnSecondChange` GET も発行され、その後の close 指示で初めて終わる。記録は 1 件。
+///
+/// # 非空虚性
+/// エラー応答が Fault へ倒れていれば、1 本目の `OnSecondChange` の後に Unload が来て、2 本目の
+/// `OnSecondChange` も `OnClose` も記録されない。
+#[test]
+fn error_response_at_conversation_get_continues_as_no_content() {
+    // アクター起動前に据え付ける（別スレッドで出る warn を拾う）。
+    let buffer = install_global_capture_all();
+
+    let harness = spawn_harness_failing(
+        KanadeConfig::new("master", "1.0.0"),
+        Fixture::quitting().without_boot_greeting(),
+        QuitPolicy::PerTalk(vec![true]),
+        FailOn {
+            id: "OnSecondChange",
+            kind: FailKind::Shiori,
+        },
+    );
+
+    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    for i in 1..=2 {
+        harness
+            .sender
+            .send(KanadeMsg::Tick {
+                now: MonotonicMs(i * 1_000),
+            })
+            .expect("send Tick");
+    }
+    harness
+        .sender
+        .send(KanadeMsg::CloseRequest {
+            reason: CloseReason::User { scope: 0 },
+        })
+        .expect("send CloseRequest");
+
+    let Harness {
+        sender,
+        kanade,
+        shiori,
+        sakura,
+    } = harness;
+
+    join_bounded("kanade steady-error-response join", DEFAULT_TIMEOUT, kanade)
+        .expect("kanade terminates via the driven close, not via the error response");
+    drop(sender);
+    let started = sakura.started();
+    sakura.join_bounded("mock-sakura steady-error-response join", DEFAULT_TIMEOUT);
+    let recorded = shiori.recorded();
+
+    // (1) エラー応答のあとも会話が続いた: 次の Tick の OnSecondChange GET も記録される（計 2 件）。
+    assert_eq!(
+        recorded
+            .iter()
+            .filter(|c| c.method == CallMethod::Get && c.id == "OnSecondChange")
+            .count(),
+        2,
+        "エラー応答で止まらなければ 2 本目の OnSecondChange GET も記録されるはず: {recorded:?}"
+    );
+
+    // (2) 終わりは close 指示から（Fault で止まっていない）。
+    assert_ended_by_driven_close(&recorded, &started);
+
+    // (3) 記録は 1 往復に 1 件（エラー応答を返したのは 1 本目だけ）。
+    assert_eq!(
+        count_error_response_records(&buffer, "OnSecondChange"),
+        1,
+        "OnSecondChange のエラー応答の記録 shiori_error_response は 1 件のはず"
+    );
+}
+
+/// close 指示の `OnClose`（GET）がエラー応答なら、返事なしと同じ扱いで別れの台詞なしに閉じる
+/// （無言の終了→Unload）。kanade は期限内に終わり、記録は 1 件。
+///
+/// # 非空虚性
+/// GET のエラー応答を取り違えて通知済み（Notified）に写すと、閉じる相は Notified を想定外として
+/// 相を保つので終わらず、期限付き join が赤になる。
+#[test]
+fn error_response_at_close_get_closes_silently() {
+    // アクター起動前に据え付ける（別スレッドで出る warn を拾う）。
+    let buffer = install_global_capture_all();
+
+    let harness = spawn_harness_failing(
+        KanadeConfig::new("master", "1.0.0"),
+        Fixture::quitting().without_boot_greeting(),
+        QuitPolicy::PerTalk(vec![true]),
+        FailOn {
+            id: "OnClose",
+            kind: FailKind::Shiori,
+        },
+    );
+
+    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    harness
+        .sender
+        .send(KanadeMsg::CloseRequest {
+            reason: CloseReason::User { scope: 0 },
+        })
+        .expect("send CloseRequest");
+
+    let Harness {
+        sender,
+        kanade,
+        shiori,
+        sakura,
+    } = harness;
+
+    join_bounded("kanade close-error-response join", DEFAULT_TIMEOUT, kanade)
+        .expect("OnClose のエラー応答は返事なしとして無言で閉じ、kanade は期限内に終わるはず");
+    drop(sender);
+    let started = sakura.started();
+    sakura.join_bounded("mock-sakura close-error-response join", DEFAULT_TIMEOUT);
+    let recorded = shiori.recorded();
+
+    // (1) OnClose GET は発行され、別れの talk は起きない（返事なし＝無言の終了）。
+    assert!(
+        position_of(&recorded, CallMethod::Get, "OnClose").is_some(),
+        "OnClose GET が記録されるはず: {recorded:?}"
+    );
+    assert!(
+        started.iter().all(|s| s.script != FIXED_FAREWELL_SCRIPT),
+        "返事なしの close では別れの talk は起きないはず: {started:?}"
+    );
+
+    // (2) 終了系列を通った: Unload は末尾に 1 件。
+    assert_unload_recorded_once(&recorded);
+    assert_eq!(
+        recorded.last().map(|c| &c.method),
+        Some(&CallMethod::Unload),
+        "末尾は Unload（無言の終了）: {recorded:?}"
+    );
+
+    // (3) 記録は 1 往復に 1 件。
+    assert_eq!(
+        count_error_response_records(&buffer, "OnClose"),
+        1,
+        "OnClose のエラー応答の記録 shiori_error_response は 1 件のはず"
+    );
 }

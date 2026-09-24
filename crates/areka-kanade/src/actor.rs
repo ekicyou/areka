@@ -302,6 +302,8 @@ fn execute_actions(
 ///   既存の fault 経路で処理＝檻専用の応答を発明しない・panic しない・宙吊りにしない）。
 /// - 許可集合内: 送出前に Method・イベント ID・参照値・実行状態の wire 証跡を `trace!`（event=
 ///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
+/// - SHIORI のエラー応答（`Failed(ShioriFailure::Shiori)`）は、GET なら `NoContent`、NOTIFY なら
+///   `Notified` に写して返し、`warn!`（event=`shiori_error_response`）を 1 件残す（会話を続ける）。
 pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
     // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
@@ -359,15 +361,40 @@ pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -
         "SHIORI 送出"
     );
 
+    // エラー応答の記録に載せるため、call を渡す前に ID を控える（固定 ID なら複製は無料）。
+    let event_id = event_id.clone();
     let (reply_tx, reply_rx) = reply_channel::<ShioriOutcome>();
-    round_trip(
+    let outcome = round_trip(
         shiori,
         ShioriMsg::Request {
             call,
             reply: reply_tx,
         },
         reply_rx,
-    )
+    );
+
+    // エラー応答（400・500 など）は致命の失敗にせず「返事なし」に写す（shiori-fault-notice
+    // 要件 6.1・裁定 3）: GET は 204 相当の NoContent、NOTIFY は Notified として再投入する。
+    // 運行表は応答が GET か NOTIFY かを知らないので、種別を知るここで写す。回数の閾値は置かない。
+    // 他の 4 種（接続・期限切れ・通信・内部）は Failed のまま（Fault の判断は運行表のまま）。
+    match outcome {
+        ShioriOutcome::Failed(ShioriFailure::Shiori(e)) => {
+            tracing::warn!(
+                target: "kanade",
+                event = "shiori_error_response",
+                method,
+                id = %event_id.as_str(),
+                error = %e,
+                "SHIORI がエラー応答——返事なし（204）と同じ扱いで会話を続ける"
+            );
+            if method == "GET" {
+                ShioriOutcome::NoContent
+            } else {
+                ShioriOutcome::Notified
+            }
+        }
+        other => other,
+    }
 }
 
 /// unload の同期往復（送出＋応答受領）。失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
@@ -507,3 +534,8 @@ mod tests;
 #[cfg(test)]
 #[path = "actor_stop_notify_tests.rs"]
 mod stop_notify_tests;
+
+// エラー応答の写しの檻（shiori-fault-notice 要件 6.1・7.3）。
+#[cfg(test)]
+#[path = "actor_error_response_tests.rs"]
+mod error_response_tests;
