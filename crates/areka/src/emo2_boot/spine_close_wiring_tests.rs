@@ -166,7 +166,7 @@ fn spine_close_request_runs_the_farewell_then_the_quit_phase_closes_the_windows(
     let deadline = Instant::now() + SPIN_WAIT;
     let mut quit_consumed = false;
     while Instant::now() < deadline {
-        if run_ghost_quit_phase(&mut harness.wiring, &mut harness.world) {
+        if run_ghost_quit_phase(&mut harness.world) {
             quit_consumed = true;
             break;
         }

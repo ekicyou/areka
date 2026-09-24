@@ -216,6 +216,9 @@ fn main() -> Result<()> {
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
     // 終了処理へ運ぶ。`wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォール
     // バック boot へ倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
+    // 停止通知の channel は 1 本だけ作り、送出端の写しを起動の 2 経路へ、受信端を下の据え付けへ
+    // 渡す（要件 6.4）。main 自身の送出端は分岐の後で落とす。
+    let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
     let outcome = emo2_boot::wire_emo2_boot(
         &app,
         &cfg.ghost_root,
@@ -223,6 +226,7 @@ fn main() -> Result<()> {
         &helper_exe,
         author_dpi,
         zorder_raw.as_deref(),
+        kanade_stop_tx.clone(),
     );
     let (ghost_runtime, seriko_handle, loop_ticker) = if outcome.wired {
         tracing::info!(
@@ -278,7 +282,11 @@ fn main() -> Result<()> {
         // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
         // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
         let ghost_options = ghost_boot_options(cfg.ghost_root.clone(), helper_exe.clone());
-        let ghost = match areka_ghost::boot(ghost_options) {
+        // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
+        let ghost = match areka_ghost::boot_with_kanade_stop(
+            ghost_options,
+            Some(kanade_stop_tx.clone()),
+        ) {
             Ok(runtime) => {
                 tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
                 // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
@@ -312,73 +320,133 @@ fn main() -> Result<()> {
         (ghost, None, None)
     };
 
+    // main 自身の送出端を落とす（受け口に残る送出端は起動の 2 経路が持つ写しだけになる）。
+    drop(kanade_stop_tx);
+
+    // 停止通知の受け口と終了相の据え付け（起動の 2 経路で共通・起動の分岐の後・`run()` の前に 1 回）。
+    emo2_boot::wire_kanade_stop(&app, kanade_stop_rx);
+
     // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。窓が 0 になっても戻らず、
-    // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が `Ok` を返す。
-    app.run()?;
+    // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が戻る。
+    // 失敗でも後始末は通すので `?` で抜けない（要件 3.2・6.3）。
+    let run = app.run();
 
-    // 終了順序（task 9.5・design「結線・資産・実機経路（main.rs）」）:
-    //   ① loop ticker Close → ② ghost.shutdown → ③ seriko join。
-    //
-    // ① loop ticker Close（本ブロック）: SERIKO ループ ticker の worker スレッドは closure 内へ
-    // `SerikoSink` クローン（tick_sink）を握る。これを先に停止させないと seriko inbox が ticker 経由で
-    // 生き続け、③ の join が「全 Sender drop」を永遠に待って hang する。停止端 Sender へ
-    // `TickerMsg::Close` を送ると worker は `recv_timeout` から `Ok(Close)` で return し、その closure＝
-    // tick_sink が drop される（inbox 切断の片翼が外れる。残る片翼＝ghost 側 SerikoSink は ② が外す）。
-    // main は ticker の JoinHandle を持たない（`wire_emo2_boot` が保持せず drop 済み）ため直接 join でき
-    // ないが、③ の seriko join が全 Sender drop まで block するため実質 ticker worker の終端を待つ形に
-    // なり hang しない（Close 未達で worker が既に終端していても drop で disconnected 経路へ倒れる）。
-    // 失敗（既に終端済み）は shutdown 期待事象ゆえ `debug!`（silent failure 禁止・非致命・R7.5）。
-    if let Some(ticker) = loop_ticker {
-        match ticker.send(areka_ghost::ticker::TickerMsg::Close) {
-            Ok(()) => tracing::info!(
-                "seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止）"
-            ),
-            Err(_) => tracing::debug!(
-                "seriko: loop ticker は既に終端済み（Close 送信先なし・shutdown 期待事象）"
-            ),
+    // 最初に終了を指示した出所が SHIORI の失敗なら告知の場面を組む（要件 1.1・1.3・1.12）。
+    // 窓は `quit_app` が閉じ、残りは `run()` が壊してから戻るので、告知の背後に窓は無い（要件 1.11）。
+    // ゴースト名は `GhostRuntime` を ② が消費する前に読む（design Flow 1 の注記）。
+    let scene = app
+        .world()
+        .borrow()
+        .world()
+        .get_resource::<app_exit::FirstExit>()
+        .and_then(|first| app_exit::fault_of(&first.0).cloned())
+        .map(|fault| alert::AlertScene::ShioriFault {
+            ghost_name: ghost_runtime
+                .as_ref()
+                .and_then(|r| r.mount().names.name.clone()),
+            // argv で相対パスを渡されても告知には絶対パスを載せる（要件 1.3）。
+            ghost_root: std::path::absolute(&cfg.ghost_root)
+                .unwrap_or_else(|_| cfg.ghost_root.clone()),
+            fault,
+        });
+    let fault = scene.is_some();
+
+    // 後始末 ①〜④ を成否によらず 1 回通し、終了コードは最後に決める（要件 3.1・3.2）。
+    // 告知は ① の直後・② の前（design Flow 1 の注記）。利用者が閉じたらそのまま進む（要件 1.10）。
+    finish_after_run(run, fault, move || {
+        // 終了順序（task 9.5・design「結線・資産・実機経路（main.rs）」）:
+        //   ① loop ticker Close → ② ghost.shutdown → ③ seriko join。
+        //
+        // ① loop ticker Close（本ブロック）: SERIKO ループ ticker の worker スレッドは closure 内へ
+        // `SerikoSink` クローン（tick_sink）を握る。これを先に停止させないと seriko inbox が ticker 経由で
+        // 生き続け、③ の join が「全 Sender drop」を永遠に待って hang する。停止端 Sender へ
+        // `TickerMsg::Close` を送ると worker は `recv_timeout` から `Ok(Close)` で return し、その closure＝
+        // tick_sink が drop される（inbox 切断の片翼が外れる。残る片翼＝ghost 側 SerikoSink は ② が外す）。
+        // main は ticker の JoinHandle を持たない（`wire_emo2_boot` が保持せず drop 済み）ため直接 join でき
+        // ないが、③ の seriko join が全 Sender drop まで block するため実質 ticker worker の終端を待つ形に
+        // なり hang しない（Close 未達で worker が既に終端していても drop で disconnected 経路へ倒れる）。
+        // 失敗（既に終端済み）は shutdown 期待事象ゆえ `debug!`（silent failure 禁止・非致命・R7.5）。
+        if let Some(ticker) = loop_ticker {
+            match ticker.send(areka_ghost::ticker::TickerMsg::Close) {
+                Ok(()) => tracing::info!(
+                    "seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止）"
+                ),
+                Err(_) => tracing::debug!(
+                    "seriko: loop ticker は既に終端済み（Close 送信先なし・shutdown 期待事象）"
+                ),
+            }
+            // 送信の成否に依らず停止端 Sender をここで drop し、確実に制御チャンネルを disconnected にする。
+            drop(ticker);
         }
-        // 送信の成否に依らず停止端 Sender をここで drop し、確実に制御チャンネルを disconnected にする。
-        drop(ticker);
-    }
 
-    // ② 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: `run()` 復帰後、boot 済み
-    // （`Some`）のときのみ `shutdown` を呼ぶ。DD-10 により終了理由は `System` から
-    // `CloseReason::User` へ改定（全窓 close funnel はユーザ操作起点）。OnClose 応答の再生
-    // 完了待ちは kanade の `ForceQuit` 終了系列内で処理される（本仕様は `shutdown` を呼ぶだけ・
-    // 不改変・R6.2）。失敗は `error!` の上で main 自身の `Result` へ伝播する（genuine な失敗を
-    // 黙って exit 0 にしない・R6.3）。
-    if let Some(runtime) = ghost_runtime {
-        if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::User { scope: 0 }) {
-            tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
-            return Err(windows::core::Error::from_hresult(
-                windows::Win32::Foundation::E_FAIL,
-            ));
+        // SHIORI の失敗の告知（1 プロセスに最大 1 回・抑止なら記録だけ・要件 1.1・1.6・1.12）。
+        if let Some(scene) = &scene {
+            alert::raise(scene, alert::suppressed());
         }
-    }
 
-    // ③ seriko アクターの join（design「終了握手（R6）」・R6.3）。seriko inbox への送信端は 2 本ある:
-    // (a) ghost 側の `SerikoSink`（surface_sink・②の `shutdown` が drop）と (b) loop ticker closure の
-    // `tick_sink`（①の Close→worker return で drop）。①②で両端が drop されて inbox が切断され、seriko
-    // worker は自然終了する。main は自前の `SerikoSink` クローンを保持しない（sink は `wire_emo2_boot`
-    // が boot／ticker へ move 済み）ため、この `join` は両端 drop 完了（＝ticker worker 終端）まで block
-    // したうえで速やかに戻る（①で ticker を先に Close したことが hang 回避の要）。join 失敗（worker
-    // panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
-    if let Some(seriko) = seriko_handle {
-        if let Err(err) = seriko.join() {
-            tracing::error!(error = %err, "seriko アクターの join に失敗しました");
-            return Err(windows::core::Error::from_hresult(
-                windows::Win32::Foundation::E_FAIL,
-            ));
+        // ② 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: `run()` 復帰後、boot 済み
+        // （`Some`）のときのみ `shutdown` を呼ぶ。DD-10 により終了理由は `System` から
+        // `CloseReason::User` へ改定（全窓 close funnel はユーザ操作起点）。OnClose 応答の再生
+        // 完了待ちは kanade の `ForceQuit` 終了系列内で処理される（本仕様は `shutdown` を呼ぶだけ・
+        // 不改変・R6.2）。失敗は `error!` の上で main 自身の `Result` へ伝播する（genuine な失敗を
+        // 黙って exit 0 にしない・R6.3）。
+        if let Some(runtime) = ghost_runtime {
+            if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::User { scope: 0 }) {
+                tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
+                return Err(windows::core::Error::from_hresult(
+                    windows::Win32::Foundation::E_FAIL,
+                ));
+            }
         }
-    }
 
-    // ④ スレッド別 CPU の最後のスナップショット（task 2.4）。終了直前に 1 枚出してから
-    // 報告スレッドを畳む。ここへ来ない早期 `return Err` の経路では最後の 1 枚が出ない
-    // （その場合は周期のスナップショットまでが記録として残る）。消灯時は `None` で何もしない。
-    if let Some(handle) = perf_report {
-        handle.stop_and_report_final();
-    }
+        // ③ seriko アクターの join（design「終了握手（R6）」・R6.3）。seriko inbox への送信端は 2 本ある:
+        // (a) ghost 側の `SerikoSink`（surface_sink・②の `shutdown` が drop）と (b) loop ticker closure の
+        // `tick_sink`（①の Close→worker return で drop）。①②で両端が drop されて inbox が切断され、seriko
+        // worker は自然終了する。main は自前の `SerikoSink` クローンを保持しない（sink は `wire_emo2_boot`
+        // が boot／ticker へ move 済み）ため、この `join` は両端 drop 完了（＝ticker worker 終端）まで block
+        // したうえで速やかに戻る（①で ticker を先に Close したことが hang 回避の要）。join 失敗（worker
+        // panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
+        if let Some(seriko) = seriko_handle {
+            if let Err(err) = seriko.join() {
+                tracing::error!(error = %err, "seriko アクターの join に失敗しました");
+                return Err(windows::core::Error::from_hresult(
+                    windows::Win32::Foundation::E_FAIL,
+                ));
+            }
+        }
 
+        // ④ スレッド別 CPU の最後のスナップショット（task 2.4）。終了直前に 1 枚出してから
+        // 報告スレッドを畳む。②③ の失敗で早く戻る経路では最後の 1 枚が出ない
+        // （その場合は周期のスナップショットまでが記録として残る）。消灯時は `None` で何もしない。
+        if let Some(handle) = perf_report {
+            handle.stop_and_report_final();
+        }
+
+        Ok(())
+    })
+}
+
+/// `run()` の結果を受けて後始末へ進む判断（#58 が終了順序を関数へ括り出すときの芽）。
+///
+/// 後始末は成否によらず必ず 1 回通す。`run` の失敗・後始末の失敗・Fault のどれか 1 つでも
+/// あれば `Err`（終了コード 1）、なければ `Ok`（0）。後始末の失敗は後始末の中で、Fault は
+/// `quit_app` の `app_exit` で記録済みなので、ここで記録するのは `run` の失敗だけ。
+fn finish_after_run(
+    run: Result<()>,
+    fault: bool,
+    cleanup: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    if let Err(err) = &run {
+        tracing::error!(error = %err, "メッセージループが失敗で戻りました（後始末は続けます）");
+    }
+    let cleaned = cleanup();
+    run?;
+    cleaned?;
+    if fault {
+        return Err(windows::core::Error::from_hresult(
+            windows::Win32::Foundation::E_FAIL,
+        ));
+    }
     Ok(())
 }
 
@@ -772,3 +840,8 @@ mod persist_wiring_seam_tests;
 #[cfg(test)]
 #[path = "main_monitor_snapshot_seam_tests.rs"]
 mod monitor_snapshot_seam_tests;
+
+/// `finish_after_run`（task 4.1・要件 3.1・3.2・6.3）の単体テスト。
+#[cfg(test)]
+#[path = "main_finish_after_run_tests.rs"]
+mod finish_after_run_tests;

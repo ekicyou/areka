@@ -19,7 +19,8 @@
 //! `Unloading{Fault}`→`Stopped` の正規遷移で表現する・Req 6.4）。
 
 use crate::msg::{
-    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriCall, ShioriOutcome,
+    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriCall, ShioriFault,
+    ShioriOutcome,
 };
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
@@ -54,6 +55,7 @@ pub(crate) enum Input {
         reason: CloseReason,
     },
     ShioriDown {
+        kind: crate::msg::ShioriDownKind,
         reason: String,
     },
     /// マウス入力（移動／ダブルクリック）。Steady のみ `steady::on_mouse` へ委譲し、
@@ -293,12 +295,16 @@ pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
 }
 
 /// 終了系列の起因（ログ語彙・遷移は共通）。
+///
+/// `Clone` は停止通知が原因を控えるため（`actor::stop_cause_of`）。
+#[derive(Clone)]
 pub(crate) enum TermCause {
     Quit,
     Forced,
     CloseSilent,
     DeadlineExceeded,
-    Fault,
+    /// 失敗の種類と理由を運ぶ（停止通知へそのまま写す）。
+    Fault(ShioriFault),
 }
 
 /// 状態機械が返す副作用指示（シェルが実行する）。
@@ -353,9 +359,9 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
         Input::ForceQuit { reason } => force_quit(state, reason),
 
         // 死活報告（暫定 seam・DD-4）: error! 記録の上 Unloading{Fault} へ（Req 5.4）。
-        Input::ShioriDown { reason } => {
+        Input::ShioriDown { kind, reason } => {
             tracing::error!(target: "kanade", event = "shiori_down", reason = %reason, "SHIORI 死活報告を受領——終了系列（Fault）へ");
-            to_unloading_fault(state)
+            to_unloading_fault(state, ShioriFault::from_down(kind, reason))
         }
 
         // TalkDone: reason（3 値）・talk_id 突合を横断的に判定する（Req 2.5・4.3・6.2）。
@@ -527,9 +533,10 @@ fn to_unloading_quit(mut state: State, at: &'static str) -> (State, Vec<Action>)
 }
 
 /// 呼出失敗・死活報告の共通終端: Unloading{Fault}＋ShioriUnload（unload は best-effort）。
-fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
+/// `fault` は失敗の種類と理由（停止通知まで運ぶ）。
+fn to_unloading_fault(mut state: State, fault: ShioriFault) -> (State, Vec<Action>) {
     state.phase = Phase::Unloading {
-        cause: TermCause::Fault,
+        cause: TermCause::Fault(fault),
     };
     // close 系遷移の掃除点（C4 規則 7）。なお choice in-flight の `Failed` は本経路へ来ない
     // ——[`on_shiori_reply`] の先行アーム（DD-12）が steady へ委譲するためである。
@@ -651,7 +658,7 @@ fn on_shiori_reply(
         && awaits_reply(&state.phase)
     {
         tracing::error!(target: "kanade", event = "shiori_failed", error = %failure, "SHIORI 呼出失敗——終了系列（Fault）へ");
-        return to_unloading_fault(state);
+        return to_unloading_fault(state, ShioriFault::from_failure(failure));
     }
 
     // 応答待ちでない Phase への ShioriReply は構造上発生しない（防御アーム・Req 6.2）。

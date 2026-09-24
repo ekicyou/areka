@@ -1,0 +1,32 @@
+{
+  "feature_name": "areka-P0-shiori-fault-notice",
+  "created_at": "2026-09-24T10:17:17Z",
+  "updated_at": "2026-09-24T21:21:43Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-24T10:24:55Z",
+      "approved_at": "2026-09-24T11:14:31Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-24T11:14:31Z",
+      "approved_at": "2026-09-24T11:35:36Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-24T11:35:36Z",
+      "approved_at": "2026-09-24T11:35:36Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-24T21:21:43Z"
+    }
+  },
+  "ready_for_implementation": true
+}

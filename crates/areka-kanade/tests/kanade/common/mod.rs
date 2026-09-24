@@ -82,8 +82,8 @@ pub use fixture::{
 };
 pub use harness::{
     Harness, SinklessHarness, spawn_harness, spawn_harness_blocking, spawn_harness_failing,
-    spawn_harness_gated, spawn_harness_gated_failing, spawn_harness_no_sink,
-    spawn_harness_with_stop_sink,
+    spawn_harness_failing_with_stop_sink, spawn_harness_gated, spawn_harness_gated_failing,
+    spawn_harness_no_sink, spawn_harness_with_stop_sink,
 };
 pub use mock_sakura::{
     MockSakura, QuitPolicy, SakuraGate, spawn_mock_sakura, spawn_mock_sakura_gated,

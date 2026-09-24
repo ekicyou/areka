@@ -38,7 +38,9 @@
 //! real アクターは接続手順を呼び手の connect クロージャに委ね、アクタースレッド上で一度だけ
 //! 実行する（`ParentMessageWindow` が `!Send` のため spawn 前に実行できない）。接続確立に失敗
 //! した場合は [`KanadeMsg::ShioriDown`](crate::msg::KanadeMsg::ShioriDown) を `on_down` へ送って
-//! 死活報告とし、受信ループには入らず終了する。
+//! 死活報告とし、`on_down` を手放す。以後は受信ループに入らず、要求に同じ理由の接続の失敗
+//! （`ShioriFailure::Handshake`）で、`Unload` に `Unloaded` で答え、`Close` 受領か全 Sender
+//! drop で終わる（死活報告より先に届いた要求が「通信が切れた」に化けないように）。
 //!
 //! 接続確立成功後は、`on_down`（kanade inbox の送信端）を**受信ループの生存期間中保持する**
 //! （死活監視の届け先・Req 3.4）。メッセージ到達のたびに冒頭で

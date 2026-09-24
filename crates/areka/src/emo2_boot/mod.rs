@@ -62,6 +62,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender};
 
 use areka_emo_present::shell_target::ShellLoadError;
 use areka_emo_present::{EmoPresenter, PresentCommand};
@@ -85,7 +86,7 @@ use crate::placement::AuthorDpi;
 
 use self::adapter::PresentBridge;
 use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
-use self::frame::{Emo2Wiring, emo2_frame_system};
+use self::frame::{Emo2Wiring, KanadeStopRx, emo2_frame_system, ghost_quit_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::readme_cue::ReadmeCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
@@ -305,7 +306,9 @@ const _: fn() = || {
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. [`areka_ghost::boot`]（`surface_sink`＝[`SerikoSink`] を直渡し・`text_sink`＝`ClockedTextSink`・
 ///    `shiori`＝`Helper`・`ticker`＝`Real`）。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
-///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false` フォールバック。
+///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false` フォールバック。停止通知の送出端は
+///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
+///    作らない・受け口の据え付けは [`wire_kanade_stop`]）。
 /// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
 ///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入・
 ///    `add_systems(Update, emo2_frame_system)`（self-gating）。載せ方は**上流の
@@ -326,6 +329,7 @@ pub fn wire_emo2_boot(
     helper_exe: &Path,
     author_dpi: AuthorDpi,
     zorder_descript: Option<&str>,
+    kanade_stop: Sender<KanadeStopped>,
 ) -> Emo2BootOutcome {
     /// 実 sink 結線を成立させないフォールバック結果（`main` の `LogSink`×2 boot へ委ねる・R7.3）。
     fn fallback() -> Emo2BootOutcome {
@@ -528,14 +532,12 @@ pub fn wire_emo2_boot(
         app_profile_dir: Some(crate::default_app_profile_dir()),
         ticker: TickerMode::Real(Default::default()),
     };
-    // ── 停止通知の channel（R15.4・design D15 の 3） ──
-    // kanade スレッドが終了系列の完了時に送出端へ 1 件送り、UI スレッドの Emo2Wiring が受信端を
-    // 持って終了相で取り出す。`move`／`lifecycle`／`zorder` と同型の跨ぎだが、向きが逆（下流→UI）
-    // ではなく「終了の合図」1 種だけを運ぶ。これが在ることで、終了挨拶を再生し終えてから窓が
-    // 閉じる——無ければ操作が窓を直接閉じるほかなく、挨拶を素通りする（症状 C）。
-    let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel::<KanadeStopped>();
-    let ghost_runtime = match areka_ghost::boot_with_kanade_stop(boot_options, Some(kanade_stop_tx))
-    {
+    // ── 停止通知の送出端（R15.4・design D15 の 3） ──
+    // kanade スレッドが終了系列の完了時に送出端へ 1 件送り、UI スレッドの終了相が World の受け口
+    // （`wire_kanade_stop` が据える）から取り出す。channel は `main` が 1 本作り、ここは受け取った
+    // 送出端を渡すだけ。これが在ることで、終了挨拶を再生し終えてから窓が閉じる——無ければ操作が
+    // 窓を直接閉じるほかなく、挨拶を素通りする（症状 C）。
+    let ghost_runtime = match areka_ghost::boot_with_kanade_stop(boot_options, Some(kanade_stop)) {
         Ok(runtime) => runtime,
         Err(err) => {
             // R7.4: 既存 main と同一方針で分類（起点不在＝良性 warn・他＝error）。
@@ -579,9 +581,6 @@ pub fn wire_emo2_boot(
     // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
-    // 停止通知の受信端を据える（R15.4）。`insert_non_send` より前・最初の `Update` より前の
-    // 1 回だけであり、以後 UI は終了相でこの端を読む。据えなければ通知は誰にも届かず窓は閉じない。
-    wiring.set_kanade_stop(kanade_stop_rx);
     app.world().borrow_mut().world_mut().insert_non_send(wiring);
     // 相の登録先は `Update`——上流の `Update` 鎖（表示構成の検知 → モニタ表の更新 → 依存する
     // 部品の無効化 → 文字送りの更新）の**最後の系より後**という 1 点だけを指定する
@@ -642,6 +641,19 @@ pub fn wire_emo2_boot(
         wired: true,
         loop_ticker: Some(loop_ticker_stop),
     }
+}
+
+/// 停止通知の受け口を World に据え、終了相を `Update` に登録する（起動の 2 経路で共通・1 回だけ・
+/// 要件 6.4）。
+///
+/// `main` が起動の分岐の後・`run()` の前に 1 回呼ぶ。終了相は毎フレームの相より前に走る。
+/// LogSink 側の起動では毎フレームの相が登録されないが、順序の相手が居ないだけで登録は通る
+/// （`frame_schedule_tests` の 1 本がこの形を固定する）。
+pub fn wire_kanade_stop(app: &WinApp, rx: Receiver<KanadeStopped>) {
+    let world = app.world();
+    let mut world = world.borrow_mut();
+    world.world_mut().insert_non_send(KanadeStopRx(rx));
+    world.add_systems(Update, ghost_quit_system.before(emo2_frame_system));
 }
 
 #[cfg(test)]
@@ -709,6 +721,7 @@ mod wire_tests {
             helper,
             AuthorDpi::DEFAULT,
             None,
+            std::sync::mpsc::channel().0,
         );
 
         assert!(

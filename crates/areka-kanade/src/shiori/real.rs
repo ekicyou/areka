@@ -28,7 +28,7 @@ use shiori_host32_host::{
     Shiori3Client, ShutdownError,
 };
 
-use crate::msg::{KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
+use crate::msg::{KanadeMsg, ShioriCall, ShioriDownKind, ShioriFailure, ShioriMsg, ShioriOutcome};
 
 /// 接続済み SHIORI 一式（`!Send` 資材はスレッド内で connect が生成する）。
 ///
@@ -212,6 +212,7 @@ fn report_exit_once(
                 "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
             );
             let _ = on_down.send(KanadeMsg::ShioriDown {
+                kind: ShioriDownKind::HelperExited,
                 reason: format!("helper exited unexpectedly: {kind:?}"),
             });
         }
@@ -309,12 +310,37 @@ fn run_shiori_loop(
     }
 }
 
+/// 接続確立に失敗したあとの受け答え（接続が無いので backend は持たない）。
+///
+/// 死活報告（`ShioriDown`）より先に kanade が要求を送ることがある（起動の `Boot` が先に届く
+/// ときがそう）。受信端を捨てると、その要求は「通信が切れた」に化けて接続の失敗が消える。
+/// そこで要求には同じ理由の [`ShioriFailure::Handshake`]（＝「接続できなかった」）で答え、
+/// どちらが先に届いても停止通知の種類が変わらないようにする（要件 2.2・2.4）。
+/// `Unload` は何も読み込んでいないので `Unloaded` で答える。`Close` か全送信端の drop で終わる。
+fn answer_after_connect_failure(rx: Receiver<ShioriMsg>, reason: &str) {
+    while let Ok(msg) = rx.recv() {
+        match msg {
+            ShioriMsg::Request { reply, .. } => {
+                let _ = reply.send(ShioriOutcome::Failed(ShioriFailure::Handshake(
+                    reason.to_string(),
+                )));
+            }
+            ShioriMsg::Unload { reply } => {
+                let _ = reply.send(ShioriOutcome::Unloaded);
+            }
+            ShioriMsg::Close => return,
+        }
+    }
+}
+
 /// real shiori アクターを起動する（areka-actor 規約: スレッド名 "shiori"）。
 ///
 /// `connect` はアクタースレッド上で**一度だけ**実行される（[`ParentMessageWindow`] が `!Send`
 /// のため spawn 前に実行できない）。接続確立に失敗した場合
 /// （`connect` が `Err(reason)`）は [`KanadeMsg::ShioriDown`] を `on_down` へ送って死活報告と
-/// し、受信ループには入らず終了する（Req 5.3/6.1）。
+/// し、`on_down` を手放したうえで、以後の要求に同じ理由の接続の失敗
+/// （[`ShioriFailure::Handshake`]）で答える。`Close` 受領か全送信端の drop で終わる
+/// （Req 5.3/6.1・要件 2.2・2.4）。
 ///
 /// `on_down`（kanade inbox の送信端）は接続確立成功後も**受信ループの生存期間中保持する**
 /// （死活監視の届け先・Req 3.4）。この保持は kanade→shiori→on_down の Sender 環を作るが、
@@ -341,11 +367,15 @@ pub fn spawn_shiori_actor(
                     target: "shiori-actor",
                     event = "connect_failed",
                     reason = %reason,
-                    "SHIORI 接続確立に失敗——死活報告（ShioriDown）し受信ループに入らず終了"
+                    "SHIORI 接続確立に失敗——死活報告（ShioriDown）し、以後の要求には接続の失敗で答える"
                 );
-                // 死活報告後、on_down はスコープ終了で drop される（保持しない）。
-                let _ = on_down.send(KanadeMsg::ShioriDown { reason });
-                // 受信ループには入らず終了（rx はここで drop→残る Sender の送信は Err で観測される）。
+                let _ = on_down.send(KanadeMsg::ShioriDown {
+                    kind: ShioriDownKind::ConnectFailed,
+                    reason: reason.clone(),
+                });
+                // 死活報告後、on_down は保持しない（Sender 環を作らない）。
+                drop(on_down);
+                answer_after_connect_failure(rx, &reason);
             }
         }
     })

@@ -15,8 +15,9 @@ use super::{
 /// 解決まで到達する（Req4.5・DD-12・C4 規則 8）。終了は後から駆動した close によってのみ起きる。
 ///
 /// # 駆動（決定的・sleep なし）
-/// 失敗注入 mock（`FailOn{ id: "OnChoiceSelectEx", kind: Shiori }`）が **最初の** Ex GET だけを落とし、
-/// 以降は良性応答表へ戻る。選択待ち窓は保留 sakura で維持する（`spawn_harness_gated_failing`）。
+/// 失敗注入 mock（`FailOn{ id: "OnChoiceSelectEx", kind: Ipc }`）が **最初の** Ex GET だけを落とし、
+/// 以降は良性応答表へ戻る。落とすのは通信の失敗で、エラー応答ではない——エラー応答は送出点で
+/// 返事なしに写されるので、ここで見たい「選択肢の往復中の失敗は 204 扱い」の分岐を踏まない。選択待ち窓は保留 sakura で維持する（`spawn_harness_gated_failing`）。
 /// 選択処理の後に `CloseRequest` を積み、保留解放で `TalkDone{Ended}` を着弾させて close 握手を走らせる。
 ///
 /// # 非空虚性・discriminative 性（DD-12 先行アームが無ければ全て落ちる）
@@ -38,7 +39,7 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
         vec![0],
         FailOn {
             id: "OnChoiceSelectEx",
-            kind: FailKind::Shiori,
+            kind: FailKind::Ipc,
         },
     );
 
@@ -124,7 +125,8 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
 ///
 /// # 駆動（決定的・sleep なし）
 /// active talk 窓（id=1・保留）で `ChoiceWaiting` を確立し（帳簿は `Waiting`）、その窓でマウス
-/// ダブルクリックを注入する。失敗注入 mock がその GET を落とし、横断アームが `Unloading{Fault}`→
+/// ダブルクリックを注入する。失敗注入 mock がその GET を通信の失敗で落とし（エラー応答は送出点で
+/// 返事なしに写されて Fault へ倒れないので使わない）、横断アームが `Unloading{Fault}`→
 /// best-effort Unload→Stopped→StopSelf を駆動する。
 ///
 /// # 非空虚性・discriminative 性
@@ -146,7 +148,7 @@ fn non_choice_failure_during_choice_wait_still_faults() {
         vec![0],
         FailOn {
             id: "OnMouseDoubleClick",
-            kind: FailKind::Shiori,
+            kind: FailKind::Ipc,
         },
     );
 

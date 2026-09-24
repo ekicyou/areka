@@ -76,7 +76,8 @@ const REQUEST_ERROR_RESPONSE: &[u8] = b"SHIORI/3.0 500 Internal Server Error\r\n
 /// `SendMessageTimeoutW` の戻り 0 には由来が 2 つある——**本当の送出失敗**（宛先の窓が既に無い等・
 /// last error が非 0）と、**「応答なし」判定による打ち切り**（戻り 0 かつ last error 0・待たずに
 /// 即座に返る）である。前者と後者は `IpcError::SendFailed` に潰れて見分けが付かないため、生の
-/// last error を必ず一緒に残す。応答方向からハング打ち切りの旗を外した後に last error 0 の失敗が
+/// last error を必ず一緒に残す（もう 1 つの由来である期限切れ＝last error 1460 は
+/// `IpcError::Timeout` として別に届く・areka-P0-shiori-fault-notice 7.1）。応答方向からハング打ち切りの旗を外した後に last error 0 の失敗が
 /// 再発したら、旗以外の原因を疑う手がかりになる（log-first・silent swallow 禁止）。
 fn log_response_send_failure(what: &str, e: &IpcError) {
     // SAFETY: Win32 境界。直前の送出呼び出しが残したスレッド局所のエラー値を読むだけ。

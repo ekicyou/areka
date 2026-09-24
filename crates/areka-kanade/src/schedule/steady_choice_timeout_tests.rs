@@ -640,6 +640,7 @@ fn shiori_down_clears_choice_ledger() {
     let (next, actions) = step(
         s,
         Input::ShioriDown {
+            kind: crate::msg::ShioriDownKind::HelperExited,
             reason: "helper crashed".to_string(),
         },
         &config(),
@@ -647,7 +648,7 @@ fn shiori_down_clears_choice_ledger() {
     assert!(matches!(
         next.phase,
         Phase::Unloading {
-            cause: TermCause::Fault
+            cause: TermCause::Fault(_)
         }
     ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
@@ -771,7 +772,7 @@ fn non_choice_failed_still_falls_into_unloading_fault() {
     assert!(matches!(
         next.phase,
         Phase::Unloading {
-            cause: TermCause::Fault
+            cause: TermCause::Fault(_)
         }
     ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
@@ -788,7 +789,7 @@ fn non_choice_failed_still_falls_into_unloading_fault() {
         matches!(
             next.phase,
             Phase::Unloading {
-                cause: TermCause::Fault
+                cause: TermCause::Fault(_)
             }
         ),
         "選択待ち中の pump 失敗は免除対象ではない（規則 8 の条件は in-flight のみ）"

@@ -134,10 +134,15 @@ const ALLOWED_GLOBAL_CAPTURE: &[(&str, &str)] = &[
         "crates/areka-seriko/tests/loop_integration.rs",
         "同上（seriko のループがアクタースレッドで回るため全スレッド捕捉が要る）",
     ),
+    (
+        "crates/areka-kanade/tests/kanade/failure_test.rs",
+        "同上（エラー応答の記録 shiori_error_response は kanade のアクタースレッドで出るため\
+         全スレッド捕捉が要る）",
+    ),
 ];
 
 /// [`ALLOWED_GLOBAL_CAPTURE`] の件数（逐語）。
-const ALLOWED_GLOBAL_CAPTURE_COUNT: usize = 2;
+const ALLOWED_GLOBAL_CAPTURE_COUNT: usize = 3;
 
 // ---------------------------------------------------------------------------
 // 走査（⑴⑵）

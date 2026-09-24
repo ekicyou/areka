@@ -54,7 +54,7 @@ impl CloseReason {
 /// 写し**である。内部型をそのまま公開すると運行状態機械の内部（`Phase`／`Action`／`step`）まで
 /// 公開面へ引きずり出されるため（DD-9 の露出規律）、5 値だけを持つ独立の enum を置く。
 /// 値の対応は 1 対 1 で、写す点は [`crate::actor`] の停止通知だけである。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KanadeStopCause {
     /// 終了挨拶が終了指令（`\-`）で終わった正規の終了。
     Quit,
@@ -64,8 +64,8 @@ pub enum KanadeStopCause {
     CloseSilent,
     /// 終了挨拶の再生完了待ちが期限を超えた。
     DeadlineExceeded,
-    /// SHIORI 呼出失敗・死活異常による終了。
-    Fault,
+    /// SHIORI 呼出失敗・死活異常による終了（失敗の種類と理由を運ぶ）。
+    Fault(ShioriFault),
 }
 
 /// kanade の終了系列が完了したことの UI への通知（R15.3・D15 の 2）。
@@ -73,7 +73,7 @@ pub enum KanadeStopCause {
 /// `Action::StopSelf` の実行点（[`crate::actor`]）から**非ブロッキングに 1 度だけ**送る。
 /// 受け手（UI スレッドの毎フレーム結線）はこれを合図に全ゴースト窓を閉じる。原因を問わず
 /// 送る——終了挨拶を終えた正規終了も、期限超過も、強制終了も、窓を閉じる点では同じ扱いである。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KanadeStopped {
     /// 終了系列の起因（記録の語彙・受け手は分岐しない）。
     pub cause: KanadeStopCause,
@@ -164,7 +164,11 @@ pub enum KanadeMsg {
     /// 強制終了指示（OS シャットダウン・デバッグ）。quit ゲートを迂回し終了系列へ直行。
     ForceQuit { reason: CloseReason },
     /// SHIORI 死活の暫定 seam（DD-4・lifecycle 正本確定時に実型へ差し替え）。
-    ShioriDown { reason: String },
+    /// 種類は型で運ぶ（理由の綴りで判別しない）。
+    ShioriDown {
+        kind: ShioriDownKind,
+        reason: String,
+    },
     /// マウス入力（移動／ダブルクリック）。Steady でのみ受理され、他フェーズでは安全に
     /// 無視される（横断ルーティングは schedule 層・DD-IE-8）。additive 増分（Req 4.4）。
     Mouse(MouseInput),
@@ -321,6 +325,78 @@ pub enum ShioriFailure {
     /// kanade 内部規律違反（境界写像では生成されない・kanade 内部でのみ構成・DD-IT-11）。
     #[error("kanade internal violation: {0}")]
     Internal(String),
+}
+
+/// SHIORI が動かなくなったときの失敗の種類（5 値・記録の語彙）。
+///
+/// 利用者へ見せる平易な文面は持たない（文面は areka 側の告知が決める）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShioriFaultKind {
+    /// 接続できなかった。
+    ConnectFailed,
+    /// 応答が期限内に返らなかった。
+    Timeout,
+    /// 通信が切れた。
+    Disconnected,
+    /// areka 側の内部の失敗。
+    Internal,
+    /// 原因不明（停止の原因を控えられなかった）。
+    Unknown,
+}
+
+/// 失敗の種類と理由の一行（値オブジェクト）。
+///
+/// `reason` は対応する `error!` の記録と同じ文言（呼出失敗は `Display`、死活報告は理由そのもの）。
+/// 種類への写しはこの型の関連関数だけが持つ。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShioriFault {
+    pub kind: ShioriFaultKind,
+    pub reason: String,
+}
+
+/// 死活報告の種類（2 値・理由の綴りで判別しないための型）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShioriDownKind {
+    /// helper へ接続できなかった。
+    ConnectFailed,
+    /// helper が終了した。
+    HelperExited,
+}
+
+impl ShioriFault {
+    /// 呼出失敗から種類と理由へ写す（wildcard なし）。
+    pub fn from_failure(failure: &ShioriFailure) -> ShioriFault {
+        let kind = match failure {
+            ShioriFailure::Handshake(_) => ShioriFaultKind::ConnectFailed,
+            ShioriFailure::Timeout(_) => ShioriFaultKind::Timeout,
+            ShioriFailure::Ipc(_) => ShioriFaultKind::Disconnected,
+            // エラー応答は送出点で「返事なし」へ写すので、ここへは届かない契約。
+            // 届いたら契約が破れているので、内部の失敗として記録に残す。
+            ShioriFailure::Shiori(_) => ShioriFaultKind::Internal,
+            ShioriFailure::Internal(_) => ShioriFaultKind::Internal,
+        };
+        ShioriFault {
+            kind,
+            reason: failure.to_string(),
+        }
+    }
+
+    /// 死活報告から種類と理由へ写す（理由はそのまま運ぶ）。
+    pub fn from_down(kind: ShioriDownKind, reason: String) -> ShioriFault {
+        let kind = match kind {
+            ShioriDownKind::ConnectFailed => ShioriFaultKind::ConnectFailed,
+            ShioriDownKind::HelperExited => ShioriFaultKind::Disconnected,
+        };
+        ShioriFault { kind, reason }
+    }
+
+    /// 停止の原因を控えられなかったときの値。
+    pub fn unknown() -> ShioriFault {
+        ShioriFault {
+            kind: ShioriFaultKind::Unknown,
+            reason: "stop cause unknown".to_string(),
+        }
+    }
 }
 
 /// 運行構成（結線側が供給。既定値は [`KanadeConfig::new`] で提供）。
@@ -496,7 +572,7 @@ mod tests {
                 KanadeMsg::TalkDone(_) => "TalkDone",
                 KanadeMsg::CloseRequest { reason: _ } => "CloseRequest",
                 KanadeMsg::ForceQuit { reason: _ } => "ForceQuit",
-                KanadeMsg::ShioriDown { reason: _ } => "ShioriDown",
+                KanadeMsg::ShioriDown { kind: _, reason: _ } => "ShioriDown",
                 KanadeMsg::Mouse(_) => "Mouse",
                 KanadeMsg::Close => "Close",
                 // 新 2 variant（Task 1.3）。
@@ -525,6 +601,7 @@ mod tests {
                 reason: CloseReason::System,
             },
             KanadeMsg::ShioriDown {
+                kind: ShioriDownKind::HelperExited,
                 reason: "pipe closed".to_string(),
             },
             KanadeMsg::Mouse(MouseInput {
@@ -769,3 +846,7 @@ mod tests {
         };
     }
 }
+
+#[cfg(test)]
+#[path = "msg_fault_tests.rs"]
+mod fault_tests;
