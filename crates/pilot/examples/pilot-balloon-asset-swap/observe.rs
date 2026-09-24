@@ -16,7 +16,7 @@ use windows::Win32::System::Performance::QueryPerformanceCounter;
 use windows::Win32::UI::WindowsAndMessaging::{
     GW_HWNDPREV, GetClassNameW, GetWindow, GetWindowRect, GetWindowTextW, IsWindowVisible,
 };
-use wintf::ecs::{DPI, FrameCount, PointF, WindowHandle, hit_test_in_window};
+use wintf::ecs::{DPI, FrameCount, PointF, WindowHandle, WindowPos, hit_test_in_window};
 
 /// 共通範囲を切る格子の升数（縦横とも・実装 2.2 で 8 から 16 へ改訂＝design §Observer）。
 const GRID: u32 = 16;
@@ -152,6 +152,8 @@ pub enum End {
     Done,
     /// 180 tick で揃わなかった。最後に数えたフレームの（絵, 当たり判定, 矩形）。
     Incomplete(Option<(Class, Class, RECT)>),
+    /// 差し替えそのものが失敗した（数えずに閉じた・理由つき）。
+    Unmeasurable(&'static str),
 }
 
 /// 1 本の観測。
@@ -439,7 +441,7 @@ pub fn classify_hit(
     )
 }
 
-fn rect_size(r: &RECT) -> (u32, u32) {
+pub fn rect_size(r: &RECT) -> (u32, u32) {
     (
         (r.right - r.left).max(0) as u32,
         (r.bottom - r.top).max(0) as u32,
@@ -465,7 +467,7 @@ pub struct Shared {
 /// 判別対の名前（行の `pair=`・P／Q の読み替え用）。
 pub const PAIR_NAMES: [&str; 2] = ["(A0,B0)", "(A0,A2)"];
 
-fn lock(m: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
+pub fn lock(m: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
     m.lock().unwrap_or_else(|p| {
         error!("共有の記録を持ったまま別のスレッドが panic した — 記録はそのまま使う");
         p.into_inner()
@@ -517,12 +519,15 @@ pub fn tick_record_system(world: &mut World) {
         error!(tick, error = %e, "QueryPerformanceCounter が失敗 — この tick を記録しない");
         return;
     }
-    let mut rect = RECT::default();
+    let mut actual = RECT::default();
     // SAFETY: WindowHandle が付いている間の窓の HWND。
-    if let Err(e) = unsafe { GetWindowRect(hwnd, &mut rect) } {
+    if let Err(e) = unsafe { GetWindowRect(hwnd, &mut actual) } {
         error!(tick, error = %e, "GetWindowRect が失敗 — この tick を記録しない");
         return;
     }
+    // この tick と組になるフレームが映すのは、この tick の後の flush を済ませた窓（下の QueuedRect）。
+    let queued = world.get_resource::<QueuedRect>().and_then(|q| q.0);
+    let rect = effective_rect(queued, tick, actual);
     let dpi = world.get::<DPI>(obs.window).copied();
     let k_ok = dpi.is_some_and(|d| d.dpi_x == 96 && d.dpi_y == 96);
     let (hit, h_p, h_q, h_both, slot_hit) = classify_hit(world, obs.window, &obs.sigs[obs.active]);
@@ -543,6 +548,23 @@ pub fn tick_record_system(world: &mut World) {
 
     let mut shared = lock(&obs.shared);
     let last = shared.ticks.last().copied();
+    // 前の tick に記録した（予測した）矩形は、その tick の flush の後＝今の実際の矩形のはず。
+    if last.is_some_and(|l| l.rect != actual) {
+        error!(
+            tick,
+            predicted = ?last.map(|l| l.rect),
+            ?actual,
+            "前の tick の矩形の予測が実際と違う — その tick のフレームの切り出し・大きさの判定が狂っている"
+        );
+    }
+    if rect != actual {
+        debug!(
+            tick,
+            ?actual,
+            ?rect,
+            "この tick に積まれた窓の移動を矩形に先取りした"
+        );
+    }
     if last.is_none_or(|l| l.k_ok != k_ok) {
         info!(tick, k_ok, ?dpi, "拡大率（k_ok=false の tick は測れない）");
     }
@@ -576,6 +598,54 @@ pub fn tick_record_system(world: &mut World) {
             ?rect,
             "tick の記録（60 件ごと）"
         );
+    }
+}
+
+/// この tick に積まれた窓の移動（tick 番号・移動後の窓の矩形）。
+///
+/// wintf は tick の中では `SetWindowPos` を積むだけで（`apply_window_pos_changes`・UISetup）、実際の
+/// 移動は tick の後の `flush_window_pos_commands` で起きる。`FrameFinalize` の `GetWindowRect` は
+/// まだ前の寸を返すが、この tick と組になるフレームは flush の後に出るので、移動後の寸を映す。
+/// そこで UISetup の `apply_window_pos_changes` の後に、積まれた `WindowPos` を同じ変換で写しておく。
+/// `FrameFinalize` で書いた `WindowPos` は次の tick の UISetup で積まれるので、自然に次の tick に付く。
+#[derive(Resource, Default)]
+pub struct QueuedRect(pub Option<(u32, RECT)>);
+
+/// UISetup で `apply_window_pos_changes` の後に置く（同じ `Changed<WindowPos>` を見る）。
+pub fn queued_rect_system(
+    obs: Res<Observer>,
+    frame: Res<FrameCount>,
+    windows: Query<(&WindowHandle, Ref<WindowPos>)>,
+    mut queued: ResMut<QueuedRect>,
+) {
+    let Ok((handle, wp)) = windows.get(obs.window) else {
+        return;
+    };
+    if !wp.is_changed() {
+        return;
+    }
+    // apply_window_pos_changes と同じ変換（失敗時は元の値で積むのも同じ）。
+    let (x, y, w, h) = wp.to_window_coords(handle).unwrap_or_else(|e| {
+        error!(error = %e, "窓の座標の変換に失敗 — wintf と同じく元の値で予測する");
+        let p = wp.position.unwrap_or_default();
+        let s = wp.size.unwrap_or_default();
+        (p.x, p.y, s.width, s.height)
+    });
+    let rect = RECT {
+        left: x,
+        top: y,
+        right: x + w,
+        bottom: y + h,
+    };
+    trace!(tick = frame.0, ?rect, "この tick に積まれた窓の移動");
+    queued.0 = Some((frame.0, rect));
+}
+
+/// tick の記録に書く矩形: この tick に移動が積まれていればその移動後、無ければ今の実際の矩形。
+pub fn effective_rect(queued: Option<(u32, RECT)>, tick: u32, actual: RECT) -> RECT {
+    match queued {
+        Some((t, r)) if t == tick => r,
+        _ => actual,
     }
 }
 
@@ -692,6 +762,7 @@ pub fn judge_frame(obs: &mut Observation, frame: &FrameRecord, tick: &TickRecord
     };
     if native.is_some_and(|s| s != rect_size(&tick.rect)) {
         obs.counts.size += 1;
+        debug!(name = %obs.name, idx, ?pic, ?hit, tick = tick.tick, rect = ?rect_size(&tick.rect), ?native, dt, "大きさの食い違い");
     }
 }
 
@@ -848,6 +919,18 @@ impl Observer {
         self.active = pair;
         self.open = Some(Open::new(obs, &lock(&self.shared)));
         info!(name, pair = PAIR_NAMES[pair], request_tick, "観測を開いた");
+    }
+
+    /// 差し替えの失敗: 開いている観測を数えずに「測れない」で閉じる（design §Error Handling）。
+    pub fn abort(&mut self, why: &'static str) {
+        let Some(o) = self.open.take() else {
+            error!(why, "閉じる観測が開いていない");
+            return;
+        };
+        let mut obs = o.obs;
+        obs.end = Some(End::Unmeasurable(why));
+        info!("観測: {}", row(&obs));
+        self.done.push(obs);
     }
 
     pub fn is_closed(&self) -> bool {
@@ -1033,6 +1116,7 @@ pub fn row(o: &Observation) -> String {
         None => "途中".to_string(),
         Some(End::Done) => "完了".to_string(),
         Some(End::Incomplete(None)) => "未完（フレーム無し）".to_string(),
+        Some(End::Unmeasurable(why)) => format!("測れない（{why}）"),
         Some(End::Incomplete(Some((p, h, r)))) => {
             let (w, hh) = rect_size(&r);
             format!(
@@ -1570,6 +1654,20 @@ mod tests {
     }
 
     /// 当たり判定の閾値の境（0.9 と 0.1 は含む）。
+    #[test]
+    fn tick_rect_takes_the_move_queued_in_the_same_tick_only() {
+        let r = |w| RECT {
+            left: 160,
+            top: 160,
+            right: 160 + w,
+            bottom: 365,
+        };
+        let actual = r(335);
+        assert_eq!(effective_rect(Some((7, r(400))), 7, actual), r(400));
+        assert_eq!(effective_rect(Some((6, r(400))), 7, actual), actual);
+        assert_eq!(effective_rect(None, 7, actual), actual);
+    }
+
     #[test]
     fn hit_rule_thresholds_are_inclusive() {
         let nan = f32::NAN;

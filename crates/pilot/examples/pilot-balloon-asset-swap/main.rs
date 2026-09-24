@@ -14,6 +14,7 @@
 
 mod capture;
 mod observe;
+mod swap;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -32,15 +33,13 @@ use wintf::WinApp;
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::{
-    FrameCount, FrameFinalize, GraphicsCore, Point, SizeI, Update, Window, WindowHandle, WindowPos,
-    WindowStyle, WucGraphicsResource,
+    FrameCount, FrameFinalize, Point, SizeI, UISetup, Update, Window, WindowHandle, WindowPos,
+    WindowStyle, apply_window_pos_changes,
 };
 
 use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
-use areka_emo_present::{
-    DEFAULT_AUTHOR_DPI, EmoPresenter, PresentCommand, TargetId, build_balloon_target,
-};
+use areka_emo_present::build_balloon_target;
 use sample_ghost_kit::SampleRoot;
 
 /// 上限時間の環境変数（本体 `areka` の smoke と同じ名前）。
@@ -49,15 +48,12 @@ const EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 const DEFAULT_EXIT_MS: u64 = 90_000;
 /// 窓の固定位置（物理 px・スクリーン座標）。
 const WINDOW_POS: Point = Point { x: 160, y: 160 };
-/// バルーン窓の表示先 id（手本と同じ 1）。
-const BALLOON_TARGET: TargetId = TargetId(1);
 
 // ---------------------------------------------------------------------------
 // 終了の理由と終了コード（design §Runner・Key Decision 7）
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // Completed／CalibrationFailed は 3.1 の台本の終わり（completed_reason）で使う
 enum ExitReason {
     Completed,
     CalibrationFailed,
@@ -74,8 +70,7 @@ fn exit_code(reason: ExitReason) -> i32 {
     }
 }
 
-/// 台本を終えたときの終了の理由（較正不合格なら 3）。3.1 の台本の終わりが使う。
-#[allow(dead_code)]
+/// 台本を終えたときの終了の理由（較正不合格なら 3）。台本の終わり（`swap::Step::Done`）が使う。
 fn completed_reason(verdict: &observe::Verdict) -> ExitReason {
     match verdict {
         observe::Verdict::Passed => ExitReason::Completed,
@@ -99,7 +94,6 @@ fn exit_ms_from_env() -> u64 {
 // ---------------------------------------------------------------------------
 
 /// 検体 2 つの資産と、判別に使う面の合成結果（premultiplied BGRA・原寸）。
-#[allow(dead_code)] // b・face_* は 2.x・3.x の観測と差し替えで使う
 struct Assets {
     /// StayseeBalloon
     a: (EmoWorld, AtlasTable),
@@ -189,19 +183,6 @@ struct Run {
     exit: Option<ExitReason>,
 }
 
-/// presenter と資産（NonSend・UI スレッドだけが触る）。
-struct Stage {
-    presenter: EmoPresenter,
-    #[allow(dead_code)] // 2.x・3.x で使う
-    assets: Assets,
-    /// 最初の表示に渡す StayseeBalloon の資産（`attach_target` が move で消費する）。
-    ///
-    /// `EmoWorld` は `Clone` でない（design の想定と違う）ので `assets.a` を複製できず、
-    /// 起動時にもう 1 組を構築して持つ。`None` ＝表示済み。
-    first: Option<(EmoWorld, AtlasTable)>,
-    window: Entity,
-}
-
 // ---------------------------------------------------------------------------
 // Systems
 // ---------------------------------------------------------------------------
@@ -217,69 +198,6 @@ fn register_click_through(
     for (entity, wh) in new_windows.iter() {
         handle.register(entity, wh.hwnd);
         tracing::debug!(?entity, hwnd = ?wh.hwnd, "クリック透過機構へ窓を登録");
-    }
-}
-
-/// 最初の表示（仮置き・3.1 で台本の起動の段へ移す）。
-///
-/// GPU 資源が揃ってから StayseeBalloon の面 0 を表示し、窓寸を絵に合わせる。
-fn first_show_system(world: &mut World) {
-    match world.get_non_send::<Stage>() {
-        Some(s) if s.first.is_some() => {}
-        _ => return,
-    }
-    let ready = world.get_resource::<GraphicsCore>().is_some()
-        && world
-            .get_resource::<WucGraphicsResource>()
-            .is_some_and(|r| r.is_valid());
-    if !ready {
-        return;
-    }
-    let mut stage = world.remove_non_send::<Stage>().expect("直上で確認済み");
-    let (emo_world, atlas) = stage.first.take().expect("直上で確認済み");
-    match stage.presenter.attach_target(
-        world,
-        BALLOON_TARGET,
-        stage.window,
-        emo_world,
-        atlas,
-        DEFAULT_AUTHOR_DPI,
-    ) {
-        Ok(()) => {
-            stage.presenter.apply(
-                world,
-                PresentCommand::ShowSurface {
-                    target: BALLOON_TARGET,
-                    surface_id: 0,
-                    binds: BindSet::default(),
-                    pattern: PatternState::default(),
-                    reply: None,
-                },
-            );
-            fit_window(&mut stage, world);
-            tracing::info!("StayseeBalloon の面 0 を表示");
-        }
-        Err(e) => tracing::error!(error = %e, "StayseeBalloon の装着に失敗"),
-    }
-    world.insert_non_send(stage);
-}
-
-/// `take_pending_resize` → `WindowPos` で窓寸を絵に合わせる（位置は固定のまま）。
-fn fit_window(stage: &mut Stage, world: &mut World) {
-    let Some((w, h)) = stage.presenter.take_pending_resize(BALLOON_TARGET) else {
-        return;
-    };
-    let size = SizeI {
-        width: w as i32,
-        height: h as i32,
-    };
-    let Some(mut wp) = world.get_mut::<WindowPos>(stage.window) else {
-        tracing::error!(window = ?stage.window, "窓に WindowPos が無い — 窓寸を合わせられない");
-        return;
-    };
-    if wp.size != Some(size) {
-        wp.size = Some(size);
-        tracing::debug!(w, h, "窓寸を絵に合わせた");
     }
 }
 
@@ -311,32 +229,6 @@ fn deadline_system(
             tracing::debug!(hwnd = ?wh.hwnd, visible, got, ?rect, "消す直前の窓");
         }
         commands.entity(e).despawn();
-    }
-}
-
-/// 使い捨ての仮の観測（2.4 の完了の確かめ）: 最初の表示から 30 tick 後に、静止の観測を 1 本開く。
-/// 3.1 で台本の呼び出し（`Observer::open`）に置き換え、この system ごと消す。
-fn temp_observation_system(
-    stage: Option<NonSend<Stage>>,
-    frame: Res<FrameCount>,
-    mut observer: ResMut<observe::Observer>,
-    mut shown_at: Local<Option<u32>>,
-    mut opened: Local<bool>,
-) {
-    if *opened || stage.is_none_or(|s| s.first.is_some()) {
-        return;
-    }
-    let now = frame.0;
-    if now >= *shown_at.get_or_insert(now) + 30 {
-        *opened = true;
-        observer.open(
-            observe::PAIR_ASSET,
-            observe::Kind::Calib(observe::Calib::Static),
-            "temp-static A0→A0",
-            observe::Class::P,
-            observe::Class::P,
-            now,
-        );
     }
 }
 
@@ -376,18 +268,45 @@ fn boot_and_run() -> Result<ExitReason, String> {
         .map_err(|e| format!("検体 emo2 の同梱バルーン: {e}"))?;
     let decoder = WicDecoderArm::new().map_err(|e| format!("WicDecoderArm の生成に失敗: {e:?}"))?;
     let assets = build_assets(&decoder, staysee.folder(), kakukaku_dir)?;
-    let first = build_balloon_target(staysee.folder(), &decoder, 0)
-        .map_err(|e| format!("StayseeBalloon の資産（最初の表示用）の構築に失敗: {e}"))?;
     let sigs: Arc<[observe::Signature; 2]> = Arc::new([
         signature("(A0,B0)", &assets.face_a0, &assets.face_b0)?,
         signature("(A0,A2)", &assets.face_a0, &assets.face_a2)?,
     ]);
     let shared = Arc::new(Mutex::new(observe::Shared::default()));
+    let size = |f: &ComposedSurface| (f.width(), f.height());
+    let sizes = [
+        size(&assets.face_a0),
+        size(&assets.face_a2),
+        size(&assets.face_b0),
+    ];
+    let (aw, ah) = sizes[0];
+
+    // 台本が装着に使う資産を作り置く（`EmoWorld` は `Clone` でない・差し替えの tick で復号しない）。
+    let steps = swap::script();
+    let (need_a, need_b) = swap::needs(&steps);
+    let Assets { a, b, .. } = assets;
+    let pool = |first: (EmoWorld, AtlasTable), need: usize, name: &str, dir: &Path| {
+        let mut v = vec![first];
+        while v.len() < need {
+            v.push(
+                build_balloon_target(dir, &decoder, 0)
+                    .map_err(|e| format!("{name} の資産（作り置き）の構築に失敗: {e}"))?,
+            );
+        }
+        Ok::<_, String>(v)
+    };
+    let pool_a = pool(a, need_a, "StayseeBalloon", staysee.folder())?;
+    let pool_b = pool(b, need_b, "emo2-kakukaku", kakukaku_dir)?;
+    tracing::info!(
+        steps = steps.len(),
+        a = pool_a.len(),
+        b = pool_b.len(),
+        "台本と作り置きの資産"
+    );
 
     let world = app.world();
     {
         let mut w = world.borrow_mut();
-        let (aw, ah) = (assets.face_a0.width(), assets.face_a0.height());
         let window = w
             .world_mut()
             .spawn((
@@ -422,12 +341,8 @@ fn boot_and_run() -> Result<ExitReason, String> {
             limit_ms,
             "バルーン窓を生成"
         );
-        w.world_mut().insert_non_send(Stage {
-            presenter: EmoPresenter::new(),
-            assets,
-            first: Some(first),
-            window,
-        });
+        w.world_mut()
+            .insert_non_send(swap::Driver::new(window, steps, pool_a, pool_b, sizes));
         w.world_mut().insert_resource(Run {
             deadline: Instant::now() + Duration::from_millis(limit_ms),
             limit_ms,
@@ -435,18 +350,27 @@ fn boot_and_run() -> Result<ExitReason, String> {
         });
         w.world_mut()
             .insert_resource(observe::Observer::new(window, sigs.clone(), shared.clone()));
-        w.add_systems(Update, (first_show_system, temp_observation_system).chain());
+        // この tick に積まれた窓の移動を tick の記録の矩形へ先取りする（observe::QueuedRect）。
+        w.world_mut()
+            .insert_resource(observe::QueuedRect::default());
+        w.add_systems(
+            UISetup,
+            observe::queued_rect_system.after(apply_window_pos_changes),
+        );
+        // 台本の system は 2 段に登録し、段は閉じ込める（design Key Decision 2）。
+        w.add_systems(Update, swap::swap_system_for(swap::Stage::Update));
         w.add_systems(
             FrameFinalize,
             (
                 register_click_through,
                 deadline_system,
+                // 反映の後の差し替えは tick の記録より前。
+                swap::swap_system_for(swap::Stage::FrameFinalize),
                 // tick の最後（窓を消した tick は記録しない）→ 届いたフレームを観測に数える。
-                (observe::tick_record_system, observe::observe_system)
-                    .chain()
-                    .after(register_click_through)
-                    .after(deadline_system),
-            ),
+                observe::tick_record_system,
+                observe::observe_system,
+            )
+                .chain(),
         );
     }
 
