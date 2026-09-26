@@ -22,6 +22,7 @@
 //! 一切依存しない（DD-1）。
 
 pub mod actor;
+pub mod change;
 // 殻で答える複数件のリソース照会（`KanadeMsg::ResourceQuery`）。`actor.rs` を薄く保つための分室。
 mod actor_resources;
 pub mod msg;
@@ -35,6 +36,10 @@ pub mod status;
 pub mod talk;
 
 pub use actor::{spawn_kanade, spawn_kanade_with_stop_sink};
+pub use change::{
+    BootOrigin, CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget,
+    ChangedFrom, KanadeNotice, ShioriMethod,
+};
 pub use msg::{
     ChoiceInput, CloseReason, EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped,
     MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,

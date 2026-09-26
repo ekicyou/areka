@@ -19,6 +19,7 @@
 //! 完了を [`ShioriOutcome::Notified`] として表す——ここに `Value` を運ぶ経路が
 //! 存在しないため、NOTIFY 応答から talk を生成できないことが構造的に保証される。
 
+use crate::change::BootOrigin;
 use crate::schedule::resources::ResourceOutcome;
 use crate::status::ExecutionStatus;
 use crate::talk::EpilogueCommand;
@@ -421,6 +422,10 @@ pub struct KanadeConfig {
     /// バリアの `timeout_directive_secs` が `None`（未指定）のときに委譲される単一の既定値。
     /// 正典（ukadoc）は数値を規定していないため areka 裁量で定め、対応表へ記録する（裁定 5）。
     pub choice_timeout_default_ms: u64,
+    /// 起動の由来（既定 `Plain`＝ふつうの起動）。起動の根と `OnBoot` の Ref6/7 を決める。
+    pub boot_origin: BootOrigin,
+    /// シェルのフォルダ名（`OnGhostChanged` の Ref7・既定は `shell_name` の写し）。
+    pub shell_folder: String,
 }
 
 impl KanadeConfig {
@@ -430,8 +435,10 @@ impl KanadeConfig {
     /// `choice_timeout_default_ms` は `30_000`（Req7.8・DD-8）。
     /// `shell_name` / `baseware_version` は結線側固有ゆえ引数で受ける。
     pub fn new(shell_name: impl Into<String>, baseware_version: impl Into<String>) -> Self {
+        let shell_name = shell_name.into();
         KanadeConfig {
-            shell_name: shell_name.into(),
+            shell_folder: shell_name.clone(),
+            shell_name,
             baseware_version: baseware_version.into(),
             baseware_name: "areka".to_string(),
             close_talk_deadline_ms: 30_000,
@@ -439,6 +446,7 @@ impl KanadeConfig {
             vanish_count: 0,
             first_boot_epilogue: Vec::new(),
             choice_timeout_default_ms: 30_000,
+            boot_origin: BootOrigin::Plain,
         }
     }
 }
