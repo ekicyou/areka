@@ -21,6 +21,16 @@ Kiro仕様駆動開発における作業フロー・ブランチ戦略・完了�
 
 ---
 
+## `Cargo.lock` の扱い
+
+- **追跡する**: `Cargo.lock` はリポジトリで追跡する。依存を変えた（`Cargo.toml` を触った）枝は、`Cargo.lock` の差分をその枝のコミットに含める。
+- **PR を出す前（出る側）**: main を取り込み、`cargo metadata --locked` を 1 回通す（数秒・lock が `Cargo.toml` より古ければ非 0）。非 0 なら `cargo update -w` で揃え、謝辞（`THIRD-PARTY-NOTICES.md`）も作り直してコミットに含める。並走の枝が先に依存を足していても、main の `Cargo.lock` を古いまま着地させないための 1 手。
+- **追跡を始めた main を取り込むとき（入る側）**: 手元の追跡外の `Cargo.lock` を先に消す（`Remove-Item Cargo.lock`）。消さないと git が「追跡外のファイルを上書きする」と拒む。取り込んだあと、その枝が依存を変えていれば `cargo update -w`（ワークスペースの `Cargo.toml` の差分だけを lock に反映し、他の版は動かさない）で `Cargo.lock` を直してコミットする。
+- **`Cargo.lock` で衝突したとき**: 取り込む側（main）の `Cargo.lock` を採り（`git checkout --theirs -- Cargo.lock` か `git checkout main -- Cargo.lock`）、`cargo update -w` で自分の枝の `Cargo.toml` の差分を反映してから `git add` する。手で行を直さない。
+- **配布スクリプトは止まる**: 配布スクリプトは `--locked` で動くので、`Cargo.lock` と `Cargo.toml` が食い違う枝ではビルドの段で止まる（黙って解決し直さない）。
+
+---
+
 ## 実装完了時のアクション
 
 仕様の実装が完了し、**開発者が明示的に「承認」した**際は、`/kiro-complete {feature}` を実行する（このスキルが以下を中断なく完遂する）。手順実体は `.claude/skills/kiro-complete/SKILL.md` を権威とし、本節はその要約。

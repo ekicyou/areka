@@ -11,7 +11,7 @@
   - 完了の形: `git ls-files Cargo.lock` が 1 行を返し、`cargo metadata --locked` と `cargo build --locked -p areka` が非 0 で止まらず、その後の `git status --porcelain` が空。謝辞をもう 1 回生成し直しても差分 0。`cargo build --locked` が「lock が古い」で止まったときは原因を確かめ、`.gitattributes` の是正を設計の外の事として報告する
   - _Requirements: 7.3, 1.6_
 
-- [ ] 1.2 (P) 完了の手順と開発の手順に `Cargo.lock` の扱いを書く
+- [x] 1.2 (P) 完了の手順と開発の手順に `Cargo.lock` の扱いを書く
   - 完了の手順（kiro-complete）の謝辞の再生成の段の「追跡していないので版だけの上下は環境差として戻す」を、追跡後の扱い（謝辞の差分は `Cargo.lock` の差分と対応する・戻さずに原因を確かめる）へ改める。2026-09-26 の実例は履歴として残す
   - 完了の手順の PR を作る前の段に「main を取り込んだあと `cargo metadata --locked` を 1 回通す・非 0 なら `cargo update -w` で揃え謝辞を作り直して最終コミットに含める」を 1 行足す
   - 開発の手順（steering の workflow）の「ブランチ＆マージ戦略」の直後に「`Cargo.lock` の扱い」の節を 1 つ足す: 依存を変えた枝は lock の差分を含める／PR を出す前の確認（出る側）／着地を取り込むときは手元の追跡外の lock を先に消す（入る側）／衝突は main の lock を採って `cargo update -w`・手で行を直さない／配布スクリプトは lock が食い違う枝ではビルドの段で止まる
