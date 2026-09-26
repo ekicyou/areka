@@ -148,6 +148,9 @@ pub enum PersistKey {
     /// 前回使ったシェルのフォルダ名 → 正準 key `areka.last.shell`・TOML `[last]` shell。
     /// 載せるスコープは呼び手の契約（本番は Ghost）。
     LastShell,
+    /// 前回落ちたゴーストのフォルダ名 → 正準 key `areka.last.halted`・TOML `[last]` halted。
+    /// 空文字は「無し」と読む（空文字を書けば消える）。載せるスコープは呼び手の契約（本番は App）。
+    LastHalted,
 }
 
 impl PersistKey {
@@ -169,6 +172,7 @@ impl PersistKey {
             PersistKey::LastGhost => "areka.last.ghost".to_string(),
             PersistKey::LastBalloon => "areka.last.balloon".to_string(),
             PersistKey::LastShell => "areka.last.shell".to_string(),
+            PersistKey::LastHalted => "areka.last.halted".to_string(),
         }
     }
 }
@@ -191,7 +195,7 @@ pub enum PersistOutcome {
 ///   へ変換する。非数値スコープ ID（typed [`u32`] に載らない）は debug ＋ 当該エントリskip（寛容）。
 ///
 /// 返り値は決定論的順序（[`FormatDoc`] は [`std::collections::BTreeMap`] ゆえ scope ID 昇順、
-/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell）、各 pair は x → y）。
+/// window → balloon-offset → boot → vanish → last（ghost → balloon → shell → halted）、各 pair は x → y）。
 pub fn load_scope(
     scope: PersistScope,
     roots: &ScopeRoots,
@@ -317,6 +321,7 @@ fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: String) {
         PersistKey::LastGhost => doc.last_ghost = Some(value),
         PersistKey::LastBalloon => doc.last_balloon = Some(value),
         PersistKey::LastShell => doc.last_shell = Some(value),
+        PersistKey::LastHalted => doc.last_halted = Some(value),
     }
 }
 
@@ -355,6 +360,7 @@ fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, Stri
         (PersistKey::LastGhost, &doc.last_ghost),
         (PersistKey::LastBalloon, &doc.last_balloon),
         (PersistKey::LastShell, &doc.last_shell),
+        (PersistKey::LastHalted, &doc.last_halted),
     ] {
         if let Some(v) = value {
             out.push((key, v.clone()));
