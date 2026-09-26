@@ -4,6 +4,31 @@
 > 正典の語彙と Ref の一覧は親 brief（`.kiro/specs/areka-P0-ghost-shell-balloon-switch/brief.md` の Desired Outcome 2・3）が正本。本 brief は**再測定で崩れた前提と、切り出したあとの境界**だけを書く。
 > 本文の file:line は**起票時の実測値**（2026-09-20・main `fe157df1`）。着手時に必ず引き直すこと。
 
+## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝#55・#58・#59 の着地後）
+
+**並走不可のまま・#13 の直後**。#13 と共有するソースが `emo2_boot/mod.rs`・`consumer_ledger.rs`・`frame.rs`・`frame/wiring.rs`・`boot_config.rs`／`boot_resolve.rs`・`ghost_session.rs`・`menu/mod.rs`・`areka-ghost/src/runtime.rs`・kanade 5 ファイルに及ぶ。「起動時に最後のシェルを効かせる口」も同じファイルを通るので先行できない。共有 0 で先にできるのは present の片付け口（2〜3 タスク・単独 spec にはせず本仕様の先頭タスク）と 2 つ目のシェルの検体づくり（議題 ⑴ の答えが出てから）だけ。**要件（`/kiro-start`）は #13 の実装と並走して今すぐ書ける**。設計は #13 が main へ入ってから（`SwitchRequest`・汎用の通知の入口・`GhostSession` の置き場を見てから）。
+
+**#58 で形が変わったところ**
+1. 起動の結線は `&mut World` で呼べる（`emo2_boot/mod.rs` の `wire_emo2_boot(world, inputs: Emo2BootInputs, …)`）。ゴーストごとの値は `Emo2BootInputs`（`ghost_root`・`balloon_root`・`shiori`・`ticker`・`app_profile_dir`）に集まった。**シェル名の欄はここに足す**（`GhostBootOptions` には足さない＝#58 要件 2.7 と両立）。組み立てるのは `ghost_session.rs` の `GhostBootInputs::production`＝本仕様が触るファイルに `ghost_session.rs`（454 行）を足す。
+2. メニューの登記は「ゴーストを起こすたびにやり直す」契約になった（`menu/mod.rs` の `MenuRegistry` の doc）。シェル・バルーンの枠の登記はその契約に乗る。
+
+**#59 の判定「直す」で決まったこと（09-24 節の「案 A／B は go 判定で決める」は消化済み＝案 B）**
+3. present に「古い装着を消して、同じ呼び出しの中で登録し直す」口を足す。`areka-emo-present/src/presenter/hub.rs`（176 行）の `attach_target` は `targets` の表を置き換えるだけで World に触れない（`_world` 未使用）。片付ける口・登録を消す口は present に 0 件、`PresentCommand`（`command.rs` 231 行）は `ShowSurface`／`Hide`／`InvalidateCache` の 3 腕のまま。差し替えは配置が決まる前の段（`Update`・`run_attach_phase` の呼び手は `frame.rs` の `emo2_frame_system` の 1 か所）に置く。
+4. 資産は往復のたびに作る（`EmoWorld` は複製できない）。今日の `assets.rs`（409 行）の `build_boot_assets` はシェルとバルーンを一度に作る 1 本なので、**片側だけ作る関数への分割が 1 タスク増える**。作る場所は差し替えの tick の外（設計で決める）。
+5. **先進坑の学びのうち申し送りに無かった 6 点目**（`crates/pilot/examples/pilot-balloon-asset-swap/README.md` の「学び」）: 同じ id で `attach_target` を登録し直すと、**可視性の持ち主が既定の `CommandDriven` に、窓寸の要求（`applied`・`native_size`・`pending_resize`）が空に戻る**。本番のバルーン窓は `External`（`emo2_boot/frame/attach.rs` の装着）なので、差し替えた直後に `ShowSurface` が隠れているはずのバルーンを即座に見せる恐れがある。片付け口と再登録の口は、可視性の持ち主と窓寸の要求を引き継ぐ形にすること（引き継ぎを確かめる決定論テストを 1 本）。
+
+**不変の前提（再確認）**: `read_last_shell` は無い・`LastUsed::record` は毎起動 `LastShell` を書く・`ConfigInputs` は 2 欄のみ／`resolve()` の本番呼び出しは 4 か所（シェル名が効くのは 3 か所）・`resolve.rs` 952 行／`list_shells` は `menu,hidden` を除外／`OnShellChang|OnBalloonChange` は `crates/` で 0 件／`SAMPLES` 7・`R_POST_and_KOMAINU.nar` のシェルは `master` のみ（シェルを 2 つ持つ検体は 7 体とも 0）／`shiori.toml` の `shellrootbutton.caption` の備考は今も引受先を #13 と書く（本仕様が直す）。
+
+**数の更新**: `GhostBootOptions {` 28 か所・17 ファイル／`main.rs` 556／kanade `msg.rs` 852・`actor.rs` 541・`schedule/mod.rs` 758・`steady.rs` 935（不変）／`emo2_boot/mod.rs` 767・`frame.rs` 474・`frame/attach.rs` 441・`frame/wiring.rs` 324・`consumer_ledger.rs` 726／上限が近いテスト: `areka-ghost/src/runtime_tests.rs` 986・`emo2_boot/assets_tests.rs` 976・kanade `actor_tests.rs` 970・`schedule_tests.rs` 962＝足さない（兄弟の新ファイルへ）。
+
+**接触ファイル**: 新規 `areka-parsers/src/package/resolve_shell.rs`（仮・`resolve_with_shell`）・`emo2_boot/switch_cue.rs`（`\![change,shell|balloon]` の受け口・**#13 の `change_cue.rs` と #61 のファイルには触らない**）・`emo2_boot/frame/switch.rs`（差し替えの相）／既存 `areka-emo-present/src/presenter/hub.rs`・`command.rs`・`areka-seriko/src/actor.rs`（`SerikoMsg`）・`areka-emo-text`（`TextMsg`）・`emo2_boot/{mod,assets,frame,consumer_ledger}.rs`・`frame/{attach,wiring}.rs`・`boot_resolve.rs`・`boot_config.rs`・`ghost_session.rs`・`areka-ghost/src/{runtime,catalog}.rs`・`menu/mod.rs`・`placement/source.rs`・kanade（#13 の汎用の通知の入口があれば `schedule/events.rs` の許可表だけ）・台帳 `shiori.toml`・`sakura-script.toml`＋生成物。
+
+**タスク数**: **14〜17**（#13 が汎用の通知の入口を作る前提。無ければ 17〜20）。分割は不要（分割候補はどれも #13 の後で直列）。
+
+**正典の逐語**: ukadoc `\![change,shell,…]` は「シェル名を lastinstalled にすると最後にインストールした**ゴースト**に切り替え」と書く（原文ママ・`\![change,balloon,…]` は「バルーン」）。「最後に入れたシェル」と読むか、ゴーストの切替（#13・#61 の経路）へ回すかは 1 行の裁定が要る（議題 ⑷）。`OnShellChanging` の Ref は Ref0＝切り替わるシェル名・Ref1（SSP）＝現在のシェル名・Ref2（SSP）＝切り替わるシェルのパス（09-24 までの本文に無かった）。`OnShellChanged` Ref0＝現在のシェル名・Ref1（SSP）＝現在のゴースト名・Ref2（SSP）＝パス／`OnBalloonChange` Ref0＝名・Ref1＝パス。
+
+**議題の整理**: 09-24 節の ⑴〜⑶ はそのまま。⑷ のうち「バルーンブレークで切替を中止するか」は **#13 の議題 ⑴ と同じ答えにする**（別に問わない）。残るのは `random`／`lastinstalled` を In に入れるかと、上の `lastinstalled` の読み方。
+
 ## 2026-09-24 棚卸⑯の再測定（main `0b01f654`）
 
 **先進坑は別 spec に切り出した＝台帳 #59 `pilot-balloon-asset-swap`。** `two-tunnel.md` の規約（go 判定を本坑の前提依存とし、go 前の本坑着手は規律違反・1 仕様＝1 フォルダ・`pilot-` 接頭辞）により、同じ spec の先頭タスクにはできない。触るのは `crates/pilot/examples/pilot-balloon-asset-swap/` と `crates/pilot/Cargo.toml`（dev-dependencies に areka-emo-present・-compose・-atlas・-text・areka-parsers・wintf を足す＝pilot 側が依存するだけで葉ノードの隔離は崩れない）だけ＝**#55・#58・#13 と共有 0 で並走できる**。本仕様は roadmap に `_Depends(confirmed): pilot-balloon-asset-swap` を持つ。roadmap A3 行の旧記 `crates/pilot/examples/areka-P0-shell-balloon-switch/` は命名規約違反だったので直した。
