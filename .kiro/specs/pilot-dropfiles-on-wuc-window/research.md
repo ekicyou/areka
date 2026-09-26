@@ -67,12 +67,12 @@
 | 4.4 付け外し後の受け入れの宣言 | 到着時に `GWL_EXSTYLE` を読み戻す | `apply_click_through` は TRANSPARENT のみ・`apply_layered_companion` は LAYERED のみ書き換える | 既存（静的には消えない）＋確認 |
 | 5.1〜5.3 手順と go の規則 | README | — | 新規（文書） |
 | 5.2 管理者として起動したか | `IsUserAnAdmin` をログに出す | `Win32_UI_Shell` | 新規（1 行） |
-| 5.4 手当て 3 種 | ①生成後に `SetWindowLongPtrW(GWL_EXSTYLE)` で付け直し／`DragAcceptFiles(hwnd, true)`・②透過の時機・③`ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES/WM_COPYDATA/0x0049, MSGFLT_ALLOW)` | API あり。切替は環境変数か起動引数で | 新規（分岐）＋未知 |
+| 5.4 手当て 3 種 | ①生成後に `SetWindowLongPtrW(GWL_EXSTYLE)` で付け直し／`DragAcceptFiles(hwnd, true)`・②透過の時機 | API あり。③`ChangeWindowMessageFilterEx` は要件討議（議題 2）で外した＝管理者起動は扱わない。切替は環境変数か起動引数で | 新規（分岐）＋未知 |
 | 5.6 `IDropTarget` の見立て | 文書のみ（試作しない） | §6 | 新規（文書） |
 | 6.1〜6.4 有界な終了 | `AREKA_APP_SMOKE_EXIT_MS`・既定値・終了理由と回数のログ | `pilot-balloon-asset-swap/main.rs` | 既存（既定値は要検討） |
 | 7.1〜7.6 README 3 幕 | 動機・概要・検証結果 | `_template/README.md`・`pilot-balloon-asset-swap/README.md` | 既存（型） |
 
-**未知（実験が答えを出す点）は 3 つに絞れる**: (a) `WS_EX_NOREDIRECTIONBITMAP`＋LAYERED（フラグのみ）の窓で、エクスプローラ側の当たり判定が `WM_DROPFILES` を投函するか、(b) `WS_EX_TRANSPARENT` が付いている瞬間は背後へ抜けるか・ドラッグ中に付け外しが追随してドロップ時点で正しい側に居るか（監視 12ms＋tick 1 回の遅れが効くか）、(c) 権限差（管理者起動）で止まるか。
+**未知（実験が答えを出す点）は 3 つに絞れる**: (a) `WS_EX_NOREDIRECTIONBITMAP`＋LAYERED（フラグのみ）の窓で、エクスプローラ側の当たり判定が `WM_DROPFILES` を投函するか、(b) `WS_EX_TRANSPARENT` が付いている瞬間は背後へ抜けるか・ドラッグ中に付け外しが追随してドロップ時点で正しい側に居るか（監視 12ms＋tick 1 回の遅れが効くか）。(c) 権限差（管理者起動）は要件討議（議題 2）で対象外とした（ふつうの権限で走らせ、管理者の走行は判定に使わない）。
 
 ## 4. 実装の選択肢（落とし物の受け取り方＝要件 3.1）
 
@@ -128,18 +128,18 @@ wintf を変えずに `WM_DROPFILES` を example の側で受け取る方法は 
 1. **受け取りの仕掛け**: 案 A（`SetWindowSubclass`）を本線にするか。案 C（`WH_GETMESSAGE`）を切り分け用に同梱するか（環境変数で足し外し）。
 2. **絵の作り**: 子の `Rectangle`（矩形判定・ファイル不要・最短）か、`BitmapSource`＋`HitTest::alpha_mask()`（本番と同じ画素の α 判定・PNG が要る＝`sample-ghost-kit` の検体から引くか、`crates/areka/shell/base.png` を読むか）。要件 2.4 はどちらでも満たす。本番との一致を重く見るなら後者、切り分けの単純さを重く見るなら前者。
 3. **「不透明な所か」の判定の場所**: 窓手続きの中で幾何を定数で計算するか、記録を待ち行列に積んで ECS の system が `hit_test_in_window` で判定してログを出すか（透過機構と同じ判定器を使うのは後者）。
-4. **手当て（要件 5.4）の切替の形**: 環境変数（例 `PILOT_DROPFILES_FIX=reapply|dragaccept|msgfilter`）か起動引数か。手当てなしの素の走行が既定であること。
+4. **手当て（要件 5.4）の切替の形**: 環境変数（例 `PILOT_DROPFILES_FIX=reapply|dragaccept`）か起動引数か。手当てなしの素の走行が既定であること。
 5. **既定の上限時間**: 手本の 90 秒か、手でⓐ〜ⓒを 1 走行で試す余裕（透過を何度か付け外し→落とす、を 3 回）を見て 120〜180 秒か。あるいはⓐ〜ⓒを別々の走行にして 90 秒のままか。
 6. **ログの目印の語**: `[dropfiles]` 等の 1 語と、構造化フィールドの名前（`n`・`path`・`x`・`y`・`opaque`・`transparent`・`accept_files`・`admin`）。README の grep 例に同じ語を書く。
 7. **走行の分け方**: ⓐ〜ⓒと手当て 3 種を 1 走行で追うか、走行ごとに 1 項か（ログの読み取りの容易さと上限時間に関わる）。
-8. **管理者判定の記録**: `IsUserAnAdmin` を起動時に 1 行出す（要件 5.2 を手書きからログへ）でよいか。
+8. **管理者判定の記録**: `IsUserAnAdmin` を起動時に 1 行出す（要件 5.2＝管理者の走行を判定から外すための目印）。
 
 ## 8. 研究が要る点（設計段で確かめる・Research Needed）
 
 - **R1**: `WM_DROPFILES` の届き方は投函（`PostMessage`）で確定か。案 C（`WH_GETMESSAGE`）の有効性はこれに依る（送信なら `WH_CALLWNDPROC` になる）。案 A なら無関係。
 - **R2**: エクスプローラ側の落とし先の探索（OLE の `WindowFromPoint` 相当）が `WS_EX_TRANSPARENT` の窓を飛ばすことは、クリック透過が別プロセスで効いている事実（`pilot-clickthrough-alpha-toggle/REPORT.md`）から見込めるが、**ドラッグ中に付け外しが起きたときの再標的化（DragLeave→DragEnter）の追随**は実測しかない。監視 12ms＋tick 1 回の遅れが「絵の縁で落としたときの取りこぼし」になるかを観測項目に含めるか。
 - **R3**: `WS_EX_ACCEPTFILES` の窓に落としたとき、OLE の既定の受け口が `WM_DROPFILES` に変換して投函するのは Windows 11 でも同じか（`DragAcceptFiles` を呼ぶ手当てとの差は無いはず＝`DragAcceptFiles` はビットの付け外しだけ）。
-- **R4**: 管理者起動のときの遮断（UIPI）を通す `ChangeWindowMessageFilterEx` は `WM_DROPFILES`・`WM_COPYDATA`・`0x0049` の 3 つで足りるか（一般に知られる組。本坑では管理者で起動した走行が 1 回あれば確認できる）。
+- ~~**R4**: 管理者起動のときの遮断（UIPI）を通す `ChangeWindowMessageFilterEx` の組~~ → 要件討議（議題 2）で対象外（areka を管理者で動かすことは普通は無い）。
 - **R5**: `SetWindowSubclass` で重ねた手続きと、ライブラリの `WM_NCDESTROY` の状態解放（`Box::from_raw`）の順序。comctl32 は `WM_NCDESTROY` で自動的に重ね掛けを外すので問題は無い見込みだが、終了時の警告ログが出るかは実走で見る。
 
 ## 9. 次の段へ
