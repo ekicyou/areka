@@ -64,7 +64,7 @@
 - **窓手続きに落とし物の腕は無く、差し込み口も無い**: `crates/wintf/src/ecs/window_proc/mod.rs` の `dispatch_window_message` は表に無いメッセージを `None`＝既定手続きへ流す。`crates/wintf/src/runtime/message_loop.rs` の filter は `pub(crate)`。よって example は HWND を得た後に自分で窓手続きを重ねる。
 - **重ね掛けは安全**: ライブラリ `wintf-winmsg-executor` 0.0.5 は `WM_NCCREATE` で `GWLP_WNDPROC` を型付きの手続きへ差し替え、`GWLP_USERDATA` に状態を置き、`WM_NCDESTROY` で解放する（同 crate `src/util/window.rs`）。生成後に `SetWindowSubclass` で重ねれば連鎖は comctl32 が管理し、`GWLP_USERDATA` に触らずに済む。
 - **受け入れの宣言は生成時に通る**: `compute_ex_style` は `WS_EX_LAYERED` を落として `WS_EX_NOREDIRECTIONBITMAP` を足すだけで他のビットを通し、`apply_initial_state` は `GWL_STYLE` しか触らない。クリック透過の付け外し（`apply_click_through`＝`WS_EX_TRANSPARENT` のみ・`apply_layered_companion`＝`WS_EX_LAYERED` を立てるのみ）も他のビットを保つ。
-- **当たり判定は公開されている**: `hit_test_in_window(world, window, client_point: PhysicalPoint) -> Option<Entity>`（引数は物理 px のクライアント座標・`PhysicalPoint` は `PointF` の別名）。`DragQueryPoint` が返すのも物理 px のクライアント座標（本プロセスは `WinApp::new` が PMv2 を設定）なので、変換なしに同じ判定器へ渡せる。
+- **当たり判定は公開されている**: `hit_test_in_window(world, window, client_point: PointF) -> Option<Entity>`（`crates/wintf/src/ecs/layout/hit_test/mod.rs`・引数は物理 px のクライアント座標）。引数の型は `wintf::ecs::PointF` と書く。wintf には `PhysicalPoint` という別名が 2 つあり（`hit_test` 側は `PointF`・`pointer` 側は整数の `Point`）、`wintf::ecs::PhysicalPoint` は明示の再輸出が勝って整数の `Point` になるため、この名前は使わない。`DragQueryPoint` が返すのも物理 px のクライアント座標（本プロセスは `WinApp::new` が PMv2 を設定）なので、変換なしに同じ判定器へ渡せる。
 - **切り替えのログは既にある**: `crates/wintf/src/ecs/clickthrough/controller.rs` の `debug!(?window, ?desired, "clickthrough: ex-style トグル適用")`。既定フィルタに `wintf::ecs::clickthrough=debug` を含めれば見える（先例 `crates/areka/examples/clickthrough_two_rects.rs`）。
 - **UI スレッドは MTA**（`crates/wintf/src/runtime/mod.rs` の `WinApp::with_exit_policy`）。`WM_DROPFILES` は窓のスレッドの待ち行列へ投函される通常の窓メッセージで COM のアパートメントに依らないため本坑には効かない。`IDropTarget` へ倒す場合の見立ては `research.md` §6。
 
@@ -109,13 +109,13 @@ graph TB
 
 1. **受け口は `SetWindowSubclass`（案 A）1 本**。`WM_DROPFILES` だけ処理して `LRESULT(0)` を返し、他は `DefSubclassProc` へ流す（→ ライブラリの手続き → wintf の `dispatch_window_message`）。スレッドのメッセージ取得フック（案 C）は同梱しない。ⓐで届かないと分かったときだけ「待ち行列に来ているか」の切り分けとして足す（README の手当ての項に「次に足すもの」として書く）。
 2. **絵は窓 `HitTest::none()`＋不透明な `Rectangle` 1 つ**（`BitmapSource`＋α マスクは使わない）。落とし先を決めるのは OS で、見るのは `WS_EX_TRANSPARENT` のビットだけ。当たり判定の方式（矩形か α か）は wintf の中の話で、この実験の答えには効かない。矩形なら「絵の上／外」の境目がはっきりし、ファイルの依存も無い。窓に見えるもの（透明な余白＋不透明な矩形）を要件 2.4 の「絵 1 枚」と読む。寸法は窓 320×320（論理 px）・矩形は左上 (100,100) の 120×120（論理 px）。200% では窓 640×640・矩形 240×240・余白は各辺 200 物理 px で、要件 2.4 の 100×100 を満たす。
-3. **「絵の上か外か」は到着の場で `hit_test_in_window` に聞く**。受け口は文脈（World の取っ手 `Rc<RefCell<EcsWorld>>` と窓 entity）を `SetWindowSubclass` の `dwRefData` 経由で持ち、`try_borrow` で World を借りて判定する。借りられなければ（tick の途中で再入したとき）`opaque=unknown` と出して待たない。透過機構と同じ判定器・同じ座標系を使うので、要件 4 の「クリックの当たり判定と一致するか」を直接測れる。待ち行列に積んで次の tick で判定する案は、行が 1 tick 遅れる上に部品が 1 つ増えるので採らない。
+3. **「絵の上か外か」は到着の場で `hit_test_in_window` に聞く**。受け口は文脈（World への弱い参照 `Weak<RefCell<EcsWorld>>` と窓 entity）を `SetWindowSubclass` の `dwRefData` 経由で持ち、`upgrade()` → `try_borrow()` の順で World を借りて判定する。弱い参照は wintf が `run()` の冒頭で World に入れる `EcsWorldSelfRef`（`crates/wintf/src/ecs/world/mod.rs`・公開）から `on_window_created` が複製する（areka 本体の `crates/areka/src/menu/trigger.rs` の `poll_menu_query` と同じ作法）。自前の取っ手（`Rc` を World 自身へ入れる形）は作らない——World が自分を強く指す輪ができて終了時に解放されず、後片付けの観測（R5）を濁らせる。どちらかが失敗したら（tick の途中で再入したとき・終了処理の途中）`opaque=unknown` と出して待たない。**`unknown` を「同期配送があった」の証拠（R1）と読めるのは `[dropfiles] 終了` の行より前に出たときだけ**——終了処理（`crates/wintf/src/com/wuc.rs` の `drain_dispatcher_queue` → `pump_current_thread_messages`）は World を借りたまま待ち行列を配送するので、終了の瞬間の落とし物は同期配送でなくても `unknown` になる。透過機構と同じ判定器・同じ座標系を使うので、要件 4 の「クリックの当たり判定と一致するか」を直接測れる。待ち行列に積んで次の tick で判定する案は、行が 1 tick 遅れる上に部品が 1 つ増えるので採らない。
 4. **手当ての切替は環境変数 `PILOT_DROPFILES_FIX`**（未設定＝手当てなし・`reapply`＝生成後に `GWL_EXSTYLE` へ `WS_EX_ACCEPTFILES` を付け直して `SWP_FRAMECHANGED`・`dragaccept`＝`DragAcceptFiles(hwnd, true)`）。上限時間と同じく環境変数で揃え、引数の解釈を書かない。値の解釈は `Fix::from_env_value(Option<&str>) -> Fix` の 1 関数（未知の値は `warn!` して手当てなし）。要件 5.4 のもう 1 つの手当て「透過の付け外しの時機との関係」はコードの切替ではなく手順（ⓐ＝付け外しの前・ⓒ＝付け外しの後・要件 4.3）で観測する。
 5. **既定の上限時間は 180 秒**（`AREKA_APP_SMOKE_EXIT_MS` で上書き）。ⓐ〜ⓒの 3 回の落としと、ⓒの前のカーソルの出し入れを 1 走行で行う余裕を見た。
 6. **ログの目印は `[dropfiles]`**。落とし物に関する行はすべて本文の先頭にこの語を置く。構造化フィールドは `seq`（到着の通し番号）・`x`／`y`（クライアント座標・物理 px）・`in_client`・`opaque`（`true`／`false`／`unknown`）・`transparent`・`accept_files`・`layered`・`noredirect`・`n`（ファイル数）・`i`・`path`・`admin`・`fix`・`limit_ms`・`drops`（終了時の回数）。
 7. **走行はⓐ〜ⓒを 1 走行で追う**。行は `seq` と位置と `opaque` で自己記述的なので、1 走行のログで 3 項を読み分けられる。手当て（`reapply`／`dragaccept`）はそれぞれ別の走行（環境変数を変えて起動し直す）。
 8. **管理者判定は起動時に 1 行**: `info!(admin, fix = ?fix, limit_ms, "[dropfiles] 起動")`。`IsUserAnAdmin` の値をそのまま出す。管理者の走行は README に「判定に使わない」と書く。
-9. **終了コードは 2 値**: 0＝上限時間に到達して終了（この example の正常な終わり方）・2＝初期化の失敗（`run()` に入れない・`run()` 自体の失敗も含む）。終了時に `info!(drops, limit_ms, "[dropfiles] 終了: 上限時間に到達")` を出す。受け取った回数は `dropfiles.rs` の静的な `AtomicU32` で数える（World を借りずに数えられる）。
+9. **終了コードは 3 値**: 0＝上限時間に到達して終了（この example の正常な終わり方）・2＝初期化の失敗（`run()` に入れない・`run()` 自体の失敗も含む）・3＝窓が外から閉じられた（Alt＋F4 等・要件 6.4 の「終了の理由」を初期化の失敗と読み違えないための別の名）。終了時に `info!(drops, limit_ms, "[dropfiles] 終了: 上限時間に到達")` を出す。受け取った回数は `dropfiles.rs` の静的な `AtomicU32` で数える（World を借りずに数えられる）。
 10. **`WM_DROPFILES` の到着時刻は tracing の行の時刻**（行は受け口の中で同期に出るので、行の時刻＝到着の時刻）。別のフィールドは足さない。
 11. **透過の状態の読み戻しは到着時の `GWL_EXSTYLE`**。落とした瞬間から配送までの数 ms の間にカーソル監視（12ms 周期）が付け外す可能性があるので、README には「到着時の値」と明記する。
 
@@ -183,7 +183,7 @@ sequenceDiagram
 | 2.5 | 透過機構に登録 | Runner（`on_window_created`） | `ClickThroughRegistryHandle::register` | — |
 | 2.6 | 生成直後に拡張スタイルを読み戻す | DropReceiver（`log_ex_style("created")`） | `ExStyleBits` | — |
 | 2.7 | 切り替えが見えるログ水準 | Runner（既定フィルタ） | `EnvFilter::new("info,wintf::ecs::clickthrough=debug")` | — |
-| 2.8 | 200% のまま検証 | DropReceiver（物理 px のまま `hit_test_in_window` へ） | `PhysicalPoint` | System Flows |
+| 2.8 | 200% のまま検証 | DropReceiver（物理 px のまま `hit_test_in_window` へ） | `PointF` | System Flows |
 | 3.1 | wintf を変えずに受ける | DropReceiver（`install`） | `SetWindowSubclass`／`DefSubclassProc` | System Flows |
 | 3.2 | 時刻・位置・不透明か・透過か | DropReceiver（`handle_drop`） | `[dropfiles] 到着` の行 | System Flows |
 | 3.3 | 数と各パス | DropReceiver（`handle_drop`） | `n`・`i`・`path` | System Flows |
@@ -231,7 +231,7 @@ sequenceDiagram
 **Responsibilities & Constraints**
 - 起動は `main` で同期に行う: 購読者の初期化（既定フィルタ `info,wintf::ecs::clickthrough=debug`）→ `WinApp::new()` → 起動の行（`admin`・`fix`・`limit_ms`）→ 窓の spawn → リソースと system の登録 → `run()` → 終了コード。
 - 窓は 1 枚。`WindowStyle { style: WS_POPUP | WS_VISIBLE, ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_ACCEPTFILES }`（`WS_EX_TOPMOST` は本番に無いので付けない）・`WindowPos { position: Some(固定・物理 px), .. }`・`BoxStyle`（320×320 論理 px）・`HitTest::none()`・マーカー `PilotWindow`。子は `Rectangle::new()`＋`Brushes::with_foreground(不透明な色)`＋`BoxStyle`（絶対配置・左上 (100,100)・120×120 論理 px）＋`ChildOf(window)`。`DragConfig` は付けない（窓が動くと手順が複雑になる）。
-- `on_window_created`（`FrameFinalize`・`Added<WindowHandle>`＋`With<PilotWindow>`）: ①`dropfiles::log_ex_style(hwnd, "created")`（透過機構が触る前の素の値を残す）、②`ClickThroughRegistryHandle::register(entity, hwnd)`、③`dropfiles::apply_fix(hwnd, fix)`、④`dropfiles::install(hwnd, Context { world, window })`。失敗は `error!` を出して続行（受け口の無い走行は README で「無効」と扱う）。World の取っ手は `run()` の前に `insert_non_send(WorldHandle(app.world()))` で置き、この system が `NonSend<WorldHandle>` から読む。
+- `on_window_created`（`FrameFinalize`・`Added<WindowHandle>`＋`With<PilotWindow>`）: ①`dropfiles::log_ex_style(hwnd, "created")`（透過機構が触る前の素の値を残す）、②`ClickThroughRegistryHandle::register(entity, hwnd)`、③`dropfiles::apply_fix(hwnd, fix)`、④`dropfiles::install(hwnd, Context { world, window })`。失敗は `error!` を出して続行（受け口の無い走行は README で「無効」と扱う）。World への弱い参照は、wintf が `run()` の冒頭で入れる `NonSend<EcsWorldSelfRef>` から `.0.clone()` で複製して `Context` に渡す（自前のリソースは足さない）。
 - `deadline_system`（`FrameFinalize`）: `Instant::now() >= run.deadline` で `run.exit = Some(Deadline)`、`info!(drops = DROP_COUNT, limit_ms, "[dropfiles] 終了: 上限時間に到達")`、窓を despawn（→ `WinApp` 既定の終了）。
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]
@@ -242,21 +242,19 @@ const EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 const DEFAULT_EXIT_MS: u64 = 180_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ExitReason { Deadline, InitFailure }
-fn exit_code(reason: ExitReason) -> i32;            // Deadline=0, InitFailure=2
+enum ExitReason { Deadline, InitFailure, ExternalClose }
+fn exit_code(reason: ExitReason) -> i32;            // Deadline=0, InitFailure=2, ExternalClose=3
 fn exit_ms_from(value: Option<&str>) -> u64;         // 空・非数値は既定
 
 #[derive(Component)] struct PilotWindow;
 #[derive(Resource)] struct Run { deadline: Instant, limit_ms: u64, exit: Option<ExitReason> }
-struct WorldHandle(Rc<RefCell<EcsWorld>>);           // NonSend リソース
-
 fn spawn_window(world: &mut World) -> Entity;
-fn on_window_created(/* Query<(Entity, &WindowHandle), (Added<WindowHandle>, With<PilotWindow>)>, NonSend<ClickThroughRegistryHandle>, NonSend<WorldHandle>, Res<Fix> */);
+fn on_window_created(/* Query<(Entity, &WindowHandle), (Added<WindowHandle>, With<PilotWindow>)>, NonSend<ClickThroughRegistryHandle>, NonSend<EcsWorldSelfRef>, Res<Fix> */);
 fn deadline_system(/* ResMut<Run>, Query<Entity, With<PilotWindow>>, Commands */);
 fn boot_and_run() -> Result<ExitReason, String>;
 ```
 - Preconditions: `WinApp::new()` 成功（COM・DPI 初期化済み）。
-- Postconditions: `run()` が戻ったら `Run.exit` は `Some(Deadline)`。`None` なら窓が外から閉じられたと見て `error!`＋`InitFailure`。
+- Postconditions: `run()` が戻ったら `Run.exit` は `Some(Deadline)`。`None` なら窓が外から閉じられた（Alt＋F4 → wintf 既定の閉じ要求 → despawn）と見て `warn!(drops, "[dropfiles] 終了: 窓が外から閉じられた")`＋`ExternalClose`（その走行は判定に使わない）。
 - Invariants: 窓は 1 枚。終了の唯一の時計は `deadline_system`。
 
 ##### State Management
@@ -276,21 +274,21 @@ fn boot_and_run() -> Result<ExitReason, String>;
 
 **Responsibilities & Constraints**
 - `install`: `SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_ID, Box::into_raw(Box::new(ctx)) as usize)`。失敗（`FALSE`）は `Err` で返し呼び手が `error!`。文脈の `Box` はプロセスの終わりまで生かす（`WM_NCDESTROY` で外さない・使い捨て。`ponytail:` の注記を 1 行）。
-- `subclass_proc`（`unsafe extern "system"`）: `msg == WM_DROPFILES` なら `handle_drop(ctx, hwnd, HDROP(wparam.0 as _))` を呼び `LRESULT(0)`。それ以外は `DefSubclassProc(hwnd, msg, wparam, lparam)`。panic を境界から漏らさない（`catch_unwind` で包み `error!`）。
-- `handle_drop`: ①`DROP_COUNT.fetch_add(1)` → `seq`。②`DragQueryPoint(hdrop, &mut pt)` → `x`・`y`・`in_client`。③`ctx.world.try_borrow()` が通れば `hit_test_in_window(world.world(), ctx.window, PhysicalPoint::new(x as f32, y as f32)).is_some()` → `opaque = "true"/"false"`、通らなければ `"unknown"`（借用はこの呼び出しの中で終える）。④`read_ex_style(hwnd)` → `ExStyleBits`。⑤`DragQueryFileW(hdrop, 0xFFFF_FFFF, None)` → `n`。各 `i` は `DragQueryFileW(hdrop, i, None)` で長さを得て `Vec<u16>`（長さ＋1）で取得。0 が返れば `error!(seq, i, "[dropfiles] パスの取り出しに失敗")` して次へ。⑥`info!(seq, x, y, in_client, opaque, transparent, accept_files, layered, noredirect, n, "[dropfiles] 到着")` と、各ファイルに `info!(seq, i, path = %path, "[dropfiles] ファイル")`。⑦最後に必ず `DragFinish(hdrop)`（途中で失敗しても）。
+- `subclass_proc`（`unsafe extern "system"`）: `msg == WM_DROPFILES` なら `handle_drop(ctx, hwnd, HDROP(wparam.0 as _))` を呼び `LRESULT(0)`。それ以外は `DefSubclassProc(hwnd, msg, wparam, lparam)`。panic を境界から漏らさない（`catch_unwind(AssertUnwindSafe(|| …))` で包み `error!`）。
+- `handle_drop`: ①`DROP_COUNT.fetch_add(1)` → `seq`。②`DragQueryPoint(hdrop, &mut pt)` → `x`・`y`・`in_client`。③`ctx.world.upgrade()` と `try_borrow()` が両方通れば `hit_test_in_window(world.world(), ctx.window, PointF::new(x as f32, y as f32)).is_some()` → `opaque = "true"/"false"`、どちらかが通らなければ `"unknown"`（借用はこの呼び出しの中で終える）。④`read_ex_style(hwnd)` → `ExStyleBits`。⑤`DragQueryFileW(hdrop, 0xFFFF_FFFF, None)` → `n`。各 `i` は `DragQueryFileW(hdrop, i, None)` で長さを得て `Vec<u16>`（長さ＋1）で取得。0 が返れば `error!(seq, i, "[dropfiles] パスの取り出しに失敗")` して次へ。⑥`info!(seq, x, y, in_client, opaque, transparent, accept_files, layered, noredirect, n, "[dropfiles] 到着")` と、各ファイルに `info!(seq, i, path = %path, "[dropfiles] ファイル")`。⑦最後に必ず `DragFinish(hdrop)`（途中で失敗しても）。
 - `log_ex_style(hwnd, when)`: `GetWindowLongPtrW(GWL_EXSTYLE)` → `ExStyleBits::from_raw` → `info!(when, accept_files, transparent, layered, noredirect, raw = format!("0x{raw:X}"), "[dropfiles] ex-style")`。生成直後（`when = "created"`）と到着時（`when = "drop"`・`handle_drop` の④と同じ関数）で使う。
 - `apply_fix(hwnd, fix)`: `Fix::None` は何もしない。`Fix::Reapply` は `SetWindowLongPtrW(GWL_EXSTYLE, current | WS_EX_ACCEPTFILES)`＋`SetWindowPos(SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE)`（`apply_click_through` と同じレシピ）。`Fix::DragAccept` は `DragAcceptFiles(hwnd, true)`。適用後に `log_ex_style(hwnd, "fix")`。
 
 **Dependencies**
 - Inbound: Runner（`on_window_created` から `install`／`apply_fix`／`log_ex_style`、`deadline_system` から `DROP_COUNT`）— P0
-- Outbound: wintf `hit_test_in_window`・`EcsWorld::world` — P1（借りられないときは `unknown` で続行）
+- Outbound: wintf `hit_test_in_window`・`EcsWorld::world`・`EcsWorldSelfRef` — P1（借りられないときは `unknown` で続行）
 - External: comctl32（`SetWindowSubclass`／`DefSubclassProc`）・shell32（`DragQuery*`／`DragFinish`／`DragAcceptFiles`／`IsUserAnAdmin`）・user32（`GetWindowLongPtrW`／`SetWindowLongPtrW`／`SetWindowPos`）— P0。いずれも `windows` 0.62.2 に揃っている（`research.md` §2.1 の表）。
 
 **Contracts**: Service [x] / API [ ] / Event [x] / Batch [ ] / State [ ]
 
 ##### Service Interface
 ```rust
-pub struct Context { pub world: Rc<RefCell<EcsWorld>>, pub window: Entity }
+pub struct Context { pub world: Weak<RefCell<EcsWorld>>, pub window: Entity }   // world は EcsWorldSelfRef の複製
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
 pub enum Fix { None, Reapply, DragAccept }
@@ -324,7 +322,7 @@ fn handle_drop(ctx: &Context, hwnd: HWND, hdrop: HDROP);
 **Implementation Notes**
 - Integration: comctl32 は `WM_NCDESTROY` で重ね掛けを自動で外す。ライブラリの `WM_NCDESTROY` の解放とは連鎖の順（自分 → `DefSubclassProc` → ライブラリ）で衝突しない。終了時に警告が出るかは実走で見る（`research.md` R5）。
 - Validation: `ExStyleBits::from_raw` と `Fix::from_env_value` の単体テスト（既知のビット列と文字列の対応）。受け口そのものは手で落として確かめる。
-- Risks: `try_borrow` が失敗する経路は「tick の途中で `WM_DROPFILES` が同期配送される」ときだけで、投函なら起きない見込み。起きたら `opaque=unknown` の行がその証拠になる（R1 の答えにもなる）。
+- Risks: `try_borrow` が失敗する経路は 2 つ——「tick の途中で `WM_DROPFILES` が同期配送される」とき（投函なら起きない見込み）と、終了処理の `pump_current_thread_messages` が World を借りたまま待ち行列を配送するとき。`opaque=unknown` の行を R1（同期配送あり）の証拠と読むのは `[dropfiles] 終了` の行より前に出たときだけ。README の学びにもこの条件を書く。
 
 ### Readme（`README.md`）
 
@@ -335,13 +333,13 @@ fn handle_drop(ctx: &Context, hwnd: HWND, hdrop: HDROP);
 
 **Responsibilities & Constraints**
 - **動機の幕**: 本坑 `areka-P0-ghost-install` を名指し（`_Depends(confirmed): pilot-dropfiles-on-wuc-window`）。届かなければ本坑の設計が `IDropTarget`（OLE・STA）へ変わることと、WUC が MTA で動く前提との衝突を書く。合否基準（要件 Introduction の 4 項）を転記。
-- **概要の幕**: 作った物（`main.rs`／`dropfiles.rs` の役割 1 行ずつ）・実行法 `cargo run -p pilot --example pilot-dropfiles-on-wuc-window`・環境変数（`AREKA_APP_SMOKE_EXIT_MS`・`PILOT_DROPFILES_FIX`・`RUST_LOG` の既定）・grep 例（`[dropfiles]`）・**手順**:
+- **概要の幕**: 作った物（`main.rs`／`dropfiles.rs` の役割 1 行ずつ）・実行法 `cargo run -p pilot --example pilot-dropfiles-on-wuc-window`・環境変数（`AREKA_APP_SMOKE_EXIT_MS`・`PILOT_DROPFILES_FIX`・`RUST_LOG` の既定。`RUST_LOG` を自分で設定すると既定の `wintf::ecs::clickthrough=debug` は消えるので、設定するなら `info,wintf::ecs::clickthrough=debug` を含める）・`PILOT_DROPFILES_FIX=reapply` は生成直後の `ex-style`（`when=created`）の行で `accept_files=false` のときだけ意味を持つ（`true` なら何も変えない手当て）と明記・grep 例（`[dropfiles]`）・**手順**:
   - 準備: 捨ててよい作業用フォルダへ `.nar` を写す（同じドライブのフォルダの窓へ落とすと既定で移動になるため、元のファイルは使わない）。背後の受け手は別の作業用フォルダのエクスプローラの窓。走行は管理者でないターミナルから。
   - ⓐ 絵（矩形）の上へ落とす → `到着` の行（`opaque=true`・`transparent=false`）と `ファイル` の行を期待。
-  - ⓑ 絵の外（余白）へ、背後にエクスプローラの窓を置いて落とす → 行が出ないこと、背後の窓にファイルが渡ったことを目で確かめる。
+  - ⓑ 絵の外（余白）へ、背後にエクスプローラの窓を置いて落とす → 行が出ないこと、背後の窓にファイルが渡ったことを目で確かめる。ドラッグの起点の窓はクリックした瞬間に前面へ来て、ドラッグ中は先進坑の窓を前に出せないので、起点の窓は先進坑の窓と重ならない所に置き、受け手の窓だけを余白の下に置く。
   - ⓒ カーソルを矩形の内外へ数回出し入れ（`clickthrough: ex-style トグル適用` の行が数回出る）→ 矩形の上へ落とす → `到着` の行の `accept_files=true` を期待。
   - 窓がエクスプローラに隠れたら絵をクリックして前に出す。1 走行（既定 180 秒）でⓐ〜ⓒを行い、届かないときだけ `PILOT_DROPFILES_FIX=reapply`／`dragaccept` の走行を足す。
-- **検証結果の幕**: ⓐ〜ⓒの結果（届いたか・取れたパス・`transparent`・`accept_files`）・起動の行（`admin=false` の確認）・試した手当てと結果・学び（窓手続きまで届いたか＝`SetWindowSubclass` の手続きで受けた事実＝本坑は `dispatch_window_message` の表に 1 分岐足すだけで足りるか・透過の付け外しとドラッグの追随）・見立て（下表）・日付。判定の欄は空欄で残す。
+- **検証結果の幕**: ⓐ〜ⓒの結果（届いたか・取れたパス・`transparent`・`accept_files`）・起動の行（`admin=false` の確認）・試した手当てと結果・学び（窓手続きまで届いたか＝`SetWindowSubclass` の手続きで受けた事実＝本坑は `dispatch_window_message` の表に 1 分岐足すだけで足りるか・透過の付け外しとドラッグの追随・`opaque=unknown` が出たなら `終了` の行より前かどうか・判定方式（矩形か α か）が結果に効かない理由）・見立て（下表）・日付。判定の欄は空欄で残す。
 
 | 観測 | 見立て |
 |---|---|
@@ -354,6 +352,7 @@ fn handle_drop(ctx: &Context, hwnd: HWND, hdrop: HDROP);
 
 ### Error Strategy
 - 初期化の失敗（`WinApp::new`・窓の生成）: `error!` → 終了コード 2（`run()` に入らない）。
+- 窓が外から閉じられて `run()` が戻った（`Run.exit == None`）: `warn!` → 終了コード 3。
 - 受け口の設置の失敗（`SetWindowSubclass` が `FALSE`・`SetWindowLongPtrW` が 0 で `GetLastError` あり）: `error!("[dropfiles] …")` して走行は続ける。README ではその走行を無効とする。
 - パスの取り出しの失敗（`DragQueryFileW` が 0）: `error!(seq, i)` して次のファイルへ。`DragFinish` は必ず呼ぶ（要件 3.4・3.5）。
 - World が借りられない: `opaque=unknown` で行を出す（止まらない）。
@@ -368,7 +367,7 @@ fn handle_drop(ctx: &Context, hwnd: HWND, hdrop: HDROP);
 先進坑なので厳しさは緩めるが（要件 1.5）、分岐のある純関数には最小の単体テストを 1 本ずつ置く。受け口の本体は Win32 の振る舞いを測るものなので手で落として確かめる（それが本実験）。
 
 - Unit（`#[cfg(test)]`・example の中）:
-  - `exit_ms_from`: 空・非数値・数値（手本と同じ）。
+  - `exit_ms_from`: 空・非数値・数値（手本と同じ）。`exit_code`: 3 値の対応。
   - `ExStyleBits::from_raw`: `0x10`（`ACCEPTFILES`）・`0x20`（`TRANSPARENT`）・`0x80000`（`LAYERED`）・`0x200000`（`NOREDIRECTIONBITMAP`）の組み合わせで 4 ビットが正しく立つ。
   - `Fix::from_env_value`: `None`／`""`／`"reapply"`／`"dragaccept"`／未知の語。
 - Manual（README の手順ⓐ〜ⓒ）: 各項で期待する行（または行が出ないこと）を README に書き、実走のログを README の検証結果へ転記する。
