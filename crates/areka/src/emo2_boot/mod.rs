@@ -70,7 +70,7 @@ use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
-use areka_kanade::KanadeNotice;
+use areka_kanade::{BootOrigin, KanadeNotice};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
 use areka_seriko::{
@@ -98,8 +98,9 @@ use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
 ///
 /// 各段（mount／shell 読み込み＝一覧＋読取＋parse＋bake／balloon 組立／UI アクター spawn）の失敗を
 /// `#[from]` 変換で集約し、呼び手（`wire_emo2_boot`）が `MountError::StartPointMissing` 系は
-/// `warn!`・他は `error!` に分類して `LogSink`×2 フォールバック boot へ倒す（design.md
-/// 「Error Categories and Responses」）。
+/// `warn!`・他は `error!` に分類して `wired=false` を呼び手へ返す（`ghost_session::boot_ghost` は
+/// `LogSink`×2 フォールバック boot へ倒し、`ghost_session::boot_ghost_strict` は `Err` を返す・
+/// design.md「Error Categories and Responses」）。
 ///
 /// load-time バリアント: 構築入力の組立（`build_boot_assets`・task 2.6）が返す
 /// `Mount`／`Decoder`／`ShellRead`／`ShellEmpty`／`Balloon` に加え、UI アクター spawn 失敗
@@ -155,7 +156,7 @@ pub enum BootWiringError {
     /// `spawn_emo_text` は UI（pump）スレッド外呼び出しを検出すると
     /// [`areka_actor::UiSpawnError::NotUiThread`] を返す。本番は `WinApp::new()` 済みの
     /// UI スレッドで `wire_emo2_boot` を呼ぶため通常発生しないが、万一失敗した場合は
-    /// 握り潰さず `error!`＋`wired=false` フォールバックへ倒す（log-first・R7.3）。
+    /// 握り潰さず `error!`＋`wired=false` を呼び手へ返す（log-first・R7.3）。
     /// `UiSpawnError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[source]` で連鎖する。
     #[error("バルーン文字層 UI アクターの spawn に失敗")]
     SpawnUi(#[source] areka_actor::UiSpawnError),
@@ -187,23 +188,24 @@ impl From<ShellLoadError> for BootWiringError {
 // wire_emo2_boot」）— 完成済み 5 トラックを束ねる最後の一結線（M-boot の心臓部）。
 // ===========================================================================
 
-/// `wire_emo2_boot` の結果（design「Service Interface」・`ghost_session::boot_ghost` が
+/// `wire_emo2_boot` の結果（design「Service Interface」・`ghost_session` の結線ありの腕が
 /// `GhostSession` へ束ね、終了処理（`GhostSession::shutdown`）で消費する）。
 ///
-/// - `ghost`: boot 成立時の [`areka_ghost::GhostRuntime`]（フォールバック時は `None`）。
-/// - `seriko`: seriko アクターの [`areka_actor::ActorHandle`]（フォールバック時は `None`）。
-/// - `wired`: 実 sink 結線が成立したか（`false` = `LogSink`×2 フォールバックへ委ねる・R7.3）。
-/// - `loop_ticker`: SERIKO ループ ticker（[`spawn_loop_ticker`]）の停止端（フォールバック時 `None`）。
+/// - `ghost`: boot 成立時の [`areka_ghost::GhostRuntime`]（不成立時は `None`）。
+/// - `seriko`: seriko アクターの [`areka_actor::ActorHandle`]（不成立時は `None`）。
+/// - `wired`: 実 sink 結線が成立したか（`false` の帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
+///   フォールバックへ倒し、`boot_ghost_strict` は `Err` を返す・R7.3）。
+/// - `loop_ticker`: SERIKO ループ ticker（[`spawn_loop_ticker`]）の停止端（不成立時 `None`）。
 pub struct Emo2BootOutcome {
-    /// boot 成立時の ghost ランタイム（フォールバック時 `None`）。
+    /// boot 成立時の ghost ランタイム（不成立時 `None`）。
     pub ghost: Option<areka_ghost::GhostRuntime>,
-    /// seriko アクターの join ハンドル（フォールバック時 `None`）。
+    /// seriko アクターの join ハンドル（不成立時 `None`）。
     pub seriko: Option<areka_actor::ActorHandle>,
-    /// 実 sink 結線が成立したか（`false` = `LogSink` フォールバック）。
+    /// 実 sink 結線が成立したか（`false` の帰結は呼び手が決める）。
     pub wired: bool,
     /// SERIKO ループ ticker（16ms 実時計・[`spawn_loop_ticker`]）の停止端。
     /// 終了処理（`GhostSession::shutdown`・task 9.5）が [`TickerMsg::Close`] を送って ticker を止める
-    /// （フォールバック時は ticker を起こさないため `None`）。
+    /// （不成立時は ticker を起こさないため `None`）。
     pub loop_ticker: Option<std::sync::mpsc::Sender<TickerMsg>>,
 }
 
@@ -224,6 +226,9 @@ pub struct Emo2BootInputs {
     pub ticker: TickerMode,
     /// アプリのプロファイルの置き場（本番 `Some`・テスト `None`）。
     pub app_profile_dir: Option<PathBuf>,
+    /// 起動の由来（ふつう・切替で来た・前回落ちた）。`areka_ghost::boot_with_origin` へ渡る
+    /// （`GhostBootOptions` に欄を足さない・要件 8.6）。
+    pub boot_origin: BootOrigin,
 }
 
 /// M-boot の scope 集合を導出する（design DD-12・line 460「placement と同じ入力から自前導出」）。
@@ -277,14 +282,14 @@ fn classify_wiring_error(err: &BootWiringError) {
         BootWiringError::Mount(MountError::StartPointMissing { .. }) => {
             warn!(
                 error = %err,
-                "emo2-boot: 構築入力の起点が見つかりません（LogSink フォールバックへ委ねる・R7.3）"
+                "emo2-boot: 構築入力の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.3）"
             );
         }
         // 他は真に予期しない失敗として error（読取不能／bake／balloon／spawn_ui 等）。
         _ => {
             error!(
                 error = %err,
-                "emo2-boot: 構築入力の組立に失敗（LogSink フォールバックへ委ねる・R7.3）"
+                "emo2-boot: 構築入力の組立に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.3）"
             );
         }
     }
@@ -316,9 +321,10 @@ const _: fn() = || {
 /// 1. [`build_boot_assets_for`]（`scopes` は [`derive_scopes`] で placement と同じ入力から自前導出・
 ///    DD-12。作者基準 DPI は引数 `author_dpi`＝placement の準備が読んだ値をそのまま搬送・
 ///    task 4.3）。`Err` は [`classify_wiring_error`]（起点不在＝`warn!`・他＝`error!`・R7.3）の上
-///    `wired=false` を返し、呼び手（`ghost_session::boot_ghost`）の `LogSink`×2 フォールバック boot へ委ねる。
+///    `wired=false` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink`×2 フォールバック boot へ
+///    倒し、`ghost_session::boot_ghost_strict` は `Err` を返す）。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
-///    （UI スレッド前提。`Err` は [`BootWiringError::SpawnUi`] 分類＋`wired=false` フォールバック）。
+///    （UI スレッド前提。`Err` は [`BootWiringError::SpawnUi`] 分類＋`wired=false`）。
 /// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入）／[`ClockedTextSink::new`]。
 /// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]／[`spawn_seriko`]。
 ///    **SurfaceResolver 突き合わせ（Task 4.1 申し送り）**: `resolver`（非 Clone）は `spawn_seriko`
@@ -326,7 +332,7 @@ const _: fn() = || {
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
 /// 5. [`areka_ghost::boot`]（`surface_sink`＝[`SerikoSink`] を直渡し・`text_sink`＝`ClockedTextSink`・
 ///    `shiori`／`ticker`／`app_profile_dir` は [`Emo2BootInputs`] の値＝本番は `Helper`／`Real`）。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
-///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false` フォールバック。停止通知の送出端は
+///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false`。停止通知の送出端は
 ///    引数 `kanade_stop`（`main` が作った channel の送出端）をそのまま渡す（ここでは channel を
 ///    作らない・受け口の据え付けは [`wire_kanade_stop`]）。
 /// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
@@ -338,7 +344,8 @@ const _: fn() = || {
 ///
 /// # 失敗（log-first・panic しない・R7.3）
 /// いずれの手順の失敗も `warn!`／`error!`＋`Emo2BootOutcome{ ghost: None, seriko: None,
-/// wired: false }` へ縮退し、`ghost_session::boot_ghost` の `LogSink`×2 boot（既存 smoke 温存）へ委ねる。boot 成立後の
+/// wired: false }` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink`×2 boot（既存 smoke 温存）へ倒し、
+/// `ghost_session::boot_ghost_strict` は `Err` を返す）。boot 成立後の
 /// spawn 済み seriko は、boot 失敗時 `surface_sink` drop で inbox 切断→worker 自然終了ゆえ handle を
 /// drop（非 RAII・detach）して打ち切る（hang させない）。
 pub fn wire_emo2_boot(
@@ -348,7 +355,8 @@ pub fn wire_emo2_boot(
     zorder_descript: Option<&str>,
     kanade_stop: Sender<KanadeNotice>,
 ) -> Emo2BootOutcome {
-    /// 実 sink 結線を成立させないフォールバック結果（`ghost_session::boot_ghost` の `LogSink`×2 boot へ委ねる・R7.3）。
+    /// 実 sink 結線が成立しなかった結果（`wired=false`・帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
+    /// boot へ倒し、`boot_ghost_strict` は `Err` を返す・R7.3）。
     fn fallback() -> Emo2BootOutcome {
         Emo2BootOutcome {
             ghost: None,
@@ -364,10 +372,11 @@ pub fn wire_emo2_boot(
         shiori,
         ticker,
         app_profile_dir,
+        boot_origin,
     } = inputs;
 
     // 手順1: 構築入力の一括組立（scopes は placement と同じ入力から自前導出・DD-12）。
-    // 失敗（fixture 不在等）は分類 warn/error の上 wired=false フォールバックへ倒す（R7.3）。
+    // 失敗（fixture 不在等）は分類 warn/error の上 wired=false を呼び手へ返す（R7.3）。
     let scopes = derive_scopes();
     // 作者基準 DPI（design Flow 3 手順1）は placement の準備が **1 度だけ**読んだ値を
     // `main` から `ghost_session::boot_ghost` 経由で受け取る（採寸 k₀ と attach が同じ宣言を見る・task 4.3）。
@@ -381,7 +390,7 @@ pub fn wire_emo2_boot(
     };
 
     // 手順2: presenter／文字層ランタイム（Rc<RefCell<>>）／文字層 UI アクター（UI スレッド前提）。
-    // spawn_emo_text の Err（UI スレッド外呼び出し検出等）は SpawnUi 分類＋フォールバック（R7.3）。
+    // spawn_emo_text の Err（UI スレッド外呼び出し検出等）は SpawnUi 分類＋wired=false（R7.3）。
     let presenter = EmoPresenter::new();
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
@@ -516,7 +525,7 @@ pub fn wire_emo2_boot(
     // boot 失敗時はこの clone が inbox を生かし続けないよう明示 drop する（worker 自然終了・下記）。
     let tick_sink = surface_sink.clone();
 
-    // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋フォールバック。
+    // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋wired=false。
     // sinks は broadcast 登録先で、surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
     // 3 sink を第 1〜3 要素として渡す（task 9.1）。move_sink は `\![move]` を名前選別で消費し、
     // MoveDirective を move channel 経由で UI スレッド（Emo2Wiring の move_rx）へ送出する。
@@ -560,19 +569,24 @@ pub fn wire_emo2_boot(
     // （`wire_kanade_stop` が据える）から取り出す。channel は `main` が 1 本作り、ここは受け取った
     // 送出端を渡すだけ。これが在ることで、終了挨拶を再生し終えてから窓が閉じる——無ければ操作が
     // 窓を直接閉じるほかなく、挨拶を素通りする（症状 C）。
-    let ghost_runtime = match areka_ghost::boot_with_kanade_stop(boot_options, Some(kanade_stop)) {
+    // 起動の由来は kanade の起動の根（`OnBoot`／`OnGhostChanged`）の選択へ渡る（要件 4.1・8.6）。
+    let ghost_runtime = match areka_ghost::boot_with_origin(
+        boot_options,
+        Some(kanade_stop),
+        boot_origin,
+    ) {
         Ok(runtime) => runtime,
         Err(err) => {
             // R7.4: 既存 main と同一方針で分類（起点不在＝良性 warn・他＝error）。
             if crate::is_benign_boot_error(&err) {
                 warn!(
                     error = %err,
-                    "emo2-boot: ghost boot の起点が見つかりません（LogSink フォールバックへ委ねる・R7.4）"
+                    "emo2-boot: ghost boot の起点が見つかりません（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
                 );
             } else {
                 error!(
                     error = %err,
-                    "emo2-boot: ghost boot に失敗（LogSink フォールバックへ委ねる・R7.4）"
+                    "emo2-boot: ghost boot に失敗（実 sink 結線は不成立・帰結は呼び手が記録・R7.4）"
                 );
             }
             // spawn 済み seriko の後始末: surface_sink は boot_options 消費で drop 済み。ただし tick 用
@@ -724,7 +738,7 @@ mod wire_tests {
     }
 
     /// 観測可能な完了条件（tasks.md task 5.1）: 存在しない ghost_root に対し
-    /// `wire_emo2_boot` は `wired=false`（`LogSink` フォールバックへ委ねる・R7.3）を返し、
+    /// `wire_emo2_boot` は `wired=false`（帰結は呼び手が決める・R7.3）を返し、
     /// ghost／seriko ハンドルは `None` となる（実 sink 結線を成立させない決定分岐の檻）。
     ///
     /// 素の `World::new()` で足りる。`build_boot_assets` が `resolve` 起点不在で早期 `Err` を返すため、
@@ -741,6 +755,7 @@ mod wire_tests {
             },
             ticker: TickerMode::Disabled,
             app_profile_dir: None,
+            boot_origin: BootOrigin::Plain,
         };
 
         let outcome = wire_emo2_boot(
@@ -753,15 +768,15 @@ mod wire_tests {
 
         assert!(
             !outcome.wired,
-            "存在しない ghost_root では実 sink 結線は成立せず LogSink フォールバックへ委ねる（R7.3）"
+            "存在しない ghost_root では実 sink 結線は成立せず wired=false を返す（R7.3）"
         );
         assert!(
             outcome.ghost.is_none(),
-            "フォールバック時は ghost ランタイムを起動しない（None）"
+            "不成立時は ghost ランタイムを起動しない（None）"
         );
         assert!(
             outcome.seriko.is_none(),
-            "フォールバック時は seriko アクターを起こさない（None）"
+            "不成立時は seriko アクターを起こさない（None）"
         );
     }
 }

@@ -178,6 +178,7 @@ fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeNotice>) -> Gh
             })),
             ticker: areka_ghost::TickerMode::Disabled,
             app_profile_dir: None,
+            boot_origin: areka_kanade::BootOrigin::Plain,
         },
         // 結線ありの腕を通すので使われない（fallback に落ちたら判定の説明書の面が赤になる）。
         helper_exe: PathBuf::from("ghost_session_restart_tests/使わない/helper.exe"),

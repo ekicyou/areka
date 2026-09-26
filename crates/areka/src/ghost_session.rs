@@ -6,15 +6,18 @@
 //! 済ませ、状態は後から入れ替えても系は新しい状態を見る。
 //!
 //! 今ここに在るのは登録の入口 [`register_systems`] と、窓を作る側 [`open_ghost_windows`]・
-//! 閉じた証を受けて窓を作り直す [`reopen_ghost_windows`]、ゴーストごとの結線 [`boot_ghost`] と
-//! その 3 ハンドルを降ろす [`GhostSession::shutdown`] である。登録の呼び手は `fn main` の
+//! 閉じた証を受けて窓を作り直す [`reopen_ghost_windows`]、ゴーストごとの結線 [`boot_ghost`]
+//! （fallback へ倒れる）／[`boot_ghost_strict`]（倒れず失敗を返す・切替用）と
+//! その 3 ハンドルを降ろす [`GhostSession::shutdown`]、起こしたゴーストの置き場 [`GhostSlot`] と
+//! 起動入力の作り口 [`GhostBootInputsSource`] である。登録の呼び手は `fn main` の
 //! 1 か所（`WinApp` を作った直後・起動窓の前）。各結線（`wire_*`）は状態の挿入だけを行い、
 //! 系を登録しない。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use areka_kanade::KanadeNotice;
+use areka_kanade::{BootOrigin, KanadeMsg, KanadeNotice};
+use areka_parsers::package::GhostNames;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use wintf::ecs::FrameFinalize;
@@ -285,11 +288,12 @@ pub(crate) struct GhostBootInputs {
 
 impl GhostBootInputs {
     /// 本番の値: SHIORI は `Helper { helper_exe }`・時計は `Real` 既定・記憶の置き場は
-    /// `Some(default_app_profile_dir())`・根は構成入力のもの。
+    /// `Some(default_app_profile_dir())`・根は構成入力のもの・起動の由来は呼び手が渡したもの。
     pub(crate) fn production(
         cfg: &ConfigInputs,
         helper_exe: PathBuf,
         kanade_stop: Sender<KanadeNotice>,
+        boot_origin: BootOrigin,
     ) -> Self {
         Self {
             wiring: emo2_boot::Emo2BootInputs {
@@ -300,12 +304,35 @@ impl GhostBootInputs {
                 },
                 ticker: areka_ghost::TickerMode::Real(Default::default()),
                 app_profile_dir: Some(default_app_profile_dir()),
+                boot_origin,
             },
             helper_exe,
             kanade_stop,
         }
     }
 }
+
+/// 起動入力の作り口（World の NonSend・プロセスに 1 つ）: 構成入力と起動の由来から
+/// [`GhostBootInputs`] を組む。切替が相手のゴーストを起こすときに使う（`ShioriWiring::Custom` は
+/// 写せず、停止通知の送り口は `main` にしか無いので、作り口ごと World に置く）。本番は
+/// [`GhostBootInputs::production`] を helper のパスと停止通知の送り口の写しで閉じたもの、
+/// テストは根のフォルダごとに偽の SHIORI を返すものを据える。
+// 据え付けは本番が 8.5 の `fn main`・テストが 8.1 の土台。それまでは test からだけ作る。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct GhostBootInputsSource(
+    pub(crate) Box<dyn Fn(&ConfigInputs, BootOrigin) -> GhostBootInputs>,
+);
+
+/// 起こしたゴーストの置き場（World の NonSend・プロセスに 1 つ）。`main` が据え、切替が
+/// 入れ替え、`main` が `run()` の後に取り出して降ろす。
+// 据え付けは 8.5 の `fn main`・入れ替えは 8.2 の切替。それまでは test からだけ作る。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct GhostSlot(pub(crate) Option<GhostSession>);
+
+/// 結線ありの起動が成立しなかった（理由は `wire_emo2_boot` が `warn!`／`error!` で記録済み）。
+#[derive(Debug, thiserror::Error)]
+#[error("ゴーストの起動の結線が成立しなかった")]
+pub(crate) struct BootWiringFailed;
 
 /// 1 体のゴーストの 3 ハンドル（ゴースト実行系・seriko・loop ticker）。
 ///
@@ -315,14 +342,33 @@ pub(crate) struct GhostSession {
     ghost: Option<areka_ghost::GhostRuntime>,
     seriko: Option<areka_actor::ActorHandle>,
     loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
+    /// 起こしたゴーストの根（`ghost/<フォルダ名>`・起動の結線の入力のもの）。
+    ghost_dir: PathBuf,
 }
 
 impl GhostSession {
     /// 告知の場面が使うゴースト名（fallback の起動に失敗して実行系が無ければ `None`）。
     pub(crate) fn ghost_name(&self) -> Option<String> {
-        self.ghost
-            .as_ref()
-            .and_then(|r| r.mount().names.name.clone())
+        self.names().and_then(|n| n.name.clone())
+    }
+
+    /// ゴーストの名前情報（descript の `name`・`sakura.name` ほか）。実行系が無ければ `None`。
+    pub(crate) fn names(&self) -> Option<&GhostNames> {
+        self.ghost.as_ref().map(|r| &r.mount().names)
+    }
+
+    /// kanade への送出端（切替の要求を送る）。実行系が無ければ `None`。
+    // 本番の呼び手は 7.1 の切替の入口。それまでは test からだけ呼ぶ。
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn kanade(&self) -> Option<&Sender<KanadeMsg>> {
+        self.ghost.as_ref().map(|r| r.kanade())
+    }
+
+    /// 起こしたゴーストの根（実行系が無くても起動に渡した根を返す）。
+    // 本番の呼び手は 7.1／8.2 の切替（直前のゴーストのパス）。それまでは test からだけ呼ぶ。
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn ghost_dir(&self) -> &Path {
+        &self.ghost_dir
     }
 
     /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止 → ② ゴースト実行系の終了
@@ -385,12 +431,12 @@ impl GhostSession {
     }
 }
 
-/// ゴーストごとの結線と状態の載せ替え（要件 2.3・2.4・2.6・design「boot_ghost」）。
+/// ゴーストごとの結線と状態の載せ替え（要件 2.3・2.4・2.6・design「boot_ghost」）。今日どおりの入口。
 ///
-/// 起動の結線（`wire_emo2_boot`）が成立すれば実 sink の腕（入力・メニュー・記憶・バルーンの
-/// 選択・選択肢の送り）を、成立しなければ `LogSink`×2 の fallback の腕を通す。各状態は
-/// `insert_non_send` で置き換わるので n 回呼べる（呼び手は先に [`GhostSession::shutdown`] で
-/// 前のゴーストを降ろしておくこと）。証は取らない（証は [`reopen_ghost_windows`] が消費する）。
+/// 起動の結線が成立すれば結線ありの腕（[`boot_wired`]）を、成立しなければ `LogSink`×2 の
+/// fallback の腕を通す（初回起動の非致命）。各状態は `insert_non_send` で置き換わるので n 回
+/// 呼べる（呼び手は先に [`GhostSession::shutdown`] で前のゴーストを降ろしておくこと）。証は
+/// 取らない（証は [`reopen_ghost_windows`] が消費する）。
 pub(crate) fn boot_ghost(
     world: &mut World,
     inputs: GhostBootInputs,
@@ -403,14 +449,95 @@ pub(crate) fn boot_ghost(
         helper_exe,
         kanade_stop,
     } = inputs;
-    // fallback の腕が使う根（結線の入力は `wire_emo2_boot` へ move するので先に写す）。
+    // fallback の腕が使う根（結線の入力は `boot_wired` へ move するので先に写す）。
     let ghost_root = wiring.ghost_root.clone();
+
+    // `wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォールバック boot へ
+    // 倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
+    if let Ok(session) = boot_wired(world, wiring, &kanade_stop, descript, ghost, balloon) {
+        return session;
+    }
+
+    // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
+    // relocate したもの。失敗は非致命——起動前の解決が `ghost/master/descript.txt` の実在を
+    // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
+    // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
+    // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
+    let ghost_options = ghost_boot_options(ghost_root.clone(), helper_exe);
+    // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
+    let runtime = match areka_ghost::boot_with_kanade_stop(ghost_options, Some(kanade_stop)) {
+        Ok(runtime) => {
+            tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
+            // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
+            // 生きた runtime があれば wired 経路と同型に PersistWiring（NonSend）を同一 World へ
+            // 挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。
+            // 起動成功時の記憶の書き込みも wired 経路と同じ 1 か所で行う（baseware-root-layout 要件 3）。
+            crate::on_boot_ok(world, &runtime, ghost, balloon);
+            Some(runtime)
+        }
+        Err(err) => {
+            if is_benign_boot_error(&err) {
+                tracing::warn!(
+                    error = %err,
+                    "ghost 結線層の起動起点が見つかりません（決定のみで継続・骨格起動は阻害しません）"
+                );
+            } else {
+                tracing::error!(
+                    error = %err,
+                    "ghost 結線層の起動に失敗しました（継続・骨格起動は阻害しません）"
+                );
+            }
+            None
+        }
+    };
+    // フォールバック経路に seriko アクター・loop ticker はない（実 sink 結線が成立していない）。
+    GhostSession {
+        ghost: runtime,
+        seriko: None,
+        loop_ticker: None,
+        ghost_dir: ghost_root,
+    }
+}
+
+/// 切替用の入口（要件 6.1）: 結線が成立しなければ fallback の骨格へ倒れず
+/// `Err(BootWiringFailed)` を返す（呼び手が既定ゴーストへ戻すか致命で終える）。成立したときの
+/// 状態の載せ替えは [`boot_ghost`] の結線ありの腕と同じ（[`boot_wired`]）。
+// 本番の呼び手は 8.2 の切替（切替先を起こす・既定へ戻す）。それまでは test からだけ呼ぶ。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn boot_ghost_strict(
+    world: &mut World,
+    inputs: GhostBootInputs,
+    descript: &StartupDescriptValues,
+    ghost: &GhostDecision,
+    balloon: &BalloonDecision,
+) -> Result<GhostSession, BootWiringFailed> {
+    // helper のパスは fallback の腕だけが使う（厳格な入口は fallback を持たない）。
+    let GhostBootInputs {
+        wiring,
+        helper_exe: _,
+        kanade_stop,
+    } = inputs;
+    boot_wired(world, wiring, &kanade_stop, descript, ghost, balloon)
+}
+
+/// 結線ありの腕（2 つの入口が共有・私有）: 起動の結線（`wire_emo2_boot`）を試み、成立すれば
+/// 窓ごとの状態（マウス・メニュー・記憶・バルーンの選択・選択肢の送り）を `insert_non_send` で
+/// 新品へ置き換えて [`GhostSession`] を返す（要件 4.8）。成立しなければ `Err(BootWiringFailed)`
+/// （理由は `wire_emo2_boot` が記録済み）で、World の状態には触れない。
+fn boot_wired(
+    world: &mut World,
+    wiring: emo2_boot::Emo2BootInputs,
+    kanade_stop: &Sender<KanadeNotice>,
+    descript: &StartupDescriptValues,
+    ghost: &GhostDecision,
+    balloon: &BalloonDecision,
+) -> Result<GhostSession, BootWiringFailed> {
+    let ghost_dir = wiring.ghost_root.clone();
 
     // emo2 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）:
     // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
-    // 終了処理へ運ぶ。`wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォール
-    // バック boot へ倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
+    // 終了処理へ運ぶ。
     let outcome = emo2_boot::wire_emo2_boot(
         world,
         wiring,
@@ -418,86 +545,51 @@ pub(crate) fn boot_ghost(
         descript.zorder_raw.as_deref(),
         kanade_stop.clone(),
     );
-    if outcome.wired {
-        tracing::info!(
-            "実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）"
-        );
-        // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
-        // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
-        // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
-        // 成立する（Emo2Wiring 挿入と同位置・同型・self-gating）。窓へのハンドラ登録は task 3.2。
-        if let Some(runtime) = outcome.ghost.as_ref() {
-            let sender = runtime.kanade().clone();
-            input_events::wire_mouse_input(world, sender);
-            // 右クリックメニューの結線（areka-P0-popup-menu-minimal）: 終了の項目が上の入力の結線を使う。
-            menu::wire_menu(world, runtime.kanade().clone());
-            // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
-            // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
-            // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
-            // write-through 導管を確立する。続けて起動成功時の記憶を書く（baseware-root-layout 要件 3）。
-            crate::on_boot_ok(world, runtime, ghost, balloon);
-        }
-        // バルーン選択肢対話配線を World へ結線（task 6.2・design「main.rs＋wire_balloon_choice」・
-        // R4.3/5.5/8.1）: mpsc チャネル生成＋`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入。
-        // 離脱の系の登録は [`register_systems`] が済ませてある。ハンドラ装着は [`open_ghost_windows`] の
-        // spawn 直後（`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `Emo2Wiring` を
-        // self-gate するため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating・DD-IE-9 前例）。
-        input_events::balloon::wire_balloon_choice(world);
-        // 選択確定通知の受信結線（areka-P0-choice-select-events task 5・design C1 ChoiceDrain・
-        // Req1.1/1.2/1.5/1.6/3.7）: 直上 `wire_balloon_choice` が挿入した `ChoiceSelectionInbox`
-        // （precondition）を毎フレーム drain し kanade へ全件転送する系（登録は [`register_systems`]）の
-        // 送り口を置く。位置・様式は `wire_mouse_input`（上方の同 boot スロット）と同型——kanade Sender
-        // クローンを持つ NonSend 資源挿入。
-        if let Some(runtime) = outcome.ghost.as_ref() {
-            input_events::choice_drain::wire_choice_drain(world, runtime.kanade().clone());
-        }
-        GhostSession {
-            ghost: outcome.ghost,
-            seriko: outcome.seriko,
-            loop_ticker: outcome.loop_ticker,
-        }
-    } else {
-        // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
-        // relocate したもの。失敗は非致命——起動前の解決が `ghost/master/descript.txt` の実在を
-        // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
-        // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
-        // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
-        let ghost_options = ghost_boot_options(ghost_root, helper_exe);
-        // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
-        let runtime = match areka_ghost::boot_with_kanade_stop(ghost_options, Some(kanade_stop)) {
-            Ok(runtime) => {
-                tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
-                // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
-                // 生きた runtime があれば wired 経路と同型に PersistWiring（NonSend）を同一 World へ
-                // 挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。
-                // 起動成功時の記憶の書き込みも wired 経路と同じ 1 か所で行う（baseware-root-layout 要件 3）。
-                crate::on_boot_ok(world, &runtime, ghost, balloon);
-                Some(runtime)
-            }
-            Err(err) => {
-                if is_benign_boot_error(&err) {
-                    tracing::warn!(
-                        error = %err,
-                        "ghost 結線層の起動起点が見つかりません（決定のみで継続・骨格起動は阻害しません）"
-                    );
-                } else {
-                    tracing::error!(
-                        error = %err,
-                        "ghost 結線層の起動に失敗しました（継続・骨格起動は阻害しません）"
-                    );
-                }
-                None
-            }
-        };
-        // フォールバック経路に seriko アクター・loop ticker はない（実 sink 結線が成立していない）。
-        GhostSession {
-            ghost: runtime,
-            seriko: None,
-            loop_ticker: None,
-        }
+    if !outcome.wired {
+        return Err(BootWiringFailed);
     }
+    tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）");
+    // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
+    // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
+    // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
+    // 成立する（Emo2Wiring 挿入と同位置・同型・self-gating）。窓へのハンドラ登録は task 3.2。
+    if let Some(runtime) = outcome.ghost.as_ref() {
+        let sender = runtime.kanade().clone();
+        input_events::wire_mouse_input(world, sender);
+        // 右クリックメニューの結線（areka-P0-popup-menu-minimal）: 終了の項目が上の入力の結線を使う。
+        menu::wire_menu(world, runtime.kanade().clone());
+        // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
+        // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
+        // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
+        // write-through 導管を確立する。続けて起動成功時の記憶を書く（baseware-root-layout 要件 3）。
+        crate::on_boot_ok(world, runtime, ghost, balloon);
+    }
+    // バルーン選択肢対話配線を World へ結線（task 6.2・design「main.rs＋wire_balloon_choice」・
+    // R4.3/5.5/8.1）: mpsc チャネル生成＋`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入。
+    // 離脱の系の登録は [`register_systems`] が済ませてある。ハンドラ装着は [`open_ghost_windows`] の
+    // spawn 直後（`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `Emo2Wiring` を
+    // self-gate するため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating・DD-IE-9 前例）。
+    input_events::balloon::wire_balloon_choice(world);
+    // 選択確定通知の受信結線（areka-P0-choice-select-events task 5・design C1 ChoiceDrain・
+    // Req1.1/1.2/1.5/1.6/3.7）: 直上 `wire_balloon_choice` が挿入した `ChoiceSelectionInbox`
+    // （precondition）を毎フレーム drain し kanade へ全件転送する系（登録は [`register_systems`]）の
+    // 送り口を置く。位置・様式は `wire_mouse_input`（上方の同 boot スロット）と同型——kanade Sender
+    // クローンを持つ NonSend 資源挿入。
+    if let Some(runtime) = outcome.ghost.as_ref() {
+        input_events::choice_drain::wire_choice_drain(world, runtime.kanade().clone());
+    }
+    Ok(GhostSession {
+        ghost: outcome.ghost,
+        seriko: outcome.seriko,
+        loop_ticker: outcome.loop_ticker,
+        ghost_dir,
+    })
 }
 
 #[cfg(test)]
 #[path = "ghost_session_restart_tests.rs"]
 mod restart_tests;
+
+#[cfg(test)]
+#[path = "ghost_session_strict_tests.rs"]
+mod strict_tests;

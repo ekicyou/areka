@@ -255,7 +255,12 @@ fn main() -> Result<()> {
     // loop ticker）は `GhostSession` に束ねて後始末へ運ぶ。
     let session = ghost_session::boot_ghost(
         app.world().borrow_mut().world_mut(),
-        ghost_session::GhostBootInputs::production(&cfg, helper_exe, kanade_stop_tx.clone()),
+        ghost_session::GhostBootInputs::production(
+            &cfg,
+            helper_exe,
+            kanade_stop_tx.clone(),
+            areka_kanade::BootOrigin::Plain,
+        ),
         &descript,
         &ghost_decision,
         &balloon_decision,
