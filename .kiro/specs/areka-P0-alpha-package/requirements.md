@@ -24,7 +24,7 @@
 - 検体の展開は `cargo run -p sample-ghost-kit --bin nar-sample-path -- <検体>`（出力の形は `crates/sample-ghost-kit/tests/nar_sample_path_test.rs` が固定）。呼ぶたびに `target/nar-samples/manual/<検体>/` を消して作り直す＝同じ検体で実機を回している最中に呼ぶと、その木を消す。
 - smoke の自動終了は `main.rs` の `SMOKE_EXIT_ENV`＝`AREKA_APP_SMOKE_EXIT_MS`。告知のモーダルは `alert.rs` の `NO_ALERT_ENV`＝`AREKA_NO_ALERT` で抑えられる。前例 `crates/areka/tests/emo2_real_run.rs` は子プロセスの出力を grep し、終了コード 0 と「ゴーストが立った」記録を番犬付きで判定している。
 - ライセンス: 根の `Cargo.toml` の `[workspace.package]` は `license = "MIT"`、全 crate が `license.workspace = true`、実物のファイルは `LICENSE-MIT` だけ。根の `README.md` はバッジ（リンク先 `LICENSE` は不在）とライセンスの節の 2 か所が「MIT OR Apache-2.0」。謝辞の雛形 `about.hbs` は「areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）」と書き、生成物 `THIRD-PARTY-NOTICES.md` にもその文が入る。`deny.toml` の冒頭の注記も「areka の MIT 化を守る」。
-- 根の `README.md` の「現在の到達点」は「57件の仕様を完了し、基盤レイヤーの約70%を構築済み」（完了フォルダは 201）。
+- 根の `README.md` の「現在の到達点」は「57件の仕様を完了し、基盤レイヤーの約70%を構築済み」（`.kiro/specs/completed/` の直下は仕様のフォルダ 200 と `.md` 1 本の計 201 項目＝仕様の数は 200）。
 - `Cargo.lock` は追跡外（`.gitignore` の 2 行目）。`THIRD-PARTY-NOTICES.md` は cargo の依存だけを載せ、cargo 依存でない資産（ゴースト・シェル・バルーン）は載らない（steering `tech.md`）。
 
 ## Boundary Context
@@ -75,7 +75,8 @@
 3. The 配布スクリプト shall zip に起動記録（areka の記憶の置き場 `profile/` と、ゴーストの中の `profile/`）を 1 つも入れない（展開した直後の起動が初回の起動になる）。
 4. The 配布スクリプト shall zip に既定ゴースト `emo2` 以外のゴーストを入れず、`StayseeBalloon` と要件 2.5 のもの以外のバルーンを入れない（`konnoyayame`・`claudia`・`R_POST_and_KOMAINU`・`emo2-kakukaku-offsetdpi`・`emo2-kakukaku-wplimit` は入れない）。テスト用の DLL と実行ファイル（`shiori-host32-testdll` 等）も入れない。
 5. Where 〔議題 ⑴＝入れる〕, the 配布スクリプト shall `balloon/emo2-kakukaku/` を zip に入れる。Where 〔議題 ⑴＝入れない〕, the 配布スクリプト shall `balloon/emo2-kakukaku/` を zip に入れない。
-6. When zip を組み終える, the 配布スクリプト shall 要件 2.1〜2.5 を zip の実物の一覧から判定し（印字するだけでなく合否を決め）、1 つでも外れれば要件 1.5 の失敗として扱う。
+6. When zip を組み終える, the 配布スクリプト shall 要件 2.1〜2.5 と 2.7 を zip の実物から判定し（印字するだけでなく合否を決め）、1 つでも外れれば要件 1.5 の失敗として扱う。判定には「zip の `shiori-host32-helper.exe` が 32 ビット（PE の機種 0x14c）であること」を含める（`cargo build --workspace` が x64 の helper を `target/release/` に置くことがあり、取り違えると 32 ビットの SHIORI が読めない）。
+7. The zip の実行ファイル（`areka.exe`・`shiori-host32-helper.exe`）shall Windows 10 以降に標準で在る DLL だけに頼り、Visual C++ 再頒布可能パッケージ（`VCRUNTIME140.dll` 等）を入れていない機械でも起動できる（開発機には必ず在るので、要件 3 の起動確認だけではこの欠けを見つけられない。どう満たすか＝静的に結ぶか等は設計で決める）。
 
 ### Requirement 3: 展開した zip で起動確認が通る
 
@@ -83,9 +84,9 @@
 
 #### Acceptance Criteria
 
-1. When 開発者が起動確認を求める, the 配布スクリプト shall 組んだ zip をリポジトリの外の新しい空の場所へ展開し、展開した `areka.exe` を引数なしで起動する（根も記憶の置き場も展開した場所から決まる形で）。
-2. While 起動確認の走行中, the 配布スクリプト shall 開発機の環境変数のうち根と記憶の置き場を上書きするもの（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）を子プロセスへ渡さず、告知のモーダルを抑える指定（`AREKA_NO_ALERT`）と有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）を渡す。
-3. When 子プロセスが終わる, the 配布スクリプト shall 終了コードが 0 であること・ゴーストの窓が立った記録があること・SHIORI の接続の失敗の記録が無いことを判定し、合否を印字して、否なら終了コード非 0 で終わる。
+1. When 開発者が起動確認を求める, the 配布スクリプト shall 組んだ zip をリポジトリの外の新しい空の、パスの短い場所へ展開し、展開した `areka.exe` を引数なしで起動する（根も記憶の置き場も展開した場所から決まる形で）。パスを短くするのは、`emo2` の SHIORI（pasta）が初回に `ghost/master/profile/` の奥へ書き出すファイルのパスが長すぎると、接続の失敗を出さずに黙るため（`research.md` §4.2）。
+2. While 起動確認の走行中, the 配布スクリプト shall 開発機の環境変数のうち areka の振る舞いを変えるもの（`AREKA_` で始まるもの。根と記憶の置き場を上書きする `AREKA_ROOT`・`AREKA_PROFILE_DIR` を含む）を子プロセスへ持ち越さず、告知のモーダルを抑える指定（`AREKA_NO_ALERT`）と有界の自動終了（`AREKA_APP_SMOKE_EXIT_MS`）だけを渡す（判定に要る記録の出し方の指定は設計で決める）。
+3. When 子プロセスが終わる, the 配布スクリプト shall 終了コードが 0 であること・ゴーストの窓が立った記録があること・SHIORI の接続の失敗の記録が無いこと・ゴーストの会話が始まった記録があることを判定し、合否を印字して、否なら終了コード非 0 で終わる。「会話が始まった」を含めるのは、SHIORI がすべてのイベントに空の応答を返して黙る失敗と、接続の結果より先に自動終了が来る空振りを、ほかの 3 条件だけでは通してしまうため（どの記録を目印にするか・自動終了を何ミリ秒にするかは設計で決める）。
 4. If 子プロセスが決めた上限の時間までに終わらない, then the 配布スクリプト shall 自分が起こしたその子プロセスだけを止め、起動確認を否として終了コード非 0 で終わる（他のプロセスは止めない）。
 5. When 子プロセスが終わる, the 配布スクリプト shall 初回に立ったバルーンが議題 ⑴ の答えどおり（入れる＝`emo2-kakukaku`・入れない＝`StayseeBalloon`）であることも判定する。〔議題 ⑴＝入れない〕のとき初回だけ出る `companion_balloon_not_found` の警告は否の理由にしない。
 6. If 起動確認が否になる, then the 配布スクリプト shall 子プロセスの記録の置き場所を印字して残す（開発者があとで読める）。
@@ -101,7 +102,7 @@
 2. The 第三者向け README shall 少なくとも「起動」「終了」「右クリックメニュー」「記憶の置き場」「既知の制限」「`.nar` の入れ方」「同梱物とライセンス」の欄を持つ。
 3. The 第三者向け README shall 「`.nar` の入れ方」の欄は見出しと「未記入（`alpha-release-signoff` が仕上げる）」の目印だけを置き、手順を書かない（入れ方は `ghost-install` の入口で決まるため）。ほかの欄でも、本仕様の時点で書けない中身は同じ目印で空けておく。
 4. The 第三者向け README shall 欄に書く事実（起動のしかた・終了のしかた・メニューの項目・記憶の置き場所・根の形）を、実装の着手時の main のソースで確かめてから書き、確かめられないことは書かない。
-5. The 第三者向け README shall 「既知の制限」の欄に、少なくとも「exe に署名が無い（Windows が警告を出すことがある）」「Windows 専用」「α の時点でできないこと（ゴーストの切替など、着手時の main で未着地のもの）」を書く。
+5. The 第三者向け README shall 「既知の制限」の欄に、少なくとも「exe に署名が無い（Windows が警告を出すことがある）」「Windows 専用」「深いフォルダに展開しない（パスが長いと既定ゴーストが黙ることがある）」「α の時点でできないこと（ゴーストの切替など、着手時の main で未着地のもの）」を書く。
 6. When 配布スクリプトが zip を組む, the 配布スクリプト shall リポジトリの第三者向け README をそのまま zip の最上位へ入れる（zip のために別の文面を作らない）。
 
 ### Requirement 5: 同梱物の条件を正しく載せる
@@ -111,7 +112,7 @@
 #### Acceptance Criteria
 
 1. The 第三者向け README shall 「同梱物とライセンス」の欄に、zip に入れた第三者の資産（ゴースト・SHIORI の DLL・シェル・バルーン）を 1 つずつ挙げ、作者と条件とその出どころ（資産に同梱された文書の名前、または配布元）を書く。
-2. The 第三者向け README shall `emo2` について「シェルは MIT ではなく、シェル作者の条件に従う」「areka のファーストゴースト（既定ゴースト）として使うことはできるが、シェルを抜き出して利用することはできない」と明記し、シェルの説明書が zip の中のどこに在るか（`ghost/emo2/shell/master/readme.txt`）を示す。
+2. The 第三者向け README shall `emo2` について「シェルは MIT ではなく、シェル作者の条件に従う」「areka のファーストゴースト（既定ゴースト）として使うことはできるが、シェルを抜き出して利用することはできない」と明記し、シェルの説明書が zip の中のどこに在るか（`ghost/emo2/shell/master/readme.txt`）を示す。シェルは作者が 2 人（\0「コンフィズリー」＝ゆゆぴか・\1「City-Pop'n」＝大槻）で、説明書に条件の本文があるのは \0 だけなので、\1 の条件は要件 5.6 に従い「未確認」と書き作者のサイトを示す（同梱すること自体は議題 ⑶ の裁定＝`emo2` 同梱可に含まれる）。
 3. The 第三者向け README shall `StayseeBalloon` の条件が CC0 であることを書く。
 4. The 第三者向け README shall areka 自身のライセンスは areka の本体（`areka.exe`・`shiori-host32-helper.exe`）に及び、同梱の第三者の資産には及ばないことを書き、cargo の依存の謝辞は同梱の謝辞の文書にあると示す。
 5. Where 〔議題 ⑴＝入れる〕, the 第三者向け README shall `emo2-kakukaku` の作者と条件（バルーン画像素材の出どころの条件を含む）を載せる。確かめられない条件がある場合の扱いは要件 5.6 に従う。
@@ -128,7 +129,7 @@
 2. Where 〔議題 ⑵＝MIT 単独〕, the 根の `README.md` shall バッジとライセンスの節の 2 か所を「MIT」とし、`LICENSE-MIT` を指す。このとき根の `Cargo.toml`・`about.hbs`・`deny.toml` の変更は 0。
 3. Where 〔議題 ⑵＝MIT OR Apache-2.0〕, the リポジトリ shall `LICENSE-APACHE` を置き、根の `Cargo.toml` の `license` を `"MIT OR Apache-2.0"` にし、`about.hbs` の「areka 自身のライセンス」の文と `deny.toml` の冒頭の注記をそれに揃え、`THIRD-PARTY-NOTICES.md` を生成器で作り直し、根の `README.md` の 2 か所を「MIT OR Apache-2.0」として両方のファイルを指す。
 4. The リポジトリ shall areka 自身のライセンスを述べる箇所（根の `README.md` の 2 か所・根の `Cargo.toml` の `license`・`about.hbs`・第三者向け README・zip に入れるライセンス文書）を、議題 ⑵ の答えの 1 つに揃え、食い違いを 0 にする。
-5. The 根の `README.md` shall 「現在の到達点」の節の数（「57件の仕様を完了」「約70%」）を、着手時の実物から数え直した数と数えた日付に直すか、実物から導けない数を消す（古い数を残さない）。
+5. The 根の `README.md` shall 「現在の到達点」の節の数（「57件の仕様を完了」「約70%」）を、着手時の実物から数え直した数と数えた日付に直すか、実物から導けない数を消す（古い数を残さない）。仕様の数は `.kiro/specs/completed/` の直下の**フォルダ**の数で数える（直下の `.md` は仕様ではない）。「約70%」は実物から導けないので消す。
 6. The 根の `README.md` shall 第三者向け README の置き場所を 1 行で案内する。
 7. The 根の `README.md` shall 本仕様で直す範囲を、ライセンスの表記・到達点の数・要件 6.6 の 1 行の案内に限り、それ以外の古い記述（クレート構成の説明など）は本仕様で直さない。
 
@@ -138,6 +139,6 @@
 
 #### Acceptance Criteria
 
-1. When 配布スクリプトが zip を組む, the 配布スクリプト shall zip に入れる謝辞を、zip に入れる実行ファイルを組んだのと同じ依存の版から生成器で作る（リポジトリの `THIRD-PARTY-NOTICES.md` が古くても zip の謝辞は古くならない）。
+1. When 配布スクリプトが zip を組む, the 配布スクリプト shall zip に入れる謝辞を、zip に入れる実行ファイルを組んだのと同じ依存の版から生成器で作る（リポジトリの `THIRD-PARTY-NOTICES.md` が古くても zip の謝辞は古くならない）。生成の出力先は追跡外の場所とし、リポジトリの `THIRD-PARTY-NOTICES.md` は書き換えない（要件 1.6）。
 2. If 謝辞の生成（またはその前提のライセンスの検査）が失敗する, then the 配布スクリプト shall 要件 1.5 の失敗として扱い、謝辞の無い zip を完成品として残さない。
 3. Where 〔議題 ⑷＝追跡する〕, the リポジトリ shall `Cargo.lock` を追跡し（`.gitignore` の該当の 1 行を外す）、同じコミットから組んだ zip の依存の版と謝辞が機械によらず同じになる。Where 〔議題 ⑷＝追跡しない〕, the リポジトリ shall `.gitignore` と `Cargo.lock` の扱いを変えず（変更 0）、zip の謝辞は組んだ機械の依存の版で作られることを配布スクリプトの使い方の説明に書く。
