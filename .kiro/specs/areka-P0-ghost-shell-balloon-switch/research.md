@@ -309,7 +309,7 @@
 - `boot.rs` に `boot_root(config) -> Option<ShioriCall>` を置く: `first_boot` → `OnFirstBoot`／`ChangedFrom` → `OnGhostChanged`／それ以外 → 根なし。既存の `Phase::BootType`（根の応答待ち）の腕（204 → `OnBoot`・Value → 飛ばす）をそのまま使うので相は増えない。範囲外の根は `BootOrigin` に値を足して表に行を足すだけ。
 
 ### 単独起動の失敗の記憶（要件 6.8）
-- `PersistKey::LastHalted`（`areka.last.halted`・App）。`main` の後始末で `session.shutdown` の後（sylphya の flush が終わってから）に実 fs の `save_scope` で `LastGhost=emo2`・`LastHalted=名前` を書く（`record_halt`）。次回の `resolve_boot_from` が `take_last_halted` で読んで空文字を書き戻す（1 回で消える）。**`Argv` の起動は書き換えない**（`LastUsed` の「argv で決まった側は書かない」と同じ規則・第三者は argv を使わない）。既定ゴースト自身の失敗も書かない。
+- `PersistKey::LastHalted`（`areka.last.halted`・App）。`main` の後始末で `session.shutdown` の後（sylphya の flush が終わってから）に実 fs の `save_scope` で `LastGhost=emo2`・`LastHalted=名前` を書く（`record_halt`）。次回の `resolve_boot_from` が `take_last_halted` で読んで空文字を書き戻す（1 回で消える）。**適用範囲は「`Fault` で終わるとき全般」**（2026-09-26 設計討議・議題 1 で開発者が (a) を採択。検証 Issue 3 の (b)「定常到達の旗で起動系列に限る」は却下＝正典の Ref6 の語に合わせ、旗と檢査を増やさない）。**`Argv` の起動は書き換えない**（`LastUsed` の「argv で決まった側は書かない」と同じ規則・第三者は argv を使わない）。既定ゴースト自身の失敗も書かない。
 
 ## 10. 設計で見つけた危険と対策
 

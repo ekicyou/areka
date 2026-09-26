@@ -654,7 +654,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 
 - 据え付け: `register_systems` の後に `BootContext` を挿す。`boot_ghost` の戻りを `GhostSlot(Some(session))` として World へ挿す（ローカル変数には持たない）。
 - `run()` の後: `GhostSlot` から取り出す（`None` なら降ろすものが無い）。告知の場面の `ghost_name`／`ghost_root` は `GhostSession::names()` と `BootContext.current.cfg.ghost_root` から組む（切替後の今のゴースト）。`fatal` で終わったときは `GhostSlot` が空なので、`ghost_name` は `BootContext.current.ghost` のフォルダ名へ倒す。`fault_of` が `Some` なら `AlertScene::ShioriFault`（`GhostFallbackFailed` も同じ場面）。
-- 単独起動の失敗（要件 6.8）: `FirstExit` が `KanadeStopped(Fault)` で、`BootContext.current.ghost.route` が `Argv` でなく、フォルダが `DEFAULT_GHOST_FOLDER` でないとき、後始末で `session.shutdown` の**後**（sylphya の flush が終わってから）に `record_halt(app_profile_dir, 落ちた名前)`（名前は `names().name`・無ければフォルダ名）。`Argv` の起動は開発者の上書きなので記憶を書き換えない（`LastUsed` の規則と同じ・`info!`）。`GhostFallbackFailed`（切替の途中の致命）では既定ゴーストの `on_boot_ok` が既に `LastGhost` を既定へ書いているので書かない。
+- 単独起動の失敗（要件 6.8・2026-09-26 設計討議で「処理中の失敗全般」に確定＝起動系列の途中か定常のあとかを見ない・定常到達の旗は持たない）: `FirstExit` が `KanadeStopped(Fault)` で、`BootContext.current.ghost.route` が `Argv` でなく、フォルダが `DEFAULT_GHOST_FOLDER` でないとき、後始末で `session.shutdown` の**後**（sylphya の flush が終わってから）に `record_halt(app_profile_dir, 落ちた名前)`（名前は `names().name`・無ければフォルダ名）。`Argv` の起動は開発者の上書きなので記憶を書き換えない（`LastUsed` の規則と同じ・`info!`）。`GhostFallbackFailed`（切替の途中の致命）では既定ゴーストの `on_boot_ok` が既に `LastGhost` を既定へ書いているので書かない。
 
 #### GhostFrame（`crates/areka/src/menu/ghost_frame.rs`）
 
@@ -742,7 +742,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 - `change_tests.rs`: `Steady{Some}` ＋ `pending_change` ＋ `TalkDone{Interrupted, quit_reserved: true}` → 終了系列（`begin_close`）へ進み `pending_change == None`・`OnGhostChanging` 0 件（要件 5.5 の但し書き）。
 - `ghost_frame_tests.rs`: 2 体の目録で `Submenu` の子 2 つ・並び・ラベル（`name` 無しはフォルダ名）・現在のゴーストに `checked`・子を選ぶと `SwitchRequest{Folder, raise_event: true, Manual}` が入口へ届く・`boot_wired` の 2 周目で登記が新品（`registered_frames` に `Ghost`）（要件 1.4・1.11・1.12・10.9）。
 - `app_exit_tests.rs`: `close_windows_for_restart` の後 `GhostWindows` が無い・`fault_of(GhostFallbackFailed)` が `Some`。
-- `boot_resolve_tests.rs`／`main_halt_record_tests.rs`: `record_halt` → `LastGhost == emo2`・`take_last_halted` が名前を返し 2 度目は `None`。`Fault` ＋ 既定ゴースト → 書き換え 0 回。`Argv` → 書き換え 0 回（要件 6.8・10.14）。
+- `boot_resolve_tests.rs`／`main_halt_record_tests.rs`: `record_halt` → `LastGhost == emo2`・`take_last_halted` が名前を返し 2 度目は `None`。定常に入ったあと（`Steady` の通知を受けたあと）の `Fault` でも書き換える。`Fault` ＋ 既定ゴースト → 書き換え 0 回。`Argv` → 書き換え 0 回（要件 6.8・10.14）。
 - `change_cue_tests.rs`: `("change","ghost","B")` → 要求 1 件（`raise_event=false`）・`--option=raise-event` → 真・`("change","shell",…)` → 0 件（担当外）・名前なし → `warn!`（要件 1.2・1.3・1.10・8.5）。
 - `consumer_ledger` の件数の固定を 9 へ。
 
