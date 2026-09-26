@@ -61,7 +61,7 @@
   - 完了の形: 走行後に `target/alpha/` の下に x64 の `areka.exe`・i686 の helper・謝辞の生成物が在り、2 本の exe の取り込み表に拒否表の名前が 0（静的リンクが効いたことをこの時点で確かめる。効かなければ先へ進まず報告する）、スクリプトの前後で開発者のシェルの 3 つの環境変数の値が変わらず、`Cargo.lock` とリポジトリの謝辞に差分が 0
   - _Requirements: 1.1, 1.2, 1.6, 2.7, 7.1, 7.2_
 
-- [ ] 3.3 検体の展開・組み立て・圧縮の段を足す
+- [x] 3.3 検体の展開・組み立て・圧縮の段を足す
   - 既存の展開の窓口（`nar-sample-path`）を `--locked` で `emo2` と `StayseeBalloon` について呼び、出力の `folder=`・`balloon.emo2-kakukaku=` を読む。鍵が無い・パスが実在しなければ失敗
   - 組み立て場所を毎回消して作り、設計の「zip の中身」の表の 9 行（本体・helper・`ghost/emo2/`・`balloon/emo2-kakukaku/`・`balloon/StayseeBalloon/`・`README.txt`・`LICENSE-MIT`・この走行の謝辞・`BUILD-INFO.txt`）だけを写す。helper は i686 の出力先から写す
   - `BUILD-INFO.txt` に `commit=`・`dirty=`・`built=`・`script=`（3.1 の較正値の版）・`rustflags=`（3.2 で保持した値）の 5 行を書く

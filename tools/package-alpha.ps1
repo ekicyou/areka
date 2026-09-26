@@ -275,7 +275,62 @@ Step '謝辞の生成' {
     if (-not (Test-Path -LiteralPath $script:Notices)) { throw "謝辞の出力が無い: $script:Notices" }
 }
 
-# 残りの組む段（展開・組み立て・圧縮・中身の判定・完成）と
+# nar-sample-path の出力（1 行 1 組の key=value）から $Keys の値を読む。鍵が無い・パスが実在しなければ throw。
+function Read-SamplePaths([string]$Sample, [string[]]$Keys) {
+    $lines = @(cargo run -q --locked -p sample-ghost-kit --bin nar-sample-path -- $Sample)
+    if ($LASTEXITCODE) { throw "nar-sample-path $Sample が終了コード $LASTEXITCODE" }
+    $paths = @{}
+    foreach ($key in $Keys) {
+        $line = $lines | Where-Object { $_.StartsWith("$key=") } | Select-Object -First 1
+        if (-not $line) { throw "nar-sample-path $Sample の出力に $key= が無い" }
+        $path = $line.Substring($key.Length + 1)
+        if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw "nar-sample-path $Sample の $key= が実在しない: $path" }
+        $paths[$key] = $path
+    }
+    $paths
+}
+
+Step '検体の展開' {
+    $emo2 = Read-SamplePaths 'emo2' @('folder', 'balloon.emo2-kakukaku')
+    $script:GhostDir = $emo2['folder']
+    $script:KakukakuDir = $emo2['balloon.emo2-kakukaku']
+    $script:StayseeDir = (Read-SamplePaths 'StayseeBalloon' @('folder'))['folder']
+}
+
+$STAGE_DIR = "$OUT_DIR/stage"
+Step '組み立て' {
+    if (Test-Path -LiteralPath $STAGE_DIR) { Remove-Item -LiteralPath $STAGE_DIR -Recurse -Force }
+    $null = New-Item -ItemType Directory -Path "$STAGE_DIR/ghost", "$STAGE_DIR/balloon"
+    # 設計の「zip の中身」の 9 行だけ（写す元が無ければ Copy-Item が throw）
+    Copy-Item -LiteralPath $script:AppExe -Destination $STAGE_DIR
+    Copy-Item -LiteralPath $script:HelperExe -Destination $STAGE_DIR
+    Copy-Item -LiteralPath $script:GhostDir -Destination "$STAGE_DIR/ghost/emo2" -Recurse
+    Copy-Item -LiteralPath $script:KakukakuDir -Destination "$STAGE_DIR/balloon/emo2-kakukaku" -Recurse
+    Copy-Item -LiteralPath $script:StayseeDir -Destination "$STAGE_DIR/balloon/StayseeBalloon" -Recurse
+    Copy-Item -LiteralPath 'dist/README.txt' -Destination $STAGE_DIR
+    Copy-Item -LiteralPath 'LICENSE-MIT' -Destination $STAGE_DIR
+    Copy-Item -LiteralPath $script:Notices -Destination $STAGE_DIR
+    $info = @(
+        "commit=$script:Commit"
+        "dirty=$script:Dirty"
+        "built=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+        "script=tools/package-alpha.ps1 $SCRIPT_VERSION"
+        "rustflags=$script:RustFlags"
+    )
+    [IO.File]::WriteAllLines((Join-Path (Resolve-Path -LiteralPath $STAGE_DIR) 'BUILD-INFO.txt'), $info)   # UTF-8（BOM 無し）
+}
+
+Step '圧縮' {
+    $name = 'areka-alpha-x64-{0}-{1}{2}.zip' -f (Get-Date -Format 'yyyyMMdd'), $script:Commit, $(if ($script:Dirty) { '-dirty' } else { '' })
+    $script:ZipFinal = Join-Path (Resolve-Path -LiteralPath $OUT_DIR) $name
+    $script:ZipTmp = "$script:ZipFinal.tmp"
+    if (Test-Path -LiteralPath $script:ZipTmp) { Remove-Item -LiteralPath $script:ZipTmp -Force }
+    # includeBaseDirectory を $false にしないと stage/ が最上位に入る
+    [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path -LiteralPath $STAGE_DIR), $script:ZipTmp, [IO.Compression.CompressionLevel]::Optimal, $false)
+    Write-Host $script:ZipTmp
+}
+
+# 残りの組む段（中身の判定・完成）と
 # -Check の段（展開・起動・番犬・記録の判定）はこの位置へ Step で並べる。
 
 Step 'git status 不変の確認' {
