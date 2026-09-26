@@ -8,13 +8,16 @@
 //! 2. 予約が無ければ同じ通知は今日どおり終了を指示する。
 //! 3. 送り出しの段で中身の無い停止（kanade が切替の要求を受理しないまま止まった）は、
 //!    `warn!(ghost_switch_not_accepted)` 1 件の上で予約を下ろし今日どおり終了する。
+//! 4. 保留の切替が台本の終了（`\-`）で捨てられたときは、kanade が停止より先に切替の中止
+//!    （終了要求）を知らせる＝予約は `info!(ghost_switch_cancelled)` で下り、後の停止は今日の
+//!    終了になる（警告は出ない・要件 5.5・8.11）。
 
 use std::sync::mpsc;
 use std::time::Duration;
 
 use areka_kanade::{
-    ChangeHandoff, ChangeOrigin, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, TalkDone,
-    TalkEndReason, TalkId,
+    CancelReason, ChangeHandoff, ChangeOrigin, KanadeMsg, KanadeNotice, KanadeStopCause,
+    KanadeStopped, TalkDone, TalkEndReason, TalkId,
 };
 use log_capture_kit::{CapturedEvent, capture};
 use shiori_host32_host::ExitKind;
@@ -227,5 +230,56 @@ fn send_off_stop_without_handoff_quits_and_clears_reservation() {
             false,
         ),
         "(消化・終了の指示・最初の出所・受理されなかった記録・予約): {events:?}"
+    );
+}
+
+/// 保留の切替を捨てた終了: kanade は停止より先に切替の中止（終了要求）を送る → 予約は
+/// `info!(ghost_switch_cancelled)` で下り、停止は今日どおりの終了（受理されなかった警告は 0 件・
+/// 要件 5.5・8.11）。
+///
+/// # 非空虚性
+/// 中止の通知が無ければ停止が予約の下で届き、`warn!(ghost_switch_not_accepted)` が 1 件出る
+/// （上の `send_off_stop_without_handoff_quits_and_clears_reservation` の場面）。
+#[test]
+fn cancel_notice_before_stop_clears_reservation_without_warning() {
+    let (tx, rx) = mpsc::channel::<KanadeNotice>();
+    let mut world = World::new();
+    world.insert_non_send(wintf::AppExit::new());
+    world.insert_non_send(KanadeNoticeRx(rx));
+    world.insert_non_send(reservation(SwitchStage::SendOff));
+    for notice in [
+        KanadeNotice::ChangeCancelled {
+            reason: CancelReason::CloseRequest,
+        },
+        KanadeNotice::Stopped(KanadeStopped {
+            cause: KanadeStopCause::Quit,
+            handoff: None,
+        }),
+    ] {
+        tx.send(notice).expect("通知を投函できる");
+    }
+
+    let (consumed, events) = capture(|| run_ghost_quit_phase(&mut world));
+
+    assert_eq!(
+        (
+            consumed,
+            world.non_send::<wintf::AppExit>().is_requested(),
+            world.get_resource::<FirstExit>().map(|f| f.0.clone()),
+            levels_of(&events, "ghost_switch_not_accepted"),
+            levels_of(&events, "ghost_switch_cancelled"),
+            levels_of(&events, "ghost_quit"),
+            world.get_non_send::<SwitchInFlight>().is_some(),
+        ),
+        (
+            true,
+            true,
+            Some(ExitOrigin::KanadeStopped(KanadeStopCause::Quit)),
+            vec![],
+            vec![tracing::Level::INFO],
+            vec![tracing::Level::INFO],
+            false,
+        ),
+        "(消化・終了の指示・最初の出所・受理されなかった記録・中止の記録・今日の終了・予約): {events:?}"
     );
 }

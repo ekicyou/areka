@@ -208,7 +208,7 @@ crates/areka/src/
 - `crates/areka/src/main_config_input_tests.rs` — `BootResolved` の形の追随。
 - `crates/areka/src/boot_resolve.rs` — `GhostRoute::Switched`。`read_last_halted`／`take_last_halted`／`record_halt(app_profile_dir, fallen_name)`（既定へ書き換え＋落ちた名前を控える・実 fs の `save_scope`）。
 - `crates/areka/src/boot_resolve_tests.rs` — `record_halt`／`take_last_halted` の往復（1 回使ったら消える）。
-- `crates/areka/src/main.rs` — `resolve_boot` の 4 つ目の戻り・`BootContext` と `GhostSlot` の据え付け・`boot_origin` の受け渡し・`run()` の後は `GhostSlot` から取り出して後始末・告知の場面は `BootContext.current` の根と `GhostSession` の名前で組む・`Fault` かつ単独起動なら `record_halt`。
+- `crates/areka/src/main.rs` — `resolve_boot` の 4 つ目の戻り（前回落ちた名前）と 5 つ目の戻り（根 `BasewareRoot`＝`BootContext` 用）・`BootContext` と `GhostSlot` の据え付け・`boot_origin` の受け渡し・`run()` の後は `GhostSlot` から取り出して後始末・告知の場面は `BootContext.current` の根と `GhostSession` の名前で組む・`Fault` かつ単独起動なら `record_halt`。
 - `crates/areka/src/menu/mod.rs` — `ItemBody::Submenu`・`register` の `#[allow(dead_code)]` を外す。`unregister` のコメントを「呼び手なし（枠の取り消しは今日の spec に無い）」へ改める。`ghost_frame` モジュールの宣言。
 - `crates/areka-sylphya/src/persist/mod.rs`・`persist/format.rs`・`persist_tests.rs` — `PersistKey::LastHalted`（`areka.last.halted`・`[last] halted`）。空文字は「無し」と読む。
 - `doc/ukadoc-coverage/ledger/shiori.toml`・`sakura-script.toml` — 3 行を `implemented`（owner＝本仕様）へ。生成物（`report/*.md`）は生成器（`ukadoc-survey -- report`／`report-summary`）で作り直す。手書きの `briefing-sakura-script.md` の「未対応」の行と、検査が数を照合する `briefing.md`・`roadmap-draft.md` は手で追随させる。
@@ -486,7 +486,7 @@ pub enum ShioriMethod { Get, Notify }
 **Implementation Notes**
 - Integration: `close.rs` の `deadline_from` を `pub(super)` にして共有する。`events::on_close` の `CloseReason` は `System`（切替は利用者の窓の操作ではない・Ref0＝`system`）。
 - Validation: `change_tests.rs`（`close.rs` の `mod tests` の状態の組み立てを写す）。
-- Risks: `pending_close` と `pending_change` の両方が在るときは `pending_close` が勝つ（要件 2.9）。`Steady{Some}` に `pending_change` が在り、その台本（`raise-event` 無しの `\![change,ghost,B]` と `\-` を同じ台本に書いた形）を利用者が中断して `\-` の予約が真のときは、横断の腕 ⑵ が先に効いて今日どおり終了系列へ進み、保留の切替は捨てる（`info!(event="change_dropped_by_quit")`）。定常での `\-` の予約は終了で終わるという完了 `balloon-break` の規則を切替の保留は覆さない（要件 5.5 の「切替を続ける」は `\-` の予約が無いときの話）。中止で `Steady{None}` へ戻るとき `pending_close` が在れば次の `Tick` が `begin_close` を始める（既存の規則）。
+- Risks: `pending_close` と `pending_change` の両方が在るときは `pending_close` が勝つ（要件 2.9）。`Steady{Some}` に `pending_change` が在り、その台本（`raise-event` 無しの `\![change,ghost,B]` と `\-` を同じ台本に書いた形）を利用者が中断して `\-` の予約が真のときは、横断の腕 ⑵ が先に効いて今日どおり終了系列へ進み、保留の切替は捨てる（`info!(event="change_dropped_by_quit")`・UI の目印を下ろすため切替の中止（`CloseRequest`）を通知する）。定常での `\-` の予約は終了で終わるという完了 `balloon-break` の規則を切替の保留は覆さない（要件 5.5 の「切替を続ける」は `\-` の予約が無いときの話）。中止で `Steady{None}` へ戻るとき `pending_close` が在れば次の `Tick` が `begin_close` を始める（既存の規則）。
 
 #### BootRoot（`crates/areka-kanade/src/schedule/boot.rs`）
 
@@ -711,7 +711,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 | 送り出しの台詞が 30 秒を超えた | `error!(change_deadline_exceeded)` | 降ろして切替を続ける |
 | 握手中の SHIORI の `Fault` | kanade の既存の `error!`（`shiori_failed`／`shiori_down`） | 目印が立っているので切替を続ける |
 | `SendOff` の目印の下に `handoff: None` の停止が届く（kanade が要求を受理しないまま止まった） | `warn!(ghost_switch_not_accepted)` | 目印を下ろし今日どおり終了（`Fault` なら告知・終了コード 1） |
-| 保留の切替を持つ台本が `\-` の予約つきで中断された | `info!(change_dropped_by_quit)` | 保留を捨て今日の終了系列へ |
+| 保留の切替を持つ台本が `\-` の予約つきで中断された（`\-` に辿り着いたときも同じ） | `info!(change_dropped_by_quit)`＋`Notice(ChangeCancelled{CloseRequest})` → UI `info!(ghost_switch_cancelled reason=close_request)` | 保留を捨て今日の終了系列へ。通知は停止より先に届くので UI の目印は停止の前に下り、後の停止（`handoff: None`）は予約の無い今日の終了として捌く（`ghost_switch_not_accepted` の警告は出ない） |
 | `GhostSession::shutdown` が `Err` | `error!`（既存） | 続ける（戻す先が無い） |
 | 切替先のバルーンが解けない・窓を作れない・起動の結線が成立しない | `error!(ghost_switch_boot_failed stage=…)` | 既定へ（切替先が既定なら致命） |
 | 切替先の SHIORI の `Fault`（非同期） | `error!(ghost_switch_target_fault)` | 既定へ |

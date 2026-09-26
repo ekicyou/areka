@@ -506,7 +506,7 @@ fn quit_reserved_break_drops_held_change_and_quits_without_handoff() {
         let ev = capture(|| out = Some(broken(s, true)));
         let (s, actions) = out.expect("step は必ず結果を返す");
         logged_once(&ev, Level::INFO, "change_dropped_by_quit");
-        assert_unloading(&s, &actions, "Quit");
+        assert_unloading(&s, dropped_notice_then(&actions), "Quit");
         assert!(sent_events(&actions).is_empty(), "OnGhostChanging は 0 件");
         assert!(s.pending_change.is_none(), "保留は捨てる");
         let (s, _) = reply(s, ShioriOutcome::Unloaded);
@@ -525,8 +525,28 @@ fn quit_tag_reached_drops_held_change() {
     let ev = capture(|| out = Some(talk_done(s, TalkId(4), TalkEndReason::Quit)));
     let (s, actions) = out.expect("step は必ず結果を返す");
     logged_once(&ev, Level::INFO, "change_dropped_by_quit");
-    assert_unloading(&s, &actions, "Quit");
+    assert_unloading(&s, dropped_notice_then(&actions), "Quit");
     assert!(s.pending_change.is_none() && s.change.is_none());
+}
+
+/// 保留の切替を捨てたら、先頭にちょうど 1 件の切替の中止（終了要求）の通知が出る
+/// （受け手の予約を停止通知より先に解くため）。残りの動作を返す。
+fn dropped_notice_then(actions: &[Action]) -> &[Action] {
+    let is_notice = |a: &Action| {
+        matches!(
+            a,
+            Action::Notice(KanadeNotice::ChangeCancelled {
+                reason: CancelReason::CloseRequest
+            })
+        )
+    };
+    assert_eq!(
+        actions.iter().filter(|a| is_notice(a)).count(),
+        1,
+        "通知はちょうど 1 件"
+    );
+    assert!(is_notice(&actions[0]), "通知は先頭");
+    &actions[1..]
 }
 
 #[path = "change_cancel_tests.rs"]

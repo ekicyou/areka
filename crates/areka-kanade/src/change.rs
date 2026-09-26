@@ -65,7 +65,7 @@ pub enum CancelReason {
 pub enum KanadeNotice {
     /// 定常に入った。
     Steady,
-    /// 切替を中止して定常へ戻った。
+    /// 切替を中止した（定常へ戻る。ただし終了要求・`\-` の予約が勝った場合は、このあと今日どおり停止へ進む）。
     ChangeCancelled { reason: CancelReason },
     /// kanade が止まった。
     Stopped(KanadeStopped),

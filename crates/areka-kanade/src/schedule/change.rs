@@ -131,11 +131,21 @@ pub(super) fn consume_pending(
     begin_change(state, req)
 }
 
-/// 終了系列へ進むトークに掛かっていた保留の切替を捨てる（`\-` の予約・到達が勝つ）。
-pub(super) fn drop_pending_by_quit(state: &mut State) {
-    if let Some(req) = state.pending_change.take() {
+/// 終了系列（Quit）へ進む。トークに保留の切替が掛かっていたら捨てる（`\-` の予約・到達が勝つ）。
+///
+/// 捨てたときは切替の中止（終了要求＝台本の `\-`）を先頭で通知する。受け手は同じ順の通路で
+/// 後に届く停止通知より先に切替の予約を解き、その停止を今日の終了として扱える。
+pub(super) fn quit_dropping_pending(mut state: State, at: &'static str) -> (State, Vec<Action>) {
+    let dropped = state.pending_change.take();
+    let (state, mut actions) = to_unloading_quit(state, at);
+    if let Some(req) = dropped {
         tracing::info!(target: "kanade", event = "change_dropped_by_quit", to = %req.target.name, "終了で終わるトークに保留の切替が掛かっていた——切替を捨てて終了系列へ");
+        let notice = KanadeNotice::ChangeCancelled {
+            reason: CancelReason::CloseRequest,
+        };
+        actions.insert(0, Action::Notice(notice));
     }
+    (state, actions)
 }
 
 /// 切替を始める。帳簿を立て、`raise_event` なら `OnGhostChanging` を GET で送って応答を待つ。

@@ -378,7 +378,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                 tracing::info!(
                     event = "ghost_switch_cancelled",
                     reason = ?reason,
-                    "切替は中止された——元のゴーストのまま次の要求を受ける"
+                    "切替は中止された——予約を下ろす（元のゴーストは定常へ戻るか、終了要求が勝っていれば今日どおり終わる）"
                 );
             } else {
                 tracing::warn!(
