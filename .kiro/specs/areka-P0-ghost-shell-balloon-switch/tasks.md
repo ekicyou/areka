@@ -30,7 +30,7 @@
   - _Requirements: 3.4, 8.8_
 
 - [ ] 2. kanade: Reference の組み立てと起動の根の表
-- [ ] 2.1 新しいイベントの Reference の組み立てと許可表を足す
+- [x] 2.1 新しいイベントの Reference の組み立てと許可表を足す
   - 許可表に `OnGhostChanging`・`OnGhostChanged` を足し（13 語）、許可表と一致した綴りを返す照合を 1 つ置く
   - `OnGhostChanging`（GET・Ref0〜3＝切替先の本体側の名前・出どころ・名前・フォルダの絶対パス）、`OnGhostChanged`（GET・Ref0〜3＝直前のゴーストの本体側の名前・切替時の台本・名前・パス、Ref4〜6 空、Ref7＝シェルのフォルダ名）、汎用の組み立て（渡された列のまま・GET／NOTIFY）を足す
   - `OnBoot` を起動の由来で広げる: 「前回落ちた」なら Ref1〜5 空・Ref6＝`halt`・Ref7＝落ちたゴースト名、それ以外は今日どおり Ref0 だけ
