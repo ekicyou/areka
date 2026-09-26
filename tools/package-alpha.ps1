@@ -83,8 +83,10 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # Git Bash から呼ばれると GNU coreutils の link.exe が MSVC の link.exe を遮蔽し i686 のリンクが落ちる。
 # link.exe を持つが cl.exe を持たないフォルダ（＝MSVC 以外の link.exe）を、このプロセスの PATH から外す。
-# （tools/test-all.ps1 と同じ）
-$env:PATH = ($env:PATH -split ';' | Where-Object {
+# （tools/test-all.ps1 と同じ）。& で呼ばれても親に残さないよう、後始末で元へ戻す。
+$script:OrigPath = $env:PATH
+$script:Child = $null
+$env:PATH =($env:PATH -split ';' | Where-Object {
         -not $_ -or -not (Test-Path (Join-Path $_ 'link.exe')) -or (Test-Path (Join-Path $_ 'cl.exe'))
     }) -join ';'
 
@@ -120,7 +122,10 @@ function Invoke-Cleanup {
     if ($script:ZipTmp -and (Test-Path -LiteralPath $script:ZipTmp)) {
         Remove-Item -LiteralPath $script:ZipTmp -Force
     }
+    # 起動から番犬までの段で落ちたときに、自分が起こした子だけを止める（名前では探さない）
+    if ($script:Child -and -not $script:Child.HasExited) { $script:Child.Kill() }
     Restore-Env
+    $env:PATH = $script:OrigPath
 }
 
 function Exit-Script([int]$Code, [string]$Message) {
@@ -427,7 +432,52 @@ Step '完成' {
     Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
 }
 
-# -Check の段（展開・起動・番犬・記録の判定）はこの位置へ Step で並べる。
+$script:WatchdogKilled = $false   # 番犬が子を止めたか（4.2 で合否の一覧に畳み込む）
+if ($Check) {
+    Step '短いパスへ展開' {
+        # 展開先の長さは「前提の確認」で確かめ済み
+        if (Test-Path -LiteralPath $script:ExpandDir) { throw "展開先が既に在る: $script:ExpandDir" }
+        $script:LogDir = "$script:ExpandDir-logs"
+        if (Test-Path -LiteralPath $script:LogDir) { throw "記録の置き場が既に在る: $script:LogDir" }
+        [IO.Compression.ZipFile]::ExtractToDirectory($script:ZipFinal, $script:ExpandDir)
+        $null = New-Item -ItemType Directory -Path $script:LogDir
+        $script:RunLog = Join-Path $script:LogDir 'run.log'
+        $script:RunErrLog = Join-Path $script:LogDir 'run.stderr.log'
+        Write-Host "展開先: $script:ExpandDir"
+    }
+
+    Step '起動' {
+        # AREKA_*／WINTF_* を全部外し、決めた 4 つだけ入れる。子へは継承で渡し、起こした直後に戻す。
+        Get-ChildItem Env: | Where-Object { $_.Name -like 'AREKA_*' -or $_.Name -like 'WINTF_*' } |
+            ForEach-Object { Set-EnvTemp $_.Name $null }
+        Set-EnvTemp 'AREKA_APP_SMOKE_EXIT_MS' "$script:SmokeMs"   # crates/areka/src/main.rs の SMOKE_EXIT_ENV
+        Set-EnvTemp 'AREKA_NO_ALERT' '1'                          # crates/areka/src/alert.rs の NO_ALERT_ENV
+        Set-EnvTemp 'RUST_LOG' 'info'
+        Set-EnvTemp 'NO_COLOR' '1'
+        try {
+            $script:Child = Start-Process -FilePath (Join-Path $script:ExpandDir 'areka.exe') -WorkingDirectory $script:ExpandDir `
+                -RedirectStandardOutput $script:RunLog -RedirectStandardError $script:RunErrLog -NoNewWindow -PassThru
+        } finally { Restore-Env }
+        $null = $script:Child.Handle   # 取っ手を先に掴まないと終了後に ExitCode が読めない
+        Write-Host "子のプロセス番号: $($script:Child.Id)"
+    }
+
+    Step '番犬' {
+        $limitMs = $script:SmokeMs + $WATCHDOG_MARGIN_SEC * 1000
+        if (-not $script:Child.WaitForExit($limitMs)) {
+            $script:WatchdogKilled = $true
+            Write-Host "番犬: $limitMs ミリ秒を超えたので自分が起こした子（プロセス番号 $($script:Child.Id)）だけを止めた"
+            $script:Child.Kill()
+            $null = $script:Child.WaitForExit(10000)
+        }
+        Write-Host "子の終了コード: $($script:Child.ExitCode)"
+        Write-Host "記録: $script:RunLog"
+        Write-Host "記録: $script:RunErrLog"
+        Write-Host "展開先: $script:ExpandDir"
+        # 番犬で止めたら否（記録の 6 条件の判定は次の段が持つ）
+        if ($script:WatchdogKilled) { Exit-Script $EXIT_CHECK_FAILED '起動確認の否（番犬で止めた）' }
+    }
+}
 
 Step 'git status 不変の確認' {
     $after = @(git status --porcelain)
