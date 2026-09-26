@@ -20,6 +20,8 @@ mod balloon_background;
 pub mod balloon_visibility;
 pub mod consumer_ledger;
 pub mod frame;
+/// ゴーストの切替の入口（areka-P0-ghost-shell-balloon-switch）。
+pub(crate) mod ghost_switch;
 pub mod hit_region;
 pub mod hover_inject;
 pub mod move_cue;

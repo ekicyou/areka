@@ -342,6 +342,9 @@ pub(crate) struct GhostSession {
     ghost: Option<areka_ghost::GhostRuntime>,
     seriko: Option<areka_actor::ActorHandle>,
     loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
+    /// kanade への送出端の写し（実行系が無ければ `None`）。実行系から毎回引かずに持つのは、
+    /// テストが実行系を起こさずに送出端だけを差せるようにするため（[`GhostSession::for_test`]）。
+    kanade: Option<Sender<KanadeMsg>>,
     /// 起こしたゴーストの根（`ghost/<フォルダ名>`・起動の結線の入力のもの）。
     ghost_dir: PathBuf,
 }
@@ -358,10 +361,23 @@ impl GhostSession {
     }
 
     /// kanade への送出端（切替の要求を送る）。実行系が無ければ `None`。
-    // 本番の呼び手は 7.1 の切替の入口。それまでは test からだけ呼ぶ。
+    // 本番の呼び手は 7.1 の切替の入口（入口の本番の呼び手は 7.2／7.3）。それまでは test からだけ呼ぶ。
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn kanade(&self) -> Option<&Sender<KanadeMsg>> {
-        self.ghost.as_ref().map(|r| r.kanade())
+        self.kanade.as_ref()
+    }
+
+    /// 実行系を持たない置き場の中身（テスト用）: kanade への送出端と根だけを持つ。
+    /// 降ろすもの（実行系・seriko・ticker）が無いので `shutdown` は何もせず `Ok` を返す。
+    #[cfg(test)]
+    pub(crate) fn for_test(kanade: Option<Sender<KanadeMsg>>, ghost_dir: PathBuf) -> Self {
+        Self {
+            ghost: None,
+            seriko: None,
+            loop_ticker: None,
+            kanade,
+            ghost_dir,
+        }
     }
 
     /// 起こしたゴーストの根（実行系が無くても起動に渡した根を返す）。
@@ -492,6 +508,7 @@ pub(crate) fn boot_ghost(
     };
     // フォールバック経路に seriko アクター・loop ticker はない（実 sink 結線が成立していない）。
     GhostSession {
+        kanade: runtime.as_ref().map(|r| r.kanade().clone()),
         ghost: runtime,
         seriko: None,
         loop_ticker: None,
@@ -579,6 +596,7 @@ fn boot_wired(
         input_events::choice_drain::wire_choice_drain(world, runtime.kanade().clone());
     }
     Ok(GhostSession {
+        kanade: outcome.ghost.as_ref().map(|r| r.kanade().clone()),
         ghost: outcome.ghost,
         seriko: outcome.seriko,
         loop_ticker: outcome.loop_ticker,
