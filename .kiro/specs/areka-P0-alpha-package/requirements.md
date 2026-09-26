@@ -137,5 +137,5 @@
 1. When 配布スクリプトが zip を組む, the 配布スクリプト shall zip に入れる謝辞を、zip に入れる実行ファイルを組んだのと同じ依存の版から生成器で作る（リポジトリの `THIRD-PARTY-NOTICES.md` が古くても zip の謝辞は古くならない）。生成の出力先は追跡外の場所とし、リポジトリの `THIRD-PARTY-NOTICES.md` は書き換えない（要件 1.6）。
 2. If 謝辞の生成（またはその前提のライセンスの検査）が失敗する, then the 配布スクリプト shall 要件 1.5 の失敗として扱い、謝辞の無い zip を完成品として残さない。
 3. The リポジトリ shall `Cargo.lock` を追跡し（`.gitignore` の該当の 1 行を外す）、同じコミットから組んだ zip の依存の版と謝辞が機械によらず同じになる（議題 ⑷ の裁定）。追跡を始める `Cargo.lock` は着手時の main のソースから解決したものとし、同じ変更の中でリポジトリの `THIRD-PARTY-NOTICES.md` をその `Cargo.lock` から生成器で作り直す（謝辞と追跡する版を一致させて始める）。
-4. When 追跡を始める, the 完了の手順（`.claude/skills/kiro-complete/SKILL.md`）shall 謝辞の再生成の段にある「`Cargo.lock` を追跡していないリポジトリで版だけが上下したら環境差として戻す」扱いを、追跡後の扱い（謝辞の差分は追跡している `Cargo.lock` の差分と対応する＝戻さずに原因を確かめる）へ改める。
-5. When 追跡を始める, the 開発の手順（steering の `workflow.md`）shall 並走中の worktree が本仕様の着地を取り込むときの手順（追跡外の手元の `Cargo.lock` を消してから取り込む・依存を変えた枝どうしの `Cargo.lock` の衝突は `cargo` に作り直させて解く）を 1 か所に書く。
+4. When 追跡を始める, the 完了の手順（`.claude/skills/kiro-complete/SKILL.md`）shall 謝辞の再生成の段にある「`Cargo.lock` を追跡していないリポジトリで版だけが上下したら環境差として戻す」扱いを、追跡後の扱い（謝辞の差分は追跡している `Cargo.lock` の差分と対応する＝戻さずに原因を確かめる）へ改める。あわせて PR を作る前の段に「main を取り込んだあと `Cargo.lock` が全ての `Cargo.toml` と一致することを確かめる（古ければ揃えて謝辞を作り直し、最終コミットに含める）」を 1 行足す（`Cargo.toml` だけを触った並走の枝は `Cargo.lock` と文字上で衝突しないので、確かめないと main の `Cargo.lock` が古いまま着地しうる）。
+5. When 追跡を始める, the 開発の手順（steering の `workflow.md`）shall 並走中の worktree が本仕様の着地を取り込むときの手順（追跡外の手元の `Cargo.lock` を消してから取り込む・依存を変えた枝どうしの `Cargo.lock` の衝突は `cargo` に作り直させて解く）と、枝が PR を出す前の手順（main を取り込み `Cargo.lock` が `Cargo.toml` と一致することを確かめる）を 1 か所に書く。

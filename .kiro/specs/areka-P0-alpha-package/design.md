@@ -1,6 +1,6 @@
 # Technical Design: areka-P0-alpha-package
 
-> 2026-09-26・worktree の HEAD `a8fde786`（main `2f5bd24a` の上に spec の文書だけ）で書いた。コードの引用は「何を定義している行か」で指し、書く前に今の木で実在を確かめた。設計時に取った実測は `research.md` の「設計時の調べ物」に置き、結論だけをここに写した。
+> 2026-09-26・worktree の HEAD `a8fde786`（main `2f5bd24a` の上に spec の文書だけ）で書き、設計レビュー（`design-validation.md`・HEAD `16d39f86`）の指摘 3 件と細かい点 5 件を設計ディスカッションで反映した。コードの引用は「何を定義している行か」で指し、書く前に今の木で実在を確かめた。設計時に取った実測は `research.md` の「設計時の調べ物」に置き、結論だけをここに写した。
 
 ## Overview
 
@@ -124,7 +124,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | スクリプト | PowerShell 7（`#Requires -Version 7.0`） | 段の直列・判定・番犬 | 前例 2 本と同じ。Git Bash から呼ばれても i686 のリンクが落ちないよう `link.exe` の除外を写す |
-| ビルド | `cargo build --locked --release --target <triple> --target-dir target/alpha` | x64 本体・i686 helper | `RUSTFLAGS=-C target-feature=+crt-static` を**このプロセスだけ**に設定（下の「VC++ ランタイム」） |
+| ビルド | `cargo build --locked --release --target <triple> --target-dir target/alpha` | x64 本体・i686 helper | `RUSTFLAGS` を `-C target-feature=+crt-static` に**置き換え**（継ぎ足さない）て**このプロセスだけ**に設定し、`CARGO_ENCODED_RUSTFLAGS`・`CARGO_BUILD_RUSTFLAGS` はこの 2 段の間だけ外す（下の「VC++ ランタイム」） |
 | 展開 | `cargo run -q --locked -p sample-ghost-kit --bin nar-sample-path -- <検体>` | `emo2`（同梱 `emo2-kakukaku` 込み）・`StayseeBalloon` | 出力の `folder=`／`balloon.emo2-kakukaku=` を読む |
 | 謝辞 | `cargo about generate 0.9.2` | zip の謝辞（機種 2 つに絞る） | `--locked`（`--fail` は足さない） |
 | 検査 | `cargo deny 0.20.2` | 謝辞の前提のライセンス検査 | `cargo deny --locked check licenses` |
@@ -139,7 +139,7 @@ graph TB
 tools/
 └── package-alpha.ps1          # 新規: 配布物を組む・確かめる 1 本（較正値は冒頭の 1 か所）
 dist/
-└── README.txt                 # 新規: 第三者向け README（zip の最上位へそのまま入る・UTF-8 BOM・CRLF）
+└── README.txt                 # 新規: 第三者向け README（zip の最上位へそのまま入る・UTF-8 BOM・改行は作業コピーのまま）
 README.md                      # 修正: バッジ・ライセンスの節・到達点の数・dist/README.txt への 1 行
 .gitignore                     # 修正: `Cargo.lock` の 1 行を外す
 Cargo.lock                     # 追跡開始: 着手時の main のソースから解決したもの
@@ -249,8 +249,8 @@ flowchart TD
 | 7.1 | zip の謝辞は同じ版から | 段「謝辞の生成」 | ビルドの直後・同じ作業コピー・`--locked`・出力先 `target/alpha/` |
 | 7.2 | 生成の失敗は失敗 | 段「ライセンス検査」「謝辞の生成」 | 非 0 で止める・出力ファイルが無ければ止める |
 | 7.3 | `Cargo.lock` を追跡・謝辞を同じ変更で作り直す | `.gitignore`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md` | 下の「Cargo.lock の追跡の始め方」 |
-| 7.4 | 完了の手順の改め | `.claude/skills/kiro-complete/SKILL.md` | 同 |
-| 7.5 | 開発の手順に取り込み方 | `.kiro/steering/workflow.md` | 同 |
+| 7.4 | 完了の手順の改め（謝辞の扱い・PR 前の `Cargo.lock` の一致の確認） | `.claude/skills/kiro-complete/SKILL.md` の 2 か所 | 同 |
+| 7.5 | 開発の手順に取り込み方（入る側）と PR 前の確認（出る側） | `.kiro/steering/workflow.md` | 同 |
 
 ## Components and Interfaces
 
@@ -295,16 +295,16 @@ flowchart TD
 
 | 段 | 何をするか | 失敗の条件 |
 |---|---|---|
-| 前提の確認 | `git rev-parse --short HEAD`・`git status --porcelain` の件数（後で比べるため全文も保持）・道具の有無・`Cargo.lock` の実在・`-Check` の引数 | 道具が無い・`Cargo.lock` が無い・引数が不正（3） |
+| 前提の確認 | `git rev-parse --short=7 HEAD`（`--short` だけだと曖昧なとき 8 桁以上を返す）・`git status --porcelain` の件数（後で比べるため全文も保持）・道具の有無・`Cargo.lock` の実在・`-Check` の引数 | 道具が無い・`Cargo.lock` が無い・引数が不正（3） |
 | i686 ターゲット導入 | `rustup target add i686-pc-windows-msvc` | 非 0 |
-| x64 本体ビルド | `RUSTFLAGS=-C target-feature=+crt-static` を設定して `cargo build --locked --release -p areka --target x86_64-pc-windows-msvc --target-dir target/alpha` | 非 0（`Cargo.lock` が `Cargo.toml` と食い違うときも cargo が非 0 で止める＝要件 1.6） |
-| i686 helper ビルド | 同じく `-p shiori-host32-helper --target i686-pc-windows-msvc`。**`RUSTFLAGS` はこの 2 段の間だけ設定し、終わったら元へ戻す**（後の `cargo run`（検体の展開）へ波及させて普段の `target/` を作り直させない） | 非 0 |
+| x64 本体ビルド | `RUSTFLAGS` を `-C target-feature=+crt-static` に**置き換え**（開発者のシェルの値に継ぎ足さない。`-C target-cpu=native` 等が混ざると開発機の CPU でしか動かない exe になり、取り込み表の判定では見つけられない）、`CARGO_ENCODED_RUSTFLAGS`・`CARGO_BUILD_RUSTFLAGS` を外して（在ると cargo が `RUSTFLAGS` を無視し `+crt-static` が黙って効かない）、`cargo build --locked --release -p areka --target x86_64-pc-windows-msvc --target-dir target/alpha` | 非 0（`Cargo.lock` が `Cargo.toml` と食い違うときも cargo が非 0 で止める＝要件 1.6） |
+| i686 helper ビルド | 同じく `-p shiori-host32-helper --target i686-pc-windows-msvc`。**3 つの環境変数の差し替えはこの 2 段の間だけで、終わったら元へ戻す**（後の `cargo run`（検体の展開）へ波及させて普段の `target/` を作り直させない） | 非 0 |
 | ライセンス検査 | `cargo deny --locked check licenses` | 非 0 |
 | 謝辞の生成 | `cargo about generate --locked --workspace --target x86_64-pc-windows-msvc --target i686-pc-windows-msvc about.hbs -o target/alpha/THIRD-PARTY-NOTICES.md`（`--fail` は足さない＝完了の手順と同じ厳しさ。`accepted` 外のライセンスは元から非 0） | 非 0・出力が無い |
 | 検体の展開 | `cargo run -q --locked -p sample-ghost-kit --bin nar-sample-path -- emo2` と `-- StayseeBalloon`。`folder=`・`balloon.emo2-kakukaku=` を読む | 非 0・鍵が無い・パスが実在しない |
 | 組み立て | `target/alpha/stage/` を消して作り、下の「zip の中身」を写す。`BUILD-INFO.txt` を書く | 写す元が無い |
-| 圧縮 | `ZipFile::CreateFromDirectory(stage, <zip>.tmp)` | 例外 |
-| 中身の判定 | `.zip.tmp` を読み戻して下の「zip の中身の判定」を全部行う | 1 つでも否（`.zip.tmp` を消す） |
+| 圧縮 | `ZipFile::CreateFromDirectory(stage, <zip>.tmp, Optimal, includeBaseDirectory: $false)`（`$false` を落とすと `stage/` が最上位に入る） | 例外 |
+| 中身の判定 | `.zip.tmp` を読み戻し、項目名の `\` を `/` に揃えてから下の「zip の中身の判定」を全部行う | 1 つでも否（`.zip.tmp` を消す） |
 | 完成 | `.zip.tmp` → 最終名へ改名。絶対パス・コミット・件数を印字 | — |
 | 短いパスへ展開（`-Check`） | 展開先を新しく作り `ZipFile::ExtractToDirectory` | 展開先が既に在る・長さの上限超え |
 | 起動（`-Check`） | 環境変数を組んで `Start-Process`（下の「起動確認」） | 起動できない |
@@ -324,7 +324,7 @@ flowchart TD
 | `README.txt` | `dist/README.txt` | バイトそのまま |
 | `LICENSE-MIT` | 根の `LICENSE-MIT` | バイトそのまま・名前もそのまま |
 | `THIRD-PARTY-NOTICES.md` | `target/alpha/THIRD-PARTY-NOTICES.md`（この走行の生成物） | リポジトリの `THIRD-PARTY-NOTICES.md` は写さない（範囲が違う・下の「謝辞の範囲」） |
-| `BUILD-INFO.txt` | スクリプトが書く | `commit=<7 桁>`・`dirty=<件数>`・`built=<UTC>`・`script=tools/package-alpha.ps1 <版>` の 4 行 |
+| `BUILD-INFO.txt` | スクリプトが書く | `commit=<7 桁>`・`dirty=<件数>`・`built=<UTC>`・`script=tools/package-alpha.ps1 <版>`・`rustflags=<ビルドに使った RUSTFLAGS の値>` の 5 行 |
 
 入れないもの（要件 2.4・5.7）: `konnoyayame`・`claudia`・`R_POST_and_KOMAINU`・`emo2-kakukaku-offsetdpi`・`emo2-kakukaku-wplimit`・`shiori-host32-testdll*`・`shiori4-testdll`・`profile/`。写す元がこの表の 9 行しか無いので混入の経路は無いが、判定で改めて確かめる。
 
@@ -343,7 +343,7 @@ flowchart TD
 
 - **展開先**: `-CheckDir` が無ければ `[IO.Path]::GetTempPath()`（開発機で 34 文字・設計時に実測）。その下に `areka-alpha-check-<HHmmss>` を新しく作る（既に在れば失敗）。展開先のフルパスが較正値 `EXPAND_DIR_MAX_CHARS`＝160 を超えるなら起動せず失敗（3）。理由は `emo2` の SHIORI（pasta）が初回に `ghost\master\profile\pasta\pasta_scripts\pasta\shiori\event\virtual_dispatcher.lua`（zip の最上位から約 93 文字）を書き、260 文字を超えると接続の失敗を出さずに黙るため（`research.md` §4.2）。
 - **起動**: 展開先の `areka.exe` を**引数なし**・作業フォルダ＝展開先で `Start-Process -RedirectStandardOutput run.log -RedirectStandardError run.stderr.log -NoNewWindow -PassThru`（`invoke-perf-run.ps1` と同じ形。release の exe はコンソールを持たないが、親が渡した標準出力の取っ手には書ける＝`invoke-perf-run.ps1 -Build release` の実績）。記録は展開先の隣の `areka-alpha-check-<HHmmss>-logs/` に置く（展開先の中に置くと根の列挙に混ざる）。
-- **環境変数**（要件 3.2・自分のプロセスに設定して継承させ、終わったら元に戻す＝前例と同じ）: `AREKA_` と `WINTF_` で始まるものを**全部外し**（実行時に読むものは 15 種・`research.md` §4.5）、次の 4 つだけ入れる。
+- **環境変数**（要件 3.2・自分のプロセスに設定して継承させ、終わったら元に戻す＝前例と同じ）: `AREKA_` と `WINTF_` で始まるものを**全部外し**（実行時に読むものは `AREKA_*` 14 種と `WINTF_*` 1 種・`research.md` §4.5）、次の 4 つだけ入れる。
 
   | 名前 | 値 | 理由 |
   |---|---|---|
@@ -375,7 +375,7 @@ flowchart TD
 
 ### VC++ ランタイム（要件 2.7・`research.md` §4.1／§10.1 の決定）
 
-- **決定: 静的に結ぶ**。配布スクリプトだけが `RUSTFLAGS=-C target-feature=+crt-static` を自分のプロセスに設定してビルドし、終わったら元に戻す。`crates/`・`.cargo/config.toml`（作らない）・追跡ファイルの変更は 0。`--target` を明示するので、この指定はビルドスクリプトや手続きマクロ（ホスト側）には及ばない。
+- **決定: 静的に結ぶ**。配布スクリプトだけが `RUSTFLAGS` を `-C target-feature=+crt-static` に**置き換えて**（開発者のシェルの値に継ぎ足さない）自分のプロセスに設定し、`CARGO_ENCODED_RUSTFLAGS`・`CARGO_BUILD_RUSTFLAGS` を外してビルドし、終わったら 3 つとも元に戻す。使った `RUSTFLAGS` の値は `BUILD-INFO.txt` の `rustflags=` に残す（何で組んだかが zip から読める）。今の開発機では 3 つとも未設定（設計時に実測）。`crates/`・`.cargo/config.toml`（作らない）・追跡ファイルの変更は 0。`--target` を明示するので、この指定はビルドスクリプトや手続きマクロ（ホスト側）には及ばない。
 - **見張り**: zip から読み戻した 2 本の exe の取り込み表を読み、拒否表に当たる名前が 0 であることを判定に含める（上の判定 6）。設計時に PowerShell で書いた読み手が PE32（`pasta.dll`）と PE32+（`areka.exe`）の両方を正しく読むことを実測した。`dumpbin`（VS が要る）は使わない。
 - **却下した手**: README の「既知の制限」に再頒布可能パッケージを書く（第三者の最初の起動を失敗させる）。動的のまま `VCRUNTIME140.dll` を zip に入れる（再配布の条件の確認が増える）。
 
@@ -392,7 +392,7 @@ flowchart TD
 | Intent | zip を開いた第三者が最初に読む説明書。本仕様では骨子と同梱物の条件まで |
 | Requirements | 4.1〜4.5・5.1〜5.6・5.8・6.4 |
 
-**置き場と形**（`research.md` §10.7 の決定）: 新しい最上位フォルダ `dist/`（配布物へそのまま入れる文書）に `README.txt`。zip の中でも `README.txt`（要件 4.6「そのまま」＝改名もしない）。文字コードは UTF-8（BOM 付き）・改行は CRLF（Windows の「メモ帳」で開く第三者のため）。`docs/` は steering `structure.md` が「単発の技術メモ」と説明しているので使わない。
+**置き場と形**（`research.md` §10.7 の決定）: 新しい最上位フォルダ `dist/`（配布物へそのまま入れる文書）に `README.txt`。zip の中でも `README.txt`（要件 4.6「そのまま」＝改名もしない）。文字コードは UTF-8（BOM 付き）。改行は作業コピーのまま写す（リポジトリは LF で持ち、`.gitattributes` は作らない。開発機は `core.autocrlf=true` なので組んだ zip の中は CRLF になるが、それを約束にはしない——Windows 10 以降の「メモ帳」は LF も読める）。`docs/` は steering `structure.md` が「単発の技術メモ」と説明しているので使わない。
 
 **欄（要件 4.2・見出しはこの 7 つ・この順）**: 「起動」「終了」「右クリックメニュー」「記憶の置き場」「既知の制限」「`.nar` の入れ方」「同梱物とライセンス」。書けない中身は 1 つの目印 `（未記入: alpha-release-signoff が仕上げます）` を置く（要件 4.3）。「`.nar` の入れ方」は見出しとこの目印だけ。
 
@@ -450,14 +450,18 @@ flowchart TD
 2. `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md`（完了の手順と同じ形）で謝辞を作り直す。差分はすべてこの `Cargo.lock` の版に由来する。
 3. `.gitignore` の 2 行目を外し、3 つを一緒にコミットする。
 4. 以後、`cargo build`／`cargo test` は `Cargo.lock` を読む。依存を変えた（`Cargo.toml` を触った）ときだけ `Cargo.lock` に差分が出る＝それをコミットに含める。
+5. **本仕様の PR を出す直前にもう 1 回**: main を取り込み、`cargo metadata --locked` を通す（数秒・lock が `Cargo.toml` より古ければ非 0）。止まったら `cargo update -w` で揃え、謝辞も作り直してコミットに含める。並走していた枝が先に依存を足していても、main の `Cargo.lock` を古いまま着地させない。
 
 改行: `Cargo.lock` は LF で書かれる。`.gitattributes` は作らない（開発機は `core.autocrlf=true` で作業コピーは CRLF になるが、cargo は行単位で比べるので書き換えを起こさない。もし着手時の `cargo build --locked` が「lock が古い」で止まったら、原因を確かめてから `.gitattributes` に `Cargo.lock -text` を足す＝設計の外の是正として報告する）。
 
-**完了の手順の改め**（要件 7.4・`.claude/skills/kiro-complete/SKILL.md` の License Gate (b)）: 「`Cargo.lock` を追跡していないリポジトリで…環境差として戻す」の文を、「`Cargo.lock` を追跡しているので、`THIRD-PARTY-NOTICES.md` の差分は同じコミットの `Cargo.lock` の差分と対応する。**戻さずに**、`Cargo.lock` に差分が無いのに謝辞だけが変わったら原因（`cargo about` の版・`about.toml`・`about.hbs`）を確かめる」へ改める。2026-09-26 の `thiserror` の実例は履歴として残す。
+**完了の手順の改め**（要件 7.4・`.claude/skills/kiro-complete/SKILL.md`）: 2 か所。
+- License Gate (b): 「`Cargo.lock` を追跡していないリポジトリで…環境差として戻す」の文を、「`Cargo.lock` を追跡しているので、`THIRD-PARTY-NOTICES.md` の差分は同じコミットの `Cargo.lock` の差分と対応する。**戻さずに**、`Cargo.lock` に差分が無いのに謝辞だけが変わったら原因（`cargo about` の版・`about.toml`・`about.hbs`）を確かめる」へ改める。2026-09-26 の `thiserror` の実例は履歴として残す。
+- PR 作成の前に 1 行: 「main を取り込んだあと `cargo metadata --locked` を 1 回通す（非 0 なら `cargo update -w` で `Cargo.lock` を揃え、謝辞を作り直して最終コミットに含める）」。`Cargo.lock` は本仕様が新規に足すファイルなので、`Cargo.toml` だけを触った並走の枝とは文字上の衝突が起きず、何もしないと main の `Cargo.lock` が `Cargo.toml` より古いまま着地しうる（そうなると配布スクリプトは綺麗な main でもビルドの段で止まる）。
 
 **開発の手順**（要件 7.5・`.kiro/steering/workflow.md` に「`Cargo.lock` の扱い」の節を 1 つ）:
 
 - `Cargo.lock` は追跡する。依存を変えた枝は `Cargo.lock` の差分をその枝のコミットに含める。
+- **PR を出す前（出る側）**: main を取り込み、`cargo metadata --locked` を 1 回通す（数秒・lock が古ければ非 0）。非 0 なら `cargo update -w` で揃えてコミットに含める。並走の枝が先に依存を足していても、main の `Cargo.lock` を古いまま着地させないための 1 手。
 - **並走中の worktree が本仕様の着地した main を取り込むとき**: 手元の追跡外の `Cargo.lock` を先に消す（`Remove-Item Cargo.lock`）。消さないと git が「追跡外のファイルを上書きする」と拒む。取り込んだあと、その枝が依存を変えていれば `cargo update -w`（ワークスペースの `Cargo.toml` の差分だけを lock に反映し、他の版は動かさない）で `Cargo.lock` を直してコミットする。
 - **`Cargo.lock` で衝突したとき**: 取り込む側（main）の `Cargo.lock` を採り（`git checkout --theirs -- Cargo.lock` か `git checkout main -- Cargo.lock`）、`cargo update -w` で自分の枝の `Cargo.toml` の差分を反映してから `git add`。手で行を直さない。
 - 配布スクリプトは `--locked` で動くので、`Cargo.lock` と `Cargo.toml` が食い違う枝ではビルドの段で止まる（黙って解決し直さない）。
@@ -480,7 +484,7 @@ flowchart TD
 
 ### Monitoring
 
-- 記録は標準出力（段の名前・秒・合否の一覧・zip の絶対パス・コミット・件数）と `-Check` の `run.log`／`run.stderr.log`。`invoke-perf-run.ps1` の `run-meta.txt` のような別の記録ファイルは作らない（`BUILD-INFO.txt` の 4 行で足りる）。
+- 記録は標準出力（段の名前・秒・合否の一覧・zip の絶対パス・コミット・件数）と `-Check` の `run.log`／`run.stderr.log`。`invoke-perf-run.ps1` の `run-meta.txt` のような別の記録ファイルは作らない（`BUILD-INFO.txt` の 5 行で足りる）。
 
 ## Testing Strategy
 
@@ -501,7 +505,7 @@ flowchart TD
 1. `pwsh -NoProfile -File tools/package-alpha.ps1` — 全段が緑・zip の絶対パス・コミット・件数が出る・`git status` が前後で同じ。
 2. `pwsh -NoProfile -File tools/package-alpha.ps1 -Check` — 6 条件が合・終了コード 0。`run.log` に正の目印 4 種が在り、失敗の目印 3 種が 0 件。
 3. 取り込み表の実測: 完成した zip の 2 本の exe を読み、`VCRUNTIME`・`api-ms-win-crt-*` が 0 件（`+crt-static` の効果の確定）。
-4. 否の方向 1 つ: `-SmokeExitMs 300` で回し、「会話が始まった」が否になって終了コード 2 で終わること（空振りを通さないことの確認）。
+4. 否の方向 1 つ: `-SmokeExitMs 300` で回し、終了コード 2 で終わり、**かつ**合否の一覧に「会話が始まった＝否」が出ること（空振りを通さないことの確認。300 ms では「窓が立った」も否になりうるので、終了コードだけでなく一覧の行で見る）。
 
 ### 文書
 
