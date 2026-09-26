@@ -69,7 +69,7 @@
   - 完了の形: `.zip.tmp` を開くと最上位に 8 項目（`areka.exe`・helper・`ghost/`・`balloon/`・`README.txt`・`LICENSE-MIT`・`THIRD-PARTY-NOTICES.md`・`BUILD-INFO.txt`）が並び（`stage/` の階層が無い）、`ghost/` の下は `emo2` だけ、`balloon/` の下は `emo2-kakukaku` と `StayseeBalloon` だけ
   - _Requirements: 1.3, 1.4, 2.1, 2.5, 4.6, 5.7_
 
-- [ ] 3.4 zip の中身の判定と完成の段を足し、判定の部品を較正する
+- [x] 3.4 zip の中身の判定と完成の段を足し、判定の部品を較正する
   - `.zip.tmp` を読み戻し、項目名の区切りを揃えてから設計の判定 1〜8（必須の項目・直下の許可表・`profile/` が 0・実行ファイルと DLL は 3 本だけ・PE の機種・依存 DLL の拒否表・説明書 2 本の `emo2.nar` とのバイト比較・README／ライセンス／謝辞のバイト比較と `BUILD-INFO.txt` の値）を全部行い、否の項目を全部並べてから 1 回否とする
   - 全部合なら最終名へ改名し、絶対パス・コミット・未コミットの件数を印字する。1 つでも否なら `.zip.tmp` を消して終了コード 1
   - 較正の入力の出どころ: 開発機の debug の `areka.exe` と x64 の helper は `cargo build -p areka -p shiori-host32-helper`（普段の `target/debug/`）で用意する
