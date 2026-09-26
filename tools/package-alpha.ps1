@@ -99,12 +99,19 @@ function Set-EnvTemp([string]$Name, [AllowNull()][string]$Value) {
     if (-not $script:SavedEnv.ContainsKey($Name)) {
         $script:SavedEnv[$Name] = [Environment]::GetEnvironmentVariable($Name)
     }
-    [Environment]::SetEnvironmentVariable($Name, $Value)
+    Set-EnvValue $Name $Value
+}
+
+# $null（と空）は変数を消す。[Environment]::SetEnvironmentVariable に $null を渡すと PowerShell が '' に
+# 変えて「空の値を持つ変数」が残る（CARGO_ENCODED_RUSTFLAGS が空で残ると cargo は RUSTFLAGS を無視する）
+function Set-EnvValue([string]$Name, [AllowNull()][string]$Value) {
+    if ($Value) { Set-Item -LiteralPath "Env:$Name" -Value $Value }
+    else { Remove-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue }
 }
 
 function Restore-Env {
     foreach ($name in @($script:SavedEnv.Keys)) {
-        [Environment]::SetEnvironmentVariable($name, $script:SavedEnv[$name])
+        Set-EnvValue $name $script:SavedEnv[$name]
     }
     $script:SavedEnv.Clear()
 }
@@ -190,7 +197,85 @@ Step '前提の確認' {
     Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
 }
 
-# 組む段（ビルド・ライセンス・謝辞・展開・組み立て・圧縮・中身の判定・完成）と
+$X64 = 'x86_64-pc-windows-msvc'; $I686 = 'i686-pc-windows-msvc'
+$OUT_DIR = 'target/alpha'
+$script:AppExe = "$OUT_DIR/$X64/release/areka.exe"
+$script:HelperExe = "$OUT_DIR/$I686/release/shiori-host32-helper.exe"
+$script:Notices = "$OUT_DIR/THIRD-PARTY-NOTICES.md"
+# 開発者のシェルの値に継ぎ足さない（-C target-cpu=native 等が混ざると開発機でしか動かない exe になる）
+$script:RustFlags = '-C target-feature=+crt-static'
+
+# PE のバイト列から機種と取り込み表の DLL 名を読む（PE32 と PE32+ の両方）。
+# 読めない形なら throw。遅延読み込みの表は読まない（拒否表の DLL を遅延で読むことは無い前提）。
+function Read-PeInfo([byte[]]$Bytes) {
+    $u16 = { param($o) [BitConverter]::ToUInt16($Bytes, $o) }
+    $u32 = { param($o) [BitConverter]::ToUInt32($Bytes, $o) }
+    $pe = & $u32 0x3c
+    if ((& $u32 $pe) -ne 0x4550) { throw 'PE の署名が無い' }
+    $machine = & $u16 ($pe + 4)
+    $sections = & $u16 ($pe + 6)
+    $opt = $pe + 24
+    $magic = & $u16 $opt
+    $dirs = switch ($magic) { 0x10b { $opt + 96 } 0x20b { $opt + 112 } default { throw ('知らない optional header の magic 0x{0:x}' -f $magic) } }
+    $importRva = & $u32 ($dirs + 8)   # データディレクトリの 1 番＝import
+    $secTable = $opt + (& $u16 ($pe + 20))
+    $toOffset = {
+        param($rva)
+        for ($i = 0; $i -lt $sections; $i++) {
+            $s = $secTable + 40 * $i
+            $va = & $u32 ($s + 12); $size = [Math]::Max((& $u32 ($s + 8)), (& $u32 ($s + 16)))
+            if ($rva -ge $va -and $rva -lt $va + $size) { return $rva - $va + (& $u32 ($s + 20)) }
+        }
+        throw ('RVA 0x{0:x} がどの節にも無い' -f $rva)
+    }
+    $names = [Collections.Generic.List[string]]::new()
+    if ($importRva) {
+        for ($d = & $toOffset $importRva; ($nameRva = & $u32 ($d + 12)) -ne 0; $d += 20) {
+            $n = & $toOffset $nameRva; $end = [Array]::IndexOf($Bytes, [byte]0, $n)
+            $names.Add([Text.Encoding]::ASCII.GetString($Bytes, $n, $end - $n))
+        }
+    }
+    [pscustomobject]@{ Machine = $machine; Imports = $names.ToArray() }
+}
+
+# 取り込み表の名前のうち拒否表（前方一致・大文字小文字を区別しない）に当たるもの（呼ぶ側は @() で包む）
+function Get-DeniedImports([string[]]$Imports) {
+    $Imports | Where-Object { $n = $_; $DLL_DENY_PREFIXES | Where-Object { $n.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) } }
+}
+
+Step 'i686 ターゲット導入' { rustup target add $I686 }
+
+# RUSTFLAGS を置き換え、CARGO_ENCODED_RUSTFLAGS・CARGO_BUILD_RUSTFLAGS を外す（在ると cargo が RUSTFLAGS を無視する）。
+# 差し替えはこの 2 段の間だけ。失敗時は Exit-Script の後始末が戻す。
+Set-EnvTemp 'RUSTFLAGS' $script:RustFlags
+Set-EnvTemp 'CARGO_ENCODED_RUSTFLAGS' $null
+Set-EnvTemp 'CARGO_BUILD_RUSTFLAGS' $null
+Step 'x64 本体ビルド' { cargo build --locked --release -p areka --target $X64 --target-dir $OUT_DIR }
+Step 'i686 helper ビルド' { cargo build --locked --release -p shiori-host32-helper --target $I686 --target-dir $OUT_DIR }
+Restore-Env
+
+Step '静的リンクの確認' {
+    $bad = $false
+    foreach ($exe in @($script:AppExe, $script:HelperExe)) {
+        if (-not (Test-Path -LiteralPath $exe)) { throw "ビルドの出力が無い: $exe" }
+        $info = Read-PeInfo ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $exe)))
+        $denied = @(Get-DeniedImports $info.Imports)
+        Write-Host ('{0}: 機種 0x{1:x4}・取り込み {2}' -f $exe, $info.Machine, ($info.Imports -join ', '))
+        if ($denied.Count) { Write-Host "  拒否表に当たる: $($denied -join ', ')"; $bad = $true }
+    }
+    if ($bad) { throw 'VC++ ランタイムの DLL を読んでいる（+crt-static が効いていない）' }
+}
+
+Step 'ライセンス検査' { cargo deny --locked check licenses }
+
+Step '謝辞の生成' {
+    if (Test-Path -LiteralPath $script:Notices) { Remove-Item -LiteralPath $script:Notices -Force }
+    cargo about generate --locked --workspace --target $X64 --target $I686 about.hbs -o $script:Notices
+    if ($LASTEXITCODE) { return }
+    if (-not (Test-Path -LiteralPath $script:Notices)) { throw "謝辞の出力が無い: $script:Notices" }
+}
+
+# 残りの組む段（展開・組み立て・圧縮・中身の判定・完成）と
 # -Check の段（展開・起動・番犬・記録の判定）はこの位置へ Step で並べる。
 
 Step 'git status 不変の確認' {

@@ -53,7 +53,7 @@
   - 完了の形: 不正な引数（相対の `-CheckDir`・`-SmokeExitMs 0`）で終了コード 3 が返り、`Get-Help tools/package-alpha.ps1` に「展開した木を消す」の文が出る。わざと失敗させた段で、その段の名前が印字され終了コード 1 になる
   - _Requirements: 1.4, 1.5, 1.6, 1.7_
 
-- [ ] 3.2 release ビルド・ライセンス検査・謝辞の生成の段を足す
+- [x] 3.2 release ビルド・ライセンス検査・謝辞の生成の段を足す
   - i686 のターゲットを導入してから、x64 の本体と i686 の helper を release・`--locked`・専用の出力先（`target/alpha`）で組む
   - この 2 段の間だけ `RUSTFLAGS` を静的リンクの指定に**置き換え**（継ぎ足さない）、`CARGO_ENCODED_RUSTFLAGS`・`CARGO_BUILD_RUSTFLAGS` を外し、終わったら 3 つとも元に戻す。使った値を後の `BUILD-INFO.txt` のために保持する
   - PE の読み手（機種と取り込み表・PE32 と PE32+ の両方）を関数に切る（3.4 の判定が使い回す）
@@ -106,3 +106,6 @@
   - `-SmokeExitMs 300` で回す
   - 完了の形: 終了コード 2 で終わり、**かつ**合否の一覧に「会話が始まった＝否」の行が出る（終了コードだけでは判定しない）。一覧を完了報告に貼る
   - _Requirements: 3.3, 3.6_
+
+## Implementation Notes
+- PowerShell から `[Environment]::SetEnvironmentVariable(name, $null)` を呼ぶと `''` が入り変数は消えない。空の `CARGO_ENCODED_RUSTFLAGS` が残ると cargo は `RUSTFLAGS` を黙って無視する（3.2 で静的リンクの確認が捕まえた）。消すときは `Remove-Item env:NAME`（`Set-EnvValue`）。
