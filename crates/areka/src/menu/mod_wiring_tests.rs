@@ -4,7 +4,7 @@
 //! 確かめること: 結線の後に「説明書」「終了」が写しへ現れること・「説明書」の有効／無効が
 //! 写しを取った時点のファイルの在否で決まること・「終了」の動作が終了指示をちょうど 1 件送る
 //! こと（受信側で数える）・解放ハンドラがキャラクター窓にだけ付き枚数が記録されること・結線
-//! そのものは窓に触れないこと・毎 tick の取り出しが入力の段へ登録されること・後続 spec 向けの
+//! そのものは窓に触れないこと・毎 tick の取り出しが登録関数で入力の段へ載ること・後続 spec 向けの
 //! 登記の口が結線の有無で振る舞いを変えること。
 //!
 //! 本番では結線（`wire_menu`）が先で、窓はその後に作られて解放ハンドラが付く。窓を使うテストは
@@ -44,7 +44,7 @@ fn shifted_to_screen(_hwnd: HWND, x: i32, y: i32) -> Option<(i32, i32)> {
     Some((x + 1000, y + 2000))
 }
 
-/// スケジュールの入れ物だけを持つ World（結線は入力の段への登録を伴う）。
+/// スケジュールの入れ物だけを持つ World（登録関数は入力の段へ載せる）。
 fn empty_world() -> World {
     let mut world = World::new();
     world.init_resource::<Schedules>();
@@ -315,17 +315,24 @@ fn an_attached_handler_without_any_wiring_ignores_the_release() {
     );
 }
 
-/// 結線は入力の段へ system をちょうど 1 つ登録する。
+/// 結線は系を登録せず、続けて登録関数を呼ぶと（本番は `ghost_session::register_systems`）
+/// 入力の段へ system がちょうど 1 つ載る。
 #[test]
-fn wiring_registers_one_system_into_the_input_schedule() {
-    let (world, _rx) = wired_world();
+fn wiring_then_registering_puts_one_system_into_the_input_schedule() {
+    let (mut world, _rx) = wired_world();
+    assert!(
+        !world.resource::<Schedules>().contains(Input),
+        "結線は系を登録しない"
+    );
+
+    register_menu_poll(&mut world);
 
     let schedules = world.resource::<Schedules>();
     let input = schedules.get(Input).expect("入力の段がある");
     assert_eq!(input.systems_len(), 1);
 }
 
-/// 登録された system は返事待ちを覗くものである。順序は本番と同じ: 結線（窓はまだ無い）→ 窓を
+/// 登録された system は返事待ちを覗くものである。順序は本番と同じ: 結線と登録（窓はまだ無い）→ 窓を
 /// 作る → 解放ハンドラを付ける → 右解放。付いたハンドラで返事待ちを作り、返信端を捨ててから
 /// 入力の段を 1 回回すと、返事待ちが片付いて表示中の印が降りる。この World には外側の World への
 /// 参照が無いので、表示のタスクは起こされず、その旨が 1 行記録される。
@@ -338,6 +345,7 @@ fn the_registered_system_polls_the_pending_query() {
         &mut world,
         MenuWiring::with_to_screen(tx, shifted_to_screen),
     );
+    register_menu_poll(&mut world);
     let window = spawn_char_window(&mut world);
     attach_release_handlers(&mut world);
 
@@ -397,4 +405,49 @@ fn registering_after_the_wiring_places_the_frame_in_order() {
 
     let frames: Vec<Frame> = snapshot(&world, 0).into_iter().map(|(f, _)| f).collect();
     assert_eq!(frames, [Frame::Shell, Frame::Readme, Frame::Close]);
+}
+
+// ---------------------------------------------------------------- 登録と登記の一覧（areka-P0-ghost-restart-unit 要件 2.1・2.3）
+
+/// 登録専用の関数は単独で呼べ、入力の段へ返事の取り出しをちょうど 1 つ足し、持ち物は置かない。
+#[test]
+fn register_menu_poll_alone_adds_one_system_without_wiring() {
+    let mut world = empty_world();
+
+    register_menu_poll(&mut world);
+
+    let input = world
+        .resource::<Schedules>()
+        .get(Input)
+        .map_or(0, |s| s.systems_len());
+    assert_eq!(input, 1, "返事の取り出しの 1 本だけが載る");
+    assert!(
+        world.get_non_send::<MenuWiring>().is_none(),
+        "登録は持ち物を置かない"
+    );
+}
+
+/// 結線した直後の登記の一覧は組込の 2 項目（説明書・終了）だけで、枠の並び順に並ぶ。
+/// 余分な登記を足すと一覧に現れる（2 周テストが「前のゴーストの登記が残った」を見分ける前提）。
+#[test]
+fn registered_frames_after_wiring_are_the_two_builtin_items() {
+    let (mut world, _rx) = wired_world();
+    let frames_of = |world: &World| {
+        world
+            .get_non_send::<MenuWiring>()
+            .expect("MenuWiring は結線で入る")
+            .registry
+            .registered_frames()
+    };
+
+    let builtin = frames_of(&world);
+    register(&mut world, Frame::Shell, shell_supplier());
+
+    assert_eq!(
+        (builtin, frames_of(&world)),
+        (
+            vec![Frame::Readme, Frame::Close],
+            vec![Frame::Shell, Frame::Readme, Frame::Close]
+        )
+    );
 }

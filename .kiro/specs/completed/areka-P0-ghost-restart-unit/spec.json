@@ -1,0 +1,28 @@
+{
+  "feature_name": "areka-P0-ghost-restart-unit",
+  "created_at": "2026-09-24T10:18:50Z",
+  "updated_at": "2026-09-26T09:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-24T10:25:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-24T12:40:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-26T09:00:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

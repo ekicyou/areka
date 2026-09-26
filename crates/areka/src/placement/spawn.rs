@@ -37,9 +37,10 @@
 //!   メニューの「終了」が送る（結線済みの Ctrl+左ダブルクリックの入口は areka-P0-popup-menu-minimal
 //!   で除去）。Ctrl+Shift+左ダブルクリックと結線前の Ctrl+左ダブルクリックだけが強制退避
 //!   （終了の統合操作＝全窓を閉じてから終了を指示する→`run()` 正常復帰）である。いずれも
-//!   input_events 側ハンドラ／main.rs の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
+//!   input_events 側ハンドラ／`ghost_session` の結線が担う（stand-in 即終了 `on_ghost_pressed` は退役）。
 //!   全窓を閉じる操作は本モジュールには置かず、終了の指示と 1 つにした `app_exit::quit_app`
-//!   に限る（全窓を閉じるだけの操作はクレート内に無い）
+//!   に限る（全窓を閉じるだけの `app_exit::close_windows_for_restart` は起こし直し専用で、
+//!   終了経路からは呼ばない）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
 //!   相対位置記憶（4.8・DD16・task 8.3）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ
@@ -67,7 +68,7 @@
 //! [`wire_zorder_pair`] が実行時ストラテジ（既定＝案 A・補助浮上なし）を明示挿入し、
 //! **挿入した当の値を起動時ログへ 1 行残し**（要件 5.6・実機ゲートの結論をバイナリ自身が
 //! 名乗る）、wintf の確立系 → ペア維持系 → 鎖の適用系を clickthrough 登録と同じ確定段
-//! （`FrameFinalize`）へこの順で載せる。呼び手は main.rs の起動窓シーム（同 1.1／5.6／6.1）。
+//! （`FrameFinalize`）へこの順で載せる。呼び手は `ghost_session::register_systems`（プロセスに 1 回・同 1.1／5.6／6.1）。
 //! 3 本目の鎖の適用系は areka-P0-scope-zorder-pinning task 3.2 の追加であり、順序と
 //! 同期点の両方に意味がある（[`wire_zorder_pair`] の doc「なぜ順序を付けるのか」）。
 
@@ -361,7 +362,8 @@ impl GhostWindows {
     /// 連鎖の再解決から常に除外され、既定位置へ引き戻されない。未知スコープは no-op
     /// （panic せず `false`）。
     ///
-    /// 呼び手は復元マージを行う `main.rs` の起動シームのみ（保存位置が入り込む唯一の経路）。
+    /// 呼び手は復元マージの結果を受ける `ghost_session::open_ghost_windows` の窓を作るクロージャのみ
+    /// （保存位置が入り込む唯一の経路）。
     pub fn clear_default_char_pos(&mut self, scope: usize) -> bool {
         match self.windows.get_mut(&scope) {
             Some(w) => {
@@ -532,7 +534,8 @@ pub fn spawn_ghost_windows(
         // 宣言はスコープ内ペアにのみ張り、スコープ間には一切張らない——これが
         // 「スコープ間の上下関係を固定規則で決めない」（要件 3.1）と「是正時に当該
         // スコープの 2 窓しか動かさない」（要件 3.4）の構造的な根拠である。
-        // 宣言を消費する確立系・維持系（wintf 側）の結線は main.rs が行う。
+        // 宣言を消費する確立系・維持系（wintf 側）の登録は `wire_zorder_pair` が
+        // `ghost_session::register_systems` からプロセスに 1 回行う。
         //
         // **この宣言がスコープ間を張らないことは今も変わらない**が、スコープ間の列が
         // engine の中に一切現れない、という意味ではなくなった——作者が `\![set,zorder,…]`
@@ -559,7 +562,7 @@ pub fn spawn_ghost_windows(
                 char_window,
                 balloon_window,
                 // spawn へ渡る placements が resolver 既定である前提で `Some` を置く。
-                // 保存位置が復元された場合は起動シーム（`main.rs`）が直後に
+                // 保存位置が復元された場合は起動シーム（`ghost_session::open_ghost_windows`）が直後に
                 // `clear_default_char_pos` で `None` へ落とす（scg 7.3）。
                 default_char_pos: Some(p.char_pos),
             },
@@ -652,9 +655,8 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 /// 載せる場所を決めるのは areka 側という既存の流儀）。どちらの system も Win32 を呼ぶため
 /// UI スレッド固定であり、その担保は system 側の `NonSendMarker` が持つ。
 ///
-/// 呼び手は main.rs の起動窓シーム（`open_startup_window`）で、`Schedules` 資源が既在の
-/// World（`EcsWorld` 内 World）に対し、schedule 実行外で 1 回だけ同期に呼ぶ
-/// （クリック透過登録と同じ作法）。
+/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）で、`Schedules` 資源が既在の
+/// World（`EcsWorld` 内 World）に対し、schedule 実行外で同期に呼ぶ（クリック透過登録と同じ作法）。
 pub fn wire_zorder_pair(world: &mut World) {
     // 挿入と記録は**同じ束縛**から行う（要件 5.6・task 5.1 の観測条項）。値を 2 度書くと
     // 片方だけ変えたときに記録が静かに嘘をつく——起動時ログは「どの方式で動いているか」を
@@ -708,8 +710,8 @@ impl ClickThroughRegistrar for ClickThroughRegistryHandle {
 /// 登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
 /// `ClickThroughRegistryHandle` は `WinApp::run` の結線で NonSend リソース
 /// として挿入される。ごく初期の tick で未挿入の可能性へ `Option` で防御する
-/// （headless でも no-op で安全）。schedule への結線は main.rs シーム
-/// `open_startup_window`（task 6.2）が `FrameFinalize` へ行う。
+/// （headless でも no-op で安全）。schedule への結線は `ghost_session::register_systems`
+/// が `FrameFinalize` へ行う。
 pub fn register_ghost_windows_click_through(
     new_windows: Query<(Entity, &WindowHandle), (With<GhostWindowMarker>, Added<WindowHandle>)>,
     handle: Option<NonSend<ClickThroughRegistryHandle>>,

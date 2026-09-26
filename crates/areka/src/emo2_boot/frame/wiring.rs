@@ -185,8 +185,9 @@ impl Emo2Wiring {
     /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口・要件 5.1）。
     ///
     /// 台帳は `frame` の内側に閉じているので、起動の結線（`wire_emo2_boot`）はこの口から
-    /// 触る。呼ぶのは **`insert_non_send` より前・最初の `Update` より前**の 1 回だけで
-    /// あり、そのとき取り出しの相はまだ 1 度も走っていない——ゆえに基底はタグの実行を待たずに
+    /// 触る。呼ぶのは結線状態 1 つにつき **`insert_non_send` より前**（その結線状態で走る最初の
+    /// `Update` より前）の 1 回だけで（起こし直しでは `boot_ghost` が新しい結線状態で呼ぶ）、
+    /// そのときこの結線状態の取り出しの相はまだ 1 度も走っていない——ゆえに基底はタグの実行を待たずに
     /// 最初の維持の巡から効く（design「descript 起動時適用」）。
     ///
     /// 解釈・拒否・記録はすべて [`apply_descript_base`] が持つ。ここは台帳への到達だけを
@@ -206,10 +207,10 @@ impl Emo2Wiring {
     /// 契約を消費のみ）。所有・可変アクセスは presenter を専有する frame 相（attach/drain/text）に
     /// 閉じたまま、UI 配線層へは read 口のみを開ける（本番表面を最小に保つ）。
     ///
-    /// 本番の呼び手は結線済み（実測）——`input_events/mod.rs:316` が
-    /// `.map(Emo2Wiring::presenter)` の関数パス形で借り、`resolve_hit_owned`（`:309`）が当たり判定へ
-    /// 渡す。到達の起点は `main.rs` の `attach_char_pointer_handlers` 呼出（キャラ窓ポインタ
-    /// ハンドラ装着）と `main.rs` の `wire_mouse_input` 呼出。呼び出しがメソッド構文でないため
+    /// 本番の呼び手は結線済み（実測）——`input_events/mod.rs` の `resolve_hit_owned` が
+    /// `.map(Emo2Wiring::presenter)` の関数パス形で借りて当たり判定へ渡す。到達の起点は
+    /// `ghost_session::open_ghost_windows` の `attach_char_pointer_handlers` 呼出（キャラ窓ポインタ
+    /// ハンドラ装着）と `ghost_session::boot_ghost` の `wire_mouse_input` 呼出。呼び出しがメソッド構文でないため
     /// `.presenter()` の grep では見つからないが、dead_code 判定上は live である。
     pub(crate) fn presenter(&self) -> &EmoPresenter {
         &self.presenter
@@ -225,9 +226,12 @@ impl Emo2Wiring {
     /// （`areka-emo-text`）には一切手を入れない（R8.5）。
     ///
     /// 本番の呼び手は結線済みで 3 箇所ある（実測・いずれも `Rc::clone` して world 側の借用を即座に
-    /// 解く形）——`input_events/balloon.rs:394`（ポインタ移動での選択肢 hover 追従）・`:564`
-    /// （クリックによる選択確定）・`:748`（バルーン離脱での hover 解除）。到達の起点は
-    /// `main.rs` の `wire_balloon_choice` と `attach_balloon_pointer_handlers` 呼出。
+    /// 解く形）——`input_events/balloon.rs` の `on_balloon_pointer_moved`（ポインタ移動での選択肢
+    /// hover 追従）・`on_balloon_pointer_pressed`（クリックによる選択確定）・
+    /// `clear_balloon_hover_on_leave`（バルーン離脱での hover 解除）。到達の起点は
+    /// `ghost_session::boot_ghost` の `wire_balloon_choice`・`ghost_session::open_ghost_windows` の
+    /// `attach_balloon_pointer_handlers` 呼出・`ghost_session::register_systems` の
+    /// `register_balloon_leave_system` 呼出。
     ///
     /// [`presenter()`]: Self::presenter
     pub(crate) fn runtime(&self) -> &Rc<RefCell<TextLayerRuntime>> {

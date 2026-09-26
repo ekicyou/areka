@@ -220,8 +220,8 @@ fn raise_the_dirty_mark(mut plan: ResMut<ZOrderChainPlan>) {
 
 /// 本番と同じ順序で確定段を組んだ World（`wire_zorder_pair` が 3 本を先に載せる）。
 ///
-/// 本番も `open_startup_window`（`wire_zorder_pair`）→ `wire_emo2_boot`（相の登録）の順で
-/// あり、**登録の順は適用系のほうが先**である。順序指定を落とすと相は後ろへ回る。
+/// 本番の登録の入口（`ghost_session::register_systems`）も `wire_zorder_pair` で確定段へ 3 本を
+/// 載せる。同じ段に後から載せる仕事は、順序指定を落とすと適用系との前後が定まらない。
 fn wired_finalize_world() -> World {
     let mut world = World::new();
     world.init_resource::<Schedules>();
@@ -372,7 +372,7 @@ fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        code.contains("app.world().borrow_mut().world_mut().insert_non_send(wiring);"),
+        code.contains("world.insert_non_send(wiring);"),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(
@@ -439,36 +439,47 @@ fn t_zwi07_the_frame_calls_the_zorder_drain_right_after_the_move_drain() {
 /// 映らない。運ぶ側の字面をここが唯一押さえる。
 #[test]
 fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
-    let raw = include_str!("../main.rs");
-    let code = code_only(raw);
-    let squeezed = squeeze(&code);
+    // 窓を作る側（重なりの生の値の写し）と結線へ渡す行は `ghost_session.rs`、その戻りを受けて
+    // ゴーストごとの結線へ運ぶ行は `fn main`（`main.rs`）に在る（areka-P0-ghost-restart-unit
+    // task 4.2・4.3）。
+    let session_raw = include_str!("../ghost_session.rs");
+    let session_code = code_only(session_raw);
+    let session = squeeze(&session_code);
+    let main_raw = include_str!("../main.rs");
+    let squeezed = squeeze(&code_only(main_raw));
 
     assert!(
-        squeezed.contains("let zorder_raw = prepared.zorder_raw.clone();"),
+        session.contains("let zorder_raw = prepared.zorder_raw.clone();"),
         "準備の結果から重なりの生の値を取り出す行が本文に無い"
     );
     assert!(
         squeezed.contains(
-            "let StartupDescriptValues { author_dpi, zorder_raw, } = match open_startup_window(&app, &cfg) {"
+            "let opened = ghost_session::open_ghost_windows(app.world().borrow_mut().world_mut(), &cfg); let descript = match opened {"
         ),
         "起動窓の戻り値から重なりの生の値を受け取る行が本文に無い"
     );
     assert!(
-        squeezed.contains("author_dpi, zorder_raw.as_deref(), kanade_stop_tx.clone(), );"),
-        "重なりの生の値が結線（wire_emo2_boot）へ渡されていない＝設定が台帳へ届かない: {squeezed}"
+        squeezed.contains("&descript, &ghost_decision, &balloon_decision, );"),
+        "起動窓の戻り値がゴーストごとの結線（boot_ghost）へ渡されていない: {squeezed}"
+    );
+    assert!(
+        session.contains(
+            "descript.author_dpi, descript.zorder_raw.as_deref(), kanade_stop.clone(), );"
+        ),
+        "重なりの生の値が結線（wire_emo2_boot）へ渡されていない＝設定が台帳へ届かない: {session}"
     );
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。
     assert!(
-        code.contains("fn open_startup_window("),
+        session_code.contains("pub(crate) fn open_ghost_windows("),
         "説明文を落とす処理が本文まで落としている"
     );
     assert!(
-        !code.contains("起動窓の準備が descript から**1 度だけ**読み取った値"),
+        !session_code.contains("起動窓の準備が descript から**1 度だけ**読み取った値"),
         "説明文が落ちていない（走査が恒真になっている）"
     );
     assert!(
-        raw.contains("起動窓の準備が descript から**1 度だけ**読み取った値"),
+        session_raw.contains("起動窓の準備が descript から**1 度だけ**読み取った値"),
         "対照の前提が崩れている（素の全文に説明文が無い）"
     );
 }
@@ -496,10 +507,7 @@ fn t_zwi09_the_boot_seats_the_descript_base_before_inserting_the_wiring() {
         &squeezed,
         "wiring.seed_zorder_descript_base(zorder_descript);",
     );
-    let insert_at = index_of(
-        &squeezed,
-        "app.world().borrow_mut().world_mut().insert_non_send(wiring);",
-    );
+    let insert_at = index_of(&squeezed, "world.insert_non_send(wiring);");
     assert!(
         seed_at < insert_at,
         "基底を据える段が結線状態を World へ載せるより後ろに在る（seed={seed_at}・insert={insert_at}）"

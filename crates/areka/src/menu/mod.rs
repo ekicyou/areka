@@ -99,6 +99,8 @@ pub(crate) enum ItemBody {
 }
 
 /// 登記の口。枠ごとに供給関数を高々 1 つ持つ。
+///
+/// ゴーストを起こすたびに `MenuWiring` は新品になるので、登記は起こすたびにやり直す（`ghost-shell-balloon-switch` の契約）。
 #[derive(Default)]
 pub(crate) struct MenuRegistry {
     slots: [Option<Supplier>; 7],
@@ -131,6 +133,15 @@ impl MenuRegistry {
                 let supplier = self.slots[frame as usize].as_ref()?;
                 Some((frame, supplier(world, ctx)))
             })
+            .collect()
+    }
+
+    /// 登記のある枠を [`Frame::ORDER`] の順に返す（テスト専用の読み口・供給関数は呼ばない）。
+    #[cfg(test)]
+    pub(crate) fn registered_frames(&self) -> Vec<Frame> {
+        Frame::ORDER
+            .into_iter()
+            .filter(|&frame| self.slots[frame as usize].is_some())
             .collect()
     }
 }
@@ -177,15 +188,17 @@ impl MenuWiring {
     }
 }
 
-/// メニューを起動に結ぶ。boot 成功後に `main.rs` から 1 回だけ呼ぶ（入力の結線の直後）。
+/// メニューを起動に結ぶ。boot 成功後に `ghost_session::boot_ghost` からゴーストごとに呼ぶ
+/// （入力の結線の直後・状態の載せ替え＝n 回。系の登録は [`register_menu_poll`] を
+/// `ghost_session::register_systems` からプロセスに 1 回）。
 ///
-/// 行うのは結線状態の挿入・組込 2 項目の登記・返事の取り出しの登録までで、**窓には触れない**。
-/// 呼ばれるのは `app.run()` の前で、キャラクター窓はまだ 1 枚も無いからである（窓を作る
-/// クロージャは `app.run()` の最初の数 tick で動く）。解放ハンドラはそのクロージャが
+/// 行うのは結線状態の挿入・組込 2 項目の登記までで、**窓には触れない**（返事の取り出しの
+/// 登録は [`register_menu_poll`]）。呼ばれるのは窓を作るクロージャが動くより前（1 度目は
+/// `app.run()` の前）で、キャラクター窓はまだ 1 枚も無いからである（窓を作る
+/// クロージャは `app.run()` の中の tick で動く）。解放ハンドラはそのクロージャが
 /// [`attach_release_handlers`] で付ける。
 ///
-/// `Schedules` 資源は在る前提（`wire_choice_drain` と同じ）。運行（kanade）への送り口は
-/// 照会（`KanadeMsg::ResourceQuery`）に使う。
+/// 運行（kanade）への送り口は照会（`KanadeMsg::ResourceQuery`）に使う。
 pub(crate) fn wire_menu(world: &mut World, kanade: Sender<KanadeMsg>) {
     wire_menu_with(world, MenuWiring::new(kanade));
 }
@@ -193,15 +206,22 @@ pub(crate) fn wire_menu(world: &mut World, kanade: Sender<KanadeMsg>) {
 /// 結線の中身。結線状態を受け取るのは、テストが画面座標への写しを差し替えた状態
 /// （[`MenuWiring::with_to_screen`]）で同じ手順を通せるようにするためである。
 ///
-/// 手順は ⑴ 組込の 2 項目を登記して結線状態を World へ入れる、⑵ 照会の返事の取り出しを
-/// 毎 tick の入力の段へ登録する。⑵ の並びは `dispatch_pointer_events` の後——解放ハンドラが
-/// 同じ tick に預けた返事待ちを、その tick のうちに 1 度覗けるようにする。
+/// 手順は組込の 2 項目を登記して結線状態を World へ入れるだけ。
 fn wire_menu_with(world: &mut World, mut wiring: MenuWiring) {
     wiring
         .registry
         .register(Frame::Readme, Rc::new(readme_item));
     wiring.registry.register(Frame::Close, Rc::new(close_item));
     world.insert_non_send(wiring);
+}
+
+/// 照会の返事の取り出しを毎 tick の入力の段へ登録する（登録だけ・持ち物は置かない）。
+///
+/// 並びは `dispatch_pointer_events` の後——解放ハンドラが同じ tick に預けた返事待ちを、
+/// その tick のうちに 1 度覗けるようにする。
+///
+/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
+pub(crate) fn register_menu_poll(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,
         trigger::poll_menu_query.after(dispatch_pointer_events),
@@ -212,9 +232,11 @@ fn wire_menu_with(world: &mut World, mut wiring: MenuWiring) {
 ///
 /// # タイミング契約
 ///
-/// キャラクター窓を作った**直後**に、同じ `&mut World` クロージャの中で呼ぶこと（`main.rs` の
-/// `open_startup_window` が `input_events::attach_char_pointer_handlers` の隣で呼ぶ）。付くのは
-/// 呼ばれた時点に在る窓だけなので、窓を作り直す spec は作り直した窓へもう一度呼ぶ。既に付いて
+/// キャラクター窓を作った**直後**に、同じ `&mut World` クロージャの中で呼ぶこと
+/// （`ghost_session::open_ghost_windows` の窓を作るクロージャが
+/// `input_events::attach_char_pointer_handlers` の隣で呼ぶ）。付くのは呼ばれた時点に在る窓
+/// だけだが、窓を作り直す `ghost_session::reopen_ghost_windows` も同じ `open_ghost_windows` を
+/// 通るので、作り直した窓へもこのクロージャが付け直す。既に付いて
 /// いる窓へ呼んでも、同じハンドラで置き換わるだけで害は無い。
 ///
 /// [`wire_menu`] との前後は問わない。ハンドラは結線（`MenuWiring`／`MouseWiring`）が無ければ

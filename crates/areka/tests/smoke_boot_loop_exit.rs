@@ -65,7 +65,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// wire 成立マーカー（`emo2_boot` の `info!`・実 sink 結線が end-to-end で踏まれた証跡・task 7.1）。
 const WIRED: &str = "emo2-boot: 実 sink 結線が成立しました（wire 成立）";
 
-/// 本物のゴースト窓を開いたマーカー（`main` の `open_startup_window` 成功アーム）。
+/// 本物のゴースト窓を開いたマーカー（`ghost_session::open_ghost_windows` の窓を作るクロージャ）。
 const REAL_WINDOWS: &str = "本物のゴースト窓を開きました";
 
 /// env ゲートを立てた areka バイナリを与えた引数と env で起動し、番犬締切内の終了を待って

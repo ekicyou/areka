@@ -16,7 +16,7 @@ Kiro仕様駆動開発における作業フロー・ブランチ戦略・完了�
 - **ブランチ供給元**: フィーチャーブランチは Claude Code（ハーネス）のワークツリーが供給する。skillは自前でブランチ／ワークツリーを作成・削除しない。
 - **1 feature = 1 branch = 1 PR**: 1つの仕様の全フェーズ（requirements → design → tasks → implementation）を**同一のワークツリーブランチ**で進め、完了時に**1回だけ** PR を作成して squash マージする。
 - **入口**: `/kiro-start {feature}` — 要件ディスカバリ後の単一spec開始。ブランチは作らず、現在のワークツリーブランチで spec を初期化（push しない）。デフォルトブランチ上では STOP し、ワークツリーでの再実行を促す。
-- **出口**: `/kiro-complete {feature}` — DoDゲート検証 → アーカイブ → PR作成 → squash マージ。**mainへの統合はここだけ。**
+- **出口**: `/kiro-complete {feature}` — DoD静的ゲート → アーカイブ → 全体テスト 1 回（待ち時間に文書更新を並行）→ PR作成 → squash マージ。**mainへの統合はここだけ。**
 - **直push禁止**: 各タスク・各フェーズの途中で `main` へ fast-forward / 直 push しない。途中コミットはワークツリーブランチ上に積み、統合は完了時のPRに集約する。
 
 ---
@@ -29,10 +29,11 @@ Kiro仕様駆動開発における作業フロー・ブランチ戦略・完了�
 
 `{remote}` / `{default-branch}` を固定優先順序で決定的に解決する（`origin`/`main` をハードコードしない）。
 
-### Step 1. DoDゲート検証
+### Step 1. DoD静的ゲート
 
 - **Spec Gate**: 当該 spec の `tasks.md` が全 `[x]` 完了。
-- **Test Gate**: `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` が終了コード 0（整形・i686 の導入と成果物のビルド・fmt --check・x64 の全テスト・i686 でしか走らないテストを 1 本で回す。直近の実行で全段緑かつ以降コード変更がなければ省略可）。
+- **Test Gate はアーカイブの後の 1 回**（Step 5 の後）: `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` を**アーカイブをコミットした後に 1 回だけ**裏で回し、終了コード 0 を確認する（整形・i686 の導入と成果物のビルド・fmt --check・x64 の全テスト・i686 でしか走らないテスト・deny・about を 1 本で回す）。移動後の 1 回は移動前の 1 回を包含するので、以前の「移動前と移動後の 2 回」を 1 回にまとめた（2026-09-26）。スキップ不可。
+- **待ち時間の並行レーン**: テストの裏で ROADMAP・steering・スキル文書の更新と PR 文面の下書きを行う。ソース・`tools/`・テストが読む文書は触らず、`.kiro/specs` 直下のディレクトリを増減せず（ukadoc-survey の数え直しが偶発的に赤になる）、`cargo` を回さない。起票と移動はテストの起動より前に済ませる。
 - いずれか失敗時はワークフローを中断し開発者へ報告。
 
 ### Step 2. 実装コミット
@@ -133,7 +134,7 @@ gh pr merge --squash --delete-branch --subject "<subject>" --body "<body>"
 ### 完了チェックリスト
 
 - [ ] DoDゲート通過（Spec / Test）
-- [ ] 全テストがパス（`tools/test-all.ps1` が終了コード 0、または直近の実行結果により省略）
+- [ ] 全テストがパス（アーカイブをコミットした後の `tools/test-all.ps1 -Format -License` 1 回が終了コード 0）
 - [ ] スペックフォルダーが `.kiro/specs/completed/<spec-name>/` に存在（繰り返し仕様を除く）
 - [ ] `spec.json` の `phase` が `"completed"` + `updated_at` 更新済み
 - [ ] 移動元（`.kiro/specs/<spec-name>/`）にファイルが残っていない

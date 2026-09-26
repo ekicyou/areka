@@ -209,7 +209,7 @@ impl ScriptedShioriBackendBuilder {
 }
 
 /// 台本化したテスト専用 SHIORI backend（`areka_kanade::ShioriBackend` 実装・R8.1/R8.6）。
-struct ScriptedShioriBackend {
+pub(crate) struct ScriptedShioriBackend {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,
     unload_script: Option<Result<ExitKind, ShutdownError>>,
@@ -294,7 +294,7 @@ impl ShioriBackend for ScriptedShioriBackend {
 ///
 /// backend 本体を別スレッド（shiori actor）へ move した後も、このハンドルから発火列を照合できる。
 #[derive(Clone)]
-struct ScriptedShioriHandle {
+pub(crate) struct ScriptedShioriHandle {
     calls: Arc<Mutex<Vec<RecordedCall>>>,
     /// 進行状態の記録（第 2 系統・R3.8）の共有台帳。取り出し口は [`Self::status_calls`]。
     status_calls: StatusLedger,
@@ -381,7 +381,7 @@ const BACKOFF_SLEEP: Duration = Duration::from_millis(1);
 /// [`SPIN_YIELD_BUDGET`] を超えたら [`BACKOFF_SLEEP`] の短い sleep へ落として**コア占有をやめる**。
 /// 本ファイルの「sleep 不使用」規律は *系を進める* Tick 注入ループの決定論を守るためのものであり、
 /// 別スレッドの進行を待つだけの本ヘルパには当たらない（待機は観測内容を変えない）。
-fn spin_wait_until(mut cond: impl FnMut() -> bool) -> bool {
+pub(crate) fn spin_wait_until(mut cond: impl FnMut() -> bool) -> bool {
     let deadline = Instant::now() + SPIN_WAIT;
     let mut spun = 0u32;
     loop {
@@ -539,7 +539,7 @@ fn pump_until_idle() {
 }
 
 /// クロージャ `f` を別スレッドで実行し有界時間で完了を観測する（ghost spine の `run_bounded` 同旨）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
+pub(crate) fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
     let (done_tx, done_rx) = mpsc::sync_channel::<()>(0);
     std::thread::spawn(move || {
         f();
@@ -615,7 +615,7 @@ enum LoopDriver {
 /// scripted backend＋`TickerMode::Disabled` で**テスト内 in-process** に再現したもの。frame
 /// フェーズ（`run_attach_phase` 等）を直接駆動でき、`ghost`/`seriko`/`shiori_handle` で
 /// ライフサイクル・発火列を観測できる。
-struct SpineHarness {
+pub(crate) struct SpineHarness {
     /// GPU 資源（`GraphicsCore`/`WucGraphicsResource`）＋合成 `GhostWindows`＋装着スロットを持つ World。
     world: World,
     /// frame 三相結線状態（presenter/rx/runtime/clock/assets）。`run_attach_phase` の駆動対象。
@@ -675,7 +675,7 @@ impl SpineHarness {
     /// 台本化する。OnSecondChange は kanade へ Tick を送らないため不要。
     /// username prefetch GET（OnInitialize 後・OnFirstBoot 前・sylphya task 8.2・R9.1/9.2）は `build()` が
     /// 既定 `Ok(None)`（NoContent＝カスタム username 無し）を自動補填するため明示台本化しない。
-    fn standard_backend(on_boot: &str) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
+    pub(crate) fn standard_backend(on_boot: &str) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
         ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
             .get("OnFirstBoot", Ok(None))

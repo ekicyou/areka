@@ -2,7 +2,10 @@
 //!
 //! 「終了のために全窓を閉じる」と「終了を指示する」を [`quit_app`] 1 つの操作にまとめ、
 //! 片方だけを呼べない形にする（裁定 2）。全窓を閉じる部品 [`despawn_app_windows`] は私有で、
-//! クレート内のどこからも単独では呼べない（要件 3.6 を構造で守る）。
+//! クレート内のどこからも単独では呼べない（要件 3.6 を構造で守る）。起こし直しのために閉じるだけの
+//! [`close_windows_for_restart`] は同じ部品を使うが、証 [`WindowsClosed`] の消費先が
+//! `ghost_session::reopen_ghost_windows` だけなので、終了の代わりには使えない
+//! （areka-P0-ghost-restart-unit 要件 4）。
 //!
 //! 出所 [`ExitOrigin`] は記録の語彙であり、受け手は出所で分岐しない（要件 3.7）。
 
@@ -94,6 +97,43 @@ pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
     );
     exit.request_exit();
     closed
+}
+
+/// 起こし直しのために全窓を閉じた証（areka-P0-ghost-restart-unit・design「close_windows_for_restart
+/// + WindowsClosed」）。
+///
+/// 作れるのは [`close_windows_for_restart`] だけ（欄は私有）。消費先は
+/// `ghost_session::reopen_ghost_windows` の 1 つに限る（値渡し・`Clone` なし＝1 回しか消費できない）。
+/// 呼んで捨てる使い方（`quit_app` の代わりに閉じて終わる）は `#[must_use]` の警告で露わになる。
+#[must_use = "閉じた窓は起こし直しへ続けること（reopen_ghost_windows へ渡す）"]
+pub(crate) struct WindowsClosed {
+    closed: usize,
+}
+
+impl WindowsClosed {
+    /// 閉じた窓の枚数（標的として拾った件数・[`despawn_app_windows`] の戻り値）。
+    pub(crate) fn closed(&self) -> usize {
+        self.closed
+    }
+}
+
+/// 全窓（ゴースト窓）を閉じるが、終了は指示しない（要件 4.1・4.2）。
+///
+/// 窓を消す手順は [`quit_app`] と同じ私有部品 [`despawn_app_windows`]（要件 4.5）。
+/// [`AppExit`] には触れない（呼ぶ前後で `is_requested()` は変わらない）。記録は終了の
+/// `app_exit` とは別の語彙 `windows_closed_for_restart`（要件 4.3）。
+/// 終了経路（`quit_app`・停止通知からの終了・OS の閉鎖要求・強制退避・smoke）からは呼ばない
+/// （要件 4.4・4.6・完了 `app-lifetime-separation` 要件 3.6 の意図）。
+// 本番の呼び手は #13（ゴーストの切替）の起こし直しの経路。それまでは test からだけ呼ぶ。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
+    let closed = despawn_app_windows(world);
+    tracing::info!(
+        event = "windows_closed_for_restart",
+        closed,
+        "[close_windows_for_restart] 起こし直しのために全窓を閉じた（終了は指示しない）"
+    );
+    WindowsClosed { closed }
 }
 
 /// 全窓（`GhostWindowMarker`）を despawn する私有部品。

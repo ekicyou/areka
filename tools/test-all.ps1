@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  ワークスペースのフルテストを 1 本で回す（kiro-complete の Format／Test／License ゲートの正本）。
+  ワークスペースのフルテストを 1 本で回す（kiro-complete の Format／Test／License／移動後ゲートを兼ねる 1 回の正本）。
 
 .DESCRIPTION
   1. i686 ターゲットの導入（入っていれば何もしない）
@@ -14,7 +14,7 @@
 
 .EXAMPLE
   pwsh -NoProfile -File tools/test-all.ps1
-  pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # kiro-complete の DoD ゲート
+  pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # kiro-complete（アーカイブ後の 1 回）
 #>
 param([switch]$Format, [switch]$License)
 

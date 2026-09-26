@@ -14,8 +14,8 @@ use temp_path_kit::TempPath;
 
 use super::*;
 
-/// 説明書の持ち物を World へ直に入れる（結線 `wire_readme` はスケジュール登録を伴うので、
-/// 判断分岐だけを見るここでは通さない）。送出端は要求を送るために返す。
+/// 説明書の持ち物を World へ直に入れる（判断分岐だけを見るここでは結線 `wire_readme` を
+/// 通さない）。送出端は要求を送るために返す。
 fn wired(world: &mut World, path: PathBuf) -> Sender<ReadmeRequest> {
     let (tx, rx) = mpsc::channel::<ReadmeRequest>();
     world.insert_non_send(ReadmeWiring {
@@ -35,6 +35,49 @@ fn capture<F: FnOnce()>(f: F) -> Vec<String> {
 /// 指定した出来事の行だけを拾う。
 fn lines_of<'a>(lines: &'a [String], event: &str) -> Vec<&'a String> {
     lines.iter().filter(|l| l.contains(event)).collect()
+}
+
+/// 入力の段に載っている system の数（段がまだ無ければ 0）。
+fn input_systems_len(world: &World) -> usize {
+    world
+        .resource::<Schedules>()
+        .get(Input)
+        .map_or(0, |input| input.systems_len())
+}
+
+// -------------------------------------------------------------------------
+// 登録と結線（areka-P0-ghost-restart-unit 要件 2.1）
+// -------------------------------------------------------------------------
+
+/// 登録専用の関数は単独で呼べ、入力の段へ取り出しの system をちょうど 1 つ足す。
+#[test]
+fn register_readme_drain_alone_adds_one_system_to_the_input_schedule() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+
+    register_readme_drain(&mut world);
+
+    assert_eq!(input_systems_len(&world), 1, "取り出しの 1 本だけが載る");
+    assert!(
+        world.get_non_send::<ReadmeWiring>().is_none(),
+        "登録は持ち物を置かない"
+    );
+}
+
+/// 結線は持ち物を置くだけで、系は登録しない（登録は `ghost_session::register_systems`・要件 2.1）。
+#[test]
+fn wire_readme_inserts_the_wiring_without_registering() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    let (_tx, rx) = mpsc::channel::<ReadmeRequest>();
+
+    wire_readme(&mut world, PathBuf::from("readme.txt"), rx);
+
+    assert_eq!(input_systems_len(&world), 0, "結線は系を登録しない");
+    let wiring = world
+        .get_non_send::<ReadmeWiring>()
+        .expect("結線は持ち物を置く");
+    assert_eq!(wiring.path(), Path::new("readme.txt"), "決めた経路を持つ");
 }
 
 // -------------------------------------------------------------------------

@@ -80,9 +80,9 @@ fn register_like_the_boot(world: &mut World) {
         .add_systems(Update, emo2_frame_system.after(update_typewriters));
 }
 
-/// 本番と同じ順序で段を組んだ World——鎖の適用系（末尾の段の 3 本）が**先に**載る。
+/// 鎖の適用系（末尾の段の 3 本）を**先に**載せた World。
 ///
-/// 本番も `open_startup_window`（`wire_zorder_pair`）→ `wire_emo2_boot`（相の登録）の順である。
+/// 本番の登録の入口（`ghost_session::register_systems`）も相の登録と `wire_zorder_pair` の両方を載せる。
 /// 末尾の段を空のままにすると「載らない」の主張が「段そのものが無い」で通ってしまうので、
 /// ここで実際に 3 本を載せておく。
 fn world_with_the_chain_apply_wired() -> World {
@@ -207,7 +207,7 @@ fn t_n10_before_the_registration_the_update_stage_holds_nothing() {
 /// 本番（`wire_kanade_stop`）の終了相の登録の字面。下のテストはこの写しを素の World で行う。
 const QUIT_REGISTRATION: &str = "add_systems(Update, ghost_quit_system.before(emo2_frame_system));";
 
-/// 毎フレームの相を登録しない World（＝LogSink 側の起動と同じ形）でも、終了相の登録は
+/// 毎フレームの相を登録しない World（順序の相手が居ない形）でも、終了相の登録は
 /// bevy に受け入れられ、停止通知 1 件 → `Update` 1 回で終了が指示され最初の出所が残る。
 ///
 /// 順序の相手（`emo2_frame_system`）が schedule に無い登録の形は bevy の挙動に依る 1 点なので、

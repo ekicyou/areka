@@ -52,10 +52,7 @@ pub(crate) struct ReadmeWiring {
     missing_logged: Cell<bool>,
 }
 
-/// 説明書の持ち物を World へ入れ、要求の取り出しを毎 tick の入力の段へ登録する。
-///
-/// 並びは `dispatch_pointer_events` の後——同じ tick のうちに届いた要求をその tick で
-/// 処理する（`input_events/choice_drain.rs` の `wire_choice_drain` と同型）。
+/// 説明書の持ち物を World へ入れる（取り出しの登録は [`register_readme_drain`]）。
 ///
 /// 呼び手は boot 成功後の `wire_emo2_boot`（ゴーストの根と `readme` キーを読める場所・task 4.3）。
 pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeRequest>) {
@@ -64,9 +61,26 @@ pub(crate) fn wire_readme(world: &mut World, path: PathBuf, rx: Receiver<ReadmeR
         rx,
         missing_logged: Cell::new(false),
     });
+}
+
+/// 要求の取り出しを入力の段へ登録する（登録だけ・持ち物は置かない）。
+///
+/// 並びは `dispatch_pointer_events` の後——同じ tick のうちに届いた要求をその tick で
+/// 処理する（`input_events/choice_drain.rs` の `register_choice_drain` と同型）。
+///
+/// 呼び手は `ghost_session::register_systems`（プロセスに 1 回）。
+pub(crate) fn register_readme_drain(world: &mut World) {
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, drain_readme_requests.after(dispatch_pointer_events));
+}
+
+impl ReadmeWiring {
+    /// 起動時に決めた説明書のファイル（テスト専用の読み口）。
+    #[cfg(test)]
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 /// 説明書のファイルがあるか（要件 4.3・11.4）。
