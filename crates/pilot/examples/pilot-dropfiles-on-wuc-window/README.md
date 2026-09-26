@@ -98,7 +98,7 @@ grep -E '\[dropfiles\]|clickthrough: ex-style' dropfiles.log
 3. 画面の拡大率は変えなくてよい（開発機の 200% のまま）。
 4. エクスプローラの窓を 2 枚開いて置く:
    - **落とす側（`drop-src`）の窓は、先進坑の窓と重ならない所に置く**。ドラッグを始めるためにクリックした瞬間にその窓が前面へ来て、ドラッグ中は先進坑の窓を前に出せないため。
-   - **背後の受け手（`drop-dst`）の窓は、先進坑の窓の下に広げて置く**（ⓑで余白の下にこの窓が来るように）。
+   - **背後の受け手（`drop-dst`）の窓は、赤い矩形が `drop-dst` の窓の真ん中あたりに重なるように広げて置く**。先進坑の窓は矩形よりひと回り大きい正方形だが、矩形のまわりは透明で見えない（これを「余白」と呼ぶ。矩形の各辺から外へ矩形の幅の 8 割ほど）。矩形のまわりに `drop-dst` の空のファイル一覧が見えていればよい。
 5. example を起動する。**窓がエクスプローラに隠れたら、赤い矩形をクリックして前に出す**（先進坑の窓は最前面ではない）。起動直後に `clickthrough: ex-style トグル適用 … desired=Transparent` が 1 行出る（カーソルが絵の外にあるので透過が付いた）。
 6. 既定の 180 秒のうちにⓐ〜ⓒを 1 走行で行う。途中で窓を閉じない（閉じると終了コード 3 で、その走行は判定に使わない）。
 
@@ -107,9 +107,10 @@ grep -E '\[dropfiles\]|clickthrough: ex-style' dropfiles.log
 | 手順 | 落とし方 | 期待する行（go の場合） |
 |---|---|---|
 | ⓐ 絵の上 | `drop-src` の `a.nar` をつかみ、先進坑の赤い矩形の上で離す（わざと矩形の内外を出し入れしない）。 | `ex-style when="drop"` に続いて `[dropfiles] 到着 seq=1 … in_client=true opaque="true" transparent=false accept_files=true … n=1`、続けて `[dropfiles] ファイル seq=1 i=0 path=…\a.nar`。位置 `x`・`y` は矩形の中（論理 100〜220 × 拡大率。200% なら物理 px で 200〜440）。 |
-| ⓑ 絵の外 | ⓐで使った `drop-src` の `a.nar` をもう一度つかみ、先進坑の余白（矩形の外・窓の内側）で離す。背後には `drop-dst` の窓がある。 | **`[dropfiles] 到着` の行が出ない**。`a.nar` が `drop-dst` の窓へ移った（または写った）ことを目で確かめる。 |
+| ⓑ 絵の外 | ⓐで使った `drop-src` の `a.nar` をもう一度つかみ、赤い矩形のすぐ外側、辺から矩形の幅の半分くらい離れた所（見えない余白の内側で、下に `drop-dst` の窓が見えている所）で離す。離れすぎると余白の外に出て、ただ `drop-dst` に落としただけになる。 | **`[dropfiles] 到着` の行が出ない**。`a.nar` が `drop-dst` の窓へ移った（または写った）ことを目で確かめる。 |
 | ⓒ 付け外しの後に絵の上 | 先にカーソルを矩形の内外へ数回出し入れし、`clickthrough: ex-style トグル適用` の行が `desired=Opaque`／`desired=Transparent` で数回出たことを確かめる。それから `drop-src` の `b.nar` を矩形の上で離す。 | `[dropfiles] 到着 seq=2 … opaque="true" transparent=false accept_files=true …` と `[dropfiles] ファイル seq=2 i=0 path=…\b.nar`。**`accept_files=true` が、付け外しの後も受け入れの宣言が残っている証拠**。 |
 
+- 絵の上に落としても**画面の上では何も起きない**（ファイルも動かない）。この先進坑は受け取ったことをログに書くだけなので、結果はログの行で確かめる。
 - ⓐは「起動時の 1 回と、矩形へ入るときの付け外ししか起きていない」状態、ⓒは「わざと何度も付け外しさせた後」の状態で、透過の付け外しの前後で受け取りが変わるかを比べる。
 - 上限時間が来ると `[dropfiles] 終了: 上限時間に到達 drops=…` が出る。ⓐ〜ⓒを行えば `drops=2` のはず（ⓑは数えられない）。
 - ⓐかⓒで届かなかったら、`PILOT_DROPFILES_FIX=reapply` と `PILOT_DROPFILES_FIX=dragaccept` の走行を 1 本ずつ足し、同じ手順で試す。それでも届かないときに次に足すのは、スレッドのメッセージ取得フック（`SetWindowsHookExW(WH_GETMESSAGE, …)`）で「そもそも待ち行列に `WM_DROPFILES` が来ているか」を切り分けることである（今回のコードには入れていない）。
@@ -117,7 +118,7 @@ grep -E '\[dropfiles\]|clickthrough: ex-style' dropfiles.log
 ## 検証結果
 
 - 判定（go／違う／直す）: （開発者が記入）
-- 日付: （実走で記入）
+- 日付: 2026-09-26（走行 1＝22:40〜22:43・走行 2＝22:45〜22:48、いずれも日本時間）
 
 ### 見立ての表（判定ではない）
 
@@ -138,36 +139,38 @@ grep -E '\[dropfiles\]|clickthrough: ex-style' dropfiles.log
 
 「違う」のときは、1〜3 のどれが `areka-P0-ghost-install` の規模に収まるかの見立てまでを学びに書く。
 
-見立て: （実走で記入）
+見立て: **go**。ⓐ・ⓒで届いてパスが取れ、ⓑでは窓に届かず背後のエクスプローラの窓へ渡った（表の 1 行目）。手当ては要らなかった。本坑 `areka-P0-ghost-install` は上の 3 の線（`WM_DROPFILES` で `.nar` を受ける）で設計できる見込み。
 
 ### 走行の条件
 
-- コマンドと環境変数: （実走で記入）
-- 画面の拡大率: （実走で記入）
-- 起動の行（`admin=false` の確認）: （実走で記入）
-- 生成直後の `ex-style when="created"` の行: （実走で記入）
-- 終了の行と終了コード: （実走で記入）
+- コマンドと環境変数: `NO_COLOR=1 cargo run -q -p pilot --example pilot-dropfiles-on-wuc-window`（`AREKA_APP_SMOKE_EXIT_MS`・`PILOT_DROPFILES_FIX`・`RUST_LOG` は未設定＝上限 180 秒・手当てなし・既定のフィルタ）。管理者でないシェルから 2 走行。走行 1 はⓐだけ（ⓑの位置取りの説明が分かりにくく、2 回目も絵の上に落ちた）、走行 2 でⓐ〜ⓒを通した。下の表は走行 2 の値。
+- 画面の拡大率: 200%（開発機のまま）
+- 起動の行（`admin=false` の確認）: 両走行とも `[dropfiles] 起動 admin=false fix=None limit_ms=180000`
+- 生成直後の `ex-style when="created"` の行: 両走行とも `accept_files=true transparent=false layered=false noredirect=true raw="0x200090"`。直後に wintf が `clickthrough: WS_EX_LAYERED 同伴フラグ適用` を出し、以後の到着時の値は `raw="0x280090"`（`layered=true`）
+- 終了の行と終了コード: 走行 1＝`[dropfiles] 終了: 上限時間に到達 drops=2 limit_ms=180000`・走行 2＝`… drops=3 …`。どちらも `終了コード reason=Deadline code=0`（プロセスの終了コード 0）
 
 ### ⓐ〜ⓒの結果
 
 | 手順 | 届いたか | 取れたパス | 位置（`x`,`y`）・`opaque` | 到着時の `transparent` | 到着時の `accept_files` |
 |---|---|---|---|---|---|
-| ⓐ 絵の上 | （実走で記入） | （実走で記入） | （実走で記入） | （実走で記入） | （実走で記入） |
-| ⓑ 絵の外 | （実走で記入） | —（背後の窓に渡ったか: 実走で記入） | — | — | — |
-| ⓒ 付け外しの後に絵の上 | （実走で記入） | （実走で記入） | （実走で記入） | （実走で記入） | （実走で記入） |
+| ⓐ 絵の上 | 届いた（22:45:15・`seq=1`・`n=1`） | `C:\Users\maz-o\Downloads\x\drop-src\a.nar` | `433`,`336`（矩形は物理 px で 200〜440）・`opaque="true"` | `false` | `true` |
+| ⓑ 絵の外 | 届かなかった（`到着` の行なし） | —（背後の `drop-dst` の窓へ渡った。`a.nar` が 22:45:26.74 に `drop-dst` へ移動。その直前 22:45:25.97 に `desired=Transparent`） | — | — | — |
+| ⓒ 付け外しの後に絵の上 | 届いた（22:46:04・`seq=2`／22:46:16・`seq=3`） | `C:\Users\maz-o\Downloads\x\drop-src\b.nar`（2 回とも） | `393`,`385`／`404`,`403`・どちらも `opaque="true"` | `false` | `true` |
 
-- ⓒの前に出た `clickthrough: ex-style トグル適用` の行の数: （実走で記入）
+- ⓒの前に出た `clickthrough: ex-style トグル適用` の行の数: `seq=1` から `seq=2` までに 18 行（ⓑのドラッグを含む）、`seq=2` から `seq=3` までにさらに 18 行
+- 走行 1 も同じ形で 2 回届いた（`seq=1` `x=326 y=277`・`seq=2` `x=332 y=320`、どちらも `a.nar`・`opaque="true"`・`transparent=false`・`accept_files=true`）
 
 ### 試した手当てと結果
 
-- 手当てなし（既定）: （実走で記入）
-- `PILOT_DROPFILES_FIX=reapply`: （届かない項があったときだけ・実走で記入）
-- `PILOT_DROPFILES_FIX=dragaccept`: （届かない項があったときだけ・実走で記入）
+- 手当てなし（既定）: ⓐ〜ⓒすべて期待どおり
+- `PILOT_DROPFILES_FIX=reapply`: 走らせていない（届かない項が無かった。生成直後に `accept_files=true` なので、この手当ては何も変えない）
+- `PILOT_DROPFILES_FIX=dragaccept`: 走らせていない（届かない項が無かった）
 
 ### 学び
 
-- 落とし物のメッセージは wintf の窓手続きまで届いたか（`SetWindowSubclass` で重ねた手続きで受けられた＝本坑は wintf の窓手続きの振り分けの表に `WM_DROPFILES` の 1 分岐を足すだけで足りるか）: （実走で記入）
-- 透過の付け外しとの噛み合い（付け外しの前後で受け取りが変わったか・受け入れの宣言が付け外しの後も残ったか・ドラッグ中に透過が追随したか）: （実走で記入）
-- `opaque="unknown"` が出たか。出たなら `[dropfiles] 終了` の行より前か後か: （実走で記入）
-- 終了時の警告の有無（重ねた手続きの後片付けで警告やエラーの行が出たか）: （実走で記入）
-- 判定の方式（矩形か α マスクか）が結果に効かない理由（設計の見込み: どの窓へ落とすかを決めるのは OS で、OS が見るのは `WS_EX_TRANSPARENT` のビットだけ。当たり判定の方式は wintf の中でそのビットを決める段の話）: （実走で裏付けを記入）
+- 落とし物のメッセージは wintf の窓手続きまで届いたか（`SetWindowSubclass` で重ねた手続きで受けられた＝本坑は wintf の窓手続きの振り分けの表に `WM_DROPFILES` の 1 分岐を足すだけで足りるか）: **届いた**。`WM_DROPFILES` は窓スレッドの待ち行列経由で、`SetWindowSubclass` で重ねた手続きに 5 回とも届いた（`opaque` が 5 回とも判定できた＝tick の途中の同期配送ではない）。本坑は wintf の窓手続きの振り分け（`dispatch_window_message`）に 1 分岐足せば足りる見込み。宣言は `WS_EX_ACCEPTFILES` のビットだけで足り、`DragAcceptFiles` は要らなかった。
+- 透過の付け外しとの噛み合い（付け外しの前後で受け取りが変わったか・受け入れの宣言が付け外しの後も残ったか・ドラッグ中に透過が追随したか）: 変わらなかった。`seq=1` から数えて 18 行・36 行の付け外しの後も到着時の `accept_files=true`（wintf の付け外しは `WS_EX_TRANSPARENT` と `WS_EX_LAYERED` 以外のビットを保つ）。ドラッグ中もカーソル監視は動き続け、絵の上に来ると `desired=Opaque`・外へ出ると `desired=Transparent` が出た。そのため落とした瞬間の透過の状態は落とした位置と一致し、絵の上の到着は 5 回とも `transparent=false`、絵の外では窓に届かなかった。
+- `opaque="unknown"` が出たか。出たなら `[dropfiles] 終了` の行より前か後か: 出なかった（両走行とも 0 件）
+- 終了時の警告の有無（重ねた手続きの後片付けで警告やエラーの行が出たか）: なし（両走行とも `WARN`・`ERROR` の行 0 件。`[App] Last window closed.` → `終了コード … code=0` まで通常どおり）
+- 判定の方式（矩形か α マスクか）が結果に効かない理由（設計の見込み: どの窓へ落とすかを決めるのは OS で、OS が見るのは `WS_EX_TRANSPARENT` のビットだけ。当たり判定の方式は wintf の中でそのビットを決める段の話）: 裏付けあり。ⓑの落としは直前に `desired=Transparent` が出た状態で背後の窓へ渡り、ⓐ・ⓒの到着はどれも `transparent=false` で、wintf の当たり判定（`opaque="true"`）と一致した。落とし先はビットの状態で決まり、そのビットを矩形で決めるか α で決めるかは結果に関わらない。
+- 本坑への注意: ドラッグ中の付け外しはカーソル監視の周期（12ms）に追随する。絵の縁ぎりぎりに素早く落とすと、ビットが切り替わる前の状態で落とし先が決まる可能性はある（今回は縁から 7 物理 px 内側の `x=433` でも正しく届いた）。
