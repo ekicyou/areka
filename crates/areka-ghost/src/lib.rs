@@ -49,6 +49,6 @@ pub use runtime::{
     boot_with_origin,
 };
 // baseware-root-layout: 根の目録（列挙と素性）。bin は `areka_ghost::catalog::…` で引く。
-pub use catalog::{BalloonEntry, BasewareRoot, GhostEntry, Identity, ShellEntry};
+pub use catalog::{BalloonEntry, BasewareRoot, GhostEntry, Identity, ShellEntry, sakura_name};
 // task 2.3: InProc 結線の connect closure 構成関数（D-3・テストの Recorder 合成と M2 の直接利用に供する）。
 pub use shiori_inproc::inproc_connect;

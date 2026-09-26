@@ -459,3 +459,41 @@ fn non_utf8_folder_name_warns_and_is_excluded() {
     assert_eq!(folders, ["ok"]);
     assert_eq!(catalog_warns(&events), ["catalog_non_utf8_name"]);
 }
+
+/// `sakura.name` の単独の読み手（要件 2.1・8.7）: 在る → 値・鍵が無い／descript が無い → 黙って None。
+#[test]
+fn sakura_name_reads_one_key_from_master_descript() {
+    let tmp = TempPath::new("catalog-sakura-name");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    let with = put_ghost(
+        &root,
+        "with",
+        "charset,UTF-8\nSakura.Name,さくら\nname,With\n",
+    );
+    let without = put_ghost(&root, "without", "charset,UTF-8\nname,Without\n");
+
+    let mut got = (None, None, None);
+    let events = capture(|| {
+        got = (
+            sakura_name(&with),
+            sakura_name(&without),
+            sakura_name(&root.ghost_dir("none")),
+        )
+    });
+    assert_eq!(got, (Some("さくら".to_owned()), None, None));
+    assert_eq!(catalog_warns(&events), Vec::<&str>::new());
+}
+
+/// descript が I/O 失敗で読めない → warn!＋本体側の名前は無し。
+#[test]
+fn sakura_name_unreadable_warns_and_yields_none() {
+    let tmp = TempPath::new("catalog-sakura-name-unreadable");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    let ghost = put_ghost(&root, "locked", "charset,UTF-8\nsakura.name,さくら\n");
+    let _held = hold_exclusive(&ghost.join("ghost").join("master").join("descript.txt"));
+
+    let mut got = Some(String::new());
+    let events = capture(|| got = sakura_name(&ghost));
+    assert_eq!(got, None);
+    assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
+}
