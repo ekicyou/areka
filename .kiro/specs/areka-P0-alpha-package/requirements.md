@@ -12,7 +12,7 @@
 
 ## Introduction
 
-本仕様は、α の配布物（zip）を**組む・確かめる・説明する**ための道具と文書を用意する。areka の本体（`crates/` のソース）は 1 行も変えない。変えるのは配布スクリプト（新規）・第三者向け README（新規）・根の `README.md` の表記だけで、議題 ⑷ の答えしだいで `.gitignore` の 1 行が加わる（下の「要件討議で決める 3 点」。議題 ⑵ は MIT 単独に決まり、`LICENSE-APACHE`・根の `Cargo.toml`・謝辞の雛形の変更は 0）。
+本仕様は、α の配布物（zip）を**組む・確かめる・説明する**ための道具と文書を用意する。areka の本体（`crates/` のソース）は 1 行も変えない。変えるのは配布スクリプト（新規）・第三者向け README（新規）・根の `README.md` の表記だけで、議題 ⑷ の裁定で `Cargo.lock` の追跡を始める（`.gitignore` の 1 行・`Cargo.lock` の追加・作り直した `THIRD-PARTY-NOTICES.md`・完了の手順と開発の手順の注記）。議題 ⑵ は MIT 単独に決まり、`LICENSE-APACHE`・根の `Cargo.toml`・謝辞の雛形の変更は 0（下の「要件討議で決めた 3 点」）。
 
 要件生成時に引き直した事実（設計はこれを再検証する）:
 
@@ -25,24 +25,22 @@
 - smoke の自動終了は `main.rs` の `SMOKE_EXIT_ENV`＝`AREKA_APP_SMOKE_EXIT_MS`。告知のモーダルは `alert.rs` の `NO_ALERT_ENV`＝`AREKA_NO_ALERT` で抑えられる。前例 `crates/areka/tests/emo2_real_run.rs` は子プロセスの出力を grep し、終了コード 0 と「ゴーストが立った」記録を番犬付きで判定している。
 - ライセンス: 根の `Cargo.toml` の `[workspace.package]` は `license = "MIT"`、全 crate が `license.workspace = true`、実物のファイルは `LICENSE-MIT` だけ。根の `README.md` はバッジ（リンク先 `LICENSE` は不在）とライセンスの節の 2 か所が「MIT OR Apache-2.0」。謝辞の雛形 `about.hbs` は「areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）」と書き、生成物 `THIRD-PARTY-NOTICES.md` にもその文が入る。`deny.toml` の冒頭の注記も「areka の MIT 化を守る」。
 - 根の `README.md` の「現在の到達点」は「57件の仕様を完了し、基盤レイヤーの約70%を構築済み」（`.kiro/specs/completed/` の直下は仕様のフォルダ 200 と `.md` 1 本の計 201 項目＝仕様の数は 200）。
-- `Cargo.lock` は追跡外（`.gitignore` の 2 行目）。`THIRD-PARTY-NOTICES.md` は cargo の依存だけを載せ、cargo 依存でない資産（ゴースト・シェル・バルーン）は載らない（steering `tech.md`）。
+- `Cargo.lock` は追跡外（`.gitignore` の 2 行目）。そのため完了の手順（`.claude/skills/kiro-complete/SKILL.md` の謝辞の再生成の段）は「依存を変えていないのに版だけが上下したら環境差として戻す」と書いている。`THIRD-PARTY-NOTICES.md` は cargo の依存だけを載せ、cargo 依存でない資産（ゴースト・シェル・バルーン）は載らない（steering `tech.md`）。
 
 ## Boundary Context
 
-- **In scope**: ① 配布スクリプト（`tools/package-alpha.ps1`）で zip を組む／② 組んだ zip を別の場所へ展開して起動確認する（有界の自動終了）／③ 第三者向け README の骨子（新規ファイル）と同梱物の条件の明記／④ 根の `README.md` のライセンス表記と古い数の是正／⑤ 議題 ⑷ の答えしだいの付随（`.gitignore` の `Cargo.lock` の行）。
+- **In scope**: ① 配布スクリプト（`tools/package-alpha.ps1`）で zip を組む／② 組んだ zip を別の場所へ展開して起動確認する（有界の自動終了）／③ 第三者向け README の骨子（新規ファイル）と同梱物の条件の明記／④ 根の `README.md` のライセンス表記と古い数の是正／⑤ `Cargo.lock` の追跡を始める（`.gitignore` の 1 行を外し、`Cargo.lock` を加え、それに伴う開発の手順の注記を直す＝議題 ⑷ の裁定）。
 - **Out of scope**: 検証項目表と第三者の手順の実機一周・第三者向け README の仕上げ（`.nar` の入れ方の手順を含む）・署名と宣言（`alpha-release-signoff`）／既定ゴーストの差し替え（議題「emo2 を入れてよいか」は同梱可で決着。万一将来要るときも `boot_resolve.rs` は `ghost-shell-balloon-switch`・`shell-balloon-switch` と共有するので本仕様では行わない）／インストーラ（msi 等）・署名付きの exe・自動更新／ARM64 版の zip（α の zip は x64 版 1 種）／常時のテストへの組み込み。
 - **変更 0 と明記するもの**: `crates/` の変更は 0（触る必要が出たら `alpha-release-signoff` へ送る）。`tools/test-all.ps1` の変更は 0。`vendors/sample_ghost/` の変更は 0。`THIRD-PARTY-NOTICES.md` を手で直す箇所は 0（直すなら生成器で作り直す）。ワークスペースの常時のテストに足すテストは 0。
-- **Adjacent expectations**: 完了 `areka-P0-baseware-root-layout`（根の形・記憶の置き場・起動の解決）・`areka-P0-default-balloon-nar-fold`（既定バルーンの `.nar`）・`areka-P0-nar-install`（`nar-sample-path`）の上に建つ。下流の `areka-P0-alpha-release-signoff` は本仕様の zip で実機一周をし、第三者向け README の空欄を仕上げる。同じウェーブで並走する `ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update` は `tools/` と根の `README.md` に触らない（共有 0）。ただし `ghost-shell-balloon-switch` が着地すると右クリックメニューに項目が増えるので、第三者向け README のメニューの欄は着地した main に合わせて `alpha-release-signoff` が仕上げる。
+- **Adjacent expectations**: 完了 `areka-P0-baseware-root-layout`（根の形・記憶の置き場・起動の解決）・`areka-P0-default-balloon-nar-fold`（既定バルーンの `.nar`）・`areka-P0-nar-install`（`nar-sample-path`）の上に建つ。下流の `areka-P0-alpha-release-signoff` は本仕様の zip で実機一周をし、第三者向け README の空欄を仕上げる。同じウェーブで並走する `ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update` は `tools/` と根の `README.md` に触らない（共有 0）。**ただし `Cargo.lock` の追跡を始めると、並走する全ての枝に波及する**（各 worktree に追跡外の `Cargo.lock` が在るため、本仕様の着地を取り込むときに git が上書きを拒む／依存を変える枝どうしは `Cargo.lock` で衝突する）＝受け取り方を要件 7.5 で手順に書く。ただし `ghost-shell-balloon-switch` が着地すると右クリックメニューに項目が増えるので、第三者向け README のメニューの欄は着地した main に合わせて `alpha-release-signoff` が仕上げる。
 
-## 要件討議で決める 3 点（開発者の決めごと）
+## 要件討議で決めた 3 点（開発者の決めごと）
 
-議題 ⑶「`emo2` を zip に入れてよいか」は 2026-09-26 に開発者が裁定済み（同梱可・要件 2.2 と 5.2 に反映）で、残りは次の 3 点。各議題は、答えによって変わる条項を「Where 〔議題 ⑷＝…〕」の形で分けて書いた（裁定済みの議題は条項を 1 つに畳んだ）。どちらの答えでも他の条項は変わらない。
+議題 ⑶「`emo2` を zip に入れてよいか」は起票時（2026-09-26）に開発者が裁定済み（同梱可・要件 2.2 と 5.2 に反映）。残りの 3 点も 2026-09-26 の要件討議で裁定し、答えによって分けていた条項は 1 つに畳んだ。
 
 - ~~**⑴ zip に `emo2-kakukaku` を入れるか**~~ → **2026-09-26 要件討議で開発者裁定＝入れる**（要件 2.5・3.5・5.5 に反映）。根拠: 開発者が配布サイトで公開している `emo2.nar` にすでに `emo2-kakukaku` が同梱されており、zip はその中身をそのまま写すのと同じ形。初回に立つバルーンは `emo2` の同梱の `emo2-kakukaku`（決まる順の「同梱」の段）で、`emo2` の説明書（「利用バルーン: kakukaku for emo-gs」）と一致する。画像素材はフキダシデザインのもの（規約は「アプリ・ゲームへの組み込みは 20 点まで無料・表記不要・データの再配布は禁止」・画像は 15 本）なので、第三者向け README には `emo2` のシェルと同じ書き方で「画像の抜き出し利用は不可」を明記する。
 - ~~**⑵ areka 自身のライセンスは MIT 単独か MIT OR Apache-2.0 か**~~ → **2026-09-26 要件討議で開発者裁定＝MIT 単独**（要件 6.2・6.4 に反映・旧 6.3 は削除）。開発者の整理: 実装のコードは MIT。「MIT OR Apache-2.0」は Rust の crate の慣習（依存の crate や pasta の `Cargo.toml`）から来た書きぶりで、areka の実物（`LICENSE-MIT`・全 crate の `license.workspace`＝`"MIT"`）とは別。画像（シェル・バルーン）は各作者の条件で別に管理する。`emo2` の `pasta.dll` は MIT、ゴーストの辞書には利用条件の主張が無い（要件 5.8 に反映）。
-- **⑷ `Cargo.lock` を追跡するか**（要件 7.3）。
-  - 追跡する: 別の機械で組み直しても同じ依存の版になり、zip と謝辞が再現できる。`.gitignore` の 1 行を外し `Cargo.lock` を加える。並走する枝が依存を変えるたびに `Cargo.lock` が衝突する。
-  - 追跡しない: 今日のまま。zip の謝辞は組んだ機械の依存の版で作る（要件 7.1・7.2 はどちらの答えでも満たす）。
+- ~~**⑷ `Cargo.lock` を追跡するか**~~ → **2026-09-26 要件討議で開発者裁定＝追跡する**（要件 1.6・7.3〜7.5 に反映）。開発者の整理: areka は exe なので、依存の版を厳密に追跡する方がよい。代償（並走する枝が依存を変えるたびに `Cargo.lock` が衝突する・衝突は `cargo` に作り直させれば解ける種類）は受け入れる。
 
 ## Requirements
 
@@ -57,7 +55,7 @@
 3. When 配布スクリプトが既定ゴーストと既定バルーンを zip に入れる, the 配布スクリプト shall 検体の `.nar` を展開した木を既存の展開の窓口（`nar-sample-path`）から得て写す（展開の仕組みを 2 つ持たない）。
 4. When zip を組み終える, the 配布スクリプト shall zip の置き場所の絶対パスと、組んだコミットと、組み始めた時点の未コミットの変更の件数を印字し、同じコミットと件数を zip の中にも記録として残す。
 5. If どれかの段（ビルド・展開・写し・圧縮・中身の検査）が失敗する, then the 配布スクリプト shall 失敗した段の名前を印字して終了コード非 0 で終わり、完成品に見える zip を残さない。
-6. The 配布スクリプト shall 追跡しているファイルを 1 つも書き換えず、zip と作業の途中物は追跡外の場所に置く（実行の前後で `git status` が変わらない）。
+6. The 配布スクリプト shall 追跡しているファイルを 1 つも書き換えず、zip と作業の途中物は追跡外の場所に置く（実行の前後で `git status` が変わらない）。追跡する `Cargo.lock`（要件 7.3）もビルドと謝辞の生成で書き換えず、`Cargo.lock` が `Cargo.toml` と食い違っていればその場で段の失敗として止める（黙って解決し直さない）。
 7. The 配布スクリプト shall 使い方の説明に「同じ検体で実機を回している最中に実行すると、その走行の展開した木を消す」ことを書く。
 
 ### Requirement 2: zip の中身は決めたものだけ
@@ -138,4 +136,6 @@
 
 1. When 配布スクリプトが zip を組む, the 配布スクリプト shall zip に入れる謝辞を、zip に入れる実行ファイルを組んだのと同じ依存の版から生成器で作る（リポジトリの `THIRD-PARTY-NOTICES.md` が古くても zip の謝辞は古くならない）。生成の出力先は追跡外の場所とし、リポジトリの `THIRD-PARTY-NOTICES.md` は書き換えない（要件 1.6）。
 2. If 謝辞の生成（またはその前提のライセンスの検査）が失敗する, then the 配布スクリプト shall 要件 1.5 の失敗として扱い、謝辞の無い zip を完成品として残さない。
-3. Where 〔議題 ⑷＝追跡する〕, the リポジトリ shall `Cargo.lock` を追跡し（`.gitignore` の該当の 1 行を外す）、同じコミットから組んだ zip の依存の版と謝辞が機械によらず同じになる。Where 〔議題 ⑷＝追跡しない〕, the リポジトリ shall `.gitignore` と `Cargo.lock` の扱いを変えず（変更 0）、zip の謝辞は組んだ機械の依存の版で作られることを配布スクリプトの使い方の説明に書く。
+3. The リポジトリ shall `Cargo.lock` を追跡し（`.gitignore` の該当の 1 行を外す）、同じコミットから組んだ zip の依存の版と謝辞が機械によらず同じになる（議題 ⑷ の裁定）。追跡を始める `Cargo.lock` は着手時の main のソースから解決したものとし、同じ変更の中でリポジトリの `THIRD-PARTY-NOTICES.md` をその `Cargo.lock` から生成器で作り直す（謝辞と追跡する版を一致させて始める）。
+4. When 追跡を始める, the 完了の手順（`.claude/skills/kiro-complete/SKILL.md`）shall 謝辞の再生成の段にある「`Cargo.lock` を追跡していないリポジトリで版だけが上下したら環境差として戻す」扱いを、追跡後の扱い（謝辞の差分は追跡している `Cargo.lock` の差分と対応する＝戻さずに原因を確かめる）へ改める。
+5. When 追跡を始める, the 開発の手順（steering の `workflow.md`）shall 並走中の worktree が本仕様の着地を取り込むときの手順（追跡外の手元の `Cargo.lock` を消してから取り込む・依存を変えた枝どうしの `Cargo.lock` の衝突は `cargo` に作り直させて解く）を 1 か所に書く。
