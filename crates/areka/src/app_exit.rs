@@ -38,8 +38,6 @@ pub(crate) enum ExitOrigin {
     OsClose,
     /// ゴーストの切替の途中で既定ゴーストへ戻せなかった（失敗の中身つき）。
     /// 告知の場面は kanade の停止の Fault と同じ（新しい場面は作らない）。
-    // 本番の呼び手は 8.2 の切替の致命の経路。それまでは test からだけ作る。
-    #[cfg_attr(not(test), allow(dead_code))]
     GhostFallbackFailed(ShioriFault),
 }
 

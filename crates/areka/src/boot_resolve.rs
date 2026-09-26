@@ -35,8 +35,6 @@ pub(crate) enum GhostRoute {
     Default,
     Random,
     /// 実行中の切替で決まった（記憶を書く経路＝要件 4.6。書かないのは `Argv` だけ）。
-    // 本番の呼び手は 8.2 の切替先の起動。それまでは test からだけ作る。
-    #[cfg_attr(not(test), allow(dead_code))]
     Switched,
 }
 

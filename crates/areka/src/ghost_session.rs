@@ -326,8 +326,6 @@ pub(crate) struct GhostBootInputsSource(
 
 /// 起こしたゴーストの置き場（World の NonSend・プロセスに 1 つ）。`main` が据え、切替が
 /// 入れ替え、`main` が `run()` の後に取り出して降ろす。
-// 据え付けは 8.5 の `fn main`・入れ替えは 8.2 の切替。それまでは test からだけ作る。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct GhostSlot(pub(crate) Option<GhostSession>);
 
 /// 結線ありの起動が成立しなかった（理由は `wire_emo2_boot` が `warn!`／`error!` で記録済み）。
@@ -516,8 +514,6 @@ pub(crate) fn boot_ghost(
 /// 切替用の入口（要件 6.1）: 結線が成立しなければ fallback の骨格へ倒れず
 /// `Err(BootWiringFailed)` を返す（呼び手が既定ゴーストへ戻すか致命で終える）。成立したときの
 /// 状態の載せ替えは [`boot_ghost`] の結線ありの腕と同じ（[`boot_wired`]）。
-// 本番の呼び手は 8.2 の切替（切替先を起こす・既定へ戻す）。それまでは test からだけ呼ぶ。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn boot_ghost_strict(
     world: &mut World,
     inputs: GhostBootInputs,
