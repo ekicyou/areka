@@ -263,3 +263,66 @@
 6. **B-6 `BasewareRoot` とアプリのプロファイルを World に置く器**（§2.6。メニューの目録・切替先のバルーンの解決に要る）。
 7. **B-7 `LastUsed::record` に渡す `GhostRoute` の値**（§2.7。`Argv` 以外なら記憶が書かれる。値を足すか流用するか）。
 8. **B-8 切替の相の置き方**（§4.4）と **汎用の入口の形**（§4.5）。`OnGhostChanging`／`OnGhostChanged` は専用の腕で送る（要件 7.5 への答えの候補）。
+
+## 9. 設計フェーズの決定（2026-09-26・正本は `design.md`。ここは根拠と選ばなかった案）
+
+設計時に読み直したコード（「何の定義か」で指す）: kanade `schedule/mod.rs`（`Phase`・`State`・`step`・`on_talk_done`・`on_shiori_reply`・`dispatch_phase`）・`close.rs`・`boot.rs`（`on_prefetch_reply`・`to_baseware_version`）・`steady.rs`（`on_reply` の出所別の腕・`on_talk_done`・`begin_close`）・`user_break.rs`・`events.rs`・`actor.rs`（`spawn_kanade_with_stop_sink`・`execute_actions`・`notify_stop`）・`msg.rs`（`KanadeConfig::new` が唯一の構造体リテラル）／areka-ghost `runtime.rs`（`boot_with_kanade_stop`・`apply_boot_record_gate`・`GhostRuntime::shutdown`）・`config.rs`・`catalog.rs`／areka `frame.rs`・`app_exit.rs`・`ghost_session.rs`・`main.rs`・`boot_config.rs`・`boot_resolve.rs`・`readme_cue.rs`・`readme.rs`・`input_events/user_break.rs`・`menu/mod.rs`・`consumer_ledger.rs`・`emo2_boot/mod.rs`（`wire_emo2_boot`）・`spine.rs`・`ghost_session_restart_tests.rs`・`frame/attach.rs`／sylphya `persist/mod.rs`。
+
+### Decision B-1: 切替の目印＝UI の予約 `SwitchInFlight` ＋ 停止通知に載せる `ChangeHandoff`（②＋③）
+- **Alternatives**: ① 停止原因に切替の値を足す／② UI に予約／③ 通知に切替の中身を載せる。
+- **Selected**: ②＋③。UI の `SwitchInFlight{target, prev, stage}` が「切替中か・迎え入れのどの段か」を持ち、kanade の `State.change` が「切替の相を経たか・`OnGhostChanging` の台本」を持って停止通知の `handoff: Option<ChangeHandoff>` に写す。
+- **Rationale**: ⑴ 要件 2.8（握手中の `Fault` でも続ける）は UI の目印で一様に捌ける（原因を見ない）。⑵ 要件 6.1・6.6（切替先の非同期の `Fault`）は kanade B の通知に切替の情報が無いので UI の段が要る。⑶ `OnGhostChanged` の Ref1 は kanade しか知らないので通知に載せる。⑷ 停止原因は今日の値のまま（要件 3.3 の列挙どおり・`stop_cause_of`／`fault_of` の網羅 match は不変）。⑸ 二重要求は UI で弾く（後続 spec が同じ入口を使う）。
+- **Trade-offs**: 目印が 2 か所（送り出し＝kanade の相・迎え入れ＝UI）。中止と拒否を UI へ返す線が要る → B-2 の通知の線で解く。
+- **Follow-up**: kanade が受理しなかった要求（終了要求と競合）は必ず `ChangeCancelled{Rejected}` で返す（UI の目印を残すと次の停止通知を切替と取り違える）。
+
+### Decision B-2: 定常到達を UI が知る手段＝停止通知の線を運行の通知 `KanadeNotice` に広げる
+- **Alternatives**: ⒜ 通知の型を `Steady`／`ChangeCancelled`／`Stopped` の 3 種に広げる／⒝ `ResourceQuery` に運行状態を足して毎フレーム覗く／⒞ 時間で区切る（採らない・要件 3.5）。
+- **Selected**: ⒜。`boot.rs` の `BootVersion + Notified` で `Action::Notice(KanadeNotice::Steady)`、`change.rs` の中止・取りやめ・拒否で `Action::Notice(ChangeCancelled{reason})`、`StopSelf` は `KanadeNotice::Stopped(KanadeStopped{cause, handoff})`。受け口 `KanadeStopRx` は `KanadeNoticeRx` へ。
+- **Rationale**: 同じ 1 本の `mpsc` なので順序が保証され（`ChangeCancelled` → `Stopped` の順で届く）、配線（`main` → `register_systems` → `wire_kanade_stop` → `boot_with_kanade_stop`）をそのまま使える。⒝ は毎フレームの往復と返事の線が増え、状態機械の外で状態を推定する形になる。
+- **Trade-offs**: `Sender<KanadeStopped>` の型を持つ箇所（本番 5・テスト 7）が追随する。`boot_complete` の Action が空でなくなるので既存の起動系列のテストが字面で追随する。
+
+### Decision B-3: 降ろすのは同期（`run_ghost_quit_phase` の中・UI スレッド）
+- **Selected**: 案 A。`ghost_switch::switch_to` が `GhostSession::shutdown` → `close_windows_for_restart` → バルーンの解決 → `reopen_ghost_windows` → `boot_ghost_strict` を 1 つの排他 system の中で行う。所要 ms を `ghost_switch_down_ms` で残し実機で測る（要件 3.8）。
+- **Rationale**: 降ろして起こすまでの間にフレームが挟まらないので「降ろし中に届く入力」を扱う状態が要らない。`GhostSession` は `Send`（`shutdown_bounded` が `run_bounded<F: Send>` へ move している）なので、1 秒を超えたら別スレッド化（`SwitchStage::Descending` を足す）へ移れる。
+
+### Decision B-4: 直前のゴーストの情報＝`KanadeConfig.boot_origin: BootOrigin` ＋ `shell_folder`、派生関数 `boot_with_origin`
+- **Alternatives**: ⓐ `KanadeConfig` に欄／ⓑ `spawn_kanade_with_stop_sink` の引数／ⓒ `KanadeMsg::Boot` に載せる。
+- **Selected**: ⓐ。実測で `KanadeConfig {` の構造体リテラルは `KanadeConfig::new` の 1 か所だけ（他は `new` 経由か戻り型の字面）なので、欄を足す費用は `new` の既定値だけ。`BootOrigin` は `Plain`／`ChangedFrom`／`Halted` の 3 値で、`OnBoot` の Ref6/7（要件 6.2・6.8）も同じ器で運ぶ。`shell_folder` は `mount.shell.dir` の末尾（要件 4.1 の Ref7「シェルのフォルダ名」）。`GhostBootOptions` には欄を足さず、`boot_with_origin(options, kanade_stop, origin)` が `apply_boot_record_gate` の後に詰める（要件 8.6）。
+- **Rationale**: ⓑ は `State` の構築点（21 か所）に響き、ⓒ は `KanadeMsg::Boot` の送出点とテストの `Boot` 全部が変わる。
+
+### Decision B-5: `boot_ghost_strict`（fallback へ倒れない）と `GhostSlot`（NonSend）
+- **Selected**: `boot_ghost` の結線ありの腕を私有の `boot_wired` に括り出し、`boot_ghost`（署名不変・fallback へ倒れる）と `boot_ghost_strict`（`Err(BootWiringFailed)`）の 2 入口にする。`GhostSession` は `GhostSlot(Option<GhostSession>)` として World の NonSend に置き、`main` は `run()` の後に取り出して後始末する。
+- **Rationale**: 切替で fallback へ倒れると切替先が居ないまま窓だけ出る（要件 6.1）。`GhostSession` は `Send` だが、取り出し・入れ替えは UI スレッドの排他 system だけなので NonSend で足りる。
+
+### Decision B-6: `BootContext`（Resource）
+- **Selected**: 根（`BasewareRoot`）・記憶の置き場・helper のパス・今のゴースト（`ConfigInputs`・`GhostDecision`・`BalloonDecision`）を 1 つの Resource に置き、`main` が据え、切替の成功で `current` を更新する。メニューの「ゴースト」枠・名前の突き合わせ・切替先のバルーンの解決・`run()` 後の告知の場面が読む。
+- **Rationale**: 根は `resolve_boot_from` のローカル値で World のどこにも無かった。`main` の告知の場面が起動時の `cfg.ghost_root` を使っているのは切替後に嘘になる。
+
+### Decision B-7: `GhostRoute::Switched`
+- **Selected**: 値を 1 つ足す。`LastUsed::record` は `Argv` 以外を書くので記憶が書かれ、記録の語彙（`ghost_resolved`／`last_used_recorded`）が嘘にならない。既定へ戻すときは `Default`。
+
+### Decision B-8: 切替の相は新ファイル `schedule/change.rs`・汎用の入口は `KanadeMsg::RaiseEvent` → 同じファイルの `on_raise_event`
+- **Selected**: `Phase` に 4 値（`ChangePending`／`ChangeTalkWait`／`ChangeClosePending`／`ChangeCloseTalkWait`）を足し、`close.rs` の写しに「中断 → 定常」と「終了要求 → 今日の終了の握手へ合流」の腕を足す。`OnGhostChanging`／`OnGhostChanged` は専用の腕（`events::on_ghost_changing`／`on_ghost_changed`）で送る（要件 7.5）。汎用の入口は許可表の照合を入口側（`events::allowed_static`）で行い、`round_trip_request` の `error!` ＋ `Fault` には流さない。再生中の応答は `events::value_replaces_active_talk(origin)`（`OnSecondChange` 以外は置き換え）で `steady.rs` の腕 1 つを書き換える（行数の増減 0・要件 8.8）。
+- **Rationale**: `close.rs` を流用すると中断で降ろしてしまう（要件 5.1 に反する）。1 値の `Changing{stage}` にすると `current_talk_id`／`awaits_reply` が入れ子の match になる。
+
+### 起動の根の表（裁定 3 の反映）
+- `boot.rs` に `boot_root(config) -> Option<ShioriCall>` を置く: `first_boot` → `OnFirstBoot`／`ChangedFrom` → `OnGhostChanged`／それ以外 → 根なし。既存の `Phase::BootType`（根の応答待ち）の腕（204 → `OnBoot`・Value → 飛ばす）をそのまま使うので相は増えない。範囲外の根は `BootOrigin` に値を足して表に行を足すだけ。
+
+### 単独起動の失敗の記憶（要件 6.8）
+- `PersistKey::LastHalted`（`areka.last.halted`・App）。`main` の後始末で `session.shutdown` の後（sylphya の flush が終わってから）に実 fs の `save_scope` で `LastGhost=emo2`・`LastHalted=名前` を書く（`record_halt`）。次回の `resolve_boot_from` が `take_last_halted` で読んで空文字を書き戻す（1 回で消える）。**`Argv` の起動は書き換えない**（`LastUsed` の「argv で決まった側は書かない」と同じ規則・第三者は argv を使わない）。既定ゴースト自身の失敗も書かない。
+
+## 10. 設計で見つけた危険と対策
+
+1. **`close_windows_for_restart` が `GhostWindows` 資源を残す。** 消えた窓の `Entity` が残ったまま次のフレームの `run_attach_phase` がゲートを通り、新しい `Emo2Wiring` の資産を消費して死んだ窓へ装着しようとする（資産は高々 1 回消費なので窓が二度と装着されない）。→ `close_windows_for_restart` で `remove_resource::<GhostWindows>()`。新しい窓が spawn されるまでゲートが閉じる（状態で解く）。
+2. **1 周目の停止通知が受け口に残る**（完了 `ghost-restart-unit` の申し送り）。→ 切替は「通知を受けてから降ろす」順なので `ForceQuit` は空振りし、通知は 1 件。`Welcoming` の段で届く `Fault` 以外の停止は「切替先が終了を望んだ」として今日どおり終わる。
+3. **fallback の腕は前のゴーストの NonSend を残す。** → 切替は `boot_ghost_strict` を使い fallback へ倒れない。同期の失敗は同じ system の中で既定を起こすか致命で終わるので、古い NonSend を見るフレームは無い。
+4. **メニューの動作は UI スレッドの `&mut World` で走るが系の外**（`trigger.rs` の `finish`）。→ 動作は `request_ghost_switch`（送るだけ）で、降ろすのは通知の相（系の中）。
+5. **`main` の告知の場面が起動時の `cfg.ghost_root`・`session.ghost_name()` を使う。** → `BootContext.current` と `GhostSlot` から読む。
+6. **kanade が受理しなかった要求で UI の目印が残る。** → `ChangeCancelled{Rejected}` を必ず返す。
+7. **`pending_close` と `pending_change` の競合。** → `consume_pending` は `pending_close` を先に見て取りやめる（終了が勝つ・要件 2.9）。
+
+## 11. 設計の簡素化（synthesis）
+
+- **一般化**: 「起動の根」を表 1 つに（`OnFirstBoot`／`OnGhostChanged`／将来の `OnGhostCalled`・`OnVanished`）。「運行の通知」を 1 本の線に（停止・定常到達・中止）。「切替要求」を 1 型に（台本＝名前・メニュー＝フォルダ名）。
+- **build vs adopt**: 新しい依存 0。`mpsc`・`bevy_ecs` の NonSend／Resource・`sylphya::persist` の既存 API・`ScriptedShioriBackend` の型で足りる。
+- **削ったもの**: 新しい停止原因（`Changed`）・新しい告知の場面・新しい SHIORI イベント・`GhostBootOptions` の欄・`ResourceQuery` の拡張・別スレッドで降ろす形・`unregister` の呼び手・`(change,shell|balloon)` の消費者。
