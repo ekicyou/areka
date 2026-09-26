@@ -1,11 +1,11 @@
 # Brief: areka-P0-alpha-package
 
-> 2026-09-26 `/kiro-discovery` 再入（棚卸⑰）で起票（台帳 #63）。`areka-P0-alpha-release-signoff`（台帳 #17）の再測定で、配布物づくり（スクリプト・zip の起動確認・第三者向け README の骨子・ライセンス表記の是正）が他の α の spec のソースと 1 本も重ならないと分かったので、α の最後の段まで待たせずに前へ切り出した。#17 には検証項目表・実機一周・README の仕上げ・署名と宣言が残る。
+> 2026-09-26 `/kiro-discovery` 再入（棚卸⑰）で起票。`areka-P0-alpha-release-signoff`の再測定で、配布物づくり（スクリプト・zip の起動確認・第三者向け README の骨子・ライセンス表記の是正）が他の α の spec のソースと 1 本も重ならないと分かったので、α の最後の段まで待たせずに前へ切り出した。`alpha-release-signoff` には検証項目表・実機一周・README の仕上げ・署名と宣言が残る。
 > 本文の file:line は**起票時の実測値**（2026-09-26・main `13b72893`）。着手時に必ず引き直すこと。
 
 ## Problem
 
-**誰の何が困っているか**: α を受け取る第三者と、α の完成宣言を出す開発者。今日は配布物を作る手段が無い——zip を組むスクリプトも、第三者が最初に読む説明書も無い。さらに根の `README.md` のライセンス表記が実物と食い違っている（バッジと本文が「MIT OR Apache-2.0」・バッジのリンク先 `LICENSE` は実在しない／`Cargo.toml` は `license = "MIT"`・実物は `LICENSE-MIT` だけ）。これを α の最後の段（#17）でまとめてやると、再配布の条件の確認（下の議題 ⑶）の答え次第で既定ゴーストの差し替えまで最後に押し寄せる。
+**誰の何が困っているか**: α を受け取る第三者と、α の完成宣言を出す開発者。今日は配布物を作る手段が無い——zip を組むスクリプトも、第三者が最初に読む説明書も無い。さらに根の `README.md` のライセンス表記が実物と食い違っている（バッジと本文が「MIT OR Apache-2.0」・バッジのリンク先 `LICENSE` は実在しない／`Cargo.toml` は `license = "MIT"`・実物は `LICENSE-MIT` だけ）。これを α の最後の段（`alpha-release-signoff`）でまとめてやると、再配布の条件の確認（下の議題 ⑶）の答え次第で既定ゴーストの差し替えまで最後に押し寄せる。
 
 ## Current State
 
@@ -21,7 +21,7 @@
 
 1. `tools/package-alpha.ps1` 1 本で、release ビルドの `areka.exe`・`shiori-host32-helper.exe`（i686）・既定ゴーストと既定バルーン（`.nar` を展開した木）・第三者向け README・ライセンスと謝辞を 1 つの zip に組める。
 2. 組んだ zip を別の場所へ展開し、`AREKA_APP_SMOKE_EXIT_MS` の有界の自動終了で起動確認が通る（ゴーストが立ち、終了コード 0 で終わる）。
-3. 第三者向け README の骨子がある（起動・終了・メニュー・記憶の置き場・既知の制限の欄）。**`.nar` の入れ方の手順は #15 の入口で決まるので欄だけ置き、#17 が仕上げる**。
+3. 第三者向け README の骨子がある（起動・終了・メニュー・記憶の置き場・既知の制限の欄）。**`.nar` の入れ方の手順は `ghost-install` の入口で決まるので欄だけ置き、`alpha-release-signoff` が仕上げる**。
 4. 根の `README.md` のライセンス表記が実物と一致する（議題 ⑵ の答えどおり）。
 5. 同梱する `emo2` について、第三者向け README と同梱の告知に「シェルは MIT ではなくシェル作者の条件に従う」「areka のファーストゴーストとして使えるが、シェルを抜き出して利用することはできない」を明記し、シェルの説明書（`shell/master/readme.txt`）を zip の中に残す（議題 ⑶ の裁定・2026-09-26）。
 
@@ -33,7 +33,7 @@
 ## Scope
 
 - **In**: 配布スクリプト・zip の起動確認・第三者向け README の骨子・根の README のライセンス表記と古い数の是正・（議題 ⑵ が「MIT OR Apache-2.0」なら `LICENSE-APACHE` の追加と `Cargo.toml` の `license` の修正）
-- **Out**: 検証項目表と第三者の手順 12 項目の実機一周・README の仕上げ・署名と宣言（#17）／**既定ゴーストの差し替え**（議題 ⑶ は「同梱してよい」で決着し差し替えは不要になった。万一将来要るときも `boot_resolve.rs` は #13・#50 と共有するので本仕様では行わない）／インストーラ（msi 等）・署名付きの exe・自動更新（本体の更新は α 後の予約）
+- **Out**: 検証項目表と第三者の手順 12 項目の実機一周・README の仕上げ・署名と宣言（`alpha-release-signoff`）／**既定ゴーストの差し替え**（議題 ⑶ は「同梱してよい」で決着し差し替えは不要になった。万一将来要るときも `boot_resolve.rs` は `ghost-shell-balloon-switch`・`shell-balloon-switch` と共有するので本仕様では行わない）／インストーラ（msi 等）・署名付きの exe・自動更新（本体の更新は α 後の予約）
 
 ## Boundary Candidates
 
@@ -48,16 +48,16 @@
 ## Upstream / Downstream
 
 - **Upstream**: 完了 `areka-P0-baseware-root-layout`（根の形）・`areka-P0-default-balloon-nar-fold`（既定バルーンの `.nar`）・`areka-P0-nar-install`（`nar-sample-path`）・PR#181（`tools/test-all.ps1` の前例）
-- **Downstream**: #17 `areka-P0-alpha-release-signoff`（この zip で実機一周をする）
+- **Downstream**: `areka-P0-alpha-release-signoff`（この zip で実機一周をする）
 
 ## Existing Spec Touchpoints
 
-- **Extends**: #17 から切り出し
-- **Adjacent**: #13（同じウェーブで並走・共有 0＝#13・#50・#15・#16 はどれも `tools/` と根の `README.md` に触らない）
+- **Extends**: `alpha-release-signoff` から切り出し
+- **Adjacent**: `ghost-shell-balloon-switch`（同じウェーブで並走・共有 0＝`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update` はどれも `tools/` と根の `README.md` に触らない）
 
 ## Constraints
 
-- `crates/` に触らない（触る必要が出たら #17 へ送る）。`THIRD-PARTY-NOTICES.md` は手で直さず生成器で作り直す。
+- `crates/` に触らない（触る必要が出たら `alpha-release-signoff` へ送る）。`THIRD-PARTY-NOTICES.md` は手で直さず生成器で作り直す。
 - 第三者の資産の再配布条件を README に正しく載せる（`StayseeBalloon` は CC0、`claudia` は Unlicense、`konnoyayame` のシェルは CC BY-NC-ND＝zip に入れない、`emo2` のシェルは MIT ではない＝ファーストゴーストとしての同梱は可・シェルの抜き出し利用は不可と明記）。
 - 規模 **S（4〜5 タスク）**。要件は Opus で足りる（議題は開発者の決めごとで、深掘りではない）。
 

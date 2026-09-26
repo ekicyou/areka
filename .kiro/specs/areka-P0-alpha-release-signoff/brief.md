@@ -3,38 +3,38 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。M1 の `areka-P0-emo2-conformance-e2e`（完成宣言の器）と同じ役割を α で担う——**配布物を作り、第三者の手順で一周し、開発者が署名する**。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
-## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝#55・#58・#59・PR#180・PR#181 の着地後）
+## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap`・PR#180・PR#181 の着地後）
 
-**棚卸⑰で配布物づくりを前に切り出した＝台帳 #63 `areka-P0-alpha-package`**（配布スクリプト `tools/package-alpha.ps1`・zip の起動確認・第三者向け README の骨子・根の README のライセンス是正・4〜5 タスク）。触るのは `tools/`・根の `README.md`・新規の第三者向け README だけで、#13・#50・#15・#16 はどれもここに触らない＝**#13 の実装と並走できる**。本仕様に残るのは **検証項目表・第三者の手順 12 項目の実機一周・README の仕上げ（入れ方の手順は #15 の入口で決まる）・既定ゴーストの差し替え（議題 ⑶ の答えしだい）・署名と宣言**（5〜6 タスク）。議題 ⑴⑵ と新しい議題 ⑶（emo2 の再配布の条件）は #63 の要件で先に決める。
+**棚卸⑰で配布物づくりを前に切り出した＝`areka-P0-alpha-package`**（配布スクリプト `tools/package-alpha.ps1`・zip の起動確認・第三者向け README の骨子・根の README のライセンス是正・4〜5 タスク）。触るのは `tools/`・根の `README.md`・新規の第三者向け README だけで、`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update` はどれもここに触らない＝**`ghost-shell-balloon-switch` の実装と並走できる**。本仕様に残るのは **検証項目表・第三者の手順 12 項目の実機一周・README の仕上げ（入れ方の手順は `ghost-install` の入口で決まる）・既定ゴーストの差し替え（議題 ⑶ の答えしだい）・署名と宣言**（5〜6 タスク）。議題 ⑴⑵ と新しい議題 ⑶（emo2 の再配布の条件）は `alpha-package` の要件で先に決める。
 
 **崩れた／変わった前提**
-1. `tools/` の直下に `tools/test-all.ps1`（66 行）が入った（PR#181）。配布スクリプトは `tools/package-alpha.ps1` に置くのが前例に沿う（#63）。`scripts/` は今も無い。
-2. ライセンスの不一致は残っている: 根の `README.md` のバッジと本文は「MIT OR Apache-2.0」（バッジのリンク先 `LICENSE` は実在しない）、`Cargo.toml` は `license = "MIT"`（各クレートは `license.workspace = true`）、実物は `LICENSE-MIT` だけ。`crates/*/README.md` と `doc/` に Apache の記述は 0 件。根の README は他の spec が触らない＝#63 で直す。同じ README の「57件の仕様を完了」も古い（完了フォルダは 201）。
+1. `tools/` の直下に `tools/test-all.ps1`（66 行）が入った（PR#181）。配布スクリプトは `tools/package-alpha.ps1` に置くのが前例に沿う（`alpha-package`）。`scripts/` は今も無い。
+2. ライセンスの不一致は残っている: 根の `README.md` のバッジと本文は「MIT OR Apache-2.0」（バッジのリンク先 `LICENSE` は実在しない）、`Cargo.toml` は `license = "MIT"`（各クレートは `license.workspace = true`）、実物は `LICENSE-MIT` だけ。`crates/*/README.md` と `doc/` に Apache の記述は 0 件。根の README は他の spec が触らない＝`alpha-package` で直す。同じ README の「57件の仕様を完了」も古い（完了フォルダは 201）。
 3. 検体の SHIORI は `emo2`（pasta.dll）・`claudia`（yaya.dll）・`R_POST_and_KOMAINU`（satori.dll）とも 32 ビット（PE の機種 0x14c）＝zip に 32 ビットの helper（名前は `boot_config.rs` で `shiori-host32-helper.exe` に固定）は必須。
 4. 展開した木を zip にコピーしても、同梱バルーンの判定は効く見込み（読み手は `<ゴースト>/install.txt` の `balloon.directory`＝`catalog.rs`、`areka-nar` は同梱バルーンの取り出し元フォルダだけを本体の配置から外す＝`install.txt` はゴーストのフォルダに残る。コードから読んだ推定で実走は未）。
-5. **新しい論点（再配布の条件）**: `emo2` のシェルの説明書（`shell/master/readme.txt`・コンフィズリー・ゆゆぴか氏）は「フリーシェルとしての再配布」と「商用利用」を禁じ、再配布するならこのテキストを必ず同梱せよと書いている。\1 側のシェル（City-Pop'n・大槻氏）の条件は書庫に無い。`emo2` は既定ゴースト（`boot_resolve.rs` の `DEFAULT_GHOST_FOLDER = "emo2"`）なので、areka の zip にゴーストごと入れてよいかを確かめる（#63 の議題）。→ **2026-09-26 開発者裁定＝同梱してよい**（シェルは MIT ではないこと、areka のファーストゴーストとして使えるがシェルを抜き出して利用することはできないことを明記する＝#63）。既定ゴーストの差し替えは不要。
-6. **PR#180 の影響**: 検体は 7 体。`claudia` は全体が Unlicense（`vendors/sample_ghost/README.md`）で、配布物に入れても支障のない唯一のゴーストの検体・同梱バルーンが 2 つ＝検証項目 4（2 体目）と 7（バルーン切替）の候補。`konnoyayame` はシェルが改変・営利の禁止付きなので zip へは入れない（実機一周で手で置くのは可）。シェルを 2 つ持つ検体は今も 0 体（項目 6 は #50 の議題 ⑴ 待ち）。
-7. 旧議題 ⑷（SHIORI が動かないと黙って消える）は #55（PR#183）で解消した（告知して終了コード 1）。既知の制限には載せない。
+5. **新しい論点（再配布の条件）**: `emo2` のシェルの説明書（`shell/master/readme.txt`・コンフィズリー・ゆゆぴか氏）は「フリーシェルとしての再配布」と「商用利用」を禁じ、再配布するならこのテキストを必ず同梱せよと書いている。\1 側のシェル（City-Pop'n・大槻氏）の条件は書庫に無い。`emo2` は既定ゴースト（`boot_resolve.rs` の `DEFAULT_GHOST_FOLDER = "emo2"`）なので、areka の zip にゴーストごと入れてよいかを確かめる（`alpha-package` の議題）。→ **2026-09-26 開発者裁定＝同梱してよい**（シェルは MIT ではないこと、areka のファーストゴーストとして使えるがシェルを抜き出して利用することはできないことを明記する＝`alpha-package`）。既定ゴーストの差し替えは不要。
+6. **PR#180 の影響**: 検体は 7 体。`claudia` は全体が Unlicense（`vendors/sample_ghost/README.md`）で、配布物に入れても支障のない唯一のゴーストの検体・同梱バルーンが 2 つ＝検証項目 4（2 体目）と 7（バルーン切替）の候補。`konnoyayame` はシェルが改変・営利の禁止付きなので zip へは入れない（実機一周で手で置くのは可）。シェルを 2 つ持つ検体は今も 0 体（項目 6 は `shell-balloon-switch` の議題 ⑴ 待ち）。
+7. 旧議題 ⑷（SHIORI が動かないと黙って消える）は `shiori-fault-notice`（PR#183）で解消した（告知して終了コード 1）。既知の制限には載せない。
 8. `THIRD-PARTY-NOTICES.md`（2,828 行）は完了のたびに `tools/test-all.ps1 -License` が作り直す。本仕様は最後に差分 0 を確かめるだけ。
-9. **`Cargo.lock` は追跡外**（`.gitignore` の 2 行目）。このため謝辞の版が環境で上下する（kiro-complete は「戻す」手順で回避しているだけ）。配布 zip の再現性と謝辞の正確さに効く＝#63 の議題（追跡すると並走する枝が互いの依存の変更で `Cargo.lock` を衝突させる代償がある）。
-10. **既知の制限の候補**: `derive_scopes()` が `[0, 1]` 固定（`emo2_boot/mod.rs`）＝キャラが 3 人以上のゴーストの `\p[2]` 以降の窓は出ない（#13 の再測定項目 11）。
-11. 検証項目 8 の更新先の候補: `emo2` の `homeurl`（開発者の配布サイト・https）。#16 の実機確認と共用できる。
-12. 変わっていない: `default_app_profile_dir`（`<exe>/profile/areka`）・バルーンの決まる順「記憶 → 同梱 → 唯一 → 既定 → 無作為」（`boot_resolve.rs`）・`AREKA_APP_SMOKE_EXIT_MS` は zip の起動確認にそのまま使える（#63 が使う）。
+9. **`Cargo.lock` は追跡外**（`.gitignore` の 2 行目）。このため謝辞の版が環境で上下する（kiro-complete は「戻す」手順で回避しているだけ）。配布 zip の再現性と謝辞の正確さに効く＝`alpha-package` の議題（追跡すると並走する枝が互いの依存の変更で `Cargo.lock` を衝突させる代償がある）。
+10. **既知の制限の候補**: `derive_scopes()` が `[0, 1]` 固定（`emo2_boot/mod.rs`）＝キャラが 3 人以上のゴーストの `\p[2]` 以降の窓は出ない（`ghost-shell-balloon-switch` の再測定項目 11）。
+11. 検証項目 8 の更新先の候補: `emo2` の `homeurl`（開発者の配布サイト・https）。`network-update` の実機確認と共用できる。
+12. 変わっていない: `default_app_profile_dir`（`<exe>/profile/areka`）・バルーンの決まる順「記憶 → 同梱 → 唯一 → 既定 → 無作為」（`boot_resolve.rs`）・`AREKA_APP_SMOKE_EXIT_MS` は zip の起動確認にそのまま使える（`alpha-package` が使う）。
 
 **検証項目の差し替え（推し・議題にしない）**: 項目 1＝`ghost/` を空にした根で「ゴーストが見つかりません」を見る。項目 4＝`claudia.nar`。
 
-**タスク数**: 本仕様 5〜6（#63 を切り出した後）。**議題 ⑶ は 2026-09-26 に開発者が裁定＝emo2 は同梱してよい**（シェルは MIT でないこと・ファーストゴーストとしては使えるがシェルの抜き出し利用は不可であることを明記＝#63 が書く）。既定ゴーストの差し替えは不要＝+1〜2 は消えた。
+**タスク数**: 本仕様 5〜6（`alpha-package` を切り出した後）。**議題 ⑶ は 2026-09-26 に開発者が裁定＝emo2 は同梱してよい**（シェルは MIT でないこと・ファーストゴーストとしては使えるがシェルの抜き出し利用は不可であることを明記＝`alpha-package` が書く）。既定ゴーストの差し替えは不要＝+1〜2 は消えた。
 
-**要件段階の議題**: ⑴ zip に `emo2-kakukaku` を入れるか／⑵ ライセンスは MIT 単独か MIT OR Apache-2.0 か／~~⑶ emo2 を zip に入れてよいか~~（**2026-09-26 開発者裁定＝同梱可**・シェルは MIT でないこと、ファーストゴーストとしては使えるがシェルの抜き出し利用は不可であることを明記）——**⑴⑵ は #63 の要件で決め、本仕様はその答えを受け取る**。
+**要件段階の議題**: ⑴ zip に `emo2-kakukaku` を入れるか／⑵ ライセンスは MIT 単独か MIT OR Apache-2.0 か／~~⑶ emo2 を zip に入れてよいか~~（**2026-09-26 開発者裁定＝同梱可**・シェルは MIT でないこと、ファーストゴーストとしては使えるがシェルの抜き出し利用は不可であることを明記）——**⑴⑵ は `alpha-package` の要件で決め、本仕様はその答えを受け取る**。
 
 ## 2026-09-24 棚卸⑯の再測定（main `0b01f654`）
 
-想定 **8〜10 タスク**・分割不要。Rust のソースはほぼ 0（`nar-sample-path` で足りなければ展開用の小さな bin を 1 本）。前提は α の残り全部（#55・#58・#13・#59・#50・#15・#16）。
+想定 **8〜10 タスク**・分割不要。Rust のソースはほぼ 0（`nar-sample-path` で足りなければ展開用の小さな bin を 1 本）。前提は α の残り全部（`shiori-fault-notice`・`ghost-restart-unit`・`ghost-shell-balloon-switch`・`pilot-balloon-asset-swap`・`shell-balloon-switch`・`ghost-install`・`network-update`）。
 
 **崩れた／変わった前提**
 
 1. **根の `README.md` は開発者向け**（ビルド手順・クレート構成・「57 件の仕様を完了」・「ぱすたさん」を目標に掲げるなど古い）＝第三者向け README は**別ファイルとして新規に作る**。さらに **README のライセンス表記「MIT OR Apache-2.0」とバッジのリンク先 `LICENSE`（存在しない）が実物と合っていない**——実物は `Cargo.toml` の `license = "MIT"` と `LICENSE-MIT` だけ（09-24 に較正済み）。直し方は議題 2 の答えで決まる。
-2. **アプリの記憶の既定の置き場所は「exe の隣」ではなく `<exe のフォルダ>/profile/areka/sylphya.toml`**（`boot_config.rs` の `default_app_profile_dir`・完了 #12 要件 1.7・9.5）。下の 09-24 追記の「既定は exe の隣」はこの細部だけ違う。helper は exe の隣の `shiori-host32-helper.exe` 固定（`boot_config.rs` の `default_helper_exe_path`）。
+2. **アプリの記憶の既定の置き場所は「exe の隣」ではなく `<exe のフォルダ>/profile/areka/sylphya.toml`**（`boot_config.rs` の `default_app_profile_dir`・完了 `baseware-root-layout` 要件 1.7・9.5）。下の 09-24 追記の「既定は exe の隣」はこの細部だけ違う。helper は exe の隣の `shiori-host32-helper.exe` 固定（`boot_config.rs` の `default_helper_exe_path`）。
 3. **新しい論点: `emo2.nar` の同梱バルーンは `emo2-kakukaku`**（`SAMPLES` の `balloons`）。バルーンは「記憶 → 同梱（`install.txt` の `balloon.directory`）」の順で決まる（`boot_resolve.rs` の `BalloonRoute::Companion`）ので、zip に `emo2-kakukaku` を入れると**初回は StayseeBalloon ではなく emo2-kakukaku で立つ**。開発者は emo2-kakukaku を「癖が強く既定に向かない」と裁定している（議題 1）。
 4. `LICENSE-MIT`・`about.toml`・`about.hbs`・`THIRD-PARTY-NOTICES.md` は在る。`scripts/` は無い。`tools/` の直下は `perf/` だけ（置き場所は判断）。
 
@@ -42,7 +42,7 @@
 
 **触るファイル**: 高＝`scripts/package-alpha.ps1`（新規・置き場所は判断）・配布用 README（新規）・`verification/acceptance-record.md`・`verification/alpha-completion.md`（新規）・`THIRD-PARTY-NOTICES.md`（再生成）。中＝根の `README.md`（ライセンス表記の是正）。
 
-**要件段階の議題**: ⑴ zip に `emo2-kakukaku` を入れるか（入れると初回の既定が StayseeBalloon でなくなる）。⑵ **ライセンスは MIT 単独か MIT OR Apache-2.0 か**——後者なら `LICENSE-APACHE` の追加と `Cargo.toml` の修正、前者なら README の修正（どちらも小さいが**開発者の決めごと**なので棚卸⑯では触っていない）。⑶ 検証項目 1 と 4 の差し替え先（空の根で確かめる手順と 2 体目の検体）。⑷ #55 が α までに着地しない場合、「SHIORI が動かないとアプリが黙って消える」を既知の制限に載せるか（B1 で着地する予定なので通常は不要）。**未測定**: `nar-sample-path` で展開した木を zip にコピーしても同梱バルーンの判定（Companion）が効くか／`emo2.nar` の中身（i686 の pasta.dll を同梱しているか）と再配布ライセンス。
+**要件段階の議題**: ⑴ zip に `emo2-kakukaku` を入れるか（入れると初回の既定が StayseeBalloon でなくなる）。⑵ **ライセンスは MIT 単独か MIT OR Apache-2.0 か**——後者なら `LICENSE-APACHE` の追加と `Cargo.toml` の修正、前者なら README の修正（どちらも小さいが**開発者の決めごと**なので棚卸⑯では触っていない）。⑶ 検証項目 1 と 4 の差し替え先（空の根で確かめる手順と 2 体目の検体）。⑷ `shiori-fault-notice` が α までに着地しない場合、「SHIORI が動かないとアプリが黙って消える」を既知の制限に載せるか（B1 で着地する予定なので通常は不要）。**未測定**: `nar-sample-path` で展開した木を zip にコピーしても同梱バルーンの判定（Companion）が効くか／`emo2.nar` の中身（i686 の pasta.dll を同梱しているか）と再配布ライセンス。
 
 ## 2026-09-20 棚卸⑮の再測定
 
@@ -51,8 +51,8 @@
 - ライセンスのファイル名は `LICENSE` ではなく **`LICENSE-MIT`**。
 - `scripts/` は実在しない＝新規。既存の道具の置き場は `tools/perf`。
 - 本文の検証項目は 12 項目。roadmap の 3 か所が「11 項目」と書いていたのを、本日 12 へ直した。
-- **zip へ入れる既定バルーン 29 ファイルの出どころが変わった。** `areka-P0-default-balloon-nar-fold`（台帳 #42）が着地し、既定バルーンは展開フォルダではなく `vendors/sample_ghost/StayseeBalloon.nar` として保管されている（登記表 `SAMPLES` に `StayseeBalloon` の名前で登記済み）。zip を作るスクリプトは `.nar` を展開して入れる（窓口 `sample_ghost_kit` か `areka-nar` を呼ぶ）。
-- **片道だった申し送りを受け取る。** 完了 `areka-P0-shell-implicit-surface` は、開発者の目と手が要る 5 項目（⑴ 絵の外のクリックが背後の窓へ抜ける ⑵ 右クリックメニューの 1 項目目の表示 ⑶ `konnoyayame` の目の周りに四角い地色が出ない ⑷ 起動挨拶の字形が文字化けしない ⑸ `emo2` の撫で・メニュー・終了が適用前と同じに見える）を「本仕様の実機一周で見る」と書いたが、本文に該当の記述が 0 件だった。**第三者の手順の実機一周に、検体 3 体それぞれで ⑴ を、テンプレート 2 体で ⑶⑷ を含める。** ⑴ は `areka-P0-keycolor-clickthrough-coverage`（台帳 #53）が決定論テストで退行を止めるが、実機の確認は外さない。
+- **zip へ入れる既定バルーン 29 ファイルの出どころが変わった。** `areka-P0-default-balloon-nar-fold`が着地し、既定バルーンは展開フォルダではなく `vendors/sample_ghost/StayseeBalloon.nar` として保管されている（登記表 `SAMPLES` に `StayseeBalloon` の名前で登記済み）。zip を作るスクリプトは `.nar` を展開して入れる（窓口 `sample_ghost_kit` か `areka-nar` を呼ぶ）。
+- **片道だった申し送りを受け取る。** 完了 `areka-P0-shell-implicit-surface` は、開発者の目と手が要る 5 項目（⑴ 絵の外のクリックが背後の窓へ抜ける ⑵ 右クリックメニューの 1 項目目の表示 ⑶ `konnoyayame` の目の周りに四角い地色が出ない ⑷ 起動挨拶の字形が文字化けしない ⑸ `emo2` の撫で・メニュー・終了が適用前と同じに見える）を「本仕様の実機一周で見る」と書いたが、本文に該当の記述が 0 件だった。**第三者の手順の実機一周に、検体 3 体それぞれで ⑴ を、テンプレート 2 体で ⑶⑷ を含める。** ⑴ は `areka-P0-keycolor-clickthrough-coverage`が決定論テストで退行を止めるが、実機の確認は外さない。
 - 前提の spec は分割で増えた: `baseware-root-layout`・`app-lifetime-separation`・`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`update-engine`・`network-update`・`default-balloon-nar-fold`。
 
 ## Problem

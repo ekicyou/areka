@@ -52,6 +52,6 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
 - 正典の曖昧点 1 件を要件で裁定: `balloontimeout` の「`0` または `-1`」（同一項で表現が割れ `-2` の扱いが曖昧）。
 - 決定論テスト必達（3 イベントの発火・`\x` の 2 形・中断起点）。要件定義は Opus で足りる（裁定は上の 1 件と `\x` の scope リセット範囲の 2 件）。
 
-> **📌 2026-09-20 相互登記（`areka-P0-balloon-break` 起票）**——利用者による中断操作（バルーンの左ダブルクリック→再生停止→全バルーン即時非表示）は `areka-P0-balloon-break`（台帳 #47）が所有する。本 spec の項目 8 の `OnBalloonBreak` はその通知（どのスコープで中断が起きたかを kanade まで届ける）を起点に発火させる。**中断位置（Reference2）の源は #47 でも作らない**＝台本上の位置を compile→cue→再生へ通す工事は本 spec に残る。項目 10 は、利用者による中断では即時非表示になるので、対象は選択肢タイムアウト・後続トークの割り込みなど残りの中断だけになる。
+> **📌 2026-09-20 相互登記（`areka-P0-balloon-break` 起票）**——利用者による中断操作（バルーンの左ダブルクリック→再生停止→全バルーン即時非表示）は `areka-P0-balloon-break`が所有する。本 spec の項目 8 の `OnBalloonBreak` はその通知（どのスコープで中断が起きたかを kanade まで届ける）を起点に発火させる。**中断位置（Reference2）の源は `balloon-break` でも作らない**＝台本上の位置を compile→cue→再生へ通す工事は本 spec に残る。項目 10 は、利用者による中断では即時非表示になるので、対象は選択肢タイムアウト・後続トークの割り込みなど残りの中断だけになる。
 >
 > **📌 2026-09-13 相互登記（`areka-P0-text-decoration-canon` 着地）**——項目 9 の「`\f` 状態の何がリセットされるか」の権威定義は `crates/areka-emo-text/src/state_decoration.rs` の `TextLayerState::reset_decoration(scope)` で、`\x` はこれを `None`（全スコープを 1 回で戻す）で呼び、`\x[noclear]` は呼ばない——という配線を本 spec が足す（親 spec の着地時点で `TextLayerState::reset_decoration` を呼ぶ**本番の経路は 0 件**——同関数はテストからのみ呼ばれており、本 spec が最初の本番呼び出し元になる。本番で実際に戻しているのは同じファイルの `ActorTextState::reset_look`／`reset_look_disabled` を通る 3 経路〔`\f[default]`／`\f[disable]`／台詞開始の `ClearAll`〕で、`reset_decoration` もこれらと同じ共通実体 `ActorTextState::reset_look_to` へ落ちるので、戻し方は 1 つに保たれる）。

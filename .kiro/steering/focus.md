@@ -45,6 +45,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 
 - 直下に `phase=completed` のまま残る仕様（例: 旧メタ仕様）があれば `completed/` への移動候補として棚卸しに挙げる
 - **過去の棚卸しの基準実数（2026-06-28〜2026-07-29 の 26 行）は `roadmap-history.md` の末尾「旧・focus.md 棚卸しの基準実数ログ」へ退避した**（2026-09-20）。本ファイルには**最新の 1 行だけ**を置き、更新するときは古い行をそちらへ足してから置き換える（常時読み込みのファイルを履歴で太らせない）。
+- **spec は名前で呼ぶ**（2026-09-26 開発者指示）: 報告・brief・コミット・PR で spec を指すときは spec 名を書き、台帳の番号（「#数字」）は使わない。台帳の番号の列は `roadmap.md` から外した。「#数字」は `PR#185` のように接頭辞を付けた PR 番号にだけ使う。
 - 棚卸しの基準実数（2026-09-26 更新㉖・棚卸⑰の実測・`main` `13b72893` 基準）: 完了 **201**（`completed/` 直下の実測エントリ数＝ディレクトリ 200＋`graphics-rendering-stability.md` 1）/ **spec.json 有りの active = 0** / **brief-only = 29**（`.kiro/specs/` 直下実測＝更新㉕の 29 − 09-24〜09-26 完了 3〔`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap`〕＋ 棚卸⑰の起票 3〔`ghost-change-name-resolution`・`pilot-dropfiles-on-wuc-window`・`alpha-package`〕）。open PR 0 本＝着手中の spec は 0。M1 は 2026-09-11 に完成宣言済み・現行は α（M2・`roadmap.md` B3〜B7）。**着手の優先度は「バグ修正 → α に要る機能」**（2026-09-20 開発者指示・`roadmap.md`「棚卸⑮の裁定」）。棚卸の経緯の正本は `roadmap.md`／`roadmap-history.md`。
 
 ## 運用上の注意
