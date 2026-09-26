@@ -5,7 +5,8 @@
 //! 注入する（本番は [`pick_index`]）。列挙の並びは判断に使わない（裁定 3）。
 //!
 //! 既定の定数 [`DEFAULT_GHOST_FOLDER`]／[`DEFAULT_BALLOON_FOLDER`] はこのファイルだけが持ち、
-//! 参照はそれぞれゴーストの段 4・バルーンの段 5 の 1 か所だけ（要件 4.11・5.9）。
+//! 解決の判断での参照はそれぞれゴーストの段 4・バルーンの段 5 の 1 か所だけ（要件 4.11・5.9）。
+//! 判断の外では、単独起動の失敗の控え [`record_halt`] が既定ゴーストを記憶の書き換え先に使う（要件 6.8）。
 
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
@@ -13,7 +14,9 @@ use std::path::{Path, PathBuf};
 use areka_ghost::BasewareRoot;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
+use areka_sylphya::{
+    PersistKey, PersistOutcome, PersistScope, ScopeRoots, SylphyaPublisher, load_scope, save_scope,
+};
 
 // 判断と記憶の直読みの消費者は起動前の解決（`boot_config::resolve_boot`）。記憶の書き込み
 // （[`LastUsed`]）の消費者は boot 成功直後の `main::on_boot_ok`。
@@ -31,6 +34,10 @@ pub(crate) enum GhostRoute {
     Only,
     Default,
     Random,
+    /// 実行中の切替で決まった（記憶を書く経路＝要件 4.6。書かないのは `Argv` だけ）。
+    // 本番の呼び手は 8.2 の切替先の起動。それまでは test からだけ作る。
+    #[cfg_attr(not(test), allow(dead_code))]
+    Switched,
 }
 
 /// バルーンが決まった経路（要件 5.11 の記録に載せる）。
@@ -245,11 +252,11 @@ fn read_last(scope: PersistScope, roots: &ScopeRoots, key: PersistKey) -> Option
 
 /// 起動前の記憶の直読み（App スコープ `areka.last.ghost`・要件 4.2）。無ければ `None`。
 pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
-    let roots = ScopeRoots {
-        app: Some(app_profile_dir.to_path_buf()),
-        ..ScopeRoots::default()
-    };
-    read_last(PersistScope::App, &roots, PersistKey::LastGhost)
+    read_last(
+        PersistScope::App,
+        &app_roots(app_profile_dir),
+        PersistKey::LastGhost,
+    )
 }
 
 /// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.balloon`・要件 5.2・裁定 4）。
@@ -260,6 +267,86 @@ pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
         ..ScopeRoots::default()
     };
     read_last(PersistScope::Ghost, &roots, PersistKey::LastBalloon)
+}
+
+fn app_roots(app_profile_dir: &Path) -> ScopeRoots {
+    ScopeRoots {
+        app: Some(app_profile_dir.to_path_buf()),
+        ..ScopeRoots::default()
+    }
+}
+
+/// App スコープへ実 fs で直接書く。失敗は `save_scope` がログ済み・結末の `warn!` は呼び手が残す。
+fn save_app(app_profile_dir: &Path, entries: Vec<(PersistKey, String)>) -> PersistOutcome {
+    save_scope(
+        PersistScope::App,
+        &app_roots(app_profile_dir),
+        &FsPersistIo,
+        entries,
+    )
+}
+
+/// 前回落ちたゴーストの名前（App スコープ `areka.last.halted`・要件 6.8）。空文字・無しは `None`。
+// 本番の呼び手は 5.3 の起動前の解決（take 経由）。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn read_last_halted(app_profile_dir: &Path) -> Option<String> {
+    read_last(
+        PersistScope::App,
+        &app_roots(app_profile_dir),
+        PersistKey::LastHalted,
+    )
+}
+
+/// 前回落ちたゴーストの名前を読んで消す（空文字を書き戻す＝1 回で消える・要件 6.8）。
+// 本番の呼び手は 5.3 の起動前の解決。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn take_last_halted(app_profile_dir: &Path) -> Option<String> {
+    let name = read_last_halted(app_profile_dir)?;
+    match save_app(
+        app_profile_dir,
+        vec![(PersistKey::LastHalted, String::new())],
+    ) {
+        PersistOutcome::Saved => tracing::info!(
+            event = "last_halted_taken",
+            ghost = %name,
+            "[boot_resolve] 前回落ちたゴーストの名前を読んで消しました"
+        ),
+        PersistOutcome::Degraded => tracing::warn!(
+            event = "last_halted_clear_degraded",
+            ghost = %name,
+            dir = %app_profile_dir.display(),
+            "[boot_resolve] 前回落ちたゴーストの名前を記憶から消せませんでした（次回の起動でも同じ名前を落ちたゴーストとして渡します）"
+        ),
+    }
+    Some(name)
+}
+
+/// 単独起動の失敗の控え（要件 6.8・裁定 11）: 最後に使ったゴーストを既定へ書き換え、
+/// 落ちた名前を控える（次回の起動で既定が起き、`OnBoot` の Ref7 に載る）。
+// 本番の呼び手は 8.5 の `fn main` の後始末。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str) {
+    match save_app(
+        app_profile_dir,
+        vec![
+            (PersistKey::LastGhost, DEFAULT_GHOST_FOLDER.to_owned()),
+            (PersistKey::LastHalted, fallen_name.to_owned()),
+        ],
+    ) {
+        PersistOutcome::Saved => tracing::info!(
+            event = "halt_recorded",
+            ghost = fallen_name,
+            next = DEFAULT_GHOST_FOLDER,
+            "[boot_resolve] 落ちたゴーストを控え、次回の起動を既定のゴーストへ書き換えました"
+        ),
+        PersistOutcome::Degraded => tracing::warn!(
+            event = "halt_record_degraded",
+            ghost = fallen_name,
+            next = DEFAULT_GHOST_FOLDER,
+            dir = %app_profile_dir.display(),
+            "[boot_resolve] 既定のゴーストへの書き換えと落ちたゴーストの控えを記憶へ書けませんでした（次回の起動で同じゴーストがまた起きることがあります）"
+        ),
+    }
 }
 
 /// 起動成功時に書く内容（要件 3.2〜3.5・裁定 5）。

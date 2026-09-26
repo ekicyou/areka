@@ -528,4 +528,81 @@ mod last_used {
             Some("StayseeBalloon")
         );
     }
+
+    /// 切替で決まったゴーストは記憶を書く経路（要件 4.6）: App に書かれ argv の skip は出ない。
+    #[test]
+    fn record_switched_writes_last_ghost() {
+        let root = root();
+        let g = ghost_at(&root, GhostRoute::Switched, "g2");
+        let b = balloon_at(&root, BalloonRoute::Memory, "b1");
+        let (app, _, events) = record_and_load(&g, &b, "master");
+        assert_eq!(app, vec![entry(PersistKey::LastGhost, "g2")]);
+        assert_eq!(count_event(&events, "last_used_skipped_argv"), 0);
+    }
+
+    /// 単独起動の失敗の控え（要件 6.8・10.14）: 書き換えのあと最後のゴーストは既定・
+    /// 落ちた名前は 1 回だけ返り 2 度目は無し。実 fs の記憶で往復する。
+    #[test]
+    fn record_halt_rewrites_to_default_and_take_returns_name_once() {
+        let tmp = TempPath::new("boot-resolve-last-halted");
+        let app_dir = tmp.child("app-profile");
+        assert_eq!(read_last_halted(&app_dir), None);
+        assert_eq!(take_last_halted(&app_dir), None, "未記録なら無し");
+
+        let ((), events) = capture(|| record_halt(&app_dir, "壊れた子"));
+        assert_one_event(&events, "halt_recorded", tracing::Level::INFO);
+        assert_eq!(
+            read_last_ghost(&app_dir).as_deref(),
+            Some(DEFAULT_GHOST_FOLDER)
+        );
+        assert_eq!(read_last_halted(&app_dir).as_deref(), Some("壊れた子"));
+
+        assert_eq!(take_last_halted(&app_dir).as_deref(), Some("壊れた子"));
+        assert_eq!(take_last_halted(&app_dir), None, "1 回使ったら消える");
+        assert_eq!(read_last_halted(&app_dir), None);
+        assert_eq!(
+            read_last_ghost(&app_dir).as_deref(),
+            Some(DEFAULT_GHOST_FOLDER),
+            "消すのは落ちた名前だけ・最後のゴーストは残る"
+        );
+    }
+
+    /// 書けないとき（App の置き場が普通のファイル）: `record_halt` は `warn!` 1 件で戻り、成功の info は出ない。
+    #[test]
+    fn record_halt_save_failure_warns_once_and_returns() {
+        let tmp = TempPath::new("boot-resolve-halt-degraded");
+        let app_dir = tmp.child("app-profile");
+        std::fs::create_dir_all(app_dir.parent().unwrap()).unwrap();
+        std::fs::write(&app_dir, "not a dir").unwrap();
+        let roots = ScopeRoots {
+            app: Some(app_dir.clone()),
+            ..ScopeRoots::default()
+        };
+        // 前提の確認: この置き場への保存は本当に縮退する。
+        assert_eq!(
+            save_scope(PersistScope::App, &roots, &FsPersistIo, vec![]),
+            PersistOutcome::Degraded
+        );
+        let ((), events) = capture(|| record_halt(&app_dir, "壊れた子"));
+        assert_one_event(&events, "halt_record_degraded", tracing::Level::WARN);
+        assert_eq!(count_event(&events, "halt_recorded"), 0);
+    }
+
+    /// 消せないとき（一時ファイルの場所をフォルダで塞ぐ・読みは通る）: 名前は返り `warn!` 1 件。
+    #[test]
+    fn take_last_halted_clear_failure_warns_once_and_returns_name() {
+        let tmp = TempPath::new("boot-resolve-take-degraded");
+        let app_dir = tmp.child("app-profile");
+        record_halt(&app_dir, "壊れた子");
+        std::fs::create_dir_all(app_dir.join("sylphya.toml.tmp")).unwrap();
+        let (name, events) = capture(|| take_last_halted(&app_dir));
+        assert_eq!(name.as_deref(), Some("壊れた子"));
+        assert_one_event(&events, "last_halted_clear_degraded", tracing::Level::WARN);
+        assert_eq!(count_event(&events, "last_halted_taken"), 0);
+        assert_eq!(
+            read_last_halted(&app_dir).as_deref(),
+            Some("壊れた子"),
+            "消せなかったので残る"
+        );
+    }
 }
