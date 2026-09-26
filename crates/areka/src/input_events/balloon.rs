@@ -12,7 +12,7 @@
 //!
 //! 本番の入口は 3 箇所——離脱の系の登録 `register_balloon_leave_system`（`ghost_session::register_systems`
 //! からプロセスに 1 回）・状態の載せ替え `wire_balloon_choice`（`ghost_session::boot_ghost` から
-//! ゴーストごとに n 回・同期呼出）・`attach_balloon_pointer_handlers`（`ghost_session::open_ghost_windows`
+//! ゴーストごとに n 回・同期呼出）・`attach_balloon_pointer_handlers`（`ghost_session::prepare_ghost_windows`
 //! の窓 spawn 直後クロージャ内）。
 //! 本 mod の公開項目はこの 3 入口のいずれかから到達する（唯一の例外は
 //! [`BalloonWiring::is_balloon_hovered`] で、こちらはバルーン可視性の相
@@ -78,7 +78,7 @@ pub(crate) struct ChoiceSelection {
 ///
 /// 本番到達済み——挿入は [`wire_balloon_choice`]（`ghost_session::boot_ghost` からゴーストごと）、
 /// 消費はポインタハンドラ（[`on_balloon_pointer_moved`]／[`on_balloon_pointer_pressed`]・
-/// `ghost_session::open_ghost_windows` の
+/// `ghost_session::prepare_ghost_windows` の
 /// [`attach_balloon_pointer_handlers`] で装着）と離脱システム [`clear_balloon_hover_on_leave`]。
 /// 3 フィールドはいずれもそれらの経路で読み書きされる。
 pub(crate) struct BalloonWiring {
@@ -210,7 +210,7 @@ pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 ///
 /// 本番到達済み——[`on_balloon_pointer_moved`]（hover 追従）と [`click_selection`] 経由の
 /// [`on_balloon_pointer_pressed`]（クリック確定）が呼ぶ。両ハンドラは
-/// `ghost_session::open_ghost_windows` の [`attach_balloon_pointer_handlers`] でバルーン窓へ装着される。
+/// `ghost_session::prepare_ghost_windows` の [`attach_balloon_pointer_handlers`] でバルーン窓へ装着される。
 pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<usize> {
     // 逆順走査の最初の一致＝スライス最終一致（後定義が手前・画家のアルゴリズム・DD-CI-5）。
     // 半開区間 [left, right) × [top, bottom)：left/top は包含・right/bottom は非包含。
@@ -244,7 +244,7 @@ pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<us
 ///   - `hit_ordinal != last_injected` → [`HoverAction::Inject`]`(hit_ordinal)`（遷移・新値注入。
 ///     `Some(ordinal)`＝行ハイライト・R1.2／`None`＝ハイライト解除・R1.3）。
 ///
-/// 本番到達済み——[`hover_action`] の返値を [`on_balloon_pointer_moved`]（`ghost_session::open_ghost_windows`
+/// 本番到達済み——[`hover_action`] の返値を [`on_balloon_pointer_moved`]（`ghost_session::prepare_ghost_windows`
 /// で装着）と [`clear_balloon_hover_on_leave`]（`ghost_session::register_systems` から Input へ登録）の
 /// 双方が解釈する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -301,7 +301,7 @@ pub(crate) fn hover_action(
 /// 座標に現行 rows のどの行も無ければ非ヒット＝`None`、別行が現れていればその現行行から
 /// 構成される（キャッシュではなく現行ジオメトリが正本）。
 ///
-/// 本番到達済み——[`on_balloon_pointer_pressed`]（`ghost_session::open_ghost_windows` の
+/// 本番到達済み——[`on_balloon_pointer_pressed`]（`ghost_session::prepare_ghost_windows` の
 /// [`attach_balloon_pointer_handlers`] でバルーン窓へ装着）が押下ごとに呼ぶ。
 pub(crate) fn click_selection(
     active: bool,
@@ -361,7 +361,7 @@ pub(crate) fn click_selection(
 /// hover 遷移注入時は `debug!(event = "choice_hover_inject")` を発行する（DD-CI-7・トラブルシュート用）。
 /// クリック確定・`send`・`info!` は本ハンドラの範囲外（押下ハンドラ＝task 4.2）。
 ///
-/// 本番到達済み——[`attach_balloon_pointer_handlers`]（`ghost_session::open_ghost_windows` から
+/// 本番到達済み——[`attach_balloon_pointer_handlers`]（`ghost_session::prepare_ghost_windows` から
 /// 呼ばれる）が `BalloonWindowMarker` 窓へ `OnPointerMoved` として挿入する。
 pub(crate) fn on_balloon_pointer_moved(
     world: &mut World,
@@ -524,7 +524,7 @@ pub(crate) fn on_balloon_pointer_moved(
 /// **戻り値**: `ChoiceSelection` を発行したとき、または利用者の中断を受け入れたとき `true`
 /// （棄却・縮退・非左押下・Tunnel 時は `false`。途中の早期復帰では中断も作らない）。
 ///
-/// 本番到達済み——[`attach_balloon_pointer_handlers`]（`ghost_session::open_ghost_windows` から
+/// 本番到達済み——[`attach_balloon_pointer_handlers`]（`ghost_session::prepare_ghost_windows` から
 /// 呼ばれる）が `BalloonWindowMarker` 窓へ `OnPointerPressed` として挿入する。
 pub(crate) fn on_balloon_pointer_pressed(
     world: &mut World,
@@ -847,7 +847,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
 // 結線済み——系の登録（`register_balloon_leave_system`）は `ghost_session::register_systems` から
 // プロセスに 1 回、状態の載せ替え（`wire_balloon_choice`）は `ghost_session::boot_ghost` から
 // `wire_mouse_input` と同型に schedule 実行外でゴーストごとに n 回同期呼出され、
-// `attach_balloon_pointer_handlers` は `ghost_session::open_ghost_windows`（窓 spawn 直後の同一
+// `attach_balloon_pointer_handlers` は `ghost_session::prepare_ghost_windows`（窓 spawn 直後の同一
 // `&mut World` クロージャ内）から呼ばれる。
 // ---------------------------------------------------------------------------
 
@@ -855,13 +855,13 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
 /// （donor `attach_char_pointer_handlers` の鏡写し・spawn.rs 不改変・R4.3/4.4）。
 ///
 /// 前提: `spawn_ghost_windows` 完了後（`BalloonWindowMarker` 窓が存在する状態）に同一 `&mut World`
-/// クロージャ内で呼ぶ（キャラ窓ハンドラ装着と同型のタイミング契約・`ghost_session::open_ghost_windows`
+/// クロージャ内で呼ぶ（キャラ窓ハンドラ装着と同型のタイミング契約・`ghost_session::prepare_ghost_windows`
 /// の spawn 直後結線）。
 /// `&mut World` 借用中はクエリで別の可変借用を取れないため、まず対象 entity を収集してから 1 件ずつ
 /// 挿入する（donor 同型）。標的は `BalloonWindowMarker` 窓のみ——キャラ窓・その他 entity は一切
 /// 触らない（配線の非退行・R4.3）。
 ///
-/// 本番到達済み——`ghost_session::open_ghost_windows`（`attach_char_pointer_handlers` の直後・
+/// 本番到達済み——`ghost_session::prepare_ghost_windows`（`attach_char_pointer_handlers` の直後・
 /// `spawn_ghost_windows` と同一 `&mut World` クロージャ内）から呼ばれる。
 pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
     let balloon_windows: Vec<Entity> = world

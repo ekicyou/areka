@@ -244,7 +244,7 @@ pub struct Emo2BootInputs {
 ///
 /// emo2 fixture は sakura（scope0）＋kero（scope1）の 2 scope 構成であり、placement の
 /// `detect_scopes`（scope0 常設・`kero.*` 存在で scope1）も emo2 に対し `[0, 1]` を返す。
-/// placement の実結果は `ghost_session::open_ghost_windows` の async クロージャへ move 済みで同期参照不能
+/// placement の実結果は `ghost_session::prepare_ghost_windows` の async クロージャへ move 済みで同期参照不能
 /// （DD-12）ゆえ、本関数が同じ scope 集合を独立に導出する。導出の二元性（placement の動的
 /// `detect_scopes` との厳密一致は取らない）は M1 受容トレードオフとして増分申し送り（design
 /// line 460）。窓と資産の不一致は [`frame::plan_attachments`]（DD-12）が missing/unused へ分類し

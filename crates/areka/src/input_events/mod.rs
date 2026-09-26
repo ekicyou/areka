@@ -38,7 +38,7 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// による World 挿入（`ghost_session::boot_ghost` の boot 成功後呼出）は task 3.1 で結線済み＝`new` は本番から到達可能。
 /// 送出ヘルパ群はポインタハンドラ経由でのみ参照される。ハンドラのキャラ窓登録は本モジュールの
 /// [`attach_char_pointer_handlers`]（依存方向 input_events→placement。stand-in `on_ghost_pressed`
-/// を退役して差し替え・`ghost_session::open_ghost_windows` が spawn 直後に呼ぶ）で完了済み＝本番消費者が到達したため
+/// を退役して差し替え・`ghost_session::prepare_ghost_windows` が spawn 直後に呼ぶ）で完了済み＝本番消費者が到達したため
 /// dead_code 抑止は不要になった。
 ///
 /// 例外はメニュー側（`menu`）から呼ばれる 3 つである: 右ダブルクリックの預かりの取り出しと送出
@@ -344,7 +344,7 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 /// # タイミング契約
 ///
 /// `spawn_ghost_windows` の**直後**に同一 `&mut World` クロージャ内で呼ぶこと
-/// （キャラ窓が既に存在する状態・`ghost_session::open_ghost_windows` の窓を作るクロージャ）。同一
+/// （キャラ窓が既に存在する状態・`ghost_session::prepare_ghost_windows` が組む窓を作るクロージャ）。同一
 /// World-mutation 内で同期実行するため async race はない。
 pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
     // `&mut World` を借用中にクエリで別の可変借用を取れないため、まず対象 entity を
@@ -367,7 +367,7 @@ pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
 // 署名は `fn(&mut World, sender: Entity, entity: Entity, ev: &Phase<PointerState>) -> bool`
 // （`wintf::ecs::pointer::PointerEventHandler`）。Bubble 相のみ処理し Tunnel は no-op false
 // （伝播続行）。キャラ窓への登録は本モジュールの `attach_char_pointer_handlers`（依存方向
-// input_events→placement・`ghost_session::open_ghost_windows` が spawn 直後に呼ぶ）で行う＝stand-in `on_ghost_pressed`
+// input_events→placement・`ghost_session::prepare_ghost_windows` が spawn 直後に呼ぶ）で行う＝stand-in `on_ghost_pressed`
 // を退役して `OnPointerMoved`／`OnPointerPressed` へ差し替え。
 // ---------------------------------------------------------------------------
 

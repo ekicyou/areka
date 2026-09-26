@@ -209,7 +209,7 @@ impl Emo2Wiring {
     ///
     /// 本番の呼び手は結線済み（実測）——`input_events/mod.rs` の `resolve_hit_owned` が
     /// `.map(Emo2Wiring::presenter)` の関数パス形で借りて当たり判定へ渡す。到達の起点は
-    /// `ghost_session::open_ghost_windows` の `attach_char_pointer_handlers` 呼出（キャラ窓ポインタ
+    /// `ghost_session::prepare_ghost_windows` の `attach_char_pointer_handlers` 呼出（キャラ窓ポインタ
     /// ハンドラ装着）と `ghost_session::boot_ghost` の `wire_mouse_input` 呼出。呼び出しがメソッド構文でないため
     /// `.presenter()` の grep では見つからないが、dead_code 判定上は live である。
     pub(crate) fn presenter(&self) -> &EmoPresenter {
@@ -229,7 +229,7 @@ impl Emo2Wiring {
     /// 解く形）——`input_events/balloon.rs` の `on_balloon_pointer_moved`（ポインタ移動での選択肢
     /// hover 追従）・`on_balloon_pointer_pressed`（クリックによる選択確定）・
     /// `clear_balloon_hover_on_leave`（バルーン離脱での hover 解除）。到達の起点は
-    /// `ghost_session::boot_ghost` の `wire_balloon_choice`・`ghost_session::open_ghost_windows` の
+    /// `ghost_session::boot_ghost` の `wire_balloon_choice`・`ghost_session::prepare_ghost_windows` の
     /// `attach_balloon_pointer_handlers` 呼出・`ghost_session::register_systems` の
     /// `register_balloon_leave_system` 呼出。
     ///

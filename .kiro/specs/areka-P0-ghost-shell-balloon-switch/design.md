@@ -718,6 +718,9 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 | 既定ゴーストが目録に無い・既定の同期の失敗 | `error!(ghost_switch_fatal)` | `quit_app(GhostFallbackFailed)` → 告知・終了コード 1 |
 | 既定ゴーストの SHIORI の `Fault` | kanade の既存の `error!` ＋ UI の `error!(ghost_switch_default_fault)`（切替先が既定ゴーストだった場合も） | `quit_app(KanadeStopped(Fault))` → 告知・終了コード 1 |
 | 窓の準備を投函した後・窓が生える前に全窓を閉じた（切替先の非同期の失敗など） | `debug!(ghost_windows_stale)` | 古い閉包は窓を作らない（`app_exit::WindowsEpoch` の世代で判定・孤児の窓 0） |
+| 切替先を起こす段で起動の文脈・起動入力の作り口が無い | `error!(ghost_switch_no_context)` ＋ `error!(ghost_switch_boot_failed, stage=no_context)` | 起動の失敗と同じ扱い（既定へ／致命） |
+| 予約の無いときに切替の中止の通知が届いた | `warn!(ghost_switch_cancelled)` | 読み捨て |
+| 迎え入れの段でないときに定常到達の通知が届いた（送り出し中の前のゴーストの遅れた通知など） | `debug!(ghost_switch_done)` | 予約を保つ |
 | 汎用の入口: 許可表に無い／定常でない | `warn!(raise_event_not_allowed)`／`warn!(raise_event_not_steady)` | 捨てる |
 | 通知の送出に失敗（受け口が消えた） | `warn!(notice_send_failed)` | 続ける |
 | `record_halt`／`take_last_halted` の I/O 失敗 | `warn!`（`save_scope` の既存の縮退） | 続ける |
