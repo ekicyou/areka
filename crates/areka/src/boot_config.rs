@@ -95,12 +95,35 @@ pub(crate) fn resolve_root() -> Result<(std::path::PathBuf, RootSource), RootErr
 // 起動前の解決（areka-P0-baseware-root-layout task 5.1・`main` が WinApp 構築の前に呼ぶ）
 // ---------------------------------------------------------------------------
 
-/// 起動前に決まったもの: 構成入力と、ゴースト・バルーンの決定（経路とフォルダ）。
+/// 起動前に決まったもの: 構成入力と、ゴースト・バルーンの決定（経路とフォルダ）と、
+/// 前回落ちたゴーストの名前（`take_last_halted`＝読んだら消す・要件 6.8）。
 pub(crate) type BootResolved = (
     ConfigInputs,
     crate::boot_resolve::GhostDecision,
     crate::boot_resolve::BalloonDecision,
+    Option<String>,
 );
+
+/// 起動の文脈（プロセスに 1 つ）: 根・記憶の置き場・helper のパス・今のゴースト。
+/// 目録とバルーンの解決に要る根を切替の経路へ渡す（切替が成功したら `current` を更新する）。
+// 本番の据え付けは 8.5 の `fn main`。それまでは test からだけ作る。
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(bevy_ecs::prelude::Resource)]
+pub(crate) struct BootContext {
+    pub root: areka_ghost::BasewareRoot,
+    pub app_profile_dir: std::path::PathBuf,
+    pub helper_exe: std::path::PathBuf,
+    pub current: CurrentGhost,
+}
+
+/// 今のゴースト（構成入力・ゴーストの決定・バルーンの決定）。
+// 本番の据え付けは 8.5 の `fn main`（`BootContext` と一緒）。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct CurrentGhost {
+    pub cfg: ConfigInputs,
+    pub ghost: crate::boot_resolve::GhostDecision,
+    pub balloon: crate::boot_resolve::BalloonDecision,
+}
 
 /// env（`AREKA_ROOT`・`AREKA_PROFILE_DIR`）と `current_exe()` を読んで [`resolve_boot_from`] へ渡す薄い口。
 pub(crate) fn resolve_boot(args: &[String]) -> Result<BootResolved, crate::alert::AlertScene> {
@@ -165,27 +188,19 @@ pub(crate) fn resolve_boot_from(
     })?;
     tracing::info!(event = "ghost_resolved", route = ?ghost.route, dir = %ghost.dir.display(), "起動するゴーストを決めました");
 
-    let (memory, companion, listed): (_, _, Vec<String>) = match argv_balloon {
-        Some(_) => (None, None, Vec::new()),
-        None => (
-            boot_resolve::read_last_balloon(&ghost.dir),
-            catalog::companion_balloon(&ghost.dir),
-            catalog::list_balloons(&root)
-                .into_iter()
-                .map(|e| e.identity.folder)
-                .collect(),
+    let balloon = match argv_balloon {
+        Some(argv) => boot_resolve::resolve_balloon(
+            &BalloonInputs {
+                root: &root,
+                argv: Some(argv),
+                memory: None,
+                companion: None,
+                listed: &[],
+            },
+            pick,
         ),
-    };
-    let balloon = boot_resolve::resolve_balloon(
-        &BalloonInputs {
-            root: &root,
-            argv: argv_balloon,
-            memory: memory.as_deref(),
-            companion: companion.as_deref(),
-            listed: &listed,
-        },
-        pick,
-    )
+        None => resolve_balloon_for_ghost(&root, &ghost.dir, pick),
+    }
     .map_err(|NoBalloon { balloon_store }| AlertScene::BalloonMissing { balloon_store })?;
     tracing::info!(event = "balloon_resolved", route = ?balloon.route, dir = %balloon.dir.display(), "バルーンを決めました");
 
@@ -193,7 +208,41 @@ pub(crate) fn resolve_boot_from(
         ghost_root: ghost.dir.clone(),
         balloon_root: balloon.dir.clone(),
     };
-    Ok((cfg, ghost, balloon))
+    // argv のゴーストは開発者の上書きで前回のゴーストの記憶（`LastGhost`）を読まない（控えも読まず消さない）。
+    let halted = argv_ghost
+        .is_none()
+        .then(|| boot_resolve::take_last_halted(app_profile_dir))
+        .flatten();
+    Ok((cfg, ghost, balloon, halted))
+}
+
+/// argv 無しの分岐（そのゴーストの最後のバルーンの記憶 → 同梱 → 唯一 → 既定 → 無作為）で
+/// 1 ゴースト分のバルーンを解く（起動前の解決の後半・切替先のバルーンの解決＝要件 4.7）。
+/// 初回起動の argv の第 2 引数はここへ届かない。
+pub(crate) fn resolve_balloon_for_ghost(
+    root: &areka_ghost::BasewareRoot,
+    ghost_dir: &std::path::Path,
+    pick: fn(usize) -> usize,
+) -> Result<crate::boot_resolve::BalloonDecision, crate::boot_resolve::NoBalloon> {
+    use crate::boot_resolve::{self, BalloonInputs};
+    use areka_ghost::catalog;
+
+    let memory = boot_resolve::read_last_balloon(ghost_dir);
+    let companion = catalog::companion_balloon(ghost_dir);
+    let listed: Vec<String> = catalog::list_balloons(root)
+        .into_iter()
+        .map(|e| e.identity.folder)
+        .collect();
+    boot_resolve::resolve_balloon(
+        &BalloonInputs {
+            root,
+            argv: None,
+            memory: memory.as_deref(),
+            companion: companion.as_deref(),
+            listed: &listed,
+        },
+        pick,
+    )
 }
 
 // ---------------------------------------------------------------------------

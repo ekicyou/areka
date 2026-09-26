@@ -155,7 +155,8 @@ fn main() -> Result<()> {
     // （要件 1.4・4.7・4.8・5.8・6.3）。`warn!` で起動を続ける経路は作らない（要件 6.6）。
     // 決まった経路とフォルダは boot の分岐まで持ち越す（boot 成功直後の記憶の書き込みに使う）。
     let args: Vec<String> = std::env::args().collect();
-    let (cfg, ghost_decision, balloon_decision) = match resolve_boot(&args) {
+    // 4 つ目は前回落ちたゴーストの名前（読んだら消えている）。起動への受け渡しは 8.5。
+    let (cfg, ghost_decision, balloon_decision, _halted) = match resolve_boot(&args) {
         Ok(resolved) => resolved,
         Err(scene) => {
             alert::raise(&scene, alert::suppressed());

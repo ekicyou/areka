@@ -172,7 +172,7 @@
 4. When 切替先のゴーストに起動記録が無い（初めて起動する）, the areka shall 初回起動を最優先にして今日どおり `OnFirstBoot`（204 なら `OnBoot`）を送り、`OnGhostChanged` は送らない（0 件・要件 11 裁定 3）。起動記録は初回の起動と同じ規則で書く。切替で起きたゴーストに送る起動の根は常に 1 つ（`OnFirstBoot` と `OnGhostChanged` の両方を送る形は作らない）。
 5. When 切替先の起動系列が `OnGhostChanged`（または `OnBoot`）を終える, the areka shall 以降を今日の起動と同じ定常（`basewareversion` の照会・`OnSecondChange` など）にする。
 6. When 切替先のゴーストが起動に成功する, the areka shall 最後に使ったゴーストの記憶（`LastGhost`・App スコープ）にそのゴーストを書く（経路は `GhostRoute::Argv` 以外＝記憶を書く経路。値を足すかは設計）。次回起動でそのゴーストが復元される。
-7. When 切替先のバルーンを決める, the areka shall 完了 `baseware-root-layout` の起動解決（同梱バルーン → そのゴーストの最後のバルーンの記憶 → 既定バルーン）を argv の指定なしの分岐で使う（初回起動の argv の第 2 引数は切替後には効かせない）。切替先の `LastBalloon`／`LastShell`（Ghost スコープ）は今日の `on_boot_ok` と同じ規則で書く。
+7. When 切替先のバルーンを決める, the areka shall 完了 `baseware-root-layout` の起動解決（そのゴーストの最後のバルーンの記憶 → 同梱バルーン → 既定バルーン＝`resolve_balloon` の順）を argv の指定なしの分岐で使う（初回起動の argv の第 2 引数は切替後には効かせない）。切替先の `LastBalloon`／`LastShell`（Ghost スコープ）は今日の `on_boot_ok` と同じ規則で書く。
 8. When 切替先のゴーストが起きる, the areka shall 窓ごとの状態（`MouseWiring`・`MenuWiring`・選択肢の送り口・`PersistWiring`・説明書の経路 ほか完了 `ghost-restart-unit` 要件 2.3 の一覧）を切替先のもので置き換え、前のゴーストのものを残さない。
 9. The areka shall 切替先がキャラ 1 人（1 スコープ）のゴーストでも落ちず、2 人のゴーストと同じ窓の数（0 と 1）で起こす（`derive_scopes()` の据え置き。3 人以上は範囲外）。
 10. When 切替先のゴーストの窓を作る, the areka shall 初回の起動と同じ手順（配置の準備 → 監視の状態 → 復元 → 窓の生成 → 入力の受け口の装着）で作り、切替先のゴーストの前回の窓位置（永続化されていれば）を復元する。

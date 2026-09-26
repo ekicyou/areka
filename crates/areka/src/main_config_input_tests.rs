@@ -181,7 +181,7 @@ mod boot {
                 no_pick,
             )
         });
-        let (cfg, g, b) = got.expect("argv で決まる");
+        let (cfg, g, b, _halted) = got.expect("argv で決まる");
         assert_eq!((g.route, b.route), (GhostRoute::Argv, BalloonRoute::Argv));
         assert_eq!((cfg.ghost_root, cfg.balloon_root), (ghost, balloon));
         let warned: Vec<_> = events
@@ -208,5 +208,234 @@ mod boot {
                 argv: None,
             })
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 1 ゴースト分のバルーンの解決と、前回落ちたゴーストの名前（task 5.3・要件 4.7・6.8）
+// ---------------------------------------------------------------------------
+// `resolve_balloon_for_ghost` は切替先のバルーンを argv 無しの分岐で解く。起動前の解決は
+// それを呼び、戻りの 4 つ目に「前回落ちたゴーストの名前（読んだら消す）」を載せる。
+
+mod switch_balloon {
+    use crate::boot_config::{RootSource, resolve_balloon_for_ghost, resolve_boot_from};
+    use crate::boot_resolve::{BalloonRoute, read_last_halted, record_halt};
+    use areka_ghost::BasewareRoot;
+    use std::path::{Path, PathBuf};
+    use temp_path_kit::TempPath;
+
+    /// 呼ばれない添字（候補に既定のバルーンを置くので無作為の段へ届かない）。
+    fn no_pick(n: usize) -> usize {
+        panic!("無作為の段へ届いてはならない（候補 {n}）")
+    }
+
+    /// 根にゴースト `g1` とバルーン 3 つ（既定・b1・b2）を組み、ゴーストのフォルダを返す。
+    fn fixture(tmp: &TempPath) -> PathBuf {
+        let ghost = tmp.child("ghost").join("g1");
+        let master = ghost.join("ghost").join("master");
+        std::fs::create_dir_all(&master).expect("フォルダを組む");
+        std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
+        for folder in ["StayseeBalloon", "b1", "b2"] {
+            let dir = tmp.child("balloon").join(folder);
+            std::fs::create_dir_all(&dir).expect("フォルダを組む");
+            std::fs::write(dir.join("descript.txt"), "charset,UTF-8\n").expect("descript");
+        }
+        ghost
+    }
+
+    fn put_companion(ghost: &Path, folder: &str) {
+        std::fs::write(
+            ghost.join("install.txt"),
+            format!("charset,UTF-8\nballoon.directory,{folder}\n"),
+        )
+        .expect("install.txt");
+    }
+
+    /// そのゴーストの最後のバルーンの記憶（Ghost スコープ・boot が据える場所と同じ）。
+    fn put_memory(ghost: &Path, folder: &str) {
+        let dir = ghost
+            .join("ghost")
+            .join("master")
+            .join("profile")
+            .join("areka");
+        std::fs::create_dir_all(&dir).expect("フォルダを組む");
+        std::fs::write(
+            dir.join("sylphya.toml"),
+            format!("format-version = 1\n[last]\nballoon = \"{folder}\"\n"),
+        )
+        .expect("記憶");
+    }
+
+    fn resolve(tmp: &TempPath, ghost: &Path) -> (BalloonRoute, Option<String>) {
+        let root = BasewareRoot::new(tmp.path().to_path_buf());
+        let got = resolve_balloon_for_ghost(&root, ghost, no_pick).expect("決まる");
+        assert_eq!(
+            got.dir,
+            tmp.child("balloon").join(got.folder.as_deref().unwrap())
+        );
+        (got.route, got.folder)
+    }
+
+    /// 同梱バルーンがあればそれ（記憶が無いとき）。
+    #[test]
+    fn companion_is_used_when_no_memory() {
+        let tmp = TempPath::new("switch-balloon-companion");
+        let ghost = fixture(&tmp);
+        put_companion(&ghost, "b1");
+        assert_eq!(
+            resolve(&tmp, &ghost),
+            (BalloonRoute::Companion, Some("b1".to_owned()))
+        );
+    }
+
+    /// そのゴーストの最後のバルーンの記憶があれば、同梱より先にそれ（起動解決と同じ順）。
+    #[test]
+    fn memory_of_that_ghost_is_used() {
+        let tmp = TempPath::new("switch-balloon-memory");
+        let ghost = fixture(&tmp);
+        put_companion(&ghost, "b1");
+        put_memory(&ghost, "b2");
+        assert_eq!(
+            resolve(&tmp, &ghost),
+            (BalloonRoute::Memory, Some("b2".to_owned()))
+        );
+    }
+
+    /// 同梱も記憶も無ければ既定のバルーン。
+    #[test]
+    fn default_when_neither_companion_nor_memory() {
+        let tmp = TempPath::new("switch-balloon-default");
+        let ghost = fixture(&tmp);
+        assert_eq!(
+            resolve(&tmp, &ghost),
+            (BalloonRoute::Default, Some("StayseeBalloon".to_owned()))
+        );
+    }
+
+    /// 初回起動の argv の第 2 引数は、1 ゴースト分の解決には効かない（要件 4.7）:
+    /// 同じ根・同じゴーストでも起動前の解決は argv のバルーン、括り出した関数は既定になる。
+    #[test]
+    fn argv_second_argument_has_no_effect() {
+        let tmp = TempPath::new("switch-balloon-argv");
+        let ghost = fixture(&tmp);
+        let argv_balloon = tmp.child("balloon").join("b1");
+        let args = vec![
+            "areka.exe".to_owned(),
+            ghost.display().to_string(),
+            argv_balloon.display().to_string(),
+        ];
+        let (_, _, b, _) = resolve_boot_from(
+            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+            &args,
+            tmp.path(),
+            no_pick,
+        )
+        .expect("argv で決まる");
+        assert_eq!((b.route, b.dir), (BalloonRoute::Argv, argv_balloon));
+        assert_eq!(
+            resolve(&tmp, &ghost),
+            (BalloonRoute::Default, Some("StayseeBalloon".to_owned()))
+        );
+    }
+
+    /// argv 無しの起動前の解決は後半を括り出した関数へ任せる（初回起動の結果は不変）。
+    #[test]
+    fn resolve_boot_uses_the_same_balloon_resolution() {
+        let tmp = TempPath::new("switch-balloon-boot");
+        let ghost = fixture(&tmp);
+        put_companion(&ghost, "b1");
+        let args = vec!["areka.exe".to_owned()];
+        let (cfg, g, b, halted) = resolve_boot_from(
+            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+            &args,
+            tmp.path(),
+            no_pick,
+        )
+        .expect("決まる");
+        assert_eq!(g.dir, ghost);
+        assert_eq!(
+            (b.route, b.folder.as_deref()),
+            (BalloonRoute::Companion, Some("b1"))
+        );
+        assert_eq!(cfg.balloon_root, tmp.child("balloon").join("b1"));
+        assert_eq!(halted, None, "控えが無ければ無し");
+    }
+
+    /// 前回落ちたゴーストの名前は起動前の解決の戻りに載り、読んだら消える（要件 6.8）。
+    #[test]
+    fn halted_name_is_returned_once() {
+        let tmp = TempPath::new("switch-balloon-halted");
+        fixture(&tmp);
+        let app_dir = tmp.child("app-profile");
+        record_halt(&app_dir, "落ちた子");
+        let args = vec!["areka.exe".to_owned()];
+        let boot = || {
+            resolve_boot_from(
+                Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+                &args,
+                &app_dir,
+                no_pick,
+            )
+            .expect("決まる")
+            .3
+        };
+        assert_eq!(boot().as_deref(), Some("落ちた子"));
+        assert_eq!(read_last_halted(&app_dir), None, "読んだら消える");
+        assert_eq!(boot(), None, "2 度目は無し");
+    }
+
+    /// argv でゴーストを指定した起動（開発者の上書き）は記憶を読まないので、控えも読まず消さない。
+    #[test]
+    fn argv_ghost_neither_takes_nor_clears_halted() {
+        let tmp = TempPath::new("switch-balloon-halted-argv");
+        let ghost = fixture(&tmp);
+        let app_dir = tmp.child("app-profile");
+        record_halt(&app_dir, "落ちた子");
+        let args = vec!["areka.exe".to_owned(), ghost.display().to_string()];
+        let (_, _, _, halted) = resolve_boot_from(
+            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+            &args,
+            &app_dir,
+            no_pick,
+        )
+        .expect("argv で決まる");
+        assert_eq!(halted, None);
+        assert_eq!(read_last_halted(&app_dir).as_deref(), Some("落ちた子"));
+    }
+
+    /// 起動前の解決の結果から起動の文脈を組み、World の資源として読める（据え付けは 8.5）。
+    #[test]
+    fn boot_context_holds_the_resolved_current_ghost() {
+        use crate::boot_config::{BootContext, CurrentGhost};
+        let tmp = TempPath::new("switch-balloon-context");
+        let ghost = fixture(&tmp);
+        let (cfg, g, b, _) = resolve_boot_from(
+            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+            &["areka.exe".to_owned()],
+            tmp.path(),
+            no_pick,
+        )
+        .expect("決まる");
+        let mut world = bevy_ecs::world::World::new();
+        world.insert_resource(BootContext {
+            root: BasewareRoot::new(tmp.path().to_path_buf()),
+            app_profile_dir: tmp.path().to_path_buf(),
+            helper_exe: tmp.child("shiori-host32-helper.exe"),
+            current: CurrentGhost {
+                cfg,
+                ghost: g,
+                balloon: b,
+            },
+        });
+        let ctx = world.resource::<BootContext>();
+        assert_eq!(ctx.current.cfg.ghost_root, ghost);
+        assert_eq!(ctx.current.ghost.folder.as_deref(), Some("g1"));
+        assert_eq!(
+            ctx.current.balloon.folder.as_deref(),
+            Some("StayseeBalloon")
+        );
+        assert_eq!(ctx.root.balloon_dir("b1"), tmp.child("balloon").join("b1"));
+        assert_eq!(ctx.app_profile_dir, tmp.path());
+        assert_eq!(ctx.helper_exe, tmp.child("shiori-host32-helper.exe"));
     }
 }

@@ -287,8 +287,6 @@ fn save_app(app_profile_dir: &Path, entries: Vec<(PersistKey, String)>) -> Persi
 }
 
 /// 前回落ちたゴーストの名前（App スコープ `areka.last.halted`・要件 6.8）。空文字・無しは `None`。
-// 本番の呼び手は 5.3 の起動前の解決（take 経由）。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn read_last_halted(app_profile_dir: &Path) -> Option<String> {
     read_last(
         PersistScope::App,
@@ -298,8 +296,7 @@ pub(crate) fn read_last_halted(app_profile_dir: &Path) -> Option<String> {
 }
 
 /// 前回落ちたゴーストの名前を読んで消す（空文字を書き戻す＝1 回で消える・要件 6.8）。
-// 本番の呼び手は 5.3 の起動前の解決。
-#[cfg_attr(not(test), allow(dead_code))]
+/// 呼び手は起動前の解決（`boot_config::resolve_boot_from`・argv でゴーストを指定しないとき）。
 pub(crate) fn take_last_halted(app_profile_dir: &Path) -> Option<String> {
     let name = read_last_halted(app_profile_dir)?;
     match save_app(

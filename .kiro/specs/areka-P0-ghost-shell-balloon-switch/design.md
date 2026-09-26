@@ -652,7 +652,7 @@ pub(crate) fn read_last_halted(app_profile_dir: &Path) -> Option<String>;      /
 pub(crate) fn take_last_halted(app_profile_dir: &Path) -> Option<String>;      // 読んで空文字を書き戻す（1 回で消す）
 pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          // App へ LastGhost=既定・LastHalted=名前（実 fs・save_scope）
 ```
-- `PersistKey::LastHalted`（`areka.last.halted`・`[last] halted`）。`resolve_boot_from` は `take_last_halted` を最後に呼び、`main` はそれを `BootOrigin::Halted{ghost_name}` として初回の `GhostBootInputs` へ渡す（`None` なら `Plain`）。
+- `PersistKey::LastHalted`（`areka.last.halted`・`[last] halted`）。`resolve_boot_from` は `take_last_halted` を最後に呼び（argv でゴーストを指定した起動では読まず消さない＝開発者の上書きは記憶に触れない）、`main` はそれを `BootOrigin::Halted{ghost_name}` として初回の `GhostBootInputs` へ渡す（`None` なら `Plain`）。
 
 #### Main（`crates/areka/src/main.rs`）
 
