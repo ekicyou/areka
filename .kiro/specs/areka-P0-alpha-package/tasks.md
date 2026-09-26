@@ -110,3 +110,4 @@
 ## Implementation Notes
 - PowerShell から `[Environment]::SetEnvironmentVariable(name, $null)` を呼ぶと `''` が入り変数は消えない。空の `CARGO_ENCODED_RUSTFLAGS` が残ると cargo は `RUSTFLAGS` を黙って無視する（3.2 で静的リンクの確認が捕まえた）。消すときは `Remove-Item env:NAME`（`Set-EnvValue`）。
 - kanade は有界の自動終了の後にも「起動グリーティングを再生起動」を記録へ出す。会話の判定は件数だけでは空振りを通すので、`run.log` の最初の「smoke 自動 close: ゴースト窓を despawn しました」より前の行だけを数える（4.2 の差し戻しで判明・設計の表を追記）。
+- 完了時の棚卸（2026-09-26）: その場で解決 0 件（最終検証の指摘 W1〔`-CheckDir` をリポジトリの外に限る〕・I1・I3 は完了の前に `8fedd77a` で解決済み）・登記 1 件（`sample-ghost-kit` の展開テストの os error 5 を roadmap の「登記だけの行」へ）。`cargo deny` の「BSD-2-Clause の許可が使われていない」警告は既存の `deny.toml` の話で失敗ではないので扱わない。

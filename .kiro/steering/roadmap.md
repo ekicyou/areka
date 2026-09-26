@@ -178,6 +178,8 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 - **wintf の兄弟の重なり順が描画と当たり判定で逆（2026-09-24 登記）**。先進坑 `pilot-balloon-asset-swap` の完了時の棚卸で拾った既存の食い違い。`crates/wintf` の `visual_hierarchy_sync_system`（`visual_sync.rs`）は `Children` を前から `InsertAtBottom` するので**先頭の子が最上に描かれる**。一方 `hit_test`（`hit_test/mod.rs`）は `DepthFirstReversePostOrder` で**最後の子から調べる**。窓に面を 2 枚重ねると「絵は古い方が上・当たり判定は新しい方が優先」になる。先進坑の実機走行で目視でも確かめた（同じ id の `attach_target` 再登録の B→A で、古い kakukaku が Staysee の上に描かれた）。本番の現行経路では、バルーンの子は `emo-text-layer-slot`（当たり判定なし）と `emo-surface` の 1 組だけなので表に出ていない。直すならどちらの順に揃えるかの裁定が要る（描画に合わせるか当たり判定に合わせるか）ので、brief は書かず α 後の棚卸で決める。数え方: 先進坑 README の「学び」と `design.md` の Existing Architecture Analysis。
 
+- **`sample-ghost-kit` の展開テストが一度だけ os error 5 で落ちた（2026-09-26 登記）**。`areka-P0-alpha-package` の最終検証の全体テスト（`tools/test-all.ps1`・コミット `6f625966`）で、`every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`（`crates/sample-ghost-kit/src/lib_tests.rs`）が `konnoyayame.nar` の展開の確定（`Commit`）で「アクセスが拒否されました。 (os error 5)」になった。単体で 3 回・全体テストの 2 回目（コミット `8fedd77a`）はどれも緑。同 spec は `crates/` を 0 行しか変えていないので既存の性質。置き換えの瞬間に Defender などが木を掴んだと見られるが、原因は確かめていない。再発したら `areka-nar` の確定の段（改名の再試行の有無）から調べる。brief は書かない。
+
 ## 引き受け手の居ない残り（`shell-implicit-surface` の着地で残した 7 件・2026-09-20）
 
 > **なぜここに書くのか**: 下の 7 件はどれも、正典に書かれていて areka が引き受けていない振る舞いだが、**本ファイルの spec 台帳（2026-09-20 の起票時点で 46 行・棚卸⑮のあとは 54 行。どの行も下の 7 件を引き受けていないことは変わらない）にも `.kiro/specs/` にも、これを引き受ける仕様が 1 本も無い**（2026-09-20 に数え直した実測）。網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の側でも、該当する項目の担当欄は空か、名指しの仕様が完了アーカイブに在って先送りを消化できない。先送りを完了アーカイブへ入れると誰も読まなくなるので、行だけ立てて生きた本ファイルから見えるようにしておく（開発規律 deferral-requires-verified-owner）。**着手の判断は α 完成宣言のあとの棚卸で行う。引受先が決まっていないので、ここに実在しない仕様の名前は書かない。**
