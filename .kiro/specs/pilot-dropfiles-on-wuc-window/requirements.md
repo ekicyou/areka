@@ -59,7 +59,7 @@
 #### Acceptance Criteria
 1. When example を起動したとき, the pilot example shall wintf で窓を 1 枚建て、実際の画面に表示する。
 2. The pilot example shall 窓の様式を本番のゴースト窓と同じ（枠なしのポップアップ・拡張スタイルは本番の `WS_EX_LAYERED | WS_EX_TOOLWINDOW` に受け入れの宣言 `WS_EX_ACCEPTFILES` を足したもの）にし、wintf が付け外しする分（`WS_EX_LAYERED` を外し `WS_EX_NOREDIRECTIONBITMAP` を足す）はそのまま wintf に任せる。
-3. The pilot example shall 受け入れの宣言を、拡張スタイルに `WS_EX_ACCEPTFILES` を足すだけで行い、`DragAcceptFiles` を呼ばない。
+3. The pilot example shall 既定の走行では、受け入れの宣言を拡張スタイルに `WS_EX_ACCEPTFILES` を足すだけで行い、`DragAcceptFiles` を呼ばない（第 5 要件 4 の手当てとして試す走行は除く）。
 4. The pilot example shall 透明な所と不透明な所の両方を持つ絵 1 枚を窓に表示し、どちらの所もエクスプローラからファイルを落とせる大きさ（少なくとも 100×100 画素）にする。
 5. The pilot example shall 窓を wintf のクリック透過の機構に登録し、絵の透明な所ではクリックが背後の窓へ抜け、不透明な所ではクリックが窓に届く状態にする。
 6. When 窓を建てた直後, the pilot example shall 窓の拡張スタイルの実際の値を読み戻し、受け入れの宣言・透過・`WS_EX_NOREDIRECTIONBITMAP` の各ビットの有無をログへ出す。
@@ -83,8 +83,8 @@
 **Objective:** As a 開発者, I want 絵の透明な所へ落としたときに窓が受け取らず背後の窓へ抜けることを確かめる手立て, so that 投げ込みの当たり判定がクリックの当たり判定と一致していることを判定できる
 
 #### Acceptance Criteria
-1. While 絵の透明な所に落とす操作が行われている間, the pilot example shall 落とし物のメッセージを受け取ったログを出さない（受け取ったなら第 3 要件どおりに出す＝出た行が「届いた」の証拠になる）。
-2. The pilot shall 検証の手順に、背後に落とし物を受け取れる窓（例: エクスプローラのフォルダの窓）を置いて絵の透明な所へ落とし、背後の窓に落とし物が渡ったことを開発者が目で確かめる項を含める。
+1. The pilot example shall 受け取った落とし物のメッセージを、落とした位置が絵の透明な所か不透明な所かにかかわらず例外なく第 3 要件どおりログへ出す（絵の透明な所へ落としたときに行が出ないことが「窓に届かなかった」の証拠になるように）。
+2. The pilot shall 検証の手順に、背後に落とし物を受け取れる窓を置いて絵の透明な所へ落とし、背後の窓に落とし物が渡ったことを開発者が目で確かめる項を含める。背後の受け手は、落としても元のファイルを動かしたり壊したりしないもの（例: 捨ててよい作業用フォルダへ写した `.nar` を落とす・同じドライブのフォルダの窓へ落とすと既定で移動になることに注意する）とする。
 3. The pilot shall 検証の手順に、透過が付いている状態と外れている状態のそれぞれで絵の不透明な所へ落とす項を含め、透過の付け外しの前後で受け取りが変わるかを観測する。
 4. When 透過の付け外しが 1 回以上起きた後に絵の不透明な所へ落としたとき, the pilot example shall 受け入れの宣言が付け外しの後も窓に残っているか（第 2 要件 6 と同じ読み戻し）をログへ出す。
 
