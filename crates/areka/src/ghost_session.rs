@@ -610,3 +610,7 @@ mod restart_tests;
 #[cfg(test)]
 #[path = "ghost_session_strict_tests.rs"]
 mod strict_tests;
+
+#[cfg(test)]
+#[path = "ghost_session_switch_tests.rs"]
+mod switch_tests;

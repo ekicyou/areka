@@ -46,6 +46,10 @@ pub(crate) mod spine;
 #[cfg(test)]
 pub(crate) mod sample_test_support;
 
+// 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台（areka-P0-ghost-shell-balloon-switch）。
+#[cfg(test)]
+pub(crate) mod ghost_switch_test_support;
+
 // タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
 // 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
