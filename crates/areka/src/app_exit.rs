@@ -17,7 +17,9 @@ use wintf::ecs::window::OnCloseRequest;
 
 use crate::input_events::MouseWiring;
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
-use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
+use crate::placement::spawn::{
+    BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
+};
 
 /// どの終了操作から来たか（記録の語彙・受け手は分岐しない）。
 ///
@@ -34,6 +36,11 @@ pub(crate) enum ExitOrigin {
     /// kanade 未結線の起動でのゴースト窓への OS の閉鎖要求
     /// （結線済みならゴースト窓の閉鎖要求は `KanadeStopped` 経由で来る）。
     OsClose,
+    /// ゴーストの切替の途中で既定ゴーストへ戻せなかった（失敗の中身つき）。
+    /// 告知の場面は kanade の停止の Fault と同じ（新しい場面は作らない）。
+    // 本番の呼び手は 8.2 の切替の致命の経路。それまでは test からだけ作る。
+    #[cfg_attr(not(test), allow(dead_code))]
+    GhostFallbackFailed(ShioriFault),
 }
 
 /// 最初に終了を指示した出所（World に 1 つ・書き込みは 1 度）。
@@ -46,11 +53,13 @@ pub(crate) struct FirstExit(pub(crate) ExitOrigin);
 
 /// 告知するか・終了コードを 1 にするかの判定（呼び手は分けて判断しない）。
 ///
-/// 失敗の中身を返すのは「kanade の停止で原因が Fault」だけ。他の停止原因・強制退避・smoke の
+/// 失敗の中身を返すのは「kanade の停止で原因が Fault」と「既定ゴーストへ戻せなかった」だけ
+/// （告知の場面はどちらも今日の SHIORI の失敗）。他の停止原因・強制退避・smoke の
 /// 自動終了・OS の閉鎖要求は `None`（告知なし・終了コード 0）。
 pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     match origin {
-        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f)) => Some(f),
+        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f))
+        | ExitOrigin::GhostFallbackFailed(f) => Some(f),
         ExitOrigin::KanadeStopped(
             KanadeStopCause::Quit
             | KanadeStopCause::Forced
@@ -122,12 +131,15 @@ impl WindowsClosed {
 /// 窓を消す手順は [`quit_app`] と同じ私有部品 [`despawn_app_windows`]（要件 4.5）。
 /// [`AppExit`] には触れない（呼ぶ前後で `is_requested()` は変わらない）。記録は終了の
 /// `app_exit` とは別の語彙 `windows_closed_for_restart`（要件 4.3）。
+/// 窓を消したあと窓の束 [`GhostWindows`] の資源も外す（消した窓の `Entity` を装着の相の
+/// ゲートに見せない・areka-P0-ghost-shell-balloon-switch 要件 3.1）。
 /// 終了経路（`quit_app`・停止通知からの終了・OS の閉鎖要求・強制退避・smoke）からは呼ばない
 /// （要件 4.4・4.6・完了 `app-lifetime-separation` 要件 3.6 の意図）。
 // 本番の呼び手は #13（ゴーストの切替）の起こし直しの経路。それまでは test からだけ呼ぶ。
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     let closed = despawn_app_windows(world);
+    world.remove_resource::<GhostWindows>();
     tracing::info!(
         event = "windows_closed_for_restart",
         closed,
