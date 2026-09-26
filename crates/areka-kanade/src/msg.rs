@@ -217,6 +217,16 @@ pub enum KanadeMsg {
     /// ゴーストの切替の要求（UI → kanade）。名前の突き合わせは UI 側で済んでいる。
     /// 受理しなかったときは運行の通知で「切替の中止（受理しなかった）」が返る。
     ChangeGhost(crate::change::ChangeRequest),
+    /// 汎用の通知の入口（UI → kanade）。許可表にあるイベントを渡した Reference 列のまま送る。
+    /// 定常でだけ送り、許可表に無い・定常以外は `warn!` で捨てる（待ち行列に積まない）。
+    RaiseEvent {
+        /// イベント名（許可表 `ALLOWED_EVENT_IDS` の要素）。
+        id: String,
+        /// Ref0〜Ref n（欠番は空文字列・詰めない）。
+        references: Vec<String>,
+        /// GET か NOTIFY か。
+        method: crate::change::ShioriMethod,
+    },
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -598,6 +608,8 @@ mod tests {
                 KanadeMsg::UserBreak { scope: _ } => "UserBreak",
                 // ゴーストの切替の要求（additive・既存の判別結果を変えない）。
                 KanadeMsg::ChangeGhost(_) => "ChangeGhost",
+                // 汎用の通知の入口（additive・既存の判別結果を変えない）。
+                KanadeMsg::RaiseEvent { .. } => "RaiseEvent",
             }
         }
         let existing = [

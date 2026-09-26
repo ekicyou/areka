@@ -282,7 +282,7 @@ fn initial_state_is_idle_with_monotonic_counter() {
 
 use crate::msg::{MouseEventKind, MouseInput};
 
-fn mouse_move() -> MouseInput {
+pub(super) fn mouse_move() -> MouseInput {
     MouseInput {
         scope: 0,
         x: 10,
@@ -411,48 +411,13 @@ fn mouse_input_in_steady_with_pending_close_emits_no_get() {
 // ============================================================
 
 /// 檻用の選択確定入力（内容は本檻で load-bearing でない＝写像・帳簿の存在のみを見る）。
-fn choice_input() -> ChoiceInput {
+pub(super) fn choice_input() -> ChoiceInput {
     ChoiceInput {
         id: "OnMenu".to_string(),
         label: "メニュー".to_string(),
         scope: 0,
         references: vec!["a0".to_string()],
     }
-}
-
-/// 檻用の選択待ち通知入力（同上）。
-fn choice_waiting_input() -> Input {
-    Input::ChoiceWaiting {
-        talk_id: TalkId(5),
-        choice_ids: vec!["OnMenu".to_string()],
-        display_end: MonotonicMs(2_000),
-        timeout_directive_secs: None,
-    }
-}
-
-/// Req4.4: 既存 `Input` 8 variant が無改変で、選択系 2 variant が additive に増えたこと。
-#[test]
-fn input_variants_are_existing_eight_plus_choice_two() {
-    fn tag(input: &Input) -> &'static str {
-        match input {
-            Input::Boot => "Boot",
-            Input::Tick { .. } => "Tick",
-            Input::TalkDone(_) => "TalkDone",
-            Input::CloseRequest { .. } => "CloseRequest",
-            Input::ForceQuit { .. } => "ForceQuit",
-            Input::ShioriDown { .. } => "ShioriDown",
-            Input::Mouse(_) => "Mouse",
-            Input::ShioriReply { .. } => "ShioriReply",
-            Input::Choice(_) => "Choice",
-            Input::ChoiceWaiting { .. } => "ChoiceWaiting",
-            Input::UserBreak { .. } => "UserBreak",
-            Input::ChangeGhost(_) => "ChangeGhost",
-        }
-    }
-    assert_eq!(tag(&Input::Boot), "Boot");
-    assert_eq!(tag(&Input::Mouse(mouse_move())), "Mouse");
-    assert_eq!(tag(&Input::Choice(choice_input())), "Choice");
-    assert_eq!(tag(&choice_waiting_input()), "ChoiceWaiting");
 }
 
 /// DD-3: 選択帳簿は `State`（Phase 外）に置かれ、初期値は両方とも空である。

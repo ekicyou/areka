@@ -14,13 +14,16 @@
 //! 送り出しの台詞を利用者が中断したら切替を中止して定常へ戻る（[`cancel_by_user_break`]）。
 //! 定常へ戻る経路はここにだけ置き、終了の握手には足さない。終了要求が届いたら切替を取りやめ、
 //! 相ごとに今日の終了の握手へ合流する（[`yield_to_close`]）。
+//!
+//! 汎用の通知の入口（外から頼まれた許可表のイベントを定常でだけ送る）の判断
+//! [`on_raise_event`] もここに置く。
 
 use super::close::deadline_from;
 use super::{
     Action, ActiveTalk, Input, Phase, State, TermCause, clear_choice_ledger, events, phase_label,
     steady, to_unloading_quit,
 };
-use crate::change::{CancelReason, ChangeRequest, KanadeNotice};
+use crate::change::{CancelReason, ChangeRequest, KanadeNotice, ShioriMethod};
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
@@ -72,6 +75,29 @@ pub(super) fn on_change_ghost(mut state: State, req: ChangeRequest) -> (State, V
         return (state, vec![Action::Notice(notice)]);
     }
     begin_change(state, req)
+}
+
+/// 横断の腕 `Input::RaiseEvent`（汎用の通知の入口）の判断。
+///
+/// 許可表に無いイベントと定常以外での依頼は `warn!` の上で捨てる（待ち行列に積まない）。
+/// 定常なら渡された Reference 列のまま GET／NOTIFY を送る。応答は定常の応答の腕へ流れ、
+/// 再生中なら [`events::value_replaces_active_talk`] に従って今のトークを置き換える。
+pub(super) fn on_raise_event(
+    state: State,
+    id: String,
+    references: Vec<String>,
+    method: ShioriMethod,
+) -> (State, Vec<Action>) {
+    let Some(id) = events::allowed_static(&id) else {
+        tracing::warn!(target: "kanade", event = "raise_event_not_allowed", id = %id, "許可表に無いイベントの依頼——送らずに捨てる");
+        return (state, Vec::new());
+    };
+    if !matches!(state.phase, Phase::Steady { .. }) {
+        tracing::warn!(target: "kanade", event = "raise_event_not_steady", id, phase = phase_label(&state.phase), "定常以外でのイベントの依頼——送らずに捨てる（積まない）");
+        return (state, Vec::new());
+    }
+    let call = events::raise(id, references, method, &state.snapshot());
+    (state, vec![Action::ShioriRequest(call)])
 }
 
 /// 横断の腕（`on_talk_done`）の問い: 定常の再生中のトークに保留の切替が掛かっているか。

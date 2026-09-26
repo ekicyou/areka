@@ -97,6 +97,12 @@ pub(crate) enum Input {
     },
     /// ゴーストの切替の要求（UI → kanade）。受理の判断は [`change::on_change_ghost`] が持つ。
     ChangeGhost(crate::change::ChangeRequest),
+    /// 汎用の通知の入口（UI → kanade）。判断は [`change::on_raise_event`] が持つ。
+    RaiseEvent {
+        id: String,
+        references: Vec<String>,
+        method: crate::change::ShioriMethod,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -471,6 +477,13 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
         // ChangeGhost: 受理の規則ごと change::on_change_ghost へ渡す。
         Input::ChangeGhost(req) => change::on_change_ghost(state, req),
 
+        // RaiseEvent: 許可表と定常の判定ごと change::on_raise_event へ渡す。
+        Input::RaiseEvent {
+            id,
+            references,
+            method,
+        } => change::on_raise_event(state, id, references, method),
+
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
         // Idle 以外での Boot は不整合（warn!＋現 Phase 維持・Req 6.2）。Idle のみ boot へ委譲。
@@ -706,6 +719,12 @@ fn on_shiori_reply(
     // 応答待ちでない Phase への ShioriReply は構造上発生しない（防御アーム・Req 6.2）。
     if !awaits_reply(&state.phase) {
         tracing::warn!(target: "kanade", event = "unexpected_reply", "応答待ちでない Phase への SHIORI 応答を無視");
+        return (state, Vec::new());
+    }
+
+    // 定常の NOTIFY の応答（pump・汎用の入口）は正常な完了で、何もしない（トークも相も変えない）。
+    if matches!(outcome, ShioriOutcome::Notified) && matches!(state.phase, Phase::Steady { .. }) {
+        tracing::trace!(target: "kanade", event = "steady_notify_reply", origin, "定常の NOTIFY の応答——何もしない");
         return (state, Vec::new());
     }
 

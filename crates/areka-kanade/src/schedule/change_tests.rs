@@ -531,3 +531,6 @@ fn quit_tag_reached_drops_held_change() {
 
 #[path = "change_cancel_tests.rs"]
 mod cancel_tests;
+
+#[path = "raise_event_tests.rs"]
+mod raise_event_tests;

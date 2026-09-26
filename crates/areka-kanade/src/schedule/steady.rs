@@ -725,10 +725,10 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
 /// - `talk: None` + `Value(script)` → 一意 talk_id 採番＋StartTalk・`Steady{Some(origin)}` へ（origin ラベルは
 ///   応答の実イベント名・OnSecondChange 起動／マウス起動を同一経路で扱う・Req 4.1）。
 /// - `talk: None` + `NoContent`（204）→ StartTalk なし・`Steady{None}` 維持（Req 2.3／4.2）。
-/// - `talk: Some` + `Value` + origin ∈ {OnMouseMove, OnMouseDoubleClick} → **置換**: 新 talk_id 採番＋slot
+/// - `talk: Some` + `Value` + `value_replaces_active_talk(origin)`（マウス 2 語・汎用の入口）→ **置換**: 採番＋slot
 ///   上書き＋StartTalk（dispatcher の既存 Close-then-spawn が旧 talk を閉じ、旧 Done を stale 破棄する・
 ///   kanade 側は slot 上書きと採番のみ＝新調停なし・Req 4.3・DD-IE-2）。
-/// - `talk: Some` + `Value` + その他 origin（例 OnSecondChange）→ 既存 DD-6 防御破棄・warn!＋破棄・維持。
+/// - `talk: Some` + `Value` + origin が `OnSecondChange` → 既存 DD-6 防御破棄・warn!＋破棄・維持。
 /// - `talk: Some` + `Notified` → NOTIFY pump の応答・`Steady{Some}` 維持（無視）。
 fn on_reply(
     mut state: State,
@@ -787,16 +787,16 @@ fn on_reply(
                 // NOTIFY pump（Ref3=0）の応答。構造的に無視し Steady{Some} を維持する。
                 (state, Vec::new())
             }
-            // 出所別の Value 政策（DD-IE-2）。origin の match は **wildcard にしない**——マウス系を
-            // 明示列挙し、第 3 の origin 追加時にレビューで必ず政策判断を要求する（design Risks）。
+            // 出所別の Value 政策（DD-IE-2）。置き換えるかの判断は述語
+            // `events::value_replaces_active_talk` の 1 か所に置く（`OnSecondChange` 以外は置き換える）。
             ShioriOutcome::Value(script) => match origin {
-                "OnMouseMove" | "OnMouseDoubleClick" => {
-                    // 置換（Req 4.3・DD-IE-2）: マウス由来の Value は active talk を差し替える。
+                origin if events::value_replaces_active_talk(origin) => {
+                    // 置換（Req 4.3・DD-IE-2）: マウス 2 語・汎用の入口の Value は active talk を差し替える。
                     // kanade 側は新 talk_id 採番＋slot 上書き＋StartTalk のみ。旧 talk の後始末
                     // （Close-then-spawn・旧 Done の stale 破棄）は dispatcher 既存実装へ完全委譲する。
                     let talk_id = TalkId(state.next_talk_id);
                     state.next_talk_id += 1;
-                    tracing::info!(target: "kanade", event = "steady_talk_replace", talk_id = talk_id.0, origin = origin, "active talk 中にマウス由来 Value——単一 slot 置換（新 talk_id 採番）");
+                    tracing::info!(target: "kanade", event = "steady_talk_replace", talk_id = talk_id.0, origin = origin, "active talk 中に置き換える出所の Value——単一 slot 置換（新 talk_id 採番）");
                     // slot 置換の掃除点（C4 規則 7・**マウス由来を含む**）: 旧トークの選択待ちは
                     // 置換で消滅する。加えて 1 世代 stale 保持も「次の slot 差替」で消す（規則 9）
                     // ——choice 起因でない置換が挟まれた時点で、保持していた旧 id は 2 世代前になる。
@@ -814,13 +814,13 @@ fn on_reply(
                         vec![Action::StartTalk(StartTalk::new(talk_id, script))],
                     )
                 }
-                // DD-6 防御破棄（非マウス origin 限定）。本アームの意味は「全 origin 防御」から
-                // **「非マウス origin 限定の防御」へ狭まった**——マウス origin は上の置換アームへ
-                // 抜けるため、ここへ届くのは pump（OnSecondChange）等の非マウス Value のみ。active
+                // DD-6 防御破棄（`OnSecondChange` 限定）。本アームの意味は「全 origin 防御」から
+                // **「pump の応答限定の防御」へ狭まった**——それ以外の origin は上の置換アームへ
+                // 抜けるため、ここへ届くのは pump（OnSecondChange）の Value のみ。active
                 // talk は NOTIFY を発行するため構造上ここへは届かないはずだが、万一届いても
                 // StartTalk・キュー・中断を一切行わず破棄し、idle-talk 檻の防御規律を保存する。
                 _ => {
-                    tracing::warn!(target: "kanade", event = "steady_value_during_talk", origin = origin, "active talk 中に非マウス Value——構造上想定外・破棄（キュー/中断なし・DD-6）");
+                    tracing::warn!(target: "kanade", event = "steady_value_during_talk", origin = origin, "active talk 中に OnSecondChange の Value——構造上想定外・破棄（キュー/中断なし・DD-6）");
                     (state, Vec::new())
                 }
             },

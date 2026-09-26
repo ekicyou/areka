@@ -136,6 +136,15 @@ pub fn spawn_kanade_with_stop_sink(
                 },
                 KanadeMsg::UserBreak { scope } => Input::UserBreak { scope },
                 KanadeMsg::ChangeGhost(req) => Input::ChangeGhost(req),
+                KanadeMsg::RaiseEvent {
+                    id,
+                    references,
+                    method,
+                } => Input::RaiseEvent {
+                    id,
+                    references,
+                    method,
+                },
             };
             match drive(
                 &mut state,
