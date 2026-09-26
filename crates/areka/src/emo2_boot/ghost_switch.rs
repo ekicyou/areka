@@ -3,20 +3,73 @@
 //! 切替要求は台本の `\![change,ghost,…]` とメニューの「ゴースト」枠の 2 つの出どころから、
 //! ここの [`request_ghost_switch`] 1 本だけを通る（要件 1.1）。入口は降ろす前・`OnGhostChanging`
 //! を送る前に目録と突き合わせ（要件 1.5〜1.7）、受理したら切替の予約 [`SwitchInFlight`] を
-//! 立てて kanade へ切替の要求を送る。
-
-// 入口の本番の呼び手は 7.2（台本の取り出しの系）と 7.3（メニューの「ゴースト」枠）。それまでは
-// test からだけ呼ぶ。
-#![cfg_attr(not(test), allow(dead_code))]
+//! 立てて kanade へ切替の要求を送る。台本からの要求は受け口 `ChangeCueSink` から受信端
+//! [`ChangeRx`] を経て、入力の段の取り出しの系 [`drain_change_requests`] が入口へ渡す。
 
 use std::path::PathBuf;
+use std::sync::mpsc::Receiver;
 
 use areka_ghost::GhostEntry;
 use areka_kanade::{ChangeOrigin, ChangeRequest, ChangeTarget, KanadeMsg};
+use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
+use wintf::ecs::Input;
+use wintf::ecs::pointer::dispatch_pointer_events;
 
 use crate::boot_config::BootContext;
 use crate::ghost_session::GhostSlot;
+
+/// 台本の `\![change,ghost,名(,--option=raise-event)]` から届く切替要求（受け口
+/// `ChangeCueSink` が talk スレッドから送る）。名前は台本の字面のまま（無変形）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ChangeRequestRaw {
+    pub name: String,
+    pub raise_event: bool,
+}
+
+/// 台本からの切替要求の受信端（World の NonSend・ゴーストごとに新品）。
+pub(crate) struct ChangeRx(Receiver<ChangeRequestRaw>);
+
+/// 受信端を World へ据える（ゴーストごと・系は登録しない＝登録は [`register_change_drain`]）。
+///
+/// 呼び手は結線の成立後の `wire_emo2_boot`。前のゴーストの受信端は置き換わって落ちる。
+pub(crate) fn wire_change_rx(world: &mut World, rx: Receiver<ChangeRequestRaw>) {
+    world.insert_non_send(ChangeRx(rx));
+}
+
+/// 取り出しの系を入力の段へ登録する（プロセスに 1 回・持ち物は置かない）。
+///
+/// 並びは説明書の取り出しと同じく `dispatch_pointer_events` の後。呼び手は
+/// `ghost_session::register_systems`。
+pub(crate) fn register_change_drain(world: &mut World) {
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Input, drain_change_requests.after(dispatch_pointer_events));
+}
+
+/// 溜まった台本の切替要求を全件取り出し、1 件ごとに入口へ「自動」の出どころで渡す（Input の系）。
+///
+/// 受信端が無ければ無操作（LogSink の起動・結線の前）。受け口の借用を切ってから入口を呼ぶ。
+pub(crate) fn drain_change_requests(world: &mut World) {
+    let Some(rx) = world.get_non_send::<ChangeRx>() else {
+        tracing::trace!(
+            event = "change_drain_no_wiring",
+            "台本の切替要求の受信端が無い——取り出しは無操作"
+        );
+        return;
+    };
+    let pending: Vec<ChangeRequestRaw> = rx.0.try_iter().collect();
+    for raw in pending {
+        request_ghost_switch(
+            world,
+            SwitchRequest {
+                ghost: GhostSpec::Name(raw.name),
+                raise_event: raw.raise_event,
+                origin: ChangeOrigin::Automatic,
+            },
+        );
+    }
+}
 
 /// 切替要求（要件 1.1 の入口の型）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +84,8 @@ pub(crate) struct SwitchRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GhostSpec {
     Name(String),
+    // 本番の呼び手はメニューの「ゴースト」枠（7.3）。それまでは test からだけ組む。
+    #[cfg_attr(not(test), allow(dead_code))]
     Folder(String),
 }
 
@@ -71,6 +126,8 @@ pub(crate) enum SwitchStage {
 
 /// 切替の予約（World の NonSend・在れば切替中）。二重要求の判定はこの有無で行う（要件 1.9）。
 #[derive(Debug)]
+// 欄の本番の読み手は停止通知を受けて切替先を起こす 8.2。それまでは有無だけを見る。
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct SwitchInFlight {
     pub target: SwitchTarget,
     pub prev: PrevGhost,

@@ -18,6 +18,8 @@ pub mod assets;
 /// バルーン面 0 の原点画素から背景色を導く（無効表示の混色の相手・要件 4.6）。
 mod balloon_background;
 pub mod balloon_visibility;
+/// `\![change,ghost,…]` の受け口（areka-P0-ghost-shell-balloon-switch）。
+mod change_cue;
 pub mod consumer_ledger;
 pub mod frame;
 /// ゴーストの切替の入口（areka-P0-ghost-shell-balloon-switch）。
@@ -88,6 +90,7 @@ use crate::placement::AuthorDpi;
 
 use self::adapter::PresentBridge;
 use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
+use self::change_cue::ChangeCueSink;
 use self::frame::{Emo2Wiring, KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::readme_cue::ReadmeCueSink;
@@ -453,6 +456,12 @@ pub fn wire_emo2_boot(
     // それまでに届いた合図は線が溜めておく（起動の挨拶の `enter` を取りこぼさない）。
     let (no_user_break_tx, no_user_break_rx) = std::sync::mpsc::channel::<NoUserBreakSignal>();
     let no_user_break_sink = NoUserBreakCueSink::new(no_user_break_tx);
+    // 切替要求の channel（説明書の channel と同型の配線・areka-P0-ghost-shell-balloon-switch
+    // task 7.2）: talk スレッドの ChangeCueSink が送出端、UI スレッドの `ghost_switch::ChangeRx` が
+    // 受信端（Input の段の取り出しが消費）を持つ。受信端は boot 成立後に World へ据える
+    // （boot が倒れた経路ではそのまま落ちる・送出側が送れなかったことを記録する）。
+    let (change_tx, change_rx) = std::sync::mpsc::channel::<ghost_switch::ChangeRequestRaw>();
+    let change_sink = ChangeCueSink::new(change_tx);
     let BootAssets {
         shells,
         balloons,
@@ -549,6 +558,9 @@ pub fn wire_emo2_boot(
     // 消費し、トークの始まりと合わせて 3 値を 1 本の線で送出する（要件 5.1・5.4）。担当外へは
     // 触れないので既存 6 sink の消費は変わらず、文字 cue にも依存しないため末尾で構わない。
     // 既存 6 本の並びは変えない（旗の順序の保証がこの並びに依る）。
+    // 第 8 要素の change_sink（areka-P0-ghost-shell-balloon-switch task 7.2）は
+    // `\![change,ghost,…]` を「名前＋第 1 引数」で選別して消費し、名前を無変形で切替要求として
+    // 送出する（要件 1.2・1.3）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.clone(),
         default_encoding: DefaultEncoding::Ansi,
@@ -561,6 +573,7 @@ pub fn wire_emo2_boot(
             Box::new(zorder_sink),
             Box::new(readme_sink),
             Box::new(no_user_break_sink),
+            Box::new(change_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir,
@@ -628,6 +641,10 @@ pub fn wire_emo2_boot(
     let readme_path =
         crate::readme::resolve_path(&ghost_root, ghost_runtime.mount().readme.as_deref());
     crate::readme::wire_readme(world, readme_path, readme_rx);
+
+    // 切替要求の受信端（ゴーストごとに新品・task 7.2）。取り出しの登録は
+    // `ghost_session::register_systems` が別に 1 度だけ行う。
+    ghost_switch::wire_change_rx(world, change_rx);
 
     // 中断の持ち物（areka-P0-balloon-break task 3.3・要件 4.5・5.1）。運行（kanade）への送出端は
     // boot が返した `GhostRuntime` から複製する（マウスの結線と同じ投函端）。`Input` の段への

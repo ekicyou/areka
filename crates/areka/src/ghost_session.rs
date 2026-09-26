@@ -37,13 +37,13 @@ use crate::{ConfigInputs, default_app_profile_dir, ghost_boot_options, is_benign
 /// 載せる系と順序（段ごとに今日の挿入順を保つ）:
 /// - `Update` ← 毎フレームの相 → 停止通知の受け口（受け口 `KanadeNoticeRx` はプロセスに 1 つ
 ///   なので [`emo2_boot::wire_kanade_stop`] を分割せずそのまま呼ぶ）
-/// - `Input` ← 説明書 → 中断 → メニュー → バルーンの離脱 → 選択肢の送り
+/// - `Input` ← 説明書 → 台本の切替要求 → 中断 → メニュー → バルーンの離脱 → 選択肢の送り
 /// - `FrameFinalize` ← クリック透過 → OS の閉鎖要求 → 重なり順の対（状態がゴーストごとで
 ///   ないので `wire_zorder_pair` をそのまま呼ぶ）
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
 ///
-/// 今日との差: `Input` の 5 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
+/// 今日との差: `Input` の 6 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
 /// 起動でも登録される。どれも状態（`NonSend`）が無ければ無操作で戻る（記録は `trace!` か無し）
 /// ので、見え方は変わらない。バルーンの離脱の系だけは `BalloonWiring` 不在で
 /// `error!(balloon_wiring_missing)` の枝を持つが、そこへは `PointerLeave` が立ったときにしか
@@ -54,6 +54,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     emo2_boot::wire_kanade_stop(world, kanade_stop_rx);
 
     readme::register_readme_drain(world);
+    emo2_boot::ghost_switch::register_change_drain(world);
     input_events::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
@@ -361,8 +362,6 @@ impl GhostSession {
     }
 
     /// kanade への送出端（切替の要求を送る）。実行系が無ければ `None`。
-    // 本番の呼び手は 7.1 の切替の入口（入口の本番の呼び手は 7.2／7.3）。それまでは test からだけ呼ぶ。
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn kanade(&self) -> Option<&Sender<KanadeMsg>> {
         self.kanade.as_ref()
     }
@@ -381,8 +380,6 @@ impl GhostSession {
     }
 
     /// 起こしたゴーストの根（実行系が無くても起動に渡した根を返す）。
-    // 本番の呼び手は 7.1／8.2 の切替（直前のゴーストのパス）。それまでは test からだけ呼ぶ。
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn ghost_dir(&self) -> &Path {
         &self.ghost_dir
     }

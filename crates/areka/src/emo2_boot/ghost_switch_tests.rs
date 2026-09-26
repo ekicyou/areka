@@ -1,4 +1,4 @@
-//! 切替要求の入口と名前の突き合わせの決定論テスト（areka-P0-ghost-shell-balloon-switch task 7.1）。
+//! 切替要求の入口・名前の突き合わせ・台本の切替要求の取り出しの決定論テスト（areka-P0-ghost-shell-balloon-switch task 7.1・7.2）。
 //!
 //! 確かめること: 突き合わせの順（`name` → フォルダ名）と大文字小文字の区別・メニューの指し方
 //! （フォルダ名だけ）・該当なし（未知の名前・`random`・`lastinstalled`）で `warn!` 1 件と送出 0 件・
@@ -451,4 +451,94 @@ fn send_failure_logs_error_and_leaves_no_reservation() {
         "{events:?}"
     );
     assert_one_event(&events, "ghost_switch_send_failed", tracing::Level::ERROR);
+}
+
+// ---------------------------------------------------------------- 台本の切替要求の取り出し（task 7.2）
+
+/// 入力の段に載っている系の数（段がまだ無ければ 0）。
+fn input_systems_len(world: &World) -> usize {
+    world
+        .resource::<Schedules>()
+        .get(Input)
+        .map_or(0, |input| input.systems_len())
+}
+
+/// 登録は入力の段へ取り出しの系をちょうど 1 つ足し、受信端は置かない。受信端が無いまま段を
+/// 回しても無操作（LogSink の起動と同じ）。
+#[test]
+fn register_change_drain_adds_exactly_one_input_system() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+
+    register_change_drain(&mut world);
+    world.run_schedule(Input);
+
+    assert_eq!(
+        (
+            input_systems_len(&world),
+            world.get_non_send::<ChangeRx>().is_some()
+        ),
+        (1, false),
+        "(入力の段の系の数, 受信端の有無)"
+    );
+}
+
+/// 結線は受信端を据えるだけで系を登録しない。
+#[test]
+fn wire_change_rx_inserts_the_receiver_without_registering() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    let (_tx, rx) = mpsc::channel::<ChangeRequestRaw>();
+
+    wire_change_rx(&mut world, rx);
+
+    assert_eq!(
+        (
+            input_systems_len(&world),
+            world.get_non_send::<ChangeRx>().is_some()
+        ),
+        (0, true)
+    );
+}
+
+/// 取り出しは届いた要求を名前の指し方・「自動」の出どころで入口へ渡す（要件 1.2・1.3）。
+/// 2 件目は予約中なので入口が `ghost_switch_busy` で退ける（取り出しは全件を渡す）。
+#[test]
+fn drain_passes_each_request_to_the_entry_as_automatic() {
+    let tmp = TempPath::new("ghost-switch-drain");
+    let root = fixture_root(&tmp);
+    let (mut world, kanade_rx) = world_with_slot(&root);
+    world.init_resource::<Schedules>();
+    register_change_drain(&mut world);
+    let (tx, rx) = mpsc::channel();
+    wire_change_rx(&mut world, rx);
+    for name in ["Alice", "B"] {
+        tx.send(ChangeRequestRaw {
+            name: name.to_owned(),
+            raise_event: true,
+        })
+        .expect("送れる");
+    }
+
+    let ((), events) = capture(|| world.run_schedule(Input));
+
+    let sent: Vec<_> = sent_changes(&kanade_rx)
+        .into_iter()
+        .map(|c| (c.target.name, c.origin, c.raise_event))
+        .collect();
+    assert_eq!(
+        (
+            sent,
+            world
+                .get_non_send::<SwitchInFlight>()
+                .map(|r| r.target.folder.clone()),
+            count_event(&events, "ghost_switch_busy"),
+        ),
+        (
+            vec![("Alice".to_owned(), ChangeOrigin::Automatic, true)],
+            Some("A".to_owned()),
+            1,
+        ),
+        "{events:?}"
+    );
 }
