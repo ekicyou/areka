@@ -57,6 +57,9 @@ pub(crate) enum FakeShiori {
     Scripted(Box<dyn Fn() -> ScriptedShioriBackendBuilder>),
     /// 接続に失敗する（kanade は `Fault` で止まる）。
     ConnectFail,
+    /// 起動の結線が同期で成立しない（結線の入力の根が実在しない＝`boot_ghost_strict` は `Err`）。
+    /// 窓の準備は構成入力の本物の根で通る。
+    WiringFail,
 }
 
 /// 標準の台本: 起動系列（`OnInitialize`・`OnFirstBoot` 204・`OnBoot` は `on_boot`・
@@ -124,6 +127,7 @@ impl SwitchRig {
         world.insert_non_send(GhostBootInputsSource(Box::new(
             move |cfg: &ConfigInputs, origin: BootOrigin| {
                 let folder = folder_of(&cfg.ghost_root);
+                let mut ghost_root = cfg.ghost_root.clone();
                 let shiori = match scripts.get(&folder) {
                     Some(FakeShiori::Scripted(script)) => {
                         let (backend, handle) = script().build();
@@ -135,11 +139,15 @@ impl SwitchRig {
                     Some(FakeShiori::ConnectFail) => {
                         ShioriWiring::Custom(Box::new(|| Err(CONNECT_ERR.to_owned())))
                     }
+                    Some(FakeShiori::WiringFail) => {
+                        ghost_root = PathBuf::from("ghost_switch_test_support/無い/ghost");
+                        ShioriWiring::Custom(Box::new(|| Err(CONNECT_ERR.to_owned())))
+                    }
                     None => panic!("偽の SHIORI の台本が無いゴースト: {folder}"),
                 };
                 GhostBootInputs {
                     wiring: Emo2BootInputs {
-                        ghost_root: cfg.ghost_root.clone(),
+                        ghost_root,
                         balloon_root: cfg.balloon_root.clone(),
                         shiori,
                         ticker: TickerMode::Disabled,

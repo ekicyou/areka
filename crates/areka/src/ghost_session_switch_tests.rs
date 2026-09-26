@@ -486,3 +486,7 @@ fn switch_to_self_takes_down_and_reboots_a() {
          降ろせた）"
     );
 }
+
+// 失敗方向（既定へ戻す・致命・孤児の窓 0）は子のファイルへ分ける（1 ファイルの行数を抑える）。
+#[path = "ghost_session_switch_fallback_tests.rs"]
+mod fallback_tests;
