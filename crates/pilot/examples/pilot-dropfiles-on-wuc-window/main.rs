@@ -11,6 +11,8 @@
 //!
 //! 器は手本 `crates/pilot/examples/pilot-balloon-asset-swap/main.rs` から写した。
 
+mod dropfiles;
+
 use std::time::{Duration, Instant};
 
 use bevy_ecs::name::Name;
