@@ -20,7 +20,7 @@
 
   較正値・調整値の一覧（変更するときはスクリプト冒頭の「較正値」の 1 か所だけを書き換える）:
     SCRIPT_VERSION                  本スクリプトの版（BUILD-INFO.txt の script= に書く）
-    SMOKE_EXIT_MS        = 20000    -Check の有界の自動終了（ミリ秒・-SmokeExitMs で上書き）
+    SMOKE_EXIT_MS        = 10000    -Check の有界の自動終了（ミリ秒・-SmokeExitMs で上書き）
     WATCHDOG_MARGIN_SEC  = 60       自動終了の予定から番犬が子を止めるまでの猶予（秒）
     EXPAND_DIR_MAX_CHARS = 160      -Check の展開先のフルパスの長さの上限（文字）
     DLL_DENY_PREFIXES               取り込み表に在ってはならない DLL 名の前方一致（大文字小文字を区別しない）
@@ -42,7 +42,7 @@
   pwsh -NoProfile -File tools/package-alpha.ps1
 
 .EXAMPLE
-  pwsh -NoProfile -File tools/package-alpha.ps1 -Check -CheckDir C:\t -SmokeExitMs 20000
+  pwsh -NoProfile -File tools/package-alpha.ps1 -Check -CheckDir C:\t -SmokeExitMs 10000
 #>
 # 使い方の説明（上）は Get-Help がファイルの先頭でしか読まないので、#Requires はここに置く
 #Requires -Version 7
@@ -63,7 +63,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 # 較正値（説明の一覧と対応。変更はここだけ）
 # =============================================================================
 $SCRIPT_VERSION       = '1.0.0'
-$SMOKE_EXIT_MS        = 20000
+$SMOKE_EXIT_MS        = 10000   # 2026-09-26 実測: 挨拶はゲートから約 2.1 秒（release・展開直後の初回起動）。余裕 5 倍
 $WATCHDOG_MARGIN_SEC  = 60
 $EXPAND_DIR_MAX_CHARS = 160
 $DLL_DENY_PREFIXES    = @('vcruntime', 'msvcp', 'msvcr', 'api-ms-win-crt-', 'ucrtbase', 'concrt')

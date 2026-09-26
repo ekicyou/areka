@@ -347,7 +347,7 @@ flowchart TD
 
   | 名前 | 値 | 理由 |
   |---|---|---|
-  | `AREKA_APP_SMOKE_EXIT_MS` | 較正値 `SMOKE_EXIT_MS`＝20000（`-SmokeExitMs` で上書き） | 有界の自動終了。接続（helper 起動＋`pasta.dll` 読込＋初回の Lua の自己展開）の結果より後に来る値。前例は debug で 3000（`emo2_real_run.rs`）・失敗方向で 20000（`smoke_boot_loop_exit.rs`） |
+  | `AREKA_APP_SMOKE_EXIT_MS` | 較正値 `SMOKE_EXIT_MS`＝10000（2026-09-26 の実走で挨拶がゲートから約 2.1 秒だったので 20000 から下げた・`-SmokeExitMs` で上書き） | 有界の自動終了。接続（helper 起動＋`pasta.dll` 読込＋初回の Lua の自己展開）の結果より後に来る値。前例は debug で 3000（`emo2_real_run.rs`）・失敗方向で 20000（`smoke_boot_loop_exit.rs`） |
   | `AREKA_NO_ALERT` | `1` | 告知のモーダルで番犬まで止まらない（`alert.rs` の `suppressed_from`） |
   | `RUST_LOG` | `info` | 目印はすべて `info`。開発者のシェルの `warn` 等を持ち込まない |
   | `NO_COLOR` | `1` | 着色の制御文字が `route=Companion` を分断しない |
