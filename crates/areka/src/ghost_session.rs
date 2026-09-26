@@ -18,7 +18,7 @@ use areka_kanade::KanadeNotice;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use wintf::ecs::FrameFinalize;
-use wintf::ecs::widget::bitmap_source::{CommandSender, WintfTaskPool};
+use wintf::ecs::widget::bitmap_source::{BoxedCommand, CommandSender, WintfTaskPool};
 
 use crate::app_exit::{self, WindowsClosed};
 use crate::boot_resolve::{BalloonDecision, GhostDecision};
@@ -72,6 +72,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
 /// どちらも `wire_emo2_boot` へ渡る搬送値であり、[`open_ghost_windows`] 自身は解釈しない。
 /// 戻り口を 2 つに増やさず 1 つの型へまとめるのは、「同じ 1 度の読取から来た」という出所を
 /// 型で示すためである——別々に読み直す余地を残すと、配置と重なりが違う宣言を見る日が来る。
+#[derive(Clone)]
 pub(crate) struct StartupDescriptValues {
     /// 採寸 k₀ と attach（`attach_target`）が共有する作者基準 DPI。
     pub(crate) author_dpi: placement::AuthorDpi,
@@ -90,8 +91,8 @@ pub(crate) enum OpenWindowsError {
     TaskPoolMissing,
 }
 
-/// 窓を作る側（要件 3.3・3.4・window-placement 1.4）: 配置の準備 → 監視の 2 源 → 復元 →
-/// 窓の生成と受け口の装着を作業プールへ積む。
+/// 窓を作る側（要件 3.3・3.4・window-placement 1.4）: 準備（[`prepare_ghost_windows`]）と
+/// 投函（[`commit_ghost_windows`]）を続けて呼ぶ（初回起動の `main` の入口・署名不変）。
 ///
 /// - 最初に作業プール（[`WintfTaskPool`]）の有無を確かめる。無ければ配置の準備に入らず
 ///   `error!(event = "task_pool_missing")` の上で [`OpenWindowsError::TaskPoolMissing`]
@@ -104,7 +105,7 @@ pub(crate) enum OpenWindowsError {
 ///   呼び手（`main`）が「起動窓を開けない」を告知して終了コード 1 で終える
 ///   （baseware-root-layout 要件 6.4・窓を開かずに居座らない＝要件 6.6）。
 ///
-/// 準備（`prepare_ghost_windows`）は同期実行し、I/O はここで完結・Send な値のみを ECS
+/// 準備は同期実行し、I/O はそこで完結・Send な値のみを ECS
 /// コマンドへ運ぶ。呼び出しスレッドは `WinApp` 構築済みの MTA UI スレッド＝COM
 /// 初期化済み（measure の WIC 前提を満たす）。
 ///
@@ -116,14 +117,42 @@ pub(crate) fn open_ghost_windows(
     world: &mut World,
     cfg: &ConfigInputs,
 ) -> Result<StartupDescriptValues, OpenWindowsError> {
-    let Some(task_pool) = world.get_resource::<WintfTaskPool>() else {
+    let prepared = prepare_ghost_windows(world, cfg)?;
+    let descript = prepared.descript.clone();
+    commit_ghost_windows(world, prepared);
+    Ok(descript)
+}
+
+/// 準備を終えた窓（design「prepare_ghost_windows / commit_ghost_windows」）: 準備が descript から
+/// 1 度だけ読んだ値と、窓を作る閉包（まだ作業プールへ渡していない）。投函
+/// （[`commit_ghost_windows`]）するまで窓は 1 枚も生えない。
+#[must_use = "準備した窓は投函しないと生えない（commit_ghost_windows へ渡す）"]
+pub(crate) struct PreparedWindows {
+    /// 準備が descript から 1 度だけ読んだ値（ゴーストごとの結線へ渡す）。
+    pub(crate) descript: StartupDescriptValues,
+    /// 窓の生成と受け口の装着を行う閉包（`Input` 段で World に適用される）。
+    spawn: BoxedCommand,
+}
+
+/// 窓の準備（同期）: 作業プールの有無 → 配置の準備 → 監視の 2 源 → 復元 → 窓を作る閉包を組む。
+/// 閉包は作業プールへまだ渡さない（渡すのは [`commit_ghost_windows`]）ので、準備だけでは窓は
+/// 生えない——切替先の起動に失敗したとき、壊れた切替先の窓が孤児として生えないための分割。
+///
+/// - 最初に作業プール（[`WintfTaskPool`]）の有無を確かめる。無ければ配置の準備に入らず
+///   `error!(event = "task_pool_missing")` の上で [`OpenWindowsError::TaskPoolMissing`]。
+/// - 配置の準備の失敗は [`placement::PlacementError`] を包んで返す。
+pub(crate) fn prepare_ghost_windows(
+    world: &mut World,
+    cfg: &ConfigInputs,
+) -> Result<PreparedWindows, OpenWindowsError> {
+    if !world.contains_resource::<WintfTaskPool>() {
         tracing::error!(
             event = "task_pool_missing",
             ghost_root = %cfg.ghost_root.display(),
-            "[open_ghost_windows] 作業プールが World に無いので窓を作れません（配置の準備に入らず失敗を返す）"
+            "[prepare_ghost_windows] 作業プールが World に無いので窓を作れません（配置の準備に入らず失敗を返す）"
         );
         return Err(OpenWindowsError::TaskPoolMissing);
-    };
+    }
     let prepared = placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root)?;
     // モニタ 2 源（task 8.1・atom task 5.1）: 起動時の実モニタから忠実転写した
     // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
@@ -160,68 +189,88 @@ pub(crate) fn open_ghost_windows(
     );
     let titles = prepared.titles;
 
-    // 作業プールの async タスク → CommandSender → Input スケジュールで
+    // 投函の後、作業プールの async タスク → CommandSender → Input スケジュールで
     // World 適用という既存 ECS コマンド経路で本物窓を組み立てる。
-    task_pool.spawn(|tx: CommandSender| async move {
-        let _ = tx.send(Box::new(move |world: &mut World| {
-            // 2 源は同時に挿す（片方だけ古い運転を作らない・atom C6）。
-            world.insert_resource(sources.snapshot);
-            world.insert_resource(sources.dpi_table);
-            let windows = placement::spawn::spawn_ghost_windows(world, &placements, &titles);
-            // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
-            // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
-            // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
-            // 挿した実体を直接標す（戻り値の clone を触っても Resource へは効かない）。
-            if !restored_scopes.is_empty()
-                && let Some(mut gw) = world.get_resource_mut::<placement::spawn::GhostWindows>()
-            {
-                for scope in &restored_scopes {
-                    gw.clear_default_char_pos(*scope);
-                }
+    let spawn: BoxedCommand = Box::new(move |world: &mut World| {
+        // 2 源は同時に挿す（片方だけ古い運転を作らない・atom C6）。
+        world.insert_resource(sources.snapshot);
+        world.insert_resource(sources.dpi_table);
+        let windows = placement::spawn::spawn_ghost_windows(world, &placements, &titles);
+        // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
+        // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
+        // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
+        // 挿した実体を直接標す（戻り値の clone を触っても Resource へは効かない）。
+        if !restored_scopes.is_empty()
+            && let Some(mut gw) = world.get_resource_mut::<placement::spawn::GhostWindows>()
+        {
+            for scope in &restored_scopes {
+                gw.clear_default_char_pos(*scope);
             }
-            // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→
-            // placement）: placement は `crate::` パスを持てない（example の `#[path]`
-            // include で成立させるため）ゆえ、キャラ窓へのポインタハンドラ結線は
-            // input_events 側が担う。spawn 直後の同一 World-mutation クロージャ内で
-            // 同期実行するため、キャラ窓は既に存在し async race はない。
-            input_events::attach_char_pointer_handlers(world);
-            // 右クリックメニューの解放ハンドラも同じ場所で付ける。このクロージャが動くのは
-            // `app.run()` の中＝`menu::wire_menu` より後で、結線の無い起動では解放を無視するだけ。
-            menu::attach_release_handlers(world);
-            // バルーン窓へポインタハンドラを装着（task 6.2・`attach_char_pointer_handlers`
-            // 直後・R4.3/5.5）: `BalloonWindowMarker` 窓へ `OnPointerMoved`／`OnPointerPressed`
-            // を post-spawn 挿入する（標的はバルーン窓のみ＝キャラ窓配線の非退行・R4.3）。同一
-            // `&mut World` クロージャ内で同期実行するためバルーン窓は既に存在し async race は
-            // ない（キャラ窓ハンドラ装着と同型のタイミング契約）。
-            input_events::balloon::attach_balloon_pointer_handlers(world);
-            let scopes: Vec<usize> = windows.scopes().collect();
-            tracing::info!(
-                ?scopes,
-                "本物のゴースト窓を開きました（placement シーム・スコープごとにキャラ窓＋バルーン窓）"
-            );
-        }));
+        }
+        // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→
+        // placement）: placement は `crate::` パスを持てない（example の `#[path]`
+        // include で成立させるため）ゆえ、キャラ窓へのポインタハンドラ結線は
+        // input_events 側が担う。spawn 直後の同一 World-mutation クロージャ内で
+        // 同期実行するため、キャラ窓は既に存在し async race はない。
+        input_events::attach_char_pointer_handlers(world);
+        // 右クリックメニューの解放ハンドラも同じ場所で付ける。このクロージャが動くのは
+        // `app.run()` の中＝`menu::wire_menu` より後で、結線の無い起動では解放を無視するだけ。
+        menu::attach_release_handlers(world);
+        // バルーン窓へポインタハンドラを装着（task 6.2・`attach_char_pointer_handlers`
+        // 直後・R4.3/5.5）: `BalloonWindowMarker` 窓へ `OnPointerMoved`／`OnPointerPressed`
+        // を post-spawn 挿入する（標的はバルーン窓のみ＝キャラ窓配線の非退行・R4.3）。同一
+        // `&mut World` クロージャ内で同期実行するためバルーン窓は既に存在し async race は
+        // ない（キャラ窓ハンドラ装着と同型のタイミング契約）。
+        input_events::balloon::attach_balloon_pointer_handlers(world);
+        let scopes: Vec<usize> = windows.scopes().collect();
+        tracing::info!(
+            ?scopes,
+            "本物のゴースト窓を開きました（placement シーム・スコープごとにキャラ窓＋バルーン窓）"
+        );
     });
 
-    Ok(StartupDescriptValues {
-        author_dpi,
-        zorder_raw,
+    Ok(PreparedWindows {
+        descript: StartupDescriptValues {
+            author_dpi,
+            zorder_raw,
+        },
+        spawn,
     })
 }
 
-/// 閉じた証を受けて窓を作り直す（要件 3.4・4.4）。証（[`WindowsClosed`]）の唯一の消費先で、
-/// 手順は 1 度目と同じ [`open_ghost_windows`] へ委譲する。
+/// 窓の投函: 準備した閉包を作業プールへ渡す。窓は次の `Input` 段で生える。
+///
+/// 作業プールが無ければ（準備の後に外された＝配線の誤り）閉包を捨てた上で
+/// `error!(event = "task_pool_missing")` を残す。
+pub(crate) fn commit_ghost_windows(world: &mut World, prepared: PreparedWindows) {
+    let Some(task_pool) = world.get_resource::<WintfTaskPool>() else {
+        tracing::error!(
+            event = "task_pool_missing",
+            "[commit_ghost_windows] 作業プールが World に無いので窓を作れません（準備した窓を捨てる）"
+        );
+        return;
+    };
+    let spawn = prepared.spawn;
+    task_pool.spawn(|tx: CommandSender| async move {
+        let _ = tx.send(spawn);
+    });
+}
+
+/// 閉じた証を受けて窓を作り直す準備をする（要件 3.4・4.4・4.10）。証（[`WindowsClosed`]）の
+/// 唯一の消費先で、手順は 1 度目と同じ [`prepare_ghost_windows`] へ委譲する。窓は投函
+/// （[`commit_ghost_windows`]）するまで生えない（呼び手は起動が成功したときだけ投函する）。
 // 本番の呼び手は #13（ゴーストの切替）。それまでは test からだけ呼ぶ。
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn reopen_ghost_windows(
     world: &mut World,
     cfg: &ConfigInputs,
     closed: WindowsClosed,
-) -> Result<StartupDescriptValues, OpenWindowsError> {
+) -> Result<PreparedWindows, OpenWindowsError> {
     tracing::debug!(
         closed = closed.closed(),
         "[reopen_ghost_windows] 閉じた窓の後に窓を作り直す"
     );
-    open_ghost_windows(world, cfg)
+    prepare_ghost_windows(world, cfg)
 }
 
 /// ゴーストごとの結線の入力の束（design「boot_ghost」）。

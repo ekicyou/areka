@@ -63,6 +63,108 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
     );
 }
 
+/// 作業プールの閉包を回す `Input` 段を、`done` が真になるまで（10 秒まで）回す。
+/// 閉包は作業プールの別スレッドから届くので、届くまで待つ（有界・期限切れは `false`）。
+fn run_input_until(world: &mut World, done: impl Fn(&mut World) -> bool) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        world.run_schedule(Input);
+        if done(world) {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::yield_now();
+    }
+}
+
+fn ghost_window_count(world: &mut World) -> usize {
+    world
+        .query_filtered::<(), bevy_ecs::query::With<GhostWindowMarker>>()
+        .iter(world)
+        .count()
+}
+
+/// 作業プールの閉包が届いたことの目印（準備だけで窓が生えないことの対照）。
+#[derive(bevy_ecs::resource::Resource)]
+struct SentinelArrived;
+
+/// 窓を作る手順は「準備」と「投函」に分かれる（要件 4.10・6.1・design「ghost_session.rs」）。
+///
+/// 準備（[`prepare_ghost_windows`]）だけでは窓は 1 枚も生えない——準備の後に作業プールへ
+/// 投げた目印の閉包が `Input` 段で届いても、窓は 0 枚のまま。投函
+/// （[`commit_ghost_windows`]）の後、次の `Input` 段で窓が生える（emo2 はスコープ 2 つ＝
+/// キャラ窓とバルーン窓で 4 枚）。
+/// 判定は集めてから 1 回。
+#[test]
+fn prepare_spawns_no_window_until_commit() {
+    // SAFETY: 資産の採寸（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let sample = acquire_emo2();
+    let cfg = ConfigInputs {
+        ghost_root: sample.folder().to_path_buf(),
+        balloon_root: emo2_balloon(&sample),
+    };
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    world.insert_resource(WintfTaskPool::new());
+    world.resource_mut::<Schedules>().add_systems(
+        Input,
+        wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands,
+    );
+
+    let prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
+    world
+        .resource::<WintfTaskPool>()
+        .spawn(|tx: CommandSender| async move {
+            let _ = tx.send(Box::new(|world: &mut World| {
+                world.insert_resource(SentinelArrived);
+            }));
+        });
+    let sentinel_arrived =
+        run_input_until(&mut world, |w| w.contains_resource::<SentinelArrived>());
+    let after_prepare = ghost_window_count(&mut world);
+
+    commit_ghost_windows(&mut world, prepared);
+    let spawned = run_input_until(&mut world, |w| ghost_window_count(w) > 0);
+    let after_commit = ghost_window_count(&mut world);
+
+    assert_eq!(
+        (sentinel_arrived, after_prepare, spawned, after_commit),
+        (true, 0, true, 4),
+        "準備だけで窓が生えた／投函の後に窓が生えない（目印が届いた・準備後の窓の数・\
+         投函後に生えた・投函後の窓の数）"
+    );
+}
+
+/// 投函の時点で作業プールが無ければ、閉包を捨てた上で `task_pool_missing` を error で残す
+/// （黙って捨てない・log-first の判断分岐）。
+#[test]
+fn commit_without_task_pool_logs_error() {
+    let mut world = World::new();
+    let prepared = PreparedWindows {
+        descript: StartupDescriptValues {
+            author_dpi: placement::AuthorDpi::DEFAULT,
+            zorder_raw: None,
+        },
+        spawn: Box::new(|_: &mut World| {}),
+    };
+    let ((), events) = capture_logs(|| commit_ghost_windows(&mut world, prepared));
+    let missing_errors = events
+        .iter()
+        .filter(|e| {
+            e.field_str("event") == Some("task_pool_missing") && e.level == tracing::Level::ERROR
+        })
+        .count();
+    assert_eq!(
+        missing_errors, 1,
+        "作業プールの欠落が記録されない: {events:?}"
+    );
+}
+
 /// 偽の SHIORI（標準の台本）・検体の複製・時計なし・記憶の置き場なしで入力の束を組む。
 /// 台本は呼ぶたびに新しい（周ごとに `OnInitialize` から `Unload` までを 1 本ずつ消費する）。
 fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeNotice>) -> GhostBootInputs {

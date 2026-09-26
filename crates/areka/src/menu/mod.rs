@@ -233,9 +233,9 @@ pub(crate) fn register_menu_poll(world: &mut World) {
 /// # タイミング契約
 ///
 /// キャラクター窓を作った**直後**に、同じ `&mut World` クロージャの中で呼ぶこと
-/// （`ghost_session::open_ghost_windows` の窓を作るクロージャが
+/// （`ghost_session::prepare_ghost_windows` の窓を作るクロージャが
 /// `input_events::attach_char_pointer_handlers` の隣で呼ぶ）。付くのは呼ばれた時点に在る窓
-/// だけだが、窓を作り直す `ghost_session::reopen_ghost_windows` も同じ `open_ghost_windows` を
+/// だけだが、窓を作り直す `ghost_session::reopen_ghost_windows` も同じ `prepare_ghost_windows` を
 /// 通るので、作り直した窓へもこのクロージャが付け直す。既に付いて
 /// いる窓へ呼んでも、同じハンドラで置き換わるだけで害は無い。
 ///
