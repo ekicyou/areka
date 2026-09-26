@@ -211,7 +211,7 @@ crates/areka/src/
 - `crates/areka/src/main.rs` — `resolve_boot` の 4 つ目の戻り・`BootContext` と `GhostSlot` の据え付け・`boot_origin` の受け渡し・`run()` の後は `GhostSlot` から取り出して後始末・告知の場面は `BootContext.current` の根と `GhostSession` の名前で組む・`Fault` かつ単独起動なら `record_halt`。
 - `crates/areka/src/menu/mod.rs` — `ItemBody::Submenu`・`register` の `#[allow(dead_code)]` を外す。`unregister` のコメントを「呼び手なし（枠の取り消しは今日の spec に無い）」へ改める。`ghost_frame` モジュールの宣言。
 - `crates/areka-sylphya/src/persist/mod.rs`・`persist/format.rs`・`persist_tests.rs` — `PersistKey::LastHalted`（`areka.last.halted`・`[last] halted`）。空文字は「無し」と読む。
-- `doc/ukadoc-coverage/ledger/shiori.toml`・`sakura-script.toml` — 3 行を `implemented`（owner＝本仕様）へ。生成物（`briefing-sakura-script.md` 等）は生成器で作り直す。
+- `doc/ukadoc-coverage/ledger/shiori.toml`・`sakura-script.toml` — 3 行を `implemented`（owner＝本仕様）へ。生成物（`report/*.md`）は生成器（`ukadoc-survey -- report`／`report-summary`）で作り直す。手書きの `briefing-sakura-script.md` の「未対応」の行と、検査が数を照合する `briefing.md`・`roadmap-draft.md` は手で追随させる。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 に 9 行（要件 9.2 の (a)〜(i)）。
 - `.kiro/steering/roadmap.md` — α 後の候補「壊れたゴーストを表示し続ける」を登記だけの行として足す（要件 11.10）。
 

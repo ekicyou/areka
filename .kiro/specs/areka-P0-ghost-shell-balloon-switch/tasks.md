@@ -221,9 +221,9 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.8, 8.9, 8.10, 8.11, 10.10_
 
 - [ ] 10. 記録と実機確認
-- [ ] 10.1 (P) 網羅台帳を実装済みへ改め、生成物を作り直す
+- [x] 10.1 (P) 網羅台帳を実装済みへ改め、生成物を作り直す
   - `shiori.toml` の `OnGhostChanging`／`OnGhostChanged` と `sakura-script.toml` の `\![change,ghost,…]` の 3 行を実装済み（owner＝本仕様・備考に `random`／`sequential`／`lastinstalled` は `ghost-change-name-resolution`）へ改める
-  - 生成物（sakura-script の briefing の「未対応」の行を含む）を生成器で作り直す（手で直さない）。ukadoc-survey の検査が緑
+  - 生成物（`report/*.md`）を生成器で作り直す（手で直さない）。手書きの sakura-script の briefing の「未対応」の行と、検査が照合する `briefing.md`・`roadmap-draft.md` は手で追随させる。ukadoc-survey の検査が緑
   - _Depends: 9.3_
   - _Requirements: 9.1, 9.3_
   - _Boundary: doc/ukadoc-coverage_

@@ -3055,47 +3055,48 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnGhostChanged:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-shell-balloon-switch"
 priority = "B2"
 values = ["記憶"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-無いと失うもの: 誰と入れ替わって出てきたのかを知らないまま、いつもと同じ挨拶になる。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。切替で起きたゴーストは
+OnBoot の代わりにこのイベントで起きる（Ref0〜3＝直前のゴーストの本体側の名前・切替時の台本・
+名前・パス、Ref4〜6＝空、Ref7＝シェルのフォルダ名）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_ghost_changed（起動の根の選択は
+crates/areka-kanade/src/schedule/boot.rs の BootOrigin::ChangedFrom の腕）。
+名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は areka-P0-ghost-change-name-resolution の持ち場で、本仕様では該当なしとして warn のログ（ghost_switch_unknown）を残し、切り替えない。
 """
 
 [entry."ukadoc:list_shiori_event:OnGhostChanging:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-shell-balloon-switch"
 priority = "B2"
 values = ["記憶"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-無いと失うもの: 次に誰へ渡すのかを知らないまま、送り出しの一言も無く引っ込む。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。送り出す側のゴーストへ、
+メニューから選んだ切替と \\![change,ghost,…,--option=raise-event] の切替で送る（Ref0〜3＝
+切替先の本体側の名前・出どころ manual／automatic・名前・フォルダの絶対パス）。204 のときは
+続けて OnClose（Ref0＝system）を送る。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_ghost_changing（切替の相は
+crates/areka-kanade/src/schedule/change.rs の begin_change）。
+名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は areka-P0-ghost-change-name-resolution の持ち場で、本仕様では該当なしとして warn のログ（ghost_switch_unknown）を残し、切り替えない。
 """
 
 [entry."ukadoc:list_shiori_event:OnGhostTermsAccept:1"]

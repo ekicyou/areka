@@ -942,7 +942,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\![cancel,http,URL]` | 未対応（書いてあるのに何も起きない） | WebSocket と通信の中止 | `ukadoc:list_sakura_script:_5c_21_5bcancel_2chttp_2cURL_5d:1` |
 | `\![cancel,websocket,URL]` | 未対応（書いてあるのに何も起きない） | WebSocket と通信の中止 | `ukadoc:list_sakura_script:_5c_21_5bcancel_2cwebsocket_2cURL_5d:1` |
 | `\![change,balloon,バルーン名]` | 未対応（書いてあるのに何も起きない） | バルーンの見た目と切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1` |
-| `\![change,ghost,ゴースト名(,--option=raise-event)]` | 未対応（書いてあるのに何も起きない） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1` |
+| `\![change,ghost,ゴースト名(,--option=raise-event)]` | 実装済み（2026-09-27 に `areka-P0-ghost-shell-balloon-switch` が実装。調査時点は未対応） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1` |
 | `\![change,shell,シェル名(,--option=raise-event)]` | 未対応（書いてあるのに何も起きない） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1` |
 | `\![close,communicatebox]` | 未対応（書いてあるのに何も起きない） | 通信箱と教え込み箱 | `ukadoc:list_sakura_script:_5c_21_5bclose_2ccommunicatebox_5d:1` |
 | `\![close,dialog,ID]` | 未対応（書いてあるのに何も起きない） | 入力窓とダイアログ | `ukadoc:list_sakura_script:_5c_21_5bclose_2cdialog_2cID_5d:1` |
@@ -1582,7 +1582,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 - **その群を成立させる最小の基盤**: ゴーストとシェルを入れ替える部分と、その指示を受け取る口。`\+`・`\_+` はタグを読み替える所のどの分岐にも当たらず素通しになり、`\![call,ghost,…]` ほか 3 件は名前が運ばれるだけである。
 - **台帳の項目 id**:
   - `\![call,ghost,ゴースト名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bcall_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1`
-  - `\![change,ghost,ゴースト名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1`
+  - `\![change,ghost,ゴースト名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1`（2026-09-27 に `areka-P0-ghost-shell-balloon-switch` が実装済み。特別な名前 `random`／`sequential`／`lastinstalled` の解決は `areka-P0-ghost-change-name-resolution` の持ち場）
   - `\![change,shell,シェル名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1`
   - `\+` — `ukadoc:list_sakura_script:_5c_2b:1`
   - `\_+` — `ukadoc:list_sakura_script:_5c__2b:1`
