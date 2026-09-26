@@ -86,7 +86,7 @@
   - 完了 `shiori-fault-notice` の告知の部品（`AlertScene`・場面ごとの題名）と停止通知の中身（`Fault(ShioriFault)`）を使う。`run_ghost_quit_phase` に切替の分岐を足すのは本仕様（同 spec 要件 6.5 の引き継ぎ）。
   - 完了 `baseware-root-layout` の目録（`catalog::list_ghosts`）・記憶の鍵（`LastGhost`＝App・`LastBalloon`／`LastShell`＝Ghost スコープ）・起動解決（`resolve_balloon`）・`on_boot_ok` を使う。
   - 完了 `popup-menu-minimal` の OS ネイティブメニューと `Frame::Ghost` に登記する（メニューの見た目や操作の作法は変えない）。
-  - `ghost-change-name-resolution`（並走・共有ソース 0）は本仕様が作る受け口の「解決できない名前」の腕を置き換える。`shell-balloon-switch`・`ghost-install`・`network-update` は本仕様の `SwitchRequest` の形・汎用の通知の入口・`GhostSession` の置き場を見てから設計する（要件までは並走）。本仕様の完了で `.kiro/specs` 直下が減る瞬間、並走側の ukadoc-survey の検査が偶発で赤になりうる（並走側は本仕様の着地後に rebase）。
+  - `ghost-change-name-resolution`（並走・共有ソース 0）は本仕様が作る「解決できない名前」の腕（UI 側の取り出し＝要件 1.7。talk スレッドの受け口ではない）を置き換える。`shell-balloon-switch`・`ghost-install`・`network-update` は本仕様の `SwitchRequest` の形・汎用の通知の入口・`GhostSession` の置き場を見てから設計する（要件までは並走）。本仕様の完了で `.kiro/specs` 直下が減る瞬間、並走側の ukadoc-survey の検査が偶発で赤になりうる（並走側は本仕様の着地後に rebase）。
   - 完了 `areka-P0-nar-install` の申し送り: 起動中のゴーストのフォルダに入れ替えをかける経路は、先に SHIORI を降ろしてから行う（本仕様は降ろす口を提供するだけで、インストールの順序は `ghost-install` が決める）。
 
 ## Requirements
@@ -103,7 +103,7 @@
 4. When 利用者が右クリックメニューの「ゴースト」枠から 1 体を選ぶ, the areka shall その 1 体を切替先とし、`OnGhostChanging` を送る切替要求（Ref1＝`manual`）を入口へ出す。
 5. The areka shall 切替先の名前を、まず目録の各ゴーストの `descript.txt` の `name` と突き合わせ、一致が無ければフォルダ名と突き合わせて決める（要件 11 裁定 8）。名前の比較は大文字小文字を区別する。
 6. If 切替先の名前が目録のどのゴーストにも一致しない（`random`／`sequential`／`lastinstalled` など本仕様では解決しない名前を含む）, then the areka shall 正典どおり切替を無視し、`warn!` を 1 件残し、ゴーストを降ろさず `OnGhostChanging` も送らない（利用者から見える変化は 0）。
-7. The areka shall 「該当するゴーストが無い」の判定を、ゴーストを降ろす前・`OnGhostChanging` を送る前に行う（降ろしてから該当なしに気付く形にしない）。
+7. The areka shall 「該当するゴーストが無い」の判定を、ゴーストを降ろす前・`OnGhostChanging` を送る前に行う（降ろしてから該当なしに気付く形にしない）。この突き合わせは台本の受け口（talk スレッドの `CueSink`）ではなく、UI 側（フレームの相）の取り出しで目録を読んで行い、受け口は名前を無変形で運ぶだけにする。`ghost-change-name-resolution` が置き換える「解決できない名前」の腕はこの UI 側の取り出しにある（同 spec の brief が指す `change_cue.rs` は運ぶ側であって腕の所在ではない。要件討議 2026-09-26 で確定・同 brief へ申し送り済み）。
 8. When 切替先が現在のゴースト自身である, the areka shall 無視せず、他のゴーストへの切替と同じ経路で降ろして起こし直す（読み直しの代用。要件 11 裁定 9）。
 9. While 切替が進行中である（切替の目印が立っている）, when 新しい切替要求が届く, the areka shall 新しい要求を無視して `warn!` を 1 件残す（切替を重ねない）。
 10. The areka shall 台本の `\![change,ghost,…]` を汎用命令の名前の選別で受け（`change` の第 1 引数 `ghost` までを鍵にする）、型付きの命令を新設しない。`(change,shell)`・`(change,balloon)` の消費者は登記しない（0 組のまま）。
@@ -124,6 +124,7 @@
 6. When `OnGhostChanging` を送らない切替要求（`raise-event` 無しの台本）を受ける, the areka shall `OnGhostChanging` も `OnClose` も送らず、切替の命令を運んだ台本の再生が終わってから（利用者の中断で早く終わった場合も含む）ゴーストを降ろす（要件 11 裁定 6）。
 7. When 切替のためにゴーストを降ろす, the areka shall SHIORI を降ろす順序（`OnClose` の通知の有無・`unload`）を今日の終了と同じにし、SHIORI の解放を待ってから切替先を起こす（完了 `nar-install` の申し送り＝解放前に同じフォルダへ触らない）。
 8. If 送り出しの握手の途中で現在のゴーストの SHIORI が失敗する（`Fault`）, then the areka shall 握手を打ち切ってゴーストを降ろし、切替を続ける（元のゴーストがもう答えられないので戻す先が無い。切替先も失敗したときは要件 6.4 の告知へ）。
+9. While 切替の相にある（送り出しの台詞の再生中、または `raise-event` 無しの切替で命令を運んだ台本の終わりを待っている間）, when 終了要求（メニューの「終了」・OS の閉鎖要求・Alt＋F4）が届く, the areka shall 切替を取りやめて（目印を下ろし `info!` を 1 件残す）再生中の台詞が終わってから今日の終了経路で終わる（利用者の終了の意思が切替に勝つ。完了 `app-lifetime-separation` の「終了要求は必ず終了で終わる」を継ぐ）。`OnClose` を既に送っていれば二度送らず、その別れの台詞の終わりで終了する。
 
 ### Requirement 3: 降ろして起こし直す間、プロセスは生き続ける
 
@@ -135,7 +136,7 @@
 2. While 切替の目印が立っている, when 全ゴースト窓が 0 になる, the areka shall 終了の指示（`AppExit`）を出さず、次の tick 以降で切替先の窓を作る。
 3. While 切替の目印が立っている, when 降ろした側のゴーストの停止通知（原因 `Quit`・`CloseSilent`・`DeadlineExceeded`・`Forced` のいずれか）が受け口に届く, the areka shall それを「切替による停止」として捌き、`quit_app` を呼ばない（0 回）。`GhostSession::shutdown` が送る `ForceQuit` に対する 1 件と、正典どおりの握手の末に kanade が送る 1 件のどちらも同じ規則で捌く。
 4. The areka shall 降ろした側の停止通知と切替先の停止通知を取り違えない（どのゴーストの通知かを区別できる形で受ける。区別の持ち方＝停止原因に切替の値を足すか・通知に世代を載せるか・UI 側に予約を持つかは設計で決める）。
-5. When 切替の目印が下りたあと（切替先の起動系列が始まったあと）に停止通知が届く, the areka shall 今日どおり `run_ghost_quit_phase` → `quit_app` へ流す（`Fault` なら完了 `shiori-fault-notice` の告知と終了コード 1）。
+5. The areka shall 切替の目印を、切替先の kanade が起動系列（`OnGhostChanged` または `OnBoot` の応答まで）を終えて定常に入った時点で下ろす（切替先の SHIORI の失敗は起動の呼び出しが返った数フレーム後に非同期で届くので、「起動系列が始まった時点」では早すぎる＝要件 6.6 が成り立たない）。UI がその時点を知る手段（kanade からの通知の形）は設計で決める。When 切替の目印が下りたあとに停止通知が届く, the areka shall 今日どおり `run_ghost_quit_phase` → `quit_app` へ流す（`Fault` なら完了 `shiori-fault-notice` の告知と終了コード 1）。
 6. The areka shall `GhostSession` をフレームの系（`run_ghost_quit_phase` と同じ相）から降ろして起こし直せる場所に置く（World の資源に置くか `main` 側に口を出すかは設計で決める）。`Drop` による自動の終了は採らない（完了 `ghost-restart-unit` 要件 1.7 を継ぐ）。
 7. The areka shall 切替の経路から終了の指示を出す場所を 1 つも持たない（要件 6.4 の二重失敗だけが `quit_app` を呼ぶ）。
 8. The areka shall 降ろし始めてから切替先のゴーストの窓が出るまでの間に UI スレッドが止まる時間（seriko の join を含む）を **1 秒以内**を目標とし、実機サインオフで測って記録に残す（超えたら要件ディスカッションまたは設計ディスカッションの議題に上げる。決定論テストでは固定しない）。
@@ -178,8 +179,8 @@
 
 #### Acceptance Criteria
 
-1. While 切替の目印が立っている, when 切替先のゴーストの起動が失敗する（起動解決の失敗・マウントの失敗・SHIORI の失敗＝停止通知の原因 `Fault`・窓を開けない）, the areka shall `error!` を 1 件残し（失敗の種類と理由を含む）、切替先を降ろして、元のゴーストを同じ経路で起こし直す（要件 11 裁定 2）。
-2. When 元のゴーストを起こし直す, the areka shall 通常の起動系列（起動記録があるので `OnBoot`）で起こし、`OnGhostChanged` は送らない（交代は成立していない）。記憶（`LastGhost`）は元のゴーストのままにする。
+1. While 切替の目印が立っている, when 切替先のゴーストの起動が失敗する（起動解決の失敗・マウントの失敗・SHIORI の失敗＝停止通知の原因 `Fault`・窓を開けない）, the areka shall `error!` を 1 件残し（失敗の種類と理由を含む）、切替先を降ろして、元のゴーストを同じ経路で起こし直す（要件 11 裁定 2）。切替では、初回起動の「起動に失敗しても LogSink の代替で骨格だけ起こす」契約（`boot_ghost` の fallback）へ倒れず、失敗として扱う（初回起動の契約そのものは変えない。切替先が居ないまま窓だけ出る形は作らない）。
+2. When 元のゴーストを起こし直す, the areka shall 通常の起動系列（起動記録があるので `OnBoot`）で起こし、`OnGhostChanged` は送らない（交代は成立していない）。記憶（`LastGhost`）は元のゴーストの起こし直しで同じ値に書き直され、結果として元のままになる（書かない経路は作らない）。
 3. When 元のゴーストへ戻す, the areka shall 利用者向けの告知（メッセージボックス）を出さない（要件 11 裁定 4）。記録は 6.1 の `error!` 1 件で足りる。
 4. If 元のゴーストの起こし直しも失敗する, then the areka shall 告知の場面を 1 つ足した形（題名は起動失敗でも会話中の失敗でもない「ゴーストを切り替えられません」に相当する文言・本文に切替先と元の両方の名前と失敗の種類）で告知を出し、完了 `shiori-fault-notice` と同じ後始末の順序で終了コード 1 で終える（`AREKA_NO_ALERT` の抑止規則も同じ）。
 5. The areka shall 戻す試みを 1 回だけにする（元 → 切替先 → 元 → … と往復しない）。
@@ -194,7 +195,7 @@
 
 1. The areka shall kanade の外から「イベント名＋Reference 列（Ref0〜Ref n・欠番は空）＋GET か NOTIFY か」を渡して SHIORI イベントを頼める口を 1 本持つ。
 2. When その口で頼まれたイベント名が許可表（`ALLOWED_EVENT_IDS`）に無い, the areka shall 送らず（0 件）`warn!` を 1 件残す。許可表に行を足すだけで新しいイベントを送れる形にする。
-3. While kanade が定常にある, when その口でイベントを頼まれる, the areka shall そのイベントを SHIORI へ送り、GET の応答の台本を通常のトークとして再生し、204 なら何もしない。
+3. While kanade が定常にある, when その口でイベントを頼まれる, the areka shall そのイベントを SHIORI へ送り、GET の応答の台本を通常のトークとして再生し、204 なら何もしない。応答が届いたときに別のトークが再生中なら、マウス系の応答と同じ規則でそのトークを置き換えて再生する（捨てない・待たない。この口を使うイベントは利用者の操作の結果＝シェル切替・インストール完了・更新の進捗なので、応答を捨てると「操作したのに何も言わない」形になる）。
 4. While kanade が定常以外（起動系列・終了系列・切替の相）にある, when その口でイベントを頼まれる, the areka shall 捨てて `warn!` を 1 件残す（待ち行列に積まない。積む形が要る spec が出たらそのときに足す）。
 5. The areka shall 本仕様の `OnGhostChanging`／`OnGhostChanged` 自身をその口で送るか、切替の相の専用の腕で送るかを設計で決める（どちらでも要件 2・4 の順序と Reference を満たすこと）。
 6. The areka shall その口の判断（許可表にある／無い・定常にある／無い）を決定論テストで固定する。
@@ -211,7 +212,7 @@
 4. The 本仕様 shall `run_ghost_quit_phase` に足す分岐を「切替の目印が立っている間の停止通知」に限り、それ以外の停止通知の扱い（`Fault` の告知と終了コード 1 を含む）を変えない。
 5. The 本仕様 shall `(change,shell)`・`(change,balloon)`・`OnShellChang*`・`OnBalloonChange`・`\+`／`\_+`・`random`／`sequential`／`lastinstalled` の解決を持ち込まない（それぞれ `shell-balloon-switch`・`ghost-change-name-resolution`）。
 6. The 本仕様 shall `GhostBootOptions` に欄を足さない（構造体リテラルが 28 か所・17 ファイル。起動元の情報＝直前のゴーストの名前・パス・切替時の台本は派生関数で渡す）。
-7. The 本仕様 shall 目録の素性（`catalog::Identity`）に `sakura.name` を足さず、切替先と直前のゴーストの `sakura.name` は `catalog::companion_balloon` と同じ形の単独の読み手で読む。
+7. The 本仕様 shall 目録の素性（`catalog::Identity`）に `sakura.name` を足さず、切替先と直前のゴーストの `sakura.name` は `catalog::companion_balloon` と同じ形の単独の読み手で読む。その読み手を呼ぶのは `OnGhostChanging` の Reference を組むとき（切替先）だけで、直前のゴーストの分は起動済みの `MountModel` の名前から取り、メニューの「ゴースト」枠は `sakura.name` を読まない。
 8. The 本仕様 shall 触るファイルすべてを 1 ファイル 1,000 行の目安の内側に収める。上限に近い `schedule/steady.rs`（935）・`actor_tests.rs`（970）・`runtime_tests.rs`（986）・`schedule_tests.rs`・`steady_flow_tests.rs` には行を足さず、切替の相は新しいファイル（前例 `schedule/user_break.rs`）、受け口は新しいファイル（前例 `emo2_boot/readme_cue.rs`）、テストは兄弟の新ファイルへ置く。
 9. The 本仕様 shall `crates/areka-parsers/src/sakura/decode.rs`・`crates/areka-sakura/src/compile.rs` に触らない（`ghost-change-name-resolution` の持ち場）。
 10. The 本仕様 shall 本番コードが読む環境変数を新しく足さない。
@@ -233,7 +234,7 @@
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 偽の SHIORI 2 体（x64 の偽境界＝`ShioriWiring::Custom`・偽の資産）で「A を起こす → `\![change,ghost,B,--option=raise-event]` → `OnGhostChanging`（台本あり）→ 再生完了 → 降ろす → B を起こす → `OnGhostChanged`（Ref0〜3・7 を突き合わせる）→ 204 → `OnBoot`」を同じプロセス・同じ World で 1 周する決定論テストを 1 本持ち、⑴ イベント列と Reference、⑵ 降ろした側の停止通知で `quit_app` が呼ばれていない（終了の指示 0 件）、⑶ 系の登録数が 1 周目と同じ、⑷ 窓ごとの状態が B のもので置き換わっている、を集めてから 1 回で判定する。
+1. The 本仕様 shall 偽の SHIORI 2 体（x64 の偽境界＝`ShioriWiring::Custom`・偽の資産）で「A を起こす → `\![change,ghost,B,--option=raise-event]` → `OnGhostChanging`（台本あり）→ 再生完了 → 降ろす → B を起こす → `OnGhostChanged`（Ref0〜3・7 を突き合わせる）→ 204 → `OnBoot`」を同じプロセス・同じ World で 1 周する決定論テストを 1 本持ち、⑴ イベント列と Reference、⑵ 降ろした側の停止通知で `quit_app` が呼ばれていない（終了の指示 0 件）、⑶ 系の登録数が 1 周目と同じ、⑷ 窓ごとの状態が B のもので置き換わっている（決定論テストでは実窓を作れないので、完了 `ghost-restart-unit` と同じく配線の資源＝説明書の経路・メニューの登記・中断の旗・停止通知の受け口で判定する）、を集めてから 1 回で判定する。
 2. The 本仕様 shall `OnGhostChanging` が 204 のとき `OnClose` が続き、その別れの台詞（`\-` 入りを含む）が最後まで流れても・中断されても・期限切れでも、終了ではなく降ろすことで終わることを決定論テストで固定する（要件 2.3〜2.5・衝突表 1）。
 3. The 本仕様 shall `raise-event` 無しの切替で `OnGhostChanging` も `OnClose` も送られず（0 件）、命令を運んだ台本の終了後に降ろされることを決定論テストで固定する（要件 2.6）。
 4. The 本仕様 shall `raise-event` 付きの切替の送り出しの台詞をバルーンブレークで止めると切替が中止され、元のゴーストの定常へ戻り、`\-` の予約が終了に結ばれないことを決定論テストで固定する（要件 5・衝突表 2）。
