@@ -1,5 +1,4 @@
 target
-Cargo.lock
 tmpclaude*
 .vs/
 # デバッグ用一時ログファイル

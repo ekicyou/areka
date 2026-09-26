@@ -20,6 +20,7 @@
 10. **既知の制限の候補**: `derive_scopes()` が `[0, 1]` 固定（`emo2_boot/mod.rs`）＝キャラが 3 人以上のゴーストの `\p[2]` 以降の窓は出ない（`ghost-shell-balloon-switch` の再測定項目 11）。
 11. 検証項目 8 の更新先の候補: `emo2` の `homeurl`（開発者の配布サイト・https）。`network-update` の実機確認と共用できる。
 12. 変わっていない: `default_app_profile_dir`（`<exe>/profile/areka`）・バルーンの決まる順「記憶 → 同梱 → 唯一 → 既定 → 無作為」（`boot_resolve.rs`）・`AREKA_APP_SMOKE_EXIT_MS` は zip の起動確認にそのまま使える（`alpha-package` が使う）。
+13. **`alpha-package` からの申し送り（City-Pop'n の条件）**: \1 のシェル「City-Pop'n」（大槻氏）は、要件 5.2・設計・上の 5 では「条件は未確認（書庫に無い）」の前提だったが、実装の裏取りで書庫の中の `shell/master/CityPop.txt` に作者の条件（「改変や転用、伺かゴースト以外での使用の一切は自由」「使用許可の請求も不要」）が見つかった。`dist/README.txt` はこの文書を出どころとして書いた（シェルごとの抜き出し不可は \0 の条件による）——この書き方でよいか、作者のサイト（`http://th88.blog.shinobi.jp/`）での確認を要するか、このまま同梱して出すかの最終判断は本仕様で行う。
 
 **検証項目の差し替え（推し・議題にしない）**: 項目 1＝`ghost/` を空にした根で「ゴーストが見つかりません」を見る。項目 4＝`claudia.nar`。
 
