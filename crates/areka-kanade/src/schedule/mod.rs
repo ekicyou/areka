@@ -26,6 +26,7 @@ use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 pub(crate) mod boot;
+pub(crate) mod change;
 pub(crate) mod choice;
 pub(crate) mod close;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
@@ -196,6 +197,10 @@ pub(crate) struct State {
     pub choice_prev_talk: Option<TalkId>,
     /// 利用者の中断を出した相手のトーク（止めた応答＝完了通知を待っている間だけ `Some`）。
     pub user_break_talk: Option<TalkId>,
+    /// 受理した切替（要求と `OnGhostChanging` の台本）。停止通知の切替の中身の源。
+    pub change: Option<change::ChangeState>,
+    /// 台詞の再生中に受けた切替の要求の保留（`pending_close` と同型）。
+    pub pending_change: Option<crate::change::ChangeRequest>,
 }
 
 impl State {
@@ -212,6 +217,8 @@ impl State {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            change: None,
+            pending_change: None,
         }
     }
 

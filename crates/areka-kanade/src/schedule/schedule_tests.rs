@@ -1,4 +1,5 @@
 use super::log_capture::{assert_logged, assert_not_logged, capture};
+use super::steady::test_support::base_state;
 use super::*;
 use crate::msg::ShioriFailure;
 use tracing::Level;
@@ -12,10 +13,7 @@ fn state_in(phase: Phase) -> State {
         phase,
         last_now: Some(MonotonicMs(1_000)),
         next_talk_id: 5,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        user_break_talk: None,
+        ..base_state()
     }
 }
 

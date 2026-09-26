@@ -218,6 +218,8 @@ fn boot_main_no_content_emits_no_talk() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (s, actions) = step(
         s,
@@ -259,6 +261,8 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (s1, actions1) = step(
         s1,
@@ -284,6 +288,8 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (s2, actions2) = step(
         s2,
@@ -322,6 +328,8 @@ fn close_request_during_boot_records_pending_only() {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            change: None,
+            pending_change: None,
         };
         let phase_before = std::mem::discriminant(&s.phase);
         let (s, actions) = step(
@@ -439,6 +447,8 @@ fn baseware_version_status_reflects_greeting_tracking() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (_, actions) = step(
         greeting,
@@ -463,6 +473,8 @@ fn baseware_version_status_reflects_greeting_tracking() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (_, actions) = step(
         no_greeting,

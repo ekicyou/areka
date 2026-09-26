@@ -212,6 +212,8 @@ mod tests {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            change: None,
+            pending_change: None,
         }
     }
 
@@ -230,6 +232,8 @@ mod tests {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            change: None,
+            pending_change: None,
         }
     }
 

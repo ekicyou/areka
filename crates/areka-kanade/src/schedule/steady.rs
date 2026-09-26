@@ -920,7 +920,7 @@ fn steady_reply_unexpected(
 
 #[cfg(test)]
 #[path = "steady_test_support.rs"]
-mod test_support;
+pub(super) mod test_support;
 
 #[cfg(test)]
 #[path = "steady_flow_tests.rs"]

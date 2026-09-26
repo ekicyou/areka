@@ -17,6 +17,8 @@ fn state_in(phase: Phase) -> State {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     }
 }
 
@@ -111,6 +113,8 @@ fn error_close_deadline_exceeded_logs() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let ev = capture(|| {
         let _ = step(
