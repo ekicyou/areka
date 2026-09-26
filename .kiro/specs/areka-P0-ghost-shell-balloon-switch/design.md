@@ -190,7 +190,7 @@ crates/areka/src/
 - `crates/areka-kanade/src/schedule/boot_sequence_tests.rs`・`boot_reply_branch_tests.rs` — `boot_complete` の Action が空でなくなる分の追随（形の固定。判断は `events_change_tests.rs`／`change_tests.rs`）。
 - `crates/areka-kanade/src/schedule/events.rs` — `ALLOWED_EVENT_IDS` に `OnGhostChanging`・`OnGhostChanged`（13 語）。`on_ghost_changing`・`on_ghost_changed`・`raise`・`value_replaces_active_talk` を足し、`on_boot` を `boot_origin` で Ref6/7 付きに広げる。
 - `crates/areka-kanade/src/schedule/steady.rs` — `on_reply` の `"OnMouseMove" | "OnMouseDoubleClick"` の腕を `origin if events::value_replaces_active_talk(origin)` に書き換える（**行数の増減 0**・`use` は既存の行へ足す）。
-- `crates/areka-kanade/src/schedule/schedule_tests.rs`・`schedule_log_firing_tests.rs`・`close.rs` のテスト・`steady_test_support.rs`・`boot_test_support.rs`・`user_break_tests.rs`・`steady_flow_tests.rs` — `State` の構造体リテラル（21 か所）へ 2 欄の追随（値は `None`）。`steady_flow_tests.rs` は行を足さない＝各リテラルの既存行に欄を継ぎ足す。
+- `crates/areka-kanade/src/schedule/schedule_tests.rs`・`schedule_log_firing_tests.rs`・`close.rs` のテスト・`steady_test_support.rs`・`boot_test_support.rs`・`user_break_tests.rs`・`steady_flow_tests.rs` — `State` の構造体リテラル（21 か所）へ 2 欄の追随（値は `None`）。`steady_flow_tests.rs`・`schedule_tests.rs` は行を足さない＝`cargo fmt` が 1 欄 1 行に割るので欄の継ぎ足しでなく、`steady_test_support.rs` の基準の状態を使う構造体更新（`..base_state()`）で既存の欄の行を置き換え、差し引き 0 行以下にする。`schedule_tests.rs` の網羅の match（`Action`・既存の相）は腕が増えるので、その 2 本のテストを兄弟のテストファイルへ移す（消さない）。
 - `crates/areka-ghost/src/runtime.rs` — `boot_with_origin(options, kanade_stop: Option<Sender<KanadeNotice>>, origin: BootOrigin)` を足し、`boot_with_kanade_stop` はそれを `BootOrigin::Plain` で呼ぶ。`config.shell_folder` を `mount.shell.dir` の末尾から詰める。
 - `crates/areka-ghost/src/catalog.rs` — `sakura_name(ghost_dir) -> Option<String>`（`ghost/master/descript.txt` の `sakura.name` の単独の読み手・`companion_balloon` と同型）。`Identity` は変えない。
 - `crates/areka-ghost/src/lib.rs` — `sakura_name` の再輸出。
@@ -480,7 +480,7 @@ pub enum ShioriMethod { Get, Notify }
 
 ##### State Management
 - 状態は `State`（`Phase`・`change`・`pending_change`）だけ。時計は `Tick` の注入時刻（`last_now`）で、実時間を読まない。
-- 不変条件: `state.change.is_some()` ⇔ 切替の相にあるか `pending_change` が在る（取りやめ・中止で両方空になる）。`Unloading` に至った時点の `state.change` がそのまま停止通知の `handoff` になる。
+- 不変条件: `state.change` は `begin_change` だけが立て、中止・取りやめでだけ消え、`Unloading` まで残る（停止通知の `handoff` の源）。`pending_change` だけを控えている間 `state.change` は `None` のまま（保留を捨てて `\-` で終わる停止の `handoff` は `None`＝UI は終了として捌く）。取りやめ・中止で両方空になる。`Unloading` に至った時点の `state.change` がそのまま停止通知の `handoff` になる。
 
 **Implementation Notes**
 - Integration: `close.rs` の `deadline_from` を `pub(super)` にして共有する。`events::on_close` の `CloseReason` は `System`（切替は利用者の窓の操作ではない・Ref0＝`system`）。
@@ -620,6 +620,8 @@ pub(crate) enum WelcomeAttempt { Target, Default }
 ```rust
 /// 起こしたゴーストの置き場（NonSend・プロセスに 1 つ）。`main` が据え、切替が入れ替え、`main` が `run()` の後に取り出す。
 pub(crate) struct GhostSlot(pub(crate) Option<GhostSession>);
+/// 起こす材料の作り口（NonSend・プロセスに 1 つ）。切替が相手の構成入力から `GhostBootInputs` を組む。`main` は本番（helper の結線・停止通知の送り口の写し）を、試験は根のフォルダごとに偽の SHIORI を返すものを据える。
+pub(crate) struct GhostBootInputsSource(pub(crate) Box<dyn Fn(&ConfigInputs, BootOrigin) -> GhostBootInputs>);
 impl GhostSession { pub(crate) fn kanade(&self) -> Option<&Sender<KanadeMsg>>; pub(crate) fn names(&self) -> Option<&GhostNames>; }
 /// 結線ありの腕（私有）。`wire_emo2_boot` が成立しなければ `Err(BootWiringFailed)`。
 fn boot_wired(world, inputs, descript, ghost, balloon) -> Result<GhostSession, BootWiringFailed>;
@@ -631,6 +633,7 @@ pub(crate) fn boot_ghost_strict(world, inputs, descript, ghost, balloon) -> Resu
 - `boot_wired` の `wire_menu` の直後に `menu::ghost_frame::register(world)`（起こすたびに登記をやり直す＝要件 1.12）。`register_systems` に `ghost_switch::register_change_drain(world)` を足す（`Input` 段・説明書の取り出しと同じ位置）。
 - `reopen_ghost_windows` の `#[cfg_attr(not(test), allow(dead_code))]` を外す。
 - `GhostBootInputs::production(cfg, helper_exe, kanade_stop, boot_origin)` に由来を足す（`Emo2BootInputs.boot_origin`）。
+- `switch_to`／`switch_to_default` の `inputs` は `GhostBootInputsSource` から組む（`ShioriWiring::Custom` は写せず、停止通知の送り口は `main` にしか無いため、作り口ごと World に置く）。無ければ `error!(ghost_switch_no_context)` で起動失敗と同じ扱い。
 
 #### BootConfig／BootResolve（`crates/areka/src/boot_config.rs`・`boot_resolve.rs`）
 
@@ -652,7 +655,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 
 #### Main（`crates/areka/src/main.rs`）
 
-- 据え付け: `register_systems` の後に `BootContext` を挿す。`boot_ghost` の戻りを `GhostSlot(Some(session))` として World へ挿す（ローカル変数には持たない）。
+- 据え付け: `register_systems` の後に `BootContext` と `GhostBootInputsSource`（`GhostBootInputs::production` を helper のパスと停止通知の送り口の写しで閉じたもの）を挿す。`boot_ghost` の戻りを `GhostSlot(Some(session))` として World へ挿す（ローカル変数には持たない）。
 - `run()` の後: `GhostSlot` から取り出す（`None` なら降ろすものが無い）。告知の場面の `ghost_name`／`ghost_root` は `GhostSession::names()` と `BootContext.current.cfg.ghost_root` から組む（切替後の今のゴースト）。`fatal` で終わったときは `GhostSlot` が空なので、`ghost_name` は `BootContext.current.ghost` のフォルダ名へ倒す。`fault_of` が `Some` なら `AlertScene::ShioriFault`（`GhostFallbackFailed` も同じ場面）。
 - 単独起動の失敗（要件 6.8・2026-09-26 設計討議で「処理中の失敗全般」に確定＝起動系列の途中か定常のあとかを見ない・定常到達の旗は持たない）: `FirstExit` が `KanadeStopped(Fault)` で、`BootContext.current.ghost.route` が `Argv` でなく、フォルダが `DEFAULT_GHOST_FOLDER` でないとき、後始末で `session.shutdown` の**後**（sylphya の flush が終わってから）に `record_halt(app_profile_dir, 落ちた名前)`（名前は `names().name`・無ければフォルダ名）。`Argv` の起動は開発者の上書きなので記憶を書き換えない（`LastUsed` の規則と同じ・`info!`）。`GhostFallbackFailed`（切替の途中の致命）では既定ゴーストの `on_boot_ok` が既に `LastGhost` を既定へ書いているので書かない。
 
@@ -747,7 +750,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 - `consumer_ledger` の件数の固定を 9 へ。
 
 ### Integration Tests（偽の SHIORI 2 体・同じ World・`ghost_session_switch_tests.rs`）
-- 土台: `ghost_switch_test_support.rs` が一時の根を組む（`ghost/A`・`ghost/B`・`ghost/emo2` ＝ emo2 検体の複製・`balloon/emo2-kakukaku`）。B と emo2 には起動記録（`ghost/master/profile/areka/sylphya.toml` の `[boot] count`）を先に書く。`World::new()` ＋ `Schedules` ＋ `AppExit` ＋ `register_systems` ＋ `BootContext`（`ghost_session_restart_tests.rs` の形）。偽の SHIORI は `SpineHarness::standard_backend` の型（`ScriptedShioriBackend::builder()`）で 1 体ずつ台本を組み、`ShioriWiring::Custom` で渡す。フレームは回さず、`run_ghost_quit_phase(world)` と `drain_change_requests(world)` を有界に回す（`spin_wait_until`＋`run_bounded`）。
+- 土台: `ghost_switch_test_support.rs` が一時の根を組む（`ghost/A`・`ghost/B`・`ghost/emo2` ＝ emo2 検体の複製・`balloon/emo2-kakukaku`）。B と emo2 には起動記録（`ghost/master/profile/areka/sylphya.toml` の `[boot] count`）を先に書く。`World::new()` ＋ `Schedules` ＋ `AppExit` ＋ `register_systems` ＋ `BootContext`（`ghost_session_restart_tests.rs` の形）。偽の SHIORI は `SpineHarness::standard_backend` の型（`ScriptedShioriBackend::builder()`）で 1 体ずつ台本を組み、`ShioriWiring::Custom` で渡す（`GhostBootInputsSource` を試験用に据え、`cfg.ghost_root` のフォルダ名で B／emo2 の台本を選ぶ）。フレームは回さず、`run_ghost_quit_phase(world)` と `drain_change_requests(world)` を有界に回す（`spin_wait_until`＋`run_bounded`）。
 - 1 周（要件 10.1・10.13）: A（`OnBoot` 台本）→ `request_ghost_switch(Name(B), raise_event: true, Automatic)` → A の `OnGhostChanging`（台本あり）→ 再生完了 → `Stopped` → B（`OnGhostChanged` 204 → `OnBoot`）→ `Steady`。判定（集めて 1 回）: ⑴ A・B の呼出列と Reference（`RecordedCall`）、⑵ `AppExit` 未要求、⑶ 系の数が 1 周目と同じ、⑷ `ReadmeWiring` が B の根の下・`MenuWiring` の登記に `Ghost`・`UserBreakWiring` と `KanadeNoticeRx` が生きた送出端につながっている、⑸ `SwitchInFlight` が消えている。
 - 同じ土台で: 起動記録の無い B → `OnFirstBoot`・`OnGhostChanged` 0 件（要件 4.4・10.13）。A → A（自分自身・要件 1.8）。B の SHIORI が接続に失敗（`Custom(|| Err)`）→ emo2 が `OnBoot` の Ref6＝`halt`・Ref7＝B の名前で起き `OnGhostChanged` 0 件・`alert::raise` は呼ばれない（要件 6.1・6.2・10.5）。根に emo2 が無い ＋ B の失敗 → `AppExit` 要求 ＋ `FirstExit == GhostFallbackFailed`（要件 6.4・10.5）。
 
