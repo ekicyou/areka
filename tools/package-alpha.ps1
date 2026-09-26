@@ -72,6 +72,7 @@ $LOG_MARKER_SMOKE_GATE     = 'smoke 自動 close ゲート有効'          # cra
 $LOG_MARKER_WINDOWS        = '本物のゴースト窓を開きました'          # crates/areka/src/ghost_session.rs
 $LOG_MARKER_FAULTS         = @('SHIORI が動かなくなりました', 'event="connect_failed"', 'event="helper_exited"')
 $LOG_MARKER_GREETING       = '起動グリーティングを再生起動'          # areka-kanade/src/schedule/boot.rs（204 側の文言は数えない）
+$LOG_MARKER_SMOKE_EXIT     = 'smoke 自動 close: ゴースト窓を despawn しました'  # crates/areka/src/main.rs の有界の自動終了が発火した行（quit_app の直後）
 $LOG_MARKER_BALLOON        = 'バルーンを決めました'                  # crates/areka/src/boot_config.rs の balloon_resolved
 $LOG_MARKER_BALLOON_ROUTE  = 'route=Companion'
 $LOG_MARKER_BALLOON_DIR    = '\balloon\emo2-kakukaku'
@@ -432,7 +433,40 @@ Step '完成' {
     Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
 }
 
-$script:WatchdogKilled = $false   # 番犬が子を止めたか（4.2 で合否の一覧に畳み込む）
+# 記録の判定（要件 3.3・3.5）。2 つの記録を連結した文字列・子の終了コード・番犬で止めたかを受け、
+# 条件ごとに { Name; Ok; Detail } を返す。全部見てから呼び手が 1 回主張する（1 つ目で止めない）。
+function Test-RunLog([AllowEmptyString()][string]$Text, [int]$ExitCode, [bool]$WatchdogKilled) {
+    $lines = $Text -split "`r?`n"
+    $count = { param($m) @($lines | Where-Object { $_.Contains($m) }).Count }
+    $row = { param($name, $ok, $detail) [pscustomobject]@{ Name = $name; Ok = [bool]$ok; Detail = $detail } }
+    $gate = & $count $LOG_MARKER_SMOKE_GATE
+    & $row '番犬で止めていない' (-not $WatchdogKilled) ($WatchdogKilled ? '番犬で止めた' : '自分で終わった')
+    & $row '有界で走った' ($gate -gt 0) "「$LOG_MARKER_SMOKE_GATE」$gate 件"
+    & $row '終了コード 0' ($ExitCode -eq 0) "終了コード $ExitCode"
+    $win = & $count $LOG_MARKER_WINDOWS
+    & $row 'ゴーストの窓が立った' ($win -gt 0) "「$LOG_MARKER_WINDOWS」$win 件"
+    $faults = @($LOG_MARKER_FAULTS | ForEach-Object { $n = & $count $_; if ($n) { "「$_」$n 件" } })
+    & $row 'SHIORI の接続の失敗が無い' (-not $faults.Count) ($faults.Count ? ($faults -join '・') : '失敗の目印 0 件')
+    # 204 側の「epilogue-only 起動記録トーク…」は同じ event="boot_talk" だが文言が違うので数えない
+    # 自動終了より後の挨拶は数えない（要件 3.3 の空振り）。両方とも run.log に出るので行の位置で比べる。
+    # 自動終了の目印が無ければ全行を見る（そのときは「有界で走った」側か終了コードで落ちる）
+    $exitAt = [array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($l) $l.Contains($LOG_MARKER_SMOKE_EXIT) })
+    $before = ($exitAt -ge 0) ? @($lines | Select-Object -First $exitAt) : $lines
+    $greet = @($before | Where-Object { $_.Contains($LOG_MARKER_GREETING) }).Count
+    $all = & $count $LOG_MARKER_GREETING
+    & $row '会話が始まった' ($greet -gt 0) "「$LOG_MARKER_GREETING」$greet 件（自動終了より前）・全体 $all 件"
+    # 初回のバルーン: 最初の「バルーンを決めました」の行。dir= は行末までの値（パスに空白が入り得る）
+    $b = @($lines | Where-Object { $_.Contains($LOG_MARKER_BALLOON) }) | Select-Object -First 1
+    if (-not $b) {
+        & $row '初回のバルーンは同梱' $false "「$LOG_MARKER_BALLOON」の行が無い"
+    } else {
+        $dir = ($b -match 'dir=(.*)$') ? $Matches[1].Trim() : ''
+        $ok = $b.Contains($LOG_MARKER_BALLOON_ROUTE) -and $dir.EndsWith($LOG_MARKER_BALLOON_DIR, [StringComparison]::OrdinalIgnoreCase)
+        & $row '初回のバルーンは同梱' $ok ($b.Substring($b.IndexOf($LOG_MARKER_BALLOON)))
+    }
+}
+
+$script:WatchdogKilled = $false   # 番犬が子を止めたか（記録の判定の合否の一覧に畳み込む）
 if ($Check) {
     Step '短いパスへ展開' {
         # 展開先の長さは「前提の確認」で確かめ済み
@@ -471,11 +505,20 @@ if ($Check) {
             $null = $script:Child.WaitForExit(10000)
         }
         Write-Host "子の終了コード: $($script:Child.ExitCode)"
+        # 番犬で止めたことは次の段「記録の判定」の合否の一覧に畳み込む（ここでは止めない）
+    }
+
+    Step '記録の判定' {
+        $text = (Get-Content -LiteralPath $script:RunLog -Raw) + "`n" + (Get-Content -LiteralPath $script:RunErrLog -Raw)
+        $rows = Test-RunLog $text $script:Child.ExitCode $script:WatchdogKilled
+        $rows | ForEach-Object { Write-Host ('{0} {1}（{2}）' -f ($_.Ok ? '合' : '否'), $_.Name, $_.Detail) }
         Write-Host "記録: $script:RunLog"
         Write-Host "記録: $script:RunErrLog"
         Write-Host "展開先: $script:ExpandDir"
-        # 番犬で止めたら否（記録の 6 条件の判定は次の段が持つ）
-        if ($script:WatchdogKilled) { Exit-Script $EXIT_CHECK_FAILED '起動確認の否（番犬で止めた）' }
+        $failed = @($rows | Where-Object { -not $_.Ok })
+        if ($failed.Count) {
+            Exit-Script $EXIT_CHECK_FAILED ("起動確認の否（{0}）" -f (($failed | ForEach-Object Name) -join '・'))
+        }
     }
 }
 

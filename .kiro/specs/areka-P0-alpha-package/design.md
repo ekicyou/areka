@@ -57,7 +57,7 @@
 
 ### Revalidation Triggers
 
-- 記録の行の文言が変わる: 「本物のゴースト窓を開きました」（`ghost_session.rs`）・「バルーンを決めました」の `route=`（`boot_config.rs` の `event = "balloon_resolved"`）・「起動グリーティングを再生起動」（`areka-kanade/src/schedule/boot.rs` の `event = "boot_talk"` の Value 側）・「SHIORI が動かなくなりました」（`alert.rs` の `SHIORI_FAULT_TITLE`）・`connect_failed`／`helper_exited`（`areka-kanade/src/shiori/real.rs`）・「smoke 自動 close ゲート有効」（`main.rs`）。変わるとスクリプトの判定が偽の否になる。
+- 記録の行の文言が変わる: 「本物のゴースト窓を開きました」（`ghost_session.rs`）・「バルーンを決めました」の `route=`（`boot_config.rs` の `event = "balloon_resolved"`）・「起動グリーティングを再生起動」（`areka-kanade/src/schedule/boot.rs` の `event = "boot_talk"` の Value 側）・「SHIORI が動かなくなりました」（`alert.rs` の `SHIORI_FAULT_TITLE`）・`connect_failed`／`helper_exited`（`areka-kanade/src/shiori/real.rs`）・「smoke 自動 close ゲート有効」「smoke 自動 close: ゴースト窓を despawn しました」（`main.rs`）。変わるとスクリプトの判定が偽の否になる。
 - 根の形・helper の名前・記憶の置き場・既定の名前が変わる（zip の形と README の事実が古くなる）。
 - `nar-sample-path` の出力の鍵（`root=`／`folder=`／`balloon.<名>=`）が変わる。
 - `about.toml` の `accepted`・`about.hbs`・`deny.toml` が変わる（謝辞の生成が止まる）。
@@ -362,7 +362,7 @@ flowchart TD
   | 終了コード 0 | `$proc.ExitCode` | `0`（SHIORI の失敗で終わると `finish_after_run` が `Err`＝1） |
   | ゴーストの窓が立った | 「本物のゴースト窓を開きました」（`ghost_session.rs`） | 1 件以上 |
   | SHIORI の接続の失敗が無い | 「SHIORI が動かなくなりました」（`alert.rs` の `SHIORI_FAULT_TITLE`）・`event="connect_failed"`・`event="helper_exited"`（`areka-kanade/src/shiori/real.rs`） | いずれも 0 件 |
-  | 会話が始まった | 「起動グリーティングを再生起動」（`areka-kanade/src/schedule/boot.rs` の `to_baseware_version` の Value 側） | 1 件以上。**同じ `event="boot_talk"` でも「epilogue-only 起動記録トークを再生起動（挨拶トーク皆無）」は 204 側の文言なので数えない**（`event` の名前ではなく文言で見る） |
+  | 会話が始まった | 「起動グリーティングを再生起動」（`areka-kanade/src/schedule/boot.rs` の `to_baseware_version` の Value 側） | 1 件以上。**同じ `event="boot_talk"` でも「epilogue-only 起動記録トークを再生起動（挨拶トーク皆無）」は 204 側の文言なので数えない**（`event` の名前ではなく文言で見る）。**数えるのは `run.log` の中で最初の「smoke 自動 close: ゴースト窓を despawn しました」（`main.rs`・有界の自動終了だけが出す行）より前の行だけ**（kanade は自動終了の後にも挨拶の行を出すので、件数だけでは空振りを通す。2026-09-26 実装時に `-SmokeExitMs 300` の実走で判明し追記） |
   | 初回のバルーンは同梱 | 「バルーンを決めました」の行（`boot_config.rs` の `event = "balloon_resolved"`） | その行が `route=Companion` を含み、`dir=` が `\balloon\emo2-kakukaku` で終わる |
 
   否なら `run.log`・`run.stderr.log` の絶対パスと展開先を印字して終了コード 2。合でも同じパスを印字する（展開先は消さない＝あとで読める・要件 3.6）。
@@ -496,7 +496,7 @@ City-Pop'n は当初「未確認」としていたが、2026-09-26 の実装の�
 
 - PE の読み手: `vendors/sample_ghost/emo2.nar` の `pasta.dll`（機種 `0x014c`・`VCRUNTIME` を読まない＝合）と、開発機の `target/debug/areka.exe`（機種 `0x8664`・`VCRUNTIME140.dll` を読む＝拒否表に当たる＝否）。
 - 中身の判定: 正しい stage から作った zip（合）と、`profile/` を 1 つ足した zip・helper を x64 に差し替えた zip・`readme.txt` を 1 バイト変えた zip（それぞれ否）。
-- 記録の判定: 正の目印 4 種が在り失敗の目印が無い記録（合）と、「起動グリーティングを再生起動」を「epilogue-only 起動記録トークを再生起動（挨拶トーク皆無）」に替えた記録（否・204 だけが返る状態の再現）・`route=Only` の記録（否）。
+- 記録の判定: 正の目印 4 種が在り失敗の目印が無い記録（合）と、「起動グリーティングを再生起動」を「epilogue-only 起動記録トークを再生起動（挨拶トーク皆無）」に替えた記録（否・204 だけが返る状態の再現）・`route=Only` の記録（否）・`-SmokeExitMs 300` の実走の記録（否・挨拶の行が自動終了の後にだけ在る）。
 
 これらは使い捨ての確かめであり、リポジトリにテストとして残さない（要件の境界）。結果は tasks の完了報告に書く。
 
