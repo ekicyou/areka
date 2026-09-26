@@ -234,11 +234,11 @@ flowchart TD
 | 4.5 | 既知の制限の 4 点 | 同 | 署名なし・Windows 専用・深いフォルダ不可・α でできないこと |
 | 4.6 | README をそのまま zip へ | 段「組み立て」「中身の判定」 | zip の `README.txt` と `dist/README.txt` をバイト比較 |
 | 5.1 | 資産を 1 つずつ・作者と条件と出どころ | `dist/README.txt` の「同梱物とライセンス」 | 下の「同梱物の条件の文面」の表（7 行） |
-| 5.2 | `emo2` のシェルは MIT でない・抜き出し不可・説明書の場所・\1 は未確認 | 同 | 表の \0・\1 の行 |
+| 5.2 | `emo2` のシェルは MIT でない・抜き出し不可・説明書の場所・\1 は `CityPop.txt` の条件 | 同 | 表の \0・\1 の行 |
 | 5.3 | `StayseeBalloon` は CC0 | 同 | 表の行 |
 | 5.4 | areka の MIT は本体だけ・謝辞の文書を示す | 同 | 表の先頭の行 |
 | 5.5 | `emo2-kakukaku` の作者・素材の出どころ・抜き出し不可 | 同 | 表の行 |
-| 5.6 | 確かめられない条件は「未確認」 | 同・`alpha-release-signoff` への申し送り | 表の \1 の行 |
+| 5.6 | 確かめられない条件は「未確認」 | 同・`alpha-release-signoff` への申し送り | 該当する資産は 0（\1 は `CityPop.txt` で確かめられた・2026-09-26 実装時） |
 | 5.7 | `konnoyayame` を入れない | スクリプトの写す元の表（9 行）と判定 2 | `ghost/` 直下は `emo2` だけ |
 | 5.8 | `emo2` を部分ごとに分けて書く | 同 | 表の辞書・`pasta.dll`・画像の行 |
 | 6.1・6.2・6.4 | 根の README のライセンス表記 | `README.md` | バッジのリンク先 `LICENSE-MIT`・2 か所を「MIT」・食い違い 0（`Cargo.toml`／`about.hbs`／`dist/README.txt`／zip の `LICENSE-MIT`） |
@@ -416,11 +416,11 @@ flowchart TD
 | 5.1・5.8 | ゴースト `emo2` の辞書・スクリプト | えちょ（ekicyou） | 書庫の中に利用条件の記載は無い（そのまま書く・推測で足さない） | `ghost/emo2/readme.txt`・`https://ekicyou.github.io/ghost_dev/emo2/` |
 | 5.1・5.8 | SHIORI `pasta.dll`（32 ビット） | ekicyou | MIT | pasta の `LICENSE`（`https://github.com/ekicyou/pasta`） |
 | 5.2・5.8 | シェル \0「コンフィズリー」 | ゆゆぴか | シェル作者の条件に従う（MIT ではない）。**areka のファーストゴーストとして使うことはできるが、シェルを抜き出して利用することはできない**。禁止: フリーシェルとしての再配布・伺か関連物以外での使用・商用利用・立ち絵の左右反転 | `ghost/emo2/shell/master/readme.txt` |
-| 5.2・5.6 | シェル \1「City-Pop'n」 | 大槻 | **未確認**（説明書に条件の本文が無い）。作者のサイト `http://th88.blog.shinobi.jp/` を示す。抜き出し利用の不可は \0 と同じ書き方 | 同上 |
+| 5.2 | シェル \1「City-Pop'n」 | 大槻 | シェル作者の条件に従う（MIT ではない）。作者の説明書に「改変や転用、伺かゴースト以外での使用の一切は自由」「使用許可の請求も不要」。ただし \0 と 1 つのシェルにまとまっているので、シェルごとの抜き出しは \0 の条件により不可。作者のサイト `http://th88.blog.shinobi.jp/` を示す | `ghost/emo2/shell/master/CityPop.txt` |
 | 5.5・5.8 | バルーン `emo2-kakukaku` | ekicyou | 画像素材はフキダシデザインのもの（規約: 表記不要・アプリへの組み込みは 20 点まで無料・データの再配布は禁止）。**areka と `emo2` のバルーンとして使うことはできるが、画像を抜き出して利用することはできない** | `balloon/emo2-kakukaku/`・`https://fukidesign.com/terms` |
 | 5.3 | バルーン `StayseeBalloon` | ぽな | CC0 1.0 | `balloon/StayseeBalloon/LICENSE`・`https://github.com/ponapalt/StayseeBalloon` |
 
-「未確認」の資産（City-Pop'n）は要件 5.6 に従い、未確認のまま同梱すること自体は議題 ⑶ の裁定（`emo2` 同梱可）に含まれる旨を README には書かず、`alpha-release-signoff` の brief に「未確認のまま出すかの最終判断」として申し送る（設計の外の判断）。
+City-Pop'n は当初「未確認」としていたが、2026-09-26 の実装の裏取りで書庫の中の `shell/master/CityPop.txt` に作者の条件が見つかったので、その文書を出どころとして書く。この書き方でよいか・作者のサイトでの確認を要するかは `alpha-release-signoff` の brief に申し送る（設計の外の判断）。
 
 **Implementation Notes**
 
