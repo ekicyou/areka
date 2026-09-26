@@ -2,7 +2,7 @@
 
 > 先進坑（使い捨て）。規模 S。変更は `crates/pilot/examples/pilot-dropfiles-on-wuc-window/` の新規フォルダだけ（`crates/pilot/Cargo.toml` も含め既存ファイルは変えない）。手で落とす検証（タスク 4）は開発者の手が要る。
 
-- [ ] 1. 雛形を写して example を立ち上げる
+- [x] 1. 雛形を写して example を立ち上げる
   - `_template` の README と入口を spec 名のフォルダへ写し、入口を「上限時間で自分で終わるだけの空の走行」にする（手本 `pilot-balloon-asset-swap` の器: 購読者の既定フィルタ `info,wintf::ecs::clickthrough=debug`・上限時間の環境変数と既定 180 秒・終了の理由 3 値と終了コード 0／2／3）
   - 上限時間の解釈と終了コードの対応に単体テストを置く
   - `cargo test -p pilot --example pilot-dropfiles-on-wuc-window` が緑で、`crates/pilot/` の外と `crates/pilot/Cargo.toml` に差分が無い
