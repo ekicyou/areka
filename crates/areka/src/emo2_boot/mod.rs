@@ -70,7 +70,7 @@ use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
-use areka_kanade::KanadeStopped;
+use areka_kanade::KanadeNotice;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
 use areka_seriko::{
@@ -86,7 +86,7 @@ use crate::placement::AuthorDpi;
 
 use self::adapter::PresentBridge;
 use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
-use self::frame::{Emo2Wiring, KanadeStopRx, emo2_frame_system, ghost_quit_system};
+use self::frame::{Emo2Wiring, KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::readme_cue::ReadmeCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
@@ -346,7 +346,7 @@ pub fn wire_emo2_boot(
     inputs: Emo2BootInputs,
     author_dpi: AuthorDpi,
     zorder_descript: Option<&str>,
-    kanade_stop: Sender<KanadeStopped>,
+    kanade_stop: Sender<KanadeNotice>,
 ) -> Emo2BootOutcome {
     /// 実 sink 結線を成立させないフォールバック結果（`ghost_session::boot_ghost` の `LogSink`×2 boot へ委ねる・R7.3）。
     fn fallback() -> Emo2BootOutcome {
@@ -669,14 +669,14 @@ pub fn register_emo2_frame_system(world: &mut World) {
         .add_systems(Update, emo2_frame_system.after(update_typewriters));
 }
 
-/// 停止通知の受け口を World に据え、終了相を `Update` に登録する（受け口はプロセスに 1 つ・
+/// 運行の通知（停止ほか）の受け口を World に据え、終了相を `Update` に登録する（受け口はプロセスに 1 つ・
 /// 要件 6.4）。
 ///
 /// 呼び手は `ghost_session::register_systems` で、プロセスに 1 回、[`register_emo2_frame_system`] の
 /// 直後に呼ぶ。終了相は毎フレームの相より前に走る。順序の相手（毎フレームの相）が登録されていない
 /// World でも登録は通る（`frame_schedule_tests` の 1 本がこの形を固定する）。
-pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeStopped>) {
-    world.insert_non_send(KanadeStopRx(rx));
+pub fn wire_kanade_stop(world: &mut World, rx: Receiver<KanadeNotice>) {
+    world.insert_non_send(KanadeNoticeRx(rx));
     world
         .resource_mut::<Schedules>()
         .add_systems(Update, ghost_quit_system.before(emo2_frame_system));

@@ -11,7 +11,7 @@ use std::sync::mpsc::{self, Sender};
 
 use areka_actor::ActorHandle;
 use areka_kanade::{
-    KanadeConfig, KanadeMsg, KanadeStopped, ShioriBackend, spawn_kanade_with_stop_sink,
+    KanadeConfig, KanadeMsg, KanadeNotice, ShioriBackend, spawn_kanade_with_stop_sink,
     spawn_shiori_actor,
 };
 use areka_parsers::charset::DefaultEncoding;
@@ -498,11 +498,12 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
 /// 全構築点の書き換えを強いる——設計自身が置いた「既存の構築点は不変」という条件と両立しない。
 /// そこで [`areka_kanade::spawn_kanade_with_stop_sink`] と**同じ形の派生関数**を採る。
 ///
-/// `Some` を渡すと、kanade の終了系列が完了した時点で [`KanadeStopped`] が 1 件届く。受け手
+/// `Some` を渡すと、kanade の終了系列が完了した時点で運行の通知の「停止」
+/// （[`KanadeNotice::Stopped`]）が 1 件届く。受け手
 /// （UI の毎フレーム結線）はそれを合図に全ゴースト窓を閉じる。`None` なら通知は出ない。
 pub fn boot_with_kanade_stop(
     mut options: GhostBootOptions,
-    kanade_stop: Option<Sender<KanadeStopped>>,
+    kanade_stop: Option<Sender<KanadeNotice>>,
 ) -> Result<GhostRuntime, GhostBootError> {
     // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。
     let mount = match resolve(&options.ghost_root, options.default_encoding) {

@@ -63,7 +63,7 @@ use areka_ghost::{
     GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
     boot_with_kanade_stop,
 };
-use areka_kanade::{CloseReason, KanadeStopped, MonotonicMs, ShioriBackend};
+use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
 use areka_seriko::{
@@ -90,7 +90,7 @@ use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use super::adapter::PresentBridge;
 use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use super::frame::{
-    Emo2Wiring, KanadeStopRx, run_attach_phase, run_dpi_phase, run_move_drain_phase,
+    Emo2Wiring, KanadeNoticeRx, run_attach_phase, run_dpi_phase, run_move_drain_phase,
     run_text_phase, run_text_scale_phase,
 };
 use super::move_cue::{MoveCueSink, MoveDirective};
@@ -830,8 +830,8 @@ impl SpineHarness {
             ticker: TickerMode::Disabled,
         };
         // 停止通知の channel（R15.4・本番 `wire_emo2_boot` と同型）: 送出端は kanade へ、受信端は
-        // World の受け口（`KanadeStopRx`）へ挿す。終了相を回さないテストでは読まれないだけで無害である。
-        let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeStopped>();
+        // World の受け口（`KanadeNoticeRx`）へ挿す。終了相を回さないテストでは読まれないだけで無害である。
+        let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
         let ghost = boot_with_kanade_stop(options, Some(kanade_stop_tx))
             .expect("scripted boot は解決可能な emo2 ghost_root で成功する");
 
@@ -849,7 +849,7 @@ impl SpineHarness {
             clock,
             wiring_assets,
         );
-        world.insert_non_send(KanadeStopRx(kanade_stop_rx));
+        world.insert_non_send(KanadeNoticeRx(kanade_stop_rx));
 
         SpineHarness {
             world,

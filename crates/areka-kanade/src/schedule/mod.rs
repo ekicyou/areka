@@ -342,6 +342,8 @@ pub(crate) enum Action {
     CancelChoice {
         talk_id: TalkId,
     },
+    /// 運行の通知を UI へ送る（シェルは停止通知と同じ送出端へそのまま流す）。
+    Notice(crate::change::KanadeNotice),
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
@@ -741,6 +743,11 @@ fn current_talk_id(phase: &Phase) -> Option<TalkId> {
 #[cfg(test)]
 #[path = "schedule_tests.rs"]
 mod tests;
+
+/// 運行表の型（`Action` ほか）の変種の網羅。
+#[cfg(test)]
+#[path = "schedule_variant_tests.rs"]
+mod variant_tests;
 
 /// タスク 6.1: 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
 ///

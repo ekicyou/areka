@@ -76,8 +76,8 @@ use tracing::{debug, error, info, warn};
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, TextSlotView};
 #[allow(unused_imports)]
 use areka_emo_text::actor::{TextLayerRuntime, present_frame};
-// 終了相（R15.4）が読む停止通知の型。`run_ghost_quit_phase` が非 test ビルドでも使う。
-use areka_kanade::KanadeStopped;
+// 終了相（R15.4）が読む運行の通知の型。`run_ghost_quit_phase` が非 test ビルドでも使う。
+use areka_kanade::{KanadeNotice, KanadeStopped};
 #[allow(unused_imports)]
 use areka_parsers::balloon::BalloonModel;
 #[allow(unused_imports)]
@@ -155,11 +155,12 @@ use self::scale_text::reconcile_reported_sizes;
 // 別式で組むと「観測したグリフ数」と「実際に描かれる文字」が食い違う。
 pub(super) use self::scale_text::resolve_talk_time;
 
-/// kanade の停止通知の受け口（World の NonSend 資源・`Receiver` は `Sync` でない）。
+/// kanade の運行の通知（停止・定常到達・切替の中止）の受け口（World の NonSend 資源・
+/// `Receiver` は `Sync` でない）。
 ///
 /// 実 sink 結線（`wire_emo2_boot`）と LogSink 側の起動とで同じ 1 つを共有する（要件 6.4）。
 /// 取り出すのは [`run_ghost_quit_phase`] の 1 か所だけ。
-pub(crate) struct KanadeStopRx(pub(crate) Receiver<KanadeStopped>);
+pub(crate) struct KanadeNoticeRx(pub(crate) Receiver<KanadeNotice>);
 
 /// 終了相: kanade の停止通知を取り出し、届いていれば全ゴースト窓を閉じる（R15.4・design D15 の 4）。
 ///
@@ -169,12 +170,14 @@ pub(crate) struct KanadeStopRx(pub(crate) Receiver<KanadeStopped>);
 ///
 /// # 判断
 ///
-/// - 受け口 [`KanadeStopRx`] が World に無い（結線していない構成・既存の試験）→ 何もせず `false`。
+/// - 受け口 [`KanadeNoticeRx`] が World に無い（結線していない構成・既存の試験）→ 何もせず `false`。
 /// - 届いていない → 何もせず `false`（定常フレームは無操作）。
 /// - 1 件以上届いた → `try_recv` で**全件**取り出し、`info!(event = "ghost_quit")` の上で
 ///   統合操作 [`quit_app`]（出所 `KanadeStopped`）を 1 度だけ呼び `true`。2 件目以降と、
 ///   既に窓が無い場合は `debug!` で打ち切る（終了処理の正常系であって失敗ではない——
 ///   統合操作が破棄済み標的に対して敷いているのと同じ区別）。
+/// - 停止以外の通知（定常到達・切替の中止）は `debug!` を残して読み捨てる（切替を捌く相が
+///   まだ無いので、終了の判断には関わらない）。返り値は停止の通知を消化したときだけ `true`。
 /// - 送出端が全て落ちた（`Disconnected`）→ 溜まっていた通知は上と同じに扱い、無ければ何もしない。
 ///   ghost boot に失敗した構成でも受信端だけは生き得るので、切断そのものは異常ではない。
 ///
@@ -183,17 +186,24 @@ pub(crate) struct KanadeStopRx(pub(crate) Receiver<KanadeStopped>);
 ///
 /// 原因（Fault を含む）によって終わらない分岐は置かない（要件 6.5）。
 pub(super) fn run_ghost_quit_phase(world: &mut World) -> bool {
-    let Some(rx) = world.get_non_send::<KanadeStopRx>() else {
+    let Some(rx) = world.get_non_send::<KanadeNoticeRx>() else {
         return false;
     };
     let mut first: Option<KanadeStopped> = None;
     let mut extra = 0usize;
     // 全件取り出す（`Disconnected` も「もう来ない」だけで異常ではない＝溜まっていた分は消化する）。
     // 取り出し終えてから `quit_app` へ World を渡す（受け口の借用はここで切れる）。
-    while let Ok(stopped) = rx.0.try_recv() {
-        match first {
-            None => first = Some(stopped),
-            Some(_) => extra += 1,
+    while let Ok(notice) = rx.0.try_recv() {
+        match notice {
+            KanadeNotice::Stopped(stopped) => match first {
+                None => first = Some(stopped),
+                Some(_) => extra += 1,
+            },
+            other => tracing::debug!(
+                event = "kanade_notice_ignored",
+                notice = ?other,
+                "停止以外の運行の通知は終了の判断に関わらない——読み捨てる"
+            ),
         }
     }
     let Some(stopped) = first else {

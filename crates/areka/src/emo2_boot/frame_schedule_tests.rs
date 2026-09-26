@@ -27,12 +27,12 @@
 
 use std::sync::mpsc;
 
-use areka_kanade::{KanadeStopCause, KanadeStopped};
+use areka_kanade::{KanadeNotice, KanadeStopCause, KanadeStopped};
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, IntoSystemSet, ScheduleLabel, Schedules};
 use wintf::ecs::{FrameFinalize, Update, update_typewriters};
 
-use super::frame::{KanadeStopRx, emo2_frame_system, ghost_quit_system};
+use super::frame::{KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
 use crate::app_exit::{ExitOrigin, FirstExit};
 use crate::placement::spawn::wire_zorder_pair;
 
@@ -223,8 +223,8 @@ fn ghost_quit_system_without_the_frame_system_quits_on_one_notice() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
     world.insert_non_send(wintf::AppExit::new());
-    let (tx, rx) = mpsc::channel::<KanadeStopped>();
-    world.insert_non_send(KanadeStopRx(rx));
+    let (tx, rx) = mpsc::channel::<KanadeNotice>();
+    world.insert_non_send(KanadeNoticeRx(rx));
     world
         .resource_mut::<Schedules>()
         .add_systems(Update, ghost_quit_system.before(emo2_frame_system));
@@ -238,9 +238,10 @@ fn ghost_quit_system_without_the_frame_system_quits_on_one_notice() {
         "`Update` に載るのは終了相 1 本だけ（毎フレームの相は載せない）"
     );
 
-    tx.send(KanadeStopped {
+    tx.send(KanadeNotice::Stopped(KanadeStopped {
         cause: KanadeStopCause::Quit,
-    })
+        handoff: None,
+    }))
     .expect("停止通知を投函できる");
     world.run_schedule(Update);
 

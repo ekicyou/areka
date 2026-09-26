@@ -71,13 +71,16 @@ pub enum KanadeStopCause {
 
 /// kanade の終了系列が完了したことの UI への通知（R15.3・D15 の 2）。
 ///
-/// `Action::StopSelf` の実行点（[`crate::actor`]）から**非ブロッキングに 1 度だけ**送る。
+/// `Action::StopSelf` の実行点（[`crate::actor`]）から運行の通知の「停止」
+/// （[`crate::change::KanadeNotice::Stopped`]）に包んで**非ブロッキングに 1 度だけ**送る。
 /// 受け手（UI スレッドの毎フレーム結線）はこれを合図に全ゴースト窓を閉じる。原因を問わず
 /// 送る——終了挨拶を終えた正規終了も、期限超過も、強制終了も、窓を閉じる点では同じ扱いである。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KanadeStopped {
     /// 終了系列の起因（記録の語彙・受け手は分岐しない）。
     pub cause: KanadeStopCause,
+    /// 切替の相を経て止まったときの切替の中身（それ以外の停止は `None`）。
+    pub handoff: Option<crate::change::ChangeHandoff>,
 }
 
 /// マウス入力（UI 配線層 → kanade の境界メッセージ・DD-IE 系）。

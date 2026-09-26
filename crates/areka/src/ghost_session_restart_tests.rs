@@ -12,7 +12,7 @@ use wintf::ecs::{Input, Update};
 
 use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::emo2_boot::frame::KanadeStopRx;
+use crate::emo2_boot::frame::KanadeNoticeRx;
 use crate::emo2_boot::sample_test_support::acquire_emo2;
 use crate::emo2_boot::spine::{SpineHarness, run_bounded};
 use crate::input_events::user_break::UserBreakWiring;
@@ -65,7 +65,7 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
 
 /// 偽の SHIORI（標準の台本）・検体の複製・時計なし・記憶の置き場なしで入力の束を組む。
 /// 台本は呼ぶたびに新しい（周ごとに `OnInitialize` から `Unload` までを 1 本ずつ消費する）。
-fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeStopped>) -> GhostBootInputs {
+fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeNotice>) -> GhostBootInputs {
     let (backend, _handle) = SpineHarness::standard_backend("\\s[0]\\e");
     GhostBootInputs {
         wiring: emo2_boot::Emo2BootInputs {
@@ -94,7 +94,7 @@ fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
 fn boot_round(
     world: &mut World,
     sample: &SampleRoot,
-    kanade_stop: Sender<KanadeStopped>,
+    kanade_stop: Sender<KanadeNotice>,
 ) -> GhostSession {
     let descript = StartupDescriptValues {
         author_dpi: placement::AuthorDpi::DEFAULT,
@@ -162,7 +162,7 @@ fn boots_twice_in_one_process_without_double_registration() {
     world.spawn(GhostWindowMarker);
     world.spawn(GhostWindowMarker);
 
-    let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeStopped>();
+    let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
     register_systems(&mut world, kanade_stop_rx);
     let lens_before = systems_lens(&world);
 
@@ -207,7 +207,7 @@ fn boots_twice_in_one_process_without_double_registration() {
         .get_non_send::<MenuWiring>()
         .map(|w| w.registry.registered_frames());
     let kanade_stop_live = {
-        let rx = &world.non_send::<KanadeStopRx>().0;
+        let rx = &world.non_send::<KanadeNoticeRx>().0;
         loop {
             match rx.try_recv() {
                 Ok(_) => continue,
