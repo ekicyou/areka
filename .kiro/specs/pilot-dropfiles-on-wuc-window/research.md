@@ -1,7 +1,7 @@
 # ギャップ分析: pilot-dropfiles-on-wuc-window
 
 > 2026-09-26・`/kiro-validate-gap`。対象は確定済みの `requirements.md`（要件 1〜7）と、ブランチ `claude/pilot-dropfiles-wuc-window-f3f940`（main `13b72893` 相当）の実物のコード。
-> 本書は「情報と選択肢」を出す文書で、決定は書かない。決めるべき点は末尾の「設計で決める事項」に番号を付けて並べた。
+> §1〜§9 は「情報と選択肢」を出すギャップ分析で、決定は書かない。決めるべき点は §7「設計で決める事項」に番号を付けて並べ、設計段の決定は §10 の決定ログに書いた。
 > 引用は「どのファイルの、何の定義か」で指す（行番号は使わない）。
 
 ## 1. 要約
@@ -147,3 +147,84 @@ wintf を変えずに `WM_DROPFILES` を example の側で受け取る方法は 
 - 本書の §7 を要件ディスカッションの議題にする（答えで作業が変わるものだけ＝1・2・3・5 が主。4・6・7・8 は how なので設計で決めて結果だけ報告でよい）。
 - 設計は `pilot-balloon-asset-swap` の design の型（Runner・終了の理由・環境変数）を写し、受け口だけを新しく描けば足りる。
 - 本坑 `areka-P0-ghost-install` の design が参照するのは README の検証結果だけ。ここで書いた API の所在（§2.1 の表）は設計へ写してよいが、検証結果は README に一本化する（`two-tunnel.md` の「二重化しない」）。
+
+## 10. 設計段の調査と決定ログ（2026-09-26・`/kiro-spec-design`）
+
+> §1〜§9 はギャップ分析（決定を書かない文書）。本節から先は設計段の記録で、§7 の各項に対する**決定**とその理由を書く。結論は `design.md` の Key Decisions に転記済み（design.md は単体で読める）。
+
+### 10.1 調査の範囲と要点（Discovery: light＝既存の先進坑の型の拡張）
+
+- **Feature の分類**: 既存の先進坑 `pilot-balloon-asset-swap` の器（窓・透過機構への登録・上限時間）の写しに受け口を 1 つ足す拡張。外部の新しい依存は無く、Web 調査は要らない。未知は Win32 の振る舞い（§3 末尾の (a)(b)）で、それを測るのが本坑。
+- **引用した定義の実在を再確認**（2026-09-26・ブランチ `claude/pilot-dropfiles-wuc-window-f3f940`）:
+  - `crates/pilot/examples/pilot-balloon-asset-swap/main.rs`: `EXIT_ENV`／`DEFAULT_EXIT_MS`／`exit_ms_from`／`ExitReason`／`exit_code`／`Run`／`register_click_through`／`deadline_system`／`boot_and_run`。
+  - `crates/areka/examples/clickthrough_two_rects.rs`: 窓の `HitTest::none()`・`spawn_rect`（`Rectangle::new()`＋`Brushes::with_foreground`＋絶対配置の `BoxStyle`）・既定フィルタ `"info,wintf::ecs::clickthrough=debug"`・`register_click_through_windows`。
+  - wintf: `hit_test_in_window(world, window, client_point: PhysicalPoint)`（`crates/wintf/src/ecs/layout/hit_test/mod.rs`・`PhysicalPoint` は同ファイルで `PointF` の別名・`PointF::new(f32, f32)` は `crates/wintf/src/ecs/types.rs`）／`WindowHandle::get_style`（`crates/wintf/src/ecs/window/window_handle.rs`）／`ClickThroughRegistryHandle::register(window, hwnd)`（`crates/wintf/src/ecs/clickthrough/controller.rs`）／`compute_ex_style`・`apply_initial_state`（`crates/wintf/src/runtime/window_factory.rs`）／`apply_click_through`・`apply_layered_companion`（`crates/wintf/src/win_style.rs`）／`dispatch_window_message`（`pub(crate)`・`crates/wintf/src/ecs/window_proc/mod.rs`）／`WinApp::new`・`with_exit_policy`（`COINIT_MULTITHREADED`・`crates/wintf/src/runtime/mod.rs`）。
+  - areka 本番の窓の様式: `crates/areka/src/placement/spawn.rs` の `window_style`＝`WS_POPUP | WS_VISIBLE`／`WS_EX_LAYERED | WS_EX_TOOLWINDOW`（`WS_EX_TOPMOST` なし）。
+  - `windows` 0.62.2（`c:\rust\cargo\registry` の実物）: `Win32::UI::Shell` に `SetWindowSubclass`／`DefSubclassProc`／`RemoveWindowSubclass`／`SUBCLASSPROC`／`DragAcceptFiles`／`DragFinish`／`DragQueryFileW(hdrop, u32, Option<&mut [u16]>) -> u32`／`DragQueryPoint(hdrop, *mut POINT) -> BOOL`／`IsUserAnAdmin`。`Win32::UI::WindowsAndMessaging` に `WM_DROPFILES`（563）／`WS_EX_ACCEPTFILES`（0x10）／`GetWindowLongPtrW`／`SetWindowLongPtrW`／`SetWindowsHookExW`／`WH_GETMESSAGE`。両モジュールはルート `Cargo.toml` の `[workspace.dependencies.windows]` の features `Win32_UI_Shell`・`Win32_UI_WindowsAndMessaging` で有効＝**`crates/pilot/Cargo.toml` の変更は不要**（§2.2 の見込みを確定）。
+  - `wintf-winmsg-executor` 0.0.5 `src/util/window.rs`: `WM_NCCREATE` で `GWLP_WNDPROC` を差し替え `GWLP_USERDATA` に状態を置く・`WM_NCDESTROY` で `Box::from_raw` で解放（R5 の前提を確認）。
+- **R1（`WM_DROPFILES` は投函か）**: Windows の落とし物の受け口（OLE がシェルの `CF_HDROP` を `WM_DROPFILES` に直して届ける経路）は窓のスレッドの待ち行列へ投函する経路で、設計は投函前提（案 A なら投函でも送信でも受ける）。同期に送られる経路があれば `try_borrow` の失敗＝`opaque=unknown` の行として実走で見える（設計はそれを R1 の観測に兼ねる）。
+- **R3（`DragAcceptFiles` との差）**: `DragAcceptFiles` は `WS_EX_ACCEPTFILES` の付け外しだけ。差は無いはずで、手当て `dragaccept` はそれを確かめる走行になる。
+- **R2（ドラッグ中の付け外しの追随）**: 実測のみ。ⓑ・ⓒの観測項目に含めた。「絵の縁で落としたときの取りこぼし」は今回の手順に含めない（矩形の縁から離れた所に落とす）。
+
+### 10.2 統合（synthesis）
+
+- **一般化**: しない。受け口は `WM_DROPFILES` 1 種・窓 1 枚。本坑が要る「窓手続きの表への 1 分岐」の形は学びとして README に書くだけ。
+- **作るか採るか**: 重ね掛けは comctl32 の `SetWindowSubclass`（OS 標準）を採る。自前の連鎖（`GWLP_WNDPROC` の差し替え）は作らない。パスの取り出しは shell32 の `DragQueryFileW` そのまま。
+- **簡略化**: 観測用の待ち行列・ECS の system を介した判定・スレッドのメッセージフック（案 C）を外した。ファイルは `main.rs`＋`dropfiles.rs` の 2 つ。終了コードは 0／2 の 2 値（この example には「完了」が無く、上限時間で終わるのが正常）。
+
+### 10.3 決定ログ（§7 の 8 項）
+
+#### 決定 1: 受け口は `SetWindowSubclass`（案 A）1 本・案 C は同梱しない
+- **選択肢**: A `SetWindowSubclass`／B `GWLP_WNDPROC` 差し替え＋`CallWindowProcW`／C `WH_GETMESSAGE` フック／A＋C 同梱。
+- **選択**: A のみ。
+- **理由**: A は連鎖を OS が管理し `GWLP_USERDATA` に触らず、「窓手続きまで届いた」の直接の証拠になる（要件 7.5）。C は「待ち行列に来たか」しか示さず `DragFinish` の責務が二重になる。ⓐで届かないと分かった時だけ足せば足りる（先に作るのは使わない可能性のある部品）。B は A に対して利点が無い。
+- **確認事項**: 終了時（`WM_NCDESTROY`）の連鎖の順で警告が出ないか（R5）。
+
+#### 決定 2: 絵は窓 `HitTest::none()`＋不透明な `Rectangle` 1 つ
+- **選択肢**: `Rectangle`（矩形判定・ファイル不要）／`BitmapSource`＋`HitTest::alpha_mask()`（本番と同じ α 判定・PNG が要る）。
+- **選択**: `Rectangle`。窓 320×320・矩形 (100,100) の 120×120（論理 px）。
+- **理由**: 落とし先を決めるのは OS で、見るのは `WS_EX_TRANSPARENT` のビットだけ。矩形か α かは wintf の中の判定方式で、実験の答えに効かない（α 判定そのものは `clickthrough_two_rects.rs` で既に別に確かめられている）。矩形は境目がはっきりし、200% でも余白が各辺 200 物理 px 取れる。
+- **代償**: 「本番と同じ α の絵で測った」とは言えない。README の学びに「判定方式は結果に効かない理由」を 1 行書く。
+
+#### 決定 3: 「絵の上か外か」は到着の場で `hit_test_in_window` に聞く（`try_borrow`）
+- **選択肢**: (i) 窓手続きの中で幾何を定数で計算／(ii) 記録を待ち行列に積み ECS の system が次の tick で判定／(iii) 受け口が World の取っ手（`Rc<RefCell<EcsWorld>>`）を文脈として持ち、到着の場で `try_borrow` して判定。
+- **選択**: (iii)。
+- **理由**: 透過機構と同じ判定器・同じ座標系（物理 px のクライアント座標＝`DragQueryPoint` の値をそのまま渡せる）で、要件 4 の「クリックの当たり判定と一致するか」を直接測れる。(i) は 200% で論理 px と物理 px を混ぜる罠（§5 の落とし穴 (1)）。(ii) は行が 1 tick 遅れ、待ち行列と system が 1 つずつ増える。窓手続きが `Rc<RefCell<EcsWorld>>` を借りるのは wintf 自身の `dispatch_window_message` と同じ作法。
+- **代償**: 借りられない瞬間（tick の途中の同期配送）は `opaque=unknown`。それ自体が R1 の観測になる。
+
+#### 決定 4: 手当ての切替は環境変数 `PILOT_DROPFILES_FIX`（未設定＝手当てなし）
+- **選択肢**: 環境変数／起動引数。
+- **選択**: 環境変数（`reapply`／`dragaccept`・未知の値は `warn!` して手当てなし）。
+- **理由**: 上限時間（`AREKA_APP_SMOKE_EXIT_MS`）と同じ形で揃い、引数の解釈を書かずに済む。「透過の付け外しの時機」は手順（ⓐ／ⓒ）で観測する項目なので切替にしない。
+
+#### 決定 5: 既定の上限時間は 180 秒
+- **選択肢**: 90 秒（手本のまま・ⓐ〜ⓒを別走行に）／120〜180 秒（1 走行でⓐ〜ⓒ）。
+- **選択**: 180 秒・1 走行でⓐ〜ⓒ。
+- **理由**: 手で 3 回落とし、ⓒの前にカーソルを出し入れする余裕。短くしたいときは環境変数で上書きできる。
+
+#### 決定 6: ログの目印は `[dropfiles]`
+- **選択**: 落とし物に関する行はすべて本文の先頭に `[dropfiles]`。フィールド名は `seq`・`x`・`y`・`in_client`・`opaque`（`true`／`false`／`unknown`）・`transparent`・`accept_files`・`layered`・`noredirect`・`n`・`i`・`path`・`admin`・`fix`・`limit_ms`・`drops`・`when`・`raw`。
+- **理由**: `logging.md` のスコープ接頭辞の作法。README の grep 例に同じ語を書く。
+
+#### 決定 7: ⓐ〜ⓒは 1 走行・手当ては走行ごとに 1 種
+- **選択肢**: 全部 1 走行／項ごとに 1 走行／ⓐ〜ⓒ 1 走行＋手当ては別走行。
+- **選択**: ⓐ〜ⓒ 1 走行（既定の手当てなし）＋手当ては環境変数を変えて別走行。
+- **理由**: 到着の行は `seq`・位置・`opaque` で自己記述的なので 1 走行のログで読み分けられる。手当ては窓の生成時に効くものなので走行を分けないと比べられない。
+
+#### 決定 8: 管理者判定は起動時に 1 行（`IsUserAnAdmin`）
+- **選択**: `info!(admin, fix, limit_ms, "[dropfiles] 起動")`。
+- **理由**: 要件 5.2（管理者の走行を判定から外す目印）。要件討議（議題 2）で管理者起動の手当ては対象外。
+
+#### 付随の決定
+- **終了コードは 0（上限時間で終了＝正常）／2（初期化の失敗）**。手本の 1（打ち切り）・3（較正不合格）はこの example に該当が無い。
+- **到着の時刻は tracing の行の時刻**で足りる（行は受け口の中で同期に出る）。
+- **透過の状態は到着時の `GWL_EXSTYLE`**。落とした瞬間から配送までの数 ms に監視（12ms 周期）が付け外す可能性は README に明記する。
+- **文脈の `Box` はプロセスの終わりまで生かす**（`WM_NCDESTROY` で外さない・使い捨て）。
+- **`crates/pilot/Cargo.toml` は変えない**（10.1 で確定）。
+
+### 10.4 リスクと備え
+
+- `try_borrow` の失敗が頻発する → 投函でなく同期配送の経路がある証拠。行に `opaque=unknown` が残るので見落とさない。必要なら (ii) の待ち行列へ切り替える。
+- 窓が非最前面でエクスプローラに隠れる → 手順に「絵をクリックして前に出す」を書く。`WS_EX_TOPMOST` は本番に無いので付けない（要件 2.2）。
+- 窓 entity の `HitTest::none()` を忘れる → 窓全面が当たりで透過が一度も付かず、ⓑが測れない。生成直後の `ex-style` の行と `clickthrough` の debug 行が出ないことで気付ける。
+- `DragFinish` を失敗経路で忘れる → `handle_drop` の最後に無条件で呼ぶ形にする（設計で固定）。
