@@ -32,7 +32,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.8, 6.4_
   - _Boundary: dist/README.txt, structure.md, alpha-release-signoff brief_
 
-- [ ] 2.2 (P) 根の README のライセンス表記と到達点の数を実物に揃える
+- [x] 2.2 (P) 根の README のライセンス表記と到達点の数を実物に揃える
   - バッジを「MIT」にしてリンク先を実在する `LICENSE-MIT` に、「ライセンス」の節を「MIT（`LICENSE-MIT` 参照）」にする
   - 「現在の到達点」の数を、着手時に `.kiro/specs/completed/` の直下の**フォルダ**だけを数え直した数と数えた日付に直し、「約70%」を消す
   - 「プロジェクト概要」の末尾に `dist/README.txt` への案内を 1 行足す
