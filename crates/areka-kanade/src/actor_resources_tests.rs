@@ -60,6 +60,10 @@ fn expected_queryable(phase: &Phase) -> bool {
         | Phase::BootVersion { .. }
         | Phase::ClosePending { .. }
         | Phase::CloseTalkWait { .. }
+        | Phase::ChangePending
+        | Phase::ChangeTalkWait { .. }
+        | Phase::ChangeClosePending
+        | Phase::ChangeCloseTalkWait { .. }
         | Phase::Unloading { .. }
         | Phase::Stopped => false,
     }

@@ -40,3 +40,37 @@ fn action_variants_are_existing_five_plus_choice_two() {
     );
     assert_eq!(tag(&Action::Notice(KanadeNotice::Steady)), "Notice");
 }
+
+/// Req4.4: 既存 `Phase` の 11 variant が無改変であること（切替の 4 相を足して 15）。
+///
+/// 本 match は wildcard を持たないため、variant の削除・改名・形（フィールド構成）の
+/// 変更はコンパイルを壊す。DD-3 が要求する「Phase を一切触らない」を構造で固定する
+/// （`State.choice` は Phase の外＝`pending_close` と同型に置かれる）。
+/// ghost-shell-balloon-switch で切替の 4 相の腕を足した（`schedule_tests.rs` から移した）。
+#[test]
+fn existing_phase_variants_are_unchanged() {
+    fn tag(phase: &Phase) -> &'static str {
+        match phase {
+            Phase::Idle => "Idle",
+            Phase::BootInit => "BootInit",
+            Phase::BootPrefetch => "BootPrefetch",
+            Phase::BootType => "BootType",
+            Phase::BootMain => "BootMain",
+            Phase::BootVersion { .. } => "BootVersion",
+            Phase::Steady { .. } => "Steady",
+            Phase::ClosePending { .. } => "ClosePending",
+            Phase::CloseTalkWait { .. } => "CloseTalkWait",
+            Phase::ChangePending => "ChangePending",
+            Phase::ChangeTalkWait { .. } => "ChangeTalkWait",
+            Phase::ChangeClosePending => "ChangeClosePending",
+            Phase::ChangeCloseTalkWait { .. } => "ChangeCloseTalkWait",
+            Phase::Unloading { .. } => "Unloading",
+            Phase::Stopped => "Stopped",
+        }
+    }
+    assert_eq!(tag(&Phase::Idle), "Idle");
+    assert_eq!(tag(&Phase::Steady { talk: None }), "Steady");
+    assert_eq!(tag(&Phase::Stopped), "Stopped");
+    assert_eq!(tag(&Phase::ChangePending), "ChangePending");
+    assert_eq!(tag(&Phase::ChangeClosePending), "ChangeClosePending");
+}

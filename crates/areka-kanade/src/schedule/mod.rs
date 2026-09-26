@@ -95,6 +95,8 @@ pub(crate) enum Input {
     UserBreak {
         scope: u32,
     },
+    /// ゴーストの切替の要求（UI → kanade）。受理の判断は [`change::on_change_ghost`] が持つ。
+    ChangeGhost(crate::change::ChangeRequest),
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -120,6 +122,20 @@ pub(crate) enum Phase {
         reason: CloseReason,
     },
     CloseTalkWait {
+        talk_id: TalkId,
+        deadline: Option<MonotonicMs>,
+    },
+    /// 切替の `OnGhostChanging` の応答待ち（[`change`]）。
+    ChangePending,
+    /// `OnGhostChanging` の台詞の完了待ち／期限判定。
+    ChangeTalkWait {
+        talk_id: TalkId,
+        deadline: Option<MonotonicMs>,
+    },
+    /// 切替の `OnClose` の応答待ち。
+    ChangeClosePending,
+    /// 切替の `OnClose` の別れの台詞の完了待ち／期限判定。
+    ChangeCloseTalkWait {
         talk_id: TalkId,
         deadline: Option<MonotonicMs>,
     },
@@ -452,6 +468,9 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
         // UserBreak: 場面で振り分けず、受理の規則ごと user_break::on_user_break へ渡す。
         Input::UserBreak { scope } => user_break::on_user_break(state, scope),
 
+        // ChangeGhost: 受理の規則ごと change::on_change_ghost へ渡す。
+        Input::ChangeGhost(req) => change::on_change_ghost(state, req),
+
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
         // Idle 以外での Boot は不整合（warn!＋現 Phase 維持・Req 6.2）。Idle のみ boot へ委譲。
@@ -505,6 +524,10 @@ fn phase_label(phase: &Phase) -> &'static str {
         Phase::Steady { .. } => "Steady",
         Phase::ClosePending { .. } => "ClosePending",
         Phase::CloseTalkWait { .. } => "CloseTalkWait",
+        Phase::ChangePending => "ChangePending",
+        Phase::ChangeTalkWait { .. } => "ChangeTalkWait",
+        Phase::ChangeClosePending => "ChangeClosePending",
+        Phase::ChangeCloseTalkWait { .. } => "ChangeCloseTalkWait",
         Phase::Unloading { .. } => "Unloading",
         Phase::Stopped => "Stopped",
     }
@@ -702,6 +725,10 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
         Phase::ClosePending { .. } | Phase::CloseTalkWait { .. } => {
             close::step(state, input, config)
         }
+        Phase::ChangePending
+        | Phase::ChangeTalkWait { .. }
+        | Phase::ChangeClosePending
+        | Phase::ChangeCloseTalkWait { .. } => change::step(state, input, config),
         // 終了系列（Unloading／Stopped）に届いた非横断入力は防御的に無視する。
         Phase::Unloading { .. } | Phase::Stopped => {
             tracing::warn!(target: "kanade", event = "input_after_terminate", "終了系列で受領した入力を無視");
@@ -728,6 +755,8 @@ fn awaits_reply(phase: &Phase) -> bool {
             | Phase::BootVersion { .. }
             | Phase::Steady { .. }
             | Phase::ClosePending { .. }
+            | Phase::ChangePending
+            | Phase::ChangeClosePending
     )
 }
 
@@ -742,7 +771,9 @@ fn current_talk_id(phase: &Phase) -> Option<TalkId> {
         | Phase::BootVersion {
             talk: Some(active), ..
         } => Some(active.talk_id),
-        Phase::CloseTalkWait { talk_id, .. } => Some(*talk_id),
+        Phase::CloseTalkWait { talk_id, .. }
+        | Phase::ChangeTalkWait { talk_id, .. }
+        | Phase::ChangeCloseTalkWait { talk_id, .. } => Some(*talk_id),
         _ => None,
     }
 }

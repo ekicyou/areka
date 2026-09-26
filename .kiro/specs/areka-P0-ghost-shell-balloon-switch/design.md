@@ -730,7 +730,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 
 ### Unit Tests（kanade の純粋な `step`・`schedule/change_tests.rs`／`events_change_tests.rs`）
 - 受理: `Steady{None}` ＋ `ChangeGhost{raise_event}` → `OnGhostChanging` GET（Ref0〜3 の突き合わせ・`manual`／`automatic`）＋ `ChangePending`。`Steady{Some}` → `pending_change` に控え Action 0。`ChangePending`／`BootMain` 等で受けたら `warn!` 1 件・状態不変（要件 2.1・11.7・7.5）。
-- 204 → `OnClose`（`Ref0=system`）→ 台本あり → `TalkDone{Ended}`／`Interrupted+quit_reserved`／期限超過のいずれも `Unloading{Quit|DeadlineExceeded}`・`handoff` に台本なし（要件 2.3〜2.5・10.2）。`OnGhostChanging` の台本が `\-` で終わる（`TalkDone{Quit}`）でも `Unloading{Quit}` ＋ `handoff.script == Some`。
+- 204 → `OnClose`（`Ref0=system`）→ 台本あり → `TalkDone{Ended}`／`TalkDone{Quit}`／期限超過のいずれも `Unloading{Quit|DeadlineExceeded}`・`handoff` に台本なし（要件 2.3〜2.5・10.2。`Interrupted` は `\-` の予約があっても中止＝要件 5.1・5.4）。`OnGhostChanging` の台本が `\-` で終わる（`TalkDone{Quit}`）でも `Unloading{Quit}` ＋ `handoff.script == Some`。
 - `raise_event` 無し: `Steady{None}` → 即 `Unloading{CloseSilent}`・`OnGhostChanging` 0・`OnClose` 0。`Steady{Some}` → `pending_change` → `TalkDone{Ended}` と `TalkDone{Interrupted}` の両方で `Unloading{CloseSilent}`（要件 2.6・5.5・10.3）。
 - 中止: `ChangeTalkWait` ＋ `TalkDone{Interrupted, quit_reserved: true}` → `Steady{None}` ＋ `Notice(ChangeCancelled{UserBreak})`・`Unloading` へ進まない・`state.change == None`。`ChangeCloseTalkWait` も同じ。中止のあと `CloseRequest` → `begin_close`（`OnClose` GET）が今日どおり出る（要件 5.1・5.4・5.6・10.4）。
 - 終了要求: `ChangeTalkWait` ＋ `CloseRequest` → `Steady{Some}`・`pending_close`・`Notice(ChangeCancelled{CloseRequest})`、続く `TalkDone{Ended}` で `OnClose` GET が 1 件。`ChangeClosePending`／`ChangeCloseTalkWait` ＋ `CloseRequest` → `ClosePending`／`CloseTalkWait` へ・`OnClose` の追加送出 0（要件 2.9）。

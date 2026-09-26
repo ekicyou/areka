@@ -135,6 +135,7 @@ pub fn spawn_kanade_with_stop_sink(
                     timeout_directive_secs,
                 },
                 KanadeMsg::UserBreak { scope } => Input::UserBreak { scope },
+                KanadeMsg::ChangeGhost(req) => Input::ChangeGhost(req),
             };
             match drive(
                 &mut state,

@@ -214,6 +214,9 @@ pub enum KanadeMsg {
         /// 返信端（oneshot・[`ShioriMsg::Request`] と同じ envelope 規約）。
         reply: areka_actor::ReplySender<Vec<(&'static str, ResourceOutcome)>>,
     },
+    /// ゴーストの切替の要求（UI → kanade）。名前の突き合わせは UI 側で済んでいる。
+    /// 受理しなかったときは運行の通知で「切替の中止（受理しなかった）」が返る。
+    ChangeGhost(crate::change::ChangeRequest),
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -593,6 +596,8 @@ mod tests {
                 KanadeMsg::ResourceQuery { ids: _, reply: _ } => "ResourceQuery",
                 // 利用者の中断（additive・既存の判別結果を変えない）。
                 KanadeMsg::UserBreak { scope: _ } => "UserBreak",
+                // ゴーストの切替の要求（additive・既存の判別結果を変えない）。
+                KanadeMsg::ChangeGhost(_) => "ChangeGhost",
             }
         }
         let existing = [
