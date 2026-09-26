@@ -11,7 +11,7 @@ use std::sync::mpsc::{self, Sender};
 
 use areka_actor::ActorHandle;
 use areka_kanade::{
-    KanadeConfig, KanadeMsg, KanadeNotice, ShioriBackend, spawn_kanade_with_stop_sink,
+    BootOrigin, KanadeConfig, KanadeMsg, KanadeNotice, ShioriBackend, spawn_kanade_with_stop_sink,
     spawn_shiori_actor,
 };
 use areka_parsers::charset::DefaultEncoding;
@@ -502,8 +502,23 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
 /// （[`KanadeNotice::Stopped`]）が 1 件届く。受け手
 /// （UI の毎フレーム結線）はそれを合図に全ゴースト窓を閉じる。`None` なら通知は出ない。
 pub fn boot_with_kanade_stop(
+    options: GhostBootOptions,
+    kanade_stop: Option<Sender<KanadeNotice>>,
+) -> Result<GhostRuntime, GhostBootError> {
+    boot_with_origin(options, kanade_stop, BootOrigin::Plain)
+}
+
+/// 起動の由来つきで ghost を起動する（要件 4.1・8.6）。
+///
+/// [`boot_with_kanade_stop`] の末尾に `origin` が 1 つ増えるだけの派生（[`GhostBootOptions`] に
+/// 欄を足さない＝既存の構築点は変わらない）。起動記録の判定の後で、kanade の設定へ由来と
+/// シェルのフォルダ名（マウントしたシェルのフォルダの末尾・取れなければシェル名のまま）を
+/// 詰めてから kanade を起こす。切替で来たなら `OnGhostChanged`（Ref7＝シェルのフォルダ名）、
+/// 前回落ちたなら `OnBoot` の Ref6/Ref7 に現れる。
+pub fn boot_with_origin(
     mut options: GhostBootOptions,
     kanade_stop: Option<Sender<KanadeNotice>>,
+    origin: BootOrigin,
 ) -> Result<GhostRuntime, GhostBootError> {
     // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。
     let mount = match resolve(&options.ghost_root, options.default_encoding) {
@@ -562,7 +577,14 @@ pub fn boot_with_kanade_stop(
     // 2c. 起動記録ゲート（design「C5 GhostRuntime 増分」boot() step 1-3・要件 3.1/3.4/4.1/4.2/6.3）。
     //     sylphya reader＋ghost_asker が揃った直後に永続鏡像を引き、初回起動ゲート・vanish 回数・
     //     初回起動記録 epilogue を解決した config へ差し替える（read のみ・panic なし・不在は既定縮退）。
-    let config = apply_boot_record_gate(config, &sylphya_reader, &ghost_asker);
+    let mut config = apply_boot_record_gate(config, &sylphya_reader, &ghost_asker);
+
+    // 2d. 起動の由来とシェルのフォルダ名（要件 4.1）。フォルダ名が取れなければ
+    //     `KanadeConfig::new` が写したシェル名のまま。
+    config.boot_origin = origin;
+    if let Some(folder) = mount.shell.dir.file_name() {
+        config.shell_folder = folder.to_string_lossy().into_owned();
+    }
 
     // 静的構成層 publish: フラット（selfname 系＝derive_flat_statics）＋大域点付き（baseware 2 項・
     // version＝areka-ghost の CARGO_PKG_VERSION・R5.1）。投函のみ（反映は prefetch sink の barrier で担保）。
@@ -683,3 +705,7 @@ pub fn boot_with_kanade_stop(
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "runtime_origin_tests.rs"]
+mod origin_tests;

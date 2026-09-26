@@ -46,6 +46,7 @@ mod test_log_capture;
 pub use runtime::{
     GhostBootError, GhostBootOptions, GhostHandles, GhostParts, GhostRuntime, GhostShutdownError,
     ShioriWiring, SystemVarSource, SystemVarWiring, TickerMode, boot, boot_with_kanade_stop,
+    boot_with_origin,
 };
 // baseware-root-layout: 根の目録（列挙と素性）。bin は `areka_ghost::catalog::…` で引く。
 pub use catalog::{BalloonEntry, BasewareRoot, GhostEntry, Identity, ShellEntry};
