@@ -453,7 +453,7 @@ fn smoke_exit_ms() -> Option<u64> {
     trimmed.parse::<u64>().ok()
 }
 
-/// env ゲート付き smoke 自動 close を結線する（main.rs `open_startup_window` の smoke ゲートと
+/// env ゲート付き smoke 自動 close を結線する（main.rs `fn main` の `smoke_exit_ms` のゲートと
 /// 同作法: `wintf::executor::spawn_local`＋world `Weak`・一発の async タスク）。指定 ms 後に
 /// 全 [`GhostWindowMarker`] 窓を despawn → `WindowRegistry` 空遷移 → `run()` 正常復帰。
 fn install_smoke_exit(app: &WinApp) {

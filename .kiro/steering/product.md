@@ -73,9 +73,9 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 | `konnoyayame`（紺野ややめ） | YAYA | 標準テンプレート。同上。**シェルは CC BY-NC-ND＝開発用検体に限り、areka の配布物へ同梱しない・畳み直さない** |
 | `claudia`（悪役令嬢クローディア） | YAYA | `konnoyayame` から作られた実作ゴースト（2026-09-24 追加・全体 Unlicense）。**同梱バルーンを 2 つ持つ唯一の検体** |
 
-- テンプレート 2 体は `areka-P0-shell-implicit-surface`（2026-09-20）で**実機で動く**ようになった（ファイル名の慣習による面＋α の無い絵の抜き色透過＝左上 1 画素と完全一致の色を抜く＋`sometimes`／`rarely`）。α の検証に使う検体はこの 3 体＋既定バルーン（`roadmap.md` の裁定「nar-install を α の先頭に置く」の項）。YAYA の検体は「正しく展開される」から「実機で動く」へ進んだ段階で、出た不具合は個別に起票する。
-- 第三者のゴーストの多くはバルーンを同梱しないので、**既定バルーンは CC0 の `StayseeBalloon` に確定**した（`areka-P0-default-balloon-bundle` 2026-09-19・`areka-P0-default-balloon-nar-fold` で `vendors/sample_ghost/StayseeBalloon.nar` へ無改変のまま畳んで保管し、登記表 `SAMPLES` 経由で引く・表示は決定論テストと実機目視で確認済み）。今は `areka.exe <ゴーストの根> <バルーンの根>` の第 2 引数で渡す形で、**バルーン無指定時の自動の既定採用は下流 spec の仕事**（id `StayseeBalloon` を申し送り済み）。
-- α（M2）の着地済み（2026-09-24 時点）: `.nar` インストールのエンジン（`areka-nar`・堅牢化込み）・既定バルーン（`.nar` 保管）・右クリックメニュー第 1 スライス（説明書／終了・OS ネイティブメニュー）・ファイル名の慣習による面・アプリの寿命の分離（`AppExit`）・ベースウェアの根と目録と最後の選択の記憶・ネットワーク更新のエンジン（`areka-update`）・`loadu`。残りは `roadmap.md` B1〜B7（SHIORI の失敗の告知 → 降ろして起こし直せる形 → ゴースト切替 → シェル／バルーン切替 → インストール → 更新の結線 → α サインオフ）。
+- テンプレート 2 体は `areka-P0-shell-implicit-surface`（2026-09-20）で**実機で動く**ようになった（ファイル名の慣習による面＋α の無い絵の抜き色透過＝左上 1 画素と完全一致の色を抜く＋`sometimes`／`rarely`）。α の検証に使う検体はこの 4 体＋既定バルーン（`claudia` は 2026-09-24 に追加）（`roadmap.md` の裁定「nar-install を α の先頭に置く」の項）。YAYA の検体は「正しく展開される」から「実機で動く」へ進んだ段階で、出た不具合は個別に起票する。
+- 第三者のゴーストの多くはバルーンを同梱しないので、**既定バルーンは CC0 の `StayseeBalloon` に確定**した（`areka-P0-default-balloon-bundle` 2026-09-19・`areka-P0-default-balloon-nar-fold` で `vendors/sample_ghost/StayseeBalloon.nar` へ無改変のまま畳んで保管し、登記表 `SAMPLES` 経由で引く・表示は決定論テストと実機目視で確認済み）。バルーンを指定しないときは起動解決の段で `StayseeBalloon` を自動で採る（`areka-P0-baseware-root-layout` 2026-09-24・`crates/areka/src/boot_resolve.rs`）。`areka.exe <ゴーストの根> <バルーンの根>` の第 2 引数で明示することもできる。
+- α（M2）の着地済み（2026-09-26 時点）: `.nar` インストールのエンジン（`areka-nar`・堅牢化込み）・既定バルーン（`.nar` 保管）・右クリックメニュー第 1 スライス（説明書／終了・OS ネイティブメニュー）・ファイル名の慣習による面・アプリの寿命の分離（`AppExit`）・ベースウェアの根と目録と最後の選択の記憶・ネットワーク更新のエンジン（`areka-update`）・`loadu`・SHIORI の失敗の告知（黙って消えず告知して終了コード 1）・同じプロセスでゴーストを降ろして起こし直せる形。残りは `roadmap.md` のウェーブ表（ゴースト切替 → シェル／バルーン切替 → インストール → 更新の結線 → α サインオフ）。
 
 詳細: `doc/COMPAT_ARCHITECTURE.md`, `doc/PASTA_PROFILE.md`, `.kiro/steering/roadmap.md`（ロードマップ正本）
 

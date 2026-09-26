@@ -3,6 +3,34 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「インストール」の**製品側**（利用者が `.nar` を渡す体験）と、順位 4 の束「投げ込み」（`OnFileDrop2` 等）のうち窓へ落とす経路を引き受ける。エンジン（コンテナ読取・`install.txt` 解釈・安全な展開）は `areka-P0-nar-install` が持つ。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝#55・#58 の着地後）
+
+**棚卸⑰の裁定（本仕様に効くもの）**: ⓐ 投げ込みが WUC 合成の窓に届くかを先に確かめる**先進坑を別 spec に切り出した＝台帳 #62 `pilot-dropfiles-on-wuc-window`**（`crates/pilot/` だけ・#13 と並走）。本仕様は `_Depends(confirmed): pilot-dropfiles-on-wuc-window`＝**要件（`/kiro-start`）は先進坑の go 判定の後**。届かなければ設計が `WM_DROPFILES` から `IDropTarget`（OLE・STA が要り WUC の MTA と衝突しうる＝棚卸⑭の仮裁定 7 の見直し）へ変わるからである。ⓑ `lastinstalled` の受け皿は **#61 `areka-P0-ghost-change-name-resolution` が持つ**（本仕様は入れた直後に #61 の受け皿へ書くだけ）。順序は #13 → #50 ∥ #61 → 本仕様。ⓒ 要件定義は **Fable** に格上げ（議題が 3 件に増え、#13 の起こし直しと利用条件の閉じるボタンの読みが絡む・想定 17〜20 タスクで上限に張り付く）。
+
+**#55 の一般化で変わったところ**（09-24 節の前提 5 の更新）
+1. `alert.rs`（191 行）は場面ごとに題名を持てる形になった（`alert_text` が `(題名, 本文)` を返す・場面は 5 つ＝`RootMissing`／`GhostMissing`／`BalloonMissing`／`StartupWindow`／`ShioriFault`）。失敗の告知は場面を 1 つ足せば乗れる。**ただし #55 は「一般化」まではしていない＝押されたボタンを今も返さない**（`raise(scene, suppressed)` は `MB_OK | MB_ICONERROR` の箱を出して戻りを見ない）。#55 の要件 5.4 が「押されたボタンを返す形は #15 が足す」と明記している。`terms.txt` の受諾／拒否は **`raise` の隣に「はい／いいえを返す」口を 1 つ足す**（1 タスク・既存 5 場面の文面テスト 9 本は不変）。`AREKA_NO_ALERT` で抑えたときに受諾と拒否のどちらにするかは要件で決める。
+
+**#58 で変わったところ**
+2. ゴーストごとの結線は `ghost_session.rs`（454 行）の `boot_ghost` に集まった（`wire_mouse_input`・`wire_menu`・`wire_balloon_choice`・`wire_choice_drain` をここで挿す）。台本の受け口の受信端と落とし物の送り口はここで挿す＝**触るファイルに `ghost_session.rs` を足す**。窓へのハンドラ装着は同ファイルの `open_ghost_windows`（`attach_balloon_pointer_handlers` と同じ場所）。
+3. 起動中のゴーストを上書きして起こし直す順序は #58 の `GhostSession::shutdown` → `close_windows_for_restart` → `reopen_ghost_windows` → `boot_ghost`。ただし「1 周目の停止通知が受け口に残って次フレームで終了へ進む」（#58 → #13 の申し送り）はこの経路にも掛かるので、#13 の捌き方を待つ（議題 ⑴ は #13 の設計待ち）。
+
+**崩れた前提 1 件**: 09-24 節の前提 9 の「`areka-update` は `areka-nar` に依存」は誤り（#16 の再測定）。本番の依存は無く、dev の `sample-ghost-kit` 経由だけ。`areka_nar` の型を改名してもエンジンには影響しない。
+
+**見落としていた近道**
+4. 落とし物の受け入れは `DragAcceptFiles` を呼ばず、ゴースト窓の拡張スタイルに `WS_EX_ACCEPTFILES` を足すだけで済む見込み（`placement/spawn.rs` の `WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW }` の 1 行。wintf の `window_factory.rs` は `WS_EX_LAYERED` を外し `WS_EX_NOREDIRECTIONBITMAP` を足す以外の bit を通す）。`WM_DROPFILES` の腕と `DragQueryFileW` は wintf 側に要る（変わらず）。**クリック透過のトグル（`WS_EX_TRANSPARENT`）中の窓に落とし物が届くかは未測定**＝先進坑 #62 が答える。
+
+**不変（再確認）**: `WM_DROPFILES`／`DragAcceptFiles`／`DragQueryFile`／`IDropTarget`／`GetOpenFileName` は `crates/` で 0 件。振り分け表は `crates/wintf/src/ecs/window_proc/mod.rs`（331 行）の `dispatch_window_message`。`Win32_UI_Controls_Dialogs` は未有効。`crates/areka/Cargo.toml` に `areka-nar` 無し。`Identity` 7 項目・`sakura.name` 無し。`areka_nar::{InstallRequest, InstallOutcome}` の再公開は残る（改名の議題は不変）。`Frame::Install`・「インストール…」は在り、`menu::register` は `#[allow(dead_code)]`。台帳: `descript_install` の 11 行は `absent`／`owner="areka-P0-nar-install"`、`OnInstall*`／`OnFileDrop2`／`OnDirectoryDrop`／`OnGhostTerms*` は `absent`／`owner=""`、`roadmap-draft.md` に本仕様の行は無い。
+
+**接触ファイル**: 新規 `crates/areka/src/install.rs`（手続き・`areka-nar` 3 段の呼び出し・結果型）・`emo2_boot/install_cue.rs`（#16 が改変）・`input_events/drop.rs`・wintf `window_proc/drop.rs`（`WM_DROPFILES` の腕＋`DragQueryFileW`）とハンドラ用の ECS 型・`terms.rs`・kanade の相のファイル（前例 `schedule/user_break.rs`）／既存 `crates/areka/Cargo.toml`・`main.rs` 556・`ghost_session.rs` 454・`emo2_boot/mod.rs` 767・`consumer_ledger.rs` 726・`alert.rs` 191・`menu/mod.rs` 339・`placement/spawn.rs` 767（`ex_style` 1 行）・`areka-ghost/src/catalog.rs` 303・wintf `window_proc/mod.rs` 331・kanade（#13 の汎用の通知の入口があれば `schedule/events.rs` の許可表中心）・`areka-nar/src/*`（`// ukadoc:` の 1 行）・台帳 3 本＋`roadmap-draft.md`＋生成物。上限が近い: kanade `steady.rs` 935・`actor_tests.rs` 970・`schedule_tests.rs` 962＝足さない。
+
+**依存の判定**: #13 とは `ghost_session.rs`・`emo2_boot/mod.rs`・`consumer_ledger.rs`・`menu/mod.rs`・`alert.rs`・kanade を共有＝並走不可。**#50 への依存は弱い**（バルーン `.nar` は切り替えず記憶だけ・シェルの一覧はメニューを開くたびに列挙し直す）が、`consumer_ledger.rs`・`emo2_boot/mod.rs`・`menu/mod.rs` を共有するので直列。
+
+**タスク数**: 17〜20（#13 が汎用の通知の入口を作る前提・無ければ +3）。**要件の時点で「投げ込み」の切り出しを決める**——20 を超えるなら wintf の腕・ハンドラ型・`OnFileDrop2`／`OnDirectoryDrop`・振り分け（5〜6 本）を `areka-P0-file-drop` へ（kanade を通るので本仕様とは直列のまま）。
+
+**正典の逐語（要件で写す）**: `OnInstallRefuse` は Ref0（accept の本体側名）に加えて Ref1＝識別子・Ref2＝名前（2.4.85）／`OnInstallCompleteEx`・`OnInstallCompleteAll` の Ref0〜2 は byte 1 区切りの識別子・名前・**インストールした場所**（`OnInstallComplete` の Ref2 だけ「同梱バルーンの名前」）／`OnFileDrop2` Ref2＝MIME（2.7.98）・`OnDirectoryDrop` Ref0＝パス・Ref1＝スコープ／`OnGhostTermsAccept`／`Decline` は「右上の閉じるボタンでは何もイベントは発生しない」／`terms.txt|md` は**バルーンにも**置ける（`manual_directory`「(myballoon)\terms.txt または terms.md」）＝バルーン `.nar` も同じ経路で表示する（追加の手間 0）／`\![execute,install,path]` は「フルパスで行うこと（相対パス指定不可）」／`\![open,terms]`（2.5.33）は Out に明記する。
+
+**議題の追加**: ⑶ 利用条件の箱の右上の閉じるボタン——はい／いいえ（閉じるボタンの無い形）にするか、閉じる＝拒否と読んで `OnGhostTermsDecline` を送るか（正典は「閉じるでは何も発生しない」。`MessageBoxW` の OK／キャンセルでは閉じる＝キャンセルと区別できない）。見える差は「閉じたときにゴーストが何か言うか」。
+
 ## 2026-09-24 棚卸⑯の再測定（main `0b01f654`）
 
 **#15 と #16 は直列のまま**（共有するソースファイル 12 本＝`crates/areka/Cargo.toml`・`main.rs`・`emo2_boot/{consumer_ledger,mod}.rs`・`emo2_boot/install_cue.rs`（本仕様が作り #16 が改変する＝消費者台帳の登記の単位は「名前＋第 1 引数」なので `\![execute,install,path]` と `\![execute,install,url]` は同じ鍵 `("execute", Some("install"))` になり同じ受け口でしか扱えない＝**構造上確定**）・`alert.rs`・`areka-ghost/src/catalog.rs`・kanade `msg.rs`／`actor.rs`／`schedule/{mod,events}.rs`・`Input` の網羅 match を持つ kanade のテスト支援。文書類＝台帳 3 本・`roadmap-draft.md`・生成物・§8）。**実装は #13・#50 の着地待ち**（両方とも brief だけ）。要件と設計は先行できる。想定 **17〜19 タスク**（手続きの段が縮んだ分と `alert` の拡張・`accept` の読み手が増えた分がほぼ相殺）。20 を超えそうなら「投げ込み」（wintf の `WM_DROPFILES`・`OnFileDrop2`／`OnDirectoryDrop`）を別 spec へ切り出す（wintf と入力系が中心で #16 との共有なし）。
