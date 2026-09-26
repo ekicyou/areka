@@ -140,6 +140,45 @@ fn prepare_spawns_no_window_until_commit() {
     );
 }
 
+/// 投函した窓の閉包が `Input` 段に着く前に全窓を閉じたら、着いた閉包は窓を 1 枚も作らない
+/// （切替先の非同期の失敗が窓の生成より先に届き既定へ戻す形＝壊れた切替先の窓が孤児として
+/// 生えない・要件 6.1・4.10）。閉包の後ろに目印を継ぎ、着いたことを確かめてから数える。
+#[test]
+fn close_before_commit_arrives_spawns_no_window() {
+    // SAFETY: 資産の採寸（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let sample = acquire_emo2();
+    let cfg = ConfigInputs {
+        ghost_root: sample.folder().to_path_buf(),
+        balloon_root: emo2_balloon(&sample),
+    };
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    world.insert_resource(WintfTaskPool::new());
+    world.resource_mut::<Schedules>().add_systems(
+        Input,
+        wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands,
+    );
+
+    let mut prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
+    let spawn = prepared.spawn;
+    prepared.spawn = Box::new(move |world: &mut World| {
+        spawn(world);
+        world.insert_resource(SentinelArrived);
+    });
+    commit_ghost_windows(&mut world, prepared);
+    let _closed = app_exit::close_windows_for_restart(&mut world);
+    let arrived = run_input_until(&mut world, |w| w.contains_resource::<SentinelArrived>());
+
+    assert_eq!(
+        (arrived, ghost_window_count(&mut world)),
+        (true, 0),
+        "(閉包が着いた・窓の数): 閉じたあとに着いた閉包が窓を作った"
+    );
+}
+
 /// 投函の時点で作業プールが無ければ、閉包を捨てた上で `task_pool_missing` を error で残す
 /// （黙って捨てない・log-first の判断分岐）。
 #[test]

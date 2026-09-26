@@ -178,8 +178,18 @@ fn despawn_app_windows(world: &mut World) -> usize {
         }
         world.despawn(e);
     }
+    world.get_resource_or_insert_with(WindowsEpoch::default).0 += 1;
     count
 }
+
+/// 窓を閉じた回数（[`despawn_app_windows`] が閉じるたびに 1 進める・無ければ 0 とみなす）。
+///
+/// 窓を作る閉包（`ghost_session::prepare_ghost_windows`）は組んだ時点の値を控え、`Input` 段で
+/// 着いたときに値が進んでいれば窓を作らない——投函した後・着く前に全窓を閉じた（切替先の非同期の
+/// 失敗で既定へ戻した・終了した）とき、閉じた後に古い窓が孤児として生えないため
+/// （areka-P0-ghost-shell-balloon-switch 要件 6.1・4.10）。
+#[derive(Resource, Default)]
+pub(crate) struct WindowsEpoch(pub(crate) u64);
 
 /// ゴースト窓への OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの終了」）の受け手（裁定 3）。
 ///

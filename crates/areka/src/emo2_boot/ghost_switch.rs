@@ -15,7 +15,7 @@ use std::time::Instant;
 use areka_ghost::GhostEntry;
 use areka_kanade::{
     BootOrigin, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, ChangedFrom, CloseReason,
-    KanadeMsg, ShioriFault, ShioriFaultKind,
+    KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind,
 };
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
@@ -270,13 +270,137 @@ pub(crate) fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> Swi
     SwitchVerdict::Accepted
 }
 
+/// 予約の下で届いた停止通知を切替の段で振り分ける（要件 2.4・2.8・3.3・6.6・design Flow 3）。
+///
+/// 送り出し＋中身あり → [`switch_to`]（握手の途中の失敗でも中身があれば続ける・要件 2.8）。
+/// 送り出し＋中身なし → `warn!(ghost_switch_not_accepted)`・予約を下ろし今日どおり終了。
+/// 迎え入れ（切替先）＋失敗 → `error!(ghost_switch_target_fault)` の上で [`switch_to_default`]。
+/// 迎え入れ（既定）か、既定ゴーストへの切替の迎え入れ＋失敗 → 予約を下ろし今日の失敗の経路
+/// （告知・終了コード 1）で終了（戻す試みは 1 回だけ・要件 6.5）。記録は既定ゴーストの失敗を表す
+/// `error!(ghost_switch_default_fault)`（切替先の失敗 `ghost_switch_target_fault` とは別の語）。
+/// 迎え入れ＋失敗以外 → `info!(ghost_switch_target_quit)`・予約を下ろし今日どおり終了。
+/// 予約が無ければ今日どおり終了（呼び手は予約が在るときだけ呼ぶ）。エラー応答は停止通知を
+/// 生まないので、ここに判断は無い（要件 6.7）。
+// 本番の呼び手は 8.4 の終了の相（`run_ghost_quit_phase`）。それまでは test からだけ呼ぶ。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
+    let Some((stage, target_name, target_is_default)) =
+        world.get_non_send::<SwitchInFlight>().map(|f| {
+            let is_default = f.target.folder == DEFAULT_GHOST_FOLDER;
+            (f.stage, f.target.name.clone(), is_default)
+        })
+    else {
+        tracing::debug!(
+            event = "ghost_switch_no_reservation",
+            cause = ?stopped.cause,
+            "切替の予約が無い停止通知——今日どおり終了する"
+        );
+        quit_app(world, ExitOrigin::KanadeStopped(stopped.cause));
+        return;
+    };
+    let cause = stopped.cause;
+    match (stage, stopped.handoff) {
+        (SwitchStage::SendOff, Some(handoff)) => switch_to(world, handoff),
+        (SwitchStage::SendOff, None) => {
+            tracing::warn!(
+                event = "ghost_switch_not_accepted",
+                cause = ?cause,
+                "kanade が切替の要求を受理しないまま止まった（終了要求と競合）——切替をやめて今日どおり終了する"
+            );
+            world.remove_non_send::<SwitchInFlight>();
+            quit_app(world, ExitOrigin::KanadeStopped(cause));
+        }
+        (SwitchStage::Welcoming { attempt }, _) => match (attempt, cause) {
+            (WelcomeAttempt::Target, KanadeStopCause::Fault(fault)) if !target_is_default => {
+                tracing::error!(
+                    event = "ghost_switch_target_fault",
+                    ghost = %target_name,
+                    reason = %fault.reason,
+                    "切替先の SHIORI が失敗した——既定ゴーストへ戻す"
+                );
+                switch_to_default(world, &target_name);
+            }
+            (_, KanadeStopCause::Fault(fault)) => {
+                tracing::error!(
+                    event = "ghost_switch_default_fault",
+                    ghost = %DEFAULT_GHOST_FOLDER,
+                    attempt = ?attempt,
+                    reason = %fault.reason,
+                    "既定ゴーストの SHIORI が失敗した（戻す試みは済んだ／切替先が既定）——今日の失敗の経路で終了する"
+                );
+                world.remove_non_send::<SwitchInFlight>();
+                quit_app(
+                    world,
+                    ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault)),
+                );
+            }
+            (attempt, cause) => {
+                tracing::info!(
+                    event = "ghost_switch_target_quit",
+                    attempt = ?attempt,
+                    cause = ?cause,
+                    "迎え入れたゴーストが失敗以外で止まった——今日どおり終了する"
+                );
+                world.remove_non_send::<SwitchInFlight>();
+                quit_app(world, ExitOrigin::KanadeStopped(cause));
+            }
+        },
+    }
+}
+
+/// 運行の通知を切替の段で振り分ける（要件 3.5・5.2）。
+///
+/// 定常到達: 迎え入れの予約を下ろし `info!(ghost_switch_done)`。送り出しの段の予約は残す（まだ
+/// 握手の途中）。予約が無ければ `debug!`（初回起動・切替の外）。切替の中止: 予約を下ろし
+/// `info!(ghost_switch_cancelled)`。予約が無ければ `warn!`。停止は [`on_ghost_stopped`] へ。
+// 本番の呼び手は 8.4 の終了の相（`run_ghost_quit_phase`）。それまでは test からだけ呼ぶ。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
+    let stage = world.get_non_send::<SwitchInFlight>().map(|f| f.stage);
+    match notice {
+        KanadeNotice::Steady => match stage {
+            Some(SwitchStage::Welcoming { attempt }) => {
+                world.remove_non_send::<SwitchInFlight>();
+                let ghost = world
+                    .get_resource::<BootContext>()
+                    .and_then(|c| c.current.ghost.folder.clone());
+                tracing::info!(
+                    event = "ghost_switch_done",
+                    ghost = ?ghost,
+                    attempt = ?attempt,
+                    "切替で起こしたゴーストが定常に入った——切替を終える"
+                );
+            }
+            stage => tracing::debug!(
+                event = "ghost_switch_done",
+                stage = ?stage,
+                "迎え入れの予約の外の定常到達——予約は触らない"
+            ),
+        },
+        KanadeNotice::ChangeCancelled { reason } => {
+            if world.remove_non_send::<SwitchInFlight>().is_some() {
+                tracing::info!(
+                    event = "ghost_switch_cancelled",
+                    reason = ?reason,
+                    "切替は中止された——元のゴーストのまま次の要求を受ける"
+                );
+            } else {
+                tracing::warn!(
+                    event = "ghost_switch_cancelled",
+                    reason = ?reason,
+                    "切替の予約が無いのに中止の通知が届いた——無視する"
+                );
+            }
+        }
+        KanadeNotice::Stopped(stopped) => on_ghost_stopped(world, stopped),
+    }
+}
+
 /// 切替先を起こす（要件 2.7・3.1・3.2・3.7・3.8・4.6・4.7・6.1・design Flow 1）。
 ///
 /// 予約の切替先へ: 置き場のゴーストを同期で降ろす → 全窓を閉じる → [`boot_into`]（由来＝切替で
 /// 来た・経路＝切替）。成功なら段を「迎え入れ（切替先）」に。同期の失敗は、切替先が既定なら致命、
 /// そうでなければ [`switch_to_default`]（窓は投函していないので壊れた切替先の窓は生えない）。
-// 本番の呼び手は 8.3 の停止通知の振り分け（送り出しの段で切替の中身あり）。それまでは test からだけ呼ぶ。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let Some((target, prev)) = world
         .get_non_send::<SwitchInFlight>()
@@ -496,3 +620,7 @@ mod tests;
 #[cfg(test)]
 #[path = "ghost_switch_fallback_tests.rs"]
 mod fallback_tests;
+
+#[cfg(test)]
+#[path = "ghost_switch_notice_tests.rs"]
+mod notice_tests;

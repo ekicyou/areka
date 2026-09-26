@@ -195,7 +195,24 @@ pub(crate) fn prepare_ghost_windows(
 
     // 投函の後、作業プールの async タスク → CommandSender → Input スケジュールで
     // World 適用という既存 ECS コマンド経路で本物窓を組み立てる。
+    // 組んだ時点の「窓を閉じた回数」を控え、着いたときに進んでいれば作らない（投函の後に全窓を
+    // 閉じた＝この窓はもう要らない・`app_exit::WindowsEpoch`）。
+    let epoch_of = |world: &World| {
+        world
+            .get_resource::<app_exit::WindowsEpoch>()
+            .map_or(0, |e| e.0)
+    };
+    let epoch = epoch_of(world);
+    let ghost_root = cfg.ghost_root.clone();
     let spawn: BoxedCommand = Box::new(move |world: &mut World| {
+        if epoch_of(world) != epoch {
+            tracing::debug!(
+                event = "ghost_windows_stale",
+                ghost_root = %ghost_root.display(),
+                "投函の後に全窓が閉じられたので、着いた窓の閉包は窓を作らない"
+            );
+            return;
+        }
         // 2 源は同時に挿す（片方だけ古い運転を作らない・atom C6）。
         world.insert_resource(sources.snapshot);
         world.insert_resource(sources.dpi_table);

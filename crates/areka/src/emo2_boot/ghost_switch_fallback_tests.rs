@@ -20,7 +20,7 @@ use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRou
 use crate::ghost_session::{GhostSession, GhostSlot};
 
 /// 根に `folders` のゴーストを組む（`ghost/<名>/ghost/master/descript.txt` だけ）。
-fn root_with(tmp: &TempPath, folders: &[&str]) -> BasewareRoot {
+pub(super) fn root_with(tmp: &TempPath, folders: &[&str]) -> BasewareRoot {
     for folder in folders {
         let master = tmp.child("ghost").join(folder).join("ghost").join("master");
         std::fs::create_dir_all(&master).expect("フォルダを組む");
@@ -35,7 +35,7 @@ fn root_with(tmp: &TempPath, folders: &[&str]) -> BasewareRoot {
 
 /// 今のゴーストを `A` とし、`target` への切替の予約（送り出しの段）と置き場（降ろすものの無い中身）と
 /// 終了の受け口を据えた World。起動入力の作り口は据えない。
-fn switching_world(root: &BasewareRoot, target: &str) -> World {
+pub(super) fn switching_world(root: &BasewareRoot, target: &str) -> World {
     let mut world = World::new();
     world.insert_non_send(AppExit::new());
     world.insert_resource(BootContext {
@@ -80,7 +80,7 @@ fn switching_world(root: &BasewareRoot, target: &str) -> World {
     world
 }
 
-fn count_event(events: &[CapturedEvent], event: &str) -> usize {
+pub(super) fn count_event(events: &[CapturedEvent], event: &str) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
