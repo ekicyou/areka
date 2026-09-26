@@ -40,7 +40,7 @@
 - **運行の通知の線**: `KanadeNotice`（`Steady`／`ChangeCancelled`／`Stopped`）と `Action::Notice`。停止通知の受け口 `KanadeStopRx` は `KanadeNoticeRx` に広がる。
 - **起動の根の表**: `crates/areka-kanade/src/schedule/boot.rs` の `boot_root`（初回起動 → `OnFirstBoot`・切替 → `OnGhostChanged`・それ以外 → 根なし＝`OnBoot` だけ）と、`OnBoot` の Ref6/7（`BootOrigin::Halted`）。
 - **直前のゴーストの情報を切替先へ渡す器**: `KanadeConfig` の `boot_origin: BootOrigin`（`Plain`／`ChangedFrom`／`Halted`）と `shell_folder`。派生関数 `areka_ghost::boot_with_origin`。
-- **降ろして起こし直す経路**: `ghost_switch.rs` の `switch_to`／`switch_to_default`（`GhostSession::shutdown` → `close_windows_for_restart` → バルーンの解決 → `reopen_ghost_windows` → `boot_ghost_strict`）。`GhostSession` の置き場 `GhostSlot`（NonSend）。根とプロファイルの置き場 `BootContext`（Resource）。
+- **降ろして起こし直す経路**: `ghost_switch.rs` の `switch_to`／`switch_to_default`（`GhostSession::shutdown` → `close_windows_for_restart` → バルーンの解決 → 窓の準備 `reopen_ghost_windows` → `boot_ghost_strict` → 成功したときだけ窓の投函 `commit_ghost_windows`）。`GhostSession` の置き場 `GhostSlot`（NonSend）。根とプロファイルの置き場 `BootContext`（Resource）。
 - **汎用の通知の入口**: `KanadeMsg::RaiseEvent` → `Input::RaiseEvent` → `change::on_raise_event`（許可表と定常の判定）→ `events::raise`。
 - **切替後の記憶**: `GhostRoute::Switched`（記憶を書く経路）と、単独起動の失敗の記録 `PersistKey::LastHalted`（`areka.last.halted`・App スコープ）。
 - **切替先の失敗と致命**: `ExitOrigin::GhostFallbackFailed(ShioriFault)`（既定ゴーストの同期の失敗を今日の告知の場面へ流す）。
@@ -85,7 +85,7 @@
 - **起動系列**: `boot.rs` の `on_prefetch_reply` が `config.first_boot` で `OnFirstBoot`（→ `BootType`）と `OnBoot`（→ `BootMain`）に分ける。`BootType` の応答は 204 → `OnBoot`・Value → `OnBoot` を飛ばして `basewareversion`。`BootVersion` + `Notified` で `Steady` へ（外へ知らせる手段は無い）。
 - **外からの入力**: `KanadeMsg` は 12 変種。`actor.rs` の `spawn_kanade_with_stop_sink` が 1 対 1 で `Input` へ写す（`Close`・`ResourceQuery` だけ `step` を経ない）。`round_trip_request` は許可表に無い ID を `error!` ＋ `Failed(Internal)` にし、応答待ちの相では `Unloading{Fault}` へ倒す。
 - **`GhostSession` の置き場**: `fn main` のローカル変数で、`finish_after_run` の後始末の閉包へ move される。フレームの系からは届かない。
-- **窓**: `open_ghost_windows` は配置の準備を同期で行い、窓の生成は作業プール経由で次の `Input` 段に着く。`spawn_ghost_windows` が `GhostWindows` 資源を差し替える。`close_windows_for_restart` は窓を消すが `GhostWindows` を外さない（消した窓の `Entity` が残る＝`run_attach_phase` のゲートを通ってしまう）。
+- **窓**: `open_ghost_windows` は配置の準備を同期で行い、窓の生成は作業プール経由で次の `Input` 段に着く（同じ `Input` 段に閉包が 2 つ積まれれば両方の窓が生える＝切替先の起動に失敗したあと既定ゴーストの窓を頼むと、壊れた切替先の窓も孤児として生えてしまう）。`spawn_ghost_windows` が `GhostWindows` 資源を差し替える。`close_windows_for_restart` は窓を消すが `GhostWindows` を外さない（消した窓の `Entity` が残る＝`run_attach_phase` のゲートを通ってしまう）。
 - **記憶**: `LastUsed::record` は `GhostRoute::Argv` のとき書かない。記憶ファイルは `areka_sylphya::persist::load_scope`／`save_scope` で実 fs から直接読み書きできる（起動前の解決が使っている）。
 - **メニュー**: `Frame::Ghost` の枠・`ItemBody::Submenu`（`plan.rs`／`win32.rs` で表示まで結線済み）・`menu::register` が登記待ち。`MenuWiring` は `boot_ghost` の結線ありの腕で `wire_menu` が起こすたびに新品にする。メニューの動作は `trigger.rs` の `finish` で UI スレッドの `&mut World` を持って走る（系の外）。
 - **受け口**: `ReadmeCueSink`（`readme_cue.rs`）＝自己選別＋送り出しの 2 段。UI 側は `wire_readme`（ゴーストごとに NonSend を挿す）と `register_readme_drain`（プロセスに 1 回・`Input` 段）の対。
@@ -194,13 +194,14 @@ crates/areka/src/
 - `crates/areka-ghost/src/runtime.rs` — `boot_with_origin(options, kanade_stop: Option<Sender<KanadeNotice>>, origin: BootOrigin)` を足し、`boot_with_kanade_stop` はそれを `BootOrigin::Plain` で呼ぶ。`config.shell_folder` を `mount.shell.dir` の末尾から詰める。
 - `crates/areka-ghost/src/catalog.rs` — `sakura_name(ghost_dir) -> Option<String>`（`ghost/master/descript.txt` の `sakura.name` の単独の読み手・`companion_balloon` と同型）。`Identity` は変えない。
 - `crates/areka-ghost/src/lib.rs` — `sakura_name` の再輸出。
-- `crates/areka/src/emo2_boot/frame.rs` — `KanadeStopRx` → `KanadeNoticeRx(Receiver<KanadeNotice>)`。`run_ghost_quit_phase` は全件取り出したあと 1 件ずつ捌く: `Stopped` は目印が立っていれば `ghost_switch::on_ghost_stopped` へ委譲、立っていなければ今日どおり `quit_app`（最初の 1 件だけ）。`Steady`／`ChangeCancelled` は `ghost_switch::on_notice` へ。
+- `crates/areka/src/emo2_boot/frame.rs` — `KanadeStopRx` → `KanadeNoticeRx(Receiver<KanadeNotice>)`。`run_ghost_quit_phase` は全件取り出したあと 1 件ずつ捌く: `Stopped` は目印が立っていれば `ghost_switch::on_ghost_stopped` へ委譲、立っていなければ今日どおり `quit_app`（最初の 1 件だけ）。`Steady`／`ChangeCancelled` は `ghost_switch::on_notice` へ。可視性を `pub(super)` から `pub(crate)` へ広げる（crate 直下の `ghost_session_switch_tests.rs` が回す）。
 - `crates/areka/src/emo2_boot/frame_ghost_quit_tests.rs`・`frame_schedule_tests.rs`・`frame_ghost_quit_logsink_tests.rs` — 通知の型の追随（`KanadeNotice::Stopped(KanadeStopped{cause, handoff: None})`）。
 - `crates/areka/src/emo2_boot/mod.rs` — `Emo2BootInputs` に `boot_origin: BootOrigin`。`wire_emo2_boot` で change の線を 1 本作り、`sinks` の 8 本目に `ChangeCueSink`、受信端を `ghost_switch::wire_change_rx` で World へ。`boot_with_origin` を呼ぶ。`wire_kanade_stop` の引数の型。
 - `crates/areka/src/emo2_boot/consumer_ledger.rs` — `CommandConsumer::ChangeSink`・`canonical()` に `("change", Some("ghost"))`（9 組）。件数を固定するテスト `canonical_builds_without_duplicate` の 8 → 9。
-- `crates/areka/src/ghost_session.rs` — `GhostSlot(Option<GhostSession>)`（NonSend）。`boot_ghost` の結線ありの腕を私有の `boot_wired` に括り出し、`boot_ghost`（fallback へ倒れる・署名不変）と `boot_ghost_strict`（倒れず `Err`）の 2 つの入口にする。`GhostSession::kanade()`・`ghost_dir()`／`names()` の読み口。`register_systems` に `ghost_switch::register_change_drain` を足す。結線ありの腕の `wire_menu` の直後に `menu::ghost_frame::register(world)`。`reopen_ghost_windows` の `#[cfg_attr(not(test), allow(dead_code))]` を外す。
+- `crates/areka/src/ghost_session.rs` — `GhostSlot(Option<GhostSession>)`（NonSend）。`boot_ghost` の結線ありの腕を私有の `boot_wired` に括り出し、`boot_ghost`（fallback へ倒れる・署名不変）と `boot_ghost_strict`（倒れず `Err`）の 2 つの入口にする。`GhostSession::kanade()`・`ghost_dir()`／`names()` の読み口。`register_systems` に `ghost_switch::register_change_drain` を足す。結線ありの腕の `wire_menu` の直後に `menu::ghost_frame::register(world)`。窓を「準備」と「投函」に分ける: `open_ghost_windows` の中身を `prepare_ghost_windows(world, cfg) -> Result<PreparedWindows, OpenWindowsError>`（同期・配置の準備と descript の 1 度の読取・spawn の閉包を持つ）と `commit_ghost_windows(world, prepared)`（閉包を作業プールへ渡す）に括り出し、`open_ghost_windows` は両方を続けて呼ぶ（署名不変・初回起動の `main` の順序は据え置き）。`reopen_ghost_windows` は `PreparedWindows` を返す形に変える（本番の呼び手は本仕様が初めてなので形を変えてよい）。`#[cfg_attr(not(test), allow(dead_code))]` を外す。
 - `crates/areka/src/ghost_session_restart_tests.rs` — 通知の型の追随・2 周目のメニューの登記の一覧に `Frame::Ghost` が加わる分の追随。
 - `crates/areka/src/app_exit.rs` — `ExitOrigin::GhostFallbackFailed(ShioriFault)`・`fault_of` の腕・`close_windows_for_restart` が `GhostWindows` 資源を外す・`#[cfg_attr(not(test), allow(dead_code))]` を外す。
+- `crates/areka/src/main.rs`（既出の行に加えて）— 初回起動の順序（`open_ghost_windows` → `boot_ghost`）は据え置き（そこでは失敗が告知と終了で終わるので孤児の窓は残らない）。
 - `crates/areka/src/app_exit_tests.rs` — `fault_of` の新しい腕と `GhostWindows` を外す判断。
 - `crates/areka/src/boot_config.rs` — `BootContext`（Resource）と `CurrentGhost`。`resolve_balloon_for_ghost(root, ghost_dir, pick)` を `resolve_boot_from` から括り出す。`BootResolved` に `halted: Option<String>`（`take_last_halted`）を足す。
 - `crates/areka/src/main_config_input_tests.rs` — `BootResolved` の形の追随。
@@ -237,7 +238,7 @@ sequenceDiagram
         KA->>KA: 台本あり StartTalk ChangeCloseTalkWait なし Unloading CloseSilent
     end
     KA->>UI: Notice Stopped handoff 台本
-    UI->>UI: shutdown 窓を閉じる GhostWindows を外す バルーン解決 reopen boot_ghost_strict ChangedFrom
+    UI->>UI: shutdown 窓を閉じる GhostWindows を外す バルーン解決 窓の準備 boot_ghost_strict ChangedFrom 成功なら窓の投函
     UI->>UI: SwitchInFlight Welcoming Target
     KB->>KB: OnInitialize username OnGhostChanged GET 204 なら OnBoot basewareversion
     KB->>UI: Notice Steady
@@ -277,15 +278,17 @@ stateDiagram-v2
 flowchart TD
     Stopped[Notice Stopped が届く] --> Marker{SwitchInFlight は}
     Marker -->|なし| Quit[今日どおり quit_app]
-    Marker -->|SendOff| SwitchTo[switch_to 切替先]
+    Marker -->|SendOff| Handoff{handoff は}
+    Handoff -->|None kanade が受理していない| QuitDrop
+    Handoff -->|Some| SwitchTo[switch_to 切替先]
     Marker -->|Welcoming Target| CauseT{原因は}
     CauseT -->|Fault| Fallback[error 切替先を降ろす switch_to_default]
     CauseT -->|それ以外| QuitDrop[目印を下ろし quit_app]
     Marker -->|Welcoming Default| CauseD{原因は}
     CauseD -->|Fault| Fatal[目印を下ろし quit_app KanadeStopped Fault 告知 終了コード 1]
     CauseD -->|それ以外| QuitDrop
-    SwitchTo --> SyncFail{同期の失敗 窓 解決 起動}
-    SyncFail -->|なし| Welcome[Welcoming Target]
+    SwitchTo --> SyncFail{同期の失敗 解決 窓の準備 起動}
+    SyncFail -->|なし| Commit[窓の投函] --> Welcome[Welcoming Target]
     SyncFail -->|あり| IsDefault{切替先は既定か}
     IsDefault -->|いいえ| Fallback
     IsDefault -->|はい| FatalSync[quit_app GhostFallbackFailed]
@@ -294,7 +297,7 @@ flowchart TD
     DefaultSync -->|あり| FatalSync
 ```
 
-流れの判断: 戻す試みは 1 回だけ（`Welcoming{Default}` からは戻らない）。既定ゴーストの `OnBoot` は `BootOrigin::Halted{ghost_name}` により Ref6＝`halt`・Ref7＝落ちた名前を載せる。`Welcoming` で届いた `Fault` 以外の停止（例: `OnGhostChanged` の台本が `\-` で終わった）は「切替先が終了を望んだ」として今日どおり終わる。
+流れの判断: `SendOff` で届いた停止通知は `handoff` が `Some` のときだけ切替として捌く（`handoff` は kanade が切替の相を経て止まった証。`None` は利用者の終了と切替要求がほぼ同時で kanade が要求を受理しないまま止まった形＝終了が勝つ。`warn!(event="ghost_switch_not_accepted")` の上で目印を下ろし今日どおり `quit_app(KanadeStopped(cause))`）。窓は切替先の起動（`boot_ghost_strict`）が成功したあとで投函する（失敗したときに壊れた切替先の窓と既定ゴーストの窓が両方生えるのを防ぐ）。戻す試みは 1 回だけ（`Welcoming{Default}` からは戻らない）。既定ゴーストの `OnBoot` は `BootOrigin::Halted{ghost_name}` により Ref6＝`halt`・Ref7＝落ちた名前を載せる。`Welcoming` で届いた `Fault` 以外の停止（例: `OnGhostChanged` の台本が `\-` で終わった）は「切替先が終了を望んだ」として今日どおり終わる。
 
 ### Flow 4: 汎用の通知の入口
 
@@ -482,7 +485,7 @@ pub enum ShioriMethod { Get, Notify }
 **Implementation Notes**
 - Integration: `close.rs` の `deadline_from` を `pub(super)` にして共有する。`events::on_close` の `CloseReason` は `System`（切替は利用者の窓の操作ではない・Ref0＝`system`）。
 - Validation: `change_tests.rs`（`close.rs` の `mod tests` の状態の組み立てを写す）。
-- Risks: `pending_close` と `pending_change` の両方が在るときは `pending_close` が勝つ（要件 2.9）。中止で `Steady{None}` へ戻るとき `pending_close` が在れば次の `Tick` が `begin_close` を始める（既存の規則）。
+- Risks: `pending_close` と `pending_change` の両方が在るときは `pending_close` が勝つ（要件 2.9）。`Steady{Some}` に `pending_change` が在り、その台本（`raise-event` 無しの `\![change,ghost,B]` と `\-` を同じ台本に書いた形）を利用者が中断して `\-` の予約が真のときは、横断の腕 ⑵ が先に効いて今日どおり終了系列へ進み、保留の切替は捨てる（`info!(event="change_dropped_by_quit")`）。定常での `\-` の予約は終了で終わるという完了 `balloon-break` の規則を切替の保留は覆さない（要件 5.5 の「切替を続ける」は `\-` の予約が無いときの話）。中止で `Steady{None}` へ戻るとき `pending_close` が在れば次の `Tick` が `begin_close` を始める（既存の規則）。
 
 #### BootRoot（`crates/areka-kanade/src/schedule/boot.rs`）
 
@@ -591,9 +594,9 @@ pub(crate) enum WelcomeAttempt { Target, Default }
 ```
 - `request_ghost_switch`: ⑴ `SwitchInFlight` が在れば `warn!(event="ghost_switch_busy")`・`Busy`。⑵ `BootContext.root` で `catalog::list_ghosts` → `resolve_switch_target` → `None` なら `warn!(event="ghost_switch_unknown", name)`・`NotFound`（降ろさず・`OnGhostChanging` も送らない）。⑶ `sakura_name` は `catalog::sakura_name(&target.dir)` で切替先だけ読む（要件 8.7）。`prev` は `GhostSlot` の `GhostSession` の `mount().names` と `BootContext.current` から取る。⑷ 目印を立て、`KanadeMsg::ChangeGhost(ChangeRequest{target: ChangeTarget{sakura_name, name, dir: 絶対パス}, origin, raise_event})` を `GhostSession::kanade()` へ送る。`info!(event="ghost_switch_requested", from, to, raise_event, origin)`。
 - `drain_change_requests`（`Input` 段の系）: `ChangeRx` が無ければ無操作。届いた要求ごとに `request_ghost_switch(world, SwitchRequest{ghost: Name(name), raise_event, origin: Automatic})`。
-- `on_ghost_stopped(stopped)`: Flow 3 のとおり。`SendOff` → `switch_to(world, handoff)`。`Welcoming{Target}` ＋ `Fault` → `error!(event="ghost_switch_target_fault", ghost, reason)` → `switch_to_default(world, fallen_name)`。`Welcoming{Default}` ＋ `Fault` → 目印を下ろし `quit_app(world, ExitOrigin::KanadeStopped(Fault))`（完了 `shiori-fault-notice` の告知と終了コード 1）。`Welcoming{..}` ＋ `Fault` 以外 → `info!(ghost_switch_target_quit)`・目印を下ろし `quit_app(world, ExitOrigin::KanadeStopped(cause))`。
-- `switch_to(handoff)`（切替先を起こす）: ① `GhostSlot` から `GhostSession` を取り出し `shutdown(CloseReason::System)`（`Err` は `error!` の上で続ける＝戻す先は無い）・所要 ms を記録。② `close_windows_for_restart`。③ `resolve_balloon_for_ghost(root, &target.dir)`（`Err` は `error!`）。④ `reopen_ghost_windows(world, &cfg, closed)`（`Err` は `error!`）。⑤ `boot_ghost_strict(world, inputs{boot_origin: ChangedFrom{prev.sakura_name, handoff.script, prev.name, prev.dir}}, &descript, &GhostDecision{route: Switched, dir, folder: Some}, &balloon)`（`Err` は `error!`）。③〜⑤ のどれかが失敗 → 切替先が既定（`folder == DEFAULT_GHOST_FOLDER`）なら `fatal(world, reason)`、そうでなければ `switch_to_default(world, target.name)`。⑥ 成功 → `GhostSlot` へ戻し、`BootContext.current` を切替先で更新、`stage = Welcoming{Target}`、`info!(event="ghost_switch_booted", ghost)`。
-- `switch_to_default(fallen_name)`: 既定ゴーストが目録に無ければ `fatal`。在れば「切替先を降ろして」（`GhostSlot` の `shutdown`・窓を閉じる）から ③〜⑤ を `boot_origin: Halted{ghost_name: fallen_name}`・`GhostDecision{route: Default}` で行う。失敗 → `fatal`。成功 → `stage = Welcoming{Default}`。`OnGhostChanged` は送らない（`Halted` の根は無い）。告知は出さない（要件 6.3）。
+- `on_ghost_stopped(stopped)`: Flow 3 のとおり。`SendOff` ＋ `handoff: Some` → `switch_to(world, handoff)`。`SendOff` ＋ `handoff: None`（kanade が要求を受理しないまま止まった＝利用者の終了と競合）→ `warn!(event="ghost_switch_not_accepted", cause)`・目印を下ろし `quit_app(world, ExitOrigin::KanadeStopped(cause))`（今日どおり・`Fault` なら告知と終了コード 1）。`Welcoming{Target}` ＋ `Fault` → `error!(event="ghost_switch_target_fault", ghost, reason)` → `switch_to_default(world, fallen_name)`。`Welcoming{Default}` ＋ `Fault` → 目印を下ろし `quit_app(world, ExitOrigin::KanadeStopped(Fault))`（完了 `shiori-fault-notice` の告知と終了コード 1）。`Welcoming{..}` ＋ `Fault` 以外 → `info!(ghost_switch_target_quit)`・目印を下ろし `quit_app(world, ExitOrigin::KanadeStopped(cause))`。
+- `switch_to(handoff)`（切替先を起こす）: ① `GhostSlot` から `GhostSession` を取り出し `shutdown(CloseReason::System)`（`Err` は `error!` の上で続ける＝戻す先は無い）・所要 ms を記録。② `close_windows_for_restart`。③ `resolve_balloon_for_ghost(root, &target.dir)`（`Err` は `error!`）。④ 窓の準備 `reopen_ghost_windows(world, &cfg, closed) -> PreparedWindows`（同期・descript の読取まで・窓はまだ作らない・`Err` は `error!`）。⑤ `boot_ghost_strict(world, inputs{boot_origin: ChangedFrom{prev.sakura_name, handoff.script, prev.name, prev.dir}}, &prepared.descript, &GhostDecision{route: Switched, dir, folder: Some}, &balloon)`（`Err` は `error!`）。③〜⑤ のどれかが失敗 → 窓は投函していないので何も生えない。切替先が既定（`folder == DEFAULT_GHOST_FOLDER`）なら `fatal(world, reason)`、そうでなければ `switch_to_default(world, target.name)`。⑥ 成功 → 窓の投函 `commit_ghost_windows(world, prepared)`・`GhostSlot` へ戻し、`BootContext.current` を切替先で更新、`stage = Welcoming{Target}`、`info!(event="ghost_switch_booted", ghost)`。
+- `switch_to_default(fallen_name)`: 既定ゴーストが目録に無ければ `fatal`。在れば「切替先を降ろして」（`GhostSlot` に切替先が在れば `shutdown`・窓を閉じる。⑤ で失敗したときは `GhostSlot` が空で窓も 0 枚なので閉じるものは無い）から ③〜⑥ を `boot_origin: Halted{ghost_name: fallen_name}`・`GhostDecision{route: Default}` で行う。失敗 → `fatal`。成功 → `stage = Welcoming{Default}`。`OnGhostChanged` は送らない（`Halted` の根は無い）。告知は出さない（要件 6.3）。
 - `fatal(reason)`: 目印を下ろし `quit_app(world, ExitOrigin::GhostFallbackFailed(ShioriFault{kind: Internal, reason}))`（`main` の後始末が今日の `Fault` の経路で告知し終了コード 1）。
 - `on_notice(Steady)`: `stage == Welcoming{..}` → 目印を外し `info!(event="ghost_switch_done", ghost, attempt)`。目印が無ければ `debug!`（初回起動・LogSink の起動の定常到達）。`on_notice(ChangeCancelled{reason})`: 目印を外し `info!(event="ghost_switch_cancelled", reason)`。目印が無ければ `warn!`。
 
@@ -650,7 +653,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 #### Main（`crates/areka/src/main.rs`）
 
 - 据え付け: `register_systems` の後に `BootContext` を挿す。`boot_ghost` の戻りを `GhostSlot(Some(session))` として World へ挿す（ローカル変数には持たない）。
-- `run()` の後: `GhostSlot` から取り出す（`None` なら降ろすものが無い）。告知の場面の `ghost_name`／`ghost_root` は `GhostSession::names()` と `BootContext.current.cfg.ghost_root` から組む（切替後の今のゴースト）。`fault_of` が `Some` なら `AlertScene::ShioriFault`（`GhostFallbackFailed` も同じ場面）。
+- `run()` の後: `GhostSlot` から取り出す（`None` なら降ろすものが無い）。告知の場面の `ghost_name`／`ghost_root` は `GhostSession::names()` と `BootContext.current.cfg.ghost_root` から組む（切替後の今のゴースト）。`fatal` で終わったときは `GhostSlot` が空なので、`ghost_name` は `BootContext.current.ghost` のフォルダ名へ倒す。`fault_of` が `Some` なら `AlertScene::ShioriFault`（`GhostFallbackFailed` も同じ場面）。
 - 単独起動の失敗（要件 6.8）: `FirstExit` が `KanadeStopped(Fault)` で、`BootContext.current.ghost.route` が `Argv` でなく、フォルダが `DEFAULT_GHOST_FOLDER` でないとき、後始末で `session.shutdown` の**後**（sylphya の flush が終わってから）に `record_halt(app_profile_dir, 落ちた名前)`（名前は `names().name`・無ければフォルダ名）。`Argv` の起動は開発者の上書きなので記憶を書き換えない（`LastUsed` の規則と同じ・`info!`）。`GhostFallbackFailed`（切替の途中の致命）では既定ゴーストの `on_boot_ok` が既に `LastGhost` を既定へ書いているので書かない。
 
 #### GhostFrame（`crates/areka/src/menu/ghost_frame.rs`）
@@ -671,7 +674,8 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 - **kanade の帳簿 `State.change`／`pending_change`**: 受理で立ち、中止・取りやめで消える。`Unloading` に至った時点の `change` が停止通知の `handoff` になる。
 - **起動の文脈 `BootContext`**（Resource）: 根・記憶の置き場・helper・今のゴースト（切替の成功で更新）。
 - **起動の由来 `BootOrigin`**（kanade の設定）: `Plain`／`ChangedFrom`／`Halted`。根の表の入力。
-- 不変条件: `SwitchInFlight` が在る間、`quit_app` を呼ぶのは `fatal` と「`Welcoming` での `Fault` 以外の停止」だけ。`SwitchInFlight` が無い間、停止通知は今日どおり終了へ。
+- 不変条件: `SwitchInFlight` が在る間、`quit_app` を呼ぶのは `fatal`・「`Welcoming` での `Fault` 以外の停止」・「`SendOff` での `handoff: None` の停止」の 3 つだけ。`SwitchInFlight` が無い間、停止通知は今日どおり終了へ。
+- 不変条件（`handoff`）: kanade が `begin_change` を通れば停止通知の `handoff` は必ず `Some`（`raise_event` 無し・204・`Fault` で台本が無くても `Some(ChangeHandoff{script: None})`）。`None` は「切替の相を経ていない停止」だけを意味する。
 
 ### Logical Data Model（記憶）
 | 鍵 | スコープ | 書く時 | 読む時 |
@@ -702,6 +706,8 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 | 切替の相に終了要求 | `info!(change_yield_to_close)` → UI `info!(ghost_switch_cancelled reason=close_request)` | 今日の終了の握手へ |
 | 送り出しの台詞が 30 秒を超えた | `error!(change_deadline_exceeded)` | 降ろして切替を続ける |
 | 握手中の SHIORI の `Fault` | kanade の既存の `error!`（`shiori_failed`／`shiori_down`） | 目印が立っているので切替を続ける |
+| `SendOff` の目印の下に `handoff: None` の停止が届く（kanade が要求を受理しないまま止まった） | `warn!(ghost_switch_not_accepted)` | 目印を下ろし今日どおり終了（`Fault` なら告知・終了コード 1） |
+| 保留の切替を持つ台本が `\-` の予約つきで中断された | `info!(change_dropped_by_quit)` | 保留を捨て今日の終了系列へ |
 | `GhostSession::shutdown` が `Err` | `error!`（既存） | 続ける（戻す先が無い） |
 | 切替先のバルーンが解けない・窓を作れない・起動の結線が成立しない | `error!(ghost_switch_boot_failed stage=…)` | 既定へ（切替先が既定なら致命） |
 | 切替先の SHIORI の `Fault`（非同期） | `error!(ghost_switch_target_fault)` | 既定へ |
@@ -712,7 +718,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 | `record_halt`／`take_last_halted` の I/O 失敗 | `warn!`（`save_scope` の既存の縮退） | 続ける |
 
 ### Monitoring
-実機サインオフは `RUST_LOG` を `kanade=info,areka=info`（判定の分岐の水準）まで開け、`ghost_switch_requested`／`change_*`／`windows_closed_for_restart`／`ghost_switch_booted`／`ghost_switch_done`／`ghost_switch_cancelled`／`ghost_switch_target_fault`／`app_exit` の件数と順序、`ghost_switch_down_ms` の値を `signoff.md` に残す。
+実機サインオフは `RUST_LOG` を `kanade=info,areka=info`（判定の分岐の水準）に加えて `GhostRuntime::shutdown` の段ごとの記録（`areka_ghost` の runtime）の水準まで開け（`ghost_switch_down_ms` が 1 秒を超えたとき、kanade・dispatcher・SHIORI（helper の unload）・relay・ticker・sylphya のどの join が支配したかを切り分けるため）、`ghost_switch_requested`／`change_*`／`windows_closed_for_restart`／`ghost_switch_booted`／`ghost_switch_done`／`ghost_switch_cancelled`／`ghost_switch_target_fault`／`app_exit` の件数と順序、`ghost_switch_down_ms` の値を `signoff.md` に残す。
 
 ## Testing Strategy
 
@@ -731,7 +737,9 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 
 ### Unit Tests（areka の判断・実ゴースト無し）
 - `ghost_switch_tests.rs`: `resolve_switch_target`（`name` 一致 → フォルダ名一致 → 該当なし・大文字小文字・現在のゴーストを除外しない）。`request_ghost_switch`: 二重要求 `Busy` ＋ `warn!` 1 件・該当なし `NotFound` ＋ `warn!` 1 件 ＋ kanade の受信端は空・受理で `SwitchInFlight{SendOff}` ＋ `ChangeGhost` 1 件。`on_notice(ChangeCancelled)` で目印が消え `info!` 1 件。`on_ghost_stopped(Welcoming{Default}, Fault)` → `AppExit` 要求 ＋ `FirstExit == KanadeStopped(Fault)`（要件 1.5〜1.9・5.2・6.4・10.6）。
-- `frame_ghost_quit_switch_tests.rs`: `SwitchInFlight` が在る World に `Stopped` を積む → `quit_app` 0 回（`AppExit` 未要求）・委譲先の記録 1 件。目印を外して同じ通知 → `AppExit` 要求（要件 3.3・3.5・8.4・10.7）。
+- `frame_ghost_quit_switch_tests.rs`: `SwitchInFlight` が在る World に `Stopped{handoff: Some}` を積む → `quit_app` 0 回（`AppExit` 未要求）・委譲先の記録 1 件。目印を外して同じ通知 → `AppExit` 要求。`SwitchInFlight{SendOff}` ＋ `Stopped{handoff: None}` → `AppExit` 要求 ＋ `warn!` 1 件 ＋ 目印が消えている（要件 2.9・3.3・3.5・8.4・10.7）。
+- `ghost_session_switch_tests.rs`（同じ土台）: 切替先の起動が同期で失敗（`ShioriWiring::Custom(|| Err)` を結線の失敗に見立てる）→ 次の `Input` 段を 1 回回したあと `GhostWindowMarker` の窓が既定ゴーストの分だけ（孤児 0）・`GhostWindows` が 1 つ（要件 6.1・4.10）。
+- `change_tests.rs`: `Steady{Some}` ＋ `pending_change` ＋ `TalkDone{Interrupted, quit_reserved: true}` → 終了系列（`begin_close`）へ進み `pending_change == None`・`OnGhostChanging` 0 件（要件 5.5 の但し書き）。
 - `ghost_frame_tests.rs`: 2 体の目録で `Submenu` の子 2 つ・並び・ラベル（`name` 無しはフォルダ名）・現在のゴーストに `checked`・子を選ぶと `SwitchRequest{Folder, raise_event: true, Manual}` が入口へ届く・`boot_wired` の 2 周目で登記が新品（`registered_frames` に `Ghost`）（要件 1.4・1.11・1.12・10.9）。
 - `app_exit_tests.rs`: `close_windows_for_restart` の後 `GhostWindows` が無い・`fault_of(GhostFallbackFailed)` が `Some`。
 - `boot_resolve_tests.rs`／`main_halt_record_tests.rs`: `record_halt` → `LastGhost == emo2`・`take_last_halted` が名前を返し 2 度目は `None`。`Fault` ＋ 既定ゴースト → 書き換え 0 回。`Argv` → 書き換え 0 回（要件 6.8・10.14）。

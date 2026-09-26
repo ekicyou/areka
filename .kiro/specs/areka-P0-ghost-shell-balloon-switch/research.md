@@ -320,6 +320,9 @@
 5. **`main` の告知の場面が起動時の `cfg.ghost_root`・`session.ghost_name()` を使う。** → `BootContext.current` と `GhostSlot` から読む。
 6. **kanade が受理しなかった要求で UI の目印が残る。** → `ChangeCancelled{Rejected}` を必ず返す。
 7. **`pending_close` と `pending_change` の競合。** → `consume_pending` は `pending_close` を先に見て取りやめる（終了が勝つ・要件 2.9）。
+8. **窓の生成は次の `Input` 段に着く**（設計検証 2026-09-26・Issue 1）。切替先の起動が同期で失敗したあと既定ゴーストの窓を頼むと、同じ `Input` 段で切替先の窓（孤児）と既定の窓が両方生える。→ `open_ghost_windows` を「準備」（同期・descript の読取と spawn の閉包）と「投函」に分け、切替は `boot_ghost_strict` が成功したあとにだけ投函する（状態で解く・世代番号は持たない）。初回起動の `main` の順序は据え置き。
+9. **`SendOff` の目印の下に `handoff: None` の停止が届く**（同・Issue 2）。利用者の終了と切替要求がほぼ同時で、kanade が `StopSelf` の後に要求を受け取ると `ChangeCancelled{Rejected}` は返らず捨てられる。→ `on_ghost_stopped(SendOff)` は `handoff` が `Some` のときだけ切替として捌き、`None` は `warn!` の上で今日どおり終了（終了は終了で終わる）。
+10. **保留の切替を持つ台本の `\-` 予約つき中断**（同・小さな点）。定常なので `\-` の予約が先に効き、保留の切替は捨てて終了系列へ（要件 5.5 に但し書き）。
 
 ## 11. 設計の簡素化（synthesis）
 
