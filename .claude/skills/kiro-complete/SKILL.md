@@ -300,7 +300,7 @@ pwsh -NoProfile -File tools/test-all.ps1 -Format -License   # Bash／PowerShell 
 - **Format Gate**: `-Format` が「`cargo fmt --all` で整形 → `--check` で確認」をテストの前の段で行う。整形差分はステップ7 のコミットに取り込む。`cargo fmt` が構文エラーで失敗したら中断して報告する（コンパイルできないコードが残っている）。Rust ワークスペースでないリポジトリはチェックリストに「(整形対象不在により省略)」と注記する。
 - **License Gate**: MIT 配布を守るライセンス健全性ゲート。`-License` がテストの後に直列で回す（テストと同時に回すと rustc がメモリ不足で落ちる）。
   - (a) 汚染ゲート `cargo deny check`: 強コピーレフト（GPL/LGPL/AGPL/MPL 等）や許可外ライセンスの混入を検出する（`deny.toml` があるときだけ意味を持つ）。
-  - (b) 第三者謝辞の再生成 `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md`（`about.toml` があるときだけ）。差分は依存が変わった証跡で、ステップ7 のコミットに含める。
+  - (b) 第三者謝辞の再生成 `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md`（`about.toml` があるときだけ）。差分は依存が変わった証跡で、ステップ7 のコミットに含める。**ただし `Cargo.lock` を追跡していないリポジトリで、このブランチが依存（`Cargo.toml`）を変えていないのに版の上下だけが出た場合は環境差**（手元の lock の解決が既定ブランチと違うだけ）なので取り込まず `git restore THIRD-PARTY-NOTICES.md` で戻す。取り込むと謝辞が古い版へ後退する（2026-09-26 の実走で `thiserror` 2.0.21 → 2.0.20 として出た）。
   - ツール未導入時は `cargo install cargo-deny --locked` / `cargo install cargo-about --features cli --locked` で導入してから回す。`deny.toml`・`about.toml` が無いリポジトリでは「(設定不在により省略)」と注記する。
 - **移動後のゲートを兼ねる**: このテストは移動をコミットした後に走るので、ソースからの spec 文書の実ファイル読みがパスの追随漏れで壊れていれば、ここで赤になる。**スキップしない**（以前の「直近の実行結果により省略」は廃止。移動というテスト対象への変更が必ず間に挟まるため）。
 - **スクリプトが無いリポジトリ**（このスキルを別のリポジトリへ移したとき）: `cargo fmt --all`・`cargo fmt --all -- --check`・`cargo test --workspace --no-fail-fast` を 1 本のコマンドにつないで裏で起動し、License Gate は同じコマンドの末尾に直列でつなぐ。
