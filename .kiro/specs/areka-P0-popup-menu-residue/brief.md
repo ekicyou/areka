@@ -4,7 +4,7 @@
 
 ## 2026-09-20 棚卸⑮の再測定
 
-**残件 1・2 は `areka-P0-wintf-drag-state-rest-contract`（台帳 #43）へ移した。** どちらも潜在バグで、同 spec と同じ `crates/areka/src/menu/trigger.rs` を触るためである。本仕様に残るのは 3〜10 の 8 件（記録の文言と接頭辞 4・5・6・7／テストの穴 3・8／語彙 4 件の引受先 9／World 借用中の `ShellExecuteW` 10）＝いずれも α にもバグ修正にも属さないので、当面着手しない。
+**残件 1・2 は `areka-P0-wintf-drag-state-rest-contract`へ移した。** どちらも潜在バグで、同 spec と同じ `crates/areka/src/menu/trigger.rs` を触るためである。本仕様に残るのは 3〜10 の 8 件（記録の文言と接頭辞 4・5・6・7／テストの穴 3・8／語彙 4 件の引受先 9／World 借用中の `ShellExecuteW` 10）＝いずれも α にもバグ修正にも属さないので、当面着手しない。
 
 **実測（main `fe157df1`）**: 残件 3〜10 は全件が実在する。ただし 7 番（`crates/areka/src/emo2_boot/spine.rs` の「現在は 4 本」「4-sink 構成」）は、本文の「実際は 6 本」も古くなった——`areka-P0-balloon-break` の `no_user_break_sink` で **7 本**（`crates/areka/src/emo2_boot/mod.rs` の `sinks: vec![…]`）。
 

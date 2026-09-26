@@ -3,29 +3,29 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「更新」（候補名 `areka-P0-network-update`＝同名）。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
-## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝#55・#58・#59 の着地後）
+## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap` の着地後）
 
-**#15 の後の直列のまま**。ただし理由は `install_cue.rs`（消費者台帳の同じ鍵 `("execute", Some("install"))`・`consumer_ledger.rs` の `canonical()`）だけではない——それを外しても #15 と 10 本・#13 と 9 本以上のソースを共有し、読み直しは #13 の「同じゴーストへの切替」、kanade への通知は #13 の汎用の通知の入口に乗る。**要件（`/kiro-start`）は #13 の実装と並走して今すぐ書ける**（`.kiro/specs/` だけ）。設計は #13・#15 の設計が main へ入ってから。想定 **14〜17 タスク**（#13 が通知の入口を作らなければ +2〜3）。
+**`ghost-install` の後の直列のまま**。ただし理由は `install_cue.rs`（消費者台帳の同じ鍵 `("execute", Some("install"))`・`consumer_ledger.rs` の `canonical()`）だけではない——それを外しても `ghost-install` と 10 本・`ghost-shell-balloon-switch` と 9 本以上のソースを共有し、読み直しは `ghost-shell-balloon-switch` の「同じゴーストへの切替」、kanade への通知は `ghost-shell-balloon-switch` の汎用の通知の入口に乗る。**要件（`/kiro-start`）は `ghost-shell-balloon-switch` の実装と並走して今すぐ書ける**（`.kiro/specs/` だけ）。設計は `ghost-shell-balloon-switch`・`ghost-install` の設計が main へ入ってから。想定 **14〜17 タスク**（`ghost-shell-balloon-switch` が通知の入口を作らなければ +2〜3）。
 
-**棚卸⑰の裁定（本仕様に効くもの）**: エンジン側の調整を切り出すかは**本仕様の要件段階の議題 ⑴ の答えで決める**（棚卸⑰では起票しない）。答えが (a)・(b)・(d) の正規形なら、`crates/areka-update/` だけを触る小さな別 spec（仮名 `areka-P0-update-engine-commit-gate`・3〜5 タスク＝「確定に入る」の通知 1 つ・後片付けの `old/` の扱い・https の実機走行 1 本）を `/kiro-discovery` で起票し、#50 の実装の段で並走させる（#13・#50・#15 と共有 0）。答えが (c) なら切り出さない。
+**棚卸⑰の裁定（本仕様に効くもの）**: エンジン側の調整を切り出すかは**本仕様の要件段階の議題 ⑴ の答えで決める**（棚卸⑰では起票しない）。答えが (a)・(b)・(d) の正規形なら、`crates/areka-update/` だけを触る小さな別 spec（仮名 `areka-P0-update-engine-commit-gate`・3〜5 タスク＝「確定に入る」の通知 1 つ・後片付けの `old/` の扱い・https の実機走行 1 本）を `/kiro-discovery` で起票し、`shell-balloon-switch` の実装の段で並走させる（`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install` と共有 0）。答えが (c) なら切り出さない。
 
 **崩れた／変わった前提**
 1. 09-24 節 2 の「`areka-update` は `areka-nar` に依存」は誤り。本番の依存は無い（`crates/areka-update/Cargo.toml` の `[dependencies]` は encoding_rs・thiserror・tracing・windows の 4 本）。dev の `sample-ghost-kit` 経由だけ。
 2. 議題 ⑴ の (b)「未実走」はファイルの層では半分確かめ済み。写像中の DLL は改名できる（`commit_tests.rs` の較正）ので確定（改名 2 回・`commit.rs`）は通る。**ただし**後片付けの `WorkArea::cleanup`（`work.rs`）が `old/<dll>` を消せず、次の走行の `sweep` はそれを「戻せなかった走行」と見なして永久に残し毎周 `warn!` を出す＝(b) もエンジンの改修が要る。
 3. **選択肢 (d) を足す**: `run` の観測（`observe`）の呼び出しは同期で、最後の照合の通知 `Md5Compared{matched:true}` の直後が確定。その通知の中で SHIORI を降ろし切って戻れば、エンジンを変えずに「解放してから確定」になる。弱点は観測者に寿命の仕事をさせ `Progress` の並び順に頼ること。正規の形にするなら「確定に入る」の通知を 1 つ足すのが最小（エンジン改修 1 タスク）。
-4. `alert.rs` は #55 で場面が 5 つになったが、ボタン 1 つ・戻り値なしのまま（一般化はされていない）。
+4. `alert.rs` は `shiori-fault-notice` で場面が 5 つになったが、ボタン 1 つ・戻り値なしのまま（一般化はされていない）。
 5. 09-24 節 8 の「`events.rs` が 1,000 行に迫る」は言い過ぎ（431 行・許可表 10 件）。上限に近いのはテスト側（`actor_tests.rs` 970・`schedule_tests.rs` 962）で、新しいテストは兄弟の新ファイルへ。
-6. 触るファイルに足す: `crates/areka/src/ghost_session.rs`（#58 の新設・降ろすのは `GhostSession::shutdown`、起こすのは `boot_ghost`）と `emo2_boot/frame.rs` の `run_ghost_quit_phase`（更新のための解放でも停止通知を踏む＝#13 が足す切替の分岐に乗る）、網羅台帳 `shiori.toml` の `updatebutton.caption`（`vocabulary-only`・備考が「枠を登記した日に実装済みへ」と本仕様を指す＝メニュー登記と同じコミットで状態を動かす）。
+6. 触るファイルに足す: `crates/areka/src/ghost_session.rs`（`ghost-restart-unit` の新設・降ろすのは `GhostSession::shutdown`、起こすのは `boot_ghost`）と `emo2_boot/frame.rs` の `run_ghost_quit_phase`（更新のための解放でも停止通知を踏む＝`ghost-shell-balloon-switch` が足す切替の分岐に乗る）、網羅台帳 `shiori.toml` の `updatebutton.caption`（`vocabulary-only`・備考が「枠を登記した日に実装済みへ」と本仕様を指す＝メニュー登記と同じコミットで状態を動かす）。
 7. `WinHttpFetch::new()`（`winhttp.rs`）は失敗を `Err` で返すだけで記録を持たない。本番の呼び手はまだ 0 本なので今は黙った失敗ではないが、**本仕様が最初の呼び手になるので、呼ぶ側で `error!` を必ず残す**（ログ無し失敗経路の禁止）。
 8. 行数: `msg.rs` 852・`actor.rs` 541・`schedule/mod.rs` 758・`main.rs` 556・`emo2_boot/mod.rs` 767・`consumer_ledger.rs` 726・`areka-update/src/lib.rs` 381。
-9. 実機の更新先の候補: `emo2.nar` の `homeurl` は `https://ekicyou.github.io/ghost_dev/emo2/emo2/`（開発者の配布サイト・https）。書庫に `updates.txt`（根と `ghost/master/`）と `delete.txt` がある。ここに差分 1 件を置ければ、https の確認と #17 の検証項目 8 が 1 回の走行で済む（サーバ側の中身は未確認）。
+9. 実機の更新先の候補: `emo2.nar` の `homeurl` は `https://ekicyou.github.io/ghost_dev/emo2/emo2/`（開発者の配布サイト・https）。書庫に `updates.txt`（根と `ghost/master/`）と `delete.txt` がある。ここに差分 1 件を置ければ、https の確認と `alpha-release-signoff` の検証項目 8 が 1 回の走行で済む（サーバ側の中身は未確認）。
 10. 変わっていない（確認済み）: `run`・`Fetch`・`Progress`／`crates/areka/Cargo.toml` に `areka-update` は無い／`ALLOWED_RESOURCE_IDS`（`resources.rs`）に `homeurl`・`useorigin1`・`other_homeurl_override` は無く読み手も 0／`menu::register` の呼び手は 0／`assets.toml` の `delete.txt` の行は `absent`・owner は本仕様／`KanadeMsg` の 12 変種に外からイベントを送る汎用の口は無い。
 
-**要件段階の議題**: ⑴ 進捗の台詞と SHIORI の解放——(a)・(d) 取得と照合のあいだはゴーストが進捗を話し、確定の直前に一瞬消えて更新後に戻る／(b) ゴーストは消えないが古い DLL の写しが次の起動まで残る（エンジン改修）／(c) 進捗の台詞は無く終わってからまとめて出る。答えでエンジンの改修と別 spec の切り出しが決まる。⑵ ゴーストが `OnUpdateFailure` に応えない（空の応答）とき areka 自身が告知するか（するなら `alert.rs` に場面を 1 つ・ボタンは 1 つで足りる）。⑶ `\![execute,install,url]` を α に入れるか（入れなければ #15 の `install_cue.rs` に触らずに済み −1〜2 タスク。台本から URL でインストールを勧めるゴーストが α では動かない＝警告ログだけ）。⑷ 実機の更新先に emo2 の配布サイトを使い、差分 1 件を置いてよいか（不可ならローカルの http を用意し、https は未確認のまま残る）。
+**要件段階の議題**: ⑴ 進捗の台詞と SHIORI の解放——(a)・(d) 取得と照合のあいだはゴーストが進捗を話し、確定の直前に一瞬消えて更新後に戻る／(b) ゴーストは消えないが古い DLL の写しが次の起動まで残る（エンジン改修）／(c) 進捗の台詞は無く終わってからまとめて出る。答えでエンジンの改修と別 spec の切り出しが決まる。⑵ ゴーストが `OnUpdateFailure` に応えない（空の応答）とき areka 自身が告知するか（するなら `alert.rs` に場面を 1 つ・ボタンは 1 つで足りる）。⑶ `\![execute,install,url]` を α に入れるか（入れなければ `ghost-install` の `install_cue.rs` に触らずに済み −1〜2 タスク。台本から URL でインストールを勧めるゴーストが α では動かない＝警告ログだけ）。⑷ 実機の更新先に emo2 の配布サイトを使い、差分 1 件を置いてよいか（不可ならローカルの http を用意し、https は未確認のまま残る）。
 
-## 2026-09-24 棚卸⑯の再測定（main `0b01f654`＝#51 `update-engine` の着地後）
+## 2026-09-24 棚卸⑯の再測定（main `0b01f654`＝`update-engine` の着地後）
 
-**#15 の後の直列のまま**（共有ファイルの全数は #15 の brief の同じ節）。**実装は #13・#50・#15 の着地待ち**。要件と設計は先行できる。想定 **12〜14 タスク**・分割不要。
+**`ghost-install` の後の直列のまま**（共有ファイルの全数は `ghost-install` の brief の同じ節）。**実装は `ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install` の着地待ち**。要件と設計は先行できる。想定 **12〜14 タスク**・分割不要。
 
 **崩れた／変わった前提（brief を改める箇所）**
 
@@ -33,13 +33,13 @@
 2. **`crates/areka/Cargo.toml` はまだ `areka-update` に依存していない。** `Win32_Networking_WinHttp` は `crates/areka-update/Cargo.toml` にだけあり本体に機能を足す必要は無い。`areka-update` は `areka-nar` に依存している（新事実）。
 3. **`WinHttpFetch::new()` は失敗しても記録を出さない**（`winhttp.rs` に `tracing` 0 件）＝本仕様の側で `error!`。**https は未確認**（`winhttp_real_two_rounds_update_then_unchanged` は `#[ignore]`・ローカルの http）。
 4. **`delete.rs` の読み手には `// ukadoc:` の 1 行が在る**（`areka-update/src` で唯一）が本体から辿れないので、台帳の「相対パス」行は `status="absent"`・`owner="areka-P0-network-update"` のまま。`roadmap-draft` の行は `owner_count = 1`・`wave = "A4"`。`OnUpdateBegin`／`updatebymyself` の台帳行は `owner=""`。
-5. **`homeurl` の読み手は 0**（語彙が sylphya に在るだけ・#12 要件 2.9 が目録から除外）＝`catalog::companion_balloon` と同じ形の単独の読み手を足す。**`homeurl`／`useorigin1`／`other_homeurl_override` のリソース照会は既存の仕組みに乗る**＝`KanadeMsg::ResourceQuery` と `schedule/resources.rs` の `ALLOWED_RESOURCE_IDS` に 3 行足すだけ（「薄い読み手を新設」は不要）。
+5. **`homeurl` の読み手は 0**（語彙が sylphya に在るだけ・`baseware-root-layout` 要件 2.9 が目録から除外）＝`catalog::companion_balloon` と同じ形の単独の読み手を足す。**`homeurl`／`useorigin1`／`other_homeurl_override` のリソース照会は既存の仕組みに乗る**＝`KanadeMsg::ResourceQuery` と `schedule/resources.rs` の `ALLOWED_RESOURCE_IDS` に 3 行足すだけ（「薄い読み手を新設」は不要）。
 6. **失敗の参照値は写すだけ**＝`OnUpdateFailure` の Ref1 は `UpdateError::file()`・Ref0 は `reason.kind()`。
-7. **メニューの枠と項目名は済み**＝`Frame::Update` と「ネットワーク更新」（`updatebutton.caption`）。`menu::register` を呼ぶだけ（呼び手 0・`#[allow(dead_code)]`・最初の呼び手は #13 の予定）。
-8. **`schedule/events.rs`（431 行）は更新系で約 24 本、#15 の約 10 本を足すと 1,000 行に迫る**＝`events_update.rs` への分割を推す。
+7. **メニューの枠と項目名は済み**＝`Frame::Update` と「ネットワーク更新」（`updatebutton.caption`）。`menu::register` を呼ぶだけ（呼び手 0・`#[allow(dead_code)]`・最初の呼び手は `ghost-shell-balloon-switch` の予定）。
+8. **`schedule/events.rs`（431 行）は更新系で約 24 本、`ghost-install` の約 10 本を足すと 1,000 行に迫る**＝`events_update.rs` への分割を推す。
 9. 束の件数は `linkage.md` の members で「更新」**50**（brief の 51 とずれ・原因未確認）。
 
-**触るファイル**: `crates/areka/Cargo.toml`・`main.rs`・`emo2_boot/{consumer_ledger,mod}.rs`・新規 `update_cue.rs`（`updatebymyself`／`update`／`updateother`）・**#15 の `install_cue.rs` の改変**（`\![execute,install,url]`＝同じ鍵）・kanade `msg.rs`／`actor.rs`／`schedule/mod.rs`／`schedule/resources.rs`／`events.rs`（分割）／新しい相のファイル・中＝`alert.rs`（失敗告知）と `areka-ghost/src/catalog.rs`（`homeurl` の読み手）・台帳 `assets.toml`（1 行）／`shiori.toml`（束「更新」のうち引き受ける分の `owner`）／`sakura-script.toml`・`roadmap-draft.md` の `owner_count`・生成物・§8。
+**触るファイル**: `crates/areka/Cargo.toml`・`main.rs`・`emo2_boot/{consumer_ledger,mod}.rs`・新規 `update_cue.rs`（`updatebymyself`／`update`／`updateother`）・**`ghost-install` の `install_cue.rs` の改変**（`\![execute,install,url]`＝同じ鍵）・kanade `msg.rs`／`actor.rs`／`schedule/mod.rs`／`schedule/resources.rs`／`events.rs`（分割）／新しい相のファイル・中＝`alert.rs`（失敗告知）と `areka-ghost/src/catalog.rs`（`homeurl` の読み手）・台帳 `assets.toml`（1 行）／`shiori.toml`（束「更新」のうち引き受ける分の `owner`）／`sakura-script.toml`・`roadmap-draft.md` の `owner_count`・生成物・§8。
 
 **要件段階の議題（Fable）**: ⑴ **更新中のイベントと SHIORI の解放が噛み合わない**——エンジンの前提は「確定の前に SHIORI を解放しておく」（完了 `update-engine` 設計の前提条件）だが、`run` は取得から確定までを 1 回の呼び出しで行い、その間に `OnUpdate.OnDownloadBegin` や MD5 照合の進捗を出す＝SHIORI に送るにはゴーストが起きている必要がある。選択肢: (a) `run` を「取得と照合」と「確定」の 2 段に割る（**完了クレートの改修**）／(b) 読み込み中の DLL の改名が通ることに賭け SHIORI を生かしたまま更新して後で読み直す（**未実走**）／(c) 進捗イベントを後からまとめて送る。答えで作業が完了クレートの改修になるかどうかが変わる。
 
@@ -49,8 +49,8 @@
 
 | spec | 中身 | 本 brief の対応箇所 |
 |---|---|---|
-| `areka-P0-update-engine`（台帳 #51・**今日着手できる**） | 定義ファイルの読み手・差分・`HttpFetch`・WinHTTP 実装・MD5・一時フォルダからの全か無かの確定・`delete.txt` | Approach ①②⑤。**本 brief からは外れた** |
-| **本仕様**（台帳 #16） | kanade の「更新」の相（`OnUpdate*`／`OnUpdateOther*` の全列と Ref）・台本の入口 3 つ・メニュー登記・`OnUpdateProcessExec`・`useorigin1`・`\![execute,install,url,…]`・更新後の読み直し・**網羅台帳の状態の更新** | Approach ③④ |
+| `areka-P0-update-engine`（**今日着手できる**） | 定義ファイルの読み手・差分・`HttpFetch`・WinHTTP 実装・MD5・一時フォルダからの全か無かの確定・`delete.txt` | Approach ①②⑤。**本 brief からは外れた** |
+| **本仕様** | kanade の「更新」の相（`OnUpdate*`／`OnUpdateOther*` の全列と Ref）・台本の入口 3 つ・メニュー登記・`OnUpdateProcessExec`・`useorigin1`・`\![execute,install,url,…]`・更新後の読み直し・**網羅台帳の状態の更新** | Approach ③④ |
 
 分割後の規模は **M（タスク 12〜15 本）**。本仕様は `areka-P0-update-engine`・`areka-P0-ghost-shell-balloon-switch`（読み直しは同じゴーストへの切替で代用）・`areka-P0-ghost-install`（`execute,install,url` は同 spec が作る受け口ファイルを改変する形になる）を待つ。
 
