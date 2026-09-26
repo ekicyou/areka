@@ -236,7 +236,7 @@
   - _Requirements: 9.2, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12_
   - _Boundary: doc/COMPAT_ARCHITECTURE.md, roadmap_
 
-- [ ] 10.3 実機で 5 走行を見て記録する
+- [x] 10.3 実機で 5 走行を見て記録する
   - i686 の 2 成果物を建ててから、絶対パスの短いパスで起動し、有界の自動終了つきで見る: ① emo2 → メニュー「ゴースト」→ R_POST_and_KOMAINU（交代の台詞のあと「○○から交代」）② R_POST → emo2（往復）③ ① の台詞の途中でダブルクリック → 中止・emo2 が残る ④ R_POST → SHIORI が失敗するゴースト（`shiori-host32-testdll-loadu` を SHIORI に持つ 1 キャラのフォルダ）→ emo2 が `OnBoot` の Ref6＝`halt`・Ref7 つきで起きる（ログの Reference で判定）⑤ ① のあと終了して再起動で R_POST
   - `RUST_LOG` は判定の分岐（kanade の切替の相・areka の終了の相／切替の事象／終了の記録）と、降ろす処理の段ごとの記録の水準まで開ける
   - spec フォルダの `signoff.md` に 5 走行のコマンド・終了コード・事象の件数と順序・`ghost_switch_down_ms` の値が残っている。1 秒を超えたら設計討議の議題に上げる
