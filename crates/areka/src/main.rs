@@ -155,8 +155,8 @@ fn main() -> Result<()> {
     // （要件 1.4・4.7・4.8・5.8・6.3）。`warn!` で起動を続ける経路は作らない（要件 6.6）。
     // 決まった経路とフォルダは boot の分岐まで持ち越す（boot 成功直後の記憶の書き込みに使う）。
     let args: Vec<String> = std::env::args().collect();
-    // 4 つ目は前回落ちたゴーストの名前（読んだら消えている）。起動への受け渡しは 8.5。
-    let (cfg, ghost_decision, balloon_decision, _halted) = match resolve_boot(&args) {
+    // 4 つ目は前回落ちたゴーストの名前（読んだら消えている）。初回の起動の由来になる（要件 6.8）。
+    let (cfg, ghost_decision, balloon_decision, halted, root) = match resolve_boot(&args) {
         Ok(resolved) => resolved,
         Err(scene) => {
             alert::raise(&scene, alert::suppressed());
@@ -166,8 +166,8 @@ fn main() -> Result<()> {
         }
     };
 
-    // 実行ファイル隣接の 32bit SHIORI helper パスを一度だけ解決する（実 sink 結線経路と
-    // `LogSink` フォールバック boot 経路の双方が使うため main で保持する・DD-7）。
+    // 実行ファイル隣接の 32bit SHIORI helper パスを一度だけ解決する（起動の文脈と起動入力の作り口が
+    // 持ち、実 sink 結線経路と `LogSink` フォールバック boot 経路の双方が使う・DD-7）。
     let helper_exe = default_helper_exe_path();
 
     // UI ランタイム起動（COM/DPI 初期化・World 生成・終了の受け口 `AppExit` の据え付け）（R2.4）。
@@ -181,6 +181,22 @@ fn main() -> Result<()> {
     // 2 経路へ渡す（要件 6.4）。main 自身の送出端は起動の分岐の後で落とす。
     let (kanade_stop_tx, kanade_stop_rx) = std::sync::mpsc::channel();
     ghost_session::register_systems(app.world().borrow_mut().world_mut(), kanade_stop_rx);
+
+    // 起動の文脈と起動入力の作り口（本番版）を据える（切替と右クリックメニューの「ゴースト」枠が読む）。
+    install_boot_context(
+        app.world().borrow_mut().world_mut(),
+        boot_config::BootContext {
+            root,
+            app_profile_dir: default_app_profile_dir(),
+            helper_exe,
+            current: boot_config::CurrentGhost {
+                cfg: cfg.clone(),
+                ghost: ghost_decision.clone(),
+                balloon: balloon_decision.clone(),
+            },
+        },
+        kanade_stop_tx.clone(),
+    );
 
     // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
     tick_gate_config::apply_from_env(&mut app.world().borrow_mut());
@@ -252,21 +268,18 @@ fn main() -> Result<()> {
 
     // ゴーストごとの結線（areka-P0-ghost-restart-unit・`ghost_session::boot_ghost`）: 実 sink 結線を
     // 試み、成立しなければ `LogSink`×2 の fallback へ倒す。3 ハンドル（ゴースト実行系・seriko・
-    // loop ticker）は `GhostSession` に束ねて後始末へ運ぶ。
-    let session = ghost_session::boot_ghost(
+    // loop ticker）は `GhostSession` に束ねて置き場（`GhostSlot`）へ入れる（切替が入れ替え、
+    // `run()` の後にここへ取り出して降ろす）。前回落ちた名前が在れば由来は「前回落ちた」（要件 6.8）。
+    boot_first_ghost(
         app.world().borrow_mut().world_mut(),
-        ghost_session::GhostBootInputs::production(
-            &cfg,
-            helper_exe,
-            kanade_stop_tx.clone(),
-            areka_kanade::BootOrigin::Plain,
-        ),
+        &cfg,
+        first_boot_origin(halted),
         &descript,
         &ghost_decision,
         &balloon_decision,
     );
 
-    // main 自身の送出端を落とす（受け口に残る送出端は起動の 2 経路が持つ写しだけになる）。
+    // main 自身の送出端を落とす（受け口に残る送出端は起動の 2 経路と起動入力の作り口が持つ写しだけ）。
     drop(kanade_stop_tx);
 
     // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。窓が 0 になっても戻らず、
@@ -274,32 +287,39 @@ fn main() -> Result<()> {
     // 失敗でも後始末は通すので `?` で抜けない（要件 3.2・6.3）。
     let run = app.run();
 
-    // 最初に終了を指示した出所が SHIORI の失敗なら告知の場面を組む（要件 1.1・1.3・1.12）。
-    // 窓は `quit_app` が閉じ、残りは `run()` が壊してから戻るので、告知の背後に窓は無い（要件 1.11）。
-    // ゴースト名は降ろす（`GhostRuntime` を消費する）前にここで読む（design「告知の位置」⑴）。
-    let scene = app
-        .world()
-        .borrow()
-        .world()
-        .get_resource::<app_exit::FirstExit>()
-        .and_then(|first| app_exit::fault_of(&first.0).cloned())
-        .map(|fault| alert::AlertScene::ShioriFault {
-            ghost_name: session.ghost_name(),
-            // argv で相対パスを渡されても告知には絶対パスを載せる（要件 1.3）。
-            ghost_root: std::path::absolute(&cfg.ghost_root)
-                .unwrap_or_else(|_| cfg.ghost_root.clone()),
-            fault,
-        });
-    let fault = scene.is_some();
+    // 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と記憶の書き換えを決める
+    // （要件 1.1・1.3・1.12・6.8）。窓は `quit_app` が閉じ、残りは `run()` が壊してから戻るので、
+    // 告知の背後に窓は無い（要件 1.11）。ゴースト名は降ろす前にここで読む（design「告知の位置」⑴）。
+    let AfterRun {
+        session,
+        scene,
+        halt,
+        fault,
+    } = after_run(app.world().borrow_mut().world_mut());
 
-    // 後始末（降ろす → 告知 → 降ろした結果 → ④）を成否によらず 1 回通し、終了コードは最後に
-    // 決める（要件 3.1・3.2）。告知は降ろした後（design「告知の位置」）。① で loop ticker は
-    // 止まっており、降ろす結果は告知の後で返すので ②③ が失敗しても告知は出る。利用者が閉じたら
-    // そのまま進む（要件 1.10）。
+    // 後始末（降ろす → 記憶の書き換え → 告知 → 降ろした結果 → ④）を成否によらず 1 回通し、
+    // 終了コードは最後に決める（要件 3.1・3.2）。告知は降ろした後（design「告知の位置」）。① で
+    // loop ticker は止まっており、降ろす結果は告知の後で返すので ②③ が失敗しても告知は出る。
+    // 利用者が閉じたらそのまま進む（要件 1.10）。
     finish_after_run(run, fault, move || {
         // 降ろす（① loop ticker Close → ② ghost.shutdown → ③ seriko join・`GhostSession::shutdown`）。
-        // 終了理由は全窓 close funnel＝ユーザ操作起点（DD-10）。
-        let down = session.shutdown(areka_kanade::CloseReason::User { scope: 0 });
+        // 終了理由は全窓 close funnel＝ユーザ操作起点（DD-10）。置き場が空なのは切替の途中の致命だけ。
+        let down = match session {
+            Some(session) => session.shutdown(areka_kanade::CloseReason::User { scope: 0 }),
+            None => {
+                tracing::info!(
+                    event = "ghost_slot_empty",
+                    "[main] 置き場が空——降ろすゴーストは無い"
+                );
+                Ok(())
+            }
+        };
+
+        // 単独起動の失敗の控え（要件 6.8）: 降ろして記憶の書き出しが済んだ後に書き換える
+        // （先に書くと、降ろすときの書き出しが最後に使ったゴーストを上書きする）。
+        if let Some((app_profile_dir, fallen)) = &halt {
+            boot_resolve::record_halt(app_profile_dir, fallen);
+        }
 
         // SHIORI の失敗の告知（1 プロセスに最大 1 回・抑止なら記録だけ・要件 1.1・1.6・1.12）。
         if let Some(scene) = &scene {
@@ -340,6 +360,161 @@ fn finish_after_run(
         ));
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 置き場と起動の文脈（areka-P0-ghost-shell-balloon-switch task 8.5）
+// ---------------------------------------------------------------------------
+
+/// 起動の文脈と起動入力の作り口（本番版）を World へ据える（系の登録の直後に 1 回）。
+/// 作り口は本番の入力の組み立て（[`ghost_session::GhostBootInputs::production`]）を文脈の helper の
+/// パスと停止通知の送出端の写しで閉じたもの（切替が相手のゴーストを起こすときにも同じ入力になる）。
+fn install_boot_context(
+    world: &mut World,
+    ctx: boot_config::BootContext,
+    kanade_stop: std::sync::mpsc::Sender<areka_kanade::KanadeNotice>,
+) {
+    let helper_exe = ctx.helper_exe.clone();
+    world.insert_resource(ctx);
+    world.insert_non_send(ghost_session::GhostBootInputsSource(Box::new(
+        move |cfg, origin| {
+            ghost_session::GhostBootInputs::production(
+                cfg,
+                helper_exe.clone(),
+                kanade_stop.clone(),
+                origin,
+            )
+        },
+    )));
+}
+
+/// 初回の起動の由来: 前回落ちたゴーストの名前が在れば「前回落ちた」（`OnBoot` の Ref6/7）、
+/// 無ければ「ふつう」（要件 6.8）。
+fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
+    match halted {
+        Some(ghost_name) => areka_kanade::BootOrigin::Halted { ghost_name },
+        None => areka_kanade::BootOrigin::Plain,
+    }
+}
+
+/// 初回の起動: 起動入力の作り口で入力を組んで起こし（fallback へ倒れる `boot_ghost`）、
+/// 置き場（`GhostSlot`）へ入れる。作り口は [`install_boot_context`] が先に据えている。
+fn boot_first_ghost(
+    world: &mut World,
+    cfg: &ConfigInputs,
+    origin: areka_kanade::BootOrigin,
+    descript: &ghost_session::StartupDescriptValues,
+    ghost: &boot_resolve::GhostDecision,
+    balloon: &boot_resolve::BalloonDecision,
+) {
+    let inputs = (world.non_send::<ghost_session::GhostBootInputsSource>().0)(cfg, origin);
+    let session = ghost_session::boot_ghost(world, inputs, descript, ghost, balloon);
+    world.insert_non_send(ghost_session::GhostSlot(Some(session)));
+}
+
+/// `run()` の後に置き場と起動の文脈から組むもの。
+struct AfterRun {
+    /// 降ろす単位（置き場が空＝切替の途中の致命なら `None`）。
+    session: Option<ghost_session::GhostSession>,
+    /// SHIORI の失敗の告知の場面（最初の出所が Fault のときだけ）。
+    scene: Option<alert::AlertScene>,
+    /// 単独起動の失敗の控え（記憶の置き場・落ちたゴーストの名前）。降ろした後に書く。
+    halt: Option<(std::path::PathBuf, String)>,
+    /// 終了コードを 1 にするか（最初の出所が Fault）。
+    fault: bool,
+}
+
+/// 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と記憶の書き換えを決める。
+///
+/// 告知のゴーストは置き場の単位の名前と文脈の今のゴーストの根（切替後の今のゴースト）。
+/// 切替の途中の致命（既定へ戻せなかった）では置き場が空で、文脈の今のゴーストは最後に起きた
+/// ゴーストのまま残るので、起こそうとしていた既定ゴーストの名前（フォルダ名）と場所で組む
+/// （致命になるのは既定ゴーストを起こせなかったときだけ＝`ghost_switch::fatal` の呼び手）。
+fn after_run(world: &mut World) -> AfterRun {
+    let session = world
+        .get_non_send_mut::<ghost_session::GhostSlot>()
+        .and_then(|mut slot| slot.0.take());
+    let first = world
+        .get_resource::<app_exit::FirstExit>()
+        .map(|first| first.0.clone());
+    let fault = first.as_ref().and_then(app_exit::fault_of).cloned();
+    let Some(ctx) = world.get_resource::<boot_config::BootContext>() else {
+        // `main` が系の登録の直後に据える。無ければ配線の誤りで、告知の場所も記憶の置き場も組めない。
+        tracing::error!(
+            event = "boot_context_missing",
+            "[main] 起動の文脈が無い——告知と記憶の書き換えを組めません"
+        );
+        return AfterRun {
+            session,
+            scene: None,
+            halt: None,
+            fault: fault.is_some(),
+        };
+    };
+    let (ghost_name, ghost_root) = match first {
+        Some(app_exit::ExitOrigin::GhostFallbackFailed(_)) => (
+            Some(boot_resolve::DEFAULT_GHOST_FOLDER.to_owned()),
+            ctx.root.ghost_dir(boot_resolve::DEFAULT_GHOST_FOLDER),
+        ),
+        _ => (
+            session
+                .as_ref()
+                .and_then(ghost_session::GhostSession::ghost_name)
+                .or_else(|| ctx.current.ghost.folder.clone()),
+            ctx.current.cfg.ghost_root.clone(),
+        ),
+    };
+    let halt = should_record_halt(first.as_ref(), &ctx.current.ghost).then(|| {
+        (
+            ctx.app_profile_dir.clone(),
+            ghost_name.clone().unwrap_or_default(),
+        )
+    });
+    let scene = fault.map(|fault| alert::AlertScene::ShioriFault {
+        ghost_name,
+        // argv で相対パスを渡されても告知には絶対パスを載せる（要件 1.3）。
+        ghost_root: std::path::absolute(&ghost_root).unwrap_or(ghost_root),
+        fault,
+    });
+    AfterRun {
+        session,
+        fault: scene.is_some(),
+        scene,
+        halt,
+    }
+}
+
+/// 単独起動の失敗を記憶に残すか（要件 6.8・裁定 11）。
+///
+/// 書くのは最初の出所が kanade の停止の Fault（起動系列の途中か定常のあとかは見ない）で、
+/// 今のゴーストが argv で決まっておらず、既定ゴーストでもないときだけ。argv（開発者の上書き）・
+/// 既定ゴースト自身の失敗・切替の途中の致命（既定の起動が既に記憶を既定へ書いている）は
+/// 書き換えず `info!` を残す。Fault 以外の終了は記録なしで `false`。
+fn should_record_halt(
+    first: Option<&app_exit::ExitOrigin>,
+    ghost: &boot_resolve::GhostDecision,
+) -> bool {
+    use app_exit::ExitOrigin;
+    let reason = match first {
+        Some(ExitOrigin::KanadeStopped(areka_kanade::KanadeStopCause::Fault(_))) => {
+            if ghost.route == boot_resolve::GhostRoute::Argv {
+                "argv"
+            } else if ghost.folder.as_deref() == Some(boot_resolve::DEFAULT_GHOST_FOLDER) {
+                "default_ghost"
+            } else {
+                return true;
+            }
+        }
+        Some(ExitOrigin::GhostFallbackFailed(_)) => "switch_fatal",
+        _ => return false,
+    };
+    tracing::info!(
+        event = "halt_record_skipped",
+        reason,
+        ghost = ?ghost.folder,
+        "[main] 落ちたゴーストを記憶に控えません（次回も記憶のとおりに起動します）"
+    );
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -560,3 +735,8 @@ mod monitor_snapshot_seam_tests;
 #[cfg(test)]
 #[path = "main_finish_after_run_tests.rs"]
 mod finish_after_run_tests;
+
+/// 据え付けと `run()` の後（task 8.5・要件 6.8・8.1・8.2・10.14・11.11）のテスト。
+#[cfg(test)]
+#[path = "main_halt_record_tests.rs"]
+mod halt_record_tests;

@@ -318,8 +318,7 @@ pub(crate) fn take_last_halted(app_profile_dir: &Path) -> Option<String> {
 
 /// 単独起動の失敗の控え（要件 6.8・裁定 11）: 最後に使ったゴーストを既定へ書き換え、
 /// 落ちた名前を控える（次回の起動で既定が起き、`OnBoot` の Ref7 に載る）。
-// 本番の呼び手は 8.5 の `fn main` の後始末。
-#[cfg_attr(not(test), allow(dead_code))]
+/// 呼び手は `fn main` の後始末（降ろして記憶の書き出しが済んだ後）。
 pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str) {
     match save_app(
         app_profile_dir,

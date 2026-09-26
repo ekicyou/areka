@@ -657,7 +657,7 @@ pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str);          /
 #### Main（`crates/areka/src/main.rs`）
 
 - 据え付け: `register_systems` の後に `BootContext` と `GhostBootInputsSource`（`GhostBootInputs::production` を helper のパスと停止通知の送り口の写しで閉じたもの）を挿す。`boot_ghost` の戻りを `GhostSlot(Some(session))` として World へ挿す（ローカル変数には持たない）。
-- `run()` の後: `GhostSlot` から取り出す（`None` なら降ろすものが無い）。告知の場面の `ghost_name`／`ghost_root` は `GhostSession::names()` と `BootContext.current.cfg.ghost_root` から組む（切替後の今のゴースト）。`fatal` で終わったときは `GhostSlot` が空なので、`ghost_name` は `BootContext.current.ghost` のフォルダ名へ倒す。`fault_of` が `Some` なら `AlertScene::ShioriFault`（`GhostFallbackFailed` も同じ場面）。
+- `run()` の後: `GhostSlot` から取り出す（`None` なら降ろすものが無い）。告知の場面の `ghost_name`／`ghost_root` は `GhostSession::names()` と `BootContext.current.cfg.ghost_root` から組む（切替後の今のゴースト）。`fatal`（`GhostFallbackFailed`）で終わったときは起こそうとして失敗したのが既定ゴーストなので、`ghost_name`／`ghost_root` は既定ゴーストのフォルダ名と `root.ghost_dir(DEFAULT_GHOST_FOLDER)` で組む（`BootContext.current` は最後に起きた別のゴーストを指したままなので使わない）。`fault_of` が `Some` なら `AlertScene::ShioriFault`（`GhostFallbackFailed` も同じ場面）。
 - 単独起動の失敗（要件 6.8・2026-09-26 設計討議で「処理中の失敗全般」に確定＝起動系列の途中か定常のあとかを見ない・定常到達の旗は持たない）: `FirstExit` が `KanadeStopped(Fault)` で、`BootContext.current.ghost.route` が `Argv` でなく、フォルダが `DEFAULT_GHOST_FOLDER` でないとき、後始末で `session.shutdown` の**後**（sylphya の flush が終わってから）に `record_halt(app_profile_dir, 落ちた名前)`（名前は `names().name`・無ければフォルダ名）。`Argv` の起動は開発者の上書きなので記憶を書き換えない（`LastUsed` の規則と同じ・`info!`）。`GhostFallbackFailed`（切替の途中の致命）では既定ゴーストの `on_boot_ok` が既に `LastGhost` を既定へ書いているので書かない。
 
 #### GhostFrame（`crates/areka/src/menu/ghost_frame.rs`）

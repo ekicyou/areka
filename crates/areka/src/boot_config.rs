@@ -96,18 +96,18 @@ pub(crate) fn resolve_root() -> Result<(std::path::PathBuf, RootSource), RootErr
 // ---------------------------------------------------------------------------
 
 /// 起動前に決まったもの: 構成入力と、ゴースト・バルーンの決定（経路とフォルダ）と、
-/// 前回落ちたゴーストの名前（`take_last_halted`＝読んだら消す・要件 6.8）。
+/// 前回落ちたゴーストの名前（`take_last_halted`＝読んだら消す・要件 6.8）と、根（起動の文脈へ渡す）。
 pub(crate) type BootResolved = (
     ConfigInputs,
     crate::boot_resolve::GhostDecision,
     crate::boot_resolve::BalloonDecision,
     Option<String>,
+    areka_ghost::BasewareRoot,
 );
 
 /// 起動の文脈（プロセスに 1 つ）: 根・記憶の置き場・helper のパス・今のゴースト。
 /// 目録とバルーンの解決に要る根を切替の経路へ渡す（切替が成功したら `current` を更新する）。
-// 本番の据え付けは 8.5 の `fn main`。それまでは test からだけ作る。
-#[cfg_attr(not(test), allow(dead_code))]
+/// 据え付けは `fn main`（系の登録の直後）。
 #[derive(bevy_ecs::prelude::Resource)]
 pub(crate) struct BootContext {
     pub root: areka_ghost::BasewareRoot,
@@ -117,11 +117,12 @@ pub(crate) struct BootContext {
 }
 
 /// 今のゴースト（構成入力・ゴーストの決定・バルーンの決定）。
-// 本番の据え付けは 8.5 の `fn main`（`BootContext` と一緒）。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct CurrentGhost {
     pub cfg: ConfigInputs,
     pub ghost: crate::boot_resolve::GhostDecision,
+    /// 本番の読み手は後続の `shell-balloon-switch`（今のバルーンを入れ替える口）。本仕様は切替の
+    /// 成功で書くだけなので、本番ビルドでは未読の警告を抑える。
+    #[cfg_attr(not(test), allow(dead_code))]
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 
@@ -213,7 +214,7 @@ pub(crate) fn resolve_boot_from(
         .is_none()
         .then(|| boot_resolve::take_last_halted(app_profile_dir))
         .flatten();
-    Ok((cfg, ghost, balloon, halted))
+    Ok((cfg, ghost, balloon, halted, root))
 }
 
 /// argv 無しの分岐（そのゴーストの最後のバルーンの記憶 → 同梱 → 唯一 → 既定 → 無作為）で

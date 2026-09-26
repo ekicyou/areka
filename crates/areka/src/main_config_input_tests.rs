@@ -181,7 +181,7 @@ mod boot {
                 no_pick,
             )
         });
-        let (cfg, g, b, _halted) = got.expect("argv で決まる");
+        let (cfg, g, b, _halted, _) = got.expect("argv で決まる");
         assert_eq!((g.route, b.route), (GhostRoute::Argv, BalloonRoute::Argv));
         assert_eq!((cfg.ghost_root, cfg.balloon_root), (ghost, balloon));
         let warned: Vec<_> = events
@@ -324,7 +324,7 @@ mod switch_balloon {
             ghost.display().to_string(),
             argv_balloon.display().to_string(),
         ];
-        let (_, _, b, _) = resolve_boot_from(
+        let (_, _, b, _, _) = resolve_boot_from(
             Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
             &args,
             tmp.path(),
@@ -345,7 +345,7 @@ mod switch_balloon {
         let ghost = fixture(&tmp);
         put_companion(&ghost, "b1");
         let args = vec!["areka.exe".to_owned()];
-        let (cfg, g, b, halted) = resolve_boot_from(
+        let (cfg, g, b, halted, _) = resolve_boot_from(
             Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
             &args,
             tmp.path(),
@@ -392,7 +392,7 @@ mod switch_balloon {
         let app_dir = tmp.child("app-profile");
         record_halt(&app_dir, "落ちた子");
         let args = vec!["areka.exe".to_owned(), ghost.display().to_string()];
-        let (_, _, _, halted) = resolve_boot_from(
+        let (_, _, _, halted, _) = resolve_boot_from(
             Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
             &args,
             &app_dir,
@@ -409,7 +409,7 @@ mod switch_balloon {
         use crate::boot_config::{BootContext, CurrentGhost};
         let tmp = TempPath::new("switch-balloon-context");
         let ghost = fixture(&tmp);
-        let (cfg, g, b, _) = resolve_boot_from(
+        let (cfg, g, b, _, _) = resolve_boot_from(
             Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
             &["areka.exe".to_owned()],
             tmp.path(),

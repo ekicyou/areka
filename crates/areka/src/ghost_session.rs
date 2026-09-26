@@ -334,8 +334,6 @@ impl GhostBootInputs {
 /// 写せず、停止通知の送り口は `main` にしか無いので、作り口ごと World に置く）。本番は
 /// [`GhostBootInputs::production`] を helper のパスと停止通知の送り口の写しで閉じたもの、
 /// テストは根のフォルダごとに偽の SHIORI を返すものを据える。
-// 据え付けは本番が 8.5 の `fn main`・テストが 8.1 の土台。それまでは test からだけ作る。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct GhostBootInputsSource(
     pub(crate) Box<dyn Fn(&ConfigInputs, BootOrigin) -> GhostBootInputs>,
 );
