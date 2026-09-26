@@ -186,6 +186,11 @@ Step '前提の確認' {
     if (($Check -or $CheckDir) -and $script:ExpandDir.Length -gt $EXPAND_DIR_MAX_CHARS) {
         Exit-Script $EXIT_BAD_ARGS ("展開先が長すぎる（{0} 文字・上限 {1}）: {2} — -CheckDir に短いパスを指定する" -f $script:ExpandDir.Length, $EXPAND_DIR_MAX_CHARS, $script:ExpandDir)
     }
+    # 展開先はリポジトリの外（要件 3.1）。中だと target/ の下は git status でも捕まらない
+    $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\') + '\'
+    if ($CheckDir -and ([IO.Path]::GetFullPath($script:ExpandDir) + '\').StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        Exit-Script $EXIT_BAD_ARGS "-CheckDir はリポジトリの外を指定する: $CheckDir"
+    }
 
     # git（コミットは 7 桁固定。--short だけだと曖昧なとき 8 桁以上を返す）
     $script:Commit = git rev-parse --short=7 HEAD 2>$null

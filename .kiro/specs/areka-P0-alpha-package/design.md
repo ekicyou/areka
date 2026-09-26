@@ -299,6 +299,7 @@ flowchart TD
 | i686 ターゲット導入 | `rustup target add i686-pc-windows-msvc` | 非 0 |
 | x64 本体ビルド | `RUSTFLAGS` を `-C target-feature=+crt-static` に**置き換え**（開発者のシェルの値に継ぎ足さない。`-C target-cpu=native` 等が混ざると開発機の CPU でしか動かない exe になり、取り込み表の判定では見つけられない）、`CARGO_ENCODED_RUSTFLAGS`・`CARGO_BUILD_RUSTFLAGS` を外して（在ると cargo が `RUSTFLAGS` を無視し `+crt-static` が黙って効かない）、`cargo build --locked --release -p areka --target x86_64-pc-windows-msvc --target-dir target/alpha` | 非 0（`Cargo.lock` が `Cargo.toml` と食い違うときも cargo が非 0 で止める＝要件 1.6） |
 | i686 helper ビルド | 同じく `-p shiori-host32-helper --target i686-pc-windows-msvc`。**3 つの環境変数の差し替えはこの 2 段の間だけで、終わったら元へ戻す**（後の `cargo run`（検体の展開）へ波及させて普段の `target/` を作り直させない） | 非 0 |
+| 静的リンクの確認 | 2 本の exe の取り込み表に拒否表の名前が 0（`+crt-static` が効いたことをビルドの直後に確かめる・タスク 3.2 の完了の形。2026-09-26 実装時に追記） | 当たれば非 0 |
 | ライセンス検査 | `cargo deny --locked check licenses` | 非 0 |
 | 謝辞の生成 | `cargo about generate --locked --workspace --target x86_64-pc-windows-msvc --target i686-pc-windows-msvc about.hbs -o target/alpha/THIRD-PARTY-NOTICES.md`（`--fail` は足さない＝完了の手順と同じ厳しさ。`accepted` 外のライセンスは元から非 0） | 非 0・出力が無い |
 | 検体の展開 | `cargo run -q --locked -p sample-ghost-kit --bin nar-sample-path -- emo2` と `-- StayseeBalloon`。`folder=`・`balloon.emo2-kakukaku=` を読む | 非 0・鍵が無い・パスが実在しない |
