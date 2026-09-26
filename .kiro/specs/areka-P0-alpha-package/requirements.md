@@ -12,7 +12,7 @@
 
 ## Introduction
 
-本仕様は、α の配布物（zip）を**組む・確かめる・説明する**ための道具と文書を用意する。areka の本体（`crates/` のソース）は 1 行も変えない。変えるのは配布スクリプト（新規）・第三者向け README（新規）・根の `README.md` の表記だけで、議題の答えしだいで `LICENSE-APACHE`（新規）・根の `Cargo.toml` の `license` の 1 行・謝辞の雛形・`.gitignore` の 1 行が加わる（下の「要件討議で決める 3 点」）。
+本仕様は、α の配布物（zip）を**組む・確かめる・説明する**ための道具と文書を用意する。areka の本体（`crates/` のソース）は 1 行も変えない。変えるのは配布スクリプト（新規）・第三者向け README（新規）・根の `README.md` の表記だけで、議題 ⑷ の答えしだいで `.gitignore` の 1 行が加わる（下の「要件討議で決める 3 点」。議題 ⑵ は MIT 単独に決まり、`LICENSE-APACHE`・根の `Cargo.toml`・謝辞の雛形の変更は 0）。
 
 要件生成時に引き直した事実（設計はこれを再検証する）:
 
@@ -29,19 +29,17 @@
 
 ## Boundary Context
 
-- **In scope**: ① 配布スクリプト（`tools/package-alpha.ps1`）で zip を組む／② 組んだ zip を別の場所へ展開して起動確認する（有界の自動終了）／③ 第三者向け README の骨子（新規ファイル）と同梱物の条件の明記／④ 根の `README.md` のライセンス表記と古い数の是正／⑤ 議題の答えしだいの付随（`LICENSE-APACHE`・根の `Cargo.toml` の `license`・`about.hbs`・`.gitignore` の `Cargo.lock` の行）。
+- **In scope**: ① 配布スクリプト（`tools/package-alpha.ps1`）で zip を組む／② 組んだ zip を別の場所へ展開して起動確認する（有界の自動終了）／③ 第三者向け README の骨子（新規ファイル）と同梱物の条件の明記／④ 根の `README.md` のライセンス表記と古い数の是正／⑤ 議題 ⑷ の答えしだいの付随（`.gitignore` の `Cargo.lock` の行）。
 - **Out of scope**: 検証項目表と第三者の手順の実機一周・第三者向け README の仕上げ（`.nar` の入れ方の手順を含む）・署名と宣言（`alpha-release-signoff`）／既定ゴーストの差し替え（議題「emo2 を入れてよいか」は同梱可で決着。万一将来要るときも `boot_resolve.rs` は `ghost-shell-balloon-switch`・`shell-balloon-switch` と共有するので本仕様では行わない）／インストーラ（msi 等）・署名付きの exe・自動更新／ARM64 版の zip（α の zip は x64 版 1 種）／常時のテストへの組み込み。
 - **変更 0 と明記するもの**: `crates/` の変更は 0（触る必要が出たら `alpha-release-signoff` へ送る）。`tools/test-all.ps1` の変更は 0。`vendors/sample_ghost/` の変更は 0。`THIRD-PARTY-NOTICES.md` を手で直す箇所は 0（直すなら生成器で作り直す）。ワークスペースの常時のテストに足すテストは 0。
 - **Adjacent expectations**: 完了 `areka-P0-baseware-root-layout`（根の形・記憶の置き場・起動の解決）・`areka-P0-default-balloon-nar-fold`（既定バルーンの `.nar`）・`areka-P0-nar-install`（`nar-sample-path`）の上に建つ。下流の `areka-P0-alpha-release-signoff` は本仕様の zip で実機一周をし、第三者向け README の空欄を仕上げる。同じウェーブで並走する `ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update` は `tools/` と根の `README.md` に触らない（共有 0）。ただし `ghost-shell-balloon-switch` が着地すると右クリックメニューに項目が増えるので、第三者向け README のメニューの欄は着地した main に合わせて `alpha-release-signoff` が仕上げる。
 
 ## 要件討議で決める 3 点（開発者の決めごと）
 
-議題 ⑶「`emo2` を zip に入れてよいか」は 2026-09-26 に開発者が裁定済み（同梱可・要件 2.2 と 5.2 に反映）で、残りは次の 3 点。各議題は、答えによって変わる条項を「Where 〔議題 ⑵＝…〕」の形で分けて書いた（裁定済みの議題は条項を 1 つに畳んだ）。どちらの答えでも他の条項は変わらない。
+議題 ⑶「`emo2` を zip に入れてよいか」は 2026-09-26 に開発者が裁定済み（同梱可・要件 2.2 と 5.2 に反映）で、残りは次の 3 点。各議題は、答えによって変わる条項を「Where 〔議題 ⑷＝…〕」の形で分けて書いた（裁定済みの議題は条項を 1 つに畳んだ）。どちらの答えでも他の条項は変わらない。
 
 - ~~**⑴ zip に `emo2-kakukaku` を入れるか**~~ → **2026-09-26 要件討議で開発者裁定＝入れる**（要件 2.5・3.5・5.5 に反映）。根拠: 開発者が配布サイトで公開している `emo2.nar` にすでに `emo2-kakukaku` が同梱されており、zip はその中身をそのまま写すのと同じ形。初回に立つバルーンは `emo2` の同梱の `emo2-kakukaku`（決まる順の「同梱」の段）で、`emo2` の説明書（「利用バルーン: kakukaku for emo-gs」）と一致する。画像素材はフキダシデザインのもの（規約は「アプリ・ゲームへの組み込みは 20 点まで無料・表記不要・データの再配布は禁止」・画像は 15 本）なので、第三者向け README には `emo2` のシェルと同じ書き方で「画像の抜き出し利用は不可」を明記する。
-- **⑵ areka 自身のライセンスは MIT 単独か MIT OR Apache-2.0 か**（要件 6.2・6.3）。
-  - MIT 単独: 根の `README.md` の 2 か所を直すだけ（他はすでに MIT）。
-  - MIT OR Apache-2.0: `LICENSE-APACHE` の追加・根の `Cargo.toml` の `license` の 1 行・`about.hbs` の 1 文（と生成し直した `THIRD-PARTY-NOTICES.md`）・`deny.toml` の冒頭の注記・根の `README.md` の 2 か所。brief は `about.hbs` を数えていなかった（要件生成時に見つけた）。
+- ~~**⑵ areka 自身のライセンスは MIT 単独か MIT OR Apache-2.0 か**~~ → **2026-09-26 要件討議で開発者裁定＝MIT 単独**（要件 6.2・6.4 に反映・旧 6.3 は削除）。開発者の整理: 実装のコードは MIT。「MIT OR Apache-2.0」は Rust の crate の慣習（依存の crate や pasta の `Cargo.toml`）から来た書きぶりで、areka の実物（`LICENSE-MIT`・全 crate の `license.workspace`＝`"MIT"`）とは別。画像（シェル・バルーン）は各作者の条件で別に管理する。`emo2` の `pasta.dll` は MIT、ゴーストの辞書には利用条件の主張が無い（要件 5.8 に反映）。
 - **⑷ `Cargo.lock` を追跡するか**（要件 7.3）。
   - 追跡する: 別の機械で組み直しても同じ依存の版になり、zip と謝辞が再現できる。`.gitignore` の 1 行を外し `Cargo.lock` を加える。並走する枝が依存を変えるたびに `Cargo.lock` が衝突する。
   - 追跡しない: 今日のまま。zip の謝辞は組んだ機械の依存の版で作る（要件 7.1・7.2 はどちらの答えでも満たす）。
@@ -116,6 +114,7 @@
 5. The 第三者向け README shall `emo2-kakukaku` の作者（ekicyou）と、バルーン画像素材の出どころ（フキダシデザイン）とその条件を載せ、`emo2` のシェルと同じ書き方で「areka と `emo2` のバルーンとして使うことはできるが、画像を抜き出して利用することはできない」と明記する。
 6. If 資産の条件をその資産の文書や配布元から確かめられない, then the 第三者向け README shall 推測で条件を書かず「未確認」と書き、その資産を未確認のまま zip に入れるかどうかを開発者の判断に回す（要件討議か `alpha-release-signoff` で決める）。
 7. The 配布スクリプト shall `konnoyayame`（シェルが CC BY-NC-ND）を zip に入れない（要件 2.4 の再掲・再配布の条件による理由をここに記す）。
+8. The 第三者向け README shall `emo2` を部分ごとに分けて書く: SHIORI の `pasta.dll` は MIT（pasta の `LICENSE` の実物どおり。pasta の `Cargo.toml` の「MIT OR Apache-2.0」の書きぶりの是正は本仕様の外）／ゴーストの辞書には利用条件の主張が無いことをそのまま書き、推測で条件を足さない／画像（シェル・バルーン）は各作者の条件に従い、要件 5.2・5.5 のとおり抜き出し利用はできない。
 
 ### Requirement 6: 根の README の表記が実物と一致する
 
@@ -124,9 +123,9 @@
 #### Acceptance Criteria
 
 1. The 根の `README.md` shall ライセンスのバッジのリンク先を実在するファイルにする（今日のリンク先 `LICENSE` は実在しない）。
-2. Where 〔議題 ⑵＝MIT 単独〕, the 根の `README.md` shall バッジとライセンスの節の 2 か所を「MIT」とし、`LICENSE-MIT` を指す。このとき根の `Cargo.toml`・`about.hbs`・`deny.toml` の変更は 0。
-3. Where 〔議題 ⑵＝MIT OR Apache-2.0〕, the リポジトリ shall `LICENSE-APACHE` を置き、根の `Cargo.toml` の `license` を `"MIT OR Apache-2.0"` にし、`about.hbs` の「areka 自身のライセンス」の文と `deny.toml` の冒頭の注記をそれに揃え、`THIRD-PARTY-NOTICES.md` を生成器で作り直し、根の `README.md` の 2 か所を「MIT OR Apache-2.0」として両方のファイルを指す。
-4. The リポジトリ shall areka 自身のライセンスを述べる箇所（根の `README.md` の 2 か所・根の `Cargo.toml` の `license`・`about.hbs`・第三者向け README・zip に入れるライセンス文書）を、議題 ⑵ の答えの 1 つに揃え、食い違いを 0 にする。
+2. The 根の `README.md` shall バッジとライセンスの節の 2 か所を「MIT」とし、`LICENSE-MIT` を指す（議題 ⑵ の裁定＝MIT 単独）。根の `Cargo.toml`・`about.hbs`・`deny.toml`・`crates/` の README の変更は 0（すでに MIT）。`LICENSE-APACHE` の追加は 0。
+3. （削除: 議題 ⑵ が MIT 単独に決まり、MIT OR Apache-2.0 の条項は不要になった）
+4. The リポジトリ shall areka 自身のライセンスを述べる箇所（根の `README.md` の 2 か所・根の `Cargo.toml` の `license`・`about.hbs`・第三者向け README・zip に入れるライセンス文書）を MIT に揃え、食い違いを 0 にする。
 5. The 根の `README.md` shall 「現在の到達点」の節の数（「57件の仕様を完了」「約70%」）を、着手時の実物から数え直した数と数えた日付に直すか、実物から導けない数を消す（古い数を残さない）。仕様の数は `.kiro/specs/completed/` の直下の**フォルダ**の数で数える（直下の `.md` は仕様ではない）。「約70%」は実物から導けないので消す。
 6. The 根の `README.md` shall 第三者向け README の置き場所を 1 行で案内する。
 7. The 根の `README.md` shall 本仕様で直す範囲を、ライセンスの表記・到達点の数・要件 6.6 の 1 行の案内に限り、それ以外の古い記述（クレート構成の説明など）は本仕様で直さない。
