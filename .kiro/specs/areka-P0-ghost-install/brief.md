@@ -3,6 +3,16 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「インストール」の**製品側**（利用者が `.nar` を渡す体験）と、順位 4 の束「投げ込み」（`OnFileDrop2` 等）のうち窓へ落とす経路を引き受ける。エンジン（コンテナ読取・`install.txt` 解釈・安全な展開）は `areka-P0-nar-install` が持つ。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-26 先進坑 `pilot-dropfiles-on-wuc-window` の結果＝**go**（開発者判定）
+
+`_Depends(confirmed): pilot-dropfiles-on-wuc-window` は充足。一次記録は `crates/pilot/examples/pilot-dropfiles-on-wuc-window/README.md` の「検証結果」（完了 spec は `.kiro/specs/completed/pilot-dropfiles-on-wuc-window/`）。本仕様の要件・設計に効く事実:
+
+1. **投げ込みは `WM_DROPFILES` で行ける**（棚卸⑭の仮裁定 7 はそのまま・`IDropTarget` への切り替えは不要）。本番と同じ様式＋`WS_EX_ACCEPTFILES` の窓で、絵の上への落とし 5 回がすべて窓手続きまで届き `DragQueryFileW` でパスが取れた。受け口は wintf の `dispatch_window_message` の表に 1 分岐足す形で足りる見込み（先進坑は `SetWindowSubclass` で重ねた手続きで受けた）。
+2. **宣言は `WS_EX_ACCEPTFILES` のビットだけで足りる**。`DragAcceptFiles`・生成後の付け直しは要らなかった（生成直後の読み戻しで `accept_files=true`・`raw=0x200090`）。上の「現状」4 の見込みは実測で裏付けられた＝`placement/spawn.rs` の `ex_style` に 1 ビット足すだけ。
+3. **絵の外（クリック透過中）に落とすと窓には届かず背後の窓へ抜ける**。落とし先は OS が `WS_EX_TRANSPARENT` のビットで決め、wintf のカーソル監視（12ms 周期）はドラッグ中も付け外しを続ける＝**本仕様で「絵の外なら捨てる」処理は要らない**。透過の付け外しを 36 回繰り返した後も `WS_EX_ACCEPTFILES` は残った。
+4. **既知の制限の候補**: 絵の縁ぎりぎりに素早く落とすと、12ms の監視が追い付く前のビットで落とし先が決まる可能性は残る（実測では縁の 7 物理 px 内側でも正しく届いた）。
+5. 配送は待ち行列経由（tick の途中の同期配送は観測されず）。重ねた手続きの後片付けで終了時の警告は 0 件。ふつうの権限で測った（管理者として起動したときの手当て `ChangeWindowMessageFilterEx` は対象外のまま）。
+
 ## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝`shiori-fault-notice`・`ghost-restart-unit` の着地後）
 
 **棚卸⑰の裁定（本仕様に効くもの）**: ⓐ 投げ込みが WUC 合成の窓に届くかを先に確かめる**先進坑を別 spec に切り出した＝`pilot-dropfiles-on-wuc-window`**（`crates/pilot/` だけ・`ghost-shell-balloon-switch` と並走）。本仕様は `_Depends(confirmed): pilot-dropfiles-on-wuc-window`＝**要件（`/kiro-start`）は先進坑の go 判定の後**。届かなければ設計が `WM_DROPFILES` から `IDropTarget`（OLE・STA が要り WUC の MTA と衝突しうる＝棚卸⑭の仮裁定 7 の見直し）へ変わるからである。ⓑ `lastinstalled` の受け皿は **`areka-P0-ghost-change-name-resolution` が持つ**（本仕様は入れた直後に `ghost-change-name-resolution` の受け皿へ書くだけ）。順序は `ghost-shell-balloon-switch` → `shell-balloon-switch` ∥ `ghost-change-name-resolution` → 本仕様。ⓒ 要件定義は **Fable** に格上げ（議題が 3 件に増え、`ghost-shell-balloon-switch` の起こし直しと利用条件の閉じるボタンの読みが絡む・想定 17〜20 タスクで上限に張り付く）。
