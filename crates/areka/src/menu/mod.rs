@@ -8,9 +8,11 @@
 //! 起動時の結線（[`wire_menu`]）と、本体が自分で登記する 2 項目（説明書・終了）もここに置く。
 //!
 //! 配下の module は役割ごとに分かれる: [`plan`]（構造の計算）・[`captions`]（項目名と
-//! 表示可否の照会）・[`trigger`]（引き金と表示の段取り）・[`win32`]（OS 表示）。
+//! 表示可否の照会）・[`trigger`]（引き金と表示の段取り）・[`win32`]（OS 表示）・
+//! [`ghost_frame`]（「ゴースト」枠の供給関数・areka-P0-ghost-shell-balloon-switch）。
 
 pub(crate) mod captions;
+pub(crate) mod ghost_frame;
 pub(crate) mod plan;
 pub(crate) mod trigger;
 pub(crate) mod win32;
@@ -92,9 +94,7 @@ pub(crate) struct MenuItem {
 /// 項目の中身。動作を持つ葉か、子項目を登記順に並べたサブメニュー。
 pub(crate) enum ItemBody {
     Action(MenuAction),
-    // 本仕様の組込 2 項目はどちらも葉で、本番でこれを作るのは後続 spec
-    // （ghost-shell-balloon-switch ほか・一覧をサブメニューで出す）である。
-    #[allow(dead_code)]
+    /// 本番で作るのは「ゴースト」枠（[`ghost_frame`]・一覧をサブメニューで出す）。
     Submenu(Vec<MenuItem>),
 }
 
@@ -119,7 +119,7 @@ impl MenuRegistry {
     }
 
     /// 枠の登記を取り消す（要件 6.4）。登記の無い枠に対しては何もしない。
-    // 後続 spec（ghost-shell-balloon-switch ほか）が自分の枠を下ろす口。本仕様の中に呼び手は無い。
+    // 呼び手なし（枠の取り消しは今日の spec に無い）。
     #[allow(dead_code)]
     pub(crate) fn unregister(&mut self, frame: Frame) {
         self.slots[frame as usize] = None;
@@ -272,9 +272,7 @@ pub(crate) fn attach_release_handlers(world: &mut World) {
 }
 
 /// 枠へ供給関数を登記する（World 越しの入口）。結線の前に呼ばれたら `warn!` で記録して
-/// 何もしない。
-// 後続 spec（ghost-shell-balloon-switch ほか）の登記の口。本仕様の中に呼び手は無い。
-#[allow(dead_code)]
+/// 何もしない。呼び手は「ゴースト」枠の [`ghost_frame::register`]（ゴーストを起こすたび）。
 pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     let Some(mut wiring) = world.get_non_send_mut::<MenuWiring>() else {
         tracing::warn!(

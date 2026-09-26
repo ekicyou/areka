@@ -245,7 +245,7 @@ fn systems_lens(world: &World) -> [usize; 3] {
 ///
 /// 1 周目を降ろして全窓を閉じ、2 周目を結線した後に、⑴ 系が二重に登録されていない
 /// ⑵ 状態が 2 周目のものへ載せ替わっている（説明書の経路が 2 周目の根の下・メニューの登記が
-/// 組込 2 項目だけ・停止通知の受け口と中断の旗の受信端が生きた送出端につながっている）
+/// 組込 2 項目と「ゴースト」枠だけ・停止通知の受け口と中断の旗の受信端が生きた送出端につながっている）
 /// ⑶ 終了が指示されていない、を確かめる。
 ///
 /// 「つながっている」は `try_recv` を `Err` が出るまで回して最後が `Empty`（1 周目の受信端は
@@ -343,10 +343,15 @@ fn boots_twice_in_one_process_without_double_registration() {
         actual,
         (
             true,
-            Some(vec![Frame::Shell, Frame::Readme, Frame::Close]),
+            Some(vec![
+                Frame::Ghost,
+                Frame::Shell,
+                Frame::Readme,
+                Frame::Close
+            ]),
             lens_before,
             true,
-            Some(vec![Frame::Readme, Frame::Close]),
+            Some(vec![Frame::Ghost, Frame::Readme, Frame::Close]),
             true,
             true,
             false,

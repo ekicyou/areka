@@ -84,8 +84,6 @@ pub(crate) struct SwitchRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GhostSpec {
     Name(String),
-    // 本番の呼び手はメニューの「ゴースト」枠（7.3）。それまでは test からだけ組む。
-    #[cfg_attr(not(test), allow(dead_code))]
     Folder(String),
 }
 

@@ -572,6 +572,8 @@ fn boot_wired(
         input_events::wire_mouse_input(world, sender);
         // 右クリックメニューの結線（areka-P0-popup-menu-minimal）: 終了の項目が上の入力の結線を使う。
         menu::wire_menu(world, runtime.kanade().clone());
+        // 「ゴースト」枠の登記（要件 1.12）: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
+        menu::ghost_frame::register(world);
         // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
         // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
         // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
