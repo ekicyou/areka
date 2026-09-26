@@ -391,6 +391,13 @@ impl GhostSession {
         }
     }
 
+    /// 台詞を進める Tick の注入口（テスト用・時計を止めて起こした実行系の dispatcher）。
+    /// 実行系が無ければ `None`。
+    #[cfg(test)]
+    pub(crate) fn dispatcher(&self) -> Option<&Sender<areka_ghost::dispatcher::DispatcherMsg>> {
+        self.ghost.as_ref().map(|r| r.dispatcher())
+    }
+
     /// 起こしたゴーストの根（実行系が無くても起動に渡した根を返す）。
     pub(crate) fn ghost_dir(&self) -> &Path {
         &self.ghost_dir

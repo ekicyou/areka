@@ -6,26 +6,30 @@
 //! ゴーストのフォルダ名ごとに偽の SHIORI（台本は起こすたびに新品）を選ぶ起動入力の作り口
 //! （[`GhostBootInputsSource`]）を World に据える。World は系の登録を 1 回だけ済ませ、
 //! 起動の文脈（[`BootContext`]）と終了の指示の受け口（`AppExit`）を持つ。フレームは回さず、
-//! 通知の相と台本の切替要求の取り出しを [`SwitchRig::pump_until`] で有界に回す。
+//! 通知の相と台本の切替要求の取り出しを [`SwitchRig::pump_until`] で有界に回す。台本の中の
+//! `\![change,ghost,…]` から切替を通すときは [`SwitchRig::pump_talking_until`] が、置き場の
+//! ゴーストの dispatcher へ合成の Tick を注入して台詞を進め、`Input` の段（登録済みの取り出しの系）を回す。
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{BasewareRoot, ShioriWiring, TickerMode};
-use areka_kanade::{BootOrigin, CloseReason, KanadeNotice};
+use areka_kanade::{BootOrigin, CloseReason, KanadeNotice, MonotonicMs};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use sample_ghost_kit::SampleRoot;
 use shiori_host32_host::ExitKind;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
+use wintf::ecs::Input;
 
 use super::Emo2BootInputs;
-use super::frame::run_ghost_quit_phase;
+use super::frame::{KanadeNoticeRx, run_ghost_quit_phase};
 use super::ghost_switch::drain_change_requests;
 use super::sample_test_support::acquire_emo2;
 use super::spine::{
@@ -68,6 +72,11 @@ pub(crate) fn standard_script(on_boot: &str) -> ScriptedShioriBackendBuilder {
         .unload(Ok(ExitKind::Clean))
 }
 
+/// 注入する Tick 1 回で台詞の時計を進める幅（合成の ms）。
+const TICK_STEP_MS: u64 = 100;
+/// Tick を注入する実時間の最小間隔（spin の反復ごとに投函して受信箱を溢れさせない）。
+const TICK_EVERY: Duration = Duration::from_millis(1);
+
 /// 起こしたゴースト 1 回分の記録（フォルダ名と偽の SHIORI の観測口）。
 type BootLedger = Rc<RefCell<Vec<(String, ScriptedShioriHandle)>>>;
 
@@ -76,6 +85,8 @@ pub(crate) struct SwitchRig {
     pub(crate) world: World,
     pub(crate) root: BasewareRoot,
     boots: BootLedger,
+    /// 注入した Tick の合成の時刻（単調増加・ゴーストをまたいでも戻さない）。
+    talk_clock_ms: u64,
     /// 根の木の寿命（捨てると木が消えるので最後に落ちる欄に置く）。
     sample: SampleRoot,
 }
@@ -146,6 +157,7 @@ impl SwitchRig {
             world,
             root,
             boots,
+            talk_clock_ms: 0,
             sample,
         }
     }
@@ -225,6 +237,42 @@ impl SwitchRig {
             drain_change_requests(&mut self.world);
             done(self)
         })
+    }
+
+    /// 台詞を進めながら回す: 置き場のゴーストの dispatcher へ合成の Tick を注入し（台本の cue が
+    /// 受け口へ届き、再生の完了が kanade へ届く）、通知の相と `Input` の段（`register_systems` が
+    /// 登録した台本の切替要求の取り出しを含む）を `done` が真になるまで有界に回す（期限切れは `false`）。
+    pub(crate) fn pump_talking_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
+        let mut last_tick: Option<Instant> = None;
+        spin_wait_until(|| {
+            if last_tick.is_none_or(|at| at.elapsed() >= TICK_EVERY) {
+                last_tick = Some(Instant::now());
+                self.talk_clock_ms += TICK_STEP_MS;
+                let now = MonotonicMs(self.talk_clock_ms);
+                if let Some(dispatcher) = self
+                    .world
+                    .get_non_send::<GhostSlot>()
+                    .and_then(|slot| slot.0.as_ref())
+                    .and_then(|session| session.dispatcher())
+                {
+                    // 降ろしている最中の dispatcher は閉じていてよい（次の反復で次のゴーストへ届く）。
+                    let _ = dispatcher.send(DispatcherMsg::Tick { now });
+                }
+            }
+            run_ghost_quit_phase(&mut self.world);
+            self.world.run_schedule(Input);
+            done(self)
+        })
+    }
+
+    /// 受け口から定常到達を 1 件待って読み捨てる（有界・届けば `true`・先に別の通知が届いたら
+    /// `false`）。台詞の時計を回す前に呼べば、台本の切替要求は必ず定常の kanade へ届く。
+    pub(crate) fn wait_steady(&self) -> bool {
+        let rx = &self.world.non_send::<KanadeNoticeRx>().0;
+        matches!(
+            rx.recv_timeout(Duration::from_secs(20)),
+            Ok(KanadeNotice::Steady)
+        )
     }
 
     /// 終了が指示されたか。
