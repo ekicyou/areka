@@ -597,13 +597,21 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
                 TalkEndReason::Quit => {
                     // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
                     tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
+                    change::drop_pending_by_quit(&mut state);
                     to_unloading_quit(state, "talk_done_quit")
                 }
                 TalkEndReason::Interrupted if break_quit => {
                     // 利用者の中断で止めた台本が終了を予約していた——`\-` に辿り着いたのと
                     // 同じ終了へ進む（Req 3.8・設計「終了の予約」）。
                     tracing::info!(target: "kanade", event = "talk_done_break_quit", talk_id = done.talk_id.0, "利用者の中断で止めた台本が終了を予約していた——終了系列（Quit）へ");
+                    change::drop_pending_by_quit(&mut state);
                     to_unloading_quit(state, "talk_done_break_quit")
+                }
+                // 保留の切替を持つトークの完了（最後まで・`\-` の予約なしの中断とも）は切替の相へ。
+                TalkEndReason::Interrupted | TalkEndReason::Ended
+                    if change::has_pending(&state) =>
+                {
+                    change::consume_pending(state, done, config)
                 }
                 TalkEndReason::Interrupted => {
                     // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で

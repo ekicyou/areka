@@ -13,13 +13,13 @@
 
 use super::close::deadline_from;
 use super::{
-    Action, Input, Phase, State, TermCause, clear_choice_ledger, events, phase_label,
+    Action, Input, Phase, State, TermCause, clear_choice_ledger, events, phase_label, steady,
     to_unloading_quit,
 };
 use crate::change::{CancelReason, ChangeRequest, KanadeNotice};
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
-use crate::talk::{StartTalk, TalkId};
+use crate::talk::{StartTalk, TalkDone, TalkId};
 
 /// 受理した切替の帳簿（[`super::State::change`]）。
 ///
@@ -34,15 +34,23 @@ pub(crate) struct ChangeState {
 
 /// 横断の腕 `Input::ChangeGhost` の受理。
 ///
-/// 終了の保留が無い `Steady{talk: None}` だけが受理する。それ以外（終了の保留あり・再生中・
-/// 起動系列・終了系列・切替の相）は `warn!` の上で「切替の中止（受理しなかった）」を通知し、
-/// 状態を変えない（受理しなかった要求は必ず UI へ返し、UI の目印を残さない）。再生中に届いた
-/// 要求はまだ保留しないので、ここでは受理しなかった側に入る。
-pub(super) fn on_change_ghost(state: State, req: ChangeRequest) -> (State, Vec<Action>) {
+/// 終了の保留が無い `Steady{talk: None}` が受理する。終了の保留が無い `Steady{talk: Some}` は
+/// 要求を [`State::pending_change`] に控え、そのトークの完了で [`consume_pending`] が消化する
+/// （保留の間 [`State::change`] は空のまま）。それ以外（終了の保留あり・保留済み・起動系列・
+/// 終了系列・切替の相）は `warn!` の上で「切替の中止（受理しなかった）」を通知し、状態を変えない
+/// （受理しなかった要求は必ず UI へ返し、UI の目印を残さない）。
+pub(super) fn on_change_ghost(mut state: State, req: ChangeRequest) -> (State, Vec<Action>) {
     let rejected = match (&state.phase, &state.pending_close) {
         (_, Some(_)) => Some("pending_close"),
         (Phase::Steady { talk: None }, None) => None,
-        (Phase::Steady { talk: Some(_) }, None) => Some("talk_active"),
+        (Phase::Steady { talk: Some(_) }, None) if state.pending_change.is_some() => {
+            Some("change_pending")
+        }
+        (Phase::Steady { talk: Some(_) }, None) => {
+            tracing::info!(target: "kanade", event = "change_pending", to = %req.target.name, raise_event = req.raise_event, "再生中に切替の要求を受けた——トークの完了まで保留する");
+            state.pending_change = Some(req);
+            return (state, Vec::new());
+        }
         _ => Some("not_steady"),
     };
     if let Some(reason) = rejected {
@@ -60,6 +68,44 @@ pub(super) fn on_change_ghost(state: State, req: ChangeRequest) -> (State, Vec<A
         return (state, vec![Action::Notice(notice)]);
     }
     begin_change(state, req)
+}
+
+/// 横断の腕（`on_talk_done`）の問い: 定常の再生中のトークに保留の切替が掛かっているか。
+pub(super) fn has_pending(state: &State) -> bool {
+    matches!(state.phase, Phase::Steady { talk: Some(_) }) && state.pending_change.is_some()
+}
+
+/// 保留の切替を持つトークが終わった（最後まで流れた・`\-` の予約なしで中断された）ときの消化。
+///
+/// 終了の保留が在れば終了が勝つ: 保留の切替を捨てて「切替の中止（終了要求）」を通知し、
+/// 残り（保留の終了の握手）は定常の完了の処理へ任せる。無ければ保留を取り出して切替を始める
+/// （`raise_event` 無しなら黙って降ろす）。
+pub(super) fn consume_pending(
+    mut state: State,
+    done: TalkDone,
+    config: &KanadeConfig,
+) -> (State, Vec<Action>) {
+    let Some(req) = state.pending_change.take() else {
+        return steady::step(state, Input::TalkDone(done), config);
+    };
+    if state.pending_close.is_some() {
+        tracing::info!(target: "kanade", event = "change_yield_to_close", phase = phase_label(&state.phase), to = %req.target.name, "保留の切替より終了の保留が勝つ——切替を取りやめる");
+        let (state, mut actions) = steady::step(state, Input::TalkDone(done), config);
+        let notice = KanadeNotice::ChangeCancelled {
+            reason: CancelReason::CloseRequest,
+        };
+        actions.insert(0, Action::Notice(notice));
+        return (state, actions);
+    }
+    tracing::info!(target: "kanade", event = "change_pending_consumed", talk_id = done.talk_id.0, reason = ?done.reason, "保留の切替を持つトークが終わった——切替を始める");
+    begin_change(state, req)
+}
+
+/// 終了系列へ進むトークに掛かっていた保留の切替を捨てる（`\-` の予約・到達が勝つ）。
+pub(super) fn drop_pending_by_quit(state: &mut State) {
+    if let Some(req) = state.pending_change.take() {
+        tracing::info!(target: "kanade", event = "change_dropped_by_quit", to = %req.target.name, "終了で終わるトークに保留の切替が掛かっていた——切替を捨てて終了系列へ");
+    }
 }
 
 /// 切替を始める。帳簿を立て、`raise_event` なら `OnGhostChanging` を GET で送って応答を待つ。

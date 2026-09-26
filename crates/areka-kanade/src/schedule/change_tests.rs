@@ -1,15 +1,16 @@
-//! 切替の相のテスト（areka-P0-ghost-shell-balloon-switch 要件 2.1〜2.5・7.5・10.2）。
+//! 切替の相のテスト（areka-P0-ghost-shell-balloon-switch 要件 2.1〜2.6・5.5・7.5・10.2・10.3・11.6）。
 //!
 //! 受理と `OnGhostChanging` の Reference・受理しない場面・送り出しの握手（台本／204 → `OnClose`）と、
 //! 台詞が最後まで流れる・`\-` で終わる・期限を超える、のいずれでも降ろす相へ進み、切替の帳簿
 //! （停止通知の切替の中身の源）に `OnGhostChanging` の台本が残ることを `step` 経由で固定する。
+//! 再生中に届いた要求の保留（最後まで・中断で消化／終了の保留が勝つ／`\-` の予約・到達で捨てる）も固定する。
 
 use super::*;
 use crate::change::{ChangeOrigin, ChangeTarget};
 use crate::msg::{CloseReason, ShioriCall};
 use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::steady::test_support::base_state;
-use crate::schedule::step;
+use crate::schedule::{ActiveTalk, step};
 use crate::talk::{TalkDone, TalkEndReason};
 use tracing::Level;
 
@@ -354,4 +355,176 @@ fn without_raise_event_unloads_silently_without_events() {
         None,
         "送らなかったので台本は無し・帳簿は立つ"
     );
+}
+
+// ---- 再生中に届いた切替の保留（要件 2.6・5.5・10.3・11.6） ----
+
+/// 定常でトーク（talk_id 4）を再生している状態。
+fn playing() -> State {
+    State {
+        phase: Phase::Steady {
+            talk: Some(ActiveTalk {
+                talk_id: TalkId(4),
+                origin: "OnSecondChange",
+                script: "x".to_string(),
+            }),
+        },
+        ..steady()
+    }
+}
+
+/// 再生中に切替の要求を送り、保留されたことを確かめて返す。
+fn held(raise_event: bool) -> State {
+    let r = req(ChangeOrigin::Manual, raise_event);
+    let mut out = None;
+    let ev = capture(|| out = Some(step(playing(), Input::ChangeGhost(r.clone()), &cfg())));
+    let (s, actions) = out.expect("step は必ず結果を返す");
+    logged_once(&ev, Level::INFO, "change_pending");
+    assert!(actions.is_empty(), "保留の間は何も送らない");
+    assert!(matches!(s.phase, Phase::Steady { talk: Some(_) }));
+    assert!(s.change.is_none(), "保留の間は受理した切替の欄は空");
+    assert_eq!(s.pending_change, Some(r));
+    s
+}
+
+/// 利用者の中断を受けてから `TalkDone{Interrupted}` を返す。
+fn broken(s: State, quit_reserved: bool) -> (State, Vec<Action>) {
+    let (s, actions) = step(s, Input::UserBreak { scope: 0 }, &cfg());
+    assert!(matches!(actions.as_slice(), [Action::CancelChoice { .. }]));
+    let done = TalkDone {
+        talk_id: TalkId(4),
+        reason: TalkEndReason::Interrupted,
+        quit_reserved,
+    };
+    step(s, Input::TalkDone(done), &cfg())
+}
+
+/// 送ったイベント名（GET／NOTIFY）の列。
+fn sent_events(actions: &[Action]) -> Vec<String> {
+    actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ShioriRequest(ShioriCall::Get { id, .. })
+            | Action::ShioriRequest(ShioriCall::Notify { id, .. }) => Some(id.as_str().to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn held_request_is_consumed_on_end_and_on_interrupt() {
+    for raise_event in [true, false] {
+        type Finish = fn(State) -> (State, Vec<Action>);
+        let finishes: [(&str, Finish); 3] = [
+            ("ended", |s| talk_done(s, TalkId(4), TalkEndReason::Ended)),
+            ("user_break", |s| broken(s, false)),
+            ("interrupted", |s| {
+                talk_done(s, TalkId(4), TalkEndReason::Interrupted)
+            }),
+        ];
+        for (label, finish) in finishes {
+            let (s, actions) = finish(held(raise_event));
+            assert!(s.pending_change.is_none(), "{label}: 保留は消化される");
+            let change = s.change.as_ref().expect("消化で受理した切替の欄が立つ");
+            assert_eq!(change.req, req(ChangeOrigin::Manual, raise_event));
+            if raise_event {
+                assert!(matches!(s.phase, Phase::ChangePending), "{label}");
+                assert_eq!(only_get(&actions).0, "OnGhostChanging", "{label}");
+            } else {
+                assert_unloading(&s, &actions, "CloseSilent");
+                assert!(sent_events(&actions).is_empty(), "{label}");
+            }
+        }
+    }
+}
+
+#[test]
+fn without_raise_event_sends_neither_changing_nor_close() {
+    let (s, actions) = step(
+        steady(),
+        Input::ChangeGhost(req(ChangeOrigin::Manual, false)),
+        &cfg(),
+    );
+    let (s, more) = reply(s, ShioriOutcome::Unloaded);
+    assert!(matches!(s.phase, Phase::Stopped));
+    let all: Vec<Action> = actions.into_iter().chain(more).collect();
+    assert!(
+        sent_events(&all).is_empty(),
+        "OnGhostChanging も OnClose も 0 件"
+    );
+    assert!(s.change.is_some(), "停止通知には切替の中身が載る");
+}
+
+#[test]
+fn second_request_while_held_is_rejected() {
+    let s = held(true);
+    let (s, actions) = step(
+        s,
+        Input::ChangeGhost(req(ChangeOrigin::Automatic, true)),
+        &cfg(),
+    );
+    assert!(matches!(
+        actions.as_slice(),
+        [Action::Notice(KanadeNotice::ChangeCancelled {
+            reason: CancelReason::Rejected
+        })]
+    ));
+    assert_eq!(s.pending_change, Some(req(ChangeOrigin::Manual, true)));
+}
+
+#[test]
+fn pending_close_wins_over_held_change() {
+    let s = held(true);
+    let (s, _) = step(
+        s,
+        Input::CloseRequest {
+            reason: CloseReason::User { scope: 0 },
+        },
+        &cfg(),
+    );
+    assert!(s.pending_close.is_some());
+    let (s, actions) = talk_done(s, TalkId(4), TalkEndReason::Ended);
+    assert!(
+        actions.iter().any(|a| matches!(
+            a,
+            Action::Notice(KanadeNotice::ChangeCancelled {
+                reason: CancelReason::CloseRequest
+            })
+        )),
+        "切替の中止（終了要求）を通知する"
+    );
+    assert_eq!(sent_events(&actions), vec!["OnClose".to_string()]);
+    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(s.pending_change.is_none() && s.change.is_none());
+}
+
+#[test]
+fn quit_reserved_break_drops_held_change_and_quits_without_handoff() {
+    for raise_event in [true, false] {
+        let s = held(raise_event);
+        let mut out = None;
+        let ev = capture(|| out = Some(broken(s, true)));
+        let (s, actions) = out.expect("step は必ず結果を返す");
+        logged_once(&ev, Level::INFO, "change_dropped_by_quit");
+        assert_unloading(&s, &actions, "Quit");
+        assert!(sent_events(&actions).is_empty(), "OnGhostChanging は 0 件");
+        assert!(s.pending_change.is_none(), "保留は捨てる");
+        let (s, _) = reply(s, ShioriOutcome::Unloaded);
+        assert!(matches!(s.phase, Phase::Stopped));
+        assert!(
+            s.change.is_none(),
+            "終了系列の末の停止通知に切替の中身は無し"
+        );
+    }
+}
+
+#[test]
+fn quit_tag_reached_drops_held_change() {
+    let s = held(true);
+    let mut out = None;
+    let ev = capture(|| out = Some(talk_done(s, TalkId(4), TalkEndReason::Quit)));
+    let (s, actions) = out.expect("step は必ず結果を返す");
+    logged_once(&ev, Level::INFO, "change_dropped_by_quit");
+    assert_unloading(&s, &actions, "Quit");
+    assert!(s.pending_change.is_none() && s.change.is_none());
 }
