@@ -528,3 +528,6 @@ fn quit_tag_reached_drops_held_change() {
     assert_unloading(&s, &actions, "Quit");
     assert!(s.pending_change.is_none() && s.change.is_none());
 }
+
+#[path = "change_cancel_tests.rs"]
+mod cancel_tests;

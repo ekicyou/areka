@@ -592,7 +592,9 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             state.choice_prev_talk = None;
             // 現行トークの完了なので中断の帳簿はここで必ず空になる（終わり方を問わない・不変条件）。
             // 空にした結果が「利用者の中断で終わり、かつ終了の予約があった」かを持ち帰る（Req 3.8）。
-            let break_quit = user_break::take_user_break_quit(&mut state, &done);
+            // 切替の相では予約を終了へ結ばない（中断は切替の中止＝切替の要件 5.4）。
+            let break_quit = user_break::take_user_break_quit(&mut state, &done)
+                && !change::is_change_phase(&state.phase);
             match done.reason {
                 TalkEndReason::Quit => {
                     // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
