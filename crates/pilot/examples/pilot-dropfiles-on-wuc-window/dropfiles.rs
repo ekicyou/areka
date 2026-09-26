@@ -2,14 +2,27 @@
 //!
 //! ログの行はすべて本文の先頭に目印 `[dropfiles]` を置く（design Key Decision 6・要件 3.6）。
 
-use bevy_ecs::prelude::Resource;
-use windows::Win32::Foundation::{GetLastError, HWND, SetLastError, WIN32_ERROR};
-use windows::Win32::UI::Shell::{DragAcceptFiles, IsUserAnAdmin};
+use std::cell::RefCell;
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::rc::Weak;
+use std::sync::atomic::{AtomicU32, Ordering};
+
+use bevy_ecs::prelude::{Entity, Resource};
+use windows::Win32::Foundation::{
+    GetLastError, HWND, LPARAM, LRESULT, POINT, SetLastError, WIN32_ERROR, WPARAM,
+};
+use windows::Win32::UI::Shell::{
+    DefSubclassProc, DragAcceptFiles, DragFinish, DragQueryFileW, DragQueryPoint, HDROP,
+    IsUserAnAdmin, SetWindowSubclass,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     GWL_EXSTYLE, GetWindowLongPtrW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SWP_NOZORDER, SetWindowLongPtrW, SetWindowPos, WS_EX_ACCEPTFILES, WS_EX_LAYERED,
+    SWP_NOZORDER, SetWindowLongPtrW, SetWindowPos, WM_DROPFILES, WS_EX_ACCEPTFILES, WS_EX_LAYERED,
     WS_EX_NOREDIRECTIONBITMAP, WS_EX_TRANSPARENT,
 };
+use wintf::ecs::PointF;
+use wintf::ecs::hit_test_in_window;
+use wintf::ecs::world::EcsWorld;
 
 // ---------------------------------------------------------------------------
 // 拡張スタイルの読み分け（要件 2.6・4.4）
@@ -135,6 +148,135 @@ fn reapply_accept_files(hwnd: HWND) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// 受け口（要件 2.8・3.1〜3.6・4.1・4.4）
+// ---------------------------------------------------------------------------
+
+/// 受け取った回数（World の外で数える・`seq` の元）。
+pub static DROP_COUNT: AtomicU32 = AtomicU32::new(0);
+
+/// `SetWindowSubclass` の識別子（この example は 1 つしか重ねない）。
+const SUBCLASS_ID: usize = 1;
+
+/// 受け口が持つ文脈。`world` は wintf の `EcsWorldSelfRef` の複製。
+pub struct Context {
+    pub world: Weak<RefCell<EcsWorld>>,
+    pub window: Entity,
+}
+
+/// 窓へ受け口を重ね掛けする。失敗（`FALSE`）は呼び手へ返す。
+pub fn install(hwnd: HWND, ctx: Context) -> Result<(), String> {
+    // ponytail: 文脈の Box は解放しない（窓 1 枚・使い捨て）。窓を作り直すなら WM_NCDESTROY で Box::from_raw して外す。
+    let refdata = Box::into_raw(Box::new(ctx));
+    // SAFETY: Win32 境界。refdata はプロセスの終わりまで生きる。
+    if unsafe { SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_ID, refdata as usize) }
+        .as_bool()
+    {
+        Ok(())
+    } else {
+        // SAFETY: 設置に失敗したので誰も refdata を持っていない。取り戻して落とす。
+        drop(unsafe { Box::from_raw(refdata) });
+        Err("SetWindowSubclass が FALSE を返した".to_string())
+    }
+}
+
+/// `WM_DROPFILES` だけ消費し、他は `DefSubclassProc` へ無条件に流す。
+unsafe extern "system" fn subclass_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    _id: usize,
+    refdata: usize,
+) -> LRESULT {
+    if msg != WM_DROPFILES {
+        // SAFETY: 受けた引数をそのまま連鎖の次へ渡す。
+        return unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) };
+    }
+    // SAFETY: refdata は install が Box::into_raw した Context で、解放されない。
+    let ctx = unsafe { &*(refdata as *const Context) };
+    let hdrop = HDROP(wparam.0 as _);
+    if catch_unwind(AssertUnwindSafe(|| handle_drop(ctx, hwnd, hdrop))).is_err() {
+        tracing::error!("[dropfiles] 受け口の中で panic — 片付けて続行");
+    }
+    LRESULT(0)
+}
+
+/// 途中で失敗（panic を含む）しても `DragFinish` を必ず呼ぶ。
+struct FinishOnDrop(HDROP);
+
+impl Drop for FinishOnDrop {
+    fn drop(&mut self) {
+        // SAFETY: WM_DROPFILES で受けた HDROP を 1 回だけ解放する。
+        unsafe { DragFinish(self.0) };
+    }
+}
+
+/// 1 回の到着を記録する。位置による分岐は置かない（要件 4.1）。
+fn handle_drop(ctx: &Context, hwnd: HWND, hdrop: HDROP) {
+    let _finish = FinishOnDrop(hdrop);
+    let seq = DROP_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+    let mut pt = POINT::default();
+    // SAFETY: Win32 境界。pt は有効な書き込み先。
+    let in_client = unsafe { DragQueryPoint(hdrop, &mut pt) }.as_bool();
+    let opaque = opaque_label(hit_opaque(ctx, pt));
+    let bits = log_ex_style(hwnd, "drop");
+    // SAFETY: Win32 境界。0xFFFF_FFFF で本数を問う。
+    let n = unsafe { DragQueryFileW(hdrop, u32::MAX, None) };
+    tracing::info!(
+        seq,
+        x = pt.x,
+        y = pt.y,
+        in_client,
+        opaque,
+        transparent = bits.transparent,
+        accept_files = bits.accept_files,
+        layered = bits.layered,
+        noredirect = bits.noredirect,
+        n,
+        "[dropfiles] 到着"
+    );
+    for i in 0..n {
+        match query_path(hdrop, i) {
+            Some(path) => tracing::info!(seq, i, path = %path, "[dropfiles] ファイル"),
+            None => tracing::error!(seq, i, "[dropfiles] パスの取り出しに失敗"),
+        }
+    }
+}
+
+/// 物理 px のまま透過機構と同じ判定器に聞く。World を借りられなければ `None`（借用はここで終える）。
+fn hit_opaque(ctx: &Context, pt: POINT) -> Option<bool> {
+    let world = ctx.world.upgrade()?;
+    let ecs = world.try_borrow().ok()?;
+    let hit = hit_test_in_window(
+        ecs.world(),
+        ctx.window,
+        PointF::new(pt.x as f32, pt.y as f32),
+    );
+    Some(hit.is_some())
+}
+
+fn opaque_label(hit: Option<bool>) -> &'static str {
+    match hit {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "unknown",
+    }
+}
+
+/// `i` 番目のパス。長さを問うてから取り出す。どちらかが 0 なら `None`。
+fn query_path(hdrop: HDROP, i: u32) -> Option<String> {
+    // SAFETY: Win32 境界。None で必要な長さ（終端を除く）を問う。
+    let len = unsafe { DragQueryFileW(hdrop, i, None) };
+    if len == 0 {
+        return None;
+    }
+    let mut buf = vec![0u16; len as usize + 1];
+    // SAFETY: buf は長さ＋終端ぶん確保済み。
+    let got = unsafe { DragQueryFileW(hdrop, i, Some(&mut buf)) };
+    (got != 0).then(|| String::from_utf16_lossy(&buf[..got as usize]))
+}
+
+// ---------------------------------------------------------------------------
 // 管理者判定（要件 5.2）
 // ---------------------------------------------------------------------------
 
@@ -197,6 +339,13 @@ mod tests {
             ),
             (false, true, true, true)
         );
+    }
+
+    #[test]
+    fn opaque_label_maps_hit_result() {
+        assert_eq!(opaque_label(Some(true)), "true");
+        assert_eq!(opaque_label(Some(false)), "false");
+        assert_eq!(opaque_label(None), "unknown");
     }
 
     #[test]
