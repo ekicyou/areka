@@ -281,8 +281,6 @@ pub(crate) fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> Swi
 /// 迎え入れ＋失敗以外 → `info!(ghost_switch_target_quit)`・予約を下ろし今日どおり終了。
 /// 予約が無ければ今日どおり終了（呼び手は予約が在るときだけ呼ぶ）。エラー応答は停止通知を
 /// 生まないので、ここに判断は無い（要件 6.7）。
-// 本番の呼び手は 8.4 の終了の相（`run_ghost_quit_phase`）。それまでは test からだけ呼ぶ。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
     let Some((stage, target_name, target_is_default)) =
         world.get_non_send::<SwitchInFlight>().map(|f| {
@@ -353,8 +351,6 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
 /// 定常到達: 迎え入れの予約を下ろし `info!(ghost_switch_done)`。送り出しの段の予約は残す（まだ
 /// 握手の途中）。予約が無ければ `debug!`（初回起動・切替の外）。切替の中止: 予約を下ろし
 /// `info!(ghost_switch_cancelled)`。予約が無ければ `warn!`。停止は [`on_ghost_stopped`] へ。
-// 本番の呼び手は 8.4 の終了の相（`run_ghost_quit_phase`）。それまでは test からだけ呼ぶ。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
     let stage = world.get_non_send::<SwitchInFlight>().map(|f| f.stage);
     match notice {

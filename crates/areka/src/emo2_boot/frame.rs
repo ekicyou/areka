@@ -97,6 +97,8 @@ use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindow
 use crate::app_exit::{ExitOrigin, quit_app};
 
 use super::assets::{BalloonScopeAssets, BootAssets, ScopeAssets};
+// 終了相が運行の通知を切替の段で振り分ける先（areka-P0-ghost-shell-balloon-switch 要件 8.4）。
+use super::ghost_switch::{self, SwitchInFlight};
 // 可視性の相（design 決定 D5）。相順の所有者は本モジュールなので、呼び出しはここから行う。
 use super::balloon_visibility::run_balloon_visibility_phase;
 // `scale_text::run_text_phase` が `super::hover_inject::drive` で辿る先（移設前は本ファイルから
@@ -162,53 +164,59 @@ pub(super) use self::scale_text::resolve_talk_time;
 /// 取り出すのは [`run_ghost_quit_phase`] の 1 か所だけ。
 pub(crate) struct KanadeNoticeRx(pub(crate) Receiver<KanadeNotice>);
 
-/// 終了相: kanade の停止通知を取り出し、届いていれば全ゴースト窓を閉じる（R15.4・design D15 の 4）。
+/// 終了相: kanade の運行の通知を取り出して 1 件ずつ捌く（R15.4・design D15 の 4・
+/// areka-P0-ghost-shell-balloon-switch design「NoticePhase」）。
 ///
 /// [`ghost_quit_system`] として毎フレームの相（[`emo2_frame_system`]）より前に走る。終了が
 /// 決まったフレームで他の相を走らせても、これから閉じる窓のために描き直すだけだからである。
-/// 返り値は「通知を消化したか」。
+/// 返り値は「停止の通知を消化したか」。
 ///
 /// # 判断
 ///
 /// - 受け口 [`KanadeNoticeRx`] が World に無い（結線していない構成・既存の試験）→ 何もせず `false`。
 /// - 届いていない → 何もせず `false`（定常フレームは無操作）。
-/// - 1 件以上届いた → `try_recv` で**全件**取り出し、`info!(event = "ghost_quit")` の上で
-///   統合操作 [`quit_app`]（出所 `KanadeStopped`）を 1 度だけ呼び `true`。2 件目以降と、
-///   既に窓が無い場合は `debug!` で打ち切る（終了処理の正常系であって失敗ではない——
-///   統合操作が破棄済み標的に対して敷いているのと同じ区別）。
-/// - 停止以外の通知（定常到達・切替の中止）は `debug!` を残して読み捨てる（切替を捌く相が
-///   まだ無いので、終了の判断には関わらない）。返り値は停止の通知を消化したときだけ `true`。
+/// - 届いた分を `try_iter` で**全件**取り出してから（受け口の借用を切ってから）届いた順に捌く:
+///   - 停止: 切替の予約（[`SwitchInFlight`]）が在れば切替の振り分け
+///     [`ghost_switch::on_ghost_stopped`] へ委ねる（要件 3.3・8.4）。無ければ今日どおり、最初の
+///     1 件で `info!(event = "ghost_quit")` の上で統合操作 [`quit_app`]（出所 `KanadeStopped`）を
+///     呼ぶ。今日どおりの終了の後の停止と、既に窓が無い場合は `debug!` で打ち切る（終了処理の
+///     正常系であって失敗ではない——統合操作が破棄済み標的に対して敷いているのと同じ区別）。
+///   - 定常到達・切替の中止: [`ghost_switch::on_notice`] へ（予約を下ろす／予約の外なら記録だけ）。
 /// - 送出端が全て落ちた（`Disconnected`）→ 溜まっていた通知は上と同じに扱い、無ければ何もしない。
 ///   ghost boot に失敗した構成でも受信端だけは生き得るので、切断そのものは異常ではない。
+///
+/// 取り違えない（要件 3.4）: 受け口はプロセスに 1 つで FIFO。止まった kanade は停止の後に通知を
+/// 出さず、切替先は取り出した後に起こすので、取り出した列の中で停止より後ろに切替先の通知が
+/// 混ざることは無い。切替先の通知は次の呼び出しで、進んだ段（迎え入れ）の下で捌かれる。
 ///
 /// 統合操作が全窓を閉じて終了を指示すると wintf の `run()` が戻り、`main.rs` の終了統括が走る。
 /// そこは既に冪等である（kanade は停止済みゆえ `ForceQuit` の送出が失敗し `debug!` で流れる）。
 ///
-/// 原因（Fault を含む）によって終わらない分岐は置かない（要件 6.5）。
-pub(super) fn run_ghost_quit_phase(world: &mut World) -> bool {
+/// 予約の無い停止で、原因（Fault を含む）によって終わらない分岐は置かない（要件 6.5）。
+pub(crate) fn run_ghost_quit_phase(world: &mut World) -> bool {
     let Some(rx) = world.get_non_send::<KanadeNoticeRx>() else {
         return false;
     };
-    let mut first: Option<KanadeStopped> = None;
+    // `Disconnected` も「もう来ない」だけで異常ではない＝溜まっていた分は消化する。
+    let notices: Vec<KanadeNotice> = rx.0.try_iter().collect();
+    let mut consumed = false;
+    let mut quit = false;
     let mut extra = 0usize;
-    // 全件取り出す（`Disconnected` も「もう来ない」だけで異常ではない＝溜まっていた分は消化する）。
-    // 取り出し終えてから `quit_app` へ World を渡す（受け口の借用はここで切れる）。
-    while let Ok(notice) = rx.0.try_recv() {
-        match notice {
-            KanadeNotice::Stopped(stopped) => match first {
-                None => first = Some(stopped),
-                Some(_) => extra += 1,
-            },
-            other => tracing::debug!(
-                event = "kanade_notice_ignored",
-                notice = ?other,
-                "停止以外の運行の通知は終了の判断に関わらない——読み捨てる"
-            ),
+    for notice in notices {
+        let KanadeNotice::Stopped(stopped) = notice else {
+            ghost_switch::on_notice(world, notice);
+            continue;
+        };
+        consumed = true;
+        if world.get_non_send::<SwitchInFlight>().is_some() {
+            ghost_switch::on_ghost_stopped(world, stopped);
+        } else if quit {
+            extra += 1;
+        } else {
+            quit = true;
+            quit_as_today(world, stopped);
         }
     }
-    let Some(stopped) = first else {
-        return false;
-    };
     if extra > 0 {
         tracing::debug!(
             event = "ghost_quit_extra",
@@ -216,6 +224,11 @@ pub(super) fn run_ghost_quit_phase(world: &mut World) -> bool {
             "停止通知が 2 件以上届いた——窓を閉じるのは 1 度きりゆえ残りは打ち切る"
         );
     }
+    consumed
+}
+
+/// 予約の無い停止: 今日どおり全ゴースト窓を閉じて終了を指示する。
+fn quit_as_today(world: &mut World, stopped: KanadeStopped) {
     tracing::info!(
         event = "ghost_quit",
         cause = ?stopped.cause,
@@ -228,7 +241,6 @@ pub(super) fn run_ghost_quit_phase(world: &mut World) -> bool {
             "閉じる窓が既に無い（強制退避が先に走った等）——正常系として打ち切る"
         );
     }
-    true
 }
 
 /// 終了相 [`run_ghost_quit_phase`] を呼ぶだけの排他 system（起動の 2 経路で共有する）。
@@ -418,6 +430,12 @@ mod ghost_quit_tests;
 #[cfg(test)]
 #[path = "frame_ghost_quit_logsink_tests.rs"]
 mod ghost_quit_logsink_tests;
+
+// 切替の予約が在る間の停止通知と運行の通知の振り分け（areka-P0-ghost-shell-balloon-switch
+// タスク 8.4・要件 10.7）。
+#[cfg(test)]
+#[path = "frame_ghost_quit_switch_tests.rs"]
+mod ghost_quit_switch_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]

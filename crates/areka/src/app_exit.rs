@@ -133,8 +133,7 @@ impl WindowsClosed {
 /// ゲートに見せない・areka-P0-ghost-shell-balloon-switch 要件 3.1）。
 /// 終了経路（`quit_app`・停止通知からの終了・OS の閉鎖要求・強制退避・smoke）からは呼ばない
 /// （要件 4.4・4.6・完了 `app-lifetime-separation` 要件 3.6 の意図）。
-// 本番の呼び手は #13（ゴーストの切替）の起こし直しの経路。それまでは test からだけ呼ぶ。
-#[cfg_attr(not(test), allow(dead_code))]
+// 本番の呼び手は areka-P0-ghost-shell-balloon-switch（ゴーストの切替）の起こし直しの経路。
 pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     let closed = despawn_app_windows(world);
     world.remove_resource::<GhostWindows>();

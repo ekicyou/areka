@@ -280,8 +280,7 @@ pub(crate) fn commit_ghost_windows(world: &mut World, prepared: PreparedWindows)
 /// 閉じた証を受けて窓を作り直す準備をする（要件 3.4・4.4・4.10）。証（[`WindowsClosed`]）の
 /// 唯一の消費先で、手順は 1 度目と同じ [`prepare_ghost_windows`] へ委譲する。窓は投函
 /// （[`commit_ghost_windows`]）するまで生えない（呼び手は起動が成功したときだけ投函する）。
-// 本番の呼び手は #13（ゴーストの切替）。それまでは test からだけ呼ぶ。
-#[cfg_attr(not(test), allow(dead_code))]
+// 本番の呼び手は areka-P0-ghost-shell-balloon-switch（ゴーストの切替）。
 pub(crate) fn reopen_ghost_windows(
     world: &mut World,
     cfg: &ConfigInputs,

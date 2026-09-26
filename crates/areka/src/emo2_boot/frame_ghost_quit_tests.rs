@@ -12,7 +12,7 @@
 //! 4. 窓が既に無ければ `debug!` で打ち切る（失敗にしない）。
 //! 5. 原因が Fault でも同じ 1 本道で終わり、記録と最初の出所に種類と理由が載る
 //!    （areka-P0-shiori-fault-notice 要件 7.4・2.5）。
-//! 6. 停止以外の運行の通知（定常到達・切替の中止）は `debug!` で読み捨て、終了の判断に関わらない
+//! 6. 停止以外の運行の通知（定常到達・切替の中止）は切替の振り分けへ渡り、終了の判断に関わらない
 //!    （areka-P0-ghost-shell-balloon-switch 要件 8.4）。
 
 use std::sync::mpsc;
@@ -252,14 +252,14 @@ fn a_fault_notification_quits_and_records_kind_and_reason() {
     );
 }
 
-/// 停止以外の運行の通知（定常到達・切替の中止）は `debug!` を 1 行ずつ残して読み捨てる。
-/// 窓は閉じず終了も指示しない。同じフレームに停止が混ざれば、停止だけが今日どおり終了へ進む
-/// （要件 8.4）。
+/// 停止以外の運行の通知（定常到達・切替の中止）は切替の振り分けへ渡り、予約の無い今は 1 件ずつ
+/// 記録だけを残す（定常到達は `ghost_switch_done`・中止は `ghost_switch_cancelled`）。窓は閉じず
+/// 終了も指示しない。同じフレームに停止が混ざれば、停止だけが今日どおり終了へ進む（要件 8.4）。
 ///
 /// # 非空虚性
 /// 停止以外の通知で終了へ進めば窓が消えて終了が指示され、黙って捨てれば記録の行数が落ちる。
 #[test]
-fn notices_other_than_stop_are_dropped_with_a_debug_line() {
+fn notices_other_than_stop_go_to_the_switch_dispatch_without_quitting() {
     let (tx, rx) = mpsc::channel::<KanadeNotice>();
     let mut world = world_with_ghost_windows(2, Some(rx));
     tx.send(KanadeNotice::Steady).expect("通知を投函できる");
@@ -276,9 +276,12 @@ fn notices_other_than_stop_are_dropped_with_a_debug_line() {
     assert_eq!(ghost_count(&mut world), 2, "停止以外の通知では窓は残る");
     assert!(!exit_requested(&world), "停止以外の通知では終了しない");
     assert_eq!(
-        event_lines(&logs, "kanade_notice_ignored").len(),
-        2,
-        "読み捨てた通知は 1 件ずつ記録される: {logs:?}"
+        (
+            event_lines(&logs, "ghost_switch_done").len(),
+            event_lines(&logs, "ghost_switch_cancelled").len(),
+        ),
+        (1, 1),
+        "振り分けた通知は 1 件ずつ記録される: {logs:?}"
     );
     assert!(event_lines(&logs, "ghost_quit").is_empty(), "{logs:?}");
 
@@ -292,10 +295,6 @@ fn notices_other_than_stop_are_dropped_with_a_debug_line() {
     assert!(consumed, "停止の通知を消化した");
     assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓が閉じる");
     assert!(exit_requested(&world), "終了を指示する");
-    assert_eq!(
-        event_lines(&logs, "kanade_notice_ignored").len(),
-        1,
-        "{logs:?}"
-    );
+    assert_eq!(event_lines(&logs, "ghost_switch_done").len(), 1, "{logs:?}");
     assert_eq!(event_lines(&logs, "ghost_quit").len(), 1, "{logs:?}");
 }
