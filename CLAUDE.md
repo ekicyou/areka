@@ -45,7 +45,7 @@ Kiro-style Spec-Driven Development on an agentic SDLC
   - Without task numbers: autonomous mode (subagent per task + independent review + final validation)
   - With task numbers: manual mode (selected tasks in main context, still reviewer-gated before completion)
   - `/kiro-validate-impl {feature}` (standalone re-validation)
-- Completion (explicit approval required): `/kiro-complete {feature}` — DoD gate → archive to `completed/` → final commit → **PR create + squash merge** (the only path into `main`). Use only when the developer explicitly approves.
+- Completion (explicit approval required): `/kiro-complete {feature}` — static DoD gate → archive to `completed/` → one full test run after the archive (docs updated in parallel while it runs) → final commit → **PR create + squash merge** (the only path into `main`). Use only when the developer explicitly approves.
 - Progress check: `/kiro-spec-status {feature}` (use anytime)
 
 ## Skills Structure
@@ -56,7 +56,7 @@ Skills are located in `.claude/skills/kiro-*/SKILL.md`
 - Additional files (templates, examples) can be added to skill directories
 - `kiro-start` — post-discovery single-spec entry (init → requirements → gap analysis (subagent) → requirements discussion (interactive, chat window) on the harness worktree branch; no branch creation, no push)
 - `kiro-design` — post-requirements design-phase entry (design generation (kiro-spec-design -y, subagent) → design validation (kiro-validate-design, subagent, non-interactive, report to disk) → design discussion (kiro-design-discussion, interactive, chat window) on the harness worktree branch; no branch creation, no push)
-- `kiro-complete` — spec completion exit (DoD gate → archive → PR-based squash merge into `main`; the only path into the default branch)
+- `kiro-complete` — spec completion exit (static DoD gate → archive → one full test run with parallel doc work → PR-based squash merge into `main`; the only path into the default branch)
 - `kiro-review` — task-local adversarial review protocol used by reviewer subagents
 - `kiro-debug` — root-cause-first debug protocol used by debugger subagents
 - `kiro-verify-completion` — fresh-evidence gate before success or completion claims

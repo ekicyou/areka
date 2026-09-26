@@ -63,7 +63,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 #### フルテスト（`tools/test-all.ps1`＝完了ゲートの正本・2026-09-24）
 
-ワークスペース全体の合否は `pwsh -NoProfile -File tools/test-all.ps1 [-Format] [-License]` 1 本で判定する（`kiro-complete` は DoD ゲートで `-Format -License`、移動後テストゲートで素のまま呼ぶ。`-Format` は先に `cargo fmt --all` で整形し、`-License` は最後に `cargo deny check` と `cargo about generate` を直列で回す。末尾の一覧に検査したコミットが出る）。素の `cargo test --workspace` では足りない理由と、スクリプトが守っていること:
+ワークスペース全体の合否は `pwsh -NoProfile -File tools/test-all.ps1 [-Format] [-License]` 1 本で判定する（`kiro-complete` はアーカイブをコミットした後に `-Format -License` で 1 回だけ裏で呼び、その待ち時間に文書更新を並行する。`-Format` は先に `cargo fmt --all` で整形し、`-License` は最後に `cargo deny check` と `cargo about generate` を直列で回す。末尾の一覧に検査したコミットが出る）。素の `cargo test --workspace` では足りない理由と、スクリプトが守っていること:
 
 - **x64 のテストが i686 の成果物を要する**: host-32 の e2e は i686 の helper exe を別プロセスで起こし、i686 の偽 `shiori.dll` を読ませる。成果物が無いと「先にビルドせよ」で **panic する**（黙って飛ばさない設計）。スクリプトは `rustup target add` と i686 ビルド（helper・偽 DLL 2 つ）を先に行う
 - **i686 でしか走らないテストがある**: in-process で i686 DLL を読むテストは x64 では理由付き `ignore`。`--target i686-pc-windows-msvc` で host-32 系（`-helper`・`-ipc`）を別に回す
