@@ -40,9 +40,27 @@
 |---|---|---|
 | [`\![change,ghost,ゴースト名(,--option=raise-event)]`](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1) | 「そのゴーストへの切り替えを行う。」「実行後、該当ゴーストがいなかった場合は無視される。」「ゴースト名の後に--option=raise-eventとすると、メニューから切り替え操作をした場合と同じくOnGhostChangingが通知される。この場合、バルーンブレーク（通常ダブルクリック）による中止操作も可能な点に注意。指定しない場合は通知されない。」 | 名指しの切替・該当なしは無視・`raise-event` の有無で `OnGhostChanging` を送るか否か・`raise-event` のときは中断で中止できる。`random`／`sequential`／`lastinstalled` の行は `ghost-change-name-resolution` が引き受ける。 |
 | [`OnGhostChanging`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanging:1) | 「他のゴーストへの切り替え指示があった際に発生。SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnCloseが発生する。」Reference0「切り替わるゴーストの本体側の名前。」Reference1「手動で切り替えた場合、manual システムにより切り替えられた場合、automaticが返される。」Reference2「切り替わるゴーストの名前。[SSPのみ]」Reference3「切り替わるゴーストのパス。[SSPのみ]」 | 送り出しの握手の形と Ref0〜3。SSP のみの Ref も送る（記憶 no-ssp-measurement-import-semantics-from-ukadoc）。 |
-| [`OnGhostChanged`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanged:1) | 「他のゴーストから自ゴーストに切り替えられた際に発生。SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnBootが発生する。」Reference0「直前のゴーストの本体側の名前。」Reference1「直前のゴーストの切り替え時のスクリプト。」Reference2「直前のゴーストの名前。[SSPのみ]」Reference3「直前のゴーストのパス（ファイルの場所）。[SSPのみ]」Reference7「切り替わったゴーストのシェル名。[SSPのみ]」 | 迎え入れの握手の形と Ref0〜3・7。`OnFirstBoot` との関係は書いていない（沈黙＝要件 11 裁定 3）。 |
+| [`OnGhostChanged`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanged:1) | 「他のゴーストから自ゴーストに切り替えられた際に発生。SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnBootが発生する。」Reference0「直前のゴーストの本体側の名前。」Reference1「直前のゴーストの切り替え時のスクリプト。」Reference2「直前のゴーストの名前。[SSPのみ]」Reference3「直前のゴーストのパス（ファイルの場所）。[SSPのみ]」Reference7「切り替わったゴーストのシェル名。[SSPのみ]」 | 迎え入れの握手の形と Ref0〜3・7。`OnFirstBoot` との優先順は書いていない（下の「起動の根の木」と要件 11 裁定 3）。 |
+| [`OnBoot`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1) | 「起動した際に発生。SSPでは、OnGhostChanged、OnGhostCalled、OnFirstBoot、OnVanishedに対してスクリプトが返されなかった（204）場合、続けてこのイベントが発生する。」 | 起動系列は「理由の根 1 つ → 204 → `OnBoot`」の 1 形（下の木）。根どうしの間に落ちる辺は無い＝切替で起きたゴーストに送る根は 1 つ。 |
 
-正典が沈黙している点（`raise-event` 無しのときに `OnClose` を送るか・切替先が起動できないときの振る舞い・初めて起動するゴーストへの切替で `OnFirstBoot` を言うか・`OnGhostChanged` の Ref1 に何を載せるか・名前をどの項目で引くか・自分自身への切替）は areka の裁量として要件 11 で決め、`doc/COMPAT_ARCHITECTURE.md` §8 に記す。SSP の挙動を実測して合わせることはしない。
+### 起動と終了の根の木（ukadoc の「204 なら続けて」の逐語から）
+
+```
+起動の根（起動の理由で 1 つだけ選ぶ）                       204 →
+  OnFirstBoot   「初回起動した際に発生」                       → OnBoot   本仕様: 起動記録が無ければ最優先（裁定 3）
+  OnGhostChanged「他のゴーストから自ゴーストに切り替えられた」 → OnBoot   本仕様: 起動記録があるときの切替（要件 4.1）
+  OnGhostCalled 「他のゴーストから呼び出された」               → OnBoot   範囲外（多重ゴースト）
+  OnVanished    「直前のゴーストの消滅により切り替わった」     → OnBoot   範囲外（消滅）
+  OnBoot        共通の葉（根が無いときはこれだけ）
+終了の根                                                     204 →
+  OnGhostChanging「他のゴーストへの切り替え指示」              → OnClose  本仕様（要件 2）
+  OnCloseAll     「SSP 自体が終了する際」                      → OnClose  範囲外（areka は今日 OnClose だけ）
+  OnClose        共通の葉
+```
+
+根どうし（`OnFirstBoot` と `OnGhostChanged` など）の間に 204 で落ちる辺は無い。したがって切替で起きたゴーストにも根は 1 つだけ送り、複数の根の条件が同時に真のとき（起動記録が無いゴーストへ切り替えた）は**初回起動を最優先**にする（2026-09-26 開発者裁定・里々 wiki「初回起動時はそれが交替であれ呼出であれ OnGhostCalled/OnGhostChanged は発生しない」と一致）。設計はこの木を「根の表＋共通の葉」の 1 か所で持ち、範囲外の根は行を足すだけで入る形にする。 |
+
+正典が沈黙している点（`raise-event` 無しのときに `OnClose` を送るか・切替先が起動できないときの振る舞い・初めて起動するゴーストへの切替で `OnFirstBoot` と `OnGhostChanged` のどちらの根を選ぶか〔ukadoc 本体は沈黙・里々 wiki が初回優先と明記〕・`OnGhostChanged` の Ref1 に何を載せるか・名前をどの項目で引くか・自分自身への切替）は areka の裁量として要件 11 で決め、`doc/COMPAT_ARCHITECTURE.md` §8 に記す。SSP の挙動を実測して合わせることはしない。
 
 ### 既存の裁定との衝突表（どちらが先に効くか）
 
@@ -148,10 +166,10 @@
 
 #### Acceptance Criteria
 
-1. When 切替先のゴーストが起き、起動系列に入る, the areka shall `OnInitialize` のあと `OnFirstBoot` の代わりに `OnGhostChanged` を GET で送り、Reference を Ref0＝直前のゴーストの本体側の名前（`sakura.name`。無ければ空）・Ref1＝直前のゴーストの切替時の台本（`OnGhostChanging` が返した台本。`OnGhostChanging` を送らなかったときと 204 のときは空＝要件 11 裁定 5）・Ref2＝直前のゴーストの名前・Ref3＝直前のゴーストのフォルダの絶対パス・Ref7＝切替先で使うシェルのフォルダ名（例 `master`）で載せる。Ref4〜6 は空で送る（番号を詰めない）。
+1. When 切替先のゴーストが起き、起動系列に入り、そのゴーストに起動記録（`areka.boot.count`）がある, the areka shall `OnInitialize` のあと `OnBoot` の代わりに `OnGhostChanged` を GET で送り、Reference を Ref0＝直前のゴーストの本体側の名前（`sakura.name`。無ければ空）・Ref1＝直前のゴーストの切替時の台本（`OnGhostChanging` が返した台本。`OnGhostChanging` を送らなかったときと 204 のときは空＝要件 11 裁定 5）・Ref2＝直前のゴーストの名前・Ref3＝直前のゴーストのフォルダの絶対パス・Ref7＝切替先で使うシェルのフォルダ名（例 `master`）で載せる。Ref4〜6 は空で送る（番号を詰めない）。
 2. When `OnGhostChanged` が 204 を返す, the areka shall 正典どおり続けて `OnBoot` を送る（起動記録の有無に関わらず）。
 3. When `OnGhostChanged` が台本を返す, the areka shall その台本を起動の台詞として再生し、`OnBoot` を送らない。
-4. The areka shall 切替で起こしたゴーストには、起動記録が無くても `OnFirstBoot` を送らない（要件 11 裁定 3）。起動記録（`areka.boot.count`）は初回の起動と同じ規則で書く。
+4. When 切替先のゴーストに起動記録が無い（初めて起動する）, the areka shall 初回起動を最優先にして今日どおり `OnFirstBoot`（204 なら `OnBoot`）を送り、`OnGhostChanged` は送らない（0 件・要件 11 裁定 3）。起動記録は初回の起動と同じ規則で書く。切替で起きたゴーストに送る起動の根は常に 1 つ（`OnFirstBoot` と `OnGhostChanged` の両方を送る形は作らない）。
 5. When 切替先の起動系列が `OnGhostChanged`（または `OnBoot`）を終える, the areka shall 以降を今日の起動と同じ定常（`basewareversion` の照会・`OnSecondChange` など）にする。
 6. When 切替先のゴーストが起動に成功する, the areka shall 最後に使ったゴーストの記憶（`LastGhost`・App スコープ）にそのゴーストを書く（経路は `GhostRoute::Argv` 以外＝記憶を書く経路。値を足すかは設計）。次回起動でそのゴーストが復元される。
 7. When 切替先のバルーンを決める, the areka shall 完了 `baseware-root-layout` の起動解決（同梱バルーン → そのゴーストの最後のバルーンの記憶 → 既定バルーン）を argv の指定なしの分岐で使う（初回起動の argv の第 2 引数は切替後には効かせない）。切替先の `LastBalloon`／`LastShell`（Ghost スコープ）は今日の `on_boot_ok` と同じ規則で書く。
@@ -225,7 +243,7 @@
 #### Acceptance Criteria
 
 1. The 本仕様 shall `doc/ukadoc-coverage/ledger/shiori.toml` の `OnGhostChanging`／`OnGhostChanged` と `sakura-script.toml` の `\![change,ghost,ゴースト名(,--option=raise-event)]` を実装済みへ更新し（owner＝本仕様・備考に `random`／`sequential`／`lastinstalled` は `ghost-change-name-resolution` と記す）、生成物を生成器で作り直す（手で直さない）。
-2. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 に次を 1 行ずつ記す: (a) 切替の途中の `OnClose` と別れの台詞は終了で終わらない（完了 `balloon-break` 要件 3.6 の適用範囲の限定）、(b) 切替の相の中断は中止であり `\-` の予約を終了に結ばない（同 3.8 の限定）、(c) 切替先の `Fault` は元へ戻す（完了 `shiori-fault-notice` 要件 3.1 の限定・二重失敗は 3.1 のまま）、(d) 切替で起こしたゴーストに `OnFirstBoot` を送らない、(e) `raise-event` 無しの切替では `OnClose` も送らない、(f) `OnGhostChanged` の Ref1 の中身、(g) 名前の突き合わせの順序と自分自身への切替。各行に正典の沈黙の根拠と開発者裁定の日付を付ける。
+2. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 に次を 1 行ずつ記す: (a) 切替の途中の `OnClose` と別れの台詞は終了で終わらない（完了 `balloon-break` 要件 3.6 の適用範囲の限定）、(b) 切替の相の中断は中止であり `\-` の予約を終了に結ばない（同 3.8 の限定）、(c) 切替先の `Fault` は元へ戻す（完了 `shiori-fault-notice` 要件 3.1 の限定・二重失敗は 3.1 のまま）、(d) 起動の根は 1 つ・起動記録が無いゴーストへの切替は初回起動（`OnFirstBoot`）を最優先し `OnGhostChanged` を送らない、(e) `raise-event` 無しの切替では `OnClose` も送らない、(f) `OnGhostChanged` の Ref1 の中身、(g) 名前の突き合わせの順序と自分自身への切替。各行に正典の沈黙の根拠と開発者裁定の日付を付ける。
 3. The 本仕様 shall `crates/areka/src/menu/mod.rs` の登記待ちのコメント（`#[allow(dead_code)]` 3 か所の理由）と `doc/ukadoc-coverage/briefing-sakura-script.md` の「未対応」の行を、実装後の形に合わせて改める。
 
 ### Requirement 10: 決定論テストと実機確認
@@ -234,7 +252,7 @@
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 偽の SHIORI 2 体（x64 の偽境界＝`ShioriWiring::Custom`・偽の資産）で「A を起こす → `\![change,ghost,B,--option=raise-event]` → `OnGhostChanging`（台本あり）→ 再生完了 → 降ろす → B を起こす → `OnGhostChanged`（Ref0〜3・7 を突き合わせる）→ 204 → `OnBoot`」を同じプロセス・同じ World で 1 周する決定論テストを 1 本持ち、⑴ イベント列と Reference、⑵ 降ろした側の停止通知で `quit_app` が呼ばれていない（終了の指示 0 件）、⑶ 系の登録数が 1 周目と同じ、⑷ 窓ごとの状態が B のもので置き換わっている（決定論テストでは実窓を作れないので、完了 `ghost-restart-unit` と同じく配線の資源＝説明書の経路・メニューの登記・中断の旗・停止通知の受け口で判定する）、を集めてから 1 回で判定する。
+1. The 本仕様 shall 偽の SHIORI 2 体（x64 の偽境界＝`ShioriWiring::Custom`・偽の資産）で「A を起こす → `\![change,ghost,B,--option=raise-event]` → `OnGhostChanging`（台本あり）→ 再生完了 → 降ろす → B（起動記録あり）を起こす → `OnGhostChanged`（Ref0〜3・7 を突き合わせる）→ 204 → `OnBoot`」を同じプロセス・同じ World で 1 周する決定論テストを 1 本持ち、⑴ イベント列と Reference、⑵ 降ろした側の停止通知で `quit_app` が呼ばれていない（終了の指示 0 件）、⑶ 系の登録数が 1 周目と同じ、⑷ 窓ごとの状態が B のもので置き換わっている（決定論テストでは実窓を作れないので、完了 `ghost-restart-unit` と同じく配線の資源＝説明書の経路・メニューの登記・中断の旗・停止通知の受け口で判定する）、を集めてから 1 回で判定する。
 2. The 本仕様 shall `OnGhostChanging` が 204 のとき `OnClose` が続き、その別れの台詞（`\-` 入りを含む）が最後まで流れても・中断されても・期限切れでも、終了ではなく降ろすことで終わることを決定論テストで固定する（要件 2.3〜2.5・衝突表 1）。
 3. The 本仕様 shall `raise-event` 無しの切替で `OnGhostChanging` も `OnClose` も送られず（0 件）、命令を運んだ台本の終了後に降ろされることを決定論テストで固定する（要件 2.6）。
 4. The 本仕様 shall `raise-event` 付きの切替の送り出しの台詞をバルーンブレークで止めると切替が中止され、元のゴーストの定常へ戻り、`\-` の予約が終了に結ばれないことを決定論テストで固定する（要件 5・衝突表 2）。
@@ -246,6 +264,7 @@
 10. The 本仕様 shall 足すテストを上の判断の分岐に限り、既に確かめられている配線（`ghost-restart-unit` の登録と載せ替え・終了の握手・seriko の join・窓の配置・告知の文面）を再テストしない。既存の決定論テストは 1 本も落とさない（本番ソースの字面で形を固定しているテストは新しい字面へ追随させ、削除しない）。
 11. When 実機で確認する, the 開発者 shall ① emo2 で起動し、メニューの「ゴースト」枠から R_POST_and_KOMAINU を選び、emo2 の交代の台詞のあと R_POST が「○○から交代」の台詞で起きること、② R_POST から emo2 へ戻れること（往復 1 周）、③ ①の交代の台詞の途中でバルーンをダブルクリックすると交代がやめになって emo2 が残ること、④ SHIORI が失敗するゴースト（`shiori-host32-testdll-loadu` を SHIORI に持つフォルダ）へ切り替えると元のゴーストが戻ること、⑤ ① のあとに終了して再起動すると R_POST が出ること（記憶）、を有界の自動終了つきで見る。`RUST_LOG` は判定の分岐（kanade の切替の相・areka の `ghost_quit`／切替の事象／`app_exit`）の水準まで開ける。降ろし始めから切替先の窓が出るまでの時間を記録する（要件 3.8）。
 12. The 本仕様 shall 実機の 5 走行の結果（コマンド・終了コード・目印の件数・止まった時間）を spec の文書に残す。
+13. The 本仕様 shall 起動記録の無い B へ切り替えたとき `OnFirstBoot`（204 なら `OnBoot`）が送られ `OnGhostChanged` が 0 件であること、起動記録のある B では `OnGhostChanged` が送られ `OnFirstBoot` が 0 件であることを、同じ決定論テストの形で固定する（要件 4.1・4.4・裁定 3。起動の根は常に 1 つ）。
 
 ### Requirement 11: 裁定（暫定・要件ディスカッションで確定）
 
@@ -255,7 +274,7 @@
 
 1. The 本仕様 shall **裁定 1（中断で切替を中止する・brief 議題 ⑴）**として、`raise-event` 付きの切替の送り出しの台詞をバルーンブレークで止めたら切替を中止し、元のゴーストの定常へ戻す（要件 5）。根拠: 正典が「中止操作も可能」と明記する。完了 `balloon-break` 裁定 6（2026-09-20）は終了の話で切替には及んでいない。kanade に「切替の相から定常へ戻る」経路が 1 本増えるが、終了の握手には足さない。`shell-balloon-switch` のシェル切替の中止も同じ答えを継ぐ。**別案**（09-20 の裁定に倣って中断しても切替へ進む）は「止めたのに切り替わる」を出すので採らない。
 2. The 本仕様 shall **裁定 2（起動できなければ元へ戻す・brief 議題 ⑵）**として、切替先が起動できないとき元のゴーストを起こし直し、それも失敗したら告知して終了コード 1 で終える（要件 6）。根拠: 開発者裁定「1 体の失敗はアプリの失敗ではない」（2026-09-24）。利用者から見える差は「壊れたゴーストを選んでも元の子が戻って話し続ける」。**別案**（告知して終了）は採らない。
-3. The 本仕様 shall **裁定 3（切替では `OnFirstBoot` を送らない・brief 議題 ⑶）**として、初めて起動するゴーストへ切り替えたときも `OnGhostChanged`（204 なら `OnBoot`）だけを送る（要件 4.4）。根拠: 正典は `OnGhostChanged` → 204 なら `OnBoot` としか書かず `OnFirstBoot` との関係に沈黙する。交代の文脈で「はじめまして」より「○○から交代」が自然で、起動記録は同じ規則で書くので次回の単独起動は `OnBoot` になる。**別案**（起動記録が無ければ `OnFirstBoot` を優先）は採らない。
+3. The 本仕様 shall **裁定 3（初回起動が最優先・brief 議題 ⑶・2026-09-26 開発者裁定で確定）**として、初めて起動するゴースト（起動記録なし）へ切り替えたときは `OnFirstBoot`（204 なら `OnBoot`）を送り `OnGhostChanged` を送らず、起動記録があるときだけ `OnGhostChanged`（204 なら `OnBoot`）を送る（要件 4.1・4.4）。根拠: ukadoc の「204 なら続けて」の木で `OnFirstBoot`・`OnGhostChanged`・`OnGhostCalled`・`OnVanished` は `OnBoot` へ落ちる兄弟の根で、根どうしに辺は無い＝起動の根は 1 つ。優先順は ukadoc 本体が沈黙し、里々 wiki「起動・終了関連」が「初回起動時はそれが交替であれ呼出であれ OnGhostCalled/OnGhostChanged は発生しない」「初めての起動ということで、他のイベントより優先」と明記する。初回の条件は永続の状態（一度も起きていない）で、切替は出来事なので状態の根が先。**要件生成時の暫定（常に `OnGhostChanged`）は覆した**＝里々の標準テンプレートの「＊初回」が切替経由でも動く。
 4. The 本仕様 shall **裁定 4（衝突表の優先順・brief 議題 ⑷⑸）**として、切替の目印が立っている間は「中止して元の定常へ戻る」＞「切替で降ろすだけ」＞「終了で終わる」の順で効かせ、切替先の `Fault` は「元へ戻す」へ回す（衝突表 1〜3・要件 2.4・5.4・6.6）。元へ戻すときは告知を出さない（要件 6.3）。根拠: 告知の部品はモーダルで、完了 `shiori-fault-notice` 裁定 4 が「フレームの相の中でモーダルを回さない」と定めた。利用者は元のゴーストが戻ることで結果を知る。**別案**（「○○は起動できませんでした」を出してから戻す）は、告知を出す場所（全窓を閉じたあと・起こし直す前）を新しく作る必要があり、規模 L を守るため採らない。要件ディスカッションで「告知が要る」となれば要件 6.3 と規模を改める。
 5. The 本仕様 shall **裁定 5（`OnGhostChanged` の Ref1）**として、Ref1 に `OnGhostChanging` が返した台本をそのまま載せ、`OnGhostChanging` を送らなかったとき（`raise-event` 無し）と 204 のときは空にする（要件 4.1）。根拠: 正典「直前のゴーストの切り替え時のスクリプト」は `OnGhostChanging` の応答を指すと読むのが自然で、`raise-event` 無しの台本は「切り替え時の」台本ではなく命令を運んだ通常の台本である。**別案**（命令を運んだ台本の全文を載せる）は消費者の位置から元の台本の全文を取り戻す口が要るので採らない。
 6. The 本仕様 shall **裁定 6（`raise-event` 無しは `OnClose` も送らない）**として、`OnGhostChanging` を送らない切替では `OnClose` も送らず、命令を運んだ台本の終了後に黙って降ろす（要件 2.6）。根拠: 正典は `OnClose` を「`OnGhostChanging` が 204 のとき続けて発生」としか書かず、`OnGhostChanging` を通さない切替での `OnClose` に沈黙する。`raise-event` 無しの切替は台本の作者が「別れの台詞はこの台本に書いた」と決めた形（`\+` の説明「このスクリプトによる切り替えでは `OnGhostChanging` は通知されない」と同じ意図）。**別案**（`OnClose` を送る）は、台本の作者が別れを言ったあとに別れの台詞がもう 1 度流れる。
