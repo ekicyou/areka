@@ -1,6 +1,7 @@
-# ギャップ分析: areka-P0-alpha-package
+# ギャップ分析と設計の調べ物: areka-P0-alpha-package
 
-> 2026-09-26・worktree の HEAD `d386c580`（main `2f5bd24a` の上に spec の初期化 1 コミット）で実測。依存の数だけは本流の作業コピーの `Cargo.lock`（2026-09-26 20:01 更新）を `--locked` で読んだ（この worktree には `Cargo.lock` がまだ無い）。
+> §1〜§10 は 2026-09-26・worktree の HEAD `d386c580`（main `2f5bd24a` の上に spec の初期化 1 コミット）での実測（`/kiro-validate-gap`＋要件討議）。依存の数だけは本流の作業コピーの `Cargo.lock`（2026-09-26 20:01 更新）を `--locked` で読んだ。
+> §11〜§15 は同日の `/kiro-spec-design`（HEAD `a8fde786`）で足した設計時の調べ物と決定。
 > 本文のコードの引用は「何を定義している行か」で指す。
 
 ## 1. 要約
@@ -209,3 +210,88 @@
 8. **zip の書き方**: .NET の `ZipFile` の UTF-8 の名前をエクスプローラーが読むか（`頬差分.pdn` 1 件・§4.6・§8.5）。作業フォルダで組んでから改名で置く形（要件 1.5）。
 9. **release ビルドの並列度**: メモリ不足（os error 1455）の前例に合わせ `-j` を絞るか（§4.6）。
 10. **`Cargo.lock` の追跡の始め方**（要件 1.6・7.3〜7.5）: 配布スクリプトのビルドと謝辞の生成に `--locked` を付ける形・`Cargo.lock` の改行の扱い（`.gitattributes` を要するか）・追跡を始めるコミットの切り方（`Cargo.lock` と作り直した `THIRD-PARTY-NOTICES.md` を同じコミットに入れる）。
+
+## 11. 設計時の調べ物（2026-09-26・`/kiro-spec-design`・worktree HEAD `a8fde786`）
+
+§8 の持ち越しのうち、読み取りだけで済むものはここで実測した。release ビルドと実走を要するものは「実装の最初のタスクで実測して確定」とし、既定値を設計に書いた。
+
+### 11.1 実測した（結論は design.md に写した）
+
+| § | 調べ物 | 方法 | 結果 |
+|---|---|---|---|
+| 8.1（一部） | exe の依存 DLL | PowerShell で PE の取り込み表を読む関数を書き、本流の `target/debug/areka.exe`（PE32+）と `emo2.nar` の `pasta.dll`（PE32）に当てた | `areka.exe`（debug）: `VCRUNTIME140.dll`＋`api-ms-win-crt-{math,string,runtime,stdio,locale,heap}-l1-1-0.dll` を読む（研究どおり）。`pasta.dll`（機種 `0x014c`）: `user32`・`kernel32`・`bcryptprimitives`・`api-ms-win-core-synch-l1-2-0`・`ws2_32`・`ntdll`・`userenv` だけ＝CRT 系 0。読み手は PE32／PE32+ の両方で正しく動いた（design の判定 6 の実装の下敷き）。release の実物と `+crt-static` の効果は未（実装で） |
+| 8.3（一部） | 204 だけが返る状態で「会話が始まった」の目印が出ないこと | `areka-kanade/src/schedule/boot.rs` の `to_baseware_version` を読む | `event = "boot_talk"` は **2 つの経路で出る**: Value 側「起動グリーティングを再生起動」と、204＋`first_boot_epilogue` 非空の側「epilogue-only 起動記録トークを再生起動（挨拶トーク皆無）」。**`event` の名前で数えると 204 の失敗を通す**ので、判定は文言「起動グリーティングを再生起動」で行う。`boot_complete` は 204 でも出るので目印にしない。自動終了のミリ秒は未（実装で・既定 20000） |
+| 8.4 | `cargo about` の範囲 | 本流の `Cargo.lock`（264 パッケージ・2026-09-26 20:01）を worktree へ複製（追跡外）し、`--locked` で 3 通り生成 | 機種の指定なし `--workspace`＝**225** crate（リポジトリの `THIRD-PARTY-NOTICES.md` は 220＝より古い lock の版・`ambassador 0.5.1→0.5.0`・`anstream 1.0.0→0.6.21` 等の差＝「版の上下」そのもの）／`--workspace --target x86_64-pc-windows-msvc --target i686-pc-windows-msvc`＝**189**／`-m crates/areka/Cargo.toml --target x86_64-…`＝**175**。生成は各 15〜35 秒。`cargo about generate` は `--locked`・`--target`（複数可）・`-m`・`--fail` を持つ（`--help` で確認）。`cargo deny` は大域の `--locked`／`--offline`／`--frozen` と `check licenses` を持つ |
+| 8.5 | .NET `ZipFile` の UTF-8 の名前をエクスプローラーが読むか | `頬差分.pdn` と `plain.txt` を `ZipFile::CreateFromDirectory` で固め、ローカルヘッダの汎用目的ビットを読み、`Shell.Application`（エクスプローラーの zip フォルダそのもの）で列挙と `CopyHere` を行った | `頬差分.pdn` にだけ bit 11（UTF-8）が立つ（`0x0800`）。エクスプローラーの列挙も展開も `頬差分.pdn` を正しい名前で出した。`Expand-Archive` も同じ。**文字化けの心配は 0** |
+| （3.1） | 既定の展開先の長さ | `[IO.Path]::GetTempPath()` | `C:\Users\<名>\AppData\Local\Temp\`＝34 文字。`areka-alpha-check-HHmmss` を足しても約 60 文字＝上限 160 の下 |
+| （7.3） | `Cargo.lock` の改行と git の設定 | `file Cargo.lock`・`git config core.autocrlf`・根の `.gitattributes` | lock は LF。`core.autocrlf=true`。根に `.gitattributes` は無い |
+| （6.5） | 完了 spec の数 | `.kiro/specs/completed/` 直下 | フォルダ **200**・`.md` 1 本（`graphics-rendering-stability.md`） |
+| （2.2・2.3） | `emo2.nar` の中身 | `ZipFile::OpenRead` で列挙 | 110 項目・`profile` を含む名前 0・半角でない名前 1（`shell/master/CityPop/頬差分.pdn`）・`readme.txt` 3,105 バイト・`shell/master/readme.txt` 2,903 バイト・`install.txt` 135 バイト・`emo2-kakukaku/install.txt` 78 バイト |
+| （1.3） | `nar-sample-path` のバルーン検体の出力 | `sample-ghost-kit/src/lib.rs` の `manual_paths`・`tests/nar_sample_path_test.rs` | 鍵は `root=`・`folder=`（`<根>/balloon/<名>`）・同梱があれば `balloon.<名>=`。`StayseeBalloon` は `folder=` が `<根>/balloon/StayseeBalloon` |
+
+引き直した実在（design.md に綴ったもの・すべて今の木に在る）: `main.rs` の `windows_subsystem` 属性・`SMOKE_EXIT_ENV`・「smoke 自動 close ゲート有効」・`finish_after_run`・`EnvFilter::new("info")` の既定／`alert.rs` の `NO_ALERT_ENV`・`SHIORI_FAULT_TITLE`・`suppressed_from`（`""`・`"0"` 以外は抑止）／`boot_config.rs` の `resolve_root_from`・`default_helper_exe_path`・`default_app_profile_dir`・`event = "balloon_resolved"`／`boot_resolve.rs` の `DEFAULT_GHOST_FOLDER`・`DEFAULT_BALLOON_FOLDER`・`resolve_balloon`（`BalloonRoute::Companion`）／`ghost_session.rs` の「本物のゴースト窓を開きました」／`emo2_boot/frame/attach.rs` の「emo2 attach: 装着計画を実行」／`areka-kanade/src/shiori/real.rs` の `connect_failed`・`helper_exited`／`menu/captions.rs` の `FRAME_CAPTIONS`（7 行）／`app_exit.rs` の `quit_app`／`smoke_boot_loop_exit.rs` の `is_i686_pe`・`run_smoke`／`.claude/skills/kiro-complete/SKILL.md` の License Gate (b) の「環境差として戻す」の段落。
+
+### 11.2 実装の最初のタスクで実測して確定するもの（設計は既定値を置いた）
+
+1. `+crt-static` の release の `areka.exe`（x64）と `shiori-host32-helper.exe`（i686）の取り込み表に CRT 系（`vcruntime`・`msvcp`・`api-ms-win-crt-*`・`ucrtbase`）が 0 であること。`panic='unwind'`・`human-panic`・`windows` crate との組み合わせでビルドとリンクが通ること。
+2. release の `areka.exe`（コンソール無し）を `Start-Process -RedirectStandardOutput` で起こしたとき、正の目印 4 種が `run.log` に残ること（`invoke-perf-run.ps1 -Build release` の前例は「有界の証跡の行」で成り立っている）。
+3. `SMOKE_EXIT_MS`＝20000 で「起動グリーティングを再生起動」が自動終了より前に出ること。短くできるなら較正値を下げる（前例: debug の実走は 3000 で挨拶まで通る）。
+4. `cargo build --locked` が CRLF で取り出された `Cargo.lock` を書き換えようとしないこと（cargo は行単位で比べるので起きない見込み・起きたら `.gitattributes` に `Cargo.lock -text` を足す＝設計の外の是正として報告）。
+5. `cargo update -w` が「`Cargo.toml` の差分だけを lock に反映し他の版を動かさない」こと（`workflow.md` に書く衝突の解き方の前提）。
+
+## 12. アーキテクチャの選択肢の評価（設計フェーズ）
+
+| 選択肢 | 中身 | 長所 | 短所 | 判定 |
+|---|---|---|---|---|
+| B: 1 本＋`-Check` | `tools/package-alpha.ps1` に組む・判定・起動確認を全部入れる | 要件の文言どおり 1 本。前例を写すだけ。共有するファイル 0 | 300〜400 行。`link.exe` の除外が `test-all.ps1` と 2 か所に並ぶ | **採用** |
+| C: 2 本＋共有の小片 | 組む／確かめる を分ける | 既成の zip を確かめられる | ファイルが増える。要件 1.1「その場のソースから作り直す」が常に先に立つので「既成の zip だけ確かめる」入口は本仕様に無い | 却下（要るときは `alpha-release-signoff` で `-Check` を切り出せばよい） |
+| A: `test-all.ps1` に `-Package` | 既存 1 本に足す | i686 の準備を共有 | 境界「`test-all.ps1` の変更 0」に反する。止め方が逆 | 却下 |
+
+## 13. 設計の決定（要件討議で設計へ回した 10 項目の答え）
+
+### 決定 1: VC++ ランタイムは静的に結ぶ（要件 2.7）
+- **代替**: ⒝ README の既知の制限に再頒布可能パッケージを書く／`VCRUNTIME140.dll` を zip に入れる。
+- **選択**: 配布スクリプトだけが `RUSTFLAGS=-C target-feature=+crt-static` を設定し、`--target` 明示・`--target-dir target/alpha`。見張りは zip の exe の取り込み表を PE から読み、CRT 系の名前の拒否表に当たれば否。
+- **理由**: 第三者の最初の起動を落とさない。`crates/`・追跡ファイルの変更 0。`--target` 明示でホスト側（ビルドスクリプト・手続きマクロ）に波及しない。`--target-dir` を分けるので普段の増分ビルドを壊さない。
+- **代償**: release ビルドの成果物が普段の `target/release/` と別に 1 組増える。実物の確認は release ビルドを要する（実装の最初のタスク）。
+
+### 決定 2: 会話の目印は文言「起動グリーティングを再生起動」・自動終了は 20000 ms（要件 3.3・3.4）
+- **代替**: `event="boot_talk"` で数える（204 の失敗を通す＝却下）／`boot_complete`（204 でも出る＝却下）／目印を待って自分で止める（areka に外から止める口が無い＝不可）。
+- **選択**: 文言で数える。`SMOKE_EXIT_MS`＝20000（`-SmokeExitMs` で上書き）、番犬＝＋60 秒。
+- **理由**: §11.1 の読取で 2 経路の文言が違うことを確認。20000 は失敗方向の前例と同じで、接続（helper 起動＋`pasta.dll`＋Lua の自己展開）の結果より後になる余裕を持つ。
+
+### 決定 3: 環境変数は `AREKA_*`・`WINTF_*` を全部外して 4 つだけ入れる（要件 3.2）
+- `AREKA_APP_SMOKE_EXIT_MS`・`AREKA_NO_ALERT=1`・`RUST_LOG=info`・`NO_COLOR=1`。`RUST_BACKTRACE` は入れない（判定に使わない・human-panic が報告を書く）。
+
+### 決定 4: 展開先は `GetTempPath()` の下・上限 160 文字（要件 3.1）
+- `-CheckDir` で上書き可。上限を超えたら起動せず 3 で止める。展開先は合否に関わらず消さない（あとで読める・削除のコードを持たない）。
+
+### 決定 5: 謝辞は `--workspace`＋機種 2 つ（要件 7.1）
+- §11.1 の 189 crate。リポジトリの `THIRD-PARTY-NOTICES.md`（225・機種なし）とは範囲が違い版は同じ。前提の検査は `cargo deny --locked check licenses`（advisories は含めない）。`--fail` は足さない（完了の手順と同じ厳しさ）。
+
+### 決定 6: スクリプトは 1 本（§12）。
+
+### 決定 7: 第三者向け README は `dist/README.txt`・UTF-8（BOM）・CRLF・zip でも `README.txt`（要件 4.1・4.6）
+- `docs/` は steering の説明（単発の技術メモ）と食い違うので使わない。`dist/` は steering `structure.md` に 1 行登記する。
+
+### 決定 8: zip は .NET `ZipFile`・`stage/` で組んで `.zip.tmp` → 判定 → 改名（要件 1.5）
+- UTF-8 の名前は §11.1 で実測済み（エクスプローラーが読む）。
+
+### 決定 9: release ビルドの `-j` は絞らない
+- 前例の os error 1455 は `cargo test --workspace` の多数の並行リンク。1 本の release ビルドで出たら較正値として `-j 4` を足す。
+
+### 決定 10: `Cargo.lock` の追跡は `cargo generate-lockfile` → 謝辞の作り直し → `.gitignore` の 1 行 を 1 コミットで（要件 7.3〜7.5）
+- `.gitattributes` は作らない（§11.2 の 4）。並走 worktree の取り込み方（追跡外の lock を先に消す・衝突は main の lock を採って `cargo update -w`）を `workflow.md` に 1 節。完了の手順の「環境差として戻す」は「戻さず原因を確かめる」へ。
+
+## 14. 統合（synthesis）の記録
+
+- **一般化**: 「判定は集めてから 1 回主張する」を中身の判定と記録の判定の共通の形にした（1 つ目で止めると残りの赤が見えない）。較正値は冒頭 1 か所（`invoke-perf-run.ps1` と同じ体裁）。
+- **作る／借りる**: ビルド・展開・謝辞・検査・圧縮はすべて既存の道具を借り、新しく作るのは「呼ぶ順」「写す表」「判定」だけ。PE の読み手は `is_i686_pe` の読み方（PowerShell で十数行）で、`dumpbin` を要しない。
+- **削ったもの**: `run-meta.txt` のような別の記録ファイル（`BUILD-INFO.txt` 4 行で足りる）・既成の zip だけを確かめる入口・`RUST_BACKTRACE`・`--fail`・`-j` の較正値・展開先の削除・`.gitattributes`・helper を名前で探して止めるコード（OS のジョブが道連れにする）。
+
+## 15. 危険と手当て
+
+- release ビルドが長い（`lto`・`codegen-units=1`）— 1 本の走行で 2 回（x64・i686）。手で回す道具なので許容。
+- `+crt-static` で未知のリンク失敗 — 実装の最初のタスクで実測。失敗したら決定 1 の代替（README に書く）へ戻して報告。
+- 記録の文言の変更で判定が偽の否 — design の Revalidation Triggers に列挙。較正値の 1 か所を直せば済む。
+- `Cargo.lock` の追跡開始が並走 5 本に波及 — `workflow.md` の 1 節で手順を固定。衝突は `cargo` に作り直させれば解ける種類。
