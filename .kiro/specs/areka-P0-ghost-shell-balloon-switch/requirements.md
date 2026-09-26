@@ -41,7 +41,7 @@
 | [`\![change,ghost,ゴースト名(,--option=raise-event)]`](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1) | 「そのゴーストへの切り替えを行う。」「実行後、該当ゴーストがいなかった場合は無視される。」「ゴースト名の後に--option=raise-eventとすると、メニューから切り替え操作をした場合と同じくOnGhostChangingが通知される。この場合、バルーンブレーク（通常ダブルクリック）による中止操作も可能な点に注意。指定しない場合は通知されない。」 | 名指しの切替・該当なしは無視・`raise-event` の有無で `OnGhostChanging` を送るか否か・`raise-event` のときは中断で中止できる。`random`／`sequential`／`lastinstalled` の行は `ghost-change-name-resolution` が引き受ける。 |
 | [`OnGhostChanging`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanging:1) | 「他のゴーストへの切り替え指示があった際に発生。SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnCloseが発生する。」Reference0「切り替わるゴーストの本体側の名前。」Reference1「手動で切り替えた場合、manual システムにより切り替えられた場合、automaticが返される。」Reference2「切り替わるゴーストの名前。[SSPのみ]」Reference3「切り替わるゴーストのパス。[SSPのみ]」 | 送り出しの握手の形と Ref0〜3。SSP のみの Ref も送る（記憶 no-ssp-measurement-import-semantics-from-ukadoc）。 |
 | [`OnGhostChanged`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanged:1) | 「他のゴーストから自ゴーストに切り替えられた際に発生。SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnBootが発生する。」Reference0「直前のゴーストの本体側の名前。」Reference1「直前のゴーストの切り替え時のスクリプト。」Reference2「直前のゴーストの名前。[SSPのみ]」Reference3「直前のゴーストのパス（ファイルの場所）。[SSPのみ]」Reference7「切り替わったゴーストのシェル名。[SSPのみ]」 | 迎え入れの握手の形と Ref0〜3・7。`OnFirstBoot` との優先順は書いていない（下の「起動の根の木」と要件 11 裁定 3）。 |
-| [`OnBoot`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1) | 「起動した際に発生。SSPでは、OnGhostChanged、OnGhostCalled、OnFirstBoot、OnVanishedに対してスクリプトが返されなかった（204）場合、続けてこのイベントが発生する。」 | 起動系列は「理由の根 1 つ → 204 → `OnBoot`」の 1 形（下の木）。根どうしの間に落ちる辺は無い＝切替で起きたゴーストに送る根は 1 つ。 |
+| [`OnBoot`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1) | 「起動した際に発生。SSPでは、OnGhostChanged、OnGhostCalled、OnFirstBoot、OnVanishedに対してスクリプトが返されなかった（204）場合、続けてこのイベントが発生する。」 | 起動系列は「理由の根 1 つ → 204 → `OnBoot`」の 1 形（下の木）。根どうしの間に落ちる辺は無い＝切替で起きたゴーストに送る根は 1 つ。Reference6「※MATERIA、SSPのみ　前回の処理中で落ちた時にhalt。」Reference7「※MATERIA、SSPのみ　前回の処理中で落ちたゴースト名 。」＝切替先が起動の途中で落ちて元へ戻したことを元のゴーストへ伝える器（要件 6.2・裁定 10）。 |
 
 ### 起動と終了の根の木（ukadoc の「204 なら続けて」の逐語から）
 
@@ -198,7 +198,7 @@
 #### Acceptance Criteria
 
 1. While 切替の目印が立っている, when 切替先のゴーストの起動が失敗する（起動解決の失敗・マウントの失敗・SHIORI の失敗＝停止通知の原因 `Fault`・窓を開けない）, the areka shall `error!` を 1 件残し（失敗の種類と理由を含む）、切替先を降ろして、元のゴーストを同じ経路で起こし直す（要件 11 裁定 2）。切替では、初回起動の「起動に失敗しても LogSink の代替で骨格だけ起こす」契約（`boot_ghost` の fallback）へ倒れず、失敗として扱う（初回起動の契約そのものは変えない。切替先が居ないまま窓だけ出る形は作らない）。
-2. When 元のゴーストを起こし直す, the areka shall 通常の起動系列（起動記録があるので `OnBoot`）で起こし、`OnGhostChanged` は送らない（交代は成立していない）。記憶（`LastGhost`）は元のゴーストの起こし直しで同じ値に書き直され、結果として元のままになる（書かない経路は作らない）。
+2. When 元のゴーストを起こし直す, the areka shall 通常の起動系列（起動記録があるので `OnBoot`）で起こし、`OnGhostChanged` は送らない（交代は成立していない）。その `OnBoot` の Reference に **Ref6＝`halt`・Ref7＝切替先のゴーストの名前**（`descript.txt` の `name`。無ければフォルダ名）を載せ、Ref1〜5 は空で送る（正典 `OnBoot` の「前回の処理中で落ちた時に halt」「落ちたゴースト名」の器を、切替先が起動の途中で落ちた知らせとして使う＝要件 11 裁定 10）。切替失敗を知らせる新しい SHIORI イベントは作らない（0 件）。記憶（`LastGhost`）は元のゴーストの起こし直しで同じ値に書き直され、結果として元のままになる（書かない経路は作らない）。
 3. When 元のゴーストへ戻す, the areka shall 利用者向けの告知（メッセージボックス）を出さない（要件 11 裁定 4）。記録は 6.1 の `error!` 1 件で足りる。
 4. If 元のゴーストの起こし直しも失敗する, then the areka shall 告知の場面を 1 つ足した形（題名は起動失敗でも会話中の失敗でもない「ゴーストを切り替えられません」に相当する文言・本文に切替先と元の両方の名前と失敗の種類）で告知を出し、完了 `shiori-fault-notice` と同じ後始末の順序で終了コード 1 で終える（`AREKA_NO_ALERT` の抑止規則も同じ）。
 5. The areka shall 戻す試みを 1 回だけにする（元 → 切替先 → 元 → … と往復しない）。
@@ -243,7 +243,7 @@
 #### Acceptance Criteria
 
 1. The 本仕様 shall `doc/ukadoc-coverage/ledger/shiori.toml` の `OnGhostChanging`／`OnGhostChanged` と `sakura-script.toml` の `\![change,ghost,ゴースト名(,--option=raise-event)]` を実装済みへ更新し（owner＝本仕様・備考に `random`／`sequential`／`lastinstalled` は `ghost-change-name-resolution` と記す）、生成物を生成器で作り直す（手で直さない）。
-2. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 に次を 1 行ずつ記す: (a) 切替の途中の `OnClose` と別れの台詞は終了で終わらない（完了 `balloon-break` 要件 3.6 の適用範囲の限定）、(b) 切替の相の中断は中止であり `\-` の予約を終了に結ばない（同 3.8 の限定）、(c) 切替先の `Fault` は元へ戻す（完了 `shiori-fault-notice` 要件 3.1 の限定・二重失敗は 3.1 のまま）、(d) 起動の根は 1 つ・起動記録が無いゴーストへの切替は初回起動（`OnFirstBoot`）を最優先し `OnGhostChanged` を送らない、(e) `raise-event` 無しの切替では `OnClose` も送らない、(f) `OnGhostChanged` の Ref1 の中身、(g) 名前の突き合わせの順序と自分自身への切替。各行に正典の沈黙の根拠と開発者裁定の日付を付ける。
+2. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 に次を 1 行ずつ記す: (a) 切替の途中の `OnClose` と別れの台詞は終了で終わらない（完了 `balloon-break` 要件 3.6 の適用範囲の限定）、(b) 切替の相の中断は中止であり `\-` の予約を終了に結ばない（同 3.8 の限定）、(c) 切替先の `Fault` は元へ戻す（完了 `shiori-fault-notice` 要件 3.1 の限定・二重失敗は 3.1 のまま）、(d) 起動の根は 1 つ・起動記録が無いゴーストへの切替は初回起動（`OnFirstBoot`）を最優先し `OnGhostChanged` を送らない、(e) `raise-event` 無しの切替では `OnClose` も送らない、(f) `OnGhostChanged` の Ref1 の中身、(g) 名前の突き合わせの順序と自分自身への切替、(h) 切替先の失敗は元のゴーストへ戻し、その `OnBoot` の Ref6＝`halt`・Ref7＝切替先の名前で伝える（SSP の「切替は成功扱い・壊れたまま表示・次回起動で FIRST へ」は採らない・切替失敗の新イベントは作らない）。各行に正典の沈黙の根拠と開発者裁定の日付を付ける。
 3. The 本仕様 shall `crates/areka/src/menu/mod.rs` の登記待ちのコメント（`#[allow(dead_code)]` 3 か所の理由）と `doc/ukadoc-coverage/briefing-sakura-script.md` の「未対応」の行を、実装後の形に合わせて改める。
 
 ### Requirement 10: 決定論テストと実機確認
@@ -256,7 +256,7 @@
 2. The 本仕様 shall `OnGhostChanging` が 204 のとき `OnClose` が続き、その別れの台詞（`\-` 入りを含む）が最後まで流れても・中断されても・期限切れでも、終了ではなく降ろすことで終わることを決定論テストで固定する（要件 2.3〜2.5・衝突表 1）。
 3. The 本仕様 shall `raise-event` 無しの切替で `OnGhostChanging` も `OnClose` も送られず（0 件）、命令を運んだ台本の終了後に降ろされることを決定論テストで固定する（要件 2.6）。
 4. The 本仕様 shall `raise-event` 付きの切替の送り出しの台詞をバルーンブレークで止めると切替が中止され、元のゴーストの定常へ戻り、`\-` の予約が終了に結ばれないことを決定論テストで固定する（要件 5・衝突表 2）。
-5. The 本仕様 shall 切替先の起動が失敗（接続に失敗する偽 SHIORI＝`Fault`）したとき元のゴーストが `OnBoot` で起こし直され告知が出ないこと、元も失敗したとき告知の場面が 1 回出て終了コード 1 になることを決定論テストで固定する（要件 6・衝突表 3）。
+5. The 本仕様 shall 切替先の起動が失敗（接続に失敗する偽 SHIORI＝`Fault`）したとき元のゴーストが `OnBoot`（Ref6＝`halt`・Ref7＝切替先の名前・`OnGhostChanged` 0 件）で起こし直され告知が出ないこと、元も失敗したとき告知の場面が 1 回出て終了コード 1 になることを決定論テストで固定する（要件 6・衝突表 3）。
 6. The 本仕様 shall 該当なし（未知の名前・`random`・`lastinstalled`）で `warn!` 1 件・降ろさず・`OnGhostChanging` 0 件、切替中の二重要求で `warn!` 1 件、自分自身への切替で降ろして起こし直される、をそれぞれ決定論テストで固定する（要件 1.6〜1.9）。
 7. The 本仕様 shall `run_ghost_quit_phase` のテスト（`frame_ghost_quit_tests.rs` の兄弟）に「切替の目印が立っている間の停止通知は `quit_app` を呼ばない・下りたあとは呼ぶ」を足す（要件 3.3・3.5）。
 8. The 本仕様 shall 汎用の通知の入口の判断（許可表・定常か否か）を決定論テストで固定する（要件 7.6）。
@@ -281,4 +281,5 @@
 7. The 本仕様 shall **裁定 7（`OnGhostChanging` の Ref1）**として、メニューからの切替を `manual`、台本（`raise-event` 付き）からの切替を `automatic` にする（要件 2.1）。根拠: 正典「手動で切り替えた場合 manual、システムにより切り替えられた場合 automatic」。台本の命令は利用者の手ではなくゴースト（システム側）の判断で出る。**別案**（`raise-event` は「メニューから切り替え操作をした場合と同じく」なので `manual`）は、正典の文が `OnGhostChanging` の有無について言っており Ref1 の値には触れていないので採らない。
 8. The 本仕様 shall **裁定 8（名前の突き合わせ）**として、切替先の名前を `descript.txt` の `name` → フォルダ名の順で引き、大文字小文字を区別する（要件 1.5）。根拠: 正典の記述例「`\![change,ghost,Emily/Phase4.5]`」はゴーストの `name` であり、里々 wiki の tip は `name` と `sakura.name` の不一致で失敗すると書く（＝SSP は `name` で引く）。フォルダ名を 2 番目に置くのは記憶の鍵がフォルダ名なので利用者がフォルダ名で書く場面があるため。**別案**（`sakura.name` でも引く）は本体側の名前が複数のゴーストで重なりうるので採らない。
 9. The 本仕様 shall **裁定 9（自分自身への切替）**として、切替先が現在のゴースト自身でも無視せず同じ経路で降ろして起こし直す（要件 1.8）。根拠: `\![reload,ghost]` を α 後に送った代用（`network-update` の brief「読み直しは同じゴーストへの切替で代用」）が成り立ち、経路に例外を作らない。正典は自分自身への切替に沈黙する（里々 wiki は「自分自身に交替」を起こりうる形として書く）。
-10. Where 設計・実装の途中で裁定 1〜9 のいずれかを覆す必要が判明する, the 本仕様 shall 開発者へ議題として上げ、確定を待ってから要件・設計・`doc/COMPAT_ARCHITECTURE.md` §8 の該当箇所を改める。
+10. The 本仕様 shall **裁定 10（切替失敗の形＝呼び出し元へ戻し、`OnBoot` の Ref6/7 で伝える・2026-09-26 開発者裁定）**として、切替先の起動失敗は元のゴーストを起こし直す（裁定 2 の再確認）と同時に、失敗の知らせを新しい SHIORI イベントではなく、元のゴーストの `OnBoot` の Ref6＝`halt`・Ref7＝切替先の名前で伝える（要件 6.2）。根拠: 正典 `OnBoot` の Reference6「前回の処理中で落ちた時に halt」・Reference7「前回の処理中で落ちたゴースト名」が「試したゴーストが処理の途中で落ちた」知らせの器として在り、ukadoc に「切替失敗」のイベントは無い（`Failure` 系は `\![execute,…]` の `--event` の流儀だけ）。areka 独自のイベントを作っても受ける辞書がどのゴーストにも無い。**検討して採らなかった形**（開発者の説明による SSP の挙動）: ⑴ 切替を成功扱いにして SHIORI が死んだまま表示を続け、失敗を記憶して次回起動で FIRST（既定）ゴーストへ強制切替——kanade に「SHIORI が死んでいるが生きている」状態が要り、完了 `shiori-fault-notice` の「`Fault` は告知して終了」を切替後に限って覆す規模になるため α では採らず、α 後の候補として `roadmap.md` に「壊れたゴーストを表示し続ける」で登記する。⑵ 既定ゴーストへの強制切替——既定ゴースト自身が切替先（壊れている）でありうる・利用者の文脈（元のゴースト）を失う。⑶ 成功扱い＋今日どおり告知して終了——選び間違い 1 回でアプリが消える。
+11. Where 設計・実装の途中で裁定 1〜10 のいずれかを覆す必要が判明する, the 本仕様 shall 開発者へ議題として上げ、確定を待ってから要件・設計・`doc/COMPAT_ARCHITECTURE.md` §8 の該当箇所を改める。
