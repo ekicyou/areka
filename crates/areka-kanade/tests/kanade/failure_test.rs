@@ -65,9 +65,15 @@ fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
 /// 呼び手は kanade を join してから読む——join の成功は終了系列の完了（停止通知の投函）の後なので、
 /// 通知は既に届いている。
 fn single_fault_notification(rx: &mpsc::Receiver<KanadeNotice>) -> ShioriFault {
-    let first = rx
+    let mut first = rx
         .try_recv()
         .expect("終了系列の完了で停止通知が 1 件届くはず");
+    // 定常に入っていれば、その通知（定常到達）が停止の通知より先に 1 件だけ届く。
+    if first == KanadeNotice::Steady {
+        first = rx
+            .try_recv()
+            .expect("終了系列の完了で停止通知が 1 件届くはず");
+    }
     assert!(rx.try_recv().is_err(), "停止通知は 1 件だけのはず");
     match first {
         KanadeNotice::Stopped(KanadeStopped {

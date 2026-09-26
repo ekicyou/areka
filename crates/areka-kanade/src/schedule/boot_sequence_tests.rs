@@ -131,7 +131,13 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
         ),
         "挨拶 talk は boot 完了後も Steady へ引き継がれる（Steady{{talk: None}} へ丸めない）"
     );
-    assert!(actions.is_empty(), "boot 完了は副作用なし");
+    assert!(
+        matches!(
+            actions.as_slice(),
+            [Action::Notice(crate::change::KanadeNotice::Steady)]
+        ),
+        "boot 完了は定常到達の通知 1 件だけ"
+    );
     assert!(s.pending_close.is_none());
 }
 
@@ -672,7 +678,13 @@ fn run_boot_version_talkdone_then_close(reason: crate::talk::TalkEndReason) {
         matches!(s.phase, Phase::Steady { talk: None }),
         "通知完了で追跡枠が空の Steady{{talk: None}} へ進むはず"
     );
-    assert!(actions.is_empty(), "boot 完了は副作用指示を返さない");
+    assert!(
+        matches!(
+            actions.as_slice(),
+            [Action::Notice(crate::change::KanadeNotice::Steady)]
+        ),
+        "boot 完了は定常到達の通知 1 件だけを返す"
+    );
 
     // close 指示 → 待つべき talk が無いので即握手（OnClose GET・ClosePending）。
     let (s, actions) = step(
@@ -723,7 +735,10 @@ fn boot_version_talkdone_keeps_pending_close_until_steady_tick() {
         &cfg,
     );
     assert!(matches!(s.phase, Phase::Steady { talk: None }));
-    assert!(actions.is_empty());
+    assert!(matches!(
+        actions.as_slice(),
+        [Action::Notice(crate::change::KanadeNotice::Steady)]
+    ));
     assert_eq!(s.pending_close.map(CloseReason::as_ref_str), Some("system"));
 
     // 次の Tick → 保留を消化して OnClose GET・ClosePending。

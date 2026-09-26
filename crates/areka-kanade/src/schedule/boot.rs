@@ -6,7 +6,8 @@
 //! フェーズ分岐として呼び出せるようにする。
 
 use super::{Action, ActiveTalk, Input, Phase, State, events, resources, snapshot_of};
-use crate::msg::{CloseReason, KanadeConfig, ShioriOutcome};
+use crate::change::{BootOrigin, KanadeNotice};
+use crate::msg::{CloseReason, KanadeConfig, ShioriCall, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
 use resources::ResourceOutcome;
@@ -58,7 +59,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
     match state.phase {
         // BootInit + Notified: OnInitialize 完了→**username リソース照会（prefetch）GET** を発行し
         // BootPrefetch へ（R4.1・prefetch は OnInitialize 後・OnFirstBoot 前に 1 回）。既存 shiori
-        // request 経路（単一 in-flight・shiori_tx 専有）をそのまま使う。応答受領後に OnFirstBoot へ進む。
+        // request 経路（単一 in-flight・shiori_tx 専有）をそのまま使う。応答受領後に起動の根（boot_root）へ進む。
         Phase::BootInit => match outcome {
             ShioriOutcome::Notified => {
                 let mut state = state;
@@ -73,7 +74,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             other => unexpected_reply(state, "BootInit", other),
         },
         // BootPrefetch + 応答: username 照会結果を写像・sink へ渡し（同期）・完了固定ログを出し、
-        // OnFirstBoot GET を発行して BootType へ進む（R4.1・R9.3）。失敗でも boot を殺さず続行する。
+        // 起動の根（boot_root）を発行する（R4.1・R9.3）。失敗でも boot を殺さず続行する。
         Phase::BootPrefetch => on_prefetch_reply(state, outcome, config),
         // BootType: 204→OnBoot GET（BootMain へ・Req 1.3）。Value→OnBoot をスキップし
         // StartTalk＋basewareversion（正典フォールスルー打ち切り・Req 2.1）。
@@ -102,7 +103,8 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             ShioriOutcome::NoContent => to_baseware_version(state, None, config),
             other => unexpected_reply(state, "BootMain", other),
         },
-        // BootVersion + Notified: basewareversion 完了→boot 系列完了・Steady へ（Req 1.4 完了）。
+        // BootVersion + Notified: basewareversion 完了→boot 系列完了・Steady へ（Req 1.4 完了）・
+        // 定常到達の通知を 1 件返す。
         // DD-IT-12: 追跡中の挨拶 talk（BootVersion{talk: Some}）を Steady{talk} へそのまま引き継ぐ
         // （204 経路は None のまま＝従来意味論を保存）。以後の Tick は Steady{Some} 由来で
         // NOTIFY・Ref3=0・Status: talking を発行し、挨拶 TalkDone は slot と照合される。
@@ -113,7 +115,8 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
                 if let Phase::BootVersion { talk } = state.phase {
                     state.phase = Phase::Steady { talk };
                 }
-                (state, Vec::new())
+                // 定常に入った時点を外へ知らせる（要件 3.5・切替の目印を下ろす合図）。
+                (state, vec![Action::Notice(KanadeNotice::Steady)])
             }
             other => unexpected_reply(state, "BootVersion", other),
         },
@@ -126,7 +129,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
 }
 
 /// prefetch 応答（username GET）を [`ResourceOutcome`] へ写像し、sink 呼出指示＋完了固定ログを添えて
-/// OnFirstBoot GET を発行し BootType へ進む（R4.1・R9.3）。
+/// 起動の根（[`boot_root`]）を発行する（根があれば BootType・無ければ OnBoot で BootMain）（R4.1・R9.3）。
 ///
 /// 写像: 200 Value→[`ResourceOutcome::Value`]／204→[`ResourceOutcome::NoContent`]／失敗（タイムアウト・
 /// IPC 断）→[`ResourceOutcome::Failed`]。失敗時は `warn!` を残しつつ **boot を殺さず**続行する（起動を
@@ -134,8 +137,8 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
 /// 起動を続行する。
 ///
 /// リソース照会は talk を生成しない（Invariant）——結果は [`Action::ResourceOutcome`] で sink へ渡すのみで
-/// StartTalk へは流さない。返す Action 列は `[ResourceOutcome, ShioriRequest(OnFirstBoot)]` の順であり、
-/// シェルは sink 呼出（同期・返るまで待つ）を先に実行してから OnFirstBoot を送出する（design boot 図）。
+/// StartTalk へは流さない。返す Action 列は `[ResourceOutcome, ShioriRequest(根または OnBoot)]` の順であり、
+/// シェルは sink 呼出（同期・返るまで待つ）を先に実行してから次の GET を送出する（design boot 図）。
 ///
 /// # 完了固定ログ（R9.3 grep 証跡）
 /// 経路によらず `info!(target: "areka_kanade::resource", id = "username", outcome = <value|no_content|
@@ -189,23 +192,13 @@ fn on_prefetch_reply(
         id: "username",
         outcome: resource_outcome,
     };
-    // 初回ゲート（design C9・3.1/3.3）: prefetch 段自体は不変（3.5）——照会応答後の分岐のみ。
-    if config.first_boot {
-        // 初回起動（記録なし）: 従来どおり OnFirstBoot GET（Ref0=vanish_count・4.1）→ BootType。
-        // OnFirstBoot 204 は BootType アームで OnBoot へフォールスルーする（3.2・不変）。
+    // 起動の根（username 照会の応答後に 1 つだけ選ぶ・照会の段は不変）。根があれば BootType で
+    // その応答を待ち、既存の腕（204 → OnBoot・台本 → OnBoot を飛ばす）へ合流する。根が無ければ
+    // OnBoot（BootMain）へ直行する（今日の boot_gate の枝）。
+    if let Some(root) = boot_root(config) {
         state.phase = Phase::BootType;
-        (
-            state,
-            vec![
-                sink,
-                Action::ShioriRequest(events::on_first_boot(
-                    &ExecutionSnapshot::INACTIVE,
-                    config.vanish_count,
-                )),
-            ],
-        )
+        (state, vec![sink, Action::ShioriRequest(root)])
     } else {
-        // 2 回目以降（記録あり）: OnFirstBoot と BootType を飛ばし OnBoot（BootMain）直行（3.3）。
         tracing::info!(target: "kanade", event = "boot_gate", "boot_gate skip_first_boot");
         state.phase = Phase::BootMain;
         (
@@ -215,6 +208,27 @@ fn on_prefetch_reply(
                 Action::ShioriRequest(events::on_boot(config, &ExecutionSnapshot::INACTIVE)),
             ],
         )
+    }
+}
+
+/// 起動の根の表（ukadoc の「204 なら続けて」の木の根を 1 つ選ぶ・要件 4.1〜4.4・6.2・11.3）。
+///
+/// 起動記録なし（`first_boot`）→ `OnFirstBoot`（由来を問わず最優先）。切替で来た
+/// （[`BootOrigin::ChangedFrom`]）→ `OnGhostChanged`。それ以外（`Plain`・`Halted`）→ 根なし
+/// （`OnBoot` だけ。`Halted` の Ref6/7 は [`events::on_boot`] が載せる）。範囲外の根は
+/// [`BootOrigin`] に値を足し、この表に行を足すだけで入る。
+fn boot_root(config: &KanadeConfig) -> Option<ShioriCall> {
+    let snapshot = &ExecutionSnapshot::INACTIVE;
+    if config.first_boot {
+        return Some(events::on_first_boot(snapshot, config.vanish_count));
+    }
+    match &config.boot_origin {
+        BootOrigin::ChangedFrom(from) => Some(events::on_ghost_changed(
+            from,
+            &config.shell_folder,
+            snapshot,
+        )),
+        BootOrigin::Plain | BootOrigin::Halted { .. } => None,
     }
 }
 
@@ -321,3 +335,7 @@ mod sequence_tests;
 #[cfg(test)]
 #[path = "boot_reply_branch_tests.rs"]
 mod reply_branch_tests;
+
+#[cfg(test)]
+#[path = "boot_root_tests.rs"]
+mod root_tests;

@@ -42,9 +42,15 @@ fn harness_with_stop_channel(fixture: Fixture) -> (Harness, mpsc::Receiver<Kanad
 
 /// 通知が 1 件だけ届いたことを確かめ、その原因を返す。
 fn single_notification(rx: &mpsc::Receiver<KanadeNotice>) -> KanadeStopCause {
-    let first = rx
+    let mut first = rx
         .try_recv()
         .expect("終了系列の完了で停止通知が 1 件届くはず（R15.3）");
+    // 定常に入っていれば、その通知（定常到達）が停止の通知より先に 1 件だけ届く。
+    if first == KanadeNotice::Steady {
+        first = rx
+            .try_recv()
+            .expect("終了系列の完了で停止通知が 1 件届くはず（R15.3）");
+    }
     assert!(
         rx.try_recv().is_err(),
         "停止通知は 1 度だけ（`StopSelf` は 1 回しか実行されない）"

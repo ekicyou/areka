@@ -160,6 +160,7 @@ crates/areka-kanade/src/
 └── schedule/
     ├── change.rs                    # 切替の相（4 相の step・受理・中止・終了要求への譲り）と汎用の入口の判断 on_raise_event
     ├── change_tests.rs              # 上の決定論テスト（要件 10.2〜10.4・10.8・2.9・5.x の kanade 側）
+    ├── boot_root_tests.rs           # 起動の根の表 boot_root と定常到達の通知の固定（boot.rs の子・非公開の補助を使う）
     └── events_change_tests.rs       # on_ghost_changing／on_ghost_changed／on_boot の Ref6-7／raise の Reference の固定
 
 crates/areka/src/
