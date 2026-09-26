@@ -131,7 +131,7 @@ grep -E '\[dropfiles\]|clickthrough: ex-style' dropfiles.log
 | ⓐ・ⓒで届くがⓑで窓が受け取る（背後へ抜けない） | **直す**（本坑は落ちた位置を当たり判定にかけ、絵の外なら捨てる。背後へ抜けないことを既知の制限として書く） |
 | 手当てをすべて試してもⓐかⓒで届かない | **違う**（`IDropTarget` へ倒す。STA の置き場所の見立ては下記） |
 
-「違う」になったときの STA の置き場所の見立て（試作はしない・`.kiro/specs/pilot-dropfiles-on-wuc-window/research.md` §6 より）:
+「違う」になったときの STA の置き場所の見立て（試作はしない・`.kiro/specs/completed/pilot-dropfiles-on-wuc-window/research.md` §6 より）:
 
 1. **UI スレッドを STA にする**: `WinApp` の初期化を `COINIT_APARTMENTTHREADED` へ変える。WUC は STA でも動く道がある（`crates/wintf/src/com/wuc.rs` の注記）が、WIC の背景復号（MTA 前提）と `crates/areka-emo-*` の `CoInitializeEx(COINIT_MULTITHREADED)` 呼び出し群の見直しが要る＝変更が広い。
 2. **STA の別スレッドに受け口の窓を置く**: ゴースト窓と同じ位置・大きさに透明な受け口の窓を重ね、`RegisterDragDrop` はそのスレッドで行う。重なり順・クリック透過の付け外しとの二重管理・DPI への追従が新たに要る＝複雑。
