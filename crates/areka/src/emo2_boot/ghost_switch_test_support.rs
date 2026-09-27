@@ -58,8 +58,14 @@ pub(crate) enum FakeShiori {
     /// 接続に失敗する（kanade は `Fault` で止まる）。
     ConnectFail,
     /// 起動の結線が同期で成立しない（結線の入力の根が実在しない＝`boot_ghost_strict` は `Err`）。
-    /// 窓の準備は構成入力の本物の根で通る。
+    /// 窓の準備は構成入力の本物の根で通る。`boot_ghost` では LogSink の腕へ倒れ、倒れた先も
+    /// 起点が無くて失敗する（実行系なし）。
     WiringFail,
+    /// 結線は成立しないが LogSink の起動は成功する（バルーンの根が実在しない・ゴーストの根は本物）。
+    /// `boot_ghost` は LogSink の腕へ倒れ、mount が通って実行系が起きる（SHIORI は使わない helper の
+    /// 経路で接続に失敗し、kanade は `Fault` で止まる）。[`FakeShiori::WiringFail`] と対で、倒れた先の
+    /// 成功と失敗の両方を作る。
+    BalloonMissing,
 }
 
 /// 標準の台本: 起動系列（`OnInitialize`・`OnFirstBoot` 204・`OnBoot` は `on_boot`・
@@ -134,6 +140,7 @@ impl SwitchRig {
             move |cfg: &ConfigInputs, origin: BootOrigin| {
                 let folder = folder_of(&cfg.ghost_root);
                 let mut ghost_root = cfg.ghost_root.clone();
+                let mut balloon_root = cfg.balloon_root.clone();
                 let shiori = match scripts.get(&folder) {
                     Some(FakeShiori::Scripted(script)) => {
                         let (backend, handle) = script().build();
@@ -149,18 +156,22 @@ impl SwitchRig {
                         ghost_root = PathBuf::from("ghost_switch_test_support/無い/ghost");
                         ShioriWiring::Custom(Box::new(|| Err(CONNECT_ERR.to_owned())))
                     }
+                    Some(FakeShiori::BalloonMissing) => {
+                        balloon_root = PathBuf::from("ghost_switch_test_support/無い/balloon");
+                        ShioriWiring::Custom(Box::new(|| Err(CONNECT_ERR.to_owned())))
+                    }
                     None => panic!("偽の SHIORI の台本が無いゴースト: {folder}"),
                 };
                 GhostBootInputs {
                     wiring: Emo2BootInputs {
                         ghost_root,
-                        balloon_root: cfg.balloon_root.clone(),
+                        balloon_root,
                         shiori,
                         ticker: TickerMode::Disabled,
                         app_profile_dir: wired_app.get().then(|| app_dir.clone()),
                         boot_origin: origin,
                     },
-                    // 結線ありの腕だけを通す（fallback に落ちると記録が残らず判定が赤になる）。
+                    // 結線ありの腕を通す形では、fallback に落ちると記録が残らず判定が赤になる。WiringFail／BalloonMissing はわざと倒れ、倒れた先の SHIORI はこの helper で接続に失敗する。
                     helper_exe: PathBuf::from("ghost_switch_test_support/使わない/helper.exe"),
                     kanade_stop: notice_tx.clone(),
                 }
@@ -256,6 +267,17 @@ impl SwitchRig {
             .filter(|(f, _)| f == folder)
             .map(|(_, handle)| handle.non_status_calls())
             .collect()
+    }
+
+    /// `folder` を最後に起こした回の偽の SHIORI の観測口（固まりの確かめ・解く手）。
+    pub(crate) fn handle(&self, folder: &str) -> ScriptedShioriHandle {
+        self.boots
+            .borrow()
+            .iter()
+            .rev()
+            .find(|(f, _)| f == folder)
+            .map(|(_, handle)| handle.clone())
+            .unwrap_or_else(|| panic!("{folder} を台本つきで起こしていない"))
     }
 
     /// 通知の相と台本の切替要求の取り出しを、`done` が真になるまで有界に回す（期限切れは `false`）。

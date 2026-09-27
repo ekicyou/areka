@@ -45,7 +45,10 @@ pub use msg::{
     MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,
     ShioriFailure, ShioriFault, ShioriFaultKind, ShioriMsg, ShioriOutcome,
 };
-pub use shiori::{ShioriBackend, ShioriConnection, spawn_shiori_actor};
+pub use shiori::{
+    CutGuard, ShioriBackend, ShioriBusy, ShioriConnection, ShioriCut, ShioriProbe, ShioriUnblock,
+    WaitBudget, spawn_shiori_actor,
+};
 pub use status::{ExecutionSnapshot, ExecutionState, ExecutionStatus};
 pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 

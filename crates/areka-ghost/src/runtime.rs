@@ -11,8 +11,8 @@ use std::sync::mpsc::{self, Sender};
 
 use areka_actor::ActorHandle;
 use areka_kanade::{
-    BootOrigin, KanadeConfig, KanadeMsg, KanadeNotice, ShioriBackend, spawn_kanade_with_stop_sink,
-    spawn_shiori_actor,
+    BootOrigin, KanadeConfig, KanadeMsg, KanadeNotice, ShioriBackend, ShioriCut, ShioriProbe,
+    WaitBudget, spawn_kanade_with_stop_sink, spawn_shiori_actor,
 };
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{MountError, MountModel, resolve};
@@ -164,6 +164,8 @@ pub struct GhostRuntime {
     /// sylphya アクターの join ハンドル。shutdown の最終段で join して panic を観測する。
     sylphya_handle: ActorHandle,
     mount: MountModel,
+    /// SHIORI の待ちの見張り部品（[`GhostRuntime::shutdown_within`] だけが張る）。
+    shiori_probe: ShioriProbe,
 }
 
 /// `into_parts` が返す全 `ActorHandle`（design.md「アクター別の停止経路（正本）」・
@@ -240,6 +242,24 @@ impl GhostRuntime {
         &self.mount
     }
 
+    /// SHIORI の待ちの見張り部品（テストが手動の口 `cut_now` で見張りを起こすための読み口）。
+    pub fn shiori_probe(&self) -> &ShioriProbe {
+        &self.shiori_probe
+    }
+
+    /// 期限つきの終了統括。見張りを `budget` で張ってから [`GhostRuntime::shutdown`] をそのまま
+    /// 走らせ、降ろした結果と打ち切りの結果（上限で SHIORI の待ちを解いたときだけ `Some`）を返す。
+    /// join の順・冪等・失敗の収集は `shutdown` のまま。
+    pub fn shutdown_within(
+        self,
+        reason: areka_kanade::CloseReason,
+        budget: WaitBudget,
+    ) -> (Result<(), GhostShutdownError>, Option<ShioriCut>) {
+        let guard = self.shiori_probe.arm(budget);
+        let result = self.shutdown(reason);
+        (result, guard.finish())
+    }
+
     /// 終了統括（design.md「終了（shutdown）シーケンス」・要件 6.1/6.4/6.5）。
     ///
     /// 手順: `KanadeMsg::ForceQuit(reason)` 送出 → kanade join → `DispatcherMsg::Close`
@@ -268,6 +288,7 @@ impl GhostRuntime {
             sylphya_reader: _,
             sylphya_handle,
             mount: _,
+            shiori_probe: _,
         } = self;
 
         let mut failures: Vec<(&'static str, areka_actor::ActorError)> = Vec::new();
@@ -392,6 +413,7 @@ impl GhostRuntime {
             sylphya_reader,
             sylphya_handle,
             mount: _,
+            shiori_probe: _,
         } = self;
 
         GhostParts {
@@ -620,7 +642,8 @@ pub fn boot_with_origin(
         };
 
     // 5. shiori actor。
-    let (shiori_tx, shiori_handle) = spawn_shiori_actor(connect, down_tx);
+    //    見張り部品は実行系に持たせる（`shutdown_within` が張る）。
+    let (shiori_tx, shiori_handle, shiori_probe) = spawn_shiori_actor(connect, down_tx);
 
     // 6. kanade（start_tx を「自身の」sakura Sender として渡す）。
     //    task 8.2: prefetch 段（username GET）の応答を sylphya へ反映する実 `ResourceSink` を注入する。
@@ -699,6 +722,7 @@ pub fn boot_with_origin(
         sylphya_reader,
         sylphya_handle,
         mount,
+        shiori_probe,
     })
 }
 
@@ -709,3 +733,7 @@ mod tests;
 #[cfg(test)]
 #[path = "runtime_origin_tests.rs"]
 mod origin_tests;
+
+#[cfg(test)]
+#[path = "runtime_within_tests.rs"]
+mod within_tests;

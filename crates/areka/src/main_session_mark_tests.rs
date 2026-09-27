@@ -22,7 +22,8 @@ use bevy_ecs::world::World;
 use log_capture_kit::capture;
 use temp_path_kit::TempPath;
 
-use super::{AfterRun, MarkInputs, MarkVerdict, after_run, boot_first_ghost, finish_after_run};
+use super::finish_after_run;
+use super::{AfterRun, MarkInputs, MarkVerdict, Teardown, after_run, boot_first_ghost};
 use super::{first_boot_origin, install_boot_context, session_mark_verdict, settle_session_mark};
 use crate::ConfigInputs;
 use crate::alert::AlertScene;
@@ -199,7 +200,7 @@ fn after_run_and_settle(rig: &mut SwitchRig) -> (bool, Option<MarkVerdict>) {
     let verdict = after
         .mark
         .as_ref()
-        .map(|mark| settle_session_mark(mark, true, down_ok));
+        .map(|mark| settle_session_mark(mark, end(true, down_ok, false)));
     (down_ok, verdict)
 }
 
@@ -377,8 +378,18 @@ fn first_boot_origin_follows_session_mark() {
 // きれいな終わりの判定の表（要件 12.2・12.3・12.5・12.12 ⑴）
 // ---------------------------------------------------------------------------
 
-/// 上から順に: argv のセッションは触らない → 出所なし → 失敗の出所 → `run()` の失敗 →
-/// 降ろす処理の失敗 → それ以外は消す。
+/// 降ろした結果の組（メッセージループの成否・降ろす処理の成否・上限の打ち切りの有無）。
+fn end(run_ok: bool, down_ok: bool, shiori_cut: bool) -> Teardown {
+    Teardown {
+        run_ok,
+        down_ok,
+        shiori_cut,
+    }
+}
+
+/// 時系列で最初の理由を採る。上から順に: argv のセッションは触らない → LogSink へ倒れた →
+/// 出所なし → 失敗の出所 → `run()` の失敗 → 上限の打ち切り → 降ろす処理の失敗 → それ以外は消す。
+/// 判定は名前を見ないので、倒れたのが既定ゴースト自身でも同じ行で印が残る（要件 4.5）。
 #[test]
 fn session_mark_verdict_table() {
     use KanadeStopCause::{CloseSilent, DeadlineExceeded, Forced, Quit};
@@ -394,35 +405,154 @@ fn session_mark_verdict_table() {
         ExitOrigin::SessionEnd,
     ];
     let quit = ExitOrigin::KanadeStopped(Quit);
-    let mut got: Vec<MarkVerdict> = clean
-        .iter()
-        .map(|o| session_mark_verdict(Some(o), false, true, true))
-        .collect();
-    got.extend([
-        session_mark_verdict(Some(&kanade_fault()), false, true, true),
-        session_mark_verdict(Some(&fatal), false, true, true),
-        session_mark_verdict(None, false, true, true),
-        session_mark_verdict(Some(&quit), false, false, true),
-        session_mark_verdict(Some(&quit), false, true, false),
-        // 失敗の出所は run() と降ろす処理の失敗より先に理由になる。
-        session_mark_verdict(Some(&kanade_fault()), false, false, false),
-        // argv で始まったプロセスは出所・成否によらず触らない（切替の後の致命も）。
-        session_mark_verdict(Some(&quit), true, true, true),
-        session_mark_verdict(Some(&fatal), true, true, true),
-        session_mark_verdict(None, true, false, false),
-    ]);
+    let session_end = ExitOrigin::SessionEnd;
+    let ok = end(true, true, false);
+    let v = session_mark_verdict;
+
+    // 既存の行（倒れていない・打ち切りなし）: 結論は今日のまま。
+    let mut got: Vec<MarkVerdict> = clean.iter().map(|o| v(Some(o), false, false, ok)).collect();
     let mut want = vec![MarkVerdict::Clear; clean.len()];
-    want.extend([
-        MarkVerdict::Keep("fault"),
-        MarkVerdict::Keep("switch_fatal"),
-        MarkVerdict::Keep("no_exit_origin"),
-        MarkVerdict::Keep("run_failed"),
-        MarkVerdict::Keep("down_failed"),
-        MarkVerdict::Keep("fault"),
-        MarkVerdict::Untouched,
-        MarkVerdict::Untouched,
-        MarkVerdict::Untouched,
-    ]);
+    let existing = [
+        (
+            v(Some(&kanade_fault()), false, false, ok),
+            MarkVerdict::Keep("fault"),
+        ),
+        (
+            v(Some(&fatal), false, false, ok),
+            MarkVerdict::Keep("switch_fatal"),
+        ),
+        (
+            v(None, false, false, ok),
+            MarkVerdict::Keep("no_exit_origin"),
+        ),
+        (
+            v(Some(&quit), false, false, end(false, true, false)),
+            MarkVerdict::Keep("run_failed"),
+        ),
+        (
+            v(Some(&quit), false, false, end(true, false, false)),
+            MarkVerdict::Keep("down_failed"),
+        ),
+        // 失敗の出所は run() と降ろす処理の失敗より先に理由になる。
+        (
+            v(
+                Some(&kanade_fault()),
+                false,
+                false,
+                end(false, false, false),
+            ),
+            MarkVerdict::Keep("fault"),
+        ),
+        // argv で始まったプロセスは出所・成否によらず触らない（切替の後の致命も）。
+        (v(Some(&quit), true, false, ok), MarkVerdict::Untouched),
+        (v(Some(&fatal), true, false, ok), MarkVerdict::Untouched),
+        (
+            v(None, true, false, end(false, false, false)),
+            MarkVerdict::Untouched,
+        ),
+    ];
+
+    // LogSink へ倒れた × きれいな出所 × 成否（打ち切りの有無も）: 常に倒れた語で残す（要件 4.1・4.2）。
+    let outcomes: Vec<Teardown> = [false, true]
+        .into_iter()
+        .flat_map(|r| [false, true].into_iter().map(move |d| (r, d)))
+        .flat_map(|(r, d)| [false, true].into_iter().map(move |c| end(r, d, c)))
+        .collect();
+    let mut fallback_clean = Vec::new();
+    for o in &clean {
+        for e in &outcomes {
+            fallback_clean.push((
+                v(Some(o), false, true, *e),
+                MarkVerdict::Keep("logsink_fallback"),
+            ));
+        }
+    }
+    // LogSink へ倒れた × 他の理由: 倒れたのが時系列で最初なので倒れた語が勝つ。
+    let fallback_other = [
+        (
+            v(Some(&kanade_fault()), false, true, ok),
+            MarkVerdict::Keep("logsink_fallback"),
+        ),
+        (
+            v(Some(&fatal), false, true, ok),
+            MarkVerdict::Keep("logsink_fallback"),
+        ),
+        (
+            v(None, false, true, ok),
+            MarkVerdict::Keep("logsink_fallback"),
+        ),
+        (
+            v(Some(&quit), false, true, end(false, true, false)),
+            MarkVerdict::Keep("logsink_fallback"),
+        ),
+        (
+            v(Some(&quit), false, true, end(true, false, false)),
+            MarkVerdict::Keep("logsink_fallback"),
+        ),
+        (
+            v(Some(&session_end), false, true, end(true, true, true)),
+            MarkVerdict::Keep("logsink_fallback"),
+        ),
+        // LogSink へ倒れた × argv: argv の上書きが先に効き、触らない（要件 4.6）。
+        (v(Some(&quit), true, true, ok), MarkVerdict::Untouched),
+        (
+            v(Some(&kanade_fault()), true, true, ok),
+            MarkVerdict::Untouched,
+        ),
+        (
+            v(None, true, true, end(false, false, true)),
+            MarkVerdict::Untouched,
+        ),
+    ];
+    // 上限の打ち切り × 各組み合わせ（要件 2.3・2.6・3.4）。
+    let cut = [
+        (
+            v(Some(&session_end), false, false, end(true, true, true)),
+            MarkVerdict::Keep("session_end_deadline"),
+        ),
+        // 打ち切りは降ろす処理の失敗より先（打ち切りが原因で降ろす処理が失敗しても語は上限）。
+        (
+            v(Some(&session_end), false, false, end(true, false, true)),
+            MarkVerdict::Keep("session_end_deadline"),
+        ),
+        // 失敗の出所・出所なし・run() の失敗は打ち切りより先に起きている。
+        (
+            v(Some(&kanade_fault()), false, false, end(true, true, true)),
+            MarkVerdict::Keep("fault"),
+        ),
+        (
+            v(Some(&fatal), false, false, end(true, true, true)),
+            MarkVerdict::Keep("switch_fatal"),
+        ),
+        (
+            v(None, false, false, end(true, true, true)),
+            MarkVerdict::Keep("no_exit_origin"),
+        ),
+        (
+            v(Some(&session_end), false, false, end(false, true, true)),
+            MarkVerdict::Keep("run_failed"),
+        ),
+        // 打ち切り × argv: 触らない。
+        (
+            v(Some(&session_end), true, false, end(true, true, true)),
+            MarkVerdict::Untouched,
+        ),
+        // 打ち切りが無ければ OS のセッションの終了は今日どおり消す／降ろす処理の失敗で残す（要件 2.6）。
+        (v(Some(&session_end), false, false, ok), MarkVerdict::Clear),
+        (
+            v(Some(&session_end), false, false, end(true, false, false)),
+            MarkVerdict::Keep("down_failed"),
+        ),
+    ];
+    for (g, w) in existing
+        .into_iter()
+        .chain(fallback_clean)
+        .chain(fallback_other)
+        .chain(cut)
+    {
+        got.push(g);
+        want.push(w);
+    }
     assert_eq!(got, want);
 }
 
@@ -458,8 +588,9 @@ fn settle_session_mark_applies_the_verdict() {
             app_profile_dir: app_profile_dir.clone(),
             argv_session,
             first,
+            logsink_fallback: false,
         };
-        let (verdict, events) = capture(|| settle_session_mark(&mark, true, true));
+        let (verdict, events) = capture(|| settle_session_mark(&mark, end(true, true, false)));
         let logged = events
             .iter()
             .filter(|e| e.level == level && e.field_str("event") == Some(event))
@@ -512,7 +643,7 @@ fn boot_fault_keeps_mark_and_next_boot_is_default_with_halt() {
     let verdict = after
         .mark
         .as_ref()
-        .map(|mark| settle_session_mark(mark, true, down_a));
+        .map(|mark| settle_session_mark(mark, end(true, down_a, false)));
     let mark_kept = read_session_mark(&app);
     plant_last_ghost(&app, "A");
     let next = next_boot(&mut rig);
@@ -699,6 +830,9 @@ fn argv_session_neither_reads_writes_nor_clears_mark() {
     );
 }
 
+#[path = "main_session_mark_fallback_tests.rs"]
+mod fallback;
+
 // ---------------------------------------------------------------------------
 // 告知と終了コード（切替の途中の致命・失敗でない終了）
 // ---------------------------------------------------------------------------
@@ -727,10 +861,14 @@ fn switch_fatal_names_the_default_ghost_and_keeps_mark() {
         } => (ghost_name, ghost_root),
         other => panic!("SHIORI の失敗の場面でない: {other:?}"),
     });
-    let verdict = after
-        .mark
-        .as_ref()
-        .map(|mark| session_mark_verdict(mark.first.as_ref(), mark.argv_session, true, true));
+    let verdict = after.mark.as_ref().map(|mark| {
+        session_mark_verdict(
+            mark.first.as_ref(),
+            mark.argv_session,
+            mark.logsink_fallback,
+            end(true, true, false),
+        )
+    });
     assert_eq!(
         (after.session.is_none(), scene, verdict, after.fault),
         (

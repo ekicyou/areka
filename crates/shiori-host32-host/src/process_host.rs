@@ -206,6 +206,14 @@ impl HelperHandle {
             Err(err) => Err(err),
         }
     }
+
+    /// `Child` を持たないスレッドから helper を終わらせる取っ手を作る（プロセスの取っ手の複製）。
+    ///
+    /// # Errors
+    /// 取っ手の複製（`DuplicateHandle`）の失敗を [`std::io::Error`] として返す。
+    pub fn terminator(&self) -> std::io::Result<crate::HelperTerminator> {
+        crate::HelperTerminator::from_child(&self.child)
+    }
 }
 
 /// helper exe を起動し、[`HelperHandle`] を返す（要件 1.1 / 3.1 / 3.2 / 3.3 / 5.2）。

@@ -360,6 +360,9 @@ pub(crate) struct GhostSession {
     kanade: Option<Sender<KanadeMsg>>,
     /// 起こしたゴーストの根（`ghost/<フォルダ名>`・起動の結線の入力のもの）。
     ghost_dir: PathBuf,
+    /// 窓への結線が成立せず LogSink の起動へ倒れた単位か（倒れた先の成否を問わない・生涯で不変）。
+    /// 結線ありの腕・切替の経路・テスト用の組み立ては偽（要件 4.2・4.8・8.3）。
+    logsink_fallback: bool,
 }
 
 impl GhostSession {
@@ -378,6 +381,11 @@ impl GhostSession {
         self.ghost.as_ref()
     }
 
+    /// 窓への結線が成立せず LogSink の起動へ倒れた単位か（印の判定の材料・要件 4.1・4.2）。
+    pub(crate) fn logsink_fallback(&self) -> bool {
+        self.logsink_fallback
+    }
+
     /// kanade への送出端（切替の要求を送る）。実行系が無ければ `None`。
     pub(crate) fn kanade(&self) -> Option<&Sender<KanadeMsg>> {
         self.kanade.as_ref()
@@ -393,6 +401,7 @@ impl GhostSession {
             loop_ticker: None,
             kanade,
             ghost_dir,
+            logsink_fallback: false,
         }
     }
 
@@ -412,6 +421,26 @@ impl GhostSession {
     /// （`reason` を渡す）→ ③ seriko の join。無い段は飛ばし、②③ の失敗は `error!` の上で
     /// `Err` を返して以降を飛ばす。perf の最終報告はプロセスに 1 回なので呼び手が後で行う。
     pub(crate) fn shutdown(self, reason: areka_kanade::CloseReason) -> windows::core::Result<()> {
+        self.shutdown_impl(reason, None).0
+    }
+
+    /// 期限つきで降ろす（OS のセッションの終了の受け手だけが呼ぶ・要件 1.1・2.1）。手順は
+    /// [`GhostSession::shutdown`] と同じで、② だけを見張りつきの `GhostRuntime::shutdown_within` に
+    /// 替える。戻りの 2 つ目は上限で SHIORI の待ちを打ち切ったときだけ `Some`（実行系が無ければ `None`）。
+    pub(crate) fn shutdown_within(
+        self,
+        reason: areka_kanade::CloseReason,
+        budget: areka_kanade::WaitBudget,
+    ) -> (windows::core::Result<()>, Option<areka_kanade::ShioriCut>) {
+        self.shutdown_impl(reason, Some(budget))
+    }
+
+    /// 降ろす手順の本体（`budget` が在れば ② を見張りつきで走らせる）。
+    fn shutdown_impl(
+        self,
+        reason: areka_kanade::CloseReason,
+        budget: Option<areka_kanade::WaitBudget>,
+    ) -> (windows::core::Result<()>, Option<areka_kanade::ShioriCut>) {
         // ① loop ticker Close（本ブロック）: SERIKO ループ ticker の worker スレッドは closure 内へ
         // `SerikoSink` クローン（tick_sink）を握る。これを先に停止させないと seriko inbox が ticker 経由で
         // 生き続け、③ の join が「全 Sender drop」を永遠に待って hang する。停止端 Sender へ
@@ -439,12 +468,24 @@ impl GhostSession {
         // 全窓 close funnel はユーザ操作起点）。OnClose 応答の再生完了待ちは kanade の `ForceQuit`
         // 終了系列内で処理される（本仕様は `shutdown` を呼ぶだけ・不改変・R6.2）。失敗は `error!` の上で
         // 呼び手へ `Err` を返す（genuine な失敗を黙って exit 0 にしない・R6.3）。
+        let mut cut = None;
         if let Some(runtime) = self.ghost {
-            if let Err(err) = runtime.shutdown(reason) {
+            let result = match budget {
+                Some(budget) => {
+                    let (result, fired) = runtime.shutdown_within(reason, budget);
+                    cut = fired;
+                    result
+                }
+                None => runtime.shutdown(reason),
+            };
+            if let Err(err) = result {
                 tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
-                return Err(windows::core::Error::from_hresult(
-                    windows::Win32::Foundation::E_FAIL,
-                ));
+                return (
+                    Err(windows::core::Error::from_hresult(
+                        windows::Win32::Foundation::E_FAIL,
+                    )),
+                    cut,
+                );
             }
         }
 
@@ -458,13 +499,16 @@ impl GhostSession {
         if let Some(seriko) = self.seriko {
             if let Err(err) = seriko.join() {
                 tracing::error!(error = %err, "seriko アクターの join に失敗しました");
-                return Err(windows::core::Error::from_hresult(
-                    windows::Win32::Foundation::E_FAIL,
-                ));
+                return (
+                    Err(windows::core::Error::from_hresult(
+                        windows::Win32::Foundation::E_FAIL,
+                    )),
+                    cut,
+                );
             }
         }
 
-        Ok(())
+        (Ok(()), cut)
     }
 }
 
@@ -486,8 +530,11 @@ pub(crate) fn boot_ghost(
         helper_exe,
         kanade_stop,
     } = inputs;
-    // fallback の腕が使う根（結線の入力は `boot_wired` へ move するので先に写す）。
+    // fallback の腕が使う根と App スコープの置き場（結線の入力は `boot_wired` へ move するので先に写す）。
+    // 置き場は本番では `GhostBootInputs::production` の `Some(default_app_profile_dir())`＝
+    // `ghost_boot_options` の既定と同じ値（振る舞いは不変・要件 4.7）。テストは土台の置き場か `None`。
     let ghost_root = wiring.ghost_root.clone();
+    let app_profile_dir = wiring.app_profile_dir.clone();
 
     // `wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォールバック boot へ
     // 倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
@@ -500,7 +547,10 @@ pub(crate) fn boot_ghost(
     // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
     // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
     // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
-    let ghost_options = ghost_boot_options(ghost_root.clone(), helper_exe);
+    let ghost_options = areka_ghost::GhostBootOptions {
+        app_profile_dir,
+        ..ghost_boot_options(ghost_root.clone(), helper_exe)
+    };
     // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
     let runtime = match areka_ghost::boot_with_kanade_stop(ghost_options, Some(kanade_stop)) {
         Ok(runtime) => {
@@ -528,12 +578,14 @@ pub(crate) fn boot_ghost(
         }
     };
     // フォールバック経路に seriko アクター・loop ticker はない（実 sink 結線が成立していない）。
+    // 倒れたことは倒れた先の成否によらず単位に残す（印の判定の材料・要件 4.1・4.2）。
     GhostSession {
         kanade: runtime.as_ref().map(|r| r.kanade().clone()),
         ghost: runtime,
         seriko: None,
         loop_ticker: None,
         ghost_dir: ghost_root,
+        logsink_fallback: true,
     }
 }
 
@@ -622,6 +674,7 @@ fn boot_wired(
         seriko: outcome.seriko,
         loop_ticker: outcome.loop_ticker,
         ghost_dir,
+        logsink_fallback: false,
     })
 }
 

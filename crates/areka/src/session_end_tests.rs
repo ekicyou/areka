@@ -8,6 +8,7 @@
 //! 終了コードを最初の出所から決めることもここで見る。
 
 use std::sync::mpsc;
+use std::time::Duration;
 
 use areka_ghost::BasewareRoot;
 use areka_kanade::{
@@ -19,7 +20,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 use wintf::AppExit;
 
-use super::{SessionEnded, on_os_session_end};
+use super::{SessionEnded, end_session_within, on_os_session_end};
 use crate::ConfigInputs;
 use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::boot_config::{BootContext, CurrentGhost};
@@ -109,7 +110,8 @@ fn slot_empty(world: &World) -> bool {
 }
 
 /// 定常の A にセッションの終了 → `OnClose`（NOTIFY・Ref0＝`system`）が 1 件・最初の出所は
-/// セッションの終了・終了の指示あり・置き場が空・印が消え・済みの印が在る・所要 ms の記録が 1 件。
+/// セッションの終了・終了の指示あり・置き場が空・印が消え・済みの印が在る・所要 ms と打ち切りなし
+/// （`shiori_cut=false`）の記録が 1 件。上限は負荷で揺れないよう大きく取って引数の入口で渡す。
 /// 2 回目（守りの判定）は呼出列が増えず `debug!(os_session_end_again)` 1 件だけ。
 #[test]
 fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
@@ -123,7 +125,8 @@ fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
     write_session_mark(&app, "A");
     let steady = rig.wait_steady();
 
-    let ((), first_events) = capture(|| on_os_session_end(&mut rig.world, Entity::PLACEHOLDER));
+    let ((), first_events) =
+        capture(|| end_session_within(&mut rig.world, Duration::from_secs(60)));
     let calls_after_first = rig.calls("A").last().cloned().unwrap_or_default();
     let observed = (
         steady,
@@ -139,7 +142,7 @@ fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
         first_events
             .iter()
             .find(|e| e.field_str("event") == Some("os_session_end_done"))
-            .is_some_and(|e| e.field("ms").is_some()),
+            .map(|e| (e.field("ms").is_some(), e.field("shiori_cut"))),
     );
 
     let ((), again_events) = capture(|| on_os_session_end(&mut rig.world, Entity::PLACEHOLDER));
@@ -165,10 +168,10 @@ fn session_end_takes_ghost_down_with_system_close_and_clears_mark() {
             vec![tracing::Level::INFO],
             vec![tracing::Level::INFO],
             vec![tracing::Level::INFO],
-            true,
+            Some((true, Some("false"))),
         ),
         "セッションの終了がきれいな終わりにならない（定常・OnClose の Ref0・最初の出所・終了の指示・\
-         置き場・印・済みの印・開始・印の消去・所要・ms）: {first_events:?}"
+         置き場・印・済みの印・開始・印の消去・所要・(ms, 打ち切り)）: {first_events:?}"
     );
     assert_eq!(
         (again, down),

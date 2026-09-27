@@ -68,7 +68,7 @@ pub fn spawn_window_actor() -> WindowActor {
         }))
     };
 
-    let (shiori_tx, handle) = spawn_shiori_actor(connect, down_tx);
+    let (shiori_tx, handle, _probe) = spawn_shiori_actor(connect, down_tx);
     let hwnd = match hwnd_rx.recv_timeout(HWND_TIMEOUT) {
         Ok(hwnd) => hwnd,
         Err(e) => {

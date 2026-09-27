@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-session-mark-residue",
+  "created_at": "2026-09-27T09:45:27Z",
+  "updated_at": "2026-09-27T22:49:45Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-27T22:49:45Z"
+    }
+  },
+  "ready_for_implementation": true
+}
