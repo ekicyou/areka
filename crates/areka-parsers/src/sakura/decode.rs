@@ -17,6 +17,7 @@
 //!   および正典 bare 形 `\0`/`\h`（本体側=0）・`\1`/`\u`（相方側=1）を写像（ukadoc・R1.5/R4.4）。
 //!   サーフェス `\s[...]` → `Surface`（無加工保持）、
 //!   カーソル `\_l[x,y]` → `Cursor`、制御 `\e`/`\c`/`\-` → `End`/`Clear`/`Quit`（要件 2/6）。
+//! - 裸の `\+`／`\_+` → `\![change,ghost,random]`／`\![change,ghost,sequential]` と同じ `GenericCommand`（別名の転記）。
 //! - システム変数 `%keyword` → `SystemVar`（展開なし・要件 8）、テキスト → `Text`（要件 9）。
 //!
 //! **スコープ境界（タスク 4.1 / 4.2 シーム）**: 本ファイルは emo2 subset の
@@ -194,6 +195,14 @@ fn decode_bare(word: &str) -> Instruction {
         // `Raw` のまま台本の組み立ての catch-all へ落ちる経路を残さない
         // （表示を変えない扱いは消費側が担う——本層は転記に徹する）。
         "f" => Instruction::Font { args: Vec::new() },
+        // 裸の `\+`／`\_+`（ghost-change-name-resolution 要件 1）: 角括弧付き
+        // `\![change,ghost,random]`／`\![change,ghost,sequential]` と同じ値へ写す
+        // 別名の転記。誰が消費するかは決めない（意味づけは消費側）。
+        // 角括弧付きの `\+[…]` は正典に無いので `decode_tag` に腕を作らない。
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_2b:1
+        "+" => decode_passthrough_bang(["change", "ghost", "random"].map(String::from).into()),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c__2b:1
+        "_+" => decode_passthrough_bang(["change", "ghost", "sequential"].map(String::from).into()),
         // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_a` `\__q` 等）は
         // タスク 4.2 のパススルー領分。
         other => decode_passthrough_bare(other),

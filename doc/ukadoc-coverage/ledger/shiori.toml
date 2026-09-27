@@ -3081,7 +3081,7 @@ OnBoot の代わりにこのイベントで起きる（Ref0〜3＝直前のゴ�
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の on_ghost_changed（起動の根の選択は
 crates/areka-kanade/src/schedule/boot.rs の BootOrigin::ChangedFrom の腕）。
-名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は areka-P0-ghost-change-name-resolution の持ち場で、本仕様では該当なしとして warn のログ（ghost_switch_unknown）を残し、切り替えない。
+名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は解決済み（areka-P0-ghost-change-name-resolution・ghost_switch.rs の resolve_special_name）。
 """
 
 [entry."ukadoc:list_shiori_event:OnGhostChanging:1"]
@@ -3104,7 +3104,7 @@ note = """
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の on_ghost_changing（切替の相は
 crates/areka-kanade/src/schedule/change.rs の begin_change）。
-名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は areka-P0-ghost-change-name-resolution の持ち場で、本仕様では該当なしとして warn のログ（ghost_switch_unknown）を残し、切り替えない。
+名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は解決済み（areka-P0-ghost-change-name-resolution・ghost_switch.rs の resolve_special_name）。
 """
 
 [entry."ukadoc:list_shiori_event:OnGhostTermsAccept:1"]
