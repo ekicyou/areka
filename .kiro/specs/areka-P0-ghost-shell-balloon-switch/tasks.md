@@ -300,7 +300,7 @@
   - _Requirements: 9.2, 11.13, 12.14_
   - _Boundary: doc/COMPAT_ARCHITECTURE.md, doc/ukadoc-coverage_
 
-- [ ] 11.7 全体テストで既存の振る舞いが保たれていることを確かめる
+- [x] 11.7 全体テストで既存の振る舞いが保たれていることを確かめる
   - `tools/test-all.ps1` 1 本（i686 の準備込み）で、常設 smoke 4 方向（`Fault` の方向を含め、印が各走行の記憶の置き場に残っても方向ごとの判定が変わらないこと）・終了操作 7 種の決定論テスト・既存テストが 1 本も落ちずに緑であることを確かめる（字面の追随と置き換え前の仕組みのテストの書き換えだけ・置き換え無しの削除 0）
   - 1 ファイル 1,000 行の見張りが緑、本番コードが読む環境変数と依存クレートが増えていない、置き換え前の関数名と鍵の綴り（`record_halt`・`should_record_halt`・`take_last_halted`・`read_last_halted`・`LastHalted`・`areka.last.halted`）がソースに 0 件（パスの実在を確かめてから 0 件を記す）
   - 失敗の経路の記録が design の Error Handling の表（2026-09-27 の行を含む）どおりそろっている
