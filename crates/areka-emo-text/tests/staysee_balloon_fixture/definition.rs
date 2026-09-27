@@ -67,7 +67,7 @@ fn descript_identity_keys_are_read_as_declared() {
 /// `install.txt` の `directory` が `descript.txt` の `id` と同綴りである（要件 7.1）。
 ///
 /// 下流（`baseware-root-layout` の既定 id 定数・`nar-install` の畳み込み先・
-/// `alpha-release-signoff` の zip の中の綴り）はこの事実を写す。片方だけ変わったら赤になる。
+/// `alpha-package` の zip の中の綴り）はこの事実を写す。片方だけ変わったら赤になる。
 #[test]
 fn install_directory_matches_descript_id() {
     let descript = parse_kv(&read_decoded("descript.txt"));
