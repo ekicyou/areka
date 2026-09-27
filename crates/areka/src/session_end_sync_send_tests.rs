@@ -22,7 +22,12 @@
 //! 順序は sleep で作らない: 送信が UI 役のキューに届いたことは `GetQueueStatus`（配らずに読む）で、
 //! 偽の SHIORI の固まりは `holding()` で見る。走行ごと固まらないよう、全体を [`run_bounded`] で
 //! 囲み、送信にも期限（[`SEND_TIMEOUT_MS`]）を付ける。
+//!
+//! 後半はワークスペースの本番ソースの同期の送信を許可表（[`ALLOWED_SYNC_SENDS`]）と突き合わせる
+//! 検査と、その較正（task 6.2・要件 5.4・7.5）。
 
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::thread;
@@ -217,5 +222,259 @@ fn teardown_join_does_not_wait_for_a_sync_send_to_the_ui_window() {
             shiori_cut: Some("false".to_owned()),
         },
         "join と同期の送信が重なった（後始末が送信を待った・join の間に配った・送信が期限で切れた）"
+    );
+}
+
+// ============================ 本番ソースの同期の送信と許可表（要件 5.4・7.5）
+
+/// 走査の字面（左端は区切り＝識別子の途中では当てない）。design「要件 5 の検査」の語に、
+/// 同じ族の A/W の片割れを足した。`SendNotifyMessage*`（別スレッドの窓へは非同期・同じスレッドの
+/// 窓へは同期）と `SendMessageCallback*`（非同期）も、宛先のスレッドと重なり方を人が確かめる
+/// べき送信として同じ表で扱う（今日の本番の当たりは 0 件なので、足すなら表へ理由つきで載せる）。
+/// `BroadcastSystemMessage` は開き括弧を付けず、`A`/`W`/`Ex` の全形に当てる。
+/// `PostMessage*`・`PostThreadMessage*` は送り手が待たないので対象外。取り込みの行
+/// （`use ... SendMessageTimeoutW,`）は括弧を伴わないので当たらない＝呼び出しだけを数える。
+/// 数えない形（今日 0 件）: `use ...::SendMessageW as X;` の別名での呼び出し・
+/// `SendMessageW::<..>(` の型引数つきの呼び出し・`SendDlgItemMessage*`。
+const SYNC_SEND_TOKENS: [&str; 9] = [
+    "SendMessageW(",
+    "SendMessageA(",
+    "SendMessageTimeoutW(",
+    "SendMessageTimeoutA(",
+    "SendNotifyMessageW(",
+    "SendNotifyMessageA(",
+    "SendMessageCallbackW(",
+    "SendMessageCallbackA(",
+    "BroadcastSystemMessage",
+];
+
+/// 当たりの鍵: (ワークスペース根からの相対パス, 字面, 行がファイル直下の `#[cfg(test)] mod` の中か)。
+type SendKey = (String, &'static str, bool);
+
+/// 本番ソースで同期の送信を呼んでよい所と回数（`research.md` §6 の洗い出し）。
+/// - IPC の送信: shiori のスレッド → 32bit の補助プロセスの message-only 窓（別プロセス）と、
+///   補助プロセス → shiori のスレッドの親窓の応答の両方が、この 1 か所を通る。
+/// - 親窓のテスト: 不正なフレームを親窓へ自分のスレッドから送る（ファイル内のテストの
+///   モジュールの中＝本番のビルドには入らない）。
+const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 2] = [
+    (
+        "crates/shiori-host32-ipc/src/lib.rs",
+        "SendMessageTimeoutW(",
+        false,
+        1,
+    ),
+    (
+        "crates/shiori-host32-host/src/parent_window.rs",
+        "SendMessageW(",
+        true,
+        1,
+    ),
+];
+
+/// ワークスペースの `crates/*/src/**/*.rs` の本番ソースを `(根からの相対パス, 本文)` で集める。
+/// 除くのはテストとテストの土台（`_tests.rs`・`_test_support.rs`）と、`tests`・`examples` の
+/// ディレクトリの下（design「要件 5 の検査」の範囲。結合テストと examples は `src` の外なので
+/// そもそも歩かない）。
+fn workspace_production_sources() -> Vec<(String, String)> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
+        let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {
+            panic!("木を歩けない（走査が空振りする）: {} — {e}", dir.display())
+        });
+        for entry in entries {
+            let path = entry.expect("ディレクトリ項目が読めない").path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if path.is_dir() {
+                if name != "tests" && name != "examples" {
+                    walk(root, &path, out);
+                }
+                continue;
+            }
+            if !name.ends_with(".rs")
+                || name.ends_with("_tests.rs")
+                || name.ends_with("_test_support.rs")
+            {
+                continue;
+            }
+            let rel = path
+                .strip_prefix(root)
+                .expect("走査の根の下に無い")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let src = std::fs::read_to_string(&path).expect("本番ファイルが読めない");
+            out.push((rel, src));
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let crates = std::fs::read_dir(root.join("crates")).expect("crates を読めない");
+    let mut out = Vec::new();
+    for krate in crates {
+        let src = krate.expect("crates の項目が読めない").path().join("src");
+        if src.is_dir() {
+            walk(&root, &src, &mut out);
+        }
+    }
+    out
+}
+
+/// 走査の当たりを鍵ごとに数える。注釈の行（`//`・`///`・`//!` で始まる行）は除く。
+/// ファイル直下の `#[cfg(test)]` に続く、その場で本体を持つ `mod t {` の行から、そのモジュールを
+/// 閉じる列 0 の `}` までを「テストのモジュールの中」とする（rustfmt の形に依る）。外部ファイルの
+/// 宣言（`mod x_tests;`）は本体を持たないので中へ入らない。
+fn sync_send_sites(files: &[(String, String)]) -> BTreeMap<SendKey, usize> {
+    let mut found = BTreeMap::new();
+    for (rel, src) in files {
+        let lines: Vec<&str> = src.lines().collect();
+        let mut in_test_mod = false;
+        for (i, line) in lines.iter().enumerate() {
+            if *line == "#[cfg(test)]"
+                && lines
+                    .get(i + 1)
+                    .is_some_and(|n| n.starts_with("mod ") && n.trim_end().ends_with('{'))
+            {
+                in_test_mod = true;
+            } else if in_test_mod && *line == "}" {
+                in_test_mod = false;
+            }
+            let body = line.trim_start();
+            if body.starts_with("//") {
+                continue;
+            }
+            for token in SYNC_SEND_TOKENS {
+                let hits = body
+                    .match_indices(token)
+                    .filter(|(at, _)| {
+                        !body[..*at]
+                            .chars()
+                            .next_back()
+                            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+                    })
+                    .count();
+                if hits > 0 {
+                    *found.entry((rel.clone(), token, in_test_mod)).or_insert(0) += hits;
+                }
+            }
+        }
+    }
+    found
+}
+
+/// 当たりと許可表の差: (表に無い当たり・表より多い当たり, 当たりの無い表の行・表より少ない当たり)。
+fn sync_send_mismatch(
+    found: &BTreeMap<SendKey, usize>,
+    allowed: &[(&str, &'static str, bool, usize)],
+) -> (Vec<(SendKey, usize)>, Vec<(SendKey, usize)>) {
+    let allowed: BTreeMap<SendKey, usize> = allowed
+        .iter()
+        .map(|(rel, token, in_test, n)| (((*rel).to_owned(), *token, *in_test), *n))
+        .collect();
+    let extra = found
+        .iter()
+        .filter(|(k, n)| allowed.get(*k).is_none_or(|a| *n > a))
+        .map(|(k, n)| (k.clone(), *n))
+        .collect();
+    let missing = allowed
+        .iter()
+        .filter(|(k, n)| found.get(*k).is_none_or(|f| f < *n))
+        .map(|(k, n)| (k.clone(), *n))
+        .collect();
+    (extra, missing)
+}
+
+/// 本番ソースの同期の送信は許可表と一致する（要件 5.4・7.5）。表に無い当たりも、当たりの無い
+/// 表の行も赤。新しい送信を足すなら、宛先のスレッドと OS のセッションの終了の join と輪に
+/// ならないことを確かめ、`session_end.rs` の受け手の説明と表を一緒に直す。
+#[test]
+fn production_sync_sends_match_the_allowed_table() {
+    let found = sync_send_sites(&workspace_production_sources());
+    assert_eq!(
+        sync_send_mismatch(&found, &ALLOWED_SYNC_SENDS),
+        (vec![], vec![]),
+        "本番ソースの同期の送信が許可表と合わない（表に無い当たり, 当たりの無い表の行）: {found:?}"
+    );
+}
+
+/// 走査の較正: 許可表から 1 行消す・本番ソースの写しに当たりを 1 つ足す・写しから許可の
+/// 当たりを消す、のどれでも赤になる（検査が空振りしていない）。
+#[test]
+fn sync_send_scan_turns_red_on_one_row_removed_or_one_call_added() {
+    let files = workspace_production_sources();
+    let found = sync_send_sites(&files);
+    let ipc = (
+        "crates/shiori-host32-ipc/src/lib.rs".to_owned(),
+        "SendMessageTimeoutW(",
+        false,
+    );
+
+    // ⑴ 許可表から IPC の行を消す → 表に無い当たり。
+    assert_eq!(
+        sync_send_mismatch(&found, &ALLOWED_SYNC_SENDS[1..]),
+        (vec![(ipc.clone(), 1)], vec![]),
+        "許可表から 1 行消しても赤にならない"
+    );
+
+    // ⑵ 本番ソースの写しに UI の窓への同期の送信を 1 つ足す → 表に無い当たり。
+    let mut added = files.clone();
+    added.push((
+        "crates/areka/src/main.rs".to_owned(),
+        "let _ = unsafe { SendMessageW(hwnd, WM_NULL, None, None) };".to_owned(),
+    ));
+    assert_eq!(
+        sync_send_mismatch(&sync_send_sites(&added), &ALLOWED_SYNC_SENDS),
+        (
+            vec![(
+                (
+                    "crates/areka/src/main.rs".to_owned(),
+                    "SendMessageW(",
+                    false
+                ),
+                1
+            )],
+            vec![]
+        ),
+        "本番ソースに当たりを 1 つ足しても赤にならない"
+    );
+
+    // ⑶ 写しから IPC の送信を消す → 当たりの無い表の行（注釈の行は数えない）。
+    let removed: Vec<(String, String)> = files
+        .iter()
+        .map(|(rel, src)| {
+            let src = if *rel == ipc.0 {
+                src.replace("SendMessageTimeoutW(", "// SendMessageTimeoutW(")
+            } else {
+                src.clone()
+            };
+            (rel.clone(), src)
+        })
+        .collect();
+    assert_eq!(
+        sync_send_mismatch(&sync_send_sites(&removed), &ALLOWED_SYNC_SENDS),
+        (vec![], vec![(ipc, 1)]),
+        "許可の当たりを消しても赤にならない"
+    );
+}
+
+/// 走査の較正: 「テストのモジュールの中」の欄は、`#[cfg(test)]` の次行が本体を持つ `mod t {` の
+/// ときだけ真で、外部ファイルの宣言（`mod x_tests;`）の後ろに続く本番の行は偽のまま。
+#[test]
+fn sync_send_scan_marks_only_inline_test_modules() {
+    let files = [
+        (
+            "decl.rs".to_owned(),
+            "#[cfg(test)]\nmod x_tests;\n\nfn send() {\n    unsafe { SendMessageW(h, WM_NULL, None, None) };\n}\n"
+                .to_owned(),
+        ),
+        (
+            "inline.rs".to_owned(),
+            "#[cfg(test)]\nmod t {\n    fn send() {\n        unsafe { SendMessageW(h, WM_NULL, None, None) };\n    }\n}\n"
+                .to_owned(),
+        ),
+    ];
+    assert_eq!(
+        sync_send_sites(&files),
+        BTreeMap::from([
+            (("decl.rs".to_owned(), "SendMessageW(", false), 1),
+            (("inline.rs".to_owned(), "SendMessageW(", true), 1),
+        ]),
+        "テストのモジュールの中かの判定が外部ファイルの宣言と本体を持つモジュールを取り違える"
     );
 }
