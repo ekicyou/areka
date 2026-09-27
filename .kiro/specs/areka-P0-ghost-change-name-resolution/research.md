@@ -136,6 +136,14 @@
 5. **解けないときの event 名**（要件 6.1）。既存 `ghost_switch_unknown` に `reason` 欄を足す（既存テストの `assert_one_event(…, "ghost_switch_unknown", WARN)` がそのまま使える）か、`ghost_switch_unresolved` を新設するか。ログを grep する側（実機サインオフ・`alpha-release-signoff`）の都合で決める。
 6. **文書の接触範囲（要件 7）**。要件に無い 3 か所——`roadmap-draft.md`（`[[spec]]`＋`count`）、§8「角括弧なし `\_` タグ」の行の `\_+` の所有先、`ledger/shiori.toml` の `OnGhostChanging`／`OnGhostChanged` の備考にある同じ文「…の持ち場で、本仕様では該当なしとして…」（`shell-balloon-switch` は `shiori.toml` の `OnShellChang*`／`OnBalloonChange` の行を触るが、この 2 行は触らない）——と、手書きの `briefing-sakura-script.md` の `\+`・`\_+` の「未対応」の行を本仕様で直すかどうか。推奨: `roadmap-draft.md` と §8 の行は必須（検査が赤になる・裁定の記録が矛盾する）、`shiori.toml` の 2 か所の備考は 1 文の差し替えだけなので本仕様で直す、`briefing-sakura-script.md` は完了 spec の前例に倣って直す（いずれも別枠＝並走の重なりには数えない）。
 
+### 7.1 要件ディスカッション（2026-09-27）での仕分け
+
+- 論点 1（実機サインオフの向き）→ **自明な修正**。要件 8.1 を「`\+` を言う里々の検体の複製 → 目録の他のゴースト（emo2 など）」へ改めた。
+- 論点 2（argv で起こしたゴースト）→ **自明な修正**。案 (a)。右クリックメニューの「ゴースト」枠も同じ `folder` で印を付ける（`menu/ghost_frame.rs` の `ghost_frame_item`）ので、「引数で起こしたゴーストは目録に居ない扱い」は利用者の見るものと揃う。要件 2.4・3.3・9 裁定 2 を「根の中を指していても同じ」へ改めた。
+- 論点 3（目録 1 体の `sequential`）→ **開発者確認**（下の結果を参照）。
+- 論点 4（記録の型と書く口の名前）・論点 5（解けないときの event 名）→ **設計へ**（`/kiro-spec-design` で決める・§6 の推奨が出発点）。
+- 論点 6（文書の接触範囲）→ **自明な修正**。推奨どおり 4 か所すべてを要件 7.6〜7.9 に足し、証拠行を要件 1.6、`parse_bare_tag_tests.rs` の `_+` 外しを要件 6.4 に足した。
+
 ## 8. 設計へ持ち越す調べもの（Research Needed）
 
 - `pick_index` を `request_ghost_switch` の中で毎回呼ぶ形で、`RandomState::new()` がプロセス内で値を変える（std の実装はスレッドごとの鍵を呼ぶたびに進める）ことを、決定論テストではなく実機ログで 2 回以上の `\+` の結果が散ることで確かめる（要件 2.2 は「固定しない」＝分布の検定はしない）。
