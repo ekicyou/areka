@@ -181,6 +181,27 @@ pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
     lowercased(&bytes).remove("balloon.directory")
 }
 
+/// `<ゴースト>/ghost/master/descript.txt` の `sakura.name`（切替先の本体側の名前・要件 8.7）。
+/// `companion_balloon` と同型: 無い → None・読めない → `warn!`＋None。素性（`Identity`）には載せない。
+/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name_2c_540d_524d:1
+pub fn sakura_name(ghost_dir: &Path) -> Option<String> {
+    let path = master_descript(ghost_dir);
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(err) => {
+            tracing::warn!(
+                event = "catalog_descript_unreadable",
+                path = %path.display(),
+                error = %err,
+                "descript.txt が読めない——本体側の名前は無しとして扱う"
+            );
+            return None;
+        }
+    };
+    lowercased(&bytes).remove("sakura.name")
+}
+
 /// `<dir>/ghost/master/descript.txt` が実在するか（argv のゴーストの検査＝要件 4.8）。
 pub fn is_ghost_dir(dir: &Path) -> bool {
     master_descript(dir).is_file()

@@ -135,6 +135,19 @@ unsafe impl Sync for Window {}
 pub struct OnCloseRequest(pub fn(world: &mut World, entity: Entity));
 
 // ============================================================================
+// OnSessionEnd
+// ============================================================================
+
+/// OS がセッションの終了（シャットダウン・再起動・ログオフ）を確定したとき
+/// （`WM_ENDSESSION` の wParam が真）に呼ぶ関数。付けなければ何もしない。
+///
+/// [`OnCloseRequest`] と同型の「窓に関数を差す部品」。関数は World 借用中に呼ばれ、
+/// 戻った直後にプロセスが終了させられうる（後始末を済ませてから戻ること）。
+#[derive(Component, Clone, Copy)]
+#[component(storage = "SparseSet")]
+pub struct OnSessionEnd(pub fn(world: &mut World, entity: Entity));
+
+// ============================================================================
 // WindowStyle
 // ============================================================================
 

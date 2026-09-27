@@ -5,7 +5,9 @@
 //! 注入する（本番は [`pick_index`]）。列挙の並びは判断に使わない（裁定 3）。
 //!
 //! 既定の定数 [`DEFAULT_GHOST_FOLDER`]／[`DEFAULT_BALLOON_FOLDER`] はこのファイルだけが持ち、
-//! 参照はそれぞれゴーストの段 4・バルーンの段 5 の 1 か所だけ（要件 4.11・5.9）。
+//! 解決の判断での参照はそれぞれゴーストの段 4・バルーンの段 5 の 1 か所だけ（要件 4.11・5.9）。
+//! 判断の外では、切替の降ろした直後の記憶 [`write_switch_drop`] が既定ゴーストを最後のゴーストの
+//! 書き先に使う（要件 12.6）。
 
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
@@ -13,7 +15,9 @@ use std::path::{Path, PathBuf};
 use areka_ghost::BasewareRoot;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
+use areka_sylphya::{
+    PersistKey, PersistOutcome, PersistScope, ScopeRoots, SylphyaPublisher, load_scope, save_scope,
+};
 
 // 判断と記憶の直読みの消費者は起動前の解決（`boot_config::resolve_boot`）。記憶の書き込み
 // （[`LastUsed`]）の消費者は boot 成功直後の `main::on_boot_ok`。
@@ -31,6 +35,8 @@ pub(crate) enum GhostRoute {
     Only,
     Default,
     Random,
+    /// 実行中の切替で決まった（記憶を書く経路＝要件 4.6。書かないのは `Argv` だけ）。
+    Switched,
 }
 
 /// バルーンが決まった経路（要件 5.11 の記録に載せる）。
@@ -245,11 +251,11 @@ fn read_last(scope: PersistScope, roots: &ScopeRoots, key: PersistKey) -> Option
 
 /// 起動前の記憶の直読み（App スコープ `areka.last.ghost`・要件 4.2）。無ければ `None`。
 pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
-    let roots = ScopeRoots {
-        app: Some(app_profile_dir.to_path_buf()),
-        ..ScopeRoots::default()
-    };
-    read_last(PersistScope::App, &roots, PersistKey::LastGhost)
+    read_last(
+        PersistScope::App,
+        &app_roots(app_profile_dir),
+        PersistKey::LastGhost,
+    )
 }
 
 /// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.balloon`・要件 5.2・裁定 4）。
@@ -260,6 +266,128 @@ pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
         ..ScopeRoots::default()
     };
     read_last(PersistScope::Ghost, &roots, PersistKey::LastBalloon)
+}
+
+fn app_roots(app_profile_dir: &Path) -> ScopeRoots {
+    ScopeRoots {
+        app: Some(app_profile_dir.to_path_buf()),
+        ..ScopeRoots::default()
+    }
+}
+
+/// App スコープへ実 fs で直接書く。失敗は `save_scope` がログ済み・結末の `warn!` は呼び手が残す。
+fn save_app(app_profile_dir: &Path, entries: Vec<(PersistKey, String)>) -> PersistOutcome {
+    save_scope(
+        PersistScope::App,
+        &app_roots(app_profile_dir),
+        &FsPersistIo,
+        entries,
+    )
+}
+
+// ---------------------------------------------------------------- 起動中の印（要件 12.1〜12.8）
+//
+// 印（App スコープ `areka.last.running`）は「今動いているゴーストの名前」。起こす前に書き、
+// きれいな終わりでだけ消す（強制終了・クラッシュ・電源断では消えずに残る）。次の起動で残って
+// いれば前回はきれいに終わらなかった＝最後のゴーストの記憶を読まずに解き、`OnBoot` の Ref7 に載せる。
+//
+// 下の書き手（`write_session_mark`・`write_switch_drop`・`clear_session_mark`）を UI スレッドから
+// 呼ぶのは、ゴーストの実行系が 1 つも動いていない間だけ（初回の起動の前・切替の降ろした直後・
+// 後始末で降ろした後）。記憶の保存は「読んで重ねて書く」ので、動いている実行系の記憶の書き手と
+// 同時に同じファイルを書くと片方が消えうるため。
+
+/// 起動中の印（App スコープ `areka.last.running`）。空文字・無しは `None`。読むだけで消さない。
+pub(crate) fn read_session_mark(app_profile_dir: &Path) -> Option<String> {
+    read_last(
+        PersistScope::App,
+        &app_roots(app_profile_dir),
+        PersistKey::LastRunning,
+    )
+}
+
+/// 印を書く（初回の起動の前・呼び手は argv で始まったプロセスでないときだけ呼ぶ）。
+pub(crate) fn write_session_mark(app_profile_dir: &Path, running: &str) {
+    match save_app(
+        app_profile_dir,
+        vec![(PersistKey::LastRunning, running.to_owned())],
+    ) {
+        PersistOutcome::Saved => tracing::info!(
+            event = "session_mark_written",
+            ghost = running,
+            "[boot_resolve] 起動中の印を書きました"
+        ),
+        PersistOutcome::Degraded => tracing::warn!(
+            event = "session_mark_write_degraded",
+            ghost = running,
+            dir = %app_profile_dir.display(),
+            "[boot_resolve] 起動中の印を記憶へ書けませんでした（このゴーストが落ちても、次の起動の Ref6/7 にこのゴーストの名前は載りません）"
+        ),
+    }
+}
+
+/// 切替で前のゴーストを降ろした直後: 最後に使ったゴースト＝既定と（`mark` が在れば）印＝切替先を
+/// 1 回の書き込みで書く。argv で始まったプロセスは `mark` に `None` を渡す（印に触れない・要件 12.5）。
+/// 呼び手は `ghost_switch::switch_to`。
+pub(crate) fn write_switch_drop(app_profile_dir: &Path, mark: Option<&str>) {
+    let mut entries = vec![(PersistKey::LastGhost, DEFAULT_GHOST_FOLDER.to_owned())];
+    entries.extend(mark.map(|m| (PersistKey::LastRunning, m.to_owned())));
+    match (save_app(app_profile_dir, entries), mark) {
+        (PersistOutcome::Saved, _) => tracing::info!(
+            event = "switch_drop_recorded",
+            last_ghost = DEFAULT_GHOST_FOLDER,
+            mark = mark.unwrap_or("-"),
+            "[boot_resolve] 降ろした直後の記憶を書きました（最後のゴーストは既定・印は切替先・- は argv なので印に触れていない）"
+        ),
+        (PersistOutcome::Degraded, Some(mark)) => tracing::warn!(
+            event = "switch_drop_record_degraded",
+            last_ghost = DEFAULT_GHOST_FOLDER,
+            mark,
+            dir = %app_profile_dir.display(),
+            "[boot_resolve] 降ろした直後の記憶を書けませんでした（切替先が落ちても、次の起動の印は前のゴーストの名前のまま・最後のゴーストは前のゴーストのままになります）"
+        ),
+        (PersistOutcome::Degraded, None) => tracing::warn!(
+            event = "switch_drop_record_degraded",
+            last_ghost = DEFAULT_GHOST_FOLDER,
+            mark = "-",
+            dir = %app_profile_dir.display(),
+            "[boot_resolve] 降ろした直後の記憶を書けませんでした（最後のゴーストは前のゴーストのままになります・argv で始まったプロセスなので印にはもともと触れません）"
+        ),
+    }
+}
+
+/// きれいな終わり: 印を消す（空文字を書く）。呼び手は後始末で降ろした後。
+pub(crate) fn clear_session_mark(app_profile_dir: &Path) {
+    match save_app(
+        app_profile_dir,
+        vec![(PersistKey::LastRunning, String::new())],
+    ) {
+        PersistOutcome::Saved => tracing::info!(
+            event = "session_mark_cleared",
+            "[boot_resolve] きれいに終わったので起動中の印を消しました"
+        ),
+        PersistOutcome::Degraded => tracing::warn!(
+            event = "session_mark_clear_degraded",
+            dir = %app_profile_dir.display(),
+            "[boot_resolve] 起動中の印を消せませんでした（きれいに終わったのに、次の起動は前回落ちたとして既定のゴーストで Ref6/7 付きになります）"
+        ),
+    }
+}
+
+/// 印に書く名前: 目録の同じフォルダの descript の `name`、無ければフォルダ名（argv 以外の決定だけが来る）。
+pub(crate) fn running_name(root: &BasewareRoot, ghost: &GhostDecision) -> String {
+    let folder = ghost.folder.clone().unwrap_or_else(|| {
+        // argv の決定は印を書かない（呼び手が旗で止める）。来たらフォルダの末尾で代える。
+        ghost
+            .dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+    areka_ghost::catalog::list_ghosts(root)
+        .into_iter()
+        .find(|e| e.identity.folder == folder)
+        .and_then(|e| e.identity.name)
+        .unwrap_or(folder)
 }
 
 /// 起動成功時に書く内容（要件 3.2〜3.5・裁定 5）。

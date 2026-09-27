@@ -874,7 +874,7 @@ fn choice_actions_map_to_talk_commands_and_preserve_order() {
         &sakura_tx,
         &noop_sink(),
         None,
-        None,
+        (None, None),
     );
 
     assert!(
@@ -945,7 +945,7 @@ fn talk_command_send_failure_does_not_abort_the_action_batch() {
             &noop_sink(),
             // 停止通知は結線しない（`None`）——本檻の対象は talk 指示の送出失敗の記録である。
             None,
-            None,
+            (None, None),
         ));
     });
 

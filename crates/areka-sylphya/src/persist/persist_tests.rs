@@ -26,6 +26,7 @@ fn all_families() -> Vec<PersistKey> {
         PersistKey::LastGhost,
         PersistKey::LastBalloon,
         PersistKey::LastShell,
+        PersistKey::LastRunning,
     ]
 }
 
@@ -570,6 +571,10 @@ fn last_family_canonical_key_exact_strings() {
         "areka.last.balloon"
     );
     assert_eq!(PersistKey::LastShell.to_canonical_key(), "areka.last.shell");
+    assert_eq!(
+        PersistKey::LastRunning.to_canonical_key(),
+        "areka.last.running"
+    );
 }
 
 // --- 3 鍵を書いて読み戻す往復（表 [last] に載り、返り順は ghost → balloon → shell）---
@@ -718,4 +723,64 @@ fn last_table_hand_written_is_read_and_type_mismatch_is_absent() {
         load_scope(PersistScope::Ghost, &roots, &io),
         vec![(PersistKey::LastBalloon, "b".to_string())]
     );
+}
+
+// === 起動中の印（areka-P0-ghost-shell-balloon-switch 要件 12・2026-09-27 に halted から改名）===
+
+// --- 書く → 読む（表 [last] の running・返り順は ghost のあと）→ 空文字を書くと消える ---
+#[test]
+fn last_running_round_trip_and_empty_string_clears() {
+    let io = FakePersistIo::new();
+    let path = PathBuf::from("/app/sylphya.toml");
+    let roots = ScopeRoots {
+        app: Some(PathBuf::from("/app")),
+        ..ScopeRoots::default()
+    };
+    save_scope(
+        PersistScope::App,
+        &roots,
+        &io,
+        vec![
+            (PersistKey::LastRunning, "broken".into()),
+            (PersistKey::LastGhost, "emo2".into()),
+        ],
+    );
+    let serialized = io.read(&path).unwrap().unwrap();
+    assert!(
+        serialized.contains("running = \"broken\""),
+        "serialized=\n{serialized}"
+    );
+    assert_eq!(
+        load_scope(PersistScope::App, &roots, &io),
+        vec![
+            (PersistKey::LastGhost, "emo2".to_string()),
+            (PersistKey::LastRunning, "broken".to_string()),
+        ]
+    );
+
+    // 空文字を書く＝消す。ほかの鍵は残る。
+    save_scope(
+        PersistScope::App,
+        &roots,
+        &io,
+        vec![(PersistKey::LastRunning, String::new())],
+    );
+    assert_eq!(
+        load_scope(PersistScope::App, &roots, &io),
+        vec![(PersistKey::LastGhost, "emo2".to_string())]
+    );
+}
+
+// --- 手書きの running = "" は「無し」と読む ---
+#[test]
+fn last_running_hand_written_empty_is_absent() {
+    let io = FakePersistIo::new();
+    let path = PathBuf::from("/app/sylphya.toml");
+    let roots = ScopeRoots {
+        app: Some(PathBuf::from("/app")),
+        ..ScopeRoots::default()
+    };
+    io.commit(&path, "format-version = 1\n[last]\nrunning = \"\"\n")
+        .unwrap();
+    assert!(load_scope(PersistScope::App, &roots, &io).is_empty());
 }

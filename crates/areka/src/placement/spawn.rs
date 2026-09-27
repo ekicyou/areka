@@ -292,9 +292,11 @@ pub struct ScopeWindows {
 /// 後続（emo2-boot）への引き渡し正本（6.1/6.2）。
 ///
 /// 「スコープ×種別 → Entity」の唯一の正本（markers は補助的な逆引き）。
-/// spawn 完了時に Resource 挿入＋戻り値の両方で公開される。窓 despawn 後の
-/// Entity 無効化は M1 では追跡しない（emo2-boot は起動直後に読む前提・design
-/// Revalidation Trigger）。
+/// spawn 完了時に Resource 挿入＋戻り値の両方で公開される。ゴーストの切替などで
+/// 全窓を閉じるとき（`app_exit::close_windows_for_restart`）は、この Resource ごと外す
+/// （閉じた窓の Entity を指したまま残らない・読み手は無いことに耐える）。閉じる前に
+/// 投函済みだった窓を作るクロージャは、閉じた回数（`app_exit::WindowsEpoch`）が
+/// 進んでいれば窓を作らない。
 #[derive(Resource, Clone, Debug)]
 pub struct GhostWindows {
     /// スコープ番号 → 窓 entity 対（非公開・アクセサ経由）。
@@ -362,7 +364,7 @@ impl GhostWindows {
     /// 連鎖の再解決から常に除外され、既定位置へ引き戻されない。未知スコープは no-op
     /// （panic せず `false`）。
     ///
-    /// 呼び手は復元マージの結果を受ける `ghost_session::open_ghost_windows` の窓を作るクロージャのみ
+    /// 呼び手は復元マージの結果を受ける `ghost_session::prepare_ghost_windows` が組む窓を作るクロージャのみ
     /// （保存位置が入り込む唯一の経路）。
     pub fn clear_default_char_pos(&mut self, scope: usize) -> bool {
         match self.windows.get_mut(&scope) {
@@ -562,7 +564,7 @@ pub fn spawn_ghost_windows(
                 char_window,
                 balloon_window,
                 // spawn へ渡る placements が resolver 既定である前提で `Some` を置く。
-                // 保存位置が復元された場合は起動シーム（`ghost_session::open_ghost_windows`）が直後に
+                // 保存位置が復元された場合は起動シーム（`ghost_session::prepare_ghost_windows`）が直後に
                 // `clear_default_char_pos` で `None` へ落とす（scg 7.3）。
                 default_char_pos: Some(p.char_pos),
             },

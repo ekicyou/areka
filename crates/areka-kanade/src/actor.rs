@@ -33,6 +33,7 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, ReplyError, reply_channel, run_inbox, spawn_actor};
 
+use crate::change::{ChangeHandoff, KanadeNotice};
 use crate::msg::{
     EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped, ShioriCall, ShioriFailure,
     ShioriFault, ShioriMsg, ShioriOutcome,
@@ -79,9 +80,10 @@ pub fn spawn_kanade(
 /// 引数は [`spawn_kanade`] と同一で、末尾に `stop_sink` が 1 つ増えるだけの派生である
 /// （[`spawn_kanade`] は `None` を渡す薄い包み＝既存の呼び手は 1 つも変わらない）。
 ///
-/// `stop_sink` が `Some` なら、[`Action::StopSelf`] の実行点で
-/// [`KanadeStopped`]`{ cause }` を**ちょうど 1 度**送る。受信端が既に落ちていても
-/// `warn!`（`event="stop_notify_failed"`）を残して停止は完走する（panic しない・log-first）。
+/// `stop_sink` は運行の通知（[`KanadeNotice`]）の送出端である。`Some` なら、[`Action::StopSelf`]
+/// の実行点で [`KanadeNotice::Stopped`]`(`[`KanadeStopped`]`{ cause, handoff })` を**ちょうど 1 度**
+/// 送る。受信端が既に落ちていても `warn!`（`event="stop_notify_failed"`）を残して停止は完走する
+/// （panic しない・log-first）。運行表の「通知を送る」（[`Action::Notice`]）もこの送出端へ流す。
 /// `None` なら通知は一切出ない（従来どおり）。
 ///
 /// # 誰が受けるのか
@@ -94,7 +96,7 @@ pub fn spawn_kanade_with_stop_sink(
     shiori: Sender<ShioriMsg>,
     sakura: Sender<TalkCommand>,
     resource_sink: ResourceSink,
-    stop_sink: Option<Sender<KanadeStopped>>,
+    stop_sink: Option<Sender<KanadeNotice>>,
 ) -> (Sender<KanadeMsg>, ActorHandle) {
     spawn_actor("kanade", move |rx| {
         let mut state = State::initial();
@@ -133,6 +135,16 @@ pub fn spawn_kanade_with_stop_sink(
                     timeout_directive_secs,
                 },
                 KanadeMsg::UserBreak { scope } => Input::UserBreak { scope },
+                KanadeMsg::ChangeGhost(req) => Input::ChangeGhost(req),
+                KanadeMsg::RaiseEvent {
+                    id,
+                    references,
+                    method,
+                } => Input::RaiseEvent {
+                    id,
+                    references,
+                    method,
+                },
             };
             match drive(
                 &mut state,
@@ -165,24 +177,19 @@ fn drive(
     shiori: &Sender<ShioriMsg>,
     sakura: &Sender<TalkCommand>,
     resource_sink: &ResourceSink,
-    stop_sink: Option<&Sender<KanadeStopped>>,
+    stop_sink: Option<&Sender<KanadeNotice>>,
 ) -> Drive {
     // 終了原因の受け渡し（R15.3）: [`Action::StopSelf`] は必ず `Unloading{cause}` からの遷移で
     // 生まれる（発行点は `schedule::unloading_reply` の 1 箇所だけで、そこへ入れるのは
     // `Phase::Unloading` の先行アームだけ）。その遷移で `Phase` は `Stopped` へ書き換わり原因が
     // 消えるため、**step へ渡す直前**の運行状態から原因を控えておき、StopSelf の実行点で通知へ載せる。
-    let mut term_cause = stop_cause_of(state);
+    // 切替の中身（帳簿の `change`）も同じ時点で控える（原因と中身が別の時点の状態を指さない）。
+    let mut term = (stop_cause_of(state), handoff_of(state));
     // 初回 step。以降は state を差し替えつつ actions を回す。
     let (mut st, mut actions) = step(std::mem::replace(state, State::initial()), input, config);
     loop {
-        let BatchResult { last_reply, stop } = execute_actions(
-            actions,
-            shiori,
-            sakura,
-            resource_sink,
-            stop_sink,
-            term_cause,
-        );
+        let BatchResult { last_reply, stop } =
+            execute_actions(actions, shiori, sakura, resource_sink, stop_sink, term);
         if stop {
             *state = st;
             return Drive::Stop;
@@ -190,7 +197,7 @@ fn drive(
         match last_reply {
             // 往復応答を再投入して次の遷移を得る（Actions が尽きるまで反復）。origin を転記する。
             Some((outcome, origin)) => {
-                term_cause = stop_cause_of(&st);
+                term = (stop_cause_of(&st), handoff_of(&st));
                 let (s, a) = step(st, Input::ShioriReply { outcome, origin }, config);
                 st = s;
                 actions = a;
@@ -227,15 +234,16 @@ struct BatchResult {
 /// する——バッチも中断しない（design「Error Strategy」: 選択・再生の失敗でゴーストを終了させない）。
 ///
 /// # 停止通知（R15.3・design D15 の 2）
-/// `stop_sink` が `Some` のとき、[`Action::StopSelf`] の実行点で [`KanadeStopped`] を 1 度だけ送る。
-/// `term_cause` は呼び手（[`drive`]）が step へ渡す直前の `Unloading{cause}` から控えた原因である。
+/// `stop_sink` が `Some` のとき、[`Action::StopSelf`] の実行点で [`KanadeNotice::Stopped`] を
+/// 1 度だけ送る。[`Action::Notice`] はそのままの値で同じ送出端へ流す（[`send_notice`]）。
+/// `term` は呼び手（[`drive`]）が step へ渡す直前の運行状態から控えた（原因, 切替の中身）である。
 fn execute_actions(
     actions: Vec<Action>,
     shiori: &Sender<ShioriMsg>,
     sakura: &Sender<TalkCommand>,
     resource_sink: &ResourceSink,
-    stop_sink: Option<&Sender<KanadeStopped>>,
-    term_cause: Option<KanadeStopCause>,
+    stop_sink: Option<&Sender<KanadeNotice>>,
+    term: (Option<KanadeStopCause>, Option<ChangeHandoff>),
 ) -> BatchResult {
     let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
     for action in actions {
@@ -273,12 +281,13 @@ fn execute_actions(
                 // origin を参照しないが、契約上必ず値を持たせる）。
                 last_reply = Some((round_trip_unload(shiori), "Unload"));
             }
+            Action::Notice(notice) => send_notice(stop_sink, notice),
             Action::StopSelf => {
                 // 終了系列完了: shiori へ Close を送り自身も停止する。
                 let _ = shiori.send(ShioriMsg::Close);
                 // 終了系列の完了を UI へ 1 度だけ知らせる（R15.3）。shiori を畳んだ**後**に置く
                 // ——受け手はこの通知で窓を閉じるので、通知が先に出ると解放より先に窓が消え得る。
-                notify_stop(stop_sink, term_cause);
+                notify_stop(stop_sink, term.0, term.1);
                 return BatchResult {
                     last_reply,
                     stop: true,
@@ -491,6 +500,13 @@ fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
     })
 }
 
+/// 運行状態の切替の帳簿を、停止通知に載せる切替の中身へ写す（切替の相を経ていなければ `None`）。
+fn handoff_of(state: &State) -> Option<ChangeHandoff> {
+    state.change.as_ref().map(|change| ChangeHandoff {
+        script: change.script.clone(),
+    })
+}
+
 /// 停止通知を投函する（R15.3・design D15 の 2）。
 ///
 /// `sink` が `None` なら何もしない（通知端を結線していない構成＝既存の呼び手はすべてこちら）。
@@ -501,7 +517,11 @@ fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
 /// `cause` が `None` になるのは、`Unloading` を経ずに `StopSelf` が現れた場合だけである
 /// （現在の運行表には存在しない経路）。その場合も通知は出す——窓を閉じる合図としての意味は
 /// 原因に依らないためで、原因不明であることは記録に残し、種類 `Unknown` の Fault として送る。
-fn notify_stop(sink: Option<&Sender<KanadeStopped>>, cause: Option<KanadeStopCause>) {
+fn notify_stop(
+    sink: Option<&Sender<KanadeNotice>>,
+    cause: Option<KanadeStopCause>,
+    handoff: Option<ChangeHandoff>,
+) {
     let Some(tx) = sink else {
         return;
     };
@@ -514,12 +534,40 @@ fn notify_stop(sink: Option<&Sender<KanadeStopped>>, cause: Option<KanadeStopCau
     }
     let cause = cause.unwrap_or_else(|| KanadeStopCause::Fault(ShioriFault::unknown()));
     // 送出に失敗した値は SendError に載って戻るので、記録にはそれを使う（clone しない）。
-    if let Err(std::sync::mpsc::SendError(unsent)) = tx.send(KanadeStopped { cause }) {
+    let stopped = KanadeStopped { cause, handoff };
+    // 戻ってくるのは送った「停止」そのものなので、腕は 1 つで足りる。
+    if let Err(std::sync::mpsc::SendError(KanadeNotice::Stopped(unsent))) =
+        tx.send(KanadeNotice::Stopped(stopped))
+    {
         tracing::warn!(
             target: "kanade",
             event = "stop_notify_failed",
             cause = ?unsent.cause,
             "停止通知の送出に失敗（受信端＝UI は既に切断）——停止は完走する"
+        );
+    }
+}
+
+/// 運行表の「通知を送る」（[`Action::Notice`]）を送出端へ流す。
+///
+/// 送出端が無い構成（既存の呼び手）では `debug!` を 1 件残すだけ。受け口が消えていれば
+/// `warn!`（`event="notice_send_failed"`）を残して続ける（panic しない・運行は止めない）。
+fn send_notice(sink: Option<&Sender<KanadeNotice>>, notice: KanadeNotice) {
+    let Some(tx) = sink else {
+        tracing::debug!(
+            target: "kanade",
+            event = "notice_no_sink",
+            notice = ?notice,
+            "運行の通知の送出端が無い——通知は送らない"
+        );
+        return;
+    };
+    if let Err(std::sync::mpsc::SendError(unsent)) = tx.send(notice) {
+        tracing::warn!(
+            target: "kanade",
+            event = "notice_send_failed",
+            notice = ?unsent,
+            "運行の通知の送出に失敗（受信端＝UI は既に切断）——運行は続ける"
         );
     }
 }

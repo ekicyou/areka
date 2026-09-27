@@ -17,7 +17,7 @@
 
 use std::sync::mpsc;
 
-use areka_kanade::{KanadeStopCause, KanadeStopped};
+use areka_kanade::{KanadeNotice, KanadeStopCause, KanadeStopped};
 
 use super::{
     CallMethod, CloseReason, DEFAULT_TIMEOUT, Fixture, Harness, KanadeConfig, KanadeMsg,
@@ -28,8 +28,8 @@ use super::{
 ///
 /// 戻り値は（ハーネス, 停止通知の受信端）。呼び手は kanade を join してから受信端を読む
 /// ——join 成功は `StopSelf` の実行完了を意味するので、通知は既に投函済みである（race なし）。
-fn harness_with_stop_channel(fixture: Fixture) -> (Harness, mpsc::Receiver<KanadeStopped>) {
-    let (stop_tx, stop_rx) = mpsc::channel::<KanadeStopped>();
+fn harness_with_stop_channel(fixture: Fixture) -> (Harness, mpsc::Receiver<KanadeNotice>) {
+    let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     let harness = spawn_harness_with_stop_sink(
         KanadeConfig::new("master", "1.0.0"),
         fixture,
@@ -41,15 +41,27 @@ fn harness_with_stop_channel(fixture: Fixture) -> (Harness, mpsc::Receiver<Kanad
 }
 
 /// 通知が 1 件だけ届いたことを確かめ、その原因を返す。
-fn single_notification(rx: &mpsc::Receiver<KanadeStopped>) -> KanadeStopCause {
-    let first = rx
+fn single_notification(rx: &mpsc::Receiver<KanadeNotice>) -> KanadeStopCause {
+    let mut first = rx
         .try_recv()
         .expect("終了系列の完了で停止通知が 1 件届くはず（R15.3）");
+    // 定常に入っていれば、その通知（定常到達）が停止の通知より先に 1 件だけ届く。
+    if first == KanadeNotice::Steady {
+        first = rx
+            .try_recv()
+            .expect("終了系列の完了で停止通知が 1 件届くはず（R15.3）");
+    }
     assert!(
         rx.try_recv().is_err(),
         "停止通知は 1 度だけ（`StopSelf` は 1 回しか実行されない）"
     );
-    first.cause
+    match first {
+        KanadeNotice::Stopped(KanadeStopped {
+            cause,
+            handoff: None,
+        }) => cause,
+        other => panic!("停止の通知（切替の中身は無し）のはず: {other:?}"),
+    }
 }
 
 /// 強制終了（`ForceQuit`）の終了系列完了で `KanadeStopped{Forced}` が 1 件届く（R15.3）。
@@ -155,7 +167,7 @@ fn silent_close_delivers_the_close_silent_cause() {
 /// `Err` になって本檻が落ちる。
 #[test]
 fn a_dropped_receiver_does_not_stop_the_termination_sequence() {
-    let (stop_tx, stop_rx) = mpsc::channel::<KanadeStopped>();
+    let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     // 通知の受信端を先に落とす（UI が既に消えている状況）。
     drop(stop_rx);
 

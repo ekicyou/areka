@@ -7,7 +7,7 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use areka_actor::ActorHandle;
 use areka_kanade::{
-    KanadeConfig, KanadeMsg, KanadeStopped, TalkCommand, spawn_kanade, spawn_kanade_with_stop_sink,
+    KanadeConfig, KanadeMsg, KanadeNotice, TalkCommand, spawn_kanade, spawn_kanade_with_stop_sink,
 };
 
 use super::{
@@ -69,14 +69,14 @@ pub fn spawn_harness(config: KanadeConfig, fixture: Fixture, quit_policy: QuitPo
 ///
 /// [`spawn_harness`] と同一の結線だが、kanade を [`spawn_kanade_with_stop_sink`] で起動して
 /// `stop_sink` を渡す。`Some` なら終了系列の完了（`Action::StopSelf`）で
-/// [`KanadeStopped`] が 1 件届き、`None` なら通知は出ない（＝[`spawn_harness`] と同一挙動）。
+/// [`KanadeNotice::Stopped`] が 1 件届き、`None` なら通知は出ない（＝[`spawn_harness`] と同一挙動）。
 ///
 /// 受信端をテスト側で先に drop しておけば「送出失敗しても停止は完走する」経路も踏める。
 pub fn spawn_harness_with_stop_sink(
     config: KanadeConfig,
     fixture: Fixture,
     quit_policy: QuitPolicy,
-    stop_sink: Option<Sender<KanadeStopped>>,
+    stop_sink: Option<Sender<KanadeNotice>>,
 ) -> Harness {
     let shiori = spawn_mock_shiori(fixture);
 
@@ -186,7 +186,7 @@ pub fn spawn_harness_failing_with_stop_sink(
     fixture: Fixture,
     quit_policy: QuitPolicy,
     fail_on: FailOn,
-    stop_sink: Option<Sender<KanadeStopped>>,
+    stop_sink: Option<Sender<KanadeNotice>>,
 ) -> Harness {
     let shiori = spawn_mock_shiori_failing(fixture, fail_on);
 

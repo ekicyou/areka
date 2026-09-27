@@ -16,7 +16,7 @@ use areka_ghost::{
     GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode,
     boot_with_kanade_stop,
 };
-use areka_kanade::{KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind};
+use areka_kanade::{KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind};
 use areka_parsers::charset::DefaultEncoding;
 
 use areka_actor::{ActorError, ActorHandle};
@@ -104,7 +104,7 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
     };
 
     // 停止通知の投函端つきで起動する（要件 2.4・7.5）。
-    let (stop_tx, stop_rx) = std::sync::mpsc::channel::<KanadeStopped>();
+    let (stop_tx, stop_rx) = std::sync::mpsc::channel::<KanadeNotice>();
     // boot() 自体は connect の成否と無関係に成功する——connect 失敗は非同期に
     // shiori アクタースレッド内部で起こるため、これは「接続失敗は boot 失敗では
     // ない」ことの重要な、逆に取り違えやすい直接証跡になる。
@@ -150,9 +150,10 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
     let stopped = stop_rx
         .recv_timeout(BOUND)
         .expect("kanade should post a stop notice after the connect failure");
-    let KanadeStopped {
+    let KanadeNotice::Stopped(KanadeStopped {
         cause: KanadeStopCause::Fault(ShioriFault { kind, reason }),
-    } = &stopped
+        handoff: None,
+    }) = &stopped
     else {
         panic!("the stop notice must be a Fault, got {stopped:?}");
     };

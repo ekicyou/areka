@@ -178,7 +178,10 @@ fn on_close_talk_wait(
 ///
 /// `last_now == Some(n)` なら `n + close_talk_deadline_ms` を上限とする。`None`（Tick 未受領で
 /// 握手に入った場合）は None のまま入り、CloseTalkWait 最初の Tick 受領時点で確定する。
-fn deadline_from(last_now: Option<MonotonicMs>, config: &KanadeConfig) -> Option<MonotonicMs> {
+pub(super) fn deadline_from(
+    last_now: Option<MonotonicMs>,
+    config: &KanadeConfig,
+) -> Option<MonotonicMs> {
     last_now.map(|n| MonotonicMs(n.0.saturating_add(config.close_talk_deadline_ms)))
 }
 
@@ -212,6 +215,8 @@ mod tests {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            change: None,
+            pending_change: None,
         }
     }
 
@@ -230,6 +235,8 @@ mod tests {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            change: None,
+            pending_change: None,
         }
     }
 

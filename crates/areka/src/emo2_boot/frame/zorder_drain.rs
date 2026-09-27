@@ -233,7 +233,7 @@ fn resolve_member(
 /// この Resource を失っても復元されるのは「もう一度同じ行が出る」ことだけで、
 /// 重なりの判断には何の影響も無い。
 #[derive(Resource, Default)]
-struct ZOrderAbsentReports {
+pub(crate) struct ZOrderAbsentReports {
     /// 前回報せた `(グループ id, 要素の正準表記)` の並び（合成が返した順のまま）。
     reported: Vec<(u32, String)>,
 }

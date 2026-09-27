@@ -26,6 +26,7 @@ use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 pub(crate) mod boot;
+pub(crate) mod change;
 pub(crate) mod choice;
 pub(crate) mod close;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
@@ -94,6 +95,14 @@ pub(crate) enum Input {
     UserBreak {
         scope: u32,
     },
+    /// ゴーストの切替の要求（UI → kanade）。受理の判断は [`change::on_change_ghost`] が持つ。
+    ChangeGhost(crate::change::ChangeRequest),
+    /// 汎用の通知の入口（UI → kanade）。判断は [`change::on_raise_event`] が持つ。
+    RaiseEvent {
+        id: String,
+        references: Vec<String>,
+        method: crate::change::ShioriMethod,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -119,6 +128,20 @@ pub(crate) enum Phase {
         reason: CloseReason,
     },
     CloseTalkWait {
+        talk_id: TalkId,
+        deadline: Option<MonotonicMs>,
+    },
+    /// 切替の `OnGhostChanging` の応答待ち（[`change`]）。
+    ChangePending,
+    /// `OnGhostChanging` の台詞の完了待ち／期限判定。
+    ChangeTalkWait {
+        talk_id: TalkId,
+        deadline: Option<MonotonicMs>,
+    },
+    /// 切替の `OnClose` の応答待ち。
+    ChangeClosePending,
+    /// 切替の `OnClose` の別れの台詞の完了待ち／期限判定。
+    ChangeCloseTalkWait {
         talk_id: TalkId,
         deadline: Option<MonotonicMs>,
     },
@@ -196,6 +219,10 @@ pub(crate) struct State {
     pub choice_prev_talk: Option<TalkId>,
     /// 利用者の中断を出した相手のトーク（止めた応答＝完了通知を待っている間だけ `Some`）。
     pub user_break_talk: Option<TalkId>,
+    /// 受理した切替（要求と `OnGhostChanging` の台本）。停止通知の切替の中身の源。
+    pub change: Option<change::ChangeState>,
+    /// 台詞の再生中に受けた切替の要求の保留（`pending_close` と同型）。
+    pub pending_change: Option<crate::change::ChangeRequest>,
 }
 
 impl State {
@@ -212,6 +239,8 @@ impl State {
             choice: None,
             choice_prev_talk: None,
             user_break_talk: None,
+            change: None,
+            pending_change: None,
         }
     }
 
@@ -342,6 +371,8 @@ pub(crate) enum Action {
     CancelChoice {
         talk_id: TalkId,
     },
+    /// 運行の通知を UI へ送る（シェルは停止通知と同じ送出端へそのまま流す）。
+    Notice(crate::change::KanadeNotice),
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
@@ -443,6 +474,16 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
         // UserBreak: 場面で振り分けず、受理の規則ごと user_break::on_user_break へ渡す。
         Input::UserBreak { scope } => user_break::on_user_break(state, scope),
 
+        // ChangeGhost: 受理の規則ごと change::on_change_ghost へ渡す。
+        Input::ChangeGhost(req) => change::on_change_ghost(state, req),
+
+        // RaiseEvent: 許可表と定常の判定ごと change::on_raise_event へ渡す。
+        Input::RaiseEvent {
+            id,
+            references,
+            method,
+        } => change::on_raise_event(state, id, references, method),
+
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
         // Idle 以外での Boot は不整合（warn!＋現 Phase 維持・Req 6.2）。Idle のみ boot へ委譲。
@@ -496,6 +537,10 @@ fn phase_label(phase: &Phase) -> &'static str {
         Phase::Steady { .. } => "Steady",
         Phase::ClosePending { .. } => "ClosePending",
         Phase::CloseTalkWait { .. } => "CloseTalkWait",
+        Phase::ChangePending => "ChangePending",
+        Phase::ChangeTalkWait { .. } => "ChangeTalkWait",
+        Phase::ChangeClosePending => "ChangeClosePending",
+        Phase::ChangeCloseTalkWait { .. } => "ChangeCloseTalkWait",
         Phase::Unloading { .. } => "Unloading",
         Phase::Stopped => "Stopped",
     }
@@ -560,18 +605,26 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             state.choice_prev_talk = None;
             // 現行トークの完了なので中断の帳簿はここで必ず空になる（終わり方を問わない・不変条件）。
             // 空にした結果が「利用者の中断で終わり、かつ終了の予約があった」かを持ち帰る（Req 3.8）。
-            let break_quit = user_break::take_user_break_quit(&mut state, &done);
+            // 切替の相では予約を終了へ結ばない（中断は切替の中止＝切替の要件 5.4）。
+            let break_quit = user_break::take_user_break_quit(&mut state, &done)
+                && !change::is_change_phase(&state.phase);
             match done.reason {
                 TalkEndReason::Quit => {
                     // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
                     tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
-                    to_unloading_quit(state, "talk_done_quit")
+                    change::quit_dropping_pending(state, "talk_done_quit")
                 }
                 TalkEndReason::Interrupted if break_quit => {
                     // 利用者の中断で止めた台本が終了を予約していた——`\-` に辿り着いたのと
                     // 同じ終了へ進む（Req 3.8・設計「終了の予約」）。
                     tracing::info!(target: "kanade", event = "talk_done_break_quit", talk_id = done.talk_id.0, "利用者の中断で止めた台本が終了を予約していた——終了系列（Quit）へ");
-                    to_unloading_quit(state, "talk_done_break_quit")
+                    change::quit_dropping_pending(state, "talk_done_break_quit")
+                }
+                // 保留の切替を持つトークの完了（最後まで・`\-` の予約なしの中断とも）は切替の相へ。
+                TalkEndReason::Interrupted | TalkEndReason::Ended
+                    if change::has_pending(&state) =>
+                {
+                    change::consume_pending(state, done, config)
                 }
                 TalkEndReason::Interrupted => {
                     // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で
@@ -667,6 +720,12 @@ fn on_shiori_reply(
         return (state, Vec::new());
     }
 
+    // 定常の NOTIFY の応答（pump・汎用の入口）は正常な完了で、何もしない（トークも相も変えない）。
+    if matches!(outcome, ShioriOutcome::Notified) && matches!(state.phase, Phase::Steady { .. }) {
+        tracing::trace!(target: "kanade", event = "steady_notify_reply", origin, "定常の NOTIFY の応答——何もしない");
+        return (state, Vec::new());
+    }
+
     // 正常応答（Value／NoContent／Notified）は応答待ちフェーズ固有遷移へ委譲（origin を保持）。
     dispatch_phase(state, Input::ShioriReply { outcome, origin }, config)
 }
@@ -693,6 +752,10 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
         Phase::ClosePending { .. } | Phase::CloseTalkWait { .. } => {
             close::step(state, input, config)
         }
+        Phase::ChangePending
+        | Phase::ChangeTalkWait { .. }
+        | Phase::ChangeClosePending
+        | Phase::ChangeCloseTalkWait { .. } => change::step(state, input, config),
         // 終了系列（Unloading／Stopped）に届いた非横断入力は防御的に無視する。
         Phase::Unloading { .. } | Phase::Stopped => {
             tracing::warn!(target: "kanade", event = "input_after_terminate", "終了系列で受領した入力を無視");
@@ -719,6 +782,8 @@ fn awaits_reply(phase: &Phase) -> bool {
             | Phase::BootVersion { .. }
             | Phase::Steady { .. }
             | Phase::ClosePending { .. }
+            | Phase::ChangePending
+            | Phase::ChangeClosePending
     )
 }
 
@@ -733,7 +798,9 @@ fn current_talk_id(phase: &Phase) -> Option<TalkId> {
         | Phase::BootVersion {
             talk: Some(active), ..
         } => Some(active.talk_id),
-        Phase::CloseTalkWait { talk_id, .. } => Some(*talk_id),
+        Phase::CloseTalkWait { talk_id, .. }
+        | Phase::ChangeTalkWait { talk_id, .. }
+        | Phase::ChangeCloseTalkWait { talk_id, .. } => Some(*talk_id),
         _ => None,
     }
 }
@@ -741,6 +808,11 @@ fn current_talk_id(phase: &Phase) -> Option<TalkId> {
 #[cfg(test)]
 #[path = "schedule_tests.rs"]
 mod tests;
+
+/// 運行表の型（`Action` ほか）の変種の網羅。
+#[cfg(test)]
+#[path = "schedule_variant_tests.rs"]
+mod variant_tests;
 
 /// タスク 6.1: 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
 ///

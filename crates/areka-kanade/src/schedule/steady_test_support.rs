@@ -3,16 +3,19 @@ pub(super) fn config() -> KanadeConfig {
     KanadeConfig::new("master", "1.0.0")
 }
 
+/// 構造体更新（`..base_state()`）の基準の状態（[`State::initial`]＝Idle・Tick 未受領・採番 1・
+/// 保留と帳簿なし）。欄が増えても、これを使うテストのリテラルは追随を要さない。
+pub(crate) fn base_state() -> State {
+    State::initial()
+}
+
 /// Steady{talk: None}（pending_close なし）を任意時刻・任意採番で構築する。
 pub(super) fn steady_none(next_id: u64) -> State {
     State {
         phase: Phase::Steady { talk: None },
         last_now: Some(MonotonicMs(500)),
         next_talk_id: next_id,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        user_break_talk: None,
+        ..base_state()
     }
 }
 
@@ -28,10 +31,7 @@ pub(super) fn steady_some(talk_id: TalkId, next_id: u64) -> State {
         },
         last_now: Some(MonotonicMs(500)),
         next_talk_id: next_id,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        user_break_talk: None,
+        ..base_state()
     }
 }
 

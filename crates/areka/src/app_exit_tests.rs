@@ -252,12 +252,13 @@ fn connect_failed() -> areka_kanade::ShioriFault {
 }
 
 /// **要件 1.7・1.8・3.3（判定の表・要件 7.2）**: 失敗の中身を返すのは「kanade の停止で原因が
-/// Fault」の 1 行だけ。他の停止原因 4 値・強制退避・smoke の自動終了・OS の閉鎖要求の 7 行は
-/// 何も返さない（告知なし・終了コード 0）。
+/// Fault」と「既定ゴーストへ戻せなかった」（areka-P0-ghost-shell-balloon-switch 要件 6.4）の
+/// 2 行だけ。他の停止原因 4 値・強制退避・smoke の自動終了・OS の閉鎖要求・OS のセッションの
+/// 終了（同 要件 12.9）の 8 行は何も返さない（告知なし・終了コード 0）。
 #[test]
-fn fault_of_returns_the_fault_only_for_kanade_stopped_fault() {
+fn fault_of_returns_the_fault_only_for_fault_origins() {
     let fault = connect_failed();
-    let rows: [(ExitOrigin, Option<&areka_kanade::ShioriFault>); 8] = [
+    let rows: [(ExitOrigin, Option<&areka_kanade::ShioriFault>); 10] = [
         (ExitOrigin::KanadeStopped(KanadeStopCause::Quit), None),
         (ExitOrigin::KanadeStopped(KanadeStopCause::Forced), None),
         (
@@ -275,6 +276,8 @@ fn fault_of_returns_the_fault_only_for_kanade_stopped_fault() {
         (ExitOrigin::Escape, None),
         (ExitOrigin::Smoke, None),
         (ExitOrigin::OsClose, None),
+        (ExitOrigin::GhostFallbackFailed(fault.clone()), Some(&fault)),
+        (ExitOrigin::SessionEnd, None),
     ];
     for (origin, expected) in &rows {
         assert_eq!(fault_of(origin), *expected, "出所 {origin:?} の判定");
@@ -376,5 +379,99 @@ fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
         ),
         (0, true, false, 3, true, false),
         "(残った窓, 印の無い entity が残る, 終了の指示, 閉じた枚数, 起こし直しの info, app_exit の記録): {events:?}"
+    );
+}
+
+/// **areka-P0-ghost-shell-balloon-switch 要件 3.1・3.2・3.9**: 起こし直しのために全窓を閉じたら、
+/// 窓の束（`GhostWindows` 資源）も外す（消した窓の `Entity` を装着の相のゲートに見せない）。
+/// 終了の指示は出さない。
+///
+/// 窓は本番と同じ `spawn_ghost_windows` で生やす（窓の印と `GhostWindows` 資源が揃う）。
+/// 前提として閉じる前に資源が在ることを確かめる（無い World では判定が空になる）。
+#[test]
+fn close_windows_for_restart_removes_ghost_windows_resource() {
+    use crate::placement::follow::OffsetBase;
+    use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use crate::placement::source::GhostTitles;
+    use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+
+    let placement = ScopePlacement {
+        scope: 0,
+        char_pos: PointPx { x: 100, y: 100 },
+        char_size: SizePx { w: 200, h: 300 },
+        balloon_pos: PointPx { x: 320, y: 100 },
+        balloon_size: SizePx { w: 180, h: 120 },
+        balloon_offset: PointPx { x: 220, y: 0 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 220, y: 0 }),
+        balloon_limit: false,
+        anchor: Anchor::Bottom,
+        balloon_keyword_base: None,
+    };
+    let mut world = World::new();
+    world.insert_non_send(AppExit::new());
+    spawn_ghost_windows(
+        &mut world,
+        &[placement],
+        &GhostTitles::from_scope_titles([(0, "scope-0".to_string())]),
+    );
+    assert!(
+        world.contains_resource::<GhostWindows>(),
+        "前提: 閉じる前は窓の束が在る"
+    );
+
+    let closed = close_windows_for_restart(&mut world).closed();
+
+    let windows_left = world
+        .query_filtered::<Entity, With<GhostWindowMarker>>()
+        .iter(&world)
+        .count();
+    assert_eq!(
+        (
+            closed,
+            windows_left,
+            world.contains_resource::<GhostWindows>(),
+            world.non_send::<AppExit>().is_requested(),
+        ),
+        (2, 0, false, false),
+        "(閉じた枚数, 残った窓, 窓の束が在る, 終了の指示)"
+    );
+}
+
+/// **areka-P0-ghost-shell-balloon-switch 要件 12.9**: HWND が付いたゴースト窓へ、OS の閉鎖要求の
+/// 受け手と並べて OS のセッションの終了の受け手も差す（系は増やさない）。印の無い窓には差さない。
+#[test]
+fn attach_os_close_request_puts_both_receivers_on_ghost_windows() {
+    use bevy_ecs::system::RunSystemOnce;
+    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use wintf::ecs::window::OnSessionEnd;
+
+    let mut world = World::new();
+    let handle = || WindowHandle {
+        hwnd: HWND(0x5e55 as *mut _),
+        instance: HINSTANCE::default(),
+    };
+    let ghost = world.spawn((GhostWindowMarker, handle())).id();
+    let plain = world.spawn(handle()).id();
+    world
+        .run_system_once(attach_os_close_request)
+        .expect("系を 1 回回せる");
+
+    let receivers = |e: Entity| {
+        (
+            world.get::<OnCloseRequest>(e).is_some_and(|c| {
+                std::ptr::fn_addr_eq(c.0, on_ghost_os_close as fn(&mut World, Entity))
+            }),
+            world.get::<OnSessionEnd>(e).is_some_and(|c| {
+                std::ptr::fn_addr_eq(
+                    c.0,
+                    crate::session_end::on_os_session_end as fn(&mut World, Entity),
+                )
+            }),
+        )
+    };
+    assert_eq!(
+        (receivers(ghost), receivers(plain)),
+        ((true, true), (false, false)),
+        "ゴースト窓に 2 つの受け手が差さらない（閉鎖要求・セッションの終了）／印の無い窓に差さった"
     );
 }

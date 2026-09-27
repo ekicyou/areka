@@ -2,9 +2,9 @@
 //!
 //! kanade の終了系列が完了したことを知らせる停止通知を受けたら、UI は全ゴースト窓を
 //! **ちょうど 1 度**閉じる。ここで固定するのはその判断だけで、GPU も実窓も要らない
-//! （素の `World` に `GhostWindowMarker` と受け口 `KanadeStopRx` を並べて相を直に叩く）。
+//! （素の `World` に `GhostWindowMarker` と受け口 `KanadeNoticeRx` を並べて相を直に叩く）。
 //!
-//! 5 本の構成:
+//! 6 本の構成:
 //!
 //! 1. 通知 1 件 → 窓 0・`info!(event="ghost_quit")` 1 行。
 //! 2. 2 件目は `debug!` で打ち切る（窓を 2 度閉じない）。
@@ -12,10 +12,14 @@
 //! 4. 窓が既に無ければ `debug!` で打ち切る（失敗にしない）。
 //! 5. 原因が Fault でも同じ 1 本道で終わり、記録と最初の出所に種類と理由が載る
 //!    （areka-P0-shiori-fault-notice 要件 7.4・2.5）。
+//! 6. 停止以外の運行の通知（定常到達・切替の中止）は切替の振り分けへ渡り、終了の判断に関わらない
+//!    （areka-P0-ghost-shell-balloon-switch 要件 8.4）。
 
 use std::sync::mpsc;
 
-use areka_kanade::{KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind};
+use areka_kanade::{
+    CancelReason, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind,
+};
 use bevy_ecs::prelude::With;
 use log_capture_kit::{LineFormat, capture_lines};
 
@@ -27,17 +31,25 @@ use crate::placement::spawn::GhostWindowMarker;
 ///
 /// 終了の受け口（`wintf::AppExit`）も挿す——本番では `WinApp` が必ず挿すので、無ければ
 /// 統合操作は配線の誤りとして `error!` を残す。停止通知の受け口は `rx` が `Some` のときだけ挿す。
-fn world_with_ghost_windows(count: usize, rx: Option<Receiver<KanadeStopped>>) -> World {
+fn world_with_ghost_windows(count: usize, rx: Option<Receiver<KanadeNotice>>) -> World {
     let mut world = World::new();
     world.insert_non_send(wintf::AppExit::new());
     if let Some(rx) = rx {
-        world.insert_non_send(KanadeStopRx(rx));
+        world.insert_non_send(KanadeNoticeRx(rx));
     }
     for _ in 0..count {
         world.spawn(GhostWindowMarker);
     }
     world.spawn_empty();
     world
+}
+
+/// 停止の通知（切替の中身は無し）。
+fn stopped(cause: KanadeStopCause) -> KanadeNotice {
+    KanadeNotice::Stopped(KanadeStopped {
+        cause,
+        handoff: None,
+    })
 }
 
 /// `GhostWindowMarker` 窓の現数。
@@ -68,12 +80,10 @@ fn event_lines<'a>(logs: &'a [String], name: &str) -> Vec<&'a String> {
 /// 相が通知を読まなければ窓が 3 枚のまま残り、記録も出ない。
 #[test]
 fn one_notification_closes_every_ghost_window_and_logs_once() {
-    let (tx, rx) = mpsc::channel::<KanadeStopped>();
+    let (tx, rx) = mpsc::channel::<KanadeNotice>();
     let mut world = world_with_ghost_windows(3, Some(rx));
-    tx.send(KanadeStopped {
-        cause: KanadeStopCause::Quit,
-    })
-    .expect("停止通知を投函できる");
+    tx.send(stopped(KanadeStopCause::Quit))
+        .expect("停止通知を投函できる");
 
     let (consumed, logs) = capture_lines(LineFormat::LevelTargetFields, || {
         run_ghost_quit_phase(&mut world)
@@ -103,11 +113,10 @@ fn one_notification_closes_every_ghost_window_and_logs_once() {
 /// 全件 drain せずに 1 件ずつ処理していれば、2 件目の記録（`ghost_quit_extra`）が出ない。
 #[test]
 fn a_second_notification_is_cut_off_with_a_debug_line() {
-    let (tx, rx) = mpsc::channel::<KanadeStopped>();
+    let (tx, rx) = mpsc::channel::<KanadeNotice>();
     let mut world = world_with_ghost_windows(2, Some(rx));
     for cause in [KanadeStopCause::Quit, KanadeStopCause::Forced] {
-        tx.send(KanadeStopped { cause })
-            .expect("停止通知を投函できる");
+        tx.send(stopped(cause)).expect("停止通知を投函できる");
     }
 
     let (consumed, logs) = capture_lines(LineFormat::LevelTargetFields, || {
@@ -147,7 +156,7 @@ fn a_second_notification_is_cut_off_with_a_debug_line() {
 #[test]
 fn no_notification_and_no_receiver_are_both_complete_no_ops() {
     // ⑴ 受け口は在るが通知が来ていない。
-    let (_tx, rx) = mpsc::channel::<KanadeStopped>();
+    let (_tx, rx) = mpsc::channel::<KanadeNotice>();
     let mut world = world_with_ghost_windows(2, Some(rx));
     let (consumed, logs) = capture_lines(LineFormat::LevelTargetFields, || {
         run_ghost_quit_phase(&mut world)
@@ -174,12 +183,10 @@ fn no_notification_and_no_receiver_are_both_complete_no_ops() {
 /// 窓 0 を異常として扱えば（`error!`／panic）本檻が落ちる。
 #[test]
 fn a_notification_with_no_windows_left_is_cut_off_as_a_normal_case() {
-    let (tx, rx) = mpsc::channel::<KanadeStopped>();
+    let (tx, rx) = mpsc::channel::<KanadeNotice>();
     let mut world = world_with_ghost_windows(0, Some(rx));
-    tx.send(KanadeStopped {
-        cause: KanadeStopCause::Forced,
-    })
-    .expect("停止通知を投函できる");
+    tx.send(stopped(KanadeStopCause::Forced))
+        .expect("停止通知を投函できる");
 
     let (consumed, logs) = capture_lines(LineFormat::LevelTargetFields, || {
         run_ghost_quit_phase(&mut world)
@@ -218,12 +225,10 @@ fn a_fault_notification_quits_and_records_kind_and_reason() {
         kind: ShioriFaultKind::Timeout,
         reason: REASON.to_owned(),
     };
-    let (tx, rx) = mpsc::channel::<KanadeStopped>();
+    let (tx, rx) = mpsc::channel::<KanadeNotice>();
     let mut world = world_with_ghost_windows(2, Some(rx));
-    tx.send(KanadeStopped {
-        cause: KanadeStopCause::Fault(fault.clone()),
-    })
-    .expect("停止通知を投函できる");
+    tx.send(stopped(KanadeStopCause::Fault(fault.clone())))
+        .expect("停止通知を投函できる");
 
     let (consumed, logs) = capture_lines(LineFormat::LevelTargetFields, || {
         run_ghost_quit_phase(&mut world)
@@ -245,4 +250,51 @@ fn a_fault_notification_quits_and_records_kind_and_reason() {
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(fault)),
         "最初の出所は Fault の停止"
     );
+}
+
+/// 停止以外の運行の通知（定常到達・切替の中止）は切替の振り分けへ渡り、予約の無い今は 1 件ずつ
+/// 記録だけを残す（定常到達は `ghost_switch_done`・中止は `ghost_switch_cancelled`）。窓は閉じず
+/// 終了も指示しない。同じフレームに停止が混ざれば、停止だけが今日どおり終了へ進む（要件 8.4）。
+///
+/// # 非空虚性
+/// 停止以外の通知で終了へ進めば窓が消えて終了が指示され、黙って捨てれば記録の行数が落ちる。
+#[test]
+fn notices_other_than_stop_go_to_the_switch_dispatch_without_quitting() {
+    let (tx, rx) = mpsc::channel::<KanadeNotice>();
+    let mut world = world_with_ghost_windows(2, Some(rx));
+    tx.send(KanadeNotice::Steady).expect("通知を投函できる");
+    tx.send(KanadeNotice::ChangeCancelled {
+        reason: CancelReason::UserBreak,
+    })
+    .expect("通知を投函できる");
+
+    let (consumed, logs) = capture_lines(LineFormat::LevelTargetFields, || {
+        run_ghost_quit_phase(&mut world)
+    });
+
+    assert!(!consumed, "停止以外の通知は消化扱いにしない");
+    assert_eq!(ghost_count(&mut world), 2, "停止以外の通知では窓は残る");
+    assert!(!exit_requested(&world), "停止以外の通知では終了しない");
+    assert_eq!(
+        (
+            event_lines(&logs, "ghost_switch_done").len(),
+            event_lines(&logs, "ghost_switch_cancelled").len(),
+        ),
+        (1, 1),
+        "振り分けた通知は 1 件ずつ記録される: {logs:?}"
+    );
+    assert!(event_lines(&logs, "ghost_quit").is_empty(), "{logs:?}");
+
+    // 停止が混ざったフレームでは、停止だけが今日どおり終了へ進む。
+    tx.send(KanadeNotice::Steady).expect("通知を投函できる");
+    tx.send(stopped(KanadeStopCause::Quit))
+        .expect("停止通知を投函できる");
+    let (consumed, logs) = capture_lines(LineFormat::LevelTargetFields, || {
+        run_ghost_quit_phase(&mut world)
+    });
+    assert!(consumed, "停止の通知を消化した");
+    assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓が閉じる");
+    assert!(exit_requested(&world), "終了を指示する");
+    assert_eq!(event_lines(&logs, "ghost_switch_done").len(), 1, "{logs:?}");
+    assert_eq!(event_lines(&logs, "ghost_quit").len(), 1, "{logs:?}");
 }

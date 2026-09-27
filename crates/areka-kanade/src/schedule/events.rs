@@ -19,7 +19,7 @@
 //! |---|---|---|
 //! | `OnInitialize` | NOTIFY | References なし（空 Vec・M1 にリロード概念なし） |
 //! | `OnFirstBoot` | GET | Ref0=`"0"`（固定・Req 1.6） |
-//! | `OnBoot` | GET | Ref0=`config.shell_name`（Ref6/7 省略） |
+//! | `OnBoot` | GET | Ref0=`config.shell_name`（前回落ちたときだけ Ref1〜5=空・Ref6=`halt`・Ref7=落ちたゴースト名） |
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"）・"user" のみ Ref1=Ref2=スコープ番号（ForceQuit の NOTIFY は Ref0 のみ） |
@@ -27,7 +27,11 @@
 //! | `OnChoiceSelect` | GET | Ref0=選択肢 ID（Req3.2） |
 //! | 任意名（`\q` の `On` 始まり ID） | GET | Ref0 以降=付随参照列のみ（空なら References なし・Req3.3/3.5） |
 //! | `OnChoiceTimeout` | GET | Ref0=タイムアウトした選択肢を含むトークの起動スクリプト（Req3.4） |
+//! | `OnGhostChanging` | GET | Ref0〜3=切替先の本体側の名前・出どころ・名前・フォルダの絶対パス |
+//! | `OnGhostChanged` | GET | Ref0〜3=直前のゴーストの本体側の名前・切替時の台本・名前・パス・Ref4〜6=空・Ref7=シェルのフォルダ名 |
+//! | 汎用の入口（許可表の名前） | GET／NOTIFY | 渡された列のまま |
 
+use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
@@ -90,6 +94,10 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnChoiceSelect",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnChoiceTimeout:1
     "OnChoiceTimeout",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanging:1
+    "OnGhostChanging",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanged:1
+    "OnGhostChanged",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
@@ -98,6 +106,25 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
 /// 本判定ではなく [`is_allowed_choice_event`] を用いる（DD-2）。
 pub fn is_allowed_event_id(id: &str) -> bool {
     ALLOWED_EVENT_IDS.contains(&id)
+}
+
+/// 許可表（[`ALLOWED_EVENT_IDS`]）と一致した綴りを `&'static str` で返す（無ければ `None`）。
+///
+/// 汎用の入口が外から受けた名前を [`EventId::Static`] と再生中のトークの `origin` の両方へ
+/// 使える形に写す照合（要件 7.2）。判定は逐語（大小文字の揺れは補正しない）。
+pub fn allowed_static(id: &str) -> Option<&'static str> {
+    ALLOWED_EVENT_IDS
+        .iter()
+        .copied()
+        .find(|allowed| *allowed == id)
+}
+
+/// 再生中に届いた GET の応答（台本）で今のトークを置き換えるか（要件 7.3）。
+///
+/// `OnSecondChange` の応答だけは今日どおり捨て、それ以外（マウス 2 語・汎用の入口・
+/// `OnGhostChanging`）は置き換える。
+pub fn value_replaces_active_talk(origin: &str) -> bool {
+    origin != "OnSecondChange"
 }
 
 /// **選択起源**（[`crate::msg::EventId::Choice`]）の任意名イベント受理規則（Req2.6／2.9・DD-2）。
@@ -142,12 +169,85 @@ pub fn on_first_boot(snapshot: &ExecutionSnapshot, vanish_count: u32) -> ShioriC
 
 /// `OnBoot`（GET・Ref0=`config.shell_name`）。
 ///
-/// Ref6/7（前回 crash 情報・MATERIA/SSP）は crash 情報を持たない M1 では省略する。
+/// 起動の由来が「前回落ちた」（[`BootOrigin::Halted`]）なら Ref1〜5＝空・Ref6＝`halt`・
+/// Ref7＝落ちたゴースト名を載せる（番号を詰めない・要件 6.2・11.10）。それ以外は Ref0 だけ。
 pub fn on_boot(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    let mut references = vec![config.shell_name.clone()];
+    if let BootOrigin::Halted { ghost_name } = &config.boot_origin {
+        references.resize(6, String::new());
+        references.extend(["halt".to_string(), ghost_name.clone()]);
+    }
     ShioriCall::Get {
         id: EventId::Static("OnBoot"),
-        references: vec![config.shell_name.clone()],
+        references,
         status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnGhostChanging`（GET・Ref0〜3＝切替先の本体側の名前・出どころ・名前・フォルダの絶対パス）。
+///
+/// 本体側の名前が無ければ Ref0 は空のまま位置を保つ（要件 2.1・11.7）。
+pub fn on_ghost_changing(req: &ChangeRequest, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnGhostChanging"),
+        references: vec![
+            req.target.sakura_name.clone(),
+            req.origin.as_ref_str().to_string(),
+            req.target.name.clone(),
+            req.target.dir.clone(),
+        ],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnGhostChanged`（GET・Ref0〜3＝直前のゴーストの本体側の名前・切替時の台本・名前・パス、
+/// Ref4〜6＝空、Ref7＝シェルのフォルダ名）。
+///
+/// 切替時の台本が無ければ Ref1 は空のまま位置を保つ（要件 4.1・11.5）。
+pub fn on_ghost_changed(
+    from: &ChangedFrom,
+    shell_folder: &str,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnGhostChanged"),
+        references: vec![
+            from.sakura_name.clone(),
+            from.script.clone(),
+            from.name.clone(),
+            from.dir.clone(),
+            String::new(),
+            String::new(),
+            String::new(),
+            shell_folder.to_string(),
+        ],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// 汎用の入口の組み立て（GET／NOTIFY・渡された列をそのまま Reference にする）。
+///
+/// 欠番は呼び手が空文字で埋める（本関数は詰めも補いもしない）。`id` は
+/// [`allowed_static`] を通した許可表の綴り（要件 7.2・7.3）。
+pub fn raise(
+    id: &'static str,
+    references: Vec<String>,
+    method: ShioriMethod,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    let id = EventId::Static(id);
+    let status = ExecutionStatus::derive(snapshot);
+    match method {
+        ShioriMethod::Get => ShioriCall::Get {
+            id,
+            references,
+            status,
+        },
+        ShioriMethod::Notify => ShioriCall::Notify {
+            id,
+            references,
+            status,
+        },
     }
 }
 
@@ -429,3 +529,7 @@ pub fn on_choice_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCa
 #[cfg(test)]
 #[path = "events_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "events_change_tests.rs"]
+mod change_tests;

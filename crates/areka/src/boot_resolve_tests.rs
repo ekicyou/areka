@@ -528,4 +528,146 @@ mod last_used {
             Some("StayseeBalloon")
         );
     }
+
+    /// 切替で決まったゴーストは記憶を書く経路（要件 4.6）: App に書かれ argv の skip は出ない。
+    #[test]
+    fn record_switched_writes_last_ghost() {
+        let root = root();
+        let g = ghost_at(&root, GhostRoute::Switched, "g2");
+        let b = balloon_at(&root, BalloonRoute::Memory, "b1");
+        let (app, _, events) = record_and_load(&g, &b, "master");
+        assert_eq!(app, vec![entry(PersistKey::LastGhost, "g2")]);
+        assert_eq!(count_event(&events, "last_used_skipped_argv"), 0);
+    }
+
+    /// 起動中の印の往復（要件 12.1・12.2）: 書く → 読む → 消す（空文字＝無し）。最後のゴーストには触れない。
+    #[test]
+    fn session_mark_round_trip_and_clear() {
+        let tmp = TempPath::new("boot-resolve-session-mark");
+        let app_dir = tmp.child("app-profile");
+        let before = read_session_mark(&app_dir);
+
+        let ((), written) = capture(|| write_session_mark(&app_dir, "動いている子"));
+        let after_write = read_session_mark(&app_dir);
+        let ((), cleared) = capture(|| clear_session_mark(&app_dir));
+
+        assert_eq!(
+            (
+                before,
+                after_write,
+                read_session_mark(&app_dir),
+                read_last_ghost(&app_dir)
+            ),
+            (None, Some("動いている子".to_owned()), None, None),
+            "印の往復が崩れた（書く前・書いた後・消した後・最後のゴースト）"
+        );
+        assert_one_event(&written, "session_mark_written", tracing::Level::INFO);
+        assert_one_event(&cleared, "session_mark_cleared", tracing::Level::INFO);
+    }
+
+    /// 切替の降ろした直後（要件 12.6）: 1 回の書き込みで最後のゴースト＝既定・印＝切替先。
+    /// 印を渡さない（argv で始まったプロセス）なら最後のゴーストだけで、前から在った印は残る。
+    #[test]
+    fn switch_drop_writes_default_and_mark_at_once() {
+        let tmp = TempPath::new("boot-resolve-switch-drop");
+        let app_dir = tmp.child("app-profile");
+        let argv_dir = tmp.child("app-profile-argv");
+        write_session_mark(&argv_dir, "前からの印");
+
+        let ((), events) = capture(|| write_switch_drop(&app_dir, Some("切替先")));
+        write_switch_drop(&argv_dir, None);
+
+        assert_eq!(
+            (
+                read_last_ghost(&app_dir),
+                read_session_mark(&app_dir),
+                read_last_ghost(&argv_dir),
+                read_session_mark(&argv_dir),
+            ),
+            (
+                Some(DEFAULT_GHOST_FOLDER.to_owned()),
+                Some("切替先".to_owned()),
+                Some(DEFAULT_GHOST_FOLDER.to_owned()),
+                Some("前からの印".to_owned()),
+            ),
+            "降ろした直後の記憶が崩れた（最後のゴースト・印／argv の最後のゴースト・印）"
+        );
+        assert_one_event(&events, "switch_drop_recorded", tracing::Level::INFO);
+    }
+
+    /// 書けないとき（App の置き場が普通のファイル）: 3 つの書き手（切替の降ろした直後は印あり・argv の
+    /// 印なしの 2 通り）はそれぞれ `warn!` 1 件で戻り、
+    /// 成功の info は出ない。
+    #[test]
+    fn session_mark_writers_warn_once_when_they_cannot_write() {
+        let tmp = TempPath::new("boot-resolve-session-mark-degraded");
+        let app_dir = tmp.child("app-profile");
+        std::fs::create_dir_all(app_dir.parent().unwrap()).unwrap();
+        std::fs::write(&app_dir, "not a dir").unwrap();
+        let roots = ScopeRoots {
+            app: Some(app_dir.clone()),
+            ..ScopeRoots::default()
+        };
+        // 前提の確認: この置き場への保存は本当に縮退する。
+        assert_eq!(
+            save_scope(PersistScope::App, &roots, &FsPersistIo, vec![]),
+            PersistOutcome::Degraded
+        );
+        let cases: [(&str, &str, Box<dyn Fn()>); 4] = [
+            (
+                "session_mark_write_degraded",
+                "session_mark_written",
+                Box::new(|| write_session_mark(&app_dir, "動いている子")),
+            ),
+            (
+                "switch_drop_record_degraded",
+                "switch_drop_recorded",
+                Box::new(|| write_switch_drop(&app_dir, Some("切替先"))),
+            ),
+            (
+                // argv で始まったプロセス（印に触れない）でも最後のゴーストが書けなければ警告する。
+                "switch_drop_record_degraded",
+                "switch_drop_recorded",
+                Box::new(|| write_switch_drop(&app_dir, None)),
+            ),
+            (
+                "session_mark_clear_degraded",
+                "session_mark_cleared",
+                Box::new(|| clear_session_mark(&app_dir)),
+            ),
+        ];
+        for (warn, info, write) in cases {
+            let ((), events) = capture(|| write());
+            assert_one_event(&events, warn, tracing::Level::WARN);
+            assert_eq!(count_event(&events, info), 0, "{info} が出た");
+        }
+    }
+
+    /// 印に書く名前（要件 12.1）: 目録の同じフォルダの descript の `name`、無ければフォルダ名。
+    #[test]
+    fn running_name_prefers_descript_name_then_folder() {
+        let tmp = TempPath::new("boot-resolve-running-name");
+        let root = BasewareRoot::new(tmp.path().to_path_buf());
+        for (folder, descript) in [
+            ("named", "charset,UTF-8\nname,名のある子\n"),
+            ("nameless", "charset,UTF-8\n"),
+        ] {
+            let master = root.ghost_dir(folder).join("ghost").join("master");
+            std::fs::create_dir_all(&master).unwrap();
+            std::fs::write(master.join("descript.txt"), descript).unwrap();
+        }
+        assert_eq!(
+            [
+                running_name(&root, &ghost_at(&root, GhostRoute::Memory, "named")),
+                running_name(&root, &ghost_at(&root, GhostRoute::Default, "nameless")),
+                running_name(&root, &ghost_at(&root, GhostRoute::Only, "missing")),
+            ],
+            [
+                "名のある子".to_owned(),
+                "nameless".to_owned(),
+                "missing".to_owned()
+            ],
+            "印の名前が descript の name → フォルダ名の順でない（在る・name 無し・目録に無い）"
+        );
+    }
 }

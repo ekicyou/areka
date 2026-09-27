@@ -414,6 +414,8 @@ fn boot_greeting_talk_carries_epilogue() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (_, actions) = step(s, reply(ShioriOutcome::Value("greeting".to_string())), &cfg);
     let st = start_talk_of(&actions);
@@ -481,6 +483,8 @@ fn normal_204_with_empty_epilogue_emits_no_talk() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
     assert!(
@@ -524,6 +528,8 @@ fn boot_active_talk_records_started_script() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (s, actions) = step(s, reply(ShioriOutcome::Value("greeting".to_string())), &cfg);
     assert_eq!(start_talk_of(&actions).script, "greeting");
@@ -542,6 +548,8 @@ fn boot_active_talk_records_started_script() {
         choice: None,
         choice_prev_talk: None,
         user_break_talk: None,
+        change: None,
+        pending_change: None,
     };
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
     assert_eq!(start_talk_of(&actions).script, "");

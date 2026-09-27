@@ -12,7 +12,7 @@ use wintf::ecs::{Input, Update};
 
 use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::emo2_boot::frame::KanadeStopRx;
+use crate::emo2_boot::frame::KanadeNoticeRx;
 use crate::emo2_boot::sample_test_support::acquire_emo2;
 use crate::emo2_boot::spine::{SpineHarness, run_bounded};
 use crate::input_events::user_break::UserBreakWiring;
@@ -63,9 +63,150 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
     );
 }
 
+/// 作業プールの閉包を回す `Input` 段を、`done` が真になるまで（10 秒まで）回す。
+/// 閉包は作業プールの別スレッドから届くので、届くまで待つ（有界・期限切れは `false`）。
+fn run_input_until(world: &mut World, done: impl Fn(&mut World) -> bool) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        world.run_schedule(Input);
+        if done(world) {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::yield_now();
+    }
+}
+
+fn ghost_window_count(world: &mut World) -> usize {
+    world
+        .query_filtered::<(), bevy_ecs::query::With<GhostWindowMarker>>()
+        .iter(world)
+        .count()
+}
+
+/// 作業プールの閉包が届いたことの目印（準備だけで窓が生えないことの対照）。
+#[derive(bevy_ecs::resource::Resource)]
+struct SentinelArrived;
+
+/// 窓を作る手順は「準備」と「投函」に分かれる（要件 4.10・6.1・design「ghost_session.rs」）。
+///
+/// 準備（[`prepare_ghost_windows`]）だけでは窓は 1 枚も生えない——準備の後に作業プールへ
+/// 投げた目印の閉包が `Input` 段で届いても、窓は 0 枚のまま。投函
+/// （[`commit_ghost_windows`]）の後、次の `Input` 段で窓が生える（emo2 はスコープ 2 つ＝
+/// キャラ窓とバルーン窓で 4 枚）。
+/// 判定は集めてから 1 回。
+#[test]
+fn prepare_spawns_no_window_until_commit() {
+    // SAFETY: 資産の採寸（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let sample = acquire_emo2();
+    let cfg = ConfigInputs {
+        ghost_root: sample.folder().to_path_buf(),
+        balloon_root: emo2_balloon(&sample),
+    };
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    world.insert_resource(WintfTaskPool::new());
+    world.resource_mut::<Schedules>().add_systems(
+        Input,
+        wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands,
+    );
+
+    let prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
+    world
+        .resource::<WintfTaskPool>()
+        .spawn(|tx: CommandSender| async move {
+            let _ = tx.send(Box::new(|world: &mut World| {
+                world.insert_resource(SentinelArrived);
+            }));
+        });
+    let sentinel_arrived =
+        run_input_until(&mut world, |w| w.contains_resource::<SentinelArrived>());
+    let after_prepare = ghost_window_count(&mut world);
+
+    commit_ghost_windows(&mut world, prepared);
+    let spawned = run_input_until(&mut world, |w| ghost_window_count(w) > 0);
+    let after_commit = ghost_window_count(&mut world);
+
+    assert_eq!(
+        (sentinel_arrived, after_prepare, spawned, after_commit),
+        (true, 0, true, 4),
+        "準備だけで窓が生えた／投函の後に窓が生えない（目印が届いた・準備後の窓の数・\
+         投函後に生えた・投函後の窓の数）"
+    );
+}
+
+/// 投函した窓の閉包が `Input` 段に着く前に全窓を閉じたら、着いた閉包は窓を 1 枚も作らない
+/// （切替先の非同期の失敗が窓の生成より先に届き既定へ戻す形＝壊れた切替先の窓が孤児として
+/// 生えない・要件 6.1・4.10）。閉包の後ろに目印を継ぎ、着いたことを確かめてから数える。
+#[test]
+fn close_before_commit_arrives_spawns_no_window() {
+    // SAFETY: 資産の採寸（WIC）に要る COM 初期化（既初期化の S_FALSE 等は無視）。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    let sample = acquire_emo2();
+    let cfg = ConfigInputs {
+        ghost_root: sample.folder().to_path_buf(),
+        balloon_root: emo2_balloon(&sample),
+    };
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+    world.insert_resource(WintfTaskPool::new());
+    world.resource_mut::<Schedules>().add_systems(
+        Input,
+        wintf::ecs::widget::bitmap_source::systems::drain_task_pool_commands,
+    );
+
+    let mut prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
+    let spawn = prepared.spawn;
+    prepared.spawn = Box::new(move |world: &mut World| {
+        spawn(world);
+        world.insert_resource(SentinelArrived);
+    });
+    commit_ghost_windows(&mut world, prepared);
+    let _closed = app_exit::close_windows_for_restart(&mut world);
+    let arrived = run_input_until(&mut world, |w| w.contains_resource::<SentinelArrived>());
+
+    assert_eq!(
+        (arrived, ghost_window_count(&mut world)),
+        (true, 0),
+        "(閉包が着いた・窓の数): 閉じたあとに着いた閉包が窓を作った"
+    );
+}
+
+/// 投函の時点で作業プールが無ければ、閉包を捨てた上で `task_pool_missing` を error で残す
+/// （黙って捨てない・log-first の判断分岐）。
+#[test]
+fn commit_without_task_pool_logs_error() {
+    let mut world = World::new();
+    let prepared = PreparedWindows {
+        descript: StartupDescriptValues {
+            author_dpi: placement::AuthorDpi::DEFAULT,
+            zorder_raw: None,
+        },
+        spawn: Box::new(|_: &mut World| {}),
+    };
+    let ((), events) = capture_logs(|| commit_ghost_windows(&mut world, prepared));
+    let missing_errors = events
+        .iter()
+        .filter(|e| {
+            e.field_str("event") == Some("task_pool_missing") && e.level == tracing::Level::ERROR
+        })
+        .count();
+    assert_eq!(
+        missing_errors, 1,
+        "作業プールの欠落が記録されない: {events:?}"
+    );
+}
+
 /// 偽の SHIORI（標準の台本）・検体の複製・時計なし・記憶の置き場なしで入力の束を組む。
 /// 台本は呼ぶたびに新しい（周ごとに `OnInitialize` から `Unload` までを 1 本ずつ消費する）。
-fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeStopped>) -> GhostBootInputs {
+fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeNotice>) -> GhostBootInputs {
     let (backend, _handle) = SpineHarness::standard_backend("\\s[0]\\e");
     GhostBootInputs {
         wiring: emo2_boot::Emo2BootInputs {
@@ -76,6 +217,7 @@ fn scripted_inputs(sample: &SampleRoot, kanade_stop: Sender<KanadeStopped>) -> G
             })),
             ticker: areka_ghost::TickerMode::Disabled,
             app_profile_dir: None,
+            boot_origin: areka_kanade::BootOrigin::Plain,
         },
         // 結線ありの腕を通すので使われない（fallback に落ちたら判定の説明書の面が赤になる）。
         helper_exe: PathBuf::from("ghost_session_restart_tests/使わない/helper.exe"),
@@ -94,7 +236,7 @@ fn emo2_balloon(sample: &SampleRoot) -> PathBuf {
 fn boot_round(
     world: &mut World,
     sample: &SampleRoot,
-    kanade_stop: Sender<KanadeStopped>,
+    kanade_stop: Sender<KanadeNotice>,
 ) -> GhostSession {
     let descript = StartupDescriptValues {
         author_dpi: placement::AuthorDpi::DEFAULT,
@@ -142,7 +284,7 @@ fn systems_lens(world: &World) -> [usize; 3] {
 ///
 /// 1 周目を降ろして全窓を閉じ、2 周目を結線した後に、⑴ 系が二重に登録されていない
 /// ⑵ 状態が 2 周目のものへ載せ替わっている（説明書の経路が 2 周目の根の下・メニューの登記が
-/// 組込 2 項目だけ・停止通知の受け口と中断の旗の受信端が生きた送出端につながっている）
+/// 組込 2 項目と「ゴースト」枠だけ・停止通知の受け口と中断の旗の受信端が生きた送出端につながっている）
 /// ⑶ 終了が指示されていない、を確かめる。
 ///
 /// 「つながっている」は `try_recv` を `Err` が出るまで回して最後が `Empty`（1 周目の受信端は
@@ -162,7 +304,7 @@ fn boots_twice_in_one_process_without_double_registration() {
     world.spawn(GhostWindowMarker);
     world.spawn(GhostWindowMarker);
 
-    let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeStopped>();
+    let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
     register_systems(&mut world, kanade_stop_rx);
     let lens_before = systems_lens(&world);
 
@@ -207,7 +349,7 @@ fn boots_twice_in_one_process_without_double_registration() {
         .get_non_send::<MenuWiring>()
         .map(|w| w.registry.registered_frames());
     let kanade_stop_live = {
-        let rx = &world.non_send::<KanadeStopRx>().0;
+        let rx = &world.non_send::<KanadeNoticeRx>().0;
         loop {
             match rx.try_recv() {
                 Ok(_) => continue,
@@ -240,10 +382,15 @@ fn boots_twice_in_one_process_without_double_registration() {
         actual,
         (
             true,
-            Some(vec![Frame::Shell, Frame::Readme, Frame::Close]),
+            Some(vec![
+                Frame::Ghost,
+                Frame::Shell,
+                Frame::Readme,
+                Frame::Close
+            ]),
             lens_before,
             true,
-            Some(vec![Frame::Readme, Frame::Close]),
+            Some(vec![Frame::Ghost, Frame::Readme, Frame::Close]),
             true,
             true,
             false,

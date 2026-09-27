@@ -30,8 +30,9 @@
 use std::sync::mpsc;
 
 use areka_kanade::{
-    CloseReason, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped, MonotonicMs,
-    ShioriDownKind, ShioriFailure, ShioriFault, ShioriFaultKind, TalkDone, TalkEndReason, TalkId,
+    CloseReason, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped,
+    MonotonicMs, ShioriDownKind, ShioriFailure, ShioriFault, ShioriFaultKind, TalkDone,
+    TalkEndReason, TalkId,
 };
 
 use log_capture_kit::install_global_capture_all;
@@ -63,14 +64,25 @@ fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
 ///
 /// 呼び手は kanade を join してから読む——join の成功は終了系列の完了（停止通知の投函）の後なので、
 /// 通知は既に届いている。
-fn single_fault_notification(rx: &mpsc::Receiver<KanadeStopped>) -> ShioriFault {
-    let first = rx
+fn single_fault_notification(rx: &mpsc::Receiver<KanadeNotice>) -> ShioriFault {
+    let mut first = rx
         .try_recv()
         .expect("終了系列の完了で停止通知が 1 件届くはず");
+    // 定常に入っていれば、その通知（定常到達）が停止の通知より先に 1 件だけ届く。
+    if first == KanadeNotice::Steady {
+        first = rx
+            .try_recv()
+            .expect("終了系列の完了で停止通知が 1 件届くはず");
+    }
     assert!(rx.try_recv().is_err(), "停止通知は 1 件だけのはず");
-    match first.cause {
-        KanadeStopCause::Fault(fault) => fault,
-        other => panic!("SHIORI の失敗で止まったなら停止原因は Fault のはず: {other:?}"),
+    match first {
+        KanadeNotice::Stopped(KanadeStopped {
+            cause: KanadeStopCause::Fault(fault),
+            handoff: None,
+        }) => fault,
+        other => panic!(
+            "SHIORI の失敗で止まったなら停止の通知で原因は Fault・切替の中身は無しのはず: {other:?}"
+        ),
     }
 }
 
@@ -148,7 +160,7 @@ fn each_failure_vocabulary_drives_observable_termination() {
         };
 
         // boot 最初の呼出（OnInitialize NOTIFY）を当該語彙で失敗させる（停止通知の投函端つき）。
-        let (stop_tx, stop_rx) = mpsc::channel::<KanadeStopped>();
+        let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
         let harness = spawn_harness_failing_with_stop_sink(
             KanadeConfig::new("master", "1.0.0"),
             Fixture::default(),
@@ -240,7 +252,7 @@ fn shiori_down_case(
     expected_kind: ShioriFaultKind,
 ) {
     let reason = "shiori went down (failure_test)";
-    let (stop_tx, stop_rx) = mpsc::channel::<KanadeStopped>();
+    let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     let harness = spawn_harness_with_stop_sink(
         KanadeConfig::new("master", "1.0.0"),
         Fixture::default(),
@@ -739,7 +751,7 @@ fn send_failure_delivers_a_disconnected_fault() {
     // 記録 `shiori_failed` は kanade のアクタースレッドで出るので、起動前に全スレッド捕捉を据える。
     let buffer = install_global_capture_all();
 
-    let (stop_tx, stop_rx) = mpsc::channel::<KanadeStopped>();
+    let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     let harness = spawn_harness_with_stop_sink(
         KanadeConfig::new("master", "1.0.0"),
         Fixture::default(),
@@ -816,7 +828,7 @@ fn reply_dropped_delivers_a_disconnected_fault() {
 
     // 起動の最初の呼出で止まるので talk は起きない。受信端は保持だけする。
     let (talk_tx, _talk_rx) = mpsc::channel::<areka_kanade::TalkCommand>();
-    let (stop_tx, stop_rx) = mpsc::channel::<KanadeStopped>();
+    let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     let (sender, kanade) = areka_kanade::spawn_kanade_with_stop_sink(
         KanadeConfig::new("master", "1.0.0"),
         shiori_tx,

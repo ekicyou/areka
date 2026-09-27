@@ -60,3 +60,7 @@
 - **`shell-balloon-switch` と並走する条件（共有ソース 0）**: 本仕様は `consumer_ledger.rs`・`boot_resolve.rs`・`boot_config.rs`・`emo2_boot/mod.rs`・`ghost_session.rs`・kanade・`menu/mod.rs` に**触らない**。触るのは `areka-parsers/src/sakura/decode.rs`（391 行）・`areka-sakura/src/compile.rs`（346 行）・`areka-ghost` の新ファイル・`emo2_boot/change_cue.rs`（`ghost-shell-balloon-switch` が作り、`shell-balloon-switch` は触らない＝`shell-balloon-switch` は別ファイル `switch_cue.rs`）とそれぞれの兄弟テストだけ。網羅台帳 `sakura-script.toml` は `shell-balloon-switch` と同じファイルの**別の行**（`\+`・`\_+` 対 `\![change,shell|balloon…]`）、生成物（`report/*.md`）は手で直さず合流後に生成器で作り直す。着手時に `ghost-shell-balloon-switch` の実物（`change_cue.rs` の名前と形）で接触ファイルを再測定し、重なりが出たら `shell-balloon-switch` の後へ直列に戻す。
 - 決定論テスト網羅（乱数は注入・`list_ghosts` の並びは偽の目録で固定）。ログ無し失敗経路の禁止（候補 0・記録なしは `warn!`）。
 - 規模 **S（4〜5 タスク）**。要件は Opus で足りる（正典が語を決めており、裁量は `sequential` の順と「今のゴーストを候補から外す」の 2 点）。
+
+## 2026-09-26 申し送り（`ghost-shell-balloon-switch` の要件討議から）
+
+- **「解決できない名前」の腕の所在は `change_cue.rs` ではない。** 名前の突き合わせは目録（`catalog::list_ghosts`＝fs I/O）を読むので、talk スレッドの受け口 `emo2_boot/change_cue.rs` ではなく **UI 側（フレームの相）の取り出し**で行う。受け口は名前を無変形で運ぶだけ（`ghost-shell-balloon-switch` 要件 1.7）。本仕様が置き換える腕は UI 側の取り出しにあり、着手時に実物（取り出しのファイル名と形）で接触ファイルを再測定すること。上の Constraints の `change_cue.rs` の記述はこの申し送りで読み替える。

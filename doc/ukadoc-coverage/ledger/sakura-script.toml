@@ -793,9 +793,9 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.4.74"
-owner = ""
+owner = "areka-P0-ghost-shell-balloon-switch"
 priority = "B2"
 values = []
 links = [
@@ -804,9 +804,9 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c__2b:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへ交代できず、今のゴーストが立ったままになる）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。ChangeCueSink（crates/areka/src/emo2_boot/change_cue.rs）が名前と第 1 引数の組（change・ghost）で自分を選び、切替の要求を UI 側へ運ぶ。UI 側が目録と突き合わせて送り出す側のゴーストを降ろし、切替先を起こす（--option=raise-event があれば送り出す側へ OnGhostChanging を送る）。
+ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ ChangeCueSink が記録を残す。第 1 引数が ghost でない change は担当外として debug! を残す）。
+名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は areka-P0-ghost-change-name-resolution の持ち場で、本仕様では該当なしとして warn のログ（ghost_switch_unknown）を残し、切り替えない。
 [群: ゴーストの切り替え]
 [頻度: 里々 4 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![change。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 [条件: OnGhostChanging が通知されるのは --option=raise-event を付けたときだけ]

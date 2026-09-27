@@ -63,7 +63,7 @@ use areka_ghost::{
     GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
     boot_with_kanade_stop,
 };
-use areka_kanade::{CloseReason, KanadeStopped, MonotonicMs, ShioriBackend};
+use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
 use areka_seriko::{
@@ -90,7 +90,7 @@ use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use super::adapter::PresentBridge;
 use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use super::frame::{
-    Emo2Wiring, KanadeStopRx, run_attach_phase, run_dpi_phase, run_move_drain_phase,
+    Emo2Wiring, KanadeNoticeRx, run_attach_phase, run_dpi_phase, run_move_drain_phase,
     run_text_phase, run_text_scale_phase,
 };
 use super::move_cue::{MoveCueSink, MoveDirective};
@@ -113,7 +113,7 @@ use self::conformance_support::{
 
 /// backend が受領した 1 呼出の記録（照合用）。`Get`/`Notify` は id・references を保持する。
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum RecordedCall {
+pub(crate) enum RecordedCall {
     /// GET 呼出（応答を要するイベント）。
     Get { id: String, references: Vec<String> },
     /// NOTIFY 呼出（片道イベント）。
@@ -128,7 +128,7 @@ enum RecordedCall {
 ///
 /// GET/NOTIFY は id ごとに応答列（`VecDeque`）を積み、呼出のたびに先頭から 1 件消費する
 /// （`RequestError`/`ShutdownError` は `Clone` 非実装ゆえ値を使い切り消費する設計）。
-struct ScriptedShioriBackendBuilder {
+pub(crate) struct ScriptedShioriBackendBuilder {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,
     unload_script: Option<Result<ExitKind, ShutdownError>>,
@@ -145,7 +145,7 @@ impl ScriptedShioriBackendBuilder {
     }
 
     /// `id` に対する GET 応答を 1 件、応答列の末尾へ積む（複数回で FIFO 消費）。
-    fn get(
+    pub(crate) fn get(
         mut self,
         id: impl Into<String>,
         response: Result<Option<String>, RequestError>,
@@ -158,7 +158,11 @@ impl ScriptedShioriBackendBuilder {
     }
 
     /// `id` に対する NOTIFY 応答を 1 件、応答列の末尾へ積む。
-    fn notify(mut self, id: impl Into<String>, response: Result<(), RequestError>) -> Self {
+    pub(crate) fn notify(
+        mut self,
+        id: impl Into<String>,
+        response: Result<(), RequestError>,
+    ) -> Self {
         self.notify_scripts
             .entry(id.into())
             .or_default()
@@ -167,7 +171,7 @@ impl ScriptedShioriBackendBuilder {
     }
 
     /// `unload()` の結果を台本化する（一度きり消費・`Option::take` で払い出す）。
-    fn unload(mut self, response: Result<ExitKind, ShutdownError>) -> Self {
+    pub(crate) fn unload(mut self, response: Result<ExitKind, ShutdownError>) -> Self {
         self.unload_script = Some(response);
         self
     }
@@ -185,7 +189,7 @@ impl ScriptedShioriBackendBuilder {
     /// backend が panic しない（`boot_with` に手組み backend を渡す経路も同じ既定で保護される）。
     /// テストが独自 username 応答を要すれば `.get("username", …)` で明示上書きでき、その場合は
     /// 既に登録済みゆえ既定は補われない。
-    fn build(mut self) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
+    pub(crate) fn build(mut self) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
         self.get_scripts
             .entry("username".to_string())
             .or_insert_with(|| VecDeque::from([Ok(None)]));
@@ -221,7 +225,7 @@ pub(crate) struct ScriptedShioriBackend {
 
 impl ScriptedShioriBackend {
     /// ビルダー起点。
-    fn builder() -> ScriptedShioriBackendBuilder {
+    pub(crate) fn builder() -> ScriptedShioriBackendBuilder {
         ScriptedShioriBackendBuilder::new()
     }
 }
@@ -302,7 +306,7 @@ pub(crate) struct ScriptedShioriHandle {
 
 impl ScriptedShioriHandle {
     /// 受領記録（非 Status のみ）のスナップショットを返す（死活監視ノイズを除外）。
-    fn non_status_calls(&self) -> Vec<RecordedCall> {
+    pub(crate) fn non_status_calls(&self) -> Vec<RecordedCall> {
         self.calls
             .lock()
             .expect("calls mutex poisoned")
@@ -830,8 +834,8 @@ impl SpineHarness {
             ticker: TickerMode::Disabled,
         };
         // 停止通知の channel（R15.4・本番 `wire_emo2_boot` と同型）: 送出端は kanade へ、受信端は
-        // World の受け口（`KanadeStopRx`）へ挿す。終了相を回さないテストでは読まれないだけで無害である。
-        let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeStopped>();
+        // World の受け口（`KanadeNoticeRx`）へ挿す。終了相を回さないテストでは読まれないだけで無害である。
+        let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
         let ghost = boot_with_kanade_stop(options, Some(kanade_stop_tx))
             .expect("scripted boot は解決可能な emo2 ghost_root で成功する");
 
@@ -849,7 +853,7 @@ impl SpineHarness {
             clock,
             wiring_assets,
         );
-        world.insert_non_send(KanadeStopRx(kanade_stop_rx));
+        world.insert_non_send(KanadeNoticeRx(kanade_stop_rx));
 
         SpineHarness {
             world,

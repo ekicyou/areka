@@ -13,11 +13,16 @@ use areka_kanade::{CloseReason, KanadeStopCause, ShioriFault};
 use bevy_ecs::prelude::*;
 use wintf::AppExit;
 use wintf::ecs::WindowHandle;
-use wintf::ecs::window::OnCloseRequest;
+use wintf::ecs::window::{OnCloseRequest, OnSessionEnd, ZOrderChainPlan};
 
+use crate::emo2_boot::frame::ZOrderAbsentReports;
 use crate::input_events::MouseWiring;
+use crate::placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
+use crate::placement::chain_realign::ChainRealignPending;
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
-use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
+use crate::placement::spawn::{
+    BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
+};
 
 /// どの終了操作から来たか（記録の語彙・受け手は分岐しない）。
 ///
@@ -34,6 +39,12 @@ pub(crate) enum ExitOrigin {
     /// kanade 未結線の起動でのゴースト窓への OS の閉鎖要求
     /// （結線済みならゴースト窓の閉鎖要求は `KanadeStopped` 経由で来る）。
     OsClose,
+    /// ゴーストの切替の途中で既定ゴーストへ戻せなかった（失敗の中身つき）。
+    /// 告知の場面は kanade の停止の Fault と同じ（新しい場面は作らない）。
+    GhostFallbackFailed(ShioriFault),
+    /// OS のセッションの終了（シャットダウン・再起動・ログオフ＝`WM_ENDSESSION` の wParam が真）。
+    /// 窓の手続きの中で後始末まで済ませる（`session_end::on_os_session_end`）。失敗の中身は無い。
+    SessionEnd,
 }
 
 /// 最初に終了を指示した出所（World に 1 つ・書き込みは 1 度）。
@@ -46,11 +57,13 @@ pub(crate) struct FirstExit(pub(crate) ExitOrigin);
 
 /// 告知するか・終了コードを 1 にするかの判定（呼び手は分けて判断しない）。
 ///
-/// 失敗の中身を返すのは「kanade の停止で原因が Fault」だけ。他の停止原因・強制退避・smoke の
-/// 自動終了・OS の閉鎖要求は `None`（告知なし・終了コード 0）。
+/// 失敗の中身を返すのは「kanade の停止で原因が Fault」と「既定ゴーストへ戻せなかった」だけ
+/// （告知の場面はどちらも今日の SHIORI の失敗）。他の停止原因・強制退避・smoke の
+/// 自動終了・OS の閉鎖要求・OS のセッションの終了は `None`（告知なし・終了コード 0）。
 pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     match origin {
-        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f)) => Some(f),
+        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f))
+        | ExitOrigin::GhostFallbackFailed(f) => Some(f),
         ExitOrigin::KanadeStopped(
             KanadeStopCause::Quit
             | KanadeStopCause::Forced
@@ -59,7 +72,8 @@ pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
         )
         | ExitOrigin::Escape
         | ExitOrigin::Smoke
-        | ExitOrigin::OsClose => None,
+        | ExitOrigin::OsClose
+        | ExitOrigin::SessionEnd => None,
     }
 }
 
@@ -124,10 +138,42 @@ impl WindowsClosed {
 /// `app_exit` とは別の語彙 `windows_closed_for_restart`（要件 4.3）。
 /// 終了経路（`quit_app`・停止通知からの終了・OS の閉鎖要求・強制退避・smoke）からは呼ばない
 /// （要件 4.4・4.6・完了 `app-lifetime-separation` 要件 3.6 の意図）。
-// 本番の呼び手は #13（ゴーストの切替）の起こし直しの経路。それまでは test からだけ呼ぶ。
-#[cfg_attr(not(test), allow(dead_code))]
+///
+/// # 窓の一式に属する資源を外す（areka-P0-ghost-shell-balloon-switch 要件 3.1・4.10）
+///
+/// 次の窓の一式が初回の起動と同じ手順で整うよう、窓の一式ごとに立つ World の資源を窓と一緒に
+/// 外す。`crates/areka/src` の資源の挿入を洗い出した結果は次のとおり。
+///
+/// 外すもの（窓の一式に属する）:
+/// - [`GhostWindows`]: 窓の束。消した窓の `Entity` を装着の相のゲートに見せない。
+/// - `ChainFinalized`（初期配置の確定の印）: 残すと次の一式で確定（連鎖の解き直し）が一度も
+///   走らず、2 人目のキャラが初回の位置へ寄らない（実機の欠陥・タスク 11.9）。
+/// - `ChainFinalizeStall`（確定の見送りの回数）: 残すと前の一式の見送りを引き継ぎ、次の一式の
+///   待ちの途中で上限の警告が出る。
+/// - `ChainRealignPending`（拡大率の遷移後の解き直しの待ち）: 消した窓の遷移の待ちであり、
+///   次の一式では確定が済むまで武装しない。
+/// - `ZOrderChainPlan`（重なりの鎖の受け口）: 消した窓の `Entity` を並べた鎖。窓はもう無く
+///   撤去すべき繋ぎも残らないので、グループが無ければ受け口も無い初回の状態へ戻す。
+/// - `ZOrderAbsentReports`（窓の無かった宣言要素の報告の控え）: 残すと次の一式で同じ不在が
+///   報告されない。
+///
+/// 外さないもの（プロセスに属する・または起こすたびに差し替わる）:
+/// - [`WindowsEpoch`]: 閉じた回数。投函済みの古い窓を作らない照合に使うので、進めて残す。
+/// - `FirstExit`・`SessionEnded`: 終了の記録。`BootContext`・`GhostSlot`・`SwitchInFlight`・
+///   `GhostBootInputsSource`・`AppExit`・`Schedules`・描画の装置（`GraphicsCore` ほか）・
+///   `ZOrderPairStrategy`（系の登録と一緒にプロセスに 1 回）も同じ。
+/// - `MonitorSnapshot`・`MonitorDpiTable`: 画面の表。毎フレーム同期し、窓を開くたびにも据え直す。
+/// - ゴーストごとの結線（`Emo2Wiring`・`KanadeNoticeRx`・`ChangeRx`・`MouseWiring`・
+///   `BalloonWiring`・メニュー・記憶の結線など）: 起こすたびに `insert_non_send` で差し替わる。
+/// - 環境変数の読み取りの控え（`OnceLock`）と系の `Local`: 窓の一式に依らない。
 pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     let closed = despawn_app_windows(world);
+    world.remove_resource::<GhostWindows>();
+    world.remove_resource::<ChainFinalized>();
+    world.remove_resource::<ChainFinalizeStall>();
+    world.remove_resource::<ChainRealignPending>();
+    world.remove_resource::<ZOrderChainPlan>();
+    world.remove_resource::<ZOrderAbsentReports>();
     tracing::info!(
         event = "windows_closed_for_restart",
         closed,
@@ -168,8 +214,18 @@ fn despawn_app_windows(world: &mut World) -> usize {
         }
         world.despawn(e);
     }
+    world.get_resource_or_insert_with(WindowsEpoch::default).0 += 1;
     count
 }
+
+/// 窓を閉じた回数（[`despawn_app_windows`] が閉じるたびに 1 進める・無ければ 0 とみなす）。
+///
+/// 窓を作る閉包（`ghost_session::prepare_ghost_windows`）は組んだ時点の値を控え、`Input` 段で
+/// 着いたときに値が進んでいれば窓を作らない——投函した後・着く前に全窓を閉じた（切替先の非同期の
+/// 失敗で既定へ戻した・終了した）とき、閉じた後に古い窓が孤児として生えないため
+/// （areka-P0-ghost-shell-balloon-switch 要件 6.1・4.10）。
+#[derive(Resource, Default)]
+pub(crate) struct WindowsEpoch(pub(crate) u64);
 
 /// ゴースト窓への OS の閉鎖要求（Alt＋F4・`taskkill`・「タスクの終了」）の受け手（裁定 3）。
 ///
@@ -212,7 +268,8 @@ pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
     });
 }
 
-/// HWND が付いた瞬間のゴースト窓へ [`on_ghost_os_close`] を差す system。
+/// HWND が付いた瞬間のゴースト窓へ [`on_ghost_os_close`] と、OS のセッションの終了の受け手
+/// `session_end::on_os_session_end`（areka-P0-ghost-shell-balloon-switch 要件 12.9）を差す system。
 ///
 /// `register_ghost_windows_click_through` と同じ `Added<WindowHandle>` の捉え方で、同じ
 /// `FrameFinalize` 段に登録する。`placement` は `crate::` パスを持てない（example の `#[path]`
@@ -222,7 +279,10 @@ pub(crate) fn attach_os_close_request(
     new_windows: Query<Entity, (With<GhostWindowMarker>, Added<WindowHandle>)>,
 ) {
     for e in &new_windows {
-        commands.entity(e).insert(OnCloseRequest(on_ghost_os_close));
+        commands.entity(e).insert((
+            OnCloseRequest(on_ghost_os_close),
+            OnSessionEnd(crate::session_end::on_os_session_end),
+        ));
     }
 }
 

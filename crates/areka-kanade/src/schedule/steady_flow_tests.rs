@@ -1,4 +1,4 @@
-use super::test_support::{assert_no_second_change, config, steady_none, steady_some};
+use super::test_support::{assert_no_second_change, base_state, config, steady_none, steady_some};
 use super::*;
 use crate::msg::ShioriCall;
 use crate::schedule::step;
@@ -137,12 +137,7 @@ fn steady_none_tick_with_pending_close_begins_handshake() {
 fn boot_phase_tick_emits_no_second_change() {
     let s = State {
         phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        user_break_talk: None,
+        ..base_state()
     };
     let (_next, actions) = step(
         s,
@@ -163,12 +158,7 @@ fn close_pending_tick_emits_no_second_change() {
         phase: Phase::ClosePending {
             reason: CloseReason::System,
         },
-        last_now: None,
-        next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        user_break_talk: None,
+        ..base_state()
     };
     let (_next, actions) = step(
         s,
@@ -188,12 +178,8 @@ fn close_talk_wait_tick_emits_no_second_change() {
             talk_id: TalkId(2),
             deadline: None,
         },
-        last_now: None,
         next_talk_id: 3,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        user_break_talk: None,
+        ..base_state()
     };
     let (_next, actions) = step(
         s,

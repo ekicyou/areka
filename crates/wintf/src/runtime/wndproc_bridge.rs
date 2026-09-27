@@ -29,7 +29,9 @@ use std::rc::Weak;
 
 use crate::executor::util::WindowMessage;
 use bevy_ecs::prelude::Entity;
+use tracing::warn;
 use windows::Win32::Foundation::LRESULT;
+use windows::Win32::UI::WindowsAndMessaging::WM_ENDSESSION;
 
 use crate::ecs::dispatch_window_message;
 use crate::ecs::world::EcsWorld;
@@ -58,7 +60,8 @@ pub(crate) struct WndState {
 ///
 /// 1. pinned state から `entity` を直接読む（`Entity: Copy`）。
 /// 2. `world.upgrade()`→`None` なら `None`（破棄中・安全スキップ）。
-/// 3. World を `try_borrow`。失敗（再入）なら `None`（安全スキップ）。
+/// 3. World を `try_borrow`。失敗（再入）なら `None`（安全スキップ）。ただし `WM_ENDSESSION`（wParam 真）
+///    だけは受け手を呼べない帰結を `warn!(os_session_end_world_busy)` に残してから飛ばす。
 /// 4. 成功時のみ `dispatch_window_message(&world, entity, &msg)` を呼ぶ。
 //
 // `EcsWindowFactory::create_window`（`create_windows` 経由）がウィンドウ生成時に呼び、
@@ -75,6 +78,15 @@ pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option
         // 借用ガード自体は dispatch に渡さない（dispatch は `Rc` を受け取り内部で借用規律を
         // 適用する純関数）。ここでは「借用可能か」だけを試して即座に解放する。
         if world.try_borrow().is_err() {
+            // OS のセッションの終了（wParam 真）だけは、受け手を呼べないことを黙って流さない。
+            if msg.msg == WM_ENDSESSION && msg.wparam.0 != 0 {
+                warn!(
+                    event = "os_session_end_world_busy",
+                    entity = ?entity,
+                    "[WM_ENDSESSION] World が借用中でセッションの終了の受け手を呼べない → \
+                     後始末をせずに終わるので起動中の印が残り、次の起動は前回落ちた扱い（Ref6/7 付き）になる"
+                );
+            }
             return None;
         }
 
@@ -144,6 +156,45 @@ mod tests {
         assert!(
             ret.is_none(),
             "World 借用中は try_borrow 失敗で安全スキップ（None）すべき"
+        );
+    }
+
+    /// 要件 12.10: World の借用中に `WM_ENDSESSION`（wParam 真）が届いたら、受け手を呼べない
+    /// ことを帰結付きの `warn!` 1 件で残し、戻りは今日どおり既定の手続きへ委ねる（`None`）。
+    /// wParam 偽や他のメッセージでは今日どおり記録しない。
+    #[test]
+    fn closure_warns_session_end_only_while_world_borrowed() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let state = make_state(&world);
+        let wndproc = make_wndproc();
+        let boxed = Box::pin(state);
+        let busy_warns = |m: WindowMessage| {
+            let (ret, events) = log_capture_kit::capture(|| wndproc(boxed.as_ref(), m));
+            let n = events
+                .iter()
+                .filter(|e| {
+                    e.field_str("event") == Some("os_session_end_world_busy")
+                        && e.level == tracing::Level::WARN
+                })
+                .count();
+            (ret, n)
+        };
+
+        let _held = world.borrow_mut();
+        let session_end = WindowMessage {
+            wparam: WPARAM(1),
+            ..msg(WM_ENDSESSION)
+        };
+        assert_eq!(busy_warns(session_end), (None, 1));
+        assert_eq!(
+            busy_warns(msg(WM_ENDSESSION)),
+            (None, 0),
+            "wParam 偽で警告した"
+        );
+        assert_eq!(
+            busy_warns(msg(WM_ERASEBKGND)),
+            (None, 0),
+            "他のメッセージで警告した"
         );
     }
 

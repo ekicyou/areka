@@ -1,4 +1,5 @@
 use super::log_capture::{assert_logged, assert_not_logged, capture};
+use super::steady::test_support::base_state;
 use super::*;
 use crate::msg::ShioriFailure;
 use tracing::Level;
@@ -12,10 +13,7 @@ fn state_in(phase: Phase) -> State {
         phase,
         last_now: Some(MonotonicMs(1_000)),
         next_talk_id: 5,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        user_break_talk: None,
+        ..base_state()
     }
 }
 
@@ -284,7 +282,7 @@ fn initial_state_is_idle_with_monotonic_counter() {
 
 use crate::msg::{MouseEventKind, MouseInput};
 
-fn mouse_move() -> MouseInput {
+pub(super) fn mouse_move() -> MouseInput {
     MouseInput {
         scope: 0,
         x: 10,
@@ -413,106 +411,13 @@ fn mouse_input_in_steady_with_pending_close_emits_no_get() {
 // ============================================================
 
 /// 檻用の選択確定入力（内容は本檻で load-bearing でない＝写像・帳簿の存在のみを見る）。
-fn choice_input() -> ChoiceInput {
+pub(super) fn choice_input() -> ChoiceInput {
     ChoiceInput {
         id: "OnMenu".to_string(),
         label: "メニュー".to_string(),
         scope: 0,
         references: vec!["a0".to_string()],
     }
-}
-
-/// 檻用の選択待ち通知入力（同上）。
-fn choice_waiting_input() -> Input {
-    Input::ChoiceWaiting {
-        talk_id: TalkId(5),
-        choice_ids: vec!["OnMenu".to_string()],
-        display_end: MonotonicMs(2_000),
-        timeout_directive_secs: None,
-    }
-}
-
-/// Req4.4: 既存 `Phase` の 11 variant が無改変であること。
-///
-/// 本 match は wildcard を持たないため、variant の削除・改名・形（フィールド構成）の
-/// 変更はコンパイルを壊す。DD-3 が要求する「Phase を一切触らない」を構造で固定する
-/// （`State.choice` は Phase の外＝`pending_close` と同型に置かれる）。
-#[test]
-fn existing_phase_variants_are_unchanged() {
-    fn tag(phase: &Phase) -> &'static str {
-        match phase {
-            Phase::Idle => "Idle",
-            Phase::BootInit => "BootInit",
-            Phase::BootPrefetch => "BootPrefetch",
-            Phase::BootType => "BootType",
-            Phase::BootMain => "BootMain",
-            Phase::BootVersion { .. } => "BootVersion",
-            Phase::Steady { .. } => "Steady",
-            Phase::ClosePending { .. } => "ClosePending",
-            Phase::CloseTalkWait { .. } => "CloseTalkWait",
-            Phase::Unloading { .. } => "Unloading",
-            Phase::Stopped => "Stopped",
-        }
-    }
-    assert_eq!(tag(&Phase::Idle), "Idle");
-    assert_eq!(tag(&Phase::Steady { talk: None }), "Steady");
-    assert_eq!(tag(&Phase::Stopped), "Stopped");
-}
-
-/// Req4.4: 既存 `Action` 5 variant が無改変で、選択系 2 variant が additive に増えたこと。
-///
-/// wildcard なしの網羅 match ゆえ、既存 5 variant のいずれかが消える／改名される／
-/// 形が変わると本檻はコンパイルできない。
-#[test]
-fn action_variants_are_existing_five_plus_choice_two() {
-    fn tag(action: &Action) -> &'static str {
-        match action {
-            Action::ShioriRequest(_) => "ShioriRequest",
-            Action::ShioriUnload => "ShioriUnload",
-            Action::StartTalk(_) => "StartTalk",
-            Action::ResourceOutcome { .. } => "ResourceOutcome",
-            Action::StopSelf => "StopSelf",
-            Action::ResolveChoice { .. } => "ResolveChoice",
-            Action::CancelChoice { .. } => "CancelChoice",
-        }
-    }
-    assert_eq!(tag(&Action::ShioriUnload), "ShioriUnload");
-    assert_eq!(tag(&Action::StopSelf), "StopSelf");
-    assert_eq!(
-        tag(&Action::ResolveChoice {
-            talk_id: TalkId(5),
-            id: "OnMenu".to_string(),
-        }),
-        "ResolveChoice"
-    );
-    assert_eq!(
-        tag(&Action::CancelChoice { talk_id: TalkId(5) }),
-        "CancelChoice"
-    );
-}
-
-/// Req4.4: 既存 `Input` 8 variant が無改変で、選択系 2 variant が additive に増えたこと。
-#[test]
-fn input_variants_are_existing_eight_plus_choice_two() {
-    fn tag(input: &Input) -> &'static str {
-        match input {
-            Input::Boot => "Boot",
-            Input::Tick { .. } => "Tick",
-            Input::TalkDone(_) => "TalkDone",
-            Input::CloseRequest { .. } => "CloseRequest",
-            Input::ForceQuit { .. } => "ForceQuit",
-            Input::ShioriDown { .. } => "ShioriDown",
-            Input::Mouse(_) => "Mouse",
-            Input::ShioriReply { .. } => "ShioriReply",
-            Input::Choice(_) => "Choice",
-            Input::ChoiceWaiting { .. } => "ChoiceWaiting",
-            Input::UserBreak { .. } => "UserBreak",
-        }
-    }
-    assert_eq!(tag(&Input::Boot), "Boot");
-    assert_eq!(tag(&Input::Mouse(mouse_move())), "Mouse");
-    assert_eq!(tag(&Input::Choice(choice_input())), "Choice");
-    assert_eq!(tag(&choice_waiting_input()), "ChoiceWaiting");
 }
 
 /// DD-3: 選択帳簿は `State`（Phase 外）に置かれ、初期値は両方とも空である。

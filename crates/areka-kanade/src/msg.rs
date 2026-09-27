@@ -19,6 +19,7 @@
 //! 完了を [`ShioriOutcome::Notified`] として表す——ここに `Value` を運ぶ経路が
 //! 存在しないため、NOTIFY 応答から talk を生成できないことが構造的に保証される。
 
+use crate::change::BootOrigin;
 use crate::schedule::resources::ResourceOutcome;
 use crate::status::ExecutionStatus;
 use crate::talk::EpilogueCommand;
@@ -70,13 +71,16 @@ pub enum KanadeStopCause {
 
 /// kanade の終了系列が完了したことの UI への通知（R15.3・D15 の 2）。
 ///
-/// `Action::StopSelf` の実行点（[`crate::actor`]）から**非ブロッキングに 1 度だけ**送る。
+/// `Action::StopSelf` の実行点（[`crate::actor`]）から運行の通知の「停止」
+/// （[`crate::change::KanadeNotice::Stopped`]）に包んで**非ブロッキングに 1 度だけ**送る。
 /// 受け手（UI スレッドの毎フレーム結線）はこれを合図に全ゴースト窓を閉じる。原因を問わず
 /// 送る——終了挨拶を終えた正規終了も、期限超過も、強制終了も、窓を閉じる点では同じ扱いである。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KanadeStopped {
     /// 終了系列の起因（記録の語彙・受け手は分岐しない）。
     pub cause: KanadeStopCause,
+    /// 切替の相を経て止まったときの切替の中身（それ以外の停止は `None`）。
+    pub handoff: Option<crate::change::ChangeHandoff>,
 }
 
 /// マウス入力（UI 配線層 → kanade の境界メッセージ・DD-IE 系）。
@@ -209,6 +213,19 @@ pub enum KanadeMsg {
         ids: Vec<&'static str>,
         /// 返信端（oneshot・[`ShioriMsg::Request`] と同じ envelope 規約）。
         reply: areka_actor::ReplySender<Vec<(&'static str, ResourceOutcome)>>,
+    },
+    /// ゴーストの切替の要求（UI → kanade）。名前の突き合わせは UI 側で済んでいる。
+    /// 受理しなかったときは運行の通知で「切替の中止（受理しなかった）」が返る。
+    ChangeGhost(crate::change::ChangeRequest),
+    /// 汎用の通知の入口（UI → kanade）。許可表にあるイベントを渡した Reference 列のまま送る。
+    /// 定常でだけ送り、許可表に無い・定常以外は `warn!` で捨てる（待ち行列に積まない）。
+    RaiseEvent {
+        /// イベント名（許可表 `ALLOWED_EVENT_IDS` の要素）。
+        id: String,
+        /// Ref0〜Ref n（欠番は空文字列・詰めない）。
+        references: Vec<String>,
+        /// GET か NOTIFY か。
+        method: crate::change::ShioriMethod,
     },
 }
 
@@ -421,6 +438,10 @@ pub struct KanadeConfig {
     /// バリアの `timeout_directive_secs` が `None`（未指定）のときに委譲される単一の既定値。
     /// 正典（ukadoc）は数値を規定していないため areka 裁量で定め、対応表へ記録する（裁定 5）。
     pub choice_timeout_default_ms: u64,
+    /// 起動の由来（既定 `Plain`＝ふつうの起動）。起動の根と `OnBoot` の Ref6/7 を決める。
+    pub boot_origin: BootOrigin,
+    /// シェルのフォルダ名（`OnGhostChanged` の Ref7・既定は `shell_name` の写し）。
+    pub shell_folder: String,
 }
 
 impl KanadeConfig {
@@ -430,8 +451,10 @@ impl KanadeConfig {
     /// `choice_timeout_default_ms` は `30_000`（Req7.8・DD-8）。
     /// `shell_name` / `baseware_version` は結線側固有ゆえ引数で受ける。
     pub fn new(shell_name: impl Into<String>, baseware_version: impl Into<String>) -> Self {
+        let shell_name = shell_name.into();
         KanadeConfig {
-            shell_name: shell_name.into(),
+            shell_folder: shell_name.clone(),
+            shell_name,
             baseware_version: baseware_version.into(),
             baseware_name: "areka".to_string(),
             close_talk_deadline_ms: 30_000,
@@ -439,6 +462,7 @@ impl KanadeConfig {
             vanish_count: 0,
             first_boot_epilogue: Vec::new(),
             choice_timeout_default_ms: 30_000,
+            boot_origin: BootOrigin::Plain,
         }
     }
 }
@@ -582,6 +606,10 @@ mod tests {
                 KanadeMsg::ResourceQuery { ids: _, reply: _ } => "ResourceQuery",
                 // 利用者の中断（additive・既存の判別結果を変えない）。
                 KanadeMsg::UserBreak { scope: _ } => "UserBreak",
+                // ゴーストの切替の要求（additive・既存の判別結果を変えない）。
+                KanadeMsg::ChangeGhost(_) => "ChangeGhost",
+                // 汎用の通知の入口（additive・既存の判別結果を変えない）。
+                KanadeMsg::RaiseEvent { .. } => "RaiseEvent",
             }
         }
         let existing = [
