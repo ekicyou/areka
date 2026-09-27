@@ -201,7 +201,7 @@ fn real_helper_boot_pump_close_completes() {
     //     ここでは接続失敗・死活検出のいずれも可視化する観測チャンネルとして張り、shiori アクター
     //     終了（Close 経路）まで生存する。
     let (down_tx, down_rx) = std::sync::mpsc::channel::<KanadeMsg>();
-    let (shiori_tx, shiori_handle) = spawn_shiori_actor(
+    let (shiori_tx, shiori_handle, _shiori_probe) = spawn_shiori_actor(
         move || connect_real_helper(helper_exe, load_dir, shiori_name),
         down_tx,
     );

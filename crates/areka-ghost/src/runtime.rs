@@ -620,7 +620,8 @@ pub fn boot_with_origin(
         };
 
     // 5. shiori actor。
-    let (shiori_tx, shiori_handle) = spawn_shiori_actor(connect, down_tx);
+    //    見張り部品は受け取って捨てる（実行系に持たせるのは後続のタスク）。
+    let (shiori_tx, shiori_handle, _shiori_probe) = spawn_shiori_actor(connect, down_tx);
 
     // 6. kanade（start_tx を「自身の」sakura Sender として渡す）。
     //    task 8.2: prefetch 段（username GET）の応答を sylphya へ反映する実 `ResourceSink` を注入する。

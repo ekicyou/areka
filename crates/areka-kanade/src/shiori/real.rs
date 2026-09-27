@@ -19,6 +19,7 @@
 //! アクター境界の受理規約（envelope・停止・on_down の寿命）は親モジュール
 //! [`crate::shiori`] の rustdoc に記す。
 
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
@@ -28,6 +29,7 @@ use shiori_host32_host::{
     Shiori3Client, ShutdownError,
 };
 
+use super::probe::{ShioriBusy, ShioriProbe, ShioriUnblock};
 use crate::msg::{KanadeMsg, ShioriCall, ShioriDownKind, ShioriFailure, ShioriMsg, ShioriOutcome};
 
 /// 接続済み SHIORI 一式（`!Send` 資材はスレッド内で connect が生成する）。
@@ -85,6 +87,12 @@ pub trait ShioriBackend {
     /// （直後に必ず確認される）。往復（`get`／`notify`／`unload`）の内側からは呼ばれない。
     /// 既定は何もしない。
     fn on_idle(&mut self) {}
+    /// 往復の外から待ちを解く手（別スレッドから呼ぶ）。無ければ `None`（既定・InProc・多くの偽物）。
+    ///
+    /// 接続の成功後にアクターのスレッド上で一度だけ呼ばれ、[`ShioriProbe`] へ据えられる。
+    fn unblock_handle(&self) -> Option<ShioriUnblock> {
+        None
+    }
 }
 
 /// backend の保守周期（手空きを検出する受信待ちの上限）。
@@ -131,6 +139,23 @@ impl ShioriBackend for ShioriConnection {
         // 手空きの間も窓を所有するこのスレッドがメッセージを取り出し続け、OS の応答なし判定に
         // 落ちないようにする（往復の外でしか呼ばれない契約ゆえ `clear→store→take` は崩れない）。
         self.window.pump_pending_messages();
+    }
+
+    fn unblock_handle(&self) -> Option<ShioriUnblock> {
+        match self.helper.terminator() {
+            Ok(terminator) => Some(Arc::new(move || {
+                terminator.terminate().map_err(|error| error.to_string())
+            })),
+            Err(error) => {
+                tracing::error!(
+                    target: "shiori-actor",
+                    event = "shiori_unblock_handle_unavailable",
+                    error = %error,
+                    "補助プロセスの取っ手を複製できなかった——外から待ちを解く手は無い"
+                );
+                None
+            }
+        }
     }
 }
 
@@ -237,10 +262,16 @@ fn report_exit_once(
 /// （sticky）。unload 成功後（`unloaded` フラグ確定後）は死活報告を発火しない（正規終了は
 /// 死ではない）。`on_down` は受信ループの生存期間中保持し、ループを抜ける（関数から return
 /// する）際に自然に drop される。
+///
+/// # 今の呼び出しの記録
+/// 往復の直前に [`ShioriBusy::Request`]（イベント名）、直後（応答を送る前）に
+/// [`ShioriBusy::Idle`] を `probe` へ書く。`Unload` の直前に [`ShioriBusy::Unload`]、`unload` が
+/// 戻ったら成否を問わず [`ShioriBusy::Unloaded`] を書く。読むのは上限の見張りだけ。
 fn run_shiori_loop(
     rx: Receiver<ShioriMsg>,
     mut backend: Box<dyn ShioriBackend>,
     on_down: Sender<KanadeMsg>,
+    probe: ShioriProbe,
 ) {
     let mut unloaded = false;
     let mut down_reported = false;
@@ -260,42 +291,54 @@ fn run_shiori_loop(
         report_exit_once(backend.as_mut(), unloaded, &mut down_reported, &on_down);
         match msg {
             ShioriMsg::Request { call, reply } => {
+                let id = match &call {
+                    ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id.as_str(),
+                };
+                probe.set_busy(ShioriBusy::Request(id.to_string()));
                 let outcome = handle_call(backend.as_mut(), call);
+                // 応答より先に書く（応答を受け取った側が見る値を往復の後の値に揃える）。
+                probe.set_busy(ShioriBusy::Idle);
                 // envelope 規約: ちょうど 1 回応答する。要求側の取消／切断による send Err は無視。
                 let _ = reply.send(outcome);
             }
-            ShioriMsg::Unload { reply } => match backend.unload() {
-                Ok(ExitKind::Clean) => {
-                    unloaded = true;
-                    tracing::info!(
-                        target: "shiori-actor",
-                        event = "unload_clean",
-                        "正規 clean shutdown 完了（unload → helper 正常終了 exit(0)）"
-                    );
-                    let _ = reply.send(ShioriOutcome::Unloaded);
+            ShioriMsg::Unload { reply } => {
+                probe.set_busy(ShioriBusy::Unload);
+                let result = backend.unload();
+                // 成否を問わず SHIORI の待ちは終わっている（見張りはこの後では切らない）。
+                probe.set_busy(ShioriBusy::Unloaded);
+                match result {
+                    Ok(ExitKind::Clean) => {
+                        unloaded = true;
+                        tracing::info!(
+                            target: "shiori-actor",
+                            event = "unload_clean",
+                            "正規 clean shutdown 完了（unload → helper 正常終了 exit(0)）"
+                        );
+                        let _ = reply.send(ShioriOutcome::Unloaded);
+                    }
+                    Ok(other_kind) => {
+                        unloaded = true;
+                        tracing::warn!(
+                            target: "shiori-actor",
+                            event = "unload_non_clean",
+                            exit = ?other_kind,
+                            "unload は完了したが終了種別が Clean でない"
+                        );
+                        let _ = reply.send(ShioriOutcome::Unloaded);
+                    }
+                    Err(shutdown_error) => {
+                        tracing::error!(
+                            target: "shiori-actor",
+                            event = "unload_failed",
+                            error = %shutdown_error,
+                            "正規 clean shutdown に失敗"
+                        );
+                        let _ = reply.send(ShioriOutcome::Failed(ShioriFailure::Ipc(
+                            shutdown_error.to_string(),
+                        )));
+                    }
                 }
-                Ok(other_kind) => {
-                    unloaded = true;
-                    tracing::warn!(
-                        target: "shiori-actor",
-                        event = "unload_non_clean",
-                        exit = ?other_kind,
-                        "unload は完了したが終了種別が Clean でない"
-                    );
-                    let _ = reply.send(ShioriOutcome::Unloaded);
-                }
-                Err(shutdown_error) => {
-                    tracing::error!(
-                        target: "shiori-actor",
-                        event = "unload_failed",
-                        error = %shutdown_error,
-                        "正規 clean shutdown に失敗"
-                    );
-                    let _ = reply.send(ShioriOutcome::Failed(ShioriFailure::Ipc(
-                        shutdown_error.to_string(),
-                    )));
-                }
-            },
+            }
             ShioriMsg::Close => {
                 tracing::info!(
                     target: "shiori-actor",
@@ -350,19 +393,27 @@ fn answer_after_connect_failure(rx: Receiver<ShioriMsg>, reason: &str) {
 /// `connect` は本番では実 [`ShioriConnection`] を返すが、純 x64 の偽装注入シームとして
 /// `Box<dyn ShioriBackend>` へ一般化されている（Req 7.1/7.6）。
 ///
-/// inbox の送信端（[`Sender<ShioriMsg>`]）と [`ActorHandle`] を返す。
+/// inbox の送信端（[`Sender<ShioriMsg>`]）・[`ActorHandle`]・[`ShioriProbe`] を返す。
+/// [`ShioriProbe`] にはアクターが今の呼び出しを書き、接続の成功後に backend の解く手
+/// （[`ShioriBackend::unblock_handle`]）を据える（接続の失敗なら「解く手なし」を据える）。
 pub fn spawn_shiori_actor(
     connect: impl FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send + 'static,
     on_down: Sender<KanadeMsg>,
-) -> (Sender<ShioriMsg>, ActorHandle) {
-    spawn_actor("shiori", move |rx| {
+) -> (Sender<ShioriMsg>, ActorHandle, ShioriProbe) {
+    let probe = ShioriProbe::default();
+    let actor_probe = probe.clone();
+    let (tx, handle) = spawn_actor("shiori", move |rx| {
         // 接続はアクタースレッド上で一度だけ実行（!Send window）。
         match connect() {
             Ok(backend) => {
+                // 外から待ちを解く手は接続の成功後に一度だけ据える（受信ループより前）。
+                actor_probe.install_unblock(backend.unblock_handle());
                 // on_down は受信ループの生存期間中保持する（死活報告の届け先・Req 3.4）。
-                run_shiori_loop(rx, backend, on_down);
+                run_shiori_loop(rx, backend, on_down, actor_probe);
             }
             Err(reason) => {
+                // 接続が無いので解く手も無い（死活報告より前に据える）。
+                actor_probe.install_unblock(None);
                 tracing::error!(
                     target: "shiori-actor",
                     event = "connect_failed",
@@ -378,7 +429,8 @@ pub fn spawn_shiori_actor(
                 answer_after_connect_failure(rx, &reason);
             }
         }
-    })
+    });
+    (tx, handle, probe)
 }
 
 #[cfg(test)]
@@ -388,3 +440,7 @@ mod tests;
 #[cfg(test)]
 #[path = "real_idle_tests.rs"]
 mod idle_tests;
+
+#[cfg(test)]
+#[path = "real_probe_tests.rs"]
+mod probe_tests;

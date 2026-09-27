@@ -71,7 +71,9 @@ fn start_runner() -> Runner {
         exited: exited.clone(),
         idles: idles.clone(),
     };
-    let handle = std::thread::spawn(move || run_shiori_loop(rx, Box::new(probe), on_down_tx));
+    let handle = std::thread::spawn(move || {
+        run_shiori_loop(rx, Box::new(probe), on_down_tx, ShioriProbe::default())
+    });
     Runner {
         tx,
         on_down_rx,

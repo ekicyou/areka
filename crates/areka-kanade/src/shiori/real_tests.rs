@@ -126,7 +126,9 @@ fn boxed(backend: FakeBackend) -> Box<dyn ShioriBackend> {
 fn round_trip_via_runner(backend: FakeBackend, call: ShioriCall) -> ShioriOutcome {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || {
+        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Request { call, reply })
         .expect("send Request");
@@ -414,7 +416,9 @@ fn unload_ok_clean_returns_unloaded() {
     let backend = fake_unload(|| Ok(ExitKind::Clean));
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || {
+        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
     let outcome = receiver.recv().expect("reply received");
@@ -439,7 +443,9 @@ fn unload_ok_non_clean_logs_warn_and_returns_unloaded() {
     let backend = fake_unload(|| Ok(ExitKind::Abnormal(3)));
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || {
+        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
     let outcome = receiver.recv().expect("reply received");
@@ -458,7 +464,9 @@ fn unload_err_logs_error_and_returns_failed_ipc() {
     let backend = fake_unload(|| Err(ShutdownError::ExitTimeout));
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || {
+        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
     let outcome = receiver.recv().expect("reply received");
@@ -485,7 +493,9 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
     };
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || {
+        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    });
 
     // 1 通目のメッセージ到達で死活検出される。
     let (reply1, receiver1) = reply_channel::<ShioriOutcome>();
@@ -565,7 +575,9 @@ fn death_report_suppressed_after_successful_unload() {
     };
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || {
+        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    });
 
     // 1 通目の Unload: 到達時点では status=Running（死活報告なし）→ unload 成功で unloaded=true。
     let (reply1, receiver1) = reply_channel::<ShioriOutcome>();
@@ -607,7 +619,9 @@ fn all_senders_dropped_terminates_runner() {
     let backend = fake_get(|_, _, _| unreachable!("no request"));
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || {
+        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    });
     // 何も送らず全 Sender を drop → recv が Err → ループ正常終了。
     drop(tx);
     let (join_tx, join_rx) = mpsc::sync_channel::<()>(0);
@@ -627,7 +641,7 @@ fn all_senders_dropped_terminates_runner() {
 #[test]
 fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let (shiori_tx, handle) = spawn_shiori_actor(|| Err("boom".to_string()), on_down_tx);
+    let (shiori_tx, handle, _probe) = spawn_shiori_actor(|| Err("boom".to_string()), on_down_tx);
 
     // 死活報告を有界時間内に受領する（KanadeMsg は Debug 非実装ゆえ variant を明示照合）。
     match on_down_rx.recv_timeout(BOUND) {

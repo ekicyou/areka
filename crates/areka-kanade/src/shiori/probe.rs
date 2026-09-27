@@ -98,6 +98,18 @@ impl ShioriProbe {
         *lock(&self.0.busy) = busy;
     }
 
+    /// 今の呼び出しを読む（クレート内のテストが書く位置を確かめる口）。
+    #[cfg(test)]
+    pub(crate) fn busy(&self) -> ShioriBusy {
+        lock(&self.0.busy).clone()
+    }
+
+    /// 見張りの決め手を呼び手のスレッドで直に呼ぶ（クレート内のテストが据わった解く手を確かめる口）。
+    #[cfg(test)]
+    pub(crate) fn fire_now(&self, budget: WaitBudget) -> Option<ShioriCut> {
+        try_fire(&self.0, budget)
+    }
+
     /// 解く手を据える。一度だけ効き、2 度目は無視する。
     pub fn install_unblock(&self, unblock: Option<ShioriUnblock>) {
         if self.0.unblock.set(unblock).is_err() {

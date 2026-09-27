@@ -30,7 +30,7 @@
   - _Requirements: 1.1, 1.3, 1.4, 2.1, 2.2, 2.4, 2.6, 6.3, 7.1_
   - _Boundary: ShioriProbe_
 
-- [ ] 2.2 SHIORI の係のスレッドが今の呼び出しを見張り部品へ書き、接続が解く手を差し出すようにする
+- [x] 2.2 SHIORI の係のスレッドが今の呼び出しを見張り部品へ書き、接続が解く手を差し出すようにする
   - SHIORI の backend に既定で「解く手なし」を返すメソッドを 1 つ足し、本物の接続は 1.1 の取っ手を包んだ解く手を返す（取っ手が複製できなければ `error!` の上で「なし」）
   - SHIORI の係のスレッドは要求の前後・降ろす前・降ろした後（成否を問わず）に今の呼び出しを書く
   - SHIORI の係のスレッドを起こす関数が見張り部品も返し、接続の成功後に解く手を据える（失敗なら「なし」を据える）
@@ -136,3 +136,4 @@
 - 1.1: `TerminateProcess` の 2 度目は、終わりかけ（取っ手がまだシグナルでない）でも `ERROR_ACCESS_DENIED` を返す。既終了の判定に `WaitForSingleObject` を足すと偽の失敗になる。テストの長命の子は `cmd /c ping` でなく `ping.exe` を直接起こす（cmd を終わらせても孫が残る）。
 - 1.2: 往復の最中に宛先のプロセスを終わらせると、同期の送信は戻り値 1・応答 0 で戻る（0 ではない）。本番の `send_request` は受け皿が空なので `IpcError::Timeout` を返す＝kanade には `RequestError::Timeout` として見える（`SendFailed` ではない）。2 系・5 系は「打ち切った」をエラーの種類でなく `ShioriProbe` の結果で決めること。`Timeout` を扱う既存の枝（`shiori-fault-notice` まわり）が上限切れの回で走ることも織り込む。design・research は実測へ揃えた。
 - 2.1: `log_capture_kit::capture` は自スレッドの記録しか拾わない＝見張りのスレッドの `warn!(shiori_wait_cut)` は捕まらない。記録の中身は `try_fire` をテストのスレッドで直に呼んで判定し、見張り経由の回は `finish` の戻り値と解く手の回数で判定する（5.3 で areka から見張りの `warn!` を数えるなら捕捉の仕方を先に確かめる）。design の `armed` と `pending_cut` は 1 つの `Mutex<Armed>` にまとめた（予約と張るの交差を防ぐ）。`CutGuard` は `finish` せず落としても `Drop` で見張りを畳む。
+- 2.2: `spawn_shiori_actor` は `(Sender, ActorHandle, ShioriProbe)` を返す。見張りの発火をテストで決定論にするには `#[cfg(test)] ShioriProbe::fire_now(budget)`（`try_fire` の同期呼び）を使う（`cut_now`→`finish` は取り合いで `None` になりうる）。`Idle`・`Unloaded` は応答を返す前に書かれる＝応答を受けた後に読めば時刻に依らない。

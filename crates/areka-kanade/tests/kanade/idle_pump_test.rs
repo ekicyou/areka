@@ -6,15 +6,20 @@
 //! backend に fake を使わないのは、`ShioriConnection::on_idle` から窓の取り出しへ委譲する 1 行
 //! まで本番の経路を踏ませるため（fake が同じ部品へ委譲する形では、その 1 行が欠けても緑になる）。
 
+use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use areka_kanade::shiori::real::IDLE_INTERVAL;
-use areka_kanade::{KanadeMsg, ShioriMsg};
+use areka_kanade::{KanadeMsg, ShioriBackend, ShioriConnection, ShioriMsg};
+use shiori_host32_host::process_host::spawn_command;
+use shiori_host32_host::{
+    Charset, CharsetNegotiator, HelperLifecycle, HelperStatus, ParentMessageWindow,
+};
 use shiori_host32_ipc::{MsgTag, hwnd_from_u32, send_copydata, send_copydata_response};
 
-use super::common::{DEFAULT_TIMEOUT, join_bounded, spawn_window_actor};
+use super::common::{DEFAULT_TIMEOUT, WINDOW_CREATE_SERIAL, join_bounded, spawn_window_actor};
 
 /// 速いテストの同期送出の上限。
 const SEND_BOUND: Duration = Duration::from_secs(2);
@@ -163,4 +168,61 @@ fn down_before(rx: &std::sync::mpsc::Receiver<KanadeMsg>, deadline: Instant) -> 
             Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => return None,
         }
     }
+}
+
+/// 本番の接続（[`ShioriConnection`]）が差し出す解く手は、別スレッドから呼ぶと補助プロセスを
+/// 終わらせる（areka-P0-session-mark-residue 要件 1.3・2.4）。2 度目も成功する（冪等）。
+///
+/// 補助プロセスの代わりに長命の x64 の子（`ping.exe` を直接起こす）を置き、終わったことは
+/// 接続の死活の問い合わせで締切内に確かめる。アクターが解く手を据えることは
+/// `real_probe_tests.rs` が偽の backend で判定する。
+#[test]
+fn the_real_connection_offers_an_unblock_handle_that_ends_the_helper() {
+    let window = {
+        let _guard = WINDOW_CREATE_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        ParentMessageWindow::create().expect("親 message-only 窓を作る")
+    };
+    let mut long_lived = Command::new("ping.exe");
+    long_lived
+        .args(["-n", "60", "127.0.0.1"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let handle = spawn_command(long_lived).expect("長命の子を起こす");
+    let mut connection = ShioriConnection {
+        window,
+        helper: HelperLifecycle::new(handle),
+        negotiator: CharsetNegotiator::new(Charset::UTF_8, false),
+    };
+    assert_eq!(
+        connection.status(),
+        HelperStatus::Running,
+        "子はまだ生きている"
+    );
+
+    let unblock = connection
+        .unblock_handle()
+        .expect("本番の接続は解く手を差し出す");
+    let called = std::thread::spawn({
+        let unblock = unblock.clone();
+        move || unblock()
+    })
+    .join()
+    .expect("解く手を呼ぶスレッドが終わる");
+    assert_eq!(called, Ok(()), "別スレッドから呼んだ解く手が成功する");
+
+    let deadline = Instant::now() + DEFAULT_TIMEOUT;
+    let status = loop {
+        let status = connection.status();
+        if matches!(status, HelperStatus::Exited(_)) || Instant::now() >= deadline {
+            break status;
+        }
+        std::thread::yield_now();
+    };
+    assert!(
+        matches!(status, HelperStatus::Exited(_)),
+        "解く手で子が締切内に終わる: {status:?}"
+    );
+    assert_eq!(unblock(), Ok(()), "2 度目も成功する（冪等）");
 }
