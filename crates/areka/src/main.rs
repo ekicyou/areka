@@ -67,6 +67,8 @@ mod input_events;
 mod app_exit;
 mod menu;
 mod readme;
+/// OS のセッションの終了（`WM_ENDSESSION`）を窓の手続きの中できれいな終わりにする受け手。
+mod session_end;
 
 /// 起こし直しの単位（areka-P0-ghost-restart-unit）。系の登録の入口 `register_systems` を持つ。
 mod ghost_session;
@@ -309,13 +311,14 @@ fn main() -> Result<()> {
     // 利用者が閉じたらそのまま進む（要件 1.10）。
     finish_after_run(run, fault, move || {
         // 降ろす（① loop ticker Close → ② ghost.shutdown → ③ seriko join・`GhostSession::shutdown`）。
-        // 終了理由は全窓 close funnel＝ユーザ操作起点（DD-10）。置き場が空なのは切替の途中の致命だけ。
+        // 終了理由は全窓 close funnel＝ユーザ操作起点（DD-10）。置き場が空なのは切替の途中の致命か、
+        // OS のセッションの終了で降ろし済み（`session_end`）のとき。
         let down = match session {
             Some(session) => session.shutdown(areka_kanade::CloseReason::User { scope: 0 }),
             None => {
                 tracing::info!(
                     event = "ghost_slot_empty",
-                    "[main] 置き場が空——降ろすゴーストは無い"
+                    "[main] 置き場が空（切替の途中の致命か、OS のセッションの終了で降ろし済み）——降ろすゴーストは無い"
                 );
                 Ok(())
             }
@@ -440,13 +443,14 @@ fn boot_first_ghost(
 
 /// `run()` の後に置き場と起動の文脈から組むもの。
 struct AfterRun {
-    /// 降ろす単位（置き場が空＝切替の途中の致命なら `None`）。
+    /// 降ろす単位（置き場が空＝切替の途中の致命か、OS のセッションの終了で降ろし済みなら `None`）。
     session: Option<ghost_session::GhostSession>,
-    /// SHIORI の失敗の告知の場面（最初の出所が Fault のときだけ）。
+    /// SHIORI の失敗の告知の場面（最初の出所が Fault で、OS のセッションの終了を処理していないときだけ）。
     scene: Option<alert::AlertScene>,
-    /// 起動中の印の判定の材料（起動の文脈が無ければ `None`＝印に触れない）。判定は降ろした後。
+    /// 起動中の印の判定の材料（起動の文脈が無いか、OS のセッションの終了で済んでいれば `None`＝
+    /// 印に触れない）。判定は降ろした後。
     mark: Option<MarkInputs>,
-    /// 終了コードを 1 にするか（最初の出所が Fault）。
+    /// 終了コードを 1 にするか（最初の出所に失敗の中身がある＝`fault_of`・告知の場面の有無とは独立）。
     fault: bool,
 }
 
@@ -474,6 +478,21 @@ fn after_run(world: &mut World) -> AfterRun {
         .get_resource::<app_exit::FirstExit>()
         .map(|first| first.0.clone());
     let fault = first.as_ref().and_then(app_exit::fault_of).cloned();
+    let fault_exit = fault.is_some();
+    if world.contains_resource::<session_end::SessionEnded>() {
+        // OS のセッションの終了の中で降ろして印も始末した（要件 12.11）。告知は OS の終了を塞ぐので出さない。
+        tracing::info!(
+            event = "session_end_already_handled",
+            first = ?first,
+            "[main] OS のセッションの終了で後始末は済んでいる——告知を出さず、起動中の印にも触れません"
+        );
+        return AfterRun {
+            session,
+            scene: None,
+            mark: None,
+            fault: fault_exit,
+        };
+    }
     let Some(ctx) = world.get_resource::<boot_config::BootContext>() else {
         // `main` が系の登録の直後に据える。無ければ配線の誤りで、告知の場所も記憶の置き場も組めない。
         tracing::error!(
@@ -484,7 +503,7 @@ fn after_run(world: &mut World) -> AfterRun {
             session,
             scene: None,
             mark: None,
-            fault: fault.is_some(),
+            fault: fault_exit,
         };
     };
     let (ghost_name, ghost_root) = match first {
@@ -513,9 +532,9 @@ fn after_run(world: &mut World) -> AfterRun {
     });
     AfterRun {
         session,
-        fault: scene.is_some(),
         scene,
         mark: Some(mark),
+        fault: fault_exit,
     }
 }
 
@@ -560,7 +579,8 @@ fn session_mark_verdict(
         )
         | ExitOrigin::Escape
         | ExitOrigin::Smoke
-        | ExitOrigin::OsClose => {}
+        | ExitOrigin::OsClose
+        | ExitOrigin::SessionEnd => {}
     }
     if !run_ok {
         return MarkVerdict::Keep("run_failed");

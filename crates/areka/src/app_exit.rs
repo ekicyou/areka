@@ -13,7 +13,7 @@ use areka_kanade::{CloseReason, KanadeStopCause, ShioriFault};
 use bevy_ecs::prelude::*;
 use wintf::AppExit;
 use wintf::ecs::WindowHandle;
-use wintf::ecs::window::OnCloseRequest;
+use wintf::ecs::window::{OnCloseRequest, OnSessionEnd};
 
 use crate::input_events::MouseWiring;
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
@@ -39,6 +39,9 @@ pub(crate) enum ExitOrigin {
     /// ゴーストの切替の途中で既定ゴーストへ戻せなかった（失敗の中身つき）。
     /// 告知の場面は kanade の停止の Fault と同じ（新しい場面は作らない）。
     GhostFallbackFailed(ShioriFault),
+    /// OS のセッションの終了（シャットダウン・再起動・ログオフ＝`WM_ENDSESSION` の wParam が真）。
+    /// 窓の手続きの中で後始末まで済ませる（`session_end::on_os_session_end`）。失敗の中身は無い。
+    SessionEnd,
 }
 
 /// 最初に終了を指示した出所（World に 1 つ・書き込みは 1 度）。
@@ -53,7 +56,7 @@ pub(crate) struct FirstExit(pub(crate) ExitOrigin);
 ///
 /// 失敗の中身を返すのは「kanade の停止で原因が Fault」と「既定ゴーストへ戻せなかった」だけ
 /// （告知の場面はどちらも今日の SHIORI の失敗）。他の停止原因・強制退避・smoke の
-/// 自動終了・OS の閉鎖要求は `None`（告知なし・終了コード 0）。
+/// 自動終了・OS の閉鎖要求・OS のセッションの終了は `None`（告知なし・終了コード 0）。
 pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
     match origin {
         ExitOrigin::KanadeStopped(KanadeStopCause::Fault(f))
@@ -66,7 +69,8 @@ pub(crate) fn fault_of(origin: &ExitOrigin) -> Option<&ShioriFault> {
         )
         | ExitOrigin::Escape
         | ExitOrigin::Smoke
-        | ExitOrigin::OsClose => None,
+        | ExitOrigin::OsClose
+        | ExitOrigin::SessionEnd => None,
     }
 }
 
@@ -231,7 +235,8 @@ pub(crate) fn on_ghost_os_close(world: &mut World, entity: Entity) {
     });
 }
 
-/// HWND が付いた瞬間のゴースト窓へ [`on_ghost_os_close`] を差す system。
+/// HWND が付いた瞬間のゴースト窓へ [`on_ghost_os_close`] と、OS のセッションの終了の受け手
+/// `session_end::on_os_session_end`（areka-P0-ghost-shell-balloon-switch 要件 12.9）を差す system。
 ///
 /// `register_ghost_windows_click_through` と同じ `Added<WindowHandle>` の捉え方で、同じ
 /// `FrameFinalize` 段に登録する。`placement` は `crate::` パスを持てない（example の `#[path]`
@@ -241,7 +246,10 @@ pub(crate) fn attach_os_close_request(
     new_windows: Query<Entity, (With<GhostWindowMarker>, Added<WindowHandle>)>,
 ) {
     for e in &new_windows {
-        commands.entity(e).insert(OnCloseRequest(on_ghost_os_close));
+        commands.entity(e).insert((
+            OnCloseRequest(on_ghost_os_close),
+            OnSessionEnd(crate::session_end::on_os_session_end),
+        ));
     }
 }
 

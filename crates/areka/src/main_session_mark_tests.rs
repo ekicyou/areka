@@ -391,6 +391,7 @@ fn session_mark_verdict_table() {
         ExitOrigin::Escape,
         ExitOrigin::Smoke,
         ExitOrigin::OsClose,
+        ExitOrigin::SessionEnd,
     ];
     let quit = ExitOrigin::KanadeStopped(Quit);
     let mut got: Vec<MarkVerdict> = clean
