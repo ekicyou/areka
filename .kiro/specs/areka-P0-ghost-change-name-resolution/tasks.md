@@ -25,7 +25,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.7, 3.1, 3.2, 3.3, 3.4, 3.5, 3.7, 4.3, 4.4, 4.5, 4.7, 5.2, 5.4, 5.5, 6.1, 6.3, 9.1, 9.2, 9.3, 9.4, 9.6, 9.7_
   - _Boundary: SpecialNameResolver_
 
-- [ ] 2.2 `lastinstalled` の記録と書く口を足し、入口に解決の段を組み込む
+- [x] 2.2 `lastinstalled` の記録と書く口を足し、入口に解決の段を組み込む
   - プロセスの中だけの記録（フォルダ名 1 つの `Resource`）と書く口（置き換えて `info!(last_installed_recorded)` を 1 件）を足す。書く口には `#[allow(dead_code)]` を付けて本番の呼び手 `areka-P0-ghost-install` を注釈し、ファイル・記憶へは書かない
   - 記録の型 `LastInstalledGhost` と書く口 `record_last_installed` の 2 つの名前は design の「設計で決めたこと」のまま変えない（`ghost-install` の brief がこの名前で書く）
   - 入口の中身を「乱数を関数引数で受ける版」へ移し、今の入口はそこへ本番の乱数を渡す薄い皮にする（呼び手・メニューは変えない）

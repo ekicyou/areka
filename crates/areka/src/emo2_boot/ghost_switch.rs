@@ -7,6 +7,8 @@
 //! [`ChangeRx`] を経て、入力の段の取り出しの系 [`drain_change_requests`] が入口へ渡す。
 //! 送り出しの握手が済んだら [`switch_to`] が降ろして切替先を起こし、失敗なら
 //! [`switch_to_default`] が既定ゴーストへ 1 回だけ戻す（それも失敗なら致命で終了）。
+//! 台本の特別な名前（`random`・`sequential`・`lastinstalled`）は、入口が目録を読んだ直後に
+//! [`resolve_special_name`] で目録のフォルダ名へ解いてから突き合わせる（areka-P0-ghost-change-name-resolution）。
 
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
@@ -18,6 +20,7 @@ use areka_kanade::{
     KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind,
 };
 use areka_sylphya::{PersistKey, PersistScope};
+use bevy_ecs::resource::Resource;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
@@ -283,14 +286,44 @@ pub(crate) fn resolve_special_name(
     }
 }
 
-/// 切替要求の唯一の入口（要件 1.1・1.6・1.7・1.9）。
+/// 同じプロセスで最後に入れたゴーストのフォルダ名の記録（`lastinstalled` の解決に使う）。
 ///
-/// ⑴ 予約が在れば `warn!(ghost_switch_busy)`。⑵ 起動の文脈の根で目録を読み突き合わせ、該当なしは
-/// `warn!(ghost_switch_unknown)`（降ろさず kanade へ何も送らない）。⑶ 置き場のゴーストの送出端が
+/// プロセスの中だけ（ファイル・記憶へは書かない）。無ければ「このプロセスで何も入れていない」。
+/// 入口は読むだけで、切替に使っても消さない。
+#[derive(Resource)]
+pub(crate) struct LastInstalledGhost(pub String);
+
+/// 最後に入れたゴーストのフォルダ名を記録する（前の記録は置き換わる＝最後の 1 件だけ残る）。
+// 本番の呼び手は後続 areka-P0-ghost-install（インストール完了時に入れたゴーストのフォルダ名を渡す）。
+#[allow(dead_code)]
+pub(crate) fn record_last_installed(world: &mut World, folder: String) {
+    tracing::info!(
+        event = "last_installed_recorded",
+        folder = %folder,
+        "最後に入れたゴーストを記録した"
+    );
+    world.insert_resource(LastInstalledGhost(folder));
+}
+
+/// 切替要求の唯一の入口（要件 1.1・1.6・1.7・1.9）。乱数は本番の `pick_index`。
+pub(crate) fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerdict {
+    request_ghost_switch_with(world, req, pick_index)
+}
+
+/// 入口の中身。乱数を外から受ける（決定論テスト用・本番は [`request_ghost_switch`] が `pick_index` を渡す）。
+///
+/// ⑴ 予約が在れば `warn!(ghost_switch_busy)`。⑵ 起動の文脈の根で目録を読み、名前の要求だけ特別な
+/// 名前を解いてから（解けたら `info!(ghost_switch_resolved)` でフォルダの名指しへ読み替える）突き合わせ、
+/// 切替先が決まらない（該当なし・特別な名前が解けない）ときは `warn!(ghost_switch_unknown)` を
+/// `reason` つきで 1 件（降ろさず kanade へ何も送らない）。⑶ 置き場のゴーストの送出端が
 /// 無ければ `warn!(ghost_switch_no_context)`。⑷ 切替先の `sakura.name` だけを読み（要件 8.7）、
 /// kanade へ切替の要求を送って予約を立てる。送出に失敗したら `error!(ghost_switch_send_failed)` で
 /// 予約は立てない（送ってから立てるので、下ろすべき予約は残らない）。
-pub(crate) fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> SwitchVerdict {
+pub(crate) fn request_ghost_switch_with(
+    world: &mut World,
+    req: SwitchRequest,
+    pick: impl FnOnce(usize) -> usize,
+) -> SwitchVerdict {
     if world.get_non_send::<SwitchInFlight>().is_some() {
         tracing::warn!(
             event = "ghost_switch_busy",
@@ -308,15 +341,48 @@ pub(crate) fn request_ghost_switch(world: &mut World, req: SwitchRequest) -> Swi
         return SwitchVerdict::NoContext;
     };
     let entries = areka_ghost::catalog::list_ghosts(&ctx.root);
-    let Some(mut target) = resolve_switch_target(&entries, &req.ghost) else {
+    let current_folder = ctx.current.ghost.folder.clone();
+    // 特別な名前は同名のゴーストより先に解く。メニューのフォルダの名指しは素通し。記録は読むだけ。
+    let spec = match &req.ghost {
+        GhostSpec::Name(name) => {
+            let last = world
+                .get_resource::<LastInstalledGhost>()
+                .map(|r| r.0.as_str());
+            match resolve_special_name(name, &entries, current_folder.as_deref(), last, pick) {
+                NameResolution::Plain => req.ghost.clone(),
+                NameResolution::Resolved { folder, position } => {
+                    tracing::info!(
+                        event = "ghost_switch_resolved",
+                        name = %name,
+                        to = %folder,
+                        position = ?position,
+                        "特別な名前を目録のフォルダ名へ解いた"
+                    );
+                    GhostSpec::Folder(folder)
+                }
+                NameResolution::Unresolved(reason) => {
+                    tracing::warn!(
+                        event = "ghost_switch_unknown",
+                        reason = reason.as_ref_str(),
+                        spec = ?req.ghost,
+                        "{}",
+                        reason.describe()
+                    );
+                    return SwitchVerdict::NotFound;
+                }
+            }
+        }
+        GhostSpec::Folder(_) => req.ghost.clone(),
+    };
+    let Some(mut target) = resolve_switch_target(&entries, &spec) else {
         tracing::warn!(
             event = "ghost_switch_unknown",
+            reason = "name",
             spec = ?req.ghost,
             "切替先が目録のどのゴーストにも一致しない——切替を無視する（降ろさず知らせも送らない）"
         );
         return SwitchVerdict::NotFound;
     };
-    let current_folder = ctx.current.ghost.folder.clone();
 
     let session = world
         .get_non_send::<GhostSlot>()

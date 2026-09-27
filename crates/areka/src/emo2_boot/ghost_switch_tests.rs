@@ -1,7 +1,7 @@
 //! 切替要求の入口・名前の突き合わせ・台本の切替要求の取り出しの決定論テスト（areka-P0-ghost-shell-balloon-switch task 7.1・7.2）。
 //!
 //! 確かめること: 突き合わせの順（`name` → フォルダ名）と大文字小文字の区別・メニューの指し方
-//! （フォルダ名だけ）・該当なし（未知の名前・`random`・`lastinstalled`）で `warn!` 1 件と送出 0 件・
+//! （フォルダ名だけ）・該当なし（未知の名前）で `warn!`（`reason = "name"`）1 件と送出 0 件・
 //! 二重要求で `warn!` 1 件・受理で予約 1 つと kanade への切替の要求 1 件（今のゴースト自身も受理）・
 //! 文脈／置き場が無い・送出の失敗で記録が 1 件残り予約が無いこと（要件 1.5〜1.9・8.7・10.6・11.8・11.9）。
 //! 実行系は起こさない（置き場には kanade の送出端だけを持つ中身を据え、受信端で送出を数える）。
@@ -498,32 +498,35 @@ fn accepted_folder_request_without_names_sends_folder_and_empty_sakura_name() {
     );
 }
 
-/// 該当なし（未知の名前・`random`・`lastinstalled`）: `warn!` 1 件・送出 0 件・予約なし
-/// （降ろさず `OnGhostChanging` も送らない・要件 1.6・1.7）。
+/// 名指しの該当なし（未知の名前）: `warn!(ghost_switch_unknown, reason = "name")` 1 件・送出 0 件・
+/// 予約なし（降ろさず `OnGhostChanging` も送らない・要件 1.6・1.7・6.5）。
 #[test]
 fn unknown_names_warn_once_and_send_nothing() {
     let tmp = TempPath::new("ghost-switch-unknown");
     let root = fixture_root(&tmp);
-    for unknown in ["Nobody", "random", "lastinstalled"] {
-        let (mut world, rx) = world_with_slot(&root);
-        let (verdict, events) = capture(|| {
-            request_ghost_switch(
-                &mut world,
-                request(name(unknown), true, ChangeOrigin::Automatic),
-            )
-        });
-        assert_eq!(
-            (
-                verdict,
-                sent_changes(&rx).len(),
-                world.get_non_send::<SwitchInFlight>().is_some(),
-                count_event(&events, "ghost_switch_requested"),
-            ),
-            (SwitchVerdict::NotFound, 0, false, 0),
-            "{unknown}: {events:?}"
-        );
-        assert_one_event(&events, "ghost_switch_unknown", tracing::Level::WARN);
-    }
+    let (mut world, rx) = world_with_slot(&root);
+    let (verdict, events) = capture(|| {
+        request_ghost_switch(
+            &mut world,
+            request(name("Nobody"), true, ChangeOrigin::Automatic),
+        )
+    });
+    assert_eq!(
+        (
+            verdict,
+            sent_changes(&rx).len(),
+            world.get_non_send::<SwitchInFlight>().is_some(),
+            count_event(&events, "ghost_switch_requested"),
+        ),
+        (SwitchVerdict::NotFound, 0, false, 0),
+        "{events:?}"
+    );
+    assert_one_event(&events, "ghost_switch_unknown", tracing::Level::WARN);
+    let unknown = events
+        .iter()
+        .find(|e| e.field_str("event") == Some("ghost_switch_unknown"))
+        .expect("該当なしの記録");
+    assert_eq!(unknown.field_str("reason"), Some("name"), "{events:?}");
 }
 
 /// 二重要求: 予約が在る間の 2 件目は `warn!` 1 件で捨てる（送出は 1 件目の 1 件だけ・要件 1.9）。
