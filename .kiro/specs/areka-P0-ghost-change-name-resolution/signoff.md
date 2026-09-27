@@ -142,3 +142,20 @@ pwsh -NoProfile -File C:\tmp\areka-signoff-gcnr\tools\launch.ps1 -Run cal -Profi
 1. i686 の helper と `areka` を建て、上の「検体」の形で `C:\tmp\` の下に根を組む（目録は emo2 と検体の 2 体だけ）
 2. PowerShell で `$env:AREKA_PROFILE_DIR='<新しいフォルダ>'; Remove-Item Env:AREKA_ROOT -ErrorAction SilentlyContinue` とし、そのフォルダに `sylphya.toml`（`format-version = 1`・`[last]`・`ghost = "rpost_plus"`）を置いて、根の `areka.exe` を argv なしで起動する
 3. ポストと狛犬の窓が一瞬出て、何も話さずに消え、emo2 が現れて挨拶する。`$env:RUST_LOG='info,areka=debug'` で起動すれば `ghost_switch_resolved name=random to=emo2` が見える
+
+## 2026-09-27 追記: 開発者の目視（21:22〜21:28 JST）
+
+同じ実行体（HEAD `f02bd753` のビルド・以降のコード差分なし）で、開発者が画面を見ながら 3 回走らせた。起動は `C:\tmp\areka-signoff-gcnr\tools\launch.ps1`（走行ごとに新しい記憶の置き場）。
+
+| 走行 | 根・検体 | 終わり方 | 終了コード | ERROR | 開発者の見え方 |
+|---|---|---|---|---|---|
+| manual1 | `root`・`rpost_plus`（`OnBoot` は `\+` だけ） | 自動終了（Smoke） | 0 | 0 | 目視が間に合わなかった |
+| manual2 | 同上 | メニューの「終了」（`KanadeStopped(Quit)`） | 0 | 1（下記） | 「普通に emo2 が起動してるだけに見える」 |
+| manual3 | `root-talk`・`rpost_talk`（`OnBoot` は `：３秒後に他のゴーストへ替わります。\_w[3000]\+`） | 自動終了（Smoke） | 0 | 0 | **「ポストから emo2 に切り替わりましたね」** |
+
+- manual1・manual2 で検体が見えなかったのは正常: 検体の窓は開いてから閉じるまで **約 0.13 秒**（manual2: 窓 40.97 → `OnBoot` 41.05 → `ghost_switch_resolved` 41.08 → 窓を閉じる 41.11）で、描き終わる前か一瞬のちらつきにしかならない。ログでは起動したのは検体（`ghost_resolved route=Memory dir=…\rpost_plus`）で、そこから emo2 へ替わっている
+- manual3 は検体に一言言わせてから `\+` に届くようにした版。窓 28.21 → `OnBoot` 28.45 → 台詞と 3 秒の待ち → `ghost_switch_resolved name=random to=emo2` 32.33 → `ghost_switch_requested` 32.33 → 窓を閉じる 32.36 → emo2 の窓 33.06 → `ghost_switch_done` 33.35。`\_w[3000]` の待ちを守ってから切り替わり、組み立ての「無視」は 0 件
+- 3 走行とも `ghost_switch_resolved` 1・`ghost_switch_unknown` 0・パニック 0
+- manual2 の ERROR 1 件は本仕様と関係のない終了間際の競合: メニューの終了で窓を閉じた直後に SERIKO のループの遅れたコマの表示が届き、`areka_emo_present::scale: derive_scale: 窓 DPI を取得できない（DPI component 不在）` の `error!` と「装着が未完了」の WARN 7 件が出た。その後の停止は正常（記憶の書き出し・起動中の印を消す・終了コード 0）。これまでの実機確認のログには 1 度も出ていない。持ち主の spec が無いので、別の作業として切り出した
+
+判定: 要件 8.1 は開発者の目視でも**合格**（利用者から見て、検体が話してから消え、emo2 が現れて挨拶した）。
