@@ -68,7 +68,7 @@ pwsh -NoProfile -File C:\tmp\areka-signoff-gcnr\tools\launch.ps1 -Run main -Prof
 |---|---|
 | 12:03:09.857 | `ghost_resolved route=Memory dir=…\ghost\rpost_plus` |
 | 10.119 | 検体の窓が出た（「本物のゴースト窓を開きました」scopes=[0, 1]） |
-| 10.228 | `OnBoot` GET `["master"]` → 台本 `\0\+\e` |
+| 10.228 | `OnBoot` GET `["master"]` → 台本 `\0\+\e`（前確認より・本走行のログは送出だけ） |
 | 10.310 | **`ghost_switch_resolved name=random to=emo2 position=None`** |
 | 10.311 | **`ghost_switch_requested from=Some("Ｒポストランダム") to=えも？？ raise_event=false origin="automatic"`**・`change_accepted`（同じ値） |
 | 10.329 | `unload_clean`（`OnGhostChanging`・`OnClose` は送らない＝黙って降ろす） |
