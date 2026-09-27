@@ -46,6 +46,7 @@ pub(crate) fn dispatch_window_message(
         WM_ERASEBKGND => lifecycle::WM_ERASEBKGND(world, entity, hwnd, wparam, lparam),
         WM_PAINT => lifecycle::WM_PAINT(world, entity, hwnd, wparam, lparam),
         WM_CLOSE => lifecycle::WM_CLOSE(world, entity, hwnd, wparam, lparam),
+        WM_ENDSESSION => lifecycle::WM_ENDSESSION(world, entity, hwnd, wparam, lparam),
         WM_WINDOWPOSCHANGED => window_pos::WM_WINDOWPOSCHANGED(world, entity, hwnd, wparam, lparam),
         WM_DISPLAYCHANGE => lifecycle::WM_DISPLAYCHANGE(world, entity, hwnd, wparam, lparam),
         WM_DPICHANGED => window_pos::WM_DPICHANGED(world, entity, hwnd, wparam, lparam),

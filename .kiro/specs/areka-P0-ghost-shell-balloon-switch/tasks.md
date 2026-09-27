@@ -267,7 +267,7 @@
   - _Requirements: 4.6, 4.7, 12.1, 12.6, 12.7, 12.8, 12.14_
   - _Boundary: ghost_switch, main（on_boot_ok）, ghost_session_
 
-- [ ] 11.3 (P) wintf: ゴースト窓でセッションの終了を受ける口を足す
+- [x] 11.3 (P) wintf: ゴースト窓でセッションの終了を受ける口を足す
   - 「窓に関数を差す部品」の前例（OS の閉鎖要求）と同じ形の部品「セッションの終了で呼ぶ関数」を足し、窓の手続きの配送表に `WM_ENDSESSION` の腕を 1 つ足す。wParam が真で生きた entity が部品を持てば `info!(os_session_end)` の上で関数を呼ぶ。wParam が偽（取りやめ）・部品なし・破棄済み・World が借用中はそれぞれ記録（取りやめと部品なしと破棄済みは `debug!`、借用中は帰結を書いた `warn!`）だけで呼ばない。戻り値はどれも 0。`WM_QUERYENDSESSION` の腕は足さない（既定の手続きが終了を許す）
   - 本番の窓の手続きの橋渡し（`runtime/wndproc_bridge.rs` の `make_wndproc`）は World の借用中だと記録なしで既定の手続きへ流すので、配送表の受け手には届かない。その「借用中は飛ばす」腕で、`WM_ENDSESSION` かつ wParam が真のときだけ「受け手を呼べない＝印が残り次の起動が Ref6/7 付きになる」と帰結を書いた `warn!(os_session_end_world_busy)` を 1 件残す（他のメッセージの扱いと戻り値は変えない）
   - 窓の手続きのテストの兄弟ファイルで固定し緑: wParam 真で 1 回呼ばれる／偽・部品なし・破棄済み・借用中で呼ばれず panic 無し（借用中は `warn!` 1 件）／`WM_QUERYENDSESSION` は既定の手続きへ委ねる。橋渡しのテストに 1 本: 借用を持ったまま橋渡しの閉包へ `WM_ENDSESSION`（真）→ 戻りは既定の手続きへ委ねる形・`warn!` がちょうど 1 件／wParam 偽や他のメッセージでは 0 件

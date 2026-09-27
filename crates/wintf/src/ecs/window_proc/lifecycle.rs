@@ -1,6 +1,6 @@
 //! ウィンドウライフサイクルおよびディスプレイ変更ハンドラ
 //!
-//! WM_ERASEBKGND, WM_PAINT, WM_CLOSE, WM_DISPLAYCHANGE
+//! WM_ERASEBKGND, WM_PAINT, WM_CLOSE, WM_ENDSESSION, WM_DISPLAYCHANGE
 //!
 //! NOTE: WM_NCCREATE / WM_NCDESTROY（GWLP_USERDATA への Entity 格納・破棄時 despawn）は
 //! 旧 `ecs_wndproc` 専用だったため撤去した（task 4.5）。新経路ではウィンドウ生成・破棄を
@@ -12,11 +12,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::Entity;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use windows::Win32::Foundation::*;
 
-use crate::ecs::window::OnCloseRequest;
 use crate::ecs::window::transition_diag::{self, MSG_DISPLAYCHANGE, MsgRecord};
+use crate::ecs::window::{OnCloseRequest, OnSessionEnd};
 use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
@@ -127,6 +127,63 @@ pub(super) fn WM_CLOSE(
         } else {
             w.world_mut().despawn(entity);
         }
+    }
+    Some(LRESULT(0))
+}
+
+/// WM_ENDSESSION: OS のセッションの終了（シャットダウン・再起動・ログオフ）の確定／取りやめ
+///
+/// wParam が真で生存 entity が [`OnSessionEnd`] を持てば、その関数を World 借用中に呼ぶ
+/// （関数から戻った直後にプロセスが終了させられうる）。取りやめ（wParam 偽）・部品なし・
+/// 破棄済み・World の借用中はどれも記録だけで呼ばない。最初の受け手が全ゴースト窓の
+/// entity を破棄するので、残りの窓へ届いた 2 通目以降は破棄済みの打ち切りで止まる。
+/// 戻り値はどの腕も `Some(LRESULT(0))`（`WM_ENDSESSION` を処理したら 0 を返す）。
+///
+/// `WM_QUERYENDSESSION` の腕は持たない（既定の手続きが TRUE＝終了を許すを返す）。
+#[inline]
+pub(super) fn WM_ENDSESSION(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
+    _hwnd: HWND,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> HandlerResult {
+    if wparam.0 == 0 {
+        debug!(
+            event = "os_session_end_cancelled",
+            entity = ?entity,
+            "[WM_ENDSESSION] セッションの終了は取りやめられた → 何もしない"
+        );
+        return Some(LRESULT(0));
+    }
+    let Ok(mut w) = world.try_borrow_mut() else {
+        warn!(
+            event = "os_session_end_world_busy",
+            entity = ?entity,
+            "[WM_ENDSESSION] World が借用中でセッションの終了の受け手を呼べない → \
+             後始末をせずに終わるので起動中の印が残り、次の起動は前回落ちた扱い（Ref6/7 付き）になる"
+        );
+        return Some(LRESULT(0));
+    };
+    if w.world().get_entity(entity).is_err() {
+        debug!(
+            entity = ?entity,
+            "{DESPAWNED_SKIP_TAG} WM_ENDSESSION: 対象 entity は既に破棄済み（despawn）→ \
+             セッションの終了は先の受け手で済んだものとして打ち切り"
+        );
+    } else if let Some(cb) = w.world().get::<OnSessionEnd>(entity).copied() {
+        info!(
+            event = "os_session_end",
+            entity = ?entity,
+            lparam = lparam.0,
+            "[WM_ENDSESSION] セッションの終了を利用側の関数へ渡す"
+        );
+        (cb.0)(w.world_mut(), entity);
+    } else {
+        debug!(
+            entity = ?entity,
+            "[WM_ENDSESSION] セッションの終了の関数を持たない窓 → 何もしない"
+        );
     }
     Some(LRESULT(0))
 }
