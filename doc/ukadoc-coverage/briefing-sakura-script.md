@@ -1101,9 +1101,9 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\![vanishbymyself]` | 未対応（書いてあるのに何も起きない） | ゴーストの終了 | `ukadoc:list_sakura_script:_5c_21_5bvanishbymyself_5d:1` |
 | `\&[ID]` | 未対応（書いてあるのに何も起きない） | 文字コードの埋め込みと実体参照 | `ukadoc:list_sakura_script:_5c_26_5bID_5d:1` |
 | `\*` | 未対応（書いてあるのに何も起きない） | バルーンの追記と選択肢のタイムアウト抑止 | `ukadoc:list_sakura_script:_5c_2a:1` |
-| `\+` | 未対応（書いてあるのに何も起きない） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_2b:1` |
+| `\+` | 実装済み（2026-09-27 に `areka-P0-ghost-change-name-resolution` が実装。`\![change,ghost,random]` と同じ切替になり、今のゴーストを除いた目録から 1 体へ切り替わる。調査時点は未対応） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_2b:1` |
 | `\_!` | 未対応（書いてあるのに何も起きない） | タグを実行しない区間 | `ukadoc:list_sakura_script:_5c__21:1` |
-| `\_+` | 未対応（書いてあるのに何も起きない） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c__2b:1` |
+| `\_+` | 実装済み（2026-09-27 に `areka-P0-ghost-change-name-resolution` が実装。`\![change,ghost,sequential]` と同じ切替になり、目録の並び〔フォルダ名の昇順〕で次のゴーストへ切り替わる。調査時点は未対応） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c__2b:1` |
 | `\_?` | 未対応（書いてあるのに何も起きない） | タグを実行しない区間 | `ukadoc:list_sakura_script:_5c__3f:1` |
 | `\__c` | 未対応（書いてあるのに何も起きない） | 外部を開く・別窓 | `ukadoc:list_sakura_script:_5c__c:1` |
 | `\__q[ID,...]` | 未対応（書いてあるのに何も起きない） | 選択肢の別書式 | `ukadoc:list_sakura_script:_5c__q_5bID_2c..._5d:1` |
@@ -1149,7 +1149,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | 項目の綴り | 引受先の候補 | 台帳の項目 id |
 | --- | --- | --- |
 | `\_!` | 統合担当（`areka-P0-ukadoc-coverage-roadmap`）の無所有一覧で裁定 | `ukadoc:list_sakura_script:_5c__21:1` |
-| `\_+` | 統合担当（`areka-P0-ukadoc-coverage-roadmap`）の無所有一覧で裁定 | `ukadoc:list_sakura_script:_5c__2b:1` |
+| `\_+` | `areka-P0-ghost-change-name-resolution`（2026-09-27 に引き受けて実装。調査時点は統合担当〔`areka-P0-ukadoc-coverage-roadmap`〕の無所有一覧で裁定） | `ukadoc:list_sakura_script:_5c__2b:1` |
 | `\_?` | 統合担当（`areka-P0-ukadoc-coverage-roadmap`）の無所有一覧で裁定 | `ukadoc:list_sakura_script:_5c__3f:1` |
 | `\__c` | 統合担当（`areka-P0-ukadoc-coverage-roadmap`）の無所有一覧で裁定 | `ukadoc:list_sakura_script:_5c__c:1` |
 | `\__q[ID,...]` | 統合担当（`areka-P0-ukadoc-coverage-roadmap`）の無所有一覧で裁定 | `ukadoc:list_sakura_script:_5c__q_5bID_2c..._5d:1` |
@@ -1579,13 +1579,13 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 #### ゴーストの切り替え（5 件）
 
 - **利用者に何が起きるか**: 別のゴーストを呼ぶ・別のゴーストへ交代する・見た目一式を着替える、のどれも起きない。台詞では相方が来たことになっているのに、画面には誰も現れない。
-- **その群を成立させる最小の基盤**: ゴーストとシェルを入れ替える部分と、その指示を受け取る口。`\+`・`\_+` はタグを読み替える所のどの分岐にも当たらず素通しになり、`\![call,ghost,…]` ほか 3 件は名前が運ばれるだけである。
+- **その群を成立させる最小の基盤**: ゴーストとシェルを入れ替える部分と、その指示を受け取る口。`\+`・`\_+` はタグを読み替える所のどの分岐にも当たらず素通しになり（調査時点。2026-09-27 に `areka-P0-ghost-change-name-resolution` がタグを読み替える所へ `\![change,ghost,random]`／`\![change,ghost,sequential]` と同じ値にする分岐を足し、切替の入口が目録のゴーストへ解くようになった）、`\![call,ghost,…]` ほか 3 件は名前が運ばれるだけである。
 - **台帳の項目 id**:
   - `\![call,ghost,ゴースト名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bcall_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1`
-  - `\![change,ghost,ゴースト名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1`（2026-09-27 に `areka-P0-ghost-shell-balloon-switch` が実装済み。特別な名前 `random`／`sequential`／`lastinstalled` の解決は `areka-P0-ghost-change-name-resolution` の持ち場）
+  - `\![change,ghost,ゴースト名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1`（2026-09-27 に `areka-P0-ghost-shell-balloon-switch` が実装済み。正典の特別な名前 random／sequential／lastinstalled の解決は解決済み（areka-P0-ghost-change-name-resolution・ghost_switch.rs の resolve_special_name）。）
   - `\![change,shell,シェル名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1`
-  - `\+` — `ukadoc:list_sakura_script:_5c_2b:1`
-  - `\_+` — `ukadoc:list_sakura_script:_5c__2b:1`
+  - `\+` — `ukadoc:list_sakura_script:_5c_2b:1`（2026-09-27 に `areka-P0-ghost-change-name-resolution` が実装済み）
+  - `\_+` — `ukadoc:list_sakura_script:_5c__2b:1`（2026-09-27 に `areka-P0-ghost-change-name-resolution` が実装済み）
 
 #### 外部のアプリに渡す（5 件）
 
