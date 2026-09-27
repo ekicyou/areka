@@ -51,6 +51,8 @@
 //! し、その時点で `on_down` は自然に drop される——「アクター別の停止経路」マトリクス参照
 //! （kanade の「全 Sender drop で正常終了」は on_down 保持構成では環の解体後にのみ成立する）。
 
+pub mod probe;
 pub mod real;
 
+pub use probe::{CutGuard, ShioriBusy, ShioriCut, ShioriProbe, ShioriUnblock, WaitBudget};
 pub use real::{ShioriBackend, ShioriConnection, spawn_shiori_actor};

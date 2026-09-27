@@ -21,7 +21,7 @@
   - _Boundary: HelperTerminator, HelperLifecycle_
 
 - [ ] 2. SHIORI の待ちを見張って外から解く仕組み（areka-kanade）
-- [ ] 2.1 (P) 今の呼び出しの記録・解く手の置き場・上限の見張りを持つ見張り部品を足す
+- [x] 2.1 (P) 今の呼び出しの記録・解く手の置き場・上限の見張りを持つ見張り部品を足す
   - 今の呼び出し（待っていない・要求中〔id つき〕・降ろし中・降り済み）の置き場、解く手を一度だけ据える置き場、上限で発火する見張りのスレッドを 1 つの共有部品にまとめる（host32 の型は持たない）
   - 発火の口は期限とテストの手動の 2 つ。手動は見張りが張られる前に呼ばれても予約として残り、次に張った時点で即発火する
   - 後始末の終わりと期限が同時なら 1 人だけが勝ち、終わりが勝てば切らない。降り済みの段では切らずに debug を 1 件だけ残す
@@ -135,3 +135,4 @@
 ## Implementation Notes
 - 1.1: `TerminateProcess` の 2 度目は、終わりかけ（取っ手がまだシグナルでない）でも `ERROR_ACCESS_DENIED` を返す。既終了の判定に `WaitForSingleObject` を足すと偽の失敗になる。テストの長命の子は `cmd /c ping` でなく `ping.exe` を直接起こす（cmd を終わらせても孫が残る）。
 - 1.2: 往復の最中に宛先のプロセスを終わらせると、同期の送信は戻り値 1・応答 0 で戻る（0 ではない）。本番の `send_request` は受け皿が空なので `IpcError::Timeout` を返す＝kanade には `RequestError::Timeout` として見える（`SendFailed` ではない）。2 系・5 系は「打ち切った」をエラーの種類でなく `ShioriProbe` の結果で決めること。`Timeout` を扱う既存の枝（`shiori-fault-notice` まわり）が上限切れの回で走ることも織り込む。design・research は実測へ揃えた。
+- 2.1: `log_capture_kit::capture` は自スレッドの記録しか拾わない＝見張りのスレッドの `warn!(shiori_wait_cut)` は捕まらない。記録の中身は `try_fire` をテストのスレッドで直に呼んで判定し、見張り経由の回は `finish` の戻り値と解く手の回数で判定する（5.3 で areka から見張りの `warn!` を数えるなら捕捉の仕方を先に確かめる）。design の `armed` と `pending_cut` は 1 つの `Mutex<Armed>` にまとめた（予約と張るの交差を防ぐ）。`CutGuard` は `finish` せず落としても `Drop` で見張りを畳む。
