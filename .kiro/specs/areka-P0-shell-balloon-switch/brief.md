@@ -1,7 +1,7 @@
 # Brief: areka-P0-shell-balloon-switch
 
 > 2026-09-20 `/kiro-discovery` 再入（棚卸⑮）で起票。`areka-P0-ghost-shell-balloon-switch`（規模 L）の Approach ②③「バルーン切替・シェル切替」を**単独の spec として切り出した**。名前は `doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 2 の束「切替」の候補名そのものである。
-> 正典の語彙と Ref の一覧は親 brief（`.kiro/specs/areka-P0-ghost-shell-balloon-switch/brief.md` の Desired Outcome 2・3）が正本。本 brief は**再測定で崩れた前提と、切り出したあとの境界**だけを書く。
+> 正典の語彙と Ref の一覧は親 brief（`.kiro/specs/completed/areka-P0-ghost-shell-balloon-switch/brief.md` の Desired Outcome 2・3）が正本。本 brief は**再測定で崩れた前提と、切り出したあとの境界**だけを書く。
 > 本文の file:line は**起票時の実測値**（2026-09-20・main `fe157df1`）。着手時に必ず引き直すこと。
 
 ## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap` の着地後）
