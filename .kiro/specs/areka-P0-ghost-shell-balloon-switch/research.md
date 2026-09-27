@@ -329,3 +329,49 @@
 - **一般化**: 「起動の根」を表 1 つに（`OnFirstBoot`／`OnGhostChanged`／将来の `OnGhostCalled`・`OnVanished`）。「運行の通知」を 1 本の線に（停止・定常到達・中止）。「切替要求」を 1 型に（台本＝名前・メニュー＝フォルダ名）。
 - **build vs adopt**: 新しい依存 0。`mpsc`・`bevy_ecs` の NonSend／Resource・`sylphya::persist` の既存 API・`ScriptedShioriBackend` の型で足りる。
 - **削ったもの**: 新しい停止原因（`Changed`）・新しい告知の場面・新しい SHIORI イベント・`GhostBootOptions` の欄・`ResourceQuery` の拡張・別スレッドで降ろす形・`unregister` の呼び手・`(change,shell|balloon)` の消費者。
+
+## 12. 裁定 13（2026-09-27）の反映: 起動中の印・切替の記憶の時点・OS のセッションの終了
+
+出どころ: 実装後の実機サインオフ（`signoff.md`「気付いたこと」2・4）の議題に対する開発者裁定。要件 12・11.13 が正本。ここは設計で決めたことの理由と選ばなかった案だけ。
+
+### 実測（2026-09-27・本ブランチ HEAD `9d1ea646`）
+- 置き換え前の仕組み: `boot_resolve.rs` の `read_last_halted`／`take_last_halted`／`record_halt`、`main.rs` の `should_record_halt`・`after_run`、鍵 `PersistKey::LastHalted`（`areka.last.halted`）。main には未着地（本ブランチだけ）なので移行は持たない。
+- 記憶の保存 `areka_sylphya::persist::save_scope` は「既存のファイルを読んで重ねて書く」（プロセス内でも鍵は取らない）。App スコープの書き手は、UI スレッドの直接の書き込み（`save_app`）と、各ゴーストの記憶の書き手（sylphya のアクター・`persist_put` は write-through）の 2 種類。
+- `on_boot_ok` の `LastUsed::record` は起動の呼び出しが返った時点に sylphya へ投函する（④ の走行で `fail1` が 537 ms だけ `LastGhost` に載った）。
+- `GhostSession::shutdown(CloseReason)` は kanade へ `ForceQuit` を送り、kanade の `force_quit`（`schedule/mod.rs`）は `OnClose` を NOTIFY（Ref0＝終了理由）で送ってから SHIORI を降ろす。`CloseReason::System` の Ref0 は `system`。
+- `WM_QUERYENDSESSION`／`WM_ENDSESSION` は `crates/` で 0 件。wintf の配送表（`ecs/window_proc/mod.rs` の `dispatch_window_message`）に腕が無く、既定の手続きへ流れている（`WM_QUERYENDSESSION` は既定で TRUE＝終了を許す）。ゴースト窓には `WM_CLOSE` 用の「窓に関数を差す部品」`OnCloseRequest` が `app_exit::attach_os_close_request` で差されている。
+- OS はセッションの終了をトップレベル窓へ送る（メッセージ専用の窓は受けない）。ゴースト窓（キャラとバルーン）はトップレベルなので受ける。wintf の実行器の内部の窓に頼らず、ゴースト窓に受け口を差す。
+
+### Decision C-1: 印は App スコープの鍵 `areka.last.running`（`LastHalted` を改名）
+- 意味が「落ちた名前の控え（読んだら消す）」から「動いている間だけ在る印（きれいな終わりで消す）」へ変わったので名前を変える。main 未着地なので移行は要らない。空文字＝無しの読みと `[last]` の表の置き場は継ぐ。
+- 別案（`areka.boot.*` など Ghost スコープに置く）: 次の起動は「どのゴーストか」を知る前に読むので App スコープでなければならない。
+
+### Decision C-2: 次の起動は `LastGhost` を読まないだけ（新しい経路の値を作らない）
+- 印が在るとき `resolve_ghost` に `memory: None` を渡すと、既存の段 3〜5（唯一 → 既定 → 無作為）が既定ゴーストを選ぶ（配布物は既定を同梱）。`DEFAULT_GHOST_FOLDER` を参照する場所が 1 つのままで、記録の語彙 `route=Default` も嘘にならない。
+- 印は読んだだけでは消さない。起こす前の書き込みが上書きする（読んでから書くまでに落ちても同じ名前がもう一度渡るだけ）。置き換え前の「読んだら消す」は 2 度の書き込みを要した。
+
+### Decision C-3: 戻しの間の印は切替先の名前のまま・定常到達で今のゴーストへ
+- 裁定の「切替の途中のどこで落ちても次は emo2＋Ref7＝切替先」を戻しの途中（既定ゴーストの迎え入れ）まで満たすため。既定ゴーストが定常に入ったら、以後落ちたのは既定ゴーストなので印を既定の名前へ改める。
+- 定常到達の書き込みは段（切替先／既定）を問わず同じ手順（`LastUsed`＋印＝今のゴースト）。どちらの段でも一方は同じ値の上書きになるだけで、分岐を持たない方が短い。
+
+### Decision C-4: 初回の起動の `LastGhost` は今日どおり起動の呼び出しが返った時点
+- 落ちれば印が残り、次の起動は `LastGhost` を読まないので、定常到達まで遅らせても次の起動の結果は変わらない。初回の起動には迎え入れの予約が無く、定常到達で書く口を足すと LogSink の骨格（kanade が居ない起動）の扱いまで増える。切替だけ遅らせるのは、裁定が「壊れた切替先の名前は一瞬も `LastGhost` に載らない」を求めたため。
+
+### Decision C-5: UI スレッドの直接書き込みは「実行系が 1 つも動いていない間」だけ
+- 「読んで重ねて書く」保存を 2 つの書き手が同時に行うと片方が消えうる。初回の起動の前・`switch_to` の降ろした直後・後始末で降ろした後は実行系が無い（`shutdown` は記憶の書き手の受信箱を処理し切ってから join する）。動いている間（定常到達）はそのゴーストの記憶の書き手へ投函して直列にする。鍵やファイルのロックは足さない。
+
+### Decision C-6: きれいな終わりの判定は 1 つの表（`session_mark_verdict`）
+- 消すのは「最初の出所が失敗でない・`run()` が成功・降ろす処理が成功・argv でない」ときだけ。`ExitOrigin` の網羅の match で書くので、後続が出所を足すと判定の漏れがコンパイルで止まる。`fn main` の後始末と OS のセッションの終了の 2 か所がこの 1 つを呼ぶ。
+- 別案（終了コード 0 かどうかだけで決める）: 終了コードは後始末の後に決まるので、消す時点（降ろした直後）では使えない。
+
+### Decision C-7: OS のセッションの終了は `WM_ENDSESSION`（wParam＝TRUE）の窓の手続きの中で同期に済ませる
+- `WM_ENDSESSION` から戻った後はいつ終了させられてもよいので、`run()` の後の後始末には頼れない。受け手の中で `quit_app(SessionEnd)` → `GhostSession::shutdown(CloseReason::System)`（既存の `ForceQuit` 経路＝`OnClose` の Ref0＝`system` を NOTIFY）→ 判定 → 印の消去を行い、それから戻る。
+- 別れの台詞は流さない: 受け手の中では UI スレッドが塞がり描けない。戻れば終了させられうる。
+- wintf には `OnCloseRequest` と同じ形の部品 `OnSessionEnd` と配送表の腕を 1 つずつ足すだけ（wintf は areka を知らない）。ゴースト窓は複数あるので 2 通目以降は `SessionEnded` で読み捨てる。
+- **選ばなかった案**: ⑴ `WM_QUERYENDSESSION` で正典の終了の握手（`OnClose` の GET と別れの台詞）を始めて TRUE を返し、`WM_ENDSESSION` で終わりを待つ——握手は数フレームかかり、その間 OS は次の `WM_ENDSESSION` を送ってくる。取りやめ（wParam＝FALSE）のときに握手を巻き戻す経路が要る（終了の握手から定常へ戻る経路は 0 本＝完了 `balloon-break` 裁定 6）。⑵ `WM_QUERYENDSESSION` で FALSE を返して握手を待たせる／`ShutdownBlockReasonCreate`——デスクトップマスコットが OS の終了を止めるのは無粋で、第三者の環境で「終了を妨げているアプリ」の画面を出す。⑶ 隠しの専用窓で受ける——トップレベルの窓を 1 枚増やすだけで、ゴースト窓で受けるのと得るものが同じ（ゴースト窓は必ず在る。在らない一瞬は切替の窓 0 枚の間で、受け入れる）。⑷ `SetConsoleCtrlHandler`——GUI のプロセスには届かない。
+- 32bit helper のプロセスが OS から先に終了させられた場合、SHIORI の呼び出しは既存の送信の期限で失敗し、降ろす処理は続く（新しい扱いは要らない）。
+
+### Decision C-8: テストの置き場
+- 置き換え前の仕組みを固定していたテスト（`main_halt_record_tests.rs`・`boot_resolve_tests.rs` の 3 本・`main_config_input_tests.rs` の 2 本・sylphya の鍵の往復 2 本）は、新しい振る舞いを固定する形へ書き換える（ファイルは `main_session_mark_tests.rs` へ改名）。消すだけの変更はしない。
+- 切替の記憶の時系列は `SwitchRig` の新しい兄弟ファイル `ghost_session_switch_memory_tests.rs`（既存の `ghost_session_switch_tests.rs`／`_fallback_tests.rs` に足さず行数の目安を守る）。
+- 強制終了は「後始末を通さずに実行系を降ろして World を捨てる」で見立てる（印が残ることは、消す経路を通らないことと同じ）。実物の `taskkill /F` は実機サインオフ ⑥。OS のセッションの終了は受け手の関数を直接呼ぶ（areka）と配送表の腕（wintf）で固定し、本物の窓への送信は実機サインオフ ⑧。
