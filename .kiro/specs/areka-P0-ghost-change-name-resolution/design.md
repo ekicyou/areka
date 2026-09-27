@@ -130,9 +130,10 @@ graph TB
 - `crates/areka-parsers/src/sakura/parse_bare_tag_tests.rs` — `CANONICAL_BRACKETLESS_SPELLINGS` から `"_+"` を外し（12 → 11）、定数の説明と P5 の説明の「12」を「11」に改め、`\_+` は本仕様で `\![change,ghost,sequential]` の別名になったと 1 文書く。
 - `doc/ukadoc-coverage/ledger/sakura-script.toml` — `_5c_2b:1`（`\+`）と `_5c__2b:1`（`\_+`）を `status = "implemented"`・`owner = "areka-P0-ghost-change-name-resolution"`・`links` に `same-feature` で `\![change,ghost,…]` の項目を指し返す。備考の「壊れ方」を実装後の振る舞い（何へ解かれるか・解けないときの `warn!` の `reason`）へ書き換え、`\_+` の「所有先未定」の行を消す（「語境界の欠陥」の行は残す）。`\![change,ghost,…]` の備考の「…の持ち場で、本仕様では該当なしとして warn のログ（ghost_switch_unknown）を残し、切り替えない。」の 1 文を「解決済み（areka-P0-ghost-change-name-resolution・`ghost_switch.rs` の `resolve_special_name`）」へ改める。`\![change,shell|balloon,…]` の行には触らない。
 - `doc/ukadoc-coverage/ledger/shiori.toml` — `OnGhostChanging`・`OnGhostChanged` の備考にある同じ 1 文を同じ文面へ改める（2 か所）。`OnShellChang*`／`OnBalloonChange` の行には触らない。
+- `doc/ukadoc-coverage/report/sakura-script.md`・`report/shiori.md`・`report/summary.md`（生成物） — 台帳の状態を変える**同じタスク**で `cargo run -p ukadoc-survey -- report` と `report-summary` を走らせて作り直し、`cargo test -p ukadoc-survey` が緑であることをそのタスクの完了条件にする。理由: 生成物が台帳より古いと `DomainReportStale`（`crates/ukadoc-survey/tests/consistency/checks.rs`）が、`summary.md` の本文が台帳から作り直した本文と違うと `the_summary_report_is_as_fresh_as_the_ledgers`（`documents_checks.rs`）が赤になる。`\+`・`\_+` を `absent` → `implemented` にした瞬間に両方の件数が動く。手では直さず生成器の出力をそのまま採る（`report/shiori.md` は備考だけの変更で動かない見込みだが、出力に従う）。要件 7.3 の「後に main へ入る側が作り直す」は、並走 spec と合流で衝突したときの解き方（衝突した側が作り直す）であって、本ブランチでの作り直しを省く意味ではない。完了 `ghost-shell-balloon-switch`（PR#192）も台帳・生成物 3 本・`roadmap-draft.md` を同じ PR で更新した。
 - `doc/ukadoc-coverage/roadmap-draft.md` — `[[spec]]` に `name = "areka-P0-ghost-change-name-resolution"`・`stage = "B"`・`bundle = "切替"`・`owner_count = 2`・`wave = "B4-②"` を 1 行足し、`[briefs].count` を 35 → 36、「2026-09-27 の追加」に倣う段落と段階ごとの表の「切替」の行に本仕様（2 件）を足す。
 - `doc/COMPAT_ARCHITECTURE.md` §8 — 裁定 1〜7 を 1 行ずつ（並び・目録に無いとき・1 体だけ・消えた記録・記録の寿命・同名より優先・一様な選択）足し、「角括弧なし `\_` タグ」の行の `\_+` の所有先を本仕様へ改める。
-- `doc/ukadoc-coverage/briefing-sakura-script.md` — `\+`・`\_+` の「未対応（書いてあるのに何も起きない）」を実装後の振る舞いへ、`\_+` の「無所有一覧で裁定」の行を本仕様へ改める。
+- `doc/ukadoc-coverage/briefing-sakura-script.md` — `\+`・`\_+` の「未対応（書いてあるのに何も起きない）」を実装後の振る舞いへ、`\_+` の「無所有一覧で裁定」の行を本仕様へ改める。加えて `\![change,ghost,ゴースト名(,--option=raise-event)]` の行の「特別な名前 `random`／`sequential`／`lastinstalled` の解決は `areka-P0-ghost-change-name-resolution` の持ち場」を「解決済み（本仕様・`ghost_switch.rs` の `resolve_special_name`）」へ改める（台帳 7.2・`shiori.toml` 7.8 と同じ文面。手書きの側だけ古い文が残らないように）。
 - `.kiro/steering/roadmap.md` — 本仕様の行を完了へ。
 - `.kiro/specs/areka-P0-ghost-change-name-resolution/signoff.md`（新規） — 実機サインオフの記録。
 
@@ -233,13 +234,13 @@ flowchart TD
 | 6.6 | `lastinstalled` は記録を手で入れた World で | Tests | `record_last_installed` を呼んでから入口 | — |
 | 7.1 | 台帳 `\+`・`\_+` を実装済みに | Docs | `sakura-script.toml` | — |
 | 7.2 | `\![change,ghost,…]` の備考 | Docs | 同上 | — |
-| 7.3 | 生成物は生成器で | Docs | `cargo run -p ukadoc-survey -- report`／`report-summary` | — |
+| 7.3 | 生成物は生成器で | Docs | 台帳を変える同じタスクで `cargo run -p ukadoc-survey -- report`／`report-summary`・`cargo test -p ukadoc-survey` 緑が完了条件 | — |
 | 7.4 | §8 に裁定 1〜7 | Docs | `COMPAT_ARCHITECTURE.md` | — |
 | 7.5 | roadmap.md | Docs | `.kiro/steering/roadmap.md` | — |
 | 7.6 | `roadmap-draft.md` の `[[spec]]`＋`count` | Docs | 腕 a・c・f の整合 | — |
 | 7.7 | §8「角括弧なし `\_` タグ」の行 | Docs | `\_+` の所有先を本仕様へ | — |
 | 7.8 | `shiori.toml` の 2 か所 | Docs | `OnGhostChanging`／`OnGhostChanged` の備考 | — |
-| 7.9 | `briefing-sakura-script.md` | Docs | `\+`・`\_+` の行 | — |
+| 7.9 | `briefing-sakura-script.md` | Docs | `\+`・`\_+` の行と `\![change,ghost,…]` の行の「持ち場」の 1 文 | — |
 | 8.1 | 実機: `\+` を言う検体 → 他のゴースト | Signoff | 検体の複製＋`ghost_switch_resolved`・`ghost_switch_requested` の grep | — |
 | 8.2 | level を開けて記録・`signoff.md` | Signoff | `RUST_LOG=info,areka=debug,kanade=trace` | — |
 | 8.3 | `lastinstalled` の実機は `ghost-install` へ | Signoff | 申し送り（`signoff.md` と完了時の brief） | — |
@@ -335,7 +336,10 @@ pub(crate) enum UnresolvedReason {
     LastInstalledMissing, // "lastinstalled_missing"
 }
 impl UnresolvedReason {
+    /// `reason` 欄の語（`random_empty` など）。
     pub(crate) fn as_ref_str(self) -> &'static str;
+    /// 人が読む本文（理由ごとに 1 文・`match` 1 つ）。
+    pub(crate) fn describe(self) -> &'static str;
 }
 
 /// 純粋: 特別な名前を目録のフォルダ名へ解く。
@@ -380,8 +384,8 @@ pub(crate) fn resolve_special_name(
 **Responsibilities & Constraints**
 - `request_ghost_switch(world, req)` は `request_ghost_switch_with(world, req, pick_index)` を呼ぶ薄い皮（呼び手 `drain_change_requests`・メニューは変えない）。
 - `request_ghost_switch_with` の順序: ⑴ 予約 → ⑵ 文脈 → ⑶ 目録 → **⑶′ 解決（`GhostSpec::Name` のみ）** → ⑷ `resolve_switch_target` → 以降は今日どおり。今のフォルダ名の読み（`ctx.current.ghost.folder`）は ⑶′ の前へ動かす。記録は `world.get_resource::<LastInstalledGhost>()` で読む（`ctx` と同じく不変の借用）。
-- ⑶′ の結果: `Plain` → 要求の `GhostSpec` のまま。`Resolved { folder, position }` → `info!(event = "ghost_switch_resolved", name = %name, to = %folder, position = ?position, …)` を 1 件残し、`GhostSpec::Folder(folder)` に読み替える。`Unresolved(reason)` → `warn!(event = "ghost_switch_unknown", reason = reason.as_ref_str(), spec = ?req.ghost, …)` を 1 件残し `SwitchVerdict::NotFound`。
-- 既存の「名指しの該当なし」の `warn!(ghost_switch_unknown)` に `reason = "name"` を足す（1 事象 1 件のまま・event 名は変えない）。
+- ⑶′ の結果: `Plain` → 要求の `GhostSpec` のまま。`Resolved { folder, position }` → `info!(event = "ghost_switch_resolved", name = %name, to = %folder, position = ?position, …)` を 1 件残し、`GhostSpec::Folder(folder)` に読み替える。`Unresolved(reason)` → `warn!(event = "ghost_switch_unknown", reason = reason.as_ref_str(), spec = ?req.ghost, "{}", reason.describe())` を 1 件残し `SwitchVerdict::NotFound`。本文は理由ごとに 1 文（`describe`）で、既存の「切替先が目録のどのゴーストにも一致しない」を使い回さない（目録が空・記録が無い、には当てはまらないため）。
+- 既存の「名指しの該当なし」の `warn!(ghost_switch_unknown)` に `reason = "name"` を足す（1 事象 1 件のまま・event 名も本文も変えない）。関数の説明の「該当なし」を「切替先が決まらない（該当なし・特別な名前が解けない）」へ改める。
 - `raise_event`・`origin` は要求の値をそのまま `ChangeRequest` へ。
 - `GhostSpec::Folder`（メニュー）は解決に掛けない。
 
@@ -405,7 +409,7 @@ pub(crate) fn request_ghost_switch_with(
 
 ##### Event Contract（記録）
 - `ghost_switch_resolved`（`info!`）: `name`（台本の名前）・`to`（解けたフォルダ名）・`position`（`sequential` の今の位置・`Option<usize>`）。解けたとき 1 件。
-- `ghost_switch_unknown`（`warn!`・既存）: `reason` 欄を足す。値は `name`（名指しの該当なし・既存の腕）・`random_empty`・`sequential_empty`・`lastinstalled_none`・`lastinstalled_missing`。解けないとき 1 件。
+- `ghost_switch_unknown`（`warn!`・既存）: `reason` 欄を足す。値は `name`（名指しの該当なし・既存の腕）・`random_empty`・`sequential_empty`・`lastinstalled_none`・`lastinstalled_missing`。解けないとき 1 件。本文は理由ごとに 1 文: `name`＝既存の「切替先が目録のどのゴーストにも一致しない——切替を無視する（降ろさず知らせも送らない）」のまま、`random_empty`／`sequential_empty`＝「目録にゴーストが 1 体も無い——`random`／`sequential` の切替を無視する」、`lastinstalled_none`＝「このプロセスでゴーストを入れていない——`lastinstalled` の切替を無視する」、`lastinstalled_missing`＝「最後に入れたゴーストが目録に無い——`lastinstalled` の切替を無視する」（文言は実装で整えてよいが「無視する」を含め、理由が読み分けられること）。
 - `last_installed_recorded`（`info!`）: `folder`。書く口が呼ばれるたび 1 件。
 - 既存の `ghost_switch_busy`・`ghost_switch_no_context`・`ghost_switch_requested` は不変。
 
@@ -459,12 +463,12 @@ pub(crate) fn request_ghost_switch_with(
 1. **特別な名前の判定**（5.4）: `"Random"`・`"RANDOM"`・`"Nobody"` は `Plain`。`"random"`・`"sequential"`・`"lastinstalled"` は `Plain` にならない。
 2. **`random` の候補と両端**（2.1・2.2・9.7）: 目録 `[A, B, C]`・今 `B` → 候補 `[A, C]`。`pick = |n| { assert_eq!(n, 2); 0 }` → `A`、`|_| 1` → `C`（`B` は選ばれない）。
 3. **`random` で今のゴースト 1 体だけ**（2.3・9.3）: 目録 `[A]`・今 `A` → `Resolved { folder: A }`。`pick` は呼ばれない（呼ばれたら panic する閉包を渡す）。
-4. **`random` で今のゴーストが目録に無い**（2.4・9.2）: 目録 `[A, B]`・今 `None` → `pick(2)` が呼ばれ、`0` → `A`・`1` → `B`。
+4. **`random` で今のゴーストが目録に無い**（2.4・9.2）: 目録 `[A, B]`・今 `None` → `pick(2)` が呼ばれ、`0` → `A`・`1` → `B`。今 `"Zed"`（目録に無い名前）も同じく `pick(2)`（除くものが無い）。
 5. **`random` で目録が空**（2.7）: `Unresolved(RandomEmpty)`・`pick` は呼ばれない。
 6. **`sequential` の次・末尾→先頭・目録に無い・1 体・空**（3.1〜3.5・9.1〜9.3）: 目録 `[A, B, C]` で今 `A` → `B`（`position = Some(0)`）、今 `C` → `A`（`Some(2)`）、今 `None` → `A`（`None`）、今 `"Zed"`（目録に無い名前）→ `A`；目録 `[A]`・今 `A` → `A`；空 → `Unresolved(SequentialEmpty)`。`pick` は呼ばれない。
 7. **`lastinstalled`**（4.3〜4.5・4.7・9.4）: 記録 `None` → `LastInstalledNone`；記録 `B`・目録 `[A, B]` → `B`；記録 `"Gone"` → `LastInstalledMissing`；記録 `A`・今 `A` → `A`（自分自身）。`pick` は呼ばれない。
 8. **同名のゴーストより特別な名前が優先**（5.5・9.6）: 目録に `entry("random", Some("random"))` と `B` があり今 `random` → `random` の解決は候補 `[B]` から `B`（`Plain` にならない・`random` 自身を名指ししない）。
-9. **`UnresolvedReason::as_ref_str`** の 4 語（6.1 の語彙）。
+9. **`UnresolvedReason::as_ref_str`** の 4 語と **`describe`** の 4 文が互いに異なる（6.1 の語彙・本文）。
 
 ### Integration Tests（入口・`ghost_switch_tests.rs`・`fixture_root` の `A`／`B`・`world_with_slot`）
 

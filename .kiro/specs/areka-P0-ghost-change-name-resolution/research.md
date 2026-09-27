@@ -219,3 +219,12 @@
 - `crates/areka/src/boot_resolve.rs` の `pick_index`。`crates/areka/src/session_end.rs` の `SessionEnded`（`Resource` の前例）。`crates/areka/src/emo2_boot/hit_region.rs` の `#[allow(dead_code)]` の注釈の前例。
 - `crates/ukadoc-survey/tests/consistency/spec_checks.rs`（腕 a・c・f）・`crates/ukadoc-survey/src/check/content.rs` の `check_evidence`。
 - 正典 URL は design.md の Supporting References。
+
+### 9.6 設計ディスカッション（2026-09-27）での仕分け
+
+設計レビュー（`design-validation.md`・判定 GO）の指摘 3 件と、討議で拾った 1 件は、いずれも**自明な修正（A）**として design.md に反映した。開発者に伺う議題（B）は無し。
+
+- 指摘 1（生成物の作り直し）→ Modified Files に `report/sakura-script.md`・`report/shiori.md`・`report/summary.md` を足し、「台帳を変える同じタスクで生成器を走らせ `cargo test -p ukadoc-survey` 緑が完了条件」とした。要件 7.3 の「後に main へ入る側が作り直す」は合流で衝突したときの解き方と読む（PR#192 の前例どおり本ブランチでも作り直す）。
+- 指摘 2（`briefing-sakura-script.md` の `\![change,ghost,…]` の行）→ 同ファイルの項に「持ち場」の 1 文を「解決済み」へ改める作業を足した（7.2・7.8 と同じ文面）。
+- 指摘 3（`ghost_switch_unknown` の本文）→ `UnresolvedReason::describe`（理由ごとに 1 文）を足し、Event Contract に 4 文の例を書いた。既存の `name` の本文は変えない。
+- 討議で拾った 1 件 → 単体テスト 4（`random` で今のゴーストが目録に無い）に今 `"Zed"`（目録に無い名前）の例を足した（`None` と同じ腕だが、要件 2.4 の「目録に無い」の両方の形を固定する）。
