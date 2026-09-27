@@ -76,3 +76,9 @@
   - `.kiro/steering/roadmap.md` の本仕様の行は、このタスクでは触らず `/kiro-complete` の ROADMAP 更新で完了へ改める（二重に書かない）
   - `signoff.md` に期待したログの行がそろい、利用者から見て検体が消えて emo2 が現れた
   - _Requirements: 7.5, 8.1, 8.2, 8.3_
+
+## Implementation Notes
+
+- `ghost_switch_tests.rs` は 987 行で上限 1,000 行の目前（design の見積もりは約 830 行）。後続 `areka-P0-ghost-install` がこのファイルにテストを足すなら、先にファイルを分ける。
+- `/kiro-complete` の時点で `origin/main` が動いていたら `git log HEAD..origin/main -- crates/areka/src/emo2_boot/ doc/ukadoc-coverage/` を見直す。並走 spec が台帳を変えていたら `report/*.md` は生成器で作り直し、手でマージしない。
+- 実機の前確認で、`kanade=trace` の記録は送出だけで SHIORI の応答の生文字列は出ないと分かった（design の前提と違う）。応答の確認は `shiori-host32-host` の `request_e2e_real_pasta_optional` に `HOST32_PASTA_DLL` を向けて行った（`signoff.md` の「気付いたこと」）。
