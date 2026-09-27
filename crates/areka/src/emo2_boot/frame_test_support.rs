@@ -213,10 +213,21 @@ fn resnap_work_area() -> RectPx {
 /// spawn_ghost_windows で 2 スコープの窓を組み、各窓へ偽 WindowHandle を付与し
 /// MonitorSnapshot を挿入した World を返す（char 窓は spawn が Anchored/WindowPos を付ける）。
 pub(super) fn resnap_world() -> (World, GhostWindows) {
-    let placements = resnap_placements();
     let mut world = World::new();
+    let gw = spawn_resnap_windows(&mut world);
+    // MonitorSnapshot（project_anchor Bottom が下端 live 算出に用いる）。
+    world.insert_resource(MonitorSnapshot {
+        work_areas: vec![resnap_work_area()],
+    });
+    (world, gw)
+}
+
+/// [`resnap_world`] と同じ 2 スコープの窓の一式（偽 WindowHandle 付き）を既存の World へ生やす
+/// （窓を全部閉じたあとの次の窓の一式を、初回と同じ形で作るため）。
+pub(super) fn spawn_resnap_windows(world: &mut World) -> GhostWindows {
+    let placements = resnap_placements();
     let gw = spawn_ghost_windows(
-        &mut world,
+        world,
         &placements,
         &GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]),
     );
@@ -232,11 +243,7 @@ pub(super) fn resnap_world() -> (World, GhostWindows) {
             raw += 0x10;
         }
     }
-    // MonitorSnapshot（project_anchor Bottom が下端 live 算出に用いる）。
-    world.insert_resource(MonitorSnapshot {
-        work_areas: vec![resnap_work_area()],
-    });
-    (world, gw)
+    gw
 }
 
 pub(super) fn size_of(world: &World, e: Entity) -> Option<SizeI> {

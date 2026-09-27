@@ -47,6 +47,10 @@ use super::resolver::PointPx;
 ///
 /// 挿入されている間は連鎖の再解決を駆動しない。**一度きり**の確定を保証する制御であり、
 /// 以後のサーフェス切替（会話中の表情差替等）で位置が動かないことの構造的な根拠になる。
+///
+/// 「一度きり」は**窓の一式ごと**である。ゴーストの切替で窓を全部閉じるとき
+/// （`app_exit::close_windows_for_restart`）に本標識と [`ChainFinalizeStall`] は外れ、
+/// 作り直した窓でも初回の起動と同じく確定が 1 回走る（areka-P0-ghost-shell-balloon-switch 要件 4.10）。
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ChainFinalized;
 

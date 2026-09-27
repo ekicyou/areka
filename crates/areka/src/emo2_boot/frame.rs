@@ -156,6 +156,8 @@ use self::scale_text::reconcile_reported_sizes;
 // `visible_glyphs(actor, t)` でリビール済みグリフ数を観測し、text 相は同じ `t` で描画するため、
 // 別式で組むと「観測したグリフ数」と「実際に描かれる文字」が食い違う。
 pub(super) use self::scale_text::resolve_talk_time;
+// 窓を全部閉じるとき（`app_exit::close_windows_for_restart`）に外す、窓の一式に属する控え。
+pub(crate) use self::zorder_drain::ZOrderAbsentReports;
 
 /// kanade の運行の通知（停止・定常到達・切替の中止）の受け口（World の NonSend 資源・
 /// `Receiver` は `Sync` でない）。
@@ -452,6 +454,11 @@ mod resnap_tests;
 #[cfg(test)]
 #[path = "frame_chain_finalize_tests.rs"]
 mod chain_finalize_tests;
+
+// 窓を全部閉じたあとの次の窓の一式の確定（areka-P0-ghost-shell-balloon-switch タスク 11.9）。
+#[cfg(test)]
+#[path = "frame_chain_finalize_restart_tests.rs"]
+mod chain_finalize_restart_tests;
 
 #[cfg(test)]
 #[path = "frame_dpi_tests.rs"]

@@ -13,9 +13,12 @@ use areka_kanade::{CloseReason, KanadeStopCause, ShioriFault};
 use bevy_ecs::prelude::*;
 use wintf::AppExit;
 use wintf::ecs::WindowHandle;
-use wintf::ecs::window::{OnCloseRequest, OnSessionEnd};
+use wintf::ecs::window::{OnCloseRequest, OnSessionEnd, ZOrderChainPlan};
 
+use crate::emo2_boot::frame::ZOrderAbsentReports;
 use crate::input_events::MouseWiring;
+use crate::placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
+use crate::placement::chain_realign::ChainRealignPending;
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
 use crate::placement::spawn::{
     BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
@@ -133,14 +136,44 @@ impl WindowsClosed {
 /// 窓を消す手順は [`quit_app`] と同じ私有部品 [`despawn_app_windows`]（要件 4.5）。
 /// [`AppExit`] には触れない（呼ぶ前後で `is_requested()` は変わらない）。記録は終了の
 /// `app_exit` とは別の語彙 `windows_closed_for_restart`（要件 4.3）。
-/// 窓を消したあと窓の束 [`GhostWindows`] の資源も外す（消した窓の `Entity` を装着の相の
-/// ゲートに見せない・areka-P0-ghost-shell-balloon-switch 要件 3.1）。
 /// 終了経路（`quit_app`・停止通知からの終了・OS の閉鎖要求・強制退避・smoke）からは呼ばない
 /// （要件 4.4・4.6・完了 `app-lifetime-separation` 要件 3.6 の意図）。
-// 本番の呼び手は areka-P0-ghost-shell-balloon-switch（ゴーストの切替）の起こし直しの経路。
+///
+/// # 窓の一式に属する資源を外す（areka-P0-ghost-shell-balloon-switch 要件 3.1・4.10）
+///
+/// 次の窓の一式が初回の起動と同じ手順で整うよう、窓の一式ごとに立つ World の資源を窓と一緒に
+/// 外す。`crates/areka/src` の資源の挿入を洗い出した結果は次のとおり。
+///
+/// 外すもの（窓の一式に属する）:
+/// - [`GhostWindows`]: 窓の束。消した窓の `Entity` を装着の相のゲートに見せない。
+/// - `ChainFinalized`（初期配置の確定の印）: 残すと次の一式で確定（連鎖の解き直し）が一度も
+///   走らず、2 人目のキャラが初回の位置へ寄らない（実機の欠陥・タスク 11.9）。
+/// - `ChainFinalizeStall`（確定の見送りの回数）: 残すと前の一式の見送りを引き継ぎ、次の一式の
+///   待ちの途中で上限の警告が出る。
+/// - `ChainRealignPending`（拡大率の遷移後の解き直しの待ち）: 消した窓の遷移の待ちであり、
+///   次の一式では確定が済むまで武装しない。
+/// - `ZOrderChainPlan`（重なりの鎖の受け口）: 消した窓の `Entity` を並べた鎖。窓はもう無く
+///   撤去すべき繋ぎも残らないので、グループが無ければ受け口も無い初回の状態へ戻す。
+/// - `ZOrderAbsentReports`（窓の無かった宣言要素の報告の控え）: 残すと次の一式で同じ不在が
+///   報告されない。
+///
+/// 外さないもの（プロセスに属する・または起こすたびに差し替わる）:
+/// - [`WindowsEpoch`]: 閉じた回数。投函済みの古い窓を作らない照合に使うので、進めて残す。
+/// - `FirstExit`・`SessionEnded`: 終了の記録。`BootContext`・`GhostSlot`・`SwitchInFlight`・
+///   `GhostBootInputsSource`・`AppExit`・`Schedules`・描画の装置（`GraphicsCore` ほか）・
+///   `ZOrderPairStrategy`（系の登録と一緒にプロセスに 1 回）も同じ。
+/// - `MonitorSnapshot`・`MonitorDpiTable`: 画面の表。毎フレーム同期し、窓を開くたびにも据え直す。
+/// - ゴーストごとの結線（`Emo2Wiring`・`KanadeNoticeRx`・`ChangeRx`・`MouseWiring`・
+///   `BalloonWiring`・メニュー・記憶の結線など）: 起こすたびに `insert_non_send` で差し替わる。
+/// - 環境変数の読み取りの控え（`OnceLock`）と系の `Local`: 窓の一式に依らない。
 pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {
     let closed = despawn_app_windows(world);
     world.remove_resource::<GhostWindows>();
+    world.remove_resource::<ChainFinalized>();
+    world.remove_resource::<ChainFinalizeStall>();
+    world.remove_resource::<ChainRealignPending>();
+    world.remove_resource::<ZOrderChainPlan>();
+    world.remove_resource::<ZOrderAbsentReports>();
     tracing::info!(
         event = "windows_closed_for_restart",
         closed,
