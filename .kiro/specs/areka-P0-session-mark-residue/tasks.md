@@ -148,3 +148,4 @@
 - 6.2: 同期の送信の走査は `crates/*/src` の本番ソース（`_tests.rs`・`_test_support.rs`・`tests/`・`examples/` を除く）。「テストのモジュールの中」は `#[cfg(test)]` の次行が `mod ` で始まり末尾が `{` のときだけ（`mod x;` の宣言の後は本番の行）。
 - 7.1: `tools/test-all.ps1` 全段緑（検査したコミット d7a0049f＋文書のみ未コミット・x64 全体 294 秒）。main と HEAD の `#[test]` の関数名を突き合わせて消えたテスト 0 件。
 - 7.2: 実機で SHIORI を固めるには、emo2 の子の helper を `NtSuspendProcess` で一時停止してから `WM_ENDSESSION` を送る（在来の往復の段だけ作れる）。LogSink へ倒すには作業用の写しのバルーンの面 1 以降を壊す（面 0 を抜くと起動窓の採寸で止まり、印を書く前の起動失敗の告知で終わる）。
+- 完了時の棚卸（2026-09-28）: その場で解決 0 件・`/kiro-discovery` で起票 0 件・roadmap への登記 1 件（`InProc` に外から終わらせる手が無い＝議題 D7・M2 で本番に使うときの宿題）。直さないと判断した 2 件: ⑴ `boot_first_ghost` は `BootContext` が無いときも `session_mark_pinned_by_fallback` の warn を出す（配線の誤りでしか通らず、直前の `boot_context_missing` が「印を書けない」と既に書く）⑵ `CutGuard::stop` は join の前に自分の送信端を落とさない（`arm` が同時に 2 つ張られたときだけ期限まで待つ＝構造で 1 回なので踏まない）。
