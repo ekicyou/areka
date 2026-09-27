@@ -119,7 +119,7 @@
   - _Requirements: 5.4, 7.5_
 
 - [ ] 7. 文書・全体の回帰・実機確認
-- [ ] 7.1 `doc/COMPAT_ARCHITECTURE.md` §8 の既存 2 行へ追記し、全体のテストを 1 回通す
+- [x] 7.1 `doc/COMPAT_ARCHITECTURE.md` §8 の既存 2 行へ追記し、全体のテストを 1 回通す
   - 「OS のシャットダウン・再起動・ログオフで終わるとき」の行へ、SHIORI を待つ合計を後始末に入った時点から 3 秒に収め、超えたら補助プロセスを終わらせて印を残す（正典は沈黙・areka 裁量）ことと定義点・判定のテスト名を追記する
   - 「きれいに終わらなかった次の起動（起動中の印）」の行へ、最初の起動が LogSink へ倒れた回もきれいな終わりに含めないことを 1〜2 行で追記する。完了 spec の文書は書き換えない
   - 既存のテストを置き換え無しに消していないことを確かめ、`tools/test-all.ps1` が緑
@@ -146,3 +146,4 @@
 - 5.3: 見張りの `warn!(shiori_wait_cut)` は別スレッドで出るので、件数は解く手の回数で、段の語は同じ固まり方で `GhostSession::shutdown_within` を直に呼んだ `ShioriCut.stage` で判定する（全スレッドの捕捉は取り消せず他テストへ波及するので不採用）。`limit_ms`・`elapsed_ms` の欄は kanade の `probe_tests` が固定。GET で固まる回は `OnClose` が送られない。構造検査は `crates/areka/src` の本番ファイルの行を許可表 3 行と逐語で比べる＝rustfmt で行が変われば表も直す。
 - 6.1: 再現は止まらなかった（research.md 3-B は採らない）。UI 役のスレッドは `GetQueueStatus(QS_SENDMESSAGE)` で送信の到着を配らずに確かめてから後始末に入る＝join の間ずっと送信が待っていることを時刻に依らず作る。6.2 の走査は注釈の行を除くこと（`session_end.rs` の説明は `SendMessageTimeoutW` を括弧なしで書いている）。
 - 6.2: 同期の送信の走査は `crates/*/src` の本番ソース（`_tests.rs`・`_test_support.rs`・`tests/`・`examples/` を除く）。「テストのモジュールの中」は `#[cfg(test)]` の次行が `mod ` で始まり末尾が `{` のときだけ（`mod x;` の宣言の後は本番の行）。
+- 7.1: `tools/test-all.ps1` 全段緑（検査したコミット d7a0049f＋文書のみ未コミット・x64 全体 294 秒）。main と HEAD の `#[test]` の関数名を突き合わせて消えたテスト 0 件。
