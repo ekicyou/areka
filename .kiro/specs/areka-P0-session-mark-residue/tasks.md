@@ -103,7 +103,7 @@
   - _Depends: 5.1, 5.2_
 
 - [ ] 6. OS の終了の受け手の join と同期の送信の重なりを確かめる
-- [ ] 6.1 join の最中に別スレッドから UI の窓へ同期に送る形を再現するテストを常設し、止まらない理由を受け手の説明に残す
+- [x] 6.1 join の最中に別スレッドから UI の窓へ同期に送る形を再現するテストを常設し、止まらない理由を受け手の説明に残す
   - OS の終了の受け手の兄弟テスト（同期の送信の再現と検査のファイル）に置く。テストのスレッドが message-only 窓を作り、`OnClose` で固まる偽の SHIORI を起こし、別スレッドが同期に送り、もう 1 本が送信の旗を見てから偽の SHIORI を解く。テストのスレッドは大きな上限で後始末を呼ぶ
   - 後始末が送信に依らず戻り、戻った後にメッセージを 1 回覗くと送信が返る（順序は連番で判定・送信が期限で切れたら赤）
   - 再現で止まった場合は `research.md` の 3-B の手（降ろす処理を別スレッドで走らせ、UI スレッドは待ちながら送られてきたメッセージを配る）で直し、同じテストを緑にする
@@ -144,3 +144,4 @@
 - 4.1〜4.3 の追加で `main_session_mark_tests.rs` が 1,184 行になり、log-capture-kit の 1,000 行の見張りが赤になっていた（crate 単位のテストでは映らない）。倒れた回のテストを子モジュール `main_session_mark_fallback_tests.rs` へ切り出した。以後の検証は `cargo test -p log-capture-kit` も回す。
 - 5.2: 受け手 `on_os_session_end` は `end_session_within(world, SESSION_END_SHIORI_LIMIT)` を呼ぶだけ。テストは負荷で 3 秒が発火しないよう `end_session_within(.., 60 秒)` を使う＝ゴースト付きで定数を渡す行はまだどのテストも踏まない（5.3 の構造検査と定数の判定で固定する）。`started` は 2 回目を読み捨てる判定の直後。`os_session_end_done` に `shiori_cut` の欄を足した。
 - 5.3: 見張りの `warn!(shiori_wait_cut)` は別スレッドで出るので、件数は解く手の回数で、段の語は同じ固まり方で `GhostSession::shutdown_within` を直に呼んだ `ShioriCut.stage` で判定する（全スレッドの捕捉は取り消せず他テストへ波及するので不採用）。`limit_ms`・`elapsed_ms` の欄は kanade の `probe_tests` が固定。GET で固まる回は `OnClose` が送られない。構造検査は `crates/areka/src` の本番ファイルの行を許可表 3 行と逐語で比べる＝rustfmt で行が変われば表も直す。
+- 6.1: 再現は止まらなかった（research.md 3-B は採らない）。UI 役のスレッドは `GetQueueStatus(QS_SENDMESSAGE)` で送信の到着を配らずに確かめてから後始末に入る＝join の間ずっと送信が待っていることを時刻に依らず作る。6.2 の走査は注釈の行を除くこと（`session_end.rs` の説明は `SendMessageTimeoutW` を括弧なしで書いている）。

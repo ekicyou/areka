@@ -39,8 +39,24 @@ pub(crate) struct SessionEnded;
 /// 補助プロセスを終わらせて待ちを解く）⑤ きれいな終わりの判定で印を消すか残すか（倒れた旗と
 /// 打ち切りの有無も材料）⑥ 所要 ms と打ち切りの有無を記録する。
 ///
-/// 降ろす処理の join は UI スレッドを塞ぐ（送られてきたメッセージは配らない）。所要は
-/// `os_session_end_done` の `ms` で実機サインオフで測る。
+/// # join と同期の送信（要件 5.4・`research.md` §6）
+/// 降ろす処理の join は UI スレッド（この関数を呼ぶ窓の手続きのスレッド）を塞ぎ、その間は
+/// 送られてきたメッセージを配らない。それでも止まらない理由:
+/// - areka のどのスレッドも UI スレッドの窓へ同期に送らない。ゴーストの実行系（kanade・shiori・
+///   dispatcher ほか）から UI への知らせはすべて `mpsc` の送信。shiori のスレッドの
+///   `SendMessageTimeoutW` の宛先は 32bit の補助プロセスの message-only 窓（別プロセス）で、
+///   補助プロセスからの応答の宛先は shiori のスレッドが持つ親窓。wintf の窓の操作は UI スレッド
+///   自身が行い、VSync のスレッドは窓に触らない。COM は MTA なので、別スレッドからの呼び出しが
+///   メッセージで取り次がれない。したがって join が待つ相手は、UI スレッドを待たない。
+/// - 外から UI の窓へ同期に送る相手（IME・シェル・他のアプリ）は送り手の側が待つだけで、join は
+///   それに依らないので輪にならない。その送信は後始末から戻った後に返る
+///   （`session_end_sync_send_tests.rs` が固定する）。
+/// - 理屈の上で残る唯一の輪は、補助プロセスの中の SHIORI・SAORI が `OnClose` の処理中などに
+///   areka の窓へ同期に送る形（UI スレッドの join → kanade → shiori のスレッドの往復 → 補助
+///   プロセスの中の送信 → UI スレッド）。この輪は [`SESSION_END_SHIORI_LIMIT`] に達した時点で
+///   見張りが補助プロセスを終わらせて切る。
+///
+/// 所要は `os_session_end_done` の `ms` で実機サインオフで測る。
 pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity) {
     end_session_within(world, SESSION_END_SHIORI_LIMIT)
 }
@@ -141,3 +157,7 @@ mod tests;
 #[cfg(test)]
 #[path = "session_end_deadline_tests.rs"]
 mod deadline_tests;
+
+#[cfg(test)]
+#[path = "session_end_sync_send_tests.rs"]
+mod sync_send_tests;
