@@ -33,7 +33,7 @@ use crate::ghost_session::{GhostSlot, open_ghost_windows};
 use crate::placement::spawn::{GhostWindowMarker, GhostWindows};
 
 /// B の `descript.txt` の `name`（フォルダ名と違う綴り＝Ref7 がフォルダ名でなく名前を運ぶことを見る）。
-const B_NAME: &str = "ビー";
+pub(super) const B_NAME: &str = "ビー";
 
 /// `folder` の `descript.txt` の `name` を `name` へ書き換える。
 fn rename_ghost(rig: &SwitchRig, folder: &str, name: &str) {
@@ -59,7 +59,7 @@ fn rename_ghost(rig: &SwitchRig, folder: &str, name: &str) {
 
 /// A（台本で B への切替を命じる）・B・既定ゴースト（`default`・無ければ根から消す）を据えた土台。
 /// A と既定ゴーストは起動記録あり、B の名前は [`B_NAME`]。
-fn fallback_rig(a: FakeShiori, b: FakeShiori, default: Option<FakeShiori>) -> SwitchRig {
+pub(super) fn fallback_rig(a: FakeShiori, b: FakeShiori, default: Option<FakeShiori>) -> SwitchRig {
     let with_default = default.is_some();
     let mut scripts = vec![("A", a), ("B", b)];
     scripts.extend(default.map(|d| (DEFAULT_GHOST_FOLDER, d)));
@@ -77,7 +77,7 @@ fn fallback_rig(a: FakeShiori, b: FakeShiori, default: Option<FakeShiori>) -> Sw
 }
 
 /// 既定ゴーストの偽の SHIORI（標準の台本・`OnGhostChanged` の応答は持たない）。
-fn default_ghost() -> FakeShiori {
+pub(super) fn default_ghost() -> FakeShiori {
     FakeShiori::Scripted(Box::new(|| standard_script("\\0emo2\\e")))
 }
 

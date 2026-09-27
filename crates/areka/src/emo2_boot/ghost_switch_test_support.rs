@@ -10,7 +10,7 @@
 //! `\![change,ghost,…]` から切替を通すときは [`SwitchRig::pump_talking_until`] が、置き場の
 //! ゴーストの dispatcher へ合成の Tick を注入して台詞を進め、`Input` の段（登録済みの取り出しの系）を回す。
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -88,6 +88,9 @@ pub(crate) struct SwitchRig {
     pub(crate) world: World,
     pub(crate) root: BasewareRoot,
     boots: BootLedger,
+    /// 起こす実行系に App スコープの置き場（[`SwitchRig::app_dir`]）を渡すか（既定は渡さない＝
+    /// 最後に使ったゴーストと印を実行系の記憶の書き手が書かない）。[`SwitchRig::wire_app_memory`] で立てる。
+    app_memory: Rc<Cell<bool>>,
     /// 注入した Tick の合成の時刻（単調増加・ゴーストをまたいでも戻さない）。
     talk_clock_ms: u64,
     /// 根の木の寿命（捨てると木が消えるので最後に落ちる欄に置く）。
@@ -124,6 +127,9 @@ impl SwitchRig {
             .map(|(folder, fake)| (folder.to_owned(), fake))
             .collect();
         let ledger = Rc::clone(&boots);
+        let app_memory = Rc::new(Cell::new(false));
+        let app_dir = app_dir_of(sample.root());
+        let wired_app = Rc::clone(&app_memory);
         world.insert_non_send(GhostBootInputsSource(Box::new(
             move |cfg: &ConfigInputs, origin: BootOrigin| {
                 let folder = folder_of(&cfg.ghost_root);
@@ -151,7 +157,7 @@ impl SwitchRig {
                         balloon_root: cfg.balloon_root.clone(),
                         shiori,
                         ticker: TickerMode::Disabled,
-                        app_profile_dir: None,
+                        app_profile_dir: wired_app.get().then(|| app_dir.clone()),
                         boot_origin: origin,
                     },
                     // 結線ありの腕だけを通す（fallback に落ちると記録が残らず判定が赤になる）。
@@ -165,6 +171,7 @@ impl SwitchRig {
             world,
             root,
             boots,
+            app_memory,
             talk_clock_ms: 0,
             sample,
         }
@@ -185,6 +192,18 @@ impl SwitchRig {
             "format-version = 1\n[boot]\ncount = \"1\"\n",
         )
         .expect("起動記録を書く");
+    }
+
+    /// 起動の文脈に据える App スコープの記憶の置き場（最後に使ったゴースト・起動中の印）。
+    pub(crate) fn app_dir(&self) -> PathBuf {
+        app_dir_of(self.sample.root())
+    }
+
+    /// 以後に起こす実行系へ App スコープの置き場（[`SwitchRig::app_dir`]＝起動の文脈と同じ場所）を
+    /// 渡す（本番の `default_app_profile_dir()` の代わり）。起動の直後と定常到達の記憶の投函が実 fs に
+    /// 届く。立てる前に起こした実行系には効かない。
+    pub(crate) fn wire_app_memory(&self) {
+        self.app_memory.set(true);
     }
 
     /// 構成入力（ゴーストの根と既定のバルーン）。
@@ -212,7 +231,7 @@ impl SwitchRig {
         let inputs = (self.world.non_send::<GhostBootInputsSource>().0)(&cfg, BootOrigin::Plain);
         self.world.insert_resource(BootContext {
             root: self.root.clone(),
-            app_profile_dir: self.sample.root().join("profile"),
+            app_profile_dir: self.app_dir(),
             helper_exe: inputs.helper_exe.clone(),
             argv_session: false,
             current: CurrentGhost {
@@ -308,6 +327,11 @@ impl SwitchRig {
         );
         rx.recv().unwrap_or(false)
     }
+}
+
+/// 根の下の App スコープの置き場。
+fn app_dir_of(root: &Path) -> PathBuf {
+    root.join("profile")
 }
 
 /// ゴーストの根のフォルダ名。
