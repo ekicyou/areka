@@ -15,7 +15,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 6.4_
   - _Boundary: BareAlias_
 
-- [ ] 2. 切替の入口: 特別な名前の解決と `lastinstalled` の記録
+- [x] 2. 切替の入口: 特別な名前の解決と `lastinstalled` の記録
 - [x] 2.1 (P) 特別な名前を目録のフォルダ名へ解く純粋な関数と、解けない理由の語彙を足す
   - 解決の結果（特別な名前ではない／解けた〔フォルダ名と `sequential` の今の位置〕／解けない〔理由〕）と、解けない理由 4 つ（目録が空の `random`・目録が空の `sequential`・記録なし・記録のゴーストが目録に無い）を、`reason` 欄の語と人が読む 1 文を返す形で足す
   - 純粋な関数は目録・今のゴーストのフォルダ名・記録・乱数（関数引数）だけを入力とし、fs・World を読まない。特別な名前は正典の 3 語の完全一致（大文字小文字を区別）
@@ -36,7 +36,7 @@
   - _Requirements: 2.5, 2.6, 3.6, 4.1, 4.2, 4.6, 4.8, 5.1, 5.3, 5.5, 5.6, 5.7, 6.1, 6.2, 6.5, 9.5_
   - _Boundary: SwitchEntry, LastInstalledRecord_
 
-- [ ] 2.3 入口の統合テストで解決の分岐を固定する
+- [x] 2.3 入口の統合テストで解決の分岐を固定する
   - 既存の道具立て（実 fs の目録 `A`／`B`・今のゴースト `A` の World・送出の読み出し・ログの捕捉）で design の Integration Tests 1〜6 を足す
   - `random`・`sequential` が入口で切替先へ解けて kanade への要求 1 件（切替先・出どころ・`raise_event` の真偽の両方がそのまま）・`ghost_switch_resolved` 1 件・`ghost_switch_requested` 1 件／今 `B` の `sequential` は先頭へ
   - 目録が空の根で `random`／`sequential` が「該当なし」・送出 0・予約なし・`ghost_switch_unknown` 1 件で `reason` がそれぞれの語

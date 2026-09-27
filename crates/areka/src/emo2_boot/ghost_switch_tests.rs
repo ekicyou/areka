@@ -6,7 +6,9 @@
 //! 文脈／置き場が無い・送出の失敗で記録が 1 件残り予約が無いこと（要件 1.5〜1.9・8.7・10.6・11.8・11.9）。
 //! 実行系は起こさない（置き場には kanade の送出端だけを持つ中身を据え、受信端で送出を数える）。
 //! 特別な名前（`random`・`sequential`・`lastinstalled`）の解決は、偽の目録と固定の乱数で純粋な関数
-//! だけを確かめる（areka-P0-ghost-change-name-resolution task 2.1）。
+//! だけを確かめる（areka-P0-ghost-change-name-resolution task 2.1）。入口での解決の分岐（切替先へ
+//! 解ける・解けない理由の語・`lastinstalled` の記録・予約中・メニューのフォルダ名）は実 fs の目録で
+//! 確かめる（同 task 2.3）。
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -109,12 +111,17 @@ fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
 /// 文脈と置き場（kanade の送出端だけを持つ中身）を据えた World と、kanade の受信端。
 /// 今のゴーストは `A`。
 fn world_with_slot(root: &BasewareRoot) -> (World, Receiver<KanadeMsg>) {
+    world_at(root, "A")
+}
+
+/// [`world_with_slot`] の今のゴーストを `current` にしたもの。
+fn world_at(root: &BasewareRoot, current: &str) -> (World, Receiver<KanadeMsg>) {
     let (tx, rx) = mpsc::channel();
     let mut world = World::new();
-    world.insert_resource(boot_context(root, "A"));
+    world.insert_resource(boot_context(root, current));
     world.insert_non_send(GhostSlot(Some(GhostSession::for_test(
         Some(tx),
-        root.ghost_dir("A"),
+        root.ghost_dir(current),
     ))));
     (world, rx)
 }
@@ -732,4 +739,249 @@ fn drain_passes_each_request_to_the_entry_as_automatic() {
         ),
         "{events:?}"
     );
+}
+
+// ---------------------------------------------------------------- 入口での特別な名前の解決（areka-P0-ghost-change-name-resolution task 2.3）
+
+/// `fixture_root` の `A`／`B` へ切り替える kanade への要求。
+fn change_to(
+    root: &BasewareRoot,
+    folder: &str,
+    origin: ChangeOrigin,
+    raise: bool,
+) -> ChangeRequest {
+    let (sakura_name, name) = match folder {
+        "A" => ("さくら", "Alice"),
+        _ => ("", folder),
+    };
+    ChangeRequest {
+        target: ChangeTarget {
+            sakura_name: sakura_name.to_owned(),
+            name: name.to_owned(),
+            dir: absolute(&root.ghost_dir(folder)),
+        },
+        origin,
+        raise_event: raise,
+    }
+}
+
+/// `event` の記録 1 件の欄 `key` の Debug 表現（`%`／`?` で渡した値）。
+fn field_of(events: &[CapturedEvent], event: &str, key: &str) -> Option<String> {
+    events
+        .iter()
+        .find(|e| e.field_str("event") == Some(event))
+        .and_then(|e| e.field(key).map(str::to_owned))
+}
+
+/// 受理: 送出は `want` の 1 件・予約の切替先は `want` のフォルダ・`ghost_switch_resolved`
+/// （`to` がそのフォルダ・`position` が `position`）と `ghost_switch_requested` が 1 件ずつ。
+fn assert_switched(
+    (world, rx): (&World, &Receiver<KanadeMsg>),
+    (verdict, events): (SwitchVerdict, &[CapturedEvent]),
+    want: ChangeRequest,
+    folder: &str,
+    position: &str,
+) {
+    let reserved = world
+        .get_non_send::<SwitchInFlight>()
+        .map(|r| r.target.folder.clone());
+    assert_eq!(
+        (verdict, sent_changes(rx), reserved),
+        (SwitchVerdict::Accepted, vec![want], Some(folder.to_owned())),
+        "{events:?}"
+    );
+    assert_one_event(events, "ghost_switch_resolved", tracing::Level::INFO);
+    assert_one_event(events, "ghost_switch_requested", tracing::Level::INFO);
+    assert_eq!(
+        (
+            field_of(events, "ghost_switch_resolved", "to"),
+            field_of(events, "ghost_switch_resolved", "position"),
+        ),
+        (Some(folder.to_owned()), Some(position.to_owned())),
+        "(to, position)"
+    );
+}
+
+/// 無視: 該当なし・送出 0 件・予約なし・`ghost_switch_resolved`／`requested` 0 件・
+/// `ghost_switch_unknown` WARN 1 件で `reason` が `reason`。
+fn assert_ignored(
+    (world, rx): (&World, &Receiver<KanadeMsg>),
+    (verdict, events): (SwitchVerdict, &[CapturedEvent]),
+    reason: &str,
+) {
+    assert_eq!(
+        (
+            verdict,
+            sent_changes(rx).len(),
+            world.get_non_send::<SwitchInFlight>().is_some(),
+            count_event(events, "ghost_switch_resolved"),
+            count_event(events, "ghost_switch_requested"),
+        ),
+        (SwitchVerdict::NotFound, 0, false, 0, 0),
+        "{events:?}"
+    );
+    assert_one_event(events, "ghost_switch_unknown", tracing::Level::WARN);
+    assert_eq!(
+        events
+            .iter()
+            .find(|e| e.field_str("event") == Some("ghost_switch_unknown"))
+            .and_then(|e| e.field_str("reason")),
+        Some(reason),
+        "{events:?}"
+    );
+}
+
+/// `random`（今 `A` なら候補は `B` だけ）と `sequential`（今 `A` → `B`・今 `B` → 末尾から先頭の
+/// `A`）が入口で切替先へ解け、出どころと `raise_event` の真偽はそのまま kanade へ届く
+/// （要件 2.1・2.5・3.1・3.2・3.6・5.1・5.3・6.2）。
+#[test]
+fn random_and_sequential_resolve_to_a_target_at_the_entry() {
+    let tmp = TempPath::new("ghost-switch-resolve");
+    let root = fixture_root(&tmp);
+    for (special, current, to, position) in [
+        ("random", "A", "B", "None"),
+        ("sequential", "A", "B", "Some(0)"),
+        ("sequential", "B", "A", "Some(1)"),
+    ] {
+        for (raise, origin) in [
+            (true, ChangeOrigin::Automatic),
+            (false, ChangeOrigin::Manual),
+        ] {
+            let (mut world, rx) = world_at(&root, current);
+            let (verdict, events) = capture(|| {
+                request_ghost_switch_with(&mut world, request(name(special), raise, origin), |n| {
+                    assert_eq!(
+                        (special, n),
+                        ("random", 1),
+                        "乱数は random だけ・候補は B だけ"
+                    );
+                    0
+                })
+            });
+            assert_switched(
+                (&world, &rx),
+                (verdict, &events),
+                change_to(&root, to, origin, raise),
+                to,
+                position,
+            );
+        }
+    }
+}
+
+/// 目録が空（`ghost/` の無い根）: `random`／`sequential` は解けず、理由の語はそれぞれ
+/// （要件 2.7・3.5・6.1）。
+#[test]
+fn special_names_on_an_empty_catalog_are_ignored() {
+    let tmp = TempPath::new("ghost-switch-empty-catalog");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    for (special, reason) in [
+        ("random", "random_empty"),
+        ("sequential", "sequential_empty"),
+    ] {
+        let (mut world, rx) = world_at(&root, "A");
+        let (verdict, events) = capture(|| {
+            request_ghost_switch_with(
+                &mut world,
+                request(name(special), true, ChangeOrigin::Automatic),
+                no_pick,
+            )
+        });
+        assert_ignored((&world, &rx), (verdict, &events), reason);
+    }
+}
+
+/// `lastinstalled`: 記録なし・消えたゴースト・最後に書いた 1 件（前の `Zed` は置き換わる）・
+/// 今のゴースト自身。受理のあとも記録は消えず、`last_installed_recorded` は書いた回数だけ残る
+/// （要件 4.2〜4.8・6.1・6.3・6.6）。
+#[test]
+fn lastinstalled_switches_to_the_last_recorded_ghost() {
+    let tmp = TempPath::new("ghost-switch-lastinstalled");
+    let root = fixture_root(&tmp);
+    for (records, raise, want) in [
+        (&[][..], true, Err("lastinstalled_none")),
+        (&["Gone"][..], true, Err("lastinstalled_missing")),
+        (&["B"][..], false, Ok("B")),
+        (&["Zed", "B"][..], true, Ok("B")),
+        (&["A"][..], true, Ok("A")),
+    ] {
+        let (mut world, rx) = world_with_slot(&root);
+        let (verdict, events) = capture(|| {
+            for r in records {
+                record_last_installed(&mut world, (*r).to_owned());
+            }
+            request_ghost_switch_with(
+                &mut world,
+                request(name("lastinstalled"), raise, ChangeOrigin::Automatic),
+                no_pick,
+            )
+        });
+        assert_eq!(
+            (
+                count_event(&events, "last_installed_recorded"),
+                world
+                    .get_resource::<LastInstalledGhost>()
+                    .map(|r| r.0.clone()),
+            ),
+            (records.len(), records.last().map(|r| (*r).to_owned())),
+            "{records:?}: (記録した回数, 残っている記録)"
+        );
+        match want {
+            Ok(to) => assert_switched(
+                (&world, &rx),
+                (verdict, &events),
+                change_to(&root, to, ChangeOrigin::Automatic, raise),
+                to,
+                "None",
+            ),
+            Err(reason) => assert_ignored((&world, &rx), (verdict, &events), reason),
+        }
+    }
+}
+
+/// 予約の判定が解決より先: 切替中の 2 通目の `random` は解かずに `Busy`（要件 5.6）。
+#[test]
+fn special_name_while_reserved_is_busy_without_resolving() {
+    let tmp = TempPath::new("ghost-switch-busy-random");
+    let root = fixture_root(&tmp);
+    let (mut world, rx) = world_with_slot(&root);
+    let first = request_ghost_switch(
+        &mut world,
+        request(name("Alice"), true, ChangeOrigin::Automatic),
+    );
+    let (second, events) = capture(|| {
+        request_ghost_switch_with(
+            &mut world,
+            request(name("random"), true, ChangeOrigin::Automatic),
+            no_pick,
+        )
+    });
+    assert_eq!(
+        (
+            first,
+            second,
+            sent_changes(&rx).len(),
+            count_event(&events, "ghost_switch_resolved"),
+        ),
+        (SwitchVerdict::Accepted, SwitchVerdict::Busy, 1, 0),
+        "{events:?}"
+    );
+    assert_one_event(&events, "ghost_switch_busy", tracing::Level::WARN);
+}
+
+/// メニューのフォルダの名指しは特別な名前として解かない: 目録に無いフォルダ名 `random` は
+/// 名指しの該当なし（`reason = "name"`・要件 5.7）。
+#[test]
+fn menu_folder_named_random_is_not_resolved() {
+    let tmp = TempPath::new("ghost-switch-folder-random");
+    let root = fixture_root(&tmp);
+    let (mut world, rx) = world_with_slot(&root);
+    let (verdict, events) = capture(|| {
+        request_ghost_switch_with(
+            &mut world,
+            request(folder("random"), false, ChangeOrigin::Manual),
+            no_pick,
+        )
+    });
+    assert_ignored((&world, &rx), (verdict, &events), "name");
 }
