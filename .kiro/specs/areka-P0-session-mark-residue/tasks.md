@@ -83,7 +83,7 @@
   - _Requirements: 7.1_
   - _Depends: 2.2_
 
-- [ ] 5.2 OS のセッションの終了の受け手が、上限つきで降ろして印の材料に打ち切りと倒れた旗を載せる
+- [x] 5.2 OS のセッションの終了の受け手が、上限つきで降ろして印の材料に打ち切りと倒れた旗を載せる
   - 上限の定数 3 秒を置き、受け手はそれを渡すだけにして、テストは上限を引数で渡せる入口を使う
   - ゴーストの単位に期限つきで降ろす入口を足し（既存の降ろし方は不変・共通の手順を共有）、上限は後始末に入った時点から数える
   - 降ろす前に倒れた旗を読み、降ろした後の打ち切りの有無と合わせて印の判定へ渡す。後始末の所要の記録に打ち切りの有無を足す
@@ -142,3 +142,4 @@
 - 4.3: `FakeShiori::BalloonMissing` の回は、倒れた先の kanade の Fault の知らせが受け口に残り、次の起動の最初の汲み出しで `quit_app` が走りうる（判定欄は揺れない）。次の起動の出所を判定に足すなら先に受け口を空にする。
 - 5.1: 偽の SHIORI の `hold_at(HoldAt::{Get|Notify|Unload})` は、固まった呼び出しが台本の応答を消費せず、解かれた後は固定で GET/NOTIFY＝`RequestError::Timeout`（本番と一致）・UNLOAD＝`ShutdownError::ExitTimeout`（代用。本番は `Unload(SendError::Ipc(IpcError::Timeout))`）を返す。固まるのは台本 1 件につき最初の 1 回。部品は `emo2_boot/spine_hold_support.rs`（`pub(crate) mod hold_support`）。`unblock_handle` は常に `Some`。
 - 4.1〜4.3 の追加で `main_session_mark_tests.rs` が 1,184 行になり、log-capture-kit の 1,000 行の見張りが赤になっていた（crate 単位のテストでは映らない）。倒れた回のテストを子モジュール `main_session_mark_fallback_tests.rs` へ切り出した。以後の検証は `cargo test -p log-capture-kit` も回す。
+- 5.2: 受け手 `on_os_session_end` は `end_session_within(world, SESSION_END_SHIORI_LIMIT)` を呼ぶだけ。テストは負荷で 3 秒が発火しないよう `end_session_within(.., 60 秒)` を使う＝ゴースト付きで定数を渡す行はまだどのテストも踏まない（5.3 の構造検査と定数の判定で固定する）。`started` は 2 回目を読み捨てる判定の直後。`os_session_end_done` に `shiori_cut` の欄を足した。

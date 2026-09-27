@@ -192,6 +192,40 @@ fn logsink_fallback_that_fails_keeps_mark_and_next_boot_is_default_with_halt() {
     assert_eq!(next, expected, "次の起動");
 }
 
+/// LogSink へ倒れた回が OS のセッションの終了で終わる（要件 4.1・6.1）: 受け手は降ろす前に単位の
+/// 倒れた旗を読んで印の材料に載せるので、上限の中できれいに降りても（打ち切りなし）印＝A が理由
+/// `logsink_fallback` で残る。上限は負荷で揺れないよう大きく取って引数の入口で渡す。
+#[test]
+fn logsink_fallback_ended_by_os_session_end_keeps_mark() {
+    let mut rig = rig_with(FakeShiori::BalloonMissing);
+    first_boot_memory(&mut rig, "A");
+    let app = app_dir(&rig);
+    let ((), events) = capture(|| {
+        crate::session_end::end_session_within(&mut rig.world, std::time::Duration::from_secs(60))
+    });
+    let kept: Vec<String> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("session_mark_kept"))
+        .filter_map(|e| e.field_str("reason").map(str::to_owned))
+        .collect();
+    let done: Vec<(Option<&str>, Option<&str>)> = events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("os_session_end_done"))
+        .map(|e| (e.field("down_ok"), e.field("shiori_cut")))
+        .collect();
+
+    assert_eq!(
+        (kept, done, read_session_mark(&app), rig.shutdown()),
+        (
+            vec!["logsink_fallback".to_owned()],
+            vec![(Some("true"), Some("false"))],
+            Some("A".to_owned()),
+            true,
+        ),
+        "倒れた回のセッションの終了で印が消えたか材料が崩れた（残す理由・所要の (降ろせた, 打ち切り)・印・置き場が空）: {events:?}"
+    );
+}
+
 /// argv で始まって LogSink へ倒れた（要件 4.6）: 解決は印を読まず、起こしても書かず、きれいに終えても
 /// 消さない（前から在った印がそのまま残る）。倒れた記録は `debug!` 1 件どまりで `warn!` は 0 件、
 /// 印を残した記録も 0 件。

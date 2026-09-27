@@ -421,6 +421,26 @@ impl GhostSession {
     /// （`reason` を渡す）→ ③ seriko の join。無い段は飛ばし、②③ の失敗は `error!` の上で
     /// `Err` を返して以降を飛ばす。perf の最終報告はプロセスに 1 回なので呼び手が後で行う。
     pub(crate) fn shutdown(self, reason: areka_kanade::CloseReason) -> windows::core::Result<()> {
+        self.shutdown_impl(reason, None).0
+    }
+
+    /// 期限つきで降ろす（OS のセッションの終了の受け手だけが呼ぶ・要件 1.1・2.1）。手順は
+    /// [`GhostSession::shutdown`] と同じで、② だけを見張りつきの `GhostRuntime::shutdown_within` に
+    /// 替える。戻りの 2 つ目は上限で SHIORI の待ちを打ち切ったときだけ `Some`（実行系が無ければ `None`）。
+    pub(crate) fn shutdown_within(
+        self,
+        reason: areka_kanade::CloseReason,
+        budget: areka_kanade::WaitBudget,
+    ) -> (windows::core::Result<()>, Option<areka_kanade::ShioriCut>) {
+        self.shutdown_impl(reason, Some(budget))
+    }
+
+    /// 降ろす手順の本体（`budget` が在れば ② を見張りつきで走らせる）。
+    fn shutdown_impl(
+        self,
+        reason: areka_kanade::CloseReason,
+        budget: Option<areka_kanade::WaitBudget>,
+    ) -> (windows::core::Result<()>, Option<areka_kanade::ShioriCut>) {
         // ① loop ticker Close（本ブロック）: SERIKO ループ ticker の worker スレッドは closure 内へ
         // `SerikoSink` クローン（tick_sink）を握る。これを先に停止させないと seriko inbox が ticker 経由で
         // 生き続け、③ の join が「全 Sender drop」を永遠に待って hang する。停止端 Sender へ
@@ -448,12 +468,24 @@ impl GhostSession {
         // 全窓 close funnel はユーザ操作起点）。OnClose 応答の再生完了待ちは kanade の `ForceQuit`
         // 終了系列内で処理される（本仕様は `shutdown` を呼ぶだけ・不改変・R6.2）。失敗は `error!` の上で
         // 呼び手へ `Err` を返す（genuine な失敗を黙って exit 0 にしない・R6.3）。
+        let mut cut = None;
         if let Some(runtime) = self.ghost {
-            if let Err(err) = runtime.shutdown(reason) {
+            let result = match budget {
+                Some(budget) => {
+                    let (result, fired) = runtime.shutdown_within(reason, budget);
+                    cut = fired;
+                    result
+                }
+                None => runtime.shutdown(reason),
+            };
+            if let Err(err) = result {
                 tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
-                return Err(windows::core::Error::from_hresult(
-                    windows::Win32::Foundation::E_FAIL,
-                ));
+                return (
+                    Err(windows::core::Error::from_hresult(
+                        windows::Win32::Foundation::E_FAIL,
+                    )),
+                    cut,
+                );
             }
         }
 
@@ -467,13 +499,16 @@ impl GhostSession {
         if let Some(seriko) = self.seriko {
             if let Err(err) = seriko.join() {
                 tracing::error!(error = %err, "seriko アクターの join に失敗しました");
-                return Err(windows::core::Error::from_hresult(
-                    windows::Win32::Foundation::E_FAIL,
-                ));
+                return (
+                    Err(windows::core::Error::from_hresult(
+                        windows::Win32::Foundation::E_FAIL,
+                    )),
+                    cut,
+                );
             }
         }
 
-        Ok(())
+        (Ok(()), cut)
     }
 }
 
