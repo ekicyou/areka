@@ -47,7 +47,7 @@
   - _Requirements: 1.1, 1.6, 2.1, 3.3_
   - _Depends: 2.2_
 
-- [ ] 4. 印の判定と LogSink への倒れ込み（areka）
+- [x] 4. 印の判定と LogSink への倒れ込み（areka）
 - [x] 4.1 (P) 印の判定に「LogSink へ倒れた」と「上限で打ち切った」の 2 つの理由を時系列の順で足す
   - 印の材料に倒れた旗を足し、降ろした結果を「メッセージループの成否・降ろす処理の成否・打ち切りの有無」の 1 つの組にまとめる
   - 判定の順は argv → 倒れた → 出所なし → SHIORI の失敗／切替の致命 → メッセージループの失敗 → 上限の打ち切り → 降ろす処理の失敗 → 消す。終了の出所の網羅の match はそのまま、理由の語は既存と別の 2 語
@@ -66,7 +66,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.7, 4.8, 6.3, 8.2, 8.3_
   - _Depends: 4.1_
 
-- [ ] 4.3 LogSink へ倒れた回の 1 周を、倒れた先の成功と失敗の両方で固定する
+- [x] 4.3 LogSink へ倒れた回の 1 周を、倒れた先の成功と失敗の両方で固定する
   - 切替の土台に「結線は不成立・LogSink の起動は成功」の形（バルーンの根が無い）を足し、既存の「倒れた先も失敗」の形と対にする
   - 両方の形で初回の起動 → 倒れた `warn!` 1 件 → きれいに終える → 印が残り理由が倒れた語 → 次の起動が既定ゴースト＋Ref6＝`halt`・Ref7＝倒れたゴーストの名前、を 1 周で判定する（最初の出所の値は非同期の知らせに依るので判定に使わない）
   - argv で始まって倒れた回は印を読まず・書かず・消さず・倒れた `warn!` も出ないことを判定する
@@ -139,3 +139,4 @@
 - 2.2: `spawn_shiori_actor` は `(Sender, ActorHandle, ShioriProbe)` を返す。見張りの発火をテストで決定論にするには `#[cfg(test)] ShioriProbe::fire_now(budget)`（`try_fire` の同期呼び）を使う（`cut_now`→`finish` は取り合いで `None` になりうる）。`Idle`・`Unloaded` は応答を返す前に書かれる＝応答を受けた後に読めば時刻に依らない。
 - 4.1: 理由の語は `logsink_fallback`・`session_end_deadline`。`settle_session_mark` は語をそのまま `info!(session_mark_kept, reason)` に載せるが、新しい 2 語が記録に出ることの判定は 4.3（倒れた回の 1 周）と 5.3（上限の語）で入れる。
 - 4.2: LogSink の腕の App スコープの置き場を結線の入力から写す前は、テストが `target\debug\deps\profile\areka\sylphya.toml`（実行体の隣の実 profile）へ書いていた。旗の出所は `GhostSession::logsink_fallback()`、印の材料へは `after_run` が運ぶ。5.2 で `session_end.rs` も同じ読み口から載せる。
+- 4.3: `FakeShiori::BalloonMissing` の回は、倒れた先の kanade の Fault の知らせが受け口に残り、次の起動の最初の汲み出しで `quit_app` が走りうる（判定欄は揺れない）。次の起動の出所を判定に足すなら先に受け口を空にする。
