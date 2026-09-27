@@ -41,7 +41,7 @@
 | [`OnInstallComplete`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallComplete:1)（参考） | 「インストールが正常終了した際に発生。」 | 里々 wiki の定石はこのイベントの応答で `\![change,ghost,lastinstalled]` を出す。送るのは `ghost-install`（本仕様の外）。本仕様は、その台本が届いたときに解けるようにする。 |
 | [里々 wiki「ゴースト切り替え」](https://soliton.sub.jp/satori/?%E3%82%B4%E3%83%BC%E3%82%B9%E3%83%88%E5%88%87%E3%82%8A%E6%9B%BF%E3%81%88#ma90e679)（参考） | 「速攻ゴースト切替 …\![change,ghost,lastinstalled]」 | α で「入れて替える一周」を台本から完結させる根拠。 |
 
-正典が沈黙している点（並びの定義・今のゴーストが目録に無いときの「次」・目録が 1 体だけのときの `sequential`・特別な名前と同名のゴーストがいるときの優先・`lastinstalled` の記録を切替に使ったあと残すか・記録したゴーストが目録から消えていたとき）は areka の裁量として要件 9 で決め、`doc/COMPAT_ARCHITECTURE.md` §8 に記す。SSP の挙動を実測して合わせることはしない。
+正典が沈黙している点（並びの定義・今のゴーストが目録に無いときの「次」・目録が 1 体だけのときの `random`／`sequential`・特別な名前と同名のゴーストがいるときの優先・`lastinstalled` の記録を切替に使ったあと残すか・記録したゴーストが目録から消えていたとき）は areka の裁量として要件 9 で決め、`doc/COMPAT_ARCHITECTURE.md` §8 に記す。SSP の挙動を実測して合わせることはしない。
 
 ### 何を変えるか
 
@@ -90,12 +90,13 @@
 
 #### Acceptance Criteria
 
-1. When 名前 `random` の切替要求が届く, the areka shall 目録のゴーストのうち**今のゴーストを除いた**ものを候補とし、その中から 1 体を選んで名指しの切替の経路へ渡す。
+1. When 名前 `random` の切替要求が届く, the areka shall 目録のゴーストのうち**今のゴーストを除いた**ものを候補とし、その中から 1 体を選んで名指しの切替の経路へ渡す（今のゴーストしか居ないときは要件 2.3）。
 2. When 候補が 2 体以上ある, the areka shall どの候補も選ばれ得るようにする（特定の 1 体に固定しない）。
-3. If 候補が 0 体（目録が今のゴーストだけ、または空）, then the areka shall 切替を無視し、`warn!` を 1 件残し、ゴーストを降ろさず `OnGhostChanging` も送らない（利用者から見える変化は 0）。
+3. While 目録が今のゴースト 1 体だけである, when 名前 `random` の切替要求が届く, the areka shall 今のゴースト自身を切替先とし、完了 `ghost-shell-balloon-switch` 要件 1.8 のとおり降ろして起こし直す（無視しない・要件 9 裁定 3）。
 4. While 今のゴーストが目録に無い（ゴーストを引数で起こした＝根の中を指していても同じ・メニューで印が付かないのと同じ扱い）, when 名前 `random` の切替要求が届く, the areka shall 目録の全ゴーストを候補とする（除くものが無い）。
 5. When `\![change,ghost,random,--option=raise-event]` が届く, the areka shall 選んだ 1 体を切替先として、名指しと同じく `OnGhostChanging`（Ref0〜3 は選んだ切替先の値）を送る切替を行う。`\+` と `--option` 無しの `random` は送らない。
 6. The areka shall 候補からの選び方を、乱数を外から与えて決定論テストで固定できる形にする（本番の乱数の出所は設計で決める・新しい依存は足さない）。
+7. If 目録が空である, then the areka shall 切替を無視し、`warn!` を 1 件残し、ゴーストを降ろさず `OnGhostChanging` も送らない（利用者から見える変化は 0）。
 
 ### Requirement 3: `sequential` は目録の並びで「次」のゴーストへ替える
 
@@ -146,9 +147,9 @@
 
 #### Acceptance Criteria
 
-1. If 特別な名前が解けなかった（`random` の候補 0・`sequential` の目録空・`lastinstalled` の記録なし・記録のゴーストが目録にない）, then the areka shall それぞれを見分けられる `warn!` を 1 件だけ残す（同じ事象で 2 件出さない・黙って落ちる経路を残さない）。
+1. If 特別な名前が解けなかった（`random` の目録空・`sequential` の目録空・`lastinstalled` の記録なし・記録のゴーストが目録にない）, then the areka shall それぞれを見分けられる `warn!` を 1 件だけ残す（同じ事象で 2 件出さない・黙って落ちる経路を残さない）。
 2. When 特別な名前が解けた, the areka shall 何を何へ解いたか（名前・切替先のフォルダ名・`sequential` なら今の位置）を `info!` または `debug!` に 1 件残す。
-3. The areka shall 要件 2〜5 の分岐（候補 0・候補 1・候補 2 以上と乱数の値・末尾→先頭・今のゴーストが目録にない・1 体だけ・記録なし・記録あり・記録のゴーストが消えた・`raise-event` の通り方・同名のゴーストとの優先・切替中の 2 通目）を、偽の目録と注入した乱数と手で入れた記録による決定論テストで固定する。
+3. The areka shall 要件 2〜5 の分岐（目録空・今のゴースト 1 体だけ（`random`・`sequential` とも起こし直し）・他の候補 1・他の候補 2 以上と乱数の値・末尾→先頭・今のゴーストが目録にない・1 体だけ・記録なし・記録あり・記録のゴーストが消えた・`raise-event` の通り方・同名のゴーストとの優先・切替中の 2 通目）を、偽の目録と注入した乱数と手で入れた記録による決定論テストで固定する。
 4. The areka shall 要件 1 の別名の転記（`\+`／`\_+` → 角括弧付きと同じ受け皿・直後の本文が残る）を転記の兄弟テストで固定する。既存テスト `each_canonical_bracketless_tag_yields_exactly_one_raw`（`parse_bare_tag_tests.rs`）の「角括弧なしで `Raw` になる正典の綴り」の一覧から `_+` を外す（綴りの数と説明文も合わせる）。
 5. The areka shall 既存テスト `unknown_names_warn_once_and_send_nothing` の「該当なし」の例から `random`・`lastinstalled` を外し（`Nobody` だけ残す）、それらの判断を本仕様の新しいテストへ移す。
 6. The areka shall `lastinstalled` の切替を、本番の書く側が無いため、記録を手で入れた World の決定論テストで確かめる（実機では確かめない＝`ghost-install` の実機一周へ申し送る）。
@@ -162,7 +163,7 @@
 1. The areka shall 網羅台帳 `doc/ukadoc-coverage/ledger/sakura-script.toml` の `\+`・`\_+` の行を実装済み（owner＝本仕様）に改め、備考の「壊れ方」を実装後の振る舞い（何へ解かれるか・解けないときの `warn!`）へ書き換える。
 2. The areka shall 同台帳の `\![change,ghost,…]` の行の備考「random／sequential／lastinstalled の解決は areka-P0-ghost-change-name-resolution の持ち場」を「解決済み（本仕様）」へ改める。`shell-balloon-switch` が触る `\![change,shell|balloon,…]` の行には触らない。
 3. The areka shall 生成物（`doc/ukadoc-coverage/report/*.md`）を手で直さず、生成器で作り直す（並走する spec と同時に変わる数は、後に main へ入る側が作り直す）。
-4. The areka shall `doc/COMPAT_ARCHITECTURE.md` §8 に、要件 9 の裁定（`sequential` の並び・今のゴーストが目録にないとき・1 体だけのとき・同名のゴーストとの優先・`lastinstalled` の記録の寿命と消えたゴースト）を 1 行ずつ記す。
+4. The areka shall `doc/COMPAT_ARCHITECTURE.md` §8 に、要件 9 の裁定（`sequential` の並び・今のゴーストが目録にないとき・1 体だけのとき（`random`・`sequential` とも起こし直し）・同名のゴーストとの優先・`lastinstalled` の記録の寿命と消えたゴースト）を 1 行ずつ記す。
 5. The areka shall `.kiro/steering/roadmap.md` の本仕様の行を完了へ改める。
 6. The areka shall 台帳の宛先を本仕様にするのと同じ変更で、`doc/ukadoc-coverage/roadmap-draft.md` に本仕様の `[[spec]]` の行（宛先の数＝台帳で本仕様を宛先に持つ項目数）を足し、`[briefs].count` を 1 増やす（`ukadoc-survey` の整合検査が求める・完了 `ghost-shell-balloon-switch` と同じ手順）。
 7. The areka shall `doc/COMPAT_ARCHITECTURE.md` §8 の「角括弧なし `\_` タグ」の行が `\_+` を「所有先未定」と書いているのを、本仕様の実装へ改める。
@@ -187,7 +188,7 @@
 
 1. **`sequential` の並び＝目録の並び（フォルダ名の昇順）。** The areka shall SSP の「ゴーストエクスプローラの下側」の代わりに、利用者が右クリックメニューで見る並びをそのまま使う（要件 3.1）。完了 `baseware-root-layout` の「列挙の並びは判断に使わない」は `sequential` に限り上書きする。
 2. **今のゴーストが目録に無いときの「次」＝先頭。** The areka shall ゴーストを引数で起こしたとき（パスが根の中を指していても・`resolve_ghost` の段 1 は常に `folder` を持たない）の `sequential` を目録の先頭へ解き、`random` は目録の全ゴーストを候補とする（要件 2.4・3.3）。パスを正規化して目録と突き合わせることはしない（右クリックメニューの印の付け方と揃える・引数での起動は開発者の上書き）。
-3. **目録が 1 体だけのときの `sequential`＝自分自身（起こし直し）。** The areka shall 正典「一番下なら一番上」を文字どおりに当て、無視ではなく自分自身への切替（完了 `ghost-shell-balloon-switch` 要件 1.8 の読み直しの代用）とする（要件 3.4）。`random` は「他の」と書かれているので同じ状況では無視（要件 2.3）。
+3. **目録が今のゴースト 1 体だけのときは `random`・`sequential` とも自分自身（起こし直し）。** The areka shall 無視せず、今のゴーストを降ろして起こし直す（完了 `ghost-shell-balloon-switch` 要件 1.8 と同じ・要件 2.3・3.4）。「次へ」も「ランダム」も、書いたら必ず切り替わる（消えて、現れる）ことを優先する。`random` の正典「他の」は、他のゴーストが居る限り今のゴーストを候補から外す意味に読む（要件 2.1）。目録が空のときだけ無視（要件 2.7・3.5）。**2026-09-27 要件ディスカッションで開発者が確定**（推奨案「`\_+` も無視に揃える」を退けた）。
 4. **記録のゴーストが目録から消えていたら無視。** The areka shall 消えたゴーストを起こそうとしてから失敗する形（既定ゴーストへ戻る）にせず、解決の段で「該当なし」として `warn!` で止める（要件 4.5・正典「該当ゴーストがいなかった場合は無視される」の読み）。
 5. **`lastinstalled` の記録は使っても消えない。** The areka shall 記録をプロセスの終わりまで保ち、同じ記録で何度でも切り替えられるようにする（要件 4.6・正典は「SSP を一度終了した場合は無効」としか言わない）。
 6. **特別な名前は目録の同名より優先。** The areka shall `random`・`sequential`・`lastinstalled` と同じ名前のゴーストを台本から名指しできない形を受け入れる（要件 5.5・正典が引数の語を予約している以上、避けられない）。
