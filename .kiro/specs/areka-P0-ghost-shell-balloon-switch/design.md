@@ -83,7 +83,7 @@
 - `PersistKey::LastRunning` の鍵の綴り（`areka.last.running`・`[last] running`）と「空文字は無し」の読み（2026-09-27 に `LastHalted`／`areka.last.halted` から改名。main に未着地なので移行は持たない）。
 - 終了の経路の追加・変更（後続の `shell-balloon-switch`・`network-update` など）: きれいな終わりで印を消すのは `session_mark_verdict` を通る 2 か所（`fn main` の後始末・`session_end::on_os_session_end`）だけ。新しい終了の出所を足すときはこの判定の表に行を足す（`ExitOrigin` の網羅の match が漏れを止める）。
 - App スコープの記憶へ UI スレッドが直接書く時点（ゴーストの実行系が 1 つも動いていない間だけ・下の SessionMark の不変条件）。
-- `close_windows_for_restart` が `GhostWindows` 資源を外すこと（窓を作り直す経路の前提）。
+- `close_windows_for_restart` が `GhostWindows` 資源を外すこと、窓の一式ごとに 1 度だけ立つ資源（`ChainFinalized`・`ChainFinalizeStall`・`ChainRealignPending`・`ZOrderChainPlan`・`ZOrderAbsentReports`）も外す（2026-09-27 タスク 11.9・洗い出しの結果は `close_windows_for_restart` の doc）（窓を作り直す経路の前提）。
 
 ## Architecture
 
@@ -214,7 +214,7 @@ crates/areka/src/
 - `crates/areka/src/emo2_boot/consumer_ledger.rs` — `CommandConsumer::ChangeSink`・`canonical()` に `("change", Some("ghost"))`（9 組）。件数を固定するテスト `canonical_builds_without_duplicate` の 8 → 9。
 - `crates/areka/src/ghost_session.rs` — `GhostSlot(Option<GhostSession>)`（NonSend）。`boot_ghost` の結線ありの腕を私有の `boot_wired` に括り出し、`boot_ghost`（fallback へ倒れる・署名不変）と `boot_ghost_strict`（倒れず `Err`）の 2 つの入口にする。`GhostSession::kanade()`・`ghost_dir()`／`names()` の読み口。`register_systems` に `ghost_switch::register_change_drain` を足す。結線ありの腕の `wire_menu` の直後に `menu::ghost_frame::register(world)`。窓を「準備」と「投函」に分ける: `open_ghost_windows` の中身を `prepare_ghost_windows(world, cfg) -> Result<PreparedWindows, OpenWindowsError>`（同期・配置の準備と descript の 1 度の読取・spawn の閉包を持つ）と `commit_ghost_windows(world, prepared)`（閉包を作業プールへ渡す）に括り出し、`open_ghost_windows` は両方を続けて呼ぶ（署名不変・初回起動の `main` の順序は据え置き）。`reopen_ghost_windows` は `PreparedWindows` を返す形に変える（本番の呼び手は本仕様が初めてなので形を変えてよい）。`#[cfg_attr(not(test), allow(dead_code))]` を外す。
 - `crates/areka/src/ghost_session_restart_tests.rs` — 通知の型の追随・2 周目のメニューの登記の一覧に `Frame::Ghost` が加わる分の追随。
-- `crates/areka/src/app_exit.rs` — `ExitOrigin::GhostFallbackFailed(ShioriFault)`・`fault_of` の腕・`close_windows_for_restart` が `GhostWindows` 資源を外す・`#[cfg_attr(not(test), allow(dead_code))]` を外す。
+- `crates/areka/src/app_exit.rs` — `ExitOrigin::GhostFallbackFailed(ShioriFault)`・`fault_of` の腕・`close_windows_for_restart` が `GhostWindows` 資源を外す、窓の一式ごとに 1 度だけ立つ資源（`ChainFinalized`・`ChainFinalizeStall`・`ChainRealignPending`・`ZOrderChainPlan`・`ZOrderAbsentReports`）も外す（2026-09-27 タスク 11.9・洗い出しの結果は `close_windows_for_restart` の doc）・`#[cfg_attr(not(test), allow(dead_code))]` を外す。
 - `crates/areka/src/main.rs`（既出の行に加えて）— 初回起動の順序（`open_ghost_windows` → `boot_ghost`）は据え置き（そこでは失敗が告知と終了で終わるので孤児の窓は残らない）。
 - `crates/areka/src/app_exit_tests.rs` — `fault_of` の新しい腕と `GhostWindows` を外す判断。
 - `crates/areka/src/boot_config.rs` — `BootContext`（Resource）と `CurrentGhost`。`resolve_balloon_for_ghost(root, ghost_dir, pick)` を `resolve_boot_from` から括り出す。`BootResolved` の 4 つ目は前回落ちたゴーストの名前（2026-09-27: 起動中の印の値＝`read_session_mark`。印が在れば `LastGhost` を読まない）。
@@ -524,7 +524,7 @@ sequenceDiagram
 | BootConfig／BootResolve（`boot_config.rs`・`boot_resolve.rs`） | areka・起動解決 | `BootContext`・バルーンの解決・`Switched`・起動中の印の読み書き（SessionMark） | 4.6, 4.7, 12.1〜12.8 | `catalog`（P0）・`sylphya::persist`（P0） | Service |
 | SessionEnd（`session_end.rs`・wintf `OnSessionEnd`） | areka・終了／wintf・窓の手続き | OS のセッションの終了を窓の手続きの中できれいな終わりにする | 12.9〜12.11 | GhostSession（P0）・`quit_app`（P0）・`session_mark_verdict`（P0） | Event |
 | GhostFrame（`menu/ghost_frame.rs`） | areka・メニュー | 「ゴースト」枠の子メニュー | 1.4, 1.11, 1.12 | `menu::register`（P0）・BootContext（P0） | — |
-| AppExit（`app_exit.rs`） | areka・終了 | `GhostFallbackFailed`・`GhostWindows` を外す | 3.2, 3.9, 6.4 | — | Service |
+| AppExit（`app_exit.rs`） | areka・終了 | `GhostFallbackFailed`・`GhostWindows` と窓の一式の資源を外す（11.9） | 3.2, 3.9, 4.10, 6.4 | — | Service |
 | Main（`main.rs`） | areka・入口 | 据え付けと後始末・起動中の印を書く／消す判定 | 8.1, 8.2, 12.1〜12.5, 12.11 | GhostSlot・BootContext（P0） | — |
 | Docs／Tests | 文書・検査 | 台帳・§8・決定論テスト・実機 | 9.x, 10.x | — | — |
 
@@ -827,7 +827,7 @@ pub(crate) fn session_mark_verdict(first: Option<&ExitOrigin>, argv_session: boo
 
 - `ExitOrigin::GhostFallbackFailed(ShioriFault)`。`fault_of`: `KanadeStopped(Fault(f)) | GhostFallbackFailed(f) => Some(f)`。
 - 2026-09-27: `ExitOrigin::SessionEnd`（OS のシャットダウン・再起動・ログオフ・`fault_of` は `None`）。`attach_os_close_request` は同じ `Added<WindowHandle>` の窓へ `OnCloseRequest(on_ghost_os_close)` に並べて `OnSessionEnd(session_end::on_os_session_end)` を差す（系は増やさない）。
-- `close_windows_for_restart` は窓を消したあと `world.remove_resource::<GhostWindows>()` を行う（消えた窓の `Entity` を装着のゲートに見せない）。`quit_app` は変えない。`#[cfg_attr(not(test), allow(dead_code))]` を外す。
+- `close_windows_for_restart` は窓を消したあと `world.remove_resource::<GhostWindows>()` を行う（消えた窓の `Entity` を装着のゲートに見せない）、窓の一式ごとに 1 度だけ立つ資源（`ChainFinalized`・`ChainFinalizeStall`・`ChainRealignPending`・`ZOrderChainPlan`・`ZOrderAbsentReports`）も外す（2026-09-27 タスク 11.9・洗い出しの結果は `close_windows_for_restart` の doc）。`quit_app` は変えない。`#[cfg_attr(not(test), allow(dead_code))]` を外す。
 
 #### SessionEnd（`crates/areka/src/session_end.rs`・wintf の受け口・2026-09-27・要件 12.9〜12.11）
 
