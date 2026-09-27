@@ -70,7 +70,7 @@
 
 ### Architecture Pattern & Boundary Map
 
-採る形は **「見張り＋外から解く」**（`research.md` §4 案 A）。後始末の出発点が見張りを張り、上限に達したら shiori のスレッドの外から補助プロセスを終わらせる。補助プロセスが消えると、止まっていた `SendMessageTimeoutW` は宛先を失って戻り（`IpcError::SendFailed`）、`request_clean_shutdown` は `HelperStatus::Exited` を観測して即座に抜け、kanade は失敗の応答で終了系列（`Unloading{Fault}` → `Stopped`）へ進み、以後の join はすべて今日どおり走る。段ごとの期限は運ばない（`msg.rs`・`ShioriBackend::notify/unload` の署名は不変）。
+採る形は **「見張り＋外から解く」**（`research.md` §4 案 A）。後始末の出発点が見張りを張り、上限に達したら shiori のスレッドの外から補助プロセスを終わらせる。補助プロセスが消えると、止まっていた `SendMessageTimeoutW` は宛先を失って戻り（実測〔タスク 1.2〕では戻り値 1・応答 0 で戻るので、受け皿が空のまま `send_request` は `IpcError::Timeout` を返し、kanade には `RequestError::Timeout` として見える。「打ち切った」かどうかはエラーの種類でなく `ShioriProbe` の結果で決める）、`request_clean_shutdown` は `HelperStatus::Exited` を観測して即座に抜け、kanade は失敗の応答で終了系列（`Unloading{Fault}` → `Stopped`）へ進み、以後の join はすべて今日どおり走る。段ごとの期限は運ばない（`msg.rs`・`ShioriBackend::notify/unload` の署名は不変）。
 
 ```mermaid
 graph TB
@@ -185,8 +185,8 @@ sequenceDiagram
     P->>P: read busy stage
     P->>H: TerminateProcess via unblock handle
     P->>P: warn shiori_wait_cut
-    H-->>A: SendFailed
-    A-->>K: Failed Ipc
+    H-->>A: returns with empty reply slot
+    A-->>K: Failed Timeout
     K->>A: Unload
     A->>A: status Exited short circuit
     K-->>G: Stopped
@@ -326,7 +326,7 @@ impl HelperLifecycle { pub fn terminator(&self) -> std::io::Result<HelperTermina
 - 事前条件: `HelperHandle` が spawn 済み。事後条件: `Ok` なら補助プロセスは終わっているか終わりつつある（`status()` はまもなく `Exited`）。不変条件: 何度呼んでも `Ok`（冪等）。
 
 **Implementation Notes**
-- Validation: `terminator_tests.rs` — ⑴ 長命の子（`cmd /c ping`）を `terminate` → 締切内に `try_wait` が `Some`、2 度目も `Ok`。⑵ **案 A の前提**（往復の最中に宛先のプロセスを終わらせると `SendMessageTimeoutW` が戻る）: テストの実行体を `current_exe()` で子として起こす（`--exact` で子の入口の関数を指名し、環境変数の旗で「窓を作って眠る」枝に入れる。旗が無ければその関数は何もせず緑）。子は `STATIC`・`HWND_MESSAGE` の窓を**自分の pid を含む一意な題**で作り、メッセージを配らずに眠る。親は `FindWindowExW(HWND_MESSAGE, None, "STATIC", 題)` を有界に繰り返して窓を見つける（標準出力を読まない・`--nocapture` も要らない）。親の別スレッドが「送る」の旗を立ててから `SendMessageTimeoutW(hwnd, WM_NULL, SMTO_NORMAL, 30 秒)` を送り、親は旗を見てから `HelperTerminator::from_child(&child).terminate()`。判定は**時計に依らない**: 送信が 0 で戻り、かつ `GetLastError()` が `ERROR_TIMEOUT` **でない**こと（`SMTO_NORMAL` なので戻る理由は「期限切れ」か「宛先が消えた」の 2 つだけ）と、子の `try_wait` が `Some`。前提が崩れていれば 30 秒後に `ERROR_TIMEOUT` で赤になる（止まらない）。`SMTO_ABORTIFHUNG` は使わない: OS の「応答なし」の判定は「プロセスが起きてから概ね 20〜30 秒を過ぎている」かつ「宛先のスレッドが 14 秒以上メッセージを取り出していない」の 2 条件で 5 秒ではなく（`crates/shiori-host32-helper/src/main_response_flavor_hung_cage_tests.rs` の較正の記録）、時間で理由を判定すると Defender の再スキャンなどの遅れで偽の赤になる。x64 だけで走る。本物の補助プロセスに対する同じ形は、i686 のテスト DLL に「固まる」応答が無い（境界外）ので常設せず、実機確認（要件 7.7）で固まる SHIORI を用意できる場合に限る。既存の `crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs` は「終わらせた**後**に送ると有限で戻る」までを固定しており、本テストはその前段（最中）を足す。
+- Validation: `terminator_tests.rs` — ⑴ 長命の子（`ping.exe` を直接起こす。`cmd /c` を挟むと孫が残る）を `terminate` → 締切内に `try_wait` が `Some`、2 度目も `Ok`。⑵ **案 A の前提**（往復の最中に宛先のプロセスを終わらせると `SendMessageTimeoutW` が戻る）: テストの実行体を `current_exe()` で子として起こす（`--exact` で子の入口の関数を指名し、環境変数の旗で「窓を作って眠る」枝に入れる。旗が無ければその関数は何もせず緑）。子は `STATIC`・`HWND_MESSAGE` の窓を**自分の pid を含む一意な題**で作り、メッセージを配らずに眠る。親は `FindWindowExW(HWND_MESSAGE, None, "STATIC", 題)` を有界に繰り返して窓を見つける（標準出力を読まない・`--nocapture` も要らない）。親の別スレッドが `SendMessageTimeoutW(hwnd, WM_GETTEXTLENGTH, SMTO_NORMAL, 30 秒)` を送る。子は `GetQueueStatus(QS_SENDMESSAGE)` で送信の到着を見て（配らない）名前つきイベントで親へ知らせ、親はそれを見てから `HelperTerminator::from_child(&child).terminate()`（「往復の最中」を子の側で確かめる）。判定は**時計に依らない**: 送信が期限切れの組（戻り値 0 かつ `GetLastError() == ERROR_TIMEOUT`）で**ない**こと、窓の応答が 0（子が配っていれば題の長さが返る＝同じ形の窓へ同じスレッドから送る対照で較正）、子の `try_wait` が `Some`。実測（x64）では宛先のスレッドが消えた送信は戻り値 1・応答 0・最後のエラー 0 で戻る（当初の見込み「0 で戻る」は外れ）。前提が崩れていれば 30 秒後に `ERROR_TIMEOUT` で赤になる（止まらない）。`SMTO_ABORTIFHUNG` は使わない: OS の「応答なし」の判定は「プロセスが起きてから概ね 20〜30 秒を過ぎている」かつ「宛先のスレッドが 14 秒以上メッセージを取り出していない」の 2 条件で 5 秒ではなく（`crates/shiori-host32-helper/src/main_response_flavor_hung_cage_tests.rs` の較正の記録）、時間で理由を判定すると Defender の再スキャンなどの遅れで偽の赤になる。x64 だけで走る。本物の補助プロセスに対する同じ形は、i686 のテスト DLL に「固まる」応答が無い（境界外）ので常設せず、実機確認（要件 7.7）で固まる SHIORI を用意できる場合に限る。既存の `crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs` は「終わらせた**後**に送ると有限で戻る」までを固定しており、本テストはその前段（最中）を足す。
 - Risks: 補助プロセスの取っ手の複製は `HelperHandle` が生きている間しか作れない。接続前（`spawn` から HELLO まで）に上限に達した場合は解く手が無く、記録だけになる。
 
 ### areka-kanade / shiori
@@ -554,7 +554,7 @@ impl ScriptedShioriBackendBuilder { pub(crate) fn hold_at(self, at: HoldAt) -> S
 
 ### Unit（kanade・host32）
 - `probe_tests.rs`: 発火なしで `finish` → `None`・`warn!` 0 件（対照の事象を要求）／`cut_now` で段の語 4 通り・解く手 1 回／短い期限で期限の口から発火／解く手 `None`・`Err` で `error!`・`unblocked=false`／`arm` の前の `cut_now` が `arm` で即発火（粘り）／`finish` が先に勝てば見張りの決め手は `None`（同時の回に切らない）／`Unloaded` で期限に達しても切らない（`debug!` 1 件・解く手 0 回）。
-- `terminator_tests.rs`: 冪等（2 度 `Ok`）／案 A の前提（別プロセスの `STATIC`・`HWND_MESSAGE` 窓への `SendMessageTimeoutW(SMTO_NORMAL, 30 秒)` が、往復の最中の `terminate` で **0 かつ `GetLastError() != ERROR_TIMEOUT`** で戻る。窓は `FindWindowExW(HWND_MESSAGE, ..)` で pid 入りの題から探す。時計では判定しない）。
+- `terminator_tests.rs`: 冪等（2 度 `Ok`）／案 A の前提（別プロセスの `STATIC`・`HWND_MESSAGE` 窓への `SendMessageTimeoutW(SMTO_NORMAL, 30 秒)` が、往復の最中の `terminate` で期限切れの組（0 かつ `ERROR_TIMEOUT`）でなく応答 0 で戻る。窓は `FindWindowExW(HWND_MESSAGE, ..)` で pid 入りの題から探す。時計では判定しない）。
 
 ### Integration（areka・`SwitchRig`）
 - `session_end_deadline_tests.rs`（要件 7.1・7.2）:
@@ -580,7 +580,7 @@ impl ScriptedShioriBackendBuilder { pub(crate) fn hold_at(self, at: HoldAt) -> S
 - 見張りのスレッドは OS のセッションの終了の後始末につき 1 本。`set_busy` は往復ごとに `Mutex` の書き込み 2 回（`String` 1 つ）で、往復の所要（ミリ秒級の IPC）に対して無視できる。健全な SHIORI の後始末（完了 spec の実機で 22 ms）は変わらない。
 
 ## Open Questions / Risks
-- **案 A の前提**（補助プロセスを終わらせると `SendMessageTimeoutW` がすぐ戻る）: Win32 の一般の振る舞い（宛先の窓のスレッドが消えれば送信は失敗で戻る）に依る。`terminator_tests.rs` の前提のテストで x64 の別プロセスの窓に対して固定する（判定は `GetLastError() != ERROR_TIMEOUT`＝時計に依らない）。本物の補助プロセスに対しては、i686 のテスト DLL に固まる応答が無いので常設せず、実機サインオフで固まる SHIORI を用意できる場合に見る。崩れた場合は待ちが今日どおり長くなるだけで、印は残る（悪化はしない）。
+- **案 A の前提**（補助プロセスを終わらせると `SendMessageTimeoutW` がすぐ戻る）: Win32 の一般の振る舞い（宛先の窓のスレッドが消えれば送信は失敗で戻る）に依る。`terminator_tests.rs` の前提のテストで x64 の別プロセスの窓に対して固定する（判定は期限切れの組でない＋応答 0＝時計に依らない）。本物の補助プロセスに対しては、i686 のテスト DLL に固まる応答が無いので常設せず、実機サインオフで固まる SHIORI を用意できる場合に見る。崩れた場合は待ちが今日どおり長くなるだけで、印は残る（悪化はしない）。
 - **接続前に上限に達した場合**（起動直後の OS の終了）: 解く手が無く `error!` の記録だけになる。補助プロセスは job の道連れで終わる。頻度は低いので受け入れる。
 - **InProc**: 対象外（本番では選ばれない）。M2 で本番に使うときの宿題として `research.md` に残す。
 - **要件 5.2 の再現が止まった場合**: 5.3 に従い `research.md` 3-B（降ろす処理を別スレッドで走らせ、UI スレッドは待ちながら送られてきたメッセージだけ配る）を採る。静的な洗い出しは 0 件なので止まらない見込み。

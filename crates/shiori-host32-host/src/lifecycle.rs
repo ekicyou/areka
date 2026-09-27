@@ -357,6 +357,14 @@ pub(crate) mod tests {
         assert_eq!(got, FailureClass::Handshake);
     }
 
+    /// 降ろす段の期限が今日の値であること（UNLOAD の応答 30 秒・終了の観測 10 秒）。
+    /// OS のセッションの終了以外の経路の期限を変えない約束（session-mark-residue 要件 3.1・7.2）。
+    #[test]
+    fn unload_ack_and_exit_observe_timeouts_are_todays_values() {
+        assert_eq!(UNLOAD_ACK_TIMEOUT, Duration::from_secs(30));
+        assert_eq!(EXIT_OBSERVE_TIMEOUT, Duration::from_secs(10));
+    }
+
     // --- HelperLifecycle: 非ブロッキング・分類・sticky・冪等後始末（R1.1〜1.6, 5.2）---
 
     use crate::process_host::spawn_command;

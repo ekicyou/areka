@@ -193,7 +193,7 @@ wintf  window_proc/lifecycle.rs の WM_ENDSESSION（wParam 真・World を借り
 
 ## 7. 調べが要ること（Research Needed）
 
-1. **補助プロセスを終わらせたとき、止まっている `SendMessageTimeoutW` がすぐ戻るか**（案 A の前提）。受け手のスレッドが消えれば送り手の待ちは解ける、が Win32 の一般的な振る舞いだが、`SMTO_ABORTIFHUNG` との組み合わせと戻り値（`IpcError::SendFailed` になるか）を i686 の実物で確かめる。常設テストは x64 の偽境界で書き（方針「常時テストは x86 回避」）、実物の確認は実機サインオフか一度きりの e2e で行う。
+1. **補助プロセスを終わらせたとき、止まっている `SendMessageTimeoutW` がすぐ戻るか**（案 A の前提）。受け手のスレッドが消えれば送り手の待ちは解ける、が Win32 の一般的な振る舞いだが、`SMTO_ABORTIFHUNG` との組み合わせと戻り値（`IpcError::SendFailed` になるか）を i686 の実物で確かめる。→ タスク 1.2 の実測（x64）: 戻り値 1・応答 0 で戻る＝`SendFailed` にはならず、受け皿が空なので `send_request` は `IpcError::Timeout` を返す。常設テストは x64 の偽境界で書き（方針「常時テストは x86 回避」）、実物の確認は実機サインオフか一度きりの e2e で行う。
 2. **`SMTO_ABORTIFHUNG` が、送った後で相手が固まったときに途中で打ち切るか**。打ち切るなら、固まった SHIORI の実際の待ちは 60 秒より短い（parent_window.rs の説明に「`SMTO_ABORTIFHUNG` の実測は 14 秒」とある）。今日の「約 100 秒」の見積りが縮むだけで、本仕様の結論は変わらない。
 3. **別スレッドから補助プロセスを終わらせる口の形**: `HelperHandle` の `Child` を共有するか、プロセスの取っ手を複製するか、job の取っ手で `TerminateJobObject` するか。`windows` クレートの feature の追加が要るか（要件 3.5 は依存クレートの追加を禁じるが、feature の追加の扱いは要確認）。
 4. **OS が areka の窓（WUC 合成・`WS_EX_TRANSPARENT` のトグル）を「見える窓」と数えるか**（5 章の 2 つの扱いのどちらに当たるか）。
@@ -273,7 +273,7 @@ wintf  window_proc/lifecycle.rs の WM_ENDSESSION（wParam 真・World を借り
 - `boot_ghost` は argv を知らない（argv では印に触れないので「印を残す」とは書けない）。`boot_first_ghost` が戻りの `logsink_fallback()` と文脈の argv を見て 1 件（argv なら `debug!`）。
 
 ### 10.3 危うさと緩和
-- 案 A の前提（終わらせると `SendMessageTimeoutW` が戻る）— `terminator_tests.rs` で別プロセスの窓に対して固定（送信は `SMTO_NORMAL`・30 秒。**0 で戻り `GetLastError() != ERROR_TIMEOUT`** で「宛先が消えた」と判定＝時計に依らない。窓は pid 入りの題を `FindWindowExW(HWND_MESSAGE, ..)` で探し、標準出力は読まない）＋実機サインオフ。崩れても悪化はしない（待ちが今日どおり長くなるだけで印は残る）。
+- 案 A の前提（終わらせると `SendMessageTimeoutW` が戻る）— `terminator_tests.rs` で別プロセスの窓に対して固定（送信は `SMTO_NORMAL`・30 秒。**期限切れの組（0 かつ `ERROR_TIMEOUT`）でなく応答 0** で「宛先が消えた」と判定（実測は戻り値 1・応答 0）＝時計に依らない。窓は pid 入りの題を `FindWindowExW(HWND_MESSAGE, ..)` で探し、標準出力は読まない）＋実機サインオフ。崩れても悪化はしない（待ちが今日どおり長くなるだけで印は残る）。
 - 期限と `finish` が同時 — `outcome` の `compare_exchange` で 1 人だけ勝つ（`try_recv` で `Done` を 1 度確かめる案は、確かめた直後に `finish` が走る隙が残るので採らない）。
 - 接続前（HELLO 待ち）に上限に達する — 解く手が無く記録だけ。補助プロセスは job の道連れで終わる。
 - 見張りのスレッドの取り残し — `CutGuard::finish` が必ず join する。`shutdown_within` は `finish` を呼んでから戻る。
