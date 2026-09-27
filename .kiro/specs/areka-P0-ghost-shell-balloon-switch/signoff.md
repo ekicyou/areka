@@ -551,3 +551,17 @@ pwsh -NoProfile -File C:\tmp\areka-signoff-gsw\tools\launch.ps1 -Run run11 -Prof
 | ⑪ 補足 run11c（SHIORI が 5 秒応答しない） | 0 | 1340 → 1392 | （読んでいない） | 1（fail-one の窓・戻しの前） | 引き継ぎなし |
 
 - 全走行で告知 0・パニック 0・プロセスは残らなかった（`areka.exe`・`shiori-host32-helper.exe` とも 0 件。run11b・run11c で一時停止した helper も親の終了とともに消えた）
+
+## 開発者の手による確認（2026-09-27・⑨ をメニューで）
+
+⑦ と ⑨ はスクリーンセーバーのため代わりの形で回していたので、⑨ を開発者がメニューで回した。
+
+- 実行体: HEAD `111c6584` の `target\debug\areka.exe`（コードは `f4771ae1` と同じ・後のコミットは文書だけ）を根 `C:\tmp\areka-signoff-gsw\root\` へ複製。`AREKA_PROFILE_DIR` は空のフォルダ `C:\tmp\areka-signoff-gsw\manual-menu-quit`・`RUST_LOG=info,kanade=trace`・`AREKA_APP_SMOKE_EXIT_MS` なし・argv なし
+- 開発者の操作: emo2 → メニューで R_POST → メニューで emo2 → メニューの「終了」。開発者の所見は「特に問題なし」
+- ログ（`logs\manual.out.txt`）:
+  - emo2 の起動で `session_mark_written`（えも？？）
+  - R_POST への切替: `OnGhostChanging`（Ref0＝ポスト・Ref1＝`manual`）→ 204 → `OnClose`（Ref0＝`system`）→ `unload_clean` → `windows_closed_for_restart` → `ghost_switch_booted`（Target）→ `session_mark_steady`（Ｒポストと狛犬）
+  - emo2 への切替: 同じ順で `session_mark_steady`（えも？？）
+  - メニューの終了: `menu_selected frame=Close` → `OnClose`（Ref0＝`user`）→ `unload_clean` → `app_exit origin=KanadeStopped(Quit)` → `session_mark_cleared`
+- 終わった後の記憶 `sylphya.toml` の `[last]` は `ghost = "emo2"`・`running = ""`（印は消えた）。`areka.exe`・`shiori-host32-helper.exe` はどちらも 0 件。告知 0・パニック 0
+- 判定: ⑨ 合格（メニューの経路で確かめた）
