@@ -1,6 +1,6 @@
 # Design Document — areka-P0-ghost-shell-balloon-switch
 
-> 本文の実測は 2026-09-26・本ブランチ（main `13b72893` と同じソース）のもの。コードは「何の定義か」（関数名・型名＋ファイルパス）で指し、行番号では指さない。要件 11 の裁定 1〜12 は確定済みで、本設計はそれを覆さない。研究の経緯と選ばなかった案は `research.md` §9〜§11 にある。
+> 本文の実測は 2026-09-26・本ブランチ（main `13b72893` と同じソース）のもの。コードは「何の定義か」（関数名・型名＋ファイルパス）で指し、行番号では指さない。要件 11 の裁定 1〜13 は確定済みで、本設計はそれを覆さない（裁定 13 は 2026-09-27 の追加）。研究の経緯と選ばなかった案は `research.md` §9〜§11 にある。
 > **2026-09-27 追記（裁定 13・要件 12）**: 単独起動の失敗の記憶の書き換え（`record_halt`・`should_record_halt`・`take_last_halted`・鍵 `areka.last.halted`）を「起動中の印」（鍵 `areka.last.running`）で置き換え、切替の記憶を書く時点を「降ろした時点」と「切替先の定常到達」へ移し、OS のセッションの終了（`WM_ENDSESSION`）の後始末を足した。該当は「SessionMark」「SessionEnd」の節・Flow 5〜7・Error Handling・Testing Strategy。選んだ理由と選ばなかった案は `research.md` §12。
 
 ## Overview
@@ -223,9 +223,11 @@ crates/areka/src/
 - `crates/areka/src/boot_resolve_tests.rs` — 置き換え前の往復のテスト（`record_halt_rewrites_to_default_and_take_returns_name_once` ほか 3 本）を印の往復（書く → 読む → 消す・書けないときの `warn!` 1 件・切替の 1 回の書き込みで 2 つの鍵がそろう）へ書き換える。
 - `crates/areka/src/main.rs` — `resolve_boot` の 4 つ目の戻り（前回落ちた名前＝印の値）と 5 つ目の戻り（根 `BasewareRoot`＝`BootContext` 用）・`BootContext` と `GhostSlot` の据え付け・`boot_origin` の受け渡し・`run()` の後は `GhostSlot` から取り出して後始末・告知の場面は `BootContext.current` の根と `GhostSession` の名前で組む。2026-09-27: `boot_first_ghost` が argv でなければ起こす前に `write_session_mark`、`should_record_halt` を `session_mark_verdict` に置き換え、後始末は降ろした後にきれいな終わりなら `clear_session_mark`。`on_boot_ok` から記憶を書く部分を `record_last_used` に括り出し、経路が `Switched` のときは書かない（定常到達で `ghost_switch` が呼ぶ）。`SessionEnded` が在れば告知も印も触らない。
 - `crates/areka/src/session_end.rs`（新規）・`crates/areka/src/app_exit.rs` — `ExitOrigin::SessionEnd`（`fault_of` は `None`）・`attach_os_close_request` が同じ窓へ `OnSessionEnd(session_end::on_os_session_end)` も差す。
-- `crates/areka/src/emo2_boot/ghost_switch.rs` — `switch_to` が降ろした直後に `write_switch_drop(切替先の名前)`、`on_notice(Steady)` の迎え入れの段で `record_steady_memory`（切替先の実行系の記憶の書き手で `LastUsed` と印）。
+- `crates/areka/src/emo2_boot/ghost_switch.rs` — `switch_to` が降ろした直後に `write_switch_drop`（`mark: Option<&str>`＝切替先の名前・argv のセッションでは `None`）、`on_notice(Steady)` の迎え入れの段で `record_steady_memory`（切替先の実行系の記憶の書き手で `LastUsed` と印）。
 - `crates/areka/src/ghost_session.rs` — `GhostSession::runtime()`（定常到達で切替先の記憶の書き手を借りる読み口）。
 - `crates/wintf/src/ecs/window/components.rs`・`ecs/window_proc/mod.rs`・`ecs/window_proc/lifecycle.rs`・`lifecycle_tests.rs` — 部品 `OnSessionEnd` と `WM_ENDSESSION` の腕と受け手（下の SessionEnd）。
+- `crates/wintf/src/runtime/wndproc_bridge.rs` — `make_wndproc` の「World が借用中なら飛ばす」腕で、`WM_ENDSESSION`（wParam 真）のときだけ帰結を書いた `warn!(os_session_end_world_busy)` を 1 件残す（他のメッセージは今日どおり記録なし）。同じファイルのテストに 1 本（借用を持ったまま橋渡しの閉包を呼ぶ → `warn!` がちょうど 1 件・戻りは `None`）。
+- `crates/areka/src/boot_config.rs` — `BootContext` に `argv_session: bool`（`fn main` が 1 度だけ詰める・要件 12.5）。
 - `crates/areka/src/menu/mod.rs` — `ItemBody::Submenu`・`register` の `#[allow(dead_code)]` を外す。`unregister` のコメントを「呼び手なし（枠の取り消しは今日の spec に無い）」へ改める。`ghost_frame` モジュールの宣言。
 - `crates/areka-sylphya/src/persist/mod.rs`・`persist/format.rs`・`persist_tests.rs` — `PersistKey::LastRunning`（`areka.last.running`・`[last] running`・2026-09-27 に `LastHalted`／`areka.last.halted`／`[last] halted` から改名）。空文字は「無し」と読む。
 - `doc/ukadoc-coverage/ledger/shiori.toml`・`sakura-script.toml` — 3 行を `implemented`（owner＝本仕様）へ。生成物（`report/*.md`）は生成器（`ukadoc-survey -- report`／`report-summary`）で作り直す。手書きの `briefing-sakura-script.md` の「未対応」の行と、検査が数を照合する `briefing.md`・`roadmap-draft.md` は手で追随させる。
@@ -371,7 +373,7 @@ sequenceDiagram
     end
 ```
 
-流れの判断: ⑴ UI スレッドが App スコープへ直接書くのは、ゴーストの実行系が 1 つも動いていない間だけ（初回の起動の前・降ろした直後・後始末で降ろした後）。動いている間の書き込みはそのゴーストの記憶の書き手（sylphya の `persist_put`・書き手の中で直列）を通す。記憶の保存は「読んで重ねて書く」ので、2 つの書き手が同時に書くと片方が消えうるため（SessionMark の不変条件）。⑵ 迎え入れの段を問わず、定常到達で「`LastUsed` と印＝今のゴーストの名前」を同じ手順で書く（切替先の段では印は既に切替先の名前・既定の段では `LastUsed` は既に既定＝どちらも同じ値の上書きで害は無い。段で分けないので分岐が増えない）。⑶ 切替先が定常に入る前に自ら終わった（`Welcoming` での `Fault` 以外の停止＝今日どおりの終了）ときは、きれいな終わりなので印は消え、`LastGhost` は既定のまま（定常に入らなかったゴーストは記憶しない）。
+流れの判断: ⑴ UI スレッドが App スコープへ直接書くのは、ゴーストの実行系が 1 つも動いていない間だけ（初回の起動の前・降ろした直後・後始末で降ろした後）。動いている間の書き込みはそのゴーストの記憶の書き手（sylphya の `persist_put`・書き手の中で直列）を通す。記憶の保存は「読んで重ねて書く」ので、2 つの書き手が同時に書くと片方が消えうるため（SessionMark の不変条件）。⑵ 迎え入れの段を問わず、定常到達で「`LastUsed` と印＝今のゴーストの名前」を同じ手順で書く（切替先の段では印は既に切替先の名前・既定の段では `LastUsed` は既に既定＝どちらも同じ値の上書きで害は無い。段で分けないので分岐が増えない）。⑵' 印は「今動いているゴースト」なので、前のゴーストを降ろし終えるまで（送り出しの握手・降ろす最中）は前のゴーストの名前のまま。そこで落ちれば次の起動の Ref7＝前のゴースト（落ちたのは前のゴースト）。Ref7＝切替先になるのは降ろし終えた後（迎え入れ・既定への戻し）に落ちたとき。argv で始まったプロセスでは印の部分を書かない（`LastGhost` の部分は同じ）。⑶ 切替先が定常に入る前に自ら終わった（`Welcoming` での `Fault` 以外の停止＝今日どおりの終了）ときは、きれいな終わりなので印は消え、`LastGhost` は既定のまま（定常に入らなかったゴーストは記憶しない）。
 
 ### Flow 7: きれいな終わりと OS のセッションの終了（2026-09-27・要件 12.2・12.9〜12.11）
 
@@ -386,7 +388,7 @@ sequenceDiagram
     W-->>OS: 既定の手続き TRUE
     OS->>W: WM_ENDSESSION wParam TRUE
     W->>SE: OnSessionEnd の関数 World を借りたまま
-    SE->>SE: SessionEnded を立てる 切替の予約を下ろす quit_app SessionEnd
+    SE->>SE: SessionEnded を立てる 切替の予約を下ろす 未処理の運行の通知を今日の規則で捌く quit_app SessionEnd
     SE->>G: GhostSession shutdown System
     G->>G: OnClose NOTIFY Ref0 system と unload と join と記憶の書き出し
     SE->>FS: session_mark_verdict が Clear なら印を消す
@@ -395,7 +397,7 @@ sequenceDiagram
     Note over OS: この後いつ終了させられてもよい
 ```
 
-流れの判断: ⑴ `WM_ENDSESSION` から戻った後はいつプロセスが終わってもよいので、`run()` の後の後始末に頼らず窓の手続きの中で同期に済ませる。⑵ OS はトップレベル窓ごとに送る（ゴースト窓は複数）ので、`SessionEnded` で 2 通目以降を読み捨てる。⑶ 別れの台詞は流さない: この処理の間 UI スレッドは塞がって台詞を描けず、戻れば終了させられうる。`GhostSession::shutdown(CloseReason::System)` は kanade へ `ForceQuit` を送り、kanade の既存の `force_quit` が `OnClose` を Ref0＝`system` の NOTIFY で送ってから SHIORI を降ろす（新しい経路を作らない）。⑷ 戻った後もプロセスが続けば、後から届く停止通知は予約が無いので今日どおり `quit_app`（2 度目は `app_exit_again` の `debug!`）、`run()` の後の `fn main` は `SessionEnded` を見て告知も印も触らない。⑸ `WM_QUERYENDSESSION` は既定の手続きが TRUE を返す（拒まない）ので受け手を置かない。`WM_ENDSESSION` の wParam＝FALSE（取りやめ）は何もしない。⑹ 切替の途中で全窓が 0 枚の一瞬に OS が終わると、トップレベル窓が無いので受け手が居ない＝印が残り次の起動は Ref6/7 になる（数百 ms の窓・受け入れる）。
+流れの判断: ⑴ `WM_ENDSESSION` から戻った後はいつプロセスが終わってもよいので、`run()` の後の後始末に頼らず窓の手続きの中で同期に済ませる。⑵ OS はトップレベル窓ごとに送る（ゴースト窓は複数）。最初の受け手の `quit_app` が全ゴースト窓の entity を破棄するので、残りの窓への `WM_ENDSESSION` は wintf の `WM_ENDSESSION` の受け手の破棄済みの打ち切り（`DESPAWNED_SKIP_TAG` の `debug!`）で止まるか、窓が既に壊れていれば送信そのものが失敗する＝`on_os_session_end` に届くのは 1 回。`SessionEnded` による 2 通目以降の読み捨ては守りの判定として残す。⑵' 受け手は `quit_app(SessionEnd)` の前に、受け口にまだ捌いていない運行の通知を今日の規則で捌く（予約は外した後）。先に届いていた `Fault` の停止が最初の出所として勝ち（印は残る・終了コード 1）、`SessionEnd` が `Fault` を覆い隠して印を消す競合を作らない。切替先の定常到達の通知が未処理で残っていた場合は予約を外した後なので記憶を書かない（`LastGhost` は既定のまま＝次の起動は既定で起きる・受け入れる）。⑶ 別れの台詞は流さない: この処理の間 UI スレッドは塞がって台詞を描けず、戻れば終了させられうる。`GhostSession::shutdown(CloseReason::System)` は kanade へ `ForceQuit` を送り、kanade の既存の `force_quit` が `OnClose` を Ref0＝`system` の NOTIFY で送ってから SHIORI を降ろす（新しい経路を作らない）。⑷ 戻った後もプロセスが続けば、後から届く停止通知は予約が無いので今日どおり `quit_app`（2 度目は `app_exit_again` の `debug!`）、`run()` の後の `fn main` は `SessionEnded` を見て告知も印も触らない。⑸ `WM_QUERYENDSESSION` は既定の手続きが TRUE を返す（拒まない）ので受け手を置かない。`WM_ENDSESSION` の wParam＝FALSE（取りやめ）は何もしない。⑹ 切替の途中で全窓が 0 枚の一瞬に OS が終わると、トップレベル窓が無いので受け手が居ない＝印が残り次の起動は Ref6/7 になる（数百 ms の窓・受け入れる）。
 
 ## Requirements Traceability
 
@@ -495,7 +497,7 @@ sequenceDiagram
 | 12.1 | 起こす前に印を書く（戻しは定常到達で既定の名前へ） | SessionMark・Main・GhostSwitch | `write_session_mark`・`write_switch_drop`・`record_steady_memory` | Flow 5・6 |
 | 12.2, 12.3 | きれいな終わりでだけ消す・それ以外は残す | Main・SessionEnd | `session_mark_verdict`・`clear_session_mark` | Flow 5・7 |
 | 12.4 | 印が在れば `LastGhost` を読まず既定へ・Ref6/7 | BootConfig・Main | `resolve_boot_from`（`memory: None`）・`first_boot_origin` | Flow 5 |
-| 12.5 | argv の起動は印を読まず書かず消さない | BootConfig・Main | `argv_ghost` の分岐・`MarkVerdict::Untouched` | Flow 5 |
+| 12.5 | argv で始まったプロセスは印を読まず書かず消さない（切替の後も） | BootConfig・Main・GhostSwitch | `argv_ghost` の分岐・`BootContext.argv_session`・`MarkVerdict::Untouched` | Flow 5 |
 | 12.6 | 降ろした時点で `LastGhost` 既定＋印＝切替先・定常到達で `LastUsed` | GhostSwitch | `write_switch_drop`・`record_steady_memory` | Flow 6 |
 | 12.7, 12.8 | 戻しの間は印＝切替先・既定の定常で既定の名前・致命でもそのまま | GhostSwitch | `switch_to_default`（印に触れない）・`record_steady_memory` | Flow 6 |
 | 12.9 | `WM_ENDSESSION` で窓の手続きの中できれいに終わる | SessionEnd・wintf | `OnSessionEnd`・`on_os_session_end`・`ExitOrigin::SessionEnd` | Flow 7 |
@@ -703,10 +705,10 @@ pub(crate) enum WelcomeAttempt { Target, Default }
 - `request_ghost_switch`: ⑴ `SwitchInFlight` が在れば `warn!(event="ghost_switch_busy")`・`Busy`。⑵ `BootContext.root` で `catalog::list_ghosts` → `resolve_switch_target` → `None` なら `warn!(event="ghost_switch_unknown", name)`・`NotFound`（降ろさず・`OnGhostChanging` も送らない）。⑶ `sakura_name` は `catalog::sakura_name(&target.dir)` で切替先だけ読む（要件 8.7）。`prev` は `GhostSlot` の `GhostSession` の `mount().names` と `BootContext.current` から取る。⑷ 目印を立て、`KanadeMsg::ChangeGhost(ChangeRequest{target: ChangeTarget{sakura_name, name, dir: 絶対パス}, origin, raise_event})` を `GhostSession::kanade()` へ送る。`info!(event="ghost_switch_requested", from, to, raise_event, origin)`。
 - `drain_change_requests`（`Input` 段の系）: `ChangeRx` が無ければ無操作。届いた要求ごとに `request_ghost_switch(world, SwitchRequest{ghost: Name(name), raise_event, origin: Automatic})`。
 - `on_ghost_stopped(stopped)`: Flow 3 のとおり。`SendOff` ＋ `handoff: Some` → `switch_to(world, handoff)`。`SendOff` ＋ `handoff: None`（kanade が要求を受理しないまま止まった＝利用者の終了と競合）→ `warn!(event="ghost_switch_not_accepted", cause)`・目印を下ろし `quit_app(world, ExitOrigin::KanadeStopped(cause))`（今日どおり・`Fault` なら告知と終了コード 1）。`Welcoming{Target}` ＋ `Fault` → `error!(event="ghost_switch_target_fault", ghost, reason)` → `switch_to_default(world, fallen_name)`。`Welcoming{Default}` ＋ `Fault` → 目印を下ろし `quit_app(world, ExitOrigin::KanadeStopped(Fault))`（完了 `shiori-fault-notice` の告知と終了コード 1）。`Welcoming{..}` ＋ `Fault` 以外 → `info!(ghost_switch_target_quit)`・目印を下ろし `quit_app(world, ExitOrigin::KanadeStopped(cause))`。
-- `switch_to(handoff)`（切替先を起こす）: ① `GhostSlot` から `GhostSession` を取り出し `shutdown(CloseReason::System)`（`Err` は `error!` の上で続ける＝戻す先は無い）・所要 ms を記録。①' （2026-09-27・要件 12.6）降ろし終えた直後（前のゴーストの記憶の書き手は join 済み＝動いている実行系は 0）に `write_switch_drop(app_profile_dir, &target.name)`＝`LastGhost`＝既定・印＝切替先を 1 回の書き込みで。`take_down` 自身は記憶に触れない（`switch_to_default` の降ろしでは印を切替先のまま残すため、書くのは `switch_to` の側）。② `close_windows_for_restart`。③ `resolve_balloon_for_ghost(root, &target.dir)`（`Err` は `error!`）。④ 窓の準備 `reopen_ghost_windows(world, &cfg, closed) -> PreparedWindows`（同期・descript の読取まで・窓はまだ作らない・`Err` は `error!`）。⑤ `boot_ghost_strict(world, inputs{boot_origin: ChangedFrom{prev.sakura_name, handoff.script, prev.name, prev.dir}}, &prepared.descript, &GhostDecision{route: Switched, dir, folder: Some}, &balloon)`（`Err` は `error!`）。③〜⑤ のどれかが失敗 → 窓は投函していないので何も生えない。切替先が既定（`folder == DEFAULT_GHOST_FOLDER`）なら `fatal(world, reason)`、そうでなければ `switch_to_default(world, target.name)`。⑥ 成功 → 窓の投函 `commit_ghost_windows(world, prepared)`・`GhostSlot` へ戻し、`BootContext.current` を切替先で更新、`stage = Welcoming{Target}`、`info!(event="ghost_switch_booted", ghost)`。
+- `switch_to(handoff)`（切替先を起こす）: ① `GhostSlot` から `GhostSession` を取り出し `shutdown(CloseReason::System)`（`Err` は `error!` の上で続ける＝戻す先は無い）・所要 ms を記録。①' （2026-09-27・要件 12.6）降ろし終えた直後（前のゴーストの記憶の書き手は join 済み＝動いている実行系は 0）に `write_switch_drop(app_profile_dir, (!ctx.argv_session).then_some(&target.name))`＝`LastGhost`＝既定・印＝切替先を 1 回の書き込みで（argv で始まったプロセスは `LastGhost` だけ）。`take_down` 自身は記憶に触れない（`switch_to_default` の降ろしでは印を切替先のまま残すため、書くのは `switch_to` の側）。② `close_windows_for_restart`。③ `resolve_balloon_for_ghost(root, &target.dir)`（`Err` は `error!`）。④ 窓の準備 `reopen_ghost_windows(world, &cfg, closed) -> PreparedWindows`（同期・descript の読取まで・窓はまだ作らない・`Err` は `error!`）。⑤ `boot_ghost_strict(world, inputs{boot_origin: ChangedFrom{prev.sakura_name, handoff.script, prev.name, prev.dir}}, &prepared.descript, &GhostDecision{route: Switched, dir, folder: Some}, &balloon)`（`Err` は `error!`）。③〜⑤ のどれかが失敗 → 窓は投函していないので何も生えない。切替先が既定（`folder == DEFAULT_GHOST_FOLDER`）なら `fatal(world, reason)`、そうでなければ `switch_to_default(world, target.name)`。⑥ 成功 → 窓の投函 `commit_ghost_windows(world, prepared)`・`GhostSlot` へ戻し、`BootContext.current` を切替先で更新、`stage = Welcoming{Target}`、`info!(event="ghost_switch_booted", ghost)`。
 - `switch_to_default(fallen_name)`: 既定ゴーストが目録に無ければ `fatal`。在れば「切替先を降ろして」（`GhostSlot` に切替先が在れば `shutdown`・窓を閉じる。⑤ で失敗したときは `GhostSlot` が空で窓も 0 枚なので閉じるものは無い）から ③〜⑥ を `boot_origin: Halted{ghost_name: fallen_name}`・`GhostDecision{route: Default}` で行う。失敗 → `fatal`。成功 → `stage = Welcoming{Default}`。`OnGhostChanged` は送らない（`Halted` の根は無い）。告知は出さない（要件 6.3）。記憶には触れない（`LastGhost` は `switch_to` の降ろしで既に既定・印は切替先のまま＝戻しの途中や致命で落ちても次の起動は Ref7＝切替先・要件 12.7・12.8）。既定の `on_boot_ok`（経路 `Default`）は今日どおり起動の呼び出しが返った時点で `LastUsed`（既定）を書く。
 - `fatal(reason)`: 目印を下ろし `quit_app(world, ExitOrigin::GhostFallbackFailed(ShioriFault{kind: Internal, reason}))`（`main` の後始末が今日の `Fault` の経路で告知し終了コード 1）。
-- `on_notice(Steady)`: `stage == Welcoming{..}` → 目印を外し `info!(event="ghost_switch_done", ghost, attempt)`。2026-09-27（要件 12.6・12.7）: 目印を外す前に `record_steady_memory(world)`＝`GhostSlot` の `GhostSession::runtime()` の記憶の書き手で ⑴ `crate::record_last_used(runtime, &ctx.current.ghost, &ctx.current.balloon)`（`LastGhost`＝今のゴースト・Ghost スコープの `LastBalloon`／`LastShell`）と ⑵ `persist_put(App, [(LastRunning, 今のゴーストの名前)])` を投函する（段を問わず同じ手順・書き手の中で直列）。置き場か実行系か文脈が無ければ `warn!(event="steady_memory_not_recorded", reason)` で続ける（次の起動は `LastGhost`＝既定で起きる＝害は既定へ倒れるだけ）。目印が無ければ `debug!`（初回起動・LogSink の起動の定常到達）。`on_notice(ChangeCancelled{reason})`: 目印を外し `info!(event="ghost_switch_cancelled", reason)`。目印が無ければ `warn!`。
+- `on_notice(Steady)`: `stage == Welcoming{..}` → 目印を外し `info!(event="ghost_switch_done", ghost, attempt)`。2026-09-27（要件 12.6・12.7）: 目印を外す前に `record_steady_memory(world)`＝`GhostSlot` の `GhostSession::runtime()` の記憶の書き手で ⑴ `crate::record_last_used(runtime, &ctx.current.ghost, &ctx.current.balloon)`（`LastGhost`＝今のゴースト・Ghost スコープの `LastBalloon`／`LastShell`）と ⑵ `argv_session` が偽なら `persist_put(App, [(LastRunning, 今のゴーストの名前)])` を投函する（段を問わず同じ手順・書き手の中で直列）。置き場か実行系か文脈が無ければ `warn!(event="steady_memory_not_recorded", reason)` で続ける（次の起動は `LastGhost`＝既定で起きる＝害は既定へ倒れるだけ）。目印が無ければ `debug!`（初回起動・LogSink の起動の定常到達）。`on_notice(ChangeCancelled{reason})`: 目印を外し `info!(event="ghost_switch_cancelled", reason)`。目印が無ければ `warn!`。
 
 **Dependencies**
 - Inbound: NoticePhase（`frame.rs`）・GhostFrame・`drain_change_requests`（P0）。
@@ -772,9 +774,10 @@ pub(crate) enum GhostRoute { Argv, Memory, Only, Default, Random, Switched }   /
 pub(crate) fn read_session_mark(app_profile_dir: &Path) -> Option<String>;
 /// 印を書く（初回の起動の前）。info!(session_mark_written)／書けなければ warn!(session_mark_write_degraded)。
 pub(crate) fn write_session_mark(app_profile_dir: &Path, running: &str);
-/// 切替で降ろした直後: LastGhost＝DEFAULT_GHOST_FOLDER と 印＝target を 1 回の save_scope で。
+/// 切替で降ろした直後: LastGhost＝DEFAULT_GHOST_FOLDER と（mark が Some なら）印＝mark を 1 回の save_scope で。
+/// argv で始まったプロセスは mark＝None（印に触れない・要件 12.5）。
 /// info!(switch_drop_recorded)／warn!(switch_drop_record_degraded)。
-pub(crate) fn write_switch_drop(app_profile_dir: &Path, target: &str);
+pub(crate) fn write_switch_drop(app_profile_dir: &Path, mark: Option<&str>);
 /// きれいな終わり: 印を空文字にする。info!(session_mark_cleared)／warn!(session_mark_clear_degraded)。
 pub(crate) fn clear_session_mark(app_profile_dir: &Path);
 /// 印に書く名前: 目録の同じフォルダの descript の name、無ければフォルダ名（argv 以外の決定だけが来る）。
@@ -783,16 +786,18 @@ pub(crate) fn running_name(root: &BasewareRoot, ghost: &GhostDecision) -> String
 - 実装は置き換え前の `save_app`／`read_last`（`save_scope`／`load_scope` の App 版）をそのまま使う。
 - **不変条件（UI スレッドの直接書き込みの時点）**: `write_session_mark`・`write_switch_drop`・`clear_session_mark` を呼ぶのは、ゴーストの実行系が 1 つも動いていない間だけ（初回の起動の前・`switch_to` の降ろした直後・後始末と OS のセッションの終了で降ろした後）。実行系が動いている間の App スコープの書き込み（`on_boot_ok` の `LastUsed`・定常到達の `record_steady_memory`）はそのゴーストの記憶の書き手（sylphya）を通す。記憶の保存は「読んで重ねて書く」ので、UI スレッドと sylphya が同時に同じファイルを書くと片方が消えうるため。`GhostRuntime::shutdown` は sylphya の受信箱を処理し切ってから join するので、降ろした後の直接書き込みは先の投函の後に着く。
 - `PersistKey::LastRunning`（`areka.last.running`・`[last] running`）。空文字は「無し」と読む（消去は空文字を書く＝既存の鍵と同じ）。
+- **argv のセッション**: `BootContext` に `argv_session: bool` を足し、`fn main` が `install_boot_context` で 1 度だけ `ghost_decision.route == Argv` を詰める（以後変えない）。argv はプロセスのセッションの性質で、切替後の `current.ghost.route`（`Switched` になる）では判断しない。印に触れる 4 か所（`boot_first_ghost` の書き込み・`switch_to` の `write_switch_drop` の印の部分・`record_steady_memory` の印の部分・きれいな終わりの判定）はすべてこの旗を見る。`LastGhost`／`LastUsed` の書き方は旗によらない。
+- **印の意味**: 「今動いているゴースト」。切替で前のゴーストを降ろし終えるまでは前のゴーストの名前のまま（送り出しと降ろす最中に落ちれば次の起動の Ref7＝前のゴースト＝そのとき落ちたゴースト）。降ろし終えた後（迎え入れ・既定への戻し）は切替先の名前。
 
 **きれいな終わりの判定**（`main.rs`・後始末と SessionEnd が共有）:
 ```rust
 pub(crate) enum MarkVerdict { Clear, Keep(&'static str), Untouched }
-/// first: 最初の終了の出所・ghost: 今のゴーストの決定・run_ok: run() の成否・down_ok: 降ろす処理の成否。
-pub(crate) fn session_mark_verdict(first: Option<&ExitOrigin>, ghost: &GhostDecision, run_ok: bool, down_ok: bool) -> MarkVerdict;
+/// first: 最初の終了の出所・argv_session: BootContext の旗・run_ok: run() の成否・down_ok: 降ろす処理の成否。
+pub(crate) fn session_mark_verdict(first: Option<&ExitOrigin>, argv_session: bool, run_ok: bool, down_ok: bool) -> MarkVerdict;
 ```
 | 条件（上から順に） | 判定 | 記録 |
 |---|---|---|
-| 今のゴーストの経路が `Argv` | `Untouched` | `debug!(session_mark_untouched_argv)` |
+| `argv_session` が真（argv で始まったプロセス・切替の後も） | `Untouched` | `debug!(session_mark_untouched_argv)` |
 | 出所が無い（`FirstExit` 無し） | `Keep("no_exit_origin")` | `info!(session_mark_kept)` |
 | `fault_of(出所)` が `Some`（SHIORI の失敗・既定へ戻せない致命） | `Keep("fault")`／`Keep("switch_fatal")` | 同上 |
 | `run_ok` が偽 | `Keep("run_failed")` | 同上 |
@@ -806,10 +811,11 @@ pub(crate) fn session_mark_verdict(first: Option<&ExitOrigin>, ghost: &GhostDeci
 - 据え付け: `register_systems` の後に `BootContext` と `GhostBootInputsSource`（`GhostBootInputs::production` を helper のパスと停止通知の送り口の写しで閉じたもの）を挿す。`boot_ghost` の戻りを `GhostSlot(Some(session))` として World へ挿す（ローカル変数には持たない）。
 - `run()` の後: `GhostSlot` から取り出す（`None` なら降ろすものが無い）。告知の場面の `ghost_name`／`ghost_root` は `GhostSession::names()` と `BootContext.current.cfg.ghost_root` から組む（切替後の今のゴースト）。`fatal`（`GhostFallbackFailed`）で終わったときは起こそうとして失敗したのが既定ゴーストなので、`ghost_name`／`ghost_root` は既定ゴーストのフォルダ名と `root.ghost_dir(DEFAULT_GHOST_FOLDER)` で組む（`BootContext.current` は最後に起きた別のゴーストを指したままなので使わない）。`fault_of` が `Some` なら `AlertScene::ShioriFault`（`GhostFallbackFailed` も同じ場面）。
 - 〔2026-09-27 裁定 13 で置き換え〕置き換え前は、単独起動の `Fault` のとき後始末で `record_halt` を呼んでいた（`should_record_halt`）。置き換え後は次のとおり。
-- 起こす前の印（要件 12.1・12.5）: `boot_first_ghost` は `ghost.route != Argv` のとき、起こす前に `write_session_mark(ctx.app_profile_dir, &running_name(&ctx.root, ghost))`（ゴーストの実行系はまだ 1 つも無い）。argv の起動は印を書かない。
+- 起こす前の印（要件 12.1・12.5）: `boot_first_ghost` は `BootContext.argv_session` が偽のとき、起こす前に `write_session_mark(ctx.app_profile_dir, &running_name(&ctx.root, ghost))`（ゴーストの実行系はまだ 1 つも無い）。argv の起動は印を書かない。
 - `on_boot_ok` は位置永続の導管の挿入と、記憶を書く部分 `pub(crate) fn record_last_used(runtime, ghost, balloon)`（シェルのフォルダ名の取り出し＋`LastUsed::record`）に分け、経路が `Switched` のときは書かず `debug!(event="last_used_deferred")`（定常到達で `ghost_switch::record_steady_memory` が同じ関数を呼ぶ・要件 12.6）。それ以外の経路は今日どおり起動の呼び出しが返った時点で書く。
-- きれいな終わりの消去（要件 12.2・12.3）: `after_run` は `session_mark_verdict(first, &ctx.current.ghost, run_ok, down_ok)` の材料（`first` と今のゴーストと記憶の置き場）を組み、後始末の閉包が `session.shutdown` の**後**に判定して `Clear` なら `clear_session_mark(app_profile_dir)`、`Keep(reason)` なら `info!(event="session_mark_kept", reason)`。`run_ok` は `finish_after_run` へ渡す前に `run.is_ok()` で控える。
-- `after_run` は `SessionEnded`（下の SessionEnd）が World に在れば、告知の場面を組まず（`scene: None`）印の判定も行わない（OS のセッションの終了の中で済んでいる・`info!(event="session_end_already_handled")`）。終了コードは今日どおり `fault_of` で決める。
+- きれいな終わりの消去（要件 12.2・12.3）: `after_run` は `session_mark_verdict(first, ctx.argv_session, run_ok, down_ok)` の材料（`first` と argv の旗と記憶の置き場）を組み、後始末の閉包が `session.shutdown` の**後**に判定して `Clear` なら `clear_session_mark(app_profile_dir)`、`Keep(reason)` なら `info!(event="session_mark_kept", reason)`。`run_ok` は `finish_after_run` へ渡す前に `run.is_ok()` で控える。
+- `after_run` は `SessionEnded`（下の SessionEnd）が World に在れば、告知の場面を組まず（`scene: None`）印の判定も行わない（OS のセッションの終了の中で済んでいる・`info!(event="session_end_already_handled")`）。**終了コード**: 今日の `AfterRun.fault` は `scene.is_some()` から作っているので、告知の場面を組まない分岐でも終了コードが変わらないよう、`fault` を `fault_of(first).is_some()` から直接作る形に改める（場面の有無と切り離す）。
+- 後始末の置き場が空のときの記録 `ghost_slot_empty` の文言（今は「置き場が空なのは切替の途中の致命だけ」）を「切替の途中の致命か、OS のセッションの終了で降ろし済み」に改める。
 
 #### GhostFrame（`crates/areka/src/menu/ghost_frame.rs`）
 
@@ -821,6 +827,7 @@ pub(crate) fn session_mark_verdict(first: Option<&ExitOrigin>, ghost: &GhostDeci
 
 - `ExitOrigin::GhostFallbackFailed(ShioriFault)`。`fault_of`: `KanadeStopped(Fault(f)) | GhostFallbackFailed(f) => Some(f)`。
 - 2026-09-27: `ExitOrigin::SessionEnd`（OS のシャットダウン・再起動・ログオフ・`fault_of` は `None`）。`attach_os_close_request` は同じ `Added<WindowHandle>` の窓へ `OnCloseRequest(on_ghost_os_close)` に並べて `OnSessionEnd(session_end::on_os_session_end)` を差す（系は増やさない）。
+- `close_windows_for_restart` は窓を消したあと `world.remove_resource::<GhostWindows>()` を行う（消えた窓の `Entity` を装着のゲートに見せない）。`quit_app` は変えない。`#[cfg_attr(not(test), allow(dead_code))]` を外す。
 
 #### SessionEnd（`crates/areka/src/session_end.rs`・wintf の受け口・2026-09-27・要件 12.9〜12.11）
 
@@ -837,19 +844,20 @@ pub(crate) fn session_mark_verdict(first: Option<&ExitOrigin>, ghost: &GhostDeci
 pub struct OnSessionEnd(pub fn(world: &mut World, entity: Entity));
 ```
 - `ecs/window_proc/mod.rs` の `dispatch_window_message` に `WM_ENDSESSION => lifecycle::WM_ENDSESSION(..)` の腕を 1 つ足す。`WM_QUERYENDSESSION` の腕は足さない（`None`＝既定の手続きが TRUE を返す＝終了を拒まない）。
-- `lifecycle::WM_ENDSESSION`: wParam＝0（取りやめ）→ `debug!(event="os_session_end_cancelled")`。`try_borrow_mut` に失敗（World が借用中＝モーダルの中などの再入）→ `warn!(event="os_session_end_world_busy")`（受け手を呼べない＝印が残り次の起動が Ref6/7 になる、と帰結を書く）。entity が破棄済み → `DESPAWNED_SKIP_TAG` の `debug!`。`OnSessionEnd` を持つ → `info!(event="os_session_end", entity, lparam)` の上で関数を呼ぶ。持たない → `debug!`。戻り値はどの腕も `Some(LRESULT(0))`（`WM_ENDSESSION` を処理したら 0 を返す）。
+- **World の借用中の到着**: 本番の窓の手続きの橋渡し `runtime/wndproc_bridge.rs` の `make_wndproc` は、`world.try_borrow()` に失敗すると記録なしで `None`（既定の手続き）を返すので、借用中に届いた `WM_ENDSESSION` は `lifecycle` の受け手に届かない。そこでこの「借用中は飛ばす」腕で、`msg == WM_ENDSESSION` かつ wParam が真のときだけ `warn!(event="os_session_end_world_busy")`（「受け手を呼べない＝印が残り次の起動が Ref6/7 付きになる」と帰結を書く）を 1 件残してから `None` を返す（他のメッセージの扱いは変えない）。`lifecycle::WM_ENDSESSION` の中の `try_borrow_mut` の失敗（橋渡しを通らない呼び出し）も同じ `warn!` にする。
+- `lifecycle::WM_ENDSESSION`: wParam＝0（取りやめ）→ `debug!(event="os_session_end_cancelled")`。`try_borrow_mut` に失敗 → 上の `warn!`。entity が破棄済み（最初の受け手の `quit_app` が全ゴースト窓の entity を破棄した後に残りの窓へ届いた 2 通目以降はここで止まる） → `DESPAWNED_SKIP_TAG` の `debug!`。`OnSessionEnd` を持つ → `info!(event="os_session_end", entity, lparam)` の上で関数を呼ぶ。持たない → `debug!`。戻り値はどの腕も `Some(LRESULT(0))`（`WM_ENDSESSION` を処理したら 0 を返す）。
 
 **areka 側**:
 ```rust
-/// OS のセッションの終了を 1 回処理した印（Resource）。2 通目以降と `fn main` の後始末が見る。
+/// OS のセッションの終了を 1 回処理した印（Resource）。`fn main` の後始末が見る。2 通目以降の読み捨ては守りの判定
+/// （本番では最初の受け手の `quit_app` が全ゴースト窓の entity を破棄するので、残りの窓への送信は wintf の破棄済みの打ち切りで止まり、ここまで来ない）。
 #[derive(Resource)] pub(crate) struct SessionEnded;
 /// OnSessionEnd に差す関数。
 pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity);
 ```
-- 手順: ① `SessionEnded` が在れば `debug!(event="os_session_end_again")` で戻る。無ければ挿して `info!(event="os_session_end_begin")`。② `SwitchInFlight` が在れば外し `info!(event="ghost_switch_cancelled", reason="session_end")`（後から届く停止通知が切替として切替先を起こさないため）。③ `quit_app(world, ExitOrigin::SessionEnd)`（全窓を閉じ・最初の出所を残し・終了を指示。既に出所があれば今日どおり最初が勝つ）。④ `GhostSlot` から取り出して `shutdown(CloseReason::System)`（kanade の既存の `force_quit` が `OnClose` を Ref0＝`system` の NOTIFY で送り、SHIORI を降ろし、各アクターを join し、記憶を書き出す）。置き場が空なら `Ok`。失敗は `error!(event="os_session_end_down_failed")`。⑤ `session_mark_verdict(FirstExit, &ctx.current.ghost, true, down_ok)` → `Clear` なら `clear_session_mark`・`Keep` なら `info!(session_mark_kept)`。⑥ `info!(event="os_session_end_done", ms)`（①〜⑤の所要）。
+- 手順: ① `SessionEnded` が在れば `debug!(event="os_session_end_again")` で戻る。無ければ挿して `info!(event="os_session_end_begin")`。② `SwitchInFlight` が在れば外し `info!(event="ghost_switch_cancelled", reason="session_end")`（後から届く停止通知が切替として切替先を起こさないため）。②' 受け口 `KanadeNoticeRx` にまだ捌いていない運行の通知があれば、`frame::run_ghost_quit_phase(world)` を同期に 1 回呼んで今日の規則で捌く（予約は②で外してあるので、停止は切替として扱われず今日どおり `quit_app(KanadeStopped(cause))`＝先に届いていた `Fault` が最初の出所として勝ち、印は残る。切替先を起こす経路には入らない）。③ `quit_app(world, ExitOrigin::SessionEnd)`（全窓を閉じ・最初の出所を残し・終了を指示。既に出所があれば今日どおり最初が勝つ）。④ `GhostSlot` から取り出して `shutdown(CloseReason::System)`（kanade の既存の `force_quit` が `OnClose` を Ref0＝`system` の NOTIFY で送り、SHIORI を降ろし、各アクターを join し、記憶を書き出す）。置き場が空なら `Ok`。失敗は `error!(event="os_session_end_down_failed")`。⑤ `session_mark_verdict(FirstExit, ctx.argv_session, true, down_ok)` → `Clear` なら `clear_session_mark`・`Keep` なら `info!(session_mark_kept)`。⑥ `info!(event="os_session_end_done", ms)`（①〜⑤の所要）。
 - 告知（メッセージボックス）は出さない（出所が既に `Fault` でも。記録は `app_exit` と kanade の `error!` に在る）。
 - Risks: ⑴ `shutdown` の join は UI スレッドを塞ぐ。切替の `take_down` が同じ処理を系の中で同期に行い実機で 1 ms（`signoff.md`）だったので同じ前提に立つ。helper のプロセスが OS から先に終了させられていれば、SHIORI の呼び出しは既存の送信の期限で失敗し（`Fault` の記録）、降ろす処理は続く。⑵ 既定の手続きの期限（OS が「終了を妨げている」画面を出すまでの数秒）を越える恐れは `os_session_end_done` の ms で実機サインオフで測る。⑶ 全窓が 0 枚の切替の一瞬に OS が終わると受け手が居ない（Flow 7 ⑹）。
-- `close_windows_for_restart` は窓を消したあと `world.remove_resource::<GhostWindows>()` を行う（消えた窓の `Entity` を装着のゲートに見せない）。`quit_app` は変えない。`#[cfg_attr(not(test), allow(dead_code))]` を外す。
 
 ## Data Models
 
@@ -866,7 +874,7 @@ pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity);
 | 鍵 | スコープ | 書く時 | 読む時 |
 |---|---|---|---|
 | `areka.last.ghost` | App | 初回の起動の `on_boot_ok`（argv 以外・起動の呼び出しが返った時点）・切替の降ろした直後（`write_switch_drop`＝既定）・切替先と戻しの定常到達（`record_steady_memory`）・既定への戻しの `on_boot_ok`（`Default`） | 次回の起動解決（印が在れば読まない） |
-| `areka.last.running`（起動中の印・2026-09-27） | App | 初回の起動の前（`write_session_mark`・argv 以外）・切替の降ろした直後（`write_switch_drop`＝切替先）・定常到達（`record_steady_memory`＝今のゴースト）。消すのはきれいな終わり（`clear_session_mark`） | 次回の起動解決（`read_session_mark`・argv 以外） |
+| `areka.last.running`（起動中の印・2026-09-27） | App | 初回の起動の前（`write_session_mark`・argv 以外）・切替の降ろした直後（`write_switch_drop`＝切替先・argv のセッションでは書かない）・定常到達（`record_steady_memory`＝今のゴースト・argv のセッションでは書かない）。消すのはきれいな終わり（`clear_session_mark`） | 次回の起動解決（`read_session_mark`・argv 以外） |
 | `areka.last.balloon`／`areka.last.shell` | Ghost（切替先） | 初回は `on_boot_ok`・切替先は定常到達（`record_steady_memory`） | 切替先のバルーンの解決 |
 | `areka.boot.count` | Ghost（切替先） | 初回起動の `first_boot_epilogue`（今日の規則） | `apply_boot_record_gate` |
 
@@ -909,8 +917,8 @@ pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity);
 | きれいに終わらなかった（出所が失敗・`run()` の失敗・降ろす失敗・出所なし） | `info!(session_mark_kept, reason)` | 印を残す |
 | 定常到達の記憶を書く相手が無い（置き場・実行系・文脈が無い） | `warn!(steady_memory_not_recorded, reason)` | 続ける（`LastGhost` は既定のまま） |
 | `WM_ENDSESSION` の wParam＝FALSE | `debug!(os_session_end_cancelled)`（wintf） | 何もしない |
-| `WM_ENDSESSION` が World の借用中に届いた | `warn!(os_session_end_world_busy)`（wintf） | 受け手を呼べない（印が残る） |
-| セッションの終了の 2 通目以降 | `debug!(os_session_end_again)` | 読み捨て |
+| `WM_ENDSESSION`（真）が World の借用中に届いた | `warn!(os_session_end_world_busy)`（wintf の `runtime/wndproc_bridge.rs` の借用中の腕・`lifecycle` の `try_borrow_mut` の失敗も同じ） | 受け手を呼べない（印が残る） |
+| セッションの終了の 2 通目以降（残りのゴースト窓へ届いたもの） | wintf の破棄済みの打ち切り `debug!`（本番の通常）／`debug!(os_session_end_again)`（守りの判定） | 読み捨て |
 | セッションの終了で降ろす処理が失敗 | `error!(os_session_end_down_failed)` | 印を残して戻る |
 
 ### Monitoring
@@ -940,10 +948,10 @@ pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity);
 - `app_exit_tests.rs`: `close_windows_for_restart` の後 `GhostWindows` が無い・`fault_of(GhostFallbackFailed)` が `Some`。
 - 〔2026-09-27 裁定 13 で置き換え〕`boot_resolve_tests.rs`／`main_halt_record_tests.rs` の `record_halt`・`take_last_halted`・`should_record_halt` の固定は、下の要件 12 のテストへ書き換える（置き換え無しに消さない）。
 - `boot_resolve_tests.rs`（要件 12.1・12.6）: 印の往復（書く → 読む → 消す＝空文字は無し）・`write_switch_drop` の 1 回で `LastGhost == emo2` と印がそろう・書けない置き場（App の置き場が普通のファイル）でそれぞれ `warn!` 1 件で戻る・`running_name` が `name` → フォルダ名の順。
-- `main_session_mark_tests.rs`（`main_halt_record_tests.rs` を改名して書き換え・要件 12.2〜12.5・12.12 ⑴〜⑶）: `session_mark_verdict` の表（出所ごと・`run_ok`／`down_ok` の偽・`Argv`・出所なし・`SessionEnd` は `Clear`）。偽の SHIORI の土台で A を初回の起動として起こし（`boot_first_ghost`）→ 印＝A。⑴ 起動系列の途中の `Fault`・⑵ 定常のあとの `Fault`・⑶ 後始末を通さずに捨てた（強制終了に見立てる）の 3 通りのあと、同じ根で `resolve_boot_from` → 既定が選ばれ 4 つ目が A の名前（`LastGhost` は A のままでも読まれない）→ `first_boot_origin` が `Halted{A}` → 起こすと印＝emo2 の名前。既定ゴースト自身の `Fault` → 次も既定で Ref7＝既定の名前。メニューの「終了」相当（`KanadeStopped(Quit)`）の後始末 → 印が消え、次の起動は `LastGhost` どおりで由来 `Plain`。`Argv` の起動 → 印を読まず書かず消さない（前の印が残る）。
-- `ghost_session_switch_memory_tests.rs`（`SwitchRig`・要件 12.6〜12.8・12.12 ⑷⑸）: A → B（`raise_event`）で、降ろした直後（`Welcoming{Target}` の間）に `read_last_ghost == emo2`・印＝B・B の Ghost スコープに `LastBalloon` 無し → B の `Steady` の処理のあと `LastGhost == B`・印＝B・B の `LastBalloon`／`LastShell` あり。B が接続に失敗 → 戻しの間は印＝B → emo2 の `Steady` のあと印＝emo2・`LastGhost == emo2`。根に emo2 が無い＋B の失敗（致命）→ `LastGhost == emo2`・印＝B。判定は集めてから 1 回（記憶は sylphya の書き手の投函なので、読む前に置き場の実行系の記憶の書き手へ `barrier` を掛けるか有界の待ちで読む）。
-- `session_end_tests.rs`（`SwitchRig`・要件 12.9〜12.11・12.12 ⑹）: A を起こして印を書き定常まで回す → `on_os_session_end(world, 任意の entity)` → A の呼出列の最後の方に `OnClose`（NOTIFY・Ref0＝`system`）が 1 件・`FirstExit == SessionEnd`・終了の指示あり・`GhostSlot` が空・印が消えている・`SessionEnded` が在る。2 回目の呼び出し → 呼出列が増えず `debug!(os_session_end_again)` 1 件。`SwitchInFlight` を立てた World → 予約が消える。先に `quit_app(KanadeStopped(Fault))` を指示した World → 印が残る（`Keep("fault")`）。`after_run` は `SessionEnded` が在れば告知の場面を組まない。
-- wintf `ecs/window_proc/lifecycle_tests.rs`（要件 12.10・12.12 ⑹）: `OnSessionEnd` を持つ entity へ `WM_ENDSESSION`（wParam＝1）→ 関数が 1 回呼ばれ `Some(LRESULT(0))`／wParam＝0 → 呼ばれない／部品なし・破棄済みの entity → 呼ばれず panic 無し／World を借用中 → 呼ばれず `Some(LRESULT(0))`。配送表の `WM_QUERYENDSESSION` は `None`（既定の手続き）。
+- `main_session_mark_tests.rs`（`main_halt_record_tests.rs` を改名して書き換え・要件 12.2〜12.5・12.12 ⑴〜⑶）: `session_mark_verdict` の表（出所ごと・`run_ok`／`down_ok` の偽・`argv_session`・出所なし・`SessionEnd` は `Clear`）。`after_run` の終了コードは `fault_of(first)` から決まる（告知の場面を組まない `SessionEnded` の分岐でも `Fault` が出所なら 1）。偽の SHIORI の土台で A を初回の起動として起こし（`boot_first_ghost`）→ 印＝A。⑴ 起動系列の途中の `Fault`・⑵ 定常のあとの `Fault`・⑶ 後始末を通さずに捨てた（強制終了に見立てる）の 3 通りのあと、同じ根で `resolve_boot_from` → 既定が選ばれ 4 つ目が A の名前（`LastGhost` は A のままでも読まれない）→ `first_boot_origin` が `Halted{A}` → 起こすと印＝emo2 の名前。既定ゴースト自身の `Fault` → 次も既定で Ref7＝既定の名前。メニューの「終了」相当（`KanadeStopped(Quit)`）の後始末 → 印が消え、次の起動は `LastGhost` どおりで由来 `Plain`。argv で始まったプロセス（`argv_session` 真）→ 印を読まず書かず消さない（前の印が残る）。argv で A を起こして B へ切り替え、その後に致命で終わっても判定は `Untouched`（記録は `session_mark_untouched_argv`・`LastGhost` は既定）。
+- `ghost_session_switch_memory_tests.rs`（`SwitchRig`・要件 12.6〜12.8・12.12 ⑷⑸）: A → B（`raise_event`）で、降ろした直後（`Welcoming{Target}` の間）に `read_last_ghost == emo2`・印＝B・B の Ghost スコープに `LastBalloon` 無し → B の `Steady` の処理のあと `LastGhost == B`・印＝B・B の `LastBalloon`／`LastShell` あり。B が接続に失敗 → 戻しの間は印＝B → emo2 の `Steady` のあと印＝emo2・`LastGhost == emo2`。根に emo2 が無い＋B の失敗（致命）→ `LastGhost == emo2`・印＝B。判定は集めてから 1 回（記憶は sylphya の書き手への投函なので、読む前に置き場の `GhostSession::runtime()` の記憶の書き手へ `SylphyaPublisher::barrier()` を掛けて反映を確定させる＝時間で待たない。降ろした後の読みは `shutdown` が書き手を処理し切っているので掛けない）。
+- `session_end_tests.rs`（`SwitchRig`・要件 12.9〜12.11・12.12 ⑹）: A を起こして印を書き定常まで回す → `on_os_session_end(world, 任意の entity)` → A の呼出列の最後の方に `OnClose`（NOTIFY・Ref0＝`system`）が 1 件・`FirstExit == SessionEnd`・終了の指示あり・`GhostSlot` が空・印が消えている・`SessionEnded` が在る。2 回目の呼び出し（守りの判定）→ 呼出列が増えず `debug!(os_session_end_again)` 1 件。受け口に未処理の `Stopped(Fault)` を積んだ World → 最初の出所が `KanadeStopped(Fault)`・印が残る・`after_run` の終了コードの材料が失敗（`SessionEnd` が `Fault` を覆わない）。`SwitchInFlight` を立てた World → 予約が消える。先に `quit_app(KanadeStopped(Fault))` を指示した World → 印が残る（`Keep("fault")`）。`after_run` は `SessionEnded` が在れば告知の場面を組まない。
+- wintf `ecs/window_proc/lifecycle_tests.rs`（要件 12.10・12.12 ⑹）: `OnSessionEnd` を持つ entity へ `WM_ENDSESSION`（wParam＝1）→ 関数が 1 回呼ばれ `Some(LRESULT(0))`／wParam＝0 → 呼ばれない／部品なし・破棄済みの entity → 呼ばれず panic 無し／World を借用中 → 呼ばれず `Some(LRESULT(0))`・`warn!(os_session_end_world_busy)` 1 件。`runtime/wndproc_bridge.rs` のテスト: World の借用を持ったまま橋渡しの閉包へ `WM_ENDSESSION`（真）→ `None`・同じ `warn!` がちょうど 1 件／wParam 偽や他のメッセージでは 0 件。配送表の `WM_QUERYENDSESSION` は `None`（既定の手続き）。
 - `app_exit_tests.rs`: `fault_of(SessionEnd) == None`・`attach_os_close_request` の後にゴースト窓が `OnSessionEnd` も持つ。
 - `change_cue_tests.rs`: `("change","ghost","B")` → 要求 1 件（`raise_event=false`）・`--option=raise-event` → 真・`("change","shell",…)` → 0 件（担当外）・名前なし → `warn!`（要件 1.2・1.3・1.10・8.5）。
 - `consumer_ledger` の件数の固定を 9 へ。
@@ -955,7 +963,7 @@ pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity);
 
 ### E2E（実機・`signoff.md`・要件 10.11・10.12）
 ① emo2 → メニュー「ゴースト」→ R_POST_and_KOMAINU（交代の台詞 → 「○○から交代」）。② R_POST → emo2（往復）。③ ① の台詞の途中でダブルクリック → 中止・emo2 が残る。④ R_POST → SHIORI が失敗するゴースト（`shiori-host32-testdll-loadu`）→ emo2 が Ref6/7 つきで起きる（ログで判定）。⑤ ① のあと終了 → 再起動で R_POST。各走行のコマンド・終了コード・目印の事象の件数・`ghost_switch_down_ms` を記録する。1 スコープのゴーストへの切替が落ちないこと（要件 4.9）は ④ の失敗するゴーストを 1 人にして兼ねる。
-2026-09-27 の追加（要件 12.13・同じ記憶の置き場・argv なしの起動）: ⑥ R_POST を起動 → エージェントが自分で起こした areka の PID に限って `taskkill /F /PID` → 次の起動が emo2 で `OnBoot` の Ref6＝`halt`・Ref7＝R_POST の名前・`session_mark_found` 1 件。⑦ （時間の窓が取れれば）R_POST → fail-one の切替の迎え入れの途中（`ghost_switch_booted` の記録を見てから `ghost_switch_target_fault` より前）で強制終了 → 次の起動の Ref7＝fail-one・記憶の `LastGhost` が fail-one でない（`[last]` の中身を記録）。窓が取れなければ ④ の走行の記憶の時系列（`switch_drop_recorded` → `last_used_recorded` の順と値）で代える。⑧ 定常の R_POST の PID のトップレベル窓を列挙し（`EnumWindows`＋`GetWindowThreadProcessId`）、各窓へ `SendMessageTimeout` で `WM_QUERYENDSESSION`（lParam＝0）→ 全窓 TRUE を確かめてから `WM_ENDSESSION`（wParam＝TRUE・lParam＝0）を送る（OS が各トップレベル窓へ送るのと同じ形）→ `os_session_end_begin` 1 件・`os_session_end_again` が窓の数−1 件・`OnClose` の Reference0＝`system` が 1 件・`session_mark_cleared` 1 件・`os_session_end_done` の ms を記録 → 次の起動で Ref6/7 が付かず記憶どおりのゴーストで起きる。⑨ メニューの「終了」で閉じた次の起動で Ref6/7 が付かない。
+2026-09-27 の追加（要件 12.13・同じ記憶の置き場・argv なしの起動）: ⑥ R_POST を起動 → エージェントが自分で起こした areka の PID に限って `taskkill /F /PID` → 次の起動が emo2 で `OnBoot` の Ref6＝`halt`・Ref7＝R_POST の名前・`session_mark_found` 1 件。⑦ （時間の窓が取れれば）R_POST → fail-one の切替の迎え入れの途中（`ghost_switch_booted` の記録を見てから `ghost_switch_target_fault` より前）で強制終了 → 次の起動の Ref7＝fail-one・記憶の `LastGhost` が fail-one でない（`[last]` の中身を記録）。窓が取れなければ ④ の走行の記憶の時系列（`switch_drop_recorded` → `last_used_recorded` の順と値）で代える。⑧ 定常の R_POST の PID のトップレベル窓を列挙し（`EnumWindows`＋`GetWindowThreadProcessId`）、各窓へ `SendMessageTimeout` で `WM_QUERYENDSESSION`（lParam＝0）→ 全窓 TRUE を確かめてから `WM_ENDSESSION`（wParam＝TRUE・lParam＝0）を送る（OS が各トップレベル窓へ送るのと同じ形）→ `os_session_end_begin` がちょうど 1 件・残りの窓への `WM_ENDSESSION` は wintf の破棄済みの打ち切り（`[despawn-skip]` の `debug!`）か送信の失敗（窓が既に壊れている＝`SendMessageTimeout` が 0）で、`os_session_end_again` は 0 件・`OnClose` の Reference0＝`system` が 1 件・`session_mark_cleared` 1 件・`os_session_end_done` の ms を記録 → 次の起動で Ref6/7 が付かず記憶どおりのゴーストで起きる。⑨ メニューの「終了」で閉じた次の起動で Ref6/7 が付かない。
 
 ## Performance & Scalability
 - 目標: 降ろし始めから切替先の窓が出るまで 1 秒以内（要件 3.8）。UI スレッドを塞ぐのは `GhostSession::shutdown`（kanade → dispatcher → shiori（helper の unload）→ relay → ticker → sylphya の join → seriko の join）。`ghost_switch_down_ms` を実機で測る。超えたら設計討議へ（別スレッド化の下地: `GhostSession: Send`・フレームをまたぐ状態は `SwitchStage` に `Descending` を足す形）。
