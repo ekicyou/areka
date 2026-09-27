@@ -3,6 +3,15 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「インストール」の**製品側**（利用者が `.nar` を渡す体験）と、順位 4 の束「投げ込み」（`OnFileDrop2` 等）のうち窓へ落とす経路を引き受ける。エンジン（コンテナ読取・`install.txt` 解釈・安全な展開）は `areka-P0-nar-install` が持つ。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-27 `ghost-change-name-resolution` の着地＝`lastinstalled` の受け皿は同 spec が持つ
+
+同 spec が先に着地した（完了 spec は `.kiro/specs/completed/areka-P0-ghost-change-name-resolution/`・実機の記録は同じフォルダの `signoff.md`）。下の 09-26 節の「本仕様が先なら `install.rs` に `LastInstalled` を置く」の分岐は消え、本仕様は**書くだけ**になった。本仕様の要件・設計に効く事実:
+
+1. **受け皿の名前は固定**（同 spec の design「設計で決めたこと」）: 記録の型 `LastInstalledGhost`（`crates/areka/src/emo2_boot/ghost_switch.rs`・`#[derive(Resource)]`・フォルダ名 1 つ・プロセスの中だけ・ファイルや記憶へは書かない・`lastinstalled` で使っても消えない）と、書く口 `record_last_installed(world: &mut World, folder: String)`（置き換えて `info!(event="last_installed_recorded", folder)` を 1 件残す）。本仕様はインストールに成功したゴーストのフォルダ名でこの書く口を呼ぶだけ。今は `#[allow(dead_code)]` で呼び手を本仕様と注釈しているので、呼んだら allow を外す。
+2. **`\![change,ghost,lastinstalled]` の実機確認は本仕様が行う**（同 spec は本番の呼び手が無いため決定論テストだけで固定した）。一周は「インストール → `lastinstalled` で切替 → `ghost_switch_resolved name=lastinstalled` → `ghost_switch_done`」。記録が無ければ `ghost_switch_unknown reason=lastinstalled_none`、記録のゴーストが目録に無ければ `reason=lastinstalled_missing` で切替を無視する。
+3. **`ghost_switch_tests.rs` は 987 行で上限 1,000 行の目前**。本仕様が `ghost_switch.rs` の入口にテストを足すなら、先にテストファイルを分ける。
+4. 共有していた `sakura-script.toml`・`roadmap-draft.md`（`[briefs].count` は同 spec で 36）は同 spec の側で更新済み。本仕様が +1 するときは生成器で生成物を作り直す。
+
 ## 2026-09-26 先進坑 `pilot-dropfiles-on-wuc-window` の結果＝**go**（開発者判定）
 
 `_Depends(confirmed): pilot-dropfiles-on-wuc-window` は充足。一次記録は `crates/pilot/examples/pilot-dropfiles-on-wuc-window/README.md` の「検証結果」（完了 spec は `.kiro/specs/completed/pilot-dropfiles-on-wuc-window/`）。本仕様の要件・設計に効く事実:

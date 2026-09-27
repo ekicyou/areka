@@ -162,6 +162,15 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 （3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 35 に合わせ、`snapshot_on` は
 行の集合に最後に手を入れた日として **2026-09-27** にした。
 
+**2026-09-27 の 2 行目の追加**: `areka-P0-ghost-change-name-resolution` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と
+同じで、同日この spec が台帳 `ledger/sakura-script.toml` の `\+`・`\_+` の 2 項目を実装済みへ移し、自分の宛先として
+登記したからである。2 項目はどちらも `linkage.md` の束「切替」に属するので、束の欄には「切替」を書いた。
+段階ごとの表の「依存する既存 spec」の欄も、「切替」の行にこの spec を件数付きで足した。足した行の中身は
+`stage = "B"`・`bundle = "切替"`・`owner_count = 2`・`wave = "B4-②"` で、段階は「切替」が順位表で置かれて
+いる段階の写し、ウェーブは正本のロードマップの写しである。行数は **36 行**（`[[spec]]` の塊を数えた）で、
+うち束を持つ行が **22 行**・`none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出して
+いない）。`[briefs].count` はこの 36 に合わせ、`snapshot_on` は同じ日なので **2026-09-27** のまま変えていない。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -195,7 +204,7 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 
 ```toml
 [briefs]
-count = 35
+count = 36
 snapshot_on = "2026-09-27"
 ```
 
@@ -483,6 +492,13 @@ stage = "B"
 bundle = "切替"
 owner_count = 3
 wave = "B3-①"
+
+[[spec]]
+name = "areka-P0-ghost-change-name-resolution"
+stage = "B"
+bundle = "切替"
+owner_count = 2
+wave = "B4-②"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -530,7 +546,7 @@ spec 台帳で、この表はそれを写した写真である。
 | ---: | --- | --- | --- | --- |
 | 1 | インストール | `areka-P0-nar-install`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-nar-install`（A0・11 件） | 第 3 波 |
 | 1 | 更新 | `areka-P0-network-update`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-network-update`（A4・1 件） | 第 3 波 |
-| 2 | 切替 | `areka-P0-shell-balloon-switch` | `areka-P0-currentghost-property-tree`（W15・4 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-kero-balloon`（完了・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・3 件） | 第 3 波 |
+| 2 | 切替 | `areka-P0-shell-balloon-switch` | `areka-P0-currentghost-property-tree`（W15・4 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-kero-balloon`（完了・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・3 件）／`areka-P0-ghost-change-name-resolution`（B4-②・2 件） | 第 3 波 |
 | 3 | 消滅 | `areka-P0-vanish-canon` | **0 本** | 第 3 波 |
 | 4 | 投げ込み | `areka-P0-file-drop-events` | **0 本** | 第 3 波 |
 | 5 | 休止と復帰 | `areka-P0-shiori-cache-suspend` | **0 本** | 第 3 波 |

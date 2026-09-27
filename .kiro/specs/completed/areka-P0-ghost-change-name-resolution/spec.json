@@ -1,0 +1,29 @@
+{
+  "feature_name": "areka-P0-ghost-change-name-resolution",
+  "created_at": "2026-09-27T09:45:46Z",
+  "updated_at": "2026-09-27T13:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-27T10:05:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-27T12:00:00Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-09-27T13:00:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-27T13:00:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}
