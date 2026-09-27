@@ -3,7 +3,7 @@
 > Rust製デスクトップマスコット・プラットフォーム
 
 [![Rust](https://img.shields.io/badge/Rust-2024_Edition-orange?logo=rust)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE-MIT)
 [![Windows](https://img.shields.io/badge/Platform-Windows_10%2F11-0078D6?logo=windows)](https://www.microsoft.com/windows)
 
 ---
@@ -13,6 +13,8 @@
 **areka** は、デスクトップ上にキャラクター（ゴースト）を常駐させ、ユーザーとの自然な対話を実現するデスクトップマスコット・プラットフォームです。
 
 ECSアーキテクチャ、DirectComposition による高品質レンダリング、日本語縦書き描画、そして宣言的アニメーション定義を基盤に据えています。
+
+配布物（zip）を受け取った方向けの使い方は [dist/README.txt](dist/README.txt) を参照してください。
 
 ---
 
@@ -87,7 +89,7 @@ areka/                          # ワークスペースルート
 
 ## 現在の到達点
 
-57件の仕様を完了し、基盤レイヤーの約70%を構築済み。
+200件の仕様を完了（2026-09-26 時点で `.kiro/specs/completed/` 直下のフォルダを数えた数）。
 
 ### ✅ 実装済み基盤機能
 
@@ -194,7 +196,7 @@ cargo build --release
 
 ## ライセンス
 
-MIT OR Apache-2.0（[Cargo.toml](Cargo.toml) 参照）
+MIT（[LICENSE-MIT](LICENSE-MIT) 参照）
 
 ---
 
