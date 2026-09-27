@@ -445,6 +445,7 @@ pwsh -NoProfile -File C:\tmp\areka-signoff-gsw\tools\launch.ps1 -Run run9b -Prof
    - 証拠（前回の記録）: 初回の起動の emo2 は `chain_finalize: 実表示寸で連鎖を再解決 scope=1 from_x=1340 to_x=1392` → `初期配置を確定`（run1・run4 の起動時）。これに対し run5（② R_POST → emo2）と run4（④ の R_POST への切替・fail-one → emo2 の既定への戻し）では、`ghost_switch_booted` の後の `chain_finalize` の記録が 0 件で、emo2 の 2 人目のキャラ窓は `char_x=1340` のまま（初回の起動の 1392 へ動かない）。DPI 192 の画面で 2 人のキャラの間に 52 px の隙間が開き、2 人目のバルーンもそれに付いてこない
    - ⑦ の試み 1 の `chain_finalize: 初期配置の確定が続けて見送られている（deferrals=600 scope=Some(0) reason=実表示寸が未確定）` の WARN は同じ根の副作用: rpost_auto が初期配置の確定より前に（起動の挨拶の台本で）切り替えたので確定の印が立たず、見送りの数だけが fail-one の窓（HELLO 待ちの 5 秒間表示されない）をまたいで引き継がれ、既定へ戻した emo2 の窓で上限に達した。この走行でだけ emo2 の初期配置が 2.2 秒後に確定したのも、印が立っていなかったため
    - 本書の要件 12.13 の判定（⑥〜⑨）は印と終了の経路だけを見ており、この欠陥の影響を受けない。修正はコントローラが足すタスク 11.9 で行う
+   - **11.9 で解消（⑩⑪）**: `close_windows_for_restart` が初期配置の資源を取り除くようにした HEAD `f4771ae1` で、切替先の emo2（⑩）と既定への戻しの emo2（⑪）のどちらでも `chain_finalize: 実表示寸で連鎖を再解決 scope=1 from_x=1340 to_x=1392` が初回の起動と同じ値で走り、2 人目のキャラ窓は初回の起動と同じ L=1392 に着いた（末尾の「走行 ⑩〜⑪」）。ふつうの既定への戻しでは `deferrals=600` の WARN は 0 件。切替先の SHIORI が 5 秒応答しない形（試み 1 と同じ形）では、その切替先自身の表示されない窓について 1 件だけ残る（引き継ぎではない・末尾の ⑪ の補足）
 7. **⑧ の残りの窓の 3 つ目の形**: 要件 12.10・design Flow 7 は残りの窓への `WM_ENDSESSION` を「破棄済みの打ち切り（`[despawn-skip]`）か送信の失敗」とするが、実機では「送信の待ちの間に窓が壊れて `SendMessageTimeout` が 0 で成功を返す（手続きへ配られない）」が 1 枚あった（上の ⑧）。受け手の処理が 1 回だけという振る舞いは変わらないので、コードの変更は要らない。字面を合わせるなら要件 12.10 と design の 2 形に「待ちの間に窓が壊れる」を足す
    - 根拠: `WinApp::run` の手順 4.5（`crates/wintf/src/runtime/mod.rs`・残存窓の破棄）は World を借りたまま残りの窓を壊す。その間に窓の手続きが呼ばれていれば、橋渡し（`wndproc_bridge.rs`）の World の借用中の腕が `os_session_end_world_busy` の warn を 1 件残すはずだが、その warn は 0 件だった＝メッセージが手続きへ配られる前に窓が壊された。害は無い
 8. 所要（22 ms）は OS の猶予より十分小さい。11.3 の申し送り（受け手の中の `GhostSession::shutdown` の join は送られてきたメッセージを配らない＝受け手の処理中に別スレッドから UI の窓へ同期の送信が重なると止まりうる）は、この再現では 1 通ずつ返りを待って送ったので重なる形が起きておらず、確かめていない
@@ -455,3 +456,98 @@ pwsh -NoProfile -File C:\tmp\areka-signoff-gsw\tools\launch.ps1 -Run run9b -Prof
 2. ⑦: `$env:HOST32_TESTDLL_LOADU_FAIL='1'` で起動し、R_POST から「fail-one」を選んだ瞬間（fail-one の窓が一瞬出る間）に `taskkill /F` するのは人の手では難しい。記憶の中身（`<AREKA_PROFILE_DIR>\sylphya.toml` の `[last]`）が切替の途中で `ghost = "emo2"`・`running = "fail-one"` になることは、切替の直後に開けば見える
 3. ⑧: Windows をシャットダウン（または サインアウト）し、次のサインインで areka を起動すると、前回のゴーストが Ref6/7 なしで出る（`running` が空）
 4. ⑨: メニューの「終了」で閉じ、起動し直すと前回のゴーストが Ref6/7 なしで出る
+
+---
+
+## 2026-09-27 追記: 走行 ⑩〜⑪（11.9 の確認）
+
+「気付いたこと」6（切替・既定への戻しで起こしたゴーストの初期配置の連鎖の再解決が走らない）の修正の実機確認。
+
+- 日時: 2026-09-27 13:22〜13:28 JST（ログは UTC 04:22〜04:28）
+- HEAD: `f4771ae1`（`close_windows_for_restart` が `ChainFinalized`・`ChainFinalizeStall`・`ChainRealignPending`・`ZOrderChainPlan`・`ZOrderAbsentReports` を取り除く）。`cargo build -p areka -j 4` は建て直し無し。`areka.exe` の SHA-256 は `target\` の元と根の複製で一致: `5DF0F422D903A9E2BE08E973888444CDAB81B92B2685A097691ADBD571502B00`
+- 根・`launch.ps1`・`RUST_LOG` は ⑥〜⑨ と同じ（`chain_finalize` の記録は target `areka::emo2_boot::frame::drain_resnap` で `areka=debug` が拾う）。記憶の置き場は走行ごとに新しいフォルダ。全走行が自動終了（強制終了なし）
+- 画面はまだスクリーンセーバーで入力が使えないので、切替は台本で起こした。検体を 2 つ足した（どちらも R_POST_and_KOMAINU の複製で、`＊OnBoot` の本文だけを差し替え）:
+  - `ghost\rpost_to_emo2\`（name `Ｒポスト→えも`）: `：おはよう。\_w[2000]\![change,ghost,えも？？]`
+  - `ghost\rpost_to_fail\`（name `Ｒポスト→fail`）: `：おはよう。\_w[2000]\![change,ghost,fail-one]`
+  - 2 秒待ってから切り替えるのは、R_POST 自身の初期配置が先に確定する（`初期配置を確定 scopes=2 moved=0`＝欠陥の条件だった「確定の印が立った後の切替」）のを待つため。⑦ の `rpost_auto` は確定より前に切り替えていた
+- 窓の位置は、再解決の記録の 1.5 秒後に `tools\capture-rects.ps1`（`EnumWindows`＋`GetWindowRect`・物理座標・入力は使わない）で読んだ（`logs\<走行>.rects.txt`）
+
+### 比べる相手: 同じ HEAD の emo2 の初回の起動（`runctl`）
+
+```
+pwsh -NoProfile -File C:\tmp\areka-signoff-gsw\tools\launch.ps1 -Run runctl -Profile C:\tmp\areka-signoff-gsw\prof-ctl -SmokeMs 20000
+```
+
+- 記憶の無い置き場 → `ghost_resolved route=Default`（emo2）→ 04:23:56.793 `chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1） scope=1 from_x=1340 to_x=1392` → `初期配置を確定 scopes=2 moved=1`。終了コード 0
+- 窓（物理座標）: むらさき（本体）L=2064 T=610 W=764 H=1094・むらさきのバルーン L=1796 T=352・**エモ（2 人目）L=1392 T=904 W=672 H=800**・エモのバルーン L=1684 T=754
+- 前の HEAD の初回の起動（run1・run4 の起動時・⑥〜⑨ の 6b・7b）も同じ `from_x=1340 to_x=1392`
+
+### 走行 ⑩: R_POST → emo2（切替先）
+
+```
+pwsh -NoProfile -File C:\tmp\areka-signoff-gsw\tools\capture-rects.ps1 -Run run10 -Pattern '連鎖を再解決' -Count 1   # 裏で
+pwsh -NoProfile -File C:\tmp\areka-signoff-gsw\tools\launch.ps1 -Run run10 -Profile C:\tmp\areka-signoff-gsw\prof10 -SmokeMs 30000
+```
+
+（置き場は `[last] ghost = "rpost_to_emo2"` で用意）
+
+| 時刻（UTC） | 事象 |
+|---|---|
+| 04:24:24.703 | R_POST の `chain_finalize: 初期配置を確定 scopes=2 moved=0`（確定の印が立つ） |
+| 26.835 | `ghost_switch_requested`（to=えも？？・origin=automatic） |
+| 26.873 | `windows_closed_for_restart` closed=4 |
+| 27.289 | emo2 の復元 `scope=1 … char_x=1340` |
+| 27.707 | `ghost_switch_booted`（emo2・Target） |
+| 28.029 | `ghost_switch_done`（emo2・Target） |
+| **28.939** | **`chain_finalize: 実表示寸で連鎖を再解決 scope=1 from_x=1340 to_x=1392`** → `初期配置を確定 scopes=2 moved=1` |
+
+- 窓: むらさき L=2064・むらさきのバルーン L=1796・**エモ L=1392 T=904**・エモのバルーン L=1684 T=754＝`runctl` と 4 枚とも同じ位置と寸法
+- 終了コード **0**（30.57 秒）。`chain_finalize` の WARN 0・ERROR 0・告知 0・パニック 0・`session_mark_cleared` 1
+- 同じ形の 1 回目（`logs\run10-first.*`・窓の位置は読んでいない）も `from_x=1340 to_x=1392`（04:22:54.442）で終了コード 0
+- 修正前は同じ切替（前回の run5 の ② R_POST → emo2）で再解決が 0 件・エモは 1340 のままだった
+- 判定（要件 4.10・タスク 11.9）: **合格**
+
+### 走行 ⑪: R_POST → fail-one → 既定 emo2 へ戻す
+
+```
+pwsh -NoProfile -File C:\tmp\areka-signoff-gsw\tools\capture-rects.ps1 -Run run11 -Pattern '連鎖を再解決' -Count 1   # 裏で
+pwsh -NoProfile -File C:\tmp\areka-signoff-gsw\tools\launch.ps1 -Run run11 -Profile C:\tmp\areka-signoff-gsw\prof11 -SmokeMs 30000 -LoaduFail
+```
+
+（置き場は `[last] ghost = "rpost_to_fail"` で用意。`-LoaduFail`＝`HOST32_TESTDLL_LOADU_FAIL=1`）
+
+| 時刻（UTC） | 事象 |
+|---|---|
+| 04:26:04.611 | R_POST の `初期配置を確定 scopes=2 moved=0` |
+| 06.835 | `ghost_switch_requested`（to=fail-one）→ 06.857 `switch_drop_recorded` → 06.867 `windows_closed_for_restart` |
+| 07.846 | `ghost_switch_booted`（fail1・Target） |
+| 07.951 | `connect_failed`（LOAD が ack [1] を返さない）→ 07.958 `ghost_switch_target_fault` → 07.966 `windows_closed_for_restart` |
+| 08.668 | `ghost_switch_booted`（emo2・**Default**） |
+| 09.684 | `OnBoot` GET `[…, "halt", "fail-one"]` → 09.694 `ghost_switch_done`（emo2・Default） |
+| **10.593** | **`chain_finalize: 実表示寸で連鎖を再解決 scope=1 from_x=1340 to_x=1392`** → `初期配置を確定 scopes=2 moved=1` |
+
+- 窓: むらさき L=2064・むらさきのバルーン L=1796・**エモ L=1392 T=904**・エモのバルーン L=1684 T=754＝`runctl` と同じ
+- 終了コード **0**（32.20 秒）。**`deferrals=600` の WARN 0 件**・ERROR 3（`connect_failed`・`shiori_failed`・`ghost_switch_target_fault`＝意図した失敗）・告知 0・パニック 0・`session_mark_cleared` 1・走行後の記憶 `ghost = "emo2"`・`running = ""`
+- 同じ形の 1 回目（`logs\run11-first.*`）も `from_x=1340 to_x=1392`（04:25:18.197）・WARN 0。窓を読んだのが再解決の 0.36 秒前（`ghost_switch_done` を合図にした）だったのでエモ L=1340 と写っており、合図を再解決の記録に改めてやり直したのが上の run11
+- 修正前は同じ戻し（前回の run4 の ④ fail-one → emo2）で再解決が 0 件だった
+- 判定（要件 4.10・6.1・タスク 11.9）: **合格**
+
+#### ⑪ の補足: 切替先の SHIORI が 5 秒応答しない形（⑦ の試み 1 と同じ形）
+
+`deferrals=600` の WARN が「引き継ぎ」かを見るため、⑦ の試み 1 と同じ形（`rpost_auto`＝確定より前に切り替える・切替先の helper を `tools\suspend-target-helper.ps1` で一時停止）を強制終了なしで流した。
+
+- `run11c`（終了コード 0）: `ghost_switch_booted`（fail1）04:28:08.942 → **04:28:13.991 に WARN `deferrals=600 scope=Some(0) reason=実表示寸が未確定（初回表示が未成立）`** → 13.997 `connect_failed`（HELLO を 5 秒受領できない）→ 13.999 `ghost_switch_target_fault` → 14.801 emo2（Default）→ 17.733 `実表示寸で連鎖を再解決 scope=1 from_x=1340 to_x=1392`。既定へ戻した後の WARN は 0 件
+  - WARN は fail-one の窓（SHIORI が応答しないので一度も表示されない）について、既定へ戻す**前**に 1 件出た。修正前の試み 1 では既定へ戻した emo2 の窓を作った 26 ms 後に出ていた（見送りの数が戻しをまたいで引き継がれていた）。修正後は戻しで数が消え、emo2 の再解決は初回の起動と同じ値で走った
+- `run11b`（終了コード 0）: helper の一時停止が HELLO の後に掛かり、fail-one の LOAD の送信が 30 秒の上限まで返らなかった形。fail-one の窓について同じ WARN が 1 件（04:27:05.307）出て、fail-one は自動終了まで迎え入れの途中のまま（LOAD の失敗 `connect_failed … ipc request timed out` は終了の最中 04:27:30.309）。終了は出所 Smoke のきれいな終わりで `session_mark_cleared` 1
+- 残る 1 件の WARN は「表示されないまま置かれた切替先の窓」についての正しい知らせで、引き継ぎではない（要件 4.10 の外・直さない）
+
+### まとめ（⑩〜⑪）
+
+| 走行 | 終了コード | 再解決 `scope=1` | エモ（2 人目）の最終位置 | `deferrals=600` WARN | 判定 |
+|---|---|---|---|---|---|
+| runctl（初回の起動・比べる相手） | 0 | 1340 → 1392 | L=1392 T=904 | 0 | — |
+| ⑩ R_POST → emo2 | 0 | 1340 → 1392 | L=1392 T=904 | 0 | 合格 |
+| ⑪ R_POST → fail-one → emo2（戻し） | 0 | 1340 → 1392 | L=1392 T=904 | 0 | 合格 |
+| ⑪ 補足 run11c（SHIORI が 5 秒応答しない） | 0 | 1340 → 1392 | （読んでいない） | 1（fail-one の窓・戻しの前） | 引き継ぎなし |
+
+- 全走行で告知 0・パニック 0・プロセスは残らなかった（`areka.exe`・`shiori-host32-helper.exe` とも 0 件。run11b・run11c で一時停止した helper も親の終了とともに消えた）
