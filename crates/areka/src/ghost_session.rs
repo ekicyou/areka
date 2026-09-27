@@ -299,7 +299,7 @@ pub(crate) struct GhostBootInputs {
     pub wiring: emo2_boot::Emo2BootInputs,
     /// fallback（`LogSink`）の起動が使う 32bit SHIORI helper のパス。
     pub helper_exe: PathBuf,
-    /// 停止通知の送出端の写し（結線あり・fallback の両方の起動へ渡る・#55）。
+    /// 停止通知の送出端の写し（結線あり・fallback の両方の起動へ渡る・`shiori-fault-notice`）。
     pub kanade_stop: Sender<KanadeNotice>,
 }
 

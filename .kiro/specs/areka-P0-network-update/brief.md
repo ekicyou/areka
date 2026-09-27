@@ -36,7 +36,7 @@
 5. **`homeurl` の読み手は 0**（語彙が sylphya に在るだけ・`baseware-root-layout` 要件 2.9 が目録から除外）＝`catalog::companion_balloon` と同じ形の単独の読み手を足す。**`homeurl`／`useorigin1`／`other_homeurl_override` のリソース照会は既存の仕組みに乗る**＝`KanadeMsg::ResourceQuery` と `schedule/resources.rs` の `ALLOWED_RESOURCE_IDS` に 3 行足すだけ（「薄い読み手を新設」は不要）。
 6. **失敗の参照値は写すだけ**＝`OnUpdateFailure` の Ref1 は `UpdateError::file()`・Ref0 は `reason.kind()`。
 7. **メニューの枠と項目名は済み**＝`Frame::Update` と「ネットワーク更新」（`updatebutton.caption`）。`menu::register` を呼ぶだけ（呼び手 0・`#[allow(dead_code)]`・最初の呼び手は `ghost-shell-balloon-switch` の予定）。
-8. **`schedule/events.rs`（431 行）は更新系で約 24 本、`ghost-install` の約 10 本を足すと 1,000 行に迫る**＝`events_update.rs` への分割を推す。
+8. **`schedule/events.rs`（431 行）は更新系で約 24 本、`ghost-install` の約 10 本を足すと 1,000 行に迫る**＝`events_update.rs` への分割を推す。→ 棚卸⑱: 535 行・許可表は 1 行 2 行（URL のコメント＋名前）＝34 件足しても約 600 行。分割は不要。
 9. 束の件数は `linkage.md` の members で「更新」**50**（brief の 51 とずれ・原因未確認）。
 
 **触るファイル**: `crates/areka/Cargo.toml`・`main.rs`・`emo2_boot/{consumer_ledger,mod}.rs`・新規 `update_cue.rs`（`updatebymyself`／`update`／`updateother`）・**`ghost-install` の `install_cue.rs` の改変**（`\![execute,install,url]`＝同じ鍵）・kanade `msg.rs`／`actor.rs`／`schedule/mod.rs`／`schedule/resources.rs`／`events.rs`（分割）／新しい相のファイル・中＝`alert.rs`（失敗告知）と `areka-ghost/src/catalog.rs`（`homeurl` の読み手）・台帳 `assets.toml`（1 行）／`shiori.toml`（束「更新」のうち引き受ける分の `owner`）／`sakura-script.toml`・`roadmap-draft.md` の `owner_count`・生成物・§8。
@@ -170,3 +170,36 @@
 - **2026-09-19 追記（網羅台帳の引受先を登記した）**: `doc/ukadoc-coverage/ledger/assets.toml` の `descript_install` の「相対パス」（delete.txt の行の書式）1 項目は、備考が「引受先の候補は……まだ起票されていない」と書いたまま宛先が空だった。本仕様は 2026-09-18 に起票済みで、上の「正典の要点」の節がこの項目の id をそのまま引き、範囲の一覧にも `delete.txt`／`delete[数字].txt` を入れている。2026-09-19 にこの 1 項目の宛先を `areka-P0-network-update` で埋め、備考を実態へ直し、`doc/ukadoc-coverage/roadmap-draft.md` に本仕様の行（`stage = "B"`・`bundle = "更新"`・`owner_count = 1`・`wave = "A4"`）を足した。**状態は `absent` のまま**である——`delete.txt` を読む経路はまだ 1 つも無い。着手時にこの 1 項目を実装へ運び、定義箇所へ正典 URL の 1 行（`// ukadoc:`）を置いて状態を `implemented` へ動かし、`cargo run -p ukadoc-survey -- report` と `-- report-summary` を作り直すこと。**宛先の数を増減させたら同じコミットで `roadmap-draft.md` の `owner_count` を追随させる**（登記だけして表を直さないと `cargo test -p ukadoc-survey` がその場で赤になる）。
 
 **`ghost-shell-balloon-switch` からの申し送り（2026-09-27 完了時）**: ⑴ kanade の汎用の通知の入口 `KanadeMsg::RaiseEvent` の許可表は、起動・終了のイベントと共用の `ALLOWED_EVENT_IDS` をそのまま使う。入口専用の表に分けるかは、入口を最初に使う spec で決める。⑵ 終了や起こし直しの経路を足すときは、印を消す判定 `crates/areka/src/main.rs` の `session_mark_verdict` を必ず通す（`ExitOrigin` を足すと網羅の match がコンパイルで止める）。正本は `doc/COMPAT_ARCHITECTURE.md` §8 と完了 spec の design「Boundary Commitments」
+
+## 2026-09-27 棚卸⑱の再測定（main `5a232d2f`＝`ghost-shell-balloon-switch`・`pilot-dropfiles-on-wuc-window`・`alpha-package` の着地後）
+
+**着地した 3 本で変わったところ**
+
+1. **汎用の通知の入口 `KanadeMsg::RaiseEvent { id, references, method }` が在る**（`crates/areka-kanade/src/msg.rs` → `schedule/change.rs` の `on_raise_event` → `events::raise`）。許可表 `ALLOWED_EVENT_IDS`（`schedule/events.rs`・13 件）に無い名前と定常以外は `warn!` で捨てる（積まない）。`OnUpdate*`／`OnUpdateOther*` の送出はこれに乗る＝本仕様は kanade に「更新」の相を**足さない**。触る kanade は `schedule/events.rs`（許可表に約 24 件）＋`events_change_tests.rs`（`ALLOWED_EVENT_IDS.len() == 13` の直書き）＋`schedule/resources.rs`（`ALLOWED_RESOURCE_IDS` は今 6 件＝`username`＋メニューの caption 5 つ。`homeurl`・`useorigin1`・`other_homeurl_override` の 3 行を足す）。`msg.rs`（880 行）・`actor.rs`（589）・`schedule/mod.rs`（830）・`events.rs` の分割（09-24 節 8 の `events_update.rs`）は**要らない**。−2〜3 タスク。
+   - **ただし `OnUpdateProcessExec` は乗らない**: 正典「このイベントに対して何かスクリプトを返すと、更新処理をカスタマイズできる。イベントを無視した場合は標準の更新処理に自動的に移行する」（ukadoc）＝応答の有無を UI が知る必要がある。`RaiseEvent` は応答を台本として再生するだけで返さない（返信端を持つのは `ResourceQuery` だけ）。入れるなら返信付きの変種を `KanadeMsg` に足す（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`Input` の網羅 match を持つテスト支援＝+2〜3 タスク）。新しい議題 ⑸。
+   - 進捗の GET の応答は今の再生中の台本を置き換える（`events.rs` の `value_replaces_active_talk` は `OnSecondChange` 以外すべて真）＝進捗の台詞が続くと前の台詞を切る。SSP と同じ振る舞いなので設計で明記するだけ。
+2. **読み直しは自分自身への切替で足りる**: `emo2_boot/ghost_switch.rs` の `request_ghost_switch(world, SwitchRequest { ghost: GhostSpec::Folder(今のフォルダ), raise_event: false, origin })`（完了 spec の裁定 9＝自分自身も同じ経路で降ろして起こし直す）。`frame.rs` の `run_ghost_quit_phase` は `SwitchInFlight` が在れば `on_ghost_stopped` へ回す（09-26 節 6 の「切替の分岐に乗る」は実物どおり）。ただし起動の根は `schedule/boot.rs` の `boot_root`（切替 → `OnGhostChanged`・それ以外 → `OnBoot` だけ）＝**読み直しの後の起動で `OnGhostChanged`（自分→自分）が出る**。`OnBoot` にしたいなら `BootOrigin` に「読み直し」を足す（完了 spec の Revalidation Trigger・kanade `boot.rs`・`change.rs` に触る）。議題 ⑹（小）。
+3. **メニュー登記の前例**: `menu/ghost_frame.rs`（`super::register(world, Frame::Ghost, …)`）と `ghost_session.rs`（638 行）の `boot_wired` の呼び出し（起こすたびにやり直す）。本仕様は `menu/update_frame.rs`（仮）＋`boot_wired` に 1 行＋`menu/mod.rs`（337 行）に mod 1 行。`main.rs`（873 行）は触らない見込み。
+4. **`dist/README.txt`（`alpha-package` の成果物）の「今の版ではできません: … ネットワーク更新」の 2 行**を本仕様の完了時に消す（brief に無かった申し送り）。
+5. 不変（確認）: `crates/areka/Cargo.toml` に `areka-update` 無し／`crates/areka-update/Cargo.toml` の `[dependencies]` は encoding_rs・thiserror・tracing・windows の 4 本／`run(&UpdateRequest, &dyn Fetch, &mut dyn FnMut(&Progress))` は同期・`Progress`（`outcome.rs`）は `ManifestFetched`／`DiffDecided`／`DownloadBegin { index, total }`／`Md5Compared { matched }`／`Committed`／`Deleted` の 6 変種／`delete.rs` の `// ukadoc:` 1 行／`homeurl` の読み手は areka の本番コードに 0（sylphya の語彙と `areka-update` の URL の組み立てだけ）／台帳 `shiori.toml` の `OnUpdate*` は `absent`・`owner=""`、`updatebutton.caption` は `vocabulary-only`・`owner="areka-P0-popup-menu-minimal"`、`assets.toml` の「相対パス」は `absent`・owner 本仕様、`sakura-script.toml` の `\![execute,install,url,…]` は `absent`・`owner=""`／`menu::register` の外からの呼び手は `ghost_frame.rs` の 1 つ。
+
+**議題 ⑴（進捗の台詞と SHIORI の解放）の整理し直し**
+
+- 前提の再確認: 確定（`areka-update/src/commit.rs`＝`rename(宛先 → old/)` → `rename(fresh → 宛先)`）は**写像中の DLL でも通る**（`commit_tests.rs` の較正）。詰まるのは後片付けだけ＝`WorkArea::cleanup`（`work.rs`）が `old/<dll>` を消せず、次の走行の `sweep` が「`old/` に中身が残る＝戻せなかった走行」と読んで永久に残し毎周 `warn!`。
+- **(d) は成り立たない**: `run` は背景スレッドで回す（UI を止めない制約）が、降ろす側（`GhostSession::shutdown`・`close_windows_for_restart`）は UI スレッドの `&mut World` が要る。観測の閉包から UI へ頼んで待つ握手を作るのは (a) より大きい。外す。
+- (a)（`run` を「取得と照合」「確定」に割る）: エンジン改修 2〜3 タスク＋本仕様側で「降ろす→確定→起こす」の順序。確定の間だけゴーストが消える。
+- **(b)（生かしたまま更新して、終わってから読み直す）が正規形になり得る**。SSP も更新中はゴーストを生かして進捗を話させ、終わってから読み直す。要るエンジン改修は「確定が成功した走行の後片付けで消せなかった `old/` を、戻せなかった走行の残骸と区別する」だけ（例: `cleanup` が消せなかったとき印のファイルを置き、`sweep` は印の在る棚を `warn!` 無しで次の機会に消す）＝**1〜2 タスク・`crates/areka-update/src/{work,lib}.rs` と兄弟テストのみ**。読み直しは上の 2。
+- (c)（台詞を後でまとめて出す）: 正典の順序（`OnUpdate.OnDownloadBegin` は各ファイルの前）を崩す。取らない。
+- **推す答え＝(b)**。別 spec の切り出し: 09-26 の仮名 `update-engine-commit-gate`（3〜5 タスク・「確定に入る」の通知・https の実走）は (a) の形＝**起票しない**。(b) に要る 1〜2 タスクは本仕様の先頭タスクに入れて上限の内側に収める（`crates/areka-update/` は誰とも共有しない）。並走の益のために切るなら XS `update-engine-cleanup-residue`（仮）だが 1 spec＝1 PR の手間に対して小さい。https の実走はエンジンでなく本仕様の実機サインオフ（議題 ⑷）。
+
+**触るファイル（今の実物で引き直し）**: 新規 `emo2_boot/update_cue.rs`（`updatebymyself`／`(update, …)`／`(updateother, …)` の受け口・前例 `change_cue.rs`）・`menu/update_frame.rs`・`crates/areka/src/update.rs`（仮・背景スレッドで `run`・`WinHttpFetch::new()` の失敗を `error!`・`Progress` → `RaiseEvent` の写し・`useorigin1` の 0 始まりからの読み替え・終わったら読み直し）／既存 `crates/areka/Cargo.toml`・`ghost_session.rs` 638・`emo2_boot/mod.rs` 805・`consumer_ledger.rs` 756・`menu/mod.rs` 337・kanade `schedule/events.rs` 535＋`events_change_tests.rs`＋`schedule/resources.rs` 346・`areka-ghost/src/catalog.rs` 324（`homeurl` の読み手・前例 `companion_balloon`／`sakura_name`）・`areka-update/src/{work,lib}.rs`（(b) のとき）・`ghost-install` の `install_cue.rs`（議題 ⑶ で url を α に入れるとき）・`dist/README.txt`・台帳 3 本＋`roadmap-draft.md`＋生成物＋§8。**触らない**: `main.rs`・kanade `msg.rs`／`actor.rs`／`schedule/mod.rs`（議題 ⑸ を「入れない」で答えたとき）・`alert.rs`（議題 ⑵ を方針どおり「箱を出さない」で答えたとき）・`frame.rs`・`ghost_switch.rs`。
+
+**`ghost-install` との共有（数え直し）**: 確実 7 本（`crates/areka/Cargo.toml`・`consumer_ledger.rs`・`emo2_boot/mod.rs`・`ghost_session.rs`・`menu/mod.rs`・kanade `schedule/events.rs`＋`events_change_tests.rs`・`areka-ghost/src/catalog.rs`）＋条件付き 2 本（`install_cue.rs`・`alert.rs`）＝09-24 の 12 本 → **7〜9 本**。文書は `assets.toml` の同じ表・`roadmap-draft.md` の数・`dist/README.txt` の同じ 2 行。**直列のまま**（消費者台帳と sink の組み立ては 1 か所＝切り方で 0 にはできない）。`ghost-install` への**機能の**前提は議題 ⑶ の url だけ（外せば 0＝順序を入れ替えても動く）。
+
+**想定タスク数**: **13〜16**（09-26 の 14〜17 から kanade の相 −2〜3・(b) のエンジン改修 +1〜2。`OnUpdateProcessExec` を入れるなら +2〜3 で 16〜19）。
+
+**要件定義の Fable 要否＝○（据え置き）**。議題（答えで作業が変わるもの）: ⑴ 上の (a)／(b)（推す (b)）。⑵ `OnUpdateFailure` に応えないゴーストへ areka 自身が告知するか＝09-26 の方針（メッセージボックスは無粋・失敗は既定ゴーストの台詞で）どおり**出さない**を既定にし、既定ゴースト emo2 の辞書で拾う→ 議題から外して要件に書くだけでよい。⑶ `\![execute,install,url]` を α に入れるか（入れると `ghost-install` の `install_cue.rs` を触る・+1〜2）。⑷ 実機の更新先（emo2 の配布サイトに差分 1 件を置けるか）。⑸ **新**: `OnUpdateProcessExec` を α に入れるか（入れると返信付きの `KanadeMsg` の変種＝kanade 3 ファイル＋テスト支援 +2〜3。外せば台帳の行は `absent` のまま）。⑹ **新・小**: 読み直しの後の起動の根を `OnGhostChanged`（自分→自分・今の `boot_root` のまま）で通すか、`OnBoot` にするために `BootOrigin` を足すか。α は前者を推す。
+
+**申し送りの取り込み**: `ghost-shell-balloon-switch`（許可表・`session_mark_verdict`）は上の段落に在り、本節 1・2 で実物へ写した。`update-engine`（09-24）は在る。`alpha-package` からは `dist/README.txt`（本節 4）。
+
+**バグ**: なし（読んだ範囲）。注意: `events_change_tests.rs` が許可表の件数 13 を直書きしている＝許可表に足す spec は必ずこの数を動かす（`shell-balloon-switch` → `ghost-install` → 本仕様の順で 3 度・並走の枝が別々に動かすと黙って合流するので直列で足す）。
