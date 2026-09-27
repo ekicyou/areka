@@ -75,7 +75,7 @@
   - _Depends: 4.2_
 
 - [ ] 5. OS のセッションの終了に上限を通す（統合）
-- [ ] 5.1 偽の SHIORI に「解かれるまで固まる」台本と解く手を足す
+- [x] 5.1 偽の SHIORI に「解かれるまで固まる」台本と解く手を足す
   - 指定した呼び出し（GET・NOTIFY の id 指定・UNLOAD）に入ったら解かれるまで待ち、解かれた後は期限切れの失敗を返す（本番と同じ道で kanade が止まる）
   - 解く手を差し出し、呼ばれた回数を数える。解く手が先に呼ばれていれば待たずに通る（順序に依らない）
   - テストが「いま固まっている」ことを読める口を 1 つ足す
@@ -140,3 +140,4 @@
 - 4.1: 理由の語は `logsink_fallback`・`session_end_deadline`。`settle_session_mark` は語をそのまま `info!(session_mark_kept, reason)` に載せるが、新しい 2 語が記録に出ることの判定は 4.3（倒れた回の 1 周）と 5.3（上限の語）で入れる。
 - 4.2: LogSink の腕の App スコープの置き場を結線の入力から写す前は、テストが `target\debug\deps\profile\areka\sylphya.toml`（実行体の隣の実 profile）へ書いていた。旗の出所は `GhostSession::logsink_fallback()`、印の材料へは `after_run` が運ぶ。5.2 で `session_end.rs` も同じ読み口から載せる。
 - 4.3: `FakeShiori::BalloonMissing` の回は、倒れた先の kanade の Fault の知らせが受け口に残り、次の起動の最初の汲み出しで `quit_app` が走りうる（判定欄は揺れない）。次の起動の出所を判定に足すなら先に受け口を空にする。
+- 5.1: 偽の SHIORI の `hold_at(HoldAt::{Get|Notify|Unload})` は、固まった呼び出しが台本の応答を消費せず、解かれた後は固定で GET/NOTIFY＝`RequestError::Timeout`（本番と一致）・UNLOAD＝`ShutdownError::ExitTimeout`（代用。本番は `Unload(SendError::Ipc(IpcError::Timeout))`）を返す。固まるのは台本 1 件につき最初の 1 回。部品は `emo2_boot/spine_hold_support.rs`（`pub(crate) mod hold_support`）。`unblock_handle` は常に `Some`。

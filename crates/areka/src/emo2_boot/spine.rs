@@ -63,7 +63,7 @@ use areka_ghost::{
     GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
     boot_with_kanade_stop,
 };
-use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend};
+use areka_kanade::{CloseReason, KanadeNotice, MonotonicMs, ShioriBackend, ShioriUnblock};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
 use areka_seriko::{
@@ -101,6 +101,7 @@ use super::target_map::{balloon_target, shell_target};
 use self::conformance_support::{
     RecordedStatus, StatusLedger, record_status, snapshot_status_calls,
 };
+use self::hold_support::{HoldAt, HoldGate};
 
 // ===========================================================================
 // ScriptedShioriBackend（DD-11・areka 側 spine ローカルの最小 fake）
@@ -132,6 +133,7 @@ pub(crate) struct ScriptedShioriBackendBuilder {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
     notify_scripts: HashMap<String, VecDeque<Result<(), RequestError>>>,
     unload_script: Option<Result<ExitKind, ShutdownError>>,
+    hold: Option<HoldAt>,
 }
 
 impl ScriptedShioriBackendBuilder {
@@ -141,6 +143,7 @@ impl ScriptedShioriBackendBuilder {
             get_scripts: HashMap::new(),
             notify_scripts: HashMap::new(),
             unload_script: None,
+            hold: None,
         }
     }
 
@@ -196,6 +199,7 @@ impl ScriptedShioriBackendBuilder {
 
         let calls = Arc::new(Mutex::new(Vec::new()));
         let status_calls: StatusLedger = Arc::new(Mutex::new(Vec::new()));
+        let gate = Arc::new(HoldGate::new(self.hold));
         let backend = ScriptedShioriBackend {
             get_scripts: self.get_scripts,
             notify_scripts: self.notify_scripts,
@@ -203,10 +207,12 @@ impl ScriptedShioriBackendBuilder {
             status: HelperStatus::Running,
             calls: Arc::clone(&calls),
             status_calls: Arc::clone(&status_calls),
+            gate: Arc::clone(&gate),
         };
         let handle = ScriptedShioriHandle {
             calls,
             status_calls,
+            gate,
         };
         (backend, handle)
     }
@@ -221,6 +227,8 @@ pub(crate) struct ScriptedShioriBackend {
     calls: Arc<Mutex<Vec<RecordedCall>>>,
     /// 進行状態の記録（第 2 系統・R3.8）。既存 `calls` とは別の台帳で、書き込みのみ。
     status_calls: StatusLedger,
+    /// 「解かれるまで固まる」台本と解く手の置き場（要件 7.1・`spine_hold_support.rs`）。
+    gate: Arc<HoldGate>,
 }
 
 impl ScriptedShioriBackend {
@@ -245,6 +253,7 @@ impl ShioriBackend for ScriptedShioriBackend {
                 id: id.to_string(),
                 references: references.to_vec(),
             });
+        self.gate.pass_get(id)?;
         self.get_scripts
             .get_mut(id)
             .and_then(VecDeque::pop_front)
@@ -267,6 +276,7 @@ impl ShioriBackend for ScriptedShioriBackend {
                 id: id.to_string(),
                 references: references.to_vec(),
             });
+        self.gate.pass_notify(id)?;
         self.notify_scripts
             .get_mut(id)
             .and_then(VecDeque::pop_front)
@@ -280,6 +290,7 @@ impl ShioriBackend for ScriptedShioriBackend {
             .lock()
             .expect("calls mutex poisoned")
             .push(RecordedCall::Unload);
+        self.gate.pass_unload()?;
         self.unload_script.take().unwrap_or_else(|| {
             panic!("ScriptedShioriBackend::unload(): no scripted response configured")
         })
@@ -292,6 +303,10 @@ impl ShioriBackend for ScriptedShioriBackend {
             .push(RecordedCall::Status);
         self.status
     }
+
+    fn unblock_handle(&self) -> Option<ShioriUnblock> {
+        Some(self.gate.unblock())
+    }
 }
 
 /// [`ScriptedShioriBackend`] をテスト側から観測するためのハンドル（`Arc` 共有）。
@@ -302,6 +317,7 @@ pub(crate) struct ScriptedShioriHandle {
     calls: Arc<Mutex<Vec<RecordedCall>>>,
     /// 進行状態の記録（第 2 系統・R3.8）の共有台帳。取り出し口は [`Self::status_calls`]。
     status_calls: StatusLedger,
+    gate: Arc<HoldGate>,
 }
 
 impl ScriptedShioriHandle {
@@ -955,6 +971,8 @@ mod conformance_support;
 #[cfg(test)]
 #[path = "spine_display_tests.rs"]
 mod display_tests;
+#[path = "spine_hold_support.rs"]
+pub(crate) mod hold_support;
 #[cfg(test)]
 #[path = "spine_move_cue_tests.rs"]
 mod move_cue_tests;
