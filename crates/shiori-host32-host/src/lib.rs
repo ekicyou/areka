@@ -31,6 +31,8 @@ pub mod lifecycle;
 pub mod parent_window;
 pub mod process_host;
 pub mod shiori3;
+/// `Child` を持たないスレッドから helper を終わらせる取っ手（windows 依存をここへ隔離する）。
+mod terminator;
 
 pub use charset::{Charset, CharsetNegotiator, CharsetPolicy, LabelError};
 pub use client::Shiori3Client;
@@ -45,3 +47,4 @@ pub use process_host::{
 pub use shiori3::{
     EncodedRequest, Method, ParsedResponse, ShioriRequest, build_request, parse_response,
 };
+pub use terminator::HelperTerminator;

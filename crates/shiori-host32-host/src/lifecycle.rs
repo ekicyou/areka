@@ -156,6 +156,14 @@ impl HelperLifecycle {
         }
     }
 
+    /// `Child` を持たないスレッドから helper を終わらせる取っ手（[`HelperHandle::terminator`] へ委譲）。
+    ///
+    /// # Errors
+    /// 取っ手の複製の失敗を [`std::io::Error`] として返す（記録は呼び手が行う）。
+    pub fn terminator(&self) -> std::io::Result<crate::HelperTerminator> {
+        self.handle.terminator()
+    }
+
     /// request 失敗と死活を突合し統一報告を作る（R2.1〜2.5）。
     ///
     /// 内部で [`Self::status`]（非ブロッキング・sticky・task 2.2）を採り、その観測結果を
