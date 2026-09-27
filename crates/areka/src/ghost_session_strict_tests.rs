@@ -160,3 +160,109 @@ fn origin_given_to_source_reaches_wiring_inputs() {
 
     assert_eq!(carried, origins, "作り口に渡した由来が結線の入力へ載らない");
 }
+
+/// LogSink へ倒れた旗（要件 4.1・4.2・4.7・4.8）: 旗が立つのは fallback の腕だけで、倒れた先の
+/// 起動の成否を問わない。結線ありの腕（切替の経路と同じ `boot_wired`）とテスト用の組み立ては偽。
+///
+/// 倒れた先が成功する形は、ゴーストの根は本物・バルーンの根だけが無い入力で作る（結線は資産の
+/// 組立で失敗し、LogSink の起動は mount が通るので成功する。SHIORI は使わない helper の経路で
+/// 接続に失敗し、kanade は非同期に止まる）。このとき LogSink の腕の App スコープの置き場は結線の
+/// 入力のもの＝起動の直後の「最後に使ったゴースト」はその置き場へ書かれる（実行体の隣の既定の
+/// 置き場へは書かない）。書き込みは降ろすときに反映されるので、降ろした後に読む。
+///
+/// # 非空虚性
+/// fallback の腕で旗を立てないと 1・2 番目が偽で赤。App スコープの置き場を結線の入力から写さないと
+/// 既定の置き場（`default_app_profile_dir`）へ書かれ、読み返しが `None` で赤。
+#[test]
+fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
+    use crate::boot_resolve::read_last_ghost;
+    use crate::emo2_boot::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig};
+
+    let (descript, ghost, balloon) = decisions();
+
+    // 倒れた先も失敗する形（根がどちらも無い）。
+    let mut failed_world = World::new();
+    let failed = boot_ghost(
+        &mut failed_world,
+        unwirable_inputs(),
+        &descript,
+        &ghost,
+        &balloon,
+    );
+    let failed_flag = (failed.logsink_fallback(), failed.runtime().is_some());
+
+    // 倒れた先が成功する形（バルーンの根だけが無い）。
+    let mut rig = SwitchRig::new(vec![("A", FakeShiori::ConnectFail)]);
+    let app = rig.root.dir().join("fallback-app-profile");
+    let ghost_a = GhostDecision {
+        route: GhostRoute::Memory,
+        dir: rig.root.ghost_dir("A"),
+        folder: Some("A".to_owned()),
+    };
+    let balloon_missing = BalloonDecision {
+        route: BalloonRoute::Companion,
+        dir: rig.root.dir().join("balloon").join("無い"),
+        folder: Some(BALLOON.to_owned()),
+    };
+    let (kanade_stop, _stop_rx) = mpsc::channel::<KanadeNotice>();
+    let inputs = GhostBootInputs {
+        wiring: emo2_boot::Emo2BootInputs {
+            ghost_root: ghost_a.dir.clone(),
+            balloon_root: balloon_missing.dir.clone(),
+            shiori: areka_ghost::ShioriWiring::Helper {
+                helper_exe: PathBuf::from("ghost_session_strict_tests/使わない/helper.exe"),
+            },
+            ticker: areka_ghost::TickerMode::Disabled,
+            app_profile_dir: Some(app.clone()),
+            boot_origin: BootOrigin::Plain,
+        },
+        helper_exe: PathBuf::from("ghost_session_strict_tests/使わない/helper.exe"),
+        kanade_stop,
+    };
+    let fallen = boot_ghost(
+        &mut rig.world,
+        inputs,
+        &descript,
+        &ghost_a,
+        &balloon_missing,
+    );
+    let fallen_flag = (fallen.logsink_fallback(), fallen.runtime().is_some());
+    rig.world.insert_non_send(GhostSlot(Some(fallen)));
+    let down = rig.shutdown();
+
+    // 結線ありの腕（切替と同じ経路・同じ土台で起こし直す）とテスト用の組み立て。
+    rig.boot("A");
+    let wired_flag = rig
+        .world
+        .non_send::<GhostSlot>()
+        .0
+        .as_ref()
+        .map(GhostSession::logsink_fallback);
+    let wired_down = rig.shutdown();
+    let for_test = GhostSession::for_test(None, PathBuf::from("ghost_session_strict_tests/ghost"))
+        .logsink_fallback();
+
+    assert_eq!(
+        (
+            failed_flag,
+            fallen_flag,
+            down,
+            read_last_ghost(&app),
+            wired_flag,
+            wired_down,
+            for_test,
+        ),
+        (
+            (true, false),
+            (true, true),
+            true,
+            Some("A".to_owned()),
+            Some(false),
+            true,
+            false,
+        ),
+        "LogSink へ倒れた旗か倒れた先の App スコープの置き場が崩れた（倒れた先も失敗 (旗, 実行系)・\
+         倒れた先は成功 (旗, 実行系)・降ろせた・結線の入力の置き場の最後のゴースト・結線ありの旗・\
+         降ろせた・テスト用の組み立ての旗）"
+    );
+}

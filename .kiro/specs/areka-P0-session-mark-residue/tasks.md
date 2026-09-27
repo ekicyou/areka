@@ -57,7 +57,7 @@
   - _Requirements: 2.3, 2.6, 3.4, 4.1, 4.5, 4.6, 6.1, 6.2, 7.3, 7.4, 7.6, 8.4_
   - _Boundary: main の印の判定_
 
-- [ ] 4.2 ゴーストの単位に「LogSink へ倒れた」を持たせ、印の判定の材料へ運ぶ
+- [x] 4.2 ゴーストの単位に「LogSink へ倒れた」を持たせ、印の判定の材料へ運ぶ
   - 窓への結線が成功した腕と切替の経路は旗が偽、LogSink の腕は倒れた先の成否によらず旗が真。テスト用の組み立ても偽
   - LogSink の腕の App スコープの置き場を結線の入力から写して渡す（本番では今日と同じ値・テストは土台の置き場になり実 profile へ書かない）。終了コード・告知・LogSink の起動そのものは変えない
   - `fn main` の後始末は単位の旗を印の材料に載せ、最初の起動が倒れて argv でなければ帰結を書いた `warn!` を 1 件残す（argv なら debug）
@@ -138,3 +138,4 @@
 - 2.1: `log_capture_kit::capture` は自スレッドの記録しか拾わない＝見張りのスレッドの `warn!(shiori_wait_cut)` は捕まらない。記録の中身は `try_fire` をテストのスレッドで直に呼んで判定し、見張り経由の回は `finish` の戻り値と解く手の回数で判定する（5.3 で areka から見張りの `warn!` を数えるなら捕捉の仕方を先に確かめる）。design の `armed` と `pending_cut` は 1 つの `Mutex<Armed>` にまとめた（予約と張るの交差を防ぐ）。`CutGuard` は `finish` せず落としても `Drop` で見張りを畳む。
 - 2.2: `spawn_shiori_actor` は `(Sender, ActorHandle, ShioriProbe)` を返す。見張りの発火をテストで決定論にするには `#[cfg(test)] ShioriProbe::fire_now(budget)`（`try_fire` の同期呼び）を使う（`cut_now`→`finish` は取り合いで `None` になりうる）。`Idle`・`Unloaded` は応答を返す前に書かれる＝応答を受けた後に読めば時刻に依らない。
 - 4.1: 理由の語は `logsink_fallback`・`session_end_deadline`。`settle_session_mark` は語をそのまま `info!(session_mark_kept, reason)` に載せるが、新しい 2 語が記録に出ることの判定は 4.3（倒れた回の 1 周）と 5.3（上限の語）で入れる。
+- 4.2: LogSink の腕の App スコープの置き場を結線の入力から写す前は、テストが `target\debug\deps\profile\areka\sylphya.toml`（実行体の隣の実 profile）へ書いていた。旗の出所は `GhostSession::logsink_fallback()`、印の材料へは `after_run` が運ぶ。5.2 で `session_end.rs` も同じ読み口から載せる。

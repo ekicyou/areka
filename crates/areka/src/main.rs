@@ -429,6 +429,9 @@ fn boot_first_ghost(
     ghost: &boot_resolve::GhostDecision,
     balloon: &boot_resolve::BalloonDecision,
 ) {
+    let argv_session = world
+        .get_resource::<boot_config::BootContext>()
+        .is_some_and(|ctx| ctx.argv_session);
     match world.get_resource::<boot_config::BootContext>() {
         Some(ctx) if !ctx.argv_session => boot_resolve::write_session_mark(
             &ctx.app_profile_dir,
@@ -445,6 +448,21 @@ fn boot_first_ghost(
     }
     let inputs = (world.non_send::<ghost_session::GhostBootInputsSource>().0)(cfg, origin);
     let session = ghost_session::boot_ghost(world, inputs, descript, ghost, balloon);
+    // LogSink へ倒れたら、このプロセスは終わり方によらず印を残す（要件 4.1・4.3）。帰結を 1 件だけ
+    // 記録する（倒れた先の成否は `boot_ghost` が今日どおり記録済み）。argv なら印に触れないので `debug!`。
+    if session.logsink_fallback() {
+        if argv_session {
+            tracing::debug!(
+                event = "session_mark_pinned_by_fallback",
+                "[main] 起動が LogSink へ倒れた——argv で始まったプロセスなので起動中の印には触れません"
+            );
+        } else {
+            tracing::warn!(
+                event = "session_mark_pinned_by_fallback",
+                "[main] 起動が LogSink へ倒れた——このプロセスは終わり方によらず起動中の印を残す（次の起動は既定のゴーストで Ref6/7 付き）"
+            );
+        }
+    }
     world.insert_non_send(ghost_session::GhostSlot(Some(session)));
 }
 
@@ -543,7 +561,9 @@ fn after_run(world: &mut World) -> AfterRun {
         app_profile_dir: ctx.app_profile_dir.clone(),
         argv_session: ctx.argv_session,
         first,
-        logsink_fallback: false,
+        logsink_fallback: session
+            .as_ref()
+            .is_some_and(ghost_session::GhostSession::logsink_fallback),
     };
     let scene = fault.map(|fault| alert::AlertScene::ShioriFault {
         ghost_name,

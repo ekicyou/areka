@@ -300,6 +300,11 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
         .is_some_and(|mut w| w.flag_source_connected());
     let notice_live = notice_rx_live(&mut rig.world);
     let reserved = rig.world.get_non_send::<SwitchInFlight>().is_some();
+    // 切替先の新しい単位は LogSink へ倒れた旗を持たない（倒れた理由を引き継がない・要件 8.3）。
+    let fallback = rig
+        .world
+        .get_non_send::<super::GhostSlot>()
+        .and_then(|slot| slot.0.as_ref().map(super::GhostSession::logsink_fallback));
     let expected_changing = Some(vec![
         "Bのさくら".to_owned(),
         "automatic".to_owned(),
@@ -329,6 +334,7 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
                 user_break_live,
                 notice_live,
                 reserved,
+                fallback,
                 levels_of(&events, "ghost_switch_requested"),
                 shutdown_ok,
             ),
@@ -363,6 +369,7 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
                 true,
                 true,
                 false,
+                Some(false),
                 vec![tracing::Level::INFO],
                 true,
             ),
@@ -370,7 +377,7 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
         "1 周が通らない（A の定常・B の定常まで届いた・A の呼出列・OnGhostChanging の Reference・\
          B の呼出列・OnGhostChanged の Reference・終了の指示・系の数 [Input, Update, FrameFinalize]・\
          説明書が B の根の下・メニューの登記・中断の旗が生きている・停止通知の受け口が生きている・\
-         予約が残っている・切替の要求の記録・降ろせた): {events:?}"
+         予約が残っている・切替先が LogSink へ倒れた旗・切替の要求の記録・降ろせた): {events:?}"
     );
 }
 

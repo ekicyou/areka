@@ -360,6 +360,9 @@ pub(crate) struct GhostSession {
     kanade: Option<Sender<KanadeMsg>>,
     /// 起こしたゴーストの根（`ghost/<フォルダ名>`・起動の結線の入力のもの）。
     ghost_dir: PathBuf,
+    /// 窓への結線が成立せず LogSink の起動へ倒れた単位か（倒れた先の成否を問わない・生涯で不変）。
+    /// 結線ありの腕・切替の経路・テスト用の組み立ては偽（要件 4.2・4.8・8.3）。
+    logsink_fallback: bool,
 }
 
 impl GhostSession {
@@ -378,6 +381,11 @@ impl GhostSession {
         self.ghost.as_ref()
     }
 
+    /// 窓への結線が成立せず LogSink の起動へ倒れた単位か（印の判定の材料・要件 4.1・4.2）。
+    pub(crate) fn logsink_fallback(&self) -> bool {
+        self.logsink_fallback
+    }
+
     /// kanade への送出端（切替の要求を送る）。実行系が無ければ `None`。
     pub(crate) fn kanade(&self) -> Option<&Sender<KanadeMsg>> {
         self.kanade.as_ref()
@@ -393,6 +401,7 @@ impl GhostSession {
             loop_ticker: None,
             kanade,
             ghost_dir,
+            logsink_fallback: false,
         }
     }
 
@@ -486,8 +495,11 @@ pub(crate) fn boot_ghost(
         helper_exe,
         kanade_stop,
     } = inputs;
-    // fallback の腕が使う根（結線の入力は `boot_wired` へ move するので先に写す）。
+    // fallback の腕が使う根と App スコープの置き場（結線の入力は `boot_wired` へ move するので先に写す）。
+    // 置き場は本番では `GhostBootInputs::production` の `Some(default_app_profile_dir())`＝
+    // `ghost_boot_options` の既定と同じ値（振る舞いは不変・要件 4.7）。テストは土台の置き場か `None`。
     let ghost_root = wiring.ghost_root.clone();
+    let app_profile_dir = wiring.app_profile_dir.clone();
 
     // `wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォールバック boot へ
     // 倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
@@ -500,7 +512,10 @@ pub(crate) fn boot_ghost(
     // 確かめているので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）
     // に限られ、`warn!` の上で `None` として骨格起動を継続する（要件 8.2）。それ以外の予期しない
     // 失敗（読取不能・shell 不在等）は `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
-    let ghost_options = ghost_boot_options(ghost_root.clone(), helper_exe);
+    let ghost_options = areka_ghost::GhostBootOptions {
+        app_profile_dir,
+        ..ghost_boot_options(ghost_root.clone(), helper_exe)
+    };
     // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
     let runtime = match areka_ghost::boot_with_kanade_stop(ghost_options, Some(kanade_stop)) {
         Ok(runtime) => {
@@ -528,12 +543,14 @@ pub(crate) fn boot_ghost(
         }
     };
     // フォールバック経路に seriko アクター・loop ticker はない（実 sink 結線が成立していない）。
+    // 倒れたことは倒れた先の成否によらず単位に残す（印の判定の材料・要件 4.1・4.2）。
     GhostSession {
         kanade: runtime.as_ref().map(|r| r.kanade().clone()),
         ghost: runtime,
         seriko: None,
         loop_ticker: None,
         ghost_dir: ghost_root,
+        logsink_fallback: true,
     }
 }
 
@@ -622,6 +639,7 @@ fn boot_wired(
         seriko: outcome.seriko,
         loop_ticker: outcome.loop_ticker,
         ghost_dir,
+        logsink_fallback: false,
     })
 }
 

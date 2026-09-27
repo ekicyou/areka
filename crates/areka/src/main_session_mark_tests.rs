@@ -830,6 +830,83 @@ fn argv_session_neither_reads_writes_nor_clears_mark() {
     );
 }
 
+/// 初回の起動が LogSink へ倒れた（要件 4.1・4.3・4.6）: argv でなければ帰結を書いた
+/// `warn!(session_mark_pinned_by_fallback)` が 1 件残り、置き場の単位の旗と `run()` の後に組む
+/// 印の材料の旗が立つ。argv なら同じ事象は `debug!` どまり（旗は立つが判定は argv が先に効く）。
+/// 結線が成立した起動では事象は 0 件で旗は偽（要件 4.8）。記録はどれも `boot_first_ghost` を
+/// 呼んだスレッドで出るので、同じスレッドの捕捉で数える。
+///
+/// # 非空虚性
+/// 1 行目が同じ捕捉で `warn!` 1 件を数えるので、3 行目の 0 件は捕捉の盲点ではない。
+#[test]
+fn first_boot_falling_back_pins_mark_with_one_warn() {
+    /// （`warn!` の件数・`debug!` の件数・置き場の単位の旗・印の材料の (argv, 旗)・降ろせた）。
+    type Row = (usize, usize, Option<bool>, Option<(bool, bool)>, bool);
+    fn boot_and_read(rig: &mut SwitchRig, ghost: GhostDecision, argv: bool) -> Row {
+        let ((), events) = capture(|| first_boot(rig, ghost, BootOrigin::Plain, argv));
+        let count = |level| {
+            events
+                .iter()
+                .filter(|e| {
+                    e.level == level
+                        && e.field_str("event") == Some("session_mark_pinned_by_fallback")
+                })
+                .count()
+        };
+        let slot_flag = rig
+            .world
+            .non_send::<GhostSlot>()
+            .0
+            .as_ref()
+            .map(GhostSession::logsink_fallback);
+        let mut after = after_run(&mut rig.world);
+        let mark = after
+            .mark
+            .as_ref()
+            .map(|m| (m.argv_session, m.logsink_fallback));
+        let down_ok = down(rig, &mut after);
+        (
+            count(tracing::Level::WARN),
+            count(tracing::Level::DEBUG),
+            slot_flag,
+            mark,
+            down_ok,
+        )
+    }
+
+    fn memory_a(rig: &SwitchRig) -> GhostDecision {
+        GhostDecision {
+            route: GhostRoute::Memory,
+            dir: rig.root.ghost_dir("A"),
+            folder: Some("A".to_owned()),
+        }
+    }
+
+    let mut fallen = rig_with(FakeShiori::WiringFail);
+    let argv = GhostDecision {
+        route: GhostRoute::Argv,
+        dir: fallen.root.ghost_dir("A"),
+        folder: None,
+    };
+    let fallen_memory = memory_a(&fallen);
+    let fallen_plain = boot_and_read(&mut fallen, fallen_memory, false);
+    let fallen_argv = boot_and_read(&mut fallen, argv, true);
+    let mut wired = rig_with(scripted_a());
+    let wired_memory = memory_a(&wired);
+    let wired_plain = boot_and_read(&mut wired, wired_memory, false);
+
+    assert_eq!(
+        vec![fallen_plain, fallen_argv, wired_plain],
+        vec![
+            (1, 0, Some(true), Some((false, true)), true),
+            (0, 1, Some(true), Some((true, true)), true),
+            (0, 0, Some(false), Some((false, false)), true),
+        ],
+        "LogSink へ倒れた初回の起動の記録か旗が崩れた（行: 倒れた・argv で倒れた・結線が成立した／\
+         列: warn の件数・debug の件数・置き場の単位の旗・印の材料 (argv, 旗)・降ろせた）"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // 告知と終了コード（切替の途中の致命・失敗でない終了）
 // ---------------------------------------------------------------------------
