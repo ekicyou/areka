@@ -42,6 +42,7 @@ pub(super) fn switching_world(root: &BasewareRoot, target: &str) -> World {
         root: root.clone(),
         app_profile_dir: root.dir().join("profile"),
         helper_exe: root.dir().join("helper.exe"),
+        argv_session: false,
         current: CurrentGhost {
             cfg: ConfigInputs {
                 ghost_root: root.ghost_dir("A"),

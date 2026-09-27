@@ -96,7 +96,8 @@ pub(crate) fn resolve_root() -> Result<(std::path::PathBuf, RootSource), RootErr
 // ---------------------------------------------------------------------------
 
 /// 起動前に決まったもの: 構成入力と、ゴースト・バルーンの決定（経路とフォルダ）と、
-/// 前回落ちたゴーストの名前（`take_last_halted`＝読んだら消す・要件 6.8）と、根（起動の文脈へ渡す）。
+/// 前回落ちたゴーストの名前（起動中の印の値・`read_session_mark`＝読むだけで消さない・要件 12.4）と、
+/// 根（起動の文脈へ渡す）。
 pub(crate) type BootResolved = (
     ConfigInputs,
     crate::boot_resolve::GhostDecision,
@@ -105,7 +106,7 @@ pub(crate) type BootResolved = (
     areka_ghost::BasewareRoot,
 );
 
-/// 起動の文脈（プロセスに 1 つ）: 根・記憶の置き場・helper のパス・今のゴースト。
+/// 起動の文脈（プロセスに 1 つ）: 根・記憶の置き場・helper のパス・argv で始まったプロセスか・今のゴースト。
 /// 目録とバルーンの解決に要る根を切替の経路へ渡す（切替が成功したら `current` を更新する）。
 /// 据え付けは `fn main`（系の登録の直後）。
 #[derive(bevy_ecs::prelude::Resource)]
@@ -113,6 +114,10 @@ pub(crate) struct BootContext {
     pub root: areka_ghost::BasewareRoot,
     pub app_profile_dir: std::path::PathBuf,
     pub helper_exe: std::path::PathBuf,
+    /// argv でゴーストを指定して始まったプロセスか（要件 12.5）。`fn main` が据え付けで 1 度だけ詰め、
+    /// 以後変えない（切替の後の `current.ghost.route` では判断しない）。真なら起動中の印を読まず
+    /// 書かず消さない。
+    pub argv_session: bool,
     pub current: CurrentGhost,
 }
 
@@ -164,10 +169,26 @@ pub(crate) fn resolve_boot_from(
             argv: Some(argv.to_path_buf()),
         });
     }
+    // 起動中の印（要件 12.4・12.5）: argv でゴーストを指定した起動（開発者の上書き）は読まない。
+    // 在れば前回はきれいに終わらなかったので、最後のゴーストの記憶を読まずに残りの段
+    // （唯一 → 既定 → 無作為）で解く。印は読むだけで消さない（起こす前の書き込みが上書きする）。
+    let mark = match argv_ghost {
+        Some(_) => None,
+        None => boot_resolve::read_session_mark(app_profile_dir),
+    };
+    if let Some(ghost) = &mark {
+        tracing::info!(
+            event = "session_mark_found",
+            ghost = %ghost,
+            "前回はきれいに終わらなかったので、最後のゴーストの記憶を読まずに起動するゴーストを決めます"
+        );
+    }
     let (memory, listed): (_, Vec<String>) = match argv_ghost {
         Some(_) => (None, Vec::new()),
         None => (
-            boot_resolve::read_last_ghost(app_profile_dir),
+            mark.is_none()
+                .then(|| boot_resolve::read_last_ghost(app_profile_dir))
+                .flatten(),
             catalog::list_ghosts(&root)
                 .into_iter()
                 .map(|e| e.identity.folder)
@@ -209,12 +230,7 @@ pub(crate) fn resolve_boot_from(
         ghost_root: ghost.dir.clone(),
         balloon_root: balloon.dir.clone(),
     };
-    // argv のゴーストは開発者の上書きで前回のゴーストの記憶（`LastGhost`）を読まない（控えも読まず消さない）。
-    let halted = argv_ghost
-        .is_none()
-        .then(|| boot_resolve::take_last_halted(app_profile_dir))
-        .flatten();
-    Ok((cfg, ghost, balloon, halted, root))
+    Ok((cfg, ghost, balloon, mark, root))
 }
 
 /// argv 無しの分岐（そのゴーストの最後のバルーンの記憶 → 同梱 → 唯一 → 既定 → 無作為）で

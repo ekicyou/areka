@@ -155,7 +155,8 @@ fn main() -> Result<()> {
     // （要件 1.4・4.7・4.8・5.8・6.3）。`warn!` で起動を続ける経路は作らない（要件 6.6）。
     // 決まった経路とフォルダは boot の分岐まで持ち越す（boot 成功直後の記憶の書き込みに使う）。
     let args: Vec<String> = std::env::args().collect();
-    // 4 つ目は前回落ちたゴーストの名前（読んだら消えている）。初回の起動の由来になる（要件 6.8）。
+    // 4 つ目は起動中の印の値＝前回きれいに終わらなかったゴーストの名前（読むだけで消さない）。
+    // 初回の起動の由来になる（要件 12.4）。
     let (cfg, ghost_decision, balloon_decision, halted, root) = match resolve_boot(&args) {
         Ok(resolved) => resolved,
         Err(scene) => {
@@ -189,6 +190,8 @@ fn main() -> Result<()> {
             root,
             app_profile_dir: default_app_profile_dir(),
             helper_exe,
+            // argv で始まったプロセスか（ここで 1 度だけ決め、以後変えない・要件 12.5）。
+            argv_session: ghost_decision.route == boot_resolve::GhostRoute::Argv,
             current: boot_config::CurrentGhost {
                 cfg: cfg.clone(),
                 ghost: ghost_decision.clone(),
@@ -269,7 +272,8 @@ fn main() -> Result<()> {
     // ゴーストごとの結線（areka-P0-ghost-restart-unit・`ghost_session::boot_ghost`）: 実 sink 結線を
     // 試み、成立しなければ `LogSink`×2 の fallback へ倒す。3 ハンドル（ゴースト実行系・seriko・
     // loop ticker）は `GhostSession` に束ねて置き場（`GhostSlot`）へ入れる（切替が入れ替え、
-    // `run()` の後にここへ取り出して降ろす）。前回落ちた名前が在れば由来は「前回落ちた」（要件 6.8）。
+    // `run()` の後にここへ取り出して降ろす）。印の値が在れば由来は「前回落ちた」（要件 12.4）。
+    // 起こす前に起動中の印を書く（argv で始まったプロセスは書かない・要件 12.1・12.5）。
     boot_first_ghost(
         app.world().borrow_mut().world_mut(),
         &cfg,
@@ -286,18 +290,20 @@ fn main() -> Result<()> {
     // `app_exit::quit_app`（全窓を閉じてから終了を指示）の終了の指示で `run()` が戻る。
     // 失敗でも後始末は通すので `?` で抜けない（要件 3.2・6.3）。
     let run = app.run();
+    // 印の判定の材料（`run` は下で `finish_after_run` へ渡すので、成否をここで控える）。
+    let run_ok = run.is_ok();
 
-    // 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と記憶の書き換えを決める
-    // （要件 1.1・1.3・1.12・6.8）。窓は `quit_app` が閉じ、残りは `run()` が壊してから戻るので、
+    // 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と印の判定の材料を組む
+    // （要件 1.1・1.3・1.12・12.2）。窓は `quit_app` が閉じ、残りは `run()` が壊してから戻るので、
     // 告知の背後に窓は無い（要件 1.11）。ゴースト名は降ろす前にここで読む（design「告知の位置」⑴）。
     let AfterRun {
         session,
         scene,
-        halt,
+        mark,
         fault,
     } = after_run(app.world().borrow_mut().world_mut());
 
-    // 後始末（降ろす → 記憶の書き換え → 告知 → 降ろした結果 → ④）を成否によらず 1 回通し、
+    // 後始末（降ろす → 印の始末 → 告知 → 降ろした結果 → ④）を成否によらず 1 回通し、
     // 終了コードは最後に決める（要件 3.1・3.2）。告知は降ろした後（design「告知の位置」）。① で
     // loop ticker は止まっており、降ろす結果は告知の後で返すので ②③ が失敗しても告知は出る。
     // 利用者が閉じたらそのまま進む（要件 1.10）。
@@ -315,10 +321,10 @@ fn main() -> Result<()> {
             }
         };
 
-        // 単独起動の失敗の控え（要件 6.8）: 降ろして記憶の書き出しが済んだ後に書き換える
-        // （先に書くと、降ろすときの書き出しが最後に使ったゴーストを上書きする）。
-        if let Some((app_profile_dir, fallen)) = &halt {
-            boot_resolve::record_halt(app_profile_dir, fallen);
+        // 起動中の印の始末（要件 12.2・12.3）: 降ろして記憶の書き出しが済んだ後に、きれいな終わりなら
+        // 消し、そうでなければ理由を残して残す（実行系が 0 の時点なので UI スレッドから直接書いてよい）。
+        if let Some(mark) = &mark {
+            settle_session_mark(mark, run_ok, down.is_ok());
         }
 
         // SHIORI の失敗の告知（1 プロセスに最大 1 回・抑止なら記録だけ・要件 1.1・1.6・1.12）。
@@ -388,8 +394,8 @@ fn install_boot_context(
     )));
 }
 
-/// 初回の起動の由来: 前回落ちたゴーストの名前が在れば「前回落ちた」（`OnBoot` の Ref6/7）、
-/// 無ければ「ふつう」（要件 6.8）。
+/// 初回の起動の由来: 起動中の印の値（前回きれいに終わらなかったゴーストの名前）が在れば
+/// 「前回落ちた」（`OnBoot` の Ref6/7）、無ければ「ふつう」（要件 12.4）。
 fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
     match halted {
         Some(ghost_name) => areka_kanade::BootOrigin::Halted { ghost_name },
@@ -399,6 +405,9 @@ fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
 
 /// 初回の起動: 起動入力の作り口で入力を組んで起こし（fallback へ倒れる `boot_ghost`）、
 /// 置き場（`GhostSlot`）へ入れる。作り口は [`install_boot_context`] が先に据えている。
+///
+/// 起こす前（ゴーストの実行系がまだ 1 つも無い時点）に、argv で始まったプロセスでなければ
+/// 起動中の印＝起こすゴーストの名前を書く（要件 12.1・12.5）。
 fn boot_first_ghost(
     world: &mut World,
     cfg: &ConfigInputs,
@@ -407,6 +416,20 @@ fn boot_first_ghost(
     ghost: &boot_resolve::GhostDecision,
     balloon: &boot_resolve::BalloonDecision,
 ) {
+    match world.get_resource::<boot_config::BootContext>() {
+        Some(ctx) if !ctx.argv_session => boot_resolve::write_session_mark(
+            &ctx.app_profile_dir,
+            &boot_resolve::running_name(&ctx.root, ghost),
+        ),
+        Some(_) => tracing::debug!(
+            event = "session_mark_untouched_argv",
+            "[main] argv で始まったプロセスなので起動中の印を書きません"
+        ),
+        None => tracing::warn!(
+            event = "boot_context_missing",
+            "[main] 起動の文脈が無いので起動中の印を書けません（このゴーストが落ちても次の起動は前回落ちたと気付きません）"
+        ),
+    }
     let inputs = (world.non_send::<ghost_session::GhostBootInputsSource>().0)(cfg, origin);
     let session = ghost_session::boot_ghost(world, inputs, descript, ghost, balloon);
     world.insert_non_send(ghost_session::GhostSlot(Some(session)));
@@ -418,13 +441,23 @@ struct AfterRun {
     session: Option<ghost_session::GhostSession>,
     /// SHIORI の失敗の告知の場面（最初の出所が Fault のときだけ）。
     scene: Option<alert::AlertScene>,
-    /// 単独起動の失敗の控え（記憶の置き場・落ちたゴーストの名前）。降ろした後に書く。
-    halt: Option<(std::path::PathBuf, String)>,
+    /// 起動中の印の判定の材料（起動の文脈が無ければ `None`＝印に触れない）。判定は降ろした後。
+    mark: Option<MarkInputs>,
     /// 終了コードを 1 にするか（最初の出所が Fault）。
     fault: bool,
 }
 
-/// 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と記憶の書き換えを決める。
+/// 起動中の印の判定の材料（`run()` の後に組み、降ろした後に [`settle_session_mark`] へ渡す）。
+struct MarkInputs {
+    /// 記憶の置き場（App スコープ）。
+    app_profile_dir: std::path::PathBuf,
+    /// 起動の文脈の argv の旗（要件 12.5）。
+    argv_session: bool,
+    /// 最初に終了を指示した出所（無ければ `None`）。
+    first: Option<app_exit::ExitOrigin>,
+}
+
+/// 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と印の判定の材料を組む。
 ///
 /// 告知のゴーストは置き場の単位の名前と文脈の今のゴーストの根（切替後の今のゴースト）。
 /// 切替の途中の致命（既定へ戻せなかった）では置き場が空で、文脈の今のゴーストは最後に起きた
@@ -442,12 +475,12 @@ fn after_run(world: &mut World) -> AfterRun {
         // `main` が系の登録の直後に据える。無ければ配線の誤りで、告知の場所も記憶の置き場も組めない。
         tracing::error!(
             event = "boot_context_missing",
-            "[main] 起動の文脈が無い——告知と記憶の書き換えを組めません"
+            "[main] 起動の文脈が無い——告知を組めず、起動中の印も消せません（次の起動は前回落ちたとして Ref6/7 付きになります）"
         );
         return AfterRun {
             session,
             scene: None,
-            halt: None,
+            mark: None,
             fault: fault.is_some(),
         };
     };
@@ -464,12 +497,11 @@ fn after_run(world: &mut World) -> AfterRun {
             ctx.current.cfg.ghost_root.clone(),
         ),
     };
-    let halt = should_record_halt(first.as_ref(), &ctx.current.ghost).then(|| {
-        (
-            ctx.app_profile_dir.clone(),
-            ghost_name.clone().unwrap_or_default(),
-        )
-    });
+    let mark = MarkInputs {
+        app_profile_dir: ctx.app_profile_dir.clone(),
+        argv_session: ctx.argv_session,
+        first,
+    };
     let scene = fault.map(|fault| alert::AlertScene::ShioriFault {
         ghost_name,
         // argv で相対パスを渡されても告知には絶対パスを載せる（要件 1.3）。
@@ -480,41 +512,80 @@ fn after_run(world: &mut World) -> AfterRun {
         session,
         fault: scene.is_some(),
         scene,
-        halt,
+        mark: Some(mark),
     }
 }
 
-/// 単独起動の失敗を記憶に残すか（要件 6.8・裁定 11）。
+/// きれいな終わりの判定（要件 12.2・12.3・12.5）の結論。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MarkVerdict {
+    /// きれいに終わった＝印を消す。
+    Clear,
+    /// きれいに終わらなかった＝印を残す（理由は記録の `reason`）。
+    Keep(&'static str),
+    /// argv で始まったプロセス＝印に触れない。
+    Untouched,
+}
+
+/// きれいな終わりの判定（後始末と OS のセッションの終了が共有する唯一の判定・要件 12.2・12.3）。
 ///
-/// 書くのは最初の出所が kanade の停止の Fault（起動系列の途中か定常のあとかは見ない）で、
-/// 今のゴーストが argv で決まっておらず、既定ゴーストでもないときだけ。argv（開発者の上書き）・
-/// 既定ゴースト自身の失敗・切替の途中の致命（既定の起動が既に記憶を既定へ書いている）は
-/// 書き換えず `info!` を残す。Fault 以外の終了は記録なしで `false`。
-fn should_record_halt(
+/// 上から順に: argv で始まったプロセスは触らない → 最初の出所が無い → 出所が失敗（SHIORI の失敗・
+/// 既定へ戻せない致命）→ `run()` の失敗 → 降ろす処理の失敗 → それ以外は消す。出所は網羅の
+/// match で見るので、出所を足すとこの判定の漏れがコンパイルで止まる。
+fn session_mark_verdict(
     first: Option<&app_exit::ExitOrigin>,
-    ghost: &boot_resolve::GhostDecision,
-) -> bool {
+    argv_session: bool,
+    run_ok: bool,
+    down_ok: bool,
+) -> MarkVerdict {
     use app_exit::ExitOrigin;
-    let reason = match first {
-        Some(ExitOrigin::KanadeStopped(areka_kanade::KanadeStopCause::Fault(_))) => {
-            if ghost.route == boot_resolve::GhostRoute::Argv {
-                "argv"
-            } else if ghost.folder.as_deref() == Some(boot_resolve::DEFAULT_GHOST_FOLDER) {
-                "default_ghost"
-            } else {
-                return true;
-            }
-        }
-        Some(ExitOrigin::GhostFallbackFailed(_)) => "switch_fatal",
-        _ => return false,
+    use areka_kanade::KanadeStopCause;
+    if argv_session {
+        return MarkVerdict::Untouched;
+    }
+    let Some(first) = first else {
+        return MarkVerdict::Keep("no_exit_origin");
     };
-    tracing::info!(
-        event = "halt_record_skipped",
-        reason,
-        ghost = ?ghost.folder,
-        "[main] 落ちたゴーストを記憶に控えません（次回も記憶のとおりに起動します）"
-    );
-    false
+    match first {
+        ExitOrigin::KanadeStopped(KanadeStopCause::Fault(_)) => return MarkVerdict::Keep("fault"),
+        ExitOrigin::GhostFallbackFailed(_) => return MarkVerdict::Keep("switch_fatal"),
+        ExitOrigin::KanadeStopped(
+            KanadeStopCause::Quit
+            | KanadeStopCause::Forced
+            | KanadeStopCause::CloseSilent
+            | KanadeStopCause::DeadlineExceeded,
+        )
+        | ExitOrigin::Escape
+        | ExitOrigin::Smoke
+        | ExitOrigin::OsClose => {}
+    }
+    if !run_ok {
+        return MarkVerdict::Keep("run_failed");
+    }
+    if !down_ok {
+        return MarkVerdict::Keep("down_failed");
+    }
+    MarkVerdict::Clear
+}
+
+/// 降ろした後の印の始末: 判定して、消すなら消し（`info!(session_mark_cleared)`）、残すなら理由つきの
+/// `info!(session_mark_kept)`、argv なら `debug!` だけ。呼ぶのはゴーストの実行系が 0 の時点だけ。
+fn settle_session_mark(mark: &MarkInputs, run_ok: bool, down_ok: bool) -> MarkVerdict {
+    let verdict = session_mark_verdict(mark.first.as_ref(), mark.argv_session, run_ok, down_ok);
+    match verdict {
+        MarkVerdict::Clear => boot_resolve::clear_session_mark(&mark.app_profile_dir),
+        MarkVerdict::Keep(reason) => tracing::info!(
+            event = "session_mark_kept",
+            reason,
+            first = ?mark.first,
+            "[main] きれいに終わらなかったので起動中の印を残します（次の起動は既定のゴーストで Ref6/7 付き）"
+        ),
+        MarkVerdict::Untouched => tracing::debug!(
+            event = "session_mark_untouched_argv",
+            "[main] argv で始まったプロセスなので起動中の印に触れません"
+        ),
+    }
+    verdict
 }
 
 // ---------------------------------------------------------------------------
@@ -736,7 +807,7 @@ mod monitor_snapshot_seam_tests;
 #[path = "main_finish_after_run_tests.rs"]
 mod finish_after_run_tests;
 
-/// 据え付けと `run()` の後（task 8.5・要件 6.8・8.1・8.2・10.14・11.11）のテスト。
+/// 据え付けと `run()` の後・起動中の印（task 8.5・11.1・要件 8.1・8.2・12.1〜12.5・12.12）のテスト。
 #[cfg(test)]
-#[path = "main_halt_record_tests.rs"]
-mod halt_record_tests;
+#[path = "main_session_mark_tests.rs"]
+mod session_mark_tests;

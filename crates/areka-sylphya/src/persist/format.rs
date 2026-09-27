@@ -24,11 +24,11 @@
 //! [vanish]             # areka.vanish.count
 //! count = "0"
 //!
-//! [last]               # areka.last.ghost|balloon|shell|halted（値のある欄だけ・無ければ表ごと省く）
+//! [last]               # areka.last.ghost|balloon|shell|running（値のある欄だけ・無ければ表ごと省く）
 //! ghost = "emo2"
 //! balloon = "StayseeBalloon"
 //! shell = "master"
-//! halted = "broken"    # 前回落ちたゴースト（空文字は「無し」と読む）
+//! running = "broken"   # 起動中の印（空文字は「無し」と読む）
 //! ```
 //!
 //! - `format-version` は最上位の **整数 key**（本バージョン = [`FORMAT_VERSION`] = 1）。
@@ -85,9 +85,9 @@ pub struct FormatDoc {
     pub last_balloon: Option<String>,
     /// 前回のシェルのフォルダ名。正準 key `areka.last.shell`・表 `[last]` shell。
     pub last_shell: Option<String>,
-    /// 前回落ちたゴーストのフォルダ名。正準 key `areka.last.halted`・表 `[last]` halted。
+    /// 起動中の印（動いているゴーストの名前）。正準 key `areka.last.running`・表 `[last]` running。
     /// 空文字は「無し」と読む（[`read_toml_str`] が `None` にする＝空文字を書けば消える）。
-    pub last_halted: Option<String>,
+    pub last_running: Option<String>,
 }
 
 impl FormatDoc {
@@ -102,7 +102,7 @@ impl FormatDoc {
             && self.last_ghost.is_none()
             && self.last_balloon.is_none()
             && self.last_shell.is_none()
-            && self.last_halted.is_none()
+            && self.last_running.is_none()
     }
 }
 
@@ -150,7 +150,7 @@ pub fn to_toml_string(doc: &FormatDoc) -> String {
         ("ghost", &doc.last_ghost),
         ("balloon", &doc.last_balloon),
         ("shell", &doc.last_shell),
-        ("halted", &doc.last_halted),
+        ("running", &doc.last_running),
     ] {
         if let Some(v) = value {
             last.insert(field.into(), toml::Value::String(v.clone()));
@@ -242,7 +242,7 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
         last_ghost: read_last("ghost"),
         last_balloon: read_last("balloon"),
         last_shell: read_last("shell"),
-        last_halted: read_last("halted").filter(|v| !v.is_empty()),
+        last_running: read_last("running").filter(|v| !v.is_empty()),
         window: read_axis_map(&table, "window"),
         balloon_offset: read_axis_map(&table, "balloon-offset"),
         boot_count: read_count(&table, "boot"),
@@ -316,7 +316,7 @@ mod tests {
             last_ghost: Some("emo2".into()),
             last_balloon: Some("StayseeBalloon".into()),
             last_shell: Some("master".into()),
-            last_halted: Some("broken".into()),
+            last_running: Some("broken".into()),
         };
 
         let toml = to_toml_string(&doc);
@@ -411,7 +411,7 @@ mod tests {
                 ..Default::default()
             },
             FormatDoc {
-                last_halted: Some("h".into()),
+                last_running: Some("h".into()),
                 ..Default::default()
             },
         ] {

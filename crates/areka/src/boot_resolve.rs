@@ -6,7 +6,8 @@
 //!
 //! 既定の定数 [`DEFAULT_GHOST_FOLDER`]／[`DEFAULT_BALLOON_FOLDER`] はこのファイルだけが持ち、
 //! 解決の判断での参照はそれぞれゴーストの段 4・バルーンの段 5 の 1 か所だけ（要件 4.11・5.9）。
-//! 判断の外では、単独起動の失敗の控え [`record_halt`] が既定ゴーストを記憶の書き換え先に使う（要件 6.8）。
+//! 判断の外では、切替の降ろした直後の記憶 [`write_switch_drop`] が既定ゴーストを最後のゴーストの
+//! 書き先に使う（要件 12.6）。
 
 use std::hash::{BuildHasher, RandomState};
 use std::path::{Path, PathBuf};
@@ -284,63 +285,103 @@ fn save_app(app_profile_dir: &Path, entries: Vec<(PersistKey, String)>) -> Persi
     )
 }
 
-/// 前回落ちたゴーストの名前（App スコープ `areka.last.halted`・要件 6.8）。空文字・無しは `None`。
-pub(crate) fn read_last_halted(app_profile_dir: &Path) -> Option<String> {
+// ---------------------------------------------------------------- 起動中の印（要件 12.1〜12.8）
+//
+// 印（App スコープ `areka.last.running`）は「今動いているゴーストの名前」。起こす前に書き、
+// きれいな終わりでだけ消す（強制終了・クラッシュ・電源断では消えずに残る）。次の起動で残って
+// いれば前回はきれいに終わらなかった＝最後のゴーストの記憶を読まずに解き、`OnBoot` の Ref7 に載せる。
+//
+// 下の書き手（`write_session_mark`・`write_switch_drop`・`clear_session_mark`）を UI スレッドから
+// 呼ぶのは、ゴーストの実行系が 1 つも動いていない間だけ（初回の起動の前・切替の降ろした直後・
+// 後始末で降ろした後）。記憶の保存は「読んで重ねて書く」ので、動いている実行系の記憶の書き手と
+// 同時に同じファイルを書くと片方が消えうるため。
+
+/// 起動中の印（App スコープ `areka.last.running`）。空文字・無しは `None`。読むだけで消さない。
+pub(crate) fn read_session_mark(app_profile_dir: &Path) -> Option<String> {
     read_last(
         PersistScope::App,
         &app_roots(app_profile_dir),
-        PersistKey::LastHalted,
+        PersistKey::LastRunning,
     )
 }
 
-/// 前回落ちたゴーストの名前を読んで消す（空文字を書き戻す＝1 回で消える・要件 6.8）。
-/// 呼び手は起動前の解決（`boot_config::resolve_boot_from`・argv でゴーストを指定しないとき）。
-pub(crate) fn take_last_halted(app_profile_dir: &Path) -> Option<String> {
-    let name = read_last_halted(app_profile_dir)?;
+/// 印を書く（初回の起動の前・呼び手は argv で始まったプロセスでないときだけ呼ぶ）。
+pub(crate) fn write_session_mark(app_profile_dir: &Path, running: &str) {
     match save_app(
         app_profile_dir,
-        vec![(PersistKey::LastHalted, String::new())],
+        vec![(PersistKey::LastRunning, running.to_owned())],
     ) {
         PersistOutcome::Saved => tracing::info!(
-            event = "last_halted_taken",
-            ghost = %name,
-            "[boot_resolve] 前回落ちたゴーストの名前を読んで消しました"
+            event = "session_mark_written",
+            ghost = running,
+            "[boot_resolve] 起動中の印を書きました"
         ),
         PersistOutcome::Degraded => tracing::warn!(
-            event = "last_halted_clear_degraded",
-            ghost = %name,
+            event = "session_mark_write_degraded",
+            ghost = running,
             dir = %app_profile_dir.display(),
-            "[boot_resolve] 前回落ちたゴーストの名前を記憶から消せませんでした（次回の起動でも同じ名前を落ちたゴーストとして渡します）"
+            "[boot_resolve] 起動中の印を記憶へ書けませんでした（このゴーストが落ちても、次の起動の Ref6/7 にこのゴーストの名前は載りません）"
         ),
     }
-    Some(name)
 }
 
-/// 単独起動の失敗の控え（要件 6.8・裁定 11）: 最後に使ったゴーストを既定へ書き換え、
-/// 落ちた名前を控える（次回の起動で既定が起き、`OnBoot` の Ref7 に載る）。
-/// 呼び手は `fn main` の後始末（降ろして記憶の書き出しが済んだ後）。
-pub(crate) fn record_halt(app_profile_dir: &Path, fallen_name: &str) {
-    match save_app(
-        app_profile_dir,
-        vec![
-            (PersistKey::LastGhost, DEFAULT_GHOST_FOLDER.to_owned()),
-            (PersistKey::LastHalted, fallen_name.to_owned()),
-        ],
-    ) {
+/// 切替で前のゴーストを降ろした直後: 最後に使ったゴースト＝既定と（`mark` が在れば）印＝切替先を
+/// 1 回の書き込みで書く。argv で始まったプロセスは `mark` に `None` を渡す（印に触れない・要件 12.5）。
+// 本番の呼び手は切替の記憶の時点を移すタスク（`ghost_switch::switch_to`）で付く。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn write_switch_drop(app_profile_dir: &Path, mark: Option<&str>) {
+    let mut entries = vec![(PersistKey::LastGhost, DEFAULT_GHOST_FOLDER.to_owned())];
+    entries.extend(mark.map(|m| (PersistKey::LastRunning, m.to_owned())));
+    match save_app(app_profile_dir, entries) {
         PersistOutcome::Saved => tracing::info!(
-            event = "halt_recorded",
-            ghost = fallen_name,
-            next = DEFAULT_GHOST_FOLDER,
-            "[boot_resolve] 落ちたゴーストを控え、次回の起動を既定のゴーストへ書き換えました"
+            event = "switch_drop_recorded",
+            last_ghost = DEFAULT_GHOST_FOLDER,
+            mark = mark.unwrap_or("-"),
+            "[boot_resolve] 降ろした直後の記憶を書きました（最後のゴーストは既定・印は切替先・- は argv なので印に触れていない）"
         ),
         PersistOutcome::Degraded => tracing::warn!(
-            event = "halt_record_degraded",
-            ghost = fallen_name,
-            next = DEFAULT_GHOST_FOLDER,
+            event = "switch_drop_record_degraded",
+            last_ghost = DEFAULT_GHOST_FOLDER,
+            mark = mark.unwrap_or("-"),
             dir = %app_profile_dir.display(),
-            "[boot_resolve] 既定のゴーストへの書き換えと落ちたゴーストの控えを記憶へ書けませんでした（次回の起動で同じゴーストがまた起きることがあります）"
+            "[boot_resolve] 降ろした直後の記憶を書けませんでした（切替先が落ちても、次の起動の印は前のゴーストの名前のまま・最後のゴーストは前のゴーストのままになります）"
         ),
     }
+}
+
+/// きれいな終わり: 印を消す（空文字を書く）。呼び手は後始末で降ろした後。
+pub(crate) fn clear_session_mark(app_profile_dir: &Path) {
+    match save_app(
+        app_profile_dir,
+        vec![(PersistKey::LastRunning, String::new())],
+    ) {
+        PersistOutcome::Saved => tracing::info!(
+            event = "session_mark_cleared",
+            "[boot_resolve] きれいに終わったので起動中の印を消しました"
+        ),
+        PersistOutcome::Degraded => tracing::warn!(
+            event = "session_mark_clear_degraded",
+            dir = %app_profile_dir.display(),
+            "[boot_resolve] 起動中の印を消せませんでした（きれいに終わったのに、次の起動は前回落ちたとして既定のゴーストで Ref6/7 付きになります）"
+        ),
+    }
+}
+
+/// 印に書く名前: 目録の同じフォルダの descript の `name`、無ければフォルダ名（argv 以外の決定だけが来る）。
+pub(crate) fn running_name(root: &BasewareRoot, ghost: &GhostDecision) -> String {
+    let folder = ghost.folder.clone().unwrap_or_else(|| {
+        // argv の決定は印を書かない（呼び手が旗で止める）。来たらフォルダの末尾で代える。
+        ghost
+            .dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+    areka_ghost::catalog::list_ghosts(root)
+        .into_iter()
+        .find(|e| e.identity.folder == folder)
+        .and_then(|e| e.identity.name)
+        .unwrap_or(folder)
 }
 
 /// 起動成功時に書く内容（要件 3.2〜3.5・裁定 5）。

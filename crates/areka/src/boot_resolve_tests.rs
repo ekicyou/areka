@@ -540,37 +540,66 @@ mod last_used {
         assert_eq!(count_event(&events, "last_used_skipped_argv"), 0);
     }
 
-    /// 単独起動の失敗の控え（要件 6.8・10.14）: 書き換えのあと最後のゴーストは既定・
-    /// 落ちた名前は 1 回だけ返り 2 度目は無し。実 fs の記憶で往復する。
+    /// 起動中の印の往復（要件 12.1・12.2）: 書く → 読む → 消す（空文字＝無し）。最後のゴーストには触れない。
     #[test]
-    fn record_halt_rewrites_to_default_and_take_returns_name_once() {
-        let tmp = TempPath::new("boot-resolve-last-halted");
+    fn session_mark_round_trip_and_clear() {
+        let tmp = TempPath::new("boot-resolve-session-mark");
         let app_dir = tmp.child("app-profile");
-        assert_eq!(read_last_halted(&app_dir), None);
-        assert_eq!(take_last_halted(&app_dir), None, "未記録なら無し");
+        let before = read_session_mark(&app_dir);
 
-        let ((), events) = capture(|| record_halt(&app_dir, "壊れた子"));
-        assert_one_event(&events, "halt_recorded", tracing::Level::INFO);
-        assert_eq!(
-            read_last_ghost(&app_dir).as_deref(),
-            Some(DEFAULT_GHOST_FOLDER)
-        );
-        assert_eq!(read_last_halted(&app_dir).as_deref(), Some("壊れた子"));
+        let ((), written) = capture(|| write_session_mark(&app_dir, "動いている子"));
+        let after_write = read_session_mark(&app_dir);
+        let ((), cleared) = capture(|| clear_session_mark(&app_dir));
 
-        assert_eq!(take_last_halted(&app_dir).as_deref(), Some("壊れた子"));
-        assert_eq!(take_last_halted(&app_dir), None, "1 回使ったら消える");
-        assert_eq!(read_last_halted(&app_dir), None);
         assert_eq!(
-            read_last_ghost(&app_dir).as_deref(),
-            Some(DEFAULT_GHOST_FOLDER),
-            "消すのは落ちた名前だけ・最後のゴーストは残る"
+            (
+                before,
+                after_write,
+                read_session_mark(&app_dir),
+                read_last_ghost(&app_dir)
+            ),
+            (None, Some("動いている子".to_owned()), None, None),
+            "印の往復が崩れた（書く前・書いた後・消した後・最後のゴースト）"
         );
+        assert_one_event(&written, "session_mark_written", tracing::Level::INFO);
+        assert_one_event(&cleared, "session_mark_cleared", tracing::Level::INFO);
     }
 
-    /// 書けないとき（App の置き場が普通のファイル）: `record_halt` は `warn!` 1 件で戻り、成功の info は出ない。
+    /// 切替の降ろした直後（要件 12.6）: 1 回の書き込みで最後のゴースト＝既定・印＝切替先。
+    /// 印を渡さない（argv で始まったプロセス）なら最後のゴーストだけで、前から在った印は残る。
     #[test]
-    fn record_halt_save_failure_warns_once_and_returns() {
-        let tmp = TempPath::new("boot-resolve-halt-degraded");
+    fn switch_drop_writes_default_and_mark_at_once() {
+        let tmp = TempPath::new("boot-resolve-switch-drop");
+        let app_dir = tmp.child("app-profile");
+        let argv_dir = tmp.child("app-profile-argv");
+        write_session_mark(&argv_dir, "前からの印");
+
+        let ((), events) = capture(|| write_switch_drop(&app_dir, Some("切替先")));
+        write_switch_drop(&argv_dir, None);
+
+        assert_eq!(
+            (
+                read_last_ghost(&app_dir),
+                read_session_mark(&app_dir),
+                read_last_ghost(&argv_dir),
+                read_session_mark(&argv_dir),
+            ),
+            (
+                Some(DEFAULT_GHOST_FOLDER.to_owned()),
+                Some("切替先".to_owned()),
+                Some(DEFAULT_GHOST_FOLDER.to_owned()),
+                Some("前からの印".to_owned()),
+            ),
+            "降ろした直後の記憶が崩れた（最後のゴースト・印／argv の最後のゴースト・印）"
+        );
+        assert_one_event(&events, "switch_drop_recorded", tracing::Level::INFO);
+    }
+
+    /// 書けないとき（App の置き場が普通のファイル）: 3 つの書き手はそれぞれ `warn!` 1 件で戻り、
+    /// 成功の info は出ない。
+    #[test]
+    fn session_mark_writers_warn_once_when_they_cannot_write() {
+        let tmp = TempPath::new("boot-resolve-session-mark-degraded");
         let app_dir = tmp.child("app-profile");
         std::fs::create_dir_all(app_dir.parent().unwrap()).unwrap();
         std::fs::write(&app_dir, "not a dir").unwrap();
@@ -583,26 +612,55 @@ mod last_used {
             save_scope(PersistScope::App, &roots, &FsPersistIo, vec![]),
             PersistOutcome::Degraded
         );
-        let ((), events) = capture(|| record_halt(&app_dir, "壊れた子"));
-        assert_one_event(&events, "halt_record_degraded", tracing::Level::WARN);
-        assert_eq!(count_event(&events, "halt_recorded"), 0);
+        let cases: [(&str, &str, Box<dyn Fn()>); 3] = [
+            (
+                "session_mark_write_degraded",
+                "session_mark_written",
+                Box::new(|| write_session_mark(&app_dir, "動いている子")),
+            ),
+            (
+                "switch_drop_record_degraded",
+                "switch_drop_recorded",
+                Box::new(|| write_switch_drop(&app_dir, Some("切替先"))),
+            ),
+            (
+                "session_mark_clear_degraded",
+                "session_mark_cleared",
+                Box::new(|| clear_session_mark(&app_dir)),
+            ),
+        ];
+        for (warn, info, write) in cases {
+            let ((), events) = capture(|| write());
+            assert_one_event(&events, warn, tracing::Level::WARN);
+            assert_eq!(count_event(&events, info), 0, "{info} が出た");
+        }
     }
 
-    /// 消せないとき（一時ファイルの場所をフォルダで塞ぐ・読みは通る）: 名前は返り `warn!` 1 件。
+    /// 印に書く名前（要件 12.1）: 目録の同じフォルダの descript の `name`、無ければフォルダ名。
     #[test]
-    fn take_last_halted_clear_failure_warns_once_and_returns_name() {
-        let tmp = TempPath::new("boot-resolve-take-degraded");
-        let app_dir = tmp.child("app-profile");
-        record_halt(&app_dir, "壊れた子");
-        std::fs::create_dir_all(app_dir.join("sylphya.toml.tmp")).unwrap();
-        let (name, events) = capture(|| take_last_halted(&app_dir));
-        assert_eq!(name.as_deref(), Some("壊れた子"));
-        assert_one_event(&events, "last_halted_clear_degraded", tracing::Level::WARN);
-        assert_eq!(count_event(&events, "last_halted_taken"), 0);
+    fn running_name_prefers_descript_name_then_folder() {
+        let tmp = TempPath::new("boot-resolve-running-name");
+        let root = BasewareRoot::new(tmp.path().to_path_buf());
+        for (folder, descript) in [
+            ("named", "charset,UTF-8\nname,名のある子\n"),
+            ("nameless", "charset,UTF-8\n"),
+        ] {
+            let master = root.ghost_dir(folder).join("ghost").join("master");
+            std::fs::create_dir_all(&master).unwrap();
+            std::fs::write(master.join("descript.txt"), descript).unwrap();
+        }
         assert_eq!(
-            read_last_halted(&app_dir).as_deref(),
-            Some("壊れた子"),
-            "消せなかったので残る"
+            [
+                running_name(&root, &ghost_at(&root, GhostRoute::Memory, "named")),
+                running_name(&root, &ghost_at(&root, GhostRoute::Default, "nameless")),
+                running_name(&root, &ghost_at(&root, GhostRoute::Only, "missing")),
+            ],
+            [
+                "名のある子".to_owned(),
+                "nameless".to_owned(),
+                "missing".to_owned()
+            ],
+            "印の名前が descript の name → フォルダ名の順でない（在る・name 無し・目録に無い）"
         );
     }
 }

@@ -212,15 +212,18 @@ mod boot {
 }
 
 // ---------------------------------------------------------------------------
-// 1 ゴースト分のバルーンの解決と、前回落ちたゴーストの名前（task 5.3・要件 4.7・6.8）
+// 1 ゴースト分のバルーンの解決と、起動中の印（task 5.3・11.1・要件 4.7・12.4・12.5）
 // ---------------------------------------------------------------------------
 // `resolve_balloon_for_ghost` は切替先のバルーンを argv 無しの分岐で解く。起動前の解決は
-// それを呼び、戻りの 4 つ目に「前回落ちたゴーストの名前（読んだら消す）」を載せる。
+// それを呼び、戻りの 4 つ目に「起動中の印の値（前回落ちたゴーストの名前・読むだけで消さない）」を載せる。
 
 mod switch_balloon {
     use crate::boot_config::{RootSource, resolve_balloon_for_ghost, resolve_boot_from};
-    use crate::boot_resolve::{BalloonRoute, read_last_halted, record_halt};
+    use crate::boot_resolve::{
+        BalloonRoute, DEFAULT_GHOST_FOLDER, GhostRoute, read_session_mark, write_session_mark,
+    };
     use areka_ghost::BasewareRoot;
+    use log_capture_kit::capture;
     use std::path::{Path, PathBuf};
     use temp_path_kit::TempPath;
 
@@ -345,7 +348,7 @@ mod switch_balloon {
         let ghost = fixture(&tmp);
         put_companion(&ghost, "b1");
         let args = vec!["areka.exe".to_owned()];
-        let (cfg, g, b, halted, _) = resolve_boot_from(
+        let (cfg, g, b, mark, _) = resolve_boot_from(
             Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
             &args,
             tmp.path(),
@@ -358,49 +361,113 @@ mod switch_balloon {
             (BalloonRoute::Companion, Some("b1"))
         );
         assert_eq!(cfg.balloon_root, tmp.child("balloon").join("b1"));
-        assert_eq!(halted, None, "控えが無ければ無し");
+        assert_eq!(mark, None, "印が無ければ無し");
     }
 
-    /// 前回落ちたゴーストの名前は起動前の解決の戻りに載り、読んだら消える（要件 6.8）。
+    /// 根にゴースト `g1` と既定ゴーストを置き、最後のゴーストの記憶を `g1` にする。
+    fn two_ghosts_remembering_g1(tmp: &TempPath, app_dir: &Path) {
+        use areka_sylphya::persist::FsPersistIo;
+        use areka_sylphya::{PersistKey, PersistScope, ScopeRoots, save_scope};
+        fixture(tmp);
+        let master = tmp
+            .child("ghost")
+            .join(DEFAULT_GHOST_FOLDER)
+            .join("ghost")
+            .join("master");
+        std::fs::create_dir_all(&master).expect("フォルダを組む");
+        std::fs::write(master.join("descript.txt"), "charset,UTF-8\n").expect("descript");
+        save_scope(
+            PersistScope::App,
+            &ScopeRoots {
+                app: Some(app_dir.to_path_buf()),
+                ..ScopeRoots::default()
+            },
+            &FsPersistIo,
+            vec![(PersistKey::LastGhost, "g1".to_owned())],
+        );
+    }
+
+    /// 印が在れば（要件 12.4）: `info!(session_mark_found)` の上で最後のゴーストの記憶を読まずに
+    /// 既定の段で決まり、印の値が 4 つ目に載る。読むだけで消さない（2 度目も同じ）。
+    /// 印が無ければ今日どおり記憶の経路。
     #[test]
-    fn halted_name_is_returned_once() {
-        let tmp = TempPath::new("switch-balloon-halted");
-        fixture(&tmp);
+    fn session_mark_is_returned_and_last_ghost_is_not_read() {
+        let tmp = TempPath::new("switch-balloon-mark");
         let app_dir = tmp.child("app-profile");
-        record_halt(&app_dir, "落ちた子");
+        two_ghosts_remembering_g1(&tmp, &app_dir);
         let args = vec!["areka.exe".to_owned()];
         let boot = || {
+            let (_, g, _, mark, _) = resolve_boot_from(
+                Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
+                &args,
+                &app_dir,
+                no_pick,
+            )
+            .expect("決まる");
+            (g.route, g.folder, mark)
+        };
+        let without_mark = boot();
+        write_session_mark(&app_dir, "落ちた子");
+        let (first, events) = capture(boot);
+        let second = boot();
+        let found = events
+            .iter()
+            .filter(|e| {
+                e.level == tracing::Level::INFO
+                    && e.field_str("event") == Some("session_mark_found")
+            })
+            .count();
+        let with_mark = (
+            GhostRoute::Default,
+            Some(DEFAULT_GHOST_FOLDER.to_owned()),
+            Some("落ちた子".to_owned()),
+        );
+        assert_eq!(
+            (
+                without_mark,
+                first,
+                second,
+                found,
+                read_session_mark(&app_dir)
+            ),
+            (
+                (GhostRoute::Memory, Some("g1".to_owned()), None),
+                with_mark.clone(),
+                with_mark,
+                1,
+                Some("落ちた子".to_owned())
+            ),
+            "印の読みが崩れた（印なし・印あり 1 度目・2 度目・session_mark_found の件数・印は残る）"
+        );
+    }
+
+    /// argv でゴーストを指定した起動（開発者の上書き・要件 12.5）は印を読まず消さない。
+    #[test]
+    fn argv_ghost_neither_reads_nor_clears_session_mark() {
+        let tmp = TempPath::new("switch-balloon-mark-argv");
+        let ghost = fixture(&tmp);
+        let app_dir = tmp.child("app-profile");
+        write_session_mark(&app_dir, "落ちた子");
+        let args = vec!["areka.exe".to_owned(), ghost.display().to_string()];
+        let (got, events) = capture(|| {
             resolve_boot_from(
                 Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
                 &args,
                 &app_dir,
                 no_pick,
             )
-            .expect("決まる")
+            .expect("argv で決まる")
             .3
-        };
-        assert_eq!(boot().as_deref(), Some("落ちた子"));
-        assert_eq!(read_last_halted(&app_dir), None, "読んだら消える");
-        assert_eq!(boot(), None, "2 度目は無し");
-    }
-
-    /// argv でゴーストを指定した起動（開発者の上書き）は記憶を読まないので、控えも読まず消さない。
-    #[test]
-    fn argv_ghost_neither_takes_nor_clears_halted() {
-        let tmp = TempPath::new("switch-balloon-halted-argv");
-        let ghost = fixture(&tmp);
-        let app_dir = tmp.child("app-profile");
-        record_halt(&app_dir, "落ちた子");
-        let args = vec!["areka.exe".to_owned(), ghost.display().to_string()];
-        let (_, _, _, halted, _) = resolve_boot_from(
-            Ok((tmp.path().to_path_buf(), RootSource::EnvVar)),
-            &args,
-            &app_dir,
-            no_pick,
-        )
-        .expect("argv で決まる");
-        assert_eq!(halted, None);
-        assert_eq!(read_last_halted(&app_dir).as_deref(), Some("落ちた子"));
+        });
+        let found = events
+            .iter()
+            .filter(|e| e.field_str("event") == Some("session_mark_found"))
+            .count();
+        assert_eq!(
+            (got, found, read_session_mark(&app_dir)),
+            (None, 0, Some("落ちた子".to_owned())),
+            "argv の起動が印に触れた（戻り・session_mark_found の件数・印は残る）"
+        );
     }
 
     /// 起動前の解決の結果から起動の文脈を組み、World の資源として読める（据え付けは 8.5）。
@@ -421,6 +488,7 @@ mod switch_balloon {
             root: BasewareRoot::new(tmp.path().to_path_buf()),
             app_profile_dir: tmp.path().to_path_buf(),
             helper_exe: tmp.child("shiori-host32-helper.exe"),
+            argv_session: false,
             current: CurrentGhost {
                 cfg,
                 ghost: g,

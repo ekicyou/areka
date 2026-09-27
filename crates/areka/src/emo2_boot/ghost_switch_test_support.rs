@@ -214,6 +214,7 @@ impl SwitchRig {
             root: self.root.clone(),
             app_profile_dir: self.sample.root().join("profile"),
             helper_exe: inputs.helper_exe.clone(),
+            argv_session: false,
             current: CurrentGhost {
                 cfg,
                 ghost: ghost.clone(),
