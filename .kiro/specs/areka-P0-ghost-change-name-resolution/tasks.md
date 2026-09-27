@@ -63,13 +63,13 @@
   - _Depends: 2.2, 3.1_
   - _Requirements: 7.4, 7.7, 7.9, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
 
-- [ ] 4. 全体の回帰と実機サインオフ
+- [x] 4. 全体の回帰と実機サインオフ
 - [x] 4.1 ワークスペース全体のテストを回す
   - 先に `cargo fmt --all` をかけてから、`tools/test-all.ps1`（fmt 検査・i686 の成果物を含む全体）を 1 回回し、1 本も落ちない
   - 触った 3 つのソースファイルがそれぞれ 1,000 行以下、`compile.rs`・`change_cue.rs`・字句解析・kanade に差分が無い（`git diff --stat` で確かめる）
   - _Requirements: 5.3, 6.3, 6.4_
 
-- [ ] 4.2 実機で `\+` を言う検体から他のゴーストへ替わるのを見て、記録を残す
+- [x] 4.2 実機で `\+` を言う検体から他のゴーストへ替わるのを見て、記録を残す
   - 完了 `ghost-shell-balloon-switch` の `signoff.md` の手順で、里々の検体の丸ごとの複製の `OnBoot` を `\+` 1 行に差し替え、目録に emo2 と並べる。先に `kanade=trace` の応答の生文字列で里々が `\+` を素通しすることを確かめる
   - `AREKA_PROFILE_DIR` を空のフォルダ・`RUST_LOG=info,areka=debug,kanade=trace`・有界の自動終了・絶対パスで起動し、`ghost_switch_resolved`（`name=random`）→ `ghost_switch_requested`（`raise_event=false`）→ 切替の完了までのログを grep し、組み立ての「無視」の `debug!` に `\+` が出ないことを確かめる
   - 結果を spec の下の `signoff.md` に残し、`lastinstalled` の実機確認と書く口の 2 つの名前（記録の型・書く口）を `ghost-install` へ申し送ると明記する
