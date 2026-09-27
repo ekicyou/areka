@@ -229,6 +229,9 @@ wintf  window_proc/lifecycle.rs の WM_ENDSESSION（wParam 真・World を借り
   - kanade は補助プロセスが消えた後も今日の道で止まる: `OnClose` の失敗は `Unloading{Forced}` の中の応答として `Stopped` へ（`schedule/mod.rs` の「Unloading 中の応答は Unload 完了として扱う」）、`request_clean_shutdown` は `status()` の `Exited` で短絡する。新しい遷移は要らない。
   - LogSink の腕の `ghost_boot_options` は App スコープの置き場を `default_app_profile_dir()` で埋める。本番では結線ありの腕の入力（`GhostBootInputs::production`）と同じ値だが、テストで倒れた先を成功させると実行体の隣の実 profile へ書く。結線の入力の `app_profile_dir` をそのまま渡す（本番の値は不変）。
   - テストの窓は `CreateWindowExW(STATIC, HWND_MESSAGE)` で登録なしに作れる（機能 `Win32_UI_WindowsAndMessaging` はワークスペースに既にある）。message-only 窓への同期の送信は、窓を持つスレッドがメッセージを取り出す関数（`PeekMessageW` など）を呼んだ時点で配られる。
+  - （設計ディスカッション 2026-09-27 で追加）`SMTO_ABORTIFHUNG` の打ち切りは 5 秒ではない。OS の「応答なし」の判定は「プロセスが起きてから概ね 20〜30 秒」かつ「宛先のスレッドが 14 秒以上メッセージを取り出していない」の 2 条件（`crates/shiori-host32-helper/src/main_response_flavor_hung_cage_tests.rs` の 2026-09-07 の較正）。前提のテストで「5 秒より早く戻れば終了が理由」と時間で判定する案はこれで崩れた。
+  - （同）`IpcError` は `shiori_host32_host` の `lib.rs` が再輸出しておらず、`crates/areka/Cargo.toml` は `shiori-host32-ipc` に依存しない。偽の SHIORI が解かれた後に返す失敗は `RequestError::Timeout` に確定（kanade は `Unloading` の中の応答を成否を問わず Unload 完了として扱うので道は同じ）。
+  - （同）既存の `crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs` は「補助プロセスを終わらせた**後**に送ると有限で戻る」までを実 helper で固定している。往復の**最中**に終わらせる前提は別に要る。i686 のテスト DLL（`crates/shiori-host32-testdll`）に「固まる」応答は無い（境界外なので足さない）。
 
 ### 10.2 決定
 
@@ -244,13 +247,14 @@ wintf  window_proc/lifecycle.rs の WM_ENDSESSION（wParam 真・World を借り
 - 要件 1.3 は要件ディスカッションで「どの段で待っていても T で打ち切る（今日の期限が先に切れる段は今日どおり）」に改まっているので、案 A と一致する。1.4 は「見張りが環境変数を読まず外から解く」ことで構造的に満たす。7.1 ⑶ は「SHIORI 側の期限が T より長い・無限・短い」の 3 通りとして起こす（長い・無限＝固まる台本で T の打ち切り／短い＝台本が自分で `Err(Timeout)` を返し、打ち切りは起きず今日どおり）。要件の改訂は要らない。
 
 #### D4: 「どの段で達したか」の粒度＝3 語＋`idle`
-- shiori のアクターが往復の直前に `ShioriBusy::Request(id)`／`Unload` を書き、見張りが読む。`Request("OnClose")` → `on_close_notify`、他の `Request` → `in_flight_request`、`Unload` → `unload`（UNLOAD の応答と終了の観測は `request_clean_shutdown` の中で分けられないのでまとめる）、`Idle` → `idle`。要件 2.2 の「少なくとも 3 つ」を満たし、`request_clean_shutdown` の中に印を足さない。
+- shiori のアクターが往復の直前に `ShioriBusy::Request(id)`／`Unload` を書き、見張りが読む。`Request("OnClose")` → `on_close_notify`、他の `Request` → `in_flight_request`、`Unload` → `unload`（UNLOAD の応答と終了の観測は `request_clean_shutdown` の中で分けられないのでまとめる）、`Idle` → `idle`（呼び出しの外で上限に達した。以後の往復が要件 1.1 の合計を破らないよう、ここでも補助プロセスを終わらせる）。要件 2.2 の「少なくとも 3 つ」を満たし、`request_clean_shutdown` の中に印を足さない。
+- （設計ディスカッション 2026-09-27 で追加）`unload` が戻った後は `Unloaded`。見張りはこの状態では**切らない**（SHIORI の待ちは終わっており、残りの join は要件 1.6 で上限の対象外。切ると要件 2.6「T に達しなければ今日どおり」の否定になる）。`debug!` 1 件だけ残す。
 
 #### D5: 上限切れの回に出る副次の記録＝許す
 - 補助プロセスを終わらせると shiori 側の `helper_exited`・`unload_failed` などの `error!` と kanade の `Fault` が出る。その直前に `warn!(shiori_wait_cut, stage, limit_ms, elapsed_ms)` が 1 件あるので因果は読める。終わらせた事実を shiori 側へ伝えて語を変える案は、`ShioriBackend` と `run_shiori_loop` の失敗の分類に手を入れるので採らない。`os_session_end_done` に `shiori_cut` の欄を足し、`session_mark_kept` の理由は `session_end_deadline`。
 
 #### D6: テストで実時間を待たない＝見張りを手で起こす口（`cut_now`）
-- 偽の時計は持たない（見張りは `recv_timeout` 1 本）。テストは `ScriptedShioriBackend` の「解かれるまで固まる」台本（`hold_at`）で該当の段に固め、補助のスレッドが固まりを観測してから `ShioriProbe::cut_now` を呼ぶ。期限の口そのものは、応答しない台本と数十 ms の `limit` で 1 本だけ確かめる（台本が自分では応答しないので結果は時刻に依らない）。上限 T は本番の定数 `SESSION_END_SHIORI_LIMIT`、テストは `end_session_within(world, limit)` の引数（要件 8.1・環境変数は足さない）。
+- 偽の時計は持たない（見張りは `recv_timeout` 1 本）。テストは `ScriptedShioriBackend` の「解かれるまで固まる」台本（`hold_at`）で該当の段に固め、補助のスレッドが固まりを観測してから `ShioriProbe::cut_now` を呼ぶ。（設計ディスカッション 2026-09-27 で追加）`cut_now` は**粘る**: 見張りがまだ張られていなければ「切る予約」を置き、次の `arm` が即発火する。「後始末に入る前から待っていた往復」の回は偽の SHIORI が `end_session_within` より前に固まるので、補助のスレッドの `cut_now` が `arm` より先に走りうる。空振りする形だと見張りは大きな `limit` を待ち続けてテストが止まる（順序に依る＝決定論でない）。採らなかった案: `wait_armed()` のテスト専用の口（口が 1 つ増え、補助のスレッドに待ちが 2 つ要る）。期限の口そのものは、応答しない台本と数十 ms の `limit` で 1 本だけ確かめる（台本が自分では応答しないので結果は時刻に依らない）。上限 T は本番の定数 `SESSION_END_SHIORI_LIMIT`、テストは `end_session_within(world, limit)` の引数（要件 8.1・環境変数は足さない）。
 
 #### D7: `InProc` の扱い＝対象外として記録
 - `unblock_handle` の既定 `None` で、見張りは `error!(shiori_unblock_unavailable)` を残して待ちは今日どおり続く。本番の `fn main` は `Helper` だけ（`main_ghost_wiring_tests.rs` が固定）。join を期限で見切る二段目の守りは、shiori のスレッドを取り残す（資材の所有者が消える）ので採らない。M2 で `InProc` を本番に使うときの宿題。
@@ -269,10 +273,24 @@ wintf  window_proc/lifecycle.rs の WM_ENDSESSION（wParam 真・World を借り
 - `boot_ghost` は argv を知らない（argv では印に触れないので「印を残す」とは書けない）。`boot_first_ghost` が戻りの `logsink_fallback()` と文脈の argv を見て 1 件（argv なら `debug!`）。
 
 ### 10.3 危うさと緩和
-- 案 A の前提（終わらせると `SendMessageTimeoutW` が戻る）— `terminator_tests.rs` で別プロセスの窓に対して固定（`SMTO_ABORTIFHUNG` の 5 秒より短く戻ることで理由を判定）＋実機サインオフ。崩れても悪化はしない（待ちが今日どおり長くなるだけで印は残る）。
+- 案 A の前提（終わらせると `SendMessageTimeoutW` が戻る）— `terminator_tests.rs` で別プロセスの窓に対して固定（送信は `SMTO_NORMAL`・30 秒。**0 で戻り `GetLastError() != ERROR_TIMEOUT`** で「宛先が消えた」と判定＝時計に依らない。窓は pid 入りの題を `FindWindowExW(HWND_MESSAGE, ..)` で探し、標準出力は読まない）＋実機サインオフ。崩れても悪化はしない（待ちが今日どおり長くなるだけで印は残る）。
+- 期限と `finish` が同時 — `outcome` の `compare_exchange` で 1 人だけ勝つ（`try_recv` で `Done` を 1 度確かめる案は、確かめた直後に `finish` が走る隙が残るので採らない）。
 - 接続前（HELLO 待ち）に上限に達する — 解く手が無く記録だけ。補助プロセスは job の道連れで終わる。
 - 見張りのスレッドの取り残し — `CutGuard::finish` が必ず join する。`shutdown_within` は `finish` を呼んでから戻る。
 - 既存テストの署名の追随（`settle_session_mark` 6 か所・`spawn_shiori_actor` 3 か所）— 機械的。振る舞いの判定は変えない（要件 7.6）。
+
+### 10.5 設計ディスカッション（2026-09-27）
+
+設計レビュー（`design-validation.md`・判定 GO）の重要な問題 3 件と補足 2 件、精査で見つけた 1 件は、いずれも要件から答えが 1 つに決まる「やり方」だったので、開発者への議題にせず自明な修正として design.md に反映した（開発者の判断が要る議題: 0 件）。
+
+| # | 出所 | 問題 | 反映 |
+|---|---|---|---|
+| 1 | レビュー問題 1 | 前提のテストが「2 秒以内に戻る」の壁時計と標準出力の読みに頼る。`SMTO_ABORTIFHUNG` の打ち切りは 5 秒ではない（§10.1） | `SMTO_NORMAL`・30 秒で送り、`GetLastError() != ERROR_TIMEOUT` で判定。窓は `FindWindowExW` で探す。実 helper の常設は i686 テスト DLL に固まる応答が無いので採らず、実機確認に回す |
+| 2 | レビュー問題 2 | `cut_now` が未 `arm` で空振りし、「既に待っていた往復」のテストが順序次第で止まる | `cut_now` を粘る形に（切る予約＋次の `arm` で即発火）。D6 に追記 |
+| 3 | レビュー問題 3 | 期限と `finish` が同時のとき、きれいに終わった回に印が残る。`idle` の意味が言葉になっていない | `outcome` の `compare_exchange` で 1 人だけ勝つ。`ShioriBusy::Unloaded` を足し、SHIORI が降りた後は切らない。`idle` は「呼び出しの外で上限に達した＝以後の待ちを起こさないために終わらせる」と明記。D4 に追記 |
+| 4 | レビュー補足 1 | 倒れた先が成功した 1 周で `first` を判定に使うと非同期の `Fault` で揺れる | テストの判定に `first` を使わないと明記 |
+| 5 | レビュー補足 2 | 要件 7.1 ⑵ の「UNLOAD の応答」「終了の観測」の 2 段を `unload` 1 語にまとめたことが表に無い | 対応表 7.1 と Integration ⑵ に代表の理由と脱出の道を明記 |
+| 6 | 精査 | 偽の SHIORI の失敗の型が「`IpcError` が見えれば…見えなければ…」の二股で書かれていた | `RequestError::Timeout` に確定（§10.1） |
 
 ### 10.4 参照
 - [WM_ENDSESSION](https://learn.microsoft.com/en-us/windows/win32/shutdown/wm-endsession)・[Shutdown Changes for Windows Vista](https://learn.microsoft.com/en-us/windows/win32/shutdown/shutdown-changes-for-windows-vista) — 5 秒の猶予（5 章）。

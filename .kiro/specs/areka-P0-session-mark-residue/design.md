@@ -201,7 +201,8 @@ sequenceDiagram
 流れの決めごと:
 - 見張りは `started` からの残り時間で待つ（`limit.saturating_sub(started.elapsed())`）。後始末の中で降ろす前の手順（予約の取り下げ・運行の通知の捌き・`quit_app`）に使った時間も上限の内に数える（要件 1.1）。
 - 発火は 2 つの口から: 期限（`recv_timeout` の `Timeout`）とテストの手動（`cut_now`）。後始末が期限内に終われば `CutGuard::finish` が送信端を落として見張りを起こし、見張りは何もせず終わる（`Disconnected`／`Done`）。
-- 発火時に読む「段」は shiori のアクターが直前に書いた今の呼び出しで決める: `Request(id)` で `id == "OnClose"` → `on_close_notify`、他の `Request(_)` → `in_flight_request`（後始末に入る前から待っていた往復）、`Unload` → `unload`（UNLOAD の応答と終了の観測をまとめる＝`research.md` §8 D4 は 3 語に縮める）、`Idle` → `idle`（SHIORI の呼び出しの外で時間を使い切った）。
+- **期限と `finish` が同時のときは 1 人だけ勝つ**: どちらも `outcome` の `compare_exchange` を取り合い、`finish` が勝てば見張りは切らず（`None`）、見張りが勝てば `finish` は見張りの結果を待つ。これで「T に達しなかったのに印が残る」形（要件 2.6 の否定）は起きない。
+- 発火時に読む「段」は shiori のアクターが直前に書いた今の呼び出しで決める: `Request(id)` で `id == "OnClose"` → `on_close_notify`、他の `Request(_)` → `in_flight_request`（後始末に入る前から待っていた往復）、`Unload` → `unload`（UNLOAD の応答と終了の観測をまとめる＝`research.md` §8 D4 は 3 語に縮める）、`Idle` → `idle`（SHIORI の呼び出しの外で上限に達した。以後に始まる往復が要件 1.1 の合計を破らないよう、補助プロセスをここで終わらせる）、`Unloaded`（`unload` が戻った後）→ **切らない**（SHIORI の待ちは終わっており、残りの join は上限の対象外＝要件 1.6。`debug!` だけで `ShioriCut` は返さず、印の判定は今日どおり＝要件 2.6）。
 - 補助プロセスが消えた後の kanade の道は今日の形そのまま: `OnClose` の失敗は `Unloading{Forced}` の中の応答として `Stopped` へ（`crates/areka-kanade/src/schedule/mod.rs` の「Unloading 中の応答は Unload 完了として扱う」）。`request_clean_shutdown` は `status()` の `Exited` で短絡する。shiori 側の `error!`（`helper_exited`・`unload_failed` など）は残るが、その直前に `warn!(shiori_wait_cut)` が 1 件あるので因果が読める（D5＝許す）。
 - 解く手が無い（`unblock_handle` が `None`＝`InProc`、または接続がまだ済んでいない）か失敗した場合は `error!` を残し、待ちは今日どおり続く（上限の内に戻る保証は無い。本番の `fn main` はこの形を踏まない）。
 
@@ -242,7 +243,7 @@ flowchart TD
 | 2.3 | 印を残し理由に上限切れの語 | main::session_mark_verdict | `Teardown.shiori_cut` → `Keep("session_end_deadline")` | 印の判定の順序 |
 | 2.4 | 補助プロセスを残さない・失敗は `error!` | HelperTerminator・ShioriProbe | `HelperTerminator::terminate`・`error!(shiori_unblock_failed)` | — |
 | 2.5 | 告知なし・終了コードは最初の出所 | session_end（不変）・after_run（不変） | — | — |
-| 2.6 | T に達しなければ印の判定は今日どおり | main::session_mark_verdict | `shiori_cut=false` の枝 | 印の判定の順序 |
+| 2.6 | T に達しなければ印の判定は今日どおり | main::session_mark_verdict・ShioriProbe（`finish` が先に勝てば切らない・`Unloaded` なら切らない） | `shiori_cut=false` の枝・`outcome` の `compare_exchange` | 印の判定の順序 |
 | 3.1 | 切替・メニュー・強制退避・`WM_CLOSE`・smoke・kanade の期限は不変 | 期限の定数・`GhostSession::shutdown`（不変） | — | — |
 | 3.2 | LOAD・GET／NOTIFY の期限は不変 | `LOAD_ACK_TIMEOUT`・`effective_timeout`（不変） | — | — |
 | 3.3 | T を渡さない呼び手は 1 ミリ秒も違わない | 上限は `shutdown_within` だけが張る（`shutdown` は見張らない） | 呼び手の構造の検査 | — |
@@ -265,7 +266,7 @@ flowchart TD
 | 6.2 | 理由の語は既存と別 | `logsink_fallback`・`session_end_deadline` | — | — |
 | 6.3 | ログの無い経路を作らない | ShioriProbe・session_end・boot_first_ghost | 各 `warn!`／`error!`／`info!` | — |
 | 6.4 | §8 への追記 | doc/COMPAT_ARCHITECTURE.md | — | — |
-| 7.1 | 偽の SHIORI で上限の 4 場面を固定 | session_end_deadline_tests・ScriptedShioriBackend の `hold_at`・`cut_now` | — | — |
+| 7.1 | 偽の SHIORI で上限の 4 場面を固定 | session_end_deadline_tests・ScriptedShioriBackend の `hold_at`・`cut_now` | ⑵ の「UNLOAD の応答」「終了の観測」の 2 段は `hold_at(Unload)` の固まりで代表する（`request_clean_shutdown` の中で分けられない＝D4。観測の段の脱出は `lifecycle.rs` の `status()` の `Exited` の既存の短絡と同じ道） | — |
 | 7.2 | 他の経路の期限が今日の値のままと判定 | session_end_deadline_tests（呼び手の構造）・既存の定数の判定 | — | — |
 | 7.3 | 表に LogSink の行・1 周（成功／失敗） | main_session_mark_tests・SwitchRig `BalloonMissing`／`WiringFail` | — | — |
 | 7.4 | 表に上限切れの行 | main_session_mark_tests | — | — |
@@ -315,14 +316,17 @@ flowchart TD
 
 ```rust
 pub struct HelperTerminator(Arc<OwnedHandle>);   // Clone + Send + Sync
-impl HelperTerminator { pub fn terminate(&self) -> std::io::Result<()>; }
+impl HelperTerminator {
+    pub(crate) fn from_child(child: &std::process::Child) -> std::io::Result<Self>;  // 取っ手の複製（HelperHandle::terminator と前提のテストが使う）
+    pub fn terminate(&self) -> std::io::Result<()>;
+}
 impl HelperHandle    { pub fn terminator(&self) -> std::io::Result<HelperTerminator>; }
 impl HelperLifecycle { pub fn terminator(&self) -> std::io::Result<HelperTerminator>; }
 ```
 - 事前条件: `HelperHandle` が spawn 済み。事後条件: `Ok` なら補助プロセスは終わっているか終わりつつある（`status()` はまもなく `Exited`）。不変条件: 何度呼んでも `Ok`（冪等）。
 
 **Implementation Notes**
-- Validation: `terminator_tests.rs` — ⑴ 長命の子（`cmd /c ping`）を `terminate` → 締切内に `try_wait` が `Some`、2 度目も `Ok`。⑵ **案 A の前提**: テストの実行体を `current_exe()` で子として起こし（環境変数で「窓を作って待つ」入口に入れる）、子は `STATIC`・`HWND_MESSAGE` の窓を作って HWND を標準出力に書き、メッセージを配らず待つ。親は別スレッドから `SendMessageTimeoutW(hwnd, WM_NULL, SMTO_ABORTIFHUNG, 10 秒)` を送り、送信に入った後に `terminate` する。送信が **2 秒以内**に 0 で戻ること（`SMTO_ABORTIFHUNG` の打ち切りは 5 秒以上かかるので、戻りの理由が終了であると判定できる）と子の終了を判定する。x64 だけで走る。
+- Validation: `terminator_tests.rs` — ⑴ 長命の子（`cmd /c ping`）を `terminate` → 締切内に `try_wait` が `Some`、2 度目も `Ok`。⑵ **案 A の前提**（往復の最中に宛先のプロセスを終わらせると `SendMessageTimeoutW` が戻る）: テストの実行体を `current_exe()` で子として起こす（`--exact` で子の入口の関数を指名し、環境変数の旗で「窓を作って眠る」枝に入れる。旗が無ければその関数は何もせず緑）。子は `STATIC`・`HWND_MESSAGE` の窓を**自分の pid を含む一意な題**で作り、メッセージを配らずに眠る。親は `FindWindowExW(HWND_MESSAGE, None, "STATIC", 題)` を有界に繰り返して窓を見つける（標準出力を読まない・`--nocapture` も要らない）。親の別スレッドが「送る」の旗を立ててから `SendMessageTimeoutW(hwnd, WM_NULL, SMTO_NORMAL, 30 秒)` を送り、親は旗を見てから `HelperTerminator::from_child(&child).terminate()`。判定は**時計に依らない**: 送信が 0 で戻り、かつ `GetLastError()` が `ERROR_TIMEOUT` **でない**こと（`SMTO_NORMAL` なので戻る理由は「期限切れ」か「宛先が消えた」の 2 つだけ）と、子の `try_wait` が `Some`。前提が崩れていれば 30 秒後に `ERROR_TIMEOUT` で赤になる（止まらない）。`SMTO_ABORTIFHUNG` は使わない: OS の「応答なし」の判定は「プロセスが起きてから概ね 20〜30 秒を過ぎている」かつ「宛先のスレッドが 14 秒以上メッセージを取り出していない」の 2 条件で 5 秒ではなく（`crates/shiori-host32-helper/src/main_response_flavor_hung_cage_tests.rs` の較正の記録）、時間で理由を判定すると Defender の再スキャンなどの遅れで偽の赤になる。x64 だけで走る。本物の補助プロセスに対する同じ形は、i686 のテスト DLL に「固まる」応答が無い（境界外）ので常設せず、実機確認（要件 7.7）で固まる SHIORI を用意できる場合に限る。既存の `crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs` は「終わらせた**後**に送ると有限で戻る」までを固定しており、本テストはその前段（最中）を足す。
 - Risks: 補助プロセスの取っ手の複製は `HelperHandle` が生きている間しか作れない。接続前（`spawn` から HELLO まで）に上限に達した場合は解く手が無く、記録だけになる。
 
 ### areka-kanade / shiori
@@ -335,10 +339,10 @@ impl HelperLifecycle { pub fn terminator(&self) -> std::io::Result<HelperTermina
 | Requirements | 1.1, 1.3, 1.4, 2.1, 2.2, 2.4, 7.1 |
 
 **Responsibilities & Constraints**
-- shiori のアクターだけが `set_busy` を書く（往復の直前に `Request(id)`／`Unload`、直後に `Idle`）。見張りだけが読む。
+- shiori のアクターだけが `set_busy` を書く（往復の直前に `Request(id)`／`Unload`、直後に `Idle`。`unload` が戻ったら成否を問わず `Unloaded`＝SHIORI はもう降りている）。見張りだけが読む。
 - 解く手は `install_unblock(Option<ShioriUnblock>)` で一度だけ据える（`OnceLock`・接続の成功後・アクターのスレッド上）。
-- `arm(budget) -> CutGuard` は見張りのスレッドを 1 本起こす。見張りは `recv_timeout(残り)` で待ち、`Done`／切断なら何もせず終わる。期限か `CutNow` なら **1 回だけ** 解く: 段を読む → 解く手を呼ぶ → `warn!` 1 件 → `ShioriCut` を返す。
-- `cut_now()` はテストの口: 張られている見張りへ `CutNow` を送る（張られていなければ何もしない・`debug!`）。本番コードは呼ばない。
+- `arm(budget) -> CutGuard` は見張りのスレッドを 1 本起こす。見張りは `recv_timeout(残り)` で待ち、`Done`／切断なら何もせず終わる。期限か `CutNow` なら、まず**勝者を 1 人に決める**（`outcome` の `compare_exchange(Armed → Fired)`。`finish` が先に `Armed → Finished` を取っていれば何もせず終わる＝後始末が T ちょうどで終わった回には切らない・要件 2.6）。勝ったら段を読み、段が `Unloaded` なら切らずに終わる（SHIORI の待ちは既に終わっており、残りの後始末は上限の対象外＝要件 1.6・2.6。`debug!` だけ）。それ以外は **1 回だけ** 解く: 解く手を呼ぶ → `warn!` 1 件 → `ShioriCut` を返す。`Idle` で勝った場合も解く（SHIORI は今は待っていないが、上限の後に始まる往復は要件 1.1 の合計を破るので、以後の待ちを起こさないために補助プロセスを終わらせる。UNLOAD 前なら SHIORI の保存は失われる＝T＝3 秒を選んだときに引き受けた代価）。
+- `cut_now()` はテストの口で**粘る**: 張られている見張りへ `CutNow` を送り、張られていなければ「切る予約」（`pending_cut`）を置く。次の `arm` は予約を見つけたら待たずに発火する（補助のスレッドが `arm` より先に呼んでも空振りしない＝順序に依らない）。本番コードは呼ばない。
 - 環境変数は読まない（要件 1.4 は構造で満たす: 外から解くので、環境変数がどんな値でも T で切れる。環境変数が T より短ければ shiori のスレッドの側が今日どおり先に切る）。
 - host32 の型を持たない（`real.rs` の約束を守る）。
 
@@ -348,7 +352,7 @@ impl HelperLifecycle { pub fn terminator(&self) -> std::io::Result<HelperTermina
 pub type ShioriUnblock = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ShioriBusy { Idle, Request(String), Unload }
+pub enum ShioriBusy { Idle, Request(String), Unload, Unloaded }   // Unloaded＝unload が戻った後（見張りは切らない）
 
 #[derive(Debug, Clone, Copy)]
 pub struct WaitBudget { pub started: Instant, pub limit: Duration }
@@ -356,6 +360,7 @@ pub struct WaitBudget { pub started: Instant, pub limit: Duration }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShioriCut { pub stage: &'static str, pub unblocked: bool }
 // stage: "in_flight_request" | "on_close_notify" | "unload" | "idle"
+// idle＝SHIORI の呼び出しの外で上限に達した（以後の待ちを起こさないために補助プロセスを終わらせる）
 
 #[derive(Clone, Default)]
 pub struct ShioriProbe(Arc<ProbeInner>);
@@ -363,23 +368,24 @@ impl ShioriProbe {
     pub fn set_busy(&self, busy: ShioriBusy);
     pub fn install_unblock(&self, unblock: Option<ShioriUnblock>);   // 2 度目は無視（debug!）
     pub fn arm(&self, budget: WaitBudget) -> CutGuard;
-    pub fn cut_now(&self);                                           // テストの口
+    pub fn cut_now(&self);                                           // テストの口（粘る: 未 arm なら予約）
 }
 pub struct CutGuard { /* Sender<Signal> と見張りの JoinHandle<Option<ShioriCut>> */ }
 impl CutGuard { pub fn finish(self) -> Option<ShioriCut>; }         // 送信端を落として見張りを join
 ```
-- 事前条件: `arm` は同時に 1 つだけ（`GhostRuntime::shutdown_within` からだけ呼ぶ）。事後条件: `finish` は見張りが終わってから戻る（見張りのスレッドを残さない）。不変条件: 発火は高々 1 回・`warn!(shiori_wait_cut)` は発火につき 1 件。
+- 事前条件: `arm` は同時に 1 つだけ（`GhostRuntime::shutdown_within` が `self` を消費して呼ぶので構造で 1 回）。事後条件: `finish` は見張りが終わってから戻る（見張りのスレッドを残さない）。不変条件: 発火は高々 1 回・`warn!(shiori_wait_cut)` は発火につき 1 件・`finish` と期限が同時なら `compare_exchange` でどちらか一方だけが勝つ（両方が勝つことも両方が負けることも無い）。
 
 **State Management**
-- `ProbeInner { busy: Mutex<ShioriBusy>, unblock: OnceLock<Option<ShioriUnblock>>, armed: Mutex<Option<Sender<Signal>>> }`。`enum Signal { Done, CutNow }`。
+- `ProbeInner { busy: Mutex<ShioriBusy>, unblock: OnceLock<Option<ShioriUnblock>>, armed: Mutex<Option<Sender<Signal>>>, pending_cut: AtomicBool, outcome: AtomicU8 }`。`enum Signal { Done, CutNow }`。`outcome` は `Armed`／`Finished`／`Fired` の 3 値で、`arm` が `Armed` に戻し、`finish` と見張りが `compare_exchange` で 1 人だけ勝つ。
 - 記録（発火時・すべて `target: "shiori-actor"`）:
+  - 勝ったが段が `Unloaded`: `debug!(event = "shiori_wait_limit_after_unload", limit_ms, elapsed_ms, "上限に達したが SHIORI は既に降りている——切らない")`（`warn!` は出ない・`ShioriCut` は返さない）
   - `warn!(event = "shiori_wait_cut", stage, id = ?Option<String>, limit_ms, elapsed_ms, unblocked, "SHIORI の待ちを上限で打ち切った——補助プロセスを終わらせて待ちを解く")`（要件 2.2 の 1 件）
   - 解く手が `None`: `error!(event = "shiori_unblock_unavailable", stage, "外から解く手が無い（接続前か InProc）——待ちは今日どおり続く")`
   - 解く手が `Err`: `error!(event = "shiori_unblock_failed", error, stage, "補助プロセスを終わらせられなかった")`（要件 2.4）
 
 **Implementation Notes**
-- Integration: `run_shiori_loop(rx, backend, on_down, probe)` が `Request{call}` の前に `set_busy(Request(call の id.as_str()))`、`Unload` の前に `set_busy(Unload)`、それぞれの後に `Idle`。`spawn_shiori_actor(connect, on_down) -> (Sender<ShioriMsg>, ActorHandle, ShioriProbe)` は接続の成功後に `probe.install_unblock(backend.unblock_handle())`、失敗なら `install_unblock(None)`。
-- Validation: `probe_tests.rs` — `arm` → `finish`（発火なし）は `None` で `warn!` 0 件（対照の事象つき）／`cut_now` で `Request("OnClose")` → `on_close_notify`・`Request("OnBoot")` → `in_flight_request`・`Unload` → `unload`・`Idle` → `idle`、解く手が 1 回呼ばれる／短い期限（数十 ms・偽の SHIORI は応答しないので結果は時刻に依らない）で期限の口からも発火する／解く手 `None` と `Err` で `error!` が出て `unblocked=false`。
+- Integration: `run_shiori_loop(rx, backend, on_down, probe)` が `Request{call}` の前に `set_busy(Request(call の id.as_str()))`、その後に `Idle`、`Unload` の前に `set_busy(Unload)`、`unload` が戻ったら（成否を問わず）`Unloaded`。`spawn_shiori_actor(connect, on_down) -> (Sender<ShioriMsg>, ActorHandle, ShioriProbe)` は接続の成功後に `probe.install_unblock(backend.unblock_handle())`、失敗なら `install_unblock(None)`。
+- Validation: `probe_tests.rs` — `arm` → `finish`（発火なし）は `None` で `warn!` 0 件（対照の事象つき）／`cut_now` で `Request("OnClose")` → `on_close_notify`・`Request("OnBoot")` → `in_flight_request`・`Unload` → `unload`・`Idle` → `idle`、解く手が 1 回呼ばれる／短い期限（数十 ms・偽の SHIORI は応答しないので結果は時刻に依らない）で期限の口からも発火する／解く手 `None` と `Err` で `error!` が出て `unblocked=false`／**`arm` より先に `cut_now`** を呼んでから `arm` すると待たずに発火する（粘り）／**`finish` が先に勝っていれば**見張りの決め手（`try_fire`）は `None` で `warn!` 0 件（同時の回に切らない）／段が **`Unloaded`** で期限に達すると `None`・`warn!` 0 件・`debug!(shiori_wait_limit_after_unload)` 1 件・解く手は呼ばれない。
 - Risks: 見張りのスレッドは後始末ごとに 1 本（プロセスに 1 回の OS のセッションの終了だけなので安い）。
 
 #### ShioriBackend の拡張と ShioriConnection（`real.rs`）
@@ -496,7 +502,7 @@ fn settle_session_mark(mark: &MarkInputs, end: Teardown) -> MarkVerdict;
 pub(crate) enum HoldAt { Get(&'static str), Notify(&'static str), Unload }
 impl ScriptedShioriBackendBuilder { pub(crate) fn hold_at(self, at: HoldAt) -> Self; }
 ```
-- 該当の呼び出しに入ったら `Condvar` で `released` が立つまで待ち、立ったら今日どおり台本の応答を消費して返す（テストは本番で補助プロセスが消えたときと同じ失敗＝`Err(RequestError::Ipc(..))`（`IpcError` が areka の dev-dependencies から見えなければ `Err(RequestError::Timeout)`）／`Err(ShutdownError::ExitTimeout)` を台本にする）。`unblock_handle` は `Some`（`released` を立てて起こす閉じ手）。解く手が先に呼ばれていれば待たずに通る（順序に依らない）。`ScriptedShioriHandle` から「いま固まっている」ことを読める口（`holding()`）を 1 つ足す（テストが `cut_now` を呼ぶ前に固まりを待つ）。
+- 該当の呼び出しに入ったら `Condvar` で `released` が立つまで待ち、立ったら今日どおり台本の応答を消費して返す。解かれた後の台本は `Err(RequestError::Timeout)`／`Err(ShutdownError::ExitTimeout)` にする（`IpcError` は `shiori_host32_host` が再輸出しておらず areka は `shiori-host32-ipc` に依存しないので `RequestError::Ipc(..)` は作れない。kanade は `Unloading` の中の応答を成否を問わず Unload 完了として扱うので、`Timeout` でも本番と同じ道＝`Stopped` を踏む）。`unblock_handle` は `Some`（`released` を立てて起こす閉じ手）。解く手が先に呼ばれていれば待たずに通る（順序に依らない）。`ScriptedShioriHandle` から「いま固まっている」ことを読める口（`holding()`）を 1 つ足す（テストが `cut_now` を呼ぶ前に固まりを待つ）。
 - `unblock_handle` が呼ばれた回数も記録する（要件 7.1 の判定で「解く手が 1 回」を数える）。
 
 #### SwitchRig の `FakeShiori::BalloonMissing`（`ghost_switch_test_support.rs`）
@@ -517,8 +523,9 @@ impl ScriptedShioriBackendBuilder { pub(crate) fn hold_at(self, at: HoldAt) -> S
 
 ### Domain Model
 - **上限**: `SESSION_END_SHIORI_LIMIT`（3 秒・本番の定数）。`WaitBudget { started, limit }` は後始末の出発点から数える約束を型で運ぶ。
-- **今の呼び出し**: `ShioriBusy { Idle, Request(id), Unload }`（shiori のアクターが書く・見張りが読む）。
-- **打ち切りの結果**: `ShioriCut { stage, unblocked }`。`stage` の語 4 つは要件 2.2 の 3 語（在来の往復・`OnClose`・降ろす）＋`idle`。
+- **今の呼び出し**: `ShioriBusy { Idle, Request(id), Unload, Unloaded }`（shiori のアクターが書く・見張りが読む。`Unloaded` は「もう待たない」の印で、見張りはこの状態では切らない）。
+- **打ち切りの結果**: `ShioriCut { stage, unblocked }`。`stage` の語 4 つは要件 2.2 の 3 語（在来の往復・`OnClose`・降ろす）＋`idle`（呼び出しの外で上限に達した）。
+- **勝者**: `outcome ∈ { Armed, Finished, Fired }`。`finish` と見張りの `compare_exchange` で 1 人だけが `Armed` から進める。
 - **降ろした結果**: `Teardown { run_ok, down_ok, shiori_cut }`。
 - **印の材料**: `MarkInputs` に `logsink_fallback` を足す。判定の結論 `MarkVerdict::Keep(&'static str)` の語に `logsink_fallback`・`session_end_deadline` が増える。
 - 不変条件: 見張りの発火は後始末 1 回につき高々 1 回。`logsink_fallback` は単位（`GhostSession`）の生涯で不変。
@@ -528,6 +535,8 @@ impl ScriptedShioriBackendBuilder { pub(crate) fn hold_at(self, at: HoldAt) -> S
 | 場面 | 振る舞い | 記録 |
 |---|---|---|
 | 上限に達した | 段を読み、解く手を呼び、後始末は続ける | `warn!(shiori_wait_cut, stage, id, limit_ms, elapsed_ms, unblocked)` 1 件（要件 2.2） |
+| 上限に達したが `finish` が先に勝った（同時） | 切らない・印の判定は今日どおり | 記録なし（後始末は期限内に終わっている＝`os_session_end_done` の `shiori_cut=false`） |
+| 上限に達したが SHIORI は既に降りている（`Unloaded`） | 切らない・残りの join は今日どおり・印の判定は今日どおり | `debug!(shiori_wait_limit_after_unload, limit_ms, elapsed_ms)` 1 件 |
 | 解く手が無い（接続前・InProc） | 待ちは今日どおり続く | `error!(shiori_unblock_unavailable, stage)` |
 | 補助プロセスを終わらせられない | 待ちは今日どおり続く（job の道連れが最後の安全網） | `error!(shiori_unblock_failed, error, stage)`（要件 2.4） |
 | 補助プロセスの取っ手が複製できない | `unblock_handle` は `None` | `error!` を `ShioriConnection::unblock_handle` で 1 件 |
@@ -544,20 +553,20 @@ impl ScriptedShioriBackendBuilder { pub(crate) fn hold_at(self, at: HoldAt) -> S
 すべて決定論（偽の SHIORI・x64・見張りは手で起こす）。テストは本番ファイルの兄弟ファイルに置き、接続宣言だけを本番側に残す（`structure.md` の規約）。
 
 ### Unit（kanade・host32）
-- `probe_tests.rs`: 発火なしで `finish` → `None`・`warn!` 0 件（対照の事象を要求）／`cut_now` で段の語 4 通り・解く手 1 回／短い期限で期限の口から発火／解く手 `None`・`Err` で `error!`・`unblocked=false`。
-- `terminator_tests.rs`: 冪等（2 度 `Ok`）／案 A の前提（別プロセスの窓への `SendMessageTimeoutW` が `TerminateProcess` で 2 秒以内に戻る・`SMTO_ABORTIFHUNG` の 5 秒より短いことで理由を判定）。
+- `probe_tests.rs`: 発火なしで `finish` → `None`・`warn!` 0 件（対照の事象を要求）／`cut_now` で段の語 4 通り・解く手 1 回／短い期限で期限の口から発火／解く手 `None`・`Err` で `error!`・`unblocked=false`／`arm` の前の `cut_now` が `arm` で即発火（粘り）／`finish` が先に勝てば見張りの決め手は `None`（同時の回に切らない）／`Unloaded` で期限に達しても切らない（`debug!` 1 件・解く手 0 回）。
+- `terminator_tests.rs`: 冪等（2 度 `Ok`）／案 A の前提（別プロセスの `STATIC`・`HWND_MESSAGE` 窓への `SendMessageTimeoutW(SMTO_NORMAL, 30 秒)` が、往復の最中の `terminate` で **0 かつ `GetLastError() != ERROR_TIMEOUT`** で戻る。窓は `FindWindowExW(HWND_MESSAGE, ..)` で pid 入りの題から探す。時計では判定しない）。
 
 ### Integration（areka・`SwitchRig`）
 - `session_end_deadline_tests.rs`（要件 7.1・7.2）:
   - ⑴ 上限の中で応答（`standard_script`・大きな `limit`）→ 今日どおり印が消え・`shiori_wait_cut` 0 件・`os_session_end_done` の `shiori_cut=false`（既存 `session_end_takes_ghost_down_with_system_close_and_clears_mark` と同じ形で `shiori_cut` の欄だけ足す）。
-  - ⑵ 段ごとに固まる 4 通り: `hold_at(Get("OnBoot"))`（後始末に入る前から待っていた往復・定常を待たずに `end_session_within`）／`hold_at(Notify("OnClose"))`／`hold_at(Unload)`／（`idle` は `probe_tests` で）。補助のスレッドが `holding()` を待って `cut_now` を呼ぶ。判定: 後始末が戻る・`warn!(shiori_wait_cut)` 1 件で `stage` が期待の語・解く手 1 回・印が残り `session_mark_kept` の `reason="session_end_deadline"`・`os_session_end_done` の `shiori_cut=true`・`OnClose` の Ref0＝`system` は 1 件（`OnClose` で固めた回）。
+  - ⑵ 段ごとに固まる 4 通り: `hold_at(Get("OnBoot"))`（後始末に入る前から待っていた往復・定常を待たずに `end_session_within`）／`hold_at(Notify("OnClose"))`／`hold_at(Unload)`（要件 7.1 ⑵ の「UNLOAD の応答」「終了の観測」の 2 段をこの 1 つで代表する＝D4）／（`idle` は `probe_tests` で）。補助のスレッドが `holding()` を待って `cut_now` を呼ぶ（`arm` より先に呼んでも粘るので順序に依らない）。判定: 後始末が戻る・`warn!(shiori_wait_cut)` 1 件で `stage` が期待の語・解く手 1 回・印が残り `session_mark_kept` の `reason="session_end_deadline"`・`os_session_end_done` の `shiori_cut=true`・`OnClose` の Ref0＝`system` は 1 件（`OnClose` で固めた回）。
   - ⑵' 期限の口: `hold_at(Notify("OnClose"))`・`limit` を数十 ms にして `cut_now` を呼ばない → 発火（偽の SHIORI は自分では応答しないので結果は時刻に依らない）。
-  - ⑶ 環境変数の 3 通りの言い換え（案 A では環境変数を読まないので「SHIORI 側の期限が T より長い・無限・短い」として起こす）: 長い・無限＝固まる台本で T の打ち切り（⑵ と同じ判定）／短い＝台本が自分で `Err(RequestError::Timeout)` を返す → `shiori_wait_cut` 0 件・印の判定は今日どおり。
+  - ⑶ 環境変数の 3 通りの言い換え（案 A では環境変数を読まないので「SHIORI 側の期限が T より長い・無限・短い」として起こす）: 長い・無限＝固まる台本で T の打ち切り（⑵ と同じ判定）／短い＝台本が自分で `Err(RequestError::Timeout)` を返す → `shiori_wait_cut` 0 件・印の判定は今日どおり。環境変数そのものの読み（`client.rs` の `effective_timeout`）は本仕様では変えず、実 helper で踏む既存の e2e（`crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs` などが `AREKA_SHIORI_REQUEST_TIMEOUT_MS` を設定して走る）が固定している。
   - ⑷ 上限を渡さない呼び手（要件 3.3・7.2）: `crates/areka/src` の本番ソースで `shutdown_within(` と `.arm(` を呼ぶのが `session_end.rs` と `ghost_session.rs`（委譲）だけであることを判定する。`GhostSession::shutdown` で固まる台本を解く手で外から解いても `shiori_wait_cut` は 0 件（見張りは張られない）。期限の定数の値は既存の判定（`process_host.rs` の `LOAD_ACK_TIMEOUT`・`REQUEST_TIMEOUT`、`msg.rs` の `close_talk_deadline_ms`）に加え、`UNLOAD_ACK_TIMEOUT`＝30 秒・`EXIT_OBSERVE_TIMEOUT`＝10 秒を判定する行を `lifecycle.rs` のテストに足す。
   - 定数: `SESSION_END_SHIORI_LIMIT == Duration::from_secs(3)`（要件 1.2・8.1）。
 - `main_session_mark_tests.rs`（要件 7.3・7.4）:
   - `session_mark_verdict_table` に行を足す: `logsink_fallback` × 8 つのきれいな出所 × `run_ok`/`down_ok` → `Keep("logsink_fallback")`／`logsink_fallback` × `fault`・`switch_fatal`・出所なし・`run_failed`・`down_failed` → `Keep("logsink_fallback")`（時系列で最初）／`logsink_fallback` × argv → `Untouched`／`SessionEnd` × `shiori_cut` → `Keep("session_end_deadline")`／`SessionEnd` × `shiori_cut` × `!down_ok` → `Keep("session_end_deadline")`／`shiori_cut` × `fault` → `Keep("fault")`／`shiori_cut` × argv → `Untouched`。既存 21 行は `Teardown` の形へ書き換えるだけで結論は不変。
-  - 1 周（倒れた先が成功）: `FakeShiori::BalloonMissing` で初回の起動 → `boot_first_ghost` の `warn!(session_mark_pinned_by_fallback)` 1 件・単位の `logsink_fallback()`・`runtime().is_some()` → `quit_app(OsClose)` → `after_run_and_settle` → `Keep("logsink_fallback")`・印が A → `next_boot` が `expected_halted_next(rig, "A")`。
+  - 1 周（倒れた先が成功）: `FakeShiori::BalloonMissing` で初回の起動 → `boot_first_ghost` の `warn!(session_mark_pinned_by_fallback)` 1 件・単位の `logsink_fallback()`・`runtime().is_some()` → `quit_app(OsClose)` → `after_run_and_settle` → `Keep("logsink_fallback")`・印が A → `next_boot` が `expected_halted_next(rig, "A")`。倒れた先の SHIORI の接続の失敗で kanade の `Fault` の知らせが**非同期に**届くので、`first` の値（`OsClose` か `KanadeStopped(Fault)` か）は判定に使わない（理由は順序により `logsink_fallback` で安定する）。
   - 1 周（倒れた先が失敗）: `FakeShiori::WiringFail` で同じ手順・`runtime().is_none()`。
   - argv で LogSink へ倒れる → 印を読まず・書かず・消さず・`warn!` は出ない（要件 4.6）。
 - `session_end_sync_send_tests.rs`（要件 5.2・5.4・7.5）: 上の「要件 5 の検査」の 2 本。
@@ -571,7 +580,7 @@ impl ScriptedShioriBackendBuilder { pub(crate) fn hold_at(self, at: HoldAt) -> S
 - 見張りのスレッドは OS のセッションの終了の後始末につき 1 本。`set_busy` は往復ごとに `Mutex` の書き込み 2 回（`String` 1 つ）で、往復の所要（ミリ秒級の IPC）に対して無視できる。健全な SHIORI の後始末（完了 spec の実機で 22 ms）は変わらない。
 
 ## Open Questions / Risks
-- **案 A の前提**（補助プロセスを終わらせると `SendMessageTimeoutW` がすぐ戻る）: Win32 の一般の振る舞い（宛先の窓のスレッドが消えれば送信は失敗で戻る）に依る。`terminator_tests.rs` の前提のテストで x64 の別プロセスの窓に対して固定し、実機サインオフで補助プロセスに対しても見る。崩れた場合は待ちが今日どおり長くなるだけで、印は残る（悪化はしない）。
+- **案 A の前提**（補助プロセスを終わらせると `SendMessageTimeoutW` がすぐ戻る）: Win32 の一般の振る舞い（宛先の窓のスレッドが消えれば送信は失敗で戻る）に依る。`terminator_tests.rs` の前提のテストで x64 の別プロセスの窓に対して固定する（判定は `GetLastError() != ERROR_TIMEOUT`＝時計に依らない）。本物の補助プロセスに対しては、i686 のテスト DLL に固まる応答が無いので常設せず、実機サインオフで固まる SHIORI を用意できる場合に見る。崩れた場合は待ちが今日どおり長くなるだけで、印は残る（悪化はしない）。
 - **接続前に上限に達した場合**（起動直後の OS の終了）: 解く手が無く `error!` の記録だけになる。補助プロセスは job の道連れで終わる。頻度は低いので受け入れる。
 - **InProc**: 対象外（本番では選ばれない）。M2 で本番に使うときの宿題として `research.md` に残す。
 - **要件 5.2 の再現が止まった場合**: 5.3 に従い `research.md` 3-B（降ろす処理を別スレッドで走らせ、UI スレッドは待ちながら送られてきたメッセージだけ配る）を採る。静的な洗い出しは 0 件なので止まらない見込み。
