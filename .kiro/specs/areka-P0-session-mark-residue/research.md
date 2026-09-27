@@ -216,3 +216,66 @@ wintf  window_proc/lifecycle.rs の WM_ENDSESSION（wParam 真・World を借り
 - **規模: M 寄りの S（案 A・2-A・3-A で 9〜12 タスク）**。内訳の目安: 穴 1＝5〜7（host32 の取っ手・`ShioriBackend` の口・`GhostRuntime`／`GhostSession` の期限つきの入口・`on_os_session_end`・固まる台本と見張りのテスト・他の経路が不変のテスト）、穴 2＝2〜3（`GhostSession` の印・判定の材料と表・1 周のテスト）、穴 3＝1〜2（説明と記録・代表の再現テスト・ソースの判定）、§8 の追記と実機確認で 1。案 B・C なら M〜L（`msg.rs`・`Action`・`ShioriBackend` の署名と全偽物の書き換えが加わる）。
 - **危うさ: 中**。理由: 穴 1 は Win32 の振る舞い（補助プロセスが消えたときの `SendMessageTimeoutW` の戻り方）に依る新しい形で、x64 の偽境界では実物を踏めない。穴 2・3 は既存の型を延ばすだけで低い。
 - **並走との当たり**: 案 A は `emo2_boot/ghost_switch.rs`・`change_cue.rs`・`menu/`・`areka-parsers/`・`schedule/events.rs`・`msg.rs` に触らない見込み。案 B・C は `msg.rs` の既存の変種（`KanadeMsg::ForceQuit`・`ShioriMsg`）を変えるので、後続 3 本と当たる。
+
+## 10. 設計フェーズの決定（`/kiro-spec-design`・2026-09-27）
+
+> 上の 1〜9 章はギャップ分析（2026-09-27）。本章は設計で決めたことと、設計のために追加で調べたこと。決めごとの本文は `design.md` にあり、ここは経緯と採らなかった案。
+
+### 10.1 まとめ
+- **Discovery Scope**: Extension（既存の終了経路・印の判定・テストの土台の延長。外部の新しい依存は無い）。
+- **Key Findings**:
+  - `TerminateProcess` が要る機能 `Win32_System_Threading` はワークスペースの `windows` 依存（ルート `Cargo.toml` の `[workspace.dependencies.windows]`）に既にあり、`shiori-host32-host` は `workspace = true` で継ぐ。**機能も依存クレートも足さずに済む**（要件 3.5 の懸念は消えた）。`TerminateJobObject`（job の取っ手で終わらせる）も既存の機能で書けるが、job の割り当てが縮退（`None`）した補助プロセスに効かないので採らない。
+  - `Child` の取っ手は std の `AsHandle` と `OwnedHandle::try_clone_to_owned` で複製でき、`Send + Sync` の取っ手になる（`Child::kill` は `&mut` なので別スレッドからは使えない）。
+  - kanade は補助プロセスが消えた後も今日の道で止まる: `OnClose` の失敗は `Unloading{Forced}` の中の応答として `Stopped` へ（`schedule/mod.rs` の「Unloading 中の応答は Unload 完了として扱う」）、`request_clean_shutdown` は `status()` の `Exited` で短絡する。新しい遷移は要らない。
+  - LogSink の腕の `ghost_boot_options` は App スコープの置き場を `default_app_profile_dir()` で埋める。本番では結線ありの腕の入力（`GhostBootInputs::production`）と同じ値だが、テストで倒れた先を成功させると実行体の隣の実 profile へ書く。結線の入力の `app_profile_dir` をそのまま渡す（本番の値は不変）。
+  - テストの窓は `CreateWindowExW(STATIC, HWND_MESSAGE)` で登録なしに作れる（機能 `Win32_UI_WindowsAndMessaging` はワークスペースに既にある）。message-only 窓への同期の送信は、窓を持つスレッドがメッセージを取り出す関数（`PeekMessageW` など）を呼んだ時点で配られる。
+
+### 10.2 決定
+
+#### D2: 穴 1 の方式＝案 A（見張り＋補助プロセスを終わらせて解く）
+- **Context**: 既に待っている往復（kanade の無期限の `recv()`・shiori のスレッドの `SendMessageTimeoutW`）は期限をメッセージで運んでも切れない。
+- **Alternatives**: 案 B（段ごとに期限を運ぶ・`msg.rs` と `ShioriBackend` の署名を変える・既に待っている往復は切れない）／案 C（A＋B・差は記録の「どの段」の精度だけ）。
+- **Selected**: 案 A。見張りは kanade の `ShioriProbe::arm`（`recv_timeout` の別スレッド）、解く手は host32 の `HelperTerminator`（プロセスの取っ手の複製＋`TerminateProcess`）、`ShioriConnection::unblock_handle` が両者を結ぶ。
+- **Rationale**: 他の経路のコードが 1 行も変わらず（要件 3 を構造で満たす）、並走の `msg.rs` に触らない。2.4（補助プロセスを残さない）を同じ一手で満たす。
+- **Trade-offs**: 段の記録は shiori のアクターが書く「今の呼び出し」に依る（D4）。補助プロセスを終わらせた後の shiori 側の `error!` が残る（D5）。
+- **Follow-up**: 前提（終わらせると `SendMessageTimeoutW` が戻る）を `terminator_tests.rs` の別プロセスの窓で固定し、実機でも見る。
+
+#### D3: 要件 1.3・1.4・7.1 ⑶ の字面
+- 要件 1.3 は要件ディスカッションで「どの段で待っていても T で打ち切る（今日の期限が先に切れる段は今日どおり）」に改まっているので、案 A と一致する。1.4 は「見張りが環境変数を読まず外から解く」ことで構造的に満たす。7.1 ⑶ は「SHIORI 側の期限が T より長い・無限・短い」の 3 通りとして起こす（長い・無限＝固まる台本で T の打ち切り／短い＝台本が自分で `Err(Timeout)` を返し、打ち切りは起きず今日どおり）。要件の改訂は要らない。
+
+#### D4: 「どの段で達したか」の粒度＝3 語＋`idle`
+- shiori のアクターが往復の直前に `ShioriBusy::Request(id)`／`Unload` を書き、見張りが読む。`Request("OnClose")` → `on_close_notify`、他の `Request` → `in_flight_request`、`Unload` → `unload`（UNLOAD の応答と終了の観測は `request_clean_shutdown` の中で分けられないのでまとめる）、`Idle` → `idle`。要件 2.2 の「少なくとも 3 つ」を満たし、`request_clean_shutdown` の中に印を足さない。
+
+#### D5: 上限切れの回に出る副次の記録＝許す
+- 補助プロセスを終わらせると shiori 側の `helper_exited`・`unload_failed` などの `error!` と kanade の `Fault` が出る。その直前に `warn!(shiori_wait_cut, stage, limit_ms, elapsed_ms)` が 1 件あるので因果は読める。終わらせた事実を shiori 側へ伝えて語を変える案は、`ShioriBackend` と `run_shiori_loop` の失敗の分類に手を入れるので採らない。`os_session_end_done` に `shiori_cut` の欄を足し、`session_mark_kept` の理由は `session_end_deadline`。
+
+#### D6: テストで実時間を待たない＝見張りを手で起こす口（`cut_now`）
+- 偽の時計は持たない（見張りは `recv_timeout` 1 本）。テストは `ScriptedShioriBackend` の「解かれるまで固まる」台本（`hold_at`）で該当の段に固め、補助のスレッドが固まりを観測してから `ShioriProbe::cut_now` を呼ぶ。期限の口そのものは、応答しない台本と数十 ms の `limit` で 1 本だけ確かめる（台本が自分では応答しないので結果は時刻に依らない）。上限 T は本番の定数 `SESSION_END_SHIORI_LIMIT`、テストは `end_session_within(world, limit)` の引数（要件 8.1・環境変数は足さない）。
+
+#### D7: `InProc` の扱い＝対象外として記録
+- `unblock_handle` の既定 `None` で、見張りは `error!(shiori_unblock_unavailable)` を残して待ちは今日どおり続く。本番の `fn main` は `Helper` だけ（`main_ghost_wiring_tests.rs` が固定）。join を期限で見切る二段目の守りは、shiori のスレッドを取り残す（資材の所有者が消える）ので採らない。M2 で `InProc` を本番に使うときの宿題。
+
+#### D8: 判定の順序と材料の形＝時系列で最初の理由・`Teardown` の小さな値
+- 順序: `argv` → `logsink_fallback` → `no_exit_origin` → `fault`／`switch_fatal` → `run_failed` → `session_end_deadline` → `down_failed` → 消す。既存の順（出所の失敗 → run → down）も時系列なので、同じ規則で 2 つを差し込める。LogSink へ倒れたプロセスが後で SHIORI の失敗で止まっても理由は `logsink_fallback`（どちらでも印は残り、4.3 の語は満たす）。
+- 材料: `MarkInputs` に `logsink_fallback` を足し、降ろした結果を `Teardown { run_ok, down_ok, shiori_cut }` にまとめる。位置引数の bool を 6 つ並べる形は避けた（両枝が同じ誤りを書いても気付けない）。既存 21 行の表は形を書き換えるだけで結論は不変。
+
+#### D9: 要件 5.2 の再現が何を緑とするか
+- 緑＝「後始末は送信に依らず戻る（順序: 後始末の戻り < 送信の戻り）」「送信は UI スレッドが次にメッセージを取り出した時点で返る（10 秒の上限で切れたら赤）」。あわせて本番ソースの同期の送信の許可表（`shiori-host32-ipc/src/lib.rs` の `SendMessageTimeoutW(` ×1・`shiori-host32-host/src/parent_window.rs` の `#[cfg(test)]` の `SendMessageW(` ×1）を判定する検査を常設する（表に無い当たりも当たりの無い行も赤）。
+
+#### 追加の決定: LogSink へ倒れた腕の App スコープの置き場
+- テストで倒れた先を成功させる（`FakeShiori::BalloonMissing`）と、`ghost_boot_options` の `default_app_profile_dir()` が実行体の隣の実 profile へ書く。結線の入力の `app_profile_dir` を写して渡す（本番の値は同じ・要件 4.7 の「LogSink の起動そのものを変えない」は守る）。
+
+#### 追加の決定: 倒れた時点の `warn!` の置き場＝`boot_first_ghost`
+- `boot_ghost` は argv を知らない（argv では印に触れないので「印を残す」とは書けない）。`boot_first_ghost` が戻りの `logsink_fallback()` と文脈の argv を見て 1 件（argv なら `debug!`）。
+
+### 10.3 危うさと緩和
+- 案 A の前提（終わらせると `SendMessageTimeoutW` が戻る）— `terminator_tests.rs` で別プロセスの窓に対して固定（`SMTO_ABORTIFHUNG` の 5 秒より短く戻ることで理由を判定）＋実機サインオフ。崩れても悪化はしない（待ちが今日どおり長くなるだけで印は残る）。
+- 接続前（HELLO 待ち）に上限に達する — 解く手が無く記録だけ。補助プロセスは job の道連れで終わる。
+- 見張りのスレッドの取り残し — `CutGuard::finish` が必ず join する。`shutdown_within` は `finish` を呼んでから戻る。
+- 既存テストの署名の追随（`settle_session_mark` 6 か所・`spawn_shiori_actor` 3 か所）— 機械的。振る舞いの判定は変えない（要件 7.6）。
+
+### 10.4 参照
+- [WM_ENDSESSION](https://learn.microsoft.com/en-us/windows/win32/shutdown/wm-endsession)・[Shutdown Changes for Windows Vista](https://learn.microsoft.com/en-us/windows/win32/shutdown/shutdown-changes-for-windows-vista) — 5 秒の猶予（5 章）。
+- [TerminateProcess](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminateprocess) — 既に終わったプロセスには `ERROR_ACCESS_DENIED`（冪等に畳む根拠）。
+- [SendMessageTimeoutW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendmessagetimeoutw) — 宛先の窓が無ければ 0 で戻る・`SMTO_ABORTIFHUNG` は相手が応答なしと判定されたときだけ打ち切る。
+- 正典 [`OnClose`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnClose:1)・[`OnBoot`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBoot:1)（要件の「正典の位置づけ」）。
