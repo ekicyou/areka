@@ -806,7 +806,7 @@ links = [
 note = """
 壊れ方: 該当なし。ChangeCueSink（crates/areka/src/emo2_boot/change_cue.rs）が名前と第 1 引数の組（change・ghost）で自分を選び、切替の要求を UI 側へ運ぶ。UI 側が目録と突き合わせて送り出す側のゴーストを降ろし、切替先を起こす（--option=raise-event があれば送り出す側へ OnGhostChanging を送る）。
 ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ ChangeCueSink が記録を残す。第 1 引数が ghost でない change は担当外として debug! を残す）。
-名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は areka-P0-ghost-change-name-resolution の持ち場で、本仕様では該当なしとして warn のログ（ghost_switch_unknown）を残し、切り替えない。
+名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は解決済み（areka-P0-ghost-change-name-resolution・ghost_switch.rs の resolve_special_name）。
 [群: ゴーストの切り替え]
 [頻度: 里々 4 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![change。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 [条件: OnGhostChanging が通知されるのは --option=raise-event を付けたときだけ]
@@ -3789,15 +3789,17 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_2b:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-change-name-resolution"
 priority = "B2"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1" },
+]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。他のゴーストへ切り替わらず、その場に留まる。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 該当なし。decode_bare の \"+\" の腕が \\![change,ghost,random] と同じ受け皿（汎用のキャリアの change・ghost・random）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka/src/emo2_boot/ghost_switch.rs の resolve_special_name）が random を目録のフォルダ名へ解く——今のゴーストを除いた候補から一様に 1 体を選び、目録が今のゴーストだけなら今のゴーストを起こし直す。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
+ログ: 出る（解けたときは何を何へ解いたかを info! の記録 ghost_switch_resolved に 1 件残す。目録が空で解けないときは warn のログ ghost_switch_unknown を reason=random_empty で 1 件残し、切り替えない）。
 [群: ゴーストの切り替え]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\+。綴りが短く別の語の一部にも当たるぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -3839,18 +3841,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c__2b:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-change-name-resolution"
 priority = "B2"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1" },
+]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。次の順番のゴーストへ切り替わらない。
-ログ: 出る（compile の catch-all の debug! 記録）。
+壊れ方: 該当なし。decode_bare の \"_+\" の腕が \\![change,ghost,sequential] と同じ受け皿（汎用のキャリアの change・ghost・sequential）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka/src/emo2_boot/ghost_switch.rs の resolve_special_name）が sequential を目録のフォルダ名へ解く——目録の並び（フォルダ名の昇順）で今のゴーストの次の 1 体（末尾なら先頭・今のゴーストが目録に無ければ先頭・目録に今のゴーストだけなら今のゴーストを起こし直す）。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
+ログ: 出る（解けたときは何を何へ解いたかと今の位置を info! の記録 ghost_switch_resolved に 1 件残す。目録が空で解けないときは warn のログ ghost_switch_unknown を reason=sequential_empty で 1 件残し、切り替えない）。
 [群: ゴーストの切り替え]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
-[所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\_+。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
