@@ -150,6 +150,11 @@ impl ScriptedShioriHandle {
     pub(crate) fn unblock_calls(&self) -> usize {
         self.gate.unblock_calls.load(Ordering::SeqCst)
     }
+
+    /// 見張りを通さずにテストから直に解く（`unblock_handle` と同じ手・回数に数える）。
+    pub(crate) fn release(&self) {
+        (self.gate.unblock())().expect("偽の SHIORI の解く手は失敗しない");
+    }
 }
 
 #[cfg(test)]

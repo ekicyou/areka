@@ -269,6 +269,17 @@ impl SwitchRig {
             .collect()
     }
 
+    /// `folder` を最後に起こした回の偽の SHIORI の観測口（固まりの確かめ・解く手）。
+    pub(crate) fn handle(&self, folder: &str) -> ScriptedShioriHandle {
+        self.boots
+            .borrow()
+            .iter()
+            .rev()
+            .find(|(f, _)| f == folder)
+            .map(|(_, handle)| handle.clone())
+            .unwrap_or_else(|| panic!("{folder} を台本つきで起こしていない"))
+    }
+
     /// 通知の相と台本の切替要求の取り出しを、`done` が真になるまで有界に回す（期限切れは `false`）。
     pub(crate) fn pump_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
         spin_wait_until(|| {

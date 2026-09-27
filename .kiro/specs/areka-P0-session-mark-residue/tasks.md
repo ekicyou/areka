@@ -74,7 +74,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.6, 7.3_
   - _Depends: 4.2_
 
-- [ ] 5. OS のセッションの終了に上限を通す（統合）
+- [x] 5. OS のセッションの終了に上限を通す（統合）
 - [x] 5.1 偽の SHIORI に「解かれるまで固まる」台本と解く手を足す
   - 指定した呼び出し（GET・NOTIFY の id 指定・UNLOAD）に入ったら解かれるまで待ち、解かれた後は期限切れの失敗を返す（本番と同じ道で kanade が止まる）
   - 解く手を差し出し、呼ばれた回数を数える。解く手が先に呼ばれていれば待たずに通る（順序に依らない）
@@ -91,7 +91,7 @@
   - _Requirements: 1.1, 1.2, 1.5, 1.6, 2.1, 2.3, 2.5, 5.5, 6.1, 6.3, 8.1_
   - _Depends: 3, 4.2_
 
-- [ ] 5.3 上限の振る舞いを偽の SHIORI で段ごとに固定する
+- [x] 5.3 上限の振る舞いを偽の SHIORI で段ごとに固定する
   - 上限の中で応答すれば今日どおり印が消え、打ち切りの `warn!` 0 件・所要の記録の打ち切りは偽
   - 在来の往復（GET の最中）・`OnClose` の通知・UNLOAD のそれぞれで固まったとき、後始末が戻り、`warn!` 1 件の段の語が期待どおり、解く手 1 回、印が残り理由が上限の語、所要の記録の打ち切りが真
   - 終了の観測の段は UNLOAD で固まる形で代表する（`request_clean_shutdown` の中で分けられない＝設計 D4。補助プロセスが終わった後の観測は既存の短絡と 1.1・1.2 のテストが固定する）
@@ -143,3 +143,4 @@
 - 5.1: 偽の SHIORI の `hold_at(HoldAt::{Get|Notify|Unload})` は、固まった呼び出しが台本の応答を消費せず、解かれた後は固定で GET/NOTIFY＝`RequestError::Timeout`（本番と一致）・UNLOAD＝`ShutdownError::ExitTimeout`（代用。本番は `Unload(SendError::Ipc(IpcError::Timeout))`）を返す。固まるのは台本 1 件につき最初の 1 回。部品は `emo2_boot/spine_hold_support.rs`（`pub(crate) mod hold_support`）。`unblock_handle` は常に `Some`。
 - 4.1〜4.3 の追加で `main_session_mark_tests.rs` が 1,184 行になり、log-capture-kit の 1,000 行の見張りが赤になっていた（crate 単位のテストでは映らない）。倒れた回のテストを子モジュール `main_session_mark_fallback_tests.rs` へ切り出した。以後の検証は `cargo test -p log-capture-kit` も回す。
 - 5.2: 受け手 `on_os_session_end` は `end_session_within(world, SESSION_END_SHIORI_LIMIT)` を呼ぶだけ。テストは負荷で 3 秒が発火しないよう `end_session_within(.., 60 秒)` を使う＝ゴースト付きで定数を渡す行はまだどのテストも踏まない（5.3 の構造検査と定数の判定で固定する）。`started` は 2 回目を読み捨てる判定の直後。`os_session_end_done` に `shiori_cut` の欄を足した。
+- 5.3: 見張りの `warn!(shiori_wait_cut)` は別スレッドで出るので、件数は解く手の回数で、段の語は同じ固まり方で `GhostSession::shutdown_within` を直に呼んだ `ShioriCut.stage` で判定する（全スレッドの捕捉は取り消せず他テストへ波及するので不採用）。`limit_ms`・`elapsed_ms` の欄は kanade の `probe_tests` が固定。GET で固まる回は `OnClose` が送られない。構造検査は `crates/areka/src` の本番ファイルの行を許可表 3 行と逐語で比べる＝rustfmt で行が変われば表も直す。

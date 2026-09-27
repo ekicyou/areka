@@ -137,3 +137,7 @@ pub(crate) fn end_session_within(world: &mut World, limit: Duration) {
 #[cfg(test)]
 #[path = "session_end_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "session_end_deadline_tests.rs"]
+mod deadline_tests;
