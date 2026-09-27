@@ -15,7 +15,7 @@ updated_at: 2026-09-26
 **Location**: `/`  
 **Purpose**: Cargoワークスペース設定、横断ドキュメント、開発ルール  
 **Example**: `Cargo.toml`, `README.md`, `doc/`, `.kiro/steering/`
-**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`perf/`＝性能改善ループ）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）
+**その他の最上位**: `tools/`＝開発用スクリプト（`test-all.ps1`＝フルテスト・完了ゲートの正本〔`tech.md` の Testing〕／`package-alpha.ps1`＝α の配布 zip を組んで中身と起動を確かめる／`perf/`＝性能改善ループ）・`vendors/`＝検体 `.nar`（`sample_ghost/`）と調査資料のサブモジュール（`pasta/`）・`assets/`＝UI 資産・`docs/`＝単発の技術メモ・`dist/`＝配布物へそのまま入れる文書（第三者向け `README.txt`）
 
 ### Library Crate
 **Location**: `/crates/wintf/`  
