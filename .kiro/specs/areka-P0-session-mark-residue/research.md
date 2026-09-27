@@ -261,7 +261,7 @@ wintf  window_proc/lifecycle.rs の WM_ENDSESSION（wParam 真・World を借り
 
 #### D8: 判定の順序と材料の形＝時系列で最初の理由・`Teardown` の小さな値
 - 順序: `argv` → `logsink_fallback` → `no_exit_origin` → `fault`／`switch_fatal` → `run_failed` → `session_end_deadline` → `down_failed` → 消す。既存の順（出所の失敗 → run → down）も時系列なので、同じ規則で 2 つを差し込める。LogSink へ倒れたプロセスが後で SHIORI の失敗で止まっても理由は `logsink_fallback`（どちらでも印は残り、4.3 の語は満たす）。
-- 材料: `MarkInputs` に `logsink_fallback` を足し、降ろした結果を `Teardown { run_ok, down_ok, shiori_cut }` にまとめる。位置引数の bool を 6 つ並べる形は避けた（両枝が同じ誤りを書いても気付けない）。既存 21 行の表は形を書き換えるだけで結論は不変。
+- 材料: `MarkInputs` に `logsink_fallback` を足し、降ろした結果を `Teardown { run_ok, down_ok, shiori_cut }` にまとめる。位置引数の bool を 6 つ並べる形は避けた（両枝が同じ誤りを書いても気付けない）。既存 17 行の表は形を書き換えるだけで結論は不変。
 
 #### D9: 要件 5.2 の再現が何を緑とするか
 - 緑＝「後始末は送信に依らず戻る（順序: 後始末の戻り < 送信の戻り）」「送信は UI スレッドが次にメッセージを取り出した時点で返る（10 秒の上限で切れたら赤）」。あわせて本番ソースの同期の送信の許可表（`shiori-host32-ipc/src/lib.rs` の `SendMessageTimeoutW(` ×1・`shiori-host32-host/src/parent_window.rs` の `#[cfg(test)]` の `SendMessageW(` ×1）を判定する検査を常設する（表に無い当たりも当たりの無い行も赤）。

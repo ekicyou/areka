@@ -17,7 +17,7 @@ use crate::boot_config::BootContext;
 use crate::emo2_boot::frame::run_ghost_quit_phase;
 use crate::emo2_boot::ghost_switch::SwitchInFlight;
 use crate::ghost_session::GhostSlot;
-use crate::{MarkInputs, settle_session_mark};
+use crate::{MarkInputs, Teardown, settle_session_mark};
 
 /// OS のセッションの終了を 1 回処理した印（プロセスに高々 1 つ）。`fn main` の後始末はこれを見て
 /// 告知も印の判定も行わない。
@@ -90,8 +90,16 @@ pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity) {
                 app_profile_dir: ctx.app_profile_dir.clone(),
                 argv_session: ctx.argv_session,
                 first,
+                logsink_fallback: false,
             };
-            settle_session_mark(&mark, true, down_ok);
+            settle_session_mark(
+                &mark,
+                Teardown {
+                    run_ok: true,
+                    down_ok,
+                    shiori_cut: false,
+                },
+            );
         }
         None => tracing::warn!(
             event = "boot_context_missing",

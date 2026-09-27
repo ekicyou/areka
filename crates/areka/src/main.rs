@@ -328,7 +328,14 @@ fn main() -> Result<()> {
         // 消し、そうでなければ理由を残して残す。UI スレッドが App スコープへ直接書くのは実行系が
         // 1 つも動いていない間だけ（ここは降ろした後なので書いてよい）。
         if let Some(mark) = &mark {
-            settle_session_mark(mark, run_ok, down.is_ok());
+            settle_session_mark(
+                mark,
+                Teardown {
+                    run_ok,
+                    down_ok: down.is_ok(),
+                    shiori_cut: false,
+                },
+            );
         }
 
         // SHIORI の失敗の告知（1 プロセスに最大 1 回・抑止なら記録だけ・要件 1.1・1.6・1.12）。
@@ -462,6 +469,19 @@ struct MarkInputs {
     argv_session: bool,
     /// 最初に終了を指示した出所（無ければ `None`）。
     first: Option<app_exit::ExitOrigin>,
+    /// 最初の起動が LogSink へ倒れたか（倒れた先の成否を問わない）。
+    logsink_fallback: bool,
+}
+
+/// 降ろした結果（`fn main` の後始末は `shiori_cut=false`・OS のセッションの終了は見張りの結果）。
+#[derive(Debug, Clone, Copy)]
+struct Teardown {
+    /// メッセージループ（`run()`）が成功したか。
+    run_ok: bool,
+    /// 降ろす処理が成功したか。
+    down_ok: bool,
+    /// OS のセッションの終了で SHIORI の待ちを上限で打ち切ったか。
+    shiori_cut: bool,
 }
 
 /// 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と印の判定の材料を組む。
@@ -523,6 +543,7 @@ fn after_run(world: &mut World) -> AfterRun {
         app_profile_dir: ctx.app_profile_dir.clone(),
         argv_session: ctx.argv_session,
         first,
+        logsink_fallback: false,
     };
     let scene = fault.map(|fault| alert::AlertScene::ShioriFault {
         ghost_name,
@@ -551,19 +572,24 @@ enum MarkVerdict {
 
 /// きれいな終わりの判定（後始末と OS のセッションの終了が共有する唯一の判定・要件 12.2・12.3）。
 ///
-/// 上から順に: argv で始まったプロセスは触らない → 最初の出所が無い → 出所が失敗（SHIORI の失敗・
-/// 既定へ戻せない致命）→ `run()` の失敗 → 降ろす処理の失敗 → それ以外は消す。出所は網羅の
-/// match で見るので、出所を足すとこの判定の漏れがコンパイルで止まる。
+/// 時系列で最初に起きた理由を採る。上から順に: argv で始まったプロセスは触らない → 最初の起動が
+/// LogSink へ倒れた → 最初の出所が無い → 出所が失敗（SHIORI の失敗・既定へ戻せない致命）→ `run()` の
+/// 失敗 → OS のセッションの終了で SHIORI の待ちを上限で打ち切った → 降ろす処理の失敗 → それ以外は
+/// 消す。出所は網羅の match で見るので、出所を足すとこの判定の漏れがコンパイルで止まる。
+/// 名前は見ないので、倒れたのが既定ゴースト自身でも同じく残す。
 fn session_mark_verdict(
     first: Option<&app_exit::ExitOrigin>,
     argv_session: bool,
-    run_ok: bool,
-    down_ok: bool,
+    logsink_fallback: bool,
+    end: Teardown,
 ) -> MarkVerdict {
     use app_exit::ExitOrigin;
     use areka_kanade::KanadeStopCause;
     if argv_session {
         return MarkVerdict::Untouched;
+    }
+    if logsink_fallback {
+        return MarkVerdict::Keep("logsink_fallback");
     }
     let Some(first) = first else {
         return MarkVerdict::Keep("no_exit_origin");
@@ -582,10 +608,13 @@ fn session_mark_verdict(
         | ExitOrigin::OsClose
         | ExitOrigin::SessionEnd => {}
     }
-    if !run_ok {
+    if !end.run_ok {
         return MarkVerdict::Keep("run_failed");
     }
-    if !down_ok {
+    if end.shiori_cut {
+        return MarkVerdict::Keep("session_end_deadline");
+    }
+    if !end.down_ok {
         return MarkVerdict::Keep("down_failed");
     }
     MarkVerdict::Clear
@@ -593,8 +622,13 @@ fn session_mark_verdict(
 
 /// 降ろした後の印の始末: 判定して、消すなら消し（`info!(session_mark_cleared)`）、残すなら理由つきの
 /// `info!(session_mark_kept)`、argv なら `debug!` だけ。呼ぶのはゴーストの実行系が 0 の時点だけ。
-fn settle_session_mark(mark: &MarkInputs, run_ok: bool, down_ok: bool) -> MarkVerdict {
-    let verdict = session_mark_verdict(mark.first.as_ref(), mark.argv_session, run_ok, down_ok);
+fn settle_session_mark(mark: &MarkInputs, end: Teardown) -> MarkVerdict {
+    let verdict = session_mark_verdict(
+        mark.first.as_ref(),
+        mark.argv_session,
+        mark.logsink_fallback,
+        end,
+    );
     match verdict {
         MarkVerdict::Clear => boot_resolve::clear_session_mark(&mark.app_profile_dir),
         MarkVerdict::Keep(reason) => tracing::info!(

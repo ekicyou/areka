@@ -21,7 +21,7 @@ use crate::boot_resolve::{
 use crate::emo2_boot::ghost_switch::{SwitchStage, WelcomeAttempt};
 use crate::emo2_boot::ghost_switch_test_support::BALLOON;
 use crate::ghost_session::GhostSlot;
-use crate::{MarkVerdict, after_run, settle_session_mark};
+use crate::{MarkVerdict, Teardown, after_run, settle_session_mark};
 
 /// App スコープの記憶: （最後に使ったゴースト, 起動中の印）。
 type AppMemory = (Option<String>, Option<String>);
@@ -91,10 +91,16 @@ fn after_run_and_settle(rig: &mut SwitchRig) -> (bool, Option<MarkVerdict>) {
     let mut after = after_run(&mut rig.world);
     rig.world.insert_non_send(GhostSlot(after.session.take()));
     let down_ok = rig.shutdown();
-    let verdict = after
-        .mark
-        .as_ref()
-        .map(|mark| settle_session_mark(mark, true, down_ok));
+    let verdict = after.mark.as_ref().map(|mark| {
+        settle_session_mark(
+            mark,
+            Teardown {
+                run_ok: true,
+                down_ok,
+                shiori_cut: false,
+            },
+        )
+    });
     (down_ok, verdict)
 }
 
