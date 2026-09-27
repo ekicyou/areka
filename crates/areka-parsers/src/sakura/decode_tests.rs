@@ -455,6 +455,50 @@ fn unknown_bare_tag_absorbed_as_raw() {
     assert_eq!(dec(r"\i"), vec![Instruction::Raw(r"\i".to_string())]);
 }
 
+/// `change`・`ghost`・`<名前>` の汎用の運び手（`\![change,ghost,<名前>]` の転記結果と同じ値）。
+fn change_ghost(name: &str) -> Instruction {
+    Instruction::GenericCommand {
+        name: "change".to_string(),
+        raw_args: vec!["ghost".to_string(), name.to_string()],
+    }
+}
+
+/// 裸の `\+`／`\_+` は角括弧付き `\![change,ghost,random]`／`\![change,ghost,sequential]`
+/// と同じ値へ写る別名の転記（ghost-change-name-resolution 要件 1.1〜1.3・6.4）。
+/// 値の綴りがずれると切替の受け口の自己選別に届かなくなるので、角括弧付き形と `==` で固定する。
+#[test]
+fn bare_plus_and_underscore_plus_alias_change_ghost() {
+    assert_eq!(dec(r"\+"), dec(r"\![change,ghost,random]"));
+    assert_eq!(dec(r"\+"), vec![change_ghost("random")]);
+    assert_eq!(dec(r"\_+"), dec(r"\![change,ghost,sequential]"));
+    assert_eq!(dec(r"\_+"), vec![change_ghost("sequential")]);
+}
+
+/// `\+`／`\_+` の直後の本文は本文として残る（字句の切れ目は変えない・要件 1.4）。
+#[test]
+fn bare_plus_aliases_keep_following_text() {
+    assert_eq!(
+        dec(r"\+こんにちは"),
+        vec![
+            change_ghost("random"),
+            Instruction::Text("こんにちは".to_string())
+        ],
+    );
+    assert_eq!(
+        dec(r"\_+次へ"),
+        vec![
+            change_ghost("sequential"),
+            Instruction::Text("次へ".to_string())
+        ],
+    );
+}
+
+/// 角括弧付きの `\+[…]` は正典に無いので別名にせず、今日どおり生の綴り 1 つ（要件 1.5）。
+#[test]
+fn bracketed_plus_stays_raw() {
+    assert_eq!(dec(r"\+[x]"), vec![Instruction::Raw(r"\+[x]".to_string())]);
+}
+
 /// lexer が区切れず Raw 吸収した不正断片（未閉じ `[`）は decode でも Raw のまま
 /// （要件 10.1/13.8）。前後の正常命令は欠落しない（要件 10.3）。
 #[test]
