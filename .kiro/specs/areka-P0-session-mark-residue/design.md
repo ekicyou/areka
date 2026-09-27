@@ -140,6 +140,15 @@ crates/areka/src/
 ├── session_end_deadline_tests.rs    # 要件 1・2・7.1〜7.2: 固まる偽 SHIORI × 段 × 上限で戻る・warn 1 件・印が残る
 └── session_end_sync_send_tests.rs   # 要件 5: join 中の同期の送信の再現＋本番ソースの同期の送信の許可表の検査
 ```
+実装で足した兄弟のファイル（行数の目安と兄弟配置の規約のため）:
+```
+crates/areka-kanade/src/shiori/real_probe_tests.rs    # SHIORI の係のスレッドが今の呼び出しを書く位置・解く手の据え付け（2.2）
+crates/areka-ghost/src/runtime_within_tests.rs        # GhostRuntime::shutdown_within（3）
+crates/areka/src/main_session_mark_fallback_tests.rs  # LogSink へ倒れた回の 1 周（4.3・main_session_mark_tests.rs の子モジュール）
+crates/areka/src/emo2_boot/spine_hold_support.rs      # 偽の SHIORI の「解かれるまで固まる」台本の部品（5.1）
+crates/areka/src/emo2_boot/spine_hold_tests.rs        # その台本のテスト（5.1）
+```
+追随で変えたテスト: `ghost_session_strict_tests.rs`・`ghost_session_switch_tests.rs`・`crates/areka-kanade/src/shiori/real_tests.rs`・`real_idle_tests.rs`・`crates/areka-kanade/tests/kanade/idle_pump_test.rs`（実物の接続の解く手のテストもここ）。
 
 ### 変更
 - `crates/shiori-host32-host/src/process_host.rs` — `HelperHandle::terminator()`（`child` の取っ手を複製して `HelperTerminator` を返す）。
@@ -376,7 +385,7 @@ impl CutGuard { pub fn finish(self) -> Option<ShioriCut>; }         // 送信端
 - 事前条件: `arm` は同時に 1 つだけ（`GhostRuntime::shutdown_within` が `self` を消費して呼ぶので構造で 1 回）。事後条件: `finish` は見張りが終わってから戻る（見張りのスレッドを残さない）。不変条件: 発火は高々 1 回・`warn!(shiori_wait_cut)` は発火につき 1 件・`finish` と期限が同時なら `compare_exchange` でどちらか一方だけが勝つ（両方が勝つことも両方が負けることも無い）。
 
 **State Management**
-- `ProbeInner { busy: Mutex<ShioriBusy>, unblock: OnceLock<Option<ShioriUnblock>>, armed: Mutex<Option<Sender<Signal>>>, pending_cut: AtomicBool, outcome: AtomicU8 }`。`enum Signal { Done, CutNow }`。`outcome` は `Armed`／`Finished`／`Fired` の 3 値で、`arm` が `Armed` に戻し、`finish` と見張りが `compare_exchange` で 1 人だけ勝つ。
+- `ProbeInner { busy: Mutex<ShioriBusy>, unblock: OnceLock<Option<ShioriUnblock>>, armed: Mutex<Armed { tx: Option<Sender<Signal>>, pending_cut: bool }>, outcome: AtomicU8 }`（実装で送信端と切る予約を 1 つの錠にまとめた＝`cut_now` と `arm` の交差で予約を取りこぼさない）。`enum Signal { Done, CutNow }`。`outcome` は `Armed`／`Finished`／`Fired` の 3 値で、`arm` が `Armed` に戻し、`finish` と見張りが `compare_exchange` で 1 人だけ勝つ。`CutGuard` は `finish` せずに落とされても `Drop` で見張りを畳む（`finish` と `Drop` が冪等の `stop` を共有）。テスト専用に `#[cfg(test)]` の `busy()`・`fire_now(budget)`（判定の関数を呼び手のスレッドで直に呼ぶ）を持つ。
 - 記録（発火時・すべて `target: "shiori-actor"`）:
   - 勝ったが段が `Unloaded`: `debug!(event = "shiori_wait_limit_after_unload", limit_ms, elapsed_ms, "上限に達したが SHIORI は既に降りている——切らない")`（`warn!` は出ない・`ShioriCut` は返さない）
   - `warn!(event = "shiori_wait_cut", stage, id = ?Option<String>, limit_ms, elapsed_ms, unblocked, "SHIORI の待ちを上限で打ち切った——補助プロセスを終わらせて待ちを解く")`（要件 2.2 の 1 件）
@@ -502,7 +511,7 @@ fn settle_session_mark(mark: &MarkInputs, end: Teardown) -> MarkVerdict;
 pub(crate) enum HoldAt { Get(&'static str), Notify(&'static str), Unload }
 impl ScriptedShioriBackendBuilder { pub(crate) fn hold_at(self, at: HoldAt) -> Self; }
 ```
-- 該当の呼び出しに入ったら `Condvar` で `released` が立つまで待ち、立ったら今日どおり台本の応答を消費して返す。解かれた後の台本は `Err(RequestError::Timeout)`／`Err(ShutdownError::ExitTimeout)` にする（`IpcError` は `shiori_host32_host` が再輸出しておらず areka は `shiori-host32-ipc` に依存しないので `RequestError::Ipc(..)` は作れない。kanade は `Unloading` の中の応答を成否を問わず Unload 完了として扱うので、`Timeout` でも本番と同じ道＝`Stopped` を踏む）。`unblock_handle` は `Some`（`released` を立てて起こす閉じ手）。解く手が先に呼ばれていれば待たずに通る（順序に依らない）。`ScriptedShioriHandle` から「いま固まっている」ことを読める口（`holding()`）を 1 つ足す（テストが `cut_now` を呼ぶ前に固まりを待つ）。
+- 部品は兄弟ファイル `spine_hold_support.rs`（`pub(crate) mod hold_support`）に置く（`spine.rs` が 1,000 行に近いため）。該当の呼び出しに入ったら `Condvar` で `released` が立つまで待ち、立ったら台本の応答を消費せずに固定で `Err(RequestError::Timeout)`（GET・NOTIFY＝本番と同じ型）／`Err(ShutdownError::ExitTimeout)`（UNLOAD＝代用。本番は `Unload(SendError::Ipc(IpcError::Timeout))`）を返す。固まるのは台本 1 件につき最初の 1 回だけ。UNLOAD を代用で返す理由（`IpcError` は `shiori_host32_host` が再輸出しておらず areka は `shiori-host32-ipc` に依存しないので `RequestError::Ipc(..)` は作れない。kanade は `Unloading` の中の応答を成否を問わず Unload 完了として扱うので、`Timeout` でも本番と同じ道＝`Stopped` を踏む）。`unblock_handle` は `Some`（`released` を立てて起こす閉じ手）。解く手が先に呼ばれていれば待たずに通る（順序に依らない）。`ScriptedShioriHandle` から「いま固まっている」ことを読める口（`holding()`）を 1 つ足す（テストが `cut_now` を呼ぶ前に固まりを待つ）。
 - `unblock_handle` が呼ばれた回数も記録する（要件 7.1 の判定で「解く手が 1 回」を数える）。
 
 #### SwitchRig の `FakeShiori::BalloonMissing`（`ghost_switch_test_support.rs`）
