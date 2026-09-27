@@ -373,6 +373,11 @@ impl GhostSession {
         self.ghost.as_ref().map(|r| &r.mount().names)
     }
 
+    /// ゴーストの実行系（定常到達の記憶を、そのゴーストの記憶の書き手へ投函する）。無ければ `None`。
+    pub(crate) fn runtime(&self) -> Option<&areka_ghost::GhostRuntime> {
+        self.ghost.as_ref()
+    }
+
     /// kanade への送出端（切替の要求を送る）。実行系が無ければ `None`。
     pub(crate) fn kanade(&self) -> Option<&Sender<KanadeMsg>> {
         self.kanade.as_ref()

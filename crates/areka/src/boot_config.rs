@@ -125,9 +125,8 @@ pub(crate) struct BootContext {
 pub(crate) struct CurrentGhost {
     pub cfg: ConfigInputs,
     pub ghost: crate::boot_resolve::GhostDecision,
-    /// 本番の読み手は後続の `shell-balloon-switch`（今のバルーンを入れ替える口）。本仕様は切替の
-    /// 成功で書くだけなので、本番ビルドでは未読の警告を抑える。
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// 読み手は切替の定常到達の記憶（`ghost_switch::record_steady_memory`）と、後続の
+    /// `shell-balloon-switch`（今のバルーンを入れ替える口）。
     pub balloon: crate::boot_resolve::BalloonDecision,
 }
 

@@ -274,3 +274,35 @@ fn welcoming_non_fault_stop_quits_as_today() {
         "(最初の出所・予約・記録): {events:?}"
     );
 }
+
+/// 定常到達の記憶の書き手が無い（置き場が無い World）→ `warn!(steady_memory_not_recorded)` 1 件で
+/// 続け、迎え入れの予約は下りる（task 11.2・要件 12.6・design Error Handling）。
+#[test]
+fn steady_without_slot_warns_once_and_clears_reservation() {
+    let tmp = TempPath::new("ghost-switch-steady-no-slot");
+    let root = root_with(&tmp, &["A", "B"]);
+    let mut world = switching_world(&root, "B");
+    world.remove_non_send::<GhostSlot>();
+    set_stage_to(
+        &mut world,
+        SwitchStage::Welcoming {
+            attempt: WelcomeAttempt::Target,
+        },
+    );
+
+    let ((), events) = capture(|| on_notice(&mut world, KanadeNotice::Steady));
+
+    assert_eq!(
+        (
+            level_of(&events, "steady_memory_not_recorded"),
+            world.get_non_send::<SwitchInFlight>().is_some(),
+            level_of(&events, "ghost_switch_done"),
+        ),
+        (
+            vec![tracing::Level::WARN],
+            false,
+            vec![tracing::Level::INFO]
+        ),
+        "(記録・予約・切替の終わり): {events:?}"
+    );
+}

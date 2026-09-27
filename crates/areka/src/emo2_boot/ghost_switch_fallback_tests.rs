@@ -188,3 +188,35 @@ fn switch_to_default_ghost_failure_is_fatal_without_retry() {
     );
     assert_fatal(&world, &events);
 }
+
+/// 降ろした直後の記憶（task 11.2・要件 12.6〜12.8）: 前のゴーストを降ろし終えた直後に 1 回だけ
+/// 最後のゴースト＝既定・印＝切替先を書き、既定への戻しと致命はそれに触れない（印は切替先のまま）。
+/// argv で始まったプロセスでは最後のゴーストだけ書き、前から在った印はそのまま残る（要件 12.5）。
+#[test]
+fn switch_to_records_drop_once_and_fallback_keeps_it() {
+    let run = |argv_session: bool| {
+        let tmp = TempPath::new("ghost-switch-drop-record");
+        let root = root_with(&tmp, &["A", "B", crate::boot_resolve::DEFAULT_GHOST_FOLDER]);
+        let mut world = switching_world(&root, "B");
+        world.resource_mut::<BootContext>().argv_session = argv_session;
+        let profile = world.resource::<BootContext>().app_profile_dir.clone();
+        crate::boot_resolve::write_session_mark(&profile, "A");
+
+        let ((), events) = capture(|| switch_to(&mut world, ChangeHandoff { script: None }));
+
+        (
+            count_event(&events, "switch_drop_recorded"),
+            crate::boot_resolve::read_last_ghost(&profile),
+            crate::boot_resolve::read_session_mark(&profile),
+        )
+    };
+    let default = Some(crate::boot_resolve::DEFAULT_GHOST_FOLDER.to_owned());
+    assert_eq!(
+        [run(false), run(true)],
+        [
+            (1, default.clone(), Some("B".to_owned())),
+            (1, default, Some("A".to_owned())),
+        ],
+        "(降ろした直後の記録の件数・最後のゴースト・印) を ふつう・argv の順に"
+    );
+}

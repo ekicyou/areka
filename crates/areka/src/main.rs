@@ -322,7 +322,8 @@ fn main() -> Result<()> {
         };
 
         // 起動中の印の始末（要件 12.2・12.3）: 降ろして記憶の書き出しが済んだ後に、きれいな終わりなら
-        // 消し、そうでなければ理由を残して残す（実行系が 0 の時点なので UI スレッドから直接書いてよい）。
+        // 消し、そうでなければ理由を残して残す。UI スレッドが App スコープへ直接書くのは実行系が
+        // 1 つも動いていない間だけ（ここは降ろした後なので書いてよい）。
         if let Some(mark) = &mark {
             settle_session_mark(mark, run_ok, down.is_ok());
         }
@@ -407,7 +408,9 @@ fn first_boot_origin(halted: Option<String>) -> areka_kanade::BootOrigin {
 /// 置き場（`GhostSlot`）へ入れる。作り口は [`install_boot_context`] が先に据えている。
 ///
 /// 起こす前（ゴーストの実行系がまだ 1 つも無い時点）に、argv で始まったプロセスでなければ
-/// 起動中の印＝起こすゴーストの名前を書く（要件 12.1・12.5）。
+/// 起動中の印＝起こすゴーストの名前を書く（要件 12.1・12.5）。UI スレッドが App スコープへ直接
+/// 書くのは実行系が 1 つも動いていない間だけ（動いている間はそのゴーストの記憶の書き手を通す＝
+/// 保存は「読んで重ねて書く」ので、2 つの書き手が同時に書くと片方が消えうる）。
 fn boot_first_ghost(
     world: &mut World,
     cfg: &ConfigInputs,
@@ -657,9 +660,7 @@ fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPub
 /// boot が `Ok` を返した直後の結線（wired／fallback の両アームが呼ぶ 1 か所）。
 ///
 /// 位置永続の導管を挿入し（[`insert_persist_wiring`]）、続けて起動成功時の記憶を書く
-/// （baseware-root-layout 要件 3.2〜3.5・design「起動窓の準備と記憶の書き込み」）。書き込みは
-/// 投函だけで待たない（反映は `shutdown` の barrier に任せる＝design R1）。シェルのフォルダ名は
-/// `mount().shell.dir` の末尾（非 UTF-8 は `to_string_lossy` で写す＝design の Integration）。
+/// （[`record_last_used_at_boot`]・baseware-root-layout 要件 3.2〜3.5）。
 fn on_boot_ok(
     world: &mut World,
     runtime: &areka_ghost::GhostRuntime,
@@ -667,7 +668,46 @@ fn on_boot_ok(
     balloon: &boot_resolve::BalloonDecision,
 ) {
     insert_persist_wiring(world, runtime.sylphya_publisher().clone());
-    let shell_dir = &runtime.mount().shell.dir;
+    record_last_used_at_boot(
+        runtime.sylphya_publisher(),
+        &runtime.mount().shell.dir,
+        ghost,
+        balloon,
+    );
+}
+
+/// 起動の呼び出しが返った時点の記憶（初回の起動・既定への戻しは今日どおりここで書く）。
+///
+/// 経路が切替なら書かない（要件 4.6・12.6）: 壊れた切替先の名前を最後のゴーストに一瞬も載せない
+/// ため、切替先の記憶は定常到達で `ghost_switch::record_steady_memory` が同じ [`record_last_used`] で書く。
+fn record_last_used_at_boot(
+    publisher: &areka_sylphya::SylphyaPublisher,
+    shell_dir: &std::path::Path,
+    ghost: &boot_resolve::GhostDecision,
+    balloon: &boot_resolve::BalloonDecision,
+) {
+    if ghost.route == boot_resolve::GhostRoute::Switched {
+        tracing::debug!(
+            event = "last_used_deferred",
+            ghost = ?ghost.folder,
+            "[main] 切替で起こしたゴーストの記憶は定常到達まで書きません"
+        );
+        return;
+    }
+    record_last_used(publisher, shell_dir, ghost, balloon);
+}
+
+/// 最後に使ったもの（ゴースト・バルーン・シェル）を、動いているゴーストの記憶の書き手へ投函する
+/// （baseware-root-layout 要件 3.2〜3.5）。書き込みは投函だけで待たない（反映は `shutdown` の
+/// barrier に任せる＝design R1）。シェルのフォルダ名は `shell_dir`（`mount().shell.dir`）の末尾
+/// （非 UTF-8 は `to_string_lossy` で写す）。呼び手は起動の直後と切替の定常到達
+/// （`ghost_switch::record_steady_memory`）。
+pub(crate) fn record_last_used(
+    publisher: &areka_sylphya::SylphyaPublisher,
+    shell_dir: &std::path::Path,
+    ghost: &boot_resolve::GhostDecision,
+    balloon: &boot_resolve::BalloonDecision,
+) {
     let Some(shell_folder) = shell_dir.file_name().map(|n| n.to_string_lossy()) else {
         // `<ゴースト>/shell/<名>` の形で末尾が無いことは起きない。来たら書かずに残す。
         tracing::error!(
@@ -682,7 +722,7 @@ fn on_boot_ok(
         balloon,
         shell_folder: &shell_folder,
     }
-    .record(runtime.sylphya_publisher());
+    .record(publisher);
 }
 
 /// 起動時モニタスナップショットの構築＋出力シーム（areka-P0-dpi-window-vanish task 1.2・

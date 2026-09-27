@@ -327,24 +327,30 @@ pub(crate) fn write_session_mark(app_profile_dir: &Path, running: &str) {
 
 /// 切替で前のゴーストを降ろした直後: 最後に使ったゴースト＝既定と（`mark` が在れば）印＝切替先を
 /// 1 回の書き込みで書く。argv で始まったプロセスは `mark` に `None` を渡す（印に触れない・要件 12.5）。
-// 本番の呼び手は切替の記憶の時点を移すタスク（`ghost_switch::switch_to`）で付く。
-#[cfg_attr(not(test), allow(dead_code))]
+/// 呼び手は `ghost_switch::switch_to`。
 pub(crate) fn write_switch_drop(app_profile_dir: &Path, mark: Option<&str>) {
     let mut entries = vec![(PersistKey::LastGhost, DEFAULT_GHOST_FOLDER.to_owned())];
     entries.extend(mark.map(|m| (PersistKey::LastRunning, m.to_owned())));
-    match save_app(app_profile_dir, entries) {
-        PersistOutcome::Saved => tracing::info!(
+    match (save_app(app_profile_dir, entries), mark) {
+        (PersistOutcome::Saved, _) => tracing::info!(
             event = "switch_drop_recorded",
             last_ghost = DEFAULT_GHOST_FOLDER,
             mark = mark.unwrap_or("-"),
             "[boot_resolve] 降ろした直後の記憶を書きました（最後のゴーストは既定・印は切替先・- は argv なので印に触れていない）"
         ),
-        PersistOutcome::Degraded => tracing::warn!(
+        (PersistOutcome::Degraded, Some(mark)) => tracing::warn!(
             event = "switch_drop_record_degraded",
             last_ghost = DEFAULT_GHOST_FOLDER,
-            mark = mark.unwrap_or("-"),
+            mark,
             dir = %app_profile_dir.display(),
             "[boot_resolve] 降ろした直後の記憶を書けませんでした（切替先が落ちても、次の起動の印は前のゴーストの名前のまま・最後のゴーストは前のゴーストのままになります）"
+        ),
+        (PersistOutcome::Degraded, None) => tracing::warn!(
+            event = "switch_drop_record_degraded",
+            last_ghost = DEFAULT_GHOST_FOLDER,
+            mark = "-",
+            dir = %app_profile_dir.display(),
+            "[boot_resolve] 降ろした直後の記憶を書けませんでした（最後のゴーストは前のゴーストのままになります・argv で始まったプロセスなので印にはもともと触れません）"
         ),
     }
 }

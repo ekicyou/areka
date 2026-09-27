@@ -17,6 +17,7 @@ use areka_kanade::{
     BootOrigin, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, ChangedFrom, CloseReason,
     KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind,
 };
+use areka_sylphya::{PersistKey, PersistScope};
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
@@ -24,7 +25,10 @@ use wintf::ecs::pointer::dispatch_pointer_events;
 
 use crate::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost};
-use crate::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute, NoBalloon, pick_index};
+use crate::boot_resolve::{
+    DEFAULT_GHOST_FOLDER, GhostDecision, GhostRoute, NoBalloon, pick_index, running_name,
+    write_switch_drop,
+};
 use crate::ghost_session::{
     GhostBootInputsSource, GhostSlot, boot_ghost_strict, commit_ghost_windows, reopen_ghost_windows,
 };
@@ -356,6 +360,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
     match notice {
         KanadeNotice::Steady => match stage {
             Some(SwitchStage::Welcoming { attempt }) => {
+                record_steady_memory(world);
                 world.remove_non_send::<SwitchInFlight>();
                 let ghost = world
                     .get_resource::<BootContext>()
@@ -392,6 +397,58 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
     }
 }
 
+/// 迎え入れたゴーストが定常に入った時点の記憶（要件 4.6・4.7・12.6・12.7・design Flow 6）。
+///
+/// 段を問わず同じ手順で、置き場のゴーストの記憶の書き手へ最後に使ったもの（ゴースト・バルーン・
+/// シェル）と、argv で始まったプロセスでなければ印＝今のゴーストの名前を投函する。実行系が動いて
+/// いるので UI スレッドから App スコープへ直接は書かない（書き手の中で直列にする）。置き場・実行系・
+/// 文脈が無ければ `warn!(steady_memory_not_recorded)` で続ける（最後のゴーストは既定のまま）。
+fn record_steady_memory(world: &World) {
+    let ctx = world.get_resource::<BootContext>();
+    let slot = world.get_non_send::<GhostSlot>();
+    let runtime = slot
+        .as_ref()
+        .and_then(|s| s.0.as_ref())
+        .and_then(|s| s.runtime());
+    let (Some(ctx), Some(runtime)) = (ctx, runtime) else {
+        let reason = match (ctx.is_some(), slot.as_ref().map(|s| s.0.is_some())) {
+            (false, _) => "boot_context",
+            (true, None | Some(false)) => "ghost_slot",
+            (true, Some(true)) => "runtime",
+        };
+        tracing::warn!(
+            event = "steady_memory_not_recorded",
+            reason,
+            "定常に入ったゴーストの記憶を書く相手が無い（最後のゴーストは既定のまま・次の起動は既定で起きる）"
+        );
+        return;
+    };
+    let publisher = runtime.sylphya_publisher();
+    crate::record_last_used(
+        publisher,
+        &runtime.mount().shell.dir,
+        &ctx.current.ghost,
+        &ctx.current.balloon,
+    );
+    if ctx.argv_session {
+        tracing::debug!(
+            event = "session_mark_untouched_argv",
+            "argv で始まったプロセスなので定常到達でも起動中の印に触れない"
+        );
+        return;
+    }
+    let name = running_name(&ctx.root, &ctx.current.ghost);
+    publisher.persist_put(
+        PersistScope::App,
+        vec![(PersistKey::LastRunning, name.clone())],
+    );
+    tracing::info!(
+        event = "session_mark_steady",
+        ghost = %name,
+        "定常に入ったゴーストの名前を起動中の印へ投函した"
+    );
+}
+
 /// 切替先を起こす（要件 2.7・3.1・3.2・3.7・3.8・4.6・4.7・6.1・design Flow 1）。
 ///
 /// 予約の切替先へ: 置き場のゴーストを同期で降ろす → 全窓を閉じる → [`boot_into`]（由来＝切替で
@@ -409,6 +466,20 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         return;
     };
     take_down(world);
+    // 降ろし終えた直後（前のゴーストの記憶の書き手は処理し切って join 済み＝動いている実行系は 0）に
+    // 最後のゴースト＝既定・印＝切替先を 1 回で書く（要件 12.6）。UI スレッドが App スコープへ直接
+    // 書くのは実行系が 1 つも動いていない間だけ（動いている間はそのゴーストの記憶の書き手を通す）。
+    // 既定への戻しと致命はこれに触れない（印は切替先のまま・要件 12.7・12.8）。
+    match world.get_resource::<BootContext>() {
+        Some(ctx) => write_switch_drop(
+            &ctx.app_profile_dir,
+            (!ctx.argv_session).then_some(target.name.as_str()),
+        ),
+        None => tracing::warn!(
+            event = "boot_context_missing",
+            "起動の文脈が無いので降ろした直後の記憶を書けない（最後のゴーストと印は前のゴーストのまま）"
+        ),
+    }
     let closed = close_windows_for_restart(world);
     let origin = BootOrigin::ChangedFrom(ChangedFrom {
         sakura_name: prev.sakura_name.unwrap_or_default(),

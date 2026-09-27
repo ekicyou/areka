@@ -595,7 +595,8 @@ mod last_used {
         assert_one_event(&events, "switch_drop_recorded", tracing::Level::INFO);
     }
 
-    /// 書けないとき（App の置き場が普通のファイル）: 3 つの書き手はそれぞれ `warn!` 1 件で戻り、
+    /// 書けないとき（App の置き場が普通のファイル）: 3 つの書き手（切替の降ろした直後は印あり・argv の
+    /// 印なしの 2 通り）はそれぞれ `warn!` 1 件で戻り、
     /// 成功の info は出ない。
     #[test]
     fn session_mark_writers_warn_once_when_they_cannot_write() {
@@ -612,7 +613,7 @@ mod last_used {
             save_scope(PersistScope::App, &roots, &FsPersistIo, vec![]),
             PersistOutcome::Degraded
         );
-        let cases: [(&str, &str, Box<dyn Fn()>); 3] = [
+        let cases: [(&str, &str, Box<dyn Fn()>); 4] = [
             (
                 "session_mark_write_degraded",
                 "session_mark_written",
@@ -622,6 +623,12 @@ mod last_used {
                 "switch_drop_record_degraded",
                 "switch_drop_recorded",
                 Box::new(|| write_switch_drop(&app_dir, Some("切替先"))),
+            ),
+            (
+                // argv で始まったプロセス（印に触れない）でも最後のゴーストが書けなければ警告する。
+                "switch_drop_record_degraded",
+                "switch_drop_recorded",
+                Box::new(|| write_switch_drop(&app_dir, None)),
             ),
             (
                 "session_mark_clear_degraded",
