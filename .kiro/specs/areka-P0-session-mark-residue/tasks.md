@@ -141,3 +141,4 @@
 - 4.2: LogSink の腕の App スコープの置き場を結線の入力から写す前は、テストが `target\debug\deps\profile\areka\sylphya.toml`（実行体の隣の実 profile）へ書いていた。旗の出所は `GhostSession::logsink_fallback()`、印の材料へは `after_run` が運ぶ。5.2 で `session_end.rs` も同じ読み口から載せる。
 - 4.3: `FakeShiori::BalloonMissing` の回は、倒れた先の kanade の Fault の知らせが受け口に残り、次の起動の最初の汲み出しで `quit_app` が走りうる（判定欄は揺れない）。次の起動の出所を判定に足すなら先に受け口を空にする。
 - 5.1: 偽の SHIORI の `hold_at(HoldAt::{Get|Notify|Unload})` は、固まった呼び出しが台本の応答を消費せず、解かれた後は固定で GET/NOTIFY＝`RequestError::Timeout`（本番と一致）・UNLOAD＝`ShutdownError::ExitTimeout`（代用。本番は `Unload(SendError::Ipc(IpcError::Timeout))`）を返す。固まるのは台本 1 件につき最初の 1 回。部品は `emo2_boot/spine_hold_support.rs`（`pub(crate) mod hold_support`）。`unblock_handle` は常に `Some`。
+- 4.1〜4.3 の追加で `main_session_mark_tests.rs` が 1,184 行になり、log-capture-kit の 1,000 行の見張りが赤になっていた（crate 単位のテストでは映らない）。倒れた回のテストを子モジュール `main_session_mark_fallback_tests.rs` へ切り出した。以後の検証は `cargo test -p log-capture-kit` も回す。
