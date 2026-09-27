@@ -149,3 +149,73 @@
 - `pick_index` を `request_ghost_switch` の中で毎回呼ぶ形で、`RandomState::new()` がプロセス内で値を変える（std の実装はスレッドごとの鍵を呼ぶたびに進める）ことを、決定論テストではなく実機ログで 2 回以上の `\+` の結果が散ることで確かめる（要件 2.2 は「固定しない」＝分布の検定はしない）。
 - `roadmap-draft.md` の `[[spec]]` を足したときの `linkage.md` の束名「切替」の実在（腕 d）と、`briefing.md` の `[[owner_completed]]` に本仕様が要らないこと（完了前は `[[spec]]` に居るだけでよい）を、`cargo test -p ukadoc-survey` で着手時に確かめる。
 - 実機で `\+` を言う検体（R_POST の複製）の `OnBoot` 台本が `：\+` 1 行で里々の出力として `\+` を素通しするか（里々が `\+` を自分の記法と誤読しないか）を、走らせる前に検体の台本を areka のログ（`kanade=trace` の応答の生文字列）で確かめる。
+
+## 9. 設計フェーズの記録（2026-09-27・`/kiro-spec-design -y`）
+
+### 9.1 要約
+
+- **Discovery Scope**: Extension（既存の切替の入口と転記の拡張・軽い発見）。外部依存・新しいライブラリは無し。WebSearch は不要（正典は要件の表で引用済み・実装の前例はすべて手元のソース）。
+- **Key Findings**（設計を決めた 3 点）:
+  1. 入口 `request_ghost_switch` は既に「目録を読む → 突き合わせる」の順で、今のフォルダ名も同じ関数の中で読んでいる。特別な名前の解決はその間の 1 段で済み、入口の型（`SwitchRequest`・`GhostSpec`・`SwitchVerdict`）に触らない。
+  2. `decode_bare` の裸 `\f` → `Font { args: [] }` の腕が「裸の綴りを角括弧付きと同じ受け皿へ載せる」前例で、`\+`／`\_+` → `GenericCommand { "change", ["ghost", …] }` はその同型。`\+[x]` は字句が `Tag { word: "+", … }` にするので、`decode_tag` に腕を足さなければ今日どおり `Raw`（要件 1.5 が自然に成り立つ）。
+  3. `ghost_switch_tests.rs` の道具立て（`entry`・`fixture_root`・`world_with_slot`・`sent_changes`・`assert_one_event`）は非公開の関数なので、新しい兄弟テストファイルを作ると `ghost_switch_test_support.rs` への括り出し（`structure.md` の規約）が要る。本仕様のテストを同じファイルに足せば 545 → 約 830 行で目安 1,000 の内側。
+- **Review Gate**: 1 周目で通過（要件 ID 60 件すべてが traceability に在る・境界節 4 つとも実体あり・File Structure Plan に部品 7 つすべての実ファイル）。
+
+### 9.2 Design Decisions
+
+#### Decision: `lastinstalled` の記録は `Resource` `LastInstalledGhost(String)`・書く口は `record_last_installed(world, folder)`（論点 4）
+- **Context**: 要件 4.1〜4.2・Adjacent expectations（`ghost-install` へ名前と引数を申し送る）。
+- **Alternatives**: (a) NonSend（`ghost-install` の brief の仮置き）・(b) `GhostEntry` を受ける・(c) 書く口を関数にせず `insert_resource` の 1 行を呼ばせる。
+- **Selected**: `#[derive(Resource)] pub(crate) struct LastInstalledGhost(pub String)` と `pub(crate) fn record_last_installed(world: &mut World, folder: String)`（`insert_resource` ＋ `info!(last_installed_recorded)`）。`ghost_switch.rs` に置く。
+- **Rationale**: `String` は `Send` なので NonSend にする理由が無い（(a) 却下）。目録に無ければ無視するのは要件 4.5 で `dir` は要らない（(b) 却下）。ログ無し失敗経路の禁止の裏返しで「書いた」記録を 1 件残したいので関数にする（(c) 却下・1 行増えるだけ）。
+- **Trade-offs**: 本仕様では本番の呼び手が無く `#[allow(dead_code)]` が要る（`hit_region.rs` の前例どおり呼び手の spec 名を注釈）。
+- **Follow-up**: 完了時に `ghost-install` の brief へ 2 つの名前を申し送る。
+
+#### Decision: 解けないときは既存 `ghost_switch_unknown` に `reason` 欄・解けたときは新設 `ghost_switch_resolved`（論点 5）
+- **Context**: 要件 6.1（4 通りを見分ける `warn!` 1 件）・6.2（解けた記録）。
+- **Alternatives**: `ghost_switch_unresolved` を新設して 4 通りをそこへ・既存は名指しだけに残す。
+- **Selected**: `ghost_switch_unknown` の `reason` に `name`／`random_empty`／`sequential_empty`／`lastinstalled_none`／`lastinstalled_missing`。`ghost_switch_resolved`（`info!`・`name`・`to`・`position`）を新設。
+- **Rationale**: `ghost_switch_no_context` が `reason` で理由を分ける同型が既に在る。実機と `alpha-release-signoff` の grep は「切替が無視された」を event 1 語で拾える。既存テストの `assert_one_event(…, "ghost_switch_unknown", WARN)` がそのまま使える。「解けた」に当たる既存の語は無いので 1 語だけ新設。
+- **Trade-offs**: `ghost_switch_unknown` の意味が「該当なし」から「解けない全般」へ広がる。説明文を「切替先が決まらない」に改める。
+
+#### Decision: 解決の段は入口の中の前処理・`GhostSpec` は変えない（案 A）
+- **Context**: 研究 §4 の A／B／C。
+- **Selected**: A。`request_ghost_switch` を `request_ghost_switch_with(world, req, pick)` に分け、`GhostSpec::Name` のときだけ `resolve_special_name` を呼び、解けたら `GhostSpec::Folder(folder)` へ読み替えて `resolve_switch_target` へ。
+- **Rationale**: 入口の型が不変＝完了 spec の Revalidation Trigger に当たらず、`ghost-install`・`shell-balloon-switch` への申し送りが要らない。要件 5.5（同名より優先）は段の順序だけで成り立つ。要件 5.7（メニューに掛けない）は `Folder` を素通しにするだけ。
+- **Trade-offs**: 型で「特別な名前」が見えない（B の長所を捨てる）。純粋な関数の出力 `NameResolution` の 3 通りで補う。
+
+#### Decision: 別名の転記は `decode_bare` の 2 腕（`compile.rs` には触らない）
+- **Context**: brief は「decode か compile かは設計で決める」。
+- **Selected**: `decode_bare`。値は `decode_passthrough_bang(["change","ghost","random"])` と同じ。
+- **Rationale**: `Raw` の中身を `compile` で文字列で見分けるのは転記層の約束（`Raw` に意味を見ない）に反する。`decode_bare` の裸 `\f` の前例と同型で、`compile.rs`・`consumer_ledger.rs` に触らない。
+- **Trade-offs**: `decode.rs` の裸タグの腕に値を持つ `GenericCommand` の初例が入る（注釈で「別名の転記」と明記）。
+
+#### Decision: テストは既存の兄弟ファイルへ足す（新しいファイルを作らない）
+- **Context**: brief・研究 §2.8 は新しい兄弟ファイル `ghost_switch_resolve_tests.rs` を仮置きしていた。
+- **Selected**: `ghost_switch_tests.rs`（純粋な関数＋入口）・`decode_tests.rs`（転記）へ足す。
+- **Rationale**: 道具立てが非公開の関数で、新ファイルにすると `ghost_switch_test_support.rs` への括り出し（規約）が要り接触が増える。行数は目安の内側（約 830・約 650）。
+- **Trade-offs**: `ghost_switch_tests.rs` が 1 ファイルで入口の全部を持つ。後続で 1,000 を超える気配が出たら括り出す。
+
+### 9.3 Synthesis（一般化・採用か自作か・簡素化）
+
+- **一般化**: `random`／`sequential`／`lastinstalled` は「目録の項目・今のゴースト・記録・乱数 → フォルダ名か理由」の 1 つの純粋な関数で表せる。`\+`／`\_+` はその関数へ届く前に別名として溶ける。将来の `\![call,ghost,…]` は同じ関数を呼べる（本仕様では呼ばない）。
+- **採用か自作か**: 乱数は std の `RandomState`（`pick_index`・既存）。記録は `bevy_ecs` の `Resource`（既存）。自作するのは判断の関数 1 本だけ。
+- **簡素化**: `SpecialName` の enum を公開しない（判定は関数の中の `match`）。記録は `String` 1 つ。新しいファイルは `signoff.md` だけ。event 名の新設は `ghost_switch_resolved`・`last_installed_recorded` の 2 語。
+
+### 9.4 Risks & Mitigations
+
+- `roadmap-draft.md` の `[[spec]]`＋`count` を忘れると `cargo test -p ukadoc-survey` が赤 — 台帳の owner を書き換えるタスクと同じタスクで直す（design の File Structure Plan に明記）。
+- `random` の候補 0 で目録が空でないときの「今のゴースト自身」は、`current` が目録に在るときだけ起きる（候補 0 かつ目録あり ⇒ 目録＝`[current]`）。純粋な関数の説明にこの含意を書き、テスト 3 で固定。
+- `pick(n)` が `n` 以上を返す閉包をテストで渡すと添字が外れる — 説明に `0..n` の約束を書く。本番 `pick_index` は `% n`。
+- 里々が `\+` を自分の記法と誤読する可能性 — 実機の前に `kanade=trace` の応答の生文字列で確かめる（§8）。
+
+### 9.5 References
+
+- `crates/areka/src/emo2_boot/ghost_switch.rs` の `request_ghost_switch`／`resolve_switch_target`／`SwitchInFlight`（入口の順序・型）。
+- `crates/areka/src/emo2_boot/ghost_switch_tests.rs` の `unknown_names_warn_once_and_send_nothing`・`fixture_root`・`world_with_slot`（道具立て）。
+- `crates/areka-parsers/src/sakura/decode.rs` の `decode_bare`（`"f"` の腕）・`decode_tag`（`+` の腕が無い＝`\+[x]` は `Raw`）・`decode_passthrough_bang`。
+- `crates/areka-parsers/src/sakura/lexer.rs` の `lex`（確定したタグ名の直後が `[` → `Token::Tag`）。
+- `crates/areka-parsers/src/sakura/parse_bare_tag_tests.rs` の `CANONICAL_BRACKETLESS_SPELLINGS`。
+- `crates/areka/src/boot_resolve.rs` の `pick_index`。`crates/areka/src/session_end.rs` の `SessionEnded`（`Resource` の前例）。`crates/areka/src/emo2_boot/hit_region.rs` の `#[allow(dead_code)]` の注釈の前例。
+- `crates/ukadoc-survey/tests/consistency/spec_checks.rs`（腕 a・c・f）・`crates/ukadoc-survey/src/check/content.rs` の `check_evidence`。
+- 正典 URL は design.md の Supporting References。
