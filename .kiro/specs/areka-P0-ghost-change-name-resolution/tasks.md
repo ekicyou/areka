@@ -82,3 +82,5 @@
 - `ghost_switch_tests.rs` は 987 行で上限 1,000 行の目前（design の見積もりは約 830 行）。後続 `areka-P0-ghost-install` がこのファイルにテストを足すなら、先にファイルを分ける。
 - `/kiro-complete` の時点で `origin/main` が動いていたら `git log HEAD..origin/main -- crates/areka/src/emo2_boot/ doc/ukadoc-coverage/` を見直す。並走 spec が台帳を変えていたら `report/*.md` は生成器で作り直し、手でマージしない。
 - 実機の前確認で、`kanade=trace` の記録は送出だけで SHIORI の応答の生文字列は出ないと分かった（design の前提と違う）。応答の確認は `shiori-host32-host` の `request_e2e_real_pasta_optional` に `HOST32_PASTA_DLL` を向けて行った（`signoff.md` の「気付いたこと」）。
+- 完了時にその場で解決（1 件）: `areka-P0-ghost-install` の brief に「2026-09-27 `ghost-change-name-resolution` の着地」節を足し、受け皿の名前 `LastInstalledGhost`／`record_last_installed`・`lastinstalled` の実機確認・`ghost_switch_tests.rs` の行数を申し送った。
+- 完了時に起票（1 件・roadmap の登記）: 開発者の目視の manual2 で、メニューの終了の直後に表示の適用が閉じた窓へ届き `derive_scale` の `error!` が 1 件残った件。本仕様と関係のない既存の性質で持ち主の spec が無いので、`.kiro/steering/roadmap.md` の登記の行（2026-09-27 登記）に書いた。
