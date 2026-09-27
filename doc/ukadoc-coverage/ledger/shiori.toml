@@ -1616,6 +1616,10 @@ note = """
 おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の on_boot。
+Ref6/7: Ref6＝halt・Ref7＝落ちたゴーストの名前は、切替先の失敗で既定ゴーストへ戻したときと、前回
+きれいに終わらなかった（起動中の印が残っていた）次の起動で載る（areka-P0-ghost-shell-balloon-switch・
+crates/areka-kanade/src/change.rs の BootOrigin::Halted、crates/areka/src/main.rs の first_boot_origin と
+crates/areka/src/emo2_boot/ghost_switch.rs の switch_to_default が渡す）。
 無いと失うもの: 立ち上げたときの第一声が無く、居るのに黙ったままになる。
 """
 
@@ -1832,6 +1836,10 @@ note = """
 おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
 crates/areka-kanade/src/actor.rs の round_trip_request。
 構築関数: crates/areka-kanade/src/schedule/events.rs の on_close（通常の握手・GET）と on_close_notify（強制終了時の通知・NOTIFY）。
+OS のセッションの終了: OS のシャットダウン・再起動・ログオフでは、ゴースト窓の手続きの中で Ref0＝system の
+通知（NOTIFY）を送ってから SHIORI を降ろす。別れの台詞は流さない（areka-P0-ghost-shell-balloon-switch・
+crates/areka/src/session_end.rs の on_os_session_end から crates/areka-kanade/src/schedule/mod.rs の
+force_quit を通る）。
 無いと失うもの: 終わらせるときの別れの一言が無く、黙って消える。
 """
 
