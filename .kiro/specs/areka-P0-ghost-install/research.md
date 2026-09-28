@@ -356,3 +356,102 @@ brief に数が無く、本分析で測ったもの: kanade `msg.rs` **880**・`
 | brief 09-27 節の README の引用「ゴースト・シェル・バルーンの切り替え、インストール、…」 | 今の行は「シェル・バルーンの切り替え、インストール、…」 | 消す語は同じ。行は 2 行のまま |
 | 要件 Introduction「`OnInstall`…の綴りは `crates/areka-nar/src/` の 6 ファイル（説明と失敗の語彙）」 | 6 ファイルのうち 1 つはテスト（`install_commit_tests.rs`） | 影響なし |
 | brief Constraints「規模 M」 | 見立ては L（§6） | 見積もりの前提が変わる |
+
+## 10. 設計フェーズの調査と決定（2026-09-28・`/kiro-spec-design -y`）
+
+> ここから下は設計の段で足した。§1〜§9（ギャップ分析）は書き換えていない。コードは「何の定義か」で指す。
+
+### 10.1 Summary
+
+- **Feature**: `areka-P0-ghost-install`
+- **Discovery Scope**: Complex Integration（既存の 5 クレートへ口を足し、切替と終了の 2 つの道筋へ合流する）。外部クレートの追加が 0 なので、外部の調査は正典（ukadoc MCP）の引き直しだけ。調査の本体は既存コードの読み取り。
+- **Key Findings**:
+  - 起動中のゴーストへ入れる形を「間を空けない」にすると、展開の成否によらず `switch_to` の続きが今日のまま使え、要件 7.4〜7.6 の失敗の枝を 1 本も足さずに済む。
+  - 空の値つきの応答は `ShioriOutcome::Value` の空文字列として届く。「応えが無い」の判定は kanade の殻に 1 か所置けば足りる。
+  - 置換語は語彙表の状態に縛られない。凍結する表は値がある名前をすべて写すので、`publish_static` で載せれば置き換わる。記憶の置き場は起こすたびに新しくなるので、載せ直しが要る。
+
+### 10.2 Research Log
+
+#### 空の台本の届き方（§7 の 3）
+- **Sources**: `crates/shiori-host32-host/src/shiori3.rs` の `parse_response`・`client.rs` の `map_get_result`・`crates/areka-kanade/src/shiori/real.rs` の `handle_call`・`schedule/steady.rs` の定常の応答の腕。
+- **Findings**: `Value` の行が在れば値が空でも `Some("")`。200 はそのまま返るので `ShioriOutcome::Value("")`。定常の応答の腕は空の台本でも採番して再生の指示を出す。
+- **Implications**: 204 と空の台本を同じ「返事なし」に読む判定は、`RaiseOutcome` を組む所（殻）に置く。運行表は変えない。
+
+#### 応えの有無を返す道（§4 c・§8 の 1）
+- **Sources**: `crates/areka-kanade/src/actor.rs` の `spawn_kanade_with_stop_sink`・`drive`・`execute_actions`・`round_trip_request`、`msg.rs` の `KanadeMsg`、`schedule/change.rs` の `on_raise_event`、`crates/areka-actor/src/reply.rs`。
+- **Findings**: `on_raise_event` は捨てるとき動作を 0 個返す。送るときは `Action::ShioriRequest` を 1 つ返し、`execute_actions` の `last_reply` に結果が入る。エラー応答は `round_trip_request` が `NoContent` へ写し済み。`KanadeMsg::RaiseEvent` を組み立てる箇所は本番 0・テスト 0（名札の match は `{ .. }`）。`ShioriOutcome` は複製できない。
+- **Implications**: 殻だけで 5 値（許可表に無い・定常でない・台本あり・返事なし・失敗）を作れる。許可表に無いかどうかは殻が `events::allowed_static` で先に見分ける。
+
+#### 起動中のゴーストへ入れる形（§4 e・§8 の 2）
+- **Sources**: `crates/areka/src/emo2_boot/ghost_switch.rs` の `request_ghost_switch_with`・`on_ghost_stopped`・`switch_to`・`switch_to_default`・`take_down`・`boot_into`・`on_notice`、`crates/areka-kanade/src/schedule/change.rs` の `on_change_ghost`・`consume_pending`・`begin_change`、`crates/areka/src/app_exit.rs` の `close_windows_for_restart`。
+- **Findings**: `raise_event` が偽の切替は `OnGhostChanging` も `OnClose` も送らない。再生中は保留してトークの完了で始める。`switch_to` は `boot_into` が偽を返せば、相手が既定でなければ `switch_to_default`、既定なら `fatal`。定常到達の通知は初回の起動でも `on_notice` を通る。
+- **Implications**: 降ろした後に展開を 1 回呼ぶだけで、要件 7.1〜7.7 が既存の道筋で満たせる。`SwitchRequest`・`SwitchInFlight` は変えない。
+
+#### 置換語の載せ方（§4' の 1・§7 の 5）
+- **Sources**: `crates/areka-ghost/src/sylphya_wiring.rs` の `from_sylphya_provider`・`ghost_asker_id`・`publish_ghost_statics`、`crates/areka-sylphya/src/reader.rs` の `talk_snapshot`、`actor.rs` の `publish_static`・`barrier`、`crates/areka-sakura/src/sysvar.rs` の `resolve_system_var`、`crates/areka-sylphya/src/vocab/flat.rs`。
+- **Findings**: `talk_snapshot` は語彙表を見ない。`publish_static` の本番の呼び手は `publish_ghost_statics` の 1 つ。起動の入力に欄を足すと `GhostBootOptions` の組み立て 31 か所に波及する。語彙表の状態を固定しているテストは `only_four_tokens_are_m1_derived` の 1 本。
+- **Implications**: 値はプロセスで 1 つ持ち、`boot_wired` で載せ直す。起こし直した最初の台詞に間に合う保証は無い（締めの知らせの返事では反映を待ってから送るので置き換わる）。
+
+#### tick の門と取り出しの系
+- **Sources**: `crates/wintf/src/ecs/world/tick_gate.rs`・`tick_wake.rs`、`crates/areka/src/tick_gate_config.rs`、`emo2_boot/readme_cue.rs`・`change_cue.rs`。
+- **Findings**: 門は既定で無効。有効でも 30 画面更新ごとに回る。既存の台本の受け口（説明書・切替）は起床の旗を立てていない。
+- **Implications**: 旗は足さない。遅れは最大で心拍 1 回ぶん。
+
+#### 正典の引き直し（ukadoc MCP）
+- `OnInstallCompleteEx`・`OnInstallComplete`・`OnInstallCompleteAll` の説明と Reference は要件の逐語引用と一致した（`ukadoc:list_shiori_event:OnInstallCompleteEx:1` ほか）。`OnInstallCompleteAll` には「SSPでは2.9.00より前のバージョンに実装漏れがあり、実際には発生しない」の注記がある（areka の設計には影響しない）。
+- `terms.txt` は `ukadoc:manual_directory` と `\![open,terms]` の 2 件に現れる。後者は本仕様の範囲外。
+
+### 10.3 Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|---|---|---|---|---|
+| 背景スレッドで上から順に走る手続き＋UI 側の窓口（採用） | 手続きは口越しに外とやり取りし、UI は頼みを捌く | 手続きが読みやすい。偽の口で画面もスレッドも無しにテストできる | 頼みの往復の型が増える | §5 案 C の具体形 |
+| UI スレッドの状態機械＋塞ぐ仕事だけ背景 | 手続きの状態を World に持つ | World に触る所が 1 つ | 状態が 10 前後になり、順序が読みにくい | 採らない |
+| 切替の道筋の中へ織り込む | `ghost_switch.rs` に前後の処理を書く | ファイルが少ない | 上限の近いファイルが膨らむ。後続と同じ行を触る | §5 案 A・採らない |
+
+### 10.4 Design Decisions
+
+決めたことの一覧は `design.md`「設計で決めたこと」の 16 行。ここには比べた中身の長いものだけを残す。
+
+#### Decision: 手続きの置き場（背景スレッドで上から順に走らせる）
+- **Context**: 要件は段が多く（始まり・照合・利用条件・展開・締め・複数）、決定論テストが必達。
+- **Alternatives Considered**: 1. UI スレッドの状態機械 2. 背景スレッドの上から順の手続き＋口。
+- **Selected Approach**: 2。口 `InstallPorts` は 6 関数で、実装は本物（worker）と偽物（テスト）の 2 つ。
+- **Rationale**: 口に切替を頼む関数を置かないことで、「areka は切替を主導しない」が型で守られる。
+- **Trade-offs**: worker と窓口の間の頼みの型が要る。
+- **Follow-up**: 頼みの往復が増えたら、口の関数を増やす前に頼みをまとめられないかを見る。
+
+#### Decision: 展開を挟む位置（全窓を閉じた直後）
+- **Context**: `switch_to` の中のどこで展開するか。
+- **Alternatives Considered**: 1. 降ろした直後・窓を閉じる前 2. 窓を閉じた直後・起こす前。
+- **Selected Approach**: 2。
+- **Rationale**: 利用者から見て「引っ込んで、新しい中身で戻る」になる。窓を閉じる前だと、動かないゴーストが画面に残る。窓を閉じる前に展開しても、窓へ届いていた OS の終了の問い合わせは窓と一緒に消えるので、終了の扱いは良くならない。
+- **Trade-offs**: 展開の間は窓が 0 枚（`design.md` Open Questions / Risks の 1）。
+- **Follow-up**: 実機で所要 ms を測る。
+
+#### Decision: 確定の前で止める口を足さない
+- **Context**: 要件 12 裁定 4 の末尾「終了の指示の後は確定の段へ入らない形にできれば」。
+- **Alternatives Considered**: 1. `InstallRequest` に欄 2. `install` の隣に「続けてよいか」を受ける口 3. 足さない。
+- **Selected Approach**: 3。
+- **Rationale**: 1 は組み立て 50 か所に波及する。2 は `areka-nar` の公開面を広げるが、得られるのは「組み上げの途中で終了が来たときに確定へ進まない」だけで、その場合も今の形で 3 秒の内に終わるか、宛先が無傷のまま打ち切られる公算が高い。
+- **Trade-offs**: 確定の 2 手の間で上限に達すると、宛先のフォルダは無く元の中身は作業フォルダに残る（要件 8.3 の記録に出る）。
+
+### 10.5 Synthesis（設計の前の 3 つの見直し）
+
+- **一般化**: 終了で待つ口は「門を登記する」形にした（`network-update` が同じ口に乗る）。実装は門 1 つぶんだけ。切替の道筋への呼び出しは一般化せず、`desk` の 2 関数を直に呼ぶ（呼び手が 1 つの間は抽象を足さない）。
+- **作るか借りるか**: 背景スレッドは `areka_actor::spawn_actor`、返信は `areka_actor::reply_channel`、上限の数え方は `areka_kanade::WaitBudget`、復号は `areka_parsers::charset::decode`、降ろす・起こすは切替の道筋、画面は OS（`GetOpenFileNameW`・`MessageBoxW`）。新しく作るのは手続き・窓口・門だけ。
+- **削ったもの**: UI 側の定常の旗／`switch_to` の分割／起床の旗／`areka-nar` の確定の前で止める口／入口専用の許可表／依頼の出どころの 3 つ目（`file-drop` が自分で足す）。
+
+### 10.6 Risks & Mitigations
+
+- 起動中のゴーストへ入れる展開の間の Windows の終了 — 手当てなし。所要を測り、既知の制限の候補として `alpha-release-signoff` へ申し送る。
+- 使用中のフォルダ（§7 の 4）— 失敗しても宛先は元のまま（`areka-nar` の保証）。実機の項目 3 で確かめる。
+- 画面が前面に出ない — 実機で確かめ、出なければ `IFileOpenDialog` か旗の見直し。
+- 規模が上限に掛かる（17.5〜20.5）— 切る候補は置換語 2 つと終了で待つ口。切るかどうかは開発者が決める。
+
+### 10.7 References
+
+- [OnInstallCompleteEx](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallCompleteEx:1) — 応えが無ければ旧仕様へ続ける根拠
+- [OnInstallCompleteAll](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallCompleteAll:1) — 複数の書庫の最後の知らせ
+- [全体の構成](https://ssp.shillest.net/ukadoc/manual/manual_directory.html) — `terms.txt`／`terms.md`
+- 完了 spec `areka-P0-ghost-shell-balloon-switch`・`areka-P0-session-mark-residue`・`areka-P0-ghost-change-name-resolution`（`.kiro/specs/completed/` 以下）— 切替の道筋・終了の上限・受け皿
