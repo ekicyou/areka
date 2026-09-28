@@ -226,6 +226,9 @@ pub enum KanadeMsg {
         references: Vec<String>,
         /// GET か NOTIFY か。
         method: crate::change::ShioriMethod,
+        /// 結果の返信端（要らなければ None）。`Some` なら、その依頼の処理を済ませてから
+        /// ちょうど 1 回返す（kanade が止まって落ちれば送り手には `ReplyError::Dropped`）。
+        reply: Option<areka_actor::ReplySender<crate::change::RaiseOutcome>>,
     },
 }
 

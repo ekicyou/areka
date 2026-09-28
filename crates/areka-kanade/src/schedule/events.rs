@@ -30,6 +30,14 @@
 //! | `OnGhostChanging` | GET | Ref0〜3=切替先の本体側の名前・出どころ・名前・フォルダの絶対パス |
 //! | `OnGhostChanged` | GET | Ref0〜3=直前のゴーストの本体側の名前・切替時の台本・名前・パス・Ref4〜6=空・Ref7=シェルのフォルダ名 |
 //! | 汎用の入口（許可表の名前） | GET／NOTIFY | 渡された列のまま |
+//! | `OnInstallBegin` | GET（汎用の入口） | References なし |
+//! | `OnInstallComplete` | GET（汎用の入口） | Ref0=識別子・Ref1=`install.txt` の `name`・Ref2=同梱バルーンの名前（旧仕様・渡された列のまま） |
+//! | `OnInstallCompleteEx` | GET（汎用の入口） | Ref0〜2=識別子・名前・場所（複数は byte 値 1 区切り・渡された列のまま） |
+//! | `OnInstallCompleteAll` | GET（汎用の入口） | Ref0〜2=識別子・名前・場所（複数は byte 値 1 区切り・渡された列のまま） |
+//! | `OnInstallFailure` | GET（汎用の入口） | Ref0=失敗理由（渡された列のまま） |
+//! | `OnInstallRefuse` | GET（汎用の入口） | Ref0=`accept` の名前・Ref1=識別子・Ref2=名前（渡された列のまま） |
+//! | `OnGhostTermsAccept` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnGhostTermsDecline` | GET（汎用の入口） | 渡された列のまま |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
@@ -98,6 +106,24 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnGhostChanging",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostChanged:1
     "OnGhostChanged",
+    // インストール系の 8 語（areka-P0-ghost-install）。汎用の入口から送る。送り先を他の
+    // ゴーストへ移す場面は作らないので `OnInstallReroute` は載せない（要件 2.11）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallBegin:1
+    "OnInstallBegin",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallComplete:1
+    "OnInstallComplete",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallCompleteEx:1
+    "OnInstallCompleteEx",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallCompleteAll:1
+    "OnInstallCompleteAll",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallFailure:1
+    "OnInstallFailure",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnInstallRefuse:1
+    "OnInstallRefuse",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostTermsAccept:1
+    "OnGhostTermsAccept",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostTermsDecline:1
+    "OnGhostTermsDecline",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。

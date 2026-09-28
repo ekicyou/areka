@@ -30,8 +30,22 @@ fn s(v: &[&str]) -> Vec<String> {
 
 #[test]
 fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 13);
-    for id in ["OnGhostChanging", "OnGhostChanged", "OnBoot", "OnMouseMove"] {
+    // 13 語に、インストール系の 8 語を足して 21 語（areka-P0-ghost-install 要件 2.12・11.9）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 21);
+    for id in [
+        "OnGhostChanging",
+        "OnGhostChanged",
+        "OnBoot",
+        "OnMouseMove",
+        "OnInstallBegin",
+        "OnInstallComplete",
+        "OnInstallCompleteEx",
+        "OnInstallCompleteAll",
+        "OnInstallFailure",
+        "OnInstallRefuse",
+        "OnGhostTermsAccept",
+        "OnGhostTermsDecline",
+    ] {
         assert_eq!(allowed_static(id), Some(id));
         assert!(is_allowed_event_id(id));
     }
@@ -41,6 +55,8 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
         "onghostchanging",
         "OnGhostChangingX",
         "",
+        // 送り先を他のゴーストへ移す場面は作らない（要件 2.11）。
+        "OnInstallReroute",
     ] {
         assert_eq!(allowed_static(id), None, "{id} は許可表に無い");
     }
