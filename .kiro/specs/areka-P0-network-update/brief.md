@@ -3,6 +3,16 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「更新」（候補名 `areka-P0-network-update`＝同名）。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-28 棚卸⑲の再測定（main `10a8d724`）
+
+> `ghost-change-name-resolution`（PR#194）・`session-mark-residue`（PR#195）の着地後に、末尾の「2026-09-27 棚卸⑱の再測定」節と突き合わせた。**崩れは行数 1 つだけ**で、前提・議題・触るファイル・タスク数（13〜16）・Fable の判定（○）は動かない。
+
+- `ghost_session.rs` 638 → **691**（`session-mark-residue` が `GhostSession` に欄 `logsink_fallback` と `shutdown_within` を足した）。`main.rs` も 873 → 927 に増えたが、本仕様は触らない見込みのまま。
+- 不変を確かめたもの: `ALLOWED_EVENT_IDS` 13 件・`events_change_tests.rs` の `assert_eq!(ALLOWED_EVENT_IDS.len(), 13)`・`schedule/events.rs` 535・`schedule/resources.rs` 346・`msg.rs` 880・`actor.rs` 589・`schedule/mod.rs` 830・`emo2_boot/mod.rs` 805・`consumer_ledger.rs` 756・`menu/mod.rs` 337・`catalog.rs` 324。`crates/areka-update/` は 2 本とも 0 行。
+- 読み直しの手（⑱ 項目 2）はそのまま使える: `request_ghost_switch` に特別な名前の解決が入ったが、解くのは `GhostSpec::Name` のときだけで、`GhostSpec::Folder(今のフォルダ)` は今日どおり素通し。
+- `dist/README.txt` の 2 行（⑱ 項目 4）は在る。文言は PR#193 で「シェル・バルーンの切り替え、インストール、ネットワーク更新の項目は、今の版ではメニューに出ません。」と「α 版の時点では、次のことはできません: シェル・バルーンの切り替え、.nar ファイルからのインストール、ネットワーク更新。」に変わった＝本仕様の完了時は行を消すのでなく「ネットワーク更新」の語を外す（先に着地した spec が外した残り次第）。
+- 新しい決まり（注意）: `crates/areka/src/session_end_sync_send_tests.rs` の `production_sync_sends_match_the_allowed_table` が、本番ソースの `SendMessageW(`／`SendMessageTimeoutW(` を 2 行の許可表と突き合わせる。更新の背景スレッドから UI の窓へ同期で送る形を取ると赤になる（今の案どおり `mpsc` で送る形なら影響 0）。
+
 ## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap` の着地後）
 
 **`ghost-install` の後の直列のまま**。ただし理由は `install_cue.rs`（消費者台帳の同じ鍵 `("execute", Some("install"))`・`consumer_ledger.rs` の `canonical()`）だけではない——それを外しても `ghost-install` と 10 本・`ghost-shell-balloon-switch` と 9 本以上のソースを共有し、読み直しは `ghost-shell-balloon-switch` の「同じゴーストへの切替」、kanade への通知は `ghost-shell-balloon-switch` の汎用の通知の入口に乗る。**要件（`/kiro-start`）は `ghost-shell-balloon-switch` の実装と並走して今すぐ書ける**（`.kiro/specs/` だけ）。設計は `ghost-shell-balloon-switch`・`ghost-install` の設計が main へ入ってから。想定 **14〜17 タスク**（`ghost-shell-balloon-switch` が通知の入口を作らなければ +2〜3）。

@@ -3,6 +3,18 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。M1 の `areka-P0-emo2-conformance-e2e`（完成宣言の器）と同じ役割を α で担う——**配布物を作り、第三者の手順で一周し、開発者が署名する**。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-28 棚卸⑲の再測定（main `10a8d724`）
+
+> `ghost-change-name-resolution`（PR#194）・`session-mark-residue`（PR#195）の着地後に、末尾の「2026-09-27 棚卸⑱の再測定」節と、`vendors/sample_ghost/emo2.nar`・`dist/README.txt`・完了 `session-mark-residue` の `signoff.md` を突き合わせた。
+
+1. **emo2 はまだ `halt` の台詞を持っていない**（⑱ 項目 4 のまま）。`vendors/sample_ghost/emo2.nar` の最後の変更は `a7b7eb19`（PR#162）で、全 110 項目を UTF-8／CP932 で読んでも `halt`・`Reference6` は 0 件。開発者の手の段取り ⑴〜⑷ は未着手。
+2. **項目 13 に関わる新しい事実**（完了 `session-mark-residue` の `signoff.md`）。強制終了（`taskkill /F`）そのものは走らせていないが、印が残って次の起動が emo2＋Ref6＝`halt` になる経路を実機で 2 つ確かめた。ⓐ 最初の起動が LogSink へ倒れた回（走行 B: 既定のバルーン StayseeBalloon の面 1 を壊して R_POST を起こす → OS のセッションの終了できれいに終えても印が残る〔`session_mark_kept reason="logsink_fallback"`〕→ 次の起動の `OnBoot` の参照は `[…, "halt", "Ｒポストと狛犬"]`）。ⓑ SHIORI が応答しないまま Windows を終えた回（走行 D: 定常の emo2 の helper を一時停止して `WM_ENDSESSION` → 3006 ms で戻る〔`reason="session_end_deadline"`〕→ 次の起動は `[…, "halt", "えも？？"]`）。どちらも告知 0・終了コード 0。記録で見る目印は `session_mark_kept` の理由の語と、次の起動の `session_mark_found`・`OnBoot` の `shiori_request`（trace まで開ける）。台詞の確認は 1 の段取りが済むまでどの経路でもできない。記録の読み方の注意: OS のセッションの終了の後は `app_exit` の info が 2 件出る（2 件目は後から届いた停止通知で `closed=0`・最初の出所は `SessionEnd` のまま・無害）。
+3. **既知の制限の候補 ⑴（⑱ 項目 7）は要らなくなった**。SHIORI が固まったまま Windows を終えても、areka は SHIORI を待つ合計を 3 秒で打ち切る（`crates/areka/src/session_end.rs` の `SESSION_END_SHIORI_LIMIT`）。「数十秒止める」形は無い。残るのは「次の起動は えも？？ で立つ」ことで、⑱ 項目 3 ⑶ の README の記述に含められる。打ち切れない `InProc` の SHIORI（roadmap の登記だけの行）は本番の `fn main` が `Helper` だけを選ぶので α では踏まない＝制限に書かない。残る候補は ⑵（落ちたゴーストのことを えも？？ は話さない）だけ。
+4. **`dist/README.txt` の仕上げの欄は 3 か所から 1 か所に減った**。⑱ 項目 3 の ⑴（メニューの項目）と ⑵（ゴーストの切り替えはできる）は PR#193 で直っている。残りは ⑶（前回きれいに終わらなかった次の起動は えも？？ で立つ、を書くか）と、冒頭の「2026-09-26 時点」の日付。
+5. **未着地の前提は 4 本から 3 本へ**（`shell-balloon-switch`・`ghost-install`・`network-update`）。`ghost-change-name-resolution` は着地した（`\+`／`\_+` と特別な名前の解決。検証項目の 12 項目には直接の項目が無いので、足すかは要件で決める）。
+
+**タスク数**: 5〜7 のまま（README の欄は減ったが同じタスクの中）。**Fable**: − のまま。
+
 ## 2026-09-26 棚卸⑰の再測定（main `13b72893`＝`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap`・PR#180・PR#181 の着地後）
 
 **棚卸⑰で配布物づくりを前に切り出した＝`areka-P0-alpha-package`**（配布スクリプト `tools/package-alpha.ps1`・zip の起動確認・第三者向け README の骨子・根の README のライセンス是正・4〜5 タスク）。触るのは `tools/`・根の `README.md`・新規の第三者向け README だけで、`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update` はどれもここに触らない＝**`ghost-shell-balloon-switch` の実装と並走できる**。本仕様に残るのは **検証項目表・第三者の手順 12 項目の実機一周・README の仕上げ（入れ方の手順は `ghost-install` の入口で決まる）・既定ゴーストの差し替え（議題 ⑶ の答えしだい）・署名と宣言**（5〜6 タスク）。議題 ⑴⑵ と新しい議題 ⑶（emo2 の再配布の条件）は `alpha-package` の要件で先に決める。
