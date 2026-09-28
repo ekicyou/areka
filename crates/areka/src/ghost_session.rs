@@ -37,15 +37,17 @@ use crate::{ConfigInputs, default_app_profile_dir, ghost_boot_options, is_benign
 /// 載せる系と順序（段ごとに今日の挿入順を保つ）:
 /// - `Update` ← 毎フレームの相 → 停止通知の受け口（受け口 `KanadeNoticeRx` はプロセスに 1 つ
 ///   なので [`emo2_boot::wire_kanade_stop`] を分割せずそのまま呼ぶ）
-/// - `Input` ← 説明書 → 台本の切替要求 → 中断 → メニュー → バルーンの離脱 → 選択肢の送り
+/// - `Input` ← 説明書 → 台本の切替要求 → 中断 → メニュー → バルーンの離脱 → 選択肢の送り →
+///   インストールの窓口（[`crate::install::register`] は窓口と終了の待ちの門もここで 1 度だけ据える）
 /// - `FrameFinalize` ← クリック透過 → OS の閉鎖要求 → 重なり順の対（状態がゴーストごとで
 ///   ないので `wire_zorder_pair` をそのまま呼ぶ）
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
 ///
-/// 今日との差: `Input` の 6 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
+/// 今日との差: `Input` の 7 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
 /// 起動でも登録される。どれも状態（`NonSend`）が無ければ無操作で戻る（記録は `trace!` か無し）
-/// ので、見え方は変わらない。バルーンの離脱の系だけは `BalloonWiring` 不在で
+/// ので、見え方は変わらない（インストールの窓口だけは登録と同時に据わるが、依頼が無ければ
+/// 何もしない）。バルーンの離脱の系だけは `BalloonWiring` 不在で
 /// `error!(balloon_wiring_missing)` の枝を持つが、そこへは `PointerLeave` が立ったときにしか
 /// 進まず、LogSink の起動のバルーン窓は `HitTest::none()` のまま（当たり判定の面は結線ありの
 /// 起動でだけ装着する）なので `PointerLeave` が立たず届かない。
@@ -59,6 +61,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
     input_events::choice_drain::register_choice_drain(world);
+    crate::install::register(world);
 
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,

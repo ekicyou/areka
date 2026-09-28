@@ -525,26 +525,30 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
 pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
     let stage = world.get_non_send::<SwitchInFlight>().map(|f| f.stage);
     match notice {
-        KanadeNotice::Steady => match stage {
-            Some(SwitchStage::Welcoming { attempt }) => {
-                record_steady_memory(world);
-                world.remove_non_send::<SwitchInFlight>();
-                let ghost = world
-                    .get_resource::<BootContext>()
-                    .and_then(|c| c.current.ghost.folder.clone());
-                tracing::info!(
+        KanadeNotice::Steady => {
+            match stage {
+                Some(SwitchStage::Welcoming { attempt }) => {
+                    record_steady_memory(world);
+                    world.remove_non_send::<SwitchInFlight>();
+                    let ghost = world
+                        .get_resource::<BootContext>()
+                        .and_then(|c| c.current.ghost.folder.clone());
+                    tracing::info!(
+                        event = "ghost_switch_done",
+                        ghost = ?ghost,
+                        attempt = ?attempt,
+                        "切替で起こしたゴーストが定常に入った——切替を終える"
+                    );
+                }
+                stage => tracing::debug!(
                     event = "ghost_switch_done",
-                    ghost = ?ghost,
-                    attempt = ?attempt,
-                    "切替で起こしたゴーストが定常に入った——切替を終える"
-                );
+                    stage = ?stage,
+                    "迎え入れの予約の外の定常到達——予約は触らない"
+                ),
             }
-            stage => tracing::debug!(
-                event = "ghost_switch_done",
-                stage = ?stage,
-                "迎え入れの予約の外の定常到達——予約は触らない"
-            ),
-        },
+            // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）。
+            crate::install::desk::on_steady(world);
+        }
         KanadeNotice::ChangeCancelled { reason } => {
             if world.remove_non_send::<SwitchInFlight>().is_some() {
                 tracing::info!(

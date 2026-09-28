@@ -25,8 +25,6 @@ use crate::alert::{self, YesNo};
 use crate::exit_wait::WorkGate;
 
 /// 背景のスレッドから窓口への頼み。どれも返信端を 1 つ持ち、窓口が答えるか落とす。
-// 読み手（窓口 `desk`）は 6.2 で結ぶ。結んだら外す。
-#[allow(dead_code)]
 pub(crate) enum DeskAsk {
     /// イベントを今のゴーストへ GET で送る。`reply` は kanade へそのまま渡す（kanade が直接答える）。
     Raise {
@@ -57,8 +55,6 @@ pub(crate) enum DeskAsk {
 
 /// 背景のスレッド `install` を起こし、依頼の送出端と join の取っ手を返す。
 /// 窓口が最初の依頼で 1 度だけ呼ぶ。依頼の送出端が全部落ちたらスレッドは終わる。
-// 呼び手（窓口 `desk`）は 6.2 で結ぶ。結んだら外す。
-#[allow(dead_code)]
 pub(crate) fn spawn_worker(
     desk: Sender<DeskAsk>,
     gate: Arc<WorkGate>,

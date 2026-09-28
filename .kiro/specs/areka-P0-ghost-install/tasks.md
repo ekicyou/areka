@@ -84,7 +84,7 @@
   - _Requirements: 1.11, 8.4_
   - _Depends: 2.1, 5_
 
-- [ ] 6.2 UI 側の窓口（受付・待ち行列・イベントの送出の保留）を作り、系として登録する
+- [x] 6.2 UI 側の窓口（受付・待ち行列・イベントの送出の保留）を作り、系として登録する
   - 受付の口を 1 つ置く（書庫 0 本・窓口なし・終了中は断って `warn!`、受けたら `info!(install_order_queued)`）。窓口は World に 1 つで、ゴーストを起こし直しても作り直さない
   - 毎 tick の取り出しで、生の要求を受付へ流し、背景スレッドの頼みを捌き、手元のイベントの頼みを条件（切替の予約が無い・終了していない・置き場のゴーストに送出端がある）を満たせば送り、背景スレッドが空いていれば次の依頼を渡す。送り先は送る時点のゴースト
   - 送り直しの頼みは、前に送った後に定常到達が届いているときだけ送る（定常到達の回数で比べる・UI に定常の旗を持たない）
@@ -190,3 +190,4 @@
 - 4.1: `procedure.rs` はモジュール全体に `#![allow(dead_code)]`＝**6.1（worker が呼び手）で外す**。項目単位の allow が残るのは `judge::ScriptRefusal`・`script_request`（**7.1 で外す**）と `InstallOrigin`（**6.2／7.x で外す**）。途中でやめたときの記録 `warn!(event = "install_abandoned", archive, skipped, skipped_archives)` は design の Monitoring の表に無い追加（タスク 10 の §8／文書で拾うなら拾う）。同梱バルーンの名前は手続きが展開の後に `list_balloons` から目録の `name` を引く（設計で決めたこと 14）。`InstalledRecord.folder` は `areka-nar` の綴りのまま＝目録の綴りへ揃えるのは 6.3。
 - 5: `exit_wait.rs` は先頭に `#![allow(dead_code)]`＝**9 で外す**。`main.rs` は 933 行（9 で足すときに 1,000 行を超えないか見る）。**6.1 への申し送り**: ⑴ 要件 8.3 の「書庫のパスと宛先」は門の `begin(label)` の label 1 つに両方を入れて満たす（`exit_wait_timeout`／`exit_wait_abandoned` の欄は name と label だけ）。⑵ `leave_write` の直後に続けて `end` を呼ぶ（間で終了が始まると書き終えた後なのに `exit_wait_abandoned`＝「書く前」と記録される）。
 - 6.1: **口は 7 つになった**＝`InstallPorts::begin_archive(path)` を足した（`NarArchive` に書庫のパスを返す口が無く、門の名前を書庫の始め＝`OnInstallBegin` の前に置かないと、利用条件の画面や読み取りの段で終わったときに記録が残らない＝要件 8.4）。design.md の procedure・worker の節は実物に揃え済み（完了済みの 4.1 の本文の「6 つの口」は履歴として残す）。worker は依頼の終わりと `overwrite_running` の `Ran` で `gate.end()`。Monitoring の表に無い記録の語 5 つ（`install_event_not_allowed`・`install_event_not_steady`・`install_order_done`・`install_desk_gone`・`install_gate_closed`）と 4.1 の `install_abandoned` は**タスク 10 で拾う**。項目単位の allow が残るのは `DeskAsk`・`spawn_worker`（**6.2 で外す**）と `Overwritten`（**6.2／8.1 で外す**）。テストの補助で `thread::scope` を使うと、口が panic したときに生きた送出端で固まる＝`thread::spawn` を使う。
+- 6.2: 項目単位の allow の残り＝`RawInstallRequest`・`raw_sender`（**7.1・7.2 で外す**）・`InstallOrigin`（**7.x で外す**）・`Overwritten`（**8.1 で外す**）。9 の担当から 2 点を先に入れた＝`discard_for_exit` が待っている依頼と手元の頼みを捨てて `warn!(install_pending_discarded, count, paths, held)`・終了後に届いた頼みの返信端を落とす（`OrderDone` だけは受ける）。**9 で決める**: `count` は依頼の件数・`paths` は書庫の数＝2 本以上の依頼で食い違う（要件 8.5 の「件数」の単位）。終了の枝のテストは 9 の `desk_exit_tests.rs`。Monitoring の表に無い記録の語 11 個（`install_order_refused`・`install_ask_dropped`・`install_raise_replaced`・`install_facts_none`・`install_overwrite_returned`・`install_record_received`・`install_reply_unread`・`install_event_sent`・`install_event_send_failed`・`install_worker_spawned`・`install_worker_gone`）も**タスク 10 で拾う**。`ghost_switch.rs` は 870 行。
