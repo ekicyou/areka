@@ -75,7 +75,7 @@
   - _Boundary: exit_wait_
 
 - [ ] 6. 背景スレッドと UI 側の窓口
-- [ ] 6.1 手続きを走らせる背景スレッドと、窓口へ頼んで返事を待つ本物の口を作る
+- [x] 6.1 手続きを走らせる背景スレッドと、窓口へ頼んで返事を待つ本物の口を作る
   - 最初の依頼で 1 度だけスレッド `install` を起こし、依頼を 1 件ずつ受けて手続きを走らせ、終わったら窓口へ知らせる
   - 背景スレッドと窓口の間の頼みと返事の型はこのタスクが定義する（窓口は 6.2 で読む側）。本物の口は窓口への頼みと返信端でやり取りする。kanade の結果が「定常でない」なら送り直しの印を付けて頼み直し、「台本あり」はそのまま、「返事なし」「許可表に無い」は返事なし、「失敗」と返信端の切断は「閉じた」に読む（許可表に無い・失敗は `error!`）
   - 利用条件の画面はこのスレッドで出す。よそへの展開はこのスレッドで行い、門に始め・書く段の出入り・終わりを知らせ、門が閉じていれば入らずに「入らなかった」を返す
@@ -189,3 +189,4 @@
 - 3.2: `install/terms.rs`（モジュール全体）と `alert.rs` の `YesNo`・`ask_yes_no`（2 項目）に `#[allow(dead_code)]`。4.1 で terms と `YesNo` は外した。**`ask_yes_no` は 6.1（本物の口）で外す**。利用条件の上限は 25 行で切った後、改行を含めて 1,200 文字で切る。`nested_terms` は同梱の取り出し元フォルダの直下だけを見る（`areka-nar` に一覧の口が無い）。抑止を拒否へ倒すのは手続き（4.1／4.2）の責務。
 - 4.1: `procedure.rs` はモジュール全体に `#![allow(dead_code)]`＝**6.1（worker が呼び手）で外す**。項目単位の allow が残るのは `judge::ScriptRefusal`・`script_request`（**7.1 で外す**）と `InstallOrigin`（**6.2／7.x で外す**）。途中でやめたときの記録 `warn!(event = "install_abandoned", archive, skipped, skipped_archives)` は design の Monitoring の表に無い追加（タスク 10 の §8／文書で拾うなら拾う）。同梱バルーンの名前は手続きが展開の後に `list_balloons` から目録の `name` を引く（設計で決めたこと 14）。`InstalledRecord.folder` は `areka-nar` の綴りのまま＝目録の綴りへ揃えるのは 6.3。
 - 5: `exit_wait.rs` は先頭に `#![allow(dead_code)]`＝**9 で外す**。`main.rs` は 933 行（9 で足すときに 1,000 行を超えないか見る）。**6.1 への申し送り**: ⑴ 要件 8.3 の「書庫のパスと宛先」は門の `begin(label)` の label 1 つに両方を入れて満たす（`exit_wait_timeout`／`exit_wait_abandoned` の欄は name と label だけ）。⑵ `leave_write` の直後に続けて `end` を呼ぶ（間で終了が始まると書き終えた後なのに `exit_wait_abandoned`＝「書く前」と記録される）。
+- 6.1: **口は 7 つになった**＝`InstallPorts::begin_archive(path)` を足した（`NarArchive` に書庫のパスを返す口が無く、門の名前を書庫の始め＝`OnInstallBegin` の前に置かないと、利用条件の画面や読み取りの段で終わったときに記録が残らない＝要件 8.4）。design.md の procedure・worker の節は実物に揃え済み（完了済みの 4.1 の本文の「6 つの口」は履歴として残す）。worker は依頼の終わりと `overwrite_running` の `Ran` で `gate.end()`。Monitoring の表に無い記録の語 5 つ（`install_event_not_allowed`・`install_event_not_steady`・`install_order_done`・`install_desk_gone`・`install_gate_closed`）と 4.1 の `install_abandoned` は**タスク 10 で拾う**。項目単位の allow が残るのは `DeskAsk`・`spawn_worker`（**6.2 で外す**）と `Overwritten`（**6.2／8.1 で外す**）。テストの補助で `thread::scope` を使うと、口が panic したときに生きた送出端で固まる＝`thread::spawn` を使う。

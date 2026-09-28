@@ -10,6 +10,7 @@ use std::path::PathBuf;
 mod judge;
 mod procedure;
 mod terms;
+mod worker;
 
 /// インストールの依頼（書庫のパスを 1 本以上・並んだ順に扱う＝要件 9.1）。
 #[derive(Debug, Clone, PartialEq, Eq)]

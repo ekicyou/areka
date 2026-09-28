@@ -130,6 +130,9 @@ impl FakePorts {
 }
 
 impl InstallPorts for FakePorts {
+    // 呼び出しの列には載せない（手続きの判定は書庫ごとのイベントの列で足りる）。
+    fn begin_archive(&mut self, _path: &Path) {}
+
     fn raise(&mut self, id: &'static str, references: Vec<String>) -> Raised {
         self.calls.push(Call::Raise(id, references));
         self.replies.get(id).copied().unwrap_or(Raised::NoReply)

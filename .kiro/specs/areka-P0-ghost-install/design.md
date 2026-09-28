@@ -83,7 +83,7 @@
 
 ### Architecture Pattern & Boundary Map
 
-採る形は **「背景スレッドで上から順に走る手続き＋UI 側の窓口」**（`research.md` §5 案 C を具体にしたもの）。手続きは World もスレッドも知らず、外とのやり取りは口 `InstallPorts` の 6 つだけ。本番の口は UI 側の窓口 `desk` へ頼みを送って返事を待ち、テストの口は台本どおりに答える。降ろす・起こす・既定へ戻す・致命は切替の道筋をそのまま使う。
+採る形は **「背景スレッドで上から順に走る手続き＋UI 側の窓口」**（`research.md` §5 案 C を具体にしたもの）。手続きは World もスレッドも知らず、外とのやり取りは口 `InstallPorts` の 7 つだけ。本番の口は UI 側の窓口 `desk` へ頼みを送って返事を待ち、テストの口は台本どおりに答える。降ろす・起こす・既定へ戻す・致命は切替の道筋をそのまま使う。
 
 ```mermaid
 graph TB
@@ -687,6 +687,8 @@ pub(crate) fn nested_terms(archive: &NarArchive) -> Vec<String>;
 ```rust
 /// 手続きが外とやり取りする口（本番は worker・テストは偽物）。
 pub(crate) trait InstallPorts {
+    /// 書庫 1 本の手続きを始める（`path` は書庫のパス・終了の待ちの記録に載せる）。
+    fn begin_archive(&mut self, path: &Path);
     /// イベントを今のゴーストへ GET で送り、応えを待つ。定常でなければ定常まで待つ。
     fn raise(&mut self, id: &'static str, references: Vec<String>) -> Raised;
     /// 今のゴーストの素性。ゴーストが居なければ None。
@@ -748,7 +750,7 @@ pub(crate) fn run_order(order: &InstallOrder, ports: &mut dyn InstallPorts) -> V
 - スレッドは `areka_actor::spawn_actor("install", …)` で、最初の依頼が来たときに 1 度だけ起こす。受け取るのは依頼 1 件ずつ。
 - 本物の口 `DeskPorts` は、`desk` への頼み（`mpsc`）と返信端（`areka_actor::reply_channel`）で UI とやり取りする。`raise` は kanade からの `RaiseOutcome` を直接受ける。`NotSteady` なら「送り直し」の印を付けて頼み直す。`NotAllowed` と `Failed` は `error!` を残し、`NotAllowed` は `NoReply`、`Failed` は `Closed` に読む。返信端が落ちたら `Closed`。
 - 利用条件の画面はこのスレッドで `alert::ask_yes_no` を呼ぶ。
-- `install_elsewhere` はこのスレッドで `archive.install` を呼ぶ。書庫を扱い始めるときに `gate.begin(書庫のパス)`、呼ぶ前に `gate.enter_write()`、戻ったら `gate.leave_write()`、書庫の終わりに `gate.end()`。`enter_write` が偽（終了が始まっている）なら入らずに `None` を返す。
+- 門への知らせ: 書庫を扱い始めるとき（手続きが `begin_archive` を呼ぶ・`OnInstallBegin` の前）に `gate.begin(書庫のパス)`。`install_elsewhere` はこのスレッドで `archive.install` を呼び、その前に `gate.begin` で名前を「書庫のパスと宛先」へ差し替え（要件 8.3）、`gate.enter_write()`、戻ったら `gate.leave_write()` の直後に続けて `gate.end()`。`begin`／`enter_write` が偽（終了が始まっている）なら入らずに `None` を返す。依頼 1 件の `run_order` が戻ったら `gate.end()`（断った・拒否・失敗・途中でやめた書庫の名前を門に残さない）。利用条件の画面や読み取りと検査の段で終了が始まれば、`begin_close` が途中でやめた書庫として `exit_wait_abandoned` に書庫のパスを残す（要件 8.4）。`begin_archive` で門が偽（終了が始まっている）なら `debug!(install_gate_closed)` を残して続ける（以後の頼みは窓口が落とし `Closed` に倒れる）。`overwrite_running` が `Ran` を受けたら `gate.end()`（書き終えた書庫が完了の知らせ待ちの間に終了しても「書く前にやめた」と記録しない）。
 - 依頼が終わったら `desk` へ終わりを知らせる（次の依頼を受け取れる）。
 - Validation: `worker_tests.rs` が本物の口の判断を固定する（Testing Strategy「背景スレッドの口」）。
 

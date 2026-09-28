@@ -2,12 +2,9 @@
 //!
 //! 書庫 1 本の一周（`OnInstallBegin` → 読み取りと検査 → `accept` の照合 → 利用条件 → 展開 →
 //! 入れた後の記録 → 締めの知らせ）と、依頼 1 件の一周を正典の順で進める。World も
-//! スレッドも門も知らず、外とのやり取りは口 [`InstallPorts`] の 6 つだけ（本番は背景の
+//! スレッドも門も知らず、外とのやり取りは口 [`InstallPorts`] の 7 つだけ（本番は背景の
 //! スレッドの口・テストは偽物）。口に切替を頼む関数は無い＝手続きが切替を要求することは
 //! 型の上で起きない（要件 6.2）。
-
-// 呼び手（背景のスレッド）は後続のタスクが結ぶ。結んだら外す。
-#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 
@@ -43,6 +40,8 @@ const ON_GHOST_TERMS_DECLINE: &str = "OnGhostTermsDecline";
 
 /// 手続きが外とやり取りする口（本番は背景のスレッド・テストは偽物）。
 pub(crate) trait InstallPorts {
+    /// 書庫 1 本の手続きを始める（`path` は書庫のパス・終了の待ちの記録に載せる）。
+    fn begin_archive(&mut self, path: &Path);
     /// イベントを今のゴーストへ GET で送り、応えを待つ。定常でなければ定常まで待つ。
     fn raise(&mut self, id: &'static str, references: Vec<String>) -> Raised;
     /// 今のゴーストの素性。ゴーストが居なければ None。
@@ -77,6 +76,8 @@ pub(crate) enum Raised {
 }
 
 /// 起動中のゴーストへ入れた結果。
+// `Ran`・`NotRunning` を組み立てる窓口（`desk`）は 6.2・8.1 で結ぶ。結んだら外す。
+#[allow(dead_code)]
 pub(crate) enum Overwritten {
     Ran(Result<InstallOutcome, NarError>),
     /// 宛先はもう起動中のゴーストではない（書庫を返す）。
@@ -175,6 +176,7 @@ fn archive_steps(
         origin = ?origin,
         "[install] 書庫の手続きを始めます"
     );
+    ports.begin_archive(path);
     send(ports, ON_INSTALL_BEGIN, Vec::new())?;
 
     // 読み取りと検査（1 バイトも書かない）。
