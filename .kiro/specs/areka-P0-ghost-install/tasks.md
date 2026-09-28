@@ -27,7 +27,7 @@
   - _Boundary: areka-ghost catalog_
 
 - [ ] 3. 手続きの判断と利用条件（純粋な部品）
-- [ ] 3.1 (P) `accept` の照合・宛先の種類・失敗理由の表・Reference の組み立て・台本の引数の検査を、fs も World も読まない判断にまとめる
+- [x] 3.1 (P) `accept` の照合・宛先の種類・失敗理由の表・Reference の組み立て・台本の引数の検査を、fs も World も読まない判断にまとめる
   - 照合は `sakura.name` と `install.accept` の各名前に完全一致（大文字小文字を区別）。`accept` の無い `ghost`／`balloon` は照合なしで受け取り、`accept` の無い `shell`／`supplement` は「名指しが無い」
   - 宛先の種類は、`supplement` は常に起動中のゴースト、`ghost` はフォルダ名が一致したときだけ起動中のゴースト、`shell`／`balloon` とフォルダ名を持たないゴースト（argv の起動）は「よそ」
   - 失敗理由は拒否の 14 種と I/O の失敗を正典の 3 語へ写し、ワイルドカードの腕を置かない（種類が増えるとビルドが止まる）。`type` の指定なしは `invalid type`、受けない指定は `unsupported`
@@ -185,3 +185,4 @@
 
 - 1: `assets.toml` の `descript_install` 11 行の注記は「NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）」と未来形で書いた。**タスク 10 で、3.1・4.1 の実物（何の定義か）を指す現在形へ書き直す**。同じくタスク 10 で、古い注記の 3 行（`descript_ghost` の `install.accept`・ページ全体の `dev_nar`・`manual_install`＝「install.txt を読む経路が無い」）を実物に揃える（`dev_nar`・`manual_install` はタスク 10 の項目に無いので足す）。
 - 2.1: `KanadeMsg::RaiseEvent` の返事は殻の `drive` の後に送る。kanade から SHIORI への `Close` は投げるだけ＝テストで返事の後の記録を数えるときは、同期の往復（GET・Unload）だけを返事の前に済んだものとして読む。
+- 3.1: `install/judge.rs` はモジュール全体に `#![allow(dead_code)]`（呼び手が無いため）。**4.1（手続きが呼び手になる）で外す**。後続のモジュール（terms・procedure・worker・desk ほか）も同じく、呼び手を結ぶタスクで外す。旧仕様 `OnInstallComplete` の Reference2 は 2 件目の物の名前だけ（正典: 先頭 2 件だけ）。
