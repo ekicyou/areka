@@ -278,7 +278,10 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 pub fn emo2_frame_system(world: &mut World) {
     // 終了が指示済みの巡は結線を取り出さず、作業領域の同期も含めて何もしない（受け口は読むだけ・
     // 無ければ未指示）。窓は閉じる途中で、相を走らせても閉じる窓を描き直すだけである。
-    if world.get_non_send::<wintf::AppExit>().is_some_and(|e| e.is_requested()) {
+    if world
+        .get_non_send::<wintf::AppExit>()
+        .is_some_and(|e| e.is_requested())
+    {
         debug!(
             event = "frame_phases_skipped_after_exit",
             "終了が指示済み——毎フレームの処理を読み飛ばす"
