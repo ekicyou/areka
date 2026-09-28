@@ -185,26 +185,49 @@ pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
 /// `companion_balloon` と同型: 無い → None・読めない → `warn!`＋None。素性（`Identity`）には載せない。
 /// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#sakura.name_2c_540d_524d:1
 pub fn sakura_name(ghost_dir: &Path) -> Option<String> {
-    let path = master_descript(ghost_dir);
-    let bytes = match std::fs::read(&path) {
-        Ok(bytes) => bytes,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
-        Err(err) => {
-            tracing::warn!(
-                event = "catalog_descript_unreadable",
-                path = %path.display(),
-                error = %err,
-                "descript.txt が読めない——本体側の名前は無しとして扱う"
-            );
-            return None;
-        }
-    };
-    lowercased(&bytes).remove("sakura.name")
+    master_descript_keys(ghost_dir)?.remove("sakura.name")
+}
+
+/// `<ゴースト>/ghost/master/descript.txt` の `install.accept`（受け手の名乗り・要件 3.1）を
+/// カンマで分け、前後の空白を落とした名前の列。空の名前は落とす。`sakura_name` と同じ読み方で、
+/// 無い → 空の列・読めない → `warn!`＋空の列。素性（`Identity`）には載せない。
+/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1
+pub fn install_accept(ghost_dir: &Path) -> Vec<String> {
+    master_descript_keys(ghost_dir)
+        .and_then(|mut keys| keys.remove("install.accept"))
+        .map(|names| {
+            names
+                .split(',')
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// `<dir>/ghost/master/descript.txt` が実在するか（argv のゴーストの検査＝要件 4.8）。
 pub fn is_ghost_dir(dir: &Path) -> bool {
     master_descript(dir).is_file()
+}
+
+/// ゴーストの descript（`ghost/master/descript.txt`）を鍵を小文字化した表で読む（単独の鍵の読み手用）。
+/// 無い → None・読めない → `warn!`＋None。
+fn master_descript_keys(ghost_dir: &Path) -> Option<BTreeMap<String, String>> {
+    let path = master_descript(ghost_dir);
+    match std::fs::read(&path) {
+        Ok(bytes) => Some(lowercased(&bytes)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+        Err(err) => {
+            tracing::warn!(
+                event = "catalog_descript_unreadable",
+                path = %path.display(),
+                error = %err,
+                "descript.txt が読めない——その鍵は無しとして扱う"
+            );
+            None
+        }
+    }
 }
 
 /// `<ゴースト>/ghost/master/descript.txt`

@@ -497,3 +497,46 @@ fn sakura_name_unreadable_warns_and_yields_none() {
     assert_eq!(got, None);
     assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
 }
+
+/// `install.accept` の読み手（要件 3.1）: カンマで分けて前後の空白を落とし、空の名前は落とす。
+/// 鍵は大文字小文字を問わない。鍵が無い／descript が無い → 黙って空の列。
+#[test]
+fn install_accept_splits_trims_and_drops_empty_names() {
+    let tmp = TempPath::new("catalog-install-accept");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    let with = put_ghost(
+        &root,
+        "with",
+        "charset,UTF-8\nInstall.Accept, さくら ,,Emily ,  ,\t毒子\nsakura.name,本体\n",
+    );
+    let one = put_ghost(&root, "one", "charset,UTF-8\ninstall.accept,ひとり\n");
+    let without = put_ghost(&root, "without", "charset,UTF-8\nsakura.name,本体\n");
+
+    let mut got = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let events = capture(|| {
+        got = (
+            install_accept(&with),
+            install_accept(&one),
+            install_accept(&without),
+            install_accept(&root.ghost_dir("none")),
+        )
+    });
+    assert_eq!(got.0, ["さくら", "Emily", "毒子"]);
+    assert_eq!(got.1, ["ひとり"]);
+    assert!(got.2.is_empty() && got.3.is_empty(), "{got:?}");
+    assert_eq!(catalog_warns(&events), Vec::<&str>::new());
+}
+
+/// descript が I/O 失敗で読めない → warn! 1 件＋空の列。
+#[test]
+fn install_accept_unreadable_warns_and_yields_empty() {
+    let tmp = TempPath::new("catalog-install-accept-unreadable");
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    let ghost = put_ghost(&root, "locked", "charset,UTF-8\ninstall.accept,さくら\n");
+    let _held = hold_exclusive(&ghost.join("ghost").join("master").join("descript.txt"));
+
+    let mut got = vec![String::new()];
+    let events = capture(|| got = install_accept(&ghost));
+    assert!(got.is_empty(), "{got:?}");
+    assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
+}
