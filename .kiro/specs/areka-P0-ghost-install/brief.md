@@ -3,6 +3,58 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「インストール」の**製品側**（利用者が `.nar` を渡す体験）と、順位 4 の束「投げ込み」（`OnFileDrop2` 等）のうち窓へ落とす経路を引き受ける。エンジン（コンテナ読取・`install.txt` 解釈・安全な展開）は `areka-P0-nar-install` が持つ。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-28 棚卸⑲の再測定（main `10a8d724`）
+
+前回（下の「2026-09-27 棚卸⑱の再測定」節・main `5a232d2f`）の後に main へ 2 本が入った: `ghost-change-name-resolution`（PR#194・`0f50921e`・受け皿の話は直下の節）と `session-mark-residue`（PR#195・`10a8d724`・完了 spec は `.kiro/specs/completed/areka-P0-session-mark-residue/`）。本節は両方の着地を実物で引き直した結果で、前節の数と「触る／触らない」を上書きする。
+
+**変わった数と場所**
+
+1. **行数**: `main.rs` 873 → **927**・`ghost_session.rs` 638 → **691**・`session_end.rs` 112 → **163**（以上 `session-mark-residue`）／`emo2_boot/ghost_switch.rs` 699 → **866**・`ghost_switch_tests.rs` 545 → **987**（`ghost-change-name-resolution`・上限目前は直下の節 3 のまま）／`emo2_boot/spine.rs` 975 → **993**（`session-mark-residue` が偽の SHIORI `ScriptedShioriBackend` に「解かれるまで固まる」台本を足した＝上限目前・本仕様はここに足さない）／`dist/README.txt` 102 → 103。
+   **不変**: `alert.rs` 191・`emo2_boot/mod.rs` 805・`emo2_boot/consumer_ledger.rs` 756・`menu/mod.rs` 337・`input_events/mod.rs` 545・`placement/spawn.rs` 769（`ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW` の 1 行も同じ）・`areka-ghost/src/catalog.rs` 324・`crates/areka/Cargo.toml` 72・`app_exit.rs` 291・kanade `schedule/events.rs` 535（`ALLOWED_EVENT_IDS` は 13 件のまま）と `events_change_tests.rs`（`assert_eq!(ALLOWED_EVENT_IDS.len(), 13)` のまま）・kanade `schedule/mod.rs` 830・wintf `window_proc/mod.rs` 332（`dispatch_window_message` の表に `WM_DROPFILES` は 0 行）・wintf `window/components.rs` 348。`WM_DROPFILES`／`DragAcceptFiles`／`DragQueryFile`／`GetOpenFileName`／`IDropTarget` は `crates/` で今も 0 件（`crates/pilot/` を除く）。台帳 3 本の該当行（`descript_install` 11 行・`OnInstall*` など・`\![execute,install,path,…]`）・`roadmap-draft.md` の `[briefs].count = 36`・`crates/areka-nar/src/` の `// ukadoc:` 0 行も前節（と直下の節 4）のまま。
+   なお `session-mark-residue` が触る見込みとされていた kanade `schedule/mod.rs`・`app_exit.rs`・host32 `client.rs` は実際には変わっていない（変わったのは kanade `lib.rs`・`shiori/{mod,probe,real}.rs`、host32 `lib.rs`・`lifecycle.rs`・`process_host.rs`・`terminator.rs`、`areka-ghost/src/runtime.rs`）。
+2. **`ghost_switch.rs` は「触らない」から外れる。** 前節は「触らない: `ghost_switch.rs`（議題 ⑴ の答えが (a) でなければ）」としたが、受け皿の書く口 `record_last_installed` には `#[allow(dead_code)]` と「本番の呼び手は後続 areka-P0-ghost-install」の注釈が付いており、呼んだコミットで外す（直下の節 1）。したがって議題 ⑴ の答えによらず `ghost_switch.rs` に 2 行の削除が入る。テストは `ghost_switch_tests.rs`（987 行）に足さず本仕様の新しいテストファイルへ置けば、テストファイルの分割は要らない。議題 ⑴ を (a) で答えると `switch_to` に口を足すので本体 866 行とテスト 987 行の両方に手が入り、先にテストの分割が 1 手要る（(a) の手間は前節より増えた）。
+3. **起動中の印の判定 `session_mark_verdict`（`main.rs`）の形が変わった。** 引数は `(first, argv_session, logsink_fallback, end: Teardown { run_ok, down_ok, shiori_cut })`。印を残す理由は時系列で最初のものを採り、順は `logsink_fallback` → `no_exit_origin` → 出所の失敗（SHIORI の失敗・既定へ戻せない致命）→ `run_failed` → `session_end_deadline`（OS の終了で SHIORI の待ちを上限で打ち切った）→ `down_failed`。本仕様との関係:
+   - 議題 ⑴ を (b)／(c) で答えれば、本仕様は終了や起こし直しの経路を新設しない（(b) は既存の入口 `request_ghost_switch` を呼ぶだけ＝切替の経路の印の扱いは `session-mark-residue` 要件 4.8 で不変と固定済み）＝判定には触らない。
+   - 最初の起動が LogSink へ倒れた回（`GhostSession::logsink_fallback()` が真）は、窓も台本の受け口（`emo2_boot/mod.rs` の `wire_emo2_boot` の中で組む）も無いので、本仕様の入口 3 つ（投げ込み・メニュー・台本）はどれも届かない＝ぶつからない。
+   - 判定の署名を変えるのは `session-mark-residue` の Revalidation Trigger（呼び手 5 か所を直す）。下の議題 ⑷ の答えによらず、印の材料は足さずに済む（下の 5）。
+4. **OS の終了の後始末に期限が入った**（`session_end.rs`）。`SESSION_END_SHIORI_LIMIT`（3 秒・`pub(crate) const`）を、`end_session_within` が後始末に入った時点 `started` から数え、`GhostSession::shutdown_within(reason, WaitBudget { started, limit })` で降ろす。見張るのは SHIORI の待ちだけ（`crates/areka-kanade/src/shiori/probe.rs` の `ShioriProbe`）。ふつうの `GhostSession::shutdown` は署名も振る舞いも変わっていないので、切替の経路（`ghost_switch.rs` の `take_down`）には期限は掛からない＝議題 ⑴ (b) の「既定へ切り替えてから入れる」も今日どおり。
+5. **汎用の通知の入口を最初に使うのは本仕様になった。** `KanadeMsg::RaiseEvent` を送る本番コードは今も 0 件（kanade の `msg.rs`・`actor.rs`・`schedule/{mod,change}.rs` の受け手だけ）。前節の帰結 2 は「入口専用の許可表に分けるかは `shell-balloon-switch` が決める」としたが、ウェーブの順が `ghost-install` → `shell-balloon-switch` に替わったので**本仕様が決める**。勝者は明白＝分けない（共用の `ALLOWED_EVENT_IDS` に 10 行足し、`events_change_tests.rs` の数を 13 → 23 にする。表を分けると `events.rs` の判定と `schedule/change.rs` の `on_raise_event` に手が入る）。設計で結果だけ書く。
+
+**install の途中でアプリが終わるとき（新しく見えた穴）**
+
+6. 手続きは背景スレッドで走る（前節・09-24 節 10）。ところが `fn main` の後始末（`after_run` → 降ろす → `settle_session_mark`）も OS の終了の受け手（`end_session_within`）も**そのスレッドを知らない**ので、後始末が済んでプロセスが終われば手続きは途中で断たれる。`areka-nar` の確定は宛先ごとに「宛先 → 作業フォルダの `old-<k>` へ `rename`」「組み上げた木 → 宛先へ `rename`」の 2 手（`crates/areka-nar/src/install.rs` の `commit_one`）なので、2 手の間で断たれると**元のゴーストのフォルダが消え**、元の木は `.nar-work/…/old-<k>/` に残る（7 日の保持の後に片付けの対象）。展開の途中で断たれるのは無害（宛先は無傷・作業フォルダは次の展開の開始時に片付く）。`NarArchive::install` に入る前（利用条件の箱・ファイル選択・`manifest()` の照合）で断たれるのも無害（まだ何も書いていない）。
+   - **乗れる点**: 期限の数え方 `WaitBudget { started, limit }` と 3 秒の定数がそのまま使える（OS の終了では手続きの待ちも同じ `started` から数え、SHIORI の待ちと足し算にしない）。印の判定は変えずに済む——断たれても次の起動は、前回のゴーストが根に見つからなければ `warn!(last_ghost_not_found)` を残して次の候補へ進む既存の経路（`boot_resolve.rs` の起動の解決）で起きる。断ったことは `warn!` で必ず残す。
+   - **ぶつかる点**: 待つなら `main.rs`（後始末）と `session_end.rs`（期限の中）にそれぞれ数行の呼び出しが入る＝前節の「触らない: `main.rs`」が外れる。待ちは必ず有界にする（`NarArchive::install` の中にいる間だけ待ち、箱やファイル選択で止まっている間は待たずに断つ）。
+   - 同じ形の穴は `network-update` の背景の更新（一時フォルダからの確定）にもある見込み（未確認）。本仕様が「背景の手続きを終了で待つ」口を作れば `network-update` はそれに乗れる。→ 議題 ⑷。
+7. **利用条件の箱とファイル選択は UI スレッドで出さない**（設計で決める how・勝者が明白）。メニューの動作 `menu::MenuAction` は `Fn(&mut World, &MenuContext)`＝World を借りたまま呼ばれる。そこで `GetOpenFileNameW`／`MessageBoxW` を出すと、入れ子のメッセージループの間に届いた窓のメッセージは World を借りられずに捨てられる。とくに `WM_ENDSESSION` は wintf の受け手（`window_proc/lifecycle.rs` の `WM_ENDSESSION`）が `warn!(os_session_end_world_busy)` だけ残して後始末を飛ばす＝印が残り、次の起動が emo2 の `halt` で始まる。したがって箱とファイル選択は手続きの背景スレッドで出す（`alert.rs` の `raise` は既に `MessageBoxW(None, …)`＝持ち主の窓を持たず、どのスレッドからも呼べる）。**持ち主の窓は渡さない**（UI の窓を持ち主にすると、別スレッドの箱が `EnableWindow` などで持ち主へ同期にメッセージを送り、後始末で UI スレッドが待っている間に互いを待つ形になりうる。前に出すには `MB_SETFOREGROUND` などの旗で足りる）。ファイル選択のスレッドを COM の STA で初期化する要否は設計で確かめる（WUC の MTA とは別スレッド＝衝突しない）。09-24 節の未測定「UI スレッドで `MessageBoxW` の入れ子のモーダルが出ている間の ECS の刻み」は、この形なら測らなくてよい。
+   - `session-mark-residue` が置いた本番ソースの同期の送信の検査（`session_end_sync_send_tests.rs` の `SYNC_SEND_TOKENS`／`ALLOWED_SYNC_SENDS`）は `SendMessage*` 系だけを数え、`MessageBoxW`・`GetOpenFileNameW`・`DragQueryFileW`・`DragFinish` は数えない＝本仕様で表は動かない（`SendMessage*` を足さない限り）。
+
+**議題（3 件 → 4 件・答えで作業が変わるものだけ）**
+
+- ⑴ **起動中のゴーストを上書きするとき**（前節のまま (a)／(b)／(c)）。(b)／(c) なら `ghost_switch.rs` は上の 2 の 2 行だけ。(a) は上の 2 のとおり手間が増えた。(b) の「既定の定常を待ってから入れる」待ちの状態は、OS の終了で切替の予約 `SwitchInFlight` が下ろされる所（`end_session_within` の冒頭）と同じ扱いで下ろして `warn!` を残す（⑷ と同じ口で扱える）。
+- ⑵ **巻き戻せなかったときの伝え方**（前節のまま）。上の 6 の「終了で断たれた」場合も元の木は同じ `old-<k>` に残るが、次の起動では伝える手続きがもう無く記録だけになる——同じ扱いでよいかをここで一緒に決める。
+- ⑶ **利用条件の箱の閉じるボタン**（前節のまま）。`AREKA_NO_ALERT` のときの既定もここ。箱を背景スレッドで出すこと（上の 7）は答えに影響しない。
+- ⑷ **新規: install の途中でアプリが終わるとき**（上の 6）。(a) 待つ——`NarArchive::install` の中にいる間だけ有界に待つ（メニューの「終了」などの後始末では上限を要件で決める・OS の終了では 3 秒の残りだけ）。`main.rs`・`session_end.rs` に入り +1 タスク、`network-update` が同じ口に乗れる／(b) 待たない——既知の制限として `alpha-release-signoff` の既知の制限の候補へ送る。見える差＝「入れている最中にアプリを終えたり Windows を終了したりしたとき、元のゴーストのフォルダが消えることがあるか」。
+
+**規模**: 14〜17 → **15〜18**（+1＝⑷ を (a) で答えたときの終了時の待ち。(b) なら 14〜17 のまま。⑴ を (a) で答えるとさらに +1＝テストの分割）。`ghost_switch.rs` の 2 行（受け皿への書き込み 0.5 に含む）・箱とファイル選択を背景スレッドで出すこと（利用条件 1〜2・メニューとファイル選択 1〜2 に含む）・許可表を分けないこと（0）は内訳に収まる。上限 20 の内側。投げ込みは切り出さない（前節の判断のまま）。
+
+**要件定義の Fable 要否＝○（据え置き）**: 議題が 4 件に増え、⑴ と ⑷ はどちらも `session-mark-residue` が固めた終了の経路（印の判定・3 秒の期限）と切替の経路を読み合わせて答えを出す必要があり、⑷ の答えは `network-update` が乗る口の形まで決めるため。
+
+**触るファイル（確定形・main `10a8d724` の行数）**
+
+- 新規: `crates/areka/src/install.rs`（`NarArchive::open` → `manifest()` → 照合 → `install` の手続き・背景スレッド・利用条件の箱とファイル選択もこのスレッドで出す・結果を Ref 列へ写す・戻りの受け口・⑷ (a) なら終了で待つ口）・その兄弟テスト（`install_tests.rs` など）・`emo2_boot/install_cue.rs`・`menu/install_frame.rs`・`input_events/drop.rs`・`terms.rs`・wintf `ecs/window_proc/drop.rs`（`WM_DROPFILES` → `DragQueryFileW` → `DragFinish`）
+- 既存: `crates/areka/Cargo.toml` 72（`areka-nar`・`Win32_UI_Controls_Dialogs`）・`ghost_session.rs` 691（`boot_wired` に登記 1 行・`register_systems` に受け口の系 1 行）・`emo2_boot/mod.rs` 805（mod 宣言・channel・sink）・`emo2_boot/consumer_ledger.rs` 756（`canonical()` に 1 行＋`CommandConsumer` に変種 1 つ）・`emo2_boot/ghost_switch.rs` 866（`record_last_installed` の `#[allow(dead_code)]` と注釈の 2 行を消す）・`menu/mod.rs` 337（mod 1 行）・`input_events/mod.rs` 545（mod 1 行）・`alert.rs` 191（はい／いいえを返す口）・`placement/spawn.rs` 769（`ex_style` に `WS_EX_ACCEPTFILES`）・`areka-ghost/src/catalog.rs` 324（`install.accept` の読み手）・kanade `schedule/events.rs` 535（許可表に 10 行）＋`events_change_tests.rs`（13 → 23）・wintf `window_proc/mod.rs` 332（1 腕）・wintf `window/components.rs` 348（`OnFileDrop` の部品）・`areka-nar/src/*`（`// ukadoc:` の行）・`dist/README.txt` 103（「インストール」を 2 行から消す）・台帳 `assets.toml`／`shiori.toml`／`sakura-script.toml`＋`roadmap-draft.md`（`[briefs].count` 36 → 37 は生成器で）＋生成物＋`doc/COMPAT_ARCHITECTURE.md` §8
+- ⑷ を (a) で答えたとき: `main.rs` 927（後始末で待つ呼び出し）・`session_end.rs` 163（期限の中で待つ呼び出し）・兄弟テストは新しいファイルへ（`session_end_deadline_tests.rs` 523 行・`main_session_mark_tests.rs` 938 行には足さない）
+- ⑴ を (a) で答えたとき: `ghost_switch.rs` の `switch_to` に口・`ghost_switch_tests.rs` 987 の分割
+- **触らない**: kanade `msg.rs`／`actor.rs`／`schedule/mod.rs`／`schedule/change.rs`／`steady.rs`・`emo2_boot/spine.rs` 993・`ghost_switch_tests.rs` 987（⑴ が (a) でなければ）・`session_mark_verdict` の署名・`areka-parsers/src/sakura/decode.rs`／`areka-sakura/src/compile.rs`
+
+**後続 2 本と共有するファイル**（本仕様 → `shell-balloon-switch` → `network-update` の直列は変わらない）
+
+- `shell-balloon-switch`（B6）と: `ghost_session.rs`・`emo2_boot/mod.rs`・`emo2_boot/consumer_ledger.rs`・`menu/mod.rs`・`areka-ghost/src/catalog.rs`・kanade `schedule/events.rs`＋`events_change_tests.rs`（許可表の数の直書き＝本仕様の 23 から同 spec が +3 で 26）の 7 本。条件付きで `main.rs`（同 spec は `record_last_used` を呼び足すとき・本仕様は ⑷ (a) のとき）。文書は `dist/README.txt` の**同じ 2 行**（「シェル・バルーンの切り替え、インストール、…」＝前節に無かった重なり）・`sakura-script.toml`・`shiori.toml`・生成物・§8。
+- `network-update`（B7）と: `crates/areka/Cargo.toml`・`ghost_session.rs`・`emo2_boot/mod.rs`・`emo2_boot/consumer_ledger.rs`・`menu/mod.rs`・`areka-ghost/src/catalog.rs`・kanade `schedule/events.rs`＋`events_change_tests.rs` の 8 本。条件付きで `emo2_boot/install_cue.rs`（`\![execute,install,url]`＝同じ鍵 `("execute", Some("install"))`）・`alert.rs`（同 spec の議題 ⑵ を「箱を出す」で答えたとき）・**`install.rs` の終了で待つ口と `main.rs`・`session_end.rs`**（本仕様の ⑷ を (a) で答え、同 spec が背景の更新をそれに乗せるとき＝新規）。文書は `assets.toml` の `descript_install`・`roadmap-draft.md`・`dist/README.txt` の同じ 2 行・生成物・§8。
+
+**バグ**: 読んだ範囲（`session_end.rs`・`main.rs` の印の判定・`ghost_session.rs` の `shutdown_within`・`ghost_switch.rs` の受け皿・wintf `lifecycle.rs` の `WM_ENDSESSION`・`areka-nar` の `commit_one`）で、今の main に利用者から見える実害は見つからなかった。上の 6・7 は本仕様が作る背景スレッドとモーダルの箱で初めて生じる穴で、設計で塞ぐ。
+
 ## 2026-09-27 `ghost-change-name-resolution` の着地＝`lastinstalled` の受け皿は同 spec が持つ
 
 同 spec が先に着地した（完了 spec は `.kiro/specs/completed/areka-P0-ghost-change-name-resolution/`・実機の記録は同じフォルダの `signoff.md`）。下の 09-26 節の「本仕様が先なら `install.rs` に `LastInstalled` を置く」の分岐は消え、本仕様は**書くだけ**になった。本仕様の要件・設計に効く事実:
