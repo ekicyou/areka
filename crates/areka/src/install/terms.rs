@@ -3,9 +3,6 @@
 //! 純粋: 書庫が持つ伸長済みの中身を引いて復号し、画面に収まる上限で切るだけ。
 //! 何も書かず、記録も出さない（出すのは呼び手）。
 
-// 呼び手（手続き）は後続のタスクが結ぶ。結んだら外す。
-#![allow(dead_code)]
-
 use areka_nar::NarArchive;
 use areka_parsers::charset::{DefaultEncoding, decode};
 

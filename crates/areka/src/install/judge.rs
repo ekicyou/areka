@@ -3,9 +3,6 @@
 //! fs も World も読まない。`accept` の照合・宛先の種類・失敗理由の語・イベントの Reference の
 //! 組み立て・台本の引数の検査を、渡された値だけから決める。記録も出さない（出すのは呼び手）。
 
-// 呼び手（手続き・台本の受け口）は後続のタスクが結ぶ。結んだら外す。
-#![allow(dead_code)]
-
 use std::path::{Path, PathBuf};
 
 use areka_nar::{ElementKind, InstallKind, InstallManifest, NarError, RefuseReason};
@@ -187,6 +184,8 @@ pub(crate) fn refuse_refs(accept: &str, manifest: &InstallManifest) -> Vec<Strin
     ]
 }
 
+// 呼び手（台本の受け口）は後続のタスクが結ぶ。結んだら外す。
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ScriptRefusal {
     NotPath { found: String },
@@ -197,6 +196,7 @@ pub(crate) enum ScriptRefusal {
 /// `\![execute,install,…]` の 2 番目以降の引数から書庫のパスを取り出す（要件 1.5〜1.7）。
 ///
 /// パスより後ろの引数は読まない（残っていれば受け口が記録する）。
+#[allow(dead_code)]
 pub(crate) fn script_request(arguments: &[&str]) -> Result<PathBuf, ScriptRefusal> {
     match arguments {
         ["path"] | ["path", "", ..] => Err(ScriptRefusal::Empty),

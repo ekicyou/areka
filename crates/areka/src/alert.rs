@@ -192,8 +192,6 @@ pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
 }
 
 /// はい／いいえの答え（ghost-install 要件 4.4・4.7・4.8）。
-// 呼び手（インストールの手続き）は後続のタスクが結ぶ。結んだら外す。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum YesNo {
     Yes,
@@ -207,6 +205,7 @@ pub(crate) enum YesNo {
 /// はい／いいえの 2 択の画面を出して答えを返す（閉じるボタンは効かない）。
 /// `info!(event = "ask")` を必ず 1 件残し、`suppressed` が真なら画面を出さない。持ち主の窓は
 /// 渡さない。抑止と失敗を拒否へ倒すのは呼び手。
+// 呼び手（背景のスレッドの本物の口）は後続のタスクが結ぶ。結んだら外す。
 #[allow(dead_code)]
 pub(crate) fn ask_yes_no(title: &str, body: &str, suppressed: bool) -> YesNo {
     tracing::info!(event = "ask", title, suppressed, "[alert] 利用者に尋ねます");

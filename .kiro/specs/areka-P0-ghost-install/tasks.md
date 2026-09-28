@@ -48,7 +48,7 @@
   - _Depends: 1_
 
 - [ ] 4. インストールの手続き（書庫 1 本の一周と依頼 1 件の一周）
-- [ ] 4.1 依頼の型と、外とのやり取りを 6 つの口に限った手続きを作り、書庫 5 種の成功の列を固定する
+- [x] 4.1 依頼の型と、外とのやり取りを 6 つの口に限った手続きを作り、書庫 5 種の成功の列を固定する
   - 依頼（書庫のパスを 1 本以上と出どころ）の型を `install` のモジュールの骨組みに置く（受付の口は 6.2）
   - 手続きは「`OnInstallBegin` → 読み取りと検査 → `accept` の照合 → 利用条件 → 展開（起動中のゴーストか、よそか）→ 入れた後の記録 → 締めの知らせ」の順に進み、書庫 1 本につき締めの知らせを 1 つだけ送る。口に切替を頼む関数を持たない
   - `OnInstallCompleteEx` に応えが無いときだけ続けて `OnInstallComplete` を送る。口が「閉じた」を返したら以後は送らず「途中でやめた」で抜ける
@@ -186,4 +186,5 @@
 - 1: `assets.toml` の `descript_install` 11 行の注記は「NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）」と未来形で書いた。**タスク 10 で、3.1・4.1 の実物（何の定義か）を指す現在形へ書き直す**。同じくタスク 10 で、古い注記の 3 行（`descript_ghost` の `install.accept`・ページ全体の `dev_nar`・`manual_install`＝「install.txt を読む経路が無い」）を実物に揃える（`dev_nar`・`manual_install` はタスク 10 の項目に無いので足す）。
 - 2.1: `KanadeMsg::RaiseEvent` の返事は殻の `drive` の後に送る。kanade から SHIORI への `Close` は投げるだけ＝テストで返事の後の記録を数えるときは、同期の往復（GET・Unload）だけを返事の前に済んだものとして読む。
 - 3.1: `install/judge.rs` はモジュール全体に `#![allow(dead_code)]`（呼び手が無いため）。**4.1（手続きが呼び手になる）で外す**。後続のモジュール（terms・procedure・worker・desk ほか）も同じく、呼び手を結ぶタスクで外す。旧仕様 `OnInstallComplete` の Reference2 は 2 件目の物の名前だけ（正典: 先頭 2 件だけ）。
-- 3.2: `install/terms.rs`（モジュール全体）と `alert.rs` の `YesNo`・`ask_yes_no`（2 項目）に `#[allow(dead_code)]`。**4.1 で外す**。利用条件の上限は 25 行で切った後、改行を含めて 1,200 文字で切る。`nested_terms` は同梱の取り出し元フォルダの直下だけを見る（`areka-nar` に一覧の口が無い）。抑止を拒否へ倒すのは手続き（4.1／4.2）の責務。
+- 3.2: `install/terms.rs`（モジュール全体）と `alert.rs` の `YesNo`・`ask_yes_no`（2 項目）に `#[allow(dead_code)]`。4.1 で terms と `YesNo` は外した。**`ask_yes_no` は 6.1（本物の口）で外す**。利用条件の上限は 25 行で切った後、改行を含めて 1,200 文字で切る。`nested_terms` は同梱の取り出し元フォルダの直下だけを見る（`areka-nar` に一覧の口が無い）。抑止を拒否へ倒すのは手続き（4.1／4.2）の責務。
+- 4.1: `procedure.rs` はモジュール全体に `#![allow(dead_code)]`＝**6.1（worker が呼び手）で外す**。項目単位の allow が残るのは `judge::ScriptRefusal`・`script_request`（**7.1 で外す**）と `InstallOrigin`（**6.2／7.x で外す**）。途中でやめたときの記録 `warn!(event = "install_abandoned", archive, skipped, skipped_archives)` は design の Monitoring の表に無い追加（タスク 10 の §8／文書で拾うなら拾う）。同梱バルーンの名前は手続きが展開の後に `list_balloons` から目録の `name` を引く（設計で決めたこと 14）。`InstalledRecord.folder` は `areka-nar` の綴りのまま＝目録の綴りへ揃えるのは 6.3。
