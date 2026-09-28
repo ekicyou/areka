@@ -169,8 +169,9 @@ pub(crate) struct KanadeNoticeRx(pub(crate) Receiver<KanadeNotice>);
 /// 終了相: kanade の運行の通知を取り出して 1 件ずつ捌く（R15.4・design D15 の 4・
 /// areka-P0-ghost-shell-balloon-switch design「NoticePhase」）。
 ///
-/// [`ghost_quit_system`] として毎フレームの相（[`emo2_frame_system`]）より前に走る。終了が
-/// 決まったフレームで他の相を走らせても、これから閉じる窓のために描き直すだけだからである。
+/// [`ghost_quit_system`] として毎フレームの相（[`emo2_frame_system`]）より前に走る。ここで終了が
+/// 指示されると全ゴースト窓はもう無く、同じ巡で続けて走る [`emo2_frame_system`] は入口の判定で
+/// 相を 1 つも回さずに戻る。他の相を止める判定は本関数ではなく [`emo2_frame_system`] の入口に在る。
 /// 返り値は「停止の通知を消化したか」。
 ///
 /// # 判断
@@ -262,6 +263,11 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 /// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
 /// （`FrameTime`＋`TalkClock` で `talk_time` を解決）。
 ///
+/// アプリの終了が指示済み（World の `wintf::AppExit` が指示済みを返す）の巡では、`Emo2Wiring` を
+/// 取り出すより前に判定し、作業領域の同期も含めて相を 1 つも回さずに戻る。記録は
+/// `debug!(event = "frame_phases_skipped_after_exit")` の 1 行。`wintf::AppExit` が World に無い構成は
+/// 未指示とみなす。
+///
 /// `Emo2Wiring` 未挿入（`wire_emo2_boot`＝task 5.1 前・フォールバック boot 経路）なら早期 return の
 /// no-op（安全・panic しない）。schedule への登録
 /// （`add_systems(Update, emo2_frame_system.after(update_typewriters))`）は `register_emo2_frame_system`
@@ -270,6 +276,18 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 /// （`PostLayout`）・面の生成（`PreRenderSurface`）・描画（`RenderSurface`）に拾わせるため
 /// である（裁定 2026-09-12・要件 2.4。末尾の段に載せると絵の着地が次の巡へずれる）。
 pub fn emo2_frame_system(world: &mut World) {
+    // 終了が指示済みの巡は結線を取り出さず、作業領域の同期も含めて何もしない（受け口は読むだけ・
+    // 無ければ未指示）。窓は閉じる途中で、相を走らせても閉じる窓を描き直すだけである。
+    if world
+        .get_non_send::<wintf::AppExit>()
+        .is_some_and(|e| e.is_requested())
+    {
+        debug!(
+            event = "frame_phases_skipped_after_exit",
+            "終了が指示済み——毎フレームの処理を読み飛ばす"
+        );
+        return;
+    }
     // Emo2Wiring 未挿入（wire_emo2_boot=task 5.1 前・LogSink フォールバック boot 経路）なら no-op。
     let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
         return;
@@ -446,6 +464,12 @@ mod attach_tests;
 #[cfg(test)]
 #[path = "frame_drain_text_tests.rs"]
 mod drain_text_tests;
+
+// 終了指示の有無による毎フレームの処理の分岐（areka-P0-frame-phases-after-exit タスク 2.1）。
+// GPU もハーネスも使わない。
+#[cfg(test)]
+#[path = "frame_exit_gate_tests.rs"]
+mod exit_gate_tests;
 
 #[cfg(test)]
 #[path = "frame_resnap_tests.rs"]

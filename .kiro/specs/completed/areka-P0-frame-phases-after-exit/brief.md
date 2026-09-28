@@ -92,7 +92,7 @@ ERROR の出方は時刻に依る: 終了の巡で受信端に表示の指令（
 |---|---|---|
 | `crates/areka/src/emo2_boot/frame.rs` | 509 | `emo2_frame_system` 先頭の判定＋`debug!`（約 10 行）・`run_ghost_quit_phase` の doc の一文・新テストの `#[cfg(test)] #[path = "frame_exit_gate_tests.rs"] mod exit_gate_tests;`（4 行）。`use wintf::AppExit` か完全パス |
 | `crates/areka/src/emo2_boot/frame_exit_gate_tests.rs` | 新規（見込み 100〜150） | 決定論テスト（下） |
-| `.kiro/specs/areka-P0-frame-phases-after-exit/*` | — | spec 文書・実機の記録 |
+| `.kiro/specs/completed/areka-P0-frame-phases-after-exit/*` | — | spec 文書・実機の記録 |
 | `.kiro/steering/roadmap.md` | — | 完了時に登記の行を消す（`/kiro-complete`） |
 
 **触らないファイル**: `crates/areka-emo-present/src/scale.rs`（230）・`crates/areka-emo-present/src/presenter/show.rs`（426）・`crates/areka/src/app_exit.rs`（291）・`crates/areka/src/emo2_boot/ghost_switch.rs`（866）・`crates/areka/src/ghost_session.rs`（691）・`crates/areka/src/emo2_boot/mod.rs`（805）・`crates/areka/src/emo2_boot/frame/drain_resnap.rs`（481）・`crates/areka/src/emo2_boot/frame_test_support.rs`（900・上限 1,000 の目前＝助けの関数を足さない。`headless_wiring_with`・`capture_logs`・`count_level`・`zero_clock` は既存のまま使う）・`crates/wintf/**`・`crates/areka/src/main.rs`。

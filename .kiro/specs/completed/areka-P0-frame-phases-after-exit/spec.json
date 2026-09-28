@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-frame-phases-after-exit",
+  "created_at": "2026-09-28T10:17:14Z",
+  "updated_at": "2026-09-28T12:10:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-09-28T12:10:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}
