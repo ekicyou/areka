@@ -308,3 +308,19 @@ fn shiori_fault_unknown_with_name() {
 fn shiori_fault_unknown_without_name() {
     assert_shiori_fault(ShioriFaultKind::Unknown, "原因不明", None);
 }
+
+// ---------------------------------------------------------------- はい／いいえ（ghost-install 要件 4.4・4.7）
+
+/// 抑止ありなら画面を出さずに `Suppressed` を返し、`info!(event = "ask")` をちょうど 1 件残す。
+/// 抑止なしの呼び出しはモーダルで止まるので決定論テストに入れない。
+#[test]
+fn ask_yes_no_suppressed_returns_suppressed_and_logs_one_info() {
+    let (answer, events) = capture(|| ask_yes_no("利用条件", "本文", true));
+    assert_eq!(answer, YesNo::Suppressed);
+    assert_eq!(events.len(), 1, "記録はちょうど 1 件: {events:?}");
+    let ev = &events[0];
+    assert_eq!(ev.level, tracing::Level::INFO);
+    assert_eq!(ev.field_str("event"), Some("ask"));
+    assert_eq!(ev.field_str("title"), Some("利用条件"));
+    assert_eq!(ev.field("suppressed"), Some("true"));
+}

@@ -38,7 +38,7 @@
   - _Boundary: install judge_
   - _Depends: 1_
 
-- [ ] 3.2 (P) 利用条件の本文を用意し、はい／いいえを返す画面の口を告知の部品に足す
+- [x] 3.2 (P) 利用条件の本文を用意し、はい／いいえを返す画面の口を告知の部品に足す
   - 書庫の最上位の `terms.txt`（無ければ `terms.md`）を探し、`install.txt` と同じ関数で復号する（1 行目の `charset,` の行は出さない・Markdown は解釈しない）。上限（25 行かつ 1,200 文字）を超えたら先頭だけ残し、続きがファイルにあることを末尾に足す
   - 同梱バルーンの取り出し元フォルダの中の利用条件は出さず、そのパスを記録用に返す
   - 告知の部品に、はい／いいえの 2 択（閉じるボタンが効かない形）を出して「はい・いいえ・抑止で出さなかった・出せなかった」を返す口を足す。記録は `info!` 1 件、出せなければ `error!`。既存の告知の場面と `raise` は変えない
@@ -186,3 +186,4 @@
 - 1: `assets.toml` の `descript_install` 11 行の注記は「NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）」と未来形で書いた。**タスク 10 で、3.1・4.1 の実物（何の定義か）を指す現在形へ書き直す**。同じくタスク 10 で、古い注記の 3 行（`descript_ghost` の `install.accept`・ページ全体の `dev_nar`・`manual_install`＝「install.txt を読む経路が無い」）を実物に揃える（`dev_nar`・`manual_install` はタスク 10 の項目に無いので足す）。
 - 2.1: `KanadeMsg::RaiseEvent` の返事は殻の `drive` の後に送る。kanade から SHIORI への `Close` は投げるだけ＝テストで返事の後の記録を数えるときは、同期の往復（GET・Unload）だけを返事の前に済んだものとして読む。
 - 3.1: `install/judge.rs` はモジュール全体に `#![allow(dead_code)]`（呼び手が無いため）。**4.1（手続きが呼び手になる）で外す**。後続のモジュール（terms・procedure・worker・desk ほか）も同じく、呼び手を結ぶタスクで外す。旧仕様 `OnInstallComplete` の Reference2 は 2 件目の物の名前だけ（正典: 先頭 2 件だけ）。
+- 3.2: `install/terms.rs`（モジュール全体）と `alert.rs` の `YesNo`・`ask_yes_no`（2 項目）に `#[allow(dead_code)]`。**4.1 で外す**。利用条件の上限は 25 行で切った後、改行を含めて 1,200 文字で切る。`nested_terms` は同梱の取り出し元フォルダの直下だけを見る（`areka-nar` に一覧の口が無い）。抑止を拒否へ倒すのは手続き（4.1／4.2）の責務。

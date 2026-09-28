@@ -6,3 +6,4 @@
 //! 宣言を 1 行ずつ足す。
 
 mod judge;
+mod terms;
