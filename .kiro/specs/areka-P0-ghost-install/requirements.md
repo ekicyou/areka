@@ -1,7 +1,7 @@
 # Requirements Document
 
 > 本文の実測は **2026-09-28・本ブランチ**（main `f233f720`＝棚卸⑲のコミット。ソースは `10a8d724`〔`session-mark-residue` の完了〕から不変＝`git diff --stat 10a8d724 HEAD -- crates` は空）のもの。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。
-> 要件 12 の裁定は、brief の議題 4 件と、要件を書く途中で答えが要った点に対する**推奨案による暫定の確定**であり、要件ディスカッションで覆せる（覆したら該当要件も改める）。開発者の確定は **1 件**（裁定 16＝ゴーストの窓へのドラッグ＆ドロップを新しい spec `areka-P0-file-drop` へ切り出す・2026-09-28）。
+> 要件 12 の裁定は、brief の議題 4 件と、要件を書く途中で答えが要った点に対する**推奨案による暫定の確定**であり、要件ディスカッションで覆せる（覆したら該当要件も改める）。開発者の確定は **2 件**（2026-09-28）: 裁定 16＝ゴーストの窓へのドラッグ＆ドロップを新しい spec `areka-P0-file-drop` へ切り出す／裁定 5＝インストールと切り替えは別の出来事で、areka は入れた後の切替を主導しない。
 
 ## Project Description (Input)
 
@@ -9,7 +9,7 @@
 
 **今の状態**: `.nar` を読んで根へ入れる部品（`areka-nar`・完了 `areka-P0-nar-install`／`areka-P0-nar-install-hardening`）は在るが、本体 `areka` からは辿れない（`crates/areka/Cargo.toml` の依存に無い）。窓への投げ込み・ファイル選択・台本 `\![execute,install,path,…]` の受け口は 0、インストール系のイベントを送る所も 0。右クリックメニューの「インストール…」の枠と項目名は在るが、登記が 0 なので項目は出ない。
 
-**何を変えるか**: メニュー「インストール…」でファイルを選ぶ・台本 `\![execute,install,path,フルパス]` の 2 つの入口から、同じ 1 本の手続きでインストールできるようにする。手続きは正典のイベント（`OnInstallBegin` → `OnInstallCompleteEx`／`OnInstallComplete`／`OnInstallCompleteAll`、`OnInstallFailure`、`OnInstallRefuse`）を送り、`terms.txt`／`terms.md` があれば展開の前に受諾か拒否かを選ばせる。入れたゴーストは `lastinstalled` で引けるようにし、ゴーストが何も言わなければ areka が入れたゴーストへ切り替える。失敗はメッセージボックスではなくゴーストの台詞（イベント）と記録で伝える。ゴーストの窓へのドラッグ＆ドロップ（書庫の投げ込みと、書庫でないファイル・フォルダの `OnFileDrop2`／`OnDirectoryDrop`）は、本仕様の直後に建つ `areka-P0-file-drop` が同じ手続きへ繋ぐ（裁定 16）。
+**何を変えるか**: メニュー「インストール…」でファイルを選ぶ・台本 `\![execute,install,path,フルパス]` の 2 つの入口から、同じ 1 本の手続きでインストールできるようにする。手続きは正典のイベント（`OnInstallBegin` → `OnInstallCompleteEx`／`OnInstallComplete`／`OnInstallCompleteAll`、`OnInstallFailure`、`OnInstallRefuse`）を送り、`terms.txt`／`terms.md` があれば展開の前に受諾か拒否かを選ばせる。入れたゴーストは `lastinstalled` で引けるようにする。インストールと切り替えは別の出来事で、areka は入れた後に自分から切り替えない（切り替わるのは、ゴーストの台本が指示したときと、利用者がメニューから選んだときだけ）。失敗はメッセージボックスではなくゴーストの台詞（イベント）と記録で伝える。ゴーストの窓へのドラッグ＆ドロップ（書庫の投げ込みと、書庫でないファイル・フォルダの `OnFileDrop2`／`OnDirectoryDrop`）は、本仕様の直後に建つ `areka-P0-file-drop` が同じ手続きへ繋ぐ（裁定 16）。
 
 > 起票: 2026-09-18 `/kiro-discovery` 再入（棚卸⑭）。2026-09-20・09-24・09-26・09-27・09-28 の棚卸で再測定した。先進坑 `pilot-dropfiles-on-wuc-window` は 2026-09-26 に開発者判定 go（一次記録は `crates/pilot/examples/pilot-dropfiles-on-wuc-window/README.md`）。
 
@@ -74,12 +74,12 @@
 
 1. **`supplement` は必ず起動中のゴーストのフォルダを入れ替える。** areka は 1 度に 1 体なので、`accept` が一致して受け取れる相手は起動中のゴーストだけ。その `supplement` の宛先はゴーストのフォルダそのものなので、議題 ⑴ を「断る」で答えると `supplement` は 1 本も入らなくなる（裁定 1）。
 2. **降ろす前に組み上げると、ゴーストが降りるときに保存した内容を失う。** 展開は宛先の今の中身を下敷きに写すので、写した後で SHIORI が保存を書くと、その保存は入れ替えで古い写しに置き換わる。起動中のゴーストへ入れるときは、降ろし終えてから展開を始める必要がある（要件 7.3）。
-3. **応えが無かったことを知る道が無い。** 「`OnInstallCompleteEx` に応えなければ `OnInstallComplete`」（正典）と「ゴーストが何も言わなければ areka が切り替える」（裁定 5）は、どちらもゴーストが台本を返したかどうかを知る必要がある。汎用の通知の入口は応答を送り手へ返さないので、brief が「触らない」に挙げた kanade のファイル（`msg.rs`・`schedule/change.rs` など）に手が入りうる。形は設計で決める。
+3. **応えが無かったことを知る道が無い。** 「`OnInstallCompleteEx` に応えなければ `OnInstallComplete`」（正典）は、ゴーストが台本を返したかどうかを知る必要がある。汎用の通知の入口は応答を送り手へ返さないので、brief が「触らない」に挙げた kanade のファイル（`msg.rs`・`schedule/change.rs` など）に手が入りうる。形は設計で決める。
 4. **書庫の中の `terms.txt` を読む口が無い。** `areka-nar` に読む口を 1 つ足す必要がある（brief は `areka-nar` を `// ukadoc:` の行だけで触る見立て）。形は設計で決める。
 
 ### 何を変えるか
 
-2 つの入口（メニュー・台本）が同じ 1 本の手続きへ流れ、手続きは背景で走って、正典のイベントを起動中のゴーストへ送る。宛先違いは断り、利用条件は受諾か拒否かを選ばせ、失敗は正典の語の理由で知らせる。起動中のゴーストのフォルダへ入れるときは、そのゴーストを降ろしてから入れて起こし直す。入れたゴーストは `lastinstalled` で引け、ゴーストが何も言わなければ areka が切り替える。途中でアプリや Windows が終わるときは、展開の終わりを上限つきで待つ。手続きへの依頼は書庫を 1 本以上並べられる形にし、後続 `file-drop` が窓へ落とされた書庫をそのまま渡せるようにする。
+2 つの入口（メニュー・台本）が同じ 1 本の手続きへ流れ、手続きは背景で走って、正典のイベントを起動中のゴーストへ送る。宛先違いは断り、利用条件は受諾か拒否かを選ばせ、失敗は正典の語の理由で知らせる。起動中のゴーストのフォルダへ入れるときは、そのゴーストを降ろしてから入れて起こし直す。入れたゴーストは `lastinstalled` で引けるが、areka は自分から切り替えない。途中でアプリや Windows が終わるときは、展開の終わりを上限つきで待つ。手続きへの依頼は書庫を 1 本以上並べられる形にし、後続 `file-drop` が窓へ落とされた書庫をそのまま渡せるようにする。
 
 ## Boundary Context
 
@@ -90,7 +90,7 @@
   - 送るイベント 8 語: `OnInstallBegin`・`OnInstallComplete`・`OnInstallCompleteEx`・`OnInstallCompleteAll`・`OnInstallFailure`・`OnInstallRefuse`・`OnGhostTermsAccept`・`OnGhostTermsDecline`。
   - `terms.txt`／`terms.md` の表示（ゴーストの書庫・バルーンの書庫）と、告知の部品に足す「はい／いいえを返す」口 1 つ。
   - 起動中のゴーストのフォルダへ入れるときの「降ろす → 入れる → 起こし直す」。
-  - 入れたゴーストの記録（`lastinstalled` の受け皿へ書く）と、入れた後の切替。置換語 `%lastghostname`／`%lastobjectname`。
+  - 入れたゴーストの記録（`lastinstalled` の受け皿へ書く）。置換語 `%lastghostname`／`%lastobjectname`。入れた後の切替は範囲外（areka は主導しない・裁定 5）。
   - インストールの途中でアプリや Windows が終わるときの、上限つきの待ち。
   - 網羅台帳・生成物・`dist/README.txt` の 2 行・`doc/COMPAT_ARCHITECTURE.md` §8・`crates/areka-nar/src/` の正典 URL の行。
   - 決定論テストと実機確認。
@@ -208,21 +208,22 @@
 7. The areka shall ゴーストが `OnInstallFailure`・`OnInstallRefuse` に応えなかったとき、代わりの画面や台詞を出さない（利用者から見える変化は 0・記録は残る）。
 8. When 展開は成功したが片付けられずに残った作業フォルダが在る, the areka shall 成功として扱い、残った場所を `warn!` に残す。
 
-### Requirement 6: 入れた物は覚えられ、ゴーストが何も言わなければ areka が切り替える
+### Requirement 6: 入れた物は覚えられ、切り替えるかどうかはゴーストと利用者が決める
 
-**Objective:** As a `.nar` を落とした第三者, I want 入れたゴーストがそのまま出てくること, so that 入れた後にメニューから探さずに済む
+**Objective:** As a `.nar` を入れた第三者とゴーストの作者, I want 入れたゴーストが `lastinstalled` やメニューから呼び出せ、勝手には切り替わらないこと, so that インストールと切り替えを別々に選べ、ゴーストの問いかけ（「呼んでみる？」など）が踏みつぶされない
 
 #### Acceptance Criteria
 
 1. When ゴーストを入れ終える（`type` が `ghost`）, the areka shall そのゴーストのフォルダ名を `lastinstalled` の受け皿へ書く（プロセスの中だけ・ファイルへは書かない）。以後 `\![change,ghost,lastinstalled]` はそのゴーストへ切り替わる。
-2. When ゴーストを入れ終え、完了の知らせ（`OnInstallCompleteEx`・`OnInstallComplete`・送った場合は `OnInstallCompleteAll`）のどれにも起動中のゴーストが台本を返さなかった, the areka shall 入れたゴーストへ、既存の切替の入口を通して切り替える（`OnGhostChanging` を送る切替・切替の理由は `automatic`）。
-3. When 完了の知らせのどれかにゴーストが台本を返した, the areka shall 自分からは切り替えない（切り替えるかどうかはその台本に任せる）。
-4. When 1 回の依頼で複数のゴーストを入れた, the areka shall 要件 6.1・6.2 の相手を最後に入れたゴーストにする。
+2. The areka shall ゴーストを入れ終えた後に、自分から切り替えない（切替の要求 0 件）。完了の知らせにゴーストが台本を返しても返さなくても同じ。
+3. When 完了の知らせへの返事の台本が切替を指示する（`\![change,ghost,lastinstalled]` など）, the areka shall 既存の切替の入口でその指示どおりに切り替える（今日の台本の切替のまま・本仕様で足す経路 0）。
+4. When 1 回の依頼で複数のゴーストを入れた, the areka shall 要件 6.1 の記録を最後に入れたゴーストにする。
 5. When 入れたゴーストが起動中のゴースト自身である, the areka shall 要件 7 の起こし直しだけを行い、追加の切替をしない。
 6. When バルーンだけを入れ終える, the areka shall 切り替えず、起動中のゴーストの「最後に使ったバルーン」の記憶を入れたバルーンへ書き換える（次にそのゴーストを起こしたときから使われる）。
 7. When シェルだけを入れ終える, the areka shall 切り替えず、表示中のシェルも替えない。入れたシェルを選ぶ入口は本仕様では足さない（0 個・`shell-balloon-switch` が足す）。
 8. When 書庫を 1 本入れ終える, the areka shall 置換語 `%lastobjectname` をその書庫の `install.txt` の `name` に、`%lastghostname` を関わったゴーストの名前（`ghost` なら入れたゴースト、`shell`／`supplement` なら宛先のゴースト、`balloon` なら前の値のまま）にする。
 9. While このプロセスでまだ 1 本も入れていない, the areka shall `%lastghostname`／`%lastobjectname` を今日どおり置き換えない。
+10. When ゴーストが何も言わずにインストールが終わる, the areka shall 表示中のゴーストをそのまま残し、入れたゴーストをメニューの「ゴースト」枠から選べる状態にする（枠はメニューを出すたびに目録を読み直す＝`menu/ghost_frame.rs` の `ghost_frame_item`・本仕様で足す処理 0）。
 
 ### Requirement 7: 起動中のゴーストのフォルダへ入れるときは、降ろしてから入れて起こし直す
 
@@ -274,7 +275,7 @@
 
 #### Acceptance Criteria
 
-1. The areka shall 手続きの各段（依頼を受けた・始めた・`accept` の照合の結果・利用条件の結果・展開の結果・締めの知らせ・受け皿への記録・切替の依頼）を記録に残し、記録の無い失敗の経路を作らない（0 本）。
+1. The areka shall 手続きの各段（依頼を受けた・始めた・`accept` の照合の結果・利用条件の結果・展開の結果・締めの知らせ・受け皿への記録）を記録に残し、記録の無い失敗の経路を作らない（0 本）。
 2. The 本仕様 shall 本体から `areka-nar` を辿れるようにしたその変更と同じコミットで、`crates/areka-nar/src/` の定義の場所に正典の URL の行（`// ukadoc:`）を置き、網羅台帳 `assets.toml` の `descript_install` の 11 行（`type`・`name`・`directory`・`accept`・`charset`・`refresh`・`refreshundeletemask`・`*.directory`・`*.refresh`・`*.refreshundeletemask`・`*.source.directory`）を実装済みへ動かす。
 3. The 本仕様 shall 網羅台帳の、本仕様が送る 8 イベント（`OnFileDrop2`・`OnDirectoryDrop` の行は `file-drop` が動かす）・`\![execute,install,path,…]`・`install.accept`・`%lastghostname`・`%lastobjectname`・`ghostinstallbutton.caption` の行を実物に合わせて更新し、生成物と `roadmap-draft.md` の数は生成器で作り直す（手で数を直さない）。
 4. The 本仕様 shall `dist/README.txt` の「できないこと」を挙げる 2 行から「インストール」を消す。「■ .nar の入れ方」の本文は `alpha-release-signoff` が書く。
@@ -292,13 +293,13 @@
 2. The 本仕様 shall `accept` の一致（`sakura.name`・`install.accept` のそれぞれ）と不一致、`accept` の無い `shell`／`supplement` を判定する。
 3. The 本仕様 shall 利用条件の 4 通り（ファイルなし・受諾・拒否・`AREKA_NO_ALERT` で抑止）を、画面を出さない形で判定する。
 4. The 本仕様 shall 失敗理由の表（要件 5.2）を、`areka-nar` の拒否の 14 種の全部と I/O の失敗について判定する（値を印字するだけにしない）。
-5. The 本仕様 shall 応えが無いときだけ `OnInstallComplete` へ続くこと・応えが無いときだけ areka が切り替えること・2 本以上が全部成功したときだけ `OnInstallCompleteAll` を送ることを判定する。
+5. The 本仕様 shall 応えが無いときだけ `OnInstallComplete` へ続くこと・応えの有無によらず areka が切替を要求しないこと・2 本以上が全部成功したときだけ `OnInstallCompleteAll` を送ることを判定する。
 6. The 本仕様 shall 2 つの入口のそれぞれが同じ依頼を作ること（台本は台本から）と、相対パス・空・`path` 以外の引数の扱いを判定する。
 7. The 本仕様 shall 起動中のゴーストへ入れる一周（降ろす → 入れる → 起こし直す → 締めの知らせ）と、展開が失敗して元の中身で起こし直す場合を、偽の SHIORI で判定する。あわせて、宛先が使用中で確定に失敗したとき、失敗の記録の作業フォルダの欄が実際の場所を持つことを判定する（完了 `nar-install` の申し送り）。
 8. The 本仕様 shall 終了で待つ口を、実時間を待たない形で判定する（上限の内に終われば待つ・上限に達したら `warn!` を残して進む・まだ書いていない段では待たない・OS の終了では SHIORI の待ちと合わせて上限を超えない）。
 9. The 本仕様 shall kanade の許可表が 21 語であることを判定する（既存の判定の数 13 を書き換える）。
 10. The 本仕様 shall 既存のテストを置き換え無しに消さない。振る舞いが変わる行は新しい振る舞いを固定する形へ書き換える。
-11. When 実機で確認する, the 開発者 shall 次を見て `signoff.md` に記録する: ⑴ メニュー「インストール…」からゴーストの `.nar` を入れる → 入る → 切り替わる ⑵ `\![change,ghost,lastinstalled]` で入れたゴーストへ切り替わる（記録に `ghost_switch_resolved name=lastinstalled` と `ghost_switch_done`）⑶ 起動中のゴーストの `.nar` をメニューから入れる → 引っ込んで戻る ⑷ 利用条件の画面で「はい」「いいえ」を手で押す。窓への投げ込みの実機確認は `file-drop` が行う。
+11. When 実機で確認する, the 開発者 shall 次を見て `signoff.md` に記録する: ⑴ メニュー「インストール…」からゴーストの `.nar` を入れる → 入る → 表示中のゴーストのまま（切り替わらない）→ メニューの「ゴースト」枠に入れたゴーストが出て、選ぶと切り替わる ⑵ `\![change,ghost,lastinstalled]` で入れたゴーストへ切り替わる（記録に `ghost_switch_resolved name=lastinstalled` と `ghost_switch_done`）⑶ 起動中のゴーストの `.nar` をメニューから入れる → 引っ込んで戻る ⑷ 利用条件の画面で「はい」「いいえ」を手で押す。窓への投げ込みの実機確認は `file-drop` が行う。
 12. When 実機で確認する, the 開発者 shall 記録の水準をイベントの送出と判断の分かれ目が見える所まで開ける。
 
 ### Requirement 12: 裁定（暫定・要件ディスカッションで確定）
@@ -311,7 +312,7 @@
 2. The 本仕様 shall **議題 ⑵（暫定）: 巻き戻せなかったときの伝え方**を「`OnInstallFailure`（理由 `extraction`）＋`error!` に在りかと 7 日の期限」とする（要件 5.6）。正典に無い Reference は足さず（0 個）、元の中身を別のゴーストとして救い出すことはしない（部品が 7 日残すので後から足せる）。終了で断たれた場合（要件 8.3）も同じ扱いで、次の起動では記録だけが残る。在りかの説明は `alpha-release-signoff` の既知の制限へ申し送る。
 3. The 本仕様 shall **議題 ⑶（暫定）: 利用条件の画面**を「はい／いいえの 2 択・閉じるボタンなし」とし、`AREKA_NO_ALERT` のときは拒否に倒す（要件 4.4・4.7）。理由: 閉じるボタンが無ければ、正典の「閉じるボタンでは何もイベントは発生しない」に反する場面が起きない。抑止のときに受諾へ倒すと、利用者が読んでいない条件を areka が代わりに受け入れることになる。
 4. The 本仕様 shall **議題 ⑷（暫定）: 途中でアプリが終わるとき**を「(a) 展開の最中だけ上限つきで待つ」とし、上限は OS の終了でもそれ以外でも 3 秒とする（要件 8）。理由: (b)「待たない」は、終了の操作で元のゴーストのフォルダが消えうる。確定そのものは短い（フォルダの付け替え 2 回）ので、3 秒は進行中の確定を終えるのに足り、組み上げの途中で切れても宛先は無傷。終了の指示の後は確定の段へ入らない形にできれば待ちはさらに確実になる（`areka-nar` に手が入る・採るかは設計で決める）。
-5. The 本仕様 shall **暫定の確定 5: 入れた後に誰が切り替えるか**を「ゴーストが完了の知らせに台本を返したらその台本に任せ、返さなければ areka が切り替える」とする（要件 6.2・6.3）。理由: 既存のゴーストの辞書には、完了の知らせの中で利用者に尋ねてから `\![change,ghost,lastinstalled]` を実行するものがある（里々 wiki「ゴースト切り替え」の作例）。areka が必ず切り替えると、その選択を上書きする。何も言わないゴースト（今日の emo2）では areka が切り替えるので、α の一周「落とす → 起動」は成り立つ。**採らなかった案**: 必ず切り替える／切り替えない（既定ゴーストの辞書に任せる）。
+5. The 本仕様 shall **裁定 5（開発者確定・2026-09-28 要件ディスカッション議題 2）: インストールと切り替えは別の出来事で、areka は入れた後の切替を主導しない**（要件 6.2・6.3・6.10）。ゴーストが完了の知らせの中で自分から切り替えに行く（`\![change,ghost,lastinstalled]` など）のは有り。ゴーストが何も言わなければ、利用者がメニューから新しいゴーストを明示的に呼び出さない限り切り替わらない。帰結: brief の Desired Outcome 5「インストール直後にそのゴーストへ切り替える」は取り下げ。今日の emo2（完了の知らせに何も言わない）で入れた場合は表示中のゴーストのままで、α の手順は「入れる → メニューの『ゴースト』から選ぶ」になる（`alpha-release-signoff` へ申し送る）。応えの有無を知る道は、正典の「`OnInstallCompleteEx` に応えなければ `OnInstallComplete`」のために引き続き要る。**採らなかった案**: ゴーストが何も言わなければ areka が切り替える／いつも areka が切り替える。
 6. The 本仕様 shall **暫定の確定 6: 「応えが無い」の読み**を「返事なし（204）と空の台本」とする（要件 2.6）。
 7. The 本仕様 shall **暫定の確定 7: `OnInstallComplete` の Reference0** を、バルーン同梱のゴーストでも `ghost` とする（正典が「廃止」と書く `ghost with balloon` は送らない）。
 8. The 本仕様 shall **暫定の確定 8: イベントの前後**を「`OnInstallBegin` が先、`accept` の照合と利用条件の画面はその後」とし、利用条件を拒否した後は `OnGhostTermsDecline` だけを送る（`OnInstallFailure` の `artificial` は送らない）。理由: 正典は利用条件の画面を「インストールを中断して」出すと書く。拒否の知らせと失敗の知らせを続けて送ると、後の台詞が前の台詞を置き換える。

@@ -7,6 +7,10 @@
 
 ギャップ分析（`research.md`）の見立てが 20〜26 タスクで上限 20 を超えたため、ゴーストの窓へのドラッグ＆ドロップ（wintf の `WM_DROPFILES` の受け口・`WS_EX_ACCEPTFILES`・振り分け・`OnFileDrop2`／`OnDirectoryDrop`・混ざった投げ込みの順・バルーン窓への投げ込み）を丸ごと新しい spec `areka-P0-file-drop` へ切り出した。本仕様はメニューと台本の 2 つの入口と手続きを持ち、依頼に書庫を 1 本以上並べられる形（要件 9）を界面として残す。見立ては 16〜22。下の節の「投げ込みは切り出さない」（09-27・09-24）はこの決定で上書きされた。本節より下の触るファイルの一覧のうち、wintf `window_proc/{mod,drop}.rs`・`window/components.rs`・`placement/spawn.rs`・`input_events/{mod,drop}.rs` は `file-drop` へ移った。
 
+## 2026-09-28 要件ディスカッション議題 2＝インストールと切り替えは別の出来事（開発者確定）
+
+areka は入れた後の切替を主導しない。ゴーストが完了の知らせの中で自分から切り替えに行くのは有り。ゴーストが何も言わなければ、利用者がメニューから新しいゴーストを明示的に呼び出さない限り切り替わらない。本 brief の Desired Outcome 5「インストール直後にそのゴーストへ切り替える」は取り下げ（要件 12 裁定 5）。
+
 ## 2026-09-28 棚卸⑲の再測定（main `10a8d724`）
 
 前回（下の「2026-09-27 棚卸⑱の再測定」節・main `5a232d2f`）の後に main へ 2 本が入った: `ghost-change-name-resolution`（PR#194・`0f50921e`・受け皿の話は直下の節）と `session-mark-residue`（PR#195・`10a8d724`・完了 spec は `.kiro/specs/completed/areka-P0-session-mark-residue/`）。本節は両方の着地を実物で引き直した結果で、前節の数と「触る／触らない」を上書きする。
