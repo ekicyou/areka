@@ -3,6 +3,10 @@
 > 2026-09-18 `/kiro-discovery` 再入（棚卸⑭＝α ゴールへの組み直し）で起票。`doc/ukadoc-coverage/roadmap-draft.md` 段階 B 順位 1 の束「インストール」の**製品側**（利用者が `.nar` を渡す体験）と、順位 4 の束「投げ込み」（`OnFileDrop2` 等）のうち窓へ落とす経路を引き受ける。エンジン（コンテナ読取・`install.txt` 解釈・安全な展開）は `areka-P0-nar-install` が持つ。
 > 本文の file:line は**起票時の実測値**（2026-09-18）。着手時に必ず引き直すこと。
 
+## 2026-09-28 要件ディスカッション議題 1＝ドラッグ＆ドロップを `areka-P0-file-drop` へ切り出した（開発者確定）
+
+ギャップ分析（`research.md`）の見立てが 20〜26 タスクで上限 20 を超えたため、ゴーストの窓へのドラッグ＆ドロップ（wintf の `WM_DROPFILES` の受け口・`WS_EX_ACCEPTFILES`・振り分け・`OnFileDrop2`／`OnDirectoryDrop`・混ざった投げ込みの順・バルーン窓への投げ込み）を丸ごと新しい spec `areka-P0-file-drop` へ切り出した。本仕様はメニューと台本の 2 つの入口と手続きを持ち、依頼に書庫を 1 本以上並べられる形（要件 9）を界面として残す。見立ては 16〜22。下の節の「投げ込みは切り出さない」（09-27・09-24）はこの決定で上書きされた。本節より下の触るファイルの一覧のうち、wintf `window_proc/{mod,drop}.rs`・`window/components.rs`・`placement/spawn.rs`・`input_events/{mod,drop}.rs` は `file-drop` へ移った。
+
 ## 2026-09-28 棚卸⑲の再測定（main `10a8d724`）
 
 前回（下の「2026-09-27 棚卸⑱の再測定」節・main `5a232d2f`）の後に main へ 2 本が入った: `ghost-change-name-resolution`（PR#194・`0f50921e`・受け皿の話は直下の節）と `session-mark-residue`（PR#195・`10a8d724`・完了 spec は `.kiro/specs/completed/areka-P0-session-mark-residue/`）。本節は両方の着地を実物で引き直した結果で、前節の数と「触る／触らない」を上書きする。
