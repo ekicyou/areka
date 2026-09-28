@@ -115,8 +115,6 @@ pub(crate) fn on_steady(world: &mut World) {
 }
 
 /// 台本の受け口と選ぶ画面のスレッドへ配る送出端（窓口が無ければ受信端の無い送出端）。
-// 配り先（台本の受け口・選ぶ画面）は 7.1・7.2 で結ぶ。結んだら外す。
-#[allow(dead_code)]
 pub(crate) fn raw_sender(world: &World) -> Sender<RawInstallRequest> {
     match world.get_non_send::<InstallDesk>() {
         Some(desk) => desk.raw_tx.clone(),

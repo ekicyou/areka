@@ -184,8 +184,7 @@ pub(crate) fn refuse_refs(accept: &str, manifest: &InstallManifest) -> Vec<Strin
     ]
 }
 
-// 呼び手（台本の受け口）は後続のタスクが結ぶ。結んだら外す。
-#[allow(dead_code)]
+/// 台本の引数を断った理由（受け口が記録の語を選ぶ）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ScriptRefusal {
     NotPath { found: String },
@@ -196,7 +195,6 @@ pub(crate) enum ScriptRefusal {
 /// `\![execute,install,…]` の 2 番目以降の引数から書庫のパスを取り出す（要件 1.5〜1.7）。
 ///
 /// パスより後ろの引数は読まない（残っていれば受け口が記録する）。
-#[allow(dead_code)]
 pub(crate) fn script_request(arguments: &[&str]) -> Result<PathBuf, ScriptRefusal> {
     match arguments {
         ["path"] | ["path", "", ..] => Err(ScriptRefusal::Empty),

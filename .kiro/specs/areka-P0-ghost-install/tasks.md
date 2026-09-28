@@ -110,7 +110,7 @@
   - _Depends: 2.1, 6.3_
 
 - [ ] 7. 2 つの入口
-- [ ] 7.1 (P) 台本 `\![execute,install,path,…]` の受け口を作り、消費者台帳に登記する
+- [x] 7.1 (P) 台本 `\![execute,install,path,…]` の受け口を作り、消費者台帳に登記する
   - 既存の台本の受け口と同じ形で `("execute", "install")` を選び、判断の関数に引数を渡して、通れば出どころ「台本」の生の要求を窓口へ送る。`path` 以外は `install_cue_unsupported`、空・相対パスは `install_cue_bad_path` の `warn!` で送らない
   - 台本の受け口の列に 9 本目として足し、消費者台帳に `("execute", Some("install"))` の行を足す（台帳の行数の判定を書き換える）
   - 台本の文字列から受け口 → 取り出し → 受付まで通したテストと、相対パス・空・`path` 以外で依頼が 0 件で `warn!` が 1 件のテストが緑
@@ -193,3 +193,4 @@
 - 6.2: 項目単位の allow の残り＝`RawInstallRequest`・`raw_sender`（**7.1・7.2 で外す**）・`InstallOrigin`（**7.x で外す**）・`Overwritten`（**8.1 で外す**）。9 の担当から 2 点を先に入れた＝`discard_for_exit` が待っている依頼と手元の頼みを捨てて `warn!(install_pending_discarded, count, paths, held)`・終了後に届いた頼みの返信端を落とす（`OrderDone` だけは受ける）。**9 で決める**: `count` は依頼の件数・`paths` は書庫の数＝2 本以上の依頼で食い違う（要件 8.5 の「件数」の単位）。終了の枝のテストは 9 の `desk_exit_tests.rs`。Monitoring の表に無い記録の語 11 個（`install_order_refused`・`install_ask_dropped`・`install_raise_replaced`・`install_facts_none`・`install_overwrite_returned`・`install_record_received`・`install_reply_unread`・`install_event_sent`・`install_event_send_failed`・`install_worker_spawned`・`install_worker_gone`）も**タスク 10 で拾う**。`ghost_switch.rs` は 870 行。
 - 6.3: 目録に無いときの名前は、ゴーストなら `install.txt` の `name`、シェル・追加ファイルなら宛先のフォルダ名（設計で決めたこと 14 の読み）。`reseed` は barrier を待たない（Risks 5）。Monitoring の表に無い記録の語 3 つ（`install_names_reseeded`・`install_balloon_not_remembered`・`install_record_unsettled`）と `install_names_updated` の欄 `published` も**タスク 10 で拾う**。`GhostRuntime` に台詞の表を読む公開の口が無いので、置換のテストは「publish→`from_sylphya_provider`→`resolve_system_var`」と「載せ直し先の asker が起こし直したゴーストの SHIORI フォルダ」の 2 本に分けてある。
 - 6.4: 本番の道筋のテストは `SwitchRig::pump_input_until`（`ghost_switch_test_support.rs`）で Input の段を回し、窓口の `queue` が空で `busy` が偽になるまで待つ（`InstallDesk.busy` はテストが読むために `pub(super)`）。8.x の窓口のテストも同じ補助で回せる。
+- 7.1: `install/mod.rs` の `judge` は `pub(crate)`（入口から `script_request` を呼ぶ）。`InstallOrigin` の allow は `Menu` の腕だけに残る＝**7.2 で外す**。sinks の列を増やすと `zorder_wiring_tests.rs` の `t_zwi05`（列の原文を判定）も直す。Monitoring の表に無い記録の語 4 つ（`install_cue_unopenable`・`install_cue_skip`・`install_cue_extra_ignored`・`install_cue_send_failed`）も**タスク 10 で拾う**。

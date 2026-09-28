@@ -17,7 +17,7 @@ use wintf::ecs::pointer::dispatch_pointer_events;
 use crate::exit_wait::{self, WorkGate};
 
 pub(crate) mod desk;
-mod judge;
+pub(crate) mod judge;
 pub(crate) mod names;
 mod procedure;
 mod terms;
@@ -31,10 +31,10 @@ pub(crate) struct InstallOrder {
 }
 
 /// 依頼の出どころ（記録の語彙・手続きは分岐しない）。
-// 組み立てる呼び手（メニュー・台本の入口）は後続のタスクが結ぶ。結んだら外す。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InstallOrigin {
+    // 組み立てる呼び手（メニューの入口）は 7.2 で結ぶ。結んだら外す。
+    #[allow(dead_code)]
     Menu,
     Script,
 }
@@ -52,8 +52,6 @@ pub(crate) enum SubmitVerdict {
 }
 
 /// 別のスレッド（台本の受け口・選ぶ画面）から窓口へ届く、依頼になる前の要求。
-// 送り手（台本の受け口・選ぶ画面のスレッド）は 7.1・7.2 で結ぶ。結んだら外す。
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RawInstallRequest {
     pub path: PathBuf,
