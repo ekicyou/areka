@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use areka_nar::{InstallOutcome, InstallRequest, NarArchive, NarError};
+use areka_nar::{InstallOutcome, InstallRequest, IoPhase, NarArchive, NarError, SurvivingTree};
 use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
@@ -54,6 +54,8 @@ pub(super) struct FakePorts {
     pub terms_answer: YesNo,
     /// 真なら `install_elsewhere` が入らずに None を返す。
     pub elsewhere_closed: bool,
+    /// 在れば `install_elsewhere` が入れずに確定の段の I/O の失敗を返す（生き残りはこの列）。
+    pub elsewhere_error: Option<Vec<SurvivingTree>>,
     pub overwrite: OverwriteScript,
     pub calls: Vec<Call>,
 }
@@ -86,6 +88,7 @@ impl FakePorts {
             replies: HashMap::new(),
             terms_answer: YesNo::Yes,
             elsewhere_closed: false,
+            elsewhere_error: None,
             overwrite: OverwriteScript::Run,
             calls: Vec::new(),
         }
@@ -151,6 +154,17 @@ impl InstallPorts for FakePorts {
             .push(Call::Elsewhere(target_ghost.map(str::to_owned)));
         if self.elsewhere_closed {
             return None;
+        }
+        if let Some(survivors) = &self.elsewhere_error {
+            return Some(Err(NarError::Io {
+                archive: PathBuf::from("fake.nar"),
+                phase: IoPhase::Commit,
+                path: self.root.path().to_path_buf(),
+                source: std::io::Error::other("偽の確定の失敗"),
+                committed: Vec::new(),
+                rolled_back: survivors.is_empty(),
+                survivors: survivors.clone().into_boxed_slice(),
+            }));
         }
         Some(self.install(archive, target_ghost))
     }

@@ -471,3 +471,7 @@ mod procedure_test_support;
 #[cfg(test)]
 #[path = "procedure_tests.rs"]
 mod procedure_tests;
+
+#[cfg(test)]
+#[path = "procedure_branch_tests.rs"]
+mod procedure_branch_tests;
