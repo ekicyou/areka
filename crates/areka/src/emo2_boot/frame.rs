@@ -462,6 +462,12 @@ mod attach_tests;
 #[path = "frame_drain_text_tests.rs"]
 mod drain_text_tests;
 
+// 終了指示の有無による毎フレームの処理の分岐（areka-P0-frame-phases-after-exit タスク 2.1）。
+// GPU もハーネスも使わない。
+#[cfg(test)]
+#[path = "frame_exit_gate_tests.rs"]
+mod exit_gate_tests;
+
 #[cfg(test)]
 #[path = "frame_resnap_tests.rs"]
 mod resnap_tests;
