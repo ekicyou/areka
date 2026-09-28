@@ -23,7 +23,7 @@
 ### いま何が起きているか（2026-09-28 実測）
 
 - **入口が 0。** `WM_DROPFILES`／`DragAcceptFiles`／`DragQueryFile`／`GetOpenFileName`／`IDropTarget` は `crates/`（`crates/pilot/` を除く）の `.rs` に 0 件。wintf の振り分け表（`crates/wintf/src/ecs/window_proc/mod.rs` の `dispatch_window_message`）に `WM_DROPFILES` の腕は 0 本。ゴースト窓の様式（`crates/areka/src/placement/spawn.rs` の `window_style`＝キャラクター窓とバルーン窓で共通）は `WS_EX_LAYERED | WS_EX_TOOLWINDOW` で、受け入れの宣言は無い。
-- **イベントが 0。** `OnInstall`・`OnFileDrop`・`OnDirectoryDrop`・`OnGhostTerms` の綴りは `crates/` の `.rs` のうち `crates/areka-nar/src/` の 6 ファイル（説明と失敗の語彙）にしか無く、送る側は 0 件。kanade の許可表 `ALLOWED_EVENT_IDS`（`crates/areka-kanade/src/schedule/events.rs`）は 13 語で、上の 10 語（後述）は 0 語。数は `events_change_tests.rs` が `13` と直書きで判定している。
+- **イベントが 0。** `OnInstall`・`OnFileDrop`・`OnDirectoryDrop`・`OnGhostTerms` の綴りは `crates/` の `.rs` のうち `crates/areka-nar/src/` の 6 ファイル（説明と失敗の語彙・うち 1 つはテスト）にしか無く、送る側は 0 件。kanade の許可表 `ALLOWED_EVENT_IDS`（`crates/areka-kanade/src/schedule/events.rs`）は 13 語で、上の 10 語（後述）は 0 語。数は `events_change_tests.rs` が `13` と直書きで判定している。
 - **汎用の通知の入口は在るが、送り手が 0。** `KanadeMsg::RaiseEvent { id, references, method }`（`crates/areka-kanade/src/msg.rs`）を送る本番コードは 0 件。受け手 `on_raise_event`（`schedule/change.rs`）は、許可表に無い名前と定常以外での依頼を `warn!` の上で捨てる（積まない）。応答は定常の応答の腕へ流れ、再生中のトークを置き換える。**応答があったか無かったかを送り手へ返す道は無い**（運行の通知 `KanadeNotice` は定常到達・切替の中止・停止の 3 種）。
 - **部品は 3 段で揃っている。** `areka_nar::NarArchive::open`（全部を検証し 1 バイトも書かない）→ `manifest()`（`kind`・`name`・`directory`・`accept`・同梱）→ `install(&InstallRequest { root, target_ghost })`。公開の口はこの 3 つだけで、**書庫の中の任意のファイル（`terms.txt` など）を読む口は無い**。失敗は `NarError::Refused { reason: RefuseReason }`（14 種）と `NarError::Io { phase, rolled_back, survivors, … }`。
 - **展開は「作業フォルダで組み上げてから入れ替える」。** 宛先が在るとき、下敷きとして**宛先の今の中身を作業フォルダへ写してから**書庫の中身を重ねる（`crates/areka-nar/src/install.rs` の `stage_placement`）。確定は宛先ごとに「宛先 → 作業フォルダの `old-<k>`」「組み上げた木 → 宛先」の 2 手（同 `commit_one`）。2 手の間でプロセスが断たれると宛先のフォルダは無く、元の中身は `<根>/.nar-work/<プロセス識別子>-<連番>/old-<k>/` に残る（7 日の保持）。
@@ -131,7 +131,7 @@
 8. When ゴーストを起こす（最初の起動でも切替の後でも）, the areka shall メニューの「インストール」枠へ項目を登記し直す（項目名は今日どおり `ghostinstallbutton.caption`、答えが無ければ既定名「インストール…」）。
 9. The areka shall 手続きを 1 度に 1 本だけ走らせ、走っている間に届いた依頼は届いた順に待たせて続けて扱う（捨てない）。
 10. While ゴーストが定常でない（起動の途中・切替の途中）, when 書庫の依頼が届く, the areka shall 依頼を待たせ、ゴーストが定常に入ってから手続きを始める。
-11. The areka shall 書庫の読み取り・展開・ファイルを選ぶ画面・利用条件の画面のどれの間も、ゴーストの描画・台詞の再生・メニュー・Windows の終了の後始末を止めない。
+11. While ゴーストが表示されている, the areka shall 書庫の読み取り・展開・ファイルを選ぶ画面・利用条件の画面のどれの間も、ゴーストの描画・台詞の再生・メニュー・Windows の終了の後始末を止めない（要件 7 でゴーストを降ろしている間は窓が 0 枚で、止める相手の描画・台詞・メニューが無い。その間の展開をどのスレッドで行うかは設計で決める）。
 12. The areka shall 最初の起動が窓の無い形へ倒れた回（窓も台本の受け口も無い）では、3 つの入口のどれも受けない（今日どおり・本仕様で足す経路 0）。
 
 ### Requirement 2: 手続きは正典の順序でイベントを送る
@@ -312,7 +312,7 @@
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall **議題 ⑴（暫定）: 起動中のゴーストを上書きするとき**を「(a) 降ろしてから入れて起こし直す」とする（要件 7）。理由: (c)「断る」は `supplement` を 1 本も入れられなくする（`supplement` の宛先は必ず起動中のゴーストのフォルダ）。(b)「先に既定ゴーストへ切り替える」は、起動中のゴーストが既定ゴースト自身のときに切り替える先が無く、既定ゴーストの挨拶が一瞬挟まる。(a) は相手が誰でも同じ 1 本の道で済む。**代償**: 切替の道筋（`switch_to`）に手が入り、テストファイル `ghost_switch_tests.rs`（987 行）の分割が先に 1 手要る。完了 `ghost-shell-balloon-switch` の切替の入口の形を変えるなら、同 spec の見直しの引き金に当たる。
+1. The 本仕様 shall **議題 ⑴（暫定）: 起動中のゴーストを上書きするとき**を「(a) 降ろしてから入れて起こし直す」とする（要件 7）。理由: (c)「断る」は `supplement` を 1 本も入れられなくする（`supplement` の宛先は必ず起動中のゴーストのフォルダ）。(b)「先に既定ゴーストへ切り替える」は、起動中のゴーストが既定ゴースト自身のときに切り替える先が無く、既定ゴーストの挨拶が一瞬挟まる。(a) は相手が誰でも同じ 1 本の道で済む。**代償**: 切替の道筋（`switch_to`）の「降ろした後・起こす前」に展開を挟む口が入る。テストファイル `ghost_switch_tests.rs`（987 行）の分割は要らない（`switch_to` に触れる行はそのファイルに 1 行だけで、新しいテストは新しい兄弟ファイルへ置ける＝ギャップ分析 §4 e）。完了 `ghost-shell-balloon-switch` の切替の入口の形を変えるなら、同 spec の見直しの引き金に当たる。展開を挟む形（間を空けて背景で展開するか、間を空けずに展開するか）は設計で決める。
 2. The 本仕様 shall **議題 ⑵（暫定）: 巻き戻せなかったときの伝え方**を「`OnInstallFailure`（理由 `extraction`）＋`error!` に在りかと 7 日の期限」とする（要件 5.6）。正典に無い Reference は足さず（0 個）、元の中身を別のゴーストとして救い出すことはしない（部品が 7 日残すので後から足せる）。終了で断たれた場合（要件 8.3）も同じ扱いで、次の起動では記録だけが残る。在りかの説明は `alpha-release-signoff` の既知の制限へ申し送る。
 3. The 本仕様 shall **議題 ⑶（暫定）: 利用条件の画面**を「はい／いいえの 2 択・閉じるボタンなし」とし、`AREKA_NO_ALERT` のときは拒否に倒す（要件 4.4・4.7）。理由: 閉じるボタンが無ければ、正典の「閉じるボタンでは何もイベントは発生しない」に反する場面が起きない。抑止のときに受諾へ倒すと、利用者が読んでいない条件を areka が代わりに受け入れることになる。
 4. The 本仕様 shall **議題 ⑷（暫定）: 途中でアプリが終わるとき**を「(a) 展開の最中だけ上限つきで待つ」とし、上限は OS の終了でもそれ以外でも 3 秒とする（要件 8）。理由: (b)「待たない」は、終了の操作で元のゴーストのフォルダが消えうる。確定そのものは短い（フォルダの付け替え 2 回）ので、3 秒は進行中の確定を終えるのに足り、組み上げの途中で切れても宛先は無傷。終了の指示の後は確定の段へ入らない形にできれば待ちはさらに確実になる（`areka-nar` に手が入る・採るかは設計で決める）。
