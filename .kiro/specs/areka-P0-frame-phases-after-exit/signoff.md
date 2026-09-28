@@ -86,4 +86,43 @@
 
 ## 実機の確認（タスク 3.1）
 
-（タスク 3.1 で記入）
+- 日時: 2026-09-28 20:24〜20:25 JST（ログの時刻は UTC で 11:24:06〜11:24:46）
+- HEAD: `740adf98`。実行体は `cargo build -p areka -j 4` を HEAD で通した `target\debugreka.exe`（x64 debug）の複製（sha256 が元と一致）。i686 の helper は `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` の成果物
+- 検体（短い絶対パスの根 `C:	mpreka-fpeoot\`・実行体を根の直下に置き `AREKA_ROOT` は外した）:
+  - `ghost\emo2\`・`balloon\emo2-kakukaku\` … `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が配ったもの（`profile` は除いて複製）
+  - `balloon\StayseeBalloon\` … `nar-sample-path -- StayseeBalloon` が配ったもの
+- 環境: `NO_COLOR=1`・`AREKA_PROFILE_DIR=C:	mpreka-fpe\prof1`（新しく作った空のフォルダ）・`AREKA_APP_SMOKE_EXIT_MS` は未設定（自動終了なし）・`RUST_LOG=info,kanade=trace,areka_kanade=trace,areka=debug,areka_emo_text=info,areka_emo_present=info,areka_ghost=debug,ghost-shutdown=debug,ghost-boot=debug,shiori-actor=trace,wintf::ecs::window_proc::lifecycle=debug`
+- 起動の前に開発者へ告げたこと: 画面には何も起きないのが正常であること。読み飛ばしの記録は指令の残りに関わらず毎回ちょうど 1 件出て、それが判定の働いた証拠であること
+- 手順: 起動 → SERIKO のループの記録（`seriko: bind 適用 … id=1400 on=true`・11:24:17）を確かめる → 開発者がメニューの「終了」を手で選んだ（`menu_shown` 11:24:40 → `menu_selected frame=Close id=3` 11:24:41）→ 挨拶の後に kanade の終了系列が完了して閉じた
+- 走行の後に `areka.exe`・`shiori-host32-helper.exe` がどちらも 0 件であることを `tasklist` で確かめた
+
+### 判定（記録 `run1.out.log`・1,290 行）
+
+| 確かめること | 数えた語 | 期待 | 実測 | 要件 |
+|---|---|---|---|---|
+| ERROR の行 | ` ERROR ` と `level=ERROR` | 0 件 | **0 件** | 4.1 |
+| `event="app_exit"` より後の「装着が未完了」の WARN | `装着が未完了` | 0 件 | **0 件**（ログ全体でも 0 件。WARN はログ全体で 3 件で、どれも起動時の 11:24:06〜07・`app_exit` より前: 全透明の要素の焼き込み 2 件・折返し基準 1 件） | 4.2 |
+| `event="app_exit"` の `origin=KanadeStopped(Quit)` | `event="app_exit"` | 1 件 | **1 件**（`closed=4`・11:24:46.393404） | 4.3 |
+| `session_mark_cleared` | `session_mark_cleared` | 1 件 | **1 件**（11:24:46.435304） | 4.3 |
+| 終了コード | — | 0 | **0**（所要 42.2 秒） | 4.3 |
+| `frame_phases_skipped_after_exit` | `frame_phases_skipped_after_exit` | 1 件 | **1 件**（`level` は DEBUG・`app_exit` の 0.45 ms 後・11:24:46.393857） | 4.4 |
+
+終了の巡の並び（抜粋）:
+
+```
+11:24:46.389429Z  INFO areka::emo2_boot::frame: kanade の終了系列が完了した: 全ゴースト窓を閉じる event="ghost_quit" cause=Quit
+11:24:46.393404Z  INFO areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4
+11:24:46.393573Z  INFO wintf::runtime::message_loop: [AppExit] exit requested
+11:24:46.393857Z DEBUG areka::emo2_boot::frame: 終了が指示済み——毎フレームの処理を読み飛ばす event="frame_phases_skipped_after_exit"
+11:24:46.425563Z  INFO areka::ghost_session: seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止）
+11:24:46.435304Z  INFO areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"
+```
+
+### 0 件の語の較正
+
+- 水準の綴り: このログは `level=` 形式でなく、時刻の後に水準を空白で挟む形（`Z  INFO `・`Z  WARN `・`Z DEBUG `）。同じログで ` WARN ` は 3 件、` INFO ` は 189 件、` DEBUG ` は 1,022 件に当たる。` ERROR ` は、同じ形式の過去の areka のログ `C:\home\maz	mpbreakun0-boot.log` の `…Z ERROR areka_emo_compose: …` の行に当たることを確かめた
+- `装着が未完了`: 同じ語で `crates/areka-emo-present/src/mount.rs` の 4 行（`set_visible`・`set_layout`・`set_display` の `warn!` の文言）に当たることを確かめた（同じ UTF-8 の綴りで引ける）
+
+### 判定
+
+**合格**。メニューの終了で ERROR 0 件・`app_exit` より後の「装着が未完了」の WARN 0 件・`app_exit`（`KanadeStopped(Quit)`）1 件・`session_mark_cleared` 1 件・終了コード 0・読み飛ばしの記録 1 件。直す前に出ていた `derive_scale` の ERROR と「装着が未完了」の WARN 7 件は出ていない。
