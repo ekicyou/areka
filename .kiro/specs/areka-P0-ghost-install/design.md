@@ -150,7 +150,7 @@ graph TB
 | 11 | ファイルを選ぶ画面は `GetOpenFileNameW`。メニューを選ぶたびに短命のスレッド `install-pick` で出す。持ち主の窓は渡さない。作業フォルダを変えない旗（`OFN_NOCHANGEDIR`）を付ける | メニューの動作は World を借りたまま呼ばれるので、UI スレッドで画面を出すと、その間の窓のメッセージが捨てられる。手続きのスレッドで出すと、展開が終わるまで画面が出ない | `IFileOpenDialog`（実機で前面に出ないなどの不都合が出たときの代わり） |
 | 12 | 利用条件の画面は `MessageBoxW` の `MB_YESNO`。本文の上限は先頭 25 行かつ 1,200 文字。1 行目が `charset,` で始まるときはその行を出さない | `MB_YESNO` は閉じるボタンが効かない（要件 4.4）。上限は縦 768 の画面に収まる量 | 自前の窓 |
 | 13 | 失敗の記録は 2 件で役割を分ける。`areka-nar` の `error!` は部品の詳細（理由の文・確定済みの件数・作業フォルダ）。areka の `error!(event = "install_failed")` は手続きの要約（書庫・種類の語・段・元へ戻ったか・ゴーストへ送る語） | どちらも要件が求める欄を持つ。areka の側は `event` の欄で引ける | 片方に寄せる（`areka-nar` は areka のイベントの語を知らない） |
-| 14 | 名前の出どころ: 同梱バルーンの名前と `%lastghostname` のゴーストの名前は、入れた後の目録（`catalog::list_balloons`・`list_ghosts`）の `name`。読めなければフォルダ名／`install.txt` の `name` | メニューの「ゴースト」枠や `OnGhostChanging` と同じ名前の引き方 | `install.txt` の値だけを使う |
+| 14 | 名前の出どころ: 同梱バルーンの名前と `%lastghostname` のゴーストの名前は、入れた後の目録（`catalog::list_balloons`・`list_ghosts`）の `name`。読めなければフォルダ名／`install.txt` の `name`。受け皿（`record_last_installed`）とバルーンの記憶へ渡すフォルダ名も目録の側の綴り（書庫の `directory` と大文字小文字を無視して突き合わせ、目録の綴りを採る） | メニューの「ゴースト」枠や `OnGhostChanging` と同じ名前の引き方 | `install.txt` の値だけを使う |
 | 15 | 許可表は起動・終了のイベントと共用の `ALLOWED_EVENT_IDS` のまま 8 語を足す | 表を分けると `events.rs` の判定と `on_raise_event` に手が入る | 入口専用の表 |
 | 16 | 起床の旗は足さない。取り出しの系は毎 tick 回り、門が有効でも心拍で回る | 既存の台本の受け口と同じ。遅れは最大で心拍 1 回ぶん | `tick_wake::mark` を足す（wintf の名簿と検査に手が入る） |
 
@@ -177,7 +177,8 @@ crates/areka/src/
 │   ├── terms.rs              # 純粋: 利用条件のファイルを探す・復号する・上限で切る
 │   ├── procedure.rs          # 手続き（書庫 1 本の一周・依頼 1 件の一周）と口 InstallPorts
 │   ├── worker.rs             # スレッド install・本物の口（desk への頼み・利用条件の画面）
-│   ├── desk.rs               # UI 側の窓口: 待ち行列・取り出しの系・送出の保留・起動中のゴーストへ入れる一周・入れた後の記録
+│   ├── desk.rs               # UI 側の窓口: 待ち行列・取り出しの系・送出の保留・入れた後の記録
+│   ├── overwrite.rs          # desk の子: 起動中のゴーストへ入れる一周（預かった書庫・段・切替の入口の判定ごとの扱い）
 │   ├── names.rs              # 置換語 2 つの値と載せ直し
 │   └── pick.rs               # ファイルを選ぶ画面（unsafe はここに閉じる）
 ├── exit_wait.rs              # 終了で背景の仕事を待つ口（WorkGate・ExitWaits・begin_close）
@@ -189,7 +190,8 @@ crates/areka/src/
 
 - `install/judge_tests.rs`・`install/terms_tests.rs`
 - `install/procedure_tests.rs`（書庫 5 種とイベントの列）・`install/procedure_branch_tests.rs`（宛先違い・利用条件・失敗・複数）・`install/procedure_test_support.rs`（偽の口と書庫の組み立て）
-- `install/desk_tests.rs`（受付・待ち行列・送出の保留）・`install/desk_overwrite_tests.rs`（起動中のゴーストへ入れる一周・偽の SHIORI）・`install/desk_exit_tests.rs`（終了で捨てる・送らない）
+- `install/desk_tests.rs`（受付・待ち行列・送出の保留）・`install/desk_overwrite_tests.rs`（起動中のゴーストへ入れる一周・偽の SHIORI・切替の入口の判定 4 値）・`install/desk_exit_tests.rs`（終了で捨てる・送らない）
+- `install/worker_tests.rs`（本物の口の写し・門が閉じているときの展開・本物の kanade を通した締めの知らせの列）
 - `install/names_tests.rs`・`exit_wait_tests.rs`
 - `emo2_boot/install_cue_tests.rs`・`menu/install_frame_tests.rs`
 - `crates/areka-kanade/src/actor_raise_reply_tests.rs`（応えの有無の 5 値）
@@ -200,10 +202,10 @@ crates/areka/src/
 | ファイル | 何を変えるか |
 |---|---|
 | `crates/areka/Cargo.toml` | 依存に `areka-nar`。`windows` に機能 `Win32_UI_Controls_Dialogs` |
-| `crates/areka/src/main.rs` | `mod install;`・`mod exit_wait;`。`fn main` で `run()` が戻った直後（`after_run` の前）に `exit_wait::begin_close`、後始末の閉包の「降ろす」の後で待つ。`AfterRun`・`after_run` は変えない |
-| `crates/areka/src/session_end.rs` | `end_session_within` で、済みの印を据えた直後に `exit_wait::begin_close`、`shutdown_within` の後に同じ `WaitBudget` で待つ |
+| `crates/areka/src/main.rs` | `mod install;`・`mod exit_wait;`。`fn main` で `run()` が戻った直後（`after_run` の前）に `exit_wait::begin_close`、後始末の閉包の「降ろす → 印の始末（`settle_session_mark`）」の後・告知の前で待つ。`AfterRun`・`after_run` は変えない |
+| `crates/areka/src/session_end.rs` | `end_session_within` で、済みの印を据えた直後に `exit_wait::begin_close`、`shutdown_within` と印の始末（`settle_session_mark`）の後に同じ `WaitBudget` で待つ |
 | `crates/areka/src/ghost_session.rs` | `register_systems` に `install::register` を 1 行。`boot_wired` に `menu::install_frame::register` と `install::names::reseed` を各 1 行 |
-| `crates/areka/src/emo2_boot/ghost_switch.rs` | `record_last_installed` の `#[allow(dead_code)]` と注釈の 2 行を消す。`switch_to` の `close_windows_for_restart` の直後に `desk::run_overwrite_between` を 1 行。`on_notice` の定常到達の腕の末尾に `desk::on_steady` を 1 行 |
+| `crates/areka/src/emo2_boot/ghost_switch.rs` | `record_last_installed` の `#[allow(dead_code)]` と注釈の 2 行を消す。`switch_to` の `close_windows_for_restart` の直後に `desk::run_overwrite_between` を 1 行。`on_notice` の定常到達の腕（中が match の式）を波括弧で包み、末尾に `desk::on_steady` の呼び出しを足す |
 | `crates/areka/src/emo2_boot/mod.rs` | `mod install_cue;`。`wire_emo2_boot` で受け口を組み、`sinks` の列の 9 本目に足す |
 | `crates/areka/src/emo2_boot/consumer_ledger.rs` | `CommandConsumer::InstallSink` と、`canonical` に `("execute", Some("install"))` の 1 行 |
 | `crates/areka/src/menu/mod.rs` | `pub(crate) mod install_frame;` |
@@ -283,6 +285,16 @@ sequenceDiagram
 - 展開の結果によらず `switch_to` は同じ道を進む。展開が失敗して宛先が元のままなら、同じゴーストが元の中身で起きる。宛先が無くなっていて起こせなければ、`switch_to` の既存の枝が既定ゴーストへ戻す（`OnBoot` の Reference6＝`halt`）。相手が既定ゴースト自身なら今日の致命の経路。
 - 頼んだ時点で宛先が起動中のゴーストのフォルダでなくなっていたら（その間に利用者が切り替えた）、`desk` は書庫を返し、worker が自分のスレッドで入れる。
 - kanade が切替を受理しなかったら（切替の中止の通知で予約が下りる）、`desk` は預かった書庫を持ち続け、次の定常到達で頼み直す。
+- 切替の入口 `request_ghost_switch` の判定（`SwitchVerdict` の 4 値）ごとの扱い。どの判定でも手続きは止まらず、書庫 1 本につき締めの知らせが 1 つ出る:
+
+| 判定 | 起きる場面 | `desk` の扱い | その後 |
+|---|---|---|---|
+| `Accepted` | 通常 | 段を「切替を頼んだ」へ進める | 上の図のとおり |
+| `Busy` | 別の切替の最中 | 段は「預かった」のまま。予約が下りた tick か次の定常到達で頼み直す | 頼み直しが `Accepted` になれば上の図 |
+| `NotFound` | 起動中のゴーストのフォルダが目録に無い | `warn!(event = "install_overwrite_unavailable", verdict)` を 1 件残し、書庫を worker へ返す（`Overwritten::NotRunning`） | worker が `install_elsewhere` で入れる。宛先が使用中で入れ替えられなければ要件 5 の失敗（宛先は元のまま・`OnInstallFailure`） |
+| `NoContext` | 起動の文脈か送り先のゴーストが無い | 同上 | 同上（送り先が無ければ `raise` が `Closed` を返し `Abandoned`） |
+
+- `run_overwrite_between` が展開するのは、段が「切替を頼んだ」で、かつ切替の予約（`SwitchInFlight`）の切替先のフォルダが預かった宛先と同じ（ASCII の大文字小文字を無視）ときだけ。それ以外の切替（利用者や台本が頼んだ別の切替）では無操作で、預かった書庫は「預かった」のまま次の定常到達を待つ。
 
 ### 終了で待つ（要件 8）
 
@@ -642,7 +654,7 @@ pub(crate) enum ScriptRefusal { NotPath { found: String }, Empty, Relative { pat
 pub(crate) fn script_request(arguments: &[&str]) -> Result<PathBuf, ScriptRefusal>;
 ```
 - `judge_accept`: `accept` が在れば `sakura_name` と `install_accept` の各名前に完全一致（大文字小文字を区別）で照合する。`ghost`／`balloon` で `accept` が無ければ照合なしで受け取る。
-- `destination_of`: `supplement` は常に `RunningGhost`。`ghost` は `directory` と `folder` が ASCII の大文字小文字を無視して等しいとき `RunningGhost`。`shell`／`balloon` は `Elsewhere`。
+- `destination_of`: `supplement` は常に `RunningGhost`。`ghost` は `directory` と `folder` が ASCII の大文字小文字を無視して等しいとき `RunningGhost`。`shell`／`balloon` は `Elsewhere`。`folder` が `None`（argv で起こしたゴースト）のときは種類によらず `Elsewhere`＝降ろして入れる一周へは入らない。このとき `shell`／`supplement` は宛先のゴーストを名指しできないので `areka-nar` が断り（`OnInstallFailure`）、起動中のゴースト自身への `ghost` の上書きは使用中のフォルダの入れ替えになるので要件 5 の失敗になる（宛先は元のまま）。argv の起動は開発者の実走の経路で、配布物の利用者は通らない。
 - `failure_word`: `RefuseReason` の 14 種と `NarError::Io` を要件 5.2 の表のとおりに写す。ワイルドカードの腕を置かないので、種類が増えるとビルドが止まる。`UnsupportedType` は欄 `found` が `None` なら `InvalidType`、`Some` なら `Unsupported`。
 - 複数の値は byte 値 1（`'\u{1}'`）で繋ぐ。並びは `InstallOutcome.installed` の順（本体が先・同梱バルーンが後）。
 - `complete_legacy_refs`: Reference0＝先頭の物の識別子、Reference1＝`install.txt` の `name`、Reference2＝同梱バルーンの名前（無ければ空）。
@@ -738,6 +750,7 @@ pub(crate) fn run_order(order: &InstallOrder, ports: &mut dyn InstallPorts) -> V
 - 利用条件の画面はこのスレッドで `alert::ask_yes_no` を呼ぶ。
 - `install_elsewhere` はこのスレッドで `archive.install` を呼ぶ。書庫を扱い始めるときに `gate.begin(書庫のパス)`、呼ぶ前に `gate.enter_write()`、戻ったら `gate.leave_write()`、書庫の終わりに `gate.end()`。`enter_write` が偽（終了が始まっている）なら入らずに `None` を返す。
 - 依頼が終わったら `desk` へ終わりを知らせる（次の依頼を受け取れる）。
+- Validation: `worker_tests.rs` が本物の口の判断を固定する（Testing Strategy「背景スレッドの口」）。
 
 #### desk（`install/desk.rs`）
 
@@ -769,13 +782,13 @@ pub(crate) fn discard_for_exit(world: &mut World);
 ##### State Management
 - 取り出しの系が毎 tick 行うこと: ⑴ 生の要求を `submit` へ ⑵ worker の頼みを捌く ⑶ 手元のイベントの頼みを、条件を満たせば送る ⑷ worker が空いていれば次の依頼を渡す ⑸ 預かった書庫の段を進める。
 - イベントを送る条件: 切替の予約（`SwitchInFlight`）が無い・終了が始まっていない・置き場のゴーストに kanade への送出端がある。送り直しの頼みは、前に送った後に定常到達が届いているときだけ送る。
-- 預かった書庫の段: 預かった → 切替を頼んだ → 展開した（結果つき）。「切替を頼んだ」のまま予約が消えていたら「預かった」へ戻し、次の定常到達で頼み直す。「展開した」は定常到達で worker へ結果を返して消す。
+- 預かった書庫の段（中身は `install/overwrite.rs`。`desk.rs` は 1,000 行の上限から離すために段を持たず、公開の口 `run_overwrite_between`・`on_steady` から呼ぶだけ）: 預かった → 切替を頼んだ → 展開した（結果つき）。切替の入口の判定ごとの扱いは「System Flows／起動中のゴーストへ入れる一周」の表のとおり。「切替を頼んだ」のまま予約が消えていたら「預かった」へ戻し、次の定常到達で頼み直す。「展開した」は定常到達で worker へ結果を返して消す。
 - 入れた後の記録: `ghost` なら `record_last_installed`。`balloon` だけなら今のゴーストの記憶の書き手へ `persist_put(PersistScope::Ghost, [(PersistKey::LastBalloon, フォルダ名)])`。置換語は `names::update`。最後に `publisher.barrier()` を待ってから worker へ返す。
 - 終了が始まった後は、届いた頼みの返信端をそのまま落とす（worker は `Closed` を受ける）。
 
 **Implementation Notes**
 - Integration: `run_overwrite_between` は展開の所要 ms を `info!(event = "install_overwrite_done", ms, ok)` に残す。根は起動の文脈（`BootContext.root`）から取る。
-- Validation: `desk_overwrite_tests.rs` は既存の `SwitchRig`（`emo2_boot/ghost_switch_test_support.rs`）の上で、偽の SHIORI に届いた呼び出しの列を突き合わせる。
+- Validation: `desk_overwrite_tests.rs` は既存の `SwitchRig`（`emo2_boot/ghost_switch_test_support.rs`）の上で、本物の kanade と偽の SHIORI を使い、偽の SHIORI に届いた呼び出しの列を突き合わせる。口は本物（`DeskPorts`）を通す。
 - Risks: 展開の間 UI スレッドが止まる（窓は 0 枚）。Open Questions / Risks の 1。
 
 #### names（`install/names.rs`）
@@ -801,6 +814,7 @@ pub(crate) fn pick_archive() -> Result<Option<PathBuf>, PickError>;
 ```
 - `GetOpenFileNameW`。フィルタは「書庫（*.nar;*.zip）」と「すべてのファイル」。旗は `OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR | OFN_EXPLORER`。選べるのは 1 つ。
 - 呼ぶスレッド `install-pick` は、呼ぶ前に COM を単一スレッドの形で初期化し、戻ったら解放する。
+- `AREKA_NO_ALERT` で抑止されているときは画面を出さず、`warn!(event = "install_pick_suppressed")` を 1 件残して取り消しと同じに扱う（自動の実走で画面が残らない）。判定は `desk::pick_and_submit` がスレッドを起こす前に `alert::suppressed()` で行う。
 - 取り消しは `info!(event = "install_pick_cancelled")`。画面を出せなかったら `error!(event = "install_pick_failed")`。どちらもイベントは 0 件。
 
 ### areka / 終了
@@ -838,7 +852,8 @@ impl ClosingWaits {
 ```
 - `begin_close` の記録: 書いていない仕事が在れば `warn!(event = "exit_wait_abandoned", name, label)`（`label` は途中でやめた書庫のパス）。書いている最中なら待ちへ回す。
 - `wait` の記録: 間に合えば `info!(event = "exit_wait_done", ms)`。上限に達したら `warn!(event = "exit_wait_timeout", label, "元の中身が <根>/.nar-work/ の下に残っているかもしれない")`。
-- 呼び手: `main.rs` の `fn main`（`run()` が戻った直後に `begin_close`）と後始末の閉包（降ろした後に `wait`・出発点は `begin_close` の時点・上限は `EXIT_WAIT_LIMIT`）。`session_end.rs` の `end_session_within`（`shutdown_within` の後に、同じ `started` と `limit` で `wait`）。
+- 呼び手: `main.rs` の `fn main`（`run()` が戻った直後に `begin_close`）と後始末の閉包（降ろして印の始末を済ませた後・告知の前に `wait`・出発点は `begin_close` の時点・上限は `EXIT_WAIT_LIMIT`）。`session_end.rs` の `end_session_within`（`shutdown_within` と印の始末の後に、同じ `started` と `limit` で `wait`）。
+- 待ちを印の始末の後に置く理由: 先に待つと、待っている間に Windows にプロセスを終わらされたとき起動中の印が残り、次の起動が「前回落ちた」扱いになる（要件 8.7 の趣旨に反する）。
 - 印の判定には何も渡さない。
 
 ### areka / 入口
@@ -936,16 +951,22 @@ impl ClosingWaits {
 - 待ち行列: 手続きの最中に届いた 2 件が届いた順に渡ること。
 - 送出の保留: 切替の予約が在る間は送らず、予約が下りた tick で送ること。送り直しの頼みは定常到達の後に送ること。
 - 起動中のゴーストへ入れる一周（偽の SHIORI・`SwitchRig`）: `OnGhostChanging` も `OnClose` も 0 件／降ろした後に宛先の中身が替わる／同じゴーストが起きる／定常到達の後に結果が返る（11.7）。
+- 切替の入口の判定 4 値: `Busy` は予約が下りた後に頼み直して一周する／`NotFound`・`NoContext` は `warn!(install_overwrite_unavailable)` が 1 件で書庫が worker へ返り、締めの知らせが 1 つ出る（手続きが止まらない）／別のゴーストへの切替の最中は `run_overwrite_between` が展開しない。
 - 展開が失敗する場合: 宛先の中のファイルを開いたまま走らせ、確定が失敗して元の中身で起き直ること。このとき `areka-nar` の失敗の記録の作業フォルダの欄が空でないこと（11.7）。
 - 終了: 待っている依頼が捨てられて件数とパスが `warn!` に出ること／終了の後に届いたイベントの頼みが送られないこと（kanade に 0 件）。
-- メニュー: 起こし直した後も「インストール」枠が登記されていること／選ぶ画面が出ている間は選べないこと。
+- メニュー: 起こし直した後も「インストール」枠が登記されていること／選ぶ画面が出ている間は選べないこと／抑止のときは選ぶ画面のスレッドが起きず `warn!(install_pick_suppressed)` が 1 件でイベントが 0 件であること。
+
+### 背景スレッドの口（`worker_tests.rs`）
+- 写し: `RaiseOutcome` の 5 値と返信端の切断を 1 つずつ本物の口へ渡し、`NotSteady` は送り直しの頼み・`Script` は `Raised::Script`・`NoReply` と `NotAllowed` は `Raised::NoReply`・`Failed` と切断は `Raised::Closed` になること。
+- 門: 門が閉じていれば、本物の口の `install_elsewhere` は宛先に 1 バイトも書かずに `None` を返すこと。
+- 本番の道筋（窓口 → kanade → 背景スレッド → 手続き）: `SwitchRig` の上で本物の口を通し、偽の SHIORI に届く列が「`OnInstallCompleteEx` に 204 → 続けて `OnInstallComplete` が 1 件」「`OnInstallCompleteEx` に台本 → `OnInstallComplete` が 0 件」になること（11.5）。待ちは返信端と受信端の受け取りで揃え、実時間の待ちに依らない。
 
 ### 終了（`exit_wait_tests.rs`）
 - 書いていない仕事は待たない（`wait` が直ちに戻る）。
 - 書いている最中の仕事は、書き終わりの合図で戻る（別スレッドが合図を受けて `leave_write` を呼ぶ）。
 - 出発点を過去に置いた `WaitBudget`（残り 0）では、直ちに戻って `warn!(exit_wait_timeout)` が 1 件。
 - OS の終了の形: ゴーストを降ろす待ちと同じ `started` を渡し、合計が上限を超えないこと（11.8）。
-- 門が閉じた後は `begin` と `enter_write` が偽を返すこと。本物の口の `install_elsewhere` は、門が閉じていれば宛先に 1 バイトも書かずに `None` を返すこと。
+- 門が閉じた後は `begin` と `enter_write` が偽を返すこと（`install/` の口を通す判定は `worker_tests.rs` に置く。`exit_wait.rs` は `install/` を知らない）。
 
 ### 規律（11.10）
 既存のテストは消さない。数の判定（許可表 13 → 21・消費者台帳の行・語彙表の実装済みの名前の一覧）は新しい値へ書き換える。
@@ -954,7 +975,7 @@ impl ClosingWaits {
 `RUST_LOG` は `info,areka=debug,kanade=trace` を基準にし、イベントの送出（`shiori_request`）と `install_*` が見える所まで開ける。検体は絶対パスの短い場所へ置く。
 1. メニュー「インストール…」からゴーストの `.nar` を入れる → `install_done` → 表示中のゴーストのまま → メニューの「ゴースト」枠に出る → 選ぶと切り替わる。
 2. `\![change,ghost,lastinstalled]` で切り替わる（`ghost_switch_resolved name=lastinstalled`・`ghost_switch_done`）。
-3. 起動中のゴーストの `.nar` をメニューから入れる → 引っ込んで戻る（`install_overwrite_done` の ms を記録する）。
+3. 起動中のゴーストの `.nar` をメニューから入れる → 引っ込んで戻る（`install_overwrite_done` の ms を記録する）。**この項目だけは最後まで待たず、`switch_to` に呼び出しを入れたタスクの直後に 1 回先に通す**（降ろした後にゴーストのフォルダを付け替えられるかは、本番の SHIORI が 32bit の補助プロセスなので偽の SHIORI のテストでは分からない。付け替えられなければ要件 7 の一周が毎回「失敗して元の中身で戻る」になるので、早く知る）。
 4. 利用条件の画面で「はい」「いいえ」を手で押す。画面が前面に出るかも記録する。
 
 ## Security & Performance
@@ -972,18 +993,18 @@ impl ClosingWaits {
 | 判断（照合・宛先・失敗理由の表・Reference・台本の引数） | 1.5〜2 |
 | 利用条件（探す・復号・切る・はい／いいえ） | 1〜1.5 |
 | 手続き（書庫 1 本・依頼 1 件）とテスト | 2 |
-| 窓口と背景スレッド（受付・待ち行列・送出の保留） | 2 |
+| 窓口と背景スレッド（受付・待ち行列・送出の保留・本物の口のテスト） | 2〜2.5 |
 | 台本の受け口と消費者台帳 | 1 |
 | メニューの登記とファイルを選ぶ画面 | 1〜1.5 |
-| 起動中のゴーストへ入れる一周と失敗の場合 | 2 |
+| 起動中のゴーストへ入れる一周と失敗の場合（切替の入口の判定 4 値を含む） | 2〜2.5 |
 | 入れた後の記録（受け皿・バルーンの記憶） | 0.5 |
 | 置換語 2 つ | 0.5〜1 |
 | 終了で待つ口と 2 か所の呼び出し | 1〜1.5 |
 | 台帳・生成物・README・§8 | 1 |
 | 実機確認 | 1 |
-| **合計** | **17.5〜20.5** |
+| **合計** | **17.5〜21.5** |
 
-- 中央は 19 で、上限 20 に収まる見込み。ただし余裕は無く、上振れすると 0.5 超える。
+- 中央は 19.5 で、上限 20 に収まる見込み。ただし余裕は無く、上振れすると 1.5 超える（設計レビューの指摘 1・3 で足したテストの分を上端に入れた）。実機でしか分からない 3 点（Open Questions / Risks の 1〜3）が外れたときの手戻りは、この数に入っていない。
 - 要件の段の見立て（16〜22）から幅が縮んだ理由: 起動中のゴーストへ入れる形を「間を空けない」にして `switch_to` を割らずに済んだ／UI 側に定常の旗を持たない／応えの有無を返す道が殻の 1 か所で済む。
 - **範囲は黙って削っていない。** 上限を確実に守るために切るなら、候補は要件 12.16 のとおり次の 2 つで、切るかどうかは開発者が決める。
   - 置換語 2 つ（要件 6.8・6.9）: −0.5〜1。切ると `%lastghostname` が今日どおり台詞にそのまま出る。`install/names.rs` と `boot_wired` の 1 行・語彙表の 2 行が丸ごと外れる。
@@ -997,3 +1018,4 @@ impl ClosingWaits {
 3. **ファイルを選ぶ画面と利用条件の画面が前面に出るか。** 持ち主の窓を渡さない別スレッドの画面なので、実機で確かめる。出なければ `IFileOpenDialog` へ替えるか、旗を見直す。
 4. **台詞の置き換え。** 展開が速いと、始まりの知らせの返事が終わりの知らせの返事に置き換わって見えない。起こし直した直後の挨拶も同じ。設計で決めたこと 6 のとおり受け入れ、§8 に記す。
 5. **起こし直した最初の台詞の中の置換語。** 載せ直しは起こした直後に投函するが、最初の台詞（`OnGhostChanged` の返事）の凍結に間に合う保証は無い。締めの知らせの返事では、記録の反映を待ってから送るので必ず置き換わる。
+6. **降ろした直後の起動中の印の名前。** `switch_to` は切替の予約の切替先の名前（上書きの前に読んだ値）で印を書く。上書きで `descript.txt` の `name` が変わる書庫では、定常到達で書き直されるまで古い名前が残る。その間にプロセスが落ちたときだけ、次の起動の Reference7 が古い名前になる。手当ては入れない。
