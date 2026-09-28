@@ -235,7 +235,7 @@ wintf 側で `request_exit` を呼ぶのは `WinApp::wire_shutdown_hook`（`crat
 
 ### 7.2 設計で新しく分かったこと
 
-- **説明文と注釈の字面の制約。** `frame.rs` を `include_str!` で読む並びの検査 4 本のうち、`frame_work_area_sync_tests.rs` と `frame_work_area_resnap_tests.rs` は説明文を落とさずに素の全文から最初に現れる字面を探す。探す字面は `work_area_sync::sync_monitor_snapshot(world)`・`run_dpi_phase(&mut wiring, world)`・`work_area_sync::resnap_for_work_area_change(`・`reconcile_reported_sizes(&mut wiring.presenter, world)`。本件で足す説明文と注釈は、実際の呼び出しより前に置かれるので、これらの字面をそのまま書くと検査が別の位置を拾う。関数は名前だけで指す。
+- **説明文と注釈の字面の制約。** `frame.rs` を `include_str!` で読む検査 4 本（相の並びを見るのは 3 本。`frame_harness_tests.rs` は接続宣言の直前の属性を見る）のうち、`frame_work_area_sync_tests.rs` と `frame_work_area_resnap_tests.rs` は説明文を落とさずに素の全文から最初に現れる字面を探す。探す字面は `work_area_sync::sync_monitor_snapshot(world)`・`run_dpi_phase(&mut wiring, world)`・`work_area_sync::resnap_for_work_area_change(`・`reconcile_reported_sizes(&mut wiring.presenter, world)`。本件で足す説明文と注釈は、実際の呼び出しより前に置かれるので、これらの字面をそのまま書くと検査が別の位置を拾う。関数は名前だけで指す。
 - `zorder_wiring_tests.rs` は `pub fn emo2_frame_system(world: &mut World) {` の行と、説明文の「donor パターン: remove→各フェーズ→insert」の字面の存在を確かめている。どちらも変えない。
 
 ### 7.3 設計の決定（6 節の「設計で決める項目」への答え）
@@ -281,5 +281,5 @@ wintf 側で `request_exit` を呼ぶのは `WinApp::wire_shutdown_hook`（`crat
 |---|---|
 | 将来、窓を消さずに終了を指示する経路が増える | 判定の前提が崩れる。design の Revalidation Triggers に挙げた |
 | 対照の側で、素の World のほかの相が ERROR を出す | 対照は `apply(Hide)` を含む ERROR だけを数える |
-| 新しい説明文が既存の並びの検査の字面に当たる | 7.2 の字面を書かない。`cargo test -p areka` で 4 本の検査が緑であることを確かめる |
+| 新しい説明文が `frame.rs` を読む既存の検査の字面に当たる | 7.2 の字面を書かない。`cargo test -p areka` で 4 本の検査が緑であることを確かめる |
 | 変異を戻した後に古い成果物で緑に見える | 戻したファイルの更新時刻を新しくしてから回し直す |

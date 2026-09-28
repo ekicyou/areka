@@ -74,7 +74,7 @@
 - `wintf::AppExit` は `Rc` を持つ NonSend 資源で、`is_requested()` は `bool` を返す。受け口が World に無い構成（既存のテストの多く）では `get_non_send` が `None` を返す
 - 素の World（モニタ 0 台）で作業領域の同期を回すと、`sync_monitor_snapshot_with` が「モニタ表が空（列挙異常）」の WARN を 1 件出す
 - 未登録の対象への `Hide` は `EmoPresenter` の `apply_hide`（`crates/areka-emo-present/src/presenter/hub.rs`）が `error!(?target_id, "apply(Hide): 未装着ターゲット")` を 1 件出す。`reply: None` でも出る
-- `frame.rs` の本文を `include_str!` で読む並びの検査が 4 本ある（`zorder_wiring_tests.rs`・`frame_work_area_sync_tests.rs`・`frame_work_area_resnap_tests.rs`・`frame_harness_tests.rs`）。うち 2 本は説明文を含む素の全文に対して最初に現れる字面を探す
+- `frame.rs` の本文を `include_str!` で読む検査が 4 本ある。相の並びを見るのは 3 本（`zorder_wiring_tests.rs`・`frame_work_area_sync_tests.rs`・`frame_work_area_resnap_tests.rs`）で、うち後ろの 2 本は説明文を含む素の全文に対して最初に現れる字面を探す。残る 1 本（`frame_harness_tests.rs`）は並びではなく、`#[path = "frame_harness_tests.rs"]` の直前の属性が x64 限定であることを見る
 
 ### Architecture Pattern & Boundary Map
 
@@ -109,11 +109,11 @@ LogSink の起動（`Emo2Wiring` が無い構成）でも、終了が指示さ�
 
 #### D3 の補足: 位置の固定
 
-判定の位置がずれる退行は、3.1 のテストの既存の 3 つの確認がそのまま捕まえる。
+判定の位置がずれる退行は、3.1 と 3.2 のテストの確認がそのまま捕まえる。
 
 | 退行 | 赤になる確認 |
 |---|---|
-| 判定を外す | ERROR 0 件（`Hide` が適用されて 1 件になる）・記録 1 件（0 件になる）・受信端に 1 件残る（0 件になる） |
+| 判定を外す | ERROR 0 件（`Hide` が適用されて 1 件になる）・WARN 0 件（「モニタ表が空」の WARN が 1 件出る）・記録 1 件（0 件になる）・受信端に 1 件残る（0 件になる） |
 | 判定が常に真 | 3.2 の対照（適用の ERROR が 0 件になる・記録が 1 件出る・受信端に 1 件残る） |
 | 判定を作業領域の同期より後ろへ動かす | WARN 0 件（「モニタ表が空」の WARN が 1 件出る） |
 | 判定を `remove_non_send` より後ろへ動かし、戻さずに戻る | 結線が World に残ること |
@@ -270,7 +270,8 @@ pub fn emo2_frame_system(world: &mut World)
 
 **Implementation Notes**
 
-- Integration: 既存の 4 本の並びの検査のうち 2 本（`frame_work_area_sync_tests.rs`・`frame_work_area_resnap_tests.rs`）は、説明文を含む素の全文から最初に現れる字面を探す。新しく書く説明文と注釈には、次の字面を**そのままの形で書かない**（関数は名前だけで指す）: `work_area_sync::sync_monitor_snapshot(world)`・`run_dpi_phase(&mut wiring, world)`・`work_area_sync::resnap_for_work_area_change(`・`reconcile_reported_sizes(&mut wiring.presenter, world)`
+- Integration: 新しいテストの接続宣言は `drain_text_tests` の並びに置く。x64 限定の属性と `#[path = "frame_harness_tests.rs"]` の間には何も挟まない（`frame_harness_tests.rs` の `the_harness_tests_are_connected_under_an_x64_only_gate` が直前の属性を見ている）
+- Integration: `frame.rs` を読む既存の検査のうち 2 本（`frame_work_area_sync_tests.rs`・`frame_work_area_resnap_tests.rs`）は、説明文を含む素の全文から最初に現れる字面を探す。新しく書く説明文と注釈には、次の字面を**そのままの形で書かない**（関数は名前だけで指す）: `work_area_sync::sync_monitor_snapshot(world)`・`run_dpi_phase(&mut wiring, world)`・`work_area_sync::resnap_for_work_area_change(`・`reconcile_reported_sizes(&mut wiring.presenter, world)`
 - Integration: `zorder_wiring_tests.rs` は `pub fn emo2_frame_system(world: &mut World) {` の行と、説明文の「donor パターン: remove→各フェーズ→insert」の字面が在ることを確かめている。どちらも変えない
 - Validation: 下の Testing Strategy
 - Risks: 判定の前提（指示済みならゴースト窓は無い）は `quit_app` の構造に依る。崩れる変更は Revalidation Triggers に挙げた
@@ -343,6 +344,7 @@ pub fn emo2_frame_system(world: &mut World)
 
 - テスト 2 と 3 は確かめる項目が同じなので、1 つの関数で 2 つの組み立てを順に回す形でよい
 - テスト 2・3 では WARN の件数と ERROR の総数を確かめない（D6）
+- `attached = true` のまま素の World で全相を回す既存のテストは 0 本である。実装時に 1 度、テスト 2 で捕捉した行を全部読み、`apply(Hide)` の ERROR 1 件と「モニタ表が空」の WARN 1 件のほかに行が出ていたら `signoff.md` に書き留める（本件の合否には使わない）
 - 確かめないもの（新しいテスト 0 本）:
   - 終了の出所ごとの組み合わせ。判定は出所を読まず、本番の終了の指示が `quit_app` の 1 か所であることは既存の構造である
   - 切替の経路。判定の式から決まる。`close_windows_for_restart` が終了を指示しないことは、`app_exit_tests.rs` の既存のテスト `close_windows_for_restart_closes_all_windows_without_requesting_exit` が確かめている
@@ -359,7 +361,7 @@ pub fn emo2_frame_system(world: &mut World)
 
 ### 実行の手順
 
-1. `cargo test -p areka -j 4`（本件のテストと、`emo2_frame_system` を呼ぶ既存のテスト・並びの検査 4 本を含む）— 失敗 **0 件**
+1. `cargo test -p areka -j 4`（本件のテストと、`emo2_frame_system` を呼ぶ既存のテスト・`frame.rs` を読む検査 4 本を含む）— 失敗 **0 件**
 2. `cargo test -p log-capture-kit`（1 ファイル 1,000 行の検査）— 失敗 **0 件**（3.5）
 3. ワークスペース全体の 1 回は完了の手順（`tools/test-all.ps1`）が担う
 
