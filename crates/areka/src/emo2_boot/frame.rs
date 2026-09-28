@@ -270,6 +270,15 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 /// （`PostLayout`）・面の生成（`PreRenderSurface`）・描画（`RenderSurface`）に拾わせるため
 /// である（裁定 2026-09-12・要件 2.4。末尾の段に載せると絵の着地が次の巡へずれる）。
 pub fn emo2_frame_system(world: &mut World) {
+    // 終了が指示済みの巡は結線を取り出さず、作業領域の同期も含めて何もしない（受け口は読むだけ・
+    // 無ければ未指示）。窓は閉じる途中で、相を走らせても閉じる窓を描き直すだけである。
+    if world.get_non_send::<wintf::AppExit>().is_some_and(|e| e.is_requested()) {
+        debug!(
+            event = "frame_phases_skipped_after_exit",
+            "終了が指示済み——毎フレームの処理を読み飛ばす"
+        );
+        return;
+    }
     // Emo2Wiring 未挿入（wire_emo2_boot=task 5.1 前・LogSink フォールバック boot 経路）なら no-op。
     let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
         return;
