@@ -50,7 +50,7 @@ pub(crate) struct InstallDesk {
     /// 背景のスレッドへの依頼の送出端（最初の依頼で 1 度だけ起こす）。
     worker: Option<Sender<InstallOrder>>,
     /// 背景のスレッドが依頼を扱っている最中か。
-    busy: bool,
+    pub(super) busy: bool,
     /// 背景のスレッドの頼みの送出端（スレッドへ渡す）と、その受信端。
     asks_tx: Sender<DeskAsk>,
     asks_rx: Receiver<DeskAsk>,

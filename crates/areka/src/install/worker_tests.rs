@@ -1,9 +1,14 @@
-//! 背景のスレッドの口の決定論テスト（design「Testing Strategy / 背景スレッドの口」・要件 1.11・8.4）。
+//! 背景のスレッドの口の決定論テスト（design「Testing Strategy / 背景スレッドの口」・要件 1.11・8.4・
+//! 本番の道筋は要件 2.6・2.7・6.2・11.5）。
 //!
 //! 窓口の代わりに素の受信端で頼みを受けて答える。確かめること: kanade の結果 5 値と返信端の
 //! 切断の写し（「定常でない」は送り直しの印つきで 2 回目の頼みが来る）・窓口が居ないときの
 //! 閉じた扱い・門が閉じていれば宛先に 1 バイトも書かずに「入らなかった」・スレッドが依頼を
 //! 1 件走らせて終わりを知らせる。
+//!
+//! 本番の道筋は、切替の土台（[`SwitchRig`]）の上で本物の窓口・kanade・背景のスレッド・口を通し、
+//! 締めの知らせの列（`OnInstallCompleteEx` の応えで旧仕様へ続くか）と切替の要求が 0 件であることを
+//! 偽の SHIORI に届いた列で確かめる。
 //!
 //! 実時間の待ちに依らない: 口は返信端の受け取りで、窓口の代わりは受信端の受け取りで揃える。
 
@@ -20,8 +25,12 @@ use sample_ghost_kit::{NarBuilder, install_txt};
 use temp_path_kit::TempPath;
 
 use super::*;
+use crate::emo2_boot::ghost_switch::{LastInstalledGhost, SwitchInFlight};
+use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::emo2_boot::spine::RecordedCall;
 use crate::exit_wait::{begin_close, register_gate};
-use crate::install::InstallOrigin;
+use crate::install::desk::InstallDesk;
+use crate::install::{InstallOrigin, SubmitVerdict, submit};
 
 // ---------------------------------------------------------------- 道具立て
 
@@ -430,4 +439,88 @@ fn overwrite_ran_releases_the_gate() {
         events_named(&events, "exit_wait_abandoned").is_empty(),
         "{events:?}"
     );
+}
+
+// ---------------------------------------------------------------- 本番の道筋
+
+/// 本番の道筋（受付 → 窓口の取り出しの系 → 背景のスレッド → 手続き → 本物の口 → 窓口 → kanade →
+/// 偽の SHIORI）で、よそへ入れるゴーストの書庫 1 本を入れる。`complete_ex` は
+/// `OnInstallCompleteEx` の応え（None は 204）。起こした後に偽の SHIORI へ届いた呼び出しの名前の列・
+/// 切替の要求が出たか（予約が一度でも在った・`ghost_switch_requested` の記録）・受け皿を返す。
+///
+/// 依頼の終わりは窓口が背景のスレッドから終わりの知らせを受けたこと（待っている依頼が無く、
+/// 扱っている最中でもない）で揃える。kanade は返事を往復の後に送るので、そのとき列は出そろっている。
+fn install_through_production_path(
+    complete_ex: Option<&'static str>,
+) -> (Vec<String>, bool, Option<String>) {
+    let mut rig = SwitchRig::new(vec![(
+        "A",
+        FakeShiori::Scripted(Box::new(move || {
+            standard_script(r"\0A\e")
+                .get("OnInstallBegin", Ok(None))
+                .get("OnInstallCompleteEx", Ok(complete_ex.map(str::to_owned)))
+                .get("OnInstallComplete", Ok(None))
+        })),
+    )]);
+    rig.boot("A");
+    assert!(rig.wait_steady(), "A が定常に着く");
+    let booted = rig.calls("A")[0].len();
+
+    let dir = TempPath::new("install-worker-e2e");
+    let (path, _) = ghost_archive(&dir);
+    let order = InstallOrder {
+        archives: vec![path],
+        origin: InstallOrigin::Menu,
+    };
+    assert_eq!(submit(&mut rig.world, order), SubmitVerdict::Queued);
+
+    // 切替の予約が在る間は窓口がイベントを送らず依頼が終わらないので、予約を見たらそこで止める。
+    let mut reserved = false;
+    let (finished, events) = capture(|| {
+        rig.pump_input_until(|rig| {
+            reserved |= rig.world.get_non_send::<SwitchInFlight>().is_some();
+            let desk = rig.world.non_send::<InstallDesk>();
+            reserved || (desk.queue.is_empty() && !desk.busy)
+        })
+    });
+    assert!(finished, "依頼が終わる（期限切れ）: {events:?}");
+
+    let boots = rig.calls("A");
+    assert_eq!(boots.len(), 1, "A を起こし直さない");
+    let calls = boots[0][booted..]
+        .iter()
+        .map(|call| match call {
+            RecordedCall::Get { id, .. } | RecordedCall::Notify { id, .. } => id.clone(),
+            other => format!("{other:?}"),
+        })
+        .collect();
+    let switched = reserved || !events_named(&events, "ghost_switch_requested").is_empty();
+    let last = rig
+        .world
+        .get_resource::<LastInstalledGhost>()
+        .map(|g| g.0.clone());
+    assert!(rig.shutdown());
+    (calls, switched, last)
+}
+
+/// `OnInstallCompleteEx` に返事が無ければ、続けて `OnInstallComplete` を 1 件送る。受け皿へは
+/// 書くが、切替は要求しない（要件 2.6・2.7・6.2・11.5）。
+#[test]
+fn production_path_follows_a_silent_complete_ex_with_the_legacy_complete() {
+    let (calls, switched, last) = install_through_production_path(None);
+    assert!(!switched, "切替を要求しない");
+    assert_eq!(
+        calls,
+        ["OnInstallBegin", "OnInstallCompleteEx", "OnInstallComplete"]
+    );
+    assert_eq!(last.as_deref(), Some("newbie"));
+}
+
+/// `OnInstallCompleteEx` に台本が返れば、`OnInstallComplete` は送らない。切替も要求しない。
+#[test]
+fn production_path_sends_no_legacy_complete_after_a_complete_ex_script() {
+    let (calls, switched, last) = install_through_production_path(Some(r"\0入れたよ\e"));
+    assert!(!switched, "切替を要求しない");
+    assert_eq!(calls, ["OnInstallBegin", "OnInstallCompleteEx"]);
+    assert_eq!(last.as_deref(), Some("newbie"));
 }
