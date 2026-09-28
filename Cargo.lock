@@ -99,6 +99,7 @@ dependencies = [
  "areka-emo-text",
  "areka-ghost",
  "areka-kanade",
+ "areka-nar",
  "areka-parsers",
  "areka-sakura",
  "areka-seriko",
