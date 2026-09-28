@@ -48,3 +48,7 @@
   - 0 件を書く前に、数える語が同じログの別の行に当たることを確かめる
   - 完了の状態: `signoff.md` に ERROR 0 件・`app_exit` より後の「装着が未完了」の WARN 0 件・`origin=KanadeStopped(Quit)` 1 件・`session_mark_cleared` 1 件・終了コード 0・`frame_phases_skipped_after_exit` 1 件が書かれている
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
+
+## Implementation Notes
+
+- タスクごとの検証（`cargo test -p areka`）は整形を見ない。1.1 で足した判定の式が rustfmt の折り方と違い、最終検証の `tools/test-all.ps1` の fmt の段で初めて赤になった（`18711aa2` で整形）。実装とレビューの検証に `cargo fmt --all --check` を入れる。
