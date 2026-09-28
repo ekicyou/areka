@@ -52,3 +52,4 @@
 ## Implementation Notes
 
 - タスクごとの検証（`cargo test -p areka`）は整形を見ない。1.1 で足した判定の式が rustfmt の折り方と違い、最終検証の `tools/test-all.ps1` の fmt の段で初めて赤になった（`18711aa2` で整形）。実装とレビューの検証に `cargo fmt --all --check` を入れる。
+- 完了時にその場で解決: 上の知見を `.claude/skills/kiro-impl/SKILL.md` の Preflight「Discover validation commands」に 1 行足した（全体テストのスクリプトに整形の段があれば、その確認を実装とレビューの TEST_COMMANDS に入れる）。

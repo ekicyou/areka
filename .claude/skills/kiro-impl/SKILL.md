@@ -64,6 +64,7 @@ After all parallel research completes, synthesize implementation brief before st
 - Inspect repository-local sources of truth in this order: project scripts/manifests (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, app manifests), task runners (`Makefile`, `justfile`), CI/workflow files, existing e2e/integration configs, then `README*`
 - Derive a canonical validation set for this repo: `TEST_COMMANDS`, `BUILD_COMMANDS`, and `SMOKE_COMMANDS`
 - Prefer commands already used by repo automation over ad hoc shell pipelines
+- If the repo's full-suite script has a format stage (areka: `tools/test-all.ps1` runs `cargo fmt --all -- --check`), add that format check to the `TEST_COMMANDS` given to implementers and reviewers. Crate-level tests do not check formatting, so a misformatted line otherwise first turns red in the final validation (areka-P0-frame-phases-after-exit, 2026-09-28)
 - For `SMOKE_COMMANDS`, choose the lightest trustworthy runtime-liveness check for the app shape (for example: root URL load, Electron launch, CLI `--help`, service health endpoint, mobile simulator/e2e harness if one already exists)
 - Keep the full command set in the parent context, and pass only the task-relevant subset to implementer and reviewer subagents
 
