@@ -34,7 +34,7 @@
 - 読み飛ばしの記録 `frame_phases_skipped_after_exit` の名前・水準・欄
 - `run_ghost_quit_phase` と `emo2_frame_system` の説明文のうち、判定の場所を述べる部分
 - 決定論テスト `crates/areka/src/emo2_boot/frame_exit_gate_tests.rs`（新規）
-- 実機の確認の記録 `.kiro/specs/areka-P0-frame-phases-after-exit/signoff.md`（新規）
+- 実機の確認の記録 `.kiro/specs/completed/areka-P0-frame-phases-after-exit/signoff.md`（新規）
 
 ### Out of Boundary
 
@@ -138,7 +138,7 @@ crates/areka/src/emo2_boot/
 ├── frame.rs                      # 変更: 入口の判定・説明文 2 か所・新しいテストの接続宣言
 └── frame_exit_gate_tests.rs      # 新規: 終了指示の有無による分岐の決定論テスト
 
-.kiro/specs/areka-P0-frame-phases-after-exit/
+.kiro/specs/completed/areka-P0-frame-phases-after-exit/
 └── signoff.md                    # 新規: 変異の確認の記録と、実機の確認の記録
 ```
 
@@ -153,7 +153,7 @@ crates/areka/src/emo2_boot/
 ### New Files
 
 - `crates/areka/src/emo2_boot/frame_exit_gate_tests.rs`（見込み 100〜150 行）— 終了指示の有無による分岐のテスト。補助は既存のものだけを使い、記録を数える絞り込みはこのファイルの中に閉じる
-- `.kiro/specs/areka-P0-frame-phases-after-exit/signoff.md` — 変異の確認（3.3）と実機の確認（4.1〜4.4）の記録
+- `.kiro/specs/completed/areka-P0-frame-phases-after-exit/signoff.md` — 変異の確認（3.3）と実機の確認（4.1〜4.4）の記録
 
 ### 触らないファイル
 
