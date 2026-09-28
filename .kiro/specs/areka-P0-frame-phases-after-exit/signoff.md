@@ -87,11 +87,11 @@
 ## 実機の確認（タスク 3.1）
 
 - 日時: 2026-09-28 20:24〜20:25 JST（ログの時刻は UTC で 11:24:06〜11:24:46）
-- HEAD: `740adf98`。実行体は `cargo build -p areka -j 4` を HEAD で通した `target\debugreka.exe`（x64 debug）の複製（sha256 が元と一致）。i686 の helper は `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` の成果物
-- 検体（短い絶対パスの根 `C:	mpreka-fpeoot\`・実行体を根の直下に置き `AREKA_ROOT` は外した）:
+- HEAD: `740adf98`。実行体は `cargo build -p areka -j 4` を HEAD で通した `target\debug\areka.exe`（x64 debug）の複製（sha256 が元と一致）。i686 の helper は `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` の成果物
+- 検体（短い絶対パスの根 `C:\tmp\areka-fpe\root\`・実行体を根の直下に置き `AREKA_ROOT` は外した）:
   - `ghost\emo2\`・`balloon\emo2-kakukaku\` … `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が配ったもの（`profile` は除いて複製）
   - `balloon\StayseeBalloon\` … `nar-sample-path -- StayseeBalloon` が配ったもの
-- 環境: `NO_COLOR=1`・`AREKA_PROFILE_DIR=C:	mpreka-fpe\prof1`（新しく作った空のフォルダ）・`AREKA_APP_SMOKE_EXIT_MS` は未設定（自動終了なし）・`RUST_LOG=info,kanade=trace,areka_kanade=trace,areka=debug,areka_emo_text=info,areka_emo_present=info,areka_ghost=debug,ghost-shutdown=debug,ghost-boot=debug,shiori-actor=trace,wintf::ecs::window_proc::lifecycle=debug`
+- 環境: `NO_COLOR=1`・`AREKA_PROFILE_DIR=C:\tmp\areka-fpe\prof1`（新しく作った空のフォルダ）・`AREKA_APP_SMOKE_EXIT_MS` は未設定（自動終了なし）・`RUST_LOG=info,kanade=trace,areka_kanade=trace,areka=debug,areka_emo_text=info,areka_emo_present=info,areka_ghost=debug,ghost-shutdown=debug,ghost-boot=debug,shiori-actor=trace,wintf::ecs::window_proc::lifecycle=debug`
 - 起動の前に開発者へ告げたこと: 画面には何も起きないのが正常であること。読み飛ばしの記録は指令の残りに関わらず毎回ちょうど 1 件出て、それが判定の働いた証拠であること
 - 手順: 起動 → SERIKO のループの記録（`seriko: bind 適用 … id=1400 on=true`・11:24:17）を確かめる → 開発者がメニューの「終了」を手で選んだ（`menu_shown` 11:24:40 → `menu_selected frame=Close id=3` 11:24:41）→ 挨拶の後に kanade の終了系列が完了して閉じた
 - 走行の後に `areka.exe`・`shiori-host32-helper.exe` がどちらも 0 件であることを `tasklist` で確かめた
@@ -120,7 +120,7 @@
 
 ### 0 件の語の較正
 
-- 水準の綴り: このログは `level=` 形式でなく、時刻の後に水準を空白で挟む形（`Z  INFO `・`Z  WARN `・`Z DEBUG `）。同じログで ` WARN ` は 3 件、` INFO ` は 189 件、` DEBUG ` は 1,022 件に当たる。` ERROR ` は、同じ形式の過去の areka のログ `C:\home\maz	mpbreakun0-boot.log` の `…Z ERROR areka_emo_compose: …` の行に当たることを確かめた
+- 水準の綴り: このログは `level=` 形式でなく、時刻の後に水準を空白で挟む形（`Z  INFO `・`Z  WARN `・`Z DEBUG `）。同じログで ` WARN ` は 3 件、` INFO ` は 189 件、` DEBUG ` は 1,022 件に当たる。` ERROR ` は、同じ形式の過去の areka のログ `C:\home\maz\tmp\bbreak\run0-boot.log` の `…Z ERROR areka_emo_compose: …` の行に当たることを確かめた
 - `装着が未完了`: 同じ語で `crates/areka-emo-present/src/mount.rs` の 4 行（`set_visible`・`set_layout`・`set_display` の `warn!` の文言）に当たることを確かめた（同じ UTF-8 の綴りで引ける）
 
 ### 判定
