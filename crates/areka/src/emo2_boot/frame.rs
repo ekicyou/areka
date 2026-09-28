@@ -169,8 +169,9 @@ pub(crate) struct KanadeNoticeRx(pub(crate) Receiver<KanadeNotice>);
 /// 終了相: kanade の運行の通知を取り出して 1 件ずつ捌く（R15.4・design D15 の 4・
 /// areka-P0-ghost-shell-balloon-switch design「NoticePhase」）。
 ///
-/// [`ghost_quit_system`] として毎フレームの相（[`emo2_frame_system`]）より前に走る。終了が
-/// 決まったフレームで他の相を走らせても、これから閉じる窓のために描き直すだけだからである。
+/// [`ghost_quit_system`] として毎フレームの相（[`emo2_frame_system`]）より前に走る。ここで終了が
+/// 指示されると全ゴースト窓はもう無く、同じ巡で続けて走る [`emo2_frame_system`] は入口の判定で
+/// 相を 1 つも回さずに戻る。他の相を止める判定は本関数ではなく [`emo2_frame_system`] の入口に在る。
 /// 返り値は「停止の通知を消化したか」。
 ///
 /// # 判断
@@ -261,6 +262,11 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 /// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
 /// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
 /// （`FrameTime`＋`TalkClock` で `talk_time` を解決）。
+///
+/// アプリの終了が指示済み（World の `wintf::AppExit` が指示済みを返す）の巡では、`Emo2Wiring` を
+/// 取り出すより前に判定し、作業領域の同期も含めて相を 1 つも回さずに戻る。記録は
+/// `debug!(event = "frame_phases_skipped_after_exit")` の 1 行。`wintf::AppExit` が World に無い構成は
+/// 未指示とみなす。
 ///
 /// `Emo2Wiring` 未挿入（`wire_emo2_boot`＝task 5.1 前・フォールバック boot 経路）なら早期 return の
 /// no-op（安全・panic しない）。schedule への登録
