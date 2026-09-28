@@ -79,7 +79,10 @@
 
 ## crate 単位のテストと行数の上限の検査（タスク 2.3）
 
-（タスク 2.3 で記入）
+- 日付: 2026-09-28・対象のコミット: `4194bfb8`
+- `cargo test -p areka -j 4`: 終了コード 0。単体 1974 passed・0 failed・2 ignored（新しいテスト 2 本を含む）、結合 1 passed・0 failed、4 passed・0 failed
+- `cargo test -p log-capture-kit`: 終了コード 0。失敗 0 件。単体 30 passed、`capture_calibration_test` 1 passed（2 ignored）、`file_length_guard_test`（1,000 行の上限の検査）6 passed、`sample_path_guard_test` 16 passed、`temp_path_guard_test` 16 passed、`with_default_guard_test` 24 passed、`workspace_scan_test` 20 passed、doc 4 passed
+- 新しいファイル `frame_exit_gate_tests.rs` は 141 行（上限 1,000 行未満）
 
 ## 実機の確認（タスク 3.1）
 
