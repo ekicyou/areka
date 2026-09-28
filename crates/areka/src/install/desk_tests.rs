@@ -397,7 +397,7 @@ fn facts_describe_the_running_ghost() {
 }
 
 /// 起動中のゴーストへの上書きの頼みは、8.1 まで書庫を返す（もう起動中のゴーストではない）。
-/// 入れた後の記録の頼みは直ちに答える（中身は 6.3）。
+/// 起動の文脈もゴーストも無くても、入れた後の記録の頼みには答える（中身は `desk_record_tests.rs`）。
 #[test]
 fn overwrite_returns_the_archive_and_record_answers() {
     let tmp = TempPath::new("desk-overwrite");

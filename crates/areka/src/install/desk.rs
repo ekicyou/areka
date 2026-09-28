@@ -4,7 +4,7 @@
 //! ゴーストを起こし直しても作り直さない。取り出しの系 [`drain`] が毎 tick ⑴ 入口（台本の受け口・
 //! 選ぶ画面のスレッド）からの生の要求を受付 [`submit`] へ流し ⑵ 背景のスレッドの頼み [`DeskAsk`] を
 //! 捌き ⑶ 手元のイベントの頼み（高々 1 件）を条件を満たせば送り ⑷ 背景のスレッドが空いていれば
-//! 次の依頼を渡す。
+//! 次の依頼を渡す。入れた後の記録（受け皿・バルーンの記憶・置換語）は反映を待ってから答える。
 //!
 //! イベントを送るのは、切替の予約が無い・終了が始まっていない・置き場のゴーストに kanade への
 //! 送出端がある tick で、送り先は送る時点の置き場のゴースト。定常かどうかの正本は kanade で、
@@ -16,15 +16,19 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, SendError, Sender};
 
 use areka_actor::ReplySender;
+use areka_ghost::catalog::{list_balloons, list_ghosts};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod};
+use areka_nar::InstallKind;
+use areka_sylphya::{PersistKey, PersistScope};
 use bevy_ecs::world::World;
 
 use super::judge::GhostFacts;
-use super::procedure::Overwritten;
+use super::names;
+use super::procedure::{InstalledRecord, Overwritten};
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, RawInstallRequest, submit};
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
+use crate::emo2_boot::ghost_switch::{SwitchInFlight, record_last_installed};
 use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
 
@@ -198,16 +202,92 @@ fn answer(world: &mut World, ask: DeskAsk) {
             );
             reply_to(reply, Overwritten::NotRunning(archive));
         }
-        // 受け皿・バルーンの記憶・置換語への反映は 6.3。
         DeskAsk::Record { record, reply } => {
             tracing::debug!(
                 event = "install_record_received",
                 record = ?record,
                 "[install] 入れた後の記録を受けました"
             );
+            record_installed(world, record);
             reply_to(reply, ());
         }
     }
+}
+
+/// 入れた後の記録（要件 6.1・6.6・6.7・6.8・設計で決めたこと 14）: `ghost` は受け皿へ、`balloon`
+/// だけなら今のゴーストの「最後に使ったバルーン」の記憶へフォルダ名を書き、シェル・追加ファイルは
+/// 置換語だけ（表示は替えない）。フォルダ名と名前は入れた後の目録の綴り（`areka-nar` の綴りと
+/// 大文字小文字を無視して突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
+/// 最後に今のゴーストの記憶の書き手の反映を待つ（背景のスレッドへ答えるのはその後）。
+fn record_installed(world: &mut World, record: InstalledRecord) {
+    let root = world
+        .get_resource::<BootContext>()
+        .map(|ctx| ctx.root.clone());
+    let ghosts = match (&root, record.kind) {
+        (Some(root), InstallKind::Ghost | InstallKind::Shell | InstallKind::Supplement) => {
+            list_ghosts(root)
+        }
+        _ => Vec::new(),
+    };
+    let ghost_entry = |folder: &str| {
+        ghosts
+            .iter()
+            .find(|entry| entry.identity.folder.eq_ignore_ascii_case(folder))
+    };
+    let ghost_name = record.ghost_folder.as_deref().map(|folder| {
+        match ghost_entry(folder).and_then(|entry| entry.identity.name.clone()) {
+            Some(name) => name,
+            None if record.kind == InstallKind::Ghost => record.object_name.clone(),
+            None => folder.to_owned(),
+        }
+    });
+    match record.kind {
+        InstallKind::Ghost => {
+            let folder = ghost_entry(&record.folder)
+                .map_or_else(|| record.folder.clone(), |e| e.identity.folder.clone());
+            record_last_installed(world, folder);
+        }
+        InstallKind::Balloon => {
+            let balloons = root.as_ref().map(list_balloons).unwrap_or_default();
+            let folder = balloons
+                .iter()
+                .find(|entry| entry.identity.folder.eq_ignore_ascii_case(&record.folder))
+                .map_or_else(|| record.folder.clone(), |e| e.identity.folder.clone());
+            remember_balloon(world, folder);
+        }
+        InstallKind::Shell | InstallKind::Supplement => {}
+    }
+    names::update(world, record.object_name, ghost_name);
+    if let Some(runtime) = names::current_runtime(world)
+        && let Err(err) = runtime.sylphya_publisher().barrier()
+    {
+        tracing::error!(
+            event = "install_record_unsettled",
+            error = %err,
+            "[install] 今のゴーストの記憶の書き手が止まっているので、入れた後の記録の反映を確かめられません"
+        );
+    }
+}
+
+/// 今のゴーストの「最後に使ったバルーン」の記憶を書き換える（次に起こしたときから使われる＝要件 6.6）。
+fn remember_balloon(world: &World, folder: String) {
+    let Some(runtime) = names::current_runtime(world) else {
+        tracing::warn!(
+            event = "install_balloon_not_remembered",
+            folder = %folder,
+            "[install] 今のゴーストが居ないので、入れたバルーンを記憶へ書けません"
+        );
+        return;
+    };
+    runtime.sylphya_publisher().persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::LastBalloon, folder.clone())],
+    );
+    tracing::info!(
+        event = "install_balloon_remembered",
+        folder = %folder,
+        "[install] 今のゴーストの「最後に使ったバルーン」を入れたバルーンへ書き換えました"
+    );
 }
 
 /// 背景のスレッドへ答える。スレッドが居なければ記録だけ残す。
@@ -318,3 +398,7 @@ fn hand_next_order(world: &mut World) {
 #[cfg(test)]
 #[path = "desk_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "desk_record_tests.rs"]
+mod record_tests;

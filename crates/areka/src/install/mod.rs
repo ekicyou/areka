@@ -18,6 +18,7 @@ use crate::exit_wait::{self, WorkGate};
 
 pub(crate) mod desk;
 mod judge;
+pub(crate) mod names;
 mod procedure;
 mod terms;
 mod worker;

@@ -294,8 +294,6 @@ pub(crate) fn resolve_special_name(
 pub(crate) struct LastInstalledGhost(pub String);
 
 /// 最後に入れたゴーストのフォルダ名を記録する（前の記録は置き換わる＝最後の 1 件だけ残る）。
-// 本番の呼び手は後続 areka-P0-ghost-install（インストール完了時に入れたゴーストのフォルダ名を渡す）。
-#[allow(dead_code)]
 pub(crate) fn record_last_installed(world: &mut World, folder: String) {
     tracing::info!(
         event = "last_installed_recorded",

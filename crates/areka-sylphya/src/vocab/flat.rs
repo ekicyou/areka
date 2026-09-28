@@ -3,7 +3,8 @@
 //! 全 26 トークンを key モデル上の第一級エントリとして保持する（R1.1）。
 //! lexer が届かない `%m?` も第一級（token に `?` を残す・lexer 非依存）。
 //! backing 層は brief.md Scope 節の typology に従って割り当て、実導出は
-//! M1 で源に着地する 4 件（username/selfname/selfname2/keroname）のみ。
+//! M1 で源に着地する 4 件（username/selfname/selfname2/keroname）と、インストールの後に
+//! areka が載せる 2 件（lastghostname/lastobjectname）のみ。
 
 use crate::vocab::{BackingLayer, DegradePolicy, M1Status};
 
@@ -27,8 +28,10 @@ pub struct FlatEntry {
 /// - `selfname`/`selfname2`/`keroname` = StaticConfig（descript 由来）。
 /// - 暦時計・時刻ネタ・画面・OS 起動時間（month..second/et/wronghour/
 ///   screenwidth/screenheight/exh）= SystemEnv（OS 由来・注入シーム必須）。
-/// - 単語ランダム系・インストール文脈（ms..dms/lastghostname/lastobjectname）
-///   = RuntimeState（他エンジン所有の運行状態・出所は正典未規定＝縮退のまま予約）。
+/// - 単語ランダム系（ms..dms）= RuntimeState（他エンジン所有の運行状態・出所は正典未規定＝
+///   縮退のまま予約）。
+/// - インストール文脈（lastghostname/lastobjectname）= RuntimeState（インストールの後に
+///   areka が載せる・areka-P0-ghost-install）。
 pub const FLAT_VOCAB: &[FlatEntry] = &[
     // 暦時計（SystemEnv・縮退・素通し）。
     FlatEntry {
@@ -179,17 +182,18 @@ pub const FLAT_VOCAB: &[FlatEntry] = &[
         m1: M1Status::Degraded,
         degrade: DegradePolicy::PassThroughRaw,
     },
-    // インストール文脈（RuntimeState・縮退・素通し・M1 外）。
+    // インストール文脈（RuntimeState・実導出・素通し）。値は areka がインストールの後に載せる
+    // （areka-P0-ghost-install・`install/names.rs`）。まだ入れていなければ値が無く素通し。
     FlatEntry {
         token: "lastghostname",
         layer: BackingLayer::RuntimeState,
-        m1: M1Status::Degraded,
+        m1: M1Status::Derived,
         degrade: DegradePolicy::PassThroughRaw,
     },
     FlatEntry {
         token: "lastobjectname",
         layer: BackingLayer::RuntimeState,
-        m1: M1Status::Degraded,
+        m1: M1Status::Derived,
         degrade: DegradePolicy::PassThroughRaw,
     },
 ];
@@ -270,7 +274,8 @@ mod tests {
         );
     }
 
-    /// M1 実導出は username/selfname/selfname2/keroname の 4 件のみ Derived。
+    /// 実導出は M1 の 4 件（username/selfname/selfname2/keroname）と、インストールの後に
+    /// 載せる 2 件（lastghostname/lastobjectname・areka-P0-ghost-install）の 6 件だけ Derived。
     #[test]
     fn only_four_tokens_are_m1_derived() {
         let derived: Vec<&str> = FLAT_VOCAB
@@ -280,9 +285,19 @@ mod tests {
             .collect();
         let mut got = derived.clone();
         got.sort_unstable();
-        assert_eq!(got, vec!["keroname", "selfname", "selfname2", "username"]);
+        assert_eq!(
+            got,
+            vec![
+                "keroname",
+                "lastghostname",
+                "lastobjectname",
+                "selfname",
+                "selfname2",
+                "username"
+            ]
+        );
         // 代表的な縮退トークンは Degraded。
-        for t in ["month", "screenwidth", "ms", "lastghostname"] {
+        for t in ["month", "screenwidth", "ms", "dms"] {
             let e = FLAT_VOCAB.iter().find(|e| e.token == t).unwrap();
             assert_eq!(e.m1, M1Status::Degraded, "{t}");
         }
