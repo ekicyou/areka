@@ -66,7 +66,7 @@
   - 分かれ道の兄弟テストが緑
   - _Requirements: 2.8, 2.9, 3.2, 3.6, 3.7, 4.5, 4.6, 4.7, 4.8, 4.11, 5.1, 5.4, 5.6, 5.7, 9.2, 11.3, 11.5, 12.2, 12.12_
 
-- [ ] 5. (P) 終了で背景の仕事を上限つきで待つ口を作る
+- [x] 5. (P) 終了で背景の仕事を上限つきで待つ口を作る
   - 背景の仕事 1 本ぶんの門（扱っている物の名前・書いている最中か・終了が始まったか を 1 つの鍵の下で持つ）と、門と片付けを登記する口、終了の始まりで全部の門を閉じて片付けを呼ぶ口、書いている最中の門だけを残りの時間だけ待つ口を作る。上限は 3 秒
   - 書いていない仕事は `warn!(exit_wait_abandoned)` を残して待たない。間に合えば `info!`、上限なら元の中身が作業フォルダに残りうることを書いた `warn!(exit_wait_timeout)`
   - この部品は `install` を知らない（後続 `network-update` が同じ口に乗れる）。門が閉じた後は「始める」「書く段へ入る」が偽を返す
@@ -188,3 +188,4 @@
 - 3.1: `install/judge.rs` はモジュール全体に `#![allow(dead_code)]`（呼び手が無いため）。**4.1（手続きが呼び手になる）で外す**。後続のモジュール（terms・procedure・worker・desk ほか）も同じく、呼び手を結ぶタスクで外す。旧仕様 `OnInstallComplete` の Reference2 は 2 件目の物の名前だけ（正典: 先頭 2 件だけ）。
 - 3.2: `install/terms.rs`（モジュール全体）と `alert.rs` の `YesNo`・`ask_yes_no`（2 項目）に `#[allow(dead_code)]`。4.1 で terms と `YesNo` は外した。**`ask_yes_no` は 6.1（本物の口）で外す**。利用条件の上限は 25 行で切った後、改行を含めて 1,200 文字で切る。`nested_terms` は同梱の取り出し元フォルダの直下だけを見る（`areka-nar` に一覧の口が無い）。抑止を拒否へ倒すのは手続き（4.1／4.2）の責務。
 - 4.1: `procedure.rs` はモジュール全体に `#![allow(dead_code)]`＝**6.1（worker が呼び手）で外す**。項目単位の allow が残るのは `judge::ScriptRefusal`・`script_request`（**7.1 で外す**）と `InstallOrigin`（**6.2／7.x で外す**）。途中でやめたときの記録 `warn!(event = "install_abandoned", archive, skipped, skipped_archives)` は design の Monitoring の表に無い追加（タスク 10 の §8／文書で拾うなら拾う）。同梱バルーンの名前は手続きが展開の後に `list_balloons` から目録の `name` を引く（設計で決めたこと 14）。`InstalledRecord.folder` は `areka-nar` の綴りのまま＝目録の綴りへ揃えるのは 6.3。
+- 5: `exit_wait.rs` は先頭に `#![allow(dead_code)]`＝**9 で外す**。`main.rs` は 933 行（9 で足すときに 1,000 行を超えないか見る）。**6.1 への申し送り**: ⑴ 要件 8.3 の「書庫のパスと宛先」は門の `begin(label)` の label 1 つに両方を入れて満たす（`exit_wait_timeout`／`exit_wait_abandoned` の欄は name と label だけ）。⑵ `leave_write` の直後に続けて `end` を呼ぶ（間で終了が始まると書き終えた後なのに `exit_wait_abandoned`＝「書く前」と記録される）。
