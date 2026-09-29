@@ -173,7 +173,7 @@
   - ゴーストの窓への投げ込みの受け口（`WM_DROPFILES` など）が本体に 0 件
   - _Requirements: 1.2, 10.6, 10.7, 11.10, 12.13, 12.16_
 
-- [ ] 11.2 実機で残りの 3 項目を確かめて `signoff.md` に記録する
+- [x] 11.2 実機で残りの 3 項目を確かめて `signoff.md` に記録する
   - `RUST_LOG` をイベントの送出と `install_*` が見える所まで開ける
   - ⑴ メニュー「インストール…」からゴーストの `.nar` を入れる → `install_done` → 表示中のゴーストのまま → メニューの「ゴースト」枠に出て、選ぶと切り替わる
   - ⑵ `\![change,ghost,lastinstalled]` で切り替わる（`ghost_switch_resolved name=lastinstalled` と `ghost_switch_done`）
@@ -200,3 +200,4 @@
 - 9: `install_pending_discarded` の `count` は**書庫の数**（＝`paths` の数・要件 8.5「まだ始めていない書庫」）。動いている依頼の残りの書庫は worker が `install_abandoned` の `skipped_archives` に残す。預かった書庫（`overwrite::discard`）は「預かった／Busy／切替を頼んだ」なら返信端を落として worker を `Closed` で放し、パスは同じ `begin_close` の `exit_wait_abandoned` の label に残る（要件 8.4）＝`install_pending_discarded` には欄 `overwrite=(宛先, held|busy|requested|ran)` を足しただけ。「展開した」なら結果を worker へ返す。UI スレッドの展開は終了と同じスレッドなので書く段の出入りを門へ知らせず、展開の直後に `gate.end()`（無いと致命の道などで書き終えた書庫が `exit_wait_abandoned` と誤記される）。`session_end.rs` は本体 `end_session_from(world, WaitBudget)`＋薄い包み `end_session_within`（テストが出発点を過去に置くため）。Monitoring の表に無い欄 `overwrite` と段の語も**タスク 10 で拾う**。`main.rs` は 943 行。
 - 10: 台帳 13 行を実装済みに（`ghostinstallbutton.caption` の担当を `popup-menu-minimal` から移した＝その `owner_count` 15→14）。`briefing.md` の `[[barrier]]` と `roadmap-draft.md` の `[[spec]]`・`[briefs]` は生成器が無く手で入れた値だが、`ukadoc-survey` のテスト（分布の腕・件数の腕）が判定する。分野ごとの briefing は調査時点の数を残し日付つきの注記で実物を指す。`dist/README.txt` の右クリックメニューは 4 項目（「■ .nar の入れ方」は alpha-release-signoff の持ち分で未記入のまま）。残った提案: `assets.toml` の `manual_install` の束の行（「仕組み全体…読む経路が無い」）は本文と語が食い違って読める＝ukadoc-coverage-roadmap の持ち分。
 - 11.1: 2026-09-29 `cb6bb3df` で `tools/test-all.ps1` 全段 緑（i686 の成果物・fmt・x64 ワークスペース 533 秒・i686 host-32。8971 passed・0 failed・43 ignored）。main から分かれた地点 `87a625ec` からの差分で、本番の環境変数の読み 0・`SendMessageW(`／`SendMessageTimeoutW(` の追加 0・外部クレートの追加 0（依存の変更は path の `areka-nar` と `windows` の機能 1 つ）・投げ込みの受け口（`WM_DROPFILES`・`DragAcceptFiles`・`WS_EX_ACCEPTFILES`）0・消したテスト 0（足したテスト 152）・変更した `.rs` の最大は `main.rs` の 943 行。
+- 11.2: 実機 4 項目は `signoff.md` にそろった（項目 3 は 8.2）。項目 2 は画面を操作せず台本だけで一周（`\![execute,install,path,…]` → `OnInstallComplete` の台詞の `\![change,ghost,lastinstalled]`）。項目 4 の検体は `terms.txt` に `charset` の行も BOM も無いと正典どおり Shift_JIS で読まれて化ける＝検体を作るときは 1 行目に `charset,UTF-8` を置く。案内のコマンドを bash の行に書くと `$env:…` が先に展開されて効かない。

@@ -121,7 +121,7 @@ design の Testing Strategy「実機」の 4 項目。項目 3 はタスク 8.2�
 - 入れた後もえも？？のまま（`install_done` 05:09:16 から利用者がメニューで選ぶ 05:09:24 まで切替の要求は 0 件）
 - 次に開いたメニューの項目が 4 → 5 に増え（「ゴースト」枠に入れたゴーストが出た）、選ぶと切り替わった
 
-### 項目 4: 結果＝「はい」は合格・画面は前面に出た・「いいえ」は手では押していない
+### 項目 4: 結果＝「はい」「いいえ」とも合格・画面は前面に出た
 
 - 1 回目（05:10:22）: 検体の `terms.txt` に `charset` の行も BOM も無かったため、正典（「1行目にcharset,UTF-8と書いておくか、BOMを含んでおけばShift JIS以外も使える」）と要件 4.3 のとおり Shift_JIS として読まれ、**本文が化けた**＝検体の誤り（areka の欠陥ではない）。この画面は「はい」で閉じられた（`install_terms answer="accept"` 05:11:21 → `install_done`）
 - 検体を 1 行目 `charset,UTF-8` つきに作り直した
@@ -138,7 +138,7 @@ design の Testing Strategy「実機」の 4 項目。項目 3 はタスク 8.2�
   05:12:28.473938 ghost_switch_done ghost=Some("konnoyayame") attempt=Target
   ```
 
-- 「いいえ」の道は、画面を出さない形で別に通した（下）。手で「いいえ」を押す操作は通していない。「いいえ」と抑止の違いは、画面の戻り値を写す 1 行（`alert.rs` の `ask_yes_no` の `IDNO => YesNo::No`）と記録の水準・`answer` の語だけで、その後の道（`OnGhostTermsDecline` を送って `Declined` を返す）は `procedure.rs` の利用条件の関数の中で同じ
+- 「いいえ」の道は、画面を出さない形（下）と、手で押す形（その下）の両方で通した。「いいえ」と抑止の違いは、画面の戻り値を写す 1 行（`alert.rs` の `ask_yes_no` の `IDNO => YesNo::No`）と記録の水準・`answer` の語だけで、その後の道（`OnGhostTermsDecline` を送って `Declined` を返す）は `procedure.rs` の利用条件の関数の中で同じ
 
 #### 拒否の道（画面を出さない形・2026-09-29 14:14 JST）
 
@@ -155,6 +155,28 @@ design の Testing Strategy「実機」の 4 項目。項目 3 はタスク 8.2�
   ```
 
 - 拒否の後は `OnGhostTermsDecline` だけで、`OnInstallFailure`・`OnInstallRefuse`・`OnInstallComplete*` は 0 件。`ghost\konnoyayame` は作られていない（`Test-Path` が False）
+
+#### 手で「いいえ」を押す（2026-09-29 14:17〜14:18 JST・開発者の手）
+
+- 検体 `C:\areka-nar\decline-test.nar`: `konnoyayame.nar` の中身の `install.txt` を `name,いいえ確認用`・`directory,decline_test`（根に無い宛先）に替え、最上位に `terms.txt`（1 行目 `charset,UTF-8`）を足した写し
+- 根 `C:\areka-su2` を Claude が起動した（`NO_COLOR=1`・`RUST_LOG=info,areka=debug,kanade=trace`・`AREKA_NO_ALERT` は外した）。立ったのは前回最後に使った「はろーYAYAワールド」
+- 開発者がメニュー「インストール…」→ `decline-test.nar` → 利用条件の画面で「いいえ」を押した。終了は Claude が自分の起こしたプロセスの窓へ閉鎖要求（`WM_CLOSE`）を送った（メニューの「終了」と同じ道）
+
+```
+05:17:48.191901 menu_selected frame=Install
+05:17:57.329310 install_order_queued origin=Menu count=1
+05:17:57.336607 shiori_request method=GET id=OnInstallBegin
+05:17:57.353232 install_accept archive=C:\areka-nar\decline-test.nar verdict="accepted"
+05:17:57.353411 ask title="利用条件 - いいえ確認用" suppressed=false
+05:18:02.487892 install_terms file="terms.txt" answer="decline"
+05:18:02.494810 shiori_request method=GET id=OnGhostTermsDecline references=[]
+05:18:02.496165 install_order_done ends=[Declined]
+05:18:27.775349 os_close_request scope=0 kind="ghost"
+05:18:32.581430 app_exit origin=KanadeStopped(Quit)
+05:18:32.601391 session_mark_cleared
+```
+
+- 結果＝合格: 拒否の後は `OnGhostTermsDecline` だけで、`OnInstallFailure`・`OnInstallRefuse`・`OnInstallComplete*` は 0 件。`ghost\decline_test` は作られていない。ERROR 0 件
 
 ### 共通
 
