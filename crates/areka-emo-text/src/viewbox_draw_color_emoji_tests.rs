@@ -2,8 +2,13 @@ use super::ViewboxExecutor;
 use super::test_support::{
     Rig, build, colored_count, glyph_items, opaque_count, require_segoe_ui_emoji,
 };
-use crate::draw::{FontCatalog, ResolvedFont};
+use crate::canvas::{
+    ChoiceLineContent, ChoiceRowSegment, ContentCanvas, HighlightPaint, Resident, ResidentContent,
+};
+use crate::draw::{DWriteMetrics, FontCatalog, ResolvedFont};
+use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{ScaleContract, TextRegion};
+use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -165,6 +170,164 @@ fn heart_symbol_follows_text_color() {
         assert_eq!(
             not_red, 0,
             "{mode:?}: ♥ は文字色（赤）の単色で出る（赤以外の色の画素 0）"
+        );
+    }
+}
+
+/// 列 `x0..x1`（全 y）の画素を数える（`pred` が真のもの・BGRA 密配列）。
+fn count_in_x_band(bytes: &[u8], w: u32, x0: u32, x1: u32, pred: impl Fn(&[u8]) -> bool) -> usize {
+    bytes
+        .chunks_exact(4)
+        .enumerate()
+        .filter(|(i, px)| {
+            let x = *i as u32 % w;
+            x >= x0 && x < x1 && pred(px)
+        })
+        .count()
+}
+
+/// 1.3・4.5・6.3: 選択肢「あ😀い」の全体をホバーして、塗り色と白の切替文字色で描いた
+/// フレームと、ホバー無しのフレームを同じ描画器で描く（ホバーの序数は行の指紋に入るので
+/// 描き直される）。帯は本番と同じ実測の送り幅（`DWriteMetrics`）で組んだ配置から取る。
+/// 😀 は字形そのものに白（歯・目の光）を持つので「白が 0」は求めず、白の画素数が
+/// ホバーの有無で変わらないこと（切替文字色で描き直されていない）を見る。横書き 1 方式。
+#[test]
+fn hovered_choice_keeps_emoji_own_colors() {
+    let mut rig = rig_with_emoji_font();
+    let mode = WritingMode::HorizontalTb;
+    let model = model(black());
+    let font = ResolvedFont::resolve(&model);
+    let region = TextRegion::resolve(&model, IMAGE, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let factory = rig
+        .core
+        .dwrite_factory()
+        .expect("GraphicsCore::dwrite_factory 失敗")
+        .clone();
+    let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+        .expect("DWriteMetrics::new 失敗");
+    let items = glyph_items("あ😀い");
+    let lines = LayoutEngine::layout(
+        &items,
+        items.len(),
+        &region,
+        mode,
+        FONT_PX as f32,
+        &metrics,
+        WrapPlan::CharByChar,
+    );
+    let base = ContentCanvas::from_layout(&lines, &region, mode);
+    let window = LayoutEngine::visible_window(&lines, &region, mode);
+    assert_eq!(base.residents.len(), 1, "「あ😀い」は 1 行");
+
+    // 行の全体を選択肢 0 にする（範囲は住人ローカル）。
+    let make_choice = |highlight: Option<HighlightPaint>, hovered: Option<usize>| {
+        let residents = base
+            .residents
+            .iter()
+            .map(|r| match &r.content {
+                ResidentContent::GlyphRun(run) => Resident {
+                    content: ResidentContent::Choice(ChoiceLineContent {
+                        run: run.clone(),
+                        segments: vec![ChoiceRowSegment {
+                            ordinal: 0,
+                            inline_range: (0.0, run.size.0),
+                        }],
+                        hovered,
+                        highlight,
+                        band_extent: run.size.1,
+                        band_offset: 0.0,
+                    }),
+                    transform: r.transform,
+                    effects: r.effects,
+                },
+                _ => r.clone(),
+            })
+            .collect();
+        ContentCanvas {
+            residents,
+            size: base.size,
+        }
+    };
+
+    // 3 字の帯（面の x・整数へ丸める）＝住人の平行移動＋配置の位置〜＋送り幅。
+    let bands: Vec<(u32, u32)> = match &base.residents[0].content {
+        ResidentContent::GlyphRun(run) => {
+            let dx = base.residents[0].transform.offset().0;
+            run.glyphs
+                .iter()
+                .map(|g| {
+                    let x0 = dx + g.inline_pos;
+                    (x0.round() as u32, (x0 + g.advance).round() as u32)
+                })
+                .collect()
+        }
+        other => panic!("住人は GlyphRun のはず: {other:?}"),
+    };
+    assert_eq!(bands.len(), 3, "「あ」「😀」「い」の 3 クラスタ");
+
+    let fill = (105u8, 25u8, 25u8);
+    let fill_bgra = [25u8, 25, 105, 255];
+    let white_bgra = [255u8, 255, 255, 255];
+    let mut surface = rig.attach(IMAGE, 1.0);
+    let (w, _) = surface.size();
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+
+    let hover_canvas = make_choice(
+        Some(HighlightPaint {
+            fill,
+            text: (255, 255, 255),
+        }),
+        Some(0),
+    );
+    exec.render(&hover_canvas, &window, &font, mode, &contract, &mut surface)
+        .expect("hover render 失敗");
+    let hovered = surface.read_back().expect("read_back(hover) 失敗");
+
+    exec.render(
+        &make_choice(None, None),
+        &window,
+        &font,
+        mode,
+        &contract,
+        &mut surface,
+    )
+    .expect("hover 無し render 失敗");
+    let plain = surface.read_back().expect("read_back(hover 無し) 失敗");
+
+    let is = |target: [u8; 4]| move |px: &[u8]| px == target;
+    let white_in =
+        |bytes: &[u8], (x0, x1): (u32, u32)| count_in_x_band(bytes, w, x0, x1, is(white_bgra));
+
+    // 絵文字の帯: 白の数がホバーの有無で同じ・自分の色が出る・ハイライトの塗りが及ぶ。
+    let emoji = bands[1];
+    assert_eq!(
+        white_in(&hovered, emoji),
+        white_in(&plain, emoji),
+        "😀 の帯の白の画素数はホバーの有無で同じ（切替文字色で描き直されない）"
+    );
+    let own_color = count_in_x_band(&hovered, w, emoji.0, emoji.1, |px| {
+        px[3] != 0 && px != fill_bgra && px != white_bgra
+    });
+    assert!(
+        own_color > 0,
+        "ホバー中の 😀 の帯に塗り色でも白でもない画素がある（字形の自分の色）"
+    );
+    assert!(
+        count_in_x_band(&hovered, w, emoji.0, emoji.1, is(fill_bgra)) > 0,
+        "ホバーの塗りが 😀 の帯まで及ぶ"
+    );
+
+    // 「あ」「い」の帯: 白はホバー中だけ出る（ホバーの範囲が絵文字の前後で途切れない）。
+    for (name, band) in [("あ", bands[0]), ("い", bands[2])] {
+        assert!(
+            white_in(&hovered, band) > 0,
+            "ホバー中の「{name}」は切替文字色（白）で出る"
+        );
+        assert_eq!(
+            white_in(&plain, band),
+            0,
+            "ホバー無しの「{name}」に白は無い"
         );
     }
 }
