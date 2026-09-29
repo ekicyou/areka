@@ -933,6 +933,9 @@ fn finish_line(
 }
 
 #[cfg(test)]
+#[path = "layout_cluster_tests.rs"]
+mod cluster_tests;
+#[cfg(test)]
 #[path = "layout_cursor_center_origin_tests.rs"]
 mod cursor_center_origin_tests;
 #[cfg(test)]
