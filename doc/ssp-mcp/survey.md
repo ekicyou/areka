@@ -14,6 +14,8 @@ areka へ SSP の MCP サーバを移植する spec 群（`.kiro/steering/roadma
 
 ## 2. 輸送とプロトコル
 
+> **areka での扱い（2026-09-29 開発者判断）**: areka はプロトコルを自作せず公式 Rust SDK `rmcp` を使う。本節の表は SSP の振る舞いの記録であり、areka の要件ではない（rmcp の振る舞いとの差は `mcp-server-core` が一覧にし、クライアントが困る行だけ直す）。SSP と一致させるのは §3 のツールの名前・引数・結果の文字列。
+
 | 項目 | SSP の振る舞い（実測） |
 |---|---|
 | 応答 | 常に `application/json` の単発応答。SSE・セッション ID（`Mcp-Session-Id`）は使わない＝無状態 |

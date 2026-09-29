@@ -22,7 +22,7 @@
 
 ## Approach
 
-小さな bin クレートを 1 つ（外部依存なしを目標・JSON は `serde_json` を `mcp-server-core` と共有）。標準入力を 1 行ずつ読み、`127.0.0.1:<port>` へ HTTP/1.1 で投げ、応答本文を 1 行で書き出す。ポートは `AREKA_MCP_PORT`（Desktop の設定の `env` で渡せる）→ 既定 9821 の順（引数で渡すかは要件で決める）。
+小さな bin クレートを 1 つ（外部依存なしを目標・JSON は `serde_json` を `mcp-server-core` と共有）。**rmcp も tokio も使わない**——中継は MCP の中身を作らず写すだけなので、本体の「MCP を自作しない」（2026-09-29 開発者判断＝rmcp 採用）には当たらない。写すだけで足りず MCP を解釈する必要が出たら（上の Boundary の問い）、そのときは rmcp の stdio と HTTP クライアントで組む。標準入力を 1 行ずつ読み、`127.0.0.1:<port>` へ HTTP/1.1 で投げ、応答本文を 1 行で書き出す。ポートは `AREKA_MCP_PORT`（Desktop の設定の `env` で渡せる）→ 既定 9821 の順（引数で渡すかは要件で決める）。
 
 ## Scope
 

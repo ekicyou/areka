@@ -23,6 +23,7 @@
 ## Approach
 
 - `areka-mcp` にツールごとの 1 ファイル（定義＋引数の型＋実装関数）を置き、表は全 10 本をこの段で埋める。
+- サーバは rmcp（`mcp-server-core`・2026-09-29 開発者判断）。**ツールの定義は rmcp の `#[tool]` マクロ（schemars の自動生成）でなく、保存した JSON の逐語を `Tool` に詰めて手で返す**——自動生成の inputSchema は SSP の逐語（`"type": "integer"` の欄・description の英文・`required` の並び）と一致しないため。手で詰めるか、マクロで一致させられるかは design で確かめる。
 - アプリ本体側（`crates/areka/src/mcp/` 仮）に要求の enum（全 10 本の変種をこの段で揃える）と、UI スレッドで汲むシステム、ツールごとの処理ファイル（ダミー）を置く。サーバのスレッドは要求を送って `ReplyReceiver` で待つ（待ちの上限は要件で決める）。
 - 結果の組み立て（`OK:`／`NG:`／素の値・画像の content）を共通の小関数にする。
 
