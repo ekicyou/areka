@@ -8,11 +8,11 @@
 
 **Users**: ゴーストを入れた第三者（作者が配布サイトを直せば手元も新しくなる）。ゴーストの作者（辞書に書いた `OnUpdateBegin`〜`OnUpdateComplete` の返事が動く・台本の `\![updatebymyself]` が効く）。後続 `shell-balloon-switch`・`alpha-release-signoff` の開発者。
 
-**Impact**: 本体 `areka` が初めて `areka-update` に依存する。kanade の許可表が 23 語から 43 語、リソースの許可表が 10 語から 12 語になる。完了 `update-engine` の作業場所の後片付け（`work.rs`）に「成功した確定の残り」を「戻せなかった走行の残骸」と区別する印が 1 つ入る。`ghost_switch::on_notice` の定常到達の腕に呼び出しが 1 行、`ghost_session::register_systems`・`boot_wired` に各 1 行、消費者台帳に 3 行、`install_cue.rs` に `url` の腕、終了で待つ口の上限に達したときの本文の一般化が入る。切替の入口（`SwitchRequest`・`request_ghost_switch`）・終了の判定（`session_mark_verdict`・`ExitOrigin`）・kanade の運行表（`schedule/mod.rs`・`change.rs`）・`KanadeMsg` の変種は変えない。
+**Impact**: 本体 `areka` が初めて `areka-update` に依存する。kanade の許可表が 23 語から 42 語、リソースの許可表が 10 語から 12 語になる。完了 `update-engine` の作業場所の後片付け（`work.rs`）に「成功した確定の残り」を「戻せなかった走行の残骸」と区別する印が 1 つ入る。`ghost_switch::on_notice` の定常到達の腕に呼び出しが 1 行、`ghost_session::register_systems`・`boot_wired` に各 1 行、消費者台帳に 3 行、`install_cue.rs` に `url` の腕、終了で待つ口の上限に達したときの本文の一般化が入る。切替の入口（`SwitchRequest`・`request_ghost_switch`）・終了の判定（`session_mark_verdict`・`ExitOrigin`）・kanade の運行表（`schedule/mod.rs`・`change.rs`）・`KanadeMsg` の変種は変えない。
 
 ### Goals
 - 入口 4 つが同じ受付 `update::submit` を通り、同じ手続き（背景スレッド 1 本・1 度に 1 本）で扱われる（要件 1）。
-- 対象 1 つにつき正典の順（`OnUpdateBegin` → `OnUpdateReady` → 各ファイルの `OnDownloadBegin`・MD5 照合 → `OnUpdateComplete`／`OnUpdateFailure`）で 20 語の中のイベントだけを送り、最後に総括を 1 回送る（要件 2・3）。
+- 対象 1 つにつき正典の順（`OnUpdateBegin` → `OnUpdateReady` → 各ファイルの `OnDownloadBegin`・MD5 照合 → `OnUpdateComplete`／`OnUpdateFailure`）で 19 語の中のイベントだけを送り、最後に総括を 1 回送る（要件 2・3）。
 - 失敗理由はエンジンの失敗 11 種・取得の失敗 8 種のすべてを網羅の `match` で正典の語（と areka の 5 語）へ写す（要件 4）。
 - 更新の間ゴーストを降ろさず、`changed` が 1 つでもあれば総括の返事の台詞が終わってから同じゴーストを読み直す（要件 5）。
 - `\![execute,install,url,URL,nar]` は URL から一時フォルダへ落とし、既存の依頼の口へ渡す（要件 6）。
@@ -32,10 +32,10 @@
 
 ### This Spec Owns
 - **受付と依頼の型**: `crates/areka/src/update/mod.rs` の `UpdateOrder`・`TargetSpec`・`TargetKind`・`UpdateReason`・`SummaryKind`・`RawUpdateRequest`・`submit`・`register`。メニューと台本の受け口が呼ぶ唯一の口。
-- **手続き 1 本**: `update/procedure.rs`（要求 1 件の一周・対象 1 つの一周・口 `UpdatePorts`）と、その純粋な写し `update/refs.rs`（イベント名 20 語・Reference の組み立て・`useorigin1` の読み替え・失敗理由の表・総括の形）。
+- **手続き 1 本**: `update/procedure.rs`（要求 1 件の一周・対象 1 つの一周・口 `UpdatePorts`）と、その純粋な写し `update/refs.rs`（イベント名 19 語・Reference の組み立て・`useorigin1` の読み替え・失敗理由の表・総括の形）。
 - **背景スレッドと UI 側の窓口**: `update/worker.rs`（スレッド `update`・本物の口・エンジン `run` の呼び出し・門の出入り）・`update/desk.rs`（窓口・対象の解決・走っている旗・`homeurl` の写し・読み直しの要求・終了で捨てる）。
 - **入口 3 つ**: `emo2_boot/update_cue.rs`（台本の受け口と引数の解析）・`menu/update_frame.rs`（メニューの登記と選べる／選べない）・`install_cue.rs` の `url` の腕と `install/fetch_url.rs`（URL から一時フォルダへ落として既存の依頼の口へ）。
-- **他クレートへ足す口**: kanade の許可表 20 語とリソース許可表 2 語／`areka_ghost::catalog::homeurl`・`catalog::descript_name`／`areka_update` の `work.rs` の印（`committed`）。
+- **他クレートへ足す口**: kanade の許可表 19 語とリソース許可表 2 語／`areka_ghost::catalog::homeurl`・`catalog::descript_name`／`areka_update` の `work.rs` の印（`committed`）。
 - **文書と台帳**: 網羅台帳 3 本の該当行・生成物・`dist/README.txt` の 2 行・`doc/COMPAT_ARCHITECTURE.md` §8・`signoff.md`。
 - **前提を外す宣言（要件 5.10）**: 本仕様は完了 `update-engine` の設計が置いた前提「起動中のゴーストなら SHIORI を先に解放している」を**外して** `run` を呼ぶ。確定（`commit.rs` の改名 2 回）は写像中の DLL でも通ることが較正済み（`commit_tests.rs`）で、外して困るのは後片付けだけ。その後片付けの扱い（印による区別）を本仕様が持つ。完了 spec の文書は書き換えず、§8 に記す。
 
@@ -60,7 +60,7 @@
 - テストだけ: `log-capture-kit`・`temp-path-kit`・`sample-ghost-kit`（どれも既存の dev-dependencies）。
 
 ### Revalidation Triggers
-- 許可表 `ALLOWED_EVENT_IDS` が 43 語・`ALLOWED_RESOURCE_IDS` が 12 語になる＝後続（`shell-balloon-switch`）は `events_change_tests.rs` の数を 43 から、`resources.rs` の名前の一覧の判定を 12 から動かす。
+- 許可表 `ALLOWED_EVENT_IDS` が 42 語・`ALLOWED_RESOURCE_IDS` が 12 語になる＝後続（`shell-balloon-switch`）は `events_change_tests.rs` の数を 42 から、`resources.rs` の名前の一覧の判定を 12 から動かす。
 - `UpdateOrder`・`TargetSpec`・`RawUpdateRequest`・`submit` の形を変える＝入口 3 つを見直す。`shell-balloon-switch` は `desk::resolve_targets` の「今のシェル・今のバルーン」（起動時に解いた物）を切替後の物へ読み替える（要件 8.8）。
 - `ghost_switch::on_notice` の定常到達の腕に `update::desk::on_steady` が入る＝定常到達のたびに `homeurl` の照会が 1 件 kanade へ飛ぶ（起動直後の SHIORI への GET が 1 つ増える）。
 - `exit_wait` の門が 2 本（`install`・`update`）になり、`exit_wait_timeout` の本文が門の名前と `label` で読む形になる。
@@ -163,7 +163,7 @@ graph TB
 | 16 | **`\![execute,install,url]` の取得は、受け口が起こす短命のスレッド `install-fetch` で行い、落とし終えたら既存の送出端へ `RawInstallRequest { path, origin: Script }` を送る**（議題 H・要件 6.1・6.5）。一時フォルダは `std::env::temp_dir().join("areka").join("download")`、ファイル名は `<pid>-<連番>-<URL の末尾の名前（安全な文字だけ）>`、7 日より古い物は次の取得の前に消す（要件 6.6） | 受け口 `InstallCueSink` は既に窓口の送出端を持ち、`Sender` は `Send`。窓口にも背景スレッドにも新しい頼みは要らず、更新の「1 度に 1 本」を汚さない。`install-pick` と同じ形（`std::thread::Builder`）。取り消しも待ちもしない（要件 7.5） | 更新の背景スレッドに乗せる（取得の間、更新が塞がる）／インストールの背景スレッドに乗せる（取得の間、他の依頼が止まる） |
 | 17 | **`judge::script_request` を `Result<ScriptRequest, ScriptRefusal>` に広げ、`ScriptRequest::Path(PathBuf)`／`Url(String)` を返す**。`url` の 2 つ目（種別）は `nar` か省略だけ通し、それ以外は `ScriptRefusal::UnsupportedKind { found }`、`http://`／`https://` で始まらないか空は `ScriptRefusal::BadUrl` | 検査は今の場所（純粋・テスト済み）に足すのが最小。`install_cue.rs` は `Path` の腕を今日どおり、`Url` の腕で `fetch_url::spawn_download` を呼ぶ | 受け口で URL を検査する |
 | 18 | **消費者台帳は `("updatebymyself", None)`・`("update", None)`・`("updateother", None)` の 3 行を `CommandConsumer::UpdateSink` へ**。`\![update,platform]` も受け口に届き、要件 1.8 の「知らない対象」として `warn!` で断る | 3 語は独立のコマンド名で、選別子なしが台帳の規則に合う（`move`・`bind` と同じ）。`platform` は範囲外で、黙って普通の更新に読み替えない | `("update", Some("ghost"))` などを対象ごとに登記（`ghost+shell` の形が選別子に収まらない） |
-| 19 | **許可表は起動・終了のイベントと共用の `ALLOWED_EVENT_IDS` のまま 20 語を足す**（43 語） | `ghost-install`・`file-drop` と同じ。表を分けると `on_raise_event` に手が入る | 入口専用の表 |
+| 19 | **許可表は起動・終了のイベントと共用の `ALLOWED_EVENT_IDS` のまま 19 語を足す**（42 語） | `ghost-install`・`file-drop` と同じ。表を分けると `on_raise_event` に手が入る | 入口専用の表 |
 | 20 | **総括の Reference の区切りは `install::judge::SEPARATOR` を借りる** | 同じ値（byte 値 1）を 2 か所に持たない。`file_drop.rs` が同じ借り方 | `update/refs.rs` に定数を持つ |
 
 ### Technology Stack
@@ -171,7 +171,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |---|---|---|---|
 | 更新のエンジン | `areka-update`（ワークスペース） | 定義ファイル・差分・取得・照合・確定・`delete.txt` | 本体の依存に足す。使う公開面は `run`・`UpdateRequest`・`Fetch`・`WinHttpFetch`・`Progress`・`UpdateOutcome`・`UpdateError`・`FailReason`・`FetchError`・`ManifestName` |
-| 運行 | `areka-kanade`（ワークスペース） | イベントの送出と応えの有無（`RaiseEvent`／`RaiseOutcome`）・リソースの照会（`ResourceQuery`／`ResourceOutcome`）・切替（`ChangeOrigin`） | 許可表 20 語＋2 語 |
+| 運行 | `areka-kanade`（ワークスペース） | イベントの送出と応えの有無（`RaiseEvent`／`RaiseOutcome`）・リソースの照会（`ResourceQuery`／`ResourceOutcome`）・切替（`ChangeOrigin`） | 許可表 19 語＋2 語 |
 | 目録 | `areka-ghost::catalog` | `homeurl`・`name` の読み手・シェル／バルーンの名前引き | `homeurl`・`descript_name` を足す |
 | スレッド | `areka_actor::spawn_actor`／`run_inbox`／`reply_channel`・`std::thread::Builder`・`std::sync::mpsc` | 手続きのスレッド `update`・取得のスレッド `install-fetch` | 外部クレートの追加 0 |
 | HTTP | WinHTTP（`areka_update::WinHttpFetch`） | 配布サイトからの取得 | 綴るのは `crates/areka-update/src/winhttp.rs` のまま |
@@ -185,7 +185,7 @@ graph TB
 crates/areka/src/
 ├── update/
 │   ├── mod.rs                # 依頼の型 UpdateOrder・TargetSpec・TargetKind・UpdateReason・SummaryKind・RawUpdateRequest・受付 submit・系の登録 register・子の宣言
-│   ├── refs.rs               # 純粋: イベント名 20 語（ukadoc の行つき）・Reference の組み立て・useorigin1 の読み替え・失敗理由の表・総括の Reference
+│   ├── refs.rs               # 純粋: イベント名 19 語（ukadoc の行つき）・Reference の組み立て・useorigin1 の読み替え・失敗理由の表・総括の Reference
 │   ├── procedure.rs          # 手続き（要求 1 件の一周・対象 1 つの一周）と口 UpdatePorts・Raised・EngineRun・TargetEnd
 │   ├── worker.rs             # スレッド update・本物の口 KanadePorts（送出端・門・エンジン）・窓口への頼み DeskAsk
 │   └── desk.rs               # UI 側の窓口: 対象の解決・段（Idle/AwaitingExec/Running）と預かり 1 枠・homeurl の写し・二重起動の断り・読み直しの要求・終了で捨てる
@@ -222,8 +222,8 @@ crates/areka/src/
 | `crates/areka/src/install/mod.rs` | `pub(crate) mod fetch_url;` の 1 行（`emo2_boot/install_cue.rs` が呼ぶ） |
 | `crates/areka/src/menu/mod.rs` | `pub(crate) mod update_frame;` |
 | `crates/areka/src/exit_wait.rs` | `exit_wait_timeout` の本文を門に依らない語へ（決めたこと 14） |
-| `crates/areka-kanade/src/schedule/events.rs` | `ALLOWED_EVENT_IDS` に 20 語（各 1 行の正典 URL つき・群の注記 1 行）。冒頭の表に 20 行 |
-| `crates/areka-kanade/src/schedule/events_change_tests.rs` | 数の判定を 23 から 43 へ。20 語が引け、`OnUpdateCheckComplete` が引けないことを同じテストで |
+| `crates/areka-kanade/src/schedule/events.rs` | `ALLOWED_EVENT_IDS` に 19 語（各 1 行の正典 URL つき・群の注記 1 行）。冒頭の表に 19 行 |
+| `crates/areka-kanade/src/schedule/events_change_tests.rs` | 数の判定を 23 から 42 へ。19 語が引け、`OnUpdateCheckComplete` が引けないことを同じテストで |
 | `crates/areka-kanade/src/schedule/resources.rs` | `ALLOWED_RESOURCE_IDS` に `homeurl`・`useorigin1`（正典 URL つき）。同ファイルの名前の一覧の判定（10 の固定表）を 12 へ |
 | `crates/areka-ghost/src/catalog.rs` | `pub fn homeurl(descript_dir: &Path) -> Option<String>`・`pub fn descript_name(descript_dir: &Path) -> Option<String>`（正典 URL の行 3 本＝ゴースト・シェル・バルーンの `homeurl`） |
 | `crates/areka-update/src/work.rs` | `COMMITTED_MARK`・`cleanup` で消せなかったとき印を置く・`sweep` の判定に印の条件 |
@@ -373,7 +373,7 @@ flowchart TB
 | 2.12 | 締めは 1 件だけ | procedure | `run_target` の戻り `TargetEnd` | 要求 1 件 |
 | 2.13 | `useorigin1` | refs | `Numbering::from_useorigin1` | 写し |
 | 2.14 | 要求ごとに 1 回 | procedure | `resources()` を先頭で 1 回 | 要求 1 件 |
-| 2.15 | 新しい名前 0・許可表 43 | refs・kanade events | 20 語の定数・`ALLOWED_EVENT_IDS` | — |
+| 2.15 | 新しい名前 0・許可表 42 | refs・kanade events | 19 語の定数・`ALLOWED_EVENT_IDS` | — |
 | 3.1 | 総括を 1 回 | procedure・refs | `summary_refs`・`SummaryKind` | 要求 1 件 |
 | 3.2 | `OnUpdateResult` の形 | refs | `summary_refs(Result)` | 写し |
 | 3.3 | `OnUpdateResultEx` の形 | refs | `summary_refs(ResultEx)` | 写し |
@@ -446,7 +446,7 @@ flowchart TB
 
 | Component | Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |---|---|---|---|---|---|
-| 許可表 2 本 | areka-kanade | 20 語と 2 語を送れるようにする | 2.15, 9.13 | — | State |
+| 許可表 2 本 | areka-kanade | 19 語と 2 語を送れるようにする | 2.15, 9.13 | — | State |
 | catalog::homeurl／descript_name | areka-ghost | `descript.txt` の `homeurl`・`name` を読む | 1.3, 1.9, 2.4 | areka-parsers (P0) | Service |
 | work.rs の印 | areka-update | 成功した確定の残りを残骸と区別する | 5.9, 9.10 | — | State |
 | refs | areka / update | 純粋な写し | 2.2, 2.4〜2.13, 3.2, 3.3, 4.2, 4.3 | areka-update の型 (P0) | Service |
@@ -464,7 +464,7 @@ flowchart TB
 
 #### 許可表（`schedule/events.rs`・`schedule/resources.rs`）
 
-`ALLOWED_EVENT_IDS` に次の 20 語を、各 1 行の正典 URL（`// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#<名前>:1`）つきで足す（23 → 43）: `OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`・`OnUpdateComplete`・`OnUpdateFailure`・`OnUpdateOtherBegin`・`OnUpdateOtherReady`・`OnUpdateOther.OnDownloadBegin`・`OnUpdateOther.OnMD5CompareBegin`・`OnUpdateOther.OnMD5CompareComplete`・`OnUpdateOther.OnMD5CompareFailure`・`OnUpdateOtherComplete`・`OnUpdateOtherFailure`・`OnUpdateResult`・`OnUpdateResultEx`。冒頭の表に 20 行（「汎用の入口・渡された列のまま」）。`OnUpdateCheck*`・`OnUpdateResultExplorer` は足さない。`events_change_tests.rs` の数を 43 にし、20 語が引けて `OnUpdateCheckComplete` が引けないことを同じテストで判定する。
+`ALLOWED_EVENT_IDS` に次の 19 語を、各 1 行の正典 URL（`// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#<名前>:1`）つきで足す（23 → 42）: `OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`・`OnUpdateComplete`・`OnUpdateFailure`・`OnUpdateOtherBegin`・`OnUpdateOtherReady`・`OnUpdateOther.OnDownloadBegin`・`OnUpdateOther.OnMD5CompareBegin`・`OnUpdateOther.OnMD5CompareComplete`・`OnUpdateOther.OnMD5CompareFailure`・`OnUpdateOtherComplete`・`OnUpdateOtherFailure`・`OnUpdateResult`・`OnUpdateResultEx`。冒頭の表に 19 行（「汎用の入口・渡された列のまま」）。`OnUpdateCheck*`・`OnUpdateResultExplorer` は足さない。`events_change_tests.rs` の数を 42 にし、19 語が引けて `OnUpdateCheckComplete` が引けないことを同じテストで判定する。
 
 `ALLOWED_RESOURCE_IDS` に `homeurl`・`useorigin1`（`list_shiori_resource.html#homeurl:1`・`#useorigin1:1`）を足す（10 → 12）。同ファイルの名前の一覧の固定表を 12 語へ。`other_homeurl_override` は足さない。
 
@@ -697,7 +697,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
 #### 写し（`update/refs.rs`）
 
 ```rust
-// 20 語の定数（各 1 行の正典 URL つき）。例:
+// 19 語の定数（各 1 行の正典 URL つき）。例:
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateBegin:1
 pub(crate) const ON_UPDATE_BEGIN: &str = "OnUpdateBegin";
 // …
@@ -795,7 +795,7 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 
 ### 文書と台帳
 
-- `shiori.toml`: 本仕様が送る 20 イベントの行を `implemented`・`owner = "areka-P0-network-update"`・証拠は `crates/areka/src/update/refs.rs` の定数の上の `// ukadoc:` の行。`homeurl`・`useorigin1` を `implemented`（証拠は `schedule/resources.rs` の行）。`updatebutton.caption` を `implemented`（証拠は既存の `resources.rs` の行・`owner` は本仕様へ）。`OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・`OnUpdatedataCreating`／`Created`・`other_homeurl_override` は状態を動かさず備考に理由。
+- `shiori.toml`: 本仕様が送る 19 イベントの行を `implemented`・`owner = "areka-P0-network-update"`・証拠は `crates/areka/src/update/refs.rs` の定数の上の `// ukadoc:` の行。`homeurl`・`useorigin1` を `implemented`（証拠は `schedule/resources.rs` の行）。`updatebutton.caption` を `implemented`（証拠は既存の `resources.rs` の行・`owner` は本仕様へ）。`OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・`OnUpdatedataCreating`／`Created`・`other_homeurl_override` は状態を動かさず備考に理由。
 - `assets.toml`: `descript_install` の「相対パス」を `implemented`（証拠は `crates/areka-update/src/delete.rs` の既存の行＝本体から辿れるようになる）。`descript_ghost`／`descript_shell`／`descript_balloon` の `homeurl` を `implemented`（証拠は `catalog.rs` の `homeurl` の上の 3 行）。
 - `sakura-script.toml`: `\![updatebymyself…]`・`\![update,更新対象…]`・`\![updateother,…]`・`\![execute,install,url,…]` を `implemented`（証拠は `consumer_ledger.rs` の `UpdateSink` の行と `judge.rs` の `Url` の腕の行）。`\![update,platform]`・`\![execute,createupdatedata]` は動かさない。
 - 手順: 台帳を動かす前に `cargo run -p ukadoc-survey -- evidence` で証拠の実在を確かめ、`-- report`・`-- report-summary` で生成物を作り直し、`cargo test -p ukadoc-survey` を緑にする。`roadmap-draft.md` の `owner_count` は生成器に任せる。
@@ -900,13 +900,13 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 - 印の無い `old/` 付きフォルダは今日どおり `residue` に挙がる（既存の `folder_with_content_in_old_survives_repeated_creates_and_is_listed` はそのまま緑）。
 
 ### kanade（`events_change_tests.rs`・`resources.rs` のテスト・9.13）
-- 許可表 43 語・20 語が引け・`OnUpdateCheckComplete` が引けない。リソース 12 語。
+- 許可表 42 語・19 語が引け・`OnUpdateCheckComplete` が引けない。リソース 12 語。
 
 ### 終了（`exit_wait_tests.rs`・9.12）
 門は部品として `update/` を知らないので、「書いている最中なら上限の内に待つ・上限（出発点を過去に置いた `WaitBudget`）で `warn!(exit_wait_timeout)` を残して進む・書いていなければ待たない」は既存の `exit_wait_tests.rs` がそのまま固定する。本文の変更（決めたこと 14）で、`.nar-work` を見ている既存の判定を新しい本文と `label` を見る判定へ書き換える（消さない）。更新の側の「後始末の後はイベント 0 件と読み直し 0 件」は `worker_tests.rs`・`desk_tests.rs` に置く（上の 2 節）。
 
 ### 規律（9.14・9.15）
-既存のテストは消さない。数の判定（23 → 43・10 → 12・消費者台帳 10 → 13）は新しい値へ書き換える。ネットへ出るテストは 0。
+既存のテストは消さない。数の判定（23 → 42・10 → 12・消費者台帳 10 → 13）は新しい値へ書き換える。ネットへ出るテストは 0。
 
 ### 実機（`signoff.md`・9.16・9.17）
 `RUST_LOG` は `info,areka=debug,areka::update=debug,areka_update=debug,kanade=trace` を基準にし、`shiori_request`・`update_*`・`ghost_switch_*` が見える所まで開ける。検体は根へ入れた emo2（引数なし・短い絶対パス）。配布サイトへ差分 1 件を置くのは開発者の手（裁定 4）。
@@ -928,7 +928,7 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 | エンジンの後片付けの印（`work.rs`＋テスト）＝先頭 | 1 |
 | 本体から `areka-update` を辿れるようにする（依存・`homeurl`／`descript_name` の読み手・台帳の 5 行・生成物） | 1 |
 | kanade の許可表 2 本と数の判定 | 0.5 |
-| 写し（`refs.rs`＝20 語・Reference・番号・失敗理由の表・総括）とテスト | 2 |
+| 写し（`refs.rs`＝19 語・Reference・番号・失敗理由の表・総括）とテスト | 2 |
 | 手続き（`procedure.rs`）と偽の口・4 経路・読み直しのテスト | 2〜2.5 |
 | 依頼の型・受付・窓口（対象の解決・段と預かり・写し・`executing`・読み直しの条件・終了）とテスト | 2〜2.5 |
 | 背景スレッドと本物の口（門・エンジン・写し 5 値・本番の道筋のテスト・字面の検査） | 1.5〜2 |
@@ -940,7 +940,7 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 | **合計** | **15.5〜17** |
 
 - 要件の段の見立て（13〜16）の内側。待ち行列と送り直しを持たないこと（決めたこと 1・2・5）で窓口が `install/desk.rs` より小さい。
-- タスク生成への申し送り: エンジンの印は誰とも共有しないので先頭に独立させる（`cargo test -p areka-update` で閉じる）。依存の追加と台帳 5 行（要件 8.2）は同じタスク。許可表の追加は本仕様が `file-drop` の次（23 → 43）で、`shell-balloon-switch` はその後。
+- タスク生成への申し送り: エンジンの印は誰とも共有しないので先頭に独立させる（`cargo test -p areka-update` で閉じる）。依存の追加と台帳 5 行（要件 8.2）は同じタスク。許可表の追加は本仕様が `file-drop` の次（23 → 42）で、`shell-balloon-switch` はその後。
 
 ## Open Questions / Risks
 
@@ -950,4 +950,4 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 4. **読み直しの後のシェル・バルーンの解き直し**。`boot_into` は `resolve_balloon_for_ghost` と `boot_ghost_strict` で解き直すが、更新で中身が変わった後の再起動は初めて。実機の項目 1 で新しい中身が効くことを見る。
 5. **定常到達ごとの `homeurl` の照会**が起動直後の SHIORI への GET を 1 つ増やす。`username` の prefetch と同じく軽いはずだが、起動の記録で往復の時間を 1 度見る。
 6. **`updateother` で今表示中でないシェル・バルーンを更新した後**は読み直しの対象にならない（今の切替の道は自分自身のゴーストだけを読み直す）。表示中でない物の中身は次に選んだときに効く。§8 に記す。
-7. **申し送り**（要件 8.8）: `shell-balloon-switch` へ「今のシェル・今のバルーン」の読み替え（`desk::resolve_targets`）と許可表の数 43・リソース 12／`alpha-release-signoff` へ第三者の手順「更新する」（メニュー → 進捗の台詞 → 引っ込んで戻る）と既知の制限（更新オプション・`other_homeurl_override`・URL の `feed`／`homeurl`・落としたファイルは `%TEMP%\areka\download\` に 7 日残る・戻せなかった残りは `.update-work` の下に残る・argv で始めたゴーストは読み直さない）。
+7. **申し送り**（要件 8.8）: `shell-balloon-switch` へ「今のシェル・今のバルーン」の読み替え（`desk::resolve_targets`）と許可表の数 42・リソース 12／`alpha-release-signoff` へ第三者の手順「更新する」（メニュー → 進捗の台詞 → 引っ込んで戻る）と既知の制限（更新オプション・`other_homeurl_override`・URL の `feed`／`homeurl`・落としたファイルは `%TEMP%\areka\download\` に 7 日残る・戻せなかった残りは `.update-work` の下に残る・argv で始めたゴーストは読み直さない）。

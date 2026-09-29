@@ -63,7 +63,7 @@
 | [`OnUpdate.OnMD5CompareBegin`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdate.OnMD5CompareBegin:1)／[`Complete`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdate.OnMD5CompareComplete:1)／[`Failure`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdate.OnMD5CompareFailure:1) | Reference0「比較するファイル名。／落としたファイル名。」Reference1「正しいMD5値。」Reference2「落としたファイルのMD5値。」 | 各ファイルの照合。 |
 | [`OnUpdateComplete`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateComplete:1) | 「ネットワーク更新が成功し完了した際に発生。」Reference0「※成功理由」Reference1「カンマでセパレートされた更新されたファイル名のリスト。」 | 差分 0 でもこれ（理由 `none`）。 |
 | [`OnUpdateFailure`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateFailure:1) | 「ネットワーク更新に失敗した際に発生。」Reference0「※失敗理由」Reference1「※SSPのみ　失敗したファイル名。」 | Reference1 はエンジンの `file()`。 |
-| [`OnUpdateOtherBegin`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOtherBegin:1) ほか `OnUpdateOther*` 9 語 | 「ゴースト以外の……」で Reference は `OnUpdate*` と同じ形 | シェル・バルーンはこの名。 |
+| [`OnUpdateOtherBegin`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOtherBegin:1) ほか `OnUpdateOther*` 8 語 | 「ゴースト以外の……」で Reference は `OnUpdate*` と同じ形 | シェル・バルーンはこの名。 |
 | [`OnUpdateResult`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateResult:1) | 「バルーン・シェル一括更新機能も含めてすべての更新結果を一括で通知する。」Reference*「更新を実行した順に … (※1)[\1](※2)[\1](※3)[\1](※4) または (※1)[\1](※2)[\1](※3)」※1 種別・※2「OK」「NG」・※3「成功した場合は更新ファイル数(更新ファイルなし=noneの場合0)、失敗した場合は失敗理由」・※4「失敗して、かつ失敗原因のファイルがわかる場合、そのファイル名」 | 総括。 |
 | [`OnUpdateResultEx`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateResultEx:1) | 「(※1)[\1](※2)[\1](※3)[\1](※4)[\1](※5)」※1 名前・※2 種別・※3 OK/NG・※4 件数か理由・※5 ファイル名 | `updateother` の総括。 |
 | 同ページの注記（ukadoc MCP の索引には無く、2026-09-29 にページ本体から引いた） | 更新対象種別「ghost / shell / balloon / plugin / headline / baseware ※CROWのみ」／更新実行理由「auto：SSPの設定などによる自動更新。manual：オーナードローメニューからの選択などによる手動実行。script：さくらスクリプトタグ（\![updatebymyself]など）による更新。」／成功理由「none：更新するファイルが無かった。changed：更新された。」／失敗理由「timeout：タイムアウトした。／too slow／md5 miss：MD5が一致しなかった。／artificial：ユーザ操作による更新中断。／404 等：そのステータスコードでの失敗。／fileio：※SSPのみ。容量不足による更新対象への書き込み失敗。／readonly／virusdetect／toomanyredirect／executing：※SSPのみ。すでに更新を実行中のため、二重起動を阻止した。／parse：※SSPのみ。取得はできたが、内容の解析に失敗した。／downloading／paramerror：※SSPのみ。更新実行タグの設定ミスにより更新を実行できなかった。」 | 種別・理由・成功理由・失敗理由は正典の語で送る。 |
@@ -81,7 +81,7 @@
 ### brief の記述を正典と実物で引き直して改めた点
 
 1. brief の「差分 0 なら `OnUpdateCheckComplete`／`OnUpdateCheckFailure`」は正典と合わない。`OnUpdateCheck*` はオプション `checkonly` の系で、標準の更新で差分 0 のときは `OnUpdateComplete`（成功理由 `none`）。emo2 の辞書もそう読んでいる（`changed` 以外を「更新無し」）。`OnUpdateCheck*` 4 語は α では送らない（裁定 8）。
-2. brief の「許可表 13 件」「`events_change_tests.rs` の 13」は `ghost-install`（21）と `file-drop`（23）で動いた。本仕様は 23 → **43**。
+2. brief の「許可表 13 件」「`events_change_tests.rs` の 13」は `ghost-install`（21）と `file-drop`（23）で動いた。本仕様は 23 → **42**。
 3. brief の「`OnUpdateProcessExec` を入れるなら返信付きの `KanadeMsg` の変種を足す（+2〜3）」は `ghost-install` が `RaiseEvent` に `reply` を足したので不要。応えの有無は `RaiseOutcome` の `Script`／`NoReply` で分かる。kanade に触るのは許可表 2 本だけのまま（裁定 5）。
 4. brief の「`homeurl`／`useorigin1`／`other_homeurl_override` の 3 行を `ALLOWED_RESOURCE_IDS` に足すだけ」のうち `other_homeurl_override` は Reference0〜4 付きの照会で、`ResourceQuery` に Reference の欄が無い。α では送らない（裁定 11）。足すのは 2 行（10 → 12）。
 5. brief の「終了で待つ口を `ghost-install` が作る」は `exit_wait.rs` として着地済み。本仕様は門を 1 つ登記するだけ。
@@ -107,7 +107,7 @@
   - 更新の手続き 1 本（対象を解く → `homeurl` を解く → エンジンの `run` を背景で呼ぶ → 進捗をイベントに写す → 総括 → 読み直し）と、入口 4 つ: メニュー「ネットワーク更新」・`\![updatebymyself]`・`\![update,ghost|shell|balloon(+…)|all]`・`\![updateother,--shell=名,--balloon=名]`。
   - 対象 3 種: 今のゴースト（`<根>/ghost/<フォルダ>/`）・今のシェル（起動時に解いたシェルのフォルダ）・今のバルーン（起動時に解いたバルーンのフォルダ）。`updateother` は名前で引いた、起動中でないシェル・バルーンも対象にできる。
   - `homeurl` の解決（SHIORI リソース → `descript.txt`）・`useorigin1`・`OnUpdateProcessExec`（メニューからだけ）。
-  - 送るイベント 20 語: `OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`・`OnUpdateComplete`・`OnUpdateFailure`・`OnUpdateOtherBegin`・`OnUpdateOtherReady`・`OnUpdateOther.OnDownloadBegin`・`OnUpdateOther.OnMD5CompareBegin`・`OnUpdateOther.OnMD5CompareComplete`・`OnUpdateOther.OnMD5CompareFailure`・`OnUpdateOtherComplete`・`OnUpdateOtherFailure`・`OnUpdateResult`・`OnUpdateResultEx`。リソース 2 語: `homeurl`・`useorigin1`。
+  - 送るイベント 19 語: `OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`・`OnUpdateComplete`・`OnUpdateFailure`・`OnUpdateOtherBegin`・`OnUpdateOtherReady`・`OnUpdateOther.OnDownloadBegin`・`OnUpdateOther.OnMD5CompareBegin`・`OnUpdateOther.OnMD5CompareComplete`・`OnUpdateOther.OnMD5CompareFailure`・`OnUpdateOtherComplete`・`OnUpdateOtherFailure`・`OnUpdateResult`・`OnUpdateResultEx`。リソース 2 語: `homeurl`・`useorigin1`。
   - 更新の間ゴーストを生かしたまま進めること（裁定 1）と、そのためのエンジンの後片付けの改修（`crates/areka-update/` の中だけ）。
   - 更新後の読み直し（同じゴーストへの、知らせを送らない切替）。
   - `\![execute,install,url,URL,nar]`（`nar`・省略）。
@@ -129,7 +129,7 @@
 - **Adjacent expectations**:
   - 完了 `update-engine` の保証（全部入るか 1 つも入らないか・失敗の値が原因のファイルと作業場所を持つ・無効な行は捨てて警告・`delete.txt` は走行を失敗にしない）に依る。本仕様は `run` の前提「SHIORI を先に解放している」を外して呼ぶ（要件 5・裁定 1）。
   - 完了 `ghost-shell-balloon-switch` の切替の入口（自分自身への切替）・汎用の通知の入口と応えの返事、完了 `ghost-install` の依頼の口と終了で待つ口、完了 `popup-menu-minimal` の「ネットワーク更新」枠、完了 `baseware-root-layout` の根と目録、完了 `session-mark-residue` の上限 3 秒と印の判定に依る。完了 spec の文書は書き換えない。
-  - 後続 `shell-balloon-switch`（本仕様の後・許可表の数を 43 から動かす・「今のシェル・今のバルーン」を切替後の物に読み替える）・`alpha-release-signoff`（第三者の手順「更新する」・既知の制限）へ申し送る（要件 8.8）。
+  - 後続 `shell-balloon-switch`（本仕様の後・許可表の数を 42 から動かす・「今のシェル・今のバルーン」を切替後の物に読み替える）・`alpha-release-signoff`（第三者の手順「更新する」・既知の制限）へ申し送る（要件 8.8）。
   - 並走する `balloon-color-emoji`（`areka-emo-text`・`areka-sakura`）とは共有するソースが 0。`Cargo.lock` は触る節が別。
 
 ## Requirements
@@ -180,7 +180,7 @@
 12. The areka shall 対象 1 つにつき締めの知らせを `OnUpdateComplete` か `OnUpdateFailure` のどちらか 1 件だけ送る。途中でアプリが終わった場合（要件 7）と、対象のゴーストが居なくなった場合（要件 5.7）だけは 0 件。
 13. When SHIORI リソース `useorigin1` の応答が `1` である, the areka shall 要件 2.6 の Reference0・2.8 の Reference1・Reference2 を 1 始まりで数える（番号は 1 から・「件数から 1 引いた数」は件数そのもの）。`0`・空・返事なしなら 0 始まり。
 14. The areka shall `useorigin1` を要求ごとに 1 回だけ照会し、その要求の全イベントで同じ読みを使う。
-15. The areka shall 本仕様で新しいイベント名を作らない（0 個）。送るのは正典に在る 20 語（Boundary Context）だけで、kanade の許可表は 23 語から 43 語になる。
+15. The areka shall 本仕様で新しいイベント名を作らない（0 個）。送るのは正典に在る 19 語（Boundary Context）だけで、kanade の許可表は 23 語から 42 語になる。
 
 ### Requirement 3: 総括を 1 回送る
 
@@ -275,12 +275,12 @@
 
 1. The areka shall 手続きの各段（要求を受けた・対象と更新先を解いた〔飛ばした対象も〕・`OnUpdateProcessExec` の応えの有無・エンジンを呼んだ・進捗の各件・締めの知らせ・総括・読み直しの要求）を記録に残し、記録の無い失敗の経路を作らない（0 本）。
 2. The 本仕様 shall 本体から `areka-update` を辿れるようにしたその変更と同じコミットで、網羅台帳 `assets.toml` の `descript_install` の「相対パス」（`delete.txt` の行の書式）を実装済みへ動かし、`descript_ghost`／`descript_shell`／`descript_balloon` の `homeurl` を読み手の定義の場所（正典 URL の行 `// ukadoc:` 付き）とともに実装済みへ動かす。
-3. The 本仕様 shall 網羅台帳の、本仕様が送る 20 イベント・リソース 2 語（`homeurl`・`useorigin1`）・`updatebutton.caption`（枠の登記と同じコミットで実装済みへ）・`\![updatebymyself…]`・`\![update,更新対象…]`・`\![updateother,…]`・`\![execute,install,url,…]` の行を実物に合わせて更新し、送らない行（`OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・`OnUpdatedataCreating`／`Created`・`other_homeurl_override`・`\![update,platform]`・`\![execute,createupdatedata]`）は状態を動かさず備考に理由を書く。報告書は生成器で作り直し、`roadmap-draft.md` の本仕様の行の数（`owner_count`）を宛先の実数に合わせる（手で数を直さない・`cargo test -p ukadoc-survey` が緑）。
+3. The 本仕様 shall 網羅台帳の、本仕様が送る 19 イベント・リソース 2 語（`homeurl`・`useorigin1`）・`updatebutton.caption`（枠の登記と同じコミットで実装済みへ）・`\![updatebymyself…]`・`\![update,更新対象…]`・`\![updateother,…]`・`\![execute,install,url,…]` の行を実物に合わせて更新し、送らない行（`OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・`OnUpdatedataCreating`／`Created`・`other_homeurl_override`・`\![update,platform]`・`\![execute,createupdatedata]`）は状態を動かさず備考に理由を書く。報告書は生成器で作り直し、`roadmap-draft.md` の本仕様の行の数（`owner_count`）を宛先の実数に合わせる（手で数を直さない・`cargo test -p ukadoc-survey` が緑）。
 4. The 本仕様 shall `dist/README.txt` の「今の版ではできません」を挙げる 2 行から「ネットワーク更新」の語を外す（`shell-balloon-switch` の分が残っていれば残す）。「■ 更新のしかた」の本文は `alpha-release-signoff` が書く。
 5. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 に、要件 10 の裁定のうち正典が沈黙している点を記す。
 6. The 本仕様 shall 本番コードが読む環境変数を足さず（0 個）、外部クレートを足さない（0 個。ワークスペースの中の `areka-update` を `crates/areka` の依存に足すことは数えない）。
 7. The 本仕様 shall 本番ファイルとテストファイルのどれも 1,000 行を超えさせない（`ghost_session.rs` 701・`emo2_boot/mod.rs` 816・`consumer_ledger.rs` 786 に足す行は各 10 行以内の見込み。新しいテストは兄弟の新しいファイルへ）。
-8. The 本仕様 shall 完了時に次を申し送る: `shell-balloon-switch` へ「今のシェル・今のバルーン」の読み替え（要件 1.4 の 3 つを切替後の物にする）と許可表の数 43／`alpha-release-signoff` へ第三者の手順「更新する」（メニュー → 進捗の台詞 → 引っ込んで戻る）と既知の制限（更新オプション・`other_homeurl_override`・URL の `feed`／`homeurl`・落としたファイルは 7 日残る・戻せなかった残りは `.update-work` の下に残る）。
+8. The 本仕様 shall 完了時に次を申し送る: `shell-balloon-switch` へ「今のシェル・今のバルーン」の読み替え（要件 1.4 の 3 つを切替後の物にする）と許可表の数 42／`alpha-release-signoff` へ第三者の手順「更新する」（メニュー → 進捗の台詞 → 引っ込んで戻る）と既知の制限（更新オプション・`other_homeurl_override`・URL の `feed`／`homeurl`・落としたファイルは 7 日残る・戻せなかった残りは `.update-work` の下に残る）。
 
 ### Requirement 9: 決定論テストと実機確認
 
@@ -300,7 +300,7 @@
 10. The 本仕様 shall エンジンの後片付けの改修（要件 5.9）を、消せないファイルを `old/` に残した走行の後で、次の走行が警告を出さずに消すこと、戻せなかった走行の残骸は今日どおり警告に出ることの 2 通りで判定する（`crates/areka-update/` の兄弟テスト）。
 11. The 本仕様 shall `\![execute,install,url]` の受け方（`nar`・省略・他の種別・URL の形）と、取得の成功で依頼が 1 本作られること・失敗で依頼 0 件と `error!` 1 件を、偽の取得で判定する。
 12. The 本仕様 shall 終了で待つ口を、実時間を待たない形で判定する（走っていれば上限の内に待つ・上限に達したら `warn!` を残して進む・走っていなければ待たない・後始末の後はイベント 0 件と読み直し 0 件）。
-13. The 本仕様 shall kanade の許可表が 43 語・リソースの許可表が 12 語であることを判定する（既存の判定の数 23 を書き換える）。
+13. The 本仕様 shall kanade の許可表が 42 語・リソースの許可表が 12 語であることを判定する（既存の判定の数 23 を書き換える）。
 14. The 本仕様 shall 既存のテストを置き換え無しに消さない。振る舞いが変わる行は新しい振る舞いを固定する形へ書き換える。
 15. The 本仕様 shall ネットへ出るテストを常時テストに入れない（実機の一周は `#[ignore]` か手順書）。
 16. When 実機で確認する, the 開発者 shall 次を見て `signoff.md` に記録する（emo2 は根へ入れた物をコマンドライン引数なしで起こす＝裁定 17 の読み直さない経路を踏まない）: ⑴ emo2 を起動し、メニュー「ネットワーク更新」→ 配布サイト（https・`homeurl,https://ekicyou.github.io/ghost_dev/emo2/emo2/`）に置いた差分 1 件が入る → emo2 の台詞（`OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete` の「更新成功」）→ 台詞の後に引っ込んで戻る（記録に `ghost_switch_done` 相当と読み直し後の `OnGhostChanged`）→ シェル・バルーンの中身も読み直されていること ⑵ もう 1 度更新 → 差分 0 → `OnUpdateComplete` の Reference0＝`none`（「更新無し」の台詞）→ 読み直さない ⑶ `homeurl` の無いシェルが飛ばされ、総括にゴーストとバルーンだけが載る（emo2 のバルーンの更新先は別のサイト〔emo-gs〕なので、その中身次第でバルーンが更新される・失敗する。予期しない結果は記録して開発者へ） ⑷ 配布サイトに置けない場合はローカルの http で ⑴⑵ を行い、https が未確認のままであることを既知の制限へ申し送る。

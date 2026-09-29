@@ -12,10 +12,10 @@
   - _Requirements: 5.9, 9.10, 10.1_
   - _Boundary: areka-update work_
 
-- [ ] 1.2 (P) kanade の許可表に更新のイベント 20 語とリソース 2 語を足す
-  - 送る 20 語（`OnUpdateProcessExec`〜`OnUpdateResultEx`）を、各 1 行の正典の URL の行つきでイベントの許可表に足し、冒頭の表にも 20 行足す（23 → 43）。`OnUpdateCheck*` 4 語と `OnUpdateResultExplorer` は足さない
+- [ ] 1.2 (P) kanade の許可表に更新のイベント 19 語とリソース 2 語を足す
+  - 送る 19 語（`OnUpdateProcessExec`〜`OnUpdateResultEx`）を、各 1 行の正典の URL の行つきでイベントの許可表に足し、冒頭の表にも 19 行足す（23 → 42）。`OnUpdateCheck*` 4 語と `OnUpdateResultExplorer` は足さない
   - リソースの許可表に `homeurl`・`useorigin1` を正典の URL の行つきで足す（10 → 12）。`other_homeurl_override` は足さない
-  - 数の判定を 43 と 12 へ書き換え、20 語が引けて `OnUpdateCheckComplete` が引けないことを同じテストで判定する
+  - 数の判定を 42 と 12 へ書き換え、19 語が引けて `OnUpdateCheckComplete` が引けないことを同じテストで判定する
   - kanade のテストが緑で、運行表・殻・`KanadeMsg` の差分が 0
   - _Requirements: 2.15, 9.13, 10.11_
   - _Boundary: areka-kanade schedule events, schedule resources_
@@ -37,7 +37,7 @@
 
 - [ ] 3. 純粋な部品
 - [ ] 3.1 (P) イベント名・Reference・番号・失敗理由・総括の写しを作る
-  - 20 語のイベント名を、各 1 行の正典の URL の行つきの定数で持つ。ゴーストは `OnUpdate*`、シェル・バルーンは `OnUpdateOther*` の組を種別から選ぶ
+  - 19 語のイベント名を、各 1 行の正典の URL の行つきの定数で持つ。ゴーストは `OnUpdate*`、シェル・バルーンは `OnUpdateOther*` の組を種別から選ぶ
   - `useorigin1` の読み（`1` なら 1 始まり・それ以外と返事なしは 0 始まり）、全イベントに同じ値で載せる種別と理由、`OnUpdateProcessExec`・`OnUpdateBegin`・差分の一覧・各ファイルの取得と照合（照合は 1 回の通知から始まりと結果の 2 件）・締め（`none`／`changed` と入れ替えた一覧）・失敗・二重起動（`executing`）の Reference を組む
   - 失敗理由の表は、エンジンの失敗 11 種と取得の失敗 8 種を包む網羅の分岐で、ワイルドカードの腕を置かない。正典に語の無い輸送の失敗は `dns`・`connect`・`tls`・`toolarge`・`http`
   - 総括は `OnUpdateResult`（`種別\x01OK\x01件数` か `種別\x01NG\x01理由(\x01ファイル名)`）と `OnUpdateResultEx`（先頭に名前）。区切りはインストールの判断の区切りの定数を借りる。どの関数も fs・記録・スレッドに触れない
@@ -154,18 +154,18 @@
   - _Depends: 6.4_
 
 - [ ] 8. 台帳・生成物・配布物の説明・互換の記述・申し送りを実物に揃える
-  - `shiori.toml` の 20 イベント（証拠は写しの定数の上の行）と `homeurl`・`useorigin1`、`sakura-script.toml` の `\![updatebymyself…]`・`\![update,更新対象…]`・`\![updateother,…]`・`\![execute,install,url,…]` を実装済みにする。送らない行（`OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・`OnUpdatedataCreating`／`Created`・`other_homeurl_override`・`\![update,platform]`・`\![execute,createupdatedata]`）は状態を動かさず備考に理由
+  - `shiori.toml` の 19 イベント（証拠は写しの定数の上の行）と `homeurl`・`useorigin1`、`sakura-script.toml` の `\![updatebymyself…]`・`\![update,更新対象…]`・`\![updateother,…]`・`\![execute,install,url,…]` を実装済みにする。送らない行（`OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・`OnUpdatedataCreating`／`Created`・`other_homeurl_override`・`\![update,platform]`・`\![execute,createupdatedata]`）は状態を動かさず備考に理由
   - 生成物と `roadmap-draft.md` の数を生成器で作り直す（手で数を直さない）
   - `dist/README.txt` の 2 行から「ネットワーク更新」の語を外す（シェル・バルーンの切り替えの分は残す）
   - `doc/COMPAT_ARCHITECTURE.md` §8 に、正典が沈黙している点の扱いと、エンジンの前提「SHIORI を先に解放」を外して呼ぶこと（写像中の DLL の退避は印で区別）を記す。Monitoring の表に無い記録の語が実装で増えていれば design の表へ拾う
-  - 後続 `shell-balloon-switch` と `alpha-release-signoff` の brief に、要件 8.8 の申し送り（今のシェル・バルーンの読み替えと許可表 43・リソース 12／第三者の手順「更新する」と既知の制限）を足す
+  - 後続 `shell-balloon-switch` と `alpha-release-signoff` の brief に、要件 8.8 の申し送り（今のシェル・バルーンの読み替えと許可表 42・リソース 12／第三者の手順「更新する」と既知の制限）を足す
   - `ukadoc-survey` のテストが緑で、台帳の検査が赤を出さない
   - _Requirements: 5.10, 8.3, 8.4, 8.5, 8.8_
   - _Depends: 4.2, 7.1, 7.2_
 
 - [ ] 9. 全体の確認と実機サインオフ
 - [ ] 9.1 全体のテストと規律の検査を通す
-  - `tools/test-all.ps1` が緑。既存のテストは置き換え無しに消していない（数の判定は 23 → 43・10 → 12・10 → 13 へ書き換えただけ）。ネットへ出るテストは常時テストに無い
+  - `tools/test-all.ps1` が緑。既存のテストは置き換え無しに消していない（数の判定は 23 → 42・10 → 12・10 → 13 へ書き換えただけ）。ネットへ出るテストは常時テストに無い
   - 本番とテストのどのファイルも 1,000 行以下。本番コードが読む環境変数・外部クレート・同期送信（`SendMessageW(`／`SendMessageTimeoutW(`）の例外表の追加が 0。メッセージボックスを出す呼び出しが本仕様のコードに 0
   - 印の判定（`session_mark_verdict`）の引数と理由の語、切替・メニューの終了・OS の終了で SHIORI を待つ期限、終了で待つ口の呼び手（同じ出発点の予算）が変わっていない
   - _Requirements: 1.18, 4.1, 5.11, 7.2, 7.6, 7.7, 8.6, 8.7, 9.14, 9.15_
