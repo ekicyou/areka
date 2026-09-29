@@ -195,7 +195,7 @@ doc/ukadoc-coverage/
 - `crates/areka-kanade/src/schedule/events_change_tests.rs`（216 行）— `assert_eq!(ALLOWED_EVENT_IDS.len(), 23)` と行コメントの数。
 - `doc/ukadoc-coverage/ledger/shiori.toml` — `[entry."ukadoc:list_shiori_event:OnFileDrop2:1"]`・`[entry."ukadoc:list_shiori_event:OnDirectoryDrop:1"]` の `status = "implemented"`・`owner = "areka-P0-file-drop"`・`note`（壊れ方: 該当なし。areka は…）。`introduced`・`priority`・`values` は据え置き。`alias` の 3 行と `OnFileDropping` は触らない。
 - `doc/ukadoc-coverage/report/` — `cargo run -p ukadoc-survey -- report` と `-- report-summary` で作り直す。
-- `doc/ukadoc-coverage/roadmap-draft.md` — `[[spec]] name = "areka-P0-file-drop" stage = "B" bundle = "投げ込み" owner_count = 2 wave = "B6"` を末尾に足し `[briefs].count = 38`・`snapshot_on` を着地日に。段階 B の表の順位 4「投げ込み」の行を「`areka-P0-file-drop`（既存 spec が引受先・構成 12 件のうち 2 件）」／依存する既存 spec「`areka-P0-file-drop`（B6・2 件）」に直す（束の構成は `linkage.md` の `[bundle."投げ込み"]`）。行数の追記の段落を 1 つ足す（37 → 38 の数え直し）。
+- `doc/ukadoc-coverage/roadmap-draft.md` — `[[spec]] name = "areka-P0-file-drop" stage = "B" bundle = "投げ込み" owner_count = 2 wave = "B6"` を末尾に足し `[briefs].count = 38`・`snapshot_on` を着地日に。段階 B の表の順位 4「投げ込み」の行を「`areka-P0-file-drop`（既存 spec が引受先・構成 10 件のうち 2 件）」／依存する既存 spec「`areka-P0-file-drop`（B6・2 件）」に直す（束の構成は `linkage.md` の `[bundle."投げ込み"]`）。行数の追記の段落を 1 つ足す（37 → 38 の数え直し）。
 
 どのファイルも 1,000 行を超えない（本番・テストとも）。新規の本番ファイルは `drop_files.rs`（〜150 行）・`file_drop.rs`（〜300 行）の 2 本。
 

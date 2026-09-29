@@ -2092,24 +2092,28 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnDirectoryDrop:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-file-drop"
 priority = "B4"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。キャラクター窓・バルーン窓の
+絵の上へフォルダを落とすと、フォルダ 1 つにつき 1 回、落とされた順に GET で送る。Reference0＝
+フォルダのパス（OS から受けた綴りのまま）・Reference1＝落とされた窓のスコープ番号。install.txt を
+持つフォルダもフォルダとして扱い、インストールへは回さない。同じ投げ込みにファイルが混ざって
+いれば、先に OnFileDrop2 を 1 回送ってからフォルダの分を送る。絵の外（透けた余白）へ落とした物は
+背後の窓へ抜けて areka に届かない。管理者として起動した areka へふつうの権限から落とした物は OS が
+届けない（手当てしていない）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。受け手は info のログ
+（file_drop_received・振り分けた数）と、送るたびに info のログ（file_drop_event_sent・名前と
+Reference0 の要約）を残す。送り口が無いときは warn のログ（file_drop_no_kanade）、kanade が
+止まっていれば warn のログ（file_drop_send_failed）を 1 行残して送らない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は
+crates/areka/src/input_events/file_drop.rs の定数 ON_DIRECTORY_DROP、Reference の組み立ては同じ
+ファイルの directory_drop_references、振り分けは sort_drops、受け手は on_ghost_files_dropped。
 無いと失うもの: フォルダを渡しても受け取ったそぶりが無い。
 """
 
@@ -2664,24 +2668,34 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnFileDrop2:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.7.98"
-owner = ""
+owner = "areka-P0-file-drop"
 priority = "B4"
 values = ["触れ合い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。キャラクター窓・バルーン窓の
+絵の上へ物を落とすと、そのうちフォルダでもインストール対象（拡張子が .nar／.zip で目次に
+install.txt が在る書庫）でもないファイルを、1 回の投げ込みにつき 1 回、落とされた順にまとめて GET で
+送る。Reference0＝パスを byte 値 1 区切りで並べたもの・Reference1＝落とされた窓のスコープ番号・
+Reference2＝同じ並び・同じ数の MIME を byte 値 1 区切りで並べたもの（拡張子の表に無ければ空のまま
+区切りは残す）。目次が読めない書庫と install.txt の無い書庫もこちらへ入る。フォルダとインストール
+対象だけの投げ込みでは送らない。絵の外（透けた余白）へ落とした物は背後の窓へ抜けて areka に
+届かない。管理者として起動した areka へふつうの権限から落とした物は OS が届けない（手当てして
+いない）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。受け手は info のログ
+（file_drop_received・振り分けた数）と、送るたびに info のログ（file_drop_event_sent・名前と
+Reference0 の要約）を残す。フォルダかどうかを問えなかった物は warn のログ（file_drop_probe_failed）
+を残してフォルダでないものとして拡張子で決め、目次が読めない書庫は warn のログ
+（file_drop_archive_unreadable）を残してこちらへ倒す。送り口が無いときは warn のログ
+（file_drop_no_kanade）、kanade が止まっていれば warn のログ（file_drop_send_failed）を 1 行残して
+送らない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は
+crates/areka/src/input_events/file_drop.rs の定数 ON_FILE_DROP2、Reference の組み立ては同じ
+ファイルの file_drop2_references、MIME の表は MIME_TABLE、振り分けは sort_drops、受け手は
+on_ghost_files_dropped。
 無いと失うもの: ファイルを渡しても受け取ったそぶりが無く、渡す遊びが成立しない。
 
 版番号: 本文に出てくる版番号は 2.7.98 の 1 つだけで、これは Reference2（ドロップされたファイルの
@@ -3354,10 +3368,11 @@ note = """
 ときだけ、最後の書庫の完了の知らせの後に GET で 1 回送る。Reference0〜2 は OnInstallCompleteEx と
 同じ形で、全部の書庫ぶんを byte 値 1 区切りで並べる。書庫が 1 本だけの依頼と、1 本でも入らなかった
 依頼では送らない。
-条件: 手続きへの依頼は書庫を 1 本以上並べられるが、メニューの「インストール…」と台本
-\\![execute,install,path,…] はどちらも 1 本だけを渡す。2 本以上を並べる本番の呼び手は、窓への投げ込み
-を受け持つ後続 areka-P0-file-drop が着地するまで 0 で、それまでこの振る舞いは決定論テスト
-（crates/areka/src/install/procedure_branch_tests.rs）だけが確かめる。
+条件: 手続きへの依頼は書庫を 1 本以上並べられる。メニューの「インストール…」と台本
+\\![execute,install,path,…] はどちらも 1 本だけを渡し、2 本以上を並べる本番の呼び手は窓への投げ込み
+（areka-P0-file-drop の crates/areka/src/input_events/file_drop.rs の on_ghost_files_dropped）で、
+1 回の投げ込みのインストール対象を全部 1 つの依頼にまとめて渡す。振る舞いは決定論テスト
+（crates/areka/src/install/procedure_branch_tests.rs）でも確かめる。
 ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ
 （install_event・名前と応えの有無）を残す。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
