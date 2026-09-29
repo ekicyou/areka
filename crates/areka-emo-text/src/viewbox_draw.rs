@@ -46,7 +46,7 @@ use std::rc::Rc;
 use tracing::warn;
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_ANTIALIAS_MODE_ALIASED, D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE,
+    D2D1_ANTIALIAS_MODE_ALIASED, D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS,
     ID2D1DeviceContext, ID2D1Image, ID2D1SolidColorBrush,
 };
 use windows::Win32::Graphics::DirectWrite::{
@@ -61,7 +61,8 @@ use crate::TextLayerError;
 use crate::canvas::GlyphRunContent;
 use crate::canvas::{ContentCanvas, ResidentContent};
 use crate::draw::{
-    FontCatalog, LineLayoutStore, ResolvedFont, create_d2d_target_bitmap, create_text_format,
+    FontCatalog, LineLayoutStore, ResolvedFont, TEXT_DRAW_OPTIONS, create_d2d_target_bitmap,
+    create_text_format,
 };
 use crate::layout::{PositionedGlyph, VisibleWindow};
 use crate::look::StyleTable;
@@ -140,6 +141,10 @@ pub struct ViewboxExecutor {
     /// **前**に `Err` を返し、失敗フレームの再試行安全（front 不変・planner 未 commit）を檻化する。
     #[cfg(test)]
     fail_next_render: bool,
+    /// テスト専用: 文字を描く描画オプション（既定は [`TEXT_DRAW_OPTIONS`]）。非テストビルドには
+    /// この欄が無く、本番は定数そのものを渡す（[`Self::text_draw_options`]）。
+    #[cfg(test)]
+    text_draw_options: D2D1_DRAW_TEXT_OPTIONS,
 }
 
 impl ViewboxExecutor {
@@ -193,7 +198,31 @@ impl ViewboxExecutor {
             seam_warned: false,
             #[cfg(test)]
             fail_next_render: false,
+            #[cfg(test)]
+            text_draw_options: TEXT_DRAW_OPTIONS,
         })
+    }
+
+    /// 文字を描く描画オプション。本番ビルドは常に定数 [`TEXT_DRAW_OPTIONS`] へ戻り、
+    /// テストビルドだけ欄の値（既定は同じ定数）を返す。
+    #[cfg(not(test))]
+    fn text_draw_options(&self) -> D2D1_DRAW_TEXT_OPTIONS {
+        TEXT_DRAW_OPTIONS
+    }
+
+    #[cfg(test)]
+    fn text_draw_options(&self) -> D2D1_DRAW_TEXT_OPTIONS {
+        self.text_draw_options
+    }
+
+    /// テスト専用: 描画オプションだけを差し替える（色つきと単色の描き比べ・要件 6.4）。
+    ///
+    /// **最初の描画の前に 1 度だけ呼ぶ**。描画オプションは行の指紋に入らないので、同じ executor で
+    /// 描き直しても何も描かれず前の面が残る——対照は executor と面を別々に作って取る。
+    /// 行のキャッシュ・planner・面には触れない。
+    #[cfg(test)]
+    pub(crate) fn set_text_draw_options_for_test(&mut self, options: D2D1_DRAW_TEXT_OPTIONS) {
+        self.text_draw_options = options;
     }
 
     /// テスト専用: 次の Update フレームの EndDraw 後にデバイス失敗を 1 回注入する（G5・
@@ -592,7 +621,7 @@ impl ViewboxExecutor {
                             d.origin,
                             &d.layout,
                             &brush,
-                            D2D1_DRAW_TEXT_OPTIONS_NONE,
+                            self.text_draw_options(),
                         );
                         self.stats.draw_text_layout_calls += 1;
                     }
