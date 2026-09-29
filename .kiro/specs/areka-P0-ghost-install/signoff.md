@@ -50,6 +50,49 @@ design の Testing Strategy「実機」の 4 項目。項目 3 はタスク 8.2�
 - 気付いたこと（インストールの手続きの外）:
   - 起き直しの後に `WARN chain_finalize: 初期配置の確定が続けて見送られている deferrals=600 scope=Some(1) reason=scope 1: 実表示寸が未確定（初回表示が未成立）` が 1 件出た（00:56:14）。画面では 2 体とも表示されていた。配置の側の記録で、この spec の境界の外
 
-## 項目 1・2・4（タスク 11.2）
+## 項目 2: `\![change,ghost,lastinstalled]` で切り替わる（タスク 11.2）
 
-未記録。
+- 日時: 2026-09-29 13:39〜13:40 JST（記録の時刻は UTC で 04:39〜04:40）
+- HEAD: `2745cb4f`（タスク 11.1 のコミット）
+- 実行体: `tools/package-alpha.ps1` で HEAD から組んだ `areka-alpha-x64-20260929-2745cb4.zip`（全段 緑）を新しい根 `C:\areka-su3` へ展開した
+- 検体（画面を操作せずに台本だけで一周させる形）:
+  - `ghost\rpost_script\`: `vendors/sample_ghost/R_POST_and_KOMAINU.nar` の中身の写し（SHIORI は里々・32bit の補助プロセス経由）。差し替えは `ghost\master\dic02_Event.txt` の 3 か所と `descript.txt` の `name`（`台本役ポスト`）だけ（Shift_JIS のまま）
+    - `＊OnFirstBoot`・`＊OnBoot` の本文: `：台本で入れます。\_w[1000]\![execute,install,path,C:/areka-nar/R_POST_and_KOMAINU.nar]`
+    - `＊OnInstallComplete` の本文: `：入れたので切り替えます。\_w[1500]\![change,ghost,lastinstalled]`
+  - `C:\areka-nar\R_POST_and_KOMAINU.nar`: `vendors/sample_ghost/` の原本の複製（宛先 `ghost\R_POST_and_KOMAINU`＝根に無い）
+  - アプリの記憶 `profile\areka\sylphya.toml` に `[last] ghost = "rpost_script"` だけを置き、検体から起動した
+- 環境変数: `NO_COLOR=1`・`AREKA_NO_ALERT=1`・`RUST_LOG=info,areka=debug,kanade=trace,areka_sakura=debug`・`AREKA_APP_SMOKE_EXIT_MS=45000`（自分で終わる）
+- 操作: なし（起動して 45 秒で自動終了）
+
+### 結果: 切り替わった
+
+```
+04:39:20.447841 shiori_request method=GET id=OnFirstBoot references=["0"]
+04:39:21.890299 install_order_queued origin=Script count=1
+04:39:21.890808 install_begin archive=C:/areka-nar/R_POST_and_KOMAINU.nar origin=Script
+04:39:21.898854 shiori_request method=GET id=OnInstallBegin
+04:39:22.924157 install_accept verdict="accepted" accept=None target_ghost=None
+04:39:22.947594 install_done kind=Ghost places=["C:\\areka-su3\\ghost\\R_POST_and_KOMAINU"]
+04:39:22.951589 install_names_updated ghost="Ｒポストと狛犬" object="Ｒポストと狛犬" published=true
+04:39:22.957617 shiori_request method=GET id=OnInstallCompleteEx references=["ghost", "Ｒポストと狛犬", "C:\\areka-su3\\ghost\\R_POST_and_KOMAINU"]
+04:39:22.965670 shiori_request method=GET id=OnInstallComplete references=["ghost", "Ｒポストと狛犬", ""]
+04:39:22.967954 install_order_done ends=[Installed([ghost Ｒポストと狛犬])]
+04:39:25.142547 ghost_switch_resolved name=lastinstalled to=R_POST_and_KOMAINU position=None
+04:39:25.142885 ghost_switch_requested from=Some("台本役ポスト") to=Ｒポストと狛犬 raise_event=false origin="automatic"
+04:39:25.307411 ghost_switch_booted ghost=Some("R_POST_and_KOMAINU") attempt=Target
+04:39:25.736528 ghost_switch_done ghost=Some("R_POST_and_KOMAINU") attempt=Target
+04:40:04.656635 app_exit origin=Smoke closed=4
+04:40:04.692761 session_mark_cleared
+```
+
+- 判定:
+  - 台本の入口（要件 1.5）から入り、`ghost\R_POST_and_KOMAINU` へ展開された（`descript.txt` が在る）
+  - 入れた後、ゴーストが台本で頼むまでの約 2.2 秒は切り替わらず、今のゴースト（台本役ポスト）のまま（`install_done` 04:39:22.9 → `ghost_switch_requested` 04:39:25.1 は `OnInstallComplete` の台詞の `\_w[1500]` の後）
+  - `\![change,ghost,lastinstalled]` が入れたゴーストへ解け（`ghost_switch_resolved name=lastinstalled to=R_POST_and_KOMAINU`）、起こして定常に入った（`ghost_switch_done`）。アプリの記憶の `[last] ghost` も `R_POST_and_KOMAINU` になった
+  - `OnInstallComplete`（旧仕様）の Reference2 は空（入れた物が 1 つなので 2 件目の名前が無い）
+  - ERROR 0 件。WARN はバルーンの面の縮退（`balloons2.png`／`balloons3.png` が本体側の系列へ）だけで、インストールと関わらない
+  - 終了コード 0・起動中の印を消した。走行の後、`C:\areka-su*` 配下のプロセスは 0 件
+
+## 項目 1・4（タスク 11.2）
+
+未記録（メニューと利用条件の画面を手で操作する）。
