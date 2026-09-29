@@ -71,7 +71,7 @@
   - 完了時: 新テストが 3 方式すべてで緑
   - _Requirements: 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 4.7, 6.2, 6.3, 6.8_
 
-- [ ] 4. COM 層の読み戻し判定
+- [x] 4. COM 層の読み戻し判定
 - [x] 4.1 テスト支援に色つきの画素の数え方と代替フォントの実在判定を足し、色の判定と非絵文字の対照を置く
   - テスト支援に「α≠0 かつ B/G/R のいずれか＞0」の画素数と、Segoe UI Emoji が引けなければ理由を添えて失敗させる判定を足す
   - 新しい COM 層テストファイルを置き、本番の描画から繋いで `lib.rs` の純粋層の走査の外の一覧に登記する。各テストの先頭で代替フォントの実在を判定する（飛ばして緑にしない）
@@ -97,7 +97,7 @@
   - 完了時: 改めた判定と足した組が 3 方式すべてで緑
   - _Requirements: 3.1, 3.2, 3.3, 4.6, 6.2, 6.6, 6.8_
 
-- [ ] 4.4 スクロールの blit と live-diff のバイト等価の組に絵文字を足す
+- [x] 4.4 スクロールの blit と live-diff のバイト等価の組に絵文字を足す
   - live-diff のシナリオに「今日は家族👨‍👩‍👧と😀」を含む組を 1 つ足し、本番と照合用の読み戻しのバイト等価を 3 方式で判定する
   - スクロールの保持のテストの初期行に絵文字を含む行を 1 つ足し、blit と全域再描画の等価が保たれることを判定する
   - 完了時: 足した組が緑で、既存の組の期待値の差分が 0
@@ -120,3 +120,4 @@
 ## Implementation Notes
 - 1.2/1.3: テストの cue の時間・グリフ数の補助のうち、`actor_test_support.rs`・`state_test_support.rs` 以外（`viewbox_draw_live_diff_tests.rs`・`viewbox_draw_scroll_retain_tests.rs`・`actor_scroll_retain_tests.rs`・`viewbox_draw_oracle_regression_tests.rs`・`viewbox_draw_png_dump_tests.rs`・`draw_oracle_tests.rs`・`draw_metrics_styled_tests.rs`・`tests/` の `pipeline`／`draw_readback`／`choice_fixture`／`line_pitch_readback`／`scale_invariance`）はまだ `chars().count()`。絵文字を流し込むタスク（4.3・4.4 ほか）は、そのファイルの補助を先に `areka_sakura::cluster::cluster_count` へ替える
 - 1.3: `cargo fmt` は編集したファイルを LF に替えることがある＝CRLF へ戻して `git ls-files --eol` で確かめる
+- 4.4: スクロールの保持のテストの仮の幅の見積もりは固定幅（全角 28 px）だと 😀（実幅 38.45 px）を低く見積もり、送りの速い経路で右端が欠ける＝テスト用の包み `AtLeastRealAdvance`（固定幅と実幅の大きい方）で配置する。本番は実幅で配置するので製品の欠陥ではない
