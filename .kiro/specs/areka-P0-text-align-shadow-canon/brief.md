@@ -51,3 +51,9 @@
 - 決定論テスト必達（3 書字方向 × 5 項目＋リセット＋インデント＋追加登記 4）。**要件定義は Fable**（SC8 の裁定と追加登記 4 の前提変更）。
 
 > **📌 2026-09-13 相互登記（`areka-P0-text-decoration-canon` 着地）**——寄せ 2 項目（`align`／`valign`）と影 3 項目（`shadowcolor`／`shadowcolor,none`／`shadowstyle`）は親 spec が引数列のまま `ActorTextState::unowned_vocab()`（`crates/areka-emo-text/src/state_decoration.rs`）に保持しており表示を変えない。実装は `look.rs` の `TextLook` にフィールドを足し、`look.rs::apply_font_tag` で `Note::Unowned` を返している腕を専用の腕へ移すだけでよく、戻す操作（`state_decoration.rs::TextLayerState::reset_decoration`）は `TextLook` を丸ごと置き換えるので新しい項目も列挙なしで自動的に戻る。影の予約名 `canvas.rs::RESERVED_EFFECT_SHADOW` の実体化も本 spec の所有（親 spec が doc で明記済み）。
+
+## `balloon-color-emoji` からの申し送り（2026-09-29）
+
+- `balloon-color-emoji` は、バルーン文字の描画（`crates/areka-emo-text/src/viewbox_draw.rs` の `ViewboxExecutor::render`。本番の経路はここだけで、`draw.rs` の `DrawExecutor` は `#[cfg(test)]` の照合用）に `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT` を渡す。
+- 影の複製を同じ指定で描くと、カラー絵文字の影まで多色になる。**影の複製はカラーフォントを使わずに、単色のブラシで描く**こと。
+- 影の位置と幅は、書記素クラスタ単位になった後の計測に従う。
