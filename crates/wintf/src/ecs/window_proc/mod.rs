@@ -3,6 +3,7 @@
 //! Windowsメッセージのディスパッチとハンドラ管理
 
 mod dpi_helpers;
+mod drop_files;
 mod keyboard;
 mod lifecycle;
 mod mouse_click;
