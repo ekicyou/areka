@@ -347,3 +347,7 @@ mod procedure_test_support;
 #[cfg(test)]
 #[path = "procedure_tests.rs"]
 mod procedure_tests;
+
+#[cfg(test)]
+#[path = "procedure_reload_tests.rs"]
+mod procedure_reload_tests;

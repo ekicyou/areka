@@ -75,7 +75,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.7, 9.11, 9.14, 10.3_
   - _Depends: 4.1_
 
-- [ ] 5. 更新の手続き（要求 1 件の一周と対象 1 つの一周）
+- [x] 5. 更新の手続き（要求 1 件の一周と対象 1 つの一周）
 - [x] 5.1 口を 5 つに限った手続きと偽の口を作り、対象 1 つの 4 経路と入口の分かれ道を固定する
   - 手続きの口（イベントを送って応えを待つ・リソースを 1 回照会する・エンジンを 1 周回す・読み直しを頼む・標準の手続きが始まったと知らせる）をどれも `&self` で置く。応えは「台本あり・返事なし・閉じた」、エンジンの結果は「済んだ・取得口を作れない・閉じた」
   - 要求 1 件は「メニューのときだけ `OnUpdateProcessExec` → 標準が始まった知らせ → 照会 1 回 → 対象ごとに一周 → 総括 → 読み直しの頼み」の順。`OnUpdateProcessExec` に台本が返れば以後 0 件、照会が無ければやめる
@@ -85,7 +85,7 @@
   - _Requirements: 1.9, 1.10, 1.12, 1.13, 2.1, 2.12, 2.14, 3.1, 3.4, 3.5, 4.1, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 8.1, 9.1, 9.5, 9.6, 10.2, 10.5, 10.7_
   - _Depends: 3.1_
 
-- [ ] 5.2 読み直しの頼みの時機と、途中で閉じたときの捨て方を固定する
+- [x] 5.2 読み直しの頼みの時機と、途中で閉じたときの捨て方を固定する
   - `changed` が 1 つでもあれば総括の応えを受けた後に読み直しを 1 回頼み、全部 `none` か失敗なら頼まない
   - 途中でイベントが「閉じた」を返したら、エンジンの一周は最後まで回し（観測では以後送らず `warn!` を 1 件ずつ）、その対象の締め・以後の対象・総括・読み直しを送らない。総括が「閉じた」でも読み直さない
   - 兄弟の `procedure_reload_tests` で、読み直しが総括の後に 1 回・`none`／失敗で 0 回・途中で閉じたら残りのイベント 0 件・総括 0・読み直し 0・観測が全部流れていること、が緑
@@ -185,3 +185,4 @@
 - 4.1: `install/fetch_url.rs` 先頭の `#![allow(dead_code)]` は 4.2 で外す。偽の取得口は `crate::install::fetch_url_test_support::FakeFetch`（`new().serve(url, bytes)`／`fail(url, err)`・表に無い URL は `NotFound`）。取得口の差し替えは `MakeFetch = Box<dyn FnOnce() -> Result<Box<dyn Fetch>, FetchError> + Send>`（スレッドの中で作る）。`std::env::temp_dir` は一時フォルダの見張り（`log-capture-kit/tests/temp_path_guard_test.rs`）の例外表に載せないと赤＝fetch_url.rs を `ProcessUnique` で登記済み。`capture` は呼んだスレッドだけを捕る＝スレッドの中の記録は中身の関数を同期で呼んで判定する
 - 4.2: 台帳 `sakura-script.toml` の `\![execute,install,path,…]` の行の注記（「url を含む→ warn!（install_cue_unsupported）」「後続 areka-P0-network-update が足す予定」）が古い＝8 で `url` の腕と `install_cue_bad_url`／`install_cue_unsupported_kind` へ直す。受け口の差し替えは `InstallCueSink::with_fetch(tx, StartFetch)`（本番の `new` は `spawn_download`）
 - 5.1: `error!(update_fetch_unavailable)` は手続き（`run_target`）の 1 件だけ＝6.1 の `run_engine` は `WinHttpFetch::new()` の `Err` を記録せず `gate.end()` の上で `EngineRun::Unavailable(e)` を返す（design の worker の節の 1 文は 8 で直す）。記録の語 `update_absolute_failed`・`update_order_begin` を 8 で Monitoring の表へ。偽の口の支え `procedure_test_support.rs` は `procedure.rs` の子（`#[path]`）＝5.2 の `procedure_reload_tests` も `procedure.rs` に宣言する。`OnUpdateProcessExec` が「閉じた」を返す枝（`update_abandoned at=process_exec`）は 5.2 で固定する
+- 5.2: 手続きが固定するのは「総括の応えの後に読み直しを頼む」まで。要件 5.3（総括への返事の台詞が終わってから読み直す）は窓口と kanade の側＝6.5・6.6 が判定する。`OnUpdateBegin` で閉じたらエンジンは回さない（5.7 の「走っている更新」は走り出した後）
