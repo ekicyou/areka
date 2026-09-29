@@ -206,6 +206,21 @@ pub fn install_accept(ghost_dir: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// `<descript_dir>/descript.txt` の `homeurl`（ネットワーク更新の更新先）。前後の空白を落とし、
+/// 空は無し。無い → 黙って None・読めない → `warn!`＋None。呼び手はゴーストなら
+/// `<ゴースト>/ghost/master`、シェル・バルーンは各フォルダを渡す。素性（`Identity`）には載せない。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#homeurl_2cURL:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#homeurl_2cURL:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#homeurl_2cURL:1
+pub fn homeurl(descript_dir: &Path) -> Option<String> {
+    read_descript(&descript_dir.join(DESCRIPT_FILE))?.remove("homeurl")
+}
+
+/// `<descript_dir>/descript.txt` の `name`。読み方は `homeurl` と同じ。
+pub fn descript_name(descript_dir: &Path) -> Option<String> {
+    read_descript(&descript_dir.join(DESCRIPT_FILE))?.remove("name")
+}
+
 /// `<dir>/ghost/master/descript.txt` が実在するか（argv のゴーストの検査＝要件 4.8）。
 pub fn is_ghost_dir(dir: &Path) -> bool {
     master_descript(dir).is_file()
@@ -294,7 +309,7 @@ fn read_descript(path: &Path) -> Option<BTreeMap<String, String>> {
                 event = "catalog_descript_unreadable",
                 path = %path.display(),
                 error = %err,
-                "descript.txt が読めない——その項目を列挙から除く"
+                "descript.txt が読めない——列挙ではその項目を除き、単独の鍵は無しとして扱う"
             );
             None
         }

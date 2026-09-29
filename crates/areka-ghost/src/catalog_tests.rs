@@ -540,3 +540,103 @@ fn install_accept_unreadable_warns_and_yields_empty() {
     assert!(got.is_empty(), "{got:?}");
     assert_eq!(catalog_warns(&events), ["catalog_descript_unreadable"]);
 }
+
+/// `homeurl`・`name` の単独の読み手（要件 1.3・1.9・2.4）: 渡したフォルダの descript.txt から読む。
+/// 鍵は大文字小文字を問わず、値は前後の空白を落として無変形。空の値・空白だけの値・鍵が無い・
+/// descript が無い → 黙って None。
+#[test]
+fn homeurl_and_descript_name_read_one_key_each() {
+    let tmp = TempPath::new("catalog-homeurl");
+    let dir = |name: &str| tmp.path().join(name);
+    let with = dir("with");
+    put(
+        &with.join("descript.txt"),
+        "charset,UTF-8\nHomeURL,  https://Example.test/Ghost/  \nName, あるふぁ \n".as_bytes(),
+    );
+    let empty = dir("empty");
+    put(
+        &empty.join("descript.txt"),
+        b"charset,UTF-8\nhomeurl,\nname,\n",
+    );
+    let blank = dir("blank");
+    put(
+        &blank.join("descript.txt"),
+        b"charset,UTF-8\nhomeurl,   \nname,\t\n",
+    );
+    let without = dir("without");
+    put(
+        &without.join("descript.txt"),
+        b"charset,UTF-8\ncraftman,x\n",
+    );
+
+    let mut got = Vec::new();
+    let events = capture(|| {
+        got = [&with, &empty, &blank, &without, &dir("none")]
+            .into_iter()
+            .map(|d| (homeurl(d), descript_name(d)))
+            .collect()
+    });
+    assert_eq!(
+        got,
+        [
+            (
+                Some("https://Example.test/Ghost/".to_owned()),
+                Some("あるふぁ".to_owned())
+            ),
+            (None, None),
+            (None, None),
+            (None, None),
+            (None, None),
+        ]
+    );
+    assert_eq!(catalog_warns(&events), Vec::<&str>::new());
+}
+
+/// ゴーストは `ghost/master`、バルーンはフォルダを渡す。`Shift_JIS` 宣言の descript も復号して読む。
+#[test]
+fn homeurl_and_descript_name_follow_the_given_folder_and_decode_shift_jis() {
+    let TempRoot { _tmp, root } = temp_root("catalog-homeurl-layout");
+    let master = root.ghost_dir("alpha").join("ghost").join("master");
+    let staysee = root.balloon_dir("StayseeBalloon");
+
+    let mut got = (None, None, None, None);
+    let events = capture(|| {
+        got = (
+            descript_name(&master),
+            descript_name(&staysee),
+            homeurl(&staysee),
+            descript_name(&root.ghost_dir("alpha")),
+        )
+    });
+    assert_eq!(
+        got,
+        (
+            Some("Alpha".to_owned()),
+            Some("吹き出し".to_owned()),
+            None,
+            None
+        )
+    );
+    assert_eq!(catalog_warns(&events), Vec::<&str>::new());
+}
+
+/// descript が I/O 失敗で読めない → 口ごとに warn! 1 件＋None。
+#[test]
+fn homeurl_and_descript_name_unreadable_warn_and_yield_none() {
+    let tmp = TempPath::new("catalog-homeurl-unreadable");
+    let path = tmp.path().join("locked").join("descript.txt");
+    put(
+        &path,
+        b"charset,UTF-8\nhomeurl,https://example.test/\nname,Locked\n",
+    );
+    let _held = hold_exclusive(&path);
+    let dir = path.parent().expect("親");
+
+    let mut got = (Some(String::new()), Some(String::new()));
+    let events = capture(|| got = (homeurl(dir), descript_name(dir)));
+    assert_eq!(got, (None, None));
+    assert_eq!(
+        catalog_warns(&events),
+        ["catalog_descript_unreadable", "catalog_descript_unreadable"]
+    );
+}
