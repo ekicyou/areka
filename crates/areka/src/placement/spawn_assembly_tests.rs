@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 use tracing::Level;
 use windows::Win32::UI::WindowsAndMessaging::{
-    WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
+    WS_EX_ACCEPTFILES, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 use wintf::ecs::drag::{DragConfig, DragConstraint, OnDrag, OnDragEnd};
 use wintf::ecs::layout::{BoxStyle, HitTest};
@@ -375,6 +375,7 @@ fn balloon_limit_never_attached_to_char_windows() {
 
 /// T-I2: 全窓の `WindowStyle.ex_style` に `WS_EX_TOPMOST` が含まれない
 /// （既定 z-order 非 topmost・5.1／DD13。style/ex_style の正値も固定する）。
+/// 全窓が投げ込みの受け入れの宣言 `WS_EX_ACCEPTFILES` を含む（areka-P0-file-drop 要件 1.1・9.9）。
 #[test]
 fn t_i2_no_window_has_ws_ex_topmost() {
     let mut world = World::new();
@@ -391,7 +392,15 @@ fn t_i2_no_window_has_ws_ex_topmost() {
             "WS_EX_TOPMOST が含まれてはならない（5.1／DD13）: {:?}",
             style.ex_style
         );
-        assert_eq!(style.ex_style, WS_EX_LAYERED | WS_EX_TOOLWINDOW);
+        assert!(
+            style.ex_style.contains(WS_EX_ACCEPTFILES),
+            "投げ込みの受け入れの宣言 WS_EX_ACCEPTFILES が無い（file-drop 要件 1.1）: {:?}",
+            style.ex_style
+        );
+        assert_eq!(
+            style.ex_style,
+            WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_ACCEPTFILES
+        );
         assert_eq!(style.style, WS_POPUP | WS_VISIBLE);
     }
 }
