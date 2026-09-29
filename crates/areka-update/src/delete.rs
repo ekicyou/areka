@@ -56,7 +56,7 @@ pub(crate) fn delete_files(target: &Path) -> io::Result<Vec<PathBuf>> {
 
 /// 全ファイルを順に適用する。読めないファイルは `DeleteFileUnreadable` を警告して飛ばす
 /// （削除は一周を失敗にしない＝6.6）。並べられなければ `file` を `delete*.txt` として同じ警告にする。
-// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#_76f8_5bfe_30d1_30b9:1
 pub(crate) fn apply(target: &Path, target_real: &Path, charset: &'static Encoding) -> DeleteReport {
     let mut report = DeleteReport {
         removed: Vec::new(),

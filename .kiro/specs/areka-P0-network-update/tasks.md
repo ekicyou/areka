@@ -27,7 +27,7 @@
   - _Requirements: 1.3, 1.9, 2.4_
   - _Boundary: areka-ghost catalog_
 
-- [ ] 2. 本体から更新のエンジンを辿れるようにし、依頼の型の骨組みと台帳の 4 行を同じコミットで入れる
+- [x] 2. 本体から更新のエンジンを辿れるようにし、依頼の型の骨組みと台帳の 4 行を同じコミットで入れる
   - 本体 `areka` の依存に `areka-update` を足す（外部クレートと根の `Cargo.toml` は不変）
   - 本体に `update` のモジュールの骨組みを置いて宣言し、依頼の型（対象の種別と Reference の綴り・理由・総括の形・解いた対象・依頼・対象を解く前の要求）を置く。登録の口は 6.2、受付の口は 6.3 で足す。子のモジュールの宣言は、その子を作るタスクがそれぞれ 1 行ずつ足す
   - 同じコミットで、網羅台帳 `assets.toml` の `descript_install` の「相対パス」（証拠はエンジンの `delete.rs` の既存の行）と、`descript_ghost`／`descript_shell`／`descript_balloon` の `homeurl`（証拠は 1.3 の 3 行）を実装済みへ動かし、証拠の実在を検査にかけ、生成物と `roadmap-draft.md` の `owner_count` を生成器で作り直す（手で数を直さない）
@@ -179,3 +179,4 @@
 ## Implementation Notes
 
 - 1.2: 送るイベントは正典で 19 語（spec の「20 語・43」は数え違いで dce16c5c で 19・42 へ直した）。後続の「19 語」「19 イベント」も同じ数。`events_tests.rs` の凍結の並び（`..._forty_two_...`）にも同じ 19 語が入っている
+- 2: `update/mod.rs` 先頭の `#![allow(dead_code)]` は 6.3（受付の口）で外す。`owner_count`・`briefing.md` の数を書き出す生成器は無い（`ukadoc-survey` は report／report-summary だけ）＝`check` と整合テストの求める値を写す。`delete.rs` の `// ukadoc:` 行にアンカーを足した（境界外・コメントだけ）

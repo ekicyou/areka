@@ -1719,20 +1719,18 @@ areka-parsers の balloon::map_merged が完全一致で引いて文字列のま
 """
 
 [entry."ukadoc:descript_balloon:homeurl_2cURL:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka にはネットワークから更新を取ってくる仕組みが無く、その宛先を書くこの欄を読む経路も無い。
-バルーンの定義を読むのは areka-emo-present の balloon::read_descript_layer と areka の placement::load_balloon_author_dpi の 2 つだけで、前者が渡す先の areka-parsers の balloon::map_merged は名前を数え上げた欄しか引かない。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+実装済み。areka-ghost の catalog::homeurl が、渡されたバルーンのフォルダの descript.txt からこの欄を読む（鍵は小文字化して引き、値は前後の空白を落とす。空は「無し」）。ネットワーク更新（areka-P0-network-update）がバルーンを更新するときの更新先で、目録の素性（Identity）には載せない。本体 areka は crates/areka/Cargo.toml で更新のエンジン areka-update を依存に持つ（同 spec 要件 8.2）。
+壊れ方: 無い（欄が無いバルーンは更新の対象から外れる）。記録: 欄が無いのは異常ではないので記録なし。descript.txt が読めないときは warn! を 1 件残して「無し」を返す。
 同じ名前の見出しがゴースト・シェル・プラグイン・ヘッドラインの descript にもあり、さらに別ドメインのプロパティと SHIORI の資源にもある。名前で引かず、ページを決めてから引くこと。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-バルーンの定義を読む部分を作った areka-P0-balloon-parse の brief が自分の範囲としているのはバルーンの幾何と書体の欄だけで、この欄は入っていない。担当は決まっていない。
-束: ネットワーク更新の宛先・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 8——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: ネットワーク更新の宛先・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み）。束の順位: 8——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
+根拠の場所: crates/areka-ghost/src/catalog.rs の homeurl（descript.txt の homeurl を読む関数）の上の正典 URL の行。
 """
 
 [entry."ukadoc:descript_balloon:id_2cID_540d:1"]
@@ -2863,21 +2861,18 @@ areka は口パクの仕掛けを切る宣言を受け取る経路を持たな�
 """
 
 [entry."ukadoc:descript_ghost:homeurl_2cURL:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka にはゴーストを配布元から取り直す仕組みが無く、その宛先を書くこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+実装済み。areka-ghost の catalog::homeurl が、渡されたフォルダ（ゴーストは ghost/master）の descript.txt からこの欄を読む（鍵は小文字化して引き、値は前後の空白を落とす。空は「無し」）。ネットワーク更新（areka-P0-network-update）がゴーストを更新するときの更新先の倒れ先で、SHIORI の資源 homeurl に答えが無いときにこの値を使う。目録の素性（Identity）には載せない。本体 areka は crates/areka/Cargo.toml で更新のエンジン areka-update を依存に持つ（同 spec 要件 8.2）。
+壊れ方: 無い（SHIORI の答えもこの欄も無いゴーストは更新の対象から外れる）。記録: 欄が無いのは異常ではないので記録なし。descript.txt が読めないときは warn! を 1 件残して「無し」を返す。
 同じ名前の見出しがバルーン・シェル・プラグイン・ヘッドラインの descript にもあり、別ドメインのプロパティの側（areka-sylphya の vocab::GENERIC_PROP_NAMES）にも SHIORI の資源の側（同じクレートの vocab::shiori_resource）にもある。名前で引かず、ページを決めてから引くこと。
-この欄が成り立つには配布と更新の仕組みが要る。areka にはそれが無い。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-担当は決まっていない。
-束: ネットワーク更新の宛先・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 8——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: ネットワーク更新の宛先・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み）。束の順位: 8——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
+根拠の場所: crates/areka-ghost/src/catalog.rs の homeurl（descript.txt の homeurl を読む関数）の上の正典 URL の行。
 """
 
 [entry."ukadoc:descript_ghost:icon.minimize_2c_30d5_30a1_30a4_30eb_540d:1"]
@@ -3882,16 +3877,17 @@ note = """
 """
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
 owner = "areka-P0-network-update"
 priority = "B1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。この行の書式は install.txt ではなく delete.txt のもので、areka に delete.txt を解釈する経路は無い。書庫の中に delete.txt があっても、areka-nar（plan.rs）は普通のファイルとして宛先へ置くだけで、書かれた道は消されない。同じ形の行を install.txt に書いても、カンマの無い行は areka-parsers の kv::parse_kv が黙って捨てる。
-束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
-担当: この見出しは install.txt ではなく delete.txt——更新のときに消す道を 1 行 1 つ並べるファイル——の行の書式である。areka-P0-nar-install が受け持つのは書庫を開いて入れるところまでで、消す指示は読まない。引き受けるのは本台帳の帰属の文書が段階 B に置く「更新」の束の仕様 areka-P0-network-update で、2026-09-18 に起票され説明書が実在する（同書の「正典の要点」の節が delete.txt の行の形としてこの項目の id をそのまま引き、範囲の一覧にも delete.txt を入れている）。2026-09-19 にこの欄をその名前で埋めた。**状態は absent のまま動かしていない**——同仕様はまだ着手しておらず、delete.txt を読む経路は 1 つも無い。
+実装済み。この行の書式は install.txt ではなく delete.txt——更新のときに消す道を 1 行 1 つ並べるファイル——のもので、ネットワーク更新のエンジン areka-update の delete::apply が読む。更新の確定の後、対象フォルダ直下の delete.txt → delete1.txt… の順に読み、1 行を対象フォルダからの相対パスとして消す（末尾が \\ ならフォルダごと）。本体 areka は crates/areka/Cargo.toml で areka-update を依存に持つ（areka-P0-network-update 要件 8.2）。インストールの側（areka-nar の plan.rs）は delete.txt を普通のファイルとして宛先へ置くだけで、読むのは更新の側だけである。
+壊れ方: 明示エラー（走行は失敗にしない）。記録: 絶対パス・.. を含む行・対象の外へ出る行・作業場所の下の行は読み飛ばし、読めない delete*.txt は飛ばして、どれも warn! を 1 件ずつ残す（areka-update の lib.rs が警告を写す）。消せなかった物は結果の undeletable に並ぶ。
+束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
+根拠の場所: crates/areka-update/src/delete.rs の apply（delete*.txt を順に適用する関数）の上の正典 URL の行。
 """
 
 [entry."ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c_30aa_30d7_30b7_30e7_30f31_2c_30aa_30d7_30b7_30e7_30f32_2c...:1"]
@@ -4591,21 +4587,18 @@ note = """
 """
 
 [entry."ukadoc:descript_shell:homeurl_2cURL:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka にはシェルを配布元から取り直す仕組みが無く、その宛先を書くこの欄を読む経路も無い。
-この欄が成り立つには配布と更新の仕組みが要る。areka にはそれが無い。
-シェルの descript から areka が引くのは、areka-parsers の package::read_bindgroup_defaults が読む着せ替えと排他の宣言、areka の emo2_boot::assets::default_bind_ids が読む起動時の着せ替え、areka の placement::config::build_placement_config が読む重なり順・貼り付き・作者基準の解像度、areka の placement::config::resolve_scope が読む窓とバルーンの置き方の欄、areka-ghost の config::resolve_shell_name が読むシェル名、areka-parsers の charset::prescan_charset が読む文字コードの宣言だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
+実装済み。areka-ghost の catalog::homeurl が、渡されたシェルのフォルダの descript.txt からこの欄を読む（鍵は小文字化して引き、値は前後の空白を落とす。空は「無し」）。ネットワーク更新（areka-P0-network-update）がシェルを更新するときの更新先で、目録の素性（Identity）には載せない。本体 areka は crates/areka/Cargo.toml で更新のエンジン areka-update を依存に持つ（同 spec 要件 8.2）。
+壊れ方: 無い（欄が無いシェルは更新の対象から外れる）。記録: 欄が無いのは異常ではないので記録なし。descript.txt が読めないときは warn! を 1 件残して「無し」を返す。
 同じ名前の見出しがゴースト・バルーン・プラグイン・ヘッドラインの descript にもある。別ドメインのプロパティの側にも同名の項目がある（areka-sylphya の vocab::GENERIC_PROP_NAMES が語彙として持っている）。別ドメインの SHIORI の資源の側にも同名の項目がある（areka-sylphya の vocab::shiori_resource が語彙として持っている）。名前で引かず、ページを決めてから引くこと。
-沈黙ルール対応表と見直し表のすべての行を当たったが、この欄を名指しで引き受ける行は無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
-担当は決まっていない。
-束: ネットワーク更新の宛先・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 8——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: ネットワーク更新の宛先・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み）。束の順位: 8——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
+根拠の場所: crates/areka-ghost/src/catalog.rs の homeurl（descript.txt の homeurl を読む関数）の上の正典 URL の行。
 """
 
 [entry."ukadoc:descript_shell:id_2cID_540d:1"]
