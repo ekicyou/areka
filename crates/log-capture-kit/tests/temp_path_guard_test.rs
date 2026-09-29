@@ -250,6 +250,18 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "偽 DLL 自身の単体テスト（#[cfg(test)] 内）。プロセス識別子＋時刻のナノ秒で一意化済み。依存は既存の \
          偽 DLL と同じものに限る（areka-P0-shiori-loadu 要件 9.1・設計）ので窓口へは寄せない",
     ),
+    // ── ⒜ の追加 1 件（2026-09-29・areka-P0-network-update）─────────────────────
+    //
+    // テストの一時パスではなく**本番の落とし場所**。要件 6.6 が「OS の一時フォルダの下の areka
+    // 専用の場所」と定め、7 日の掃除が前回までの走行の残りを見つけるにはフォルダが固定である
+    // 必要がある（窓口の一意なフォルダでは掃除が成立しない・本番へ dev-dependency は持ち込めない）。
+    // フォルダの中のファイル名はプロセス識別子＋単調連番で一意化している。
+    (
+        "crates/areka/src/install/fetch_url.rs",
+        Why::ProcessUnique,
+        "本番の落とし場所 %TEMP%\\areka\\download\\（要件 6.6）。フォルダは 7 日の掃除のために固定、\
+         中のファイル名はプロセス識別子＋単調連番で一意化済み。テストは差し替えの口で窓口の一時フォルダを渡す",
+    ),
     // ── ⒝ 読み出しのみの 2 件（要件 12.2・設計 C8 が名指しで対象外と定めた）───────
     (
         "crates/areka/src/placement/placement_monitor_tests.rs",
@@ -275,13 +287,13 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 18;
+const ALLOWED_COUNT: usize = 19;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
 /// という書き換えが通ってしまう。3 つに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 15;
+const PROCESS_UNIQUE_COUNT: usize = 16;
 /// 同上（読み出しのみ）。
 const READ_ONLY_COUNT: usize = 2;
 /// 同上（固定名が仕様）。

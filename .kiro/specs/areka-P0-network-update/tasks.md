@@ -57,7 +57,7 @@
   - _Depends: 2_
 
 - [ ] 4. `\![execute,install,url,URL,nar]`
-- [ ] 4.1 (P) URL から一時フォルダへ落とす部品と、短命の取得スレッドを作る
+- [x] 4.1 (P) URL から一時フォルダへ落とす部品と、短命の取得スレッドを作る
   - areka 専用の一時フォルダ（OS の一時フォルダの下の `areka\download\`）を作り、取得の前にそこの 7 日より古いファイルを消す（消せなければ `debug!`・消した数を記録）
   - 取得の境界（エンジンの `Fetch`）を受けて本文を `<pid>-<連番>-<URL の末尾の安全な名前>` に書く。名前が空なら `download.nar`。取得の失敗はファイル 0 で失敗を返す
   - 本体のテストで使い回す偽の取得口（URL ごとに本文か失敗を返す）を本体の兄弟の支えファイルに置く（エンジンの支えはテスト専用で本体から使えない）。6.1・6.6 もこれを使う
@@ -182,3 +182,4 @@
 - 2: `update/mod.rs` 先頭の `#![allow(dead_code)]` は 6.3（受付の口）で外す。`owner_count`・`briefing.md` の数を書き出す生成器は無い（`ukadoc-survey` は report／report-summary だけ）＝`check` と整合テストの求める値を写す。`delete.rs` の `// ukadoc:` 行にアンカーを足した（境界外・コメントだけ）
 - 3.1: `TargetEnd` は `refs.rs` に在る（`summary_refs` の入力）＝5.1 の手続きは `super::refs::TargetEnd` を使う。`begin_refs` は受けた `dir` を `display()` で書くだけ＝`OnUpdateBegin` の Ref1 を絶対パスにする（`std::path::absolute`）のは 5.1 の対象 1 つの一周の仕事
 - 3.2: `emo2_boot/update_cue.rs` 先頭の `#![allow(dead_code)]` は 7.1（受け口の列への登記）で外す。`updateother` の `--` で始まらない裸の語（正典に無い）は `Refusal::Option` で要求ごと断る。`update,all+ghost` は断らず `[Ghost,Shell,Balloon,Ghost]`（重複はそのまま）
+- 4.1: `install/fetch_url.rs` 先頭の `#![allow(dead_code)]` は 4.2 で外す。偽の取得口は `crate::install::fetch_url_test_support::FakeFetch`（`new().serve(url, bytes)`／`fail(url, err)`・表に無い URL は `NotFound`）。取得口の差し替えは `MakeFetch = Box<dyn FnOnce() -> Result<Box<dyn Fetch>, FetchError> + Send>`（スレッドの中で作る）。`std::env::temp_dir` は一時フォルダの見張り（`log-capture-kit/tests/temp_path_guard_test.rs`）の例外表に載せないと赤＝fetch_url.rs を `ProcessUnique` で登記済み。`capture` は呼んだスレッドだけを捕る＝スレッドの中の記録は中身の関数を同期で呼んで判定する
