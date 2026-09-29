@@ -327,12 +327,12 @@ fn manual_probe_advance(
     factory: &windows::Win32::Graphics::DirectWrite::IDWriteFactory2,
     font: &ResolvedFont,
     mode: WritingMode,
-    ch: char,
+    text: &str,
 ) -> f32 {
     let format = create_text_format(factory, font, mode).expect("参照 format");
     let layout = wintf::com::dwrite::DWriteFactoryExt::create_text_layout(
         factory,
-        &windows::core::HSTRING::from(ch.to_string()),
+        &windows::core::HSTRING::from(text),
         &format,
         PROBE_MAX_EXTENT,
         PROBE_MAX_EXTENT,
@@ -353,7 +353,7 @@ fn dwrite_metrics_advance_matches_manual_probe_layout() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
     let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
-    for ch in ['あ', 'a', '漢', 'W', '。'] {
+    for ch in ["あ", "a", "漢", "W", "。"] {
         let expected = manual_probe_advance(&factory, &resolved, WritingMode::HorizontalTb, ch);
         assert_eq!(
             metrics.advance(ch, DEFAULT_FONT_HEIGHT),
@@ -377,7 +377,7 @@ fn dwrite_metrics_probe_carries_writing_mode_recipe() {
         WritingMode::VerticalLr,
     ] {
         let metrics = default_metrics(&factory, mode);
-        for ch in ['あ', 'a', '、'] {
+        for ch in ["あ", "a", "、"] {
             assert_eq!(
                 metrics.advance(ch, DEFAULT_FONT_HEIGHT),
                 manual_probe_advance(&factory, &resolved, mode, ch),
@@ -395,8 +395,8 @@ fn dwrite_metrics_measures_fixed_pitch_and_proportional_distinctly() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     // 等幅: 既定 ＭＳ ゴシック——全角は半角のちょうど 2 倍。
     let gothic = default_metrics(&factory, WritingMode::HorizontalTb);
-    let full = gothic.advance('あ', DEFAULT_FONT_HEIGHT);
-    let half = gothic.advance('a', DEFAULT_FONT_HEIGHT);
+    let full = gothic.advance("あ", DEFAULT_FONT_HEIGHT);
+    let half = gothic.advance("a", DEFAULT_FONT_HEIGHT);
     assert!(full > 0.0 && half > 0.0);
     assert_eq!(full, half * 2.0, "等幅フォントの全角＝半角×2");
     // プロポーショナル: ＭＳ Ｐゴシック——'i' は 'W' より狭い。
@@ -413,8 +413,8 @@ fn dwrite_metrics_measures_fixed_pitch_and_proportional_distinctly() {
         &TextLayerConfig::default(),
     )
     .expect("プロポーショナルで DWriteMetrics 生成が成立する");
-    let narrow = p_metrics.advance('i', 12.0);
-    let wide = p_metrics.advance('W', 12.0);
+    let narrow = p_metrics.advance("i", 12.0);
+    let wide = p_metrics.advance("W", 12.0);
     assert!(
         narrow < wide,
         "プロポーショナルの実測: 'i'({narrow}) < 'W'({wide})"
@@ -428,7 +428,7 @@ fn dwrite_metrics_is_deterministic_across_calls_and_instances() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     let first = default_metrics(&factory, WritingMode::VerticalRl);
     let second = default_metrics(&factory, WritingMode::VerticalRl);
-    for ch in ['あ', 'x', '！'] {
+    for ch in ["あ", "x", "！"] {
         let a = first.advance(ch, DEFAULT_FONT_HEIGHT);
         let b = first.advance(ch, DEFAULT_FONT_HEIGHT);
         let c = second.advance(ch, DEFAULT_FONT_HEIGHT);
@@ -444,16 +444,16 @@ fn dwrite_metrics_caches_probed_advances() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
     assert_eq!(metrics.cached_probe_count(), 0);
-    let first = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
+    let first = metrics.advance("あ", DEFAULT_FONT_HEIGHT);
     assert_eq!(metrics.cached_probe_count(), 1);
-    let again = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
+    let again = metrics.advance("あ", DEFAULT_FONT_HEIGHT);
     assert_eq!(
         metrics.cached_probe_count(),
         1,
         "同一文字の再計測は probe を増やさない"
     );
     assert_eq!(first, again);
-    metrics.advance('a', DEFAULT_FONT_HEIGHT);
+    metrics.advance("a", DEFAULT_FONT_HEIGHT);
     assert_eq!(metrics.cached_probe_count(), 2);
 }
 
@@ -527,8 +527,8 @@ fn dwrite_metrics_line_box_height_comes_from_real_font_face_metrics() {
 fn dwrite_metrics_warns_on_font_height_mismatch() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
-    let bound = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
-    let (mismatched, warns, errors) = with_log_cage(|| metrics.advance('あ', 99.0));
+    let bound = metrics.advance("あ", DEFAULT_FONT_HEIGHT);
+    let (mismatched, warns, errors) = with_log_cage(|| metrics.advance("あ", 99.0));
     assert_eq!(
         warns, 1,
         "束縛高さと異なる font_height はちょうど 1 回 warn"

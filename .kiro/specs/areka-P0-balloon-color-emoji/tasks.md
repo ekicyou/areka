@@ -3,7 +3,7 @@
 > 設計 `design.md` の File Structure Plan と Testing Strategy に沿う。文字の単位の型を替える作業（1.2・1.3）はクレート全体のコンパイルが同時に動くので分けられず、1.2 で本番のビルドを通し、1.3 でテストの直書きを機械的に追随させる。1.3 以降のすべての作業で、既存テストの期待値は書き換えない（要件 5.2・5.3）。
 > 並走の条件: `crates/areka-emo-text/src/sink.rs`・`crates/areka/`・`crates/wintf/` は全タスクで変更 0、`actor.rs` は読むだけ。
 
-- [ ] 1. 基盤: クラスタの切り方と文字の単位の型
+- [x] 1. 基盤: クラスタの切り方と文字の単位の型
 - [x] 1.1 クラスタの切り方の定義点を置き、再生時間をクラスタで数える
   - `areka-sakura` に書記素クラスタの切り方の唯一の定義点（列と個数）を新設し、既に `Cargo.lock` に在る `unicode-segmentation` 1.13.3 を `areka-sakura` の依存に 1 行だけ足す（理由の注釈つき）
   - 絵文字の形を個別に扱う分岐を持たず、UAX #29 の拡張書記素クラスタの規則だけに置く
@@ -13,7 +13,7 @@
   - 完了時: `cargo test -p areka-sakura` が緑で、`Cargo.lock` の差分は `areka-sakura` の依存の並びに 1 行増えるだけ
   - _Requirements: 2.1, 2.2, 2.3, 2.6, 6.6, 7.3, 10.4, 10.5_
 
-- [ ] 1.2 `areka-emo-text` の本番コードの文字の単位を `char` からクラスタ文字列へ替える
+- [x] 1.2 `areka-emo-text` の本番コードの文字の単位を `char` からクラスタ文字列へ替える
   - 追記正本のグリフアイテムと配置済みグリフの中身を共有の不変文字列（`Arc<str>`）へ替え、`Copy` を外す。アイテムの構築関数を 1 つ置き、「ちょうど 1 クラスタ」の前提をデバッグビルドの検査で確かめる
   - cue の適用（Text・Choice の両腕）でクラスタの定義点から切り、アイテム数・出す間隔・`RevealSchedule`・選択肢の範囲・スタイル列をクラスタ数で積む（式は据え置き）
   - 計測の口（`GlyphMetrics` とその縮退の見積もり・スタイルつきの送り幅・塊の送り幅の合計）を文字列で受ける。縮退の見積もりは「ASCII だけのクラスタ＝半角・それ以外＝全角 1 つ」
@@ -25,7 +25,7 @@
   - 完了時: `cargo build -p areka-emo-text` が通り、`sink.rs`・`actor.rs` の差分が 0
   - _Requirements: 2.1, 2.4, 2.5, 2.7, 3.1, 3.3, 3.5, 4.6, 5.4, 7.2, 7.4, 8.1, 8.2_
 
-- [ ] 1.3 テストの直書きと局所の支援をクラスタ単位へ追随させる
+- [x] 1.3 テストの直書きと局所の支援をクラスタ単位へ追随させる
   - テスト内のグリフアイテム・配置済みグリフの直書き（`src` のテスト 24 ファイル・約 180 か所）を構築関数・文字列へ 1:1 で置き換える（行数不変）
   - 統合テスト `tests/kero_menu_capacity_test.rs`・`tests/scale_invariance_test.rs`・`tests/line_pitch_readback_test.rs`・`tests/staysee_balloon_fixture_test.rs`（`staysee_balloon_fixture/` の `wrapping`・`script`・`region`）の直書きと、計測の口を文字で呼ぶ所（`advance('あ', …)` など）・`.ch` の参照を文字列へ追随させ、旧ピッチの計測実装を文字列の口にする
   - テストの局所の支援（`viewbox_draw_test_support.rs` ほかの文字列→アイテム列の変換）をクラスタの定義点経由にし、`actor_test_support.rs`・`state_test_support.rs` の cue の時間を `chars().count()` からクラスタ数へ替える（本番と同じ切り方・既存の入力は 1 スカラー値の文字だけなので値は変わらない）
@@ -116,3 +116,7 @@
   - 1,000 行の見張りのテストと `cargo fmt --check` を通し、`tools/test-all.ps1` で全体テストを回す
   - 完了時: 全体テストが緑で、上の接触範囲の条件がすべて 0 件で成り立つ
   - _Requirements: 5.2, 5.4, 7.1, 7.2, 7.3, 7.4, 8.1, 10.1, 10.7_
+
+## Implementation Notes
+- 1.2/1.3: テストの cue の時間・グリフ数の補助のうち、`actor_test_support.rs`・`state_test_support.rs` 以外（`viewbox_draw_live_diff_tests.rs`・`viewbox_draw_scroll_retain_tests.rs`・`actor_scroll_retain_tests.rs`・`viewbox_draw_oracle_regression_tests.rs`・`viewbox_draw_png_dump_tests.rs`・`draw_oracle_tests.rs`・`draw_metrics_styled_tests.rs`・`tests/` の `pipeline`／`draw_readback`／`choice_fixture`／`line_pitch_readback`／`scale_invariance`）はまだ `chars().count()`。絵文字を流し込むタスク（4.3・4.4 ほか）は、そのファイルの補助を先に `areka_sakura::cluster::cluster_count` へ替える
+- 1.3: `cargo fmt` は編集したファイルを LF に替えることがある＝CRLF へ戻して `git ls-files --eol` で確かめる

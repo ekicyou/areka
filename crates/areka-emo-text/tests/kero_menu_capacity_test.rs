@@ -232,7 +232,7 @@ fn factory() -> IDWriteFactory2 {
 /// 無いと DirectWrite が等幅の代替（全角＝em）へ落ち、本ファイルの数値の前提（送り ≈ 23）が
 /// 崩れたまま緑になり得る。ゆえに縮退を検出したら**赤で止める**。
 fn assert_real_font_present(metrics: &dyn GlyphMetrics) {
-    let a = metrics.advance('あ', FONT_HEIGHT);
+    let a = metrics.advance("あ", FONT_HEIGHT);
     assert!(
         a < FONT_HEIGHT,
         "実フォント Yu Gothic UI が見つからない（「あ」の送りが {a} ＝ em {FONT_HEIGHT} 以上の等幅値へ縮退している）。\
@@ -262,8 +262,8 @@ struct LegacyPitchMetrics<'a> {
 }
 
 impl GlyphMetrics for LegacyPitchMetrics<'_> {
-    fn advance(&self, ch: char, font_height: f32) -> f32 {
-        self.real.advance(ch, font_height)
+    fn advance(&self, text: &str, font_height: f32) -> f32 {
+        self.real.advance(text, font_height)
     }
 
     fn line_pitch(&self, font_height: f32) -> f32 {
@@ -713,7 +713,7 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
         let mut want_breaks: Vec<usize> = Vec::new();
         let mut pos = resolved.region.start().0;
         let mut count_in_line = 0usize;
-        for (i, ch) in text.chars().enumerate() {
+        for (i, ch) in areka_sakura::cluster::clusters(&text).enumerate() {
             let adv = metrics.advance(ch, resolved.font.height);
             if count_in_line > 0 && pos + adv > soft {
                 want_breaks.push(i);

@@ -1,6 +1,7 @@
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
+use areka_sakura::cluster::clusters;
 use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
 use wintf::com::dwrite::DWriteTextLayoutExt;
 use wintf::com::dwrite::dwrite_create_factory;
@@ -110,9 +111,9 @@ fn geo_model(origin: (Option<i32>, Option<i32>), font_height: Option<u32>) -> Ba
     )
 }
 
-/// 文字列→グリフ item 列。
+/// 文字列→グリフ item 列（クラスタの定義点で切る）。
 fn glyph_items(s: &str) -> Vec<TextItem> {
-    s.chars().map(|ch| TextItem::Glyph { ch }).collect()
+    clusters(s).map(TextItem::glyph).collect()
 }
 
 /// layout→canvas→visible_window→render→read_back の通し（テスト用最短経路）。
@@ -302,7 +303,7 @@ fn confirmed_line_layouts_regenerate_only_on_clear() {
     // 行 0 確定（"あい"）＋行 1 リビール中（"う"）。
     let mut items = glyph_items("あい");
     items.push(TextItem::LineBreak { ratio: 1.0 });
-    items.push(TextItem::Glyph { ch: 'う' });
+    items.push(TextItem::glyph("う"));
 
     render_items(
         &mut executor,
@@ -335,7 +336,7 @@ fn confirmed_line_layouts_regenerate_only_on_clear() {
     );
 
     // リビール進行: 行 1 が "う"→"うえ" へ——行 1 のみ都度更新（行 0 は確定キャッシュ）。
-    items.push(TextItem::Glyph { ch: 'え' });
+    items.push(TextItem::glyph("え"));
     render_items(
         &mut executor,
         &mut surface,
@@ -444,11 +445,11 @@ fn scroll_overflow_drops_oldest_line_via_full_redraw() {
     let mut items3 = glyph_items("■■■");
     for _ in 0..2 {
         items3.push(TextItem::LineBreak { ratio: 1.0 });
-        items3.push(TextItem::Glyph { ch: '■' });
+        items3.push(TextItem::glyph("■"));
     }
     let mut items4 = items3.clone();
     items4.push(TextItem::LineBreak { ratio: 1.0 });
-    items4.push(TextItem::Glyph { ch: '■' });
+    items4.push(TextItem::glyph("■"));
 
     // 3 行（収まる・可視 ■×5）→ 4 行（あふれ・可視窓は行 1〜3 ＝ ■×3）。
     let before = render_items(
@@ -558,7 +559,7 @@ fn image_and_surface_seam_residents_warn_and_skip() {
 fn layout_engine_wraps_using_measured_advances() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
-    let full = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
+    let full = metrics.advance("あ", DEFAULT_FONT_HEIGHT);
     // 折返し閾値＝実測全角 1.5 個分: 2 文字目で「行内位置＋次グリフ幅 > 閾値」が成立。
     let threshold = (full * 1.5).round() as i32;
     let model = BalloonModel::new(
@@ -571,7 +572,7 @@ fn layout_engine_wraps_using_measured_advances() {
         None,
     );
     let region = TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb);
-    let items = [TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }];
+    let items = [TextItem::glyph("あ"), TextItem::glyph("あ")];
     let lines = LayoutEngine::layout(
         &items,
         2,
@@ -673,7 +674,7 @@ fn probe_advances_match_drawn_line_cluster_advances() {
                 "{} {mode:?}: 検証テキストは 1 文字=1 cluster の前提",
                 font.name
             );
-            for (ch, width) in text.chars().zip(&widths) {
+            for (ch, width) in clusters(text).zip(&widths) {
                 let probe = metrics.advance(ch, font.height);
                 assert!(probe > 0.0, "{} {mode:?} {ch:?}: probe は正値", font.name);
                 assert_eq!(
@@ -709,8 +710,7 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
                 .expect("DWriteMetrics 生成失敗");
             // 折返し閾値＝先頭 4 文字の probe 送り終端の floor——実測値が閾値と
             // 折返し位置の両方を駆動する形（metrics が違えば折返しもズレる）。
-            let cum4: f32 = text
-                .chars()
+            let cum4: f32 = clusters(text)
                 .take(4)
                 .map(|ch| metrics.advance(ch, font.height))
                 .sum();
@@ -756,7 +756,7 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
             let placed: usize = lines.iter().map(|l| l.glyphs.len()).sum();
             assert_eq!(placed, text.chars().count(), "折返しでグリフを失わない");
             for (i, line) in lines.iter().enumerate() {
-                let line_text: String = line.glyphs.iter().map(|g| g.ch).collect();
+                let line_text: String = line.glyphs.iter().map(|g| &*g.text).collect();
                 let widths = drawn_line_cluster_widths(&mut executor, &line_text, &font, mode);
                 let (inline_start, inline_end) = match mode {
                     WritingMode::HorizontalTb => (line.rect.left, line.rect.right),

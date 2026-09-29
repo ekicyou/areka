@@ -320,7 +320,7 @@ impl ContentCanvas {
                     .glyphs
                     .iter()
                     .map(|g| PositionedGlyph {
-                        ch: g.ch,
+                        text: g.text.clone(),
                         inline_pos: g.inline_pos - inline_origin,
                         advance: g.advance,
                         // 装飾番号は行のグリフ列まで写す（R3.3 の配管 3 段目）。行ローカルへ
@@ -392,7 +392,7 @@ mod tests {
 
     /// n 個の全角グリフ（'あ'）item 列。
     fn glyphs(n: usize) -> Vec<TextItem> {
-        std::iter::repeat_n(TextItem::Glyph { ch: 'あ' }, n).collect()
+        std::iter::repeat_n(TextItem::glyph("あ"), n).collect()
     }
 
     /// layout→canvas の通し（テスト用最短経路・visible は全量）。
@@ -514,7 +514,7 @@ mod tests {
         assert!(
             run0.glyphs
                 .iter()
-                .all(|g| g.ch == 'あ' && g.advance == 10.0)
+                .all(|g| &*g.text == "あ" && g.advance == 10.0)
         );
 
         // 行 1: 変換 = (0, 12)（pitch 分の平行移動・font 10 + 行間 2）・ローカル 0 起点。
@@ -592,10 +592,7 @@ mod tests {
             IMAGE,
             WritingMode::HorizontalTb,
         );
-        let items = [
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::LineBreak { ratio: 1.0 },
-        ];
+        let items = [TextItem::glyph("あ"), TextItem::LineBreak { ratio: 1.0 }];
         let (lines, canvas) = canvas_for(&items, &region, WritingMode::HorizontalTb, 12.0);
         assert_eq!(lines.len(), 1, "末尾保留改行は蒸発＝空行なし");
         assert_eq!(canvas.residents.len(), 1, "行 1 = 住人 1（1:1）");
@@ -622,7 +619,7 @@ mod tests {
                     bottom: 12.0,
                 },
                 glyphs: vec![PositionedGlyph {
-                    ch: 'あ',
+                    text: "あ".into(),
                     inline_pos: 0.0,
                     advance: 12.0,
                     style: StyleId::DEFAULT,
@@ -670,11 +667,11 @@ mod tests {
             WritingMode::HorizontalTb,
         );
         let items = [
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
             TextItem::LineBreak { ratio: 1.0 },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
             TextItem::LineBreak { ratio: 0.5 },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
         ];
         let (_, canvas) = canvas_for(&items, &region, WritingMode::HorizontalTb, 13.0);
         let offsets: Vec<(f32, f32)> = canvas
@@ -732,10 +729,10 @@ mod tests {
             (None, None, None, None),
         );
         let items = [
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
             TextItem::LineBreak { ratio: 0.5 },
-            TextItem::Glyph { ch: 'a' },
-            TextItem::Glyph { ch: '漢' },
+            TextItem::glyph("a"),
+            TextItem::glyph("漢"),
         ];
         for mode in [
             WritingMode::HorizontalTb,

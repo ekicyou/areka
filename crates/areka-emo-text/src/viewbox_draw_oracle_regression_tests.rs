@@ -6,6 +6,7 @@ use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::{TextItem, TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
+use areka_sakura::cluster::clusters;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 /// D1 診断（実機で行間の文字欠けを観測）: example の共有 fixture（font 28px・行送り
@@ -219,10 +220,7 @@ fn within_line_shrink_no_newline_stays_byte_equal_to_oracle() {
     let mut oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor");
     let mut viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
     // 単一行・改行なし。visible を 6→2 と縮める 2 フレーム（後方時刻ジャンプの un-reveal 相当）。
-    let items: Vec<TextItem> = "おっはよー！"
-        .chars()
-        .map(|ch| TextItem::Glyph { ch })
-        .collect();
+    let items: Vec<TextItem> = clusters("おっはよー！").map(TextItem::glyph).collect();
     for &visible in &[6usize, 2usize] {
         let lines = LayoutEngine::layout(
             &items,

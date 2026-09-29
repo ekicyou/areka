@@ -14,9 +14,9 @@
 //!   先頭/末尾 LineBreak）は塊を生まない。
 //! - **glyph index 写像（R2.1）**: glyph 通し番号は **全 items 中の `Glyph` のみ**を
 //!   0 起点で数えた値（visible gate と同じ数え方——`LineBreak` は番号を消費しない）。
-//!   budouy `parse(&str) -> Vec<String>` の各チャンクを `chars().count()` で累積し、
-//!   run 内グリフを `(start, len)` へ 1:1 に写す。グリフ単位は Rust `char`（state.rs 正準・
-//!   M1 は書記素クラスタ結合なし）ゆえ写像は無損失。
+//!   run の文字列は各グリフ（書記素クラスタ）の文字列の連結。budouy `parse(&str) -> Vec<String>`
+//!   の各チャンクを `chars().count()` で累積し、run 内グリフを `(start, len)` へ写す。
+//!   1 スカラー値の文字だけの run では、チャンクの文字数がグリフ数と一致し写像は無損失。
 //! - **全文 lookahead（R7.1・INV-1）**: 入力は常に全 `items`（可視 prefix ではない）。
 //!   構造的に [`segment_plan`] は全 items を受け取る。
 //! - **budouy Parser のライフサイクル（R8.1）**: `static PARSER: OnceLock<budouy::Parser>` を
@@ -123,8 +123,8 @@ pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
 
     for item in items {
         match item {
-            TextItem::Glyph { ch } => {
-                run_text.push(*ch);
+            TextItem::Glyph { text } => {
+                run_text.push_str(text);
                 glyph_index += 1;
             }
             TextItem::LineBreak { .. } => {
@@ -152,9 +152,11 @@ pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
 mod tests {
     use super::*;
 
-    /// 文字列を `TextItem::Glyph` 列へ（run 構築ヘルパ）。
+    /// 文字列を `TextItem::Glyph` 列へ（run 構築ヘルパ・クラスタの定義点で切る）。
     fn glyphs(s: &str) -> Vec<TextItem> {
-        s.chars().map(|ch| TextItem::Glyph { ch }).collect()
+        areka_sakura::cluster::clusters(s)
+            .map(TextItem::glyph)
+            .collect()
     }
 
     /// 明示改行マーカー（ratio は境界計算に無関係——LineBreak であることだけが効く）。
@@ -162,13 +164,13 @@ mod tests {
         TextItem::LineBreak { ratio: 1.0 }
     }
 
-    /// plan の各塊が被覆するグリフ列（run 別ではなく全 items 通し番号上の char 列）を復元する。
+    /// plan の各塊が被覆するグリフ列（run 別ではなく全 items 通し番号上のクラスタ列）を復元する。
     /// items 中の Glyph のみを通し番号順に並べた列を、各 Segment の [start, start+len) で切り出す。
-    fn glyph_chars(items: &[TextItem]) -> Vec<char> {
+    fn glyph_chars(items: &[TextItem]) -> Vec<&str> {
         items
             .iter()
             .filter_map(|it| match it {
-                TextItem::Glyph { ch } => Some(*ch),
+                TextItem::Glyph { text } => Some(&**text),
                 TextItem::LineBreak { .. } | TextItem::CursorMove { .. } => None,
             })
             .collect()
@@ -224,8 +226,8 @@ mod tests {
             "全グリフを被覆していない（末尾に到達しない）"
         );
 
-        // 無損失: 各塊の range から復元した char 連結が原グリフ列と一致。
-        let mut reconstructed: Vec<char> = Vec::new();
+        // 無損失: 各塊の range から復元したクラスタ連結が原グリフ列と一致。
+        let mut reconstructed: Vec<&str> = Vec::new();
         for seg in plan.segments() {
             reconstructed.extend_from_slice(&all[seg.start..seg.start + seg.len]);
         }
@@ -241,10 +243,10 @@ mod tests {
     fn glyph_index_ignores_line_break() {
         // [G, G, LineBreak, G]: run2 の先頭 glyph 通し番号は 2（LineBreak は消費しない・3 でない）。
         let items = vec![
-            TextItem::Glyph { ch: 'a' },
-            TextItem::Glyph { ch: 'b' },
+            TextItem::glyph("a"),
+            TextItem::glyph("b"),
             br(),
-            TextItem::Glyph { ch: 'c' },
+            TextItem::glyph("c"),
         ];
         let plan = segment_plan(&items);
 

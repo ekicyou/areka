@@ -39,7 +39,7 @@ pub(super) fn segment_advance_sum(
     let mut sum = 0.0f32;
     let mut serial = 0usize;
     for item in items {
-        if let TextItem::Glyph { ch } = *item {
+        if let TextItem::Glyph { text } = item {
             if serial >= end {
                 break;
             }
@@ -47,7 +47,8 @@ pub(super) fn segment_advance_sum(
                 // 送り幅の決め方は配置ループと**同じ 1 か所**を通す（要件 11.2）——
                 // 塊の合計だけが旧幅のまま取り残されると、塊の収まり判定が
                 // 見た目込みの配置と食い違って折返し位置がずれる。
-                let (_, advance, _) = glyph_style_advance(ch, serial, font_height, metrics, styles);
+                let (_, advance, _) =
+                    glyph_style_advance(text, serial, font_height, metrics, styles);
                 sum += advance;
             }
             serial += 1;

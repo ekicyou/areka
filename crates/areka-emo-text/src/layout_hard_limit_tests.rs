@@ -65,7 +65,7 @@ use crate::writing::WritingMode;
 
 /// 共通の文字高さ（[`FixedMetrics`] で全角 'あ' の送りが 10・行送りが 12 になる）。
 const FONT: f32 = 10.0;
-/// 全角 1 グリフの送り幅（`FixedMetrics::advance('あ', 10)`）。
+/// 全角 1 グリフの送り幅（`FixedMetrics::advance("あ", 10)`）。
 const ADVANCE: f32 = 10.0;
 /// 描画範囲の行内軸の遠辺（hard）＝ちょうど 10 グリフぶん。
 const HARD: f32 = 100.0;
@@ -258,8 +258,8 @@ fn hard_limit_fires_inside_a_segment_and_leaves_a_readable_record() {
     const NARROW_HARD: f32 = 95.0;
     let region = region_of(WritingMode::HorizontalTb, SOFT_OUT, NARROW_HARD);
     let items = [
-        TextItem::Glyph { ch: 'あ' },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
                 value: 80.0,
@@ -267,8 +267,8 @@ fn hard_limit_fires_inside_a_segment_and_leaves_a_readable_record() {
             },
             y: CursorCoord::Omitted,
         },
-        TextItem::Glyph { ch: 'あ' },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
+        TextItem::glyph("あ"),
     ];
     let segments = plan(&[(0, 4)]);
 
@@ -452,11 +452,11 @@ fn hard_limit_fires_after_cursor_jump_even_when_wrap_threshold_is_inside() {
         y: CursorCoord::Omitted,
     };
     let items = [
-        TextItem::Glyph { ch: 'あ' },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
+        TextItem::glyph("あ"),
         jump,
-        TextItem::Glyph { ch: 'あ' },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
+        TextItem::glyph("あ"),
     ];
     let segments = plan(&[(0, 4)]);
 

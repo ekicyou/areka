@@ -318,13 +318,13 @@ impl ViewboxExecutor {
         for (index, resident) in canvas.residents.iter().enumerate() {
             let overhang = match &resident.content {
                 ResidentContent::GlyphRun(run) if !run.glyphs.is_empty() => {
-                    let text: String = run.glyphs.iter().map(|g| g.ch).collect();
+                    let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
                     self.line_layout_for(index, &text, run, &format, font, mode, styles)?;
                     self.line_store.overhang(index).unwrap_or_default()
                 }
                 // Choice 住人は内包 run を GlyphRun と同一経路で計測する（R9.5）。
                 ResidentContent::Choice(choice) if !choice.run.glyphs.is_empty() => {
-                    let text: String = choice.run.glyphs.iter().map(|g| g.ch).collect();
+                    let text: String = choice.run.glyphs.iter().map(|g| &*g.text).collect();
                     self.line_layout_for(index, &text, &choice.run, &format, font, mode, styles)?;
                     let measured = self.line_store.overhang(index).unwrap_or_default();
                     // ハイライト帯（band_offset ＋ band_extent）は em ボックス丈より外側へ出る
@@ -420,7 +420,7 @@ impl ViewboxExecutor {
                     if run.glyphs.is_empty() {
                         continue;
                     }
-                    let text: String = run.glyphs.iter().map(|g| g.ch).collect();
+                    let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
                     let (layout, line) =
                         self.line_layout_for(index, &text, run, &format, font, mode, styles)?;
                     let (dx, dy) = resident.transform.offset();
@@ -826,8 +826,8 @@ fn expand_overhang_for_band(
 /// hover セグメントの resident-local `inline_range` を run のグリフ列へ照合し、`SetDrawingEffect`
 /// 用の UTF-16 文字範囲（[`DWRITE_TEXT_RANGE`]）を導く。
 ///
-/// 行 TextLayout の text は `run.glyphs` の `ch` 連結ゆえ、グリフ index と text 位置は各 `ch` の
-/// UTF-16 長の累積で 1:1 対応する。グリフ中心（`inline_pos + advance/2`）が `inline_range` に入る
+/// 行 TextLayout の text は `run.glyphs` の文字列（クラスタ）の連結ゆえ、グリフ index と text 位置は
+/// 各グリフの文字列の UTF-16 長の累積で 1:1 対応する（範囲の境界はクラスタの境界に揃う）。グリフ中心（`inline_pos + advance/2`）が `inline_range` に入る
 /// **連続**グリフ subrange を採り、その手前までの累積を `startPosition`・subrange の累積長を
 /// `length` とする（境界がグリフ境界に一致するため中心判定が浮動小数誤差に頑健）。交差グリフ
 /// なしは `None`（効果を適用しない）。
@@ -840,7 +840,7 @@ fn segment_text_range(
     let mut start: Option<u32> = None;
     let mut length: u32 = 0;
     for g in glyphs {
-        let units = g.ch.len_utf16() as u32;
+        let units = g.text.encode_utf16().count() as u32;
         let center = g.inline_pos + g.advance * 0.5;
         if center > i0 && center < i1 {
             if start.is_none() {

@@ -27,7 +27,7 @@ const REVEAL_INTERVAL: f64 = 0.05;
 /// （reveal interval=0.05）。他コマンドは瞬時（duration=0）。
 pub(super) fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
     let duration = match &command {
-        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
+        CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * REVEAL_INTERVAL,
         _ => 0.0,
     };
     TalkCue {
@@ -98,7 +98,7 @@ pub(super) fn opaque_count(bytes: &[u8]) -> usize {
 
 // ══ task 8.1: 選択肢契約 API（inject_choice_hover／choice_hit_rows／choice_active・純粋・COM 不要） ══
 
-/// 選択肢テキストを載せる Choice cue（duration は文字数×REVEAL_INTERVAL・runtime_tests の cue 流儀）。
+/// 選択肢テキストを載せる Choice cue（duration はクラスタ数×REVEAL_INTERVAL・runtime_tests の cue 流儀）。
 pub(super) fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> TalkCue {
     TalkCue {
         at,
@@ -108,7 +108,7 @@ pub(super) fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&st
             text: text.into(),
             references: refs.iter().map(|s| s.to_string()).collect(),
         },
-        duration: text.chars().count() as f64 * REVEAL_INTERVAL,
+        duration: areka_sakura::cluster::cluster_count(text) as f64 * REVEAL_INTERVAL,
     }
 }
 

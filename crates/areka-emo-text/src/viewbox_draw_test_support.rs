@@ -8,6 +8,7 @@ use crate::writing::WritingMode;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
+use areka_sakura::cluster::clusters;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
@@ -132,9 +133,9 @@ pub(super) fn live_diff_model_font(name: Option<&str>, font_height: Option<u32>)
     )
 }
 
-/// 文字列→グリフ item 列。
+/// 文字列→グリフ item 列（クラスタの定義点で切る＝本番の cue の適用と同じ切り方）。
 pub(super) fn glyph_items(s: &str) -> Vec<TextItem> {
-    s.chars().map(|ch| TextItem::Glyph { ch }).collect()
+    clusters(s).map(TextItem::glyph).collect()
 }
 
 /// items→(canvas, visible_window)（純粋レイアウト・FixedMetrics・visible は全量）。

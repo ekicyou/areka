@@ -417,7 +417,7 @@ impl PhysicalRect {
 /// 同値判定のみ）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CommittedLine {
-    /// 行の内容文字列（グリフ ch の連結・非グリフ住人は空）。
+    /// 行の内容文字列（グリフの文字列＝クラスタの連結・非グリフ住人は空）。
     text: String,
     /// ブロック軸位置のビット表現（横書き＝dy・縦書き＝dx——canvas-local image px）。
     block_pos_bits: u32,
@@ -667,14 +667,19 @@ fn glyph_run_indices(canvas: &ContentCanvas) -> impl Iterator<Item = usize> + '_
 fn line_fingerprint(resident: &Resident, mode: WritingMode) -> CommittedLine {
     let (text, styles, extent) = match &resident.content {
         ResidentContent::GlyphRun(run) => (
-            run.glyphs.iter().map(|g| g.ch).collect::<String>(),
+            run.glyphs.iter().map(|g| &*g.text).collect::<String>(),
             run.glyphs.iter().map(|g| g.style.0).collect::<Vec<u32>>(),
             run.size,
         ),
         // Choice 住人は内包 run から GlyphRun と同一の指紋を作る（非 hover の素描画が
         // GlyphRun と同一ゆえ指紋も同一・R9.5。hover セグメントの指紋反映は task 6.1）。
         ResidentContent::Choice(choice) => (
-            choice.run.glyphs.iter().map(|g| g.ch).collect::<String>(),
+            choice
+                .run
+                .glyphs
+                .iter()
+                .map(|g| &*g.text)
+                .collect::<String>(),
             choice
                 .run
                 .glyphs

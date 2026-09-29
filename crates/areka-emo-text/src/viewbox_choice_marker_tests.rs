@@ -8,16 +8,16 @@ use crate::layout::PositionedGlyph;
 use crate::look::StyleId;
 use crate::region::ScaleContract;
 use crate::writing::WritingMode;
+use areka_sakura::cluster::{cluster_count, clusters};
 
 // ── 6.1 R4.4: 行指紋の hover 印（choice_marker）——hover 切替は当該行の指紋だけを変える ──
 
 /// 行内 n グリフの GlyphRunContent（inline_pos 連番・全角 advance 10）。
 fn run_content(text: &str) -> GlyphRunContent {
-    let glyphs = text
-        .chars()
+    let glyphs = clusters(text)
         .enumerate()
         .map(|(i, ch)| PositionedGlyph {
-            ch,
+            text: ch.into(),
             inline_pos: i as f32 * 10.0,
             advance: 10.0,
             style: StyleId::DEFAULT,
@@ -25,7 +25,7 @@ fn run_content(text: &str) -> GlyphRunContent {
         .collect();
     GlyphRunContent {
         glyphs,
-        size: (text.chars().count() as f32 * 10.0, 10.0),
+        size: (cluster_count(text) as f32 * 10.0, 10.0),
     }
 }
 

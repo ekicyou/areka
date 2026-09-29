@@ -8,6 +8,7 @@ use crate::layout::PositionedGlyph;
 use crate::look::StyleId;
 use crate::region::ScaleContract;
 use crate::writing::WritingMode;
+use areka_sakura::cluster::{cluster_count, clusters};
 
 // ── 5.3 R11.4/15.5: 行指紋の装飾番号列（styles）——装飾だけが違う行を再利用しない ──
 //
@@ -18,14 +19,13 @@ use crate::writing::WritingMode;
 /// 行内 n グリフの GlyphRunContent（inline_pos 連番・全角 advance 10・番号列を明示指定）。
 /// 番号列の長さは文字数と一致させる（配置が `glyph_styles[ordinal]` を写す不変条件と同じ形）。
 fn run_content_styled(text: &str, ids: &[u32]) -> GlyphRunContent {
-    let count = text.chars().count();
+    let count = cluster_count(text);
     assert_eq!(count, ids.len(), "番号列の長さは文字数と一致させる");
-    let glyphs = text
-        .chars()
+    let glyphs = clusters(text)
         .zip(ids)
         .enumerate()
         .map(|(i, (ch, &id))| PositionedGlyph {
-            ch,
+            text: ch.into(),
             inline_pos: i as f32 * 10.0,
             advance: 10.0,
             style: StyleId(id),

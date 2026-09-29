@@ -34,6 +34,8 @@
 //! `areka-parsers / areka-sakura / areka-actor → areka-emo-text ← wintf`、
 //! `areka-emo-atlas → areka-emo-compose → areka-emo-present → areka-emo-text`。
 //! 逆方向 import（emo-present → emo-text 等）は実装・レビューでエラーとして扱う。
+//! 文字の単位（グリフ）は書記素クラスタで、切り方は `areka_sakura::cluster` だけを通す
+//! （sakura の再生時間が数える文字と同じ切り方・本 crate に別の切り方を置かない）。
 //!
 //! ## 失敗経路のログ規律（log-first）
 //!

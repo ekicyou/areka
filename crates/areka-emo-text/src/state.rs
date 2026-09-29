@@ -37,12 +37,15 @@
 //!   で導出する（自前の文字送り定数は持たない・服従＝再生時間の真実源に従う・R7.1/R7.2）。
 //!   可視数は `visible_glyphs(actor, t)`＝注入時刻 `t` で `r_i <= t` のグリフ数。
 //!   実時間 sleep／`Instant` 不使用（注入時刻駆動・R3.3/R9.1）。
-//! - グリフ単位は Rust の `char`（M1 正準。書記素クラスタ結合は M2 検討事項——
-//!   emo2 fixture は結合文字を使用しない）。
+//! - グリフ単位は書記素クラスタ（UAX #29 の拡張書記素クラスタ）。切り方は
+//!   [`areka_sakura::cluster::clusters`] だけを通す（再生時間の文字数と同じ切り方・
+//!   ZWJ 列・国旗・肌色・異体字セレクタ・キーキャップ・結合文字が 1 アイテム・1 段になる）。
 //! - 同一 cue 列＋同一入力条件→同一状態（決定論・R2.4/R2.5）。
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
+use areka_sakura::cluster::clusters;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 use crate::look::{StyleId, StyleTable};
@@ -103,12 +106,16 @@ impl TextLayerConfig {
 }
 
 /// 追記順の正本を構成する 1 要素（グリフ／改行マーカー）。
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TextItem {
-    /// 1 グリフ（Rust `char` 単位・M1 正準）。
+    /// 1 グリフ＝書記素クラスタ 1 つ（UAX #29 の拡張書記素クラスタ・非空）。
+    ///
+    /// 構築は [`TextItem::glyph`] を通す。中身を共有の不変文字列（`Arc<str>`）にするのは、
+    /// 毎フレームの配置（[`crate::layout::PositionedGlyph`] への写し）で割り当てを起こさず、
+    /// 状態をスレッドの間で受け渡せる（`Send`）ようにするため。
     Glyph {
-        /// グリフの文字。
-        ch: char,
+        /// グリフの文字列（クラスタ 1 つ）。
+        text: Arc<str>,
     },
     /// 改行マーカー（`CueCommand::NewLine { ratio }` の転写・`\n`=1.0／`\n[half]`=0.5）。
     LineBreak {
@@ -127,6 +134,23 @@ pub enum TextItem {
         /// y 軸の座標語彙。
         y: CursorCoord,
     },
+}
+
+impl TextItem {
+    /// クラスタ 1 つからグリフのアイテムを作る（本番の cue の適用もテストの直書きもこれを通す）。
+    ///
+    /// 前提「非空・ちょうど 1 クラスタ」はデバッグビルドの検査で確かめる（2 クラスタを 1 アイテムに
+    /// 詰める直書きの誤りを捕まえるため）。本番の経路は [`areka_sakura::cluster::clusters`] の
+    /// 各要素を渡すので前提が崩れず、失敗も記録もしない。
+    pub fn glyph(text: &str) -> TextItem {
+        debug_assert!(
+            areka_sakura::cluster::cluster_count(text) == 1,
+            "TextItem::glyph はクラスタちょうど 1 つを受ける: {text:?}"
+        );
+        TextItem::Glyph {
+            text: Arc::from(text),
+        }
+    }
 }
 
 /// `\_l` 座標 1 軸の語彙（不透明文字列の全語彙を保持・`Copy`・state.rs 所有）。
@@ -390,7 +414,8 @@ impl TextLayerState {
     pub fn apply_cue(&mut self, cue: &TalkCue) {
         match &cue.command {
             CueCommand::Text(text) => {
-                let glyph_count = text.chars().count();
+                let glyph_units: Vec<&str> = clusters(text).collect();
+                let glyph_count = glyph_units.len();
                 // 服従（R7.1/R7.3）: reveal ペースは自前定数でなく配送 duration 由来。
                 // N=0 は除算しない（0 割り回避・R1.8）。N>0 かつ duration=0 は interval=0
                 // ＝全グリフが cue.at で同時可視（縮退・R1.2）。
@@ -403,7 +428,7 @@ impl TextLayerState {
                 let state = self.actors.entry(cue.actor.clone()).or_default();
                 state
                     .items
-                    .extend(text.chars().map(|ch| TextItem::Glyph { ch }));
+                    .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
                 state.reveal.extend_chunk(glyph_count, cue.at, interval);
                 // 追記した文字にいま効いている見た目の番号を与える（R3.2/R3.3）。
                 state.push_current_style(&cue.actor, glyph_count);
@@ -451,7 +476,8 @@ impl TextLayerState {
                 // リビール時刻式で載せ、追記したグリフ序数範囲＋不透明転写した `\q` 属性を
                 // 1 スパンとして `choices` へ記録する。空 `text` は warn!（actor 付き）＋空範囲
                 // スパン記録・グリフ追記なし（R1.5 縮退・design.md 縮退表 Choice text 空 row）。
-                let glyph_count = text.chars().count();
+                let glyph_units: Vec<&str> = clusters(text).collect();
+                let glyph_count = glyph_units.len();
                 let interval = if glyph_count > 0 {
                     cue.duration / glyph_count as f64
                 } else {
@@ -471,7 +497,7 @@ impl TextLayerState {
                     tracing::debug!(actor = %cue.actor, id = %id, len = glyph_count, at = cue.at, duration = cue.duration, interval, "Choice cue 適用（グリフ追記＋配送 duration 由来のリビール時刻確定＋スパン記録）");
                     state
                         .items
-                        .extend(text.chars().map(|ch| TextItem::Glyph { ch }));
+                        .extend(glyph_units.iter().map(|c| TextItem::glyph(c)));
                     state.reveal.extend_chunk(glyph_count, cue.at, interval);
                     // 選択肢の文字にもそのときの装飾状態を与える（R3.5）。
                     state.push_current_style(&cue.actor, glyph_count);

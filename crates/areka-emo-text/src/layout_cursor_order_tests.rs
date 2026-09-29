@@ -84,10 +84,10 @@ fn cursor_absolute_y100() -> TextItem {
 fn written_order_decides_relative_cursor_against_newline() {
     // 順方向 `\_l` → `\n`: 改行が後勝ち（次行の先頭へ）。
     let cursor_then_break = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         cursor_relative_x10(),
         newline(),
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = layout_h(&cursor_then_break, 2);
     assert_eq!(
@@ -109,10 +109,10 @@ fn written_order_decides_relative_cursor_against_newline() {
 
     // 逆順 `\n` → `\_l`: 従来どおりカーソルが後勝ち（不変）。
     let break_then_cursor = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         newline(),
         cursor_relative_x10(),
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = layout_h(&break_then_cursor, 2);
     assert_eq!(lines.len(), 2);
@@ -142,11 +142,7 @@ fn written_order_decides_relative_cursor_against_newline() {
 #[test]
 fn written_order_decides_absolute_cursor_against_newline() {
     // 順方向 `\_l` → `\n`: 改行の送りがカーソルの着地点に**加算**される。
-    let cursor_then_break = [
-        cursor_absolute_y100(),
-        newline(),
-        TextItem::Glyph { ch: 'あ' },
-    ];
+    let cursor_then_break = [cursor_absolute_y100(), newline(), TextItem::glyph("あ")];
     let lines = layout_h(&cursor_then_break, 1);
     assert_eq!(
         lines.len(),
@@ -161,11 +157,7 @@ fn written_order_decides_absolute_cursor_against_newline() {
     assert_eq!(inline_positions(&lines[0]), vec![0.0]);
 
     // 逆順 `\n` → `\_l`: 従来どおりカーソルが改行送りを上書きする（不変）。
-    let break_then_cursor = [
-        newline(),
-        cursor_absolute_y100(),
-        TextItem::Glyph { ch: 'あ' },
-    ];
+    let break_then_cursor = [newline(), cursor_absolute_y100(), TextItem::glyph("あ")];
     let lines = layout_h(&break_then_cursor, 1);
     assert_eq!(lines.len(), 1);
     assert_eq!(
@@ -197,11 +189,11 @@ fn written_order_decides_absolute_cursor_against_newline() {
 #[test]
 fn written_order_applies_newlines_before_and_after_the_cursor() {
     let items = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         newline(),
         cursor_absolute_y100(),
         newline(),
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = layout_h(&items, 2);
     assert_eq!(lines.len(), 2);
@@ -228,11 +220,7 @@ fn written_order_applies_newlines_before_and_after_the_cursor() {
 /// （[あ@0]・行内終端 10・行送り 0）は同じなので、この期待値は**書き換えではなく不変**である。
 #[test]
 fn trailing_cursor_then_newline_creates_no_extra_line() {
-    let items = [
-        TextItem::Glyph { ch: 'あ' },
-        cursor_absolute_y100(),
-        newline(),
-    ];
+    let items = [TextItem::glyph("あ"), cursor_absolute_y100(), newline()];
     let lines = layout_h(&items, 1);
     assert_eq!(lines.len(), 1, "末尾の `\\_l`／`\\n` は行を作らない");
     assert_eq!(inline_positions(&lines[0]), vec![0.0]);
@@ -246,7 +234,7 @@ fn trailing_cursor_then_newline_creates_no_extra_line() {
     // 4 段目の `\n` で (1)(2)(3) が走って行送りは 100 になるが、そこに置かれる文字が
     // 無いので行は増えず、末尾の改行は保留のまま蒸発する。
     let mixed_tail = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         newline(),
         cursor_absolute_y100(),
         newline(),

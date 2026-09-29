@@ -187,7 +187,7 @@ fn place(script: &str) -> Placed {
 
 /// 行を「その行に並んだ文字」の文字列へ写す（どの行に何が置かれたかを失敗文言に出すため）。
 fn line_text(line: &PositionedLine) -> String {
-    line.glyphs.iter().map(|g| g.ch).collect()
+    line.glyphs.iter().map(|g| &*g.text).collect()
 }
 
 // ── 遅延座標指定の着地（設計 C2 の H 行・要件 3.6）────────────────────────────
@@ -234,7 +234,7 @@ fn the_cursor_tag_places_the_next_glyph_at_the_declared_offset() {
             want,
             "台本 `{script}`: 遅延座標指定の直後のグリフ `{}` の左上が {want:?} ではなく {:?}\
              （描画開始点 {start:?} からの相対 ({dx},{dy}) に置かれるはず）",
-            glyph.ch,
+            glyph.text,
             (glyph.inline_pos, head.rect.top)
         );
         assert_eq!(
@@ -441,7 +441,7 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
         let label = EXPECTED_CHOICES[n].1;
         let line = &placed.lines[n + 1];
         for (i, glyph) in line.glyphs.iter().enumerate() {
-            let where_ = format!("選択肢「{label}」の {} 文字目 `{}`", i + 1, glyph.ch);
+            let where_ = format!("選択肢「{label}」の {} 文字目 `{}`", i + 1, glyph.text);
             assert_containment(
                 &where_,
                 (
