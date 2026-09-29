@@ -9,6 +9,7 @@
 
 use std::path::PathBuf;
 
+mod procedure;
 mod refs;
 
 /// 更新の対象の種別（Reference の綴り: ghost／shell／balloon）。
