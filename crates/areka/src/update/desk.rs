@@ -21,7 +21,7 @@ use areka_kanade::{ChangeOrigin, KanadeMsg, ShioriMethod};
 use bevy_ecs::world::World;
 
 use super::refs::{ON_UPDATE_FAILURE, executing_refs};
-use super::worker::{DeskAsk, UpdateJob, spawn_worker, winhttp_fetch};
+use super::worker::{DeskAsk, NewFetch, UpdateJob, spawn_worker, winhttp_fetch};
 use super::{RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason};
 use crate::boot_config::BootContext;
 use crate::emo2_boot::ghost_switch::{
@@ -43,6 +43,8 @@ pub(crate) struct UpdateDesk {
     asks_rx: Receiver<DeskAsk>,
     /// 背景スレッドへの仕事の送出端（最初の依頼で 1 度だけ起こす）。
     pub(super) worker: Option<Sender<UpdateJob>>,
+    /// 背景スレッドへ渡す取得口の作り方（本番は [`winhttp_fetch`]・テストは起こす前に偽物へ差し替える）。
+    pub(super) new_fetch: NewFetch,
     /// 手続きの段。
     pub(super) stage: Stage,
     /// 答え待ちの間に届いた要求の預かり（高々 1 件・対象はまだ解かない）。
@@ -65,6 +67,7 @@ impl UpdateDesk {
             asks_tx,
             asks_rx,
             worker: None,
+            new_fetch: winhttp_fetch(),
             stage: Stage::Idle,
             held: None,
             gate,
@@ -269,7 +272,12 @@ pub(super) fn hand_over(world: &mut World, job: UpdateJob) -> SubmitVerdict {
             "[update] 背景スレッドを起こします"
         );
         // 取っ手は持たない（落としても join しない）。終了で待つのは門の役目。
-        spawn_worker(desk.asks_tx.clone(), desk.gate.clone(), winhttp_fetch()).0
+        spawn_worker(
+            desk.asks_tx.clone(),
+            desk.gate.clone(),
+            desk.new_fetch.clone(),
+        )
+        .0
     });
     let reason = job.order.reason;
     let names: Vec<String> = job.order.targets.iter().map(|t| t.name.clone()).collect();

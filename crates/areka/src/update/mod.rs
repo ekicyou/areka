@@ -217,3 +217,6 @@ pub(crate) fn register(world: &mut World) {
 
 #[cfg(test)]
 mod update_tests;
+
+#[cfg(test)]
+mod worker_path_tests;

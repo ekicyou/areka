@@ -91,7 +91,7 @@
   - 兄弟の `procedure_reload_tests` で、読み直しが総括の後に 1 回・`none`／失敗で 0 回・途中で閉じたら残りのイベント 0 件・総括 0・読み直し 0・観測が全部流れていること、が緑
   - _Requirements: 5.2, 5.4, 5.7, 7.4, 9.9, 10.13, 10.16_
 
-- [ ] 6. 背景スレッドと UI 側の窓口
+- [x] 6. 背景スレッドと UI 側の窓口
 - [x] 6.1 背景スレッドと本物の口を作り、終了の門に出入りさせる
   - 最初の仕事で 1 度だけスレッド `update` を起こし、仕事（依頼と、依頼を受けた時点の kanade の送出端の写し）を 1 件ずつ受けて手続きを走らせ、終わったら窓口へ「終わった」を頼む。背景スレッドから窓口への頼み（始まった・読み直し・終わった）の型はこのタスクが定義する
   - 本物の口は kanade へ直接 GET で送って返事を待つ。返事の 5 値と切断を「台本あり・返事なし・閉じた」へ写す（定常でない・失敗・切断は閉じた、許可表に無いは返事なしで `error!`）。終了が始まっていれば送らない。照会は `homeurl` と `useorigin1` を 1 回で
@@ -128,7 +128,7 @@
   - 切替の土台（偽の SHIORI）の兄弟の `desk_reload_tests` で、条件を満たせば切替が受け付けられて `OnGhostChanging` と `OnClose` が 0 件、引数の起動・別のゴースト・終了の後では切替の要求 0 件と `warn!` 1 件、読み直しの途中の切替の頼みが今日どおり無視されること、が緑
   - _Requirements: 5.2, 5.3, 5.5, 5.6, 5.8, 7.4, 9.9, 9.12, 10.6, 10.13, 10.17_
 
-- [ ] 6.6 本番の道筋（窓口 → 背景スレッド → kanade → 偽の SHIORI）で、一周のイベントと読み直しを固定する
+- [x] 6.6 本番の道筋（窓口 → 背景スレッド → kanade → 偽の SHIORI）で、一周のイベントと読み直しを固定する
   - 切替の土台の上で本物の窓口・kanade・本物の口を通し、4.1 の偽の取得口を差した一周で `OnUpdateBegin` → `OnUpdateReady` → 各ファイル → `OnUpdateComplete` → `OnUpdateResult` が偽の SHIORI に届く順を判定する
   - `changed` なら総括の返事の台詞が終わってから同じゴーストが `OnGhostChanging` 無しに起き直り `OnGhostChanged`（自分→自分）が届く、`none` なら切替の要求が 0 件であることを判定する。待ちは返信端と受信端の受け取りで揃え、実時間に依らない
   - 兄弟の新しいファイル `worker_path_tests` のこの 2 本が緑
@@ -191,3 +191,4 @@
 - 6.3: `update/mod.rs` の `#![allow(dead_code)]` は外した。残る的の絞った allow は `raw_sender` と `UpdateDesk.raw_tx`＝7.1 で外す。design に無い判定 `SubmitVerdict::WorkerGone`（背景スレッドへ渡せない→ `error!(update_worker_gone)`・次の依頼で起こし直す）と記録の語 `update_worker_gone`・`update_worker_spawned`・`update_request_held`・`update_stage` を 8 で design の型と Monitoring の表へ。`DeskAsk::Reload` の腕は 6.5、`peek_homeurl` は 6.4 が埋める
 - 6.4: `can_update`・`update_current` の `#[allow(dead_code)]` は 7.2 で外す。定常到達の照会は偽の SHIORI（`spine.rs` の `ScriptedShioriBackend`）が台本に無ければ NoContent で答え、`SwitchRig::calls` は `GET homeurl` を外す＝6.6 で手続きの `homeurl` に値を台本で渡すと定常到達の照会が先に 1 件食う（台本に 2 件積むか `handle.non_status_calls()` を直接見る）。`spine.rs` は 998 行＝6.5・6.6 で足す土台は `ghost_switch_test_support.rs` へ。記録の語 `update_homeurl_unqueried`・`update_homeurl_copied`・`update_homeurl_absent`・`update_homeurl_query_failed` を 8 で Monitoring の表へ
 - 6.5: 要件 5.5 の「`OnBoot` は送らない」は「起動の根が `OnGhostChanged`」の意味（裁定 10.6＝boot_root はそのまま）。`OnGhostChanged` が 204 なら正典どおり `OnBoot` へ続く＝テストは `OnGhostChanged` に台本で応えて根を見る（6.6 も同じ注意）。requirements.md 導入の「`OnBoot` は送らない」の一文の扱いは完了時に開発者へ申し送る。`update_reload_skipped` の `reason`（`closing`・`switching`・`other_ghost`・`argv`）と `desk.rs` が使う `SwitchVerdict` を 8 で design の Monitoring の表と Allowed Dependencies へ
+- 6.6: 窓口に取得口の作り方の欄 `UpdateDesk.new_fetch`（既定 `winhttp_fetch()`・背景スレッドを起こす前に差す）。本番の道筋のテストは台本の入口（`raw_sender`）から入る＝`OnUpdateProcessExec` は通らない（5.1・6.3 が固定）。要件 5.2 の「シェル・バルーンの中身も読み直される」は実機（9.2 ⑴）で確かめる
