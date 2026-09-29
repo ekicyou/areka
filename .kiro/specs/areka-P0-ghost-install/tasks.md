@@ -167,7 +167,7 @@
   - _Requirements: 10.3, 10.4, 10.5_
 
 - [ ] 11. 全体の確認と実機サインオフ
-- [ ] 11.1 全体のテストと規律の検査を通す
+- [x] 11.1 全体のテストと規律の検査を通す
   - `tools/test-all.ps1` が緑。既存のテストは置き換え無しに消していない（数の判定は新しい値へ書き換えただけ）
   - 本番とテストのどのファイルも 1,000 行以下。本番コードが読む環境変数・外部クレート・`SendMessageW(`／`SendMessageTimeoutW(` の追加が 0
   - ゴーストの窓への投げ込みの受け口（`WM_DROPFILES` など）が本体に 0 件
@@ -199,3 +199,4 @@
 - 8.3: `overwrite.rs` に段 `Busy` と毎 tick の `on_tick`（`desk::drain` の末尾）を足した＝予約が下りた tick に `Busy` を 1 回頼み直す・「切替を頼んだ」のまま予約が消えたら `requeue_if_cancelled` が「預かった」へ戻す（`info!(install_overwrite_requeued)`）。**設計に無い見張り**: `on_tick` は `FirstExit` が在れば `Busy` を頼み直さない（終了中に切替や別の場所への展開を始めない・要件 8.6 の向き）＝**タスク 10 で design の desk／State Management に 1 行**。別の切替で展開を見送った書庫は次の定常到達まで「切替を頼んだ」に残り、そこで「預かった」へ戻して頼み直す（見える動きは設計どおり）。起動の文脈が無いときも切替の入口を通して `NoContext` の `warn!` を出す（`install_overwrite_returned` は文脈が在って起動中のフォルダが違うときだけ）。確定の失敗のテストは掴むファイルを `share_mode(1)`（0 だと組み上げの複写で失敗して確定まで届かない）・確定で失敗したことは `areka_nar` の記録の理由の `Commit` で見分ける。致命の道では段が「展開した」のまま残り worker へ答えが返らない＝**9 で `discard_for_exit` が預かった書庫・段を捨てる**。Monitoring の表に無い記録の語 `install_overwrite_requeued` も**タスク 10 で拾う**。
 - 9: `install_pending_discarded` の `count` は**書庫の数**（＝`paths` の数・要件 8.5「まだ始めていない書庫」）。動いている依頼の残りの書庫は worker が `install_abandoned` の `skipped_archives` に残す。預かった書庫（`overwrite::discard`）は「預かった／Busy／切替を頼んだ」なら返信端を落として worker を `Closed` で放し、パスは同じ `begin_close` の `exit_wait_abandoned` の label に残る（要件 8.4）＝`install_pending_discarded` には欄 `overwrite=(宛先, held|busy|requested|ran)` を足しただけ。「展開した」なら結果を worker へ返す。UI スレッドの展開は終了と同じスレッドなので書く段の出入りを門へ知らせず、展開の直後に `gate.end()`（無いと致命の道などで書き終えた書庫が `exit_wait_abandoned` と誤記される）。`session_end.rs` は本体 `end_session_from(world, WaitBudget)`＋薄い包み `end_session_within`（テストが出発点を過去に置くため）。Monitoring の表に無い欄 `overwrite` と段の語も**タスク 10 で拾う**。`main.rs` は 943 行。
 - 10: 台帳 13 行を実装済みに（`ghostinstallbutton.caption` の担当を `popup-menu-minimal` から移した＝その `owner_count` 15→14）。`briefing.md` の `[[barrier]]` と `roadmap-draft.md` の `[[spec]]`・`[briefs]` は生成器が無く手で入れた値だが、`ukadoc-survey` のテスト（分布の腕・件数の腕）が判定する。分野ごとの briefing は調査時点の数を残し日付つきの注記で実物を指す。`dist/README.txt` の右クリックメニューは 4 項目（「■ .nar の入れ方」は alpha-release-signoff の持ち分で未記入のまま）。残った提案: `assets.toml` の `manual_install` の束の行（「仕組み全体…読む経路が無い」）は本文と語が食い違って読める＝ukadoc-coverage-roadmap の持ち分。
+- 11.1: 2026-09-29 `cb6bb3df` で `tools/test-all.ps1` 全段 緑（i686 の成果物・fmt・x64 ワークスペース 533 秒・i686 host-32。8971 passed・0 failed・43 ignored）。main から分かれた地点 `87a625ec` からの差分で、本番の環境変数の読み 0・`SendMessageW(`／`SendMessageTimeoutW(` の追加 0・外部クレートの追加 0（依存の変更は path の `areka-nar` と `windows` の機能 1 つ）・投げ込みの受け口（`WM_DROPFILES`・`DragAcceptFiles`・`WS_EX_ACCEPTFILES`）0・消したテスト 0（足したテスト 152）・変更した `.rs` の最大は `main.rs` の 943 行。
