@@ -71,7 +71,7 @@
 
 - [ ] 4. ゴースト窓に受け手を差し、知らせと依頼へつなぐ
 
-- [ ] 4.1 受け手をゴースト窓へ差し、受け取り・振り分け・依頼を 1 回の呼び出しで終える
+- [x] 4.1 受け手をゴースト窓へ差し、受け取り・振り分け・依頼を 1 回の呼び出しで終える
   - ゴースト窓の印を持つ全ての窓へ受け手の部品を差す関数を作り、窓を作る閉包の中（既存の入力の受け手を差した直後）で呼ぶ。起こし直しも同じ閉包を通る
   - 受け手は、窓の印からスコープ番号を読む（キャラクター → バルーンの順・どちらも無ければ `warn!` で戻る）→ 本番の問い合わせ（ファイルシステムの属性と 2.1 の口）で振り分け → 覚え書きを 1 件ずつ `warn!` → 受け取りの記録 1 行（件数・スコープ・3 つの内訳・所要。0 も書く）→ インストール対象が在れば依頼 1 つ、を順に行う
   - インストールの依頼の出どころに「窓への投げ込み」の語を 1 つ足し、テストだけが待ち行列の中身と順を読める口を足す（本番には無い）。手続きの本体は触らない
@@ -113,6 +113,5 @@
 ## Implementation Notes
 - 1.2: `read_dropped_paths` の成功と `Query` の枝は決定論テストでは踏めない（実 HDROP が要る）＝実機 ⑶ で確かめる
 - 2.3: areka は bin だけの crate＝テストの絞り込みは `--lib` でなく `--bin areka <filter>`
-- 3.1: `sort_drops` と `ProbeNote` の `#[cfg_attr(not(test), allow(dead_code))]` は仮置き。4.1 で受け手が呼び覚え書きを `warn!` に出すようになったら外す
 - 3.1 の審査中、全体テストの初回で `install::desk::overwrite_tests::overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again` が 1 度だけ赤（負荷時の時間の読み・単独と再実行は緑・本 spec の配線前）。6.1 で再発したら追う
 - 3.2: `ON_FILE_DROP2`・`ON_DIRECTORY_DROP`・`file_drop2_references`・`directory_drop_references`・`mime_for`・`MIME_TABLE` の仮置きの dead_code 抑止も 4.1/4.2 で外す。テスト 20 の字面の見張りは本番の `file_drop.rs`・`drop_files.rs` だけを読むこと（`file_drop_tests.rs` に 2 語の字面がある）

@@ -6,8 +6,93 @@
 //! 戻り値に載せる（記録は呼び手が出す）。
 
 use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+use bevy_ecs::prelude::*;
+use wintf::ecs::window::OnFilesDropped;
 
 use crate::install::judge::SEPARATOR;
+use crate::install::{self, InstallOrder, InstallOrigin};
+use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
+
+/// `GhostWindowMarker` を持つ全 entity へ受け手 [`on_ghost_files_dropped`] を差す（要件 1.1〜1.3）。
+///
+/// `ghost_session::prepare_ghost_windows` の窓を作る閉包の中で、spawn の直後に同期に呼ぶ
+/// （`attach_balloon_pointer_handlers` と同じ契約）。起こし直しも同じ閉包を通るので、回数によらず
+/// 新しい窓に差さる。印の無い窓には差さない。
+pub(crate) fn attach_file_drop_receivers(world: &mut World) {
+    let ghost_windows: Vec<Entity> = world
+        .query_filtered::<Entity, With<GhostWindowMarker>>()
+        .iter(world)
+        .collect();
+    for e in ghost_windows {
+        world
+            .entity_mut(e)
+            .insert(OnFilesDropped(on_ghost_files_dropped));
+    }
+}
+
+/// 窓に差す受け手（`OnFilesDropped` の署名）。1 回の投げ込みをこの 1 回の呼び出しで終える
+/// （要件 6.5）: スコープ → 振り分け → 問い合わせの失敗の記録 → 受け取りの記録 → 依頼。
+/// 途中で戻るのは窓に印が無いときだけ。依頼はゴーストが定常かどうかを見ずに渡す（要件 3.8）。
+pub(crate) fn on_ghost_files_dropped(world: &mut World, entity: Entity, paths: Vec<PathBuf>) {
+    let count = paths.len();
+    let scope = if let Some(m) = world.get::<CharWindowMarker>(entity) {
+        m.scope
+    } else if let Some(m) = world.get::<BalloonWindowMarker>(entity) {
+        m.scope
+    } else {
+        tracing::warn!(
+            event = "file_drop_unknown_window",
+            entity = ?entity,
+            count,
+            "[file_drop] キャラ／バルーンの印が無い窓への投げ込み: 何もしない"
+        );
+        return;
+    };
+    let started = Instant::now();
+    let sorted = sort_drops(
+        paths,
+        |p| std::fs::metadata(p).map(|m| m.is_dir()),
+        areka_nar::peek_install_txt,
+    );
+    for note in &sorted.notes {
+        match note {
+            ProbeNote::IsDirFailed { path, error } => tracing::warn!(
+                event = "file_drop_probe_failed",
+                path = %path.display(),
+                error = %error,
+                "[file_drop] フォルダかどうかを問えない: フォルダでないものとして拡張子で決めた"
+            ),
+            ProbeNote::ArchiveUnreadable { path, error } => tracing::warn!(
+                event = "file_drop_archive_unreadable",
+                path = %path.display(),
+                reason = %error,
+                "[file_drop] 書庫の目次が読めない: インストール対象でないファイルとして扱う"
+            ),
+        }
+    }
+    tracing::info!(
+        event = "file_drop_received",
+        scope,
+        count,
+        files = sorted.files.len(),
+        dirs = sorted.dirs.len(),
+        installs = sorted.installs.len(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "[file_drop] 落とされた物を受け取って振り分けました"
+    );
+    if !sorted.installs.is_empty() {
+        // 戻り値の記録は `submit` 自身が出す（`install_order_queued`／`install_order_refused`）。
+        install::submit(
+            world,
+            InstallOrder {
+                archives: sorted.installs,
+                origin: InstallOrigin::WindowDrop,
+            },
+        );
+    }
+}
 
 /// 振り分けの結果（1 回の投げ込みにつき 1 つ）。
 ///
@@ -29,7 +114,6 @@ pub(crate) struct DropSort {
 
 /// 問い合わせの失敗。どちらも当該の物は「インストール対象でないファイル」側へ倒れる。
 #[derive(Debug)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum ProbeNote {
     /// フォルダかどうかを問えなかった（フォルダでないものとして拡張子で決めた・要件 2.5）。
     IsDirFailed {
@@ -55,7 +139,6 @@ pub(crate) enum ProbeNote {
 /// 入力の順に押す（要件 2.6）。記録は出さず、問い合わせの失敗は `notes` に載せる。
 ///
 /// 本番の注入は `fs::metadata(p).map(|m| m.is_dir())` と [`areka_nar::peek_install_txt`]。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn sort_drops(
     paths: Vec<PathBuf>,
     mut is_dir: impl FnMut(&Path) -> std::io::Result<bool>,
@@ -200,3 +283,7 @@ mod tests;
 #[cfg(test)]
 #[path = "file_drop_mime_tests.rs"]
 mod mime_tests;
+
+#[cfg(test)]
+#[path = "file_drop_wiring_tests.rs"]
+mod wiring_tests;
