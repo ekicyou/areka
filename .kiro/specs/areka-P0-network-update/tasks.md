@@ -189,7 +189,7 @@
   - _Requirements: 5.9, 9.9, 9.10_
   - _Depends: 10.1_
 
-- [ ] 11. 32bit の補助プロセスをコンソール窓なしで起こす（2026-09-30 実機で見つかった既存の欠陥・開発者「出ないようにしないとダメ」）
+- [x] 11. 32bit の補助プロセスをコンソール窓なしで起こす（2026-09-30 実機で見つかった既存の欠陥・開発者「出ないようにしないとダメ」）
   - `shiori-host32-host` の `process_host::spawn` が補助プロセス（コンソールの実行体）を `CREATE_NO_WINDOW` 付きで起こす。GUI の `areka.exe` から起こすと今はコンソール窓が開き、閉じると補助プロセスが殺される。標準出力・標準エラーの受け取りは今日どおり
   - 本番で子プロセスを起こす他の箇所（`Command::new` の本番の呼び出し）にもコンソール窓を開く物が無いことを確かめ、在れば同じく直す
   - 決定論のテスト（起こした子にコンソール窓が無いこと、それが難しければ本番の起こし方が `CREATE_NO_WINDOW` を付けることの字面の検査）が緑。`cargo test -p shiori-host32-host` と i686 のテストも緑
@@ -217,3 +217,4 @@
 - 9.1: `tools/test-all.ps1` 全段緑（検査したコミット 2750f729・x64 全テスト 475 秒）。静的な規律の検査（テストの削除 0・ネット 0・1,000 行・環境変数／外部クレート／同期送信の例外 0・メッセージボックス 0・印の判定と待つ期限は不変）も通った。`consumer_ledger.rs` は 786→831 行（要件 8.7 の「各 10 行以内」の見込みを超えたが上限の内側）
 - 10.1: エンジンの公開の口 `areka_update::purge_committed(target) -> Purge { removed, held }`（記録しない・印つきの走行フォルダだけ・リンクは辿らない）。`run` は入口の検査の後・定義ファイルの取得の前に毎回呼び、何かあれば `debug!` 1 行だけ（`warn!` は 10.2 の窓口の `update_purge_held` が持つ）。`held` には棚を読めないとき棚そのものが 1 件入る
 - 10.2: 窓口は `reload` が `Accepted` で `UpdateDesk.purge_after_switch` に覚え、`ghost_switch::on_notice` の切替を終える腕（`Welcoming` の定常到達・`attempt == Target`）と `ChangeCancelled` の腕から `desk::on_switch_end(world, finished)` を呼ぶ。古い SHIORI は `take_down` の同期の中で降りている（32bit は `HelperLifecycle::request_clean_shutdown` が補助プロセスの終わりを待つ・InProc は `FreeLibrary`）。本番の道筋のテストの印つきの残りは、読み直しの予約が立った後に置く（`run` の始めの片付けが先に消すため）
+- 11: `CREATE_NO_WINDOW` は補助プロセスの起動がすべて通る `shiori_host32_host::process_host::spawn_command` に付けた（標準入出力は `Command` の渡すハンドルが優先＝記録は今日どおり届く）。本番で子を起こすのはここだけ（`readme.rs` の `ShellExecuteW` は説明書を見せる意図した窓）。テストは自分の実行体を子として起こし `GetConsoleWindow`／`GetConsoleProcessList` を見る。i686 の `shiori_proxy::tests::testdll_drop_invokes_courtesy_unload` が 1 度だけ落ちた（既存の不安定・補助プロセスは host crate に依存しない）
