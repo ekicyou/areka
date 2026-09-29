@@ -30,8 +30,9 @@ fn s(v: &[&str]) -> Vec<String> {
 
 #[test]
 fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
-    // 13 語に、インストール系の 8 語を足して 21 語（areka-P0-ghost-install 要件 2.12・11.9）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 21);
+    // 13 語に、インストール系の 8 語を足して 21 語（areka-P0-ghost-install 要件 2.12・11.9）、
+    // 投げ込みの 2 語を足して 23 語（areka-P0-file-drop 要件 7.3・8.8）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 23);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",
@@ -45,6 +46,8 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
         "OnInstallRefuse",
         "OnGhostTermsAccept",
         "OnGhostTermsDecline",
+        "OnFileDrop2",
+        "OnDirectoryDrop",
     ] {
         assert_eq!(allowed_static(id), Some(id));
         assert!(is_allowed_event_id(id));

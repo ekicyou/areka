@@ -855,3 +855,7 @@ mod tests {
         assert!(apply_layered_companion(HWND::default()).is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "win_style_accept_files_tests.rs"]
+mod accept_files_tests;

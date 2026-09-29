@@ -246,6 +246,9 @@ pub(crate) fn prepare_ghost_windows(
         // `&mut World` クロージャ内で同期実行するためバルーン窓は既に存在し async race は
         // ない（キャラ窓ハンドラ装着と同型のタイミング契約）。
         input_events::balloon::attach_balloon_pointer_handlers(world);
+        // 投げ込みの受け手をゴースト窓（キャラ窓・バルーン窓）へ差す（areka-P0-file-drop・
+        // 要件 1.1・1.2）。起こし直しもこの閉包を通るので、回数によらず新しい窓に差さる。
+        input_events::file_drop::attach_file_drop_receivers(world);
         let scopes: Vec<usize> = windows.scopes().collect();
         tracing::info!(
             ?scopes,

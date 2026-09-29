@@ -4,6 +4,11 @@
 > 正典の語彙と Ref の一覧は親 brief（`.kiro/specs/completed/areka-P0-ghost-shell-balloon-switch/brief.md` の Desired Outcome 2・3）が正本。本 brief は**再測定で崩れた前提と、切り出したあとの境界**だけを書く。
 > 本文の file:line は**起票時の実測値**（2026-09-20・main `fe157df1`）。着手時に必ず引き直すこと。
 
+## 2026-09-29 `file-drop` からの申し送り（完了時）
+
+1. **許可表の件数**: `schedule/events.rs` の `ALLOWED_EVENT_IDS` は **23 件**（`ghost-install` が 13 → 21、`file-drop` が `OnFileDrop2`・`OnDirectoryDrop` を足して 23）。下の棚卸⑲ 1 の「13 件・3 件足して 16」は古い＝本仕様が 3 件足すなら 26。直書きは `events_change_tests.rs` の `assert_eq!(ALLOWED_EVENT_IDS.len(), 23)` と `events_tests.rs` の 23 語の完全一致の 2 か所
+2. **`ghost_session.rs` の窓を作る閉包に 1 行増えた**: `attach_balloon_pointer_handlers(world)` の直後に `input_events::file_drop::attach_file_drop_receivers(world)`（ゴースト窓に投げ込みの受け手を差す）。起こし直しも同じ閉包を通る。ゴースト窓の様式 `placement/spawn.rs` の `window_style` は `WS_EX_ACCEPTFILES` を含む 3 ビットになった（`spawn_assembly_tests.rs` の `t_i2_no_window_has_ws_ex_topmost` が固定）
+
 ## 2026-09-28 棚卸⑲の再測定（main `10a8d724`）
 
 > `ghost-change-name-resolution`（PR#194）・`session-mark-residue`（PR#195）の着地後に、末尾の「2026-09-27 棚卸⑱の再測定」節の file:line・数と突き合わせた。**ここに書いたものだけが変わった**。書いていない数は実物どおり（`emo2_boot/mod.rs` 805・`frame.rs` 509・`consumer_ledger.rs` 756・`boot_resolve.rs` 471・`boot_config.rs` 357・kanade `msg.rs` 880・`actor.rs` 589・`schedule/mod.rs` 830・`schedule/events.rs` 535・`steady.rs` 935・`presenter/hub.rs` 176・`catalog.rs` 324・`menu/ghost_frame.rs` 73。kanade の `schedule/` と `msg.rs`、`menu/`、`change_cue.rs`、`consumer_ledger.rs`、`sample-ghost-kit` は 2 本とも 0 行）。

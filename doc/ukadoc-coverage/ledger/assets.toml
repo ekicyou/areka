@@ -8119,7 +8119,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnInstallReroute:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布アーカイブの中身の並べ方と、install.txt・developer_options.txt の役割を定める。areka はインストーラの働きを持つ——areka-nar が書庫の最上位の install.txt を読んで検査し展開し、本体は右クリックのメニューの「インストール…」（ファイルを選ぶ画面）と台本 \\![execute,install,path,…] の 2 つの入口から同じ手続きで入れる（areka-P0-ghost-install）。ただしページが自動インストールの手段として挙げる D&D（ゴーストの窓への投げ込み）は受け口がまだ無く（後続 areka-P0-file-drop が受け持つ）、developer_options.txt を読む経路も無いので、ページ全体としては満たしていない。install.txt の欄ごとの可否は同じ台帳の descript_install の各項目で読める。
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布アーカイブの中身の並べ方と、install.txt・developer_options.txt の役割を定める。areka はインストーラの働きを持つ——areka-nar が書庫の最上位の install.txt を読んで検査し展開し、本体は右クリックのメニューの「インストール…」（ファイルを選ぶ画面）と台本 \\![execute,install,path,…] の 2 つの入口から同じ手続きで入れる（areka-P0-ghost-install）。ページが自動インストールの手段として挙げる D&D（ゴーストの窓への投げ込み）は areka-P0-file-drop が受け口を足し、install.txt を持つ .nar／.zip を同じ手続きへ渡す。ただし developer_options.txt を読む経路が無いので、ページ全体としては満たしていない。install.txt の欄ごとの可否は同じ台帳の descript_install の各項目で読める。
 担当は空。ページ 1 枚をまとめて指すこの粒度を引き受ける spec は無い（担当が決まるのは install.txt の中の個々の欄と、個々のイベント・タグであって、ページ全体ではない）。担当の割り当ては areka-P0-ukadoc-coverage-roadmap に委ねる。
 areka-P0-package-mount の brief は範囲の Out で install.txt と nar の配置の解決を対象外と宣言している。install.txt を読むのはその後に建った areka-P0-nar-install（読み手 areka-nar）と areka-P0-ghost-install（本体の入口と手続き）である。
 関連の向き: 正典の本文が相手のページを名指しで指しているとき、指している側にだけ関連を置き、指されている側には戻りの関連を置かない。このページが名指しで指しているのは「配布用ファイルの作成」のページで、アーカイブの作り方そのものをそちらに預けている。これを関連に置いた。
