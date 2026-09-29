@@ -57,6 +57,8 @@ pub(crate) enum FakeShiori {
     Scripted(Box<dyn Fn() -> ScriptedShioriBackendBuilder>),
     /// 接続に失敗する（kanade は `Fault` で止まる）。
     ConnectFail,
+    /// 最初の起動だけ台本で起き、2 回目からは接続に失敗する（同じゴーストへの切替の失敗を作る）。
+    ScriptedThenConnectFail(Box<dyn Fn() -> ScriptedShioriBackendBuilder>),
     /// 起動の結線が同期で成立しない（結線の入力の根が実在しない＝`boot_ghost_strict` は `Err`）。
     /// 窓の準備は構成入力の本物の根で通る。`boot_ghost` では LogSink の腕へ倒れ、倒れた先も
     /// 起点が無くて失敗する（実行系なし）。
@@ -141,8 +143,14 @@ impl SwitchRig {
                 let folder = folder_of(&cfg.ghost_root);
                 let mut ghost_root = cfg.ghost_root.clone();
                 let mut balloon_root = cfg.balloon_root.clone();
+                let booted_before = ledger.borrow().iter().any(|(f, _)| *f == folder);
                 let shiori = match scripts.get(&folder) {
-                    Some(FakeShiori::Scripted(script)) => {
+                    Some(FakeShiori::ScriptedThenConnectFail(_)) if booted_before => {
+                        ShioriWiring::Custom(Box::new(|| Err(CONNECT_ERR.to_owned())))
+                    }
+                    Some(
+                        FakeShiori::Scripted(script) | FakeShiori::ScriptedThenConnectFail(script),
+                    ) => {
                         let (backend, handle) = script().build();
                         ledger.borrow_mut().push((folder, handle));
                         ShioriWiring::Custom(Box::new(move || {

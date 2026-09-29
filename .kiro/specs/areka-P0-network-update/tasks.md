@@ -175,7 +175,7 @@
   - ⑴ メニュー「ネットワーク更新」→ 差分 1 件が入る → `OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete`（`changed`）の台詞 → 台詞の後に引っ込んで戻る（`OnGhostChanged`）→ シェル・バルーンの中身も読み直されている ⑵ もう 1 度 → `none` → 読み直さない ⑶ `homeurl` の無いシェルが飛ばされ総括にゴーストとバルーンだけ ⑷ ⑴ の走行で `.update-work/` に印が置かれ、⑵ の走行で黙って消えるか（本番の 32bit SHIORI）。置けなければローカルの http で ⑴⑵ を行い、https 未確認を既知の制限へ
   - 4 項目が `signoff.md` に記録されている。予期しない結果は記録して開発者の判断を仰ぐ
   - _Requirements: 9.16, 9.17, 10.4_
-- [ ] 10. 読み直しの後に成功した走行の残りを消す（2026-09-30 実機の結果による要件 5.9 の改訂）
+- [x] 10. 読み直しの後に成功した走行の残りを消す（2026-09-30 実機の結果による要件 5.9 の改訂）
 - [x] 10.1 エンジンに印つきの残りを消す公開の口を足し、`run` の始めで毎回呼ぶ
   - `purge_committed(target)`: `.update-work/` の直下で印 `committed` の在る走行フォルダだけを消し、消せた物と消せなかった物を返す（記録しない・印の無いフォルダは触らない）
   - `run` は差分を見る前に毎回呼ぶ（差分なしの走行でも残りが消える）。`run` の署名・進捗・結果・失敗の型は変えない
@@ -183,7 +183,7 @@
   - _Requirements: 5.9, 9.10_
   - _Boundary: areka-update work, lib_
 
-- [ ] 10.2 窓口が読み直しの切替が終わった時点で残りを消す
+- [x] 10.2 窓口が読み直しの切替が終わった時点で残りを消す
   - `reload` が `Accepted` のとき読み直すゴーストのフォルダを覚え、その切替が終わった時点（古い SHIORI を降ろした後）で `purge_committed` を呼ぶ。消せた件数は `info!(update_purge_done)`、消せなかった物は `warn!(update_purge_held)`。切替が失敗・中止なら覚えた物を捨てる
   - 切替の土台（偽の SHIORI）の兄弟テストで、読み直しの切替が終わると印つきの残りが消え `update_purge_done` が 1 件、読み直しを頼まなかった場合は消さないこと、が緑。本番の道筋のテスト（`worker_path_tests`）でも読み直しの後に `.update-work` に印つきの残りが無いことを判定する
   - _Requirements: 5.9, 9.9, 9.10_
@@ -216,3 +216,4 @@
 - 7.1: design の「消費者台帳は今 10 行」「受け口は今 9 本」の記述が古い（13 行・10 本）＝8 で直す。台本の文字列から窓口まで通すテストは本番の `winhttp_fetch()` のまま背景スレッドを起こすが、kanade の受信端を落としてあるのでリソースの照会で止まり WinHTTP に達しない
 - 9.1: `tools/test-all.ps1` 全段緑（検査したコミット 2750f729・x64 全テスト 475 秒）。静的な規律の検査（テストの削除 0・ネット 0・1,000 行・環境変数／外部クレート／同期送信の例外 0・メッセージボックス 0・印の判定と待つ期限は不変）も通った。`consumer_ledger.rs` は 786→831 行（要件 8.7 の「各 10 行以内」の見込みを超えたが上限の内側）
 - 10.1: エンジンの公開の口 `areka_update::purge_committed(target) -> Purge { removed, held }`（記録しない・印つきの走行フォルダだけ・リンクは辿らない）。`run` は入口の検査の後・定義ファイルの取得の前に毎回呼び、何かあれば `debug!` 1 行だけ（`warn!` は 10.2 の窓口の `update_purge_held` が持つ）。`held` には棚を読めないとき棚そのものが 1 件入る
+- 10.2: 窓口は `reload` が `Accepted` で `UpdateDesk.purge_after_switch` に覚え、`ghost_switch::on_notice` の切替を終える腕（`Welcoming` の定常到達・`attempt == Target`）と `ChangeCancelled` の腕から `desk::on_switch_end(world, finished)` を呼ぶ。古い SHIORI は `take_down` の同期の中で降りている（32bit は `HelperLifecycle::request_clean_shutdown` が補助プロセスの終わりを待つ・InProc は `FreeLibrary`）。本番の道筋のテストの印つきの残りは、読み直しの予約が立った後に置く（`run` の始めの片付けが先に消すため）

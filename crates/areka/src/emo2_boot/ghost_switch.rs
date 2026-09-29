@@ -537,6 +537,8 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                         attempt = ?attempt,
                         "切替で起こしたゴーストが定常に入った——切替を終える"
                     );
+                    // 更新の窓口へ（読み直しなら古い SHIORI は降りている＝残りを消す・既定へ戻ったなら捨てる）。
+                    crate::update::desk::on_switch_end(world, attempt == WelcomeAttempt::Target);
                 }
                 stage => tracing::debug!(
                     event = "ghost_switch_done",
@@ -556,6 +558,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                     reason = ?reason,
                     "切替は中止された——予約を下ろす（元のゴーストは定常へ戻るか、終了要求が勝っていれば今日どおり終わる）"
                 );
+                crate::update::desk::on_switch_end(world, false);
             } else if world.contains_resource::<crate::session_end::SessionEnded>() {
                 tracing::debug!(
                     event = "ghost_switch_cancelled",

@@ -53,6 +53,8 @@ pub(crate) struct UpdateDesk {
     ghost_homeurl: Option<String>,
     /// `homeurl` の照会の返事待ち（高々 1 件）。
     homeurl_query: Option<ReplyReceiver<QueryReply>>,
+    /// 受け付けた読み直しのゴーストのフォルダ（その切替が終わったら成功した走行の残りを消す・要件 5.9）。
+    pub(super) purge_after_switch: Option<PathBuf>,
 }
 
 impl UpdateDesk {
@@ -71,6 +73,7 @@ impl UpdateDesk {
             gate,
             ghost_homeurl: None,
             homeurl_query: None,
+            purge_after_switch: None,
         }
     }
 }
@@ -141,6 +144,7 @@ fn answer(world: &mut World, ask: DeskAsk) {
 /// 読み直しの頼み: 条件を満たせば既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で
 /// 1 回頼み、判定を残す（`Accepted` は `info!`・他は `warn!`）。満たさなければ理由つきの
 /// `warn!(update_reload_skipped)` で頼まない。頼み直しはしない（終了の後に届いた頼みも落とす）。
+/// `Accepted` ならゴーストのフォルダを覚え、その切替が終わったら [`on_switch_end`] が残りを消す。
 fn reload(world: &mut World, ghost_dir: &Path) {
     let folder = match reload_folder(world, ghost_dir) {
         Ok(folder) => folder,
@@ -163,6 +167,9 @@ fn reload(world: &mut World, ghost_dir: &Path) {
         },
     );
     if verdict == SwitchVerdict::Accepted {
+        if let Some(mut desk) = world.get_non_send_mut::<UpdateDesk>() {
+            desk.purge_after_switch = Some(ghost_dir.to_path_buf());
+        }
         tracing::info!(
             event = "update_reload_requested",
             verdict = ?verdict,
@@ -176,6 +183,42 @@ fn reload(world: &mut World, ghost_dir: &Path) {
             folder = %folder,
             "[update] 同じゴーストへの切替が受け付けられなかったので、読み直しません"
         );
+    }
+}
+
+/// 切替が終わった（`ghost_switch` の切替を終える腕・中止の腕から）。読み直しを覚えていれば、`finished`
+/// （頼んだゴーストが定常に入った＝古い SHIORI は降りている）なら成功した走行の残りを消して記録し、
+/// そうでなければ（既定へ戻った・中止）覚えた物を捨てる（次の走行の始めにエンジンが消す・要件 5.9）。
+/// 消せた件数は `info!(update_purge_done)`（0 件なら `debug!`）、消せなかった物は 1 件ずつ
+/// `warn!(update_purge_held)`。
+pub(crate) fn on_switch_end(world: &mut World, finished: bool) {
+    let Some(dir) = world
+        .get_non_send_mut::<UpdateDesk>()
+        .and_then(|mut desk| desk.purge_after_switch.take())
+    else {
+        return;
+    };
+    if !finished {
+        tracing::debug!(
+            event = "update_purge_dropped",
+            dir = %dir.display(),
+            "[update] 読み直しの切替が終わらなかったので、残りは次の走行の始めに消します"
+        );
+        return;
+    }
+    let purge = areka_update::purge_committed(&dir);
+    for path in &purge.held {
+        tracing::warn!(
+            event = "update_purge_held",
+            path = %path.display(),
+            "[update] 古い SHIORI を降ろした後も更新の残りを消せませんでした（次の走行の始めにもう一度消します）"
+        );
+    }
+    let removed = purge.removed.len();
+    if removed > 0 {
+        tracing::info!(event = "update_purge_done", removed, dir = %dir.display(), "[update] 読み直しの後に更新の残りを消しました");
+    } else {
+        tracing::debug!(event = "update_purge_done", removed, dir = %dir.display(), "[update] 読み直しの後に消す更新の残りはありませんでした");
     }
 }
 

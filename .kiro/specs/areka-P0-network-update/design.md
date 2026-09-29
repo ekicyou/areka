@@ -863,6 +863,7 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 | イベント | `update_event`（名前と応えの有無）・`update_event_dropped`・`update_event_failed`・`update_event_not_allowed`・`update_not_steady`・`update_kanade_gone` |
 | 総括 | `update_summary` |
 | 読み直し | `update_reload_requested`（判定つき）・`update_reload_skipped`（`warn!`・`reason`＝`closing`〔終了が始まった・窓口が無い〕／`switching`〔切替の予約が在る〕／`other_ghost`〔置き場のゴーストが依頼時と違う〕／`argv`〔コマンドライン引数で始めた〕） |
+| 読み直しの後の片付け（要件 5.9・2026-09-30） | `update_purge_done`（消せた数が 1 以上なら `info!`・0 なら `debug!`・`removed`・`dir`）・`update_purge_held`（`warn!`・降ろした後でも消せなかった物 1 件ごと・`path`）・`update_purge_dropped`（`debug!`・切替が失敗・中止で覚えたフォルダを捨てた）／エンジンの `run` の始めの片付けは `areka_update` の `debug!` 1 行 |
 | 終了 | `update_abandoned`・`exit_wait_abandoned`・`exit_wait_done`・`exit_wait_timeout` |
 | 受け口・メニュー | `update_cue_skip`・`update_cue_unopenable`・`update_cue_refused`・`update_cue_selector_ignored`・`update_cue_send_failed` |
 | URL の取得 | `install_fetch_begin`・`install_fetch_done`・`install_fetch_failed`・`install_fetch_send_failed`・`install_fetch_swept`（消した数）・`install_fetch_sweep_skipped`（`debug!`・一時フォルダを読めない・古いファイルを消せない） |

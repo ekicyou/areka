@@ -10,6 +10,7 @@
 //!
 //! 実時間に依らない: 進みは偽の SHIORI の記録・窓口の段・kanade の返信端の受け取りで揃える。
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use areka_update::Fetch;
@@ -134,6 +135,19 @@ fn homeurl_gets(rig: &SwitchRig) -> usize {
         .count()
 }
 
+/// ゴーストの `.update-work/` の下の印つきの走行フォルダ（成功した走行の残り）。
+fn marked_leftovers(ghost_dir: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(ghost_dir.join(".update-work"))
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.join("committed").is_file())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// 起動系列（起動記録あり＝`OnFirstBoot` なし）に続く更新のイベントの正典の順（1 ファイルの `changed`）。
 const CHANGED_ROUND: [&str; 12] = [
     "NOTIFY OnInitialize",
@@ -154,7 +168,8 @@ const CHANGED_ROUND: [&str; 12] = [
 /// `OnUpdateComplete`（`changed`・置いたファイル）→ `OnUpdateResult`（`ghost\x01OK\x011`）が偽の SHIORI
 /// に届き、ファイルが手元に置かれる。総括の返事の台詞が再生中の間は切替が kanade に保留され（照会の
 /// 往復で確かめる）、台詞を進めて終わると A が `OnGhostChanging`・`OnClose`・`OnBoot` 無しに起き直り
-/// `OnGhostChanged`（Ref0＝A のさくら・Ref2＝A）を受ける。
+/// `OnGhostChanged`（Ref0＝A のさくら・Ref2＝A）を受ける。読み直しの切替が終わった後、`.update-work` に
+/// 印つきの残りは無い（エンジンの後に置いた残りも、切替を終える時点で消える・要件 5.9）。
 ///
 /// # 非空虚性
 /// 手続きの読み直しの頼み（`request_reload`）を外すと切替の予約が立たず期限切れで赤、写しの順を
@@ -170,6 +185,11 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_after_the_
     });
     assert!(reserved, "読み直しの切替が予約される: {events:?}");
     assert_eq!(named(&events, "update_reload_requested"), 1, "{events:?}");
+    // 偽の取得の一周は掴まれた古い写しを作れないので、エンジンが走り終えた後（読み直しの予約の後）に
+    // 成功した走行の残りを置く。
+    let leftover = a_dir.join(".update-work").join("held-run");
+    std::fs::create_dir_all(leftover.join("old")).expect("走行フォルダを組む");
+    std::fs::write(leftover.join("committed"), b"").expect("印を置く");
 
     // 予約の切替は kanade へ送ってある。同じ送出端で照会を 1 往復させ、返事を受けた時点で kanade は
     // 切替の要求を捌き終えている。まだ定常（再生中）なら照会は SHIORI まで届く＝切替は台詞の完了待ち。
@@ -194,9 +214,11 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_after_the_
     let (a, b) = (rig.calls("A"), rig.calls("B"));
     let exited = rig.exit_requested();
     let placed = std::fs::read(a_dir.join(FILE)).ok();
+    let leftovers = marked_leftovers(&a_dir);
     assert!(rig.shutdown());
 
     assert!(rebooted && !exited, "A が起き直る（終了しない）: {a:?}");
+    assert_eq!(leftovers, Vec::<PathBuf>::new(), "印つきの残りは無い");
     assert_eq!(held_while_talking, (1, 1), "台詞の間は起き直らない");
     assert_eq!((a.len(), b.len()), (2, 0), "A を 1 回起こし直すだけ: {a:?}");
     let mut expected: Vec<String> = CHANGED_ROUND.iter().map(|s| (*s).to_owned()).collect();

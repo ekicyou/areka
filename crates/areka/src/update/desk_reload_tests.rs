@@ -6,8 +6,10 @@
 //! 確かめること: 条件を満たせば同じゴーストへの知らせなしの切替が 1 回受け付けられ（`OnGhostChanging`・
 //! `OnClose` 0 件・起動の根は `OnGhostChanged`）、読み直しの途中の切替の頼みは今日どおり無視される／
 //! 終了の後・切替の予約が在る・別のゴースト・引数の起動では切替の要求 0 件で `warn!` が 1 件。
+//! 読み直しの切替が終わると成功した走行の残り（印つき）が消え、読み直しでない切替・失敗した切替では
+//! 消さない（要件 5.9・9.9・9.10）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use areka_kanade::ChangeOrigin;
 use log_capture_kit::{CapturedEvent, capture};
@@ -17,7 +19,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::UpdateDesk;
 use crate::boot_config::BootContext;
-use crate::boot_resolve::GhostRoute;
+use crate::boot_resolve::{DEFAULT_GHOST_FOLDER, GhostRoute};
 use crate::emo2_boot::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,
@@ -34,6 +36,15 @@ fn reloading(folder: &'static str) -> FakeShiori {
         let script = format!(r"\0{folder}\e");
         standard_script(&script).get("OnGhostChanged", Ok(Some(script.clone())))
     }))
+}
+
+/// ゴーストの `.update-work/` の下に、成功した走行の残り（印 `committed` と古い DLL の写し）を置く。
+fn plant_committed(ghost_dir: &Path, run: &str) -> PathBuf {
+    let dir = ghost_dir.join(".update-work").join(run);
+    std::fs::create_dir_all(dir.join("old")).expect("走行フォルダを組む");
+    std::fs::write(dir.join("old").join("yaya.dll"), b"old").expect("古い写しを置く");
+    std::fs::write(dir.join("committed"), b"").expect("印を置く");
+    dir
 }
 
 /// A を起こして定常に着いた土台（B は切替で起こせるが、起こされないことを数える）。
@@ -231,4 +242,137 @@ fn a_reload_that_misses_a_condition_requests_no_switch_and_warns_once() {
     let reserved = rig.world.get_non_send::<SwitchInFlight>().is_some();
     assert!(rig.shutdown());
     assert_eq!((a, exited, reserved), (1, false, false));
+}
+
+/// 読み直しの切替が終わる（古い SHIORI を降ろして起き直ったゴーストが定常に入る）と、そのゴーストの
+/// 印つきの残りが消え `info!(update_purge_done)`（`removed`＝1）が 1 件・`update_purge_held` 0 件。
+/// 印の無いフォルダ（戻せなかった走行）は触らない。覚えたフォルダは使い切る。
+///
+/// # 非空虚性
+/// 切替を終える腕から窓口を呼ばないと残りが消えず赤。受け付けで覚えないと同じく赤。
+#[test]
+fn a_finished_reload_purges_the_marked_leftover_once() {
+    let mut rig = running_a();
+    let a_dir = rig.root.ghost_dir("A");
+    let marked = plant_committed(&a_dir, "run1");
+    let unmarked = a_dir.join(".update-work").join("run2").join("old");
+    std::fs::create_dir_all(&unmarked).expect("印の無い走行を組む");
+
+    let (finished, events) = capture(|| {
+        ask_reload(&rig, a_dir.clone());
+        rig.world.run_schedule(Input);
+        rig.pump_talking_until(|rig| {
+            rig.exit_requested()
+                || (rig.calls("A").len() == 2
+                    && rig.world.get_non_send::<SwitchInFlight>().is_none())
+        })
+    });
+    let remembered = rig
+        .world
+        .non_send::<UpdateDesk>()
+        .purge_after_switch
+        .clone();
+    assert!(rig.shutdown());
+
+    assert!(finished, "読み直しが終わる: {events:?}");
+    assert!(!marked.exists(), "印つきの残りは消える: {events:?}");
+    assert!(unmarked.exists(), "印の無い走行は触らない");
+    assert_eq!(remembered, None, "覚えたフォルダは使い切る");
+    let done = named(&events, "update_purge_done");
+    assert_eq!(done.len(), 1, "{events:?}");
+    assert_eq!(done[0].level, Level::INFO);
+    assert_eq!(done[0].field("removed"), Some("1"));
+    assert!(named(&events, "update_purge_held").is_empty(), "{events:?}");
+}
+
+/// 読み直しでない切替（メニューから同じゴーストへ）が終わっても、印つきの残りは消さない
+/// （`update_purge_done`・`update_purge_held` 0 件）。
+#[test]
+fn a_switch_without_a_reload_leaves_the_marked_leftover() {
+    let mut rig = running_a();
+    let a_dir = rig.root.ghost_dir("A");
+    let marked = plant_committed(&a_dir, "run1");
+
+    let ((verdict, finished), events) = capture(|| {
+        let verdict = request_ghost_switch(
+            &mut rig.world,
+            SwitchRequest {
+                ghost: GhostSpec::Folder("A".to_owned()),
+                raise_event: false,
+                origin: ChangeOrigin::Manual,
+            },
+        );
+        let finished = rig.pump_talking_until(|rig| {
+            rig.exit_requested()
+                || (rig.calls("A").len() == 2
+                    && rig.world.get_non_send::<SwitchInFlight>().is_none())
+        });
+        (verdict, finished)
+    });
+    assert!(rig.shutdown());
+
+    assert_eq!(
+        (verdict, finished),
+        (SwitchVerdict::Accepted, true),
+        "{events:?}"
+    );
+    assert!(marked.exists(), "読み直しでない切替では消さない");
+    for name in ["update_purge_done", "update_purge_held"] {
+        assert!(named(&events, name).is_empty(), "{name}: {events:?}");
+    }
+}
+
+/// 読み直しの切替が失敗する（起き直った A の SHIORI が接続に失敗し既定ゴーストへ戻る）と、覚えた
+/// フォルダを捨てて消さない（`update_purge_done`・`update_purge_held` 0 件＝次の走行の始めに消える）。
+///
+/// # 非空虚性
+/// 既定へ戻った定常到達でも消すと、A の残りが消えて赤。
+#[test]
+fn a_failed_reload_switch_drops_the_remembered_folder() {
+    let a_script = FakeShiori::ScriptedThenConnectFail(Box::new(|| {
+        standard_script(r"\0A\e").get("OnGhostChanged", Ok(Some(r"\0A\e".to_owned())))
+    }));
+    let default = FakeShiori::Scripted(Box::new(|| standard_script(r"\0emo2\e")));
+    let mut rig = SwitchRig::new(vec![("A", a_script), (DEFAULT_GHOST_FOLDER, default)]);
+    rig.world.insert_resource(WintfTaskPool::new());
+    rig.plant_boot_record("A");
+    rig.plant_boot_record(DEFAULT_GHOST_FOLDER);
+    rig.boot("A");
+    assert!(rig.wait_steady(), "A が定常に着く");
+    let a_dir = rig.root.ghost_dir("A");
+    let marked = plant_committed(&a_dir, "run1");
+
+    let (welcomed, events) = capture(|| {
+        ask_reload(&rig, a_dir.clone());
+        rig.world.run_schedule(Input);
+        rig.pump_talking_until(|rig| {
+            rig.exit_requested()
+                || (rig.calls(DEFAULT_GHOST_FOLDER).len() == 1
+                    && rig.world.get_non_send::<SwitchInFlight>().is_none())
+        })
+    });
+    let exited = rig.exit_requested();
+    let remembered = rig
+        .world
+        .non_send::<UpdateDesk>()
+        .purge_after_switch
+        .clone();
+    assert!(rig.shutdown());
+
+    assert!(welcomed && !exited, "既定ゴーストへ戻る: {events:?}");
+    assert_eq!(
+        named(&events, "update_reload_requested").len(),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        named(&events, "ghost_switch_target_fault").len(),
+        1,
+        "{events:?}"
+    );
+    assert!(marked.exists(), "失敗した切替では消さない");
+    assert_eq!(remembered, None, "覚えたフォルダは捨てる");
+    for name in ["update_purge_done", "update_purge_held"] {
+        assert!(named(&events, name).is_empty(), "{name}: {events:?}");
+    }
 }
