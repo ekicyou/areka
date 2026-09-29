@@ -126,7 +126,8 @@ fn writing_work_returns_when_write_ends() {
     assert!(events_named(&events, "exit_wait_timeout").is_empty());
 }
 
-/// 残り 0 の予算では待たずに戻り、`warn!(exit_wait_timeout)` を 1 件残す（要件 8.3）。
+/// 残り 0 の予算では待たずに戻り、`warn!(exit_wait_timeout)` を 1 件残す（要件 8.3）。本文は門に
+/// 依らない語で、書きかけの場所は `label` の欄が運ぶ（network-update 要件 7.3・9.14）。
 #[test]
 fn spent_budget_returns_at_once_with_one_timeout_warning() {
     let (mut world, gate) = world_with_gate();
@@ -143,10 +144,17 @@ fn spent_budget_returns_at_once_with_one_timeout_warning() {
     assert_eq!(timeout[0].level, tracing::Level::WARN);
     assert_eq!(timeout[0].field_str("name"), Some(NAME));
     assert_eq!(timeout[0].field_str("label"), Some(LABEL));
+    // 本文は門（インストール・更新）に依らない語で、場所は `label` が運ぶ（network-update 決めたこと 14）。
+    let message = timeout[0].message();
     assert!(
-        timeout[0].message().contains(".nar-work"),
-        "元の中身が作業フォルダに残りうることを書く: {}",
-        timeout[0].message()
+        message.contains("取得か書き込みの途中だった")
+            && message.contains("書きかけの物が作業場所に残っているかもしれない")
+            && message.contains("label"),
+        "書きかけの物が残りうることと、場所は label を見ることを書く: {message}"
+    );
+    assert!(
+        !message.contains(".nar-work"),
+        "インストールの作業フォルダに決め打ちしない: {message}"
     );
     assert_eq!(events.len(), 1, "{events:?}");
 }

@@ -5,7 +5,8 @@
 //! 書く前の段に居た仕事は待たずに記録を残し、書いている最中の仕事だけを
 //! [`ClosingWaits::wait`] が予算の残りの時間だけ待つ。
 //!
-//! この部品は `install` を知らない。後続 `network-update` の背景の更新も同じ口で待てる（要件 8.10）。
+//! この部品は `install` も `update` も知らない。どちらの背景の仕事も同じ口で待ち（要件 8.10）、
+//! 書きかけの場所は門の `label`（書庫 → 根／更新先 → 対象）が運ぶ。
 
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -179,7 +180,7 @@ impl ClosingWaits {
                     event = "exit_wait_timeout",
                     name = work.name,
                     label,
-                    "[exit_wait] 上限に達したので待つのをやめた——元の中身が <根>/.nar-work/ の下に残っているかもしれない"
+                    "[exit_wait] 上限に達したので待つのをやめた——取得か書き込みの途中だった。書きかけの物が作業場所に残っているかもしれない（label を見よ）"
                 );
             } else {
                 tracing::info!(

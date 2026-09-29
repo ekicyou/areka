@@ -92,7 +92,7 @@
   - _Requirements: 5.2, 5.4, 5.7, 7.4, 9.9, 10.13, 10.16_
 
 - [ ] 6. 背景スレッドと UI 側の窓口
-- [ ] 6.1 背景スレッドと本物の口を作り、終了の門に出入りさせる
+- [x] 6.1 背景スレッドと本物の口を作り、終了の門に出入りさせる
   - 最初の仕事で 1 度だけスレッド `update` を起こし、仕事（依頼と、依頼を受けた時点の kanade の送出端の写し）を 1 件ずつ受けて手続きを走らせ、終わったら窓口へ「終わった」を頼む。背景スレッドから窓口への頼み（始まった・読み直し・終わった）の型はこのタスクが定義する
   - 本物の口は kanade へ直接 GET で送って返事を待つ。返事の 5 値と切断を「台本あり・返事なし・閉じた」へ写す（定常でない・失敗・切断は閉じた、許可表に無いは返事なしで `error!`）。終了が始まっていれば送らない。照会は `homeurl` と `useorigin1` を 1 回で
   - エンジンの一周は門の始め → 取得口を作る → 書く段へ入る → `run` → 書く段を出る → 終わり。門が閉じていれば取得口も `run` も呼ばずに「閉じた」。取得口の作り方は差し替えられる口にし（本番は `WinHttpFetch::new`・テストは 4.1 の偽の取得口）、背景スレッドを起こす口から渡せるようにする。門の `label` は「更新先 → 対象」
@@ -186,3 +186,4 @@
 - 4.2: 台帳 `sakura-script.toml` の `\![execute,install,path,…]` の行の注記（「url を含む→ warn!（install_cue_unsupported）」「後続 areka-P0-network-update が足す予定」）が古い＝8 で `url` の腕と `install_cue_bad_url`／`install_cue_unsupported_kind` へ直す。受け口の差し替えは `InstallCueSink::with_fetch(tx, StartFetch)`（本番の `new` は `spawn_download`）
 - 5.1: `error!(update_fetch_unavailable)` は手続き（`run_target`）の 1 件だけ＝6.1 の `run_engine` は `WinHttpFetch::new()` の `Err` を記録せず `gate.end()` の上で `EngineRun::Unavailable(e)` を返す（design の worker の節の 1 文は 8 で直す）。記録の語 `update_absolute_failed`・`update_order_begin` を 8 で Monitoring の表へ。偽の口の支え `procedure_test_support.rs` は `procedure.rs` の子（`#[path]`）＝5.2 の `procedure_reload_tests` も `procedure.rs` に宣言する。`OnUpdateProcessExec` が「閉じた」を返す枝（`update_abandoned at=process_exec`）は 5.2 で固定する
 - 5.2: 手続きが固定するのは「総括の応えの後に読み直しを頼む」まで。要件 5.3（総括への返事の台詞が終わってから読み直す）は窓口と kanade の側＝6.5・6.6 が判定する。`OnUpdateBegin` で閉じたらエンジンは回さない（5.7 の「走っている更新」は走り出した後）
+- 6.1: 取得口の作り方は `NewFetch = Arc<dyn Fn() -> Result<Box<dyn Fetch>, FetchError> + Send + Sync>`（対象ごとに呼ぶ）＝`spawn_worker(desk, gate, new_fetch)` の第 3 引数。本番は `worker::winhttp_fetch()`（6.3 で渡す）・テストは偽物。窓口への頼みは `DeskAsk::{Started, Reload, OrderDone}`。記録の語 `update_gate_closed`・`update_desk_gone`・`update_order_done` を 8 で Monitoring の表へ
