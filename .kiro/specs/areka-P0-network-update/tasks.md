@@ -136,7 +136,7 @@
   - _Depends: 6.1, 6.3, 6.5_
 
 - [ ] 7. 2 つの入口を結ぶ
-- [ ] 7.1 (P) 台本の受け口を消費者台帳と受け口の列に登記する
+- [x] 7.1 (P) 台本の受け口を消費者台帳と受け口の列に登記する
   - 消費者台帳に更新の担当（正典の URL の行 3 本）と `updatebymyself`・`update`・`updateother` の 3 行（選別子なし）を足し、行数の判定を 10 から 13 へ書き換える
   - 受け口の列に 10 本目として足し、窓口の生の要求の送出端を渡す（窓の無い起動では組まれない）。列の原文を判定しているテストも直す
   - 台本の文字列から受け口 → 取り出し → 受付まで通したテストと、断りの形で依頼 0 件・`warn!` 1 件のテストが緑
@@ -192,3 +192,4 @@
 - 6.4: `can_update`・`update_current` の `#[allow(dead_code)]` は 7.2 で外す。定常到達の照会は偽の SHIORI（`spine.rs` の `ScriptedShioriBackend`）が台本に無ければ NoContent で答え、`SwitchRig::calls` は `GET homeurl` を外す＝6.6 で手続きの `homeurl` に値を台本で渡すと定常到達の照会が先に 1 件食う（台本に 2 件積むか `handle.non_status_calls()` を直接見る）。`spine.rs` は 998 行＝6.5・6.6 で足す土台は `ghost_switch_test_support.rs` へ。記録の語 `update_homeurl_unqueried`・`update_homeurl_copied`・`update_homeurl_absent`・`update_homeurl_query_failed` を 8 で Monitoring の表へ
 - 6.5: 要件 5.5 の「`OnBoot` は送らない」は「起動の根が `OnGhostChanged`」の意味（裁定 10.6＝boot_root はそのまま）。`OnGhostChanged` が 204 なら正典どおり `OnBoot` へ続く＝テストは `OnGhostChanged` に台本で応えて根を見る（6.6 も同じ注意）。requirements.md 導入の「`OnBoot` は送らない」の一文の扱いは完了時に開発者へ申し送る。`update_reload_skipped` の `reason`（`closing`・`switching`・`other_ghost`・`argv`）と `desk.rs` が使う `SwitchVerdict` を 8 で design の Monitoring の表と Allowed Dependencies へ
 - 6.6: 窓口に取得口の作り方の欄 `UpdateDesk.new_fetch`（既定 `winhttp_fetch()`・背景スレッドを起こす前に差す）。本番の道筋のテストは台本の入口（`raw_sender`）から入る＝`OnUpdateProcessExec` は通らない（5.1・6.3 が固定）。要件 5.2 の「シェル・バルーンの中身も読み直される」は実機（9.2 ⑴）で確かめる
+- 7.1: design の「消費者台帳は今 10 行」「受け口は今 9 本」の記述が古い（13 行・10 本）＝8 で直す。台本の文字列から窓口まで通すテストは本番の `winhttp_fetch()` のまま背景スレッドを起こすが、kanade の受信端を落としてあるのでリソースの照会で止まり WinHTTP に達しない

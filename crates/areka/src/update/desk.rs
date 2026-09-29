@@ -34,8 +34,6 @@ use crate::menu::captions::{QueryReply, send_query};
 /// UI 側の窓口（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct UpdateDesk {
     /// 入口へ配る生の要求の送出端と、その受信端。
-    // 読むのは `raw_sender` だけ＝台本の受け口へ配るタスク 7.1 で外す。
-    #[allow(dead_code)]
     raw_tx: Sender<RawUpdateRequest>,
     raw_rx: Receiver<RawUpdateRequest>,
     /// 背景スレッドの頼みの送出端（スレッドへ渡す）と、その受信端。
@@ -87,8 +85,6 @@ pub(crate) enum Stage {
 }
 
 /// 台本の受け口へ配る生の要求の送出端（窓口が無ければ受信端の無い送出端）。
-// 呼び手（台本の受け口の列への登記）はタスク 7.1 が足す。そのとき外す。
-#[allow(dead_code)]
 pub(crate) fn raw_sender(world: &World) -> Sender<RawUpdateRequest> {
     match world.get_non_send::<UpdateDesk>() {
         Some(desk) => desk.raw_tx.clone(),
