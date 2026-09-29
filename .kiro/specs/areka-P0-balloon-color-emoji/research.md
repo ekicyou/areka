@@ -296,7 +296,7 @@ budouy の `parse` はスカラー値の境界で切るので、チャンクの�
 
 ### D5: 6.4 は同じテストの中の描き比べ
 - **Context**: §7 項目 6・R-4。
-- **Selected Approach**: `ViewboxExecutor` に `#[cfg(test)]` の欄 `text_draw_options` と `set_text_draw_options_for_test`（`fail_next_render` と同型）。本番は定数 `TEXT_DRAW_OPTIONS`（`draw.rs`）。
+- **Selected Approach**: `ViewboxExecutor` に `#[cfg(test)]` の欄 `text_draw_options` と `set_text_draw_options_for_test`（`fail_next_render` と同型）。本番は定数 `TEXT_DRAW_OPTIONS`（`draw.rs`）。対照は executor と面を別々に作り、口は最初の描画の前に 1 度だけ呼ぶ（設計検証 2026-09-29 の指摘 1: 描画オプションは `line_fingerprint` に入らないので、同じ executor の描き直しは何も描かず空振りする）。
 - **Rationale**: golden の PNG（新設・保守）が要らない。R-4 の等価が実測で確かめられた。
 
 ### D6: 代替フォントの実在は理由つきの失敗

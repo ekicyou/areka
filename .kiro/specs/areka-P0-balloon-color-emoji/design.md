@@ -355,6 +355,8 @@ pub enum TextItem {
 }
 impl TextItem {
     /// 1 クラスタからアイテムを作る（テストの直書きもこれを使う）。
+    /// 前提「非空・ちょうど 1 クラスタ」は `debug_assert!(cluster_count(text) == 1)` で検査する
+    /// （テストの直書きの誤り＝2 クラスタを 1 アイテムに詰める等をデバッグビルドで捕まえる。本番は失敗しない）。
     pub fn glyph(text: &str) -> TextItem;
 }
 ```
@@ -481,7 +483,7 @@ impl ViewboxExecutor {
 ```
 - `render_styled` の `draw_text_layout(d.origin, &d.layout, &brush, self.text_draw_options())`。行の文字列は `run.glyphs.iter().map(|g| &*g.text).collect::<String>()`（3 か所）。
 - `segment_text_range`: `let units = g.text.encode_utf16().count() as u32;`。中心判定（`inline_pos + advance / 2`）は変えない。範囲の境界がクラスタの境界に揃うので、ホバーの `SetDrawingEffect` はクラスタの途中で切り替わらない（4.5）。色つきの字形は塗りに従わないので、ホバー中も自分の色で出る（調査 R-3）。
-- 差し替えの口は描画オプションだけを変え、行のキャッシュ（`LineLayoutStore`）・planner・面の役割交換には触れない。差し替えの後は同じ canvas を描き直すだけで比較できる（行の TextLayout は再利用され、描画のオプションだけが違う）。
+- 差し替えの口は描画オプションだけを変え、行のキャッシュ（`LineLayoutStore`）・planner・面の役割交換には触れない。**最初の描画の前に 1 度だけ呼ぶ**。同じ executor で描き直しても対照にはならない: `ScrollPlanner::plan_with_overhangs` は前回の確定行（`prev_lines`）との指紋（`line_fingerprint`＝文字列・装飾・ホバーの序数）の差分から描き直す行を決め、描画オプションは指紋に無いので、同じ canvas の 2 度目は何も描かれず前の面が残る。対照は **executor と面を別々に作って**取る（`viewbox_draw_choice_hover_tests.rs` の `exec_glyph`／`exec_choice` の 2 台と同じ形）。
 
 **Implementation Notes**
 - Validation（`viewbox_draw_color_emoji_tests.rs`）は下の Testing Strategy。
@@ -530,7 +532,7 @@ pub(super) fn glyph_items(s: &str) -> Vec<TextItem>;   // clusters(s).map(TextIt
 
 ## Error Handling
 
-- **新しい失敗経路 0**（5.4）: `clusters()`・`assign_items_to_chunks`・`TextItem::glyph` は失敗しない。`probe_advance` の失敗は今日どおり `error!`＋縮退値（`degraded_advance`・記憶しない・次回再試行）。`FontCatalog::family_for` が代替フォントを引けない場合も今日どおり（本番は OS の既定の代替に任せ、判定するのはテストだけ）。
+- **新しい失敗経路 0**（5.4）: `clusters()`・`assign_items_to_chunks`・`TextItem::glyph` は失敗しない（`TextItem::glyph` の `debug_assert!` はデバッグビルドの前提検査で、本番の経路ではない）。`probe_advance` の失敗は今日どおり `error!`＋縮退値（`degraded_advance`・記憶しない・次回再試行）。`FontCatalog::family_for` が代替フォントを引けない場合も今日どおり（本番は OS の既定の代替に任せ、判定するのはテストだけ）。
 - **色つきの字形が無い**（1.5）: Direct2D の既定で単色の字形（国旗・キーキャップ・ＭＳ ゴシックの ❤️）が出る。記録を出さない。
 - **記録**（8.1・8.2）: 毎フレーム・毎文字の記録を増やさない。`apply_cue` の `debug!` は cue 単位のまま（`len` の値がクラスタ数になる）。
 - **テストの失敗**: 代替フォント不在は `require_segoe_ui_emoji` の `panic!`（理由つき）。飛ばして緑にしない（6.7）。
@@ -548,10 +550,12 @@ pub(super) fn glyph_items(s: &str) -> Vec<TextItem>;   // clusters(s).map(TextIt
 ### Integration Tests（COM 層・読み戻し）
 
 1. `viewbox_draw_color_emoji_tests.rs`（各テストの先頭で `require_segoe_ui_emoji`・6.7）:
-   - **色つきの画素**（1.1・6.1）: 「あ😀い」を既定の黒で描き `colored_count > 0`。同じ canvas を `set_text_draw_options_for_test(NONE)` で描き直すと `colored_count == 0`（オプションが効いている証拠）。3 方式（1.6・6.8）。
-   - **非絵文字の画素の対照**（5.1・6.4）: 「あiWa。漢！x」を `ENABLE_COLOR_FONT` と `NONE` で描いた読み戻しがバイト等価。3 方式。
-   - **ホバー中の絵文字**（1.3・4.5・6.3）: 選択肢「あ😀い」を hover=Some で描き、絵文字の帯（`inline_pos`〜`+advance`）に切替文字色（白）の画素が 0・`colored_count > 0`（hover=None の帯の色つきの画素数と同じ）。同じフレームで「あ」「い」の帯には白の画素が 1 以上（ホバーの範囲が選択肢全体を覆い、絵文字の前後で途切れない）。
-   - **指定フォントが持つ字形は文字色**（1.2）: 「♥」（U+2665）を赤で描くと `colored_count`（黒基準の述語ではなく「赤以外の色相」の画素）が 0。
+   - **色つきの画素**（1.1・6.1）: 「あ😀い」を既定の黒で描き `colored_count > 0`。同じ canvas を、**別の executor と別の面**で、最初の描画の前に `set_text_draw_options_for_test(NONE)` を呼んでから描くと `colored_count == 0`（オプションが効いている証拠）。両方の面で `opaque_count > 0`（空の面同士の一致を排する）。3 方式（1.6・6.8）。
+   - **非絵文字の画素の対照**（5.1・6.4）: 「あiWa。漢！x」を `ENABLE_COLOR_FONT` の executor と `NONE` の executor（面も別）で描いた読み戻しがバイト等価・`opaque_count > 0`。3 方式。同じ executor で描き直す形は取らない（上の `ViewboxExecutor` の節）。
+   - **ホバー中の絵文字**（1.3・4.5・6.3）: 選択肢「あ😀い」を、`HighlightPaint { fill, text: 白 }` つきの hover=Some と、hover=None の 2 フレームで描く（既存のホバーのテストと同じく同じ executor でよい。ホバーの序数は指紋に入るので描き直される）。判定は帯ごとの**厳密な色の一致数**（既存の `count_bgra_in_x_band` と同じ数え方）で行う。😀 は字形そのものに白（歯・目の光）を持つので「白が 0」は要求しない。
+     - 絵文字の帯（`inline_pos`〜`+advance`）: 白の画素数が hover=Some と hover=None で**同数**（切替文字色で描き直されていない。不透明な白は下地に依らず同じ値で、半透明の縁は塗りと混ざって厳密な白にならない）。hover=Some で「α≠0・塗り色でも白でも無い」画素が 1 以上（字形の自分の色が出ている）・塗り色の画素が 1 以上（ハイライトの矩形が絵文字の帯まで及ぶ）。
+     - 「あ」「い」の帯: 白の画素が hover=Some で 1 以上・hover=None で 0（ホバーの範囲が選択肢全体を覆い、絵文字の前後で途切れない）。
+   - **指定フォントが持つ字形は文字色**（1.2）: 「♥」（U+2665）を赤（`FontColor` で R=255）で描くと、α≠0 かつ（G>0 または B>0）の画素が 0・`opaque_count > 0`（premultiplied の赤は B＝G＝0 なので、この述語で「赤以外の色」を数えられる。述語はテスト局所でよい）。
 2. `draw_oracle_tests.rs`: `probe_advances_match_drawn_line_advances_per_cluster`——6 形を含む台詞を 3 方式で描き、行の `GetClusterMetrics` を UTF-16 長でクラスタごとに束ねた合計が `metrics.advance(cluster)` と一致・束ねた数がクラスタ数と一致（国旗は 2 クラスタが 1 つに束なる・3.2・6.2）。既存の 2 組は据え置き。
 3. `viewbox_draw_live_diff_tests.rs`: 「今日は家族👨‍👩‍👧と😀」を含むシナリオで本番と照合用の読み戻しがバイト等価（3 方式・6.5）。
 4. `viewbox_draw_scroll_retain_tests.rs`: `boot_items` に絵文字を含む行を足し、スクロールの blit と全域再描画の等価が保たれる（6.5）。
@@ -571,9 +575,9 @@ pub(super) fn glyph_items(s: &str) -> Vec<TextItem>;   // clusters(s).map(TextIt
 | 3 | 定義点と依存の置き場 | `areka-sakura/src/cluster.rs` に 1 つ。依存の追加は `areka-sakura/Cargo.toml` の 1 行だけ。`areka-emo-text` は `areka_sakura::cluster` を呼ぶ |
 | 4 | 分かち書きの境界がクラスタの途中 | クラスタは先頭バイトが属する塊へ（境界を後ろへ寄せる）。純粋関数 `assign_items_to_chunks` に切り出す。調査 R-2 で「か゚」に実例あり |
 | 5 | `probe_advances_match_…` の前提 | DirectWrite のクラスタを UTF-16 長でクラスタごとに束ねて合計を比べる（国旗は 2 → 1）。数の一致は「束ねた数＝クラスタ数」で判定し続ける。組から外す形は無い |
-| 6 | 非絵文字の画素の対照 | 同じテストの中で `NONE`／`ENABLE_COLOR_FONT` を描き比べる（`set_text_draw_options_for_test`）。golden の PNG は作らない。調査 R-4 で等価を実測済み |
+| 6 | 非絵文字の画素の対照 | 同じテストの中で `NONE`／`ENABLE_COLOR_FONT` を描き比べる（`set_text_draw_options_for_test`・最初の描画の前に 1 度）。executor と面は**別々に作る**（描画オプションは行の指紋に入らないので、同じ executor の描き直しは何も描かず空振りする）。golden の PNG は作らない。調査 R-4 で等価を実測済み |
 | 7 | 代替フォントの実在 | `require_segoe_ui_emoji`（`viewbox_draw_test_support.rs`）。無ければ理由つきの `panic!` |
-| 8 | 1.3／4.5 の判定に使う絵文字 | 😀・👨‍👩‍👧（塗りの色に従う層が無いことを黒／赤の描き比べで実測）。国旗・キーキャップ・ＭＳ ゴシックの ❤️ は単色なので使わない。ホバーの判定は「帯に切替文字色の画素 0・色つきの画素 > 0・非ホバーと同数」で足りる |
+| 8 | 1.3／4.5 の判定に使う絵文字 | 😀・👨‍👩‍👧（塗りの色に従う層が無いことを黒／赤の描き比べで実測）。国旗・キーキャップ・ＭＳ ゴシックの ❤️ は単色なので使わない。ホバーの判定は「絵文字の帯の白の画素数が hover の有無で同数・字形の自分の色（塗り色でも白でも無い画素）が 1 以上・塗り色の画素が 1 以上」。😀 は字形に白を含むので「白が 0」は要求しない（Testing Strategy） |
 | 9 | COLR の版の記録 | この機械（Windows 11・`ID2D1DeviceContext5` まで QI 可）ではグラデーション（COLR v1）の字形が出る。Windows 10 では平面（v0）。どちらでも 1.1／6.1 は同じ判定。自前の描き手は持たない（裁定 3） |
 | 10 | 異体字セレクタの実測 | ❤️・☺️ は、基字を持つＭＳ ゴシック（既定）では単色・持たない Yu Gothic UI では色つき。1 クラスタ・幅 1 つ。独自の規則は足さない（1.7） |
 
