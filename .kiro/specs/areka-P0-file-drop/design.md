@@ -121,7 +121,7 @@ graph TB
 | 1 | wintf の受け口の切り方と部品の署名 | **§4.1 の B**: OS 読み取り `read_dropped_paths(hdrop: HDROP) -> Result<Vec<PathBuf>, DropReadError>`（`unsafe` はここだけ）と World 側 `deliver_dropped_files(world, entity, paths) -> HandlerResult`（純粋・4 腕）に分け、`WM_DROPFILES` の腕は前者の結果で後者を呼ぶ。部品は `OnFilesDropped(pub fn(&mut World, Entity, Vec<PathBuf>))`。一覧の型は **`Vec<PathBuf>`**（`OsString::from_wide` で非可逆変換を挟まない） | World 側の 4 腕を偽の一覧で全部踏める。名前を `OnFileDrop` にしないのは正典の旧仕様のイベント名と紛れるため |
 | 2 | 定常でないときの `warn!` の出し手 | **送り口が在れば送り、kanade が `raise_event_not_steady` を出す。送り口が無ければ areka が `warn!(file_drop_no_kanade)` を出す**。どちらも「送らなかったイベント 1 件につき warn 1 件」 | areka が常に自分で判定すると kanade の判定と二重になり、定常かどうかの正本（kanade）が 2 か所になる |
 | 3 | 終了が指示された後の見分け | **本仕様は何も足さない**（`FirstExit` も `submit` の判定も見ない）。`quit_app` は終了を指示する前に必ず全ゴースト窓を `despawn` する（areka で `request_exit` を呼ぶ唯一の場所）ので、終了が指示された後にゴースト窓の受け手が呼ばれる道は無い。窓の HWND が壊れるまでの間に届いた `WM_DROPFILES` は wintf の「entity 破棄済み」の腕が `debug!`（`DESPAWNED_SKIP_TAG`）で打ち切り、`DragFinish` だけ呼ぶ | 要件 6.4「本仕様で足す経路 0」のとおり。`FirstExit` を見る腕を足すと、本番で到達しない腕をテストで踏むことになる |
-| 4 | MIME 表の広さと置き場 | **`file_drop.rs` の定数表 `MIME_TABLE`（拡張子 41・MIME 33 種）**。下の「MIME の表」に全項目を書く。拡張子は ASCII 大小無視。表に無い・拡張子なしは空文字 | 要件 4.5 が「表を持ち全項目を判定する」と定める。OS のレジストリは機械ごとに答えが違い決定論に乗らない |
+| 4 | MIME 表の広さと置き場 | **`file_drop.rs` の定数表 `MIME_TABLE`（拡張子 38・MIME 33 種）**。下の「MIME の表」に全項目を書く。拡張子は ASCII 大小無視。表に無い・拡張子なしは空文字 | 要件 4.5 が「表を持ち全項目を判定する」と定める。OS のレジストリは機械ごとに答えが違い決定論に乗らない |
 | 5 | 決定論テストで `HDROP` を偽造するか | **偽造しない**。振り分け表 → 受け手の線は「null の `HDROP`（wparam 0）→ `warn!` 1 件・受け手を呼ばない」で踏み、受け手の成功の腕は `deliver_dropped_files` を偽の一覧で踏む。成功の線の実物は実機 ⑶ | `GlobalAlloc` は `Win32_System_Memory` で、根の `Cargo.toml` に無い。本番が使わない機能を足してまで 1 本の直線（呼ぶだけ）を踏む価値が無い。resolver は `"2"` なので `[dev-dependencies]` の機能は `cargo build` には漏れないが、その道も取らない |
 | 6 | 装着の置き場 | **§4.2 の A でも B でもなく、`input_events` の既存の型**: `input_events::file_drop::attach_file_drop_receivers(world)` を `prepare_ghost_windows` の窓を作る閉包の中（`attach_balloon_pointer_handlers` の直後）で呼ぶ。`GhostWindowMarker` を持つ entity へ `OnFilesDropped(on_ghost_files_dropped)` を差す | 入力の受け手は spawn 直後の同期装着が既存の型で、`Added<WindowHandle>` の系を増やさない。起こし直しは同じ閉包を通るので回数によらず差さる。`app_exit.rs` の系に「終了」以外の部品を混ぜない |
 | 7 | `InstallOrigin` の変種の綴り | **`WindowDrop`** | `Debug` 出力がそのまま記録の検索語（`origin=WindowDrop`）。`Menu`・`Script` と並べて「窓への投げ込み」と読める |
@@ -546,7 +546,7 @@ fn send_event(world: &World, id: &'static str, references: Vec<String>, scope: u
 | `rar` | `application/vnd.rar` |
 | `exe`・`dll` | `application/vnd.microsoft.portable-executable` |
 
-拡張子 41・MIME 33 種。表に無い拡張子・拡張子なし（`Path::extension()` が `None`）は空文字。値は IANA の登録名（`image/vnd.microsoft.icon`・`application/vnd.microsoft.portable-executable` を含む）。表の広さを広げるときは行を足すだけで、テストが全項目を回す（要件 9.8）。
+拡張子 38（画像 8・音 7・動画 5・文字 7・xml/json/pdf 3・書庫 6・実行体 2）・MIME 33 種。表に無い拡張子・拡張子なし（`Path::extension()` が `None`）は空文字。値は IANA の登録名（`image/vnd.microsoft.icon`・`application/vnd.microsoft.portable-executable` を含む）。表の広さを広げるときは行を足すだけで、テストが全項目を回す（要件 9.8）。
 
 **Implementation Notes**
 - Integration: `ghost_session::prepare_ghost_windows` の閉包に 1 行。`input_events/mod.rs` に `pub(crate) mod file_drop;`。
@@ -585,6 +585,7 @@ fn send_event(world: &World, id: &'static str, references: Vec<String>, scope: u
 pub fn peek_install_txt(path: &Path) -> Result<bool, NarError>;
 ```
 - Postconditions: 探し方は `NarArchive::open` と同じ `manifest::locate_install_txt`（同じ `EntryName` 列に対して同じ答え）。`Err` の中身は `open` が同じ書庫で返すものと同じ語彙。
+- **名前の検証で撥ねられる書庫**（`..` を含む・絶対パス・大小の衝突など）は、最上位に `install.txt` が在っても `Err(Refused)`＝「目次が読めない」（要件 2.4）。`open` も同じ順（名前の検証 → 探す）で、`install.txt` を探す前に断るので、手続きの側でもこの書庫は「`install.txt` を持つ物」と扱われたことが無い。振り分けは `OnFileDrop2`＋`warn!(file_drop_archive_unreadable)` で、`OnInstallRefuse` へは回さない。`validate_entry_names` を飛ばして生の名前で探す道は、探し方が 2 つになるので取らない（要件 2.2）。
 - 記録を出さないのは意図（`lib.rs` の「記録はここだけが出す」は `open`／`install` の契約・この関数は問い合わせで、失敗の記録は呼び手が 1 回出す）。doc に明記する。
 
 ### kanade
@@ -625,7 +626,7 @@ pub fn peek_install_txt(path: &Path) -> Result<bool, NarError>;
 
 | 場面 | 場所 | 水準 | `event` | 続き |
 |---|---|---|---|---|
-| wParam が 0（返す資源なし）・`DragQueryFileW` が長さ 0 か中身 0 を返した | wintf `WM_DROPFILES` | `warn` | `files_dropped_read_failed`（`error`） | 受け手を呼ばない・`HDROP` を受けた腕は `DragFinish` |
+| wParam が 0（返す資源なし）・`DragQueryFileW` が長さ 0 か中身 0 を返した | wintf `WM_DROPFILES` | `warn` | `files_dropped_read_failed`（`error`） | 受け手を呼ばない・`HDROP` を受けた腕は `DragFinish`。`Query` の側はテストでも実機でも到達しない（Testing 6） |
 | World が借用中 | wintf `deliver_dropped_files` | `warn` | `files_dropped_world_busy`（`count`） | 呼ばない・`DragFinish` |
 | entity が破棄済み（終了の直後・要件 3.5・6.4） | wintf | `debug` | `DESPAWNED_SKIP_TAG` の行 | 呼ばない・`DragFinish` |
 | 部品なし（ゴースト窓以外に届いた・本番では起きない） | wintf | `debug` | `files_dropped_no_receiver` | 呼ばない |
@@ -655,7 +656,7 @@ pub fn peek_install_txt(path: &Path) -> Result<bool, NarError>;
 3. 部品なしの entity → 呼ばれない・`DEBUG` の `files_dropped_no_receiver`・`WARN` 0。
 4. 破棄済みの entity → `DESPAWNED_SKIP_TAG` の `DEBUG` 1 行・`WARN` 0（`wm_close_skips_stale_entity_as_normal_teardown` と同じ自己証明の腕つき）。
 5. World を `borrow_mut` したまま → `WARN` の `files_dropped_world_busy` 1 行・呼ばれない・panic なし。
-6. `DropReadError` の 2 変種の `Display` が `warn!` の `error` 欄で読み分けられる（`NullHandle`／`Query { index, total }`）。`read_dropped_paths` の成功の腕（実物の `HDROP`）は決定論では踏まず実機 ⑶ で見る（設計で決めたこと 5）。
+6. `DropReadError` の 2 変種の `Display` が `warn!` の `error` 欄で読み分けられる（`NullHandle`／`Query { index, total }`）。`read_dropped_paths` の成功の腕（実物の `HDROP`）は決定論では踏まず実機 ⑶ で見る（設計で決めたこと 5）。**`Query` の腕は決定論でも実機でも到達しない**（`HDROP` を偽造しない代償・実機は成功の線）。この検査で語だけを固定し、腕の中には入らないことを承知の上とする。
 
 ### wintf（`win_style_accept_files_tests.rs`・要件 1.10）
 7. `WS_EX_ACCEPTFILES | WS_EX_TOOLWINDOW` で作った実 HWND（`"Static"`・非表示）に `apply_click_through` を true/false 交互に 36 回 → `GWL_EXSTYLE` に `WS_EX_ACCEPTFILES` が残り、`WS_EX_TRANSPARENT` は最後の値。
@@ -669,7 +670,7 @@ pub fn peek_install_txt(path: &Path) -> Result<bool, NarError>;
 11. `directory_drop_references`: 長さ 2・[パス, scope]。
 
 ### areka `file_drop_mime_tests.rs`（要件 9.8）
-12. 表の全項目を回し、小文字・大文字・混在（`PNG`・`Png`）で同じ MIME。表の拡張子に重複なし。`nar`／`zip` が `application/zip`。表に無い `xyz`・拡張子なし・`.`（空の拡張子）は `""`。表の要素数（41）を直書きで判定（増やしたら数も直す）。
+12. 表の全項目を回し、小文字・大文字・混在（`PNG`・`Png`）で同じ MIME。表の拡張子に重複なし。`nar`／`zip` が `application/zip`。表に無い `xyz`・拡張子なし・`.`（空の拡張子）は `""`。表の要素数（38）を直書きで判定（増やしたら数も直す）。
 
 ### areka `file_drop_wiring_tests.rs`（要件 9.2・9.4〜9.6）
 13. 装着: `GhostWindowMarker+CharWindowMarker`・`GhostWindowMarker+BalloonWindowMarker`・印なしの `Window` の 3 entity → 前 2 つに `OnFilesDropped` が差さり（`fn_addr_eq` で `on_ghost_files_dropped`）、印なしには差さらない。新しい 2 entity を足してもう 1 度呼ぶ（起こし直しの形）→ 新しい 2 つにも差さる。
@@ -677,12 +678,13 @@ pub fn peek_install_txt(path: &Path) -> Result<bool, NarError>;
 15. 混ざった投げ込み（ファイル 2・フォルダ 2・書庫 2・`peek` は一時フォルダに置いた実物の `.nar` 2 本＝`sample-ghost-kit` の `NarBuilder` で `install.txt` あり／なしを組む）→ 受信端に `RaiseEvent` が `OnFileDrop2` → `OnDirectoryDrop`（1 つ目）→ `OnDirectoryDrop`（2 つ目）の順に 3 件・`method = Get`・`reply = None`、`queued_orders` に依頼 1 つ・`archives` が落とされた順の 1 本（`install.txt` あり）・`origin = WindowDrop`・`install.txt` なしの 1 本は `OnFileDrop2` の Reference0 に載り MIME が `application/zip`。`file_drop_received` の欄が `count = 6, files = 3, dirs = 2, installs = 1`。
 16. 0 件: `paths = []` → `file_drop_received` に `count = 0`・受信端 0 件・`queued_orders` 空。
 17. 送り口なし（`GhostSlot` を置かない）: ファイル 1・フォルダ 2・書庫 1 → `WARN` の `file_drop_no_kanade` が 3 件（イベント 1 件につき 1 件）・`queued_orders` に依頼 1 つ（要件 3.8）。
+17b. kanade が止まっている（`GhostSession::for_test(Some(tx), dir)` で置き場を作り、受信端 `rx` を先に落とす）: ファイル 1・フォルダ 1・書庫 1 → `WARN` の `file_drop_send_failed` が 2 件（イベント 1 件につき 1 件）・`file_drop_no_kanade` 0 件・`queued_orders` に依頼 1 つ。
 18. 印なしの窓 → `file_drop_unknown_window` 1 件・受信端 0・依頼 0。
 19. 問い合わせ失敗の記録: 存在しないパスの `x.nar` → `file_drop_archive_unreadable` 1 件（`reason` に `Io`）・`OnFileDrop2` に載る／`is_dir` の失敗は `sort_drops` の単体で判定済み（本番の閉包は `fs::metadata` で、存在しないパスは `Err`）→ `file_drop_probe_failed` 1 件も同じ入力で出る。
 20. 字面の見張り（要件 7.2）: `file_drop.rs`・`drop_files.rs` の本番ソース（`include_str!`）に、正典の 15 語（`OnFileDropping`・`OnFileDrop`（`OnFileDrop2` を除く＝直後が `"` のもの）・`OnFileDropEx`・`OnFileDropped`・`OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`・`OnTextDrop`・`OnURLDropping`・`OnURLDropped`・`OnURLDropFailure`・`OnOtherObjectDropping`・`OnOtherObjectDropped`・`OnNarCreating`・`OnNarCreated`）が 0 件。較正として `OnFileDrop2`・`OnDirectoryDrop` の 2 語はちょうど 1 件ずつ在ること（0 件の主張が空振りでない）。
 
 ### areka-nar `lib_peek_tests.rs`（要件 2.2・9.3）
-21. `install.txt` を最上位に持つ書庫 → `Ok(true)`／`INSTALL.TXT` → `Ok(true)`／`wrap/install.txt` だけ → `Ok(false)`／EOCD の無いバイト列 → `Err(Refused)`／存在しないパス → `Err(Io)`。同じ 3 本に `NarArchive::open` を当て、`Ok(true)` ⇔ `open` が `MissingInstallTxt` 以外／`Ok(false)` ⇔ `open` が `MissingInstallTxt`（探し方の同一性）。捕捉で `peek` は記録 0 件（`open` の `error!` と対照）。
+21. `install.txt` を最上位に持つ書庫 → `Ok(true)`／`INSTALL.TXT` → `Ok(true)`／`wrap/install.txt` だけ → `Ok(false)`／EOCD の無いバイト列 → `Err(Refused)`／存在しないパス → `Err(Io)`／最上位に `install.txt` が在るが `../x` のエントリも在る書庫 → `Err(Refused)`（名前の拒否）。探し方の同一性は**この検体に限って**並べる: `install.txt` あり ⇒ `open` は `MissingInstallTxt` 以外／`wrap/install.txt` だけ ⇒ `open` も `MissingInstallTxt`／名前の拒否の検体 ⇒ `open` も同じ理由（`UnsafeWhy::DotDot`）の `Refused`。捕捉で `peek` は記録 0 件（`open` の `error!` と対照）。
 
 ### kanade（要件 9.7）
 22. `events_change_tests.rs` の 21 → 23。`allowed_static("OnFileDrop2")`・`("OnDirectoryDrop")` が `Some`。
