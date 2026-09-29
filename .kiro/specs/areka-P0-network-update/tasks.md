@@ -109,7 +109,7 @@
   - 一時の根に置いた emo2 風のフォルダの兄弟の `desk_resolve_tests` で、今の 3 つの `dir`・名前・倒れ先、名前引きの完全一致・大文字小文字違いと隠しシェルが引けないことが緑
   - _Requirements: 1.4, 1.7, 7.1, 10.12, 10.18_
 
-- [ ] 6.3 受付と窓口の段（走っていない・答え待ち・走っている）と預かり 1 枠を作る
+- [x] 6.3 受付と窓口の段（走っていない・答え待ち・走っている）と預かり 1 枠を作る
   - 受付の口を 1 つ置き、窓口が無い・終了が始まった・走っている（答え待ちで預かりが埋まっているときも）・切替の予約が在る・送出端や起動の文脈が無い・解いた対象が 0 の順に断って判定ごとに `warn!` を 1 件残す。走っているときだけ UI スレッドから `OnUpdateFailure(executing)` を 1 件直接送る（返事なし）。受けたら 6.2 で対象を解き、送出端の写しと一緒に背景スレッドへ渡す（`info!`）
   - 答え待ちの間に届いた要求は対象を解かずに 1 件だけ預かる（`info!`）。「始まった」を受けたら段を走っているにして預かりを `executing` で断り、「終わった」を受けたら段を戻して預かりを受付に掛け直す。受けたらメニューは答え待ち、台本は走っているの段へ。段の遷移は `debug!`
   - 台本の受け口へ配る生の要求の送出端を答える口を置く（窓口が無ければ受信端の無い送出端）
@@ -188,3 +188,4 @@
 - 5.2: 手続きが固定するのは「総括の応えの後に読み直しを頼む」まで。要件 5.3（総括への返事の台詞が終わってから読み直す）は窓口と kanade の側＝6.5・6.6 が判定する。`OnUpdateBegin` で閉じたらエンジンは回さない（5.7 の「走っている更新」は走り出した後）
 - 6.1: 取得口の作り方は `NewFetch = Arc<dyn Fn() -> Result<Box<dyn Fetch>, FetchError> + Send + Sync>`（対象ごとに呼ぶ）＝`spawn_worker(desk, gate, new_fetch)` の第 3 引数。本番は `worker::winhttp_fetch()`（6.3 で渡す）・テストは偽物。窓口への頼みは `DeskAsk::{Started, Reload, OrderDone}`。記録の語 `update_gate_closed`・`update_desk_gone`・`update_order_done` を 8 で Monitoring の表へ
 - 6.2: 窓口 `UpdateDesk` は `update::register`（`register_systems` から 1 回）で据える。`drain` の枝（`answer`・`take_raw`・`peek_homeurl`）は仮＝6.3・6.4・6.5 が埋める。対象の解決は `here(world)`（World から写すだけ）と `resolve(&Here, raw)`（フォルダを読む）に分けた。記録の語 `update_target_resolved`・`update_query_discarded`・`update_desk_ask`・`update_desk_raw` と `update_target_skipped` の `reason`（`no_homeurl`・`no_folder`・`no_shell`・`name_not_found`）を 8 で Monitoring の表へ
+- 6.3: `update/mod.rs` の `#![allow(dead_code)]` は外した。残る的の絞った allow は `raw_sender` と `UpdateDesk.raw_tx`＝7.1 で外す。design に無い判定 `SubmitVerdict::WorkerGone`（背景スレッドへ渡せない→ `error!(update_worker_gone)`・次の依頼で起こし直す）と記録の語 `update_worker_gone`・`update_worker_spawned`・`update_request_held`・`update_stage` を 8 で design の型と Monitoring の表へ。`DeskAsk::Reload` の腕は 6.5、`peek_homeurl` は 6.4 が埋める
