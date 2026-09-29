@@ -115,4 +115,5 @@
 - 2.3: areka は bin だけの crate＝テストの絞り込みは `--lib` でなく `--bin areka <filter>`
 - 3.1 の審査中、全体テストの初回で `install::desk::overwrite_tests::overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again` が 1 度だけ赤（負荷時の時間の読み・単独と再実行は緑・本 spec の配線前）。6.1 で再発したら追う
 - 4.2: 字面の見張り（テスト 20）は `include_str!` で本番の `file_drop.rs` と wintf の `drop_files.rs` だけを読む。送らない 15 語は「直後が `"`」で数える（`"SSP: OnTextDrop"` の変異で赤を確認済み）
-- 最終検証 GO（09-29）。完了の棚卸へ: 後続 `.kiro/specs/areka-P0-shell-balloon-switch/brief.md` の「許可表は 13 件・3 件足して 16」は古い（今は 23・`ghost_session.rs` の窓を作る閉包に受け手の装着が 1 行増えた）＝申し送りを 1 行足す
+- 完了時にその場で解決: 後続 `shell-balloon-switch` の brief へ「許可表は 23 件・`ghost_session.rs` の閉包に受け手の装着が 1 行」の申し送りを足した
+- 完了時の棚卸で起票しない（理由つき）: ⑴ 3.1 の審査中に 1 度だけ赤になった上書きのテストは、その後の全体テスト 2 回（6.1・最終検証の元）と単独の実行で緑＝再現 0 ⑵ areka の example（`window-placement`・`collision-probe`）のゴースト窓にも `WS_EX_ACCEPTFILES` が付くが受け手は無い＝落としても wintf の debug 1 行と `DragFinish` だけ（最終検証で対応不要と判定） ⑶ design の Open Questions 1〜3 は実機 ⑴⑵⑷ で確かめ済み
