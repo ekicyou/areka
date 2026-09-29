@@ -546,6 +546,8 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
             }
             // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）。
             crate::install::desk::on_steady(world);
+            // 更新の窓口へ（`homeurl` の写しを消して照会し直す）。
+            crate::update::desk::on_steady(world);
         }
         KanadeNotice::ChangeCancelled { reason } => {
             if world.remove_non_send::<SwitchInFlight>().is_some() {

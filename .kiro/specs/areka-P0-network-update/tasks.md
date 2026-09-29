@@ -116,7 +116,7 @@
   - 偽の kanade の受信端を使う兄弟の `desk_tests` で、走っている間の要求が `executing` 1 件で総括 0、預かりの 3 通り（応えがあれば後で始まる・応えが無ければ `executing` 1 件・2 件目は断る）を頼みと要求が同じ tick でも別の tick でも同じ結果になること、切替の予約が在れば断ってイベント 0 と `warn!` 1 件、が緑
   - _Requirements: 1.1, 1.14, 1.15, 1.17, 8.1, 9.6, 9.7, 10.9_
 
-- [ ] 6.4 `homeurl` の写しと「選べるか」を作り、定常到達で照会する
+- [x] 6.4 `homeurl` の写しと「選べるか」を作り、定常到達で照会する
   - 定常到達のたびに写しを消して `homeurl` を 1 件照会し（`ghost_switch` の定常到達の腕に 1 行）、返事は毎 tick 覗いて空でなければ写しに置く。終了の片付けで照会の返事待ちを捨てる
   - 選べるのは窓口が在り、終了が始まっておらず、段が走っていないで、写しか 3 つの `descript.txt` のどれかに更新先が在るとき。メニューの動作は今の 3 つを理由 `manual` で受付へ
   - 兄弟の `desk_resolve_tests` で、選べる／選べないの 4 通り（3 つとも無い・写しに在る・`descript.txt` の 1 つに在る・走っている間）と、定常到達で照会が 1 件飛び返事が写しに載ること、終了の後に照会の返事待ちが捨てられることが緑
@@ -189,3 +189,4 @@
 - 6.1: 取得口の作り方は `NewFetch = Arc<dyn Fn() -> Result<Box<dyn Fetch>, FetchError> + Send + Sync>`（対象ごとに呼ぶ）＝`spawn_worker(desk, gate, new_fetch)` の第 3 引数。本番は `worker::winhttp_fetch()`（6.3 で渡す）・テストは偽物。窓口への頼みは `DeskAsk::{Started, Reload, OrderDone}`。記録の語 `update_gate_closed`・`update_desk_gone`・`update_order_done` を 8 で Monitoring の表へ
 - 6.2: 窓口 `UpdateDesk` は `update::register`（`register_systems` から 1 回）で据える。`drain` の枝（`answer`・`take_raw`・`peek_homeurl`）は仮＝6.3・6.4・6.5 が埋める。対象の解決は `here(world)`（World から写すだけ）と `resolve(&Here, raw)`（フォルダを読む）に分けた。記録の語 `update_target_resolved`・`update_query_discarded`・`update_desk_ask`・`update_desk_raw` と `update_target_skipped` の `reason`（`no_homeurl`・`no_folder`・`no_shell`・`name_not_found`）を 8 で Monitoring の表へ
 - 6.3: `update/mod.rs` の `#![allow(dead_code)]` は外した。残る的の絞った allow は `raw_sender` と `UpdateDesk.raw_tx`＝7.1 で外す。design に無い判定 `SubmitVerdict::WorkerGone`（背景スレッドへ渡せない→ `error!(update_worker_gone)`・次の依頼で起こし直す）と記録の語 `update_worker_gone`・`update_worker_spawned`・`update_request_held`・`update_stage` を 8 で design の型と Monitoring の表へ。`DeskAsk::Reload` の腕は 6.5、`peek_homeurl` は 6.4 が埋める
+- 6.4: `can_update`・`update_current` の `#[allow(dead_code)]` は 7.2 で外す。定常到達の照会は偽の SHIORI（`spine.rs` の `ScriptedShioriBackend`）が台本に無ければ NoContent で答え、`SwitchRig::calls` は `GET homeurl` を外す＝6.6 で手続きの `homeurl` に値を台本で渡すと定常到達の照会が先に 1 件食う（台本に 2 件積むか `handle.non_status_calls()` を直接見る）。`spine.rs` は 998 行＝6.5・6.6 で足す土台は `ghost_switch_test_support.rs` へ。記録の語 `update_homeurl_unqueried`・`update_homeurl_copied`・`update_homeurl_absent`・`update_homeurl_query_failed` を 8 で Monitoring の表へ

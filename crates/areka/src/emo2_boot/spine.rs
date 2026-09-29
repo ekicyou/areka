@@ -218,6 +218,9 @@ impl ScriptedShioriBackendBuilder {
     }
 }
 
+/// 更新の窓口が定常到達のたびに照会する Resource の名前（台本に無ければ NoContent で答える）。
+pub(crate) const HOMEURL_RESOURCE: &str = "homeurl";
+
 /// 台本化したテスト専用 SHIORI backend（`areka_kanade::ShioriBackend` 実装・R8.1/R8.6）。
 pub(crate) struct ScriptedShioriBackend {
     get_scripts: HashMap<String, VecDeque<Result<Option<String>, RequestError>>>,
@@ -257,6 +260,8 @@ impl ShioriBackend for ScriptedShioriBackend {
         self.get_scripts
             .get_mut(id)
             .and_then(VecDeque::pop_front)
+            // 回数は定常到達の数で決まる＝台本に無ければ「homeurl を書いていない」で答える。
+            .or_else(|| (id == HOMEURL_RESOURCE).then_some(Ok(None)))
             .unwrap_or_else(|| {
                 panic!("ScriptedShioriBackend::get(\"{id}\"): no scripted response left")
             })

@@ -16,6 +16,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use areka_actor::ReplyReceiver;
 use areka_ghost::BasewareRoot;
 use areka_ghost::catalog::{descript_name, homeurl, list_balloons, list_shells};
+use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{KanadeMsg, ShioriMethod};
 use bevy_ecs::world::World;
 
@@ -25,7 +26,7 @@ use super::{RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReaso
 use crate::boot_config::BootContext;
 use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
-use crate::menu::captions::QueryReply;
+use crate::menu::captions::{QueryReply, send_query};
 
 /// UI 側の窓口（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct UpdateDesk {
@@ -45,6 +46,8 @@ pub(crate) struct UpdateDesk {
     pub(super) held: Option<(RawUpdateRequest, UpdateReason)>,
     /// 終了の待ちへ登記した門（背景スレッドと共有）。
     pub(super) gate: Arc<WorkGate>,
+    /// 定常到達のたびに照会した SHIORI の `homeurl` の写し（灰色の判定用）。
+    ghost_homeurl: Option<String>,
     /// `homeurl` の照会の返事待ち（高々 1 件）。
     homeurl_query: Option<ReplyReceiver<QueryReply>>,
 }
@@ -62,6 +65,7 @@ impl UpdateDesk {
             stage: Stage::Idle,
             held: None,
             gate,
+            ghost_homeurl: None,
             homeurl_query: None,
         }
     }
@@ -223,8 +227,104 @@ pub(super) fn hand_over(world: &mut World, job: UpdateJob) -> SubmitVerdict {
     SubmitVerdict::Started
 }
 
-/// `homeurl` の照会の返事を覗く（写しへ置くのは 6.4 が足す）。
-fn peek_homeurl(_world: &mut World) {}
+/// 定常到達（`ghost_switch::on_notice` の定常到達の腕から）: 写しを消し、`homeurl` の照会を 1 件送る。
+/// 送れなければ（kanade が居ない・切れている）照会は持たず `debug!` を 1 件。窓口が無い・終了が
+/// 始まった後は何もしない（捨てた返事待ちを掛け直さない）。
+pub(crate) fn on_steady(world: &mut World) {
+    if !world
+        .get_non_send::<UpdateDesk>()
+        .is_some_and(|desk| !desk.gate.is_closing())
+    {
+        return;
+    }
+    let query = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|s| s.kanade())
+        .and_then(|kanade| send_query(kanade, vec!["homeurl"]).ok());
+    let Some(mut desk) = world.get_non_send_mut::<UpdateDesk>() else {
+        return;
+    };
+    desk.ghost_homeurl = None;
+    if query.is_none() {
+        tracing::debug!(
+            event = "update_homeurl_unqueried",
+            "[update] kanade へ homeurl を照会できません（写しは空のまま）"
+        );
+    }
+    desk.homeurl_query = query;
+}
+
+/// メニューの項目を選べるか: 窓口が在り・終了が始まっておらず・段が `Idle`（答え待ちも灰色）・
+/// 写しか 3 つの `descript.txt` のどれかに更新先が在る。
+// 呼び手（メニュー「ネットワーク更新」の枠）はタスク 7.2 が足す。そのとき外す。
+#[allow(dead_code)]
+pub(crate) fn can_update(world: &World) -> bool {
+    let Some(desk) = world.get_non_send::<UpdateDesk>() else {
+        return false;
+    };
+    if desk.gate.is_closing() || desk.stage != Stage::Idle {
+        return false;
+    }
+    if desk.ghost_homeurl.is_some() {
+        return true;
+    }
+    here(world).is_some_and(|here| {
+        [
+            Some(here.ghost_dir.join("ghost").join("master")),
+            here.shell_dir,
+            Some(here.balloon_dir),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|dir| homeurl(&dir).is_some())
+    })
+}
+
+/// メニューの動作: 今の 3 つを対象に理由 `manual` で受付へ（判定の記録は受付が残す）。
+// 呼び手（メニュー「ネットワーク更新」の枠）はタスク 7.2 が足す。そのとき外す。
+#[allow(dead_code)]
+pub(crate) fn update_current(world: &mut World) {
+    super::submit(
+        world,
+        RawUpdateRequest::Current(vec![
+            TargetKind::Ghost,
+            TargetKind::Shell,
+            TargetKind::Balloon,
+        ]),
+        UpdateReason::Manual,
+    );
+}
+
+/// `homeurl` の照会の返事を覗く（待たない）。空でない値だけを写しに置く。返事が失敗・返信端が
+/// 落ちたときは写しを空のまま `warn!` を 1 件。
+fn peek_homeurl(world: &mut World) {
+    let Some(mut desk) = world.get_non_send_mut::<UpdateDesk>() else {
+        return;
+    };
+    let reply = match desk.homeurl_query.as_ref().map(ReplyReceiver::try_recv) {
+        None | Some(Ok(None)) => return,
+        Some(Ok(Some(reply))) => Ok(reply),
+        Some(Err(e)) => Err(e.to_string()),
+    };
+    desk.homeurl_query = None;
+    let outcome = reply.map(|reply| reply.into_iter().find(|(id, _)| *id == "homeurl"));
+    match outcome {
+        Ok(Some((_, ResourceOutcome::Value(v)))) if !v.is_empty() => {
+            tracing::debug!(event = "update_homeurl_copied", homeurl = %v, "[update] SHIORI の homeurl を写しました");
+            desk.ghost_homeurl = Some(v);
+        }
+        Ok(Some((_, ResourceOutcome::Failed(reason)))) | Err(reason) => tracing::warn!(
+            event = "update_homeurl_query_failed",
+            reason = %reason,
+            "[update] SHIORI の homeurl を照会できませんでした（写しは空のまま）"
+        ),
+        Ok(_) => tracing::debug!(
+            event = "update_homeurl_absent",
+            "[update] SHIORI は homeurl を答えませんでした（写しは空のまま）"
+        ),
+    }
+}
 
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 照会の返事待ちを捨てる。走っている依頼は門が待つ。
 pub(crate) fn discard_for_exit(world: &mut World) {

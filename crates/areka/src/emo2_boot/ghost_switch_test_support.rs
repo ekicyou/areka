@@ -33,8 +33,8 @@ use super::frame::{KanadeNoticeRx, run_ghost_quit_phase};
 use super::ghost_switch::drain_change_requests;
 use super::sample_test_support::acquire_emo2;
 use super::spine::{
-    RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder, ScriptedShioriHandle,
-    run_bounded, spin_wait_until,
+    HOMEURL_RESOURCE, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
+    ScriptedShioriHandle, run_bounded, spin_wait_until,
 };
 use crate::ConfigInputs;
 use crate::boot_config::{BootContext, CurrentGhost};
@@ -259,13 +259,23 @@ impl SwitchRig {
         self.world.insert_non_send(GhostSlot(Some(session)));
     }
 
-    /// `folder` を起こした回ごとの呼出列（状態の問い合わせを除く・起こした順）。
+    /// `folder` を起こした回ごとの呼出列（状態の問い合わせと、定常到達で更新の窓口が飛ばす
+    /// `homeurl` の照会を除く・起こした順）。照会は UI の定常到達の処理から非同期に届くので、
+    /// 観測した時点で記録に載っているかが決まらない。
     pub(crate) fn calls(&self, folder: &str) -> Vec<Vec<RecordedCall>> {
         self.boots
             .borrow()
             .iter()
             .filter(|(f, _)| f == folder)
-            .map(|(_, handle)| handle.non_status_calls())
+            .map(|(_, handle)| {
+                handle
+                    .non_status_calls()
+                    .into_iter()
+                    .filter(
+                        |c| !matches!(c, RecordedCall::Get { id, .. } if id == HOMEURL_RESOURCE),
+                    )
+                    .collect()
+            })
             .collect()
     }
 

@@ -18,7 +18,7 @@ use crate::emo2_boot::ghost_switch::SwitchInFlight;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
 
-mod desk;
+pub(crate) mod desk;
 mod procedure;
 mod refs;
 mod worker;
