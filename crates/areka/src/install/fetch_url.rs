@@ -5,8 +5,6 @@
 //! で行い、門は持たない（終了で待たない＝要件 7.5・落としかけの物は次の取得の 7 日の掃除に任せる）。
 //! 使うのは `areka_update::{Fetch, WinHttpFetch, FetchError}` と `install::{RawInstallRequest,
 //! InstallOrigin}` だけ。
-// 呼び手（`emo2_boot/install_cue.rs` の `url` の腕）は 4.2 で結ぶ。そこでこの行を外す。
-#![allow(dead_code)]
 
 use std::fmt::Display;
 use std::fs;

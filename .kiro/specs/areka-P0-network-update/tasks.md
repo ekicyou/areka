@@ -56,7 +56,7 @@
   - _Boundary: emo2_boot update_cue（`emo2_boot/mod.rs` は宣言の 1 行だけ）_
   - _Depends: 2_
 
-- [ ] 4. `\![execute,install,url,URL,nar]`
+- [x] 4. `\![execute,install,url,URL,nar]`
 - [x] 4.1 (P) URL から一時フォルダへ落とす部品と、短命の取得スレッドを作る
   - areka 専用の一時フォルダ（OS の一時フォルダの下の `areka\download\`）を作り、取得の前にそこの 7 日より古いファイルを消す（消せなければ `debug!`・消した数を記録）
   - 取得の境界（エンジンの `Fetch`）を受けて本文を `<pid>-<連番>-<URL の末尾の安全な名前>` に書く。名前が空なら `download.nar`。取得の失敗はファイル 0 で失敗を返す
@@ -67,7 +67,7 @@
   - _Boundary: install fetch_url_
   - _Depends: 2_
 
-- [ ] 4.2 台本の引数の検査を `path` と `url` の 2 つの腕へ広げ、受け口の `url` の腕から取得を起こす
+- [x] 4.2 台本の引数の検査を `path` と `url` の 2 つの腕へ広げ、受け口の `url` の腕から取得を起こす
   - 検査の結果を「パス」か「URL」の 2 つの腕にし、`url` は種別が `nar` か省略のときだけ通す。他の種別（`feed`・`homeurl`・`ical`・`ssf`・知らない語）と、空・`http://`／`https://` で始まらない URL を別々の断りで返す。`path` の腕の検査は今日どおり
   - 受け口は `path` の腕を今日どおりに、`url` の腕で 4.1 の取得を起こし（テストは 4.1 の差し替えの口で偽の取得口を差す）、2 つの断りをそれぞれ `warn!` 1 件で何もしない
   - 戻りの型の変更で赤になる既存のテスト 3 本（判断の 6 通り・選ぶ画面・受け口）を新しい型へ書き換える（消さない。`url` を `NotPath` と判定していた行は URL の腕の判定へ）
@@ -183,3 +183,4 @@
 - 3.1: `TargetEnd` は `refs.rs` に在る（`summary_refs` の入力）＝5.1 の手続きは `super::refs::TargetEnd` を使う。`begin_refs` は受けた `dir` を `display()` で書くだけ＝`OnUpdateBegin` の Ref1 を絶対パスにする（`std::path::absolute`）のは 5.1 の対象 1 つの一周の仕事
 - 3.2: `emo2_boot/update_cue.rs` 先頭の `#![allow(dead_code)]` は 7.1（受け口の列への登記）で外す。`updateother` の `--` で始まらない裸の語（正典に無い）は `Refusal::Option` で要求ごと断る。`update,all+ghost` は断らず `[Ghost,Shell,Balloon,Ghost]`（重複はそのまま）
 - 4.1: `install/fetch_url.rs` 先頭の `#![allow(dead_code)]` は 4.2 で外す。偽の取得口は `crate::install::fetch_url_test_support::FakeFetch`（`new().serve(url, bytes)`／`fail(url, err)`・表に無い URL は `NotFound`）。取得口の差し替えは `MakeFetch = Box<dyn FnOnce() -> Result<Box<dyn Fetch>, FetchError> + Send>`（スレッドの中で作る）。`std::env::temp_dir` は一時フォルダの見張り（`log-capture-kit/tests/temp_path_guard_test.rs`）の例外表に載せないと赤＝fetch_url.rs を `ProcessUnique` で登記済み。`capture` は呼んだスレッドだけを捕る＝スレッドの中の記録は中身の関数を同期で呼んで判定する
+- 4.2: 台帳 `sakura-script.toml` の `\![execute,install,path,…]` の行の注記（「url を含む→ warn!（install_cue_unsupported）」「後続 areka-P0-network-update が足す予定」）が古い＝8 で `url` の腕と `install_cue_bad_url`／`install_cue_unsupported_kind` へ直す。受け口の差し替えは `InstallCueSink::with_fetch(tx, StartFetch)`（本番の `new` は `spawn_download`）
