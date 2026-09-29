@@ -174,6 +174,26 @@ fn heart_symbol_follows_text_color() {
     }
 }
 
+/// 1.3・10.2: 色つきの字形は `\f[color]` の文字色に従わない。「😀」を黒と赤で描いた読み戻しが
+/// バイト等価（描画器も面も別）。色つきの画素が在ることも確かめる（単色同士の一致にしない）。3 方式。
+#[test]
+fn emoji_ignores_text_color() {
+    let mut rig = rig_with_emoji_font();
+    let red = || FontColor::new(Some(255), Some(0), Some(0));
+    for mode in MODES {
+        let on_black = render_fresh(&mut rig, mode, "😀", black(), None);
+        let on_red = render_fresh(&mut rig, mode, "😀", red(), None);
+        assert!(
+            colored_count(&on_black) > 0,
+            "{mode:?}: 😀 が色つきの字形で出る（色つきの画素が 1 以上）"
+        );
+        assert!(
+            on_black == on_red,
+            "{mode:?}: 色つきの字形は文字色（黒／赤）で変わらない"
+        );
+    }
+}
+
 /// 列 `x0..x1`（全 y）の画素を数える（`pred` が真のもの・BGRA 密配列）。
 fn count_in_x_band(bytes: &[u8], w: u32, x0: u32, x1: u32, pred: impl Fn(&[u8]) -> bool) -> usize {
     bytes

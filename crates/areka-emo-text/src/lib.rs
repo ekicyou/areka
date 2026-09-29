@@ -96,7 +96,7 @@ pub enum TextLayerError {
 ///   Result ではない・`vendored-models` 同梱データのロードのみ＝ネットワーク/ファイル I/O なし）。
 /// - セグメント呼び出し: `Parser::parse(&self, &str) -> Vec<String>`（**所有** String の
 ///   チャンク列。docs.rs 表示および design.md の `Vec<&str>` 想定は誤り——実 API は owned
-///   String を返す。task 3.2 の glyph-index 写像はこの owned チャンクで `chars().count()`）。
+///   String を返す。glyph-index 写像はこの owned チャンクのバイト長で `segment::assign_items_to_chunks`）。
 /// - `budouy::Parser` は `Sync + Send`（下の `assert_sync`/`assert_send` がコンパイルで証明）
 ///   → キャッシュ機構は `static PARSER: OnceLock<budouy::Parser>` を採用可能
 ///   （`thread_local!` への退避は不要）。
@@ -124,8 +124,8 @@ mod budouy_spike {
         let sentence = "今日はいい天気ですね";
 
         // parse -> Vec<String>（**所有** String のチャンク列。docs.rs/design 想定の
-        // `Vec<&str>` は誤りで、実 API は owned String を返す——task 3.2 の glyph-index
-        // 写像はこの owned チャンクを `chars().count()` で数える）。
+        // `Vec<&str>` は誤りで、実 API は owned String を返す——glyph-index の写像は
+        // この owned チャンクのバイト長で `segment::assign_items_to_chunks` が行う）。
         let first: Vec<String> = parser.parse(sentence);
         let second: Vec<String> = parser.parse(sentence);
 
