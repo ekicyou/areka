@@ -17,7 +17,7 @@
 ## Desired Outcome
 
 - areka が起動すると `127.0.0.1:<port>` で HTTP を受け、`POST /api/mcp/v1` が SSP と同じ振る舞いの MCP サーバとして応える（survey §2 の表の全行）。ツールはまだ 0 本（`tools/list` は空）。
-- クライアントは `claude mcp add --transport http areka http://127.0.0.1:<port>/api/mcp/v1` で登録でき、`initialize`→`tools/list`→`ping` が通る。SSP の `mcp.exe`（stdio 橋・9801 焼き込み）は要らない。
+- クライアントは `claude mcp add --transport http areka http://127.0.0.1:<port>/api/mcp/v1` で登録でき、`initialize`→`tools/list`→`ping` が通る。Claude Desktop は HTTP を直接書けないので、SSP の `mcp.exe` 相当の中継は `mcp-stdio-bridge`（M2 の並走枠）が作る。
 - 待受の失敗（ポート使用中など）はログに理由を 1 行出してアプリは動き続ける（ログ無しの失敗の禁止）。
 
 ## Approach
@@ -52,7 +52,7 @@
 ## Upstream / Downstream
 
 - **Upstream**: なし（α 完成宣言のあと）。
-- **Downstream**: `mcp-tool-entrances` → 各ツールの spec 7 本（roadmap「SSP MCP の移植」）。
+- **Downstream**: `mcp-tool-entrances` → 各ツールの spec 7 本・`mcp-stdio-bridge`（roadmap「SSP MCP の移植」）。
 
 ## Existing Spec Touchpoints
 

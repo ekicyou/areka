@@ -9,7 +9,7 @@ areka へ SSP の MCP サーバを移植する spec 群（`.kiro/steering/roadma
 - SSP 本体が **`127.0.0.1:9801`（SSTP over HTTP と同じ口）** で HTTP を受ける。MCP は `POST /api/mcp/v1`。
 - `GET /api/mcp/help` は設定手順の HTML（`claude_desktop_config.json` の断片）、`GET /api/mcp/v1` は手で JSON-RPC を打つフォーム（`enctype="text/plain"`・`__dummy__mcp__form__flag__=1` と `mcp=<JSON>`）。フォーム送信も通る（実測で `ping` が 200）。
 - `data\mcp.exe`（94 KB）は **stdio ⇔ HTTP の橋**。`127.0.0.1:9801` と `POST /api/mcp/v1` を焼き込んでいる（文字列で確認）＝ポートは変えられない。
-- **areka では橋は要らない**: Claude Code などのクライアントは HTTP の MCP サーバを直接登録できる（`claude mcp add --transport http <名> http://127.0.0.1:<port>/api/mcp/v1`）。
+- **橋が要るのは Claude Desktop**: Claude Code・Cursor は HTTP の MCP サーバを直接登録できる（`claude mcp add --transport http <名> http://127.0.0.1:<port>/api/mcp/v1`）。Claude Desktop は書けない（§6）＝areka も中継を持つ（`mcp-stdio-bridge`）。
 - 能力は `tools` のみ。`resources/list`・`resources/templates/list`・`prompts/list` は空配列で 200（`instructions` の「read-only resources」は実体が無い）。
 
 ## 2. 輸送とプロトコル
@@ -60,3 +60,10 @@ areka へ SSP の MCP サーバを移植する spec 群（`.kiro/steering/roadma
 - `reload` 各対象の成功の本文・`raise_event` で台本が返ったときの本文の形（副作用があるため本調査では打っていない）。
 - `get_active_ghost_list` の複数体の区切り・`get_status` の各旗の出る条件の実例。
 - `get_log` の `update` 種別と `ghost_name` 絞り込みの実例。
+
+## 6. 中継 `mcp.exe` と Claude Desktop（2026-09-29 追記）
+
+- **`mcp.exe` の振る舞い（実測）**: 引数なし。標準入力の 1 行 1 要求を SSP へ流し、応答を 1 行で返す。`initialize`（2025-06-18）→ SSP の応答そのまま・`notifications/initialized` → 出力なし・`ping` → `{}`・`tools/call get_status` → `talking,balloon(0=0/1=0)`・JSON でない行 → `-32700`・`id: null`。その直後の `no/such` には応答が出なかった（終了したのか握りつぶしたのかは未確認）。終了コード 0。
+- **`mcp.exe` の中の文字列**: `POST /api/mcp/v1 HTTP/1.1`・`Host: 127.0.0.1:9801`・`Mcp-Method:`・`Mcp-Name:`・`MCP-Protocol-Version:`・`Server not available`・`No response from server`・`Invalid JSON response from server`・`Unsupported protocol version`・`result.supportedVersions`・`server/discover`＝SSP へは無状態版のヘッダを付けて送り、版の交渉に `server/discover` を使っている様子。
+- **Claude Desktop の JSON 設定は stdio だけ**: Desktop 2.9939.4.0（`C:\Program Files\WindowsApps\Claude_2.9939.4.0_x64__pzs8sxrjxfjjc\app\resources\app.asar`）の検査関数は、`mcpServers` の各項目に `command`（文字列）を必須とし、ほかに `args`・`env`・`extensionId` だけを許す。`url` だけの項目は検査に落ちる。
+- **Claude Desktop のコネクタは 127.0.0.1 へ届かない**: 公式の案内（support.claude.com「Getting started with custom connectors using remote MCP」）は、コネクタの接続が Anthropic のクラウドから行われ、公開インターネットから到達できるサーバが要ると書く。ukadoc の「ブラウザ上で動く AI（claude.ai など）からは 127.0.0.1 に接続できない」と同じ理由。
