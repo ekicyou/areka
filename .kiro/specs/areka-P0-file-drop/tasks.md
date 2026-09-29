@@ -80,7 +80,7 @@
   - _Depends: 1.1, 2.1, 2.3, 3.1_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.8, 3.1, 3.3, 3.5, 3.8, 8.1, 8.2, 9.2, 10.8_
 
-- [ ] 4.2 知らせを今のゴーストへ送り、混ざった投げ込みの順を固定する
+- [x] 4.2 知らせを今のゴーストへ送り、混ざった投げ込みの順を固定する
   - 今のゴーストへの送り口を置き場から取り、GET・応え不要で 1 件ずつ送る。送り口が無ければ `warn!`（切替の途中など）、送れなければ `warn!`（kanade が止まっている）、送れたら要約つきの `info!`。定常かどうかは areka で判定しない
   - 受け手の中で「`OnFileDrop2` 1 回 → フォルダごとの `OnDirectoryDrop` を落とされた順に 1 つずつ → 依頼 1 つ」の順にする
   - バルーン窓のスコープ・混ざった 6 件（実物の書庫を一時フォルダに組む）の順と中身・送り口なし・kanade 停止・存在しない書庫の記録を判定するテスト（設計のテスト 14・15・17・17b・19）と、字面の見張り（テスト 20）を置く
@@ -114,4 +114,4 @@
 - 1.2: `read_dropped_paths` の成功と `Query` の枝は決定論テストでは踏めない（実 HDROP が要る）＝実機 ⑶ で確かめる
 - 2.3: areka は bin だけの crate＝テストの絞り込みは `--lib` でなく `--bin areka <filter>`
 - 3.1 の審査中、全体テストの初回で `install::desk::overwrite_tests::overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again` が 1 度だけ赤（負荷時の時間の読み・単独と再実行は緑・本 spec の配線前）。6.1 で再発したら追う
-- 3.2: `ON_FILE_DROP2`・`ON_DIRECTORY_DROP`・`file_drop2_references`・`directory_drop_references`・`mime_for`・`MIME_TABLE` の仮置きの dead_code 抑止も 4.1/4.2 で外す。テスト 20 の字面の見張りは本番の `file_drop.rs`・`drop_files.rs` だけを読むこと（`file_drop_tests.rs` に 2 語の字面がある）
+- 4.2: 字面の見張り（テスト 20）は `include_str!` で本番の `file_drop.rs` と wintf の `drop_files.rs` だけを読む。送らない 15 語は「直後が `"`」で数える（`"SSP: OnTextDrop"` の変異で赤を確認済み）

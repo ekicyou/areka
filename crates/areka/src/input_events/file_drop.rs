@@ -8,9 +8,11 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use areka_kanade::{KanadeMsg, ShioriMethod};
 use bevy_ecs::prelude::*;
 use wintf::ecs::window::OnFilesDropped;
 
+use crate::ghost_session::GhostSlot;
 use crate::install::judge::SEPARATOR;
 use crate::install::{self, InstallOrder, InstallOrigin};
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
@@ -33,7 +35,8 @@ pub(crate) fn attach_file_drop_receivers(world: &mut World) {
 }
 
 /// 窓に差す受け手（`OnFilesDropped` の署名）。1 回の投げ込みをこの 1 回の呼び出しで終える
-/// （要件 6.5）: スコープ → 振り分け → 問い合わせの失敗の記録 → 受け取りの記録 → 依頼。
+/// （要件 6.5）: スコープ → 振り分け → 問い合わせの失敗の記録 → 受け取りの記録 →
+/// `OnFileDrop2` を 1 回 → `OnDirectoryDrop` を落とされた順に 1 つずつ → 依頼（要件 6.1・6.2）。
 /// 途中で戻るのは窓に印が無いときだけ。依頼はゴーストが定常かどうかを見ずに渡す（要件 3.8）。
 pub(crate) fn on_ghost_files_dropped(world: &mut World, entity: Entity, paths: Vec<PathBuf>) {
     let count = paths.len();
@@ -82,6 +85,22 @@ pub(crate) fn on_ghost_files_dropped(world: &mut World, entity: Entity, paths: V
         elapsed_ms = started.elapsed().as_millis() as u64,
         "[file_drop] 落とされた物を受け取って振り分けました"
     );
+    if !sorted.files.is_empty() {
+        send_event(
+            world,
+            ON_FILE_DROP2,
+            file_drop2_references(&sorted.files, scope),
+            scope,
+        );
+    }
+    for dir in &sorted.dirs {
+        send_event(
+            world,
+            ON_DIRECTORY_DROP,
+            directory_drop_references(dir, scope),
+            scope,
+        );
+    }
     if !sorted.installs.is_empty() {
         // 戻り値の記録は `submit` 自身が出す（`install_order_queued`／`install_order_refused`）。
         install::submit(
@@ -91,6 +110,54 @@ pub(crate) fn on_ghost_files_dropped(world: &mut World, entity: Entity, paths: V
                 origin: InstallOrigin::WindowDrop,
             },
         );
+    }
+}
+
+/// 今のゴーストへ GET・応え不要で 1 件送る（汎用の通知の入口・要件 7.4）。
+///
+/// 送り口は送る時点の置き場から取る。無ければ（切替の途中・結線なしの起動）`file_drop_no_kanade`、
+/// kanade が止まっていれば `file_drop_send_failed` を warn に 1 件残して送らない（送り直さない）。
+/// 定常かどうかは見ない（kanade が定常以外を捨てて記録する・要件 6.3）。
+fn send_event(world: &World, id: &'static str, references: Vec<String>, scope: usize) {
+    let Some(kanade) = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|s| s.kanade().cloned())
+    else {
+        tracing::warn!(
+            event = "file_drop_no_kanade",
+            id,
+            scope,
+            "[file_drop] 今のゴーストへの送り口が無いので、知らせを送りません"
+        );
+        return;
+    };
+    // 要約は Reference0 の要素数と先頭のパス（MIME の並びは載せない）。
+    let reference0 = references.first().map_or("", String::as_str);
+    let summary = (
+        reference0.split(SEPARATOR).count(),
+        reference0.split(SEPARATOR).next().unwrap_or("").to_owned(),
+    );
+    let msg = KanadeMsg::RaiseEvent {
+        id: id.to_owned(),
+        references,
+        method: ShioriMethod::Get,
+        reply: None,
+    };
+    match kanade.send(msg) {
+        Ok(()) => tracing::info!(
+            event = "file_drop_event_sent",
+            id,
+            scope,
+            references = ?summary,
+            "[file_drop] 知らせを今のゴーストへ送りました"
+        ),
+        Err(_) => tracing::warn!(
+            event = "file_drop_send_failed",
+            id,
+            scope,
+            "[file_drop] kanade が止まっているので、知らせを送れません"
+        ),
     }
 }
 
@@ -185,10 +252,8 @@ fn is_archive_ext(path: &Path) -> bool {
 
 // 送るイベント名はこの 2 定数だけ（要件 7.1・8.8）。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnFileDrop2:1
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) const ON_FILE_DROP2: &str = "OnFileDrop2";
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDirectoryDrop:1
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) const ON_DIRECTORY_DROP: &str = "OnDirectoryDrop";
 
 /// `OnFileDrop2` の Reference 3 つ（要件 4.2〜4.4・4.6）:
@@ -196,7 +261,6 @@ pub(crate) const ON_DIRECTORY_DROP: &str = "OnDirectoryDrop";
 ///
 /// 決められない MIME は空文字のまま連結するので区切りは残り、Reference0 と Reference2 の要素数は
 /// 常に等しい。パスは `to_string_lossy` で載せる（正規化も検査もしない・設計で決めたこと 10）。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn file_drop2_references(files: &[PathBuf], scope: usize) -> Vec<String> {
     let paths: Vec<_> = files.iter().map(|p| p.to_string_lossy()).collect();
     let mimes: Vec<_> = files.iter().map(|p| mime_for(p)).collect();
@@ -208,13 +272,11 @@ pub(crate) fn file_drop2_references(files: &[PathBuf], scope: usize) -> Vec<Stri
 }
 
 /// `OnDirectoryDrop` の Reference 2 つ（要件 5.2）: [パス, スコープ番号（十進）]。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn directory_drop_references(dir: &Path, scope: usize) -> Vec<String> {
     vec![dir.to_string_lossy().into_owned(), scope.to_string()]
 }
 
 /// 拡張子（ASCII 大小無視）から MIME を引く（要件 4.5・10.5）。表に無い・拡張子なしは `""`。
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn mime_for(path: &Path) -> &'static str {
     let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
         return "";
@@ -227,7 +289,6 @@ pub(crate) fn mime_for(path: &Path) -> &'static str {
 
 /// 拡張子（小文字）→ MIME の定数表（拡張子 38・MIME 33 種・値は IANA の登録名）。
 /// 広げるときは行を足し、`file_drop_mime_tests.rs` の直書きの数も直す（要件 9.8）。
-#[cfg_attr(not(test), allow(dead_code))]
 const MIME_TABLE: &[(&str, &str)] = &[
     // 画像 8
     ("png", "image/png"),
