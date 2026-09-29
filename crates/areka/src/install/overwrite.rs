@@ -178,6 +178,27 @@ pub(super) fn run_between(world: &mut World) {
         "[install] 降ろした起動中のゴーストのフォルダへ展開しました"
     );
     pending.stage = Stage::Ran(result);
+    // 書き終えたので門の名前を手放す（背景のスレッドは返事を待って止まっている）。定常到達の前に
+    // 終了が始まっても、書く前にやめた書庫として記録させない。展開は UI スレッドで同期に走るので、
+    // 同じ UI スレッドの後始末が展開の最中に始まることはなく、書く段の出入りは門へ知らせない。
+    desk.gate.end();
+}
+
+/// 終了が始まった（`desk::discard_for_exit` から）: 預かった書庫を捨て、宛先のフォルダ名と段の語を
+/// 返す。展開し終えていれば結果を背景のスレッドへ返し、それ以外は返信端を落とす（背景のスレッドは
+/// 閉じた扱いで止まる）。以後の切替の道筋では展開しない。
+pub(super) fn discard(desk: &mut InstallDesk) -> Option<(String, &'static str)> {
+    let pending = desk.overwrite.take()?;
+    let stage = match pending.stage {
+        Stage::Held(_) => "held",
+        Stage::Busy(_) => "busy",
+        Stage::Requested(_) => "requested",
+        Stage::Ran(result) => {
+            reply_to(pending.reply, Overwritten::Ran(result));
+            return Some((pending.folder, "ran"));
+        }
+    };
+    Some((pending.folder, stage))
 }
 
 /// 定常到達: 「展開した」なら結果を背景のスレッドへ返して消す。「切替を頼んだ」のまま予約が消えて

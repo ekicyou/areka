@@ -726,3 +726,7 @@ fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
         },
     }
 }
+
+/// 終了の後始末での窓口の片付け（task 9・要件 8.2・8.5・8.6・11.8）。
+#[path = "desk_exit_tests.rs"]
+mod exit_tests;

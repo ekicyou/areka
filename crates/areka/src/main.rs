@@ -125,7 +125,7 @@ mod alert;
 /// 起動前の解決は `boot_config::resolve_boot` が、記憶の書き込みは boot 成功直後の `on_boot_ok` が結線する。
 mod boot_resolve;
 
-/// `.nar` を入れる手続き（areka-P0-ghost-install）。中身は後続のタスクで足す。
+/// `.nar` を入れる手続き（areka-P0-ghost-install）。
 mod install;
 
 /// 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口（areka-P0-ghost-install 要件 8）。
@@ -300,6 +300,13 @@ fn main() -> Result<()> {
     let run = app.run();
     // 印の判定の材料（`run` は下で `finish_after_run` へ渡すので、成否をここで控える）。
     let run_ok = run.is_ok();
+    // 終了を始める（ghost-install 要件 8）: 背景の仕事の門を閉じ、待っている依頼を捨てる。書いている
+    // 最中の仕事は、降ろして印の始末を済ませた後・告知の前に、ここから数えて上限まで待つ。
+    let exit_budget = areka_kanade::WaitBudget {
+        started: std::time::Instant::now(),
+        limit: exit_wait::EXIT_WAIT_LIMIT,
+    };
+    let closing = exit_wait::begin_close(app.world().borrow_mut().world_mut());
 
     // 置き場の単位を取り出し、最初に終了を指示した出所から告知の場面と印の判定の材料を組む
     // （要件 1.1・1.3・1.12・12.2）。窓は `quit_app` が閉じ、残りは `run()` が壊してから戻るので、
@@ -343,6 +350,9 @@ fn main() -> Result<()> {
                 },
             );
         }
+
+        // 書いている最中の背景の仕事を待つ（印の始末の後＝待つ間に終わらされても印は済んでいる）。
+        closing.wait(exit_budget);
 
         // SHIORI の失敗の告知（1 プロセスに最大 1 回・抑止なら記録だけ・要件 1.1・1.6・1.12）。
         if let Some(scene) = &scene {

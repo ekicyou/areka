@@ -7,9 +7,6 @@
 //!
 //! この部品は `install` を知らない。後続 `network-update` の背景の更新も同じ口で待てる（要件 8.10）。
 
-// 呼び手（`main.rs`・`session_end.rs`・`install/worker.rs`・`install/desk.rs`）を結ぶタスクで外す。
-#![allow(dead_code)]
-
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 

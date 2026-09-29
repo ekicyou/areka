@@ -245,24 +245,26 @@ fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<RawInstallR
     }
 }
 
-/// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 待っている依頼と手元のイベントの頼みを捨てて
-/// 記録に残す（頼みの返信端を落とすので、背景のスレッドは閉じた扱いで止まる）。
+/// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 待っている依頼・手元のイベントの頼み・預かった
+/// 書庫を捨てて記録に残す（頼みの返信端を落とすので、背景のスレッドは閉じた扱いで止まる）。件数は
+/// 捨てた書庫の数（要件 8.5「待っている依頼（まだ始めていない書庫）」）。
 pub(crate) fn discard_for_exit(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };
-    let orders: Vec<InstallOrder> = desk.queue.drain(..).collect();
+    let paths: Vec<PathBuf> = desk.queue.drain(..).flat_map(|o| o.archives).collect();
     let held = desk.held.take();
-    if orders.is_empty() && held.is_none() {
+    let overwrite = overwrite::discard(&mut desk);
+    if paths.is_empty() && held.is_none() && overwrite.is_none() {
         return;
     }
-    let paths: Vec<_> = orders.iter().flat_map(|o| o.archives.iter()).collect();
     tracing::warn!(
         event = "install_pending_discarded",
-        count = orders.len(),
+        count = paths.len(),
         paths = ?paths,
         held = held.map(|h| h.id),
-        "[install] 終了が始まったので、待っている依頼と手元のイベントの頼みを捨てます"
+        overwrite = ?overwrite,
+        "[install] 終了が始まったので、待っている依頼・手元のイベントの頼み・預かった書庫を捨てます"
     );
 }
 
