@@ -213,3 +213,13 @@
 **申し送りの取り込み**: `ghost-shell-balloon-switch`（許可表・`session_mark_verdict`）は上の段落に在り、本節 1・2 で実物へ写した。`update-engine`（09-24）は在る。`alpha-package` からは `dist/README.txt`（本節 4）。
 
 **バグ**: なし（読んだ範囲）。注意: `events_change_tests.rs` が許可表の件数 13 を直書きしている＝許可表に足す spec は必ずこの数を動かす（`shell-balloon-switch` → `ghost-install` → 本仕様の順で 3 度・並走の枝が別々に動かすと黙って合流するので直列で足す）。
+
+## 2026-09-29 着手順の入れ替え（開発者指示）
+
+- **本仕様は `shell-balloon-switch` より先（B7）になった。** `shell-balloon-switch` は B8。
+  - 上の節にある「実装は `shell-balloon-switch` の着地待ち」は、共有ファイル 5 本（`ghost_session.rs`・`emo2_boot/mod.rs`・`consumer_ledger.rs`・`menu/mod.rs`・kanade の許可表と `events_change_tests.rs` の件数の直書き）による直列の話で、機能の前提ではない（roadmap 棚卸⑱ 項目 4＝機能の前提は `ghost-install` の `install_cue.rs` だけ）。直列はそのままで、向きだけが逆になる。
+  - 許可表に足す順は `ghost-install` → `file-drop` → **本仕様** → `shell-balloon-switch`。
+- **要件で確かめること**: 「現ゴースト＋現シェル＋現バルーンの更新」（Desired Outcome 1）の「現シェル・現バルーン」は、シェル・バルーンの切替がまだ無いので、起動時に解いたシェル・バルーンを指す。
+  - 更新後の読み直しは「同じゴーストへの切替」で、シェル・バルーンも読み直されるかを実物で確かめる。
+  - シェル・バルーンの切替を前提にした文言があれば、`shell-balloon-switch` への申し送りへ回す。
+- 並走: 前倒しの `balloon-color-emoji`（`areka-emo-text`・`areka-sakura`）とは共有 0。`Cargo.lock` は、本仕様が `crates/areka` の依存に `areka-update` を足し、`balloon-color-emoji` が `areka-emo-text` の依存を変える可能性がある。触るパッケージの節が別なので、合流で競合しない見込み。
