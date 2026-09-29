@@ -7,6 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::install::judge::SEPARATOR;
+
 /// 振り分けの結果（1 回の投げ込みにつき 1 つ）。
 ///
 /// # 不変条件
@@ -98,6 +100,103 @@ fn is_archive_ext(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("nar") || e.eq_ignore_ascii_case("zip"))
 }
 
+// 送るイベント名はこの 2 定数だけ（要件 7.1・8.8）。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnFileDrop2:1
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) const ON_FILE_DROP2: &str = "OnFileDrop2";
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDirectoryDrop:1
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) const ON_DIRECTORY_DROP: &str = "OnDirectoryDrop";
+
+/// `OnFileDrop2` の Reference 3 つ（要件 4.2〜4.4・4.6）:
+/// [パスを byte 値 1 で連結, スコープ番号（十進）, 同じ並び・同じ数の MIME を byte 値 1 で連結]。
+///
+/// 決められない MIME は空文字のまま連結するので区切りは残り、Reference0 と Reference2 の要素数は
+/// 常に等しい。パスは `to_string_lossy` で載せる（正規化も検査もしない・設計で決めたこと 10）。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn file_drop2_references(files: &[PathBuf], scope: usize) -> Vec<String> {
+    let paths: Vec<_> = files.iter().map(|p| p.to_string_lossy()).collect();
+    let mimes: Vec<_> = files.iter().map(|p| mime_for(p)).collect();
+    vec![
+        paths.join(SEPARATOR),
+        scope.to_string(),
+        mimes.join(SEPARATOR),
+    ]
+}
+
+/// `OnDirectoryDrop` の Reference 2 つ（要件 5.2）: [パス, スコープ番号（十進）]。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn directory_drop_references(dir: &Path, scope: usize) -> Vec<String> {
+    vec![dir.to_string_lossy().into_owned(), scope.to_string()]
+}
+
+/// 拡張子（ASCII 大小無視）から MIME を引く（要件 4.5・10.5）。表に無い・拡張子なしは `""`。
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn mime_for(path: &Path) -> &'static str {
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return "";
+    };
+    MIME_TABLE
+        .iter()
+        .find(|(e, _)| e.eq_ignore_ascii_case(ext))
+        .map_or("", |(_, m)| m)
+}
+
+/// 拡張子（小文字）→ MIME の定数表（拡張子 38・MIME 33 種・値は IANA の登録名）。
+/// 広げるときは行を足し、`file_drop_mime_tests.rs` の直書きの数も直す（要件 9.8）。
+#[cfg_attr(not(test), allow(dead_code))]
+const MIME_TABLE: &[(&str, &str)] = &[
+    // 画像 8
+    ("png", "image/png"),
+    ("jpg", "image/jpeg"),
+    ("jpeg", "image/jpeg"),
+    ("gif", "image/gif"),
+    ("bmp", "image/bmp"),
+    ("webp", "image/webp"),
+    ("ico", "image/vnd.microsoft.icon"),
+    ("svg", "image/svg+xml"),
+    // 音 7
+    ("mp3", "audio/mpeg"),
+    ("wav", "audio/wav"),
+    ("ogg", "audio/ogg"),
+    ("flac", "audio/flac"),
+    ("mid", "audio/midi"),
+    ("midi", "audio/midi"),
+    ("m4a", "audio/mp4"),
+    // 動画 5
+    ("mp4", "video/mp4"),
+    ("webm", "video/webm"),
+    ("avi", "video/x-msvideo"),
+    ("mkv", "video/x-matroska"),
+    ("mov", "video/quicktime"),
+    // 文字 7
+    ("txt", "text/plain"),
+    ("csv", "text/csv"),
+    ("htm", "text/html"),
+    ("html", "text/html"),
+    ("css", "text/css"),
+    ("js", "text/javascript"),
+    ("md", "text/markdown"),
+    // xml・json・pdf 3
+    ("xml", "application/xml"),
+    ("json", "application/json"),
+    ("pdf", "application/pdf"),
+    // 書庫 6（`.nar` は正典「実体はzip」）
+    ("zip", "application/zip"),
+    ("nar", "application/zip"),
+    ("7z", "application/x-7z-compressed"),
+    ("gz", "application/gzip"),
+    ("tar", "application/x-tar"),
+    ("rar", "application/vnd.rar"),
+    // 実行体 2
+    ("exe", "application/vnd.microsoft.portable-executable"),
+    ("dll", "application/vnd.microsoft.portable-executable"),
+];
+
 #[cfg(test)]
 #[path = "file_drop_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "file_drop_mime_tests.rs"]
+mod mime_tests;

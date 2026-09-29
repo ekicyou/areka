@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use areka_nar::{ElementKind, InstallKind, InstallManifest, NarError, RefuseReason};
 
 /// 複数の値の区切り（byte 値 1）。
-const SEPARATOR: &str = "\u{1}";
+pub(crate) const SEPARATOR: &str = "\u{1}";
 
 /// 照合と宛先の判断に要る、今のゴーストの素性。
 #[derive(Debug, Clone, PartialEq, Eq)]

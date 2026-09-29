@@ -228,3 +228,55 @@ fn empty_input_sorts_to_nothing() {
     assert!(sort.files.is_empty() && sort.dirs.is_empty() && sort.installs.is_empty());
     assert!(sort.notes.is_empty() && peeked.is_empty());
 }
+
+// =============================================================================
+// Reference の形（設計のテスト 10・11・要件 4.2〜4.4・4.6・5.2）
+// =============================================================================
+
+/// `OnFileDrop2`: 2 ファイルで長さ 3・区切りは byte 値 1・拡張子なしの MIME は空でも区切りが残る。
+#[test]
+fn file_drop2_references_are_three_with_separators_kept_for_empty_mime() {
+    let refs = super::file_drop2_references(&pb(&[r"C:\d\a.png", r"C:\d\b"]), 1);
+    assert_eq!(
+        refs,
+        [
+            "C:\\d\\a.png\u{1}C:\\d\\b".to_owned(),
+            "1".to_owned(),
+            "image/png\u{1}".to_owned(),
+        ]
+    );
+    assert_eq!(
+        refs[0].split('\u{1}').count(),
+        refs[2].split('\u{1}').count(),
+        "Reference0 と Reference2 は同じ数"
+    );
+}
+
+/// `OnFileDrop2`: 1 ファイルなら区切りは 0 個。スコープは十進。
+#[test]
+fn file_drop2_references_single_file_has_no_separator() {
+    let refs = super::file_drop2_references(&pb(&[r"C:\d\x.NAR"]), 0);
+    assert_eq!(
+        refs,
+        [
+            r"C:\d\x.NAR".to_owned(),
+            "0".to_owned(),
+            "application/zip".to_owned()
+        ]
+    );
+    assert!(refs.iter().all(|r| !r.contains('\u{1}')));
+}
+
+/// `OnDirectoryDrop`: 長さ 2・[パス, スコープ]。
+#[test]
+fn directory_drop_references_are_path_and_scope() {
+    let refs = super::directory_drop_references(Path::new(r"C:\d\ghost"), 12);
+    assert_eq!(refs, [r"C:\d\ghost".to_owned(), "12".to_owned()]);
+}
+
+/// 送るイベント名の 2 定数は正典の綴り。
+#[test]
+fn event_name_constants_are_canon_spelling() {
+    assert_eq!(super::ON_FILE_DROP2, "OnFileDrop2");
+    assert_eq!(super::ON_DIRECTORY_DROP, "OnDirectoryDrop");
+}

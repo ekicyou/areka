@@ -61,7 +61,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 9.3, 10.2, 10.3, 10.6, 10.7_
   - _Boundary: areka input_events file_drop_
 
-- [ ] 3.2 `OnFileDrop2`・`OnDirectoryDrop` の Reference と MIME の表を作る
+- [x] 3.2 `OnFileDrop2`・`OnDirectoryDrop` の Reference と MIME の表を作る
   - インストールの判定が持つ区切りの定数（byte 値 1）を crate の中から使える可視性に上げ、同じ値を 2 か所に持たない
   - `OnFileDrop2` の Reference を 3 つ（パスを区切って連結・スコープ番号・同じ並びと数の MIME を区切って連結）、`OnDirectoryDrop` を 2 つ（パス・スコープ番号）で組む関数を書く。決められない MIME は空でも区切りを残す
   - 設計の MIME の表（拡張子 38・MIME 33 種・`.nar`／`.zip` は `application/zip`）を定数表として持ち、拡張子を大小無視で引く。送るイベント名の 2 定数を正典の URL の行つきで置く
@@ -115,3 +115,4 @@
 - 2.3: areka は bin だけの crate＝テストの絞り込みは `--lib` でなく `--bin areka <filter>`
 - 3.1: `sort_drops` と `ProbeNote` の `#[cfg_attr(not(test), allow(dead_code))]` は仮置き。4.1 で受け手が呼び覚え書きを `warn!` に出すようになったら外す
 - 3.1 の審査中、全体テストの初回で `install::desk::overwrite_tests::overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again` が 1 度だけ赤（負荷時の時間の読み・単独と再実行は緑・本 spec の配線前）。6.1 で再発したら追う
+- 3.2: `ON_FILE_DROP2`・`ON_DIRECTORY_DROP`・`file_drop2_references`・`directory_drop_references`・`mime_for`・`MIME_TABLE` の仮置きの dead_code 抑止も 4.1/4.2 で外す。テスト 20 の字面の見張りは本番の `file_drop.rs`・`drop_files.rs` だけを読むこと（`file_drop_tests.rs` に 2 語の字面がある）
