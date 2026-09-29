@@ -194,6 +194,29 @@ fn no_difference_writes_nothing_and_does_not_read_delete_txt() {
     ran.expect(&head(&[]), [2, 0, 0]);
 }
 
+/// 前の成功した走行が消せずに印を置いた残りは、差分なしの走行でも黙って消える（5.9・9.10）。
+#[test]
+fn unchanged_run_purges_committed_leftover_without_warning() {
+    let f = fixture();
+    fs::write(f.target.join("a.txt"), b"abc").unwrap();
+    let leftover = f.target.join(WORK_DIR).join("999-0");
+    fs::create_dir_all(leftover.join("old")).unwrap();
+    fs::write(leftover.join("old/yaya.dll"), b"old").unwrap();
+    fs::write(leftover.join(crate::work::COMMITTED_MARK), b"").unwrap();
+    let fetch = FakeFetch::new().serve(&url("updates2.dau"), &dau(&[&["a.txt", MD5_ABC]], true));
+
+    let ran = go(HOME, &f.target, &fetch);
+
+    assert!(
+        matches!(ran.result, Ok(UpdateOutcome::Unchanged { .. })),
+        "{:?}",
+        ran.result
+    );
+    assert!(!leftover.exists(), "印つきの残りが消える");
+    assert!(!f.target.join(WORK_DIR).exists(), "空の棚も消える");
+    ran.expect(&head(&[]), [2, 0, 0]);
+}
+
 #[test]
 fn zero_valid_entries_is_unchanged_and_each_invalid_entry_is_warned_once() {
     let f = fixture();

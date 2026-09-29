@@ -116,13 +116,9 @@ fn sweep(shelf: &Path) -> Result<Vec<PathBuf>, Failed> {
         let path = entry.path();
         let removed = match entry.file_type() {
             Ok(kind) if kind.is_dir() => {
-                let mark = path.join(COMMITTED_MARK);
-                if mark.is_file() {
+                if is_committed(&path) {
                     // 成功した確定の残り（写像中の DLL の古い写しなど）。消せなければ黙って次の機会へ。
-                    // 消しかけで印ごと消えることがあるので、残ったら置き直す。
-                    if fs::remove_dir_all(&path).is_err() && path.is_dir() {
-                        let _ = fs::write(&mark, b"");
-                    }
+                    remove_committed(&path);
                     continue;
                 }
                 if has_content(&path.join("old")) {
@@ -139,6 +135,70 @@ fn sweep(shelf: &Path) -> Result<Vec<PathBuf>, Failed> {
         }
     }
     Ok(residue)
+}
+
+/// [`purge_committed`] の結果。
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Purge {
+    /// 消せた走行フォルダ。
+    pub removed: Vec<PathBuf>,
+    /// 印は在るが消せなかった走行フォルダ（中のファイルがまだ開かれている）。
+    /// 棚そのものの中を読めなかったときは棚（`<target>/.update-work`）が 1 件だけ入る。
+    pub held: Vec<PathBuf>,
+}
+
+/// 成功した確定の残り（印 [`COMMITTED_MARK`] の在る走行フォルダ）だけを消す（5.9）。
+///
+/// `<target>/.update-work/` の直下だけを見る。印の無いフォルダ（戻せなかった走行の元の内容）と
+/// フォルダでない物は触らない。棚が無ければ何もしない。何か消せて棚が空になれば棚も消す。
+/// 記録はしない（呼び手が写す）。
+pub fn purge_committed(target: &Path) -> Purge {
+    let shelf = target.join(WORK_DIR);
+    let mut purge = Purge::default();
+    let entries = match fs::read_dir(&shelf) {
+        Ok(entries) => entries,
+        Err(e) if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
+            return purge;
+        }
+        Err(_) => {
+            // 棚はあるのに中を読めない。消せなかった物として呼び手の目に出す。
+            purge.held.push(shelf);
+            return purge;
+        }
+    };
+    for entry in entries.flatten() {
+        // 種別はリンクを辿らずに見る（`sweep` と同じ）。棚の下のジャンクション・シンボリック
+        // リンクを走行フォルダと見なさない＝印の置き直しが棚の外に書くことはない。
+        let is_dir = entry.file_type().is_ok_and(|kind| kind.is_dir());
+        let path = entry.path();
+        if !is_dir || !is_committed(&path) {
+            continue;
+        }
+        if remove_committed(&path) {
+            purge.removed.push(path);
+        } else {
+            purge.held.push(path);
+        }
+    }
+    if !purge.removed.is_empty() {
+        // 他の物が残っていれば消えないだけ（`cleanup` と同じ）。
+        let _ = fs::remove_dir(&shelf);
+    }
+    purge
+}
+
+fn is_committed(dir: &Path) -> bool {
+    dir.join(COMMITTED_MARK).is_file()
+}
+
+/// 印つきのフォルダを消す。消えたら真。
+/// Windows の `remove_dir_all` は消しかけで印を先に消すことがあるので、残ったら置き直す。
+fn remove_committed(dir: &Path) -> bool {
+    if fs::remove_dir_all(dir).is_ok() || !dir.is_dir() {
+        return true;
+    }
+    let _ = fs::write(dir.join(COMMITTED_MARK), b"");
+    false
 }
 
 fn has_content(dir: &Path) -> bool {
