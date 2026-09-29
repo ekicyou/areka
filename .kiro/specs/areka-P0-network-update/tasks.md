@@ -36,7 +36,7 @@
   - _Depends: 1.3_
 
 - [ ] 3. 純粋な部品
-- [ ] 3.1 (P) イベント名・Reference・番号・失敗理由・総括の写しを作る
+- [x] 3.1 (P) イベント名・Reference・番号・失敗理由・総括の写しを作る
   - 19 語のイベント名を、各 1 行の正典の URL の行つきの定数で持つ。ゴーストは `OnUpdate*`、シェル・バルーンは `OnUpdateOther*` の組を種別から選ぶ
   - `useorigin1` の読み（`1` なら 1 始まり・それ以外と返事なしは 0 始まり）、全イベントに同じ値で載せる種別と理由、`OnUpdateProcessExec`・`OnUpdateBegin`・差分の一覧・各ファイルの取得と照合（照合は 1 回の通知から始まりと結果の 2 件）・締め（`none`／`changed` と入れ替えた一覧）・失敗・二重起動（`executing`）の Reference を組む
   - 失敗理由の表は、エンジンの失敗 11 種と取得の失敗 8 種を包む網羅の分岐で、ワイルドカードの腕を置かない。正典に語の無い輸送の失敗は `dns`・`connect`・`tls`・`toolarge`・`http`
@@ -180,3 +180,4 @@
 
 - 1.2: 送るイベントは正典で 19 語（spec の「20 語・43」は数え違いで dce16c5c で 19・42 へ直した）。後続の「19 語」「19 イベント」も同じ数。`events_tests.rs` の凍結の並び（`..._forty_two_...`）にも同じ 19 語が入っている
 - 2: `update/mod.rs` 先頭の `#![allow(dead_code)]` は 6.3（受付の口）で外す。`owner_count`・`briefing.md` の数を書き出す生成器は無い（`ukadoc-survey` は report／report-summary だけ）＝`check` と整合テストの求める値を写す。`delete.rs` の `// ukadoc:` 行にアンカーを足した（境界外・コメントだけ）
+- 3.1: `TargetEnd` は `refs.rs` に在る（`summary_refs` の入力）＝5.1 の手続きは `super::refs::TargetEnd` を使う。`begin_refs` は受けた `dir` を `display()` で書くだけ＝`OnUpdateBegin` の Ref1 を絶対パスにする（`std::path::absolute`）のは 5.1 の対象 1 つの一周の仕事

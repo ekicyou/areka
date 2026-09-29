@@ -9,6 +9,8 @@
 
 use std::path::PathBuf;
 
+mod refs;
+
 /// 更新の対象の種別（Reference の綴り: ghost／shell／balloon）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TargetKind {
