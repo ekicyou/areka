@@ -345,7 +345,7 @@ wave = "A0"
 name = "areka-P0-network-update"
 stage = "B"
 bundle = "更新"
-owner_count = 5
+owner_count = 30
 wave = "A4"
 
 [[spec]]

@@ -52,7 +52,7 @@
 ### Allowed Dependencies
 - 依存の向き: `areka-update`・`areka-ghost`・`areka-kanade`・`areka-actor`・`areka-parsers` → `areka`（bin）。本体の中は `update/refs.rs`（純粋・`areka_update` の型だけ）→ `update/procedure.rs`（純粋・口の trait）→ `update/worker.rs`（スレッド・本物の口・エンジン）→ `update/desk.rs`（World）→ `update/mod.rs`（受付・登録）→ 入口（`emo2_boot/update_cue.rs`・`menu/update_frame.rs`）。worker と desk の間の頼みの型 `DeskAsk` は `worker.rs` が定義し `desk.rs` が読む（`install/` と同じ）。
 - `exit_wait.rs` は `update/` を知らない。門を使うのは `worker.rs`（`begin`・`enter_write`・`leave_write`・`end`）と `desk.rs`（`is_closing`）と、門を作って登記する `mod.rs` の `register` だけ。手続き（`procedure.rs`・`refs.rs`）は門を知らない。
-- `desk.rs` が `ghost_switch.rs` から使うのは `request_ghost_switch`・`SwitchRequest`・`GhostSpec`・`SwitchInFlight` だけ。`ghost_switch.rs` が `update/` から使うのは `desk::on_steady` だけ。
+- `desk.rs` が `ghost_switch.rs` から使うのは `request_ghost_switch`・`SwitchRequest`・`GhostSpec`・`SwitchInFlight`・`SwitchVerdict`（読み直しの判定を記録の水準へ分ける）だけ。`ghost_switch.rs` が `update/` から使うのは `desk::on_steady` だけ。
 - `update/refs.rs` は `install::judge::SEPARATOR`（byte 値 1）を借りる（同じ値を 2 か所に持たない・`input_events/file_drop.rs` が同じ借り方の前例）。
 - `install/fetch_url.rs` が使うのは `areka_update::{Fetch, WinHttpFetch, FetchError}` と `install::{RawInstallRequest, InstallOrigin}` だけ。更新の窓口・背景スレッドとは共有 0。
 - 足す依存: `crates/areka/Cargo.toml` に `areka-update = { path = "../areka-update" }`。外部クレートの追加 0・本番コードが読む環境変数の追加 0（要件 8.6）。
@@ -83,7 +83,7 @@
 - **切替の保留**（`schedule/change.rs` の `on_change_ghost`）。`Steady { talk: Some }` で受けた要求は `pending_change` に控え、そのトークの完了で `consume_pending` が始める。`raise_event: false` なら `begin_change` は `OnGhostChanging` も `OnClose` も送らず `Unloading { CloseSilent }`。UI 側の入口 `request_ghost_switch(world, SwitchRequest { ghost: GhostSpec::Folder(..), raise_event, origin })`（`emo2_boot/ghost_switch.rs`）は予約 `SwitchInFlight` を立て、`switch_to` が `take_down` → `close_windows_for_restart` → `install::desk::run_overwrite_between` → `boot_into` を通す。`GhostSpec::Folder` はフォルダ名の完全一致（大文字小文字を区別）で目録を引く。読み直しの後の起動の根は `boot_root`（`schedule/boot.rs`）の `BootOrigin::ChangedFrom` → `OnGhostChanged`。定常到達 `KanadeNotice::Steady` は `on_notice` が受け、末尾で `install::desk::on_steady` を呼ぶ。
 - **インストールの雛形**（`crates/areka/src/install/`）。受付 `submit`・窓口 `InstallDesk`（NonSend・プロセスに 1 つ・毎 tick の取り出し `drain` を `Input` の段の `dispatch_pointer_events` の後に登録）・背景スレッド `spawn_worker`（`areka_actor::spawn_actor("install", …)`＋`run_inbox`）・頼み `DeskAsk`＋返信端・純粋な手続き `run_order(&InstallOrder, &mut dyn InstallPorts)`・偽の口 `FakePorts`（`procedure_test_support.rs`）。イベントは窓口が「送る時点の置き場のゴースト」の送出端で送り（`send_held`）、定常でなければ次の定常到達で送り直す。
 - **終了で待つ口**（`exit_wait.rs`）。`WorkGate { begin, enter_write, leave_write, end, is_closing }`・`register_gate(world, name, gate, on_close: fn(&mut World))`・`begin_close(world) -> ClosingWaits`・`ClosingWaits::wait(WaitBudget)`。`EXIT_WAIT_LIMIT`＝3 秒。呼び手は `main.rs`（`run()` が戻った直後・`closing.wait(exit_budget)`）と `session_end.rs` の `end_session_from`（ゴーストを降ろす待ちと同じ `WaitBudget { started, limit }`）。登記は今 `install` の 1 本。上限に達したときの本文は「元の中身が `<根>/.nar-work/` の下に残っているかもしれない」とインストール固有の語。
-- **台本の受け口**（`emo2_boot/change_cue.rs`・`install_cue.rs`）。`dola::cue::CueSink` の `emit(&mut self, cue: TalkCue)` で `cue.command.as_command_carrier()` → `(name, params)`。自己選別 → 引数の検査 → 送出端へ 1 件。担当は `consumer_ledger.rs` の `canonical()` に `try_register(name, selector, CommandConsumer::…)` で登記（今 10 行・同じ名前に `None` と `Some` の選別子は同居できない）。受け口は `wire_emo2_boot`（`emo2_boot/mod.rs`）の `sinks` の列（今 9 本）に並べる。`install/judge.rs` の `script_request(&[&str]) -> Result<PathBuf, ScriptRefusal>` は `["path", p, ..]` だけを通し、`url` は `ScriptRefusal::NotPath { found }`。
+- **台本の受け口**（`emo2_boot/change_cue.rs`・`install_cue.rs`）。`dola::cue::CueSink` の `emit(&mut self, cue: TalkCue)` で `cue.command.as_command_carrier()` → `(name, params)`。自己選別 → 引数の検査 → 送出端へ 1 件。担当は `consumer_ledger.rs` の `canonical()` に `try_register(name, selector, CommandConsumer::…)` で登記（今 13 行＝本仕様の前の 10 行に更新の 3 行を足した・同じ名前に `None` と `Some` の選別子は同居できない）。受け口は `wire_emo2_boot`（`emo2_boot/mod.rs`）の `sinks` の列（今 10 本＝本仕様の前の 9 本に `UpdateCueSink` を足した）に並べる。`install/judge.rs` の `script_request(&[&str]) -> Result<PathBuf, ScriptRefusal>` は `["path", p, ..]` だけを通し、`url` は `ScriptRefusal::NotPath { found }`。
 - **メニュー**（`menu/mod.rs`）。`Frame::Update` は `Frame::ORDER` の 4 番目。`register(world, Frame, Supplier)`。供給関数は `Fn(&World, &MenuContext) -> MenuItem`（同期・メニューを出すたびに呼ばれる）。`captions.rs` の `FRAME_CAPTIONS` に `("updatebutton.caption", Frame::Update, "ネットワーク更新")` が在り、`ALLOWED_RESOURCE_IDS` に `updatebutton.caption` は既に在る。登記の呼び手は `ghost_session.rs` の `boot_wired`（`menu::install_frame::register(world)` の隣）。
 - **今の対象**。ゴースト＝`GhostSlot`（`ghost_session.rs`）の `GhostSession::ghost_dir()`・名前は `names()`（`GhostNames`）。フォルダ名は `BootContext.current.ghost.folder`（`boot_config.rs`・argv の起動では `None`）。シェル＝`GhostSession::runtime().mount().shell.dir`。バルーン＝`BootContext.current.balloon.dir`。名前で引く目録は `areka_ghost::catalog::list_shells(ghost_dir)`（`menu,hidden` を落とす）・`list_balloons(root)`（`identity.name`）。`descript.txt` の単独の鍵の読み手は `sakura_name`・`install_accept`（`master_descript_keys` 経由・私有の `read_descript`）。`homeurl` の読み手は 0。
 - **文書**。`dist/README.txt` の 2 行（「シェル・バルーンの切り替え、ネットワーク更新の項目は…」「…できません: シェル・バルーンの切り替え、ネットワーク更新。」）。`doc/COMPAT_ARCHITECTURE.md` §8 の表（項目・裁量・根拠・出典 spec）。台帳の行の形は `[entry."…"]` に `status`・`introduced`・`owner`・`priority`・`values`・`links`・`note`。
@@ -185,8 +185,8 @@ graph TB
 crates/areka/src/
 ├── update/
 │   ├── mod.rs                # 依頼の型 UpdateOrder・TargetSpec・TargetKind・UpdateReason・SummaryKind・RawUpdateRequest・受付 submit・系の登録 register・子の宣言
-│   ├── refs.rs               # 純粋: イベント名 19 語（ukadoc の行つき）・Reference の組み立て・useorigin1 の読み替え・失敗理由の表・総括の Reference
-│   ├── procedure.rs          # 手続き（要求 1 件の一周・対象 1 つの一周）と口 UpdatePorts・Raised・EngineRun・TargetEnd
+│   ├── refs.rs               # 純粋: イベント名 19 語（ukadoc の行つき）・Reference の組み立て・useorigin1 の読み替え・失敗理由の表・総括の Reference・対象 1 つの終わり方 TargetEnd（総括の写しの入力）
+│   ├── procedure.rs          # 手続き（要求 1 件の一周・対象 1 つの一周）と口 UpdatePorts・Raised・EngineRun・OrderEnd
 │   ├── worker.rs             # スレッド update・本物の口 KanadePorts（送出端・門・エンジン）・窓口への頼み DeskAsk
 │   └── desk.rs               # UI 側の窓口: 対象の解決・段（Idle/AwaitingExec/Running）と預かり 1 枠・homeurl の写し・二重起動の断り・読み直しの要求・終了で捨てる
 ├── install/fetch_url.rs      # \![execute,install,url] の取得: 一時フォルダ・7 日の掃除・短命のスレッド install-fetch
@@ -551,14 +551,16 @@ pub(crate) enum RawUpdateRequest {
 /// 受付の判定。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SubmitVerdict { Started, /// `AwaitingExec` の間に届き、預かった（答えが出てから始めるか断る）。
-    Held, NoDesk, Closing, Executing, NotSteady, NoContext, NoTargets }
+    Held, NoDesk, Closing, Executing, NotSteady, NoContext, NoTargets,
+    /// 背景スレッドが居ない（仕事を渡せなかった・`error!(update_worker_gone)`）。次の依頼で起こし直す。
+    WorkerGone }
 
 /// 依頼を手続きへ渡す唯一の口（UI スレッド）。対象を解き、送出端の写しを取り、背景スレッドへ渡す。
 pub(crate) fn submit(world: &mut World, raw: RawUpdateRequest, reason: UpdateReason) -> SubmitVerdict;
 /// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後）へ登録し、門 "update" を登記する（プロセスに 1 回）。
 pub(crate) fn register(world: &mut World);
 ```
-- `submit` の判定の順: 窓口が無い → `NoDesk`／`gate.is_closing()` → `Closing`／段が `Running`、または `AwaitingExec` で預かりが埋まっている → `Executing`（`refuse_executing` で `OnUpdateFailure` を 1 件・`warn!(update_refused, verdict = "executing")`）／段が `AwaitingExec` で預かりが空 → `Held`（`(raw, reason)` を預かる・`info!(update_request_held)`・対象はまだ解かない）／`SwitchInFlight` が在る → `NotSteady`／置き場に送出端が無い・`BootContext` が無い → `NoContext`／解いた対象が 0 → `NoTargets`。どの断りも `warn!(update_refused)` を 1 件。`Started` は `info!(update_order_started, origin, targets)` の上で、理由が `Manual` なら段を `AwaitingExec` に、`Script` なら `Running` にする（台本の入口は `OnUpdateProcessExec` を送らないので待つ段が無い）。
+- `submit` の判定の順: 窓口が無い → `NoDesk`／`gate.is_closing()` → `Closing`／段が `Running`、または `AwaitingExec` で預かりが埋まっている → `Executing`（`refuse_executing` で `OnUpdateFailure` を 1 件・`warn!(update_refused, verdict = "executing")`）／段が `AwaitingExec` で預かりが空 → `Held`（`(raw, reason)` を預かる・`info!(update_request_held)`・対象はまだ解かない）／`SwitchInFlight` が在る → `NotSteady`／置き場に送出端が無い・`BootContext` が無い → `NoContext`／解いた対象が 0 → `NoTargets`。どの断りも `warn!(update_refused)` を 1 件。背景スレッドへ仕事を渡せなければ `WorkerGone`（`error!(update_worker_gone)`・窓口は取っ手を捨て、次の依頼で `debug!(update_worker_spawned)` の上で起こし直す・段は動かさない）。`Started` は `info!(update_order_started, origin, targets)` の上で、理由が `Manual` なら段を `AwaitingExec` に、`Script` なら `Running` にする（台本の入口は `OnUpdateProcessExec` を送らないので待つ段が無い）。
 - `RawUpdateRequest::Other` の総括は `ResultEx`、`Current` は `Result`。理由はメニュー `Manual`・台本 `Script`。
 
 #### 窓口（`update/desk.rs`）
@@ -578,6 +580,8 @@ pub(crate) struct UpdateDesk {
     ghost_homeurl: Option<String>,
     /// 照会の返事待ち（高々 1 件）。
     homeurl_query: Option<ReplyReceiver<Vec<(&'static str, ResourceOutcome)>>>,
+    /// 背景スレッドを起こすときに渡す取得口の作り方（既定 `winhttp_fetch()`・テストは起こす前に差す）。
+    pub(super) new_fetch: NewFetch,
 }
 /// 手続きの段。`Idle`＝走っていない／`AwaitingExec`＝メニューの要求が `OnUpdateProcessExec` の答えを
 /// 待っている／`Running`＝標準の手続きが走っている。
@@ -624,7 +628,9 @@ pub(crate) enum DeskAsk {
 }
 
 /// 背景スレッド `update` を起こし、仕事の送出端と取っ手を返す（窓口が最初の依頼で 1 度だけ呼ぶ）。
-pub(crate) fn spawn_worker(desk: Sender<DeskAsk>, gate: Arc<WorkGate>) -> (Sender<UpdateJob>, ActorHandle);
+/// 取得口の作り方（対象ごとに呼ぶ）。本番は `winhttp_fetch()`・テストは偽の取得口。
+pub(crate) type NewFetch = Arc<dyn Fn() -> Result<Box<dyn Fetch>, FetchError> + Send + Sync>;
+pub(crate) fn spawn_worker(desk: Sender<DeskAsk>, gate: Arc<WorkGate>, new_fetch: NewFetch) -> (Sender<UpdateJob>, ActorHandle);
 
 /// 本物の口: kanade へ直接送り、門に出入りし、エンジンを回す。
 pub(crate) struct KanadePorts { kanade: Sender<KanadeMsg>, gate: Arc<WorkGate>, desk: Sender<DeskAsk> }
@@ -632,7 +638,7 @@ impl UpdatePorts for KanadePorts { … }
 ```
 - `raise`: `gate.is_closing()` なら送らず `Closed`。`RaiseEvent { reply: Some }` を送り `recv()`。`Script`→`Raised::Script`／`NoReply`→`NoReply`／`NotSteady`→`warn!(update_not_steady)` で `Closed`／`NotAllowed`→`error!(update_event_not_allowed)` で `NoReply`（許可表の漏れ＝起きないはずの形）／`Failed`→`error!(update_event_failed)` で `Closed`／送出の `Err`・返事の `Dropped`→`debug!(update_kanade_gone)` で `Closed`。
 - `resources`: `ResourceQuery { ids: vec!["homeurl", "useorigin1"], reply }` を送り `recv()`。`Value` は空でなければ `Some`、`NoContent`・`Failed` は `None`（`Failed` は `warn!(update_resource_failed)`）。送れなければ `None` を返す前に `debug!`。
-- `run_engine(&self, homeurl, target, observe)`: `gate.begin(label)` が偽 → `Closed`。`WinHttpFetch::new()` が `Err(e)` → `error!(update_fetch_unavailable, error = %e)` の上で `gate.end()`・`Unavailable(e)`。`gate.enter_write()` が偽 → `gate.end()`・`Closed`。`run(&UpdateRequest { homeurl, target }, &fetch, observe)` → `gate.leave_write()`・`gate.end()`・`Done(result)`。
+- `run_engine(&self, homeurl, target, observe)`: `gate.begin(label)` が偽 → `debug!(update_gate_closed)`・`Closed`。取得口の作り方（本番は `WinHttpFetch::new()`）が `Err(e)` → 記録せずに `gate.end()`・`Unavailable(e)`（`error!(update_fetch_unavailable)` は手続きの `run_target` が 1 件だけ残す）。`gate.enter_write()` が偽 → `gate.end()`・`debug!(update_gate_closed)`・`Closed`。`run(&UpdateRequest { homeurl, target }, &fetch, observe)` → `gate.leave_write()`・`gate.end()`・`Done(result)`。
 - `request_reload`: `desk.send(DeskAsk::Reload { ghost_dir })`（返事は待たない）。
 - `standard_started`: `desk.send(DeskAsk::Started)`（返事は待たない）。
 - スレッドの本体: `spawn_actor("update", …)`＋`run_inbox` で `UpdateJob` を 1 件ずつ受け、`KanadePorts` を作って `run_order` を走らせ、`debug!(update_order_done, ends)` の後に `DeskAsk::OrderDone`。
@@ -671,7 +677,8 @@ pub(crate) enum EngineRun {
     Closed,
 }
 
-/// 対象 1 つの終わり方。
+/// 対象 1 つの終わり方（定義は `refs.rs`＝総括の写し `summary_refs` の入力なのでそこに置く。手続きは
+/// `super::refs::TargetEnd` を使う）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TargetEnd {
     Changed(usize), Unchanged,
@@ -842,16 +849,22 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 | 段 | event |
 |---|---|
 | 要求を受けた・預かった・断った・段が動いた | `update_order_started`・`update_request_held`・`update_refused`・`update_stage`（`debug!`・遷移） |
-| 対象を解いた・飛ばした | `update_target_resolved`・`update_target_skipped` |
+| 窓口の取り出し | `update_desk_raw`（`debug!`・入口からの生の要求）・`update_desk_ask`（`debug!`・背景スレッドの頼み） |
+| 背景スレッド | `update_worker_spawned`（`debug!`・最初の依頼か起こし直し）・`update_worker_gone`（`error!`・仕事を渡せない＝`SubmitVerdict::WorkerGone`）・`update_desk_gone`（`debug!`・窓口が居ないので頼みを落とす）・`update_order_done`（`debug!`・依頼 1 件の終わり方） |
+| 対象を解いた・飛ばした | `update_target_resolved`（`debug!`）・`update_target_skipped`（`warn!`・`reason`＝`no_homeurl`〔手続き・更新先が無い〕／`no_folder`〔フォルダが無い〕／`no_shell`〔今のシェルのフォルダを知らない〕／`name_not_found`〔`updateother` の名前を引けない〕） |
+| 要求 1 件の始まり | `update_order_begin`（理由・対象の数・ゴーストのフォルダ） |
 | `OnUpdateProcessExec` | `update_process_exec`（`answered`） |
 | 照会 | `update_resources`（`homeurl` の有無・`useorigin1`）・`update_resource_failed` |
-| 対象の始まり・進捗・終わり | `update_target_begin`・`update_progress`（`debug!`）・`update_target_done`・`update_failed`・`update_leftover`・`update_fetch_unavailable` |
+| 定常到達の `homeurl` の照会（灰色の判定の写し） | `update_homeurl_unqueried`（`debug!`・kanade へ照会できない）・`update_homeurl_copied`（`debug!`）・`update_homeurl_absent`（`debug!`・値が無い）・`update_homeurl_query_failed`（`warn!`・返事の失敗・取り落とし）・`update_query_discarded`（`debug!`・終了で返事待ちを捨てた） |
+| 対象の始まり・進捗・終わり | `update_target_begin`・`update_absolute_failed`（`warn!`・フォルダを絶対パスにできずそのまま載せる）・`update_progress`（`debug!`）・`update_target_done`・`update_failed`・`update_leftover`・`update_fetch_unavailable`（手続きの `run_target` だけが残す） |
+| エンジンの門 | `update_gate_closed`（`debug!`・終了が始まっていてエンジンを回さない） |
 | イベント | `update_event`（名前と応えの有無）・`update_event_dropped`・`update_event_failed`・`update_event_not_allowed`・`update_not_steady`・`update_kanade_gone` |
 | 総括 | `update_summary` |
-| 読み直し | `update_reload_requested`（判定つき）・`update_reload_skipped`（理由つき） |
+| 読み直し | `update_reload_requested`（判定つき）・`update_reload_skipped`（`warn!`・`reason`＝`closing`〔終了が始まった・窓口が無い〕／`switching`〔切替の予約が在る〕／`other_ghost`〔置き場のゴーストが依頼時と違う〕／`argv`〔コマンドライン引数で始めた〕） |
 | 終了 | `update_abandoned`・`exit_wait_abandoned`・`exit_wait_done`・`exit_wait_timeout` |
-| 受け口・メニュー | `update_cue_skip`・`update_cue_unopenable`・`update_cue_refused`・`update_cue_selector_ignored`・`update_cue_send_failed`・`update_menu_no_desk` |
-| URL の取得 | `install_fetch_begin`・`install_fetch_done`・`install_fetch_failed`・`install_fetch_send_failed`・`install_fetch_swept`（消した数） |
+| 受け口・メニュー | `update_cue_skip`・`update_cue_unopenable`・`update_cue_refused`・`update_cue_selector_ignored`・`update_cue_send_failed` |
+| URL の取得 | `install_fetch_begin`・`install_fetch_done`・`install_fetch_failed`・`install_fetch_send_failed`・`install_fetch_swept`（消した数）・`install_fetch_sweep_skipped`（`debug!`・一時フォルダを読めない・古いファイルを消せない） |
+| `\![execute,install,…]` の受け口 | `install_cue_bad_url`（URL が空か `http://`／`https://` で始まらない）・`install_cue_unsupported_kind`（種別が `nar` でも省略でもない）・`install_cue_unsupported`（第 2 引数が `path` でも `url` でもない） |
 
 ## Testing Strategy
 

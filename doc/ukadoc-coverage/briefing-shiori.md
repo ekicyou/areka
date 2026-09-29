@@ -161,6 +161,8 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 
 > **2026-09-29 の追記——群 1 と群 2 の件数はもう現状ではない。** 仕様 `areka-P0-ghost-install` が、群 2 にあった `OnInstallBegin`・`OnInstallComplete`・`OnInstallCompleteEx`・`OnInstallCompleteAll`・`OnInstallFailure`・`OnInstallRefuse`・`OnGhostTermsAccept`・`OnGhostTermsDecline` の 8 件をインストールの手続きから実際に送るようにし、台帳のこの 8 行を**実装済み**へ移して自分を担当として登記した（許可表 `ALLOWED_EVENT_IDS` は 21 語になった）。8 件の共通 note は群 1 の形に、送る場面・Reference・記録・名前の定義（`crates/areka/src/install/procedure.rs` の定数）を足したものになっている。`OnInstallReroute` は送らない（areka は 1 度に 1 体）ので群 2 に残る。上の「件数」は調査時点の写しで、数え直していない。いまの状態は台帳 `ledger/shiori.toml` と報告 `report/shiori.md` が正本である。
 
+> **2026-09-30 の追記——群 2 の件数はさらに動いた。** 仕様 `areka-P0-network-update` が、群 2 にあった更新の 19 件（`OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`・`OnUpdateComplete`・`OnUpdateFailure` と、その `OnUpdateOther*` の 8 件・`OnUpdateResult`・`OnUpdateResultEx`）を右クリックのメニューの「ネットワーク更新」と台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` からの更新の手続きで実際に送るようにし、台帳のこの 19 行を**実装済み**へ移して自分を担当として登記した（許可表 `ALLOWED_EVENT_IDS` は 42 語になった）。19 件の共通 note は群 1 の形に、送る場面・Reference・記録・名前の定義（`crates/areka/src/update/refs.rs` の定数）を足したものになっている。`OnUpdateCheckComplete`・`OnUpdateCheckFailure`・`OnUpdateCheckResult`・`OnUpdateCheckResultEx`（更新オプション `checkonly` の系）・`OnUpdateResultExplorer`（ゴーストエクスプローラが無い）・`OnUpdatedataCreating`・`OnUpdatedataCreated`（更新定義ファイルを作る側）の 7 件は送らないので群 2 に残り、台帳の note に送らない理由を書き添えた。上の「件数」は調査時点の写しで、数え直していない。
+
 ---
 
 ### 群 2a — M1 で意図的に発火させていないバルーンのイベント
@@ -792,6 +794,8 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
 
 > **2026-09-29 の追記——この一覧の 8 件はもう送っている。** `B5`／記憶の OnInstallBegin・OnInstallComplete・OnInstallCompleteAll・OnInstallCompleteEx・OnInstallFailure・OnInstallRefuse の 6 件と、`D2`／テーマなしの OnGhostTermsAccept・OnGhostTermsDecline の 2 件は、仕様 `areka-P0-ghost-install` が右クリックのメニューの「インストール…」と台本 `\![execute,install,path,…]` からのインストールで送るようにし、台帳で**実装済み**になった。上の「導入と配布（9 件）」のうち、いまも伝わらないのは OnInstallReroute（areka は 1 度に 1 体なので送らない）と OnNarCreated・OnNarCreating（フォルダから `.nar` を作る仕組みが無い）の 3 件である。一覧そのものは調査時点の写しのまま残した。
 
+> **2026-09-30 の追記——`B1`／更新の 26 件のうち 19 件ももう送っている。** 仕様 `areka-P0-network-update` が右クリックのメニューの「ネットワーク更新」と台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` からの更新で送るようにし、台帳で**実装済み**になった。いまも送らないのは、更新オプション `checkonly` の系の `OnUpdateCheckComplete`・`OnUpdateCheckFailure`・`OnUpdateCheckResult`・`OnUpdateCheckResultEx`（areka は更新オプションを受けない）、`OnUpdateResultExplorer`（ゴーストエクスプローラが無い）、`OnUpdatedataCreating`・`OnUpdatedataCreated`（更新定義ファイルを作る側）の 7 件である。一覧そのものは調査時点の写しのまま残した。
+
 ---
 
 ### 群 2a — バルーンの開閉を知らせない 3 件
@@ -884,6 +888,8 @@ id は `ukadoc:list_shiori_resource:<名前>:1` の形。名前は次の 27 件�
 
 （`-` と、長い符号化された名前の 1 件は、正典の見出しがそのまま id になったものである。`char_2a` の
 `_2a` は `*` を符号化した綴りで、`char*.` を指す。）
+
+> **2026-09-30 の追記——この一覧の `B1`／更新の `homeurl`・`useorigin1` はもう語彙だけではない。** 仕様 `areka-P0-network-update` が許可表 `ALLOWED_RESOURCE_IDS` に 2 語を足し（12 語になった）、更新の手続きが標準の更新を始めるときに 1 回の照会でまとめて引く（`homeurl` は今のゴースト本体の更新先、`useorigin1` はファイルの番号の数え始め）。`homeurl` はゴーストが定常に達するたびにも引き、メニューの「ネットワーク更新」を選べるかの判定に使う。台帳のこの 2 行は**実装済み**で、担当は `areka-P0-network-update`。`other_homeurl_override` は照会に Reference が要り、kanade のリソースの照会にその欄が無いので送らず、語彙だけのまま残る（台帳の note に理由を書き添えた）。上の「27 件」とこの一覧は調査時点の写しで、数え直していない。
 
 ---
 

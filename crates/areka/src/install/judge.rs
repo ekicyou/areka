@@ -190,6 +190,8 @@ pub(crate) enum ScriptRequest {
     /// `path` の腕: 手元の書庫の絶対パス。
     Path(PathBuf),
     /// `url` の腕: `http://`／`https://` で始まる URL（種別は `nar` か省略）。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1
     Url(String),
 }
 

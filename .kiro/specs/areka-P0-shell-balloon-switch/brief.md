@@ -4,6 +4,13 @@
 > 正典の語彙と Ref の一覧は親 brief（`.kiro/specs/completed/areka-P0-ghost-shell-balloon-switch/brief.md` の Desired Outcome 2・3）が正本。本 brief は**再測定で崩れた前提と、切り出したあとの境界**だけを書く。
 > 本文の file:line は**起票時の実測値**（2026-09-20・main `fe157df1`）。着手時に必ず引き直すこと。
 
+## 2026-09-30 `network-update` からの申し送り（要件 8.8）
+
+1. **許可表の件数**: `schedule/events.rs` の `ALLOWED_EVENT_IDS` は **42 件**（`file-drop` の 23 に、`network-update` が更新の 19 語を足した）。下の `file-drop` の申し送り 1 の「23 件・3 件足して 26」は古い＝本仕様が 3 件足すなら **45**。直書きは `events_change_tests.rs` の `assert_eq!(ALLOWED_EVENT_IDS.len(), 42)` と `events_tests.rs` の `allowed_event_ids_are_exactly_the_forty_two_and_exclude_ontalk_onhour`（42 語の完全一致）の 2 か所。リソースの許可表 `schedule/resources.rs` の `ALLOWED_RESOURCE_IDS` は **12 語**（`homeurl`・`useorigin1` を足した）で、同じファイルの `allowed_resource_ids_are_exactly_the_twelve_names` が固定する
+2. **「今のシェル・今のバルーン」を切替後の物へ読み替える**（要件 1.4 の 3 つ）: 更新の対象の解決 `crates/areka/src/update/desk.rs` の `resolve_targets`（中身は同じファイルの `here`＝World から写すだけ・`resolve`＝フォルダを読む）は、今のシェルを `GhostSession::runtime().mount().shell.dir`（起動時に解いたシェル）、今のバルーンを `BootContext.current.balloon.dir`（起動時に解いたバルーン）から取っている。メニューの「ネットワーク更新」を選べるかの判定 `can_update` も同じ `here` を通る。本仕様が実行中にシェル・バルーンを差し替えるなら、この 2 つが差し替えた後の物を指すようにする（差し替えの相が `mount()` と `BootContext` を書き換えるなら手当て 0、別の場所に持つなら `here` を読み替える）。判定は `crates/areka/src/update/desk_resolve_tests.rs` の `current_three_resolve_dirs_names_and_fallback_homeurls`・`resolve_targets_reads_the_slot_and_the_boot_context`
+3. **共有 5 本の今の行数と中身**: 消費者台帳 `consumer_ledger.rs` の `canonical()` は **13 行**（`updatebymyself`・`update`・`updateother` を選別子なしで `CommandConsumer::UpdateSink` に登記。`update` は第 1 引数によらず更新の受け口が担当するので、本仕様が `\![update,…]` を別の担当へ回すことは無い）。`wire_emo2_boot` の受け口の列は **10 本**（10 本目が `UpdateCueSink`）。メニューは `Frame::Update` に `menu::update_frame::register` を `ghost_session.rs` の `boot_wired` から登記する（起こすたびにやり直す）
+4. **読み直しは既存の切替の入口を「同じフォルダ・知らせなし」で呼ぶ**: 更新で何か変わると `desk.rs` の `reload` が `request_ghost_switch(world, SwitchRequest { ghost: GhostSpec::Folder(今のフォルダ), raise_event: false, origin: ChangeOrigin::Automatic })` を 1 回呼び、ゴースト・シェル・バルーンを起動時と同じ解き方で全部読み直す。本仕様が切替の入口や `boot_into` の解き方を変えるなら、更新の後の読み直しで差し替えたシェル・バルーンが保たれるかを確かめる（判定は `desk_reload_tests.rs` の `a_reload_of_the_running_ghost_switches_to_itself_silently_and_ignores_a_midway_switch`）
+
 ## 2026-09-29 `file-drop` からの申し送り（完了時）
 
 1. **許可表の件数**: `schedule/events.rs` の `ALLOWED_EVENT_IDS` は **23 件**（`ghost-install` が 13 → 21、`file-drop` が `OnFileDrop2`・`OnDirectoryDrop` を足して 23）。下の棚卸⑲ 1 の「13 件・3 件足して 16」は古い＝本仕様が 3 件足すなら 26。直書きは `events_change_tests.rs` の `assert_eq!(ALLOWED_EVENT_IDS.len(), 23)` と `events_tests.rs` の 23 語の完全一致の 2 か所

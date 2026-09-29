@@ -153,7 +153,7 @@
   - _Boundary: menu update_frame, menu mod, ghost_session boot_wired, doc ukadoc-coverage shiori updatebutton.caption_
   - _Depends: 6.4_
 
-- [ ] 8. 台帳・生成物・配布物の説明・互換の記述・申し送りを実物に揃える
+- [x] 8. 台帳・生成物・配布物の説明・互換の記述・申し送りを実物に揃える
   - `shiori.toml` の 19 イベント（証拠は写しの定数の上の行）と `homeurl`・`useorigin1`、`sakura-script.toml` の `\![updatebymyself…]`・`\![update,更新対象…]`・`\![updateother,…]`・`\![execute,install,url,…]` を実装済みにする。送らない行（`OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・`OnUpdatedataCreating`／`Created`・`other_homeurl_override`・`\![update,platform]`・`\![execute,createupdatedata]`）は状態を動かさず備考に理由
   - 生成物と `roadmap-draft.md` の数を生成器で作り直す（手で数を直さない）
   - `dist/README.txt` の 2 行から「ネットワーク更新」の語を外す（シェル・バルーンの切り替えの分は残す）

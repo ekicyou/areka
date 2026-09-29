@@ -1141,6 +1141,7 @@ links = []
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、更新用のデータ一式が作られない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[動かさない理由（areka-P0-network-update・2026-09-30）: 更新定義ファイルを作る側の道具で、areka-P0-network-update が扱うのは取り寄せて入れ替える側だけ（作る側は α 後・開発者機能の束）]
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: 書庫と配布物の作成]
 [テーマ無し: 更新データを作者が作るための道具で、利用者の体験には現れない]
@@ -1381,9 +1382,9 @@ links = [
 ]
 note = """
 壊れ方: 該当なし。InstallCueSink（crates/areka/src/emo2_boot/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が path で第 3 引数が絶対パスなら、そのファイルを（拡張子を問わず）インストールの手続きへ渡す。手続きは右クリックのメニューの「インストール…」と同じ 1 本で、OnInstallBegin から締めの知らせまでを正典のイベントで送る。入れた後に areka は自分から切り替えない。
-ログ: 出る（第 2 引数が path でない＝url を含む→ warn!（install_cue_unsupported）・パスが空か相対パス→ warn!（install_cue_bad_path）で、どちらも手続きを始めずイベントも送らない。パスより後ろの引数は読まずに warn!（install_cue_extra_ignored）。第 1 引数が install でない execute は担当外として debug! を残す）。
+ログ: 出る（第 2 引数が path でも url でもない→ warn!（install_cue_unsupported）・パスが空か相対パス→ warn!（install_cue_bad_path）で、どちらも手続きを始めずイベントも送らない。パスより後ろの引数は読まずに warn!（install_cue_extra_ignored）。第 1 引数が install でない execute は担当外として debug! を残す）。
 根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::InstallSink（担当の台帳の行）の上の正典 URL の行。
-[条件: url の形（\\![execute,install,url,…]・兄弟の行）は受けない。後続 areka-P0-network-update が同じ受け口に足す予定]
+[条件: url の形（\\![execute,install,url,…]・兄弟の行）は areka-P0-network-update が同じ受け口に url の腕として足した（URL から落としてこの行と同じ手続きへ渡す。URL の形が悪い→ warn!（install_cue_bad_url）・種別が nar でも省略でもない→ warn!（install_cue_unsupported_kind））。path の腕の振る舞いは変えていない]
 [群: インストールと更新]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1]
 [テーマ: 手元のファイルから取り込めず、渡された新しい一式を入れられない]
@@ -1391,18 +1392,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnInstallComplete:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、網の先を指しての導入が始まらない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。InstallCueSink（crates/areka/src/emo2_boot/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が url で第 3 引数が http:// か https:// で始まる URL、第 4 引数の種別が nar か省略なら、短命のスレッドで URL のファイルを areka 専用の一時フォルダ（%TEMP%\\areka\\download\\）へ落とし、落とし終えたら \\![execute,install,path,…] と同じインストールの手続きへ渡す（以後の検査とイベントはその手続きのまま）。取得の間もゴーストは止まらない。落としたファイルはその場では消さず、同じフォルダの 7 日より古い物を次の取得のときに消す。このタグの取得では OnURLQuery を送らない。
+ログ: 出る（種別が feed・homeurl・ical・ssf ほか nar 以外→ warn!（install_cue_unsupported_kind）・URL が空か http:// / https:// で始まらない→ warn!（install_cue_bad_url）で、どちらも取得を始めずイベントも送らない。取得は info!（install_fetch_begin／install_fetch_done）を残し、取得の失敗・取得の部品を用意できないときは error!（install_fetch_failed・URL と理由）を 1 件残してインストールの依頼を作らず、イベントも送らない。消した古いファイルの数は info!（install_fetch_swept））。
+根拠の場所: crates/areka/src/install/judge.rs の ScriptRequest::Url（台本の引数の url の腕）の上の正典 URL の行。取得は crates/areka/src/install/fetch_url.rs の spawn_download。
+[条件: 種別は nar と省略だけ（省略は nar と読む・Content-Type と中身からの自動判別は持たない）。feed・homeurl・ical・ssf は α 後。落としたファイルは一時フォルダに最大 7 日残る]
 [群: インストールと更新]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1]
 [テーマ: 網の先から取り込めず、配布された新しい一式が手元に入らない]
@@ -3673,9 +3675,9 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -3683,9 +3685,9 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnUpdateResult:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、名指しした対象の更新が始まらず、新しい版が入らない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。UpdateCueSink（crates/areka/src/emo2_boot/update_cue.rs）が名前 update で自分を選び、第 1 引数を + で分けて ghost・shell・balloon を並んだ順に（all なら \\![updatebymyself] と同じ 3 つ）今の物を対象に、理由 script で更新の手続きへ渡す。ゴースト以外は OnUpdateOther* の名で送り、最後に OnUpdateResult を送る。知らない対象の語（platform を含む）と第 2 引数以降（更新オプション）は要求ごと断る。
+ログ: 出る（開けない荷物は warn!（update_cue_unopenable）、断り（更新オプション・知らない対象・--shell=／--balloon= 以外の指定しか無い）は warn!（update_cue_refused）で要求を作らない。受けた要求は窓口が info!（update_order_started）か断りの warn!（update_refused）を 1 件残す。走っている間の要求は OnUpdateFailure（executing）で断る。）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/emo2_boot/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
 [群: インストールと更新]
 [テーマ: 名指しした対象を新しくできず、直った台詞も増えた絵も手元に届かない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![update。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![updatebymyself・\\![updateother の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -3705,33 +3707,34 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、SSP 本体の更新が始まらない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+ログ: 出る（名前 update は UpdateCueSink が担当し、platform を知らない対象の語として warn!（update_cue_refused）を 1 件残して要求を作らない。イベントは送らない）。
+[動かさない理由（areka-P0-network-update・2026-09-30）: ベースウェア本体の更新で、areka-P0-network-update が扱うのはゴースト・シェル・バルーンの更新だけ（α 後）。同じ名前 update は \\![update,更新対象…] の受け口 UpdateCueSink が担当するので、第 1 引数の platform は知らない対象の語として要求ごと断る]
+[運搬: 名前 update は \\![update,更新対象…] の担当 UpdateCueSink として登記してあるが、第 1 引数 platform は受けない]
 [群: インストールと更新]
 [テーマ: 土台となるベースウェアを新しくできず、新しい書き方がいつまでも使えない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![update。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![updatebymyself・\\![updateother の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bupdatebymyself_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ゴースト自身の更新が始まらない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。UpdateCueSink（crates/areka/src/emo2_boot/update_cue.rs）が名前 updatebymyself で自分を選び、引数が無ければ今のゴースト・シェル・バルーンの 3 つ（右クリックのメニューの「ネットワーク更新」と同じ）を対象に、理由 script で更新の手続きへ渡す。手続きは OnUpdateProcessExec を送らずに標準の更新へ進み、対象ごとに OnUpdateBegin から締めまでを正典のイベントで送り、最後に OnUpdateResult を送る。更新先の無い対象は飛ばす。何か入れ替わったときだけ、総括への返事の台詞の後に同じゴーストを読み直す。引数（更新オプション）があれば要求ごと断る（checkonly・testonly・recovery は α 後）。
+ログ: 出る（開けない荷物は warn!（update_cue_unopenable）、断り（更新オプション・知らない対象・--shell=／--balloon= 以外の指定しか無い）は warn!（update_cue_refused）で要求を作らない。受けた要求は窓口が info!（update_order_started）か断りの warn!（update_refused）を 1 件残す。走っている間の要求は OnUpdateFailure（executing）で断る。）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/emo2_boot/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
 [群: インストールと更新]
 [テーマ: ゴースト自身から更新を始められず、作者が直しても手元は古いままになる]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![updatebymyself。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bupdateother_2c_66f4_65b0_5bfe_8c61_2f_30aa_30d7_30b7_30e7_30f3_7fa4_2c..._5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -3739,9 +3742,10 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnUpdateResultEx:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストの更新を促せない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。UpdateCueSink（crates/areka/src/emo2_boot/update_cue.rs）が名前 updateother で自分を選び、--shell=名前・--balloon=名前 を並んだ順に目録の name と完全一致（大文字小文字を区別・隠しシェルは引かない）で引いて、起動中でない物も対象に、理由 script で更新の手続きへ渡す。OnUpdateOther* の名で送り、最後に OnUpdateResultEx を送る。--plugin=・--headline=・--language= ほか知らない --名前= は読み飛ばし、更新オプションがあれば要求ごと断る。引けない名前はその対象を飛ばす。今表示中でないシェル・バルーンを更新しても読み直さない（中身は次に選んだときに効く）。
+ログ: 出る（読み飛ばした指定ごとに warn!（update_cue_selector_ignored）、引けない名前は warn!（update_target_skipped・reason＝name_not_found）。開けない荷物は warn!（update_cue_unopenable）、断り（更新オプション・知らない対象・--shell=／--balloon= 以外の指定しか無い）は warn!（update_cue_refused）で要求を作らない。受けた要求は窓口が info!（update_order_started）か断りの warn!（update_refused）を 1 件残す。走っている間の要求は OnUpdateFailure（executing）で断る。）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/emo2_boot/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
+[条件: --shell=・--balloon= だけ。other_homeurl_override の照会は α 後で、各対象の descript.txt の homeurl をそのまま使う]
 [群: インストールと更新]
 [テーマ: 同居している別のゴーストの更新を促せず、片方だけが古いまま残る]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![updateother。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
