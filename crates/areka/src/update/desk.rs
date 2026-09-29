@@ -9,7 +9,7 @@
 //! フォルダから今の 3 つを、ゴーストのシェルの目録と根のバルーンの目録の `name` から `updateother`
 //! の名前を引く（要件 1.4・1.7）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
@@ -17,13 +17,16 @@ use areka_actor::ReplyReceiver;
 use areka_ghost::BasewareRoot;
 use areka_ghost::catalog::{descript_name, homeurl, list_balloons, list_shells};
 use areka_kanade::resources::ResourceOutcome;
-use areka_kanade::{KanadeMsg, ShioriMethod};
+use areka_kanade::{ChangeOrigin, KanadeMsg, ShioriMethod};
 use bevy_ecs::world::World;
 
 use super::refs::{ON_UPDATE_FAILURE, executing_refs};
 use super::worker::{DeskAsk, UpdateJob, spawn_worker, winhttp_fetch};
 use super::{RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason};
 use crate::boot_config::BootContext;
+use crate::emo2_boot::ghost_switch::{
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
+};
 use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
 use crate::menu::captions::{QueryReply, send_query};
@@ -108,7 +111,8 @@ pub(crate) fn drain(world: &mut World) {
 }
 
 /// 背景スレッドの頼みを 1 件捌く。`Started`＝答え待ちなら走っているへ移し、預かりを `executing` で
-/// 断る（答え待ち以外では無操作）／`OrderDone`＝走っていないへ戻し、預かりを受付に掛け直す。正しさは
+/// 断る（答え待ち以外では無操作）／`OrderDone`＝走っていないへ戻し、預かりを受付に掛け直す／
+/// `Reload`＝[`reload`]（条件を満たせば同じゴーストへの切替を 1 回頼む）。正しさは
 /// 段の判定が持ち、頼みと生の要求の届く順に依らない。
 fn answer(world: &mut World, ask: DeskAsk) {
     tracing::debug!(event = "update_desk_ask", ask = ?ask, "[update] 背景スレッドの頼みを受けました");
@@ -131,9 +135,74 @@ fn answer(world: &mut World, ask: DeskAsk) {
                 super::submit(world, raw, reason);
             }
         }
-        // 読み直しは 6.5 が足す。
-        DeskAsk::Reload { .. } => {}
+        DeskAsk::Reload { ghost_dir } => reload(world, &ghost_dir),
     }
+}
+
+/// 読み直しの頼み: 条件を満たせば既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で
+/// 1 回頼み、判定を残す（`Accepted` は `info!`・他は `warn!`）。満たさなければ理由つきの
+/// `warn!(update_reload_skipped)` で頼まない。頼み直しはしない（終了の後に届いた頼みも落とす）。
+fn reload(world: &mut World, ghost_dir: &Path) {
+    let folder = match reload_folder(world, ghost_dir) {
+        Ok(folder) => folder,
+        Err(reason) => {
+            tracing::warn!(
+                event = "update_reload_skipped",
+                reason,
+                ghost_dir = %ghost_dir.display(),
+                "[update] 読み直しの条件を満たさないので、読み直しません（更新した中身は次の起動で効きます）"
+            );
+            return;
+        }
+    };
+    let verdict = request_ghost_switch(
+        world,
+        SwitchRequest {
+            ghost: GhostSpec::Folder(folder.clone()),
+            raise_event: false,
+            origin: ChangeOrigin::Automatic,
+        },
+    );
+    if verdict == SwitchVerdict::Accepted {
+        tracing::info!(
+            event = "update_reload_requested",
+            verdict = ?verdict,
+            folder = %folder,
+            "[update] 更新した中身を読むために、同じゴーストへの切替を頼みました"
+        );
+    } else {
+        tracing::warn!(
+            event = "update_reload_requested",
+            verdict = ?verdict,
+            folder = %folder,
+            "[update] 同じゴーストへの切替が受け付けられなかったので、読み直しません"
+        );
+    }
+}
+
+/// 読み直す先のフォルダ名。終了が始まった → 切替の予約が在る → 置き場のゴーストが頼みのゴーストと
+/// 違う → フォルダ名が無い（引数の起動・裁定 17）の順に理由を返す。
+fn reload_folder(world: &World, ghost_dir: &Path) -> Result<String, &'static str> {
+    if world
+        .get_non_send::<UpdateDesk>()
+        .is_none_or(|desk| desk.gate.is_closing())
+    {
+        return Err("closing");
+    }
+    if world.get_non_send::<SwitchInFlight>().is_some() {
+        return Err("switching");
+    }
+    let running = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .map(|s| s.ghost_dir());
+    if running != Some(ghost_dir) {
+        return Err("other_ghost");
+    }
+    world
+        .get_resource::<BootContext>()
+        .and_then(|ctx| ctx.current.ghost.folder.clone())
+        .ok_or("argv")
 }
 
 /// 入口（台本の受け口）からの生の要求を 1 件、理由 `script` で受付へ掛ける。
@@ -461,6 +530,10 @@ fn skip(kind: TargetKind, reason: &'static str, what: &str) -> Option<TargetSpec
 #[cfg(test)]
 #[path = "desk_resolve_tests.rs"]
 mod resolve_tests;
+
+#[cfg(test)]
+#[path = "desk_reload_tests.rs"]
+mod reload_tests;
 
 #[cfg(test)]
 #[path = "desk_tests.rs"]

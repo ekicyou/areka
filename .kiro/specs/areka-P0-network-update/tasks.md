@@ -122,7 +122,7 @@
   - 兄弟の `desk_resolve_tests` で、選べる／選べないの 4 通り（3 つとも無い・写しに在る・`descript.txt` の 1 つに在る・走っている間）と、定常到達で照会が 1 件飛び返事が写しに載ること、終了の後に照会の返事待ちが捨てられることが緑
   - _Requirements: 1.3, 1.4, 1.16, 7.4, 9.5, 10.7_
 
-- [ ] 6.5 読み直しの頼みを捌く
+- [x] 6.5 読み直しの頼みを捌く
   - 「読み直し」の頼みは、終了が始まっておらず、切替の予約が無く、置き場のゴーストのフォルダが頼みのフォルダと同じで、フォルダ名が在る（コマンドライン引数の起動でない）ときだけ、既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で 1 回頼み、判定を記録する（受けたら `info!`、他は `warn!`）。満たさなければ理由つきの `warn!` で頼まない。頼み直しはしない
   - 終了が始まった後に届いた読み直しの頼みは落とす
   - 切替の土台（偽の SHIORI）の兄弟の `desk_reload_tests` で、条件を満たせば切替が受け付けられて `OnGhostChanging` と `OnClose` が 0 件、引数の起動・別のゴースト・終了の後では切替の要求 0 件と `warn!` 1 件、読み直しの途中の切替の頼みが今日どおり無視されること、が緑
@@ -190,3 +190,4 @@
 - 6.2: 窓口 `UpdateDesk` は `update::register`（`register_systems` から 1 回）で据える。`drain` の枝（`answer`・`take_raw`・`peek_homeurl`）は仮＝6.3・6.4・6.5 が埋める。対象の解決は `here(world)`（World から写すだけ）と `resolve(&Here, raw)`（フォルダを読む）に分けた。記録の語 `update_target_resolved`・`update_query_discarded`・`update_desk_ask`・`update_desk_raw` と `update_target_skipped` の `reason`（`no_homeurl`・`no_folder`・`no_shell`・`name_not_found`）を 8 で Monitoring の表へ
 - 6.3: `update/mod.rs` の `#![allow(dead_code)]` は外した。残る的の絞った allow は `raw_sender` と `UpdateDesk.raw_tx`＝7.1 で外す。design に無い判定 `SubmitVerdict::WorkerGone`（背景スレッドへ渡せない→ `error!(update_worker_gone)`・次の依頼で起こし直す）と記録の語 `update_worker_gone`・`update_worker_spawned`・`update_request_held`・`update_stage` を 8 で design の型と Monitoring の表へ。`DeskAsk::Reload` の腕は 6.5、`peek_homeurl` は 6.4 が埋める
 - 6.4: `can_update`・`update_current` の `#[allow(dead_code)]` は 7.2 で外す。定常到達の照会は偽の SHIORI（`spine.rs` の `ScriptedShioriBackend`）が台本に無ければ NoContent で答え、`SwitchRig::calls` は `GET homeurl` を外す＝6.6 で手続きの `homeurl` に値を台本で渡すと定常到達の照会が先に 1 件食う（台本に 2 件積むか `handle.non_status_calls()` を直接見る）。`spine.rs` は 998 行＝6.5・6.6 で足す土台は `ghost_switch_test_support.rs` へ。記録の語 `update_homeurl_unqueried`・`update_homeurl_copied`・`update_homeurl_absent`・`update_homeurl_query_failed` を 8 で Monitoring の表へ
+- 6.5: 要件 5.5 の「`OnBoot` は送らない」は「起動の根が `OnGhostChanged`」の意味（裁定 10.6＝boot_root はそのまま）。`OnGhostChanged` が 204 なら正典どおり `OnBoot` へ続く＝テストは `OnGhostChanged` に台本で応えて根を見る（6.6 も同じ注意）。requirements.md 導入の「`OnBoot` は送らない」の一文の扱いは完了時に開発者へ申し送る。`update_reload_skipped` の `reason`（`closing`・`switching`・`other_ghost`・`argv`）と `desk.rs` が使う `SwitchVerdict` を 8 で design の Monitoring の表と Allowed Dependencies へ
