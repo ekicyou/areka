@@ -102,7 +102,7 @@
   - _Requirements: 1.11, 1.18, 2.3, 4.4, 5.1, 7.1, 7.3, 7.4, 8.1, 9.12, 9.14, 10.1_
   - _Depends: 4.1, 5.2_
 
-- [ ] 6.2 窓口を据えて系として登録し、対象を解く
+- [x] 6.2 窓口を据えて系として登録し、対象を解く
   - 窓口を World に 1 つ据え（ゴーストを起こし直しても作り直さない）、毎 tick の取り出し（背景スレッドの頼み → 生の要求 → 照会の返事）を Input の段の投げ込みの捌きの後に登録し（各枝の中身は 6.3・6.4・6.5 が埋める）、門 `update` を片付けの関数と一緒に登記する（`register_systems` に 1 行）。片付けは後のタスクが持つ物（照会の返事待ち）を捨てる場所として置く
   - 今の対象を解く: ゴーストは置き場のゴーストのフォルダ（名前は SHIORI の名前 → `descript.txt` の `name` → フォルダ名）、シェルは起動時に解いたシェルのフォルダ、バルーンは起動時に解いたバルーンのフォルダ（名前は `descript.txt` の `name` → フォルダ名）。更新先の倒れ先は各 `descript.txt` の `homeurl`
   - `updateother` はゴーストのシェルの目録と根のバルーンの目録の `name` に完全一致（大文字小文字を区別）で引き、引けない名前は `warn!` で飛ばす（隠しシェルは目録に無いので引けない）。無いフォルダも `warn!` で飛ばす
@@ -187,3 +187,4 @@
 - 5.1: `error!(update_fetch_unavailable)` は手続き（`run_target`）の 1 件だけ＝6.1 の `run_engine` は `WinHttpFetch::new()` の `Err` を記録せず `gate.end()` の上で `EngineRun::Unavailable(e)` を返す（design の worker の節の 1 文は 8 で直す）。記録の語 `update_absolute_failed`・`update_order_begin` を 8 で Monitoring の表へ。偽の口の支え `procedure_test_support.rs` は `procedure.rs` の子（`#[path]`）＝5.2 の `procedure_reload_tests` も `procedure.rs` に宣言する。`OnUpdateProcessExec` が「閉じた」を返す枝（`update_abandoned at=process_exec`）は 5.2 で固定する
 - 5.2: 手続きが固定するのは「総括の応えの後に読み直しを頼む」まで。要件 5.3（総括への返事の台詞が終わってから読み直す）は窓口と kanade の側＝6.5・6.6 が判定する。`OnUpdateBegin` で閉じたらエンジンは回さない（5.7 の「走っている更新」は走り出した後）
 - 6.1: 取得口の作り方は `NewFetch = Arc<dyn Fn() -> Result<Box<dyn Fetch>, FetchError> + Send + Sync>`（対象ごとに呼ぶ）＝`spawn_worker(desk, gate, new_fetch)` の第 3 引数。本番は `worker::winhttp_fetch()`（6.3 で渡す）・テストは偽物。窓口への頼みは `DeskAsk::{Started, Reload, OrderDone}`。記録の語 `update_gate_closed`・`update_desk_gone`・`update_order_done` を 8 で Monitoring の表へ
+- 6.2: 窓口 `UpdateDesk` は `update::register`（`register_systems` から 1 回）で据える。`drain` の枝（`answer`・`take_raw`・`peek_homeurl`）は仮＝6.3・6.4・6.5 が埋める。対象の解決は `here(world)`（World から写すだけ）と `resolve(&Here, raw)`（フォルダを読む）に分けた。記録の語 `update_target_resolved`・`update_query_discarded`・`update_desk_ask`・`update_desk_raw` と `update_target_skipped` の `reason`（`no_homeurl`・`no_folder`・`no_shell`・`name_not_found`）を 8 で Monitoring の表へ

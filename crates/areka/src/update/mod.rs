@@ -8,7 +8,16 @@
 #![allow(dead_code)]
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
+use bevy_ecs::world::World;
+use wintf::ecs::Input;
+use wintf::ecs::pointer::dispatch_pointer_events;
+
+use crate::exit_wait::{self, WorkGate};
+
+mod desk;
 mod procedure;
 mod refs;
 mod worker;
@@ -89,6 +98,18 @@ pub(crate) enum RawUpdateRequest {
     Current(Vec<TargetKind>),
     /// 名前で引くシェル・バルーン（`\![updateother,…]`・並んだ順）。
     Other(Vec<(TargetKind, String)>),
+}
+
+/// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後＝投げ込みの捌きの後）へ
+/// 登録し、門 `update` を片付けの関数と一緒に終了の待ちへ登記する（プロセスに 1 回・呼び手は
+/// `ghost_session::register_systems`）。窓口はゴーストを起こし直しても作り直さない。
+pub(crate) fn register(world: &mut World) {
+    let gate = Arc::new(WorkGate::default());
+    world.insert_non_send(desk::UpdateDesk::new(gate.clone()));
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Input, desk::drain.after(dispatch_pointer_events));
+    exit_wait::register_gate(world, "update", gate, desk::discard_for_exit);
 }
 
 #[cfg(test)]
