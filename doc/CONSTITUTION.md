@@ -105,7 +105,7 @@ areka はプラットフォーム（サーバー）とゴースト（クライ�
 | 利点 | ゴーストの頭脳をローカルLLM/クラウドAPI/従来スクリプトのいずれでも実装可能にする |
 | 位置づけ | プラットフォームはMCPサーバー、ゴーストはMCPクライアントとして動作 |
 
-> 仕様: [.kiro/specs/areka-P0-mcp-server/](../.kiro/specs/areka-P0-mcp-server/)
+> 仕様: SSP 内蔵 MCP サーバの移植（プラットフォームが MCP サーバーになる側）は `.kiro/steering/roadmap.md`「SSP MCP の移植」節の spec 群（`areka-P0-mcp-*`・2026-09-29 起票）。ゴーストが MCP クライアントになる側は未起票。
 
 ---
 

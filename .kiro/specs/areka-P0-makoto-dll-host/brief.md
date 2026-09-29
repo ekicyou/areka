@@ -100,3 +100,8 @@ x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DL
 - **鎖と別名**: 原典は `makoto,[a.dll,b.dll]` の順次連鎖と `alias.txt` の `makoto,` 上書きを定義（ukadoc には無い＝旧書式エイリアス扱い・上記 1 項）。`sstp.alwaystranslate`（SSTP でも翻訳）は SSTP 未実装ゆえ範囲外。
 - **YAYA as MAKOTO UTF-8 改良版**: 配布中（`YAYA_as_MAKOTO_UTF-8(20250116).7z`・yaya.dll Tc571-9・辞書 UTF-8・`makoto_systemfunc.dic`）。**呼び出される YAYA 関数名は未確認**（同梱 readme／`.dic` にある＝要件定義で開発者が展開して確認・サブエージェントは配布物のダウンロードを行わない）。
 - 到達不能: `navy.nm.land.to/post/makoto.html`（MAKOTO 総合解説・2026-03 にサービス終了・Wayback は 429）・`usada.sakura.vg/contents/specification{,2}.html`（Wayback 429・再試行の価値あり）。
+
+## 2026-09-29 申し送り（`mcp-reload` の起票から）
+
+- SSP MCP 移植の `areka-P0-mcp-reload`（α 後）が、再読み込みの操作と台本の `\![reload,ghost／shiori／shell／balloon／descript]` を作る。上の Downstream の「`\![reload,shiori]`（reload 機構の再…）」は同 spec が引き受けた。
+- `mcp-reload` は **makoto だけ `NG:` で返してログを出す縮退の口**を置く。本 spec が `\![reload,makoto]` を作るときは、その口（MCP の `reload` の `target: "makoto"`）も同じ操作へつなぐこと。どちらが先に着地しても、後着がつなぐ。
