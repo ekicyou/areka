@@ -1,4 +1,4 @@
-use super::deliver_dropped_files;
+use super::{DropReadError, deliver_dropped_files, warn_read_failed};
 use crate::ecs::window::OnFilesDropped;
 use crate::ecs::window_proc::lifecycle::DESPAWNED_SKIP_TAG;
 use crate::ecs::world::EcsWorld;
@@ -175,4 +175,70 @@ fn deliver_while_world_borrowed_warns_without_call() {
     );
     assert_eq!(hits[0].level, Level::WARN);
     assert_eq!(hits[0].field("count"), Some("2"));
+}
+
+/// 設計テスト 1（要件 1.7・9.1）: 振り分け表に `WM_DROPFILES` の腕が在り、取っ手 0 の投げ込みでは
+/// `files_dropped_read_failed`（`error` が `NullHandle`）の `warn!` がちょうど 1 行・受け手 0 回・
+/// 戻り値は既定処理（`None`）でない `Some(LRESULT(0))`。取っ手が無いので `DragFinish` は呼ばない。
+#[test]
+fn dispatch_null_hdrop_warns_once_without_call() {
+    use crate::ecs::window_proc::dispatch_window_message;
+    use crate::executor::util::WindowMessage;
+    use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::WM_DROPFILES;
+
+    let (world, hooked, _) = drop_world();
+    let m = WindowMessage {
+        hwnd: HWND(std::ptr::null_mut()),
+        msg: WM_DROPFILES,
+        wparam: WPARAM(0),
+        lparam: LPARAM(0),
+    };
+
+    let (ret, events) = log_capture_kit::capture(|| dispatch_window_message(&world, hooked, &m));
+
+    assert_eq!(ret, Some(LRESULT(0)), "WM_DROPFILES が既定処理へ流れた");
+    assert_eq!(received(&world), None, "取っ手 0 で受け手が呼ばれた");
+    let hits = events_named(&events, "files_dropped_read_failed");
+    assert_eq!(
+        hits.len(),
+        1,
+        "files_dropped_read_failed がちょうど 1 行でない: {events:?}"
+    );
+    assert_eq!(hits[0].level, Level::WARN);
+    assert!(
+        hits[0]
+            .field("error")
+            .is_some_and(|e| e.contains("NullHandle")),
+        "error 欄が NullHandle を名乗っていない: {:?}",
+        hits[0]
+    );
+    assert_eq!(warn_count(&events), 1, "警告が 1 行でない: {events:?}");
+}
+
+/// 設計テスト 6（要件 1.7）: `DropReadError` の 2 変種は `files_dropped_read_failed` の `error` 欄で
+/// 読み分けられる（`NullHandle`／`Query` は何番目・何本のうちかを載せる）。`Query` の腕は実物の
+/// `HDROP` でしか踏めないので、ここでは記録の語だけを固定する。
+#[test]
+fn read_error_variants_are_distinguishable_in_the_record() {
+    let (_, hooked, _) = drop_world();
+    let ((), events) = log_capture_kit::capture(|| {
+        warn_read_failed(hooked, &DropReadError::NullHandle);
+        warn_read_failed(hooked, &DropReadError::Query { index: 1, total: 3 });
+    });
+
+    let errors: Vec<&str> = events_named(&events, "files_dropped_read_failed")
+        .iter()
+        .map(|e| {
+            assert_eq!(e.level, Level::WARN);
+            e.field("error").unwrap_or("")
+        })
+        .collect();
+    assert_eq!(errors.len(), 2, "2 行でない: {events:?}");
+    assert!(errors[0].contains("NullHandle"), "{errors:?}");
+    assert!(
+        errors[1].contains("Query") && errors[1].contains('1') && errors[1].contains('3'),
+        "Query が何番目・何本のうちかを載せていない: {errors:?}"
+    );
+    assert_ne!(errors[0], errors[1]);
 }

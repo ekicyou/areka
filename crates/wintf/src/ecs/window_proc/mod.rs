@@ -82,6 +82,7 @@ pub(crate) fn dispatch_window_message(
         WM_CANCELMODE => keyboard::WM_CANCELMODE(world, entity, hwnd, wparam, lparam),
         WM_ACTIVATE => keyboard::WM_ACTIVATE(world, entity, hwnd, wparam, lparam),
         WM_CAPTURECHANGED => keyboard::WM_CAPTURECHANGED(world, entity, hwnd, wparam, lparam),
+        WM_DROPFILES => drop_files::WM_DROPFILES(world, entity, hwnd, wparam, lparam),
         _ => None,
     }
 }
