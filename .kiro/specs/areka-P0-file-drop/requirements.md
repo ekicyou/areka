@@ -103,7 +103,7 @@
 #### Acceptance Criteria
 
 1. The areka shall 落とされた物 1 つを、次の順で 1 つの種類に決める: ⑴ フォルダなら「フォルダ」⑵ 拡張子が `.nar` または `.zip`（大文字小文字を区別しない・`.NAR`・`.Zip` も同じ）なら「書庫」⑶ それ以外は「書庫でないファイル」。
-2. The areka shall 種類の判定に、フォルダかどうか以外の情報（書庫の中身・`install.txt` の有無・ファイルの大きさ）を使わない。
+2. The areka shall 種類の判定に、フォルダかどうかと拡張子以外の情報（書庫の中身・`install.txt` の有無・ファイルの大きさ）を使わない。
 3. When `install.txt` を持つフォルダが落とされる, the areka shall フォルダとして扱う（`.nar` を作らない・インストールの手続きへ渡さない）。
 4. When 拡張子が `.zip` で `install.txt` を持たない書庫が落とされる, the areka shall 書庫として手続きへ渡す（入らない理由は `ghost-install` の手続きが `OnInstallFailure` で知らせる・`OnFileDrop2` へは回さない）。
 5. If フォルダかどうかを OS に問い合わせられない（落とした直後に無くなった等）, then the areka shall 拡張子だけで書庫か書庫でないファイルかを決め、問い合わせに失敗したことを `warn!` に 1 件残す。
@@ -119,7 +119,7 @@
 2. The areka shall 渡した後の手順（`OnInstallBegin` から締めの知らせまで・`accept` の照合・利用条件・待ち行列・定常まで待つこと・`OnInstallCompleteAll` の判断）を `ghost-install` の手続きに任せ、本仕様で重ねて作らない（インストールの手順 0 本）。
 3. The areka shall 依頼の出どころを、記録で「窓への投げ込み」と分かる語にする（メニュー・台本と区別できる・手続きは出どころで分岐しない）。
 4. When 手続きが別の依頼を扱っている最中に書庫が落とされる, the areka shall 依頼を待ち行列へ積み（捨てない）、先の依頼が終わってから扱わせる。
-5. When 終了が始まった後に書庫が落とされる, the areka shall 依頼を渡さず（手続きの口が断る）、`warn!` が 1 件残ることで足りるとする（本仕様で足す知らせ 0 件）。
+5. When 終了が指示された後に書庫が落とされる, the areka shall その書庫を入れず（展開 0 件）、入れなかったことを記録に 1 件残す（本仕様で足す知らせ・画面 0 件）。依頼を渡す前に止めるか、渡して手続きの側で捨てさせるかは設計で決める（今の `submit` は、終了が指示されてから実行の輪が返るまでの間は断らず積み、後で `discard_for_exit` が捨てる）。
 6. When 落とされた書庫のインストールが終わる, the areka shall 表示中のゴーストをそのまま残す（切替の要求 0 件・完了 `ghost-install` 裁定 5 のまま）。
 7. When 複数の `.nar` を一度に落とし、その全部が入る, the areka shall 最後に `OnInstallCompleteAll` が 1 回届く状態にする（送るのは `ghost-install` の手続き・本仕様は依頼を 1 つにまとめるだけ）。
 8. The areka shall 書庫の依頼をゴーストが定常でないときも渡す（手続きの待ち行列が定常まで待たせる・本仕様は捨てない）。
@@ -158,7 +158,7 @@
 1. When 受け取った一覧に 2 種類以上が混ざっている, the areka shall 「書庫でないファイル（`OnFileDrop2` 1 回）→ フォルダ（`OnDirectoryDrop` を 1 つずつ）→ 書庫（依頼 1 つ）」の順に扱う。
 2. The areka shall 書庫の依頼を、`OnFileDrop2`・`OnDirectoryDrop` を送った後に渡す（書庫の手続きは時間がかかり、終わるとゴーストが替わりうるため、知らせは今のゴーストへ先に届ける）。
 3. While ゴーストが定常でない（起動の途中・切替の途中・上書きの起こし直しの途中）, when 書庫でないファイルまたはフォルダが落とされる, the areka shall そのイベントを送らず（後で送り直さない）、`warn!` を 1 件残す（汎用の通知の入口が定常以外を捨てるのと同じ扱い）。書庫は要件 3.8 のとおり渡す。
-4. While 終了が指示された後, when 何かが落とされる, the areka shall イベントを送らず、依頼は手続きの口が断り、記録が残ること以外に何も起こさない（本仕様で足す経路 0）。
+4. While 終了が指示された後, when 何かが落とされる, the areka shall イベントを送らず（0 件）、書庫は要件 3.5 のとおり入れず、記録が残ること以外に何も起こさない（本仕様で足す経路 0）。
 5. The areka shall 1 回の投げ込みの扱い（振り分け・送出・依頼）を、受け取ったその巡の中で終える（次の投げ込みを待たない・順を入れ替えない）。
 
 ### Requirement 7: 正典の語だけを送る
@@ -181,7 +181,7 @@
 1. The areka shall 受け取り（要件 1.6）・振り分けの結果・送ったイベントの名前と Reference の要約・渡した依頼の書庫の数を記録に残し、記録の無い失敗の経路を作らない（0 本）。
 2. The areka shall 失敗をメッセージボックスで伝えない（0 個）。本仕様が出す画面は 0 個。
 3. The 本仕様 shall 網羅台帳 `shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 行を実装済み（`owner = "areka-P0-file-drop"`）へ動かし、報告書は生成器で作り直す（手で数を直さない）。`OnFileDropping` と旧仕様 3 語（`alias`）は動かさない。
-4. The 本仕様 shall `roadmap-draft.md` に本仕様の行を足すなら `[briefs].count` を表の行数に合わせ、`cargo test -p ukadoc-survey` で判定させる。
+4. The 本仕様 shall `roadmap-draft.md` に本仕様の行を足して `[briefs].count` を表の行数（37 → 38）に合わせ、束の表の「投げ込み」の行（候補名の案 `areka-P0-file-drop-events`・依存する既存 spec「0 本」）を着地後の台帳の `owner` に合わせて直し、`cargo test -p ukadoc-survey` で判定させる。
 5. The 本仕様 shall 本番コードが読む環境変数を足さず（0 個）、外部クレートを足さない（0 個。既に依存している `windows` クレートの機能を足すことは数えない）。
 6. The 本仕様 shall 本番コードに同期送信（`SendMessageW(`／`SendMessageTimeoutW(`）を足さない（既存の見張りの例外表を増やさない・0 件）。
 7. The 本仕様 shall 本番ファイルとテストファイルのどれも 1,000 行を超えさせない。

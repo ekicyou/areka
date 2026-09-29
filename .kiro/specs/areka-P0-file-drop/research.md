@@ -112,13 +112,13 @@
 
 1. **wintf の受け口の切り方**（§4.1 A か B）と部品の名前・署名（一覧の型は `Vec<PathBuf>` か `Vec<String>`）。
 2. **定常でないときの `warn!` の出し手**: kanade（送り口あり）と areka（送り口なし）で 2 か所になるのを承知するか、areka が常に自分で出すか（後者は kanade の判定と二重）。
-3. **終了が指示された後の見分け**: `FirstExit` を見て `submit` を呼ばない（依頼 0）か、`submit` に任せる（`Queued` → `discard_for_exit`）か。要件 6.4 の語「手続きの口が断り」は前者を想定しているが、今日の `submit` は run の中では断らない。
+3. **終了が指示された後の見分け**: `FirstExit` を見て `submit` を呼ばない（依頼 0）か、`submit` に任せる（`Queued` → `discard_for_exit`）か。要件ディスカッションで要件 3.5・6.4 を「入れない・記録 1 件」の結果の語へ改め、どちらの道で止めるかをここへ預けた。
 4. **MIME 表の広さ**（§4.6 A-⑴ か ⑵）と、表を areka の新規ファイルに置くか。
 5. **決定論テストで `HDROP` を偽造するか**（`Win32_System_Memory` を test でだけ足せるか＝Research）。
 6. **装着の置き場**（§4.2 A: `attach_os_close_request` に足す／B: 新設の系）。
 7. **`InstallOrigin` の変種の綴り**（`WindowDrop`／`Drop`／`FileDrop`・記録の検索語になる）。
 8. **区切り byte 値 1 の定数の置き場**: `install/judge.rs` の `SEPARATOR` を `pub(crate)` へ上げて共用するか、新規ファイルに同じ値を持つか。
-9. **`roadmap-draft.md`**: `[[spec]]` の行を足して `count` 38 にするか（要件 8.4 は「足すなら」）。束の表の候補名 `areka-P0-file-drop-events` を実名へ直すかは要件の外（文書の整合）。
+9. ~~`roadmap-draft.md`~~ → 要件ディスカッションで要件 8.4 に確定（行を足して 38・束の表の「投げ込み」の行を台帳に合わせる）。設計の判断は残らない。
 10. **パスの扱い**: `DragQueryFileW` が返す綴りをそのまま渡す（正規化しない）。エクスプローラは絶対パスを返すが、要件 1.4 の「絶対パス」を areka が検査するか（`Path::is_absolute()` で `warn!` だけ）。
 
 ## 6. 規模とリスク
