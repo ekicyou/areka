@@ -14,6 +14,7 @@ use areka_nar::{InstallOutcome, InstallRequest, NarArchive, NarError};
 use bevy_ecs::world::World;
 
 use super::{InstallDesk, reply_to};
+use crate::app_exit::FirstExit;
 use crate::boot_config::BootContext;
 use crate::emo2_boot::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
@@ -22,8 +23,10 @@ use crate::install::procedure::Overwritten;
 
 /// 預かった書庫の段。
 enum Stage {
-    /// 預かった（切替はまだ頼んでいない）。
+    /// 預かった（切替はまだ頼んでいない・次の定常到達で頼む）。
     Held(NarArchive),
+    /// 預かったが別の切替の最中だった（その予約が下りた tick か次の定常到達で頼み直す）。
+    Busy(NarArchive),
     /// 切替を頼んだ（切替の入口が受理した）。
     Requested(NarArchive),
     /// 展開した（定常到達で背景のスレッドへ返す）。
@@ -71,32 +74,40 @@ pub(super) fn take(
     request(world);
 }
 
-/// 「預かった」の書庫について切替を頼む。宛先がもう起動中のゴーストでなければ書庫を返す。
+/// 預かった書庫（「預かった」か「別の切替の最中だった」）について切替を頼む。宛先がもう起動中の
+/// ゴーストでなければ書庫を返す。
 fn request(world: &mut World) {
     let running = world
         .get_resource::<BootContext>()
-        .and_then(|ctx| ctx.current.ghost.folder.clone());
+        .map(|ctx| ctx.current.ghost.folder.clone());
     let Some(pending) = world.non_send_mut::<InstallDesk>().overwrite.take() else {
         return;
     };
-    let Stage::Held(archive) = pending.stage else {
+    let (Stage::Held(archive) | Stage::Busy(archive)) = pending.stage else {
         world.non_send_mut::<InstallDesk>().overwrite = Some(pending);
         return;
     };
-    let Some(running) = running.filter(|r| r.eq_ignore_ascii_case(&pending.folder)) else {
-        tracing::debug!(
-            event = "install_overwrite_returned",
-            folder = %pending.folder,
-            "[install] 宛先はもう起動中のゴーストではないので、書庫を返します"
-        );
-        reply_to(pending.reply, Overwritten::NotRunning(archive));
-        return;
+    // 目録と同じ綴り（起動中のゴーストのフォルダ名）で名指しする。起動の文脈が無ければ預かった宛先の
+    // まま頼み、切替の入口の判定（`NoContext`）に任せる。
+    let folder = match running {
+        None => pending.folder.clone(),
+        Some(running) => match running.filter(|r| r.eq_ignore_ascii_case(&pending.folder)) {
+            Some(running) => running,
+            None => {
+                tracing::debug!(
+                    event = "install_overwrite_returned",
+                    folder = %pending.folder,
+                    "[install] 宛先はもう起動中のゴーストではないので、書庫を返します"
+                );
+                reply_to(pending.reply, Overwritten::NotRunning(archive));
+                return;
+            }
+        },
     };
-    // 目録と同じ綴り（起動中のゴーストのフォルダ名）で名指しする。
     let verdict = request_ghost_switch(
         world,
         SwitchRequest {
-            ghost: GhostSpec::Folder(running),
+            ghost: GhostSpec::Folder(folder),
             raise_event: false,
             origin: ChangeOrigin::Automatic,
         },
@@ -110,8 +121,8 @@ fn request(world: &mut World) {
             );
             Stage::Requested(archive)
         }
-        // 別の切替の最中: 預かったまま、次の定常到達で頼み直す。
-        SwitchVerdict::Busy => Stage::Held(archive),
+        // 別の切替の最中: 預かったまま、その予約が下りた tick か次の定常到達で頼み直す。
+        SwitchVerdict::Busy => Stage::Busy(archive),
         SwitchVerdict::NotFound | SwitchVerdict::NoContext => {
             tracing::warn!(
                 event = "install_overwrite_unavailable",
@@ -169,8 +180,10 @@ pub(super) fn run_between(world: &mut World) {
     pending.stage = Stage::Ran(result);
 }
 
-/// 定常到達: 「展開した」なら結果を背景のスレッドへ返して消し、「預かった」なら切替を頼み直す。
+/// 定常到達: 「展開した」なら結果を背景のスレッドへ返して消す。「切替を頼んだ」のまま予約が消えて
+/// いれば「預かった」へ戻し、「預かった」「別の切替の最中だった」なら切替を頼み直す。
 pub(super) fn on_steady(world: &mut World) {
+    requeue_if_cancelled(world);
     let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
         return;
     };
@@ -182,7 +195,7 @@ pub(super) fn on_steady(world: &mut World) {
         }) => reply_to(reply, Overwritten::Ran(result)),
         Some(
             pending @ Pending {
-                stage: Stage::Held(_),
+                stage: Stage::Held(_) | Stage::Busy(_),
                 ..
             },
         ) => {
@@ -191,4 +204,52 @@ pub(super) fn on_steady(world: &mut World) {
         }
         other => desk.overwrite = other,
     }
+}
+
+/// 毎 tick（取り出しの系から）: 「切替を頼んだ」のまま予約が消えていれば「預かった」へ戻して次の
+/// 定常到達を待つ（頼み直しても終了の保留や起動の途中で同じく断られるだけ）。「別の切替の最中だった」
+/// なら、その予約が下りた tick に頼み直す（中止された切替は定常到達を伴わない）。終了が指示された後は
+/// 頼み直さない。
+pub(super) fn on_tick(world: &mut World) {
+    requeue_if_cancelled(world);
+    let busy = world.get_non_send::<InstallDesk>().is_some_and(|desk| {
+        matches!(
+            desk.overwrite,
+            Some(Pending {
+                stage: Stage::Busy(_),
+                ..
+            })
+        )
+    });
+    if busy
+        && world.get_non_send::<SwitchInFlight>().is_none()
+        && !world.contains_resource::<FirstExit>()
+    {
+        request(world);
+    }
+}
+
+/// 「切替を頼んだ」のまま切替の予約が消えていたら（切替が中止された）「預かった」へ戻す。
+fn requeue_if_cancelled(world: &mut World) {
+    if world.get_non_send::<SwitchInFlight>().is_some() {
+        return;
+    }
+    let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() else {
+        return;
+    };
+    let Some(pending) = desk.overwrite.take() else {
+        return;
+    };
+    let stage = match pending.stage {
+        Stage::Requested(archive) => {
+            tracing::info!(
+                event = "install_overwrite_requeued",
+                folder = %pending.folder,
+                "[install] 頼んだ切替が中止されたので、書庫を預かり直して次の定常到達で頼み直します"
+            );
+            Stage::Held(archive)
+        }
+        stage => stage,
+    };
+    desk.overwrite = Some(Pending { stage, ..pending });
 }

@@ -142,7 +142,7 @@
   - _Requirements: 11.11_
   - _Depends: 7.2, 8.1_
 
-- [ ] 8.3 切替の入口の判定 4 値と展開の失敗の扱いを固定する
+- [x] 8.3 切替の入口の判定 4 値と展開の失敗の扱いを固定する
   - 別の切替の最中は段を「預かった」のまま置き、予約が下りた tick か次の定常到達で頼み直す。「切替を頼んだ」のまま予約が消えたら「預かった」へ戻す
   - 目録に無い・起動の文脈が無いときは `warn!(install_overwrite_unavailable)` を 1 件残して書庫を背景スレッドへ返し、手続きを止めない
   - 利用者や台本が頼んだ別のゴーストへの切替では展開しない
@@ -196,3 +196,4 @@
 - 7.1: `install/mod.rs` の `judge` は `pub(crate)`（入口から `script_request` を呼ぶ）。`InstallOrigin` の allow は `Menu` の腕だけに残る＝**7.2 で外す**。sinks の列を増やすと `zorder_wiring_tests.rs` の `t_zwi05`（列の原文を判定）も直す。Monitoring の表に無い記録の語 4 つ（`install_cue_unopenable`・`install_cue_skip`・`install_cue_extra_ignored`・`install_cue_send_failed`）も**タスク 10 で拾う**。
 - 7.2: 選ぶ画面のテストの口は窓口の非公開の `start_pick(world, suppressed, pick)`（本番は `pick_and_submit` だけが通る）。「出ている」旗は `PickingFlag` の Drop で下ろす（正常終了・panic・スレッドを起こせない、のどれでも）。`start_pick` は終了を判定しない＝項目が選べなくなり、後から届いたパスは受付が `install_order_refused` で断る。`CoInitializeEx` の失敗は `error!(install_pick_failed)`。項目単位の allow の残りは `Overwritten`（**8.1 で外す**）だけ。Monitoring の表に無い記録の語 3 つ（`install_pick_no_desk`・`install_pick_busy`・`install_pick_send_failed`）も**タスク 10 で拾う**。`desk.rs` は 514 行・`ghost_session.rs` は 698 行。
 - 8.1: 預かった書庫の段は `install/overwrite.rs`（`desk.rs` の `#[path]` の子）。先に入れた 8.3 の分＝`Busy` は「預かった」のまま次の定常到達で頼み直す・`NotFound`／`NoContext` は `warn!(install_overwrite_unavailable, verdict)` で `NotRunning` を返す・別のゴーストへの切替では展開しない（`debug!(install_overwrite_skipped)`）。**8.3 で必ず直す**: 「切替を頼んだ」のまま予約が消えた（`ChangeCancelled`）ときに段が戻らず worker が返事を待ち続ける（`overwrite::on_steady` の `other => desk.overwrite = other` の腕）・予約が下りた tick での頼み直しが無い。**9 で結ぶ**: UI スレッドの展開は終了の門を通らない・`discard_for_exit` が預かった書庫を捨てない（今は終了で worker が World の破棄まで待つ）。`ChangeOrigin::Automatic` はテストで直接判定していない（8.3 で `ghost_switch_requested` の origin 欄を 1 つ判定するとよい）。Monitoring の表に無い記録の語 3 つ（`install_overwrite_requested`・`install_overwrite_replaced`・`install_overwrite_skipped`）も**タスク 10 で拾う**。`ghost_switch.rs` は 870 行。
+- 8.3: `overwrite.rs` に段 `Busy` と毎 tick の `on_tick`（`desk::drain` の末尾）を足した＝予約が下りた tick に `Busy` を 1 回頼み直す・「切替を頼んだ」のまま予約が消えたら `requeue_if_cancelled` が「預かった」へ戻す（`info!(install_overwrite_requeued)`）。**設計に無い見張り**: `on_tick` は `FirstExit` が在れば `Busy` を頼み直さない（終了中に切替や別の場所への展開を始めない・要件 8.6 の向き）＝**タスク 10 で design の desk／State Management に 1 行**。別の切替で展開を見送った書庫は次の定常到達まで「切替を頼んだ」に残り、そこで「預かった」へ戻して頼み直す（見える動きは設計どおり）。起動の文脈が無いときも切替の入口を通して `NoContext` の `warn!` を出す（`install_overwrite_returned` は文脈が在って起動中のフォルダが違うときだけ）。確定の失敗のテストは掴むファイルを `share_mode(1)`（0 だと組み上げの複写で失敗して確定まで届かない）・確定で失敗したことは `areka_nar` の記録の理由の `Commit` で見分ける。致命の道では段が「展開した」のまま残り worker へ答えが返らない＝**9 で `discard_for_exit` が預かった書庫・段を捨てる**。Monitoring の表に無い記録の語 `install_overwrite_requeued` も**タスク 10 で拾う**。

@@ -3,7 +3,9 @@
 //! 確かめること: 受付の 4 つの判定と記録・手続きの最中に届いた依頼が届いた順に 1 件ずつ背景の
 //! スレッドへ渡ること・イベントの頼みは切替の予約が在る間は送らず、予約が下りた tick に送る
 //! 時点のゴーストへ送ること・送り直しの頼みは前に送った後に定常到達が届いてから送ること・
-//! 素性の答え・宛先が起動中のゴーストでない上書きの頼みは書庫を返すこと。
+//! 素性の答え・宛先が起動中のゴーストでない上書きの頼みは書庫を返すこと・起動中のゴーストへの
+//! 上書きの切替が中止されたら「預かった」へ戻して次の定常到達で頼み直すこと・切替の入口が
+//! `NotFound`／`NoContext` なら `warn!` を 1 件残して書庫を返すこと。
 //!
 //! 背景のスレッドは起こさない: 窓口の依頼の送出端を受信端に差し替え、頼みは窓口の頼みの送出端へ
 //! 直接入れる。kanade の代わりは置き場の中身に持たせた送出端の受信端。取り出しの系は `drain` を
@@ -14,7 +16,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use areka_actor::{ReplyReceiver, reply_channel};
 use areka_ghost::BasewareRoot;
-use areka_kanade::{KanadeMsg, KanadeNotice, RaiseOutcome, ShioriMethod};
+use areka_kanade::{CancelReason, KanadeMsg, KanadeNotice, RaiseOutcome, ShioriMethod};
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
@@ -84,6 +86,19 @@ impl Rig {
 
     fn drain(&mut self) {
         drain(&mut self.world);
+    }
+
+    /// 起動中のゴーストへの上書きの頼みを 1 件入れ、答えの受信端を返す。
+    fn ask_overwrite(&self, archive: areka_nar::NarArchive) -> ReplyReceiver<Overwritten> {
+        let (reply, answer) = reply_channel();
+        self.asks
+            .send(DeskAsk::Overwrite {
+                archive,
+                target_ghost: None,
+                reply,
+            })
+            .expect("窓口の頼みの受信端は生きている");
+        answer
     }
 }
 
@@ -396,7 +411,7 @@ fn facts_describe_the_running_ghost() {
     );
 }
 
-/// 宛先がもう起動中のゴーストでない上書きの頼みは、切替を頼まずに書庫を返す（起動の文脈も無い）。
+/// 起動の文脈もゴーストも無いときの上書きの頼みは、切替の入口が断る（`NoContext`）ので書庫を返す。
 /// 起動の文脈もゴーストも無くても、入れた後の記録の頼みには答える（中身は `desk_record_tests.rs`）。
 #[test]
 fn overwrite_returns_the_archive_and_record_answers() {
@@ -451,6 +466,240 @@ fn overwrite_returns_the_archive_and_record_answers() {
         _ => panic!("書庫が返る"),
     }
     assert!(matches!(recorded.try_recv(), Ok(Some(()))));
+}
+
+/// 目録に載るゴースト（`descript.txt` の `name` はフォルダ名）を 1 体置いた根。
+fn root_with_ghost(tmp: &TempPath, folder: &str) -> BasewareRoot {
+    let root = BasewareRoot::new(tmp.path().to_path_buf());
+    let master = root.ghost_dir(folder).join("ghost").join("master");
+    std::fs::create_dir_all(&master).unwrap();
+    std::fs::write(
+        master.join("descript.txt"),
+        format!(
+            "charset,UTF-8
+name,{folder}
+"
+        ),
+    )
+    .unwrap();
+    root
+}
+
+/// `directory,<folder>` の `ghost` の書庫。
+fn ghost_archive(tmp: &TempPath, folder: &str) -> areka_nar::NarArchive {
+    let path = tmp.child(&format!("{folder}.nar"));
+    NarBuilder::new()
+        .file(
+            "install.txt",
+            &install_txt(&[
+                "charset,UTF-8",
+                "type,ghost",
+                &format!("name,{folder}"),
+                &format!("directory,{folder}"),
+            ]),
+        )
+        .done()
+        .file("ghost/master/overwritten.txt", b"new")
+        .done()
+        .write_to(&path)
+        .unwrap();
+    areka_nar::NarArchive::open(&path).unwrap()
+}
+
+/// kanade の受信端に届いた切替の要求（切替先の名前・知らせを送るか・出どころの綴り）を取り出す。
+fn change_requests(kanade: &Receiver<KanadeMsg>) -> Vec<(String, bool, &'static str)> {
+    kanade
+        .try_iter()
+        .map(|msg| match msg {
+            KanadeMsg::ChangeGhost(req) => {
+                (req.target.name, req.raise_event, req.origin.as_ref_str())
+            }
+            _ => panic!("切替の要求だけが届く"),
+        })
+        .collect()
+}
+
+/// 「切替を頼んだ」のまま切替が中止された（予約が下りた）ら「預かった」へ戻し、その tick では
+/// 頼み直さず、次の定常到達で頼み直す（design「desk / State Management」）。頼みはどれも同じ
+/// フォルダの名指し・知らせなし・出どころ「自動」。背景のスレッドは答えを待ち続ける（捨てない）。
+#[test]
+fn a_cancelled_overwrite_switch_goes_back_to_held_and_retries_on_the_next_steady() {
+    let tmp = TempPath::new("desk-overwrite-cancelled");
+    let root = root_with_ghost(&tmp, "A");
+    let mut rig = Rig::new();
+    rig.world.insert_resource(boot_context(&root, "A"));
+    let kanade = rig.put_ghost(root.ghost_dir("A"));
+    let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
+    let same = ("A".to_owned(), false, "automatic");
+
+    let ((), events) = capture(|| {
+        rig.drain();
+        assert_eq!(change_requests(&kanade), vec![same.clone()], "切替を頼む");
+        on_notice(
+            &mut rig.world,
+            KanadeNotice::ChangeCancelled {
+                reason: CancelReason::Rejected,
+            },
+        );
+        rig.drain();
+        rig.drain();
+        assert!(
+            change_requests(&kanade).is_empty(),
+            "中止の後の tick では頼み直さない"
+        );
+        on_notice(&mut rig.world, KanadeNotice::Steady);
+        assert_eq!(
+            change_requests(&kanade),
+            vec![same.clone()],
+            "次の定常到達で頼み直す"
+        );
+        // 中止と定常到達が tick を挟まずに届いても、定常到達で戻して頼み直す。
+        on_notice(
+            &mut rig.world,
+            KanadeNotice::ChangeCancelled {
+                reason: CancelReason::Rejected,
+            },
+        );
+        on_notice(&mut rig.world, KanadeNotice::Steady);
+        assert_eq!(change_requests(&kanade), vec![same.clone()]);
+    });
+    assert!(
+        matches!(answer.try_recv(), Ok(None)),
+        "背景のスレッドは答えを待つ（書庫は窓口が持ち続ける）"
+    );
+    assert_eq!(
+        events_named(&events, "install_overwrite_requeued").len(),
+        2,
+        "{events:?}"
+    );
+    let requested = events_named(&events, "ghost_switch_requested");
+    assert_eq!(requested.len(), 3, "{events:?}");
+    for event in requested {
+        assert_eq!(event.field_str("origin"), Some("automatic"), "{event:?}");
+        assert_eq!(event.field("raise_event"), Some("false"), "{event:?}");
+    }
+}
+
+/// 別の切替の最中に預かった書庫（`Busy`）は、その予約が下りた tick に頼み直す。ただし終了が指示された
+/// 後は頼み直さない（終了の指示が無くなれば頼み直す＝止めていたのは終了の指示だけ）。
+#[test]
+fn a_busy_overwrite_is_not_retried_after_the_exit_was_instructed() {
+    let tmp = TempPath::new("desk-overwrite-busy-exit");
+    let root = root_with_ghost(&tmp, "A");
+    let mut rig = Rig::new();
+    rig.world.insert_resource(boot_context(&root, "A"));
+    let kanade = rig.put_ghost(root.ghost_dir("A"));
+    rig.world.insert_non_send(reservation());
+    let _answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
+    rig.drain();
+    assert!(change_requests(&kanade).is_empty(), "予約の間は頼まない");
+
+    rig.world.remove_non_send::<SwitchInFlight>();
+    rig.world.insert_resource(crate::app_exit::FirstExit(
+        crate::app_exit::ExitOrigin::Escape,
+    ));
+    rig.drain();
+    assert!(
+        change_requests(&kanade).is_empty(),
+        "終了の指示の後は頼まない"
+    );
+
+    rig.world.remove_resource::<crate::app_exit::FirstExit>();
+    rig.drain();
+    assert_eq!(
+        change_requests(&kanade),
+        vec![("A".to_owned(), false, "automatic")]
+    );
+}
+
+/// 切替の入口が `NotFound`（起動中のゴーストのフォルダが目録に無い）・`NoContext`（送り先の
+/// ゴーストが居ない・起動の文脈が無い）と判定したら、`warn!(install_overwrite_unavailable)` を
+/// 判定つきで 1 件残し、書庫を背景のスレッドへ返す（切替は頼まない・手続きは止まらない）。
+#[test]
+fn an_unavailable_switch_returns_the_archive_with_one_warning() {
+    let cases = [
+        ("NotFound", "not-found", false, true, true),
+        ("NoContext", "no-ghost", true, false, true),
+        ("NoContext", "no-context", true, true, false),
+    ];
+    for (verdict, label, listed, ghost, context) in cases {
+        let tmp = TempPath::new(&format!("desk-overwrite-{label}"));
+        let root = match listed {
+            true => root_with_ghost(&tmp, "A"),
+            false => BasewareRoot::new(tmp.path().to_path_buf()),
+        };
+        let mut rig = Rig::new();
+        if context {
+            rig.world.insert_resource(boot_context(&root, "A"));
+        }
+        let kanade = ghost.then(|| rig.put_ghost(root.ghost_dir("A")));
+        let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
+
+        let ((), events) = capture(|| rig.drain());
+        match answer.try_recv() {
+            Ok(Some(Overwritten::NotRunning(back))) => {
+                assert_eq!(back.manifest().directory, "A", "{verdict}")
+            }
+            _ => panic!("{label}: 書庫が返る"),
+        }
+        let warned = events_named(&events, "install_overwrite_unavailable");
+        assert_eq!(warned.len(), 1, "{label}: {events:?}");
+        assert_eq!(warned[0].level, Level::WARN, "{verdict}");
+        assert_eq!(warned[0].field("verdict"), Some(verdict), "{events:?}");
+        assert!(
+            events_named(&events, "ghost_switch_requested").is_empty(),
+            "{verdict}: {events:?}"
+        );
+        if let Some(kanade) = kanade {
+            assert!(change_requests(&kanade).is_empty(), "{verdict}");
+        }
+    }
+}
+
+/// 「切替を頼んだ」の段でも、切替の予約の切替先が預かった宛先と違う（その間に利用者や台本が頼んだ
+/// 別のゴーストへの切替）なら、全窓を閉じた直後の口は展開せず `debug!(install_overwrite_skipped)` を
+/// 残す（背景のスレッドは待ったまま）。切替先が預かった宛先なら（ASCII の大文字小文字は無視）展開する。
+#[test]
+fn run_between_installs_only_on_the_switch_to_the_held_destination() {
+    let tmp = TempPath::new("desk-overwrite-between");
+    let root = root_with_ghost(&tmp, "A");
+    let mut rig = Rig::new();
+    rig.world.insert_resource(boot_context(&root, "A"));
+    let kanade = rig.put_ghost(root.ghost_dir("A"));
+    let answer = rig.ask_overwrite(ghost_archive(&tmp, "A"));
+    rig.drain();
+    assert_eq!(
+        change_requests(&kanade),
+        vec![("A".to_owned(), false, "automatic")],
+        "「切替を頼んだ」へ進む"
+    );
+    let marker = root.ghost_dir("A").join("ghost/master/overwritten.txt");
+
+    // 予約は残したまま、切替先だけが別のゴースト（B）。
+    rig.world.insert_non_send(reservation());
+    let ((), other) = capture(|| run_overwrite_between(&mut rig.world));
+    assert!(
+        events_named(&other, "install_overwrite_done").is_empty(),
+        "{other:?}"
+    );
+    assert_eq!(
+        events_named(&other, "install_overwrite_skipped").len(),
+        1,
+        "{other:?}"
+    );
+    assert!(!marker.exists(), "A のフォルダには展開しない");
+    assert!(
+        matches!(answer.try_recv(), Ok(None)),
+        "背景のスレッドは待ったまま"
+    );
+
+    // 切替先が預かった宛先（綴りの大文字小文字だけが違う）。
+    rig.world.non_send_mut::<SwitchInFlight>().target.folder = "a".to_owned();
+    let ((), ours) = capture(|| run_overwrite_between(&mut rig.world));
+    let done = events_named(&ours, "install_overwrite_done");
+    assert_eq!(done.len(), 1, "{ours:?}");
+    assert_eq!(done[0].field("ok"), Some("true"));
+    assert!(marker.exists(), "A のフォルダへ展開する");
 }
 
 fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
