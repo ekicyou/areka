@@ -3108,48 +3108,48 @@ crates/areka-kanade/src/schedule/change.rs の begin_change）。
 """
 
 [entry."ukadoc:list_shiori_event:OnGhostTermsAccept:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.5.33"
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。インストールする書庫の最上位
+（install.txt と同じ階層）に terms.txt か terms.md があれば、展開の前に利用条件の画面（はい／いいえの
+2 択・閉じるボタンは効かない）を出し、「はい」が押されたら Reference なしで GET で送ってから展開へ
+進む。両方あれば terms.txt を出す。利用条件のファイルが無い書庫では画面もこのイベントも出ない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは info のログ（install_terms・
+answer=accept）と、送るたびに info のログ（install_event）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は crates/areka/src/install/procedure.rs
+の定数 ON_GHOST_TERMS_ACCEPT。画面は crates/areka/src/alert.rs の ask_yes_no、本文は
+crates/areka/src/install/terms.rs の find_terms。
 テーマの直し: 名前の頭 OnGhost の既定は記憶だが、利用条件のダイアログで受諾が押された出来事は、覚え
 て渡すことでも他のゴーストとの関わりでもない。無いと利用者がゴーストの何を失うかを 1 文で言えないの
 で付けない。
 """
 
 [entry."ukadoc:list_shiori_event:OnGhostTermsDecline:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.5.33"
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。インストールする書庫の利用条件の
+画面で「いいえ」が押されたとき、1 バイトも書かずに手続きを止めて Reference なしで GET で送る。告知が
+抑止されている（環境変数 AREKA_NO_ALERT）ときと画面を出せなかったときも、画面を出さずに拒否として
+扱って同じく送る。拒否の後に OnInstallFailure は送らない（正典の沈黙への areka の裁量・
+doc/COMPAT_ARCHITECTURE.md §8）。画面に閉じるボタンの道は無いので、正典の「閉じるボタンでは何も
+イベントは発生しない」場面は起きない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは install_terms を、拒否は
+info・抑止は warn・画面を出せなかったときは error で 1 行残す（欄 answer＝decline・suppressed・
+unavailable）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は crates/areka/src/install/procedure.rs
+の定数 ON_GHOST_TERMS_DECLINE、分かれ道は同じファイルの terms_step。
 テーマの直し: 名前の頭 OnGhost の既定は記憶だが、利用条件のダイアログで拒否が押された出来事は、覚え
 て渡すことでも他のゴーストとの関わりでもない。無いと利用者がゴーストの何を失うかを 1 文で言えないの
 で付けない。
@@ -3296,134 +3296,144 @@ crates/areka-kanade/src/actor.rs の round_trip_request。
 """
 
 [entry."ukadoc:list_shiori_event:OnInstallBegin:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = ["記憶"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの
+「インストール…」で選んだ書庫と、台本 \\![execute,install,path,…] が指した書庫の、どちらでも
+同じ手続きが書庫 1 本を扱い始めるときに Reference なしで GET で送る。送るのは書庫の読み取りと
+検査の前で、accept の照合と利用条件の画面はその後（前後は正典が沈黙しているので
+doc/COMPAT_ARCHITECTURE.md §8 に登記した）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは書庫を始めるときに info の
+ログ（install_begin）を、送るたびに info のログ（install_event・名前と応えの有無）を残す。往復が
+失敗したときは error のログ（install_event_failed）が出て、以後のインストール系のイベントは送らない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は crates/areka/src/install/procedure.rs
+の定数 ON_INSTALL_BEGIN で、手続き（同じファイルの run_order）が書庫ごとに送る。
 無いと失うもの: 何かを入れ始めたことをゴーストが知らず、受け取る側の一言が出ない。
 """
 
 [entry."ukadoc:list_shiori_event:OnInstallComplete:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = ["記憶"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。正典どおり、先に送った
+OnInstallCompleteEx にゴーストが応えなかったときだけ続けて GET で送る。「応えなかった」は返事なし
+（204）と、空の台本・空白だけの台本（読みは doc/COMPAT_ARCHITECTURE.md §8 に登記）。Reference0＝
+先頭の物の識別子（バルーン同梱のゴーストでも ghost・ghost with balloon は送らない）・Reference1＝
+install.txt の name・Reference2＝同梱バルーンの名前（無ければ空）。正典のとおり先頭の 2 件だけを
+載せる。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ
+（install_event・名前と応えの有無）を残す。往復が失敗したときは error のログ（install_event_failed）
+が出て、以後のインストール系のイベントは送らない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。応えの有無は kanade の殻が RaiseOutcome で送り手へ
+返す（crates/areka-kanade/src/actor.rs の raise_outcome_of）。名前の定義は
+crates/areka/src/install/procedure.rs の定数 ON_INSTALL_COMPLETE、Reference の組み立ては
+crates/areka/src/install/judge.rs の complete_legacy_refs。
 無いと失うもの: 入ったものをゴーストが知らないまま、入れた覚えのない顔で話し続ける。
 """
 
 [entry."ukadoc:list_shiori_event:OnInstallCompleteAll:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = ["記憶"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを送る。1 つの依頼に書庫が 2 本以上並び、その全部が入った
+ときだけ、最後の書庫の完了の知らせの後に GET で 1 回送る。Reference0〜2 は OnInstallCompleteEx と
+同じ形で、全部の書庫ぶんを byte 値 1 区切りで並べる。書庫が 1 本だけの依頼と、1 本でも入らなかった
+依頼では送らない。
+条件: 手続きへの依頼は書庫を 1 本以上並べられるが、メニューの「インストール…」と台本
+\\![execute,install,path,…] はどちらも 1 本だけを渡す。2 本以上を並べる本番の呼び手は、窓への投げ込み
+を受け持つ後続 areka-P0-file-drop が着地するまで 0 で、それまでこの振る舞いは決定論テスト
+（crates/areka/src/install/procedure_branch_tests.rs）だけが確かめる。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ
+（install_event・名前と応えの有無）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は crates/areka/src/install/procedure.rs
+の定数 ON_INSTALL_COMPLETE_ALL で、送るかどうかは同じファイルの run_order が依頼の単位で決める。
 無いと失うもの: まとめて入れ終わったことをゴーストが知れず、締めくくりの一言が出ない。
 """
 
 [entry."ukadoc:list_shiori_event:OnInstallCompleteEx:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = ["記憶"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。書庫を入れ終えたときに GET で
+送り、Reference0＝入れた物の識別子（ghost・shell・balloon・supplement の 4 語だけ）・Reference1＝
+入れた物の名前・Reference2＝入れた場所（フォルダの絶対パス）を、入れた物の数だけ byte 値 1 区切り
+で並べる（書庫の本体が先・同梱バルーンが後）。ゴーストが応えなかったときだけ続けて
+OnInstallComplete を送る。入れた後に areka は自分から切り替えない（切り替えるかはゴーストの返事と
+利用者が決める・doc/COMPAT_ARCHITECTURE.md §8）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは入れ終えたときに info のログ
+（install_done）を、送るたびに info のログ（install_event・名前と応えの有無）を残す。往復が失敗した
+ときは error のログ（install_event_failed）が出て、以後のインストール系のイベントは送らない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は crates/areka/src/install/procedure.rs
+の定数 ON_INSTALL_COMPLETE_EX、Reference の組み立ては crates/areka/src/install/judge.rs の
+complete_ex_refs。
 無いと失うもの: 入ったものの詳しい内訳をゴーストが知れず、何が増えたのかを語れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnInstallFailure:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = ["記憶"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。書庫の読み取り・検査・展開の
+どれかが失敗したときと、accept の無い shell／supplement の書庫のときに GET で送る。Reference0 は
+正典の失敗理由の語 1 つだけ（extraction・invalid type・unsupported。unlha32・artificial・password は
+送らない）で、Reference1 以降は無い。areka-nar の拒否の 14 種と I/O の失敗をどの語へ写すかは
+doc/COMPAT_ARCHITECTURE.md §8 に登記した。失敗はメッセージボックスを出さず、このイベントと記録で
+伝える。ゴーストが応えなくても代わりの画面や台詞は出さない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは error のログ（install_failed・
+書庫のパス・areka-nar の種類の語・段・宛先が元へ戻ったか・送る語）を 1 行残し、確定に失敗して元へ
+戻せなかった宛先があれば宛先ごとに error のログ（install_survivor・元の中身の在りかと 7 日で消える
+こと）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は crates/areka/src/install/procedure.rs
+の定数 ON_INSTALL_FAILURE、語の表は crates/areka/src/install/judge.rs の failure_word（網羅の match・
+種類が増えるとビルドが止まる）。
 無いと失うもの: 入れ損ねたことをゴーストが知らず、失敗に寄り添う一言が出ない。
 """
 
 [entry."ukadoc:list_shiori_event:OnInstallRefuse:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.4.85"
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = ["記憶"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。書庫の install.txt の accept が、
+起動中のゴーストの descript.txt の sakura.name とも install.accept のどの名前とも完全一致（大文字
+小文字を区別）しないとき、1 バイトも書かずに手続きを止めて GET で送る。Reference0＝accept の値・
+Reference1＝識別子・Reference2＝install.txt の name。宛先違いは失敗に数えない（OnInstallFailure は
+送らない）。areka は 1 度に 1 体なので、相手が一緒に起動している場合の OnInstallReroute は送らない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは warn のログ（install_refused・
+accept の値と起動中のゴーストの名前）を 1 行残す（error ではない）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）。名前の定義は crates/areka/src/install/procedure.rs
+の定数 ON_INSTALL_REFUSE、照合は crates/areka/src/install/judge.rs の judge_accept、Reference の
+組み立ては同じファイルの refuse_refs。
 無いと失うもの: 他のゴースト宛のものが持ち込まれたことを知れず、断りの一言が出ない。
 
 版番号: 本文の末尾にある版番号の欄は「Ref1以降は2.4.85」であり、版番号だけを置いた欄ではない。これ
@@ -12733,22 +12743,24 @@ note = """
 """
 
 [entry."ukadoc:list_shiori_resource:ghostinstallbutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = "areka-P0-ghost-install"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
-（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
-（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
-メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
-この名前を引く相手は 0 件である。
-引受先: areka-P0-ghost-install。ゴーストの導入を置く仕様で、その枠を登記した日に実装済みへ
-改める。
-壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
-ログ: 1 行も出ない。引かれない名前は記録にも現れない。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「インストール…」の
+項目名に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
+「インストール」枠へ項目を登記するのは areka-P0-ghost-install（crates/areka/src/menu/install_frame.rs
+の register を、ゴーストを起こすたびに crates/areka/src/ghost_session.rs の boot_wired が呼ぶ）。
+項目を選ぶとファイルを選ぶ画面が出て、選んだ書庫をインストールの手続きへ渡す。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「インストール…」に落ち、メニューはそのまま
+出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由
+（send_failed／timeout／dropped）を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「ゴーストインストールの名称」とされ、その
 項目に出る言葉である。
 無いと失うもの: 右クリックのメニューの「ゴーストインストール」の項目が、そのゴーストらしい言い回しに

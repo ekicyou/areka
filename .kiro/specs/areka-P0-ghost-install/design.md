@@ -60,7 +60,7 @@
 - 許可表 `ALLOWED_EVENT_IDS` が 21 語になる＝後続は数の判定（`events_change_tests.rs`）を 21 から動かす。
 - `InstallOrder`・`InstallOrigin`・`submit` の形を変える＝`file-drop` の入口を見直す（`file-drop` は `InstallOrigin` に自分の出どころを 1 つ足す）。
 - `switch_to` の「全窓を閉じた直後・起こす前」に呼び出しが入った＝切替の道筋を触る後続は、この位置で UI スレッドが展開の長さだけ止まることを前提にする。
-- `exit_wait::begin_close` の呼び出しが `fn main`（`run()` が戻った直後）と `end_session_within` に入った＝終了の経路を足す後続は同じ口を通す。
+- `exit_wait::begin_close` の呼び出しが `fn main`（`run()` が戻った直後）と `end_session_from`（`end_session_within` の中身）に入った＝終了の経路を足す後続は同じ口を通す。
 - `areka-sylphya` の語彙表 `FLAT_VOCAB` の 2 語の状態が変わる＝同クレートのテスト `only_four_tokens_are_m1_derived` の名前の一覧が 6 語になる。
 
 ## Architecture
@@ -203,7 +203,7 @@ crates/areka/src/
 |---|---|
 | `crates/areka/Cargo.toml` | 依存に `areka-nar`。`windows` に機能 `Win32_UI_Controls_Dialogs` |
 | `crates/areka/src/main.rs` | `mod install;`・`mod exit_wait;`。`fn main` で `run()` が戻った直後（`after_run` の前）に `exit_wait::begin_close`、後始末の閉包の「降ろす → 印の始末（`settle_session_mark`）」の後・告知の前で待つ。`AfterRun`・`after_run` は変えない |
-| `crates/areka/src/session_end.rs` | `end_session_within` で、済みの印を据えた直後に `exit_wait::begin_close`、`shutdown_within` と印の始末（`settle_session_mark`）の後に同じ `WaitBudget` で待つ |
+| `crates/areka/src/session_end.rs` | 本体を `end_session_from(world, WaitBudget)` に移し、`end_session_within` は出発点を今にして呼ぶ薄い包みにする（テストが出発点を過去に置くため）。`end_session_from` で、済みの印を据えた直後に `exit_wait::begin_close`、`shutdown_within` と印の始末（`settle_session_mark`）の後に同じ `WaitBudget` で待つ |
 | `crates/areka/src/ghost_session.rs` | `register_systems` に `install::register` を 1 行。`boot_wired` に `menu::install_frame::register` と `install::names::reseed` を各 1 行 |
 | `crates/areka/src/emo2_boot/ghost_switch.rs` | `record_last_installed` の `#[allow(dead_code)]` と注釈の 2 行を消す。`switch_to` の `close_windows_for_restart` の直後に `desk::run_overwrite_between` を 1 行。`on_notice` の定常到達の腕（中が match の式）を波括弧で包み、末尾に `desk::on_steady` の呼び出しを足す |
 | `crates/areka/src/emo2_boot/mod.rs` | `mod install_cue;`。`wire_emo2_boot` で受け口を組み、`sinks` の列の 9 本目に足す |
@@ -785,6 +785,7 @@ pub(crate) fn discard_for_exit(world: &mut World);
 - 取り出しの系が毎 tick 行うこと: ⑴ 生の要求を `submit` へ ⑵ worker の頼みを捌く ⑶ 手元のイベントの頼みを、条件を満たせば送る ⑷ worker が空いていれば次の依頼を渡す ⑸ 預かった書庫の段を進める。
 - イベントを送る条件: 切替の予約（`SwitchInFlight`）が無い・終了が始まっていない・置き場のゴーストに kanade への送出端がある。送り直しの頼みは、前に送った後に定常到達が届いているときだけ送る。
 - 預かった書庫の段（中身は `install/overwrite.rs`。`desk.rs` は 1,000 行の上限から離すために段を持たず、公開の口 `run_overwrite_between`・`on_steady` から呼ぶだけ）: 預かった → 切替を頼んだ → 展開した（結果つき）。切替の入口の判定ごとの扱いは「System Flows／起動中のゴーストへ入れる一周」の表のとおり。「切替を頼んだ」のまま予約が消えていたら「預かった」へ戻し、次の定常到達で頼み直す。「展開した」は定常到達で worker へ結果を返して消す。
+- 毎 tick の `overwrite::on_tick`（取り出しの系の末尾）は、終了が指示された後（`FirstExit` が在る）は別の切替の最中だった書庫（`Busy`）を頼み直さない（終了中に切替や展開を始めない・要件 8.6 の向き）。
 - 入れた後の記録: `ghost` なら `record_last_installed`。`balloon` だけなら今のゴーストの記憶の書き手へ `persist_put(PersistScope::Ghost, [(PersistKey::LastBalloon, フォルダ名)])`。置換語は `names::update`。最後に `publisher.barrier()` を待ってから worker へ返す。
 - 終了が始まった後は、届いた頼みの返信端をそのまま落とす（worker は `Closed` を受ける）。
 
@@ -854,7 +855,7 @@ impl ClosingWaits {
 ```
 - `begin_close` の記録: 書いていない仕事が在れば `warn!(event = "exit_wait_abandoned", name, label)`（`label` は途中でやめた書庫のパス）。書いている最中なら待ちへ回す。
 - `wait` の記録: 間に合えば `info!(event = "exit_wait_done", ms)`。上限に達したら `warn!(event = "exit_wait_timeout", label, "元の中身が <根>/.nar-work/ の下に残っているかもしれない")`。
-- 呼び手: `main.rs` の `fn main`（`run()` が戻った直後に `begin_close`）と後始末の閉包（降ろして印の始末を済ませた後・告知の前に `wait`・出発点は `begin_close` の時点・上限は `EXIT_WAIT_LIMIT`）。`session_end.rs` の `end_session_within`（`shutdown_within` と印の始末の後に、同じ `started` と `limit` で `wait`）。
+- 呼び手: `main.rs` の `fn main`（`run()` が戻った直後に `begin_close`）と後始末の閉包（降ろして印の始末を済ませた後・告知の前に `wait`・出発点は `begin_close` の時点・上限は `EXIT_WAIT_LIMIT`）。`session_end.rs` の `end_session_from`（`end_session_within` の中身・`shutdown_within` と印の始末の後に、同じ `started` と `limit` で `wait`）。
 - 待ちを印の始末の後に置く理由: 先に待つと、待っている間に Windows にプロセスを終わらされたとき起動中の印が残り、次の起動が「前回落ちた」扱いになる（要件 8.7 の趣旨に反する）。
 - 印の判定には何も渡さない。
 
@@ -921,7 +922,48 @@ impl ClosingWaits {
 | 展開 | `install_done`・`install_overwrite_done`・`install_failed`・`install_survivor` |
 | イベント | `install_event`（名前と応えの有無） |
 | 受け皿・記憶 | `last_installed_recorded`（既存）・`install_balloon_remembered`・`install_names_updated` |
+| 途中でやめた | `install_abandoned` |
 | 終了 | `install_pending_discarded`・`exit_wait_abandoned`・`exit_wait_done`・`exit_wait_timeout` |
+
+段の記録の欄のうち、実装で足したもの:
+- `install_abandoned`（`warn!`・`procedure.rs` の `run_archive`）: 欄 `archive`（途中でやめた書庫）・`skipped`（同じ依頼のまだ始めていない書庫の数）・`skipped_archives`（そのパスの列）。
+- `install_names_updated`（`info!`・`names.rs` の `update`）: 欄 `published`（今のゴーストの記憶の書き手へ載せたか。偽は今のゴーストが居なかった）。
+- `install_pending_discarded`（`warn!`・`desk.rs` の `discard_for_exit`）: 欄 `count` は捨てた**書庫の数**（＝`paths` の数・依頼の数ではない・要件 8.5「まだ始めていない書庫」）・`paths`・`held`（捨てた手元のイベントの頼みの名前）・`overwrite`（預かった書庫の宛先のフォルダ名と段の語 `held`／`busy`／`requested`／`ran` の組。`ran` は結果を背景のスレッドへ返しただけで捨てていない）。預かった書庫のパスは同じ終了の `exit_wait_abandoned` の `label` に残る。
+
+判断の分かれ目と道の途切れの記録（段の表に載らないもの・どれも実装に在ることを確かめた）:
+
+| 部品 | event | 水準 | 何が起きたか |
+|---|---|---|---|
+| 受付（`mod.rs` の `submit`） | `install_order_refused` | `warn!` | 書庫が 0 本・窓口が無い・終了が始まっているので依頼を断った |
+| worker（`worker.rs`） | `install_order_done` | `debug!` | 依頼 1 件を終えた（書庫ごとの終わり方つき） |
+| worker | `install_desk_gone` | `debug!` | 窓口が居ないので、頼みや終わりの知らせを閉じた扱いにした |
+| worker | `install_gate_closed` | `debug!` | 終了が始まっているので、書庫を扱い始めなかった（以後の頼みは窓口が落とす） |
+| worker | `install_event_not_allowed` | `error!` | 許可表に無いイベントで送られなかった（返事なしとして続ける） |
+| worker | `install_event_not_steady` | `debug!` | 定常でなかったので、定常到達の後に送り直す |
+| 窓口（`desk.rs`） | `install_ask_dropped` | `debug!` | 終了が始まっているので、背景のスレッドの頼みに答えなかった |
+| 窓口 | `install_raise_replaced` | `warn!` | 手元のイベントの頼みが 2 件になったので古い方を閉じた（起きないはずの形） |
+| 窓口 | `install_facts_none` | `debug!` | 起動の文脈か置き場のゴーストが無いので、素性は無しと答えた |
+| 窓口 | `install_record_received` | `debug!` | 入れた後の記録を受けた |
+| 窓口 | `install_record_unsettled` | `error!` | 今のゴーストの記憶の書き手が止まっていて、記録の反映を確かめられない |
+| 窓口 | `install_balloon_not_remembered` | `warn!` | 今のゴーストが居ないので、入れたバルーンを記憶へ書けない |
+| 窓口 | `install_reply_unread` | `debug!` | 背景のスレッドが答えを待っていなかった |
+| 窓口 | `install_event_sent` | `debug!` | イベントを今のゴーストへ送った（欄 `resend` は送り直しか） |
+| 窓口 | `install_event_send_failed` | `warn!` | kanade が止まっていてイベントを送れない（背景のスレッドは閉じた扱いで止まる） |
+| 窓口 | `install_worker_spawned` | `debug!` | 最初の依頼で背景のスレッドを起こした |
+| 窓口 | `install_worker_gone` | `error!` | 背景のスレッドが居ないので依頼を扱えない |
+| 窓口（選ぶ画面） | `install_pick_no_desk` | `debug!` | 窓口が無いので選ぶ画面を出さない |
+| 窓口（選ぶ画面） | `install_pick_busy` | `debug!` | 選ぶ画面が出ているので 2 つ目は出さない |
+| 窓口（選ぶ画面） | `install_pick_send_failed` | `warn!` | 選ばれた書庫を窓口へ送れない |
+| 起動中のゴーストへ入れる一周（`overwrite.rs`） | `install_overwrite_requested` | `info!` | 同じゴーストへの知らせなしの切替を頼んだ |
+| 同上 | `install_overwrite_returned` | `debug!` | 宛先がもう起動中のゴーストではないので、書庫を背景のスレッドへ返した |
+| 同上 | `install_overwrite_replaced` | `warn!` | 預かった書庫が 2 件になったので古い方を閉じた（起きないはずの形） |
+| 同上 | `install_overwrite_skipped` | `debug!` | 預かった宛先への切替ではない（または起動の文脈が無い）ので展開しなかった |
+| 同上 | `install_overwrite_requeued` | `info!` | 頼んだ切替が中止されたので、書庫を預かり直した（次の定常到達で頼み直す） |
+| 置換語（`names.rs`） | `install_names_reseeded` | `debug!` | 起こしたゴーストへ置換語の値を載せ直した |
+| 台本の受け口（`emo2_boot/install_cue.rs`） | `install_cue_unopenable` | `warn!` | 自分宛（`execute`）の開けない荷物を読み飛ばした |
+| 同上 | `install_cue_skip` | `debug!` | 担当外の cue・コマンドを読み飛ばした |
+| 同上 | `install_cue_extra_ignored` | `warn!` | パスより後ろの引数を読まなかった（要求は出す） |
+| 同上 | `install_cue_send_failed` | `warn!` | 要求を窓口へ送れなかった |
 
 ## Testing Strategy
 

@@ -2930,20 +2930,17 @@ note = """
 """
 
 [entry."ukadoc:descript_ghost:install.accept_2c_540d_524d1_2c_540d_524d2_2c_540d_524d3...:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる。記録: なし。
-areka にはゴーストの配布ファイルを受け入れる導線が無く、入れてよい相手の名前を並べるこの欄を読む経路も無い。
-ゴーストの descript から areka が引くのは、areka-parsers の package::resolve が読む名前の欄と SHIORI のファイル名とシェルの置き場所の名前、同じ package::resolve が SHIORI マウントへ転記する shiori.encoding と shiori.forceencoding（SHIORI 通信の文字コードを areka-ghost の shiori_wiring::initial_charset が決めるのに使う）、同じクレートの charset::prescan_charset が読む文字コードの宣言、そして areka の placement::config::resolve_scope が読む窓の置き方の欄だけである。この欄はそのどれにも入っていないので、読まれることも記録が出ることもない。
-areka-parsers の package::resolve は前置きで install.txt に触れないと自ら宣言しており、入れる側の仕組みは 1 つも無い。
-両方の表のすべての行を当たったが、この欄を名指しで引き受ける行は無い。
-入れる・更新する・配布ファイルを作るまわりの項目は、どの spec も担当していない。
-束: 配布物の素性と説明文・読む経路が無い（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 45——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+実装済み。インストールの手続きが書庫を扱うたびに、起動中のゴーストの ghost/master/descript.txt からこの欄を読み（鍵は ASCII 小文字化して引く）、カンマで分けて前後の空白を落とした名前の列にする（空の名前は落とす）。書庫の install.txt の accept をこの列の各名前と sakura.name に突き合わせ、どれか 1 つに完全一致（大文字小文字を区別）すれば受け取り、どれにも一致しなければ OnInstallRefuse で断る。読むのは照合のときだけで、目録の素性（Identity）には載せない。
+壊れ方: 無い。記録: 欄が無ければ空の列（異常ではない・記録なし）。descript.txt が読めないときは空の列にして warn!（catalog_descript_unreadable）を残す。照合の結果は info!（install_accept）か warn!（install_refused）に残る。
+根拠の場所: crates/areka-ghost/src/catalog.rs の install_accept（この欄の読み手）の上の正典 URL の行。照合は crates/areka/src/install/judge.rs の judge_accept、今のゴーストの素性を組むのは crates/areka/src/install/desk.rs の ghost_facts。
+束: 配布物の素性と説明文・正典どおりに動く（先に要る仕組み: 資産の素性を保持する場所）。束の順位: 78——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」（順位 45）から同じ束の実装済みの行と同じ綴りへ揃えた（同じ台帳の descript_ghost の id,ID名 が先例）。priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 """
 
 [entry."ukadoc:descript_ghost:kero.balloon.defaultsurface_2c_6570_5024:1"]
@@ -3836,9 +3833,9 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。ghost・shell の書庫に書かれた balloon／balloon<数字> の接頭辞を同時インストールのバルーンとして読み、宛先 balloon/<ディレクトリ名>/ に持つ。1 階層の名前でなければ書庫ごと拒否する。headline・plugin・calendar.skin・calendar.plugin の接頭辞と、ghost・shell 以外の書庫に書かれたものは読み飛ばして記録する。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。ghost・shell の書庫に書かれた balloon／balloon<数字> の接頭辞を同時インストールのバルーンとして読み、宛先 balloon/<ディレクトリ名>/ に持つ。1 階層の名前でなければ書庫ごと拒否する。headline・plugin・calendar.skin・calendar.plugin の接頭辞と、ghost・shell 以外の書庫に書かれたものは読み飛ばして記録する。
 壊れ方: 明示エラー。記録: error!（[areka_nar] refused or failed）。書庫ごと拒否し、宛先には 1 バイトも触れない。読み飛ばしは warn!（[areka_nar] manifest entry skipped）。
-束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の COMPANION_SUFFIXES（同時インストールのキーの後半の表）の上の正典 URL の行。
 """
 
@@ -3850,9 +3847,9 @@ priority = "B1"
 values = ["更新"]
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。同時インストールのバルーンごとに、本体の refresh と同じ規則（値が 1 のときだけ全消去して入れ替え）で読む。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。同時インストールのバルーンごとに、本体の refresh と同じ規則（値が 1 のときだけ全消去して入れ替え）で読む。
 壊れ方: 無い。記録: なし（値が 1 でないのは異常ではない）。
-束: 更新で消す・残すの指示（要件 8.3 の 14 件）・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 更新で消す・残すの指示（要件 8.3 の 14 件）・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 31 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の COMPANION_SUFFIXES（同時インストールのキーの後半の表）の上の正典 URL の行。
 """
 
@@ -3864,9 +3861,9 @@ priority = "B1"
 values = ["更新"]
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。同時インストールのバルーンごとに、本体の refreshundeletemask と同じ規則で読む（*.refresh,1 のときだけ）。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。同時インストールのバルーンごとに、本体の refreshundeletemask と同じ規則で読む（*.refresh,1 のときだけ）。
 壊れ方: 無い。記録: 1 階層のファイル名でない要素は読み飛ばして warn!（[areka_nar] manifest entry skipped）。
-束: 更新で消す・残すの指示（要件 8.3 の 14 件）・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 更新で消す・残すの指示（要件 8.3 の 14 件）・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 31 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の COMPANION_SUFFIXES（同時インストールのキーの後半の表）の上の正典 URL の行。
 """
 
@@ -3878,9 +3875,9 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。同時インストールのバルーンの、書庫の中の取り出し元フォルダ名として読む。無い・空なら *.directory と同じ名前を使う。1 階層の名前でなければ書庫ごと拒否する。宛先（*.directory）の無い接頭辞の断片は読み飛ばして記録する。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。同時インストールのバルーンの、書庫の中の取り出し元フォルダ名として読む。無い・空なら *.directory と同じ名前を使う。1 階層の名前でなければ書庫ごと拒否する。宛先（*.directory）の無い接頭辞の断片は読み飛ばして記録する。
 壊れ方: 明示エラー。記録: error!（[areka_nar] refused or failed）。書庫ごと拒否し、宛先には 1 バイトも触れない。読み飛ばしは warn!（[areka_nar] manifest entry skipped）。
-束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の COMPANION_SUFFIXES（同時インストールのキーの後半の表）の上の正典 URL の行。
 """
 
@@ -3931,9 +3928,9 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。値を InstallManifest.accept に持つ（空値は「無し」）。areka-nar は照合しない。照合と、不一致のときの記録（install_refused）・ゴーストへの知らせ（OnInstallRefuse）は areka-P0-ghost-install の install の判断と手続きが受け持つ。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。値を InstallManifest.accept に持つ（空値は「無し」）。areka-nar は照合しない。照合と、不一致のときの記録（install_refused）・ゴーストへの知らせ（OnInstallRefuse）は areka-P0-ghost-install の install の判断と手続きが受け持つ。
 壊れ方: 無い（areka-nar は値を持つだけで、この値で書庫を拒否しない）。記録: なし（areka-nar の範囲）。
-束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の KNOWN_KEYS（単独で意味を持つキーの表）の上の正典 URL の行。
 """
 
@@ -3958,10 +3955,10 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。文字コードは areka-parsers の charset::decode が charset 行を先読みして決める（行が無ければ ANSI 既定）。宣言された綴りは InstallManifest.charset_declared に持つ。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。文字コードは areka-parsers の charset::decode が charset 行を先読みして決める（行が無ければ ANSI 既定）。宣言された綴りは InstallManifest.charset_declared に持つ。
 壊れ方: 黙って壊れる。記録: debug!。宣言された綴りを解けないときは、既定の文字コードへ静かに落ちる（areka-parsers の charset::decode）。
 同じ綴りの見出しは本台帳の 8 ページに並ぶ（ゴースト・シェル・バルーンの descript、プラグインとヘッドラインセンサの descript、インストール指示の install.txt、シェルの surfaces.txt、シェルの surfacetable.txt）。8 つは読み手の有無で状態が二手に割れる——ゴースト・シェル・バルーンの descript とシェルの surfaces.txt は areka-parsers の charset::prescan_charset を通る読む経路があるので実装済み（surfaces.txt は areka-P0-charset-canon の着地でこちらへ移った）、インストール指示の install.txt も areka-nar が areka-parsers の charset::decode を通して読むので実装済み（areka-P0-ghost-install で本体 areka の依存に入った）、プラグインとヘッドラインセンサの descript とシェルの surfacetable.txt はファイルごと開かれないので黙って壊れる。この項目は読む経路のある 5 枚のうちインストール指示の install.txt の側である。名前で引かず、ページを決めてから引くこと。
-束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の KNOWN_KEYS（単独で意味を持つキーの表）の上の正典 URL の行。
 """
 
@@ -3973,9 +3970,9 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。値を宛先のフォルダ名として InstallManifest.directory に持つ。無い・空・1 階層の名前でないものは書庫ごと拒否する。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。値を宛先のフォルダ名として InstallManifest.directory に持つ。無い・空・1 階層の名前でないものは書庫ごと拒否する。
 壊れ方: 明示エラー。記録: error!（[areka_nar] refused or failed）。書庫ごと拒否し、宛先には 1 バイトも触れない。
-束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の KNOWN_KEYS（単独で意味を持つキーの表）の上の正典 URL の行。
 """
 
@@ -3987,10 +3984,10 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。値を表示名として InstallManifest.name に持つ（OnInstallComplete の Reference1 に使う）。無い・空は書庫ごと拒否する。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。値を表示名として InstallManifest.name に持つ（OnInstallComplete の Reference1 に使う）。無い・空は書庫ごと拒否する。
 壊れ方: 明示エラー。記録: error!（[areka_nar] refused or failed）。書庫ごと拒否し、宛先には 1 バイトも触れない。
 同じ綴りの見出しは、ゴースト・シェル・バルーンの descript、インストール指示の install.txt、シェルの surfaces.txt、プラグインとヘッドラインセンサの descript の 7 ページに並ぶ。さらに別ドメインにも同じ綴りがある——プロパティの側（list_propertysystem のページ）とSHIORI の資源の側（list_shiori_resource のページ）である。7 ページは areka の読み手が別々なので状態も割れる——シェル名はareka-ghost の config::resolve_shell_name が読んで起動時のシェル名になり、ゴースト名は areka-parsers の package::resolve が写すだけで誰も読まず、インストール指示の install.txt の名前は areka-nar が表示名として読み、残りはどれも読まれずに終わる。この項目はその install.txt の側である。名前で引かず、ページを決めてから引くこと。
-束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の KNOWN_KEYS（単独で意味を持つキーの表）の上の正典 URL の行。
 """
 
@@ -4002,9 +3999,9 @@ priority = "B1"
 values = ["更新"]
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。値が 1 のときだけ既存の宛先を全消去してから入れ替え、それ以外は既存を残して同名だけ上書きする。supplement では読まない（重ね置き先がゴースト本体なので、全消去は本体ごと消しかねない）。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。値が 1 のときだけ既存の宛先を全消去してから入れ替え、それ以外は既存を残して同名だけ上書きする。supplement では読まない（重ね置き先がゴースト本体なので、全消去は本体ごと消しかねない）。
 壊れ方: 無い。記録: supplement に書かれていて読み飛ばしたときは warn!（[areka_nar] manifest entry skipped）。
-束: 更新で消す・残すの指示（要件 8.3 の 14 件）・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 更新で消す・残すの指示（要件 8.3 の 14 件）・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 31 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の KNOWN_KEYS（単独で意味を持つキーの表）の上の正典 URL の行。
 """
 
@@ -4016,9 +4013,9 @@ priority = "B1"
 values = ["更新"]
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。refresh,1 のときだけ読み、コロンで分けて前後の空白を落とした名前を全消去から残す（全階層で）。空の要素は捨てる。supplement では refresh と同じく読まない。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。refresh,1 のときだけ読み、コロンで分けて前後の空白を落とした名前を全消去から残す（全階層で）。空の要素は捨てる。supplement では refresh と同じく読まない。
 壊れ方: 無い。記録: 1 階層のファイル名でない要素は読み飛ばして warn!（[areka_nar] manifest entry skipped）。
-束: 更新で消す・残すの指示（要件 8.3 の 14 件）・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 更新で消す・残すの指示（要件 8.3 の 14 件）・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 31——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 31 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の KNOWN_KEYS（単独で意味を持つキーの表）の上の正典 URL の行。
 """
 
@@ -4030,10 +4027,10 @@ priority = "B1"
 values = []
 links = []
 note = """
-実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）。値を ghost・shell・supplement・balloon の 4 つに写す（キーの大小は区別しないが、値の大小は区別する）。それ以外（package・calendar・calendar skin・plugin・headline など）と指定なし・空は、受けない種別として書庫ごと拒否する。
+実装済み。areka-nar の manifest::parse_manifest が書庫最上位の install.txt を読み（キーは ASCII 小文字化して引く）、InstallManifest へ写す。本体 areka は crates/areka/Cargo.toml で areka-nar を依存に持つ（areka-P0-ghost-install 要件 10.2）。NarArchive::open を呼ぶのは同 spec のインストールの手続き（crates/areka/src/install/procedure.rs の run_order が書庫ごとに開いて InstallManifest を読み、accept の照合・宛先の判断・イベントの Reference の組み立ては crates/areka/src/install/judge.rs の judge_accept・destination_of・complete_ex_refs などが行う）。値を ghost・shell・supplement・balloon の 4 つに写す（キーの大小は区別しないが、値の大小は区別する）。それ以外（package・calendar・calendar skin・plugin・headline など）と指定なし・空は、受けない種別として書庫ごと拒否する。
 壊れ方: 明示エラー。記録: error!（[areka_nar] refused or failed）。書庫ごと拒否し、宛先には 1 バイトも触れない。
 同じ綴りの見出しがゴースト・シェル・バルーンの descript にもあり、本ページを含めて 5 ページに並ぶ。読まれ方は割れる——ゴースト・シェル・バルーンの descript は areka が開いて読むファイルだが、その中でこの欄だけが引かれない。プラグインの descript はファイルごと開かれない。インストール指示の install.txt（この項目）だけは areka-nar が読んで種別を決める。5 つはページごとに別の項目で、名乗る相手（何の種別か）が違うので、書ける語が同じとはかぎらない。別ドメインに同じ綴りの項目は無い。名前で引かず、ページを決めてから引くこと。
-束: 配布ファイルを入れる指示・読む経路が無い（先に要る仕組み: 配布と更新の仕組み）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
+束: 配布ファイルを入れる指示・正典どおりに動く（先に要る仕組み: 配布と更新の仕組み。書庫の install.txt を読んで入れる側は、読み手 areka-nar〔areka-P0-nar-install〕と、それを呼ぶ本体の入口〔右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…]・areka-P0-ghost-install〕で在る。網の先から取ってくる側と、更新の差分を当てる側はまだ無い）。束の順位: 47——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。実装済みへ移したので、下位区分を「読む経路が無い」から実物に揃えた。順位 47 は下位区分が「読む経路が無い」だったときに付いた値のままで、priority の欄は道具（priority-apply）が linkage.md と briefing.md から書き戻す値なので手で触っていない。下位区分が動いたぶんの順位の付け直しは統合担当（ukadoc-coverage-roadmap）の持ち分である。
 根拠の場所: crates/areka-nar/src/manifest.rs の KNOWN_KEYS（単独で意味を持つキーの表）の上の正典 URL の行。
 """
 
@@ -7978,7 +7975,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnNarCreating:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布用アーカイブ（nar）の作り方一式を定める。areka にはアーカイブの作成も展開も無く、install.txt を読む経路も無いので、ページ全体として何も無い。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布用アーカイブ（nar）の作り方一式を定める。areka は出来上がった nar を読んで入れる側を持つ（areka-nar が install.txt を読んで展開し、本体は右クリックのメニューの「インストール…」と台本 \\![execute,install,path,…] から入れる・areka-P0-ghost-install）が、このページの中心であるアーカイブを作る側（フォルダから nar を作る・developer_options.txt を読む）は 1 つも無いので、ページ全体としては満たしていない。入れる側の細かい可否は同じ台帳の descript_install の各項目で読める。ベースウェアの違いに触れる注記があるが、SSP でも有効な記述なので対象外にはしない。
 担当は空。配布者向けのページで、要件 7.2 が名指しする担当 spec にも設計が足した 2 本にも、ページ 1 枚をまとめて引き受ける spec は無い。担当の割り当ては areka-P0-ukadoc-coverage-roadmap に委ねる。
 関連の向き: 正典の本文が相手のページを名指しで指しているとき、指している側にだけ関連を置き、指されている側には戻りの関連を置かない。このページは配布用アーカイブを作る手順を書く途中で、置くファイルの中身の説明を「インストール」「全体の構成」「ゴースト」「シェル」の各ページへ預けている。名指しで指している先をすべて関連に置いた。
 束: 配布者向け・プラグイン・ヘッドライン（要件 8.4 の既定）・読む経路が無い（先に要る仕組み: プラグインとヘッドラインの仕組み）。束の順位: 55——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
@@ -8122,9 +8119,9 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnInstallReroute:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布アーカイブの中身の並べ方と、install.txt・developer_options.txt の役割を定める。areka にはインストーラの働きも install.txt を読む経路も無いので、ページ全体として何も無い。
-担当は空。配布と更新に属する項目はまとめて担当が決まっていない。担当の割り当ては areka-P0-ukadoc-coverage-roadmap に委ねる。
-areka-P0-package-mount の brief は範囲の Out で install.txt と nar の配置の解決を対象外と宣言している。担当が空なのは取りこぼしではなく、この宣言の結果である。
+壊れ方: 黙って壊れる。記録: なし。この項目はページ 1 枚をまとめて指す粗い粒度で、ページの中の記述を 1 つずつ分けて持っていない。ページは配布アーカイブの中身の並べ方と、install.txt・developer_options.txt の役割を定める。areka はインストーラの働きを持つ——areka-nar が書庫の最上位の install.txt を読んで検査し展開し、本体は右クリックのメニューの「インストール…」（ファイルを選ぶ画面）と台本 \\![execute,install,path,…] の 2 つの入口から同じ手続きで入れる（areka-P0-ghost-install）。ただしページが自動インストールの手段として挙げる D&D（ゴーストの窓への投げ込み）は受け口がまだ無く（後続 areka-P0-file-drop が受け持つ）、developer_options.txt を読む経路も無いので、ページ全体としては満たしていない。install.txt の欄ごとの可否は同じ台帳の descript_install の各項目で読める。
+担当は空。ページ 1 枚をまとめて指すこの粒度を引き受ける spec は無い（担当が決まるのは install.txt の中の個々の欄と、個々のイベント・タグであって、ページ全体ではない）。担当の割り当ては areka-P0-ukadoc-coverage-roadmap に委ねる。
+areka-P0-package-mount の brief は範囲の Out で install.txt と nar の配置の解決を対象外と宣言している。install.txt を読むのはその後に建った areka-P0-nar-install（読み手 areka-nar）と areka-P0-ghost-install（本体の入口と手続き）である。
 関連の向き: 正典の本文が相手のページを名指しで指しているとき、指している側にだけ関連を置き、指されている側には戻りの関連を置かない。このページが名指しで指しているのは「配布用ファイルの作成」のページで、アーカイブの作り方そのものをそちらに預けている。これを関連に置いた。
 束: 仕組み全体を説明するページ全体・読む経路が無い（先に要る仕組み: ページ 1 枚がまとめて指す仕組み全体）。束の順位: 62——壊れ方の段 → テーマの数 → 影響する既存資産の広さ → 依存する基盤の共有度 の順で決めた。同じ束の項目には同じ優先度を付ける。
 """
