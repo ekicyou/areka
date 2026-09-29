@@ -180,3 +180,143 @@ budouy の `parse` はスカラー値の境界で切るので、チャンクの�
 8. **要件 1.3／4.5 の判定に使う絵文字の選び方**: 前景色を参照する層を持たない絵文字（🇯🇵・😀 など）に限る（R-3）。判定の期待値に「自分の色のまま」を書くには、hover 中と非 hover の画素の比較で足りるか。
 9. **COLR の版の記録**（裁定 3）: spike で出た字形の版（v0／v1）を design.md に実測として書くだけで、要件は変えない。Windows 10 では v0 になる旨も併記する。
 10. **異体字セレクタの代替の実測の記録**（要件 1.7・R-8）: 游ゴシックが基字を持つ U+FE0F つきの絵文字がどちらに出るかを design.md に事実として書く。独自の代替の規則は足さない。
+
+---
+
+# 設計フェーズの調査記録（2026-09-29・`/kiro-spec-design`）
+
+## Summary
+
+- **Feature**: `areka-P0-balloon-color-emoji`
+- **Discovery Scope**: Extension（既存の `areka-emo-text`・`areka-sakura` の拡張。軽量の調査＋設計判断のための実測 1 回）
+- **Key Findings**:
+  - DirectWrite のクラスタ数は UAX #29 と **国旗以外**で一致する。国旗は Windows に字形が無く、地域表示記号 2 つが単色の 2 クラスタになる（色も出ない）。
+  - `ENABLE_COLOR_FONT` は単色の字形の画素を **1 ビットも変えない**（2 書体 × 3 方式 × 2 色の塗りでバイト等価）。
+  - 色つきの字形は塗りの色に従う層を持たない（黒／赤の塗りでバイト等価）。字形はこの機械ではグラデーション（COLR v1）。
+  - budouy は結合文字の手前で塊の境界を落とす（「か゚き゚く゚の話」→ `か`｜`゚き゚く`｜`゚の`｜`話`）。写像規則が要る。
+  - `TextLayerState` は `tests/pipeline_test.rs` がスレッドの `join` 越しに値で返すので `Send` を保つ必要がある（クラスタの型の選択に効く）。
+
+## Research Log
+
+### 実測の方法（一時的な検証プログラム）
+
+- **Context**: §4 の R-1〜R-8 は設計で実測すると決めていた。
+- **Sources Consulted**: `crates/areka-emo-text/tests/` に一時ファイル `zz_color_emoji_spike.rs` を置き、`GraphicsCore::new()` → `ID2D1Device::CreateDeviceContext` → `CreateBitmap`（`TARGET`）へ `DrawTextLayout` で描き、`CPU_READ` の bitmap へ `CopyFromBitmap` → `Map` で読み戻した。書式は `create_text_format` と同じ引数（`ja-JP`・NORMAL）で `DirectionRecipe::for_mode` を焼き、家族名はＭＳ ゴシック（既定）と Yu Gothic UI の 2 つ、方式は 3 つ、大きさは計測 24px・描画 48px。`cargo test -p areka-emo-text --test zz_color_emoji_spike -- --nocapture` で 1 回走らせ（0.73 秒）、ファイルは削除した（コミットしない）。
+- **Findings**: 下の各項目。
+- **Implications**: 設計は実測に基づく事実として design.md「設計の調査で確かめた事実」へ転記した。
+
+### R-7 代替フォントの実在
+
+- **Findings**: `FontCatalog::family_for(&["Segoe UI Emoji"])` → `Some("Segoe UI Emoji")`。`Yu Gothic UI`・`游ゴシック` も `Some`。
+- **Implications**: 6.7 の判定はこの綴りで引く。
+
+### R-1 DirectWrite のクラスタ数と幅（`GetClusterMetrics`・24px・折り返し無し）
+
+| 形 | UAX #29 | DirectWrite（横） | 幅（ＭＳ ゴシック・横） | 幅（縦 2 方式） |
+|---|---|---|---|---|
+| a あ 🦆 | 3 | 3 | 12.0 / 24.0 / 32.95 | 12 / 24 / 22.52 |
+| 😀 | 1 | 1 | 32.95 | 22.52 |
+| 👨‍👩‍👧 | 1 | 1（UTF-16 長 8） | 30.07 | 22.52 |
+| 🇯🇵 | 1 | **2**（各 UTF-16 長 2） | 7.15 ＋ 11.09 | 22.52 ＋ 22.52 |
+| 👍🏻 | 1 | 1（長 4） | 32.95 | 22.52 |
+| ❤️ | 1 | 1（長 2） | 24.0（Yu Gothic UI は 32.95） | 24.0（同 22.52） |
+| 1️⃣ | 1 | 1（長 3） | 24.0 | 24.0 |
+| か゚ | 1 | 1（長 2） | 24.0 | 24.0 |
+| a あ 👨‍👩‍👧 b 🇯🇵 | 5 | 6 | 12 / 24 / 30.07 / 12 / 7.15 / 11.09 | — |
+
+- **Findings**: 国旗だけ 2 クラスタ。行の中（最後の行）でも同じ 2 つの幅なので、`probe_advance` の合計式は行の中で占める幅と一致する。Yu Gothic UI でも数は同じ。
+- **Implications**: 単位は UAX #29。照合用の判定（`probe_advances_match_…`）は DirectWrite のクラスタを UTF-16 長でクラスタごとに束ねて合計を比べる形へ改める（§7 項目 5 の答え）。国旗の色は 1.5 の縮退。
+
+### R-4 非絵文字の画素（`NONE` と `ENABLE_COLOR_FONT`）
+
+- **Findings**: 「a あ 漢字 Hello ♥ 。 i W」（24px・256×96）を黒／赤の塗りで描いた読み戻しは、ＭＳ ゴシック・Yu Gothic UI × 3 方式のすべてで **バイト等価**（不透明画素 1,540〜1,671）。
+- **Implications**: 5.1 は成り立つ。6.4 の証拠は同じテストの中の描き比べで足りる（golden の PNG は作らない）。
+
+### R-3／R-5／R-6／R-8 色つきの字形（48px・128×128・`ENABLE_COLOR_FONT`）
+
+| 形 | 書体 | `NONE` の色つき画素 | `COLOR` の色つき画素 | 不透明画素の色の種類 | 黒／赤の塗りでバイト等価 |
+|---|---|---|---|---|---|
+| 😀 | 両方 | 0 | 1,889（縦 1,805） | 1,109 | **等価** |
+| 👨‍👩‍👧 | 両方 | 0 | 1,971（縦 1,898） | 1,232 | **等価** |
+| 👍🏻 | 両方 | 0 | 1,258（縦 1,226） | 844 | **等価** |
+| 🇯🇵 | 両方 | 0 | **0** | 1 | 不等価（単色＝塗りに従う） |
+| 1️⃣ | 両方 | 0 | **0** | 1 | 不等価（単色） |
+| か゚ | 両方 | 0 | 0 | 1 | 不等価（単色） |
+| ❤️ | ＭＳ ゴシック | 0 | **0** | 1 | 不等価（単色） |
+| ❤️ | Yu Gothic UI | 0 | 1,437 | 1,125 | **等価** |
+| ☺️ | ＭＳ ゴシック | 0 | 0 | 1 | 不等価（単色） |
+| ☺️ | Yu Gothic UI | 0 | 1,893 | 1,515 | **等価** |
+| ♥ U+2665 | 両方 | 0 | 0 | 1 | 不等価（単色） |
+
+- **Findings**: 色つきで出る形は黒／赤の塗りで読み戻しが等価＝塗りに従う層が無い（R-3）。不透明画素の色が 1,000 通りを超えるのでグラデーションの字形＝COLR v1（R-5。DC は `ID2D1DeviceContext4`／`5` へ QI 可）。縦書き 2 方式でも色つきの画素が出る（R-6）。異体字セレクタつきは基字を持つＭＳ ゴシックでは単色・持たない Yu Gothic UI では色つき（R-8）。国旗とキーキャップは色つきにならない（国旗は Windows に字形が無い・キーキャップは `1` を基字体が持ち U+20E3 が単色の囲みで代替される）。♥ U+2665 は単色（1.2）。
+- **Implications**: 1.3／4.5 の判定は 😀・👨‍👩‍👧・👍🏻 で行う。裁定 3（版は OS 任せ）はそのまま。1.7 は事実として design.md に記録。国旗の色は Non-Goals に明記。
+
+### R-2 budouy の塊の境界とクラスタ
+
+- **Findings**: 「今日は家族👨‍👩‍👧で出かけた」→ 3 塊（ZWJ 列は塊の中）・「日本🇯🇵に行きたい」→ 2 塊（国旗は塊の中）・「いいね👍🏻と思う」→ 2 塊・「番号は1️⃣です」→ 2 塊（キーキャップは塊の中）・「好き❤️だよ」→ 1 塊・絵文字 3 つだけ → 1 塊。**「か゚き゚く゚の話」→ `か`｜`゚き゚く`｜`゚の`｜`話`（結合文字 U+309A の手前で切れる）**。
+- **Implications**: 境界がクラスタの途中に落ちる実例がある。規則「クラスタは先頭バイトが属する塊へ」で `[1, 2, 1, 1]`（合計 5＝クラスタ数）。純粋関数に切り出して budouy 無しで全分岐を判定し、この例文は回帰の固定に使う。
+
+### `TextLayerState` の `Send`
+
+- **Context**: クラスタの型を `Rc<str>` にすると毎フレームの写しが割り当て無しになるが、`Send` を失う。
+- **Sources Consulted**: `crates/areka-emo-text/tests/pipeline_test.rs` の `run_channel_pipeline`——`std::thread::spawn(move || { … state.borrow().clone() }).join()` で `TextLayerState` を値で返す（`std::thread::spawn` は戻り値に `Send` を要求する）。`actor.rs` の `TextLayerRuntime` は `!Send`（`Rc` 共有）だが、状態の型そのものは今日 `Send`。
+- **Findings**: `Rc<str>` は既存テストのコンパイルを壊す。`Box<str>` は `Send` だが毎フレームの写しで割り当てる。`Arc<str>` は両方を満たす（単一スレッドでは参照数の増減だけ）。
+- **Implications**: `TextItem::Glyph { text: Arc<str> }`・`PositionedGlyph { text: Arc<str> }`（設計決定 D1）。
+
+## Architecture Pattern Evaluation
+
+§3.1〜3.4 の表のとおり。採用は方針 C（既存の型と署名を替え、新しいものは兄弟ファイルへ）＋ ⒜ 文字列を持つ表現 ＋ `unicode-segmentation` ＋ `areka-sakura` の 1 定義点 ＋ 境界を後ろへ寄せる写像。
+
+## Design Decisions
+
+### D1: クラスタの表現は `Arc<str>`・`Copy` を外す
+- **Context**: §7 項目 1。
+- **Alternatives Considered**: ⒜ `Box<str>`（毎フレームの写しで割り当て）／`Rc<str>`（`Send` を失い `pipeline_test.rs` が壊れる）／⒝ 上限つき内蔵文字列（上限超えの縮退が要る）／⒞ `enum { Single(char), Multi }`（2 形の分岐が漏れる）／⒟ 範囲＋状態の文字列（署名が全部増える）。
+- **Selected Approach**: `Arc<str>`。構築は `TextItem::glyph(&str)`。
+- **Rationale**: 割り当て無しの写し＋`Send` 保持＋`From<&str>`・`Borrow<str>` で記憶の鍵にも使える。
+- **Trade-offs**: 参照数の増減が原子的操作になる（単一スレッドでは無視できる）。
+- **Follow-up**: 直書き約 180 か所の置換を機械的に行う（`TextItem::Glyph { ch: 'X' }` → `TextItem::glyph("X")`）。
+
+### D2: 切り方は `unicode-segmentation`・定義点は `areka-sakura/src/cluster.rs`
+- **Context**: §7 項目 2・3。
+- **Alternatives Considered**: DirectWrite の `GetClusterMetrics`（純粋層から呼べない・国旗で数が違う）／両 crate で直接 `graphemes(true)`（定義点 2 つ）／自前の規則（裁定 4 に反する）。
+- **Selected Approach**: `areka-sakura` に `clusters()`／`cluster_count()` を置き、`duration.rs` と `areka-emo-text/src/state.rs` が呼ぶ。依存の追加は `areka-sakura/Cargo.toml` の 1 行。
+- **Rationale**: 依存の向き（`areka-sakura → areka-emo-text`）に沿い、「文字の単位」の正本が `CHAR_NOMINAL_MS` と同じ crate に揃う。
+- **Trade-offs**: `areka-sakura` に小さなモジュールが 1 つ増える。
+
+### D3: 分かち書きの写像は「先頭バイトが属する塊へ」
+- **Context**: §7 項目 4・R-2。
+- **Selected Approach**: 純粋関数 `assign_items_to_chunks(chunk_byte_lens, item_byte_lens, run_start)`。空になった塊は生まない。前提が崩れたときのはみ出しは最後の塊へ（記録なし）。
+- **Rationale**: budouy が切った位置より前で切らないので既存の結果が不変。budouy 無しで全分岐を判定できる。
+
+### D4: 照合用の判定は DirectWrite のクラスタを束ねる
+- **Context**: §7 項目 5・R-1（国旗）。
+- **Selected Approach**: 行の `GetClusterMetrics` を `length`（UTF-16）で累積し、各クラスタの UTF-16 長に達したところで束ねて `width` を合計。束の境界がクラスタの境界と一致しなければ理由つきで失敗。
+- **Rationale**: 国旗を組から外さずに 6 形すべてを判定できる。
+
+### D5: 6.4 は同じテストの中の描き比べ
+- **Context**: §7 項目 6・R-4。
+- **Selected Approach**: `ViewboxExecutor` に `#[cfg(test)]` の欄 `text_draw_options` と `set_text_draw_options_for_test`（`fail_next_render` と同型）。本番は定数 `TEXT_DRAW_OPTIONS`（`draw.rs`）。
+- **Rationale**: golden の PNG（新設・保守）が要らない。R-4 の等価が実測で確かめられた。
+
+### D6: 代替フォントの実在は理由つきの失敗
+- **Context**: §7 項目 7・R-7。
+- **Selected Approach**: `require_segoe_ui_emoji(&FontCatalog)`（テスト支援・`panic!`）。
+
+### D7〜D10: 判定に使う絵文字・字形の版・異体字セレクタ・その他の記録
+- 😀・👨‍👩‍👧・👍🏻 を色の判定に使う（国旗・キーキャップ・ＭＳ ゴシックの ❤️ は単色）。字形の版は OS 任せ（この機械は COLR v1・Windows 10 は v0）。異体字セレクタは基字の有無で OS が決める（記録のみ）。国旗の色は Non-Goals。タグで割ったクラスタは繋がない（Non-Goals）。
+
+## Risks & Mitigations
+
+- `Copy` の除去がテストの直書きへ広く波及する — 機械的な 1:1 置換（`TextItem::glyph`・`text: "…".into()`）で行数を変えずに追随する。
+- `unicode-segmentation` の版更新で切り方が変わる — 1 スカラー値の文字は影響を受けない。6 形のテストが赤になれば版の差として扱う。
+- budouy の版更新で塊が変わる — 既存と同じ性質。「か゚」の固定は budouy の実物に依存するので、版を上げたら見直す。
+- 1,000 行の見張り — `layout.rs`・`actor.rs` に関数を足さない。新しいコードは兄弟ファイル。見込みは design.md の表。
+- Windows 10 の機械では字形が平面（COLR v0） — 判定は「色つきの画素が出る」だけなので同じ結果。
+
+## References
+
+- [Color font support - Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/directwrite/color-fonts)
+- [UAX #29: Unicode Text Segmentation](https://www.unicode.org/reports/tr29/)
+- [unicode-segmentation (crates.io)](https://crates.io/crates/unicode-segmentation) — 1.13.3・MIT/Apache-2.0
+- `crates/areka-emo-text/src/lib.rs` 層規律・`crates/log-capture-kit/tests/file_length_guard_test.rs` 1,000 行の見張り
