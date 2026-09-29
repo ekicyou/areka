@@ -1,4 +1,4 @@
-//! 作業場所の作成・書き込み・片付け・他の走行の残骸（要件 4.1・4.7・4.8・5.5）。
+//! 作業場所の作成・書き込み・片付け・他の走行の残骸（要件 4.1・4.7・4.8・5.5・5.9・9.10）。
 
 use super::*;
 use crate::testkit::{hold, tree};
@@ -136,6 +136,47 @@ fn folder_with_content_in_old_survives_repeated_creates_and_is_listed() {
         assert!(!empty_old.exists());
         assert_eq!(area.cleanup(), vec![stuck.clone()]);
     }
+}
+
+#[test]
+fn committed_run_with_held_file_in_old_is_not_residue_and_goes_once_released() {
+    let (_w, target) = fixture();
+    let area = WorkArea::create(&target).unwrap();
+    area.put("a.dll", b"new").unwrap();
+    let retired = area.retired("a.dll");
+    fs::create_dir_all(retired.parent().unwrap()).unwrap();
+    fs::write(&retired, b"old").unwrap();
+    let dir = area.dir().to_path_buf();
+    let held = hold(&retired);
+    // 成功した確定の後片付け: 消せなかった自分のフォルダは今日どおり挙げ、印を置く。
+    assert_eq!(area.cleanup(), vec![dir.clone()]);
+    assert!(dir.join(COMMITTED_MARK).is_file(), "印が置かれる");
+    // 開いたままの間は何周しても残骸に挙がらない（消しにかかって消せなくても黙る）。
+    for _ in 0..2 {
+        let area = WorkArea::create(&target).unwrap();
+        assert!(retired.exists(), "較正: 実際に消せていない");
+        assert!(area.cleanup().is_empty(), "印つきの走行は残骸でない");
+    }
+    drop(held);
+    let area = WorkArea::create(&target).unwrap();
+    assert!(!dir.exists(), "閉じた後の作業場所づくりで消える");
+    assert!(area.cleanup().is_empty());
+    assert!(!target.join(WORK_DIR).exists());
+}
+
+#[test]
+fn kept_run_gets_no_mark_and_stays_listed() {
+    let (_w, target) = fixture();
+    let area = WorkArea::create(&target).unwrap();
+    fs::create_dir_all(area.retired("sub")).unwrap();
+    fs::write(area.retired("sub/orig.txt"), b"o").unwrap();
+    let (kept, _) = area.keep();
+    assert!(
+        !kept.join(COMMITTED_MARK).exists(),
+        "戻せなかった走行は印を置かない"
+    );
+    let area = WorkArea::create(&target).unwrap();
+    assert_eq!(area.cleanup(), vec![kept]);
 }
 
 #[test]

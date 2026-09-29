@@ -1,4 +1,4 @@
-//! 作業場所（要件 4.1・4.7・4.8・5.5）。
+//! 作業場所（要件 4.1・4.7・4.8・5.5・5.9）。
 //!
 //! `<対象>/.update-work/<プロセス識別子>-<連番>/` に、落とした物（`new/<相対パス>`）と
 //! 退避した元の内容（`old/<相対パス>`）を置く。`areka-nar` の `.nar-work` と同じ置き方。
@@ -12,6 +12,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 /// 同一プロセス内で単調増加する連番。プロセス間の一意性はプロセス識別子が担う。
 static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
+
+/// 成功した確定の後片付けで消せなかった走行フォルダに置く印（空ファイル・5.9）。
+pub(crate) const COMMITTED_MARK: &str = "committed";
 
 /// 失敗は `(触ったパス, io::Error)`。
 type Failed = (PathBuf, io::Error);
@@ -29,6 +32,8 @@ pub(crate) struct WorkArea {
 impl WorkArea {
     /// 棚の他の走行の残骸を先に消し（消せなければ `residue`）、自分のフォルダを作る。
     /// `old/` に中身が残るフォルダ（戻せなかった走行の元の内容＝5.5）は消さずに `residue` へ。
+    /// ただし印 [`COMMITTED_MARK`] の在るフォルダは成功した確定の残りなので消しにかかり、
+    /// 消せなくても `residue` に挙げない（5.9）。
     /// 自分の名前のフォルダが既に在れば（プロセス識別子の再利用）作らずに失敗する。
     pub(crate) fn create(target: &Path) -> Result<WorkArea, Failed> {
         let shelf = target.join(WORK_DIR);
@@ -68,11 +73,14 @@ impl WorkArea {
     }
 
     /// 自分のフォルダを消し、空なら棚も消す。消せなかった物と `residue` を返す（4.8）。
+    /// 自分のフォルダを消せなかったときは印 [`COMMITTED_MARK`] を置く（5.9）。
     pub(crate) fn cleanup(self) -> Vec<PathBuf> {
         let mut leftovers = self.residue;
         if let Err(e) = fs::remove_dir_all(&self.dir)
             && e.kind() != ErrorKind::NotFound
         {
+            // 印が書けなくても挙げ方は同じ（次の走行が今日どおり残骸に挙げるだけ）。
+            let _ = fs::write(self.dir.join(COMMITTED_MARK), b"");
             leftovers.push(self.dir.clone());
         }
         let shelf = self.dir.parent().expect("作業場所は棚の下");
@@ -91,6 +99,7 @@ impl WorkArea {
 }
 
 /// 棚の中身を消す。消せなかった物と、`old/` に中身が残るので消さなかった物を返す。
+/// 印の在るフォルダは消せなくても返さない。
 fn sweep(shelf: &Path) -> Result<Vec<PathBuf>, Failed> {
     let entries = match fs::read_dir(shelf) {
         Ok(entries) => entries,
@@ -107,6 +116,15 @@ fn sweep(shelf: &Path) -> Result<Vec<PathBuf>, Failed> {
         let path = entry.path();
         let removed = match entry.file_type() {
             Ok(kind) if kind.is_dir() => {
+                let mark = path.join(COMMITTED_MARK);
+                if mark.is_file() {
+                    // 成功した確定の残り（写像中の DLL の古い写しなど）。消せなければ黙って次の機会へ。
+                    // 消しかけで印ごと消えることがあるので、残ったら置き直す。
+                    if fs::remove_dir_all(&path).is_err() && path.is_dir() {
+                        let _ = fs::write(&mark, b"");
+                    }
+                    continue;
+                }
                 if has_content(&path.join("old")) {
                     residue.push(path);
                     continue;
