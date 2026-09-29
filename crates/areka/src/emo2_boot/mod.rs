@@ -32,6 +32,7 @@ mod readme_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
+mod update_cue;
 pub(crate) mod user_break_cue;
 pub mod zorder_cue;
 

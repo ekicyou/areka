@@ -35,7 +35,7 @@
   - _Requirements: 8.2, 8.6_
   - _Depends: 1.3_
 
-- [ ] 3. 純粋な部品
+- [x] 3. 純粋な部品
 - [x] 3.1 (P) イベント名・Reference・番号・失敗理由・総括の写しを作る
   - 19 語のイベント名を、各 1 行の正典の URL の行つきの定数で持つ。ゴーストは `OnUpdate*`、シェル・バルーンは `OnUpdateOther*` の組を種別から選ぶ
   - `useorigin1` の読み（`1` なら 1 始まり・それ以外と返事なしは 0 始まり）、全イベントに同じ値で載せる種別と理由、`OnUpdateProcessExec`・`OnUpdateBegin`・差分の一覧・各ファイルの取得と照合（照合は 1 回の通知から始まりと結果の 2 件）・締め（`none`／`changed` と入れ替えた一覧）・失敗・二重起動（`executing`）の Reference を組む
@@ -46,7 +46,7 @@
   - _Boundary: update refs_
   - _Depends: 2_
 
-- [ ] 3.2 (P) 台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` の受け口と引数の解析を作る
+- [x] 3.2 (P) 台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` の受け口と引数の解析を作る
   - 3 つのコマンド名（選別子なし）だけを自分宛てとし、他は `debug!` で見送る。開けない荷物は自分宛てなら `warn!`
   - 解析は純粋な関数に置く: `updatebymyself` と `update,all` は今の 3 つ、`update,ghost+shell…` は並んだ順（`platform` を含む知らない語は断る）、`updateother` は `--shell=名前`／`--balloon=名前` を並んだ順に。更新オプション（`checkonly`・`testonly`・`recovery`・`--option=…`）が 1 つでもあれば要求ごと断り、`--plugin=` ほか知らない `--名前=` は 1 件ずつ `warn!` で読み飛ばし、`--shell=`／`--balloon=` が 1 つも無ければ断る
   - 断りは `warn!` 1 件で要求 0。通れば生の要求を送出端へ 1 件送る（送れなければ `warn!`・台本は殺さない）
@@ -181,3 +181,4 @@
 - 1.2: 送るイベントは正典で 19 語（spec の「20 語・43」は数え違いで dce16c5c で 19・42 へ直した）。後続の「19 語」「19 イベント」も同じ数。`events_tests.rs` の凍結の並び（`..._forty_two_...`）にも同じ 19 語が入っている
 - 2: `update/mod.rs` 先頭の `#![allow(dead_code)]` は 6.3（受付の口）で外す。`owner_count`・`briefing.md` の数を書き出す生成器は無い（`ukadoc-survey` は report／report-summary だけ）＝`check` と整合テストの求める値を写す。`delete.rs` の `// ukadoc:` 行にアンカーを足した（境界外・コメントだけ）
 - 3.1: `TargetEnd` は `refs.rs` に在る（`summary_refs` の入力）＝5.1 の手続きは `super::refs::TargetEnd` を使う。`begin_refs` は受けた `dir` を `display()` で書くだけ＝`OnUpdateBegin` の Ref1 を絶対パスにする（`std::path::absolute`）のは 5.1 の対象 1 つの一周の仕事
+- 3.2: `emo2_boot/update_cue.rs` 先頭の `#![allow(dead_code)]` は 7.1（受け口の列への登記）で外す。`updateother` の `--` で始まらない裸の語（正典に無い）は `Refusal::Option` で要求ごと断る。`update,all+ghost` は断らず `[Ghost,Shell,Balloon,Ghost]`（重複はそのまま）
