@@ -31,8 +31,9 @@ fn s(v: &[&str]) -> Vec<String> {
 #[test]
 fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
     // 13 語に、インストール系の 8 語を足して 21 語（areka-P0-ghost-install 要件 2.12・11.9）、
-    // 投げ込みの 2 語を足して 23 語（areka-P0-file-drop 要件 7.3・8.8）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 23);
+    // 投げ込みの 2 語を足して 23 語（areka-P0-file-drop 要件 7.3・8.8）、
+    // ネットワーク更新の 19 語を足して 42 語（areka-P0-network-update 要件 2.15・9.13）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 42);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",
@@ -48,6 +49,25 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
         "OnGhostTermsDecline",
         "OnFileDrop2",
         "OnDirectoryDrop",
+        "OnUpdateProcessExec",
+        "OnUpdateBegin",
+        "OnUpdateReady",
+        "OnUpdate.OnDownloadBegin",
+        "OnUpdate.OnMD5CompareBegin",
+        "OnUpdate.OnMD5CompareComplete",
+        "OnUpdate.OnMD5CompareFailure",
+        "OnUpdateComplete",
+        "OnUpdateFailure",
+        "OnUpdateOtherBegin",
+        "OnUpdateOtherReady",
+        "OnUpdateOther.OnDownloadBegin",
+        "OnUpdateOther.OnMD5CompareBegin",
+        "OnUpdateOther.OnMD5CompareComplete",
+        "OnUpdateOther.OnMD5CompareFailure",
+        "OnUpdateOtherComplete",
+        "OnUpdateOtherFailure",
+        "OnUpdateResult",
+        "OnUpdateResultEx",
     ] {
         assert_eq!(allowed_static(id), Some(id));
         assert!(is_allowed_event_id(id));
@@ -60,6 +80,14 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
         "",
         // 送り先を他のゴーストへ移す場面は作らない（要件 2.11）。
         "OnInstallReroute",
+        // 更新オプション `checkonly` の系・エクスプローラ・作る側は送らない（要件 2.15）。
+        "OnUpdateCheckComplete",
+        "OnUpdateCheckFailure",
+        "OnUpdateCheckResult",
+        "OnUpdateCheckResultEx",
+        "OnUpdateResultExplorer",
+        "OnUpdatedataCreating",
+        "OnUpdatedataCreated",
     ] {
         assert_eq!(allowed_static(id), None, "{id} は許可表に無い");
     }

@@ -195,8 +195,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// `OnInstallReroute` は載せない）。
 /// 投げ込みの 2 語（OnFileDrop2/OnDirectoryDrop）は file-drop 2.2 で同じ前例に倣い足した
 /// （21→23・いずれも正典固定 ID）。
+/// ネットワーク更新の 19 語は network-update 2.15 で同じ前例に倣い足した（23→42・いずれも
+/// 正典固定 ID・`OnUpdateCheck*`／`OnUpdateResultExplorer`／`OnUpdatedata*` は載せない）。
 #[test]
-fn allowed_event_ids_are_exactly_the_twenty_three_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_forty_two_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -223,6 +225,25 @@ fn allowed_event_ids_are_exactly_the_twenty_three_and_exclude_ontalk_onhour() {
             "OnGhostTermsDecline",
             "OnFileDrop2",
             "OnDirectoryDrop",
+            "OnUpdateProcessExec",
+            "OnUpdateBegin",
+            "OnUpdateReady",
+            "OnUpdate.OnDownloadBegin",
+            "OnUpdate.OnMD5CompareBegin",
+            "OnUpdate.OnMD5CompareComplete",
+            "OnUpdate.OnMD5CompareFailure",
+            "OnUpdateComplete",
+            "OnUpdateFailure",
+            "OnUpdateOtherBegin",
+            "OnUpdateOtherReady",
+            "OnUpdateOther.OnDownloadBegin",
+            "OnUpdateOther.OnMD5CompareBegin",
+            "OnUpdateOther.OnMD5CompareComplete",
+            "OnUpdateOther.OnMD5CompareFailure",
+            "OnUpdateOtherComplete",
+            "OnUpdateOtherFailure",
+            "OnUpdateResult",
+            "OnUpdateResultEx",
         ]
     );
     assert!(

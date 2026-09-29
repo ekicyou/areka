@@ -12,7 +12,7 @@
   - _Requirements: 5.9, 9.10, 10.1_
   - _Boundary: areka-update work_
 
-- [ ] 1.2 (P) kanade の許可表に更新のイベント 19 語とリソース 2 語を足す
+- [x] 1.2 (P) kanade の許可表に更新のイベント 19 語とリソース 2 語を足す
   - 送る 19 語（`OnUpdateProcessExec`〜`OnUpdateResultEx`）を、各 1 行の正典の URL の行つきでイベントの許可表に足し、冒頭の表にも 19 行足す（23 → 42）。`OnUpdateCheck*` 4 語と `OnUpdateResultExplorer` は足さない
   - リソースの許可表に `homeurl`・`useorigin1` を正典の URL の行つきで足す（10 → 12）。`other_homeurl_override` は足さない
   - 数の判定を 42 と 12 へ書き換え、19 語が引けて `OnUpdateCheckComplete` が引けないことを同じテストで判定する
@@ -175,3 +175,7 @@
   - ⑴ メニュー「ネットワーク更新」→ 差分 1 件が入る → `OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete`（`changed`）の台詞 → 台詞の後に引っ込んで戻る（`OnGhostChanged`）→ シェル・バルーンの中身も読み直されている ⑵ もう 1 度 → `none` → 読み直さない ⑶ `homeurl` の無いシェルが飛ばされ総括にゴーストとバルーンだけ ⑷ ⑴ の走行で `.update-work/` に印が置かれ、⑵ の走行で黙って消えるか（本番の 32bit SHIORI）。置けなければローカルの http で ⑴⑵ を行い、https 未確認を既知の制限へ
   - 4 項目が `signoff.md` に記録されている。予期しない結果は記録して開発者の判断を仰ぐ
   - _Requirements: 9.16, 9.17, 10.4_
+
+## Implementation Notes
+
+- 1.2: 送るイベントは正典で 19 語（spec の「20 語・43」は数え違いで dce16c5c で 19・42 へ直した）。後続の「19 語」「19 イベント」も同じ数。`events_tests.rs` の凍結の並び（`..._forty_two_...`）にも同じ 19 語が入っている

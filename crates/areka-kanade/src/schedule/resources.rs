@@ -22,7 +22,7 @@
 use crate::msg::{EventId, ShioriCall};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
-/// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（利用者名＋メニュー 9 名・Req4.1）。
+/// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（利用者名＋メニュー 9 名＋更新 2 名・Req4.1）。
 ///
 /// イベント発火の許可集合（[`crate::schedule::events::ALLOWED_EVENT_IDS`]）とは**別族**である。
 /// egress ガードは「イベント許可 ∨ リソース許可」で判定するため、本集合の要素は許可外拒否を
@@ -55,6 +55,12 @@ pub const ALLOWED_RESOURCE_IDS: &[&str] = &[
     "sakura.popupmenu.visible",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#kero.popupmenu.visible:1
     "kero.popupmenu.visible",
+    // ネットワーク更新の更新先と番号の起点（areka-P0-network-update）。Reference 付きの照会になる
+    // `other_homeurl_override` は載せない（裁定 11）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#homeurl:1
+    "homeurl",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#useorigin1:1
+    "useorigin1",
 ];
 
 /// `id` がリソース送出許可集合（[`ALLOWED_RESOURCE_IDS`]）に属するかを判定する（Req4.1）。
@@ -159,9 +165,10 @@ mod tests {
         );
     }
 
-    /// リソース許可集合は厳密にこの 10 名（語彙の凍結檻・Req4.1／要件 3.2）。
+    /// リソース許可集合は厳密にこの 12 名（語彙の凍結檻・Req4.1／要件 3.2・
+    /// areka-P0-network-update 要件 9.13）。
     #[test]
-    fn allowed_resource_ids_are_exactly_the_ten_names() {
+    fn allowed_resource_ids_are_exactly_the_twelve_names() {
         assert_eq!(
             ALLOWED_RESOURCE_IDS,
             &[
@@ -175,8 +182,10 @@ mod tests {
                 "closebutton.caption",
                 "sakura.popupmenu.visible",
                 "kero.popupmenu.visible",
+                "homeurl",
+                "useorigin1",
             ],
-            "リソース許可集合は利用者名＋枠 7 種の項目名＋本体側／相方側の表示可否の 10 名"
+            "リソース許可集合は利用者名＋枠 7 種の項目名＋本体側／相方側の表示可否＋更新先と番号の起点の 12 名"
         );
         for id in ALLOWED_RESOURCE_IDS {
             assert!(
@@ -195,6 +204,8 @@ mod tests {
             "kero.popupmenu.type",
             "char2.popupmenu.type",
             "char2.popupmenu.visible",
+            // Reference 付きの照会は α で送らない（areka-P0-network-update 裁定 11）。
+            "other_homeurl_override",
         ] {
             assert!(
                 !is_allowed_resource_id(id),

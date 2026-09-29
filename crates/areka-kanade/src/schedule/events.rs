@@ -38,6 +38,25 @@
 //! | `OnInstallRefuse` | GET（汎用の入口） | Ref0=`accept` の名前・Ref1=識別子・Ref2=名前（渡された列のまま） |
 //! | `OnGhostTermsAccept` | GET（汎用の入口） | 渡された列のまま |
 //! | `OnGhostTermsDecline` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateProcessExec` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateBegin` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateReady` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdate.OnDownloadBegin` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdate.OnMD5CompareBegin` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdate.OnMD5CompareComplete` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdate.OnMD5CompareFailure` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateComplete` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateFailure` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateOtherBegin` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateOtherReady` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateOther.OnDownloadBegin` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateOther.OnMD5CompareBegin` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateOther.OnMD5CompareComplete` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateOther.OnMD5CompareFailure` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateOtherComplete` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateOtherFailure` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateResult` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnUpdateResultEx` | GET（汎用の入口） | 渡された列のまま |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
@@ -129,6 +148,46 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnFileDrop2",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDirectoryDrop:1
     "OnDirectoryDrop",
+    // ネットワーク更新の 19 語（areka-P0-network-update）。汎用の入口から送る。`checkonly` の系の
+    // `OnUpdateCheck*` 4 語・`OnUpdateResultExplorer`・作る側の `OnUpdatedata*` は載せない（要件 2.15）。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateProcessExec:1
+    "OnUpdateProcessExec",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateBegin:1
+    "OnUpdateBegin",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateReady:1
+    "OnUpdateReady",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdate.OnDownloadBegin:1
+    "OnUpdate.OnDownloadBegin",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdate.OnMD5CompareBegin:1
+    "OnUpdate.OnMD5CompareBegin",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdate.OnMD5CompareComplete:1
+    "OnUpdate.OnMD5CompareComplete",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdate.OnMD5CompareFailure:1
+    "OnUpdate.OnMD5CompareFailure",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateComplete:1
+    "OnUpdateComplete",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateFailure:1
+    "OnUpdateFailure",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOtherBegin:1
+    "OnUpdateOtherBegin",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOtherReady:1
+    "OnUpdateOtherReady",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOther.OnDownloadBegin:1
+    "OnUpdateOther.OnDownloadBegin",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOther.OnMD5CompareBegin:1
+    "OnUpdateOther.OnMD5CompareBegin",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOther.OnMD5CompareComplete:1
+    "OnUpdateOther.OnMD5CompareComplete",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOther.OnMD5CompareFailure:1
+    "OnUpdateOther.OnMD5CompareFailure",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOtherComplete:1
+    "OnUpdateOtherComplete",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateOtherFailure:1
+    "OnUpdateOtherFailure",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateResult:1
+    "OnUpdateResult",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateResultEx:1
+    "OnUpdateResultEx",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
