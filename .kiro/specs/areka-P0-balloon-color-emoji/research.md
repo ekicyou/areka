@@ -149,6 +149,7 @@ budouy の `parse` はスカラー値の境界で切るので、チャンクの�
 - **R-5 字形の版（COLR v0 か v1 か）**。Windows 11 の Segoe UI Emoji は COLR v1 と v0 の両方を持ち、`ID2D1DeviceContext4` 以降の `DrawTextLayout` は COLR v1 の描画を外部から止められない（Microsoft Learn「Color font support」）。areka の `dc` は `ID2D1DeviceContext`（`create_device_context`）で作るが、実体の版は OS に依るので、どちらの字形が出るかは実測（裁定 3 のとおり、どちらでも要件 1.1／6.1 は満たす）。Windows 10 は COLR v0 のみ。
 - **R-6 縦書きでの色つき字形**。`DirectionRecipe` の縦書き 2 方式で `ENABLE_COLOR_FONT` が効くこと（色つきの画素が出ること）だけを実測する。向きは判定しない（裁定 6）。
 - **R-7 テスト機の代替フォント**。Windows 10/11 の同梱フォント「Segoe UI Emoji」の実在を `FontCatalog::family_for` で引けること（家族名の綴り）。
+- **R-8 異体字セレクタと指定フォントの基字**（要件 1.7）。游ゴシック（バルーンの既定）が基の字形を持つ `❤️`（U+2764 U+FE0F）・`☺️` などで、DirectWrite の代替が U+FE0F を見て Segoe UI Emoji へ回すか、基字のまま単色で描くかを実測し、design.md に事実として書く。どちらでも要件は満たす（独自の代替の規則は持たない）。
 
 参考: [Color font support - Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/directwrite/color-fonts)・[Using color fonts for beautiful text and icons - Windows Developer Blog](https://blogs.windows.com/windowsdeveloper/2017/06/06/using-color-fonts-beautiful-text-icons/)・[unicode-segmentation (crates.io)](https://crates.io/crates/unicode-segmentation)・[UAX #29](https://www.unicode.org/reports/tr29/)。
 
@@ -175,6 +176,7 @@ budouy の `parse` はスカラー値の境界で切るので、チャンクの�
 4. **分かち書きの境界がクラスタの途中に落ちたとき**: クラスタを前のチャンクへ入れる（境界を後ろへ寄せる）か、次のチャンクへ入れるか。推奨 前のチャンク（既存の結果が不変）。
 5. **`probe_advances_match_drawn_line_cluster_advances` の前提**: DirectWrite のクラスタ数と UAX #29 のクラスタ数が一致しない形が見つかったとき、幅の一致だけを判定して数の一致は外すか、その形を組から外すか。spike（R-1）の結果を見て決める。
 6. **「非絵文字の画素が変わらない」の対照**（要件 6.4）: 同じテストの中で `NONE`／`ENABLE_COLOR_FONT` を描き比べる（`ViewboxExecutor` に `#[cfg(test)]` の描画オプションの口を足す）か、変更前の `main` から取った読み戻しを固定値として持つか（golden の PNG は今リポジトリに無い＝新設になる）。推奨 描き比べ（R-4 が等価なら証拠として十分・golden の保守が要らない）。
-7. **代替フォントが無い機械での飛ばし方**: `FontCatalog::family_for` で「Segoe UI Emoji」を引けなければ理由を出して `return` する型を、テストの支援ファイルに 1 つ置くか。既存に同じ型は無いので初例の形を決める。
+7. **代替フォントの実在の判定**（要件 6.7・要件ディスカッションで「飛ばす」→「失敗にする」へ改めた）: `FontCatalog::family_for` で「Segoe UI Emoji」を引けなければ理由を添えて `panic!`／`assert!` する前提の関数を、テストの支援ファイルに 1 つ置く形。
 8. **要件 1.3／4.5 の判定に使う絵文字の選び方**: 前景色を参照する層を持たない絵文字（🇯🇵・😀 など）に限る（R-3）。判定の期待値に「自分の色のまま」を書くには、hover 中と非 hover の画素の比較で足りるか。
 9. **COLR の版の記録**（裁定 3）: spike で出た字形の版（v0／v1）を design.md に実測として書くだけで、要件は変えない。Windows 10 では v0 になる旨も併記する。
+10. **異体字セレクタの代替の実測の記録**（要件 1.7・R-8）: 游ゴシックが基字を持つ U+FE0F つきの絵文字がどちらに出るかを design.md に事実として書く。独自の代替の規則は足さない。
