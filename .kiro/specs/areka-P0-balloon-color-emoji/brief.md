@@ -84,7 +84,8 @@
 
 - **Extends**: なし。完了 spec の「書記素クラスタは M2 検討事項」の先送りを、ここで引き受ける。
 - **Adjacent**
-  - `shell-balloon-switch`（B7・`areka-emo-text` の `TextMsg`＝`sink.rs` に触る）。本 spec は `sink.rs` に触らない。`actor.rs` は折り返しの方式を選ぶ箇所を読むだけにして、書き換えが要るなら先に着地した側へ合わせる。
+  - `shell-balloon-switch`（**09-29 に B8 へ繰り下げ**・`areka-emo-text` の `TextMsg`＝`sink.rs` に触る）。本 spec は `sink.rs` に触らない。`actor.rs` は折り返しの方式を選ぶ箇所を読むだけにして、書き換えが要るなら先に着地した側へ合わせる。
+  - `network-update`（**09-29 に B7 へ繰り上げ**）とは共有 0（`crates/areka`・`crates/areka-update`・kanade）。`Cargo.lock` は別パッケージの節。
   - `file-drop`（B6・着手中）とは共有ファイル 0（2026-09-29 に `git diff main...claude/areka-p0-file-drop-9fdc80 --stat` で確認。`areka-emo-text`・`areka-sakura`・`areka-parsers`・`Cargo` は 0 件）。
 
 ## Constraints

@@ -196,3 +196,9 @@
 - `GhostSlot`／`BootContext`（`root`・`app_profile_dir`・`argv_session`・`current`）は読むだけ。`BootContext.current.balloon` の書き換えは本仕様の持ち場（doc コメントに明記済み）。
 - `close_windows_for_restart`（`app_exit.rs`）は窓の一式ごとに 1 度だけ立つ資源（`ChainFinalized` ほか 5 つ）を外す。**本仕様はキャラ窓を作り直さない前提**（シェルの差し替えは窓を残して資産だけ替える）。窓を作り直す設計に倒れるなら、この経路の前提（初期配置の確定が走り直す）を再検証する。
 - `signoff.md` 気付き 8: `GhostSession::shutdown` の join の間は UI の窓へ届く同期の送信が止まりうる（未確認）。本仕様は降ろさないので直接は関係しないが、差し替えの相で UI スレッドを長く塞ぐ処理（資産の復号）は tick の外へ出す（棚卸⑰ 項目 4 と同じ結論）。
+
+## 2026-09-29 着手順の入れ替え（開発者指示）
+
+- **本仕様は `network-update` の後（B8）になった。** Adjacent 節の「親 → 本仕様 → `ghost-install` → `network-update`」の直列は、向きが `ghost-install` → `file-drop` → `network-update` → **本仕様** に変わる（共有 5 本の直列はそのまま）。
+- 着手時には、`network-update` が足した許可表の件数・メニューの枠（`Frame::Update` の登記）・`consumer_ledger.rs` の行を読み直してから載せる。
+- `areka-emo-text` の `sink.rs`（`TextMsg`）を触るのは本仕様だけ。前倒しの `balloon-color-emoji` が先に着地していれば、書記素クラスタ単位になった `areka-emo-text` の上に載せる。
