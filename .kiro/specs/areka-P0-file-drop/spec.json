@@ -1,18 +1,20 @@
 {
   "feature_name": "areka-P0-file-drop",
   "created_at": "2026-09-29T07:02:06Z",
-  "updated_at": "2026-09-29T07:08:26Z",
+  "updated_at": "2026-09-29T08:08:15Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false,
-      "generated_at": "2026-09-29T07:08:26Z"
+      "approved": true,
+      "generated_at": "2026-09-29T07:08:26Z",
+      "approved_at": "2026-09-29T08:08:15Z"
     },
     "design": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": false,
+      "generated_at": "2026-09-29T08:08:15Z"
     },
     "tasks": {
       "generated": false,

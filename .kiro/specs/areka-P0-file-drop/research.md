@@ -137,3 +137,94 @@
 ## 8. 次の段階
 
 `/kiro-design areka-P0-file-drop`（要件ディスカッションで §5 を消化した後）。設計の骨は brief の Approach 表の 5 段のままで足りる。
+
+---
+
+# 設計の記録（2026-09-29・`/kiro-spec-design` で追記）
+
+> 上の §1〜§8 はギャップ分析（不変）。ここから下は設計で確かめたことと決めたこと。実測は同じ本ブランチ（main `c3876110`）。
+
+## Summary
+
+- **Feature**: `areka-P0-file-drop`
+- **Discovery Scope**: Extension（既存の 4 部品をつなぐ・light discovery。外部依存の追加 0 なので WebSearch は不要）
+- **Key Findings**:
+  - `quit_app`（`crates/areka/src/app_exit.rs`）は終了を指示する前に必ず `despawn_app_windows` で全ゴースト窓を消し、areka で `AppExit::request_exit` を呼ぶのはこの 1 か所。ゆえに「終了が指示された後にゴースト窓の受け手が呼ばれる」道は無く、§5 ⑶ の `FirstExit` の判定は要らない。
+  - `areka-nar` の `container::read_central_directory` はローカルヘッダの署名と範囲までしか読まず、伸長は `NarArchive::read` が別に全エントリへ掛けている。目次だけを読む公開関数は `read_central_directory` → `validate_entry_names` → `locate_install_txt` の 3 つを並べるだけで組める（新しい解析器は要らない）。
+  - 入力の受け手をゴースト窓へ差す既存の型は「spawn 直後の同期装着」（`attach_char_pointer_handlers`・`attach_balloon_pointer_handlers`・`prepare_ghost_windows` の閉包）で、`Added<WindowHandle>` の系（`attach_os_close_request`）は終了系の受け手のもの。投げ込みは入力なので前者に倣う（§4.2 の A・B のどちらでもない）。
+  - `install/desk_tests.rs` の `Rig` が `GhostSession::for_test(Some(tx), dir)`＋`GhostSlot` で kanade の受信端を偽造する型を持つ。areka の配線テストはこれで `RaiseEvent` の中身と順を読める。
+
+## Research Log
+
+### `[dev-dependencies]` の `windows` の機能はテストビルドにだけ効くか（§7 の 1 点目）
+- **Context**: §4.5 A（`HDROP` の偽造）に `Win32_System_Memory`（`GlobalAlloc`）が要る。
+- **Sources Consulted**: 根の `Cargo.toml`（`resolver = "2"`・`[workspace.dependencies.windows]` の features に `Win32_System_Memory` は無い）・cargo の resolver 2 の規則（dev-dependencies の feature は、そのターゲットを build しないときは統合しない）。
+- **Findings**: resolver 2 なので `cargo build` には漏れないが、`cargo test` のビルド単位では本番コードにも効く（package 単位の統合）。
+- **Implications**: 偽造は可能だが採らない（設計で決めたこと 5）。踏めるのは「腕 → 読み手 → 受け手」の 1 本の直線（呼ぶだけ）で、World 側の 4 腕は偽の一覧で全部踏める。機能フラグの追加 0 を保つ。
+
+### `DragQueryFileW` が返すパスの綴り（§7 の 2 点目）
+- **Context**: `\\?\` 接頭辞や相対パスが来るか。
+- **Sources Consulted**: 先進坑の記録（`crates/pilot/examples/pilot-dropfiles-on-wuc-window/README.md`・エクスプローラからの 5 回はいずれも `C:\…` の絶対パス）。
+- **Findings**: エクスプローラは絶対パス。他のアプリからの投げ込みでどう綴られるかは測っていない。
+- **Implications**: 正規化も検査もしない（設計で決めたこと 10）。綴りは記録に載るので後から分かる。
+
+### `OnDirectoryDrop` を続けて 2 件送ったときの順（§7 の 3 点目）
+- **Context**: 要件 5.1「落とされた順に 1 つずつ」。
+- **Sources Consulted**: `crates/areka-kanade/src/schedule/change.rs` の `on_raise_event`（1 件につき `Action::ShioriRequest` を 1 つ返す・待ち行列に積まない）・`msg.rs` の `KanadeMsg::RaiseEvent`（mpsc の到着順）。
+- **Findings**: 要求の順は mpsc の到着順で保たれる。応答の順と「後の返事が前の台詞を置き換える」様子は裁定 2 で承知済み。
+- **Implications**: 新しい檻は置かない（既存の入口の性質）。実機 ⑷ で 2 フォルダの記録を見る。
+
+### `DragFinish` を null の取っ手に呼んでよいか
+- **Context**: 受け手の入口で `FinishOnDrop` を無条件に握る書き方は wParam が 0 のとき null を返す。
+- **Sources Consulted**: `DragFinish` の契約（`WM_DROPFILES` で受けた `HDROP` を解放する・null の扱いは文書に無い）。
+- **Findings**: 無害と断定できる根拠が無い。
+- **Implications**: wParam が 0 なら `FinishOnDrop` を握らずに `warn!(NullHandle)` で戻る（返す資源が無い）。`HDROP` を受けた腕でだけ `DragFinish` をちょうど 1 回。
+
+### `sample-ghost-kit` は areka のテストから使えるか
+- **Sources Consulted**: `crates/areka/Cargo.toml` の `[dev-dependencies]`（`sample-ghost-kit`・`temp-path-kit` あり）。
+- **Implications**: areka の配線テストは `NarBuilder` で `install.txt` あり／なしの実物の `.nar` を一時フォルダに置いて `on_ghost_files_dropped` を通せる（`peek_install_txt` は注入しない本番の呼び手をそのまま踏む）。
+
+### 台帳の `implemented` の行に要る証拠
+- **Sources Consulted**: `crates/ukadoc-survey/tests/consistency/checks.rs`（要件 6.6: `implemented` の行はソースの正典 URL の索引に証拠が要る・`implemented_without_evidence_turns_red_and_evidence_clears_it`）。`spec_checks.rs`（`[[spec]].owner_count` は台帳 4 本で名前を宛先に持つ数・`[briefs].count` は行数）。
+- **Implications**: `events.rs` の許可表に `// ukadoc:` の行を置けば証拠になる（要件 8.8 と同じ 1 行）。`roadmap-draft.md` の `owner_count = 2`・`count = 38` は `cargo test -p ukadoc-survey` が判定する。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|---|---|---|---|---|
+| OS 境界（wintf）→ 窓に差した関数（areka）→ 純粋な振り分け → 既存の 2 口 | 完了 `app-lifetime-separation`／`ghost-shell-balloon-switch` の OS 閉鎖要求と同じ型 | 新しい型は 4 つ・状態を持たない・その巡で終える | 窓手続きの中で書庫を読む（伸長なし）ので大きな書庫で数十 ms | **採用** |
+| 受け取った一覧を資源にためて Input の段で捌く（§4.3 B） | `InstallDesk::drain` と同型 | 窓手続きが軽い | 資源と系が 1 組増え、要件 6.5 の順の保証を別に固定する必要 | 却下（ためる理由が無い） |
+| wintf に読み手の差し替え口（§4.1 C） | trait／閉包で OS 読み取りを差し替え | 成功の線を決定論で踏める | 実装 1 つの抽象が増える | 却下（B の分割で World 側は全部踏める） |
+
+## Design Decisions（research.md §5 の 1〜11 への答え・正本は design.md「設計で決めたこと」）
+
+1. **wintf の受け口**: §4.1 B（`read_dropped_paths` と `deliver_dropped_files` に分割）。部品は `OnFilesDropped(pub fn(&mut World, Entity, Vec<PathBuf>))`・一覧は `Vec<PathBuf>`。
+2. **定常でないときの `warn!`**: 送り口が在れば送って kanade が出す（`raise_event_not_steady`）。無ければ areka が `file_drop_no_kanade`。送らなかったイベント 1 件につき warn 1 件。
+3. **終了後の見分け**: 何も足さない。`quit_app` が先に全窓を消すので受け手は呼ばれず、遅れて届いた `WM_DROPFILES` は wintf の破棄済みの腕（`debug!`）が記録して `DragFinish` だけ呼ぶ。
+4. **MIME 表**: `file_drop.rs` の定数表（拡張子 41・MIME 33 種・design.md に全項目）。決められなければ空。
+5. **`HDROP` の偽造**: しない。null の取っ手で腕の到達を踏み、World 側は偽の一覧で踏む。成功の線の実物は実機 ⑶。
+6. **装着の置き場**: `input_events::file_drop::attach_file_drop_receivers` を `prepare_ghost_windows` の閉包で呼ぶ（入力の受け手の既存の型）。
+7. **`InstallOrigin`**: `WindowDrop`。
+8. **区切りの定数**: `install/judge.rs` の `SEPARATOR` を `pub(crate)` にして共用。
+9. **`roadmap-draft.md`**: 要件 8.4 で確定済み（設計の判断なし）。
+10. **パス**: 正規化しない・検査しない。
+11. **目次だけを読む口**: `areka_nar::peek_install_txt(path) -> Result<bool, NarError>`（伸長なし・書かない・記録なし・探し方は `locate_install_txt` を共用）。読めない書庫の `warn!` の語は `file_drop_archive_unreadable`。
+
+## 設計の統合（synthesis）で決めたこと
+
+- **一般化**: `OnFileDrop2` と `OnDirectoryDrop` の送出は `send_event(world, id, references, scope)` 1 つに寄せる（イベントごとの送り道を作らない・要件 7.4）。振り分けの 3 種は `DropSort` の 3 つの `Vec` で、種類を enum にしない（種類ごとの処理が並ぶだけで、値として持ち回る場面が無い）。
+- **作るか採るか**: MIME は表を自前で持つ（OS のレジストリは決定論に乗らない）。zip の目次は `areka-nar` の既存の読み手を並べる（新しい zip 解析器を書かない・`zip` クレートを入れない）。
+- **削ったもの**: 絵の外の判定（OS が決める）・`FirstExit` の判定（到達しない）・`is_absolute()` の検査（腕が増えるだけ）・読み手の差し替え口（実装 1 つ）・受け取りをためる資源（理由が無い）。
+
+## Risks & Mitigations
+
+- `peek_install_txt` が書庫全体を読む — 実機の `file_drop_received.elapsed_ms` で控え、目に見える長さなら `container` に末尾読みの入口を足す（ponytail の天井を design.md に明記）。
+- `OnDirectoryDrop` を 1 つずつ送ると後の返事が前の台詞を置き換える — 裁定 2 で承知済み。実機 ⑷ で様子を記録する。
+- `t_i2` の直書きの更新忘れ・`events_change_tests.rs` の 21 — どちらも赤で気付く（置き換えとして書き換える）。
+
+## References
+
+- [`OnFileDrop2`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnFileDrop2:1)・[`OnDirectoryDrop`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDirectoryDrop:1)・[インストール](https://ssp.shillest.net/ukadoc/manual/manual_install.html) — 正典。
+- `crates/pilot/examples/pilot-dropfiles-on-wuc-window/README.md` — 先進坑の検証結果（go）。
+- `.kiro/specs/completed/areka-P0-ghost-install/design.md` — 依頼の口と再検証の引き金「`file-drop` は `InstallOrigin` に自分の出どころを 1 つ足す」。
+- `crates/wintf/src/ecs/window_proc/lifecycle.rs` の `WM_ENDSESSION` — 4 腕の型。
