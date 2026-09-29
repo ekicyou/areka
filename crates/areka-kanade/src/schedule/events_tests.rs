@@ -183,7 +183,7 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
     assert_eq!(references, vec!["user"]);
 }
 
-/// 許可 ID の固定（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待21集合と完全一致し
+/// 許可 ID の固定（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待23集合と完全一致し
 /// `OnTalk`/`OnHour` を含まない。マウス系2種（OnMouseMove/OnMouseDoubleClick）は
 /// Task 2.1 で additive 追加され、選択関連の固定 3 ID（OnChoiceSelectEx/OnChoiceSelect/
 /// OnChoiceTimeout）は choice-select-events 2.3 で同じ前例に倣い additive 追加された
@@ -193,8 +193,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// 同じ前例に倣い足した（11→13・いずれも正典固定 ID）。
 /// インストール系の 8 語は ghost-install 2.1 で同じ前例に倣い足した（13→21・いずれも正典固定 ID・
 /// `OnInstallReroute` は載せない）。
+/// 投げ込みの 2 語（OnFileDrop2/OnDirectoryDrop）は file-drop 2.2 で同じ前例に倣い足した
+/// （21→23・いずれも正典固定 ID）。
 #[test]
-fn allowed_event_ids_are_exactly_the_twenty_one_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_twenty_three_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -219,6 +221,8 @@ fn allowed_event_ids_are_exactly_the_twenty_one_and_exclude_ontalk_onhour() {
             "OnInstallRefuse",
             "OnGhostTermsAccept",
             "OnGhostTermsDecline",
+            "OnFileDrop2",
+            "OnDirectoryDrop",
         ]
     );
     assert!(

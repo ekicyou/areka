@@ -189,6 +189,18 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 **14 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 37 に合わせ、
 `snapshot_on` は行の集合に最後に手を入れた日として **2026-09-29** にした。
 
+**2026-09-29 の 2 行目の追加**: `areka-P0-file-drop` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、同日この
+spec が台帳 `ledger/shiori.toml` の `OnFileDrop2`・`OnDirectoryDrop` の 2 項目を実装済みへ移し、自分の宛先として
+登記したからである。2 項目はどちらも `linkage.md` の束「投げ込み」に属するので、束の欄には「投げ込み」を書いた。
+段階 B の表の「投げ込み」の行は、依存する既存 spec の欄を **0 本**からこの spec の件数付きへ直し、候補 spec 名の
+案の欄もこの spec を引受先として書いた。「投げ込み」の束の構成は **10 件**（`linkage.md` の `members` を数えた）で、
+この spec の 2 件は ⑴（全数）にも ⑵（過半）にも当たらない。ドラッグ中の知らせ（`OnFileDropping`）と、文字・URL・
+他のオブジェクトの投げ込みの残り 7 件は宛先が空のままである。足した行の中身は `stage = "B"`・
+`bundle = "投げ込み"`・`owner_count = 2`・`wave = "B6"` で、段階は「投げ込み」が順位表で置かれている段階の写し、
+ウェーブは正本のロードマップの写しである。行数は **38 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が
+**24 行**・`none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出していない）。
+`[briefs].count` はこの 38 に合わせ、`snapshot_on` は同じ日なので **2026-09-29** のまま変えていない。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -222,7 +234,7 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 
 ```toml
 [briefs]
-count = 37
+count = 38
 snapshot_on = "2026-09-29"
 ```
 
@@ -524,6 +536,13 @@ stage = "B"
 bundle = "インストール"
 owner_count = 13
 wave = "B5-②"
+
+[[spec]]
+name = "areka-P0-file-drop"
+stage = "B"
+bundle = "投げ込み"
+owner_count = 2
+wave = "B6"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -573,7 +592,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 1 | 更新 | `areka-P0-network-update`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-network-update`（A4・1 件） | 第 3 波 |
 | 2 | 切替 | `areka-P0-shell-balloon-switch` | `areka-P0-currentghost-property-tree`（W15・4 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-kero-balloon`（完了・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・3 件）／`areka-P0-ghost-change-name-resolution`（B4-②・2 件） | 第 3 波 |
 | 3 | 消滅 | `areka-P0-vanish-canon` | **0 本** | 第 3 波 |
-| 4 | 投げ込み | `areka-P0-file-drop-events` | **0 本** | 第 3 波 |
+| 4 | 投げ込み | `areka-P0-file-drop`（既存 spec が引受先・構成 10 件のうち 2 件） | `areka-P0-file-drop`（B6・2 件） | 第 3 波 |
 | 5 | 休止と復帰 | `areka-P0-shiori-cache-suspend` | **0 本** | 第 3 波 |
 | 5 | 好感度の絵柄 | `areka-P0-favorite-rate-record`（残余） | `areka-P0-property-catalog-lists`（W16・24 件） | 第 3 波 |
 | 5 | 着せ替え | `areka-P0-dressup-bind-canon` | `areka-P0-mayuna-compose`（完了・3 件）／`areka-P0-bindoption-exclusivity`（完了・2 件） | 第 3 波 |

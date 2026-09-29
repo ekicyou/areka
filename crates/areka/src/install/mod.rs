@@ -36,6 +36,8 @@ pub(crate) struct InstallOrder {
 pub(crate) enum InstallOrigin {
     Menu,
     Script,
+    /// 窓への投げ込み（areka-P0-file-drop）。
+    WindowDrop,
 }
 
 /// 受付の判定。
@@ -88,6 +90,14 @@ pub(crate) fn submit(world: &mut World, order: InstallOrder) -> SubmitVerdict {
         );
     }
     verdict
+}
+
+/// 窓口の待ち行列の中身（届いた順の写し・テストが依頼の中身と順を読む口・本番には無い）。
+#[cfg(test)]
+pub(crate) fn queued_orders(world: &World) -> Vec<InstallOrder> {
+    world
+        .get_non_send::<desk::InstallDesk>()
+        .map_or_else(Vec::new, |desk| desk.queue.iter().cloned().collect())
 }
 
 /// 窓口を据え、取り出しの系を Input の段（`dispatch_pointer_events` の後）へ登録し、門を終了の

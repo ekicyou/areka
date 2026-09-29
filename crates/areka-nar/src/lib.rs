@@ -151,15 +151,7 @@ impl NarArchive {
             archive: path.to_path_buf(),
             reason,
         };
-        let bytes = std::fs::read(path).map_err(|source| NarError::Io {
-            archive: archive.clone(),
-            phase: IoPhase::Read,
-            path: archive.clone(),
-            source,
-            committed: Vec::new(),
-            rolled_back: true,
-            survivors: Box::default(),
-        })?;
+        let bytes = read_archive_bytes(path)?;
 
         let raw = read_central_directory(&bytes).map_err(refused)?;
         let names = validate_entry_names(&raw).map_err(refused)?;
@@ -234,6 +226,50 @@ impl NarArchive {
     }
 }
 
+/// 最上位に `install.txt` が在るか。書庫の目次（中央ディレクトリ）と名前の検証までで止め、
+/// 伸長も書き込みも記録も無い（要件 1.9・2.2・2.4）。
+///
+/// `Ok(true)`＝在る（ASCII の大文字小文字は問わない）／`Ok(false)`＝無い（包みフォルダの
+/// 下にだけ在るものを含む）／`Err`＝目次が読めない。探し方は [`NarArchive::open`] と同じ
+/// `manifest::locate_install_txt` を同じ順（名前の検証 → 探す）で使うので、同じ書庫に
+/// 対して手続きと答えが食い違わない。
+///
+/// **名前の検証で撥ねられる書庫**（`..` を含む・絶対パス・大文字小文字の衝突など）は、
+/// 最上位に `install.txt` が在っても `Err`（[`NarError::Refused`]）＝「読めない」になる。
+/// 手続きも `install.txt` を探す前に同じ理由で断るので、「`install.txt` を持つ物」と
+/// 扱われたことが無い。生の名前で探す道は、探し方が 2 つになるので取らない。
+///
+/// **記録を出さないのは意図**。「記録はここだけが出す」は `open`／`install` の契約で、
+/// これは問い合わせ——読めなかったことの記録は呼び手が 1 回出す。
+///
+/// # Errors
+///
+/// 読み取りに失敗したとき [`NarError::Io`]（`phase: Read`）。構造または名前が通らない
+/// とき [`NarError::Refused`]。中身は `open` が同じ書庫で返すものと同じ語彙。
+pub fn peek_install_txt(path: &Path) -> Result<bool, NarError> {
+    let refused = |reason| NarError::Refused {
+        archive: path.to_path_buf(),
+        reason,
+    };
+    let bytes = read_archive_bytes(path)?;
+    let raw = read_central_directory(&bytes).map_err(refused)?;
+    let names = validate_entry_names(&raw).map_err(refused)?;
+    Ok(manifest::locate_install_txt(&names).is_ok())
+}
+
+/// 書庫を丸ごと読む。失敗は `phase: Read` の [`NarError::Io`]（確定 0 件）。記録は出さない。
+fn read_archive_bytes(path: &Path) -> Result<Vec<u8>, NarError> {
+    std::fs::read(path).map_err(|source| NarError::Io {
+        archive: path.to_path_buf(),
+        phase: IoPhase::Read,
+        path: path.to_path_buf(),
+        source,
+        committed: Vec::new(),
+        rolled_back: true,
+        survivors: Box::default(),
+    })
+}
+
 /// 失敗の記録を 1 回だけ出し、受け取った失敗をそのまま返す（要件 9.1・6.4）。
 ///
 /// `NarError` の表示は確定済みの件数も巻き戻せたかも持たない（設計の逐語）ので、
@@ -268,3 +304,7 @@ mod tests;
 #[cfg(test)]
 #[path = "lib_entry_tests.rs"]
 mod entry_tests;
+
+#[cfg(test)]
+#[path = "lib_peek_tests.rs"]
+mod peek_tests;

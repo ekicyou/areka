@@ -18,7 +18,7 @@
 //! （areka-P0-dpi-window-vanish 要件 4.3・D3。[`external_position_authority`] に理由を記載）。
 //!
 //! - キャラ窓: `Name`＋`CharWindowMarker{scope}`＋`GhostWindowMarker`＋`Window{title}`
-//!   ＋`WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED|WS_EX_TOOLWINDOW }`
+//!   ＋`WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_ACCEPTFILES }`
 //!   （**`WS_EX_TOPMOST` なし**・5.1／DD13）＋`WindowPos { position, size }`（物理 px）
 //!   ＋`HitTest::none()`（全面ヒットで透過を殺さない）＋`Anchored(p.anchor)`（解決済み
 //!   アンカーの単一真実源・**全 char 窓へ無条件付与**＝Free 窓も resize の identity 射影で
@@ -82,7 +82,7 @@ use bevy_ecs::world::DeferredWorld;
 use tracing::debug;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
+    WS_EX_ACCEPTFILES, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
 };
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
@@ -578,10 +578,11 @@ pub fn spawn_ghost_windows(
 
 /// 全ゴースト窓共通の `WindowStyle`（DD13: `WS_EX_TOPMOST` を含めない＝既定
 /// z-order 非 topmost・5.1。`WS_EX_LAYERED` は clickthrough トグルの同伴フラグ）。
+/// `WS_EX_ACCEPTFILES` は投げ込みの受け入れの宣言（areka-P0-file-drop）で、宣言はこのビットだけ・OS の受け入れ関数（`DragAcceptFiles`）は呼ばない（先進坑 2）。
 fn window_style() -> WindowStyle {
     WindowStyle {
         style: WS_POPUP | WS_VISIBLE,
-        ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW,
+        ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_ACCEPTFILES,
     }
 }
 

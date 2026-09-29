@@ -9,6 +9,7 @@
 
 pub(crate) mod balloon;
 pub(crate) mod choice_drain;
+pub(crate) mod file_drop;
 pub(crate) mod throttle;
 pub(crate) mod user_break;
 

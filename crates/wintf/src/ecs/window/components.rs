@@ -9,6 +9,7 @@ use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use std::cell::RefCell;
+use std::path::PathBuf;
 use tracing::{debug, trace};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
@@ -146,6 +147,19 @@ pub struct OnCloseRequest(pub fn(world: &mut World, entity: Entity));
 #[derive(Component, Clone, Copy)]
 #[component(storage = "SparseSet")]
 pub struct OnSessionEnd(pub fn(world: &mut World, entity: Entity));
+
+// ============================================================================
+// OnFilesDropped
+// ============================================================================
+
+/// ファイル・フォルダが窓へ落とされた（`WM_DROPFILES`）とき、落とされた物の絶対パスの
+/// 一覧を渡して呼ぶ関数。付けなければ何もしない。
+///
+/// [`OnSessionEnd`] と同型の「窓に関数を差す部品」で、引数に一覧が増えるだけ。
+/// 関数は World 借用中に呼ばれる。
+#[derive(Component, Clone, Copy)]
+#[component(storage = "SparseSet")]
+pub struct OnFilesDropped(pub fn(world: &mut World, entity: Entity, paths: Vec<PathBuf>));
 
 // ============================================================================
 // WindowStyle
