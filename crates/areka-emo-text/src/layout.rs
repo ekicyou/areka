@@ -104,8 +104,8 @@ use styled::{LineHeights, glyph_style_advance, line_pitch_of};
 /// 実行時は COM 層の DWriteMetrics（測定専用 probe TextLayout 由来）を注入する。
 /// 両者で折返し位置は異なってよいが、アルゴリズム分岐は存在しない。
 pub trait GlyphMetrics {
-    /// グリフの行内送り幅（image px）。writing_mode の行内軸方向の寸。
-    fn advance(&self, ch: char, font_height: f32) -> f32;
+    /// グリフ（書記素クラスタ 1 つ）の行内送り幅（image px）。writing_mode の行内軸方向の寸。
+    fn advance(&self, text: &str, font_height: f32) -> f32;
 
     /// 行送りピッチ（image px）。正典式: `font_height + 行間`（切り上げなし）。
     /// 式も行間の既定値（2）も [`TextLayerConfig::line_pitch`] が正本で、
@@ -133,14 +133,15 @@ pub trait GlyphMetrics {
     /// 既存の 2 実装（[`FixedMetrics`]・COM 層 `DWriteMetrics`）と既存の呼び手は
     /// これで無変更のまま済む。フォント名・太字・斜体まで含めて測るのは
     /// 実測 metrics（`DWriteMetrics`）の領分で、そちらが本メソッドを上書きする。
-    fn advance_styled(&self, ch: char, look: &TextLook) -> f32 {
-        self.advance(ch, look.height)
+    fn advance_styled(&self, text: &str, look: &TextLook) -> f32 {
+        self.advance(text, look.height)
     }
 }
 
 /// 構造テスト用の決定論 metrics（R4.5/R11.6）。
 ///
-/// 決定論仮想値: 全角（非 ASCII）＝`font_height`・半角（ASCII）＝`font_height / 2`。
+/// 決定論仮想値: ASCII だけのクラスタ＝半角 `font_height / 2`・それ以外＝全角 `font_height`
+/// 1 つ分（ZWJ 列などの部品の数で増やさない）。
 /// 行送りピッチは既定の調整値を読んで [`TextLayerConfig::line_pitch`] へ委譲する
 /// （`font_height + 行間 2`・自前の仮想行間を持たない）。行ボックス丈は
 /// [`FIXED_LINE_BOX_RATIO`]×`font_height`。
@@ -156,8 +157,8 @@ pub struct FixedMetrics;
 pub const FIXED_LINE_BOX_RATIO: f32 = 1.33;
 
 impl GlyphMetrics for FixedMetrics {
-    fn advance(&self, ch: char, font_height: f32) -> f32 {
-        if ch.is_ascii() {
+    fn advance(&self, text: &str, font_height: f32) -> f32 {
+        if text.is_ascii() {
             font_height / 2.0
         } else {
             font_height
@@ -187,10 +188,10 @@ pub struct LineRect {
 }
 
 /// 配置済みグリフ（行内軸の絶対位置＋送り幅・クリック可能範囲導出の入力形・R9.4）。
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PositionedGlyph {
-    /// グリフの文字。
-    pub ch: char,
+    /// グリフの文字列（書記素クラスタ 1 つ・アイテムの写し＝参照数の増減だけで割り当てない）。
+    pub text: std::sync::Arc<str>,
     /// 行内軸の配置位置（image px 絶対座標。horizontal_tb＝x・縦書き＝y）。
     pub inline_pos: f32,
     /// 行内送り幅（image px・注入 metrics 由来）。
@@ -429,7 +430,7 @@ impl LayoutEngine {
 
         for item in items {
             match *item {
-                TextItem::Glyph { ch } => {
+                TextItem::Glyph { ref text } => {
                     // ゲート順序の契約（DD-3）: ①可視 prefix 打切り → ②保留フラッシュ →
                     // ③折返し判定 → ④配置。①を先頭に置くことで、リビールカーソルが
                     // 改行を通過済みでも次の可視グリフが無い限り行送りは起きない（R4.2）。
@@ -437,10 +438,10 @@ impl LayoutEngine {
                         break;
                     }
                     // 装飾番号と送り幅（R3.3／R7.10）。番号列が無い経路・既定の番号の文字は
-                    // 従来どおり `advance(ch, font_height)`——既定の見た目の高さが
+                    // 従来どおり `advance(text, font_height)`——既定の見た目の高さが
                     // `font_height` と食い違う登録前の一瞬でも、装飾なしの出力を動かさない。
                     let (style, advance, glyph_height) =
-                        glyph_style_advance(ch, placed, font_height, metrics, styles.as_ref());
+                        glyph_style_advance(text, placed, font_height, metrics, styles.as_ref());
                     // ② 保留フラッシュ（次の可視コンテンツ配置の直前・R2.1/2.3）。保留改行と
                     // pending-cursor は同一フラッシュに混在しうるため順序が意味を持つ（design
                     // 「ゲート②の直後に②'として挿入」）。厳密順序:
@@ -564,7 +565,7 @@ impl LayoutEngine {
                     }
                     // ④ 配置。
                     current.push(PositionedGlyph {
-                        ch,
+                        text: text.clone(),
                         inline_pos,
                         advance,
                         style,
@@ -931,6 +932,9 @@ fn finish_line(
     PositionedLine { rect, glyphs }
 }
 
+#[cfg(test)]
+#[path = "layout_cluster_tests.rs"]
+mod cluster_tests;
 #[cfg(test)]
 #[path = "layout_cursor_center_origin_tests.rs"]
 mod cursor_center_origin_tests;

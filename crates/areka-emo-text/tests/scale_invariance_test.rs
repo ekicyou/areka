@@ -405,9 +405,8 @@ fn same_image_size_yields_identical_layout_regardless_of_scale() {
         (Some(46), Some(-56), Some(36), Some(-44)),
         None,
     );
-    let items: Vec<TextItem> = "あいうえおかきくけこ"
-        .chars()
-        .map(|ch| TextItem::Glyph { ch })
+    let items: Vec<TextItem> = areka_sakura::cluster::clusters("あいうえおかきくけこ")
+        .map(TextItem::glyph)
         .collect();
 
     let mut world = World::new();
@@ -479,7 +478,7 @@ fn layout_decision_is_scale_independent_for_vertical_modes() {
         if i > 0 {
             items.push(TextItem::LineBreak { ratio: 1.0 });
         }
-        items.push(TextItem::Glyph { ch: 'あ' });
+        items.push(TextItem::glyph("あ"));
     }
 
     let mut world = World::new();

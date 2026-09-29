@@ -28,16 +28,23 @@
 //! 狭くなるので、ダーティ矩形が行内軸で 1 画素インクを切り、オラクルとの byte 等価が破れる
 //! ——**檻の作り方の都合**であって製品の欠陥ではない（本番は同じ `DWriteMetrics` が配置と
 //! 描画の両方へ同じ送り幅を配る）。全角では両者が一致するので全角で組む。
+//!
+//! 絵文字（代替フォントの字形）は逆に実フォントの送り幅が 28 より広い（Yu Gothic UI 28 の
+//! 実測で 👨‍👩‍👧 35・😀 38）。行矩形が絵文字のインクより狭くなると同じ理由で byte 等価が破れる
+//! ので、配置の送り幅は `FixedMetrics` と実フォント（[`DWriteMetrics`]）の**広い方**を取る
+//! （[`AtLeastRealAdvance`]）。既存の本文の字は実フォントの送り幅がどれも 28 以下なので、
+//! 配置は `FixedMetrics` だけのときと 1 画素も変わらない。
 
 use super::ViewboxExecutor;
-use super::test_support::{Rig, glyph_items, live_diff_model_font, opaque_count};
+use super::test_support::{Rig, colored_count, glyph_items, live_diff_model_font, opaque_count};
 use crate::canvas::ContentCanvas;
-use crate::draw::{DrawExecutor, ResolvedFont};
-use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
+use crate::layout::{FixedMetrics, GlyphMetrics, LayoutEngine, VisibleWindow, WrapPlan};
 use crate::region::{ScaleContract, TextRegion};
-use crate::state::TextItem;
+use crate::state::{TextItem, TextLayerConfig};
 use crate::surface::TextSurface;
 use crate::writing::WritingMode;
+use areka_sakura::cluster::cluster_count;
 
 /// 相方側バルーン相当の描画範囲（image px）——高さ 93 は実機 `balloonk0s.txt` の validrect 丈、
 /// 幅 216 は同じく行内軸の丈。`font.height,28` ＋ 行間 2 ＝ 行送り 30。
@@ -47,7 +54,8 @@ const FONT_HEIGHT: f32 = 28.0;
 
 /// 実機の台本（`boot.pasta:78-90`）と同じ形の入力列を組む——2 行に折り返す台詞 → `\n[150]`
 /// （＝`LineBreak { ratio: 1.5 }`・段落間隔 45＝1.5 × 行送り 30）→ 次の台詞（さらに折り返して
-/// 送りを重ねる長さ）→ もう 1 度の段落間隔 → 3 本目の台詞。
+/// 送りを重ねる長さ）→ もう 1 度の段落間隔 → 3 本目の台詞 → 絵文字を含む 4 本目（要件 6.5・
+/// 絵文字の行も送られて blit される）。字数はクラスタで数える（👨‍👩‍👧 は 5 スカラーで 1 字）。
 fn boot_items() -> (Vec<TextItem>, usize) {
     let mut items = Vec::new();
     let mut glyphs = 0;
@@ -55,6 +63,7 @@ fn boot_items() -> (Vec<TextItem>, usize) {
         "僕はエモクール系娘。",
         "イイジャンええとそれでね。",
         "そこ自分でいう。",
+        "今日は家族👨‍👩‍👧と😀。",
     ]
     .iter()
     .enumerate()
@@ -63,9 +72,29 @@ fn boot_items() -> (Vec<TextItem>, usize) {
             items.push(TextItem::LineBreak { ratio: 1.5 });
         }
         items.extend(glyph_items(text));
-        glyphs += text.chars().count();
+        glyphs += cluster_count(text);
     }
     (items, glyphs)
+}
+
+/// 配置の送り幅を `FixedMetrics` と実フォントの広い方にする（冒頭の但し書き）。行送りと
+/// 行の箱の丈は `FixedMetrics` のまま（決定論）。
+struct AtLeastRealAdvance<'a>(&'a DWriteMetrics);
+
+impl GlyphMetrics for AtLeastRealAdvance<'_> {
+    fn advance(&self, text: &str, font_height: f32) -> f32 {
+        FixedMetrics
+            .advance(text, font_height)
+            .max(self.0.advance(text, font_height))
+    }
+
+    fn line_pitch(&self, font_height: f32) -> f32 {
+        FixedMetrics.line_pitch(font_height)
+    }
+
+    fn line_box_height(&self, font_height: f32) -> f32 {
+        FixedMetrics.line_box_height(font_height)
+    }
 }
 
 /// 行送り軸の帯 `[y0, y1)` に非透明ピクセルがいくつ在るか（BGRA 密配列・物理 px）。
@@ -101,6 +130,8 @@ struct ScrollRig {
     viewbox: ViewboxExecutor,
     region: TextRegion,
     font: ResolvedFont,
+    /// 実フォントの送り幅（絵文字の配置にだけ効く・冒頭の但し書き）。
+    metrics: DWriteMetrics,
     contract: ScaleContract,
     mode: WritingMode,
     /// World／Compositor／Core／DispatcherQueue の寿命を束ねる（供給面より後に drop）。
@@ -110,7 +141,8 @@ struct ScrollRig {
 
 impl ScrollRig {
     /// 実機と同じフォント（Yu Gothic UI 28px＝下端はみ出しが行間 2px を超える）で二面を装着する。
-    /// レイアウトは [`FixedMetrics`]（決定論）ゆえ折返し位置はフォント非依存で、フォント名は
+    /// レイアウトは [`FixedMetrics`]（決定論・絵文字の送り幅だけ実フォント）ゆえ折返し位置は
+    /// 本文の字ではフォント非依存で、フォント名は
     /// ラスタライズ（インクの形・はみ出し量）にだけ効く。
     fn new() -> ScrollRig {
         let mut rig = Rig::new();
@@ -122,6 +154,9 @@ impl ScrollRig {
         let region = TextRegion::resolve(&model, IMAGE, mode);
         let oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
         let viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics::new 失敗");
         ScrollRig {
             oracle_surface,
             viewbox_surface,
@@ -129,6 +164,7 @@ impl ScrollRig {
             viewbox,
             region,
             font,
+            metrics,
             contract: ScaleContract::new(1.0, None),
             mode,
             rig,
@@ -143,7 +179,7 @@ impl ScrollRig {
             &self.region,
             self.mode,
             FONT_HEIGHT,
-            &FixedMetrics,
+            &AtLeastRealAdvance(&self.metrics),
             WrapPlan::CharByChar,
         );
         let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
@@ -216,6 +252,16 @@ fn scroll_frames_keep_first_visible_line_ink() {
             opaque_count(&frames.oracle) > 0,
             "{label}: オラクル面にインクが在る（空面同士の一致を排除）"
         );
+
+        if visible == total_glyphs {
+            // 最後のフレーム（送りの後）に絵文字が色つきの字形で窓の中に在る——byte 等価の比べる
+            // 画素に絵文字が入っていることの確かめ（要件 6.5）。
+            assert!(
+                frames.window.first_visible_line > 0 && colored_count(&frames.oracle) > 0,
+                "{label}: 最後のフレームは送りの後で、色つきの画素が在る（先頭可視行 {}）",
+                frames.window.first_visible_line
+            );
+        }
 
         if frames.window.first_visible_line > 0 {
             scrolled_frames += 1;
@@ -294,7 +340,7 @@ fn scroll_frame_sweep_matches_full_redraw_oracle() {
                     items.push(TextItem::LineBreak { ratio });
                 }
                 items.extend(glyph_items(body));
-                total += body.chars().count();
+                total += cluster_count(body);
             }
             let mut rig = ScrollRig::new();
             let (w, _h) = rig.oracle_surface.size();

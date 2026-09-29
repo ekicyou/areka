@@ -57,3 +57,4 @@
 - `balloon-color-emoji` は、バルーン文字の描画（`crates/areka-emo-text/src/viewbox_draw.rs` の `ViewboxExecutor::render`。本番の経路はここだけで、`draw.rs` の `DrawExecutor` は `#[cfg(test)]` の照合用）に `D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT` を渡す。
 - 影の複製を同じ指定で描くと、カラー絵文字の影まで多色になる。**影の複製はカラーフォントを使わずに、単色のブラシで描く**こと。
 - 影の位置と幅は、書記素クラスタ単位になった後の計測に従う。
+- 2026-09-30 着地時の追記: 描画オプションの定義点は `crates/areka-emo-text/src/draw.rs` の `TEXT_DRAW_OPTIONS`（`ENABLE_COLOR_FONT`）。影の複製はこれを使わず `D2D1_DRAW_TEXT_OPTIONS_NONE` を明示して描く。幅の計測（`GlyphMetrics::advance`／`advance_styled`）はクラスタ文字列（`&str`）で受ける。

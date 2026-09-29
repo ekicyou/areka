@@ -74,7 +74,7 @@ fn cursor_px(x: f32, y: f32) -> TextItem {
 
 /// 全角グリフ 1 個。
 fn glyph() -> TextItem {
-    TextItem::Glyph { ch: 'あ' }
+    TextItem::glyph("あ")
 }
 
 // ─────────────────────────────────────────────────────────────────────

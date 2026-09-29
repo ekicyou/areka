@@ -21,11 +21,11 @@ fn plan(segs: &[(usize, usize)]) -> SegmentPlan {
 }
 
 /// 各グリフの (行 index, 行内位置, 文字) を配置順に平坦化する（prefix 一致比較用）。
-fn flat_glyphs(lines: &[PositionedLine]) -> Vec<(usize, f32, char)> {
+fn flat_glyphs(lines: &[PositionedLine]) -> Vec<(usize, f32, &str)> {
     lines
         .iter()
         .enumerate()
-        .flat_map(|(li, l)| l.glyphs.iter().map(move |g| (li, g.inline_pos, g.ch)))
+        .flat_map(|(li, l)| l.glyphs.iter().map(move |g| (li, g.inline_pos, &*g.text)))
         .collect()
 }
 
@@ -511,7 +511,11 @@ fn segmented_extremely_long_segment_places_all_glyphs() {
         assert!(!line.glyphs.is_empty(), "空行が生じている");
     }
     // 全グリフが同一文字 'あ'（内容が壊れていない）。
-    assert!(lines.iter().all(|l| l.glyphs.iter().all(|g| g.ch == 'あ')));
+    assert!(
+        lines
+            .iter()
+            .all(|l| l.glyphs.iter().all(|g| &*g.text == "あ"))
+    );
 }
 
 // ── Task 4.4: 保留改行との整合とリフロー跳び不発生（WrapPlan::Segmented） ──
@@ -633,11 +637,11 @@ fn deferred_newline_semantics_unchanged_under_segmented() {
     // (b) 連続 `\n\n(0.5)` の単一累算フラッシュ: `[a, \n, \n(0.5), b, c]` → 2 行・Σratio 1.5。
     // run1="a"(glyph0)・run2="bc"(glyph1,2)。塊は全て収まる → ON = OFF。
     let acc = [
-        TextItem::Glyph { ch: 'a' },
+        TextItem::glyph("a"),
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::LineBreak { ratio: 0.5 },
-        TextItem::Glyph { ch: 'b' },
-        TextItem::Glyph { ch: 'c' },
+        TextItem::glyph("b"),
+        TextItem::glyph("c"),
     ];
     let p_b = plan(&[(0, 1), (1, 2)]);
     let seg_b = LayoutEngine::layout(

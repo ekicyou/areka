@@ -174,7 +174,7 @@ fn landing_of(line: &PositionedLine, mode: WritingMode) -> (f32, f32) {
 
 /// 全角グリフ 1 個（'あ'・advance 10）。
 fn glyph() -> TextItem {
-    TextItem::Glyph { ch: 'あ' }
+    TextItem::glyph("あ")
 }
 
 /// `\_l[centerx,centery]`。
@@ -236,7 +236,7 @@ fn the_center_and_origin_fixture_keeps_every_basepoint_candidate_apart() {
         (htb.image_size().0 / 2.0, htb.image_size().1 / 2.0),
         "V6 の期待値は画像原寸の半分である（design.md 解決表 `centerx` / `centery` の行）"
     );
-    assert_eq!(FixedMetrics.advance('あ', FONT), ADVANCE);
+    assert_eq!(FixedMetrics.advance("あ", FONT), ADVANCE);
     assert_eq!(FixedMetrics.line_pitch(FONT), PITCH);
     assert_ne!(
         PITCH, ADVANCE,

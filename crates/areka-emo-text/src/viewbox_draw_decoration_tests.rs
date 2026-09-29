@@ -32,11 +32,12 @@ use crate::layout::PositionedGlyph;
 use crate::look::{StyleId, StyleTable, TextLook};
 use crate::region::{ScaleContract, TextRegion};
 use crate::writing::WritingMode;
+use areka_sakura::cluster::clusters;
 
 /// 番号だけを与えたグリフ（位置と送りは区間の切り出しに効かないので 0）。
-fn glyph(ch: char, style: StyleId) -> PositionedGlyph {
+fn glyph(text: &str, style: StyleId) -> PositionedGlyph {
     PositionedGlyph {
-        ch,
+        text: text.into(),
         inline_pos: 0.0,
         advance: 0.0,
         style,
@@ -57,10 +58,10 @@ fn triples(glyphs: &[PositionedGlyph]) -> Vec<(u32, u32, u32)> {
 fn style_runs_group_consecutive_ids_and_count_utf16_units() {
     let one = StyleId(1);
     let glyphs = [
-        glyph('A', StyleId::DEFAULT),
-        glyph('𠮷', one), // UTF-16 で 2 単位（サロゲートペア）。
-        glyph('B', one),
-        glyph('C', StyleId::DEFAULT),
+        glyph("A", StyleId::DEFAULT),
+        glyph("𠮷", one), // UTF-16 で 2 単位（サロゲートペア）。
+        glyph("B", one),
+        glyph("C", StyleId::DEFAULT),
     ];
 
     assert_eq!(
@@ -68,13 +69,25 @@ fn style_runs_group_consecutive_ids_and_count_utf16_units() {
         vec![(0, 1, 0), (1, 3, 1), (4, 1, 0)],
         "連続する同じ番号は 1 区間・2 単位の文字は長さ 2 として累積する（要件 3.6）"
     );
+
+    // ZWJ 列は 1 グリフで UTF-16 で 8 単位（要件 4.6: 範囲はクラスタの境界に沿う）。
+    let family = glyph("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", one); // 👨‍👩‍👧
+    let glyphs = [
+        glyph("A", StyleId::DEFAULT),
+        family,
+        glyph("C", StyleId::DEFAULT),
+    ];
+    assert_eq!(
+        triples(&glyphs),
+        vec![(0, 1, 0), (1, 8, 1), (9, 1, 0)],
+        "ZWJ 列の区間は 8 単位・後ろの区間は 9 から始まる"
+    );
 }
 
 /// 要件 14.2: 既定しか使われていない行は区間が 1 つ（番号 0）になる。空行は区間 0 個。
 #[test]
 fn style_runs_collapse_to_one_default_run_for_undecorated_line() {
-    let glyphs: Vec<PositionedGlyph> = "あいう"
-        .chars()
+    let glyphs: Vec<PositionedGlyph> = clusters("あいう")
         .map(|c| glyph(c, StyleId::DEFAULT))
         .collect();
 
@@ -117,7 +130,9 @@ fn block_extent_takes_the_block_axis_of_the_line_box() {
 #[test]
 fn default_only_line_keeps_font_height_and_empty_style_ids() {
     let run = GlyphRunContent {
-        glyphs: "あい".chars().map(|c| glyph(c, StyleId::DEFAULT)).collect(),
+        glyphs: clusters("あい")
+            .map(|c| glyph(c, StyleId::DEFAULT))
+            .collect(),
         size: (20.0, 37.5), // 行箱の高さを font_height と別値にする（丸め非依存の証拠）。
     };
 
@@ -138,7 +153,7 @@ fn default_only_line_keeps_font_height_and_empty_style_ids() {
 
     // 対照: 1 グリフでも番号が付けば装飾のある行として切り出され、箱寸は行矩形側になる。
     let decorated = GlyphRunContent {
-        glyphs: vec![glyph('あ', StyleId(1)), glyph('い', StyleId::DEFAULT)],
+        glyphs: vec![glyph("あ", StyleId(1)), glyph("い", StyleId::DEFAULT)],
         size: (20.0, 37.5),
     };
     let line = line_styles(&decorated, 12.0, WritingMode::HorizontalTb);

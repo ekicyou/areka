@@ -43,7 +43,7 @@ pub(super) fn broken_lines(n: usize) -> Vec<TextItem> {
         if i > 0 {
             items.push(TextItem::LineBreak { ratio: 1.0 });
         }
-        items.push(TextItem::Glyph { ch: 'あ' });
+        items.push(TextItem::glyph("あ"));
     }
     items
 }

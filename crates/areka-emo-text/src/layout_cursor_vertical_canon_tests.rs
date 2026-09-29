@@ -91,7 +91,7 @@ fn column_of(line: &PositionedLine) -> (f32, f32) {
 
 /// 全角グリフ 1 個。
 fn glyph() -> TextItem {
-    TextItem::Glyph { ch: 'あ' }
+    TextItem::glyph("あ")
 }
 
 /// 素の改行 1 個（`ratio = 1.0`）。
@@ -186,7 +186,7 @@ fn the_vertical_fixture_keeps_the_directions_and_basepoints_apart() {
     );
     assert_eq!(rl.image_size(), (400.0, 224.0), "バルーン画像原寸");
     assert_eq!(
-        FixedMetrics.advance('あ', FONT),
+        FixedMetrics.advance("あ", FONT),
         ADVANCE,
         "全角 1 文字の行内送り"
     );

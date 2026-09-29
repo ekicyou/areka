@@ -9,7 +9,7 @@ fn line(positions: &[(f32, f32)]) -> PositionedLine {
     let glyphs = positions
         .iter()
         .map(|&(inline_pos, advance)| PositionedGlyph {
-            ch: 'あ',
+            text: "あ".into(),
             inline_pos,
             advance,
             style: StyleId::DEFAULT,

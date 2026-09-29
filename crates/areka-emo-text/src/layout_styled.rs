@@ -60,12 +60,12 @@ impl LayoutEngine {
 
 /// 1 文字ぶんの `(装飾番号, 送り幅, em の大きさ)`。
 ///
-/// 番号列が無い経路と既定の番号の文字は従来どおり `advance(ch, font_height)` で測り、
+/// 番号列が無い経路と既定の番号の文字は従来どおり `advance(text, font_height)` で測り、
 /// 高さも `font_height` を返す——既定の見た目の高さが `font_height` と食い違う登録前の
 /// 一瞬でも、装飾なしの出力を 1 ビットも動かさないためである（`layout_styled_tests.rs` の
 /// 「番号列を渡さない出力」「既定だけの番号列」の 2 本が字義の期待値で見張る）。
 pub(super) fn glyph_style_advance(
-    ch: char,
+    text: &str,
     ordinal: usize,
     font_height: f32,
     metrics: &dyn GlyphMetrics,
@@ -74,7 +74,7 @@ pub(super) fn glyph_style_advance(
     let default = || {
         (
             StyleId::DEFAULT,
-            metrics.advance(ch, font_height),
+            metrics.advance(text, font_height),
             font_height,
         )
     };
@@ -84,7 +84,7 @@ pub(super) fn glyph_style_advance(
             StyleId::DEFAULT => default(),
             id => {
                 let look = s.look_of(ordinal);
-                (id, metrics.advance_styled(ch, look), look.height)
+                (id, metrics.advance_styled(text, look), look.height)
             }
         },
     }

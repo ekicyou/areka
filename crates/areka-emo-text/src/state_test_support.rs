@@ -11,7 +11,7 @@ pub(super) const REVEAL_INTERVAL: f64 = 0.25;
 /// 与えたい縮退（D=0／空テキスト）・honor no-op 檻は [`cue_dur`] を使う。
 pub(super) fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
     let duration = match &command {
-        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
+        CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * REVEAL_INTERVAL,
         _ => 0.0,
     };
     TalkCue {

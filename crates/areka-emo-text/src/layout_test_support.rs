@@ -27,7 +27,7 @@ pub(super) fn model(
 
 /// n 個の全角グリフ（'あ'）item 列。
 pub(super) fn glyphs(n: usize) -> Vec<TextItem> {
-    std::iter::repeat_n(TextItem::Glyph { ch: 'あ' }, n).collect()
+    std::iter::repeat_n(TextItem::glyph("あ"), n).collect()
 }
 
 /// 行のグリフ行内位置列を抜き出す。
@@ -66,7 +66,7 @@ pub(super) fn broken_lines(n: usize) -> Vec<TextItem> {
         if i > 0 {
             items.push(TextItem::LineBreak { ratio: 1.0 });
         }
-        items.push(TextItem::Glyph { ch: 'あ' });
+        items.push(TextItem::glyph("あ"));
     }
     items
 }

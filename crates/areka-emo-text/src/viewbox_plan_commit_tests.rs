@@ -457,7 +457,7 @@ fn plan_dirty_derivation_suite_covers_five_cases() {
     let mode = WritingMode::HorizontalTb;
     let vr = (Some(0), Some(100), Some(0), Some(400));
     let surface = (400u32, 100u32);
-    let glyph = |ch| TextItem::Glyph { ch };
+    let glyph = TextItem::glyph;
 
     // (1) 可視窓のみ移動（content 不変）→ dirty＝露出帯のみ（変化行ゼロ・下端の帯）。
     {
@@ -477,8 +477,8 @@ fn plan_dirty_derivation_suite_covers_five_cases() {
 
     // (2) typewriter 1 グリフ進行（現在行が伸長）→ dirty＝現在行のみ・draw＝[0]。
     {
-        let prev_canvas = canvas_for(&[glyph('あ')], mode, vr, 10.0);
-        let curr_canvas = canvas_for(&[glyph('あ'), glyph('あ')], mode, vr, 10.0);
+        let prev_canvas = canvas_for(&[glyph("あ")], mode, vr, 10.0);
+        let curr_canvas = canvas_for(&[glyph("あ"), glyph("あ")], mode, vr, 10.0);
         let mut planner = ScrollPlanner::new();
         commit_initial(&mut planner, &prev_canvas, mode, &contract, surface);
         let plan = planner.plan(&curr_canvas, &window(0, 0.0), mode, &contract, surface);

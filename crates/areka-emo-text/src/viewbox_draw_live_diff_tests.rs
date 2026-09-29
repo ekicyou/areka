@@ -1,7 +1,7 @@
 use super::ViewboxExecutor;
 use super::test_support::{
-    Rig, block_axis_ink_span, build, emo2_balloon_root, glyph_items, live_diff_model_font,
-    opaque_count,
+    Rig, block_axis_ink_span, build, colored_count, emo2_balloon_root, glyph_items,
+    live_diff_model_font, opaque_count,
 };
 use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
@@ -495,6 +495,54 @@ fn live_diff_proportional_font_matches_oracle_byte_for_byte() {
     ));
 }
 
+/// 絵文字を含む台詞（要件 6.5）: 1 行目「あ」・2 行目「今日は家族👨‍👩‍👧と😀」と置いて描き、
+/// あと 2 行足してあふれさせる。可視窓は 3 行ゆえ送りは 1 行だけで、絵文字の行が先頭可視行に
+/// 残ったまま blit される。送りの前後とも、オラクルと viewbox の読み戻しがバイト等価であることを
+/// 判定する。ZWJ 列（5 スカラーで 1 クラスタ）と 😀 は代替フォント（Segoe UI Emoji）の色つきの
+/// 字形で描かれるので、送りの前後とも色つきの画素が在ることも確かめる（両方式が揃って白黒で
+/// 描く筋と、絵文字が窓の外へ出て比べる画素に入らない筋を排す）。
+fn run_live_diff_emoji_scenario(mode: WritingMode, image: (u32, u32)) {
+    let mut ld = LiveDiffRig::new(mode, image);
+    ld.apply_text(0.0, "あ");
+    ld.apply_newline(0.0);
+    ld.apply_text(0.0, "今日は家族👨‍👩‍👧と😀");
+    let w = ld.checkpoint("絵文字の台詞", 10.0, true);
+    assert_eq!(w.first_visible_line, 0, "送りの前は先頭可視行 0: {w:?}");
+    assert_emoji_colored(&ld, "絵文字の台詞");
+
+    // あと 2 行足して 4 行目であふれさせる。
+    for s in ["い", "う"] {
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, s);
+    }
+    let w = ld.checkpoint("絵文字の行が送られた後", 20.0, true);
+    assert_eq!(
+        w.first_visible_line, 1,
+        "送りは 1 行だけで、絵文字の行（2 行目）が先頭可視行になる: {w:?}"
+    );
+    assert_emoji_colored(&ld, "絵文字の行が送られた後");
+}
+
+/// オラクル面に色つきの画素が在る（＝絵文字が色つきの字形で窓の中に描かれている）。
+fn assert_emoji_colored(ld: &LiveDiffRig, label: &str) {
+    let ob = ld
+        .oracle_surface
+        .read_back()
+        .expect("オラクル read_back 失敗");
+    assert!(
+        colored_count(&ob) > 0,
+        "{label}: 絵文字が色つきの字形で窓の中に描かれている（色つきの画素が 0 ではない）"
+    );
+}
+
+/// 絵文字を含む台詞でも、横書き・縦書き 2 方式の計 3 方式でバイト等価（要件 6.5）。
+#[test]
+fn live_diff_emoji_matches_oracle_byte_for_byte() {
+    run_live_diff_emoji_scenario(WritingMode::HorizontalTb, (80, 40));
+    run_live_diff_emoji_scenario(WritingMode::VerticalRl, (40, 80));
+    run_live_diff_emoji_scenario(WritingMode::VerticalLr, (40, 80));
+}
+
 /// 観測可能な完了状態（後半・負のコントロール）: 意図的に不一致を起こす細工（viewbox 側だけ
 /// 1 グリフ多い content を描く）を入れると read_back の byte 比較が差を検出する——比較器は
 /// ゼロでない差を捕捉できる（＝live-diff はトートロジーでない）。本物のバグ注入ではなく、
@@ -609,7 +657,7 @@ fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
         at,
         actor: actor.clone(),
         duration: match &cmd {
-            CueCommand::Text(t) => t.chars().count() as f64 * 0.05,
+            CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * 0.05,
             _ => 0.0,
         },
         command: cmd,

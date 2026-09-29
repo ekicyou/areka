@@ -26,6 +26,7 @@
 //! 3 番目は**保持庫の要素数**では捕まらない（同じ鍵で作り直しても要素数は増えない）。
 //! §3 が数えるのは実際の生成回数。
 
+use areka_sakura::cluster::clusters;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_WEIGHT_BOLD,
     DWRITE_TEXT_RANGE, IDWriteTextLayout,
@@ -75,17 +76,17 @@ fn the_default_look_measures_exactly_what_it_measured_before_decorations_existed
     let m = metrics();
     let look = default_look();
     assert_eq!(
-        m.advance_styled('あ', &look),
+        m.advance_styled("あ", &look),
         ADVANCE_FULLWIDTH_AT_12,
         "既定の見た目の全角の送り幅が装飾導入前の実測値から動いた"
     );
     assert_eq!(
-        m.advance_styled('A', &look),
+        m.advance_styled("A", &look),
         ADVANCE_ASCII_AT_12,
         "既定の見た目の半角の送り幅が装飾導入前の実測値から動いた"
     );
     // 束縛書式の経路（従来の入口）とも同値——2 つの入口が割れていない。
-    assert_eq!(m.advance_styled('あ', &look), m.advance('あ', look.height));
+    assert_eq!(m.advance_styled("あ", &look), m.advance("あ", look.height));
 }
 
 // ────────────────────────── §2 大きさ・太字が計測値に効く（R7.10／R11.1）
@@ -95,11 +96,11 @@ fn the_default_look_measures_exactly_what_it_measured_before_decorations_existed
 #[test]
 fn doubling_the_size_widens_the_advance_even_after_the_default_was_measured_first() {
     let m = metrics();
-    let base = m.advance_styled('あ', &default_look());
+    let base = m.advance_styled("あ", &default_look());
     assert_eq!(base, ADVANCE_FULLWIDTH_AT_12);
 
     let doubled = m.advance_styled(
-        'あ',
+        "あ",
         &look_with(|l| l.height = ADVANCE_FULLWIDTH_AT_12 * 2.0),
     );
     assert!(
@@ -117,8 +118,8 @@ fn doubling_the_size_widens_the_advance_even_after_the_default_was_measured_firs
 #[test]
 fn bold_does_not_shrink_the_advance() {
     let m = metrics();
-    let base = m.advance_styled('あ', &default_look());
-    let bold = m.advance_styled('あ', &look_with(|l| l.bold = true));
+    let base = m.advance_styled("あ", &default_look());
+    let bold = m.advance_styled("あ", &look_with(|l| l.bold = true));
     assert!(bold >= base, "太字の送り幅 {bold} が既定 {base} より狭い");
 }
 
@@ -138,24 +139,24 @@ fn a_probe_format_is_created_once_per_measurement_key() {
         0,
         "既定の見た目しか測っていない間は試験用書式を作らない（束縛書式を使う）"
     );
-    m.advance_styled('あ', &default_look());
+    m.advance_styled("あ", &default_look());
     assert_eq!(m.probe_format_creations(), 0);
 
-    m.advance_styled('あ', &big);
+    m.advance_styled("あ", &big);
     assert_eq!(
         m.probe_format_creations(),
         1,
         "鍵 1 つ目で 1 度だけ生成する"
     );
-    m.advance_styled('あ', &big);
-    m.advance_styled('い', &big);
+    m.advance_styled("あ", &big);
+    m.advance_styled("い", &big);
     assert_eq!(
         m.probe_format_creations(),
         1,
         "同じ鍵の 2 度目・別の文字では試験用書式を作り直さない"
     );
 
-    m.advance_styled('あ', &look_with(|l| l.bold = true));
+    m.advance_styled("あ", &look_with(|l| l.bold = true));
     assert_eq!(m.probe_format_creations(), 2, "鍵が違えばもう 1 度作る");
 }
 
@@ -165,15 +166,15 @@ fn the_measurement_cache_is_keyed_by_character_and_measurement_key() {
     let m = metrics();
     let big = look_with(|l| l.height = 24.0);
 
-    m.advance_styled('あ', &default_look());
+    m.advance_styled("あ", &default_look());
     assert_eq!(m.cached_probe_count(), 1);
-    m.advance_styled('あ', &big);
+    m.advance_styled("あ", &big);
     assert_eq!(
         m.cached_probe_count(),
         2,
         "同じ文字でも鍵が違えば別の記憶（鍵が文字だけなら 1 のまま＝赤）"
     );
-    m.advance_styled('あ', &big);
+    m.advance_styled("あ", &big);
     assert_eq!(m.cached_probe_count(), 2, "同じ組は測り直さない");
 }
 
@@ -252,7 +253,7 @@ fn styled_measurements_match_the_cluster_advances_of_a_decorated_line() {
         "検証テキストは 1 文字＝1 クラスタの前提"
     );
 
-    for (i, (ch, width)) in LINE.chars().zip(&widths).enumerate() {
+    for (i, (ch, width)) in clusters(LINE).zip(&widths).enumerate() {
         let look = if i < 3 { &plain } else { &styled };
         assert_eq!(
             m.advance_styled(ch, look),
@@ -306,11 +307,11 @@ fn the_shared_catalog_constructor_measures_the_same_as_the_owning_one() {
     .expect("共有台帳で DWriteMetrics が作れる");
 
     assert_eq!(
-        m.advance_styled('あ', &default_look()),
+        m.advance_styled("あ", &default_look()),
         ADVANCE_FULLWIDTH_AT_12
     );
     assert_eq!(
-        m.advance_styled('あ', &look_with(|l| l.height = 24.0)),
+        m.advance_styled("あ", &look_with(|l| l.height = 24.0)),
         24.0
     );
     assert!(

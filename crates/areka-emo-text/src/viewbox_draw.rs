@@ -46,7 +46,7 @@ use std::rc::Rc;
 use tracing::warn;
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_ANTIALIAS_MODE_ALIASED, D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE,
+    D2D1_ANTIALIAS_MODE_ALIASED, D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS,
     ID2D1DeviceContext, ID2D1Image, ID2D1SolidColorBrush,
 };
 use windows::Win32::Graphics::DirectWrite::{
@@ -61,7 +61,8 @@ use crate::TextLayerError;
 use crate::canvas::GlyphRunContent;
 use crate::canvas::{ContentCanvas, ResidentContent};
 use crate::draw::{
-    FontCatalog, LineLayoutStore, ResolvedFont, create_d2d_target_bitmap, create_text_format,
+    FontCatalog, LineLayoutStore, ResolvedFont, TEXT_DRAW_OPTIONS, create_d2d_target_bitmap,
+    create_text_format,
 };
 use crate::layout::{PositionedGlyph, VisibleWindow};
 use crate::look::StyleTable;
@@ -140,6 +141,10 @@ pub struct ViewboxExecutor {
     /// **前**に `Err` を返し、失敗フレームの再試行安全（front 不変・planner 未 commit）を檻化する。
     #[cfg(test)]
     fail_next_render: bool,
+    /// テスト専用: 文字を描く描画オプション（既定は [`TEXT_DRAW_OPTIONS`]）。非テストビルドには
+    /// この欄が無く、本番は定数そのものを渡す（[`Self::text_draw_options`]）。
+    #[cfg(test)]
+    text_draw_options: D2D1_DRAW_TEXT_OPTIONS,
 }
 
 impl ViewboxExecutor {
@@ -193,7 +198,31 @@ impl ViewboxExecutor {
             seam_warned: false,
             #[cfg(test)]
             fail_next_render: false,
+            #[cfg(test)]
+            text_draw_options: TEXT_DRAW_OPTIONS,
         })
+    }
+
+    /// 文字を描く描画オプション。本番ビルドは常に定数 [`TEXT_DRAW_OPTIONS`] へ戻り、
+    /// テストビルドだけ欄の値（既定は同じ定数）を返す。
+    #[cfg(not(test))]
+    fn text_draw_options(&self) -> D2D1_DRAW_TEXT_OPTIONS {
+        TEXT_DRAW_OPTIONS
+    }
+
+    #[cfg(test)]
+    fn text_draw_options(&self) -> D2D1_DRAW_TEXT_OPTIONS {
+        self.text_draw_options
+    }
+
+    /// テスト専用: 描画オプションだけを差し替える（色つきと単色の描き比べ・要件 6.4）。
+    ///
+    /// **最初の描画の前に 1 度だけ呼ぶ**。描画オプションは行の指紋に入らないので、同じ executor で
+    /// 描き直しても何も描かれず前の面が残る——対照は executor と面を別々に作って取る。
+    /// 行のキャッシュ・planner・面には触れない。
+    #[cfg(test)]
+    pub(crate) fn set_text_draw_options_for_test(&mut self, options: D2D1_DRAW_TEXT_OPTIONS) {
+        self.text_draw_options = options;
     }
 
     /// テスト専用: 次の Update フレームの EndDraw 後にデバイス失敗を 1 回注入する（G5・
@@ -318,13 +347,13 @@ impl ViewboxExecutor {
         for (index, resident) in canvas.residents.iter().enumerate() {
             let overhang = match &resident.content {
                 ResidentContent::GlyphRun(run) if !run.glyphs.is_empty() => {
-                    let text: String = run.glyphs.iter().map(|g| g.ch).collect();
+                    let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
                     self.line_layout_for(index, &text, run, &format, font, mode, styles)?;
                     self.line_store.overhang(index).unwrap_or_default()
                 }
                 // Choice 住人は内包 run を GlyphRun と同一経路で計測する（R9.5）。
                 ResidentContent::Choice(choice) if !choice.run.glyphs.is_empty() => {
-                    let text: String = choice.run.glyphs.iter().map(|g| g.ch).collect();
+                    let text: String = choice.run.glyphs.iter().map(|g| &*g.text).collect();
                     self.line_layout_for(index, &text, &choice.run, &format, font, mode, styles)?;
                     let measured = self.line_store.overhang(index).unwrap_or_default();
                     // ハイライト帯（band_offset ＋ band_extent）は em ボックス丈より外側へ出る
@@ -420,7 +449,7 @@ impl ViewboxExecutor {
                     if run.glyphs.is_empty() {
                         continue;
                     }
-                    let text: String = run.glyphs.iter().map(|g| g.ch).collect();
+                    let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
                     let (layout, line) =
                         self.line_layout_for(index, &text, run, &format, font, mode, styles)?;
                     let (dx, dy) = resident.transform.offset();
@@ -592,7 +621,7 @@ impl ViewboxExecutor {
                             d.origin,
                             &d.layout,
                             &brush,
-                            D2D1_DRAW_TEXT_OPTIONS_NONE,
+                            self.text_draw_options(),
                         );
                         self.stats.draw_text_layout_calls += 1;
                     }
@@ -826,8 +855,8 @@ fn expand_overhang_for_band(
 /// hover セグメントの resident-local `inline_range` を run のグリフ列へ照合し、`SetDrawingEffect`
 /// 用の UTF-16 文字範囲（[`DWRITE_TEXT_RANGE`]）を導く。
 ///
-/// 行 TextLayout の text は `run.glyphs` の `ch` 連結ゆえ、グリフ index と text 位置は各 `ch` の
-/// UTF-16 長の累積で 1:1 対応する。グリフ中心（`inline_pos + advance/2`）が `inline_range` に入る
+/// 行 TextLayout の text は `run.glyphs` の文字列（クラスタ）の連結ゆえ、グリフ index と text 位置は
+/// 各グリフの文字列の UTF-16 長の累積で 1:1 対応する（範囲の境界はクラスタの境界に揃う）。グリフ中心（`inline_pos + advance/2`）が `inline_range` に入る
 /// **連続**グリフ subrange を採り、その手前までの累積を `startPosition`・subrange の累積長を
 /// `length` とする（境界がグリフ境界に一致するため中心判定が浮動小数誤差に頑健）。交差グリフ
 /// なしは `None`（効果を適用しない）。
@@ -840,7 +869,7 @@ fn segment_text_range(
     let mut start: Option<u32> = None;
     let mut length: u32 = 0;
     for g in glyphs {
-        let units = g.ch.len_utf16() as u32;
+        let units = g.text.encode_utf16().count() as u32;
         let center = g.inline_pos + g.advance * 0.5;
         if center > i0 && center < i1 {
             if start.is_none() {
@@ -859,6 +888,9 @@ fn segment_text_range(
 #[cfg(test)]
 #[path = "viewbox_draw_choice_hover_tests.rs"]
 mod choice_hover_tests;
+#[cfg(test)]
+#[path = "viewbox_draw_color_emoji_tests.rs"]
+mod color_emoji_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_decoration_tests.rs"]
 mod decoration_tests;

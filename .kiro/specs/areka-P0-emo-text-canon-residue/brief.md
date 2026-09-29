@@ -65,3 +65,8 @@
 - 規模 M・要件定義は Opus で足りる（裁定は 15 の禁則文字集合の出典 1 件）。
 
 
+
+## `balloon-color-emoji` からの申し送り（2026-09-30 着地）
+
+- バルーンの文字の単位は `char` から書記素クラスタ（人が 1 文字と見る単位）に替わった。範囲（`ChoiceSpan::glyph_range`・`style_runs`・`segment_text_range`）はクラスタの通し番号で数え、UTF-16 の位置はクラスタ文字列の長さを積む。
+- `TextItem::Glyph` と `PositionedGlyph` の中身は `text: Arc<str>`（`Copy` なし）。構築は `TextItem::glyph(&str)`、切り方は `areka_sakura::cluster::clusters` だけが決める。文字を比べる処理（行末のぶら下げの判定など）は `&str` で比べる。

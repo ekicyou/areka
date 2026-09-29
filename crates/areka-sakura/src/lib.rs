@@ -30,6 +30,7 @@
 //!
 //! wintf には依存しない（headless）。`std::time::Instant` は本クレートに一切現れない。
 
+pub mod cluster;
 pub mod compile;
 pub mod contract;
 pub mod drive;

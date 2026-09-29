@@ -849,7 +849,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
         &TextLayerConfig::default(),
     )
     .expect("DWriteMetrics 生成");
-    let advance = metrics.advance('あ', FONT_H);
+    let advance = metrics.advance("あ", FONT_H);
     assert!(
         advance < FONT_H,
         "実フォント Yu Gothic UI が見つからない（「あ」の送りが {advance} ＝ em {FONT_H} 以上の等幅値へ縮退している）。本檻は実フォントの行ボックス丈を前提にしているので、代替フォントのまま緑にしない"

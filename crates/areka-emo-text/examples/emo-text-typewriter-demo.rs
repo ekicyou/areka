@@ -11,6 +11,7 @@
 //!
 //! ```text
 //! cargo run -p areka-emo-text --example emo-text-typewriter-demo
+//! cargo run -p areka-emo-text --example emo-text-typewriter-demo -- --emoji   # 色つきの絵文字
 //! ```
 //!
 //! 注: これは対話デモ（自動 pass/fail 判定は行わない）。描画・タイプライター進行・
@@ -57,6 +58,22 @@ const LINE1: &str = "おっはよー！";
 const LINE2: &str = "めっちゃええ朝やん！";
 const LINE3: &str = "今日もいくでー！";
 
+/// `--emoji` のときの台詞（色つきの絵文字と、人が 1 文字と見る単位＝クラスタの目視用）。
+/// 家族（ZWJ）・国旗・肌色・異体字セレクタ・キーキャップ・結合文字（か゚）と、既定フォントが持つ ♥。
+const EMOJI_LINES: [&str; 3] = [
+    "おはよ😀👍🏻",
+    "家族👨\u{200d}👩\u{200d}👧と🇯🇵❤\u{fe0f}",
+    "1\u{fe0f}\u{20e3}番か\u{309a}♥やで",
+];
+
+fn lines() -> [&'static str; 3] {
+    if std::env::args().any(|a| a == "--emoji") {
+        EMOJI_LINES
+    } else {
+        [LINE1, LINE2, LINE3]
+    }
+}
+
 /// 見やすいタイプ速度（秒/グリフ・既定 0.05 より遅く）。
 const CHAR_WAIT: f64 = 0.12;
 /// 1 サイクル長（タイプ完了＋余韻・秒）。超えたら Clear して打ち直す。
@@ -100,7 +117,7 @@ fn actor() -> ActorKey {
 /// （全 cue at=0.0 なので reveal は連続的に累積・旧 char_wait 定数と機能等価）。
 fn cue(at: f64, command: CueCommand) -> TalkCue {
     let duration = match &command {
-        CueCommand::Text(t) => t.chars().count() as f64 * CHAR_WAIT,
+        CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * CHAR_WAIT,
         _ => 0.0,
     };
     TalkCue {
@@ -362,11 +379,12 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
     // サイクル頭で挨拶 cue を一度だけ流す（全 at=0.0＝リビールは配送 duration で連続進行）。
     if !demo.fed {
         let mut rt = demo.runtime.borrow_mut();
-        rt.apply_cue(&cue(0.0, CueCommand::Text(LINE1.into())));
+        let [line1, line2, line3] = lines();
+        rt.apply_cue(&cue(0.0, CueCommand::Text(line1.into())));
         rt.apply_cue(&cue(0.0, CueCommand::NewLine { ratio: 1.0 }));
-        rt.apply_cue(&cue(0.0, CueCommand::Text(LINE2.into())));
+        rt.apply_cue(&cue(0.0, CueCommand::Text(line2.into())));
         rt.apply_cue(&cue(0.0, CueCommand::NewLine { ratio: 1.0 }));
-        rt.apply_cue(&cue(0.0, CueCommand::Text(LINE3.into())));
+        rt.apply_cue(&cue(0.0, CueCommand::Text(line3.into())));
         demo.fed = true;
     }
 
