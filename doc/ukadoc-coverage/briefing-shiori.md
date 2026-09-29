@@ -1012,6 +1012,8 @@ vanishbutton.caption, vanishbuttoncaption, vanishbuttonvisible
 
 > **2026-09-29 の追記——この一覧の `ghostinstallbutton.caption` はもう語彙だけではない。** 仕様 `areka-P0-ghost-install` が右クリックのメニューの「インストール」枠へ項目を登記したので、メニューを出すたびにこの名前を引き、返った文言を「インストール…」の項目名に使う（引く仕組みは `areka-P0-popup-menu-minimal` が置いていた）。台帳のこの行は**実装済み**で、担当は `areka-P0-ghost-install`。上の索引の群 7 の「131 件」とこの一覧は調査時点の写しで、数え直していない。
 
+> **2026-09-30 の追記——この一覧の `updatebutton.caption` ももう語彙だけではない。** 仕様 `areka-P0-network-update` が右クリックのメニューの「ネットワーク更新」枠へ項目を登記したので、メニューを出すたびにこの名前を引き、返った文言を「ネットワーク更新」の項目名に使う（引く仕組みは `areka-P0-popup-menu-minimal` が置いていた）。台帳のこの行は**実装済み**で、担当は `areka-P0-network-update`。上と同じく、群 7 の「131 件」とこの一覧は数え直していない。
+
 ---
 
 ## 第 3 部 — 受け口が無い外部との連携

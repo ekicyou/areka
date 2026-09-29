@@ -990,8 +990,8 @@ not_applicable = 0
 
 [[barrier]]
 page = "list_shiori_resource"
-implemented = 6
-vocabulary_only = 153
+implemented = 7
+vocabulary_only = 152
 degraded = 0
 absent = 0
 alias = 0

@@ -330,8 +330,6 @@ pub(crate) fn on_steady(world: &mut World) {
 
 /// メニューの項目を選べるか: 窓口が在り・終了が始まっておらず・段が `Idle`（答え待ちも灰色）・
 /// 写しか 3 つの `descript.txt` のどれかに更新先が在る。
-// 呼び手（メニュー「ネットワーク更新」の枠）はタスク 7.2 が足す。そのとき外す。
-#[allow(dead_code)]
 pub(crate) fn can_update(world: &World) -> bool {
     let Some(desk) = world.get_non_send::<UpdateDesk>() else {
         return false;
@@ -355,8 +353,6 @@ pub(crate) fn can_update(world: &World) -> bool {
 }
 
 /// メニューの動作: 今の 3 つを対象に理由 `manual` で受付へ（判定の記録は受付が残す）。
-// 呼び手（メニュー「ネットワーク更新」の枠）はタスク 7.2 が足す。そのとき外す。
-#[allow(dead_code)]
 pub(crate) fn update_current(world: &mut World) {
     super::submit(
         world,

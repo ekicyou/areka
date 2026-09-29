@@ -15027,22 +15027,25 @@ note = """
 """
 
 [entry."ukadoc:list_shiori_resource:updatebutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = "areka-P0-network-update"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
-（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
-（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
-メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
-この名前を引く相手は 0 件である。
-引受先: areka-P0-network-update。ネットワーク更新を置く仕様で、その枠を登記した日に実装済みへ
-改める。
-壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
-ログ: 1 行も出ない。引かれない名前は記録にも現れない。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「ネットワーク更新」の
+項目名に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
+「ネットワーク更新」枠へ項目を登記するのは areka-P0-network-update（crates/areka/src/menu/update_frame.rs
+の register を、ゴーストを起こすたびに crates/areka/src/ghost_session.rs の boot_wired が呼ぶ）。
+項目を選ぶと今のゴースト・シェル・バルーンを対象に更新を始める。3 つのどれにも更新先が無いときと、
+更新が走っている間は選べない（灰色）。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「ネットワーク更新」に落ち、メニューはそのまま
+出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由
+（send_failed／timeout／dropped）を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「ネットワーク更新の名称」とされ、その項目
 に出る言葉である。
 無いと失うもの: 右クリックのメニューの「ネットワーク更新」の項目が、そのゴーストらしい言い回しになら

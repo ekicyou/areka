@@ -324,7 +324,7 @@ wave = "W14"
 name = "areka-P0-popup-menu-minimal"
 stage = "A"
 bundle = "メニュー"
-owner_count = 14
+owner_count = 13
 wave = "A0"
 
 [[spec]]
@@ -345,7 +345,7 @@ wave = "A0"
 name = "areka-P0-network-update"
 stage = "B"
 bundle = "更新"
-owner_count = 4
+owner_count = 5
 wave = "A4"
 
 [[spec]]
