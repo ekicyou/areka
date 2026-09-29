@@ -127,7 +127,7 @@
   - _Boundary: menu install_frame, menu mod, install pick, install desk（選ぶ画面を起こす動作と「出ている」旗）, ghost_session boot_wired_
 
 - [ ] 8. 起動中のゴーストのフォルダへ入れる一周
-- [ ] 8.1 預かった書庫の段を持ち、切替の道筋の「全窓を閉じた直後・起こす前」で展開する
+- [x] 8.1 預かった書庫の段を持ち、切替の道筋の「全窓を閉じた直後・起こす前」で展開する
   - 窓口の子（`overwrite`）に預かった書庫と段（預かった → 切替を頼んだ → 展開した）を持たせ、起動中のゴーストへの頼みを受けたら既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で頼む（再生中の台詞の終わりは kanade の保留が待つ）
   - `switch_to` の全窓を閉じた直後に 1 行足し、段が「切替を頼んだ」で切替の予約の切替先が預かった宛先と同じときだけ、UI スレッドで同期に展開して所要 ms を `install_overwrite_done` に残す。展開の成否によらず `switch_to` は今日の道を進む
   - 定常到達で「展開した」の結果を背景スレッドへ返して消す。頼んだ時点で宛先がもう起動中のゴーストでなければ書庫を返す
@@ -195,3 +195,4 @@
 - 6.4: 本番の道筋のテストは `SwitchRig::pump_input_until`（`ghost_switch_test_support.rs`）で Input の段を回し、窓口の `queue` が空で `busy` が偽になるまで待つ（`InstallDesk.busy` はテストが読むために `pub(super)`）。8.x の窓口のテストも同じ補助で回せる。
 - 7.1: `install/mod.rs` の `judge` は `pub(crate)`（入口から `script_request` を呼ぶ）。`InstallOrigin` の allow は `Menu` の腕だけに残る＝**7.2 で外す**。sinks の列を増やすと `zorder_wiring_tests.rs` の `t_zwi05`（列の原文を判定）も直す。Monitoring の表に無い記録の語 4 つ（`install_cue_unopenable`・`install_cue_skip`・`install_cue_extra_ignored`・`install_cue_send_failed`）も**タスク 10 で拾う**。
 - 7.2: 選ぶ画面のテストの口は窓口の非公開の `start_pick(world, suppressed, pick)`（本番は `pick_and_submit` だけが通る）。「出ている」旗は `PickingFlag` の Drop で下ろす（正常終了・panic・スレッドを起こせない、のどれでも）。`start_pick` は終了を判定しない＝項目が選べなくなり、後から届いたパスは受付が `install_order_refused` で断る。`CoInitializeEx` の失敗は `error!(install_pick_failed)`。項目単位の allow の残りは `Overwritten`（**8.1 で外す**）だけ。Monitoring の表に無い記録の語 3 つ（`install_pick_no_desk`・`install_pick_busy`・`install_pick_send_failed`）も**タスク 10 で拾う**。`desk.rs` は 514 行・`ghost_session.rs` は 698 行。
+- 8.1: 預かった書庫の段は `install/overwrite.rs`（`desk.rs` の `#[path]` の子）。先に入れた 8.3 の分＝`Busy` は「預かった」のまま次の定常到達で頼み直す・`NotFound`／`NoContext` は `warn!(install_overwrite_unavailable, verdict)` で `NotRunning` を返す・別のゴーストへの切替では展開しない（`debug!(install_overwrite_skipped)`）。**8.3 で必ず直す**: 「切替を頼んだ」のまま予約が消えた（`ChangeCancelled`）ときに段が戻らず worker が返事を待ち続ける（`overwrite::on_steady` の `other => desk.overwrite = other` の腕）・予約が下りた tick での頼み直しが無い。**9 で結ぶ**: UI スレッドの展開は終了の門を通らない・`discard_for_exit` が預かった書庫を捨てない（今は終了で worker が World の破棄まで待つ）。`ChangeOrigin::Automatic` はテストで直接判定していない（8.3 で `ghost_switch_requested` の origin 欄を 1 つ判定するとよい）。Monitoring の表に無い記録の語 3 つ（`install_overwrite_requested`・`install_overwrite_replaced`・`install_overwrite_skipped`）も**タスク 10 で拾う**。`ghost_switch.rs` は 870 行。

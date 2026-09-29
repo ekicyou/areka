@@ -3,7 +3,7 @@
 //! 確かめること: 受付の 4 つの判定と記録・手続きの最中に届いた依頼が届いた順に 1 件ずつ背景の
 //! スレッドへ渡ること・イベントの頼みは切替の予約が在る間は送らず、予約が下りた tick に送る
 //! 時点のゴーストへ送ること・送り直しの頼みは前に送った後に定常到達が届いてから送ること・
-//! 素性の答え・8.1 までの上書きの頼みは書庫を返すこと。
+//! 素性の答え・宛先が起動中のゴーストでない上書きの頼みは書庫を返すこと。
 //!
 //! 背景のスレッドは起こさない: 窓口の依頼の送出端を受信端に差し替え、頼みは窓口の頼みの送出端へ
 //! 直接入れる。kanade の代わりは置き場の中身に持たせた送出端の受信端。取り出しの系は `drain` を
@@ -30,7 +30,7 @@ use crate::emo2_boot::ghost_switch::{
 };
 use crate::exit_wait::begin_close;
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::install::procedure::InstalledRecord;
+use crate::install::procedure::{InstalledRecord, Overwritten};
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
 
 // ---------------------------------------------------------------- 道具立て
@@ -396,7 +396,7 @@ fn facts_describe_the_running_ghost() {
     );
 }
 
-/// 起動中のゴーストへの上書きの頼みは、8.1 まで書庫を返す（もう起動中のゴーストではない）。
+/// 宛先がもう起動中のゴーストでない上書きの頼みは、切替を頼まずに書庫を返す（起動の文脈も無い）。
 /// 起動の文脈もゴーストも無くても、入れた後の記録の頼みには答える（中身は `desk_record_tests.rs`）。
 #[test]
 fn overwrite_returns_the_archive_and_record_answers() {

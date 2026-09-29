@@ -5,6 +5,8 @@
 //! 選ぶ画面のスレッド）からの生の要求を受付 [`submit`] へ流し ⑵ 背景のスレッドの頼み [`DeskAsk`] を
 //! 捌き ⑶ 手元のイベントの頼み（高々 1 件）を条件を満たせば送り ⑷ 背景のスレッドが空いていれば
 //! 次の依頼を渡す。入れた後の記録（受け皿・バルーンの記憶・置換語）は反映を待ってから答える。
+//! 起動中のゴーストへ入れる一周（預かった書庫と段）は子の `overwrite` が持ち、ここは切替の道筋から
+//! 呼ばれる口 [`run_overwrite_between`]・[`on_steady`] を開けるだけ。
 //!
 //! イベントを送るのは、切替の予約が無い・終了が始まっていない・置き場のゴーストに kanade への
 //! 送出端がある tick で、送り先は送る時点の置き場のゴースト。定常かどうかの正本は kanade で、
@@ -28,7 +30,7 @@ use bevy_ecs::world::World;
 use super::judge::GhostFacts;
 use super::names;
 use super::pick::{self, PickError};
-use super::procedure::{InstalledRecord, Overwritten};
+use super::procedure::InstalledRecord;
 use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use crate::boot_config::BootContext;
@@ -68,6 +70,8 @@ pub(crate) struct InstallDesk {
     pub(super) gate: Arc<WorkGate>,
     /// 選ぶ画面が出ているか（選ぶ画面のスレッドと共有・スレッドが終わると降りる）。
     picking: Arc<AtomicBool>,
+    /// 起動中のゴーストへ入れる、預かった書庫と段（高々 1 件・中身は [`overwrite`]）。
+    overwrite: Option<overwrite::Pending>,
 }
 
 impl InstallDesk {
@@ -87,6 +91,7 @@ impl InstallDesk {
             sent_at_steady: None,
             gate,
             picking: Arc::new(AtomicBool::new(false)),
+            overwrite: None,
         }
     }
 }
@@ -114,11 +119,19 @@ pub(crate) fn drain(world: &mut World) {
     hand_next_order(world);
 }
 
-/// 定常到達の通知を受けた（`ghost_switch::on_notice` の定常到達の腕の末尾から）。回数を数えるだけ。
+/// 定常到達の通知を受けた（`ghost_switch::on_notice` の定常到達の腕の末尾から）。回数を数え、
+/// 預かった書庫の段を進める（展開した結果を返す・預かったままなら切替を頼み直す）。
 pub(crate) fn on_steady(world: &mut World) {
     if let Some(mut desk) = world.get_non_send_mut::<InstallDesk>() {
         desk.steady_count += 1;
     }
+    overwrite::on_steady(world);
+}
+
+/// 降ろして全窓を閉じた直後・起こす前（`ghost_switch::switch_to` から）。預かった宛先への切替の
+/// ときだけ UI スレッドで同期に展開する（それ以外は無操作）。
+pub(crate) fn run_overwrite_between(world: &mut World) {
+    overwrite::run_between(world);
 }
 
 /// 台本の受け口と選ぶ画面のスレッドへ配る送出端（窓口が無ければ受信端の無い送出端）。
@@ -295,19 +308,11 @@ fn answer(world: &mut World, ask: DeskAsk) {
             }
             reply_to(reply, facts);
         }
-        // 起動中のゴーストへ入れる一周は 8.1。それまでは書庫を返し、よそへの展開へ進ませる。
         DeskAsk::Overwrite {
             archive,
             target_ghost,
             reply,
-        } => {
-            tracing::debug!(
-                event = "install_overwrite_returned",
-                target_ghost = ?target_ghost,
-                "[install] 起動中のゴーストへ入れる一周はまだ無いので、書庫を返します"
-            );
-            reply_to(reply, Overwritten::NotRunning(archive));
-        }
+        } => overwrite::take(world, archive, target_ghost, reply),
         DeskAsk::Record { record, reply } => {
             tracing::debug!(
                 event = "install_record_received",
@@ -501,6 +506,9 @@ fn hand_next_order(world: &mut World) {
     }
 }
 
+#[path = "overwrite.rs"]
+mod overwrite;
+
 #[cfg(test)]
 #[path = "desk_tests.rs"]
 mod tests;
@@ -512,3 +520,7 @@ mod record_tests;
 #[cfg(test)]
 #[path = "desk_pick_tests.rs"]
 mod pick_tests;
+
+#[cfg(test)]
+#[path = "desk_overwrite_tests.rs"]
+mod overwrite_tests;

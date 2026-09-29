@@ -76,8 +76,6 @@ pub(crate) enum Raised {
 }
 
 /// 起動中のゴーストへ入れた結果。
-// `Ran`・`NotRunning` を組み立てる窓口（`desk`）は 6.2・8.1 で結ぶ。結んだら外す。
-#[allow(dead_code)]
 pub(crate) enum Overwritten {
     Ran(Result<InstallOutcome, NarError>),
     /// 宛先はもう起動中のゴーストではない（書庫を返す）。

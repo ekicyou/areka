@@ -656,6 +656,8 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         ),
     }
     let closed = close_windows_for_restart(world);
+    // 起動中のゴーストへ入れる一周（預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
+    crate::install::desk::run_overwrite_between(world);
     let origin = BootOrigin::ChangedFrom(ChangedFrom {
         sakura_name: prev.sakura_name.unwrap_or_default(),
         script: handoff.script.unwrap_or_default(),
