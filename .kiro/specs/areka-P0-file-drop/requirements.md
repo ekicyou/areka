@@ -65,6 +65,7 @@
 - **Out of scope**:
   - インストールの手続きそのもの（`accept` の照合・利用条件・展開・`OnInstall*` の送出・`OnInstallCompleteAll` の判断・`lastinstalled`・入れた後の切替）＝完了 `ghost-install`。書庫の中身（`install.txt` の有無など）は本仕様では見ない。
   - ドラッグ中の知らせ `OnFileDropping`・旧仕様 `OnFileDrop`／`OnFileDropEx`／`OnFileDropped`・応えが無いときのビューア（`OnArchiveViewerOpen` など）。
+  - 書庫の中を覗いて `install.txt` の無い `.zip` を `OnFileDrop2` へ回すこと・汎用の書庫の解凍機としての働き（SSP にはあるが、areka はデスクトップマスコットの枠を超えない＝恒久に範囲外・裁定 10.7）。
   - テキスト・URL・「ファイル」として扱えない物の投げ込み（`OnTextDrop`／`OnURLDropping`／`OnURLDropped`／`OnURLDropFailure`／`OnOtherObjectDropping`／`OnOtherObjectDropped`）＝α 後。URL は `network-update` の Out にも明記。
   - 管理者として起動した areka へ、ふつうの権限のエクスプローラから落としたときの手当て（OS の仕組みで窓に届かない＝既知の制限として `alpha-release-signoff` へ申し送る）。
   - フォルダから `.nar` を作ること（`OnNarCreating`／`OnNarCreated`）。
@@ -218,5 +219,5 @@
 4. The 本仕様 shall **裁定 4: 定常でないときの書庫でない物**を「送らず `warn!` 1 件」とする（要件 6.3）。理由: 汎用の通知の入口が定常以外を捨てる規則と揃える。書庫は `ghost-install` の待ち行列が定常まで待たせるので捨てない（要件 3.8）。後で送り直すと、起動の挨拶の後に前の投げ込みの台詞が突然出る。
 5. The 本仕様 shall **裁定 5: MIME**を「拡張子から決め、決められなければ空・表の広さは設計で決める」とする（要件 4.4・4.5）。理由: 正典は決め方を書かない。ファイルの中身を読むと受け取りが遅くなる。空にしても Reference の要素数を保てば辞書側は並びで突き合わせられる。
 6. The 本仕様 shall **裁定 6: 問い合わせに失敗した物**を「拡張子だけで決め `warn!`」とする（要件 2.5）。理由: 一覧の 1 件を黙って落とすと記録の無い失敗になる。
-7. The 本仕様 shall **裁定 7: `install.txt` を持たない `.zip`**を書庫として渡す（要件 2.4・完了 `ghost-install` 暫定の確定 10 のまま）。理由: 入らない理由は手続きが `OnInstallFailure`（`invalid type`）で知らせる。本仕様が書庫の中を覗くと、境界（書庫の中身を見ない）が崩れる。
+7. The 本仕様 shall **裁定 7: `install.txt` を持たない `.zip`**を書庫として渡す（要件 2.4・完了 `ghost-install` 暫定の確定 10 のまま・**2026-09-29 要件ディスカッション議題 1 で開発者確定**）。理由: 入らない理由は手続きが `OnInstallFailure`（`invalid type`）で知らせる。本仕様が書庫の中を覗くと、境界（書庫の中身を見ない）が崩れる。正典の [`OnArchiveViewerOpen`](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnArchiveViewerOpen:1)「ファイルがDnDされて、OnFileDrop2にゴーストが応答せず、かつアーカイブビューアーが開かれた際に発生」は、SSP がインストールできない書庫を `OnFileDrop2` とビューアへ回す（汎用の書庫の解凍機としても働く）ことを示すが、開発者の方針「areka はデスクトップマスコットの枠を超えない」により取らない。よって `.zip` を渡されたときの `OnFileDrop2` の台詞は areka では動かない（既知の差・後で拾う予定 0＝roadmap へ登記しない）。
 8. The 本仕様 shall **裁定 8: 1 回の投げ込みの書庫は依頼 1 つ**とする（要件 3.1）。理由: `OnInstallCompleteAll` は「複数のnarをD&Dした時などに」全部入ったときに 1 回（正典）。依頼を分けると手続きは全部入ったことを知れない。
