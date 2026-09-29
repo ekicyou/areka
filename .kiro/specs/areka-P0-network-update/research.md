@@ -197,7 +197,15 @@
 - 読み直しの後の中身の解き直し — 実機の項目 1 で `shell_target` の読み込みの記録を見る。
 - 定常到達ごとの照会が 1 件増える — 起動の記録で往復の時間を見る。
 
-### 8.7 References
+### 8.7 設計討議での修正（2026-09-29・`/kiro-design` の設計検証 → 討議）
+
+設計検証（`design-validation.md`・判定 GO）の問題 3 件はどれも設計の骨格を変えない局所の直しで、開発者の判断を要する分かれ目は無かった（採らなかった案が安全性か決定論で明確に劣る）。自明な修正として design.md に反映した。
+
+- **問題 1（`OnUpdateProcessExec` の答え待ちの間に届いた要求）**: 正典の「`OnUpdateProcessExec` に応えて自分で更新を始める」使い方では、応えの台本の中の `\![updatebymyself]` が背景スレッドの `OrderDone` より先に受け口から届き得る。`busy` の旗 1 つでは時機次第で `executing` と誤って断る。窓口を段 `Stage { Idle, AwaitingExec, Running }` と預かり 1 枠にし、`AwaitingExec` の間の要求は預かって、標準が始まれば（`DeskAsk::Started`）断り、応えがあれば（`OrderDone`）始める。`drain` の順の入れ替えだけでは同じ tick の競合しか解けないので採らない。手続きの口に `standard_started` が 1 つ増える。
+- **問題 2（書く段が `run` 全体＝取得の途中の終了で上限 3 秒まで待つ）**: 受け入れる。エンジンに「確定に入る」の通知（`Progress::CommitBegin`）を足す案は、観測の閉包（`FnMut(&Progress)`）から `run` を止められないので、終了が始まった後に確定へ入っても止められず終了も待たない＝確定がプロセスの終わりで裂けやすくなる。`run` の前で `enter_write` すれば門の意味論だけで「始まっていれば走らせない・走っていれば上限まで待つ」が成り立つ。代わりに `exit_wait_timeout` の本文を「取得か書き込みの途中だった」と読める語にした。
+- **問題 3（変更表に無い既存テスト）**: `install/judge_tests.rs`（`["url", …]` が `NotPath` である判定＝検証の指摘に無かったが同じ型変更で赤になる）・`install/desk_pick_tests.rs`・`emo2_boot/install_cue_tests.rs`・`exit_wait_tests.rs`（`.nar-work` を含む判定）の 4 行を変更表へ足した。どれも消さず新しい振る舞いへ書き換える（要件 9.14）。
+
+### 8.8 References
 - [ネットワーク更新への対応](https://ssp.shillest.net/ukadoc/manual/dev_update.html)・[ファイル構成](https://ssp.shillest.net/ukadoc/manual/manual_update.html)・[更新定義ファイル](https://ssp.shillest.net/ukadoc/manual/spec_update_file.html)
 - [SHIORI イベント一覧](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html)（`OnUpdateProcessExec`〜`OnUpdateResultEx`）・[SHIORI リソース一覧](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html)（`homeurl`・`useorigin1`・`updatebutton.caption`）
 - [さくらスクリプト一覧](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html)（`\![updatebymyself]`・`\![update,…]`・`\![updateother,…]`・`\![execute,install,url,…]`・`\![reload,ghost]`）
