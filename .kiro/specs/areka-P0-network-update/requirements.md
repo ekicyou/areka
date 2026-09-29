@@ -146,7 +146,7 @@
 4. When 利用者が「ネットワーク更新」を選ぶ, the areka shall 今のゴースト・今のシェル・今のバルーンの 3 つを対象にした要求（理由 `manual`）を作る。
 5. When 再生中の台本が `\![updatebymyself]` または `\![update,all]` の位置に達する, the areka shall 要件 1.4 と同じ 3 つを対象にした要求（理由 `script`）を作る。
 6. When 再生中の台本が `\![update,対象]` の位置に達し、対象が `ghost`・`shell`・`balloon` を `+` で 1 つ以上並べた形である, the areka shall 並べた対象だけ（今のゴースト・今のシェル・今のバルーン）を、並んだ順に更新する要求（理由 `script`）を作る。
-7. When 再生中の台本が `\![updateother,…]` の位置に達し、`--shell=名前`・`--balloon=名前` が 1 つ以上並んでいる, the areka shall 名前を今のゴーストのシェルの目録・根のバルーンの目録から `descript.txt` の `name` で引き（大文字小文字を区別・起動中でなくてもよい）、引けた物を並んだ順に更新する要求（理由 `script`）を作る。引けない名前は `warn!` 1 件で飛ばす。
+7. When 再生中の台本が `\![updateother,…]` の位置に達し、`--shell=名前`・`--balloon=名前` が 1 つ以上並んでいる, the areka shall 名前を今のゴーストのシェルの目録・根のバルーンの目録から `descript.txt` の `name` で引き（大文字小文字を区別・起動中でなくてもよい）、引けた物を並んだ順に更新する要求（理由 `script`）を作る。引けない名前は `warn!` 1 件で飛ばす。`menu,hidden` のシェルはメニューの目録と同じく引かない（引けない名前として飛ばす・裁定 18）。
 8. If `\![update,…]`／`\![updatebymyself]`／`\![updateother,…]` に更新オプション（`checkonly`・`testonly`・`recovery`・`--option=…`）が付いている、または `\![update,…]` の対象に `ghost`・`shell`・`balloon`・`all` 以外の語がある、または `\![updateother,…]` に `--shell=`／`--balloon=` 以外の指定しか無い, then the areka shall 要求を作らず、イベントを 1 件も送らず、`warn!` を 1 件残す。
 9. The areka shall 対象ごとの更新先を次の順で解く: ゴーストは SHIORI リソース `homeurl` の応答（空・返事なしでなければそれ）→ ゴーストの `descript.txt` の `homeurl`／シェルとバルーンは各 `descript.txt` の `homeurl`。
 10. If 対象の更新先がどちらにも無い, then the areka shall その対象を飛ばし（その対象のイベントは 0 件・総括にも載せない）、`warn!` を 1 件残す。要求の対象が全部飛ばされたときは総括も送らない（0 件）。
@@ -228,7 +228,7 @@
 #### Acceptance Criteria
 
 1. The areka shall 取得・照合・確定・削除の間、今のゴーストを降ろさない（SHIORI を解放しない・窓を閉じない）。進捗のイベントはこのゴーストへ届く。
-2. When 更新が 1 つでも `changed` で終わった（対象がゴースト・シェル・バルーンのどれでも）, the areka shall 総括の後に、同じゴーストを読み直す（完了 `ghost-shell-balloon-switch` の「自分自身への、知らせを送らない切替」＝`OnGhostChanging` を送らない・終了の挨拶を再生しない・SHIORI の解放を待つ・全窓が 0 になっても終了しない）。読み直しでゴースト・シェル・バルーンの 3 つの中身がすべて読み直される（起動時と同じ解き方）。
+2. When 更新が 1 つでも `changed` で終わった（対象がゴースト・シェル・バルーンのどれでも）, the areka shall 総括の後に、同じゴーストを読み直す（完了 `ghost-shell-balloon-switch` の「自分自身への、知らせを送らない切替」＝`OnGhostChanging` を送らない・終了の挨拶を再生しない・SHIORI の解放を待つ・全窓が 0 になっても終了しない）。読み直しでゴースト・シェル・バルーンの 3 つの中身がすべて読み直される（起動時と同じ解き方）。ただしコマンドライン引数でゴーストのフォルダを指して始めたプロセス（根の目録の外のゴースト）では読み直さず、`warn!` を 1 件残す（裁定 17）。
 3. The areka shall 読み直しを、総括への返事の台詞が終わってから（返事が無ければ総括を送った直後に）始める。
 4. When 要求の対象がすべて `none`（変更なし）または失敗で終わった, the areka shall 読み直さない（切替の要求 0 件）。
 5. The areka shall 読み直しの後の起動の根を今日の切替と同じ `OnGhostChanged`（Reference は自分→自分）とする（裁定 6・`OnBoot` は送らない）。
@@ -279,7 +279,7 @@
 4. The 本仕様 shall `dist/README.txt` の「今の版ではできません」を挙げる 2 行から「ネットワーク更新」の語を外す（`shell-balloon-switch` の分が残っていれば残す）。「■ 更新のしかた」の本文は `alpha-release-signoff` が書く。
 5. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 に、要件 10 の裁定のうち正典が沈黙している点を記す。
 6. The 本仕様 shall 本番コードが読む環境変数を足さず（0 個）、外部クレートを足さない（0 個。ワークスペースの中の `areka-update` を `crates/areka` の依存に足すことは数えない）。
-7. The 本仕様 shall 本番ファイルとテストファイルのどれも 1,000 行を超えさせない（`ghost_session.rs` 691・`emo2_boot/mod.rs` 805・`consumer_ledger.rs` 756 に足す行は各 10 行以内の見込み。新しいテストは兄弟の新しいファイルへ）。
+7. The 本仕様 shall 本番ファイルとテストファイルのどれも 1,000 行を超えさせない（`ghost_session.rs` 701・`emo2_boot/mod.rs` 816・`consumer_ledger.rs` 786 に足す行は各 10 行以内の見込み。新しいテストは兄弟の新しいファイルへ）。
 8. The 本仕様 shall 完了時に次を申し送る: `shell-balloon-switch` へ「今のシェル・今のバルーン」の読み替え（要件 1.4 の 3 つを切替後の物にする）と許可表の数 43／`alpha-release-signoff` へ第三者の手順「更新する」（メニュー → 進捗の台詞 → 引っ込んで戻る）と既知の制限（更新オプション・`other_homeurl_override`・URL の `feed`／`homeurl`・落としたファイルは 7 日残る・戻せなかった残りは `.update-work` の下に残る）。
 
 ### Requirement 9: 決定論テストと実機確認
@@ -303,7 +303,7 @@
 13. The 本仕様 shall kanade の許可表が 43 語・リソースの許可表が 12 語であることを判定する（既存の判定の数 23 を書き換える）。
 14. The 本仕様 shall 既存のテストを置き換え無しに消さない。振る舞いが変わる行は新しい振る舞いを固定する形へ書き換える。
 15. The 本仕様 shall ネットへ出るテストを常時テストに入れない（実機の一周は `#[ignore]` か手順書）。
-16. When 実機で確認する, the 開発者 shall 次を見て `signoff.md` に記録する: ⑴ emo2 を起動し、メニュー「ネットワーク更新」→ 配布サイト（https・`homeurl,https://ekicyou.github.io/ghost_dev/emo2/emo2/`）に置いた差分 1 件が入る → emo2 の台詞（`OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete` の「更新成功」）→ 台詞の後に引っ込んで戻る（記録に `ghost_switch_done` 相当と読み直し後の `OnGhostChanged`）→ シェル・バルーンの中身も読み直されていること ⑵ もう 1 度更新 → 差分 0 → `OnUpdateComplete` の Reference0＝`none`（「更新無し」の台詞）→ 読み直さない ⑶ `homeurl` の無いシェルが飛ばされ、総括にゴーストとバルーンだけが載る（emo2 のバルーンの更新先は別のサイト〔emo-gs〕なので、その中身次第でバルーンが更新される・失敗する。予期しない結果は記録して開発者へ） ⑷ 配布サイトに置けない場合はローカルの http で ⑴⑵ を行い、https が未確認のままであることを既知の制限へ申し送る。
+16. When 実機で確認する, the 開発者 shall 次を見て `signoff.md` に記録する（emo2 は根へ入れた物をコマンドライン引数なしで起こす＝裁定 17 の読み直さない経路を踏まない）: ⑴ emo2 を起動し、メニュー「ネットワーク更新」→ 配布サイト（https・`homeurl,https://ekicyou.github.io/ghost_dev/emo2/emo2/`）に置いた差分 1 件が入る → emo2 の台詞（`OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete` の「更新成功」）→ 台詞の後に引っ込んで戻る（記録に `ghost_switch_done` 相当と読み直し後の `OnGhostChanged`）→ シェル・バルーンの中身も読み直されていること ⑵ もう 1 度更新 → 差分 0 → `OnUpdateComplete` の Reference0＝`none`（「更新無し」の台詞）→ 読み直さない ⑶ `homeurl` の無いシェルが飛ばされ、総括にゴーストとバルーンだけが載る（emo2 のバルーンの更新先は別のサイト〔emo-gs〕なので、その中身次第でバルーンが更新される・失敗する。予期しない結果は記録して開発者へ） ⑷ 配布サイトに置けない場合はローカルの http で ⑴⑵ を行い、https が未確認のままであることを既知の制限へ申し送る。
 17. When 実機で確認する, the 開発者 shall 記録の水準をイベントの送出・更新先の解決・判断の分かれ目が見える所まで開ける（`RUST_LOG` にエンジンと本仕様のモジュールを `debug` 以上で）。
 
 ### Requirement 10: 裁定（暫定・要件ディスカッションで確定）
@@ -328,3 +328,5 @@
 14. The 本仕様 shall **暫定の確定 14: MD5 の照合の知らせ**を「1 回の通知から `Begin` と `Complete`／`Failure` を続けて 2 件」とする（要件 2.9）。理由: エンジンは照合の結果だけを知らせ、照合は一瞬で終わる。`Begin` を落とすと辞書の返事が 1 つ呼ばれなくなる。
 15. The 本仕様 shall **暫定の確定 15: `\![execute,install,url]` の失敗**を「`error!` 1 件・イベント 0 件」とする（要件 6.4）。理由: 正典の `OnURLDropFailure` は投げ込みの系で「他では発生しない」と書き、インストールの失敗理由の語に取得の失敗は無い。落とし場所は OS の一時フォルダの下の areka 専用の場所（`C:\` 直下と対象のフォルダの中は不可）で、7 日の掃除は次の取得のとき。
 16. The 本仕様 shall **暫定の確定 16: 更新中の切替**を「更新は最後まで進め、残りのイベントと読み直しを捨てる」とする（要件 5.7）。理由: 途中で止める口がエンジンに無く、全か無かの保証はファイルの上で守られる。別のゴーストへ進捗を送るのは誤り。
+17. The 本仕様 shall **暫定の確定 17: コマンドライン引数で始めたゴーストの読み直し**を「しない（`warn!` 1 件）」とする（要件 5.2）。理由: 引数で指したゴーストは根の目録の外（起動の判断のフォルダ名が無い）で、自分自身への切替はフォルダ名で目録を引くため `NotFound` になる。引数の起動は開発者の上書きの形。読み直せるようにするには切替の指定にフォルダの絶対パスを足す改修が要り（`ghost_switch.rs` と完了 `ghost-shell-balloon-switch` の再検証）、益が小さい。実機確認は根へ入れた emo2 で行う（要件 9.16）。
+18. The 本仕様 shall **暫定の確定 18: `\![updateother,--shell=名]` と `menu,hidden` のシェル**を「引かない（引けない名前として飛ばす）」とする（要件 1.7）。理由: シェルの目録（`list_shells`）はメニューと同じく隠しシェルを落とす。正典は隠しシェルの更新に触れておらず、SSP の挙動を測って合わせない方針。
