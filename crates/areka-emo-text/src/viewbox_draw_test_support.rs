@@ -1,5 +1,6 @@
 use crate::actor::TextSlotBinding;
 use crate::canvas::ContentCanvas;
+use crate::draw::FontCatalog;
 use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::TextItem;
@@ -166,6 +167,26 @@ pub(super) fn build(
 /// 非透明ピクセル数（BGRA 密配列の α≠0）。
 pub(super) fn opaque_count(bytes: &[u8]) -> usize {
     bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
+}
+
+/// 「文字色（黒）でも背景（透明）でもない色」の画素数: α≠0 かつ B/G/R のいずれか＞0
+/// （premultiplied の黒は 0,0,0 なので、黒の文字の縁の半透明も数えない）。
+pub(super) fn colored_count(bytes: &[u8]) -> usize {
+    bytes
+        .chunks_exact(4)
+        .filter(|px| px[3] != 0 && (px[0] > 0 || px[1] > 0 || px[2] > 0))
+        .count()
+}
+
+/// Segoe UI Emoji が引けなければ理由を添えて失敗にする（飛ばして緑にしない・要件 6.7）。
+/// 色の判定は代替フォントの色つきの字形を前提にするので、色を判定するテストの先頭で呼ぶ。
+pub(super) fn require_segoe_ui_emoji(fonts: &FontCatalog) {
+    if fonts.family_for(&["Segoe UI Emoji".to_string()]).is_none() {
+        panic!(
+            "Segoe UI Emoji が見つからない——Windows 10/11 の同梱フォントなので、無いのは環境の異常か\
+             家族名の綴りの誤り（調査 2026-09-29 では `Some(\"Segoe UI Emoji\")`）"
+        );
+    }
 }
 
 /// ブロック軸（行送り軸）方向のインク範囲 `(near, far)`（物理 px・両端含む・インクなしは `None`）。

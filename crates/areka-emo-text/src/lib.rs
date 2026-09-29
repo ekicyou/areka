@@ -390,6 +390,7 @@ mod tests {
         "surface.rs",
         "viewbox_draw.rs",
         "viewbox_draw_choice_hover_tests.rs",
+        "viewbox_draw_color_emoji_tests.rs",
         "viewbox_draw_decoration.rs",
         "viewbox_draw_decoration_tests.rs",
         "viewbox_draw_frame_render_tests.rs",

@@ -889,6 +889,9 @@ fn segment_text_range(
 #[path = "viewbox_draw_choice_hover_tests.rs"]
 mod choice_hover_tests;
 #[cfg(test)]
+#[path = "viewbox_draw_color_emoji_tests.rs"]
+mod color_emoji_tests;
+#[cfg(test)]
 #[path = "viewbox_draw_decoration_tests.rs"]
 mod decoration_tests;
 #[cfg(test)]
