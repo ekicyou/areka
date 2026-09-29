@@ -111,3 +111,94 @@
 - `useorigin1`・`homeurl` は背景スレッドから `ResourceQuery` で 1 回ずつ（`ReplyReceiver::recv`）。
 - 失敗理由の表は `FailReason`／`FetchError` の網羅 `match`（ワイルドカード無し）。
 - 台帳の状態は「本体から `areka-update` を辿れるようにした変更」と同じコミットで動かし、`cargo run -p ukadoc-survey -- evidence` と `cargo test -p ukadoc-survey` で証拠と数を確かめる。
+
+## 8. 設計フェーズの調査と決定（2026-09-29・`/kiro-spec-design -y`）
+
+> ここから下は設計の段で足した。§1〜§7 のギャップ分析は変えていない。コードは「何の定義か」で指す。
+
+### 8.1 Summary
+- **Feature**: `areka-P0-network-update`
+- **Discovery Scope**: Extension（既存の `install/` の型に倣う結線・外部依存の追加 0・ライブラリの新規調査 0＝light discovery）
+- **Key Findings**:
+  - 汎用の通知の入口の返事は**台本の再生の開始の後**に返る（`crates/areka-kanade/src/actor.rs`: `drive` が戻ってから `send_raise_reply`・`drive` の 2 周目の `StartTalk` は既に送出済み）。返事の直後に自分自身への切替を頼めば、kanade の `on_change_ghost` は `Steady { talk: Some }` で受けて `pending_change` に控え、トークの完了で `consume_pending` が始める＝「総括の台詞が終わってから読み直す」（要件 5.3）は既存の仕組みだけで満たせる。
+  - `Sender<KanadeMsg>` は `std::sync::mpsc` の送出端で `Send`（`msg.rs` のテストが `KanadeMsg: Send + 'static` を固定）。背景スレッドが依頼時の写しを持てば、切替の後は `NotSteady`／送出の `Err`／返事の `Dropped` で「対象のゴーストが居なくなった」（要件 5.7）がそのまま分かり、窓口の送出の保留（`install/desk.rs` の `send_held`・`steady_count`・`sent_at_steady`）を持たずに済む。
+  - `ReplyReceiver` は `recv()`（待つ）に加えて `try_recv(&self)`（覗く）を持つ（`crates/areka-actor/src/reply.rs`）。定常到達ごとの `homeurl` の照会の返事を、窓口が毎 tick 覗く形で受けられる（メニューの `PendingQuery` と同型）。
+  - `work.rs` の `sweep` は `has_content(<走行>/old)` だけで「戻せなかった走行」を判定し、印の仕組みは 0。`cleanup` の失敗の場所（`remove_dir_all` の `Err`）に空ファイルを置き、`sweep` の判定に 1 条件足すだけで区別できる。
+  - `exit_wait.rs` の `exit_wait_timeout` の本文は `<根>/.nar-work/` を名指ししている（インストール固有）。門を 2 本にするなら本文を `label` で読む形へ一般化するのが最小。
+  - `WinHttpFetch` は定義の注記どおり「呼び出し側が一周ごとに作る」（`Send`／`Sync` でない・記録 0）。対象ごとに背景スレッドで作れば、失敗の `error!` と `connect` の締めが「対象 1 つにつき締め 1 件」（要件 2.12）と両立する。
+
+### 8.2 Research Log
+
+#### 返事の時機と読み直しの待ち
+- **Context**: 要件 5.3「総括への返事の台詞が終わってから読み直す」を UI 側で待たずに満たせるか。
+- **Sources**: `crates/areka-kanade/src/actor.rs`（受信ループの `RaiseEvent` の腕・`drive`・`send_raise_reply`）、`schedule/change.rs`（`on_change_ghost`・`consume_pending`・`begin_change`）、`crates/areka/src/install/overwrite.rs`（同じ前提で書かれた前例）。
+- **Findings**: 返事は `drive` の後（`StartTalk` の送出後）に 1 回。切替の要求は `Steady { talk: Some }` で保留され、`TalkDone` で消化される。`raise_event: false` なら `OnGhostChanging`・`OnClose` を送らず `Unloading { CloseSilent }`。
+- **Implications**: 手続きは総括の `raise` の直後に `request_reload` を呼ぶだけ。UI 側に台詞の終わりを数える線は要らない（設計で決めたこと 7）。
+
+#### 送り先の取り方（議題 E）
+- **Context**: 依頼時の送出端を背景スレッドが持つ ⒜ か、毎回窓口へ頼む ⒝ か。
+- **Sources**: `crates/areka/src/install/desk.rs`（`send_held`・`answer`・`HeldRaise`）、`crates/areka/src/input_events/file_drop.rs`（`send_event`＝UI スレッドからの直接の送出）、`crates/areka-kanade/src/schedule/change.rs`（`on_raise_event`＝定常以外は捨てて積まない）。
+- **Findings**: ⒝ は切替の後に新しいゴーストへ届くので、要件 5.7 のために対象の照合を足すことになる。⒜ は古い kanade が `NotSteady` か停止で答え、別のゴーストへ届く道が無い。要件 1.17 は「待たせない」なので送り直しの機構も要らない。
+- **Implications**: ⒜ を採る（設計で決めたこと 1・2）。窓口は `busy`・門・`homeurl` の写し・読み直しの要求だけを持つ。
+
+#### エンジンの後片付けの印（議題 G）
+- **Context**: 写像中の DLL を `old/` へ退避した成功の走行が、次の走行以後ずっと「戻せなかった走行」として警告に出る。
+- **Sources**: `crates/areka-update/src/work.rs`（`cleanup`・`sweep`・`has_content`）、`commit.rs`（`Undo::Restore`＝`old/<rel>` を戻す）、`work_tests.rs` の `folder_with_content_in_old_survives_repeated_creates_and_is_listed`。
+- **Findings**: `old/` の中身は「戻せなかった元の内容」と「成功したが消せなかった退避」の 2 通りで、フォルダの形だけでは区別できない。改名で区別する案は、開かれたファイルを含むフォルダの改名が Windows で通らないことがある。空ファイルの印は確実で、`cleanup` の失敗の 1 か所で置ける。
+- **Implications**: 印 `committed`（設計で決めたこと 15）。`keep`（戻せなかった走行）は印を置かないので今日の警告は保たれる。
+
+#### 終了の門の「書く段」（議題 C）
+- **Context**: `run` は取得と確定を 1 回の呼び出しで行い、WinHTTP は同期で外から中断できない。
+- **Sources**: `crates/areka/src/exit_wait.rs`（`WorkGate`・`begin_close`・`wait`）、`crates/areka/src/install/worker.rs`（`install_elsewhere` の門の出入り）、`crates/areka-update/src/lib.rs`（`walk` の段の順）。
+- **Findings**: `enter_write` を `run` の直前・`leave_write` を直後に置けば、既存の門の意味論のまま「取得の途中でも上限 3 秒まで待ち、上限で打ち切って進む」になる。`Progress` の並びに頼って確定の直前で段を分けるのは brief の (d) と同じ弱さ。
+- **Implications**: `run` 全体を書く段にする（設計で決めたこと 13）。
+
+#### URL の取得のスレッド（議題 H）
+- **Context**: 取得を更新の背景スレッド・インストールの背景スレッド・短命のスレッドのどこで行うか。
+- **Sources**: `crates/areka/src/emo2_boot/install_cue.rs`（`tx: Sender<RawInstallRequest>` を持つ）、`crates/areka/src/install/desk.rs`（`start_pick`＝`std::thread::Builder` の短命のスレッド `install-pick`）、`crates/areka/src/install/judge.rs`（`script_request`）。
+- **Findings**: 受け口は既に窓口の送出端を持ち `Send`。短命のスレッドで落として同じ送出端へ `RawInstallRequest { origin: Script }` を送れば、窓口にも背景スレッドにも頼みは要らない。
+- **Implications**: `install/fetch_url.rs` の `spawn_download`（設計で決めたこと 16・17）。一時フォルダは `%TEMP%\areka\download\`。
+
+#### メニューの灰色の判定（議題 A）
+- **Context**: 供給関数は同期、SHIORI の `homeurl` は非同期。
+- **Sources**: `crates/areka/src/menu/mod.rs`（`Supplier`）、`menu/captions.rs`（`send_query`）、`menu/trigger.rs`（`PendingQuery`・`poll_step`）、`emo2_boot/ghost_switch.rs`（`on_notice` の定常到達の腕が `install::desk::on_steady` を呼ぶ）。
+- **Findings**: 定常到達の通知の受け手に 1 行足せば、窓口が `homeurl` を 1 件照会して写しを持てる。返事は毎 tick `try_recv` で覗く。
+- **Implications**: ⒝ を採る（設計で決めたこと 6）。要件 1.3 の文言どおり。
+
+#### `updateother` と隠しシェル（議題 D）・argv のゴースト（議題 B）
+- **Sources**: `crates/areka-ghost/src/catalog.rs`（`list_shells` の `menu,hidden` の除外）、`crates/areka/src/boot_resolve.rs`（`GhostRoute::Argv` で `folder: None`）、`emo2_boot/ghost_switch.rs`（`resolve_switch_target` はフォルダ名の完全一致）。
+- **Findings**: どちらも要件 10 の裁定 17・18 で確定済み。設計は既存の目録と入口をそのまま使う。
+- **Implications**: `GhostSpec` を広げない・隠しシェル用の走査を足さない（設計で決めたこと 8）。
+
+### 8.3 Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|---|---|---|---|---|
+| `install/` へ相乗り | `InstallDesk` に更新の旗と段を足す | 新規ファイルが少ない | `desk.rs` 530 行が更新の語彙で膨らむ・待ち行列の直列に更新が混ざる・URL の取得でインストールが止まる | §3 案 A・取らない |
+| `update/` 新設（`install/` と同型・窓口経由の送出） | 窓口が「送る時点のゴースト」へ送る | インストールと同じ形 | 切替の後に新しいゴーストへ届く（要件 5.7 のための照合が増える）・送り直しの機構が要る | §3 案 B の素朴な写し |
+| **`update/` 新設（依頼時の送出端を背景スレッドが持つ・待ち行列なし）** | 背景スレッドが kanade へ直接送る・窓口は旗と写しと読み直しだけ | 要件 5.7・1.14・1.17 がそのまま得られる・窓口が小さい | 依頼時の送出端に縛られる（送り先の変更は要件が禁じるので制約にならない） | **採用**（設計で決めたこと 1・2・5） |
+
+### 8.4 Design Decisions
+
+（本文は design.md「設計で決めたこと」1〜20。ここには採らなかった案の補足だけを置く。）
+
+- **決めたこと 9（口の trait は `&self`）**: `&mut self` の口だと `run_engine` の間に観測の閉包から `raise` を呼べない。代わりに「送り手」を閉包へ渡す案は口が 2 つに割れ、偽の口の記録が 2 か所になる。`&self` にして本物の口の中身（`Sender`・`Arc<WorkGate>`・頼みの送出端）を共有参照で使う。
+- **決めたこと 12（網羅の `match`）**: `kind()` の文字列で分ける案は `FailReason` に変種が増えても止まらない。要件 4.2「種類が増えたらビルドが止まる形」は `match` でしか得られない。
+- **決めたこと 18（消費者台帳は選別子なし 3 行）**: `("update", Some("ghost"))` の形は `ghost+shell` を選別子に収められない。`\![update,platform]` が受け口に届くが、要件 1.8 の「知らない対象」として断るので黙って読み替えることはない。
+
+### 8.5 Synthesis（設計の前の 3 つの見直し）
+- **一般化**: 4 つの入口は「対象の列＋理由＋総括の形」の 1 つの依頼に畳めた（`RawUpdateRequest` → `UpdateOrder`）。イベントの写しは種別（ゴースト／他）を名前の組 `EventNames` で切り替えるだけで、手続きは対象の種別で分岐しない。
+- **作るか採るか**: HTTP・MD5・確定は完了エンジン。切替・門・通知の入口・照会・目録はすべて既存。新しく作るのは写し・手続き・窓口・受け口だけ。外部クレート 0。
+- **簡素化**: 待ち行列・送出の保留・定常到達の回数・起床の旗を持たない。`GhostSpec` を広げない。`Identity` に欄を足さない。エンジンに「確定に入る」の通知を足さない。
+
+### 8.6 Risks & Mitigations
+- 排他で開かれたファイルが定義に載っていると `CommitWrite` → NG — 実機の項目 1 で emo2 の `updates.txt` の中身と結果を記録し、作者側の問題として §8 に記す（既知の制限には書かない・裁定 1）。
+- 本番の 32bit SHIORI が写像した DLL の退避が消せない期間 — 印つきのフォルダは警告に出ないので害は残るフォルダだけ。実機の項目 4 で消えることを見る。
+- 読み直しの後の中身の解き直し — 実機の項目 1 で `shell_target` の読み込みの記録を見る。
+- 定常到達ごとの照会が 1 件増える — 起動の記録で往復の時間を見る。
+
+### 8.7 References
+- [ネットワーク更新への対応](https://ssp.shillest.net/ukadoc/manual/dev_update.html)・[ファイル構成](https://ssp.shillest.net/ukadoc/manual/manual_update.html)・[更新定義ファイル](https://ssp.shillest.net/ukadoc/manual/spec_update_file.html)
+- [SHIORI イベント一覧](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html)（`OnUpdateProcessExec`〜`OnUpdateResultEx`）・[SHIORI リソース一覧](https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html)（`homeurl`・`useorigin1`・`updatebutton.caption`）
+- [さくらスクリプト一覧](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html)（`\![updatebymyself]`・`\![update,…]`・`\![updateother,…]`・`\![execute,install,url,…]`・`\![reload,ghost]`）
+- 完了 spec: `areka-P0-update-engine`（エンジン）・`areka-P0-ghost-install`（`install/` の型・終了で待つ口・通知の入口の返事）・`areka-P0-ghost-shell-balloon-switch`（切替の入口・自分自身への切替）・`areka-P0-file-drop`（UI スレッドからの直接の送出）・`areka-P0-popup-menu-minimal`（枠の登記）
