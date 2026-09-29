@@ -118,7 +118,7 @@
   - _Requirements: 1.5, 1.6, 1.7, 11.6_
   - _Boundary: emo2_boot install_cue, emo2_boot mod, consumer_ledger_
 
-- [ ] 7.2 (P) メニュー「インストール…」とファイルを選ぶ画面を作り、ゴーストを起こすたびに登記する
+- [x] 7.2 (P) メニュー「インストール…」とファイルを選ぶ画面を作り、ゴーストを起こすたびに登記する
   - ファイルを選ぶ画面（書庫と「すべてのファイル」のフィルタ・1 つだけ・作業フォルダを変えない）を、メニューを選ぶたびに短命のスレッドで出す（COM を単一スレッドの形で初期化して解放・持ち主の窓は渡さない）
   - 選ばれたパスは出どころ「メニュー」の生の要求として窓口へ送る。取り消しは `info!`、出せなければ `error!`、どちらもイベント 0 件。抑止のときはスレッドを起こさず `warn!(install_pick_suppressed)` で取り消しと同じに扱う
   - 「インストール」枠へ既定名と `ghostinstallbutton.caption` の項目を登記する関数を置き、`boot_wired` から呼ぶ（窓の無い起動では登記されない）。選べるのは窓口が在り、終了しておらず、選ぶ画面が出ていないとき
@@ -194,3 +194,4 @@
 - 6.3: 目録に無いときの名前は、ゴーストなら `install.txt` の `name`、シェル・追加ファイルなら宛先のフォルダ名（設計で決めたこと 14 の読み）。`reseed` は barrier を待たない（Risks 5）。Monitoring の表に無い記録の語 3 つ（`install_names_reseeded`・`install_balloon_not_remembered`・`install_record_unsettled`）と `install_names_updated` の欄 `published` も**タスク 10 で拾う**。`GhostRuntime` に台詞の表を読む公開の口が無いので、置換のテストは「publish→`from_sylphya_provider`→`resolve_system_var`」と「載せ直し先の asker が起こし直したゴーストの SHIORI フォルダ」の 2 本に分けてある。
 - 6.4: 本番の道筋のテストは `SwitchRig::pump_input_until`（`ghost_switch_test_support.rs`）で Input の段を回し、窓口の `queue` が空で `busy` が偽になるまで待つ（`InstallDesk.busy` はテストが読むために `pub(super)`）。8.x の窓口のテストも同じ補助で回せる。
 - 7.1: `install/mod.rs` の `judge` は `pub(crate)`（入口から `script_request` を呼ぶ）。`InstallOrigin` の allow は `Menu` の腕だけに残る＝**7.2 で外す**。sinks の列を増やすと `zorder_wiring_tests.rs` の `t_zwi05`（列の原文を判定）も直す。Monitoring の表に無い記録の語 4 つ（`install_cue_unopenable`・`install_cue_skip`・`install_cue_extra_ignored`・`install_cue_send_failed`）も**タスク 10 で拾う**。
+- 7.2: 選ぶ画面のテストの口は窓口の非公開の `start_pick(world, suppressed, pick)`（本番は `pick_and_submit` だけが通る）。「出ている」旗は `PickingFlag` の Drop で下ろす（正常終了・panic・スレッドを起こせない、のどれでも）。`start_pick` は終了を判定しない＝項目が選べなくなり、後から届いたパスは受付が `install_order_refused` で断る。`CoInitializeEx` の失敗は `error!(install_pick_failed)`。項目単位の allow の残りは `Overwritten`（**8.1 で外す**）だけ。Monitoring の表に無い記録の語 3 つ（`install_pick_no_desk`・`install_pick_busy`・`install_pick_send_failed`）も**タスク 10 で拾う**。`desk.rs` は 514 行・`ghost_session.rs` は 698 行。

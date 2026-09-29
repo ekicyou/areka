@@ -19,6 +19,7 @@ use crate::exit_wait::{self, WorkGate};
 pub(crate) mod desk;
 pub(crate) mod judge;
 pub(crate) mod names;
+mod pick;
 mod procedure;
 mod terms;
 mod worker;
@@ -33,8 +34,6 @@ pub(crate) struct InstallOrder {
 /// 依頼の出どころ（記録の語彙・手続きは分岐しない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InstallOrigin {
-    // 組み立てる呼び手（メニューの入口）は 7.2 で結ぶ。結んだら外す。
-    #[allow(dead_code)]
     Menu,
     Script,
 }

@@ -651,6 +651,8 @@ fn boot_wired(
         menu::wire_menu(world, runtime.kanade().clone());
         // 「ゴースト」枠の登記（要件 1.12）: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
         menu::ghost_frame::register(world);
+        // 「インストール」枠の登記（ghost-install 要件 1.8）: 同じ理由で起こすたびにやり直す。
+        menu::install_frame::register(world);
         // 置換語 %lastghostname・%lastobjectname の載せ直し（記憶の置き場は起こすたびに新しくなる）。
         crate::install::names::reseed(world, runtime);
         // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは

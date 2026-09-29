@@ -9,10 +9,12 @@
 //!
 //! 配下の module は役割ごとに分かれる: [`plan`]（構造の計算）・[`captions`]（項目名と
 //! 表示可否の照会）・[`trigger`]（引き金と表示の段取り）・[`win32`]（OS 表示）・
-//! [`ghost_frame`]（「ゴースト」枠の供給関数・areka-P0-ghost-shell-balloon-switch）。
+//! [`ghost_frame`]（「ゴースト」枠の供給関数・areka-P0-ghost-shell-balloon-switch）・
+//! [`install_frame`]（「インストール」枠の供給関数・areka-P0-ghost-install）。
 
 pub(crate) mod captions;
 pub(crate) mod ghost_frame;
+pub(crate) mod install_frame;
 pub(crate) mod plan;
 pub(crate) mod trigger;
 pub(crate) mod win32;
@@ -272,7 +274,8 @@ pub(crate) fn attach_release_handlers(world: &mut World) {
 }
 
 /// 枠へ供給関数を登記する（World 越しの入口）。結線の前に呼ばれたら `warn!` で記録して
-/// 何もしない。呼び手は「ゴースト」枠の [`ghost_frame::register`]（ゴーストを起こすたび）。
+/// 何もしない。呼び手は「ゴースト」枠の [`ghost_frame::register`] と「インストール」枠の
+/// [`install_frame::register`]（どちらもゴーストを起こすたび）。
 pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {
     let Some(mut wiring) = world.get_non_send_mut::<MenuWiring>() else {
         tracing::warn!(

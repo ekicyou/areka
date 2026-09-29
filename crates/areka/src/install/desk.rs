@@ -12,8 +12,11 @@
 //! 届いているときだけ送る（設計で決めたこと 5）。起床の旗は立てない（設計で決めたこと 16）。
 
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SendError, Sender};
+use std::thread::{self, JoinHandle};
 
 use areka_actor::ReplySender;
 use areka_ghost::catalog::{list_balloons, list_ghosts};
@@ -24,9 +27,10 @@ use bevy_ecs::world::World;
 
 use super::judge::GhostFacts;
 use super::names;
+use super::pick::{self, PickError};
 use super::procedure::{InstalledRecord, Overwritten};
 use super::worker::{DeskAsk, spawn_worker};
-use super::{InstallOrder, RawInstallRequest, submit};
+use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use crate::boot_config::BootContext;
 use crate::emo2_boot::ghost_switch::{SwitchInFlight, record_last_installed};
 use crate::exit_wait::WorkGate;
@@ -62,6 +66,8 @@ pub(crate) struct InstallDesk {
     sent_at_steady: Option<u64>,
     /// 終了の待ちへ登記した門（背景のスレッドと共有）。
     pub(super) gate: Arc<WorkGate>,
+    /// 選ぶ画面が出ているか（選ぶ画面のスレッドと共有・スレッドが終わると降りる）。
+    picking: Arc<AtomicBool>,
 }
 
 impl InstallDesk {
@@ -80,6 +86,7 @@ impl InstallDesk {
             steady_count: 0,
             sent_at_steady: None,
             gate,
+            picking: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -119,6 +126,107 @@ pub(crate) fn raw_sender(world: &World) -> Sender<RawInstallRequest> {
     match world.get_non_send::<InstallDesk>() {
         Some(desk) => desk.raw_tx.clone(),
         None => mpsc::channel().0,
+    }
+}
+
+/// メニュー「インストール…」を選べるか（窓口が在り・終了が始まっておらず・選ぶ画面が出ていない）。
+pub(crate) fn can_pick(world: &World) -> bool {
+    world
+        .get_non_send::<InstallDesk>()
+        .is_some_and(|desk| !desk.gate.is_closing() && !desk.picking.load(Ordering::Acquire))
+}
+
+/// メニューの動作: 選ぶ画面のスレッド `install-pick` を起こす（設計で決めたこと 11）。出ている最中なら
+/// `debug!` で無視し、`AREKA_NO_ALERT` で抑止されていればスレッドを起こさず取り消しと同じに扱う。
+pub(crate) fn pick_and_submit(world: &mut World) {
+    start_pick(world, crate::alert::suppressed(), pick::pick_archive);
+}
+
+/// [`pick_and_submit`] の中身（テストは抑止の判定と選ぶ画面の代わりを差し込む）。起こしたスレッドの
+/// 取っ手を返す（本番は持たない）。
+fn start_pick<F>(world: &mut World, suppressed: bool, pick: F) -> Option<JoinHandle<()>>
+where
+    F: FnOnce() -> Result<Option<PathBuf>, PickError> + Send + 'static,
+{
+    let Some(desk) = world.get_non_send::<InstallDesk>() else {
+        tracing::debug!(
+            event = "install_pick_no_desk",
+            "[install] 窓口が無いので、ファイルを選ぶ画面を出しません"
+        );
+        return None;
+    };
+    if desk.picking.load(Ordering::Acquire) {
+        tracing::debug!(
+            event = "install_pick_busy",
+            "[install] ファイルを選ぶ画面が出ているので、2 つ目は出しません"
+        );
+        return None;
+    }
+    if suppressed {
+        tracing::warn!(
+            event = "install_pick_suppressed",
+            "[install] 告知が抑止されているので、ファイルを選ぶ画面を出さずに取り消しと同じに扱います"
+        );
+        return None;
+    }
+    desk.picking.store(true, Ordering::Release);
+    // 旗はスレッドが終わるとき（panic も含む）と、スレッドを起こせずに閉包が落ちたときに降りる。
+    let flag = PickingFlag(desk.picking.clone());
+    let tx = desk.raw_tx.clone();
+    let spawned = thread::Builder::new()
+        .name("install-pick".to_owned())
+        .spawn(move || {
+            let _flag = flag;
+            send_pick(pick(), &tx);
+        });
+    match spawned {
+        Ok(handle) => Some(handle),
+        Err(err) => {
+            tracing::error!(
+                event = "install_pick_failed",
+                error = %err,
+                "[install] ファイルを選ぶ画面のスレッドを起こせません"
+            );
+            None
+        }
+    }
+}
+
+/// 選ぶ画面が出ている旗（落ちると降りる）。
+struct PickingFlag(Arc<AtomicBool>);
+
+impl Drop for PickingFlag {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+/// 選ぶ画面の結果を窓口へ流す（選ぶ画面のスレッド）。選ばれたら出どころ「メニュー」の生の要求 1 件、
+/// 取り消しは `info!`、出せなければ `error!` でどちらも 0 件（要件 1.3・1.4）。
+fn send_pick(result: Result<Option<PathBuf>, PickError>, tx: &Sender<RawInstallRequest>) {
+    match result {
+        Ok(Some(path)) => {
+            let request = RawInstallRequest {
+                path,
+                origin: InstallOrigin::Menu,
+            };
+            if let Err(err) = tx.send(request) {
+                tracing::warn!(
+                    event = "install_pick_send_failed",
+                    path = %err.0.path.display(),
+                    "[install] 選ばれた書庫を窓口へ送れません（窓口が無い）"
+                );
+            }
+        }
+        Ok(None) => tracing::info!(
+            event = "install_pick_cancelled",
+            "[install] ファイルを選ぶ画面が取り消されました"
+        ),
+        Err(err) => tracing::error!(
+            event = "install_pick_failed",
+            error = ?err,
+            "[install] ファイルを選ぶ画面を出せません"
+        ),
     }
 }
 
@@ -400,3 +508,7 @@ mod tests;
 #[cfg(test)]
 #[path = "desk_record_tests.rs"]
 mod record_tests;
+
+#[cfg(test)]
+#[path = "desk_pick_tests.rs"]
+mod pick_tests;
