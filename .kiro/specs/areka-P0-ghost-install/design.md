@@ -48,7 +48,7 @@
 - 完了 spec の文書（`.kiro/specs/completed/` 以下）。
 
 ### Allowed Dependencies
-- 依存の向き: `areka-nar`・`areka-ghost`・`areka-kanade`・`areka-sylphya`・`areka-parsers` → `areka`（bin）。本体の中は `install/judge.rs`・`install/terms.rs`（純粋）→ `install/procedure.rs` → `install/worker.rs` → `install/desk.rs` → 入口（`emo2_boot/install_cue.rs`・`menu/install_frame.rs`）。worker と `desk` の間の頼みの型は `worker.rs` が定義し、`desk` が読む。`exit_wait.rs` は `install/` を知らず、門を使うのは `worker.rs` と `desk.rs` だけ（手続きと判断は門を知らない）。
+- 依存の向き: `areka-nar`・`areka-ghost`・`areka-kanade`・`areka-sylphya`・`areka-parsers` → `areka`（bin）。本体の中は `install/judge.rs`・`install/terms.rs`（純粋）→ `install/procedure.rs` → `install/worker.rs` → `install/desk.rs` → 入口（`emo2_boot/install_cue.rs`・`menu/install_frame.rs`）。worker と `desk` の間の頼みの型は `worker.rs` が定義し、`desk` が読む。`exit_wait.rs` は `install/` を知らず、門を使うのは `worker.rs` と `desk.rs`（子の `overwrite.rs` を含む）と、門を作って登記し受付で閉じたかを読む `install/mod.rs` の `register`・`submit` だけ（手続きと判断は門を知らない）。
 - 切替の道筋と `install/desk.rs` は互いを呼ぶ（`desk` は `request_ghost_switch`・`record_last_installed`・`SwitchInFlight` を使い、`ghost_switch.rs` は `desk::run_overwrite_between`・`desk::on_steady` を呼ぶ）。`ghost_switch.rs` が `install/` から使うのはこの 2 関数だけ。
 - 足す依存: `crates/areka/Cargo.toml` に `areka-nar`（ワークスペースの中）と、`windows` の機能 `Win32_UI_Controls_Dialogs`（`crates/areka-update/Cargo.toml` と同じく自分のクレートで上乗せ・根の `Cargo.toml` は変えない）。外部クレートの追加は 0。
 - 本番コードが読む環境変数は足さない（`AREKA_NO_ALERT` は既存）。
@@ -773,6 +773,8 @@ pub(crate) fn drain(world: &mut World);
 pub(crate) fn on_steady(world: &mut World);
 /// 降ろして全窓を閉じた直後・起こす前（`ghost_switch::switch_to` から）。預かった書庫が無ければ無操作。
 pub(crate) fn run_overwrite_between(world: &mut World);
+/// メニュー「インストール…」を選べるか（窓口が在り・終了が始まっておらず・選ぶ画面が出ていない）。
+pub(crate) fn can_pick(world: &World) -> bool;
 /// メニューの動作: 選ぶ画面のスレッドを起こす。出ている最中なら `debug!` で無視する。
 pub(crate) fn pick_and_submit(world: &mut World);
 /// 台本の受け口へ配る送出端（窓口が無ければ受信端の無い送出端）。
