@@ -543,7 +543,7 @@ pub(super) fn glyph_items(s: &str) -> Vec<TextItem>;   // clusters(s).map(TextIt
 
 1. `cluster.rs`: 6 形（👨‍👩‍👧・🇯🇵・👍🏻・❤️・1️⃣・か゚）が各 1 要素、「aあ🦆」が 3、空が 0、連結が入力と一致（2.2・2.3）。
 2. `duration.rs`: ZWJ 列 1 つ＝`1 × CHAR_NOMINAL_MS`、「aあ🦆」＝3 × 50 ms（改名して据え置き・2.6・6.6）。
-3. `state_cluster_tests.rs`: Text cue「👨‍👩‍👧🇯🇵」（duration 1.0）→ アイテム 2・各アイテムの `text` が形の全体・`RevealSchedule` の可視数が時刻 0.5 で 1（部品ではなく 1 つ）・間隔 0.5（2.4・2.5）。Choice cue「A👍🏻B」→ `glyph_range` の長さ 3（2.7）。「aあ🦆」→ 3 アイテム（`glyph_unit_is_grapheme_cluster`・6.6）。
+3. `state_cluster_tests.rs`: Text cue「👨‍👩‍👧🇯🇵」（duration 1.0）→ アイテム 2・各アイテムの `text` が形の全体・`RevealSchedule` の出す時刻が `[0.0, 0.5]`・可視数が時刻 0.5 未満で 1（部品ではなく 1 つ）・0.5 で 2・間隔 0.5（2.4・2.5）。Choice cue「A👍🏻B」→ `glyph_range` の長さ 3（2.7）。「aあ🦆」→ 3 アイテム（`glyph_unit_is_grapheme_cluster`・6.6）。
 4. `segment.rs`: `assign_items_to_chunks` の 4 分岐（境界一致・途中・空塊・はみ出し）＋「か゚き゚く゚の話」の `[1, 2, 1, 1]`（4.2）。
 5. `layout_cluster_tests.rs`: `FixedMetrics` で 6 形が `font_height` 1 つ分（3.5）・`CharByChar` の狭い行で行の先頭が必ずアイテムの先頭（4.1）・手組み `SegmentPlan` の長すぎる塊でも同じ（4.2）・行幅より広いクラスタが 1 行に置かれる（4.3）・選択肢の `inline_range` の幅＝`advance`（4.4・6.3 の当たり範囲）・`CursorMove` の基点が絵文字 1 つ分（3.4）・3 方式（4.7・6.8）。
 

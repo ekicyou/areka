@@ -591,5 +591,9 @@ mod cue_apply_tests;
 mod reveal_tests;
 
 #[cfg(test)]
+#[path = "state_cluster_tests.rs"]
+mod cluster_tests;
+
+#[cfg(test)]
 #[path = "state_cursor_coord_parse_tests.rs"]
 mod cursor_coord_parse_tests;
