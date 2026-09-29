@@ -455,6 +455,19 @@ fn dwrite_metrics_caches_probed_advances() {
     assert_eq!(first, again);
     metrics.advance("a", DEFAULT_FONT_HEIGHT);
     assert_eq!(metrics.cached_probe_count(), 2);
+
+    // クラスタ全体が 1 つの鍵: ZWJ 列を 2 度測っても probe は 1 つしか増えない
+    // （文字ごとに分けて測り記憶する誤りなら 👨・ZWJ・👩・👧 の 4 つ増えて赤）。
+    const FAMILY: &str = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}"; // 👨‍👩‍👧
+    let family = metrics.advance(FAMILY, DEFAULT_FONT_HEIGHT);
+    assert_eq!(metrics.cached_probe_count(), 3);
+    let family_again = metrics.advance(FAMILY, DEFAULT_FONT_HEIGHT);
+    assert_eq!(
+        metrics.cached_probe_count(),
+        3,
+        "同じクラスタの再計測は probe を増やさない"
+    );
+    assert_eq!(family, family_again);
 }
 
 /// line_pitch は正典式 font_height + TextLayerConfig::line_gap

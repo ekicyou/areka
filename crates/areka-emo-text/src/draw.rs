@@ -70,7 +70,7 @@
 //! ## probe/描画 一致 invariant（task 6.4・R4.5/R6.1–6.3/R7.5）
 //!
 //! probe（1 文字＝クラスタ 1 つごとの計測）と描画行 TextLayout の cluster advance の**同値** invariant は
-//! 本モジュールの統合テスト（`probe_advances_match_drawn_line_cluster_advances`／
+//! 本モジュールの統合テスト（`probe_advances_match_drawn_line_advances_per_cluster`／
 //! `advance_divergence_would_surface_as_wrap_position_drift`）が檻化する——乖離は
 //! クリップに隠れず折返し位置のズレとして赤くなる（design Testing Strategy #5）。
 

@@ -1,7 +1,7 @@
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
-use areka_sakura::cluster::clusters;
+use areka_sakura::cluster::{cluster_count, clusters};
 use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
 use wintf::com::dwrite::DWriteTextLayoutExt;
 use wintf::com::dwrite::dwrite_create_factory;
@@ -597,14 +597,14 @@ fn layout_engine_wraps_using_measured_advances() {
 // ── task 6.4 R4.5/R6.1–6.3/R7.5: probe/描画行 TextLayout の送り幅一致 invariant ──
 //
 // design Testing Strategy Integration #5（正典）: 同一 TextFormat・同一テキストで
-// probe layout（DWriteMetrics＝per-char 計測）と描画行 TextLayout
+// probe layout（DWriteMetrics＝クラスタごとの計測）と描画行 TextLayout
 // （DrawExecutor::line_layout＝render が DrawTextLayout へ渡す実物）の cluster
 // advance が**同値**であることを、等幅（ＭＳ ゴシック）＋プロポーショナル欧文混在
 // （ＭＳ Ｐゴシック）の両方で檻化する。
 //
 // 許容誤差: なし（f32 完全一致）。同一 factory・同一 create_text_format 経路・
 // 同一テキストに対する DirectWrite 計測は決定論であり、design の「同値」が正準
-// ——epsilon を挟むと per-char probe と行文脈（カーニング等）の乖離
+// ——epsilon を挟むとクラスタごとの probe と行文脈（カーニング等）の乖離
 // （6.2 申し送りの検出責務）を握りつぶすため導入しない。
 
 /// テキストごとの invariant 検証ケース（フォント名 None＝既定 ＭＳ ゴシック）。
@@ -625,15 +625,32 @@ fn invariant_font(name: Option<&str>) -> ResolvedFont {
     ResolvedFont::resolve(&model_with_font(font))
 }
 
+/// 6 形（ZWJ 列・国旗・肌色・異体字セレクタ・キーキャップ・結合文字）を前後の
+/// 普通の文字で挟んだ組（既定 ＭＳ ゴシック）。国旗だけは DirectWrite が 2 クラスタに
+/// 分ける（調査 R-1）ので、束ねる判定の分岐を実際に踏む。
+const CLUSTER_CASE: (Option<&str>, &str) = (
+    None,
+    concat!(
+        "a",
+        "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", // 👨‍👩‍👧（UTF-16 で 8 単位）
+        "\u{1F1EF}\u{1F1F5}",                          // 🇯🇵（地域表示記号 2 つ）
+        "\u{1F44D}\u{1F3FB}",                          // 👍🏻（肌色つき）
+        "\u{2764}\u{FE0F}",                            // ❤️（異体字セレクタつき）
+        "\u{0031}\u{FE0F}\u{20E3}",                    // 1️⃣（キーキャップ）
+        "\u{304B}\u{309A}",                            // か゚（結合文字）
+        "あ",
+    ),
+);
+
 /// DrawExecutor の実描画経路（ensure_format→line_layout）で行 TextLayout を組み、
-/// cluster metrics の幅列を返す——render が DrawTextLayout へ渡すのと同一の layout
-/// （検証用の別組みではない）から実描画送り幅を読む。
+/// cluster metrics の（UTF-16 長, 幅）の列を返す——render が DrawTextLayout へ渡すのと
+/// 同一の layout（検証用の別組みではない）から実描画送り幅を読む。
 fn drawn_line_cluster_widths(
     executor: &mut DrawExecutor,
     text: &str,
     font: &ResolvedFont,
     mode: WritingMode,
-) -> Vec<f32> {
+) -> Vec<(u16, f32)> {
     let format = executor
         .ensure_format(font, mode)
         .expect("ensure_format 失敗");
@@ -644,21 +661,49 @@ fn drawn_line_cluster_widths(
         .get_cluster_metrics()
         .expect("GetClusterMetrics(描画行) 失敗")
         .iter()
-        .map(|c| c.width)
+        .map(|c| (c.length, c.width))
         .collect()
 }
 
+/// 行の DirectWrite のクラスタを、こちらのクラスタ（UAX #29）ごとに UTF-16 長で束ねて
+/// 幅を合計する（国旗は 2 つが 1 つに束なる）。束の切れ目がこちらのクラスタの境界と
+/// 合わなければ理由つきで失敗する。合計は probe と同じ形（先頭から `sum`）で取る。
+fn widths_per_cluster<'a>(text: &'a str, drawn: &[(u16, f32)]) -> Vec<(&'a str, f32)> {
+    let mut rest = drawn.iter();
+    let mut grouped = Vec::new();
+    for cluster in clusters(text) {
+        let want = cluster.encode_utf16().count();
+        let mut got = 0usize;
+        let mut widths = Vec::new();
+        while got < want {
+            let (len, width) = rest
+                .next()
+                .unwrap_or_else(|| panic!("{cluster:?}: 行のクラスタが途中で尽きた"));
+            got += usize::from(*len);
+            widths.push(*width);
+        }
+        assert_eq!(
+            got, want,
+            "{cluster:?}: DirectWrite のクラスタの切れ目がこちらのクラスタの境界と合わない"
+        );
+        grouped.push((cluster, widths.iter().sum()));
+    }
+    assert!(rest.next().is_none(), "行のクラスタが余った");
+    grouped
+}
+
 /// 観測可能な完了状態（task 6.4）: 同一フォント設定・同一テキストで、計測専用
-/// probe の per-char advance と描画行 TextLayout の per-cluster advance が完全一致
-/// する（等幅＋プロポーショナル欧文混在 × 3 方向）。プロポーショナルの行文脈調整
-/// （カーニング等）で per-char probe と行計測が乖離するなら、本檻がその文字で
-/// 赤くなる（6.2 申し送りの検出責務・クリップでは隠れない metrics 述語）。
+/// probe のクラスタごとの advance と、描画行 TextLayout のクラスタを UTF-16 長で
+/// クラスタごとに束ねた幅の合計が完全一致し、束ねた数がクラスタ数と一致する
+/// （等幅＋プロポーショナル欧文混在＋6 形 × 3 方向）。プロポーショナルの行文脈調整
+/// （カーニング等）で probe と行計測が乖離するなら、本檻がそのクラスタで赤くなる
+/// （6.2 申し送りの検出責務・クリップでは隠れない metrics 述語）。
 #[test]
-fn probe_advances_match_drawn_line_cluster_advances() {
+fn probe_advances_match_drawn_line_advances_per_cluster() {
     let rig = DrawRig::new();
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
     let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
-    for (name, text) in INVARIANT_CASES {
+    for (name, text) in INVARIANT_CASES.into_iter().chain([CLUSTER_CASE]) {
         let font = invariant_font(name);
         for mode in [
             WritingMode::HorizontalTb,
@@ -667,19 +712,24 @@ fn probe_advances_match_drawn_line_cluster_advances() {
         ] {
             let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
                 .expect("DWriteMetrics 生成失敗");
-            let widths = drawn_line_cluster_widths(&mut executor, text, &font, mode);
+            let drawn = drawn_line_cluster_widths(&mut executor, text, &font, mode);
+            let grouped = widths_per_cluster(text, &drawn);
             assert_eq!(
-                widths.len(),
-                text.chars().count(),
-                "{} {mode:?}: 検証テキストは 1 文字=1 cluster の前提",
+                grouped.len(),
+                cluster_count(text),
+                "{} {mode:?}: 束ねた数＝クラスタ数",
                 font.name
             );
-            for (ch, width) in clusters(text).zip(&widths) {
-                let probe = metrics.advance(ch, font.height);
-                assert!(probe > 0.0, "{} {mode:?} {ch:?}: probe は正値", font.name);
+            for (cluster, width) in grouped {
+                let probe = metrics.advance(cluster, font.height);
+                assert!(
+                    probe > 0.0,
+                    "{} {mode:?} {cluster:?}: probe は正値",
+                    font.name
+                );
                 assert_eq!(
-                    probe, *width,
-                    "{} {mode:?} {ch:?}: probe advance（計測専用）と描画行 cluster \
+                    probe, width,
+                    "{} {mode:?} {cluster:?}: probe advance（計測専用）と描画行を束ねた \
                      advance（実描画）の同値 invariant",
                     font.name
                 );
@@ -754,7 +804,7 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
                 font.name
             );
             let placed: usize = lines.iter().map(|l| l.glyphs.len()).sum();
-            assert_eq!(placed, text.chars().count(), "折返しでグリフを失わない");
+            assert_eq!(placed, cluster_count(text), "折返しでグリフを失わない");
             for (i, line) in lines.iter().enumerate() {
                 let line_text: String = line.glyphs.iter().map(|g| &*g.text).collect();
                 let widths = drawn_line_cluster_widths(&mut executor, &line_text, &font, mode);
@@ -766,7 +816,7 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
                 };
                 // LayoutEngine の inline_pos 累積と同じ逐次加算（f32 結合順まで一致）。
                 let mut drawn_end = inline_start;
-                for w in &widths {
+                for (_, w) in &widths {
                     drawn_end += *w;
                 }
                 assert_eq!(

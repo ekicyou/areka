@@ -69,6 +69,19 @@ fn style_runs_group_consecutive_ids_and_count_utf16_units() {
         vec![(0, 1, 0), (1, 3, 1), (4, 1, 0)],
         "連続する同じ番号は 1 区間・2 単位の文字は長さ 2 として累積する（要件 3.6）"
     );
+
+    // ZWJ 列は 1 グリフで UTF-16 で 8 単位（要件 4.6: 範囲はクラスタの境界に沿う）。
+    let family = glyph("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", one); // 👨‍👩‍👧
+    let glyphs = [
+        glyph("A", StyleId::DEFAULT),
+        family,
+        glyph("C", StyleId::DEFAULT),
+    ];
+    assert_eq!(
+        triples(&glyphs),
+        vec![(0, 1, 0), (1, 8, 1), (9, 1, 0)],
+        "ZWJ 列の区間は 8 単位・後ろの区間は 9 から始まる"
+    );
 }
 
 /// 要件 14.2: 既定しか使われていない行は区間が 1 つ（番号 0）になる。空行は区間 0 個。
