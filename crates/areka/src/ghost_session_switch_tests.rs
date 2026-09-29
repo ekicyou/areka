@@ -365,7 +365,12 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
                 false,
                 lens_round1,
                 true,
-                Some(vec![Frame::Ghost, Frame::Readme, Frame::Close]),
+                Some(vec![
+                    Frame::Ghost,
+                    Frame::Install,
+                    Frame::Readme,
+                    Frame::Close
+                ]),
                 true,
                 true,
                 false,

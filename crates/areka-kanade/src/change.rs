@@ -98,6 +98,23 @@ pub enum ShioriMethod {
     Notify,
 }
 
+/// 汎用の通知の入口で送ったイベントの結果（kanade → 送り手・`KanadeMsg::RaiseEvent` の返信端）。
+///
+/// 写すのは最初の往復の結果だけで、運行表の判断（許可表・定常・置き換え）は変えない。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RaiseOutcome {
+    /// 許可表に無い名前（送っていない）。
+    NotAllowed,
+    /// 定常でない（送っていない・積んでもいない）。
+    NotSteady,
+    /// 空でない台本が返った。
+    Script,
+    /// 返事なし（204・空か空白だけの台本・エラー応答・NOTIFY の完了）。
+    NoReply,
+    /// 往復が失敗した（kanade は今日どおり終了系列へ進む）。
+    Failed,
+}
+
 #[cfg(test)]
 #[path = "change_tests.rs"]
 mod tests;

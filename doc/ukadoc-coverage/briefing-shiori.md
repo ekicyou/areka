@@ -159,6 +159,8 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   absent のまま変わらない。
   ```
 
+> **2026-09-29 の追記——群 1 と群 2 の件数はもう現状ではない。** 仕様 `areka-P0-ghost-install` が、群 2 にあった `OnInstallBegin`・`OnInstallComplete`・`OnInstallCompleteEx`・`OnInstallCompleteAll`・`OnInstallFailure`・`OnInstallRefuse`・`OnGhostTermsAccept`・`OnGhostTermsDecline` の 8 件をインストールの手続きから実際に送るようにし、台帳のこの 8 行を**実装済み**へ移して自分を担当として登記した（許可表 `ALLOWED_EVENT_IDS` は 21 語になった）。8 件の共通 note は群 1 の形に、送る場面・Reference・記録・名前の定義（`crates/areka/src/install/procedure.rs` の定数）を足したものになっている。`OnInstallReroute` は送らない（areka は 1 度に 1 体）ので群 2 に残る。上の「件数」は調査時点の写しで、数え直していない。いまの状態は台帳 `ledger/shiori.toml` と報告 `report/shiori.md` が正本である。
+
 ---
 
 ### 群 2a — M1 で意図的に発火させていないバルーンのイベント
@@ -788,6 +790,8 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
   OnSelectModeMouseUp, OnSoundError, OnSoundLoop, OnSoundStop, OnSpeechSynthesisStatus,
   OnSystemDialog, OnSystemDialogCancel, OnVoiceRecognitionStatus
 
+> **2026-09-29 の追記——この一覧の 8 件はもう送っている。** `B5`／記憶の OnInstallBegin・OnInstallComplete・OnInstallCompleteAll・OnInstallCompleteEx・OnInstallFailure・OnInstallRefuse の 6 件と、`D2`／テーマなしの OnGhostTermsAccept・OnGhostTermsDecline の 2 件は、仕様 `areka-P0-ghost-install` が右クリックのメニューの「インストール…」と台本 `\![execute,install,path,…]` からのインストールで送るようにし、台帳で**実装済み**になった。上の「導入と配布（9 件）」のうち、いまも伝わらないのは OnInstallReroute（areka は 1 度に 1 体なので送らない）と OnNarCreated・OnNarCreating（フォルダから `.nar` を作る仕組みが無い）の 3 件である。一覧そのものは調査時点の写しのまま残した。
+
 ---
 
 ### 群 2a — バルーンの開閉を知らせない 3 件
@@ -1005,6 +1009,8 @@ switchrootbutton.caption, switchtalkghostbutton.caption, systeminfobutton.captio
 termsbutton.caption, texttospeechbutton.caption, updatebutton.caption, updatebuttoncaption,
 updatefmobutton.caption, updateplatformbutton.caption, utilityrootbutton.caption,
 vanishbutton.caption, vanishbuttoncaption, vanishbuttonvisible
+
+> **2026-09-29 の追記——この一覧の `ghostinstallbutton.caption` はもう語彙だけではない。** 仕様 `areka-P0-ghost-install` が右クリックのメニューの「インストール」枠へ項目を登記したので、メニューを出すたびにこの名前を引き、返った文言を「インストール…」の項目名に使う（引く仕組みは `areka-P0-popup-menu-minimal` が置いていた）。台帳のこの行は**実装済み**で、担当は `areka-P0-ghost-install`。上の索引の群 7 の「131 件」とこの一覧は調査時点の写しで、数え直していない。
 
 ---
 

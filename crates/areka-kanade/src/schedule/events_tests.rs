@@ -183,7 +183,7 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
     assert_eq!(references, vec!["user"]);
 }
 
-/// 許可 ID の固定（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待13集合と完全一致し
+/// 許可 ID の固定（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待21集合と完全一致し
 /// `OnTalk`/`OnHour` を含まない。マウス系2種（OnMouseMove/OnMouseDoubleClick）は
 /// Task 2.1 で additive 追加され、選択関連の固定 3 ID（OnChoiceSelectEx/OnChoiceSelect/
 /// OnChoiceTimeout）は choice-select-events 2.3 で同じ前例に倣い additive 追加された
@@ -191,8 +191,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// 固定イベント ID であり、「表＝正典固定 ID の部分集合」の性質は保たれる。
 /// 切替の 2 語（OnGhostChanging/OnGhostChanged）は ghost-shell-balloon-switch 2.1 で
 /// 同じ前例に倣い足した（11→13・いずれも正典固定 ID）。
+/// インストール系の 8 語は ghost-install 2.1 で同じ前例に倣い足した（13→21・いずれも正典固定 ID・
+/// `OnInstallReroute` は載せない）。
 #[test]
-fn allowed_event_ids_are_exactly_the_thirteen_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_twenty_one_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -209,6 +211,14 @@ fn allowed_event_ids_are_exactly_the_thirteen_and_exclude_ontalk_onhour() {
             "OnChoiceTimeout",
             "OnGhostChanging",
             "OnGhostChanged",
+            "OnInstallBegin",
+            "OnInstallComplete",
+            "OnInstallCompleteEx",
+            "OnInstallCompleteAll",
+            "OnInstallFailure",
+            "OnInstallRefuse",
+            "OnGhostTermsAccept",
+            "OnGhostTermsDecline",
         ]
     );
     assert!(

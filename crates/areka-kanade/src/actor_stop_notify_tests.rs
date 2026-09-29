@@ -260,7 +260,7 @@ fn stop_notice_carries_the_change_handoff_taken_from_the_state() {
         script: Some(r"\0またね\e".to_string()),
     });
 
-    let outcome = drive(
+    let (outcome, _) = drive(
         &mut state,
         Input::ShioriReply {
             outcome: ShioriOutcome::Unloaded,

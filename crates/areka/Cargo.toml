@@ -25,6 +25,9 @@ areka-parsers = { path = "../areka-parsers" }
 # 統一プロパティシステム sylphya の reader/publisher へ委譲し第 2 ストア（HashMap）を撤去する
 # ための workspace path 依存（bin → sylphya は許容・外部 crates.io 依存の追加ではない）。
 areka-sylphya = { path = "../areka-sylphya" }
+# `.nar` の読み取り・検査・展開（areka-P0-ghost-install・要件 4.1）。ワークスペースの中の
+# path 依存で、外部（crates.io）依存の追加ではない。
+areka-nar = { path = "../areka-nar" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }
@@ -32,7 +35,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 async-io = { version = "2.6", default-features = false }
 bevy_ecs = { workspace = true }
-windows = { workspace = true }
+# ファイルを選ぶ画面（GetOpenFileNameW）の機能は本クレートで上乗せし、根の
+# [workspace.dependencies.windows] は変えない（areka-P0-ghost-install 要件 10.6・
+# crates/areka-update/Cargo.toml と同じやり方）。
+windows = { workspace = true, features = ["Win32_UI_Controls_Dialogs"] }
 # placement の採寸（measure）で surface 原寸を合成取得するため通常依存へ昇格
 # （areka-P0-window-placement design DD5・旧 dev-dependencies から移動）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }

@@ -91,6 +91,18 @@ impl NarArchive {
         &self.manifest
     }
 
+    /// 書庫の中のファイル 1 つの伸長済みの中身。`path` は書庫の中の `/` 区切りのパスで、
+    /// ASCII の大文字小文字を区別しない。フォルダと、無いパスは `None`。
+    ///
+    /// 保持している中身を引くだけで、原本の読み直しも伸長のやり直しもしない。
+    /// 何も書かず、記録も出さない。
+    pub fn entry_bytes(&self, path: &str) -> Option<&[u8]> {
+        self.names
+            .iter()
+            .find(|entry| !entry.is_dir && entry.path.eq_ignore_ascii_case(path))
+            .map(|entry| self.contents[entry.index].as_slice())
+    }
+
     /// 検証済みの中身をベースウェアの根へ入れる（要件 5.10・5.11）。
     ///
     /// 何度呼んでも同じ結果になる。2 度目以降は既存の宛先の扱い（[`ExistingState`]）が
@@ -252,3 +264,7 @@ fn log_failure(failure: NarError, work: Option<PathBuf>) -> NarError {
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lib_entry_tests.rs"]
+mod entry_tests;

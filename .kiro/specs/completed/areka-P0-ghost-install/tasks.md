@@ -1,0 +1,203 @@
+# Implementation Plan
+
+> 設計（`design.md`）の部品名で境界を示す。コードは「何の定義か」で指し、行番号では指さない。テストは本番ファイルの兄弟ファイルへ置く（`structure.md` の規約・どのファイルも 1,000 行以下）。全体のテストは `tools/test-all.ps1` 1 本で回す（i686 の補助プロセスの成果物が要る）。開発者の確定「これ以上は分けない」（設計ディスカッション議題 1）により、後回しにする要件は 0。
+
+- [x] 1. 本体から `areka-nar` を辿れるようにし、書庫の中を読む口を足す（要件 10.2 の「同じコミット」）
+  - `areka-nar` に、書庫の中の `/` 区切りのパス（ASCII の大文字小文字を区別しない）でファイル 1 つの伸長済みの中身を返す口を足す。フォルダと無いパスは「無し」、読み直し・書き込み・記録は 0
+  - 本体 `areka` の依存に `areka-nar` を、`windows` の機能にファイルを選ぶ画面の機能を足す（根の `Cargo.toml` と外部クレートは不変）
+  - 本体に `install` のモジュールの骨組み（`install/mod.rs`）を置いて宣言する。子のモジュールの宣言は、その子を作るタスクがそれぞれ 1 行ずつ足す（並走する 3.1・3.2 が同じファイルに 1 行ずつ足すだけ）。呼び手が付くまでの未使用の警告は許す（ビルドは警告で止まらない）
+  - 同じコミットで `install.txt` の 11 項目の定義の場所に正典の URL の行を置き、網羅台帳 `assets.toml` の `descript_install` の 11 行を実装済みへ動かし、生成物を生成器で作り直す
+  - 読む口のテスト（在る・大文字小文字違い・フォルダ・無い・同梱バルーンのフォルダの中のファイル）が緑で、本体がビルドでき、`ukadoc-survey` のテストが緑
+  - _Requirements: 4.1, 4.10, 10.2, 10.6_
+
+- [x] 2. 他のクレートへ足す口
+- [x] 2.1 (P) kanade の汎用の通知の入口に「応えがあったか」を返す口を足し、許可表を 21 語にする
+  - 結果の 5 値（許可表に無い・定常でない・台本あり・返事なし・失敗）を足し、通知の入口の変種に返信端の欄（要らなければ無し）を足す。運行表への入力の欄は増やさない
+  - 殻が最初の往復の結果を 5 値へ写し、その依頼の処理を済ませてから返信端へ 1 回だけ送る。空の台本と空白だけの台本は「返事なし」。返信端が無ければ今日どおり、受け手が居なければ `debug!` を 1 件残して運行を続ける
+  - 許可表にインストール系の 8 語を正典の URL の行つきで足し（13 → 21）、`OnInstallReroute` は足さない。数の判定を 21 へ書き換え、8 語が引けて `OnInstallReroute` が引けないことを同じテストで判定する
+  - 新しい兄弟テストで 5 値が 1 つずつ出る（台本・空の台本・空白だけ・204・失敗・起動の途中・許可表に無い名前）ことと、返信端が無くても今日どおり動くことが緑。既存の kanade のテストも緑
+  - _Requirements: 2.6, 2.7, 2.11, 2.12, 11.5, 11.9, 12.6_
+  - _Boundary: areka-kanade（RaiseOutcome と返信端・許可表）_
+
+- [x] 2.2 (P) ゴーストの `descript.txt` から受け手の名乗り（`install.accept`）を読む口を足す
+  - カンマで分けて前後の空白を落とし、空の名前は落とす。無い・読めないときは空の列（読めないときは `warn!`）。目録の素性には載せない
+  - 読み方は `sakura.name` の読み手と同じ（鍵は小文字化）
+  - 在る・無い・空白入り・空の要素・読めないファイルのテストが緑
+  - _Requirements: 3.1_
+  - _Boundary: areka-ghost catalog_
+
+- [x] 3. 手続きの判断と利用条件（純粋な部品）
+- [x] 3.1 (P) `accept` の照合・宛先の種類・失敗理由の表・Reference の組み立て・台本の引数の検査を、fs も World も読まない判断にまとめる
+  - 照合は `sakura.name` と `install.accept` の各名前に完全一致（大文字小文字を区別）。`accept` の無い `ghost`／`balloon` は照合なしで受け取り、`accept` の無い `shell`／`supplement` は「名指しが無い」
+  - 宛先の種類は、`supplement` は常に起動中のゴースト、`ghost` はフォルダ名が一致したときだけ起動中のゴースト、`shell`／`balloon` とフォルダ名を持たないゴースト（argv の起動）は「よそ」
+  - 失敗理由は拒否の 14 種と I/O の失敗を正典の 3 語へ写し、ワイルドカードの腕を置かない（種類が増えるとビルドが止まる）。`type` の指定なしは `invalid type`、受けない指定は `unsupported`
+  - 識別子は 4 語だけ。Ex・旧仕様・`OnInstallRefuse` の Reference を byte 値 1 区切りで組む（本体が先・同梱バルーンが後。旧仕様の Reference0 は同梱でも `ghost`）
+  - 台本の引数は `path` 以外（`url` を含む）・空・相対パスを別々の断りで返し、絶対パスだけを通す
+  - 判断のテストで、照合の各場合・14 種を 1 つずつ組んだ語の判定と判定した種類の数が全種類の数と等しいこと・I/O の 4 段・書庫 5 種の Reference・`ghost with balloon` が現れないこと・台本の引数 6 通りが緑
+  - _Requirements: 1.5, 1.6, 1.7, 2.4, 2.5, 3.1, 3.4, 3.5, 3.6, 5.2, 5.3, 7.8, 11.2, 11.4, 12.7, 12.9, 12.10_
+  - _Boundary: install judge_
+  - _Depends: 1_
+
+- [x] 3.2 (P) 利用条件の本文を用意し、はい／いいえを返す画面の口を告知の部品に足す
+  - 書庫の最上位の `terms.txt`（無ければ `terms.md`）を探し、`install.txt` と同じ関数で復号する（1 行目の `charset,` の行は出さない・Markdown は解釈しない）。上限（25 行かつ 1,200 文字）を超えたら先頭だけ残し、続きがファイルにあることを末尾に足す
+  - 同梱バルーンの取り出し元フォルダの中の利用条件は出さず、そのパスを記録用に返す
+  - 告知の部品に、はい／いいえの 2 択（閉じるボタンが効かない形）を出して「はい・いいえ・抑止で出さなかった・出せなかった」を返す口を足す。記録は `info!` 1 件、出せなければ `error!`。既存の告知の場面と `raise` は変えない
+  - 利用条件のテスト（無し・`terms.txt` だけ・`terms.md` だけ・両方・Shift_JIS・`charset,UTF-8`・BOM・26 行で切る・同梱バルーンの中だけ）と、抑止で画面を出さずに「抑止」を返すテストが緑
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.7, 4.8, 4.9, 4.10, 4.11, 12.3, 12.15_
+  - _Boundary: install terms, alert_
+  - _Depends: 1_
+
+- [x] 4. インストールの手続き（書庫 1 本の一周と依頼 1 件の一周）
+- [x] 4.1 依頼の型と、外とのやり取りを 6 つの口に限った手続きを作り、書庫 5 種の成功の列を固定する
+  - 依頼（書庫のパスを 1 本以上と出どころ）の型を `install` のモジュールの骨組みに置く（受付の口は 6.2）
+  - 手続きは「`OnInstallBegin` → 読み取りと検査 → `accept` の照合 → 利用条件 → 展開（起動中のゴーストか、よそか）→ 入れた後の記録 → 締めの知らせ」の順に進み、書庫 1 本につき締めの知らせを 1 つだけ送る。口に切替を頼む関数を持たない
+  - `OnInstallCompleteEx` に応えが無いときだけ続けて `OnInstallComplete` を送る。口が「閉じた」を返したら以後は送らず「途中でやめた」で抜ける
+  - 失敗・宛先違いの記録（`install_failed`・`install_survivor`・`install_refused`）と、各段の記録（Monitoring の表）を残す
+  - 偽の口とテストの中で組む書庫の支え（兄弟の支えファイル）を作り、本物の `areka-nar` を一時の根へ走らせて、書庫 5 種（ゴースト・バルーン同梱のゴースト・バルーン・`accept` 付きのシェル・`accept` 付きの追加ファイル）のイベントの名前・順・Reference と、応えの有無による旧仕様の 0 件／1 件、切替の頼みが 0 件であることが緑
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 3.3, 5.5, 5.8, 6.2, 6.4, 9.1, 10.1, 11.1, 11.5, 12.5, 12.8_
+  - _Depends: 3.1, 3.2_
+
+- [x] 4.2 手続きの分かれ道（宛先違い・利用条件・失敗・複数の書庫・途中でやめる）を固定する
+  - 宛先違いは `OnInstallRefuse` が 1 件で `error!` が 0 件、`accept` の無い `shell`／`supplement` は `OnInstallFailure`（`invalid type`）
+  - 利用条件の 4 通り（無し・受諾・拒否・抑止）と出せなかった場合。拒否・抑止・出せないでは宛先に 1 バイトも書かず `OnGhostTermsDecline` だけで `OnInstallFailure` が 0 件
+  - 読み取りの失敗・展開の失敗は `OnInstallFailure` の Reference0 が表の語 1 つだけで、メッセージボックスを呼ばない。確定に失敗して戻せなかった宛先は宛先ごとに記録が出て 7 日で消えることが書かれる
+  - 依頼に 2 本: 全部成功なら最後に `OnInstallCompleteAll` が 1 件で Reference が 2 本ぶん、1 本が失敗なら 0 件、1 本だけの依頼なら 0 件
+  - 展開の口が「入らなかった」を返したら締めの知らせが 0 件で「途中でやめた」
+  - 分かれ道の兄弟テストが緑
+  - _Requirements: 2.8, 2.9, 3.2, 3.6, 3.7, 4.5, 4.6, 4.7, 4.8, 4.11, 5.1, 5.4, 5.6, 5.7, 9.2, 11.3, 11.5, 12.2, 12.12_
+
+- [x] 5. (P) 終了で背景の仕事を上限つきで待つ口を作る
+  - 背景の仕事 1 本ぶんの門（扱っている物の名前・書いている最中か・終了が始まったか を 1 つの鍵の下で持つ）と、門と片付けを登記する口、終了の始まりで全部の門を閉じて片付けを呼ぶ口、書いている最中の門だけを残りの時間だけ待つ口を作る。上限は 3 秒
+  - 書いていない仕事は `warn!(exit_wait_abandoned)` を残して待たない。間に合えば `info!`、上限なら元の中身が作業フォルダに残りうることを書いた `warn!(exit_wait_timeout)`
+  - この部品は `install` を知らない（後続 `network-update` が同じ口に乗れる）。門が閉じた後は「始める」「書く段へ入る」が偽を返す
+  - 実時間を待たないテストで、書いていない仕事は直ちに戻る・書き終わりの合図で戻る・残り 0 の予算では直ちに戻って `warn!` が 1 件・同じ出発点を渡すと合計が上限を超えない・閉じた門が偽を返す、が緑
+  - _Requirements: 8.1, 8.3, 8.4, 8.10, 11.8, 12.4_
+  - _Boundary: exit_wait_
+
+- [x] 6. 背景スレッドと UI 側の窓口
+- [x] 6.1 手続きを走らせる背景スレッドと、窓口へ頼んで返事を待つ本物の口を作る
+  - 最初の依頼で 1 度だけスレッド `install` を起こし、依頼を 1 件ずつ受けて手続きを走らせ、終わったら窓口へ知らせる
+  - 背景スレッドと窓口の間の頼みと返事の型はこのタスクが定義する（窓口は 6.2 で読む側）。本物の口は窓口への頼みと返信端でやり取りする。kanade の結果が「定常でない」なら送り直しの印を付けて頼み直し、「台本あり」はそのまま、「返事なし」「許可表に無い」は返事なし、「失敗」と返信端の切断は「閉じた」に読む（許可表に無い・失敗は `error!`）
+  - 利用条件の画面はこのスレッドで出す。よそへの展開はこのスレッドで行い、門に始め・書く段の出入り・終わりを知らせ、門が閉じていれば入らずに「入らなかった」を返す
+  - 起動中のゴーストへの頼みは 8.1 で窓口が捌く。それまで窓口は書庫を返し（「もう起動中のゴーストではない」）、手続きはよそへの展開へ進む
+  - 窓口の代わりに素の受信端で頼みを受けて答えるテストで、本物の口の写し（5 値と切断を 1 つずつ）と、門が閉じていれば宛先に 1 バイトも書かずに「入らなかった」を返すテストが兄弟の `worker_tests` で緑
+  - _Requirements: 1.11, 8.4_
+  - _Depends: 2.1, 5_
+
+- [x] 6.2 UI 側の窓口（受付・待ち行列・イベントの送出の保留）を作り、系として登録する
+  - 受付の口を 1 つ置く（書庫 0 本・窓口なし・終了中は断って `warn!`、受けたら `info!(install_order_queued)`）。窓口は World に 1 つで、ゴーストを起こし直しても作り直さない
+  - 毎 tick の取り出しで、生の要求を受付へ流し、背景スレッドの頼みを捌き、手元のイベントの頼みを条件（切替の予約が無い・終了していない・置き場のゴーストに送出端がある）を満たせば送り、背景スレッドが空いていれば次の依頼を渡す。送り先は送る時点のゴースト
+  - 送り直しの頼みは、前に送った後に定常到達が届いているときだけ送る（定常到達の回数で比べる・UI に定常の旗を持たない）
+  - 今のゴーストの素性（根・フォルダ名・名前・`sakura.name`・`install.accept`）を答える
+  - 系の登録を `register_systems` に 1 行足し、`ghost_switch` の定常到達の腕を波括弧で包んで末尾に窓口への知らせを足す（切替の道筋へ足すのはこの 1 か所）
+  - 窓口のテストで、手続きの最中に届いた 2 件が届いた順に渡る・切替の予約が在る間は送らず下りた tick で送る・送り直しは定常到達の後に送る、が緑
+  - _Requirements: 1.1, 1.9, 1.10, 2.10, 2.13, 9.3_
+  - _Depends: 2.2, 6.1_
+
+- [x] 6.3 入れた後の記録（受け皿・バルーンの記憶・置換語 2 つ）を反映してから手続きへ返す
+  - `ghost` を入れたら受け皿へフォルダ名を書き（受け皿の `#[allow(dead_code)]` と注釈を消す）、バルーンだけなら今のゴーストの「最後に使ったバルーン」の記憶を書き換える。シェルは記録だけで表示を替えない。フォルダ名と名前は入れた後の目録の綴りから取る
+  - 置換語の値をプロセスで 1 つ持ち、入れ終えたら今のゴーストの記憶の書き手へ載せ、ゴーストを起こすたびに載せ直す（`boot_wired` に 1 行）。まだ入れていなければ載せない。バルーンだけのときは `%lastghostname` を前の値のまま
+  - 語彙表の 2 語を実装済みへ動かし、同クレートのテストの名前の一覧を 6 語にする
+  - 記憶の反映を待ってから手続きへ返す
+  - 記録と置換語の兄弟テスト（入れる前は置き換えない・入れた後は台詞の `%lastghostname`／`%lastobjectname` が置き換わる・起こし直した後も残る・複数なら最後のゴースト・バルーンだけで記憶が替わる）が緑
+  - _Requirements: 6.1, 6.4, 6.6, 6.7, 6.8, 6.9, 12.11, 12.14_
+
+- [x] 6.4 本番の道筋（窓口 → kanade → 背景スレッド → 手続き）で、締めの知らせの列を偽の SHIORI で固定する
+  - 切替の土台（`SwitchRig`）の上で本物の kanade と本物の口を通し、`OnInstallCompleteEx` に 204 なら続けて `OnInstallComplete` が 1 件、台本なら 0 件になることを、偽の SHIORI に届いた列で判定する
+  - どちらの場合も切替の要求が 0 件であることを判定する。待ちは返信端と受信端の受け取りで揃え、実時間に依らない
+  - 兄弟の `worker_tests` のこの 2 本が緑
+  - _Requirements: 2.6, 2.7, 6.2, 11.5_
+  - _Depends: 2.1, 6.3_
+
+- [x] 7. 2 つの入口
+- [x] 7.1 (P) 台本 `\![execute,install,path,…]` の受け口を作り、消費者台帳に登記する
+  - 既存の台本の受け口と同じ形で `("execute", "install")` を選び、判断の関数に引数を渡して、通れば出どころ「台本」の生の要求を窓口へ送る。`path` 以外は `install_cue_unsupported`、空・相対パスは `install_cue_bad_path` の `warn!` で送らない
+  - 台本の受け口の列に 9 本目として足し、消費者台帳に `("execute", Some("install"))` の行を足す（台帳の行数の判定を書き換える）
+  - 台本の文字列から受け口 → 取り出し → 受付まで通したテストと、相対パス・空・`path` 以外で依頼が 0 件で `warn!` が 1 件のテストが緑
+  - 窓口（`desk.rs`）は生の要求の送出端を借りるだけで編集しない（7.2 と並走できる）
+  - _Requirements: 1.5, 1.6, 1.7, 11.6_
+  - _Boundary: emo2_boot install_cue, emo2_boot mod, consumer_ledger_
+
+- [x] 7.2 (P) メニュー「インストール…」とファイルを選ぶ画面を作り、ゴーストを起こすたびに登記する
+  - ファイルを選ぶ画面（書庫と「すべてのファイル」のフィルタ・1 つだけ・作業フォルダを変えない）を、メニューを選ぶたびに短命のスレッドで出す（COM を単一スレッドの形で初期化して解放・持ち主の窓は渡さない）
+  - 選ばれたパスは出どころ「メニュー」の生の要求として窓口へ送る。取り消しは `info!`、出せなければ `error!`、どちらもイベント 0 件。抑止のときはスレッドを起こさず `warn!(install_pick_suppressed)` で取り消しと同じに扱う
+  - 「インストール」枠へ既定名と `ghostinstallbutton.caption` の項目を登記する関数を置き、`boot_wired` から呼ぶ（窓の無い起動では登記されない）。選べるのは窓口が在り、終了しておらず、選ぶ画面が出ていないとき
+  - メニューのテストで、起こし直した後も枠が登記されている・選ぶ画面が出ている間は選べない・抑止ではスレッドが起きずイベント 0 件、と、メニューの側の生の要求が台本の側と出どころだけ違う同じ依頼になることが緑
+  - _Requirements: 1.2, 1.3, 1.4, 1.8, 1.12, 9.4, 11.6_
+  - _Boundary: menu install_frame, menu mod, install pick, install desk（選ぶ画面を起こす動作と「出ている」旗）, ghost_session boot_wired_
+
+- [x] 8. 起動中のゴーストのフォルダへ入れる一周
+- [x] 8.1 預かった書庫の段を持ち、切替の道筋の「全窓を閉じた直後・起こす前」で展開する
+  - 窓口の子（`overwrite`）に預かった書庫と段（預かった → 切替を頼んだ → 展開した）を持たせ、起動中のゴーストへの頼みを受けたら既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で頼む（再生中の台詞の終わりは kanade の保留が待つ）
+  - `switch_to` の全窓を閉じた直後に 1 行足し、段が「切替を頼んだ」で切替の予約の切替先が預かった宛先と同じときだけ、UI スレッドで同期に展開して所要 ms を `install_overwrite_done` に残す。展開の成否によらず `switch_to` は今日の道を進む
+  - 定常到達で「展開した」の結果を背景スレッドへ返して消す。頼んだ時点で宛先がもう起動中のゴーストでなければ書庫を返す
+  - 偽の SHIORI と切替の土台のテストで、`OnGhostChanging` も `OnClose` も 0 件・降ろした後に宛先の中身が替わる・同じゴーストが起きる・定常到達の後に締めの知らせが出る、が兄弟の `desk_overwrite_tests` で緑
+  - `ghost_switch.rs`（6.2・6.3・本タスクで計 3 か所に手が入る）が 1,000 行以下のまま
+  - _Requirements: 6.5, 7.1, 7.2, 7.3, 12.1_
+
+- [x] 8.2 起動中のゴーストの上書きを実機で先に 1 回通す（最後まで待たない）
+  - 本番の SHIORI（32bit の補助プロセス）で、降ろした後にゴーストのフォルダを付け替えられるかを確かめる。起動中のゴーストの `.nar` をメニューから入れ、引っ込んで戻ることと `install_overwrite_done` の ms を見る
+  - `RUST_LOG` は `info,areka=debug,kanade=trace`、検体は絶対パスの短い場所に置く
+  - 結果を `signoff.md` の項目 3 に記録する。付け替えられなければ設計へ戻る判断を開発者に仰ぐ
+  - _Requirements: 11.11_
+  - _Depends: 7.2, 8.1_
+
+- [x] 8.3 切替の入口の判定 4 値と展開の失敗の扱いを固定する
+  - 別の切替の最中は段を「預かった」のまま置き、予約が下りた tick か次の定常到達で頼み直す。「切替を頼んだ」のまま予約が消えたら「預かった」へ戻す
+  - 目録に無い・起動の文脈が無いときは `warn!(install_overwrite_unavailable)` を 1 件残して書庫を背景スレッドへ返し、手続きを止めない
+  - 利用者や台本が頼んだ別のゴーストへの切替では展開しない
+  - 宛先の中のファイルを開いたまま走らせて確定を失敗させ、同じゴーストが元の中身で起き直って `OnInstallFailure` が出ること、`areka-nar` の失敗の記録の作業フォルダの欄が空でないことを判定する。起こせなければ既存の既定へ戻す道・既定なら致命の道に乗ること、途中の切替要求が無視されること、印の判定の引数と理由の語が変わらないことを確かめる
+  - 判定 4 値と失敗の場合のテストが緑
+  - _Requirements: 7.4, 7.5, 7.6, 7.7, 7.9, 11.7_
+
+- [x] 9. 終了の後始末に待つ口を結ぶ（統合）
+  - 窓口の片付け（待っている依頼・手元の頼み・預かった書庫を捨てて件数とパスを `warn!`）を門と一緒に登記する。終了の後に届いた頼みの返信端はそのまま落とす
+  - `fn main` で `run()` が戻った直後に終了を始め、降ろして印の始末を済ませた後・告知の前に上限 3 秒で待つ。OS のセッションの終了では済みの印を据えた直後に始め、降ろす待ちと印の始末の後に同じ予算（同じ出発点）で待つ
+  - 印の判定・SHIORI の待ちの期限・次の起動の道筋は変えない
+  - 終了のテストで、待っている依頼が捨てられて件数とパスが `warn!` に出る・終了の後の頼みが kanade に 0 件・OS の終了で合計が上限を超えない、が兄弟の `desk_exit_tests` で緑。既存の終了と印のテストも緑
+  - _Requirements: 8.2, 8.5, 8.6, 8.7, 8.8, 8.9, 11.8_
+  - _Depends: 5, 6.2, 8.1_
+
+- [x] 10. 台帳・生成物・配布物の説明・互換の記述を実物に揃える
+  - `shiori.toml` の 8 イベントと `ghostinstallbutton.caption`、`sakura-script.toml` の `\![execute,install,path,…]`・`%lastghostname`・`%lastobjectname`、`assets.toml` の `install.accept` を実装済みにし、それぞれの定義の場所に正典の URL の行を置く。`OnInstallReroute` の行は動かさない
+  - 生成物と `roadmap-draft.md` の数を生成器で作り直す（手で数を直さない）
+  - `dist/README.txt` の「できないこと」の 2 行から「インストール」を消す
+  - `doc/COMPAT_ARCHITECTURE.md` §8 に、正典が沈黙している点の扱い（イベントと利用条件の前後・拒否の後・`accept` の無い物・切替を主導しない・上書きは降ろしてから・終了の待ち・利用条件の 2 つ・応えが無いの読み・台詞の置き換え・置換語の読み・失敗理由の写し）を記す
+  - `ukadoc-survey` のテストが緑で、台帳の検査が赤を出さない
+  - _Requirements: 10.3, 10.4, 10.5_
+
+- [x] 11. 全体の確認と実機サインオフ
+- [x] 11.1 全体のテストと規律の検査を通す
+  - `tools/test-all.ps1` が緑。既存のテストは置き換え無しに消していない（数の判定は新しい値へ書き換えただけ）
+  - 本番とテストのどのファイルも 1,000 行以下。本番コードが読む環境変数・外部クレート・`SendMessageW(`／`SendMessageTimeoutW(` の追加が 0
+  - ゴーストの窓への投げ込みの受け口（`WM_DROPFILES` など）が本体に 0 件
+  - _Requirements: 1.2, 10.6, 10.7, 11.10, 12.13, 12.16_
+
+- [x] 11.2 実機で残りの 3 項目を確かめて `signoff.md` に記録する
+  - `RUST_LOG` をイベントの送出と `install_*` が見える所まで開ける
+  - ⑴ メニュー「インストール…」からゴーストの `.nar` を入れる → `install_done` → 表示中のゴーストのまま → メニューの「ゴースト」枠に出て、選ぶと切り替わる
+  - ⑵ `\![change,ghost,lastinstalled]` で切り替わる（`ghost_switch_resolved name=lastinstalled` と `ghost_switch_done`）
+  - ⑷ 利用条件の画面で「はい」「いいえ」を手で押す。選ぶ画面と利用条件の画面が前面に出るかも記録する
+  - 4 項目（項目 3 は 8.2）がそろって `signoff.md` に記録されている
+  - _Requirements: 6.3, 6.10, 11.11, 11.12_
+
+## Implementation Notes
+
+- 1: `assets.toml` の `descript_install` 11 行の注記は「NarArchive::open を呼ぶのは同 spec の install の手続き（後続タスクで結ぶ）」と未来形で書いた。**タスク 10 で、3.1・4.1 の実物（何の定義か）を指す現在形へ書き直す**。同じくタスク 10 で、古い注記の 3 行（`descript_ghost` の `install.accept`・ページ全体の `dev_nar`・`manual_install`＝「install.txt を読む経路が無い」）を実物に揃える（`dev_nar`・`manual_install` はタスク 10 の項目に無いので足す）。
+- 2.1: `KanadeMsg::RaiseEvent` の返事は殻の `drive` の後に送る。kanade から SHIORI への `Close` は投げるだけ＝テストで返事の後の記録を数えるときは、同期の往復（GET・Unload）だけを返事の前に済んだものとして読む。
+- 3.1: `install/judge.rs` はモジュール全体に `#![allow(dead_code)]`（呼び手が無いため）。**4.1（手続きが呼び手になる）で外す**。後続のモジュール（terms・procedure・worker・desk ほか）も同じく、呼び手を結ぶタスクで外す。旧仕様 `OnInstallComplete` の Reference2 は 2 件目の物の名前だけ（正典: 先頭 2 件だけ）。
+- 3.2: `install/terms.rs`（モジュール全体）と `alert.rs` の `YesNo`・`ask_yes_no`（2 項目）に `#[allow(dead_code)]`。4.1 で terms と `YesNo` は外した。**`ask_yes_no` は 6.1（本物の口）で外す**。利用条件の上限は 25 行で切った後、改行を含めて 1,200 文字で切る。`nested_terms` は同梱の取り出し元フォルダの直下だけを見る（`areka-nar` に一覧の口が無い）。抑止を拒否へ倒すのは手続き（4.1／4.2）の責務。
+- 4.1: `procedure.rs` はモジュール全体に `#![allow(dead_code)]`＝**6.1（worker が呼び手）で外す**。項目単位の allow が残るのは `judge::ScriptRefusal`・`script_request`（**7.1 で外す**）と `InstallOrigin`（**6.2／7.x で外す**）。途中でやめたときの記録 `warn!(event = "install_abandoned", archive, skipped, skipped_archives)` は design の Monitoring の表に無い追加（タスク 10 の §8／文書で拾うなら拾う）。同梱バルーンの名前は手続きが展開の後に `list_balloons` から目録の `name` を引く（設計で決めたこと 14）。`InstalledRecord.folder` は `areka-nar` の綴りのまま＝目録の綴りへ揃えるのは 6.3。
+- 5: `exit_wait.rs` は先頭に `#![allow(dead_code)]`＝**9 で外す**。`main.rs` は 933 行（9 で足すときに 1,000 行を超えないか見る）。**6.1 への申し送り**: ⑴ 要件 8.3 の「書庫のパスと宛先」は門の `begin(label)` の label 1 つに両方を入れて満たす（`exit_wait_timeout`／`exit_wait_abandoned` の欄は name と label だけ）。⑵ `leave_write` の直後に続けて `end` を呼ぶ（間で終了が始まると書き終えた後なのに `exit_wait_abandoned`＝「書く前」と記録される）。
+- 6.1: **口は 7 つになった**＝`InstallPorts::begin_archive(path)` を足した（`NarArchive` に書庫のパスを返す口が無く、門の名前を書庫の始め＝`OnInstallBegin` の前に置かないと、利用条件の画面や読み取りの段で終わったときに記録が残らない＝要件 8.4）。design.md の procedure・worker の節は実物に揃え済み（完了済みの 4.1 の本文の「6 つの口」は履歴として残す）。worker は依頼の終わりと `overwrite_running` の `Ran` で `gate.end()`。Monitoring の表に無い記録の語 5 つ（`install_event_not_allowed`・`install_event_not_steady`・`install_order_done`・`install_desk_gone`・`install_gate_closed`）と 4.1 の `install_abandoned` は**タスク 10 で拾う**。項目単位の allow が残るのは `DeskAsk`・`spawn_worker`（**6.2 で外す**）と `Overwritten`（**6.2／8.1 で外す**）。テストの補助で `thread::scope` を使うと、口が panic したときに生きた送出端で固まる＝`thread::spawn` を使う。
+- 6.2: 項目単位の allow の残り＝`RawInstallRequest`・`raw_sender`（**7.1・7.2 で外す**）・`InstallOrigin`（**7.x で外す**）・`Overwritten`（**8.1 で外す**）。9 の担当から 2 点を先に入れた＝`discard_for_exit` が待っている依頼と手元の頼みを捨てて `warn!(install_pending_discarded, count, paths, held)`・終了後に届いた頼みの返信端を落とす（`OrderDone` だけは受ける）。**9 で決める**: `count` は依頼の件数・`paths` は書庫の数＝2 本以上の依頼で食い違う（要件 8.5 の「件数」の単位）。終了の枝のテストは 9 の `desk_exit_tests.rs`。Monitoring の表に無い記録の語 11 個（`install_order_refused`・`install_ask_dropped`・`install_raise_replaced`・`install_facts_none`・`install_overwrite_returned`・`install_record_received`・`install_reply_unread`・`install_event_sent`・`install_event_send_failed`・`install_worker_spawned`・`install_worker_gone`）も**タスク 10 で拾う**。`ghost_switch.rs` は 870 行。
+- 6.3: 目録に無いときの名前は、ゴーストなら `install.txt` の `name`、シェル・追加ファイルなら宛先のフォルダ名（設計で決めたこと 14 の読み）。`reseed` は barrier を待たない（Risks 5）。Monitoring の表に無い記録の語 3 つ（`install_names_reseeded`・`install_balloon_not_remembered`・`install_record_unsettled`）と `install_names_updated` の欄 `published` も**タスク 10 で拾う**。`GhostRuntime` に台詞の表を読む公開の口が無いので、置換のテストは「publish→`from_sylphya_provider`→`resolve_system_var`」と「載せ直し先の asker が起こし直したゴーストの SHIORI フォルダ」の 2 本に分けてある。
+- 6.4: 本番の道筋のテストは `SwitchRig::pump_input_until`（`ghost_switch_test_support.rs`）で Input の段を回し、窓口の `queue` が空で `busy` が偽になるまで待つ（`InstallDesk.busy` はテストが読むために `pub(super)`）。8.x の窓口のテストも同じ補助で回せる。
+- 7.1: `install/mod.rs` の `judge` は `pub(crate)`（入口から `script_request` を呼ぶ）。`InstallOrigin` の allow は `Menu` の腕だけに残る＝**7.2 で外す**。sinks の列を増やすと `zorder_wiring_tests.rs` の `t_zwi05`（列の原文を判定）も直す。Monitoring の表に無い記録の語 4 つ（`install_cue_unopenable`・`install_cue_skip`・`install_cue_extra_ignored`・`install_cue_send_failed`）も**タスク 10 で拾う**。
+- 7.2: 選ぶ画面のテストの口は窓口の非公開の `start_pick(world, suppressed, pick)`（本番は `pick_and_submit` だけが通る）。「出ている」旗は `PickingFlag` の Drop で下ろす（正常終了・panic・スレッドを起こせない、のどれでも）。`start_pick` は終了を判定しない＝項目が選べなくなり、後から届いたパスは受付が `install_order_refused` で断る。`CoInitializeEx` の失敗は `error!(install_pick_failed)`。項目単位の allow の残りは `Overwritten`（**8.1 で外す**）だけ。Monitoring の表に無い記録の語 3 つ（`install_pick_no_desk`・`install_pick_busy`・`install_pick_send_failed`）も**タスク 10 で拾う**。`desk.rs` は 514 行・`ghost_session.rs` は 698 行。
+- 8.1: 預かった書庫の段は `install/overwrite.rs`（`desk.rs` の `#[path]` の子）。先に入れた 8.3 の分＝`Busy` は「預かった」のまま次の定常到達で頼み直す・`NotFound`／`NoContext` は `warn!(install_overwrite_unavailable, verdict)` で `NotRunning` を返す・別のゴーストへの切替では展開しない（`debug!(install_overwrite_skipped)`）。**8.3 で必ず直す**: 「切替を頼んだ」のまま予約が消えた（`ChangeCancelled`）ときに段が戻らず worker が返事を待ち続ける（`overwrite::on_steady` の `other => desk.overwrite = other` の腕）・予約が下りた tick での頼み直しが無い。**9 で結ぶ**: UI スレッドの展開は終了の門を通らない・`discard_for_exit` が預かった書庫を捨てない（今は終了で worker が World の破棄まで待つ）。`ChangeOrigin::Automatic` はテストで直接判定していない（8.3 で `ghost_switch_requested` の origin 欄を 1 つ判定するとよい）。Monitoring の表に無い記録の語 3 つ（`install_overwrite_requested`・`install_overwrite_replaced`・`install_overwrite_skipped`）も**タスク 10 で拾う**。`ghost_switch.rs` は 870 行。
+- 8.3: `overwrite.rs` に段 `Busy` と毎 tick の `on_tick`（`desk::drain` の末尾）を足した＝予約が下りた tick に `Busy` を 1 回頼み直す・「切替を頼んだ」のまま予約が消えたら `requeue_if_cancelled` が「預かった」へ戻す（`info!(install_overwrite_requeued)`）。**設計に無い見張り**: `on_tick` は `FirstExit` が在れば `Busy` を頼み直さない（終了中に切替や別の場所への展開を始めない・要件 8.6 の向き）＝**タスク 10 で design の desk／State Management に 1 行**。別の切替で展開を見送った書庫は次の定常到達まで「切替を頼んだ」に残り、そこで「預かった」へ戻して頼み直す（見える動きは設計どおり）。起動の文脈が無いときも切替の入口を通して `NoContext` の `warn!` を出す（`install_overwrite_returned` は文脈が在って起動中のフォルダが違うときだけ）。確定の失敗のテストは掴むファイルを `share_mode(1)`（0 だと組み上げの複写で失敗して確定まで届かない）・確定で失敗したことは `areka_nar` の記録の理由の `Commit` で見分ける。致命の道では段が「展開した」のまま残り worker へ答えが返らない＝**9 で `discard_for_exit` が預かった書庫・段を捨てる**。Monitoring の表に無い記録の語 `install_overwrite_requeued` も**タスク 10 で拾う**。
+- 9: `install_pending_discarded` の `count` は**書庫の数**（＝`paths` の数・要件 8.5「まだ始めていない書庫」）。動いている依頼の残りの書庫は worker が `install_abandoned` の `skipped_archives` に残す。預かった書庫（`overwrite::discard`）は「預かった／Busy／切替を頼んだ」なら返信端を落として worker を `Closed` で放し、パスは同じ `begin_close` の `exit_wait_abandoned` の label に残る（要件 8.4）＝`install_pending_discarded` には欄 `overwrite=(宛先, held|busy|requested|ran)` を足しただけ。「展開した」なら結果を worker へ返す。UI スレッドの展開は終了と同じスレッドなので書く段の出入りを門へ知らせず、展開の直後に `gate.end()`（無いと致命の道などで書き終えた書庫が `exit_wait_abandoned` と誤記される）。`session_end.rs` は本体 `end_session_from(world, WaitBudget)`＋薄い包み `end_session_within`（テストが出発点を過去に置くため）。Monitoring の表に無い欄 `overwrite` と段の語も**タスク 10 で拾う**。`main.rs` は 943 行。
+- 10: 台帳 13 行を実装済みに（`ghostinstallbutton.caption` の担当を `popup-menu-minimal` から移した＝その `owner_count` 15→14）。`briefing.md` の `[[barrier]]` と `roadmap-draft.md` の `[[spec]]`・`[briefs]` は生成器が無く手で入れた値だが、`ukadoc-survey` のテスト（分布の腕・件数の腕）が判定する。分野ごとの briefing は調査時点の数を残し日付つきの注記で実物を指す。`dist/README.txt` の右クリックメニューは 4 項目（「■ .nar の入れ方」は alpha-release-signoff の持ち分で未記入のまま）。残った提案: `assets.toml` の `manual_install` の束の行（「仕組み全体…読む経路が無い」）は本文と語が食い違って読める＝ukadoc-coverage-roadmap の持ち分。
+- 11.1: 2026-09-29 `cb6bb3df` で `tools/test-all.ps1` 全段 緑（i686 の成果物・fmt・x64 ワークスペース 533 秒・i686 host-32。8971 passed・0 failed・43 ignored）。main から分かれた地点 `87a625ec` からの差分で、本番の環境変数の読み 0・`SendMessageW(`／`SendMessageTimeoutW(` の追加 0・外部クレートの追加 0（依存の変更は path の `areka-nar` と `windows` の機能 1 つ）・投げ込みの受け口（`WM_DROPFILES`・`DragAcceptFiles`・`WS_EX_ACCEPTFILES`）0・消したテスト 0（足したテスト 152）・変更した `.rs` の最大は `main.rs` の 943 行。
+- 11.2: 実機 4 項目は `signoff.md` にそろった（項目 3 は 8.2）。項目 2 は画面を操作せず台本だけで一周（`\![execute,install,path,…]` → `OnInstallComplete` の台詞の `\![change,ghost,lastinstalled]`）。項目 4 の検体は `terms.txt` に `charset` の行も BOM も無いと正典どおり Shift_JIS で読まれて化ける＝検体を作るときは 1 行目に `charset,UTF-8` を置く。案内のコマンドを bash の行に書くと `$env:…` が先に展開されて効かない。

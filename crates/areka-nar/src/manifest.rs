@@ -49,6 +49,10 @@ const BALLOON_PREFIX: &str = "balloon";
 const UNSUPPORTED_COMPANION_PREFIXES: &[&str] =
     &["headline", "plugin", "calendar.skin", "calendar.plugin"];
 
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#_2a.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#_2a.source.directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#_2a.refresh_2c_6570_5024:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#_2a.refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1
 /// 同時インストールのキーの後半（`<接頭辞>.<これ>`）。
 ///
 /// 並びは前から順に試す。`source.directory` は `directory` で先に一致し得るが、
@@ -60,6 +64,13 @@ const COMPANION_SUFFIXES: &[&str] = &[
     "refreshundeletemask",
 ];
 
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#charset_2c_6587_5b57_30b3_30fc_30c9:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#type_2c_7a2e_5225:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#name_2c_30aa_30d6_30b8_30a7_30af_30c8_540d:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#directory_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#accept_2c_672c_4f53_5074_540d:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#refresh_2c_6570_5024:1
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_install.html#refreshundeletemask_2c_30d5_30a1_30a4_30eb_540d1_3a_30d5_30a1_30a4_30eb_540d2...:1
 /// 単独で意味を持つキー。これでも同時インストールの形でもなければ読み飛ばす。
 const KNOWN_KEYS: &[&str] = &[
     "charset",

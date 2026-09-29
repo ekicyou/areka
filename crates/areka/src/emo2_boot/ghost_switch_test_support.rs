@@ -315,6 +315,16 @@ impl SwitchRig {
         })
     }
 
+    /// 台詞の時計を進めずに回す: 通知の相と `Input` の段（登録済みの取り出しの系＝台本の切替要求と
+    /// インストールの窓口の取り出し）を、`done` が真になるまで有界に回す（期限切れは `false`）。
+    pub(crate) fn pump_input_until(&mut self, mut done: impl FnMut(&Self) -> bool) -> bool {
+        spin_wait_until(|| {
+            run_ghost_quit_phase(&mut self.world);
+            self.world.run_schedule(Input);
+            done(self)
+        })
+    }
+
     /// 受け口から定常到達を 1 件待って読み捨てる（有界・届けば `true`・先に別の通知が届いたら
     /// `false`）。台詞の時計を回す前に呼べば、台本の切替要求は必ず定常の kanade へ届く。
     pub(crate) fn wait_steady(&self) -> bool {

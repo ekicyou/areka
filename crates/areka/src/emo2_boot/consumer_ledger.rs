@@ -38,9 +38,9 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 9 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 10 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(enter,nouserbreakmode)`・
-//! `(leave,nouserbreakmode)`・`(change,ghost)`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `(leave,nouserbreakmode)`・`(change,ghost)`・`(execute,install)`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -87,6 +87,9 @@ type LedgerKey = (String, Option<String>);
 /// - [`ChangeSink`](CommandConsumer::ChangeSink): `\![change,ghost,…]` を消費する
 ///   [`ChangeCueSink`](super::change_cue::ChangeCueSink)。正準台帳が `(change, ghost)` の 1 組だけを
 ///   登記する（areka-P0-ghost-shell-balloon-switch 要件 1.10）。
+/// - [`InstallSink`](CommandConsumer::InstallSink): `\![execute,install,…]` を消費する
+///   [`InstallCueSink`](super::install_cue::InstallCueSink)。正準台帳が `(execute, install)` の
+///   1 組だけを登記する（areka-P0-ghost-install 要件 1.5〜1.7）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandConsumer {
     /// `\![move]` の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
@@ -123,6 +126,13 @@ pub enum CommandConsumer {
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1
     ChangeSink,
+    /// 書庫を入れるタグの担当消費者
+    /// （[`InstallCueSink`](super::install_cue::InstallCueSink)）。名前だけでは決まらず、
+    /// 第 1 引数が `install` の出現だけを担当する（`execute` の別の第 1 引数は担当外・
+    /// areka-P0-ghost-install 要件 1.5〜1.7）。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1
+    InstallSink,
 }
 
 /// 選別子を記録本文へ書くときの見え方（「無い」側も読める形にする——片側だけの本文では
@@ -261,7 +271,8 @@ impl ConsumerLedger {
     /// [`CommandConsumer::ZOrderSink`]・運搬名 `\f` →
     /// [`CommandConsumer::TextLayer`]・`(open, readme)` → [`CommandConsumer::ReadmeSink`]・
     /// `(enter, nouserbreakmode)` と `(leave, nouserbreakmode)` →
-    /// [`CommandConsumer::UserBreakSink`]・`(change, ghost)` → [`CommandConsumer::ChangeSink`]）。
+    /// [`CommandConsumer::UserBreakSink`]・`(change, ghost)` → [`CommandConsumer::ChangeSink`]・
+    /// `(execute, install)` → [`CommandConsumer::InstallSink`]）。
     ///
     /// zorder の 2 行は `ZOrderCueSink` が自己選別する組とちょうど同じである（表は宣言し、受け口は
     /// 自ら選別する——実行時に受け口が本表を引くわけではない）。中断の無効化の 2 行と
@@ -311,6 +322,9 @@ impl ConsumerLedger {
         ledger
             .try_register("change", Some("ghost"), CommandConsumer::ChangeSink)
             .expect("正準台帳: ('change','ghost') は一意（重複・排他違反は編集ミス）");
+        ledger
+            .try_register("execute", Some("install"), CommandConsumer::InstallSink)
+            .expect("正準台帳: ('execute','install') は一意（重複・排他違反は編集ミス）");
         ledger
     }
 }
@@ -609,14 +623,14 @@ mod tests {
     /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
     #[test]
     fn canonical_builds_without_duplicate() {
-        // canonical() は内部 try_register（9 行）が Ok（重複なら expect が panic する）。
+        // canonical() は内部 try_register（10 行）が Ok（重複なら expect が panic する）。
         let ledger = ConsumerLedger::canonical();
         assert_eq!(
             ledger.entry_count(),
-            9,
-            "正準台帳の登記は 9 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
-             (open,readme)／(enter,nouserbreakmode)／(leave,nouserbreakmode)／(change,ghost)）\
-             ——増減させたら本檻と doc の 2 か所を編集すること"
+            10,
+            "正準台帳の登記は 10 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+             (open,readme)／(enter,nouserbreakmode)／(leave,nouserbreakmode)／(change,ghost)／\
+             (execute,install)）——増減させたら本檻と doc の 2 か所を編集すること"
         );
         assert_eq!(
             ledger.consumer_of("move", None),
@@ -635,7 +649,7 @@ mod tests {
             Some(CommandConsumer::ZOrderSink)
         );
 
-        // 9 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+        // 10 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
         // 検出される。
         let mut ext = ledger.clone();
         let err = ext
@@ -647,7 +661,7 @@ mod tests {
                 name: "bind".to_string(),
                 selector: None,
             },
-            "9 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+            "10 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
         );
         // 既登記の担当は据え置き（上書きしない）。
         assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
@@ -751,6 +765,22 @@ mod tests {
             ],
             [Some(CommandConsumer::ChangeSink), None, None, None],
             "(change,ghost) だけが担当あり（shell／balloon・裸の change は担当なし）"
+        );
+    }
+
+    /// areka-P0-ghost-install 要件 1.5〜1.7: 正準台帳は `(execute, install)` の 1 組だけを
+    /// 書庫を入れるタグの受け口の担当として登記し、`execute` の他の第 1 引数は登記しない。
+    #[test]
+    fn canonical_registers_only_execute_install_for_the_install_sink() {
+        let ledger = ConsumerLedger::canonical();
+        assert_eq!(
+            [
+                ledger.consumer_of("execute", Some("install")),
+                ledger.consumer_of("execute", Some("http-get")),
+                ledger.consumer_of("execute", None),
+            ],
+            [Some(CommandConsumer::InstallSink), None, None],
+            "(execute,install) だけが担当あり（execute の他の第 1 引数・裸の execute は担当なし）"
         );
     }
 }

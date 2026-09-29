@@ -893,6 +893,8 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | 一部だけが効かない | 2 |
 | **合計** | **242** |
 
+> **2026-09-29 の追記**: 上の数は調査時点の写しで、数え直していない。この 242 件のうち `\![execute,install,path,ファイル名]`・`%lastghostname`・`%lastobjectname` の 3 件は、2026-09-29 に `areka-P0-ghost-install` が担当として引き受けて実装済みにした（下の表の該当行に書き添えた）。いまの状態は台帳 `ledger/sakura-script.toml` と報告 `report/sakura-script.md` が正本である。
+
 全数を項目の id まで並べる。
 
 | 項目の綴り | 台帳の状態 | 群 | 台帳の項目 id |
@@ -903,8 +905,8 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `%et` | 語彙だけが登記されている | 画面と OS 起動時間・時刻ネタ | `ukadoc:list_sakura_script:_25et:1` |
 | `%exh` | 語彙だけが登記されている | 画面と OS 起動時間・時刻ネタ | `ukadoc:list_sakura_script:_25exh:1` |
 | `%hour` | 語彙だけが登記されている | 暦時計 | `ukadoc:list_sakura_script:_25hour:1` |
-| `%lastghostname` | 語彙だけが登記されている | インストール文脈 | `ukadoc:list_sakura_script:_25lastghostname:1` |
-| `%lastobjectname` | 語彙だけが登記されている | インストール文脈 | `ukadoc:list_sakura_script:_25lastobjectname:1` |
+| `%lastghostname` | 実装済み（2026-09-29 に `areka-P0-ghost-install` が実装。書庫を 1 本入れ終えるたびに、関わったゴーストの名前へ置き換わる〔バルーンだけなら前の値のまま〕。このプロセスでまだ入れていなければ今日どおり置き換えない。調査時点は語彙だけが登記されていた） | インストール文脈 | `ukadoc:list_sakura_script:_25lastghostname:1` |
+| `%lastobjectname` | 実装済み（2026-09-29 に `areka-P0-ghost-install` が実装。書庫を 1 本入れ終えるたびに、その書庫の `install.txt` の `name` へ置き換わる。このプロセスでまだ入れていなければ今日どおり置き換えない。調査時点は語彙だけが登記されていた） | インストール文脈 | `ukadoc:list_sakura_script:_25lastobjectname:1` |
 | `%m?` | 語彙だけが登記されている | 単語ランダム系 | `ukadoc:list_sakura_script:_25m_3f:1` |
 | `%mc` | 語彙だけが登記されている | 単語ランダム系 | `ukadoc:list_sakura_script:_25mc:1` |
 | `%me` | 語彙だけが登記されている | 単語ランダム系 | `ukadoc:list_sakura_script:_25me:1` |
@@ -972,7 +974,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\![execute,http-post,URL,オプション,オプション,オプション...]` | 未対応（書いてあるのに何も起きない） | HTTP と RSS の通信 | `ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-post_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..:1` |
 | `\![execute,http-post,URL,パラメータ]` | 未対応（書いてあるのに何も起きない） | HTTP と RSS の通信 | `ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-post_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1` |
 | `\![execute,http-put,URL,オプション,オプション,オプション...]` | 未対応（書いてあるのに何も起きない） | HTTP と RSS の通信 | `ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-put_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3...:1` |
-| `\![execute,install,path,ファイル名]` | 未対応（書いてあるのに何も起きない） | インストールと更新 | `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1` |
+| `\![execute,install,path,ファイル名]` | 実装済み（2026-09-29 に `areka-P0-ghost-install` が実装。絶対パスで指したファイルを、右クリックのメニューの「インストール…」と同じ手続きで入れる。相対パス・空・`path` 以外の引数は何もせず `warn!` を残す。調査時点は未対応） | インストールと更新 | `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1` |
 | `\![execute,install,url,URL,(feed\|nar\|homeurlのいずれか)]` | 未対応（書いてあるのに何も起きない） | インストールと更新 | `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1` |
 | `\![execute,nslookup,パラメータ1,パラメータ2,...]` | 未対応（書いてあるのに何も起きない） | ネットワークの調べもの | `ukadoc:list_sakura_script:_5c_21_5bexecute_2cnslookup_2c_30d1_30e9_30e1_30fc_30bf1_2c_30d1_30e9_30e1_30fc_30bf2_2c..._5d:1` |
 | `\![execute,ping,パラメータ1,パラメータ2,...]` | 未対応（書いてあるのに何も起きない） | ネットワークの調べもの | `ukadoc:list_sakura_script:_5c_21_5bexecute_2cping_2c_30d1_30e9_30e1_30fc_30bf1_2c_30d1_30e9_30e1_30fc_30bf2_2c..._5d:1` |
@@ -1497,9 +1499,9 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 #### インストールと更新（6 件）
 
 - **利用者に何が起きるか**: 導入も更新も始まらない。新しい版が出ても取り込めず、「更新しておいたよ」という台詞だけが残る。
-- **その群を成立させる最小の基盤**: 配布物を取ってきて入れ替える部分と、その開始を名前で受け取る口。
+- **その群を成立させる最小の基盤**: 配布物を取ってきて入れ替える部分と、その開始を名前で受け取る口（調査時点。2026-09-29 に `areka-P0-ghost-install` が手元の書庫を入れる部分と `\![execute,install,path,…]` を受け取る口を置いた。網の先から取ってくる部分〔`url` の形と更新の 4 件〕はまだ無い）。
 - **台帳の項目 id**:
-  - `\![execute,install,path,ファイル名]` — `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1`
+  - `\![execute,install,path,ファイル名]` — `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1`（2026-09-29 に `areka-P0-ghost-install` が実装済み）
   - `\![execute,install,url,URL,(feed\|nar\|homeurlのいずれか)]` — `ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1`
   - `\![update,更新対象(,オプション,オプション...)]` — `ukadoc:list_sakura_script:_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1`
   - `\![update,platform]` — `ukadoc:list_sakura_script:_5c_21_5bupdate_2cplatform_5d:1`

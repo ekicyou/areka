@@ -294,8 +294,6 @@ pub(crate) fn resolve_special_name(
 pub(crate) struct LastInstalledGhost(pub String);
 
 /// 最後に入れたゴーストのフォルダ名を記録する（前の記録は置き換わる＝最後の 1 件だけ残る）。
-// 本番の呼び手は後続 areka-P0-ghost-install（インストール完了時に入れたゴーストのフォルダ名を渡す）。
-#[allow(dead_code)]
 pub(crate) fn record_last_installed(world: &mut World, folder: String) {
     tracing::info!(
         event = "last_installed_recorded",
@@ -525,26 +523,30 @@ pub(crate) fn on_ghost_stopped(world: &mut World, stopped: KanadeStopped) {
 pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
     let stage = world.get_non_send::<SwitchInFlight>().map(|f| f.stage);
     match notice {
-        KanadeNotice::Steady => match stage {
-            Some(SwitchStage::Welcoming { attempt }) => {
-                record_steady_memory(world);
-                world.remove_non_send::<SwitchInFlight>();
-                let ghost = world
-                    .get_resource::<BootContext>()
-                    .and_then(|c| c.current.ghost.folder.clone());
-                tracing::info!(
+        KanadeNotice::Steady => {
+            match stage {
+                Some(SwitchStage::Welcoming { attempt }) => {
+                    record_steady_memory(world);
+                    world.remove_non_send::<SwitchInFlight>();
+                    let ghost = world
+                        .get_resource::<BootContext>()
+                        .and_then(|c| c.current.ghost.folder.clone());
+                    tracing::info!(
+                        event = "ghost_switch_done",
+                        ghost = ?ghost,
+                        attempt = ?attempt,
+                        "切替で起こしたゴーストが定常に入った——切替を終える"
+                    );
+                }
+                stage => tracing::debug!(
                     event = "ghost_switch_done",
-                    ghost = ?ghost,
-                    attempt = ?attempt,
-                    "切替で起こしたゴーストが定常に入った——切替を終える"
-                );
+                    stage = ?stage,
+                    "迎え入れの予約の外の定常到達——予約は触らない"
+                ),
             }
-            stage => tracing::debug!(
-                event = "ghost_switch_done",
-                stage = ?stage,
-                "迎え入れの予約の外の定常到達——予約は触らない"
-            ),
-        },
+            // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）。
+            crate::install::desk::on_steady(world);
+        }
         KanadeNotice::ChangeCancelled { reason } => {
             if world.remove_non_send::<SwitchInFlight>().is_some() {
                 tracing::info!(
@@ -654,6 +656,8 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         ),
     }
     let closed = close_windows_for_restart(world);
+    // 起動中のゴーストへ入れる一周（預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
+    crate::install::desk::run_overwrite_between(world);
     let origin = BootOrigin::ChangedFrom(ChangedFrom {
         sakura_name: prev.sakura_name.unwrap_or_default(),
         script: handoff.script.unwrap_or_default(),

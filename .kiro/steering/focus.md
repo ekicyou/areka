@@ -47,7 +47,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 - **過去の棚卸しの基準実数（2026-06-28〜2026-07-29 の 26 行）は `roadmap-history.md` の末尾「旧・focus.md 棚卸しの基準実数ログ」へ退避した**（2026-09-20）。本ファイルには**最新の 1 行だけ**を置き、更新するときは古い行をそちらへ足してから置き換える（常時読み込みのファイルを履歴で太らせない）。
 - **spec は名前で呼ぶ**（2026-09-26 開発者指示）: 報告・brief・コミット・PR で spec を指すときは spec 名を書き、台帳の番号（「#数字」）は使わない。台帳の番号の列は `roadmap.md` から外した。「#数字」は `PR#185` のように接頭辞を付けた PR 番号にだけ使う。
 - **並走できる spec の紹介の形**（2026-09-26 開発者指示）: 挙げるのは**完全並走できるものだけ**＝要件から実装・完了まで同時に進められ、触るソースファイルの重なりが 0 で、条件（要件までで止める・先進坑の go を待つ・接触制限つき）が付かないもの。条件付きは外す。Fable 推奨を先頭に、「① Fable 推奨：`spec 名`（一言の説明）」＋`/kiro-start` のコマンドだけの短い形で並べ、前置きは 1〜2 行・注意書きや削る順は付けない（聞かれたら答える）。
-- 棚卸しの基準実数（2026-09-28 更新㉘・棚卸⑲の実測・`main` `10a8d724` 基準）: 完了 **206**（`completed/` 直下の実測エントリ数＝ディレクトリ 205＋`graphics-rendering-stability.md` 1） / **spec.json 有りの active = 0** / **brief-only = 26**（`.kiro/specs/` 直下実測＝更新㉗の 27 − 09-27〜09-28 完了 2〔`ghost-change-name-resolution`・`session-mark-residue`〕＋ 棚卸⑲の起票 1〔`frame-phases-after-exit`〕）。open PR 0 本＝着手中の spec は 0。M1 は 2026-09-11 に完成宣言済み・現行は α（M2・`roadmap.md` B5〜B8）。**着手の優先度は「バグ修正 → α に要る機能」**（2026-09-20 開発者指示・`roadmap.md`「棚卸⑮の裁定」）。棚卸の経緯の正本は `roadmap.md`／`roadmap-history.md`。
+- 棚卸しの基準実数（2026-09-28 更新㉘・棚卸⑲の実測・`main` `10a8d724` 基準）: 完了 **206**（`completed/` 直下の実測エントリ数＝ディレクトリ 205＋`graphics-rendering-stability.md` 1） / **spec.json 有りの active = 0** / **brief-only = 26**（`.kiro/specs/` 直下実測＝更新㉗の 27 − 09-27〜09-28 完了 2〔`ghost-change-name-resolution`・`session-mark-residue`〕＋ 棚卸⑲の起票 1〔`frame-phases-after-exit`〕）。open PR 0 本＝着手中の spec は 0。M1 は 2026-09-11 に完成宣言済み・現行は α（M2・`roadmap.md` B5〜B9）。**着手の優先度は「バグ修正 → α に要る機能」**（2026-09-20 開発者指示・`roadmap.md`「棚卸⑮の裁定」）。棚卸の経緯の正本は `roadmap.md`／`roadmap-history.md`。
 
 ## 運用上の注意
 

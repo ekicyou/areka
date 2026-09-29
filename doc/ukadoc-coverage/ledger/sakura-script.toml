@@ -106,29 +106,47 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_25lastghostname:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（%lastghostname が台詞にそのまま出る）。
-ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+実装済み。書庫を 1 本入れ終えるたびに、関わったゴーストの名前へ値を替える（ghost の書庫なら入れた
+ゴースト・shell／supplement なら宛先のゴースト・balloon だけなら前の値のまま。「最後にイベントを
+行ったゴースト名」の読みは doc/COMPAT_ARCHITECTURE.md §8 に登記した）。名前は入れた後の目録の
+descript.txt の name で、引けなければ install.txt の name（ghost）かフォルダ名（shell／supplement）。
+値はプロセスの中だけに持ち、今のゴーストの記憶の書き手へ載せ、ゴーストを起こすたびに載せ直す。
+締めの知らせの返事では必ず置き換わる（記録の反映を待ってから送る）。
+壊れ方: このプロセスでまだ 1 本も入れていない間は置き換えない（%lastghostname が台詞にそのまま
+出る・正典は「インストール時用」とする）。起こし直した直後の最初の台詞に載せ直しが間に合う保証は
+無い。
+ログ: 値を替えたときは info!（install_names_updated）、起こしたゴーストへ載せ直したときは
+debug!（install_names_reseeded）。置き換えなかったときは resolve_system_var の未対応名の腕の debug!。
+根拠の場所: crates/areka/src/install/names.rs の update（値を替えて載せる口）の上の正典 URL の行。
 [群: インストール文脈]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは %lastghostname。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
 [entry."ukadoc:list_sakura_script:_25lastobjectname:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = []
 links = []
 note = """
-壊れ方: 黙って壊れる（%lastobjectname が台詞にそのまま出る）。
-ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
+実装済み。書庫を 1 本入れ終えるたびに、その書庫の install.txt の name へ値を替える（種類を問わない。
+「最後にイベントを行ったオブジェクト名」の読みは doc/COMPAT_ARCHITECTURE.md §8 に登記した）。値は
+プロセスの中だけに持ち、今のゴーストの記憶の書き手へ載せ、ゴーストを起こすたびに載せ直す。締めの
+知らせの返事では必ず置き換わる（記録の反映を待ってから送る）。
+壊れ方: このプロセスでまだ 1 本も入れていない間は置き換えない（%lastobjectname が台詞にそのまま
+出る・正典は「インストール時用」とする）。起こし直した直後の最初の台詞に載せ直しが間に合う保証は
+無い。
+ログ: 値を替えたときは info!（install_names_updated）、起こしたゴーストへ載せ直したときは
+debug!（install_names_reseeded）。置き換えなかったときは resolve_system_var の未対応名の腕の debug!。
+根拠の場所: crates/areka/src/install/names.rs の update（値を替えて載せる口）の上の正典 URL の行。
 [群: インストール文脈]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは %lastobjectname。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -1353,18 +1371,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-ghost-install"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnInstallComplete:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、手元のファイルからの導入が始まらない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。InstallCueSink（crates/areka/src/emo2_boot/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が path で第 3 引数が絶対パスなら、そのファイルを（拡張子を問わず）インストールの手続きへ渡す。手続きは右クリックのメニューの「インストール…」と同じ 1 本で、OnInstallBegin から締めの知らせまでを正典のイベントで送る。入れた後に areka は自分から切り替えない。
+ログ: 出る（第 2 引数が path でない＝url を含む→ warn!（install_cue_unsupported）・パスが空か相対パス→ warn!（install_cue_bad_path）で、どちらも手続きを始めずイベントも送らない。パスより後ろの引数は読まずに warn!（install_cue_extra_ignored）。第 1 引数が install でない execute は担当外として debug! を残す）。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::InstallSink（担当の台帳の行）の上の正典 URL の行。
+[条件: url の形（\\![execute,install,url,…]・兄弟の行）は受けない。後続 areka-P0-network-update が同じ受け口に足す予定]
 [群: インストールと更新]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1]
 [テーマ: 手元のファイルから取り込めず、渡された新しい一式を入れられない]

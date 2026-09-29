@@ -385,12 +385,18 @@ fn boots_twice_in_one_process_without_double_registration() {
             Some(vec![
                 Frame::Ghost,
                 Frame::Shell,
+                Frame::Install,
                 Frame::Readme,
                 Frame::Close
             ]),
             lens_before,
             true,
-            Some(vec![Frame::Ghost, Frame::Readme, Frame::Close]),
+            Some(vec![
+                Frame::Ghost,
+                Frame::Install,
+                Frame::Readme,
+                Frame::Close
+            ]),
             true,
             true,
             false,

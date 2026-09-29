@@ -38,7 +38,7 @@ pub mod talk;
 pub use actor::{spawn_kanade, spawn_kanade_with_stop_sink};
 pub use change::{
     BootOrigin, CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget,
-    ChangedFrom, KanadeNotice, ShioriMethod,
+    ChangedFrom, KanadeNotice, RaiseOutcome, ShioriMethod,
 };
 pub use msg::{
     ChoiceInput, CloseReason, EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped,

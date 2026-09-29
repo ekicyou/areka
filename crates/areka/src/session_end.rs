@@ -4,8 +4,9 @@
 //! `WM_ENDSESSION`（wParam が真）から戻った直後にプロセスは終了させられうるので、`run()` の後の
 //! 後始末に頼らず、窓の手続きの中（wintf の `OnSessionEnd` に差した [`on_os_session_end`]）で
 //! 同期に済ませる: 予約を下ろす → 未処理の運行の通知を今日の規則で捌く → 終了を指示する →
-//! ゴーストを「システム」の理由で降ろす → きれいな終わりなら起動中の印を消す。告知（メッセージ
-//! ボックス）は出さない（OS の終了を塞がない・失敗は記録に残る）。
+//! ゴーストを「システム」の理由で降ろす → きれいな終わりなら起動中の印を消す → 書いている最中の
+//! 背景の仕事を同じ予算の残りで待つ。告知（メッセージボックス）は出さない（OS の終了を塞がない・
+//! 失敗は記録に残る）。
 
 use std::time::{Duration, Instant};
 
@@ -16,6 +17,7 @@ use crate::app_exit::{ExitOrigin, FirstExit, quit_app};
 use crate::boot_config::BootContext;
 use crate::emo2_boot::frame::run_ghost_quit_phase;
 use crate::emo2_boot::ghost_switch::SwitchInFlight;
+use crate::exit_wait;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::{MarkInputs, Teardown, settle_session_mark};
 
@@ -66,7 +68,20 @@ pub(crate) fn on_os_session_end(world: &mut World, _entity: Entity) {
 pub(crate) const SESSION_END_SHIORI_LIMIT: Duration = Duration::from_secs(3);
 
 /// [`on_os_session_end`] の本体。上限を引数で受ける（本番は定数だけを渡す・テストは任意の上限）。
+/// 出発点は後始末に入った今。
 pub(crate) fn end_session_within(world: &mut World, limit: Duration) {
+    end_session_from(
+        world,
+        WaitBudget {
+            started: Instant::now(),
+            limit,
+        },
+    )
+}
+
+/// [`end_session_within`] の中身。予算（出発点と上限）を外から受ける（テストは出発点を過去に置ける）。
+/// ゴーストを降ろす待ちと背景の仕事の待ちは、同じ予算から数える（足し算にしない）。
+pub(crate) fn end_session_from(world: &mut World, budget: WaitBudget) {
     if world.contains_resource::<SessionEnded>() {
         tracing::debug!(
             event = "os_session_end_again",
@@ -74,12 +89,14 @@ pub(crate) fn end_session_within(world: &mut World, limit: Duration) {
         );
         return;
     }
-    let started = Instant::now();
+    let WaitBudget { started, limit } = budget;
     world.insert_resource(SessionEnded);
     tracing::info!(
         event = "os_session_end_begin",
         "[session_end] OS のセッションの終了: 窓の手続きの中で後始末を済ませる"
     );
+    // 背景の仕事の門を閉じる（待っている依頼を捨て、以後は書き始めない・待つのは印の始末の後）。
+    let closing = exit_wait::begin_close(world);
 
     if world.remove_non_send::<SwitchInFlight>().is_some() {
         tracing::info!(
@@ -140,6 +157,10 @@ pub(crate) fn end_session_within(world: &mut World, limit: Duration) {
             "[session_end] 起動の文脈が無いので起動中の印を消せません（次の起動は前回落ちたとして Ref6/7 付きになります）"
         ),
     }
+
+    // 書いている最中の背景の仕事を、降ろす待ちと同じ出発点・同じ上限で待つ（足し算にしない・
+    // ghost-install 要件 8.2）。印の始末の後なので、待つ間に終わらされても印は済んでいる。
+    closing.wait(WaitBudget { started, limit });
 
     tracing::info!(
         event = "os_session_end_done",

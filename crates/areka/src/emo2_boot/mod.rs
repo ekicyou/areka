@@ -26,6 +26,7 @@ pub mod frame;
 pub(crate) mod ghost_switch;
 pub mod hit_region;
 pub mod hover_inject;
+mod install_cue;
 pub mod move_cue;
 mod readme_cue;
 pub mod talk_clock;
@@ -96,6 +97,7 @@ use self::adapter::PresentBridge;
 use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use self::change_cue::ChangeCueSink;
 use self::frame::{Emo2Wiring, KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
+use self::install_cue::InstallCueSink;
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::readme_cue::ReadmeCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
@@ -466,6 +468,11 @@ pub fn wire_emo2_boot(
     // （boot が倒れた経路ではそのまま落ちる・送出側が送れなかったことを記録する）。
     let (change_tx, change_rx) = std::sync::mpsc::channel::<ghost_switch::ChangeRequestRaw>();
     let change_sink = ChangeCueSink::new(change_tx);
+    // インストールの要求の送出端（areka-P0-ghost-install task 7.1）: talk スレッドの InstallCueSink が
+    // 送出端、UI スレッドの窓口（`install::desk`・プロセスに 1 つ）が受信端を持つ。窓口はゴーストを
+    // 起こし直しても作り直さないので、送出端は窓口から借りるだけ（窓口が無ければ受信端の無い
+    // 送出端＝送った側が送れなかったことを記録する）。
+    let install_sink = InstallCueSink::new(crate::install::desk::raw_sender(world));
     let BootAssets {
         shells,
         balloons,
@@ -565,6 +572,9 @@ pub fn wire_emo2_boot(
     // 第 8 要素の change_sink（areka-P0-ghost-shell-balloon-switch task 7.2）は
     // `\![change,ghost,…]` を「名前＋第 1 引数」で選別して消費し、名前を無変形で切替要求として
     // 送出する（要件 1.2・1.3）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
+    // 第 9 要素の install_sink（areka-P0-ghost-install task 7.1）は `\![execute,install,…]` を
+    // 「名前＋第 1 引数」で選別して消費し、絶対パスを出どころ「台本」の生の要求として窓口へ
+    // 送出する（要件 1.5〜1.7）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.clone(),
         default_encoding: DefaultEncoding::Ansi,
@@ -578,6 +588,7 @@ pub fn wire_emo2_boot(
             Box::new(readme_sink),
             Box::new(no_user_break_sink),
             Box::new(change_sink),
+            Box::new(install_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir,

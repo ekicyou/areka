@@ -171,6 +171,24 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 うち束を持つ行が **22 行**・`none = true` の行が **14 行**である（3 つとも数え直した値で、引き算では出して
 いない）。`[briefs].count` はこの 36 に合わせ、`snapshot_on` は同じ日なので **2026-09-27** のまま変えていない。
 
+**2026-09-29 の追加**: `areka-P0-ghost-install` の行を 1 行足した。理由は上の ⑴ ⑵ ⑶ と同じで、同日この spec が
+台帳 `ledger/shiori.toml` のインストール系のイベント 8 項目（`OnInstallBegin`・`OnInstallComplete`・
+`OnInstallCompleteEx`・`OnInstallCompleteAll`・`OnInstallFailure`・`OnInstallRefuse`・`OnGhostTermsAccept`・
+`OnGhostTermsDecline`）と `ghostinstallbutton.caption`、`ledger/sakura-script.toml` の
+`\![execute,install,path,ファイル名]`・`%lastghostname`・`%lastobjectname`、`ledger/assets.toml` のゴーストの
+`install.accept` の計 13 項目を実装済みへ移し、自分の宛先として登記したからである。13 項目は `linkage.md` の
+2 つの束にまたがる（「インストール」12・「メニュー」1）ので、束の欄にはいちばん多い「インストール」を書いた。
+段階ごとの表の「依存する既存 spec」の欄も、この 2 つの束の行にこの spec を件数付きで足した。
+`ghostinstallbutton.caption` の宛先は `areka-P0-popup-menu-minimal` から移した（同 spec の備考が「枠を登記した日に
+実装済みへ改める」と引受先に名指ししていた）ので、`areka-P0-popup-menu-minimal` の行の `owner_count` は 15 から
+14 へ、「メニュー」の行のその spec の件数は 13 から 12 へ変わった（どちらも台帳を数え直した値）。足した行の
+中身は `stage = "B"`・`bundle = "インストール"`・`owner_count = 13`・`wave = "B5-②"` で、段階は「インストール」が
+順位表で置かれている段階の写し、ウェーブは正本のロードマップの写しである。「インストール」の束の構成は
+40 件で、この spec の 12 件は過半に満たないので、下の「意図しない重なり」の行の結論（裁定はまだ要る）は
+変わらない。行数は **37 行**（`[[spec]]` の塊を数えた）で、うち束を持つ行が **23 行**・`none = true` の行が
+**14 行**である（3 つとも数え直した値で、引き算では出していない）。`[briefs].count` はこの 37 に合わせ、
+`snapshot_on` は行の集合に最後に手を入れた日として **2026-09-29** にした。
+
 **候補 spec 名の案が既存の説明書と同じ綴りになっている行は 3 行あり、そのうち裁定が要るものは
 2 行である。** 数え方: 5 つの段階の表のうち案を置いた行（行数と、そこから新しい名前の数が
 どう決まるかは「読み方」にある。ここには写さない）の綴りを、いまの spec の置き場の直下に
@@ -204,8 +222,8 @@ spec を封じる場所のどちらかに実在するディレクトリ名であ
 
 ```toml
 [briefs]
-count = 36
-snapshot_on = "2026-09-27"
+count = 37
+snapshot_on = "2026-09-29"
 ```
 
 **段階と束の決め方**: その spec が台帳 4 本の宛先の欄に持つ id を全部引き、**いちばん多くを含む
@@ -294,7 +312,7 @@ wave = "W14"
 name = "areka-P0-popup-menu-minimal"
 stage = "A"
 bundle = "メニュー"
-owner_count = 15
+owner_count = 14
 wave = "A0"
 
 [[spec]]
@@ -499,6 +517,13 @@ stage = "B"
 bundle = "切替"
 owner_count = 2
 wave = "B4-②"
+
+[[spec]]
+name = "areka-P0-ghost-install"
+stage = "B"
+bundle = "インストール"
+owner_count = 13
+wave = "B5-②"
 ```
 
 **新しい説明書の登記先はこの文書ではない。** 起票した spec を登記するのは正本のロードマップの
@@ -524,7 +549,7 @@ spec 台帳で、この表はそれを写した写真である。
 | 10 | descript の転記 | `areka-P0-descript-transcribe` | `areka-P0-balloon-canon-residue`（W14・4 件）／`areka-P0-package-mount`（完了・1 件） | 第 2 波 |
 | 10 | バルーンのリンク | `areka-P0-anchor-tag-canon`（既存 spec がそのまま引受先・構成 60 件の全数を `owner` に持つ） | `areka-P0-anchor-tag-canon`（W17・60 件） | 第 2 波 |
 | 10 | マウスの矢印 | `areka-P0-mouse-cursor-canon` | `areka-P0-currentghost-property-tree`（W15・15 件） | 第 2 波 |
-| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・13 件）／`areka-P0-property-catalog-lists`（W16・4 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件） | 第 2 波 |
+| 11 | メニュー | `areka-P0-ownerdraw-menu-canon` | `areka-P0-popup-menu-minimal`（A0・12 件）／`areka-P0-property-catalog-lists`（W16・4 件）／`areka-P0-baseware-root-layout`（A1 後段・1 件）／`areka-P0-ghost-install`（B5-②・1 件） | 第 2 波 |
 | 12 | 撫で | `areka-P0-touch-events-canon` | `areka-P0-currentghost-property-tree`（W15・5 件）／`areka-P0-shell-parse`（完了・1 件） | 第 2 波 |
 | 13 | バルーンの付属画像 | `areka-P0-balloon-inline-image` | `areka-P0-balloon-canon-residue`（W14・9 件） | 第 2 波 |
 | 14 | イベントの呼び起こし | `areka-P0-raise-event-tag` | `areka-P0-property-query-channels`（W14・1 件） | 第 2 波 |
@@ -544,7 +569,7 @@ spec 台帳で、この表はそれを写した写真である。
 
 | 順位 | 束 | 候補 spec 名の案 | 依存する既存 spec | 波の案 |
 | ---: | --- | --- | --- | --- |
-| 1 | インストール | `areka-P0-nar-install`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-nar-install`（A0・11 件） | 第 3 波 |
+| 1 | インストール | `areka-P0-nar-install`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-nar-install`（A0・11 件）／`areka-P0-ghost-install`（B5-②・12 件） | 第 3 波 |
 | 1 | 更新 | `areka-P0-network-update`（同じ綴りの既存 spec と重なる・裁定待ち） | `areka-P0-network-update`（A4・1 件） | 第 3 波 |
 | 2 | 切替 | `areka-P0-shell-balloon-switch` | `areka-P0-currentghost-property-tree`（W15・4 件）／`areka-P0-sakura-time-directives`（W16・2 件）／`areka-P0-balloon-canon-residue`（W14・1 件）／`areka-P0-kero-balloon`（完了・1 件）／`areka-P0-ghost-shell-balloon-switch`（B3-①・3 件）／`areka-P0-ghost-change-name-resolution`（B4-②・2 件） | 第 3 波 |
 | 3 | 消滅 | `areka-P0-vanish-canon` | **0 本** | 第 3 波 |

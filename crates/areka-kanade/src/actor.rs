@@ -31,9 +31,9 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 use std::sync::mpsc::Sender;
 
-use areka_actor::{ActorHandle, ReplyError, reply_channel, run_inbox, spawn_actor};
+use areka_actor::{ActorHandle, ReplyError, ReplySender, reply_channel, run_inbox, spawn_actor};
 
-use crate::change::{ChangeHandoff, KanadeNotice};
+use crate::change::{ChangeHandoff, KanadeNotice, RaiseOutcome};
 use crate::msg::{
     EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped, ShioriCall, ShioriFailure,
     ShioriFault, ShioriMsg, ShioriOutcome,
@@ -101,6 +101,8 @@ pub fn spawn_kanade_with_stop_sink(
     spawn_actor("kanade", move |rx| {
         let mut state = State::initial();
         run_inbox::<KanadeMsg, Infallible>(rx, move |msg| {
+            // 汎用の通知の入口の返信端と、返事の材料（名前・許可表に在るか）。運行表へ渡す前に控える。
+            let mut raise_reply: Option<(ReplySender<RaiseOutcome>, String, bool)> = None;
             // 停止規約: Close は step を経ず即時 Break（積み残しは rx drop で破棄）。
             let input = match msg {
                 KanadeMsg::Close => {
@@ -140,13 +142,21 @@ pub fn spawn_kanade_with_stop_sink(
                     id,
                     references,
                     method,
-                } => Input::RaiseEvent {
-                    id,
-                    references,
-                    method,
-                },
+                    reply,
+                } => {
+                    // 許可表の照合は運行表（`on_raise_event`）と同じ関数で行う。
+                    raise_reply = reply.map(|tx| {
+                        let allowed = crate::schedule::events::allowed_static(&id).is_some();
+                        (tx, id.clone(), allowed)
+                    });
+                    Input::RaiseEvent {
+                        id,
+                        references,
+                        method,
+                    }
+                }
             };
-            match drive(
+            let (flow, first_reply) = drive(
                 &mut state,
                 input,
                 &config,
@@ -154,7 +164,18 @@ pub fn spawn_kanade_with_stop_sink(
                 &sakura,
                 &resource_sink,
                 stop_sink.as_ref(),
-            ) {
+            );
+            // 返事はこの依頼の処理（応答を入れ直して動作を実行し終えるまで）が済んだ後に 1 回だけ送る。
+            // 往復が無かったのは、許可表に無い名前か定常以外での依頼（どちらも運行表が捨てた）。
+            if let Some((tx, id, allowed)) = raise_reply {
+                let outcome = match (allowed, first_reply) {
+                    (false, _) => RaiseOutcome::NotAllowed,
+                    (true, None) => RaiseOutcome::NotSteady,
+                    (true, Some(outcome)) => outcome,
+                };
+                send_raise_reply(tx, &id, outcome);
+            }
+            match flow {
                 Drive::Continue => Ok(ControlFlow::Continue(())),
                 Drive::Stop => Ok(ControlFlow::Break(())),
             }
@@ -170,6 +191,9 @@ enum Drive {
 
 /// DD-2 同期往復ループ: `step` の Action バッチを全実行し、最後の SHIORI 往復応答のみを
 /// `Input::ShioriReply` として再投入して Actions が尽きるまで反復する（execute-batch/reinject-last）。
+///
+/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`RaiseOutcome`] へ写したもの（往復が無ければ
+/// `None`）。汎用の通知の入口の返事の材料で、他の入力では呼び手が読み捨てる。
 fn drive(
     state: &mut State,
     input: Input,
@@ -178,7 +202,7 @@ fn drive(
     sakura: &Sender<TalkCommand>,
     resource_sink: &ResourceSink,
     stop_sink: Option<&Sender<KanadeNotice>>,
-) -> Drive {
+) -> (Drive, Option<RaiseOutcome>) {
     // 終了原因の受け渡し（R15.3）: [`Action::StopSelf`] は必ず `Unloading{cause}` からの遷移で
     // 生まれる（発行点は `schedule::unloading_reply` の 1 箇所だけで、そこへ入れるのは
     // `Phase::Unloading` の先行アームだけ）。その遷移で `Phase` は `Stopped` へ書き換わり原因が
@@ -187,12 +211,20 @@ fn drive(
     let mut term = (stop_cause_of(state), handoff_of(state));
     // 初回 step。以降は state を差し替えつつ actions を回す。
     let (mut st, mut actions) = step(std::mem::replace(state, State::initial()), input, config);
+    let mut first_batch = true;
+    let mut first_reply = None;
     loop {
         let BatchResult { last_reply, stop } =
             execute_actions(actions, shiori, sakura, resource_sink, stop_sink, term);
+        // `ShioriOutcome` は複製できないので、入れ直す前に参照から写す。
+        if std::mem::take(&mut first_batch) {
+            first_reply = last_reply
+                .as_ref()
+                .map(|(outcome, _)| raise_outcome_of(outcome));
+        }
         if stop {
             *state = st;
-            return Drive::Stop;
+            return (Drive::Stop, first_reply);
         }
         match last_reply {
             // 往復応答を再投入して次の遷移を得る（Actions が尽きるまで反復）。origin を転記する。
@@ -205,9 +237,39 @@ fn drive(
             // バッチに SHIORI 往復が無い＝この入力の処理は完了。
             None => {
                 *state = st;
-                return Drive::Continue;
+                return (Drive::Continue, first_reply);
             }
         }
+    }
+}
+
+/// SHIORI の往復の結果を汎用の通知の入口の返事へ写す。
+///
+/// 空の台本と空白だけの台本は返事なしに数える（運行表の再生の振る舞いは変えない）。エラー応答は
+/// 送出点（[`round_trip_request`]）で既に 204／NOTIFY の完了へ写っているので返事なしになる。
+/// `Unloaded` は通知の入口の往復からは生じない（降ろす往復の結果）が、写しの表を閉じるため
+/// 返事なしに置く。
+fn raise_outcome_of(outcome: &ShioriOutcome) -> RaiseOutcome {
+    match outcome {
+        ShioriOutcome::Value(script) if !script.trim().is_empty() => RaiseOutcome::Script,
+        ShioriOutcome::Value(_)
+        | ShioriOutcome::NoContent
+        | ShioriOutcome::Notified
+        | ShioriOutcome::Unloaded => RaiseOutcome::NoReply,
+        ShioriOutcome::Failed(_) => RaiseOutcome::Failed,
+    }
+}
+
+/// 汎用の通知の入口の返事を返信端へ送る。受け手が居なくても運行は続ける（`debug!` を 1 件）。
+fn send_raise_reply(reply: ReplySender<RaiseOutcome>, id: &str, outcome: RaiseOutcome) {
+    if reply.send(outcome).is_err() {
+        tracing::debug!(
+            target: "kanade",
+            event = "raise_reply_dropped",
+            id,
+            outcome = ?outcome,
+            "イベントの結果の受け手が居ない——返事は捨てて運行を続ける"
+        );
     }
 }
 
@@ -587,3 +649,8 @@ mod stop_notify_tests;
 #[cfg(test)]
 #[path = "actor_error_response_tests.rs"]
 mod error_response_tests;
+
+// 汎用の通知の入口の返事の檻（areka-P0-ghost-install 要件 2.6・2.7・11.5・12.6）。
+#[cfg(test)]
+#[path = "actor_raise_reply_tests.rs"]
+mod raise_reply_tests;

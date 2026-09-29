@@ -7,12 +7,17 @@
 //! 告知は環境変数 `AREKA_NO_ALERT` で抑えられる（自動テストでモーダルが止まらない）。
 //! 終了コードは呼び手（`main`）の責務で、ここは告げるだけ。
 //!
-//! この module の `unsafe` は [`raise`] の `MessageBoxW` 呼び出し 1 か所に閉じる。
+//! はい／いいえを尋ねる口 [`ask_yes_no`]（areka-P0-ghost-install 要件 4.4）も置く。
+//!
+//! この module の `unsafe` は [`raise`] と [`ask_yes_no`] の `MessageBoxW` 呼び出しに閉じる。
 
 use std::path::PathBuf;
 
 use areka_kanade::{ShioriFault, ShioriFaultKind};
-use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+use windows::Win32::UI::WindowsAndMessaging::{
+    IDNO, IDYES, MB_ICONERROR, MB_ICONQUESTION, MB_OK, MB_SETFOREGROUND, MB_TOPMOST, MB_YESNO,
+    MessageBoxW,
+};
 use windows::core::HSTRING;
 
 use crate::boot_config::{RootError, RootSource};
@@ -183,6 +188,51 @@ pub(crate) fn raise(scene: &AlertScene, suppressed: bool) {
             error = %e,
             "[alert] MessageBoxW failed: the alert was only logged"
         );
+    }
+}
+
+/// はい／いいえの答え（ghost-install 要件 4.4・4.7・4.8）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum YesNo {
+    Yes,
+    No,
+    /// 抑止されていて出さなかった。
+    Suppressed,
+    /// 出せなかった。
+    Unavailable,
+}
+
+/// はい／いいえの 2 択の画面を出して答えを返す（閉じるボタンは効かない）。
+/// `info!(event = "ask")` を必ず 1 件残し、`suppressed` が真なら画面を出さない。持ち主の窓は
+/// 渡さない。抑止と失敗を拒否へ倒すのは呼び手。
+pub(crate) fn ask_yes_no(title: &str, body: &str, suppressed: bool) -> YesNo {
+    tracing::info!(event = "ask", title, suppressed, "[alert] 利用者に尋ねます");
+    if suppressed {
+        return YesNo::Suppressed;
+    }
+    let (title, body) = (HSTRING::from(title), HSTRING::from(body));
+    // SAFETY: `title`／`body` は終端 0 付きで呼び出しの間ずっと生存し、他の引数は None と定数。
+    let result = unsafe {
+        MessageBoxW(
+            None,
+            &body,
+            &title,
+            MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST,
+        )
+    };
+    match result {
+        IDYES => YesNo::Yes,
+        IDNO => YesNo::No,
+        // 0 は出せなかった。`MB_YESNO` は閉じるボタンが効かないので、他の値は来ない。
+        _ => {
+            let e = windows::core::Error::from_thread();
+            tracing::error!(
+                event = "ask_box_failed",
+                error = %e,
+                "[alert] MessageBoxW failed: the question was not shown"
+            );
+            YesNo::Unavailable
+        }
     }
 }
 
