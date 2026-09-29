@@ -97,3 +97,4 @@ design の Testing Strategy「実機」の 6 項目（⑴〜⑹）。タスク 6
 - **失敗の記録は 0 件**: 最初の投げ込みの後、`WARN`・`ERROR` は 0 行。`files_dropped_read_failed`・`file_drop_probe_failed`・`file_drop_archive_unreadable`・`file_drop_no_kanade`・`file_drop_send_failed` も 0 件
 - **画面は何も出なかった**: 投げ込みの経路に選ぶ画面・メッセージボックスは無い（記録にも画面の行は無い）
 - **終了はきれい**: `app_exit origin=KanadeStopped(Quit) closed=4` → `session_mark_cleared`
+- **記録の水準の差**: design は `wintf::ecs::window_proc=debug` まで開けると書いたが、この走行の `RUST_LOG` には入れていない。成功の線（`files_dropped`）は info で見え、wintf 側の debug の分かれ道（部品なし・破棄済み）はこの走行では踏まないので、判定は変わらない

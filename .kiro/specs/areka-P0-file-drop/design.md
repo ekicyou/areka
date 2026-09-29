@@ -67,6 +67,7 @@
 - `areka_nar::peek_install_txt` の意味（「最上位に `install.txt`」の定義＝`manifest::locate_install_txt`）を変える → 振り分けと手続きの判定が食い違う。要件 2.2 の同一性テストが赤になる。
 - 許可表の数を動かす spec（後続 `shell-balloon-switch`）→ `events_change_tests.rs` の 23 を動かす。
 - ゴースト窓の様式（`window_style`）を分ける・他の窓に `WS_EX_ACCEPTFILES` を付ける → 要件 1.3 の「0 枚」が崩れる。
+- wintf の `ecs/window_proc/drop_files.rs` を動かす・名前を変える → areka の字面の見張り（テスト 20・`file_drop_wiring_tests.rs`）が `include_str!` で直接読んでいるので、コンパイルで止まる。パスを直す。
 
 ## Architecture
 

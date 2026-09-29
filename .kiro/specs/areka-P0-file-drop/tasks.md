@@ -115,3 +115,4 @@
 - 2.3: areka は bin だけの crate＝テストの絞り込みは `--lib` でなく `--bin areka <filter>`
 - 3.1 の審査中、全体テストの初回で `install::desk::overwrite_tests::overwriting_the_running_ghost_takes_it_down_installs_and_boots_it_again` が 1 度だけ赤（負荷時の時間の読み・単独と再実行は緑・本 spec の配線前）。6.1 で再発したら追う
 - 4.2: 字面の見張り（テスト 20）は `include_str!` で本番の `file_drop.rs` と wintf の `drop_files.rs` だけを読む。送らない 15 語は「直後が `"`」で数える（`"SSP: OnTextDrop"` の変異で赤を確認済み）
+- 最終検証 GO（09-29）。完了の棚卸へ: 後続 `.kiro/specs/areka-P0-shell-balloon-switch/brief.md` の「許可表は 13 件・3 件足して 16」は古い（今は 23・`ghost_session.rs` の窓を作る閉包に受け手の装着が 1 行増えた）＝申し送りを 1 行足す
