@@ -1,0 +1,209 @@
+{
+  "tools": [
+    {
+      "name": "get_active_ghost_list",
+      "title": "Get Active Ghost List",
+      "description": "Get current active ghost list suitable for ghost_name parameter. Please use this tool before using sakurascript tool.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "get_status",
+      "title": "Get Ghost Status",
+      "description": "Get current status of a ghost as comma separated flags (same as SSTP EXECUTE GetStatus). Empty means idle. Flags: talking, choosing, minimizing, changing, induction, passive, timecritical, nouserbreak, online, opening(...), balloon(...). Sending SakuraScript while talking / choosing / timecritical / opening may interrupt the ghost or be rejected.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ghost_name": {
+            "type": "string",
+            "description": "Optional: target ghost name or full path of its root folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_expression_table",
+      "title": "Get Surface Table",
+      "description": "Get list of ghost expressions in markdown tabular form. Suitable for use with SakuraScript \\s[] tag. Please use this tool before using sakurascript tool.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ghost_name": {
+            "type": "string",
+            "description": "Target ghost name or full path of its root folder"
+          }
+        },
+        "required": [
+          "ghost_name"
+        ]
+      }
+    },
+    {
+      "name": "get_property",
+      "title": "Get Property System",
+      "description": "Get Ukagaka property system value : for detail please see https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "property_name": {
+            "type": "string",
+            "description": "Property name"
+          },
+          "ghost_name": {
+            "type": "string",
+            "description": "Optional: target ghost name or full path of its root folder"
+          }
+        },
+        "required": [
+          "property_name"
+        ]
+      }
+    },
+    {
+      "name": "get_log",
+      "title": "Get Log",
+      "description": "Get SSP log entries, oldest first. One entry per line: \"#id time [type] name : text\" (continuation lines of multi-line text start with a tab). log_type: error (errors/warnings of SSP and ghosts, including sakurascript strict errors), script (played SakuraScripts), network, update, status. Use since_id with the largest id you have seen to get only new entries.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "log_type": {
+            "type": "string",
+            "description": "Optional: error (default) / script / network / update / status"
+          },
+          "ghost_name": {
+            "type": "string",
+            "description": "Optional: only entries of this ghost (ghost name or full path of its root folder)"
+          },
+          "since_id": {
+            "type": "integer",
+            "description": "Optional: only entries with id greater than this"
+          },
+          "max_count": {
+            "type": "integer",
+            "description": "Optional: maximum number of newest entries to return"
+          }
+        }
+      }
+    },
+    {
+      "name": "sakurascript",
+      "title": "Send SakuraScript",
+      "description": "Send Ukagaka SakuraScript to a ghost (character). Please use get_active_ghost_list , get_expression_table tools first to obtain detailed information.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "script": {
+            "type": "string",
+            "description": "SakuraScript to send"
+          },
+          "ghost_name": {
+            "type": "string",
+            "description": "Optional: send target ghost name or full path of its root folder"
+          },
+          "strict": {
+            "type": "boolean",
+            "description": "Optional: if true, record script errors (unknown surface/balloon/animation/command) to the error log during playback. Read them with get_log tool (log_type=error, since_id=value returned by this tool)."
+          }
+        },
+        "required": [
+          "script"
+        ]
+      }
+    },
+    {
+      "name": "raise_event",
+      "title": "Raise SHIORI Event",
+      "description": "Send a SHIORI event to a ghost (same as SSTP NOTIFY with Event header) and play the script it returns. The returned script is included in the result. Useful to try random talks (OnAiTalk) or reactions (OnMouseDoubleClick etc.).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "SHIORI event ID (e.g. OnAiTalk, OnMouseDoubleClick)"
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional: Reference0, Reference1, ... of the event"
+          },
+          "ghost_name": {
+            "type": "string",
+            "description": "Optional: target ghost name or full path of its root folder"
+          },
+          "strict": {
+            "type": "boolean",
+            "description": "Optional: if true, record script errors of the returned script to the error log during playback (same as sakurascript tool)."
+          }
+        },
+        "required": [
+          "event"
+        ]
+      }
+    },
+    {
+      "name": "reload",
+      "title": "Reload Ghost",
+      "description": "Reload ghost / shiori (dictionaries) / shell / balloon / makoto / descript of a ghost, for example after editing its files. Errors while loading are recorded to the error log; check them with get_log tool.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "What to reload: ghost / shiori / shell / balloon / makoto / descript"
+          },
+          "ghost_name": {
+            "type": "string",
+            "description": "Optional: target ghost name or full path of its root folder"
+          }
+        },
+        "required": [
+          "target"
+        ]
+      }
+    },
+    {
+      "name": "dump_surface",
+      "title": "Dump Surface Image",
+      "description": "Get an image (PNG with transparency) of a ghost's character. Without surface, captures what is currently shown on the screen: use it to check the result of sakurascript tool. With surface, renders that surface ID alone in its initial state regardless of the screen. One image per call.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "integer",
+            "description": "Optional: character scope (0 = \\0 main character, 1 = \\1 partner, ...). Default 0"
+          },
+          "surface": {
+            "type": "integer",
+            "description": "Optional: surface ID to render. If omitted, the surface currently shown on the screen is captured as is"
+          },
+          "ghost_name": {
+            "type": "string",
+            "description": "Optional: target ghost name or full path of its root folder"
+          }
+        }
+      }
+    },
+    {
+      "name": "dump_balloon",
+      "title": "Dump Balloon Image",
+      "description": "Get an image (PNG with transparency) of the balloon (speech bubble) of a character as last drawn. While the ghost is still talking the text may be partially drawn; wait until get_status no longer reports talking.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "integer",
+            "description": "Optional: character scope whose balloon is captured (0 = \\0, 1 = \\1, ...). Default 0"
+          },
+          "ghost_name": {
+            "type": "string",
+            "description": "Optional: target ghost name or full path of its root folder"
+          }
+        }
+      }
+    }
+  ]
+}
