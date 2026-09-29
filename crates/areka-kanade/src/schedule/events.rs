@@ -124,6 +124,11 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnGhostTermsAccept",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnGhostTermsDecline:1
     "OnGhostTermsDecline",
+    // 投げ込みの 2 語（areka-P0-file-drop）。汎用の入口から送る。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnFileDrop2:1
+    "OnFileDrop2",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDirectoryDrop:1
+    "OnDirectoryDrop",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
