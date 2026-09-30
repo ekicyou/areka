@@ -459,3 +459,36 @@ fn same_value_writes_do_not_trigger_change_detection() {
         "現値と異なれば set_display は挿す（無条件 return ではない証拠）"
     );
 }
+
+/// 要件 4.6: 装着の子を消す口（`despawn`）の後、窓の子は 0 で、面と文字層スロットの entity は
+/// どちらも World に残らない。親を実 `Window` にして `Visual::on_add` の連鎖挿入が起きた装着で踏む。
+///
+/// 較正: 消す前に窓の子が 2（面とスロット）であることを先に確かめる（「最初から 0」で恒真に
+/// ならないため）。
+#[test]
+fn despawn_removes_both_children_from_the_window() {
+    let (mut world, window, mount) = attach_fixture_under_window(3, 2, ScaleRatio::ONE);
+    let (surface, slot) = (mount.surface_entity(), mount.text_slot());
+    assert_eq!(
+        world.get::<Children>(window).map_or(0, |c| c.len()),
+        2,
+        "較正: 装着の直後は窓の子が 2（面とスロット）"
+    );
+
+    mount.despawn(&mut world);
+
+    assert_eq!(
+        world.get::<Children>(window).map_or(0, |c| c.len()),
+        0,
+        "despawn の後は窓の子が 0"
+    );
+    assert!(
+        world.get_entity(surface).is_err(),
+        "面の entity が残っている"
+    );
+    assert!(
+        world.get_entity(slot).is_err(),
+        "文字層スロットが残っている"
+    );
+    assert!(world.get_entity(window).is_ok(), "窓そのものは消さない");
+}

@@ -277,6 +277,23 @@ impl VisualMount {
         );
     }
 
+    /// 装着の子 2 つ（surface entity と text-layer slot）を窓から消す（シェル・バルーンの差し替えの
+    /// 片付け・`areka-P0-shell-balloon-switch` 要件 4.6）。
+    ///
+    /// `self` を消費するので、消した後のハンドルは残らない。`ChildOf` のリレーションにより窓の
+    /// `Children` からも同時に外れる。窓そのものは消さない（窓の寿命は placement/ghost 領分）。
+    /// 既に居ない entity は装着契約の破綻ゆえ warn で記録する。
+    pub(crate) fn despawn(self, world: &mut World) {
+        for (entity, role) in [
+            (self.text_slot, "text-layer-slot"),
+            (self.surface_entity, "surface"),
+        ] {
+            if !world.despawn(entity) {
+                tracing::warn!(?entity, role, "despawn: 装着の子が既に居ない");
+            }
+        }
+    }
+
     /// `Arrangement`＋`GraphicsCommandList`＋`HitTest`＋`AlphaMaskResource` を持つ表示 entity。
     pub(crate) fn surface_entity(&self) -> Entity {
         self.surface_entity
