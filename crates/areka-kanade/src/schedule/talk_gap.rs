@@ -14,15 +14,14 @@
 //! 判断は純粋で、返信の送り手は殻が持つ。`RaiseEvent` と [`super::change::on_raise_event`] には
 //! 触れない（印の無い依頼の振る舞いは 1 行も変えない＝要件 8.3）。
 //!
-//! 印の付いた依頼（`OnShellChanging`）の送出・印の台詞の追跡・中断の例外は後続のタスク 2.2 が
-//! 埋める。本タスクでは印の許可表の照合までを行い、許可表に在る印は `warn!` を残して「送らなかった」
-//! で返す（黙って印を落とさない）。[`Marked`] の印の追跡の値と、見極めの印の腕（応答待ち・利用者の
-//! 中断・終わり方）は Flow 2 の順どおりに先に置いてある。
+//! 印の付いた依頼（`OnShellChanging`）は、印のイベントを送ってその応答の台詞を追う
+//! （[`Marked`]）。印の台詞の終わり方は完了通知（[`note_marked_done`]）と番号の食い違いで知り、
+//! 印の台詞の利用者の中断は終了の予約があっても終了系列へ結ばない（[`is_marked_break`]・要件 5.2）。
 
 use super::change::is_change_phase;
-use super::{Action, Phase, State, events};
+use super::{Action, Input, Phase, State, current_talk_id, events};
 use crate::change::{GapLeft, GapRaise, MarkedEnd, RaiseOutcome, TalkGap};
-use crate::talk::TalkId;
+use crate::talk::{TalkDone, TalkEndReason, TalkId};
 
 /// 台詞の切れ目の見張り（[`State::talk_gap`]・高々 1 つ）。
 pub(crate) struct GapWatch {
@@ -54,13 +53,14 @@ pub(crate) enum Marked {
 /// 1. 相が定常でない → `Left{NotSteady}`
 /// 2. 終了の保留あり → `Left{NotSteady}`（終了の保留に印のイベントを送らない＝要件 5.7）
 /// 3. 印が許可表に無い → `NotSent{NotAllowed}`
-/// 4. 印あり → タスク 2.2 で印のイベントの送出に置き換える（今は `warn!` の上で `NotSent`）
+/// 4. 印あり → 印のイベントを送り（許可表の照合と組み立ては汎用の入口と同じ関数）、応答を待つ
 /// 5. 印なし → 見張る（結果は同じ `step` の末尾の [`observe`] が決める）
 pub(super) fn begin(mut state: State, raise: Option<GapRaise>) -> (State, Vec<Action>) {
     let mut watch = GapWatch {
         marked: Marked::None,
         outcome: None,
     };
+    let mut actions = Vec::new();
     if !matches!(state.phase, Phase::Steady { .. }) || state.pending_close.is_some() {
         settle(
             &mut watch,
@@ -69,33 +69,106 @@ pub(super) fn begin(mut state: State, raise: Option<GapRaise>) -> (State, Vec<Ac
             },
         );
     } else if let Some(raise) = raise {
-        let not_sent = TalkGap::NotSent {
-            outcome: RaiseOutcome::NotAllowed,
-        };
         match events::allowed_static(&raise.id) {
             None => {
                 tracing::warn!(target: "kanade", event = "raise_event_not_allowed", id = %raise.id, "許可表に無い印のイベント——送らずに捨てる");
+                let not_sent = TalkGap::NotSent {
+                    outcome: RaiseOutcome::NotAllowed,
+                };
+                settle(&mut watch, not_sent);
             }
             Some(id) => {
-                tracing::warn!(target: "kanade", event = "talk_gap_marked_unsupported", id, "印の付いた切れ目の依頼はまだ扱えない——印のイベントを送らずに捨てる");
+                tracing::debug!(target: "kanade", event = "talk_gap_watch", marked = id, "印のイベントを送って台詞の切れ目の見張りを始めた");
+                let call = events::raise(id, raise.references, raise.method, &state.snapshot());
+                actions.push(Action::ShioriRequest(call));
+                watch.marked = Marked::AwaitingReply(id);
             }
         }
-        settle(&mut watch, not_sent);
     } else {
         tracing::debug!(target: "kanade", event = "talk_gap_watch", "台詞の切れ目の見張りを始めた");
     }
     state.talk_gap = Some(watch);
-    (state, Vec::new())
+    (state, actions)
+}
+
+/// 印のイベントの応答の直前のトーク（[`marked_reply`] が遷移の前に控え、[`observe`] が遷移の後に
+/// 今のトークと突き合わせる）。
+pub(super) struct MarkedReply {
+    before: Option<TalkId>,
+}
+
+/// 入力が印のイベントの応答なら、遷移の前のトークを控える（[`super::step`] が `route` の前に呼ぶ）。
+pub(super) fn marked_reply(state: &State, input: &Input) -> Option<MarkedReply> {
+    let Some(GapWatch {
+        marked: Marked::AwaitingReply(id),
+        outcome: None,
+    }) = &state.talk_gap
+    else {
+        return None;
+    };
+    match input {
+        Input::ShioriReply { origin, .. } if origin == id => Some(MarkedReply {
+            before: current_talk_id(&state.phase),
+        }),
+        _ => None,
+    }
+}
+
+/// 印の台詞を利用者が中断したか（[`super::on_talk_done`] が中断の帳簿を空にする前に呼ぶ）。
+///
+/// 真なら、終了の予約があっても終了系列へ結ばない（要件 5.2）。結果が決まった後の見張りには
+/// 効かせない（殻は決まった時点で見張りを取り出すので、例外を効かせる相手がもう居ない）。
+pub(super) fn is_marked_break(state: &State, done: &TalkDone) -> bool {
+    matches!(
+        &state.talk_gap,
+        Some(GapWatch { marked: Marked::Talk(t), outcome: None })
+            if *t == done.talk_id
+                && done.reason == TalkEndReason::Interrupted
+                && state.user_break_talk == Some(*t)
+    )
+}
+
+/// 現行トークの完了を印の追跡へ写す（[`super::on_talk_done`] が現行トークと突き合わせた後に呼ぶ）。
+///
+/// 印の台詞なら、利用者の中断は [`Marked::BrokenByUser`]、それ以外（最後まで・選択肢の時間切れの
+/// 解除・`\-` への到達）は「最後まで」にする。`\-` への到達は相が終了系列へ入るので、見極めは
+/// 「終了で達しない」を先に選ぶ。印の台詞でない完了（置き換えた台詞の完了）は何もしない。
+pub(super) fn note_marked_done(state: &mut State, done: &TalkDone, broken_by_user: bool) {
+    if let Some(GapWatch {
+        marked,
+        outcome: None,
+    }) = state.talk_gap.as_mut()
+        && matches!(marked, Marked::Talk(t) if *t == done.talk_id)
+    {
+        *marked = if broken_by_user {
+            Marked::BrokenByUser
+        } else {
+            Marked::Ended(MarkedEnd::Completed)
+        };
+    }
 }
 
 /// 毎 `step` の後の見極め（設計 Flow 2）。見張りが無いか、既に決まっていれば何もしない。
-pub(super) fn observe(state: &mut State) {
-    let Some(watch) = state.talk_gap.as_ref() else {
+///
+/// `reply` が在れば（入力が印のイベントの応答だった）、先に印の追跡を進める: 応答の直後に今の
+/// トークが変わっていればそれを印の台詞として控え、変わっていなければ「台詞なし」にする。
+pub(super) fn observe(state: &mut State, reply: Option<MarkedReply>) {
+    let now = current_talk_id(&state.phase);
+    let Some(watch) = state.talk_gap.as_mut() else {
         return;
     };
     if watch.outcome.is_some() {
         return;
     }
+    if let Some(MarkedReply { before }) = reply {
+        watch.marked = match now {
+            Some(talk) if now != before => Marked::Talk(talk),
+            _ => Marked::Ended(MarkedEnd::NoTalk),
+        };
+    }
+    let Some(watch) = state.talk_gap.as_ref() else {
+        return;
+    };
     let Some(outcome) = decide(state, &watch.marked) else {
         return;
     };
@@ -146,7 +219,8 @@ fn decide(state: &State, marked: &Marked) -> Option<TalkGap> {
     let marked = match marked {
         Marked::None => None,
         Marked::Ended(end) => Some(*end),
-        // 印の台詞が完了の突き合わせを経ずに消えた＝別のトークに置き換わっていた。
+        // 印の台詞の完了が届かないまま切れ目に来た＝印の番号と今の番号が食い違い、置き換えた台詞が
+        // 終わった（置き換えられた印の台詞の完了は dispatcher か選択の 1 世代の控えが捨てる）。
         Marked::Talk(_) => Some(MarkedEnd::Replaced),
         // 上の腕で返している。
         Marked::AwaitingReply(_) | Marked::BrokenByUser => return None,

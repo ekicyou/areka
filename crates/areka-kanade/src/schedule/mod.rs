@@ -394,8 +394,10 @@ pub(crate) enum Action {
 /// どの入力でも、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
 /// （見張りが無ければ何もしない）。
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
+    // 印のイベントの応答なら、遷移の前のトークを控える（応答で台詞が始まったかを後で突き合わせる）。
+    let marked_reply = talk_gap::marked_reply(&state, &input);
     let (mut state, actions) = route(state, input, config);
-    talk_gap::observe(&mut state);
+    talk_gap::observe(&mut state, marked_reply);
     (state, actions)
 }
 
@@ -625,11 +627,16 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             // 現 talk の完了に到達した時点で 1 世代 stale 帳簿の役目は終わる（C4 規則 9）。
             // 保持を延長すると「1 世代のみ」の契約が壊れ、真に未知の id まで info へ降格し得る。
             state.choice_prev_talk = None;
+            // 印の台詞（`OnShellChanging`）の利用者の中断かは、中断の帳簿を空にする前に見る。
+            let marked_break = talk_gap::is_marked_break(&state, &done);
+            talk_gap::note_marked_done(&mut state, &done, marked_break);
             // 現行トークの完了なので中断の帳簿はここで必ず空になる（終わり方を問わない・不変条件）。
             // 空にした結果が「利用者の中断で終わり、かつ終了の予約があった」かを持ち帰る（Req 3.8）。
-            // 切替の相では予約を終了へ結ばない（中断は切替の中止＝切替の要件 5.4）。
+            // 切替の相では予約を終了へ結ばない（中断は切替の中止＝切替の要件 5.4）。印の台詞の
+            // 中断も終了へ結ばない（シェル切替の中止＝areka-P0-shell-balloon-switch 要件 5.2）。
             let break_quit = user_break::take_user_break_quit(&mut state, &done)
-                && !change::is_change_phase(&state.phase);
+                && !change::is_change_phase(&state.phase)
+                && !marked_break;
             match done.reason {
                 TalkEndReason::Quit => {
                     // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
