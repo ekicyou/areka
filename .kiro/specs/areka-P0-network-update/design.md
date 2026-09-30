@@ -40,7 +40,7 @@
 - **前提を外す宣言（要件 5.10）**: 本仕様は完了 `update-engine` の設計が置いた前提「起動中のゴーストなら SHIORI を先に解放している」を**外して** `run` を呼ぶ。確定（`commit.rs` の改名 2 回）は写像中の DLL でも通ることが較正済み（`commit_tests.rs`）で、外して困るのは後片付けだけ。その後片付けの扱い（印による区別）を本仕様が持つ。完了 spec の文書は書き換えず、§8 に記す。
 
 ### Out of Boundary
-- `crates/areka-update/src/` の `work.rs`・`work_tests.rs` 以外の全部（`lib.rs`・`commit.rs`・`winhttp.rs`・`manifest.rs`・`delete.rs`…）。`run` の署名・`Progress`・`UpdateOutcome`・`UpdateError`・`Fetch` は変えない。
+- `crates/areka-update/src/` の `work.rs`・`work_tests.rs` 以外の全部（`commit.rs`・`winhttp.rs`・`manifest.rs`・`delete.rs`…）。例外: タスク 10.1（要件 5.9 の 2026-09-30 改訂）で `lib.rs` に `purge_committed` の公開と `run` の始めの呼び出しを足し、`run_tests.rs` にテストを足した。`delete.rs` は `// ukadoc:` の行のアンカー（コメントだけ）。`run` の署名・`Progress`・`UpdateOutcome`・`UpdateError`・`Fetch` は変えない。
 - kanade の運行表（`schedule/mod.rs`・`change.rs`・`boot.rs`・`steady.rs`）と殻（`actor.rs`・`actor_resources.rs`）・`msg.rs` の `KanadeMsg`。触るのは許可表 2 本（`schedule/events.rs`・`schedule/resources.rs`）とその数の判定だけ。
 - 切替の入口 `request_ghost_switch` の判定・`SwitchRequest`・`GhostSpec`・`SwitchInFlight`・`switch_to`・`boot_into`・`switch_to_default`（読み直しは既存の入口を呼ぶだけ）。`GhostSpec` に絶対パスの変種は足さない（裁定 17）。
 - `session_mark_verdict`・`ExitOrigin`・`Teardown`（要件 5.11・7.6）。`exit_wait.rs` の門の意味論（変えるのは上限に達したときの本文 1 行だけ）。
@@ -52,7 +52,7 @@
 ### Allowed Dependencies
 - 依存の向き: `areka-update`・`areka-ghost`・`areka-kanade`・`areka-actor`・`areka-parsers` → `areka`（bin）。本体の中は `update/refs.rs`（純粋・`areka_update` の型だけ）→ `update/procedure.rs`（純粋・口の trait）→ `update/worker.rs`（スレッド・本物の口・エンジン）→ `update/desk.rs`（World）→ `update/mod.rs`（受付・登録）→ 入口（`emo2_boot/update_cue.rs`・`menu/update_frame.rs`）。worker と desk の間の頼みの型 `DeskAsk` は `worker.rs` が定義し `desk.rs` が読む（`install/` と同じ）。
 - `exit_wait.rs` は `update/` を知らない。門を使うのは `worker.rs`（`begin`・`enter_write`・`leave_write`・`end`）と `desk.rs`（`is_closing`）と、門を作って登記する `mod.rs` の `register` だけ。手続き（`procedure.rs`・`refs.rs`）は門を知らない。
-- `desk.rs` が `ghost_switch.rs` から使うのは `request_ghost_switch`・`SwitchRequest`・`GhostSpec`・`SwitchInFlight`・`SwitchVerdict`（読み直しの判定を記録の水準へ分ける）だけ。`ghost_switch.rs` が `update/` から使うのは `desk::on_steady` だけ。
+- `desk.rs` が `ghost_switch.rs` から使うのは `request_ghost_switch`・`SwitchRequest`・`GhostSpec`・`SwitchInFlight`・`SwitchVerdict`（読み直しの判定を記録の水準へ分ける）だけ。`ghost_switch.rs` が `update/` から使うのは `desk::on_steady`（定常到達の照会）と `desk::on_switch_end`（読み直しの切替が終わった／中止された・タスク 10.2）だけ。
 - `update/refs.rs` は `install::judge::SEPARATOR`（byte 値 1）を借りる（同じ値を 2 か所に持たない・`input_events/file_drop.rs` が同じ借り方の前例）。
 - `install/fetch_url.rs` が使うのは `areka_update::{Fetch, WinHttpFetch, FetchError}` と `install::{RawInstallRequest, InstallOrigin}` だけ。更新の窓口・背景スレッドとは共有 0。
 - 足す依存: `crates/areka/Cargo.toml` に `areka-update = { path = "../areka-update" }`。外部クレートの追加 0・本番コードが読む環境変数の追加 0（要件 8.6）。
