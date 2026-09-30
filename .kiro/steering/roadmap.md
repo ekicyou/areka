@@ -336,7 +336,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 - **brief の体制**: 台帳 78 行のうち **69 本に brief あり**・登記だけの行 9 本。**段列の機械の数え＝完了 36・α 3・前倒し 0・α 後 38・保留 1**（2026-09-30 の機械の数え。`balloon-color-emoji` の完了を反映。`frame-phases-after-exit`・`ghost-install` の完了と SSP MCP の移植 10 本・`balloon-color-emoji` の起票を反映）＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。brief の file:line は起票時値＝**着手時に必ず再検証**（棚卸⑲では α の残り 4 本を main `10a8d724` で再測定し、結果を各 brief の「2026-09-28 棚卸⑲の再測定」の節へ書いた。`frame-phases-after-exit` は同日の起票値。α 後の brief は再測定していない）。
 - 新規課題の起票は `/kiro-discovery`（再入）で just-in-time。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
-- **要件定義・設計のサブエージェントは Fable**（上表 Fable 列 ○）・タスク生成と実装は Opus（記憶 requirements-design-need-fable-grade-review／fable-main-opus-subagents-token-policy）。
+- **Fable 列 ○＝Fable で起動したセッションで進めることを勧める spec**（勧めるだけ）。**要件定義・設計のサブエージェントは起動中のモデルを継承し、上位へ上げない**（Opus で起動したら Opus のまま・Fable 列 ○ でも `model: "fable"` を付けない＝意図しない課金を避ける 2026-09-30 開発者指示）。タスク生成と実装は skill の Preflight に従う（記憶 requirements-design-need-fable-grade-review／fable-main-opus-subagents-token-policy）。
 - **ukadoc 台帳の `owner`**: α の残りの spec は起票時点で台帳（`doc/ukadoc-coverage/ledger/`）の `owner` に登記していない。各 spec の要件段階で登記し、同時に `roadmap-draft.md` の `owner_count` を追随させる（記憶 sylphya-set-ledger の教訓＝担当欄を埋めたら同時に追随）。
 
 ## 制約
