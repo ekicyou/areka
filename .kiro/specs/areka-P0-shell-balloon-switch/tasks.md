@@ -4,7 +4,7 @@
 > 呼び手がまだ無いモジュールは、先頭に `#![allow(dead_code)]` を置いてよい。呼び手を結ぶタスクで外す（どのタスクで外すかを Implementation Notes に残す）。
 
 - [ ] 1. 下の層の小さな口
-- [ ] 1.1 (P) kanade の許可表に切替のイベント 3 語を足す
+- [x] 1.1 (P) kanade の許可表に切替のイベント 3 語を足す
   - `OnShellChanging`・`OnShellChanged`・`OnBalloonChange` を、各 1 行の正典の URL の行つきでイベントの許可表に足し、冒頭の件数の doc を改める（42 → 45）
   - 件数の直書き 2 か所を追随させる（件数の `assert_eq!` を 45 へ、完全一致のテストは名前を「45 語」へ改めて配列に 3 語）。消さない
   - 印の無い依頼の判断（許可表の照合・定常の判定・応答の置き換え）の差分が 0 で、既存の汎用の入口のテストが緑のまま
@@ -246,3 +246,4 @@
 ## Implementation Notes
 
 （実装の途中で分かった設計との差・外した `#![allow(dead_code)]`・Monitoring へ足す記録の語をタスクごとに 1 行で残す）
+- 1.1: 許可表に無い例として `OnShellChanged` を使っていた `raise_event_tests.rs` の既存テスト 1 本の例を `OnTalk` へ差し替えた（1 語・振る舞い不変）。design の「印の無い `RaiseEvent` の既存テストは不変」はこの 1 語を除いて成り立つ（12 で design へ反映）。

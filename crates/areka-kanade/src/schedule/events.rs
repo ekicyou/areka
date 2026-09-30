@@ -57,6 +57,9 @@
 //! | `OnUpdateOtherFailure` | GET（汎用の入口） | 渡された列のまま |
 //! | `OnUpdateResult` | GET（汎用の入口） | 渡された列のまま |
 //! | `OnUpdateResultEx` | GET（汎用の入口） | 渡された列のまま |
+//! | `OnShellChanging` | GET（台詞の切れ目の口の印） | Ref0〜2=切替先のシェル名・今のシェル名・切替先のパス（渡された列のまま） |
+//! | `OnShellChanged` | GET（汎用の入口） | Ref0〜2=今のシェル名・ゴースト名・シェルのパス（渡された列のまま） |
+//! | `OnBalloonChange` | GET（汎用の入口） | Ref0〜1=バルーン名・パス（渡された列のまま） |
 
 use crate::change::{BootOrigin, ChangeRequest, ChangedFrom, ShioriMethod};
 use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
@@ -188,6 +191,14 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnUpdateResult",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateResultEx:1
     "OnUpdateResultEx",
+    // シェル・バルーン切替の 3 語（areka-P0-shell-balloon-switch 要件 8.2・42→45 語）。
+    // `OnShellChanging` は台詞の切れ目の口の印として、残り 2 語は汎用の入口から送る。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellChanging:1
+    "OnShellChanging",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellChanged:1
+    "OnShellChanged",
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonChange:1
+    "OnBalloonChange",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。

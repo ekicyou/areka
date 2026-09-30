@@ -42,7 +42,7 @@ fn reply_from(s: State, origin: &'static str, script: &str) -> (State, Vec<Actio
 #[test]
 fn event_not_in_allowed_table_is_dropped_with_one_warn() {
     let mut out = None;
-    let ev = capture(|| out = Some(raise(steady(), "OnShellChanged", &["a"], ShioriMethod::Get)));
+    let ev = capture(|| out = Some(raise(steady(), "OnTalk", &["a"], ShioriMethod::Get)));
     let (s, actions) = out.expect("step は必ず結果を返す");
     logged_once(&ev, Level::WARN, "raise_event_not_allowed");
     assert_eq!(warn_count(&ev), 1, "warn! はちょうど 1 件");
