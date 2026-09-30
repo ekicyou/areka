@@ -83,6 +83,7 @@ pub(crate) fn drain_change_requests(world: &mut World) {
                 ghost: GhostSpec::Name(raw.name),
                 raise_event: raw.raise_event,
                 origin: ChangeOrigin::Automatic,
+                boot_event: None,
             },
         );
     }
@@ -95,6 +96,9 @@ pub(crate) struct SwitchRequest {
     /// 真なら送り出す側へ `OnGhostChanging` を送る。
     pub raise_event: bool,
     pub origin: ChangeOrigin,
+    /// 切替先を起こすときの起動の知らせ（イベントの名前と Reference・ネットワーク更新の読み直しだけが
+    /// `Some`）。在れば由来は「切替で来た」の代わりに `BootOrigin::Updated`。既定へ戻すときは使わない。
+    pub boot_event: Option<(&'static str, Vec<String>)>,
 }
 
 /// 切替先の指し方。台本は名前（`descript.txt` の `name` → フォルダ名の順）、メニューはフォルダ名。
@@ -154,6 +158,8 @@ pub(crate) struct SwitchInFlight {
     pub target: SwitchTarget,
     pub prev: PrevGhost,
     pub stage: SwitchStage,
+    /// 切替先を起こすときの起動の知らせ（[`SwitchRequest::boot_event`] の写し）。
+    pub boot_event: Option<(&'static str, Vec<String>)>,
 }
 
 /// 純粋: 目録の項目と指し方から切替先を決める（要件 1.5・1.8・11.8）。
@@ -429,12 +435,14 @@ pub(crate) fn request_ghost_switch_with(
         to = %target.name,
         raise_event = req.raise_event,
         origin = req.origin.as_ref_str(),
+        boot_event = ?req.boot_event.as_ref().map(|(id, _)| *id),
         "切替の要求を kanade へ送った"
     );
     world.insert_non_send(SwitchInFlight {
         target,
         prev,
         stage: SwitchStage::SendOff,
+        boot_event: req.boot_event,
     });
     SwitchVerdict::Accepted
 }
@@ -537,6 +545,8 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                         attempt = ?attempt,
                         "切替で起こしたゴーストが定常に入った——切替を終える"
                     );
+                    // 更新の窓口へ（読み直しなら古い SHIORI は降りている＝残りを消し、後送りの列の残りを新しいゴーストへ送る・既定へ戻ったなら捨てる）。
+                    crate::update::desk::on_switch_end(world, attempt == WelcomeAttempt::Target);
                 }
                 stage => tracing::debug!(
                     event = "ghost_switch_done",
@@ -546,6 +556,8 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
             }
             // インストールの窓口へ（送り直しの頼みは定常到達の回数で見直す）。
             crate::install::desk::on_steady(world);
+            // 更新の窓口へ（`homeurl` の写しを消して照会し直す）。
+            crate::update::desk::on_steady(world);
         }
         KanadeNotice::ChangeCancelled { reason } => {
             if world.remove_non_send::<SwitchInFlight>().is_some() {
@@ -554,6 +566,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                     reason = ?reason,
                     "切替は中止された——予約を下ろす（元のゴーストは定常へ戻るか、終了要求が勝っていれば今日どおり終わる）"
                 );
+                crate::update::desk::on_switch_end(world, false);
             } else if world.contains_resource::<crate::session_end::SessionEnded>() {
                 tracing::debug!(
                     event = "ghost_switch_cancelled",
@@ -627,12 +640,12 @@ fn record_steady_memory(world: &World) {
 /// 切替先を起こす（要件 2.7・3.1・3.2・3.7・3.8・4.6・4.7・6.1・design Flow 1）。
 ///
 /// 予約の切替先へ: 置き場のゴーストを同期で降ろす → 全窓を閉じる → [`boot_into`]（由来＝切替で
-/// 来た・経路＝切替）。成功なら段を「迎え入れ（切替先）」に。同期の失敗は、切替先が既定なら致命、
+/// 来た〔予約に起動の知らせが在ればネットワーク更新で読み直した〕・経路＝切替）。成功なら段を「迎え入れ（切替先）」に。同期の失敗は、切替先が既定なら致命、
 /// そうでなければ [`switch_to_default`]（窓は投函していないので壊れた切替先の窓は生えない）。
 pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
-    let Some((target, prev)) = world
+    let Some((target, prev, boot_event)) = world
         .get_non_send::<SwitchInFlight>()
-        .map(|f| (f.target.clone(), f.prev.clone()))
+        .map(|f| (f.target.clone(), f.prev.clone(), f.boot_event.clone()))
     else {
         tracing::error!(
             event = "ghost_switch_no_reservation",
@@ -658,15 +671,19 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     let closed = close_windows_for_restart(world);
     // 起動中のゴーストへ入れる一周（預かった宛先への切替のときだけ・降ろした後・起こす前に展開する）。
     crate::install::desk::run_overwrite_between(world);
-    let origin = BootOrigin::ChangedFrom(ChangedFrom {
-        sakura_name: prev.sakura_name.unwrap_or_default(),
-        script: handoff.script.unwrap_or_default(),
-        name: prev.name.unwrap_or_default(),
-        dir: std::path::absolute(&prev.dir)
-            .unwrap_or(prev.dir)
-            .display()
-            .to_string(),
-    });
+    // 起動の知らせが在れば（読み直し）それを根に、無ければ今日どおり「切替で来た」（決めたこと 23）。
+    let origin = match boot_event {
+        Some((id, references)) => BootOrigin::Updated { id, references },
+        None => BootOrigin::ChangedFrom(ChangedFrom {
+            sakura_name: prev.sakura_name.unwrap_or_default(),
+            script: handoff.script.unwrap_or_default(),
+            name: prev.name.unwrap_or_default(),
+            dir: std::path::absolute(&prev.dir)
+                .unwrap_or(prev.dir)
+                .display()
+                .to_string(),
+        }),
+    };
     let ghost = GhostDecision {
         route: GhostRoute::Switched,
         dir: target.dir.clone(),
@@ -868,3 +885,7 @@ mod fallback_tests;
 #[cfg(test)]
 #[path = "ghost_switch_notice_tests.rs"]
 mod notice_tests;
+
+#[cfg(test)]
+#[path = "ghost_switch_boot_event_tests.rs"]
+mod boot_event_tests;

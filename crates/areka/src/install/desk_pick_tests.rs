@@ -21,7 +21,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::install::judge::script_request;
+use crate::install::judge::{ScriptRequest, script_request};
 use crate::install::{InstallOrigin, register};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
 
@@ -95,7 +95,9 @@ fn menu_order_is_the_script_order_with_only_the_origin_changed() {
     let handle = start_pick(&mut world, false, || Ok(Some(PathBuf::from(ABSOLUTE))))
         .expect("選ぶ画面のスレッドが起きる");
     join_bounded(handle);
-    let script_path = script_request(&["path", ABSOLUTE]).expect("絶対パスは通る");
+    let Ok(ScriptRequest::Path(script_path)) = script_request(&["path", ABSOLUTE]) else {
+        panic!("絶対パスは path の腕で通る");
+    };
     raw_sender(&world)
         .send(RawInstallRequest {
             path: script_path,

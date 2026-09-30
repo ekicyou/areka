@@ -92,6 +92,7 @@ fn reservation(stage: SwitchStage) -> SwitchInFlight {
             sakura_name: None,
         },
         stage,
+        boot_event: None,
     }
 }
 
@@ -114,6 +115,7 @@ fn stop_with_handoff_under_reservation_switches_without_exit() {
             ghost: GhostSpec::Name("B".to_owned()),
             raise_event: false,
             origin: ChangeOrigin::Automatic,
+            boot_event: None,
         },
     );
     // A の起動記録のトーク（採番 1）は再生の完了まで切替を保留させる。フレームを回さない土台では

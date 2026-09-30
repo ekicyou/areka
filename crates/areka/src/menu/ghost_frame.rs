@@ -53,6 +53,7 @@ fn ghost_frame_item(world: &World, _ctx: &MenuContext) -> MenuItem {
                             ghost: GhostSpec::Folder(folder.clone()),
                             raise_event: true,
                             origin: ChangeOrigin::Manual,
+                            boot_event: None,
                         },
                     );
                     tracing::debug!(

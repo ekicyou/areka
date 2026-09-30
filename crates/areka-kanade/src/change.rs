@@ -80,6 +80,12 @@ pub enum BootOrigin {
     ChangedFrom(ChangedFrom),
     /// 前回のゴーストが落ちて既定へ戻った（`OnBoot` の Ref6＝`halt`・Ref7＝落ちたゴースト名）。
     Halted { ghost_name: String },
+    /// ネットワーク更新で読み直した。`id`（許可表の綴り）と Reference を起動の知らせとして送る
+    /// （`OnGhostChanged`・`OnBoot` の代わり・204 でも `OnBoot` へ続けない・areka-P0-network-update 要件 5.5）。
+    Updated {
+        id: &'static str,
+        references: Vec<String>,
+    },
 }
 
 /// 直前のゴーストの情報（`OnGhostChanged` の Ref0〜3）。

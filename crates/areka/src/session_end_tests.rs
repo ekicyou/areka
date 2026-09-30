@@ -195,6 +195,7 @@ fn send_off_reservation() -> SwitchInFlight {
             sakura_name: None,
         },
         stage: SwitchStage::SendOff,
+        boot_event: None,
     }
 }
 

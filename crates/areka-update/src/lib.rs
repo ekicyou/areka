@@ -62,6 +62,7 @@ pub use error::{
 pub use fetch::Fetch;
 pub use outcome::{ManifestName, Progress, Undeletable, UpdateOutcome};
 pub use winhttp::{MAX_BODY_BYTES, WinHttpFetch};
+pub use work::{Purge, purge_committed};
 
 /// 一周の入力。`homeurl` は解決済みの更新先 URL（末尾の `/` は無くてもよい）、
 /// `target` は定義ファイルのパスの根（ゴーストなら `(myghost)/`）。
@@ -141,6 +142,17 @@ fn walk(
         target = %target.display(),
         "[areka_update] update started"
     );
+    // 前の成功した走行の残り（印つき）を差分より先に消す（5.9）。差分なしの周でも消える。
+    // 消せなかった物は次の機会へ回すだけの正常な状態なので警告にしない（要件 5.9「黙って」）。
+    let purge = purge_committed(target);
+    if !(purge.removed.is_empty() && purge.held.is_empty()) {
+        tracing::debug!(
+            homeurl = %homeurl,
+            removed = purge.removed.len(),
+            held = purge.held.len(),
+            "[areka_update] committed leftovers purged"
+        );
+    }
 
     // 2〜3. 定義ファイル（1.1〜1.3）。
     let (name, manifest_bytes) = fetch_manifest(fetch, homeurl)?;

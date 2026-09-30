@@ -270,6 +270,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `input_events/` - ポインタ入力 → SHIORI マウスイベント／メニューの引き金
 - `menu/` - 右クリックメニュー（`areka-P0-popup-menu-minimal` 2026-09-19）。**枠 7 種に供給関数を登記する口**（`MenuRegistry`）を持ち、後続 spec（列挙・切替・インストール・更新）は**メニュー本体を触らず自分の枠へ登記するだけ**で項目を足す。`plan`（構造の計算・純粋）／`captions`（項目名の SHIORI リソース照会）／`trigger`（引き金と段取り）／`win32`（`TrackPopupMenuEx`＝OS ネイティブ・自前窓なし・**`unsafe` はこのファイルに閉じる**）
 - `readme.rs` - 説明書を既定アプリで開く葉 module（メニューにも入力配線にも依存しない）
+- `update/` - ネットワーク更新の結線（`areka-P0-network-update` 2026-09-30）。`install/` と同じ形＝UI 側の窓口 `desk.rs`（受付・段・預かり 1 枠・対象の解決・読み直しと後送りの列）・背景スレッド `worker.rs`（本物の口・門）・純粋な手続き `procedure.rs`（口 `UpdatePorts`・偽の口で決定論テスト）・写し `refs.rs`（イベント名 19 語・Reference・失敗の語）。エンジンは `areka-update`。成功の `OnUpdateComplete` と総括は再起動の後の新しいゴーストへ（kanade `BootOrigin::Updated`）
 **Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 
 ### Parser Crate

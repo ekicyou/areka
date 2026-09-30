@@ -77,6 +77,7 @@ pub(super) fn switching_world(root: &BasewareRoot, target: &str) -> World {
             sakura_name: None,
         },
         stage: SwitchStage::SendOff,
+        boot_event: None,
     });
     world
 }

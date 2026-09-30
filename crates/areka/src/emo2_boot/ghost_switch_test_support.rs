@@ -33,8 +33,8 @@ use super::frame::{KanadeNoticeRx, run_ghost_quit_phase};
 use super::ghost_switch::drain_change_requests;
 use super::sample_test_support::acquire_emo2;
 use super::spine::{
-    RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder, ScriptedShioriHandle,
-    run_bounded, spin_wait_until,
+    HOMEURL_RESOURCE, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
+    ScriptedShioriHandle, run_bounded, spin_wait_until,
 };
 use crate::ConfigInputs;
 use crate::boot_config::{BootContext, CurrentGhost};
@@ -57,6 +57,8 @@ pub(crate) enum FakeShiori {
     Scripted(Box<dyn Fn() -> ScriptedShioriBackendBuilder>),
     /// 接続に失敗する（kanade は `Fault` で止まる）。
     ConnectFail,
+    /// 最初の起動だけ台本で起き、2 回目からは接続に失敗する（同じゴーストへの切替の失敗を作る）。
+    ScriptedThenConnectFail(Box<dyn Fn() -> ScriptedShioriBackendBuilder>),
     /// 起動の結線が同期で成立しない（結線の入力の根が実在しない＝`boot_ghost_strict` は `Err`）。
     /// 窓の準備は構成入力の本物の根で通る。`boot_ghost` では LogSink の腕へ倒れ、倒れた先も
     /// 起点が無くて失敗する（実行系なし）。
@@ -141,8 +143,14 @@ impl SwitchRig {
                 let folder = folder_of(&cfg.ghost_root);
                 let mut ghost_root = cfg.ghost_root.clone();
                 let mut balloon_root = cfg.balloon_root.clone();
+                let booted_before = ledger.borrow().iter().any(|(f, _)| *f == folder);
                 let shiori = match scripts.get(&folder) {
-                    Some(FakeShiori::Scripted(script)) => {
+                    Some(FakeShiori::ScriptedThenConnectFail(_)) if booted_before => {
+                        ShioriWiring::Custom(Box::new(|| Err(CONNECT_ERR.to_owned())))
+                    }
+                    Some(
+                        FakeShiori::Scripted(script) | FakeShiori::ScriptedThenConnectFail(script),
+                    ) => {
                         let (backend, handle) = script().build();
                         ledger.borrow_mut().push((folder, handle));
                         ShioriWiring::Custom(Box::new(move || {
@@ -259,13 +267,23 @@ impl SwitchRig {
         self.world.insert_non_send(GhostSlot(Some(session)));
     }
 
-    /// `folder` を起こした回ごとの呼出列（状態の問い合わせを除く・起こした順）。
+    /// `folder` を起こした回ごとの呼出列（状態の問い合わせと、定常到達で更新の窓口が飛ばす
+    /// `homeurl` の照会を除く・起こした順）。照会は UI の定常到達の処理から非同期に届くので、
+    /// 観測した時点で記録に載っているかが決まらない。
     pub(crate) fn calls(&self, folder: &str) -> Vec<Vec<RecordedCall>> {
         self.boots
             .borrow()
             .iter()
             .filter(|(f, _)| f == folder)
-            .map(|(_, handle)| handle.non_status_calls())
+            .map(|(_, handle)| {
+                handle
+                    .non_status_calls()
+                    .into_iter()
+                    .filter(
+                        |c| !matches!(c, RecordedCall::Get { id, .. } if id == HOMEURL_RESOURCE),
+                    )
+                    .collect()
+            })
             .collect()
     }
 

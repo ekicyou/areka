@@ -28,6 +28,9 @@ areka-sylphya = { path = "../areka-sylphya" }
 # `.nar` の読み取り・検査・展開（areka-P0-ghost-install・要件 4.1）。ワークスペースの中の
 # path 依存で、外部（crates.io）依存の追加ではない。
 areka-nar = { path = "../areka-nar" }
+# ネットワーク更新のエンジン（areka-P0-network-update・要件 8.2／8.6）。ワークスペースの中の
+# path 依存で、外部（crates.io）依存の追加ではない。
+areka-update = { path = "../areka-update" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }

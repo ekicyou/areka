@@ -104,6 +104,7 @@ dependencies = [
  "areka-sakura",
  "areka-seriko",
  "areka-sylphya",
+ "areka-update",
  "async-io",
  "bevy_ecs",
  "dola",

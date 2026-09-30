@@ -330,6 +330,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
             sakura_name: None,
         },
         stage: SwitchStage::SendOff,
+        boot_event: None,
     });
     let (reply, answer) = reply_channel();
     let mut got = None;
@@ -348,6 +349,7 @@ fn a_busy_overwrite_retries_on_the_tick_the_reservation_clears_and_runs_through(
                 ghost: GhostSpec::Folder("B".to_owned()),
                 raise_event: true,
                 origin: ChangeOrigin::Manual,
+                boot_event: None,
             },
         );
         let finished = rig.pump_talking_until(|_| {
@@ -420,6 +422,7 @@ fn a_switch_to_another_ghost_does_not_install_and_returns_the_archive() {
                 ghost: GhostSpec::Folder("B".to_owned()),
                 raise_event: false,
                 origin: ChangeOrigin::Manual,
+                boot_event: None,
             },
         );
         take(&mut rig.world, archive, None, reply);

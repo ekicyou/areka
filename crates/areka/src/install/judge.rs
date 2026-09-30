@@ -184,24 +184,57 @@ pub(crate) fn refuse_refs(accept: &str, manifest: &InstallManifest) -> Vec<Strin
     ]
 }
 
+/// 台本の引数が通ったときの 2 つの腕。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ScriptRequest {
+    /// `path` の腕: 手元の書庫の絶対パス。
+    Path(PathBuf),
+    /// `url` の腕: `http://`／`https://` で始まる URL（種別は `nar` か省略）。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1
+    Url(String),
+}
+
 /// 台本の引数を断った理由（受け口が記録の語を選ぶ）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ScriptRefusal {
-    NotPath { found: String },
+    NotPath {
+        found: String,
+    },
     Empty,
-    Relative { path: String },
+    Relative {
+        path: String,
+    },
+    /// URL が空か `http://`／`https://` で始まらない（要件 6.3）。
+    BadUrl {
+        found: String,
+    },
+    /// `url` の種別が `nar` でも省略でもない（`feed`・`homeurl`・`ical`・`ssf`・知らない語＝要件 6.2）。
+    UnsupportedKind {
+        found: String,
+    },
 }
 
-/// `\![execute,install,…]` の 2 番目以降の引数から書庫のパスを取り出す（要件 1.5〜1.7）。
+/// `\![execute,install,…]` の 2 番目以降の引数を `path` か `url` の腕へ分ける（要件 1.5〜1.7・6.1〜6.3）。
 ///
-/// パスより後ろの引数は読まない（残っていれば受け口が記録する）。
-pub(crate) fn script_request(arguments: &[&str]) -> Result<PathBuf, ScriptRefusal> {
+/// `path` の腕はパスより後ろ、`url` の腕は種別より後ろの引数を読まない（残っていれば受け口が
+/// 記録する）。`url` は種別を先に見る（種別と URL の両方が悪ければ種別の断り）。
+pub(crate) fn script_request(arguments: &[&str]) -> Result<ScriptRequest, ScriptRefusal> {
     match arguments {
         ["path"] | ["path", "", ..] => Err(ScriptRefusal::Empty),
         ["path", path, ..] if !Path::new(path).is_absolute() => Err(ScriptRefusal::Relative {
             path: (*path).to_owned(),
         }),
-        ["path", path, ..] => Ok(PathBuf::from(path)),
+        ["path", path, ..] => Ok(ScriptRequest::Path(PathBuf::from(path))),
+        ["url", _, kind, ..] if *kind != "nar" => Err(ScriptRefusal::UnsupportedKind {
+            found: (*kind).to_owned(),
+        }),
+        ["url", url, ..] if url.starts_with("http://") || url.starts_with("https://") => {
+            Ok(ScriptRequest::Url((*url).to_owned()))
+        }
+        ["url", rest @ ..] => Err(ScriptRefusal::BadUrl {
+            found: rest.first().copied().unwrap_or_default().to_owned(),
+        }),
         _ => Err(ScriptRefusal::NotPath {
             found: arguments.first().copied().unwrap_or_default().to_owned(),
         }),

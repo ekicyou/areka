@@ -465,14 +465,14 @@ fn ghost_with_balloon_never_appears() {
     }
 }
 
-// ---- script_request（要件 1.5・1.6・1.7・11.6） ----
+// ---- script_request（要件 1.5・1.6・1.7・6.1〜6.3・11.6） ----
 
 #[test]
 fn script_request_six_cases() {
     let absolute = r"C:\Users\u\Downloads\hana.nar";
     assert_eq!(
         script_request(&["path", absolute]),
-        Ok(PathBuf::from(absolute))
+        Ok(ScriptRequest::Path(PathBuf::from(absolute)))
     );
     assert_eq!(
         script_request(&["path", r"Downloads\hana.nar"]),
@@ -482,11 +482,12 @@ fn script_request_six_cases() {
     );
     assert_eq!(script_request(&["path", ""]), Err(ScriptRefusal::Empty));
     assert_eq!(script_request(&["path"]), Err(ScriptRefusal::Empty));
+    // `url` は `NotPath` でなく URL の腕で判定される（4.2・要件 6.1）。
     assert_eq!(
         script_request(&["url", "https://example.com/hana.nar"]),
-        Err(ScriptRefusal::NotPath {
-            found: "url".to_owned()
-        })
+        Ok(ScriptRequest::Url(
+            "https://example.com/hana.nar".to_owned()
+        ))
     );
     assert_eq!(
         script_request(&["file", absolute]),
@@ -507,6 +508,56 @@ fn script_request_ignores_arguments_after_the_path() {
     let absolute = r"C:\in\hana.nar";
     assert_eq!(
         script_request(&["path", absolute, "--extra"]),
-        Ok(Path::new(absolute).to_path_buf())
+        Ok(ScriptRequest::Path(Path::new(absolute).to_path_buf()))
     );
+}
+
+/// `url` の腕が通るのは種別が `nar` か省略のときだけ（要件 6.1）。
+#[test]
+fn script_request_url_passes_with_nar_or_no_kind() {
+    for url in [
+        "https://example.com/hana.nar",
+        "http://example.com/hana.nar",
+    ] {
+        let expected = Ok(ScriptRequest::Url(url.to_owned()));
+        assert_eq!(script_request(&["url", url]), expected, "省略: {url}");
+        assert_eq!(script_request(&["url", url, "nar"]), expected, "nar: {url}");
+    }
+}
+
+/// `nar` 以外の種別は URL の良し悪しに関わらず `UnsupportedKind`（要件 6.2）。
+#[test]
+fn script_request_url_refuses_other_kinds() {
+    for kind in ["feed", "homeurl", "ical", "ssf", "zip"] {
+        assert_eq!(
+            script_request(&["url", "https://example.com/x", kind]),
+            Err(ScriptRefusal::UnsupportedKind {
+                found: kind.to_owned()
+            }),
+            "{kind}"
+        );
+    }
+}
+
+/// 空・`http://`／`https://` で始まらない URL は `BadUrl`（要件 6.3）。
+#[test]
+fn script_request_url_refuses_empty_or_non_http() {
+    let cases: [(&[&str], &str); 4] = [
+        (&["url", ""], ""),
+        (&["url"], ""),
+        (
+            &["url", "ftp://example.com/hana.nar", "nar"],
+            "ftp://example.com/hana.nar",
+        ),
+        (&["url", r"C:\in\hana.nar"], r"C:\in\hana.nar"),
+    ];
+    for (arguments, found) in cases {
+        assert_eq!(
+            script_request(arguments),
+            Err(ScriptRefusal::BadUrl {
+                found: found.to_owned()
+            }),
+            "{arguments:?}"
+        );
+    }
 }

@@ -1,7 +1,7 @@
-//! 作業場所の作成・書き込み・片付け・他の走行の残骸（要件 4.1・4.7・4.8・5.5）。
+//! 作業場所の作成・書き込み・片付け・他の走行の残骸（要件 4.1・4.7・4.8・5.5・5.9・9.10）。
 
 use super::*;
-use crate::testkit::{hold, tree};
+use crate::testkit::{hold, junction, tree};
 use sample_ghost_kit::WorkDir;
 
 fn fixture() -> (WorkDir, PathBuf) {
@@ -136,6 +136,137 @@ fn folder_with_content_in_old_survives_repeated_creates_and_is_listed() {
         assert!(!empty_old.exists());
         assert_eq!(area.cleanup(), vec![stuck.clone()]);
     }
+}
+
+#[test]
+fn committed_run_with_held_file_in_old_is_not_residue_and_goes_once_released() {
+    let (_w, target) = fixture();
+    let area = WorkArea::create(&target).unwrap();
+    area.put("a.dll", b"new").unwrap();
+    let retired = area.retired("a.dll");
+    fs::create_dir_all(retired.parent().unwrap()).unwrap();
+    fs::write(&retired, b"old").unwrap();
+    let dir = area.dir().to_path_buf();
+    let held = hold(&retired);
+    // 成功した確定の後片付け: 消せなかった自分のフォルダは今日どおり挙げ、印を置く。
+    assert_eq!(area.cleanup(), vec![dir.clone()]);
+    assert!(dir.join(COMMITTED_MARK).is_file(), "印が置かれる");
+    // 開いたままの間は何周しても残骸に挙がらない（消しにかかって消せなくても黙る）。
+    for _ in 0..2 {
+        let area = WorkArea::create(&target).unwrap();
+        assert!(retired.exists(), "較正: 実際に消せていない");
+        assert!(area.cleanup().is_empty(), "印つきの走行は残骸でない");
+    }
+    drop(held);
+    let area = WorkArea::create(&target).unwrap();
+    assert!(!dir.exists(), "閉じた後の作業場所づくりで消える");
+    assert!(area.cleanup().is_empty());
+    assert!(!target.join(WORK_DIR).exists());
+}
+
+/// 印つきの走行フォルダ（`old/a.dll` と印）を置く。
+fn committed_run(target: &Path, name: &str) -> PathBuf {
+    let dir = other_run(target, name, "old/a.dll");
+    fs::write(dir.join(COMMITTED_MARK), b"").unwrap();
+    dir
+}
+
+#[test]
+fn purge_lists_held_run_keeps_its_mark_and_removes_it_once_released() {
+    let (_w, target) = fixture();
+    let dir = committed_run(&target, "999-0");
+    let held = hold(&dir.join("old/a.dll"));
+    for _ in 0..2 {
+        let purge = purge_committed(&target);
+        assert!(dir.join("old/a.dll").exists(), "較正: 実際に消せていない");
+        assert_eq!(
+            purge,
+            Purge {
+                removed: vec![],
+                held: vec![dir.clone()]
+            }
+        );
+        assert!(dir.join(COMMITTED_MARK).is_file(), "印は残る（置き直す）");
+    }
+    drop(held);
+    let purge = purge_committed(&target);
+    assert_eq!(
+        purge,
+        Purge {
+            removed: vec![dir.clone()],
+            held: vec![]
+        }
+    );
+    assert!(!dir.exists());
+    assert!(!target.join(WORK_DIR).exists(), "空になった棚も消える");
+}
+
+#[test]
+fn purge_leaves_unmarked_folders_and_other_entries_alone() {
+    let (_w, target) = fixture();
+    let marked = committed_run(&target, "999-0");
+    let kept = other_run(&target, "999-1", "old/orig.txt");
+    let fresh_only = other_run(&target, "999-2", "new/a.txt");
+    let stray = target.join(WORK_DIR).join("stray.txt");
+    fs::write(&stray, b"s").unwrap();
+    let before_kept = tree(&kept);
+    let purge = purge_committed(&target);
+    assert_eq!(
+        purge,
+        Purge {
+            removed: vec![marked.clone()],
+            held: vec![]
+        }
+    );
+    assert!(!marked.exists());
+    assert_eq!(tree(&kept), before_kept, "戻せなかった走行は触らない");
+    assert!(
+        fresh_only.join("new/a.txt").exists(),
+        "印の無い物は触らない"
+    );
+    assert!(stray.is_file());
+}
+
+#[test]
+fn purge_does_not_follow_a_junction_on_the_shelf() {
+    let (w, target) = fixture();
+    // 棚の外に印つきの走行フォルダと同じ形の物を置き、棚の下からジャンクションで指す。
+    let outside = committed_run(&w.path().join("outside"), "999-9");
+    fs::create_dir_all(target.join(WORK_DIR)).unwrap();
+    let link = target.join(WORK_DIR).join("999-0");
+    junction(&link, &outside);
+    let before = tree(&outside);
+    assert!(
+        link.join(COMMITTED_MARK).is_file(),
+        "較正: リンク越しに印が見える"
+    );
+    assert_eq!(purge_committed(&target), Purge::default());
+    assert_eq!(tree(&outside), before, "棚の外は触らない");
+    assert!(link.exists(), "ジャンクションも触らない");
+}
+
+#[test]
+fn purge_without_shelf_does_nothing() {
+    let (_w, target) = fixture();
+    assert_eq!(purge_committed(&target), Purge::default());
+    assert!(!target.join(WORK_DIR).exists(), "棚を作らない");
+    fs::write(target.join(WORK_DIR), b"not a shelf").unwrap();
+    assert_eq!(purge_committed(&target), Purge::default());
+}
+
+#[test]
+fn kept_run_gets_no_mark_and_stays_listed() {
+    let (_w, target) = fixture();
+    let area = WorkArea::create(&target).unwrap();
+    fs::create_dir_all(area.retired("sub")).unwrap();
+    fs::write(area.retired("sub/orig.txt"), b"o").unwrap();
+    let (kept, _) = area.keep();
+    assert!(
+        !kept.join(COMMITTED_MARK).exists(),
+        "戻せなかった走行は印を置かない"
+    );
+    let area = WorkArea::create(&target).unwrap();
+    assert_eq!(area.cleanup(), vec![kept]);
 }
 
 #[test]

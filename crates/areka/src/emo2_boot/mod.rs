@@ -32,6 +32,7 @@ mod readme_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
+mod update_cue;
 pub(crate) mod user_break_cue;
 pub mod zorder_cue;
 
@@ -102,6 +103,7 @@ use self::move_cue::{MoveCueSink, MoveDirective};
 use self::readme_cue::ReadmeCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
 use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use self::update_cue::UpdateCueSink;
 use self::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
 use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
 
@@ -473,6 +475,9 @@ pub fn wire_emo2_boot(
     // 起こし直しても作り直さないので、送出端は窓口から借りるだけ（窓口が無ければ受信端の無い
     // 送出端＝送った側が送れなかったことを記録する）。
     let install_sink = InstallCueSink::new(crate::install::desk::raw_sender(world));
+    // 更新の要求の送出端（areka-P0-network-update task 7.1）: インストールと同じ形で、更新の窓口
+    // （`update::desk`・プロセスに 1 つ）から借りるだけ。
+    let update_sink = UpdateCueSink::new(crate::update::desk::raw_sender(world));
     let BootAssets {
         shells,
         balloons,
@@ -575,6 +580,9 @@ pub fn wire_emo2_boot(
     // 第 9 要素の install_sink（areka-P0-ghost-install task 7.1）は `\![execute,install,…]` を
     // 「名前＋第 1 引数」で選別して消費し、絶対パスを出どころ「台本」の生の要求として窓口へ
     // 送出する（要件 1.5〜1.7）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
+    // 第 10 要素の update_sink（areka-P0-network-update task 7.1）は `\![updatebymyself]`・
+    // `\![update,…]`・`\![updateother,…]` を名前で選別して消費し、生の更新の要求を窓口へ送出する
+    // （要件 1.5〜1.8）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.clone(),
         default_encoding: DefaultEncoding::Ansi,
@@ -589,6 +597,7 @@ pub fn wire_emo2_boot(
             Box::new(no_user_break_sink),
             Box::new(change_sink),
             Box::new(install_sink),
+            Box::new(update_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir,

@@ -367,6 +367,7 @@ fn script_change_tag_switches_a_to_b_and_reaches_steady() {
                 true,
                 Some(vec![
                     Frame::Ghost,
+                    Frame::Update,
                     Frame::Install,
                     Frame::Readme,
                     Frame::Close

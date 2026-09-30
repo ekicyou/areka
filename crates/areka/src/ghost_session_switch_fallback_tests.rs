@@ -384,6 +384,7 @@ fn request_b(rig: &mut SwitchRig) -> SwitchVerdict {
             ghost: GhostSpec::Folder("B".to_owned()),
             raise_event: false,
             origin: ChangeOrigin::Manual,
+            boot_event: None,
         },
     )
 }

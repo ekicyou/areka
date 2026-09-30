@@ -23,11 +23,18 @@
 //! [`LOAD_DIR_ENV`]（load_dir）・[`SHIORI_NAME_ENV`]（shiori_name）。cwd
 //! （`current_dir`）は load_dir に設定する（伺か慣習・R3.3）。
 
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus};
 use std::time::Duration;
 
 use crate::error::SpawnError;
+
+/// `CreateProcess` の作成フラグ `CREATE_NO_WINDOW`（コンソールの実行体を窓なしで起こす）。
+///
+/// `windows` crate の同名定数は `Win32_System_Threading` の機能に在り、この crate は有効に
+/// していない。値 1 つのために機能を足さず、Win32 の定義値（0x08000000）をここに置く。
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// helper が親 HWND を fallback で読む環境変数名（cross-task 契約）。
 ///
@@ -266,10 +273,16 @@ pub fn spawn(
 /// 単体テストは `cmd.exe /c exit N` 等の決定的 stand-in を組んだ `Command` を
 /// 直接渡し、i686 helper exe の有無に依存せず spawn/poll/分類を検証する。
 ///
+/// 補助プロセスはコンソールの実行体なので、ここで [`CREATE_NO_WINDOW`] を付けて起こす
+/// （GUI の `areka.exe` から窓の指定なしで起こすと新しいコンソール窓が開き、利用者が閉じると
+/// 補助プロセスが殺される）。`HelperHandle` に包む子の起こし方の決まり（job への割り当てと同じ
+/// 置き場）なので、`arg`／`env`／`cwd` の契約を組む [`spawn`] ではなくこの seam に置く。
+/// 標準入出力の扱いは変えない（受け取った `Command` の指定のまま）。
+///
 /// # Errors
 /// `Command::spawn` の I/O 失敗を [`SpawnError`] として返す。
 pub fn spawn_command(mut command: Command) -> Result<HelperHandle, SpawnError> {
-    let child = command.spawn()?;
+    let child = command.creation_flags(CREATE_NO_WINDOW).spawn()?;
     // 孤児化防止: spawn 直後に KILL_ON_JOB_CLOSE 付き job へ割り当てる（失敗は縮退＝None）。
     // これにより、親プロセスが UNLOAD を送らずに終了しても helper が OS 機構で kill される。
     let job = crate::job::attach_kill_on_close_job(&child);
@@ -316,6 +329,10 @@ pub fn poll_exit_kind(handle: &mut HelperHandle) -> Option<ExitKind> {
         Err(_) => None,
     }
 }
+
+#[cfg(test)]
+#[path = "process_host_console_tests.rs"]
+mod console_tests;
 
 #[cfg(test)]
 mod tests {

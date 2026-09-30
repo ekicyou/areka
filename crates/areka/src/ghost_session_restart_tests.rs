@@ -385,6 +385,7 @@ fn boots_twice_in_one_process_without_double_registration() {
             Some(vec![
                 Frame::Ghost,
                 Frame::Shell,
+                Frame::Update,
                 Frame::Install,
                 Frame::Readme,
                 Frame::Close
@@ -393,6 +394,7 @@ fn boots_twice_in_one_process_without_double_registration() {
             true,
             Some(vec![
                 Frame::Ghost,
+                Frame::Update,
                 Frame::Install,
                 Frame::Readme,
                 Frame::Close

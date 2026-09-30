@@ -6415,9 +6415,9 @@ Reference3（反応しなかった場合に本体がこの後実行予定の処�
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnDownloadBegin:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -6425,25 +6425,29 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOther.OnDownloadBegin:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、差分のファイルを 1 つ取り寄せる前に 1
+回ずつ送る。Reference0＝ファイル名・Reference1＝番号（0 から・SHIORI のリソース useorigin1 が 1 なら
+1 から）・Reference2＝ファイルの総数から 1 引いた数（同じく読み替える）・Reference3＝種別（ghost／
+shell／balloon）・Reference4＝理由（メニュー manual・台本 script）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_DOWNLOAD_BEGIN（上の行に正典 URL）で、Reference の
+組み立ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせの
+中で送る。
 無いと失うもの: ファイルの取り寄せが始まったことをゴーストが知らず、待ち時間に添える言葉が出ない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareBegin:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -6451,25 +6455,31 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareBegin:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、取り寄せたファイル 1 つの照合の結果が
+出たとき、結果の知らせ（OnUpdate.OnMD5CompareComplete か OnUpdate.OnMD5CompareFailure）の直前に 1 回
+送る。エンジンは照合の結果だけを 1 回知らせるので、始まりと結果の 2 件を続けて送る（
+doc/COMPAT_ARCHITECTURE.md §8 に登記）。Reference0＝ファイル名・Reference1＝正しい MD5・Reference2
+＝落としたファイルの MD5・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メニュー
+manual・台本 script）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_MD5_BEGIN（上の行に正典 URL）で、Reference の組み立
+ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせの中で送
+る。
 無いと失うもの: 取り寄せたものの照合が始まったことをゴーストが知れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareComplete:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -6477,50 +6487,61 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareComplete:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、取り寄せたファイル 1 つの MD5 が定義フ
+ァイルの値と一致したとき、OnUpdate.OnMD5CompareBegin の直後に 1 回送る。エンジンは照合の結果だけを 1
+回知らせるので、始まりと結果の 2 件を続けて送る（doc/COMPAT_ARCHITECTURE.md §8 に登記）。Reference0
+＝ファイル名・Reference1＝正しい MD5・Reference2＝落としたファイルの MD5・Reference3＝種別（ghost／
+shell／balloon）・Reference4＝理由（メニュー manual・台本 script）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_MD5_COMPLETE（上の行に正典 URL）で、Reference の組
+み立ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせの中
+で送る。
 無いと失うもの: 取り寄せたものが正しかったことをゴーストが知れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdate.OnMD5CompareFailure:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareFailure:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、取り寄せたファイル 1 つの MD5 が定義フ
+ァイルの値と一致しなかったとき、OnUpdate.OnMD5CompareBegin の直後に 1 回送る。エンジンは照合の結果だ
+けを 1 回知らせるので、始まりと結果の 2 件を続けて送る（doc/COMPAT_ARCHITECTURE.md §8 に登記）。
+Reference0＝ファイル名・Reference1＝正しい MD5・Reference2＝落としたファイルの MD5・Reference3＝種別
+（ghost／shell／balloon）・Reference4＝理由（メニュー manual・台本 script）。この対象はその後
+OnUpdateFailure（Reference0＝md5 miss）で締まり、ファイルは 1 つも入れ替わらない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_MD5_FAILURE（上の行に正典 URL）で、Reference の組み
+立ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせの中で
+送る。
 無いと失うもの: 取り寄せたものが壊れていたことをゴーストが知らず、やり直しを促せない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateBegin:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -6528,18 +6549,23 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateReady:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、対象 1 つの更新を始めるとき、エンジン
+を回す前に 1 回送る。Reference0＝ゴースト名・Reference1＝ゴーストのフォルダの絶対パス・Reference2＝
+空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メニュー manual・台本 script）。更
+新先は SHIORI のリソース homeurl → descript.txt の homeurl の順に解き、どちらも無ければ送らずに飛ば
+す（総括にも載せない）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。対象の始まりは info のログ（update_target_begin・種別・名前・更新先）、
+更新先が無くて飛ばしたときは warn のログ（update_target_skipped・reason＝no_homeurl）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_BEGIN（上の行に正典 URL）で、手続き（procedure.rs
+の run_target）が対象ごとに送る。
 無いと失うもの: 更新が始まったことをゴーストが知らず、始まりの一言が出ない。
 """
 
@@ -6566,6 +6592,12 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 小群: 更新 26 件のうち、更新するものがあるかどうかを調べるだけの点検の成否を伝える
 2 件の 1 つ。
+送らない理由（areka-P0-network-update・2026-09-30）: 正典ではこの系は更新オプション checkonly を付け
+たときだけ発生する。areka は更新オプションを受けない（\\![updatebymyself]・\\![update,…]・
+\\![updateother,…] にオプションがあれば warn のログ（update_cue_refused）を 1 行残して要求ごと断る）
+ので送る場面が無い。checkonly は差分を決めた時点で止める必要があり、更新のエンジン（areka-update の
+run）に途中で止める口が無いため α 後へ回した。差分 0 の普通の更新は OnUpdateComplete（Reference0＝
+none）で締める。
 無いと失うもの: 更新するものがあるかどうかを調べ終えたことをゴーストが知れない。
 """
 
@@ -6590,6 +6622,12 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 小群: 更新 26 件のうち、更新するものがあるかどうかを調べるだけの点検の成否を伝える
 2 件の 1 つ。
+送らない理由（areka-P0-network-update・2026-09-30）: 正典ではこの系は更新オプション checkonly を付け
+たときだけ発生する。areka は更新オプションを受けない（\\![updatebymyself]・\\![update,…]・
+\\![updateother,…] にオプションがあれば warn のログ（update_cue_refused）を 1 行残して要求ごと断る）
+ので送る場面が無い。checkonly は差分を決めた時点で止める必要があり、更新のエンジン（areka-update の
+run）に途中で止める口が無いため α 後へ回した。差分 0 の普通の更新は OnUpdateComplete（Reference0＝
+none）で締める。
 無いと失うもの: 更新の有無を調べられなかったことをゴーストが知れない。
 """
 
@@ -6616,6 +6654,12 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 小群: 更新 26 件のうち、一度の更新または更新チェックで起きたことをまとめて伝える結果通知の
 5 件の 1 つ。
+送らない理由（areka-P0-network-update・2026-09-30）: 正典ではこの系は更新オプション checkonly を付け
+たときだけ発生する。areka は更新オプションを受けない（\\![updatebymyself]・\\![update,…]・
+\\![updateother,…] にオプションがあれば warn のログ（update_cue_refused）を 1 行残して要求ごと断る）
+ので送る場面が無い。checkonly は差分を決めた時点で止める必要があり、更新のエンジン（areka-update の
+run）に途中で止める口が無いため α 後へ回した。差分 0 の普通の更新は OnUpdateComplete（Reference0＝
+none）で締める。
 無いと失うもの: 更新できるものがあるかどうかの一覧がゴーストへ渡らず、勧めることができない。
 """
 
@@ -6642,13 +6686,19 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 小群: 更新 26 件のうち、一度の更新または更新チェックで起きたことをまとめて伝える結果通知の
 5 件の 1 つ。
+送らない理由（areka-P0-network-update・2026-09-30）: 正典ではこの系は更新オプション checkonly を付け
+たときだけ発生する。areka は更新オプションを受けない（\\![updatebymyself]・\\![update,…]・
+\\![updateother,…] にオプションがあれば warn のログ（update_cue_refused）を 1 行残して要求ごと断る）
+ので送る場面が無い。checkonly は差分を決めた時点で止める必要があり、更新のエンジン（areka-update の
+run）に途中で止める口が無いため α 後へ回した。差分 0 の普通の更新は OnUpdateComplete（Reference0＝
+none）で締める。
 無いと失うもの: 更新できるものがあるかどうかを名前まで含めて勧めることができない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateComplete:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -6656,25 +6706,38 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOtherComplete:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、対象 1 つの更新が成功で終わったときの
+締めとして 1 回送る。Reference0＝changed（入れ替えた）か none（差分 0）・Reference1＝入れ替えたファ
+イルのカンマ区切り・Reference2＝空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メ
+ニュー manual・台本 script）。その場では送らず、要求の対象を全部終えた後の後送りの列（この締め →
+総括）の先頭に置く。changed が 1 つでもあれば、今の台詞が終わってから同じゴーストを知らせなしの自分
+自身への切替で読み直し、読み直した後の新しいゴーストの起動の知らせとして OnGhostChanged・OnBoot の
+代わりに送る（返事が無くても OnBoot へ続けない）。読み直さないときは要求の最後に今のゴーストへ送る。
+読み直しの切替が失敗・中止したときは送らない（2026-09-30 開発者確定・doc/COMPAT_ARCHITECTURE.md §8
+に登記）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。対象の終わりは info のログ（update_target_done）、消せなかった物や片付
+けられなかった作業場所が残ったときは warn のログ（update_leftover）を残す。読み直した後の起動の知ら
+せは kanade の info のログ（boot_update_root）、後送りの列を送った・捨てたときは info のログ（
+update_tail_sent）・warn のログ（update_tail_dropped）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+読み直さないときは汎用の通知の入口（KanadeMsg::RaiseEvent）で送り、読み直したときは起動の由来
+BootOrigin::Updated（crates/areka-kanade/src/change.rs）の根として送る。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_COMPLETE（上の行に正典 URL）で、Reference の組み立
+ては同じファイルの complete_refs／failure_refs で、手続き（procedure.rs の run_target・run_order）が
+対象 1 つにつき締めの知らせを 1 回だけ組む。
 無いと失うもの: 更新が終わったことをゴーストが知らず、新しくなった自分について何も言えない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateFailure:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -6682,256 +6745,313 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOtherFailure:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、対象 1 つの更新が失敗で終わったときの
+締めとして 1 回送る。Reference0＝失敗理由（正典の語 404・状態番号・timeout・md5 miss・fileio・
+paramerror と、正典に語の無い輸送の失敗の areka の語 dns・connect・tls・toolarge・http。後者は
+doc/COMPAT_ARCHITECTURE.md §8 に登記）・Reference1＝原因のファイル（分かるときだけ）・Reference2＝
+空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メニュー manual・台本 script）。失
+敗した対象のフォルダは呼ぶ前のまま（エンジンの全か無かの保証）。ほかに、更新が走っている間にもう 1
+度頼まれたときも Reference0＝executing で 1 回送り、総括は送らない（二重起動の断り・どの対象の種別で
+もこの名・§8 に登記）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。失敗は error のログ（update_failed・段・種類・ファイル・戻せたか・作業
+場所）、取得の部品を用意できないときは error のログ（update_fetch_unavailable）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_FAILURE（上の行に正典 URL）で、Reference の組み立て
+は同じファイルの complete_refs／failure_refs で、手続き（procedure.rs の run_target）が対象 1 つにつ
+き締めの知らせを 1 回だけ送る。
 無いと失うもの: 更新に失敗したことをゴーストが知らず、失敗に寄り添う一言が出ない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnDownloadBegin:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareBegin:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
-伝える 8 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。シェルかバルーンの更新（今のシェル・今のバルーンと、
+\\![updateother] で名前を引いた物）で、差分のファイルを 1 つ取り寄せる前に 1 回ずつ送る。Reference0
+＝ファイル名・Reference1＝番号（0 から・ゴーストの SHIORI のリソース useorigin1 が 1 なら 1 から）・
+Reference2＝ファイルの総数から 1 引いた数（同じく読み替える）・Reference3＝種別（ghost／shell／
+balloon）・Reference4＝理由（メニュー manual・台本 script）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_OTHER_DOWNLOAD_BEGIN（上の行に正典 URL）で、
+Reference の組み立ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進
+捗の知らせの中で送る。
 無いと失うもの: シェルや吹き出しの取り寄せが始まったことをゴーストが知れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareBegin:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareComplete:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
-伝える 8 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。シェルかバルーンの更新（今のシェル・今のバルーンと、
+\\![updateother] で名前を引いた物）で、取り寄せたファイル 1 つの照合の結果が出たとき、結果の知らせ（
+OnUpdateOther.OnMD5CompareComplete か OnUpdateOther.OnMD5CompareFailure）の直前に 1 回送る。エンジン
+は照合の結果だけを 1 回知らせるので、始まりと結果の 2 件を続けて送る（doc/COMPAT_ARCHITECTURE.md §8
+に登記）。Reference0＝ファイル名・Reference1＝正しい MD5・Reference2＝落としたファイルの MD5・
+Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メニュー manual・台本 script）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_OTHER_MD5_BEGIN（上の行に正典 URL）で、Reference の
+組み立ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせの
+中で送る。
 無いと失うもの: シェルや吹き出しの照合が始まったことをゴーストが知れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareComplete:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareFailure:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
-伝える 8 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。シェルかバルーンの更新（今のシェル・今のバルーンと、
+\\![updateother] で名前を引いた物）で、取り寄せたファイル 1 つの MD5 が定義ファイルの値と一致したと
+き、OnUpdateOther.OnMD5CompareBegin の直後に 1 回送る。エンジンは照合の結果だけを 1 回知らせるので、
+始まりと結果の 2 件を続けて送る（doc/COMPAT_ARCHITECTURE.md §8 に登記）。Reference0＝ファイル名・
+Reference1＝正しい MD5・Reference2＝落としたファイルの MD5・Reference3＝種別（ghost／shell／balloon）・
+Reference4＝理由（メニュー manual・台本 script）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_OTHER_MD5_COMPLETE（上の行に正典 URL）で、Reference
+の組み立ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせ
+の中で送る。
 無いと失うもの: シェルや吹き出しの取り寄せが正しかったことをゴーストが知れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOther.OnMD5CompareFailure:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
-伝える 8 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。シェルかバルーンの更新（今のシェル・今のバルーンと、
+\\![updateother] で名前を引いた物）で、取り寄せたファイル 1 つの MD5 が定義ファイルの値と一致しなか
+ったとき、OnUpdateOther.OnMD5CompareBegin の直後に 1 回送る。エンジンは照合の結果だけを 1 回知らせる
+ので、始まりと結果の 2 件を続けて送る（doc/COMPAT_ARCHITECTURE.md §8 に登記）。Reference0＝ファイル
+名・Reference1＝正しい MD5・Reference2＝落としたファイルの MD5・Reference3＝種別（ghost／shell／
+balloon）・Reference4＝理由（メニュー manual・台本 script）。この対象はその後 OnUpdateOtherFailure（
+Reference0＝md5 miss）で締まり、ファイルは 1 つも入れ替わらない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_OTHER_MD5_FAILURE（上の行に正典 URL）で、Reference
+の組み立ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせ
+の中で送る。
 無いと失うもの: シェルや吹き出しの取り寄せが壊れていたことをゴーストが知れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherBegin:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOtherReady:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
-伝える 8 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。シェルかバルーンの更新（今のシェル・今のバルーンと、
+\\![updateother] で名前を引いた物）で、対象 1 つの更新を始めるとき、エンジンを回す前に 1 回送る。
+Reference0＝対象の descript.txt の name（正典は「ゴースト名。」と書くが OnUpdateResultEx が対象の名
+前を持つのに揃えた。doc/COMPAT_ARCHITECTURE.md §8 に登記）・Reference1＝対象のフォルダの絶対パス・
+Reference2＝空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メニュー manual・台本
+script）。更新先は対象の descript.txt の homeurl で、無ければ送らずに飛ばす（総括にも載せない）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。対象の始まりは info のログ（update_target_begin・種別・名前・更新先）、
+更新先が無くて飛ばしたときは warn のログ（update_target_skipped・reason＝no_homeurl）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_OTHER_BEGIN（上の行に正典 URL）で、手続き（
+procedure.rs の run_target）が対象ごとに送る。
 無いと失うもの: シェルや吹き出しの更新が始まったことをゴーストが知らず、始まりの一言が出ない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherComplete:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOtherFailure:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
-伝える 8 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。シェルかバルーンの更新（今のシェル・今のバルーンと、
+\\![updateother] で名前を引いた物）で、対象 1 つの更新が成功で終わったときの締めとして 1 回送る。
+Reference0＝changed（入れ替えた）か none（差分 0）・Reference1＝入れ替えたファイルのカンマ区切り・
+Reference2＝空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メニュー manual・台本
+script）。今日どおりその場で今のゴーストへ送る。changed が 1 つでもあれば、要求の対象を全部終えた後
+に、今の台詞が終わってから同じゴーストを読み直す（今のシェル・今のバルーンも起動時と同じ解き方で読み
+直される）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。対象の終わりは info のログ（update_target_done）、消せなかった物や片付
+けられなかった作業場所が残ったときは warn のログ（update_leftover）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_OTHER_COMPLETE（上の行に正典 URL）で、Reference の
+組み立ては同じファイルの complete_refs／failure_refs で、手続き（procedure.rs の run_target）が対象
+1 つにつき締めの知らせを 1 回だけ送る。
 無いと失うもの: シェルや吹き出しが新しくなったことをゴーストが知らず、変わった見た目に触れられない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherFailure:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOther.OnDownloadBegin:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
-伝える 8 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。シェルかバルーンの更新（今のシェル・今のバルーンと、
+\\![updateother] で名前を引いた物）で、対象 1 つの更新が失敗で終わったときの締めとして 1 回送る。
+Reference0＝失敗理由（正典の語 404・状態番号・timeout・md5 miss・fileio・paramerror と、正典に語の無
+い輸送の失敗の areka の語 dns・connect・tls・toolarge・http。後者は doc/COMPAT_ARCHITECTURE.md §8
+に登記）・Reference1＝原因のファイル（分かるときだけ）・Reference2＝空・Reference3＝種別（ghost／
+shell／balloon）・Reference4＝理由（メニュー manual・台本 script）。失敗した対象のフォルダは呼ぶ前の
+まま（エンジンの全か無かの保証）。二重起動の断りは種別が shell／balloon でも OnUpdateFailure（
+executing）で送り、この名では送らない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。失敗は error のログ（update_failed・段・種類・ファイル・戻せたか・作業
+場所）、取得の部品を用意できないときは error のログ（update_fetch_unavailable）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_OTHER_FAILURE（上の行に正典 URL）で、Reference の組
+み立ては同じファイルの complete_refs／failure_refs で、手続き（procedure.rs の run_target）が対象 1
+つにつき締めの知らせを 1 回だけ送る。
 無いと失うもの: シェルや吹き出しの更新に失敗したことをゴーストが知れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateOtherReady:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOtherComplete:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト以外（シェル・バルーン・プラグイン等）を新しくする流れを
-伝える 8 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。シェルかバルーンの更新（今のシェル・今のバルーンと、
+\\![updateother] で名前を引いた物）で、更新先の定義ファイル（updates2.dau → updates.txt）と手元を比
+べて差分が 1 件以上と決まったときに 1 回送る。Reference0＝入れ替えるファイルの総数から 1 引いた数（
+SHIORI のリソース useorigin1 が 1 なら件数そのもの）・Reference1＝入れ替えるファイルのカンマ区切り・
+Reference2＝空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メニュー manual・台本
+script）。差分が 0 のときは送らず、締めを OnUpdateOtherComplete（Reference0＝none）にする。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_OTHER_READY（上の行に正典 URL）で、Reference の組み
+立ては同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせの中で
+送る。
 無いと失うもの: シェルや吹き出しについて取り寄せるものが決まったことをゴーストが知れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateProcessExec:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.6.23"
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateBegin:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」を選んだときだけ、標準の手続きの前に Reference0＝manual で 1 回送る。ゴーストが台本で応え
+ればそこで標準の手続きを行わない（以後の更新のイベントも総括も 0 件）。返事が無ければ標準の手続き（
+今のゴースト・シェル・バルーンの順）へ進む。台本 \\![updatebymyself]・\\![update,…]・
+\\![updateother,…] の入口からは送らない（正典の Reference0 に script が無く、台本は自分で手続きを差
+し替えられるため）。答えを待つ間に届いた 2 件目の要求は 1 件だけ預かり、標準の手続きが始まれば
+OnUpdateFailure（executing）で断る。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。応えの有無は info のログ（update_process_exec・answered）に残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_PROCESS_EXEC（上の行に正典 URL）で、手続き（
+procedure.rs の run_order）が理由 manual の要求でだけ送る。
 無いと失うもの: 更新の始め方をゴースト自身が受け持つ道が閉じ、いつも同じ既定の手順になる。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateReady:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
@@ -6939,70 +7059,89 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateOtherReady:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…]・\\![updateother,…] の、どの入口からでも同じ 1
+本の手続き（crates/areka/src/update/procedure.rs の run_order）が背景のスレッドで対象を並んだ順に扱
+い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、更新先の定義ファイル（updates2.dau →
+updates.txt）と手元を比べて差分が 1 件以上と決まったときに 1 回送る。Reference0＝入れ替えるファイル
+の総数から 1 引いた数（SHIORI のリソース useorigin1 が 1 なら件数そのもの）・Reference1＝入れ替える
+ファイルのカンマ区切り・Reference2＝空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由
+（メニュー manual・台本 script）。差分が 0 のときは送らず、締めを OnUpdateComplete（Reference0＝none）
+にする。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。進捗の知らせは debug のログ（update_progress）にも残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+crates/areka/src/update/refs.rs の定数 ON_UPDATE_READY（上の行に正典 URL）で、Reference の組み立ては
+同じファイルの progress_events で、手続きがエンジン（areka-update の run）の進捗の知らせの中で送る。
 無いと失うもの: 取り寄せるものが決まったことをゴーストが知らず、これから何が新しくなるかを語れない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateResult:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateResultEx:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、一度の更新または更新チェックで起きたことをまとめて伝える結果通知の
-5 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「ネットワ
+ーク更新」と台本 \\![updatebymyself]・\\![update,…] の要求の終わりに 1 回送る総括。実行した順に対象
+1 つにつき Reference 1 つで、種別・OK／NG・件数（成功。none なら 0）か失敗理由・原因のファイル（分か
+るときだけ）を byte 値 1 で区切って並べる。更新先が無くて飛ばした対象は載せず、全部飛ばせば送らない。
+後送りの列（ゴーストの成功の OnUpdateComplete → この総括）の最後に置く。changed が 1 つでもあれば、
+今の台詞が終わってから同じゴーストを知らせなしの自分自身への切替で読み直し、読み直しの切替が終わった
+時点で新しいゴーストへ送る（ゴーストが成功しなかったときはこの総括が起動の知らせになる）。読み直さな
+いとき（全部 none か失敗・コマンドライン引数でゴーストのフォルダを指して始めた）は要求の最後に今のゴ
+ーストへ送り、読み直しの切替が失敗・中止したときは送らない。既知の制限: 起動の知らせの
+OnUpdateComplete の台詞の終わりを待たないので、両方に応えるゴーストでは台詞が置き換わる（2026-09-30
+開発者確定・doc/COMPAT_ARCHITECTURE.md §8 に登記）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。総括を列に置いたときは info のログ（update_summary・Reference の列）、
+読み直しを頼んだときは info のログ（update_reload_requested）、列を送った・捨てたときは info のログ
+（update_tail_sent）・warn のログ（update_tail_dropped）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）か、起動の知らせのときは起動の由来
+BootOrigin::Updated の根。名前の定義は crates/areka/src/update/refs.rs の定数 ON_UPDATE_RESULT（上
+の行に正典 URL）で、Reference の組み立ては同じファイルの summary_refs で、手続き（procedure.rs の
+run_order）が要求 1 件につき 1 回組み、列を送るのは手続きか窓口（desk.rs の send_tail）。
 無いと失うもの: 一度の更新で何が新しくなったかの一覧がゴーストへ渡らず、まとめて語ることができない。
 """
 
 [entry."ukadoc:list_shiori_event:OnUpdateResultEx:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "same-feature", to = "ukadoc:list_shiori_event:OnUpdateCheckResult:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-小群: 更新 26 件のうち、一度の更新または更新チェックで起きたことをまとめて伝える結果通知の
-5 件の 1 つ。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。台本 \\![updateother,--shell=名
+前,--balloon=名前] の要求の終わりに 1 回送る総括。実行した順に対象 1 つにつき Reference 1 つで、対象
+の名前・種別・OK／NG・件数（成功。none なら 0）か失敗理由・原因のファイル（分かるときだけ）を byte
+値 1 で区切って並べる。名前を引けなかった対象・更新先が無くて飛ばした対象は載せず、全部飛ばせば送ら
+ない。今表示中でないシェル・バルーンを更新しても読み直しの対象にはならず、中身は次に選んだときに効く。
+送る時機は OnUpdateResult と同じ（後送りの列の最後・changed が 1 つでもあれば読み直した後の新しいゴ
+ーストへ・読み直さなければ要求の最後に今のゴーストへ・読み直しの切替が失敗・中止したら送らない・
+2026-09-30 開発者確定・doc/COMPAT_ARCHITECTURE.md §8 に登記）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
+update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
+ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
+update_event_failed）を残す。総括を列に置いたときは info のログ（update_summary・Reference の列）、
+列を送った・捨てたときは info のログ（update_tail_sent）・warn のログ（update_tail_dropped）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）か、起動の知らせのときは起動の由来
+BootOrigin::Updated の根。名前の定義は crates/areka/src/update/refs.rs の定数 ON_UPDATE_RESULT_EX（
+上の行に正典 URL）で、Reference の組み立ては同じファイルの summary_refs で、手続き（procedure.rs の
+run_order）が要求 1 件につき 1 回組む。
 無いと失うもの: 一度の更新で何が新しくなったかを名前まで含めて語ることができない。
 """
 
@@ -7027,6 +7166,9 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 absent のまま変わらない。
 小群: 更新 26 件のうち、一度の更新または更新チェックで起きたことをまとめて伝える結果通知の
 5 件の 1 つ。
+送らない理由（areka-P0-network-update・2026-09-30）: 正典ではゴーストエクスプローラから更新したとき
+に発生する。areka にゴーストエクスプローラは無いので送る場面が無い。メニューと台本からの更新の総括は
+OnUpdateResult／OnUpdateResultEx で送る。
 無いと失うもの: ゴースト管理の画面から行った更新の結果がゴーストへ渡らず、そこでは何も語れない。
 """
 
@@ -7052,6 +7194,9 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+送らない理由（areka-P0-network-update・2026-09-30）: 更新定義ファイルを作る側（
+\\![execute,createupdatedata]）のイベントで、areka は作る側を持たない（α 後・開発者機能の束）。
+areka-P0-network-update が扱うのは取り寄せて入れ替える側だけ。
 無いと失うもの: 更新データを作り終えたことをゴーストが知れず、作者の手元での節目に触れられない。
 """
 
@@ -7077,6 +7222,9 @@ events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event �
 1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
 absent のまま変わらない。
 小群: 更新 26 件のうち、ゴースト本体そのものの更新に関わる 11 件の 1 つ。
+送らない理由（areka-P0-network-update・2026-09-30）: 更新定義ファイルを作る側（
+\\![execute,createupdatedata]）のイベントで、areka は作る側を持たない（α 後・開発者機能の束）。
+areka-P0-network-update が扱うのは取り寄せて入れ替える側だけ。
 無いと失うもの: 更新データを作り始めたことをゴーストが知れず、作者の手元での節目に触れられない。
 """
 
@@ -12916,25 +13064,30 @@ areka の素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:homeurl:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = [
   { kind = "configures", to = "ukadoc:descript_ghost:homeurl_2cURL:1" },
 ]
 note = """
-壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
-した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
-起きていないようにしか見えない。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
-内容: ネットワーク更新の取り出し先。descript.txt にも書けるので、どちらが優先されるかは
-descript.txt の側の説明が持つ。
+壊れ方: 該当なし。areka はこのリソースを実際に引いている。更新の手続きが標準の更新を始めるときに
+useorigin1 と 1 回の照会でまとめて引き、今のゴースト本体の更新先に使う（空・値なし・失敗なら
+ghost/master/descript.txt の homeurl へ倒れ、どちらも無ければその対象を飛ばす）。シェル・バルーンの
+更新先には使わない（それぞれの descript.txt の homeurl）。ほかに、ゴーストが定常に達するたびにこの名
+前を 1 回引いて写しを持ち、右クリックのメニューの「ネットワーク更新」を選べるか（3 つのどれかに更新
+先が在るか）の判定に使う。
+ログ: 引く直前に trace のログ（shiori_request）が 1 行出る。手続きは照会の結果を info のログ（
+update_resources・homeurl と useorigin1）に、失敗は warn のログ（update_resource_failed）に残す。定
+常到達の照会は写したとき debug のログ（update_homeurl_copied）、値が無いとき debug のログ（
+update_homeurl_absent）、照会が失敗したとき warn のログ（update_homeurl_query_failed）を残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS（上の行に正典 URL）。
+引くのは crates/areka/src/update/worker.rs の本物の口（resources）と crates/areka/src/update/desk.rs
+の on_steady。
+内容: ネットワーク更新の取り出し先。descript.txt にも書けるので、どちらが優先されるかは descript.txt
+の側の説明が持つ。
 無いと失うもの: 更新の取り寄せ先が渡らず、ゴースト自身を新しくする道が開かない。
 """
 
@@ -13692,6 +13845,10 @@ note = """
 載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
 内容: 他のゴーストやシェル・バルーンをまとめて更新するときに、更新の取り出し先を差し替える。
 差し替えが要らないときは値なしで返す。
+送らない理由（areka-P0-network-update・2026-09-30）: 照会に Reference0〜4 が要るが、kanade のリソー
+スの照会（KanadeMsg::ResourceQuery）に Reference の欄が無い（足すと kanade の msg.rs・actor.rs・
+schedule/mod.rs に手が入る）。SSP 2.5.33 の拡張で、検体の辞書に読み手が無い。\\![updateother,…] と
+シェル・バルーンの更新は、それぞれの descript.txt の homeurl を差し替えずに使う。α 後。
 無いと失うもの: シェルや吹き出しの更新先をゴーストが差し替えられず、置き場所を移した配布物が取り寄せ
 られない。
 """
@@ -15027,22 +15184,25 @@ note = """
 """
 
 [entry."ukadoc:list_shiori_resource:updatebutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = "areka-P0-network-update"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
-（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
-（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
-メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
-この名前を引く相手は 0 件である。
-引受先: areka-P0-network-update。ネットワーク更新を置く仕様で、その枠を登記した日に実装済みへ
-改める。
-壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
-ログ: 1 行も出ない。引かれない名前は記録にも現れない。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「ネットワーク更新」の
+項目名に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
+「ネットワーク更新」枠へ項目を登記するのは areka-P0-network-update（crates/areka/src/menu/update_frame.rs
+の register を、ゴーストを起こすたびに crates/areka/src/ghost_session.rs の boot_wired が呼ぶ）。
+項目を選ぶと今のゴースト・シェル・バルーンを対象に更新を始める。3 つのどれにも更新先が無いときと、
+更新が走っている間は選べない（灰色）。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「ネットワーク更新」に落ち、メニューはそのまま
+出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由
+（send_failed／timeout／dropped）を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「ネットワーク更新の名称」とされ、その項目
 に出る言葉である。
 無いと失うもの: 右クリックのメニューの「ネットワーク更新」の項目が、そのゴーストらしい言い回しになら
@@ -15115,21 +15275,21 @@ note = """
 """
 
 [entry."ukadoc:list_shiori_resource:useorigin1:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-network-update"
 priority = "B1"
 values = ["更新"]
 links = []
 note = """
-壊れ方: 黙って壊れる。名前は語彙として登記してあるが areka は引きに行かないので、この値を前提に
-した動きはその場面で何も起きない。既定の見え方に置き換わるわけでもないため、利用者からは何も
-起きていないようにしか見えない。
-ログ: 1 行も出ない。語彙の表は名前を並べてあるだけで、実行時にそれを読んで照会を組み立てる場所が
-無い（この表を読んでいるのはテストだけである）。引ける名前を決める表は username 1 つしか載せて
-いないので、引かれなかったことを書き留める判定にも届かない。
-根拠の場所: crates/areka-sylphya/src/vocab/shiori_resource.rs の SHIORI_RESOURCE_IDS に名前は
-載っているが、crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS には無い。
+壊れ方: 該当なし。areka はこのリソースを実際に引いている。更新の手続きが標準の更新を始めるときに
+homeurl と 1 回の照会でまとめて引き、値が 1 なら OnUpdateReady の Reference0 と
+OnUpdate.OnDownloadBegin の Reference1・Reference2（OnUpdateOther* も同じ）を 1 から数える。0・それ
+以外・値なし・失敗なら 0 から数える。
+ログ: 引く直前に trace のログ（shiori_request）が 1 行出る。手続きは照会の結果を info のログ（
+update_resources・homeurl と useorigin1）に、失敗は warn のログ（update_resource_failed）に残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS（上の行に正典 URL）。
+読み替えは crates/areka/src/update/refs.rs の Numbering::from_useorigin1。
 内容: ネットワーク更新でファイルの数を 1 から数えるか 0 から数えるか。
 無いと失うもの: 更新のファイル番号の始まりが渡らず、取り寄せる順序が正典どおりにならない。
 """

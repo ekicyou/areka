@@ -128,6 +128,9 @@ mod boot_resolve;
 /// `.nar` を入れる手続き（areka-P0-ghost-install）。
 mod install;
 
+/// ゴースト・シェル・バルーンのネットワーク更新（areka-P0-network-update）。
+mod update;
+
 /// 終了の後始末が、背景で書いている仕事の終わりを上限つきで待つ口（areka-P0-ghost-install 要件 8）。
 mod exit_wait;
 

@@ -110,6 +110,7 @@ fn request(world: &mut World) {
             ghost: GhostSpec::Folder(folder),
             raise_event: false,
             origin: ChangeOrigin::Automatic,
+            boot_event: None,
         },
     );
     let stage = match verdict {
