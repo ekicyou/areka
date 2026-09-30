@@ -1,6 +1,6 @@
 # Design Document: areka-P0-network-update
 
-> 2026-09-29 作成（`/kiro-spec-design -y`）。対象はブランチ `claude/areka-p0-network-update-d76046`（ソースは main `2ec8df59`＝`file-drop` の完了 PR#201 から不変）。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。本書の主張はソースを読んで確かめた。調査の経緯と採らなかった案は `research.md` の §8 にある。要件の裁定（要件 10）は要件ディスカッションで確定済みで、本書はそれを動かさない。
+> 2026-09-29 作成（`/kiro-spec-design -y`）。対象はブランチ `claude/areka-p0-network-update-d76046`（ソースは main `2ec8df59`＝`file-drop` の完了 PR#201 から不変）。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。本書の主張はソースを読んで確かめた。調査の経緯と採らなかった案は `research.md` の §8 にある。要件の裁定（要件 10）は要件ディスカッションで確定済みで、本書はそれを動かさない。2026-09-30 の開発者確定（`OnUpdateComplete` と総括は読み直した後の新しいゴーストが受け持つ・裁定 6 を覆した・要件 2.16・3・5.5）で、読み直しの流れ・kanade の起動の由来・切替の入口の節を改めた（決めたこと 21〜24）。
 
 ## Overview
 
@@ -8,13 +8,13 @@
 
 **Users**: ゴーストを入れた第三者（作者が配布サイトを直せば手元も新しくなる）。ゴーストの作者（辞書に書いた `OnUpdateBegin`〜`OnUpdateComplete` の返事が動く・台本の `\![updatebymyself]` が効く）。後続 `shell-balloon-switch`・`alpha-release-signoff` の開発者。
 
-**Impact**: 本体 `areka` が初めて `areka-update` に依存する。kanade の許可表が 23 語から 42 語、リソースの許可表が 10 語から 12 語になる。完了 `update-engine` の作業場所の後片付け（`work.rs`）に「成功した確定の残り」を「戻せなかった走行の残骸」と区別する印が 1 つ入る。`ghost_switch::on_notice` の定常到達の腕に呼び出しが 1 行、`ghost_session::register_systems`・`boot_wired` に各 1 行、消費者台帳に 3 行、`install_cue.rs` に `url` の腕、終了で待つ口の上限に達したときの本文の一般化が入る。切替の入口（`SwitchRequest`・`request_ghost_switch`）・終了の判定（`session_mark_verdict`・`ExitOrigin`）・kanade の運行表（`schedule/mod.rs`・`change.rs`）・`KanadeMsg` の変種は変えない。
+**Impact**: 本体 `areka` が初めて `areka-update` に依存する。kanade の許可表が 23 語から 42 語、リソースの許可表が 10 語から 12 語になる。完了 `update-engine` の作業場所の後片付け（`work.rs`）に「成功した確定の残り」を「戻せなかった走行の残骸」と区別する印が 1 つ入る。`ghost_switch::on_notice` の定常到達の腕に呼び出しが 1 行、`ghost_session::register_systems`・`boot_wired` に各 1 行、消費者台帳に 3 行、`install_cue.rs` に `url` の腕、終了で待つ口の上限に達したときの本文の一般化が入る。2026-09-30 の確定で、kanade の起動の由来 `BootOrigin` に `Updated` が 1 つ、起動の根の表（`schedule/boot.rs`）に行が 1 つ、切替の入口 `SwitchRequest` に起動の知らせの欄が 1 つ入る。終了の判定（`session_mark_verdict`・`ExitOrigin`）・kanade の運行表の切替の段（`schedule/mod.rs`・`schedule/change.rs`）・`KanadeMsg` の変種は変えない。
 
 ### Goals
 - 入口 4 つが同じ受付 `update::submit` を通り、同じ手続き（背景スレッド 1 本・1 度に 1 本）で扱われる（要件 1）。
-- 対象 1 つにつき正典の順（`OnUpdateBegin` → `OnUpdateReady` → 各ファイルの `OnDownloadBegin`・MD5 照合 → `OnUpdateComplete`／`OnUpdateFailure`）で 19 語の中のイベントだけを送り、最後に総括を 1 回送る（要件 2・3）。
+- 対象 1 つにつき正典の順（`OnUpdateBegin` → `OnUpdateReady` → 各ファイルの `OnDownloadBegin`・MD5 照合 → `OnUpdateComplete`／`OnUpdateFailure`）で 19 語の中のイベントだけを送る。ゴーストの成功の `OnUpdateComplete` と総括は「後送りの列」に取っておき最後に送る（要件 2・3）。
 - 失敗理由はエンジンの失敗 11 種・取得の失敗 8 種のすべてを網羅の `match` で正典の語（と areka の 5 語）へ写す（要件 4）。
-- 更新の間ゴーストを降ろさず、`changed` が 1 つでもあれば総括の返事の台詞が終わってから同じゴーストを読み直す（要件 5）。
+- 更新の間ゴーストを降ろさず、`changed` が 1 つでもあれば全対象の後・今の台詞が終わってから同じゴーストを読み直し、新しいゴーストの起動の知らせを後送りの列の先頭にする。読み直さなければ列を最後に今のゴーストへ送る（要件 5）。
 - `\![execute,install,url,URL,nar]` は URL から一時フォルダへ落とし、既存の依頼の口へ渡す（要件 6）。
 - 終了は走っている更新を既存の門で上限 3 秒まで待つ（要件 7）。
 - 判断の分かれ目を、ネットへ出ず画面も実時間の待ちも使わない決定論テストで固定し、https は実機で 1 度通す（要件 9）。
@@ -35,14 +35,14 @@
 - **手続き 1 本**: `update/procedure.rs`（要求 1 件の一周・対象 1 つの一周・口 `UpdatePorts`）と、その純粋な写し `update/refs.rs`（イベント名 19 語・Reference の組み立て・`useorigin1` の読み替え・失敗理由の表・総括の形）。
 - **背景スレッドと UI 側の窓口**: `update/worker.rs`（スレッド `update`・本物の口・エンジン `run` の呼び出し・門の出入り）・`update/desk.rs`（窓口・対象の解決・走っている旗・`homeurl` の写し・読み直しの要求・終了で捨てる）。
 - **入口 3 つ**: `emo2_boot/update_cue.rs`（台本の受け口と引数の解析）・`menu/update_frame.rs`（メニューの登記と選べる／選べない）・`install_cue.rs` の `url` の腕と `install/fetch_url.rs`（URL から一時フォルダへ落として既存の依頼の口へ）。
-- **他クレートへ足す口**: kanade の許可表 19 語とリソース許可表 2 語／`areka_ghost::catalog::homeurl`・`catalog::descript_name`／`areka_update` の `work.rs` の印（`committed`）。
+- **他クレートへ足す口**: kanade の許可表 19 語とリソース許可表 2 語／`areka_ghost::catalog::homeurl`・`catalog::descript_name`／`areka_update` の `work.rs` の印（`committed`）と `purge_committed`。2026-09-30: kanade の `BootOrigin::Updated` と起動の根の表の行（`change.rs`・`schedule/boot.rs`）／切替の入口の `SwitchRequest.boot_event` と `SwitchInFlight` の同じ欄（`emo2_boot/ghost_switch.rs`）。
 - **文書と台帳**: 網羅台帳 3 本の該当行・生成物・`dist/README.txt` の 2 行・`doc/COMPAT_ARCHITECTURE.md` §8・`signoff.md`。
 - **前提を外す宣言（要件 5.10）**: 本仕様は完了 `update-engine` の設計が置いた前提「起動中のゴーストなら SHIORI を先に解放している」を**外して** `run` を呼ぶ。確定（`commit.rs` の改名 2 回）は写像中の DLL でも通ることが較正済み（`commit_tests.rs`）で、外して困るのは後片付けだけ。その後片付けの扱い（印による区別）を本仕様が持つ。完了 spec の文書は書き換えず、§8 に記す。
 
 ### Out of Boundary
 - `crates/areka-update/src/` の `work.rs`・`work_tests.rs` 以外の全部（`commit.rs`・`winhttp.rs`・`manifest.rs`・`delete.rs`…）。例外: タスク 10.1（要件 5.9 の 2026-09-30 改訂）で `lib.rs` に `purge_committed` の公開と `run` の始めの呼び出しを足し、`run_tests.rs` にテストを足した。`delete.rs` は `// ukadoc:` の行のアンカー（コメントだけ）。`run` の署名・`Progress`・`UpdateOutcome`・`UpdateError`・`Fetch` は変えない。
-- kanade の運行表（`schedule/mod.rs`・`change.rs`・`boot.rs`・`steady.rs`）と殻（`actor.rs`・`actor_resources.rs`）・`msg.rs` の `KanadeMsg`。触るのは許可表 2 本（`schedule/events.rs`・`schedule/resources.rs`）とその数の判定だけ。
-- 切替の入口 `request_ghost_switch` の判定・`SwitchRequest`・`GhostSpec`・`SwitchInFlight`・`switch_to`・`boot_into`・`switch_to_default`（読み直しは既存の入口を呼ぶだけ）。`GhostSpec` に絶対パスの変種は足さない（裁定 17）。
+- kanade の運行表（`schedule/mod.rs`・`schedule/change.rs`・`steady.rs`）と殻（`actor.rs`・`actor_resources.rs`）・`msg.rs` の `KanadeMsg`。触るのは許可表 2 本（`schedule/events.rs`・`schedule/resources.rs`）とその数の判定、2026-09-30 からは `change.rs` の `BootOrigin` の変種 1 つと `schedule/boot.rs` の `boot_root` の行・`BootType` の 204 の腕だけ（`Plain`・`ChangedFrom`・`Halted` の振る舞いは変えない）。
+- 切替の入口 `request_ghost_switch` の判定・`GhostSpec`・`switch_to_default`・`boot_into`。`SwitchRequest`・`SwitchInFlight` は起動の知らせの欄を運ぶだけ、`switch_to` は欄が在れば由来を `Updated` にするだけ（決めたこと 23）。`GhostSpec` に絶対パスの変種は足さない（裁定 17）。
 - `session_mark_verdict`・`ExitOrigin`・`Teardown`（要件 5.11・7.6）。`exit_wait.rs` の門の意味論（変えるのは上限に達したときの本文 1 行だけ）。
 - `install/desk.rs`・`install/worker.rs`・`install/procedure.rs`・`install/overwrite.rs`（インストールの手続きは触らない。`install/` で触るのは `judge.rs` の台本の引数の検査と新設 `fetch_url.rs`・`emo2_boot/install_cue.rs` の腕だけ）。
 - `main.rs`（`mod update;` の 1 行を除く）・`session_end.rs`・`emo2_boot/frame.rs`・`emo2_boot/spine.rs`・`placement/`・`input_events/`・wintf。
@@ -52,7 +52,7 @@
 ### Allowed Dependencies
 - 依存の向き: `areka-update`・`areka-ghost`・`areka-kanade`・`areka-actor`・`areka-parsers` → `areka`（bin）。本体の中は `update/refs.rs`（純粋・`areka_update` の型だけ）→ `update/procedure.rs`（純粋・口の trait）→ `update/worker.rs`（スレッド・本物の口・エンジン）→ `update/desk.rs`（World）→ `update/mod.rs`（受付・登録）→ 入口（`emo2_boot/update_cue.rs`・`menu/update_frame.rs`）。worker と desk の間の頼みの型 `DeskAsk` は `worker.rs` が定義し `desk.rs` が読む（`install/` と同じ）。
 - `exit_wait.rs` は `update/` を知らない。門を使うのは `worker.rs`（`begin`・`enter_write`・`leave_write`・`end`）と `desk.rs`（`is_closing`）と、門を作って登記する `mod.rs` の `register` だけ。手続き（`procedure.rs`・`refs.rs`）は門を知らない。
-- `desk.rs` が `ghost_switch.rs` から使うのは `request_ghost_switch`・`SwitchRequest`・`GhostSpec`・`SwitchInFlight`・`SwitchVerdict`（読み直しの判定を記録の水準へ分ける）だけ。`ghost_switch.rs` が `update/` から使うのは `desk::on_steady`（定常到達の照会）と `desk::on_switch_end`（読み直しの切替が終わった／中止された・タスク 10.2）だけ。
+- `desk.rs` が `ghost_switch.rs` から使うのは `request_ghost_switch`・`SwitchRequest`（`boot_event` を含む）・`GhostSpec`・`SwitchInFlight`・`SwitchVerdict`（読み直しの判定を記録の水準へ分ける）だけ。`ghost_switch.rs` が `update/` から使うのは `desk::on_steady`（定常到達の照会）と `desk::on_switch_end`（読み直しの切替が終わった／中止された・タスク 10.2・後送りの列の残りもここで送る）だけ。`ghost_switch.rs` は `update/` の型を知らない（起動の知らせは `(&'static str, Vec<String>)` の組で受け、`areka_kanade::BootOrigin::Updated` へ写す）。
 - `update/refs.rs` は `install::judge::SEPARATOR`（byte 値 1）を借りる（同じ値を 2 か所に持たない・`input_events/file_drop.rs` が同じ借り方の前例）。
 - `install/fetch_url.rs` が使うのは `areka_update::{Fetch, WinHttpFetch, FetchError}` と `install::{RawInstallRequest, InstallOrigin}` だけ。更新の窓口・背景スレッドとは共有 0。
 - 足す依存: `crates/areka/Cargo.toml` に `areka-update = { path = "../areka-update" }`。外部クレートの追加 0・本番コードが読む環境変数の追加 0（要件 8.6）。
@@ -66,6 +66,7 @@
 - `exit_wait` の門が 2 本（`install`・`update`）になり、`exit_wait_timeout` の本文が門の名前と `label` で読む形になる。
 - `work.rs` の印 `committed`＝作業場所の棚（`.update-work/`）に印のファイルを持つ走行フォルダが現れる。`sweep` の判定に依る後続は印を知る。
 - `catalog::homeurl`・`catalog::descript_name` が公開の口として増える。
+- 2026-09-30: `BootOrigin` が 4 値になる＝完了 `kanade` の起動の根の表のテスト（`boot_root_tests.rs`）と、完了 `ghost-shell-balloon-switch` の切替のテスト（`ghost_switch_tests.rs`・`ghost_session_switch_*_tests.rs`）を回し直して振る舞いが変わらないことを確かめる。`SwitchRequest` を組む所（本番 4・テスト 7）は `boot_event: None` を足す。後続 `shell-balloon-switch` が起動の根に行を足すときは `Updated` の 204 の腕（`OnBoot` へ続けない）を崩さない。
 - 完了 `update-engine` の前提「SHIORI を先に解放している」は本仕様以後、呼び手が守らない。エンジンを再検証するときは「写像中の DLL を退避した走行の後片付け」を前提に含める。
 
 ## Architecture
@@ -90,7 +91,7 @@
 
 ### Architecture Pattern & Boundary Map
 
-採る形は **「`install/` と同型の `update/`＝背景スレッド 1 本で上から順に走る手続き＋UI 側の窓口」**（`research.md` §3 案 C）。違いは 3 つ: ⑴ 待ち行列を持たない（1 度に 1 本・重なれば `executing` で断る）／⑵ イベントは窓口を経ず、依頼を受けた時点の kanade の送出端を背景スレッドが持って直接送る（ゴーストが居なくなれば送出の失敗か `NotSteady` で分かる＝要件 5.7 がそのまま得られる）／⑶ 読み直しは総括の返事の後に窓口へ 1 回頼み、窓口が既存の切替の入口を呼ぶ（台詞の終わりの待ちは kanade の保留が持つ）。
+採る形は **「`install/` と同型の `update/`＝背景スレッド 1 本で上から順に走る手続き＋UI 側の窓口」**（`research.md` §3 案 C）。違いは 3 つ: ⑴ 待ち行列を持たない（1 度に 1 本・重なれば `executing` で断る）／⑵ イベントは窓口を経ず、依頼を受けた時点の kanade の送出端を背景スレッドが持って直接送る（ゴーストが居なくなれば送出の失敗か `NotSteady` で分かる＝要件 5.7 がそのまま得られる）／⑶ 読み直しは全対象の後に後送りの列（ゴーストの `OnUpdateComplete`＋総括）を添えて窓口へ 1 回頼み、窓口が既存の切替の入口を列の先頭を起動の知らせにして呼ぶ（台詞の終わりの待ちは kanade の保留が持つ・2026-09-30）。
 
 ```mermaid
 graph TB
@@ -151,7 +152,7 @@ graph TB
 | 4 | **`homeurl`・`useorigin1` は要求ごとに 1 回の `ResourceQuery`（`ids: ["homeurl", "useorigin1"]`）で背景スレッドから照会し `recv()` で待つ**（要件 1.9・2.13・2.14） | 殻が運行表を経ずに答える口が既に在り、送出端は `Send`。定常でなければ全件 `NoContent`＝`descript.txt` へ倒れる（要件 1.9） | 窓口の写し（決めたこと 6）を手続きへ渡す（写しは「灰色の判定」用で、定常到達から要求までの間に SHIORI が変えた値を映さない） |
 | 5 | **待ち行列を持たない**。窓口は段 `Stage { Idle, AwaitingExec, Running }` と預かり 1 枠 `held` を持つ。`Running` の間に届いた要求は受付が `OnUpdateFailure`（`executing`）を UI スレッドから直接送って断る（要件 1.14・1.15）。`AwaitingExec`（メニューの要求が `OnUpdateProcessExec` の答えを待っている間）に届いた要求は断らず 1 件だけ預かり、ゴーストが台本で応えた（標準の手続きが始まらない）なら `OrderDone` の後にその預かりを始め、応えなかった（標準が始まった＝`DeskAsk::Started`）なら預かりを `executing` で断る。預かりが埋まっている間の 2 件目以降は `executing` で断る | 要件が「始めない」と決めている。UI スレッドからの直接の送出は `input_events/file_drop.rs` の `send_event`（`reply: None`）が前例。預かり 1 枠が要るのは正典の「`OnUpdateProcessExec` に応えて自分で更新を始める」使い方＝応えの台本の中の `\![updatebymyself]` が、`OrderDone` より先に受け口から届き得るから（設計検証の問題 1）。段で判定すれば時機に依らず決定論になる | `busy` の旗 1 つ（応えの台本からの要求が時機次第で「二重起動」と誤って断られる）／`drain` の順を入れ替えるだけ（同じ tick の競合しか解けない）／待ち行列（インストールの形） |
 | 6 | **メニューの「選べない」は、定常到達のたびに窓口が `homeurl` を 1 回照会して控えた写し → ゴースト・シェル・バルーンの `descript.txt` の `homeurl` で決める**（要件 1.3・裁定 7・議題 A ⒝） | 供給関数は同期で、SHIORI への照会は非同期。定常到達の通知（`ghost_switch::on_notice`）は既に `install::desk::on_steady` を呼んでおり、隣に 1 行足すだけ。返事は窓口が毎 tick `try_recv` で覗く | `descript.txt` だけで決める（SHIORI にだけ書いたゴーストが灰色になる）／灰色にしない（要件 1.3 を変える） |
-| 7 | **読み直しは、総括の返事を受けた直後に窓口へ頼み、窓口が `request_ghost_switch(SwitchRequest { ghost: GhostSpec::Folder(今のフォルダ), raise_event: false, origin: ChangeOrigin::Automatic })` を 1 回呼ぶ**。台詞の終わりの待ちは kanade の保留（`pending_change`）が持つ（要件 5.2・5.3） | 返事は台本の再生の開始の後に返る（`actor.rs`）ので、その直後の切替の要求は kanade に `Steady { talk: Some }` で届き、トークの完了で消化される。返事が無ければ（`NoReply`）`Steady { talk: None }` で直ちに始まる＝要件 5.3 の両方が同じ 1 行で満たされる。`install/overwrite.rs` と同じ前提 | UI 側で `TalkLifecycleSignal` を数えて待つ |
+| 7 | **読み直しは、全対象を終えた直後に窓口へ頼み（後送りの列を添える・決めたこと 21）、窓口が `request_ghost_switch(SwitchRequest { ghost: GhostSpec::Folder(今のフォルダ), raise_event: false, origin: ChangeOrigin::Automatic, boot_event: Some(列の先頭) })` を 1 回呼ぶ**。台詞の終わりの待ちは kanade の保留（`pending_change`）が持つ（要件 5.2・5.3・2026-09-30 改訂＝以前は総括の返事の後に頼んだ） | 最後の進捗の知らせの返事は台本の再生の開始の後に返る（`actor.rs`）ので、その後の切替の要求は kanade に `Steady { talk: Some }` で届き、トークの完了で消化される。再生中でなければ `Steady { talk: None }` で直ちに始まる。`install/overwrite.rs` と同じ前提 | UI 側で `TalkLifecycleSignal` を数えて待つ |
 | 8 | **argv で始めたゴースト（`BootContext.current.ghost.folder == None`）は読み直さず `warn!(update_reload_skipped)` 1 件**（裁定 17）。頼んだ時点で置き場のゴーストのフォルダが依頼のゴーストと違えば（切り替わっていた）同じ記録で頼まない | `GhostSpec::Folder` はフォルダ名で目録を引く。絶対パスの変種を足すと `ghost_switch.rs`（870 行）と完了 spec の再検証に触る | `GhostSpec::Dir(PathBuf)` を足す |
 | 9 | **口の trait `UpdatePorts` の関数は `&self`**。エンジンの観測の閉包（`&mut dyn FnMut(&Progress)`）の中から同じ口でイベントを送るため | `run_engine(&self, …, observe)` の間に `raise(&self, …)` を呼ぶ形は `&mut self` だと借用が重なる。本物の口の中身（送出端・`Arc<WorkGate>`・頼みの送出端）はどれも `&self` で使える | 観測の閉包に別の「送り手」を渡す（口が 2 つに割れる）／進捗を溜めて後で送る（正典の順序を崩す＝裁定 1 の (c)） |
 | 10 | **MD5 の照合の知らせは 1 回の `Progress::Md5Compared` から `OnMD5CompareBegin` と `Complete`／`Failure` の 2 件を続けて送る**（裁定 14） | エンジンは照合の結果だけを知らせる | エンジンに「照合の始まり」を足す（境界外） |
@@ -159,23 +160,21 @@ graph TB
 | 12 | **失敗理由の表は `FailReason`（11 変種）と `FetchError`（8 変種）を包む網羅の `match`（ワイルドカード無し）**。`ManifestFetch`・`FileFetch` は中の `FetchError` の語、`ManifestMissing` は `404`（要件 4.2） | 変種が増えればビルドが止まる（要件 4.2「種類が増えたらビルドが止まる形」） | `kind()` の文字列で分ける（増えても止まらない） |
 | 13 | **終了の門の「書く段」は `run` の呼び出し全体**（議題 C ⒜・要件 7.1〜7.3）。`enter_write` が偽（終了が始まっている）なら `run` を呼ばず、その対象を途中でやめる。代償として、取得の途中で終了が始まると（まだ何も本番のフォルダへ書いていなくても）上限 3 秒まで待つ。これは承知で受け入れる（設計検証の問題 2） | `run` は取得と確定を 1 回の呼び出しで行い、WinHTTP は同期で外から中断できない。上限は今日の 3 秒のまま。`Progress` の並びに頼って確定の直前で段を分けるのは brief の (d) と同じ弱さ。エンジンに「確定に入る」の通知を足して、その観測で `enter_write` する案は、観測の閉包から `run` を止められない（`FnMut(&Progress)` に戻り値が無い）ので、終了が始まった後に確定へ入っても止められず、終了は待たない＝確定がプロセスの終わりで裂けやすくなる。`run` の前で入れば「終了が始まっていれば走らせない・走っていれば上限まで待つ」が門の意味論だけで成り立つ | 最後の `Md5Compared { matched: true }` で書く段へ入る／エンジンに `Progress::CommitBegin` を足す（境界外・上の理由で安全でない） |
 | 14 | **`exit_wait_timeout` の本文を門に依らない語へ改める**（「上限に達したので待つのをやめた——取得か書き込みの途中だった。書きかけの物が作業場所に残っているかもしれない（label を見よ）」）。更新の門の `label` は「更新先 → 対象のフォルダ」 | 今の本文は `<根>/.nar-work/` を名指しし、更新の門でも同じ文が出る。`label` を門ごとに組めば本文は 1 つで足り、要件 7.3 の「更新先・対象・作業場所」は `label` が運ぶ。「取得か書き込みの途中」と書くのは、決めたこと 13 で書く段が取得を含むため（確定に入っていない場面が大半で、「書きかけ」だけでは読み手を誤らせる） | 門の名前で本文を分ける（`exit_wait.rs` が門の中身を知る） |
-| 15 | **エンジンの後片付けの印は走行フォルダ直下の空ファイル `committed`**（議題 G ⒜・要件 5.9）。`cleanup` が自分のフォルダを消せなかったとき置き、`sweep` は `old/` に中身が残っていても印の在るフォルダは残骸に挙げずに消す（消せなければ黙って次へ）。**2026-09-30 追記（要件 5.9 改訂）**: エンジンに公開の口 `purge_committed(target)` を足し、`run` の始めで毎回呼ぶ（読み直せなかった残りの保険）。窓口は読み直しを受け付けたゴーストのフォルダを覚え、その切替が終わった時点（古い SHIORI を降ろした後）で `purge_committed` を呼んで消す＝実機で古い `yaya.dll` の写しが差分なしの走行で残った | 改名（`old/` → 別名）は中に開かれたファイルがあるフォルダでは Windows で通らないことがある。空ファイルを置くのは確実で、`sweep` の判定に 1 条件足すだけ。戻せなかった走行（`keep`）は印を置かないので今日どおり警告に出る | `old/` を `old.done/` へ改名 |
+| 15 | **エンジンの後片付けの印は走行フォルダ直下の空ファイル `committed`**（議題 G ⒜・要件 5.9）。`cleanup` が自分のフォルダを消せなかったとき置き、`sweep` は `old/` に中身が残っていても印の在るフォルダは残骸に挙げずに消す（消せなければ黙って次へ）。**2026-09-30 追記（要件 5.9 改訂）**: エンジンに公開の口 `purge_committed(target)` を足し、`run` の始めで毎回呼ぶ（読み直せなかった残りの保険）。窓口は読み直しを受け付けたゴーストのフォルダを覚え、その切替が終わった時点（古い SHIORI を降ろした後）で `purge_committed` を呼んで消す＝実機で古い `yaya.dll` の写しが差分なしの走行で残った。同じ時点で後送りの列の残りも送る（決めたこと 24） | 改名（`old/` → 別名）は中に開かれたファイルがあるフォルダでは Windows で通らないことがある。空ファイルを置くのは確実で、`sweep` の判定に 1 条件足すだけ。戻せなかった走行（`keep`）は印を置かないので今日どおり警告に出る | `old/` を `old.done/` へ改名 |
 | 16 | **`\![execute,install,url]` の取得は、受け口が起こす短命のスレッド `install-fetch` で行い、落とし終えたら既存の送出端へ `RawInstallRequest { path, origin: Script }` を送る**（議題 H・要件 6.1・6.5）。一時フォルダは `std::env::temp_dir().join("areka").join("download")`、ファイル名は `<pid>-<連番>-<URL の末尾の名前（安全な文字だけ）>`、7 日より古い物は次の取得の前に消す（要件 6.6） | 受け口 `InstallCueSink` は既に窓口の送出端を持ち、`Sender` は `Send`。窓口にも背景スレッドにも新しい頼みは要らず、更新の「1 度に 1 本」を汚さない。`install-pick` と同じ形（`std::thread::Builder`）。取り消しも待ちもしない（要件 7.5） | 更新の背景スレッドに乗せる（取得の間、更新が塞がる）／インストールの背景スレッドに乗せる（取得の間、他の依頼が止まる） |
 | 17 | **`judge::script_request` を `Result<ScriptRequest, ScriptRefusal>` に広げ、`ScriptRequest::Path(PathBuf)`／`Url(String)` を返す**。`url` の 2 つ目（種別）は `nar` か省略だけ通し、それ以外は `ScriptRefusal::UnsupportedKind { found }`、`http://`／`https://` で始まらないか空は `ScriptRefusal::BadUrl` | 検査は今の場所（純粋・テスト済み）に足すのが最小。`install_cue.rs` は `Path` の腕を今日どおり、`Url` の腕で `fetch_url::spawn_download` を呼ぶ | 受け口で URL を検査する |
 | 18 | **消費者台帳は `("updatebymyself", None)`・`("update", None)`・`("updateother", None)` の 3 行を `CommandConsumer::UpdateSink` へ**。`\![update,platform]` も受け口に届き、要件 1.8 の「知らない対象」として `warn!` で断る | 3 語は独立のコマンド名で、選別子なしが台帳の規則に合う（`move`・`bind` と同じ）。`platform` は範囲外で、黙って普通の更新に読み替えない | `("update", Some("ghost"))` などを対象ごとに登記（`ghost+shell` の形が選別子に収まらない） |
 | 19 | **許可表は起動・終了のイベントと共用の `ALLOWED_EVENT_IDS` のまま 19 語を足す**（42 語） | `ghost-install`・`file-drop` と同じ。表を分けると `on_raise_event` に手が入る | 入口専用の表 |
 | 20 | **総括の Reference の区切りは `install::judge::SEPARATOR` を借りる** | 同じ値（byte 値 1）を 2 か所に持たない。`file_drop.rs` が同じ借り方 | `update/refs.rs` に定数を持つ |
+| 21 | **後送りの列（2026-09-30）**: `run_order` が全対象の後に `[OnUpdateComplete（ゴーストが成功したときだけ）] ++ [総括]` を `Vec<(&'static str, Vec<String>)>` で組む。`changed` が 1 つでもあれば `request_reload(ghost_dir, 列)` で窓口へ渡し、無ければ手続きが `raise` で順に送る（返事を待つ・`Closed` で残りを捨てる）（要件 2.16・3.1・5.2） | 読み直すかどうかは `changed` の有無だけで手続きが決まる。読み直せない理由（argv・予約・別のゴースト・終了）は窓口しか知らないので、そこから先は窓口が持つ。型は `progress_events` の戻りと同じ組で、新しい型を足さない | 総括を今日どおり送り `OnUpdateComplete` だけ後へ（総括が「最後」でなくなる）／列を背景スレッドが持ち続け、切替の後に窓口から返してもらう（頼みが往復になる） |
+| 22 | **kanade の起動の由来 `BootOrigin::Updated { id: &'static str, references: Vec<String> }`**。`boot_root` の表で `first_boot` の次・`ChangedFrom` と同じ段に置き、根は `events::raise(id, references, Get, INACTIVE)`。`BootType` で 204 なら `OnBoot` へ進まず `to_baseware_version(None)`、台本なら今日どおり（要件 5.5・裁定 6 を覆した） | `boot.rs` の注記「範囲外の根は `BootOrigin` に値を足し、この表に行を足すだけで入る」どおり。`id` を `&'static str` にするのは列の名前が `refs.rs` の定数だけだから（許可表を通すのは汎用の入口の規則で、`OnGhostChanged` と同じく根は通さない）。`first_boot` を先に残すのは今日の「由来を問わず最優先」を変えないため（読み直すゴーストは起動記録が在り、実際には真にならない） | 由来を足さず `OnGhostChanged` のまま（確定と両立しない）／根を汎用の入口で送り直す（定常の前は `NotSteady` で捨てられる） |
+| 23 | **切替の入口 `SwitchRequest` に `boot_event: Option<(&'static str, Vec<String>)>`**。`request_ghost_switch` は `SwitchInFlight` に写し、`switch_to` は在れば由来を `ChangedFrom` の代わりに `Updated` にする。既定へ戻す `switch_to_default` は見ない（今日どおり `Halted`） | 起動の知らせは切替先を起こす試み（`WelcomeAttempt::Target`）だけのもの。既定ゴーストは更新と無関係で、列の宛先でもない（要件 3.6・5.6） | `GhostSpec` に載せる（指し方と起動の知らせは別の軸）／窓口が切替の後に送る（定常の後になり、起動の知らせにならない） |
+| 24 | **列の残りと、読み直さないときの列は窓口が UI スレッドから `RaiseEvent { reply: None }` で順に送る**（`refuse_executing` と同じ形）。残りは `on_switch_end(finished = true)` で、読み直さないとき（`argv`・`switching`・入口が `Accepted` 以外）は `reload` の中で送る。`closing`・`other_ghost`・切替の失敗と中止（`finished = false`）・置き場にゴーストが居ないときは捨てて `warn!(update_tail_dropped)`（要件 3.6・5.2・5.6・7.4） | 返事を待たないので定常到達の直後に届き、起動の知らせの台詞を置き換える＝既知の制限（要件 5.3・Open Questions 7）。`other_ghost`・`closing` で捨てるのは要件 5.7（別のゴーストへ送らない）・7.4（終了の後は 0 件）が勝つため | 起動の知らせの台詞の終わりを待つ（kanade に口が無い・後続の spec）／背景スレッドへ返して送らせる（往復が増える） |
 
 ### Technology Stack
 
-| Layer | Choice / Version | Role in Feature | Notes |
-|---|---|---|---|
-| 更新のエンジン | `areka-update`（ワークスペース） | 定義ファイル・差分・取得・照合・確定・`delete.txt` | 本体の依存に足す。使う公開面は `run`・`UpdateRequest`・`Fetch`・`WinHttpFetch`・`Progress`・`UpdateOutcome`・`UpdateError`・`FailReason`・`FetchError`・`ManifestName` |
-| 運行 | `areka-kanade`（ワークスペース） | イベントの送出と応えの有無（`RaiseEvent`／`RaiseOutcome`）・リソースの照会（`ResourceQuery`／`ResourceOutcome`）・切替（`ChangeOrigin`） | 許可表 19 語＋2 語 |
-| 目録 | `areka-ghost::catalog` | `homeurl`・`name` の読み手・シェル／バルーンの名前引き | `homeurl`・`descript_name` を足す |
-| スレッド | `areka_actor::spawn_actor`／`run_inbox`／`reply_channel`・`std::thread::Builder`・`std::sync::mpsc` | 手続きのスレッド `update`・取得のスレッド `install-fetch` | 外部クレートの追加 0 |
-| HTTP | WinHTTP（`areka_update::WinHttpFetch`） | 配布サイトからの取得 | 綴るのは `crates/areka-update/src/winhttp.rs` のまま |
-| 記録 | `tracing` | `event = "update_*"` の欄つき | 水準は `info!` 基本・分かれ目は `debug!`・失敗は `error!` |
+- **更新のエンジン** `areka-update`（ワークスペース・本体の依存に足す）: 使う公開面は `run`・`purge_committed`・`UpdateRequest`・`Fetch`・`WinHttpFetch`・`Progress`・`UpdateOutcome`・`UpdateError`・`FailReason`・`FetchError`・`ManifestName`。HTTP は WinHTTP で、綴るのは `crates/areka-update/src/winhttp.rs` のまま。
+- **運行** `areka-kanade`: `RaiseEvent`／`RaiseOutcome`・`ResourceQuery`／`ResourceOutcome`・`ChangeOrigin`・`BootOrigin`（許可表 19 語＋2 語・由来 `Updated`）。**目録** `areka-ghost::catalog`（`homeurl`・`descript_name` を足す）。**スレッド** `areka_actor::spawn_actor`／`run_inbox`／`reply_channel`・`std::thread::Builder`・`std::sync::mpsc`（`update`・`install-fetch`・外部クレートの追加 0）。**記録** `tracing` の `event = "update_*"`（`info!` 基本・分かれ目は `debug!`・失敗は `error!`）。
 
 ## File Structure Plan
 
@@ -210,7 +209,11 @@ crates/areka/src/
 | `crates/areka/Cargo.toml` | 依存に `areka-update = { path = "../areka-update" }`（要件 8.2 の台帳の行と同じコミット） |
 | `crates/areka/src/main.rs` | `mod update;` の 1 行 |
 | `crates/areka/src/ghost_session.rs` | `register_systems` に `crate::update::register(world)`（`install::register` の隣）。`boot_wired` に `menu::update_frame::register(world)`（`install_frame::register` の隣） |
-| `crates/areka/src/emo2_boot/ghost_switch.rs` | `on_notice` の定常到達の腕の末尾、`install::desk::on_steady` の隣に `crate::update::desk::on_steady(world)` を 1 行 |
+| `crates/areka/src/emo2_boot/ghost_switch.rs` | `on_notice` の定常到達の腕の末尾、`install::desk::on_steady` の隣に `crate::update::desk::on_steady(world)` を 1 行。2026-09-30: `SwitchRequest`・`SwitchInFlight` に `boot_event`、`switch_to` の由来の選び分け（決めたこと 23） |
+| `SwitchRequest` を組む所（`ghost_switch.rs` の台本の切替・`install/overwrite.rs`・`menu/ghost_frame.rs`・テスト 7 か所） | `boot_event: None` を足すだけ（2026-09-30） |
+| `crates/areka-kanade/src/change.rs`・`schedule/boot.rs` | `BootOrigin::Updated { id, references }`・`boot_root` の行・`BootType` の 204 の腕（決めたこと 22・2026-09-30） |
+| `crates/areka-kanade/src/schedule/boot_root_tests.rs` | `Updated` の根・204 で `OnBoot` 0 件・台本で今日どおり・`first_boot` が先、を足す（既存の判定は変えない） |
+| `crates/areka/src/update/{procedure_tests,procedure_reload_tests,desk_reload_tests,worker_path_tests}.rs` | 後送りの列に合わせて期待を書き換える（消さない・要件 9.14・2026-09-30） |
 | `crates/areka/src/emo2_boot/mod.rs` | `mod update_cue;`。`wire_emo2_boot` で `UpdateCueSink::new(update::desk::raw_sender(world))` を組み、`sinks` の列の 10 本目に足す |
 | `crates/areka/src/emo2_boot/consumer_ledger.rs` | `CommandConsumer::UpdateSink`（正典 URL の行つき）と `canonical` の 3 行。数の判定（`canonical_builds_without_duplicate` の 10）を 13 へ |
 | `crates/areka/src/emo2_boot/install_cue.rs` | `script_request` の戻りが `ScriptRequest` になるのに追随し、`Url` の腕で `fetch_url::spawn_download(url, self.tx.clone())` |
@@ -259,21 +262,31 @@ sequenceDiagram
         U-->>W: Progress events in order
         W->>K: OnUpdateReady and per file events
         U-->>W: outcome or error
-        W->>K: OnUpdateComplete or OnUpdateFailure
+        W->>K: OnUpdateFailure or OnUpdateOther close now
+        Note over W: ghost OnUpdateComplete goes to the tail
     end
-    W->>K: OnUpdateResult or OnUpdateResultEx
-    K-->>W: RaiseOutcome after StartTalk
-    W->>D: DeskAsk Reload when changed
-    D->>K: ChangeGhost same folder no event
-    Note over K: waits for the active talk to end
-    W->>D: DeskAsk OrderDone
+    Note over W: tail is ghost OnUpdateComplete then summary
+    alt no target changed
+        W->>K: tail events in order
+        W->>D: DeskAsk OrderDone
+    else some target changed
+        W->>D: DeskAsk Reload with tail
+        W->>D: DeskAsk OrderDone
+        D->>K: ChangeGhost same folder no event
+        Note over K: waits for the active talk to end
+        Note over K: new kanade boots with tail head as boot event
+        K-->>D: Steady notice
+        D->>K: rest of tail with no reply
+    end
 ```
 
 - 受付の門番: `submit` は「窓口が在る・終了が始まっていない・走っていない・切替の予約が無い・置き場のゴーストに送出端が在る・対象が 1 つ以上」を順に見る。満たさなければ判定ごとの `warn!` を 1 件残し、走っている場合だけ `OnUpdateFailure`（`executing`）を UI スレッドから直接送る（`reply: None`）。
 - `OnUpdateProcessExec` が `Script` なら `info!(update_process_exec, answered = true)` で要求を捨てる（以後 0 件・総括 0 件）。`NotSteady` なら `warn!(update_not_steady)` で捨てる（要件 1.17）。
 - 更新先の解決は対象ごと: ゴーストは照会の `homeurl`（`Value` で空でない）→ `descript.txt` の値、シェル・バルーンは `descript.txt` の値。無ければ `warn!(update_target_skipped, reason = "no_homeurl")` で飛ばし、総括にも載せない。全部飛ばせば総括を送らずに終える。
-- 対象 1 つの中で `raise` が `Closed`（ゴーストが居なくなった・終了が始まった）を返したら、走行中のエンジンは最後まで進め（観測の閉包は以後送らず `warn!(update_event_dropped)` を 1 件ずつ）、その対象の締めと総括と読み直しは送らない。
-- 読み直しは `changed` が 1 つでもあるときだけ。総括の返事（`Script`／`NoReply`）を受けた直後に頼む。窓口は「置き場のゴーストのフォルダが依頼のゴーストと同じ・フォルダ名が在る（argv でない）・切替の予約が無い・終了が始まっていない」ときだけ `request_ghost_switch` を呼び、判定（`Accepted`／`Busy`／`NotFound`／`NoContext`）を `info!`／`warn!` に残す。頼み直しはしない。
+- 対象 1 つの中で `raise` が `Closed`（ゴーストが居なくなった・終了が始まった）を返したら、走行中のエンジンは最後まで進め（観測の閉包は以後送らず `warn!(update_event_dropped)` を 1 件ずつ）、その対象の締めと後送りの列と読み直しは送らない。
+- 後送りの列（決めたこと 21・2026-09-30）: ゴーストが成功（`none`・`changed`）したらその `OnUpdateComplete` をその場で送らずに列の先頭へ、総括を列の最後へ。ゴーストの失敗の `OnUpdateFailure` とシェル・バルーンの `OnUpdateOther*` はその場で送る。全部飛ばせば列は空（総括 0 件）。
+- 読み直しは `changed` が 1 つでもあるときだけ。全対象を終えた直後に列を添えて頼む。窓口は「置き場のゴーストのフォルダが依頼のゴーストと同じ・フォルダ名が在る（argv でない）・切替の予約が無い・終了が始まっていない」ときだけ `request_ghost_switch`（`boot_event`＝列の先頭）を呼び、判定（`Accepted`／`Busy`／`NotFound`／`NoContext`）を `info!`／`warn!` に残す。頼み直しはしない。`Accepted` なら列の残りを覚え、切替が終わったら送る。読み直さないときの列の扱いは決めたこと 24。
+- 既知の制限（要件 5.3）: 列の残り（`OnUpdateResult`）は起動の知らせ（`OnUpdateComplete`）の台詞の終わりを待たずに届き、両方に応えるゴーストでは台詞が置き換わる。
 
 ### `Progress` からイベントへの写し（要件 2）
 
@@ -286,8 +299,8 @@ sequenceDiagram
 | `Md5Compared { file, expected, actual, matched }` | `OnUpdate.OnMD5CompareBegin` → `matched` なら `…Complete`、でなければ `…Failure` | Ref0＝`file`・Ref1＝`expected`・Ref2＝`actual`・Ref3・Ref4（2 件とも同じ） |
 | `Committed { placed }` | 送らない（`OnUpdateComplete` の Ref1 の材料） | — |
 | `Deleted { removed }` | 送らない（`debug!`） | — |
-| `Ok(Unchanged)` | `OnUpdateComplete` | Ref0＝`none`・Ref1＝空・Ref2＝空・Ref3・Ref4 |
-| `Ok(Updated { placed, .. })` | `OnUpdateComplete` | Ref0＝`changed`・Ref1＝`placed` をカンマで並べた一覧（定義ファイル自身は含まれない＝エンジンの `placed` の規則）・Ref2＝空・Ref3・Ref4 |
+| `Ok(Unchanged)` | `OnUpdateComplete`（ゴーストは後送りの列へ） | Ref0＝`none`・Ref1＝空・Ref2＝空・Ref3・Ref4 |
+| `Ok(Updated { placed, .. })` | `OnUpdateComplete`（ゴーストは後送りの列へ） | Ref0＝`changed`・Ref1＝`placed` をカンマで並べた一覧（定義ファイル自身は含まれない＝エンジンの `placed` の規則）・Ref2＝空・Ref3・Ref4 |
 | `Err(UpdateError)` | `OnUpdateFailure` | Ref0＝失敗理由の語・Ref1＝`file()`（無ければ空）・Ref2＝空・Ref3・Ref4 |
 | 取得口を作れない | `OnUpdateFailure` | Ref0＝`connect`・Ref1＝空・Ref2＝空・Ref3・Ref4 |
 
@@ -374,11 +387,13 @@ flowchart TB
 | 2.13 | `useorigin1` | refs | `Numbering::from_useorigin1` | 写し |
 | 2.14 | 要求ごとに 1 回 | procedure | `resources()` を先頭で 1 回 | 要求 1 件 |
 | 2.15 | 新しい名前 0・許可表 42 | refs・kanade events | 19 語の定数・`ALLOWED_EVENT_IDS` | — |
-| 3.1 | 総括を 1 回 | procedure・refs | `summary_refs`・`SummaryKind` | 要求 1 件 |
+| 2.16 | ゴーストの成功の締めは取っておく | procedure | 後送りの列（決めたこと 21） | 要求 1 件 |
+| 3.1 | 総括を 1 回・列の最後・読み直しの後か最後 | procedure・refs・desk | `summary_refs`・`SummaryKind`・後送りの列 | 要求 1 件 |
 | 3.2 | `OnUpdateResult` の形 | refs | `summary_refs(Result)` | 写し |
 | 3.3 | `OnUpdateResultEx` の形 | refs | `summary_refs(ResultEx)` | 写し |
-| 3.4 | 最後の締めの後 | procedure | `run_order` の順 | 要求 1 件 |
+| 3.4 | 列の最後 | procedure | `run_order` の順 | 要求 1 件 |
 | 3.5 | 総括を送らない 3 場面 | procedure・mod | 全部飛ばし・`executing`・`Script` | 要求 1 件 |
+| 3.6 | 切替の失敗・中止で列を捨てる | desk | `on_switch_end(false)`・`update_tail_dropped` | 要求 1 件 |
 | 4.1 | メッセージボックス 0 | procedure（告知を呼ばない） | — | — |
 | 4.2 | 失敗理由の表 | refs | `failure_word`・`fetch_word`（網羅の `match`） | 失敗理由の表 |
 | 4.3 | 送らない 7 語 | refs | 表に無い | — |
@@ -389,11 +404,11 @@ flowchart TB
 | 4.8 | `undeletable`・`leftovers` は成功 | procedure | `warn!(update_leftover)` | — |
 | 4.9 | エンジンの `warn!` に任せる | procedure | 重ねない | — |
 | 5.1 | 降ろさない | worker | `run` を起動中のまま呼ぶ | 要求 1 件 |
-| 5.2 | `changed` なら読み直し・argv は除く | procedure・desk | `UpdatePorts::request_reload`・`desk::reload` | 要求 1 件 |
-| 5.3 | 台詞が終わってから | desk・kanade（既存の保留） | `request_ghost_switch` を返事の直後に | 要求 1 件 |
+| 5.2 | `changed` なら読み直し・argv は除く・読み直せなければ列を今のゴーストへ | procedure・desk | `UpdatePorts::request_reload(ghost_dir, tail)`・`desk::reload` | 要求 1 件 |
+| 5.3 | 台詞が終わってから・列の残りは待たない | desk・kanade（既存の保留） | `request_ghost_switch` を全対象の後に・`on_switch_end` | 要求 1 件 |
 | 5.4 | `none`・失敗なら読み直さない | procedure | `OrderEnd.changed == 0` | — |
-| 5.5 | 起動の根 `OnGhostChanged` | 既存（`boot_root`） | — | — |
-| 5.6 | 起こせなければ既定へ | 既存（`switch_to_default`） | — | — |
+| 5.5 | 起動の知らせは列の先頭・204 でも `OnBoot` 無し | kanade boot・ghost_switch | `BootOrigin::Updated`・`SwitchRequest.boot_event` | 要求 1 件 |
+| 5.6 | 起こせなければ既定へ・列は捨てる | 既存（`switch_to_default`）・desk | `on_switch_end(false)` | — |
 | 5.7 | 居なくなったら捨てる | worker・procedure | `Raised::Closed`・観測の閉包の `closed` 旗 | 要求 1 件 |
 | 5.8 | 読み直し中の切替は無視 | 既存（`SwitchVerdict::Busy`） | — | — |
 | 5.9 | 残りを残骸と区別 | areka-update work | `COMMITTED_MARK`・`sweep` | — |
@@ -428,14 +443,14 @@ flowchart TB
 | 10.3 | `url` は `nar`・省略だけ・WinHTTP を使い回す | judge・fetch_url | `ScriptRequest::Url`・`WinHttpFetch` | — |
 | 10.4 | 実機は emo2 の配布サイト | Testing Strategy（実機） | `signoff.md` | — |
 | 10.5 | `OnUpdateProcessExec` はメニューだけ | procedure | 決めたこと 3 | 要求 1 件 |
-| 10.6 | 起動の根は `OnGhostChanged` | 既存（`boot_root`） | — | — |
+| 10.6 | 起動の根は列の先頭（2026-09-30 で覆した） | kanade boot・ghost_switch | 決めたこと 22・23 | 要求 1 件 |
 | 10.7 | `homeurl` の無い対象は飛ばす・灰色は 3 つとも無いとき | procedure・desk | `TargetEnd::Skipped`・`can_update` | 要求 1 件 |
 | 10.8 | 更新オプションは断る | update_cue | `Refusal::Option` | — |
 | 10.9 | 二重起動は `executing` 1 回 | mod・desk | `refuse_executing` | — |
 | 10.10 | 輸送の失敗は areka の 5 語 | refs | `fetch_word` | 失敗理由の表 |
 | 10.11 | `other_homeurl_override` は送らない | kanade resources（足さない） | — | — |
 | 10.12 | `OnUpdateOtherBegin` の Ref0 は対象の `name` | refs・desk | `begin_refs`・`TargetSpec.name` | 写し |
-| 10.13 | 読み直しの時機 | procedure・desk | 決めたこと 7 | 要求 1 件 |
+| 10.13 | 読み直しの時機 | procedure・desk | 決めたこと 7・24 | 要求 1 件 |
 | 10.14 | MD5 は 1 通知から 2 件 | refs | 決めたこと 10 | 写し |
 | 10.15 | `url` の失敗は `error!` だけ | fetch_url | `install_fetch_failed` | — |
 | 10.16 | 更新中の切替は走行を進めて以後を捨てる | procedure・worker | `Raised::Closed`・`closed` の旗 | 要求 1 件 |
@@ -447,6 +462,8 @@ flowchart TB
 | Component | Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |---|---|---|---|---|---|
 | 許可表 2 本 | areka-kanade | 19 語と 2 語を送れるようにする | 2.15, 9.13 | — | State |
+| 起動の由来 `Updated` | areka-kanade | 読み直した後の起動の知らせを列の先頭にする | 5.5, 10.6 | — | State |
+| 切替の入口の `boot_event` | areka / emo2_boot | 起動の知らせを切替先の起動まで運ぶ | 5.5, 5.6 | kanade (P0) | Service |
 | catalog::homeurl／descript_name | areka-ghost | `descript.txt` の `homeurl`・`name` を読む | 1.3, 1.9, 2.4 | areka-parsers (P0) | Service |
 | work.rs の印 | areka-update | 成功した確定の残りを残骸と区別する | 5.9, 9.10 | — | State |
 | refs | areka / update | 純粋な写し | 2.2, 2.4〜2.13, 3.2, 3.3, 4.2, 4.3 | areka-update の型 (P0) | Service |
@@ -467,6 +484,34 @@ flowchart TB
 `ALLOWED_EVENT_IDS` に次の 19 語を、各 1 行の正典 URL（`// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#<名前>:1`）つきで足す（23 → 42）: `OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`・`OnUpdateComplete`・`OnUpdateFailure`・`OnUpdateOtherBegin`・`OnUpdateOtherReady`・`OnUpdateOther.OnDownloadBegin`・`OnUpdateOther.OnMD5CompareBegin`・`OnUpdateOther.OnMD5CompareComplete`・`OnUpdateOther.OnMD5CompareFailure`・`OnUpdateOtherComplete`・`OnUpdateOtherFailure`・`OnUpdateResult`・`OnUpdateResultEx`。冒頭の表に 19 行（「汎用の入口・渡された列のまま」）。`OnUpdateCheck*`・`OnUpdateResultExplorer` は足さない。`events_change_tests.rs` の数を 42 にし、19 語が引けて `OnUpdateCheckComplete` が引けないことを同じテストで判定する。
 
 `ALLOWED_RESOURCE_IDS` に `homeurl`・`useorigin1`（`list_shiori_resource.html#homeurl:1`・`#useorigin1:1`）を足す（10 → 12）。同ファイルの名前の一覧の固定表を 12 語へ。`other_homeurl_override` は足さない。
+
+#### 起動の由来 `Updated`（`change.rs`・`schedule/boot.rs`・2026-09-30）
+
+```rust
+pub enum BootOrigin {
+    Plain, ChangedFrom(ChangedFrom), Halted { ghost_name: String },
+    /// ネットワーク更新で読み直した。`id`（許可表の綴り）と Reference を起動の知らせとして送る
+    /// （`OnGhostChanged`・`OnBoot` の代わり・204 でも `OnBoot` へ続けない）。
+    Updated { id: &'static str, references: Vec<String> },
+}
+```
+- `boot_root`: `first_boot` → `OnFirstBoot`（今日どおり最優先）／`ChangedFrom` → `OnGhostChanged`／**`Updated` → `events::raise(id, references.clone(), ShioriMethod::Get, INACTIVE)`**（`info!(target: "kanade", event = "boot_update_root", id)`）／`Plain`・`Halted` → 根なし。
+- `BootType` の 204 の腕: 由来が `Updated`（かつ根が `OnFirstBoot` でない）なら `OnBoot` を送らず `to_baseware_version(state, None, config)`（`info!(event = "boot_update_no_content")`）。台本の腕・他の由来は今日どおり。
+- テスト（`boot_root_tests.rs`）: `Updated` の根が渡した名前と Reference の GET／204 で `OnBoot` 0 件のまま定常へ／台本で `StartTalk`／`first_boot` なら `OnFirstBoot`。既存の判定はそのまま緑。
+
+### areka / 切替の入口
+
+#### `SwitchRequest.boot_event`（`emo2_boot/ghost_switch.rs`・2026-09-30）
+
+```rust
+pub(crate) struct SwitchRequest {
+    pub ghost: GhostSpec, pub raise_event: bool, pub origin: ChangeOrigin,
+    /// 切替先を起こすときの起動の知らせ（ネットワーク更新の読み直しだけが Some）。
+    pub boot_event: Option<(&'static str, Vec<String>)>,
+}
+```
+- `request_ghost_switch` は `SwitchInFlight.boot_event` へ写す（判定・kanade への `ChangeRequest` は変えない）。`switch_to` は在れば `BootOrigin::Updated { id, references }`、無ければ今日どおり `ChangedFrom`。`switch_to_default` は見ない（`Halted`）＝起動の知らせは `WelcomeAttempt::Target` だけ。
+- テスト（`ghost_switch_tests.rs` の兄弟か `desk_reload_tests.rs`）: `boot_event` 付きの自分自身への切替で偽の SHIORI の起動が渡した知らせで始まり `OnGhostChanged`・`OnBoot` 0 件／切替先が起動に失敗して既定へ戻ると既定の起動は `OnBoot`（Ref6＝`halt`）で知らせは 0 件。
 
 ### areka-ghost
 
@@ -603,14 +648,18 @@ pub(crate) fn update_current(world: &mut World);
 pub(crate) fn discard_for_exit(world: &mut World);
 /// 対象を解く（純粋でない: BootContext・GhostSlot・目録を読む）。引けない名前・無いフォルダは `warn!` で飛ばす。
 fn resolve_targets(world: &World, raw: &RawUpdateRequest) -> Vec<TargetSpec>;
-/// 読み直しの頼み（`DeskAsk::Reload`）: 条件を満たせば `request_ghost_switch` を 1 回。
-fn reload(world: &mut World, ghost_dir: &Path);
+/// 読み直しの頼み（`DeskAsk::Reload`）: 条件を満たせば `request_ghost_switch`（`boot_event`＝列の先頭）を 1 回。
+/// 満たさなければ列を今のゴーストへ送るか捨てる（決めたこと 24）。
+fn reload(world: &mut World, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>);
+/// 切替が終わった（`ghost_switch::on_notice`）: finished なら残りを消し列の残りを送る・でなければ捨てる。
+pub(crate) fn on_switch_end(world: &mut World, finished: bool);
 ```
 - 今の対象の解き方: ゴースト＝`GhostSession::ghost_dir()`（名前は `names().name` → `catalog::descript_name(<dir>/ghost/master)` → フォルダ名・`descript_homeurl` は `catalog::homeurl(<dir>/ghost/master)`）／シェル＝`runtime().mount().shell.dir`（名前・`homeurl` は `descript_name`・`homeurl(shell dir)`）／バルーン＝`BootContext.current.balloon.dir`（同）。`updateother` は `list_shells(ghost_dir)`・`list_balloons(&ctx.root)` の `identity.name` と完全一致（大文字小文字を区別）。隠しシェルは目録に無いので引けない（裁定 18）。
 - `can_update` の「更新先が在る」: `ghost_homeurl.is_some()` または `catalog::homeurl` がゴースト（`ghost/master`）・シェル・バルーンのどれかで `Some`。
 - `refuse_executing`: `GhostSlot` の送出端へ `KanadeMsg::RaiseEvent { id: "OnUpdateFailure", references: executing_refs(kind, reason), method: Get, reply: None }` を 1 件（`file_drop::send_event` と同じ形）。`kind` は生の要求の先頭の対象（`Current` の先頭・`Other` の先頭の種別・空なら `ghost`）。
 - 段の遷移（`answer` が背景スレッドの頼みで動かす・決めたこと 5）: `Started` → 段を `Running` にし、預かりが在れば `refuse_executing` で断って空にする（`AwaitingExec` 以外で受けたら無操作）／`OrderDone` → 段を `Idle` にし、預かりが在れば取り出して `submit` に掛け直す（そのときの判定は普通の受付と同じ＝定常でなければ `NotSteady` で断られる）。`drain` は頼みを生の要求より先に捌くが、正しさは段の判定が持ち、順に依らない。
-- `reload` の条件: `!gate.is_closing()`・`SwitchInFlight` 無し・置き場のゴーストの `ghost_dir()` が頼みの `ghost_dir` と同じ・`BootContext.current.ghost.folder` が `Some`。満たさなければ `warn!(update_reload_skipped, reason)`。満たせば `request_ghost_switch(world, SwitchRequest { ghost: GhostSpec::Folder(folder), raise_event: false, origin: ChangeOrigin::Automatic })` を呼び、`info!(update_reload_requested, verdict)`（`Busy`・`NotFound`・`NoContext` は `warn!`）。
+- `reload` の条件: `!gate.is_closing()`・`SwitchInFlight` 無し・置き場のゴーストの `ghost_dir()` が頼みの `ghost_dir` と同じ・`BootContext.current.ghost.folder` が `Some`。満たさなければ `warn!(update_reload_skipped, reason)`。満たせば `request_ghost_switch(world, SwitchRequest { ghost: GhostSpec::Folder(folder), raise_event: false, origin: ChangeOrigin::Automatic, boot_event: 列の先頭 })` を呼び、`info!(update_reload_requested, verdict)`（`Busy`・`NotFound`・`NoContext` は `warn!`）。
+- 列の行き先（決めたこと 24・2026-09-30）: `Accepted` → 読み直すフォルダと列の残りを `UpdateDesk.after_switch: Option<(PathBuf, Vec<…>)>`（旧 `purge_after_switch` を広げる）に覚える／条件の `argv`・`switching` と判定の `Busy`・`NotFound`・`NoContext` → 列を今のゴーストへ順に送る（`send_tail`＝置き場の送出端へ `RaiseEvent { method: Get, reply: None }`・`info!(update_tail_sent, when = "no_reload", count)`・送出端が無ければ捨てる）／`closing`・`other_ghost` → 捨てる（`warn!(update_tail_dropped, reason)`）。`on_switch_end(true)` は残りを消した後に残りの列を `send_tail`（`when = "after_switch"`・空なら何もしない）、`on_switch_end(false)` は覚えた物を捨てる（列が在れば `warn!(update_tail_dropped, reason = "switch_failed")`）。
 - `on_steady` の照会は `captions::send_query` と同じ組み立て（`KanadeMsg::ResourceQuery { ids: vec!["homeurl"], reply }`）。返事は `drain` が `try_recv` で覗き、`Value(v)` で `v` が空でなければ写しに置く。切替や読み直しで新しいゴーストが定常に達すれば写しは置き換わる。
 
 #### 背景スレッドと本物の口（`update/worker.rs`）
@@ -623,8 +672,8 @@ pub(crate) struct UpdateJob { pub order: UpdateOrder, pub kanade: Sender<KanadeM
 pub(crate) enum DeskAsk {
     /// 標準の手続きが始まった（`OnUpdateProcessExec` に応えが無かった・照会の直前）。窓口は段を `Running` にし、預かりを断る。
     Started,
-    /// 同じゴーストを読み直す（総括の返事の後・changed が 1 つ以上）。
-    Reload { ghost_dir: PathBuf },
+    /// 同じゴーストを読み直す（全対象の後・changed が 1 つ以上）。`tail` は後送りの列（先頭が起動の知らせ）。
+    Reload { ghost_dir: PathBuf, tail: Vec<(&'static str, Vec<String>)> },
     /// 依頼 1 件が終わった（段を `Idle` に戻す・預かりが在れば始める）。
     OrderDone,
 }
@@ -641,7 +690,7 @@ impl UpdatePorts for KanadePorts { … }
 - `raise`: `gate.is_closing()` なら送らず `Closed`。`RaiseEvent { reply: Some }` を送り `recv()`。`Script`→`Raised::Script`／`NoReply`→`NoReply`／`NotSteady`→`warn!(update_not_steady)` で `Closed`／`NotAllowed`→`error!(update_event_not_allowed)` で `NoReply`（許可表の漏れ＝起きないはずの形）／`Failed`→`error!(update_event_failed)` で `Closed`／送出の `Err`・返事の `Dropped`→`debug!(update_kanade_gone)` で `Closed`。
 - `resources`: `ResourceQuery { ids: vec!["homeurl", "useorigin1"], reply }` を送り `recv()`。`Value` は空でなければ `Some`、`NoContent`・`Failed` は `None`（`Failed` は `warn!(update_resource_failed)`）。送れなければ `None` を返す前に `debug!`。
 - `run_engine(&self, homeurl, target, observe)`: `gate.begin(label)` が偽 → `debug!(update_gate_closed)`・`Closed`。取得口の作り方（本番は `WinHttpFetch::new()`）が `Err(e)` → 記録せずに `gate.end()`・`Unavailable(e)`（`error!(update_fetch_unavailable)` は手続きの `run_target` が 1 件だけ残す）。`gate.enter_write()` が偽 → `gate.end()`・`debug!(update_gate_closed)`・`Closed`。`run(&UpdateRequest { homeurl, target }, &fetch, observe)` → `gate.leave_write()`・`gate.end()`・`Done(result)`。
-- `request_reload`: `desk.send(DeskAsk::Reload { ghost_dir })`（返事は待たない）。
+- `request_reload`: `desk.send(DeskAsk::Reload { ghost_dir, tail })`（返事は待たない）。
 - `standard_started`: `desk.send(DeskAsk::Started)`（返事は待たない）。
 - スレッドの本体: `spawn_actor("update", …)`＋`run_inbox` で `UpdateJob` を 1 件ずつ受け、`KanadePorts` を作って `run_order` を走らせ、`debug!(update_order_done, ends)` の後に `DeskAsk::OrderDone`。
 - `worker_tests.rs` に字面の検査: `crates/areka/src/` の本番ファイル（`*_tests.rs`・`*_test_support.rs` を除く）で `WinHttp` で始まる識別子は `WinHttpFetch` だけ、かつその呼び出しは `update/worker.rs` と `install/fetch_url.rs` の 2 ファイルだけ（裁定 3 の「替えるときは `Fetch` の実装を 1 本足して差し替える」を保つ）。
@@ -658,8 +707,8 @@ pub(crate) trait UpdatePorts {
     fn resources(&self) -> Option<GhostResources>;
     /// エンジンを 1 周回す（門の出入り込み）。
     fn run_engine(&self, homeurl: &str, target: &Path, observe: &mut dyn FnMut(&Progress)) -> EngineRun;
-    /// 同じゴーストの読み直しを窓口へ頼む。
-    fn request_reload(&self, ghost_dir: &Path);
+    /// 同じゴーストの読み直しを窓口へ頼む（後送りの列を添える・2026-09-30）。
+    fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>);
     /// 標準の手続きが始まったと窓口へ知らせる（`OnUpdateProcessExec` の段を抜けた直後・要求 1 件につき高々 1 回）。
     fn standard_started(&self);
 }
@@ -691,16 +740,16 @@ pub(crate) enum TargetEnd {
     Abandoned,
 }
 
-/// 要求 1 件の終わり方（対象ごとの終わり方の列と、総括を送ったか・読み直しを頼んだか）。
+/// 要求 1 件の終わり方（対象ごとの終わり方の列と、総括を送ったか〔読み直すときは列に載せて渡したか〕・読み直しを頼んだか）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OrderEnd { pub ends: Vec<TargetEnd>, pub summarised: bool, pub reload_requested: bool }
 
 /// 要求 1 件を並んだ順に扱う。
 pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEnd;
 ```
-- `run_order` の順: ⑴ `info!(update_order_begin)`。⑵ 理由が `Manual` なら `OnUpdateProcessExec`（Ref0＝`manual`）。`Script` → `info!(update_process_exec, answered = true)` で `OrderEnd { ends: [], summarised: false, reload_requested: false }`。`Closed` → 同じく空で戻る（`warn!(update_abandoned, at = "process_exec")`）。`NoReply` → 続ける。⑶ `standard_started()` を 1 回（理由が `Script` でも呼ぶ＝窓口は `Running` の段で受ければ無操作）。次に `resources()`（`None` → `warn!(update_abandoned, at = "resources")` で戻る）。`Numbering::from_useorigin1`。⑷ 対象ごとに `run_target`。`Abandoned` が出たらそこで抜ける（以後の対象は扱わない）。⑸ 飛ばした対象を除いて 1 つ以上あれば総括（`SummaryKind` で名を選ぶ・Reference は `summary_refs`）。総括が `Closed` なら戻る。⑹ `Changed` が 1 つ以上なら `request_reload(order.ghost_dir)`。
-- `run_target` の順: 更新先を解く（ゴースト＝`resources.homeurl` → `spec.descript_homeurl`／他＝`descript_homeurl`・無ければ `warn!(update_target_skipped)` で `Skipped`）→ `OnUpdateBegin`（`Closed` → `Abandoned`）→ `run_engine`（観測の閉包: `progress_events` で写して `raise`・`Closed` を受けたら `closed` の旗を立てて以後は `warn!(update_event_dropped)` だけ）→ 締め: `Unavailable(e)` → `error!(update_fetch_unavailable)`・`OnUpdateFailure`（`connect`）→ `Failed`／`Done(Ok(Unchanged))` → `OnUpdateComplete`（`none`）→ `Unchanged`／`Done(Ok(Updated))` → `warn!(update_leftover)` を `undeletable`・`leftovers` の件ごと・`OnUpdateComplete`（`changed`）→ `Changed(placed.len())`／`Done(Err(e))` → `error!(update_failed, homeurl, target, stage, kind, file, rolled_back, work)`・`OnUpdateFailure`（表の語）→ `Failed`／`Closed` → `Abandoned`。閉じた旗が立っていれば締めを送らず `Abandoned`。
-- 記録: `update_target_begin`（種別・名前・更新先）・`update_event`（名前と応えの有無）・`update_progress`（`debug!`・`Progress` の変種）・`update_target_done`（終わり方）・`update_summary`（Reference の列）・`update_reload_requested`（頼んだ）。
+- `run_order` の順: ⑴ `info!(update_order_begin)`。⑵ 理由が `Manual` なら `OnUpdateProcessExec`（Ref0＝`manual`）。`Script` → `info!(update_process_exec, answered = true)` で `OrderEnd { ends: [], summarised: false, reload_requested: false }`。`Closed` → 同じく空で戻る（`warn!(update_abandoned, at = "process_exec")`）。`NoReply` → 続ける。⑶ `standard_started()` を 1 回（理由が `Script` でも呼ぶ＝窓口は `Running` の段で受ければ無操作）。次に `resources()`（`None` → `warn!(update_abandoned, at = "resources")` で戻る）。`Numbering::from_useorigin1`。⑷ 対象ごとに `run_target`。`Abandoned` が出たらそこで抜ける（以後の対象は扱わない）。⑸ 飛ばした対象を除いて 1 つ以上あれば後送りの列を組む＝`run_target` が返したゴーストの締め（在れば）→ 総括（`SummaryKind` で名を選ぶ・Reference は `summary_refs`）。⑹ `Changed` が 1 つ以上なら `request_reload(order.ghost_dir, 列)`（`debug!(update_tail_deferred, count)`）。無ければ列を `raise` で順に送り（`info!(update_tail_sent, when = "at_end")`）、`Closed` なら残りを捨てて戻る（2026-09-30・決めたこと 21）。
+- `run_target` の順: 更新先を解く（ゴースト＝`resources.homeurl` → `spec.descript_homeurl`／他＝`descript_homeurl`・無ければ `warn!(update_target_skipped)` で `Skipped`）→ `OnUpdateBegin`（`Closed` → `Abandoned`）→ `run_engine`（観測の閉包: `progress_events` で写して `raise`・`Closed` を受けたら `closed` の旗を立てて以後は `warn!(update_event_dropped)` だけ）→ 締め: `Unavailable(e)` → `error!(update_fetch_unavailable)`・`OnUpdateFailure`（`connect`）→ `Failed`／`Done(Ok(Unchanged))` → `OnUpdateComplete`（`none`）→ `Unchanged`／`Done(Ok(Updated))` → `warn!(update_leftover)` を `undeletable`・`leftovers` の件ごと・`OnUpdateComplete`（`changed`）→ `Changed(placed.len())`（成功の締めは、ゴーストなら送らずに `(名前, Reference)` を `TargetEnd` と一緒に返す＝後送りの列へ・シェル／バルーンはその場で送る）／`Done(Err(e))` → `error!(update_failed, homeurl, target, stage, kind, file, rolled_back, work)`・`OnUpdateFailure`（表の語）→ `Failed`／`Closed` → `Abandoned`。閉じた旗が立っていれば締めを送らず `Abandoned`。
+- 記録: `update_target_begin`（種別・名前・更新先）・`update_event`（名前と応えの有無）・`update_progress`（`debug!`・`Progress` の変種）・`update_target_done`（終わり方）・`update_summary`（Reference の列・列を組んだ時点）・`update_tail_deferred`／`update_tail_sent`・`update_reload_requested`（頼んだ）。
 - 手続きは告知（`alert`）を呼ばない（要件 4.1）。切替を頼む関数は `request_reload` の 1 つで、読み直し以外の切替は型の上で起きない。
 
 #### 写し（`update/refs.rs`）
@@ -809,7 +858,7 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 - `sakura-script.toml`: `\![updatebymyself…]`・`\![update,更新対象…]`・`\![updateother,…]`・`\![execute,install,url,…]` を `implemented`（証拠は `consumer_ledger.rs` の `UpdateSink` の行と `judge.rs` の `Url` の腕の行）。`\![update,platform]`・`\![execute,createupdatedata]` は動かさない。
 - 手順: 台帳を動かす前に `cargo run -p ukadoc-survey -- evidence` で証拠の実在を確かめ、`-- report`・`-- report-summary` で生成物を作り直し、`cargo test -p ukadoc-survey` を緑にする。`roadmap-draft.md` の `owner_count` は生成器に任せる。
 - `dist/README.txt`: 2 行から「ネットワーク更新」の語を外す。
-- §8 に足す行（項目／裁量／根拠／出典 spec）: `homeurl` の無い対象は飛ばす・二重起動は `OnUpdateFailure(executing)` 1 回で総括 0・正典に無い輸送の失敗は `dns`／`connect`／`tls`／`toolarge`／`http`・`OnUpdateOtherBegin` の Ref0 は対象の `name`・読み直しは総括の返事の台詞の後の自分自身への切替で起動の根は `OnGhostChanged`・更新の途中の切替は走行を進めて以後を捨てる・argv のゴーストは読み直さない・`\![execute,install,url]` の落とし場所と失敗の知らせ（`error!` のみ）・エンジンの前提「SHIORI を先に解放」を外して呼ぶ（写像中の DLL の退避は印で区別）・隠しシェルは引かない・更新オプションは断る。
+- §8 に足す行（項目／裁量／根拠／出典 spec）: `homeurl` の無い対象は飛ばす・二重起動は `OnUpdateFailure(executing)` 1 回で総括 0・正典に無い輸送の失敗は `dns`／`connect`／`tls`／`toolarge`／`http`・`OnUpdateOtherBegin` の Ref0 は対象の `name`・読み直しは全対象の後・今の台詞の後の自分自身への切替で、起動の知らせは後送りの列の先頭（ふつうは `OnUpdateComplete`・204 でも `OnBoot` 無し）・列の残り（総括）は切替の終わりで送り起動の台詞の終わりを待たない（既知の制限）・読み直さないときは列を最後に今のゴーストへ・切替の失敗と中止では捨てる（2026-09-30）・更新の途中の切替は走行を進めて以後を捨てる・argv のゴーストは読み直さない・`\![execute,install,url]` の落とし場所と失敗の知らせ（`error!` のみ）・エンジンの前提「SHIORI を先に解放」を外して呼ぶ（写像中の DLL の退避は印で区別）・隠しシェルは引かない・更新オプションは断る。
 
 ## Data Models
 
@@ -840,7 +889,8 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 | 成功したが `undeletable`／`leftovers` | `warn!(update_leftover)` | `OnUpdateComplete`（`changed`） | 更新済み |
 | 対象のゴーストが居なくなった | `warn!(update_event_dropped)`（1 件ごと）・`warn!(update_abandoned)` | 以後 0 件・読み直し 0 | 走行は最後まで |
 | kanade の往復の失敗 | `error!(update_event_failed)` | 以後 0 件 | 走行は最後まで |
-| 読み直せない（argv・切り替わった・`Busy`・`NotFound`） | `warn!(update_reload_skipped)`／`warn!(update_reload_requested, verdict)` | — | 更新済み（次の起動で効く） |
+| 読み直せない（argv・切り替わった・`Busy`・`NotFound`） | `warn!(update_reload_skipped)`／`warn!(update_reload_requested, verdict)` | 後送りの列を今のゴーストへ（切り替わった・終了なら捨てて `warn!(update_tail_dropped)`） | 更新済み（次の起動で効く） |
+| 読み直しの切替が失敗・中止 | 既存の切替の記録＋`warn!(update_tail_dropped, reason = "switch_failed")` | 列は 0 件（既定ゴーストへは送らない） | 更新済み |
 | 終了が始まった | `warn!(exit_wait_abandoned)`／`warn!(exit_wait_timeout)`（`label`） | 送らない | 確定の前なら黙って消える・途中なら残骸 |
 | `url` の取得の失敗・形の悪い URL・他の種別 | `error!(install_fetch_failed)`／`warn!(install_cue_bad_url)`／`warn!(install_cue_unsupported_kind)` | 0 件 | — |
 
@@ -864,6 +914,7 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 | 総括 | `update_summary` |
 | 読み直し | `update_reload_requested`（判定つき）・`update_reload_skipped`（`warn!`・`reason`＝`closing`〔終了が始まった・窓口が無い〕／`switching`〔切替の予約が在る〕／`other_ghost`〔置き場のゴーストが依頼時と違う〕／`argv`〔コマンドライン引数で始めた〕） |
 | 読み直しの後の片付け（要件 5.9・2026-09-30） | `update_purge_done`（消せた数が 1 以上なら `info!`・0 なら `debug!`・`removed`・`dir`）・`update_purge_held`（`warn!`・降ろした後でも消せなかった物 1 件ごと・`path`）・`update_purge_dropped`（`debug!`・切替が失敗・中止で覚えたフォルダを捨てた）／エンジンの `run` の始めの片付けは `areka_update` の `debug!` 1 行 |
+| 後送りの列（2026-09-30） | `update_tail_deferred`（`debug!`・列を窓口へ渡した・`count`）・`update_tail_sent`（`info!`・`when`＝`at_end`〔手続きが最後に送った〕／`no_reload`〔読み直せず窓口が送った〕／`after_switch`〔読み直しの後に残りを送った〕・`count`）・`update_tail_dropped`（`warn!`・`reason`＝`closing`／`other_ghost`／`switch_failed`／`no_ghost`）／kanade の `boot_update_root`（根に列の先頭を選んだ・`id`）・`boot_update_no_content`（204 でも `OnBoot` へ進まない） |
 | 終了 | `update_abandoned`・`exit_wait_abandoned`・`exit_wait_done`・`exit_wait_timeout` |
 | 受け口・メニュー | `update_cue_skip`・`update_cue_unopenable`・`update_cue_refused`・`update_cue_selector_ignored`・`update_cue_send_failed` |
 | URL の取得 | `install_fetch_begin`・`install_fetch_done`・`install_fetch_failed`・`install_fetch_send_failed`・`install_fetch_swept`（消した数）・`install_fetch_sweep_skipped`（`debug!`・一時フォルダを読めない・古いファイルを消せない） |
@@ -887,7 +938,7 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 - 更新先の解き方: 照会の `homeurl` が勝つ・`descript.txt` へ倒れる・どちらも無ければ飛ばす（イベント 0）・全部飛ばせば総括 0（9.5）。
 - 取得口を作れない（`Unavailable`）: `OnUpdateBegin` → `OnUpdateFailure(connect)`・`error!` 1 件。
 - 締めは 1 件だけ: 4 経路のどれでも `OnUpdateComplete`＋`OnUpdateFailure` の合計が 1。
-- 読み直し（9.9）: `changed` が 1 つでもあれば総括の `raise` の**後**に `request_reload` が 1 回／全部 `none` か失敗なら 0 回／途中で `raise` が `Closed` を返したら残りのイベント 0 件・総括 0・読み直し 0・`run_engine` は最後まで呼ばれている（観測の閉包が全部流れる）。
+- 後送りの列と読み直し（9.9・2026-09-30）: ゴーストの成功の `OnUpdateComplete` はその場の `raise` に無く列の先頭に在り、総括が列の最後／`changed` が 1 つでもあれば全対象の後に `request_reload` が列つきで 1 回（列を `raise` しない）／全部 `none` か失敗なら読み直し 0 回で列を `raise` で順に送る／ゴーストが失敗・対象でなければ列の先頭は総括／途中で `raise` が `Closed` を返したら残りのイベント 0 件・列 0・読み直し 0・`run_engine` は最後まで呼ばれている（観測の閉包が全部流れる）。
 - 対象が複数のとき 1 つ終えてから次（`raise` の記録の順で判定）。総括は最後の締めの後。
 
 ### 窓口と入口（`desk_tests.rs`・`update_cue_tests.rs`・`update_frame_tests.rs`・9.4・9.5・9.7）
@@ -897,13 +948,13 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 - 二重起動: 段が `Running` の間の `submit` が `Executing` を返し、偽の kanade の受信端に `OnUpdateFailure(executing)` が 1 件だけ届き、総括が無いこと（9.7）。
 - 預かり（決めたこと 5・9.6・9.7 の境目）: 段が `AwaitingExec` の間に届いた要求が `Held` になり ⑴ `OrderDone`（ゴーストが台本で応えた）を受けると、その預かりが `submit` に掛け直されて背景スレッドへ渡る（`OnUpdateFailure` 0 件）／⑵ `Started`（応えが無かった）を受けると `OnUpdateFailure(executing)` が 1 件だけ届き、預かりは空になる／⑶ 預かりが埋まっている間の 2 件目は `Executing`。頼みと生の要求が同じ `drain` に届いても別の tick に届いても同じ結果になること（両方の順で判定する）。
 - 定常でない: `SwitchInFlight` が在るときの `submit` が `NotSteady`・イベント 0・`warn!` 1 件（9.7）。
-- 読み直しの条件: argv（`folder == None`）→ `warn!(update_reload_skipped)`・切替の要求 0／置き場のゴーストが違う → 0／条件を満たせば `SwitchRig` 上で `request_ghost_switch` が `Accepted`（`OnGhostChanging`・`OnClose` 0 件）。
+- 読み直しの条件: argv（`folder == None`）→ `warn!(update_reload_skipped)`・切替の要求 0・列は今のゴーストへ順に届く／置き場のゴーストが違う → 0・列 0 件と `update_tail_dropped`／条件を満たせば `SwitchRig` 上で `request_ghost_switch` が `Accepted`（`OnGhostChanging`・`OnClose` 0 件）・起き直したゴーストの起動の知らせが列の先頭で `OnGhostChanged`・`OnBoot` 0 件・切替の終わりで列の残りが届く／切替が既定へ戻ると列 0 件と `update_tail_dropped`（2026-09-30）。
 - 終了: `begin_close` の後の `Reload` が落とされ切替の要求 0（9.12）。
 
 ### 背景スレッドの口（`worker_tests.rs`・9.7・9.12・字面）
 - 写し: 偽の kanade の受信端で `RaiseOutcome` の 5 値と切断を 1 つずつ本物の口へ返し、`Script`／`NoReply`／`NotSteady`→`Closed`／`NotAllowed`→`NoReply`＋`error!`／`Failed`→`Closed`＋`error!`／切断→`Closed` を判定する。
 - 門: 門が閉じていれば `run_engine` が `Closed` を返し `WinHttpFetch::new()` にも `run` にも入らない（偽の取得口を差した `run_engine` の写しで判定）。`raise` は閉じた後に送らない（受信端に 0 件）。
-- 本番の道筋: `SwitchRig`（偽の SHIORI）の上で本物の口を通し、偽の取得口を差した一周で `OnUpdateBegin` → `OnUpdateReady` → … → `OnUpdateComplete` → `OnUpdateResult` が SHIORI に届き、`changed` なら `OnGhostChanging` 無しに同じゴーストが起き直ること（`OnGhostChanged` が届く）。待ちは返信端と受信端の受け取りで揃える。
+- 本番の道筋: `SwitchRig`（偽の SHIORI）の上で本物の口を通し、偽の取得口を差した一周で `OnUpdateBegin` → `OnUpdateReady` → 各ファイルが古いゴーストに届き、`changed` なら `OnGhostChanging` 無しに同じゴーストが起き直り、新しいゴーストに起動の知らせ `OnUpdateComplete`（`changed`）→ `OnUpdateResult` が届く（`OnGhostChanged`・`OnBoot` 0 件）。`none` なら切替 0 件で `OnUpdateComplete`（`none`）→ `OnUpdateResult` が最後に届く（2026-09-30）。待ちは返信端と受信端の受け取りで揃える。
 - 字面: `crates/areka/src/` の本番ファイルで `WinHttp` で始まる識別子は `WinHttpFetch` だけ・呼び出しは 2 ファイルだけ。
 
 ### URL の取得（`fetch_url_tests.rs`・`judge_tests.rs`・9.11）
@@ -915,22 +966,19 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 - 印のある走行フォルダ（`old/` に開いたままのファイル）は次の `create` の `residue` に挙がらず、閉じた後の `create` で消える。
 - 印の無い `old/` 付きフォルダは今日どおり `residue` に挙がる（既存の `folder_with_content_in_old_survives_repeated_creates_and_is_listed` はそのまま緑）。
 
-### kanade（`events_change_tests.rs`・`resources.rs` のテスト・9.13）
+### kanade（`events_change_tests.rs`・`resources.rs` のテスト・`boot_root_tests.rs`・9.13）
 - 許可表 42 語・19 語が引け・`OnUpdateCheckComplete` が引けない。リソース 12 語。
+- 起動の由来 `Updated`（2026-09-30）: 根が渡した名前と Reference の GET・204 で `OnBoot` 0 件のまま定常・台本で `StartTalk`・`first_boot` が先。既存の `Plain`・`ChangedFrom`・`Halted` の判定と完了 `ghost-shell-balloon-switch` の切替のテストはそのまま緑。
 
 ### 終了（`exit_wait_tests.rs`・9.12）
-門は部品として `update/` を知らないので、「書いている最中なら上限の内に待つ・上限（出発点を過去に置いた `WaitBudget`）で `warn!(exit_wait_timeout)` を残して進む・書いていなければ待たない」は既存の `exit_wait_tests.rs` がそのまま固定する。本文の変更（決めたこと 14）で、`.nar-work` を見ている既存の判定を新しい本文と `label` を見る判定へ書き換える（消さない）。更新の側の「後始末の後はイベント 0 件と読み直し 0 件」は `worker_tests.rs`・`desk_tests.rs` に置く（上の 2 節）。
-
-### 規律（9.14・9.15）
-既存のテストは消さない。数の判定（23 → 42・10 → 12・消費者台帳 10 → 13）は新しい値へ書き換える。ネットへ出るテストは 0。
+門は部品として `update/` を知らないので、「書いている最中なら上限の内に待つ・上限（出発点を過去に置いた `WaitBudget`）で `warn!(exit_wait_timeout)` を残して進む・書いていなければ待たない」は既存の `exit_wait_tests.rs` がそのまま固定する。本文の変更（決めたこと 14）で、`.nar-work` を見ている既存の判定を新しい本文と `label` を見る判定へ書き換える（消さない）。更新の側の「後始末の後はイベント 0 件と読み直し 0 件」は `worker_tests.rs`・`desk_tests.rs` に置く（上の 2 節）。 規律（9.14・9.15）: 既存のテストは消さない。数の判定（23 → 42・10 → 12・消費者台帳 10 → 13）は新しい値へ書き換える。ネットへ出るテストは 0。
 
 ### 実機（`signoff.md`・9.16・9.17）
-`RUST_LOG` は `info,areka=debug,areka::update=debug,areka_update=debug,kanade=trace` を基準にし、`shiori_request`・`update_*`・`ghost_switch_*` が見える所まで開ける。検体は根へ入れた emo2（引数なし・短い絶対パス）。配布サイトへ差分 1 件を置くのは開発者の手（裁定 4）。
-1. メニュー「ネットワーク更新」→ 差分 1 件が入る → `OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete`（`changed`）の台詞 → 台詞の後に引っ込んで戻る（`update_reload_requested verdict=Accepted`・`ghost_switch_done`・`OnGhostChanged`）→ シェル・バルーンの中身も読み直されている（`shell_target` の読み込みの記録）。
-2. もう 1 度 → `OnUpdateComplete`（`none`）→ 読み直さない（`update_reload_requested` が 0 件）。
-3. `homeurl` の無いシェルが飛ばされ、総括にゴーストとバルーンだけ（`update_target_skipped kind=shell`）。バルーンの更新先（別のサイト）の結果は記録して開発者へ。
-4. **早く知りたい点**: 項目 1 の走行で、`.update-work/` の走行フォルダに `committed` の印が置かれ、項目 2 の走行で黙って消えること（写像中の DLL を退避したときの後片付け＝設計で決めたこと 15 の実物）。
-5. 置けなければローカルの http で 1・2 を行い、https 未確認を既知の制限へ。
+`RUST_LOG` は `info,areka=debug,areka::update=debug,areka_update=debug,kanade=trace` を基準にし、`shiori_request`・`update_*`・`ghost_switch_*` が見える所まで開ける。検体は根へ入れた物（引数なし・短い絶対パス）。配布サイトへ差分を置くのは開発者の手（裁定 4）。1〜3 回目の記録（emo2・あやめ）は `signoff.md`。
+1. メニュー「ネットワーク更新」→ 差分が入る → `OnUpdateBegin`・`OnUpdateReady`・各ファイルの台詞 → 台詞の後に引っ込んで戻る（`update_reload_requested verdict=Accepted`・`ghost_switch_done`）→ 新しいゴーストの起動の知らせが `OnUpdateComplete`（`changed`）で `OnGhostChanged`・`OnBoot` は 0 件、続けて `OnUpdateResult`（`update_tail_sent when=after_switch`）→ シェル・バルーンの中身も読み直されている（2026-09-30 改訂）。
+2. もう 1 度 → 読み直さず（`update_reload_requested` 0 件）、最後に今のゴーストへ `OnUpdateComplete`（`none`）→ `OnUpdateResult`（`update_tail_sent when=at_end`）。
+3. `homeurl` の無いシェルが飛ばされ、総括にゴーストとバルーンだけ（`update_target_skipped kind=shell`）。
+4. 項目 1 の印つきの残りが読み直しの切替の終わりで消える（`update_purge_done`）。置けなければローカルの http で 1・2、https 未確認を既知の制限へ。
 
 ## Security & Performance
 - 更新先の URL は `descript.txt` か SHIORI の値をそのまま渡す。`http://`／`https://` 以外の拒否・末尾 `/` の補い・定義ファイルの行の検査（`..`・絶対パス・作業場所の下）・本文の上限 256 MiB・時間切れはエンジンの規則のまま（本仕様で緩めない）。
@@ -939,31 +987,14 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 
 ## 規模の見立て
 
-| 仕事 | 見立て |
-|---|---|
-| エンジンの後片付けの印（`work.rs`＋テスト）＝先頭 | 1 |
-| 本体から `areka-update` を辿れるようにする（依存・`homeurl`／`descript_name` の読み手・台帳の 5 行・生成物） | 1 |
-| kanade の許可表 2 本と数の判定 | 0.5 |
-| 写し（`refs.rs`＝19 語・Reference・番号・失敗理由の表・総括）とテスト | 2 |
-| 手続き（`procedure.rs`）と偽の口・4 経路・読み直しのテスト | 2〜2.5 |
-| 依頼の型・受付・窓口（対象の解決・段と預かり・写し・`executing`・読み直しの条件・終了）とテスト | 2〜2.5 |
-| 背景スレッドと本物の口（門・エンジン・写し 5 値・本番の道筋のテスト・字面の検査） | 1.5〜2 |
-| 台本の受け口と消費者台帳 | 1 |
-| メニューの登記と定常到達の照会 | 1 |
-| `\![execute,install,url]`（`judge`・`install_cue`・`fetch_url`）とテスト | 1.5 |
-| `exit_wait` の本文・§8・README・台帳の残り・生成物 | 1 |
-| 実機確認 | 1 |
-| **合計** | **15.5〜17** |
-
-- 要件の段の見立て（13〜16）の内側。待ち行列と送り直しを持たないこと（決めたこと 1・2・5）で窓口が `install/desk.rs` より小さい。
-- タスク生成への申し送り: エンジンの印は誰とも共有しないので先頭に独立させる（`cargo test -p areka-update` で閉じる）。依存の追加と台帳 5 行（要件 8.2）は同じタスク。許可表の追加は本仕様が `file-drop` の次（23 → 42）で、`shell-balloon-switch` はその後。
+設計の段の見立ては合計 15.5〜17（エンジンの印 1・依存と台帳 1・許可表 0.5・写し 2・手続き 2〜2.5・受付と窓口 2〜2.5・背景スレッド 1.5〜2・受け口 1・メニュー 1・URL のインストール 1.5・文書 1・実機 1。内訳の表は `31bde436` 以前の本書）で、要件の段の見立て（13〜16）の内側。待ち行列と送り直しを持たないこと（決めたこと 1・2・5）で窓口が `install/desk.rs` より小さい。2026-09-30 の改訂（タスク 12＝kanade の由来・切替の入口・後送りの列・文書）は +2〜3。
 
 ## Open Questions / Risks
 
 1. **SHIORI が排他で開いているファイルが定義ファイルに載っていたら、確定は `CommitWrite` → 戻し → `OnUpdateFailure(fileio)` になる**（要件 5.1 の代償）。emo2 の `updates.txt` に記録ファイルや保存データが載っているかは実機の項目 1 で分かる。載っていれば作者の側（配布の定義から外す）の話で、既知の制限には書かない（裁定 1）。
-2. **写像中の DLL の退避と印**。確定の改名は較正済みだが、本番の 32bit SHIORI（補助プロセスが写像）で `old/` へ退避した DLL が読み直しの後に消せることは実機の項目 4 で確かめる。消せない期間が長引いても害は「印つきのフォルダが残る」だけ（警告は出ない）。
+2. **写像中の DLL の退避と印・読み直しの後の解き直し**（確かめ済み）: 本番の 32bit SHIORI で `old/` へ退避した `yaya.dll` は読み直しの切替の終わりで消え、読み直した後の補助プロセスは新しい `yaya.dll` を読み込んだ（`signoff.md` の 3 回目）。
 3. **台詞の置き換え**。ファイルごとに 3〜4 件のイベントが続くと前の台詞は切れる（`value_replaces_active_talk`）。SSP と同じ振る舞いで受け入れる（要件の段で確認済み・§8 に記す）。
-4. **読み直しの後のシェル・バルーンの解き直し**。`boot_into` は `resolve_balloon_for_ghost` と `boot_ghost_strict` で解き直すが、更新で中身が変わった後の再起動は初めて。実機の項目 1 で新しい中身が効くことを見る。
-5. **定常到達ごとの `homeurl` の照会**が起動直後の SHIORI への GET を 1 つ増やす。`username` の prefetch と同じく軽いはずだが、起動の記録で往復の時間を 1 度見る。
-6. **`updateother` で今表示中でないシェル・バルーンを更新した後**は読み直しの対象にならない（今の切替の道は自分自身のゴーストだけを読み直す）。表示中でない物の中身は次に選んだときに効く。§8 に記す。
-7. **申し送り**（要件 8.8）: `shell-balloon-switch` へ「今のシェル・今のバルーン」の読み替え（`desk::resolve_targets`）と許可表の数 42・リソース 12／`alpha-release-signoff` へ第三者の手順「更新する」（メニュー → 進捗の台詞 → 引っ込んで戻る）と既知の制限（更新オプション・`other_homeurl_override`・URL の `feed`／`homeurl`・落としたファイルは `%TEMP%\areka\download\` に 7 日残る・戻せなかった残りは `.update-work` の下に残る・argv で始めたゴーストは読み直さない）。
+4. **定常到達ごとの `homeurl` の照会**が起動直後の SHIORI への GET を 1 つ増やす。`username` の prefetch と同じく軽いはずだが、起動の記録で往復の時間を 1 度見る。
+5. **`updateother` で今表示中でないシェル・バルーンを更新した後**は読み直しの対象にならない（今の切替の道は自分自身のゴーストだけを読み直す）。表示中でない物の中身は次に選んだときに効く。§8 に記す。
+6. **申し送り**（要件 8.8）: `shell-balloon-switch` へ「今のシェル・今のバルーン」の読み替え（`desk::resolve_targets`）と許可表の数 42・リソース 12／`alpha-release-signoff` へ第三者の手順「更新する」（メニュー → 進捗の台詞 → 引っ込んで戻る）と既知の制限（更新オプション・`other_homeurl_override`・URL の `feed`／`homeurl`・落としたファイルは `%TEMP%\areka\download\` に 7 日残る・戻せなかった残りは `.update-work` の下に残る・argv で始めたゴーストは読み直さない・下の 7）。
+7. **後送りの列の残りは起動の知らせの台詞の終わりを待たない**（既知の制限・要件 5.3・2026-09-30 開発者承知）。`OnUpdateComplete` と `OnUpdateResult` の両方に応えるゴーストでは、読み直した後の `OnUpdateComplete` の台詞が `OnUpdateResult` の台詞に置き換わる。kanade に「今の台詞が終わってから送る」口が無く、足すのは後続の spec。`OnUpdateResult`／`Ex` は SSP だけのイベントで、検体（emo2・konnoyayame）の辞書はどちらも応えないので今は見えない。
