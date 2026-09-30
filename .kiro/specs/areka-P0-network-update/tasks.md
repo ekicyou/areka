@@ -163,14 +163,14 @@
   - _Requirements: 5.10, 8.3, 8.4, 8.5, 8.8_
   - _Depends: 4.2, 7.1, 7.2_
 
-- [ ] 9. 全体の確認と実機サインオフ
-- [ ] 9.1 全体のテストと規律の検査を通す（10・11 の後に回し直した。12 の後にもう一度回し直す）
+- [x] 9. 全体の確認と実機サインオフ
+- [x] 9.1 全体のテストと規律の検査を通す（10・11 の後に回し直した。12 の後にもう一度回し直す）
   - `tools/test-all.ps1` が緑。既存のテストは置き換え無しに消していない（数の判定は 23 → 42・10 → 12・10 → 13 へ書き換えただけ）。ネットへ出るテストは常時テストに無い
   - 本番とテストのどのファイルも 1,000 行以下。本番コードが読む環境変数・外部クレート・同期送信（`SendMessageW(`／`SendMessageTimeoutW(`）の例外表の追加が 0。メッセージボックスを出す呼び出しが本仕様のコードに 0
   - 印の判定（`session_mark_verdict`）の引数と理由の語、切替・メニューの終了・OS の終了で SHIORI を待つ期限、終了で待つ口の呼び手（同じ出発点の予算）が変わっていない
   - _Requirements: 1.18, 4.1, 5.11, 7.2, 7.6, 7.7, 8.6, 8.7, 9.14, 9.15_
 
-- [ ] 9.2 実機で確かめて `signoff.md` に記録する（3 回目で ⑴〜⑷ 合格。12 の後に ⑴⑵ を回し直す＝読み直した後の起動の知らせが `OnUpdateComplete`・`OnGhostChanged`／`OnBoot` 0 件・続けて `OnUpdateResult`／差分 0 では最後に今のゴーストへ `OnUpdateComplete(none)` → `OnUpdateResult`）
+- [x] 9.2 実機で確かめて `signoff.md` に記録する（3 回目で ⑴〜⑷ 合格。12 の後に ⑴⑵ を回し直す＝読み直した後の起動の知らせが `OnUpdateComplete`・`OnGhostChanged`／`OnBoot` 0 件・続けて `OnUpdateResult`／差分 0 では最後に今のゴーストへ `OnUpdateComplete(none)` → `OnUpdateResult`）
   - `RUST_LOG` をイベントの送出・更新先の解決・判断の分かれ目が見える所まで開ける（`info,areka=debug,areka::update=debug,areka_update=debug,kanade=trace`）。検体は根へ入れた emo2（引数なし・短い絶対パス）。配布サイトへ差分 1 件を置くのは開発者の手（置いてもらってから走らせる）
   - ⑴ メニュー「ネットワーク更新」→ 差分 1 件が入る → `OnUpdateBegin`・`OnUpdateReady`・各ファイルの台詞 → 台詞の後に引っ込んで戻る → 新しいゴーストが `OnUpdateComplete`（`changed`）で起きる（12 の後。10 以前は `OnGhostChanged`）→ `OnUpdateResult` → シェル・バルーンの中身も読み直されている ⑵ もう 1 度 → 読み直さず、最後に `OnUpdateComplete`（`none`）→ `OnUpdateResult` ⑶ `homeurl` の無いシェルが飛ばされ総括にゴーストとバルーンだけ ⑷ ⑴ の走行で `.update-work/` に印が置かれ、⑵ の走行で黙って消えるか（本番の 32bit SHIORI）。置けなければローカルの http で ⑴⑵ を行い、https 未確認を既知の制限へ
   - 4 項目が `signoff.md` に記録されている。予期しない結果は記録して開発者の判断を仰ぐ
@@ -265,3 +265,4 @@
   3. 対象ごとに一連のイベントが揃う（シェル・バルーンも読み直しの後に `OnUpdateOtherComplete`）。順は ゴースト → シェル → バルーン（→ 推奨バルーン）＝本仕様はシェル・バルーンの `OnUpdateOther*` を読み直しの前に古いゴーストへ送り、読み直しは最後に 1 回
   4. 総括は最後に 1 回 `OnUpdateResultEx`、それが台本を返さなかったときに限り続けて `OnUpdateResult`＝本仕様は `Current` なら `OnUpdateResult`、`Other` なら `OnUpdateResultEx` の片方だけ
   5. 自動更新（理由 `auto`）では `OnUpdateBegin` は `OnUpdateReady` の直前、更新なし・確認前の失敗ではイベント 0＝本仕様は自動更新を持たない（入口は manual・script だけ）
+- 9.1・9.2（12 の後の回し直し）: `tools/test-all.ps1` は b7df4dde で全段緑（以降は文書だけ）。実機は `signoff.md` の 4 回目（emo2・https）で新しい流れを確認・開発者の目視で問題なし

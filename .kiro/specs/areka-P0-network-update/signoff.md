@@ -67,3 +67,37 @@ design の Testing Strategy「実機」の項目 ⑴〜⑷。3 回走らせた�
 - emo2 のバルーン（kakukaku）の `homeurl` は 404（emo-gs ではバルーンはゴーストの更新の一部として配られ、単独の更新先が無い）
 - 読み直しの直後に `chain_finalize: 初期配置の確定が続けて見送られている（deferrals=600）` の `warn!` が 1 件出た（配置の既存の見張り・本仕様の範囲外）
 - i686 の `shiori_proxy::tests::testdll_drop_invokes_courtesy_unload` が検証中に 1 度だけ落ちた（既存の不安定・補助プロセスの crate は本仕様の変更に依存しない）
+
+## 4 回目: emo2（本物の配布サイト・https）— 新しい流れ（2026-09-30 開発者確定）の確認・全項目 合格
+
+- 日時: 2026-09-30 21:18〜21:20 JST（記録は UTC の 12:18〜12:20）・HEAD `519a7233`（`tools/test-all.ps1` は b7df4dde で全段 緑・その後は文書だけ）・根 `target\nu\root5`
+- 前提: 配布サイトの改行の不備は `emo2_network` のセッションが直して公開した（`updates.txt` の Last-Modified 2026-09-30 10:50:23 GMT・`ghost_dev` main `e2df8cb`）。こちらでもサイトの 109 件を取り直し、MD5 がすべて `updates.txt` と一致することを確かめた（日本語の名前 `頬差分.pdn` はエンジンが URL を UTF-8 で符号化して取る）
+- 記録（`run.log` から抜粋・時刻は UTC）:
+
+  ```
+  12:20:10.740 OnUpdateBegin        ["えも？？", "<根>\ghost\emo2", "", "ghost", "manual"]   （古いゴースト）
+  12:20:11.301 OnUpdateReady        ["23", "emo2-kakukaku/arrow0.png,…"]                   （24 件・各ファイルの取得と MD5 照合が続く）
+  12:20:16.653 OnUpdateOtherFailure ["404", "", "", "balloon", "manual"]                   （バルーン kakukaku の更新先が 404）
+  12:20:16.655 update_tail_deferred count=2
+  12:20:16.712 windows_closed_for_restart                                                    （別れの台詞・OnClose なし）
+  12:20:16.868 OnInitialize                                                                  （新しいゴースト）
+  12:20:17.274 boot_update_root id="OnUpdateComplete"
+  12:20:17.274 OnUpdateComplete     ["changed", "emo2-kakukaku/arrow0.png,…"]               （起動のイベント＝新しいゴーストが受ける）
+  12:20:17.281 ghost_switch_done ghost=Some("emo2") attempt=Target
+  12:20:17.287 update_purge_done removed=1                                                   （古い pasta.dll の写しを消した）
+  12:20:17.287 update_tail_sent when="after_switch" count=1
+  12:20:17.287 OnUpdateResult       ["ghost\x01OK\x0124", "balloon\x01NG\x01404"]
+  12:20:31.260 OnUpdateBegin        （2 回目）
+  12:20:31.392 OnUpdateOtherFailure ["404", …]
+  12:20:31.393 OnUpdateComplete     ["none", "", "", "ghost", "manual"]
+  12:20:31.395 OnUpdateResult       ["ghost\x01OK\x010", "balloon\x01NG\x01404"]
+  12:20:31.396 update_tail_sent when="at_end" count=2                                        （読み直さない）
+  12:20:36.928 OnClose              ["user", "0", "0"]（開発者がメニューで終了）
+  ```
+
+- ⑴ https で差分 24 件（`pasta.dll` を含む）が入り、再起動した新しいゴーストの起動のイベントが `OnUpdateComplete(changed)`、続いて `OnUpdateResult`。再起動の間の `OnGhostChanging`・`OnClose`・`OnGhostChanged`・`OnBoot` は 0 件。開発者の目視で問題なし
+- ⑵ `none` → 最後に今のゴーストへ `OnUpdateComplete(none)` → `OnUpdateResult`・読み直さない
+- ⑶ シェルは更新先が無いので飛ばした。バルーンは手元の `descript.txt` に残る古い更新先で 404（サイト側では `homeurl` を消した）
+- ⑷ 古い `pasta.dll` の写しは再起動の切替が終わった 6 ms 後に消えた（`update_purge_done removed=1`）。終了後の `.update-work` は無い
+- 終了は正常（`app_exit origin=KanadeStopped(Quit)`・起動中の印は空）・メッセージボックス 0
+- これで 1 回目の「https で変更の入る一周は未確認」は解消した
