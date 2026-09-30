@@ -77,14 +77,14 @@
   - _Boundary: Seriko actor_
   - _Depends: 4.1_
 
-- [ ] 5. present に古い装着を片付けて登録し直す口を足す
+- [x] 5. present に古い装着を片付けて登録し直す口を足す
 - [x] 5.1 (P) 登録を消す口と装着の子を消す口を作る
   - 装着の子 2 つ（面と文字の層のスロット）を消す口と、表から外して引き継ぐ値（窓・可視性の持ち主・適用済みの寸法・素の大きさ・保留中の大きさ変更）を返す「登録を消す口」を足す（未登録なら失敗を返し表は不変）
   - 兄弟テストで、子を消す口の後に窓の子が 0 になることと、未登録の対象で失敗が返り表が不変なことが緑
   - _Requirements: 4.6, 5.6_
   - _Boundary: Present mount, presenter_
 
-- [ ] 5.2 置き換えの命令と手順を作り、引き継ぎを固定する
+- [x] 5.2 置き換えの命令と手順を作り、引き継ぎを固定する
   - present の命令に「装着の置き換え」（対象・新しい EmoWorld・アトラス・作者の DPI・最初の表示の有無・返信）の腕を足し（`#[non_exhaustive]` のまま）、同じコミットで命令の適用の腕から置き換えの手順へ渡す（同じクレートの網羅の match が閉じる）
   - 置き換えは 1 回の呼び出しの中で、未登録なら `error!` と失敗（表は不変）→ 登録を消す → 引き継ぎの値で新しい装着を登録（作者の DPI の政策だけ新しい値から）→ 最初の表示があれば今日の表示と同じ経路で表示 → 返信、の順に行う
   - 新しいシェルに今の面が無ければ今日の合成の失敗と同じく `error!` を残し、その対象は表示なしのまま
@@ -252,3 +252,4 @@
 - 2.2: design の `observe(state, reply_origin)` は `marked_reply(&state,&input)`（遷移の前にトークの番号を控える）＋`observe(state, Option<MarkedReply>)` に分けた。台詞の終わりの後の印の追跡は `note_marked_done`。`is_marked_break` は結果の決まっていない見張りにだけ効く。暫定の `talk_gap_marked_unsupported` はコードから消えた（12 で design へ反映）。
 - 4.1: `LoopRuntime::replace_shell_table`／`replace_balloon_tables` にメソッド単位の `#[allow(dead_code)]` → 4.2 で外す。本体の仮の腕は `PresentBridge::send` の先頭の捌き（`debug!`）と `map_display_command` の網羅の腕（`Rebased => None`・届かない）の 2 か所 → 9.1 で両方を置き換える。`RebaseKind { Shell, Balloon }` は実装が名付けた。スコープごとの今の面を読む口は 4.2 で足す。
 - 4.2: 4.1 のメソッド単位の `#[allow(dead_code)]` 2 つを外した。今の面の読み口は `ScopeStates::current_surfaces`。バルーンの合図の `shows` は「seriko が見たスコープ ∪ 新しいバルーンの表の鍵」（無い面は `Some(0)`）＝6.3 と 9.1 はバルーンの表を装着の全スコープぶん作る前提。シェルの `shows` に無いスコープは 9.1 で `show: None`（登録だけ）と読む。差し替えのたびに `info!(epoch, kind)` を 1 件（Monitoring の語の候補）。
+- 5.2: `ReplaceTarget.emo_world` は `Box<EmoWorld>`（enum の大きさ・9.1 は `Box::new` で包む）。未登録の `error!` の文言は 5.1 の `detach_target: 未装着ターゲット`（design の表の `apply(ReplaceTarget): 未装着ターゲット` を 12 で直す）。無い面の `error!` は present の 1 件＋合成器の既存の 1 件（tasks の「1 件」は present の件数）。登録が済めば無い面でも返信は `Ok`。

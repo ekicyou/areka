@@ -1,7 +1,7 @@
 //! 統括ハブの器と指令ディスパッチ（`EmoPresenter` 本体・target 登録・`Hide`／`InvalidateCache`）。
 //!
 //! `EmoPresenter` の定義と、指令の入口 [`EmoPresenter::apply`] からの分岐を持つ。`ShowSurface` の適用は
-//! `super::show`、DPI 再スケールは `super::refresh`、照会系は `super::read`、当たり判定は `super::hit` に
+//! `super::show`、`ReplaceTarget`（装着の置き換え）は `super::replace`、DPI 再スケールは `super::refresh`、照会系は `super::read`、当たり判定は `super::hit` に
 //! 分かれる（いずれも同一型 `EmoPresenter` の別 `impl` ブロック）。
 
 use super::budget::FrameBudget;
@@ -104,6 +104,14 @@ impl EmoPresenter {
             PresentCommand::InvalidateCache { target, reply } => {
                 self.apply_invalidate(target, reply)
             }
+            PresentCommand::ReplaceTarget {
+                target,
+                emo_world,
+                atlas,
+                author_dpi,
+                show,
+                reply,
+            } => self.apply_replace(world, target, *emo_world, atlas, author_dpi, show, reply),
         }
     }
 

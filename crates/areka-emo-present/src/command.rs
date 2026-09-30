@@ -70,6 +70,28 @@ pub enum PresentCommand {
         /// 結果返信端（任意・`Some` のとき高々 1 回応答する）。
         reply: Option<areka_actor::ReplySender<PresentOutcome>>,
     },
+    /// 装着の置き換え（シェル・バルーンの差し替え・`areka-P0-shell-balloon-switch` 要件 4.1・4.6）。
+    ///
+    /// 同じ窓の古い装着を片付け、新しい資産で登録し直し、`show` があれば表示する——を 1 回の適用の
+    /// 中で行う。可視性の持ち主・適用済みの k・素の大きさ・保留中の窓寸の要求は古い装着から引き継ぐ
+    /// （要件 4.3）。失敗（reply `Err`）は target が未装着のときだけで、そのとき表は変わらない。
+    ReplaceTarget {
+        /// 置き換える target（登録済みであること）。
+        target: TargetId,
+        /// 新しい合成入力（`bind_atlas` 済み）。
+        ///
+        /// 箱に入れるのは、`EmoWorld` をそのまま持つと指令の enum 全体が 1.5 KB を超え、毎フレームの
+        /// `ShowSurface` の送受信までその大きさで写すことになるためである。
+        emo_world: Box<areka_emo_compose::EmoWorld>,
+        /// 新しいアトラス正本。
+        atlas: areka_emo_atlas::AtlasTable,
+        /// 新しい作者基準 DPI（拡大政策だけはこの値から作り直す）。
+        author_dpi: u16,
+        /// 最初の表示（面・着せ替え）。`None` なら登録だけ（初回の装着と同じ）。
+        show: Option<(u32, areka_emo_compose::BindSet)>,
+        /// 結果返信端（任意・`Some` のとき高々 1 回応答する）。
+        reply: Option<areka_actor::ReplySender<PresentOutcome>>,
+    },
 }
 
 /// 提示段の指令適用で観測し得る構造化エラー（失敗経路はログ＋`Err` で表現する）。
