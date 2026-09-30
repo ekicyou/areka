@@ -44,8 +44,8 @@
 - kanade の運行表（`schedule/mod.rs`・`schedule/change.rs`・`steady.rs`）と殻（`actor.rs`・`actor_resources.rs`）・`msg.rs` の `KanadeMsg`。触るのは許可表 2 本（`schedule/events.rs`・`schedule/resources.rs`）とその数の判定、2026-09-30 からは `change.rs` の `BootOrigin` の変種 1 つと `schedule/boot.rs` の `boot_root` の行・`BootType` の 204 の腕だけ（`Plain`・`ChangedFrom`・`Halted` の振る舞いは変えない）。
 - 切替の入口 `request_ghost_switch` の判定・`GhostSpec`・`switch_to_default`・`boot_into`。`SwitchRequest`・`SwitchInFlight` は起動の知らせの欄を運ぶだけ、`switch_to` は欄が在れば由来を `Updated` にするだけ（決めたこと 23）。`GhostSpec` に絶対パスの変種は足さない（裁定 17）。
 - `session_mark_verdict`・`ExitOrigin`・`Teardown`（要件 5.11・7.6）。`exit_wait.rs` の門の意味論（変えるのは上限に達したときの本文 1 行だけ）。
-- `install/desk.rs`・`install/worker.rs`・`install/procedure.rs`・`install/overwrite.rs`（インストールの手続きは触らない。`install/` で触るのは `judge.rs` の台本の引数の検査と新設 `fetch_url.rs`・`emo2_boot/install_cue.rs` の腕だけ）。
-- `main.rs`（`mod update;` の 1 行を除く）・`session_end.rs`・`emo2_boot/frame.rs`・`emo2_boot/spine.rs`・`placement/`・`input_events/`・wintf。
+- `install/desk.rs`・`install/worker.rs`・`install/procedure.rs`・`install/overwrite.rs`（インストールの手続きは触らない。`overwrite.rs` は `SwitchRequest` の `boot_event: None` の 1 行だけ・2026-09-30。`install/` で触るのは `judge.rs` の台本の引数の検査と新設 `fetch_url.rs`・`emo2_boot/install_cue.rs` の腕だけ）。
+- `main.rs`（`mod update;` の 1 行を除く）・`session_end.rs`・`emo2_boot/frame.rs`・`emo2_boot/spine.rs`・`placement/`・`input_events/`・wintf・`shiori-host32-host`（例外: タスク 11＝実機で見つかった既存の欠陥。`process_host::spawn_command` に `CREATE_NO_WINDOW`・兄弟 `process_host_console_tests.rs`・境界を広げた・並走なし）。
 - `areka_ghost::catalog::Identity`（`homeurl` の欄は足さない・目録の型は 7 欄のまま）。
 - 完了 spec の文書（`.kiro/specs/completed/` 以下）。
 
@@ -67,7 +67,7 @@
 - `work.rs` の印 `committed`＝作業場所の棚（`.update-work/`）に印のファイルを持つ走行フォルダが現れる。`sweep` の判定に依る後続は印を知る。
 - `catalog::homeurl`・`catalog::descript_name` が公開の口として増える。
 - 2026-09-30: `BootOrigin` が 4 値になる＝完了 `kanade` の起動の根の表のテスト（`boot_root_tests.rs`）と、完了 `ghost-shell-balloon-switch` の切替のテスト（`ghost_switch_tests.rs`・`ghost_session_switch_*_tests.rs`）を回し直して振る舞いが変わらないことを確かめる。`SwitchRequest` を組む所（本番 4・テスト 7）は `boot_event: None` を足す。後続 `shell-balloon-switch` が起動の根に行を足すときは `Updated` の 204 の腕（`OnBoot` へ続けない）を崩さない。
-- 完了 `update-engine` の前提「SHIORI を先に解放している」は本仕様以後、呼び手が守らない。エンジンを再検証するときは「写像中の DLL を退避した走行の後片付け」を前提に含める。
+- 完了 `update-engine` の前提「SHIORI を先に解放している」は本仕様以後、呼び手が守らない。エンジンを再検証するときは「写像中の DLL を退避した走行の後片付け」を前提に含める。32bit の補助プロセスはコンソール窓なしで起きる（タスク 11）＝依存する `areka-kanade` の host32 の e2e と i686 のテストを `tools/test-all.ps1` で回し直す。
 
 ## Architecture
 
@@ -197,9 +197,9 @@ crates/areka/src/
 
 - `update/refs_tests.rs`（Reference・番号・失敗理由の表 19 種・総括）
 - `update/procedure_tests.rs`（対象 1 つの 4 経路 × ゴースト／シェルの名・`OnUpdateProcessExec`・飛ばし・二重の締め 0）・`update/procedure_reload_tests.rs`（読み直しの要求・居なくなった対象・門が閉じた後）・`update/procedure_test_support.rs`（偽の口・`Progress` の台本）
-- `update/desk_tests.rs`（対象の解決・`updateother` の名前引き・灰色の判定・`executing`・定常でない・終了で捨てる）
+- `update/desk_tests.rs`（`executing`・預かり・定常でない）・`update/desk_resolve_tests.rs`（対象の解決・`updateother` の名前引き・灰色の判定・終了で捨てる）・`update/desk_reload_tests.rs`（読み直し・後送りの列の行き先・片付け）・`update/update_tests.rs`（種別と理由の綴り）
 - `update/worker_tests.rs`（本物の口の写し 5 値＋切断・門・`WinHttp` の字面の検査）
-- `install/fetch_url_tests.rs`・`emo2_boot/update_cue_tests.rs`・`menu/update_frame_tests.rs`
+- `install/fetch_url_tests.rs`（偽の取得口は `install/fetch_url_test_support.rs`）・`emo2_boot/update_cue_tests.rs`・`menu/update_frame_tests.rs`・`emo2_boot/ghost_switch_boot_event_tests.rs`（起動の知らせ・2026-09-30）・`update/worker_path_tests.rs`（本番の道筋）・`crates/shiori-host32-host/src/process_host_console_tests.rs`（コンソール窓なし・タスク 11）
 - `crates/areka-update/src/work_tests.rs`（既存 162 行に印の 2 通りを足す）
 
 ### 変更
@@ -222,8 +222,8 @@ crates/areka/src/
 | `crates/areka/src/install/desk_pick_tests.rs` | `script_request(&["path", ABSOLUTE]).expect(..)` を `PathBuf` として使う箇所を `ScriptRequest::Path` から取り出す形へ追随 |
 | `crates/areka/src/emo2_boot/install_cue_tests.rs` | `script_request` の戻りの型の変更に追随（`path` の腕の振る舞いは今日どおり＝判定の中身は変えない） |
 | `crates/areka/src/exit_wait_tests.rs` | `spent_budget_returns_at_once_with_one_timeout_warning` の「本文に `.nar-work` を含む」の判定を、新しい本文（決めたこと 14）と `label` を見る判定へ書き換える（要件 9.14・消さない） |
-| `crates/areka/src/install/mod.rs` | `pub(crate) mod fetch_url;` の 1 行（`emo2_boot/install_cue.rs` が呼ぶ） |
-| `crates/areka/src/menu/mod.rs` | `pub(crate) mod update_frame;` |
+| `crates/areka/src/install/mod.rs`・`menu/mod.rs` | `pub(crate) mod fetch_url;`（`emo2_boot/install_cue.rs` が呼ぶ）・`pub(crate) mod update_frame;` の各 1 行 |
+| `crates/shiori-host32-host/src/process_host.rs` | `spawn_command` に `creation_flags(CREATE_NO_WINDOW)`（タスク 11・補助プロセスのコンソール窓を出さない） |
 | `crates/areka/src/exit_wait.rs` | `exit_wait_timeout` の本文を門に依らない語へ（決めたこと 14） |
 | `crates/areka-kanade/src/schedule/events.rs` | `ALLOWED_EVENT_IDS` に 19 語（各 1 行の正典 URL つき・群の注記 1 行）。冒頭の表に 19 行 |
 | `crates/areka-kanade/src/schedule/events_change_tests.rs` | 数の判定を 23 から 42 へ。19 語が引け、`OnUpdateCheckComplete` が引けないことを同じテストで |
