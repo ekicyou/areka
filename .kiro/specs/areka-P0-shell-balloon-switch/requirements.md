@@ -33,7 +33,7 @@
 - **台詞の終わりの合図。** `crates/areka/src/emo2_boot/talk_lifecycle.rs` の `TalkLifecycleSignal`（`TalkStarted`／`DisplayEndAt(f64)`／`UserBreak`）が `Emo2Wiring.lifecycle_rx`（`crates/areka/src/emo2_boot/frame/wiring.rs`）へ届く。kanade の入口は「送る」だけで台詞の終わりを呼び手に知らせない。
 - **検体。** `crates/sample-ghost-kit/src/lib.rs` の `SAMPLES` は 7 件。シェルを 2 つ持つ検体は 0（`emo2`・`R_POST_and_KOMAINU`・`konnoyayame`・`claudia` はいずれも `shell/master/` だけ）。`claudia` は同梱バルーンを 2 つ持つ唯一の検体。実機で応答を観測できる辞書: `R_POST_and_KOMAINU` の `dic02_Event.txt` は `OnShellChanging`／`OnShellChanged` に、`konnoyayame` は 3 つすべてに、emo2 は `OnBalloonChange` に応答する。
 - **台帳の陳腐化。** `doc/ukadoc-coverage/ledger/shiori.toml` の `shellrootbutton.caption` の備考は引受先を `areka-P0-ghost-shell-balloon-switch`、`balloonrootbutton.caption` は `areka-P0-baseware-root-layout` と書く（どちらも本仕様が引き受ける）。`OnShellChanging`／`OnShellChanged`／`OnBalloonChange`、`sakura-script.toml` の `\![change,shell,…]`・`\![change,balloon,…]` は `absent`・owner 空。
-- **行数。** `emo2_boot/mod.rs` 805・`frame.rs` 509・`consumer_ledger.rs` 756・`ghost_session.rs` 691・`main.rs` 927・`boot_resolve.rs` 471・`resolve.rs` 952・`presenter/hub.rs` 176／kanade `events.rs` 535・`steady.rs` 935（触らない）／上限が近いテスト: `runtime_tests.rs` 986・`assets_tests.rs` 976・`actor_tests.rs` 970・`schedule_tests.rs` 962・`ghost_switch_tests.rs` 987（足さない・兄弟の新ファイルへ）。
+- **行数（ギャップ分析の実測で改めた）。** `emo2_boot/mod.rs` 825・`frame.rs` 533・`consumer_ledger.rs` 831・`ghost_session.rs` 705・`main.rs` 946（上限まで 54）・`boot_resolve.rs` 471・`resolve.rs` 952・`presenter/hub.rs` 176・`catalog.rs` 362／kanade `events.rs` 627・`steady.rs` 935（触らない）／上限が近いテスト: `runtime_tests.rs` 986・`assets_tests.rs` 976・`actor_tests.rs` 970・`schedule_tests.rs` 962・`ghost_switch_tests.rs` 988（足さない・兄弟の新ファイルへ）。
 
 ### 正典（ukadoc）の位置づけ
 
@@ -89,7 +89,7 @@
   - 完了 `baseware-root-layout` の目録（`list_shells`・`list_balloons`）・記憶の鍵（`LastShell`／`LastBalloon`＝Ghost スコープ）・書き手（`record_last_used`）を使い、目録の素性（`Identity`）に欄を足さない。
   - 完了 `pilot-balloon-asset-swap` の学び（同じ id の再登録だけでは重なる・古い装着を消してから同じ呼び出しの中で再登録・配置が決まる前の段・`EmoWorld` は複製できない・可視性の持ち主と窓寸の要求が既定へ戻る）の上に建つ。present に「古い装着を片付ける正規の口」と「登録を消す口」を足すのは本仕様。
   - 完了 `network-update`: 更新の対象の解決 `here` が「今のシェル」を `mount().shell.dir`、「今のバルーン」を `BootContext.current.balloon.dir` から取るので、差し替えの相がその 2 つを書き換えれば手当て 0（書き換えない置き場を選ぶなら `here` を読み替える）。更新後の読み直しで差し替えたシェル・バルーンが保たれること（要件 6.5）。更新の実行中に届いた切替要求は受けない（要件 1.13）。
-  - 完了 `balloon-color-emoji`（09-30 着地済み）: `areka-emo-text` は書記素クラスタ単位になっている。`sink.rs`（`TextMsg`）を触るのは本仕様だけ。
+  - 完了 `balloon-color-emoji`（09-30 着地済み）: `areka-emo-text` は書記素クラスタ単位になっている。文字の層の幾何は毎フレームの結び直し（`run_text_scale_phase`）で `BalloonModel` から結ばれるので、ギャップ分析の見立てでは `sink.rs`（`TextMsg`）に触る必要は無い（触るなら本仕様だけ）。
   - 完了 `session-mark-residue` の同期の送信の許可表 `ALLOWED_SYNC_SENDS`（2 行）: 本仕様は同期の送信を足さない（足せば赤）。
   - 既定ゴースト emo2 の辞書は開発者が持つ。`OnBalloonChange` への応答は emo2 の `update.pasta` に在る。
 
@@ -125,12 +125,12 @@
 #### Acceptance Criteria
 
 1. When `OnShellChanging` を送るシェルの切替要求（`raise-event` 付きの台本・メニュー）を受け、切替先が決まる, the areka shall 現在のゴーストへ `OnShellChanging` を GET で送り、Reference を Ref0＝切り替わるシェルの名前（切替先の `descript.txt` の `name`。無ければフォルダ名）・Ref1＝現在のシェルの名前（同じ規則）・Ref2＝切替先のシェルのフォルダの絶対パス、で載せる。
-2. When `OnShellChanging` が台本を返す, the areka shall その台本を通常のトークとして最後まで再生し、再生が終わってから（バルーンの表示が終わった時点で）差し替えを行う。When `OnShellChanging` が 204（返事なし）を返す, the areka shall 台詞なしで差し替えを行う。
+2. When `OnShellChanging` が台本を返す, the areka shall その台本を通常のトークとして最後まで再生し、再生が終わってから（バルーンの表示が終わった時点で）差し替えを行う。本仕様で「バルーンの表示が終わった時点」は、台詞の文字を出し終えた時点を指す（バルーンが時間切れで隠れるまでは待たない）。When `OnShellChanging` が 204（返事なし）を返す, the areka shall 台詞なしで差し替えを行う。
 3. When `OnShellChanging` を送らないシェルの切替要求（`raise-event` 無しの台本）を受ける, the areka shall `OnShellChanging` を送らず、切替の命令を運んだ台本の再生が終わってから（利用者の中断で早く終わった場合も含む・バルーンの表示が終わった時点で）差し替えを行う（要件 12 裁定 2＝差し替えは台詞の切れ目で行い、表示中の文字と残りの台本には触れない）。
 4. When 差し替えが済む, the areka shall 現在のゴーストへ `OnShellChanged` を GET で送り、Reference を Ref0＝現在の（切り替わった）シェルの名前・Ref1＝現在のゴーストの名前（`descript.txt` の `name`。無ければフォルダ名）・Ref2＝現在のシェルのフォルダの絶対パス、で載せる。応答の台本は通常のトークとして再生し、204 なら何もしない。
 5. The areka shall シェルの切替の間、SHIORI を降ろさず・起こし直さず、kanade の起動系列も終了系列も走らせない（`OnClose`・`OnBoot`・`OnGhostChanged` は 0 件）。会話の状態（`OnSecondChange` の計時・選択肢の待ち・中断の旗）は差し替えをまたいで保たれる。
 6. When 差し替えが済む, the areka shall 各キャラ窓に、差し替えの直前と同じ面番号の面を新しいシェルで表示する（新しいシェルにその面が無ければ、今日の「無い面を指定された」ときの扱いと同じ）。着せ替え（MAYUNA）の状態は新しいシェルの `descript.txt` の既定に戻す。
-7. When 差し替えが済む, the areka shall キャラ窓を作り直さず（窓の位置・重なり順・ドラッグ中の状態を保つ）、窓の大きさだけを新しい面の大きさに合わせ、バルーンの位置を新しい面に対して今日の配置の規則で置き直す。
+7. When 差し替えが済む, the areka shall キャラ窓を作り直さず（窓の位置・重なり順・ドラッグ中の状態を保つ）、窓の大きさだけを新しい面の大きさに合わせ、バルーンの位置を新しい面に対して今日の配置の規則で置き直す。シェルの `descript.txt` から読む見た目の値（窓の寸法・作者の DPI〔`seriko.dpi`〕・バルーンのずらしと揃え方〔`balloon.offsetx`／`offsety`・`balloon.alignment`〕・`seriko.zorder`・デスクトップへの揃え方）は新しいシェルから読み直す。窓の位置（ゴーストごとの記憶）とスコープの数（起動時に決めた数・`kero.*` は読み直さない）は保つ。新しいシェルに在るスコープの面が無いときは、今日の「無い面を指定された」ときの扱いと同じにする。
 8. When 差し替えが済む, the areka shall 走っている SERIKO のアニメ（まばたきなど）を新しいシェルの定義で始め直し、古いシェルの定義を残さない。
 
 ### Requirement 3: バルーン切替は差し替えのあと `OnBalloonChange` を送る
@@ -141,9 +141,9 @@
 
 1. When バルーンの切替要求を受け、切替先が決まる, the areka shall 再生中の台詞があればその再生が終わってから（バルーンの表示が終わった時点で）、無ければ直ちに差し替えを行う（要件 12 裁定 2）。
 2. When 差し替えが済む, the areka shall 現在のゴーストへ `OnBalloonChange` を GET で送り、Reference を Ref0＝切り替わったバルーンの名前（`descript.txt` の `name`。無ければフォルダ名）・Ref1＝切り替わったバルーンのフォルダの絶対パス、で載せる。応答の台本は通常のトークとして新しいバルーンで再生し、204 なら何もしない。
-3. When 差し替えが済む, the areka shall 各スコープのバルーン窓を新しいバルーンの絵と文字の層で組み直し、次の台詞から新しいバルーンの幾何（折り返しの位置・有効矩形・フォントの既定）で描く。バルーンは差し替えの直後は隠れたままで、次の台詞で今日どおり現れる。
+3. When 差し替えが済む, the areka shall 各スコープのバルーン窓を新しいバルーンの絵と文字の層で組み直し、次の台詞から新しいバルーンの幾何（折り返しの位置・有効矩形・フォントの既定・作者の DPI）で描く。差し替えの時点でまだ見えている古いバルーン（文字を出し終えて時間切れを待っているもの）はその場で隠し、新しいバルーンは差し替えの直後は隠れたままで、次の台詞で今日どおり現れる。
 4. When 差し替えが済む, the areka shall 「今のバルーン」（ネットワーク更新の対象の解決が読む場所）を新しいバルーンにする。
-5. The areka shall バルーンの切替で SHIORI もシェルも触らない（SERIKO のアニメ・面・着せ替え・キャラ窓は不変）。
+5. The areka shall バルーンの切替で SHIORI もシェルも触らない（シェル側の SERIKO のアニメ・面・着せ替え・キャラ窓は不変）。バルーン自身のアニメの定義は新しいバルーンのものへ替える。
 
 ### Requirement 4: 差し替えの途中で表示が崩れない
 
@@ -179,13 +179,13 @@
 
 #### Acceptance Criteria
 
-1. When シェルの差し替えが済む, the areka shall 現在のゴーストの「最後のシェル」の記憶（`LastShell`・Ghost スコープ・フォルダ名）を新しいシェルに書く。When バルーンの差し替えが済む, the areka shall 現在のゴーストの「最後のバルーン」の記憶（`LastBalloon`・Ghost スコープ・フォルダ名）を新しいバルーンに書く。書くのは既存の書き手（`record_last_used`）を通し、実行系が動いている間の記憶の書き込みの決まり（`sylphya_publisher` を通す）を守る。書けないときは `warn!` を残して切替は成功として扱う（記憶の縮退は今日と同じ）。
+1. When シェルの差し替えが済む, the areka shall 現在のゴーストの「最後のシェル」の記憶（`LastShell`・Ghost スコープ・フォルダ名）を新しいシェルに書く。When バルーンの差し替えが済む, the areka shall 現在のゴーストの「最後のバルーン」の記憶（`LastBalloon`・Ghost スコープ・フォルダ名）を新しいバルーンに書く。シェルの差し替えは `LastShell` だけを、バルーンの差し替えは `LastBalloon` だけを書き、他の記憶に触らない（3 つを一度に書く `record_last_used` を通すと、バルーンを入れた直後に `remember_balloon` が書いた「次から使うバルーン」を今表示しているバルーンで上書きしてしまうため、1 つだけを書く口を既存の書き手の隣に置く）。実行系が動いている間の記憶の書き込みの決まり（`sylphya_publisher` を通す）を守る。書けないときは `warn!` を残して切替は成功として扱う（記憶の縮退は今日と同じ）。
 2. When ゴーストを起こす（初回の起動・ゴースト切替の切替先・更新後の読み直し）, the areka shall そのゴーストの「最後のシェル」の記憶を読み、`shell/<記憶の名>/` に `descript.txt` が実在すればそのシェルで起こす（`menu,hidden` のシェルでも可）。記憶が無ければ今日どおり既定のシェル（`seriko.defaultsurfacedirectoryname`、無ければ `master`）。
 3. If 「最後のシェル」の記憶が指すフォルダが実在しないか `descript.txt` を持たない, then the areka shall `warn!` を 1 件残して既定のシェルで起こし、その起動の成功で記憶を既定のシェルへ書き直す（次回から警告が出ない）。
 4. The areka shall 起動時に選んだシェル名を、シェルを決める解決のすべての本番の呼び出し点（実行系の起動・資産の組み立て・配置の情報源）へ運び、どの呼び出し点も同じシェルを見る（片方だけ既定のシェルを見る形を作らない）。運ぶ口は `Emo2BootInputs` の欄と `boot_with_origin` の引数で、`GhostBootOptions` と `ConfigInputs`・`CurrentGhost`・`GhostDecision`・`BalloonDecision` には欄を足さない（完了 `ghost-shell-balloon-switch` の約束 1）。
 5. When 切替のあとにネットワーク更新の読み直し（同じフォルダのゴースト切替）が走る, the areka shall 差し替えたシェルとバルーンで起こし直す（記憶から復元される）。When 切替のあとにメニューの「ネットワーク更新」の可否と対象を判定する, the areka shall 差し替えた後のシェル・バルーンを対象にする（更新の窓口が読む「今のシェル」「今のバルーン」が差し替え後を指す）。
 6. The areka shall `OnBoot`／`OnGhostChanged` に載せるシェル名（`OnBoot` の Ref0・`OnGhostChanged` の Ref7）を起動時に選んだシェルにする（起動の解決がそのシェルでマウントすれば自動で追随する）。
-7. The areka shall 起動時の argv（`areka.exe <ゴーストの根> <バルーンの根>`）の第 2 引数の意味を変えない（argv でバルーンを指定した起動では今日どおりそのバルーンで起き、切替後の記憶の書き方も今日の規則＝argv の側は書かない、のまま）。
+7. The areka shall 起動時の argv（`areka.exe <ゴーストの根> <バルーンの根>`）の第 2 引数の意味を変えない（argv でバルーンを指定した起動では今日どおりそのバルーンで起き、起動の成功で argv のバルーンを記憶に書かない、のまま）。argv でバルーンを指定して起きたプロセスでも、利用者がバルーンを切り替えたら、その選択は 6.1 のとおり `LastBalloon` に書く（切替は利用者の明示の選択であって argv ではない）。
 
 ### Requirement 7: メニューの「シェル」「バルーン」枠
 
@@ -233,7 +233,7 @@
 #### Acceptance Criteria
 
 1. The 本仕様 shall `doc/ukadoc-coverage/ledger/shiori.toml` の `OnShellChanging`／`OnShellChanged`／`OnBalloonChange` と `sakura-script.toml` の `\![change,shell,シェル名(,--option=raise-event)]`・`\![change,balloon,バルーン名]` を実装済みへ更新し（owner＝本仕様・備考にシェルの `lastinstalled` はゴースト切替へ回す旨と `sequential` は正典に無い旨を記す）、`shellrootbutton.caption`・`balloonrootbutton.caption` の備考の引受先を本仕様に改めて登記済みの枠の一覧も今の形（ゴースト・インストール・更新・シェル・バルーン・説明書・終了）へ直し、生成物を生成器で作り直す（手で直さない）。
-2. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 に次を 1 行ずつ記す: (a) シェル名の `lastinstalled` は正典の原文どおり最後にインストールしたゴーストへの切替に回す、(b) 差し替えは台詞の切れ目で行い、表示中の文字と残りの台本には触れない（`OnShellChanging` の台詞・命令を運んだ台本の終わりを待つ）、(c) 自分自身への切替は無視せず作り直す（読み直しの代用）、(d) `random` は現在のものを除いて選び、候補 0 なら現在のもの・隠しシェルは `random` の候補に入れない、(e) 隠しシェルは名指しなら切り替えられる、(f) `OnShellChanged` の Ref1 は SSP の意味（現在のゴースト名）、(g) 差し替え後は同じ面番号を新しいシェルで出し、着せ替えは新しいシェルの既定へ戻す、(h) 途中の失敗は元のまま続け、切替失敗のイベントは作らない。各行に正典の沈黙の根拠と裁定の日付を付ける。
+2. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` §8 に次を 1 行ずつ記す: (a) シェル名の `lastinstalled` は正典の原文どおり最後にインストールしたゴーストへの切替に回す、(b) 差し替えは台詞の切れ目で行い、表示中の文字と残りの台本には触れない（`OnShellChanging` の台詞・命令を運んだ台本の終わりを待つ）、(c) 自分自身への切替は無視せず作り直す（読み直しの代用）、(d) `random` は現在のものを除いて選び、候補 0 なら現在のもの・隠しシェルは `random` の候補に入れない、(e) 隠しシェルは名指しなら切り替えられる、(f) `OnShellChanged` の Ref1 は SSP の意味（現在のゴースト名）、(g) 差し替え後は同じ面番号を新しいシェルで出し、着せ替えは新しいシェルの既定へ戻す、(h) 途中の失敗は元のまま続け、切替失敗のイベントは作らない、(i) シェルの差し替えではシェルの `descript.txt` の見た目の値を読み直し、窓の位置とスコープの数は保つ（要件 2.7）、(j) 差し替えの時点は台詞の文字を出し終えた時点で、バルーンの差し替えでは残っている古いバルーンをその場で隠す（要件 2.2・3.3）。各行に正典の沈黙の根拠と裁定の日付を付ける。
 3. The 本仕様 shall `crates/areka/src/menu/mod.rs`・`consumer_ledger.rs`・`change_cue.rs` の「シェル・バルーンは別の spec」と書く doc コメントを実装後の形に合わせて改める。
 
 ### Requirement 11: 決定論テストと実機確認
