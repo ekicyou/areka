@@ -60,13 +60,13 @@ pub(crate) struct StyleRun {
 /// 行のグリフ列を「連続する同じ装飾番号」の区間へ切る（要件 3.6）。
 ///
 /// 文字範囲の数え方は選択肢の範囲算出（`super::segment_text_range`）と同じ——行 TextLayout の
-/// text は各グリフの `ch` の連結なので、UTF-16 長の累積がそのまま文字位置になる（`𠮷` のような
-/// サロゲートペアは 2 単位）。グリフの無い行は区間 0 個。
+/// text は各グリフの文字列（クラスタ）の連結なので、UTF-16 長の累積がそのまま文字位置になる
+/// （`𠮷` のようなサロゲートペアは 2 単位・ZWJ 列は部品の単位の合計）。グリフの無い行は区間 0 個。
 pub(crate) fn style_runs(glyphs: &[PositionedGlyph]) -> Vec<StyleRun> {
     let mut runs: Vec<StyleRun> = Vec::new();
     let mut acc: u32 = 0;
     for g in glyphs {
-        let units = g.ch.len_utf16() as u32;
+        let units = g.text.encode_utf16().count() as u32;
         match runs.last_mut() {
             Some(last) if last.style == g.style => last.range.length += units,
             _ => runs.push(StyleRun {

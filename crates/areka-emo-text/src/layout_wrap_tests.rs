@@ -5,6 +5,7 @@ use super::{FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, VisibleWindow, W
 use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
+use areka_sakura::cluster::clusters;
 
 // ── R4.5: FixedMetrics の決定論仮想値（全角=height・半角=height/2・pitch=height+行間 2） ──
 
@@ -12,10 +13,10 @@ use crate::writing::WritingMode;
 #[test]
 fn fixed_metrics_advance_full_width_for_nonascii_half_for_ascii() {
     let m = FixedMetrics;
-    assert_eq!(m.advance('あ', 12.0), 12.0);
-    assert_eq!(m.advance('a', 12.0), 6.0);
-    assert_eq!(m.advance(' ', 10.0), 5.0);
-    assert_eq!(m.advance('漢', 10.0), 10.0);
+    assert_eq!(m.advance("あ", 12.0), 12.0);
+    assert_eq!(m.advance("a", 12.0), 6.0);
+    assert_eq!(m.advance(" ", 10.0), 5.0);
+    assert_eq!(m.advance("漢", 10.0), 10.0);
 }
 
 /// 行送りピッチは `font_height + 行間 2`（丸めなし・2026-09-05 の裁定）。
@@ -96,9 +97,9 @@ fn horizontal_mixed_width_advances_accumulate() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'a' },
-        TextItem::Glyph { ch: 'あ' },
-        TextItem::Glyph { ch: 'b' },
+        TextItem::glyph("a"),
+        TextItem::glyph("あ"),
+        TextItem::glyph("b"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -228,11 +229,11 @@ fn explicit_line_break_ratio_scales_line_feed() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 0.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -258,9 +259,9 @@ fn vertical_line_break_feeds_column_axis() {
         WritingMode::VerticalRl,
     );
     let items = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 0.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -343,7 +344,7 @@ fn visible_count_gates_placed_glyphs() {
         IMAGE,
         WritingMode::HorizontalTb,
     );
-    let items: Vec<TextItem> = "abcde".chars().map(|ch| TextItem::Glyph { ch }).collect();
+    let items: Vec<TextItem> = clusters("abcde").map(TextItem::glyph).collect();
     let partial = LayoutEngine::layout(
         &items,
         3,
@@ -378,9 +379,9 @@ fn line_break_defers_until_next_visible_glyph() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'a' },
+        TextItem::glyph("a"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'b' },
+        TextItem::glyph("b"),
     ];
     // visible=1: b が未リビール——改行は保留のまま行を開かない（R4.2）。
     let held = LayoutEngine::layout(
@@ -394,7 +395,7 @@ fn line_break_defers_until_next_visible_glyph() {
     );
     assert_eq!(held.len(), 1, "保留改行は行を開かない（空行を出さない）");
     assert_eq!(held[0].glyphs.len(), 1);
-    assert_eq!(held[0].glyphs[0].ch, 'a');
+    assert_eq!(&*held[0].glyphs[0].text, "a");
     // visible=2: b がリビール——保留改行が実体化して 2 行になる（R4.1）。
     let materialized = LayoutEngine::layout(
         &items,
@@ -406,8 +407,8 @@ fn line_break_defers_until_next_visible_glyph() {
         WrapPlan::CharByChar,
     );
     assert_eq!(materialized.len(), 2, "次可視グリフ配置で保留改行が実体化");
-    assert_eq!(materialized[0].glyphs[0].ch, 'a');
-    assert_eq!(materialized[1].glyphs[0].ch, 'b');
+    assert_eq!(&*materialized[0].glyphs[0].text, "a");
+    assert_eq!(&*materialized[1].glyphs[0].text, "b");
     // 実体化後の 2 行目: 行内 0 起点（b は ASCII で advance 6）・行送り軸位置は
     // pitch(14) 分進む・中間空行は生じない。
     assert_eq!(
@@ -430,10 +431,7 @@ fn trailing_line_break_defers_and_evaporates() {
         IMAGE,
         WritingMode::HorizontalTb,
     );
-    let items = [
-        TextItem::Glyph { ch: 'あ' },
-        TextItem::LineBreak { ratio: 1.0 },
-    ];
+    let items = [TextItem::glyph("あ"), TextItem::LineBreak { ratio: 1.0 }];
     let lines = LayoutEngine::layout(
         &items,
         1,
@@ -460,11 +458,11 @@ fn consecutive_newlines_accumulate_into_single_flush() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'a' },
+        TextItem::glyph("a"),
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::LineBreak { ratio: 0.5 },
-        TextItem::Glyph { ch: 'b' },
-        TextItem::Glyph { ch: 'c' },
+        TextItem::glyph("b"),
+        TextItem::glyph("c"),
     ];
     // font 12 → pitch 14。累算 Σratio=1.5 → 行送り 21。
     let lines = LayoutEngine::layout(
@@ -498,10 +496,7 @@ fn leading_newline_zero_ratio_and_newline_only_input() {
         WritingMode::HorizontalTb,
     );
     // (a) 先頭改行 `[\n, a]` → 1 行・block 位置 start + pitch(14)・空行なし。
-    let leading = [
-        TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'a' },
-    ];
+    let leading = [TextItem::LineBreak { ratio: 1.0 }, TextItem::glyph("a")];
     let lines = LayoutEngine::layout(
         &leading,
         1,
@@ -517,9 +512,9 @@ fn leading_newline_zero_ratio_and_newline_only_input() {
 
     // (b) ratio 0 `[a, \n(0), b]` → 2 行・同一 block 位置（行替えのみ・送りゼロ）。
     let zero = [
-        TextItem::Glyph { ch: 'a' },
+        TextItem::glyph("a"),
         TextItem::LineBreak { ratio: 0.0 },
-        TextItem::Glyph { ch: 'b' },
+        TextItem::glyph("b"),
     ];
     let zlines = LayoutEngine::layout(
         &zero,
@@ -565,11 +560,11 @@ fn reveal_progression_materializes_only_when_next_glyph_appears() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'a' },
+        TextItem::glyph("a"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'b' },
+        TextItem::glyph("b"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'c' },
+        TextItem::glyph("c"),
     ];
     // 可視 v のとき行数 v（改行はその後ろのグリフが reveal された時点でのみ実体化）。
     for visible in 1..=3 {
@@ -608,7 +603,7 @@ fn materialized_newline_near_full_triggers_overflow() {
     //（旧格子は pitch 13 の 3 行目下端 36・新格子は pitch 12 の 3 行目下端 34）。
     let mut items = broken_lines(3);
     items.push(TextItem::LineBreak { ratio: 1.0 });
-    items.push(TextItem::Glyph { ch: 'あ' });
+    items.push(TextItem::glyph("あ"));
     let window = window_for(&items, &region, WritingMode::HorizontalTb, 10.0);
     assert_eq!(
         window,
@@ -631,10 +626,10 @@ fn deferred_rules_hold_in_vertical_modes() {
         WritingMode::VerticalRl,
     );
     let acc = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::LineBreak { ratio: 0.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     // font 12 → pitch 14。書字開始角 x=400。列 1 の右辺 = 400 − 14×1.5 = 379。
     let lines = LayoutEngine::layout(
@@ -656,10 +651,7 @@ fn deferred_rules_hold_in_vertical_modes() {
     // (b) 縦書き 2 方向で trailing 改行は蒸発する（`[あ, \n]` → 1 列）。
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
         let region = TextRegion::resolve(&model((None, None), (None, None)), IMAGE, mode);
-        let trailing = [
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::LineBreak { ratio: 1.0 },
-        ];
+        let trailing = [TextItem::glyph("あ"), TextItem::LineBreak { ratio: 1.0 }];
         let t = LayoutEngine::layout(
             &trailing,
             1,
@@ -687,10 +679,10 @@ fn deferred_semantics_same_input_yields_identical_output() {
         // 連続改行＋末尾改行を含む列（遅延・累算・実体化・蒸発の全分岐を通す）。
         let items = [
             TextItem::LineBreak { ratio: 1.0 },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
             TextItem::LineBreak { ratio: 1.0 },
             TextItem::LineBreak { ratio: 0.5 },
-            TextItem::Glyph { ch: 'a' },
+            TextItem::glyph("a"),
             TextItem::LineBreak { ratio: 1.0 },
         ];
         let first = LayoutEngine::layout(

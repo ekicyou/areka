@@ -35,6 +35,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **nonmax** (0.5.5): ニッチ最適化された非最大整数型
 - **encoding_rs** (0.8): 伺か資産の charset デコード（`areka-parsers` の `charset` module・意図的依存追加＝2026-07-02 承認済）
 - **miniz_oxide** (0.9): `.nar`（zip コンテナ）の deflate **伸長のみ**（`areka-nar` の `container` module・意図的依存追加＝2026-09-18 承認済）。既定機能を切り `with-alloc` だけを明示する。圧縮側は機能で外せないので、本番クレートが `miniz_oxide::deflate` を綴らないことを常設検査 `crates/areka-nar/src/lib_tests.rs` が見張る。zip コンテナの読み手は `areka-nar` が std だけで持つ（`zip`・`flate2` は入れない）。推移的依存は `adler2` 1 本
+- **unicode-segmentation** (1.13.3): 台詞の文字の単位＝拡張書記素クラスタ（UAX #29）の切り方（`areka-sakura` の `cluster` module だけが使う・`Cargo.lock` に推移依存として既に在った版を直接の依存にした・2026-09-29 `balloon-color-emoji` の設計承認で決定）。版を上げると Unicode の版が変わり、絵文字の切り方が動きうる
 
 ### dola クレート依存
 - **serde** (1): シリアライズ/デシリアライズ基盤

@@ -63,7 +63,7 @@ fn layout_h(items: &[TextItem], region: &TextRegion) -> Vec<PositionedLine> {
 
 /// 全角グリフ 1 個（'あ'・advance 10）。
 fn glyph() -> TextItem {
-    TextItem::Glyph { ch: 'あ' }
+    TextItem::glyph("あ")
 }
 
 /// `\_l[,@<value>lh]`（X 省略・Y は `@` 相対の行送り単位＝**後戻りさせるための書式**）。

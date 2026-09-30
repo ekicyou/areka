@@ -62,3 +62,8 @@
 > **2026-09-03 追記（消化済み①・areka-P0-sakura-bare-tag-lexer・PR #134）**: 上記「直接修正」＝角括弧なし `\_` タグの消費是正は spec `areka-P0-sakura-bare-tag-lexer` で消化済み（規律＝`\_` ＋ `_` 0〜1 個 ＋ 1 文字の固定長・`\__X` 3 文字形も射程・意味付けなし＝`Instruction::Raw` 素通し・決定論テスト新設）。本 spec に lexer 修正は残らず規模は L→M。
 
 > **📌 2026-09-13 相互登記（`areka-P0-text-decoration-canon` 着地）**——`anchor*` 系と `anchor.font.color` は親 spec が `ActorTextState::unowned_vocab()`（`crates/areka-emo-text/src/state_decoration.rs`）に保持するだけで表示を変えない。`\f[color,default.anchor*]` は当面すべて既定色へ解決して `look.rs::Note::AnchorColorAsDefault` を返す腕（`look.rs::apply_color`）を通るので、本 spec はその腕を 3 状態の色へ差し替えればよい（下線の描画基盤は `viewbox_draw_decoration.rs::apply_font_ranges` に着地済み）。
+
+## `balloon-color-emoji` からの申し送り（2026-09-30 着地）
+
+- バルーンの文字の単位は `char` から書記素クラスタ（人が 1 文字と見る単位）に替わった。範囲（`ChoiceSpan::glyph_range`・`style_runs`・`segment_text_range`）はクラスタの通し番号で数え、UTF-16 の位置はクラスタ文字列の長さを積む。
+- `TextItem::Glyph` と `PositionedGlyph` の中身は `text: Arc<str>`（`Copy` なし）。構築は `TextItem::glyph(&str)`、切り方は `areka_sakura::cluster::clusters` だけが決める。文字を比べる処理（行末のぶら下げの判定など）は `&str` で比べる。

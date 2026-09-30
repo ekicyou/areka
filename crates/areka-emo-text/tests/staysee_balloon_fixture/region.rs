@@ -287,14 +287,14 @@ fn default_font_metrics_are_pinned_at_height_twelve() {
         "文字の高さが {EXPECTED_FONT_HEIGHT} ではなく {h}（以下の寸法はこの高さが前提）"
     );
 
-    let half = metrics.advance('a', h);
+    let half = metrics.advance("a", h);
     assert_eq!(
         half, EXPECTED_ADVANCE_HALF,
         "半角 `a` の送り幅が {EXPECTED_ADVANCE_HALF} ではなく {half}。\
          既定書体 `{CANON_DEFAULT_FONT_NAME}` がこの環境に無く別の書体へ落ちている疑いがある\
          （この値は当該書体の半角 0.5em の実測であり、代替書体のまま緑にしない）"
     );
-    let full = metrics.advance('あ', h);
+    let full = metrics.advance("あ", h);
     assert_eq!(
         full, EXPECTED_ADVANCE_FULL,
         "全角 `あ` の送り幅が {EXPECTED_ADVANCE_FULL} ではなく {full}。\

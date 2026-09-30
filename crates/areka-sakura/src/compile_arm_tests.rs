@@ -445,7 +445,7 @@ fn system_var_present_maps_to_text_cue_with_playback_duration() {
     );
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 2, "展開 Text と Emote の 2 件");
-    let d = text_playback_duration("アヒル"); // 3 char × 50ms
+    let d = text_playback_duration("アヒル"); // 3 クラスタ × 50ms
     // [0] 展開値の Text cue（通常テキスト同格・R7.2）。
     match command_of(&cues[0]) {
         CueCommand::Text(s) => assert_eq!(s, "アヒル", "スナップショット値へ展開（R7.1）"),

@@ -92,14 +92,14 @@ const KERO_EXACT_FIT_LINES: usize = 5;
 
 // ── 本番と同じ折返し経路 ─────────────────────────────────────────────────────
 
-/// 本文を 1 文字 1 グリフの追記列へ写す（`\n` は行区切りとして写す）。
+/// 本文を 1 クラスタ 1 グリフの追記列へ写す（`\n` は行区切りとして写す）。
 fn glyph_items(body: &str) -> Vec<TextItem> {
-    body.chars()
+    areka_sakura::cluster::clusters(body)
         .map(|ch| {
-            if ch == '\n' {
+            if ch == "\n" {
                 TextItem::LineBreak { ratio: 1.0 }
             } else {
-                TextItem::Glyph { ch }
+                TextItem::glyph(ch)
             }
         })
         .collect()
@@ -268,7 +268,7 @@ fn every_glyph_stays_inside_the_drawing_range() {
         for (n, line) in lines.iter().enumerate() {
             for (i, glyph) in line.glyphs.iter().enumerate() {
                 let (left, right) = (glyph.inline_pos, glyph.inline_pos + glyph.advance);
-                let where_ = format!("{label}: {} 行目 {} 文字目 `{}`", n + 1, i + 1, glyph.ch);
+                let where_ = format!("{label}: {} 行目 {} 文字目 `{}`", n + 1, i + 1, glyph.text);
                 assert!(
                     left >= EXPECTED_LEFT,
                     "{where_} の左端 {left} が描画範囲の左辺 {EXPECTED_LEFT} より外に出た"
@@ -334,7 +334,7 @@ fn wrapping_fills_each_line_greedily() {
                 "{label}: {} 行目は送り幅 {sum} で、次の行の先頭 `{}`（送り幅 {}）を足しても \
                  {} で 1 行の幅 {capacity} に収まる——貪欲に詰めていない（早すぎる折返し）",
                 n + 1,
-                next_head.ch,
+                next_head.text,
                 next_head.advance,
                 sum + next_head.advance
             );
@@ -362,7 +362,7 @@ fn placed_glyph_advances_match_the_half_and_full_width_values() {
 
     for line in &lines {
         for glyph in &line.glyphs {
-            let expected = if glyph.ch.is_ascii() {
+            let expected = if glyph.text.is_ascii() {
                 halves += 1;
                 EXPECTED_ADVANCE_HALF
             } else {
@@ -372,7 +372,7 @@ fn placed_glyph_advances_match_the_half_and_full_width_values() {
             assert_eq!(
                 glyph.advance, expected,
                 "混在: `{}` の送り幅が {expected} ではなく {}（1 行の字数の導出が崩れる）",
-                glyph.ch, glyph.advance
+                glyph.text, glyph.advance
             );
         }
     }
@@ -473,11 +473,11 @@ fn one_pixel_narrower_bottom_turns_the_same_lines_into_an_overflow() {
 /// 折返しではなく行数そのものを問う検査なので、本文は 1 行 1 文字に留める。
 fn five_short_lines() -> Vec<TextItem> {
     let mut items = Vec::new();
-    for (n, ch) in "あいうえお".chars().enumerate() {
+    for (n, ch) in areka_sakura::cluster::clusters("あいうえお").enumerate() {
         if n > 0 {
             items.push(TextItem::LineBreak { ratio: 1.0 });
         }
-        items.push(TextItem::Glyph { ch });
+        items.push(TextItem::glyph(ch));
     }
     assert_eq!(
         glyph_count(&items),

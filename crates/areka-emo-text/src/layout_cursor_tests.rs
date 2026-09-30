@@ -26,8 +26,8 @@ fn cursor_move_commits_line_and_overrides_next_glyph_axes() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'あ' },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
                 value: 100.0,
@@ -38,7 +38,7 @@ fn cursor_move_commits_line_and_overrides_next_glyph_axes() {
                 unit: CursorUnit::Px,
             },
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -70,7 +70,7 @@ fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
@@ -82,7 +82,7 @@ fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
                 unit: CursorUnit::Px,
             },
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -118,7 +118,7 @@ fn trailing_cursor_move_evaporates() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
                 value: 100.0,
@@ -154,12 +154,12 @@ fn both_axes_omitted_cursor_move_is_complete_noop() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Omitted,
             y: CursorCoord::Omitted,
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -196,8 +196,8 @@ fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'あ' },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
                 value: 2.0,
@@ -208,7 +208,7 @@ fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
                 unit: CursorUnit::Lh,
             },
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -244,7 +244,7 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
     );
     // x 軸のみ上書き（y Omitted）: block は改行がないため据え置き（0）、inline のみ 10 へ。
     let x_only = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
                 value: 10.0,
@@ -252,7 +252,7 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
             },
             y: CursorCoord::Omitted,
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &x_only,
@@ -276,7 +276,7 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
 
     // y 軸のみ上書き（x Omitted）: inline は直前送り終端(10)のまま・block のみ 50 へ。
     let y_only = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Omitted,
             y: CursorCoord::Absolute {
@@ -284,7 +284,7 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
                 unit: CursorUnit::Px,
             },
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &y_only,
@@ -317,7 +317,7 @@ fn cursor_and_pending_newline_compose_per_axis() {
     );
     // inline 上書き・block は改行進行値を取る。
     let x_over = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
@@ -326,7 +326,7 @@ fn cursor_and_pending_newline_compose_per_axis() {
             },
             y: CursorCoord::Omitted,
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &x_over,
@@ -350,7 +350,7 @@ fn cursor_and_pending_newline_compose_per_axis() {
 
     // block 上書き・inline は改行リセット値を取る（vice-versa）。
     let y_over = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::CursorMove {
             x: CursorCoord::Omitted,
@@ -359,7 +359,7 @@ fn cursor_and_pending_newline_compose_per_axis() {
                 unit: CursorUnit::Px,
             },
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &y_over,
@@ -400,7 +400,7 @@ fn cursor_negative_and_percent_axes_now_resolve_literally() {
         WritingMode::HorizontalTb,
     );
     let items = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
                 value: -1.0,
@@ -411,7 +411,7 @@ fn cursor_negative_and_percent_axes_now_resolve_literally() {
                 unit: CursorUnit::Percent,
             }, // % → origin(0) + 50 × (10/100) = 5
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -476,7 +476,7 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
                 x: coord,
                 y: CursorCoord::Omitted,
             },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
         ];
         LayoutEngine::layout_with_cursor_warn(
             &items,
@@ -550,7 +550,7 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
                 x: CursorCoord::Omitted,
                 y: CursorCoord::Omitted,
             },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
         ];
         LayoutEngine::layout_with_cursor_warn(
             &items,
@@ -608,7 +608,7 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
                 unit: CursorUnit::Px,
             },
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &items,
@@ -630,7 +630,7 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
 
     // 両軸とも成立しない `\\_l[,]` は既存の保留を消さない（R5.4/6.2）。
     let kept = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
                 value: 10.0,
@@ -645,7 +645,7 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
             x: CursorCoord::Omitted,
             y: CursorCoord::Omitted,
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &kept,
@@ -710,9 +710,9 @@ fn relative_cursor_basis_is_the_effective_position() {
 
     // 保留なし: 実効位置＝走査位置 (10, 0)。
     let plain = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         relative_zero(),
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &plain,
@@ -733,10 +733,10 @@ fn relative_cursor_basis_is_the_effective_position() {
 
     // 保留改行あり: 実効位置は改行を仮適用した (0, 12)＝次行の先頭。
     let after_break = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
         relative_zero(),
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &after_break,
@@ -776,7 +776,7 @@ fn relative_cursor_basis_is_the_effective_position() {
             },
             y: CursorCoord::Omitted,
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &after_pending_cursor,
@@ -815,7 +815,7 @@ fn relative_cursor_basis_is_the_effective_position() {
             },
             y: CursorCoord::Omitted,
         },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let lines = LayoutEngine::layout(
         &break_then_cursor,

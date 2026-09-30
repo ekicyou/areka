@@ -271,6 +271,7 @@ dependencies = [
  "dola",
  "thiserror",
  "tracing",
+ "unicode-segmentation",
 ]
 
 [[package]]

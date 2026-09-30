@@ -107,13 +107,13 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     // 6 行（font 10 → pitch 10+2=12・canvas-local y=0,12,…,60）。各行を相異なるグリフにし、
     // 12px の縦スクロールで供給面の内容が実際に移動する（同一グリフだと行が同型で readback
     // 不変になる）ことを観測可能にする。canvas は validrect-local に全行保持。
-    let line_chars = ['あ', 'い', 'う', 'え', 'お', 'か'];
+    let line_chars = ["あ", "い", "う", "え", "お", "か"];
     let mut items = Vec::new();
     for (i, &ch) in line_chars.iter().enumerate() {
         if i > 0 {
             items.push(TextItem::LineBreak { ratio: 1.0 });
         }
-        items.push(TextItem::Glyph { ch });
+        items.push(TextItem::glyph(ch));
     }
     let (canvas, _auto_window) = build(&items, &region, mode, 10.0);
     let total_glyph_lines = canvas.residents.len();
@@ -214,14 +214,14 @@ fn catch_up_scroll_draws_sum_of_per_rect_lines_not_product() {
 
     // font 10 → pitch 12。行 i の下端 = 12i + 10 ゆえ 84px には 7 行（i=0..6・82 ≤ 84）が収まり、
     // 8 行目（94）からあふれる。frame A は 7 行（スクロールなし）。
-    let chars_a = ['あ', 'い', 'う', 'え', 'お', 'か', 'き'];
+    let chars_a = ["あ", "い", "う", "え", "お", "か", "き"];
     let (canvas_a, window_a) = build(&multiline_items(&chars_a), &region, mode, 10.0);
     exec.render(&canvas_a, &window_a, &font, mode, &contract, &mut surface)
         .expect("frame A render 失敗");
     let stats_a: DrawStats = exec.stats();
 
     // frame B: 2 行が一挙に入る（追いつき）＝露出帯 1 枚 ＋ 新規行 2 枚のダーティ。
-    let chars_b = ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け'];
+    let chars_b = ["あ", "い", "う", "え", "お", "か", "き", "く", "け"];
     let (canvas_b, window_b) = build(&multiline_items(&chars_b), &region, mode, 10.0);
 
     // mirror planner（純粋層）で期待計画を独立に算出する。
@@ -282,14 +282,14 @@ fn typewriter_progress_draws_only_current_line() {
     // 行0 確定「■■」＋行1 リビール中「■」（2 行・60px に収まる＝block_offset 0）。
     let mut items = glyph_items("■■");
     items.push(TextItem::LineBreak { ratio: 1.0 });
-    items.push(TextItem::Glyph { ch: '■' });
+    items.push(TextItem::glyph("■"));
     let (canvas_a, window_a) = build(&items, &region, mode, 10.0);
     exec.render(&canvas_a, &window_a, &font, mode, &contract, &mut surface)
         .expect("frame A render 失敗");
     let stats_a: DrawStats = exec.stats();
 
     // 行1 が「■」→「■■」へ 1 グリフ進行（行0 は確定・不変）。
-    items.push(TextItem::Glyph { ch: '■' });
+    items.push(TextItem::glyph("■"));
     let (canvas_b, window_b) = build(&items, &region, mode, 10.0);
     let changed = exec
         .render(&canvas_b, &window_b, &font, mode, &contract, &mut surface)
@@ -314,13 +314,13 @@ fn typewriter_progress_draws_only_current_line() {
 }
 
 /// 複数行（各行相異なるグリフ）の item 列を組む（縮退檻で「全住人再描画」を数える台）。
-fn multiline_items(chars: &[char]) -> Vec<TextItem> {
+fn multiline_items(chars: &[&str]) -> Vec<TextItem> {
     let mut items = Vec::new();
     for (i, &ch) in chars.iter().enumerate() {
         if i > 0 {
             items.push(TextItem::LineBreak { ratio: 1.0 });
         }
-        items.push(TextItem::Glyph { ch });
+        items.push(TextItem::glyph(ch));
     }
     items
 }
@@ -401,7 +401,7 @@ fn font_change_degrades_to_full_domain_redraw() {
     let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
 
     // 3 行（相異なるグリフ・全行が 120px に収まる＝block_offset 0）。
-    let chars = ['あ', 'い', 'う'];
+    let chars = ["あ", "い", "う"];
     let items = multiline_items(&chars);
 
     // font A（高さ 10）で描画（初回＝全域ダーティ）。

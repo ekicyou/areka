@@ -12,6 +12,7 @@
 //! （要件 11.2）、(4) 行送りの式が `TextLayerConfig::line_pitch` の 1 点だけを通ること
 //! （要件 7.8——値の比較では見張れないので**字面**で固定する）。
 
+use areka_sakura::cluster::clusters;
 use areka_sakura::contract::ActorKey;
 
 use super::test_support::{IMAGE, model};
@@ -33,16 +34,16 @@ fn look_with_height(height: f32) -> TextLook {
     }
 }
 
-/// グリフ列（1 文字ずつ）。
+/// グリフ列（1 クラスタずつ・クラスタの定義点で切る）。
 fn glyph_items(text: &str) -> Vec<TextItem> {
-    text.chars().map(|ch| TextItem::Glyph { ch }).collect()
+    clusters(text).map(TextItem::glyph).collect()
 }
 
 /// 行のグリフの `(文字, 行内位置, 送り幅, 装飾番号)` を抜き出す。
-fn glyph_tuples(line: &PositionedLine) -> Vec<(char, f32, f32, u32)> {
+fn glyph_tuples(line: &PositionedLine) -> Vec<(&str, f32, f32, u32)> {
     line.glyphs
         .iter()
-        .map(|g| (g.ch, g.inline_pos, g.advance, g.style.0))
+        .map(|g| (&*g.text, g.inline_pos, g.advance, g.style.0))
         .collect()
 }
 
@@ -66,12 +67,12 @@ fn styles<'a>(table: &'a StyleTable, ids: &'a [StyleId], default: &'a TextLook) 
 #[test]
 fn advance_styled_default_impl_measures_at_the_look_height() {
     /// `(文字, 見た目の大きさ, 期待する送り幅)`。
-    const CASES: &[(char, f32, f32)] = &[
-        ('あ', 10.0, 10.0),
-        ('あ', 20.0, 20.0),
-        ('a', 20.0, 10.0),
-        ('あ', 7.0, 7.0),
-        ('a', 7.0, 3.5),
+    const CASES: &[(&str, f32, f32)] = &[
+        ("あ", 10.0, 10.0),
+        ("あ", 20.0, 20.0),
+        ("a", 20.0, 10.0),
+        ("あ", 7.0, 7.0),
+        ("a", 7.0, 3.5),
     ];
     // 表が空になるとループが恒真で緑になるので母数を先に固定する。
     assert_eq!(CASES.len(), 5, "検証表の母数");
@@ -124,9 +125,9 @@ fn styled_glyphs_advance_at_their_own_height_and_carry_their_style_id() {
     assert_eq!(
         glyph_tuples(&lines[0]),
         vec![
-            ('あ', 0.0, 10.0, 0),  // 既定の見た目＝font_height 10
-            ('い', 10.0, 20.0, 1), // 大きさ 20 → 送り幅 20
-            ('う', 30.0, 20.0, 1), // 直前が 20 進んだ位置から
+            ("あ", 0.0, 10.0, 0),  // 既定の見た目＝font_height 10
+            ("い", 10.0, 20.0, 1), // 大きさ 20 → 送り幅 20
+            ("う", 30.0, 20.0, 1), // 直前が 20 進んだ位置から
         ],
     );
 }
@@ -210,11 +211,11 @@ fn layout_without_styles_matches_the_frozen_pre_decoration_output() {
     assert_eq!(
         glyph_tuples(&lines[0]),
         vec![
-            ('あ', 0.0, 10.0, 0),
-            ('a', 10.0, 5.0, 0),
-            ('い', 15.0, 10.0, 0),
-            ('う', 25.0, 10.0, 0),
-            ('え', 35.0, 10.0, 0),
+            ("あ", 0.0, 10.0, 0),
+            ("a", 10.0, 5.0, 0),
+            ("い", 15.0, 10.0, 0),
+            ("う", 25.0, 10.0, 0),
+            ("え", 35.0, 10.0, 0),
         ],
     );
     assert_eq!(
@@ -228,7 +229,7 @@ fn layout_without_styles_matches_the_frozen_pre_decoration_output() {
     );
     assert_eq!(
         glyph_tuples(&lines[1]),
-        vec![('お', 0.0, 10.0, 0), ('か', 10.0, 10.0, 0)],
+        vec![("お", 0.0, 10.0, 0), ("か", 10.0, 10.0, 0)],
     );
 }
 
@@ -314,9 +315,9 @@ fn canvas_from_layout_transcribes_the_style_id() {
     assert_eq!(
         run.glyphs
             .iter()
-            .map(|g| (g.ch, g.advance, g.style.0))
+            .map(|g| (&*g.text, g.advance, g.style.0))
             .collect::<Vec<_>>(),
-        vec![('あ', 10.0, 0), ('い', 20.0, 1), ('う', 20.0, 1)],
+        vec![("あ", 10.0, 0), ("い", 20.0, 1), ("う", 20.0, 1)],
     );
 }
 
@@ -460,10 +461,7 @@ fn line_pitch_advances_by_the_closing_lines_largest_em() {
 #[test]
 fn a_line_with_no_glyph_advances_by_the_height_in_effect() {
     let region = region_h(200);
-    let items = vec![
-        TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'あ' },
-    ];
+    let items = vec![TextItem::LineBreak { ratio: 1.0 }, TextItem::glyph("あ")];
     let default = look_with_height(10.0);
     let mut table = StyleTable::default();
     let big = table.intern(&look_with_height(20.0), &default);
@@ -520,7 +518,7 @@ fn closing_with_no_following_glyph_uses_the_scope_current_look() {
             y: CursorCoord::Omitted,
         },
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let default = look_with_height(10.0);
     let current = look_with_height(30.0);
@@ -685,7 +683,7 @@ fn layout_styled_is_the_public_entry_for_decorated_scripts() {
 fn the_cursor_preview_of_a_pending_newline_uses_the_closing_lines_pitch() {
     let region = region_h(200);
     let items = vec![
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::CursorMove {
             x: CursorCoord::Omitted,
@@ -694,7 +692,7 @@ fn the_cursor_preview_of_a_pending_newline_uses_the_closing_lines_pitch() {
                 unit: CursorUnit::Px,
             },
         },
-        TextItem::Glyph { ch: 'い' },
+        TextItem::glyph("い"),
     ];
     let default = look_with_height(10.0);
     let mut table = StyleTable::default();

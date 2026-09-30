@@ -93,7 +93,7 @@ fn layout_h(items: &[TextItem], visible: usize, region: &TextRegion) -> Vec<Posi
 
 /// 全角グリフ 1 個（'あ'・advance 10）。
 fn glyph() -> TextItem {
-    TextItem::Glyph { ch: 'あ' }
+    TextItem::glyph("あ")
 }
 
 /// `\_l[x,y]`（両軸とも絶対 px）。

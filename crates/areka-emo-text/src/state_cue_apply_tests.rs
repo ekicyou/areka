@@ -12,9 +12,9 @@ fn text_cue_appends_glyphs_in_order() {
     assert_eq!(
         items_of(&state, "0"),
         &[
-            TextItem::Glyph { ch: 'ア' },
-            TextItem::Glyph { ch: 'ヒ' },
-            TextItem::Glyph { ch: 'ル' },
+            TextItem::glyph("ア"),
+            TextItem::glyph("ヒ"),
+            TextItem::glyph("ル"),
         ]
     );
 }
@@ -27,25 +27,25 @@ fn consecutive_text_cues_append() {
     assert_eq!(
         items_of(&state, "0"),
         &[
-            TextItem::Glyph { ch: 'ア' },
-            TextItem::Glyph { ch: 'ヒ' },
-            TextItem::Glyph { ch: 'ル' },
-            TextItem::Glyph { ch: 'や' },
+            TextItem::glyph("ア"),
+            TextItem::glyph("ヒ"),
+            TextItem::glyph("ル"),
+            TextItem::glyph("や"),
         ]
     );
 }
 
-/// グリフ単位は Rust `char`（M1 正準）——多バイト文字も 1 char = 1 グリフ。
+/// グリフ単位は書記素クラスタ——多バイト文字も 1 クラスタ = 1 グリフ。
 #[test]
-fn glyph_unit_is_rust_char() {
+fn glyph_unit_is_grapheme_cluster() {
     let mut state = TextLayerState::default();
     state.apply_cue(&cue("0", 0.0, CueCommand::Text("aあ🦆".into())));
     assert_eq!(
         items_of(&state, "0"),
         &[
-            TextItem::Glyph { ch: 'a' },
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: '🦆' },
+            TextItem::glyph("a"),
+            TextItem::glyph("あ"),
+            TextItem::glyph("🦆"),
         ]
     );
 }
@@ -62,10 +62,10 @@ fn newline_cue_appends_line_break_marker_with_ratio() {
     assert_eq!(
         items_of(&state, "0"),
         &[
-            TextItem::Glyph { ch: 'A' },
+            TextItem::glyph("A"),
             TextItem::LineBreak { ratio: 1.0 },
             TextItem::LineBreak { ratio: 0.5 },
-            TextItem::Glyph { ch: 'B' },
+            TextItem::glyph("B"),
         ]
     );
 }
@@ -100,7 +100,7 @@ fn clear_only_affects_target_actor() {
     assert!(items_of(&state, "0").is_empty());
     assert_eq!(
         items_of(&state, "1"),
-        &[TextItem::Glyph { ch: 'け' }, TextItem::Glyph { ch: 'ろ' }]
+        &[TextItem::glyph("け"), TextItem::glyph("ろ")]
     );
 }
 
@@ -156,9 +156,9 @@ fn cues_route_to_independent_actor_states() {
 
     assert_eq!(
         items_of(&state, "0"),
-        &[TextItem::Glyph { ch: 'A' }, TextItem::Glyph { ch: 'C' }]
+        &[TextItem::glyph("A"), TextItem::glyph("C")]
     );
-    assert_eq!(items_of(&state, "1"), &[TextItem::Glyph { ch: 'B' }]);
+    assert_eq!(items_of(&state, "1"), &[TextItem::glyph("B")]);
 }
 
 #[test]
@@ -167,7 +167,7 @@ fn unknown_actor_state_lazily_created_and_accumulates() {
     assert!(state.actor_state(&ActorKey::from("7")).is_none());
 
     state.apply_cue(&cue("7", 0.0, CueCommand::Text("x".into())));
-    assert_eq!(items_of(&state, "7"), &[TextItem::Glyph { ch: 'x' }]);
+    assert_eq!(items_of(&state, "7"), &[TextItem::glyph("x")]);
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn later_cues_apply_immediately_without_overwrite_guard() {
     state.apply_cue(&cue("0", 0.1, CueCommand::Clear));
     state.apply_cue(&cue("0", 0.1, CueCommand::Text("talk2".into())));
 
-    let expected: Vec<TextItem> = "talk2".chars().map(|ch| TextItem::Glyph { ch }).collect();
+    let expected: Vec<TextItem> = clusters("talk2").map(TextItem::glyph).collect();
     assert_eq!(items_of(&state, "0"), expected.as_slice());
 }
 
@@ -266,7 +266,7 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
     // グリフは items へ追記される（Text cue と同一経路）。
     assert_eq!(
         items_of(&state, "0"),
-        &[TextItem::Glyph { ch: 'は' }, TextItem::Glyph { ch: 'い' }]
+        &[TextItem::glyph("は"), TextItem::glyph("い")]
     );
     // 非空 glyph_range のスパンが記録される。
     assert_eq!(
@@ -366,7 +366,7 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
     });
 
     // グリフは追記されない（既存 "あ" のみ）・reveal 不変。
-    assert_eq!(items_of(&state, "0"), &[TextItem::Glyph { ch: 'あ' }]);
+    assert_eq!(items_of(&state, "0"), &[TextItem::glyph("あ")]);
     assert_eq!(reveal_times_of(&state, "0"), vec![0.0]);
     // 空範囲スパンが記録される（start==end==1＝現グリフ末尾）。
     assert_eq!(
@@ -432,7 +432,7 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
     assert_eq!(
         items_of(&state, "0"),
         &[
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
             TextItem::CursorMove {
                 x: CursorCoord::Absolute {
                     value: 5.0,
@@ -497,8 +497,8 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
     let glyphs = |s: &TextLayerState| -> Vec<TextItem> {
         items_of(s, "0")
             .iter()
-            .copied()
             .filter(|it| matches!(it, TextItem::Glyph { .. }))
+            .cloned()
             .collect()
     };
     assert_eq!(

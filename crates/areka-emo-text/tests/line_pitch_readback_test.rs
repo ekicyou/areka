@@ -237,7 +237,7 @@ fn canon_metrics() -> DWriteMetrics {
 
 /// 実フォントの送り幅が代替フォントへ縮退していないことを確かめる（縮退なら赤で止める）。
 fn assert_real_font_present(metrics: &DWriteMetrics) {
-    let a = metrics.advance('あ', FONT_HEIGHT);
+    let a = metrics.advance("あ", FONT_HEIGHT);
     assert!(
         a < FONT_HEIGHT,
         "実フォント Yu Gothic UI が見つからない（「あ」の送りが {a} ＝ em {FONT_HEIGHT} 以上の等幅値へ縮退している）。本ファイルの期待値は実フォントの実測を前提にしているので、代替フォントのまま緑にしない"
@@ -459,7 +459,7 @@ fn canon_pitch_advance_and_ink_height_match_the_ruling() {
     );
 
     // (b) 仮名 1 文字の送り（実フォントの実測・要件 3.4）。
-    for ch in ['あ', 'い', 'か', 'ん'] {
+    for ch in ["あ", "い", "か", "ん"] {
         let advance = metrics.advance(ch, FONT_HEIGHT);
         assert!(
             (advance - ADVANCE_KANA_28).abs() <= ADVANCE_TOLERANCE,

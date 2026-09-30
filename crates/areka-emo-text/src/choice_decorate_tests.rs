@@ -33,7 +33,7 @@ fn glyph_resident(offset: (f32, f32)) -> Resident {
     Resident {
         content: ResidentContent::GlyphRun(GlyphRunContent {
             glyphs: vec![PositionedGlyph {
-                ch: 'あ',
+                text: "あ".into(),
                 inline_pos: 0.0,
                 advance: 10.0,
                 style: StyleId::DEFAULT,

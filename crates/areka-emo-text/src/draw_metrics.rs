@@ -6,7 +6,7 @@
 //!
 //! タスク 6.4 で計測は**見た目込み**になった。送り幅に効く見た目（候補列・大きさ・
 //! 太字・斜体＝[`FontKey`]）ごとに試験用書式（probe format）を**鍵ごとに 1 度だけ**
-//! 焼き、記憶の鍵も「文字と計測鍵」へ広げた。既定の見た目は従来どおり束縛書式の
+//! 焼き、記憶の鍵も「計測鍵と文字」へ広げた。既定の見た目は従来どおり束縛書式の
 //! 経路をそのまま通るので、装飾を使わない台本の計測値は 1 ビットも変わらない。
 //!
 //! **層規律**: COM 層——UI スレッド専有。失敗は log-first（`tracing::error!`＋`Err`）で
@@ -18,6 +18,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use tracing::warn;
 use windows::Win32::Graphics::DirectWrite::{
@@ -49,10 +50,13 @@ use crate::writing::WritingMode;
 ///   [`probe_format_for`](Self::probe_format_for) が**鍵ごとに 1 度だけ**焼く
 ///   （家族名は [`FontCatalog::family_for`] が解決した名前か [`DEFAULT_FONT_NAME`]
 ///   のみ・R11.3）。
-/// - `advance` は対象文字の**未折返し probe layout**（[`PROBE_MAX_EXTENT`] 寸）を
-///   生成し cluster metrics の width 合計を返す（折返し決定より前の計測＝鶏卵なし）。
-/// - 計測値は「文字と計測鍵」の組でキャッシュする（書式が鍵で定まる＝同じ組は同じ
-///   送り幅の決定論・probe 規約「確定内容の metrics は不変ゆえキャッシュ可」・R11.1）。
+/// - `advance` は対象文字（書記素クラスタ 1 つ）全体の**未折返し probe layout**
+///   （[`PROBE_MAX_EXTENT`] 寸）を生成し cluster metrics の width 合計を返す（折返し決定より
+///   前の計測＝鶏卵なし。DirectWrite が 2 つに整形するクラスタ＝国旗などは合計が行の中で
+///   占める幅になる）。
+/// - 計測値は「計測鍵 → 文字（クラスタ文字列）」の 2 段でキャッシュする（書式が鍵で定まる＝
+///   同じ組は同じ送り幅の決定論・probe 規約「確定内容の metrics は不変ゆえキャッシュ可」・
+///   R11.1）。引くときは `&str` のまま引いて割り当てない。
 ///
 /// UI スレッド専有（COM 層規律）。`line_pitch` は M1 正準式
 /// `font_height + 行間`（正本 [`TextLayerConfig::line_pitch`]・`FixedMetrics` と同一式）
@@ -69,9 +73,10 @@ pub struct DWriteMetrics {
     /// 実 font face metrics 由来の行ボックス比 `(ascent + descent) ÷ designUnitsPerEm`
     /// （生成時に一度だけ実測・文字列非依存＝フォント固有の設計値）。
     line_box_ratio: f32,
-    /// 「文字と計測鍵」単位の計測キャッシュ（probe 成功値のみ・失敗は縮退値を返し
-    /// キャッシュしない）。既定の見た目は [`default_key`](Self::default_key) の組で入る。
-    cache: RefCell<HashMap<(char, FontKey), f32>>,
+    /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（probe 成功値のみ・
+    /// 失敗は縮退値を返しキャッシュしない）。既定の見た目は [`default_key`](Self::default_key)
+    /// の組で入る。内側の鍵を `Arc<str>` にして `&str` で引く（引くときに割り当てない）。
+    cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, f32>>>,
     /// 候補列の解決台帳（共有・警告の源を 1 つに保つ）。
     fonts: Rc<FontCatalog>,
     /// 束縛書式に焼いた見た目の計測鍵——この鍵の計測は束縛書式の経路をそのまま通る
@@ -240,23 +245,33 @@ impl DWriteMetrics {
         self.probe_format_creations.get()
     }
 
-    /// 「文字と計測鍵」の組で記憶しながら、指定の書式で 1 文字を測る。
+    /// 「計測鍵と文字」の組で記憶しながら、指定の書式で 1 文字（クラスタ 1 つ）を測る。
     ///
     /// 記憶に無ければ probe layout を作って測り、成功値だけを入れる（失敗は
     /// [`probe_advance`](Self::probe_advance) 内で `error!` 済み——縮退値は呼び手が
-    /// 決めて記憶しない＝次回再試行）。
-    fn measure(&self, ch: char, key: &FontKey, format: &IDWriteTextFormat) -> Option<f32> {
-        if let Some(&cached) = self.cache.borrow().get(&(ch, key.clone())) {
+    /// 決めて記憶しない＝次回再試行）。引くときは割り当てず、入れるときだけ鍵を作る。
+    fn measure(&self, text: &str, key: &FontKey, format: &IDWriteTextFormat) -> Option<f32> {
+        let cached = self
+            .cache
+            .borrow()
+            .get(key)
+            .and_then(|by_text| by_text.get(text).copied());
+        if let Some(cached) = cached {
             return Some(cached);
         }
-        let advance = self.probe_advance(ch, format).ok()?;
-        self.cache.borrow_mut().insert((ch, key.clone()), advance);
+        let advance = self.probe_advance(text, format).ok()?;
+        self.cache
+            .borrow_mut()
+            .entry(key.clone())
+            .or_default()
+            .insert(Arc::from(text), advance);
         Some(advance)
     }
 
-    /// 1 文字の未折返し probe layout を指定の書式で生成し、cluster metrics の width 合計を返す。
-    fn probe_advance(&self, ch: char, format: &IDWriteTextFormat) -> Result<f32, TextLayerError> {
-        let text = HSTRING::from(ch.to_string());
+    /// 1 文字（クラスタ 1 つ）全体の未折返し probe layout を指定の書式で生成し、
+    /// cluster metrics の width 合計を返す。
+    fn probe_advance(&self, text: &str, format: &IDWriteTextFormat) -> Result<f32, TextLayerError> {
+        let text = HSTRING::from(text);
         let layout = self
             .factory
             .create_text_layout(&text, format, PROBE_MAX_EXTENT, PROBE_MAX_EXTENT)
@@ -267,14 +282,14 @@ impl DWriteMetrics {
         Ok(clusters.iter().map(|c| c.width).sum())
     }
 
-    /// キャッシュ済み計測数（テスト観測用: 同じ「文字と計測鍵」の再計測が probe を
-    /// 増やさない檻・鍵が文字だけへ戻れば見た目違いが同じ組に潰れて赤くなる）。
+    /// キャッシュ済み計測数（内側の表の要素数の合計。テスト観測用: 同じ「計測鍵と文字」の
+    /// 再計測が probe を増やさない檻・鍵が文字だけへ戻れば見た目違いが同じ組に潰れて赤くなる）。
     ///
     /// `pub(super)`: ファサード配下の兄弟テスト（`draw_format_metrics_tests.rs`＝
     /// `crate::draw` の子）から見える最小の可視性。crate 外へは出さない。
     #[cfg(test)]
     pub(super) fn cached_probe_count(&self) -> usize {
-        self.cache.borrow().len()
+        self.cache.borrow().values().map(HashMap::len).sum()
     }
 }
 
@@ -284,9 +299,10 @@ impl GlyphMetrics for DWriteMetrics {
     /// `font_height` は束縛フォント（format へ焼き込み済み）と一致していることが契約。
     /// 不一致は `warn!`＋縮退継続（値は束縛 format の実測のまま——probe は描画と同一
     /// format が正準のため引数側へ寄せない）。probe 失敗は `error!`（[`device_err`]）
-    /// 済みで、決定論の縮退値（`FixedMetrics` と同式: 全角＝height・半角＝height/2）
-    /// を返して継続する（trait は失敗経路を持たない・log-first でログ無し失敗にしない）。
-    fn advance(&self, ch: char, font_height: f32) -> f32 {
+    /// 済みで、決定論の縮退値（`FixedMetrics` と同式: ASCII だけのクラスタ＝height/2・
+    /// それ以外＝height）を返して継続する（trait は失敗経路を持たない・log-first でログ無し
+    /// 失敗にしない）。
+    fn advance(&self, text: &str, font_height: f32) -> f32 {
         if font_height != self.font_height {
             warn!(
                 requested = font_height,
@@ -295,26 +311,26 @@ impl GlyphMetrics for DWriteMetrics {
             );
         }
         // 失敗は probe_advance 内で error! 済み。縮退値はキャッシュしない（次回再試行）。
-        self.measure(ch, &self.default_key, &self.format)
-            .unwrap_or_else(|| degraded_advance(ch, self.font_height))
+        self.measure(text, &self.default_key, &self.format)
+            .unwrap_or_else(|| degraded_advance(text, self.font_height))
     }
 
     /// 見た目込みの実測送り幅（R7.10／R11.1）。
     ///
     /// 既定の見た目（束縛書式に焼いた鍵と同値）は [`advance`](Self::advance) の
     /// **同じ経路**をそのまま通る——装飾を使わない台本の計測値が従来と変わらない。
-    /// それ以外は鍵ごとの試験用書式で測り「文字と計測鍵」の組で記憶する。
+    /// それ以外は鍵ごとの試験用書式で測り「計測鍵と文字」の組で記憶する。
     /// 書式の生成に失敗したときは `error!` 済みの縮退値（`FixedMetrics` と同式・
     /// 基準は**その見た目の**大きさ）を返して継続する。
-    fn advance_styled(&self, ch: char, look: &TextLook) -> f32 {
+    fn advance_styled(&self, text: &str, look: &TextLook) -> f32 {
         let key = look.font_key();
         if key == self.default_key {
-            return self.advance(ch, look.height);
+            return self.advance(text, look.height);
         }
         self.probe_format_for(&key)
             .ok()
-            .and_then(|format| self.measure(ch, &key, &format))
-            .unwrap_or_else(|| degraded_advance(ch, look.height))
+            .and_then(|format| self.measure(text, &key, &format))
+            .unwrap_or_else(|| degraded_advance(text, look.height))
     }
 
     /// 行送りピッチ＝正典式 `font_height + 行間`。式は [`TextLayerConfig::line_pitch`]
@@ -336,9 +352,14 @@ impl GlyphMetrics for DWriteMetrics {
     }
 }
 
-/// 実測できないときの決定論の縮退送り幅（`FixedMetrics` と同式: 全角＝高さ・半角＝高さ半分）。
-fn degraded_advance(ch: char, height: f32) -> f32 {
-    if ch.is_ascii() { height / 2.0 } else { height }
+/// 実測できないときの決定論の縮退送り幅（`FixedMetrics` と同式: ASCII だけのクラスタ＝
+/// 高さ半分・それ以外＝高さ 1 つ分）。
+fn degraded_advance(text: &str, height: f32) -> f32 {
+    if text.is_ascii() {
+        height / 2.0
+    } else {
+        height
+    }
 }
 
 /// format が束縛したフォントの face metrics から行ボックス比 `(ascent + descent) ÷ upem` を実測する。

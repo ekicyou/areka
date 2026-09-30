@@ -69,8 +69,8 @@
 //!
 //! ## probe/描画 一致 invariant（task 6.4・R4.5/R6.1–6.3/R7.5）
 //!
-//! probe（per-char 計測）と描画行 TextLayout の cluster advance の**同値** invariant は
-//! 本モジュールの統合テスト（`probe_advances_match_drawn_line_cluster_advances`／
+//! probe（1 文字＝クラスタ 1 つごとの計測）と描画行 TextLayout の cluster advance の**同値** invariant は
+//! 本モジュールの統合テスト（`probe_advances_match_drawn_line_advances_per_cluster`／
 //! `advance_divergence_would_surface_as_wrap_position_drift`）が檻化する——乖離は
 //! クリップに隠れず折返し位置のズレとして赤くなる（design Testing Strategy #5）。
 
@@ -81,16 +81,15 @@ use windows::Win32::Graphics::Direct2D::Common::{
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_TARGET, D2D1_BITMAP_PROPERTIES1,
-    ID2D1Bitmap1, ID2D1DeviceContext,
+    D2D1_DRAW_TEXT_OPTIONS, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT, ID2D1Bitmap1,
+    ID2D1DeviceContext,
 };
 // 比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）専用の描画 API——本番 create_d2d_target_bitmap
 // が使う定義（上）と分けて cfg(test) に隔離する（非テストビルドの dead import を避ける）。
 #[cfg(test)]
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 #[cfg(test)]
-use windows::Win32::Graphics::Direct2D::{
-    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Image,
-};
+use windows::Win32::Graphics::Direct2D::{D2D1_DEVICE_CONTEXT_OPTIONS_NONE, ID2D1Image};
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
@@ -162,6 +161,18 @@ pub const DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
 
 /// 既定フォント高さ 12（**image px**・「単位はピクセル：ポイントではない」・ukadoc 既定・R4.1/R4.2）。
 pub const DEFAULT_FONT_HEIGHT: f32 = 12.0;
+
+/// 文字を描くときの描画オプションの唯一の定義点（色つきの字形を出す）。
+///
+/// 本番（`ViewboxExecutor::render_styled`）と照合用（`DrawExecutor::render`）が同じ値を渡すので、
+/// 両者の読み戻しのバイト等価はこの定数の上で成り立つ。指定フォントに無い絵文字は OS の代替
+/// フォントの色つきの字形で出て、色つきの字形の版（COLR v0／v1）と、色つきの字形が無いときの
+/// 単色は OS に任せる（フォントの差し替えの規則・代替の表・自前の描き手は持たない）。
+/// 色つきの字形を持たない文字の画素はこのオプションで変わらない。
+///
+/// 影の複製はこの定数を使わず、単色の塗りで描く（`text-align-shadow-canon`）。
+pub(crate) const TEXT_DRAW_OPTIONS: D2D1_DRAW_TEXT_OPTIONS =
+    D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT;
 
 /// TextFormat のロケール（wintf typewriter レシピからの lift・日本語正準）。
 const LOCALE_JA_JP: &str = "ja-JP";
@@ -562,7 +573,7 @@ impl DrawExecutor {
             if run.glyphs.is_empty() {
                 continue;
             }
-            let text: String = run.glyphs.iter().map(|g| g.ch).collect();
+            let text: String = run.glyphs.iter().map(|g| &*g.text).collect();
             let layout = self.line_layout(index, &text, &format, font.height, mode)?;
             let (dx, dy) = resident.transform.offset();
             let origin = match mode {
@@ -610,7 +621,7 @@ impl DrawExecutor {
         });
         for (origin, layout) in &draws {
             self.dc
-                .draw_text_layout(*origin, layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+                .draw_text_layout(*origin, layout, &brush, TEXT_DRAW_OPTIONS);
         }
         let end = unsafe { self.dc.EndDraw(None, None) };
         unsafe { self.dc.SetTarget(None::<&ID2D1Image>) };

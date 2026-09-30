@@ -16,3 +16,7 @@ areka-parsers = { path = "../areka-parsers" }
 areka-talk = { path = "../areka-talk" }
 tracing = { workspace = true }
 thiserror = { workspace = true }
+# 文字の単位（拡張書記素クラスタ・UAX #29）の切り方は cluster.rs だけが決める。版は
+# Cargo.lock に推移依存として既に在る 1.13.3 に揃える（版を上げると Unicode の版が変わり
+# 絵文字のクラスタの切り方が動きうる）。
+unicode-segmentation = "1.13.3"

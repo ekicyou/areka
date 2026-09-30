@@ -92,14 +92,14 @@ fn typewriter_single_glyph_dirties_current_line_only() {
     let vr = (Some(0), Some(224), Some(0), Some(400));
     // 前回: 1 グリフ「あ」・今回: 2 グリフ「ああ」（同一行・折返しなし）。
     let prev_canvas = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ")],
         WritingMode::HorizontalTb,
         vr,
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&prev_canvas, WritingMode::HorizontalTb);
     let canvas = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
         WritingMode::HorizontalTb,
         vr,
         10.0,
@@ -133,10 +133,10 @@ fn within_line_shrink_falls_back_to_full_dirty() {
     // 前回確定＝広い行（全角 4「ああああ」・幅 40）。
     let wide = canvas_for(
         &[
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
+            TextItem::glyph("あ"),
+            TextItem::glyph("あ"),
+            TextItem::glyph("あ"),
         ],
         mode,
         vr,
@@ -146,7 +146,7 @@ fn within_line_shrink_falls_back_to_full_dirty() {
     commit_initial(&mut planner, &wide, mode, &contract, surface);
     // 新 canvas＝同 index 行が縮む（全角 2「ああ」・幅 20・block 不動）。
     let narrow = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
         mode,
         vr,
         10.0,
@@ -179,7 +179,7 @@ fn forward_line_growth_stays_incremental() {
     let vr = (Some(0), Some(100), Some(0), Some(400));
     let surface = (400u32, 100u32);
     let narrow = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
         mode,
         vr,
         10.0,
@@ -189,10 +189,10 @@ fn forward_line_growth_stays_incremental() {
     // 伸長（全角 2→4・同一行・block 不動）。
     let grown = canvas_for(
         &[
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
+            TextItem::glyph("あ"),
+            TextItem::glyph("あ"),
+            TextItem::glyph("あ"),
         ],
         mode,
         vr,
@@ -220,14 +220,14 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
     let vr = (Some(0), Some(224), Some(0), Some(400));
     // 現在行が 1→2 グリフへ伸長（横書き・1 行）。
     let prev_canvas = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ")],
         WritingMode::HorizontalTb,
         vr,
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&prev_canvas, WritingMode::HorizontalTb);
     let canvas = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
         WritingMode::HorizontalTb,
         vr,
         10.0,
@@ -280,15 +280,10 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
 
     // 縦書き（vertical_rl）: overhang は right（X 正方向）へ効く——横書きの top/bottom（Y）は
     // 無視され、left/right（X）で列のブロック軸が広がる（軸読み替えの檻）。
-    let vprev = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }],
-        WritingMode::VerticalRl,
-        vr,
-        10.0,
-    );
+    let vprev = canvas_for(&[TextItem::glyph("あ")], WritingMode::VerticalRl, vr, 10.0);
     let vprev_lines = ScrollPlanner::committed_lines(&vprev, WritingMode::VerticalRl);
     let vcanvas = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
         WritingMode::VerticalRl,
         vr,
         10.0,
@@ -340,10 +335,10 @@ fn confirmed_line_is_excluded_from_dirty_and_draw() {
     // 前回: 行0「ああ」・行1「い」。今回: 行0 不変・行1「いろ」へ伸長。
     let prev_canvas = canvas_for(
         &[
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
+            TextItem::glyph("あ"),
             TextItem::LineBreak { ratio: 1.0 },
-            TextItem::Glyph { ch: 'い' },
+            TextItem::glyph("い"),
         ],
         WritingMode::HorizontalTb,
         vr,
@@ -352,11 +347,11 @@ fn confirmed_line_is_excluded_from_dirty_and_draw() {
     let prev = ScrollPlanner::committed_lines(&prev_canvas, WritingMode::HorizontalTb);
     let canvas = canvas_for(
         &[
-            TextItem::Glyph { ch: 'あ' },
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
+            TextItem::glyph("あ"),
             TextItem::LineBreak { ratio: 1.0 },
-            TextItem::Glyph { ch: 'い' },
-            TextItem::Glyph { ch: 'ろ' },
+            TextItem::glyph("い"),
+            TextItem::glyph("ろ"),
         ],
         WritingMode::HorizontalTb,
         vr,
@@ -456,14 +451,14 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
 
     // (b) 先頭行伸長 → 変化行が y=0 側でガードにより負へ出るが 0 へクランプ。
     let prev_canvas = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ")],
         WritingMode::HorizontalTb,
         vr,
         10.0,
     );
     let prev = ScrollPlanner::committed_lines(&prev_canvas, WritingMode::HorizontalTb);
     let grown = canvas_for(
-        &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
         WritingMode::HorizontalTb,
         vr,
         10.0,
@@ -666,7 +661,7 @@ fn lines_with_widths(widths: &[usize]) -> Vec<TextItem> {
             items.push(TextItem::LineBreak { ratio: 1.0 });
         }
         for _ in 0..n {
-            items.push(TextItem::Glyph { ch: 'あ' });
+            items.push(TextItem::glyph("あ"));
         }
     }
     items

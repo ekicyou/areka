@@ -167,13 +167,13 @@ fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
     // font 13 → pitch 15（13 + 行間 2）。ratio 0.5 区切り 4 行:
     // 上端 0/7.5/15/22.5・下端 13/20.5/28/35.5——最新行 35.5 > 30。
     let items = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 0.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 0.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 0.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let window = window_for(&items, &region, WritingMode::HorizontalTb, 13.0);
     assert_eq!(
@@ -243,9 +243,9 @@ fn same_input_yields_identical_output() {
     ] {
         let region = TextRegion::resolve(&model, IMAGE, mode);
         let items = [
-            TextItem::Glyph { ch: 'あ' },
+            TextItem::glyph("あ"),
             TextItem::LineBreak { ratio: 0.5 },
-            TextItem::Glyph { ch: 'a' },
+            TextItem::glyph("a"),
         ];
         let first = LayoutEngine::layout(
             &items,
@@ -291,11 +291,11 @@ fn leading_gap_scrolls_from_region_start_not_from_first_line() {
     // 143 − 45 = 98 ≤ 133。`near(lines[0])` が描画範囲の開始側 40 と一致するため、
     // 原点をどちらに取っても同じ値になる。
     let without_gap = [
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let control = window_for(&without_gap, &region, WritingMode::HorizontalTb, 28.0);
     assert_eq!(
@@ -313,11 +313,11 @@ fn leading_gap_scrolls_from_region_start_not_from_first_line() {
     // 最初の行の開始側 85 だと空きは候補に入らず「2 行スキップ・−60」＝最新の 1 行だけになる。
     let with_gap = [
         TextItem::LineBreak { ratio: 1.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let window = window_for(&with_gap, &region, WritingMode::HorizontalTb, 28.0);
     assert_eq!(
@@ -348,11 +348,11 @@ fn vertical_rl_leading_gap_scrolls_from_region_start() {
     assert_eq!(region.start(), (400.0, 0.0));
     let with_gap = [
         TextItem::LineBreak { ratio: 1.5 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
-        TextItem::Glyph { ch: 'あ' },
+        TextItem::glyph("あ"),
     ];
     let window = window_for(&with_gap, &region, WritingMode::VerticalRl, 28.0);
     assert_eq!(
