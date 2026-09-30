@@ -317,8 +317,10 @@ pub fn on_ghost_changed(
 
 /// 汎用の入口の組み立て（GET／NOTIFY・渡された列をそのまま Reference にする）。
 ///
-/// 欠番は呼び手が空文字で埋める（本関数は詰めも補いもしない）。`id` は
-/// [`allowed_static`] を通した許可表の綴り（要件 7.2・7.3）。
+/// 欠番は呼び手が空文字で埋める（本関数は詰めも補いもしない）。`id` は、汎用の入口では
+/// [`allowed_static`] を通した許可表の綴り（要件 7.2・7.3）、ネットワーク更新の起動の根
+/// （[`BootOrigin::Updated`]）では呼び手の定数のまま（本関数は検査しない）。許可表の最終の
+/// 検査は送出点（`actor::round_trip_request`）が行う。
 pub fn raise(
     id: &'static str,
     references: Vec<String>,

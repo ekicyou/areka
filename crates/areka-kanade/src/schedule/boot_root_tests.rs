@@ -27,6 +27,26 @@ fn from() -> ChangedFrom {
     }
 }
 
+/// ネットワーク更新の読み直しの起動の知らせ（Reference は `OnUpdateComplete` の 5 欄の形）。
+fn update_refs() -> Vec<String> {
+    [
+        "changed",
+        "descript.txt,ghost/master/yaya.dll",
+        "",
+        "ghost",
+        "manual",
+    ]
+    .map(String::from)
+    .to_vec()
+}
+
+fn updated() -> BootOrigin {
+    BootOrigin::Updated {
+        id: "OnUpdateComplete",
+        references: update_refs(),
+    }
+}
+
 fn reply(s: State, outcome: ShioriOutcome, c: &KanadeConfig) -> (State, Vec<Action>) {
     step(
         s,
@@ -81,6 +101,7 @@ fn boot_root_table_picks_one_root_per_origin() {
         BootOrigin::Halted {
             ghost_name: "B".to_string(),
         },
+        updated(),
     ] {
         let c = cfg(true, origin);
         assert_eq!(
@@ -97,6 +118,11 @@ fn boot_root_table_picks_one_root_per_origin() {
             &c.shell_folder,
             snap
         )))
+    );
+    // 起動記録あり＋ネットワーク更新で読み直した → 渡した名前と Reference の GET（要件 5.5）。
+    assert_eq!(
+        parts(boot_root(&cfg(false, updated()))),
+        Some(("OnUpdateComplete".to_string(), update_refs()))
     );
     // 起動記録あり＋それ以外 → 根なし（OnBoot だけ）。
     assert!(boot_root(&cfg(false, BootOrigin::Plain)).is_none());
@@ -247,4 +273,105 @@ fn steady_notice_is_emitted_exactly_once_when_entering_steady() {
             done.len()
         );
     }
+}
+
+// ---- ネットワーク更新で読み直した（areka-P0-network-update 要件 5.5・9.9・10.6） ----
+
+#[test]
+fn updated_sends_given_event_as_root_and_logs_boot_update_root() {
+    use crate::schedule::log_capture::{capture, logged_once};
+    let c = cfg(false, updated());
+    let mut out = None;
+    let events = capture(|| out = Some(drive_past_prefetch(&c)));
+    let (s, actions) = out.unwrap();
+    assert!(matches!(s.phase, Phase::BootType), "根の応答待ち");
+    assert_eq!(actions.len(), 2, "[sink, 起動の知らせ] の 2 件");
+    assert_get(
+        &actions[1],
+        &events::raise(
+            "OnUpdateComplete",
+            update_refs(),
+            crate::change::ShioriMethod::Get,
+            &ExecutionSnapshot::INACTIVE,
+        ),
+    );
+    let ids = get_ids(&actions);
+    assert!(
+        !ids.iter()
+            .any(|id| id == "OnGhostChanged" || id == "OnBoot"),
+        "OnGhostChanged・OnBoot は 0 件のはず（実際 {ids:?}）"
+    );
+    let root_log = logged_once(&events, tracing::Level::INFO, "boot_update_root");
+    assert_eq!(
+        root_log.fields.get("id").map(String::as_str),
+        Some("OnUpdateComplete")
+    );
+}
+
+#[test]
+fn updated_204_goes_to_steady_without_on_boot() {
+    use crate::schedule::log_capture::{capture, logged_once};
+    let c = cfg(false, updated());
+    let (s, root) = drive_past_prefetch(&c);
+    let mut out = None;
+    let events = capture(|| out = Some(reply(s, ShioriOutcome::NoContent, &c)));
+    let (s, next) = out.unwrap();
+    // 204 でも OnBoot へ続けず basewareversion（台詞なし）へ。
+    assert!(matches!(s.phase, Phase::BootVersion { talk: None }));
+    assert!(
+        get_ids(&root)
+            .iter()
+            .chain(get_ids(&next).iter())
+            .all(|id| id != "OnBoot"),
+        "OnBoot は 0 件のはず"
+    );
+    assert_eq!(next.len(), 1, "[basewareversion] の 1 件");
+    assert_notify(
+        &next[0],
+        &events::baseware_version(&c, &snapshot_of(&s.phase)),
+    );
+    logged_once(&events, tracing::Level::INFO, "boot_update_no_content");
+    // 定常到達の通知がちょうど 1 件。
+    let (s, done) = reply(s, ShioriOutcome::Notified, &c);
+    assert!(matches!(s.phase, Phase::Steady { talk: None }));
+    assert!(matches!(
+        done.as_slice(),
+        [Action::Notice(KanadeNotice::Steady)]
+    ));
+}
+
+#[test]
+fn updated_with_script_plays_it_and_skips_on_boot() {
+    let c = cfg(false, updated());
+    let (s, root) = drive_past_prefetch(&c);
+    assert!(matches!(s.phase, Phase::BootType), "根の応答待ち");
+    assert_eq!(get_ids(&root), vec!["OnUpdateComplete".to_string()]);
+    let (s, next) = reply(s, ShioriOutcome::Value(r"\0更新したよ\e".to_string()), &c);
+    assert!(matches!(s.phase, Phase::BootVersion { talk: Some(_) }));
+    assert!(get_ids(&next).is_empty(), "OnBoot は 0 件のはず");
+    assert_eq!(next.len(), 2, "[StartTalk, basewareversion] の 2 件");
+    match &next[0] {
+        Action::StartTalk(t) => assert_eq!(t.script, r"\0更新したよ\e"),
+        _ => panic!("StartTalk のはず"),
+    }
+    assert_notify(
+        &next[1],
+        &events::baseware_version(&c, &snapshot_of(&s.phase)),
+    );
+}
+
+#[test]
+fn first_boot_wins_over_updated_and_204_still_falls_through_to_on_boot() {
+    let c = cfg(true, updated());
+    let (s, actions) = drive_past_prefetch(&c);
+    assert_eq!(actions.len(), 2, "[sink, OnFirstBoot] の 2 件");
+    assert_get(
+        &actions[1],
+        &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0),
+    );
+    // 根が OnFirstBoot なら 204 の腕は今日どおり OnBoot へ。
+    let (s, next) = reply(s, ShioriOutcome::NoContent, &c);
+    assert!(matches!(s.phase, Phase::BootMain));
+    assert_eq!(next.len(), 1, "[OnBoot] の 1 件");
+    assert_get(&next[0], &events::on_boot(&c, &ExecutionSnapshot::INACTIVE));
 }

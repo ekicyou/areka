@@ -6,7 +6,7 @@
 //! フェーズ分岐として呼び出せるようにする。
 
 use super::{Action, ActiveTalk, Input, Phase, State, events, resources, snapshot_of};
-use crate::change::{BootOrigin, KanadeNotice};
+use crate::change::{BootOrigin, KanadeNotice, ShioriMethod};
 use crate::msg::{CloseReason, KanadeConfig, ShioriCall, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
@@ -79,6 +79,15 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
         // BootType: 204→OnBoot GET（BootMain へ・Req 1.3）。Value→OnBoot をスキップし
         // StartTalk＋basewareversion（正典フォールスルー打ち切り・Req 2.1）。
         Phase::BootType => match outcome {
+            // ネットワーク更新の起動の知らせ（根が OnFirstBoot でない）は 204 でも OnBoot へ続けない
+            // （areka-P0-network-update 要件 5.5）。
+            ShioriOutcome::NoContent
+                if !config.first_boot
+                    && matches!(config.boot_origin, BootOrigin::Updated { .. }) =>
+            {
+                tracing::info!(target: "kanade", event = "boot_update_no_content", "ネットワーク更新の起動の知らせが 204——OnBoot へ進まず basewareversion へ");
+                to_baseware_version(state, None, config)
+            }
             ShioriOutcome::NoContent => {
                 let mut state = state;
                 state.phase = Phase::BootMain;
@@ -214,7 +223,9 @@ fn on_prefetch_reply(
 /// 起動の根の表（ukadoc の「204 なら続けて」の木の根を 1 つ選ぶ・要件 4.1〜4.4・6.2・11.3）。
 ///
 /// 起動記録なし（`first_boot`）→ `OnFirstBoot`（由来を問わず最優先）。切替で来た
-/// （[`BootOrigin::ChangedFrom`]）→ `OnGhostChanged`。それ以外（`Plain`・`Halted`）→ 根なし
+/// （[`BootOrigin::ChangedFrom`]）→ `OnGhostChanged`。ネットワーク更新で読み直した
+/// （[`BootOrigin::Updated`]）→ 渡された名前と Reference の GET（204 でも `OnBoot` へ続けない）。
+/// それ以外（`Plain`・`Halted`）→ 根なし
 /// （`OnBoot` だけ。`Halted` の Ref6/7 は [`events::on_boot`] が載せる）。範囲外の根は
 /// [`BootOrigin`] に値を足し、この表に行を足すだけで入る。
 fn boot_root(config: &KanadeConfig) -> Option<ShioriCall> {
@@ -228,6 +239,17 @@ fn boot_root(config: &KanadeConfig) -> Option<ShioriCall> {
             &config.shell_folder,
             snapshot,
         )),
+        // ネットワーク更新で読み直した → 渡された名前と Reference の GET（`OnGhostChanged` と同じく
+        // 根は許可表を通さない・areka-P0-network-update 要件 5.5・決めたこと 22）。
+        BootOrigin::Updated { id, references } => {
+            tracing::info!(target: "kanade", event = "boot_update_root", id = *id, "起動の根にネットワーク更新の起動の知らせを選んだ");
+            Some(events::raise(
+                id,
+                references.clone(),
+                ShioriMethod::Get,
+                snapshot,
+            ))
+        }
         BootOrigin::Plain | BootOrigin::Halted { .. } => None,
     }
 }

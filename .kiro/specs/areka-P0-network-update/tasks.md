@@ -197,7 +197,7 @@
   - _Boundary: shiori-host32-host process_host（境界を広げる・並走なし）_
 
 - [ ] 12. `OnUpdateComplete` と総括を読み直しの後の新しいゴーストへ送る（2026-09-30 開発者確定・裁定 6 を覆した）
-- [ ] 12.1 kanade の起動の由来に「ネットワーク更新で読み直した」を足す
+- [x] 12.1 kanade の起動の由来に「ネットワーク更新で読み直した」を足す
   - 起動の由来に、送るイベントの名前（許可表の綴り）と Reference を持つ変種を 1 つ足す。起動の根の表では「最初の起動」の次に置き、根はその名前と Reference の GET にする（`OnGhostChanged`・`OnBoot` の代わり）
   - 根への応えが無い（204）とき、この由来だけは `OnBoot` へ続けず、`basewareversion` へ進んで定常に入る。台本が返れば今日どおり再生する。他の由来（ふつう・切替で来た・前回落ちた）の振る舞いは変えない
   - 記録の語を 2 つ（根に選んだ・204 でも `OnBoot` へ進まない）足す
@@ -255,3 +255,4 @@
 - 9.1（回し直し）: `tools/test-all.ps1` 全段緑（検査したコミット 3d7169cf・タスク 10・11 の後）
 - 9.2: 実機は 3 回（`signoff.md`）。emo2 のサイトは改行の不備で `md5 miss`（失敗の経路の実物）、あやめで ⑴〜⑷ 合格（直した後に読み直しの 4 ms 後に古い `yaya.dll` の写しが消えた）・コンソール窓なし
 - 12（2026-09-30 開発者確定）: 6.5 の注記「`OnBoot` は送らない」の一文の扱いはこの確定で決着した（読み直しの起動は後送りの列の先頭・`OnGhostChanged`／`OnBoot` の代わり・204 でも `OnBoot` 無し＝要件 5.5・裁定 6 を覆した）。6.5・6.6 の「`OnGhostChanged` に台本で応えて根を見る」テストは 12.3 で新しい起動の知らせを見る形へ書き換える
+- 12.1: `BootOrigin::Updated { id, references }` の根は `events::raise` で組む（許可表は通さない・最後の判定は送出点 `round_trip_request`）。204 は `boot_update_no_content` で `OnBoot` へ進まない（`first_boot` のときだけ今日どおり）。SHIORI の失敗は既存の根と同じ `Unloading{Fault}`。`BootOrigin` を網羅する `match` は `boot_root` の 1 か所だけ
