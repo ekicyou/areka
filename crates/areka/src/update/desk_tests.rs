@@ -281,6 +281,7 @@ fn a_switch_reservation_refuses_with_no_event_and_one_warning() {
             sakura_name: None,
         },
         stage: SwitchStage::SendOff,
+        boot_event: None,
     });
     let (verdict, events) = capture(|| rig.submit(UpdateReason::Manual));
     assert_eq!(verdict, SubmitVerdict::NotSteady);

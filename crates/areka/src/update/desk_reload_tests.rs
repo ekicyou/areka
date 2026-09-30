@@ -115,6 +115,7 @@ fn a_reload_of_the_running_ghost_switches_to_itself_silently_and_ignores_a_midwa
                 ghost: GhostSpec::Folder("B".to_owned()),
                 raise_event: true,
                 origin: ChangeOrigin::Manual,
+                boot_event: None,
             },
         );
         let finished = rig.pump_talking_until(|rig| {
@@ -211,6 +212,7 @@ fn a_reload_that_misses_a_condition_requests_no_switch_and_warns_once() {
             sakura_name: None,
         },
         stage: SwitchStage::SendOff,
+        boot_event: None,
     });
     assert_skipped(&mut rig, a_dir.clone(), "switching");
     rig.world.remove_non_send::<SwitchInFlight>();
@@ -300,6 +302,7 @@ fn a_switch_without_a_reload_leaves_the_marked_leftover() {
                 ghost: GhostSpec::Folder("A".to_owned()),
                 raise_event: false,
                 origin: ChangeOrigin::Manual,
+                boot_event: None,
             },
         );
         let finished = rig.pump_talking_until(|rig| {

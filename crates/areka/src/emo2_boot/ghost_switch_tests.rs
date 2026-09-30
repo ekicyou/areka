@@ -131,6 +131,7 @@ fn request(spec: GhostSpec, raise_event: bool, origin: ChangeOrigin) -> SwitchRe
         ghost: spec,
         raise_event,
         origin,
+        boot_event: None,
     }
 }
 

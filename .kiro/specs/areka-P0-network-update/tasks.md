@@ -205,7 +205,7 @@
   - _Requirements: 5.5, 9.9, 10.6_
   - _Boundary: areka-kanade change（由来の型）, schedule boot（根の表・起動種別の 204 の腕）_
 
-- [ ] 12.2 切替の入口に起動の知らせの欄を足し、切替先を起こすときだけ 12.1 の由来へ写す
+- [x] 12.2 切替の入口に起動の知らせの欄を足し、切替先を起こすときだけ 12.1 の由来へ写す
   - 切替の要求に「切替先を起こすときの起動の知らせ（名前と Reference の組）」の欄を足し、切替の予約へ写す。入口の判定と kanade へ送る切替の要求は変えない
   - 切替先を起こすとき、欄が在れば由来を「切替で来た」の代わりに 12.1 の由来にする。既定ゴーストへ戻すときは欄を見ない（今日どおり「前回落ちた」）
   - 切替の要求を組む既存の所（本番 4 か所・テスト 7 か所）は欄を空で足すだけ
@@ -256,3 +256,4 @@
 - 9.2: 実機は 3 回（`signoff.md`）。emo2 のサイトは改行の不備で `md5 miss`（失敗の経路の実物）、あやめで ⑴〜⑷ 合格（直した後に読み直しの 4 ms 後に古い `yaya.dll` の写しが消えた）・コンソール窓なし
 - 12（2026-09-30 開発者確定）: 6.5 の注記「`OnBoot` は送らない」の一文の扱いはこの確定で決着した（読み直しの起動は後送りの列の先頭・`OnGhostChanged`／`OnBoot` の代わり・204 でも `OnBoot` 無し＝要件 5.5・裁定 6 を覆した）。6.5・6.6 の「`OnGhostChanged` に台本で応えて根を見る」テストは 12.3 で新しい起動の知らせを見る形へ書き換える
 - 12.1: `BootOrigin::Updated { id, references }` の根は `events::raise` で組む（許可表は通さない・最後の判定は送出点 `round_trip_request`）。204 は `boot_update_no_content` で `OnBoot` へ進まない（`first_boot` のときだけ今日どおり）。SHIORI の失敗は既存の根と同じ `Unloading{Fault}`。`BootOrigin` を網羅する `match` は `boot_root` の 1 か所だけ
+- 12.2: `SwitchRequest`・`SwitchInFlight` に `boot_event: Option<(&'static str, Vec<String>)>`。`switch_to`（切替先）だけが読み `BootOrigin::Updated` で起こす・`switch_to_default` は今日どおり `Halted`。記録は既存の `ghost_switch_requested` に `boot_event` の欄。`update/desk.rs` の `reload` はまだ `None`＝12.3 が列の先頭を入れる。`ghost_switch_tests.rs` は 988 行＝足すなら兄弟ファイルへ

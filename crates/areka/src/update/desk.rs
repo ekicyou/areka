@@ -164,6 +164,7 @@ fn reload(world: &mut World, ghost_dir: &Path) {
             ghost: GhostSpec::Folder(folder.clone()),
             raise_event: false,
             origin: ChangeOrigin::Automatic,
+            boot_event: None,
         },
     );
     if verdict == SwitchVerdict::Accepted {
