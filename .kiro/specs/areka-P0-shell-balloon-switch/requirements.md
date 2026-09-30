@@ -84,7 +84,7 @@
   - 3 人以上のキャラの窓（`derive_scopes()` の据え置き）・`.pna`／`full`／`0` の透過（未実装のシーム）・メッセージボックスでの告知（0 場面）。
   - 検体 `.nar` の畳み直し（裁定 1）・`konnoyayame` のシェルの改変（CC BY-NC-ND）。
 - **Adjacent expectations**:
-  - 完了 `ghost-shell-balloon-switch` の汎用の通知の入口（`KanadeMsg::RaiseEvent`・許可表は共用）と `GhostSession` の置き場（`GhostSlot`）・`BootContext.current.balloon` の書き換えは本仕様の持ち場（doc コメントに明記済み）を使う。kanade で触るのは許可表の 3 行と「切替の台詞」の口（要件 8.11・裁定 8）。
+  - 完了 `ghost-shell-balloon-switch` の汎用の通知の入口（`KanadeMsg::RaiseEvent`・許可表は共用）と `GhostSession` の置き場（`GhostSlot`）・`BootContext.current.balloon` の書き換えは本仕様の持ち場（doc コメントに明記済み）を使う。kanade で触るのは許可表の 3 行と「台詞の切れ目」の口（印は `OnShellChanging` だけ・要件 8.11・裁定 8）。
   - 完了 `ghost-restart-unit` の「ゴーストを起こすたびにメニューの登記をやり直す」契約と `Emo2BootInputs` に乗る（シェル名の欄はそこへ・`GhostBootOptions` には足さない）。
   - 完了 `baseware-root-layout` の目録（`list_shells`・`list_balloons`）・記憶の鍵（`LastShell`／`LastBalloon`＝Ghost スコープ）・書き手（`record_last_used`）を使い、目録の素性（`Identity`）に欄を足さない。
   - 完了 `pilot-balloon-asset-swap` の学び（同じ id の再登録だけでは重なる・古い装着を消してから同じ呼び出しの中で再登録・配置が決まる前の段・`EmoWorld` は複製できない・可視性の持ち主と窓寸の要求が既定へ戻る）の上に建つ。present に「古い装着を片付ける正規の口」と「登録を消す口」を足すのは本仕様。
@@ -182,7 +182,7 @@
 1. When シェルの差し替えが済む, the areka shall 現在のゴーストの「最後のシェル」の記憶（`LastShell`・Ghost スコープ・フォルダ名）を新しいシェルに書く。When バルーンの差し替えが済む, the areka shall 現在のゴーストの「最後のバルーン」の記憶（`LastBalloon`・Ghost スコープ・フォルダ名）を新しいバルーンに書く。シェルの差し替えは `LastShell` だけを、バルーンの差し替えは `LastBalloon` だけを書き、他の記憶に触らない（3 つを一度に書く `record_last_used` を通すと、バルーンを入れた直後に `remember_balloon` が書いた「次から使うバルーン」を今表示しているバルーンで上書きしてしまうため、1 つだけを書く口を既存の書き手の隣に置く）。実行系が動いている間の記憶の書き込みの決まり（`sylphya_publisher` を通す）を守る。書けないときは `warn!` を残して切替は成功として扱う（記憶の縮退は今日と同じ）。
 2. When ゴーストを起こす（初回の起動・ゴースト切替の切替先・更新後の読み直し）, the areka shall そのゴーストの「最後のシェル」の記憶を読み、`shell/<記憶の名>/` に `descript.txt` が実在すればそのシェルで起こす（`menu,hidden` のシェルでも可）。記憶が無ければ今日どおり既定のシェル（`seriko.defaultsurfacedirectoryname`、無ければ `master`）。
 3. If 「最後のシェル」の記憶が指すフォルダが実在しないか `descript.txt` を持たない, then the areka shall `warn!` を 1 件残して既定のシェルで起こし、その起動の成功で記憶を既定のシェルへ書き直す（次回から警告が出ない）。
-4. The areka shall 起動時に選んだシェル名を、シェルを決める解決のすべての本番の呼び出し点（実行系の起動・資産の組み立て・配置の情報源）へ運び、どの呼び出し点も同じシェルを見る（片方だけ既定のシェルを見る形を作らない）。運ぶ口は `Emo2BootInputs` の欄と `boot_with_origin` の引数で、`GhostBootOptions` と `ConfigInputs`・`CurrentGhost`・`GhostDecision`・`BalloonDecision` には欄を足さない（完了 `ghost-shell-balloon-switch` の約束 1）。
+4. The areka shall 起動時に選んだシェル名を、シェルを決める解決のすべての本番の呼び出し点（実行系の起動・資産の組み立て・配置の情報源）へ運び、どの呼び出し点も同じシェルを見る（片方だけ既定のシェルを見る形を作らない）。運ぶ口は「配置の準備が決めたシェル」を置く資源と `wire_emo2_boot`・`boot_with_origin` の引数で（`Emo2BootInputs`・`StartupDescriptValues` の構造体リテラルが触れてはならない `ghost_switch_test_support.rs` に在るので、それらに欄は足さない＝2026-09-30 設計ディスカッションで追随）、`GhostBootOptions` と `ConfigInputs`・`CurrentGhost`・`GhostDecision`・`BalloonDecision` には欄を足さない（完了 `ghost-shell-balloon-switch` の約束 1）。
 5. When 切替のあとにネットワーク更新の読み直し（同じフォルダのゴースト切替）が走る, the areka shall 差し替えたシェルとバルーンで起こし直す（記憶から復元される）。When 切替のあとにメニューの「ネットワーク更新」の可否と対象を判定する, the areka shall 差し替えた後のシェル・バルーンを対象にする（更新の窓口が読む「今のシェル」「今のバルーン」が差し替え後を指す）。
 6. The areka shall `OnBoot`／`OnGhostChanged` に載せるシェル名（`OnBoot` の Ref0・`OnGhostChanged` の Ref7）を起動時に選んだシェルにする（起動の解決がそのシェルでマウントすれば自動で追随する）。
 7. The areka shall 起動時の argv（`areka.exe <ゴーストの根> <バルーンの根>`）の第 2 引数の意味を変えない（argv でバルーンを指定した起動では今日どおりそのバルーンで起き、起動の成功で argv のバルーンを記憶に書かない、のまま）。argv でバルーンを指定して起きたプロセスでも、利用者がバルーンを切り替えたら、その選択は 6.1 のとおり `LastBalloon` に書く（切替は利用者の明示の選択であって argv ではない）。
@@ -206,7 +206,7 @@
 #### Acceptance Criteria
 
 1. The 本仕様 shall `crates/areka/src/emo2_boot/ghost_switch.rs`（と `ghost_switch_tests.rs`・`ghost_switch_test_support.rs`）・`crates/areka-parsers/src/sakura/`・`crates/areka-sakura/src/compile.rs`・`crates/areka-ghost/src/lib.rs`（`pub mod` 1 行を除く）に触らず、`SwitchRequest`／`GhostSpec`／`request_ghost_switch` の形を変えない（呼ぶだけ・`boot_event: None`）。
-2. The 本仕様 shall 送出の許可表 `ALLOWED_EVENT_IDS` に `OnShellChanging`・`OnShellChanged`・`OnBalloonChange` の 3 語を足し（42 → 45）、件数の直書き 2 か所（`events_change_tests.rs` の `assert_eq!` と `events_tests.rs` の完全一致のテスト名・配列）を追随させる。kanade で触るのは許可表とそのテスト、および要件 8.11 の「切替の台詞」の口だけとする（要件 12 裁定 8）。
+2. The 本仕様 shall 送出の許可表 `ALLOWED_EVENT_IDS` に `OnShellChanging`・`OnShellChanged`・`OnBalloonChange` の 3 語を足し（42 → 45）、件数の直書き 2 か所（`events_change_tests.rs` の `assert_eq!` と `events_tests.rs` の完全一致のテスト名・配列）を追随させる。kanade で触るのは許可表とそのテスト、および要件 8.11 の「台詞の切れ目」の口だけとする（要件 12 裁定 8。口は印の無い依頼にも使い、要件 1.14・5.4・5.7 の「kanade が終了系列へ入ったか」をこの口の返事で知る＝2026-09-30 設計ディスカッションで追随）。
 3. The 本仕様 shall 汎用の通知の入口の判断（許可表・定常か否か・応答の置き換え）を、印の無い依頼については変えない（印の無い依頼の振る舞いと既存の決定論テストは不変）。
 4. The 本仕様 shall `GhostBootOptions` に欄を足さず（構造体リテラル 31 か所・20 ファイル）、目録の素性（`catalog::Identity`）に欄を足さず、`ConfigInputs`・`CurrentGhost`・`GhostDecision`・`BalloonDecision` に欄を足さない。
 5. The 本仕様 shall ゴースト切替・終了操作・終了コード・ネットワーク更新の読み直し・インストール後の振る舞い（自動で切り替えない）を変えず、それらの決定論テストを 1 本も落とさない（本番ソースの字面で形を固定しているテストは新しい字面へ追随させ、削除しない）。
@@ -215,7 +215,7 @@
 8. The 本仕様 shall 触るファイルすべてを 1 ファイル 1,000 行の目安の内側に収める。`resolve.rs`（952）には関数を足さず、シェル名つきの解決は隣の新ファイルに置いて `resolve` はそれに委ねる（既存の呼び出し約 30 本を直さない）。上限に近いテスト（`runtime_tests.rs`・`assets_tests.rs`・`actor_tests.rs`・`schedule_tests.rs`・`ghost_switch_tests.rs`）には行を足さず、兄弟の新ファイルへ置く。`steady.rs`（935）は触らない。
 9. The 本仕様 shall 失敗の経路に記録の無いものを作らない（無視は `warn!`・失敗は `error!`・中止は `info!`・受理と完了は `info!`）。
 10. The 本仕様 shall `session_mark_verdict`（きれいな終わりの判定）と終了の出所（`ExitOrigin`）を触らず、起動中の印を別の場所で消さない（切替の失敗は元のまま続けるので終了の出所を足す理由が無い）。
-11. The 本仕様 shall kanade の汎用の通知の入口に「この依頼の台詞は切替の台詞である」という印を付けられる口を足し、印の付いた依頼について次を満たす（要件 12 裁定 8）: ⑴ その依頼が始めた台詞が終わったとき、最後まで再生されたか・利用者の中断で止まったか・別のトークに置き換えられたかを、依頼した側へ 1 回だけ知らせる（台詞が無い〔204〕ときは今日の返信のとおり）、⑵ その台詞が利用者の中断で止まったときは、台本に `\-` の予約が在っても終了系列へ進まない（ゴースト切替の相の中断と同じ扱い＝完了 `ghost-shell-balloon-switch` 衝突表 2 を継ぐ）。本仕様で印を付けるのは `OnShellChanging` だけとする。
+11. The 本仕様 shall kanade に「台詞の切れ目を待つ」口を足し（切れ目に達したか、達しないと決まったか〔定常でない・終了系列・終了の保留・ゴースト切替〕を依頼した側へ 1 回だけ返す）、その口の依頼に「この依頼の台詞は切替の台詞である」という印（先に送るイベント）を任意で付けられるようにし、印の付いた依頼について次を満たす（要件 12 裁定 8）: ⑴ その依頼が始めた台詞が終わったとき、最後まで再生されたか・利用者の中断で止まったか・別のトークに置き換えられたかを、依頼した側へ 1 回だけ知らせる（台詞が無い〔204〕ときはそのことを知らせる。知らせは切れ目の返事に載せてよい）、⑵ その台詞が利用者の中断で止まったときは、台本に `\-` の予約が在っても終了系列へ進まない（ゴースト切替の相の中断と同じ扱い＝完了 `ghost-shell-balloon-switch` 衝突表 2 を継ぐ）。本仕様で印を付けるのは `OnShellChanging` だけとする。
 
 ### Requirement 9: 2 つ目のシェルを持つ検体
 

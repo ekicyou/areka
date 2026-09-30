@@ -1,7 +1,7 @@
 # Design Document — areka-P0-shell-balloon-switch
 
 > 本文の実測は 2026-09-30・本ブランチ（main `d79ca8dc` の上に要件の 5 コミット）のもの。コードは「何の定義か」（関数名・型名＋ファイルパス）で指し、行番号では指さない。要件 12 の裁定 1〜9 は確定済みで、本設計はそれを覆さない。調べた経緯・選ばなかった案は `research.md` §9〜§12 にある。
-> **要件の本文の追随が要る 2 点（設計討議で確かめる）**: ⑴ kanade に足す口を「`OnShellChanging` に付ける印」だけでなく「台詞の切れ目を待つ口」に広げた（要件 8.2・8.11 の字面を超える。理由は下の「kanade の口の広さ」）。⑵ シェル名の運び手を `Emo2BootInputs` の欄ではなく「配置の準備が決めたシェル」の資源と `wire_emo2_boot` の引数にした（要件 6.4 の字面と違う。`Emo2BootInputs` の構造体リテラルが触れてはならない `ghost_switch_test_support.rs` に在るため）。どちらも利用者から見える振る舞いは要件のとおりで、変わるのは要件が名指しした部品だけである。
+> **要件の本文を追随させた 2 点（2026-09-30 設計ディスカッションで requirements.md 8.2・8.11・6.4 を改めた。裁定 8 の「印を付けるのは `OnShellChanging` だけ」と利用者から見える振る舞いは不変）**: ⑴ kanade に足す口を「`OnShellChanging` に付ける印」だけでなく「台詞の切れ目を待つ口」に広げた（要件 8.2・8.11 の字面を超える。理由は下の「kanade の口の広さ」）。⑵ シェル名の運び手を `Emo2BootInputs` の欄ではなく「配置の準備が決めたシェル」の資源と `wire_emo2_boot` の引数にした（要件 6.4 の字面と違う。`Emo2BootInputs` の構造体リテラルが触れてはならない `ghost_switch_test_support.rs` に在るため）。どちらも利用者から見える振る舞いは要件のとおりで、変わるのは要件が名指しした部品だけである。
 
 ## Overview
 
@@ -100,6 +100,7 @@
 - 記憶の書き手 `record_last_shell`／`record_last_balloon` が 1 つの鍵だけを書くこと（`LastUsed::record` は不変）。
 - メニューの登記の列に `Frame::Shell`・`Frame::Balloon` が加わる（`ghost_session_restart_tests.rs` の登記の一覧）。
 - 受け口の列が 11 本になる（`wire_emo2_boot` の `sinks`）。
+- seriko の送り手の複製の寿命: 持ち主は `GhostSession` だけで、`shutdown_impl` の ① で落とす。seriko の送り手を UI 側の別の置き場（`Emo2Wiring` ほか、降ろした後も World に残るもの）に持たせる spec は、ゴースト切替・終了で join が戻るかを再検証する。
 
 ## Architecture
 
@@ -282,7 +283,7 @@ crates/sample-ghost-kit/src/
 - `crates/areka-kanade/src/lib.rs` — 上の 4 型の再輸出（1 行）。
 - `crates/areka-kanade/src/msg.rs` — `KanadeMsg::AwaitTalkGap { raise, reply }` と、名前を返す match の腕。883 → 約 905 行。
 - `crates/areka-kanade/src/actor.rs` — `AwaitTalkGap` を `Input::AwaitTalkGap` へ写す。返信の送り手をメッセージをまたいで 1 本持ち、`drive` の後に `talk_gap::take_outcome` が `Some` なら 1 回送る。656 → 約 700 行。
-- `crates/areka-kanade/src/schedule/mod.rs`（830 → 約 870 行）— `Input::AwaitTalkGap`・`State.talk_gap: Option<talk_gap::GapWatch>`・`step` の末尾で `talk_gap::observe` を呼ぶ（入力の種類を先に控える）・`on_talk_done` の `break_quit` に `&& !talk_gap::is_marked_break(&state, &done)` を掛ける
+- `crates/areka-kanade/src/schedule/mod.rs`（830 → 約 870 行）— `Input::AwaitTalkGap`・`State.talk_gap: Option<talk_gap::GapWatch>`・`step` の末尾で `talk_gap::observe` を呼ぶ（入力の種類を先に控える）・`on_talk_done` は `take_user_break_quit` の**前**に `let marked_break = talk_gap::is_marked_break(&state, &done);` を取り、真なら `State.talk_gap` の印を `BrokenByUser` にしてから、`break_quit` に `&& !marked_break` を掛ける（`take_user_break_quit` が帳簿 `user_break_talk` を空にするので、後ろで評価すると常に偽になる。帳簿を空にする単一の履行点は `take_user_break_quit` のまま）
 - `State` の構造体リテラル 16 か所（`schedule/mod.rs` 2・`close.rs` 2・`boot_reply_branch_tests.rs` 4・`boot_sequence_tests.rs` 6・`schedule_log_firing_tests.rs` 2）— `talk_gap: None` を 1 行ずつ足す（どのファイルも上限の近い表に無い）。
 - `crates/areka-kanade/src/schedule/events.rs` — `ALLOWED_EVENT_IDS` に `OnShellChanging`・`OnShellChanged`・`OnBalloonChange`（42 → 45 語）と doc の件数。
 - `events_change_tests.rs`（`assert_eq!(ALLOWED_EVENT_IDS.len(), 45)`）・`events_tests.rs`（テスト名を `allowed_event_ids_are_exactly_the_forty_five_and_exclude_ontalk_onhour` へ、配列に 3 語）— 件数の追随。
@@ -300,16 +301,16 @@ crates/sample-ghost-kit/src/
 - `crates/areka-emo-present/src/presenter/hub.rs` — `apply` の腕 1 つ（`apply_replace` へ）。176 → 約 185 行。
 - `crates/areka-emo-present/src/presenter.rs`（`presenter` のモジュール宣言） — `mod replace;`。
 - `crates/areka-emo-present/src/mount.rs` — `VisualMount::despawn(self, world)`（装着の子 2 つを消す）。300 → 約 330 行。
-- `crates/areka/src/emo2_boot/assets.rs` — `build_boot_assets` を `build_shell_assets(ghost_root, shell, scopes, author_dpi, decoder)` と `build_balloon_assets(balloon_root, scopes, author_dpi, decoder)` の 2 本に括り出し、`build_boot_assets` はそれを続けて呼ぶ（振る舞い不変・署名に `shell` が 1 つ増える）。409 → 約 450 行。
-- `crates/areka/src/emo2_boot/mod.rs`（825 → 約 870 行）— 新しいモジュール 3 つ（`switch_cue`・`shell_balloon_switch`・`switch_assets`）の宣言・`wire_emo2_boot` に `shell: Option<&str>` を足す（資産づくりと `boot_with_origin` へ）・切替の線を 1 本作り、`sinks` の 11 本目に `SwitchCueSink`、受信端を `shell_balloon_switch::wire_switch_rx` で World へ・`SwapSlot` を 1 つ作って `PresentBridge::with_swap_slot` と `Emo2Wiring` の両方へ・`SerikoSink` の複製を `Emo2Wiring` へ
+- `crates/areka/src/emo2_boot/assets.rs` — `build_boot_assets` の本体を `build_shell_assets(ghost_root, shell, scopes, author_dpi, decoder)` と `build_balloon_assets(balloon_root, scopes, author_dpi, decoder)` の 2 本に括り出し、両者を続けて呼ぶ兄弟 `build_boot_assets_with_shell(.., shell: Option<&str>)` を足す。`build_boot_assets` の署名は据え置き、`shell: None` で兄弟へ委ねる 1 行にする（`assets_tests.rs`〔976 行〕・`frame_attach_tests.rs`・`frame_visibility_integration_tests.rs`・`spine.rs` の呼び出しの追随 0）。409 → 約 460 行。
+- `crates/areka/src/emo2_boot/mod.rs`（825 → 約 870 行）— 新しいモジュール 3 つ（`switch_cue`・`shell_balloon_switch`・`switch_assets`）の宣言・`wire_emo2_boot` に `shell: Option<&str>` を足す（`build_boot_assets_with_shell` と `boot_with_origin` へ）・切替の線を 1 本作り、`sinks` の 11 本目に `SwitchCueSink`、受信端を `shell_balloon_switch::wire_switch_rx` で World へ・`SwapSlot` を 1 つ作って `PresentBridge::with_swap_slot` と `Emo2Wiring` の両方へ・`SerikoSink` の複製を `Emo2BootOutcome.seriko_sink`（新しい欄・構造体リテラルは本ファイルの 2 か所だけ）で返す。持ち主は `GhostSession`（下の `ghost_session.rs` の行。`Emo2Wiring` は降ろした後も次の起動まで World に残るので、そこに持たせると seriko の join が戻らない）
 - `crates/areka/src/emo2_boot/adapter.rs` — `PresentBridge` に `swap: Option<SwapSlot>` を足す（`new` は `None`・`with_swap_slot` で `Some`）。`send` は `DisplayCommand::Rebased` を置き場の荷物と突き合わせて `ReplaceTarget` へ写し、それ以外は今日の `map_display_command`。493 → 約 560 行。
 - `crates/areka/src/emo2_boot/frame.rs` — `run_drain_phase` の直後に `run_switch_phase(&mut wiring, world)` を 1 行と、`frame/switch.rs` のモジュール宣言。
-- `crates/areka/src/emo2_boot/frame/wiring.rs` — `Emo2Wiring` に `seriko: Option<SerikoSink>`・`swap_slot: SwapSlot`（`new` は `None`・空）と `reseed_zorder_descript_base`（`seed_zorder_descript_base` の隣）。324 → 約 355 行。
+- `crates/areka/src/emo2_boot/frame/wiring.rs` — `Emo2Wiring` に `swap_slot: SwapSlot`（`new` は空）と `reseed_zorder_descript_base`（`seed_zorder_descript_base` の隣）。seriko の送り手は持たせない。324 → 約 350 行。
 - `crates/areka/src/emo2_boot/frame/zorder_descript.rs` — `apply_descript_rebase(ledger, raw)`（`apply_descript_base` と同じ解釈器を通し、`None`・拒否は空の列で `set_descript_base` を呼ぶ・拒否は既存の `log_group_rejected`）。92 → 約 115 行。台帳 `placement/zorder_group_ledger.rs` は変更 0。
 - `crates/areka/src/emo2_boot/balloon_visibility.rs` — `BalloonVisibilityState::forget_scope(scope)`（その scope の縁の記憶を消し、計測を止める）。875 → 約 895 行。
 - `crates/areka/src/emo2_boot/consumer_ledger.rs`（831 → 約 850 行）— `CommandConsumer::SwitchSink` と `canonical()` の 2 行・`canonical_builds_without_duplicate` の件数 13 → 15・`canonical_registers_only_change_ghost_for_the_change_sink` を `canonical_registers_change_ghost_shell_balloon_and_no_bare_change` へ書き換え（削除しない）
 - `crates/areka/src/emo2_boot/change_cue.rs` — モジュールの doc の「シェル・バルーンは本受け口の持ち場ではない」に持ち場（`switch_cue.rs`）を書き足す（コードは不変・要件 10.3）。
-- `crates/areka/src/ghost_session.rs`（705 → 約 760 行）— 兄弟のテスト 2 本（`boot_shell_tests.rs`・`shell_balloon_switch_session_tests.rs`）の `#[path]` 宣言・`prepare_ghost_windows` が `boot_resolve::decide_boot_shell(&cfg.ghost_root)` を 1 度呼んで配置の準備へ渡し、資源 `BootShellChoice { ghost_root, shell }` に置く・`boot_wired` はそれを取り出し（無いか根が違えば自分で決める）、`wire_emo2_boot` へ渡す。`wire_menu` の直後に `menu::shell_frame::register`・`menu::balloon_frame::register`・`register_systems` に `shell_balloon_switch::register_switch_drain`・`GhostSession::set_shell_dir`（実行系へ委ねる）
+- `crates/areka/src/ghost_session.rs`（705 → 約 775 行）— `GhostSession` に `seriko_sink: Option<SerikoSink>`（`boot_wired` が `Emo2BootOutcome.seriko_sink` を移す・`for_test` と LogSink の腕は `None`）と借り口 `seriko_sink()`。`shutdown_impl` の ① で loop ticker の停止と一緒に `drop` し、③ の join の前に送り手が消える形にする（同関数の doc の前提「呼び手は自前の `SerikoSink` クローンを保持しない」を「複製は `GhostSession` だけが持ち ① で落とす」へ改める）・兄弟のテスト 2 本（`boot_shell_tests.rs`・`shell_balloon_switch_session_tests.rs`）の `#[path]` 宣言・`prepare_ghost_windows` が `boot_resolve::decide_boot_shell(&cfg.ghost_root)` を 1 度呼んで配置の準備へ渡し、資源 `BootShellChoice { ghost_root, shell }` に置く・`boot_wired` はそれを取り出し（無いか根が違えば自分で決める）、`wire_emo2_boot` へ渡す。`wire_menu` の直後に `menu::shell_frame::register`・`menu::balloon_frame::register`・`register_systems` に `shell_balloon_switch::register_switch_drain`・`GhostSession::set_shell_dir`（実行系へ委ねる）
 - `crates/areka/src/boot_resolve.rs`（471 → 約 560 行）— `read_last_shell(ghost_dir)`（`read_last_balloon` と同じ形）・`decide_boot_shell(ghost_dir) -> Option<String>`（記憶の名の `shell/<名>/descript.txt` が在ればその名・無ければ `warn!` で `None`・記憶が無ければ `None`）・`record_last_shell(publisher, folder)`・`record_last_balloon(publisher, folder)`（どちらも 1 つの鍵だけを Ghost スコープへ投函し `info!`）
 - `crates/areka/src/placement/source.rs` — `load_descript_source_for_shell(ghost_root, shell)`（`load_descript_source` はそれを `None` で呼ぶ・既存の呼び手 6 か所は不変）。
 - `crates/areka/src/placement/mod.rs` — `prepare_ghost_windows_for_shell(ghost_root, balloon_root, shell)`（既存の `prepare_ghost_windows` はそれを `None` で呼ぶ）と `mod reseed;`。
@@ -354,7 +355,7 @@ sequenceDiagram
 
 流れの判断は次のとおり。
 - ⑴ 名前の解決・重ねの判定は、kanade へ何か送る前に UI で行う。該当なしは `warn!` で終わり、何も送らない。
-- ⑵ 資産づくりと切れ目の待ちは並行して進める。両方がそろった最初のフレームで seriko に頼む。
+- ⑵ 資産づくりと切れ目の待ちは並行して進める。seriko に頼むのは、**資産がそろった後に受けた `Reached`** があるときだけ。`Reached` が資産より先に届いたら、資産がそろったフレームで `AwaitTalkGap { raise: None }` をもう 1 度送り、その返事で決める（kanade は `Reached` を返した時点で見張りを終えるので、資産づくりの数百 ms の間に始まったトークや終了の保留を UI は知らない。今が切れ目なら返事はすぐ `Reached` になる）。印の台詞の終わり方（`MarkedEnd`）は 1 度目の返事のものを記録に使う。残る窓は、最後の返事から drain までの 1〜2 フレームだけ（研究 §10.1 の見積もりどおり）。
 - ⑶ 頼む直前に、もう一度 `SwitchInFlight` を見る。ゴースト切替が進んでいれば取りやめる（裁定 9）。
 - ⑷ `ReplaceTarget` は seriko が定義を替えた点に並ぶ。drain がそれを適用するフレームでは、差し替えの相（drain の直後）→ 窓寸の照合 → resnap → 文字の層の結び直し → 文字の描画が同じフレームで続く。
 - ⑸ `OnShellChanged` は差し替えの相の中で送る（差し替えの後）。
@@ -446,7 +447,7 @@ flowchart TD
     Keep --> Place[prepare_ghost_windows_for_shell 配置の情報源]
     Keep --> Wired[boot_wired が取り出す]
     Wired --> Wire[wire_emo2_boot shell]
-    Wire --> Assets[build_boot_assets shell]
+    Wire --> Assets[build_boot_assets_with_shell shell]
     Wire --> Runtime[boot_with_origin shell OnBoot Ref0]
     Runtime --> OnBootOk[on_boot_ok の LastUsed record は今のシェルを書く]
 ```
@@ -740,7 +741,7 @@ pub(crate) fn discard_for_exit(world: &mut World);
   1. `SkinSwitchInFlight` あり → `Busy`＋`warn!(skin_switch_busy)`
   2. `SwitchInFlight` あり → `GhostSwitching`＋`warn!`
   3. `update::desk::is_busy` → `Updating`＋`warn!`
-  4. `GhostSlot`／`BootContext`／`Emo2Wiring` の seriko の送り手が無い → `NoContext`＋`warn!`
+  4. `GhostSlot`／`BootContext`／`Emo2Wiring`／`GhostSession::seriko_sink()` が無い → `NoContext`＋`warn!`
   5. 解決できない → `NotFound`＋`warn!(skin_switch_unknown, reason)`
   6. 受理
 - 候補は、シェルなら今のゴースト（`GhostSession::ghost_dir`）の `list_all_shells`、バルーンなら `list_balloons(&BootContext.root)`。
@@ -801,11 +802,12 @@ pub(crate) fn discard_for_exit(world: &mut World);
     - 送り手が落ちた → `info!(skin_switch_dropped, reason=kanade_stopped)`
     - いずれも印を消す（差し替え・イベント・記憶は 0）
   - 資産の失敗 → `error!(skin_switch_failed, stage=build, reason)` で印を消す。
-  - 両方がそろった（`Reached` と資産）→ `SwitchInFlight` があれば `info!(skin_switch_dropped, reason=ghost_switch)`。無ければ次を行って `Committed`：
+  - `Reached` が資産より先に届いた → 資産がそろったフレームで `AwaitTalkGap { raise: None }` を送り直し、`gap` を新しい受け手に、`gap_result` を空にして待ち続ける（`debug!(skin_switch_gap_recheck)`。送れなければ `error!(skin_switch_send_failed)` で印を消す）。
+  - 資産がそろった後に `Reached` を受けた → `SwitchInFlight` があれば `info!(skin_switch_dropped, reason=ghost_switch)`。無ければ次を行って `Committed`：
     1. `epoch` を進める
     2. 荷物を置き場へ置く
     3. 返信の受け手を控える
-    4. `SerikoSink::send_replace`（送れなければ `error!(skin_switch_failed, stage=seriko)`・置き場を空にする）
+    4. `GhostSlot` の `GhostSession::seriko_sink()` で `send_replace`（送れなければ `error!(skin_switch_failed, stage=seriko)`・置き場を空にする）
 - `Committed` の見極めは次のとおり。drain が `ReplaceTarget` を適用した同じフレームで、返信は同期にそろう。
   - どれかが `Err` か落ちた → `error!(skin_switch_failed, stage=attach)`
   - 全部 `Ok` → 完了の後始末（次項）
@@ -883,7 +885,8 @@ pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str);
 - **差し替えの世代 `epoch`**（UI・単調増加の `u64`）: 置き場の荷物と `Rebased` を結ぶ。
 - **控え `LastInstalledShell`／`LastInstalledBalloon`**（プロセスの中だけ）。
 - 不変条件は次のとおり。
-  - 差し替え（`Replace` を送る）は、`TalkGap::Reached` を受け、資産がそろい、`SwitchInFlight` が無いときだけ起きる。
+  - 差し替え（`Replace` を送る）は、資産がそろった後に `TalkGap::Reached` を受け、`SwitchInFlight` が無いときだけ起きる。
+  - seriko の送り手の複製を持つのは `GhostSession` だけで、`shutdown_impl` の ① で落ちる（③ の join が戻る）。
   - `Replace` を送った後に印を消すのは、全部の返信がそろったときか、どれかが失敗したときだけ。
   - 記憶と通知は全部の返信が `Ok` のときだけ出る。
 
@@ -941,6 +944,7 @@ pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str);
 ### Monitoring
 
 - 実機サインオフでは、`RUST_LOG` を判定の分岐の水準まで開ける（`areka=info,kanade=info,areka_seriko=info,areka_emo_present=info`）。
+- 命令の直後で台本が自ら終わる形（`\![change,shell,B]\-`）は、`AwaitTalkGap` が kanade に届く時機しだいで `warn!(skin_switch_not_steady)`（台本の終わりの後に届いた）か `info!(skin_switch_dropped, reason=closing)`（前に届いた）のどちらか 1 件になる。どちらでも差し替え・イベント・記憶は 0 で、目印の件数はこの 2 つを合わせて数える。
 - 次の事象の件数・順序と、`swap_ms` の値を `signoff.md` に残す: `skin_switch_*`・`talk_gap_*`・`switch_assets_*`・`last_*_recorded`・`boot_shell_*`・`shiori_request`（trace の `OnShellChanging`／`OnShellChanged`／`OnBalloonChange` の Reference）。
 
 ## Testing Strategy
@@ -967,7 +971,7 @@ pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str);
 ### Unit Tests（areka の判断・実ゴースト無し）
 
 - `shell_balloon_switch_tests.rs`（要件 1.6〜1.14）: 解決は `name` → フォルダ名 → 該当なし・大文字小文字の区別・隠しシェルの名指し・今のものも候補。`random` は注入の乱数で今のものを除き、候補 0 なら今のもの、隠しは候補外。シェルの `lastinstalled` は控えあり・なし・別のゴースト・先が無いの 4 通りで、どれもゴースト切替の要求 0。バルーンの `lastinstalled` は控えあり・なし。入口の重ね・`SwitchInFlight`・更新中・文脈なし・該当なしで各 `warn!` 1 件と kanade の受信端が空。受理で `info!` 1 件と `AwaitTalkGap` 1 件（メニューのシェルと `raise_event` 真は `raise: Some(OnShellChanging)`・Ref0〜2 を突き合わせ）。
-- `frame/switch_tests.rs`（偽の返信）: `CancelledByUser`・`Left` の各理由・送り手が落ちた・資産の失敗で、印が消え `Replace`・`RaiseEvent`・記憶が 0 で記録 1 件（`NotSteady` は `warn!`）。`Reached` と資産がそろったとき `SwitchInFlight` があれば取りやめ（裁定 9）。返信の `Err` で `error!` 1 件と記憶 0（要件 5.5）。終了の片付けで `info!` 1 件。
+- `frame/switch_tests.rs`（偽の返信）: `CancelledByUser`・`Left` の各理由・送り手が落ちた・資産の失敗で、印が消え `Replace`・`RaiseEvent`・記憶が 0 で記録 1 件（`NotSteady` は `warn!`）。`Reached` と資産がそろったとき `SwitchInFlight` があれば取りやめ（裁定 9）。`Reached` が資産より先に届くと、資産がそろったフレームで `AwaitTalkGap{raise: None}` が 1 件送り直され、その返事が `Left{Closing}` なら取りやめ・`Reached` なら `Replace` 1 件（`Replace` は送り直しの返事より前に 0 件）。返信の `Err` で `error!` 1 件と記憶 0（要件 5.5）。終了の片付けで `info!` 1 件。
 - `reseed_tests.rs`: 新しいシェルの `balloon.offsetx`／`alignment` がキャラ窓の部品に入り、`WindowPos` と scope の集合は不変・保存済みのバルーンのずらしは保たれる。
 - `boot_shell_tests.rs`（要件 6.2〜6.4・11.7）: 記憶なし → `None`・記憶の名に `descript.txt` あり（隠しでも）→ `Some`・先が無い → `warn!` 1 件で `None`・`prepare_ghost_windows` の後の `boot_wired` が同じ値を取る（決定 1 回）・資産の解決・配置の情報源の `shell_dir`・`mount().shell.dir`・`OnBoot` の Ref0 が同じシェル。
 - `skin_frames_tests.rs`（要件 7・11.9）: 並び・ラベル・今のものの印・1 つでも見出し・選ぶと `SkinRequest{Folder, Menu}` が入口へ・`boot_wired` の 2 周目で登記が新品。`shell_copy_tests.rs`: 写した先の `name` が変わり元は不変。
@@ -977,7 +981,7 @@ pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str);
 - 土台: `R_POST_and_KOMAINU` の複製に `add_shell_copy("master", "second", "second")`、根の `balloon/` に `claudia` の同梱バルーン 2 つ。偽の SHIORI は `ScriptedShioriBackend` の型、`emo2_frame_system` を有界に回す（`frame_attach_tests.rs` と同じ GPU の土台）。
 - シェルの往復（要件 11.1）: A → `\![change,shell,second,--option=raise-event]` → `OnShellChanging`（Ref0〜2・台本あり）→ 再生完了 → 差し替え → `OnShellChanged`（Ref0〜2）→ `LastShell==second` → A へ戻る。⑴ イベント列と Reference ⑵ `OnClose`・`OnBoot` 0 件 ⑶ 窓の子が新しい分だけ ⑷ 可視性の持ち主と窓寸の要求の引き継ぎ、を集めて判定。
 - バルーンの往復（要件 11.2）: `\![change,balloon,Y]` → 台詞の終わり → 差し替え → `OnBalloonChange`（Ref0〜1）→ `LastBalloon==Y` → 次の台詞の文字の層が新しいスロットに結ばれている。
-- 要件 11.3〜11.6・11.8: `raise-event` 無しで `OnShellChanging` 0 件と命令の台本の後の差し替え・メニュー相当で 1 件・バルーンで「切り替え前」0 件。`\-` 入りの `OnShellChanging` の台詞の中断で差し替え・`OnShellChanged`・記憶 0 と `AppExit` 未要求。復号できない画像のシェルで `error!` 1 件・元の装着・イベントと記憶 0。待ちの間の `CloseRequest` で取りやめと今日の終了。差し替え後の `update::desk::resolve_targets` が新しいシェル・バルーンを指し（`desk_resolve_tests.rs` の兄弟）、読み直しの後に記憶から同じシェル・バルーンで起きる（`desk_reload_tests.rs` の兄弟・既存は緑のまま）。
+- 要件 11.3〜11.6・11.8: `raise-event` 無しで `OnShellChanging` 0 件と命令の台本の後の差し替え・メニュー相当で 1 件・バルーンで「切り替え前」0 件。`\-` 入りの `OnShellChanging` の台詞の中断で差し替え・`OnShellChanged`・記憶 0 と `AppExit` 未要求。シェルを 1 度差し替えた後のゴースト切替と終了で、`GhostSession::shutdown` が戻る（seriko の join が止まらない・要件 8.5）。復号できない画像のシェルで `error!` 1 件・元の装着・イベントと記憶 0。待ちの間の `CloseRequest` で取りやめと今日の終了。差し替え後の `update::desk::resolve_targets` が新しいシェル・バルーンを指し（`desk_resolve_tests.rs` の兄弟）、読み直しの後に記憶から同じシェル・バルーンで起きる（`desk_reload_tests.rs` の兄弟・既存は緑のまま）。
 
 ### E2E（実機・`signoff.md`・要件 11.11・11.12・9.2）
 
