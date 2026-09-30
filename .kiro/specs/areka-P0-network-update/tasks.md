@@ -266,3 +266,4 @@
   4. 総括は最後に 1 回 `OnUpdateResultEx`、それが台本を返さなかったときに限り続けて `OnUpdateResult`＝本仕様は `Current` なら `OnUpdateResult`、`Other` なら `OnUpdateResultEx` の片方だけ
   5. 自動更新（理由 `auto`）では `OnUpdateBegin` は `OnUpdateReady` の直前、更新なし・確認前の失敗ではイベント 0＝本仕様は自動更新を持たない（入口は manual・script だけ）
 - 9.1・9.2（12 の後の回し直し）: `tools/test-all.ps1` は b7df4dde で全段緑（以降は文書だけ）。実機は `signoff.md` の 4 回目（emo2・https）で新しい流れを確認・開発者の目視で問題なし
+- **完了時の棚卸（2026-09-30・`/kiro-complete`）**: その場で解決 3 件＝⑴ `ghost_switch.rs` の切替を終える腕の注記に「後送りの列の残りを送る」⑵ COMPAT §8 の「途中でやめた要求は組みかけた列も送らず」⑶ `alpha-release-signoff` の brief へ https 確認済み（⑻ を取り下げ）と同梱 emo2 のバルーン `emo2-kakukaku` の古い `homeurl`（`vendors/sample_ghost/emo2.nar`・更新で毎回 404）を申し送り。起票 1 件＝`areka-P0-network-update-canon-order`（α 後・上の正典の発生順序との差）。登記 1 件＝roadmap の「登記だけの行」に i686 の `testdll_drop_invokes_courtesy_unload` の 1 回の赤（起票しない）。あわせて roadmap の「初期配置の確定の見送りの WARN」にあやめの読み直しでも出た実測を追記
