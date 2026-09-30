@@ -14,10 +14,10 @@ use areka_sylphya::{PersistScope, ScopeRoots, save_scope};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
-type Requests = Arc<Mutex<Vec<(String, Vec<String>)>>>;
+pub(super) type Requests = Arc<Mutex<Vec<(String, Vec<String>)>>>;
 
 /// GET を `(id, references)` で記録し、すべて 204（`None`）で返す偽の SHIORI。
-struct RecordingShiori(Requests);
+pub(super) struct RecordingShiori(pub(super) Requests);
 
 impl ShioriBackend for RecordingShiori {
     fn get(
@@ -52,7 +52,7 @@ impl ShioriBackend for RecordingShiori {
 }
 
 #[derive(Clone)]
-struct NoopSink;
+pub(super) struct NoopSink;
 
 impl CueSink for NoopSink {
     fn emit(&mut self, _cue: TalkCue) {}
@@ -60,7 +60,7 @@ impl CueSink for NoopSink {
 
 /// シェル名（descript の `name`＝`TestShell`）とシェルのフォルダ名（`master`）が別の値に
 /// なるゴーストを作り、起動記録を前もって保存しておく（初回起動の根を外すため）。
-fn write_returning_ghost(root: &std::path::Path) {
+pub(super) fn write_returning_ghost(root: &std::path::Path) {
     let ghost_master = root.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
     std::fs::write(
@@ -110,7 +110,7 @@ fn boot_and_collect(tag: &str, origin: BootOrigin) -> Vec<(String, Vec<String>)>
         ticker: TickerMode::Disabled,
     };
 
-    let runtime = boot_with_origin(options, None, origin).expect("boot should succeed");
+    let runtime = boot_with_origin(options, None, origin, None).expect("boot should succeed");
 
     let deadline = Instant::now() + Duration::from_secs(10);
     let seen = loop {
@@ -140,7 +140,7 @@ fn boot_and_collect(tag: &str, origin: BootOrigin) -> Vec<(String, Vec<String>)>
     seen
 }
 
-fn refs_of<'a>(requests: &'a [(String, Vec<String>)], id: &str) -> Vec<&'a Vec<String>> {
+pub(super) fn refs_of<'a>(requests: &'a [(String, Vec<String>)], id: &str) -> Vec<&'a Vec<String>> {
     requests
         .iter()
         .filter(|(seen, _)| seen == id)

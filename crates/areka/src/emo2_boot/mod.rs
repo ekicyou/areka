@@ -613,6 +613,7 @@ pub fn wire_emo2_boot(
         boot_options,
         Some(kanade_stop),
         boot_origin,
+        None,
     ) {
         Ok(runtime) => runtime,
         Err(err) => {
