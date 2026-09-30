@@ -87,7 +87,8 @@ type SlotPlayback = HashMap<u32, Playback>;
 
 /// 二層時間の統括と per-(scope, slot) 再生状態の所有者（アクター本体が単独所有・要件 1.2/2.x/3.x/6.x）。
 pub(crate) struct LoopRuntime {
-    /// 表 2 面＋乱数注入シーム（spawn 時注入・以後不変の表＋可変 rng 状態）。
+    /// 表 2 面＋乱数注入シーム（spawn 時注入・表は差し替えの語 [`LoopRuntime::replace_shell_table`]／
+    /// [`LoopRuntime::replace_balloon_tables`] でだけ替わる＋可変 rng 状態）。
     config: SerikoLoopConfig,
     /// 1000ms 絶対グリッド境界（毎秒抽選の写像・catch-up 1 回）。最初に観測した tick で遅延初期化する
     /// （`starting_at(now)` は now より厳密未来の次境界を起点にするため、起動直後 tick では発火しない）。
@@ -407,8 +408,37 @@ impl LoopRuntime {
         self.warned_negative
             .retain(|(s, sl, _)| !(s == scope && *sl == slot));
     }
+
+    /// シェルの表の差し替え（spec: areka-P0-shell-balloon-switch 要件 2.8）。
+    ///
+    /// 全 scope のシェル slot の再生中のループを捨て、次の抽選から新しい表で始め直す。
+    /// 残留コマ（PatternState）の消去は [`ScopeStates::rebase_shell`] の責務。
+    #[allow(dead_code)] // 呼び手（アクターの差し替えの依頼）は 4.2 で結ぶ
+    pub(crate) fn replace_shell_table(&mut self, table: AnimationTable) {
+        self.config.shell_table = table;
+        self.forget_slot_kind(Slot::Shell);
+    }
+
+    /// バルーンの表の差し替え（spec: areka-P0-shell-balloon-switch 要件 3.5）。
+    ///
+    /// 全 scope のバルーン slot の再生中のループを捨て、次の抽選から新しい表で始め直す。
+    /// シェル側の再生は触らない。
+    #[allow(dead_code)] // 呼び手（アクターの差し替えの依頼）は 4.2 で結ぶ
+    pub(crate) fn replace_balloon_tables(&mut self, tables: BTreeMap<ActorKey, AnimationTable>) {
+        self.config.balloon_tables = tables;
+        self.forget_slot_kind(Slot::Balloon);
+    }
+
+    /// 全 scope の `slot` 種の再生状態と warn! 記録を捨てる（表の差し替えの共通後段）。
+    fn forget_slot_kind(&mut self, slot: Slot) {
+        self.playback.retain(|(_, s), _| *s != slot);
+        self.warned_negative.retain(|(_, s, _)| *s != slot);
+    }
 }
 
+#[cfg(test)]
+#[path = "looper_replace_tests.rs"]
+mod replace_tests;
 #[cfg(test)]
 #[path = "looper_tests.rs"]
 mod tests;

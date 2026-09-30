@@ -60,7 +60,7 @@
   - _Depends: 1.2_
 
 - [ ] 4. seriko に定義の差し替えの語を足す
-- [ ] 4.1 (P) スコープの状態とループの表を差し替える口を作る
+- [x] 4.1 (P) スコープの状態とループの表を差し替える口を作る
   - シェルの差し替えは静的な着せ替えを入れ替え、動的な着せ替えとシェル側のパターンの進行を消し、今の面は保つ。バルーンの差し替えはバルーン側のパターンの進行を消し、今の面は保つ
   - ループはシェルの表・バルーンの表をそれぞれ差し替えられるようにし、再生中のループを捨てて新しい表から始め直す（「以後不変」の doc を「差し替えの語でだけ替わる」へ改める）
   - 出力の語に「定義を替えた」の合図（世代・種別・スコープごとの今の面と着せ替え）を足して再輸出する。出力の語は網羅を強いる形なので、本体の表示の橋渡しの写しに仮の腕（`debug!` を残して何も送らない）を同じコミットで 1 つ足し、9.1 で置き換える
@@ -250,3 +250,4 @@
 - 1.2: `resolve_with_shell` は名前を検査せず `shell/` の下へつなぐ（`..`・絶対パスで外を指せる）。名前を渡す側（7.1 の起動のシェルの決定・8.2 の解決）は目録に在る名前だけを渡すこと。
 - 2.1: 構造体リテラルは実数 15 か所（design の 16 は mod.rs の数え違い）。`decide` の段 1 に「相が定常でなく `state.change` が在れば `GhostChange`」を足した（`raise_event` 無しのゴースト切替は切替の相を経ず `Unloading` へ入るため・design Flow 2 より広い＝12 で反映）。`begin` に `config` 引数は無い。許可表に在る印は暫定で `warn!(talk_gap_marked_unsupported)`＋`NotSent` → 2.2 で必ず送出へ置き換える。
 - 2.2: design の `observe(state, reply_origin)` は `marked_reply(&state,&input)`（遷移の前にトークの番号を控える）＋`observe(state, Option<MarkedReply>)` に分けた。台詞の終わりの後の印の追跡は `note_marked_done`。`is_marked_break` は結果の決まっていない見張りにだけ効く。暫定の `talk_gap_marked_unsupported` はコードから消えた（12 で design へ反映）。
+- 4.1: `LoopRuntime::replace_shell_table`／`replace_balloon_tables` にメソッド単位の `#[allow(dead_code)]` → 4.2 で外す。本体の仮の腕は `PresentBridge::send` の先頭の捌き（`debug!`）と `map_display_command` の網羅の腕（`Rebased => None`・届かない）の 2 か所 → 9.1 で両方を置き換える。`RebaseKind { Shell, Balloon }` は実装が名付けた。スコープごとの今の面を読む口は 4.2 で足す。

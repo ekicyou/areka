@@ -32,7 +32,8 @@ use crate::emo2_boot::target_map::{balloon_target, scope_of, shell_target};
 /// （`scope_of` が `None`）は本関数も `None` を返し、呼び手（`PresentBridge::send`）が `warn!` ＋
 /// 当該指令 drop で握り潰さず log-first 観測する（R3.7）。
 ///
-/// `DisplayCommand` は `#[non_exhaustive]` でないため 4 variant の網羅 `match` で全経路を尽くす。
+/// `DisplayCommand` は `#[non_exhaustive]` でないため網羅 `match` で全経路を尽くす
+/// （定義を替えた合図 `Rebased` は写さず `None`＝`PresentBridge::send` が先に捌く）。
 pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
     Some(match cmd {
         // Show: シェル表示対象へそのまま。surface_id・binds・pattern は非改変で転写（R3.1／R5.1／R5.3）。
@@ -72,6 +73,9 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
             target: balloon_target(scope_of(&scope)?),
             reply: None,
         },
+        // 定義を替えた合図は 1 件の命令へ写せない（スコープごとの置き換えは荷物と突き合わせて
+        // `PresentBridge::send` が行う）。ここへは来ない。
+        DisplayCommand::Rebased { .. } => return None,
     })
 }
 
@@ -107,6 +111,16 @@ impl SurfaceOutput for PresentBridge {
     ///
     /// `SurfaceOutput::send` は infallible（`-> ()`）契約ゆえ、いかなる配送失敗でも panic させない。
     fn send(&mut self, command: DisplayCommand) {
+        // 定義を替えた合図（spec: areka-P0-shell-balloon-switch）: 置き換えの命令への写しは
+        // 橋渡しに荷物の置き場を持たせる段で足す。それまでは記録だけ残して何も送らない。
+        if let DisplayCommand::Rebased { epoch, kind, .. } = &command {
+            tracing::debug!(
+                epoch,
+                ?kind,
+                "PresentBridge: Rebased の写しは未配線 — 何も送らない"
+            );
+            return;
+        }
         match map_display_command(command) {
             // 写像成功: UI フレーム drain 側へ非ブロック配送。受信端 drop（shutdown 中の期待事象）は
             // panic させず debug! で観測して破棄する（log-first・R3.7）。

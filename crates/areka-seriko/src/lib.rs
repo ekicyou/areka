@@ -42,7 +42,7 @@ pub use bind::{
     build_static_bindset, parse_bind_directive, scope_namespace,
 };
 pub use looper::SerikoLoopConfig;
-pub use output::{DisplayCommand, MockSurfaceOutput, SurfaceOutput};
+pub use output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow, SurfaceOutput};
 pub use resolve::{SurfaceResolver, SurfaceTarget};
 pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot,

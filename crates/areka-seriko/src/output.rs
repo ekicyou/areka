@@ -48,6 +48,36 @@ pub enum DisplayCommand {
     },
     /// バルーン非表示（`\b[-1]` 相当・要件 4.2）。
     HideBalloon { scope: ActorKey },
+    /// 定義を替えた合図（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
+    ///
+    /// seriko が定義を差し替えた点に 1 件並ぶ（同じ流れの FIFO ゆえ、前の指令は前に・後の指令は
+    /// 後に届く）。`epoch` は差し替えの依頼の世代、`shows` はスコープごとの今の面と着せ替え
+    /// （差し替え後の最初の表示）。出し先は `epoch` で荷物を突き合わせる。
+    Rebased {
+        epoch: u64,
+        kind: RebaseKind,
+        shows: Vec<RebasedShow>,
+    },
+}
+
+/// [`DisplayCommand::Rebased`] の種別（どちらの定義を替えたか）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RebaseKind {
+    /// シェルの定義（面・着せ替え・シェル側のアニメ）。
+    Shell,
+    /// バルーンの定義（バルーン側のアニメ）。
+    Balloon,
+}
+
+/// [`DisplayCommand::Rebased`] の 1 スコープぶんの最初の表示。
+#[derive(Clone, Debug, PartialEq)]
+pub struct RebasedShow {
+    /// 対象のスコープ。
+    pub scope: ActorKey,
+    /// 差し替え後に表示する面（`None` は表示しない）。
+    pub surface_id: Option<u32>,
+    /// 差し替え後の着せ替え（シェルは新しい既定・バルーンは空）。
+    pub binds: BindSet,
 }
 
 /// emo への表示指令の発行先抽象（emo-present 完了を待たない・要件 5.5）。
