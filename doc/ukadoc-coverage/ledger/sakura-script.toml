@@ -3723,7 +3723,7 @@ priority = "B1"
 values = ["更新"]
 links = []
 note = """
-壊れ方: 該当なし。UpdateCueSink（crates/areka/src/emo2_boot/update_cue.rs）が名前 updatebymyself で自分を選び、引数が無ければ今のゴースト・シェル・バルーンの 3 つ（右クリックのメニューの「ネットワーク更新」と同じ）を対象に、理由 script で更新の手続きへ渡す。手続きは OnUpdateProcessExec を送らずに標準の更新へ進み、対象ごとに OnUpdateBegin から締めまでを正典のイベントで送り、最後に OnUpdateResult を送る。更新先の無い対象は飛ばす。何か入れ替わったときだけ、総括への返事の台詞の後に同じゴーストを読み直す。引数（更新オプション）があれば要求ごと断る（checkonly・testonly・recovery は α 後）。
+壊れ方: 該当なし。UpdateCueSink（crates/areka/src/emo2_boot/update_cue.rs）が名前 updatebymyself で自分を選び、引数が無ければ今のゴースト・シェル・バルーンの 3 つ（右クリックのメニューの「ネットワーク更新」と同じ）を対象に、理由 script で更新の手続きへ渡す。手続きは OnUpdateProcessExec を送らずに標準の更新へ進み、対象ごとに OnUpdateBegin から締めまでを正典のイベントで送り（ゴーストの成功の締め OnUpdateComplete は取っておく）、最後に OnUpdateComplete → OnUpdateResult の列を送る。更新先の無い対象は飛ばす。何か入れ替わったときだけ、全対象の後・今の台詞の後に同じゴーストを読み直し、その列を読み直した後の新しいゴーストへ送る（列の先頭が起動の知らせ・2026-09-30 開発者確定）。引数（更新オプション）があれば要求ごと断る（checkonly・testonly・recovery は α 後）。
 ログ: 出る（開けない荷物は warn!（update_cue_unopenable）、断り（更新オプション・知らない対象・--shell=／--balloon= 以外の指定しか無い）は warn!（update_cue_refused）で要求を作らない。受けた要求は窓口が info!（update_order_started）か断りの warn!（update_refused）を 1 件残す。走っている間の要求は OnUpdateFailure（executing）で断る。）。
 根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/emo2_boot/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
 [群: インストールと更新]

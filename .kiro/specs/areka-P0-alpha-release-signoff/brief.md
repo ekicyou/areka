@@ -5,10 +5,10 @@
 
 ## 2026-09-30 `network-update` からの申し送り（要件 8.8）
 
-1. **第三者の手順「更新する」**: 右クリックのメニューの「ネットワーク更新」を選ぶ → ゴーストが進捗を話す（`OnUpdateBegin`・`OnUpdateReady`・各ファイルの取得と照合・`OnUpdateComplete`・総括 `OnUpdateResult` の台詞。ゴーストは更新の間も消えない）→ 何か入れ替わったときだけ、総括の台詞が終わってから**いったん引っ込んで同じゴーストが戻ってくる**（読み直し。ゴースト・シェル・バルーンの中身が新しくなる）。差分が無ければ「更新無し」の台詞で終わり、引っ込まない。今のゴースト・シェル・バルーンのどれにも更新先（`homeurl`）が無いときと、更新が走っている間は、項目が灰色で選べない。更新先の無い物は黙って飛ばす（emo2 のシェルには `homeurl` が無い）。台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` からも同じ手続きが走る。検証項目 8 の更新先は emo2 の配布サイト（`https://ekicyou.github.io/ghost_dev/emo2/emo2/`）で、`network-update` の実機確認（`signoff.md`）と共用できる
+1. **第三者の手順「更新する」**: 右クリックのメニューの「ネットワーク更新」を選ぶ → ゴーストが進捗を話す（`OnUpdateBegin`・`OnUpdateReady`・各ファイルの取得と照合の台詞。ゴーストは更新の間も消えない）→ 何か入れ替わったときだけ、最後の台詞が終わってから**いったん引っ込んで同じゴーストが戻ってくる**（読み直し。ゴースト・シェル・バルーンの中身が新しくなる）→ 戻ったゴーストが最初に `OnUpdateComplete`（「更新成功」の台詞）を話し、続けて総括 `OnUpdateResult` が届く（`OnGhostChanged`・`OnBoot` は送らない）。差分が無ければ引っ込まず、最後に「更新無し」（`OnUpdateComplete` の `none`）→ `OnUpdateResult` で終わる（2026-09-30 開発者確定で順が変わった）。今のゴースト・シェル・バルーンのどれにも更新先（`homeurl`）が無いときと、更新が走っている間は、項目が灰色で選べない。更新先の無い物は黙って飛ばす（emo2 のシェルには `homeurl` が無い）。台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` からも同じ手続きが走る。検証項目 8 の更新先は emo2 の配布サイト（`https://ekicyou.github.io/ghost_dev/emo2/emo2/`）で、`network-update` の実機確認（`signoff.md`）と共用できる
 2. **`dist/README.txt` で `network-update` が直した所と、本仕様に残る所**: `network-update` は要件 8.4 どおり「今の版ではできません」を挙げる 2 行から「ネットワーク更新」の語だけを外した（シェル・バルーンの切り替えの分は残した）。あわせて、項目「ネットワーク更新」の登記で偽になった「右クリックメニュー」の欄を直した＝項目の並びを `Frame::ORDER` の順の 5 つ（「ゴースト」「ネットワーク更新」「インストール…」「説明書」「終了」）にし、「ゴースト」の説明の直後に「ネットワーク更新」の 1 行の説明（今のゴースト・シェル・バルーンを配布元の新しい版に更新する・更新先の無いものは飛ばす・3 つのどれにも更新先が無いときと更新している間は選べない）を足した。**「■ 更新のしかた」の本文（上の 1 の手順）はまだ無く、本仕様が書く**
-3. **既知の制限の候補**（README の「既知の制限」へ）: ⑴ 更新オプション（`checkonly`・`testonly`・`recovery`）は受けない＝オプション付きの `\![updatebymyself]` などは何もしない（`OnUpdateCheck*` 4 語も送らない）⑵ SHIORI リソース `other_homeurl_override` は照会しない＝`\![updateother]` とシェル・バルーンの更新先を差し替えられない ⑶ `\![execute,install,url,URL,種別]` は種別 `nar`（と省略）だけ＝`feed`・`homeurl`・`ical`・`ssf` は何もしない ⑷ `\![execute,install,url]` で落としたファイルは一時フォルダ（`%TEMP%\areka\download\`）に最大 7 日残る（次の取得のときに 7 日より古い物を消す）⑸ 更新の確定を元へ戻せなかったときの残りは、対象のフォルダの下の `.update-work` に残る（次の更新で警告に出る。救い出しは手で）⑹ コマンドライン引数でゴーストのフォルダを指して始めたときは、更新しても読み直さない（中身は次の起動で効く）⑺ `\![updateother]` で今表示中でないシェル・バルーンを更新しても読み直さない（次に選んだときに効く）。⑻ https を実機で通せなかったら（`network-update` の `signoff.md` を見る）、その旨も
-4. **開発者への申し送り（要件の読み）**: `network-update` 要件 5.5 と要件の導入の「読み直しの後は `OnBoot` を送らない」は、**「読み直しの起動の根が `OnGhostChanged`（Reference は自分→自分）」の意味**である。起動の根の選び方（`schedule/boot.rs` の `boot_root`）は変えていないので、ゴーストが `OnGhostChanged` に返事をしない（204）と、正典どおり続けて `OnBoot` が送られる（台詞は `OnBoot` の物が出る）。要件の一文を文字どおり「`OnBoot` は 1 件も送らない」とは読まない——この読みでよいかを完了の承認のときに開発者が確かめる（`network-update` の tasks.md の Implementation Notes 6.5）
+3. **既知の制限の候補**（README の「既知の制限」へ）: ⑴ 更新オプション（`checkonly`・`testonly`・`recovery`）は受けない＝オプション付きの `\![updatebymyself]` などは何もしない（`OnUpdateCheck*` 4 語も送らない）⑵ SHIORI リソース `other_homeurl_override` は照会しない＝`\![updateother]` とシェル・バルーンの更新先を差し替えられない ⑶ `\![execute,install,url,URL,種別]` は種別 `nar`（と省略）だけ＝`feed`・`homeurl`・`ical`・`ssf` は何もしない ⑷ `\![execute,install,url]` で落としたファイルは一時フォルダ（`%TEMP%\areka\download\`）に最大 7 日残る（次の取得のときに 7 日より古い物を消す）⑸ 更新の確定を元へ戻せなかったときの残りは、対象のフォルダの下の `.update-work` に残る（次の更新で警告に出る。救い出しは手で）⑹ コマンドライン引数でゴーストのフォルダを指して始めたときは、更新しても読み直さない（中身は次の起動で効く）⑺ `\![updateother]` で今表示中でないシェル・バルーンを更新しても読み直さない（次に選んだときに効く）。⑻ https を実機で通せなかったら（`network-update` の `signoff.md` を見る）、その旨も ⑼ 読み直した後の `OnUpdateResult` は `OnUpdateComplete` の台詞の終わりを待たない＝両方に応えるゴーストでは「更新成功」の台詞が総括の台詞に置き換わる（kanade に「今の台詞が終わってから送る」口が無い・足すのは後続の spec。`OnUpdateResult`／`Ex` は SSP だけのイベントで emo2・konnoyayame の辞書は応えないので今は見えない・`network-update` 要件 5.3）
+4. **開発者への申し送り（要件の読み）＝決着済み**: `network-update` 要件 5.5 の「読み直しの後は `OnBoot` を送らない」の読みは、2026-09-30 の開発者確定で決着した（裁定 6 を覆した）。読み直した後の起動の知らせは後送りの列の先頭（ふつうは `OnUpdateComplete`）で、`OnGhostChanged`・`OnBoot` の代わりに送り、ゴーストが返事をしない（204）ときも `OnBoot` へ続けない（kanade の起動の由来 `BootOrigin::Updated`）。本仕様で確かめることは無い（`network-update` の tasks.md の Implementation Notes 12）
 
 ## 2026-09-29 `file-drop` からの申し送り（1 件）
 
@@ -110,7 +110,7 @@
    5. 右クリックメニュー → ゴースト一覧に 2 体 → 切替 → 戻る
    6. シェル切替（2 シェル持ちの検体）
    7. バルーン切替（同梱バルーン ⇄ 既定バルーン）
-   8. ネットワーク更新（開発者の配布サーバに置いた検体で差分 1 件）→ `OnUpdateComplete` → 読み直し
+   8. ネットワーク更新（開発者の配布サーバに置いた検体で差分 1 件）→ 読み直し → 新しいゴーストが `OnUpdateComplete`（2026-09-30 に順を改めた）
    9. 終了（メニュー）→ 終了挨拶 → プロセス終了
    10. 再起動 → 前回のゴースト・バルーン・窓位置が復元される
    11. 表示スケール ≠ 100% の画面で 3〜9 が崩れない（記憶 areka-placement-real-ghost-first）

@@ -911,11 +911,11 @@ pub(crate) fn spawn_download(url: String, tx: Sender<RawInstallRequest>);
 | 対象の始まり・進捗・終わり | `update_target_begin`・`update_absolute_failed`（`warn!`・フォルダを絶対パスにできずそのまま載せる）・`update_progress`（`debug!`）・`update_target_done`・`update_failed`・`update_leftover`・`update_fetch_unavailable`（手続きの `run_target` だけが残す） |
 | エンジンの門 | `update_gate_closed`（`debug!`・終了が始まっていてエンジンを回さない） |
 | イベント | `update_event`（名前と応えの有無）・`update_event_dropped`・`update_event_failed`・`update_event_not_allowed`・`update_not_steady`・`update_kanade_gone` |
-| 総括 | `update_summary` |
-| 読み直し | `update_reload_requested`（判定つき）・`update_reload_skipped`（`warn!`・`reason`＝`closing`〔終了が始まった・窓口が無い〕／`switching`〔切替の予約が在る〕／`other_ghost`〔置き場のゴーストが依頼時と違う〕／`argv`〔コマンドライン引数で始めた〕） |
+| 総括 | `update_summary`（`sent`＝`true` は総括を後送りの列の最後に置いた意味・送ったことは `update_tail_sent` が示す／`false` は総括を組まない） |
+| 読み直し | `update_reload_requested`（判定つき）・`update_reload_skipped`（`warn!`・`reason`＝`closing`〔終了が始まった・窓口が無い〕／`switching`〔切替の予約が在る〕／`other_ghost`〔置き場のゴーストが依頼時と違う・ゴーストが居ないときも〕／`argv`〔コマンドライン引数で始めた〕）・既存の `ghost_switch_requested` の欄 `boot_event`（起動の知らせの名前・読み直しだけが在る） |
 | 読み直しの後の片付け（要件 5.9・2026-09-30） | `update_purge_done`（消せた数が 1 以上なら `info!`・0 なら `debug!`・`removed`・`dir`）・`update_purge_held`（`warn!`・降ろした後でも消せなかった物 1 件ごと・`path`）・`update_purge_dropped`（`debug!`・切替が失敗・中止で覚えたフォルダを捨てた）／エンジンの `run` の始めの片付けは `areka_update` の `debug!` 1 行 |
-| 後送りの列（2026-09-30） | `update_tail_deferred`（`debug!`・列を窓口へ渡した・`count`）・`update_tail_sent`（`info!`・`when`＝`at_end`〔手続きが最後に送った〕／`no_reload`〔読み直せず窓口が送った〕／`after_switch`〔読み直しの後に残りを送った〕・`count`）・`update_tail_dropped`（`warn!`・`reason`＝`closing`／`other_ghost`／`switch_failed`／`no_ghost`）／kanade の `boot_update_root`（根に列の先頭を選んだ・`id`）・`boot_update_no_content`（204 でも `OnBoot` へ進まない） |
-| 終了 | `update_abandoned`・`exit_wait_abandoned`・`exit_wait_done`・`exit_wait_timeout` |
+| 後送りの列（2026-09-30） | `update_tail_deferred`（`debug!`・列を窓口へ渡した・`count`）・`update_tail_sent`（`info!`・`when`＝`at_end`〔手続きが最後に送った〕／`no_reload`〔読み直せず窓口が送った〕／`after_switch`〔読み直しの後に残りを送った〕・`count`）・`update_tail_dropped`（`warn!`・`reason`＝`closing`／`other_ghost`／`no_ghost` は捨てた列の名前 `ids`・`switch_failed` は覚えていた残りの数 `rest`）／kanade の `boot_update_root`（根に列の先頭を選んだ・`id`）・`boot_update_no_content`（204 でも `OnBoot` へ進まない） |
+| 終了 | `update_abandoned`（`warn!`・`at`＝`process_exec`／`resources`／`target`／`tail`〔最後に送る列の途中で閉じた〕）・`exit_wait_abandoned`・`exit_wait_done`・`exit_wait_timeout` |
 | 受け口・メニュー | `update_cue_skip`・`update_cue_unopenable`・`update_cue_refused`・`update_cue_selector_ignored`・`update_cue_send_failed` |
 | URL の取得 | `install_fetch_begin`・`install_fetch_done`・`install_fetch_failed`・`install_fetch_send_failed`・`install_fetch_swept`（消した数）・`install_fetch_sweep_skipped`（`debug!`・一時フォルダを読めない・古いファイルを消せない） |
 | `\![execute,install,…]` の受け口 | `install_cue_bad_url`（URL が空か `http://`／`https://` で始まらない）・`install_cue_unsupported_kind`（種別が `nar` でも省略でもない）・`install_cue_unsupported`（第 2 引数が `path` でも `url` でもない） |

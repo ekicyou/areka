@@ -6712,18 +6712,25 @@ note = """
 い、更新の間もゴーストは降ろさない。今のゴースト本体の更新で、対象 1 つの更新が成功で終わったときの
 締めとして 1 回送る。Reference0＝changed（入れ替えた）か none（差分 0）・Reference1＝入れ替えたファ
 イルのカンマ区切り・Reference2＝空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メ
-ニュー manual・台本 script）。changed が 1 つでもあれば、総括への返事の台詞が終わってから同じゴース
-トを読み直す。
+ニュー manual・台本 script）。その場では送らず、要求の対象を全部終えた後の後送りの列（この締め →
+総括）の先頭に置く。changed が 1 つでもあれば、今の台詞が終わってから同じゴーストを知らせなしの自分
+自身への切替で読み直し、読み直した後の新しいゴーストの起動の知らせとして OnGhostChanged・OnBoot の
+代わりに送る（返事が無くても OnBoot へ続けない）。読み直さないときは要求の最後に今のゴーストへ送る。
+読み直しの切替が失敗・中止したときは送らない（2026-09-30 開発者確定・doc/COMPAT_ARCHITECTURE.md §8
+に登記）。
 ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
 update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
 ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
 update_event_failed）を残す。対象の終わりは info のログ（update_target_done）、消せなかった物や片付
-けられなかった作業場所が残ったときは warn のログ（update_leftover）を残す。
+けられなかった作業場所が残ったときは warn のログ（update_leftover）を残す。読み直した後の起動の知ら
+せは kanade の info のログ（boot_update_root）、後送りの列を送った・捨てたときは info のログ（
+update_tail_sent）・warn のログ（update_tail_dropped）を残す。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
-送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
+読み直さないときは汎用の通知の入口（KanadeMsg::RaiseEvent）で送り、読み直したときは起動の由来
+BootOrigin::Updated（crates/areka-kanade/src/change.rs）の根として送る。名前の定義は
 crates/areka/src/update/refs.rs の定数 ON_UPDATE_COMPLETE（上の行に正典 URL）で、Reference の組み立
-ては同じファイルの complete_refs／failure_refs で、手続き（procedure.rs の run_target）が対象 1 つに
-つき締めの知らせを 1 回だけ送る。
+ては同じファイルの complete_refs／failure_refs で、手続き（procedure.rs の run_target・run_order）が
+対象 1 つにつき締めの知らせを 1 回だけ組む。
 無いと失うもの: 更新が終わったことをゴーストが知らず、新しくなった自分について何も言えない。
 """
 
@@ -6932,8 +6939,9 @@ note = """
 \\![updateother] で名前を引いた物）で、対象 1 つの更新が成功で終わったときの締めとして 1 回送る。
 Reference0＝changed（入れ替えた）か none（差分 0）・Reference1＝入れ替えたファイルのカンマ区切り・
 Reference2＝空・Reference3＝種別（ghost／shell／balloon）・Reference4＝理由（メニュー manual・台本
-script）。changed が 1 つでもあれば、総括への返事の台詞が終わってから同じゴーストを読み直す（今のシ
-ェル・今のバルーンも起動時と同じ解き方で読み直される）。
+script）。今日どおりその場で今のゴーストへ送る。changed が 1 つでもあれば、要求の対象を全部終えた後
+に、今の台詞が終わってから同じゴーストを読み直す（今のシェル・今のバルーンも起動時と同じ解き方で読み
+直される）。
 ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
 update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
 ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
@@ -7085,19 +7093,24 @@ note = """
 ーク更新」と台本 \\![updatebymyself]・\\![update,…] の要求の終わりに 1 回送る総括。実行した順に対象
 1 つにつき Reference 1 つで、種別・OK／NG・件数（成功。none なら 0）か失敗理由・原因のファイル（分か
 るときだけ）を byte 値 1 で区切って並べる。更新先が無くて飛ばした対象は載せず、全部飛ばせば送らない。
-changed が 1 つでもあれば、この総括への返事の台詞が終わってから（返事が無ければ送った直後に）同じゴ
-ーストを知らせなしの自分自身への切替で読み直し、起動の根は OnGhostChanged になる（
-doc/COMPAT_ARCHITECTURE.md §8 に登記）。コマンドライン引数でゴーストのフォルダを指して始めたときは
-読み直さない。
+後送りの列（ゴーストの成功の OnUpdateComplete → この総括）の最後に置く。changed が 1 つでもあれば、
+今の台詞が終わってから同じゴーストを知らせなしの自分自身への切替で読み直し、読み直しの切替が終わった
+時点で新しいゴーストへ送る（ゴーストが成功しなかったときはこの総括が起動の知らせになる）。読み直さな
+いとき（全部 none か失敗・コマンドライン引数でゴーストのフォルダを指して始めた）は要求の最後に今のゴ
+ーストへ送り、読み直しの切替が失敗・中止したときは送らない。既知の制限: 起動の知らせの
+OnUpdateComplete の台詞の終わりを待たないので、両方に応えるゴーストでは台詞が置き換わる（2026-09-30
+開発者確定・doc/COMPAT_ARCHITECTURE.md §8 に登記）。
 ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
 update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
 ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
-update_event_failed）を残す。総括は info のログ（update_summary・Reference の列）、読み直しを頼んだ
-ときは info のログ（update_reload_requested）を残す。
+update_event_failed）を残す。総括を列に置いたときは info のログ（update_summary・Reference の列）、
+読み直しを頼んだときは info のログ（update_reload_requested）、列を送った・捨てたときは info のログ
+（update_tail_sent）・warn のログ（update_tail_dropped）を残す。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
-送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
-crates/areka/src/update/refs.rs の定数 ON_UPDATE_RESULT（上の行に正典 URL）で、Reference の組み立て
-は同じファイルの summary_refs で、手続き（procedure.rs の run_order）が要求 1 件の終わりに 1 回送る。
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）か、起動の知らせのときは起動の由来
+BootOrigin::Updated の根。名前の定義は crates/areka/src/update/refs.rs の定数 ON_UPDATE_RESULT（上
+の行に正典 URL）で、Reference の組み立ては同じファイルの summary_refs で、手続き（procedure.rs の
+run_order）が要求 1 件につき 1 回組み、列を送るのは手続きか窓口（desk.rs の send_tail）。
 無いと失うもの: 一度の更新で何が新しくなったかの一覧がゴーストへ渡らず、まとめて語ることができない。
 """
 
@@ -7116,15 +7129,19 @@ note = """
 の名前・種別・OK／NG・件数（成功。none なら 0）か失敗理由・原因のファイル（分かるときだけ）を byte
 値 1 で区切って並べる。名前を引けなかった対象・更新先が無くて飛ばした対象は載せず、全部飛ばせば送ら
 ない。今表示中でないシェル・バルーンを更新しても読み直しの対象にはならず、中身は次に選んだときに効く。
+送る時機は OnUpdateResult と同じ（後送りの列の最後・changed が 1 つでもあれば読み直した後の新しいゴ
+ーストへ・読み直さなければ要求の最後に今のゴーストへ・読み直しの切替が失敗・中止したら送らない・
+2026-09-30 開発者確定・doc/COMPAT_ARCHITECTURE.md §8 に登記）。
 ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。手続きは送るたびに info のログ（
 update_event・名前と応えの有無）を残す。ゴーストが途中で居なくなった・終了が始まったときは以後を送ら
 ず warn のログ（update_event_dropped／update_abandoned）、往復が失敗したときは error のログ（
-update_event_failed）を残す。総括は info のログ（update_summary・Reference の列）を残す。
+update_event_failed）を残す。総括を列に置いたときは info のログ（update_summary・Reference の列）、
+列を送った・捨てたときは info のログ（update_tail_sent）・warn のログ（update_tail_dropped）を残す。
 根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っており、
-送るのは汎用の通知の入口（KanadeMsg::RaiseEvent・返事を待つ形）。名前の定義は
-crates/areka/src/update/refs.rs の定数 ON_UPDATE_RESULT_EX（上の行に正典 URL）で、Reference の組み立
-ては同じファイルの summary_refs で、手続き（procedure.rs の run_order）が要求 1 件の終わりに 1 回送
-る。
+送るのは汎用の通知の入口（KanadeMsg::RaiseEvent）か、起動の知らせのときは起動の由来
+BootOrigin::Updated の根。名前の定義は crates/areka/src/update/refs.rs の定数 ON_UPDATE_RESULT_EX（
+上の行に正典 URL）で、Reference の組み立ては同じファイルの summary_refs で、手続き（procedure.rs の
+run_order）が要求 1 件につき 1 回組む。
 無いと失うもの: 一度の更新で何が新しくなったかを名前まで含めて語ることができない。
 """
 

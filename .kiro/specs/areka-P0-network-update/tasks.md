@@ -196,7 +196,7 @@
   - _Requirements: 7.2（補助プロセスの生死の土台）_
   - _Boundary: shiori-host32-host process_host（境界を広げる・並走なし）_
 
-- [ ] 12. `OnUpdateComplete` と総括を読み直しの後の新しいゴーストへ送る（2026-09-30 開発者確定・裁定 6 を覆した）
+- [x] 12. `OnUpdateComplete` と総括を読み直しの後の新しいゴーストへ送る（2026-09-30 開発者確定・裁定 6 を覆した）
 - [x] 12.1 kanade の起動の由来に「ネットワーク更新で読み直した」を足す
   - 起動の由来に、送るイベントの名前（許可表の綴り）と Reference を持つ変種を 1 つ足す。起動の根の表では「最初の起動」の次に置き、根はその名前と Reference の GET にする（`OnGhostChanged`・`OnBoot` の代わり）
   - 根への応えが無い（204）とき、この由来だけは `OnBoot` へ続けず、`basewareversion` へ進んで定常に入る。台本が返れば今日どおり再生する。他の由来（ふつう・切替で来た・前回落ちた）の振る舞いは変えない
@@ -223,7 +223,7 @@
   - _Boundary: update procedure, update worker, update desk（と兄弟テスト）_
   - _Depends: 12.2_
 
-- [ ] 12.4 文書・台帳・申し送りを揃える
+- [x] 12.4 文書・台帳・申し送りを揃える
   - `doc/COMPAT_ARCHITECTURE.md` §8 の読み直しの行を、起動の知らせが列の先頭（`OnGhostChanged`・`OnBoot` の代わり・204 でも `OnBoot` 無し）・列の残りは切替の終わりで送る・読み直さないときは最後に今のゴーストへ・切替の失敗と中止では捨てる、へ改める。正典の根拠（`\![update,…]` の「すべて更新が終わった後に」）を載せる
   - 後続 `alpha-release-signoff` の brief の既知の制限に「読み直した後の `OnUpdateResult` は `OnUpdateComplete` の台詞の終わりを待たない（kanade に口が無い・後続の spec で足す）」を足す
   - 実装で記録の語が design の Monitoring の表と違っていれば表を実物に揃える。網羅台帳の `OnUpdateComplete`・`OnUpdateResult`・`OnUpdateResultEx` の行の備考に送る時機の書き方が在れば直し、生成物を生成器で作り直す（在るときだけ・`ukadoc-survey` のテストが緑）
@@ -258,3 +258,10 @@
 - 12.1: `BootOrigin::Updated { id, references }` の根は `events::raise` で組む（許可表は通さない・最後の判定は送出点 `round_trip_request`）。204 は `boot_update_no_content` で `OnBoot` へ進まない（`first_boot` のときだけ今日どおり）。SHIORI の失敗は既存の根と同じ `Unloading{Fault}`。`BootOrigin` を網羅する `match` は `boot_root` の 1 か所だけ
 - 12.2: `SwitchRequest`・`SwitchInFlight` に `boot_event: Option<(&'static str, Vec<String>)>`。`switch_to`（切替先）だけが読み `BootOrigin::Updated` で起こす・`switch_to_default` は今日どおり `Halted`。記録は既存の `ghost_switch_requested` に `boot_event` の欄。`update/desk.rs` の `reload` はまだ `None`＝12.3 が列の先頭を入れる。`ghost_switch_tests.rs` は 988 行＝足すなら兄弟ファイルへ
 - 12.3: 後送りの列＝`[ゴーストの締め?] ++ [総括]`（全部飛ばせば空）。changed なら `request_reload(ghost_dir, tail)`、窓口は Accepted で `tail[0]` を `boot_event` に・残りを `after_switch` に覚え、`on_switch_end(true)` で片付け→残りを送る（`when="after_switch"`）。断り: `closing`・`other_ghost`（ゴーストが居ない場合も）は捨てる・`argv`・`switching`・Accepted 以外は今のゴーストへ全部送る（`when="no_reload"`）。何も変わらなければ手続きが最後に送る（`when="at_end"`・途中で閉じたら `update_abandoned at="tail"`）。12.4 で Monitoring に `update_abandoned at="tail"` と「`update_summary sent=true` は列に置いた意味」を記す
+- 12.4: COMPAT §8・2 本の brief・design の Monitoring・台帳の備考を後送りの列の流れへ揃えた（`ukadoc-survey check` 食い違い 0）。全体のテストは b7df4dde で全段緑
+- **申し送り（α後・2026-09-30 開発者「本仕様は α 後の対応・実装完了時の申し送りのみ」）**: 正典に「ネットワーク更新イベントの発生順序」が足された（ukadoc コミット https://github.com/ukatech/ukadoc/commit/1ea881a40f9a99821c92b69ded742986de0755b0 ・`manual/list_shiori_event.html#caption_updateorder`）。本仕様の実装との差は次の 5 つ（完了時に `/kiro-discovery` で α 後の spec へ起票する）
+  1. MD5 が合わなければ同じファイルを `OnUpdate.OnDownloadBegin` から取り直し、上限を超えたら `OnUpdateFailure(md5 miss)`＝本仕様は取り直さずその場で失敗
+  2. `OnUpdateReady`・各ファイルの後・置き換えの前に、それまでのイベントの台詞の再生が終わるまで待ってから次へ進む＝本仕様は待たない（台詞が置き換えられる）。kanade に「台詞の後に進む」口が要る（既知の制限 ⑼ と同根）
+  3. 対象ごとに一連のイベントが揃う（シェル・バルーンも読み直しの後に `OnUpdateOtherComplete`）。順は ゴースト → シェル → バルーン（→ 推奨バルーン）＝本仕様はシェル・バルーンの `OnUpdateOther*` を読み直しの前に古いゴーストへ送り、読み直しは最後に 1 回
+  4. 総括は最後に 1 回 `OnUpdateResultEx`、それが台本を返さなかったときに限り続けて `OnUpdateResult`＝本仕様は `Current` なら `OnUpdateResult`、`Other` なら `OnUpdateResultEx` の片方だけ
+  5. 自動更新（理由 `auto`）では `OnUpdateBegin` は `OnUpdateReady` の直前、更新なし・確認前の失敗ではイベント 0＝本仕様は自動更新を持たない（入口は manual・script だけ）
