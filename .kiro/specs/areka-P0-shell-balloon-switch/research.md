@@ -363,3 +363,136 @@
 
 - 上の議題 A〜J のうち、要件の改訂を伴うもの（C・D・I、場合により B・G・J）を要件ディスカッションで決める。
 - 設計は `/kiro-spec-design areka-P0-shell-balloon-switch`（または `/kiro-design`）。設計では §6 の調べものの 1〜4 を最初に解く。
+
+---
+
+# 設計の段（2026-09-30・`/kiro-spec-design -y`）
+
+## Summary
+
+- **Feature**: `areka-P0-shell-balloon-switch`
+- **Discovery Scope**: Complex Integration（既存の拡張だが、kanade・seriko・present・placement・ghost・parsers の 6 層にまたがる）。発見は light〜full の中間で、外部の調べもの（Web）は無し（新しい依存が 0 のため）。コードの実測で行った。
+- **Key Findings**:
+  - 印の無い経路（`raise-event` 無し・バルーン）でも、要件 5.4・1.14・5.7 は「kanade が終了系列へ入ったか」を知らないと判定できない。既存の返信（`RaiseOutcome`）と通知（`KanadeNotice`）では足りない（§9.1）。
+  - 古い定義の表示の指令と新しい装着の食い違いは、seriko の inbox の FIFO に合図を乗せれば、世代番号も読み捨ても無しで消せる（§9.2）。
+  - `Emo2BootInputs` と `StartupDescriptValues` の構造体リテラルが、触れてはならない `ghost_switch_test_support.rs` に在る。シェル名はこの 2 つの欄では運べない（§9.5）。
+
+## 9. 設計判断（Design Decisions）
+
+### 9.1 kanade の口は「台詞の切れ目を待つ」1 本（議題 B・C・G の設計側・§6 の 4）
+
+- **Context**: 要件 8.11 は `OnShellChanging` の印の口を求め、要件 8.2 は kanade の変更をそれに限る。しかし印の無い経路にも、次の判定が要る。
+  - 要件 5.4: 台本を運んだ台詞が `\-` の予約つきで中断されたら、切替を捨てる。
+  - 要件 1.14: 定常でなければ無視する。
+  - 要件 5.7: 終了要求が勝つ。
+- **確かめた事実**:
+  - `\-` の予約は台本の翻訳時に決まる（`crates/areka-sakura/src/drive.rs` の `on_close` の doc）。cue として流れないので、UI の受け口からは見えない。
+  - 終了系列へ入ったことを UI へ知らせる通知は無い。`KanadeNotice` は `Steady`（起動の完了）・`ChangeCancelled`・`Stopped` だけ（`crates/areka-kanade/src/change.rs` の `KanadeNotice` の定義）。
+  - `KanadeNotice` に変種を足すと、`ghost_switch.rs` の `on_notice` の網羅の match が壊れる（要件 8.1 で触れない）。
+  - 完了 `ghost-shell-balloon-switch` の同じ場面（`raise-event` 無しのゴースト切替）は、kanade の `pending_change` と `quit_dropping_pending`（`schedule/change.rs`）が扱っている。UI は推し量っていない。
+  - `RaiseOutcome::NotSteady` は依頼の時点の相しか言わない（`actor.rs` の `spawn_kanade_with_stop_sink` の返信の組み立て）。
+- **Alternatives**:
+  1. UI が推し量る（自分の `UserBreak`・`DisplayEndAt`・差し替え後の `OnShellChanged` の `NotSteady`）。`\-` 入りの中断や終了の握手の途中でも差し替えてしまい、要件 5.4・1.14 を満たせない。裁定 8 が同じ理由で退けた形。
+  2. 印の口を `OnShellChanging` にだけ付け、印の無い経路は 1 のとおり。利用者から見ると、`\-` で終わるゴーストが最後の一瞬だけ新しいシェルになり、次の起動でそのシェルが記憶されうる。
+  3. **採用**: 口を `KanadeMsg::AwaitTalkGap { raise: Option<GapRaise>, reply }` の 1 本にし、印は任意の添え物にする（本仕様で付けるのは `OnShellChanging` だけ）。
+- **Selected Approach**: 判断は `schedule/talk_gap.rs`（純粋）に置く。`step` の後の見極め `observe` と、`on_talk_done` の `break_quit` への 1 項（`is_marked_break`）の 2 か所で mod.rs に繋ぐ。殻は結果を 1 回送るだけ。
+- **Rationale**: 裁定 8 の根拠がそのまま印の無い経路にも当てはまり、開発者の指示「目的の実現を優先せよ」に沿う。`steady.rs` と `RaiseEvent` は 1 行も変えない（要件 8.3）。
+- **Trade-offs**: 要件 8.2・8.11 の字面（kanade の範囲と「知らせる時点」）を超える。結果は「印の台詞が終わったとき」ではなく「その後の切れ目」で 1 回返る。印の台詞の終わり方は `Reached{marked}` に載るので、8.11 ⑴ の情報は失われない。
+- **Follow-up**: 設計討議で要件 8.2・8.11 の本文の追随を確かめる（§12）。
+
+### 9.2 差し替えの順序は seriko の表示の流れで決める（§6 の 1・2）
+
+- **Alternatives**:
+  1. `PresentCommand` に世代番号を付ける。`ShowSurface` の構築点すべてに波及する。
+  2. seriko の返事を待ってから装着する。返事と表示の流れは別の線なので、順序が決まらない。
+  3. 差し替えの tick で `wiring.rx` を読み捨てる。seriko が `Replace` を処理する前に出した古い指令が、後から届く。
+  4. **採用**: seriko が定義を替えた点で `DisplayCommand::Rebased{epoch}` を出す。areka の `PresentBridge` がそれを、UI が先に置いた荷物（`SwapSlot`）と突き合わせて `PresentCommand::ReplaceTarget` に写し、同じ present の線へ流す。
+- **Rationale**: seriko の inbox は FIFO なので、`Rebased` より前の指令は古い装着に、後の指令は新しい装着に必ず当たる。最初の面は seriko の `ScopeStates` の今の面から出す。表示の流れの権威は seriko で、UI の `current_surface_id` を使う案（§6 の 2）はアニメの途中の状態を二重に持つので採らない。
+- **Trade-offs**: `PresentBridge` に共有の置き場（`Arc<Mutex<Option<SwapPayload>>>`）が 1 つ増える。鍵を持つのは置く・取り出すの一瞬だけ。`handle_message` の署名はテストの呼び出し 45 本のために変えず、`Replace` は受信の閉包で先に捌く。
+
+### 9.3 資産は背景のスレッドで作る（議題 H・§6 の 3）
+
+- 受理ごとに `std::thread` を 1 本起こし、COM を MTA で初期化して WIC で復号する。本番の UI スレッドも MTA で、同じ `WicDecoderArm` を使う。
+- `EmoWorld` は bevy の `World` を 1 欄に持つだけ（`areka-emo-compose/src/world.rs`）で、`AtlasTable` は `Arc` と `HashMap` だけ（`areka-emo-atlas/src/table.rs`）。どちらも送れる。コンパイル時の確かめをテストに置く。
+- 位置の記憶（`persist::load_restored_state`）と配置の値（`load_descript_source_for_shell`）も背景で読み、UI スレッドではファイルを読まない。
+
+### 9.4 今のシェルの置き場は `GhostRuntime` に書く口（議題 A）
+
+- `GhostRuntime::set_shell_dir` で `mount.shell.dir` を書き換える。`ShellMount.dir` は `pub` 欄。
+- `mount().shell.dir` の本番の読み手 3 つ（`update/desk.rs` の `here`・`ghost_switch.rs` の `record_steady_memory`・`main.rs` の `on_boot_ok`）は手当て 0 で差し替え後を指す。
+- 新しい資源を置く案（議題 A (b)）は、`here` の書き換えと 2 か所の真実源を生むので採らない。
+- sylphya の Shell スコープの根は起動時のシェルのまま。本番で `PersistScope::Shell` へ書く呼び手が 0 なので張り替えない。Revalidation Triggers に登記した。
+
+### 9.5 シェル名は「配置の準備が決めた資源」と `wire_emo2_boot` の引数で運ぶ
+
+- 要件 6.4 は運び手を `Emo2BootInputs` の欄と名指しする。しかし `Emo2BootInputs` と `StartupDescriptValues` の完全な構造体リテラルが `ghost_switch_test_support.rs` に在る（それぞれ `GhostBootInputsSource` の閉包と切替の土台の中）。欄を足すと、触れてはならないファイルの書き換えをコンパイルが要求する（要件 8.1）。
+- 採用した形:
+  - `ghost_session::prepare_ghost_windows` が `decide_boot_shell` を 1 度呼び、配置の準備へ渡す。同時に資源 `BootShellChoice { ghost_root, shell }` に置く。
+  - `boot_wired` がそれを取り出して `wire_emo2_boot(.., shell)` へ渡す。
+  - `prepare` を経ない起動（テスト）では `boot_wired` が自分で決める。
+  - 決定は 1 回・`warn!` も 1 回。
+- 要件 6.4 の本旨（欄を足さない 5 つの型・3 か所が同じシェル）は満たす。要件の本文の追随は §12。
+
+### 9.6 記憶は 1 つずつ書く（議題 I の設計側）
+
+- `record_last_shell`／`record_last_balloon` を `LastUsed` の隣に置く（投函だけ・`info!`）。
+- 更新の読み直しでは、`GhostSession::shutdown` が記憶の書き手を処理し切ってから、起動前の解決が記憶を直読みする。書いた値は読める（§6 の 5）。
+
+### 9.7 シェルの差し替えで読み直す配置の値（要件 2.7・議題 F の設計側）
+
+- 起動時と同じ純関数を同じ順で通す: `build_placement_config` → `resolve_placement` → `apply_restored_placements`。そこから `anchor`・`balloon_offset_base`・`balloon_keyword_base` だけを取る（`char_pos` は捨てる＝窓の位置を保つ）。
+- 利用者のドラッグの記憶は、起動時と同じ規則で重なる。scope の集合は起動時の `GhostWindows` のまま。
+
+### 9.8 重なりの基底の置き直しでタグ由来のグループも落ちる
+
+- 台帳 `ZOrderGroupLedger::set_descript_base` は、基底を置くとタグ由来のグループも落とす（同関数の doc「終状態は `reset_to_descript` と一致させる」）。
+- 基底だけを入れ替える口を新設すると、台帳の不変条件（基底は先頭・高々 1 つ・再指定の拒否）を二重に持つことになる。そこで既存の関数を使い、シェルの差し替えの直後は「新しいシェルで起きた直後」と同じ重なりの状態にする。
+- 正典は沈黙している。台本が `\![set,zorder,…]` を掛け直したければ、`OnShellChanged` の台本で掛け直せる。
+
+### 9.9 下位の判断（要件と裁定で答えが決まるもの・議題にしない）
+
+- **選択肢の扱い**: 選択肢の選択の応答（カスケード）が印の台詞を置き換えたら `Replaced`（要件 5.2「置き換えは台詞の終わり」）。時間切れの解除は利用者の中断ではないので `Completed`。
+- **印の台詞が自ら `\-` に達したとき**: 今日どおり終了系列へ進み、切替は捨てる。要件 5.2 が例外にするのは中断だけ。台本が自ら終了を求めた場合は、要件 5.7 と同じ向き（終了の意思が勝つ）。
+- **新しいシェルに今の面が無いとき**: 要件 2.6・2.7 の「今日の『無い面を指定された』ときの扱い」に従い、`error!` を残してその scope は表示なし。次の `\s` で出る。
+  - 今日の扱いは「前の面を出し続ける」だが、前の面は古いシェルのもので持ち越せない。
+  - 要件 4.2 の「キャラ窓の絵が空になる」は差し替えの途中のフレームの崩れを指す。面が無いという定常の状態には、個別の規則（2.6）が先に効くと読む。
+- **定常でない時点で届いた要求**: `warn!`（要件 1.14）。待っている間に終了・ゴースト切替で取りやめになったものは `info!`（要件 1.12・5.7）。
+
+## 10. 危険と対策
+
+1. **切れ目と差し替えの間に新しいトークが始まる**: `Reached` を受けてから seriko の `Rebased` が drain に届くまでは、1〜2 フレーム。この間に `OnSecondChange` 等が始まると、差し替えはそのトークの最初の方と重なる。
+   - シェルなら面が新しいシェルで出るだけ。
+   - バルーンなら、文字の層は `refresh_actor_scale` が表示の進み具合を保って新しいスロットへ結び直す。可視性の制御は、新しい装着に可視コンテンツが置かれた時点で今日どおり見せる。崩れ（重なり・空・素通し）は出ない。
+   - 実機サインオフで目視する。
+2. **`Rebased` に荷物が無い**（起きない想定）: UI は荷物を置いてから `Replace` を送り、置き場は 1 つで UI だけが置く。起きたときは `error!` と切替の失敗とし、seriko の定義だけが新しくなる。構造上の防御として記録だけ残す。
+3. **拡大率 200% は未観測**（先進坑は 100% だけ）: 新しい target の `policy` は新しい作者の DPI、k は窓の `DPI` から毎回導く。仕組みは今日の表示と同じ。実機 ⑥ で確かめる。
+4. **`\-` で自ら終わる印の台詞**: §9.9 のとおり終了を優先する。
+5. **無い面**: §9.9。
+6. **記憶の反映**: §9.6。
+7. **`build_boot_assets` の括り出し**: 振る舞いは不変。既存の `assets_tests.rs`（976 行・足さない）が緑のままであることで確かめる。
+
+## 11. 簡素化（Synthesis）
+
+- **一般化**:
+  - 台詞の切れ目の口は、`raise` の有無だけで印の有無を表す 1 本にした（印の経路と印の無い経路を別の口にしない）。α 後の `network-update-canon-order` の「台詞が終わってから次へ」にも同じ口が使える見込み（実装は本仕様の範囲だけ）。
+  - `PresentCommand::ReplaceTarget` は、シェルとバルーンで同じ 1 つの語。
+- **作るか借りるか**: 依存は足さない。
+  - 背景の復号は `std::thread`＋既存の WIC。
+  - 名前の照合は完了 spec の規則を写す（`resolve_switch_target` は `ghost_switch.rs` の私有の関数で呼べない）。
+  - 乱数は `pick_index`、配置は起動時の純関数、重なりは台帳の既存の関数を使う。
+- **削ったもの**:
+  - `PresentCommand` の世代番号・seriko の返事の線・UI 側の台詞の終わりの推し量り・`here` の書き換え・`Emo2BootInputs` の欄。
+  - Shell スコープの張り替え・タグ由来の重なりの保存・切替の告知。
+  - `detach_target` は本番の呼び手が `apply_replace` だけ（要件 4.6 が口として求めるので置く。登録を消したまま戻さない経路は作らない）。
+
+## 12. 要件の本文の追随が要る点（設計討議で確かめる）
+
+利用者から見える振る舞いは要件どおり。変わるのは要件が名指しした部品だけである。
+
+1. **要件 8.2・8.11**:
+   - kanade に足す口が「`OnShellChanging` の印」だけでなく「台詞の切れ目を待つ口（印は任意）」になる。
+   - 結果を返す時点は、印の台詞の終わりではなく「その後の切れ目」になる（印の台詞の終わり方は結果に載る）。
+   - 理由は §9.1。追随しない場合（口を印だけに限る）は、印の無い経路で要件 5.4・1.14・5.7 を近似でしか満たせない。利用者から見える差は「`\-` で終わるゴーストの台本が最後の一瞬だけ新しいシェル／バルーンを見せ、次の起動でそれを記憶しうる」。
+2. **要件 6.4**:
+   - 運び手が「`Emo2BootInputs` の欄と `boot_with_origin` の引数」ではなく、「配置の準備が決めた資源 `BootShellChoice`・`wire_emo2_boot` の引数・`boot_with_origin` の引数」になる。
+   - 理由は §9.5（要件 8.1 と両立させるため）。

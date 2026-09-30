@@ -1,18 +1,19 @@
 {
   "feature_name": "areka-P0-shell-balloon-switch",
   "created_at": "2026-09-30T13:05:11Z",
-  "updated_at": "2026-09-30T13:05:11Z",
+  "updated_at": "2026-09-30T14:27:42Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false,
+      "approved": true,
       "generated_at": "2026-09-30T13:05:11Z"
     },
     "design": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": false,
+      "generated_at": "2026-09-30T14:27:42Z"
     },
     "tasks": {
       "generated": false,
