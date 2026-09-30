@@ -163,14 +163,14 @@
   - _Requirements: 5.10, 8.3, 8.4, 8.5, 8.8_
   - _Depends: 4.2, 7.1, 7.2_
 
-- [ ] 9. 全体の確認と実機サインオフ
-- [ ] 9.1 全体のテストと規律の検査を通す（10 の後に回し直す）
+- [x] 9. 全体の確認と実機サインオフ
+- [x] 9.1 全体のテストと規律の検査を通す（10 の後に回し直す）
   - `tools/test-all.ps1` が緑。既存のテストは置き換え無しに消していない（数の判定は 23 → 42・10 → 12・10 → 13 へ書き換えただけ）。ネットへ出るテストは常時テストに無い
   - 本番とテストのどのファイルも 1,000 行以下。本番コードが読む環境変数・外部クレート・同期送信（`SendMessageW(`／`SendMessageTimeoutW(`）の例外表の追加が 0。メッセージボックスを出す呼び出しが本仕様のコードに 0
   - 印の判定（`session_mark_verdict`）の引数と理由の語、切替・メニューの終了・OS の終了で SHIORI を待つ期限、終了で待つ口の呼び手（同じ出発点の予算）が変わっていない
   - _Requirements: 1.18, 4.1, 5.11, 7.2, 7.6, 7.7, 8.6, 8.7, 9.14, 9.15_
 
-- [ ] 9.2 実機で確かめて `signoff.md` に記録する
+- [x] 9.2 実機で確かめて `signoff.md` に記録する
   - `RUST_LOG` をイベントの送出・更新先の解決・判断の分かれ目が見える所まで開ける（`info,areka=debug,areka::update=debug,areka_update=debug,kanade=trace`）。検体は根へ入れた emo2（引数なし・短い絶対パス）。配布サイトへ差分 1 件を置くのは開発者の手（置いてもらってから走らせる）
   - ⑴ メニュー「ネットワーク更新」→ 差分 1 件が入る → `OnUpdateBegin`・`OnUpdateReady`・`OnUpdateComplete`（`changed`）の台詞 → 台詞の後に引っ込んで戻る（`OnGhostChanged`）→ シェル・バルーンの中身も読み直されている ⑵ もう 1 度 → `none` → 読み直さない ⑶ `homeurl` の無いシェルが飛ばされ総括にゴーストとバルーンだけ ⑷ ⑴ の走行で `.update-work/` に印が置かれ、⑵ の走行で黙って消えるか（本番の 32bit SHIORI）。置けなければローカルの http で ⑴⑵ を行い、https 未確認を既知の制限へ
   - 4 項目が `signoff.md` に記録されている。予期しない結果は記録して開発者の判断を仰ぐ
@@ -218,3 +218,5 @@
 - 10.1: エンジンの公開の口 `areka_update::purge_committed(target) -> Purge { removed, held }`（記録しない・印つきの走行フォルダだけ・リンクは辿らない）。`run` は入口の検査の後・定義ファイルの取得の前に毎回呼び、何かあれば `debug!` 1 行だけ（`warn!` は 10.2 の窓口の `update_purge_held` が持つ）。`held` には棚を読めないとき棚そのものが 1 件入る
 - 10.2: 窓口は `reload` が `Accepted` で `UpdateDesk.purge_after_switch` に覚え、`ghost_switch::on_notice` の切替を終える腕（`Welcoming` の定常到達・`attempt == Target`）と `ChangeCancelled` の腕から `desk::on_switch_end(world, finished)` を呼ぶ。古い SHIORI は `take_down` の同期の中で降りている（32bit は `HelperLifecycle::request_clean_shutdown` が補助プロセスの終わりを待つ・InProc は `FreeLibrary`）。本番の道筋のテストの印つきの残りは、読み直しの予約が立った後に置く（`run` の始めの片付けが先に消すため）
 - 11: `CREATE_NO_WINDOW` は補助プロセスの起動がすべて通る `shiori_host32_host::process_host::spawn_command` に付けた（標準入出力は `Command` の渡すハンドルが優先＝記録は今日どおり届く）。本番で子を起こすのはここだけ（`readme.rs` の `ShellExecuteW` は説明書を見せる意図した窓）。テストは自分の実行体を子として起こし `GetConsoleWindow`／`GetConsoleProcessList` を見る。i686 の `shiori_proxy::tests::testdll_drop_invokes_courtesy_unload` が 1 度だけ落ちた（既存の不安定・補助プロセスは host crate に依存しない）
+- 9.1（回し直し）: `tools/test-all.ps1` 全段緑（検査したコミット 3d7169cf・タスク 10・11 の後）
+- 9.2: 実機は 3 回（`signoff.md`）。emo2 のサイトは改行の不備で `md5 miss`（失敗の経路の実物）、あやめで ⑴〜⑷ 合格（直した後に読み直しの 4 ms 後に古い `yaya.dll` の写しが消えた）・コンソール窓なし
