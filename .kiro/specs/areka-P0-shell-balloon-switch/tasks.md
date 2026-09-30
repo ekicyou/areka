@@ -3,7 +3,7 @@
 > 境界は設計（`design.md`）の部品名で示す。コードは「何の定義か」で指し、行番号では指さない。テストは本番ファイルの兄弟ファイルへ置く（どのファイルも 1,000 行以下・上限の近い `runtime_tests.rs`・`assets_tests.rs`・`actor_tests.rs`・`schedule_tests.rs`・`ghost_switch_tests.rs` には行を足さない）。触ってはならないファイル（`ghost_switch.rs`・`ghost_switch_tests.rs`・`ghost_switch_test_support.rs`・`steady.rs`・`areka-parsers/src/sakura/`・`areka-sakura/src/compile.rs`・`areka-ghost/src/lib.rs`・`main.rs`・`boot_config.rs`・`placement/persist.rs`・`placement/spawn.rs`・`areka-emo-text`）の差分は 0 のまま進める。全体のテストは `tools/test-all.ps1` 1 本で回す。整形（`cargo fmt --check`）もタスクごとに通す。後回しにする要件は 0。
 > 呼び手がまだ無いモジュールは、先頭に `#![allow(dead_code)]` を置いてよい。呼び手を結ぶタスクで外す（どのタスクで外すかを Implementation Notes に残す）。
 
-- [ ] 1. 下の層の小さな口
+- [x] 1. 下の層の小さな口
 - [x] 1.1 (P) kanade の許可表に切替のイベント 3 語を足す
   - `OnShellChanging`・`OnShellChanged`・`OnBalloonChange` を、各 1 行の正典の URL の行つきでイベントの許可表に足し、冒頭の件数の doc を改める（42 → 45）
   - 件数の直書き 2 か所を追随させる（件数の `assert_eq!` を 45 へ、完全一致のテストは名前を「45 語」へ改めて配列に 3 語）。消さない
@@ -25,7 +25,7 @@
   - _Requirements: 1.6, 8.4_
   - _Boundary: Ghost catalog_
 
-- [ ] 1.4 (P) テスト用の検体に 2 つ目のシェルを写す部品を足す
+- [x] 1.4 (P) テスト用の検体に 2 つ目のシェルを写す部品を足す
   - 展開先の複製の中で `shell/<元>/` を `shell/<先>/` へ再帰で写し、写した `descript.txt` の `name` 行を置き換える（無ければ足す・文字コードの宣言は保つ）。失敗は検体の失敗の型で返す
   - 検体の `.nar`・検体の一覧（7 件）・README の表は不変。テスト専用のクレートのまま（本番の依存へ置かない）
   - 兄弟テストで、写した先の `name` が変わり、元のシェルの `descript.txt` がバイト単位で不変であることが緑

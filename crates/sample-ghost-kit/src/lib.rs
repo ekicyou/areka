@@ -283,6 +283,81 @@ impl SampleRoot {
                 known: self.sample.balloons,
             })
     }
+
+    /// 配られた複製の中で `shell/<from>/` を `shell/<to_folder>/` へ再帰で写し、写した
+    /// `descript.txt` の `name` を `name` に替える（spec: `areka-P0-shell-balloon-switch`
+    /// 要件 9.1）。書き換えるのは複製の中だけで、検体の `.nar` と原本には触れない。
+    ///
+    /// `name` の行はバイト単位で置き換え（無ければ足し）、他の行は読み直さずにそのまま残す
+    /// ので `charset` の宣言も保たれる。`name` は UTF-8 のバイトで書くので、`Shift_JIS` の
+    /// シェルへは ASCII の名前を渡す。
+    ///
+    /// # Errors
+    ///
+    /// 写す先が既に在る（元のシェルを黙って上書きしない）・元のシェルが無い・読み書きの
+    /// 失敗は [`SampleError::Io`]。
+    pub fn add_shell_copy(
+        &self,
+        from: &str,
+        to_folder: &str,
+        name: &str,
+    ) -> Result<(), SampleError> {
+        let shell = self.folder.join("shell");
+        let to = shell.join(to_folder);
+        std::fs::create_dir(&to).map_err(|source| SampleError::Io {
+            what: "写す先のシェルのフォルダの作成",
+            path: to.clone(),
+            source,
+        })?;
+        devroot::copy_tree(&shell.join(from), &to)?;
+        let descript = to.join("descript.txt");
+        let bytes = std::fs::read(&descript).map_err(|source| SampleError::Io {
+            what: "写したシェルの descript.txt の読み取り",
+            path: descript.clone(),
+            source,
+        })?;
+        std::fs::write(&descript, named_descript(&bytes, name)).map_err(|source| SampleError::Io {
+            what: "写したシェルの descript.txt の書き込み",
+            path: descript,
+            source,
+        })
+    }
+}
+
+/// `descript.txt` のバイト列の `name,` の行を `name,<name>` に替える。無ければ末尾に足す。
+///
+/// 行の終わり（CRLF／LF）は元の行のものを残し、足すときはファイルに CRLF が在れば CRLF に
+/// する。他の行は 1 バイトも変えない。
+fn named_descript(bytes: &[u8], name: &str) -> Vec<u8> {
+    let line_of = |end: &[u8]| [b"name,", name.as_bytes(), end].concat();
+    let mut out = Vec::with_capacity(bytes.len() + name.len() + 8);
+    let mut found = false;
+    for line in bytes.split_inclusive(|b| *b == b'\n') {
+        if line.starts_with(b"name,") {
+            let body = line.len()
+                - line
+                    .iter()
+                    .rev()
+                    .take_while(|b| matches!(b, b'\r' | b'\n'))
+                    .count();
+            out.extend(line_of(&line[body..]));
+            found = true;
+        } else {
+            out.extend_from_slice(line);
+        }
+    }
+    if !found {
+        let newline: &[u8] = if bytes.windows(2).any(|w| w == b"\r\n") {
+            b"\r\n"
+        } else {
+            b"\n"
+        };
+        if !out.is_empty() && !out.ends_with(b"\n") {
+            out.extend_from_slice(newline);
+        }
+        out.extend(line_of(newline));
+    }
+    out
 }
 
 /// 検体名を登記の 1 行に引き当てる（要件 1.1・1.4）。

@@ -529,3 +529,73 @@ fn a_boot_record_written_into_an_acquired_root_never_appears_in_the_next_one() {
         "2 回目は別の複製であること（同じ木を配り直していない）"
     );
 }
+
+/// 2 つ目のシェルを写すと、写した先の `name` だけが変わり、元のシェルはバイト単位で
+/// そのまま残る（spec: `areka-P0-shell-balloon-switch` 要件 9.1・9.3）。
+///
+/// 検体は `R_POST_and_KOMAINU`（`charset,Shift_JIS`・改行 CRLF・`name,master` を持つ）。
+/// 名前以外の行がバイト単位で残ることも見るので、文字コードを読み直す実装は赤になる。
+#[test]
+fn a_copied_shell_gets_the_new_name_and_the_original_stays_byte_for_byte() {
+    let rpost = SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
+    let shell = rpost.folder().join("shell");
+    let original = std::fs::read(shell.join("master").join("descript.txt"))
+        .expect("元のシェルの descript.txt を読めるはず");
+    assert!(
+        original.windows(8).any(|w| w == b"Shift_JI"),
+        "較正: 元のシェルが Shift_JIS を宣言していること"
+    );
+
+    rpost
+        .add_shell_copy("master", "second", "second shell")
+        .expect("2 つ目のシェルを写せるはず");
+
+    let copied = std::fs::read(shell.join("second").join("descript.txt"))
+        .expect("写した先の descript.txt を読めるはず");
+    assert_eq!(
+        std::fs::read(shell.join("master").join("descript.txt")).expect("読めるはず"),
+        original,
+        "元のシェルの descript.txt はバイト単位で不変であること"
+    );
+    let lines = |bytes: &[u8]| -> Vec<Vec<u8>> {
+        bytes.split(|b| *b == b'\n').map(<[u8]>::to_vec).collect()
+    };
+    let (before, after) = (lines(&original), lines(&copied));
+    assert_eq!(before.len(), after.len(), "行の数は変わらないこと");
+    for (old, new) in before.iter().zip(&after) {
+        if old.starts_with(b"name,") {
+            assert_eq!(
+                new.as_slice(),
+                b"name,second shell\r",
+                "name の行だけが替わること"
+            );
+        } else {
+            assert_eq!(old, new, "name 以外の行はバイト単位で残ること");
+        }
+    }
+    assert!(
+        shell.join("second").join("surface0000.png").is_file(),
+        "シェルの中身が再帰で写ること"
+    );
+    assert!(
+        rpost.add_shell_copy("master", "second", "x").is_err(),
+        "既に在る先へは写さない（黙って上書きしない）"
+    );
+}
+
+/// `name` の行が無い `descript.txt` には行を足す（改行の形は元に合わせる・要件 9.1）。
+#[test]
+fn a_descript_without_a_name_line_gets_one_appended() {
+    assert_eq!(
+        named_descript(b"charset,UTF-8\r\ntype,shell\r\n", "x"),
+        b"charset,UTF-8\r\ntype,shell\r\nname,x\r\n"
+    );
+    assert_eq!(
+        named_descript(b"charset,UTF-8\ntype,shell", "x"),
+        b"charset,UTF-8\ntype,shell\nname,x\n"
+    );
+    assert_eq!(
+        named_descript(b"charset,UTF-8\nname,old\n", "x"),
+        b"charset,UTF-8\nname,x\n"
+    );
+}
