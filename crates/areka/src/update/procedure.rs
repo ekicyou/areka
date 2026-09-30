@@ -28,8 +28,8 @@ pub(crate) trait UpdatePorts {
         target: &Path,
         observe: &mut dyn FnMut(&Progress),
     ) -> EngineRun;
-    /// 同じゴーストの読み直しを窓口へ頼む。
-    fn request_reload(&self, ghost_dir: &Path);
+    /// 同じゴーストの読み直しを窓口へ頼む（後送りの列を添える・先頭が読み直した後の起動の知らせ）。
+    fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>);
     /// 標準の手続きが始まったと窓口へ知らせる（`OnUpdateProcessExec` の段を抜けた直後・要求 1 件につき高々 1 回）。
     fn standard_started(&self);
 }
@@ -62,7 +62,8 @@ pub(crate) enum EngineRun {
     Closed,
 }
 
-/// 要求 1 件の終わり方（対象ごとの終わり方の列と、総括が受け取られたか・読み直しを頼んだか）。
+/// 要求 1 件の終わり方（対象ごとの終わり方の列と、総括を送ったか〔読み直すときは列に載せて渡したか〕・
+/// 読み直しを頼んだか）。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct OrderEnd {
     pub ends: Vec<TargetEnd>,
@@ -131,8 +132,10 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
     );
     let numbering = Numbering::from_useorigin1(resources.useorigin1.as_deref());
 
+    // 後送りの列（決めたこと 21・要件 2.16）: ゴーストの成功の締めを取っておき、最後に総括を足す。
+    let mut tail: Vec<(&'static str, Vec<String>)> = Vec::new();
     for spec in &order.targets {
-        let target_end = run_target(spec, order.reason, &resources, numbering, ports);
+        let target_end = run_target(spec, order.reason, &resources, numbering, ports, &mut tail);
         let abandoned = target_end == TargetEnd::Abandoned;
         end.ends.push(target_end);
         if abandoned {
@@ -146,7 +149,7 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
         }
     }
 
-    // 総括（飛ばした対象は載せない・全部飛ばせば送らない。要件 3・1.10）。
+    // 総括を列の最後へ（飛ばした対象は載せない・全部飛ばせば列は空で送らない。要件 3・1.10）。
     let pairs: Vec<(&TargetSpec, &TargetEnd)> = order.targets.iter().zip(&end.ends).collect();
     let summary = refs::summary_refs(order.summary, &pairs);
     if summary.is_empty() {
@@ -161,37 +164,59 @@ pub(crate) fn run_order(order: &UpdateOrder, ports: &dyn UpdatePorts) -> OrderEn
         SummaryKind::Result => ON_UPDATE_RESULT,
         SummaryKind::ResultEx => ON_UPDATE_RESULT_EX,
     };
-    tracing::info!(event = "update_summary", sent = true, id, references = ?summary, "[update] 総括を送ります");
-    if send(ports, id, summary) == Raised::Closed {
-        tracing::warn!(
-            event = "update_abandoned",
-            at = "summary",
-            "[update] 総括の後にゴーストが居ないので、読み直しを頼みません"
-        );
-        return end;
-    }
-    end.summarised = true;
+    tracing::info!(event = "update_summary", sent = true, id, references = ?summary, "[update] 総括を後送りの列の最後に置きます");
+    tail.push((id, summary));
+    let count = tail.len();
 
-    // 読み直しは changed が 1 つでもあるときだけ（要件 5.2・5.4）。
+    // changed が 1 つでもあれば列を添えて読み直しを頼む（列は送らない・要件 5.2・5.4）。
     if end.ends.iter().any(|e| matches!(e, TargetEnd::Changed(_))) {
-        ports.request_reload(&order.ghost_dir);
+        tracing::debug!(
+            event = "update_tail_deferred",
+            count,
+            "[update] 後送りの列を読み直しの頼みに添えます"
+        );
+        ports.request_reload(&order.ghost_dir, tail);
+        end.summarised = true;
         end.reload_requested = true;
         tracing::info!(
             event = "update_reload_requested",
             ghost_dir = %order.ghost_dir.display(),
             "[update] 同じゴーストの読み直しを頼みました"
         );
+        return end;
     }
+
+    // 読み直さないときは列を今のゴーストへ順に送る（閉じたら残りを捨てる・要件 3.1・7.4）。
+    for (id, references) in tail {
+        if send(ports, id, references) == Raised::Closed {
+            tracing::warn!(
+                event = "update_abandoned",
+                at = "tail",
+                id,
+                "[update] ゴーストが居ないので、後送りの列の残りを送りません"
+            );
+            return end;
+        }
+    }
+    end.summarised = true;
+    tracing::info!(
+        event = "update_tail_sent",
+        when = "at_end",
+        count,
+        "[update] 後送りの列を今のゴーストへ送りました"
+    );
     end
 }
 
-/// 対象 1 つの一周（更新先を解く → 始まり → エンジン → 締め 1 件）。
+/// 対象 1 つの一周（更新先を解く → 始まり → エンジン → 締め 1 件）。ゴーストの成功の締め
+/// （`OnUpdateComplete`）はその場で送らずに後送りの列 `deferred` へ積む（要件 2.16）。
 fn run_target(
     spec: &TargetSpec,
     reason: UpdateReason,
     resources: &GhostResources,
     numbering: Numbering,
     ports: &dyn UpdatePorts,
+    deferred: &mut Vec<(&'static str, Vec<String>)>,
 ) -> TargetEnd {
     let tail = Tail::new(spec.kind, reason);
     let names = EventNames::for_kind(spec.kind);
@@ -313,6 +338,11 @@ fn run_target(
     };
     if closed {
         return done(spec, TargetEnd::Abandoned);
+    }
+    let succeeded = matches!(end, TargetEnd::Changed(_) | TargetEnd::Unchanged);
+    if spec.kind == TargetKind::Ghost && succeeded {
+        deferred.push(closing);
+        return done(spec, end);
     }
     if send(ports, closing.0, closing.1) == Raised::Closed {
         return done(spec, TargetEnd::Abandoned);

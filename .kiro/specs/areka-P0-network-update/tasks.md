@@ -214,7 +214,7 @@
   - _Boundary: emo2_boot ghost_switch（`SwitchRequest`・`SwitchInFlight`・`switch_to`）, 切替の要求を組む所（`install/overwrite.rs`・`menu/ghost_frame.rs`・`update/desk.rs`・テスト）_
   - _Depends: 12.1_
 
-- [ ] 12.3 手続き・背景スレッド・窓口で、締めと総括を後送りの列にし、読み直しに添える
+- [x] 12.3 手続き・背景スレッド・窓口で、締めと総括を後送りの列にし、読み直しに添える
   - 手続きは、ゴーストの成功の締め（`OnUpdateComplete`）をその場で送らず、全対象の後に「ゴーストの締め（成功したときだけ）→ 総括」の列を組む。ゴーストの失敗の締めとシェル・バルーンの列は今日どおりその場で送る。全部飛ばせば列は空
   - 1 つでも `changed` なら読み直しの頼みに列を添えて渡し（列は送らない）、無ければ列を順に送って応えを待つ（「閉じた」なら残りを捨てる）。背景スレッドの頼み「読み直し」はフォルダと列を運ぶ
   - 窓口は、読み直しを頼めるとき列の先頭を 12.2 の欄に入れて切替を頼み、受け付けられたら列の残りを覚え、切替が終わった時点（残りを消すのと同じ所）で今のゴーストへ順に送る（返事を待たない）。切替が失敗・中止なら覚えた列を捨てる。頼めないとき（引数の起動・切替の予約が在る・入口が受け付けない）は列を今のゴーストへ順に送り、終了が始まった・置き場のゴーストが依頼のゴーストと違う・送り先のゴーストが居ないときは捨てる。捨てたら `warn!` を 1 件、送ったら `info!` を 1 件
@@ -257,3 +257,4 @@
 - 12（2026-09-30 開発者確定）: 6.5 の注記「`OnBoot` は送らない」の一文の扱いはこの確定で決着した（読み直しの起動は後送りの列の先頭・`OnGhostChanged`／`OnBoot` の代わり・204 でも `OnBoot` 無し＝要件 5.5・裁定 6 を覆した）。6.5・6.6 の「`OnGhostChanged` に台本で応えて根を見る」テストは 12.3 で新しい起動の知らせを見る形へ書き換える
 - 12.1: `BootOrigin::Updated { id, references }` の根は `events::raise` で組む（許可表は通さない・最後の判定は送出点 `round_trip_request`）。204 は `boot_update_no_content` で `OnBoot` へ進まない（`first_boot` のときだけ今日どおり）。SHIORI の失敗は既存の根と同じ `Unloading{Fault}`。`BootOrigin` を網羅する `match` は `boot_root` の 1 か所だけ
 - 12.2: `SwitchRequest`・`SwitchInFlight` に `boot_event: Option<(&'static str, Vec<String>)>`。`switch_to`（切替先）だけが読み `BootOrigin::Updated` で起こす・`switch_to_default` は今日どおり `Halted`。記録は既存の `ghost_switch_requested` に `boot_event` の欄。`update/desk.rs` の `reload` はまだ `None`＝12.3 が列の先頭を入れる。`ghost_switch_tests.rs` は 988 行＝足すなら兄弟ファイルへ
+- 12.3: 後送りの列＝`[ゴーストの締め?] ++ [総括]`（全部飛ばせば空）。changed なら `request_reload(ghost_dir, tail)`、窓口は Accepted で `tail[0]` を `boot_event` に・残りを `after_switch` に覚え、`on_switch_end(true)` で片付け→残りを送る（`when="after_switch"`）。断り: `closing`・`other_ghost`（ゴーストが居ない場合も）は捨てる・`argv`・`switching`・Accepted 以外は今のゴーストへ全部送る（`when="no_reload"`）。何も変わらなければ手続きが最後に送る（`when="at_end"`・途中で閉じたら `update_abandoned at="tail"`）。12.4 で Monitoring に `update_abandoned at="tail"` と「`update_summary sent=true` は列に置いた意味」を記す

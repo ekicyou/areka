@@ -39,8 +39,12 @@ pub(crate) struct UpdateJob {
 pub(crate) enum DeskAsk {
     /// 標準の手続きが始まった（`OnUpdateProcessExec` に応えが無かった・照会の直前）。
     Started,
-    /// 同じゴーストを読み直す（総括の返事の後・`changed` が 1 つ以上）。
-    Reload { ghost_dir: PathBuf },
+    /// 同じゴーストを読み直す（全対象の後・`changed` が 1 つ以上）。`tail` は後送りの列（先頭が
+    /// 読み直した後の起動の知らせ・決めたこと 21）。
+    Reload {
+        ghost_dir: PathBuf,
+        tail: Vec<(&'static str, Vec<String>)>,
+    },
     /// 依頼 1 件が終わった。
     OrderDone,
 }
@@ -214,11 +218,12 @@ impl UpdatePorts for KanadePorts {
         EngineRun::Done(result)
     }
 
-    fn request_reload(&self, ghost_dir: &Path) {
+    fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>) {
         ask_desk(
             &self.desk,
             DeskAsk::Reload {
                 ghost_dir: ghost_dir.to_path_buf(),
+                tail,
             },
         );
     }

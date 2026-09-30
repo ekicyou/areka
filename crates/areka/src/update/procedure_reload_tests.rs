@@ -1,7 +1,7 @@
-//! 読み直しの頼みの時機と、途中で閉じたときの捨て方の兄弟テスト（design「Testing Strategy /
-//! 手続き」の読み直し・要件 5.2・5.4・5.7・7.4・9.9・裁定 13・16）。
+//! 後送りの列と読み直しの頼みの時機、途中で閉じたときの捨て方の兄弟テスト（design「Testing Strategy /
+//! 手続き」の後送りの列と読み直し・決めたこと 21・要件 2.16・3.1・3.4・5.2・5.4・5.7・7.4・9.9）。
 //!
-//! 偽の口の `raise` に「閉じた」を返させ、送ったイベント・読み直しの頼み・記録を判定する。
+//! 偽の口の `raise` に「閉じた」を返させ、送ったイベント・読み直しの頼みに添えた列・記録を判定する。
 
 use std::collections::HashMap;
 
@@ -32,7 +32,7 @@ fn reloads(ports: &FakePorts) -> usize {
     ports
         .calls()
         .iter()
-        .filter(|c| matches!(c, Call::Reload(_)))
+        .filter(|c| matches!(c, Call::Reload(..)))
         .count()
 }
 
@@ -52,10 +52,15 @@ fn balloon() -> TargetSpec {
     spec(TargetKind::Balloon, "kaku", Some(SHELL_URL))
 }
 
-/// `changed` が 1 つでもあれば、総括の応えを受けた後に読み直しを 1 回だけ頼む（要件 5.2・5.3・9.9）。
-/// `changed` はバルーン（2 つ目）でも同じ＝対象の種別を問わない。
+fn ids(events: &[(&'static str, Vec<String>)]) -> Vec<&'static str> {
+    events.iter().map(|(id, _)| *id).collect()
+}
+
+/// `changed` が 1 つでもあれば、全対象の後に読み直しを後送りの列つきで 1 回だけ頼み（最後の呼び出し）、
+/// 列は `raise` しない。列はゴーストの成功の締め（`none` でも）→ 総括。`changed` はバルーン（2 つ目）
+/// でも同じ＝対象の種別を問わない。`debug!(update_tail_deferred)` に列の件数（要件 2.16・3.1・5.2・9.9）。
 #[test]
-fn reload_is_requested_once_after_the_summary_when_any_target_changed() {
+fn reload_is_requested_once_after_all_targets_with_the_tail() {
     for summary in [SummaryKind::Result, SummaryKind::ResultEx] {
         let ports = FakePorts::new([script_none(), script_changed()]);
         let order = order(vec![ghost(), balloon()], UpdateReason::Script, summary);
@@ -66,63 +71,117 @@ fn reload_is_requested_once_after_the_summary_when_any_target_changed() {
             SummaryKind::Result => "OnUpdateResult",
             SummaryKind::ResultEx => "OnUpdateResultEx",
         };
-        let summary_at = calls
-            .iter()
-            .position(|c| matches!(c, Call::Raise(i, _) if *i == id))
-            .expect("総括を送った");
         assert_eq!(reloads(&ports), 1, "{calls:?}");
-        // 読み直しの頼みは総括の後の最後の 1 件。
-        assert_eq!(
-            calls.last(),
-            Some(&Call::Reload(order.ghost_dir.clone())),
-            "{calls:?}"
-        );
-        assert_eq!(summary_at, calls.len() - 2, "{calls:?}");
+        let Some(Call::Reload(dir, tail)) = calls.last() else {
+            panic!("読み直しの頼みが最後: {calls:?}");
+        };
+        assert_eq!(dir, &order.ghost_dir);
+        assert_eq!(ids(tail), ["OnUpdateComplete", id], "{calls:?}");
+        assert_eq!(tail[0].1[0], "none", "ゴーストの none の締めも列へ");
+        // 列の中身は raise しない（締めはバルーンの分だけ・総括 0）。
+        let raised = ports.raised_ids();
+        assert!(!raised.contains(&"OnUpdateComplete"), "{raised:?}");
+        assert!(!raised.contains(&id), "{raised:?}");
+        assert_eq!(raised.last(), Some(&"OnUpdateOtherComplete"));
         assert_eq!(end.ends, vec![TargetEnd::Unchanged, TargetEnd::Changed(2)]);
         assert!(end.summarised);
         assert!(end.reload_requested);
         let asked = with_event(&events, "update_reload_requested");
         assert_eq!(asked.len(), 1, "{events:?}");
         assert_eq!(asked[0].level, Level::INFO);
+        let deferred = with_event(&events, "update_tail_deferred");
+        assert_eq!(deferred.len(), 1, "{events:?}");
+        assert_eq!(deferred[0].level, Level::DEBUG);
+        assert_eq!(deferred[0].field("count"), Some("2"));
+        assert!(with_event(&events, "update_tail_sent").is_empty());
     }
 }
 
-/// 全部 `none`・失敗・その混ざりなら、総括は送るが読み直しは 0 回（要件 5.4・9.9）。
+/// ゴーストが失敗した・対象でないときは、列の先頭は総括（要件 5.5 の「ゴーストが成功していないとき」）。
 #[test]
-fn no_reload_when_every_target_is_none_or_failed() {
+fn tail_head_is_the_summary_when_the_ghost_did_not_succeed() {
+    let g = ghost();
+    let cases: [(&str, Vec<TargetSpec>, Vec<EngineScript>); 2] = [
+        (
+            "ghost failed",
+            vec![g.clone(), balloon()],
+            vec![script_md5_mismatch(&g.dir), script_changed()],
+        ),
+        ("no ghost", vec![balloon()], vec![script_changed()]),
+    ];
+    for (label, targets, scripts) in cases {
+        let ports = FakePorts::new(scripts);
+        let order = order(targets, UpdateReason::Script, SummaryKind::Result);
+        let (end, _) = run(&order, &ports);
+
+        let tails = ports.reload_tails();
+        assert_eq!(tails.len(), 1, "{label}: {:?}", ports.calls());
+        assert_eq!(ids(&tails[0]), ["OnUpdateResult"], "{label}");
+        assert!(end.reload_requested, "{label}");
+    }
+}
+
+/// 全部 `none`・失敗・その混ざりなら読み直しは 0 回で、列を最後に `raise` で順に送る
+/// （`info!(update_tail_sent when=at_end)`・要件 3.1・5.2・5.4・9.9）。
+#[test]
+fn no_reload_sends_the_tail_at_the_end_when_nothing_changed() {
     let g = ghost();
     let unavailable = || EngineScript {
         progress: Vec::new(),
         result: EngineRun::Unavailable(FetchError::Other { code: 12007 }),
     };
-    let cases: [(&str, Vec<TargetSpec>, Vec<EngineScript>); 5] = [
-        ("none", vec![g.clone()], vec![script_none()]),
-        ("fetch", vec![g.clone()], vec![script_fetch_failed(&g.dir)]),
-        ("md5", vec![g.clone()], vec![script_md5_mismatch(&g.dir)]),
-        ("connect", vec![g.clone()], vec![unavailable()]),
+    let cases: [(&str, Vec<TargetSpec>, Vec<EngineScript>, &[&str]); 5] = [
+        (
+            "none",
+            vec![g.clone()],
+            vec![script_none()],
+            &["OnUpdateComplete", "OnUpdateResult"],
+        ),
+        (
+            "fetch",
+            vec![g.clone()],
+            vec![script_fetch_failed(&g.dir)],
+            &["OnUpdateFailure", "OnUpdateResult"],
+        ),
+        (
+            "md5",
+            vec![g.clone()],
+            vec![script_md5_mismatch(&g.dir)],
+            &["OnUpdateFailure", "OnUpdateResult"],
+        ),
+        (
+            "connect",
+            vec![g.clone()],
+            vec![unavailable()],
+            &["OnUpdateFailure", "OnUpdateResult"],
+        ),
         (
             "none+md5",
             vec![balloon(), g.clone()],
             vec![script_none(), script_md5_mismatch(&g.dir)],
+            &["OnUpdateFailure", "OnUpdateResult"],
         ),
     ];
-    for (label, targets, scripts) in cases {
+    for (label, targets, scripts, last) in cases {
         let ports = FakePorts::new(scripts);
         let order = order(targets, UpdateReason::Manual, SummaryKind::Result);
         let (end, events) = run(&order, &ports);
 
         assert_eq!(reloads(&ports), 0, "{label}: {:?}", ports.calls());
-        assert_eq!(
-            ports.raised_ids().last(),
-            Some(&"OnUpdateResult"),
-            "{label}"
-        );
+        let raised = ports.raised_ids();
+        assert_eq!(&raised[raised.len() - 2..], last, "{label}");
         assert!(end.summarised, "{label}");
         assert!(!end.reload_requested, "{label}");
         assert!(
             with_event(&events, "update_reload_requested").is_empty(),
             "{label}"
         );
+        let sent = with_event(&events, "update_tail_sent");
+        assert_eq!(sent.len(), 1, "{label}: {events:?}");
+        assert_eq!(sent[0].level, Level::INFO);
+        assert_eq!(sent[0].field_str("when"), Some("at_end"), "{label}");
+        let count = if label == "none" { "2" } else { "1" };
+        assert_eq!(sent[0].field("count"), Some(count), "{label}");
     }
 }
 
@@ -183,24 +242,24 @@ fn closed_mid_progress_drops_the_rest_but_runs_the_engine_to_the_end() {
     assert_eq!(abandoned[0].field_str("at"), Some("target"));
 }
 
-/// 始まり・締めで「閉じた」が返っても、残りの対象・総括・読み直しは 0 件（要件 5.7・7.4）。
-/// 始まりで閉じればエンジンは回さない。
+/// 始まり・締め（その場で送るシェル・バルーンの締め）で「閉じた」が返っても、残りの対象・列・読み直しは
+/// 0 件（要件 5.7・7.4）。始まりで閉じればエンジンは回さない。
 #[test]
 fn closed_at_begin_or_closing_sends_nothing_further() {
     let cases: [(&str, &[&str], usize); 2] = [
-        ("OnUpdateBegin", &["OnUpdateBegin"], 0),
+        ("OnUpdateOtherBegin", &["OnUpdateOtherBegin"], 0),
         (
-            "OnUpdateComplete",
+            "OnUpdateOtherComplete",
             &[
-                "OnUpdateBegin",
-                "OnUpdateReady",
-                "OnUpdate.OnDownloadBegin",
-                "OnUpdate.OnMD5CompareBegin",
-                "OnUpdate.OnMD5CompareComplete",
-                "OnUpdate.OnDownloadBegin",
-                "OnUpdate.OnMD5CompareBegin",
-                "OnUpdate.OnMD5CompareComplete",
-                "OnUpdateComplete",
+                "OnUpdateOtherBegin",
+                "OnUpdateOtherReady",
+                "OnUpdateOther.OnDownloadBegin",
+                "OnUpdateOther.OnMD5CompareBegin",
+                "OnUpdateOther.OnMD5CompareComplete",
+                "OnUpdateOther.OnDownloadBegin",
+                "OnUpdateOther.OnMD5CompareBegin",
+                "OnUpdateOther.OnMD5CompareComplete",
+                "OnUpdateOtherComplete",
             ],
             1,
         ),
@@ -209,7 +268,7 @@ fn closed_at_begin_or_closing_sends_nothing_further() {
         let mut ports = FakePorts::new([script_changed(), script_none()]);
         ports.replies = HashMap::from([(closed_at, Raised::Closed)]);
         let order = order(
-            vec![ghost(), balloon()],
+            vec![balloon(), ghost()],
             UpdateReason::Script,
             SummaryKind::Result,
         );
@@ -227,23 +286,25 @@ fn closed_at_begin_or_closing_sends_nothing_further() {
     }
 }
 
-/// 総括が「閉じた」なら、`changed` が在っても読み直さない（要件 5.7・7.4・裁定 13）。
+/// 最後に送る列の途中で「閉じた」が返れば残りを捨てる（総括 0・読み直し 0・`warn!(update_abandoned
+/// at=tail)` 1 件・`update_tail_sent` 0 件・要件 5.7・7.4）。
 #[test]
-fn closed_summary_means_no_reload() {
-    let mut ports = FakePorts::new([script_changed()]);
-    ports.replies = HashMap::from([("OnUpdateResult", Raised::Closed)]);
+fn closed_in_the_tail_drops_the_rest() {
+    let mut ports = FakePorts::new([script_none()]);
+    ports.replies = HashMap::from([("OnUpdateComplete", Raised::Closed)]);
     let order = order(vec![ghost()], UpdateReason::Script, SummaryKind::Result);
     let (end, events) = run(&order, &ports);
 
-    assert_eq!(ports.raised_ids().last(), Some(&"OnUpdateResult"));
+    assert_eq!(ports.raised_ids(), ["OnUpdateBegin", "OnUpdateComplete"]);
     assert_eq!(reloads(&ports), 0, "{:?}", ports.calls());
-    assert_eq!(end.ends, vec![TargetEnd::Changed(2)]);
+    assert_eq!(end.ends, vec![TargetEnd::Unchanged]);
     assert!(!end.summarised);
     assert!(!end.reload_requested);
     let abandoned = with_event(&events, "update_abandoned");
     assert_eq!(abandoned.len(), 1, "{events:?}");
     assert_eq!(abandoned[0].level, Level::WARN);
-    assert_eq!(abandoned[0].field_str("at"), Some("summary"));
+    assert_eq!(abandoned[0].field_str("at"), Some("tail"));
+    assert!(with_event(&events, "update_tail_sent").is_empty());
 }
 
 /// メニューで `OnUpdateProcessExec` が「閉じた」なら、標準が始まった知らせ・照会・イベント・読み直しは

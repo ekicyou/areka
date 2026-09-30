@@ -185,12 +185,28 @@ fn four_paths_send_canonical_events_for_ghost_and_shell() {
             );
             let (order_end, events) = run(&order, &ports);
 
-            expected.push(("OnUpdateResult", vec![summary]));
+            // 後送りの列（決めたこと 21・要件 2.16）: ゴーストの成功の締めは列の先頭へ移り、総括が最後。
+            // シェルの締めと失敗の締めはその場で送る。`changed` なら列は読み直しの頼みに添えて送らない。
+            let mut tail = Vec::new();
+            if kind == TargetKind::Ghost && expected.last().is_some_and(|(id, _)| *id == n.complete)
+            {
+                tail.push(expected.pop().expect("締め"));
+            }
+            tail.push(("OnUpdateResult", vec![summary]));
+            let reload = label == "changed";
+            if reload {
+                assert_eq!(ports.reload_tails(), vec![tail.clone()], "{k} {label}");
+            } else {
+                assert!(ports.reload_tails().is_empty(), "{k} {label}");
+                expected.extend(tail.iter().cloned());
+            }
             assert_eq!(ports.raised(), expected, "{k} {label}");
+            assert_eq!(order_end.reload_requested, reload, "{k} {label}");
             let closings = ports
-                .raised_ids()
+                .raised()
                 .into_iter()
-                .filter(|id| *id == n.complete || *id == n.failure)
+                .chain(ports.reload_tails().into_iter().flatten())
+                .filter(|(id, _)| *id == n.complete || *id == n.failure)
                 .count();
             assert_eq!(closings, 1, "{k} {label}: 締めは 1 件だけ");
             assert_eq!(order_end.ends, vec![end.clone()], "{k} {label}");
@@ -483,10 +499,8 @@ fn multiple_targets_run_one_by_one_with_one_query_and_summary_last() {
             "OnUpdate.OnDownloadBegin",
             "OnUpdate.OnMD5CompareBegin",
             "OnUpdate.OnMD5CompareComplete",
-            "OnUpdateComplete",
             "OnUpdateOtherBegin",
             "OnUpdateOtherComplete",
-            "OnUpdateResultEx",
         ]
     );
     let raised = ports.raised();
@@ -496,25 +510,30 @@ fn multiple_targets_run_one_by_one_with_one_query_and_summary_last() {
         five(["2", "a.txt,b.txt", ""], "ghost", "script")
     );
     assert_eq!(raised[2].1, five(["a.txt", "1", "2"], "ghost", "script"));
+    // ゴーストの締めと総括は後送りの列（読み直しの頼みに添える）の先頭と最後。
+    let tails = ports.reload_tails();
+    assert_eq!(tails.len(), 1, "{:?}", ports.calls());
+    let ids: Vec<&str> = tails[0].iter().map(|(id, _)| *id).collect();
+    assert_eq!(ids, ["OnUpdateComplete", "OnUpdateResultEx"]);
     assert_eq!(
-        raised.last().unwrap().1,
+        tails[0][1].1,
         s(&[
             "emo2\u{1}ghost\u{1}OK\u{1}2",
             "kaku\u{1}balloon\u{1}OK\u{1}0"
         ])
     );
     assert_eq!(end.ends, vec![TargetEnd::Changed(2), TargetEnd::Unchanged]);
-    // 2 周目のエンジンは 1 周目の締めの後。
+    // 2 周目のエンジンは 1 周目の最後のイベントの後。
     let calls = ports.calls();
-    let complete = calls
+    let first_last = calls
         .iter()
-        .position(|c| matches!(c, Call::Raise("OnUpdateComplete", _)))
+        .rposition(|c| matches!(c, Call::Raise("OnUpdate.OnMD5CompareComplete", _)))
         .unwrap();
     let second_engine = calls
         .iter()
         .rposition(|c| matches!(c, Call::RunEngine { .. }))
         .unwrap();
-    assert!(complete < second_engine, "{calls:?}");
+    assert!(first_last < second_engine, "{calls:?}");
 }
 
 /// 照会に答えが無ければ（kanade が居ない）イベント 0 件でやめる。
@@ -549,17 +568,22 @@ fn leftovers_after_success_are_warned_and_still_changed() {
     );
     let (end, events) = run(&order, &ports);
 
-    let raised = ports.raised();
-    let closings: Vec<_> = raised
+    // 締めと総括は読み直しの頼みに添えた後送りの列に在る（その場では送らない）。
+    let sent: Vec<_> = ports
+        .raised()
+        .into_iter()
+        .chain(ports.reload_tails().into_iter().flatten())
+        .collect();
+    let closings: Vec<_> = sent
         .iter()
         .filter(|(id, _)| *id == "OnUpdateComplete" || *id == "OnUpdateFailure")
         .collect();
-    assert_eq!(closings.len(), 1, "{raised:?}");
+    assert_eq!(closings.len(), 1, "{sent:?}");
     assert_eq!(closings[0].0, "OnUpdateComplete");
     assert_eq!(closings[0].1[..2], s(&["changed", "a.txt"])[..]);
     assert_eq!(end.ends, vec![TargetEnd::Changed(1)]);
     assert_eq!(
-        raised.last().unwrap(),
+        sent.last().unwrap(),
         &("OnUpdateResult", s(&["ghost\u{1}OK\u{1}1"]))
     );
 

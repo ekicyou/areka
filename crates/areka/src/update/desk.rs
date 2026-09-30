@@ -31,6 +31,9 @@ use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
 use crate::menu::captions::{QueryReply, send_query};
 
+/// 後送りの列（ゴーストの成功の締め → 総括・決めたこと 21）。
+type Tail = Vec<(&'static str, Vec<String>)>;
+
 /// UI 側の窓口（World の NonSend・プロセスに 1 つ）。
 pub(crate) struct UpdateDesk {
     /// 入口へ配る生の要求の送出端と、その受信端。
@@ -53,8 +56,9 @@ pub(crate) struct UpdateDesk {
     ghost_homeurl: Option<String>,
     /// `homeurl` の照会の返事待ち（高々 1 件）。
     homeurl_query: Option<ReplyReceiver<QueryReply>>,
-    /// 受け付けた読み直しのゴーストのフォルダ（その切替が終わったら成功した走行の残りを消す・要件 5.9）。
-    pub(super) purge_after_switch: Option<PathBuf>,
+    /// 受け付けた読み直しのゴーストのフォルダと後送りの列の残り（その切替が終わったら成功した走行の
+    /// 残りを消し、列の残りを送る・失敗や中止なら捨てる・要件 5.9・決めたこと 24）。
+    pub(super) after_switch: Option<(PathBuf, Tail)>,
 }
 
 impl UpdateDesk {
@@ -73,7 +77,7 @@ impl UpdateDesk {
             gate,
             ghost_homeurl: None,
             homeurl_query: None,
-            purge_after_switch: None,
+            after_switch: None,
         }
     }
 }
@@ -137,15 +141,17 @@ fn answer(world: &mut World, ask: DeskAsk) {
                 super::submit(world, raw, reason);
             }
         }
-        DeskAsk::Reload { ghost_dir } => reload(world, &ghost_dir),
+        DeskAsk::Reload { ghost_dir, tail } => reload(world, &ghost_dir, tail),
     }
 }
 
-/// 読み直しの頼み: 条件を満たせば既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動」で
-/// 1 回頼み、判定を残す（`Accepted` は `info!`・他は `warn!`）。満たさなければ理由つきの
-/// `warn!(update_reload_skipped)` で頼まない。頼み直しはしない（終了の後に届いた頼みも落とす）。
-/// `Accepted` ならゴーストのフォルダを覚え、その切替が終わったら [`on_switch_end`] が残りを消す。
-fn reload(world: &mut World, ghost_dir: &Path) {
+/// 読み直しの頼み: 条件を満たせば既存の切替の入口へ「同じフォルダ・知らせなし・出どころ＝自動・
+/// 起動の知らせ＝列の先頭」で 1 回頼み、判定を残す（`Accepted` は `info!`・他は `warn!`）。満たさなければ
+/// 理由つきの `warn!(update_reload_skipped)` で頼まない。頼み直しはしない（終了の後に届いた頼みも落とす）。
+/// 列の行き先（決めたこと 24）: `Accepted` ならゴーストのフォルダと列の残りを覚え、その切替が終わったら
+/// [`on_switch_end`] が残りを消して列の残りを送る／`argv`・`switching`・入口が受け付けない
+/// （`Busy`・`NotFound`・`NoContext`）なら列を今のゴーストへ送る／`closing`・`other_ghost` なら捨てる。
+fn reload(world: &mut World, ghost_dir: &Path, mut tail: Tail) {
     let folder = match reload_folder(world, ghost_dir) {
         Ok(folder) => folder,
         Err(reason) => {
@@ -155,21 +161,27 @@ fn reload(world: &mut World, ghost_dir: &Path) {
                 ghost_dir = %ghost_dir.display(),
                 "[update] 読み直しの条件を満たさないので、読み直しません（更新した中身は次の起動で効きます）"
             );
+            match reason {
+                // 終了の後（要件 7.4）・別のゴースト（要件 5.7）へは送らない。
+                "closing" | "other_ghost" => drop_tail(&tail, reason),
+                _ => send_tail(world, tail, "no_reload"),
+            }
             return;
         }
     };
+    let head = (!tail.is_empty()).then(|| tail.remove(0));
     let verdict = request_ghost_switch(
         world,
         SwitchRequest {
             ghost: GhostSpec::Folder(folder.clone()),
             raise_event: false,
             origin: ChangeOrigin::Automatic,
-            boot_event: None,
+            boot_event: head.clone(),
         },
     );
     if verdict == SwitchVerdict::Accepted {
         if let Some(mut desk) = world.get_non_send_mut::<UpdateDesk>() {
-            desk.purge_after_switch = Some(ghost_dir.to_path_buf());
+            desk.after_switch = Some((ghost_dir.to_path_buf(), tail));
         }
         tracing::info!(
             event = "update_reload_requested",
@@ -184,18 +196,71 @@ fn reload(world: &mut World, ghost_dir: &Path) {
             folder = %folder,
             "[update] 同じゴーストへの切替が受け付けられなかったので、読み直しません"
         );
+        tail.splice(0..0, head);
+        send_tail(world, tail, "no_reload");
     }
+}
+
+/// 後送りの列を置き場のゴーストへ順に送る（返事を待たない・`refuse_executing` と同じ形）。空なら何もしない。
+/// 送れたら `info!(update_tail_sent, when, count)`、送出端が無い・途中で送れなくなったら残りを捨てる。
+fn send_tail(world: &World, tail: Tail, when: &'static str) {
+    if tail.is_empty() {
+        return;
+    }
+    let Some(kanade) = world
+        .get_non_send::<GhostSlot>()
+        .and_then(|slot| slot.0.as_ref())
+        .and_then(|s| s.kanade())
+    else {
+        return drop_tail(&tail, "no_ghost");
+    };
+    let count = tail.len();
+    let mut rest = tail.into_iter();
+    while let Some((id, references)) = rest.next() {
+        let raise = KanadeMsg::RaiseEvent {
+            id: id.to_owned(),
+            references,
+            method: ShioriMethod::Get,
+            reply: None,
+        };
+        if kanade.send(raise).is_err() {
+            let left: Tail = std::iter::once((id, Vec::new())).chain(rest).collect();
+            return drop_tail(&left, "no_ghost");
+        }
+    }
+    tracing::info!(
+        event = "update_tail_sent",
+        when,
+        count,
+        "[update] 後送りの列を今のゴーストへ送りました"
+    );
+}
+
+/// 後送りの列を捨てる（空でなければ `warn!(update_tail_dropped, reason)` を 1 件）。
+fn drop_tail(tail: &[(&'static str, Vec<String>)], reason: &'static str) {
+    if tail.is_empty() {
+        return;
+    }
+    let ids: Vec<&str> = tail.iter().map(|(id, _)| *id).collect();
+    tracing::warn!(
+        event = "update_tail_dropped",
+        reason,
+        ids = ?ids,
+        "[update] 受け取るゴーストが居ないので、後送りの列を捨てます"
+    );
 }
 
 /// 切替が終わった（`ghost_switch` の切替を終える腕・中止の腕から）。読み直しを覚えていれば、`finished`
 /// （頼んだゴーストが定常に入った＝古い SHIORI は降りている）なら成功した走行の残りを消して記録し、
-/// そうでなければ（既定へ戻った・中止）覚えた物を捨てる（次の走行の始めにエンジンが消す・要件 5.9）。
-/// 消せた件数は `info!(update_purge_done)`（0 件なら `debug!`）、消せなかった物は 1 件ずつ
-/// `warn!(update_purge_held)`。
+/// 列の残りを新しいゴーストへ送る（`when = "after_switch"`・起動の知らせの台詞の終わりは待たない＝
+/// 要件 5.3 の既知の制限）。そうでなければ（既定へ戻った・中止）覚えた物を捨てる（残りは次の走行の始めに
+/// エンジンが消す・要件 5.9／列は既定ゴーストへ送らず `warn!(update_tail_dropped, reason =
+/// "switch_failed")`・要件 3.6・5.6）。消せた件数は `info!(update_purge_done)`（0 件なら `debug!`）、
+/// 消せなかった物は 1 件ずつ `warn!(update_purge_held)`。
 pub(crate) fn on_switch_end(world: &mut World, finished: bool) {
-    let Some(dir) = world
+    let Some((dir, rest)) = world
         .get_non_send_mut::<UpdateDesk>()
-        .and_then(|mut desk| desk.purge_after_switch.take())
+        .and_then(|mut desk| desk.after_switch.take())
     else {
         return;
     };
@@ -204,6 +269,13 @@ pub(crate) fn on_switch_end(world: &mut World, finished: bool) {
             event = "update_purge_dropped",
             dir = %dir.display(),
             "[update] 読み直しの切替が終わらなかったので、残りは次の走行の始めに消します"
+        );
+        // 列の先頭（起動の知らせ）も届いていない＝残りが空でも列は捨てた。
+        tracing::warn!(
+            event = "update_tail_dropped",
+            reason = "switch_failed",
+            rest = rest.len(),
+            "[update] 読み直しの切替が終わらなかったので、後送りの列を捨てます（既定ゴーストへは送りません）"
         );
         return;
     }
@@ -221,6 +293,7 @@ pub(crate) fn on_switch_end(world: &mut World, finished: bool) {
     } else {
         tracing::debug!(event = "update_purge_done", removed, dir = %dir.display(), "[update] 読み直しの後に消す更新の残りはありませんでした");
     }
+    send_tail(world, rest, "after_switch");
 }
 
 /// 読み直す先のフォルダ名。終了が始まった → 切替の予約が在る → 置き場のゴーストが頼みのゴーストと

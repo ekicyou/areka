@@ -436,21 +436,30 @@ fn unavailable_fetch_releases_gate_without_logging() {
 
 // ---------------------------------------------------------------- 窓口への頼みとスレッド
 
-/// 読み直しと「始まった」は窓口へ頼むだけ（返事を待たない）。
+/// 読み直し（後送りの列を運ぶ）と「始まった」は窓口へ頼むだけ（返事を待たない・列は kanade へ送らない）。
 #[test]
 fn reload_and_started_are_asked_to_desk() {
-    let (kanade, _rx) = mpsc::channel();
+    let (kanade, rx) = mpsc::channel();
     let (ports, asks) = ports(kanade, Arc::default(), counting_fetch().0);
+    let tail = vec![
+        (
+            "OnUpdateComplete",
+            vec!["changed".to_owned(), "a.txt".to_owned()],
+        ),
+        ("OnUpdateResult", vec!["ghost\x01OK\x011".to_owned()]),
+    ];
     ports.standard_started();
-    ports.request_reload(Path::new(r"C:\root\ghost\emo2"));
+    ports.request_reload(Path::new(r"C:\root\ghost\emo2"), tail.clone());
     assert_eq!(asks.try_recv(), Ok(DeskAsk::Started));
     assert_eq!(
         asks.try_recv(),
         Ok(DeskAsk::Reload {
             ghost_dir: PathBuf::from(r"C:\root\ghost\emo2"),
+            tail,
         })
     );
     assert!(matches!(asks.try_recv(), Err(TryRecvError::Empty)));
+    assert!(rx.try_recv().is_err(), "列は kanade へ送らない");
 }
 
 /// スレッド `update` は仕事を受けて手続きを走らせ（仕事の送出端へ照会し）、終わったら「終わった」を頼む。

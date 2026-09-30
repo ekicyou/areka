@@ -19,8 +19,12 @@ use crate::update::{SummaryKind, TargetKind, TargetSpec, UpdateOrder, UpdateReas
 pub(super) enum Call {
     Raise(&'static str, Vec<String>),
     Resources,
-    RunEngine { homeurl: String, target: PathBuf },
-    Reload(PathBuf),
+    RunEngine {
+        homeurl: String,
+        target: PathBuf,
+    },
+    /// 読み直しの頼み（フォルダと後送りの列）。
+    Reload(PathBuf, Vec<(&'static str, Vec<String>)>),
     Started,
 }
 
@@ -68,6 +72,18 @@ impl FakePorts {
             .collect()
     }
 
+    /// 読み直しの頼みに添えた後送りの列（頼んだ順）。
+    pub(super) fn reload_tails(&self) -> Vec<Vec<(&'static str, Vec<String>)>> {
+        self.calls
+            .borrow()
+            .iter()
+            .filter_map(|call| match call {
+                Call::Reload(_, tail) => Some(tail.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// 送ったイベントの名前の列。
     pub(super) fn raised_ids(&self) -> Vec<&'static str> {
         self.raised().into_iter().map(|(id, _)| id).collect()
@@ -106,10 +122,10 @@ impl UpdatePorts for FakePorts {
         script.result
     }
 
-    fn request_reload(&self, ghost_dir: &Path) {
+    fn request_reload(&self, ghost_dir: &Path, tail: Vec<(&'static str, Vec<String>)>) {
         self.calls
             .borrow_mut()
-            .push(Call::Reload(ghost_dir.to_path_buf()));
+            .push(Call::Reload(ghost_dir.to_path_buf(), tail));
     }
 
     fn standard_started(&self) {

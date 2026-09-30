@@ -4,9 +4,11 @@
 //! 切替の土台（[`SwitchRig`]）の上で、本物の窓口（`Input` の段の取り出しの系）→ 背景スレッド
 //! `update` → 本物の口 → kanade → 偽の SHIORI を通す。取得口だけを偽物（[`FakeFetch`]）に差し替え、
 //! 更新先には 1 ファイルの木（`updates2.dau` と本文）を置く。要求は台本の受け口と同じ生の要求の
-//! 送出端から入れる。確かめること: `changed` の一周でイベントが正典の順に SHIORI へ届き、総括の
-//! 返事の台詞が終わってから同じゴーストが `OnGhostChanging` 無しに起き直る（`OnGhostChanged` は
-//! 自分→自分）／`none` の一周では切替の要求が 0 件。
+//! 送出端から入れる。確かめること: `changed` の一周で進捗のイベントが正典の順に古いゴーストへ届き、
+//! 最後の進捗の返事の台詞が終わってから同じゴーストが `OnGhostChanging` 無しに起き直り、新しい
+//! ゴーストに起動の知らせ `OnUpdateComplete`（`OnGhostChanged`・`OnBoot` の代わり）→ `OnUpdateResult`
+//! が届く／`none` の一周では切替の要求が 0 件で、最後に `OnUpdateComplete` → `OnUpdateResult`
+//! （後送りの列・決めたこと 21・24・要件 2.3・2.16・3.1・5.5）。
 //!
 //! 実時間に依らない: 進みは偽の SHIORI の記録・窓口の段・kanade の返信端の受け取りで揃える。
 
@@ -32,24 +34,24 @@ const HOMEURL: &str = "https://example.invalid/areka-update/";
 const FILE: &str = "update-probe.txt";
 const BODY: &[u8] = b"hello";
 const BODY_MD5: &str = "5d41402abc4b2a76b9719d911017c592";
-/// 総括への返事の台詞（置き換わった今のトーク＝読み直しはこの台詞の完了を待つ）。
-const SUMMARY_TALK: &str = r"\0更新しました\e";
+/// 最後の進捗への返事の台詞（置き換わった今のトーク＝読み直しはこの台詞の完了を待つ）。
+const LAST_TALK: &str = r"\0照合しました\e";
 
-/// A の偽の SHIORI（起こすたびに新品）: 標準の台本に、更新のイベントの返事（総括だけ台詞）と
-/// `useorigin1` 204、起こし直しの `OnGhostChanged` の台詞を足す（204 だと起動の根が `OnBoot` へ続く）。
+/// A の偽の SHIORI（起こすたびに新品）: 標準の台本に、更新のイベントの返事（最後の進捗だけ台詞）と
+/// `useorigin1` 204 を足す。読み直しの起動の知らせ `OnUpdateComplete` は 204（`OnBoot` へ続かない）。
 fn ghost_a() -> FakeShiori {
     FakeShiori::Scripted(Box::new(|| {
-        let mut script = standard_script(r"\0A\e")
-            .get("useorigin1", Ok(None))
-            .get("OnGhostChanged", Ok(Some(r"\0A\e".to_owned())))
-            .get("OnUpdateResult", Ok(Some(SUMMARY_TALK.to_owned())));
+        let mut script = standard_script(r"\0A\e").get("useorigin1", Ok(None)).get(
+            "OnUpdate.OnMD5CompareComplete",
+            Ok(Some(LAST_TALK.to_owned())),
+        );
         for id in [
             "OnUpdateBegin",
             "OnUpdateReady",
             "OnUpdate.OnDownloadBegin",
             "OnUpdate.OnMD5CompareBegin",
-            "OnUpdate.OnMD5CompareComplete",
             "OnUpdateComplete",
+            "OnUpdateResult",
         ] {
             script = script.get(id, Ok(None));
         }
@@ -148,8 +150,9 @@ fn marked_leftovers(ghost_dir: &Path) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
-/// 起動系列（起動記録あり＝`OnFirstBoot` なし）に続く更新のイベントの正典の順（1 ファイルの `changed`）。
-const CHANGED_ROUND: [&str; 12] = [
+/// 古いゴースト: 起動系列（起動記録あり＝`OnFirstBoot` なし）に続く進捗のイベントの正典の順
+/// （1 ファイルの `changed`・締めと総括は後送りの列＝古いゴーストへは送らない）。
+const CHANGED_ROUND: [&str; 10] = [
     "NOTIFY OnInitialize",
     "GET username",
     "GET OnBoot",
@@ -160,22 +163,30 @@ const CHANGED_ROUND: [&str; 12] = [
     "GET OnUpdate.OnDownloadBegin",
     "GET OnUpdate.OnMD5CompareBegin",
     "GET OnUpdate.OnMD5CompareComplete",
+];
+
+/// 読み直した新しいゴースト: 起動の知らせは列の先頭 `OnUpdateComplete`（`OnGhostChanged`・`OnBoot` の
+/// 代わり・204 でも `OnBoot` へ続かない）、切替の終わりで列の残り `OnUpdateResult`。
+const REBOOTED: [&str; 5] = [
+    "NOTIFY OnInitialize",
+    "GET username",
     "GET OnUpdateComplete",
+    "NOTIFY basewareversion",
     "GET OnUpdateResult",
 ];
 
-/// `changed` の一周: `OnUpdateBegin` → `OnUpdateReady` → 1 ファイル分（`OnDownloadBegin`・MD5 の照合）→
-/// `OnUpdateComplete`（`changed`・置いたファイル）→ `OnUpdateResult`（`ghost\x01OK\x011`）が偽の SHIORI
-/// に届き、ファイルが手元に置かれる。総括の返事の台詞が再生中の間は切替が kanade に保留され（照会の
-/// 往復で確かめる）、台詞を進めて終わると A が `OnGhostChanging`・`OnClose`・`OnBoot` 無しに起き直り
-/// `OnGhostChanged`（Ref0＝A のさくら・Ref2＝A）を受ける。読み直しの切替が終わった後、`.update-work` に
-/// 印つきの残りは無い（エンジンの後に置いた残りも、切替を終える時点で消える・要件 5.9）。
+/// `changed` の一周: 古い A に `OnUpdateBegin` → `OnUpdateReady` → 1 ファイル分（`OnDownloadBegin`・
+/// MD5 の照合）が届き、ファイルが手元に置かれる。最後の進捗の返事の台詞が再生中の間は切替が kanade に
+/// 保留され（照会の往復で確かめる）、台詞を進めて終わると A が `OnGhostChanging`・`OnClose`・
+/// `OnGhostChanged`・`OnBoot` 無しに起き直り、起動の知らせ `OnUpdateComplete`（`changed`・置いた
+/// ファイル）→ `OnUpdateResult`（`ghost\x01OK\x011`）を受ける。読み直しの切替が終わった後、
+/// `.update-work` に印つきの残りは無い（エンジンの後に置いた残りも、切替を終える時点で消える・要件 5.9）。
 ///
 /// # 非空虚性
 /// 手続きの読み直しの頼み（`request_reload`）を外すと切替の予約が立たず期限切れで赤、写しの順を
-/// 入れ替えると呼び出しの列の判定が赤。
+/// 入れ替える・列を古いゴーストへ送ると呼び出しの列の判定が赤。
 #[test]
-fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_after_the_summary_talk() {
+fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_with_the_tail() {
     let mut rig = running_a(None);
     let a_dir = rig.root.ghost_dir("A");
 
@@ -207,9 +218,16 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_after_the_
         .expect("kanade が照会に答える");
     let held_while_talking = (homeurl_gets(&rig) - before, rig.calls("A").len());
 
-    let rebooted = rig.pump_talking_until(|rig| {
-        rig.exit_requested()
-            || (rig.calls("A").len() == 2 && rig.world.get_non_send::<SwitchInFlight>().is_none())
+    let (rebooted, after) = capture(|| {
+        rig.pump_talking_until(|rig| {
+            let a = rig.calls("A");
+            rig.exit_requested()
+                || (a.len() == 2
+                    && rig.world.get_non_send::<SwitchInFlight>().is_none()
+                    && a[1].iter().any(
+                        |c| matches!(c, RecordedCall::Get { id, .. } if id == "OnUpdateResult"),
+                    ))
+        })
     });
     let (a, b) = (rig.calls("A"), rig.calls("B"));
     let exited = rig.exit_requested();
@@ -230,30 +248,29 @@ fn a_changed_round_reaches_shiori_in_order_and_reboots_the_same_ghost_after_the_
         (begin[0].as_str(), begin[3].as_str(), begin[4].as_str()),
         ("A", "ghost", "script")
     );
-    let complete = refs_of(&a[0], "OnUpdateComplete").expect("OnUpdateComplete");
-    assert_eq!(&complete[..2], ["changed", FILE]);
-    let result = refs_of(&a[0], "OnUpdateResult").expect("OnUpdateResult");
-    assert_eq!(result, ["ghost\x01OK\x011"]);
     assert_eq!(placed.as_deref(), Some(BODY), "ファイルが手元に置かれる");
 
-    let second = kinds(&a[1]);
-    for name in ["GET OnGhostChanging", "GET OnBoot"] {
-        assert!(
-            !second.contains(&name.to_owned()),
-            "{name} は 0 件: {second:?}"
-        );
-    }
+    // 新しい A: 起動の知らせが `OnUpdateComplete`（`OnGhostChanging`・`OnGhostChanged`・`OnBoot` 0 件）→
+    // `OnUpdateResult`。
+    assert_eq!(kinds(&a[1]), REBOOTED, "起き直した A の呼び出し");
+    let complete = refs_of(&a[1], "OnUpdateComplete").expect("OnUpdateComplete");
+    assert_eq!(&complete[..2], ["changed", FILE]);
+    assert_eq!(&complete[3..], ["ghost", "script"]);
+    let result = refs_of(&a[1], "OnUpdateResult").expect("OnUpdateResult");
+    assert_eq!(result, ["ghost\x01OK\x011"]);
     assert!(
         a.iter().flatten().all(|c| !matches!(c,
             RecordedCall::Get { id, .. } | RecordedCall::Notify { id, .. } if id == "OnClose")),
         "OnClose は 0 件: {a:?}"
     );
-    let changed = refs_of(&a[1], "OnGhostChanged").expect("OnGhostChanged が届く");
-    assert_eq!(
-        (changed[0].as_str(), changed[2].as_str()),
-        ("Aのさくら", "A"),
-        "自分→自分"
-    );
+    // 列の残りは窓口が切替の終わりで送った（UI の記録）。
+    let sent: Vec<_> = after
+        .iter()
+        .filter(|e| e.field_str("event") == Some("update_tail_sent"))
+        .collect();
+    assert_eq!(sent.len(), 1, "{after:?}");
+    assert_eq!(sent[0].field_str("when"), Some("after_switch"));
+    assert_eq!(named(&after, "update_tail_dropped"), 0, "{after:?}");
 }
 
 /// `none` の一周（手元が配布と同じ）: `OnUpdateBegin` → `OnUpdateComplete`（`none`）→ `OnUpdateResult`
