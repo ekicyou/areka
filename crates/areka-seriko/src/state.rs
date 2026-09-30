@@ -295,6 +295,29 @@ impl ScopeStates {
             .retain(|(_, slot), _| *slot != Slot::Balloon);
     }
 
+    /// スコープごとの `slot` 側の今の面（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
+    ///
+    /// シェル面・バルーン面のどちらかに現れたスコープを昇順に並べ、`slot` 側で表示中なら
+    /// `Some(id)`、非表示・未知なら `None` を返す純粋な読み取り（差し替えの合図の材料）。
+    pub fn current_surfaces(&self, slot: Slot) -> Vec<(ActorKey, Option<u32>)> {
+        let map = match slot {
+            Slot::Shell => &self.scopes,
+            Slot::Balloon => &self.balloon,
+        };
+        let scopes: std::collections::BTreeSet<&ActorKey> =
+            self.scopes.keys().chain(self.balloon.keys()).collect();
+        scopes
+            .into_iter()
+            .map(|scope| {
+                let id = match map.get(scope) {
+                    Some(ScopeState::Shown(id)) => Some(*id),
+                    Some(ScopeState::Hidden) | None => None,
+                };
+                (scope.clone(), id)
+            })
+            .collect()
+    }
+
     /// 静的（既定）bind 集合を返す（[`rebase_shell`] でだけ替わる・要件 4.2/4.3/4.4）。
     ///
     /// [`rebase_shell`]: ScopeStates::rebase_shell

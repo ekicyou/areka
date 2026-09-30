@@ -37,17 +37,19 @@
 //! を返すが、`unwrap`／`expect` で panic させず [`tracing::error!`] で観測して戻る
 //! （log-first・R6.3／通常入力で panic しない・R6.4）。
 
+use std::collections::BTreeMap;
 use std::ops::ControlFlow;
 
-use areka_sakura::{CueCommand, CueTarget, TalkCue, cue_target_of};
+use areka_sakura::{ActorKey, CueCommand, CueTarget, TalkCue, cue_target_of};
 
 use crate::bind::{
     BindChoicePolicy, BindDirective, BindResolver, parse_bind_directive, scope_namespace,
 };
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
-use crate::output::{DisplayCommand, SurfaceOutput};
+use crate::output::{DisplayCommand, RebaseKind, RebasedShow, SurfaceOutput};
 use crate::resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
 use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot};
+use crate::table::AnimationTable;
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
 ///
@@ -61,8 +63,43 @@ pub enum SerikoMsg {
     /// cue と同一 inbox を FIFO 共有し、`SerikoSink::send_tick` が橋渡しする。`handle_message` の
     /// Tick 腕が `LoopRuntime::on_tick` を回し、既存 `emit_display` 単一発行点から発行する（R1.1/6.3）。
     Tick { now_ms: u64 },
+    /// 定義の差し替えの依頼（spec: areka-P0-shell-balloon-switch 要件 2.6・2.8・3.5）。
+    ///
+    /// [`spawn_seriko`] の受信の閉包が [`handle_message`] より先に捌く（定義を所有する殻の仕事）。
+    Replace(Box<SerikoReplace>),
     /// kanade 由来の停止指令（areka-actor 停止規約の Close 相当・正常終了させる）。
     Close,
+}
+
+/// 定義の差し替えの依頼の中身（spec: areka-P0-shell-balloon-switch 要件 2.6・2.8・3.5）。
+///
+/// `epoch` は UI の差し替えの世代で、出力の合図 [`DisplayCommand::Rebased`] にそのまま載る。
+pub enum SerikoReplace {
+    /// シェルの定義（別名表・静的な着せ替え・着せ替えの名前表・シェルのアニメ表）。
+    Shell {
+        epoch: u64,
+        resolver: SurfaceResolver,
+        static_binds: areka_emo_compose::BindSet,
+        bind_resolver: BindResolver,
+        shell_table: AnimationTable,
+    },
+    /// バルーンの定義（スコープごとのバルーンのアニメ表）。
+    Balloon {
+        epoch: u64,
+        balloon_tables: BTreeMap<ActorKey, AnimationTable>,
+    },
+}
+
+/// 表は大きいので種別と世代だけを出す（ログ用）。
+impl std::fmt::Debug for SerikoReplace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Shell { epoch, .. } => write!(f, "SerikoReplace::Shell {{ epoch: {epoch} }}"),
+            Self::Balloon { epoch, .. } => {
+                write!(f, "SerikoReplace::Balloon {{ epoch: {epoch} }}")
+            }
+        }
+    }
 }
 
 /// 単一の出力契約 [`dola::cue::CueSink`] を実装する送出ブリッジ（cue 再生ランタイムが保持する結線契約）。
@@ -112,6 +149,13 @@ impl SerikoSink {
                 "seriko: inbox が消失; tick を配送できず破棄した（shutdown 中の期待事象・PresentBridge 先例・R7.5）"
             );
         }
+    }
+
+    /// 定義の差し替えの依頼を inbox へ送る（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
+    ///
+    /// 受信端が消えていれば `false` を返す（呼び手が `error!` を残す）。
+    pub fn send_replace(&self, replace: SerikoReplace) -> bool {
+        self.tx.send(SerikoMsg::Replace(Box::new(replace))).is_ok()
     }
 
     /// 1 発火を inbox へ橋渡しする送出本体（infallible）——単一の出力契約
@@ -199,11 +243,45 @@ where
     let (tx, actor) = areka_actor::spawn_actor::<SerikoMsg, _>("seriko", move |rx| {
         let mut states = ScopeStates::new(static_binds);
         let mut out = out;
-        let bind_resolver = bind_resolver;
+        // 定義（別名表・着せ替えの名前表）は差し替えの依頼でだけ替わる。
+        let mut resolver = resolver;
+        let mut bind_resolver = bind_resolver;
         // アクター本体が SERIKO ループ統括器を単独所有する（スレッド内・ロック不要・単一所有者）。
         // 表・乱数は `loop_config` から構築して以後この 1 スレッドで進める（発見 C の値渡し解消）。
         let mut loop_runtime = LoopRuntime::new(loop_config);
         areka_actor::run_inbox::<SerikoMsg, std::convert::Infallible>(rx, move |msg| {
+            // 差し替えの依頼は定義を所有するこの殻が先に捌く（handle_message の署名は不変）。
+            if let SerikoMsg::Replace(replace) = msg {
+                // 設計の順: 定義 → スコープの状態 → ループの表 → 合図 1 件。
+                // `extra` は合図に必ず載せるスコープ（バルーンは新しい表の鍵＝装着の全スコープ）。
+                let (epoch, kind, extra) = match *replace {
+                    SerikoReplace::Shell {
+                        epoch,
+                        resolver: new_resolver,
+                        static_binds,
+                        bind_resolver: new_bind_resolver,
+                        shell_table,
+                    } => {
+                        resolver = new_resolver;
+                        bind_resolver = new_bind_resolver;
+                        states.rebase_shell(static_binds);
+                        loop_runtime.replace_shell_table(shell_table);
+                        (epoch, RebaseKind::Shell, Vec::new())
+                    }
+                    SerikoReplace::Balloon {
+                        epoch,
+                        balloon_tables,
+                    } => {
+                        let scopes: Vec<ActorKey> = balloon_tables.keys().cloned().collect();
+                        states.rebase_balloon();
+                        loop_runtime.replace_balloon_tables(balloon_tables);
+                        (epoch, RebaseKind::Balloon, scopes)
+                    }
+                };
+                tracing::info!(epoch, ?kind, "seriko: 定義を差し替えた");
+                emit_display(&mut out, rebased(epoch, kind, &states, extra));
+                return Ok(ControlFlow::Continue(()));
+            }
             Ok(handle_message(
                 &resolver,
                 &bind_resolver,
@@ -216,6 +294,40 @@ where
     });
 
     (SerikoSink::new(tx), actor)
+}
+
+/// 差し替えの後の最初の表示を載せた合図（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
+///
+/// シェルは各スコープの今の面（無ければ `None`）と新しい既定の着せ替え、バルーンは各スコープの
+/// バルーンの今の面（無ければ既定の 0）と空の着せ替えを載せる。スコープは seriko が見た
+/// スコープと `extra` の和（`\s`・`\b` の届いていないスコープも起動時に面 0 で確立されている）。
+fn rebased(
+    epoch: u64,
+    kind: RebaseKind,
+    states: &ScopeStates,
+    extra: Vec<ActorKey>,
+) -> DisplayCommand {
+    let (slot, binds) = match kind {
+        RebaseKind::Shell => (Slot::Shell, states.binds().clone()),
+        RebaseKind::Balloon => (Slot::Balloon, areka_emo_compose::BindSet::default()),
+    };
+    let mut surfaces: BTreeMap<ActorKey, Option<u32>> =
+        states.current_surfaces(slot).into_iter().collect();
+    for scope in extra {
+        surfaces.entry(scope).or_insert(None);
+    }
+    let shows = surfaces
+        .into_iter()
+        .map(|(scope, surface_id)| RebasedShow {
+            scope,
+            surface_id: match kind {
+                RebaseKind::Shell => surface_id,
+                RebaseKind::Balloon => surface_id.or(Some(0)),
+            },
+            binds: binds.clone(),
+        })
+        .collect();
+    DisplayCommand::Rebased { epoch, kind, shows }
 }
 
 /// inbox メッセージ 1 件を処理し、`run_inbox` 用の [`ControlFlow`] を返す。
@@ -244,6 +356,14 @@ fn handle_message<O: SurfaceOutput>(
             for cmd in loop_runtime.on_tick(now_ms, states) {
                 emit_display(out, cmd);
             }
+            return ControlFlow::Continue(());
+        }
+        // 差し替えの依頼は spawn_seriko の殻が先に捌く。ここへ届くのは殻を経ない誤配だけ。
+        SerikoMsg::Replace(replace) => {
+            tracing::error!(
+                ?replace,
+                "seriko: 差し替えの依頼が殻を経ずに届いたので捨てる（定義は不変）"
+            );
             return ControlFlow::Continue(());
         }
         SerikoMsg::Cue(cue) => cue,
@@ -517,6 +637,9 @@ mod bind_loop_tests;
 #[cfg(test)]
 #[path = "actor_dispatch_tests.rs"]
 mod dispatch_tests;
+#[cfg(test)]
+#[path = "actor_replace_tests.rs"]
+mod replace_tests;
 #[cfg(test)]
 #[path = "actor_test_support.rs"]
 mod test_support;

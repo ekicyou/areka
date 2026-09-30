@@ -59,7 +59,7 @@
   - _Requirements: 6.4, 6.5, 6.6, 8.4_
   - _Depends: 1.2_
 
-- [ ] 4. seriko に定義の差し替えの語を足す
+- [x] 4. seriko に定義の差し替えの語を足す
 - [x] 4.1 (P) スコープの状態とループの表を差し替える口を作る
   - シェルの差し替えは静的な着せ替えを入れ替え、動的な着せ替えとシェル側のパターンの進行を消し、今の面は保つ。バルーンの差し替えはバルーン側のパターンの進行を消し、今の面は保つ
   - ループはシェルの表・バルーンの表をそれぞれ差し替えられるようにし、再生中のループを捨てて新しい表から始め直す（「以後不変」の doc を「差し替えの語でだけ替わる」へ改める）
@@ -68,7 +68,7 @@
   - _Requirements: 2.6, 2.8, 3.5, 12.6_
   - _Boundary: Seriko state, looper, output（本体は橋渡しの仮の腕 1 つだけ）_
 
-- [ ] 4.2 seriko のアクターが差し替えの依頼を捌き、合図を 1 件出すようにする
+- [x] 4.2 seriko のアクターが差し替えの依頼を捌き、合図を 1 件出すようにする
   - 差し替えの依頼（シェル: 世代・別名表・静的な着せ替え・着せ替えの名前表・アニメ表／バルーン: 世代・バルーンのアニメ表）と、送り手の送り口（送れなければ偽）を足す
   - アクターの受信の閉包が依頼を既存のメッセージ処理より先に捌く（既存の処理の署名は不変＝テストの呼び出し 45 本を直さない）。既存の処理に殻を経ずに届いたら `error!` を 1 件残して捨てる
   - シェルは定義を差し替え → 4.1 の口 → 各スコープの今の面（無ければ無し）と新しい既定の着せ替えを合図で 1 件出す。バルーンはシェル側を変えず、各スコープのバルーンの今の面（無ければ 0）を出す
@@ -251,3 +251,4 @@
 - 2.1: 構造体リテラルは実数 15 か所（design の 16 は mod.rs の数え違い）。`decide` の段 1 に「相が定常でなく `state.change` が在れば `GhostChange`」を足した（`raise_event` 無しのゴースト切替は切替の相を経ず `Unloading` へ入るため・design Flow 2 より広い＝12 で反映）。`begin` に `config` 引数は無い。許可表に在る印は暫定で `warn!(talk_gap_marked_unsupported)`＋`NotSent` → 2.2 で必ず送出へ置き換える。
 - 2.2: design の `observe(state, reply_origin)` は `marked_reply(&state,&input)`（遷移の前にトークの番号を控える）＋`observe(state, Option<MarkedReply>)` に分けた。台詞の終わりの後の印の追跡は `note_marked_done`。`is_marked_break` は結果の決まっていない見張りにだけ効く。暫定の `talk_gap_marked_unsupported` はコードから消えた（12 で design へ反映）。
 - 4.1: `LoopRuntime::replace_shell_table`／`replace_balloon_tables` にメソッド単位の `#[allow(dead_code)]` → 4.2 で外す。本体の仮の腕は `PresentBridge::send` の先頭の捌き（`debug!`）と `map_display_command` の網羅の腕（`Rebased => None`・届かない）の 2 か所 → 9.1 で両方を置き換える。`RebaseKind { Shell, Balloon }` は実装が名付けた。スコープごとの今の面を読む口は 4.2 で足す。
+- 4.2: 4.1 のメソッド単位の `#[allow(dead_code)]` 2 つを外した。今の面の読み口は `ScopeStates::current_surfaces`。バルーンの合図の `shows` は「seriko が見たスコープ ∪ 新しいバルーンの表の鍵」（無い面は `Some(0)`）＝6.3 と 9.1 はバルーンの表を装着の全スコープぶん作る前提。シェルの `shows` に無いスコープは 9.1 で `show: None`（登録だけ）と読む。差し替えのたびに `info!(epoch, kind)` を 1 件（Monitoring の語の候補）。

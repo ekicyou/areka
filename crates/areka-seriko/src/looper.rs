@@ -413,7 +413,6 @@ impl LoopRuntime {
     ///
     /// 全 scope のシェル slot の再生中のループを捨て、次の抽選から新しい表で始め直す。
     /// 残留コマ（PatternState）の消去は [`ScopeStates::rebase_shell`] の責務。
-    #[allow(dead_code)] // 呼び手（アクターの差し替えの依頼）は 4.2 で結ぶ
     pub(crate) fn replace_shell_table(&mut self, table: AnimationTable) {
         self.config.shell_table = table;
         self.forget_slot_kind(Slot::Shell);
@@ -423,7 +422,6 @@ impl LoopRuntime {
     ///
     /// 全 scope のバルーン slot の再生中のループを捨て、次の抽選から新しい表で始め直す。
     /// シェル側の再生は触らない。
-    #[allow(dead_code)] // 呼び手（アクターの差し替えの依頼）は 4.2 で結ぶ
     pub(crate) fn replace_balloon_tables(&mut self, tables: BTreeMap<ActorKey, AnimationTable>) {
         self.config.balloon_tables = tables;
         self.forget_slot_kind(Slot::Balloon);
@@ -441,4 +439,4 @@ impl LoopRuntime {
 mod replace_tests;
 #[cfg(test)]
 #[path = "looper_tests.rs"]
-mod tests;
+pub(crate) mod tests;

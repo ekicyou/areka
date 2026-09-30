@@ -51,7 +51,7 @@ fn shell_table(surfaces: Vec<Surface>) -> AnimationTable {
 }
 
 /// 単一 anim（id/interval/frames）を持つ surface から shell 表を build する。
-pub(super) fn table_single(
+pub(crate) fn table_single(
     surface_id: u32,
     anim_id: u32,
     interval: Interval,
@@ -97,7 +97,7 @@ fn counting_rng(values: &[u32]) -> (LoopRng, Arc<Mutex<RngProbe>>) {
 }
 
 /// 常に発火する rng（`should_fire` は `rng(k)==0` で発火）。
-pub(super) fn always_fire() -> LoopRng {
+pub(crate) fn always_fire() -> LoopRng {
     Box::new(|_bound: u32| 0)
 }
 
@@ -113,7 +113,7 @@ fn shown_shell_with_binds(sid: u32, binds: BindSet) -> (ScopeStates, ActorKey) {
 }
 
 /// shell 表＋注入乱数から config を組む（バルーン表の写像は空＝全 scope 不活性）。
-pub(super) fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
+pub(crate) fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
     SerikoLoopConfig {
         shell_table,
         balloon_tables: BTreeMap::new(),
@@ -863,7 +863,7 @@ fn capture_logs<F: FnOnce()>(f: F) -> String {
     lines.join("\n")
 }
 
-pub(super) fn pattern_of(cmd: &DisplayCommand) -> &PatternState {
+pub(crate) fn pattern_of(cmd: &DisplayCommand) -> &PatternState {
     match cmd {
         DisplayCommand::Show { pattern, .. } | DisplayCommand::ShowBalloon { pattern, .. } => {
             pattern

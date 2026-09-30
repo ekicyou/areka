@@ -8,7 +8,7 @@
 //! - 状態層 [`ScopeStates`]／[`ScopeState`]／[`ApplyOutcome`]／[`BindApplyOutcome`]: per-scope
 //!   surface 状態・冪等ガードと、動的 bind 適用結果に応じた表示発行の判定。
 //! - 発行層 [`DisplayCommand`]／[`SurfaceOutput`]／[`MockSurfaceOutput`]: emo への表示指令と発行先抽象。
-//! - アクター層 [`SerikoMsg`]／[`SerikoSink`]／[`spawn_seriko`]: 独立スレッド稼働・単一発行点。
+//! - アクター層 [`SerikoMsg`]／[`SerikoReplace`]／[`SerikoSink`]／[`spawn_seriko`]: 独立スレッド稼働・単一発行点・定義の差し替え。
 //! - 構築層 [`build_static_bindset`]: bindgroup default → 静的 `BindSet`（恒等写像）。
 //! - アニメ定義表 [`AnimationTable`]／[`LoopAnimation`]／[`LoopTrigger`]／[`LoopFrame`]: `EmoWorld`
 //!   からの boot 時不変スナップショット（`Random`/`BindRandom` のみ採録・method 構築時 1 回解決）。
@@ -36,7 +36,7 @@ mod timeline;
 #[cfg(test)]
 mod sample_test_support;
 
-pub use actor::{SerikoMsg, SerikoSink, spawn_seriko};
+pub use actor::{SerikoMsg, SerikoReplace, SerikoSink, spawn_seriko};
 pub use bind::{
     BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, accumulate,
     build_static_bindset, parse_bind_directive, scope_namespace,
