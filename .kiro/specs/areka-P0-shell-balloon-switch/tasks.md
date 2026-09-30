@@ -100,7 +100,7 @@
   - 本体がビルドでき、既存の資産づくりと装着のテストが緑のまま。シェル名つきの兄弟が名前の先のシェルの絵を作ることを兄弟の新しいテストで判定する
   - _Requirements: 4.4, 6.4, 8.8_
 
-- [ ] 6.2 (P) 配置の情報源と配置の準備にシェル名つきの口を足す
+- [x] 6.2 (P) 配置の情報源と配置の準備にシェル名つきの口を足す
   - シェル名つきの `descript.txt` の読み口と、シェル名つきの配置の準備を足し、既存の口はそれを名前なしで呼ぶ（既存の呼び手 6 か所は不変）
   - 兄弟テストで、名前ありの情報源のシェルのフォルダが名前の先を指すことが緑
   - _Requirements: 6.4_
@@ -254,3 +254,4 @@
 - 4.2: 4.1 のメソッド単位の `#[allow(dead_code)]` 2 つを外した。今の面の読み口は `ScopeStates::current_surfaces`。バルーンの合図の `shows` は「seriko が見たスコープ ∪ 新しいバルーンの表の鍵」（無い面は `Some(0)`）＝6.3 と 9.1 はバルーンの表を装着の全スコープぶん作る前提。シェルの `shows` に無いスコープは 9.1 で `show: None`（登録だけ）と読む。差し替えのたびに `info!(epoch, kind)` を 1 件（Monitoring の語の候補）。
 - 5.2: `ReplaceTarget.emo_world` は `Box<EmoWorld>`（enum の大きさ・9.1 は `Box::new` で包む）。未登録の `error!` の文言は 5.1 の `detach_target: 未装着ターゲット`（design の表の `apply(ReplaceTarget): 未装着ターゲット` を 12 で直す）。無い面の `error!` は present の 1 件＋合成器の既存の 1 件（tasks の「1 件」は present の件数）。登録が済めば無い面でも返信は `Ok`。
 - 6.1: `build_shell_assets` の `shell` は `Option<&str>`（design 未指定）。`build_boot_assets` の doc は「`resolve`」の語のまま（12 で直す）。作者の DPI は呼び手が渡す（新しいシェルの `seriko.dpi` を読むのは 6.3）。
+- 6.2: `prepare_ghost_windows_for_shell` にメソッド単位の `#[allow(dead_code)]` → 7.2 で外す。design に無い私的な `prepare_stages_for_shell` を置いた（`prepare_stages` は `None` で委ねる）。`prepare_ghost_windows_with_work_area` に名前つきの兄弟は無い。

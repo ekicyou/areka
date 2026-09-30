@@ -388,7 +388,18 @@ fn prepare_stages(
     balloon_root: &Path,
     primary_dpi: Option<u32>,
 ) -> Result<PreparedStages, PlacementError> {
-    let src = source::load_descript_source(ghost_root)?;
+    prepare_stages_for_shell(ghost_root, balloon_root, primary_dpi, None)
+}
+
+/// [`prepare_stages`] のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
+/// `shell` は [`source::load_descript_source_for_shell`] へそのまま渡す（`None` は今日の規則）。
+fn prepare_stages_for_shell(
+    ghost_root: &Path,
+    balloon_root: &Path,
+    primary_dpi: Option<u32>,
+    shell: Option<&str>,
+) -> Result<PreparedStages, PlacementError> {
+    let src = source::load_descript_source_for_shell(ghost_root, shell)?;
     let mut cfg = config::build_placement_config(&src.ghost_kv, &src.shell_kv);
     let scope_ids: Vec<usize> = cfg.scopes.keys().copied().collect();
     // 作者基準 DPI（design D1・Flow 3 手順1）は**ここで 1 度だけ**読む。shell は既に
@@ -732,6 +743,20 @@ pub fn prepare_ghost_windows(
     ghost_root: &Path,
     balloon_root: &Path,
 ) -> Result<PreparedPlacement, PlacementError> {
+    prepare_ghost_windows_for_shell(ghost_root, balloon_root, None)
+}
+
+/// [`prepare_ghost_windows`] のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
+///
+/// `shell` が `Some(名)` なら配置の値（シェルの `descript.txt`）と採寸のシェルのフォルダを
+/// `ghost_root/shell/<名>` から取る。`None` は今日の規則。名前の先が無ければ既定のシェルへ
+/// 黙って戻らず `Err(PlacementError::Mount)` を返す。それ以外は [`prepare_ghost_windows`] と同じ。
+#[allow(dead_code)] // 起動時のシェルの決定（task 7.2・`ghost_session`）が結線するまで非テストビルドでは未使用
+pub fn prepare_ghost_windows_for_shell(
+    ghost_root: &Path,
+    balloon_root: &Path,
+    shell: Option<&str>,
+) -> Result<PreparedPlacement, PlacementError> {
     let monitors = enumerate_monitors();
     // 観測（areka-P0-dpi-window-vanish 要件 1.1）: 列挙の**直後**＝準備段の失敗より手前で
     // 出す。準備が倒れて起動窓を開けずに終わった運転のログからも、その運転が
@@ -746,7 +771,7 @@ pub fn prepare_ghost_windows(
     // 準備段（load→config→measure）を work area の検査より**先**に走らせる:
     // 準備段の失敗（Mount・DescriptRead・Measure）はモニタ列挙異常より手前の事象として
     // 報告される（既存の失敗順序＝headless でも Mount が返る契約を保つ）。
-    let stages = prepare_stages(ghost_root, balloon_root, primary_dpi)?;
+    let stages = prepare_stages_for_shell(ghost_root, balloon_root, primary_dpi, shell)?;
     let work_area = work_area_of(primary)?;
     Ok(stages.resolve(work_area))
 }

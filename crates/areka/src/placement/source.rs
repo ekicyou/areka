@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
-use areka_parsers::package::{GhostNames, resolve};
+use areka_parsers::package::{GhostNames, resolve_with_shell};
 use tracing::{debug, error, warn};
 
 use super::PlacementError;
@@ -136,9 +136,22 @@ impl DescriptSource {
 ///   resolve 成功直後ゆえ通常は読めるが、TOCTOU への防御として寛容経路を維持する）
 #[allow(dead_code)] // scaffold（task 2.2）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
 pub fn load_descript_source(ghost_root: &Path) -> Result<DescriptSource, PlacementError> {
+    load_descript_source_for_shell(ghost_root, None)
+}
+
+/// [`load_descript_source`] のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
+///
+/// `shell` が `Some(名)` なら `ghost_root/shell/<名>` の `descript.txt` を読む。`None` は
+/// 今日の規則（`areka_parsers::package::resolve_with_shell` の名前なし）。名前の先が無ければ
+/// 既定のシェルへ黙って戻らず、`error!`＋`Err(PlacementError::Mount)` を返す。
+/// 名前の検査はしない（渡す側が目録に在る名前だけを渡す）。失敗契約は [`load_descript_source`] と同じ。
+pub fn load_descript_source_for_shell(
+    ghost_root: &Path,
+    shell: Option<&str>,
+) -> Result<DescriptSource, PlacementError> {
     // マウント解決（shell dir・ghost/master dir・names の正本）。
-    let model = resolve(ghost_root, DefaultEncoding::Ansi).map_err(|e| {
-        error!(ghost_root = %ghost_root.display(), error = ?e, "ゴーストのマウント解決に失敗");
+    let model = resolve_with_shell(ghost_root, DefaultEncoding::Ansi, shell).map_err(|e| {
+        error!(ghost_root = %ghost_root.display(), shell = ?shell, error = ?e, "ゴーストのマウント解決に失敗");
         PlacementError::Mount(e)
     })?;
 
@@ -285,3 +298,7 @@ fn char_name_scope_of(key: &str) -> Option<usize> {
 #[cfg(test)]
 #[path = "source_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "source_shell_tests.rs"]
+mod shell_tests;
