@@ -94,7 +94,7 @@
   - _Depends: 5.1_
 
 - [ ] 6. 資産を片側ずつ作り、背景で作る
-- [ ] 6.1 資産づくりをシェルとバルーンの 2 本に括り出し、シェル名つきの兄弟を足す
+- [x] 6.1 資産づくりをシェルとバルーンの 2 本に括り出し、シェル名つきの兄弟を足す
   - 今の資産づくりの本体を、シェルだけ（ゴーストの根・シェル名・スコープの集合・作者の DPI）とバルーンだけの 2 本に括り出し、両者を続けて呼ぶシェル名つきの兄弟を足す
   - 今の資産づくりの署名は据え置き、名前なしで兄弟へ委ねる 1 行にする（既存の呼び手とテストの追随 0）
   - 本体がビルドでき、既存の資産づくりと装着のテストが緑のまま。シェル名つきの兄弟が名前の先のシェルの絵を作ることを兄弟の新しいテストで判定する
@@ -253,3 +253,4 @@
 - 4.1: `LoopRuntime::replace_shell_table`／`replace_balloon_tables` にメソッド単位の `#[allow(dead_code)]` → 4.2 で外す。本体の仮の腕は `PresentBridge::send` の先頭の捌き（`debug!`）と `map_display_command` の網羅の腕（`Rebased => None`・届かない）の 2 か所 → 9.1 で両方を置き換える。`RebaseKind { Shell, Balloon }` は実装が名付けた。スコープごとの今の面を読む口は 4.2 で足す。
 - 4.2: 4.1 のメソッド単位の `#[allow(dead_code)]` 2 つを外した。今の面の読み口は `ScopeStates::current_surfaces`。バルーンの合図の `shows` は「seriko が見たスコープ ∪ 新しいバルーンの表の鍵」（無い面は `Some(0)`）＝6.3 と 9.1 はバルーンの表を装着の全スコープぶん作る前提。シェルの `shows` に無いスコープは 9.1 で `show: None`（登録だけ）と読む。差し替えのたびに `info!(epoch, kind)` を 1 件（Monitoring の語の候補）。
 - 5.2: `ReplaceTarget.emo_world` は `Box<EmoWorld>`（enum の大きさ・9.1 は `Box::new` で包む）。未登録の `error!` の文言は 5.1 の `detach_target: 未装着ターゲット`（design の表の `apply(ReplaceTarget): 未装着ターゲット` を 12 で直す）。無い面の `error!` は present の 1 件＋合成器の既存の 1 件（tasks の「1 件」は present の件数）。登録が済めば無い面でも返信は `Ok`。
+- 6.1: `build_shell_assets` の `shell` は `Option<&str>`（design 未指定）。`build_boot_assets` の doc は「`resolve`」の語のまま（12 で直す）。作者の DPI は呼び手が渡す（新しいシェルの `seriko.dpi` を読むのは 6.3）。
