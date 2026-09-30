@@ -1,7 +1,7 @@
 # Requirements Document
 
 > 本文の実測は **2026-09-30・本ブランチ**（main `d79ca8dc`＝`network-update` の着地直後）のもの。コードは「何の定義か」（関数名・型名＋ファイルパス）で指し、行番号では指さない。
-> 要件 12 の裁定 1〜7 は brief の議題 ⑴・⑶・⑷ と、要件を書く途中で答えが要った 4 点に対する**推奨案による暫定の確定**であり、要件ディスカッションで覆せる（覆したら該当要件も改める）。
+> 要件 12 の裁定 1〜7 は brief の議題 ⑴・⑶・⑷ と、要件を書く途中で答えが要った 4 点に対する**推奨案による暫定の確定**であり、要件ディスカッションで覆せる（覆したら該当要件も改める）。裁定 8 以降は要件ディスカッションで開発者が確定したもの。
 
 ## Project Description (Input)
 
@@ -84,7 +84,7 @@
   - 3 人以上のキャラの窓（`derive_scopes()` の据え置き）・`.pna`／`full`／`0` の透過（未実装のシーム）・メッセージボックスでの告知（0 場面）。
   - 検体 `.nar` の畳み直し（裁定 1）・`konnoyayame` のシェルの改変（CC BY-NC-ND）。
 - **Adjacent expectations**:
-  - 完了 `ghost-shell-balloon-switch` の汎用の通知の入口（`KanadeMsg::RaiseEvent`・許可表は共用）と `GhostSession` の置き場（`GhostSlot`）・`BootContext.current.balloon` の書き換えは本仕様の持ち場（doc コメントに明記済み）を使う。kanade で触るのは許可表の 3 行だけ。
+  - 完了 `ghost-shell-balloon-switch` の汎用の通知の入口（`KanadeMsg::RaiseEvent`・許可表は共用）と `GhostSession` の置き場（`GhostSlot`）・`BootContext.current.balloon` の書き換えは本仕様の持ち場（doc コメントに明記済み）を使う。kanade で触るのは許可表の 3 行と「切替の台詞」の口（要件 8.11・裁定 8）。
   - 完了 `ghost-restart-unit` の「ゴーストを起こすたびにメニューの登記をやり直す」契約と `Emo2BootInputs` に乗る（シェル名の欄はそこへ・`GhostBootOptions` には足さない）。
   - 完了 `baseware-root-layout` の目録（`list_shells`・`list_balloons`）・記憶の鍵（`LastShell`／`LastBalloon`＝Ghost スコープ）・書き手（`record_last_used`）を使い、目録の素性（`Identity`）に欄を足さない。
   - 完了 `pilot-balloon-asset-swap` の学び（同じ id の再登録だけでは重なる・古い装着を消してから同じ呼び出しの中で再登録・配置が決まる前の段・`EmoWorld` は複製できない・可視性の持ち主と窓寸の要求が既定へ戻る）の上に建つ。present に「古い装着を片付ける正規の口」と「登録を消す口」を足すのは本仕様。
@@ -165,7 +165,7 @@
 #### Acceptance Criteria
 
 1. While `OnShellChanging` の台詞が再生中である, when 利用者がバルーンの左ダブルクリックで再生を止める, the areka shall シェル切替を中止し、差し替えを行わず、`OnShellChanged` を送らず、`info!` で「切替を中止した」ことを記録に残し、直後の新しい切替要求を受け付ける（完了 `ghost-shell-balloon-switch` 裁定 1 を継ぐ・記憶は書かない）。
-2. While `OnShellChanging` の台詞が再生中である, when 中断された台詞が `\-` を含んでいた, the areka shall 終了へ結ばない（切替の相の中断は中止であって終了ではない）。
+2. While `OnShellChanging` の台詞が再生中である, when 中断された台詞が `\-` を含んでいた, the areka shall 終了へ結ばない（切替の相の中断は中止であって終了ではない）。kanade はその台詞を印の付いた依頼の台詞として扱い、中断を切替の中止として知らせる（要件 8.11）。When `OnShellChanging` の台詞が中断されずに別のトークに置き換えられる, the areka shall 台詞の終わりとして扱い、切替を続ける。
 3. When 切替が中止される, the areka shall 中断された台詞のバルーンを完了 `balloon-break` と同じ規則で隠す（隠す規則を変えない）。
 4. When `OnShellChanging` を送らない切替（`raise-event` 無しの台本・バルーンの切替）の、命令を運んだ台本を利用者が中断する, the areka shall 中断が命令の位置より前なら切替要求が出ていないので何も起きず（0 件）、命令の位置より後なら台詞の終わりとして切替を続ける。ただし中断された台本に `\-` の予約が在れば定常の規則どおり終了が勝ち、保留の切替は捨てる（`info!`）。
 5. If 差し替えの途中で失敗する（切替先のシェル／バルーンのフォルダが読めない・`descript.txt` や `surfaces.txt` が解釈できない・画像が復号できない・装着の登録が失敗する）, then the areka shall `error!` を 1 件残し（失敗の種類と理由を含む）、古い装着を残したまま（元のシェル／バルーンのまま）表示と会話を続け、`OnShellChanged`／`OnBalloonChange` を送らず、記憶を書かない。`OnShellChanging` を既に送っていても同じ（切り替え前のイベントだけが届いた形になる）。
@@ -206,8 +206,8 @@
 #### Acceptance Criteria
 
 1. The 本仕様 shall `crates/areka/src/emo2_boot/ghost_switch.rs`（と `ghost_switch_tests.rs`・`ghost_switch_test_support.rs`）・`crates/areka-parsers/src/sakura/`・`crates/areka-sakura/src/compile.rs`・`crates/areka-ghost/src/lib.rs`（`pub mod` 1 行を除く）に触らず、`SwitchRequest`／`GhostSpec`／`request_ghost_switch` の形を変えない（呼ぶだけ・`boot_event: None`）。
-2. The 本仕様 shall 送出の許可表 `ALLOWED_EVENT_IDS` に `OnShellChanging`・`OnShellChanged`・`OnBalloonChange` の 3 語を足し（42 → 45）、件数の直書き 2 か所（`events_change_tests.rs` の `assert_eq!` と `events_tests.rs` の完全一致のテスト名・配列）を追随させる。kanade で触るのは許可表とそのテストだけ（`msg.rs`・`actor.rs`・`schedule/mod.rs`・`steady.rs`・`change.rs` は 0）。
-3. The 本仕様 shall 汎用の通知の入口の判断（許可表・定常か否か・応答の置き換え）を変えない。
+2. The 本仕様 shall 送出の許可表 `ALLOWED_EVENT_IDS` に `OnShellChanging`・`OnShellChanged`・`OnBalloonChange` の 3 語を足し（42 → 45）、件数の直書き 2 か所（`events_change_tests.rs` の `assert_eq!` と `events_tests.rs` の完全一致のテスト名・配列）を追随させる。kanade で触るのは許可表とそのテスト、および要件 8.11 の「切替の台詞」の口だけとする（要件 12 裁定 8）。
+3. The 本仕様 shall 汎用の通知の入口の判断（許可表・定常か否か・応答の置き換え）を、印の無い依頼については変えない（印の無い依頼の振る舞いと既存の決定論テストは不変）。
 4. The 本仕様 shall `GhostBootOptions` に欄を足さず（構造体リテラル 31 か所・20 ファイル）、目録の素性（`catalog::Identity`）に欄を足さず、`ConfigInputs`・`CurrentGhost`・`GhostDecision`・`BalloonDecision` に欄を足さない。
 5. The 本仕様 shall ゴースト切替・終了操作・終了コード・ネットワーク更新の読み直し・インストール後の振る舞い（自動で切り替えない）を変えず、それらの決定論テストを 1 本も落とさない（本番ソースの字面で形を固定しているテストは新しい字面へ追随させ、削除しない）。
 6. The 本仕様 shall 同期の送信（`SendMessageW`／`SendMessageTimeoutW`）を本番ソースに足さない（`ALLOWED_SYNC_SENDS` は 2 行のまま）。
@@ -215,6 +215,7 @@
 8. The 本仕様 shall 触るファイルすべてを 1 ファイル 1,000 行の目安の内側に収める。`resolve.rs`（952）には関数を足さず、シェル名つきの解決は隣の新ファイルに置いて `resolve` はそれに委ねる（既存の呼び出し約 30 本を直さない）。上限に近いテスト（`runtime_tests.rs`・`assets_tests.rs`・`actor_tests.rs`・`schedule_tests.rs`・`ghost_switch_tests.rs`）には行を足さず、兄弟の新ファイルへ置く。`steady.rs`（935）は触らない。
 9. The 本仕様 shall 失敗の経路に記録の無いものを作らない（無視は `warn!`・失敗は `error!`・中止は `info!`・受理と完了は `info!`）。
 10. The 本仕様 shall `session_mark_verdict`（きれいな終わりの判定）と終了の出所（`ExitOrigin`）を触らず、起動中の印を別の場所で消さない（切替の失敗は元のまま続けるので終了の出所を足す理由が無い）。
+11. The 本仕様 shall kanade の汎用の通知の入口に「この依頼の台詞は切替の台詞である」という印を付けられる口を足し、印の付いた依頼について次を満たす（要件 12 裁定 8）: ⑴ その依頼が始めた台詞が終わったとき、最後まで再生されたか・利用者の中断で止まったか・別のトークに置き換えられたかを、依頼した側へ 1 回だけ知らせる（台詞が無い〔204〕ときは今日の返信のとおり）、⑵ その台詞が利用者の中断で止まったときは、台本に `\-` の予約が在っても終了系列へ進まない（ゴースト切替の相の中断と同じ扱い＝完了 `ghost-shell-balloon-switch` 衝突表 2 を継ぐ）。本仕様で印を付けるのは `OnShellChanging` だけとする。
 
 ### Requirement 9: 2 つ目のシェルを持つ検体
 
@@ -245,7 +246,7 @@
 1. The 本仕様 shall 偽の SHIORI（x64 の偽境界）と偽のシェル 2 つで「A で起きる → `\![change,shell,B,--option=raise-event]` → `OnShellChanging`（Ref0〜2 を突き合わせる・台本あり）→ 再生完了 → 差し替え → `OnShellChanged`（Ref0〜2）→ 記憶 `LastShell`＝B」を同じプロセス・同じ World で往復（B → A も）する決定論テストを 1 本持ち、⑴ イベント列と Reference、⑵ SHIORI を降ろしていない（`OnClose`・`OnBoot` 0 件）、⑶ 装着の子が古い分だけ消えて新しい分だけ在る、⑷ 可視性の持ち主と窓寸の要求が引き継がれている、を集めてから 1 回で判定する。
 2. The 本仕様 shall 偽のバルーン 2 つで「`\![change,balloon,Y]` → 台詞の終わり → 差し替え → `OnBalloonChange`（Ref0〜1）→ 記憶 `LastBalloon`＝Y → 次の台詞が新しいバルーンの幾何で組まれる」の往復を同じ形で固定する。
 3. The 本仕様 shall `raise-event` 無しのシェル切替で `OnShellChanging` が 0 件・命令を運んだ台本の終わりの後に差し替わること、メニューからのシェル切替で `OnShellChanging` が送られること、バルーンの切替で「切り替え前」のイベントが 0 件であることを固定する（要件 1.2〜1.5・2.3）。
-4. The 本仕様 shall `OnShellChanging` の台詞をバルーンブレークで止めると中止され、差し替えも `OnShellChanged` も記憶も無く、`\-` が終了に結ばれないことを固定する（要件 5.1〜5.3）。
+4. The 本仕様 shall `OnShellChanging` の台詞をバルーンブレークで止めると中止され、差し替えも `OnShellChanged` も記憶も無く、`\-` が終了に結ばれないことを固定する（要件 5.1〜5.3）。kanade 単体でも、印の付いた依頼の台詞の終わり方 3 通り（再生し切った・中断・置き換え）の知らせと、中断＋`\-` で終了系列へ進まないこと、印の無い依頼では今日どおり終了系列へ進むことを固定する（要件 8.11・兄弟の新しいテストファイルへ）。
 5. The 本仕様 shall 該当なし（未知の名前）で `warn!` 1 件・イベント 0 件、隠しシェルへの名指しの切替が通ること、`random` が現在のものを除いて選ぶこと（候補 0 なら現在のもの）、バルーンの `lastinstalled`（控えあり・控えなし）、シェルの `lastinstalled` がゴースト切替の入口を `lastinstalled` の名前で 1 回呼ぶこと、自分自身への切替で作り直されること、進行中の二重要求・ゴースト切替中・更新中・定常以外での `warn!` 1 件、をそれぞれ固定する（要件 1.6〜1.14）。
 6. The 本仕様 shall 差し替えの途中の失敗（読めないフォルダ・復号できない画像・登録の失敗）で `error!` 1 件・元の装着が残る・イベントと記憶が 0 であること、切替の進行中に終了要求が届くと切替が捨てられて今日の終了経路で終わることを固定する（要件 5.5〜5.7）。
 7. The 本仕様 shall 起動時の復元＝記憶の名のシェルで起きる（隠しシェルでも）・記憶が無ければ既定・記憶の先が実在しなければ `warn!` 1 件と既定と記憶の書き直し・4 か所の解決が同じシェルを見る（資産・配置の情報源・実行系の `mount().shell.dir`・`OnBoot` の Ref0）を固定する（要件 6.2〜6.4・6.6）。
@@ -268,4 +269,5 @@
 5. The 本仕様 shall **裁定 5（自分自身への切替は作り直す）**として、切替先が現在のシェル／バルーン自身でも無視せず同じ経路で作り直し、`OnShellChanged`／`OnBalloonChange` を送る（要件 1.8）。根拠: 完了 `ghost-shell-balloon-switch` 裁定 9（自分自身へのゴースト切替は降ろして起こし直す）と同じで、α 後の `\![reload,shell|balloon]`（`mcp-reload`）の代用になり、経路に例外を作らない。
 6. The 本仕様 shall **裁定 6（差し替え後の面と着せ替え）**として、差し替えの直前と同じ面番号を新しいシェルで表示し（無ければ今日の「無い面」の扱い）、着せ替えの状態は新しいシェルの `descript.txt` の既定に戻す（要件 2.6）。根拠: 正典は沈黙する。面番号はゴーストの台本が持つ意味（表情）なので保ち、着せ替えの区分はシェルごとの定義なので持ち越せない。多くのゴーストは `OnShellChanged` の台本で面を出し直すので、どちらでも作者の意図が勝つ。
 7. The 本仕様 shall **裁定 7（途中の失敗は元のまま・告知なし・失敗のイベントなし）**として、差し替えの途中で失敗したら `error!` を残して元のシェル／バルーンのまま続け、メッセージボックスも新しい SHIORI イベントも出さない（要件 5.5）。根拠: 開発者裁定「メッセージボックスは無粋・失敗はゴーストの台詞で伝える」（2026-09-26）と「1 体の失敗はアプリの失敗ではない」（2026-09-24）。ukadoc に切替失敗のイベントは無く、areka 独自のイベントを作っても受ける辞書がどのゴーストにも無い。
-8. Where 設計・実装の途中で裁定 1〜7 のいずれかを覆す必要が判明する, the 本仕様 shall 開発者へ議題として上げ、確定を待ってから要件・設計・`doc/COMPAT_ARCHITECTURE.md` §8 の該当箇所を改める。
+8. The 本仕様 shall **裁定 8（kanade に「切替の台詞」の口を足す・2026-09-30 要件ディスカッション議題 1・開発者確定）**として、汎用の通知の入口に印を付けられる口を足し、印の付いた台詞の終わり方を依頼した側へ知らせ、その中断を終了に結ばない（要件 5.2・8.11）。根拠: 汎用の入口の返信（`RaiseOutcome::Script`）は台詞の開始までしか知らせず、kanade の `on_talk_done` は定常のトークの中断に `\-` の予約があれば終了系列へ進む（例外はゴースト切替の相だけ）。kanade に触らず UI が推し量る案は、`\-` 入りの台詞の中断でアプリが終わり、別のイベントの応答が台詞を置き換えたときに判断を誤るので採らない。開発者の指示「並走 spec が無いのでスコープを広げる弊害は無い・目的の実現を優先せよ」。「台詞が終わってから次へ進む」口は α 後の `network-update-canon-order` でも要る（同根）。
+9. Where 設計・実装の途中で裁定 1〜8 のいずれかを覆す必要が判明する, the 本仕様 shall 開発者へ議題として上げ、確定を待ってから要件・設計・`doc/COMPAT_ARCHITECTURE.md` §8 の該当箇所を改める。
