@@ -545,7 +545,7 @@ pub(crate) fn on_notice(world: &mut World, notice: KanadeNotice) {
                         attempt = ?attempt,
                         "切替で起こしたゴーストが定常に入った——切替を終える"
                     );
-                    // 更新の窓口へ（読み直しなら古い SHIORI は降りている＝残りを消す・既定へ戻ったなら捨てる）。
+                    // 更新の窓口へ（読み直しなら古い SHIORI は降りている＝残りを消し、後送りの列の残りを新しいゴーストへ送る・既定へ戻ったなら捨てる）。
                     crate::update::desk::on_switch_end(world, attempt == WelcomeAttempt::Target);
                 }
                 stage => tracing::debug!(
