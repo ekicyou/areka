@@ -217,6 +217,7 @@ mod tests {
             user_break_talk: None,
             change: None,
             pending_change: None,
+            talk_gap: None,
         }
     }
 
@@ -237,6 +238,7 @@ mod tests {
             user_break_talk: None,
             change: None,
             pending_change: None,
+            talk_gap: None,
         }
     }
 

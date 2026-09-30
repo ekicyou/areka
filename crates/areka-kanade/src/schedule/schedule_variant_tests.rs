@@ -105,6 +105,8 @@ fn input_variants_are_existing_eight_plus_choice_two() {
             Input::UserBreak { .. } => "UserBreak",
             Input::ChangeGhost(_) => "ChangeGhost",
             Input::RaiseEvent { .. } => "RaiseEvent",
+            // shell-balloon-switch で台詞の切れ目の口（`AwaitTalkGap`）の腕を足した。
+            Input::AwaitTalkGap { .. } => "AwaitTalkGap",
         }
     }
     assert_eq!(tag(&Input::Boot), "Boot");

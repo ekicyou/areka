@@ -230,6 +230,15 @@ pub enum KanadeMsg {
         /// ちょうど 1 回返す（kanade が止まって落ちれば送り手には `ReplyError::Dropped`）。
         reply: Option<areka_actor::ReplySender<crate::change::RaiseOutcome>>,
     },
+    /// 台詞の切れ目の口（UI → kanade）。切れ目に達した／達しないと決まった時点で、結果を
+    /// `reply` へちょうど 1 回返す（kanade が止まって落ちれば受け手には `ReplyError::Dropped`）。
+    /// 見張るのは高々 1 つで、見張りの最中に次の依頼が来たら古い返信端は捨てる。
+    AwaitTalkGap {
+        /// 先に送る印のイベント（要らなければ None）。
+        raise: Option<crate::change::GapRaise>,
+        /// 結果の返信端。
+        reply: areka_actor::ReplySender<crate::change::TalkGap>,
+    },
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -613,6 +622,8 @@ mod tests {
                 KanadeMsg::ChangeGhost(_) => "ChangeGhost",
                 // 汎用の通知の入口（additive・既存の判別結果を変えない）。
                 KanadeMsg::RaiseEvent { .. } => "RaiseEvent",
+                // 台詞の切れ目の口（additive・既存の判別結果を変えない）。
+                KanadeMsg::AwaitTalkGap { .. } => "AwaitTalkGap",
             }
         }
         let existing = [

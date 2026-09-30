@@ -39,6 +39,7 @@ pub(crate) mod log_capture;
 /// submit ガードはイベント許可 ∨ リソース許可で判定する（`crate::actor` の egress チョークポイント）。
 pub mod resources;
 pub(crate) mod steady;
+pub(crate) mod talk_gap;
 pub(crate) mod user_break;
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。
@@ -102,6 +103,11 @@ pub(crate) enum Input {
         id: String,
         references: Vec<String>,
         method: crate::change::ShioriMethod,
+    },
+    /// 台詞の切れ目の口（UI → kanade）。始め方は [`talk_gap::begin`] が持ち、結果は毎 `step` の
+    /// 後の [`talk_gap::observe`] が決める。
+    AwaitTalkGap {
+        raise: Option<crate::change::GapRaise>,
     },
 }
 
@@ -223,6 +229,8 @@ pub(crate) struct State {
     pub change: Option<change::ChangeState>,
     /// 台詞の再生中に受けた切替の要求の保留（`pending_close` と同型）。
     pub pending_change: Option<crate::change::ChangeRequest>,
+    /// 台詞の切れ目の見張り（高々 1 つ・[`talk_gap`]）。
+    pub talk_gap: Option<talk_gap::GapWatch>,
 }
 
 impl State {
@@ -241,6 +249,7 @@ impl State {
             user_break_talk: None,
             change: None,
             pending_change: None,
+            talk_gap: None,
         }
     }
 
@@ -381,7 +390,17 @@ pub(crate) enum Action {
 /// 本タスク 2.1 は**横断遷移**（由来・状態を問わず終了系列へ進む共通ロジック）と
 /// 防御アームを実装し、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
 /// 「横断遷移を先に判定 → 該当しなければフェーズ分岐」である。
+///
+/// どの入力でも、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
+/// （見張りが無ければ何もしない）。
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
+    let (mut state, actions) = route(state, input, config);
+    talk_gap::observe(&mut state);
+    (state, actions)
+}
+
+/// [`step`] の入力の振り分け（横断遷移 → フェーズ固有遷移への委譲）。
+fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
         // --- 横断遷移: 由来・状態を問わず終了系列へ進む共通ロジック ---
 
@@ -483,6 +502,9 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
             references,
             method,
         } => change::on_raise_event(state, id, references, method),
+
+        // AwaitTalkGap: 始め方ごと talk_gap::begin へ渡す（結果は遷移の後の見極めが決める）。
+        Input::AwaitTalkGap { raise } => talk_gap::begin(state, raise),
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 

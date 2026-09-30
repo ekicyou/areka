@@ -121,6 +121,55 @@ pub enum RaiseOutcome {
     Failed,
 }
 
+/// 台詞の切れ目の口に添える印のイベント（本仕様では `OnShellChanging` だけ）。
+///
+/// 口（`KanadeMsg::AwaitTalkGap`）は印の有無で振る舞いを分ける。印が無ければ切れ目を待つだけで、
+/// 印があれば先にこのイベントを送り、その応答の台詞を追う（areka-P0-shell-balloon-switch 要件 8.11）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GapRaise {
+    /// イベント名（許可表 `ALLOWED_EVENT_IDS` の要素）。
+    pub id: String,
+    /// Ref0〜Ref n（欠番は空文字列・詰めない）。
+    pub references: Vec<String>,
+    /// GET か NOTIFY か。
+    pub method: ShioriMethod,
+}
+
+/// 台詞の切れ目の口の結果（kanade → 依頼した側・ちょうど 1 回）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TalkGap {
+    /// 定常・再生中のトーク無し・終了とゴースト切替の保留無しに達した。
+    Reached { marked: Option<MarkedEnd> },
+    /// 印の台詞を利用者が中断した（終了系列へは進んでいない）。
+    CancelledByUser,
+    /// 切れ目に達しないと決まった。
+    Left { reason: GapLeft },
+    /// 印のイベントを送らなかった（許可表に無い）。
+    NotSent { outcome: RaiseOutcome },
+}
+
+/// 印の台詞の終わり方（要件 8.11 ⑴）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkedEnd {
+    /// 印の台詞が最後まで流れた（選択肢の時間切れの解除を含む）。
+    Completed,
+    /// 別のトークに置き換わった。
+    Replaced,
+    /// 印のイベントが台詞を返さなかった。
+    NoTalk,
+}
+
+/// 切れ目に達しないと決まった理由。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GapLeft {
+    /// 依頼が届いたとき定常でなかった（起動系列・終了系列・終了の保留あり）。
+    NotSteady,
+    /// 待っている間に終了系列へ入った・終了の保留が立った。
+    Closing,
+    /// 待っている間にゴースト切替の相へ入った・ゴースト切替の保留が立った。
+    GhostChange,
+}
+
 #[cfg(test)]
 #[path = "change_tests.rs"]
 mod tests;
