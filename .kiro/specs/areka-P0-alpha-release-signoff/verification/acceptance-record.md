@@ -322,3 +322,222 @@ foreach ($k in $kids) {
 ### 6.7 利用条件の画面（項目 4）
 
 項目 4 の「利用条件の画面が出たときは『はい』で進める」は、この一周では踏まれない。利用条件のファイル（`crates/areka/src/install/terms.rs` の `TERMS_FILES`＝`terms.txt`・`terms.md`）を、`R_POST_and_KOMAINU.nar` も `claudia.nar` も持たないため（2026-10-01 に 2 つの `.nar` の中身の一覧で `terms.` に当たる項目が 0 件であることを確かめた）。§7 の項目 4 に、画面が出なかったことと、この理由を書く。説明書の利用条件の記述（要件 4.3）は、`TERMS_FILES` と完了 `ghost-install` の `signoff.md`（手で作った `konnoyayame-terms.nar` で画面を確かめた回）で裏付ける（§10）。
+
+---
+
+## 7. 項目ごとの結果
+
+タスク 4.1〜4.4 で書く（走行の後）。
+
+## 8. 登記（要件 3.6・3.8・5.6）
+
+判定に載せない既知の症状・確かめられなかった既知の制限の候補・欠陥と開発者の判断をここに書く。8.1 はタスク 2.5（zip を組む前）で書いた。走行で見つかるもの（3.6 の除外で済まない症状・欠陥・強制終了で残った子のプロセス）はタスク 4.1〜4.4 で 8.2 以降に書き足す。
+
+### 8.1 確かめられなかった既知の制限の候補（要件 5.6）
+
+申し送られた既知の制限の候補のうち、署名の根拠にするコミットで確かめられないものを、推測で説明書へ書かずにここへ登記する。今わかっている候補は次の 2 つ（design.md「受入記録」の §8 の行）。2 つとも完了 `ghost-install` の `design.md` の「Open Questions / Risks」の 1・2 から申し送られた（同じ設計の「申し送り」の行が、この 2 つを本仕様の既知の制限の候補として渡している）。
+
+| 候補 | 何が分からないか | 確かめられなかった理由 | 扱い |
+|---|---|---|---|
+| ⑴ 表示中のシェル・使用中のバルーンのフォルダを上書きするインストール | シェルかバルーンの `.nar` を、いま表示しているシェル・いま使っているバルーンと同じフォルダへ入れたとき、areka 自身か SHIORI がそのフォルダのファイルを開いたまま掴んでいて入れ替えに失敗するか（失敗すれば宛先は元のまま・`OnInstallFailure`。完了 `ghost-install` の要件 7.8） | ⒜ ソースからは決められない: 完了 `ghost-install` の設計が「掴んでいるかはソースからは決められない」と書いたとおりで、シェルとバルーンの宛先はゴーストを降ろさずに入れる道（`crates/areka/src/install/judge.rs` の `destination_of`＝種類が `Shell`・`Balloon` なら `Destination::Elsewhere`）を通るため、掴んでいれば失敗し、掴んでいなければ通る。⒝ 実機の記録が無い: 完了 `ghost-install` の `signoff.md` の項目 3 が確かめたのは、起動中のゴーストを降ろしてから入れる道（`install_overwrite_done ok=true`・所要 277 ms）。このとき宛先の `ghost\emo2`（中のシェル `shell\master` を含む）と、使っていたバルーン `balloon\emo2-kakukaku` にも展開した（`install_done kind=Ghost places=[…ghost\\emo2, …balloon\\emo2-kakukaku]`）が、ゴーストを降ろして窓が 0 枚になった後だった（`ghost_switch_down_ms`・`windows_closed_for_restart closed=4` の後）。表示したまま、降ろさずにシェル・バルーンのフォルダを上書きする道（`Elsewhere`）は踏んでいない。⒞ この一周でも踏まない: 項目 4 で入れるのは新しいゴースト 2 体（`R_POST_and_KOMAINU`・`claudia`）で、表示中のシェル・使用中のバルーンの宛先へ入れる操作は検証項目表に無い | 説明書に書かない（要件 5.6）。完成判定の文書の「持ち越した事項」の表（§6）に「確かめられなかった既知の制限の候補」として載せる（要件 7.4）。引受先（台帳に実在する spec・その時点で起票した spec・開発者の手のどれか）は、タスク 5.1 で `roadmap.md` の台帳の行で確かめてから書く（要件 7.7） |
+| ⑵ 起動中のゴーストへ入れる間に Windows を終えたときの後始末 | 起動中のゴーストへ入れる一周（降ろす → 展開 → 起こし直す）の途中で Windows の終了が来たとき、後始末が呼ばれるか。完了 `ghost-install` の設計の見立ては「展開の間は窓が 0 枚で、受け手の窓が無いので後始末が呼ばれずにプロセスが終わらされうる。確定の 2 手の間で断たれると宛先のフォルダは無く、元の中身は作業フォルダに 7 日残る」 | ⒜ 手当ては入れていない（完了 `ghost-install` の設計が「手当ては入れず、実機で所要を測り、申し送る」と決めた）。⒝ 実機で測れたのは所要だけ: 完了 `ghost-install` の `signoff.md` の項目 3 で、降ろしてから展開し終えるまでが 277 ms（`install_overwrite_done ms=277`）。この短い間に Windows の終了を当てる操作は誰も行っておらず、起きたときの後始末の結果（宛先・作業フォルダ・次の起動）の記録は無い。⒞ この一周でも踏まない: 検証項目表に Windows の終了を当てる項目は無く、数百ミリ秒の間に終了を当てる操作は 1 分以内に観測できる操作（要件 2.4）にならない | 説明書に書かない（要件 5.6）。なお、元の中身が作業フォルダに 7 日残ること自体は、入れる途中で元へ戻せなかったときの既知の制限として説明書に書いてある（83 行目・`crates/areka-nar/src/install.rs` の `SURVIVOR_RETENTION`）が、「Windows の終了で後始末が呼ばれない」ことは書かない。完成判定の文書の「持ち越した事項」の表（§6）に載せる（要件 7.4）。引受先は ⑴ と同じくタスク 5.1 で台帳の行で確かめる（要件 7.7） |
+
+### 8.2 説明書の行で確かめられなかったもの（要件 4.7・5.5）
+
+**0 行。** §10.1 の突き合わせで、説明書の主張を持つ 125 行はすべて、本体のソース・zip の中身・完了 spec の記録・本仕様の記録のどれかで確かめられた（確かめられない行を書かずに回す先がここだが、回した行は 0）。
+
+## 9. 採り直し
+
+該当するときだけ書く（一周の後に zip の中身を変えたとき・要件 1.3）。
+
+---
+
+## 10. 説明書の突き合わせ（要件 4.6・4.7・4.8・5.4・5.5）
+
+対象は `dist/README.txt` の HEAD `0055d2827c711d82afb302bdc4e0d3c4cfe5238d`（タスク 2.4 のコミット・説明書を最後に変えたコミット）の版。作業木のファイルは同じ中身（git の `core.autocrlf=true` で改行が CRLF になっているだけ・`tr -d '\r'` で比べて同じ・UTF-8 の BOM つき）。175 行のうち空行が 50 行、主張を持つ行が 125 行。確かめた日は 2026-10-01。
+
+### 10.1 全行の突き合わせ（要件 4.7・5.5）
+
+空行（3・6・7・9・15・16・18・22・23・25・36・37・39・41・44・47・48・50・57・58・60・62・66・69・70・72・92・93・95・97・99・109・111・113・115・117・120・122・124・126・128・129・131・135・140・145・150・157・164・171 行目の 50 行）は主張を持たないので行を立てない。残りの 125 行を、下の表の「行」の列が 1 行も漏らさず重ならずに覆う（欄の見出し 9 行は 2 行目の表の行にまとめた）。「種別」は、本体のソース（`crates/` の定義）・zip の中身（`tools/package-alpha.ps1` が組む物と、その元の `vendors/sample_ghost/*.nar`）・完了 spec の記録（`.kiro/specs/completed/` の文書）・本仕様の記録（本仕様の設計と git の記録）のどれで確かめたか（添え物として、説明書が出どころに挙げる第三者のサイトを読み直した行には「外部の頁」を足す）。ソースは「何の定義か」で指す（パスは `crates/areka/src/` を略したものがある）。
+
+| 行 | 書いてあること | 確かめた先 | 種別 |
+|---|---|---|---|
+| 1・2 | 題「areka（α 版）をお使いになる方へ」と下線 | 主張は「α 版」だけ。zip の名前が `areka-alpha-x64-<日付>-<7 桁>.zip`（`tools/package-alpha.ps1` の段「圧縮」） | zip の中身 |
+| 8・17・24・38・49・59・71・94・130 | 欄の見出し 9 つ | design.md「説明書 `dist/README.txt`」の欄の並び（起動／終了／右クリックメニュー／.nar の入れ方／更新のしかた／記憶の置き場／既知の制限／同梱しているバルーンについて／同梱物とライセンス）と同じ順 | 本仕様の記録 |
+| 4 | デスクトップにキャラクター（ゴースト）を住まわせる Windows 用のアプリ | `tools/package-alpha.ps1` の `$X64`（`x86_64-pc-windows-msvc` だけを組む）と zip の判定 5（`areka.exe` の機種 0x8664）・`.kiro/steering/product.md`（「伺か」のような常駐キャラクターのデスクトップマスコット） | zip の中身 |
+| 5 | 2026-10-01 時点の内容・α 版なので変わる | 説明書を書いた 3 つのコミット `86675f08`（2.2）・`bf9782af`（2.3）・`0055d282`（2.4）の日付がどれも 2026-10-01（`git log --date=iso -- dist/README.txt`）＝要件 4.1 | 本仕様の記録 |
+| 10 | areka.exe を開く・引数は要らない | `boot_config.rs` の `resolve_boot_from`（引数が無ければ根の列挙と記憶で決める）・zip の最上位の `areka.exe`（`package-alpha.ps1` の判定 2 の許可表 `$allowed`） | 本体のソース・zip の中身 |
+| 11 | 同じフォルダの ghost・balloon から選ぶ・バルーン＝せりふを表示する吹き出し | `boot_config.rs` の `resolve_root_from`（根＝`areka.exe` の親のフォルダ）・`crates/areka-ghost/src/catalog.rs` の `BasewareRoot::ghost_store`／`balloon_store`（`<根>/ghost`・`<根>/balloon`）・`$allowed` の `ghost`・`balloon` | 本体のソース・zip の中身 |
+| 12 | 初めての起動では えも？？（ghost\emo2）が emo2-kakukaku で立つ | `boot_resolve.rs` の `resolve_ghost`（記憶が無く 1 体だけ＝段 3 唯一）と `resolve_balloon`（段 3 同梱＝`install.txt` の `balloon.directory`）・`emo2.nar` の `install.txt` に `balloon.directory,emo2-kakukaku`・`$allowed` の `ghost/` が `emo2` だけ・`-Check` が初回のバルーンを同梱の `emo2-kakukaku` と判定する | 本体のソース・zip の中身 |
+| 13 | 2 回目からは前回のゴーストが、そのゴーストで前回使ったシェルとバルーンで立つ | `boot_resolve.rs` の `read_last_ghost`（App スコープ）・`read_last_balloon` と `decide_boot_shell`（起動するゴーストの Ghost スコープ）・`resolve_ghost`／`resolve_balloon` の段 2（記憶） | 本体のソース |
+| 14 | 前回きれいに終わらなかった次は えも？？ で立つ・ghost に えも？？ が無ければほかのゴースト | `boot_config.rs` の `resolve_boot_from`（起動中の印が在れば最後のゴーストの記憶を読まない・`session_mark_found`）→ `boot_resolve.rs` の `resolve_ghost` の段 3 唯一・段 4 既定（`DEFAULT_GHOST_FOLDER`＝`emo2`）・段 5 無作為 | 本体のソース |
+| 19 | メニューの「終了」→ 別れの台詞のあとに終わる | `menu/mod.rs` の `request_close`（`CloseReason::User` の終了指示を送る・窓を閉じるのは終了の握手の後）・`app_exit.rs` の `quit_app` | 本体のソース |
+| 20 | Alt＋F4 などでも同じく別れの台詞のあとに終わる | `app_exit.rs` の `on_ghost_os_close`（OS の閉鎖要求を、メニューの「終了」と同じ `CloseReason::User` の終了要求にして送る・窓は消さない） | 本体のソース |
+| 21 | Ctrl と Shift を押しながら左ダブルクリックで台詞なしですぐ終わる | `input_events/mod.rs` の `on_char_pointer_pressed`（Ctrl・左ダブルクリック・結線の後は Shift も → 強制退避で全窓を閉じる）・`app_exit.rs` の `ExitOrigin` の強制退避 | 本体のソース |
+| 26 | 右クリックで出る | `menu/trigger.rs` の `on_char_pointer_released`（キャラクター窓で右ボタンを離したとき） | 本体のソース |
+| 27 | 項目は上から 7 つ（ゴースト・シェル・バルーン・ネットワーク更新・インストール…・説明書・終了） | `menu/mod.rs` の `Frame::ORDER`・`menu/captions.rs` の `FRAME_CAPTIONS` の既定名 | 本体のソース |
+| 28 | 「ゴースト」: ghost フォルダの一覧から選ぶと別れの台詞のあとに切り替わる・起動できないときは えも？？ に戻る | `menu/ghost_frame.rs`（根の目録の並び）・`emo2_boot/ghost_switch.rs` の `request_ghost_switch`（送り出す側へ `OnGhostChanging`）と `switch_to` → `switch_to_default`（`DEFAULT_GHOST_FOLDER`） | 本体のソース |
+| 29 | 「シェル」: 今のゴーストのシェルの一覧・今のゴーストのまま替わる | `menu/shell_frame.rs`（今のゴーストのシェルの目録）・`emo2_boot/shell_balloon_switch.rs` の `request_skin_switch`（ゴーストを降ろさず差し替える） | 本体のソース |
+| 30 | 「バルーン」: balloon フォルダの一覧・今のゴーストのまま替わる | `menu/balloon_frame.rs`（根のバルーンの目録）・`request_skin_switch` | 本体のソース |
+| 31 | 「ネットワーク更新」: 今のゴースト・シェル・バルーンを配布元の新しい版に | `menu/update_frame.rs`（選ぶと `update/desk.rs` の `update_current` が今の 3 つを受付へ掛ける） | 本体のソース |
+| 32 | 「インストール…」: ファイルを選ぶ画面・.nar を選ぶとゴースト・シェル・バルーンなどを入れる | `menu/install_frame.rs`・`install/desk.rs` の `pick_and_submit`・`install/pick.rs`（`GetOpenFileNameW`・フィルタ「書庫 (*.nar;*.zip)」） | 本体のソース |
+| 33 | 「説明書」: えも？？ なら ghost\emo2\readme.txt・ファイルが無いゴーストでは選べない | `readme.rs` の `resolve_path`（`readme` キーが無ければ `DEFAULT_README`＝`readme.txt` をゴーストのフォルダの直下で）と `is_available`（`menu/mod.rs` の `readme_item` の `enabled`）・`emo2.nar` の `ghost/master/descript.txt` に `readme` の行が 0・書庫の最上位に `readme.txt`（3,105 バイト） | 本体のソース・zip の中身 |
+| 34 | 「終了」: areka を終わる | 19 行目と同じ（`menu/mod.rs` の `close_item` → `request_close`） | 本体のソース |
+| 35 | ゴーストが項目の名前を用意していればその名前で出る | `menu/captions.rs` の `FRAME_CAPTIONS`（`ghostrootbutton.caption` ほかを照会）と `CaptionMap` | 本体のソース |
+| 40・42・43 | .nar にまとめて配られる・入れ方は「インストール…」から選ぶのと、キャラクターの上へ落とすのの 2 つ | 32 行目の出どころ・`input_events/file_drop.rs` の `sort_drops`（ゴースト窓に落とされた `.nar`／`.zip` で `install.txt` を持つものをインストール対象に振り分ける）・完了 `file-drop` | 本体のソース・完了 spec の記録 |
+| 45 | 入れた後は今のゴーストのまま・替えるときは「ゴースト」から・入れ終えたときの台詞で自分から替えるゴーストもある | 完了 `ghost-install` の `requirements.md` 要件 12 の裁定 5・`emo2_boot/ghost_switch.rs` の `record_last_installed`（`lastinstalled` の名前で替える道）・完了 `ghost-install` の `signoff.md` 項目 2（`\![change,ghost,lastinstalled]` で替わった） | 完了 spec の記録・本体のソース |
+| 46 | 利用条件のファイルを持つ .nar は入れる前に「はい」「いいえ」・「いいえ」なら入れない | `install/terms.rs` の `TERMS_FILES`（`terms.txt`・`terms.md`）・`install/procedure.rs` の `terms_step`（拒否なら `OnGhostTermsDecline` だけを送って入れない）・完了 `ghost-install` の `signoff.md` 項目 4（「はい」「いいえ」とも合格） | 本体のソース・完了 spec の記録 |
+| 51 | 「ネットワーク更新」で今のゴースト・シェル・バルーンをそれぞれの配布元の新しい版に入れ替える | `update/desk.rs` の `update_current`（今の 3 つ）・`update/procedure.rs`（対象ごとに配布元を 1 周） | 本体のソース |
+| 52 | 更新の間はゴーストが進み具合を話す（内容はゴーストしだい） | `update/procedure.rs` の `UpdatePorts`（イベントを今のゴーストへ送って応えを待つ）・完了 `network-update` の `signoff.md` | 本体のソース・完了 spec の記録 |
+| 53 | 何か入れ替わったときだけ、最後の台詞のあとにいったん引っ込み、同じゴーストが戻って更新成功を話す | `update/procedure.rs`（`TargetEnd::Changed` が 1 つでもあれば `request_reload`）・`crates/areka-kanade/src/schedule/boot.rs` の `boot_root`（`BootOrigin::Updated` は渡された名前＝列の先頭の `OnUpdateComplete` を最初に送る）・完了 `network-update` 要件 5.3 | 本体のソース・完了 spec の記録 |
+| 54 | 違いが無ければ引っ込まず更新無しを話して終わる | `update/procedure.rs`（`Changed` が無ければ読み直しを頼まない）・完了 `network-update` の `signoff.md` | 本体のソース・完了 spec の記録 |
+| 55 | 配布元（更新先）を持たないものは飛ばす | `update/procedure.rs` の `update_target_skipped`（`reason = "no_homeurl"`） | 本体のソース |
+| 56 | どれにも更新先が無いときと更新している間は選べない | `update/desk.rs` の `can_update`（段が `Idle`・3 つの `descript.txt` のどれかに更新先）・`menu/update_frame.rs` | 本体のソース |
+| 61・63 | 3 か所に覚える・areka の記憶は areka.exe の隣の profile\areka\ | `boot_config.rs` の `default_app_profile_dir`（exe の親の `profile\areka`） | 本体のソース |
+| 64 | ゴーストの記憶は ghost\<ゴースト>\ghost\master\profile\areka\ | `boot_resolve.rs` の `ghost_roots`（`<ゴースト>/ghost/master` に `profile_areka_root`）・`crates/areka-ghost/src/sylphya_wiring.rs` の `profile_areka_root`（`profile/areka`） | 本体のソース |
+| 65 | シェルの記憶は ghost\<ゴースト>\shell\<シェル>\profile\areka\ | `crates/areka-ghost/src/runtime.rs` の Shell スコープの根（`mount.shell.dir` に `profile_areka_root`） | 本体のソース |
+| 67 | 例: えも？？ のゴーストの記憶は ghost\emo2\ghost\master\profile\areka\ | 64 行目に `emo2` を当てた形 | 本体のソース |
+| 68 | 消すと初めての起動と同じ状態に戻る | 記憶が無ければ `resolve_ghost`／`resolve_balloon` は段 2 を飛ばす・`crates/areka-ghost/src/runtime.rs` の `apply_boot_record_gate`（起動回数の記憶 `PersistKey::BootCount` が無ければ `config.first_boot` を真にする＝`OnFirstBoot`） | 本体のソース |
+| 73 | areka.exe に署名が無い | `tools/package-alpha.ps1` に署名の段が無い（`signtool`・`Set-AuthenticodeSignature` の語が 0 件） | zip の中身 |
+| 74 | Windows 10／11 の 64 ビット版専用 | `$X64` だけを組む・判定 5（`areka.exe` が 0x8664）・完了 `alpha-package` の要件 4.5（Windows 専用） | zip の中身・完了 spec の記録 |
+| 75 | 深いフォルダに展開しない・長いと同梱のゴーストが話さなくなる | 完了 `alpha-package` の `research.md` §4.2（展開先のパスが長いと pasta の読み込みが失敗し、接続の失敗を出さずに黙る）・`package-alpha.ps1` の `EXPAND_DIR_MAX_CHARS`＝160 | 完了 spec の記録・zip の中身 |
+| 76 | 表現力は えも？？ が普通に動く水準まで | `.kiro/steering/roadmap.md` の M2 のゴールの開発者の指示（「表現力増強は emo2 が普通に動いている水準で一旦よい」） | 本仕様の記録（台帳） |
+| 77 | 右クリックメニューは Windows の標準の見た目 | `menu/win32.rs`（`TrackPopupMenuEx` で OS のメニューを出す）・完了 `popup-menu-minimal` | 本体のソース |
+| 78 | 複数のゴーストを同時に出せない | `ghost_session.rs` の `GhostSlot`（`Option<GhostSession>` を 1 つだけ持つ置き場） | 本体のソース |
+| 79 | ほかのアプリからゴーストへ話しかける仕組み（SSTP）が無い | 10.4 の語の探し（受け口 0） | 本体のソース |
+| 80 | SAORI はゴースト自身が読み込むものだけ・本体は読み込まない | 10.4 の語の探し（読み込み口 0） | 本体のソース |
+| 81 | キャラクターが 3 人以上のゴーストでは 3 人目からの窓が出ない | `emo2_boot/mod.rs` の `derive_scopes`（`vec![0, 1]` 固定） | 本体のソース |
+| 82 | 管理者として起動した areka へふつうの権限のエクスプローラから落としても届かない | 完了 `file-drop` の `requirements.md` 要件 8.9（OS の仕組みで窓に届かない・既知の制限として申し送る） | 完了 spec の記録 |
+| 83 | 入れる途中で元へ戻せなかったときは元の中身が areka.exe のフォルダの中の .nar-work に残り、7 日を過ぎた後、次に入れるときに片付く | `crates/areka-nar/src/install.rs` の `WORK`（`.nar-work`・根の直下）と `SURVIVOR_RETENTION`（7 日）と `is_retained`・`install/worker.rs`（根＝ベースウェアの根） | 本体のソース |
+| 84 | 更新のオプション（確かめるだけ・試すだけ・やり直し）は受けない・付けて頼まれたら何もしない | `emo2_boot/update_cue.rs` の `UPDATE_OPTIONS`（`checkonly`・`testonly`・`recovery`）と `is_update_option` | 本体のソース |
+| 85 | シェル・バルーンの更新先を差し替える仕組みには応えない | `crates/areka-kanade/src/schedule/resources.rs`（`other_homeurl_override` を照会に載せない） | 本体のソース |
+| 86 | ゴーストの指示で取ってきて入れる仕組みは .nar だけ | `install/judge.rs`（`url` の種別が `nar` 以外は `ScriptRefusal::UnsupportedKind`） | 本体のソース |
+| 87 | 取ってきたファイルは %TEMP%\areka\download\ に残り、7 日より古い物は次に取ってくるときに消す | `install/fetch_url.rs` の `download_dir`（`%TEMP%\areka\download`）と `KEEP`（7 日） | 本体のソース |
+| 88 | 更新の途中で元へ戻せなかったときの残りが更新した物のフォルダの中の .update-work に残る・取り出しは手で | `crates/areka-update/src/paths.rs` の `WORK_DIR`（`<対象>/.update-work/`）・本仕様の `brief.md` の 2026-09-30 の申し送り ⑸ | 本体のソース |
+| 89 | 引数でゴーストのフォルダを指して始めたときは引っ込んで戻らず、次の起動から効く | `update/desk.rs` の `reload_folder`（フォルダ名が無い＝引数の起動は `argv` で読み直さない） | 本体のソース |
+| 90 | 今表示していないシェル・バルーンを更新したときは、次に選んだときに効く | `update/desk.rs` の `reload_folder`（読み直すのは同じゴースト・立つのは今のシェル・バルーン）・本仕様の `brief.md` の 2026-09-30 の申し送り ⑺・タスク 2.3 の Implementation Notes（要件 5.3 を実物に合わせた） | 本体のソース・本仕様の記録 |
+| 91 | 引っ込んで戻ったとき「更新成功」の台詞の終わりを待たずにまとめの知らせを送る・両方に応えるゴーストでは置き換わる | 完了 `network-update` の `requirements.md` 要件 5.3（既知の制限として明記）・`update/procedure.rs`（総括を後送りの列の最後へ） | 完了 spec の記録・本体のソース |
+| 96 | 地の文の 1 文（emo2-kakukaku は えも？？ の同梱物で「1 つ」に数えない・条件は ◆ バルーン「emo2-kakukaku」の欄） | 指す先の欄が 165 行目に在る・`package-alpha.ps1` の `$allowed` の `balloon/` が `emo2-kakukaku` と `StayseeBalloon` の 2 つ・要件 4.6 | zip の中身 |
+| 98・100〜108・110・112・114・116・118・119・121・123・125・127 | 既定バルーンの欄の本文（§6.2 の写し） | 10.2 の一致（完了 `default-balloon-bundle` の `verification/signoff-record.md` §6.2 と一致） | 完了 spec の記録 |
+| 132〜134 | ほかの作者の作品が入っている・MIT は本体だけ・それぞれの条件に従う | `package-alpha.ps1` の段「組み立て」（`ghost/emo2`・`balloon/emo2-kakukaku`・`balloon/StayseeBalloon` を入れる） | zip の中身 |
+| 136〜139 | areka 本体（areka.exe・shiori-host32-helper.exe）の作者 ekicyou・MIT（LICENSE-MIT）・ライブラリの表示は THIRD-PARTY-NOTICES.md | `Cargo.toml` の `authors`（`ekicyou`）・`LICENSE-MIT`（MIT License・Copyright (c) 2026 ekicyou）・`$allowed` の最上位の `areka.exe`・`shiori-host32-helper.exe`・`LICENSE-MIT`・`THIRD-PARTY-NOTICES.md`（段「謝辞の生成」） | zip の中身 |
+| 141〜144 | えも？？ の辞書・スクリプトの作者 えちょ（ekicyou）・利用条件の記載なし・出どころ readme.txt と配布サイト | `emo2.nar` の `readme.txt`（「制作者：えちょ（ekicyou）」・「配布サイト：https://ekicyou.github.io/ghost_dev/emo2/」・利用条件の節が無い）・書庫に `terms.` で始まる項目が 0 | zip の中身 |
+| 146〜149 | pasta.dll（32 ビット）の作者 ekicyou・MIT・出どころ pasta の LICENSE と THIRD_PARTY_LICENSES.txt | `emo2.nar` の `ghost/master/THIRD_PARTY_LICENSES.txt`（291,413 バイト・「pasta 自体は MIT License で配布されています（https://github.com/ekicyou/pasta/blob/main/LICENSE）」）・`package-alpha.ps1` の判定 5（`pasta.dll` の機種 0x014c＝32 ビット） | zip の中身 |
+| 151〜156 | \0 側「コンフィズリー」の作者 ゆゆぴか・禁止事項 4 つ・出どころ readme.txt（同じ内容が confiserie.txt にも）とサイト | `emo2.nar` の `shell/master/readme.txt`（「作成者：ゆゆぴか」・禁止の 4 行「フリーシェルとしての再配布」「伺か関連物以外での使用」「商用利用」「立ち絵の左右反転」）。`shell/master/confiserie.txt`（50 行）はバイトでは違うが、その 1 行目と 4〜50 行目が `readme.txt` の 8 行目と 11〜57 行目に同じ字で入っている（違いは区切りの行と、`readme.txt` の前後の見出しだけ）＝「同じ内容」は成り立つ。サイトは `readme.txt` の `https://yusyuparo.net/` | zip の中身 |
+| 158〜163 | \1 側「City-Pop'n」の作者 大槻・条件の 2 つの引用・抜き出せないこと・出どころ CityPop.txt とサイト | `emo2.nar` の `shell/master/CityPop.txt`（500 バイト・「改変や転用、伺かゴースト以外での使用の一切は自由です。」「使用許可の請求も不要です。」「作成者：大槻」「http://th88.blog.shinobi.jp/」）。書き方は議題 5 の開発者の答え（2026-10-01「A. このままでよい」・tasks.md の Implementation Notes 2.4） | zip の中身・本仕様の記録 |
+| 165〜170 | emo2-kakukaku の作者 ekicyou・画像素材 フキダシデザイン・規約の要約・出どころ readme.txt「利用バルーン」と規約の URL | `emo2.nar` の `readme.txt` の「利用バルーン」の節（「制作者：えちょ（ekicyou）」・「画像素材：「フキダシデザイン」（https://fukidesign.com/）より」）・規約の要約は完了 `alpha-package` の `research.md` の作者と条件の表（`https://fukidesign.com/terms` を 2026-09-26 に取得して要約）。加えて、タスク 2.5 のレビューで、レビュー係が 2026-10-01 に規約の頁を読み直し、「1ゲームやアプリに使える素材は20素材まで」・著作権の表記は不要・データの再配布は不可の 3 点が説明書の要約と合うことを確かめた（説明書の「1 つにつき 20 素材まで」の裏付け） | zip の中身・完了 spec の記録・外部の頁 |
+| 172〜175 | StayseeBalloon の作者 ぽな・CC0 1.0・出どころ LICENSE・readme.txt・GitHub | `vendors/sample_ghost/StayseeBalloon.nar` の `LICENSE`（「CC0 1.0 Universal」）と `readme.txt`・完了 `default-balloon-bundle` の `signoff-record.md` §6.2（入手元 `https://github.com/ponapalt/StayseeBalloon`） | zip の中身・完了 spec の記録 |
+
+覆い方の確かめ: 上の表の「行」の列の行の数は 9（見出し）＋116（それ以外）＝125 で、主張を持つ行の数 125（175 − 空行 50）と同じ。
+
+### 10.2 §6.2 の写しの一致（要件 4.6）
+
+比べ方（design.md「§6.2 の写し方」の「写せたことの確かめ方」のとおり）:
+
+- 写し元: 完了 `areka-P0-default-balloon-bundle` の `verification/signoff-record.md` の `### 6.2` から `### 6.3` の前までの、`>` で始まる行だけ。各行の先頭の `>` とその後の空白 1 つを落とし、表の見出しの行（`| 項目 | 内容 |`）と区切りの行（`|---|---|`）を除き、行頭の見出しの記号 `#`・行頭の箇条の記号 `- ` を落とし、`<br>`・`**`・`` ` ``・`|` を落とし、すべての空白（全角の空白を含む）を落とす。
+- 写し先: 説明書の `■ 同梱しているバルーンについて` の行から `■ 同梱物とライセンス` の前の行まで。地の文の 1 文（`えも？？ に付いてくるバルーン emo2-kakukaku` で始まる行）を除き、行頭の空白を落としてから行頭の `■`・`◆`・`・` を落とし、すべての空白を落とす。
+- 両方を行の順につないだ文字の列が同じであること。較正として、説明書の写しの「1 つ入っています」を「2 つ入っています」に変えた（1 文字だけ変えた）写しに同じ比べ方を当てて、同じでないこと。
+- 道具: 使い捨ての Python の台本（セッションの一時フォルダの `check_readme.py`・リポジトリには置かない）。
+
+コマンドと出力（逐語・2026-10-01）:
+
+```
+$ export PYTHONIOENCODING=utf-8
+$ python check_readme.py match .kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md dist/README.txt
+framing_lines_removed=1
+source_chars=1256 readme_chars=1256 equal=True
+calibration altered_line=98 readme_chars=1256 equal=False
+```
+
+- 判定: 写し元と写し先は 1,256 文字ずつで**一致した**（`equal=True`）。地の文として除いた行はちょうど 1 行。
+- 較正: 98 行目の 1 文字を変えた写しは文字の数が同じ 1,256 のまま**一致しない**（`equal=False`）＝比べ方は 1 文字の違いを拾える。
+
+あわせて、§6.3 の判定 ⑵ の探し方（16 語）を説明書の新しい欄に当てた（design.md の同じ節の「加えて」）:
+
+```
+$ P=(-e 'crates/' -e '\.rs' -e '§' -e '要件 ' -e '設計 ' -e 'タスク ' -e 'areka-P0-' -e 'UseSelfAlpha' -e 'use_self_alpha' -e 'build_balloon' -e 'validrect' -e 'wordwrappoint' -e 'descript' -e 'surface' -e 'scope' -e '決定論')
+$ awk '/^■ 同梱しているバルーンについて/{f=1} /^■ 同梱物とライセンス/{f=0} f' dist/README.txt | grep -c "${P[@]}"
+0
+$ F=.kiro/specs/completed/areka-P0-default-balloon-bundle/verification/signoff-record.md
+$ awk '/^### 6\.1 /{f=1;next} /^### 6\.2 /{f=0} f' "$F" | grep -c "${P[@]}"
+8
+```
+
+- 判定: 新しい欄（94〜129 行目の 36 行）で 0 件。較正: 同じ探し方を §6.1 に当てると 8 件（完了 `default-balloon-bundle` の記録の値と同じ）。
+
+### 10.3 説明書の全文の内部の言葉の探し（要件 4.8）
+
+探す語（design.md「説明書の全文の語の探し」）: spec 名の形（`areka-`・`alpha-`・`-signoff`）・crate やソースのファイルの名前（`areka_`・`.rs`〔正規表現 `\.rs\b`〕）・`AREKA_`・`WINTF_`・`RUST_LOG`・`event=`・括弧の外の `On` で始まるイベントの名前（各行から全角 `（…）` と半角 `(…)` の中身を取り除いた後に `\bOn[A-Z][A-Za-z0-9]*`）。同じ使い捨ての台本 `check_readme.py` の `scan`。
+
+HEAD の説明書（コマンドと出力・逐語）:
+
+```
+$ git show HEAD:dist/README.txt > readme_head.txt      # HEAD = 0055d2827c711d82afb302bdc4e0d3c4cfe5238d
+$ python check_readme.py scan readme_head.txt
+spec 名 areka-: 0
+spec 名 alpha-: 0
+spec 名 -signoff: 0
+areka_: 0
+.rs: 0
+AREKA_: 0
+WINTF_: 0
+RUST_LOG: 0
+event=: 0
+括弧の外の On…: 0
+total=0
+$ python check_readme.py scan dist/README.txt | tail -1
+total=0
+```
+
+- 判定: HEAD の説明書の全文で **0 件**（作業木のファイルでも 0 件）。
+
+較正（仕上げる前の説明書を git の実物から取り出して当てる・`bbf9a620` はタスク 2.1 のコミットで、説明書はタスク 2.2 より前の版）:
+
+```
+$ git show bbf9a620:dist/README.txt > readme_pre.txt
+$ python check_readme.py scan readme_pre.txt
+spec 名 areka-: 0
+spec 名 alpha-: 1
+    57: （未記入: alpha-release-signoff が仕上げます）
+spec 名 -signoff: 1
+    57: （未記入: alpha-release-signoff が仕上げます）
+areka_: 0
+.rs: 0
+AREKA_: 0
+WINTF_: 0
+RUST_LOG: 0
+event=: 0
+括弧の外の On…: 0
+total=2
+```
+
+- 較正: 仕上げる前の版の 57 行目（「■ .nar の入れ方」の spec 名）に当たった（2 件・同じ 1 行を 2 つの語が拾った）＝探し方は spec 名を拾える。
+
+### 10.4 既知の制限の裏付けの語の探し（要件 5.1・5.5・SSTP と SAORI）
+
+79・80 行目の「受け口が無い」「読み込み口が無い」を、`crates/` の Rust のソースを語で探して確かめた（2026-10-01・HEAD `0055d282`）。
+
+```
+$ grep -rn "SSTP" crates --include=*.rs
+crates/areka/src/input_events/user_break.rs:98:/// SSTP に関する判定は 1 つも置かない（要件 5.8）。
+crates/shiori-host32-host/src/shiori3.rs:78:/// 二重 CRLF）で示す（要件 1.3）。`SenderType` / `SecurityOrigin` / `X-SSTP-PassThru`
+$ grep -rni "saori" crates --include=*.rs
+crates/areka/src/session_end.rs:56:/// - 理屈の上で残る唯一の輪は、補助プロセスの中の SHIORI・SAORI が `OnClose` の処理中などに
+$ grep -rnE "TcpListener|9801|9821|9811" crates --include=*.rs
+crates/areka-update/src/winhttp_real_tests.rs:16:use std::net::{TcpListener, TcpStream};
+crates/areka-update/src/winhttp_real_tests.rs:34:    let listener = TcpListener::bind("127.0.0.1:0").expect("待受を立てられる");
+```
+
+- SSTP: 当たった 2 行はどちらも注記（中断の判定に SSTP の判定を置かないこと・SHIORI のリクエストの見出しの名前の列挙）で、受け口ではない。待受（`TcpListener`・SSTP の既定の番号）を探すと、当たるのは更新の取得のテストが自分で立てる待受だけ（テストのファイル）。大文字小文字を区別しない探し（`grep -rni "sstp"`）で増える行は、バルーンの絵のファイルの名前（`sstp.png`）・バルーンの設定の名前（`sstpmessage.font.*`）・メニューの名前の資源の名前（`*sstp*button.caption`）・ukadoc の頁の名前（`spec_sstp`）で、どれも受け口ではない。
+- SAORI: 当たった 1 行は終了の待ちについての注記（補助プロセスの中の SHIORI・SAORI が固まる場合）で、読み込み口ではない。本体が DLL を読み込むのは `crates/areka-ghost/src/shiori_inproc.rs` の `LoadLibraryW`（SHIORI の DLL）だけ。
+- 較正: 同じ探し方が、既知の 1 行（設計の段で見つけていた `user_break.rs` の注記・`session_end.rs` の注記）にそれぞれ当たった＝探し方は語を拾える。
+
+### 10.5 条件つきの制限 ⒜⒝⒞ を書かなかった根拠（要件 5.4）
+
+| 行 | 書く条件 | 確かめた結果（2026-10-01） | 説明書 |
+|---|---|---|---|
+| ⒜ | zip の `emo2` が `halt` の台詞を持たない | `vendors/sample_ghost/emo2.nar`（md5 `3f5d8777deeeb91fecc587c9071ded32`）の `ghost/master/dic/boot.pasta` に `＊起動halt` が 3 件。較正: 差し替える前の版（`git show bbf9a620^:vendors/sample_ghost/emo2.nar`）では 0 件 | 書かない |
+| ⒝ | zip の `balloon/emo2-kakukaku/descript.txt` に `homeurl` の行がある | 同じ書庫の `emo2-kakukaku/descript.txt` に `homeurl` で始まる行が 0 件（同じ探し方で `name` の行は 1 件）。較正: 差し替える前の版では 1 件 | 書かない |
+| ⒞ | バグ `balloon-reappear-short-talk` が未着地 | §0.4 の判定「着地した」（`.kiro/specs/completed/areka-P0-balloon-reappear-short-talk/` が在る） | 書かない |
+
+説明書の「既知の制限」（71〜91 行目）を `halt`・`1 文字`・`古い更新先`・`emo2-kakukaku の更新` で探して 0 件（⒜⒝⒞ の行が無い）。
