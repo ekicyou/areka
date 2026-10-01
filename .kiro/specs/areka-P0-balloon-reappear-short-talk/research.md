@@ -227,3 +227,92 @@
   4. 切替の統合テストの台詞: 要件 3.6 はどちらでも満たせる。実 GPU のテストの揺れを避けるなら、注記の是正にとどめ、1 文字の台詞の確かめは決定論のテストに任せる。
   6. COMPAT §8: 生きた文書なので既存の行を改め、行番号の参照は定義の名前で指し直す（完了 spec のアーカイブ本体は書き換えない）。
 - 要件 1.2（全文が一度に見える短い台詞）と要件 1.5（台詞の途中の `\c`）は、brief の 1 文字の台詞より広いが、根は同じ取りこぼしで、案 A なら追加の仕組み無しに塞がる。あるべき姿として要件に残した。
+
+---
+
+## 10. 設計の段の調べと判断（2026-10-01・`/kiro-spec-design`）
+
+### 10.1 要約
+
+- **Feature**: `areka-P0-balloon-reappear-short-talk`
+- **Discovery Scope**: Extension（既存の可視性の判定と文字の層の延長）。新しい外部の依存は無いので、外部の調べものはしていない（軽い発見の手順・コードを読んで確かめた）。
+- **Key Findings**:
+  - 消去の回数は `TextLayerState` の中の別の表に置く（A-2）。`ActorTextState` の欄にする（A-1）と、「`Clear` の後の scope の状態は初期状態と等しい」を比べる既存のテスト 2 本（`state_cue_apply_tests.rs` の `clear_resets_actor_state_to_initial` と `clear_resets_choices_alongside_items`）の意味が変わる。A-2 なら既存の比較はどれも変わらない。
+  - 観測は「見える文字の数と消去の回数の組」（`GlyphObservation`）を 1 つの `Option` で運ぶ。数と回数を別々の欄にすると、時刻が無いフレーム（回数は読めるが数は読めない）で回数の記憶だけが進む組み合わせが生まれ、次のフレームで前の台詞の数と比べてしまう。
+  - 修正の前の赤は、本物の文字の層 → 本物の `collect_observations` → 本物の `decide` を通す配線の段のテストで立てる。`collect_observations` と `decide` の引数の形は修正で変わらないので、修正の前の HEAD でもコンパイルが通る。
+
+### 10.2 調べの記録
+
+#### 消去の回数の置き場（議題 2）
+
+- **Context**: A-1（`ActorTextState` の欄）と A-2（`TextLayerState` の別の表）の既存テストへの波及。
+- **Sources Consulted**: `crates/areka-emo-text/src/state.rs`（`ActorTextState`・`TextLayerState` はどちらも `PartialEq` を導出）、`state_cue_apply_tests.rs`（`assert_eq!(actor, &ActorTextState::default())` が `Clear` の後に 2 か所・`TextLayerState` どうしの比較は「同じ cue の列なら等しい」と「表示系の cue で変わらない」の 2 か所）、`state_decoration_tests.rs`（`ActorTextState::default()` は較正の説明文だけ）、ワークスペース全体での `ActorTextState`・`TextLayerState` の比較の検索。
+- **Findings**: A-1 は上の 2 本を「内容は初期状態と等しいが回数は進む」へ書き換える必要がある。A-2 では `TextLayerState` どうしの比較 2 か所は、同じ cue の列（回数も同じ）・消去を含まない列なので変わらない。
+- **Implications**: A-2 を採る。回数は「内容」ではなく「何回消したか」という出来事の数で、内容の状態（`ActorTextState`）に混ぜないほうが意味も揃う。
+
+#### 観測の形
+
+- **Context**: `ScopeObservation` に回数をどう載せるか。
+- **Sources Consulted**: `balloon_visibility_phase.rs` の `collect_observations`（数は借用と注入時刻の両方が要る・回数は借用だけで読める）、`balloon_visibility.rs` の `decide_content`（観測なしのフレームは記憶を据え置く）、`ScopeObservation` の字面と読み手の検索（字面は `collect_observations` と `balloon_visibility_test_support.rs` の `seen`・`unobserved` だけ、数の読み手は `balloon_visibility_phase_tests.rs` の 4 か所）。
+- **Findings**: 別々の `Option` 2 つにすると「数は無いが回数は有る」組が作れてしまい、判定がそれを正しく扱うには記憶の更新を数の有無に縛る約束が要る。1 つの `Option<GlyphObservation>` にすれば型で片方だけの観測を作れない。既存の読み手のうち形が変わるのは `Some(2)` と比べる 1 か所だけ（`None` と比べる 3 か所はそのまま通る）。
+- **Implications**: 欄の名前 `visible_glyphs` は残し、型を `Option<GlyphObservation>` にする。
+
+#### 修正の前の赤の段（議題 3）
+
+- **Context**: 判定の段のテストは新しい観測の形を使うので、修正の前にはコンパイルが通らない。
+- **Sources Consulted**: `balloon_visibility_phase_tests.rs`（`collect_observations` を直接呼ぶ既存のテスト・headless の表示層では `show_target` が確立前に必ず失敗する＝`failed_show_is_logged_and_rolled_back`）、`areka-emo-present` の `presenter_visibility_tests.rs`（表示の確立には読み戻しを伴う GPU の経路が要る）。
+- **Findings**: 配線の段（`phase` の子）のテストなら `collect_observations` と `decide` を直接呼べ、修正の前後で同じテストの本文が通る。表示層を可視にできないので、観測の `visible` だけはテストが前のフレームの行動から決めて書き込む（文字の側は本番の経路のまま）。
+- **Implications**: 新しい兄弟のテスト `balloon_visibility_phase_reappear_tests.rs` を `phase` の子に置く。既存のテストと共有するのは headless の装着だけなので、それを `balloon_visibility_phase_test_support.rs` へ出し、`balloon_visibility_phase_tests.rs` の同じ本文の箇所はその呼び出しへ置き換える。`Harness` などほかの道具は新しいテストが使わないので動かさない。
+
+#### 合図と文字の届く順（調べもの 1）の再確認と §2.4 の補正
+
+- **Context**: 中断の掛け金が最初の文字のフレームまでに解けるか。§2.4 の「時刻の起点の取り直しと全消去の適用の間にフレームが挟まると、古い文字の数が一度 0 まで下がり」の当否。
+- **Sources Consulted**: `crates/dola/src/cue/runtime.rs`（cue 1 件ごとに `self.sinks.iter_mut()` の全部へ `emit`）、`crates/areka/src/emo2_boot/mod.rs`（受け口の並び: `surface_sink` → `clocked_text_sink` → `move_sink` → `lifecycle_sink` → …）、`crates/areka/src/emo2_boot/talk_lifecycle.rs`（`BalloonLifecycleSink::emit` は初回の `emit` で `TalkStarted` を送る）、`crates/areka-emo-text/src/state.rs`（`RevealSchedule::visible` は `r_i <= t` を数える）。
+- **Findings**: 静的な順は §2.3 のとおり（`ClearAll` の投函 → `TalkStarted` の送出 → 最初の `Text` の投函）。§2.4 の最後の項は補正が要る: 前の台詞の最初の文字の時刻は多くが 0.0 なので、起点を取り直した直後（会話の時刻が 0 付近）でも前の台詞の最初の 1 文字は見える数に残り、数は 0 まで下がらず 1 にとどまることが多い。その場合、次のフレームの全消去＋1 文字は「1 と 1」で、今日の規則ではやはり出ない。つまり「合図が先のフレームに取り出される」並びも取りこぼしの形の 1 つで、修正の前に赤になる。
+- **Implications**: 再表示のテストに「合図が先のフレーム」（赤）と「全消去が先のフレーム（中断の後）」（守り）の 2 本を置く。案 A は届く順に依らず、回数の変化で比べる相手を 0 にするので、どちらの並びでも最初の文字のフレームで出る。実機の記録での実測（調べもの 1）は行わない——結論が届く順に依らないことを決定論のテストで示せるため。
+
+#### `ClearAll` の範囲（調べもの 2）
+
+- **Findings**: `ClearAll` の腕は `self.actors.values_mut()` の全部（既にある scope）を空にする。回数も同じ範囲（`actors` のキー）だけを進める。状態の無い scope は数も回数も 0 のままで、判定の比べる相手にも影響しない。
+- **Implications**: 範囲は「内容を空にする scope と同じ」と設計に書き、単体テスト（`state_clear_count_tests.rs`）で確かめる。
+
+#### 切替の統合テストの台詞（議題 4・調べもの 4）
+
+- **Findings**: `shell_balloon_switch_session_balloon_tests.rs` は実 GPU と実時間の時計で往復と結び直しを見る。台詞を 1 文字へ縮めると、新しい装着が見えて文字の層が結ばれたフレームを捕まえる前に次の切替が来る余地が増え、本 spec と関係の無い揺れを足しうる。
+- **Implications**: 台詞は変えず、`CHANGE_1` の注記から回避の理由を削り、1 文字の台詞の確かめは決定論のテストに任せる、と書き改める（要件 3.6 は注記の是正で満たす）。
+
+### 10.3 設計の判断
+
+#### Decision: 消去の事実の渡し方（議題 1）
+
+- **Context**: 判定へ「このフレームまでに内容が消された」ことを届ける口が無い。
+- **Alternatives Considered**: 案 A（文字の層の scope ごとの消去の回数）・案 B（`TalkStarted` で比べる相手を 0 にする）・案 C（消去をまたいで減らない累計）・案 D（消去された scope の集合の取り出し）。比較は §5 の表。
+- **Selected Approach**: 案 A。
+- **Rationale**: 0 フレームで解け、台詞の途中の `\c`（要件 1.5）も拾い、届く順に左右されず、可視性の段は読むだけで借りられる。案 B は `\c` を拾えず、古い文字で出す恐れがある。案 C は 0 より大の条件が別に要り持ち物が増える。案 D は書き換えの借用と `actor.rs`（975 行）への追記が要る。
+- **Trade-offs**: 文字の層の公開の読み口が 1 つ増える。観測と記憶の構造体が 1 項目ずつ増え、字面で組んでいる道具とテストが追随する。
+
+#### Decision: 回数の置き場（議題 2）
+
+- **Selected Approach**: A-2（`TextLayerState` の中の `BTreeMap<ActorKey, u64>`・読み口 `clear_count`）。
+- **Rationale**: 10.2 のとおり、既存のテストの比較の意味を変えない。`actor.rs` は `self.state.apply_cue(cue)` へ委ねるだけなので触らない。
+
+#### Decision: 比べる相手の規則
+
+- **Selected Approach**: 回数が前に観測した値と等しければ `last_glyphs`、違えば 0 と比べる。非表示の分岐は素の `last_glyphs` を使い、今のまま。記憶（`last_glyphs`・`last_clear_count`）は観測できたフレームでだけ一緒に更新する。
+- **Rationale**: 回数が変わった scope に今ある文字は、すべて最後の消去の後に積まれたもの（消去は内容を全部空にし、cue は届いた順に適用される）。比べる相手を 0 にするのは「可視の文字が置かれた」縁をそのまま言い直したもので、完了 `balloon-visibility` の単一規則（契機は可視の文字の配置だけ）を保つ。非表示に 0 を使うと全消去で見えているバルーンを隠す今の振る舞い（要件 2.5）が消えるので使わない。
+
+#### Decision: 記述の追随（議題 6）
+
+- **Selected Approach**: COMPAT §8 の既存の「バルーンが現れる契機」の行を改め、古い行番号の参照（`state.rs:440`・`balloon_visibility.rs:519`）は定義の名前で指し直し、出典に本 spec を足す。`balloon_visibility.rs` のモジュール doc の単一規則の節も同じ文へ改める。完了 spec のアーカイブ本体は書き換えない。
+
+### 10.4 まとめの 3 つの見方（synthesis）
+
+- **一般化**: 全消去（`ClearAll`）と台詞の途中の消去（`\c`）は、どちらも「scope の内容を空にした」同じ出来事で、1 つの回数・1 つの規則で扱う。隠れた理由（時間切れ・中断・切替・`\b[-1]`）ごとの条件は足さない。
+- **作るか採るか**: 外部の部品で解く問題ではない（文字の層と判定の間の事実の受け渡し）。標準の `BTreeMap` だけを使う。
+- **簡素化**: 判定の段だけの新しいテストのファイルは作らない（配線の段の再表示のテストが本物の `decide` を通り、規則の各分岐を踏む）。観測は 2 つの欄に分けず 1 つの組にする。「消去された印」を立てて消す仕組み（案 D）や、合図に依る印（案 B）は持たない。テストの道具は共有の要る装着だけを出す。
+
+### 10.5 危うさと手当て
+
+- 字面で組んでいるテストの追随漏れ — コンパイルで必ず止まる（`ScopeVisibility`・`ScopeObservation` の欄の追加）。
+- 再表示のテストが修正の前に赤にならない（偽の赤・偽の緑） — 実装の順序で「テストを先に足して HEAD で赤を確かめる」を固定し、修正の後に回数を見ない形へ戻して赤になることも確かめる（design の Testing Strategy）。
+- 1,000 行の上限 — `balloon_visibility.rs` は約 930 行の見込み。`balloon_visibility_tests.rs`（982 行）・`actor.rs`（975 行）には足さない。`balloon_visibility_phase_tests.rs` は装着の本文の置き換えで短くなる。
