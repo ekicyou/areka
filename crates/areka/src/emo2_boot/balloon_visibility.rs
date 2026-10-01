@@ -12,15 +12,18 @@
 //!
 //! # 表示・非表示の単一規則（Requirement 2.6）
 //!
-//! - 表示: ある scope の**可視グリフ数が増えた**フレームで、かつその scope が**現に不可視**のとき
-//!   だけ表示する（Requirement 2.1 / 2.5）。起動時・会話開始時・scope 切替時に別条件を設けない。
+//! - 表示: ある scope の**可視グリフ数が前のフレームより増えた**フレームで（その scope の内容が
+//!   消去された後は、空の状態（0）から増えたかで判定する）、かつその scope が**現に不可視**のとき
+//!   だけ表示する（Requirement 2.1 / 2.5・`decide_content`）。消去されたかは
+//!   `TextLayerState::clear_count` の変化で知る（areka-P0-balloon-reappear-short-talk）。
+//!   起動時・会話開始時・scope 切替時に別条件を設けない。
 //!   ただし利用者の中断で隠した後は、次のトークが始まるまで見送る（areka-P0-balloon-break 要件 4.8）。
 //! - 非表示（会話開始側）: 可視グリフ数が**ゼロへ下降した**フレームで、かつ現に可視のときだけ
 //!   非表示にする（Requirement 3.1）。会話がどの scope から始まるかを先読みしない（Requirement 3.6）。
 //!
 //! 改行・カーソル移動・待機・内容消去はいずれも可視グリフ数を増やさないため、表示の契機に
 //! ならない（Requirement 2.3）。この一致は偶然ではなく、観測量に
-//! `TextLayerState::visible_glyphs`（`crates/areka-emo-text/src/state.rs:440`）を採ったことの
+//! `TextLayerState::visible_glyphs`（`areka-emo-text` の `state.rs`）を採ったことの
 //! 帰結である——同関数はリビール済みのグリフのみを数える。
 //!
 //! # 会話終了後のタイムアウト（Requirement 4）
@@ -296,15 +299,27 @@ pub(crate) struct VisibilityDecision {
     pub(crate) logs: Vec<VisibilityLogEvent>,
 }
 
+/// 1 scope・1 フレームの「可視の文字」の観測（同じ借用・同じ注入時刻で読んだ組）。
+///
+/// 数と回数を組として型で縛るのは、片方だけが更新される記憶（回数だけ進み数が古いまま）を
+/// 作れなくするため。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GlyphObservation {
+    /// リビール済みの可視グリフ数（`TextLayerState::visible_glyphs`）。
+    pub(crate) count: usize,
+    /// その scope の内容が消された回数（`TextLayerState::clear_count`）。
+    pub(crate) clear_count: u64,
+}
+
 /// ある scope について本フレームに観測した値。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ScopeObservation {
-    /// 本フレームのリビール済み可視グリフ数。
+    /// 本フレームのリビール済み可視グリフ数と消去の回数の組。
     ///
-    /// `None` は**観測が取れなかった**ことを表す（本番では文字層ランタイムの借用失敗）。
+    /// `None` は**観測が取れなかった**ことを表す（本番では文字層ランタイムの借用失敗・注入時刻なし）。
     /// その場合は増加も下降も判定せず、直前に観測できた値を次フレームの比較相手として
     /// 保持する——観測できないフレームを「ゼロへ下降した」と読んで消してしまわないため。
-    pub(crate) visible_glyphs: Option<usize>,
+    pub(crate) visible_glyphs: Option<GlyphObservation>,
     /// 現に可視か（本番では `EmoPresenter::target_visible`）。判断の真実源。
     pub(crate) visible: bool,
     /// この scope のバルーンの上にポインタが滞在しているか（本番では
@@ -348,6 +363,8 @@ pub(crate) struct VisibilityObservations {
 pub(crate) struct ScopeVisibility {
     /// 直近に**観測できた**可視グリフ数。観測が取れなかったフレームでは更新しない。
     pub(crate) last_glyphs: usize,
+    /// 直近に観測できた消去の回数（`last_glyphs` と同じフレームでだけ更新する）。
+    pub(crate) last_clear_count: u64,
     /// 前フレーム終了時点の可視状態（本判断が同フレームで発行した遷移を反映した値）。
     ///
     /// 用途は**自分が発行していない可視性遷移の検出**（`trigger=explicit` のログと、非表示へ
@@ -603,6 +620,7 @@ fn decide_user_break(
             .entry(scope)
             .or_insert(ScopeVisibility {
                 last_glyphs: 0,
+                last_clear_count: 0,
                 prev_visible: false,
             })
             .prev_visible = false;
@@ -639,20 +657,30 @@ fn decide_content(
         // ゼロなら以後もエッジは立たず、そのまま不可視で据え置かれる（Requirement 1.1 と整合）。
         let previous = state.per_scope.entry(scope).or_insert(ScopeVisibility {
             last_glyphs: 0,
+            last_clear_count: 0,
             prev_visible: visible,
         });
 
-        let Some(glyphs) = observed.visible_glyphs else {
-            // 観測が取れなかったフレーム。増加とも下降とも読まず、`last_glyphs` も据え置く
-            // ——観測できないことを「消えた」と読むと表示を失う側へ倒れる。
+        let Some(observed_glyphs) = observed.visible_glyphs else {
+            // 観測が取れなかったフレーム。増加とも下降とも読まず、`last_glyphs`・
+            // `last_clear_count` も据え置く——観測できないことを「消えた」と読むと表示を失う側へ倒れる。
             previous.prev_visible = visible;
             continue;
         };
+        let glyphs = observed_glyphs.count;
 
         let last_glyphs = previous.last_glyphs;
+        // 表示の比べる相手: 前に見た後でこの scope の内容が消去されていれば、消去の後に置かれた
+        // 文字は空の状態（0）からの増加として数える（同じフレームの全消去＋1 文字でも縁が立つ）。
+        let show_baseline = if observed_glyphs.clear_count == previous.last_clear_count {
+            last_glyphs
+        } else {
+            0
+        };
         previous.last_glyphs = glyphs;
+        previous.last_clear_count = observed_glyphs.clear_count;
 
-        if glyphs > last_glyphs && !visible && !state.break_latch {
+        if glyphs > show_baseline && !visible && !state.break_latch {
             // 表示: 可視グリフ数の増加エッジ、かつ現に不可視のときだけ（Requirement 2.1 / 2.5）。
             // 中断の掛け金が掛かっている間は見送る——止めた台本の文字は再生を止めた後も時刻の
             // 進行だけで増えうるため（areka-P0-balloon-break 要件 4.8）。見送りでは記録を 1 件も

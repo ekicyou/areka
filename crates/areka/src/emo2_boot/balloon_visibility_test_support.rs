@@ -9,14 +9,18 @@
 use std::collections::BTreeMap;
 
 use super::{
-    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, ScopeObservation, TalkLifecycleSignal,
-    VisibilityDecision, VisibilityObservations, decide,
+    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, GlyphObservation, ScopeObservation,
+    TalkLifecycleSignal, VisibilityDecision, VisibilityObservations, decide,
 };
 
 /// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
+/// 消去の回数は 0 で一定（回数の変わらない観測の列は今と同じ答えを返す）。
 pub(crate) fn seen(visible_glyphs: usize, visible: bool) -> ScopeObservation {
     ScopeObservation {
-        visible_glyphs: Some(visible_glyphs),
+        visible_glyphs: Some(GlyphObservation {
+            count: visible_glyphs,
+            clear_count: 0,
+        }),
         visible,
         hover: Some(false),
         choice_active: Some(false),

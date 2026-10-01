@@ -26,13 +26,13 @@ use areka_emo_present::EmoPresenter;
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::TextLayerConfig;
 use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
-use bevy_ecs::prelude::Entity;
 use dola::cue::{CueCommand, TalkCue};
 use tracing::Level;
 
 use super::super::{
     BalloonVisibilityState, MeasurementDiscardReason, ScopeVisibility, SuppressionKinds,
 };
+use super::test_support::attach_headless;
 use super::*;
 use crate::emo2_boot::assets::{BootAssets, LoopTables};
 use crate::emo2_boot::talk_clock::TalkClock;
@@ -135,24 +135,6 @@ impl Harness {
     }
 }
 
-/// 表示層へ scope の balloon target を headless 装着する（可視状態は `Some(false)` から始まる）。
-fn attach_balloon(harness: &mut Harness, world: &mut World, scope: u32) -> Entity {
-    let window = world.spawn_empty().id();
-    harness
-        .wiring
-        .presenter
-        .attach_target(
-            world,
-            balloon_target(scope),
-            window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
-    window
-}
-
 /// 現在時刻（talk 相対秒）を注入した World を作る。
 fn world_at(frame_now: f64) -> World {
     let mut world = World::new();
@@ -225,12 +207,13 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
     let mut world = world_at(0.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     // scope 1 だけを表示層へ装着する（scope 0 は可視状態を引けない）。
-    attach_balloon(&mut harness, &mut world, 1);
+    attach_headless(&mut harness.wiring.presenter, &mut world, 1);
     for scope in [0, 1] {
         harness.wiring.balloon_visibility.per_scope.insert(
             scope,
             ScopeVisibility {
                 last_glyphs: 0,
+                last_clear_count: 0,
                 prev_visible: true,
             },
         );
@@ -290,7 +273,7 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
 fn failed_show_is_logged_and_rolled_back() {
     let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
     let mut world = world_at(1.0);
-    attach_balloon(&mut harness, &mut world, 0);
+    attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     reveal_text(&harness, 0, "あい");
 
@@ -341,7 +324,7 @@ fn failed_show_is_logged_and_rolled_back() {
 fn external_hide_is_logged_as_explicit_and_clears_hover() {
     let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
     let mut world = world_at(1.0);
-    attach_balloon(&mut harness, &mut world, 0);
+    attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     world
         .get_non_send_mut::<BalloonWiring>()
@@ -353,6 +336,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
         0,
         ScopeVisibility {
             last_glyphs: 2,
+            last_clear_count: 0,
             prev_visible: true,
         },
     );
@@ -394,7 +378,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
 fn lifecycle_signals_are_drained_in_full() {
     let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
     let mut world = world_at(1.0);
-    attach_balloon(&mut harness, &mut world, 0);
+    attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
 
     harness.signal(TalkLifecycleSignal::TalkStarted);
@@ -425,17 +409,7 @@ fn runtime_borrow_failure_yields_no_glyph_and_no_choice_observation() {
     let mut world = world_at(1.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     let mut presenter = EmoPresenter::new();
-    let window = world.spawn_empty().id();
-    presenter
-        .attach_target(
-            &mut world,
-            balloon_target(0),
-            window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
+    attach_headless(&mut presenter, &mut world, 0);
     reveal_text(&harness, 0, "あい");
     let runtime = Rc::clone(harness.wiring.runtime());
     let mut state = BalloonVisibilityState::default();
@@ -492,7 +466,7 @@ fn runtime_borrow_failure_yields_no_glyph_and_no_choice_observation() {
         )
     });
     assert_eq!(
-        recovered.scopes[&0].visible_glyphs,
+        recovered.scopes[&0].visible_glyphs.map(|g| g.count),
         Some(2),
         "注入時刻 1.0 では 2 文字ともリビール済み"
     );
@@ -521,17 +495,7 @@ fn glyphs_are_not_observed_without_injected_time() {
     let mut world = world_at(1.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     let mut presenter = EmoPresenter::new();
-    let window = world.spawn_empty().id();
-    presenter
-        .attach_target(
-            &mut world,
-            balloon_target(0),
-            window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
+    attach_headless(&mut presenter, &mut world, 0);
     reveal_text(&harness, 0, "あい");
     let runtime = Rc::clone(harness.wiring.runtime());
     let mut state = BalloonVisibilityState::default();
@@ -560,17 +524,7 @@ fn missing_pointer_wiring_is_logged_once_and_suppresses_nothing() {
     let harness = Harness::new().with_balloon_scope(0);
     let mut world = world_at(0.0);
     let mut presenter = EmoPresenter::new();
-    let window = world.spawn_empty().id();
-    presenter
-        .attach_target(
-            &mut world,
-            balloon_target(0),
-            window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
+    attach_headless(&mut presenter, &mut world, 0);
     let runtime = Rc::clone(harness.wiring.runtime());
     let mut state = BalloonVisibilityState::default();
 
@@ -619,17 +573,7 @@ fn pointer_residency_is_observed_per_scope() {
         .set_balloon_hover(1);
     let mut presenter = EmoPresenter::new();
     for scope in [0, 1] {
-        let window = world.spawn_empty().id();
-        presenter
-            .attach_target(
-                &mut world,
-                balloon_target(scope),
-                window,
-                EmoWorld::build(&areka_parsers::shell::parse("")),
-                AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-                96,
-            )
-            .expect("headless 装着は成功する");
+        attach_headless(&mut presenter, &mut world, scope);
     }
     let runtime = Rc::clone(harness.wiring.runtime());
     let mut state = BalloonVisibilityState::default();
@@ -685,22 +629,19 @@ fn hide_touches_only_the_balloon_target() {
     let mut world = world_at(0.0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     let mut presenter = EmoPresenter::new();
-    for target in [
-        balloon_target(0),
-        crate::emo2_boot::target_map::shell_target(0),
-    ] {
-        let window = world.spawn_empty().id();
-        presenter
-            .attach_target(
-                &mut world,
-                target,
-                window,
-                EmoWorld::build(&areka_parsers::shell::parse("")),
-                AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-                96,
-            )
-            .expect("headless 装着は成功する");
-    }
+    attach_headless(&mut presenter, &mut world, 0);
+    // キャラクター窓の target は balloon target でないので共有の道具を通さず直に装着する。
+    let shell_window = world.spawn_empty().id();
+    presenter
+        .attach_target(
+            &mut world,
+            crate::emo2_boot::target_map::shell_target(0),
+            shell_window,
+            EmoWorld::build(&areka_parsers::shell::parse("")),
+            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
+            96,
+        )
+        .expect("headless 装着は成功する");
     let mut state = BalloonVisibilityState::default();
     let observations = VisibilityObservations::default();
 
@@ -898,7 +839,7 @@ fn transition_of_a_show_that_did_not_take_is_not_written() {
 fn disconnected_lifecycle_channel_is_logged_once() {
     let mut harness = Harness::new().with_balloon_scope(0).with_talk_epoch();
     let mut world = world_at(1.0);
-    attach_balloon(&mut harness, &mut world, 0);
+    attach_headless(&mut harness.wiring.presenter, &mut world, 0);
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     harness.disconnect_lifecycle();
 
