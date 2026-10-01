@@ -90,6 +90,7 @@ surface1000
 
 - **Extends**: なし（新しい境界）。
 - **Adjacent**: `balloon-canon-residue`（`\b[数字]` の面の偶奇・系列）・`balloon-lifecycle-events`（表示の寿命）・`currentghost-property-tree`（`seriko.*` のプロパティに将来シェル内バルーンが現れうる）。
+- **2026-10-01 追記（`/kiro-discovery`「動く画像」・roadmap「動く画像」節）**: Approach 2 の「将来 `surface1000` を element定義で置く」は `surface-element-nesting` として起票した。書き方は **ファイル名の欄が数字だけならサーフェスの番号**＝element の中身の読み分けは 3 通り（描画メソッドが `balloon` なら名前／数字だけならサーフェス／それ以外は画像）。**同じ element の型を触る＝同時に走らせない**。後から着地した方が 3 通りを 1 つの列挙に揃え、**入れ子の内側のサーフェスに置かれた `balloon` の element定義は警告をログに残して無視する**（開発者確定・最初の版。同じ子を 2 か所に置くと同名の箱が 2 つでき、「スコープ × 名前」の行き先が決まらないため）。
 
 ## Constraints
 
