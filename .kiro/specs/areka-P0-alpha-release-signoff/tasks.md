@@ -21,7 +21,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.6, 3.9_
 
 - [ ] 2. zip の中身（検体と説明書）
-- [ ] 2.1 (P) 既定ゴーストの検体 `emo2.nar` を開発者の配布物へ差し替える
+- [x] 2.1 (P) 既定ゴーストの検体 `emo2.nar` を開発者の配布物へ差し替える
   - 置き換える前に、`C:\home\maz\git\ghost_dev\release\emo2\emo2.nar` が 4,586,381 バイト・md5 `3f5d8777deeeb91fecc587c9071ded32` で、ghost_dev の `release/emo2` に未コミットの変更が無いことを確かめる
   - 中身が次を満たすことを確かめる: `install.txt` に `balloon.directory,emo2-kakukaku`／判定 7 が比べる説明書 2 本が古い版とバイトで同じ／`dic/boot.pasta` に `＊起動halt` の場面がある／`emo2-kakukaku/descript.txt` に `homeurl` の行が無い。1 つでも外れたら置き換えずに開発者へ報告する
   - `vendors/sample_ghost/emo2.nar` を丸ごと置き換え、同じフォルダの `README.md` の `emo2.nar` の行だけを `111`・`4,586,381 バイト` に直す。辞書は 1 文字も編集しない
