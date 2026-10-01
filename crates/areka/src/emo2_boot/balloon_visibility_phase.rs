@@ -572,6 +572,11 @@ fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
     }
 }
 
+// 配線の段のテストで共有する道具（headless 装着）。親の `test_support` とは別のモジュール。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_test_support.rs"]
+mod test_support;
+
 #[cfg(test)]
 #[path = "balloon_visibility_phase_tests.rs"]
 mod tests;
