@@ -136,7 +136,7 @@
   - _Requirements: 8.5_
 
 - [ ] 8. 入口と台本の受け口
-- [ ] 8.1 台本の受け口を作り、消費者台帳と受け口の列に登記する
+- [x] 8.1 台本の受け口を作り、消費者台帳と受け口の列に登記する
   - 入口のモジュールを新しく置き、種別（シェル／バルーン）と台本から来る生の要求（種別・名前・`raise-event`）の型だけをそこに定める（8.2・8.3 が同じモジュールを育てる）。受信端を結ぶのは 8.3 なので、それまでの送出は `warn!` の送り失敗になる（台本は続く）
   - `(change,shell)`・`(change,balloon)` だけを自分宛てとし、他は `debug!` で見送る 2 段の受け口を作る。名前なしは `warn!`、`--option=raise-event` はシェルでだけ効き、他の選択肢は `warn!` を 1 件残して要求は出す。送れなければ `warn!`・台本は殺さない
   - 消費者台帳に 2 行を足し（13 → 15）、「`(change,ghost)` だけ」を固定していたテストを「3 組が登記され、裸の `change` は無い」へ書き換える（消さない）。起動の結線の受け口の列に 11 本目として挿す
@@ -259,3 +259,4 @@
 - 7.1: 関数単位の `#[allow(dead_code)]` → `decide_boot_shell` は 7.2、`record_last_shell`／`record_last_balloon` は 9.4 で外す。`decide_boot_shell` は 1 段の `Normal` のフォルダ名だけを受ける（`..`・区切り・絶対パスは「先が無い」扱い）。`LastUsed::record` の doc を「`areka.last.shell` は起動の決定が読む」へ改めた。記録の語は `boot_shell_missing`（warn）・`last_shell_recorded`／`last_balloon_recorded`（info）。
 - 7.2: `BootShellChoice` を取り出すのは design の「`boot_wired`」でなく 2 つの入口（`boot_ghost`・`boot_ghost_strict`）で、結線ありの腕と LogSink の倒れ先（`boot_with_origin(.., Plain, shell)`）へ同じ値を渡す（12 で design へ反映）。`BootShellChoice` の doc と `prepare_ghost_windows` のコメントに「`boot_wired` が取り出す」の古い語が残る → 7.3 で直す。`placement::prepare_ghost_windows`・`emo2_boot::assets::build_boot_assets` は本番の呼び手を失い、関数単位の `#[allow(dead_code)]` を意図して残す（example とテストが呼ぶ）。6.2・7.1 の `#[allow(dead_code)]`（`prepare_ghost_windows_for_shell`・`decide_boot_shell`）は外した。
 - 7.3: `GhostSession::seriko_sink()` にメソッド単位の `#[allow(dead_code)]` → 8.3 で外す。統合テストのファイル `shell_balloon_switch_session_tests.rs` を作った（ghost_session から `#[path]`・9.x／11 もここへ足す）。7.2 の古い語（`boot_wired` が取り出す）は直した。
+- 8.1: `shell_balloon_switch.rs` の先頭に `#![allow(dead_code)]` → 8.3 で外す。`wire_emo2_boot` は受信端をその場で `drop(switch_rx)`（8.3 で World へ据える）。開けない `change` の荷物は `SwitchCueSink` では `debug!`（`ChangeCueSink` が `warn!` 1 件を残すため）。`t_zwi05` の受け口の列の字面を追随。

@@ -38,10 +38,10 @@
 //!    同居すると `\![set,zorder,…]` の 1 出現に 2 つの担当が作用してしまうため、
 //!    [`LedgerError::SelectorConflict`] で拒む。順序はどちらでも同じく拒む。
 //!
-//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 13 行（`move`・`bind`・
+//! 正準台帳 [`ConsumerLedger::canonical`] はこの try_register を用いて 15 行（`move`・`bind`・
 //! `(set,zorder)`・`(reset,zorder)`・`\f`・`(open,readme)`・`(enter,nouserbreakmode)`・
-//! `(leave,nouserbreakmode)`・`(change,ghost)`・`(execute,install)`・`updatebymyself`・`update`・
-//! `updateother`）を登記し、違反があれば構築時に panic する（正準表は一意
+//! `(leave,nouserbreakmode)`・`(change,ghost)`・`(change,shell)`・`(change,balloon)`・
+//! `(execute,install)`・`updatebymyself`・`update`・`updateother`）を登記し、違反があれば構築時に panic する（正準表は一意
 //! ゆえ実際には発火しない・回帰檻）。
 //!
 //! # 宣言する表であって、選別する機構ではない
@@ -86,8 +86,11 @@ type LedgerKey = (String, Option<String>);
 ///   運搬名 [`FONT_TAG_CARRIER`](areka_sakura::contract::FONT_TAG_CARRIER) →
 ///   `TextLayer` を登記する（areka-P0-text-decoration-canon 要件 2.4）。
 /// - [`ChangeSink`](CommandConsumer::ChangeSink): `\![change,ghost,…]` を消費する
-///   [`ChangeCueSink`](super::change_cue::ChangeCueSink)。正準台帳が `(change, ghost)` の 1 組だけを
+///   [`ChangeCueSink`](super::change_cue::ChangeCueSink)。正準台帳が `(change, ghost)` の 1 組を
 ///   登記する（areka-P0-ghost-shell-balloon-switch 要件 1.10）。
+/// - [`SwitchSink`](CommandConsumer::SwitchSink): `\![change,shell,…]`・`\![change,balloon,…]` を
+///   消費する [`SwitchCueSink`](super::switch_cue::SwitchCueSink)。正準台帳が `(change, shell)`・
+///   `(change, balloon)` の 2 組を登記する（areka-P0-shell-balloon-switch 要件 1.15）。
 /// - [`InstallSink`](CommandConsumer::InstallSink): `\![execute,install,…]` を消費する
 ///   [`InstallCueSink`](super::install_cue::InstallCueSink)。正準台帳が `(execute, install)` の
 ///   1 組だけを登記する（areka-P0-ghost-install 要件 1.5〜1.7）。
@@ -125,11 +128,19 @@ pub enum CommandConsumer {
     TextLayer,
     /// ゴーストの切替のタグの担当消費者
     /// （[`ChangeCueSink`](super::change_cue::ChangeCueSink)）。名前だけでは決まらず、
-    /// 第 1 引数が `ghost` の出現だけを担当する（`shell`／`balloon` は別の仕様の持ち場で、
-    /// 登記しない・areka-P0-ghost-shell-balloon-switch 要件 1.10・8.5）。
+    /// 第 1 引数が `ghost` の出現だけを担当する（`shell`／`balloon` は
+    /// [`SwitchSink`](Self::SwitchSink) の持ち場・areka-P0-ghost-shell-balloon-switch 要件 1.10）。
     ///
     /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1
     ChangeSink,
+    /// シェル・バルーンの切替のタグの担当消費者
+    /// （[`SwitchCueSink`](super::switch_cue::SwitchCueSink)）。名前だけでは決まらず、
+    /// 第 1 引数が `shell`／`balloon` の出現だけを担当する（`ghost` は
+    /// [`ChangeSink`](Self::ChangeSink) の持ち場・areka-P0-shell-balloon-switch 要件 1.15）。
+    ///
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1
+    /// ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1
+    SwitchSink,
     /// 書庫を入れるタグの担当消費者
     /// （[`InstallCueSink`](super::install_cue::InstallCueSink)）。名前だけでは決まらず、
     /// 第 1 引数が `install` の出現だけを担当する（`execute` の別の第 1 引数は担当外・
@@ -285,6 +296,7 @@ impl ConsumerLedger {
     /// [`CommandConsumer::TextLayer`]・`(open, readme)` → [`CommandConsumer::ReadmeSink`]・
     /// `(enter, nouserbreakmode)` と `(leave, nouserbreakmode)` →
     /// [`CommandConsumer::UserBreakSink`]・`(change, ghost)` → [`CommandConsumer::ChangeSink`]・
+    /// `(change, shell)` と `(change, balloon)` → [`CommandConsumer::SwitchSink`]・
     /// `(execute, install)` → [`CommandConsumer::InstallSink`]・`updatebymyself`・`update`・
     /// `updateother` → [`CommandConsumer::UpdateSink`]）。
     ///
@@ -336,6 +348,13 @@ impl ConsumerLedger {
         ledger
             .try_register("change", Some("ghost"), CommandConsumer::ChangeSink)
             .expect("正準台帳: ('change','ghost') は一意（重複・排他違反は編集ミス）");
+        for selector in ["shell", "balloon"] {
+            ledger
+                .try_register("change", Some(selector), CommandConsumer::SwitchSink)
+                .expect(
+                    "正準台帳: ('change','shell'|'balloon') は一意（重複・排他違反は編集ミス）",
+                );
+        }
         ledger
             .try_register("execute", Some("install"), CommandConsumer::InstallSink)
             .expect("正準台帳: ('execute','install') は一意（重複・排他違反は編集ミス）");
@@ -644,15 +663,15 @@ mod tests {
     /// 増減は本檻と本 doc の 2 か所を明示的に編集させる。
     #[test]
     fn canonical_builds_without_duplicate() {
-        // canonical() は内部 try_register（13 行）が Ok（重複なら expect が panic する）。
+        // canonical() は内部 try_register（15 行）が Ok（重複なら expect が panic する）。
         let ledger = ConsumerLedger::canonical();
         assert_eq!(
             ledger.entry_count(),
-            13,
-            "正準台帳の登記は 13 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
+            15,
+            "正準台帳の登記は 15 件（move／bind／(set,zorder)／(reset,zorder)／運搬名 \\f／\
              (open,readme)／(enter,nouserbreakmode)／(leave,nouserbreakmode)／(change,ghost)／\
-             (execute,install)／updatebymyself／update／updateother）——増減させたら本檻と doc の \
-             2 か所を編集すること"
+             (change,shell)／(change,balloon)／(execute,install)／updatebymyself／update／\
+             updateother）——増減させたら本檻と doc の 2 か所を編集すること"
         );
         assert_eq!(
             ledger.consumer_of("move", None),
@@ -671,7 +690,7 @@ mod tests {
             Some(CommandConsumer::ZOrderSink)
         );
 
-        // 13 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
+        // 15 件共存下でも一意性は保たれる: 既登記の組 bind の再登記は Duplicate で
         // 検出される。
         let mut ext = ledger.clone();
         let err = ext
@@ -683,7 +702,7 @@ mod tests {
                 name: "bind".to_string(),
                 selector: None,
             },
-            "13 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
+            "15 件共存下でも重複は Duplicate{{name, selector}} として観測可能"
         );
         // 既登記の担当は据え置き（上書きしない）。
         assert_eq!(ext.consumer_of("bind", None), Some(CommandConsumer::Seriko));
@@ -773,10 +792,12 @@ mod tests {
         );
     }
 
-    /// areka-P0-ghost-shell-balloon-switch 要件 1.10・8.5: 正準台帳は `(change, ghost)` の 1 組だけを
-    /// 切替の受け口の担当として登記し、`(change, shell)`・`(change, balloon)` は登記しない。
+    /// areka-P0-ghost-shell-balloon-switch 要件 1.10 と areka-P0-shell-balloon-switch 要件 1.15:
+    /// 正準台帳は `change` を第 1 引数で 3 組に分けて登記する——`(change, ghost)` はゴーストの切替の
+    /// 受け口、`(change, shell)`・`(change, balloon)` はシェル・バルーンの切替の受け口。裸の `change`
+    /// （名前まるごとの登記）は無く、名簿に無い第 1 引数は担当なし。
     #[test]
-    fn canonical_registers_only_change_ghost_for_the_change_sink() {
+    fn canonical_registers_change_ghost_shell_balloon_and_no_bare_change() {
         let ledger = ConsumerLedger::canonical();
         assert_eq!(
             [
@@ -784,9 +805,16 @@ mod tests {
                 ledger.consumer_of("change", Some("shell")),
                 ledger.consumer_of("change", Some("balloon")),
                 ledger.consumer_of("change", None),
+                ledger.consumer_of("change", Some("Shell")),
             ],
-            [Some(CommandConsumer::ChangeSink), None, None, None],
-            "(change,ghost) だけが担当あり（shell／balloon・裸の change は担当なし）"
+            [
+                Some(CommandConsumer::ChangeSink),
+                Some(CommandConsumer::SwitchSink),
+                Some(CommandConsumer::SwitchSink),
+                None,
+                None,
+            ],
+            "(change,ghost)・(change,shell)・(change,balloon) の 3 組が登記され、裸の change は無い"
         );
     }
 

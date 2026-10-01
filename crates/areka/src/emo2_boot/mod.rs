@@ -29,8 +29,12 @@ pub mod hover_inject;
 mod install_cue;
 pub mod move_cue;
 mod readme_cue;
+/// シェル・バルーンの切替の入口（areka-P0-shell-balloon-switch）。
+pub(crate) mod shell_balloon_switch;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
+/// `\![change,shell|balloon,…]` の受け口（areka-P0-shell-balloon-switch）。
+mod switch_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
@@ -105,6 +109,8 @@ use self::frame::{Emo2Wiring, KanadeNoticeRx, emo2_frame_system, ghost_quit_syst
 use self::install_cue::InstallCueSink;
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::readme_cue::ReadmeCueSink;
+use self::shell_balloon_switch::SkinRequestRaw;
+use self::switch_cue::SwitchCueSink;
 use self::talk_clock::{ClockedTextSink, TalkClock};
 use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use self::update_cue::UpdateCueSink;
@@ -497,6 +503,13 @@ pub fn wire_emo2_boot(
     // 更新の要求の送出端（areka-P0-network-update task 7.1）: インストールと同じ形で、更新の窓口
     // （`update::desk`・プロセスに 1 つ）から借りるだけ。
     let update_sink = UpdateCueSink::new(crate::update::desk::raw_sender(world));
+    // シェル・バルーンの切替要求の channel（切替要求の channel と同型の配線・
+    // areka-P0-shell-balloon-switch task 8.1）: talk スレッドの SwitchCueSink が送出端を持つ。
+    // 受信端を World へ据えるのは入口の取り出しの系（task 8.3）で、それまでは受信端をここで落とす
+    // ——届いた要求は送出側が送れなかったことを `warn!` に残し、台本は続く。
+    let (switch_tx, switch_rx) = std::sync::mpsc::channel::<SkinRequestRaw>();
+    drop(switch_rx);
+    let switch_sink = SwitchCueSink::new(switch_tx);
     let BootAssets {
         shells,
         balloons,
@@ -605,6 +618,9 @@ pub fn wire_emo2_boot(
     // 第 10 要素の update_sink（areka-P0-network-update task 7.1）は `\![updatebymyself]`・
     // `\![update,…]`・`\![updateother,…]` を名前で選別して消費し、生の更新の要求を窓口へ送出する
     // （要件 1.5〜1.8）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
+    // 第 11 要素の switch_sink（areka-P0-shell-balloon-switch task 8.1）は `\![change,shell,…]`・
+    // `\![change,balloon,…]` を「名前＋第 1 引数」で選別して消費し、名前を無変形で切替要求として
+    // 送出する（要件 1.2〜1.4・1.15）。担当外へは触れず文字 cue にも依存しないため末尾で構わない。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.clone(),
         default_encoding: DefaultEncoding::Ansi,
@@ -620,6 +636,7 @@ pub fn wire_emo2_boot(
             Box::new(change_sink),
             Box::new(install_sink),
             Box::new(update_sink),
+            Box::new(switch_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir,

@@ -6,7 +6,8 @@
 //!
 //! 1. **自己選別**——コマンド名と第 1 引数の組が `("change", "ghost")` のものだけを受理する。
 //!    `\![change,shell,…]`／`\![change,balloon,…]`・第 1 引数の無い裸の `\![change]` は担当外
-//!    として `debug!` で読み飛ばす（シェル・バルーンの切替は本受け口の持ち場ではない・要件 8.5）。
+//!    として `debug!` で読み飛ばす（シェル・バルーンの切替は `switch_cue.rs` の `SwitchCueSink` の
+//!    持ち場・要件 8.5・areka-P0-shell-balloon-switch 要件 10.3）。
 //! 2. **送り出し**——第 2 引数の名前を**無変形**で、`--option=raise-event` の有無とともに
 //!    切替要求 1 件として UI へ送る。名前の突き合わせは UI 側の入口（`ghost_switch`）の仕事である。
 //!
@@ -66,7 +67,8 @@ impl dola::cue::CueSink for ChangeCueSink {
             return;
         };
 
-        // 2) 自己選別。担当は `("change", "ghost")` の 1 組だけ（shell／balloon・裸の change は担当外）。
+        // 2) 自己選別。担当は `("change", "ghost")` の 1 組だけ（shell／balloon は `SwitchCueSink`・
+        //    裸の change は担当外）。
         let selector = params.first().copied().unwrap_or_default();
         if (name, selector) != (NAME_CHANGE, SELECTOR_GHOST) {
             debug!(
