@@ -102,7 +102,7 @@ pub(crate) enum SwitchBuildError {
 }
 
 /// 差し替えの荷物（UI が置き場へ置き、表示の橋渡しが合図の世代と突き合わせて取り出す）。
-#[allow(dead_code)] // 作るのは差し替えの相（9.3）・取り出すのは表示の橋渡し（9.1）
+#[allow(dead_code)] // 作るのは差し替えの相（9.3）
 pub(crate) struct SwapPayload {
     /// 差し替えの世代（合図 `Rebased` の `epoch` と結ぶ）。
     pub epoch: u64,
@@ -113,7 +113,6 @@ pub(crate) struct SwapPayload {
 }
 
 /// 荷物を 1 つ置く共有の置き場（鍵を持つのは置くときと取り出すときの一瞬だけ）。
-#[allow(dead_code)] // 結線（9.1）が作る
 pub(crate) type SwapSlot = Arc<Mutex<Option<SwapPayload>>>;
 
 /// 受理ごとに背景のスレッドを 1 本起こして資産を作り、結果を 1 件だけ送る線の受け手を返す。

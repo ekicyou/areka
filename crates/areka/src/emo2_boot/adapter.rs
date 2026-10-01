@@ -7,13 +7,18 @@
 //! `warn!` で log-first 観測する（R3.7・design.md「Error Categories and Responses」）。
 //!
 //! 本ファイルは task 2.4（`map_display_command` 純変換）と task 2.5（`PresentBridge`＝
-//! `SurfaceOutput` 本番実装・UI 配送）を実装する。
+//! `SurfaceOutput` 本番実装・UI 配送）を実装する。定義を替えた合図 `Rebased` は、橋渡しが持つ
+//! 荷物の置き場と突き合わせて scope ごとの `ReplaceTarget` へ写す（spec:
+//! areka-P0-shell-balloon-switch・design「Adapter」）。
+
+use std::sync::PoisonError;
 
 use areka_emo_compose::BindSet;
 use areka_emo_present::PresentCommand;
-use areka_seriko::{DisplayCommand, SurfaceOutput};
+use areka_seriko::{DisplayCommand, RebaseKind, RebasedShow, SurfaceOutput};
 use wintf::ecs::world::tick_wake;
 
+use crate::emo2_boot::switch_assets::{SwapPayload, SwapSlot};
 use crate::emo2_boot::target_map::{balloon_target, scope_of, shell_target};
 
 /// `DisplayCommand` → `PresentCommand` の純変換（DD-5・`target_map` を利用）。
@@ -73,8 +78,8 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
             target: balloon_target(scope_of(&scope)?),
             reply: None,
         },
-        // 定義を替えた合図は 1 件の命令へ写せない（スコープごとの置き換えは荷物と突き合わせて
-        // `PresentBridge::send` が行う）。ここへは来ない。
+        // 定義を替えた合図は 1 件の命令へ写せない（scope ごとの置き換えは荷物と突き合わせて
+        // `PresentBridge::send` が先に捌く）。純変換としては写す先が無い。
         DisplayCommand::Rebased { .. } => return None,
     })
 }
@@ -86,18 +91,30 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
 /// [`map_display_command`] で `PresentCommand` へ純変換し、UI スレッドの表示層（frame drain 側の
 /// `Receiver`）へ `mpsc::Sender` で**非ブロック**配送する（R3.7）。
 ///
-/// 可変状態を一切持たず、フィールドは配送用 `Sender` 1 本のみ（R3.6「変換と配送のみを行い、
-/// 状態を保持しない」）。変換は [`map_display_command`] の純関数へ、配送は `Sender::send` へ委ね、
-/// 本型自身は両者を繋ぐだけの薄いアダプタに徹する（キャッシュ・カウンタ等の内部状態を持たない）。
+/// 可変状態を一切持たず、フィールドは配送用 `Sender` と、UI と共有する荷物の置き場（任意）だけ
+/// （R3.6「変換と配送のみを行い、状態を保持しない」）。変換は [`map_display_command`] の純関数へ、
+/// 配送は `Sender::send` へ委ね、本型自身は両者を繋ぐだけの薄いアダプタに徹する（キャッシュ・
+/// カウンタ等の内部状態を持たない）。
 pub struct PresentBridge {
-    /// UI フレーム drain 側 `Receiver` への非ブロック配送口（唯一のフィールド＝無状態・R3.6）。
+    /// UI フレーム drain 側 `Receiver` への非ブロック配送口。
     tx: std::sync::mpsc::Sender<PresentCommand>,
+    /// 差し替えの荷物の置き場（spec: areka-P0-shell-balloon-switch・design「Adapter」）。
+    ///
+    /// 橋渡し自身は状態を持たない。置き場は UI が荷物を置き、合図 `Rebased` を受けたときに
+    /// ここから取り出すだけの共有の器である（既定は無し＝合図が来れば `error!` で何も送らない）。
+    swap: Option<SwapSlot>,
 }
 
 impl PresentBridge {
-    /// `PresentCommand` の配送先 `Sender`（UI フレーム drain 側）を与えて構築する。
+    /// `PresentCommand` の配送先 `Sender`（UI フレーム drain 側）を与えて構築する（置き場は無し）。
     pub fn new(tx: std::sync::mpsc::Sender<PresentCommand>) -> Self {
-        Self { tx }
+        Self { tx, swap: None }
+    }
+
+    /// 差し替えの荷物の置き場を持たせる（起動の結線が `Emo2Wiring` と同じ置き場を渡す）。
+    pub(crate) fn with_swap_slot(mut self, slot: SwapSlot) -> Self {
+        self.swap = Some(slot);
+        self
     }
 }
 
@@ -111,36 +128,90 @@ impl SurfaceOutput for PresentBridge {
     ///
     /// `SurfaceOutput::send` は infallible（`-> ()`）契約ゆえ、いかなる配送失敗でも panic させない。
     fn send(&mut self, command: DisplayCommand) {
-        // 定義を替えた合図（spec: areka-P0-shell-balloon-switch）: 置き換えの命令への写しは
-        // 橋渡しに荷物の置き場を持たせる段で足す。それまでは記録だけ残して何も送らない。
-        if let DisplayCommand::Rebased { epoch, kind, .. } = &command {
-            tracing::debug!(
-                epoch,
-                ?kind,
-                "PresentBridge: Rebased の写しは未配線 — 何も送らない"
-            );
+        // 定義を替えた合図（spec: areka-P0-shell-balloon-switch）は荷物と突き合わせて scope ごとの
+        // 置き換えの命令へ写す。それ以外は今日の純変換のまま。
+        if let DisplayCommand::Rebased { epoch, kind, shows } = command {
+            self.send_rebased(epoch, kind, shows);
             return;
         }
         match map_display_command(command) {
-            // 写像成功: UI フレーム drain 側へ非ブロック配送。受信端 drop（shutdown 中の期待事象）は
-            // panic させず debug! で観測して破棄する（log-first・R3.7）。
-            Some(cmd) => {
-                if self.tx.send(cmd).is_err() {
-                    tracing::debug!(
-                        "PresentBridge: PresentCommand の配送先（UI receiver）が drop 済み（shutdown 中）— 破棄"
-                    );
-                }
-                // 表示指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の `PRESENT`）。
-                // 送出の**後**に立てる——先に立てると、読み取りと送出の隙間で旗だけが倒れ、
-                // 指令が次の起床まで置き去りになる。逆順なら余分に 1 回回るだけで済む。
-                tick_wake::mark(tick_wake::PRESENT);
-            }
+            // 写像成功: UI フレーム drain 側へ非ブロック配送。
+            Some(cmd) => self.deliver(cmd),
             // 写像不能（非数値 scope）: 握り潰さず warn! で観測して drop（R3.6/R3.7・DD-5）。
             None => {
                 tracing::warn!(
                     "PresentBridge: 非数値 scope の DisplayCommand を写像できず drop しました"
                 );
             }
+        }
+    }
+}
+
+impl PresentBridge {
+    /// 1 件を UI へ非ブロック配送する。受信端 drop（shutdown 中の期待事象）は panic させず
+    /// `debug!` で観測して破棄する（log-first・R3.7）。
+    fn deliver(&self, cmd: PresentCommand) {
+        if self.tx.send(cmd).is_err() {
+            tracing::debug!(
+                "PresentBridge: PresentCommand の配送先（UI receiver）が drop 済み（shutdown 中）— 破棄"
+            );
+        }
+        // 表示指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の `PRESENT`）。
+        // 送出の**後**に立てる——先に立てると、読み取りと送出の隙間で旗だけが倒れ、
+        // 指令が次の起床まで置き去りになる。逆順なら余分に 1 回回るだけで済む。
+        tick_wake::mark(tick_wake::PRESENT);
+    }
+
+    /// 合図 `Rebased` を、置き場の世代の一致する荷物と突き合わせて scope ごとの
+    /// `ReplaceTarget` へ写す（spec: areka-P0-shell-balloon-switch 要件 4.1・4.2・design「Adapter」）。
+    ///
+    /// - 対象の番号はシェルなら `2*scope`、バルーンなら `2*scope+1`（`frame/attach.rs` と同じ写像）。
+    /// - 最初の表示は合図の同じ scope の面と着せ替え。合図に無い scope・面の無い scope は登録だけ。
+    /// - 返信の送り手は荷物の同じ scope のものを載せる。
+    /// - 荷物が無い・世代が違うときは `error!(rebased_payload_missing)` を 1 件残して何も送らない
+    ///   （世代の違う荷物は置き場に残す）。UI は返信の送り手が届かないことで失敗を知る。
+    fn send_rebased(&self, epoch: u64, kind: RebaseKind, shows: Vec<RebasedShow>) {
+        // 鍵を持つのは取り出す一瞬だけ。毒は前の持ち主の panic で、中身の荷物は壊れていない。
+        let payload = self.swap.as_ref().and_then(|slot| {
+            slot.lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take_if(|p| p.epoch == epoch)
+        });
+        let Some(SwapPayload {
+            targets,
+            mut replies,
+            ..
+        }) = payload
+        else {
+            tracing::error!(
+                event = "rebased_payload_missing",
+                epoch,
+                ?kind,
+                "PresentBridge: 合図の世代の荷物が置き場に無い — 置き換えの命令を送らない"
+            );
+            return;
+        };
+        let to_target = match kind {
+            RebaseKind::Shell => shell_target,
+            RebaseKind::Balloon => balloon_target,
+        };
+        for (scope, emo_world, atlas, author_dpi) in targets {
+            let show = shows
+                .iter()
+                .find(|s| scope_of(&s.scope) == Some(scope))
+                .and_then(|s| s.surface_id.map(|id| (id, s.binds.clone())));
+            let reply = replies
+                .iter()
+                .position(|(s, _)| *s == scope)
+                .map(|i| replies.swap_remove(i).1);
+            self.deliver(PresentCommand::ReplaceTarget {
+                target: to_target(scope),
+                emo_world: Box::new(emo_world),
+                atlas,
+                author_dpi,
+                show,
+                reply,
+            });
         }
     }
 }
@@ -153,6 +224,10 @@ const _: fn() = || {
     fn assert_send_static<T: Send + 'static>() {}
     assert_send_static::<PresentBridge>();
 };
+
+#[cfg(test)]
+#[path = "adapter_rebased_tests.rs"]
+mod rebased_tests;
 
 #[cfg(test)]
 mod tests {

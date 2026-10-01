@@ -163,7 +163,7 @@
   - _Depends: 2.2, 6.3, 7.3_
 
 - [ ] 9. 差し替えの相
-- [ ] 9.1 seriko の合図を present の置き換えへ写す橋渡しを作る
+- [x] 9.1 seriko の合図を present の置き換えへ写す橋渡しを作る
   - 4.1 で足した仮の腕を置き換える。表示の橋渡しに荷物の置き場を持たせ（既定は無し）、合図が届いたら世代の一致する荷物を取り出してスコープごとに置き換えの命令を送る（シェルは `2*scope`・バルーンは `2*scope+1`・最初の表示は合図の同じスコープの面と着せ替え）。荷物が無い・世代が違えば `error!` を 1 件残して何も送らない。それ以外の指令は今日どおり写す
   - 結線で置き場を 1 つ作り、橋渡しと結線の持ち物の両方へ渡す（結線の持ち物に seriko の送り手は持たせない）
   - 兄弟テストで、合図が置き換えの命令へ正しい番号で写ること・荷物が無いと `error!` 1 件で命令 0・合図より前の指令が前に並ぶことが緑
@@ -262,3 +262,4 @@
 - 8.1: `shell_balloon_switch.rs` の先頭に `#![allow(dead_code)]` → 8.3 で外す。`wire_emo2_boot` は受信端をその場で `drop(switch_rx)`（8.3 で World へ据える）。開けない `change` の荷物は `SwitchCueSink` では `debug!`（`ChangeCueSink` が `warn!` 1 件を残すため）。`t_zwi05` の受け口の列の字面を追随。
 - 8.2: `resolve_skin_target` は `current: Option<&str>`・`installed: Result<&str, NotFoundReason>`（design は `&str`／`Option<&str>`）。該当なしの理由に `NoMatch`・`RandomEmpty` を足した 5 つ。控えの資源・書き手・`installed_for`・候補の列挙は `shell_balloon_resolve.rs` に置いた（design は `shell_balloon_switch.rs`）。控えは候補のフォルダ名と大文字小文字を区別せず突き合わせる（シェルの記録は書庫の綴りのまま）。`shell_balloon_resolve.rs` の先頭と `update::desk::is_busy` の `#[allow(dead_code)]` → 8.3 で外す。本番の乱数は `boot_resolve::pick_index` を 8.3 が渡す。記録の語 `skin_switch_random_pick`・`last_installed_shell_recorded`・`last_installed_balloon_recorded`（info）（12 で design へ反映）。
 - 8.3: Reference の組み立て `skin_ref_name`／`skin_ref_path` は入口の側に `pub(crate)`（design は差し替えの相の私有＝12 で反映）。外した dead_code の許可: `shell_balloon_switch.rs`・`shell_balloon_resolve.rs`・`switch_assets.rs` の先頭、`GhostSession::seriko_sink`、`update::desk::is_busy`。項目単位で残る許可: `SkinSpec::Folder`・`SkinOrigin::Menu` → 10、`SkinSwitchInFlight.stage`・`SkinSwitchStage`・`SwapBuilt` → 9.3、`SwapPayload` → 9.1／9.3、`SwapSlot` → 9.1。文脈なしの理由に `kanade` を足した（ghost_slot・boot_context・wiring・kanade・seriko_sink）。送り失敗は `NoContext` を返す。終了の片付けは空の `WorkGate`「skin_switch」に `discard_for_exit` を登記（終了を待たせない）。`cfg(test)` の口 `GhostSession::with_seriko_sink`・`update::desk::insert_running_desk_for_test`。要件 1.14 の「定常でない」は入口でなく 9.3 が `Left{NotSteady}` で `warn!`。
+- 9.1: 世代の違う合図では荷物を取り出さず置き場に残す（古い合図が今の荷物を食わない）。`SwapSlot` の許可を外し、`SwapPayload` の許可は 9.3 まで残す。`Emo2Wiring.swap_slot` に欄単位の `#[allow(dead_code)]` → 9.3 で外す。`Emo2Wiring::new` は空の置き場を作り、`wire_emo2_boot` が構築の後に差し替える。記録の語 `rebased_payload_missing`（error）。

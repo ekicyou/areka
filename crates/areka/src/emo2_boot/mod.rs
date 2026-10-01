@@ -361,7 +361,8 @@ const _: fn() = || {
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
 ///    （UI スレッド前提。`Err` は [`BootWiringError::SpawnUi`] 分類＋`wired=false`）。
 /// 3. [`TalkClock::new`]（`dola::runtime::clock::now` 注入）／[`ClockedTextSink::new`]。
-/// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]／[`spawn_seriko`]。
+/// 4. `mpsc::channel::<PresentCommand>()`／[`PresentBridge::new`]（差し替えの荷物の置き場を
+///    `Emo2Wiring` と共有）／[`spawn_seriko`]。
 ///    **SurfaceResolver 突き合わせ（Task 4.1 申し送り）**: `resolver`（非 Clone）は `spawn_seriko`
 ///    が値消費し、`static_binds`（Clone）は clone して seriko へ渡す。`Emo2Wiring` が保持する
 ///    `BootAssets` の `resolver` は attach で読まれないため無害なプレースホルダ（空 alias 表）で埋める。
@@ -453,7 +454,10 @@ pub fn wire_emo2_boot(
     // Emo2Wiring の双方へ配る。Emo2Wiring 側 BootAssets の resolver は attach で読まれない（Task 4.1）
     // ため空 alias 表のプレースホルダで埋める（実 resolver は seriko が保持）。
     let (tx, rx) = std::sync::mpsc::channel::<PresentCommand>();
-    let bridge = PresentBridge::new(tx);
+    // 差し替えの荷物の置き場（areka-P0-shell-balloon-switch task 9.1）: 1 つ作り、表示の橋渡しと
+    // Emo2Wiring の両方へ同じものを渡す（seriko の送り手は Emo2Wiring に持たせない）。
+    let swap_slot = switch_assets::SwapSlot::default();
+    let bridge = PresentBridge::new(tx).with_swap_slot(swap_slot.clone());
     // move channel（PresentBridge と同型の配線・task 9.1）: talk スレッドの MoveCueSink が送出端、
     // UI スレッドの Emo2Wiring が受信端（frame 相 drain＝task 9.2 が消費）を保持する。
     let (move_tx, move_rx) = std::sync::mpsc::channel::<MoveDirective>();
@@ -691,6 +695,7 @@ pub fn wire_emo2_boot(
         clock,
         wiring_assets,
     );
+    wiring.swap_slot = swap_slot;
     // shell 設定（`seriko.zorder`）由来の基底を、World へ載せる前に据える（要件 5.1／5.2／
     // 5.3／5.4・areka-P0-scope-zorder-pinning task 6.3）。ここはまだこの結線状態で走る
     // 最初の `Update` の手前であり、取り出しの相も 1 度も走っていない——ゆえに基底は**タグの実行を待たずに**
