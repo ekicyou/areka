@@ -29,7 +29,7 @@
 - 文字の層の scope ごとの消去の回数（`TextLayerState` の中の別の表）と、その読み口 `TextLayerState::clear_count`。
 - 観測の形の変更: `ScopeObservation::visible_glyphs` を「見える文字の数と消去の回数の組」（`GlyphObservation`）にする。判定の記憶 `ScopeVisibility` に「前に見た消去の回数」（`last_clear_count`）を足す。
 - 配線の段の観測の収集（`collect_observations`）で、上の組を同じ借用・同じ注入時刻から作ること。
-- 新しい決定論のテスト 2 本（配線の段の再表示のテスト・文字の層の消去の回数のテスト）と、配線の段のテストの道具の共有ファイル。
+- 新しい決定論のテストのファイル 2 つ（配線の段の再表示のテスト・文字の層の消去の回数のテスト）と、配線の段のテストの道具の共有ファイル。
 - 記述の追随: `doc/COMPAT_ARCHITECTURE.md` §8 の「バルーンが現れる契機」の行、`balloon_visibility.rs` のモジュール doc の単一規則の節、`shell_balloon_switch_session_balloon_tests.rs` の `CHANGE_1` の注記。
 
 ### Out of Boundary
@@ -174,7 +174,7 @@ sequenceDiagram
 | 3.2 | 全文が一度に見える短い台詞・台詞の途中の `\c` のテスト（修正の前に赤） | ReappearPhaseTests | 同上 | 分岐 a |
 | 3.3 | 1.4・1.6・2.1〜2.5 のテスト | ReappearPhaseTests | 同上 | 分岐 b・c |
 | 3.4 | 注入した時刻とフレームで駆動 | ReappearPhaseTests・ClearCountTests | `now_talk_time` を引数で渡す・実時間の待機なし | — |
-| 3.5 | 兄弟ファイル・1,000 行以下 | File Structure Plan | 新しいテストは 2 本とも兄弟ファイル・道具は `balloon_visibility_phase_test_support.rs` | — |
+| 3.5 | 兄弟ファイル・1,000 行以下 | File Structure Plan | 新しいテストのファイルは 2 つとも兄弟ファイル・道具は `balloon_visibility_phase_test_support.rs` | — |
 | 3.6 | 回避の注記の追随 | DocFollowUp | `CHANGE_1` の doc | — |
 | 3.7 | COMPAT §8 の追随（アーカイブは書き換えない） | DocFollowUp | §8 の行 | — |
 | 3.8 | ワークスペース全体の緑 | 検証 | `tools/test-all.ps1` | — |
