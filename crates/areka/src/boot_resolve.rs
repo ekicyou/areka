@@ -484,7 +484,6 @@ impl LastUsed<'_> {
 
 /// シェルの差し替えの完了: Ghost スコープへ `LastShell` だけを投函する（要件 6.1）。
 /// `LastBalloon`・App スコープには触れない。投函だけで待たない（[`LastUsed::record`] と同じ）。
-#[allow(dead_code)] // 9.4 の差し替えの後始末から呼ぶ
 pub(crate) fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
     publisher.persist_put(
         PersistScope::Ghost,
@@ -500,7 +499,6 @@ pub(crate) fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
 /// バルーンの差し替えの完了: Ghost スコープへ `LastBalloon` だけを投函する（要件 6.1・6.7）。
 /// 3 つを書く [`LastUsed::record`] を通さないのは、入れた直後の `remember_balloon` の記憶を
 /// 上書きしないため。`LastShell`・App スコープには触れない。
-#[allow(dead_code)] // 9.4 の差し替えの後始末から呼ぶ
 pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str) {
     publisher.persist_put(
         PersistScope::Ghost,

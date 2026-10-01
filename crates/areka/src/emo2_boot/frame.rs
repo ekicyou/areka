@@ -319,7 +319,10 @@ pub fn emo2_frame_system(world: &mut World) {
     if let Some(work_area_change) = &work_area_change {
         work_area_sync::resnap_for_work_area_change(world, work_area_change);
     }
+    // drain の時間は差し替えの相が `swap_ms` へ足す（置き換えの適用はこの中で走る・要件 4.4）。
+    let drain_started = std::time::Instant::now();
     run_drain_phase(&mut wiring, world);
+    wiring.last_drain = drain_started.elapsed();
     // シェル・バルーンの差し替えの相: drain の**直後**（置き換えを適用した同じフレームで後始末し、
     // 続く可視性・窓寸・resnap・文字の層の相がその結果を拾う・design Flow 1 ⑷）。
     switch::run_switch_phase(&mut wiring, world);

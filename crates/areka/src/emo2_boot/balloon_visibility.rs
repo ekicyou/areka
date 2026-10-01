@@ -419,6 +419,22 @@ pub(crate) struct BalloonVisibilityState {
     lifecycle_disconnect_logged: bool,
 }
 
+impl BalloonVisibilityState {
+    /// バルーンの差し替えで、その scope の可視の記憶を消し、計測を止める
+    /// （areka-P0-shell-balloon-switch 要件 3.3・design「SwitchPhase」の完了の後始末）。
+    ///
+    /// 古い装着は消え、新しいバルーンは外部所有のまま隠れているので、可視の記憶を偽へ倒す
+    /// （消えた古いバルーンを「外から隠された」と読まない）。見えるバルーンが無くなるので計測も
+    /// 止める。文字の数の記憶は保つ——消すと、表示の済んだ文字が次のフレームで増加の縁に化け、
+    /// 新しいバルーンが台詞の外で出てしまう（次の台詞で今日どおり現れる＝要件 3.3）。
+    pub(crate) fn forget_scope(&mut self, scope: u32) {
+        if let Some(previous) = self.per_scope.get_mut(&scope) {
+            previous.prev_visible = false;
+        }
+        self.deadline = None;
+    }
+}
+
 /// 本フレームの可視性遷移を決める（純関数・`World` / GPU / 時計に触れない）。
 ///
 /// 判定は 4 段で、この順に依存する——⑴ 表示ライフサイクル信号の畳み込み（会話の開始・占有
@@ -867,6 +883,10 @@ mod timeout_suppression_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_user_break_tests.rs"]
 mod user_break_tests;
+
+#[cfg(test)]
+#[path = "balloon_visibility_forget_tests.rs"]
+mod forget_tests;
 
 // 会話終了観測から判断中核までの端から端（task 6.6）。実台本の再生から占有終端が計測起点に
 // なるところまでを 1 本で通す。判断中核の私有状態を読むため親の内側に置く。

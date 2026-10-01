@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
+use std::time::Duration;
 
 use bevy_ecs::system::SystemState;
 // `World` を使うのは下の `impl Emo2Wiring` 内の `#[cfg(test)]` メソッド `apply_present` だけ
@@ -23,7 +24,7 @@ use super::super::balloon_visibility::BalloonVisibilityState;
 use super::super::switch_assets::SwapSlot;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::super::zorder_cue::ZOrderDirective;
-use super::zorder_descript::apply_descript_base;
+use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, MoveDirective, TalkClock};
 use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
 
@@ -146,6 +147,10 @@ pub struct Emo2Wiring {
     /// 送り手はここに持たせない（降ろした後も World に残るので、持たせると seriko の join が
     /// 戻らない＝持ち主は `GhostSession` だけ）。
     pub(in crate::emo2_boot) swap_slot: SwapSlot,
+    /// このフレームの drain（表示の指令の適用）に費やした時間（毎フレーム `emo2_frame_system` が
+    /// 書く）。差し替えの相が、置き換えの返信のそろったフレームの `swap_ms` へ足す
+    /// （spec: areka-P0-shell-balloon-switch 要件 4.4）。
+    pub(super) last_drain: Duration,
 }
 
 impl Emo2Wiring {
@@ -189,6 +194,7 @@ impl Emo2Wiring {
             dpi_state: None,
             // 空の置き場から始める。起動の結線は表示の橋渡しと同じ置き場へ差し替える。
             swap_slot: SwapSlot::default(),
+            last_drain: Duration::ZERO,
         }
     }
 
@@ -206,6 +212,16 @@ impl Emo2Wiring {
     /// [`apply_descript_base`]: super::zorder_descript::apply_descript_base
     pub(in crate::emo2_boot) fn seed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
         apply_descript_base(&mut self.zorder_ledger, zorder_raw);
+    }
+
+    /// シェルの差し替えで、基底を新しいシェルの `seriko.zorder` へ置き直す
+    /// （areka-P0-shell-balloon-switch 要件 2.7・差し替えの相の完了の後始末だけが呼ぶ）。
+    ///
+    /// 解釈・拒否・記録は [`apply_descript_rebase`] が持つ（`None`・解釈できない値は基底なし）。
+    ///
+    /// [`apply_descript_rebase`]: super::zorder_descript::apply_descript_rebase
+    pub(super) fn reseed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
+        apply_descript_rebase(&mut self.zorder_ledger, zorder_raw);
     }
 
     /// 当たり判定 resolver への読み口（design DD-IE-9/DD-IE-10・「Modified Files」mod.rs 行）。

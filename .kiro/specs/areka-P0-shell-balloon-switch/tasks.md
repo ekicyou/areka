@@ -162,7 +162,7 @@
   - _Requirements: 1.1, 1.5, 1.12, 1.13, 1.14, 1.16, 2.1, 5.7_
   - _Depends: 2.2, 6.3, 7.3_
 
-- [ ] 9. 差し替えの相
+- [x] 9. 差し替えの相
 - [x] 9.1 seriko の合図を present の置き換えへ写す橋渡しを作る
   - 4.1 で足した仮の腕を置き換える。表示の橋渡しに荷物の置き場を持たせ（既定は無し）、合図が届いたら世代の一致する荷物を取り出してスコープごとに置き換えの命令を送る（シェルは `2*scope`・バルーンは `2*scope+1`・最初の表示は合図の同じスコープの面と着せ替え）。荷物が無い・世代が違えば `error!` を 1 件残して何も送らない。それ以外の指令は今日どおり写す
   - 結線で置き場を 1 つ作り、橋渡しと結線の持ち物の両方へ渡す（結線の持ち物に seriko の送り手は持たせない）
@@ -186,7 +186,7 @@
   - _Requirements: 1.12, 1.14, 1.16, 5.1, 5.4, 5.5, 5.7, 5.8, 12.2, 12.7, 12.9_
   - _Depends: 9.1_
 
-- [ ] 9.4 差し替えの相の完了の段と後始末を作る
+- [x] 9.4 差し替えの相の完了の段と後始末を作る
   - 置き換えの返信がそろったら、どれかが失敗・落ちた → `error!`（記憶・通知 0）、全部成功 → 後始末
   - 結線の持ち物に、9.2 の関数で重なりの基底を置き直す口を足す
   - シェルの後始末: 9.2 で見た目の値を入れ直す → 重なりの基底を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`（Ref0＝新しいシェルの名前・Ref1＝ゴーストの名前・Ref2＝新しいシェルの絶対パス）を汎用の入口で送る
@@ -265,3 +265,4 @@
 - 9.1: 世代の違う合図では荷物を取り出さず置き場に残す（古い合図が今の荷物を食わない）。`SwapSlot` の許可を外し、`SwapPayload` の許可は 9.3 まで残す。`Emo2Wiring.swap_slot` に欄単位の `#[allow(dead_code)]` → 9.3 で外す。`Emo2Wiring::new` は空の置き場を作り、`wire_emo2_boot` が構築の後に差し替える。記録の語 `rebased_payload_missing`（error）。
 - 9.2: 境界を広げた（要件 2.7 の根本）: バルーン側の `windowposition` を切替でも効かせるため、`placement::apply_scope_windowpositions` を `load_scope_windowpositions`（読む）＋`merge_scope_windowpositions`（純関数）に分け、背景の `build_shell` が今のバルーンの値を読んで `SwapBuilt::Shell.balloon: BalloonPlacementInputs` で運ぶ（`SwitchBuildRequest::Shell.balloon_dir`・`SwitchContext.balloon_dir`＝`BootContext.current.balloon.dir`）。`apply_shell_descript(world, windows, src, balloon, restored) -> ()`（design は `Result`）。解決は 2 周（全スコープを昇順で 1 度に解き P2 の連鎖を保つ）。`DragConfig.move_window` も導き直す。`follow_balloon` の引き金は `Placement(PlacementRoute::Restore)`（`diag.rs` の「どこからも作られない」注記が古い → 12／13.1）。`apply_descript_rebase` は基底を消してから据え直す（`version` が 2 進む）。関数単位の `#[allow(dead_code)]`（`apply_shell_descript`・`apply_descript_rebase`）→ 9.4 で外す。9.4 は呼ぶ時点で `WindowPos.size` が新しいシェルの寸法か確かめる。記録の語 `reseed_skipped`（warn）・`reseed_scope_not_running`（debug）（12 で design へ反映）。
 - 9.3: 送り直しでは `gap_result` を空にせず 1 度目の返事の `MarkedEnd` を保つ（design は「空に」・Flow 1 ⑵ の意図を守るため）。送り直しの返事の `Left{NotSteady}` も `warn!(skin_switch_not_steady)`。資産の失敗の reason は `err.to_string()`。`SkinSwitchStage::Committed` に `marked`・`committed_at` を足し、`SwapFinish` は `shell_balloon_switch.rs` に置いた。世代はプロセスに 1 つの `static AtomicU64`。外した許可: `SkinSwitchInFlight.stage`・`SkinSwitchStage`・`SwapBuilt`・`SwapPayload`・`Emo2Wiring.swap_slot`。残る許可: `SkinSwitchStage::Committed`・`SwapFinish` → 9.4、`SkinSpec::Folder`・`SkinOrigin::Menu` → 10。9.4 が入るまで頼んだ段の印は消えない（12 で design へ反映）。
+- 9.4: `finish_shell` は先に `reconcile_reported_sizes` を呼んで窓寸を新しいシェルにしてから `apply_shell_descript`、続けて新設の `placement::reseed::reanchor_char_windows`（今の寸法・新しい `Anchored`・`PlacementRoute::AnchorChange`）でキャラ窓を置き直す（design「Reseed」の「位置は触らない」は `apply_shell_descript` だけに当てはまる）。`swap_ms` は `Emo2Wiring.last_drain`（drain 全体）＋後始末の上限の値、`since_commit_ms` は頼んでからの経過。`BalloonVisibilityState::forget_scope` は `prev_visible` と計測を止めるが文字の数 `last_glyphs` は保つ（design の「記憶を消す」だと台詞の外で現れる＝要件 3.3）。足した口: `Emo2Wiring::reseed_zorder_descript_base`、`GhostSession::memory_publisher`／`set_shell_dir`、cfg(test) の `with_memory_publisher`。外した許可: `SkinSwitchStage::Committed`・`SwapFinish`・`apply_shell_descript`・`apply_descript_rebase`・`record_last_shell`／`record_last_balloon`。記録の語（warn）: `skin_shell_dir_not_set`・`skin_current_balloon_not_set`・`skin_switch_event_not_sent`・`skin_memory_not_recorded`・`reseed_skipped`（`no_ghost_windows`／`char_size_unknown`）。11.2 で見ること: 頼んだ段で seriko の合図が来ないと印が消えない（12 で design へ反映）。

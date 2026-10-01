@@ -407,6 +407,9 @@ pub(crate) struct GhostSession {
     kanade: Option<Sender<KanadeMsg>>,
     /// 起こしたゴーストの根（`ghost/<フォルダ名>`・起動の結線の入力のもの）。
     ghost_dir: PathBuf,
+    /// テスト用の記憶の書き手（実行系を起こさずに差し替えの後始末の記憶を観測する）。
+    #[cfg(test)]
+    memory_publisher_for_test: Option<areka_sylphya::SylphyaPublisher>,
     /// 窓への結線が成立せず LogSink の起動へ倒れた単位か（倒れた先の成否を問わない・生涯で不変）。
     /// 結線ありの腕・切替の経路・テスト用の組み立ては偽（要件 4.2・4.8・8.3）。
     logsink_fallback: bool,
@@ -443,6 +446,37 @@ impl GhostSession {
         self.seriko_sink.as_ref()
     }
 
+    /// 実行系の記憶の書き手（差し替えの後始末が `LastShell`／`LastBalloon` を投函する）。
+    /// 実行系が無ければ `None`（テスト用の組み立ては [`GhostSession::with_memory_publisher`] の値）。
+    pub(crate) fn memory_publisher(&self) -> Option<&areka_sylphya::SylphyaPublisher> {
+        #[cfg(test)]
+        if let Some(publisher) = &self.memory_publisher_for_test {
+            return Some(publisher);
+        }
+        self.ghost.as_ref().map(|r| r.sylphya_publisher())
+    }
+
+    /// 今のシェルのフォルダだけを書き換える（実行系へ委ねる・要件 6.5）。実行系が無ければ偽。
+    pub(crate) fn set_shell_dir(&mut self, dir: PathBuf) -> bool {
+        match self.ghost.as_mut() {
+            Some(runtime) => {
+                runtime.set_shell_dir(dir);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// テスト用の組み立てに記憶の書き手を持たせる（差し替えの後始末の記憶を観測するため）。
+    #[cfg(test)]
+    pub(crate) fn with_memory_publisher(
+        mut self,
+        publisher: areka_sylphya::SylphyaPublisher,
+    ) -> Self {
+        self.memory_publisher_for_test = Some(publisher);
+        self
+    }
+
     /// テスト用の組み立てに seriko の送り手を持たせる（切替の入口の文脈の判定を通すため）。
     #[cfg(test)]
     pub(crate) fn with_seriko_sink(mut self, sink: areka_seriko::SerikoSink) -> Self {
@@ -462,6 +496,8 @@ impl GhostSession {
             kanade,
             ghost_dir,
             logsink_fallback: false,
+            #[cfg(test)]
+            memory_publisher_for_test: None,
         }
     }
 
@@ -669,6 +705,8 @@ pub(crate) fn boot_ghost(
         seriko_sink: None,
         ghost_dir: ghost_root,
         logsink_fallback: true,
+        #[cfg(test)]
+        memory_publisher_for_test: None,
     }
 }
 
@@ -777,6 +815,8 @@ fn boot_wired(
         seriko_sink: outcome.seriko_sink,
         ghost_dir,
         logsink_fallback: false,
+        #[cfg(test)]
+        memory_publisher_for_test: None,
     })
 }
 

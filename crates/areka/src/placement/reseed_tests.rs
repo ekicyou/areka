@@ -70,7 +70,7 @@ fn boot_placements() -> Vec<ScopePlacement> {
 }
 
 /// 起動の窓を組み、窓書込の口が通るよう偽 HWND と窓の DPI を持たせる。
-fn booted_world(dpi: u16) -> (World, GhostWindows) {
+pub(crate) fn booted_world(dpi: u16) -> (World, GhostWindows) {
     world_from(&boot_placements(), dpi)
 }
 
@@ -124,7 +124,7 @@ fn fake_handle(raw: usize) -> WindowHandle {
 
 /// 新しいシェル: 揃え方は free・sakura のバルーンは右で (30,40)・kero は (-7,9)。
 /// `char2.` のキーで設定にだけスコープ 2 が現れる（走っている窓には無い）。
-fn new_shell(extra: &[(&str, &str)]) -> DescriptSource {
+pub(crate) fn new_shell(extra: &[(&str, &str)]) -> DescriptSource {
     let kv = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
         pairs
             .iter()
@@ -159,7 +159,7 @@ fn position_of(world: &World, entity: Entity) -> Point {
     world.get::<WindowPos>(entity).unwrap().position.unwrap()
 }
 
-fn char_positions(world: &World, windows: &GhostWindows) -> Vec<Point> {
+pub(crate) fn char_positions(world: &World, windows: &GhostWindows) -> Vec<Point> {
     windows
         .scopes()
         .map(|s| position_of(world, windows.char_window(s).unwrap()))

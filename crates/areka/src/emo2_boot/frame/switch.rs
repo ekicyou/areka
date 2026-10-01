@@ -6,7 +6,11 @@
 //! - 待ちの段: 台詞の切れ目の返事と背景の資産づくりの結果を `try_recv` だけで覗く（UI スレッドを
 //!   塞がない）。中止・取りやめ・無視・失敗なら記録を 1 件残して印を消す（差し替え・イベント・
 //!   記憶は 0）。資産がそろった後に切れ目を受けたら seriko へ差し替えを頼み、頼んだ段へ進む。
-//! - 頼んだ段: 置き換えの返信を待って後始末する（完了の段・9.4）。
+//! - 頼んだ段（完了の段）: 置き換えの返信を `try_recv` だけで覗き、どれかが失敗・脱落なら
+//!   `error!` を 1 件残して印を消す（記憶・通知 0）。全部そろえば後始末（シェル: 配置の値の
+//!   入れ直し → 重なりの基底 → 実行系の今のシェル → `LastShell` → `OnShellChanged`／バルーン:
+//!   文字の模型と背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` → `OnBalloonChange`）を
+//!   して `info!(skin_switch_done)` を残し、印を消す（要件 2.4・2.7・3.2〜3.4・6.1・6.5・6.7）。
 //!
 //! 切替の経路は終了の指示を出さない（要件 5.8）。
 
@@ -17,19 +21,31 @@ use std::time::Instant;
 
 use areka_actor::{ReplyReceiver, reply_channel};
 use areka_emo_present::PresentOutcome;
-use areka_kanade::{GapLeft, KanadeMsg, MarkedEnd, TalkGap};
+use areka_kanade::{GapLeft, KanadeMsg, MarkedEnd, ShioriMethod, TalkGap};
+use areka_parsers::balloon::BalloonModel;
+use areka_sakura::ActorKey;
 use areka_seriko::SerikoReplace;
+use areka_sylphya::{PersistKey, SylphyaPublisher};
 use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
-use super::Emo2Wiring;
+use super::{Emo2Wiring, reconcile_reported_sizes};
+use crate::boot_config::BootContext;
+use crate::boot_resolve::{BalloonDecision, BalloonRoute, record_last_balloon, record_last_shell};
 use crate::emo2_boot::assets::actor_keyed_balloon_tables;
 use crate::emo2_boot::ghost_switch::SwitchInFlight;
+use crate::emo2_boot::shell_balloon_resolve::SkinCandidate;
 use crate::emo2_boot::shell_balloon_switch::{
-    SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
+    SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish, skin_ref_name, skin_ref_path,
 };
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwapPayload};
 use crate::ghost_session::{GhostSession, GhostSlot};
+use crate::placement::config::build_placement_config;
+use crate::placement::reseed::{
+    BalloonPlacementInputs, apply_shell_descript, reanchor_char_windows,
+};
+use crate::placement::source::DescriptSource;
+use crate::placement::spawn::GhostWindows;
 
 /// 差し替えの世代（プロセスで単調に進む＝ゴーストをまたいでも置き場の荷物と合図を取り違えない）。
 static NEXT_EPOCH: AtomicU64 = AtomicU64::new(1);
@@ -40,11 +56,12 @@ pub(super) fn run_switch_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         return;
     };
     let keep = match flight.stage {
-        SkinSwitchStage::Waiting { .. } => step_waiting(&mut flight, wiring, world),
-        // 置き換えの返信を待って後始末するのは完了の段（9.4）。
-        SkinSwitchStage::Committed { .. } => true,
+        SkinSwitchStage::Waiting { .. } => {
+            step_waiting(&mut flight, wiring, world).then_some(flight)
+        }
+        SkinSwitchStage::Committed { .. } => step_committed(flight, wiring, world),
     };
-    if keep {
+    if let Some(flight) = keep {
         world.insert_non_send(flight);
     }
 }
@@ -277,6 +294,258 @@ fn commit(
     true
 }
 
+/// 頼んだ段の 1 フレーム。印を残すなら `Some`（返信待ち）、消すなら `None`（完了・失敗）。
+fn step_committed(
+    flight: SkinSwitchInFlight,
+    wiring: &mut Emo2Wiring,
+    world: &mut World,
+) -> Option<SkinSwitchInFlight> {
+    let SkinSwitchInFlight {
+        kind,
+        target,
+        stage,
+    } = flight;
+    let SkinSwitchStage::Committed {
+        epoch,
+        mut replies,
+        finish,
+        marked,
+        committed_at,
+    } = stage
+    else {
+        // 待ちの段は `step_waiting` の持ち場（呼び手が振り分け済み）。
+        return Some(SkinSwitchInFlight {
+            kind,
+            target,
+            stage,
+        });
+    };
+    match poll_replies(&mut replies) {
+        Ok(false) => {
+            return Some(SkinSwitchInFlight {
+                kind,
+                target,
+                stage: SkinSwitchStage::Committed {
+                    epoch,
+                    replies,
+                    finish,
+                    marked,
+                    committed_at,
+                },
+            });
+        }
+        Ok(true) => {}
+        Err((scope, reason)) => {
+            error!(
+                event = "skin_switch_failed",
+                stage = "attach",
+                epoch,
+                scope,
+                reason = reason.as_str(),
+                ?kind,
+                to = %target.folder,
+                "新しい装着への置き換えが済まなかった——記憶も通知も書かない"
+            );
+            return None;
+        }
+    }
+
+    // UI スレッドを止めた時間 `swap_ms`＝このフレームの drain（置き換えの適用はこの中で返信を
+    // そろえた）＋後始末。drain は他の指令も捌くので上限の見積もり（要件 4.4・実機サインオフで記録）。
+    let started = Instant::now();
+    match finish {
+        SwapFinish::Shell {
+            source,
+            balloon,
+            restored,
+        } => finish_shell(wiring, world, &target, &source, &balloon, &restored),
+        SwapFinish::Balloon { scopes } => finish_balloon(wiring, world, &target, scopes),
+    }
+    info!(
+        event = "skin_switch_done",
+        ?kind,
+        to = %target.folder,
+        epoch,
+        ?marked,
+        swap_ms = (wiring.last_drain + started.elapsed()).as_secs_f64() * 1000.0,
+        since_commit_ms = committed_at.elapsed().as_secs_f64() * 1000.0,
+        "シェル・バルーンの切替を終えた"
+    );
+    None
+}
+
+/// 置き換えの返信を覗く（`try_recv` だけ）。届いた成功は外し、全部そろえば `Ok(true)`、まだ残れば
+/// `Ok(false)`。失敗の返信か送り手の脱落があれば、最初のものの (scope, 理由) を `Err` で返す。
+fn poll_replies(
+    replies: &mut Vec<(u32, ReplyReceiver<PresentOutcome>)>,
+) -> Result<bool, (u32, String)> {
+    let mut failed = None;
+    replies.retain(|(scope, rx)| match rx.try_recv() {
+        Ok(None) => true,
+        Ok(Some(Ok(()))) => false,
+        Ok(Some(Err(err))) => {
+            failed.get_or_insert((*scope, err.to_string()));
+            false
+        }
+        Err(err) => {
+            failed.get_or_insert((*scope, err.to_string()));
+            false
+        }
+    });
+    match failed {
+        Some(failure) => Err(failure),
+        None => Ok(replies.is_empty()),
+    }
+}
+
+/// シェルの後始末（design「SwitchPhase」の完了の後始末・この順）: 配置の値を入れ直す → 重なりの
+/// 基底を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`。
+fn finish_shell(
+    wiring: &mut Emo2Wiring,
+    world: &mut World,
+    target: &SkinCandidate,
+    source: &DescriptSource,
+    balloon: &BalloonPlacementInputs,
+    restored: &[(PersistKey, String)],
+) {
+    // 配置の解決は窓寸を入力に取るので、drain が置き換えで積んだ窓寸の報告をここで先に窓へ
+    // 反映し、新しいシェルの寸法で解かせる（同じフレームの後段の照合は取り出し済みで何もしない）。
+    reconcile_reported_sizes(&mut wiring.presenter, world);
+    match world.get_resource::<GhostWindows>().cloned() {
+        Some(windows) => {
+            apply_shell_descript(world, &windows, source, balloon, restored);
+            // 揃え方が変わっても窓寸が同じだと後段の再スナップは置き直さないので、ここで新しい
+            // 揃え方へ置き直す（要件 2.7）。
+            reanchor_char_windows(world, &windows);
+        }
+        None => warn!(
+            event = "reseed_skipped",
+            reason = "no_ghost_windows",
+            to = %target.folder,
+            "reseed: 窓の正本が無いので見た目の値を入れ直さない（古い値のまま）"
+        ),
+    }
+    wiring.reseed_zorder_descript_base(
+        build_placement_config(&source.ghost_kv, &source.shell_kv)
+            .zorder_raw
+            .as_deref(),
+    );
+    let replaced = world
+        .get_non_send_mut::<GhostSlot>()
+        .is_some_and(|mut slot| {
+            slot.0
+                .as_mut()
+                .is_some_and(|s| s.set_shell_dir(target.dir.clone()))
+        });
+    if !replaced {
+        warn!(
+            event = "skin_shell_dir_not_set",
+            to = %target.folder,
+            "実行系が無いので今のシェルを書き換えられない（更新の対象とメニューの印は古いシェルのまま）"
+        );
+    }
+    record_memory(world, SkinKind::Shell, |p| {
+        record_last_shell(p, &target.folder)
+    });
+    let ghost = ghost_ref_name(world);
+    raise_changed(
+        world,
+        "OnShellChanged",
+        vec![skin_ref_name(target), ghost, skin_ref_path(&target.dir)],
+    );
+}
+
+/// バルーンの後始末（design「SwitchPhase」の完了の後始末・この順）: scope ごとの文字の模型と
+/// 背景色 → 可視の記憶 → 今のバルーン → `LastBalloon` だけを書く（argv で起きたプロセスでも）→
+/// `OnBalloonChange`。
+fn finish_balloon(
+    wiring: &mut Emo2Wiring,
+    world: &mut World,
+    target: &SkinCandidate,
+    scopes: Vec<(u32, BalloonModel, (u8, u8, u8))>,
+) {
+    for (scope, model, background) in scopes {
+        // 文字の層は同じフレームの再追従が新しいスロットへ結び直す（そのとき背景色も焼き直る）。
+        wiring
+            .runtime
+            .borrow_mut()
+            .set_balloon_background(ActorKey::from(scope.to_string()), background);
+        wiring.balloon_models.insert(scope, model);
+        wiring.balloon_visibility.forget_scope(scope);
+    }
+    match world.get_resource_mut::<BootContext>() {
+        // 記憶に書くので、これが次の起動の選び方になる（`BalloonRoute` に腕を足さない）。
+        Some(mut ctx) => {
+            ctx.current.balloon = BalloonDecision {
+                route: BalloonRoute::Memory,
+                dir: target.dir.clone(),
+                folder: Some(target.folder.clone()),
+            };
+        }
+        None => warn!(
+            event = "skin_current_balloon_not_set",
+            to = %target.folder,
+            "起動の文脈が無いので今のバルーンを書き換えられない（更新の対象は古いバルーンのまま）"
+        ),
+    }
+    record_memory(world, SkinKind::Balloon, |p| {
+        record_last_balloon(p, &target.folder)
+    });
+    raise_changed(
+        world,
+        "OnBalloonChange",
+        vec![skin_ref_name(target), skin_ref_path(&target.dir)],
+    );
+}
+
+/// 実行系の記憶の書き手で書く。書き手が無ければ `warn!(skin_memory_not_recorded)` で、切替は
+/// 成功として扱う（要件 6.1・記憶の縮退は今日と同じ）。
+fn record_memory(world: &World, kind: SkinKind, write: impl FnOnce(&SylphyaPublisher)) {
+    match session(world).and_then(GhostSession::memory_publisher) {
+        Some(publisher) => write(publisher),
+        None => warn!(
+            event = "skin_memory_not_recorded",
+            ?kind,
+            "記憶の書き手が無いので切替の選択を記憶へ書けない（切替は成功として扱う）"
+        ),
+    }
+}
+
+/// 切り替えた後のイベントを汎用の入口で GET・返信なしで送る。送れなければ `warn!`（差し替えは
+/// 済んでいるので切替は成功のまま）。
+fn raise_changed(world: &World, id: &'static str, references: Vec<String>) {
+    let sent = session(world)
+        .and_then(GhostSession::kanade)
+        .is_some_and(|k| {
+            k.send(KanadeMsg::RaiseEvent {
+                id: id.to_owned(),
+                references,
+                method: ShioriMethod::Get,
+                reply: None,
+            })
+            .is_ok()
+        });
+    if !sent {
+        warn!(
+            event = "skin_switch_event_not_sent",
+            id,
+            "切り替えた後のイベントを送れなかった（kanade は止まっている）——差し替えは済んでいる"
+        );
+    }
+}
+
+/// Reference のゴーストの名前（`descript.txt` の `name`、無ければフォルダ名・要件 2.4）。
+fn ghost_ref_name(world: &World) -> String {
+    session(world).map_or_else(String::new, |s| {
+        s.ghost_name().unwrap_or_else(|| {
+            s.ghost_dir()
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
+    })
+}
+
 /// 荷物の中身（scope ごとの `EmoWorld`・アトラス・作者の DPI）。
 type Targets = Vec<(
     u32,
@@ -339,3 +608,7 @@ fn session(world: &World) -> Option<&GhostSession> {
 #[cfg(test)]
 #[path = "switch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "switch_finish_tests.rs"]
+mod finish_tests;

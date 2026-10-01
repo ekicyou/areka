@@ -9,7 +9,9 @@
 //! 結果からはスコープごとの揃え方（`Anchored`）・バルーンのずらしの基準（`BalloonFollow`）・
 //! キーワードの素材（`BalloonKeywordBase`）だけを取り、キャラ窓の位置は捨てる。
 //!
-//! 触らないもの: 窓の位置（`WindowPos`）・スコープの集合（起動時の [`GhostWindows`]）。
+//! [`apply_shell_descript`] が触らないもの: 窓の位置（`WindowPos`）・スコープの集合（起動時の
+//! [`GhostWindows`]）。揃え方が変わったときのキャラ窓の置き直しは、続けて呼ぶ
+//! [`reanchor_char_windows`] が今の窓寸のまま行う（窓の大きさとスコープの集合は変えない）。
 //! ファイルは読まない（新しいシェルの値・走っているバルーンの `windowposition` と作者の DPI・
 //! 位置の記憶は、背景の資産づくりが読んでおいたもの）。
 
@@ -25,7 +27,7 @@ use super::config::build_placement_config;
 use super::diag::PlacementRoute;
 use super::follow::{
     Anchored, BalloonFollow, BalloonFollowTrigger, MonitorSnapshot, follow_balloon,
-    work_area_for_window,
+    resize_window_to, work_area_for_window,
 };
 use super::persist::apply_restored_placements;
 use super::resolver::{RectPx, ScopeInput, SizePx, resolve_placement};
@@ -50,7 +52,6 @@ pub(crate) struct BalloonPlacementInputs {
 /// - 新しい設定に在って走っている窓に無いスコープは `debug!` で読み飛ばす（窓を作らない）。
 /// - 窓の部品が揃わないスコープは `warn!`（`event = "reseed_skipped"`）を残して読み飛ばし、
 ///   残りのスコープは続ける（差し替えは済んでいるので、配置の値だけが古いまま残る）。
-#[allow(dead_code)] // 呼び手（差し替えの相の完了の後始末）は 9.4 で結ぶ
 pub(crate) fn apply_shell_descript(
     world: &mut World,
     windows: &GhostWindows,
@@ -164,6 +165,38 @@ pub(crate) fn apply_shell_descript(
     }
 }
 
+/// 入れ直した揃え方（`Anchored`）でキャラ窓を今の窓寸のまま置き直す（要件 2.7「揃え方は新しい
+/// シェルから読み直す」）。[`apply_shell_descript`] の後に呼ぶ。
+///
+/// 後段の再スナップは窓寸が変わらないと置き直さないので、揃え方だけが変わった差し替え
+/// （bottom → top など）はここで直す。揃え方も窓寸も同じなら [`resize_window_to`] がべき等に
+/// 読み飛ばす。窓寸の読めない窓は `warn!`（`event = "reseed_skipped"`）を残して読み飛ばす。
+pub(crate) fn reanchor_char_windows(world: &mut World, windows: &GhostWindows) {
+    for scope in windows.scopes() {
+        let size = windows
+            .char_window(scope)
+            .and_then(|c| Some((c, world.get::<WindowPos>(c)?.size?)));
+        let Some((char_window, size)) = size else {
+            warn!(
+                event = "reseed_skipped",
+                scope,
+                reason = "char_size_unknown",
+                "reseed: キャラ窓の窓寸が読めないので新しい揃え方で置き直さない"
+            );
+            continue;
+        };
+        resize_window_to(
+            world,
+            char_window,
+            SizePx {
+                w: size.width,
+                h: size.height,
+            },
+            PlacementRoute::AnchorChange,
+        );
+    }
+}
+
 /// 走っている 1 スコープの窓から読んだ解決の入力。
 struct RunningScope {
     char_window: Entity,
@@ -226,4 +259,4 @@ fn running_scope(
 
 #[cfg(test)]
 #[path = "reseed_tests.rs"]
-mod tests;
+pub(crate) mod tests;

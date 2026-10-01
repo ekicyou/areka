@@ -126,8 +126,8 @@ pub(crate) enum SkinSwitchStage {
         build: Receiver<Result<SwapBuilt, SwitchBuildError>>,
         built: Option<SwapBuilt>,
     },
-    /// seriko へ差し替えを頼み、置き換えの返信を待っている（完了の後始末は差し替えの相の完了の段）。
-    #[allow(dead_code)] // 欄を読むのは完了の段（9.4）
+    /// seriko へ差し替えを頼み、置き換えの返信を待っている（全部そろえば差し替えの相の完了の段が
+    /// 後始末する）。
     Committed {
         /// 差し替えの世代（置き場の荷物と seriko の合図を結ぶ）。
         epoch: u64,
@@ -144,7 +144,6 @@ pub(crate) enum SkinSwitchStage {
 
 /// 資産のうち、荷物（scope ごとの `EmoWorld`・アトラス）と seriko の定義に入らず、完了の後始末で
 /// 使う残り。
-#[allow(dead_code)] // 欄を読むのは完了の段（9.4）
 pub(crate) enum SwapFinish {
     /// シェル: 新しいシェルの配置の値・走っているバルーンの配置の値・位置の記憶。
     Shell {

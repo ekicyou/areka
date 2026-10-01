@@ -94,7 +94,6 @@ pub(super) fn apply_descript_base(ledger: &mut ZOrderGroupLedger, raw: Option<&s
 /// 前のシェルの基底を新しいシェルの下に残さないためである。台帳の既存の規則
 /// （[`ZOrderGroupLedger::set_descript_base`]）どおりタグ由来のグループも落ち、
 /// 「新しいシェルで起きた直後」と同じ状態になる。解釈と記録（受理・拒否）は起動と同じ口を通す。
-#[allow(dead_code)] // 呼び手（結線の持ち物の口）は 9.4 で足す
 pub(super) fn apply_descript_rebase(ledger: &mut ZOrderGroupLedger, raw: Option<&str>) {
     // 先に基底なしへ戻し（空の列＝基底なし・タグ由来も落ちる）、受理できた値だけを据え直す。
     ledger.set_descript_base(Vec::new());
