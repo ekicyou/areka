@@ -506,11 +506,9 @@ pub fn wire_emo2_boot(
     // （`update::desk`・プロセスに 1 つ）から借りるだけ。
     let update_sink = UpdateCueSink::new(crate::update::desk::raw_sender(world));
     // シェル・バルーンの切替要求の channel（切替要求の channel と同型の配線・
-    // areka-P0-shell-balloon-switch task 8.1）: talk スレッドの SwitchCueSink が送出端を持つ。
-    // 受信端を World へ据えるのは入口の取り出しの系（task 8.3）で、それまでは受信端をここで落とす
-    // ——届いた要求は送出側が送れなかったことを `warn!` に残し、台本は続く。
+    // areka-P0-shell-balloon-switch task 8.1）: talk スレッドの SwitchCueSink が送出端を持ち、
+    // 受信端は結線の成立後に World へ据える（`shell_balloon_switch::wire_switch_rx`・下の手順 6 の後）。
     let (switch_tx, switch_rx) = std::sync::mpsc::channel::<SkinRequestRaw>();
-    drop(switch_rx);
     let switch_sink = SwitchCueSink::new(switch_tx);
     let BootAssets {
         shells,
@@ -712,6 +710,9 @@ pub fn wire_emo2_boot(
     // 切替要求の受信端（ゴーストごとに新品・task 7.2）。取り出しの登録は
     // `ghost_session::register_systems` が別に 1 度だけ行う。
     ghost_switch::wire_change_rx(world, change_rx);
+    // シェル・バルーンの切替要求の受信端（ゴーストごとに新品・areka-P0-shell-balloon-switch task 8.3）。
+    // 取り出しの登録は同じく `ghost_session::register_systems` が 1 度だけ行う。
+    shell_balloon_switch::wire_switch_rx(world, switch_rx);
 
     // 中断の持ち物（areka-P0-balloon-break task 3.3・要件 4.5・5.1）。運行（kanade）への送出端は
     // boot が返した `GhostRuntime` から複製する（マウスの結線と同じ投函端）。`Input` の段への

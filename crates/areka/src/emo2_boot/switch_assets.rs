@@ -13,7 +13,6 @@
 //!
 //! 荷物 [`SwapPayload`] と置き場 [`SwapSlot`] は、UI が置いてから seriko へ差し替えを頼み、
 //! seriko のスレッドの表示の橋渡しが合図の世代と突き合わせて取り出すための器である。
-#![allow(dead_code)] // 呼び手（8.3 の入口・9.1 の橋渡し・9.3 の差し替えの相）が結線するまで非テストビルドでは未使用
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -67,6 +66,7 @@ impl SwitchBuildRequest {
 }
 
 /// 背景の資産づくりの結果（線で UI へ返す）。
+#[allow(dead_code)] // 欄を読むのは差し替えの相（9.3）
 pub(crate) enum SwapBuilt {
     /// シェル: scope ごとの `EmoWorld`・アトラス・作者の DPI（新しいシェルの `seriko.dpi`）と
     /// 別名表・静的な着せ替え・着せ替えの名前表・アニメ表（[`ShellAssets`]）、配置の値
@@ -102,6 +102,7 @@ pub(crate) enum SwitchBuildError {
 }
 
 /// 差し替えの荷物（UI が置き場へ置き、表示の橋渡しが合図の世代と突き合わせて取り出す）。
+#[allow(dead_code)] // 作るのは差し替えの相（9.3）・取り出すのは表示の橋渡し（9.1）
 pub(crate) struct SwapPayload {
     /// 差し替えの世代（合図 `Rebased` の `epoch` と結ぶ）。
     pub epoch: u64,
@@ -112,6 +113,7 @@ pub(crate) struct SwapPayload {
 }
 
 /// 荷物を 1 つ置く共有の置き場（鍵を持つのは置くときと取り出すときの一瞬だけ）。
+#[allow(dead_code)] // 結線（9.1）が作る
 pub(crate) type SwapSlot = Arc<Mutex<Option<SwapPayload>>>;
 
 /// 受理ごとに背景のスレッドを 1 本起こして資産を作り、結果を 1 件だけ送る線の受け手を返す。

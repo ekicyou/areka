@@ -135,7 +135,7 @@
   - ゴースト切替・終了の既存のテストが緑のまま（seriko の join が止まらない）で、送り手を持ったセッションを降ろすと戻ることを兄弟のテストで判定する
   - _Requirements: 8.5_
 
-- [ ] 8. 入口と台本の受け口
+- [x] 8. 入口と台本の受け口
 - [x] 8.1 台本の受け口を作り、消費者台帳と受け口の列に登記する
   - 入口のモジュールを新しく置き、種別（シェル／バルーン）と台本から来る生の要求（種別・名前・`raise-event`）の型だけをそこに定める（8.2・8.3 が同じモジュールを育てる）。受信端を結ぶのは 8.3 なので、それまでの送出は `warn!` の送り失敗になる（台本は続く）
   - `(change,shell)`・`(change,balloon)` だけを自分宛てとし、他は `debug!` で見送る 2 段の受け口を作る。名前なしは `warn!`、`--option=raise-event` はシェルでだけ効き、他の選択肢は `warn!` を 1 件残して要求は出す。送れなければ `warn!`・台本は殺さない
@@ -153,7 +153,7 @@
   - 解決の関数が長くなり入口のファイルが 500 行を超えそうなら、解決の純関数を隣の新ファイルへ分ける
   - _Requirements: 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 1.13, 12.3, 12.4, 12.5_
 
-- [ ] 8.3 入口の受理の判定と、待ちの開始・取り出しの系・終了の片付けを作る
+- [x] 8.3 入口の受理の判定と、待ちの開始・取り出しの系・終了の片付けを作る
   - 入口は、進行中あり → 重ね・ゴースト切替中・更新中・文脈なし（置き場・根・結線・seriko の送り手）・該当なしの順に判定して各 `warn!` 1 件で断り、受理までに kanade へ何も送らない
   - 受理したら `info!` → 背景の資産づくり（6.3）を起こす → 待ちの口を送る（メニューのシェルと `raise-event` 真は印つき＝`OnShellChanging` の Ref0〜2・それ以外は印なし）→ 進行中の印を置く。送れなければ `error!` で印を置かない
   - Reference の組み立て（名前は `descript.txt` の `name`、無ければフォルダ名・パスは絶対パス）を入口の側に `pub(crate)` で 1 か所だけ置き、9.4 の `OnShellChanged`／`OnBalloonChange` も同じものを使う（設計は差し替えの相の私有の関数としていた＝置き場の違いを Implementation Notes に残し 12 で design へ反映する）
@@ -261,3 +261,4 @@
 - 7.3: `GhostSession::seriko_sink()` にメソッド単位の `#[allow(dead_code)]` → 8.3 で外す。統合テストのファイル `shell_balloon_switch_session_tests.rs` を作った（ghost_session から `#[path]`・9.x／11 もここへ足す）。7.2 の古い語（`boot_wired` が取り出す）は直した。
 - 8.1: `shell_balloon_switch.rs` の先頭に `#![allow(dead_code)]` → 8.3 で外す。`wire_emo2_boot` は受信端をその場で `drop(switch_rx)`（8.3 で World へ据える）。開けない `change` の荷物は `SwitchCueSink` では `debug!`（`ChangeCueSink` が `warn!` 1 件を残すため）。`t_zwi05` の受け口の列の字面を追随。
 - 8.2: `resolve_skin_target` は `current: Option<&str>`・`installed: Result<&str, NotFoundReason>`（design は `&str`／`Option<&str>`）。該当なしの理由に `NoMatch`・`RandomEmpty` を足した 5 つ。控えの資源・書き手・`installed_for`・候補の列挙は `shell_balloon_resolve.rs` に置いた（design は `shell_balloon_switch.rs`）。控えは候補のフォルダ名と大文字小文字を区別せず突き合わせる（シェルの記録は書庫の綴りのまま）。`shell_balloon_resolve.rs` の先頭と `update::desk::is_busy` の `#[allow(dead_code)]` → 8.3 で外す。本番の乱数は `boot_resolve::pick_index` を 8.3 が渡す。記録の語 `skin_switch_random_pick`・`last_installed_shell_recorded`・`last_installed_balloon_recorded`（info）（12 で design へ反映）。
+- 8.3: Reference の組み立て `skin_ref_name`／`skin_ref_path` は入口の側に `pub(crate)`（design は差し替えの相の私有＝12 で反映）。外した dead_code の許可: `shell_balloon_switch.rs`・`shell_balloon_resolve.rs`・`switch_assets.rs` の先頭、`GhostSession::seriko_sink`、`update::desk::is_busy`。項目単位で残る許可: `SkinSpec::Folder`・`SkinOrigin::Menu` → 10、`SkinSwitchInFlight.stage`・`SkinSwitchStage`・`SwapBuilt` → 9.3、`SwapPayload` → 9.1／9.3、`SwapSlot` → 9.1。文脈なしの理由に `kanade` を足した（ghost_slot・boot_context・wiring・kanade・seriko_sink）。送り失敗は `NoContext` を返す。終了の片付けは空の `WorkGate`「skin_switch」に `discard_for_exit` を登記（終了を待たせない）。`cfg(test)` の口 `GhostSession::with_seriko_sink`・`update::desk::insert_running_desk_for_test`。要件 1.14 の「定常でない」は入口でなく 9.3 が `Left{NotSteady}` で `warn!`。

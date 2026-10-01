@@ -514,11 +514,18 @@ fn peek_homeurl(world: &mut World) {
 
 /// 更新の実行中か（窓口が要求を預かっている間＝段が `Idle` でないか、読み直しの切替の後送りを
 /// 持っている）。シェル・バルーンの切替の入口が断るのに使う（shell-balloon-switch 要件 1.13）。
-#[allow(dead_code)] // 入口の受理の判定（shell-balloon-switch 8.3）が呼ぶまで本番の呼び手が無い
 pub(crate) fn is_busy(world: &World) -> bool {
     world
         .get_non_send::<UpdateDesk>()
         .is_some_and(|desk| desk.stage != Stage::Idle || desk.after_switch.is_some())
+}
+
+/// 標準の手続きが走っている窓口を据える（テスト用・背景スレッドは起こさない）。
+#[cfg(test)]
+pub(crate) fn insert_running_desk_for_test(world: &mut World) {
+    let mut desk = UpdateDesk::new(Arc::new(WorkGate::default()));
+    desk.stage = Stage::Running;
+    world.insert_non_send(desk);
 }
 
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 照会の返事待ちを捨てる。走っている依頼は門が待つ。
