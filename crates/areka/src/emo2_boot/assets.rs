@@ -317,6 +317,11 @@ pub struct ShellAssets {
     pub loop_table: AnimationTable,
     /// シェル面の作者基準 DPI（呼び手の値の素通し）。
     pub author_dpi: u16,
+    /// 焼く段で落ちた絵の理由（`ShellTarget::bake_errors` の写し・記録は読み込みの権威が出し済み）。
+    ///
+    /// 起動（[`build_boot_assets_with_shell`]）は読まずに今日どおり読み飛ばして続ける。切替は
+    /// 空でなければ差し替えの前の失敗にする（areka-P0-shell-balloon-switch 要件 5.5・5.6）。
+    pub bake_failures: Vec<String>,
 }
 
 /// バルーンの側だけの資産（[`build_balloon_assets`] の戻り値・[`BootAssets`] のバルーンの欄の一括）。
@@ -377,6 +382,7 @@ pub fn build_shell_assets(
     // 「番号 → 面の画像」の対応・土台の絵・透過の扱いが表示と採寸で食い違わない（要件 3.6）。
     let target = load_shell_target(&shell_dir, decoder)?;
     let atlas = target.atlas().clone();
+    let bake_failures = target.bake_errors().iter().map(|e| e.to_string()).collect();
 
     // scope ごとに FRESH な EmoWorld を組む（`build_world` が面の表の構築とアトラス装着を行う。
     // EmoWorld は非 Clone・装着で move 消費ゆえ scope 数だけ組む。AtlasTable は Clone 共有）。
@@ -433,6 +439,7 @@ pub fn build_shell_assets(
         bind_resolver,
         loop_table,
         author_dpi,
+        bake_failures,
     })
 }
 

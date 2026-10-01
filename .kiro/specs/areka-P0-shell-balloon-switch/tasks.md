@@ -93,7 +93,7 @@
   - _Boundary: Present presenter, command_
   - _Depends: 5.1_
 
-- [ ] 6. 資産を片側ずつ作り、背景で作る
+- [x] 6. 資産を片側ずつ作り、背景で作る
 - [x] 6.1 資産づくりをシェルとバルーンの 2 本に括り出し、シェル名つきの兄弟を足す
   - 今の資産づくりの本体を、シェルだけ（ゴーストの根・シェル名・スコープの集合・作者の DPI）とバルーンだけの 2 本に括り出し、両者を続けて呼ぶシェル名つきの兄弟を足す
   - 今の資産づくりの署名は据え置き、名前なしで兄弟へ委ねる 1 行にする（既存の呼び手とテストの追随 0）
@@ -107,7 +107,7 @@
   - _Boundary: Placement source_
   - _Depends: 1.2_
 
-- [ ] 6.3 新しい資産を背景のスレッドで作る部品と、荷物の置き場を作る
+- [x] 6.3 新しい資産を背景のスレッドで作る部品と、荷物の置き場を作る
   - 受理ごとに 1 本のスレッドを起こし、COM の MTA 初期化の上で、シェルなら 6.1 のシェルの資産・6.2 の配置の値・位置の記憶（読むだけ）を、バルーンならバルーンの資産・スコープごとの文字の模型・背景色・アニメ表を作り、結果を線で UI へ返す。失敗はスレッドの中でも `error!` を 1 件残して失敗の型で返す
   - 荷物（世代・スコープごとの EmoWorld・アトラス・作者の DPI・返信の送り手）と、荷物を 1 つ置く共有の置き場を作る
   - 新しい兄弟テストで、荷物の中身が線を越えて送れること（コンパイル時の確かめ）・読めないフォルダと復号できない画像で失敗が返り `error!` 1 件・スレッドが倒れたら受け手に「送り手が落ちた」が見えることが緑
@@ -255,3 +255,4 @@
 - 5.2: `ReplaceTarget.emo_world` は `Box<EmoWorld>`（enum の大きさ・9.1 は `Box::new` で包む）。未登録の `error!` の文言は 5.1 の `detach_target: 未装着ターゲット`（design の表の `apply(ReplaceTarget): 未装着ターゲット` を 12 で直す）。無い面の `error!` は present の 1 件＋合成器の既存の 1 件（tasks の「1 件」は present の件数）。登録が済めば無い面でも返信は `Ok`。
 - 6.1: `build_shell_assets` の `shell` は `Option<&str>`（design 未指定）。`build_boot_assets` の doc は「`resolve`」の語のまま（12 で直す）。作者の DPI は呼び手が渡す（新しいシェルの `seriko.dpi` を読むのは 6.3）。
 - 6.2: `prepare_ghost_windows_for_shell` にメソッド単位の `#[allow(dead_code)]` → 7.2 で外す。design に無い私的な `prepare_stages_for_shell` を置いた（`prepare_stages` は `None` で委ねる）。`prepare_ghost_windows_with_work_area` に名前つきの兄弟は無い。
+- 6.3: `switch_assets.rs` の先頭に `#![allow(dead_code)]` → 8.3・9.1・9.3 で呼び手を結んだら外す。`SwitchBuildError` に `ShellUndecodable { shell_dir, failures }` を足し（`BootWiringError`／`PlacementError` の写しより広い）、`ShellAssets` に `bake_failures` を足した＝復号できない絵は起動では読み飛ばし、切替では失敗（要件 5.5）。スコープの集合は `derive_scopes()`。「`error!` 1 件」は目印 `switch_assets_failed` の件数（12 で design へ反映）。

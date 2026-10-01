@@ -29,6 +29,8 @@ pub mod hover_inject;
 mod install_cue;
 pub mod move_cue;
 mod readme_cue;
+/// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
+pub(crate) mod switch_assets;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
