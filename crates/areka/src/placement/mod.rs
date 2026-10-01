@@ -739,6 +739,7 @@ fn scope_windowposition(
 /// - 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11）
 /// - 呼び出しスレッドは COM 初期化済みであること（measure の `WicDecoderArm`
 ///   前提・本番は MTA UI スレッド）
+#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手は example とテスト）
 pub fn prepare_ghost_windows(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -751,7 +752,6 @@ pub fn prepare_ghost_windows(
 /// `shell` が `Some(名)` なら配置の値（シェルの `descript.txt`）と採寸のシェルのフォルダを
 /// `ghost_root/shell/<名>` から取る。`None` は今日の規則。名前の先が無ければ既定のシェルへ
 /// 黙って戻らず `Err(PlacementError::Mount)` を返す。それ以外は [`prepare_ghost_windows`] と同じ。
-#[allow(dead_code)] // 起動時のシェルの決定（task 7.2・`ghost_session`）が結線するまで非テストビルドでは未使用
 pub fn prepare_ghost_windows_for_shell(
     ghost_root: &Path,
     balloon_root: &Path,

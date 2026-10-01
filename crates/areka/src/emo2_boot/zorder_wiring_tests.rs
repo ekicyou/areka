@@ -464,7 +464,7 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
     );
     assert!(
         session.contains(
-            "descript.author_dpi, descript.zorder_raw.as_deref(), kanade_stop.clone(), );"
+            "descript.author_dpi, descript.zorder_raw.as_deref(), kanade_stop.clone(), shell, );"
         ),
         "重なりの生の値が結線（wire_emo2_boot）へ渡されていない＝設定が台帳へ届かない: {session}"
     );

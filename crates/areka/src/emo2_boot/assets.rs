@@ -249,6 +249,7 @@ pub struct BootAssets {
 /// - `surfaces.txt` が surface を産まない → [`BootWiringError::ShellEmpty`]。
 /// - バルーン系列解決／target 構築失敗（走査失敗・面 0 不在・bake 脱落）
 ///   → [`BootWiringError::Balloon`]（`#[from] PresentError`・真因ログは権威側が既に出す）。
+#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）
 pub fn build_boot_assets(
     ghost_root: &Path,
     balloon_root: &Path,

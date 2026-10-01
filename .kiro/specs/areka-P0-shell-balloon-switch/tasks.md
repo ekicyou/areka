@@ -122,7 +122,7 @@
   - _Requirements: 6.1, 6.2, 6.3_
   - _Boundary: BootResolve_
 
-- [ ] 7.2 起動の結線にシェル名を運び、3 か所の解決を同じシェルにそろえる
+- [x] 7.2 起動の結線にシェル名を運び、3 か所の解決を同じシェルにそろえる
   - 配置の準備がシェルを 1 度だけ決めて（7.1）資源に置き、シェル名つきの配置の準備へ渡す。起こす処理はその資源を取り出し（無いか根が違えば自分で決める）、起動の結線へ渡す
   - 起動の結線にシェル名の引数を足し、シェル名つきの資産づくりと実行系の起動へ渡す。`Emo2BootInputs`・`StartupDescriptValues`・`GhostBootOptions` には欄を足さない
   - 新しい兄弟テスト（ghost_session から `#[path]` で宣言）で、記憶のシェルで起きたとき資産・配置の情報源・実行系のマウントのシェル・`OnBoot` の Ref0 が同じシェルを指し、決定が 1 回・`warn!` が高々 1 件で、記憶の先が無いときは既定で起きて起動の成功で記憶が既定へ書き直ることが緑。ゴースト切替と更新の読み直しの既存のテストが緑のまま
@@ -257,3 +257,4 @@
 - 6.2: `prepare_ghost_windows_for_shell` にメソッド単位の `#[allow(dead_code)]` → 7.2 で外す。design に無い私的な `prepare_stages_for_shell` を置いた（`prepare_stages` は `None` で委ねる）。`prepare_ghost_windows_with_work_area` に名前つきの兄弟は無い。
 - 6.3: `switch_assets.rs` の先頭に `#![allow(dead_code)]` → 8.3・9.1・9.3 で呼び手を結んだら外す。`SwitchBuildError` に `ShellUndecodable { shell_dir, failures }` を足し（`BootWiringError`／`PlacementError` の写しより広い）、`ShellAssets` に `bake_failures` を足した＝復号できない絵は起動では読み飛ばし、切替では失敗（要件 5.5）。スコープの集合は `derive_scopes()`。「`error!` 1 件」は目印 `switch_assets_failed` の件数（12 で design へ反映）。
 - 7.1: 関数単位の `#[allow(dead_code)]` → `decide_boot_shell` は 7.2、`record_last_shell`／`record_last_balloon` は 9.4 で外す。`decide_boot_shell` は 1 段の `Normal` のフォルダ名だけを受ける（`..`・区切り・絶対パスは「先が無い」扱い）。`LastUsed::record` の doc を「`areka.last.shell` は起動の決定が読む」へ改めた。記録の語は `boot_shell_missing`（warn）・`last_shell_recorded`／`last_balloon_recorded`（info）。
+- 7.2: `BootShellChoice` を取り出すのは design の「`boot_wired`」でなく 2 つの入口（`boot_ghost`・`boot_ghost_strict`）で、結線ありの腕と LogSink の倒れ先（`boot_with_origin(.., Plain, shell)`）へ同じ値を渡す（12 で design へ反映）。`BootShellChoice` の doc と `prepare_ghost_windows` のコメントに「`boot_wired` が取り出す」の古い語が残る → 7.3 で直す。`placement::prepare_ghost_windows`・`emo2_boot::assets::build_boot_assets` は本番の呼び手を失い、関数単位の `#[allow(dead_code)]` を意図して残す（example とテストが呼ぶ）。6.2・7.1 の `#[allow(dead_code)]`（`prepare_ghost_windows_for_shell`・`decide_boot_shell`）は外した。

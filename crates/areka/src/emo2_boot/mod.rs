@@ -97,7 +97,9 @@ use wintf::ecs::{Update, update_typewriters};
 use crate::placement::AuthorDpi;
 
 use self::adapter::PresentBridge;
-use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
+use self::assets::{
+    BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets_with_shell,
+};
 use self::change_cue::ChangeCueSink;
 use self::frame::{Emo2Wiring, KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
 use self::install_cue::InstallCueSink;
@@ -259,7 +261,7 @@ fn derive_scopes() -> Vec<u32> {
     vec![0, 1]
 }
 
-/// [`build_boot_assets`] へ作者基準 DPI を供給する**唯一の呼び出し点**
+/// [`build_boot_assets_with_shell`] へ作者基準 DPI を供給する**唯一の呼び出し点**
 /// （areka-P0-emo-dpi-scaling task 4.3・design Flow 3 手順1/5）。
 ///
 /// `build_boot_assets(.., shell_author_dpi, balloon_author_dpi)` は**隣接する 2 つの `u16`**
@@ -267,18 +269,21 @@ fn derive_scopes() -> Vec<u32> {
 /// 静かな誤表示になる（`frame::AuthorDpis` が attach 側で防ぐのと同じ罠が、こちらは
 /// 構築側にある）。名前付きフィールドを持つ [`AuthorDpi`] から**この 1 箇所だけ**で
 /// 位置引数へ落とし、その 1 箇所を檻に入れる（`wire_emo2_boot` は生の `u16` を触らない）。
+/// `shell` は起動のシェル（`None` は既定のシェル・areka-P0-shell-balloon-switch 要件 6.4）。
 fn build_boot_assets_for(
     ghost_root: &Path,
     balloon_root: &Path,
     scopes: &[u32],
     author_dpi: AuthorDpi,
+    shell: Option<&str>,
 ) -> Result<BootAssets, BootWiringError> {
-    build_boot_assets(
+    build_boot_assets_with_shell(
         ghost_root,
         balloon_root,
         scopes,
         author_dpi.shell,
         author_dpi.balloon,
+        shell,
     )
 }
 
@@ -335,7 +340,8 @@ const _: fn() = || {
 /// # 7 手順（design「wire_emo2_boot の統括」）
 /// 1. [`build_boot_assets_for`]（`scopes` は [`derive_scopes`] で placement と同じ入力から自前導出・
 ///    DD-12。作者基準 DPI は引数 `author_dpi`＝placement の準備が読んだ値をそのまま搬送・
-///    task 4.3）。`Err` は [`classify_wiring_error`]（起点不在＝`warn!`・他＝`error!`・R7.3）の上
+///    task 4.3。シェルは引数 `shell`＝配置の準備が決めた起動のシェルで、手順5 の起動へも
+///    同じ値を渡す・areka-P0-shell-balloon-switch 要件 6.4）。`Err` は [`classify_wiring_error`]（起点不在＝`warn!`・他＝`error!`・R7.3）の上
 ///    `wired=false` を呼び手へ返す（`ghost_session::boot_ghost` は `LogSink`×2 フォールバック boot へ
 ///    倒し、`ghost_session::boot_ghost_strict` は `Err` を返す）。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
@@ -369,6 +375,7 @@ pub fn wire_emo2_boot(
     author_dpi: AuthorDpi,
     zorder_descript: Option<&str>,
     kanade_stop: Sender<KanadeNotice>,
+    shell: Option<&str>,
 ) -> Emo2BootOutcome {
     /// 実 sink 結線が成立しなかった結果（`wired=false`・帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
     /// boot へ倒し、`boot_ghost_strict` は `Err` を返す・R7.3）。
@@ -396,7 +403,10 @@ pub fn wire_emo2_boot(
     // 作者基準 DPI（design Flow 3 手順1）は placement の準備が **1 度だけ**読んだ値を
     // `main` から `ghost_session::boot_ghost` 経由で受け取る（採寸 k₀ と attach が同じ宣言を見る・task 4.3）。
     // 隣接 u16 2 引数への落とし込みは [`build_boot_assets_for`] 1 箇所に閉じる。
-    let assets = match build_boot_assets_for(&ghost_root, &balloon_root, &scopes, author_dpi) {
+    // シェルは配置の準備が決めた起動のシェル（`ghost_session::BootShellChoice`）。資産と実行系の
+    // 起動（手順5）へ同じ値を渡す（要件 6.4）。
+    let assets = match build_boot_assets_for(&ghost_root, &balloon_root, &scopes, author_dpi, shell)
+    {
         Ok(assets) => assets,
         Err(err) => {
             classify_wiring_error(&err);
@@ -615,7 +625,7 @@ pub fn wire_emo2_boot(
         boot_options,
         Some(kanade_stop),
         boot_origin,
-        None,
+        shell,
     ) {
         Ok(runtime) => runtime,
         Err(err) => {
@@ -770,6 +780,7 @@ mod wire_tests {
                 shell: 192,
                 balloon: 144,
             },
+            None,
         )
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
@@ -810,6 +821,7 @@ mod wire_tests {
             AuthorDpi::DEFAULT,
             None,
             std::sync::mpsc::channel().0,
+            None,
         );
 
         assert!(

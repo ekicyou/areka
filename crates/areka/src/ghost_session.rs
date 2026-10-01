@@ -89,6 +89,26 @@ pub(crate) struct StartupDescriptValues {
     pub(crate) zorder_raw: Option<String>,
 }
 
+/// 配置の準備（[`prepare_ghost_windows`]）が決めた起動のシェル（areka-P0-shell-balloon-switch
+/// 要件 6.4・8.4）。起こす処理（[`boot_wired`]）が取り出して起動の結線へ渡す。`Emo2BootInputs`・
+/// [`StartupDescriptValues`]・`GhostBootOptions` に欄を足さずに運ぶための置き場である。
+#[derive(bevy_ecs::prelude::Resource)]
+pub(crate) struct BootShellChoice {
+    /// 決めたゴーストの根（起こすゴーストと違えば使わない）。
+    pub ghost_root: PathBuf,
+    /// 起動のシェルのフォルダ名（`None` は既定のシェル）。
+    pub shell: Option<String>,
+}
+
+/// 起こすゴーストのシェル: 配置の準備が置いた値を取り出す。無いか根が違えば（準備を経ない
+/// 起動・別のゴーストの残り）ここで決める。
+fn take_boot_shell(world: &mut World, ghost_root: &Path) -> Option<String> {
+    match world.remove_resource::<BootShellChoice>() {
+        Some(choice) if choice.ghost_root == ghost_root => choice.shell,
+        _ => crate::boot_resolve::decide_boot_shell(ghost_root),
+    }
+}
+
 /// 窓を作る側が失敗する理由（design「open_ghost_windows / reopen_ghost_windows」）。
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum OpenWindowsError {
@@ -162,7 +182,19 @@ pub(crate) fn prepare_ghost_windows(
         );
         return Err(OpenWindowsError::TaskPoolMissing);
     }
-    let prepared = placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root)?;
+    // 起動のシェルはここで 1 度だけ決め（記憶の先が無ければ `warn!` もここの 1 件）、配置の
+    // 情報源へ渡したうえで資源に置く。起こす処理（[`boot_wired`]）が同じ値を資産と実行系へ運ぶ
+    // （areka-P0-shell-balloon-switch 要件 6.2〜6.4）。
+    let shell = crate::boot_resolve::decide_boot_shell(&cfg.ghost_root);
+    let prepared = placement::prepare_ghost_windows_for_shell(
+        &cfg.ghost_root,
+        &cfg.balloon_root,
+        shell.as_deref(),
+    )?;
+    world.insert_resource(BootShellChoice {
+        ghost_root: cfg.ghost_root.clone(),
+        shell,
+    });
     // モニタ 2 源（task 8.1・atom task 5.1）: 起動時の実モニタから忠実転写した
     // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
     // （4.7・task 8.2）と拡大率の相が消費する。
@@ -543,10 +575,20 @@ pub(crate) fn boot_ghost(
     // `ghost_boot_options` の既定と同じ値（振る舞いは不変・要件 4.7）。テストは土台の置き場か `None`。
     let ghost_root = wiring.ghost_root.clone();
     let app_profile_dir = wiring.app_profile_dir.clone();
+    // 起動のシェルは結線ありの腕と倒れ先で同じ値を使う（取り出すのはここの 1 回だけ・要件 6.4）。
+    let shell = take_boot_shell(world, &ghost_root);
 
     // `wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォールバック boot へ
     // 倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
-    if let Ok(session) = boot_wired(world, wiring, &kanade_stop, descript, ghost, balloon) {
+    if let Ok(session) = boot_wired(
+        world,
+        wiring,
+        &kanade_stop,
+        descript,
+        ghost,
+        balloon,
+        shell.as_deref(),
+    ) {
         return session;
     }
 
@@ -560,7 +602,13 @@ pub(crate) fn boot_ghost(
         ..ghost_boot_options(ghost_root.clone(), helper_exe)
     };
     // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
-    let runtime = match areka_ghost::boot_with_kanade_stop(ghost_options, Some(kanade_stop)) {
+    // 倒れ先も起動のシェルでマウントする（areka-P0-shell-balloon-switch 要件 6.4）。
+    let runtime = match areka_ghost::boot_with_origin(
+        ghost_options,
+        Some(kanade_stop),
+        BootOrigin::Plain,
+        shell.as_deref(),
+    ) {
         Ok(runtime) => {
             tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
             // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
@@ -613,13 +661,23 @@ pub(crate) fn boot_ghost_strict(
         helper_exe: _,
         kanade_stop,
     } = inputs;
-    boot_wired(world, wiring, &kanade_stop, descript, ghost, balloon)
+    let shell = take_boot_shell(world, &wiring.ghost_root);
+    boot_wired(
+        world,
+        wiring,
+        &kanade_stop,
+        descript,
+        ghost,
+        balloon,
+        shell.as_deref(),
+    )
 }
 
 /// 結線ありの腕（2 つの入口が共有・私有）: 起動の結線（`wire_emo2_boot`）を試み、成立すれば
 /// 窓ごとの状態（マウス・メニュー・記憶・バルーンの選択・選択肢の送り）を `insert_non_send` で
 /// 新品へ置き換えて [`GhostSession`] を返す（要件 4.8）。成立しなければ `Err(BootWiringFailed)`
-/// （理由は `wire_emo2_boot` が記録済み）で、World の状態には触れない。
+/// （理由は `wire_emo2_boot` が記録済み）で、World の状態には触れない。`shell` は入口が
+/// 取り出した起動のシェル（[`take_boot_shell`]）で、結線へそのまま渡す（要件 6.4）。
 fn boot_wired(
     world: &mut World,
     wiring: emo2_boot::Emo2BootInputs,
@@ -627,6 +685,7 @@ fn boot_wired(
     descript: &StartupDescriptValues,
     ghost: &GhostDecision,
     balloon: &BalloonDecision,
+    shell: Option<&str>,
 ) -> Result<GhostSession, BootWiringFailed> {
     let ghost_dir = wiring.ghost_root.clone();
 
@@ -640,6 +699,7 @@ fn boot_wired(
         descript.author_dpi,
         descript.zorder_raw.as_deref(),
         kanade_stop.clone(),
+        shell,
     );
     if !outcome.wired {
         return Err(BootWiringFailed);
@@ -703,3 +763,7 @@ mod strict_tests;
 #[cfg(test)]
 #[path = "ghost_session_switch_tests.rs"]
 mod switch_tests;
+
+#[cfg(test)]
+#[path = "boot_shell_tests.rs"]
+mod boot_shell_tests;

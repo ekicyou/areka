@@ -291,7 +291,6 @@ fn ghost_roots(ghost_dir: &Path) -> ScopeRoots {
 /// `shell/` の下の 1 段のフォルダ名でない（`..`・区切り・絶対パス＝壊れた記憶）ときは
 /// `warn!` 1 件で `None`。記憶は起動の成功（`LastUsed::record`）が既定のシェルへ書き直す。
 /// シェル名つきの解決は名前を検査しないので、ここが `shell/` の外を指す名前を止める。
-#[allow(dead_code)] // 7.2 で起動の結線から呼ぶ
 pub(crate) fn decide_boot_shell(ghost_dir: &Path) -> Option<String> {
     let name = read_last_shell(ghost_dir)?;
     let mut parts = Path::new(&name).components();
