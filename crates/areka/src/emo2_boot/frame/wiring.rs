@@ -145,7 +145,6 @@ pub struct Emo2Wiring {
     /// 置く。差し替えの相が荷物を置き、橋渡しが合図の世代と突き合わせて取り出す。seriko の
     /// 送り手はここに持たせない（降ろした後も World に残るので、持たせると seriko の join が
     /// 戻らない＝持ち主は `GhostSession` だけ）。
-    #[allow(dead_code)] // 荷物を置くのは差し替えの相（9.3）
     pub(in crate::emo2_boot) swap_slot: SwapSlot,
 }
 

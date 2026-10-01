@@ -42,6 +42,8 @@ mod balloon_offset_follow;
 mod dpi;
 mod drain_resnap;
 mod scale_text;
+// シェル・バルーンの差し替えの相（areka-P0-shell-balloon-switch design「SwitchPhase」）。
+mod switch;
 mod wiring;
 mod work_area_sync;
 mod zorder_descript;
@@ -256,7 +258,7 @@ pub(super) fn ghost_quit_system(world: &mut World) {
 /// `Update` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
-/// attach→dpi→drain→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→連鎖再解決→
+/// attach→dpi→drain→差し替え→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→連鎖再解決→
 /// text-scale→text
 /// の順に各フェーズを駆動し、[`World::insert_non_send`] で戻す。
 /// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
@@ -318,6 +320,9 @@ pub fn emo2_frame_system(world: &mut World) {
         work_area_sync::resnap_for_work_area_change(world, work_area_change);
     }
     run_drain_phase(&mut wiring, world);
+    // シェル・バルーンの差し替えの相: drain の**直後**（置き換えを適用した同じフレームで後始末し、
+    // 続く可視性・窓寸・resnap・文字の層の相がその結果を拾う・design Flow 1 ⑷）。
+    switch::run_switch_phase(&mut wiring, world);
     // バルーン可視性（areka-P0-balloon-visibility design 決定 D5・Requirement 3.5／6.6）: 本フレームの
     // 表示指令をすべて適用し終えた**後**に置く——判断の根拠は「指令適用後の実状態」でなければならず、
     // drain の前だと 1 フレーム古い可視状態を見る。同時に窓寸 reconcile の**前**でもある必要がある

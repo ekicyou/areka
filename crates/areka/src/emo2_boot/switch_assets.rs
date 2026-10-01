@@ -73,7 +73,6 @@ impl SwitchBuildRequest {
 }
 
 /// 背景の資産づくりの結果（線で UI へ返す）。
-#[allow(dead_code)] // 欄を読むのは差し替えの相（9.3）
 pub(crate) enum SwapBuilt {
     /// シェル: scope ごとの `EmoWorld`・アトラス・作者の DPI（新しいシェルの `seriko.dpi`）と
     /// 別名表・静的な着せ替え・着せ替えの名前表・アニメ表（[`ShellAssets`]）、配置の値
@@ -110,7 +109,6 @@ pub(crate) enum SwitchBuildError {
 }
 
 /// 差し替えの荷物（UI が置き場へ置き、表示の橋渡しが合図の世代と突き合わせて取り出す）。
-#[allow(dead_code)] // 作るのは差し替えの相（9.3）
 pub(crate) struct SwapPayload {
     /// 差し替えの世代（合図 `Rebased` の `epoch` と結ぶ）。
     pub epoch: u64,

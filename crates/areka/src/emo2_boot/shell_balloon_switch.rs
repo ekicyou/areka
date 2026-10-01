@@ -16,9 +16,13 @@
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
+use std::time::Instant;
 
 use areka_actor::{ReplyReceiver, reply_channel};
-use areka_kanade::{GapRaise, KanadeMsg, ShioriMethod, TalkGap};
+use areka_emo_present::PresentOutcome;
+use areka_kanade::{GapRaise, KanadeMsg, MarkedEnd, ShioriMethod, TalkGap};
+use areka_parsers::balloon::BalloonModel;
+use areka_sylphya::PersistKey;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
@@ -34,6 +38,8 @@ use crate::boot_config::BootContext;
 use crate::boot_resolve::pick_index;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
+use crate::placement::reseed::BalloonPlacementInputs;
+use crate::placement::source::DescriptSource;
 
 /// 切替の種別。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,21 +110,51 @@ pub(crate) enum SkinVerdict {
 pub(crate) struct SkinSwitchInFlight {
     pub kind: SkinKind,
     pub target: SkinCandidate,
-    #[allow(dead_code)] // 段を読んで進めるのは差し替えの相（9.3）
     pub stage: SkinSwitchStage,
 }
 
-/// 切替の段（差し替えの相が進める）。
-#[allow(dead_code)] // 欄を読むのは差し替えの相（9.3）
+/// 切替の段（差し替えの相 `frame/switch.rs` が進める）。
 pub(crate) enum SkinSwitchStage {
     /// 台詞の切れ目の返事と、背景の資産づくりの結果を待っている（どちらが先に来てもよい）。
     Waiting {
-        /// 切れ目の返事の受け手（受け取ったら `gap_result` へ移す）。
+        /// 切れ目の返事の受け手（資産より先に `Reached` が届いたら、資産がそろったフレームで
+        /// 送り直した待ちの受け手に替わる）。
         gap: Option<ReplyReceiver<TalkGap>>,
+        /// 資産より先に届いた 1 度目の `Reached`（印の台詞の終わり方を記録に使う）。
         gap_result: Option<TalkGap>,
         /// 背景の資産づくりの結果の受け手（受け取ったら `built` へ移す）。
         build: Receiver<Result<SwapBuilt, SwitchBuildError>>,
         built: Option<SwapBuilt>,
+    },
+    /// seriko へ差し替えを頼み、置き換えの返信を待っている（完了の後始末は差し替えの相の完了の段）。
+    #[allow(dead_code)] // 欄を読むのは完了の段（9.4）
+    Committed {
+        /// 差し替えの世代（置き場の荷物と seriko の合図を結ぶ）。
+        epoch: u64,
+        /// scope ごとの置き換えの返信の受け手。
+        replies: Vec<(u32, ReplyReceiver<PresentOutcome>)>,
+        /// 後始末に使う、荷物と seriko の定義に入らなかった残り。
+        finish: SwapFinish,
+        /// 1 度目の切れ目の返事の印の台詞の終わり方（記録用）。
+        marked: Option<MarkedEnd>,
+        /// 頼んだ時刻（UI スレッドが相の中で費やした時間 `swap_ms` の起点）。
+        committed_at: Instant,
+    },
+}
+
+/// 資産のうち、荷物（scope ごとの `EmoWorld`・アトラス）と seriko の定義に入らず、完了の後始末で
+/// 使う残り。
+#[allow(dead_code)] // 欄を読むのは完了の段（9.4）
+pub(crate) enum SwapFinish {
+    /// シェル: 新しいシェルの配置の値・走っているバルーンの配置の値・位置の記憶。
+    Shell {
+        source: DescriptSource,
+        balloon: BalloonPlacementInputs,
+        restored: Vec<(PersistKey, String)>,
+    },
+    /// バルーン: scope ごとの文字の模型と背景色。
+    Balloon {
+        scopes: Vec<(u32, BalloonModel, (u8, u8, u8))>,
     },
 }
 
