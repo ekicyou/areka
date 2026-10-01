@@ -1,6 +1,6 @@
 # 設計書: areka-P0-alpha-release-signoff
 
-> 2026-10-01 生成（`kiro-spec-design -y`）。根拠は確定した `requirements.md`（要件 1〜7）と `research.md`（ギャップ分析 §1〜§9・設計の段の調べもの §10）。file:line はワークツリーの HEAD `26699e55`（main `238db25d`＋本 spec の要件の段）で読み直した値で、**何の定義行か**を併記する。実装の段では、バグ `balloon-reappear-short-talk` の PR を取り込んだ後のコミットで引き直す。
+> 2026-10-01 生成（`kiro-spec-design -y`）。根拠は確定した `requirements.md`（要件 1〜7）と `research.md`（ギャップ分析 §1〜§9・設計の段の調べもの §10）。file:line はワークツリーの HEAD `26699e55`（main `238db25d`＋本 spec の要件の段）で読み直した値で、**何の定義行か**を併記する。実装の段では、バグ `balloon-reappear-short-talk` の PR を取り込んだ後のコミットで引き直す。→ 2026-10-01 のタスク 1.1 で、取り込んだ後の HEAD `ce631340` で「Existing Architecture Analysis」と「検証項目表」の「期待の裏付け」を全部引き直し、ずれていた行を新しい場所に直した（消えた事実は 0）。
 
 ## Overview
 
@@ -74,14 +74,14 @@
 | `-Check` は `AREKA_*`／`WINTF_*` を外して 4 つだけ入れ、初回のバルーンが `route=Companion` の `\balloon\emo2-kakukaku` であることを判定する。展開先（`-CheckDir`）はリポジトリの外でなければ断る | `:489-495` の `Step '起動'`・`:76-78` の `$LOG_MARKER_BALLOON_*`・`:189-193` の展開先の検査 |
 | 全体テスト `tools/test-all.ps1` は i686 の成果物・fmt・x64 全テスト・i686 テスト、`-License` で `cargo deny check` と `cargo about generate` を回し、謝辞に差分があれば知らせる | `tools/test-all.ps1:41-49` の各 `Step`・`:60-63` の差分の知らせ |
 | 起動中の印は App スコープ `[last] running`。空の値は読み取りで捨てる | `crates/areka-sylphya/src/persist/format.rs:245` の `last_running: read_last("running").filter(|v| !v.is_empty())` |
-| 印の値はゴーストの `descript.txt` の `name`（無ければフォルダ名）。空の値の鍵は列挙で落とす | `crates/areka/src/boot_resolve.rs:420-434` の `running_name`・`crates/areka-ghost/src/catalog.rs:332-337` の `lowercased`（空の値を鍵ごと落とす） |
+| 印の値はゴーストの `descript.txt` の `name`（無ければフォルダ名）。空の値の鍵は列挙で落とす | `crates/areka/src/boot_resolve.rs:420-434` の `running_name`・`crates/areka-ghost/src/catalog.rs:334-340` の `lowercased`（空の値を鍵ごと落とす） |
 | 印が残っていれば `Halted { ghost_name }` で起こし、`OnBoot` の Ref6＝`halt`・Ref7＝その名前 | `crates/areka/src/boot_config.rs:174-183`（印を読む）・`crates/areka/src/main.rs:429-431` の `first_boot_origin`・`crates/areka-kanade/src/schedule/events.rs:273-279` の `on_boot` |
 | 初回の起動（ゴーストの起動記録が無い）は `OnFirstBoot` が優先し、`Halted` でも `OnBoot` は送らない | `crates/areka-kanade/src/schedule/boot.rs:231-235` の `boot_root` |
-| 窓の位置を保存するのは掴んで離したときだけ。台本からの位置の書き込みは拒まれる | `crates/areka/src/placement/follow/drag_follow.rs:217-226`（「char DragEnd 保存」と `char_pos_entries` の唯一の呼び手）・`crates/areka-ghost/src/prop_sink.rs:231-250` の `window_pos_key_is_rejected_no_write` |
+| 窓の位置を保存するのは掴んで離したときだけ。台本からの位置の書き込みは拒まれる | `crates/areka/src/placement/follow/drag_follow.rs:217-226`（「char DragEnd 保存」と `char_pos_entries` の唯一の呼び手）・`crates/areka-ghost/src/prop_sink.rs:231-255` の `window_pos_key_is_rejected_no_write` |
 | 復元の記録 `merge_scope restore`（`saved_win_x`／`saved_win_y` が保存の有無を示す） | `crates/areka/src/placement/persist.rs:422-434` |
 | メニューの枠は 7 つで並びは `Frame::ORDER`、既定の名前は「ゴースト」「シェル」「バルーン」「ネットワーク更新」「インストール…」「説明書」「終了」 | `crates/areka/src/menu/mod.rs:64-72`・`crates/areka/src/menu/captions.rs:30-40` の `FRAME_CAPTIONS` |
-| 「ゴーストが見つかりません。」の告知は 3 行（何が無いか・置く場所・置くもの） | `crates/areka/src/alert.rs:98-112` の `AlertScene::GhostMissing`・`:60` の `GHOST_SHAPE`・`:163-168` の `error!(event = "alert")` |
-| 記憶の置き場: アプリは exe の隣の `profile\areka\`、ゴーストとシェルはそれぞれのフォルダの下の `profile\areka\` | `crates/areka/src/boot_config.rs:291-299` の `default_app_profile_dir`・`crates/areka-ghost/src/sylphya_wiring.rs:87-89` の `profile_areka_root` |
+| 「ゴーストが見つかりません。」の告知は 3 行（何が無いか・置く場所・置くもの） | `crates/areka/src/alert.rs:104-114` の `AlertScene::GhostMissing`・`:60` の `GHOST_SHAPE`・`:163-168` の `error!(event = "alert")` |
+| 記憶の置き場: アプリは exe の隣の `profile\areka\`、ゴーストとシェルはそれぞれのフォルダの下の `profile\areka\` | `crates/areka/src/boot_config.rs:291-299` の `default_app_profile_dir`・`crates/areka-ghost/src/sylphya_wiring.rs:88-90` の `profile_areka_root` |
 | 根と記憶の置き場を上書きする環境変数は `AREKA_ROOT`・`AREKA_PROFILE_DIR`、告知の抑止は `AREKA_NO_ALERT` | `crates/areka/src/boot_config.rs` の `AREKA_ROOT`／`AREKA_PROFILE_DIR` の読み口・`crates/areka/src/alert.rs:27` の `NO_ALERT_ENV` |
 | 台本の入口 `\![open,readme]` は登記済み・開いたときの記録は `readme_opened` | `crates/areka/src/emo2_boot/consumer_ledger.rs:325`・`crates/areka/src/readme.rs:193` |
 | シェル・バルーンの切替は `OnShellChanged`／`OnBalloonChange` を送る | `crates/areka/src/emo2_boot/frame/switch.rs:464`・`:507` |
@@ -427,7 +427,7 @@ $p = Start-Process -FilePath "$ROOT\areka.exe" -WorkingDirectory $ROOT -PassThru
 
 | 項目 | 走行 | 証跡の取り方 | 期待の裏付け |
 |---|---|---|---|
-| 1 空の根の告知 | E1 | 目視（3 行の本文・置く場所が `<根 E>\ghost` の絶対パス・OK で終わる）＋記録（`event="alert"` の 1 行） | `alert.rs:98-112`・`:60`・`:163-168` |
+| 1 空の根の告知 | E1 | 目視（3 行の本文・置く場所が `<根 E>\ghost` の絶対パス・OK で終わる）＋記録（`event="alert"` の 1 行） | `alert.rs:104-114`・`:60`・`:163-168` |
 | 2 告知のとおりに置く | E2 | 目視（`konnoyayame` の挨拶・目の周りの地色・字形・抜き色の場所のクリックが背後へ抜ける）＋記録（ゴーストの決定と挨拶の行） | 完了 `shell-implicit-surface`・`keycolor-clickthrough-coverage`（roadmap の目視 5 件の節） |
 | 3 初回の起動 | A1 | 記録（`balloon_resolved` の `route=Companion`・`\balloon\emo2-kakukaku`・`OnFirstBoot`）＋目視（挨拶・透明な場所のクリックが抜ける・項目 11） | `boot_resolve.rs:199-202` の段 3（同梱）・`package-alpha.ps1:76-78` |
 | 4 2 体目・3 体目を入れる | A2 | 記録（`install_done` が 2 件・`file_drop_received` が 1 件・切替の行が 0 件）＋目視（インストールの台詞・えも？？ のまま） | 完了 `ghost-install`（要件 12 裁定 5＝入れた後に切り替えない）・`crates/areka/src/input_events/file_drop.rs` の `file_drop_received` |
@@ -437,9 +437,9 @@ $p = Start-Process -FilePath "$ROOT\areka.exe" -WorkingDirectory $ROOT -PassThru
 | 8 ネットワーク更新 | A3 | 記録（1 回目＝`OnUpdateComplete` の後に `OnUpdateResult`・`OnGhostChanged`／`OnBoot` が 0 件／2 回目＝読み直し無しで更新無し → `OnUpdateResult`）＋目視（進捗の台詞・いったん引っ込んで戻る）。手で変えたファイルの名前と、変える前・変えた後・更新の後の md5（更新の後は変える前に戻る） | 完了 `network-update` の `signoff.md`・`schedule/boot.rs:244-252`（読み直しの起動の根） |
 | 9 終了 | A3 の終わり | 記録（`app_exit`・`session_mark_cleared`・A3 の ERROR が除外の後 0 件）＋終了コード 0（`runs.txt`）＋目視（別れの台詞） | `app_exit.rs:107`・`boot_resolve.rs` の `clear_session_mark`（`session_mark_cleared`） |
 | 10 前回の状態の復元 | A4 | 記録（`session_mark_found` が 0 件・起こしたゴーストとシェルとバルーンの決定の行・`merge_scope restore` の `saved_win_*` が A3 の「char DragEnd 保存」の `saved_*` と同じ）＋目視 | `boot_resolve.rs:253-279`（記憶の直読み）・`placement/persist.rs:422-434` |
-| 11 表示の拡大率 | A1〜A4 | 目視（項目 3〜10 のたびに）＋§2 の拡大率 | `.kiro/steering/` の DPI 追従の方針・M1 の項目 18 |
-| 12 初回だけの位置合わせ | A1→A2 | 記録（A1 は `OnFirstBoot`、A2 は `OnBoot`。A2 の相方〔scope 1〕の `merge_scope restore` が `saved_win_x=None`）＋目視（初回のずらしが繰り返されず既定の配置） | `drag_follow.rs:217-226`（保存は掴んで離したときだけ）・`prop_sink.rs:231-250`・`schedule/boot.rs:233-235` |
-| 13 強制終了の次の起動 | A2→A3 | 記録（A2 の印は消えない＝`session_mark_cleared` が 0 件／期待する名前は A2 の最後の `session_mark_steady` の `ghost=` の値を逐語で写したもの〔印の値は `descript.txt` の `name` で、フォルダ名 `claudia` ではない〕。A3 の `session_mark_found` の `ghost=` と、`OnBoot` の `references` の 8 番目がその値と同じ・7 番目が `halt`）＋目視（えも？？ で立ち、落ちたゴーストのことを話す。6.4） | `format.rs:245`・`boot_config.rs:174-183`・`main.rs:429-431`・`events.rs:273-279`・`boot.rs:231-235`・新しい `emo2` の `boot.lua`（Reference6 が `halt` かつ Reference7 が空でないとき「起動halt」） |
+| 11 表示の拡大率 | A1〜A4 | 目視（項目 3〜10 のたびに）＋§2 の拡大率 | `.kiro/steering/roadmap.md` の「DPI 追従が基本設計」の行・M1 の項目 18 |
+| 12 初回だけの位置合わせ | A1→A2 | 記録（A1 は `OnFirstBoot`、A2 は `OnBoot`。A2 の相方〔scope 1〕の `merge_scope restore` が `saved_win_x=None`）＋目視（初回のずらしが繰り返されず既定の配置） | `drag_follow.rs:217-226`（保存は掴んで離したときだけ）・`prop_sink.rs:231-255`・`schedule/boot.rs:233-235` |
+| 13 強制終了の次の起動 | A2→A3 | 記録（A2 の印は消えない＝`session_mark_cleared` が 0 件／期待する名前は A2 の最後の `session_mark_steady` の `ghost=` の値を逐語で写したもの〔印の値は `descript.txt` の `name` で、フォルダ名 `claudia` ではない〕。A3 の `session_mark_found` の `ghost=` と、`OnBoot` の `references` の 8 番目がその値と同じ・7 番目が `halt`）＋目視（えも？？ で立ち、落ちたゴーストのことを話す。6.4） | `format.rs:245`・`boot_config.rs:174-183`・`main.rs:429-431`・`events.rs:273-279`・`boot.rs:231-235`・新しい `emo2` の `ghost/master/scripts/pasta/shiori/event/boot.lua` の OnBoot の受け口（Reference6 が `halt` かつ Reference7 が空でないとき「起動halt」） |
 | 付随 `\![open,readme]` | A3（項目 6 の中） | 目視（説明書が開く）＋記録（`readme_opened`） | `consumer_ledger.rs:325`・`readme.rs:193` |
 | 付随 左クリックの後の右クリック | A2 | 目視（メニューが出る）＋記録（`menu_shown`） | 完了 `wintf-drag-state-rest-contract` |
 
