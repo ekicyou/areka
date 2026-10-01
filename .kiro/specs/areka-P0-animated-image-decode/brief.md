@@ -52,6 +52,23 @@
 - **Extends**: なし（新しい境界）。
 - **Adjacent**: `shell-balloon`（バルーンの面の発見を共有する `balloon.rs`）・完了 `shell-implicit-surface`（同じファイル群）。
 
+## 依存の裏取り（2026-10-01 discovery のサブエージェント調査・着手時に版を引き直すこと）
+
+- **GIF・APNG は計画どおり成り立つ**。`image` 0.25.10 の 3 つの読み手（`GifDecoder`・`PngDecoder::apng()`・`WebPDecoder`）はどれも `AnimationDecoder::into_frames()` で、画面いっぱいに重ね済みの RGBA8 のコマと待ち時間を返す（遅延評価のイテレータ）。繰り返し回数は `loop_count()`。
+- **⚠ 動く WebP の透過に欠陥**。crates.io の最新 `image-webp` 0.2.4 では、透過のあるコマが前のコマに重なって描かれる（背景に戻す処理が効かない＝image#2913）。直しは上流の main と `release-0.2.5` の枝にだけあり、0.2.5 はまだ公開されていない（image-webp#183）。採れる道は 2 つで、要件の段で決める。
+  - 公開を待つ。
+  - `[patch.crates-io]` で rev を固定する。その場合は版が 0.2.4 より上であることを確かめる（記憶「版が合わないと cargo は黙って crates.io 版を引く」）。
+- **細部の注意**:
+  - APNG は `ImageReader` 経由では読めない（image#3038）＝`PngDecoder::apng()` を直に呼ぶ。16 bit の APNG は断られる。
+  - GIF の繰り返し回数:
+    - NETSCAPE の塊が無い GIF も `Infinite` になる。
+    - N は「1 回目の後に繰り返す回数」で、`image` は N をそのまま渡す。
+    - 正確に扱うなら `gif` クレートを直に呼ぶ（`gif::Decoder::repeat()`）。
+  - GIF が動くかどうかの安い見分けは `image` には無い。コマを 2 枚読むか、`gif` の `skip_frame_decoding` を使う。
+  - 待ち時間 0 を丸めるのは呼ぶ側。
+- **メモリ**: `image::Limits` にコマ数の上限は無い（`collect_frames()` は上限を見ない＝image#2109）＝コマを 1 枚ずつ流し、「コマ数 × 幅 × 高さ × 4」の上限は自前で持つ（500×500 で 1,000 コマなら約 1 GB）。
+- **ライセンス**: `gif` の機能で新しく 3 クレート（`gif` 0.14・`weezl` 0.1・`color_quant` 1.1）。どれも依存を持たない。`color_quant` だけ MIT 単独（`deny.toml` の許可表に MIT あり＝通る）、他は MIT／Apache-2.0。RustSec の勧告は `image` の 2019〜2020 年の古いもの（0.23 未満）だけ。
+
 ## Constraints
 
 - 新しい依存は開発者の承認が先（`tech.md` の登記）。1 ファイル 1,000 行。決定論テスト網羅は必達。ログ無しの失敗の経路を作らない（読めないコマ・上限超えは `warn!`／`error!`＋1 枚目へ縮退）。
