@@ -1,7 +1,7 @@
 # Brief: areka-P0-animated-image-playback
 
 > 2026-10-01 `/kiro-discovery` で起票（開発者指示は `animated-image-decode` の brief と同じ）。roadmap「動く画像」節の 2 本目＝**再生の側**。開発者確定「2 本で分割、always も含めて進めて」。
-> 本文の file:line は起票時（main `5e37745e`）の実測＝**着手時に引き直すこと**。**階層化エレメント（element でサーフェスを置く）の議論が続いている**＝結論によっては本 spec の前提に 1 本入る（roadmap「動く画像」節の「続いている議題」）。
+> 本文の file:line は起票時（main `5e37745e`）の実測＝**着手時に引き直すこと**。**同日の議論で `surface-element-nesting`（element でサーフェスを置く）の上に載せると決めた**（開発者「手書きで定義できるようになる→画像を自動に定義分解する。ながれできれい」）。
 
 ## Problem
 
@@ -28,14 +28,14 @@
 
 ## Approach（2026-10-01 discovery の開発者確定事項）
 
-1. **分解して SERIKO の型へ写す**（開発者の案「読み込み時にサブエレメント分解して、アニメーション表示を回す」）。読み込み（`animated-image-decode`）が出したコマを、合成器から見て普通の部品になる形で並べ、「コマを順に指すアニメーション」を合成して表に入れる。時計・コマの進み・合成のキャッシュは今の seriko の仕組みを使う＝**アニメのエンジンは sakura と seriko の 2 つのまま**（3 つ目の時計は作らない）。
+1. **分解して子サーフェスにする**（開発者の案「読み込み時にサブエレメント分解して、アニメーション表示を回す」）。読み込み（`animated-image-decode`）が出したコマから、「コマを 1 枚ずつ持ち、`always` でコマを順に指す」合成のサーフェスを作り、動く絵を指す element定義・`surface*.png` を、その子サーフェスを指す element（`surface-element-nesting` の入口）に置き換える。時計は `surface-element-nesting` の子の時計＝**親の面の切り替えで巻き戻らない**（`surface1` と `surface2` が同じ GIF を置いていれば、切り替えても途切れない）。**アニメのエンジンは sakura と seriko の 2 つのまま**（3 つ目の時計は作らない）。合成のサーフェスの番号は作者の番号と衝突しない空間に置く（設計で決める）。
 2. **`always` を本 spec で入れる**（開発者確定）。自動アニメーションと同じ「ずっと繰り返す」仕組みで、正典の interval の語として表に記録する。
 3. `import` は 2 と同じ仕組みの上に、pattern の描画メソッドとして足す（合成は overlay・繰り返し回数は無視）。
 
 ## Scope
 
 - **In**: 自動アニメーション（element定義・`surface*.png`）・`import` メソッド・interval `always`・繰り返しの仕組み（コマの終わりで頭へ戻る）・ファイルの繰り返し回数の扱い（自動アニメーションで守るかは要件で正典を確かめる）・バルーンの面の動く絵・合成のし直しの回数の確かめ（性能）・網羅台帳の行（element・`import`・`always`）の更新・決定論テスト・実機の確かめ（3 形式の検体）。
-- **Out**: 読み込みとアトラス（`animated-image-decode`）。`runonce`・`bind` などの他の interval（「サーフェスアニメーション」の束＝別途）。`overlay` 以外の描画メソッド全般。element のオプション（`--clipping` など）。
+- **Out**: 読み込みとアトラス（`animated-image-decode`）。element でサーフェスを置く入口と子の時計（`surface-element-nesting`）。`runonce`・`bind` などの他の interval（「サーフェスアニメーション」の束＝別途）。`overlay` 以外の描画メソッド全般。element のオプション（`--clipping` など）。
 
 ## Boundary Candidates
 
@@ -49,7 +49,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `animated-image-decode`。（議論の結論次第で）階層化エレメントの spec。
+- **Upstream**: `animated-image-decode`・`surface-element-nesting`（入口・子の時計）。
 - **Downstream**: `currentghost-property-tree`（`seriko.*` のプロパティでアニメーションが読めるようになる＝読むだけの隣接）。
 
 ## Existing Spec Touchpoints
