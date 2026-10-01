@@ -5,7 +5,7 @@ updated_at: 2026-10-01
 
 # Roadmap — areka（M2＝α 版・第三者がデスクトップマスコットを管理できる最小のアプリ）
 
-> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。**M2 のゴールは 2026-09-18 の棚卸⑭で「α 版」に決めた**（下記「M2 ゴール（α）」）——開発者の指示「α 版として第三者に使い始めてもらうことができるだけの機能セット。大事なのはゴースト・シェル・バルーンのファイル管理、インストール、ネットワーク更新、つまりアプリとしてのデスクトップマスコット管理。オーナードローは不要だが最低限のメニューは要る。表現力増強は emo2 が普通に動いている水準で一旦よい」。本ファイルは **spec 台帳 92 行（完了 39・α 1・バグ 0・前倒し 0・α 後 51・保留 1＝2026-10-01 の実数え〔09-28 棚卸⑲の後に `ghost-install` の完了と `file-drop` の起票で 67 行になり、09-29 に SSP MCP の移植 10 本と `balloon-color-emoji` を足し、`frame-phases-after-exit` を完了に直し、`file-drop` を完了に直し、09-30 に `balloon-color-emoji` と `network-update` を完了に直し、`network-update-canon-order` を α 後に起票した。10-01 に `shell-balloon-switch` の完了の棚卸でバグ `balloon-reappear-short-talk` を起票し、`shell-balloon-switch` を完了に直し、同日 `balloon-reappear-short-talk` を完了に直し、同日 `/kiro-discovery`（シェル内バルーン）で 8 本と登記だけの行「SSTP の受信」を α 後に起票し、同日 `/kiro-discovery`（動く画像）で 3 本を α 後に起票した〕。表の段列を機械で数えた）の着手順（ウェーブ）と干渉条件だけ**を持つ。**着手の優先度は「バグ修正 → α に要る機能」で、どちらにも属さない spec は当面着手しない**（2026-09-20 開発者指示・下の「棚卸⑮の裁定」）。
+> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。**M2 のゴールは 2026-09-18 の棚卸⑭で「α 版」に決めた**（下記「M2 ゴール（α）」）——開発者の指示「α 版として第三者に使い始めてもらうことができるだけの機能セット。大事なのはゴースト・シェル・バルーンのファイル管理、インストール、ネットワーク更新、つまりアプリとしてのデスクトップマスコット管理。オーナードローは不要だが最低限のメニューは要る。表現力増強は emo2 が普通に動いている水準で一旦よい」。本ファイルは **spec 台帳 94 行（完了 39・α 1・バグ 0・前倒し 0・α 後 53・保留 1＝2026-10-01 の実数え〔09-28 棚卸⑲の後に `ghost-install` の完了と `file-drop` の起票で 67 行になり、09-29 に SSP MCP の移植 10 本と `balloon-color-emoji` を足し、`frame-phases-after-exit` を完了に直し、`file-drop` を完了に直し、09-30 に `balloon-color-emoji` と `network-update` を完了に直し、`network-update-canon-order` を α 後に起票した。10-01 に `shell-balloon-switch` の完了の棚卸でバグ `balloon-reappear-short-talk` を起票し、`shell-balloon-switch` を完了に直し、同日 `balloon-reappear-short-talk` を完了に直し、同日 `/kiro-discovery`（シェル内バルーン）で 8 本と登記だけの行「SSTP の受信」を α 後に起票し、同日 `/kiro-discovery`（動く画像）で 3 本を α 後に起票した〕。表の段列を機械で数えた）の着手順（ウェーブ）と干渉条件だけ**を持つ。**着手の優先度は「バグ修正 → α に要る機能」で、どちらにも属さない spec は当面着手しない**（2026-09-20 開発者指示・下の「棚卸⑮の裁定」）。
 > 正本配置: 本ファイルが正本（`.kiro/steering/roadmap.md`）。`focus.md`（`inclusion: always`）から辿る。設計判断の正本は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md)。M1 実物スコープは [doc/emo2-conformance-scope.md](../../doc/emo2-conformance-scope.md)。ukadoc 網羅の段階・順位の正本は `doc/ukadoc-coverage/`（`briefing.md`・`linkage.md`・`roadmap-draft.md`）。
 > **履歴**: 追記①〜(94)・旧ゴール表・旧ウェーブ行・旧干渉台帳・完了詳報は棚卸④〜⑬で [roadmap-history.md](roadmap-history.md) へ退避済み。**棚卸⑭（09-18）で旧 W14〜W17 のウェーブ行と W14 の干渉台帳を退避**（history が全文正本・非改変）。完了ユニットの実装詳細は各 `completed/` spec が正本。**旧ウェーブ番号の読み替え**: 棚卸⑫（09-02）で W5.95→W6・W6→W7・W6.5→W8・W6.75→W9・W6.9→W10・W6.95→W11・旧 W7（e2e）→W12 へ整数化。棚卸⑬（09-11）で旧「W13 裁定枠 D〜G」「W13〜W15（裁定枠）」を W13〜W17 へ振り直し。**棚卸⑭（09-18）で W14〜W17 を「α 後」へ格下げし、α のウェーブを A0〜A5 と呼ぶ（09-18 同日に A0＝nar-install へ反転し 6 段）**（history と completed spec 内の旧番号は改変しない）。
 
@@ -77,7 +77,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - 完了 spec 直下エントリ＝**206**（`.kiro/specs/completed/` 直下・2026-09-28 実数え＝ディレクトリ 205＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
 - M1 実機サインオフ発見 7 件中 1〜6 番は解決済み・7 番（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）のうち行 4・行 10 は W13 で解決、行 1 は `dpi-transition-two-tick-bounce`、行 9 は `zorder-chain-residue` A-2。M-dual は退役（e2e 項目 10 で合格・復活させない）。
 
-## spec 台帳（**表は 92 行**。うち **brief 済み 82 本**＝2026-09-13 の 30 ＋ 09-18 起票 8 ＋ 09-19 起票 3 ＋ 09-20 起票 8 ＋ 09-24 起票 3（`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap`）＋ **09-26 棚卸⑰の起票 3（`ghost-change-name-resolution`・`pilot-dropfiles-on-wuc-window`・`alpha-package`）** ＋ **09-27 棚卸⑱の起票 1（`session-mark-residue`＝登記だけの行 2 本の格上げ）** ＋ **09-28 棚卸⑲の起票 1（`frame-phases-after-exit`＝表に行を持たない覚え書きの格上げ）** ＋ 09-28 の `file-drop` ＋ **09-29 の起票 10（SSP MCP の移植＝`mcp-*`・下の「SSP MCP の移植」節）** ＋ **09-29 起票 1（`balloon-color-emoji`＝段「前倒し」）** ＋ **09-30 起票 1（`network-update-canon-order`＝α 後）** ＋ **10-01 起票 1（`balloon-reappear-short-talk`＝`shell-balloon-switch` の完了の棚卸・段「バグ」）** ＋ **10-01 起票 8（シェル内バルーン＝下の「シェル内バルーン」節・α 後）** ＋ **10-01 起票 3（動く画像＝下の「動く画像」節・α 後）**、**10 行は brief を持たない「登記だけの行」**＝下の節を見よ（10-01 に「SSTP の受信」を足した）。**実数え（2026-09-28・表の段列を機械で数えた＝✅ 39・α 1・バグ 0・前倒し 0・α 後 51・保留 1 ＝ 92**（2026-10-01 の機械の数え・`shell-balloon-switch` と `balloon-reappear-short-talk` の完了と、シェル内バルーンの 8 本と登記だけの行 1 本と動く画像の 3 本の起票を反映））。着手は brief 持ちが `/kiro-start <名>`・登記だけの行は `/kiro-discovery` から）
+## spec 台帳（**表は 94 行**。うち **brief 済み 84 本**＝2026-09-13 の 30 ＋ 09-18 起票 8 ＋ 09-19 起票 3 ＋ 09-20 起票 8 ＋ 09-24 起票 3（`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap`）＋ **09-26 棚卸⑰の起票 3（`ghost-change-name-resolution`・`pilot-dropfiles-on-wuc-window`・`alpha-package`）** ＋ **09-27 棚卸⑱の起票 1（`session-mark-residue`＝登記だけの行 2 本の格上げ）** ＋ **09-28 棚卸⑲の起票 1（`frame-phases-after-exit`＝表に行を持たない覚え書きの格上げ）** ＋ 09-28 の `file-drop` ＋ **09-29 の起票 10（SSP MCP の移植＝`mcp-*`・下の「SSP MCP の移植」節）** ＋ **09-29 起票 1（`balloon-color-emoji`＝段「前倒し」）** ＋ **09-30 起票 1（`network-update-canon-order`＝α 後）** ＋ **10-01 起票 1（`balloon-reappear-short-talk`＝`shell-balloon-switch` の完了の棚卸・段「バグ」）** ＋ **10-01 起票 8（シェル内バルーン＝下の「シェル内バルーン」節・α 後）** ＋ **10-01 起票 3（動く画像＝下の「動く画像」節・α 後）** ＋ **10-01 起票 2（文字の現れ方＝下の「文字の現れ方」節・α 後・うち 1 本は夢）**、**10 行は brief を持たない「登記だけの行」**＝下の節を見よ（10-01 に「SSTP の受信」を足した）。**実数え（2026-09-28・表の段列を機械で数えた＝✅ 39・α 1・バグ 0・前倒し 0・α 後 53・保留 1 ＝ 94**（2026-10-01 の機械の数え・`shell-balloon-switch` と `balloon-reappear-short-talk` の完了と、シェル内バルーンの 8 本と登記だけの行 1 本と動く画像の 3 本の起票を反映））。着手は brief 持ちが `/kiro-start <名>`・登記だけの行は `/kiro-discovery` から）
 
 > **spec は名前で呼ぶ（2026-09-26 開発者指示「番号で言われても分からない。spec 名を使え」）**: 台帳の番号の列は廃止した。報告・brief・コミット・PR の本文で spec を指すときは **spec 名**（`areka-P0-` は省略してよい）を書き、「#数字」の台帳番号は使わない。登記だけの行は「登記だけの行「見出し」」の形で指す。「#数字」は GitHub の PR 番号にだけ、`PR#185` のように接頭辞を付けて使う。古い文書（history・完了 spec・古い記憶）に台帳番号が出てきたら、その時点の表で名前へ読み替えてから報告する。
 > **段の数え方（番号の列を外した後）**: `awk '/^\| spec（`areka-P0-` 省略）/{f=1;next} f&&/^\|/{print} f&&!/^\|/{f=0}' .kiro/steering/roadmap.md | awk -F'|' 'NR>1{gsub(/ /,"",$3);print $3}' | sort | uniq -c`
@@ -177,6 +177,8 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | `animated-image-decode`（**10-01 起票**・動く画像 の読み込み） | α 後 | 基盤（動く GIF・APNG・WebP の全部のコマ・待ち時間・繰り返し回数を読む口＝動く絵だけ `image` クレート〔本番の依存へ移し `gif` の機能を足す＝`tech.md` 登記と承認が要る〕・静止画は WIC のまま・アトラスの鍵にコマの番号） | M | α 後（V1） | α 完成宣言 | ○ | ⚪ |
 | `surface-element-nesting`（**10-01 起票**・動く画像 の議論で起票＝階層化エレメント） | α 後 | 製品（areka 独自。element定義のファイル名の欄に数字だけ＝サーフェスの番号で、サーフェスを部品として置く・入れ子は何段でも・子の当たり判定を親へ持ち込む・内側の `balloon` は警告して無視・**子の時計は独立し親の面の切り替えで巻き戻らない**） | M〜L | α 後（V1） | α 完成宣言 | ○ | ⚪ |
 | `animated-image-playback`（**10-01 起票**・動く画像 の再生） | α 後 | 正典（SERIKO 定義なしの自動アニメーション〔2.7.38〕・`import` メソッド〔2.7.50〕・interval `always`＝動く絵を「コマを `always` で順に指す子サーフェス」へ分解し `surface-element-nesting` の入口と子の時計に載せる・バルーンの面も） | M〜L | α 後（V2） | `animated-image-decode`・`surface-element-nesting` | ○ | ⚪ |
+| `text-reveal-fade`（**10-01 起票**・文字の現れ方） | α 後 | 表現力（areka 独自・普通のバルーンにもシェル内バルーンにも効く。1 字ずつの表示で字が透明から不透明へ変わる＝キー `text_reveal,fade 150ms`〔既定の長さ 150ms・既定は無効〕と台本 `\![text,reveal,fade,150]`〔台詞の終わりまで〕・早送りと `\_q` では即座に不透明・フェード中の字だけ毎コマ描き直す） | M | α 後（文字の現れ方 R1） | α の完成宣言 | − | ⚪ |
+| `text-reveal-dance`（**10-01 起票**・文字の現れ方・**夢・任意**） | α 後 | 表現力（夢・areka 独自。字が現れるときにだけ跳ねる・揺れるなどの動きをして定位置で止まる＝**ずっと動き続ける演出は作らない**〔負荷と目に毒・開発者裁定〕。`text_reveal` の値の追加） | M〜L | α 後（夢・順不同） | `text-reveal-fade` | ○ | ⚪ |
 
 ## 登記だけの行（brief なし・台帳の 10 行＋表に行を持たない覚え書き 4 件〔`sample-ghost-kit` の os error 5・`InProc` の SHIORI・i686 の `testdll_drop_invokes_courtesy_unload`・利用条件の切り詰めが絵文字を割る〕）
 
@@ -348,7 +350,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 ## 着手手順
 
-- **brief の体制**: 台帳 89 行のうち **79 本に brief あり**・登記だけの行 10 本。**段列の機械の数え＝完了 39・α 1・バグ 0・前倒し 0・α 後 48・保留 1**（2026-10-01 の機械の数え。シェル内バルーンの 8 本と登記だけの行「SSTP の受信」の起票を反映。`network-update`・`shell-balloon-switch`・`balloon-reappear-short-talk` の完了と `network-update-canon-order`・`balloon-reappear-short-talk` の起票を反映。09-30 以前は `balloon-color-emoji` の完了を反映。`frame-phases-after-exit`・`ghost-install` の完了と SSP MCP の移植 10 本・`balloon-color-emoji` の起票を反映）＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。brief の file:line は起票時値＝**着手時に必ず再検証**（棚卸⑲では α の残り 4 本を main `10a8d724` で再測定し、結果を各 brief の「2026-09-28 棚卸⑲の再測定」の節へ書いた。`frame-phases-after-exit` は同日の起票値。α 後の brief は再測定していない）。
+- **brief の体制**: 台帳 94 行のうち **84 本に brief あり**・登記だけの行 10 本。**段列の機械の数え＝完了 39・α 1・バグ 0・前倒し 0・α 後 53・保留 1**（2026-10-01 の機械の数え。動く画像の 3 本と文字の現れ方の 2 本の起票を反映。シェル内バルーンの 8 本と登記だけの行「SSTP の受信」の起票を反映。`network-update`・`shell-balloon-switch`・`balloon-reappear-short-talk` の完了と `network-update-canon-order`・`balloon-reappear-short-talk` の起票を反映。09-30 以前は `balloon-color-emoji` の完了を反映。`frame-phases-after-exit`・`ghost-install` の完了と SSP MCP の移植 10 本・`balloon-color-emoji` の起票を反映）＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。brief の file:line は起票時値＝**着手時に必ず再検証**（棚卸⑲では α の残り 4 本を main `10a8d724` で再測定し、結果を各 brief の「2026-09-28 棚卸⑲の再測定」の節へ書いた。`frame-phases-after-exit` は同日の起票値。α 後の brief は再測定していない）。
 - 新規課題の起票は `/kiro-discovery`（再入）で just-in-time。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
 - **Fable 列 ○＝Fable で起動したセッションで進めることを勧める spec**（勧めるだけ）。**要件定義・設計のサブエージェントは起動中のモデルを継承し、上位へ上げない**（Opus で起動したら Opus のまま・Fable 列 ○ でも `model: "fable"` を付けない＝意図しない課金を避ける 2026-09-30 開発者指示）。タスク生成と実装は skill の Preflight に従う（記憶 requirements-design-need-fable-grade-review／fable-main-opus-subagents-token-policy）。
 - **ukadoc 台帳の `owner`**: α の残りの spec は起票時点で台帳（`doc/ukadoc-coverage/ledger/`）の `owner` に登記していない。各 spec の要件段階で登記し、同時に `roadmap-draft.md` の `owner_count` を追随させる（記憶 sylphya-set-ledger の教訓＝担当欄を埋めたら同時に追随）。
@@ -465,6 +467,26 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 |---|---|---|
 | **V1**（2 本並走） | `animated-image-decode` ∥ `surface-element-nesting` | 前者は `areka-emo-atlas` の decode・アトラスの鍵と焼き込み・依存の登記、後者は `areka-parsers` の shell の element の型・`areka-emo-compose` の再帰と当たり判定・`areka-seriko` の子の時計。**見張る継ぎ目**: `areka-emo-atlas/src/manifest.rs`（前者はコマの鍵・後者は element の参照のたどり＝後から着地した方が合わせる）。`areka-emo-present/src/balloon.rs`（面の発見）は `shell-balloon`・`balloon-markers` も触る。**`surface-element-nesting` と `shell-balloon` は同じ element の型を触る＝同時に走らせない**（後から着地した方が 3 通りの読み分けと内側の `balloon` の警告を揃える） |
 | **V2**（単独） | `animated-image-playback` | 子サーフェスの合成・`always` と `import`（`areka-seriko` の表・`areka-emo-compose` の描画メソッド）。**見張る継ぎ目**: `areka-parsers` の shell の element定義（`shell-balloon` が描画メソッド `balloon` を足す）・`areka-emo-compose`／`areka-emo-present` の合成（`balloon-element-order`）＝同時に走らせない |
+
+## 文字の現れ方（α 後・2026-10-01 `/kiro-discovery` で起票）
+
+> 開発者指示（2026-10-01）「文字のタイプライター表現において、フェードインしながら文字を表示するモードが欲しい。よくノベルゲームで見ますよね。より夢のある仕様では、ニンテンドーのゲームみたいに、文字が踊りながら表示されるエフェクトも欲しいけど、これは Option の夢 spec として別に切ってください」。
+
+- **起票時の実測（main `9cf09f5d`）**: 1 字ずつの表示は字ごとの「現れる時刻」を既に持つ（`areka-emo-text/src/state.rs` の `visible`）＝フェードも動きも「現れる時刻からの経過」の純関数で決まる。手が要るのは描画の側で、今は一度描いた字を描き直さない。
+- **決めたこと（開発者確定）**: ⑴ 有効にする書き方はバルーンのキー `text_reveal`（`balloon.*`ブレスにも書ける）と台本 `\![text,reveal,…]`（台詞の終わりまで）の両方。⑵ 早送りのクリックと `\_q` の中では即座に不透明・定位置。⑶ 既定のフェードの長さは 150ms。⑷ 夢の方は**現れるときだけ動いて止まる**（跳ねる＝ポーンと跳ねて定位置に戻る・揺れる）。ずっと動き続ける演出は負荷が大きく目に毒なので作らない。
+- **採らなかったもの**: キーだけ（ここぞという台詞だけ切り替えられない）・早送りでもフェードを待たせる・ずっと動き続ける演出。
+
+### Specs (dependency order)
+
+- [ ] areka-P0-text-reveal-fade -- 字が透明から不透明へ変わる現れ方（`text_reveal,fade`・`\![text,reveal,fade,…]`）。Dependencies: α 完成宣言
+- [ ] areka-P0-text-reveal-dance -- 現れるときだけ跳ねる・揺れる（夢・任意）。Dependencies: areka-P0-text-reveal-fade
+
+### ウェーブ（α 後の棚卸で全体の並びへ組み込む）
+
+| Wave | ユニット | 編成根拠・干渉条件 |
+|---|---|---|
+| **R1**（単独） | `text-reveal-fade` | 透明度を時間で変える仕組みと描き直しの口を `balloon-scroll-fade`（シェル内バルーン S4）と共用＝**2 本は同時に走らせない**（先に着地した方が作る）。`areka-emo-text` の `state.rs`・`draw.rs`・`surface.rs` を触る＝シェル内バルーンの `text-typesetting`・`text-ruby`（`layout.rs`）とは別の場所だが、同じクレートの分割と重ならないよう着手時に照合する |
+| **夢**（順不同・任意） | `text-reveal-dance` | `text-reveal-fade` の後ならいつでも。着手は開発者が望んだときだけ |
 
 ## α 後（M2 の残りと M3）
 
