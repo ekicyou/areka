@@ -227,7 +227,9 @@ fn await_gap_again(world: &World, kind: SkinKind, to: &str) -> Option<ReplyRecei
 }
 
 /// 資産がそろった後に切れ目を受けた: ゴースト切替が進んでいれば取りやめ、無ければ世代を進め、
-/// 荷物を置き場へ置き、返信の受け手を控え、seriko へ差し替えを頼んで頼んだ段へ進む。
+/// 荷物を置き場へ置き、返信の受け手を控え、seriko へ差し替えを頼んで頼んだ段へ進む。置き場を
+/// 引き上げるのはこの関数の間だけ（戻った後は表示の橋渡しだけが荷物を生かす＝seriko が倒れれば
+/// 返信の送り手も消え、頼んだ段が脱落を見て印を消す）。
 fn commit(
     flight: &mut SkinSwitchInFlight,
     built: SwapBuilt,
@@ -248,6 +250,19 @@ fn commit(
         return false;
     }
     let epoch = NEXT_EPOCH.fetch_add(1, Ordering::Relaxed);
+    // 置き場を強く持つのは表示の橋渡しだけ。引き上げられなければ橋渡し（seriko）はもう居ない。
+    let Some(swap_slot) = wiring.swap_slot.upgrade() else {
+        error!(
+            event = "skin_switch_failed",
+            stage = "seriko",
+            reason = "bridge_gone",
+            epoch,
+            ?kind,
+            to,
+            "表示の橋渡しが消えていて差し替えの荷物を置けない（seriko は止まっている）——元のまま続ける"
+        );
+        return false;
+    };
     let (targets, replace, finish) = split(built, epoch);
     let mut replies = Vec::new();
     let mut receivers = Vec::new();
@@ -257,10 +272,7 @@ fn commit(
         receivers.push((scope, rx));
     }
     // 鍵を持つのは置く一瞬だけ。毒は前の持ち主の panic で、置き場そのものは壊れていない。
-    *wiring
-        .swap_slot
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner) = Some(SwapPayload {
+    *swap_slot.lock().unwrap_or_else(PoisonError::into_inner) = Some(SwapPayload {
         epoch,
         targets,
         replies,
@@ -277,8 +289,7 @@ fn commit(
             to,
             "seriko へ差し替えを頼めなかった——元のまま続ける"
         );
-        wiring
-            .swap_slot
+        swap_slot
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .take();

@@ -35,6 +35,7 @@ use crate::emo2_boot::shell_balloon_resolve::SkinCandidate;
 use crate::emo2_boot::shell_balloon_switch::{
     SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
 };
+use crate::emo2_boot::switch_assets::{SwapPayload, SwapSlot};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::reseed::tests as reseed_tests;
@@ -367,6 +368,54 @@ fn reply_failure_records_one_error_and_writes_nothing() {
     assert_eq!(
         got, want,
         "(種別, 場面, (skin_*／last_* の記録, 印, kanade への便り), 記憶)"
+    );
+}
+
+/// 表示の橋渡しの代わりに置き場を持ち、起動の結線（`wire_emo2_boot`）と同じ形で結線状態へ渡す。
+/// 返り値を落とすと、seriko のアクターと一緒に橋渡しが消えた形になる。
+fn wire_bridge_slot(wiring: &mut Emo2Wiring) -> SwapSlot {
+    let bridge = SwapSlot::default();
+    wiring.swap_slot = Arc::downgrade(&bridge);
+    bridge
+}
+
+/// 頼んだ段で seriko（表示の橋渡し）が合図を出す前に倒れたら、荷物と返信の送り手は橋渡しと一緒に
+/// 消え、`error!(skin_switch_failed, stage=attach)` 1 件で印を消す（記憶・通知 0）。結線状態が
+/// 荷物を生かし続けると印が残り、以後の切替がずっと断られる（design「SwitchPhase」）。
+#[test]
+fn bridge_gone_while_committed_fails_attach_and_clears_the_marker() {
+    let mut got = Vec::new();
+    let mut want = Vec::new();
+    for kind in [SkinKind::Shell, SkinKind::Balloon] {
+        let mut rig = rig(kind, true);
+        let bridge = wire_bridge_slot(&mut rig.wiring);
+        let replies = rig
+            .replies
+            .iter_mut()
+            .map(|(scope, tx)| (*scope, tx.take().unwrap()))
+            .collect();
+        *bridge.lock().unwrap() = Some(SwapPayload {
+            epoch: 7,
+            targets: Vec::new(),
+            replies,
+        });
+        drop(bridge);
+        let events = frame(&mut rig);
+        let seen = (records(&events), stage(&rig.world), raised(&rig));
+        got.push((kind, seen, memory(rig)));
+        want.push((
+            kind,
+            (
+                vec![rec("skin_switch_failed", Level::ERROR, Some("attach"))],
+                None,
+                Vec::new(),
+            ),
+            old_memory(),
+        ));
+    }
+    assert_eq!(
+        got, want,
+        "(種別, (skin_*／last_* の記録, 印, kanade への便り), 記憶)"
     );
 }
 

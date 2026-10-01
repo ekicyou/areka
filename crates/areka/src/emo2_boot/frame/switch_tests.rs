@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use areka_actor::{ActorHandle, ReplySender, reply_channel};
@@ -32,7 +32,7 @@ use crate::emo2_boot::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::emo2_boot::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::emo2_boot::shell_balloon_resolve::SkinCandidate;
 use crate::emo2_boot::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
-use crate::emo2_boot::switch_assets::{SwapBuilt, SwitchBuildError};
+use crate::emo2_boot::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::source::{DescriptSource, GhostTitles};
@@ -52,6 +52,8 @@ struct Rig {
     build: Option<Sender<BuildResult>>,
     seriko: ActorHandle,
     seriko_out: Arc<Mutex<Vec<DisplayCommand>>>,
+    /// 表示の橋渡しの代わりに置き場を強く持つ（結線状態は弱い参照だけを持つ・起動の結線と同じ形）。
+    swap_slot: SwapSlot,
 }
 
 /// 進行中の印（待ちの段）と、kanade・seriko の代わりを持つ置き場のゴーストをそろえた World。
@@ -87,14 +89,18 @@ fn rig(kind: SkinKind) -> Rig {
             built: None,
         },
     });
+    let swap_slot = SwapSlot::default();
+    let mut wiring = headless_wiring_with(mpsc::channel().1, zero_clock());
+    wiring.swap_slot = Arc::downgrade(&swap_slot);
     Rig {
         world,
-        wiring: headless_wiring_with(mpsc::channel().1, zero_clock()),
+        wiring,
         kanade,
         gap: Some(gap_tx),
         build: Some(build_tx),
         seriko,
         seriko_out,
+        swap_slot,
     }
 }
 
@@ -225,7 +231,7 @@ fn kanade_msgs(rig: &Rig) -> (Vec<Option<bool>>, Vec<ReplySender<TalkGap>>) {
 
 /// 置き場の荷物の (世代, scope ごとの (scope, 作者の DPI), 返信の送り手の scope)。
 fn slot(rig: &Rig) -> Option<(u64, Vec<(u32, u16)>, Vec<u32>)> {
-    rig.wiring.swap_slot.lock().unwrap().as_ref().map(|p| {
+    rig.swap_slot.lock().unwrap().as_ref().map(|p| {
         (
             p.epoch,
             p.targets.iter().map(|t| (t.0, t.3)).collect(),
@@ -581,6 +587,35 @@ fn ghost_switch_in_flight_wins_before_the_replace() {
             Vec::new()
         ),
         "((記録, 印, 便り, 置き場), 差し替え)"
+    );
+}
+
+/// 表示の橋渡しが消えていて置き場を引き上げられなければ、`error!(stage=seriko, reason=bridge_gone)`
+/// 1 件で印を消す（荷物は置かずに捨てる・seriko への差し替え 0）。
+#[test]
+fn bridge_gone_at_commit_drops_with_one_error() {
+    let mut rig = rig(SkinKind::Shell);
+    rig.wiring.swap_slot = Weak::new();
+    deliver(&mut rig, Ok(shell_built()));
+    reply(&mut rig, TalkGap::Reached { marked: None });
+    let events = frame(&mut rig);
+    let got = (records(&events), stage(&rig.world), slot(&rig));
+    assert_eq!(
+        (got, replaces(rig)),
+        (
+            (
+                rec(
+                    "skin_switch_failed",
+                    Level::ERROR,
+                    Some("bridge_gone"),
+                    Some("seriko")
+                ),
+                None,
+                None
+            ),
+            Vec::new()
+        ),
+        "((記録, 印, 置き場), 差し替え)"
     );
 }
 

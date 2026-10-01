@@ -111,7 +111,8 @@ impl PresentBridge {
         Self { tx, swap: None }
     }
 
-    /// 差し替えの荷物の置き場を持たせる（起動の結線が `Emo2Wiring` と同じ置き場を渡す）。
+    /// 差し替えの荷物の置き場を持たせる（起動の結線が渡す。置き場を強く持つのはこの橋渡しだけで、
+    /// `Emo2Wiring` は弱い参照を持つ＝橋渡しが消えれば荷物と返信の送り手も消える）。
     pub(crate) fn with_swap_slot(mut self, slot: SwapSlot) -> Self {
         self.swap = Some(slot);
         self

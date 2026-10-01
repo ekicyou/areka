@@ -454,8 +454,9 @@ pub fn wire_emo2_boot(
     // Emo2Wiring の双方へ配る。Emo2Wiring 側 BootAssets の resolver は attach で読まれない（Task 4.1）
     // ため空 alias 表のプレースホルダで埋める（実 resolver は seriko が保持）。
     let (tx, rx) = std::sync::mpsc::channel::<PresentCommand>();
-    // 差し替えの荷物の置き場（areka-P0-shell-balloon-switch task 9.1）: 1 つ作り、表示の橋渡しと
-    // Emo2Wiring の両方へ同じものを渡す（seriko の送り手は Emo2Wiring に持たせない）。
+    // 差し替えの荷物の置き場（areka-P0-shell-balloon-switch task 9.1）: 1 つ作り、表示の橋渡しに
+    // 持たせ、Emo2Wiring には弱い参照だけを渡す（置き場を強く持つのは橋渡しだけ＝seriko が倒れれば
+    // 荷物の返信の送り手も消える。seriko の送り手は Emo2Wiring に持たせない）。
     let swap_slot = switch_assets::SwapSlot::default();
     let bridge = PresentBridge::new(tx).with_swap_slot(swap_slot.clone());
     // move channel（PresentBridge と同型の配線・task 9.1）: talk スレッドの MoveCueSink が送出端、
@@ -695,7 +696,7 @@ pub fn wire_emo2_boot(
         clock,
         wiring_assets,
     );
-    wiring.swap_slot = swap_slot;
+    wiring.swap_slot = std::sync::Arc::downgrade(&swap_slot);
     // shell 設定（`seriko.zorder`）由来の基底を、World へ載せる前に据える（要件 5.1／5.2／
     // 5.3／5.4・areka-P0-scope-zorder-pinning task 6.3）。ここはまだこの結線状態で走る
     // 最初の `Update` の手前であり、取り出しの相も 1 度も走っていない——ゆえに基底は**タグの実行を待たずに**

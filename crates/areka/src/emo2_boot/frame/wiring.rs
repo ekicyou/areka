@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
+use std::sync::{Mutex, Weak};
 use std::time::Duration;
 
 use bevy_ecs::system::SystemState;
@@ -21,7 +22,7 @@ use areka_emo_text::actor::TextLayerRuntime;
 use areka_parsers::balloon::BalloonModel;
 
 use super::super::balloon_visibility::BalloonVisibilityState;
-use super::super::switch_assets::SwapSlot;
+use super::super::switch_assets::SwapPayload;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::super::zorder_cue::ZOrderDirective;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
@@ -142,11 +143,14 @@ pub struct Emo2Wiring {
     pub(super) dpi_state: Option<SystemState<DpiChangedQuery>>,
     /// 差し替えの荷物の置き場（spec: areka-P0-shell-balloon-switch・design「SwitchAssets」）。
     ///
-    /// 起動の結線が 1 つ作り、表示の橋渡し（`PresentBridge::with_swap_slot`）と同じものをここへ
-    /// 置く。差し替えの相が荷物を置き、橋渡しが合図の世代と突き合わせて取り出す。seriko の
-    /// 送り手はここに持たせない（降ろした後も World に残るので、持たせると seriko の join が
-    /// 戻らない＝持ち主は `GhostSession` だけ）。
-    pub(in crate::emo2_boot) swap_slot: SwapSlot,
+    /// 起動の結線が 1 つ作り、表示の橋渡し（`PresentBridge::with_swap_slot`）に持たせ、ここには
+    /// 弱い参照だけを置く。差し替えの相が引き上げて荷物を置き、橋渡しが合図の世代と突き合わせて
+    /// 取り出す。置き場を強く持つのは橋渡しだけ: seriko が合図を出す前に倒れたら、荷物（置き換えの
+    /// 返信の送り手）は橋渡しと一緒に消え、頼んだ段は返信の脱落を見て印を消す。ここが強く持つと
+    /// 送り手が生き続け、印が残って以後の切替がずっと断られる。seriko の送り手もここに持たせない
+    /// （降ろした後も World に残るので、持たせると seriko の join が戻らない＝持ち主は
+    /// `GhostSession` だけ）。
+    pub(in crate::emo2_boot) swap_slot: Weak<Mutex<Option<SwapPayload>>>,
     /// このフレームの drain（表示の指令の適用）に費やした時間（毎フレーム `emo2_frame_system` が
     /// 書く）。差し替えの相が、置き換えの返信のそろったフレームの `swap_ms` へ足す
     /// （spec: areka-P0-shell-balloon-switch 要件 4.4）。
@@ -192,8 +196,9 @@ impl Emo2Wiring {
             attached: false,
             // 初回 [`run_dpi_phase`] で遅延生成する（`SystemState::new` は `&mut World` を要する）。
             dpi_state: None,
-            // 空の置き場から始める。起動の結線は表示の橋渡しと同じ置き場へ差し替える。
-            swap_slot: SwapSlot::default(),
+            // 置き場なし（引き上げは常に失敗）から始める。起動の結線は表示の橋渡しの置き場の
+            // 弱い参照へ差し替える。
+            swap_slot: Weak::new(),
             last_drain: Duration::ZERO,
         }
     }
