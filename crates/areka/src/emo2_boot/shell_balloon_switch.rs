@@ -65,17 +65,13 @@ pub(crate) struct SkinRequestRaw {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SkinSpec {
     Name(String),
-    #[allow(dead_code)] // メニューの「シェル」「バルーン」枠（10）が作る
     Folder(String),
 }
 
 /// 要求の出どころ（`OnShellChanging` を送るかを決める＝台本の `raise-event` とメニューのシェル）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SkinOrigin {
-    Script {
-        raise_event: bool,
-    },
-    #[allow(dead_code)] // メニューの「シェル」「バルーン」枠（10）が作る
+    Script { raise_event: bool },
     Menu,
 }
 
@@ -401,13 +397,7 @@ impl SwitchContext {
             root: ctx.root.clone(),
             ghost_dir: session.ghost_dir().to_path_buf(),
             kanade,
-            current_shell: session.runtime().and_then(|r| {
-                r.mount()
-                    .shell
-                    .dir
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-            }),
+            current_shell: session.current_shell_folder(),
             current_balloon: ctx.current.balloon.folder.clone(),
             balloon_dir: ctx.current.balloon.dir.clone(),
         })

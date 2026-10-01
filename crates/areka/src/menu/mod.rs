@@ -10,13 +10,16 @@
 //! 配下の module は役割ごとに分かれる: [`plan`]（構造の計算）・[`captions`]（項目名と
 //! 表示可否の照会）・[`trigger`]（引き金と表示の段取り）・[`win32`]（OS 表示）・
 //! [`ghost_frame`]（「ゴースト」枠の供給関数・areka-P0-ghost-shell-balloon-switch）・
+//! [`shell_frame`]・[`balloon_frame`]（「シェル」「バルーン」枠の供給関数・areka-P0-shell-balloon-switch）・
 //! [`install_frame`]（「インストール」枠の供給関数・areka-P0-ghost-install）・
 //! [`update_frame`]（「ネットワーク更新」枠の供給関数・areka-P0-network-update）。
 
+pub(crate) mod balloon_frame;
 pub(crate) mod captions;
 pub(crate) mod ghost_frame;
 pub(crate) mod install_frame;
 pub(crate) mod plan;
+pub(crate) mod shell_frame;
 pub(crate) mod trigger;
 pub(crate) mod update_frame;
 pub(crate) mod win32;
@@ -98,7 +101,8 @@ pub(crate) struct MenuItem {
 /// 項目の中身。動作を持つ葉か、子項目を登記順に並べたサブメニュー。
 pub(crate) enum ItemBody {
     Action(MenuAction),
-    /// 本番で作るのは「ゴースト」枠（[`ghost_frame`]・一覧をサブメニューで出す）。
+    /// 本番で作るのは「ゴースト」「シェル」「バルーン」枠（[`ghost_frame`]・[`shell_frame`]・
+    /// [`balloon_frame`]・一覧をサブメニューで出す）。
     Submenu(Vec<MenuItem>),
 }
 
@@ -276,7 +280,8 @@ pub(crate) fn attach_release_handlers(world: &mut World) {
 }
 
 /// 枠へ供給関数を登記する（World 越しの入口）。結線の前に呼ばれたら `warn!` で記録して
-/// 何もしない。呼び手は「ゴースト」枠の [`ghost_frame::register`]・「インストール」枠の
+/// 何もしない。呼び手は「ゴースト」枠の [`ghost_frame::register`]・「シェル」枠の
+/// [`shell_frame::register`]・「バルーン」枠の [`balloon_frame::register`]・「インストール」枠の
 /// [`install_frame::register`]・「ネットワーク更新」枠の [`update_frame::register`]（どれもゴーストを
 /// 起こすたび）。
 pub(crate) fn register(world: &mut World, frame: Frame, supplier: Supplier) {

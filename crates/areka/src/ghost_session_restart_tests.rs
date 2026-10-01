@@ -311,7 +311,8 @@ fn boots_twice_in_one_process_without_double_registration() {
     // ── 1 周目 ──
     let sample1 = acquire_emo2();
     let session1 = boot_round(&mut world, &sample1, kanade_stop_tx.clone());
-    // 1 周目のメニューへ余分な登記（組込の使わない枠へ・残れば登記の一覧に見える）。
+    // 1 周目のメニューへ余分な登記（7 枠すべてが本番で登記されるので一覧には現れない。残っていれば、
+    // 2 周目の「シェル」枠の登記が置き換えの記録 `menu_registration_replaced` を残す＝0 件で新品と判定する）。
     crate::menu::register(
         &mut world,
         Frame::Shell,
@@ -338,7 +339,12 @@ fn boots_twice_in_one_process_without_double_registration() {
 
     // ── 2 周目（新しい台本・新しい複製） ──
     let sample2 = acquire_emo2();
-    let session2 = boot_round(&mut world, &sample2, kanade_stop_tx.clone());
+    let (session2, round2_events) =
+        capture_logs(|| boot_round(&mut world, &sample2, kanade_stop_tx.clone()));
+    let round2_replaced = round2_events
+        .iter()
+        .filter(|e| e.field_str("event") == Some("menu_registration_replaced"))
+        .count();
     drop(kanade_stop_tx);
 
     // ── 判定（集めてから 1 回） ──
@@ -369,6 +375,7 @@ fn boots_twice_in_one_process_without_double_registration() {
             .as_deref()
             .is_some_and(|p| p.starts_with(sample2.folder())),
         frames,
+        round2_replaced,
         kanade_stop_live,
         user_break_live,
         exit_requested,
@@ -385,6 +392,7 @@ fn boots_twice_in_one_process_without_double_registration() {
             Some(vec![
                 Frame::Ghost,
                 Frame::Shell,
+                Frame::Balloon,
                 Frame::Update,
                 Frame::Install,
                 Frame::Readme,
@@ -394,18 +402,21 @@ fn boots_twice_in_one_process_without_double_registration() {
             true,
             Some(vec![
                 Frame::Ghost,
+                Frame::Shell,
+                Frame::Balloon,
                 Frame::Update,
                 Frame::Install,
                 Frame::Readme,
                 Frame::Close
             ]),
+            0,
             true,
             true,
             false,
         ),
         "2 周目が 1 周目と同じ姿で起きていない（1 周目の説明書が 1 周目の根の下・1 周目の登記の一覧・\
          系の数 [Input, Update, FrameFinalize]・説明書が \
-         2 周目の根の下・登記の一覧・停止通知の受け口が生きている・中断の旗が生きている・終了の指示）: \
+         2 周目の根の下・登記の一覧・2 周目の登記の置き換えの記録が 0 件・停止通知の受け口が生きている・中断の旗が生きている・終了の指示）: \
          readme={readme:?} root1={:?} root2={:?} closed={closed_count}",
         sample1.folder(),
         sample2.folder(),

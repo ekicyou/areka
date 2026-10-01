@@ -456,6 +456,12 @@ impl GhostSession {
         self.ghost.as_ref().map(|r| r.sylphya_publisher())
     }
 
+    /// 今のシェルのフォルダ名（実行系のマウントの末尾）。実行系が無ければ `None`。
+    pub(crate) fn current_shell_folder(&self) -> Option<String> {
+        let dir = &self.ghost.as_ref()?.mount().shell.dir;
+        dir.file_name().map(|n| n.to_string_lossy().into_owned())
+    }
+
     /// 今のシェルのフォルダだけを書き換える（実行系へ委ねる・要件 6.5）。実行系が無ければ偽。
     pub(crate) fn set_shell_dir(&mut self, dir: PathBuf) -> bool {
         match self.ghost.as_mut() {
@@ -781,6 +787,9 @@ fn boot_wired(
         menu::wire_menu(world, runtime.kanade().clone());
         // 「ゴースト」枠の登記（要件 1.12）: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
         menu::ghost_frame::register(world);
+        // 「シェル」「バルーン」枠の登記（shell-balloon-switch 要件 1.5・11.9）: 同じ理由で起こすたびにやり直す。
+        menu::shell_frame::register(world);
+        menu::balloon_frame::register(world);
         // 「インストール」枠の登記（ghost-install 要件 1.8）: 同じ理由で起こすたびにやり直す。
         menu::install_frame::register(world);
         // 「ネットワーク更新」枠の登記（network-update 要件 1.2）: 同じ理由で起こすたびにやり直す。

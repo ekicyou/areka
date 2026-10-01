@@ -71,4 +71,4 @@ fn ghost_frame_item(world: &World, _ctx: &MenuContext) -> MenuItem {
 
 #[cfg(test)]
 #[path = "ghost_frame_tests.rs"]
-mod tests;
+pub(super) mod tests;
