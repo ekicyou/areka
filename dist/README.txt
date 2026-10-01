@@ -91,6 +91,42 @@ areka は、前回使ったゴーストなどを次の 3 か所に覚えます�
 ・更新の後にゴーストが引っ込んで戻ったとき、「更新成功」の台詞の終わりを待たずに、更新のまとめの知らせをゴーストへ送ります。両方に応えるゴーストでは、「更新成功」の台詞がまとめの台詞に置き換わることがあります。
 
 
+■ 同梱しているバルーンについて
+
+えも？？ に付いてくるバルーン emo2-kakukaku は えも？？ の同梱物で、下の「1 つ」には数えていません（条件は下の「■ 同梱物とライセンス」の中の ◆ バルーン「emo2-kakukaku」の欄にあります）。
+
+areka には、インストールした直後から使えるバルーン（ゴーストのせりふを表示する枠）が 1 つ入っています。
+
+・名前　Balloon for Staysee Syncfield
+・フォルダ名　StayseeBalloon
+・作者　ぽな（ばぐとら研究所/整備班）
+・ライセンス　CC0 1.0 Universal（パブリックドメイン提供）
+　https://creativecommons.org/publicdomain/zero/1.0/deed.ja
+・入手元　https://github.com/ponapalt/StayseeBalloon
+・配布サイト　http://ms.shillest.net/balloon/StayseeBalloon/
+・同梱した版　v1.00A（2020 年 6 月 27 日）
+・取り込んだ時点　コミット fe1b02f30d5e263cf30df800c32b2b525a52e3ad（2021 年 11 月 6 日）／取り込み日 2026 年 9 月 18 日
+
+配布条件は CC0（パブリックドメイン提供）です。CC0 は作者名を書くことを義務づけていませんが、敬意として上に記しました。原作の readme.txt と LICENSE はバルーンのフォルダの中にそのまま入れてあり、条件と連絡先はそちらでも読めます。ファイルの中身は 1 バイトも変えていません。
+
+◆ 既知の制限: 半透明を前提に作られたバルーンだけが正しく表示されます
+
+バルーンの絵は、ふちを透かしたりやわらかくぼかしたりするために、「半透明」の情報を絵そのものに持たせて作るのが普通です。areka はこの半透明の情報を必ずそのまま使います。
+
+バルーンには「半透明を使わない」という設定を書ける決まりがありますが、areka はその設定を読みません。何と書いてあっても、常に「半透明を使う」ものとして表示します。そのため次のようになります。
+
+・半透明を前提に作られたバルーンは、作者の意図したとおりに表示されます。同梱している Balloon for Staysee Syncfield もこちらです。
+・半透明を使わない前提で作られたバルーンは、areka では作者の意図したとおりには表示できません。ふちや影が思ったとおりに出ないことがあります。
+
+あわせて、絵とは別のファイル（絵と同じ名前の .pna ファイル）で透明の形を指定するやり方があります。areka はそのファイルが置いてあるかどうかは見ますが、中身は表示に使いません。透明の情報は絵そのものに入っているものだけを使います。絵に透明の情報が無く .pna だけを添えたバルーンは、表示をやめて理由を記録します。
+
+これは不具合ではなく、areka が意図して決めた扱いです。
+
+◆ 同梱しているバルーンについてのもう 1 つの注意
+
+このバルーンには、相方（2 人目のキャラクター）用の枠の絵が 2 種類だけ入っています。相方が 3 種類目・4 種類目の枠を使うときは、本体（1 人目）用の枠の絵をそのまま借りて表示します。これも不具合ではなく、絵が用意されていないときの決められた振る舞いです。
+
+
 ■ 同梱物とライセンス
 
 この配布物には、areka 本体のほかに、ほかの作者の作品が入っています。
@@ -99,7 +135,7 @@ areka 本体の MIT ライセンスは本体だけのもので、同梱の作品
 
 ◆ areka 本体（areka.exe・shiori-host32-helper.exe）
 　作者: ekicyou
-　条件: MIT ライセンス（LICENSE-MIT）。同梱のゴースト・シェル・吹き出しには及びません。
+　条件: MIT ライセンス（LICENSE-MIT）。同梱のゴースト・シェル・バルーンには及びません。
 　本体が使っているライブラリの著作権表示とライセンスは THIRD-PARTY-NOTICES.md にあります。
 
 ◆ ゴースト「えも？？」（ghost\emo2）の辞書・スクリプト
@@ -110,7 +146,7 @@ areka 本体の MIT ライセンスは本体だけのもので、同梱の作品
 ◆ SHIORI「pasta.dll」（ghost\emo2\ghost\master\pasta.dll・32 ビット）
 　作者: ekicyou
 　条件: MIT ライセンス
-　出どころ: pasta の LICENSE（https://github.com/ekicyou/pasta）
+　出どころ: pasta の LICENSE（https://github.com/ekicyou/pasta）、ghost\emo2\ghost\master\THIRD_PARTY_LICENSES.txt（pasta.dll に組み込まれている部品の著作権表示とライセンス）
 
 ◆ シェル \0 側「コンフィズリー」（ghost\emo2\shell\master）
 　作者: ゆゆぴか
@@ -126,14 +162,14 @@ areka 本体の MIT ライセンスは本体だけのもので、同梱の作品
 　　ただし、えも？？ のシェルは \0 側と \1 側が 1 つのシェルにまとまっているため、シェルごと抜き出して利用することはできません（\0 側の条件による）。
 　出どころ: ghost\emo2\shell\master\CityPop.txt、作者のサイト http://th88.blog.shinobi.jp/
 
-◆ 吹き出し「emo2-kakukaku」（balloon\emo2-kakukaku）
+◆ バルーン「emo2-kakukaku」（balloon\emo2-kakukaku）
 　作者: ekicyou
 　画像素材: フキダシデザイン（https://fukidesign.com/）
 　条件: 画像素材はフキダシデザインの利用規約に従います（著作権の表記は不要、アプリへの組み込みは 1 つにつき 20 素材まで無料、データの再配布は禁止）。
-　　areka と えも？？ の吹き出しとして使うことはできますが、画像を抜き出して利用することはできません。
+　　areka と えも？？ のバルーンとして使うことはできますが、画像を抜き出して利用することはできません。
 　出どころ: ghost\emo2\readme.txt（「利用バルーン」の節）、フキダシデザインの利用規約 https://fukidesign.com/terms
 
-◆ 吹き出し「Balloon for Staysee Syncfield」（balloon\StayseeBalloon）
+◆ バルーン「Balloon for Staysee Syncfield」（balloon\StayseeBalloon）
 　作者: ぽな
 　条件: CC0 1.0（パブリックドメイン）
 　出どころ: balloon\StayseeBalloon\LICENSE、balloon\StayseeBalloon\readme.txt、https://github.com/ponapalt/StayseeBalloon
