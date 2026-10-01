@@ -209,3 +209,74 @@
 
 - 上の決めごとのうち D2・D3 は要件の読みに関わるので、要件討議（`/kiro-requirements-discussion areka-P0-alpha-release-signoff`）で扱うのがよい。残りは設計で決められる。
 - 設計は `/kiro-design areka-P0-alpha-release-signoff`（または `/kiro-spec-design areka-P0-alpha-release-signoff`）。設計の前に、バグ `balloon-reappear-short-talk` が main に入っていれば本ブランチへ取り込み、§2 の file:line を引き直す。
+
+---
+
+## 10. 設計の段の調べもの（2026-10-01・`kiro-spec-design -y`）
+
+### 10.1 要約
+
+- **調べの種別**: 軽い調べ（既存の道具と文書の上に載せる「器」。新しい依存・新しいコードは無い）。HEAD `26699e55`（main `238db25d`＋本 spec の要件の段）で読み直した。設計の時点でバグ `balloon-reappear-short-talk` は main に**未着地**（`origin/main` の先頭は `238db25d` のまま・`.kiro/specs/areka-P0-balloon-reappear-short-talk/` は `brief.md` だけ）。よって §6 の書き分けは design.md に残した。
+- **主な発見**:
+  1. `Reference7` は前回きれいに終わらなかった次の起動で**必ず空でない**（10.2）。
+  2. 新しい `emo2` の「起動halt」は `OnBoot` でだけ流れ、初回の起動（`OnFirstBoot`）では流れない。項目 13 は `emo2` が起動記録を持つ根で観測しなければならない（10.3）。
+  3. `emo2.nar` の差し替えで赤になるテストは静的な読みでは 0 本。`-Check` の判定 7 と初回のバルーンの判定も成り立つ（10.4）。
+  4. 項目 12 の期待（2 回目は既定の配置）は今のコードの振る舞いと一致する（10.5）。
+
+### 10.2 `Reference7` が空でないことの確かめ（議題 4 から設計へ渡された確認）
+
+- **前回きれいに終わらなかった次の起動**（項目 13 の経路）: 印に書く値は `running_name`（`crates/areka/src/boot_resolve.rs:420-434`）＝目録のゴーストの `name`、無ければフォルダ名。`descript.txt` の空の値は鍵ごと落とす（`crates/areka-ghost/src/catalog.rs:332-337` の `lowercased`）ので、`name,` と空で書いたゴーストでもフォルダ名へ倒れる。読む側は空の値を捨てる（`crates/areka-sylphya/src/persist/format.rs:245` の `last_running: read_last("running").filter(|v| !v.is_empty())`）。よって `boot_config.rs:174-177` の `mark` が `Some` なら中身は空でなく、`main.rs:429-431` の `first_boot_origin` → `Halted { ghost_name }` → `crates/areka-kanade/src/schedule/events.rs:277-279` で Ref6＝`halt`・Ref7＝その名前になる。印を書けなかったとき（`boot_resolve.rs` の `write_session_mark` の `session_mark_write_degraded` の腕）は Ref7 が空になるのではなく、次の起動が「前回落ちた」と気付かない（Ref6/7 が付かない）。
+- **切替先が起きなかったとき**（項目の外・参考）: `ghost_switch.rs:182-189` の `SwitchTarget.name` は `identity.name` か、無ければフォルダ名 → `switch_to_default(world, &target.name)`（`:496`・`:700`）→ `:731-733` の `Halted { ghost_name: fallen_name }`。こちらも空にならない。
+- **結論**: どちらの経路でも Ref7 は空でない＝新しい `emo2` の `boot.lua` の条件（Reference6 が `halt` かつ Reference7 が空でない）が成り立つ。areka 側の変更は要らない。
+
+### 10.3 「起動halt」が流れる条件と項目 13 の置き場
+
+- `crates/areka-kanade/src/schedule/boot.rs:231-235` の `boot_root` は `config.first_boot` を最優先し、`Halted` でも `OnFirstBoot` を送る（`OnBoot` を送らない）。新しい `emo2` の台詞は `OnBoot` の分岐（`boot.lua`）にだけある。
+- よって項目 13 の観測は、`emo2` が既に起動記録を持つ根で行う。設計は根 A の走行 A1・A2 の後（A2 の終わりに強制終了・A3 の始めに観測）に置いた。展開したばかりの根で項目 13 だけを回すと、台詞が聞こえないのは正しい振る舞いで、欠陥と取り違える。
+
+### 10.4 `emo2.nar` の差し替えの中身（調べもの §7 の 2・D5）
+
+サブエージェントによる読み取りだけの調べ（リポジトリは変えていない）:
+
+- 新しい版 `C:\home\maz\git\ghost_dev\release\emo2\emo2.nar`: 4,586,381 バイト・md5 `3F5D8777DEEEB91FECC587C9071DED32`・111 項目（ghost_dev の HEAD `e2df8cb`・`release/emo2` に未コミットの変更なし）。今の版は 4,560,408 バイト・md5 `33D6E758C42B2A9833E54F9B4A994413`・110 項目。
+- 差: 足したもの 1（`ghost/master/THIRD_PARTY_LICENSES.txt`＝pasta.dll が使う部品の著作権表示とライセンス）・変わったもの 6（`ghost/master/dic/boot.pasta`・`ghost/master/scripts/pasta/shiori/event/boot.lua`・`ghost/master/pasta.dll`・`ghost/master/updates.txt`・最上位の `updates.txt`・`emo2-kakukaku/descript.txt`）・消えたもの 0。`emo2-kakukaku/descript.txt` の差は古い `homeurl` の 1 行が消えたことだけ。
+- `install.txt` は `balloon.directory,emo2-kakukaku` を保つ＝`-Check` の初回のバルーンの判定（`route=Companion`・`boot_resolve.rs:199-202` の段 3）が成り立つ。
+- 判定 7 が比べる `readme.txt` と `shell/master/readme.txt`、説明書が出どころに挙げる `shell/master/confiserie.txt`・`shell/master/CityPop.txt` は古い版とバイトが同じ。
+- `halt` の綴りは `boot.pasta`（`＊起動halt` の場面 3 つ・落ちたゴーストの名前を `＄ｒ７` で読む）と `boot.lua`（Reference6 が `halt` かつ Reference7 が空でないとき「起動halt」へ）にだけある。
+- テスト: `emo2.nar` の項目数・大きさ・指紋を書き込んだテストは 0 本（検体の写しの置き場の鍵は大きさと crc32 から実行時に作る）。中身を読むテスト（`kero_menu_capacity_test.rs`・`shipped_fixture_region_test.rs`・`catalog_tests.rs` の `sample_root_emo2_lists_one_ghost_one_balloon` など）が読むファイルは変わっていない。`halt` を扱うテストは偽の SHIORI を使う。本物の `pasta.dll` を動かすのは `crates/areka/tests/smoke_boot_loop_exit.rs` の方向 ①②（新品の木＝`OnFirstBoot`）と明示実行の `emo2_real_run.rs` だけで、新しい DLL の振る舞いの差はここでしか出ない。静的な読みで赤になる見込みのテストは 0 本。
+- 差し替えで直す文書: `vendors/sample_ghost/README.md:7`（110 → 111・4,560,408 → 4,586,381）。同 119 行目の「全エントリが deflate」は新しい版でも真なので変えない。
+
+### 10.5 項目 12 の期待の確かめ（調べもの §7 の 1）
+
+- 窓の位置を永続へ書くのは `crates/areka/src/placement/follow/drag_follow.rs:217-226`（「char DragEnd 保存」の後の `char_pos_entries`）だけ（`char_pos_entries` の呼び手は 1 か所）。台本の側から位置の鍵を書く道は拒まれる（`crates/areka-ghost/src/prop_sink.rs:231-250` の `window_pos_key_is_rejected_no_write`）。
+- 初回の位置合わせ（`\![move,-353,,,0,base,base]`）は `emo2` の `OnFirstBoot` にあり、2 回目の起動は `OnBoot`（`boot.rs:233-235`）なので繰り返されない。復元の記録 `merge_scope restore`（`crates/areka/src/placement/persist.rs:422-434`）の `saved_win_x`／`saved_win_y` が `None` なら既定の配置。
+- よって要件 2.1 の 12（初回のずらしは繰り返されず、相方は既定の配置）は今のコードの振る舞いで、要件 2.5 を満たす。
+
+### 10.6 決めたこと（D4・D5・D6・D8・D9・D10 と調べもの §7）
+
+| 番号 | 決めたこと | 理由 |
+|---|---|---|
+| D4 | 項目 13 を項目 8 より前に置き、同じ根 A の中で A2 の終わり（強制終了）と A3 の始め（観測）に回す（⒜）。別の新しい根（⒝）は取らない | 項目 8 は根の `emo2` を配布サイトの版で上書きする。⒝ の新しい根では `emo2` に起動記録が無く `OnFirstBoot` になり、台詞が流れない（10.3）。⒞（どの版を見たかを書く）は配布サイトの版が先に進むと 6.4 の「zip の版が話した」が言えなくなる |
+| D5 | ghost_dev `e2df8cb` の配布物で丸ごと差し替える（一部だけの差し替えはしない）。確かめは `install.txt` の `balloon.directory`・判定 7 の 2 本・`＊起動halt` の有無・`homeurl` の行の有無・全体テスト | 10.4 で全部成り立つことを確かめた。台詞と古い更新先が一度に片付き、要件 5.4 ⒜⒝ は書かずに済む |
+| D6 | 署名の根拠のコミット（zip の `commit=`）で `tools/test-all.ps1 -License` を 1 回回し、6.2（差し替えの確かめ）と 7.1 ⑴⑵ を兼ねる。説明書・検体・手順の文書を先に全部コミットしてから回し、同じコミットで zip を組む。完了の手順のアーカイブの後の 1 回は別物（M1 と同じく本判定の外）。一周の間（A1〜A4）は回さない | 差し替えを先に別に確かめる回を設けると 1 回増える。説明書の仕上げは本体のテストに効かないので、まとめて 1 回で足りる。アーカイブの後の 1 回は署名より後なので署名の根拠にできない |
+| D8 | 一周の根は `<ワークツリー>\target\alpha-lap\<E|A>`（フルパスは 160 文字以内・次善 `C:\tmp\alpha-lap\`）。生の記録・zip の写しと sha256・全体テストの記録は `C:\home\maz\lap-records\alpha-signoff-<準備日>\`（M1 の前例・ワークツリーの片付けで消えない） | 開発者方針「実機の根は第一にワークツリーの `target\`・`C:\` の直下に作らない」。完成判定の文書が指す生の記録は、宣言の後も残る置き場に要る |
+| D9 | 付随の確認 `\![open,readme]` は `R_POST_and_KOMAINU`（里々）の写しで行う。根 A の `ghost\R_POST_and_KOMAINU\ghost\master\dic02_Event.txt` の `＊OnShellChanged` に 1 行足し、項目 6 のシェルの切替で開くのを見る | 里々の辞書は平文で、さくらスクリプトをそのまま書ける（同じファイルが `\_q` を書いている）。`＊OnShellChanged` は areka が送る（`crates/areka/src/emo2_boot/frame/switch.rs:464`）ので、一周の中で確実に踏まれる。`R_POST_and_KOMAINU` は最上位に `readme.txt` を持つ。`emo2`（pasta）の辞書は書き方の前提が多い |
+| D10 | 利用条件の画面は一周で見ない。説明書の記述は `crates/areka/src/install/terms.rs:10` の `TERMS_FILES` と完了 `ghost-install` の `signoff.md`（手で作った `konnoyayame-terms.nar` で画面と「はい」を実機で確かめた回）で裏付け、受入記録に「一周では踏まれない（利用条件のファイルを持つ検体 0 体）」と書く | 要件 2.1 の 4 は「出たときは」の条件つき。実機の確認は先行 spec に既にある |
+| §7-3 | §6.2 の記法の移し方: 行頭の `>` を落とす・表は見出しと区切りの行を落として「・名前　内容」の 1 行ずつ・`<br>` は改行と字下げ・`**` と `` ` `` を落とす・行頭の `- ` を「・」・`###` は欄の見出し「■」・`####` は「◆」。語・句読点・数字・URL は変えない。地の文の 1 文は見出しの直後、本文の最初の段落の直前。確かめは記号と空白を除いた文字の列の一致（較正つき）と、§6.3 の判定 ⑵ の語の探し方 | 説明書は平文で、記号を落とすことは言い回しの書き換えに当たらない（要件 4.6 の括弧書き）。比べ方は機械で数え直せる |
+| §7-4 | 項目 8 の差分は、配布サイトの更新の一覧に載る読むだけのテキストのファイル 1 つに 1 行足して作る。変える前・変えた後・更新の後の md5 を書く | 差し替えの後は zip の `emo2` と配布サイトの差が 0 になる見込み（10.4 の `updates.txt` の照合）。更新の後に変える前の md5 へ戻ることが、更新が働いた証になる |
+| §7-5 | D8 と同じ。zip の sha256 も受入記録の同定に 1 行書く | 生の記録の置き場へ写した zip が署名の zip と同じであることを後から確かめられる |
+
+### 10.7 組み立ての見直し（一般化・採るか作るか・削る）
+
+- **一般化**: 6 回の走行（E1・E2・A1〜A4）は「根・環境変数・起動・終わり・記録」が同じなので、受入記録に「走行の型」を 1 回だけ書き、走行ごとには根と走行名と中身だけを書く。zip の中身を一周の後に変えたときの扱いも、中身の種類ごとの 1 つの表（採り直しの規則）にまとめた。
+- **採るか作るか**: zip・判定・全体テスト・検体の展開・2 つ目のシェルの作り方・器の形は、すべて既存のもの（`package-alpha.ps1`・`test-all.ps1`・`nar-sample-path`・完了 spec の記録）を採る。起動の補助スクリプトや判定器は作らない（M1 も手順書と手の操作で回した。走行は 6 回で、貼って使える起動の書き方で足りる）。
+- **削る**: M1 が別に持った `lap-procedure.md` は置かず、手順を受入記録の前半に置く（ファイル 1 本で同定・手順・結果が読める）。`package-alpha.ps1` の `commit=` の桁は変えない（要件 1.2 で決着）。
+
+### 10.8 危険と手当て
+
+- 新しい `pasta.dll` が本物の DLL を動かすテスト（`smoke_boot_loop_exit.rs`）で振る舞いを変える — 署名の根拠のコミットの全体テストで見る。赤なら 6.5 の枝を含めて開発者が決める。
+- 配布サイトの版が zip の版より先に進む — 項目 8 は差分の件数を書くだけで合否は変わらない。項目 13 は項目 8 より前に置いたので影響を受けない。
+- 一周の間に cargo を回して保存された位置や検体の展開を消す — 走行 A1〜A4 の間は回さないと受入記録に書く。konnoyayame の展開は準備で済ませる。
+- 安全弁の自動終了はきれいな終わりに数えられる — A2 で発火すると印が消え項目 13 の前半が成り立たない。30 分に取り、発火したら A2 をやり直す。
+- 強制終了で `shiori-host32-helper.exe` が残る — 止める前に子の PID を書き留め、残ったものだけを PID で止めて登記する。
+- 要件 4.6 の地の文の 1 文は「`emo2-kakukaku` は『同梱物とライセンス』の えも？？ の欄に含まれる」と書くが、今の説明書は `emo2-kakukaku` に独立の ◆ の欄を持つ。設計は「えも？？ の同梱物の欄」と読み、説明書の欄の組み立ては変えない（言い回しは説明書の仕上げで決める）。設計の討議で覆せる。
