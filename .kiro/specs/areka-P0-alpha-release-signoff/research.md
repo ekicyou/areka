@@ -203,6 +203,7 @@
 - **要件で決めた**: D1＝⒝（スクリプトは変えず、受入記録で完全な識別子を添える・要件 1.2）／D3＝⒜（写した本文の直前に地の文の 1 文を添える・要件 4.6。Markdown の記法をプレーンテキストへ移す線引きは設計で決める）／D7＝バグの取り込みの後に組む（開発者の段取り・要件 1.1）。
 - **開発者と話す**: D2（項目 12 の期待の向き）。補足の実測: 窓の位置を保存するのは掴んで離したとき（`crates/areka/src/placement/follow/drag_follow.rs` の `on_char_drag_end` の「char DragEnd 保存」）だけで、`\![move]` の結果は保存されない。`emo2` の `\![move,-353,,,0,base,base]` は `OnFirstBoot`（`ghost/master/dic/boot.pasta`）とメニューの位置調整（`menu.pasta`）にだけある。よって今のコードでは、2 回目の起動で相方は（掴んで動かしていなければ）既定の配置で立つ＝M1 の設計の「許容」の向きで、要件 2.1 の 12 の字面とは逆。
 - **設計で決める**: D4・D5・D6・D8・D9・D10 と §7 の調べもの。
+- **議題 4 の答えから設計へ渡す確認**: 新しい `emo2` の台詞「起動halt」は `OnBoot` の `Reference6=="halt"` かつ `Reference7` が空でないときだけ流れる（ghost_dev `scripts/pasta/shiori/event/boot.lua`）。areka が前回きれいに終わらなかった次の起動で `Reference7` に落ちたゴーストの名前を必ず入れて送るかを、設計でソース（`crates/areka-kanade/src/schedule/events.rs`・`crates/areka/src/main.rs` の該当の分岐）と突き合わせる。差し替えると zip の `emo2` は配布サイトと同じ版になるので、項目 8 の差分は手で作る（要件 2.1 の 8 の括弧書き）。
 
 ## 9. 次の段
 
