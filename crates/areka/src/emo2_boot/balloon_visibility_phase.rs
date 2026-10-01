@@ -41,8 +41,9 @@ use crate::placement::spawn::BalloonWindowMarker;
 use super::super::frame::{Emo2Wiring, resolve_talk_time};
 use super::super::target_map::balloon_target;
 use super::{
-    BalloonVisibilityState, ScopeObservation, TalkLifecycleSignal, VisibilityAction,
-    VisibilityLogEvent, VisibilityObservations, VisibilityTrigger, configured_timeout_secs, decide,
+    BalloonVisibilityState, GlyphObservation, ScopeObservation, TalkLifecycleSignal,
+    VisibilityAction, VisibilityLogEvent, VisibilityObservations, VisibilityTrigger,
+    configured_timeout_secs, decide,
 };
 
 /// バルーン可視性の相（`emo2_frame_system` の相順から毎フレーム呼ばれる配線）。
@@ -272,10 +273,15 @@ fn collect_observations(
                 // フレームでしか作らない。だがグリフ数と現在時刻がここで同時に立つ以上、
                 // 現在時刻が無いフレームでは表示のエッジ自体が立たない——記録の取りこぼしは
                 // 構造的に起こらない。
-                visible_glyphs: runtime
-                    .as_ref()
-                    .zip(now_talk_time)
-                    .map(|(rt, t)| rt.state().visible_glyphs(&actor, t)),
+                //
+                // 消去の回数は数と同じ借用・同じ条件でだけ組にして運ぶ（片方だけが進む記憶を作らない）。
+                visible_glyphs: runtime.as_ref().zip(now_talk_time).map(|(rt, t)| {
+                    let text = rt.state();
+                    GlyphObservation {
+                        count: text.visible_glyphs(&actor, t),
+                        clear_count: text.clear_count(&actor),
+                    }
+                }),
                 visible,
                 hover: hover_wiring.map(|w| w.is_balloon_hovered(scope as usize)),
                 choice_active: runtime.as_ref().map(|rt| rt.choice_active(&actor)),

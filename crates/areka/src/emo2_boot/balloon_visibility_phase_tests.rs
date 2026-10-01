@@ -213,6 +213,7 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
             scope,
             ScopeVisibility {
                 last_glyphs: 0,
+                last_clear_count: 0,
                 prev_visible: true,
             },
         );
@@ -335,6 +336,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
         0,
         ScopeVisibility {
             last_glyphs: 2,
+            last_clear_count: 0,
             prev_visible: true,
         },
     );
@@ -464,7 +466,7 @@ fn runtime_borrow_failure_yields_no_glyph_and_no_choice_observation() {
         )
     });
     assert_eq!(
-        recovered.scopes[&0].visible_glyphs,
+        recovered.scopes[&0].visible_glyphs.map(|g| g.count),
         Some(2),
         "注入時刻 1.0 では 2 文字ともリビール済み"
     );

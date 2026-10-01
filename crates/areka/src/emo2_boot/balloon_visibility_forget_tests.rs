@@ -40,6 +40,7 @@ fn forget_scope_drops_visibility_and_measurement_but_keeps_glyphs() {
 
     let kept = |last_glyphs, prev_visible| ScopeVisibility {
         last_glyphs,
+        last_clear_count: 0,
         prev_visible,
     };
     assert_eq!(
