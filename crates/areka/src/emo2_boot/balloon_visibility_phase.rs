@@ -591,3 +591,9 @@ mod wake_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_phase_zorder_chain_tests.rs"]
 mod zorder_chain_tests;
+
+// 隠れたバルーンが次の台詞の最初の文字とともに現れること（areka-P0-balloon-reappear-short-talk）。
+// 本物の文字の層と本物の観測の収集を通し、場面ごとの各フレームの行動と記録を見る決定論テスト。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_reappear_tests.rs"]
+mod reappear_tests;
