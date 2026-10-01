@@ -36,6 +36,7 @@ use super::worker::{DeskAsk, spawn_worker};
 use super::{InstallOrder, InstallOrigin, RawInstallRequest, submit};
 use crate::boot_config::BootContext;
 use crate::emo2_boot::ghost_switch::{SwitchInFlight, record_last_installed};
+use crate::emo2_boot::shell_balloon_resolve::{record_installed_balloon, record_installed_shell};
 use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
 
@@ -331,7 +332,8 @@ fn answer(world: &mut World, ask: DeskAsk) {
 
 /// 入れた後の記録（要件 6.1・6.6・6.7・6.8・設計で決めたこと 14）: `ghost` は受け皿へ、`balloon`
 /// だけなら今のゴーストの「最後に使ったバルーン」の記憶へフォルダ名を書き、シェル・追加ファイルは
-/// 置換語だけ（表示は替えない）。フォルダ名と名前は入れた後の目録の綴り（`areka-nar` の綴りと
+/// 置換語だけ（表示は替えない）。シェルとバルーンは `lastinstalled` の控えも置く（shell-balloon-switch
+/// 要件 1.10・1.11）。フォルダ名と名前は入れた後の目録の綴り（`areka-nar` の綴りと
 /// 大文字小文字を無視して突き合わせる・目録に無ければ `areka-nar` の綴りと `install.txt` の `name`）。
 /// 最後に今のゴーストの記憶の書き手の反映を待つ（背景のスレッドへ答えるのはその後）。
 fn record_installed(world: &mut World, record: InstalledRecord) {
@@ -368,9 +370,11 @@ fn record_installed(world: &mut World, record: InstalledRecord) {
                 .iter()
                 .find(|entry| entry.identity.folder.eq_ignore_ascii_case(&record.folder))
                 .map_or_else(|| record.folder.clone(), |e| e.identity.folder.clone());
+            record_installed_balloon(world, folder.clone());
             remember_balloon(world, folder);
         }
-        InstallKind::Shell | InstallKind::Supplement => {}
+        InstallKind::Shell => record_installed_shell(world, record.ghost_folder, record.folder),
+        InstallKind::Supplement => {}
     }
     names::update(world, record.object_name, ghost_name);
     if let Some(runtime) = names::current_runtime(world)

@@ -444,3 +444,18 @@ fn a_double_start_led_by_a_shell_reports_shell() {
     assert_eq!(references[3], "shell");
     assert!(!with_reply);
 }
+
+/// 更新の実行中か: 段が `Idle` でない間と、読み直しの切替の後送りを持つ間だけ真（窓口が無ければ偽・
+/// shell-balloon-switch 要件 1.13）。
+#[test]
+fn is_busy_while_running_or_holding_the_after_switch() {
+    assert!(!is_busy(&World::new()), "窓口が無ければ偽");
+    let mut rig = Rig::new("areka-update-desk-busy");
+    assert!(!is_busy(&rig.world));
+    assert_eq!(rig.submit(UpdateReason::Script), SubmitVerdict::Started);
+    assert!(is_busy(&rig.world));
+    rig.world.non_send_mut::<UpdateDesk>().stage = Stage::Idle;
+    assert!(!is_busy(&rig.world));
+    rig.world.non_send_mut::<UpdateDesk>().after_switch = Some((PathBuf::from("emo"), Vec::new()));
+    assert!(is_busy(&rig.world));
+}

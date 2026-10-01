@@ -20,6 +20,7 @@ use crate::emo2_boot::ghost_switch::LastInstalledGhost;
 use crate::emo2_boot::ghost_switch_test_support::{
     BALLOON, FakeShiori, SwitchRig, standard_script,
 };
+use crate::emo2_boot::shell_balloon_resolve::{LastInstalledBalloon, LastInstalledShell};
 use crate::install::names::LastInstallNames;
 use crate::install::procedure::InstalledRecord;
 
@@ -170,6 +171,11 @@ fn a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory() {
     assert_eq!(remembered[0].level, Level::INFO);
     assert_eq!(remembered[0].field("folder"), Some("Fluffy"));
     assert_eq!(last_installed(&rig), None, "受け皿は書かない");
+    assert_eq!(
+        rig.world.get_resource::<LastInstalledBalloon>(),
+        Some(&LastInstalledBalloon("Fluffy".to_owned())),
+        "バルーンの lastinstalled の控えは目録の綴り（shell-balloon-switch 要件 1.11）"
+    );
     assert!(rig.world.get_non_send::<SwitchInFlight>().is_none());
     assert_eq!(
         names(&rig),
@@ -181,8 +187,9 @@ fn a_balloon_only_install_rewrites_the_running_ghosts_balloon_memory() {
     assert!(rig.shutdown());
 }
 
-/// シェルを入れた: 記録（置換語）だけで、受け皿もバルーンの記憶も替えず、切り替えもしない。
-/// `%lastghostname` は宛先のゴーストの目録の `name`（要件 6.7・6.8）。
+/// シェルを入れた: 記録（置換語）とシェルの `lastinstalled` の控えだけで、受け皿もバルーンの記憶も
+/// 替えず、切り替えもしない。`%lastghostname` は宛先のゴーストの目録の `name`（要件 6.7・6.8・
+/// shell-balloon-switch 要件 1.10）。
 #[test]
 fn a_shell_install_only_records_names() {
     let mut rig = rig();
@@ -197,6 +204,13 @@ fn a_shell_install_only_records_names() {
     );
     assert!(answered);
     assert_eq!(last_installed(&rig), None);
+    assert_eq!(
+        rig.world.get_resource::<LastInstalledShell>(),
+        Some(&LastInstalledShell {
+            ghost_folder: Some("a".to_owned()),
+            folder: "summer".to_owned(),
+        })
+    );
     assert_eq!(
         read_last_balloon(&rig.root.ghost_dir("A")).as_deref(),
         Some(BALLOON)

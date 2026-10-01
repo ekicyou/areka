@@ -29,6 +29,8 @@ pub mod hover_inject;
 mod install_cue;
 pub mod move_cue;
 mod readme_cue;
+/// シェル・バルーンの切替先の名前の解決とインストールの控え（areka-P0-shell-balloon-switch）。
+pub(crate) mod shell_balloon_resolve;
 /// シェル・バルーンの切替の入口（areka-P0-shell-balloon-switch）。
 pub(crate) mod shell_balloon_switch;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。

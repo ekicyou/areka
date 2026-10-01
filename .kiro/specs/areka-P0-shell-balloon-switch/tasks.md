@@ -145,7 +145,7 @@
   - _Requirements: 1.2, 1.3, 1.4, 1.15, 10.3_
   - _Depends: 7.2_
 
-- [ ] 8.2 切替先の名前の解決と、インストールの控えを作る
+- [x] 8.2 切替先の名前の解決と、インストールの控えを作る
   - 要求の型（種別・名前かフォルダ・出どころ）と判定の型を作る。解決は `random` と `lastinstalled` を先に解き、次に `name` → フォルダ名の順に大文字小文字を区別して突き合わせる（シェルの候補は隠しを含む列挙・バルーンは根の目録・今のものも候補）
   - `random` は隠しと今のものを除いて乱数の共用の関数で 1 つ選び、候補 0 なら今のもの（`info!`）。シェルの `lastinstalled` は控えのゴーストが今のゴーストと一致し先が在るときだけ、バルーンは控えが目録に在るときだけ。それ以外は理由つきの該当なし
   - インストールの完了のシェルの腕とバルーンの腕に控えを書く 1 行ずつと、更新の窓口に「更新の実行中か」を答える問いを 1 つ足す
@@ -260,3 +260,4 @@
 - 7.2: `BootShellChoice` を取り出すのは design の「`boot_wired`」でなく 2 つの入口（`boot_ghost`・`boot_ghost_strict`）で、結線ありの腕と LogSink の倒れ先（`boot_with_origin(.., Plain, shell)`）へ同じ値を渡す（12 で design へ反映）。`BootShellChoice` の doc と `prepare_ghost_windows` のコメントに「`boot_wired` が取り出す」の古い語が残る → 7.3 で直す。`placement::prepare_ghost_windows`・`emo2_boot::assets::build_boot_assets` は本番の呼び手を失い、関数単位の `#[allow(dead_code)]` を意図して残す（example とテストが呼ぶ）。6.2・7.1 の `#[allow(dead_code)]`（`prepare_ghost_windows_for_shell`・`decide_boot_shell`）は外した。
 - 7.3: `GhostSession::seriko_sink()` にメソッド単位の `#[allow(dead_code)]` → 8.3 で外す。統合テストのファイル `shell_balloon_switch_session_tests.rs` を作った（ghost_session から `#[path]`・9.x／11 もここへ足す）。7.2 の古い語（`boot_wired` が取り出す）は直した。
 - 8.1: `shell_balloon_switch.rs` の先頭に `#![allow(dead_code)]` → 8.3 で外す。`wire_emo2_boot` は受信端をその場で `drop(switch_rx)`（8.3 で World へ据える）。開けない `change` の荷物は `SwitchCueSink` では `debug!`（`ChangeCueSink` が `warn!` 1 件を残すため）。`t_zwi05` の受け口の列の字面を追随。
+- 8.2: `resolve_skin_target` は `current: Option<&str>`・`installed: Result<&str, NotFoundReason>`（design は `&str`／`Option<&str>`）。該当なしの理由に `NoMatch`・`RandomEmpty` を足した 5 つ。控えの資源・書き手・`installed_for`・候補の列挙は `shell_balloon_resolve.rs` に置いた（design は `shell_balloon_switch.rs`）。控えは候補のフォルダ名と大文字小文字を区別せず突き合わせる（シェルの記録は書庫の綴りのまま）。`shell_balloon_resolve.rs` の先頭と `update::desk::is_busy` の `#[allow(dead_code)]` → 8.3 で外す。本番の乱数は `boot_resolve::pick_index` を 8.3 が渡す。記録の語 `skin_switch_random_pick`・`last_installed_shell_recorded`・`last_installed_balloon_recorded`（info）（12 で design へ反映）。
