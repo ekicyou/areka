@@ -15,7 +15,7 @@ use areka_kanade::{
     WaitBudget, spawn_kanade_with_stop_sink, spawn_shiori_actor,
 };
 use areka_parsers::charset::DefaultEncoding;
-use areka_parsers::package::{MountError, MountModel, resolve};
+use areka_parsers::package::{MountError, MountModel, resolve_with_shell};
 use areka_sakura::contract::SystemVarSnapshot;
 use areka_sylphya::{
     AskerContext, AskerId, DottedResolution, PersistKey, SylphyaPublisher, SylphyaReader,
@@ -245,6 +245,21 @@ impl GhostRuntime {
     /// SHIORI の待ちの見張り部品（テストが手動の口 `cut_now` で見張りを起こすための読み口）。
     pub fn shiori_probe(&self) -> &ShioriProbe {
         &self.shiori_probe
+    }
+
+    /// 今のシェルのフォルダ（`mount().shell.dir`）だけを書き換える（要件 6.5）。
+    ///
+    /// シェルの差し替えの後に呼び、`mount().shell.dir` の読み手を差し替え後のシェルへ向ける。
+    /// bindgroup の転記と sylphya の Shell スコープの根は起動時のシェルのまま（bindgroup は
+    /// 差し替えの資産づくりが新しいシェルから読み直す・Shell スコープへ書く本番の呼び手は無い）。
+    pub fn set_shell_dir(&mut self, dir: PathBuf) {
+        tracing::info!(
+            target: "ghost-runtime",
+            from = %self.mount.shell.dir.display(),
+            to = %dir.display(),
+            "current shell dir replaced"
+        );
+        self.mount.shell.dir = dir;
     }
 
     /// 期限つきの終了統括。見張りを `budget` で張ってから [`GhostRuntime::shutdown`] をそのまま
@@ -527,7 +542,7 @@ pub fn boot_with_kanade_stop(
     options: GhostBootOptions,
     kanade_stop: Option<Sender<KanadeNotice>>,
 ) -> Result<GhostRuntime, GhostBootError> {
-    boot_with_origin(options, kanade_stop, BootOrigin::Plain)
+    boot_with_origin(options, kanade_stop, BootOrigin::Plain, None)
 }
 
 /// 起動の由来つきで ghost を起動する（要件 4.1・8.6）。
@@ -537,18 +552,24 @@ pub fn boot_with_kanade_stop(
 /// シェルのフォルダ名（マウントしたシェルのフォルダの末尾・取れなければシェル名のまま）を
 /// 詰めてから kanade を起こす。切替で来たなら `OnGhostChanged`（Ref7＝シェルのフォルダ名）、
 /// 前回落ちたなら `OnBoot` の Ref6/Ref7 に現れる。
+///
+/// `shell` は起動するシェルのフォルダ名（要件 6.4）。`Some(名)` なら `shell/<名>/` をマウントし、
+/// `OnBoot` の Ref0 もそのシェルの名前になる。`None` は今日の規則
+/// （`seriko.defaultsurfacedirectoryname`、無ければ `master`）。[`GhostBootOptions`] に欄は足さない。
 pub fn boot_with_origin(
     mut options: GhostBootOptions,
     kanade_stop: Option<Sender<KanadeNotice>>,
     origin: BootOrigin,
+    shell: Option<&str>,
 ) -> Result<GhostRuntime, GhostBootError> {
-    // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。
-    let mount = match resolve(&options.ghost_root, options.default_encoding) {
+    // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。シェル名つき（要件 6.4）。
+    let mount = match resolve_with_shell(&options.ghost_root, options.default_encoding, shell) {
         Ok(mount) => mount,
         Err(err) => {
             tracing::error!(
                 target: "ghost-boot",
                 ghost_root = %options.ghost_root.display(),
+                shell = ?shell,
                 error = ?err,
                 "mount resolution failed; boot aborted before spawning any component"
             );
@@ -737,3 +758,7 @@ mod origin_tests;
 #[cfg(test)]
 #[path = "runtime_within_tests.rs"]
 mod within_tests;
+
+#[cfg(test)]
+#[path = "runtime_shell_tests.rs"]
+mod shell_tests;

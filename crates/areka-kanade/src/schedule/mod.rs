@@ -39,6 +39,7 @@ pub(crate) mod log_capture;
 /// submit ガードはイベント許可 ∨ リソース許可で判定する（`crate::actor` の egress チョークポイント）。
 pub mod resources;
 pub(crate) mod steady;
+pub(crate) mod talk_gap;
 pub(crate) mod user_break;
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。
@@ -102,6 +103,11 @@ pub(crate) enum Input {
         id: String,
         references: Vec<String>,
         method: crate::change::ShioriMethod,
+    },
+    /// 台詞の切れ目の口（UI → kanade）。始め方は [`talk_gap::begin`] が持ち、結果は毎 `step` の
+    /// 後の [`talk_gap::observe`] が決める。
+    AwaitTalkGap {
+        raise: Option<crate::change::GapRaise>,
     },
 }
 
@@ -223,6 +229,8 @@ pub(crate) struct State {
     pub change: Option<change::ChangeState>,
     /// 台詞の再生中に受けた切替の要求の保留（`pending_close` と同型）。
     pub pending_change: Option<crate::change::ChangeRequest>,
+    /// 台詞の切れ目の見張り（高々 1 つ・[`talk_gap`]）。
+    pub talk_gap: Option<talk_gap::GapWatch>,
 }
 
 impl State {
@@ -241,6 +249,7 @@ impl State {
             user_break_talk: None,
             change: None,
             pending_change: None,
+            talk_gap: None,
         }
     }
 
@@ -381,7 +390,19 @@ pub(crate) enum Action {
 /// 本タスク 2.1 は**横断遷移**（由来・状態を問わず終了系列へ進む共通ロジック）と
 /// 防御アームを実装し、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
 /// 「横断遷移を先に判定 → 該当しなければフェーズ分岐」である。
+///
+/// どの入力でも、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
+/// （見張りが無ければ何もしない）。
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
+    // 印のイベントの応答なら、遷移の前のトークを控える（応答で台詞が始まったかを後で突き合わせる）。
+    let marked_reply = talk_gap::marked_reply(&state, &input);
+    let (mut state, actions) = route(state, input, config);
+    talk_gap::observe(&mut state, marked_reply);
+    (state, actions)
+}
+
+/// [`step`] の入力の振り分け（横断遷移 → フェーズ固有遷移への委譲）。
+fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
         // --- 横断遷移: 由来・状態を問わず終了系列へ進む共通ロジック ---
 
@@ -483,6 +504,9 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
             references,
             method,
         } => change::on_raise_event(state, id, references, method),
+
+        // AwaitTalkGap: 始め方ごと talk_gap::begin へ渡す（結果は遷移の後の見極めが決める）。
+        Input::AwaitTalkGap { raise } => talk_gap::begin(state, raise),
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
@@ -603,11 +627,16 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             // 現 talk の完了に到達した時点で 1 世代 stale 帳簿の役目は終わる（C4 規則 9）。
             // 保持を延長すると「1 世代のみ」の契約が壊れ、真に未知の id まで info へ降格し得る。
             state.choice_prev_talk = None;
+            // 印の台詞（`OnShellChanging`）の利用者の中断かは、中断の帳簿を空にする前に見る。
+            let marked_break = talk_gap::is_marked_break(&state, &done);
+            talk_gap::note_marked_done(&mut state, &done, marked_break);
             // 現行トークの完了なので中断の帳簿はここで必ず空になる（終わり方を問わない・不変条件）。
             // 空にした結果が「利用者の中断で終わり、かつ終了の予約があった」かを持ち帰る（Req 3.8）。
-            // 切替の相では予約を終了へ結ばない（中断は切替の中止＝切替の要件 5.4）。
+            // 切替の相では予約を終了へ結ばない（中断は切替の中止＝切替の要件 5.4）。印の台詞の
+            // 中断も終了へ結ばない（シェル切替の中止＝areka-P0-shell-balloon-switch 要件 5.2）。
             let break_quit = user_break::take_user_break_quit(&mut state, &done)
-                && !change::is_change_phase(&state.phase);
+                && !change::is_change_phase(&state.phase)
+                && !marked_break;
             match done.reason {
                 TalkEndReason::Quit => {
                     // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。

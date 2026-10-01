@@ -197,8 +197,10 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
 /// （21→23・いずれも正典固定 ID）。
 /// ネットワーク更新の 19 語は network-update 2.15 で同じ前例に倣い足した（23→42・いずれも
 /// 正典固定 ID・`OnUpdateCheck*`／`OnUpdateResultExplorer`／`OnUpdatedata*` は載せない）。
+/// シェル・バルーン切替の 3 語（OnShellChanging/OnShellChanged/OnBalloonChange）は
+/// shell-balloon-switch 1.1 で同じ前例に倣い足した（42→45・いずれも正典固定 ID）。
 #[test]
-fn allowed_event_ids_are_exactly_the_forty_two_and_exclude_ontalk_onhour() {
+fn allowed_event_ids_are_exactly_the_forty_five_and_exclude_ontalk_onhour() {
     assert_eq!(
         ALLOWED_EVENT_IDS,
         &[
@@ -244,6 +246,9 @@ fn allowed_event_ids_are_exactly_the_forty_two_and_exclude_ontalk_onhour() {
             "OnUpdateOtherFailure",
             "OnUpdateResult",
             "OnUpdateResultEx",
+            "OnShellChanging",
+            "OnShellChanged",
+            "OnBalloonChange",
         ]
     );
     assert!(

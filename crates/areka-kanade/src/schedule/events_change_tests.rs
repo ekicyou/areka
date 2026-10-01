@@ -32,8 +32,9 @@ fn s(v: &[&str]) -> Vec<String> {
 fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
     // 13 語に、インストール系の 8 語を足して 21 語（areka-P0-ghost-install 要件 2.12・11.9）、
     // 投げ込みの 2 語を足して 23 語（areka-P0-file-drop 要件 7.3・8.8）、
-    // ネットワーク更新の 19 語を足して 42 語（areka-P0-network-update 要件 2.15・9.13）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 42);
+    // ネットワーク更新の 19 語を足して 42 語（areka-P0-network-update 要件 2.15・9.13）、
+    // シェル・バルーン切替の 3 語を足して 45 語（areka-P0-shell-balloon-switch 要件 8.2）。
+    assert_eq!(ALLOWED_EVENT_IDS.len(), 45);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",
@@ -68,6 +69,9 @@ fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
         "OnUpdateOtherFailure",
         "OnUpdateResult",
         "OnUpdateResultEx",
+        "OnShellChanging",
+        "OnShellChanged",
+        "OnBalloonChange",
     ] {
         assert_eq!(allowed_static(id), Some(id));
         assert!(is_allowed_event_id(id));

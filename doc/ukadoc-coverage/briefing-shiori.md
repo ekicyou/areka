@@ -163,6 +163,8 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 
 > **2026-09-30 の追記——群 2 の件数はさらに動いた。** 仕様 `areka-P0-network-update` が、群 2 にあった更新の 19 件（`OnUpdateProcessExec`・`OnUpdateBegin`・`OnUpdateReady`・`OnUpdate.OnDownloadBegin`・`OnUpdate.OnMD5CompareBegin`・`OnUpdate.OnMD5CompareComplete`・`OnUpdate.OnMD5CompareFailure`・`OnUpdateComplete`・`OnUpdateFailure` と、その `OnUpdateOther*` の 8 件・`OnUpdateResult`・`OnUpdateResultEx`）を右クリックのメニューの「ネットワーク更新」と台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` からの更新の手続きで実際に送るようにし、台帳のこの 19 行を**実装済み**へ移して自分を担当として登記した（許可表 `ALLOWED_EVENT_IDS` は 42 語になった）。19 件の共通 note は群 1 の形に、送る場面・Reference・記録・名前の定義（`crates/areka/src/update/refs.rs` の定数）を足したものになっている。`OnUpdateCheckComplete`・`OnUpdateCheckFailure`・`OnUpdateCheckResult`・`OnUpdateCheckResultEx`（更新オプション `checkonly` の系）・`OnUpdateResultExplorer`（ゴーストエクスプローラが無い）・`OnUpdatedataCreating`・`OnUpdatedataCreated`（更新定義ファイルを作る側）の 7 件は送らないので群 2 に残り、台帳の note に送らない理由を書き添えた。上の「件数」は調査時点の写しで、数え直していない。
 
+> **2026-10-01 の追記——群 2 の件数はさらに動いた。** 仕様 `areka-P0-shell-balloon-switch` が、群 2 にあった `OnShellChanging`・`OnShellChanged`・`OnBalloonChange` の 3 件を右クリックのメニューの「シェル」「バルーン」枠と台本 `\![change,shell,…]`・`\![change,balloon,…]` からの切替で実際に送るようにし、台帳のこの 3 行を**実装済み**へ移して自分を担当として登記した（許可表 `ALLOWED_EVENT_IDS` は 45 語になった）。`OnShellChanging` はメニューのシェル切替と `--option=raise-event` 付きの台本だけで送り、その台詞を利用者が中断すると切替をやめる。上の「件数」は調査時点の写しで、数え直していない。
+
 ---
 
 ### 群 2a — M1 で意図的に発火させていないバルーンのイベント
@@ -796,6 +798,8 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
 
 > **2026-09-30 の追記——`B1`／更新の 26 件のうち 19 件ももう送っている。** 仕様 `areka-P0-network-update` が右クリックのメニューの「ネットワーク更新」と台本 `\![updatebymyself]`・`\![update,…]`・`\![updateother,…]` からの更新で送るようにし、台帳で**実装済み**になった。いまも送らないのは、更新オプション `checkonly` の系の `OnUpdateCheckComplete`・`OnUpdateCheckFailure`・`OnUpdateCheckResult`・`OnUpdateCheckResultEx`（areka は更新オプションを受けない）、`OnUpdateResultExplorer`（ゴーストエクスプローラが無い）、`OnUpdatedataCreating`・`OnUpdatedataCreated`（更新定義ファイルを作る側）の 7 件である。一覧そのものは調査時点の写しのまま残した。
 
+> **2026-10-01 の追記——`B4`／装い の 13 件のうち 3 件ももう送っている。** OnShellChanging・OnShellChanged・OnBalloonChange は、仕様 `areka-P0-shell-balloon-switch` が右クリックのメニューの「シェル」「バルーン」枠と台本 `\![change,shell,…]`・`\![change,balloon,…]` からの切替で送るようにし、台帳で**実装済み**になった。残る 10 件は送らない。一覧そのものは調査時点の写しのまま残した。
+
 ---
 
 ### 群 2a — バルーンの開閉を知らせない 3 件
@@ -1019,6 +1023,8 @@ vanishbutton.caption, vanishbuttoncaption, vanishbuttonvisible
 > **2026-09-29 の追記——この一覧の `ghostinstallbutton.caption` はもう語彙だけではない。** 仕様 `areka-P0-ghost-install` が右クリックのメニューの「インストール」枠へ項目を登記したので、メニューを出すたびにこの名前を引き、返った文言を「インストール…」の項目名に使う（引く仕組みは `areka-P0-popup-menu-minimal` が置いていた）。台帳のこの行は**実装済み**で、担当は `areka-P0-ghost-install`。上の索引の群 7 の「131 件」とこの一覧は調査時点の写しで、数え直していない。
 
 > **2026-09-30 の追記——この一覧の `updatebutton.caption` ももう語彙だけではない。** 仕様 `areka-P0-network-update` が右クリックのメニューの「ネットワーク更新」枠へ項目を登記したので、メニューを出すたびにこの名前を引き、返った文言を「ネットワーク更新」の項目名に使う（引く仕組みは `areka-P0-popup-menu-minimal` が置いていた）。台帳のこの行は**実装済み**で、担当は `areka-P0-network-update`。上と同じく、群 7 の「131 件」とこの一覧は数え直していない。
+
+> **2026-10-01 の追記——この一覧の `shellrootbutton.caption`・`balloonrootbutton.caption`・`ghostrootbutton.caption` ももう語彙だけではない。** 仕様 `areka-P0-shell-balloon-switch` が右クリックのメニューの「シェル」「バルーン」枠へ項目を登記したので、メニューを出すたびにこの 2 つの名前を引き、返った文言をそれぞれの項目名に使う（引く仕組みは `areka-P0-popup-menu-minimal` が置いていた）。台帳のこの 2 行は**実装済み**で、担当は `areka-P0-shell-balloon-switch`。「ゴースト」枠は 2026-09-27 に `areka-P0-ghost-shell-balloon-switch` が登記していたのに台帳が語彙のみのまま残っていたので、同じ日に `ghostrootbutton.caption` も**実装済み**へ移し、担当をその spec にした。上と同じく、群 7 の「131 件」とこの一覧は数え直していない。
 
 ---
 

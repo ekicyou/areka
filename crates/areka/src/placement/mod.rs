@@ -30,6 +30,9 @@ pub(crate) mod dpi_sync;
 pub mod follow;
 pub mod measure;
 pub mod persist;
+/// シェルの差し替えで、新しいシェルの見た目の値を走っている窓の部品へ入れ直す
+/// （areka-P0-shell-balloon-switch 要件 2.7）。
+pub(crate) mod reseed;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
@@ -73,6 +76,7 @@ pub(crate) use windowposition::scale_signed;
 #[cfg(test)]
 pub(crate) mod test_support;
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use areka_emo_compose::ScaleRatio;
@@ -388,7 +392,18 @@ fn prepare_stages(
     balloon_root: &Path,
     primary_dpi: Option<u32>,
 ) -> Result<PreparedStages, PlacementError> {
-    let src = source::load_descript_source(ghost_root)?;
+    prepare_stages_for_shell(ghost_root, balloon_root, primary_dpi, None)
+}
+
+/// [`prepare_stages`] のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
+/// `shell` は [`source::load_descript_source_for_shell`] へそのまま渡す（`None` は今日の規則）。
+fn prepare_stages_for_shell(
+    ghost_root: &Path,
+    balloon_root: &Path,
+    primary_dpi: Option<u32>,
+    shell: Option<&str>,
+) -> Result<PreparedStages, PlacementError> {
+    let src = source::load_descript_source_for_shell(ghost_root, shell)?;
     let mut cfg = config::build_placement_config(&src.ghost_kv, &src.shell_kv);
     let scope_ids: Vec<usize> = cfg.scopes.keys().copied().collect();
     // 作者基準 DPI（design D1・Flow 3 手順1）は**ここで 1 度だけ**読む。shell は既に
@@ -565,6 +580,41 @@ fn apply_scope_windowpositions(
     scope_ids: &[usize],
     k: ScaleRatio,
 ) {
+    // 読むのは配置表に在る scope だけ（無い scope は下の合流が警告して見送る＝読む意味が無い）。
+    let present: Vec<usize> = scope_ids
+        .iter()
+        .copied()
+        .filter(|scope| cfg.scopes.contains_key(scope))
+        .collect();
+    let windowpositions = load_scope_windowpositions(balloon_root, &present);
+    merge_scope_windowpositions(cfg, &windowpositions, scope_ids, k);
+}
+
+/// scope ごとに読んだバルーンの `windowposition`（数値解釈と生値の対）。読めなかった scope は
+/// 載らない（見送りの `warn!` は読んだ側が出している）。
+pub(crate) type ScopeWindowPositions = BTreeMap<usize, (WindowPosition, WindowPositionRaw)>;
+
+/// [`apply_scope_windowpositions`] の読む半分（ファイルを読む）。
+///
+/// シェルの差し替えは、これを背景のスレッドで呼んで結果を UI へ運び、UI では読む半分を通さずに
+/// [`merge_scope_windowpositions`] だけを通す（areka-P0-shell-balloon-switch 要件 2.7）。
+pub(crate) fn load_scope_windowpositions(
+    balloon_root: &Path,
+    scope_ids: &[usize],
+) -> ScopeWindowPositions {
+    scope_ids
+        .iter()
+        .filter_map(|&scope| scope_windowposition(balloon_root, scope).map(|wp| (scope, wp)))
+        .collect()
+}
+
+/// [`apply_scope_windowpositions`] の合流の半分（純関数・ファイルを読まない）。
+fn merge_scope_windowpositions(
+    cfg: &mut PlacementConfig,
+    windowpositions: &ScopeWindowPositions,
+    scope_ids: &[usize],
+    k: ScaleRatio,
+) {
     for &scope in scope_ids {
         // バルーンの左右は配置構成の解決済み値（`balloon.alignment`・cascade 済み）。
         // 調整量の計算には効かない（符号は置き側に依らない・R7.6 確定形）が、観測点 4 の
@@ -579,13 +629,14 @@ fn apply_scope_windowpositions(
             continue;
         };
         let side = sc.balloon_alignment;
-        let Some((wp, wp_raw)) = scope_windowposition(balloon_root, scope) else {
+        let Some((wp, wp_raw)) = windowpositions.get(&scope) else {
             // 定義を読めなかった scope は `ScopeConfig` の正典既定（limit=1・`Side`）のまま。
             // 見送りの warn は `scope_windowposition` が既に出している（無言の縮退なし）。
             continue;
         };
+        let wp = *wp;
         // 語彙分類（C1）→ 不正値の警告付き縮退（要件 1.3/4.6/6.3）。
-        let (balloon_limit, x_mode, wp_x) = resolve_windowposition_vocab(scope, &wp_raw, wp.x());
+        let (balloon_limit, x_mode, wp_x) = resolve_windowposition_vocab(scope, wp_raw, wp.x());
         let wp_y = wp.y();
         // scope 別構成へ反映（要件 1.4——limit も x も「その scope が採用した面の
         // 2 層マージ結果」という同一単位で解決される）。
@@ -728,9 +779,23 @@ fn scope_windowposition(
 /// - 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11）
 /// - 呼び出しスレッドは COM 初期化済みであること（measure の `WicDecoderArm`
 ///   前提・本番は MTA UI スレッド）
+#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手は example とテスト）
 pub fn prepare_ghost_windows(
     ghost_root: &Path,
     balloon_root: &Path,
+) -> Result<PreparedPlacement, PlacementError> {
+    prepare_ghost_windows_for_shell(ghost_root, balloon_root, None)
+}
+
+/// [`prepare_ghost_windows`] のシェル名つきの兄弟（areka-P0-shell-balloon-switch 要件 6.4）。
+///
+/// `shell` が `Some(名)` なら配置の値（シェルの `descript.txt`）と採寸のシェルのフォルダを
+/// `ghost_root/shell/<名>` から取る。`None` は今日の規則。名前の先が無ければ既定のシェルへ
+/// 黙って戻らず `Err(PlacementError::Mount)` を返す。それ以外は [`prepare_ghost_windows`] と同じ。
+pub fn prepare_ghost_windows_for_shell(
+    ghost_root: &Path,
+    balloon_root: &Path,
+    shell: Option<&str>,
 ) -> Result<PreparedPlacement, PlacementError> {
     let monitors = enumerate_monitors();
     // 観測（areka-P0-dpi-window-vanish 要件 1.1）: 列挙の**直後**＝準備段の失敗より手前で
@@ -746,7 +811,7 @@ pub fn prepare_ghost_windows(
     // 準備段（load→config→measure）を work area の検査より**先**に走らせる:
     // 準備段の失敗（Mount・DescriptRead・Measure）はモニタ列挙異常より手前の事象として
     // 報告される（既存の失敗順序＝headless でも Mount が返る契約を保つ）。
-    let stages = prepare_stages(ghost_root, balloon_root, primary_dpi)?;
+    let stages = prepare_stages_for_shell(ghost_root, balloon_root, primary_dpi, shell)?;
     let work_area = work_area_of(primary)?;
     Ok(stages.resolve(work_area))
 }

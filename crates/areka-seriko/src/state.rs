@@ -101,8 +101,8 @@ pub enum PatternApplyOutcome {
 ///
 /// per-scope マップと静的 `BindSet` を同一構造体に同居させ（要件 4.4）、per-scope の動的
 /// 着せ替え集合 `dynamic_binds` を併せて保持する（要件 3.1・予約シームの消費）。`static_binds`
-/// は [`ScopeStates::new`] で一度だけ設定して以後不変であり、動的 bind 未適用の scope に対する
-/// **既定（初期値）集合**として機能する（Show 発行の bind 供給源は [`ScopeStates::current_binds`]
+/// は [`ScopeStates::new`] で設定し、シェルの差し替え（[`ScopeStates::rebase_shell`]）でだけ替わる。
+/// 動的 bind 未適用の scope に対する **既定（初期値）集合**として機能する（Show 発行の bind 供給源は [`ScopeStates::current_binds`]
 /// が `dynamic_binds` 優先・不在時 `static_binds` フォールバックで決める）。本ユニットは動的 bind の
 /// 変更 API（`apply_bind`）を持たず、`dynamic_binds` は空のまま起動する（後続タスクが書き込む）。
 pub struct ScopeStates {
@@ -112,7 +112,8 @@ pub struct ScopeStates {
     /// 要件 4.3/4.6）。同型 [`ScopeState`] だが独立し、`apply_balloon` のみが変更する。
     /// シェル面と相互に不変（`apply()` は触らない・`static_binds` はバルーンでは使わない）。
     balloon: HashMap<ActorKey, ScopeState>,
-    /// 静的 bind 集合（起動時に一度だけ解決・以後不変・要件 4.2/4.3/4.4）。
+    /// 静的 bind 集合（起動時に解決・シェルの差し替え [`ScopeStates::rebase_shell`] でだけ替わる・
+    /// 要件 4.2/4.3/4.4）。
     ///
     /// 動的 bind 未適用の scope に対する既定（初期値）供給源でもある（要件 3.1・
     /// [`ScopeStates::current_binds`] のフォールバック先）。供給元は shell descript の
@@ -139,7 +140,7 @@ impl ScopeStates {
     /// 静的 bind 集合を受けて空のスコープ状態を構築する（要件 4.2）。
     ///
     /// `static_binds` は task 1.2/2.4 で解決される bindgroup default 由来の `BindSet` を想定し、
-    /// 本構造体はそれを不変に保持する（切替 API を持たない・要件 4.3）。
+    /// 本構造体はそれを保持する（替わるのはシェルの差し替え [`ScopeStates::rebase_shell`] だけ）。
     pub fn new(static_binds: BindSet) -> Self {
         Self {
             scopes: HashMap::new(),
@@ -274,10 +275,56 @@ impl ScopeStates {
         }
     }
 
-    /// 静的（既定）bind 集合を返す（不変・要件 4.2/4.3/4.4）。
+    /// シェルの定義の差し替え（spec: areka-P0-shell-balloon-switch 要件 2.6）。
+    ///
+    /// 静的な着せ替えを新しいシェルの既定へ入れ替え、動的な着せ替えとシェル側のパターンの
+    /// 進行を消す（着せ替えの区分はシェルごとの定義ゆえ持ち越さない）。今の面（`scopes`・
+    /// `balloon`）とバルーン側のパターンの進行は保つ。発行はしない（合図は呼び手が出す）。
+    pub fn rebase_shell(&mut self, static_binds: BindSet) {
+        self.static_binds = static_binds;
+        self.dynamic_binds.clear();
+        self.pattern_states
+            .retain(|(_, slot), _| *slot != Slot::Shell);
+    }
+
+    /// バルーンの定義の差し替え（spec: areka-P0-shell-balloon-switch 要件 3.5）。
+    ///
+    /// バルーン側のパターンの進行だけを消す。今の面・着せ替え・シェル側のパターンは保つ。
+    pub fn rebase_balloon(&mut self) {
+        self.pattern_states
+            .retain(|(_, slot), _| *slot != Slot::Balloon);
+    }
+
+    /// スコープごとの `slot` 側の今の面（spec: areka-P0-shell-balloon-switch 要件 2.6・3.5）。
+    ///
+    /// シェル面・バルーン面のどちらかに現れたスコープを昇順に並べ、`slot` 側で表示中なら
+    /// `Some(id)`、非表示・未知なら `None` を返す純粋な読み取り（差し替えの合図の材料）。
+    pub fn current_surfaces(&self, slot: Slot) -> Vec<(ActorKey, Option<u32>)> {
+        let map = match slot {
+            Slot::Shell => &self.scopes,
+            Slot::Balloon => &self.balloon,
+        };
+        let scopes: std::collections::BTreeSet<&ActorKey> =
+            self.scopes.keys().chain(self.balloon.keys()).collect();
+        scopes
+            .into_iter()
+            .map(|scope| {
+                let id = match map.get(scope) {
+                    Some(ScopeState::Shown(id)) => Some(*id),
+                    Some(ScopeState::Hidden) | None => None,
+                };
+                (scope.clone(), id)
+            })
+            .collect()
+    }
+
+    /// 静的（既定）bind 集合を返す（[`rebase_shell`] でだけ替わる・要件 4.2/4.3/4.4）。
+    ///
+    /// [`rebase_shell`]: ScopeStates::rebase_shell
     ///
     /// これは per-scope 動的 bind の**既定フォールバック源**（初期値）であり、per-scope の
-    /// 現在集合は [`current_binds`] で引く。本アクセサは常に `new` で渡した静的集合を返す。
+    /// 現在集合は [`current_binds`] で引く。本アクセサは `new` で渡した静的集合
+    /// （シェルの差し替えの後は [`ScopeStates::rebase_shell`] で渡した新しい既定）を返す。
     ///
     /// [`current_binds`]: ScopeStates::current_binds
     pub fn binds(&self) -> &BindSet {
@@ -574,6 +621,9 @@ fn empty_pattern() -> &'static PatternState {
 #[cfg(test)]
 #[path = "state_bind_pattern_tests.rs"]
 mod bind_pattern_tests;
+#[cfg(test)]
+#[path = "state_rebase_tests.rs"]
+mod rebase_tests;
 #[cfg(test)]
 #[path = "state_surface_tests.rs"]
 mod surface_tests;

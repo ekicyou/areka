@@ -261,11 +261,54 @@ pub(crate) fn read_last_ghost(app_profile_dir: &Path) -> Option<String> {
 /// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.balloon`・要件 5.2・裁定 4）。
 /// 根は boot が据える場所と同じ `profile_areka_root(<ゴースト>/ghost/master)`。無ければ `None`。
 pub(crate) fn read_last_balloon(ghost_dir: &Path) -> Option<String> {
-    let roots = ScopeRoots {
+    read_last(
+        PersistScope::Ghost,
+        &ghost_roots(ghost_dir),
+        PersistKey::LastBalloon,
+    )
+}
+
+/// 起動前の記憶の直読み（起動するゴーストの Ghost スコープ `areka.last.shell`・要件 6.2）。
+/// 置き場は [`read_last_balloon`] と同じ。無ければ `None`。
+pub(crate) fn read_last_shell(ghost_dir: &Path) -> Option<String> {
+    read_last(
+        PersistScope::Ghost,
+        &ghost_roots(ghost_dir),
+        PersistKey::LastShell,
+    )
+}
+
+/// 起動するゴーストの Ghost スコープの根（boot が据える `profile_areka_root(<ゴースト>/ghost/master)`）。
+fn ghost_roots(ghost_dir: &Path) -> ScopeRoots {
+    ScopeRoots {
         ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
         ..ScopeRoots::default()
-    };
-    read_last(PersistScope::Ghost, &roots, PersistKey::LastBalloon)
+    }
+}
+
+/// 起動のシェル（要件 6.2・6.3）。記憶の名の `shell/<名>/descript.txt` が在ればその名
+/// （`menu,hidden` でも可）・記憶が無ければ `None`（既定のシェル）。記憶の先が無いか、名前が
+/// `shell/` の下の 1 段のフォルダ名でない（`..`・区切り・絶対パス＝壊れた記憶）ときは
+/// `warn!` 1 件で `None`。記憶は起動の成功（`LastUsed::record`）が既定のシェルへ書き直す。
+/// シェル名つきの解決は名前を検査しないので、ここが `shell/` の外を指す名前を止める。
+pub(crate) fn decide_boot_shell(ghost_dir: &Path) -> Option<String> {
+    let name = read_last_shell(ghost_dir)?;
+    let mut parts = Path::new(&name).components();
+    let single = matches!(
+        (parts.next(), parts.next()),
+        (Some(std::path::Component::Normal(_)), None)
+    );
+    let descript = ghost_dir.join("shell").join(&name).join("descript.txt");
+    if single && descript.is_file() {
+        return Some(name);
+    }
+    tracing::warn!(
+        event = "boot_shell_missing",
+        name = %name,
+        expected = %descript.display(),
+        "[boot_resolve] 前回のシェルが見つからないので既定のシェルで起動します（起動に成功すれば記憶は既定のシェルへ書き直ります）"
+    );
+    None
 }
 
 fn app_roots(app_profile_dir: &Path) -> ScopeRoots {
@@ -402,7 +445,8 @@ impl LastUsed<'_> {
     /// App へ `LastGhost`（argv 以外のとき）、Ghost へ `LastBalloon`（argv 以外のとき）＋`LastShell`
     /// （常に）を投函する。argv で決まった側は書かず info を残す。投函だけで待たない
     /// （反映は `GhostRuntime::shutdown` の barrier に任せる＝design R1）。
-    /// `areka.last.shell` は書くだけで起動の解決には使わない（要件 3.8）。
+    /// `areka.last.shell` は次の起動のシェルの決定（[`decide_boot_shell`]・要件 6.2）が読む。
+    /// 記憶の先が無かった起動では、ここで今マウントした既定のシェルへ書き直る（要件 6.3）。
     pub(crate) fn record(&self, publisher: &SylphyaPublisher) {
         let ghost = remembered(
             self.ghost.route == GhostRoute::Argv,
@@ -436,6 +480,35 @@ impl LastUsed<'_> {
             "[boot_resolve] 最後に使ったものを記憶へ書きました（- は argv なので書いていない）"
         );
     }
+}
+
+/// シェルの差し替えの完了: Ghost スコープへ `LastShell` だけを投函する（要件 6.1）。
+/// `LastBalloon`・App スコープには触れない。投函だけで待たない（[`LastUsed::record`] と同じ）。
+pub(crate) fn record_last_shell(publisher: &SylphyaPublisher, folder: &str) {
+    publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::LastShell, folder.to_owned())],
+    );
+    tracing::info!(
+        event = "last_shell_recorded",
+        shell = folder,
+        "[boot_resolve] 最後のシェルだけを記憶へ書きました"
+    );
+}
+
+/// バルーンの差し替えの完了: Ghost スコープへ `LastBalloon` だけを投函する（要件 6.1・6.7）。
+/// 3 つを書く [`LastUsed::record`] を通さないのは、入れた直後の `remember_balloon` の記憶を
+/// 上書きしないため。`LastShell`・App スコープには触れない。
+pub(crate) fn record_last_balloon(publisher: &SylphyaPublisher, folder: &str) {
+    publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::LastBalloon, folder.to_owned())],
+    );
+    tracing::info!(
+        event = "last_balloon_recorded",
+        balloon = folder,
+        "[boot_resolve] 最後のバルーンだけを記憶へ書きました"
+    );
 }
 
 /// argv で決まった側は `None`（書かない旨を info に残す＝要件 3.5）。それ以外はフォルダ名。

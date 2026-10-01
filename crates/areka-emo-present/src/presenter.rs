@@ -49,6 +49,7 @@ mod hit;
 mod hub;
 mod read;
 mod refresh;
+mod replace;
 mod show;
 mod target;
 mod timing;
@@ -86,6 +87,7 @@ use crate::scale::{ScalePolicy, derive_scale};
 pub use self::hit::ClientHit;
 pub use self::hub::EmoPresenter;
 pub use self::read::TextSlotView;
+pub use self::replace::DetachedState;
 use self::target::PresentTarget;
 pub use self::target::VisibilityOwnership;
 // 遷移観測のサーフェス記録の**語彙**（design C3・Requirement 2.7）。判定側（areka の
@@ -128,6 +130,9 @@ mod read_accessor_tests;
 #[cfg(test)]
 #[path = "presenter_refresh_and_log_tests.rs"]
 mod refresh_and_log_tests;
+#[cfg(test)]
+#[path = "presenter_replace_tests.rs"]
+mod replace_tests;
 #[cfg(test)]
 #[path = "presenter_resize_report_tests.rs"]
 mod resize_report_tests;

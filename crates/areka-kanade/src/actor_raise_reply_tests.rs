@@ -16,27 +16,27 @@ use std::time::Duration;
 use tracing::Level;
 
 /// ハングを失敗に変えるための受け取りの上限。
-const LIMIT: Duration = Duration::from_secs(10);
+pub(super) const LIMIT: Duration = Duration::from_secs(10);
 
 /// テストで送るイベント（許可表のインストール系の 1 語）。
-const RAISED: &str = "OnInstallCompleteEx";
+pub(super) const RAISED: &str = "OnInstallCompleteEx";
 
 /// 偽の shiori が `RAISED` へ返す応答を作る（`ShioriOutcome` は複製できないので毎回作る）。
-type Answer = Box<dyn Fn() -> ShioriOutcome + Send>;
+pub(super) type Answer = Box<dyn Fn() -> ShioriOutcome + Send>;
 
 /// 本物の殻と偽の shiori・再生系の受信端・運行の通知の受信端の組。
-struct Rig {
-    kanade: Sender<KanadeMsg>,
-    handle: ActorHandle,
+pub(super) struct Rig {
+    pub(super) kanade: Sender<KanadeMsg>,
+    pub(super) handle: ActorHandle,
     /// 偽の shiori が受けた呼び出しの要約（`GET id`・`NOTIFY id`・`Unload`・`Close`）。
-    calls: Receiver<String>,
-    talks: Receiver<TalkCommand>,
-    notices: Receiver<KanadeNotice>,
+    pub(super) calls: Receiver<String>,
+    pub(super) talks: Receiver<TalkCommand>,
+    pub(super) notices: Receiver<KanadeNotice>,
 }
 
 /// 偽の shiori を立てて kanade を起こす。`RAISED` 以外は良性の既定応答（NOTIFY→完了・GET→204・
 /// Unload→完了）を返す。
-fn spawn_rig(answer: Answer) -> Rig {
+pub(super) fn spawn_rig(answer: Answer) -> Rig {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
     let (calls_tx, calls) = mpsc::channel::<String>();
     std::thread::spawn(move || {
@@ -90,7 +90,7 @@ fn spawn_rig(answer: Answer) -> Rig {
 }
 
 /// 起動して定常の通知を受けるまで待ち、起動系列の呼び出しの記録を読み捨てる。
-fn boot_to_steady(rig: &Rig) {
+pub(super) fn boot_to_steady(rig: &Rig) {
     rig.kanade.send(KanadeMsg::Boot).expect("kanade に届く");
     loop {
         match rig.notices.recv_timeout(LIMIT).expect("定常の通知が届く") {
@@ -122,7 +122,7 @@ fn drain(calls: &Receiver<String>) -> Vec<String> {
 }
 
 /// 終わらせる（Close は運行表を経ず即時に止まる）。
-fn close(rig: Rig) {
+pub(super) fn close(rig: Rig) {
     rig.kanade.send(KanadeMsg::Close).expect("kanade に届く");
     rig.handle.join().expect("kanade が止まる");
 }

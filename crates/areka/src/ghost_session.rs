@@ -37,15 +37,16 @@ use crate::{ConfigInputs, default_app_profile_dir, ghost_boot_options, is_benign
 /// 載せる系と順序（段ごとに今日の挿入順を保つ）:
 /// - `Update` ← 毎フレームの相 → 停止通知の受け口（受け口 `KanadeNoticeRx` はプロセスに 1 つ
 ///   なので [`emo2_boot::wire_kanade_stop`] を分割せずそのまま呼ぶ）
-/// - `Input` ← 説明書 → 台本の切替要求 → 中断 → メニュー → バルーンの離脱 → 選択肢の送り →
-///   インストールの窓口 → 更新の窓口（[`crate::install::register`]・[`crate::update::register`] は
-///   窓口と終了の待ちの門もここで 1 度だけ据える）
+/// - `Input` ← 説明書 → 台本の切替要求 → 台本のシェル・バルーンの切替要求 → 中断 → メニュー →
+///   バルーンの離脱 → 選択肢の送り → インストールの窓口 → 更新の窓口（[`crate::install::register`]・
+///   [`crate::update::register`] は窓口と終了の待ちの門もここで 1 度だけ据え、シェル・バルーンの
+///   取り出しの登録は終了の片付けを終了の待ちへ登記する）
 /// - `FrameFinalize` ← クリック透過 → OS の閉鎖要求 → 重なり順の対（状態がゴーストごとで
 ///   ないので `wire_zorder_pair` をそのまま呼ぶ）
 ///
 /// 各系の並び（`before`／`after`・`chain`）は各登録関数が持つ。ここは順に呼ぶだけ。
 ///
-/// 今日との差: `Input` の 8 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
+/// 今日との差: `Input` の 9 系と `Update` の毎フレームの相（`emo2_frame_system`）は LogSink の
 /// 起動でも登録される。どれも状態（`NonSend`）が無ければ無操作で戻る（記録は `trace!` か無し）
 /// ので、見え方は変わらない（インストールと更新の窓口だけは登録と同時に据わるが、依頼が無ければ
 /// 何もしない）。バルーンの離脱の系だけは `BalloonWiring` 不在で
@@ -58,6 +59,7 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
 
     readme::register_readme_drain(world);
     emo2_boot::ghost_switch::register_change_drain(world);
+    emo2_boot::shell_balloon_switch::register_switch_drain(world);
     input_events::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
@@ -87,6 +89,27 @@ pub(crate) struct StartupDescriptValues {
     pub(crate) author_dpi: placement::AuthorDpi,
     /// shell descript の `seriko.zorder` の生の値（未指定なら `None`）。解釈は台帳の層が行う。
     pub(crate) zorder_raw: Option<String>,
+}
+
+/// 配置の準備（[`prepare_ghost_windows`]）が決めた起動のシェル（areka-P0-shell-balloon-switch
+/// 要件 6.4・8.4）。起こす処理の 2 つの入口（[`boot_ghost`]・[`boot_ghost_strict`]）が取り出して
+/// 起動の結線（結線ありの腕と LogSink の倒れ先の両方）へ渡す。`Emo2BootInputs`・
+/// [`StartupDescriptValues`]・`GhostBootOptions` に欄を足さずに運ぶための置き場である。
+#[derive(bevy_ecs::prelude::Resource)]
+pub(crate) struct BootShellChoice {
+    /// 決めたゴーストの根（起こすゴーストと違えば使わない）。
+    pub ghost_root: PathBuf,
+    /// 起動のシェルのフォルダ名（`None` は既定のシェル）。
+    pub shell: Option<String>,
+}
+
+/// 起こすゴーストのシェル: 配置の準備が置いた値を取り出す。無いか根が違えば（準備を経ない
+/// 起動・別のゴーストの残り）ここで決める。
+fn take_boot_shell(world: &mut World, ghost_root: &Path) -> Option<String> {
+    match world.remove_resource::<BootShellChoice>() {
+        Some(choice) if choice.ghost_root == ghost_root => choice.shell,
+        _ => crate::boot_resolve::decide_boot_shell(ghost_root),
+    }
 }
 
 /// 窓を作る側が失敗する理由（design「open_ghost_windows / reopen_ghost_windows」）。
@@ -162,7 +185,20 @@ pub(crate) fn prepare_ghost_windows(
         );
         return Err(OpenWindowsError::TaskPoolMissing);
     }
-    let prepared = placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root)?;
+    // 起動のシェルはここで 1 度だけ決め（記憶の先が無ければ `warn!` もここの 1 件）、配置の
+    // 情報源へ渡したうえで資源に置く。起こす処理の入口（[`boot_ghost`]・[`boot_ghost_strict`]）が
+    // 取り出し、同じ値を資産と実行系へ運ぶ
+    // （areka-P0-shell-balloon-switch 要件 6.2〜6.4）。
+    let shell = crate::boot_resolve::decide_boot_shell(&cfg.ghost_root);
+    let prepared = placement::prepare_ghost_windows_for_shell(
+        &cfg.ghost_root,
+        &cfg.balloon_root,
+        shell.as_deref(),
+    )?;
+    world.insert_resource(BootShellChoice {
+        ghost_root: cfg.ghost_root.clone(),
+        shell,
+    });
     // モニタ 2 源（task 8.1・atom task 5.1）: 起動時の実モニタから忠実転写した
     // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
     // （4.7・task 8.2）と拡大率の相が消費する。
@@ -363,11 +399,17 @@ pub(crate) struct GhostSession {
     ghost: Option<areka_ghost::GhostRuntime>,
     seriko: Option<areka_actor::ActorHandle>,
     loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
+    /// seriko の送り手の複製（シェル・バルーンの差し替えを seriko へ頼む口）。結線ありの腕だけが
+    /// 持ち、テスト用の組み立てと LogSink の腕は `None`。降ろす最初の段で落とす（要件 8.5）。
+    seriko_sink: Option<areka_seriko::SerikoSink>,
     /// kanade への送出端の写し（実行系が無ければ `None`）。実行系から毎回引かずに持つのは、
     /// テストが実行系を起こさずに送出端だけを差せるようにするため（[`GhostSession::for_test`]）。
     kanade: Option<Sender<KanadeMsg>>,
     /// 起こしたゴーストの根（`ghost/<フォルダ名>`・起動の結線の入力のもの）。
     ghost_dir: PathBuf,
+    /// テスト用の記憶の書き手（実行系を起こさずに差し替えの後始末の記憶を観測する）。
+    #[cfg(test)]
+    memory_publisher_for_test: Option<areka_sylphya::SylphyaPublisher>,
     /// 窓への結線が成立せず LogSink の起動へ倒れた単位か（倒れた先の成否を問わない・生涯で不変）。
     /// 結線ありの腕・切替の経路・テスト用の組み立ては偽（要件 4.2・4.8・8.3）。
     logsink_fallback: bool,
@@ -399,6 +441,55 @@ impl GhostSession {
         self.kanade.as_ref()
     }
 
+    /// seriko の送り手の複製（シェル・バルーンの差し替えを頼む）。結線ありの腕でなければ `None`。
+    pub(crate) fn seriko_sink(&self) -> Option<&areka_seriko::SerikoSink> {
+        self.seriko_sink.as_ref()
+    }
+
+    /// 実行系の記憶の書き手（差し替えの後始末が `LastShell`／`LastBalloon` を投函する）。
+    /// 実行系が無ければ `None`（テスト用の組み立ては [`GhostSession::with_memory_publisher`] の値）。
+    pub(crate) fn memory_publisher(&self) -> Option<&areka_sylphya::SylphyaPublisher> {
+        #[cfg(test)]
+        if let Some(publisher) = &self.memory_publisher_for_test {
+            return Some(publisher);
+        }
+        self.ghost.as_ref().map(|r| r.sylphya_publisher())
+    }
+
+    /// 今のシェルのフォルダ名（実行系のマウントの末尾）。実行系が無ければ `None`。
+    pub(crate) fn current_shell_folder(&self) -> Option<String> {
+        let dir = &self.ghost.as_ref()?.mount().shell.dir;
+        dir.file_name().map(|n| n.to_string_lossy().into_owned())
+    }
+
+    /// 今のシェルのフォルダだけを書き換える（実行系へ委ねる・要件 6.5）。実行系が無ければ偽。
+    pub(crate) fn set_shell_dir(&mut self, dir: PathBuf) -> bool {
+        match self.ghost.as_mut() {
+            Some(runtime) => {
+                runtime.set_shell_dir(dir);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// テスト用の組み立てに記憶の書き手を持たせる（差し替えの後始末の記憶を観測するため）。
+    #[cfg(test)]
+    pub(crate) fn with_memory_publisher(
+        mut self,
+        publisher: areka_sylphya::SylphyaPublisher,
+    ) -> Self {
+        self.memory_publisher_for_test = Some(publisher);
+        self
+    }
+
+    /// テスト用の組み立てに seriko の送り手を持たせる（切替の入口の文脈の判定を通すため）。
+    #[cfg(test)]
+    pub(crate) fn with_seriko_sink(mut self, sink: areka_seriko::SerikoSink) -> Self {
+        self.seriko_sink = Some(sink);
+        self
+    }
+
     /// 実行系を持たない置き場の中身（テスト用）: kanade への送出端と根だけを持つ。
     /// 降ろすもの（実行系・seriko・ticker）が無いので `shutdown` は何もせず `Ok` を返す。
     #[cfg(test)]
@@ -407,9 +498,12 @@ impl GhostSession {
             ghost: None,
             seriko: None,
             loop_ticker: None,
+            seriko_sink: None,
             kanade,
             ghost_dir,
             logsink_fallback: false,
+            #[cfg(test)]
+            memory_publisher_for_test: None,
         }
     }
 
@@ -425,7 +519,8 @@ impl GhostSession {
         &self.ghost_dir
     }
 
-    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止 → ② ゴースト実行系の終了
+    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止（seriko の送り手の複製も落とす）
+    /// → ② ゴースト実行系の終了
     /// （`reason` を渡す）→ ③ seriko の join。無い段は飛ばし、②③ の失敗は `error!` の上で
     /// `Err` を返して以降を飛ばす。perf の最終報告はプロセスに 1 回なので呼び手が後で行う。
     pub(crate) fn shutdown(self, reason: areka_kanade::CloseReason) -> windows::core::Result<()> {
@@ -453,7 +548,8 @@ impl GhostSession {
         // `SerikoSink` クローン（tick_sink）を握る。これを先に停止させないと seriko inbox が ticker 経由で
         // 生き続け、③ の join が「全 Sender drop」を永遠に待って hang する。停止端 Sender へ
         // `TickerMsg::Close` を送ると worker は `recv_timeout` から `Ok(Close)` で return し、その closure＝
-        // tick_sink が drop される（inbox 切断の片翼が外れる。残る片翼＝ghost 側 SerikoSink は ② が外す）。
+        // tick_sink が drop される（inbox 切断の 1 本が外れる。セッションの複製はこの段の末尾、
+        // ghost 側 SerikoSink は ② が外す）。
         // 呼び手は ticker の JoinHandle を持たない（`wire_emo2_boot` が保持せず drop 済み）ため直接 join でき
         // ないが、③ の seriko join が全 Sender drop まで block するため実質 ticker worker の終端を待つ形に
         // なり hang しない（Close 未達で worker が既に終端していても drop で disconnected 経路へ倒れる）。
@@ -470,6 +566,9 @@ impl GhostSession {
             // 送信の成否に依らず停止端 Sender をここで drop し、確実に制御チャンネルを disconnected にする。
             drop(ticker);
         }
+        // セッションが持つ seriko の送り手の複製（差し替えの口）も ① で落とす。残すと self の残りの欄
+        // として関数の終わりまで生き、③ の join が「全 Sender drop」を待ち続けて hang する（要件 8.5）。
+        drop(self.seriko_sink);
 
         // ② 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: boot 済み（`Some`）のときのみ
         // `shutdown` を呼ぶ。終了理由は呼び手が渡す（`fn main` は `CloseReason::User { scope: 0 }`＝
@@ -497,12 +596,13 @@ impl GhostSession {
             }
         }
 
-        // ③ seriko アクターの join（design「終了握手（R6）」・R6.3）。seriko inbox への送信端は 2 本ある:
+        // ③ seriko アクターの join（design「終了握手（R6）」・R6.3）。seriko inbox への送信端は 3 本ある:
         // (a) ghost 側の `SerikoSink`（surface_sink・②の `shutdown` が drop）と (b) loop ticker closure の
-        // `tick_sink`（①の Close→worker return で drop）。①②で両端が drop されて inbox が切断され、seriko
-        // worker は自然終了する。呼び手は自前の `SerikoSink` クローンを保持しない（sink は `wire_emo2_boot`
-        // が boot／ticker へ move 済み）ため、この `join` は両端 drop 完了（＝ticker worker 終端）まで block
-        // したうえで速やかに戻る（①で ticker を先に Close したことが hang 回避の要）。join 失敗（worker
+        // `tick_sink`（①の Close→worker return で drop）と (c) セッションの複製（`seriko_sink`・① で drop）。
+        // ①②で全端が drop されて inbox が切断され、seriko worker は自然終了する。複製は `GhostSession`
+        // だけが持ち ① で落とす（それ以外の sink は `wire_emo2_boot` が boot／ticker へ move 済み）ため、
+        // この `join` は全端 drop 完了（＝ticker worker 終端）まで block したうえで速やかに戻る（①で ticker
+        // を先に Close し複製を落としたことが hang 回避の要）。join 失敗（worker
         // panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
         if let Some(seriko) = self.seriko {
             if let Err(err) = seriko.join() {
@@ -543,10 +643,20 @@ pub(crate) fn boot_ghost(
     // `ghost_boot_options` の既定と同じ値（振る舞いは不変・要件 4.7）。テストは土台の置き場か `None`。
     let ghost_root = wiring.ghost_root.clone();
     let app_profile_dir = wiring.app_profile_dir.clone();
+    // 起動のシェルは結線ありの腕と倒れ先で同じ値を使う（取り出すのはここの 1 回だけ・要件 6.4）。
+    let shell = take_boot_shell(world, &ghost_root);
 
     // `wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォールバック boot へ
     // 倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
-    if let Ok(session) = boot_wired(world, wiring, &kanade_stop, descript, ghost, balloon) {
+    if let Ok(session) = boot_wired(
+        world,
+        wiring,
+        &kanade_stop,
+        descript,
+        ghost,
+        balloon,
+        shell.as_deref(),
+    ) {
         return session;
     }
 
@@ -560,7 +670,13 @@ pub(crate) fn boot_ghost(
         ..ghost_boot_options(ghost_root.clone(), helper_exe)
     };
     // 停止通知の送出端つきで起動する（SHIORI の失敗で kanade が止まったら終了相へ届く・要件 6.4）。
-    let runtime = match areka_ghost::boot_with_kanade_stop(ghost_options, Some(kanade_stop)) {
+    // 倒れ先も起動のシェルでマウントする（areka-P0-shell-balloon-switch 要件 6.4）。
+    let runtime = match areka_ghost::boot_with_origin(
+        ghost_options,
+        Some(kanade_stop),
+        BootOrigin::Plain,
+        shell.as_deref(),
+    ) {
         Ok(runtime) => {
             tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
             // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
@@ -592,8 +708,11 @@ pub(crate) fn boot_ghost(
         ghost: runtime,
         seriko: None,
         loop_ticker: None,
+        seriko_sink: None,
         ghost_dir: ghost_root,
         logsink_fallback: true,
+        #[cfg(test)]
+        memory_publisher_for_test: None,
     }
 }
 
@@ -613,13 +732,23 @@ pub(crate) fn boot_ghost_strict(
         helper_exe: _,
         kanade_stop,
     } = inputs;
-    boot_wired(world, wiring, &kanade_stop, descript, ghost, balloon)
+    let shell = take_boot_shell(world, &wiring.ghost_root);
+    boot_wired(
+        world,
+        wiring,
+        &kanade_stop,
+        descript,
+        ghost,
+        balloon,
+        shell.as_deref(),
+    )
 }
 
 /// 結線ありの腕（2 つの入口が共有・私有）: 起動の結線（`wire_emo2_boot`）を試み、成立すれば
 /// 窓ごとの状態（マウス・メニュー・記憶・バルーンの選択・選択肢の送り）を `insert_non_send` で
 /// 新品へ置き換えて [`GhostSession`] を返す（要件 4.8）。成立しなければ `Err(BootWiringFailed)`
-/// （理由は `wire_emo2_boot` が記録済み）で、World の状態には触れない。
+/// （理由は `wire_emo2_boot` が記録済み）で、World の状態には触れない。`shell` は入口が
+/// 取り出した起動のシェル（[`take_boot_shell`]）で、結線へそのまま渡す（要件 6.4）。
 fn boot_wired(
     world: &mut World,
     wiring: emo2_boot::Emo2BootInputs,
@@ -627,6 +756,7 @@ fn boot_wired(
     descript: &StartupDescriptValues,
     ghost: &GhostDecision,
     balloon: &BalloonDecision,
+    shell: Option<&str>,
 ) -> Result<GhostSession, BootWiringFailed> {
     let ghost_dir = wiring.ghost_root.clone();
 
@@ -640,6 +770,7 @@ fn boot_wired(
         descript.author_dpi,
         descript.zorder_raw.as_deref(),
         kanade_stop.clone(),
+        shell,
     );
     if !outcome.wired {
         return Err(BootWiringFailed);
@@ -656,6 +787,9 @@ fn boot_wired(
         menu::wire_menu(world, runtime.kanade().clone());
         // 「ゴースト」枠の登記（要件 1.12）: `wire_menu` が登記の口を新品にするので、起こすたびにやり直す。
         menu::ghost_frame::register(world);
+        // 「シェル」「バルーン」枠の登記（shell-balloon-switch 要件 1.5・11.9）: 同じ理由で起こすたびにやり直す。
+        menu::shell_frame::register(world);
+        menu::balloon_frame::register(world);
         // 「インストール」枠の登記（ghost-install 要件 1.8）: 同じ理由で起こすたびにやり直す。
         menu::install_frame::register(world);
         // 「ネットワーク更新」枠の登記（network-update 要件 1.2）: 同じ理由で起こすたびにやり直す。
@@ -687,8 +821,11 @@ fn boot_wired(
         ghost: outcome.ghost,
         seriko: outcome.seriko,
         loop_ticker: outcome.loop_ticker,
+        seriko_sink: outcome.seriko_sink,
         ghost_dir,
         logsink_fallback: false,
+        #[cfg(test)]
+        memory_publisher_for_test: None,
     })
 }
 
@@ -703,3 +840,27 @@ mod strict_tests;
 #[cfg(test)]
 #[path = "ghost_session_switch_tests.rs"]
 mod switch_tests;
+
+#[cfg(test)]
+#[path = "boot_shell_tests.rs"]
+mod boot_shell_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_tests.rs"]
+mod shell_balloon_switch_session_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_lap_tests.rs"]
+mod shell_balloon_switch_session_lap_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_balloon_tests.rs"]
+mod shell_balloon_switch_session_balloon_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_abort_tests.rs"]
+mod shell_balloon_switch_session_abort_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_update_tests.rs"]
+mod shell_balloon_switch_session_update_tests;

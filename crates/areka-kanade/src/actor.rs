@@ -33,7 +33,7 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, ReplyError, ReplySender, reply_channel, run_inbox, spawn_actor};
 
-use crate::change::{ChangeHandoff, KanadeNotice, RaiseOutcome};
+use crate::change::{ChangeHandoff, KanadeNotice, RaiseOutcome, TalkGap};
 use crate::msg::{
     EventId, KanadeConfig, KanadeMsg, KanadeStopCause, KanadeStopped, ShioriCall, ShioriFailure,
     ShioriFault, ShioriMsg, ShioriOutcome,
@@ -100,6 +100,8 @@ pub fn spawn_kanade_with_stop_sink(
 ) -> (Sender<KanadeMsg>, ActorHandle) {
     spawn_actor("kanade", move |rx| {
         let mut state = State::initial();
+        // 台詞の切れ目の口の返信端。結果が出るまでメッセージをまたいで 1 本だけ持つ。
+        let mut gap_reply: Option<ReplySender<TalkGap>> = None;
         run_inbox::<KanadeMsg, Infallible>(rx, move |msg| {
             // 汎用の通知の入口の返信端と、返事の材料（名前・許可表に在るか）。運行表へ渡す前に控える。
             let mut raise_reply: Option<(ReplySender<RaiseOutcome>, String, bool)> = None;
@@ -155,6 +157,10 @@ pub fn spawn_kanade_with_stop_sink(
                         method,
                     }
                 }
+                KanadeMsg::AwaitTalkGap { raise, reply } => {
+                    hold_gap_reply(&mut gap_reply, reply);
+                    Input::AwaitTalkGap { raise }
+                }
             };
             let (flow, first_reply) = drive(
                 &mut state,
@@ -174,6 +180,10 @@ pub fn spawn_kanade_with_stop_sink(
                     (true, Some(outcome)) => outcome,
                 };
                 send_raise_reply(tx, &id, outcome);
+            }
+            // 台詞の切れ目の結果は、決まった依頼の処理の後に 1 回だけ送る（停止の直前でも送る）。
+            if let Some(outcome) = crate::schedule::talk_gap::take_outcome(&mut state) {
+                send_gap_reply(gap_reply.take(), outcome);
             }
             match flow {
                 Drive::Continue => Ok(ControlFlow::Continue(())),
@@ -269,6 +279,42 @@ fn send_raise_reply(reply: ReplySender<RaiseOutcome>, id: &str, outcome: RaiseOu
             id,
             outcome = ?outcome,
             "イベントの結果の受け手が居ない——返事は捨てて運行を続ける"
+        );
+    }
+}
+
+/// 台詞の切れ目の口の返信端を控える。見張りは高々 1 つなので、控えが在れば古い方を捨て
+/// （受け手には `ReplyError::Dropped` が見える）、`warn!` を 1 件残す。
+fn hold_gap_reply(slot: &mut Option<ReplySender<TalkGap>>, reply: ReplySender<TalkGap>) {
+    if slot.replace(reply).is_some() {
+        tracing::warn!(
+            target: "kanade",
+            event = "talk_gap_replaced",
+            "見張りの最中に次の切れ目の依頼を受けた——古い返信端を捨てて新しい依頼を見張る"
+        );
+    }
+}
+
+/// 台詞の切れ目の結果を返信端へ送る。受け手が居なくても運行は続ける（`debug!` を 1 件）。
+///
+/// 返信端が無いのは、見張りを始めるのが返信端つきの依頼だけなので起きない想定である
+/// （起きたら `warn!` を残して結果を捨てる）。
+fn send_gap_reply(reply: Option<ReplySender<TalkGap>>, outcome: TalkGap) {
+    let Some(reply) = reply else {
+        tracing::warn!(
+            target: "kanade",
+            event = "talk_gap_no_reply",
+            outcome = ?outcome,
+            "切れ目の結果が出たが返信端が無い——結果を捨てる"
+        );
+        return;
+    };
+    if let Err(unsent) = reply.send(outcome) {
+        tracing::debug!(
+            target: "kanade",
+            event = "talk_gap_reply_dropped",
+            outcome = ?unsent,
+            "切れ目の結果の受け手が居ない——結果は捨てて運行を続ける"
         );
     }
 }
@@ -654,3 +700,8 @@ mod error_response_tests;
 #[cfg(test)]
 #[path = "actor_raise_reply_tests.rs"]
 mod raise_reply_tests;
+
+// 台詞の切れ目の口の返信端の檻（areka-P0-shell-balloon-switch 要件 1.14・2.3・5.7・8.11）。
+#[cfg(test)]
+#[path = "actor_talk_gap_tests.rs"]
+mod talk_gap_tests;

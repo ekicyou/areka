@@ -123,13 +123,25 @@ pub fn list_ghosts(root: &BasewareRoot) -> Vec<GhostEntry> {
 }
 
 /// `<ゴースト>/shell/` の直下で descript.txt を持ち、`menu` が `hidden` でないフォルダ。
+/// 他のゴーストの更新（`updateother`）とメニューはこの除外に依るので、除外は外さない。
 pub fn list_shells(ghost_dir: &Path) -> Vec<ShellEntry> {
+    scan_shells(ghost_dir, false)
+}
+
+/// `list_shells` と同じ走査で、`menu,hidden` のシェルも除かない列挙（shell-balloon-switch
+/// 要件 1.6: 隠しシェルも名指しなら切り替えられる）。素性の型は同じ `ShellEntry`（要件 8.4）。
+pub fn list_all_shells(ghost_dir: &Path) -> Vec<ShellEntry> {
+    scan_shells(ghost_dir, true)
+}
+
+/// シェルの列挙の本体。`include_hidden` が偽なら `menu,hidden` を除く。
+fn scan_shells(ghost_dir: &Path, include_hidden: bool) -> Vec<ShellEntry> {
     subdirs(&ghost_dir.join("shell"))
         .into_iter()
         .filter_map(|(folder, dir)| {
             let descript = read_descript(&dir.join(DESCRIPT_FILE))?;
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#menu_2chidden:1
-            if folded(&descript, "menu").as_deref() == Some("hidden") {
+            if !include_hidden && folded(&descript, "menu").as_deref() == Some("hidden") {
                 return None;
             }
             let identity = identity(folder, &dir, &descript);
@@ -354,6 +366,9 @@ fn identity(folder: String, top: &Path, descript: &BTreeMap<String, String>) -> 
     }
 }
 
+#[cfg(test)]
+#[path = "catalog_all_shells_tests.rs"]
+mod all_shells_tests;
 #[cfg(test)]
 #[path = "catalog_test_support.rs"]
 mod test_support;

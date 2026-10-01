@@ -24,7 +24,7 @@ use areka_emo_present::shell_target::load_shell_target;
 use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
-use areka_parsers::package::resolve;
+use areka_parsers::package::resolve_with_shell;
 use areka_sakura::ActorKey;
 use areka_seriko::{
     AnimationTable, BindOptionDecls, BindResolver, SurfaceResolver, build_static_bindset,
@@ -210,8 +210,11 @@ pub struct BootAssets {
 
 /// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
 ///
-/// 組立経路は `resolve`（shell dir）→ シェル読み込みの権威 `load_shell_target` を **1 回**
-/// （フォルダの一覧・`surfaces.txt` の読取と解析・面の画像の決定・bake をすべて権威が行う）→
+/// 既定の解決のシェルを読む形で、中身は `shell: None` で [`build_boot_assets_with_shell`] へ
+/// 委ねるだけである（シェルの側は [`build_shell_assets`]、バルーンの側は [`build_balloon_assets`]）。
+///
+/// 組立経路は `resolve_with_shell`（shell dir・名前なしは既定の解決）→ シェル読み込みの権威
+/// `load_shell_target` を **1 回**（フォルダの一覧・`surfaces.txt` の読取と解析・面の画像の決定・bake をすべて権威が行う）→
 /// scope ごとに `ShellTarget::build_world`（`EmoWorld` は非 Clone・装着で move 消費ゆえ scope 数だけ
 /// 組む。`AtlasTable` は安価 Clone）。
 /// balloon は scope ごとに 系列解決（`resolve_balloon_faces`）→ 構築
@@ -239,13 +242,14 @@ pub struct BootAssets {
 /// - 返る資産だけで attach フェーズが完結する（**以後ファイル I/O なし**）。全 I/O は本関数内で完結。
 ///
 /// # 失敗（log-first・panic しない・R7.3）
-/// - `resolve` 失敗 → [`BootWiringError::Mount`]（`StartPointMissing` 系は呼び手が warn 分類）。
+/// - `resolve_with_shell` 失敗 → [`BootWiringError::Mount`]（`StartPointMissing` 系は呼び手が warn 分類）。
 /// - WIC デコーダ生成失敗 → [`BootWiringError::Decoder`]。
 /// - シェルのフォルダの一覧失敗／`surfaces.txt`・`descript.txt` 読取失敗
 ///   → [`BootWiringError::ShellRead`]（シェル側は `ShellLoadError` からの写し替え・枝の追加 0）。
 /// - `surfaces.txt` が surface を産まない → [`BootWiringError::ShellEmpty`]。
 /// - バルーン系列解決／target 構築失敗（走査失敗・面 0 不在・bake 脱落）
 ///   → [`BootWiringError::Balloon`]（`#[from] PresentError`・真因ログは権威側が既に出す）。
+#[allow(dead_code)] // 本番の起動はシェル名つきの兄弟を通る（呼び手はテスト）
 pub fn build_boot_assets(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -253,11 +257,100 @@ pub fn build_boot_assets(
     shell_author_dpi: u16,
     balloon_author_dpi: u16,
 ) -> Result<BootAssets, BootWiringError> {
+    build_boot_assets_with_shell(
+        ghost_root,
+        balloon_root,
+        scopes,
+        shell_author_dpi,
+        balloon_author_dpi,
+        None,
+    )
+}
+
+/// [`build_boot_assets`] のシェル名つきの兄弟（spec: areka-P0-shell-balloon-switch 要件 6.4）。
+///
+/// `shell` が `Some(名)` なら `shell/<名>/` のシェルを、`None` なら既定の解決
+/// （`seriko.defaultsurfacedirectoryname`、無ければ `master`）のシェルを読む。中身は
+/// [`build_shell_assets`] と [`build_balloon_assets`] を続けて呼んで 1 つに束ねるだけである。
+/// 名前は検査しない（`resolve_with_shell` の契約どおり・目録に在る名前だけを渡すのは呼び手の責務）。
+/// 事前条件・事後条件・失敗は [`build_boot_assets`] と同じ。
+pub fn build_boot_assets_with_shell(
+    ghost_root: &Path,
+    balloon_root: &Path,
+    scopes: &[u32],
+    shell_author_dpi: u16,
+    balloon_author_dpi: u16,
+    shell: Option<&str>,
+) -> Result<BootAssets, BootWiringError> {
     // 実 WIC デコーダ（COM 初期化済みスレッド前提・donor build_and_spawn／placement measure と同型）。
     let decoder = WicDecoderArm::new().map_err(BootWiringError::Decoder)?;
+    let shell_assets = build_shell_assets(ghost_root, shell, scopes, shell_author_dpi, &decoder)?;
+    let balloon_assets = build_balloon_assets(balloon_root, scopes, balloon_author_dpi, &decoder)?;
+    Ok(BootAssets {
+        shells: shell_assets.shells,
+        balloons: balloon_assets.balloons,
+        resolver: shell_assets.resolver,
+        static_binds: shell_assets.static_binds,
+        bind_resolver: shell_assets.bind_resolver,
+        loop_tables: LoopTables {
+            shell: shell_assets.loop_table,
+            balloon: balloon_assets.loop_tables,
+        },
+        // 作者基準 DPI は呼び手が読んだ値の素通し搬送（解釈・再読取・既定差し替えをしない）。
+        shell_author_dpi: shell_assets.author_dpi,
+        balloon_author_dpi: balloon_assets.author_dpi,
+    })
+}
 
+/// シェルの側だけの資産（[`build_shell_assets`] の戻り値・[`BootAssets`] のシェルの欄の一括）。
+///
+/// シェルを差し替えるときは、これだけを作り直す（バルーンは元のまま）。
+pub struct ShellAssets {
+    /// scope ごとのシェル表示資産。
+    pub shells: Vec<ScopeAssets>,
+    /// `Emote{key}` → surface 解決器（先頭 World の `alias_snapshot()` 由来）。
+    pub resolver: SurfaceResolver,
+    /// 起動時オンの静的 bind 集合（shell descript `sakura.bindgroup{N}.default==1`）。
+    pub static_binds: BindSet,
+    /// bind 名前解決情報（`MountModel.bindgroups` 由来）。
+    pub bind_resolver: BindResolver,
+    /// シェル面のループ表（先頭 World から・scope 資産不在なら空表）。
+    pub loop_table: AnimationTable,
+    /// シェル面の作者基準 DPI（呼び手の値の素通し）。
+    pub author_dpi: u16,
+    /// 焼く段で落ちた絵の理由（`ShellTarget::bake_errors` の写し・記録は読み込みの権威が出し済み）。
+    ///
+    /// 起動（[`build_boot_assets_with_shell`]）は読まずに今日どおり読み飛ばして続ける。切替は
+    /// 空でなければ差し替えの前の失敗にする（areka-P0-shell-balloon-switch 要件 5.5・5.6）。
+    pub bake_failures: Vec<String>,
+}
+
+/// バルーンの側だけの資産（[`build_balloon_assets`] の戻り値・[`BootAssets`] のバルーンの欄の一括）。
+///
+/// バルーンを差し替えるときは、これだけを作り直す（シェルは元のまま）。
+pub struct BalloonAssets {
+    /// scope ごとのバルーン表示資産。
+    pub balloons: Vec<BalloonScopeAssets>,
+    /// バルーン面の scope 別ループ表（キー集合＝`balloons` の scope 集合）。
+    pub loop_tables: BTreeMap<u32, AnimationTable>,
+    /// バルーン面の作者基準 DPI（呼び手の値の素通し）。
+    pub author_dpi: u16,
+}
+
+/// シェルの側だけの資産を作る（[`build_boot_assets`] のシェルの半分・要件 4.4・6.4）。
+///
+/// `shell` が `Some(名)` なら `shell/<名>/`、`None` なら既定の解決のシェルを読む
+/// （`resolve_with_shell`）。失敗の種類は [`build_boot_assets`] のシェルの側と同じ。
+pub fn build_shell_assets(
+    ghost_root: &Path,
+    shell: Option<&str>,
+    scopes: &[u32],
+    author_dpi: u16,
+    decoder: &WicDecoderArm,
+) -> Result<ShellAssets, BootWiringError> {
     // マウント解決で shell dir を得る（起点 ghost/master/descript.txt・placement source と同経路）。
-    let model = resolve(ghost_root, DefaultEncoding::Ansi).map_err(BootWiringError::Mount)?;
+    let model = resolve_with_shell(ghost_root, DefaultEncoding::Ansi, shell)
+        .map_err(BootWiringError::Mount)?;
 
     // bind 名前解決情報: `MountModel.bindgroups` の名前宣言（`(カテゴリ, パーツ)`→着せ替え ID）を
     // 起動時資産へ焼き込む（既存 default_bind_ids/static_binds 経路は無改変・R independence）。
@@ -288,8 +381,9 @@ pub fn build_boot_assets(
     // 使う画像 → 焼く）。文字コードの扱い・記録・失敗の種類はすべて権威が持つ
     // （`areka_emo_present::shell_target`）。採寸（`placement::measure`）も同じ入口を通るので、
     // 「番号 → 面の画像」の対応・土台の絵・透過の扱いが表示と採寸で食い違わない（要件 3.6）。
-    let target = load_shell_target(&shell_dir, &decoder)?;
+    let target = load_shell_target(&shell_dir, decoder)?;
     let atlas = target.atlas().clone();
+    let bake_failures = target.bake_errors().iter().map(|e| e.to_string()).collect();
 
     // scope ごとに FRESH な EmoWorld を組む（`build_world` が面の表の構築とアトラス装着を行う。
     // EmoWorld は非 Clone・装着で move 消費ゆえ scope 数だけ組む。AtlasTable は Clone 共有）。
@@ -330,6 +424,35 @@ pub fn build_boot_assets(
     };
     let static_binds = build_static_bindset(&default_bind_ids(&shell_kv));
 
+    // シェル面のループ表（面種非依存＝裁定 (a)・**新規ファイル I/O なし**＝保持済み World の再利用のみ）。
+    // 全 scope が同一 `Shell` から build 済みゆえ内容は scope 非依存＝先頭 World から 1 度だけ
+    // 組めば足りる（この前提が成り立つのは **シェル面に限る**）。scope 資産が不在（空 scopes 等）
+    // なら空表を明示（`AnimationTable::empty()`）。
+    let loop_table = shells
+        .first()
+        .map(|scope_assets| AnimationTable::from_world(&scope_assets.emo_world))
+        .unwrap_or_else(AnimationTable::empty);
+
+    Ok(ShellAssets {
+        shells,
+        resolver,
+        static_binds,
+        bind_resolver,
+        loop_table,
+        author_dpi,
+        bake_failures,
+    })
+}
+
+/// バルーンの側だけの資産を作る（[`build_boot_assets`] のバルーンの半分・要件 4.4）。
+///
+/// 失敗の種類は [`build_boot_assets`] のバルーンの側と同じ（[`BootWiringError::Balloon`]）。
+pub fn build_balloon_assets(
+    balloon_root: &Path,
+    scopes: &[u32],
+    author_dpi: u16,
+    decoder: &WicDecoderArm,
+) -> Result<BalloonAssets, BootWiringError> {
     // バルーン: scope ごとに 解決 → 構築 → 定義読込 を **同一箇所で**導出する（単一導出点）。
     // 系列解決（`resolve_balloon_faces`）は scope あたり 1 回だけ呼び、その戻りを構築
     // （`build_balloon_target_from_faces`）と定義読込（`load_scope_balloon_model`）の双方へ
@@ -347,7 +470,7 @@ pub fn build_boot_assets(
     let mut balloon_tables: BTreeMap<u32, AnimationTable> = BTreeMap::new();
     for &scope in scopes {
         let faces = resolve_balloon_faces(balloon_root, scope)?;
-        let (emo_world, atlas) = build_balloon_target_from_faces(balloon_root, &decoder, &faces)?;
+        let (emo_world, atlas) = build_balloon_target_from_faces(balloon_root, decoder, &faces)?;
         // 面 0 必在（R1.7）は `resolve_balloon_faces` が権威として施行済みゆえ先頭は必ず存在する。
         // 万一の不在は権威の契約違反であり、log-first で真因を残して構築失敗に畳む（無言で
         // 定義なしのバルーンを組まない）。
@@ -375,35 +498,19 @@ pub fn build_boot_assets(
         });
     }
 
-    // SERIKO ループ表（面種非依存＝裁定 (a)・**新規ファイル I/O なし**＝保持済み World の再利用のみ）。
-    //
-    // シェル面: 全 scope が同一 `Shell` から build 済みゆえ内容は scope 非依存＝先頭 World から
-    // 1 度だけ組めば足りる（この前提が成り立つのは **シェル面に限る**）。scope 資産が不在
-    // （空 scopes 等）なら空表を明示（`AnimationTable::empty()`）。
-    // バルーン面: 上の前提は成り立たない（系列が scope ごとに異なる）ため、表は上の構築ループ内で
-    // scope ごとに導出済みである。ここではその写像をそのまま載せる（キー集合＝`balloons` の
-    // scope 集合・不変条件 (c)・scope 資産不在なら空写像）。
-    let loop_tables = LoopTables {
-        shell: shells
-            .first()
-            .map(|scope_assets| AnimationTable::from_world(&scope_assets.emo_world))
-            .unwrap_or_else(AnimationTable::empty),
-        balloon: balloon_tables,
-    };
-
-    Ok(BootAssets {
-        shells,
+    // バルーン面のループ表は系列が scope ごとに異なるため、上の構築ループ内で scope ごとに
+    // 導出済みである（キー集合＝`balloons` の scope 集合・不変条件 (c)・scope 資産不在なら空写像）。
+    Ok(BalloonAssets {
         balloons,
-        resolver,
-        static_binds,
-        bind_resolver,
-        loop_tables,
-        // 作者基準 DPI は呼び手が読んだ値の素通し搬送（解釈・再読取・既定差し替えをしない）。
-        shell_author_dpi,
-        balloon_author_dpi,
+        loop_tables: balloon_tables,
+        author_dpi,
     })
 }
 
 #[cfg(test)]
 #[path = "assets_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "assets_shell_tests.rs"]
+mod shell_tests;

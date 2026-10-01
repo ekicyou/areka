@@ -512,6 +512,33 @@ fn peek_homeurl(world: &mut World) {
     }
 }
 
+/// 更新の実行中か（窓口が要求を預かっている間＝段が `Idle` でないか、読み直しの切替の後送りを
+/// 持っている）。シェル・バルーンの切替の入口が断るのに使う（shell-balloon-switch 要件 1.13）。
+pub(crate) fn is_busy(world: &World) -> bool {
+    world
+        .get_non_send::<UpdateDesk>()
+        .is_some_and(|desk| desk.stage != Stage::Idle || desk.after_switch.is_some())
+}
+
+/// 標準の手続きが走っている窓口を据える（テスト用・背景スレッドは起こさない）。
+#[cfg(test)]
+pub(crate) fn insert_running_desk_for_test(world: &mut World) {
+    let mut desk = UpdateDesk::new(Arc::new(WorkGate::default()));
+    desk.stage = Stage::Running;
+    world.insert_non_send(desk);
+}
+
+/// 背景スレッドと同じ道（窓口の頼みの送出端）で、`ghost_dir` の読み直しを列つきで頼む（テスト用・
+/// 捌くのは次の取り出しの系）。
+#[cfg(test)]
+pub(crate) fn ask_reload_for_test(world: &World, ghost_dir: PathBuf, tail: Tail) {
+    world
+        .non_send::<UpdateDesk>()
+        .asks_tx
+        .send(DeskAsk::Reload { ghost_dir, tail })
+        .expect("窓口の頼みの受信端は生きている");
+}
+
 /// 終了が始まった（`exit_wait::begin_close` が呼ぶ）: 照会の返事待ちを捨てる。走っている依頼は門が待つ。
 pub(crate) fn discard_for_exit(world: &mut World) {
     let Some(mut desk) = world.get_non_send_mut::<UpdateDesk>() else {
@@ -540,7 +567,7 @@ struct Here {
 
 /// 対象を解く（起動の文脈と置き場のゴーストを読む・どちらかが無ければ 0 件）。引けない名前・無い
 /// フォルダは `warn!` で飛ばす。
-pub(super) fn resolve_targets(world: &World, raw: &RawUpdateRequest) -> Vec<TargetSpec> {
+pub(crate) fn resolve_targets(world: &World, raw: &RawUpdateRequest) -> Vec<TargetSpec> {
     let Some(here) = here(world) else {
         return Vec::new();
     };

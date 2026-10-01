@@ -4,6 +4,8 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
+use std::sync::{Mutex, Weak};
+use std::time::Duration;
 
 use bevy_ecs::system::SystemState;
 // `World` を使うのは下の `impl Emo2Wiring` 内の `#[cfg(test)]` メソッド `apply_present` だけ
@@ -20,9 +22,10 @@ use areka_emo_text::actor::TextLayerRuntime;
 use areka_parsers::balloon::BalloonModel;
 
 use super::super::balloon_visibility::BalloonVisibilityState;
+use super::super::switch_assets::SwapPayload;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::super::zorder_cue::ZOrderDirective;
-use super::zorder_descript::apply_descript_base;
+use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, MoveDirective, TalkClock};
 use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
 
@@ -138,6 +141,20 @@ pub struct Emo2Wiring {
     /// を作り直すと `last_run` が 0 のままとなり `Changed` が全窓へ誤マッチし続ける（＝毎フレーム
     /// 全窓 refresh の churn）ため、必ず使い回す。
     pub(super) dpi_state: Option<SystemState<DpiChangedQuery>>,
+    /// 差し替えの荷物の置き場（spec: areka-P0-shell-balloon-switch・design「SwitchAssets」）。
+    ///
+    /// 起動の結線が 1 つ作り、表示の橋渡し（`PresentBridge::with_swap_slot`）に持たせ、ここには
+    /// 弱い参照だけを置く。差し替えの相が引き上げて荷物を置き、橋渡しが合図の世代と突き合わせて
+    /// 取り出す。置き場を強く持つのは橋渡しだけ: seriko が合図を出す前に倒れたら、荷物（置き換えの
+    /// 返信の送り手）は橋渡しと一緒に消え、頼んだ段は返信の脱落を見て印を消す。ここが強く持つと
+    /// 送り手が生き続け、印が残って以後の切替がずっと断られる。seriko の送り手もここに持たせない
+    /// （降ろした後も World に残るので、持たせると seriko の join が戻らない＝持ち主は
+    /// `GhostSession` だけ）。
+    pub(in crate::emo2_boot) swap_slot: Weak<Mutex<Option<SwapPayload>>>,
+    /// このフレームの drain（表示の指令の適用）に費やした時間（毎フレーム `emo2_frame_system` が
+    /// 書く）。差し替えの相が、置き換えの返信のそろったフレームの `swap_ms` へ足す
+    /// （spec: areka-P0-shell-balloon-switch 要件 4.4）。
+    pub(super) last_drain: Duration,
 }
 
 impl Emo2Wiring {
@@ -179,6 +196,10 @@ impl Emo2Wiring {
             attached: false,
             // 初回 [`run_dpi_phase`] で遅延生成する（`SystemState::new` は `&mut World` を要する）。
             dpi_state: None,
+            // 置き場なし（引き上げは常に失敗）から始める。起動の結線は表示の橋渡しの置き場の
+            // 弱い参照へ差し替える。
+            swap_slot: Weak::new(),
+            last_drain: Duration::ZERO,
         }
     }
 
@@ -196,6 +217,16 @@ impl Emo2Wiring {
     /// [`apply_descript_base`]: super::zorder_descript::apply_descript_base
     pub(in crate::emo2_boot) fn seed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
         apply_descript_base(&mut self.zorder_ledger, zorder_raw);
+    }
+
+    /// シェルの差し替えで、基底を新しいシェルの `seriko.zorder` へ置き直す
+    /// （areka-P0-shell-balloon-switch 要件 2.7・差し替えの相の完了の後始末だけが呼ぶ）。
+    ///
+    /// 解釈・拒否・記録は [`apply_descript_rebase`] が持つ（`None`・解釈できない値は基底なし）。
+    ///
+    /// [`apply_descript_rebase`]: super::zorder_descript::apply_descript_rebase
+    pub(super) fn reseed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
+        apply_descript_rebase(&mut self.zorder_ledger, zorder_raw);
     }
 
     /// 当たり判定 resolver への読み口（design DD-IE-9/DD-IE-10・「Modified Files」mod.rs 行）。

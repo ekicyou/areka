@@ -40,7 +40,7 @@ fn fixture_root(tmp: &TempPath) -> BasewareRoot {
 }
 
 /// 今のゴーストを `current` のフォルダとする起動の文脈。
-fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
+pub(crate) fn boot_context(root: &BasewareRoot, current: &str) -> BootContext {
     BootContext {
         root: root.clone(),
         app_profile_dir: root.dir().join("profile"),
@@ -93,14 +93,14 @@ fn ghost_item(world: &World) -> Option<MenuItem> {
 }
 
 /// 枠の見出し（既定名・リソース名・有効）と子の（ラベル・有効・印）の列。
-type FrameShape = (
+pub(crate) type FrameShape = (
     String,
     Option<&'static str>,
     bool,
     Vec<(String, bool, Option<bool>)>,
 );
 
-fn shape(item: &MenuItem) -> FrameShape {
+pub(crate) fn shape(item: &MenuItem) -> FrameShape {
     let children = match &item.body {
         ItemBody::Submenu(children) => children
             .iter()

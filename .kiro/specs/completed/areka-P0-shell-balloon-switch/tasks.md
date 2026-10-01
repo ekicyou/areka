@@ -1,0 +1,276 @@
+# Implementation Plan
+
+> 境界は設計（`design.md`）の部品名で示す。コードは「何の定義か」で指し、行番号では指さない。テストは本番ファイルの兄弟ファイルへ置く（どのファイルも 1,000 行以下・上限の近い `runtime_tests.rs`・`assets_tests.rs`・`actor_tests.rs`・`schedule_tests.rs`・`ghost_switch_tests.rs` には行を足さない）。触ってはならないファイル（`ghost_switch.rs`・`ghost_switch_tests.rs`・`ghost_switch_test_support.rs`・`steady.rs`・`areka-parsers/src/sakura/`・`areka-sakura/src/compile.rs`・`areka-ghost/src/lib.rs`・`main.rs`・`boot_config.rs`・`placement/persist.rs`・`placement/spawn.rs`・`areka-emo-text`）の差分は 0 のまま進める。全体のテストは `tools/test-all.ps1` 1 本で回す。整形（`cargo fmt --check`）もタスクごとに通す。後回しにする要件は 0。
+> 呼び手がまだ無いモジュールは、先頭に `#![allow(dead_code)]` を置いてよい。呼び手を結ぶタスクで外す（どのタスクで外すかを Implementation Notes に残す）。
+
+- [x] 1. 下の層の小さな口
+- [x] 1.1 (P) kanade の許可表に切替のイベント 3 語を足す
+  - `OnShellChanging`・`OnShellChanged`・`OnBalloonChange` を、各 1 行の正典の URL の行つきでイベントの許可表に足し、冒頭の件数の doc を改める（42 → 45）
+  - 件数の直書き 2 か所を追随させる（件数の `assert_eq!` を 45 へ、完全一致のテストは名前を「45 語」へ改めて配列に 3 語）。消さない
+  - 印の無い依頼の判断（許可表の照合・定常の判定・応答の置き換え）の差分が 0 で、既存の汎用の入口のテストが緑のまま
+  - kanade のテストが緑で、3 語が引けて `OnTalk`・`OnHour` が引けないことを同じテストで判定する
+  - _Requirements: 8.2, 8.3_
+  - _Boundary: kanade Events_
+
+- [x] 1.2 (P) シェル名つきの解決を隣の新しいファイルに置き、今の解決をそれに委ねる
+  - 今の解決の本体を新しいファイルへ移し、シェル名を受ける形に広げる（名前なしは今日の規則＝`seriko.defaultsurfacedirectoryname`、無ければ `master`・名前ありは `shell/<名>/`・無ければ今日と同じ「シェルのフォルダが無い」の失敗）。bindgroup も選んだシェルの `descript.txt` から読む
+  - 既存の解決は新しい関数へ名前なしで委ねる 1 行になり、既存の呼び出し約 30 本とそのテストは直さない（元のファイルは行が減るだけ）
+  - 兄弟テストで、名前なしが今日と同じマウントを返すこと・名前ありで `shell/B` と B の bindgroup を返すこと・名前の先が無ければ「フォルダが無い」の失敗になることが緑
+  - _Requirements: 6.2, 6.4, 8.8_
+  - _Boundary: ResolveShell_
+
+- [x] 1.3 (P) 目録に隠しシェルも含める列挙を足す
+  - `menu,hidden` のシェルを除かない列挙を、今の列挙の隣に足す（今の列挙は不変＝他のゴーストの更新が除外に依る）。目録の素性の型には欄を足さない
+  - 兄弟テストで、新しい列挙は隠しシェルを含み、今の列挙は含まないことが緑
+  - _Requirements: 1.6, 8.4_
+  - _Boundary: Ghost catalog_
+
+- [x] 1.4 (P) テスト用の検体に 2 つ目のシェルを写す部品を足す
+  - 展開先の複製の中で `shell/<元>/` を `shell/<先>/` へ再帰で写し、写した `descript.txt` の `name` 行を置き換える（無ければ足す・文字コードの宣言は保つ）。失敗は検体の失敗の型で返す
+  - 検体の `.nar`・検体の一覧（7 件）・README の表は不変。テスト専用のクレートのまま（本番の依存へ置かない）
+  - 兄弟テストで、写した先の `name` が変わり、元のシェルの `descript.txt` がバイト単位で不変であることが緑
+  - _Requirements: 9.1, 9.3, 12.1_
+  - _Boundary: SampleKit_
+
+- [x] 2. kanade の「台詞の切れ目」の口
+- [x] 2.1 口の型・依頼のメッセージ・見張りの状態・殻を足し、印の無い依頼の見極めを作る
+  - 印（先に送るイベント）・結果（切れ目に達した／利用者の中断／達しないと決まった〔定常でない・終了・ゴースト切替〕／送らなかった）・印の台詞の終わり方（最後まで・置き換え・台詞なし）の型を足して再輸出し、依頼のメッセージと名前を返す腕を足す
+  - 殻は依頼のメッセージを運行の入力へ写し（メッセージの網羅の match がこのタスクで閉じる）、返信の送り手をメッセージをまたいで 1 本持ち、`drive` の後に結果が出ていれば 1 回だけ送る。見張りの最中に次の依頼が来たら古い送り手を捨てて `warn!` を 1 件残す
+  - 運行の状態に見張りの欄（高々 1 つ）を足し、構造体リテラル 16 か所へ空の値を 1 行ずつ足す
+  - 始め方は「定常でない・終了の保留あり → 達しない（定常でない）」「印なし → 見張り」。見極めは毎 `step` の後に 1 回走り、設計の Flow 2 の順（相 → 終了の保留 → ゴースト切替の保留 → 再生中 → 切れ目）で決め、1 度決まった結果は変えない
+  - 新しい兄弟テストで、印なしの依頼が `Steady{talk: None}` で即「達した」・再生中なら台詞の終わりで「達した」・`\-` の予約の無い利用者の中断の後は「達した」・`\-` の予約つきの中断は今日どおり終了系列へ進んで「終了で達しない」・見張り中の閉鎖要求で「終了で達しない」・再生中のゴースト切替の保留で「ゴースト切替で達しない」・起動系列の途中と終了の保留ありで「定常でない」が緑
+  - 殻の新しい兄弟テストで、結果がちょうど 1 回届くこと・見張りの最中に kanade を止めると受け手に「送り手が落ちた」が見えること・2 つ目の依頼で `warn!` 1 件が緑。既存の殻のテストは緑のまま
+  - `steady.rs` の差分は 0。網羅の match のために `schedule_tests.rs` に腕が要るなら、その 1 本を兄弟の新ファイルへ移す（消さない・行を足さない）
+  - _Requirements: 1.14, 2.3, 3.1, 5.4, 5.7, 8.2, 8.8, 8.11_
+  - _Depends: 1.1_
+
+- [x] 2.2 印の付いた依頼（`OnShellChanging`）の送出・台詞の追跡・中断の例外を作る
+  - 印ありの依頼は、定常で終了の保留が無いときだけ印のイベントを GET で送る（許可表の照合と組み立ては既存の関数を同じく呼ぶ・許可表に無ければ「送らなかった」）。応答の直後に今のトークが変わっていれば印の台詞として控え、変わっていなければ「台詞なし」とする
+  - 印の台詞の終わり方を 1 回だけ結果に載せる: 番号が同じまま終われば「最後まで」、今の番号と食い違えば置き換えた台詞の終わりで「置き換え」、選択肢の時間切れの解除は「最後まで」、選択の応答（カスケード）は「置き換え」
+  - 台詞の終わりの処理は、利用者の中断の帳簿を空にする既存の関数の**前**に「印の台詞の利用者の中断か」を評価し、真なら終了への結びを偽にする（帳簿を空にする場所は既存の 1 か所のまま）。印の台詞が自ら `\-` に達したときは今日どおり終了系列へ進む
+  - 兄弟テストで、最後まで → 「達した・最後まで」、置き換え → 「達した・置き換え」、204 → 「達した・台詞なし」、`\-` 入りの印の台詞の中断 → 「利用者の中断」で相が `Steady{talk: None}`・終了系列の指示 0、同じ台本を印なしで中断 → 終了系列へ進むこと、印の台詞の `Quit` → 「終了で達しない」、置き換えの検出が選択肢の 1 世代の控えと独立に働くことが緑
+  - _Requirements: 2.1, 2.2, 5.1, 5.2, 8.11, 12.8_
+
+- [x] 3. ghost の実行系にシェル名を効かせる
+- [x] 3.1 起動にシェル名の引数を足し、今のシェルを書き換える口を作る
+  - 起動の関数にシェル名の引数を足し、解決を 1.2 のシェル名つきへ替える（止め口つきの起動は名前なしを渡す）。本体の呼び出し点と既存のテストの 1 か所には名前なしを渡し、振る舞いは変えない
+  - 実行系に「今のシェルのフォルダ」だけを書き換える口を足す（bindgroup と記憶の Shell スコープの根は起動時のまま）
+  - 新しい兄弟テストで、名前ありの起動のマウントのシェルと `OnBoot` の Ref0 がそのシェルになること・書き換えの口の後にマウントのシェルが新しいフォルダを指すことが緑。本体がビルドでき既存のテストが緑
+  - _Requirements: 6.4, 6.5, 6.6, 8.4_
+  - _Depends: 1.2_
+
+- [x] 4. seriko に定義の差し替えの語を足す
+- [x] 4.1 (P) スコープの状態とループの表を差し替える口を作る
+  - シェルの差し替えは静的な着せ替えを入れ替え、動的な着せ替えとシェル側のパターンの進行を消し、今の面は保つ。バルーンの差し替えはバルーン側のパターンの進行を消し、今の面は保つ
+  - ループはシェルの表・バルーンの表をそれぞれ差し替えられるようにし、再生中のループを捨てて新しい表から始め直す（「以後不変」の doc を「差し替えの語でだけ替わる」へ改める）
+  - 出力の語に「定義を替えた」の合図（世代・種別・スコープごとの今の面と着せ替え）を足して再輸出する。出力の語は網羅を強いる形なので、本体の表示の橋渡しの写しに仮の腕（`debug!` を残して何も送らない）を同じコミットで 1 つ足し、9.1 で置き換える
+  - 兄弟テストで、差し替えの後に今の面が保たれ、動的な着せ替えとパターンの進行が消えることが緑。本体がビルドできる
+  - _Requirements: 2.6, 2.8, 3.5, 12.6_
+  - _Boundary: Seriko state, looper, output（本体は橋渡しの仮の腕 1 つだけ）_
+
+- [x] 4.2 seriko のアクターが差し替えの依頼を捌き、合図を 1 件出すようにする
+  - 差し替えの依頼（シェル: 世代・別名表・静的な着せ替え・着せ替えの名前表・アニメ表／バルーン: 世代・バルーンのアニメ表）と、送り手の送り口（送れなければ偽）を足す
+  - アクターの受信の閉包が依頼を既存のメッセージ処理より先に捌く（既存の処理の署名は不変＝テストの呼び出し 45 本を直さない）。既存の処理に殻を経ずに届いたら `error!` を 1 件残して捨てる
+  - シェルは定義を差し替え → 4.1 の口 → 各スコープの今の面（無ければ無し）と新しい既定の着せ替えを合図で 1 件出す。バルーンはシェル側を変えず、各スコープのバルーンの今の面（無ければ 0）を出す
+  - 新しい兄弟テストで、シェルの差し替えの後に同じ面の合図が新しい既定の着せ替えで 1 件出ること・古い表のループの指令が合図の後に 0 件・合図より前に処理した指令は合図より前に出ること・バルーンの差し替えがシェル側を変えないことが緑
+  - _Requirements: 2.6, 2.8, 3.5, 12.6_
+  - _Boundary: Seriko actor_
+  - _Depends: 4.1_
+
+- [x] 5. present に古い装着を片付けて登録し直す口を足す
+- [x] 5.1 (P) 登録を消す口と装着の子を消す口を作る
+  - 装着の子 2 つ（面と文字の層のスロット）を消す口と、表から外して引き継ぐ値（窓・可視性の持ち主・適用済みの寸法・素の大きさ・保留中の大きさ変更）を返す「登録を消す口」を足す（未登録なら失敗を返し表は不変）
+  - 兄弟テストで、子を消す口の後に窓の子が 0 になることと、未登録の対象で失敗が返り表が不変なことが緑
+  - _Requirements: 4.6, 5.6_
+  - _Boundary: Present mount, presenter_
+
+- [x] 5.2 置き換えの命令と手順を作り、引き継ぎを固定する
+  - present の命令に「装着の置き換え」（対象・新しい EmoWorld・アトラス・作者の DPI・最初の表示の有無・返信）の腕を足し（`#[non_exhaustive]` のまま）、同じコミットで命令の適用の腕から置き換えの手順へ渡す（同じクレートの網羅の match が閉じる）
+  - 置き換えは 1 回の呼び出しの中で、未登録なら `error!` と失敗（表は不変）→ 登録を消す → 引き継ぎの値で新しい装着を登録（作者の DPI の政策だけ新しい値から）→ 最初の表示があれば今日の表示と同じ経路で表示 → 返信、の順に行う
+  - 新しいシェルに今の面が無ければ今日の合成の失敗と同じく `error!` を残し、その対象は表示なしのまま
+  - 新しい兄弟テスト（GPU）で、置き換えの後に古い子が 0・新しい子が 1 組・外部所有の引き継ぎで隠れたまま・同じ物理寸なら窓寸の要求なし／違えば要求あり・拡大率 1 以外でも同じ手順で出ること・無い面で `error!` 1 件と表示なしが緑
+  - _Requirements: 4.1, 4.2, 4.3, 4.5, 4.6, 5.6, 11.9_
+  - _Boundary: Present presenter, command_
+  - _Depends: 5.1_
+
+- [x] 6. 資産を片側ずつ作り、背景で作る
+- [x] 6.1 資産づくりをシェルとバルーンの 2 本に括り出し、シェル名つきの兄弟を足す
+  - 今の資産づくりの本体を、シェルだけ（ゴーストの根・シェル名・スコープの集合・作者の DPI）とバルーンだけの 2 本に括り出し、両者を続けて呼ぶシェル名つきの兄弟を足す
+  - 今の資産づくりの署名は据え置き、名前なしで兄弟へ委ねる 1 行にする（既存の呼び手とテストの追随 0）
+  - 本体がビルドでき、既存の資産づくりと装着のテストが緑のまま。シェル名つきの兄弟が名前の先のシェルの絵を作ることを兄弟の新しいテストで判定する
+  - _Requirements: 4.4, 6.4, 8.8_
+
+- [x] 6.2 (P) 配置の情報源と配置の準備にシェル名つきの口を足す
+  - シェル名つきの `descript.txt` の読み口と、シェル名つきの配置の準備を足し、既存の口はそれを名前なしで呼ぶ（既存の呼び手 6 か所は不変）
+  - 兄弟テストで、名前ありの情報源のシェルのフォルダが名前の先を指すことが緑
+  - _Requirements: 6.4_
+  - _Boundary: Placement source_
+  - _Depends: 1.2_
+
+- [x] 6.3 新しい資産を背景のスレッドで作る部品と、荷物の置き場を作る
+  - 受理ごとに 1 本のスレッドを起こし、COM の MTA 初期化の上で、シェルなら 6.1 のシェルの資産・6.2 の配置の値・位置の記憶（読むだけ）を、バルーンならバルーンの資産・スコープごとの文字の模型・背景色・アニメ表を作り、結果を線で UI へ返す。失敗はスレッドの中でも `error!` を 1 件残して失敗の型で返す
+  - 荷物（世代・スコープごとの EmoWorld・アトラス・作者の DPI・返信の送り手）と、荷物を 1 つ置く共有の置き場を作る
+  - 新しい兄弟テストで、荷物の中身が線を越えて送れること（コンパイル時の確かめ）・読めないフォルダと復号できない画像で失敗が返り `error!` 1 件・スレッドが倒れたら受け手に「送り手が落ちた」が見えることが緑
+  - _Requirements: 4.4, 5.5, 5.6_
+  - _Depends: 6.1, 6.2_
+
+- [x] 7. 起動時のシェルと seriko の送り手の持ち主
+- [x] 7.1 (P) 最後のシェルの読み手・起動のシェルの決定・1 つだけ書く記憶の書き手を作る
+  - 最後のシェルの読み手（最後のバルーンの読み手と同じ形）と、起動のシェルの決定（記憶の名の `shell/<名>/descript.txt` が在ればその名・隠しでも可／無ければ `warn!` 1 件で既定／記憶が無ければ既定）を足す
+  - `LastShell` だけ・`LastBalloon` だけを Ghost スコープへ投函して `info!` を残す書き手を 2 つ足す（3 つを書く既存の書き手は不変）
+  - 兄弟テストで、記憶なし → 既定・記憶の名が在る（隠しでも）→ その名・先が無い → `warn!` 1 件で既定、1 つだけ書く書き手が他の鍵に触れないことが緑
+  - _Requirements: 6.1, 6.2, 6.3_
+  - _Boundary: BootResolve_
+
+- [x] 7.2 起動の結線にシェル名を運び、3 か所の解決を同じシェルにそろえる
+  - 配置の準備がシェルを 1 度だけ決めて（7.1）資源に置き、シェル名つきの配置の準備へ渡す。起こす処理はその資源を取り出し（無いか根が違えば自分で決める）、起動の結線へ渡す
+  - 起動の結線にシェル名の引数を足し、シェル名つきの資産づくりと実行系の起動へ渡す。`Emo2BootInputs`・`StartupDescriptValues`・`GhostBootOptions` には欄を足さない
+  - 新しい兄弟テスト（ghost_session から `#[path]` で宣言）で、記憶のシェルで起きたとき資産・配置の情報源・実行系のマウントのシェル・`OnBoot` の Ref0 が同じシェルを指し、決定が 1 回・`warn!` が高々 1 件で、記憶の先が無いときは既定で起きて起動の成功で記憶が既定へ書き直ることが緑。ゴースト切替と更新の読み直しの既存のテストが緑のまま
+  - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6, 8.4, 11.7_
+  - _Depends: 3.1, 6.1, 6.2, 7.1_
+
+- [x] 7.3 seriko の送り手の複製をゴーストのセッションに持たせ、降ろす最初の段で落とす
+  - 起動の結線の結果に seriko の送り手の複製を 1 欄足して返し（構造体リテラルは結線のファイルの中だけ）、セッションがそれを持って借り口を出す（テスト用と LogSink の腕は空）
+  - 降ろす処理の最初の段（ループの刻みの停止）で一緒に落とし、seriko の join の前に送り手が消えるようにする。同関数の doc の前提を「複製はセッションだけが持ち最初の段で落とす」へ改める
+  - ゴースト切替・終了の既存のテストが緑のまま（seriko の join が止まらない）で、送り手を持ったセッションを降ろすと戻ることを兄弟のテストで判定する
+  - _Requirements: 8.5_
+
+- [x] 8. 入口と台本の受け口
+- [x] 8.1 台本の受け口を作り、消費者台帳と受け口の列に登記する
+  - 入口のモジュールを新しく置き、種別（シェル／バルーン）と台本から来る生の要求（種別・名前・`raise-event`）の型だけをそこに定める（8.2・8.3 が同じモジュールを育てる）。受信端を結ぶのは 8.3 なので、それまでの送出は `warn!` の送り失敗になる（台本は続く）
+  - `(change,shell)`・`(change,balloon)` だけを自分宛てとし、他は `debug!` で見送る 2 段の受け口を作る。名前なしは `warn!`、`--option=raise-event` はシェルでだけ効き、他の選択肢は `warn!` を 1 件残して要求は出す。送れなければ `warn!`・台本は殺さない
+  - 消費者台帳に 2 行を足し（13 → 15）、「`(change,ghost)` だけ」を固定していたテストを「3 組が登記され、裸の `change` は無い」へ書き換える（消さない）。起動の結線の受け口の列に 11 本目として挿す
+  - 既存の `change` の受け口と台帳の doc の「シェル・バルーンは別の spec」を持ち場を書いた形へ改める
+  - 兄弟テストで、シェル → 要求 1 件（`raise-event` 偽）・`--option=raise-event` → 真・バルーンの `raise-event` → `warn!` 1 件と要求 1 件（偽）・ゴースト → 0 件・名前なし → `warn!` が緑、台帳のテストが 15 行で緑
+  - _Requirements: 1.2, 1.3, 1.4, 1.15, 10.3_
+  - _Depends: 7.2_
+
+- [x] 8.2 切替先の名前の解決と、インストールの控えを作る
+  - 要求の型（種別・名前かフォルダ・出どころ）と判定の型を作る。解決は `random` と `lastinstalled` を先に解き、次に `name` → フォルダ名の順に大文字小文字を区別して突き合わせる（シェルの候補は隠しを含む列挙・バルーンは根の目録・今のものも候補）
+  - `random` は隠しと今のものを除いて乱数の共用の関数で 1 つ選び、候補 0 なら今のもの（`info!`）。シェルの `lastinstalled` は控えのゴーストが今のゴーストと一致し先が在るときだけ、バルーンは控えが目録に在るときだけ。それ以外は理由つきの該当なし
+  - インストールの完了のシェルの腕とバルーンの腕に控えを書く 1 行ずつと、更新の窓口に「更新の実行中か」を答える問いを 1 つ足す
+  - 兄弟テストで、`name` → フォルダ名 → 該当なし・大文字小文字の区別・隠しシェルの名指し・今のものへの切替・`random` の注入の乱数と候補 0・シェルの `lastinstalled` 4 通り（控えあり・なし・別のゴースト・先が無い）でゴースト切替の要求 0・バルーンの `lastinstalled` 2 通りが緑
+  - 解決の関数が長くなり入口のファイルが 500 行を超えそうなら、解決の純関数を隣の新ファイルへ分ける
+  - _Requirements: 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 1.13, 12.3, 12.4, 12.5_
+
+- [x] 8.3 入口の受理の判定と、待ちの開始・取り出しの系・終了の片付けを作る
+  - 入口は、進行中あり → 重ね・ゴースト切替中・更新中・文脈なし（置き場・根・結線・seriko の送り手）・該当なしの順に判定して各 `warn!` 1 件で断り、受理までに kanade へ何も送らない
+  - 受理したら `info!` → 背景の資産づくり（6.3）を起こす → 待ちの口を送る（メニューのシェルと `raise-event` 真は印つき＝`OnShellChanging` の Ref0〜2・それ以外は印なし）→ 進行中の印を置く。送れなければ `error!` で印を置かない
+  - Reference の組み立て（名前は `descript.txt` の `name`、無ければフォルダ名・パスは絶対パス）を入口の側に `pub(crate)` で 1 か所だけ置き、9.4 の `OnShellChanged`／`OnBalloonChange` も同じものを使う（設計は差し替えの相の私有の関数としていた＝置き場の違いを Implementation Notes に残し 12 で design へ反映する）
+  - 受け口の線から要求を全件取り出して入口へ渡す系をプロセスに 1 回登記し、受信端をゴーストごとに挿し替える。終了の門に片付けを登記し、終了が始まったら `info!` を残して印を消す
+  - 兄弟テストで、断りの各場面で `warn!` 1 件と kanade の受信端が空・受理で `info!` 1 件と待ちの依頼 1 件（印つきの Ref0〜2 の突き合わせを含む）・終了の片付けで `info!` 1 件が緑
+  - _Requirements: 1.1, 1.5, 1.12, 1.13, 1.14, 1.16, 2.1, 5.7_
+  - _Depends: 2.2, 6.3, 7.3_
+
+- [x] 9. 差し替えの相
+- [x] 9.1 seriko の合図を present の置き換えへ写す橋渡しを作る
+  - 4.1 で足した仮の腕を置き換える。表示の橋渡しに荷物の置き場を持たせ（既定は無し）、合図が届いたら世代の一致する荷物を取り出してスコープごとに置き換えの命令を送る（シェルは `2*scope`・バルーンは `2*scope+1`・最初の表示は合図の同じスコープの面と着せ替え）。荷物が無い・世代が違えば `error!` を 1 件残して何も送らない。それ以外の指令は今日どおり写す
+  - 結線で置き場を 1 つ作り、橋渡しと結線の持ち物の両方へ渡す（結線の持ち物に seriko の送り手は持たせない）
+  - 兄弟テストで、合図が置き換えの命令へ正しい番号で写ること・荷物が無いと `error!` 1 件で命令 0・合図より前の指令が前に並ぶことが緑
+  - _Requirements: 4.1, 4.2_
+  - _Depends: 4.2, 5.2, 6.3, 8.3_
+
+- [x] 9.2 (P) シェルの `descript.txt` の見た目の値を走っている窓へ入れ直す部品を作る
+  - 起動時と同じ純関数を同じ順で通し（配置の設定 → 配置の解決 → 利用者のドラッグの記憶を重ねる）、スコープごとの基準点・バルーンのずらしの基準・揃え方の基準だけを既存のキャラ窓の部品へ入れ直し、バルーン窓を既存の追従で 1 度置き直す。窓の位置とスコープの集合は触らない
+  - 重なりの基底の解釈器の隣に、新しいシェルの `seriko.zorder` で基底を置き直す関数を足す（解釈できない・無い値は空の列＝基底なし・拒否は既存の記録）。台帳は変更 0。結線の持ち物からそれを呼ぶ口は 9.4 で足す（9.1 と同じファイルに触れない）
+  - 走っている窓に無いスコープは `debug!` で読み飛ばし、窓が無ければ `warn!` を残してスコープごとに続ける
+  - 兄弟テストで、新しいシェルのずらしと揃え方がキャラ窓の部品に入り、窓の位置とスコープの集合が不変で、保存済みのバルーンのずらしが保たれることが緑
+  - _Requirements: 2.7, 10.2_
+  - _Boundary: Reseed, zorder descript_
+
+- [x] 9.3 差し替えの相の待ちの段を作る
+  - 描画の流れの drain の直後に差し替えの相を 1 行で挿し、毎フレーム 1 回、進行中の印の段を見る
+  - 待ちの段: 利用者の中断 → `info!`、定常でない → `warn!`、終了・ゴースト切替で達しない → `info!` の取りやめ、送らなかった → `warn!`、送り手が落ちた → `info!`、資産の失敗 → `error!`。いずれも印を消し、差し替え・イベント・記憶は 0
+  - 切れ目が資産より先に届いたら、資産がそろったフレームで印なしの待ちの口を送り直して待ち続ける（`debug!`・送れなければ `error!`）。資産がそろった後に切れ目を受けたら、ゴースト切替が進んでいれば取りやめ（`info!`）、無ければ世代を進め、荷物を置き場へ置き、返信の受け手を控え、セッションの seriko の送り手で差し替えを頼む（送れなければ `error!` と置き場を空に）
+  - 兄弟テスト（偽の返信）で、各結果の記録 1 件と差し替え・イベント・記憶 0・ゴースト切替が勝つこと・切れ目が先に届いたときの送り直しが 1 件で、その返事が終了なら取りやめ・切れ目なら差し替えの依頼 1 件（送り直しの返事より前は 0 件）が緑
+  - _Requirements: 1.12, 1.14, 1.16, 5.1, 5.4, 5.5, 5.7, 5.8, 12.2, 12.7, 12.9_
+  - _Depends: 9.1_
+
+- [x] 9.4 差し替えの相の完了の段と後始末を作る
+  - 置き換えの返信がそろったら、どれかが失敗・落ちた → `error!`（記憶・通知 0）、全部成功 → 後始末
+  - 結線の持ち物に、9.2 の関数で重なりの基底を置き直す口を足す
+  - シェルの後始末: 9.2 で見た目の値を入れ直す → 重なりの基底を置き直す → 実行系の今のシェルを書き換える → `LastShell` だけを書く → `OnShellChanged`（Ref0＝新しいシェルの名前・Ref1＝ゴーストの名前・Ref2＝新しいシェルの絶対パス）を汎用の入口で送る
+  - バルーンの後始末: スコープごとの文字の模型と背景色を替える → 可視性の制御のそのスコープの記憶を消す口（足す）→ 今のバルーンを記憶の経路の新しいバルーンにする → `LastBalloon` だけを書く（argv で起きたプロセスでも）→ `OnBalloonChange`（Ref0＝名前・Ref1＝絶対パス）を送る
+  - Reference は 8.3 の組み立てを使う。最後に `info!`（種別・切替先・UI スレッドで費やした時間）を残して印を消す。記憶の書き手が無ければ `warn!` で成功扱い
+  - 兄弟テストで、返信の失敗で `error!` 1 件と記憶 0、成功でシェル・バルーンそれぞれのイベントの Reference と 1 つだけの記憶が緑
+  - _Requirements: 2.4, 2.7, 3.2, 3.3, 3.4, 4.4, 6.1, 6.5, 6.7_
+  - _Depends: 7.1, 9.2_
+
+- [x] 10. メニューの「シェル」「バルーン」枠
+  - ゴーストの枠と同じ形で 2 枠の登記を作り、起こす処理でメニューの結線の直後に登記する（起こすたびにやり直す）。メニューのモジュールの doc を実装後の形へ改める
+  - 供給はメニューを出すたびに目録を読む（シェルは隠しを除く列挙・バルーンは根の目録）。ラベルは `name`（無ければフォルダ名）で目録の並びのまま、今のものに印を付け、1 つだけでも枠を出す。項目名の照会と既定名・作法は不変
+  - 選ぶとフォルダ名で指した要求（出どころ＝メニュー）を入口へ出す（メニューは可否を判断しない）
+  - 再起動の既存のテストの登記の一覧に 2 枠を加え、新しい兄弟テストで並び・ラベル・今の印・1 つでも出る・選ぶと入口へ要求 1 件・2 周目で登記が新品が緑
+  - _Requirements: 1.5, 7.1, 7.2, 7.3, 7.4, 7.5, 10.3, 11.9_
+  - _Depends: 8.3_
+
+- [x] 11. 同じ World での往復の統合テスト
+- [x] 11.1 シェルの往復と、`OnShellChanging` の有無を固定する
+  - 土台は `R_POST_and_KOMAINU` の複製に 1.4 で 2 つ目のシェルを足したもの、偽の SHIORI、描画の流れを有界に回す GPU の土台（ghost_session から `#[path]` で宣言）
+  - A → `raise-event` 付きの台本 → `OnShellChanging`（Ref0〜2・台本あり）→ 再生完了 → 差し替え → `OnShellChanged`（Ref0〜2）→ `LastShell` が B → A へ戻る、を集めてから 1 回で判定する（イベント列と Reference・`OnClose`／`OnBoot` 0 件・窓の子が新しい分だけ・可視性の持ち主と窓寸の要求の引き継ぎ・会話の状態の保持）
+  - `raise-event` 無しで `OnShellChanging` 0 件と命令の台本の後の差し替え、メニュー相当で `OnShellChanging` 1 件、自分自身への切替で作り直しとイベントが緑
+  - _Requirements: 1.8, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 4.2, 4.3, 11.1, 11.3_
+  - _Depends: 9.4, 10_
+
+- [x] 11.2 バルーンの往復と、中止・失敗・終了・ゴースト切替を固定する
+  - `\![change,balloon,Y]` → 台詞の終わり → 差し替え → `OnBalloonChange`（Ref0〜1）→ `LastBalloon` が Y → 残っていた古いバルーンは消え、新しいバルーンは隠れたまま、次の台詞の文字の層が新しいスロットに結ばれる、の往復と「切り替え前」のイベント 0 件
+  - `\-` 入りの `OnShellChanging` の台詞の中断で差し替え・`OnShellChanged`・記憶 0・終了の要求なし・バルーンは今日の規則で隠れる。復号できない画像のシェルで `error!` 1 件・元の装着・イベントと記憶 0。待ちの間の閉鎖要求で取りやめと今日の終了。シェル切替の待ちの間に来たゴースト切替が通り、差し替え・イベント・記憶が 0
+  - シェルを 1 度差し替えた後のゴースト切替と終了で、セッションを降ろす処理が戻る
+  - _Requirements: 3.1, 3.2, 3.3, 3.5, 5.1, 5.2, 5.3, 5.5, 5.6, 5.7, 8.5, 11.2, 11.4, 11.5, 11.6_
+  - _Depends: 11.1_
+
+- [x] 11.3 切替の後の更新の対象と読み直しを固定する
+  - 差し替えの後に更新の対象の解決が新しいシェル・バルーンを指すこと（既存の解決のテストの兄弟）と、読み直しの後に記憶から同じシェル・バルーンで起きること（既存の読み直しのテストの兄弟・既存は緑のまま）が緑
+  - _Requirements: 6.5, 11.8_
+
+- [x] 12. 網羅台帳・生成物・互換の記述を実物に揃える
+  - `shiori.toml` の 3 イベントと `sakura-script.toml` の 2 命令を実装済みへ（owner＝本仕様・備考にシェルの `lastinstalled` の誤記の読みと `sequential` は正典に無い旨）、2 つの `*rootbutton.caption` の備考の引受先を本仕様へ改め、登記済みの枠の一覧を今の形（ゴースト・インストール・更新・シェル・バルーン・説明書・終了）へ直す。生成物は生成器で作り直す（手で直さない）
+  - `doc/COMPAT_ARCHITECTURE.md` §8 に (a)〜(j) の 10 行を、正典の沈黙の根拠と裁定の日付つきで記す
+  - 設計の記述と実装が食い違った箇所（Implementation Notes に残したもの）を design の該当節へ反映する
+  - 台帳の検査（`ukadoc-survey check`）の食い違いが 0 で、生成物の差分が生成器の出力と一致する
+  - _Requirements: 10.1, 10.2, 10.3_
+  - _Depends: 11.3_
+
+- [x] 13. 全体の確認と実機サインオフ
+- [x] 13.1 全体のテストと規律の検査を通す
+  - `tools/test-all.ps1` が全段緑。テストの削除 0・触ってはならないファイルの差分 0・`Emo2BootInputs`／`StartupDescriptValues`／`GhostBootOptions`／`ConfigInputs`／`CurrentGhost`／`GhostDecision`／`BalloonDecision`／`Identity` の欄の増減 0・1,000 行・上限の近いテストの行の増加 0・環境変数／外部クレート／同期送信の追加 0・`session_mark_verdict`／`ExitOrigin` の差分 0・切替の経路からの終了の指示 0 を検査する（pathspec が実在することを先に確かめる）
+  - 裁定 1〜9 を覆す必要が見つかっていないことを確かめる（見つかれば開発者へ議題として上げて止まる）
+  - _Requirements: 5.8, 8.1, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 11.10, 12.10_
+
+- [x] 13.2 実機で確かめて `signoff.md` に記録する
+  - 2 つ目のシェルは `nar-sample-path` が作る `manual/R_POST_and_KOMAINU/` の下（ワークツリーの `target\` の下）に 1.4 と同じ手順で置き、手順を残す
+  - ① メニューで 2 つ目のシェル ② 戻る ③ 台詞の途中でダブルクリック → 中止 ④ `emo2-kakukaku` ⇄ `StayseeBalloon` ⑤ 再起動で記憶どおり ⑥ 拡大率 200% で ①④ ⑦ emo2 の `\![change,balloon,…]` と `update.pasta` の応答、を有界の自動終了つきで走らせる（`RUST_LOG` は判定の分岐の水準まで開ける）
+  - コマンド・終了コード・目印の件数・UI スレッドを止めた時間・目視で崩れたフレームの有無を `signoff.md` に記録する
+  - _Requirements: 4.4, 4.5, 9.2, 9.3, 11.11, 11.12_
+
+## Implementation Notes
+
+（実装の途中で分かった設計との差・外した `#![allow(dead_code)]`・Monitoring へ足す記録の語をタスクごとに 1 行で残す）
+- 1.1: 許可表に無い例として `OnShellChanged` を使っていた `raise_event_tests.rs` の既存テスト 1 本の例を `OnTalk` へ差し替えた（1 語・振る舞い不変）。design の「印の無い `RaiseEvent` の既存テストは不変」はこの 1 語を除いて成り立つ（12 で design へ反映）。
+- 1.2: `resolve_with_shell` は名前を検査せず `shell/` の下へつなぐ（`..`・絶対パスで外を指せる）。名前を渡す側（7.1 の起動のシェルの決定・8.2 の解決）は目録に在る名前だけを渡すこと。
+- 2.1: 構造体リテラルは実数 15 か所（design の 16 は mod.rs の数え違い）。`decide` の段 1 に「相が定常でなく `state.change` が在れば `GhostChange`」を足した（`raise_event` 無しのゴースト切替は切替の相を経ず `Unloading` へ入るため・design Flow 2 より広い＝12 で反映）。`begin` に `config` 引数は無い。許可表に在る印は暫定で `warn!(talk_gap_marked_unsupported)`＋`NotSent` → 2.2 で必ず送出へ置き換える。
+- 2.2: design の `observe(state, reply_origin)` は `marked_reply(&state,&input)`（遷移の前にトークの番号を控える）＋`observe(state, Option<MarkedReply>)` に分けた。台詞の終わりの後の印の追跡は `note_marked_done`。`is_marked_break` は結果の決まっていない見張りにだけ効く。暫定の `talk_gap_marked_unsupported` はコードから消えた（12 で design へ反映）。
+- 4.1: `LoopRuntime::replace_shell_table`／`replace_balloon_tables` にメソッド単位の `#[allow(dead_code)]` → 4.2 で外す。本体の仮の腕は `PresentBridge::send` の先頭の捌き（`debug!`）と `map_display_command` の網羅の腕（`Rebased => None`・届かない）の 2 か所 → 9.1 で両方を置き換える。`RebaseKind { Shell, Balloon }` は実装が名付けた。スコープごとの今の面を読む口は 4.2 で足す。
+- 4.2: 4.1 のメソッド単位の `#[allow(dead_code)]` 2 つを外した。今の面の読み口は `ScopeStates::current_surfaces`。バルーンの合図の `shows` は「seriko が見たスコープ ∪ 新しいバルーンの表の鍵」（無い面は `Some(0)`）＝6.3 と 9.1 はバルーンの表を装着の全スコープぶん作る前提。シェルの `shows` に無いスコープは 9.1 で `show: None`（登録だけ）と読む。差し替えのたびに `info!(epoch, kind)` を 1 件（Monitoring の語の候補）。
+- 5.2: `ReplaceTarget.emo_world` は `Box<EmoWorld>`（enum の大きさ・9.1 は `Box::new` で包む）。未登録の `error!` の文言は 5.1 の `detach_target: 未装着ターゲット`（design の表の `apply(ReplaceTarget): 未装着ターゲット` を 12 で直す）。無い面の `error!` は present の 1 件＋合成器の既存の 1 件（tasks の「1 件」は present の件数）。登録が済めば無い面でも返信は `Ok`。
+- 6.1: `build_shell_assets` の `shell` は `Option<&str>`（design 未指定）。`build_boot_assets` の doc は「`resolve`」の語のまま（12 で直す）。作者の DPI は呼び手が渡す（新しいシェルの `seriko.dpi` を読むのは 6.3）。
+- 6.2: `prepare_ghost_windows_for_shell` にメソッド単位の `#[allow(dead_code)]` → 7.2 で外す。design に無い私的な `prepare_stages_for_shell` を置いた（`prepare_stages` は `None` で委ねる）。`prepare_ghost_windows_with_work_area` に名前つきの兄弟は無い。
+- 6.3: `switch_assets.rs` の先頭に `#![allow(dead_code)]` → 8.3・9.1・9.3 で呼び手を結んだら外す。`SwitchBuildError` に `ShellUndecodable { shell_dir, failures }` を足し（`BootWiringError`／`PlacementError` の写しより広い）、`ShellAssets` に `bake_failures` を足した＝復号できない絵は起動では読み飛ばし、切替では失敗（要件 5.5）。スコープの集合は `derive_scopes()`。「`error!` 1 件」は目印 `switch_assets_failed` の件数（12 で design へ反映）。
+- 7.1: 関数単位の `#[allow(dead_code)]` → `decide_boot_shell` は 7.2、`record_last_shell`／`record_last_balloon` は 9.4 で外す。`decide_boot_shell` は 1 段の `Normal` のフォルダ名だけを受ける（`..`・区切り・絶対パスは「先が無い」扱い）。`LastUsed::record` の doc を「`areka.last.shell` は起動の決定が読む」へ改めた。記録の語は `boot_shell_missing`（warn）・`last_shell_recorded`／`last_balloon_recorded`（info）。
+- 7.2: `BootShellChoice` を取り出すのは design の「`boot_wired`」でなく 2 つの入口（`boot_ghost`・`boot_ghost_strict`）で、結線ありの腕と LogSink の倒れ先（`boot_with_origin(.., Plain, shell)`）へ同じ値を渡す（12 で design へ反映）。`BootShellChoice` の doc と `prepare_ghost_windows` のコメントに「`boot_wired` が取り出す」の古い語が残る → 7.3 で直す。`placement::prepare_ghost_windows`・`emo2_boot::assets::build_boot_assets` は本番の呼び手を失い、関数単位の `#[allow(dead_code)]` を意図して残す（example とテストが呼ぶ）。6.2・7.1 の `#[allow(dead_code)]`（`prepare_ghost_windows_for_shell`・`decide_boot_shell`）は外した。
+- 7.3: `GhostSession::seriko_sink()` にメソッド単位の `#[allow(dead_code)]` → 8.3 で外す。統合テストのファイル `shell_balloon_switch_session_tests.rs` を作った（ghost_session から `#[path]`・9.x／11 もここへ足す）。7.2 の古い語（`boot_wired` が取り出す）は直した。
+- 8.1: `shell_balloon_switch.rs` の先頭に `#![allow(dead_code)]` → 8.3 で外す。`wire_emo2_boot` は受信端をその場で `drop(switch_rx)`（8.3 で World へ据える）。開けない `change` の荷物は `SwitchCueSink` では `debug!`（`ChangeCueSink` が `warn!` 1 件を残すため）。`t_zwi05` の受け口の列の字面を追随。
+- 8.2: `resolve_skin_target` は `current: Option<&str>`・`installed: Result<&str, NotFoundReason>`（design は `&str`／`Option<&str>`）。該当なしの理由に `NoMatch`・`RandomEmpty` を足した 5 つ。控えの資源・書き手・`installed_for`・候補の列挙は `shell_balloon_resolve.rs` に置いた（design は `shell_balloon_switch.rs`）。控えは候補のフォルダ名と大文字小文字を区別せず突き合わせる（シェルの記録は書庫の綴りのまま）。`shell_balloon_resolve.rs` の先頭と `update::desk::is_busy` の `#[allow(dead_code)]` → 8.3 で外す。本番の乱数は `boot_resolve::pick_index` を 8.3 が渡す。記録の語 `skin_switch_random_pick`・`last_installed_shell_recorded`・`last_installed_balloon_recorded`（info）（12 で design へ反映）。
+- 8.3: Reference の組み立て `skin_ref_name`／`skin_ref_path` は入口の側に `pub(crate)`（design は差し替えの相の私有＝12 で反映）。外した dead_code の許可: `shell_balloon_switch.rs`・`shell_balloon_resolve.rs`・`switch_assets.rs` の先頭、`GhostSession::seriko_sink`、`update::desk::is_busy`。項目単位で残る許可: `SkinSpec::Folder`・`SkinOrigin::Menu` → 10、`SkinSwitchInFlight.stage`・`SkinSwitchStage`・`SwapBuilt` → 9.3、`SwapPayload` → 9.1／9.3、`SwapSlot` → 9.1。文脈なしの理由に `kanade` を足した（ghost_slot・boot_context・wiring・kanade・seriko_sink）。送り失敗は `NoContext` を返す。終了の片付けは空の `WorkGate`「skin_switch」に `discard_for_exit` を登記（終了を待たせない）。`cfg(test)` の口 `GhostSession::with_seriko_sink`・`update::desk::insert_running_desk_for_test`。要件 1.14 の「定常でない」は入口でなく 9.3 が `Left{NotSteady}` で `warn!`。
+- 9.1: 世代の違う合図では荷物を取り出さず置き場に残す（古い合図が今の荷物を食わない）。`SwapSlot` の許可を外し、`SwapPayload` の許可は 9.3 まで残す。`Emo2Wiring.swap_slot` に欄単位の `#[allow(dead_code)]` → 9.3 で外す。`Emo2Wiring::new` は空の置き場を作り、`wire_emo2_boot` が構築の後に差し替える。記録の語 `rebased_payload_missing`（error）。
+- 9.2: 境界を広げた（要件 2.7 の根本）: バルーン側の `windowposition` を切替でも効かせるため、`placement::apply_scope_windowpositions` を `load_scope_windowpositions`（読む）＋`merge_scope_windowpositions`（純関数）に分け、背景の `build_shell` が今のバルーンの値を読んで `SwapBuilt::Shell.balloon: BalloonPlacementInputs` で運ぶ（`SwitchBuildRequest::Shell.balloon_dir`・`SwitchContext.balloon_dir`＝`BootContext.current.balloon.dir`）。`apply_shell_descript(world, windows, src, balloon, restored) -> ()`（design は `Result`）。解決は 2 周（全スコープを昇順で 1 度に解き P2 の連鎖を保つ）。`DragConfig.move_window` も導き直す。`follow_balloon` の引き金は `Placement(PlacementRoute::Restore)`（`diag.rs` の「どこからも作られない」注記が古い → 12／13.1）。`apply_descript_rebase` は基底を消してから据え直す（`version` が 2 進む）。関数単位の `#[allow(dead_code)]`（`apply_shell_descript`・`apply_descript_rebase`）→ 9.4 で外す。9.4 は呼ぶ時点で `WindowPos.size` が新しいシェルの寸法か確かめる。記録の語 `reseed_skipped`（warn）・`reseed_scope_not_running`（debug）（12 で design へ反映）。
+- 9.3: 送り直しでは `gap_result` を空にせず 1 度目の返事の `MarkedEnd` を保つ（design は「空に」・Flow 1 ⑵ の意図を守るため）。送り直しの返事の `Left{NotSteady}` も `warn!(skin_switch_not_steady)`。資産の失敗の reason は `err.to_string()`。`SkinSwitchStage::Committed` に `marked`・`committed_at` を足し、`SwapFinish` は `shell_balloon_switch.rs` に置いた。世代はプロセスに 1 つの `static AtomicU64`。外した許可: `SkinSwitchInFlight.stage`・`SkinSwitchStage`・`SwapBuilt`・`SwapPayload`・`Emo2Wiring.swap_slot`。残る許可: `SkinSwitchStage::Committed`・`SwapFinish` → 9.4、`SkinSpec::Folder`・`SkinOrigin::Menu` → 10。9.4 が入るまで頼んだ段の印は消えない（12 で design へ反映）。
+- 9.4: `finish_shell` は先に `reconcile_reported_sizes` を呼んで窓寸を新しいシェルにしてから `apply_shell_descript`、続けて新設の `placement::reseed::reanchor_char_windows`（今の寸法・新しい `Anchored`・`PlacementRoute::AnchorChange`）でキャラ窓を置き直す（design「Reseed」の「位置は触らない」は `apply_shell_descript` だけに当てはまる）。`swap_ms` は `Emo2Wiring.last_drain`（drain 全体）＋後始末の上限の値、`since_commit_ms` は頼んでからの経過。`BalloonVisibilityState::forget_scope` は `prev_visible` と計測を止めるが文字の数 `last_glyphs` は保つ（design の「記憶を消す」だと台詞の外で現れる＝要件 3.3）。足した口: `Emo2Wiring::reseed_zorder_descript_base`、`GhostSession::memory_publisher`／`set_shell_dir`、cfg(test) の `with_memory_publisher`。外した許可: `SkinSwitchStage::Committed`・`SwapFinish`・`apply_shell_descript`・`apply_descript_rebase`・`record_last_shell`／`record_last_balloon`。記録の語（warn）: `skin_shell_dir_not_set`・`skin_current_balloon_not_set`・`skin_switch_event_not_sent`・`skin_memory_not_recorded`・`reseed_skipped`（`no_ghost_windows`／`char_size_unknown`）。11.2 で見ること: 頼んだ段で seriko の合図が来ないと印が消えない（12 で design へ反映）。
+- 10: 子が 0 の枠は選べない見出し（ゴースト枠と同じ）。今のシェルの読み口 `GhostSession::current_shell_folder()` を足し、`SwitchContext::read` もそれを使う。外した許可: `SkinSpec::Folder`・`SkinOrigin::Menu`（これで本 spec の `#[allow(dead_code)]` の申し送りは残り 0）。再起動のテストは 2 周目の `menu_registration_replaced` が 0 件であることで登記の新品を判定する形に追随。印の突き合わせは大文字小文字を区別する（ゴースト枠と同じ）。記録の語 `menu_skin_selected`（debug）・`menu_shell_frame_no_ghost`／`menu_balloon_frame_no_context`（trace）。
+- 11.1: 本番コードの変更 0。統合テストは新しい兄弟 `shell_balloon_switch_session_lap_tests.rs`（ghost_session から `#[path]`・11.2 も使う土台 `lap_rig`）。土台は design の「`R_POST_and_KOMAINU` の複製」でなく、既存の `SwitchRig`（emo2 のゴースト A・`ghost_switch_test_support.rs` は凍結）に `R_POST_and_KOMAINU` のシェルを `add_shell_copy` で `shell/second` として足したもの（12 で design へ反映）。台詞の時計を止める判定は合成時刻を観測より先に進めない（`CREEP` 1 ms → `ACCEPT` 100 ms×20 → `NO_TICKS`）＝16 並列×5 周で赤 0 を確認。要件 2.6 の着せ替えの既定化・2.8 の SERIKO の始め直しは単体（4.x）が固定。
+- 11.2: 本番コードの変更 0。新しい兄弟 `shell_balloon_switch_session_balloon_tests.rs`・`shell_balloon_switch_session_abort_tests.rs`。バルーンの検体は design の claudia でなく `emo2-kakukaku`・`StayseeBalloon`（実機サインオフ ④ と同じ組・12 で design へ反映）。土台 `frames_until` は毎巡 `FrameTime`（実時計）を置きスレッドのメッセージを配る（上限 1024・本番の巡と同じ）。実 fs の記憶は柵つき `last_shell` か `shutdown()` の後に読む（負荷で揺れないため）。9.4 の申し送り「頼んだ段で seriko の合図が来ない」は静的に決着（`SwapSlot` の送り手が落ちて `error!(skin_switch_failed, stage=attach)`・テストなし）。本 spec の外の既存の穴: 隠れたバルーンは次の台詞が 1 文字だけだと現れない（全消去と 1 文字目が同じフレーム）。
+- 11.3: 本番の振る舞いの変更 0。新しい兄弟 `shell_balloon_switch_session_update_tests.rs`（ghost_session から `#[path]`・`lap_rig` を使う＝tasks の「既存の解決／読み直しのテストの兄弟」は同種のテストの意）。`update::desk::resolve_targets` を `pub(super)` → `pub(crate)`、cfg(test) の口 `ask_reload_for_test` を足した。
+- 12: 台帳の 7 項目に加え、古いままだった `ghostrootbutton.caption` も実装済み・担当 `areka-P0-ghost-shell-balloon-switch` へ（要件 10.1 の枠の一覧を今の形へ）。手書きの件数（briefing.md・roadmap-draft.md）は台帳から数え直した。生成物は生成器で作り直し（再実行で差分 0）。`diag.rs` の `PlacementRoute::Restore` の許可を外した。
+- 13.1: `tools/test-all.ps1` 全段緑（HEAD `ae635eef`・未コミット 0・x64 9,310 passed／0 failed／44 ignored・i686 緑・fmt 緑）。静的な規律の検査 9 項目すべて PASS（テストの削除 0〔改名 2 本〕・触ってはならないファイルの差分 0・8 構造体の欄の増減 0・最大 903 行・上限の近いテストの増加 0・環境変数／外部クレート／同期送信の追加 0・`session_mark_verdict`／`ExitOrigin` の差分 0・切替の経路からの終了の指示 0・残る `#[allow(dead_code)]` は意図した 2 件・裁定 1〜9 を覆す必要なし）。
+- 13.2: 実機 6 回で ①〜⑦ 合格（`signoff.md`）。2 つ目のシェルは写しの `surface0000`／`0001` を入れ替えて見分けられるようにし、③ のため `OnShellChanging` の台詞に `\_w[5000]` を足した（どちらも `target` の下の展開物）。`swap_ms` は 16 回中 15 回が 1 フレームの内側、1 回（バルーン）が 18.6 ms。emo2 には `\![change,balloon,…]` の台本が無く、⑦ はメニューからの切替と `OnBalloonChange` の応答で確かめた（台本の経路は 11.2 の決定論テストが固定）。
+- 完了時にその場で解決（2026-10-01）: 頼んだ段（Committed）で seriko のスレッドだけが倒れると、置き場の荷物（返信の送り手）を `Emo2Wiring` が強く持ち続けて印が消えず、以後の切替がすべて断られる穴を直した。置き場を強く持つのは表示の橋渡しだけにし、`Emo2Wiring.swap_slot` は `Weak`（`commit` で引き上げ・失敗は `error!(skin_switch_failed, stage=seriko, reason=bridge_gone)`）。橋渡しが消えれば送り手も消え、既存の経路で `error!(stage=attach)` と印の消去に着地する。テスト `bridge_gone_while_committed_fails_attach_and_clears_the_marker`（修正前は赤）・`bridge_gone_at_commit_drops_with_one_error`。

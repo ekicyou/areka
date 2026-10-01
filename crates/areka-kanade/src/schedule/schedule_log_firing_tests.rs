@@ -19,6 +19,7 @@ fn state_in(phase: Phase) -> State {
         user_break_talk: None,
         change: None,
         pending_change: None,
+        talk_gap: None,
     }
 }
 
@@ -115,6 +116,7 @@ fn error_close_deadline_exceeded_logs() {
         user_break_talk: None,
         change: None,
         pending_change: None,
+        talk_gap: None,
     };
     let ev = capture(|| {
         let _ = step(

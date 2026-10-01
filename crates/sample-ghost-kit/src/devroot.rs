@@ -591,7 +591,7 @@ pub(crate) fn fresh_root_in(
 /// `.nar` を展開し直すのではなく**ファイルを写す**のが要件 6.5 の「開発用の根は
 /// 再インストールの経路を通らない」である（兄弟テストが、原本にだけ在るファイルが
 /// 複製に現れることで判定する）。
-fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
+pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<(), SampleError> {
     let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).map_err(|source| SampleError::Io {
