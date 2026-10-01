@@ -167,8 +167,10 @@ pub enum PlacementRoute {
     #[allow(dead_code)]
     SpawnInitial,
     /// 位置永続化の復元マージ（可視化保証は position-persist の所有＝可視性ガード適用外）。
-    // 同上（復元は spawn 前の `apply_restored_placements` が `ScopePlacement` をマージする）。
-    #[allow(dead_code)]
+    // 起動時の復元は spawn 前の `apply_restored_placements` が `ScopePlacement` をマージするので
+    // この語を作らない。作るのはシェルの差し替えでバルーン窓を置き直す
+    // `placement::reseed::apply_shell_descript` の `follow_balloon` の引き金（記憶の復元と同じ
+    // 明示の配置として扱う）。
     Restore,
     /// アンカー変化トリガ（`anchor_changed_system`）。
     AnchorChange,

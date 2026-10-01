@@ -213,8 +213,8 @@ pub struct BootAssets {
 /// 既定の解決のシェルを読む形で、中身は `shell: None` で [`build_boot_assets_with_shell`] へ
 /// 委ねるだけである（シェルの側は [`build_shell_assets`]、バルーンの側は [`build_balloon_assets`]）。
 ///
-/// 組立経路は `resolve`（shell dir）→ シェル読み込みの権威 `load_shell_target` を **1 回**
-/// （フォルダの一覧・`surfaces.txt` の読取と解析・面の画像の決定・bake をすべて権威が行う）→
+/// 組立経路は `resolve_with_shell`（shell dir・名前なしは既定の解決）→ シェル読み込みの権威
+/// `load_shell_target` を **1 回**（フォルダの一覧・`surfaces.txt` の読取と解析・面の画像の決定・bake をすべて権威が行う）→
 /// scope ごとに `ShellTarget::build_world`（`EmoWorld` は非 Clone・装着で move 消費ゆえ scope 数だけ
 /// 組む。`AtlasTable` は安価 Clone）。
 /// balloon は scope ごとに 系列解決（`resolve_balloon_faces`）→ 構築
@@ -242,7 +242,7 @@ pub struct BootAssets {
 /// - 返る資産だけで attach フェーズが完結する（**以後ファイル I/O なし**）。全 I/O は本関数内で完結。
 ///
 /// # 失敗（log-first・panic しない・R7.3）
-/// - `resolve` 失敗 → [`BootWiringError::Mount`]（`StartPointMissing` 系は呼び手が warn 分類）。
+/// - `resolve_with_shell` 失敗 → [`BootWiringError::Mount`]（`StartPointMissing` 系は呼び手が warn 分類）。
 /// - WIC デコーダ生成失敗 → [`BootWiringError::Decoder`]。
 /// - シェルのフォルダの一覧失敗／`surfaces.txt`・`descript.txt` 読取失敗
 ///   → [`BootWiringError::ShellRead`]（シェル側は `ShellLoadError` からの写し替え・枝の追加 0）。

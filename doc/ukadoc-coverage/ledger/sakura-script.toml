@@ -793,20 +793,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-balloon-switch"
 priority = "B2"
 values = ["装い"]
 links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnBalloonChange:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンを別の意匠へ替えられず、今のバルーンのまま話し続ける）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。SwitchCueSink（crates/areka/src/emo2_boot/switch_cue.rs）が名前と第 1 引数の組（change・balloon）で自分を選び、切替の要求を UI 側の入口（crates/areka/src/emo2_boot/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口がベースウェアの根のバルーンの目録と突き合わせ、命令を運んだ台詞の終わりを待ってバルーンの絵と文字の層を差し替え、OnBalloonChange を送り、記憶 LastBalloon を書く。該当が無ければ何もせず warn! を残す。--option=raise-event はバルーンには無いので warn! を残して読み飛ばす（切替は行う）。
+ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ SwitchCueSink が warn! を残す。第 1 引数が shell・balloon でない change は担当外として debug! を残す。入口の断りは warn!、切替の取りやめは info!、途中の失敗は error!）。
+名前の解決: 切替先の名前は根の balloon/ の下のバルーンの descript.txt の name と大文字小文字を区別して突き合わせ、一致が無ければフォルダ名と突き合わせる。今のバルーン自身を指したときも作り直す。random は今のバルーンを除いて 1 つ選ぶ（候補が無ければ今のバルーン）。lastinstalled はこのプロセスの中で最後に入れたバルーンへ切り替える。sequential は正典がバルーンに書いていないので受けない（名前としてフォルダ名と突き合わせ、無ければ該当なし）。
 [群: バルーンの見た目と切り替え]
-[テーマ: 吹き出しの意匠を替えられず、最初の 1 つのまま話し続ける]
 [頻度: 里々 4 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![change。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
@@ -831,9 +830,9 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1"]
-status = "absent"
+status = "implemented"
 introduced = "2.4.74"
-owner = ""
+owner = "areka-P0-shell-balloon-switch"
 priority = "B2"
 values = ["装い"]
 links = [
@@ -841,11 +840,10 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnShellChanging:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、シェル（見た目一式）を着替えられず、今の見た目のまま変わらない）。
-ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
-[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+壊れ方: 該当なし。SwitchCueSink（crates/areka/src/emo2_boot/switch_cue.rs）が名前と第 1 引数の組（change・shell）で自分を選び、切替の要求を UI 側の入口（crates/areka/src/emo2_boot/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口が今のゴーストのシェルの目録と突き合わせ、命令を運んだ台詞の終わり（--option=raise-event があれば OnShellChanging の台詞の終わり）を待って、SHIORI を降ろさずに絵を差し替え、OnShellChanged を送り、記憶 LastShell を書く。該当が無ければ何もせず warn! を残す。
+ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ SwitchCueSink が warn! を残す。第 1 引数が shell・balloon でない change は担当外として debug! を残す。入口の断りは warn!、切替の中止・取りやめは info!、途中の失敗は error!）。
+名前の解決: 切替先の名前は今のゴーストの shell/ の下のシェル（menu,hidden のものも名指しなら可）の descript.txt の name と大文字小文字を区別して突き合わせ、一致が無ければフォルダ名と突き合わせる。今のシェル自身を指したときも作り直す。random は隠しシェルと今のシェルを除いて 1 つ選ぶ（候補が無ければ今のシェル）。lastinstalled は、原文の「最後にインストールしたゴーストに切り替え」を誤記と読み（ukadoc で lastinstalled を受ける他の項目はどれも命令と同じ種類を指す）、このプロセスの中で最後に入れたシェル（今のゴーストのもの）へ切り替える。ゴースト切替は起こさない。sequential は正典がシェルに書いていないので受けない（名前としてフォルダ名と突き合わせ、無ければ該当なし）。
 [群: ゴーストの切り替え]
-[テーマ: 絵の一式を替えられず、作者が用意した二着目から先を利用者は見られない]
 [頻度: 里々 4 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![change。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 [条件: OnShellChanged は無条件、OnShellChanging は --option=raise-event を付けたときだけ]
 """

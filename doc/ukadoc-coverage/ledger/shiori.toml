@@ -1323,25 +1323,23 @@ Reference 割当（転記元の記録の写し）: Ref0＝中断の操作が起�
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonChange:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-balloon-switch"
 priority = "B2"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-無いと失うもの: 吹き出しを別のものに替えても、ゴーストがそれに気づいて言い添えることができない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。メニューの「バルーン」枠と台本
+\\![change,balloon,…] のどちらの切替でも、再生中の台詞の終わりを待ってバルーンの絵と文字の層を
+差し替えた直後に、今のゴーストへ GET で送る（Ref0＝切り替わったバルーンの名前・Ref1＝切り替わった
+バルーンのフォルダの絶対パス。名前は descript.txt の name、無ければフォルダ名）。切替先が今のバルーン
+自身でも作り直して送る。中止・取りやめ・途中の失敗では送らない（元のバルーンのまま続く）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。kanade が止まっていて送れないときは
+warn のログ（skin_switch_event_not_sent）が出る（差し替えは済んでいる）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っている。
+送出は汎用の入口（crates/areka-kanade/src/schedule/change.rs の on_raise_event）。依頼は
+crates/areka/src/emo2_boot/frame/switch.rs の finish_balloon が出す。
 """
 
 [entry."ukadoc:list_shiori_event:OnBalloonClose:1"]
@@ -5806,47 +5804,47 @@ absent のまま変わらない。
 """
 
 [entry."ukadoc:list_shiori_event:OnShellChanged:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-balloon-switch"
 priority = "B2"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-無いと失うもの: シェルを替えても、ゴーストが着替えに気づいて言い添えることができない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。メニューの「シェル」枠と台本
+\\![change,shell,…] のどちらの切替でも、SHIORI を降ろさずに絵を差し替えた直後に、同じゴーストへ GET
+で送る（Ref0＝切り替わったシェルの名前・Ref1＝今のゴーストの名前〔SSP の意味を採る〕・Ref2＝切り替
+わったシェルのフォルダの絶対パス。名前は descript.txt の name、無ければフォルダ名）。切替先が今の
+シェル自身でも作り直して送る。中止・取りやめ・途中の失敗では送らない（元のシェルのまま続く）。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。kanade が止まっていて送れないときは
+warn のログ（skin_switch_event_not_sent）が出る（差し替えは済んでいる）。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っている。
+送出は汎用の入口（crates/areka-kanade/src/schedule/change.rs の on_raise_event）。依頼は
+crates/areka/src/emo2_boot/frame/switch.rs の finish_shell が出す。
 """
 
 [entry."ukadoc:list_shiori_event:OnShellChanging:1"]
-status = "absent"
+status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-balloon-switch"
 priority = "B2"
 values = ["装い"]
 links = []
 note = """
-壊れ方: 黙って壊れる。ベースウェアが場面に応じてこのイベントを発火する経路が areka に無いので、
-既存ゴーストの辞書に用意された返事はその場面で 1 度も呼ばれず、「何も喋らない」という形でだけ
-現れる。
-ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。ALLOWED_EVENT_IDS にこの名前が
-載っておらず、schedule/events.rs にこれを組み立てる構築関数も無いので、「送ろうとして断られる」
-のではなく、そもそも組み立てる場所が無い。例外も出ない。ただしゴーストが \\q の選択肢 ID にこの
-名前を書いた場合だけは別で、選択起源の経路（schedule/steady.rs の CascadePlan::Named の枝が
-events.rs の on_choice_named を通す。受理規則 is_allowed_choice_event の条件は「On で始まること」
-ただ 1 つ）で名前が逐語のまま送出され、そのときは trace のログ shiori_request がこの名前で
-1 行出る。これはベースウェアが正典の発火条件で発火したものではないので、この行の状態は
-absent のまま変わらない。
-無いと失うもの: シェルを替える直前の一言が出ない。
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。右クリックのメニューの「シェル」
+枠で選んだシェルの切替と、台本 \\![change,shell,…,--option=raise-event] の切替で、切り替える前の
+今のゴーストへ GET で送る（Ref0＝切替先のシェルの名前・Ref1＝今のシェルの名前・Ref2＝切替先のシェル
+のフォルダの絶対パス。名前は descript.txt の name、無ければフォルダ名）。--option=raise-event の無い
+台本の切替とバルーンの切替では送らない。返った台詞を最後まで再生し終えてから絵を差し替え、204 なら
+台詞なしで差し替える。台詞の途中で利用者がバルーンをダブルクリックすると切替をやめて元のシェルの
+まま続け、台詞に \\- があっても終了しない。kanade が定常でないとき・終了の保留があるときは送らない。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出る。台詞の切れ目の見極めは kanade の info
+のログ（talk_gap_reached・talk_gap_marked_break・talk_gap_left）に、切替の中止・取りやめは UI の
+info のログ（skin_switch_cancelled・skin_switch_dropped）に残る。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載っている。
+送出は台詞の切れ目の口（crates/areka-kanade/src/schedule/talk_gap.rs の begin）が汎用の入口と同じ
+照合 allowed_static と構築関数 raise を呼んで組み立てる。依頼は
+crates/areka/src/emo2_boot/shell_balloon_switch.rs の request_skin_switch_with が出す。
 """
 
 [entry."ukadoc:list_shiori_event:OnShellScaling:1"]
@@ -12067,22 +12065,25 @@ note = """
 """
 
 [entry."ukadoc:list_shiori_resource:balloonrootbutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = "areka-P0-shell-balloon-switch"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
-（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
-（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
-メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
-この名前を引く相手は 0 件である。
-引受先: areka-P0-baseware-root-layout。バルーンの列挙を置く仕様で、その枠を登記した日に実装済みへ
-改める。
-壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
-ログ: 1 行も出ない。引かれない名前は記録にも現れない。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「バルーン」の項目名
+に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
+「バルーン」枠へ項目を登記するのは本仕様（crates/areka/src/menu/balloon_frame.rs の register を、
+ゴーストを起こすたびに crates/areka/src/ghost_session.rs の boot_wired が呼ぶ）。登記してある枠は
+今は「ゴースト」「シェル」「バルーン」「ネットワーク更新」「インストール…」「説明書」「終了」の 7 枠（メニューの並び順）である。
+子の項目はベースウェアの根の balloon/ の下のバルーンで、今のバルーンに印が付く。選ぶとそのバルーンへ
+切り替える。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「バルーン」に落ち、メニューはそのまま出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由
+（send_failed／timeout／dropped）を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「バルーンの名称」とされ、その項目に出る言
 葉である。
 無いと失うもの: 右クリックのメニューの「バルーン」の項目が、そのゴーストらしい言い回しにならず、
@@ -12931,22 +12932,26 @@ crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 """
 
 [entry."ukadoc:list_shiori_resource:ghostrootbutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = "areka-P0-ghost-shell-balloon-switch"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
-（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
-（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
-メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
-この名前を引く相手は 0 件である。
-引受先: areka-P0-baseware-root-layout。ゴーストの列挙を置く仕様で、その枠を登記した日に実装済みへ
-改める。
-壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
-ログ: 1 行も出ない。引かれない名前は記録にも現れない。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「ゴースト」の項目名
+に使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、
+「ゴースト」枠へ項目を登記するのは areka-P0-ghost-shell-balloon-switch（crates/areka/src/menu/ghost_frame.rs
+の register を、ゴーストを起こすたびに crates/areka/src/ghost_session.rs の boot_wired が呼ぶ）。登記して
+ある枠は今は「ゴースト」「シェル」「バルーン」「ネットワーク更新」「インストール…」「説明書」「終了」の
+7 枠（メニューの並び順）である。
+子の項目はベースウェアの根の ghost/ の下のゴーストで、今のゴーストに印が付く。選ぶとそのゴーストへ
+切り替える（切り替える前に送り出す側へ OnGhostChanging を送る）。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「ゴースト」に落ち、メニューはそのまま出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由
+（send_failed／timeout／dropped）を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「ゴーストの名称」とされ、その項目に出る言
 葉である。
 無いと失うもの: 右クリックのメニューの「ゴースト」の項目が、そのゴーストらしい言い回しにならず、
@@ -14479,22 +14484,25 @@ areka の素の言葉のままになる。
 """
 
 [entry."ukadoc:list_shiori_resource:shellrootbutton.caption:1"]
-status = "vocabulary-only"
+status = "implemented"
 introduced = ""
-owner = "areka-P0-popup-menu-minimal"
+owner = "areka-P0-shell-balloon-switch"
 priority = "A11"
 values = ["装い"]
 links = []
 note = """
-語彙のみ。引く仕組みは本仕様が置いた——名前は運行の許可表
-（crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS）とメニューの対応表
-（crates/areka/src/menu/captions.rs の FRAME_CAPTIONS）の両方にあり、枠に項目が登記されていれば
-メニューを出すたびに引かれる。α で登記してあるのは「説明書」と「終了」の 2 枠だけなので、
-この名前を引く相手は 0 件である。
-引受先: areka-P0-ghost-shell-balloon-switch。シェルの切替を置く仕様で、その枠を登記した日に
-実装済みへ改める。
-壊れ方: 見た目の差。枠そのものが出ないので、ゴーストが用意した言い回しも出ない。
-ログ: 1 行も出ない。引かれない名前は記録にも現れない。
+実装済み。右クリックでメニューを出すたびにこの名前を SHIORI へ引き、返った文言を「シェル」の項目名に
+使う。値は持ち越さず、出すたびに引き直す。引く仕組みは areka-P0-popup-menu-minimal が置き、「シェル」
+枠へ項目を登記するのは本仕様（crates/areka/src/menu/shell_frame.rs の register を、ゴーストを起こす
+たびに crates/areka/src/ghost_session.rs の boot_wired が呼ぶ）。登記してある枠は今は
+「ゴースト」「シェル」「バルーン」「ネットワーク更新」「インストール…」「説明書」「終了」の 7 枠（メニューの並び順）である。
+子の項目は今のゴーストの shell/ の下のシェル（menu,hidden のものは除く）で、今のシェルに印が付く。
+選ぶとそのシェルへ切り替える（切り替える前に OnShellChanging を送る）。
+壊れ方: 無い。空・値なし・失敗・時間切れのときは既定名「シェル」に落ち、メニューはそのまま出る。
+ログ: 空と値なしは debug! に名前を、返事そのものが得られなかったときは warn! に理由
+（send_failed／timeout／dropped）を 1 回だけ残す。
+根拠の場所: crates/areka-kanade/src/schedule/resources.rs の ALLOWED_RESOURCE_IDS と
+crates/areka/src/menu/captions.rs の FRAME_CAPTIONS。
 画面の材料: 右クリックのメニューに並ぶ項目の文言。正典では「シェルの名称」とされ、その項目に出る言葉
 である。
 無いと失うもの: 右クリックのメニューの「シェル」の項目が、そのゴーストらしい言い回しにならず、areka

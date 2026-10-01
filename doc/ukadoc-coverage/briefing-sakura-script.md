@@ -893,7 +893,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | 一部だけが効かない | 2 |
 | **合計** | **242** |
 
-> **2026-09-29 の追記**: 上の数は調査時点の写しで、数え直していない。この 242 件のうち `\![execute,install,path,ファイル名]`・`%lastghostname`・`%lastobjectname` の 3 件は、2026-09-29 に `areka-P0-ghost-install` が担当として引き受けて実装済みにした（下の表の該当行に書き添えた）。2026-09-30 には `\![execute,install,url,…]`・`\![update,更新対象…]`・`\![updatebymyself…]`・`\![updateother,…]` の 4 件を `areka-P0-network-update` が担当として引き受けて実装済みにした（同じく下の表の該当行に書き添えた。`\![update,platform]` は引き受けていない）。いまの状態は台帳 `ledger/sakura-script.toml` と報告 `report/sakura-script.md` が正本である。
+> **2026-09-29 の追記**: 上の数は調査時点の写しで、数え直していない。この 242 件のうち `\![execute,install,path,ファイル名]`・`%lastghostname`・`%lastobjectname` の 3 件は、2026-09-29 に `areka-P0-ghost-install` が担当として引き受けて実装済みにした（下の表の該当行に書き添えた）。2026-09-30 には `\![execute,install,url,…]`・`\![update,更新対象…]`・`\![updatebymyself…]`・`\![updateother,…]` の 4 件を `areka-P0-network-update` が担当として引き受けて実装済みにした（同じく下の表の該当行に書き添えた。`\![update,platform]` は引き受けていない）。2026-10-01 には `\![change,shell,…]`・`\![change,balloon,…]` の 2 件を `areka-P0-shell-balloon-switch` が担当として引き受けて実装済みにした（同じく下の表の該当行に書き添えた）。いまの状態は台帳 `ledger/sakura-script.toml` と報告 `report/sakura-script.md` が正本である。
 
 全数を項目の id まで並べる。
 
@@ -943,9 +943,9 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 | `\![call,ghost,ゴースト名(,--option=raise-event)]` | 未対応（書いてあるのに何も起きない） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_21_5bcall_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1` |
 | `\![cancel,http,URL]` | 未対応（書いてあるのに何も起きない） | WebSocket と通信の中止 | `ukadoc:list_sakura_script:_5c_21_5bcancel_2chttp_2cURL_5d:1` |
 | `\![cancel,websocket,URL]` | 未対応（書いてあるのに何も起きない） | WebSocket と通信の中止 | `ukadoc:list_sakura_script:_5c_21_5bcancel_2cwebsocket_2cURL_5d:1` |
-| `\![change,balloon,バルーン名]` | 未対応（書いてあるのに何も起きない） | バルーンの見た目と切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1` |
+| `\![change,balloon,バルーン名]` | 実装済み（2026-10-01 に `areka-P0-shell-balloon-switch` が実装。台詞の終わりを待ってバルーンを差し替え、`OnBalloonChange` を送る。調査時点は未対応） | バルーンの見た目と切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1` |
 | `\![change,ghost,ゴースト名(,--option=raise-event)]` | 実装済み（2026-09-27 に `areka-P0-ghost-shell-balloon-switch` が実装。調査時点は未対応） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1` |
-| `\![change,shell,シェル名(,--option=raise-event)]` | 未対応（書いてあるのに何も起きない） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1` |
+| `\![change,shell,シェル名(,--option=raise-event)]` | 実装済み（2026-10-01 に `areka-P0-shell-balloon-switch` が実装。SHIORI を降ろさずに同じゴーストの別のシェルへ替え、`OnShellChanged` を送る〔`--option=raise-event` なら先に `OnShellChanging`〕。`lastinstalled` は最後に入れたシェルと読む。調査時点は未対応） | ゴーストの切り替え | `ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1` |
 | `\![close,communicatebox]` | 未対応（書いてあるのに何も起きない） | 通信箱と教え込み箱 | `ukadoc:list_sakura_script:_5c_21_5bclose_2ccommunicatebox_5d:1` |
 | `\![close,dialog,ID]` | 未対応（書いてあるのに何も起きない） | 入力窓とダイアログ | `ukadoc:list_sakura_script:_5c_21_5bclose_2cdialog_2cID_5d:1` |
 | `\![close,inputbox,ID]` | 未対応（書いてあるのに何も起きない） | 入力窓とダイアログ | `ukadoc:list_sakura_script:_5c_21_5bclose_2cinputbox_2cID_5d:1` |
@@ -1475,7 +1475,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 - **利用者に何が起きるか**: バルーンの意匠を替えられず、付ける側・並べ方・印・枚数の表示・位置のずらしも効かない。自動送りの入切も届かないので、長い台詞は自分では流れない。
 - **その群を成立させる最小の基盤**: バルーンの意匠と表示の設定を、会話の途中で差し替える道。
 - **台帳の項目 id**:
-  - `\![change,balloon,バルーン名]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1`
+  - `\![change,balloon,バルーン名]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1`（2026-10-01 に `areka-P0-shell-balloon-switch` が実装済み）
   - `\![reload,balloon]` — `ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1`
   - `\![set,autoscroll,disable]` — `ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cdisable_5d:1`
   - `\![set,autoscroll,enable]` — `ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cenable_5d:1`
@@ -1585,7 +1585,7 @@ areka はこの 3 件の綴りを受けないので、綴りを根へ写す作�
 - **台帳の項目 id**:
   - `\![call,ghost,ゴースト名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bcall_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1`
   - `\![change,ghost,ゴースト名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1`（2026-09-27 に `areka-P0-ghost-shell-balloon-switch` が実装済み。正典の特別な名前 random／sequential／lastinstalled の解決は解決済み（areka-P0-ghost-change-name-resolution・ghost_switch.rs の resolve_special_name）。）
-  - `\![change,shell,シェル名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1`
+  - `\![change,shell,シェル名(,--option=raise-event)]` — `ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1`（2026-10-01 に `areka-P0-shell-balloon-switch` が実装済み）
   - `\+` — `ukadoc:list_sakura_script:_5c_2b:1`（2026-09-27 に `areka-P0-ghost-change-name-resolution` が実装済み）
   - `\_+` — `ukadoc:list_sakura_script:_5c__2b:1`（2026-09-27 に `areka-P0-ghost-change-name-resolution` が実装済み）
 
