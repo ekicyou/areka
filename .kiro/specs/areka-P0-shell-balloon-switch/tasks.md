@@ -115,7 +115,7 @@
   - _Depends: 6.1, 6.2_
 
 - [ ] 7. 起動時のシェルと seriko の送り手の持ち主
-- [ ] 7.1 (P) 最後のシェルの読み手・起動のシェルの決定・1 つだけ書く記憶の書き手を作る
+- [x] 7.1 (P) 最後のシェルの読み手・起動のシェルの決定・1 つだけ書く記憶の書き手を作る
   - 最後のシェルの読み手（最後のバルーンの読み手と同じ形）と、起動のシェルの決定（記憶の名の `shell/<名>/descript.txt` が在ればその名・隠しでも可／無ければ `warn!` 1 件で既定／記憶が無ければ既定）を足す
   - `LastShell` だけ・`LastBalloon` だけを Ghost スコープへ投函して `info!` を残す書き手を 2 つ足す（3 つを書く既存の書き手は不変）
   - 兄弟テストで、記憶なし → 既定・記憶の名が在る（隠しでも）→ その名・先が無い → `warn!` 1 件で既定、1 つだけ書く書き手が他の鍵に触れないことが緑
@@ -256,3 +256,4 @@
 - 6.1: `build_shell_assets` の `shell` は `Option<&str>`（design 未指定）。`build_boot_assets` の doc は「`resolve`」の語のまま（12 で直す）。作者の DPI は呼び手が渡す（新しいシェルの `seriko.dpi` を読むのは 6.3）。
 - 6.2: `prepare_ghost_windows_for_shell` にメソッド単位の `#[allow(dead_code)]` → 7.2 で外す。design に無い私的な `prepare_stages_for_shell` を置いた（`prepare_stages` は `None` で委ねる）。`prepare_ghost_windows_with_work_area` に名前つきの兄弟は無い。
 - 6.3: `switch_assets.rs` の先頭に `#![allow(dead_code)]` → 8.3・9.1・9.3 で呼び手を結んだら外す。`SwitchBuildError` に `ShellUndecodable { shell_dir, failures }` を足し（`BootWiringError`／`PlacementError` の写しより広い）、`ShellAssets` に `bake_failures` を足した＝復号できない絵は起動では読み飛ばし、切替では失敗（要件 5.5）。スコープの集合は `derive_scopes()`。「`error!` 1 件」は目印 `switch_assets_failed` の件数（12 で design へ反映）。
+- 7.1: 関数単位の `#[allow(dead_code)]` → `decide_boot_shell` は 7.2、`record_last_shell`／`record_last_balloon` は 9.4 で外す。`decide_boot_shell` は 1 段の `Normal` のフォルダ名だけを受ける（`..`・区切り・絶対パスは「先が無い」扱い）。`LastUsed::record` の doc を「`areka.last.shell` は起動の決定が読む」へ改めた。記録の語は `boot_shell_missing`（warn）・`last_shell_recorded`／`last_balloon_recorded`（info）。

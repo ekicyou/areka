@@ -670,4 +670,155 @@ mod last_used {
             "印の名前が descript の name → フォルダ名の順でない（在る・name 無し・目録に無い）"
         );
     }
+
+    // ------------------------------------------------ 1 つだけ書く書き手と起動のシェル（要件 6.1〜6.3）
+
+    /// 前から在った Ghost スコープの 2 つの鍵を fake の置き場へ置いてから `write` を投函し、
+    /// barrier 後に App・Ghost を読み戻す。
+    fn write_one_and_load(write: impl FnOnce(&SylphyaPublisher)) -> Loaded {
+        let shared = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            app: Some(PathBuf::from("/app")),
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &SharedFakeIo(shared.clone()),
+            vec![
+                entry(PersistKey::LastBalloon, "old-balloon"),
+                entry(PersistKey::LastShell, "old-shell"),
+            ],
+        );
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(shared.clone())),
+            runtime_sink: None,
+        });
+        let ((), events) = capture(|| write(&parts.publisher));
+        parts.publisher.barrier().expect("barrier");
+        let app = load_scope(PersistScope::App, &roots, &SharedFakeIo(shared.clone()));
+        let ghost_scope = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared));
+        parts.publisher.close();
+        let _ = parts.handle.join();
+        (app, ghost_scope, events)
+    }
+
+    /// シェルの差し替えは `LastShell` だけ、バルーンの差し替えは `LastBalloon` だけを書く（要件 6.1）。
+    /// 他方の鍵と App スコープには触れない。
+    #[test]
+    fn single_key_writers_touch_only_their_key() {
+        let (app, ghost_scope, events) = write_one_and_load(|p| record_last_shell(p, "second"));
+        assert_eq!(app, vec![], "シェルの書き手が App に触れた");
+        assert_eq!(
+            ghost_scope,
+            vec![
+                entry(PersistKey::LastBalloon, "old-balloon"),
+                entry(PersistKey::LastShell, "second"),
+            ],
+            "シェルの書き手がバルーンの記憶に触れた"
+        );
+        assert_one_event(&events, "last_shell_recorded", tracing::Level::INFO);
+        assert_eq!(count_event(&events, "last_used_recorded"), 0);
+
+        let (app, ghost_scope, events) = write_one_and_load(|p| record_last_balloon(p, "b2"));
+        assert_eq!(app, vec![], "バルーンの書き手が App に触れた");
+        assert_eq!(
+            ghost_scope,
+            vec![
+                entry(PersistKey::LastBalloon, "b2"),
+                entry(PersistKey::LastShell, "old-shell"),
+            ],
+            "バルーンの書き手がシェルの記憶に触れた"
+        );
+        assert_one_event(&events, "last_balloon_recorded", tracing::Level::INFO);
+        assert_eq!(count_event(&events, "last_used_recorded"), 0);
+    }
+
+    /// 実 fs の、起動と同じ置き場へ `record_last_shell` で書く（`read_last_shell` が拾う場所）。
+    fn remember_shell(ghost_dir: &Path, name: &str) {
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: ScopeRoots {
+                ghost: Some(profile_areka_root(&ghost_dir.join("ghost").join("master"))),
+                ..ScopeRoots::default()
+            },
+            io: Box::new(FsPersistIo),
+            runtime_sink: None,
+        });
+        record_last_shell(&parts.publisher, name);
+        parts.publisher.barrier().expect("barrier");
+        parts.publisher.close();
+        let _ = parts.handle.join();
+    }
+
+    fn put_descript(dir: &Path, body: &str) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("descript.txt"), body).unwrap();
+    }
+
+    /// 起動のシェル（要件 6.2・6.3）: 記憶なし → 既定（`None`・警告なし）・記憶の名の
+    /// `shell/<名>/descript.txt` が在る（隠しでも）→ その名・先が無い／descript が無い →
+    /// `warn!` 1 件で既定。
+    #[test]
+    fn decide_boot_shell_follows_memory_only_when_descript_exists() {
+        let tmp = TempPath::new("boot-resolve-boot-shell");
+        let ghost_dir = tmp.child("ghost-a");
+        put_descript(&ghost_dir.join("shell").join("master"), "charset,UTF-8\n");
+        put_descript(
+            &ghost_dir.join("shell").join("second"),
+            "charset,UTF-8\nname,隠れたシェル\nmenu,hidden\n",
+        );
+        std::fs::create_dir_all(ghost_dir.join("shell").join("nodesc")).unwrap();
+
+        // 記憶なし。
+        let (none, events) = capture(|| decide_boot_shell(&ghost_dir));
+        assert_eq!((read_last_shell(&ghost_dir), none), (None, None));
+        assert_eq!(count_event(&events, "boot_shell_missing"), 0);
+
+        // 記憶の名が在る（menu,hidden でも）。
+        remember_shell(&ghost_dir, "second");
+        let (found, events) = capture(|| decide_boot_shell(&ghost_dir));
+        assert_eq!(read_last_shell(&ghost_dir).as_deref(), Some("second"));
+        assert_eq!(found.as_deref(), Some("second"));
+        assert_eq!(count_event(&events, "boot_shell_missing"), 0);
+
+        // 先が無い・descript が無い。
+        for gone in ["gone", "nodesc"] {
+            remember_shell(&ghost_dir, gone);
+            let (missing, events) = capture(|| decide_boot_shell(&ghost_dir));
+            assert_eq!(missing, None, "{gone} で既定に戻らない");
+            assert_one_event(&events, "boot_shell_missing", tracing::Level::WARN);
+        }
+    }
+
+    /// 壊れた記憶が `shell/` の外を指しても使わない（`..`・区切り・絶対パス・`.`）。
+    /// 外の先に descript.txt が実在していても `warn!` 1 件で既定。
+    #[test]
+    fn decide_boot_shell_rejects_names_outside_shell_dir() {
+        let tmp = TempPath::new("boot-resolve-boot-shell-escape");
+        let ghost_dir = tmp.child("ghost-a");
+        let outside = tmp.child("outside");
+        put_descript(&outside, "charset,UTF-8\n");
+        put_descript(&ghost_dir.join("escape"), "charset,UTF-8\n");
+        put_descript(
+            &ghost_dir.join("shell").join("a").join("b"),
+            "charset,UTF-8\n",
+        );
+        put_descript(&ghost_dir.join("shell"), "charset,UTF-8\n");
+        let absolute = outside.to_string_lossy().into_owned();
+        for bad in [
+            "../escape",
+            r"..\escape",
+            "a/b",
+            r"a\b",
+            absolute.as_str(),
+            ".",
+        ] {
+            remember_shell(&ghost_dir, bad);
+            let (decided, events) = capture(|| decide_boot_shell(&ghost_dir));
+            assert_eq!(decided, None, "{bad:?} を受け入れた");
+            assert_one_event(&events, "boot_shell_missing", tracing::Level::WARN);
+        }
+    }
 }
