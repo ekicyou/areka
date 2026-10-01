@@ -860,3 +860,7 @@ mod shell_balloon_switch_session_balloon_tests;
 #[cfg(test)]
 #[path = "shell_balloon_switch_session_abort_tests.rs"]
 mod shell_balloon_switch_session_abort_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_update_tests.rs"]
+mod shell_balloon_switch_session_update_tests;

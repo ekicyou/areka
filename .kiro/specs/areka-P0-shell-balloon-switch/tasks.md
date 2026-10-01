@@ -204,7 +204,7 @@
   - _Requirements: 1.5, 7.1, 7.2, 7.3, 7.4, 7.5, 10.3, 11.9_
   - _Depends: 8.3_
 
-- [ ] 11. 同じ World での往復の統合テスト
+- [x] 11. 同じ World での往復の統合テスト
 - [x] 11.1 シェルの往復と、`OnShellChanging` の有無を固定する
   - 土台は `R_POST_and_KOMAINU` の複製に 1.4 で 2 つ目のシェルを足したもの、偽の SHIORI、描画の流れを有界に回す GPU の土台（ghost_session から `#[path]` で宣言）
   - A → `raise-event` 付きの台本 → `OnShellChanging`（Ref0〜2・台本あり）→ 再生完了 → 差し替え → `OnShellChanged`（Ref0〜2）→ `LastShell` が B → A へ戻る、を集めてから 1 回で判定する（イベント列と Reference・`OnClose`／`OnBoot` 0 件・窓の子が新しい分だけ・可視性の持ち主と窓寸の要求の引き継ぎ・会話の状態の保持）
@@ -219,7 +219,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.5, 5.1, 5.2, 5.3, 5.5, 5.6, 5.7, 8.5, 11.2, 11.4, 11.5, 11.6_
   - _Depends: 11.1_
 
-- [ ] 11.3 切替の後の更新の対象と読み直しを固定する
+- [x] 11.3 切替の後の更新の対象と読み直しを固定する
   - 差し替えの後に更新の対象の解決が新しいシェル・バルーンを指すこと（既存の解決のテストの兄弟）と、読み直しの後に記憶から同じシェル・バルーンで起きること（既存の読み直しのテストの兄弟・既存は緑のまま）が緑
   - _Requirements: 6.5, 11.8_
 
@@ -269,3 +269,4 @@
 - 10: 子が 0 の枠は選べない見出し（ゴースト枠と同じ）。今のシェルの読み口 `GhostSession::current_shell_folder()` を足し、`SwitchContext::read` もそれを使う。外した許可: `SkinSpec::Folder`・`SkinOrigin::Menu`（これで本 spec の `#[allow(dead_code)]` の申し送りは残り 0）。再起動のテストは 2 周目の `menu_registration_replaced` が 0 件であることで登記の新品を判定する形に追随。印の突き合わせは大文字小文字を区別する（ゴースト枠と同じ）。記録の語 `menu_skin_selected`（debug）・`menu_shell_frame_no_ghost`／`menu_balloon_frame_no_context`（trace）。
 - 11.1: 本番コードの変更 0。統合テストは新しい兄弟 `shell_balloon_switch_session_lap_tests.rs`（ghost_session から `#[path]`・11.2 も使う土台 `lap_rig`）。土台は design の「`R_POST_and_KOMAINU` の複製」でなく、既存の `SwitchRig`（emo2 のゴースト A・`ghost_switch_test_support.rs` は凍結）に `R_POST_and_KOMAINU` のシェルを `add_shell_copy` で `shell/second` として足したもの（12 で design へ反映）。台詞の時計を止める判定は合成時刻を観測より先に進めない（`CREEP` 1 ms → `ACCEPT` 100 ms×20 → `NO_TICKS`）＝16 並列×5 周で赤 0 を確認。要件 2.6 の着せ替えの既定化・2.8 の SERIKO の始め直しは単体（4.x）が固定。
 - 11.2: 本番コードの変更 0。新しい兄弟 `shell_balloon_switch_session_balloon_tests.rs`・`shell_balloon_switch_session_abort_tests.rs`。バルーンの検体は design の claudia でなく `emo2-kakukaku`・`StayseeBalloon`（実機サインオフ ④ と同じ組・12 で design へ反映）。土台 `frames_until` は毎巡 `FrameTime`（実時計）を置きスレッドのメッセージを配る（上限 1024・本番の巡と同じ）。実 fs の記憶は柵つき `last_shell` か `shutdown()` の後に読む（負荷で揺れないため）。9.4 の申し送り「頼んだ段で seriko の合図が来ない」は静的に決着（`SwapSlot` の送り手が落ちて `error!(skin_switch_failed, stage=attach)`・テストなし）。本 spec の外の既存の穴: 隠れたバルーンは次の台詞が 1 文字だけだと現れない（全消去と 1 文字目が同じフレーム）。
+- 11.3: 本番の振る舞いの変更 0。新しい兄弟 `shell_balloon_switch_session_update_tests.rs`（ghost_session から `#[path]`・`lap_rig` を使う＝tasks の「既存の解決／読み直しのテストの兄弟」は同種のテストの意）。`update::desk::resolve_targets` を `pub(super)` → `pub(crate)`、cfg(test) の口 `ask_reload_for_test` を足した。
