@@ -45,3 +45,7 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 ---
 
 > **📌 2026-09-02 棚卸⑫**——`file:line` 主張なし（ukadoc 一次接地のみ）＝ドリフト該当なし。編集集合＝`areka-sakura/compile.rs`（allowlist 判定・lowering）・`dola/src/cue/`（C 群 Barrier）・`areka-kanade/`（C 群再調停）。**`compile.rs` を `text-decoration-canon` と共有**＝W13 と同居不可（段階 A/B/D は compile 局所・C は台本分割＝分割するなら A/B/D／C）。`\![set,balloontimeout]` は residue 項目 7 と対（COMPAT §8 で住み分け済み）。前提「これらを使うゴーストの適合」は未充足＝M2 ゲート据え置き。
+
+---
+
+> **📌 2026-10-01 `/kiro-discovery`（シェル内バルーン）からの注記**——新 spec `areka-P0-talk-fast-forward` が「クリックでの早送り」（areka 独自・利用者の 1 クリックで台詞の時計を次の `\x` か台詞の終わりまで早回し）を持つ。**`\_q`・`\![quicksection]`・`\![set,balloonwait]` は本 spec の担当のまま**で、早送りとは別物（早送りは利用者の操作、`\_q` と `balloonwait` は台本の指示）。両者が同じ台詞の時計を触るので、後から着地する側が「早送り中の `balloonwait` の倍率」「`\_q` の区間の中での早送り」を決定論テストで固定する。
