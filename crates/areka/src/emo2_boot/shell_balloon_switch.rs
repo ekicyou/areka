@@ -259,6 +259,7 @@ pub(crate) fn request_skin_switch_with(
         SkinKind::Shell => SwitchBuildRequest::Shell {
             ghost_root: ctx.ghost_dir.clone(),
             folder: target.folder.clone(),
+            balloon_dir: ctx.balloon_dir.clone(),
         },
         SkinKind::Balloon => SwitchBuildRequest::Balloon {
             dir: target.dir.clone(),
@@ -323,6 +324,8 @@ struct SwitchContext {
     current_shell: Option<String>,
     /// 今のバルーンのフォルダ名（起動の文脈の写し）。
     current_balloon: Option<String>,
+    /// 今のバルーンのフォルダ（起動の文脈の写し・シェルの差し替えで配置の値を読む先）。
+    balloon_dir: std::path::PathBuf,
 }
 
 impl SwitchContext {
@@ -371,6 +374,7 @@ impl SwitchContext {
                     .map(|n| n.to_string_lossy().into_owned())
             }),
             current_balloon: ctx.current.balloon.folder.clone(),
+            balloon_dir: ctx.current.balloon.dir.clone(),
         })
     }
 }

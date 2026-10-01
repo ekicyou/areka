@@ -31,7 +31,9 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninit
 use super::BootWiringError;
 use super::assets::{BalloonAssets, ShellAssets, build_balloon_assets, build_shell_assets};
 use crate::placement::PlacementError;
+use crate::placement::load_scope_windowpositions;
 use crate::placement::persist::load_restored_state;
+use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::source::{
     DescriptSource, load_balloon_author_dpi, load_descript_source_for_shell,
 };
@@ -39,8 +41,13 @@ use crate::placement::source::{
 /// 背景の資産づくりの依頼（受理のとき 1 回）。
 pub(crate) enum SwitchBuildRequest {
     /// シェル: ゴーストの根と、`shell/` の下のフォルダ名（目録に在る名前だけを渡す＝
-    /// `resolve_with_shell` は名前を検査しない）。
-    Shell { ghost_root: PathBuf, folder: String },
+    /// `resolve_with_shell` は名前を検査しない）、走っているバルーンのフォルダ（配置の値の
+    /// `windowposition` と作者の DPI をここで読む）。
+    Shell {
+        ghost_root: PathBuf,
+        folder: String,
+        balloon_dir: PathBuf,
+    },
     /// バルーン: バルーンのフォルダ。
     Balloon { dir: PathBuf },
 }
@@ -57,9 +64,9 @@ impl SwitchBuildRequest {
     /// 記録用の依頼の先。
     fn target(&self) -> String {
         match self {
-            Self::Shell { ghost_root, folder } => {
-                ghost_root.join("shell").join(folder).display().to_string()
-            }
+            Self::Shell {
+                ghost_root, folder, ..
+            } => ghost_root.join("shell").join(folder).display().to_string(),
             Self::Balloon { dir } => dir.display().to_string(),
         }
     }
@@ -70,10 +77,11 @@ impl SwitchBuildRequest {
 pub(crate) enum SwapBuilt {
     /// シェル: scope ごとの `EmoWorld`・アトラス・作者の DPI（新しいシェルの `seriko.dpi`）と
     /// 別名表・静的な着せ替え・着せ替えの名前表・アニメ表（[`ShellAssets`]）、配置の値
-    /// （新しいシェルの `descript.txt`）、位置の記憶（読むだけ）。
+    /// （新しいシェルの `descript.txt`）、走っているバルーンの配置の値、位置の記憶（読むだけ）。
     Shell {
         assets: ShellAssets,
         source: DescriptSource,
+        balloon: BalloonPlacementInputs,
         restored: Vec<(PersistKey, String)>,
     },
     /// バルーン: scope ごとの `EmoWorld`・アトラス・文字の模型・背景色と、装着の全 scope ぶんの
@@ -170,9 +178,11 @@ pub(crate) fn build_swap(request: &SwitchBuildRequest) -> Result<SwapBuilt, Swit
     // scope の集合は起動の結線と同じ導出（バルーンのアニメ表は装着の全 scope ぶん作る）。
     let scopes = super::derive_scopes();
     let result = match request {
-        SwitchBuildRequest::Shell { ghost_root, folder } => {
-            build_shell(ghost_root, folder, &scopes)
-        }
+        SwitchBuildRequest::Shell {
+            ghost_root,
+            folder,
+            balloon_dir,
+        } => build_shell(ghost_root, folder, balloon_dir, &scopes),
         SwitchBuildRequest::Balloon { dir } => build_balloon(dir, &scopes),
     };
     match &result {
@@ -194,10 +204,13 @@ pub(crate) fn build_swap(request: &SwitchBuildRequest) -> Result<SwapBuilt, Swit
     result
 }
 
-/// シェル: 配置の値 → 資産（作者の DPI は新しいシェルの `seriko.dpi`）→ 位置の記憶（読むだけ）。
+/// シェル: 配置の値 → 資産（作者の DPI は新しいシェルの `seriko.dpi`）→ 走っているバルーンの
+/// 配置の値（`windowposition`・作者の DPI。UI スレッドで読まないためここで読む）→ 位置の記憶
+/// （読むだけ）。
 fn build_shell(
     ghost_root: &Path,
     folder: &str,
+    balloon_dir: &Path,
     scopes: &[u32],
 ) -> Result<SwapBuilt, SwitchBuildError> {
     let source = load_descript_source_for_shell(ghost_root, Some(folder))?;
@@ -216,10 +229,16 @@ fn build_shell(
             failures: assets.bake_failures,
         });
     }
+    let scope_ids: Vec<usize> = scopes.iter().map(|&scope| scope as usize).collect();
+    let balloon = BalloonPlacementInputs {
+        author_dpi: load_balloon_author_dpi(balloon_dir),
+        windowpositions: load_scope_windowpositions(balloon_dir, &scope_ids),
+    };
     let restored = load_restored_state(ghost_root, DefaultEncoding::Ansi);
     Ok(SwapBuilt::Shell {
         assets,
         source,
+        balloon,
         restored,
     })
 }

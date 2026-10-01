@@ -485,3 +485,66 @@ fn t_zdb12_the_boot_entry_point_leaves_the_ledger_default_without_a_setting() {
         "設定が無いのに結線状態の台帳が動いた"
     );
 }
+
+// ---------------------------------------------------------------------------
+// シェルの差し替えで置き直す（areka-P0-shell-balloon-switch 要件 2.7・task 9.2）
+// ---------------------------------------------------------------------------
+
+/// 前のシェルの基底とタグ由来のグループが載った台帳を組む（置き直しの出発点）。
+fn ledger_with_base_and_tag() -> ZOrderGroupLedger {
+    let mut ledger = ZOrderGroupLedger::default();
+    apply_descript_base(&mut ledger, Some("1,0"));
+    let (tag, _) = parse_zorder_tokens(&["2", "3"]).expect("檻の前提: タグの値が受理される");
+    ledger
+        .try_add_tag_group(tag)
+        .expect("檻の前提: タグ由来のグループが載る");
+    assert_eq!(ledger.groups().len(), 2, "檻の前提: 基底とタグの 2 本");
+    ledger
+}
+
+/// 新しいシェルの値は、前の基底とタグ由来のグループを落として基底 1 本として据わる。
+#[test]
+fn t_zdb13_rebase_seats_the_new_shell_value_as_the_only_group() {
+    let mut ledger = ledger_with_base_and_tag();
+
+    let logs = capture_logs(|| apply_descript_rebase(&mut ledger, Some("0,1")));
+
+    assert_eq!(ledger.groups().len(), 1, "置き直しの後が基底 1 本でない");
+    let base = base_of(&ledger).expect("新しいシェルの基底が据わっていない");
+    assert_eq!(members_text(&base.members), "b0,s0,b1,s1");
+    assert_eq!(
+        lines_with(&logs, "[zorder-group] applied").len(),
+        1,
+        "受理の記録が起動と同じ口を通っていない: {logs:?}"
+    );
+}
+
+/// 新しいシェルに設定が無ければ基底なし（前のシェルの基底を残さない）。記録は出さない。
+#[test]
+fn t_zdb14_rebase_without_a_setting_leaves_no_base() {
+    let mut ledger = ledger_with_base_and_tag();
+
+    let logs = capture_logs(|| apply_descript_rebase(&mut ledger, None));
+
+    assert!(
+        ledger.groups().is_empty(),
+        "設定の無いシェルへ替えたのに前のグループが残った"
+    );
+    assert!(logs.is_empty(), "設定が無いのに記録が出た: {logs:?}");
+}
+
+/// 解釈できない値も基底なしへ倒し、拒否は起動と同じ記録で 1 本残す。
+#[test]
+fn t_zdb15_rebase_with_an_unreadable_setting_leaves_no_base_and_records_the_rejection() {
+    let mut ledger = ledger_with_base_and_tag();
+
+    let logs = capture_logs(|| apply_descript_rebase(&mut ledger, Some("1,x")));
+
+    assert!(
+        ledger.groups().is_empty(),
+        "解釈できない値なのに前のグループが残った"
+    );
+    let rejected = lines_with(&logs, "[zorder-group] rejected");
+    assert_eq!(rejected.len(), 1, "拒否の記録が 1 本でない: {logs:?}");
+    assert!(rejected[0].contains("tokens=1,x"), "{}", rejected[0]);
+}

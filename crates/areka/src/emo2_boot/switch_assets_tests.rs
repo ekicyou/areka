@@ -54,13 +54,20 @@ fn shell_build_runs_on_worker_and_returns_named_shell() {
     let rx = spawn_switch_build(SwitchBuildRequest::Shell {
         ghost_root: rpost.folder().to_path_buf(),
         folder: "second".to_string(),
+        balloon_dir: emo2_balloon_root(),
     });
     let built = rx
         .recv()
         .expect("背景のスレッドは結果を 1 件送る")
         .expect("名前の先のシェルの資産づくりは成功する");
 
-    let SwapBuilt::Shell { assets, source, .. } = built else {
+    let SwapBuilt::Shell {
+        assets,
+        source,
+        balloon,
+        ..
+    } = built
+    else {
         panic!("シェルの依頼にはシェルの結果が返る");
     };
     assert_eq!(
@@ -84,6 +91,23 @@ fn shell_build_runs_on_worker_and_returns_named_shell() {
         assets.author_dpi,
         source.shell_author_dpi(),
         "作者の DPI は新しいシェルの seriko.dpi（配置の値と同じ読み）"
+    );
+    // 走っているバルーン（emo2-kakukaku）の配置の値も、UI へ渡す前にここで読んである。
+    assert_eq!(
+        balloon.author_dpi,
+        load_balloon_author_dpi(&emo2_balloon_root()),
+        "バルーンの作者の DPI は走っているバルーンの dpi"
+    );
+    assert_eq!(
+        balloon.windowpositions.keys().copied().collect::<Vec<_>>(),
+        vec![0, 1],
+        "windowposition は装着の全 scope ぶん読む"
+    );
+    let wp0 = balloon.windowpositions[&0].0;
+    assert_eq!(
+        (wp0.x(), wp0.y()),
+        (Some(266), Some(-129)),
+        "scope 0 は balloons0s.txt の windowposition"
     );
 }
 
@@ -133,6 +157,7 @@ fn missing_shell_folder_fails_with_one_error() {
     let request = SwitchBuildRequest::Shell {
         ghost_root: rpost.folder().to_path_buf(),
         folder: "no-such-shell".to_string(),
+        balloon_dir: emo2_balloon_root(),
     };
 
     let (result, lines) = capture_lines(LineFormat::LevelTargetFields, || build_swap(&request));
@@ -212,6 +237,7 @@ fn undecodable_shell_image_fails_with_one_error() {
     let request = SwitchBuildRequest::Shell {
         ghost_root: rpost.folder().to_path_buf(),
         folder: "second".to_string(),
+        balloon_dir: emo2_balloon_root(),
     };
 
     let (result, lines) = capture_lines(LineFormat::LevelTargetFields, || build_swap(&request));
