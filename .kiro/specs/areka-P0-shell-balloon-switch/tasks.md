@@ -231,13 +231,13 @@
   - _Requirements: 10.1, 10.2, 10.3_
   - _Depends: 11.3_
 
-- [ ] 13. 全体の確認と実機サインオフ
+- [x] 13. 全体の確認と実機サインオフ
 - [x] 13.1 全体のテストと規律の検査を通す
   - `tools/test-all.ps1` が全段緑。テストの削除 0・触ってはならないファイルの差分 0・`Emo2BootInputs`／`StartupDescriptValues`／`GhostBootOptions`／`ConfigInputs`／`CurrentGhost`／`GhostDecision`／`BalloonDecision`／`Identity` の欄の増減 0・1,000 行・上限の近いテストの行の増加 0・環境変数／外部クレート／同期送信の追加 0・`session_mark_verdict`／`ExitOrigin` の差分 0・切替の経路からの終了の指示 0 を検査する（pathspec が実在することを先に確かめる）
   - 裁定 1〜9 を覆す必要が見つかっていないことを確かめる（見つかれば開発者へ議題として上げて止まる）
   - _Requirements: 5.8, 8.1, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 11.10, 12.10_
 
-- [ ] 13.2 実機で確かめて `signoff.md` に記録する
+- [x] 13.2 実機で確かめて `signoff.md` に記録する
   - 2 つ目のシェルは `nar-sample-path` が作る `manual/R_POST_and_KOMAINU/` の下（ワークツリーの `target\` の下）に 1.4 と同じ手順で置き、手順を残す
   - ① メニューで 2 つ目のシェル ② 戻る ③ 台詞の途中でダブルクリック → 中止 ④ `emo2-kakukaku` ⇄ `StayseeBalloon` ⑤ 再起動で記憶どおり ⑥ 拡大率 200% で ①④ ⑦ emo2 の `\![change,balloon,…]` と `update.pasta` の応答、を有界の自動終了つきで走らせる（`RUST_LOG` は判定の分岐の水準まで開ける）
   - コマンド・終了コード・目印の件数・UI スレッドを止めた時間・目視で崩れたフレームの有無を `signoff.md` に記録する
@@ -272,3 +272,4 @@
 - 11.3: 本番の振る舞いの変更 0。新しい兄弟 `shell_balloon_switch_session_update_tests.rs`（ghost_session から `#[path]`・`lap_rig` を使う＝tasks の「既存の解決／読み直しのテストの兄弟」は同種のテストの意）。`update::desk::resolve_targets` を `pub(super)` → `pub(crate)`、cfg(test) の口 `ask_reload_for_test` を足した。
 - 12: 台帳の 7 項目に加え、古いままだった `ghostrootbutton.caption` も実装済み・担当 `areka-P0-ghost-shell-balloon-switch` へ（要件 10.1 の枠の一覧を今の形へ）。手書きの件数（briefing.md・roadmap-draft.md）は台帳から数え直した。生成物は生成器で作り直し（再実行で差分 0）。`diag.rs` の `PlacementRoute::Restore` の許可を外した。
 - 13.1: `tools/test-all.ps1` 全段緑（HEAD `ae635eef`・未コミット 0・x64 9,310 passed／0 failed／44 ignored・i686 緑・fmt 緑）。静的な規律の検査 9 項目すべて PASS（テストの削除 0〔改名 2 本〕・触ってはならないファイルの差分 0・8 構造体の欄の増減 0・最大 903 行・上限の近いテストの増加 0・環境変数／外部クレート／同期送信の追加 0・`session_mark_verdict`／`ExitOrigin` の差分 0・切替の経路からの終了の指示 0・残る `#[allow(dead_code)]` は意図した 2 件・裁定 1〜9 を覆す必要なし）。
+- 13.2: 実機 6 回で ①〜⑦ 合格（`signoff.md`）。2 つ目のシェルは写しの `surface0000`／`0001` を入れ替えて見分けられるようにし、③ のため `OnShellChanging` の台詞に `\_w[5000]` を足した（どちらも `target` の下の展開物）。`swap_ms` は 16 回中 15 回が 1 フレームの内側、1 回（バルーン）が 18.6 ms。emo2 には `\![change,balloon,…]` の台本が無く、⑦ はメニューからの切替と `OnBalloonChange` の応答で確かめた（台本の経路は 11.2 の決定論テストが固定）。
