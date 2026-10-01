@@ -848,3 +848,7 @@ mod boot_shell_tests;
 #[cfg(test)]
 #[path = "shell_balloon_switch_session_tests.rs"]
 mod shell_balloon_switch_session_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_lap_tests.rs"]
+mod shell_balloon_switch_session_lap_tests;
