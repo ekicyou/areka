@@ -114,7 +114,7 @@
   - _Requirements: 4.4, 5.5, 5.6_
   - _Depends: 6.1, 6.2_
 
-- [ ] 7. 起動時のシェルと seriko の送り手の持ち主
+- [x] 7. 起動時のシェルと seriko の送り手の持ち主
 - [x] 7.1 (P) 最後のシェルの読み手・起動のシェルの決定・1 つだけ書く記憶の書き手を作る
   - 最後のシェルの読み手（最後のバルーンの読み手と同じ形）と、起動のシェルの決定（記憶の名の `shell/<名>/descript.txt` が在ればその名・隠しでも可／無ければ `warn!` 1 件で既定／記憶が無ければ既定）を足す
   - `LastShell` だけ・`LastBalloon` だけを Ghost スコープへ投函して `info!` を残す書き手を 2 つ足す（3 つを書く既存の書き手は不変）
@@ -129,7 +129,7 @@
   - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6, 8.4, 11.7_
   - _Depends: 3.1, 6.1, 6.2, 7.1_
 
-- [ ] 7.3 seriko の送り手の複製をゴーストのセッションに持たせ、降ろす最初の段で落とす
+- [x] 7.3 seriko の送り手の複製をゴーストのセッションに持たせ、降ろす最初の段で落とす
   - 起動の結線の結果に seriko の送り手の複製を 1 欄足して返し（構造体リテラルは結線のファイルの中だけ）、セッションがそれを持って借り口を出す（テスト用と LogSink の腕は空）
   - 降ろす処理の最初の段（ループの刻みの停止）で一緒に落とし、seriko の join の前に送り手が消えるようにする。同関数の doc の前提を「複製はセッションだけが持ち最初の段で落とす」へ改める
   - ゴースト切替・終了の既存のテストが緑のまま（seriko の join が止まらない）で、送り手を持ったセッションを降ろすと戻ることを兄弟のテストで判定する
@@ -258,3 +258,4 @@
 - 6.3: `switch_assets.rs` の先頭に `#![allow(dead_code)]` → 8.3・9.1・9.3 で呼び手を結んだら外す。`SwitchBuildError` に `ShellUndecodable { shell_dir, failures }` を足し（`BootWiringError`／`PlacementError` の写しより広い）、`ShellAssets` に `bake_failures` を足した＝復号できない絵は起動では読み飛ばし、切替では失敗（要件 5.5）。スコープの集合は `derive_scopes()`。「`error!` 1 件」は目印 `switch_assets_failed` の件数（12 で design へ反映）。
 - 7.1: 関数単位の `#[allow(dead_code)]` → `decide_boot_shell` は 7.2、`record_last_shell`／`record_last_balloon` は 9.4 で外す。`decide_boot_shell` は 1 段の `Normal` のフォルダ名だけを受ける（`..`・区切り・絶対パスは「先が無い」扱い）。`LastUsed::record` の doc を「`areka.last.shell` は起動の決定が読む」へ改めた。記録の語は `boot_shell_missing`（warn）・`last_shell_recorded`／`last_balloon_recorded`（info）。
 - 7.2: `BootShellChoice` を取り出すのは design の「`boot_wired`」でなく 2 つの入口（`boot_ghost`・`boot_ghost_strict`）で、結線ありの腕と LogSink の倒れ先（`boot_with_origin(.., Plain, shell)`）へ同じ値を渡す（12 で design へ反映）。`BootShellChoice` の doc と `prepare_ghost_windows` のコメントに「`boot_wired` が取り出す」の古い語が残る → 7.3 で直す。`placement::prepare_ghost_windows`・`emo2_boot::assets::build_boot_assets` は本番の呼び手を失い、関数単位の `#[allow(dead_code)]` を意図して残す（example とテストが呼ぶ）。6.2・7.1 の `#[allow(dead_code)]`（`prepare_ghost_windows_for_shell`・`decide_boot_shell`）は外した。
+- 7.3: `GhostSession::seriko_sink()` にメソッド単位の `#[allow(dead_code)]` → 8.3 で外す。統合テストのファイル `shell_balloon_switch_session_tests.rs` を作った（ghost_session から `#[path]`・9.x／11 もここへ足す）。7.2 の古い語（`boot_wired` が取り出す）は直した。

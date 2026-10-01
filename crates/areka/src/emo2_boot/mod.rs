@@ -213,6 +213,7 @@ impl From<ShellLoadError> for BootWiringError {
 /// - `wired`: 実 sink 結線が成立したか（`false` の帰結は呼び手が決める: `boot_ghost` は `LogSink`×2
 ///   フォールバックへ倒し、`boot_ghost_strict` は `Err` を返す・R7.3）。
 /// - `loop_ticker`: SERIKO ループ ticker（[`spawn_loop_ticker`]）の停止端（不成立時 `None`）。
+/// - `seriko_sink`: seriko の送り手の複製（不成立時 `None`・持ち主は `GhostSession` だけ）。
 pub struct Emo2BootOutcome {
     /// boot 成立時の ghost ランタイム（不成立時 `None`）。
     pub ghost: Option<areka_ghost::GhostRuntime>,
@@ -224,6 +225,11 @@ pub struct Emo2BootOutcome {
     /// 終了処理（`GhostSession::shutdown`・task 9.5）が [`TickerMsg::Close`] を送って ticker を止める
     /// （不成立時は ticker を起こさないため `None`）。
     pub loop_ticker: Option<std::sync::mpsc::Sender<TickerMsg>>,
+    /// seriko の送り手の複製（シェル・バルーンの差し替えを seriko へ頼む口・不成立時 `None`）。
+    /// 持ち主は `GhostSession` だけで、降ろす最初の段（loop ticker の停止）で落ちる——降ろした後も
+    /// World に残る置き場（`Emo2Wiring` ほか）に持たせると、seriko の join が戻らない
+    /// （areka-P0-shell-balloon-switch 要件 8.5）。
+    pub seriko_sink: Option<SerikoSink>,
 }
 
 /// `wire_emo2_boot` の入力の束（ゴーストごとに変わる値と、SHIORI の結線の差し替え口）。
@@ -385,6 +391,7 @@ pub fn wire_emo2_boot(
             seriko: None,
             wired: false,
             loop_ticker: None,
+            seriko_sink: None,
         }
     }
 
@@ -563,6 +570,9 @@ pub fn wire_emo2_boot(
     // boot_options が値消費する）。全 clone は単一 seriko inbox への送信端で配送意味は同一（task 9.2）。
     // boot 失敗時はこの clone が inbox を生かし続けないよう明示 drop する（worker 自然終了・下記）。
     let tick_sink = surface_sink.clone();
+    // セッションへ返す複製（シェル・バルーンの差し替えの口・areka-P0-shell-balloon-switch 要件 8.5）。
+    // 持ち主は `GhostSession` だけで、降ろす最初の段で落ちる。boot 失敗時は下で tick_sink と一緒に落とす。
+    let session_sink = surface_sink.clone();
 
     // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋wired=false。
     // sinks は broadcast 登録先で、surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
@@ -642,10 +652,11 @@ pub fn wire_emo2_boot(
                 );
             }
             // spawn 済み seriko の後始末: surface_sink は boot_options 消費で drop 済み。ただし tick 用
-            // clone（tick_sink）はまだ生存し inbox を生かし続けるため、ここで明示 drop する。両 Sender が
-            // 消えると inbox 切断→worker 自然終了する。ActorHandle は非 RAII（drop で detach）ゆえ join
+            // clone（tick_sink）とセッションへ返す複製（session_sink）はまだ生存し inbox を生かし続ける
+            // ため、ここで明示 drop する。全 Sender が消えると inbox 切断→worker 自然終了する。ActorHandle は非 RAII（drop で detach）ゆえ join
             // せず drop で打ち切る（万一 boot が dispatcher へ move 後に失敗しても hang しない）。
             drop(tick_sink);
+            drop(session_sink);
             drop(seriko_handle);
             return fallback();
         }
@@ -714,6 +725,7 @@ pub fn wire_emo2_boot(
         seriko: Some(seriko_handle),
         wired: true,
         loop_ticker: Some(loop_ticker_stop),
+        seriko_sink: Some(session_sink),
     }
 }
 

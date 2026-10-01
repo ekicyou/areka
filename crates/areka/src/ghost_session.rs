@@ -90,7 +90,8 @@ pub(crate) struct StartupDescriptValues {
 }
 
 /// 配置の準備（[`prepare_ghost_windows`]）が決めた起動のシェル（areka-P0-shell-balloon-switch
-/// 要件 6.4・8.4）。起こす処理（[`boot_wired`]）が取り出して起動の結線へ渡す。`Emo2BootInputs`・
+/// 要件 6.4・8.4）。起こす処理の 2 つの入口（[`boot_ghost`]・[`boot_ghost_strict`]）が取り出して
+/// 起動の結線（結線ありの腕と LogSink の倒れ先の両方）へ渡す。`Emo2BootInputs`・
 /// [`StartupDescriptValues`]・`GhostBootOptions` に欄を足さずに運ぶための置き場である。
 #[derive(bevy_ecs::prelude::Resource)]
 pub(crate) struct BootShellChoice {
@@ -183,7 +184,8 @@ pub(crate) fn prepare_ghost_windows(
         return Err(OpenWindowsError::TaskPoolMissing);
     }
     // 起動のシェルはここで 1 度だけ決め（記憶の先が無ければ `warn!` もここの 1 件）、配置の
-    // 情報源へ渡したうえで資源に置く。起こす処理（[`boot_wired`]）が同じ値を資産と実行系へ運ぶ
+    // 情報源へ渡したうえで資源に置く。起こす処理の入口（[`boot_ghost`]・[`boot_ghost_strict`]）が
+    // 取り出し、同じ値を資産と実行系へ運ぶ
     // （areka-P0-shell-balloon-switch 要件 6.2〜6.4）。
     let shell = crate::boot_resolve::decide_boot_shell(&cfg.ghost_root);
     let prepared = placement::prepare_ghost_windows_for_shell(
@@ -395,6 +397,9 @@ pub(crate) struct GhostSession {
     ghost: Option<areka_ghost::GhostRuntime>,
     seriko: Option<areka_actor::ActorHandle>,
     loop_ticker: Option<mpsc::Sender<areka_ghost::ticker::TickerMsg>>,
+    /// seriko の送り手の複製（シェル・バルーンの差し替えを seriko へ頼む口）。結線ありの腕だけが
+    /// 持ち、テスト用の組み立てと LogSink の腕は `None`。降ろす最初の段で落とす（要件 8.5）。
+    seriko_sink: Option<areka_seriko::SerikoSink>,
     /// kanade への送出端の写し（実行系が無ければ `None`）。実行系から毎回引かずに持つのは、
     /// テストが実行系を起こさずに送出端だけを差せるようにするため（[`GhostSession::for_test`]）。
     kanade: Option<Sender<KanadeMsg>>,
@@ -431,6 +436,13 @@ impl GhostSession {
         self.kanade.as_ref()
     }
 
+    /// seriko の送り手の複製（シェル・バルーンの差し替えを頼む）。結線ありの腕でなければ `None`。
+    // 本番の呼び手は 8.3（入口の受理の判定）で結ぶ。
+    #[allow(dead_code)]
+    pub(crate) fn seriko_sink(&self) -> Option<&areka_seriko::SerikoSink> {
+        self.seriko_sink.as_ref()
+    }
+
     /// 実行系を持たない置き場の中身（テスト用）: kanade への送出端と根だけを持つ。
     /// 降ろすもの（実行系・seriko・ticker）が無いので `shutdown` は何もせず `Ok` を返す。
     #[cfg(test)]
@@ -439,6 +451,7 @@ impl GhostSession {
             ghost: None,
             seriko: None,
             loop_ticker: None,
+            seriko_sink: None,
             kanade,
             ghost_dir,
             logsink_fallback: false,
@@ -457,7 +470,8 @@ impl GhostSession {
         &self.ghost_dir
     }
 
-    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止 → ② ゴースト実行系の終了
+    /// 降ろす（要件 1.1・1.3・1.5・1.6）: ① loop ticker の停止（seriko の送り手の複製も落とす）
+    /// → ② ゴースト実行系の終了
     /// （`reason` を渡す）→ ③ seriko の join。無い段は飛ばし、②③ の失敗は `error!` の上で
     /// `Err` を返して以降を飛ばす。perf の最終報告はプロセスに 1 回なので呼び手が後で行う。
     pub(crate) fn shutdown(self, reason: areka_kanade::CloseReason) -> windows::core::Result<()> {
@@ -485,7 +499,8 @@ impl GhostSession {
         // `SerikoSink` クローン（tick_sink）を握る。これを先に停止させないと seriko inbox が ticker 経由で
         // 生き続け、③ の join が「全 Sender drop」を永遠に待って hang する。停止端 Sender へ
         // `TickerMsg::Close` を送ると worker は `recv_timeout` から `Ok(Close)` で return し、その closure＝
-        // tick_sink が drop される（inbox 切断の片翼が外れる。残る片翼＝ghost 側 SerikoSink は ② が外す）。
+        // tick_sink が drop される（inbox 切断の 1 本が外れる。セッションの複製はこの段の末尾、
+        // ghost 側 SerikoSink は ② が外す）。
         // 呼び手は ticker の JoinHandle を持たない（`wire_emo2_boot` が保持せず drop 済み）ため直接 join でき
         // ないが、③ の seriko join が全 Sender drop まで block するため実質 ticker worker の終端を待つ形に
         // なり hang しない（Close 未達で worker が既に終端していても drop で disconnected 経路へ倒れる）。
@@ -502,6 +517,9 @@ impl GhostSession {
             // 送信の成否に依らず停止端 Sender をここで drop し、確実に制御チャンネルを disconnected にする。
             drop(ticker);
         }
+        // セッションが持つ seriko の送り手の複製（差し替えの口）も ① で落とす。残すと self の残りの欄
+        // として関数の終わりまで生き、③ の join が「全 Sender drop」を待ち続けて hang する（要件 8.5）。
+        drop(self.seriko_sink);
 
         // ② 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: boot 済み（`Some`）のときのみ
         // `shutdown` を呼ぶ。終了理由は呼び手が渡す（`fn main` は `CloseReason::User { scope: 0 }`＝
@@ -529,12 +547,13 @@ impl GhostSession {
             }
         }
 
-        // ③ seriko アクターの join（design「終了握手（R6）」・R6.3）。seriko inbox への送信端は 2 本ある:
+        // ③ seriko アクターの join（design「終了握手（R6）」・R6.3）。seriko inbox への送信端は 3 本ある:
         // (a) ghost 側の `SerikoSink`（surface_sink・②の `shutdown` が drop）と (b) loop ticker closure の
-        // `tick_sink`（①の Close→worker return で drop）。①②で両端が drop されて inbox が切断され、seriko
-        // worker は自然終了する。呼び手は自前の `SerikoSink` クローンを保持しない（sink は `wire_emo2_boot`
-        // が boot／ticker へ move 済み）ため、この `join` は両端 drop 完了（＝ticker worker 終端）まで block
-        // したうえで速やかに戻る（①で ticker を先に Close したことが hang 回避の要）。join 失敗（worker
+        // `tick_sink`（①の Close→worker return で drop）と (c) セッションの複製（`seriko_sink`・① で drop）。
+        // ①②で全端が drop されて inbox が切断され、seriko worker は自然終了する。複製は `GhostSession`
+        // だけが持ち ① で落とす（それ以外の sink は `wire_emo2_boot` が boot／ticker へ move 済み）ため、
+        // この `join` は全端 drop 完了（＝ticker worker 終端）まで block したうえで速やかに戻る（①で ticker
+        // を先に Close し複製を落としたことが hang 回避の要）。join 失敗（worker
         // panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
         if let Some(seriko) = self.seriko {
             if let Err(err) = seriko.join() {
@@ -640,6 +659,7 @@ pub(crate) fn boot_ghost(
         ghost: runtime,
         seriko: None,
         loop_ticker: None,
+        seriko_sink: None,
         ghost_dir: ghost_root,
         logsink_fallback: true,
     }
@@ -747,6 +767,7 @@ fn boot_wired(
         ghost: outcome.ghost,
         seriko: outcome.seriko,
         loop_ticker: outcome.loop_ticker,
+        seriko_sink: outcome.seriko_sink,
         ghost_dir,
         logsink_fallback: false,
     })
@@ -767,3 +788,7 @@ mod switch_tests;
 #[cfg(test)]
 #[path = "boot_shell_tests.rs"]
 mod boot_shell_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_tests.rs"]
+mod shell_balloon_switch_session_tests;
