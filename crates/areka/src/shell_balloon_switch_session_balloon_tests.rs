@@ -30,9 +30,8 @@ const STAYSEE: &str = "StayseeBalloon";
 const BOOT_TO_STAYSEE: &str = r"\0\s[0]\1\s[10]\0A\![change,balloon,StayseeBalloon]\e";
 /// 1 度目の `OnBalloonChange` の台詞: 新しいバルーンで話し、既定のバルーンへ戻る切替を命じる。
 ///
-/// 隠れたバルーンは「見える文字の数が前のフレームより増えた」縁で現れる（今日の規則）。前の台詞の
-/// 文字の数は差し替えの後も覚えているので、全消去と最初の文字が同じフレームに届くと最初の文字は
-/// 縁にならない。台詞は 2 文字以上にして、2 文字目の現れで縁を立てる。
+/// 1 文字の台詞が切替の後の最初のフレームで現れることは
+/// `emo2_boot/balloon_visibility_phase_reappear_tests.rs` が決定論で確かめる。
 const CHANGE_1: &str = r"\0新しい\![change,balloon,emo2-kakukaku]\e";
 /// 2 度目の `OnBalloonChange` の台詞（戻った既定のバルーンで話す）。
 const CHANGE_2: &str = r"\0戻った\e";

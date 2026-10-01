@@ -12,15 +12,18 @@
 //!
 //! # 表示・非表示の単一規則（Requirement 2.6）
 //!
-//! - 表示: ある scope の**可視グリフ数が増えた**フレームで、かつその scope が**現に不可視**のとき
-//!   だけ表示する（Requirement 2.1 / 2.5）。起動時・会話開始時・scope 切替時に別条件を設けない。
+//! - 表示: ある scope の**可視グリフ数が前のフレームより増えた**フレームで（その scope の内容が
+//!   消去された後は、空の状態（0）から増えたかで判定する）、かつその scope が**現に不可視**のとき
+//!   だけ表示する（Requirement 2.1 / 2.5・`decide_content`）。消去されたかは
+//!   `TextLayerState::clear_count` の変化で知る（areka-P0-balloon-reappear-short-talk）。
+//!   起動時・会話開始時・scope 切替時に別条件を設けない。
 //!   ただし利用者の中断で隠した後は、次のトークが始まるまで見送る（areka-P0-balloon-break 要件 4.8）。
 //! - 非表示（会話開始側）: 可視グリフ数が**ゼロへ下降した**フレームで、かつ現に可視のときだけ
 //!   非表示にする（Requirement 3.1）。会話がどの scope から始まるかを先読みしない（Requirement 3.6）。
 //!
 //! 改行・カーソル移動・待機・内容消去はいずれも可視グリフ数を増やさないため、表示の契機に
 //! ならない（Requirement 2.3）。この一致は偶然ではなく、観測量に
-//! `TextLayerState::visible_glyphs`（`crates/areka-emo-text/src/state.rs:440`）を採ったことの
+//! `TextLayerState::visible_glyphs`（`areka-emo-text` の `state.rs`）を採ったことの
 //! 帰結である——同関数はリビール済みのグリフのみを数える。
 //!
 //! # 会話終了後のタイムアウト（Requirement 4）
