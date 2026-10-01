@@ -300,13 +300,13 @@ graph LR
 | SAORI はゴースト（SHIORI）自身が読み込むものだけが動く | 本体に SAORI の読み込み口が無い。同じく語で検索し、当たった行（設計の段では `crates/areka/src/session_end.rs` の 1 本だけ）を読んで読み込み口でないことを書く | 5.1 |
 | キャラクターが 3 人以上のゴーストでは 3 人目以降の窓が出ない | `crates/areka/src/emo2_boot/mod.rs:274-276` の `derive_scopes`（`[0, 1]` 固定） | 5.1 |
 | 管理者として起動した areka へ、ふつうの権限のエクスプローラから落としても届かない | 完了 `file-drop` 要件 8.9 | 5.2 |
-| 入れる途中で元へ戻せなかったときの元の中身が一時的な作業のフォルダに 7 日まで残る | `crates/areka-nar/src/install.rs:40` の `SURVIVOR_RETENTION` | 5.2 |
+| 入れる途中で元へ戻せなかったときの元の中身が一時的な作業のフォルダに残り、7 日を過ぎた後の次の入れ込みで片付く | `crates/areka-nar/src/install.rs:40` の `SURVIVOR_RETENTION` | 5.2 |
 | 更新のオプション（確かめるだけ・試すだけ・やり直し）は受けない | `crates/areka/src/emo2_boot/update_cue.rs:32` の `UPDATE_OPTIONS` | 5.3 |
 | ゴーストがシェル・バルーンの更新先を差し替える仕組みには応えない | `crates/areka-kanade/src/schedule/resources.rs:59`（`other_homeurl_override` を載せない） | 5.3 |
 | ゴーストが指示する取得の種別は `.nar` だけ | 完了 `network-update` の申し送り ⑶（brief「2026-09-30」3） | 5.3 |
-| 取得したファイルが一時フォルダに最大 7 日残る | `crates/areka/src/install/fetch_url.rs:25` の `KEEP` | 5.3 |
+| 取得したファイルが一時フォルダに残り、7 日を過ぎた後の次の取得で片付く | `crates/areka/src/install/fetch_url.rs:25` の `KEEP` | 5.3 |
 | 更新の確定を元へ戻せなかったときの残りが対象のフォルダの下に残り、救い出しは手で行う | `crates/areka-update/src/paths.rs:7`（作業場所 `.update-work`） | 5.3 |
-| 引数でゴーストのフォルダを指して始めたとき・表示していないシェル・バルーンを更新したときは読み直さない | 完了 `network-update` の申し送り ⑹⑺ | 5.3 |
+| 引数でゴーストのフォルダを指して始めたときは読み直さない・表示していないシェル・バルーンを更新したときは次に選んだときに効く（何か入れ替われば同じゴーストは読み直すが、立つのは今のシェル・バルーン） | 完了 `network-update` の申し送り ⑹⑺・`crates/areka/src/update/procedure.rs` の `request_reload`・`crates/areka/src/update/desk.rs` の `reload_folder` | 5.3 |
 | 読み直した後のまとめの知らせが「更新成功」の台詞の終わりを待たない | 完了 `network-update` 要件 5.3・α 後 `network-update-canon-order` | 5.3 |
 | ⒜ `halt` の台詞が無い／⒝ `emo2-kakukaku` の古い更新先／⒞ 隠れたバルーンが 1 文字の台詞で現れない | 条件つき（下の「条件つきの制限の決め方」） | 5.4 |
 
