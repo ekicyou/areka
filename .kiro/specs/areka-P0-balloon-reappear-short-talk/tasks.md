@@ -56,3 +56,7 @@
   - 本 spec で触った本番ファイルとテストファイルの行数を数える
   - 完了の状態: ワークスペース全体が緑で、触ったファイルがすべて 1,000 行以下である
   - _Requirements: 2.6, 3.5, 3.8_
+
+## Implementation Notes
+
+- 完了時にその場で解決: `doc/COMPAT_ARCHITECTURE.md` §8 の「タイムアウト延命」「既定の待ち時間」の 2 行に残っていた `balloon_visibility.rs` の古い行番号の参照（本 spec より前からずれていた）を、`observe_suppression`・`decide_timeout`・`DEFAULT_BALLOON_TIMEOUT_SECS` の名前で指し直した（b5b4c87f）。起票は 0 件。
