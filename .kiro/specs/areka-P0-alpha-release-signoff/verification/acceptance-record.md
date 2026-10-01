@@ -54,9 +54,61 @@
 
 ---
 
-## 1. 同定
+## 1. 同定（要件 1.1・1.2）
 
-タスク 3.3 で書く（zip を組んだ直後）。
+| 欄 | 値 |
+|---|---|
+| zip の名前 | `areka-alpha-x64-20261001-7f8f4e8.zip`（名前に `-dirty` が付いていない。x64 の 1 種だけで、arm64 版は組んでいない＝要件 1.5） |
+| 組んだコマンド | `pwsh -NoProfile -File tools/package-alpha.ps1 -Check`（`-CheckDir` は付けていない＝既定の一時フォルダへ展開） |
+| `commit=` | `7f8f4e8`（zip の中の `BUILD-INFO.txt`） |
+| 完全なコミットの識別子 | `git rev-parse 7f8f4e8` → `7f8f4e8701ab0e0a890f446665ed1fda715881a0`（件名「受入記録 §10 に説明書の突き合わせと機械の確かめを書き §8 に候補 2 つを登記する (2.5)」）。全体テストを回した署名の根拠のコミット（`verification/alpha-completion.md` §1）と同じ |
+| `dirty=` | `0`（`BUILD-INFO.txt`）。組む前の `git status --porcelain` も 0 行（`package-meta.txt` の `dirty=0`・`package-alpha.log` の「コミット 7f8f4e8・未コミットの変更 0 件」） |
+| `-Check` の終了コード | `0`（`package-meta.txt` の `exit=0`・`package-alpha.log` の末尾「全段 緑」） |
+| `-Check` の日時（日本時間） | 開始 2026-10-01 22:11:47 〜 終了 2026-10-01 22:15:07（`package-meta.txt`）。zip を組んだ時刻は `BUILD-INFO.txt` の `built=2026-10-01T13:14:54Z`（日本時間 22:14:54） |
+| zip の sha256 | `0b4532e4815e80740edef23a977a8854e4c5a1a79d36661b21a99eae75084b08`（生の記録の写しと `target\alpha\` の実物で同じ値） |
+| zip の大きさ | 7,556,348 バイト |
+| 生の記録の置き場 | `C:\home\maz\lap-records\alpha-signoff-20261001\`（zip の写し・`areka-alpha-x64-20261001-7f8f4e8.zip.sha256`・`package-alpha.log`・`package-meta.txt`。3.1 の `test-all.log`・`test-all-meta.txt`・`cargo-deny.txt` も同じ置き場） |
+| `-Check` の展開先と記録 | 展開先 `C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-221148`・記録 `C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-221148-logs\run.log`（と `run.stderr.log`）。リポジトリの外で、一周の根には使わない |
+
+`BUILD-INFO.txt` の全文（逐語）:
+
+```
+commit=7f8f4e8
+dirty=0
+built=2026-10-01T13:14:54Z
+script=tools/package-alpha.ps1 1.0.0
+rustflags=-C target-feature=+crt-static
+```
+
+### 1.1 `-Check` の判定（`package-alpha.log` から逐語）
+
+```
+判定 1〜8 すべて合
+```
+
+```
+合 番犬で止めていない（自分で終わった）
+合 有界で走った（「smoke 自動 close ゲート有効」1 件）
+合 終了コード 0（終了コード 0）
+合 ゴーストの窓が立った（「本物のゴースト窓を開きました」1 件）
+合 SHIORI の接続の失敗が無い（失敗の目印 0 件）
+合 会話が始まった（「起動グリーティングを再生起動」1 件（自動終了より前）・全体 1 件）
+合 初回のバルーンは同梱（バルーンを決めました event="balloon_resolved" route=Companion dir=C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-221148\balloon\emo2-kakukaku）
+```
+
+### 1.2 zip の実物で確かめたこと（要件 1.4・1.5・4.9・5.4）
+
+生の記録の置き場の zip の写しを、使い捨ての Python（標準の `zipfile`・リポジトリには置かない）で読んで確かめた（2026-10-01）。
+
+| 確かめ | 結果 |
+|---|---|
+| `README.txt` が仕上げた説明書と同じ（判定 8） | zip の `README.txt` と `dist/README.txt` がバイト列で一致 |
+| 最上位の中身 | `BUILD-INFO.txt`・`LICENSE-MIT`・`README.txt`・`THIRD-PARTY-NOTICES.md`・`areka.exe`・`balloon/`・`ghost/`・`shiori-host32-helper.exe`（項目は全部で 146） |
+| `ghost/` が `emo2` だけ（要件 1.4） | `ghost/` の下のフォルダは `emo2` の 1 つ |
+| `balloon/` の下 | `StayseeBalloon`・`emo2-kakukaku` の 2 つ |
+| x64 の 1 種（要件 1.5） | `areka.exe` の PE の機種 `0x8664`（x64）。`shiori-host32-helper.exe` と `ghost/emo2/ghost/master/pasta.dll` は `0x014c`（32bit の SHIORI を読む補助と、えも？？ の SHIORI。zip の種類を増やすものではない） |
+| ⒜ の条件（`emo2` が `halt` の台詞を持つか） | `ghost/emo2/ghost/master/dic/boot.pasta` に `＊起動halt` を含む行が 3 件＝持つ。2.3 の判断（⒜ を書かない）と合う |
+| ⒝ の条件（`emo2-kakukaku` の `homeurl`） | `balloon/emo2-kakukaku/descript.txt`（UTF-8）に `homeurl` で始まる行が 0 件（同じ探し方で `name,` の行は 1 件）。2.3 の判断（⒝ を書かない）と合う |
 
 ## 2. 機械の構成
 
@@ -85,13 +137,13 @@ design.md「走行の型」の表を逐語で写す。全走行（E1〜A4）で�
 |---|---|---|---|
 | 根 E（項目 1・2） | `C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\E` | 83 | 160 文字以内・`C:\` の直下ではない |
 | 根 A（項目 3〜13） | `C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A` | 83 | 160 文字以内・`C:\` の直下ではない |
-| 生の記録 | `C:\home\maz\lap-records\alpha-signoff-<準備日>\` | — | リポジトリの外・ワークツリーの片付けで消えない。`<準備日>` はタスク 3.1 で置き場を作るときに決めて、ここを書き直す |
+| 生の記録 | `C:\home\maz\lap-records\alpha-signoff-20261001\` | — | リポジトリの外・ワークツリーの片付けで消えない。準備日 `20261001` はタスク 3.1 で置き場を作ったときに決めた |
 
 - 文字数は PowerShell の `'<パス>'.Length` で数えた（2026-10-01）。上限 160 は `tools/package-alpha.ps1` の展開先の上限 `EXPAND_DIR_MAX_CHARS` と同じ値。
 - 根の下でいちばん長くなる見込みのパスは、項目 4 で入る `claudia` の `ghost\claudia\ghost\master\dic\system\aya_lilith\_loading_order.txt` で、根 A と合わせて 151 文字（検体の中の最長の項目から数えた見込み）。
 - 根は `target` の下にあり、`target` は `.gitignore` の 1 行目で無視されるので、一周で根に書かれるもの（記憶・印・入れたゴースト）は `git status` に出ない。
 - ワークツリーの場所が長すぎるときの次善は `C:\tmp\alpha-lap\<E|A>`（設計の「走行の型」）。今回は使わない。
-- 生の記録の置き場に置くもの: zip の写しと `zip.sha256.txt`（3.2）・`test-all.log` と `cargo-deny.txt`（3.1）・`runs.txt`・`run-E1.log`〜`run-A4.log` と各 `.err.log`（4.x）。
+- 生の記録の置き場に置くもの: zip の写しと `areka-alpha-x64-20261001-7f8f4e8.zip.sha256`・`package-alpha.log`・`package-meta.txt`（3.2）・`test-all.log`・`test-all-meta.txt`・`cargo-deny.txt`（3.1）・`runs.txt`・`run-E1.log`〜`run-A4.log` と各 `.err.log`（4.x）。
 
 ---
 
@@ -183,7 +235,7 @@ design.md「走行の手順」の表の順（準備 → E1 → E2 → A1 → A2 
 根は zip を根のフォルダへ展開して作る（`[IO.Compression.ZipFile]::ExtractToDirectory`）。根のフォルダが既に在るときは展開せず、開発者に尋ねる（項目 3・12 は新しい根が前提）。
 
 ```powershell
-$ZIP = '<target\alpha の署名の zip の絶対パス>'
+$ZIP = 'C:\home\maz\lap-records\alpha-signoff-20261001\areka-alpha-x64-20261001-7f8f4e8.zip'   # 署名の zip の写し（target\alpha の古い zip と取り違えない）
 $ROOT = '<根の絶対パス>'          # §4 の根 E か根 A
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::ExtractToDirectory($ZIP, $ROOT)
@@ -193,7 +245,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 ```powershell
 $ROOT = '<根の絶対パス>'
-$REC  = 'C:\home\maz\lap-records\alpha-signoff-<準備日>'
+$REC  = 'C:\home\maz\lap-records\alpha-signoff-20261001'
 $RUN  = '<走行名 E1〜A4>'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Get-ChildItem Env: | Where-Object { $_.Name -like 'AREKA_*' -or $_.Name -like 'WINTF_*' } | ForEach-Object { Remove-Item "Env:$($_.Name)" }
