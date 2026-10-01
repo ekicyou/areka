@@ -27,15 +27,13 @@
 //! 値を直に読むので捕捉窓は要らず、既定の実行器がスレッドローカルの差し替えを拾えない
 //! という罠（`zorder_pair_establish_tests.rs:142-152`）にも触れない。
 
-use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::EmoWorld;
 use areka_emo_present::{EmoPresenter, PresentCommand};
-use bevy_ecs::prelude::Entity;
 use bevy_ecs::world::World;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use wintf::ecs::window::{ChainPlan, ZOrderChainPlan};
 
 use super::issue_show;
+use super::test_support::attach_headless;
 use crate::emo2_boot::frame::run_zorder_drain_phase;
 use crate::emo2_boot::target_map::balloon_target;
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
@@ -135,22 +133,6 @@ fn world_with_published_chain() -> (
     (world, ledger, tx, rx)
 }
 
-/// 表示層へ scope の balloon target を headless 装着する（可視状態は `Some(false)` から始まる）。
-fn attach_balloon(presenter: &mut EmoPresenter, world: &mut World, scope: u32) -> Entity {
-    let window = world.spawn_empty().id();
-    presenter
-        .attach_target(
-            world,
-            balloon_target(scope),
-            window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
-    window
-}
-
 // ---------------------------------------------------------------------------
 // ⑴ 不作用——再表示を模した入力で鎖の計画が 1 ビットも変わらない
 // ---------------------------------------------------------------------------
@@ -188,7 +170,7 @@ fn a_simulated_redisplay_does_not_move_the_chain_plan_by_one_bit() {
     let before = snapshot(&world);
 
     let mut presenter = EmoPresenter::new();
-    attach_balloon(&mut presenter, &mut world, 0);
+    attach_headless(&mut presenter, &mut world, 0);
 
     // 再表示を模した入力——「描き直す」と「中身の絵を消す」を交互に 3 巡。
     for round in 0..3 {

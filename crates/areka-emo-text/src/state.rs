@@ -393,6 +393,9 @@ impl ActorTextState {
 pub struct TextLayerState {
     /// `ActorKey → ActorTextState`（決定論的順序のため BTreeMap・design.md 正本）。
     actors: BTreeMap<ActorKey, ActorTextState>,
+    /// scope ごとの内容が消された回数（`Clear`／`ClearAll` の累計・単調増加）。
+    /// `ActorTextState` の欄にしないのは、内容の状態の形と等しさを変えないため。
+    clears: BTreeMap<ActorKey, u64>,
 }
 
 impl TextLayerState {
@@ -447,6 +450,7 @@ impl TextLayerState {
                     .entry(cue.actor.clone())
                     .or_default()
                     .clear_content();
+                *self.clears.entry(cue.actor.clone()).or_default() += 1;
             }
             CueCommand::ClearAll => {
                 tracing::debug!(actor = %cue.actor, "ClearAll cue 適用（全スコープを未リビール分含め消去）");
@@ -462,9 +466,11 @@ impl TextLayerState {
                 // 台本の先頭ゆえ、内容を消したうえで装飾も既定へ戻す（R3.8）——
                 // 装飾は台詞をまたいで残らない。記録済みの値も空にして、次の台詞では
                 // 同じ不正な指定がもう 1 度記録されるようにする（R13.4）。
-                for state in self.actors.values_mut() {
+                // 回数を進めるのは既にある scope だけ（状態の無い scope は 0 のまま）。
+                for (actor, state) in self.actors.iter_mut() {
                     state.clear_content();
                     state.reset_for_new_talk();
+                    *self.clears.entry(actor.clone()).or_default() += 1;
                 }
             }
             CueCommand::Choice {
@@ -564,6 +570,12 @@ impl TextLayerState {
             .map_or(0, |state| state.reveal.visible(t))
     }
 
+    /// scope の内容が消された回数（`Clear` と `ClearAll` の累計）。
+    /// 一度も消されていない・状態の無い scope は 0。読むだけで状態を変えない。
+    pub fn clear_count(&self, actor: &ActorKey) -> u64 {
+        self.clears.get(actor).copied().unwrap_or(0)
+    }
+
     /// actor のテキスト状態（未生成の actor は `None`）。
     pub fn actor_state(&self, actor: &ActorKey) -> Option<&ActorTextState> {
         self.actors.get(actor)
@@ -597,3 +609,7 @@ mod cluster_tests;
 #[cfg(test)]
 #[path = "state_cursor_coord_parse_tests.rs"]
 mod cursor_coord_parse_tests;
+
+#[cfg(test)]
+#[path = "state_clear_count_tests.rs"]
+mod clear_count_tests;
