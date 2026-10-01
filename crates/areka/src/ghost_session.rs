@@ -852,3 +852,11 @@ mod shell_balloon_switch_session_tests;
 #[cfg(test)]
 #[path = "shell_balloon_switch_session_lap_tests.rs"]
 mod shell_balloon_switch_session_lap_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_balloon_tests.rs"]
+mod shell_balloon_switch_session_balloon_tests;
+
+#[cfg(test)]
+#[path = "shell_balloon_switch_session_abort_tests.rs"]
+mod shell_balloon_switch_session_abort_tests;

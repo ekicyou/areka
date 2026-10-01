@@ -19,7 +19,12 @@ use bevy_ecs::hierarchy::Children;
 use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::SampleRoot;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
-use wintf::ecs::{DPI, GraphicsCore, Input, Update, WindowHandle, WindowPos, WucGraphicsResource};
+use windows::Win32::UI::WindowsAndMessaging::{
+    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
+};
+use wintf::ecs::{
+    DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WindowPos, WucGraphicsResource,
+};
 
 use super::GhostSlot;
 use crate::boot_resolve::read_last_shell;
@@ -39,7 +44,7 @@ use crate::placement::resolver::RectPx;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 
 /// 2 つ目のシェルのフォルダ名（`descript.txt` の `name` も同じ）。
-const SECOND: &str = "second";
+pub(super) const SECOND: &str = "second";
 /// 合成の作業領域（配置の準備と窓の追従の両方が読む）。
 const WORK_AREA: RectPx = RectPx {
     left: 0,
@@ -55,28 +60,28 @@ const TICK_EVERY: Duration = Duration::from_millis(1);
 /// 投函した Tick は talk スレッドが遅れると溜まり、後から一度に消化される。台詞の時計を観測より
 /// 先へ進めてはならない場面では、幅と回数で 1 回の待ちの進み幅を抑える。
 #[derive(Clone, Copy)]
-struct Ticks {
+pub(super) struct Ticks {
     step_ms: u64,
     max: usize,
 }
 
 /// Tick を注入しない（台詞の時計を止めたまま回す）。
-const NO_TICKS: Ticks = Ticks { step_ms: 0, max: 0 };
+pub(super) const NO_TICKS: Ticks = Ticks { step_ms: 0, max: 0 };
 /// 100 ms ずつ・上限なし（進み方を問わない場面）。
-const UNBOUNDED: Ticks = Ticks {
+pub(super) const UNBOUNDED: Ticks = Ticks {
     step_ms: 100,
     max: usize::MAX,
 };
 /// 1 ms ずつ・上限なし（台詞の始まりを見るまで。台詞の開始は kanade から中継を経て dispatcher へ
 /// 届くので Tick より遅れうる。始まる前の Tick は捨てられ、始まった後に溜まった Tick も 1 回 1 ms
 /// しか進めない）。
-const CREEP: Ticks = Ticks {
+pub(super) const CREEP: Ticks = Ticks {
     step_ms: 1,
     max: usize::MAX,
 };
 /// 台詞の始まりを見た後、受理までに注入する Tick（100 ms × 20 回＝台詞の時計で高々 2,000 ms。
 /// 命令の位置〔台本の頭から数十 ms〕には届き、命令の後の待ち 5,000 ms は食い切らない）。
-const ACCEPT: Ticks = Ticks {
+pub(super) const ACCEPT: Ticks = Ticks {
     step_ms: 100,
     max: 20,
 };
@@ -88,19 +93,31 @@ const SECOND_SIZES: [(i32, i32); 2] = [(236, 462), (140, 160)];
 // ---------------------------------------------------------------- 土台
 
 /// 窓・GPU つきの往復の土台。
-struct LapRig {
-    rig: SwitchRig,
-    windows: GhostWindows,
+pub(super) struct LapRig {
+    pub(super) rig: SwitchRig,
+    pub(super) windows: GhostWindows,
     /// 注入した Tick の合成の時刻（単調増加）。
     clock_ms: u64,
 }
 
 /// A（起動記録あり＝`OnBoot` の台本から始まる）を `script` の偽の SHIORI で、2 つ目のシェル・
 /// 窓の一式・GPU 資源つきで起こす。
-fn lap_rig(script: impl Fn() -> ScriptedShioriBackendBuilder + 'static) -> LapRig {
-    let mut rig = SwitchRig::new(vec![("A", FakeShiori::Scripted(Box::new(script)))]);
+pub(super) fn lap_rig(script: impl Fn() -> ScriptedShioriBackendBuilder + 'static) -> LapRig {
+    lap_rig_of(
+        vec![("A", FakeShiori::Scripted(Box::new(script)))],
+        &[SECOND],
+    )
+}
+
+/// [`lap_rig`] の一般形: `ghosts` の偽の SHIORI（A は必ず含む）で土台を組み、A に
+/// `R_POST_and_KOMAINU` のシェルを `shells` の各名前（フォルダ名・`name` とも）で写してから、
+/// 窓の一式と GPU 資源つきで A を起こす。
+pub(super) fn lap_rig_of(ghosts: Vec<(&str, FakeShiori)>, shells: &[&str]) -> LapRig {
+    let mut rig = SwitchRig::new(ghosts);
     rig.plant_boot_record("A");
-    add_second_shell(&rig.root.ghost_dir("A"));
+    for shell in shells {
+        add_rpost_shell(&rig.root.ghost_dir("A"), shell);
+    }
     let windows = spawn_windows(&mut rig);
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
@@ -115,17 +132,22 @@ fn lap_rig(script: impl Fn() -> ScriptedShioriBackendBuilder + 'static) -> LapRi
     }
 }
 
-/// `R_POST_and_KOMAINU` の `shell/master` を `add_shell_copy` で `second`（`name` も `second`）に
-/// 写し、それを A の `shell/second` へ複製する。
-fn add_second_shell(ghost_dir: &Path) {
+/// `R_POST_and_KOMAINU` の `shell/master` を `add_shell_copy` で `folder`（`name` も `folder`）に
+/// 写し、それを A の `shell/<folder>` へ複製する。
+fn add_rpost_shell(ghost_dir: &Path, folder: &str) {
     let rpost = SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
     rpost
-        .add_shell_copy("master", SECOND, SECOND)
+        .add_shell_copy("master", folder, folder)
         .expect("2 つ目のシェルを写す");
-    let mut stack = vec![(
-        rpost.folder().join("shell").join(SECOND),
-        ghost_dir.join("shell").join(SECOND),
-    )];
+    copy_tree(
+        &rpost.folder().join("shell").join(folder),
+        &ghost_dir.join("shell").join(folder),
+    );
+}
+
+/// フォルダ `from` を `to` へ再帰で複製する（検体の複製の中だけで使う）。
+pub(super) fn copy_tree(from: &Path, to: &Path) {
+    let mut stack = vec![(from.to_path_buf(), to.to_path_buf())];
     while let Some((src, dst)) = stack.pop() {
         std::fs::create_dir_all(&dst).expect("複製のフォルダを作る");
         for entry in std::fs::read_dir(&src).expect("写したシェルを走査する") {
@@ -180,8 +202,13 @@ fn spawn_windows(rig: &mut SwitchRig) -> GhostWindows {
 impl LapRig {
     /// 本番の `Input`・`Update` の段を `done` が真になるまで有界に回す（期限切れは `false`）。
     /// この呼び出しの中で置き場のゴーストの dispatcher へ合成の Tick を `ticks` のとおり注入して
-    /// 台詞を進め、回数を使い切った後は Tick なしでフレームだけを回す。
-    fn frames_until(&mut self, ticks: Ticks, mut done: impl FnMut(&SwitchRig) -> bool) -> bool {
+    /// 台詞を進め、回数を使い切った後は Tick なしでフレームだけを回す。巡ごとに本番の巡と同じく
+    /// `FrameTime` を置き、スレッドのメッセージを配る（文字の層の cue の適用とバルーンの表示が進む）。
+    pub(super) fn frames_until(
+        &mut self,
+        ticks: Ticks,
+        mut done: impl FnMut(&SwitchRig) -> bool,
+    ) -> bool {
         let Self { rig, clock_ms, .. } = self;
         let mut last_tick: Option<Instant> = None;
         let mut sent = 0;
@@ -201,6 +228,11 @@ impl LapRig {
                     });
                 }
             }
+            // 本番の巡と同じく、巡ごとに `FrameTime` を dola の時計で置く（台詞の文字の現れと
+            // バルーンの表示を UI が決める時刻・`TalkClock` と同じ時計）。
+            rig.world
+                .insert_resource(FrameTime(dola::runtime::clock::now()));
+            pump_messages();
             rig.world.run_schedule(Input);
             rig.world.run_schedule(Update);
             done(rig)
@@ -208,9 +240,31 @@ impl LapRig {
     }
 }
 
+/// 1 巡で配るメッセージの上限（起こし直しの投函が続いても巡を終わらせる）。
+const PUMP_MAX: usize = 1024;
+
+/// 今のスレッドのキューに溜まったメッセージを配る（本番のメッセージループの 1 巡ぶん）。文字の層の
+/// cue の適用（`spawn_ui` の受け手）は executor の窓へのメッセージで走るので、配らないと台詞の文字が
+/// 文字の層へ載らず、バルーンも現れない。
+fn pump_messages() {
+    let mut msg = MSG::default();
+    for _ in 0..PUMP_MAX {
+        // SAFETY: 今のスレッドのキューから 1 件取り出して配るだけ（待たない）。
+        let got = unsafe { PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE) };
+        if !got.as_bool() {
+            break;
+        }
+        // SAFETY: いま取り出したメッセージを同じスレッドで配る。
+        unsafe {
+            let _ = TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+}
+
 /// キャラ窓ごとの見え方。
 #[derive(Debug, Clone, Default, PartialEq)]
-struct Look {
+pub(super) struct Look {
     children: Vec<BTreeSet<Entity>>,
     sizes: Vec<Option<(i32, i32)>>,
     /// キャラ窓の下端（位置の y＋高さ）。
@@ -231,14 +285,14 @@ impl Look {
 
 /// フレームごとの見え方の記録（全部の窓に子がそろった後だけ・続けて同じものは 1 つにまとめる）。
 #[derive(Default)]
-struct LookLog {
-    distinct: Vec<Look>,
+pub(super) struct LookLog {
+    pub(super) distinct: Vec<Look>,
     /// 一度そろった後に子の欠けたフレームが在ったか（窓が空になった）。
-    blank_after_full: bool,
+    pub(super) blank_after_full: bool,
 }
 
 impl LookLog {
-    fn record(&mut self, look: Look) {
+    pub(super) fn record(&mut self, look: Look) {
         if !look.full() {
             self.blank_after_full |= !self.distinct.is_empty();
             return;
@@ -282,7 +336,7 @@ fn sizes(of: [(i32, i32); 2]) -> Vec<Option<(i32, i32)>> {
 }
 
 /// 呼出列の種別（`GET OnBoot` の形）。
-fn kinds(calls: &[RecordedCall]) -> Vec<String> {
+pub(super) fn kinds(calls: &[RecordedCall]) -> Vec<String> {
     calls
         .iter()
         .map(|c| match c {
@@ -295,7 +349,7 @@ fn kinds(calls: &[RecordedCall]) -> Vec<String> {
 }
 
 /// 呼出列から `id` の GET の Reference を順に取る。
-fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
+pub(super) fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
     calls
         .iter()
         .filter_map(|c| match c {
@@ -309,17 +363,17 @@ fn refs_of(calls: &[RecordedCall], id: &str) -> Vec<Vec<String>> {
 }
 
 /// A の最初の起動の呼出列。
-fn calls_a(rig: &SwitchRig) -> Vec<RecordedCall> {
+pub(super) fn calls_a(rig: &SwitchRig) -> Vec<RecordedCall> {
     rig.calls("A").into_iter().next().unwrap_or_default()
 }
 
 /// `id` の GET が `n` 件以上届いたか。
-fn got(rig: &SwitchRig, id: &str, n: usize) -> bool {
+pub(super) fn got(rig: &SwitchRig, id: &str, n: usize) -> bool {
     refs_of(&calls_a(rig), id).len() >= n
 }
 
 /// 置き場のゴーストの記憶の書き手へ柵を掛けてから、A の `LastShell` を実 fs から読む。
-fn last_shell(rig: &SwitchRig) -> Option<String> {
+pub(super) fn last_shell(rig: &SwitchRig) -> Option<String> {
     let fenced = rig
         .world
         .get_non_send::<GhostSlot>()
@@ -331,7 +385,7 @@ fn last_shell(rig: &SwitchRig) -> Option<String> {
 }
 
 /// `LastShell` だけを書いた記録（`last_shell_recorded`）のシェルの並び（投函の順）。
-fn recorded_shells(events: &[CapturedEvent]) -> Vec<Option<String>> {
+pub(super) fn recorded_shells(events: &[CapturedEvent]) -> Vec<Option<String>> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some("last_shell_recorded"))
@@ -340,7 +394,7 @@ fn recorded_shells(events: &[CapturedEvent]) -> Vec<Option<String>> {
 }
 
 /// 完了の記録（`skin_switch_done`）ごとの印の台詞の終わり方（`marked` の欄の字面）。
-fn done_marks(events: &[CapturedEvent]) -> Vec<Option<String>> {
+pub(super) fn done_marks(events: &[CapturedEvent]) -> Vec<Option<String>> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some("skin_switch_done"))
@@ -349,11 +403,11 @@ fn done_marks(events: &[CapturedEvent]) -> Vec<Option<String>> {
 }
 
 /// 切替の進行中の印が無い。
-fn idle(rig: &SwitchRig) -> bool {
+pub(super) fn idle(rig: &SwitchRig) -> bool {
     rig.world.get_non_send::<SkinSwitchInFlight>().is_none()
 }
 
-fn abs(dir: &Path) -> String {
+pub(super) fn abs(dir: &Path) -> String {
     std::path::absolute(dir).unwrap().display().to_string()
 }
 
@@ -376,7 +430,7 @@ fn user_break_live(rig: &mut SwitchRig) -> bool {
 // ---------------------------------------------------------------- 往復
 
 /// A の `OnBoot`: 両スコープの面を出し、台詞の終わりで `raise-event` 付きの `second` への切替を命じる。
-const BOOT_TO_SECOND: &str =
+pub(super) const BOOT_TO_SECOND: &str =
     "\\0\\s[0]\\1\\s[10]\\0A\\![change,shell,second,--option=raise-event]\\e";
 /// 1 度目の `OnShellChanging` の台詞（印の台詞）。
 const CHANGING_1: &str = "\\0着替えます\\e";
@@ -492,7 +546,7 @@ fn script_shell_switch_round_trips_with_raise_event() {
 }
 
 /// 今の見え方（キャラ窓ごとの装着の子・窓寸・シェルの表示）。
-fn look_of(rig: &SwitchRig, windows: &GhostWindows) -> Look {
+pub(super) fn look_of(rig: &SwitchRig, windows: &GhostWindows) -> Look {
     let world = &rig.world;
     let presenter = world.get_non_send::<Emo2Wiring>().map(|w| w.presenter());
     let mut look = Look::default();
@@ -530,7 +584,8 @@ fn stage(rig: &SwitchRig) -> Option<&'static str> {
 
 /// A の `OnBoot`: 両スコープの面を出し、`raise-event` 無しで `second` への切替を命じてから、
 /// 台詞をまだ 5 秒続ける（命令の位置では台本は終わっていない）。
-const BOOT_TO_SECOND_PLAIN: &str = r"\0\s[0]\1\s[10]\0A\![change,shell,second]\_w[5000]\e";
+pub(super) const BOOT_TO_SECOND_PLAIN: &str =
+    r"\0\s[0]\1\s[10]\0A\![change,shell,second]\_w[5000]\e";
 
 /// `raise-event` 無しの台本の切替（要件 1.2・2.3・11.3）: `OnShellChanging` は 0 件。命令の後も台本が
 /// 続いている間（台詞の時計を止め、資産がそろった後もフレームを回す）は差し替わらず、台詞の時計を
