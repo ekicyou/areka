@@ -232,7 +232,7 @@
   - _Depends: 11.3_
 
 - [ ] 13. 全体の確認と実機サインオフ
-- [ ] 13.1 全体のテストと規律の検査を通す
+- [x] 13.1 全体のテストと規律の検査を通す
   - `tools/test-all.ps1` が全段緑。テストの削除 0・触ってはならないファイルの差分 0・`Emo2BootInputs`／`StartupDescriptValues`／`GhostBootOptions`／`ConfigInputs`／`CurrentGhost`／`GhostDecision`／`BalloonDecision`／`Identity` の欄の増減 0・1,000 行・上限の近いテストの行の増加 0・環境変数／外部クレート／同期送信の追加 0・`session_mark_verdict`／`ExitOrigin` の差分 0・切替の経路からの終了の指示 0 を検査する（pathspec が実在することを先に確かめる）
   - 裁定 1〜9 を覆す必要が見つかっていないことを確かめる（見つかれば開発者へ議題として上げて止まる）
   - _Requirements: 5.8, 8.1, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 11.10, 12.10_
@@ -271,3 +271,4 @@
 - 11.2: 本番コードの変更 0。新しい兄弟 `shell_balloon_switch_session_balloon_tests.rs`・`shell_balloon_switch_session_abort_tests.rs`。バルーンの検体は design の claudia でなく `emo2-kakukaku`・`StayseeBalloon`（実機サインオフ ④ と同じ組・12 で design へ反映）。土台 `frames_until` は毎巡 `FrameTime`（実時計）を置きスレッドのメッセージを配る（上限 1024・本番の巡と同じ）。実 fs の記憶は柵つき `last_shell` か `shutdown()` の後に読む（負荷で揺れないため）。9.4 の申し送り「頼んだ段で seriko の合図が来ない」は静的に決着（`SwapSlot` の送り手が落ちて `error!(skin_switch_failed, stage=attach)`・テストなし）。本 spec の外の既存の穴: 隠れたバルーンは次の台詞が 1 文字だけだと現れない（全消去と 1 文字目が同じフレーム）。
 - 11.3: 本番の振る舞いの変更 0。新しい兄弟 `shell_balloon_switch_session_update_tests.rs`（ghost_session から `#[path]`・`lap_rig` を使う＝tasks の「既存の解決／読み直しのテストの兄弟」は同種のテストの意）。`update::desk::resolve_targets` を `pub(super)` → `pub(crate)`、cfg(test) の口 `ask_reload_for_test` を足した。
 - 12: 台帳の 7 項目に加え、古いままだった `ghostrootbutton.caption` も実装済み・担当 `areka-P0-ghost-shell-balloon-switch` へ（要件 10.1 の枠の一覧を今の形へ）。手書きの件数（briefing.md・roadmap-draft.md）は台帳から数え直した。生成物は生成器で作り直し（再実行で差分 0）。`diag.rs` の `PlacementRoute::Restore` の許可を外した。
+- 13.1: `tools/test-all.ps1` 全段緑（HEAD `ae635eef`・未コミット 0・x64 9,310 passed／0 failed／44 ignored・i686 緑・fmt 緑）。静的な規律の検査 9 項目すべて PASS（テストの削除 0〔改名 2 本〕・触ってはならないファイルの差分 0・8 構造体の欄の増減 0・最大 903 行・上限の近いテストの増加 0・環境変数／外部クレート／同期送信の追加 0・`session_mark_verdict`／`ExitOrigin` の差分 0・切替の経路からの終了の指示 0・残る `#[allow(dead_code)]` は意図した 2 件・裁定 1〜9 を覆す必要なし）。
