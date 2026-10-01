@@ -324,9 +324,10 @@ graph LR
 
 - 置き場: 「既知の制限」の後、「同梱物とライセンス」の前に新しい欄を置く。
 - 見出し: §6.2 の `### 同梱しているバルーンについて` を説明書の欄の見出し「■ 同梱しているバルーンについて」にする（見出しの言葉は変えない）。`####` の 2 つは説明書の小見出しの記号「◆」で始める。
-- 地の文の 1 文: 見出しの直後、本文の最初の段落（「areka には、…1 つ入っています。」）の直前に置く。中身は「えも？？ に付いてくるバルーン emo2-kakukaku は えも？？ の同梱物で、下の数には入っていません（条件は『同梱物とライセンス』の えも？？ の同梱物の欄にあります）」の趣旨の 1 文（4.6・4.7 のぶつかりを解く）。言い回しは説明書の仕上げで決める。
+- 地の文の 1 文: 見出しの直後、本文の最初の段落（「areka には、…1 つ入っています。」）の直前に置く。中身は「えも？？ に付いてくるバルーン emo2-kakukaku は えも？？ の同梱物で、下の数には入っていません（条件は『同梱物とライセンス』の ◆ バルーン「emo2-kakukaku」の欄にあります）」の趣旨の 1 文。今の説明書は `emo2-kakukaku` に独立の ◆ の欄を持つので、指す先はその欄にし、欄の組み立ては変えない（4.6・4.7 のぶつかりを解く）。言い回しは説明書の仕上げで決める。
 - 記法の移し方（言い回しの書き換えに当たらないもの）: 行頭の `> ` と素の `>` を落とす／表は見出しの行と区切りの行を落とし、各行を「・名前　内容」の形の 1 行にする（`<br>` は改行＋全角空白の字下げ）／`**` と `` ` `` を落とす／行頭の `- ` を「・」にする／見出しの記号を上のとおりにする。語・句読点・数字・URL は 1 文字も変えない。
 - 写せたことの確かめ方（受入記録 §10 に結果を書く）: §6.2 の引用ブロックと説明書の新しい欄のそれぞれから、上の記法の記号（`>`・`#`・`|`・`**`・`` ` ``・`<br>`・行頭の `- `／`・`／`■`／`◆`・すべての空白）を除き、表の見出しの行と区切りの行と地の文の 1 文を除いた文字の列が一致すること。較正: 本文の 1 文字を変えた写しに同じ比べ方を当てると一致しないこと。加えて §6.3 の判定 ⑵ の語の探し方を説明書の新しい欄に当てて 0 件であること（4.8）。
+- 説明書の全文の語の探し（4.8・4.7）: 新しい欄だけでなく説明書の全文に、内部の言葉の探し方を当てて 0 件であること。探す語は少なくとも spec 名の形（`areka-P`・`alpha-`・`-signoff` などを含む名前）・crate やソースのファイルの名前（`areka_`・`.rs`）・`AREKA_`・`WINTF_`・`RUST_LOG`・`event=`・括弧の外の `On` で始まるイベントの名前。較正: 仕上げる前の説明書（「■ .nar の入れ方」の spec 名）に当てると 1 件以上当たること。結果は受入記録 §10。
 
 **同梱物とライセンスの突き合わせの結果**（要件 6.3・設計の段で新しい `emo2.nar` を読んだ結果。実装の段で zip の実物に当て直す）
 
@@ -429,18 +430,20 @@ $p = Start-Process -FilePath "$ROOT\areka.exe" -WorkingDirectory $ROOT -PassThru
 | 1 空の根の告知 | E1 | 目視（3 行の本文・置く場所が `<根 E>\ghost` の絶対パス・OK で終わる）＋記録（`event="alert"` の 1 行） | `alert.rs:98-112`・`:60`・`:163-168` |
 | 2 告知のとおりに置く | E2 | 目視（`konnoyayame` の挨拶・目の周りの地色・字形・抜き色の場所のクリックが背後へ抜ける）＋記録（ゴーストの決定と挨拶の行） | 完了 `shell-implicit-surface`・`keycolor-clickthrough-coverage`（roadmap の目視 5 件の節） |
 | 3 初回の起動 | A1 | 記録（`balloon_resolved` の `route=Companion`・`\balloon\emo2-kakukaku`・`OnFirstBoot`）＋目視（挨拶・透明な場所のクリックが抜ける・項目 11） | `boot_resolve.rs:199-202` の段 3（同梱）・`package-alpha.ps1:76-78` |
-| 4 2 体目・3 体目を入れる | A2 | 記録（`install_done` が 2 件・`file_drop_received` が 1 件・切替の行が 0 件）＋目視（インストールの台詞・えも？？ のまま） | 完了 `ghost-install`（要件 12 裁定 5＝入れた後に切り替えない）・`file_drop.rs:79` |
+| 4 2 体目・3 体目を入れる | A2 | 記録（`install_done` が 2 件・`file_drop_received` が 1 件・切替の行が 0 件）＋目視（インストールの台詞・えも？？ のまま） | 完了 `ghost-install`（要件 12 裁定 5＝入れた後に切り替えない）・`crates/areka/src/input_events/file_drop.rs` の `file_drop_received` |
 | 5 ゴーストを替えて戻る | A2 | 目視（一覧に 3 体・送り出しの台詞・挨拶・絵・字形・抜き色のクリック）＋記録（`ghost_switch_done` が 3 件） | 完了 `ghost-shell-balloon-switch`・`menu/ghost_frame.rs:45` |
 | 6 シェルの切り替え | A3 | 目視（絵が替わる・降りない）＋記録（`skin_switch_done`・`OnShellChanged` の送出） | 完了 `shell-balloon-switch`・`frame/switch.rs:464` |
 | 7 バルーンの切り替え | A2 | 目視（次の台詞から新しいバルーン）＋記録（`skin_switch_done`・`OnBalloonChange`） | 完了 `shell-balloon-switch`・`frame/switch.rs:507` |
 | 8 ネットワーク更新 | A3 | 記録（1 回目＝`OnUpdateComplete` の後に `OnUpdateResult`・`OnGhostChanged`／`OnBoot` が 0 件／2 回目＝読み直し無しで更新無し → `OnUpdateResult`）＋目視（進捗の台詞・いったん引っ込んで戻る）。手で変えたファイルの名前と、変える前・変えた後・更新の後の md5（更新の後は変える前に戻る） | 完了 `network-update` の `signoff.md`・`schedule/boot.rs:244-252`（読み直しの起動の根） |
-| 9 終了 | A3 の終わり | 記録（`app_exit`・`session_mark_cleared`・A3 の ERROR が除外の後 0 件）＋終了コード 0（`runs.txt`）＋目視（別れの台詞） | `app_exit.rs:107`・`boot_resolve.rs:402` |
+| 9 終了 | A3 の終わり | 記録（`app_exit`・`session_mark_cleared`・A3 の ERROR が除外の後 0 件）＋終了コード 0（`runs.txt`）＋目視（別れの台詞） | `app_exit.rs:107`・`boot_resolve.rs` の `clear_session_mark`（`session_mark_cleared`） |
 | 10 前回の状態の復元 | A4 | 記録（`session_mark_found` が 0 件・起こしたゴーストとシェルとバルーンの決定の行・`merge_scope restore` の `saved_win_*` が A3 の「char DragEnd 保存」の `saved_*` と同じ）＋目視 | `boot_resolve.rs:253-279`（記憶の直読み）・`placement/persist.rs:422-434` |
 | 11 表示の拡大率 | A1〜A4 | 目視（項目 3〜10 のたびに）＋§2 の拡大率 | `.kiro/steering/` の DPI 追従の方針・M1 の項目 18 |
 | 12 初回だけの位置合わせ | A1→A2 | 記録（A1 は `OnFirstBoot`、A2 は `OnBoot`。A2 の相方〔scope 1〕の `merge_scope restore` が `saved_win_x=None`）＋目視（初回のずらしが繰り返されず既定の配置） | `drag_follow.rs:217-226`（保存は掴んで離したときだけ）・`prop_sink.rs:231-250`・`schedule/boot.rs:233-235` |
-| 13 強制終了の次の起動 | A2→A3 | 記録（A2 の印は消えない＝`session_mark_cleared` が 0 件／A3 の `session_mark_found` の `ghost` が落としたゴーストの名前・`OnBoot` の `references` の 7 番目が `halt`、8 番目がその名前）＋目視（えも？？ で立ち、落ちたゴーストのことを話す。6.4） | `format.rs:245`・`boot_config.rs:174-183`・`main.rs:429-431`・`events.rs:273-279`・`boot.rs:231-235`・新しい `emo2` の `boot.lua`（Reference6 が `halt` かつ Reference7 が空でないとき「起動halt」） |
+| 13 強制終了の次の起動 | A2→A3 | 記録（A2 の印は消えない＝`session_mark_cleared` が 0 件／期待する名前は A2 の最後の `session_mark_steady` の `ghost=` の値を逐語で写したもの〔印の値は `descript.txt` の `name` で、フォルダ名 `claudia` ではない〕。A3 の `session_mark_found` の `ghost=` と、`OnBoot` の `references` の 8 番目がその値と同じ・7 番目が `halt`）＋目視（えも？？ で立ち、落ちたゴーストのことを話す。6.4） | `format.rs:245`・`boot_config.rs:174-183`・`main.rs:429-431`・`events.rs:273-279`・`boot.rs:231-235`・新しい `emo2` の `boot.lua`（Reference6 が `halt` かつ Reference7 が空でないとき「起動halt」） |
 | 付随 `\![open,readme]` | A3（項目 6 の中） | 目視（説明書が開く）＋記録（`readme_opened`） | `consumer_ledger.rs:325`・`readme.rs:193` |
 | 付随 左クリックの後の右クリック | A2 | 目視（メニューが出る）＋記録（`menu_shown`） | 完了 `wintf-drag-state-rest-contract` |
+
+**件数を数える区間**（§5・§6・§7 に写す・2.1・3.5）: A2 と A3 には同じ記録を出す操作が複数入る（例: A2 の `ghost_switch_done` は項目 5 の 3 件と項目 13 の前の 1 件で計 4 件・A3 の `OnBoot` は項目 13 の 1 件）。証跡の件数は走行全体ではなく、**その項目の操作の始まりから次の項目の操作の始まりまでの区間**で数える。区間の境目は、開発者が各項目の操作の直前に `runs.txt` へ 1 行（`<走行> item=<番号> start=<時刻>`）を足して決める。§7 には項目ごとに区間の始まりと終わりの時刻を書き、件数はその区間の行だけを数える。表の「N 件」「0 件」はすべてこの区間での数である。
 
 **走行の手順**（§6 に写す。操作の細部は §6 で逐語にする）
 
@@ -450,7 +453,7 @@ $p = Start-Process -FilePath "$ROOT\areka.exe" -WorkingDirectory $ROOT -PassThru
 | E1 | E（zip を展開し `ghost\` の中を空にする） | 項目 1 |
 | E2 | E（控えた `konnoyayame` のフォルダを `ghost\konnoyayame` へ写す） | 項目 2 → メニューの「終了」 |
 | A1 | A（zip をそのまま展開） | 項目 3 → 窓を掴まずにメニューの「終了」（項目 12 の 1 回目） |
-| A2 | A | 項目 12 の観測 → 項目 4 ⒜（`vendors\sample_ghost\R_POST_and_KOMAINU.nar` を「インストール…」で選ぶ）⒝（`vendors\sample_ghost\claudia.nar` を Explorer からえも？？ の窓へ落とす）→ 項目 5（`R_POST_and_KOMAINU` → `claudia` → えも？？）→ 項目 7（えも？？ で `StayseeBalloon` → `emo2-kakukaku`）→ 付随（左クリックの後の右クリック）→ `claudia` へ替えて定常に入るのを待つ（`ghost_switch_done`）→ 強制終了（項目 13 の前半） |
+| A2 | A | 項目 12 の観測 → 項目 4 ⒜（`vendors\sample_ghost\R_POST_and_KOMAINU.nar` を「インストール…」で選ぶ）⒝（`vendors\sample_ghost\claudia.nar` を Explorer からえも？？ の窓へ落とす）→ 項目 5（`R_POST_and_KOMAINU` → `claudia` → えも？？）→ 項目 7（えも？？ で `StayseeBalloon` → `emo2-kakukaku`）→ 付随（左クリックの後の右クリック）→ `claudia` へ替え、`session_mark_steady` の行（`ghost=` が `claudia` の `name`）が記録に出てから 5 秒置く（印の書き込みは書き手への投函で非同期のため）→ 強制終了（項目 13 の前半） |
 | 走行の間 | A（areka を止めた状態） | 項目 6 の 2 つ目のシェル: `ghost\R_POST_and_KOMAINU\shell\master\` を `shell\second\` へ写し、写した `descript.txt` の `name,master` を `name,second` に置き換え、写した側の `surface0000.png` と `surface0001.png` を入れ替える（完了 `shell-balloon-switch` の `signoff.md` の作り方）。付随の確認: `ghost\R_POST_and_KOMAINU\ghost\master\dic02_Event.txt` の `＊OnShellChanged` の台詞に `：\![open,readme]` の 1 行を足す（Shift_JIS と CRLF を保つ）。どちらも根 A の写しだけを変え、リポジトリの検体と zip は変えない |
 | A3 | A | 項目 13 の観測 → 項目 8（えも？？ のまま・手で 1 ファイルを変えてから 2 回選ぶ）→ `R_POST_and_KOMAINU` へ替える → 項目 6（「シェル」で `second` → `master`。付随の `\![open,readme]` をここで見る）→ 項目 10 の準備（もう 1 度 `second` を選び、「バルーン」で既定でないバルーン〔例 `claudia`〕を選び、本体の窓を掴んで離す）→ 項目 9（メニューの「終了」） |
 | A4 | A | 項目 10 → メニューの「終了」 |
@@ -530,7 +533,7 @@ $p = Start-Process -FilePath "$ROOT\areka.exe" -WorkingDirectory $ROOT -PassThru
 
 - **全体テスト（1 回・署名の根拠のコミット）**: `tools/test-all.ps1 -License` の全段成功。`emo2.nar` の差し替えで影響を受けうるのは本物の `pasta.dll` を動かす `crates/areka/tests/smoke_boot_loop_exit.rs` の方向 ①②（新品の木で `OnFirstBoot`・`route=Companion`・SHIORI の失敗が無いこと）で、ここが緑であることを §1 の段の一覧で示す（6.2・7.1）。
 - **配布の判定（1 回・同じコミット）**: `package-alpha.ps1 -Check` の 8 項目＋起動の 6 条件。判定 7（説明書 2 本）と判定 8（`README.txt` が仕上げた説明書と同じ）が、検体の差し替えと説明書の仕上げを zip の上で確かめる（4.9・6.1）。
-- **文書の機械の確かめ（zip を組む前）**: §6.2 の写しの一致と較正・内部の言葉が 0 件（4.6・4.8）／条件つきの制限 ⒜⒝⒞ の確かめ（5.4）／既知の制限の各行の裏付け（5.5・SSTP と SAORI は 0 件の検索に較正を添える）。結果は受入記録 §10。
+- **文書の機械の確かめ（zip を組む前）**: §6.2 の写しの一致と較正・説明書の全文で内部の言葉が 0 件（較正つき・4.6・4.8）／条件つきの制限 ⒜⒝⒞ の確かめ（5.4）／既知の制限の各行の裏付け（5.5・SSTP と SAORI は 0 件の検索に較正を添える）。結果は受入記録 §10。
 - **実機一周（E1〜A4）**: 検証項目表の 13 項目と付随 2 つ。とくに落としてはならない経路は、第三者が最初に出会う 1・3、入れて替える 4・5、記憶が戻る 10、初回だけの位置合わせ 12、落ちた後の 13。
 
 ## Security Considerations
