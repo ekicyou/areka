@@ -432,7 +432,7 @@ foreach ($k in $kids) {
 - ⓑ（WARN）「bake: element が全透明（α=0）でトリム後 0 寸です」（`purple/a/null.png`）: えも？？ のシェルの素材に全透明の部品があることの観測。§6.6 の 3 つ目の例: 完了 `areka-P0-shell-balloon-switch` の `signoff.md` の「既知の制限・観察」（「全透明の部品」を範囲外の既存のものとした）・完了 `areka-P0-ghost-shell-balloon-switch` の `signoff.md`（WARN は検体と既定バルーンに由来するもの＝emo2 の全透明の要素 `purple/a/null.png`）。
 - ⓒ（WARN）「折返し基準が描画範囲の外に解決された」: バルーン定義の粗さの警告。§6.6 の 3 つ目の例: 完了 `areka-P0-emo-text-line-height-canon` の `verification/handoff.md`（このバルーンで警告が 1 回出るのは正常な記録）・完了 `areka-P0-shell-balloon-switch` の `signoff.md` の「既知の制限・観察」（「折り返しの基準が描画範囲の外」を範囲外の既存のものとした）。
 - ⓓ（WARN）`update_target_skipped reason="no_homeurl" kind="shell"`: シェルに更新先が無いので飛ばしたことの記録。§6.6 の 3 つ目の例: 完了 `areka-P0-network-update` の `signoff.md` の 3 回目 ⑶（「シェルは `update_target_skipped reason=no_homeurl` で飛ばし、総括にはゴーストとバルーンだけ」を合格の振る舞いとして記録）。
-- **外さないもの**: `update_target_skipped reason="no_homeurl" kind="balloon"`（項目 8 の 2 件）。§6.6 のどの例にも当たらない（バルーンの更新先が無いときに飛ばすことを判定の外と決めた先行 spec の記録が見つからない）ので数に残す。`emo2-kakukaku` に `homeurl` が無いことは §1.2 の確かめ（`homeurl` で始まる行が 0 件）と合う。項目 8 の期待は WARN の数を定めないので、判定は変わらない。
+- **外さないもの**: `update_target_skipped reason="no_homeurl" kind="balloon"`（項目 8 の 2 件）。§6.6 のどの例にも当たらない（バルーンの更新先が無いときに飛ばすことを判定の外と決めた先行 spec の記録が見つからない）ので数に残す。`emo2-kakukaku` に `homeurl` が無いことは §1.2 の確かめ（`homeurl` で始まる行が 0 件）と合う。項目 8 の期待は WARN の数を定めないので、判定は変わらない。外すかを開発者に尋ね（§6.6「外すかどうか迷うものは、外さずに開発者に尋ねる」）、答え（2026-10-02・逐語）「どちらも A で進めて」（A＝外さずに数に残し、`homeurl` の無いバルーンを飛ばした期待どおりの知らせと注記する）。
 
 ### 項目 1 空の根の告知（E1r）
 
@@ -842,10 +842,11 @@ between second-shell=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-0
 ### 8.3 えも？？ が `claudia.nar`（バルーン同梱）を入れた後の `OnInstallComplete` に台本を返さなかった（項目 4 の縮退・2026-10-02）
 
 - 何が起きたか: A2r の項目 4 ⒝ で `claudia.nar`（ゴーストにバルーン 2 つを同梱した書庫）を 2 度入れ、2 度とも `OnInstallComplete`（参照 `["ghost", "悪役令嬢クローディア", "クローディア"]`）が `raised=NoReply`（返事なし・空の台本）だった。同じ走行の ⒜ `R_POST_and_KOMAINU.nar`（同梱なし・参照 `["ghost", "Ｒポストと狛犬", ""]`）では `raised=Script` で、どちらも始まりの `OnInstallBegin` は `raised=Script`。記録の逐語は §7 の項目 4。
-- 原因は分かっていない: 根 A の `ghost\emo2\ghost\master\dic\install.pasta` の `SCENE.on_install_complete` は参照の 1 つ目（`^ghost`）だけで分かれ、⒜ も ⒝ もこれを満たす。えも？？ の辞書の記録（根 A の `ghost\emo2\ghost\master\profile\pasta\logs\pasta.log`）にも、初回の起動の保存ファイルが無いという WARN 1 行のほかに誤りの行は無い。観測できた ⒜ と ⒝ の違いは、3 つ目の参照（空か「クローディア」か）と、入れ方（メニューか窓への投げ込みか）の 2 つだけで、辞書・SHIORI の側のどこで台本が返らなかったかは分からない。
+- 本書の確かめで分かったこと（原因までは分からなかった）: 根 A の `ghost\emo2\ghost\master\dic\install.pasta` の `SCENE.on_install_complete` は参照の 1 つ目（`^ghost`）だけで分かれ、⒜ も ⒝ もこれを満たす。えも？？ の辞書の記録（根 A の `ghost\emo2\ghost\master\profile\pasta\logs\pasta.log`）にも、初回の起動の保存ファイルが無いという WARN 1 行のほかに誤りの行は無い。観測できた ⒜ と ⒝ の違いは、3 つ目の参照（空か「クローディア」か）と、入れ方（メニューか窓への投げ込みか）の 2 つだけで、辞書・SHIORI の側のどこで台本が返らなかったかは分からない。
 - areka の欠陥か: areka は入れる手続きを終え、イベントを送り、返事なしとして続けた（`crates/areka/src/install/procedure.rs` の締めの知らせ）。台詞を返すかはゴーストの辞書の側の決めで、areka の欠陥とはしない。
 - 2026-10-01 の状況との違い: 前の zip のえも？？ の辞書にはインストールの場面がそもそも無く、3 つのイベントがどれも `raised=NoReply` だった（§9.1 の ⑴・tasks.md の Implementation Notes の 4.2 の行）。ghost_dev の側で場面を足した版（`75e560e`・`dic/install.pasta`）を今回の zip に入れたので、始まりの台詞と、同梱の無いゴーストの終わりの台詞は出るようになった。残ったのは同梱のある書庫の終わりの台詞だけ。
 - 開発者の裁定（2026-10-02・逐語）: 「項目 12 はOK、項目 4 は縮退合格で、emo2 に申し送って。あとさっきの、テンポラリにある余計なフォルダの削除もお願い。」→ 項目 4 は縮退の合格（§7）。
+- 引受先の調べ（2026-10-02・セッション「emo2 開発セッション」からの知らせ。本書では確かめていない）: 原因は、ghost_dev `6725b9d` で足した `＊OnInstallCompleteAll` の場面が、イベント名の前方一致の抽選で `OnInstallComplete` の検索にも当たり、`CompleteAll` 側が選ばれると単数のインストールでは台本を返さないこと（およそ半分の確率）。3 つ目の参照や入れ方の違いは関係なく、⒜ が当たり ⒝ が 2 度とも外れた偶然。ghost_dev `4a2ba33` で直した（`release/emo2` は本仕様の署名まで変えないので、今回の zip の `emo2` は直る前の版）。
 - 引受先: セッション「emo2 開発セッション」へ 2026-10-02 に申し送った。完成判定の文書の持ち越しの行の引受先の書き方は、タスク 5.1 で決める。
 
 ### 8.4 えも？？ の更新の一覧が `emo2-kakukaku/*` をゴーストのフォルダからの相対で載せている（項目 8 で見つけた・2026-10-02）
@@ -874,6 +875,18 @@ between second-shell=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-0
 ### 8.7 強制終了で残った子のプロセス（§6.4）
 
 **0 件。** A2r の強制終了で、止める前に書き留めた子は `shiori-host32-helper.exe`（pid 27964）の 1 つで、5 秒後には残っていなかった（`runs.txt` に `child-left` の行が 0 件）。止めたプロセスは A2r の `areka.exe`（pid 4252）の 1 つだけ。
+
+### 8.8 同梱インストールの `install.txt` の読み方が ukadoc と違う 4 点（候補・2026-10-02）
+
+- 見つけた経緯: セッション「pasta棚卸」（`pasta_check` の同梱バルーンの対応）から、areka の `install.txt` の読み方の問い合わせがあり、その答えと ukadoc を突き合わせて見つかった（areka の側は本体のソース、ukadoc の側は「Install設定」の頁 https://ssp.shillest.net/ukadoc/manual/descript_install.html を 2026-10-02 に読んだ）。
+- 違い:
+  - ⑴ 番号付きの同梱: ukadoc「探索は無印→0→1→2…の順に行われ、見つからない番号が出た時点で打ち切られる。」。areka は欠番で打ち切らず、`balloon` の直後が数字だけの接頭辞をすべて読み、並びは接頭辞のバイト順（`crates/areka-nar/src/manifest.rs` の `numbered`・`classify`）。
+  - ⑵ `*.source.directory` の階層付きの値: ukadoc「SSP 2.9.00以降は、extra\bal1 のようにアーカイブ内の階層を辿る相対パスも指定できる。」。areka は 1 階層の名前の検査（`crates/areka-nar/src/names.rs` の `is_valid_one_level_name`）に掛け、インストール全体を拒否する（`InvalidDirectoryName`）。
+  - ⑶ `*.directory` のパス区切り: ukadoc「パス区切りは使えない（「_」に置換される）。」。areka は同じ検査で拒否する。
+  - ⑷ `*.source.directory` の `..`: ukadoc「「..」による上位階層への参照はできない（取り除かれる）。」。areka は拒否する。
+- この一周への影響: 無い。2026-10-02 に 3 つの検体の `.nar` の `install.txt` を読んだ。`claudia` は `balloon0.directory`・`balloon1.directory`（欠番なし・0 と 1 の順は ukadoc の探索と areka のバイト順で同じ）、`emo2` は無印の `balloon.directory`・`balloon.source.directory` に 1 階層の名前 `emo2-kakukaku`、`R_POST_and_KOMAINU` は同梱なし。欠番・階層付きの値・パス区切り・`..` を使うものは無い。
+- 開発者の裁定（2026-10-02・逐語）「どちらも A で進めて」（A＝α では直さず、完成判定の文書の持ち越しに載せる。説明書には書かない）。
+- 引受先: α の後の `/kiro-discovery`（spec にするかをそこで決める）。完成判定の文書の持ち越しの行の書き方は、タスク 5.1 で決める。
 
 ## 9. 採り直し
 
