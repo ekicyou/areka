@@ -106,6 +106,7 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
   3. 実在しない仕様名を引く 107 項目を書き換える（機械でまとめて・各名前を今の持ち主へ対応付ける）。
   4. 日付つきの数の撮り直しを道具に任せる（手で直さない）・波の欄の旧番号と `network-update` の名前の記述を直す。
   5. `README.md` の「統合担当」の指示を改める。「持ち主の居ない一覧」（`\_` の仲間の 7 件・さくらスクリプトの空の 248 行・段階が仮の 11 束）は**道具が出す一覧**にし、1 行ずつの裁定は本 spec に含めない。
-  6. 完了 `ghost-install` が申し送った「`assets.toml` の `manual_install` の束の行の語の食い違い」を引き取る。
+  6. 取り下げ予定の `emo-text-canon-residue` を `roadmap-draft.md` の `[[spec]]` の表から外し、フォルダを片付ける（残り 1 件は `shell-balloon` が引き取り済み）。
+  7. 完了 `ghost-install` が申し送った「`assets.toml` の `manual_install` の束の行の語の食い違い」を引き取る。
 - **合流しない物**: 覚え書きの残り 3 つ（`present-write-coherence` の未達 40 件・正典語彙の孤児 2 件・配布物を束ねる／作る側の 3 件）は製品の穴で、台帳の番ではない＝roadmap の覚え書きに残す。
 - **並べ方**: 触るのは `doc/ukadoc-coverage/` と `crates/ukadoc-survey/` だけで製品のコードと共有 0。ただし**台帳を書き換える spec とは同じウェーブに置かない**（C1 の `choice-timeout-directive`・`install-companion-canon` は台帳の行を直す）。

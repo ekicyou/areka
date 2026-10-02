@@ -116,11 +116,11 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 
 **保存義務（据え置き）**: 既存の終了経路（右クリックメニューの「終了」→ `OnClose` の握手 → `ghost_quit`）の決定論テストを 1 本も落とさない。実機サインオフの「絶対パス起動」（argv 上書き）を残す。
 
-## spec 台帳（brief を持つ 51 本・2026-10-02 棚卸⑳）
+## spec 台帳（brief を持つ 52 本・2026-10-02 棚卸⑳）
 
 > **spec は名前で呼ぶ**（2026-09-26 開発者指示）: 報告・brief・コミット・PR で spec を指すときは spec 名（`areka-P0-` は省略してよい）を書く。「#数字」は `PR#185` の形の PR 番号にだけ使う。古い文書に台帳番号が出てきたら、その時点の表（history）で名前へ読み替える。
 > **段**: **バグ**＝バグ修正（先頭）／**優先**＝ウェーブ C1・C2 に入れた機能／**後続**＝直列の列の順番待ち・前提待ち／**据え置き**＝当面着手しない（理由は行に）／**保留**。完了した spec はこの表に置かない（完了サマリと history）。
-> **段の数え方**: `awk '/^\| spec（`areka-P0-` 省略）/{f=1;next} f&&/^\|/{print} f&&!/^\|/{f=0}' .kiro/steering/roadmap.md | awk -F'|' 'NR>1{gsub(/ /,"",$3);print $3}' | sort | uniq -c`（2026-10-02 の数え＝バグ 5・優先 7・後続 33・据え置き 5・保留 1 ＝ 51）
+> **段の数え方**: `awk '/^\| spec（`areka-P0-` 省略）/{f=1;next} f&&/^\|/{print} f&&!/^\|/{f=0}' .kiro/steering/roadmap.md | awk -F'|' 'NR>1{gsub(/ /,"",$3);print $3}' | sort | uniq -c`（2026-10-02 の数え＝バグ 5・優先 7・後続 33・据え置き 6・保留 1 ＝ 52）
 > **規模**は棚卸⑳の再測定の見立て（タスク数）。**上限は 1 spec 20 タスク**。「要件で切る」と書いた行は、着手のときに要件の段で切り出す（先に起票しない＝spec 工場の禁止）。**Fable**列＝要件定義を Fable で起動したセッションで進めることを勧める（○）か、Opus で足りる（−）か。各 brief の末尾「2026-10-02 棚卸⑳の再測定」が、崩れた前提・触るファイル・議題の正本。
 
 | spec（`areka-P0-` 省略） | 段 | 何をするか | 規模 | 並び | 前提（先に着地） | Fable |
@@ -175,9 +175,8 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 | `dpi-transition-two-tick-bounce` | 据え置き | 拡大率の切替で位置と大きさが 1 コマずれる（開発者が許容）。着手するなら最初に測り直し、跳ねが無ければ取り下げ | S〜M | — | — | ○ |
 | `zorder-chain-residue` | 据え置き | 間欠赤のテスト族と文書。09-11 以降 main で赤 0 件＝先回りしない | M | — | — | ○（A 群） |
 | `text-reveal-dance` | 据え置き | 字が現れるときだけ跳ねる・揺れる（夢・開発者が望んだときだけ） | M〜L | — | `text-reveal-fade` | ○ |
+| `emo-text-canon-residue` | 据え置き | **取り下げ予定・着手しない**。残っていた 1 件（折り返しの警告にバルーンの名前を出す）は `shell-balloon` が引き取った。フォルダを消すと網羅台帳の整合検査（`roadmap-draft.md` の `[[spec]]` の表）が赤くなるので、表から外すのと一緒に `coverage-roadmap-refresh` が片付ける | — | — | — | − |
 | `tick-gate-adoption` | 保留 | 既定で切の門を入れるか（待機中の CPU 17〜22% → 3% 未満の見込み）。短い A/B の測り方を先に組む | M〜L | 保留 | — | ○ |
-
-**取り下げ（棚卸⑳）**: `emo-text-canon-residue`＝残っていた 1 件（折り返しの警告にバルーンの名前を出す）を `shell-balloon` が引き取った。フォルダは `.kiro/specs/_rejected/` へ移した。
 
 ## 覚え書き（brief なし・引受先が消えたまま忘れないための一覧）
 
@@ -241,7 +240,7 @@ M3 のゴールはまだ決めていない（**開発者の決めごと**）。�
 4. **土台を 1 本起票した**: `emo-text-file-split`。文字まわりの 10 本以上の brief が「分割が先」と書きながら誰が切るかを決めておらず、任せると同じファイルを別々の形で切る。
 5. **`status-execution-states` をバグ（潜在）へ改めた**。出どころが無いとされた 3 状態（`online`・`nouserbreak`・`balloon`）は α で実在するようになり、載せないことで雑談が更新や割り込み禁止の区間に割り込みうる。
 6. **覚え書き `ukadoc-coverage-custody` を `coverage-roadmap-refresh` へ合流した**（同じ仕組みの同じファイルを直す。持ち主が完了済みの行は 29 → 128 行に増えていた）。
-7. **`emo-text-canon-residue` を取り下げた**（残り 1 件を `shell-balloon` が引き取る）。
+7. **`emo-text-canon-residue` は取り下げ予定にした**（残り 1 件を `shell-balloon` が引き取る）。フォルダを `_rejected/` へ移すと網羅台帳の整合検査が赤くなる（`roadmap-draft.md` の `[[spec]]` の表が名前を持つ）ことを実際に赤で確かめたので、フォルダは置いたまま、片付けは `coverage-roadmap-refresh` に任せる。
 8. **旧 S1・S2 の「並走できる見込み」は外れだった**。`shell-balloon` ∥ `balloon-font-file`・`text-typesetting` ∥ `talk-fast-forward` はどちらもソースを共有する。文字まわりの spec は同じ表・同じ関数へ行を足すので、分割しても並走できない＝「直列の列」として並べた。`animated-image-decode` ∥ `surface-element-nesting` も、brief どおりに作ると `manifest.rs` を共有する（両方が設計で避ければ 0 にできる＝各 brief に書いた）。
 9. **20 タスクを超える 6 本は、着手のときに要件の段で切る**（`anchor-tag-canon`・`currentghost-property-tree`・`property-catalog-lists`・`sakura-time-directives`・`makoto-dll-host`・`property-query-channels` の `\![embed]`）。いま起票はしない（先の brief は着地で古くなる）。
 10. **Fable で要件定義を勧める spec（C1・C2）**: `mcp-server-core`（rmcp の版・HTTP の土台・tokio の閉じ込め）・`install-live-target-hazards`（測ってから決める・OS の終了）・`install-companion-canon`（正典の読みと安全の検査）・`shell-balloon`・`translate-pipeline`・`mcp-tool-entrances`。Opus で足りる: `drag-click-without-move`・`choice-timeout-directive`・`restart-chain-finalize-stall`・`package-check-temp-cleanup`・`emo-text-file-split`。
