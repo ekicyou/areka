@@ -56,26 +56,28 @@
 
 ## 1. 同定（要件 1.1・1.2）
 
+2026-10-02 に組み直した zip で書き直した（§9.1）。前の zip（`areka-alpha-x64-20261001-7f8f4e8.zip`・コミット `7f8f4e87`）の同定は §9.1 に残す。
+
 | 欄 | 値 |
 |---|---|
-| zip の名前 | `areka-alpha-x64-20261001-7f8f4e8.zip`（名前に `-dirty` が付いていない。x64 の 1 種だけで、arm64 版は組んでいない＝要件 1.5） |
+| zip の名前 | `areka-alpha-x64-20261002-8460506.zip`（名前に `-dirty` が付いていない。x64 の 1 種だけで、arm64 版は組んでいない＝要件 1.5） |
 | 組んだコマンド | `pwsh -NoProfile -File tools/package-alpha.ps1 -Check`（`-CheckDir` は付けていない＝既定の一時フォルダへ展開） |
-| `commit=` | `7f8f4e8`（zip の中の `BUILD-INFO.txt`） |
-| 完全なコミットの識別子 | `git rev-parse 7f8f4e8` → `7f8f4e8701ab0e0a890f446665ed1fda715881a0`（件名「受入記録 §10 に説明書の突き合わせと機械の確かめを書き §8 に候補 2 つを登記する (2.5)」）。全体テストを回した署名の根拠のコミット（`verification/alpha-completion.md` §1）と同じ |
-| `dirty=` | `0`（`BUILD-INFO.txt`）。組む前の `git status --porcelain` も 0 行（`package-meta.txt` の `dirty=0`・`package-alpha.log` の「コミット 7f8f4e8・未コミットの変更 0 件」） |
+| `commit=` | `8460506`（zip の中の `BUILD-INFO.txt`） |
+| 完全なコミットの識別子 | `8460506d95054bfc195e884d13f6b469d93e8491`（`package-meta.txt` の `head=`。件名「壊れた DLL を読んでも OS の「正しくないイメージ」の窓を出さない」）。全体テストを回した署名の根拠のコミット（`verification/alpha-completion.md` §1）と同じ |
+| `dirty=` | `0`（`BUILD-INFO.txt`）。組む前の `git status --porcelain` も 0 行（`package-meta.txt` の `dirty=0`・`package-alpha.log` の「コミット 8460506・未コミットの変更 0 件」）。組んだ後も 0 行（`package-meta.txt` の `dirty_after=0`） |
 | `-Check` の終了コード | `0`（`package-meta.txt` の `exit=0`・`package-alpha.log` の末尾「全段 緑」） |
-| `-Check` の日時（日本時間） | 開始 2026-10-01 22:11:47 〜 終了 2026-10-01 22:15:07（`package-meta.txt`）。zip を組んだ時刻は `BUILD-INFO.txt` の `built=2026-10-01T13:14:54Z`（日本時間 22:14:54） |
-| zip の sha256 | `0b4532e4815e80740edef23a977a8854e4c5a1a79d36661b21a99eae75084b08`（生の記録の写しと `target\alpha\` の実物で同じ値） |
-| zip の大きさ | 7,556,348 バイト |
-| 生の記録の置き場 | `C:\home\maz\lap-records\alpha-signoff-20261001\`（zip の写し・`areka-alpha-x64-20261001-7f8f4e8.zip.sha256`・`package-alpha.log`・`package-meta.txt`。3.1 の `test-all.log`・`test-all-meta.txt`・`cargo-deny.txt` も同じ置き場） |
-| `-Check` の展開先と記録 | 展開先 `C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-221148`・記録 `C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-221148-logs\run.log`（と `run.stderr.log`）。リポジトリの外で、一周の根には使わない |
+| `-Check` の日時（日本時間） | 開始 2026-10-02 21:51:45 〜 終了 2026-10-02 22:00:57（`package-meta.txt`）。zip を組んだ時刻は `BUILD-INFO.txt` の `built=2026-10-02T13:00:34Z`（日本時間 22:00:34） |
+| zip の sha256 | `308d1e912b5256f4da91a3a18b564524ff659bc1705c2a2628343f651be82a6d`（生の記録の写しと `target\alpha\` の実物で同じ値。写しの隣の `areka-alpha-x64-20261002-8460506.zip.sha256` の値とも同じ） |
+| zip の大きさ | 7,562,223 バイト（写しと `target\alpha\` の実物で同じ） |
+| 生の記録の置き場 | `C:\home\maz\lap-records\alpha-signoff-20261001\`（zip の写し・`areka-alpha-x64-20261002-8460506.zip.sha256`・`package-alpha.log`・`package-meta.txt`。全体テストの `test-all-r.log`・`test-all-r-meta.txt` も同じ置き場。前の zip の記録は名前を変えて `package-alpha-7f8f4e8.log`・`package-meta-7f8f4e8.txt` として残した） |
+| `-Check` の展開先と記録 | 展開先 `C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-215146`・記録 `C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-215146-logs\run.log`（と `run.stderr.log`）。リポジトリの外で、一周の根には使わない。一時フォルダの記録は消えうるので、生の記録の置き場へ `check-215146-logs\` として写した（前の zip の回の記録も `check-221148-logs\` として写した） |
 
 `BUILD-INFO.txt` の全文（逐語）:
 
 ```
-commit=7f8f4e8
+commit=8460506
 dirty=0
-built=2026-10-01T13:14:54Z
+built=2026-10-02T13:00:34Z
 script=tools/package-alpha.ps1 1.0.0
 rustflags=-C target-feature=+crt-static
 ```
@@ -83,8 +85,10 @@ rustflags=-C target-feature=+crt-static
 ### 1.1 `-Check` の判定（`package-alpha.log` から逐語）
 
 ```
-判定 1〜8 すべて合
+判定 1?8 すべて合
 ```
+
+- `?` は記録の採り方で `?` に化けた 1 文字で、`tools/package-alpha.ps1` の判定の出力の行は `判定 1〜8 すべて合`（前の zip の `package-alpha-7f8f4e8.log` ではこの字のまま残っている）。記録のバイト列をそのまま写した。
 
 ```
 合 番犬で止めていない（自分で終わった）
@@ -93,33 +97,35 @@ rustflags=-C target-feature=+crt-static
 合 ゴーストの窓が立った（「本物のゴースト窓を開きました」1 件）
 合 SHIORI の接続の失敗が無い（失敗の目印 0 件）
 合 会話が始まった（「起動グリーティングを再生起動」1 件（自動終了より前）・全体 1 件）
-合 初回のバルーンは同梱（バルーンを決めました event="balloon_resolved" route=Companion dir=C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-221148\balloon\emo2-kakukaku）
+合 初回のバルーンは同梱（バルーンを決めました event="balloon_resolved" route=Companion dir=C:\Users\maz-o\AppData\Local\Temp\areka-alpha-check-215146\balloon\emo2-kakukaku）
 ```
 
 ### 1.2 zip の実物で確かめたこと（要件 1.4・1.5・4.9・5.4）
 
-生の記録の置き場の zip の写しを、使い捨ての Python（標準の `zipfile`・リポジトリには置かない）で読んで確かめた（2026-10-01）。
+生の記録の置き場の zip の写し（`areka-alpha-x64-20261002-8460506.zip`）を、PowerShell の `System.IO.Compression.ZipFile` で読むだけで開いて確かめた（2026-10-02・展開はしていない）。
 
 | 確かめ | 結果 |
 |---|---|
-| `README.txt` が仕上げた説明書と同じ（判定 8） | zip の `README.txt` と `dist/README.txt` がバイト列で一致 |
-| 最上位の中身 | `BUILD-INFO.txt`・`LICENSE-MIT`・`README.txt`・`THIRD-PARTY-NOTICES.md`・`areka.exe`・`balloon/`・`ghost/`・`shiori-host32-helper.exe`（項目は全部で 146） |
+| `README.txt` が仕上げた説明書と同じ（判定 8） | zip の `README.txt` と作業木の `dist/README.txt` がバイト列で一致（どちらも 16,575 バイト） |
+| 最上位の中身 | `BUILD-INFO.txt`・`LICENSE-MIT`・`README.txt`・`THIRD-PARTY-NOTICES.md`・`areka.exe`・`balloon/`・`ghost/`・`shiori-host32-helper.exe`（項目は全部で 148） |
+| 前の zip との違い | 増えた項目は `ghost/emo2/ghost/master/dic/install.pasta`・`ghost/emo2/ghost/master/dic/system.pasta` の 2 つ（146 → 148）で、消えた項目は 0。中身（CRC）が変わった項目は `areka.exe`・`shiori-host32-helper.exe`・`BUILD-INFO.txt`・`ghost/emo2/updates.txt`・`ghost/emo2/ghost/master/updates.txt`・`ghost/emo2/ghost/master/dic/boot.pasta`・`ghost/emo2/ghost/master/scripts/pasta/shiori/event/boot.lua` の 7 つ。`emo2` の側の違いは §9.1 の差し替えの前の確かめの 6 つと合う |
 | `ghost/` が `emo2` だけ（要件 1.4） | `ghost/` の下のフォルダは `emo2` の 1 つ |
 | `balloon/` の下 | `StayseeBalloon`・`emo2-kakukaku` の 2 つ |
-| x64 の 1 種（要件 1.5） | `areka.exe` の PE の機種 `0x8664`（x64）。`shiori-host32-helper.exe` と `ghost/emo2/ghost/master/pasta.dll` は `0x014c`（32bit の SHIORI を読む補助と、えも？？ の SHIORI。zip の種類を増やすものではない） |
-| ⒜ の条件（`emo2` が `halt` の台詞を持つか） | `ghost/emo2/ghost/master/dic/boot.pasta` に `＊起動halt` を含む行が 3 件＝持つ。2.3 の判断（⒜ を書かない）と合う |
-| ⒝ の条件（`emo2-kakukaku` の `homeurl`） | `balloon/emo2-kakukaku/descript.txt`（UTF-8）に `homeurl` で始まる行が 0 件（同じ探し方で `name,` の行は 1 件）。2.3 の判断（⒝ を書かない）と合う |
+| x64 の 1 種（要件 1.5） | `areka.exe` の PE の機種 `0x8664`（x64）。`shiori-host32-helper.exe` と `ghost/emo2/ghost/master/pasta.dll` は `0x014c`（32bit の SHIORI を読む補助と、えも？？ の SHIORI。zip の種類を増やすものではない）。名前が `.exe`・`.dll` で終わる項目はこの 3 つだけ |
+| 記憶の置き場が入っていない（項目 3・12 の前提） | 名前に `/profile/` を含む項目が 0 件 |
+| ⒜ の条件（`emo2` が `halt` の台詞を持つか） | `ghost/emo2/ghost/master/dic/boot.pasta` を UTF-8 として読み、`＊起動halt` を含む行が 3 件＝持つ。2.3 の判断（⒜ を書かない）と合う |
+| ⒝ の条件（`emo2-kakukaku` の `homeurl`） | `balloon/emo2-kakukaku/descript.txt` を UTF-8 として読み、`homeurl` で始まる行が 0 件（同じ探し方で `name,` の行は 1 件）。2.3 の判断（⒝ を書かない）と合う |
 
 ## 2. 機械の構成
 
-一周の前（2026-10-01）に AI が読み取った値。拡大率は一周の途中で変えない（項目 11）。
+一周の前（2026-10-01）に AI が読み取った値。採り直しの前（2026-10-02）に同じ読み方（OS の版は読み方を足した）で読み直し、変わったのは OS の版（25H2・build 26200 → 26H2・build 26300）だけだった。拡大率は一周の途中で変えない（項目 11）。
 
 | 項目 | 値 | 読み方 |
 |---|---|---|
-| OS | Microsoft Windows 11 Pro 25H2（10.0.26200・build 26200） | `Win32_OperatingSystem` と `DisplayVersion` |
-| 起動に使うシェル | PowerShell 7.6.6・ふつうの権限（管理者でない） | `$PSVersionTable`・`WindowsPrincipal.IsInRole(Administrator)`＝False |
-| 画面 1（主） | 拡大率 200%（DPI 192） | DPI 対応にしたスレッドで `GetDpiForMonitor`（実効 DPI） |
-| 画面 2 | 拡大率 150%（DPI 144）・主の画面の左 | 同上 |
+| OS | 2026-10-02（採り直しの前に読んだ値）: Microsoft Windows 11 Pro 26H2（10.0.26300・build 26300・UBR 9550）。2026-10-01（前の zip の走行 E1〜A2）: Microsoft Windows 11 Pro 25H2（10.0.26200・build 26200） | `Win32_OperatingSystem` の `Caption`・`Version`・`BuildNumber`、`[Environment]::OSVersion`（`10.0.26300.0`）、レジストリ `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` の `CurrentBuild`・`UBR`・`DisplayVersion` |
+| 起動に使うシェル | PowerShell 7.6.6・ふつうの権限（管理者でない）（2026-10-02 も同じ） | `$PSVersionTable`・`WindowsPrincipal.IsInRole(Administrator)`＝False |
+| 画面 1（主） | 拡大率 200%（DPI 192）（2026-10-02 も同じ） | DPI 対応にしたスレッドで `GetDpiForMonitor`（実効 DPI） |
+| 画面 2 | 拡大率 150%（DPI 144）・主の画面の左（2026-10-02 も同じ） | 同上 |
 
 - 一周は主の画面（200%）で回す。ゴーストの窓を画面 2 へ動かさない（拡大率の違う画面をまたぐ動きは本一周の項目に無い）。
 
@@ -152,7 +158,8 @@ design.md「走行の型」の表を逐語で写す。全走行（E1〜A4）で�
 - 根の下でいちばん長くなる見込みのパスは、項目 4 で入る `claudia` の `ghost\claudia\ghost\master\dic\system\aya_lilith\_loading_order.txt` で、根 A と合わせて 151 文字（検体の中の最長の項目から数えた見込み）。
 - 根は `target` の下にあり、`target` は `.gitignore` の 1 行目で無視されるので、一周で根に書かれるもの（記憶・印・入れたゴースト）は `git status` に出ない。
 - ワークツリーの場所が長すぎるときの次善は `C:\tmp\alpha-lap\<E|A>`（設計の「走行の型」）。今回は使わない。
-- 生の記録の置き場に置くもの: zip の写しと `areka-alpha-x64-20261001-7f8f4e8.zip.sha256`・`package-alpha.log`・`package-meta.txt`（3.2）・`test-all.log`・`test-all-meta.txt`・`cargo-deny.txt`（3.1）・`runs.txt`・`run-E1.log`〜`run-A4.log` と各 `.err.log`（4.x）。
+- 生の記録の置き場に置くもの: zip の写しと `areka-alpha-x64-20261001-7f8f4e8.zip.sha256`・`package-alpha.log`・`package-meta.txt`（3.2・今は名前を変えて `package-alpha-7f8f4e8.log`・`package-meta-7f8f4e8.txt`）・`test-all.log`・`test-all-meta.txt`・`cargo-deny.txt`（3.1）・`runs.txt`・`run-E1.log`〜`run-A4.log` と各 `.err.log`（4.x）。
+- 2026-10-02 の組み直し（§9.1）で足したもの: 新しい zip の写しと `areka-alpha-x64-20261002-8460506.zip.sha256`・`package-alpha.log`・`package-meta.txt`（前の回のものは `package-alpha-7f8f4e8.log`・`package-meta-7f8f4e8.txt` へ名前を変えた）・`check-215146-logs\`・`check-221148-logs\`（`-Check` の起動の記録の写し）・`test-all-r.log`・`test-all-r-meta.txt` と `test-all-r-try1`〜`try4` の `.log`・`-meta.txt`・`badimage-red-1717d29f.log`・`badimage-green-worktree.log`（§9.1 の窓の直す前と後の 1 本の走行）・`run-E1r.log` 以降の採り直しの走行の記録と `E1r-alert.png`。
 
 ---
 
@@ -244,7 +251,7 @@ design.md「走行の手順」の表の順（準備 → E1 → E2 → A1 → A2 
 根は zip を根のフォルダへ展開して作る（`[IO.Compression.ZipFile]::ExtractToDirectory`）。根のフォルダが既に在るときは展開せず、開発者に尋ねる（項目 3・12 は新しい根が前提）。
 
 ```powershell
-$ZIP = 'C:\home\maz\lap-records\alpha-signoff-20261001\areka-alpha-x64-20261001-7f8f4e8.zip'   # 署名の zip の写し（target\alpha の古い zip と取り違えない）
+$ZIP = 'C:\home\maz\lap-records\alpha-signoff-20261001\areka-alpha-x64-20261002-8460506.zip'   # 署名の zip の写し（§1・2026-10-02 に組み直したもの。前の 20261001-7f8f4e8 の zip と取り違えない）
 $ROOT = '<根の絶対パス>'          # §4 の根 E か根 A
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::ExtractToDirectory($ZIP, $ROOT)
@@ -479,7 +486,28 @@ foreach ($k in $kids) {
   - 前の版との違いは次の 6 つだけで、メニュー・シェル・descript は同じ。
     - 足したもの: `ghost/master/dic/install.pasta`・`ghost/master/dic/system.pasta`
     - 変えたもの: `boot.pasta`・`boot.lua`・`ghost/master/updates.txt`・`updates.txt`
-- **組み直し**: 差し替えをコミットし、新しい署名の根拠のコミットで全体テスト（`-License`）と zip の `-Check` をやり直す。新しい `commit=` と zip は §1 に書き、前の zip（`areka-alpha-x64-20261001-7f8f4e8.zip`）の記録はこの節に残す。
+- **組み直し（2026-10-02 に済んだ）**: 差し替えをコミットした（`1717d29f`）。その後、全体テストの途中で見つかったテストの欠陥を直し（下の「テストが OS の窓を出して止まった件」・`8460506d`）、新しい署名の根拠のコミット `8460506d95054bfc195e884d13f6b469d93e8491` で全体テスト（`-License`）と zip の `-Check` をやり直して、どちらも全段 緑だった（全体テストは `verification/alpha-completion.md` §1・§2、zip は §1）。根 E・根 A は新しい zip の写しから作り直した（根 E は `ghost\` の中を空にした）。`konnoyayame` の控えも `target\nar-samples\manual\konnoyayame\ghost\konnoyayame` に作り直した。
+- **テストが OS の窓を出して止まった件（2026-10-02）**:
+  - 起きたこと: 全体テストを窓なしで裏で回すと、`areka-ghost` のテスト `invalid_image_returns_err`（DLL でないファイルを `.dll` の名で読ませる）で、Windows が窓「正しくないイメージ」（0xc000012f）を出し、OK が押されるまでテストが止まった。同じ 1 本を窓なしで起こした回で `finished in 17.49s`（窓は画面で見たもので、記録に残るのは所要の 17.49s だけ）。手元の端末から回すと、親のエラーモードを継ぐので窓は出ない。
+  - 開発者の判断（逐語）: 「テストがダイアログを出して中断するのはテストとして問題です。これは修正が必要だと判断しますが」
+  - 直したもの: コミット `8460506d`（件名「壊れた DLL を読んでも OS の「正しくないイメージ」の窓を出さない」）。DLL を読む本番の 2 か所（`areka-ghost` の `shiori_inproc.rs` の `InProcLibrary::load`・`shiori-host32-helper` の `shiori_proxy.rs` の `ShioriByteProxy::load`）で、読む間だけスレッドのエラーモードに `SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX` を立てて元へ戻す。テスト `invalid_image_returns_err` には、読んだ後にスレッドのエラーモードが元へ戻っていることの確かめを足した。壊れた `pasta.dll` を持つゴーストでも、利用者の画面に OS の窓が出なくなる。
+  - 直した後: 同じ起こし方で `finished in 0.05s`（このときは同じモジュールの 4 本〔`shiori_inproc::tests::`〕をまとめて回した）。2 回の出力は生の記録の置き場の `badimage-red-1717d29f.log`（1 本・`1 passed`・`finished in 17.49s`）と `badimage-green-worktree.log`（4 本・`4 passed`・`finished in 0.05s`。コミットの前の作業木で、レビューの提案〔窓を止める設定に失敗したら戻す手順も飛ばす〕を取り込む前の形。取り込んだ後のコミット `8460506d` では全体テストで確かめた）。直した後の全体テスト（`test-all-r.log`）では `test shiori_inproc::tests::invalid_image_returns_err ... ok` と `test inproc_e2e_test::i3_load_failure_invalid_image_returns_err ... ok`。
+- **全体テストの試み（2026-10-02・記録はすべて生の記録の置き場に残した）**:
+
+  | 記録 | コミット | 日時（日本時間） | 結果と理由 |
+  |---|---|---|---|
+  | `test-all-r-try1.log`・`test-all-r-try1-meta.txt` | `1717d29f` | 開始 20:40:35（終わりの行なし） | 「x64 ワークスペース全テスト」の段で、例 `collision-probe` を組むときに `` error: linking with `link.exe` failed: exit code: 0xc000026b `` で失敗し、裏で回していた道具の時間の上限に達して終わった |
+  | `test-all-r-try2.log`・`test-all-r-try2-meta.txt` | `1717d29f` | 21:04:20 〜 21:12:03・`exit=1` | 「cargo about generate」の段だけが `FAIL  cargo about generate（0 秒・終了コード 101）`（`` error: no such command: `about` ``）、ほかの 6 段は OK。開発者が Rust の環境を作り直した後で `cargo-about` が入っていなかった。開発者が入れ直した |
+  | `test-all-r-try3.log`・`test-all-r-try3-meta.txt` | `1717d29f` | 開始 21:22:52 〜 止めた 21:25:28 | 開発者の求めで止めた（OS の窓の件）。meta の行の印は `stopped-by-request` |
+  | `test-all-r-try4.log`・`test-all-r-try4-meta.txt` | `1717d29f` | 開始 21:25:45 〜 止めた 21:31:53 | 開発者の求めで止めた（OS の窓を直すため）。meta の行の印は `stopped-by-request(fix dialog)`。止めたプロセスの木は meta の行に書いてある |
+  | `test-all-r.log`・`test-all-r-meta.txt` | `8460506d` | 21:42:08 〜 21:51:05・`exit=0` | 全段 緑（`notices_diff=0`・`dirty_after=0`）。これを署名の根拠にする（`verification/alpha-completion.md` §1） |
+
+- **前の zip の同定（置き換えたもの・記録は消さずに残す）**:
+  - zip の名前 `areka-alpha-x64-20261001-7f8f4e8.zip`・7,556,348 バイト・sha256 `0b4532e4815e80740edef23a977a8854e4c5a1a79d36661b21a99eae75084b08`（2026-10-02 に写しを読み直して同じ値。隣の `.sha256` の値とも同じ）・項目 146。
+  - コミット `7f8f4e8701ab0e0a890f446665ed1fda715881a0`（`BUILD-INFO.txt` の `commit=7f8f4e8`・`built=2026-10-01T13:14:54Z`）。
+  - `-Check`: 2026-10-01 22:11:47 〜 22:15:07・`exit=0`・判定 1〜8 すべて合。記録は名前を変えて `package-alpha-7f8f4e8.log`・`package-meta-7f8f4e8.txt` として残した。
+  - 全体テスト: 2026-10-01 22:02:51 〜 22:11:23・`exit=0`・全段 緑（`test-all.log`・`test-all-meta.txt`・`cargo-deny.txt`）。
+  - この zip で回した走行 E1・E2・A1・A2 の記録（`run-E1.log`〜`run-A2.log`・`runs.txt`）も残す。
 - **採り直す項目**:
   - 全項目（1〜13 と付随 2 つ）。項目 1・2 は `emo2` に依らないが、zip が変わるので新しい zip で採り直す。
   - 根は同じ `<ワークツリー>\target\alpha-lap\{E,A}` に作り直す（置き場の決まり: 一時フォルダは `target\` の下だけ）。
