@@ -149,8 +149,8 @@ C:\home\maz\lap-records\alpha-signoff-<準備日>\   # 生の記録（ワーク�
 ### Modified Files
 
 - `dist/README.txt` — 説明書の仕上げ（§「説明書の仕上げ」）。UTF-8（BOM つき）と改行の扱いは今のまま保つ。
-- `vendors/sample_ghost/emo2.nar` — ghost_dev `e2df8cb` の `release/emo2/emo2.nar`（4,586,381 バイト・md5 `3f5d8777deeeb91fecc587c9071ded32`・111 項目）へ置き換える（バイナリの丸ごとの置き換え）。
-- `vendors/sample_ghost/README.md` — 7 行目の `emo2.nar` の行を `111`・`4,586,381 バイト` に直す（ほかの行は変えない。119 行目の「全エントリが deflate」は新しい版でも真）。
+- `vendors/sample_ghost/emo2.nar` — ghost_dev `75e560e` の `release/emo2/emo2.nar`（4,591,449 バイト・md5 `ac23d4479dff69a1edd6d02d153f27f6`・113 項目）へ置き換える（バイナリの丸ごとの置き換え）。2026-10-01 に一度 `e2df8cb` の版（4,586,381 バイト・md5 `3f5d8777deeeb91fecc587c9071ded32`・111 項目）へ置き換えたが、一周の項目 4 でインストールの台詞が無いと分かり、2026-10-02 に開発者がイベントの台詞を足した `75e560e` の版を今回の α に取り込むと裁定した。
+- `vendors/sample_ghost/README.md` — 7 行目の `emo2.nar` の行を `113`・`4,591,449 バイト` に直す（ほかの行は変えない。119 行目の「全エントリが deflate」は新しい版でも真）。
 
 変えないもの（変更 0 と明記）: `crates/`（要件 3.8 の例外を除く）・`tools/package-alpha.ps1`・`tools/test-all.ps1`・`THIRD-PARTY-NOTICES.md`（生成し直して差分 0 を確かめるだけ）・`.kiro/steering/`（完了の手順の分を除く）。
 
@@ -235,7 +235,7 @@ graph LR
 | 5.4 | 条件つきの制限 ⒜⒝⒞ | 説明書 | 条件つきの制限の決め方・バグの着地に依る条項 | — |
 | 5.5 | 裏付けのある行だけ・直った制限を書かない | 説明書・受入記録 §10 | 既知の制限の表の裏付けの列 | — |
 | 5.6 | 確かめられない候補の登記 | 受入記録 §8 | 候補の表 | — |
-| 6.1 | `emo2.nar` を差し替え README の行を直す | 検体の差し替え | ghost_dev `e2df8cb` の版 | — |
+| 6.1 | `emo2.nar` を差し替え README の行を直す | 検体の差し替え | ghost_dev `75e560e` の版（2026-10-02 の裁定・元は `e2df8cb`） | — |
 | 6.2 | 差し替えの後に `test-all.ps1` 全段 | 署名の根拠のコミットの全体テスト | 1 回で 6.2 と 7.1 ⑴ を兼ねる（D6） | 全体の段取り |
 | 6.3 | 同梱物とライセンスの突き合わせ | 説明書・検体の差し替え | 突き合わせの結果（下） | — |
 | 6.4 | 項目 13 の台詞の目視 | 受入記録 §7 | A3 の始め | A2→A3 |
@@ -347,8 +347,8 @@ graph LR
 
 **Batch / Job Contract**
 - Trigger: ゲート 0 の後、説明書の仕上げと同じ枝の上で 1 回。
-- Input / validation: `C:\home\maz\git\ghost_dev\release\emo2\emo2.nar` の大きさ 4,586,381 バイト・md5 `3f5d8777deeeb91fecc587c9071ded32`・ghost_dev の `release/emo2` に未コミットの変更が無いこと。置き換える前に、中身が次を満たすことを確かめる: `install.txt` に `balloon.directory,emo2-kakukaku` がある（`-Check` の初回のバルーンの判定が成り立つ）／判定 7 が比べる説明書 2 本が古い版とバイトで同じ／`dic/boot.pasta` に `＊起動halt` の場面がある／`emo2-kakukaku/descript.txt` に `homeurl` の行が無い。設計の段で全部成り立つことを確かめた（research §10）。
-- Output: `vendors/sample_ghost/emo2.nar` を丸ごと置き換え、`vendors/sample_ghost/README.md` 7 行目を `111`・`4,586,381 バイト` にする。辞書は 1 文字も編集しない（6.6）。
+- Input / validation: `C:\home\maz\git\ghost_dev\release\emo2\emo2.nar` の大きさ 4,591,449 バイト・md5 `ac23d4479dff69a1edd6d02d153f27f6`（ghost_dev `75e560e`。元の `e2df8cb` の版は 4,586,381 バイト・md5 `3f5d8777deeeb91fecc587c9071ded32`）・ghost_dev の `release/emo2` に未コミットの変更が無いこと。置き換える前に、中身が次を満たすことを確かめる: `install.txt` に `balloon.directory,emo2-kakukaku` がある（`-Check` の初回のバルーンの判定が成り立つ）／判定 7 が比べる説明書 2 本が古い版とバイトで同じ／`dic/boot.pasta` に `＊起動halt` の場面がある／`emo2-kakukaku/descript.txt` に `homeurl` の行が無い。設計の段で全部成り立つことを確かめた（research §10）。
+- Output: `vendors/sample_ghost/emo2.nar` を丸ごと置き換え、`vendors/sample_ghost/README.md` 7 行目を `113`・`4,591,449 バイト` にする。辞書は 1 文字も編集しない（6.6）。
 - 確かめ（6.2）: 署名の根拠のコミットの `tools/test-all.ps1 -License` の全段成功で兼ねる（D6）。設計の段の静的な読みでは赤になるテストは 0 本の見込みで、新しい版で影響を受けうるのは本物の `pasta.dll` を動かす `crates/areka/tests/smoke_boot_loop_exit.rs`（と明示実行の `emo2_real_run.rs`）だけ。
 
 **Implementation Notes**

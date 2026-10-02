@@ -132,7 +132,7 @@
 
 #### Acceptance Criteria
 
-1. When 開発者が `halt` の台詞を足した `emo2` の配布物を用意する（2026-10-01 時点で ghost_dev `e2df8cb` の `release/emo2/emo2.nar` が該当・議題 4）, the 本仕様 shall `vendors/sample_ghost/emo2.nar` をその配布物に差し替え、同じフォルダの `README.md` の表の項目数とバイト数を実物に合わせる。
+1. When 開発者が `halt` の台詞を足した `emo2` の配布物を用意する（2026-10-01 時点で ghost_dev `e2df8cb` の `release/emo2/emo2.nar` が該当・議題 4。2026-10-02 の開発者の裁定で、インストールなどのイベントの台詞を足した ghost_dev `75e560e` の版へ改めた）, the 本仕様 shall `vendors/sample_ghost/emo2.nar` をその配布物に差し替え、同じフォルダの `README.md` の表の項目数とバイト数を実物に合わせる。
 2. When `emo2.nar` を差し替える, the 本仕様 shall `tools/test-all.ps1` の全段を成功させ、`emo2` に依る既存のテストが新しい `emo2.nar` で通ることを確かめる。
 3. When `emo2.nar` を差し替える, the 本仕様 shall 説明書の「同梱物とライセンス」の記述（作者・条件・出どころの文書の名前）を新しい `emo2.nar` の中身と突き合わせ、食い違いがあれば説明書を直してから zip を組み直す。
 4. When `emo2.nar` を差し替えた zip で一周する, the 受入記録 shall 項目 13（議題 1 で採ったとき）で、えも？？ が落ちたゴーストのことを話すことを開発者の目視で確かめた結果を書く。

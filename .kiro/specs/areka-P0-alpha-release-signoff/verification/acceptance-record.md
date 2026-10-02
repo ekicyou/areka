@@ -465,6 +465,27 @@ foreach ($k in $kids) {
 
 該当するときだけ書く（一周の後に zip の中身を変えたとき・要件 1.3）。
 
+### 9.1 2026-10-02: 検体 `emo2.nar` の差し替えと、根の消失による採り直し
+
+- **起きたこと**:
+  - ⑴ A2 の項目 4 で、えも？？ の辞書にインストールの場面が無く、インストールの台詞が見えなかった（`OnInstallBegin`・`OnInstallCompleteEx`・`OnInstallComplete` がどれも `raised=NoReply`）。開発者はいったん縮退の合格と裁定し（「こちらは縮退合格としましょう。」）、ghost_dev の側でイベントの台詞を足すよう申し送った。
+  - ⑵ A2 は付随の右クリックと項目 13 の前半の前に、安全弁（30 分）で終わった（`event="app_exit" origin=Smoke`・2026-10-01T14:07:15.861719Z）。§6.5 により、未観測の 2 つは「中断」。
+  - ⑶ 機械の再起動の後、ワークツリーの `target\` がまるごと消え、根 E・根 A と `konnoyayame` の控えが無くなった（生の記録の置き場は無事）。消えた理由は分からない。
+  - ⑷ ghost_dev の側でイベントの台詞を足した版（`75e560e`・md5 `ac23d4479dff69a1edd6d02d153f27f6`・4,591,449 バイト・113 項目）が届き、開発者が今回の α に取り込むと裁定した（逐語「新しい emo2.nar を今回の α に取り込む、targetのまま。targetにテンポラリを置くのは絶対ルールです。掃除漏れが多いのでダメ」）。
+- **差し替えの前の確かめ（2026-10-02）**:
+  - `install.txt`・`readme.txt`・`shell/master/readme.txt` が前の版とバイトで同じ。
+  - `boot.pasta` の `＊起動halt` が 3 件。`emo2-kakukaku/descript.txt` の `homeurl` の行が 0 件。
+  - 実行ファイルは `ghost/master/pasta.dll` だけで、`profile/` は無い。
+  - 前の版との違いは次の 6 つだけで、メニュー・シェル・descript は同じ。
+    - 足したもの: `ghost/master/dic/install.pasta`・`ghost/master/dic/system.pasta`
+    - 変えたもの: `boot.pasta`・`boot.lua`・`ghost/master/updates.txt`・`updates.txt`
+- **組み直し**: 差し替えをコミットし、新しい署名の根拠のコミットで全体テスト（`-License`）と zip の `-Check` をやり直す。新しい `commit=` と zip は §1 に書き、前の zip（`areka-alpha-x64-20261001-7f8f4e8.zip`）の記録はこの節に残す。
+- **採り直す項目**:
+  - 全項目（1〜13 と付随 2 つ）。項目 1・2 は `emo2` に依らないが、zip が変わるので新しい zip で採り直す。
+  - 根は同じ `<ワークツリー>\target\alpha-lap\{E,A}` に作り直す（置き場の決まり: 一時フォルダは `target\` の下だけ）。
+  - 走行の名前は前と区別するため `E1r`・`E2r`・`A1r`〜`A4r` とし、前の記録（`run-E1.log`〜`run-A2.log`）は消さずに残す。
+- **前の zip での結果**: 項目 1・2・3 は合（§7）。A2 の項目 12・4・5・7 は観測したが、採り直すので判定しない。
+
 ---
 
 ## 10. 説明書の突き合わせ（要件 4.6・4.7・4.8・5.4・5.5）
@@ -651,7 +672,7 @@ crates/areka-update/src/winhttp_real_tests.rs:34:    let listener = TcpListener:
 
 | 行 | 書く条件 | 確かめた結果（2026-10-01） | 説明書 |
 |---|---|---|---|
-| ⒜ | zip の `emo2` が `halt` の台詞を持たない | `vendors/sample_ghost/emo2.nar`（md5 `3f5d8777deeeb91fecc587c9071ded32`）の `ghost/master/dic/boot.pasta` に `＊起動halt` が 3 件。較正: 差し替える前の版（`git show bbf9a620^:vendors/sample_ghost/emo2.nar`）では 0 件 | 書かない |
+| ⒜ | zip の `emo2` が `halt` の台詞を持たない | `vendors/sample_ghost/emo2.nar`（md5 `3f5d8777deeeb91fecc587c9071ded32`。2026-10-02 に差し替えた `ac23d4479dff69a1edd6d02d153f27f6` の版でも同じく 3 件）の `ghost/master/dic/boot.pasta` に `＊起動halt` が 3 件。較正: 差し替える前の版（`git show bbf9a620^:vendors/sample_ghost/emo2.nar`）では 0 件 | 書かない |
 | ⒝ | zip の `balloon/emo2-kakukaku/descript.txt` に `homeurl` の行がある | 同じ書庫の `emo2-kakukaku/descript.txt` に `homeurl` で始まる行が 0 件（同じ探し方で `name` の行は 1 件）。較正: 差し替える前の版では 1 件 | 書かない |
 | ⒞ | バグ `balloon-reappear-short-talk` が未着地 | §0.4 の判定「着地した」（`.kiro/specs/completed/areka-P0-balloon-reappear-short-talk/` が在る） | 書かない |
 
