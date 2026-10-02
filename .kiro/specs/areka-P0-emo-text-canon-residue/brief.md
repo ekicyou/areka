@@ -70,3 +70,10 @@
 
 - バルーンの文字の単位は `char` から書記素クラスタ（人が 1 文字と見る単位）に替わった。範囲（`ChoiceSpan::glyph_range`・`style_runs`・`segment_text_range`）はクラスタの通し番号で数え、UTF-16 の位置はクラスタ文字列の長さを積む。
 - `TextItem::Glyph` と `PositionedGlyph` の中身は `text: Arc<str>`（`Copy` なし）。構築は `TextItem::glyph(&str)`、切り方は `areka_sakura::cluster::clusters` だけが決める。文字を比べる処理（行末のぶら下げの判定など）は `&str` で比べる。
+
+---
+
+## 2026-10-01 `/kiro-discovery`（シェル内バルーン）による引き取り
+
+- **項目 11（縦書きの字形の観測点）と項目 15（行末のぶら下げ）は新 spec `areka-P0-text-typesetting` が引き取った**。同 spec は禁則（バルーンのキー `line_break`・既定 `anywhere`）・ぶら下げ（`hanging_punctuation,allow-end`）・縦中横（`\![text,combine-upright,…]`・`text_combine_upright,digits 2`）・字の向き（`text_orientation`）を持つ。areka 独自のキーの名前は CSS のプロパティ名の `-` を `_` にしたもので揃える（開発者確定）。ぶら下げは本 brief の項目 15 の意味論（折り返し基準を超えてよい・絶対上限は超えない）のまま実装する。
+- **本 spec に残るのは項目 12・14**（12 は 2026-09-24 に消化済みなので実質 14 のみ＝折り返し基準が描画範囲の外に解決されるバルーン定義の警告と、警告のバルーン名の欄）。

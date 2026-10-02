@@ -103,3 +103,7 @@
 ---
 
 > **📌 2026-09-11 棚卸⑬（3 軸分割を実施）**——本 spec は **⑴ 系列解決の項目 1〜6**（emo 帰属・`SeriesFamily` テーブル拡張・面偶奇の自動切替・`defaultsurface`・`\![reload,balloon]`・`balloonc*`・多面 fixture）**だけ**を持つ。⑵ 表示寿命の項目 7〜10 は **`areka-P0-balloon-lifecycle-events`**、⑶ emo-text 帰属の項目 11・12・14・15 は **`areka-P0-emo-text-canon-residue`** へ切り出した（項目本文は本 brief が正本のまま・各 spec は所有と着地条件だけを持つ）。`talk_lifecycle.rs` の `#[allow(dead_code)]` 注記が名指す所有者は `balloon-lifecycle-events` へ読み替える（注記の書き換えは同 spec の着地時）。項目 13 は記録のみ（消化済み）。パスの補正: `attach.rs` は `crates/areka/src/emo2_boot/frame/attach.rs`。編成＝**W14**（`present-gpu-transform-scale` の着地後・`areka-emo-present` crate 同居・別ファイル）。規模 XL → **M**。要件定義は Opus（議題は面偶奇と縦書き矢印の 2 件）。
+
+---
+
+> **📌 2026-10-01 `/kiro-discovery`（シェル内バルーン）による引き取り**——**項目 1（装飾の系列の per-scope 化と深い旧名）は新 spec `areka-P0-balloon-markers` が引き取った**。開発者指示「未実装だった項目（`arrow*`・`onlinemarker.*`・`sstpmarker.*`・`number.*`・`sstpmessage.*`）も、実装が必要な spec として今回の spec 群に含めて」により、印の描画と、その絵の系列の解決を同じ spec に揃えた（系列だけ先に作っても使い手が無い）。`clickwait*` の系列は `balloon-markers` と `areka-P0-talk-fast-forward` が同じ仕組みを使う（先に着地した方が作る）。**本 spec に残るのは項目 2〜6**（面の偶奇と左右向き・`defaultsurface`・`\![reload,balloon]`・`balloonc*` の kero 側・多面の検体）。網羅台帳の `arrow*`・`clickwaitmarker*`・`onlinemarker*`・`sstpmarker*` の行の引受先は、`balloon-markers`（`clickwaitmarker*` は `talk-fast-forward`）の着地時に書き換える。
