@@ -53,6 +53,9 @@ use windows::Win32::Foundation::{FreeLibrary, GlobalFree, HGLOBAL, HMODULE};
 use windows::Win32::Globalization::{
     CP_ACP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, MultiByteToWideChar, WideCharToMultiByte,
 };
+use windows::Win32::System::Diagnostics::Debug::{
+    SEM_FAILCRITICALERRORS, SEM_NOOPENFILEERRORBOX, SetThreadErrorMode, THREAD_ERROR_MODE,
+};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
 use windows::core::{HSTRING, PCSTR, s};
@@ -72,6 +75,32 @@ type UnloadFn = unsafe extern "C" fn() -> u8;
 /// `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（`len` は in/out）。
 /// **本仕様では解決のみ・呼出しない**（呼出 API は下流 host32-request が追加する）。
 type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
+
+/// `LoadLibraryW` を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに呼ぶ。
+///
+/// 既定では、壊れた DLL を読むと OS が利用者の画面に窓を出し、OK が押されるまでこのスレッドを止める。
+/// 失敗は `LoadLibraryFailed` として返るので、窓は要らない。呼ぶ間だけこのスレッドのエラーモードに
+/// `SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX` を立て、終えたら元へ戻す（プロセス全体の
+/// `SetErrorMode` は触らない）。x64 側の `areka-ghost` の `shiori_inproc.rs` と同じ手当て。
+fn load_library_quiet(wide: &HSTRING) -> windows::core::Result<HMODULE> {
+    let mut old = THREAD_ERROR_MODE(0);
+    // SAFETY: 引数は定数の正しいフラグと、呼出中生きている `old` へのポインタだけ。
+    // 定数の正しいフラグでは失敗しない。万一失敗したら `old` は読めていないので、戻す手順も飛ばす。
+    let set = unsafe {
+        SetThreadErrorMode(
+            SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX,
+            Some(&mut old),
+        )
+    }
+    .is_ok();
+    // SAFETY: `wide` は呼出中生存する有効な NUL 終端 UTF-16。失敗は Err で返る。
+    let result = unsafe { LoadLibraryW(wide) };
+    if set {
+        // SAFETY: 直前に読み出した元のモードを戻すだけ。
+        let _ = unsafe { SetThreadErrorMode(old, None) };
+    }
+    result
+}
 
 /// SHIORI DLL 確立の失敗種別（design §366-371）。観測可能な形で返す（panic しない）。
 // 中身は失敗の 1 行（`main.rs` の `{e:?}`）でだけ読む。rustc は derive した `Debug` を読み手に数えない。
@@ -158,9 +187,9 @@ impl ShioriByteProxy {
         // --- 手順 1: LoadLibraryW（絶対パス・UTF-16 null 終端）---
         // HSTRING は NUL 終端の UTF-16 を保持する。失敗→LoadLibraryFailed（R6.1）。
         let wide = HSTRING::from(dll_path.as_os_str());
-        // SAFETY: `wide` は呼出中生存する有効な NUL 終端 UTF-16 文字列。LoadLibraryW は失敗時に
-        // Err を返す（下で map）。ここで module のライフサイクル所有が本関数へ確立する。
-        let module = unsafe { LoadLibraryW(&wide) }.map_err(ProxyError::LoadLibraryFailed)?;
+        // OS の窓は出さない（`load_library_quiet`）。失敗時は Err を返す（下で map）。
+        // ここで module のライフサイクル所有が本関数へ確立する。
+        let module = load_library_quiet(&wide).map_err(ProxyError::LoadLibraryFailed)?;
 
         // --- 手順 2: エクスポート解決（無装飾名）---
         // 初期化の入口 `loadu`→`load` を任意で引いて選択の純関数へ渡し（判断は choose_init_entry だけ）、
