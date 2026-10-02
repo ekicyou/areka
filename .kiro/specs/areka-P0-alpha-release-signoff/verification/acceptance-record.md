@@ -395,65 +395,436 @@ foreach ($k in $kids) {
 
 ## 7. 項目ごとの結果
 
-時刻は記録の UTC（末尾 Z）に日本時間を添える。生の記録は §4 の置き場（`runs.txt`・`run-<走行>.log`・`run-<走行>.err.log`）。
+2026-10-02 に組み直した zip（§1・`areka-alpha-x64-20261002-8460506.zip`）で、根 E・根 A を作り直して全項目を採り直した走行（E1r・E2r・A1r・A2r・A3r・A4r）の結果を、すべての項目の判定に使う。前の zip（`areka-alpha-x64-20261001-7f8f4e8.zip`）で回した走行は判定に使わない。E1・E2・A1 の結果は §9.1 の「前の zip での走行（判定に使わない）」に、A2 の経過は §9.1 の「起きたこと」⑴⑵ と「前の zip での結果」に残した。
 
-### 項目 1 空の根の告知（E1）
+- 時刻は記録の UTC（末尾 Z）に日本時間を添える。生の記録は §4 の置き場（`runs.txt`・`run-<走行>.log`・`run-<走行>.err.log`）。
+- `runs.txt` の `item=` の行は UTC、`pid=`・`exit=`・`killed`・`children=`・`between`・`A3r item8 …` の行は日本時間（+09:00）。区間の終わりが日本時間の行のときは、9 時間を引いて UTC へ直してから比べた。
+- 件数の数え方: 生の記録の各行は時刻で始まる（時刻で始まらない行は E1r〜A4r のどの記録にも 0 行）。行頭の時刻が区間の始まり以上・終わり未満の行だけを数えた。ERROR・WARN は、時刻の次の欄（記録の重さ）が `ERROR`・`WARN` の行を数えた（本文に `ERROR` の字を含むだけの行は数えない）。
 
-- 区間: `E1 item=1 start=2026-10-01T13:28:13.8938958Z`（22:28:13 JST）〜 `E1 exit=1 end=2026-10-01T22:29:01.9853510+09:00`。pid 11360。
-- 記録（`run-E1.log` から逐語）:
-  - `2026-10-01T13:28:14.246184Z  INFO areka::boot_config: ベースウェアの根を決めました event="root_resolved" root=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\E source=ExeDir`
-  - `2026-10-01T13:28:14.250318Z ERROR areka::alert: [alert] 利用者へ告げます event="alert" scene=GhostMissing { ghost_store: "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\E\\ghost", argv: None } title="areka を起動できません" body="ゴーストが見つかりません。\n置く場所: C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\E\\ghost\n置くもの: ghost\\master\\descript.txt を持つゴーストのフォルダ" suppressed=false`
-- 目視: 告知の窓（題「areka を起動できません」・本文 3 行〔「ゴーストが見つかりません。」・置く場所 `…\target\alpha-lap\E\ghost`・置くもの〕・OK）。開発者が撮った画面の写しを `E1-alert.png` として置き場に残した。OK を押して終わった（`exit=` の行）。
-- 終了コード 1・標準エラー `Error: Error { code: HRESULT(0x80004005), message: "エラーを特定できません" }`: ゴーストが無いときは告知の後に `E_FAIL` で終わる作り（`crates/areka/src/main.rs` の `resolve_boot` が `Err(scene)` のとき `alert::raise` の後に `E_FAIL` を返す）。期待は「OK で終わる」で、終了コードを定めていないので判定に影響しない。
-- 3.6 の除外: 上の `event="alert"` の ERROR 1 行（§6.6 の例・項目 1 の期待どおりの告知）。ほかの ERROR・WARN は 0 件。
+### 7.0 結果の一覧
+
+| 項目 | 走行 | 結果 | 開発者の返信（逐語） |
+|---|---|---|---|
+| 1 空の根の告知 | E1r | **合格** | 「E1r はOK」 |
+| 2 告知のとおりに置く | E2r | **合格** | 「E2r はOK」 |
+| 3 初回の起動 | A1r | **合格** | 「OK」 |
+| 12 初回だけの位置合わせ | A1r → A2r | **合格** | 「項目 12 はOK、項目 4 は縮退合格で、emo2 に申し送って。あとさっきの、テンポラリにある余計なフォルダの削除もお願い。」 |
+| 4 2 体目・3 体目を入れる | A2r | **合格（縮退）** | 同上 |
+| 5 メニューでゴーストを替えて戻る | A2r | **合格** | 「項目 5 はOK」 |
+| 7 バルーンの切り替え | A2r（付記は A3r） | **合格** | 「項目 7 はOK」。付記は「項目 10 の準備は済み、「ん」でバルーンが出ました」 |
+| 付随 左クリックの後の右クリック | A2r | **合格** | 「付随の右クリックはOK」 |
+| 13 強制終了の次の起動 | A2r → A3r | **合格** | 前半「claudia が立ちました」「強制終了しました」・後半「項目 13 はOK、項目 8 も済みました」 |
+| 8 ネットワーク更新 | A3r | **合格** | 「項目 8 はOK、emo2 に申し送って」 |
+| 6 シェルの切り替え | A3r | **合格** | 「項目 6 はOK」 |
+| 付随 `\![open,readme]` | A3r（項目 6 の中） | **合格** | 「項目 6 はOK」 |
+| 9 終了 | A3r の終わり | **合格** | 「項目 9 は済みました」「項目 9 はOK、A4r 起動し、終了した」 |
+| 10 前回の状態の復元 | A4r | **合格** | 「項目 10 はOK、項目 11 もOK」 |
+| 11 表示の拡大率 | A1r〜A4r | **合格** | 同上 |
+
+- 「不合格」は 0 件、「中断」は 0 件。縮退の合格は項目 4 の 1 件（下の項目 4 の「縮退:」の行）。
+
+### 7.1 WARN と ERROR の除外の理由（§6.6）
+
+下の各項目で、数から外した行の後ろに次の記号を付けた。
+
+- ⓔ（ERROR）: E1r の `event="alert"`。§6.6 の 1 つ目の例（項目 1 の期待どおりの告知）。
+- ⓐ（WARN）「balloon: 面がデフォルト定義側（本体側）の系列へ縮退した」: 既定バルーン `StayseeBalloon` などが相方用の面 2・3 を持たず、本体側の面へ落ちたことの観測。`crates/areka-emo-present/src/balloon.rs` の `resolve_balloon_faces` の doc が「失敗ではなく正典準拠のフォールバック動作の観測」と定める。§6.6 の 3 つ目の例: 完了 `areka-P0-default-balloon-bundle` の `verification/signoff-record.md` §3.3（と §2 の表の 20 行目）（相方側の面 2・3 が本体側の `balloons2/3.png` へ縮退し記録 2 件＝期待どおり）・完了 `areka-P0-shell-balloon-switch` の `signoff.md` の「既知の制限・観察」（「バルーンの面が既定の系列へ縮退した」を本仕様の範囲外の既存のものとした）。
+- ⓑ（WARN）「bake: element が全透明（α=0）でトリム後 0 寸です」（`purple/a/null.png`）: えも？？ のシェルの素材に全透明の部品があることの観測。§6.6 の 3 つ目の例: 完了 `areka-P0-shell-balloon-switch` の `signoff.md` の「既知の制限・観察」（「全透明の部品」を範囲外の既存のものとした）・完了 `areka-P0-ghost-shell-balloon-switch` の `signoff.md`（WARN は検体と既定バルーンに由来するもの＝emo2 の全透明の要素 `purple/a/null.png`）。
+- ⓒ（WARN）「折返し基準が描画範囲の外に解決された」: バルーン定義の粗さの警告。§6.6 の 3 つ目の例: 完了 `areka-P0-emo-text-line-height-canon` の `verification/handoff.md`（このバルーンで警告が 1 回出るのは正常な記録）・完了 `areka-P0-shell-balloon-switch` の `signoff.md` の「既知の制限・観察」（「折り返しの基準が描画範囲の外」を範囲外の既存のものとした）。
+- ⓓ（WARN）`update_target_skipped reason="no_homeurl" kind="shell"`: シェルに更新先が無いので飛ばしたことの記録。§6.6 の 3 つ目の例: 完了 `areka-P0-network-update` の `signoff.md` の 3 回目 ⑶（「シェルは `update_target_skipped reason=no_homeurl` で飛ばし、総括にはゴーストとバルーンだけ」を合格の振る舞いとして記録）。
+- **外さないもの**: `update_target_skipped reason="no_homeurl" kind="balloon"`（項目 8 の 2 件）。§6.6 のどの例にも当たらない（バルーンの更新先が無いときに飛ばすことを判定の外と決めた先行 spec の記録が見つからない）ので数に残す。`emo2-kakukaku` に `homeurl` が無いことは §1.2 の確かめ（`homeurl` で始まる行が 0 件）と合う。項目 8 の期待は WARN の数を定めないので、判定は変わらない。
+
+### 項目 1 空の根の告知（E1r）
+
+- 区間: `E1r item=1 start=2026-10-02T13:05:36.8227598Z`（22:05:36 JST）〜 `E1r exit=1 end=2026-10-02T22:05:50.7022677+09:00`（13:05:50.70Z）。pid 27664（`E1r pid=27664 start=2026-10-02T22:05:37.2626192+09:00`）。根 E は新しい zip を展開して `ghost\` の中を空にした。
+- 記録（`run-E1r.log` から逐語）:
+  - `2026-10-02T13:05:37.284499Z  INFO areka::boot_config: ベースウェアの根を決めました event="root_resolved" root=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\E source=ExeDir`
+  - `2026-10-02T13:05:37.287636Z ERROR areka::alert: [alert] 利用者へ告げます event="alert" scene=GhostMissing { ghost_store: "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\E\\ghost", argv: None } title="areka を起動できません" body="ゴーストが見つかりません。\n置く場所: C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\E\\ghost\n置くもの: ghost\\master\\descript.txt を持つゴーストのフォルダ" suppressed=false`
+- 目視: 告知の窓（題「areka を起動できません」・本文 3 行〔「ゴーストが見つかりません。」・置く場所 `…\target\alpha-lap\E\ghost`・置くもの〕・OK）。開発者が貼った画面の写しを `E1r-alert.png` として置き場に残した。OK を押して終わった（`exit=` の行）。
+- 終了コード 1・標準エラー（`run-E1r.err.log`）`Error: Error { code: HRESULT(0x80004005), message: "エラーを特定できません" }`: ゴーストが無いときは告知の後に `E_FAIL` で終わる作り（`crates/areka/src/main.rs` の `resolve_boot` が `Err(scene)` のとき `alert::raise` の後に `E_FAIL` を返す）。期待は「OK で終わる」で、終了コードを定めていないので判定に影響しない。
+- ERROR・WARN（区間）: ERROR 1 件・WARN 0 件。外したもの:
+  - `2026-10-02T13:05:37.287636Z ERROR areka::alert: [alert] 利用者へ告げます event="alert" scene=GhostMissing { ghost_store: "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\E\\ghost", argv: None } title="areka を起動できません" body="ゴーストが見つかりません。\n置く場所: C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\E\\ghost\n置くもの: ghost\\master\\descript.txt を持つゴーストのフォルダ" suppressed=false` ← ⓔ
+- 除外の後: ERROR 0 件・WARN 0 件。
 - 根拠の種別: 両方（目視と記録の引用）。
-- 開発者の判定（逐語）: 「E1 はOK」 → **合**。
+- 開発者の判定（逐語）: 「E1r はOK」 → 結果 **合格**。
 
-### 項目 2 告知のとおりに置く（E2）
+### 項目 2 告知のとおりに置く（E2r）
 
-- 区間: `E2 item=2 start=2026-10-01T13:31:05.9643559Z`（22:31:05 JST）〜 `E2 exit=0 end=2026-10-01T22:32:01.6678706+09:00`。pid 15796。根 E の `ghost\konnoyayame` へ、準備で控えた `nar-sample-path konnoyayame` の `folder=`（`target\nar-samples\manual\konnoyayame\ghost\konnoyayame`）を写してから起動した。
-- 記録（`run-E2.log` から逐語）:
-  - `2026-10-01T13:31:06.032736Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Only dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\E\ghost\konnoyayame`
-  - `2026-10-01T13:31:06.648626Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None`
-  - `2026-10-01T13:31:06.649487Z  INFO actor{actor=kanade}: kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1`
-  - `2026-10-01T13:32:01.602794Z  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4`
-  - `2026-10-01T13:32:01.621565Z  INFO actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"`
+- 区間: `E2r item=2 start=2026-10-02T13:06:54.1299994Z`（22:06:54 JST）〜 `E2r exit=0 end=2026-10-02T22:07:48.3665594+09:00`（13:07:48.37Z）。pid 5096。根 E の `ghost\konnoyayame` へ、作り直した控え `target\nar-samples\manual\konnoyayame\ghost\konnoyayame`（§9.1）を写してから起動した。
+- 記録（`run-E2r.log` から逐語）:
+  - `2026-10-02T13:06:54.650018Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Only dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\E\ghost\konnoyayame`
+  - `2026-10-02T13:06:56.771036Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None`
+  - `2026-10-02T13:06:56.776282Z  INFO actor{actor=kanade}: kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1`
+  - `2026-10-02T13:07:47.540233Z  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4`
+  - `2026-10-02T13:07:47.667560Z  INFO actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"`
 - 目視（開発者）: `konnoyayame` が立って挨拶する・目の周りに四角い地色が出ない・挨拶の字形が化けない・左上の画素と同じ色の場所のクリックが背後の窓へ抜ける。メニューの「終了」で終えた（終了コード 0）。
-- 3.6 の除外: ERROR は 0 件。WARN 6 件を除外した。逐語（`run-E2.log`）:
-  - `2026-10-01T13:31:06.179757Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png`
-  - `2026-10-01T13:31:06.179996Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png`
-  - `2026-10-01T13:31:06.190406Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png`
-  - `2026-10-01T13:31:06.190535Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png`
-  - `2026-10-01T13:31:06.232382Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png`
-  - `2026-10-01T13:31:06.232539Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png`
-  - 理由: 既定バルーン `StayseeBalloon` が相方用の面 2・3 を持たず、本体側の面へ落ちたことの観測。`crates/areka-emo-present/src/balloon.rs` の `resolve_balloon_faces` の doc が「失敗ではなく正典準拠のフォールバック動作の観測」と定める。先行 spec の記録で判定の外と決まっている（§6.6 の 3 つ目の例）: 完了 `areka-P0-default-balloon-bundle` の `verification/signoff-record.md` §1（相方側の面 2・3 が本体側の `balloons2/3.png` へ縮退し記録 2 件＝期待どおり）・完了 `areka-P0-shell-balloon-switch` の `signoff.md`（同じ WARN を本仕様の範囲外の既存のものとした）。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 6 件。外したもの:
+  - `2026-10-02T13:06:55.067782Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:06:55.080948Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:06:55.116856Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:06:55.117629Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:06:55.376153Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:06:55.377127Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+- 除外の後: ERROR 0 件・WARN 0 件。
 - 根拠の種別: 両方（目視と記録の引用）。
-- 開発者の判定（逐語）: 「E2 はOK」 → **合**。
+- 開発者の判定（逐語）: 「E2r はOK」 → 結果 **合格**。
 
-### 項目 3 初回の起動（A1）・項目 12 の 1 回目
+### 項目 3 初回の起動（A1r）・項目 12 の 1 回目
 
-- 区間: `A1 item=3 start=2026-10-01T13:33:53.6928849Z`（22:33:53 JST）〜 `A1 exit=0 end=2026-10-01T22:34:51.1511968+09:00`。pid 32716。根 A は署名の zip を新しく展開した（`profile` は展開の直後に無かった）。
-- 記録（`run-A1.log` から逐語）:
-  - `2026-10-01T13:33:54.030610Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Only dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\emo2`
-  - `2026-10-01T13:33:54.043913Z  INFO areka::boot_config: バルーンを決めました event="balloon_resolved" route=Companion dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\balloon\emo2-kakukaku`
-  - `2026-10-01T13:33:54.450700Z  INFO areka::persist::restore: merge_scope restore scope=1 anchor=Bottom saved_win_x=None saved_win_y=None default_char_x=1340 default_char_y=904 char_x=1340 char_y=904 char_w=672 char_h=800 saved_off_x=None saved_off_y=None balloon_off_x=292 balloon_off_y=-150 balloon_x=1632 balloon_y=754`
-  - `2026-10-01T13:33:55.114593Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None`
-  - `2026-10-01T13:33:55.118344Z  INFO actor{actor=kanade}: kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1`
-  - `2026-10-01T13:34:47.788015Z  INFO actor{actor=emo-text}: areka::menu::trigger: [menu] shown event="menu_shown" scope=1 items=8`
-  - `2026-10-01T13:34:51.038214Z  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4`
-  - `2026-10-01T13:34:51.078541Z  INFO actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"`
-- 項目 12 の 1 回目: A1 の記録に「char DragEnd 保存」の行は 0 件（窓を掴まずに終えた）。終えた後の `ghost\emo2\ghost\master\profile\areka\sylphya.toml` は `[boot] count = "1"` と `[last] balloon = "emo2-kakukaku"`・`shell = "master"` だけで、窓の位置の項目は無い。
+- 区間: `A1r item=3 start=2026-10-02T13:08:13.3834358Z`（22:08:13 JST）〜 `A1r exit=0 end=2026-10-02T22:09:12.6268072+09:00`（13:09:12.63Z）。pid 28100。根 A は新しい zip を展開して作り直した（起動の直後の記録に、アプリ・ゴースト・シェルの記憶のファイルがどれも無いことの行 `persist file absent; loading as empty` が並ぶ）。
+- 記録（`run-A1r.log` から逐語）:
+  - `2026-10-02T13:08:13.866852Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Only dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\emo2`
+  - `2026-10-02T13:08:13.875648Z  INFO areka::boot_config: バルーンを決めました event="balloon_resolved" route=Companion dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\balloon\emo2-kakukaku`
+  - `2026-10-02T13:08:14.670436Z  INFO areka::persist::restore: merge_scope restore scope=1 anchor=Bottom saved_win_x=None saved_win_y=None default_char_x=1340 default_char_y=904 char_x=1340 char_y=904 char_w=672 char_h=800 saved_off_x=None saved_off_y=None balloon_off_x=292 balloon_off_y=-150 balloon_x=1632 balloon_y=754`
+  - `2026-10-02T13:08:16.632573Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None`
+  - `2026-10-02T13:08:16.651745Z  INFO actor{actor=kanade}: kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1`
+  - `2026-10-02T13:09:05.963235Z  INFO actor{actor=emo-text}: areka::menu::trigger: [menu] shown event="menu_shown" scope=0 items=8`
+  - `2026-10-02T13:09:12.342642Z  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4`
+  - `2026-10-02T13:09:12.458264Z  INFO actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"`
+- 本体の窓の位置が保存された件: 13:08:51Z の左クリックがキャラクターの絵（本体・scope 0）に当たり、掴んで離した扱いになって本体の位置が保存された（§6.1 の「キャラクターの絵の上は押さない」から外れた）。
+  - `2026-10-02T13:08:51.371241Z  INFO actor{actor=emo-text}: areka::persist::save: char DragEnd 保存 scope=0 char_x=2064 char_y=610 saved_x=2446 saved_y=610 char_w=Some(764) anchor=Bottom`
+  - 保存された位置は動かす前と同じ: 保存の行の `saved_x=2446` は、起動のときの本体の既定の位置の下端中央（`default_char_x=2012`＋`char_w=868` の半分＝2446）と同じで、A2r で読み戻した本体は既定の位置のまま立った（下の項目 12 の A2r の scope 0 の行の `char_x=2012 char_y=330` が `default_char_x=2012 default_char_y=330` と同じ）。
+  - 項目 12 が見るのは相方（scope 1）で、相方の位置は保存されていない（A1r の「char DragEnd 保存」の行はこの 1 件だけで `scope=0`）。AI は開発者に「A: このまま進め、項目 12 は相方（scope 1）で判定する／A1r をやり直す」を尋ね、開発者の返信（逐語）は「A で進めて、A2r 起動しました」。
+  - この「動かさない左クリックで位置が保存される」ことは §8.5 に登記した。
 - 目視（開発者）: えも？？ が `emo2-kakukaku` で立って挨拶する・絵の透明な場所のクリックが背後の窓へ抜ける・拡大率 200% で絵・当たり判定・窓の大きさ・バルーンの位置が崩れない（項目 11）。右クリックのメニューの「終了」で終えた（終了コード 0）。
-- ERROR は 0 件。WARN 3 件は項目 3 の判定に使わない（項目 3 の期待は WARN の数を定めない。除外ではなく記録として残す）。どれも検体（えも？？ のシェルの素材・バルーンの定義）の中身から出るもの。逐語（`run-A1.log`）:
-  - `2026-10-01T13:33:54.374171Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547`
-  - `2026-10-01T13:33:54.498279Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547`
-  - `2026-10-01T13:33:54.625000Z  WARN actor{actor=emo-text}: areka_emo_text::actor: 折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ） balloon="(名前なし)" axis="x" wrap_threshold=254.0 inline_limit=240.0`
+- ERROR・WARN（区間）: ERROR 0 件・WARN 3 件。外したもの:
+  - `2026-10-02T13:08:14.504862Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:08:14.803068Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:08:15.140424Z  WARN actor{actor=emo-text}: areka_emo_text::actor: 折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ） balloon="(名前なし)" axis="x" wrap_threshold=254.0 inline_limit=240.0` ← ⓒ
+- 除外の後: ERROR 0 件・WARN 0 件（項目 3 の期待は WARN の数を定めない）。
 - 根拠の種別: 両方（目視と記録の引用）。
-- 開発者の判定（逐語）: 「A1 はOK」（終えた後に「A1 終了しました」） → **合**。
+- 開発者の判定（逐語）: 「OK」 → 結果 **合格**。
+
+### 項目 12 初回だけの位置合わせ（A1r → A2r）
+
+- 区間: 1 回目は上の A1r の区間。2 回目は `A2r item=12 start=2026-10-02T13:12:07.0643275Z`（22:12:07 JST）〜 `A2r item=4 start=2026-10-02T13:13:20.7739481Z`（22:13:20 JST）。A2r の pid は 4252（`A2r pid=4252 start=2026-10-02T22:12:07.1809078+09:00`）。
+- 記録（A1r は `OnFirstBoot`・上の項目 3 の `id=OnFirstBoot` の行。A2r は `run-A2r.log` から逐語）:
+  - `2026-10-02T13:12:07.218871Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Memory dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\emo2`
+  - `2026-10-02T13:12:07.221667Z  INFO areka::boot_config: バルーンを決めました event="balloon_resolved" route=Memory dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\balloon\emo2-kakukaku`
+  - `2026-10-02T13:12:07.418074Z  INFO areka::persist::restore: merge_scope restore scope=0 anchor=Bottom saved_win_x=Some(2446) saved_win_y=Some(610) default_char_x=2012 default_char_y=330 char_x=2012 char_y=330 char_w=868 char_h=1374 saved_off_x=None saved_off_y=None balloon_off_x=-268 balloon_off_y=-258 balloon_x=1744 balloon_y=72`
+  - `2026-10-02T13:12:07.418288Z  INFO areka::persist::restore: merge_scope restore scope=1 anchor=Bottom saved_win_x=None saved_win_y=None default_char_x=1340 default_char_y=904 char_x=1340 char_y=904 char_w=672 char_h=800 saved_off_x=None saved_off_y=None balloon_off_x=292 balloon_off_y=-150 balloon_x=1632 balloon_y=754`
+  - `2026-10-02T13:12:08.202350Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnBoot references=["「コンフィズリー」＆「City-Pop'n」"] status=None`
+- 件数（区間）: `id=OnBoot` が 1 件・`id=OnFirstBoot` が 0 件・「char DragEnd 保存」が 0 件。相方（scope 1）の `merge_scope restore` は `saved_win_x=None saved_win_y=None` で、`char_x=1340 char_y=904` が `default_char_x=1340 default_char_y=904` と同じ＝既定の配置。
+- 本体（scope 0）は A1r で保存された位置（`saved_win_x=Some(2446) saved_win_y=Some(610)`）を読み戻したが、`char_x=2012 char_y=330` が既定の `default_char_x=2012 default_char_y=330` と同じで、既定の位置に立った（項目 3 の「本体の窓の位置が保存された件」）。項目 12 の判定は相方で行う。
+- 目視（開発者）: 初回のずらしが繰り返されず、相方が既定の配置で立った。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 3 件。外したもの:
+  - `2026-10-02T13:12:07.340206Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:12:07.557150Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:12:07.935137Z  WARN actor{actor=emo-text}: areka_emo_text::actor: 折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ） balloon="(名前なし)" axis="x" wrap_threshold=254.0 inline_limit=240.0` ← ⓒ
+- 除外の後: ERROR 0 件・WARN 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「項目 12 はOK、項目 4 は縮退合格で、emo2 に申し送って。あとさっきの、テンポラリにある余計なフォルダの削除もお願い。」 → 結果 **合格**。これで M1 の完成宣言の「持ち越した事項」の 1 行目を閉じる。
+
+### 項目 4 2 体目・3 体目を入れる（A2r）
+
+- 区間: `A2r item=4 start=2026-10-02T13:13:20.7739481Z`（22:13:20 JST）〜 `A2r item=5 start=2026-10-02T13:20:09.1951055Z`（22:20:09 JST）。
+- 記録 ⒜ メニューの「インストール…」で `R_POST_and_KOMAINU.nar`（`run-A2r.log` から逐語）:
+  - `2026-10-02T13:13:35.790615Z  INFO actor{actor=emo-text}: areka::menu::trigger: [menu] shown event="menu_shown" scope=0 items=8`
+  - `2026-10-02T13:13:49.320281Z  INFO actor{actor=install}: areka::install::procedure: [install] 書庫の手続きを始めます event="install_begin" archive=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\vendors\sample_ghost\R_POST_and_KOMAINU.nar origin=Menu`
+  - `2026-10-02T13:13:49.323709Z  INFO actor{actor=install}: areka::install::procedure: [install] イベントを送りました event="install_event" id="OnInstallBegin" raised=Script`
+  - `2026-10-02T13:13:49.382452Z  INFO actor{actor=install}: areka::install::procedure: [install] 入れました event="install_done" archive=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\vendors\sample_ghost\R_POST_and_KOMAINU.nar kind=Ghost places=["C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\ghost\\R_POST_and_KOMAINU"]`
+  - `2026-10-02T13:13:49.421892Z  INFO actor{actor=install}: areka::install::procedure: [install] イベントを送りました event="install_event" id="OnInstallCompleteEx" raised=NoReply`
+  - `2026-10-02T13:13:49.429341Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnInstallComplete references=["ghost", "Ｒポストと狛犬", ""] status=Some("talking")`
+  - `2026-10-02T13:13:49.432828Z  INFO actor{actor=install}: areka::install::procedure: [install] イベントを送りました event="install_event" id="OnInstallComplete" raised=Script`
+- 記録 ⒝ `claudia.nar` をエクスプローラからえも？？ の窓へ落とした（1 度目・`run-A2r.log` から逐語）:
+  - `2026-10-02T13:14:25.022770Z  INFO actor{actor=emo-text}: areka::input_events::file_drop: [file_drop] 落とされた物を受け取って振り分けました event="file_drop_received" scope=0 count=1 files=0 dirs=0 installs=1 elapsed_ms=17`
+  - `2026-10-02T13:14:25.039071Z  INFO actor{actor=install}: areka::install::procedure: [install] イベントを送りました event="install_event" id="OnInstallBegin" raised=Script`
+  - `2026-10-02T13:14:25.273398Z  INFO actor{actor=install}: areka::install::procedure: [install] 入れました event="install_done" archive=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\vendors\sample_ghost\claudia.nar kind=Ghost places=["C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\ghost\\claudia", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\balloon\\claudia", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\balloon\\claudia_vertical"]`
+  - `2026-10-02T13:14:25.298263Z  INFO actor{actor=install}: areka::install::procedure: [install] イベントを送りました event="install_event" id="OnInstallCompleteEx" raised=NoReply`
+  - `2026-10-02T13:14:25.331255Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnInstallComplete references=["ghost", "悪役令嬢クローディア", "クローディア"] status=Some("talking")`
+  - `2026-10-02T13:14:25.334094Z  INFO actor{actor=install}: areka::install::procedure: [install] イベントを送りました event="install_event" id="OnInstallComplete" raised=NoReply`
+- 記録 ⒝ の 2 度目（同じ `claudia.nar` をもう 1 度落とした。入れた場所は 1 度目と同じで、上書きの入れ直し・`run-A2r.log` から逐語）:
+  - `2026-10-02T13:14:47.014358Z  INFO actor{actor=emo-text}: areka::input_events::file_drop: [file_drop] 落とされた物を受け取って振り分けました event="file_drop_received" scope=0 count=1 files=0 dirs=0 installs=1 elapsed_ms=2`
+  - `2026-10-02T13:14:47.054554Z  INFO actor{actor=install}: areka::install::procedure: [install] イベントを送りました event="install_event" id="OnInstallBegin" raised=Script`
+  - `2026-10-02T13:14:47.391116Z  INFO actor{actor=install}: areka::install::procedure: [install] 入れました event="install_done" archive=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\vendors\sample_ghost\claudia.nar kind=Ghost places=["C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\ghost\\claudia", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\balloon\\claudia", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\balloon\\claudia_vertical"]`
+  - `2026-10-02T13:14:47.420168Z  INFO actor{actor=install}: areka::install::procedure: [install] イベントを送りました event="install_event" id="OnInstallComplete" raised=NoReply`
+- 件数（区間）: `install_done` 3 件（⒜ 1・⒝ 1 度目 1・⒝ 2 度目 1）・`file_drop_received` 2 件（2 度とも `installs=1`）・切替の行（`ghost_switch_requested`・`ghost_switch_booted`・`ghost_switch_done`）0 件・`id=OnGhostChanging` 0 件。表の期待（`install_done` 2 件・`file_drop_received` 1 件）より 1 件ずつ多いのは、`claudia.nar` を 2 度落としたため。1 度の落としごとに `file_drop_received` 1 件・`install_done` 1 件で、⒜ 1 回・⒝ 1 回の数え方と合う。
+- イベントの返事: `raised=Script` は台本が返ったこと、`raised=NoReply` は返事なし・空の台本（`crates/areka/src/install/procedure.rs` の `Raised` の定義）。
+  - ⒜ `R_POST_and_KOMAINU`: `OnInstallBegin` Script → `OnInstallCompleteEx` NoReply → `OnInstallComplete` Script（参照 `["ghost", "Ｒポストと狛犬", ""]`）。始まりと終わりの両方の台詞が返った。
+  - ⒝ `claudia`（1 度目・2 度目とも）: `OnInstallBegin` Script → `OnInstallCompleteEx` NoReply → `OnInstallComplete` **NoReply**（参照 `["ghost", "悪役令嬢クローディア", "クローディア"]`＝ゴーストに同梱のバルーンの名前が 3 つ目に載る形）。始まりの台詞は返ったが、終わりの台詞は返らなかった。
+- 利用条件の画面: 出なかった。§6.7 のとおり、`R_POST_and_KOMAINU.nar` も `claudia.nar` も利用条件のファイル（`crates/areka/src/install/terms.rs` の `TERMS_FILES`＝`terms.txt`・`terms.md`）を持たないため（2026-10-01 に 2 つの `.nar` の中身の一覧で `terms.` に当たる項目が 0 件であることを確かめた）。
+- 目視（開発者）: 2 つとも入り、えも？？ のまま切り替わらなかった。`claudia.nar` を落としたときに開発者が書いたこと（逐語）「「claudia.nar」をドラッグ→「荷物が来たよ」メッセージ。narと認識されていない？」。「荷物が来たよ。」は、根 A の `ghost\emo2\ghost\master\dic\install.pasta` の `＊OnInstallBegin` の台詞の 1 つで、書庫として受け取ったときの始まりの台詞（記録の `install_begin`・`install_done` のとおり書庫として入った）。終わりの台詞が出なかったので、始まりの台詞だけが見えた。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「項目 12 はOK、項目 4 は縮退合格で、emo2 に申し送って。あとさっきの、テンポラリにある余計なフォルダの削除もお願い。」 → 結果 **合格（縮退）**。
+- 縮退:
+  - ⑴ 成り立たなかった期待: 「どちらもインストールの台詞が流れ」のうち、⒝ `claudia.nar`（ゴーストにバルーンを同梱した書庫）の終わりの台詞。`OnInstallComplete` が 2 度とも `raised=NoReply`（始まりの `OnInstallBegin` は `raised=Script`）。⒜ `R_POST_and_KOMAINU.nar` は始まりと終わりの両方が `raised=Script` で成り立った。
+  - ⑵ 理由: えも？？ の辞書（ghost_dev `75e560e` の版・`dic/install.pasta`）が、`claudia.nar` の `OnInstallComplete` に台本を返さなかった（areka の側は参照を送り、返事なしとして手続きを続けた）。`install.pasta` の `SCENE.on_install_complete` は参照の 1 つ目（`^ghost`）だけで分かれ、⒜ も ⒝ もこれを満たすので、原因は分かっていない。観測できた違いは 3 つ目の参照（空か「クローディア」か）と入れ方（メニューか投げ込みか）だけ（§8.3）。2026-10-01 の前の zip の版では、えも？？ の辞書にインストールの場面がそもそも無く、3 つのイベントがどれも `raised=NoReply` だった（§9.1）。今回の版で始まりの台詞と、同梱のないゴーストの終わりの台詞は出るようになり、残ったのは同梱のある書庫の終わりの台詞だけ。
+  - ⑶ 開発者の裁定（2026-10-02・逐語）: 「項目 12 はOK、項目 4 は縮退合格で、emo2 に申し送って。あとさっきの、テンポラリにある余計なフォルダの削除もお願い。」。2026-10-02 にセッション「emo2 開発セッション」へ申し送った（§8.3）。
+
+### 項目 5 メニューでゴーストを替えて戻る（A2r）
+
+- 区間: `A2r item=5 start=2026-10-02T13:20:09.1951055Z`（22:20:09 JST）〜 `A2r item=7 start=2026-10-02T13:21:56.1311592Z`（22:21:56 JST）。
+- 記録（`run-A2r.log` から逐語）:
+  - ⑵ `R_POST_and_KOMAINU` へ:
+    - `2026-10-02T13:20:23.040342Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替の要求を kanade へ送った event="ghost_switch_requested" from=Some("えも？？") to=Ｒポストと狛犬 raise_event=true origin="manual" boot_event=None`
+    - `2026-10-02T13:20:26.622182Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None`
+    - `2026-10-02T13:20:26.639287Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替で起こしたゴーストが定常に入った——切替を終える event="ghost_switch_done" ghost=Some("R_POST_and_KOMAINU") attempt=Target`
+  - ⑶ `claudia` へ:
+    - `2026-10-02T13:20:36.955954Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替の要求を kanade へ送った event="ghost_switch_requested" from=Some("Ｒポストと狛犬") to=悪役令嬢クローディア raise_event=true origin="manual" boot_event=None`
+    - `2026-10-02T13:20:37.866378Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None`
+    - `2026-10-02T13:20:37.893872Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替で起こしたゴーストが定常に入った——切替を終える event="ghost_switch_done" ghost=Some("claudia") attempt=Target`
+  - ⑷ えも？？ へ:
+    - `2026-10-02T13:20:58.367299Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替の要求を kanade へ送った event="ghost_switch_requested" from=Some("悪役令嬢クローディア") to=えも？？ raise_event=true origin="manual" boot_event=None`
+    - `2026-10-02T13:21:02.850886Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnGhostChanged references=["Claudia", "\\0\\s[26]ふん、むらさきですって？\\w9\\nせいぜい楽しんでいらっしゃい。\\w8\\1お嬢様、扇を握る手に力が。\\e", "悪役令嬢クローディア", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\ghost\\claudia", "", "", "", "master"] status=None`
+    - `2026-10-02T13:21:02.916393Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替で起こしたゴーストが定常に入った——切替を終える event="ghost_switch_done" ghost=Some("emo2") attempt=Target`
+- 件数（区間）: `ghost_switch_done` 3 件（`R_POST_and_KOMAINU`・`claudia`・`emo2` の順）・`menu_shown` 3 件（どれも `items=12`。入れる前の A2r の区間 12 までは `items=8`）。
+- 相方の窓の位置が保存された件: `claudia` が立った後の 13:20:46Z に、`claudia` の相方（scope 1）で「char DragEnd 保存」が 1 件出た。項目 12 の観測（A2r の `item=12` の区間）を書き終えた後なので、項目 12 には響かない。保存された値は既定の位置と同じ（`char_x=1548 char_y=704` が直前の `claudia` の起動の `default_char_x=1548 default_char_y=704` と同じ）。§8.5 に登記した。
+  - `2026-10-02T13:20:46.217387Z  INFO actor{actor=emo-text}: areka::persist::save: char DragEnd 保存 scope=1 char_x=1548 char_y=704 saved_x=1548 saved_y=704 char_w=Some(666) anchor=Free`
+- 目視（開発者）: 一覧に 3 体が並ぶ・送り出しの台詞の後に切り替わり、挨拶し、絵が出る・挨拶の字形が化けない・左上の画素と同じ色の場所のクリックが背後の窓へ抜ける。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 15 件。外したもの:
+  - `2026-10-02T13:20:26.338526Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:20:26.338960Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:20:26.364200Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:20:26.364455Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:20:26.444371Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:20:26.444626Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:20:37.548158Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:20:37.548543Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:20:37.562092Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:20:37.562336Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:20:37.632981Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:20:37.633203Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:21:01.500808Z  WARN actor{actor=emo-text}: areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:21:01.865929Z  WARN actor{actor=emo-text}: areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:21:02.135339Z  WARN actor{actor=emo-text}: areka_emo_text::actor: 折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ） balloon="(名前なし)" axis="x" wrap_threshold=254.0 inline_limit=240.0` ← ⓒ
+- 除外の後: ERROR 0 件・WARN 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「項目 5 はOK」 → 結果 **合格**。
+
+### 項目 7 バルーンの切り替え（A2r）
+
+- 区間: `A2r item=7 start=2026-10-02T13:21:56.1311592Z`（22:21:56 JST）〜 `A2r item=click start=2026-10-02T13:23:04.9229392Z`（22:23:04 JST）。
+- 記録（`run-A2r.log` から逐語）:
+  - `2026-10-02T13:22:04.520182Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnBalloonChange references=["Balloon for Staysee Syncfield", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\balloon\\StayseeBalloon"] status=None`
+  - `2026-10-02T13:22:04.520171Z  INFO actor{actor=emo-text}: areka::emo2_boot::frame::switch: シェル・バルーンの切替を終えた event="skin_switch_done" kind=Balloon to=StayseeBalloon epoch=1 marked=None swap_ms=7.8855 since_commit_ms=26.7348`
+  - `2026-10-02T13:22:18.055448Z  INFO actor{actor=emo-text}: areka::emo2_boot::frame::switch: シェル・バルーンの切替を終えた event="skin_switch_done" kind=Balloon to=emo2-kakukaku epoch=2 marked=None swap_ms=5.8248 since_commit_ms=8.8827`
+  - `2026-10-02T13:22:18.055461Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnBalloonChange references=["kakukaku for emo-gs", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\balloon\\emo2-kakukaku"] status=None`
+- 件数（区間）: `skin_switch_done` 2 件（`StayseeBalloon` epoch=1・`emo2-kakukaku` epoch=2）・`id=OnBalloonChange` 2 件・切替の行（`ghost_switch_*`）0 件。
+- 目視（開発者）: どちらも次の台詞から新しいバルーンで出た。
+- 付記（切替の後の 1 文字の台詞）: A3r の項目 10 の準備で見た（下の「項目 7 の付記（A3r・項目 10 の準備）」）。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 3 件。外したもの:
+  - `2026-10-02T13:22:04.425165Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:22:04.425552Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:22:18.061575Z  WARN actor{actor=emo-text}: areka_emo_text::actor: 折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ） balloon="(名前なし)" axis="x" wrap_threshold=254.0 inline_limit=240.0` ← ⓒ
+- 除外の後: ERROR 0 件・WARN 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「項目 7 はOK」 → 結果 **合格**（付記の結果は下の項目 7 の付記）。
+
+### 付随 左クリックの後の右クリック（A2r）
+
+- 区間: `A2r item=click start=2026-10-02T13:23:04.9229392Z`（22:23:04 JST）〜 `A2r item=13a start=2026-10-02T13:23:51.5667810Z`（22:23:51 JST）。
+- 記録（`run-A2r.log` から逐語）:
+  - `2026-10-02T13:23:12.861575Z  INFO actor{actor=emo-text}: areka::persist::save: char DragEnd 保存 scope=0 char_x=2064 char_y=610 saved_x=2446 saved_y=610 char_w=Some(764) anchor=Bottom`
+  - `2026-10-02T13:23:17.794557Z  INFO actor{actor=emo-text}: areka::menu::trigger: [menu] shown event="menu_shown" scope=0 items=12`
+- 1 行目は手順の左クリック（本体の絵の上）で、A1r と同じく位置が保存された（値は A1r と同じ `saved_x=2446 saved_y=610`・§8.5）。項目 12 の観測の後なので響かない。
+- 件数（区間）: `menu_shown` 1 件。
+- 目視（開発者）: 左クリックを 1 度した後の右クリックでメニューが出た。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「付随の右クリックはOK」 → 結果 **合格**。
+
+### 項目 13 強制終了の次の起動（A2r → A3r）
+
+**前半（A2r の終わり）**
+
+- 区間: `A2r item=13a start=2026-10-02T13:23:51.5667810Z`（22:23:51 JST）〜 `A2r killed pid=4252 end=2026-10-02T22:24:40.9610512+09:00`（13:24:40.96Z）。
+- 記録（`run-A2r.log` から逐語）:
+  - `2026-10-02T13:23:55.323382Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替の要求を kanade へ送った event="ghost_switch_requested" from=Some("えも？？") to=悪役令嬢クローディア raise_event=true origin="manual" boot_event=None`
+  - `2026-10-02T13:24:05.280598Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 定常に入ったゴーストの名前を起動中の印へ投函した event="session_mark_steady" ghost=悪役令嬢クローディア`
+  - `2026-10-02T13:24:05.281131Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替で起こしたゴーストが定常に入った——切替を終える event="ghost_switch_done" ghost=Some("claudia") attempt=Target`
+- 期待する名前: 上の行が A2r 全体の最後の `session_mark_steady`（A2r の `session_mark_steady` は全体で 4 件で、これが最後）。`runs.txt` に控えた行（逐語）: `A2r expect13 ghost=悪役令嬢クローディア`。印の値は `descript.txt` の `name` で、フォルダ名 `claudia` ではない。
+- 強制終了（§6.4 の手順を写した `kill-a2.ps1` で行った。`runs.txt` から逐語）:
+  - `A2r children=27964:shiori-host32-helper.exe at=2026-10-02T22:24:40.9486686+09:00`
+  - `A2r killed pid=4252 end=2026-10-02T22:24:40.9610512+09:00`
+  - `A2r exit=-1 end=2026-10-02T22:24:41.0296134+09:00`
+  - `child-left` の行は 0 件＝5 秒後に書き留めた子（pid 27964）は残っていなかった。止めたプロセスは `$p`（pid 4252）の 1 つだけ。
+- A2r の印が消えていない: `run-A2r.log` 全体で `session_mark_cleared` 0 件・`event="app_exit"` 0 件。記録の最後の行は 13:24:40.960230Z（強制終了の直前）。
+- 目視（開発者・逐語）: `claudia` へ替えた後に「claudia が立ちました」、強制終了の後に「強制終了しました」。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 6 件。外したもの:
+  - `2026-10-02T13:24:04.767804Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:24:04.775056Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:24:04.800202Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:24:04.800602Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:24:04.941159Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:24:04.941544Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+- 除外の後: ERROR 0 件・WARN 0 件。
+
+**後半（A3r の始まり）**
+
+- 区間: `A3r item=13 start=2026-10-02T13:26:27.9612524Z`（22:26:27 JST）〜 `A3r item=8 start=2026-10-02T13:27:40.3577822Z`（22:27:40 JST）。A3r の pid は 11220（`A3r pid=11220 start=2026-10-02T22:26:28.0452940+09:00`）。
+- 記録（`run-A3r.log` から逐語）:
+  - `2026-10-02T13:26:28.062257Z  INFO areka::boot_config: 前回はきれいに終わらなかったので、最後のゴーストの記憶を読まずに起動するゴーストを決めます event="session_mark_found" ghost=悪役令嬢クローディア`
+  - `2026-10-02T13:26:28.063634Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Default dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\emo2`
+  - `2026-10-02T13:26:28.812525Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnBoot references=["「コンフィズリー」＆「City-Pop'n」", "", "", "", "", "", "halt", "悪役令嬢クローディア"] status=None`
+  - `2026-10-02T13:26:28.815277Z  INFO actor{actor=kanade}: kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1`
+- 照合: `session_mark_found` の `ghost=悪役令嬢クローディア` が `A2r expect13 ghost=悪役令嬢クローディア` と同じ。`OnBoot` の `references` の 8 番目（0 から数えて 7）が `悪役令嬢クローディア` で同じ、7 番目（0 から数えて 6）が `halt`。起こしたゴーストは `route=Default` の `emo2`（前回のゴースト `claudia` ではない）。
+- 目視（開発者）: えも？？ で立ち、落ちたゴーストのことを話した（zip の `emo2` は `＊起動halt` の台詞を持つ・§1.2）。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 3 件。外したもの:
+  - `2026-10-02T13:26:28.152154Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:26:28.286036Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:26:28.534519Z  WARN actor{actor=emo-text}: areka_emo_text::actor: 折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ） balloon="(名前なし)" axis="x" wrap_threshold=254.0 inline_limit=240.0` ← ⓒ
+- 除外の後: ERROR 0 件・WARN 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 前半「claudia が立ちました」「強制終了しました」、後半「項目 13 はOK、項目 8 も済みました」 → 結果 **合格**。
+
+### 走行の間（A2r の後・A3r の前）
+
+areka を止めた状態で、根 A の写しだけを 3 つ変えた（リポジトリの検体と zip は変えていない）。`runs.txt` の行（逐語）:
+
+```
+between second-shell=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\R_POST_and_KOMAINU\shell\second dic02_Event md5 before=6A427453663B7FAF93DFEAC4236871B9 after=48F167B8354CFEE9BBB0BF1801DC28E6 at=2026-10-02T22:25:22.1187816+09:00
+```
+
+- ⑴ 2 つ目のシェル: `ghost\R_POST_and_KOMAINU\shell\master\` を `shell\second\` へ写し、写した `descript.txt` の `name,master` を `name,second` にし、写した側の `surface0000.png` と `surface0001.png` を入れ替えた。
+- ⑵ 付随の確かめ: `ghost\R_POST_and_KOMAINU\ghost\master\dic02_Event.txt` の `＊OnShellChanged` の台詞に `：\![open,readme]` の 1 行を足した。
+- ⑶ 項目 7 の付記: 同じ `dic02_Event.txt` の末尾に、空の行に続けて `＊OnBalloonChange` と `：ん` の 2 行を足した（開発者の了承は 2026-10-01・逐語「R_POST の写しだけに、次の 2 行を足したい　どうぞ。」・tasks.md の Implementation Notes）。
+- ⑵⑶ とも Shift_JIS と CRLF を保った。`dic02_Event.txt` の md5 は変える前 `6A427453…71B9`・変えた後 `48F167B8…28E6`。
+- 2026-10-02（A4r の後）に根 A を読むだけで確かめ直したこと: `shell\master\descript.txt` が `name,master`・`shell\second\descript.txt` が `name,second`／`shell\second\surface0000.png` の md5 が `shell\master\surface0001.png` と同じ（`23e71d2e…0ab6`）、`shell\second\surface0001.png` が `shell\master\surface0000.png` と同じ（`49a8d6b8…28cd`）／2 つのシェルのファイルの名前の一覧は同じ／`dic02_Event.txt` の md5 は `48f167b8…28e6`（変えた後のまま）／Shift_JIS として読むと 48〜51 行目が `＊OnShellChanged` の台詞で 51 行目が `：\![open,readme]`、504・505 行目が `＊OnBalloonChange`・`：ん`、ファイルの末尾のバイト列は `：ん` と CRLF。
+
+### 項目 8 ネットワーク更新（A3r）
+
+- 区間: `A3r item=8 start=2026-10-02T13:27:40.3577822Z`（22:27:40 JST）〜 `A3r item=switch start=2026-10-02T13:32:57.4275591Z`（22:32:57 JST）。
+- 手で変えたファイルと md5（`runs.txt` から逐語）:
+  - `A3r item8 file=ghost\emo2\readme.txt md5 before=9743530b82d7fb47d8013c4aacc146a8 after_edit=6906bead25ecc2abbe060a18b9c4f012 at=2026-10-02T22:27:24.3909635+09:00`
+  - `A3r item8 md5 after_update=9743530b82d7fb47d8013c4aacc146a8 at=2026-10-02T22:29:42.1693443+09:00`
+  - 変えたのは `<根 A>\ghost\emo2\readme.txt`（`emo2` の `updates.txt` に載る、読むだけのテキスト）で、AI が項目 8 の直前に末尾へ 1 行足した。更新の後の md5 は変える前と同じに戻った。2026-10-02（A4r の後）に読み直しても `9743530b82d7fb47d8013c4aacc146a8`。
+- 記録 1 回目（`run-A3r.log` から逐語）:
+  - `2026-10-02T13:27:49.524714Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnUpdateBegin references=["えも？？", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\ghost\\emo2", "", "ghost", "manual"] status=Some("talking")`
+  - `2026-10-02T13:27:54.595141Z  INFO actor{actor=update}: areka::update::procedure: [update] 対象の更新を終えました event="update_target_done" name=えも？？ end=Changed(21)`
+  - `2026-10-02T13:27:54.595830Z  INFO actor{actor=update}: areka::update::procedure: [update] 総括を後送りの列の最後に置きます event="update_summary" sent=true id="OnUpdateResult" references=["ghost\u{1}OK\u{1}21"]`
+  - `2026-10-02T13:27:54.596384Z  INFO actor{actor=update}: areka::update::procedure: [update] 同じゴーストの読み直しを頼みました event="update_reload_requested" ghost_dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\emo2`
+  - `2026-10-02T13:27:54.616588Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替の要求を kanade へ送った event="ghost_switch_requested" from=Some("えも？？") to=えも？？ raise_event=false origin="automatic" boot_event=Some("OnUpdateComplete")`
+  - `2026-10-02T13:27:54.616916Z  INFO actor{actor=emo-text}: areka::update::desk: [update] 更新した中身を読むために、同じゴーストへの切替を頼みました event="update_reload_requested" verdict=Accepted folder=emo2`
+  - `2026-10-02T13:27:55.483394Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnUpdateComplete references=["changed", "emo2-kakukaku/arrow0.png,emo2-kakukaku/arrow1.png,emo2-kakukaku/balloonc1.png,emo2-kakukaku/balloonc2.png,emo2-kakukaku/balloonc3.png,emo2-kakukaku/balloonc4.png,emo2-kakukaku/balloonk0.png,emo2-kakukaku/balloonk0s.txt,emo2-kakukaku/balloons0.png,emo2-kakukaku/balloons0s.txt,emo2-kakukaku/descript.txt,emo2-kakukaku/install.txt,emo2-kakukaku/marker.png,emo2-kakukaku/online.pdn,emo2-kakukaku/online0.png,emo2-kakukaku/online1.png,emo2-kakukaku/online2.png,emo2-kakukaku/online3.png,emo2-kakukaku/sstp.png,emo2-kakukaku/sstp_new.png,readme.txt", "", "ghost", "manual"] status=None`
+  - `2026-10-02T13:27:55.502804Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替で起こしたゴーストが定常に入った——切替を終える event="ghost_switch_done" ghost=Some("emo2") attempt=Target`
+  - `2026-10-02T13:27:55.504069Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnUpdateResult references=["ghost\u{1}OK\u{1}21"] status=Some("talking")`
+- 1 回目の差分は 21 件（`Changed(21)`）。`OnUpdateComplete` の 2 つ目の参照に並ぶ名前は `emo2-kakukaku/` で始まる 20 個と `readme.txt` の 1 個。手で変えた `readme.txt` のほかに 20 件の差分があったのは、zip の `emo2` の中に `emo2-kakukaku/` が無いのに、配布サイトの更新の一覧がゴーストのフォルダからの相対で `emo2-kakukaku/*` を載せているため（§8.4）。
+- 記録 2 回目（`run-A3r.log` から逐語）:
+  - `2026-10-02T13:28:13.103304Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnUpdateBegin references=["えも？？", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\ghost\\emo2", "", "ghost", "manual"] status=None`
+  - `2026-10-02T13:28:13.388339Z  INFO actor{actor=update}: areka::update::procedure: [update] 対象の更新を終えました event="update_target_done" name=えも？？ end=Unchanged`
+  - `2026-10-02T13:28:13.394690Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnUpdateComplete references=["none", "", "", "ghost", "manual"] status=Some("talking")`
+  - `2026-10-02T13:28:13.403200Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnUpdateResult references=["ghost\u{1}OK\u{1}0"] status=Some("talking")`
+- 件数（区間）: `OnUpdateComplete` 2 件・`OnUpdateResult` 2 件（どちらも 1 回目・2 回目の順に、`OnUpdateComplete` の後に `OnUpdateResult`）・`id=OnGhostChanged` 0 件・`id=OnBoot` 0 件・`id=OnGhostChanging` 0 件・`ghost_switch_done` 1 件（1 回目の読み直しの 1 件）。`update_reload_requested` の行は 2 行で、どちらも 1 回目の 1 度の読み直し（手続きの側の頼みと、受けた側の `verdict=Accepted`）。2 回目の更新の始まり（13:28:13.08Z）から区間の終わりまでの `update_reload_requested`・`ghost_switch_*` は 0 件＝2 回目は読み直していない。
+- 目視（開発者）: 1 回目は進捗の台詞の後にいったん引っ込んで同じゴーストが戻った。2 回目は引っ込まずに終わった。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 7 件。外したものと外さないもの:
+  - `2026-10-02T13:27:54.595362Z  WARN actor{actor=update}: areka::update::procedure: [update] 更新先が無いので、この対象を飛ばします event="update_target_skipped" reason="no_homeurl" kind="shell" name=「コンフィズリー」＆「City-Pop'n」 dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\emo2\shell\master` ← ⓓ
+  - `2026-10-02T13:27:54.595565Z  WARN actor{actor=update}: areka::update::procedure: [update] 更新先が無いので、この対象を飛ばします event="update_target_skipped" reason="no_homeurl" kind="balloon" name=kakukaku for emo-gs dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\balloon\emo2-kakukaku` ← 外さない（§7.1）
+  - `2026-10-02T13:27:54.799978Z  WARN actor{actor=emo-text}: areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:27:54.978361Z  WARN actor{actor=emo-text}: areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547` ← ⓑ
+  - `2026-10-02T13:27:55.129228Z  WARN actor{actor=emo-text}: areka_emo_text::actor: 折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ） balloon="(名前なし)" axis="x" wrap_threshold=254.0 inline_limit=240.0` ← ⓒ
+  - `2026-10-02T13:28:13.389504Z  WARN actor{actor=update}: areka::update::procedure: [update] 更新先が無いので、この対象を飛ばします event="update_target_skipped" reason="no_homeurl" kind="shell" name=「コンフィズリー」＆「City-Pop'n」 dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\emo2\shell\master` ← ⓓ
+  - `2026-10-02T13:28:13.391115Z  WARN actor{actor=update}: areka::update::procedure: [update] 更新先が無いので、この対象を飛ばします event="update_target_skipped" reason="no_homeurl" kind="balloon" name=kakukaku for emo-gs dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\balloon\emo2-kakukaku` ← 外さない（§7.1）
+- 除外の後: ERROR 0 件・WARN 2 件（バルーンの更新先が無い 2 件・§7.1 の「外さないもの」）。項目 8 の期待は WARN の数を定めないので、判定には響かない。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「項目 8 はOK、emo2 に申し送って」 → 結果 **合格**。申し送りの中身は §8.4。
+
+### 走行 A3r の `item=switch`（どの項目の数にも入れない）
+
+- 区間: `A3r item=switch start=2026-10-02T13:32:57.4275591Z`（22:32:57 JST）〜 `A3r item=6 start=2026-10-02T13:33:19.0298760Z`（22:33:19 JST）。
+- 記録（`run-A3r.log` から逐語）: `2026-10-02T13:33:09.533456Z  INFO actor{actor=emo-text}: areka::emo2_boot::ghost_switch: 切替で起こしたゴーストが定常に入った——切替を終える event="ghost_switch_done" ghost=Some("R_POST_and_KOMAINU") attempt=Target`
+- WARN 6 件（すべて ⓐ）・ERROR 0 件。外したもの:
+  - `2026-10-02T13:33:09.221517Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:33:09.234786Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:33:09.251168Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:33:09.251372Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:33:09.298940Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:33:09.299153Z  WARN actor{actor=emo-text}: areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+- 除外の後: ERROR 0 件・WARN 0 件。
+
+### 項目 6 シェルの切り替え・付随 `\![open,readme]`（A3r）
+
+- 区間: `A3r item=6 start=2026-10-02T13:33:19.0298760Z`（22:33:19 JST）〜 `A3r item=prep10 start=2026-10-02T13:35:31.6937977Z`（22:35:31 JST）。ゴーストは `R_POST_and_KOMAINU`（走行の間に作った `second` を持つ）。
+- 記録（`run-A3r.log` から逐語）:
+  - `2026-10-02T13:33:26.548280Z  INFO actor{actor=emo-text}: areka::emo2_boot::frame::switch: シェル・バルーンの切替を終えた event="skin_switch_done" kind=Shell to=second epoch=1 marked=Some(Completed) swap_ms=21.818299999999997 since_commit_ms=50.005599999999994`
+  - `2026-10-02T13:33:26.548278Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnShellChanged references=["second", "Ｒポストと狛犬", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\ghost\\R_POST_and_KOMAINU\\shell\\second"] status=None`
+  - `2026-10-02T13:33:27.193183Z  INFO actor{actor=emo-text}: areka::readme: [readme] opened the readme with the default application event="readme_opened" path=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\R_POST_and_KOMAINU\readme.txt`
+  - `2026-10-02T13:33:38.257198Z  INFO actor{actor=emo-text}: areka::emo2_boot::frame::switch: シェル・バルーンの切替を終えた event="skin_switch_done" kind=Shell to=master epoch=2 marked=Some(Completed) swap_ms=7.5165 since_commit_ms=13.1329`
+  - `2026-10-02T13:33:38.257199Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnShellChanged references=["master", "Ｒポストと狛犬", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\ghost\\R_POST_and_KOMAINU\\shell\\master"] status=None`
+  - `2026-10-02T13:33:38.768565Z  INFO actor{actor=emo-text}: areka::readme: [readme] opened the readme with the default application event="readme_opened" path=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\R_POST_and_KOMAINU\readme.txt`
+- 件数（区間）: `skin_switch_done` 2 件（`second` epoch=1・`master` epoch=2）・`id=OnShellChanged` 2 件・`readme_opened` 2 件（どちらも `<根 A>\ghost\R_POST_and_KOMAINU\readme.txt`）・ゴーストが降りたことを示す行（`ghost_switch_*`・`id=OnGhostChanging`・`id=OnClose`）0 件。
+- 目視（開発者）: どちらも絵が替わり、ゴーストは降りなかった。どちらの切り替えでも説明書が開いた（AI はこの手順で、絵の替わりと説明書の開きの両方を見るよう開発者に頼んだ）。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 4 件。外したもの:
+  - `2026-10-02T13:33:25.978504Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:33:25.978681Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+  - `2026-10-02T13:33:37.622679Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:33:37.622984Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+- 除外の後: ERROR 0 件・WARN 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「項目 6 はOK」 → 項目 6 は **合格**、付随 `\![open,readme]` も **合格**（同じ返信で 2 つを判定した）。
+
+### 項目 7 の付記（A3r・項目 10 の準備）
+
+- 区間: `A3r item=prep10 start=2026-10-02T13:35:31.6937977Z`（22:35:31 JST）〜 `A3r item=9 start=2026-10-02T13:36:32.2941478Z`（22:36:32 JST）。
+- 記録（`run-A3r.log` から逐語）:
+  - `2026-10-02T13:35:37.951785Z  INFO actor{actor=emo-text}: areka::emo2_boot::frame::switch: シェル・バルーンの切替を終えた event="skin_switch_done" kind=Shell to=second epoch=3 marked=Some(Completed) swap_ms=18.694300000000002 since_commit_ms=32.714`
+  - `2026-10-02T13:35:38.533281Z  INFO actor{actor=emo-text}: areka::readme: [readme] opened the readme with the default application event="readme_opened" path=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\R_POST_and_KOMAINU\readme.txt`
+  - `2026-10-02T13:35:51.034835Z  INFO actor{actor=emo-text}: areka::emo2_boot::frame::switch: シェル・バルーンの切替を終えた event="skin_switch_done" kind=Balloon to=claudia epoch=4 marked=None swap_ms=6.1655 since_commit_ms=9.5158`
+  - `2026-10-02T13:35:51.034851Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnBalloonChange references=["クローディア", "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\A\\balloon\\claudia"] status=None`
+  - `2026-10-02T13:35:51.035786Z  INFO actor{actor=kanade}: kanade: 応答にスクリプト——再生起動 event="steady_talk" talk_id=8 origin="OnBalloonChange"`
+  - `2026-10-02T13:35:51.063194Z DEBUG actor{actor=emo-text}: areka_emo_text::state: Text cue 適用（追記＋配送 duration 由来のリビール時刻確定） actor=0 len=1 at=0.0 duration=0.05 interval=0.05`
+  - `2026-10-02T13:35:51.083608Z  INFO actor{actor=emo-text}: areka::emo2_boot::balloon_visibility::phase: [balloon-visibility] バルーンの可視状態が遷移した scope=0 trigger="content" visible=true`
+  - `2026-10-02T13:36:01.866982Z  INFO actor{actor=emo-text}: areka::persist::save: char DragEnd 保存 scope=0 char_x=2386 char_y=780 saved_x=2622 saved_y=780 char_w=Some(472) anchor=Bottom`
+- 読み方: 既定でないバルーン `claudia` へ替えた直後の `OnBalloonChange` に、走行の間に足した台詞が返り（`steady_talk … origin="OnBalloonChange"`）、文字の長さ 1 の台詞（`Text cue 適用 … len=1`）でバルーンが現れた（`scope=0 trigger="content" visible=true`。`OnBalloonChange` の送出から 49 ms 後）。バグ `balloon-reappear-short-talk` の側から頼まれた確かめ（§0.5）で、§0.4 の着地の判定（着地した）と合う。
+- `second` を選んだときの `readme_opened` 1 件は、走行の間に `＊OnShellChanged` へ足した `\![open,readme]` によるもの（項目 6 と同じ）。
+- 最後の行は、手順の「本体の窓を 1 度掴んで離す」で出た「char DragEnd 保存」（項目 10 で比べる値 `saved_x=2622 saved_y=780`）。
+- 件数（区間）: `skin_switch_done` 2 件（Shell `second` epoch=3・Balloon `claudia` epoch=4）・`id=OnBalloonChange` 1 件・「char DragEnd 保存」1 件。
+- 目視（開発者・逐語）: 「項目 10 の準備は済み、「ん」でバルーンが出ました」。
+- ERROR・WARN（区間）: ERROR 0 件・WARN 2 件。外したもの:
+  - `2026-10-02T13:35:37.394253Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png` ← ⓐ
+  - `2026-10-02T13:35:37.395834Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png` ← ⓐ
+- 除外の後: ERROR 0 件・WARN 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 結果: 項目 7 の付記は **合**（上の開発者の返信による）。項目 7 は付記を含めて **合格**。
+
+### 項目 9 終了（A3r の終わり）
+
+- 区間: `A3r item=9 start=2026-10-02T13:36:32.2941478Z`（22:36:32 JST）〜 `A3r exit=0 end=2026-10-02T22:36:35.8360853+09:00`（13:36:35.84Z）。
+- 記録（`run-A3r.log` から逐語）:
+  - `2026-10-02T13:36:34.129325Z  INFO actor{actor=emo-text}: areka::menu::trigger: [menu] shown event="menu_shown" scope=0 items=13`
+  - `2026-10-02T13:36:35.109911Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnClose references=["user", "0", "0"] status=None`
+  - `2026-10-02T13:36:35.683844Z  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4`
+  - `2026-10-02T13:36:35.719097Z  INFO actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"`
+- 終了コード: `0`（`runs.txt` の `A3r exit=0 end=2026-10-02T22:36:35.8360853+09:00`）。
+- A3r 全体の ERROR: 0 件（除外の前から 0 件。外したものは無い）。A3r 全体の WARN は 22 件（区間ごとの内訳: 13 後半 3・8 7・switch 6・6 4・prep10 2・9 0。どれも上の各区間に逐語で写した。外さないものは項目 8 の 2 件）。項目 9 の区間の WARN は 0 件。
+- 起動中の印: 上の `session_mark_cleared` の行が 1 件（A3r 全体で 1 件）。
+- 目視（開発者）: 別れの台詞の後にプロセスが終わった。開発者の返信（逐語）「項目 9 は済みました」。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「項目 9 はOK、A4r 起動し、終了した」 → 結果 **合格**。
+
+### 項目 10 前回の状態の復元（A4r）
+
+- 区間: `A4r item=10 start=2026-10-02T13:37:16.4312187Z`（22:37:16 JST）〜 `A4r exit=0 end=2026-10-02T22:37:32.9257748+09:00`（13:37:32.93Z）。pid 6332（`A4r pid=6332 start=2026-10-02T22:37:16.5364518+09:00`）。
+- 記録（`run-A4r.log` から逐語）:
+  - `2026-10-02T13:37:16.565566Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Memory dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\R_POST_and_KOMAINU`
+  - `2026-10-02T13:37:16.567432Z  INFO areka::boot_config: バルーンを決めました event="balloon_resolved" route=Memory dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\balloon\claudia`
+  - `2026-10-02T13:37:16.603693Z  INFO areka_emo_present::shell_target: shell: シェルの面の画像の一覧が終わった（R6.1） shell_dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\R_POST_and_KOMAINU\shell\second recognized=10 used=10 shadowed=0`
+  - `2026-10-02T13:37:16.635636Z  INFO areka::persist::restore: merge_scope restore scope=0 anchor=Bottom saved_win_x=Some(2622) saved_win_y=Some(780) default_char_x=2408 default_char_y=780 char_x=2386 char_y=780 char_w=472 char_h=924 saved_off_x=None saved_off_y=None balloon_off_x=-760 balloon_off_y=140 balloon_x=1626 balloon_y=920`
+  - `2026-10-02T13:37:16.709880Z  INFO areka::boot_resolve: [boot_resolve] 最後に使ったものを記憶へ書きました（- は argv なので書いていない） event="last_used_recorded" ghost="R_POST_and_KOMAINU" balloon="claudia" shell="second"`
+  - `2026-10-02T13:37:16.867035Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnBoot references=["second"] status=None`
+  - `2026-10-02T13:37:32.820993Z  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4`
+  - `2026-10-02T13:37:32.857262Z  INFO actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"`
+- 照合:
+  - ゴースト `R_POST_and_KOMAINU`（`route=Memory`）・バルーン `claudia`（`route=Memory`）・シェル `second`（シェルの面の一覧の行の `shell_dir=…\shell\second` と、`last_used_recorded` の `shell="second"`）。どれも A3r の最後の状態（項目 10 の準備で選んだもの）と同じ。
+  - `merge_scope restore scope=0` の `saved_win_x=Some(2622) saved_win_y=Some(780)` が、A3r の項目 10 の準備の「char DragEnd 保存 scope=0 … saved_x=2622 saved_y=780」と同じ。立った位置 `char_x=2386 char_y=780` も A3r の保存の行の `char_x=2386 char_y=780` と同じ（既定の `default_char_x=2408` ではない）。
+  - `session_mark_found` 0 件（A3r がきれいに終わったので、前回のゴーストの記憶で起こした）。
+- 終了コード: `0`（`A4r exit=0 end=2026-10-02T22:37:32.9257748+09:00`）。
+- ERROR・WARN（区間＝A4r 全体）: ERROR 0 件・WARN 0 件。
+- 目視（開発者）: 前回のゴースト・シェル・バルーン・窓の位置で立った。メニューの「終了」で終えた。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「項目 10 はOK、項目 11 もOK」 → 結果 **合格**。
+
+### 項目 11 表示の拡大率（A1r〜A4r）
+
+- 区間を持たない（§5.2）。拡大率は §2 のとおり主の画面 200%（DPI 192）で、一周の途中で変えていない。記録でも、窓を作るたびに出る起動時の拡大の行の `primary_dpi=` は E2r・A1r・A2r・A3r・A4r のすべてで `192`（E2r 1・A1r 1・A2r 5・A3r 3・A4r 1 行）。A4r の 1 行（逐語）:
+  - `2026-10-02T13:37:16.576396Z  INFO areka::placement: placement: 起動時 k₀ を導出（primary モニタ DPI ÷ 作者基準 DPI・D7） primary_dpi=192 shell_author_dpi=96 balloon_author_dpi=96 k_shell=2.0 k_balloon=2.0 k_shell_ratio=ScaleRatio { num: 2, den: 1 } k_balloon_ratio=ScaleRatio { num: 2, den: 1 }`
+- 目視（開発者）: 項目 3・12・4・5・7・6・7 の付記・13・8・9・10 の目視のたびに、絵・当たり判定・窓の大きさ・バルーンの位置が崩れていなかった（上の各項目の判定の返信と、次の返信）。
+- 根拠の種別: 目視（拡大率の値は §2 の読み取りと記録の引用）。
+- 開発者の判定（逐語）: 「項目 10 はOK、項目 11 もOK」 → 結果 **合格**。
 
 ## 8. 登記（要件 3.6・3.8・5.6）
 
-判定に載せない既知の症状・確かめられなかった既知の制限の候補・欠陥と開発者の判断をここに書く。8.1 はタスク 2.5（zip を組む前）で書いた。走行で見つかるもの（3.6 の除外で済まない症状・欠陥・強制終了で残った子のプロセス）はタスク 4.1〜4.4 で 8.2 以降に書き足す。
+判定に載せない既知の症状・確かめられなかった既知の制限の候補・欠陥と開発者の判断をここに書く。8.1 はタスク 2.5（zip を組む前）で書いた。走行で見つかるもの（3.6 の除外で済まない症状・欠陥・強制終了で残った子のプロセス）はタスク 4.1〜4.4 で書き足す（8.2 は説明書の突き合わせで使ったので、走行のものは 8.3 から）。
 
 ### 8.1 確かめられなかった既知の制限の候補（要件 5.6）
 
@@ -467,6 +838,42 @@ foreach ($k in $kids) {
 ### 8.2 説明書の行で確かめられなかったもの（要件 4.7・5.5）
 
 **0 行。** §10.1 の突き合わせで、説明書の主張を持つ 125 行はすべて、本体のソース・zip の中身・完了 spec の記録・本仕様の記録のどれかで確かめられた（確かめられない行を書かずに回す先がここだが、回した行は 0）。
+
+### 8.3 えも？？ が `claudia.nar`（バルーン同梱）を入れた後の `OnInstallComplete` に台本を返さなかった（項目 4 の縮退・2026-10-02）
+
+- 何が起きたか: A2r の項目 4 ⒝ で `claudia.nar`（ゴーストにバルーン 2 つを同梱した書庫）を 2 度入れ、2 度とも `OnInstallComplete`（参照 `["ghost", "悪役令嬢クローディア", "クローディア"]`）が `raised=NoReply`（返事なし・空の台本）だった。同じ走行の ⒜ `R_POST_and_KOMAINU.nar`（同梱なし・参照 `["ghost", "Ｒポストと狛犬", ""]`）では `raised=Script` で、どちらも始まりの `OnInstallBegin` は `raised=Script`。記録の逐語は §7 の項目 4。
+- 原因は分かっていない: 根 A の `ghost\emo2\ghost\master\dic\install.pasta` の `SCENE.on_install_complete` は参照の 1 つ目（`^ghost`）だけで分かれ、⒜ も ⒝ もこれを満たす。えも？？ の辞書の記録（根 A の `ghost\emo2\ghost\master\profile\pasta\logs\pasta.log`）にも、初回の起動の保存ファイルが無いという WARN 1 行のほかに誤りの行は無い。観測できた ⒜ と ⒝ の違いは、3 つ目の参照（空か「クローディア」か）と、入れ方（メニューか窓への投げ込みか）の 2 つだけで、辞書・SHIORI の側のどこで台本が返らなかったかは分からない。
+- areka の欠陥か: areka は入れる手続きを終え、イベントを送り、返事なしとして続けた（`crates/areka/src/install/procedure.rs` の締めの知らせ）。台詞を返すかはゴーストの辞書の側の決めで、areka の欠陥とはしない。
+- 2026-10-01 の状況との違い: 前の zip のえも？？ の辞書にはインストールの場面がそもそも無く、3 つのイベントがどれも `raised=NoReply` だった（§9.1 の ⑴・tasks.md の Implementation Notes の 4.2 の行）。ghost_dev の側で場面を足した版（`75e560e`・`dic/install.pasta`）を今回の zip に入れたので、始まりの台詞と、同梱の無いゴーストの終わりの台詞は出るようになった。残ったのは同梱のある書庫の終わりの台詞だけ。
+- 開発者の裁定（2026-10-02・逐語）: 「項目 12 はOK、項目 4 は縮退合格で、emo2 に申し送って。あとさっきの、テンポラリにある余計なフォルダの削除もお願い。」→ 項目 4 は縮退の合格（§7）。
+- 引受先: セッション「emo2 開発セッション」へ 2026-10-02 に申し送った。完成判定の文書の持ち越しの行の引受先の書き方は、タスク 5.1 で決める。
+
+### 8.4 えも？？ の更新の一覧が `emo2-kakukaku/*` をゴーストのフォルダからの相対で載せている（項目 8 で見つけた・2026-10-02）
+
+- 何が起きたか: A3r の項目 8 の 1 回目の更新で、手で変えた `readme.txt` のほかに `emo2-kakukaku/` で始まる 20 件が差分として入り（`Changed(21)`）、`<根 A>\ghost\emo2\emo2-kakukaku\`（ファイル 20 個・フォルダは 2026-10-02 22:27:54 JST に作られた）ができた。areka が使うバルーンの `<根 A>\balloon\emo2-kakukaku\` は更新されていない（中のファイルの時刻は zip のまま）。
+- 原因: えも？？ の `updates.txt`（根の `ghost\emo2\updates.txt` と `ghost\emo2\ghost\master\updates.txt`）が、それぞれ 20 行で `emo2-kakukaku/…` をゴーストのフォルダからの相対の名前で載せている（2026-10-02 に根 A の 2 つの `updates.txt` を読み、`emo2-kakukaku/` を含む行がそれぞれ 20 行）。ゴーストの更新はゴーストのフォルダからの相対で書き込むので、余分なフォルダができる。zip の `ghost/emo2/` の下に `emo2-kakukaku` の項目は 0 件で、`balloon/emo2-kakukaku/` の下は 20 項目（2026-10-02 に zip の写しを読むだけで数えた）。完了 `areka-P0-network-update` の `signoff.md` の 1 回目にも「ゴーストの更新で同梱バルーンの複製 `emo2-kakukaku/` をゴーストの中へ取りに行くのは SSP も同じ」とある。
+- areka の欠陥か: areka は更新の一覧のとおりに書き込んだ。一覧の中身はゴーストの配布の側の決めで、areka の欠陥とはしない。項目 8 の判定は変えない（開発者の判定「項目 8 はOK、emo2 に申し送って」）。
+- 引受先: セッション「emo2 開発セッション」へ 2026-10-02 に申し送った（開発者の返信の「emo2 に申し送って」）。
+
+### 8.5 キャラクターの絵の上の動かさない左クリックで、窓の位置が保存される（観察・判定は変えない）
+
+- 見えたこと（記録の逐語は §7 の各項目）:
+  - A1r 13:08:51.371241Z の `char DragEnd 保存 scope=0`（項目 3 の透明な場所のクリックが本体の絵に当たった）
+  - A2r 13:20:46.217387Z の `char DragEnd 保存 scope=1`（項目 5 の `claudia` の相方）
+  - A2r 13:23:12.861575Z の `char DragEnd 保存 scope=0`（付随の左クリックの後の右クリックの、手順の左クリック）
+- 3 件とも窓は動いていない: 本体の 2 件は同じ値（`saved_x=2446 saved_y=610`）で、これを読み戻した A2r・A3r の本体は `char_x=2012 char_y=330` が既定の `default_char_x=2012 default_char_y=330` と同じ位置に立った。相方の 1 件は `char_x=1548 char_y=704` が、直前の `claudia` の起動の既定 `default_char_x=1548 default_char_y=704` と同じ。それでも記憶に位置が書かれ、次の起動からは「既定の配置」ではなく「保存した位置」として読み戻される（A2r の本体の `saved_win_x=Some(2446)`）。保存は掴んで離したときだけ、という設計（§5 の項目 12 の期待の裏付け `drag_follow.rs` の保存の条件）から見ると、動かさない左クリックも「掴んで離した」に数えられている。
+- 判定への響き: 無い。A1r の 1 件は本体（scope 0）で、項目 12 は相方（scope 1）で判定した（開発者の返信「A で進めて、A2r 起動しました」）。A2r の 2 件は項目 12 の観測の後。
+- 扱い: 欠陥かどうかは決めていない（観察として残す）。引受先（台帳に実在する spec・その時点で起票する spec・開発者の手のどれか）は、タスク 5.1 で開発者に尋ねて決める。
+
+### 8.6 `tools/package-alpha.ps1 -Check` が一時フォルダに展開先を残す（候補・2026-10-02）
+
+- 見えたこと: `-Check` は展開先と記録を `%TEMP%` の下の `areka-alpha-check-*`（例 §1 の `areka-alpha-check-215146`・`areka-alpha-check-215146-logs`）に作り、終わった後も残す。2026-10-02 に開発者の求め（逐語「あとさっきの、テンポラリにある余計なフォルダの削除もお願い。」）で、AI が `%TEMP%` の下の `areka-alpha-check-*` のフォルダ 38 個を消した（今回の 2 回の `-Check` の記録は、消す前に生の記録の置き場へ `check-215146-logs\`・`check-221148-logs\` として写してあった・§1）。
+- 開発者の決まり（一時フォルダはワークツリーの `target\` の下だけ）との関係: `-Check` の展開先は本仕様より前からの `tools/package-alpha.ps1` の作りで、一周の根（§4・`target\` の下）とは別。
+- 扱い: 直すかどうか・引受先は、タスク 5.1 で開発者に尋ねて決める（候補）。署名の根拠の zip と `-Check` の判定（§1.1）は変えない。
+
+### 8.7 強制終了で残った子のプロセス（§6.4）
+
+**0 件。** A2r の強制終了で、止める前に書き留めた子は `shiori-host32-helper.exe`（pid 27964）の 1 つで、5 秒後には残っていなかった（`runs.txt` に `child-left` の行が 0 件）。止めたプロセスは A2r の `areka.exe`（pid 4252）の 1 つだけ。
 
 ## 9. 採り直し
 
@@ -512,7 +919,66 @@ foreach ($k in $kids) {
   - 全項目（1〜13 と付随 2 つ）。項目 1・2 は `emo2` に依らないが、zip が変わるので新しい zip で採り直す。
   - 根は同じ `<ワークツリー>\target\alpha-lap\{E,A}` に作り直す（置き場の決まり: 一時フォルダは `target\` の下だけ）。
   - 走行の名前は前と区別するため `E1r`・`E2r`・`A1r`〜`A4r` とし、前の記録（`run-E1.log`〜`run-A2.log`）は消さずに残す。
-- **前の zip での結果**: 項目 1・2・3 は合（§7）。A2 の項目 12・4・5・7 は観測したが、採り直すので判定しない。
+  - 2026-10-02 に採り直し終えた（走行 E1r〜A4r・22:05〜22:37 JST・記録は `run-E1r.log`〜`run-A4r.log` と `runs.txt` の `E1r`〜`A4r`・`between`・`A3r item8` の行）。全項目の判定は §7 に書いた。
+- **前の zip での結果（判定に使わない）**: 項目 1・2・3 は合だった（記録はすぐ下の「前の zip での走行（判定に使わない）」へ §7 から移した）。A2 の項目 12・4・5・7 は観測したが、採り直すので判定しない。§7 の判定は採り直しの走行だけで行った。
+
+#### 前の zip での走行（判定に使わない）
+
+前の zip（`areka-alpha-x64-20261001-7f8f4e8.zip`）で 2026-10-01 に回した走行 E1・E2・A1 の結果。2026-10-02 の採り直し（§7）で置き換えたので判定に使わない。書いた当時の §7 の文を、逐語の引用ごとそのまま移した（見出しの段だけ下げ、名前に「（前の zip）」を足した）。
+
+##### 項目 1 空の根の告知（E1）（前の zip）
+
+- 区間: `E1 item=1 start=2026-10-01T13:28:13.8938958Z`（22:28:13 JST）〜 `E1 exit=1 end=2026-10-01T22:29:01.9853510+09:00`。pid 11360。
+- 記録（`run-E1.log` から逐語）:
+  - `2026-10-01T13:28:14.246184Z  INFO areka::boot_config: ベースウェアの根を決めました event="root_resolved" root=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\E source=ExeDir`
+  - `2026-10-01T13:28:14.250318Z ERROR areka::alert: [alert] 利用者へ告げます event="alert" scene=GhostMissing { ghost_store: "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\E\\ghost", argv: None } title="areka を起動できません" body="ゴーストが見つかりません。\n置く場所: C:\\home\\maz\\git\\areka\\.claude\\worktrees\\roadmap-inventory-028436\\target\\alpha-lap\\E\\ghost\n置くもの: ghost\\master\\descript.txt を持つゴーストのフォルダ" suppressed=false`
+- 目視: 告知の窓（題「areka を起動できません」・本文 3 行〔「ゴーストが見つかりません。」・置く場所 `…\target\alpha-lap\E\ghost`・置くもの〕・OK）。開発者が撮った画面の写しを `E1-alert.png` として置き場に残した。OK を押して終わった（`exit=` の行）。
+- 終了コード 1・標準エラー `Error: Error { code: HRESULT(0x80004005), message: "エラーを特定できません" }`: ゴーストが無いときは告知の後に `E_FAIL` で終わる作り（`crates/areka/src/main.rs` の `resolve_boot` が `Err(scene)` のとき `alert::raise` の後に `E_FAIL` を返す）。期待は「OK で終わる」で、終了コードを定めていないので判定に影響しない。
+- 3.6 の除外: 上の `event="alert"` の ERROR 1 行（§6.6 の例・項目 1 の期待どおりの告知）。ほかの ERROR・WARN は 0 件。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「E1 はOK」 → **合**。
+
+##### 項目 2 告知のとおりに置く（E2）（前の zip）
+
+- 区間: `E2 item=2 start=2026-10-01T13:31:05.9643559Z`（22:31:05 JST）〜 `E2 exit=0 end=2026-10-01T22:32:01.6678706+09:00`。pid 15796。根 E の `ghost\konnoyayame` へ、準備で控えた `nar-sample-path konnoyayame` の `folder=`（`target\nar-samples\manual\konnoyayame\ghost\konnoyayame`）を写してから起動した。
+- 記録（`run-E2.log` から逐語）:
+  - `2026-10-01T13:31:06.032736Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Only dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\E\ghost\konnoyayame`
+  - `2026-10-01T13:31:06.648626Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None`
+  - `2026-10-01T13:31:06.649487Z  INFO actor{actor=kanade}: kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1`
+  - `2026-10-01T13:32:01.602794Z  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4`
+  - `2026-10-01T13:32:01.621565Z  INFO actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"`
+- 目視（開発者）: `konnoyayame` が立って挨拶する・目の周りに四角い地色が出ない・挨拶の字形が化けない・左上の画素と同じ色の場所のクリックが背後の窓へ抜ける。メニューの「終了」で終えた（終了コード 0）。
+- 3.6 の除外: ERROR は 0 件。WARN 6 件を除外した。逐語（`run-E2.log`）:
+  - `2026-10-01T13:31:06.179757Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png`
+  - `2026-10-01T13:31:06.179996Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png`
+  - `2026-10-01T13:31:06.190406Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png`
+  - `2026-10-01T13:31:06.190535Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png`
+  - `2026-10-01T13:31:06.232382Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=2 prefix=balloons file=balloons2.png`
+  - `2026-10-01T13:31:06.232539Z  WARN areka_emo_present::balloon: balloon: 面がデフォルト定義側（本体側）の系列へ縮退した scope=1 surface_id=3 prefix=balloons file=balloons3.png`
+  - 理由: 既定バルーン `StayseeBalloon` が相方用の面 2・3 を持たず、本体側の面へ落ちたことの観測。`crates/areka-emo-present/src/balloon.rs` の `resolve_balloon_faces` の doc が「失敗ではなく正典準拠のフォールバック動作の観測」と定める。先行 spec の記録で判定の外と決まっている（§6.6 の 3 つ目の例）: 完了 `areka-P0-default-balloon-bundle` の `verification/signoff-record.md` §1（相方側の面 2・3 が本体側の `balloons2/3.png` へ縮退し記録 2 件＝期待どおり）・完了 `areka-P0-shell-balloon-switch` の `signoff.md`（同じ WARN を本仕様の範囲外の既存のものとした）。
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「E2 はOK」 → **合**。
+
+##### 項目 3 初回の起動（A1）・項目 12 の 1 回目（前の zip）
+
+- 区間: `A1 item=3 start=2026-10-01T13:33:53.6928849Z`（22:33:53 JST）〜 `A1 exit=0 end=2026-10-01T22:34:51.1511968+09:00`。pid 32716。根 A は署名の zip を新しく展開した（`profile` は展開の直後に無かった）。
+- 記録（`run-A1.log` から逐語）:
+  - `2026-10-01T13:33:54.030610Z  INFO areka::boot_config: 起動するゴーストを決めました event="ghost_resolved" route=Only dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\ghost\emo2`
+  - `2026-10-01T13:33:54.043913Z  INFO areka::boot_config: バルーンを決めました event="balloon_resolved" route=Companion dir=C:\home\maz\git\areka\.claude\worktrees\roadmap-inventory-028436\target\alpha-lap\A\balloon\emo2-kakukaku`
+  - `2026-10-01T13:33:54.450700Z  INFO areka::persist::restore: merge_scope restore scope=1 anchor=Bottom saved_win_x=None saved_win_y=None default_char_x=1340 default_char_y=904 char_x=1340 char_y=904 char_w=672 char_h=800 saved_off_x=None saved_off_y=None balloon_off_x=292 balloon_off_y=-150 balloon_x=1632 balloon_y=754`
+  - `2026-10-01T13:33:55.114593Z TRACE actor{actor=kanade}: kanade: SHIORI 送出 event="shiori_request" method=GET id=OnFirstBoot references=["0"] status=None`
+  - `2026-10-01T13:33:55.118344Z  INFO actor{actor=kanade}: kanade: 起動グリーティングを再生起動 event="boot_talk" talk_id=1`
+  - `2026-10-01T13:34:47.788015Z  INFO actor{actor=emo-text}: areka::menu::trigger: [menu] shown event="menu_shown" scope=1 items=8`
+  - `2026-10-01T13:34:51.038214Z  INFO actor{actor=emo-text}: areka::app_exit: [quit_app] 全窓を閉じ、終了を指示した event="app_exit" origin=KanadeStopped(Quit) closed=4`
+  - `2026-10-01T13:34:51.078541Z  INFO actor{actor=emo-text}: areka::boot_resolve: [boot_resolve] きれいに終わったので起動中の印を消しました event="session_mark_cleared"`
+- 項目 12 の 1 回目: A1 の記録に「char DragEnd 保存」の行は 0 件（窓を掴まずに終えた）。終えた後の `ghost\emo2\ghost\master\profile\areka\sylphya.toml` は `[boot] count = "1"` と `[last] balloon = "emo2-kakukaku"`・`shell = "master"` だけで、窓の位置の項目は無い。
+- 目視（開発者）: えも？？ が `emo2-kakukaku` で立って挨拶する・絵の透明な場所のクリックが背後の窓へ抜ける・拡大率 200% で絵・当たり判定・窓の大きさ・バルーンの位置が崩れない（項目 11）。右クリックのメニューの「終了」で終えた（終了コード 0）。
+- ERROR は 0 件。WARN 3 件は項目 3 の判定に使わない（項目 3 の期待は WARN の数を定めない。除外ではなく記録として残す）。どれも検体（えも？？ のシェルの素材・バルーンの定義）の中身から出るもの。逐語（`run-A1.log`）:
+  - `2026-10-01T13:33:54.374171Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547`
+  - `2026-10-01T13:33:54.498279Z  WARN areka_emo_atlas: bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性） set=0 rel_path="purple/a/null.png" original_w=382 original_h=547`
+  - `2026-10-01T13:33:54.625000Z  WARN actor{actor=emo-text}: areka_emo_text::actor: 折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ） balloon="(名前なし)" axis="x" wrap_threshold=254.0 inline_limit=240.0`
+- 根拠の種別: 両方（目視と記録の引用）。
+- 開発者の判定（逐語）: 「A1 はOK」（終えた後に「A1 終了しました」） → **合**。
 
 ---
 
