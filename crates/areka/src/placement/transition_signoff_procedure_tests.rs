@@ -1,6 +1,6 @@
 //! サインオフ手順書の判定語が判定器の実装と一致することの檻（task 4.1・要件 8.1／8.5）。
 //!
-//! 手順書（`.kiro/specs/areka-P0-dpi-transition-atomicity/signoff-procedure.md`）は
+//! 手順書（`.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md`）は
 //! 「第三者が同一手順を再実行できる粒度」で判定語を並べる文書である。文書の側で語を 1 つ
 //! 書き間違えると、採取者は**存在しない語を grep して 0 件を得る**——それは要件 8.5 が
 //! 名指しで禁じている「消灯した観測点を発生 0 回の根拠に用いる」形そのものであり、しかも

@@ -160,6 +160,22 @@ fn exactly_1200_chars_are_not_clipped() {
 }
 
 #[test]
+fn clipping_never_splits_an_emoji_cluster() {
+    let family = "👨\u{200d}👩\u{200d}👧";
+    let text = format!("{}{family}{family}", "あ".repeat(TERMS_MAX_CHARS - 1));
+    let archive = with(&[("terms.txt", format!("charset,UTF-8\r\n{text}").as_bytes())]);
+    let notice = find_terms(&archive).expect("在る");
+    assert!(notice.clipped);
+    assert_eq!(
+        notice.body,
+        format!(
+            "{}{family}\n\n続きは書庫の中の terms.txt にあります",
+            "あ".repeat(TERMS_MAX_CHARS - 1)
+        )
+    );
+}
+
+#[test]
 fn terms_inside_the_companion_balloon_only_are_not_shown_but_listed() {
     let archive = with(&[
         ("kaku/terms.txt", b"balloon\r\n"),

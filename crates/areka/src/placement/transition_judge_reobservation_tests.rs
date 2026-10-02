@@ -10,7 +10,7 @@
 //! 一括書込の開始より前に現れる。決定論側の判定は `t_us` を判定語に使わないので無害だが、
 //! `visualize_to_write_us`／`flush_total_us` を測る用途に使うなら先に時刻の並びを直すこと。
 //!
-//! 正本は `.kiro/specs/areka-P0-dpi-transition-atomicity/reobservation-2026-08-15.md` の §3.1
+//! 正本は `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/reobservation-2026-08-15.md` の §3.1
 //! （全行を引用した代表例）である。当時のログにはフレーム番号が無く順序と遅れは時刻近似
 //! だったので、整形にあたって次の 2 点を補った——どちらも再観測レポートの本文から導ける:
 //!

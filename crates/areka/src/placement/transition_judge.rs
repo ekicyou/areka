@@ -530,7 +530,7 @@ fn read_prefix_number<T: std::str::FromStr + Default>(
 /// 変わったとき——表示設定の変更——だけで、ゴーストをモニタ間で移す往復（要件 8.2 が
 /// 指示する操作）では 1 行も出ない。窓の表示 DPI が書き換わったことを表す `windpi` を
 /// 起点へ加えて初めて、往復のログから遷移が切り出せる（実測は
-/// `.kiro/specs/areka-P0-balloon-offset-dpi/real-run-attempt-2026-08-28.md` の検出 2b）。
+/// `.kiro/specs/completed/areka-P0-balloon-offset-dpi/real-run-attempt-2026-08-28.md` の検出 2b）。
 ///
 /// **拡大率が実際に変わっている行だけを起点にする**規約は 2 種別に等しく効く。作業領域
 /// だけが変わったモニタ表更新も、`WM_DPICHANGED` が同値の DPI を運んで

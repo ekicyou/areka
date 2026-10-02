@@ -72,7 +72,7 @@ pub const KIND_MONITOR: &str = "monitor";
 /// [`KIND_MONITOR`] が出るのは**モニタ表そのもの**の値が変わったとき——すなわち表示設定の
 /// 変更——だけである。ゴーストを拡大率の異なるモニタへ移すと、窓の表示 DPI は変わるのに
 /// モニタ表は 1 つも変わらないため `monitor` 行は 1 行も出ない（実測＝
-/// `.kiro/specs/areka-P0-balloon-offset-dpi/real-run-attempt-2026-08-28.md` の検出 2b）。
+/// `.kiro/specs/completed/areka-P0-balloon-offset-dpi/real-run-attempt-2026-08-28.md` の検出 2b）。
 /// 「拡大率が変わった」を起点として読む側（`areka` の判定器）は、この経路を別の語で
 /// 見分けられなければ遷移を 1 本も切り出せない。
 ///
