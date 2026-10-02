@@ -1,0 +1,22 @@
+{
+  "feature_name": "areka-P0-alpha-release-signoff",
+  "created_at": "2026-10-01T09:06:20Z",
+  "updated_at": "2026-10-02T14:32:14Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": false
+}

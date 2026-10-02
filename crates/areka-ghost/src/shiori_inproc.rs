@@ -64,6 +64,9 @@ use shiori_host32_host::{
 };
 use tracing::{error, warn};
 use windows::Win32::Foundation::{FreeLibrary, HMODULE};
+use windows::Win32::System::Diagnostics::Debug::{
+    SEM_FAILCRITICALERRORS, SEM_NOOPENFILEERRORBOX, SetThreadErrorMode, THREAD_ERROR_MODE,
+};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 // `Result` は glob 導入しない——本モジュールの `load` は `std::result::Result<_, String>` を返すため、
 // COM の `Result<()>` は別名（`ComResult`）で受け、std `Result` を shadow しない。
@@ -77,6 +80,32 @@ const LOG_TARGET: &str = "ghost-shiori-inproc";
 /// `extern "system"`（Windows COM 標準の呼出規約・x64/ARM64 では `extern "C"` と同一 ABI だが COM
 /// 整合で正準表記は `system`）。`out` へ refcount 1 の `IShioriFactory` を move-out し `HRESULT` を返す。
 type ShioriFactoryFn = unsafe extern "system" fn(*mut *mut c_void) -> HRESULT;
+
+/// `LoadLibraryW` を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに呼ぶ。
+///
+/// 既定では、壊れた DLL を読むと OS が利用者の画面に窓を出し、OK が押されるまでこのスレッドを止める。
+/// 失敗は `Err` として返り、呼出側が `error!` で記録するので、窓は要らない。呼ぶ間だけこのスレッドの
+/// エラーモードに `SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX` を立て、終えたら元へ戻す
+/// （プロセス全体の `SetErrorMode` は触らない）。
+fn load_library_quiet(wide: &HSTRING) -> windows::core::Result<HMODULE> {
+    let mut old = THREAD_ERROR_MODE(0);
+    // SAFETY: 引数は定数の正しいフラグと、呼出中生きている `old` へのポインタだけ。
+    // 定数の正しいフラグでは失敗しない。万一失敗したら `old` は読めていないので、戻す手順も飛ばす。
+    let set = unsafe {
+        SetThreadErrorMode(
+            SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX,
+            Some(&mut old),
+        )
+    }
+    .is_ok();
+    // SAFETY: `wide` は呼出中生存する有効な NUL 終端 UTF-16。失敗は Err で返る。
+    let result = unsafe { LoadLibraryW(wide) };
+    if set {
+        // SAFETY: 直前に読み出した元のモードを戻すだけ。
+        let _ = unsafe { SetThreadErrorMode(old, None) };
+    }
+    result
+}
 
 /// x64 SHIORI4 DLL のロード RAII（design.md §InProcLibrary・要件 3.1/3.5）。
 ///
@@ -111,9 +140,9 @@ impl InProcLibrary {
         // --- 手順 1: LoadLibraryW（絶対パス・UTF-16 NUL 終端）---
         // HSTRING は NUL 終端 UTF-16 を保持する。失敗（DLL 欠落・不正イメージ）→ error! 済み Err。
         let wide = HSTRING::from(dll_path.as_os_str());
-        // SAFETY: `wide` は呼出中生存する有効な NUL 終端 UTF-16。LoadLibraryW は失敗時 Err を返す（下で map）。
+        // OS の窓は出さない（`load_library_quiet`）。失敗時は Err を返す（下で map）。
         // 成功で得た HMODULE の解放責務はこの直後に構築する InProcLibrary（Drop）へ移る。
-        let module = match unsafe { LoadLibraryW(&wide) } {
+        let module = match load_library_quiet(&wide) {
             Ok(m) => m,
             Err(e) => {
                 error!(

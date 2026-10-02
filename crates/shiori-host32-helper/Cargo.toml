@@ -23,4 +23,6 @@ features = [
     "Win32_System_LibraryLoader",
     "Win32_System_Memory",
     "Win32_Globalization",
+    # DLL を読むときだけ OS の「正しくないイメージ」等の窓を止める（`shiori_proxy.rs` の `load_library_quiet`）
+    "Win32_System_Diagnostics_Debug",
 ]

@@ -37,10 +37,20 @@ fn invalid_image_returns_err() {
     let path = std::env::temp_dir().join(&unique);
     std::fs::write(&path, b"not a real dll").expect("一時不正イメージを書き出す");
 
+    // 窓を止めるためにスレッドのエラーモードを一時だけ変える（`load_library_quiet`）。終えたら元へ戻ること。
+    // SAFETY: 引数なしの読み出しだけ。
+    let mode_before = unsafe { windows::Win32::System::Diagnostics::Debug::GetThreadErrorMode() };
     let result = InProcLibrary::load(&path);
+    // SAFETY: 同上。
+    let mode_after = unsafe { windows::Win32::System::Diagnostics::Debug::GetThreadErrorMode() };
 
     // 後始末（best-effort）: assert より先に一時ファイルを掃除する。
     let _ = std::fs::remove_file(&path);
+
+    assert_eq!(
+        mode_before, mode_after,
+        "読み込みの後、スレッドのエラーモードは元へ戻ること"
+    );
 
     let err = result
         .err()
