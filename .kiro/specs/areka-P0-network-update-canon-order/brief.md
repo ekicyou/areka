@@ -72,3 +72,13 @@
 - 1 フレーム遅らせる解は取らない（記憶 no-frame-delay-fixes-change-the-state-shape）
 - 決定論のテストで順を固定する（完了 `network-update` の `worker_path_tests.rs`・`desk_reload_tests.rs` の形を引き継ぐ）
 - 規模の見立て: M（10〜15 タスク）。Fable で要件定義（kanade の口の形・読み直しの単位の裁定がある）
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 中。規模 M（10〜15 タスク）。brief は新しく、記述はすべて実物と一致（MD5 が合わなければすぐ失敗・理由は `manual` と `script` だけ・総括はどちらか片方）。前提はすべて完了（`shell-balloon-switch` も完了済み＝本文の「完了 or 進行中」は完了）。
+- **設計の前に見る物**: `KanadeMsg::AwaitTalkGap`（台詞の切れ目の口・`areka-kanade/src/msg.rs`）が「前の台詞の終わりを待つ」に使えるかもしれない。新しい口を作る前に確かめる。
+- **本 spec が持たない物（引受先なし＝roadmap の覚え書き）**: 更新のオプション（`checkonly` など）と `OnUpdateCheck*` の 4 語・`other_homeurl_override`。
+- **触るファイル**: kanade の `schedule/steady.rs`・`crates/areka/src/emo2_boot/{ghost_switch.rs 891, mod.rs 878, update_cue.rs}`・`crates/areka/src/ghost_session.rs`・`crates/areka/src/update/`。`emo2_boot` を触る spec とは同時に走らせない。

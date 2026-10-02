@@ -41,9 +41,12 @@ pub(crate) fn find_terms(archive: &NarArchive) -> Option<TermsNotice> {
     let clipped_lines = lines.len() > TERMS_MAX_LINES;
     lines.truncate(TERMS_MAX_LINES);
     let mut body = lines.join("\n");
-    let clipped_chars = body.chars().count() > TERMS_MAX_CHARS;
+    // 人が 1 文字と見る単位（書記素クラスタ）で数えて切る＝組み合わせの絵文字の途中で切らない。
+    let clipped_chars = areka_sakura::cluster::cluster_count(&body) > TERMS_MAX_CHARS;
     if clipped_chars {
-        body = body.chars().take(TERMS_MAX_CHARS).collect();
+        body = areka_sakura::cluster::clusters(&body)
+            .take(TERMS_MAX_CHARS)
+            .collect();
     }
     let clipped = clipped_lines || clipped_chars;
     if clipped {

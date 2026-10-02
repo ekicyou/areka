@@ -72,3 +72,16 @@
 ## Constraints
 
 - 新しい依存は開発者の承認が先（`tech.md` の登記）。1 ファイル 1,000 行。決定論テスト網羅は必達。ログ無しの失敗の経路を作らない（読めないコマ・上限超えは `warn!`／`error!`＋1 枚目へ縮退）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 規模 M（11〜15 タスク）。コードの面では陳腐化していない（起票の後に `areka-emo-atlas` へ入ったコミットは 0）。
+- **足りなかった事実**: ⑴ decoder の trait には `probe_pna` もある。⑵ 本番の 3 か所（`emo2_boot/assets.rs`・`emo2_boot/switch_assets.rs`・`placement/measure.rs`）は**具体の型 `&WicDecoderArm`** を受け取る＝新しい型の decoder を作るとこの 3 ファイルと examples まで変わる。動く絵の分岐を `WicDecoderArm` の中に入れれば（trait に既定の実装つきのメソッドを足す形）、呼ぶ側は 0 ファイルで済む。
+- **⚠ brief の「アトラスの鍵にコマの番号」は波及が大きい**: `AtlasKey{set, rel_path}` に欄を足すと、構造体を直に書いている `manifest.rs`・`emo2_golden.rs` と、**`areka-emo-compose` の `blit.rs`（7 か所）・テスト 2 本**まで変わり、「合成器に触らない」と矛盾する。**コマの番号は `table.rs` の内側の索引に持たせ、`AtlasKey` は変えない**設計を推す。そうすれば `surface-element-nesting` との共有（`manifest.rs`）も消える。
+- **依存**: `image` 0.25.10 は今 `crates/wintf` の dev-dependency だけ（機能は `png`・`webp`）。本番へ移すと、その木全体が `THIRD-PARTY-NOTICES.md` に入る（`about.toml` は dev の依存を無視する設定）。`gif`・`weezl`・`color_quant` は lock に無い。`image-webp` は lock 上 0.2.4。
+- **触るファイル（推す設計）**: `crates/areka-emo-atlas/src/{decode.rs, decode/wic_arm.rs, decode/<新規>.rs, lib.rs, table.rs}` と検体・`crates/areka-emo-atlas/Cargo.toml`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`.kiro/steering/tech.md`。
+- **議題**: `image-webp` の動く WebP の透過の欠陥を版上げで待つか patch で固定するか／GIF の繰り返し回数のために `gif` を直に呼ぶか／コマ数と総画素の上限／コマの鍵の持ち方／16 bit の APNG。
+- **並べ方**: `mcp-server-core` と同じウェーブに置かない（依存の登記のファイルが重なる）。`surface-element-nesting` とは、両方が上の「推す設計」を守るときだけ共有 0。

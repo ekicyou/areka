@@ -1,6 +1,6 @@
 //! 先進坑: pilot-clickthrough-alpha-toggle
 //!
-//! 対応 spec: `.kiro/specs/pilot-clickthrough-alpha-toggle/`
+//! 対応 spec: `.kiro/specs/completed/pilot-clickthrough-alpha-toggle/`
 //! 一次記録（動機・概要・検証結果）は隣の README.md を正本とする。
 //! T1〜T8 の詳細台帳と REPORT.md はタスク 6.1 で作成する（本ファイルは骨組みのみ）。
 //!

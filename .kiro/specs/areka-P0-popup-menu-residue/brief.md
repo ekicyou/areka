@@ -74,3 +74,13 @@
 
 - α の必須ではない（段は α 後）。ただし 1 と 2 は小さいので、`menu/` に触る次の spec に相乗りさせてもよい。
 - 規模の見立て: S。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 低。残件 1・2 は完了 `wintf-drag-state-rest-contract` で済み。項目 7 の sink の数は今 **11**（`emo2_boot/mod.rs`）。項目 4・5・6・9 は残っている。
+- 項目 9（引受先の無い語彙 4 件＝`shiori.toml` の `char_2a.popupmenu.type`・`char_2a.popupmenu.visible`・`kero.popupmenu.type`・`sakura.popupmenu.type`。台帳の持ち主は完了 `popup-menu-minimal` のまま）の持ち主の付け替えは `coverage-roadmap-refresh` が行う。
+- **本文の古い記述**: 43・48 行あたりが `ghost-shell-balloon-switch`・`baseware-root-layout` を「これから行う」と書いているが、どちらも完了済み。3 人目以降のキャラクターの窓（`char{n≧2}`）は今どの spec も持っていない（説明書の既知の制限）。
+- 単独で回すより、次に `crates/areka/src/menu/` を触る spec へ相乗りするのが安い。

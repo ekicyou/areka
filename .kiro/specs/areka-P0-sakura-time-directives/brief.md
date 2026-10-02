@@ -49,3 +49,12 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 ---
 
 > **📌 2026-10-01 `/kiro-discovery`（シェル内バルーン）からの注記**——新 spec `areka-P0-talk-fast-forward` が「クリックでの早送り」（areka 独自・利用者の 1 クリックで台詞の時計を次の `\x` か台詞の終わりまで早回し）を持つ。**`\_q`・`\![quicksection]`・`\![set,balloonwait]` は本 spec の担当のまま**で、早送りとは別物（早送りは利用者の操作、`\_q` と `balloonwait` は台本の指示）。両者が同じ台詞の時計を触るので、後から着地する側が「早送り中の `balloonwait` の倍率」「`\_q` の区間の中での早送り」を決定論テストで固定する。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **B 群の `\![set,choicetimeout]` を `areka-P0-choice-timeout-directive` へ切り出した**（利用者に見えるバグ＝時間切れなしを指定したメニューが 30 秒で閉じる。ウェーブ C1）。本 spec に残るのは A 群（`quicksection`・`balloonwait`）・B 群の `balloontimeout`（受ける側は `balloon-lifecycle-events` の項目 7）・C 群・D 群。
+- 残りも全部入れると 20 タスクを超える見込み＝要件の段で「A と `balloontimeout`（compile の中で閉じる）」と「C・D（消費する者がまだ居ない＝音の再生・時間つきの移動・拡大と透明度が無い）」に分け、C・D は消費する者が現れるまで置く。
+- `compile.rs`（346 行）は `text-decoration-canon` の完了で空いた。今は `choice-timeout-directive`・`anchor-tag-canon`・`talk-fast-forward` と共有＝同時に走らせない。A 群は `talk-fast-forward`・`text-reveal-fade` と「台詞の時計」を分け合う。

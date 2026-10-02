@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-09-24
+updated_at: 2026-10-02
 ---
 
 # Product Overview
@@ -60,7 +60,7 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 | ------ | ------ | ------ |
 | M1 互換ベースウェア | 適合ゴースト emo2（32bit SHIORI）を起動→会話→撫で→メニュー→終了まで E2E 実走 | ✅ 2026-09-11 完成宣言 |
 | **M2 α 版** | zip を展開して起動 → `.nar` を窓へ落とす（またはメニュー）→ 起動 → 右クリックメニューでゴースト／シェル／バルーンを替える → ネットワーク更新 → 終了 → 再起動で前回の状態へ。表現力は M1 の水準で据え置き・オーナードローは持たない | ✅ 2026-10-02 完成宣言（`alpha-release-signoff`・署名は同 spec の `verification/alpha-completion.md`） |
-| M3 以降 | 表現力（ukadoc 網羅の段階 A〜E）・ぱすたさん（native 旗艦：pasta DSL・階層サーフェス・縦書きタイプライターバルーン） | α 完了後に組み直し |
+| M3 以降 | 表現力（ukadoc 網羅の段階 A〜E）・ぱすたさん（native 旗艦：pasta DSL・階層サーフェス・縦書きタイプライターバルーン） | 組み直し中（2026-10-02 棚卸⑳・M3 のゴールは未確定。着手順は `roadmap.md` のウェーブ C1〜C2＝バグ修正 → 優先度の高い機能） |
 
 ### 適合の検体＝SHIORI 3 系統の標準テンプレート（2026-09-20 時点）
 
@@ -75,7 +75,7 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 
 - テンプレート 2 体は `areka-P0-shell-implicit-surface`（2026-09-20）で**実機で動く**ようになった（ファイル名の慣習による面＋α の無い絵の抜き色透過＝左上 1 画素と完全一致の色を抜く＋`sometimes`／`rarely`）。α の検証に使う検体はこの 4 体＋既定バルーン（`claudia` は 2026-09-24 に追加）（`roadmap.md` の裁定「nar-install を α の先頭に置く」の項）。YAYA の検体は「正しく展開される」から「実機で動く」へ進んだ段階で、出た不具合は個別に起票する。
 - 第三者のゴーストの多くはバルーンを同梱しないので、**既定バルーンは CC0 の `StayseeBalloon` に確定**した（`areka-P0-default-balloon-bundle` 2026-09-19・`areka-P0-default-balloon-nar-fold` で `vendors/sample_ghost/StayseeBalloon.nar` へ無改変のまま畳んで保管し、登記表 `SAMPLES` 経由で引く・表示は決定論テストと実機目視で確認済み）。バルーンを指定しないときは起動解決の段で `StayseeBalloon` を自動で採る（`areka-P0-baseware-root-layout` 2026-09-24・`crates/areka/src/boot_resolve.rs`）。`areka.exe <ゴーストの根> <バルーンの根>` の第 2 引数で明示することもできる。
-- α（M2）の着地済み（2026-09-28 時点）: `.nar` インストールのエンジン（`areka-nar`・堅牢化込み）・既定バルーン（`.nar` 保管）・右クリックメニュー第 1 スライス（説明書／終了・OS ネイティブメニュー）・ファイル名の慣習による面・アプリの寿命の分離（`AppExit`）・ベースウェアの根と目録と最後の選択の記憶・ネットワーク更新のエンジン（`areka-update`）・`loadu`・SHIORI の失敗の告知（黙って消えず告知して終了コード 1）・同じプロセスでゴーストを降ろして起こし直せる形・ゴースト切替（メニューの「ゴースト」枠・`\![change,ghost,名]`・切替先が起きなければ既定ゴーストへ戻して `OnBoot` の Reference6＝`halt`）・起動中の印（きれいに終わらなかった次の起動は既定ゴーストで `halt`）と Windows の終了時の後始末・配布 zip（`tools/package-alpha.ps1`）・ゴースト名の特別な名前（`random`／`sequential`／`lastinstalled`）と `\+`／`\_+`・Windows の終了で SHIORI を待つ上限 3 秒と LogSink へ倒れた回も印を残す形。残りは `roadmap.md` のウェーブ表（終了の直後の ERROR〔バグ〕∥ インストール → 窓への投げ込み → シェル／バルーン切替 → 更新の結線 → α サインオフ）。
+- α（M2）の範囲は 2026-10-02 にすべて着地した: `.nar` インストールのエンジン（`areka-nar`・堅牢化込み）・既定バルーン（`.nar` 保管）・右クリックメニュー第 1 スライス（説明書／終了・OS ネイティブメニュー）・ファイル名の慣習による面・アプリの寿命の分離（`AppExit`）・ベースウェアの根と目録と最後の選択の記憶・ネットワーク更新のエンジン（`areka-update`）・`loadu`・SHIORI の失敗の告知（黙って消えず告知して終了コード 1）・同じプロセスでゴーストを降ろして起こし直せる形・ゴースト切替（メニューの「ゴースト」枠・`\![change,ghost,名]`・切替先が起きなければ既定ゴーストへ戻して `OnBoot` の Reference6＝`halt`）・起動中の印（きれいに終わらなかった次の起動は既定ゴーストで `halt`）と Windows の終了時の後始末・配布 zip（`tools/package-alpha.ps1`）・ゴースト名の特別な名前（`random`／`sequential`／`lastinstalled`）と `\+`／`\_+`・Windows の終了で SHIORI を待つ上限 3 秒と LogSink へ倒れた回も印を残す形・メニューと台本からのインストール・窓への投げ込み・シェルとバルーンの切替・ネットワーク更新の結線・カラー絵文字・配布 zip の実機一周（α サインオフ）。
 
 詳細: `doc/COMPAT_ARCHITECTURE.md`, `doc/PASTA_PROFILE.md`, `.kiro/steering/roadmap.md`（ロードマップ正本）
 

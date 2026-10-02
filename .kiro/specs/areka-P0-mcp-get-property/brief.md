@@ -49,3 +49,10 @@ AI エージェントがゴーストを作るとき、プロパティシステ�
 ## Constraints
 
 - 規模 S。`crates/areka-ghost/src/runtime.rs` を触る＝同じウェーブの `mcp-reload` と重なりうる（干渉台帳を見よ）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 棚卸⑳では個別の再測定をしていない（`mcp-tool-entrances` が、各 spec の触るファイルを設計で固定する）。着手は `mcp-tool-entrances` の完了の後で、そのとき接触ファイルを照合する。

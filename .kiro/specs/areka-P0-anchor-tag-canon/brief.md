@@ -67,3 +67,13 @@
 
 - バルーンの文字の単位は `char` から書記素クラスタ（人が 1 文字と見る単位）に替わった。範囲（`ChoiceSpan::glyph_range`・`style_runs`・`segment_text_range`）はクラスタの通し番号で数え、UTF-16 の位置はクラスタ文字列の長さを積む。
 - `TextItem::Glyph` と `PositionedGlyph` の中身は `text: Arc<str>`（`Copy` なし）。構築は `TextItem::glyph(&str)`、切り方は `areka_sakura::cluster::clusters` だけが決める。文字を比べる処理（行末のぶら下げの判定など）は `&str` で比べる。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **優先度 高**（`\_a` のリンクは文字として出るが、押しても何も起きずイベントも飛ばない）。
+- **そのままでは 20 タスクを超える**＝要件の段で「働き（範囲・クリックとホバー・`OnAnchorSelect`／`OnAnchorSelectEx`）」と「装飾 16 × 状態 3」に切り、**働きを先に**。働きの側は `text-align-shadow-canon`・`choice-marker-styling` を待たなくてよい（依存は同じファイルを触るだけ）。
+- 変わっていない点: `sakura/decode.rs` に `_a` の腕は無い・`OnAnchorSelect` は 0 件・字句の直しは済み。`viewbox_draw` の行番号は古い。
+- **触るファイル**: `crates/areka-parsers/src/sakura/decode.rs`・`crates/areka-sakura/src/compile.rs`・`crates/areka-emo-text/src/{actor 系, viewbox_draw 系}`・`crates/areka/src/input_events/` のバルーン・kanade の `schedule/events.rs`。文字まわりの直列の列に並ぶ（`emo-text-file-split` → `shell-balloon` の後）。

@@ -3,11 +3,11 @@ inclusion: manual
 updated_at: 2026-10-02
 ---
 
-# Roadmap — areka（M2＝α 版・第三者がデスクトップマスコットを管理できる最小のアプリ）
+# Roadmap — areka（α 後・M3 へ向けた並べ直し）
 
-> **M1 は 2026-09-11 に完成宣言済み**（下記「M1 ゴール」）。**M2 のゴールは 2026-09-18 の棚卸⑭で「α 版」に決めた**（下記「M2 ゴール（α）」）——開発者の指示「α 版として第三者に使い始めてもらうことができるだけの機能セット。大事なのはゴースト・シェル・バルーンのファイル管理、インストール、ネットワーク更新、つまりアプリとしてのデスクトップマスコット管理。オーナードローは不要だが最低限のメニューは要る。表現力増強は emo2 が普通に動いている水準で一旦よい」。本ファイルは **spec 台帳 98 行（完了 40・α 0・バグ 0・前倒し 0・α 後 57・保留 1＝2026-10-02 の実数え〔09-28 棚卸⑲の後に `ghost-install` の完了と `file-drop` の起票で 67 行になり、09-29 に SSP MCP の移植 10 本と `balloon-color-emoji` を足し、`frame-phases-after-exit` を完了に直し、`file-drop` を完了に直し、09-30 に `balloon-color-emoji` と `network-update` を完了に直し、`network-update-canon-order` を α 後に起票した。10-01 に `shell-balloon-switch` の完了の棚卸でバグ `balloon-reappear-short-talk` を起票し、`shell-balloon-switch` を完了に直し、同日 `balloon-reappear-short-talk` を完了に直し、同日 `/kiro-discovery`（シェル内バルーン）で 8 本と登記だけの行「SSTP の受信」を α 後に起票し、同日 `/kiro-discovery`（動く画像）で 3 本を α 後に起票した。10-02 に `/kiro-discovery`（`alpha-release-signoff` の持ち越し）で 4 本を α 後に起票した〕。表の段列を機械で数えた）の着手順（ウェーブ）と干渉条件だけ**を持つ。**着手の優先度は「バグ修正 → α に要る機能」で、どちらにも属さない spec は当面着手しない**（2026-09-20 開発者指示・下の「棚卸⑮の裁定」）。
-> 正本配置: 本ファイルが正本（`.kiro/steering/roadmap.md`）。`focus.md`（`inclusion: always`）から辿る。設計判断の正本は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md)。M1 実物スコープは [doc/emo2-conformance-scope.md](../../doc/emo2-conformance-scope.md)。ukadoc 網羅の段階・順位の正本は `doc/ukadoc-coverage/`（`briefing.md`・`linkage.md`・`roadmap-draft.md`）。
-> **履歴**: 追記①〜(94)・旧ゴール表・旧ウェーブ行・旧干渉台帳・完了詳報は棚卸④〜⑬で [roadmap-history.md](roadmap-history.md) へ退避済み。**棚卸⑭（09-18）で旧 W14〜W17 のウェーブ行と W14 の干渉台帳を退避**（history が全文正本・非改変）。完了ユニットの実装詳細は各 `completed/` spec が正本。**旧ウェーブ番号の読み替え**: 棚卸⑫（09-02）で W5.95→W6・W6→W7・W6.5→W8・W6.75→W9・W6.9→W10・W6.95→W11・旧 W7（e2e）→W12 へ整数化。棚卸⑬（09-11）で旧「W13 裁定枠 D〜G」「W13〜W15（裁定枠）」を W13〜W17 へ振り直し。**棚卸⑭（09-18）で W14〜W17 を「α 後」へ格下げし、α のウェーブを A0〜A5 と呼ぶ（09-18 同日に A0＝nar-install へ反転し 6 段）**（history と completed spec 内の旧番号は改変しない）。
+> **M1 は 2026-09-11、M2（α）は 2026-10-02 に完成宣言済み**。本ファイルは 2026-10-02 の棚卸⑳で、α 後の着手順へ書き直した。**完了した spec の行・棚卸⑭〜⑲の裁定・α のウェーブ表・旧「登記だけの行」の全文は [roadmap-history.md](roadmap-history.md) の「2026-10-02 棚卸⑳退避」節へ逐語で移した**（history が全文正本・非改変）。
+> 正本配置: 本ファイルが正本（`.kiro/steering/roadmap.md`）。`focus.md`（`inclusion: always`）から辿る。設計判断の正本は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md)。ukadoc 網羅の段階・順位の正本は `doc/ukadoc-coverage/`（`briefing.md`・`linkage.md`・`roadmap-draft.md`）。完了した spec の実装の詳細は各 `completed/` spec が正本。
+> **読む順**: いま何を始めるか＝「ウェーブ編成」。個々の spec の中身＝「spec 台帳」と各 brief。brief を持たない宿題＝「覚え書き」。
 
 ## M1 ゴール ✅（2026-09-11 完成宣言）
 
@@ -15,17 +15,17 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 
 **✅ 完成宣言**: 適合検証項目表 20 項目全合格の実機サインオフに開発者の署名（`.kiro/specs/completed/areka-P0-emo2-conformance-e2e/verification/m1-completion.md`・項目別は同 `acceptance-record.md` §8.1）。持ち越し 8 件（同 §6）はいずれも判定を書き換えず、引受先は下の spec 台帳に全て実在する（§13.1 行 3「初回起動限定の位置調整」だけは「違和感があれば個別仕様を切る」の据え置き＝spec なし）。
 
-## M2 ゴール（α）✅（2026-10-02 完成宣言）＝第三者がデスクトップマスコットを管理できる（2026-09-18 棚卸⑭で確定）
+## M2 ゴール（α）✅（2026-10-02 完成宣言）＝第三者がデスクトップマスコットを管理できる
 
-**✅ 完成宣言**: 第三者の手順の検証項目表（13 項目と付随の確認 2 つ）の実機サインオフに開発者の署名（`.kiro/specs/completed/areka-P0-alpha-release-signoff/verification/alpha-completion.md`・項目別は同 `acceptance-record.md` §7）。持ち越しは同 §6＝本ファイルの「alpha-release-signoff の持ち越し」節の 4 本と、ghost_dev へ申し送った emo2 の 2 件。
+**✅ 完成宣言**: 第三者の手順の検証項目表（13 項目と付随の確認 2 つ）の実機サインオフに開発者の署名（`.kiro/specs/completed/areka-P0-alpha-release-signoff/verification/alpha-completion.md`・項目別は同 `acceptance-record.md` §7）。署名の根拠のコミット `8460506d`・zip `areka-alpha-x64-20261002-8460506.zip`。
 
-**利用者の一周**: zip を展開して起動 → `.nar` を窓へ落とす（またはメニューから選ぶ）→ ゴーストが起動する → 右クリックメニューでゴースト／シェル／バルーンを替える → ネットワーク更新で作者の修正を受け取る → 終了 → 再起動で前回の状態に戻る。**表現力は M1 の水準（emo2 が普通に動く）で据え置く。オーナードローメニューは持たない（Win32 標準メニュー）。**
+**利用者の一周**: zip を展開して起動 → `.nar` を窓へ落とす（またはメニューから選ぶ）→ ゴーストが起動する → 右クリックメニューでゴースト／シェル／バルーンを替える → ネットワーク更新で作者の修正を受け取る → 終了 → 再起動で前回の状態に戻る。表現力は M1 の水準（emo2 が普通に動く）で据え置いた。メニューは Win32 標準。
 
-**完成の器**: `areka-P0-alpha-release-signoff`（配布 zip＋第三者の手順 12 項目の実機サインオフ＋開発者の署名）。M1 と同じく人間判断・自動判定にしない。
+**持ち越し**: 完成判定 §6 の 5 行は 4 本の spec（`install-live-target-hazards`・`drag-click-without-move`・`package-check-temp-cleanup`・`install-companion-canon`）へ起票済み＝いずれもウェーブ C1。emo2 の 2 件は ghost_dev へ申し送り済み。
 
-**α に要る振る舞いと今日の実在（2026-09-18 探索）**: インストーラ・列挙・切替・ネットワーク・メニュー・投げ込みの **6 種とも実装 0**。再利用できるのは単一ゴーストのマウント解決（`areka-parsers/src/package/resolve.rs`）・スコープ別 TOML 永続化（`App` スコープが空のまま配線済み・`areka-sylphya/src/persist/mod.rs`）・`nar-install` の brief（エンジン側）。詳細は各 brief。
+## M3 ゴール（未確定）
 
-**正典の出どころ**: `doc/ukadoc-coverage/roadmap-draft.md` 段階 B（「迎えて、育てて、見送る」）の束「インストール」「更新」「切替」「配布物の素性」「投げ込み」と、段階 A 順位 11 の束「メニュー」・段階 E の束「作り付けの窓」の一部。**段階 A の先頭ウェーブ 6 束（会話・窓の配置・名前の記憶・起動と挨拶・バルーンの文字・サーフェスアニメーション）は α 後へ回す**——「表現力は据え置き」の裁定による。段階 B を A より先に置くのは `briefing.md` の順位付け 4 軸（壊れ方＞伺からしさ＞資産の広さ＞基盤共有度）と逆だが、**開発者が「第三者が使い始められる」を M2 の物差しに置き換えた**ためである（棚卸⑭仮裁定 1）。
+M3 のゴールはまだ決めていない（**開発者の決めごと**）。候補は `doc/ukadoc-coverage/roadmap-draft.md`「M3 の受入基準の候補」（「伺かの冠」）。決まるまでの着手順は、開発者指示（2026-10-02）「**バグ修正系を優先し、あとは優先度の高い機能**」に従う。優先度の物差しは `briefing.md` の 4 軸（壊れ方 ＞ 伺からしさ ＞ 資産の広さ ＞ 基盤共有度）と、開発者が時期を指定した spec 群（シェル内バルーン＝「α 後なるべく早い時期」）。
 
 ## 実装規律（balloon-system の失敗から得た正）
 
@@ -33,7 +33,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - **最小実装＋薄い拡張シーム**: 使う分だけ実装し、拡張は型/レジストリの口だけ残す。抽象は「2 例目の実物」が要求してから。動く資産から建てる。
 - **粒度基準**: 1 ユニット＝単一 pass/fail の独立観測。純粋層は fixture/mock 直入力で切る。UI 位置決め・座標系は本番ゴースト（実 emo2）＋実 DPI（≠96）が観測条件（記憶 areka-placement-real-ghost-first）。
 - **語彙完備・配線ゼロの追跡**: 先送りシームには狭い `#[allow(dead_code)]`＋実在理由の doc を義務付け、消費者ゼロの検出は棚卸の定期監査項目。
-- **1 ファイル 1,000 行**: 機械の番人 `crates/log-capture-kit/tests/file_length_guard_test.rs`（例外表 11 件・暗黙増加不可・**どの spec も例外表に触れない**）。2026-09-11 実測: `areka-emo-text/src/` の `draw.rs` 988・`layout.rs` 955・`actor.rs` 952・`region.rs` 951 が射程＝emo-text を触る spec は新規ファイルで足す。
+- **1 ファイル 1,000 行**: 機械の番人 `crates/log-capture-kit/tests/file_length_guard_test.rs`（例外表 11 件・暗黙増加不可・**どの spec も例外表に触れない**）。2026-10-02 実測: `areka-emo-text/src/` の `layout.rs` 977・`region.rs` 977・`actor.rs` 975・`viewbox_draw.rs` 914 と `crates/areka/src/` の `main.rs` 946・`input_events/balloon.rs` 930・`emo2_boot/balloon_visibility.rs` 923 が射程＝`emo-text-file-split`（C1）が先に分ける。それまでは新規ファイルで足す。
 - **決定論テスト網羅は必達**・**ログ無し失敗経路の禁止**・**終了経路は正規実装**（記憶 deterministic-test-coverage-mandate／areka-log-first-no-silent-failure／canonical-not-minimal-lifecycle）。
 - **外部依存の追加は `tech.md` へ「意図的依存追加」を登記し開発者が承認する**（`encoding_rs` の前例）。α で登記したのは **`miniz_oxide` 0.9（`nar-install`・2026-09-18 承認済・伸長のみ・推移的依存は `adler2` 1 本）**、`md-5` は要らなくなった（`update-engine` 2026-09-24 完了＝MD5 は OS の CNG・`tech.md` 登記済み）。HTTP は WinHTTP（`windows` crate の機能フラグ）で crate を足さない。
 
@@ -58,7 +58,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | ② | parser/loader | `parsers` | ⑥ | render（surface 合成＋UI 層） | `emo` |
 | ③ | conductor（SHIORI イベント循環） | `kanade` | | | |
 
-## 完了サマリ（M1 全ウェーブ＋W13・詳報は completed spec ＋ history）
+## 完了サマリ（詳報は各 `completed/` spec ＋ history）
 
 | Wave | 完了日 | ユニット（PR） | 一行要約 |
 |---|---|---|---|
@@ -75,291 +75,184 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 | ⓪ | 09-03 | `sakura-bare-tag-lexer`（PR#134） | `\_X` bare 漏れ修正・完了検証で `sakura-tag-word-boundary` 起票 |
 | W12 | 09-05〜09-11 | `cursor-tag-canon`（PR#137）・`emo-text-line-height-canon`（PR#142）・`emo2-conformance-e2e`（PR#143・**M1 完成宣言**） ∥ 調査系 `ukadoc-survey-toolkit`（PR#136）・`-property`（PR#138）・`-shiori`（PR#139）・`-sakura-script`（PR#140）・`-assets`（PR#141） | 行送り 35→30・e2e 20 項目全合格・ukadoc 1,749 項目の台帳 4 本＋`report/summary.md` |
 | W13 | 09-12〜09-17 | `present-gpu-transform-scale`（PR#145）・`charset-canon`（PR#146）・`ukadoc-coverage-roadmap`（PR#147）・`text-decoration-canon`（PR#148）・`kanade-boot-talkdone-drop`（PR#149）・`sakura-tag-word-boundary`（PR#150）・`sylphya-set-ledger`（PR#151）・`host32-window-thread-pump`（PR#153）・`balloon-font-descript-keys`（PR#154） | 9/9・1 コマ 41〜78→2.65 ms・任意 charset・67 束の網羅ロードマップ・文字装飾 3 書字方向 |
+| A0（α） | 09-19 | `nar-install`（PR#158）・`default-balloon-bundle`（PR#157）・`popup-menu-minimal`（PR#159）・`balloon-origin-outside-validrect`（PR#161） | `.nar` の読取と安全な展開・既定バルーン（Staysee・CC0）・Win32 標準の右クリックメニュー |
+| A1（α） | 09-20〜09-24 | `shell-implicit-surface`（PR#162）・`balloon-break`（PR#164）・`app-lifetime-separation`（PR#169）・`shiori-loadu`（PR#170）・`default-balloon-nar-fold`（PR#171）・`wintf-drag-state-rest-contract`（PR#172）・`nar-install-hardening`（PR#174）・`keycolor-clickthrough-coverage`（PR#175）・`update-engine`（PR#176）・`baseware-root-layout`（PR#177） | 里々のテンプレートが絵を出せる・抜き色・根 `ghost/`・`balloon/` と列挙・寿命を窓の数から分離・更新のエンジン |
+| B1〜B2（α） | 09-24〜09-26 | `pilot-balloon-asset-swap`（PR#182）・`shiori-fault-notice`（PR#183）・`ghost-restart-unit`（PR#184） | SHIORI の失敗の告知・同じプロセスでゴーストを起こし直す形 |
+| B3〜B4（α） | 09-26〜09-28 | `alpha-package`（PR#190）・`pilot-dropfiles-on-wuc-window`（PR#191）・`ghost-shell-balloon-switch`（PR#192）・`ghost-change-name-resolution`（PR#194）・`session-mark-residue`（PR#195） | ゴースト切替・汎用の通知の入口 `KanadeMsg::RaiseEvent`・起動中の印（きれいに終わらなければ次は emo2 が `halt` を伝える）・配布 zip |
+| B5〜B6（α） | 09-28〜09-30 | `frame-phases-after-exit`（PR#197）・`ghost-install`（PR#198）・`file-drop`（PR#201）・`balloon-color-emoji`（PR#202） | メニューと台本と投げ込みからのインストール・カラー絵文字と書記素クラスタ |
+| B7〜B9（α） | 09-30〜10-02 | `network-update`（PR#203）・`shell-balloon-switch`（PR#205）・`balloon-reappear-short-talk`（PR#206）・`alpha-release-signoff`（PR#210・**α 完成宣言**） | ネットワーク更新・シェルとバルーンの切替・実機一周 13 項目 |
 
-- 完了 spec 直下エントリ＝**206**（`.kiro/specs/completed/` 直下・2026-09-28 実数え＝ディレクトリ 205＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**（並走 spec が同じ行を更新する）。
-- M1 実機サインオフ発見 7 件中 1〜6 番は解決済み・7 番（冒頭空行）は pasta 上流。e2e の持ち越し（§13.1 行 1・§13.2 行 4・9・10）のうち行 4・行 10 は W13 で解決、行 1 は `dpi-transition-two-tick-bounce`、行 9 は `zorder-chain-residue` A-2。M-dual は退役（e2e 項目 10 で合格・復活させない）。
+- 完了 spec 直下エントリ＝**214**（`.kiro/specs/completed/` 直下・2026-10-02 実数え＝フォルダ 213＋`graphics-rendering-stability.md` 1）。⚠ **引き算で導かず毎回実数えする**。
+- M1 の持ち越しのうち残るのは `dpi-transition-two-tick-bounce`（開発者が許容）と `zorder-chain-residue` A-2（据え置き）だけ。M-dual は退役。
+- 個々の完了行の全文（種別・議題・完了時の所見）は history「2026-10-02 棚卸⑳退避」。
 
-## spec 台帳（**表は 98 行**。うち **brief 済み 88 本**＝2026-09-13 の 30 ＋ 09-18 起票 8 ＋ 09-19 起票 3 ＋ 09-20 起票 8 ＋ 09-24 起票 3（`shiori-fault-notice`・`ghost-restart-unit`・`pilot-balloon-asset-swap`）＋ **09-26 棚卸⑰の起票 3（`ghost-change-name-resolution`・`pilot-dropfiles-on-wuc-window`・`alpha-package`）** ＋ **09-27 棚卸⑱の起票 1（`session-mark-residue`＝登記だけの行 2 本の格上げ）** ＋ **09-28 棚卸⑲の起票 1（`frame-phases-after-exit`＝表に行を持たない覚え書きの格上げ）** ＋ 09-28 の `file-drop` ＋ **09-29 の起票 10（SSP MCP の移植＝`mcp-*`・下の「SSP MCP の移植」節）** ＋ **09-29 起票 1（`balloon-color-emoji`＝段「前倒し」）** ＋ **09-30 起票 1（`network-update-canon-order`＝α 後）** ＋ **10-01 起票 1（`balloon-reappear-short-talk`＝`shell-balloon-switch` の完了の棚卸・段「バグ」）** ＋ **10-01 起票 8（シェル内バルーン＝下の「シェル内バルーン」節・α 後）** ＋ **10-01 起票 3（動く画像＝下の「動く画像」節・α 後）** ＋ **10-01 起票 2（文字の現れ方＝下の「文字の現れ方」節・α 後・うち 1 本は夢）** ＋ **10-02 起票 4（`alpha-release-signoff` の持ち越し＝下の「alpha-release-signoff の持ち越し」節・α 後）**、**10 行は brief を持たない「登記だけの行」**＝下の節を見よ（10-01 に「SSTP の受信」を足した）。**実数え（2026-09-28・表の段列を機械で数えた＝✅ 39・α 1・バグ 0・前倒し 0・α 後 57・保留 1 ＝ 98**（2026-10-02 の機械の数え・`shell-balloon-switch` と `balloon-reappear-short-talk` の完了と、シェル内バルーンの 8 本と登記だけの行 1 本と動く画像の 3 本と `alpha-release-signoff` の持ち越しの 4 本の起票を反映。brief 済み 88＝表の行のうち 1 列目に「未起票」を持たない行・登記だけの行 10＝持つ行を機械で数えた））。着手は brief 持ちが `/kiro-start <名>`・登記だけの行は `/kiro-discovery` から）
+## ウェーブ編成（着手順の正本・2026-10-02 棚卸⑳）
 
-> **spec は名前で呼ぶ（2026-09-26 開発者指示「番号で言われても分からない。spec 名を使え」）**: 台帳の番号の列は廃止した。報告・brief・コミット・PR の本文で spec を指すときは **spec 名**（`areka-P0-` は省略してよい）を書き、「#数字」の台帳番号は使わない。登記だけの行は「登記だけの行「見出し」」の形で指す。「#数字」は GitHub の PR 番号にだけ、`PR#185` のように接頭辞を付けて使う。古い文書（history・完了 spec・古い記憶）に台帳番号が出てきたら、その時点の表で名前へ読み替えてから報告する。
-> **段の数え方（番号の列を外した後）**: `awk '/^\| spec（`areka-P0-` 省略）/{f=1;next} f&&/^\|/{print} f&&!/^\|/{f=0}' .kiro/steering/roadmap.md | awk -F'|' 'NR>1{gsub(/ /,"",$3);print $3}' | sort | uniq -c`
-> **段**列: **バグ**＝バグ修正（α のゴールに要るかどうかによらず、α の機能より先に着手する＝2026-09-20 開発者指示）／**α**＝M2 のゴールに要る／**前倒し**＝α にもバグにも属さないが、α のウェーブと共有ファイル 0 で並走できるので α の前に着手する（2026-09-29 開発者指示「並行開発できる項目なら α 前に前倒しましょう。いま並行開発要素が少ない」＝下の「バグ修正にも α にも属さない spec はウェーブに入れない」の例外。並走できることを接触ファイルの照合で示した行に限る）／**α 後**＝brief を保ったまま据え置く（着手は α 完了後の棚卸で並べ直す）。**バグ修正にも α にも属さない spec は、並走できてもウェーブに入れない**（2026-09-18 開発者指示・「隙間」枠は廃止。2026-09-20 にバグ修正だけを例外にした）。**完了した行は段列も ✅ に揃える**（段列だけを機械で数えても完了数が合うように）。**規模**は brief の申告。**状態**列は `/kiro-complete` が ✅ に更新し、完了数を実数えで更新する。**Fable**列＝要件定義（design）を Fable で行うべきか（○＝Fable・−＝Opus で足りる）。α 後の行の Wave 列は棚卸⑬当時の番号（W14〜W17）を参考として残す＝**着手順の正本ではない**。
+> 各ウェーブは**フルライフサイクル**（要件 → 設計 → タスク → 実装 → `/kiro-complete`＝PR の squash マージ）を完走してから次へ。1 spec ＝ 1 worktree ＝ 1 PR。**同じウェーブに入れるのは、棚卸⑳の実測で触るソースファイルの重なりが 0 の組だけ**。許す重なりは 3 つだけ＝表の末尾への追記（`doc/COMPAT_ARCHITECTURE.md` §8）・生成物（`THIRD-PARTY-NOTICES.md`・`doc/ukadoc-coverage/report/`＝手で直さず作り直す）・steering。文書だけの段は置かない。
+> **並び順の決まり**: バグ → 優先度の高い機能。ウェーブの中の番号は優先順（上から着手）。
 
-| spec（`areka-P0-` 省略） | 段 | 種別 | 規模 | Wave | 前提（先に着地） | Fable | 状態 |
-|---|---|---|---|---|---|---|---|
-| `completed/present-gpu-transform-scale` | ✅ | バグ（性能） | M | W13 | — | ○ | ✅ 完了（2026-09-12） |
-| `completed/kanade-boot-talkdone-drop` | ✅ | バグ（構造） | S | W13 | — | − | ✅ 完了（2026-09-17） |
-| `completed/host32-window-thread-pump` | ✅ | バグ（構造） | S〜M | W13 | — | − | ✅ 完了（2026-09-17） |
-| `completed/sakura-tag-word-boundary` | ✅ | バグ | S〜M | W13 | — | − | ✅ 完了（2026-09-17） |
-| `completed/charset-canon` | ✅ | 正典 | M | W13 | — | ○ | ✅ 完了（2026-09-13） |
-| `completed/ukadoc-coverage-roadmap` | ✅ | 調査 | M | W13 | — | ○ | ✅ 完了（2026-09-13） |
-| `completed/text-decoration-canon` | ✅ | 正典 | L | W13 | — | ○ | ✅ 完了（2026-09-13） |
-| `completed/sylphya-set-ledger` | ✅ | 台帳 | S | W13 | — | − | ✅ 完了（2026-09-17） |
-| `completed/balloon-font-descript-keys` | ✅ | 正典 | S | W13 | — | − | ✅ 完了（2026-09-17） |
-| `completed/nar-install` | ✅ | 基盤（`.nar` の読取・`install.txt`・安全な展開＝`areka-nar`・検体を `.nar` 保管・**検体名 → 根の共有ヘルパ＝サンプルゴースト試験の仕組みの種**） | M | **A0-①**（**即時着手可**） | なし。38 ファイル（検体参照のある既存テスト・example）を書き換える＝**それらに触らない spec とは並走可**（09-18 実測で改訂） | ○ | ✅ 完了（2026-09-19） |
-| `completed/shell-implicit-surface` | ✅ | バグ（**里々標準テンプレートが 1 枚も絵を出せない**・第三者の最初の 1 体が里々である前提で α の入口）＋**抜き色の透過**（2026-09-19 開発者裁定で範囲に追加＝両テンプレートの絵が全て α チャンネルを持たず、抜かなければ絵が四角のままで第一の成果に届かない。触るクレートに `areka-emo-atlas` が加わる）＋まばたきの間隔の語 `sometimes`・`rarely`（同日の裁定「テンプレートゴーストを動かすのに要る実装は本仕様が巻き込む」） | M〜L | **A1-①** | `charset-canon` ✅・`present-gpu-transform-scale` ✅・`nar-install`（検体は共有ヘルパ経由で受ける＝09-18 に順序を反転） | ○（裁定 2 件＝「element0 より下」の層表現と `surface.append` の順序は、**どちらも正典の逐語で決まった**＝前者は「element0が定義されている場合…破棄され」（C4・C5）ゆえ「下に敷く」ではなく「画像を使わない」、後者は「既に在る面へ追記する」（C6）ゆえ画像だけで存在する面にも効く。裁量が残ったのは正典が沈黙する 6 点で、`doc/COMPAT_ARCHITECTURE.md` §8 に登記済み） | ✅ 完了（2026-09-20） |
-| `completed/baseware-root-layout`（**09-18 起票・09-20 再測定**） | ✅ | 基盤（根 `ghost/`・`balloon/`・列挙と素性・最後の選択の記憶＝**鍵の定義と書き込みまで。起動時にシェル名を効かせる口は `shell-balloon-switch`**・起動解決・「無い」告知。**メニューへの登記は範囲外**＝`ghost-shell-balloon-switch`・`shell-balloon-switch` が持つ。09-20 の再測定で崩れた前提 3 件＝`MessageBoxW` の告知が常設の smoke テストを止める／`resolve()` は 4 か所から独立に呼ばれシェルの記憶を起動時に効かせる口が無い／列挙に `resolve()` は流用できない） | S〜M（13〜17 タスク） | **A1 後段**（要件と設計は A1 で先行可・**実装は `app-lifetime-separation` の着地後**） | `nar-install` ✅。実装は **`app-lifetime-separation`**（`crates/areka/src/main.rs` の別の関数と `tests/smoke_boot_loop_exit.rs` を共有） | ○（09-20 に − から変更＝議題が 1 件から 3 件へ増えた・根の形は後ろの α の spec 全部が乗る契約） | ✅ 完了（2026-09-24）。根は exe の隣（`AREKA_ROOT` で差し替え）・列挙 `areka_ghost::catalog`・記憶の鍵 `[last]`（ゴーストは App・バルーンとシェルは Ghost スコープ）・起動解決（ゴースト 6 分岐・バルーン 7 分岐）・告知 4 場面（`AREKA_NO_ALERT` で抑止）・ダミー窓の退役・smoke 3 方向。実機 4 点は spec の `signoff.md`。未起票だった 2 件は `alpha-release-signoff` の brief への追記と 登記だけの行「起動後の途中終了で記憶の確定が飛ぶ」 の登記へ |
-| `completed/default-balloon-bundle`（**09-18 起票・2 度目の再入**） | ✅ | 資産（既定バルーンの選定・展開フォルダ `vendors/sample_ghost/StayseeBalloon/` で保管（**`.nar` への畳み込みは未了**＝`default-balloon-nar-fold` へ登記）・候補 CC0 `Balloon for Staysee Syncfield`・第三者告知・`use_self_alpha` 常時 1 の裁量登記） | S | **A0-③**（**即時着手可**） | なし。`nar-install` と並走＝**既存の検体参照ファイルに触らず新規テストのみ**。id 定数 1 行は `baseware-root-layout` が足す・`COMPAT_ARCHITECTURE.md` §8 は `shell-implicit-surface` と別節 | −（見た目の採否は開発者が実機で・**今日にでも argv で確認可**） | ✅ 完了（2026-09-19） |
-| `completed/balloon-origin-outside-validrect` | ✅ | バグ（互換。`origin` を validrect の外に宣言したバルーンで**行頭が 1 文字欠ける**。SSP では欠けない＝PR #124 の撤去の前提「SSP でも壊れた定義」が目視で反証された） | S | **A0-④**（**即時着手可**） | なし（`nar-install` ✅・`default-balloon-bundle` ✅）。編集は `areka-emo-text/src/region.rs` の 1 関数＋兄弟テストの新設＋`COMPAT_ARCHITECTURE.md` §8 の 3 行＝**`nar-install` の 38 ファイルに `region.rs` は含まれない（実測）** | −（裁定済みの復元・要件で決めるのは記録のレベルだけ） | ✅ 完了（2026-09-19）。**完了 spec `areka-P0-balloon-vertical-canon` 要件 3.10 を上書き**（3.11・3.7 は不変） |
-| `completed/ghost-shell-balloon-switch`（**09-18 起票・09-20 に 3 分割の真ん中として存続**＝名前は完了 spec 7 本・`crates/areka/src/menu/mod.rs` のコメント・網羅台帳 `shiori.toml` が引受先として指すので変えない） | ✅ | 正典（切替要求の入口の型 `SwitchRequest`・名指しの `\![change,ghost,名(,--option=raise-event)]`・**ゴースト切替**＝`OnGhostChanging/Changed`・降ろして起こし直す経路の最初の呼び手・**汎用の通知の入口 1 本（09-26 必達）**・メニューの「ゴースト」枠の登記。**寿命の分離は `app-lifetime-separation`・シェルとバルーンは `shell-balloon-switch`・括り出しは `ghost-restart-unit`・名前解決は `ghost-change-name-resolution` へ切り出した**） | L（14〜16 タスク。09-26 再測定で 18〜21 に張り付き、名前解決を `ghost-change-name-resolution` へ切り出した） | **B3-①**（旧 B3・旧 A2） | `baseware-root-layout` ✅・`app-lifetime-separation` ✅・`ghost-restart-unit` ✅・`shiori-fault-notice` ✅・`host32-window-thread-pump` ✅・`kanade-boot-talkdone-drop` ✅ | ○（09-26 議題 3 件＝中断で切替を中止するか〔正典は中止〕・起動できないとき元へ戻すか・初めてのゴーストへの切替で `OnFirstBoot` を言うか。構造の残り 1 つ＝`GhostSession` を World へ置くか。1 周目の停止通知は必ず 1 件残る〔原因の値では終了と切替を見分けられない〕） | ✅ 完了（2026-09-27）。名指しの切替 `\![change,ghost,名]`＋メニューの「ゴースト」枠・`OnGhostChanging`／`OnGhostChanged`・送り出しと迎え入れの台詞・汎用の通知の入口 `KanadeMsg::RaiseEvent`・切替先が起きなければ既定ゴースト（emo2）へ戻して `OnBoot` の Ref6＝`halt`・Ref7＝切替先の名前。**裁定 13（09-27）**＝起動中の印（`[last] running`・きれいな終わりでだけ消す・SSP の終了マークと同じ形）・降ろした時点で最後のゴーストを既定へ・Windows のシャットダウン／ログオフでも `OnClose`（system）で降ろして印を消す。実機で見つけた窓の作り直しの初期配置の欠陥（2 人の間に 52px の隙間）を同 spec で直した。**完了時に登記**: 「OS のセッションの終了では SHIORI の待ちを短くする」・「起動がまるごと失敗すると起動中の印が消える」。後続 3 本の brief へ許可表の共用と印の判定の決まりを申し送り |
-| `completed/popup-menu-minimal`（**09-18 起票**） | ✅ | 製品（Win32 標準メニュー・項目 7 種・`*button.caption`・登記式） | M | **A0-②**（第 1 スライス＝説明書・終了・caption・visible・`MenuRegistry`）→ サブメニューは `baseware-root-layout`（列挙）・`ghost-shell-balloon-switch`（`SwitchRequest`）が登記 | なし（**検体参照 0＝`nar-install` と並走可**）。サブメニューの登記だけ `baseware-root-layout`・`ghost-shell-balloon-switch` の後 | −（裁定候補 2 件） | ✅ 完了（2026-09-19） |
-| `completed/ghost-install`（**09-18 起票・09-20 再測定・09-27 棚卸⑱再測定・09-28 棚卸⑲再測定**） | ✅ | 製品（メニューのファイル選択・`\![execute,install,path]`・`OnInstall*`・`terms.txt`〔バルーンの `.nar` も〕・網羅台帳 `descript_install` の 11 行を実装済みへ。**`areka-nar` の堅牢化 3 件は `nar-install-hardening` へ移した**。`alert.rs` に足すのは `terms.txt` の「はい／いいえを返す」口 1 つだけ〔失敗・`accept` 不一致は箱を出さず `OnInstallFailure`／`OnInstallRefuse`＝09-26「メッセージボックスは無粋」〕。イベントは汎用の通知の入口 `KanadeMsg::RaiseEvent` に乗せ、kanade に「インストール相」は足さない〔09-27〕。`lastinstalled` は `ghost-change-name-resolution` の受け皿へ書くだけ。**ドラッグ＆ドロップは `file-drop` へ切り出した**〔09-28 要件ディスカッション議題 1・開発者確定＝ギャップ分析の見立て 20〜26 が上限 20 を超えた。界面は依頼に書庫を 1 本以上並べられる形の 1 つ〕） | L（16〜22 タスク・09-28 要件ディスカッションで投げ込みを切り出した後。設計でなお 20 を超えたら置換語 2 つ・終了で待つ口が次の候補） | **B5-②**（`frame-phases-after-exit` と完全並走） | `nar-install` ✅・`baseware-root-layout` ✅・`ghost-shell-balloon-switch` ✅・`ghost-change-name-resolution` ✅（`lastinstalled` の受け皿＝`ghost_switch.rs` の `record_last_installed`・呼んだら `#[allow(dead_code)]` と注釈の 2 行を消す）・`session-mark-residue` ✅・`popup-menu-minimal` ✅・`nar-install-hardening` ✅・`shiori-fault-notice` ✅・`_Depends(confirmed): pilot-dropfiles-on-wuc-window`（✅ 09-26 go）。**`shell-balloon-switch` は機能の前提ではない**（09-27 実測・共有ファイル 5 本の都合で直列なだけ＝順序は入れ替え可） | ○（議題 4 件＝⑴ 起動中のゴーストの上書き〔(a) 切替の途中に口を挟む＝`switch_to` に触る／(b) 先に既定へ切り替えてから入れる／(c) 断る〕・⑵ 巻き戻せなかったときの伝え方・⑶ 利用条件の箱の閉じるボタン・**⑷ インストールの途中でアプリや Windows を終えたとき〔(a) `NarArchive::install` の中にいる間だけ期限付きで待つ／(b) 待たずに既知の制限へ〕**＝`areka-nar` の確定は `rename` 2 回で、その間に落ちると元のゴーストのフォルダが消える〔09-28 実測〕。設計の決め＝利用条件の箱とファイル選択は UI スレッドでなく背景スレッドで出す〔UI スレッドで出すと箱の間に来た OS の終了が後始末を飛ばす〕） | ✅ 完了（2026-09-29）。メニュー「インストール…」と台本 `\![execute,install,path,…]` の 2 入口・`OnInstall*` 6 語＋`OnGhostTerms*` 2 語（許可表 21 語）・利用条件のはい／いいえ・起動中のゴーストは降ろしてから展開（実機 277 ms）・終了で展開の終わりを上限 3 秒待つ・`lastinstalled`／`%lastghostname`／`%lastobjectname`。実機 4 項目は `completed/areka-P0-ghost-install/signoff.md`。依頼は書庫を 1 本以上並べられる形＝`file-drop` はそのまま渡せる |
-| `completed/file-drop`（**09-28 起票**・`ghost-install` の要件ディスカッション議題 1 で切り出し） | ✅ | 製品（ゴーストの窓へのドラッグ＆ドロップ＝wintf の `WM_DROPFILES` の腕と `DragQueryFileW`・窓に差す部品・ゴースト窓の `WS_EX_ACCEPTFILES`・振り分け〔書庫 → `ghost-install` の手続き／書庫でないファイル → `OnFileDrop2`／フォルダ → `OnDirectoryDrop`〕・MIME の表・バルーン窓への投げ込み・許可表 21 → 23・台帳 2 行。先進坑 go＝絵の外の処理は要らない） | S（5〜7 タスク） | **B6**（単独） | `ghost-install`（依頼の型と手続きの入口＝**機能の前提**・許可表の数・`ghost_session.rs`・台帳を共有＝直列）・`pilot-dropfiles-on-wuc-window` ✅（09-26 go）・`ghost-shell-balloon-switch` ✅（汎用の通知の入口） | −（Opus で足りる・答えで作業が変わる議題は見込み 0。MIME の表の広さは設計） | ✅ 完了（2026-09-29）。ゴーストの窓（キャラクター・バルーン）への投げ込みを受け、インストール対象（`install.txt` を持つ `.nar`／`.zip`）→ `ghost-install` の手続きへ 1 つの依頼（出どころ `WindowDrop`）／それ以外のファイル → `OnFileDrop2`（Reference 3 つ・MIME の表 38 項目）／フォルダ → `OnDirectoryDrop`。許可表 23 語・台帳 2 行を実装済みへ・`OnInstallCompleteAll` の本番の呼び手が成立。表示中のゴーストは替えない。実機 6 項目は `completed/areka-P0-file-drop/signoff.md`（受け取りの所要 0〜1 ms）。12 タスク |
-| `completed/balloon-color-emoji`（**09-29 起票**・`/kiro-discovery`・段「前倒し」で着手） | ✅ | 表現力（バルーンのカラー絵文字＝描画に `ENABLE_COLOR_FONT`＋文字の単位を `char` から書記素クラスタへ〔演出・計測・折り返し・範囲・再生時間〕。完了 `emo-text-layer` の「書記素クラスタは M2 検討事項」を引き受ける） | M | B6-② | なし（`file-drop` と共有 0・`shell-balloon-switch` とは `areka-emo-text` の `sink.rs` を避ける） | ○ | ✅ 完了（2026-09-30） |
-| `completed/network-update`（**09-18 起票・09-20 に結線の側として存続・09-27 棚卸⑱再測定・09-28 棚卸⑲再測定**） | ✅ | 製品（`OnUpdate*`／`OnUpdateOther*` の全列と Ref・台本の入口 3 つ・メニュー登記〔`updatebutton.caption` を実装済みへ〕・`OnUpdateProcessExec`・`useorigin1`・`\![execute,install,url]`・更新後の読み直し〔同じゴーストへの切替で代用〕・網羅台帳の更新・`WinHttpFetch::new()` の失敗を呼ぶ側で `error!`。イベントは `KanadeMsg::RaiseEvent` に乗せ「更新の相」は足さない〔09-27〕。**エンジン側の改修 1〜2 タスク〔成功した確定の後片付けで消せなかった `old/` を残骸と区別する・`crates/areka-update/src/{work,lib}.rs`〕を本仕様の先頭に入れる＝`update-engine-commit-gate` は起票しない**〔09-27・議題 ⑴ の推しは (b) 生かしたまま更新 → 読み直し・(d) は不成立〕） | M（13〜16 タスク・`OnUpdateProcessExec` を返信付きで入れると 16〜19） | **B7**（単独・09-28 に B7 から繰り下げ→**09-29 に `shell-balloon-switch` と入れ替えて B7 へ**） | `update-engine` ✅・`baseware-root-layout` ✅・`ghost-shell-balloon-switch` ✅・`ghost-install`（共有 8 本＋条件付き 2 本＝直列・機能の前提は `\![execute,install,url]` だけ。`ghost-install` の議題 ⑷ が (a) なら終了時に待つ口を背景の更新でも使う）・`shell-balloon-switch`（共有 5 本＝直列・**09-29 から本仕様が先**）・`popup-menu-minimal` ✅ | ○（議題 5 件＝⑴ 更新中の SHIORI〔(a)/(b)・推し (b)〕・⑶ url を α に入れるか・⑷ 実機の更新先に emo2 の配布サイトを使うか・⑸ `OnUpdateProcessExec` を入れるか〔返信付きの `KanadeMsg` が要る〕・⑹ 読み直しの後の起動の根〔切替の `OnGhostChanged` のままか〕。⑵ 告知は「箱を出さない」を既定として要件に書くだけ） | ✅ |
-| `completed/alpha-release-signoff`（**09-18 起票・09-20 再測定・09-27 棚卸⑱再測定・09-28 棚卸⑲再測定**） | ✅ | 完成の器（第三者の手順 12 項目〔09-27 に項目 13＝強制終了の次の起動が emo2 の `halt` の台詞、を足す案〕の実機一周・`dist/README.txt` の仕上げ・署名と宣言。**配布 zip は `alpha-package` で実在**。`shell-implicit-surface` の目視 5 項目を実機一周へ受け取った） | S（5〜7 タスク・09-27 再測定） | **B9**（単独・09-28 に B8 から繰り下げ） | α の残り全部＝`ghost-install`・`file-drop`・`shell-balloon-switch`・`network-update`（`frame-phases-after-exit`〔09-28 ✅〕・`session-mark-residue`・`ghost-change-name-resolution`・`ghost-shell-balloon-switch`・`alpha-package` ほかは ✅）。**開発者の手＝emo2 の辞書に `halt` の台詞を足す**（09-27・09-28 実測: `emo2.nar` の 110 項目に `halt`・`Reference6` が 0 件＝失敗を既定ゴーストの台詞で伝える方針が成り立たない。辞書はリポジトリの外・足したら `emo2.nar` を差し替える） | −（議題は開発者の決めごと＝2 体目を zip に最初から入れるか〔推しは入れない〕・`halt` の台詞が間に合わないとき既知の制限へ回すか・項目 13 を足すか） | ✅ 完了（2026-10-02・**α 完成宣言**。署名の根拠のコミット `8460506d`・zip `areka-alpha-x64-20261002-8460506.zip`・一周 13 項目＋付随 2 つが合〔項目 4 は縮退〕。emo2 は ghost_dev `75e560e` へ差し替え・壊れた DLL で OS の窓を出さない修正を本 spec で入れた。持ち越し 5 件は「alpha-release-signoff の持ち越し」節の 4 本へ起票・emo2 の 2 件は ghost_dev へ申し送り） |
-| `dpi-transition-two-tick-bounce` | α 後 | バグ（見た目・判定器・開発者裁定「拡大率の切替は頻繁に起こらないため許容」。**09-20: 判定器が見送りの窓を除いていない穴だけは「直接修正候補」へ切り出した。09-24: 前の裁定どおり直さないと再確認して取り下げた（「直接修正候補」節）**） | M | 旧 W14 | `present-gpu-transform-scale` ✅ | ○ | ⚪ |
-| `zorder-chain-residue`（A 群＝間欠赤。**09-20 実測: A-1 と A-2 の vblank の側は `#[ignore]`＋環境変数で隔離済み・生きているのは `SPIN_WAIT` 30 秒の spine の族 5 ファイルだけ・09-11 以降に main で赤を出した記録は 0 件**） | α 後 | 台帳（A 群はバグ。**A-2 の壁時計テスト族 4 本が A2 の切替テストで赤を出したら、その時点で A 群だけを単独枠に入れる**＝先回りしない） | M | 旧 W14 | `host32-window-thread-pump` ✅ | ○（A 群のみ） | ⚪ |
-| `surfaces-basepos` | α 後 | 正典（完全独立） | S | 旧 W14 | なし | − | ⚪ |
-| `property-query-channels`（⑴ スクリプト経路 1〜4） | α 後 | 正典（プロパティ系の先頭ゲート） | M〜L | 旧 W14 | `sakura-tag-word-boundary`・`text-decoration-canon`・`kanade-boot-talkdone-drop`・`sylphya-set-ledger` ✅ | ○ | ⚪ |
-| `emo-text-canon-residue`（⑶） | α 後 | 台帳（emo-text 残件 3。**09-20: 上流の待ちは両方解けた。09-24: 項目 12 は直接修正で直したので本行から外した＝残件 3**） | M | 旧 W14 | `text-decoration-canon`・`balloon-font-descript-keys` ✅ | − | ⚪ |
-| `balloon-canon-residue`（⑴ 系列 1〜6） | α 後 | 台帳（M2 互換面） | M | 旧 W14 | `present-gpu-transform-scale` ✅ | −（議題 2 件） | ⚪ |
-| `property-ipc-transport`（channels ⑵） | α 後 | 正典（輸送路のライブ実測が前提） | M | 旧 W14 | `host32-window-thread-pump`・`charset-canon` ✅ | ○ | ⚪ |
-| `translate-pipeline` | α 後 | 正典（→ makoto） | M | 旧 W15 | `kanade-boot-talkdone-drop` ✅・`property-query-channels` | ○ | ⚪ |
-| `text-align-shadow-canon`（decoration ⑵） | α 後 | 正典（寄せ 2＋影 3＋SC8 裁定） | M | 旧 W15 | `text-decoration-canon` ✅・`emo-text-canon-residue` | ○ | ⚪ |
-| `status-execution-states` | α 後 | 台帳 | S | 旧 W15 | `property-query-channels` | − | ⚪ |
-| `currentghost-property-tree`（`seriko.*` から `zorder` 除外） | α 後 | 正典（値の木） | L（19 項スライス可） | 旧 W15 | `property-query-channels`・`sylphya-set-ledger` ✅ | −（議題 2 件） | ⚪ |
-| `zorder-property` | α 後 | 正典（値の導出） | S | 旧 W15 | `sylphya-set-ledger` ✅・完了 zsp | − | ⚪ |
-| `makoto-dll-host` | α 後 | 正典（MAKOTO/2.0） | L（ⓐ loadu は `shiori-loadu` へ移管） | 旧 W16 | `charset-canon` ✅・`translate-pipeline`・`property-ipc-transport`・`host32-window-thread-pump` ✅ | ○ | ⚪ |
-| `sakura-time-directives` | α 後 | 正典（allowlist 8 族） | L（A/B/D → C） | 旧 W16 | `text-decoration-canon` ✅・`property-query-channels`・`translate-pipeline` | ○（C 群のみ） | ⚪ |
-| `property-catalog-lists` | α 後 | 正典（島単位・`ghostlist`／`balloonlist` の供給源は `baseware-root-layout` の列挙） | M | 旧 W16 | `currentghost-property-tree`・**`baseware-root-layout`** | − | ⚪ |
-| `choice-marker-styling` | α 後 | 正典（`\f[cursor*]` 10） | S | 旧 W16 | `text-decoration-canon` ✅・`text-align-shadow-canon` | − | ⚪ |
-| `anchor-tag-canon` | α 後 | 正典（`\_a`＋装飾 16） | M | 旧 W17 | `text-decoration-canon` ✅・`text-align-shadow-canon`・`choice-marker-styling` | ○ | ⚪ |
-| `balloon-lifecycle-events`（residue ⑵） | α 後 | 正典（表示寿命 7〜10） | M | 旧 W17 | `text-decoration-canon` ✅・`sakura-time-directives`・`translate-pipeline` | −（裁定 2 件） | ⚪ |
-| `tick-gate-adoption` | 保留 | 性能（既定 OFF の門の採否） | M〜L | 保留 | 「長時間試行禁止」と両立する A/B 設計を要件で先に組む（単独） | ○ | ⚪ |
-| `ukadoc-coverage-custody`（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 調査の番人と統合担当の建て直し（下の節「登記だけの行」を見よ） | S〜M | α 後 | なし（着手は α 完了後の棚卸で just-in-time） | − | ⚪ |
-| `present-write-coherence` の未達 40 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 性能（完了仕様が「引受先なし・新規仕様の起票が必要」と自ら書いた残量） | L | α 後 | なし。着手前に当時の実測を採り直す | ○ | ⚪ |
-| 正典語彙の孤児 2 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 正典（`font.outline` の白抜き**描画**／「スタイルシートのキーワード」の所有） | S | α 後 | なし | − | ⚪ |
-| 配布物を束ねる／作る側の 3 件（仮称・**未起票**＝brief なし・2026-09-19 登記） | α 後 | 正典（`type,package` を解く・`developer_options.txt` を読む側＝配布物を**作る**道具） | XS〜S | α 後 | なし | − | ⚪ |
-| `completed/default-balloon-nar-fold`（**09-19 登記・09-20 起票**） | ✅ | 資産（`vendors/sample_ghost/StayseeBalloon/` が展開フォルダのまま残っている＝`default-balloon-bundle` と `nar-install` が互いを指したまま両方着地し、誰も畳まなかった。畳む・登記表 `SAMPLES` に 1 行・直書きの検体数 2 か所と名前の一覧 2 か所と関数名を 5→6 に・追跡から外す。**旧手順に欠けていた 1 点**＝`crates/areka-emo-text/tests/staysee_balloon_fixture_test.rs` が展開フォルダを直接指しており、窓口 `SampleRoot` へ付け替えないと結合テスト一式が赤になる） | XS（2〜3 タスク） | **A1** | `nar-install` ✅・`default-balloon-bundle` ✅（両方着地済み＝いつでも着手可） | − | ✅ 完了（2026-09-24） |
-| `completed/wintf-drag-state-rest-contract`（**09-19 起票・09-20 に相乗り 2 件**） | ✅ | バグ（構造・潜在＝wintf のドラッグ状態は `JustEnded` で休み続けるのに説明は「1 フレームのみ」・`reset_to_idle` の呼び手が製品に無い。`popup-menu-minimal` の実機確認でメニューが出なくなる実害 1 件・利用側は是正済み）＋**`popup-menu-residue` の残件 1・2 を相乗り**（別の窓の預かりの誤配＝`trigger.rs` の 1 条件／台本の `\![open,readme]` が説明書の無いゴーストで `error!` を出す）＝同じ `crates/areka/src/menu/trigger.rs` を触るので 1 本にまとめた | S（5〜7 タスク） | **A1** | `popup-menu-minimal` ✅ | −（裁定 2 件＝直し方 2 案・記録の水準） | ✅ 完了（2026-09-24） |
-| `popup-menu-residue`（**09-19 起票**） | α 後 | 台帳（`popup-menu-minimal` の最終検証の残件のうち 8 件＝記録の文言と接頭辞 4・テストの穴 2・引受先の無い語彙 4 件・World 借用中の `ShellExecuteW`。**残件 1・2 は 09-20 に `wintf-drag-state-rest-contract` へ移した**。7 番の sink の本数は `balloon-break` で 7 本になった） | S | α 後（`menu/` に触る次の spec へ相乗り可） | `popup-menu-minimal` ✅ | − | ⚪ |
-| `coverage-roadmap-refresh`（**09-19 起票**） | α 後 | 台帳（`doc/ukadoc-coverage/` の検査の外にある手書きの数の棚卸と撮り直し・候補名 `areka-P0-network-update` の重なり・波の欄の旧編成・各 spec の「統合担当への申し送り」の受け皿。**`ukadoc-coverage-custody`（仮称・登記だけ）（登記だけの行）と守備範囲が重なる**＝合流の可否は α 完成宣言のあとの棚卸で決める） | S〜M | α 後（A0 の 3 本が main へ入った直後が最も安い） | `nar-install`・`popup-menu-minimal`・`default-balloon-bundle` | − | ⚪ |
-| `completed/balloon-break`（**09-20 起票**・開発者指示） | ✅ | 互換（バルーンの左ダブルクリックで再生中の台本を止め、全バルーンを即時に隠す。ukadoc に操作の定義は無いが `\![enter,nouserbreakmode]`・`\t`・`OnBalloonBreak` が存在を前提にしている。`nouserbreakmode` の無効化を含む。`OnBalloonBreak` の発火は `balloon-lifecycle-events` に残す。**09-20 要件裁定で範囲が 1 つ増えた**＝`\-` を含む台本の中断は終了する・終了イベントの別れの台詞は `\-` の有無によらず必ず終了で終わる〔完了 `areka-P0-kanade` 要件 4.5 と `areka-P0-popup-menu-minimal` 要件 5.4 を上書き・終了の握手が定常へ戻る経路は 0 本になる・`kanade/schedule/close.rs` の終了拒否の腕とテスト 3 本（`close.rs` 2 本＋`close_test_handshake_tests.rs` 1 本）が変わる〕） | M | **開発者指示で 09-20 着手**（α のゴールには要らないが、指示が段の規則に優先する） | なし（先行必須の未完 spec は無い。`kanade/schedule/*` を触る `balloon-lifecycle-events`・`translate-pipeline`・`sakura-time-directives` とは並走させない） | −（裁定 6 件・いずれも利用者から見える結果で語れる） | ✅ 完了（2026-09-20） |
-| `completed/shiori-loadu`（**09-20 起票**・開発者指示） | ✅ | バグ（実害＝**ログ無しの失敗**。`load` へ渡すパスを既定コードページへ変換するとき、表せない字の置換を検出していない＝`WideCharToMultiByte` の `lpUsedDefaultChar` が `None`。日本語以外のロケールや特殊な字を含むフォルダに置かれたゴーストが、ログ 0 行で辞書を見失う）＋正典（ukadoc DLL 共通仕様の 4 つ目の入口 `loadu`＝置き場所のパスを UTF-8 で渡す。`load` と両方在れば `loadu` を優先。手元の検体で両方の枝が踏める＝YAYA は `loadu` 持ち・里々と pasta は `load` のみ。`makoto-dll-host` の切れ端 ⓐ を SHIORI を主語にして切り出した） | S（6〜7 タスク） | **A1** | なし（完了 `host32-shiori-load`・`host32-window-thread-pump` ✅・`charset-canon` ✅ の上に建つ。触るのは `crates/shiori-host32-helper/src/{shiori_proxy.rs,main.rs}` と新しい i686 の偽 DLL クレート＝09-20 実測で A1 の他 spec と共有するのは `doc/COMPAT_ARCHITECTURE.md` §8 の末尾追記と生成物 `THIRD-PARTY-NOTICES.md` だけ） | −（裁定 3 件は 09-20 に承認済み） | ✅ 完了（2026-09-24）。`loadu` 優先・無ければ `load`・表せない字の警告・入口名の記録・戻りを 1 バイトで受ける。**完了 spec `areka-P0-host32-shiori-load` 要件 4.2・4.6・6.2 を上書き**（`doc/COMPAT_ARCHITECTURE.md` §8）。実機で YAYA と pasta が既定コードページに無い字のフォルダから喋るようになった |
-| `completed/app-lifetime-separation`（**09-20 起票**・`ghost-shell-balloon-switch` から切り出し） | ✅ | 基盤（アプリの寿命を窓の数から切り離す。**「窓 0 で終了」の所在は `main.rs` ではなく wintf の `wire_shutdown_hook`**＝`ghost-shell-balloon-switch` の brief と旧 A2 行が見落としていた。wintf の既定と example 7 本は変えず、areka だけが切り替える。今日の終了操作 6 種はどれも同じ見え方で終わる） | S（5〜7 タスク） | **A1** | なし（**`baseware-root-layout` を待たない**＝列挙も記憶も使わない） | ○（終了経路の形を決める・後ろのゴースト切替がこの上に建つ） | ✅ 完了（2026-09-23） |
-| `completed/shell-balloon-switch`（**09-20 起票**・`ghost-shell-balloon-switch` から切り出し・**09-27 棚卸⑱再測定・09-28 棚卸⑲再測定**） | ✅ | 正典（`\![change,shell\|balloon]`・`OnShellChanging/Changed`・`OnBalloonChange`・メニューの「シェル」「バルーン」枠の登記〔手本は `menu/ghost_frame.rs`〕・起動時の「最後のシェル」の適用・**present に古い装着を片付ける口**〔`pilot-balloon-asset-swap` の判定「直す」＝案 B〕。**09-27: `SwitchRequest` はゴースト専用で kanade の `ChangeGhost` に結びつく＝シェル・バルーンの要求の型と入口は自前〔`switch_cue.rs`・`frame/switch.rs`〕**。3 イベントは `schedule/events.rs` の許可表に 3 行足して `RaiseEvent` に乗せる。棚卸⑯の「`ConfigInputs` に shell の欄」は取り下げ） | M（15〜18 タスク・09-27 再測定。20 に触れたら shell/balloon の `random`／`lastinstalled` を Out に） | **B8**（単独・09-28 に `file-drop` の起票で B6 から繰り下げ→**09-29 に `network-update` と入れ替えて B8 へ**） | `baseware-root-layout` ✅・`ghost-shell-balloon-switch` ✅・`default-balloon-nar-fold` ✅・`ghost-restart-unit` ✅・`_Depends(confirmed): pilot-balloon-asset-swap`（09-24 充足＝案 B）・**`file-drop`**（許可表の数・`ghost_session.rs`・台帳を共有＝直列）・**`ghost-install`**（共有 7 本〔`consumer_ledger.rs`・`emo2_boot/mod.rs`・`menu/mod.rs`・`ghost_session.rs`・`areka-ghost/src/catalog.rs`・kanade `events.rs` と `events_change_tests.rs`〕＋`dist/README.txt` の同じ 2 行＝直列・機能の前提ではない＝順序は入れ替え可）・`session-mark-residue` ✅ | ○（議題 3 件＝2 つ目のシェルの検体・会話途中の切替で文字と残りの台本を引き継ぐか・`random`／`lastinstalled` を入れるか〔シェル名の `lastinstalled` は原文が「ゴースト」と書く〕。名の引き方は `resolve_switch_target` に揃えて取り下げ。**起動時に最後のシェルを効かせる口が無いまま切替だけ作ると次の起動で記憶が消える**＝起動時の適用は必須） | ✅ 完了（2026-10-01） |
-| `completed/update-engine`（**09-20 起票**・`network-update` から切り出し・前例は `nar-install` と `ghost-install` の分け方） | ✅ | 基盤（新規クレート＝`updates2.dau`／`updates.txt` の読み手・MD5 の差分・`HttpFetch` の境界と偽実装と WinHTTP 実装・一時フォルダからの**全か無かの確定**・`delete.txt`。イベントは送らない・網羅台帳に触らない。入力は `homeurl` の文字列と対象フォルダのパスだけ） | M（12〜14 タスク） | **A1**（α の直列経路の外で最も長い仕事を先に走らせる） | なし | ○（第三者のフォルダを書き換える・失敗時の保全が主題。裁定＝MD5 は OS の CNG・HTTP は WinHTTP で外部クレートの追加 0＝`tech.md` 登記済み） | ✅（09-24 完了・`completed/areka-P0-update-engine`・`crates/areka-update`） |
-| `completed/nar-install-hardening`（**09-20 起票**・`nar-install` の最終検証の先送り 3 件を `ghost-install` から切り出し） | ✅ | バグ（堅牢性＝第三者の `.nar` を受ける口。1 要素あたりの名前の長さに上限が無く 30 万文字が受理される／巻き戻せなかったとき元の木の在りかを利用者へ伝える手段が無い／失敗の記録の `work` の欄が確定の段の失敗で一度も検査されていない。`areka-nar` の呼び手は今 `sample-ghost-kit` だけ＝いま直せば追随 0） | XS〜S（3〜5 タスク） | **A1** | `nar-install` ✅ | −（裁定 1 件＝上限の値と数え方） | ✅ 完了（2026-09-24）。名前・パスの長さの上限 200（UTF-16 の単位・超えたら `PathTooLong` で書庫全体を拒否・`install.txt` のフォルダ名にも同じ上限）、巻き戻せなかった元の木の在りかを `NarError::Io.survivors` で返し、その作業フォルダを 7 日のあいだ片付けから守る、確定の段の失敗を公開の入口で起こして記録の `work` の欄を検査するテスト。§8 に 1 行。残りの 2 か所（`raw_hex`・`UnsupportedEntry.name`）は「直接修正候補」へ |
-| `completed/keycolor-clickthrough-coverage`（**09-20 起票**・`shell-implicit-surface` が「直さずに残したもの」・引受先がどこにも無かった） | ✅ | テストの穴（実害に直結。`shell-implicit-surface` の要件 4 の 10 番＝抜き色で透明になった場所のクリックが背後の窓へ抜ける、を赤にできるテストが 0 本。抜き色 → α と、α → 当たりのマスクの両端は在るが**繋ぐテストが無い**。壊れると絵の四角い外枠の全面がクリックを食い、周りのデスクトップが操作できない。09-20 に目視では確認済み。相乗りの候補 3 件＝同じ完了 spec のテストの穴） | XS〜S（2〜4 タスク） | **A1** | `shell-implicit-surface` ✅・`nar-install` ✅ | − | ✅ 完了（2026-09-24）。検体 2 体の 3 面を焼く → 合成する → 当たりのマスクの順で通し、左上の画素と同じ色の画素がマスクで「外」・それ以外が「内」であることを全画素で確かめる常時テスト 1 本（`presenter_keycolor_clickthrough_tests.rs`）。3 段それぞれの差し替えで 3 面すべて赤・戻して赤 0 を記録。製品コードの変更 0 行。相乗り 3 件（compose の受け口の較正・examples 3 本の本文走査・examples の私有関数の改名）＋実装中に見つけた穴（compose クレートに転写した α を捨てる退行を止めるテストが無い）を `blit_transparent_alpha_tests.rs` で塞いだ。実機の目視は `alpha-release-signoff` に残る |
-| `tools/perf` の自己検査の赤（仮称・**未起票**＝brief なし・2026-09-20 登記） | α 後 | 道具のバグ（`perf-loop.ps1 selftest` が終了コード 4 で止まる・`nar-install` 以前からの赤。未検証の 3 経路。利用者には無関係＝性能改善ループを次に回す前に直す。下の節を見よ） | S | α 後 | なし | − | ⚪ |
-| `completed/areka-P0-shiori-fault-notice`（**09-24 起票**・`shiori-loadu` の実機確認で見えた・引受先がどこにも無かった） | ✅ | バグ（利用者から見える実害。SHIORI が動かないと〔DLL が読めない・初期化が偽・エラー応答・応答の期限切れ〕、アプリが起動から 0.5〜2 秒で**黙って消える**。ログに `ERROR` は残るが利用者向けの表示は 0 件・終了コードは 0。2026-09-23 に `konnoyayame`・`emo2` で実測。`loadu` でその 2 体は直ったが、形そのものは第三者のどのゴーストでも起きる。`baseware-root-layout` は「根が無い」、`ghost-shell-balloon-switch` は「切替先が起動できない」だけを持つ） | S（見積もり 5〜7 タスク・09-24 再測定 → 実績 19 タスク＝裁定 5・6 の相乗りと、実機で見つかった 2 件〔i686 の期限切れの分類・wintf の `run()` 後のフレーム〕の根本修正を含む） | **B1-①**（バグ＝先頭。旧 A1 後段②） | `baseware-root-layout` ✅（告知の部品 `alert.rs`＝起動専用の 4 場面で `pub(crate)`・本仕様が一般化し `ghost-install` が乗る）・`shiori-loadu` ✅・`app-lifetime-separation` ✅ | ○（09-24 議題 5 件＝Fault の終了コードを非 0 にするか〔完了 3.8 の上書き〕・失敗の種類を告知に載せるか〔kanade 3 本に手が入る〕・会話中の 500 で終え続けるか・告知を出す場所・LogSink 側の起動で Fault が起きると窓が残って固まる穴を拾うか。**登記だけの行「起動後の途中終了で記憶の確定が飛ぶ」 の相乗り候補**） | ✅ 2026-09-25 完了 |
-| SHIORI へ渡す置き場所のパスの形（仮称・**未起票**＝brief なし・2026-09-24 登記） | α 後 | 互換（潜在。下の節を見よ） | XS | α 後 | なし | − | ⚪ |
-| 起動後の途中終了で記憶の確定が飛ぶ（仮称・**未起票**＝brief なし・2026-09-24 登記） | ✅ | バグ（潜在。下の節を見よ。**`shiori-fault-notice` で修正**＝2026-09-24 の要件ディスカッションの開発者裁定で `shiori-fault-notice` が拾った。`app.run()` が失敗を返しても後始末〔再生ループの停止 → ゴースト実行環境の終了統括 → SERIKO の合流 → 性能報告〕を通してから 0 以外で終える＝`crates/areka/src/main.rs` の `finish_after_run`。`ghost-restart-unit` はこの形を括り出しのときに関数の中へ運ぶ） | XS | B1（`shiori-fault-notice` に相乗り） | なし | − | ✅ `shiori-fault-notice` で修正 |
-| `completed/areka-P0-ghost-restart-unit`（**09-24 棚卸⑯起票**・`ghost-shell-balloon-switch` から括り出し） | ✅ | 基盤（同じプロセスの中でゴーストを降ろして起こし直せる形にする＝**振る舞いを変えない括り出し**。`fn main` の終了順序を関数へ／`wire_*` 8 か所の「1 回だけ登録」と「ゴーストごとの状態」の分離／`wire_emo2_boot` の `&mut World` 化と `open_startup_window` の分割／「全窓を閉じるが終了しない」操作。正典の語彙は持たない・kanade に触らない） | M（6〜7 タスク → 実績 13 タスク・差し戻し 2 回＝古い前提の doc が「1 度」の grep に掛からない／2 周テストが 1 周目の fallback で空振り） | **B2**（単独） | `app-lifetime-separation` ✅・`baseware-root-layout` ✅・**`shiori-fault-notice`**（`main.rs`・`app_exit.rs`・`frame.rs` を共有＝直列） | ○（括り出しの形が後ろの切替 3 本の建て方を決める・`app-lifetime-separation` と同じ種類の基盤） | ✅ 2026-09-26 完了（1 周目の `KanadeStopped` が受け口に残る件は `ghost-shell-balloon-switch` の brief 項目 3 へ申し送り） |
-| `completed/pilot-balloon-asset-swap`（**09-24 棚卸⑯起票**・先進坑・`shell-balloon-switch` の go ゲート） | ✅ | 先進坑（SHIORI を生かしたまま present のバルーン資産だけを差し替えて 1 フレームも崩れずに表示が続くか＝`EmoPresenter::attach_target` の置き換えで足りるか。成果物は知見＝README 3 幕・go 判定は開発者） | S（3〜5 タスク） | **B1-②**（並走。触るのは `crates/pilot/` と `crates/pilot/Cargo.toml` だけ＝共有 0） | なし | −（答えは実験が出す） | ✅ 完了（2026-09-24）。**開発者判定＝直す**＝同じ id の `attach_target` 再登録だけでは古い装着が残り絵も当たり判定も重なったまま揃わない（9 走行とも未完）。古い装着を消してから同じ呼び出しの中で再登録（`Update` の段）なら反映待ち以外の崩れは 9 走行とも 0・反映待ちは本番の `[ID]` と同じ床 1 以下（静かな走行）。→ `shell-balloon-switch` は案 B で進め present に古い装着を片付ける口を足す（`shell-balloon-switch` の brief へ申し送り済み）。一次記録は `crates/pilot/examples/pilot-balloon-asset-swap/README.md`。棚卸で wintf の兄弟の重なり順の食い違いを 登記だけの行「wintf の兄弟の重なり順」 に登記 |
-| wintf の兄弟の重なり順が描画と当たり判定で逆（仮称・**未起票**＝brief なし・2026-09-24 登記） | α 後 | バグ（潜在。下の節を見よ。**`shell-balloon-switch` の本命の経路〔消してから再登録〕では兄弟が 2 組にならないので表に出ない**＝`shell-balloon-switch` が「古い装着を残したまま新しい装着を足す」形を選んだときだけ相乗りを検討） | XS〜S | α 後 | なし | − | ⚪ |
-| 壊れたゴーストを表示し続ける（SSP 忠実の切替失敗の形・仮称・**未起票**＝brief なし・2026-09-26 登記） | α 後 | 互換（SSP は切替先の SHIORI が死んでいても切替を成功扱いにしてシェルを表示し続け、失敗を記憶して次回起動で FIRST ゴーストへ強制切替する〔開発者の説明〕。areka は `ghost-shell-balloon-switch` 裁定 10 で「既定ゴースト（emo2）へ戻す＋`OnBoot` の Ref6＝`halt`・Ref7＝切替先の名前」を採り、この形は採らなかった。下の節を見よ） | M | α 後 | `ghost-shell-balloon-switch` ✅・完了 `shiori-fault-notice` | − | ⚪ |
-| `completed/areka-P0-session-mark-residue`（**09-27 棚卸⑱起票**・`ghost-shell-balloon-switch` の完了で残った穴 3 つ＝登記だけの行 2 本〔「OS のセッションの終了では SHIORI の待ちを短くする」・「起動がまるごと失敗すると起動中の印が消える」〕の格上げ＋完了 spec の `signoff.md`「気付いたこと」8 の未確認の申し送り） | ✅ | バグ（潜在。⑴ SHIORI が固まったまま Windows を終了すると降ろす処理が最悪約 100 秒止まり OS に打ち切られる＝開発者の決め〔09-27〕で OS の終了のときだけ期限を短くする ⑵ 最初の起動が LogSink へ倒れた後にきれいに終えると起動中の印が消え、次も同じ失敗を繰り返して `halt` が付かない＝裁定 13 に反する ⑶ OS の終了の受け手の join 中に別スレッドから同期の送信が重なると止まりうる〔未確認〕） | S（7〜10 タスク → 実績 16 タスク・差し戻し 4 回〔各 1 回〕） | **B4-①**（バグ＝先頭） | `ghost-shell-balloon-switch` ✅・`shiori-fault-notice` ✅・`ghost-restart-unit` ✅ | −（議題 2 件は開発者の決めごと＝期限の値・倒れ込みの扱い〔推しは「倒れたこと自体を印を残す理由にする」〕） | ✅ 2026-09-28 完了（OS のセッションの終了の後始末は SHIORI を待つ合計を 3 秒に収め、超えたら補助プロセスを終わらせて印を残す〔実機で 3006 ms を確認〕・最初の起動が LogSink へ倒れた回は印を残す・join と同期の送信は輪にならないことを再現テストと許可表の検査で固定。`InProc` に外から終わらせる手が無い件は登記の行「`InProc` の SHIORI を外から終わらせる手が無い」へ） |
-| `frame-phases-after-exit`（**09-28 棚卸⑲起票**・表に行を持たない覚え書き「メニューの終了の直後に表示の適用が窓の無い所へ届き ERROR が 1 件残る」の格上げ） | ✅ | バグ（ログ。メニューの「終了」で終えると、終了の巡で全窓を消した直後に毎フレームの処理 `emo2_frame_system`〔`emo2_boot/frame.rs`〕が終了の指示を見ずに全相を回し、キューに残っていた SERIKO の `ShowSurface` を消えた窓へ適用して `derive_scale` の `error!` 1 件と WARN 7 件が残る。利用者の画面には何も起きないが、α の実機確認のログで「正常な終了なのに ERROR」が混ざる。ゴースト切替の途中では起きない〔`Emo2Wiring` が同じ呼び出しの中で差し替わる・09-28 静的に確認〕。直す位置は `emo2_frame_system` の先頭 1 か所＝`AppExit::is_requested()` なら `debug!` を 1 行残して戻る〔`quit_app` は窓を消してから終了を指示する＝終了指示済みは窓なしと同じ〕） | XS（2〜3 タスク） | **B5-①**（バグ＝先頭。`ghost-install` と完全並走＝触るのは `emo2_boot/frame.rs` と新しい兄弟テスト `frame_exit_gate_tests.rs` だけ） | なし | −（止める位置は 1 か所・level は前例〔完了 `dpi-window-vanish`〕に揃える＝議題 0） | ✅ |
-| `completed/areka-P0-ghost-change-name-resolution`（**09-26 棚卸⑰起票**・`ghost-shell-balloon-switch` から切り出し・**09-27 棚卸⑱再測定**） | ✅ | 正典（`\+`／`\_+`〔`decode_bare` に 2 腕＝`\![change,ghost,random\|sequential]` の別名・`compile.rs` に触らない〕・ゴースト名 `random`／`sequential`／`lastinstalled` の解決〔`emo2_boot/ghost_switch.rs` の純関数 `resolve_switch_target` を広げる・`sequential` の並び＝`list_ghosts` のフォルダ名昇順〕・`lastinstalled` の受け皿〔`ghost_switch.rs` に `Resource` 1 つ・`ghost-install` が書く〕。里々 wiki の定石「インストールしたゴーストに即チェンジ」＝`OnInstallComplete` から `\![change,ghost,lastinstalled]`） | S（4〜6 タスク → 実績 9 タスク・差し戻し 0 回） | **B4-②**（`session-mark-residue` と完全並走＝触るのは `ghost_switch.rs`・`ghost_switch_tests.rs`・新しい兄弟テスト・`areka-parsers/src/sakura/decode.rs`・`decode_tests.rs` だけ） | `ghost-shell-balloon-switch` ✅ | −（議題 0） | ✅ 2026-09-27 完了（開発者の目視で検体→emo2 を確認。`lastinstalled` の実機確認と受け皿の名前 `LastInstalledGhost`／`record_last_installed` は `ghost-install` の brief へ申し送り。目視の走行で見えた終了間際の ERROR は登記の行「メニューの終了の直後に表示の適用が窓の無い所へ届き ERROR が 1 件残る」） |
-| `completed/pilot-dropfiles-on-wuc-window`（**09-26 棚卸⑰起票**・先進坑・`ghost-install` の go ゲート） | ✅ | 先進坑（WUC 合成〔`WS_EX_NOREDIRECTIONBITMAP`〕・クリック透過のトグル付きのゴースト窓に `.nar` を落としたとき `WM_DROPFILES` が届き `DragQueryFileW` でパスが取れるか・絵の外では背後へ抜けるか。届かなければ `ghost-install` は `IDropTarget`〔OLE・STA〕へ＝棚卸⑭の仮裁定 7 の見直し。成果物は知見＝README 3 幕・go 判定は開発者） | XS〜S（1〜3 タスク） | **B3-②**（並走。触るのは `crates/pilot/examples/pilot-dropfiles-on-wuc-window/` と要れば `crates/pilot/Cargo.toml` だけ＝共有 0） | なし | −（答えは実験が出す） | ✅ 完了（2026-09-26）・**開発者判定 go**。本番と同じ様式＋`WS_EX_ACCEPTFILES` の窓で、絵の上への落としは 5 回とも `WM_DROPFILES` が窓手続きまで届きパスが取れた・絵の外（透過中）は背後の窓へ抜けた・透過の付け外し 36 回の後も宣言は残った。`DragAcceptFiles` も付け直しも不要＝`ghost-install` は `WM_DROPFILES`（`dispatch_window_message` に 1 分岐）で行ける・仮裁定 7 はそのまま。結果は `ghost-install` の brief へ申し送り済み |
-| `completed/alpha-package`（**09-26 棚卸⑰起票**・`alpha-release-signoff` から切り出し） | ✅ | 製品（配布スクリプト `tools/package-alpha.ps1`・zip の展開先での起動確認〔`AREKA_APP_SMOKE_EXIT_MS`〕・第三者向け README の骨子・根の README のライセンス表記と古い数の是正。`crates/` に触らない） | S（4〜5 タスク） | **B3-③**（並走。触るのは `tools/`・根の `README.md`・新規の第三者向け README〔＋議題しだいで `LICENSE-APACHE`・根の `Cargo.toml` の `license` 1 行〕だけ＝共有 0） | なし（完了 `nar-install`・`baseware-root-layout`・`default-balloon-nar-fold` の成果の上に建つ） | −（議題 4 件は開発者の決めごと＝`emo2-kakukaku` を入れるか・MIT 単独か MIT OR Apache-2.0 か・`Cargo.lock` を追跡するか。**emo2 の同梱は 09-26 に開発者が裁定済み**＝同梱可・シェルは MIT でないこと、ファーストゴーストとしては使えるがシェルの抜き出し利用は不可であることを README と告知に明記） | ✅ 完了（2026-09-26）。`tools/package-alpha.ps1`＝release（`+crt-static`）の x64 本体と i686 helper・`emo2`・`emo2-kakukaku`・`StayseeBalloon`・第三者向け `dist/README.txt`・謝辞・`BUILD-INFO.txt` を zip に組み中身を 8 項目で判定・`-Check` で展開した zip を起動し記録の 6 条件で判定。`Cargo.lock` を追跡へ（完了と開発の手順も改訂）・根の README は MIT に是正。**実装中に判明**: City-Pop'n の条件は書庫の `CityPop.txt` に在った（`alpha-release-signoff` の brief 13 へ申し送り）・kanade は自動終了の後にも挨拶の行を出す（会話の判定は自動終了より前だけを数える） |
-| `mcp-server-core`（**09-29 起票**・SSP MCP の移植 M1） | α 後 | 基盤（新クレート `areka-mcp`＝公式 SDK `rmcp`〔tokio は専用スレッドに閉じ込める〕で `127.0.0.1` の Streamable HTTP・無状態と JSON 応答・Origin 検査・help ページ。ツールは 0 本。既定ポート 9821・`AREKA_MCP_PORT`） | M | α 後（M1） | α 完成宣言 | ○ | ⚪ |
-| `mcp-tool-entrances`（**09-29 起票**・M2） | α 後 | 基盤（ツール 10 本の定義を SSP と逐語一致・引数検査・`ghost_name` の解決・World への橋・`get_active_ghost_list` だけ本物・残り 9 本はダミー） | M | α 後（M2） | `mcp-server-core` | ○ | ⚪ |
-| `mcp-stdio-bridge`（**09-29 起票**・M2 の並走枠） | α 後 | 製品（Claude Desktop 用の stdio ⇔ HTTP 中継 exe＝SSP の `mcp.exe` 相当。Desktop の JSON は `command` しか書けず、コネクタはクラウドから来るので 127.0.0.1 へ届かない） | S | α 後（M2） | `mcp-server-core` | − | ⚪ |
-| `mcp-get-property`（**09-29 起票**・M3） | α 後 | 製品（`get_property`＝sylphya の reader の取り出し口） | S | α 後（M3） | `mcp-tool-entrances` | − | ⚪ |
-| `mcp-kanade-tools`（**09-29 起票**・M3） | α 後 | 製品（`get_status`・`sakurascript`・`raise_event`＝kanade の問い合わせと外からの台本・許可表の迂回・返り台本の文字列） | M〜L | α 後（M3） | `mcp-tool-entrances` | ○ | ⚪ |
-| `mcp-expression-table`（**09-29 起票**・M3） | α 後 | 製品（`get_expression_table`＝表情の説明の読み取りをパーサへ足す） | S〜M | α 後（M3） | `mcp-tool-entrances` | ○ | ⚪ |
-| `mcp-log-history`（**09-29 起票**・M3） | α 後 | 基盤（`get_log`＝tracing の Layer で 5 種別・通し番号の履歴・target 名の取り決め） | M | α 後（M3） | `mcp-tool-entrances` | ○ | ⚪ |
-| `mcp-reload`（**09-29 起票**・M3） | α 後 | 正典＋製品（`reload` と台本の `\![reload,…]`・makoto は縮退の口＝`makoto-dll-host` へ申し送り済み） | M〜L | α 後（M3） | `mcp-tool-entrances`・`shell-balloon-switch` | ○ | ⚪ |
-| `mcp-dump-images`（**09-29 起票**・M3） | α 後 | 製品（`dump_surface`・`dump_balloon`＝読み戻し・WIC で PNG・base64） | M | α 後（M3） | `mcp-tool-entrances` | ○ | ⚪ |
-| `mcp-strict-errors`（**09-29 起票**・M4） | α 後 | 正典（`strict`＝不在の surface／アニメ／バルーン・未知のタグ／`\!` コマンド／実体参照をエラーログへ） | M | α 後（M4） | `mcp-log-history`・`mcp-kanade-tools` | ○ | ⚪ |
-| `network-update-canon-order`（**09-30 起票**・`network-update` の完了時の棚卸） | α 後 | 正典（ukadoc コミット `1ea881a` で明文化された「ネットワーク更新イベントの発生順序」との差 4＋1＝MD5 の取り直し・台詞の終わりを待って次へ・対象ごとのイベントの揃い・`OnUpdateResultEx` → `OnUpdateResult` の 2 段・自動更新の Begin の位置。kanade に「台詞の後に進む」口が要る＝既知の制限「総括が締めの台詞を待たない」と同根。開発者指示「α 後の対応」） | M | α 後 | `network-update` ✅・`update-engine` ✅・`shell-balloon-switch` | ○ | ⚪ |
-| `completed/balloon-reappear-short-talk`（**10-01 起票**・`shell-balloon-switch` の完了の棚卸・開発者指示） | ✅ | バグ（見た目。隠れたバルーン〔時間切れ・利用者の中断・バルーンの切替の後〕が、次の台詞が 1 文字だけだと現れない＝台詞は流れているのに吹き出しが出ない。台詞の始まりの全消去と 1 文字目が同じフレームに届くと、見える文字の数が増えて見えない〔`emo2_boot/balloon_visibility.rs` の `decide_content`〕。完了 `balloon-visibility` の規則の穴。1 フレーム遅らせる解は取らない） | S | 単独（ウェーブ表の外・B9 の前に着地） | — | −（直す分岐は 1 か所・規則は完了 `balloon-visibility` に在る） | ✅ 完了（2026-10-01）。文字の層が scope ごとの消去の回数を数え（`TextLayerState::clear_count`）、観測が数と回数を組で運び、`decide_content` は回数が変わった scope で比べる相手を 0 にする＝全消去と同じフレームの 1 文字でもそのフレームで現れる（表示は遅らせない）。再表示の決定論テスト 10 本（修正の前に赤 7）・外せば赤になる 5 か所を確認・COMPAT §8 を追随 |
-| `shell-balloon`（**10-01 起票**・シェル内バルーン の土台） | α 後 | 製品（areka 独自・差別化。surfaces.txt の新しいブレス `balloon.名前`〔中身はバルーンの descript.txt と同じキー＋`size`〕・element定義の描画メソッド `balloon`〔`elementN,balloon,名前,X,Y`〕でいくつでも置ける・シェルの窓の文字の層の差し込み口へ結線・行き先は「スコープ × 名前」〔既定は一番若い element番号・`\b[名前]`〕・普通のバルーンと併用しない・サーフェスの切り替えの 3 場面・`\c` は今の行き先だけ・選択肢・箱のクリック・重ね順は最初の版で「常に一番上」に縮める。`actor.rs`／`region.rs` の分割が先） | L | α 後（シェル内バルーン S1） | α の完成宣言 | ○ | ⚪ |
-| `balloon-font-file`（**10-01 起票**・シェル内バルーン） | α 後 | 正典（`font.name`・`\f[name]` のフォントファイル。普通のバルーンはバルーン → ゴースト、シェル内バルーンはシェル → ゴーストのフォルダ。縦書きでも同梱フォントのまま＝SSP の標準ゴシックへの差し替えは採らない） | M | α 後（S1・`shell-balloon` と並走） | α の完成宣言 | − | ⚪ |
-| `text-typesetting`（**10-01 起票**・シェル内バルーン） | α 後 | 表現力（areka 独自・普通のバルーンにも効く。禁則 `line_break`〔既定 `anywhere`〕・ぶら下げ `hanging_punctuation`・縦中横 `\![text,combine-upright,…]` と `text_combine_upright,digits N`・字の向き `text_orientation`・縦書きの字形の観測点。`emo-text-canon-residue` の項目 11・15 を引き取る。`layout.rs` の分割が先） | M〜L | α 後（S2） | α の完成宣言 | ○ | ⚪ |
-| `text-ruby`（**10-01 起票**・シェル内バルーン） | α 後 | 表現力（areka 独自・普通のバルーンにも効く。`\![text,ruby,親文字,ルビ]`・`line_height`・`letter_spacing`・ルビは行の間隔の内側） | M〜L | α 後（S3） | `text-typesetting`（同じ `layout.rs`） | ○ | ⚪ |
-| `talk-fast-forward`（**10-01 起票**・シェル内バルーン） | α 後 | 製品（クリックでの早送り〔次の `\x` か台詞の終わりまで台詞の時計を早回し・話している最中の箱のクリックはシェルのイベントにしない〕・`\x`／`\x[noclear]`・`clickwaitmarker.*`。`balloon-lifecycle-events` の項目 9 を引き取る。**クリック待ちは台本の `\x` だけ**＝開発者裁定） | M | α 後（S2） | `shell-balloon` | ○ | ⚪ |
-| `balloon-markers`（**10-01 起票**・シェル内バルーン） | α 後 | 正典（`arrow*` と手動スクロール・`onlinemarker.*`・`number.*` と `\![set,balloonnum]`・`sstpmarker.*`／`sstpmessage.*`〔表示だけ・SSTP の受信は登記だけの行〕・装飾の画像の系列〔`balloon-canon-residue` の項目 1 を引き取る〕） | M〜L | α 後（S3） | `shell-balloon` | − | ⚪ |
-| `balloon-scroll-fade`（**10-01 起票**・シェル内バルーン） | α 後 | 表現力（areka 独自。自動スクロールで押し出される行〔列〕のフェード・既定は無効。自動の改ページは作らない） | S〜M | α 後（S4） | `balloon-markers`（同じスクロールの部分） | − | ⚪ |
-| `balloon-element-order`（**10-01 起票**・シェル内バルーン の追跡 spec） | α 後 | 正典（`balloon` の element定義を並び順どおりの重ね順で描く＝`shell-balloon` の最初の版の縮めを外す・性能の天秤） | M | α 後（S4） | `shell-balloon` | ○ | ⚪ |
-| SSTP の受信（仮称・**未起票**＝brief なし・2026-10-01 登記） | α 後 | 製品（SSTP〔9801〕で外から台詞を受ける。`balloon-markers` の `sstpmarker`／`sstpmessage` が実際に画面に出るのはこれが入ってから。roadmap「α 後」の予約「アプリ層＝SSTP」と同じもの） | L | α 後 | なし | ○ | ⚪ |
-| `animated-image-decode`（**10-01 起票**・動く画像 の読み込み） | α 後 | 基盤（動く GIF・APNG・WebP の全部のコマ・待ち時間・繰り返し回数を読む口＝動く絵だけ `image` クレート〔本番の依存へ移し `gif` の機能を足す＝`tech.md` 登記と承認が要る〕・静止画は WIC のまま・アトラスの鍵にコマの番号） | M | α 後（V1） | α 完成宣言 | ○ | ⚪ |
-| `surface-element-nesting`（**10-01 起票**・動く画像 の議論で起票＝階層化エレメント） | α 後 | 製品（areka 独自。element定義のファイル名の欄に数字だけ＝サーフェスの番号で、サーフェスを部品として置く・入れ子は何段でも・子の当たり判定を親へ持ち込む・内側の `balloon` は警告して無視・**子の時計は独立し親の面の切り替えで巻き戻らない**） | M〜L | α 後（V1） | α 完成宣言 | ○ | ⚪ |
-| `animated-image-playback`（**10-01 起票**・動く画像 の再生） | α 後 | 正典（SERIKO 定義なしの自動アニメーション〔2.7.38〕・`import` メソッド〔2.7.50〕・interval `always`＝動く絵を「コマを `always` で順に指す子サーフェス」へ分解し `surface-element-nesting` の入口と子の時計に載せる・バルーンの面も） | M〜L | α 後（V2） | `animated-image-decode`・`surface-element-nesting` | ○ | ⚪ |
-| `text-reveal-fade`（**10-01 起票**・文字の現れ方） | α 後 | 表現力（areka 独自・普通のバルーンにもシェル内バルーンにも効く。1 字ずつの表示で字が透明から不透明へ変わる＝キー `text_reveal,fade 150ms`〔既定の長さ 150ms・既定は無効〕と台本 `\![text,reveal,fade,150]`〔台詞の終わりまで〕・早送りと `\_q` では即座に不透明・フェード中の字だけ毎コマ描き直す） | M | α 後（文字の現れ方 R1） | α の完成宣言 | − | ⚪ |
-| `text-reveal-dance`（**10-01 起票**・文字の現れ方・**夢・任意**） | α 後 | 表現力（夢・areka 独自。字が現れるときにだけ跳ねる・揺れるなどの動きをして定位置で止まる＝**ずっと動き続ける演出は作らない**〔負荷と目に毒・開発者裁定〕。`text_reveal` の値の追加） | M〜L | α 後（夢・順不同） | `text-reveal-fade` | ○ | ⚪ |
-| `install-live-target-hazards`（**10-02 起票**・`alpha-release-signoff` の持ち越し） | α 後 | 堅牢性（**実測が先**。⑴ 表示中のシェル・使用中のバルーンのフォルダへの上書き〔降ろさずに入れる道・`destination_of` の `Elsewhere`〕で areka か SHIORI がファイルを掴んで失敗するか ⑵ 起動中のゴーストへ入れる途中〔窓 0 枚〕の Windows の終了で後始末が呼ばれるか。完了 `ghost-install` の設計 Risk 1・2。扱いは測ってから決める・説明書は確かめるまで変えない） | S〜M | α 後（持ち越し） | α 完成宣言・`ghost-install` ✅ | ○ | ⚪ |
-| `drag-click-without-move`（**10-02 起票**・`alpha-release-signoff` の持ち越し） | α 後 | バグ（キャラクターの絵の上の動かさない左クリックで窓の位置が保存される＝wintf が閾値未満のまま離したときも `DragEndEvent` を配り、`on_char_drag_end` の縮退が保存する。初回だけの位置合わせでずらした相方をクリックすると、ずらした位置が残る。バルーンの側も同じ形の疑い） | S | α 後（持ち越し） | α 完成宣言・`wintf-drag-state-rest-contract` ✅ | − | ⚪ |
-| `package-check-temp-cleanup`（**10-02 起票**・`alpha-release-signoff` の持ち越し） | α 後 | 道具のバグ（`tools/package-alpha.ps1 -Check` が `%TEMP%` に展開先と記録を残し片付けない〔10-02 に 38 個を手で消した〕・`-CheckDir` はリポジトリの中を断るので `target\` を指せない＝一時フォルダは `target\` の下だけの決まりに反する。記録は残す） | XS〜S | α 後（持ち越し） | α 完成宣言・`alpha-package` ✅ | − | ⚪ |
-| `install-companion-canon`（**10-02 起票**・`alpha-release-signoff` の持ち越し） | α 後 | 正典（同梱インストールの `install.txt` の読み方を ukadoc に揃える 4 点＝番号の欠番で打ち切る〔無印→0→1→2…〕・`*.source.directory` の階層付きの相対パス・`*.directory` のパス区切りを `_` へ・`..` を取り除く。今は読み続けるか全体を断る。起動時の同梱バルーンが無印の `balloon.directory` だけを読む件は問いとして記録） | S〜M | α 後（持ち越し） | α 完成宣言・`nar-install` ✅・`nar-install-hardening` ✅・`ghost-install` ✅ | −（問い 1 件＝ukadoc の「紐づくバルーンは最初の 1 個だけ」を起動時の選び方に効かせるか） | ⚪ |
-
-## 登記だけの行（brief なし・台帳の 10 行＋表に行を持たない覚え書き 4 件〔`sample-ghost-kit` の os error 5・`InProc` の SHIORI・i686 の `testdll_drop_invokes_courtesy_unload`・利用条件の切り詰めが絵文字を割る〕）
-
-> **なぜ起票しないのか**: どれも α（第三者がデスクトップマスコットを管理できる）に関係しない。開発者方針「α に関係しない spec は、並走できても
-> ウェーブに入れない」と「spec 工場禁止・起票は just-in-time」に従い、**行だけ立てて brief は書かない**。引受先が消えたまま忘れられることだけを防ぐ。
-> 着手の判断は α 完成宣言のあとの棚卸で行う。**本節の数はすべて 2026-09-19 に数え直した実測で、数え方を併記してある。**
-
-- **`ukadoc-coverage-custody`（仮称）＝網羅台帳の番人と統合担当の建て直し**。いま起きていることは 4 つある。
-  ⑴ **整合検査が「完了した spec が引受先になっている行」を検出できない。** 判定 ⑸ の腕 f は「台帳の非空の宛先がすべて `roadmap-draft.md` の `[[spec]]` か `briefing.md` の `[[owner_completed]]` に在ること」しか見ない。`[[owner_completed]]` は**手書きで凍結した 14 名の一覧**（数え方: `grep -c '^\[\[owner_completed\]\]' doc/ukadoc-coverage/briefing.md ＝ 14）で、`completed/` を走査しない。spec が完了しても `[[spec]]` の行はそのまま残るので、腕 f は緑のまま通る。実際に `completed/` に在る areka-P0- 仕様は **82 本**（数え方: `find .kiro/specs/completed -maxdepth 1 -type d -name 'areka-P0-*' | wc -l`。同ディレクトリの全ディレクトリは 183・areka-P0- 以外が 101）。
-  ⑵ **その穴を 3 つの所見が通り抜けている。** ⓐ 台帳 4 本の宛先に現れる仕様のうち **18 本**が既に `completed/` に在り、そのうち **4 本**（`text-decoration-canon` 16 行・`balloon-font-descript-keys` 7 行・`charset-canon` 5 行・`sylphya-set-ledger` 1 行＝**計 29 行**）は `[[owner_completed]]` の 14 名に入っていない。ⓑ そのうち**状態が `vocabulary-only` のまま＝もう誰も仕上げられない行が 5 行**ある（`text-decoration-canon` 3・`balloon-font-descript-keys` 1・`sylphya-set-ledger` 1。数え方: 台帳 4 本の `status` と `owner` の行を対にして数え、`owner` が `completed/` に在る仕様の行だけを残した）。ⓒ `roadmap-draft.md` の `[[spec]]` **8 行**が、完了済みの仕様を未完として載せている（`text-decoration-canon`・`charset-canon`・`balloon-font-descript-keys`・`sylphya-set-ledger`・`sakura-tag-word-boundary`・`present-gpu-transform-scale`・`kanade-boot-talkdone-drop`・`host32-window-thread-pump`）。
-  ⑶ **台帳 107 項目が「一度も起票されたことのない仕様名」を縮退の根拠に引いている。** `areka-P0-seriko-runtime`・`areka-P0-balloon-loader`・`areka-P0-shiori-host-32` の 3 つで、いずれも `.kiro/specs/` の直下にも `completed/` にも無い（旧ロードマップの名前）。数え方: 台帳 4 本を `[entry.` で区切り、3 つの綴りのどれかを含む区画を数えた＝`assets.toml` 105・`shiori.toml` 2・残り 2 本は 0。
-  ⑷ **統合担当が不在のまま指示だけが残っている。** `doc/ukadoc-coverage/README.md` は「跨いだ関連を書いたら、そのことを統合担当（`ukadoc-coverage-roadmap`）にも申し送ること」と今も書いているが、その仕様は 2026-09-13 に完了して `completed/` に在る。今後どの仕様が台帳を触っても、不在の相手へ申し送ることになる。さらにその成果物のはずだった**「無所有一覧」が作られないまま担当が消えた**ため、`\_` の仲間で角括弧を持たないタグ **8 件**（`\_!`・`\_+`・`\_?`・`\__c`・`\__q`・`\__t`・`\__v`・`\_n`＝`briefing-sakura-script.md`「引受先の候補」の表がこの一覧での裁定を待つと書き、台帳の宛先は 8 件とも空）、さくらスクリプトの台帳で宛先が空の **263 項目**（同台帳の全 342 項目のうち）、および段階が開発者の裁定待ちのまま仮値で置かれた **11 束**（`README.md`「段階（A〜E）は統合担当が付け、台帳へ書き戻してある」）が宙に浮いている。
-- **`present-write-coherence` の未達 40 件**。完了仕様 `.kiro/specs/completed/areka-P0-present-write-coherence/requirements.md`「未達の登記」の節が自ら「**引受先なし**……将来是正する場合は**新規仕様の起票が必要**」と書いている。残量は `visualize_to_write_us` が実測 **210,329〜306,301µs** に対して上限 16,667µs＝**12.6〜18.4 倍**で、上限以下で終わった窓は **32 窓中 0**。これに `flush_total_us` の 8 件を足して**計 40 件**。開発者裁定で「未達のまま GO」済みだが、**この残量はいま `roadmap-history.md` にしか無く、生きた本ファイルからは見えない**（本ファイルの完了サマリは W11 を「4/4」と完了扱いする）。追う仕様が 1 本も無い状態を、この行で可視にしておく。
-- **正典語彙の孤児 2 件**。ⓐ `font.outline`（白抜き）は受け口まで配線済みだが**描画の引受先が未起票**——台帳 `assets.toml` の `descript_balloon:font.outline` の備考が「受け口は白抜きを状態だけ更新して表示は変えない……白抜きの描画の引受先は未起票」と書き、名指しの `text-decoration-canon` は語彙登記で打ち止めかつ `completed/` に在る（さくらスクリプト側の `\f[outline,…]` も同じく `vocabulary-only`・宛先は同じ完了仕様）。ⓑ 「スタイルシートのキーワード」は**所有仕様が 0 本**——`completed/areka-P0-text-decoration-canon/tasks.md` の裁定 9.3 が「`completed/` を含む全 spec を走査して確認」と書いており、追跡先は `doc/COMPAT_ARCHITECTURE.md` §8 の行と台帳の備考だけである。
-- **配布物を束ねる／作る側の 3 件**。台帳 `assets.toml` の `descript_install` の 3 項目が、備考で自ら「引受先がまだ起票されていない」と書いている。内訳は ⓐ `type,package`（複数の配布物を 1 つに束ねた形）を解く仕様 1 件——`areka-nar` は種別を `ghost`・`shell`・`balloon`・`supplement` の 4 つに限り `package` を明示的に拒否する、ⓑ `developer_options.txt` の行の書式 2 件——読む相手はベースウェアではなく**配布物を作る道具**なので、areka が作る側の道具を持ったときにその仕様が引き受ける。いずれも α の外（`ghost-install` の Out・`network-update` の Out に明記）。
-- **`ukadoc-coverage-custody` と `wintf-drag-state-rest-contract`・`popup-menu-residue`・`coverage-roadmap-refresh` の関係（2026-09-19 の合流メモ）**: `ukadoc-coverage-custody`（登記だけ）と `coverage-roadmap-refresh`（brief あり）は、どちらも「網羅台帳の手書きの数と引受先が黙って偽になる」問題を見ている。`coverage-roadmap-refresh` は数の棚卸と検査の追加、`ukadoc-coverage-custody`（仮称・登記だけ） は整合検査の穴（完了 spec が引受先のまま・未起票の仕様名を根拠に引く 107 項目・統合担当の不在）で、重なるが同一ではない。**合流の可否はここで決めず、α 完成宣言のあとの棚卸で一括して裁定する**（`/kiro-start areka-P0-coverage-roadmap-refresh` を先に回す場合は、要件段階で `ukadoc-coverage-custody`（仮称・登記だけ） の 4 件を取り込むかを最初の議題にすること）。
-
-**規模と分割の裁定（棚卸⑬・据え置き）**: XL 3 本を分割済み＝`property-query-channels` → ⑴本体／⑵`property-ipc-transport`／⑶`sylphya-set-ledger`、`balloon-canon-residue` → ⑴本体／⑵`balloon-lifecycle-events`／⑶`emo-text-canon-residue`、`text-decoration-canon` → ⑴本体／⑵`text-align-shadow-canon`／⑶`balloon-font-descript-keys`。**L のまま置く 3 本**（`makoto-dll-host`・`sakura-time-directives`・`currentghost-property-tree`）と α の `ghost-shell-balloon-switch` は brief 内のスライスで要件段階に縮める余地を残す。
-
-
-**`default-balloon-nar-fold` は 2026-09-20 に brief を得た**（`.kiro/specs/completed/areka-P0-default-balloon-nar-fold/brief.md`）。旧節の手順は同 brief へ移し、欠けていた 1 点（`areka-emo-text` の結合テストが展開フォルダを直接指している）を足した。旧節の全文は history「2026-09-20 棚卸⑮退避」。
-
-- **`tools/perf` の自己検査の赤（2026-09-20 登記）**。完了 `areka-P0-nar-install` の最終検証（`.kiro/specs/completed/areka-P0-nar-install/validation-report.md` の「引受先の無い先送り」）が挙げた 5 件のうち、名指しの引受先が無かった 1 件。⑴ `tools/perf/perf-loop.ps1 selftest` が終了コード 4 で止まる（同 spec はこのファイルを 1 度も変更していない＝以前からの赤）。⑵ 未検証の 3 経路＝`invoke-perf-run.ps1` へ `-GhostRoot`／`-BalloonRoot` を渡す実走・`invoke-followup-checks.ps1` の単独起動・`check-quiet.ps1`。バグではあるが利用者にも α にも関係しない開発側の計測の道具なので、brief は書かない。**性能改善ループを次に回す前に直す**（回らない道具で測った数は信用できない）。
-
-- **SHIORI へ渡す置き場所のパスの形（2026-09-24 登記）**。`areka-P0-shiori-loadu` の実機確認で、`load`／`loadu` へ渡すパスが `C:\…\R_POST_and_KOMAINU\ghost/master` の形だと分かった。区切りが `\` と `/` の混在で、末尾に区切りが無い。混在の出どころは `crates/areka-parsers/src/package/resolve.rs` の定数 `GHOST_MASTER`（`"ghost/master"`）を `Path::join` で繋ぐ組み立てで、`shiori-loadu` 以前からある。同 spec の brief は「パスの末尾区切りの作法を SSP に合わせるかどうか」を範囲外と明記し、引受先を書かなかった。**正典 ukadoc の DLL 共通仕様は「モジュールのディレクトリパス」とだけ書き、区切りの向きにも末尾の区切りにも沈黙している**（2026-09-24 に `ukadoc:spec_dll` の全文で確認）。検体 3 体（YAYA・里々・pasta）はどれもこの形で辞書を読めているので、**実害は観測されていない**。ただし第三者の SHIORI が受け取ったパスへ区切り無しでファイル名を継ぎ足すと、読むべきファイルを見失う。α 後の棚卸で扱いを決める。直すなら `\` に揃え、末尾に `\` を付けるかは裁量として `doc/COMPAT_ARCHITECTURE.md` §8 に記す。SSP の挙動を実測して合わせることはしない（記憶 no-ssp-measurement-import-semantics-from-ukadoc）。
-
-- **起動後の途中終了で記憶の確定が飛ぶ（2026-09-24 登記）**。`areka-P0-baseware-root-layout` の完了時に見えた、同 spec 以前からの性質。`crates/areka/src/main.rs` の `fn main` は `app.run()?;` の**後**で ② `ghost.shutdown`（`crates/areka-ghost/src/runtime.rs` の `GhostRuntime::shutdown`＝手順 10 の `barrier()` → `close()` → join）を呼ぶ。`app.run()` が `Err` を返すと `?` で早期に抜け、main スレッドが panic しても同様に shutdown を通らない。`GhostRuntime` は `Drop` を実装しない。そのため boot 直後に投函した記憶（`areka.last.*`）や、動かした窓の位置の永続化が、sylphya のアクターに処理される前にプロセスごと消えうる。**実害は観測されていない**（書き込みは `app.run()` に入る前に投函され、通常の終了・smoke の自動終了・実機 4 点ではすべて確定した）。相乗りの 1 件＝同じ `runtime.rs` の `GhostBootError` の doc が退役済みの「ダミー窓」を今の挙動として書いている（`baseware-root-layout` は要件 7.2 で同ファイルを変えなかった）。α には効かないので brief は書かない。直すなら `app.run()` の `Err` の腕でも ②③ の終了順序を通す（`Drop` での自動 shutdown は終了理由を持てないので採らない方がよい）。**2026-09-24: `shiori-fault-notice` で修正**（同 spec の要件 6.3＝`Drop` での自動の後始末は置かず、`finish_after_run` が `Err` の腕でも同じ後始末を通す。main スレッドの panic は対象外のまま）。
-
-- **wintf の兄弟の重なり順が描画と当たり判定で逆（2026-09-24 登記）**。先進坑 `pilot-balloon-asset-swap` の完了時の棚卸で拾った既存の食い違い。`crates/wintf` の `visual_hierarchy_sync_system`（`visual_sync.rs`）は `Children` を前から `InsertAtBottom` するので**先頭の子が最上に描かれる**。一方 `hit_test`（`hit_test/mod.rs`）は `DepthFirstReversePostOrder` で**最後の子から調べる**。窓に面を 2 枚重ねると「絵は古い方が上・当たり判定は新しい方が優先」になる。先進坑の実機走行で目視でも確かめた（同じ id の `attach_target` 再登録の B→A で、古い kakukaku が Staysee の上に描かれた）。本番の現行経路では、バルーンの子は `emo-text-layer-slot`（当たり判定なし）と `emo-surface` の 1 組だけなので表に出ていない。直すならどちらの順に揃えるかの裁定が要る（描画に合わせるか当たり判定に合わせるか）ので、brief は書かず α 後の棚卸で決める。数え方: 先進坑 README の「学び」と `design.md` の Existing Architecture Analysis。
-- **壊れたゴーストを表示し続ける（SSP 忠実の切替失敗の形・2026-09-26 登記）**。`ghost-shell-balloon-switch` の要件討議（議題 2）で開発者が説明した SSP の挙動＝切替先の SHIORI が死んでいても切替は成功し、シェルは表示され続け、右クリックメニューから別のゴーストへ替えられる。起動失敗は記憶され、次回起動で FIRST ゴーストへ強制切替される。areka でこれを行うには kanade に「SHIORI が死んでいるが生きている」状態を足し、完了 `shiori-fault-notice` 要件 3.1「`Fault` は告知して終了コード 1」を切替後に限って覆し、終了・切替の要求を kanade 抜きで捌く腕が要る（規模 M）。あるべき姿としては「1 体の失敗はアプリの失敗ではない」を最も忠実に満たすが、α では `ghost-shell-balloon-switch` 裁定 10（既定ゴーストへ戻す・メッセージボックスは出さない）で足りるとして採らず、ここに登記する。起動側の「失敗したゴーストを記憶したまま次回も終了コード 1 を繰り返す」穴は `ghost-shell-balloon-switch` 要件 6.8 で塞ぐ（次回起動を既定へ倒し `OnBoot` の Ref6/7 で伝える・2026-09-26 開発者裁定）。
-- **OS のセッションの終了では SHIORI の待ちを短くする（2026-09-27 登記）**。**→ 2026-09-27 棚卸⑱で `session-mark-residue`（brief あり・段はバグ）へ格上げし、2026-09-28 に完了（`completed/areka-P0-session-mark-residue`）。以下は登記時の記述。**`ghost-shell-balloon-switch` の実機確認（`signoff.md` の ⑪ の補足 `run11b`）で見えた、同 spec 以前からの性質。SHIORI が HELLO の後に固まると、ゴーストを降ろす処理は IPC の期限まで止まる（LOAD の応答は `crates/shiori-host32-host/src/process_host.rs` の `LOAD_ACK_TIMEOUT`＝30 秒、GET／NOTIFY の往復は同じファイルの `REQUEST_TIMEOUT`＝60 秒・環境変数 `AREKA_SHIORI_REQUEST_TIMEOUT_MS` で変えられる）。切替・メニューの終了では待てば終わるが、Windows のシャットダウン・ログオフ（`WM_ENDSESSION` を受けた `crates/areka/src/session_end.rs` の `on_os_session_end`）では OS の猶予を超えて打ち切られる。打ち切られると起動中の印が残り、次の起動で emo2 が `OnBoot` の Ref6＝`halt`・Ref7＝そのゴーストの名前で起きる（伝える中身は正しい）。**開発者の決め（2026-09-27）＝OS のセッションの終了のときだけ、SHIORI を待つ期限を短くする**。切替とメニューの終了の期限は変えない。規模 XS〜S・触るのは `session_end.rs` から降ろす処理へ期限を渡す経路と `shiori-host32-host` の期限の受け口
-- **起動がまるごと失敗すると起動中の印が消える（2026-09-27 登記）**。**→ 2026-09-27 棚卸⑱で `session-mark-residue`（brief あり・段はバグ）へ格上げし、2026-09-28 に完了（`completed/areka-P0-session-mark-residue`）。以下は登記時の記述。**`ghost-shell-balloon-switch` の最終検証で静的に見えた、同 spec の設計の範囲外の穴。最初の起動は `crates/areka/src/ghost_session.rs` の `boot_ghost` が窓への結線に失敗すると LogSink の起動へ倒れる（完了 `emo2-boot` 以来の非致命の契約）。その LogSink の起動までまるごと失敗した形では、終了の出所に SHIORI の失敗が載らず、`crates/areka/src/main.rs` の `session_mark_verdict` がきれいな終わりと判定して印を消す。次の起動は同じゴーストを起こして同じ失敗を繰り返し、emo2 の `OnBoot` の Ref6＝`halt` は付かない（裁定 13「きれいに終わらなければ次は emo2」に反する）。実走はしていない（窓への結線の不成立を再現する手が無い）。直し方は「LogSink の起動の失敗を終了の出所に載せる」か「LogSink への倒れ自体を印を残す理由にする」かの決めが要る
-
-- **`sample-ghost-kit` の展開テストが一度だけ os error 5 で落ちた（2026-09-26 登記）**。`areka-P0-alpha-package` の最終検証の全体テスト（`tools/test-all.ps1`・コミット `6f625966`）で、`every_sample_nar_installs_exactly_the_elements_its_registry_row_declares`（`crates/sample-ghost-kit/src/lib_tests.rs`）が `konnoyayame.nar` の展開の確定（`Commit`）で「アクセスが拒否されました。 (os error 5)」になった。単体で 3 回・全体テストの 2 回目（コミット `8fedd77a`）はどれも緑。同 spec は `crates/` を 0 行しか変えていないので既存の性質。置き換えの瞬間に Defender などが木を掴んだと見られるが、原因は確かめていない。再発したら `areka-nar` の確定の段（改名の再試行の有無）から調べる。brief は書かない。
-- **i686 のテスト `shiori_proxy::tests::testdll_drop_invokes_courtesy_unload` が一度だけ落ちた（2026-09-30 登記）**。`areka-P0-network-update` のタスク 11 の検証で、`cargo test -p shiori-host32-helper -p shiori-host32-ipc --target i686-pc-windows-msvc` の 1 回目に `crates/shiori-host32-helper/src/shiori_proxy.rs` の同テストが「印のファイルが作られていない」で赤になった。続く 2 回と `tools/test-all.ps1` の 2 回（`3d7169cf`・`b7df4dde`）は緑。補助プロセスの crate は `shiori-host32-host` に依存しないので、タスク 11 の変更とは無関係。原因は未調査で、印のパスをプロセス全体の環境変数で渡している（並列に走る別のテストと取り合う余地がある）のが疑わしい。起票はしない（「`sample-ghost-kit` の os error 5」と同じ扱い）。もう一度赤を見たら、そのときの出力を添えて `shiori-host32-helper` の単独のバグとして起票する
-- **メニューの終了の直後に表示の適用が窓の無い所へ届き ERROR が 1 件残る（2026-09-27 登記）**。**→ 2026-09-28 棚卸⑲で `frame-phases-after-exit`（brief あり・段はバグ）へ格上げした。以下は登記時の記述。**`areka-P0-ghost-change-name-resolution` の開発者の目視（`signoff.md` の「2026-09-27 追記」の manual2・emo2・debug 版・ログは `C:\tmp\areka-signoff-gcnr\logs\manual2.out.log` の 1420〜1440 行）で見えた、同 spec と関係のない既存の性質。メニューの「終了」→ `OnClose` の「またね。」→ `talk_done_quit` → `ghost_quit cause=Quit` で全窓を閉じ `app_exit origin=KanadeStopped(Quit)` を出した直後に、その直前に発火した SERIKO のループ（animation_id=1400）の `ShowSurface`（TargetId(0)・surface_id=1000）がもう一度適用され、`areka_emo_present::scale` の `derive_scale: 窓 DPI を取得できない（DPI component 不在）` の `error!` が 1 件と「装着が未完了」の WARN 7 件（`set_display`／`set_layout`／`AlphaMaskResource` 無し／`Visual` 無し／`HitTest` 無し・entity 44v0 の surface と 43v0 の text-layer-slot）が出た。停止そのものは正常（記憶の書き出し・`session_mark_cleared`・終了コード 0）で、利用者から見える害は無い。これまでの実機確認のログに前例は無い。完了の条件の案: 窓を閉じた後（終了中・窓なし）の表示の適用は ERROR を出さず理由の分かる level で 1 件残して読み飛ばす・その分岐を決定論テストで固定する・実機でメニューから終えて ERROR 0 件。手掛かり: `derive_scale` の `dpi None` を `error!` にした完了 `areka-P0-emo-dpi-scaling` の design、終了時の `Anchored` WARN を直した完了 `dpi-window-vanish` の前例。持ち主の spec は無い。brief は書かない（棚卸で格上げを判断する）。
-- **`InProc` の SHIORI を外から終わらせる手が無い（2026-09-28 登記）**。`areka-P0-session-mark-residue` の議題 D7 で「対象外」と記録した宿題。OS のセッションの終了の後始末は、SHIORI を待つ合計が 3 秒に達すると見張りが 32bit の補助プロセスを終わらせて待ちを解く（`crates/areka-kanade/src/shiori/probe.rs` の `ShioriProbe`・解く手は `crates/shiori-host32-host/src/terminator.rs` の `HelperTerminator`）。x64 の SHIORI4 をプロセス内に読む `ShioriWiring::InProc` には終わらせる相手のプロセスが無いので `ShioriBackend::unblock_handle` は既定の `None` のままで、上限に達しても `error!(shiori_unblock_unavailable)` を残して待ちは今日どおり続く。本番の `fn main` は `Helper` だけを選ぶ（`main_ghost_wiring_tests.rs` が固定）ので今日は踏まない。M2 以降で `InProc` を本番に使うときに、解く手（例: SHIORI の係のスレッドを見切る別の形）を決める。join を期限で見切る二段目の守りは、shiori のスレッドを取り残す（資材の持ち主が消える）ので同 spec では採らなかった（同 spec の `research.md` の D7）。
-- **emo2 を上書きで起こし直した後に初期配置の確定の見送りの WARN が 1 件出た（2026-09-29 登記・未再現）**。`areka-P0-ghost-install` の実機の項目 3（起動中の emo2 へ `emo2.nar` をメニューから入れ直す・配布物 `bf4f247`）で、起こし直した約 5 秒後に `WARN chain_finalize: 初期配置の確定が続けて見送られている deferrals=600 scope=Some(1) reason=scope 1: 実表示寸が未確定（初回表示が未成立）` が 1 件出た。画面では 2 体とも表示されていた。同じ上書きの一周を R_POST（里々）で再現すると WARN は 0 件で、起こし直しの後に `初期配置を確定` まで進んだ（09-29・`2745cb4f` の配布物）。メニューからの普通の切替（emo2 → R_POST → はろーYAYAワールド）でも 0 件。emo2 の起こし直しに固有かどうかは未確定。完了 `ghost-shell-balloon-switch` の 11.9 で「切替で起こしたゴーストの見送りの数を引き継がない」は直してある（`close_windows_for_restart` が初期配置の資源を取り除く）。次の棚卸で emo2 の上書きの走行を `RUST_LOG=...,areka::emo2_boot::frame=debug` で 1 回再測定し、再現すれば `placement` の側のバグとして起票する。**2026-09-30 追記**: `areka-P0-network-update` の実機の 2 回目（あやめ `konnoyayame` を更新して読み直した約 5 秒後・配布物 `3d7169cf`・`target\nu\root3`）でも同じ `deferrals=600` の WARN が 1 件出た＝emo2 に固有ではなく、**起こし直し（同じゴーストへの切替）に固有**の見込みが強まった（画面は正常）
-- **利用条件の文の切り詰めが絵文字の途中で切れうる（2026-09-30 登記）**。`balloon-color-emoji` の最終検証で拾った。`crates/areka/src/install/terms.rs` は利用条件の文を文字数の上限（`TERMS_MAX_CHARS`）で切るとき `chars()`（スカラー値）で数えて切るので、上限の所に 👨‍👩‍👧 のような組み合わせの絵文字が掛かると途中で切れ、部品だけが見える。見た目だけで、失敗にも記録にもならない。直し方は 1 行（`areka_sakura::cluster::clusters` で数えて切る）。`balloon-color-emoji` は要件 7.1 で `crates/areka` を変えない約束だったので持ち越した。次に `terms.rs` を触る spec が一緒に直す
-- **SSTP の受信（2026-10-01 登記）**。`/kiro-discovery`（シェル内バルーン）で、バルーンの descript.txt の `sstpmarker.*`（SSTP で来た台詞の印）と `sstpmessage.*`（送り主の表示）を `balloon-markers` が「表示だけ作る」と決めた（開発者確定 (a)）。この 2 つが実際に画面に出るのは、areka が SSTP（9801）で外から台詞を受けられるようになってから。SSTP の受信は「α 後」節の予約「アプリ層＝SSTP」と同じもので、受信の口・送り主の確認・どこからの送信を受けるか（セキュリティ）を持つ大きな仕事になる。`balloon-markers` は「SSTP で届いた」という目印を台詞の付帯情報として受ける縮退の口を用意し、今は常に「SSTP でない」を流す。起票するときはこの口を埋めること
-
-## 引き受け手の居ない残り（`shell-implicit-surface` の着地で残した 7 件・2026-09-20）
-
-> **なぜここに書くのか**: 下の 7 件はどれも、正典に書かれていて areka が引き受けていない振る舞いだが、**本ファイルの spec 台帳（2026-09-20 の起票時点で 46 行・棚卸⑮のあとは 54 行。どの行も下の 7 件を引き受けていないことは変わらない）にも `.kiro/specs/` にも、これを引き受ける仕様が 1 本も無い**（2026-09-20 に数え直した実測）。網羅台帳 `doc/ukadoc-coverage/ledger/assets.toml` の側でも、該当する項目の担当欄は空か、名指しの仕様が完了アーカイブに在って先送りを消化できない。先送りを完了アーカイブへ入れると誰も読まなくなるので、行だけ立てて生きた本ファイルから見えるようにしておく（開発規律 deferral-requires-verified-owner）。**着手の判断は α 完成宣言のあとの棚卸で行う。引受先が決まっていないので、ここに実在しない仕様の名前は書かない。**
-
-1. **`.pna`（同名の別ファイルで α を与える形）は非対応のまま。** 開発者確認済みの方針が「非対応」である（2026-09-18・`default-balloon-bundle` の裁定 10）。今日の実装は `.pna` が在るかは見るが画素を使わず、α を持たない絵に `.pna` が添えられている組合せだけは焼くのをやめて理由を載せた失敗を返す（`crates/areka-emo-atlas/src/normalize.rs` の `Normalizer::normalize` が `AlphaSource::Pna` を載せた `NormalizeError::Unsupported` を返す）。検体 3 体に `.pna` は **0 件**。
-2. **`seriko.use_self_alpha,full`／バルーン側 `use_self_alpha,full`（全面不透明）は未実装のまま。** 同じ `normalize` が `AlphaSource::Opaque` を載せて失敗を返す腕である。
-3. **透過の宣言を読む経路が 1 本も無い。** `seriko.use_self_alpha`／`use_self_alpha` はどちらも読まれず、常に `1` と書いてあるものとして扱う（`doc/COMPAT_ARCHITECTURE.md` §8 に登記済み）。その帰結として、**`UseSelfAlpha::Off` の下の抜き色は未実装のまま**である——`shell-implicit-surface` が実装したのは `(On, KeyColor)` の 1 腕だけで、`(Off, KeyColor)` は今も `NormalizeError::Unsupported` を返す。宣言を読み始める仕様が現れたとき、この腕が同時に要る。
-4. **全画素が透明になる面を表示の対象にしたときの扱いが未確認。** 正典 dev_shell は「相方が要らない場合でも、単色で塗り潰した画像（＝全て透明表示）などを surface10.png として用意してください」と書く。抜き色を実装した今、その形の絵は全画素が透明になる。ところが**検体 3 体にこの形の `surface10` は 0 件**で、窓・当たり判定・撫での挙動を実機で確かめられていない。`shell-implicit-surface` は全透明の絵の既存の扱い（描く命令には数えず、原寸は外形に数える）を変えていない。
-5. **`surfaces.txt` が無いシェル／波括弧が 0 個で画像だけのシェルは、起動の失敗のまま。** 正典 dev_shell は「surface○○.png という名前の画像を用意するか、後述の surfaces.txt で複数の画像を合成する事で用意します」と書き、**画像だけのシェルを成り立つ形として認めている**。今日の areka は `surfaces.txt` が読めなければ失敗（`ShellLoadError::Read`）、面が 0 個でも失敗（同 `Empty`）で起動しない。検体 3 体に 0 件ゆえテンプレートゴーストを動かすのに要らず、本仕様は今の失敗の扱いを変えていない。
-6. **`overlay` 以外の描画メソッドで書かれた `element0` を持つ面で、面の画像が土台に使われる既知のずれ。** 正典 C4・C5 は「element0 が定義されている場合…破棄され」と書くので、本来は画像を使わないのが正しい。今日は `overlay` 以外の `element` 行が解析の段で読み飛ばされるため、`element0` が「無い」と数えられて画像が敷かれる。検体 3 体に **0 件**。**このずれは読み飛ばしの縮退そのものに由来するので、縮退が解けるとき（`overlay` 以外の行が値になるとき）に併せて正典どおりになる**。その縮退の担当として網羅台帳が名指しする仕様は完了アーカイブ（`.kiro/specs/completed/areka-P0-shell-parse`）に在り、先送りを消化できない。
-7. **`sometimes`・`rarely` 以外の間隔の語は非駆動のまま。** `always`・`runonce`・`never`・`endtalk`・`periodic,数値` などは、今までどおり元の綴りを添えた控えめな記録だけを残して再生されない。網羅台帳の該当項目（`ukadoc:descript_shell_surfaces:always:1` ほか）の担当欄は**空**である。`shell-implicit-surface` が駆動側へ移したのは、テンプレートゴーストのまばたきが実際に使う `sometimes` と、同じ 1 か所の腕で済む `rarely` の 2 語だけである。
-
-**上の 7 件の外だが、同じく引受先の無い既存の性質（`shell-implicit-surface` の着地で生じたものではない）**: `surface.append` の行に**しか**現れない絵のファイル名は焼かれない。焼く絵の一覧を導く `ManifestDeriver::derive` が読むのは波括弧の側（`shell.surfaces`）だけで、追記の側を読まないためである。`shell-implicit-surface` は焼く一覧の導出を 1 行も変えていない。`R_POST_and_KOMAINU` と `konnoyayame` の `surface.append` は 0 件、`emo2` は 5 定義ある（`shell/master/surfaces.txt` の 415・427・434・443・449 行）が、どれも `collision*` と `animation*.pattern*` の行だけで `element` 行を 1 本も持たない（2026-09-20 実測）。ゆえに追記の側にしか現れない絵のファイル名は 3 体とも 0 件で、今日は誰も踏まない。踏むシェルが現れると、その追記が足した層だけが索引表から引けずに黙って落ちる。
-
-**開発者の目と手が要る確認 5 件（`shell-implicit-surface` の実機確認で自動走行では確かめられなかったもの）→ 2026-09-20 に 5 件とも開発者が目視サインオフ済み**: ⑴ 絵の外のクリックが背後の窓へ抜けること ⑵ 右クリックメニューの 1 項目目の表示 ⑶ `konnoyayame` の目の周りに四角い地色が出ないこと ⑷ 起動挨拶の**字形**が文字化けしないこと ⑸ `emo2` の撫で・メニュー・終了が適用前と同じに見えること。いずれも走っている窓に対する操作か目視が要り、有界の自動終了＋ログの絞り込みでは判定できない。**記録は `.kiro/specs/completed/areka-P0-shell-implicit-surface/tasks.md`「開発者の目視サインオフ」節にある。ただし ⑴ の根拠である要件 4.10 には自動テストが今も 1 本も無く、「テストで担保されている」とは言えない。****どれも本仕様が新しく作った経路ではない**（クリック透過・右クリックメニュー・字形の描画・バルーンの左右反転は既存の機能で、本仕様はそこへ絵を届けられるようにしただけである）ので新しい仕様は起票しない。α の受け入れの一周で開発者の目が通る場所＝`alpha-release-signoff`（第三者の手順 12 項目の実機サインオフ）の実機一周でまとめて見るのが最も安い。再現の手順は `.kiro/specs/areka-P0-shell-implicit-surface/tasks.md`「実機確認の記録」の「共通の条件」にある。
-
-## 棚卸⑭の仮裁定（2026-09-18・開発者が覆すまで有効）
-
-1. **M2 のゴールは α（第三者が管理できる）であり、表現力の増強ではない。** 段階 A の先頭ウェーブ 6 束（`roadmap-draft.md`）と α 後 19 本は brief を保ったまま据え置く。α 完了後の棚卸で並べ直す（`briefing.md` の順位付けはそのとき再び効く）。
-2. **旧・仮裁定 2「M2 予約群は brief を起票しない」を改訂**: 予約群のうち **NAR（製品側）・ネットワーク更新・ゴースト/バルーン選択 UI（メニューのサブメニューとして）** は α に入るので起票した（本日 6 本）。残り（SSTP・FMO・DirectSSTP・Plugin/HEADLINE・多重ゴースト・pasta native x64・ベクトル描画・**owner-draw メニュー**・バルーン美観配置・回転テキスト）は引き続き起票しない。
-3. **メニューは Win32 標準（`HMENU`）**。オーナードロー（`menu_*.png`・`menu.font.*`）は M2 予約のまま。着せ替えメニュー（`sakura.menuitem*`）も α 後。
-4. **ゴースト切替はプロセス内**（再起動しない）。アプリの寿命を窓の数から切り離す（`AppExit`）。
-5. **HTTP は WinHTTP・MD5 は OS の CNG（`BCryptHash`）で外部クレートの追加 0**（`update-engine` 2026-09-24 完了・`tech.md` 登記済み。当初案の `md-5` は取り下げ）。**`nar-install` の伸長は `zip` を採らず `miniz_oxide` で決着**（2026-09-18 承認済・`tech.md` 登記済）。
-6. **消滅（`\![vanishbymyself]`・`OnVanish*`）は α に含めない**（アンインストールはフォルダ削除で足りる）。要望が出たら `ghost-shell-balloon-switch` の隣に S で切る。
-7. **投げ込みは `WM_DROPFILES`**（`IDropTarget` は OLE の STA を要求し WUC の MTA と衝突しうる）。テキスト・URL の投げ込みは α 後。
-8. **開発者への裁定候補は各 brief の末尾に登記**: ~~⑴ 既定バルーンの同梱（`emo2-kakukaku` を推す）~~ → **同日 2 度目の再入で裁定・spec 化**（下 10）／⑵ 根の既定は exe の隣（推す）／⑶ 右クリックで `OnMouseClick` も送るか（送らないを推す）／⑷ トレイアイコン（含めないを推す）／⑸ 更新定義ファイルの既定 charset（Shift_JIS 固定を推す）。残る 4 件は推奨で進めて構わない。
-9. 棚卸⑬の仮裁定 1（`zorder` の三重所有）と 3（e2e §13.1 行 3 の据え置き）は据え置き。
-10. **既定バルーン（2026-09-18 開発者裁定）**: `emo2-kakukaku` は癖が強く既定に向かない。SSP 同梱「SSPデフォルト+」は再配布条件が公開されておらず借用の根拠が薄い。候補は SSP 本家の作者が **CC0** で出している `Balloon for Staysee Syncfield`（readme「煮るなり焼くなり好きにしてください」・専用指定なし）。**areka は常に `use_self_alpha,1`・`.pna` 非対応**（開発者確認・`areka-emo-present/src/balloon.rs` の設計と一致）。独立 spec `default-balloon-bundle`（A2 並走）で扱い、見た目の採否は同 spec の要件段階で開発者が実機で決める。次善は自作の無地バルーン。
-11. **α に関係しない spec は、並走できてもウェーブに入れない**（2026-09-18 開発者指示）。「隙間」枠を廃止し、`dpi-transition-two-tick-bounce`・`zorder-chain-residue` を α 後へ戻した。例外は 1 つだけ＝α の spec のテストを実際に赤にした間欠赤（zorder A-2 の壁時計テスト族）は、その時点で A 群だけを単独枠に挟む（先回りしない）。
-12. **nar-install を α の先頭に置く**（2026-09-18 開発者「nar 関係は早く進めないとダメ」）。`shell-implicit-surface` との順序を反転＝implicit-surface は共有ヘルパを最初から使う。**サンプルゴーストを増やして試験する仕組み**は、nar-install の共有ヘルパ（検体名 → 根）と `vendors/sample_ghost/*.nar` の保管慣行がそのまま器になる＝別 spec は切らない（検体を 1 体足す作業は `.nar` 1 つと名前 1 行）。α の検証に使う検体は emo2（pasta）・R_POST_and_KOMAINU（里々）・既定バルーンの 3 つ。~~YAYA の検体を α に足すかは `alpha-release-signoff` の要件段階で決める（裁定候補 ⑹）~~ → **2026-09-19 決着＝足す**（開発者提案）。YAYA 標準テンプレート「紺野ややめ」を `vendors/sample_ghost/konnoyayame.nar` として登記済み（配布物そのまま・シェルは CC BY-NC-ND 2.1 JP＝畳み直さない・areka の配布物へ同梱しない。出どころは同フォルダの README）。**確かめたのは「正しく展開される」までで、areka 上の実走は未実施**＝出た不具合は個別に起票する。
-
-## 棚卸⑮の裁定（2026-09-20・開発者指示と実測に基づく）
-
-1. **着手の優先度は「バグ修正 → α に要る機能」。どちらにも属さない spec は当面着手しない**（開発者指示）。棚卸⑭の仮裁定 11（α に関係しない spec はウェーブに入れない）は、**バグ修正に限って解除**する。台帳の段列に **バグ** を足した（`wintf-drag-state-rest-contract`・`shiori-loadu`・`nar-install-hardening`・`keycolor-clickthrough-coverage`）。
-2. **バグの判定は実測で行う。** brief のまま置かれていた spec を項目ごとに「利用者から見える実害／潜在／テストの穴／正典の追加」へ分け、前の 3 つだけを拾った。その結果、`dpi-transition-two-tick-bounce` 本体（開発者裁定で許容済み）・`zorder-chain-residue`（隔離済み・赤の記録 0 件）・`surfaces-basepos`・`balloon-canon-residue`（バグの混入 0 件）・`emo-text-canon-residue` の残り・`popup-menu-residue` の残りは**着手対象にしない**。
-3. **規模の上限は 1 spec 20 タスク。** 超えた 2 本を分けた——`ghost-shell-balloon-switch`（30〜40 本）→ `app-lifetime-separation` 寿命の分離／`ghost-shell-balloon-switch` ゴースト切替／`shell-balloon-switch` シェルとバルーンの切替、`network-update`（24〜30 本）→ `update-engine` エンジン／`network-update` 結線。`ghost-install`（20〜25 本）は `areka-nar` の堅牢化 3 件を `nar-install-hardening` へ抜いて上限の内側へ収めた。**分けた親の名前は変えない**——完了 spec が引受先として名指ししており、完了 spec は書き換えられない（開発規律 deferral-requires-verified-owner）。
-4. **メニューへのサブメニューの登記は切替の 2 本が持つ**（「ゴースト」枠＝`ghost-shell-balloon-switch`・「シェル」「バルーン」枠＝`shell-balloon-switch`）。旧 A1 行は `baseware-root-layout` に割り当てていたが、切替の動作が無いと項目を作れない。`baseware-root-layout` は `crates/areka/src/menu/` に触らない。
-5. **「最後のシェル」を起動時に効かせる口は `shell-balloon-switch` が作る。** `baseware-root-layout` は鍵の定義と書き込みまで。
-6. **エンジンを切り出した spec（`update-engine`・`nar-install-hardening`）は網羅台帳 `doc/ukadoc-coverage/` に触らない。** 台帳の状態の更新は結線の側（`network-update`・`ghost-install`）がまとめて行う——並走する枝が手書きの数を別々に動かすと、競合しなかった行が黙って偽になる（開発規律 both-branches-same-wrong-count-merges-silently）。
-7. **`zorder-chain-residue` の A 群は先回りしない**（棚卸⑭の仮裁定 11 の例外条項を実測で再確認）。09-11 以降に main で赤を出した記録は 0 件で、発動条件は満たされていない。
-8. **並走の物差し**: 同じウェーブに入れるのは、2026-09-20 の実測で**触るソースファイルの重なりが 0** の組だけ。残る重なりは「表の末尾への追記」（`doc/COMPAT_ARCHITECTURE.md` §8）・「生成物」（`THIRD-PARTY-NOTICES.md`＝手で直さず再生成）・「steering の文書」の 3 種に限り、下の干渉台帳に全部書き出してある。
-
-## 棚卸⑯の裁定（2026-09-24・main `0b01f654`・開発者指示「main が進んだので棚卸＆深掘り＆徹底ブリーフィング」）
-
-> 09-24 に main へ 8 本（`baseware-root-layout`・`default-balloon-nar-fold`・`wintf-drag-state-rest-contract`・`shiori-loadu`・`update-engine`・`nar-install-hardening`・`keycolor-clickthrough-coverage` と PR#178 の直接修正）が入った直後の棚卸。残る α／バグの brief 6 本（`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update`・`alpha-release-signoff`・`shiori-fault-notice`）を**サブエージェント 4 系統で main `0b01f654` に対して再測定**し、結果を各 brief の「2026-09-24 棚卸⑯の再測定」の節へ書いた。段列の機械の数え＝✅ 23・α 7・バグ 1・α 後 27・保留 1＝59。
-
-1. **即時修正（spec なし）は 0 件**。PR#178 が直接修正候補を一掃済みで、残っていたのは brief 側の陳腐化 2 件だけ＝`dpi-transition-two-tick-bounce` の brief に残っていた「判定器を直す」の項を取り下げに揃え、`balloon-canon-residue` の brief の項目 12 を「PR#178 で消化済み」にした（本棚卸で是正）。**根の `README.md` のライセンス表記（「MIT OR Apache-2.0」・バッジのリンク先 `LICENSE` が不在）が実物（`Cargo.toml` の `license = "MIT"`・`LICENSE-MIT`）と合っていない**のは新たに見つけたが、どちらへ揃えるかは開発者の決めごとなので触らず `alpha-release-signoff` の議題にした。
-2. **`ghost-shell-balloon-switch` から括り出しを前に切り出した＝`ghost-restart-unit`（M・6〜7 タスク）。** 再測定で想定タスクが 19〜22 本に膨らんだ（寿命の分離は `app-lifetime-separation` で済んだが、⑴ 停止通知を受けると必ず終了へ進む一本道 `run_ghost_quit_phase` が新たに入った、⑵ `wire_*` の「1 回だけ登録」前提が 8 か所、⑶ `wire_emo2_boot` が `&WinApp` で World を借りるので系の中から呼べない、⑷ `\+`／`\_+`・`OnGhostChanged`→`OnBoot` の起動系列・起動元の情報を渡す口の 3 件が触るファイルから漏れていた）。切る場所は「kanade に触るかどうか」。分割後の `ghost-shell-balloon-switch` は L（13〜15）。
-3. **`shell-balloon-switch` の先進坑を独立の spec にした＝`pilot-balloon-asset-swap`。** `two-tunnel.md` の規約（go 判定を本坑の前提依存に・go 前の本坑着手は規律違反・`pilot-` 接頭辞・1 仕様＝1 フォルダ）により同 spec の先頭タスクにはできない。旧 A3 行の `crates/pilot/examples/areka-P0-shell-balloon-switch/` は命名規約違反だった。`shell-balloon-switch` には `_Depends(confirmed): pilot-balloon-asset-swap`。**`shell-balloon-switch` で崩れた前提**＝起動時に最後のシェルを効かせる口が無いまま切替だけ作ると、次の起動で `LastUsed::record` が既定シェルを書き戻して記憶が消える（起動時の適用は省けない）。
-4. **`shiori-fault-notice` はバグとして次ウェーブの先頭。** `baseware-root-layout` の告知の部品 `alert.rs` は起動専用の 4 場面で `pub(crate)`＝本仕様が一般化し、`ghost-install` の `terms.txt` の受諾／拒否と失敗告知はそれに乗る。Fault の原因は `main` まで届いておらず（`KanadeStopCause` は中身を持たない）、失敗の種類を告知に載せるなら kanade 3 本に手が入る。**完了 `app-lifetime-separation` 要件 3.8（終了コード 0）が Fault にも効いている**＝非 0 にするなら本仕様で上書きし §8 に記す。
-5. **登記だけの行「起動後の途中終了で記憶の確定が飛ぶ」（起動後の途中終了で記憶の確定が飛ぶ・XS・潜在）は `shiori-fault-notice` か `ghost-restart-unit` への相乗り候補。** どちらも `fn main` の `app.run()` の後ろを書き換える。brief は書かず要件で決める。登記だけの行「SHIORI へ渡すパスの形」（SHIORI へ渡すパスの形）は `shell-balloon-switch` が `resolve.rs` の隣を触るが、バグでも α でもないので相乗りしない。
-6. **`ghost-install` と `network-update` は直列を維持**（共有ソース 12 本を実測。`\![execute,install,path]` と `\![execute,install,url]` は消費者台帳の鍵が同じ `("execute", Some("install"))` になるので、`network-update` が `ghost-install` の `install_cue.rs` を改変するのは構造上確定）。`ghost-install` は 17〜19 タスク（20 を超えたら「投げ込み」＝`WM_DROPFILES`・`OnFileDrop2`／`OnDirectoryDrop` を切り出す）。`network-update` は 12〜14。`network-update` の主題は「更新中の進捗イベントと SHIORI の解放が噛み合わない」＝`run` を 2 段に割る（完了クレートの改修）かの裁定。
-7. **ウェーブは B1〜B7 へ組み直した**（下の表）。実装はほぼ直列で、並走できるのは先進坑と文書のみの段。**B1 の開始コマンド 3 本**＝`/kiro-start areka-P0-shiori-fault-notice` ∥ `/kiro-start pilot-balloon-asset-swap` ∥ `/kiro-start areka-P0-ghost-restart-unit`（`/kiro-design` まで）。
-8. **Fable で要件定義を行う spec**（Fable 列 ○）: `shiori-fault-notice`（終了コード・500・原因の運搬）・`ghost-restart-unit`（括り出しの形）・`ghost-shell-balloon-switch`（中断で中止するか・目印の置き場所・起動できないとき）・`shell-balloon-switch`（検体・名の引き方・会話途中の切替）・`network-update`（`run` の 2 段化）。Opus で足りる: `pilot-balloon-asset-swap`（先進坑）・`ghost-install`・`alpha-release-signoff`。
-9. **正典の見落とし（要件で足す）**: `ghost-install`＝フォルダの投げ込みは `OnDirectoryDrop`（`OnFileDrop2` ではない）／`shell-balloon-switch`＝シェル名・バルーン名に `random`／`lastinstalled` も受ける・`raise-event` 時はバルーンブレークで中止できる／`ghost-shell-balloon-switch`＝`OnGhostChanging` の中断の扱い（正典は中止・09-20 の終了の裁定は進む）。
-10. **α の残り 8 本の想定タスク合計＝67〜77**（`shiori-fault-notice` 5〜7・`pilot-balloon-asset-swap` 3〜5・`ghost-restart-unit` 6〜7・`ghost-shell-balloon-switch` 13〜15・`shell-balloon-switch` 13〜16・`ghost-install` 17〜19・`network-update` 12〜14・`alpha-release-signoff` 8〜10）。前回（09-20）の 5 本 56〜73 から本数は増えたが上限超えは 0 本。
-
-## 棚卸⑰の裁定（2026-09-26・main `13b72893`・開発者指示「main が進んだので棚卸＆深掘り＆徹底ブリーフィング」）
-
-> 09-24〜09-26 に main へ 5 本（PR#180 検体 `claudia`・PR#181 `tools/test-all.ps1`・PR#182 `pilot-balloon-asset-swap`・PR#183 `shiori-fault-notice`・PR#184 `ghost-restart-unit`）が入った直後の棚卸。残る α の brief 5 本（`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update`・`alpha-release-signoff`）を**サブエージェント 4 系統で main `13b72893` に対して再測定**し（`ghost-shell-balloon-switch`・`shell-balloon-switch`＋`ghost-install` は Fable、`network-update`＋`alpha-release-signoff` と引受先の無い残件の掃き出しは Opus）、結果を各 brief の「2026-09-26 棚卸⑰の再測定」の節へ書いた。段列の機械の数え＝起票前 ✅ 27・α 5・バグ 0・α 後 27・保留 1＝60 → 起票後 ✅ 27・**α 8**・バグ 0・α 後 27・保留 1＝**63**。
-
-1. **即時修正（spec なし）は本ブランチで実施して閉じた。** コードは振る舞いを変えないコメントの陳腐化 2 件だけ（`crates/areka/src/main.rs` の `finish_after_run` の doc の「`ghost-restart-unit` が…括り出すときの芽」→ `ghost-restart-unit` で `GhostSession::shutdown` へ括り出した／`crates/areka/examples/window-placement.rs` の `install_smoke_exit` の doc が消えた関数 `open_startup_window` を指していた）。文書は本ファイルの手書きの数 4 か所（導入文の 59 行・台帳の見出しの 26／6・完了エントリ 184・α 後 25 行）と前提の列の ✅、`product.md`（検体 3 体 → 4 体・「バルーン無指定時の既定の自動採用は下流 spec の仕事」は `baseware-root-layout` が実装済み＝`boot_resolve.rs` の段 5・α の着地済みに `shiori-fault-notice`・`ghost-restart-unit`）、`focus.md` の基準実数（198・29 → 201・29）。**バグは新たに 0 件**（下の 7）。
-2. **`ghost-shell-balloon-switch` から名前解決を切り出した＝`areka-P0-ghost-change-name-resolution`（S・4〜5 タスク・α）。** 再測定で `ghost-shell-balloon-switch` が 18〜21 本に張り付いた。切る場所は「名前解決」＝`\+`／`\_+`（compile で汎用キャリア `\![change,ghost,random|sequential]` へ写す）・`random`／`sequential` の純関数・`lastinstalled` の受け皿（プロセス内の記録）。`ghost-shell-balloon-switch` は名指しだけを受け、解決できない名前は無視＋`warn!`。**`ghost-change-name-resolution` が α に入る理由**＝里々 wiki の定石「インストールしたゴーストに即チェンジ」は `OnInstallComplete` から `\![change,ghost,lastinstalled]` を出す（`satori:ゴースト切り替え`）＝入れて替える一周が台本から完結しない。分割後の `ghost-shell-balloon-switch` は L（14〜16）。
-3. **`ghost-shell-balloon-switch` の要件に「汎用の通知の入口を 1 本作る」を必達で入れる。** `shell-balloon-switch`・`ghost-install`・`network-update` の再測定がそろって「入口が無いと kanade の 5 段（`KanadeMsg`→`Input`→`steady.rs`→`events.rs`→`ALLOWED_EVENT_IDS`）を各自が踏み、3 タスクずつ増え `steady.rs`（935 行）・`actor_tests.rs`（970 行）に触る」と指摘した。
-4. **`ghost-install` の先進坑を独立の spec にした＝`pilot-dropfiles-on-wuc-window`（XS〜S・α）。** `WM_DROPFILES` が WUC 合成（`WS_EX_NOREDIRECTIONBITMAP`）・クリック透過のトグル付きの窓に届くかは誰も測っていない。届かなければ `ghost-install` の設計が `IDropTarget`（OLE・STA）へ倒れ、棚卸⑭の仮裁定 7 を見直すことになる。`crates/pilot/` だけ＝`ghost-shell-balloon-switch` と共有 0。`ghost-install` は `_Depends(confirmed): pilot-dropfiles-on-wuc-window`。
-5. **`alpha-release-signoff` から配布物づくりを前に切り出した＝`areka-P0-alpha-package`（S・4〜5・α）。** 配布スクリプト（`tools/package-alpha.ps1`）・zip の起動確認・第三者向け README の骨子・根の README のライセンス是正は `tools/` と根の `README.md` だけで済み、`ghost-shell-balloon-switch`・`shell-balloon-switch`・`ghost-install`・`network-update` のどれとも重ならない。**新しい議題**＝`emo2` のシェルの説明書が「フリーシェルとしての再配布」と商用利用を禁じている（既定ゴーストとして zip に入れてよいか）。**→ 同日に開発者が裁定＝emo2 は同梱してよい。ただしシェルは MIT ではないことを明記し、areka のファーストゴーストとして使えるがシェルを抜き出して利用することはできないと書く**（`alpha-package` が README と告知に書く・既定ゴーストの差し替えは不要）。`alpha-release-signoff` は 5〜6 タスクへ縮んだ。
-6. **`network-update` のエンジン側の調整は起票しない（条件付き）。** 議題 ⑴（進捗の台詞と SHIORI の解放）の答えが (a)・(b)・(d) の正規形なら `crates/areka-update/` だけの別 spec（仮名 `areka-P0-update-engine-commit-gate`・3〜5）を `network-update` の要件の後に `/kiro-discovery` で起票して B4 へ入れる。(c) なら不要。再測定で分かったこと＝(b) も後片付けが `old/<dll>` を消せず永久に残すのでエンジン改修が要る／エンジンを変えない選択肢 (d)（最後の照合の通知の中で SHIORI を降ろし切る）がある。
-7. **引受先の無い残件の掃き出し（09-24 以降の完了 3 本＋PR#180・PR#181）**: 宙に浮いていた 4 件を各 brief へ入れた——先進坑の学び「同じ id の再登録で可視性の持ち主と窓寸の要求が既定に戻る」（`shell-balloon-switch`）／`alert.rs` はボタンを返さない＝`ghost-install` が口を足す（`ghost-install`・`shiori-fault-notice` 要件 5.4 の申し送りが brief に無かった）／`derive_scopes()` の `[0, 1]` 固定（`ghost-shell-balloon-switch`・`alpha-release-signoff` の既知の制限の候補）／`Cargo.lock` の追跡（`alpha-package` の議題）。捨てた 3 件＝main スレッドの panic で後始末を通らない（方針「panic は致命の場合だけ」と整合）・i686 の応答なしの打ち切りが `SendFailed` のまま（完了時に告知の種類に影響しないと判定済み）・ukadoc-survey の直下の二重数え（kiro-complete の手順で回避済み）。**バグは 0 件**＝バグの段に入れる spec は無い。
-8. **ウェーブは B3〜B7 を組み直した**（下の表）。B1・B2 は閉じた（B2 の文書の段＝`ghost-shell-balloon-switch` の `/kiro-start` は未着手のまま閉じ、`ghost-shell-balloon-switch` は B3 でフルライフサイクル）。並走の形は「α 実装 1 本（直列経路）∥ 共有 0 の実装（先進坑・配布物・名前解決）∥ 次の spec の要件」。**文書の段は要件（`/kiro-start`）で止め、設計は直列経路の前の spec が main へ入ってから**（09-24 版は設計まで先行を許していたが、`shell-balloon-switch`・`ghost-install`・`network-update` の設計はどれも `ghost-shell-balloon-switch` の `SwitchRequest`・通知の入口・`GhostSession` の置き場を待つと再測定が一致した）。
-9. **Fable で要件定義を行う spec**: `ghost-shell-balloon-switch`（中断で中止するか・起動できないとき・`OnFirstBoot` との関係）・`shell-balloon-switch`（検体・名の引き方・会話途中の切替・`lastinstalled` の読み方）・**`ghost-install`（− から ○ へ格上げ**＝利用条件の箱の閉じるボタンの読み・`ghost-shell-balloon-switch` の起こし直しへの乗り方・17〜20 タスクで投げ込みの切り出し判断）・`network-update`（解放の 4 択とエンジン改修）。Opus で足りる: `ghost-change-name-resolution`・`pilot-dropfiles-on-wuc-window`・`alpha-package`・`alpha-release-signoff`。
-10. **α の残り 8 本の想定タスク合計＝72〜88**（`ghost-shell-balloon-switch` 14〜16・`pilot-dropfiles-on-wuc-window` 1〜3・`alpha-package` 4〜5・`shell-balloon-switch` 14〜17・`ghost-change-name-resolution` 4〜5・`ghost-install` 17〜20・`network-update` 14〜17・`alpha-release-signoff` 5〜6）。上限超えは 0 本（`ghost-install` は張り付き＝要件で投げ込みの切り出しを判断）。
-
-## 棚卸⑱の裁定（2026-09-27・main `5a232d2f`・開発者指示「main が進んだので棚卸＆深掘り＆徹底ブリーフィング」）
-
-> 09-26〜09-27 に main へ 3 本（PR#190 `alpha-package`・PR#191 `pilot-dropfiles-on-wuc-window`〔開発者判定 go〕・PR#192 `ghost-shell-balloon-switch`）が入り、B3 の実装 3 本がそろって閉じた直後の棚卸。残る α の brief 5 本を**サブエージェント 3 系統で main `5a232d2f` に対して再測定**し（`shell-balloon-switch`＋`ghost-change-name-resolution` と `ghost-install`＋`network-update` は Fable、`alpha-release-signoff` と引受先の無い残件の掃き出しは Opus）、結果を各 brief の「2026-09-27 棚卸⑱の再測定」の節へ書いた。段列の機械の数え＝起票前 ✅ 30・α 5・バグ 0・α 後 30・保留 1＝66 → 起票後 ✅ 30・α 5・**バグ 1**・α 後 28・保留 1＝**65**。
-
-1. **即時修正（spec なし）は本ブランチで実施して閉じた。** コードは振る舞いを変えないコメント 3 件（`crates/areka/src/main.rs` の `finish_after_run` の doc と `crates/areka/src/ghost_session.rs` の `GhostBootInputs` の停止通知の欄の doc が台帳番号で spec を指していた／`crates/areka-emo-text/tests/staysee_balloon_fixture/definition.rs` の `install_directory_matches_descript_id` の doc が zip の持ち主を `alpha-release-signoff` と書いていた）。配布物の説明書 `dist/README.txt` は「ゴーストの切り替えはできない」が偽になったので、メニューの項目を 3 つにし既知の制限から外した（zip は `dist/README.txt` とのバイト比較なので安全）。文書は本ファイル・`focus.md`・`product.md`・`structure.md` の手書きの数と古い記述。完了した spec を「これから作る」と書いたコードのコメントは 0 件。
-2. **バグを 1 本起票した＝`session-mark-residue`（S・7〜10 タスク）。** 登記だけの行 2 本（「OS のセッションの終了では SHIORI の待ちを短くする」・「起動がまるごと失敗すると起動中の印が消える」）と、完了 `ghost-shell-balloon-switch` の `signoff.md`「気付いたこと」8 に引受先なしで残っていた未確認の申し送り（OS の終了の受け手の join 中に同期の送信が重なると止まりうる）を 1 本にまとめた。3 つとも起動中の印（裁定 13）の後始末で、同じ `on_os_session_end`・`session_mark_verdict` を通る。**再測定で分かったこと**＝OS の終了の待ちは台帳の「30〜60 秒」ではなく最悪約 100 秒（NOTIFY 60・UNLOAD 30・終了の観測 10）、倒れ込みの穴は LogSink の起動が**成功した**場合も同じ形になる。α の第三者の一周では 3 つとも踏まないが、優先度「バグ → α」によりウェーブの先頭に置く。
-3. **`ghost-change-name-resolution` は `session-mark-residue` と完全並走できる**（触るのは `emo2_boot/ghost_switch.rs`・その兄弟テスト・`areka-parsers/src/sakura/decode.rs`・`decode_tests.rs` だけ＝共有ソース 0）。`\+`／`\_+` は `decode_bare` に 2 腕で済み `compile.rs` に触らない。`areka-ghost` の新ファイル案も取り下げ（`ghost_switch.rs` の純関数 `resolve_switch_target` を広げる）。開発者への議題は 0。
-4. **`ghost-install`・`shell-balloon-switch`・`network-update` は互いに直列**（共有 5〜7 本＝`ghost_session.rs`・`emo2_boot/mod.rs`・`consumer_ledger.rs`・`menu/mod.rs`・kanade `schedule/events.rs` と `events_change_tests.rs` の許可表の件数の直書き）。**`shell-balloon-switch` は `ghost-install` の機能の前提ではない**（09-27 実測）＝順序は入れ替えられる。α の一周の入口（`.nar` の投げ込み）を先に通すため **`ghost-install` → `shell-balloon-switch` → `network-update`** の順にした（`network-update` の機能の前提は `ghost-install` の `install_cue.rs` だけ）。3 本とも `session-mark-residue` と `ghost_session.rs`・`main.rs` を共有するので、その後に置く。
-5. **汎用の通知の入口 `KanadeMsg::RaiseEvent` で後続が軽くなった**。`ghost-install` 17〜20 → 14〜17（kanade に相を足さない・**投げ込みは切り出さない**）・`network-update` 14〜17 → 13〜16（`OnUpdateProcessExec` を返信付きで入れると 16〜19＝新議題 ⑸）。`shell-balloon-switch` は 14〜17 → 15〜18（`SwitchRequest` がゴースト専用で kanade の `ChangeGhost` に結びつく＝シェル・バルーンの要求の型と入口は自前）。上限超えは 0 本。**注意**: `on_raise_event` は定常以外で届いた通知を捨てる（積まない）＝`OnInstallComplete` などは `KanadeNotice::Steady` を待って送る。許可表の件数の直書き（`events_change_tests.rs`）は 3 本が順に動かす。
-6. **`update-engine-commit-gate` は起票しない。** `network-update` の議題 ⑴ の推しは (b)（SHIORI を生かしたまま更新 → 終わってから読み直し・SSP と同じ）。(d) は成り立たない（`run` は背景スレッドで、降ろすには UI の `&mut World` が要る）。要るエンジンの改修は「成功した確定の後片付けで消せなかった `old/` を残骸と区別する」1〜2 タスクだけで、`crates/areka-update/` は誰とも共有しないので `network-update` の先頭タスクに入れる。
-7. **emo2 は `halt` の台詞を持たない**（`vendors/sample_ghost/emo2.nar` の 110 項目に `halt`・`Reference6` が 0 件）。09-26 の裁定「失敗は既定ゴーストの台詞で伝える」が今は成り立たず、切替に失敗すると えも？？ が説明なしにいつもの挨拶で戻る。**開発者の手が要る**（辞書はリポジトリの外）＝`alpha-release-signoff` の前提に入れた。足したら `emo2.nar` を差し替え、`vendors/sample_ghost/README.md` の表も直す。
-8. **文書だけの段は置かない**（厳しめの並走の物差し）。棚卸⑰の B3 の文書の段（`shell-balloon-switch`・`network-update`・`ghost-install` の要件）は 1 本も着手されず、棚卸⑯の B2 の文書の段も同じだった。そのうえ要件は前の spec の着地で陳腐化する（今回も `SwitchRequest` の形で `shell-balloon-switch` の前提が崩れた）。各 spec は自分のウェーブでフルライフサイクルを走る。
-9. **Fable で要件定義を行う spec**: `ghost-install`（起動中のゴーストの上書き 3 案・巻き戻せなかったときの伝え方・利用条件の箱）・`shell-balloon-switch`（2 つ目のシェルの検体・会話途中の切替・`random`／`lastinstalled`）・`network-update`（更新中の SHIORI・url・`OnUpdateProcessExec`・読み直しの後の起動の根）。Opus で足りる: `session-mark-residue`（議題は値と 2 案の選択）・`ghost-change-name-resolution`（議題 0）・`alpha-release-signoff`。
-10. **α の残り 6 本（バグ 1 本を含む）の想定タスク合計＝58〜74**（`session-mark-residue` 7〜10・`ghost-change-name-resolution` 4〜6・`ghost-install` 14〜17・`shell-balloon-switch` 15〜18・`network-update` 13〜16・`alpha-release-signoff` 5〜7）。
-
-## 棚卸⑲の裁定（2026-09-28・main `10a8d724`・開発者指示「main が進んだので棚卸＆深掘り＆徹底ブリーフィング」）
-
-> 09-27〜09-28 に main へ B4 の 2 本（PR#194 `ghost-change-name-resolution`・PR#195 `session-mark-residue`）が入った直後の棚卸。α の残り 4 本の brief を**サブエージェント 3 系統（Opus）で main `10a8d724` に対して再測定**し、結果を各 brief の「2026-09-28 棚卸⑲の再測定」の節へ書いた。段列の機械の数え＝起票前 ✅ 32・α 4・バグ 0・α 後 28・保留 1＝65 → 起票後 ✅ 32・α 4・**バグ 1**・α 後 28・保留 1＝**66**。
-
-1. **即時修正（spec なし）は本ブランチで実施して閉じた。** `doc/COMPAT_ARCHITECTURE.md` §8「きれいに終わらなかった次の起動」の「きれいな終わり」の定義が、OS のセッションの終了で SHIORI の待ちを 3 秒で打ち切った回を除くことを書いていなかった（(j) の行にだけ在った）＝定義の括弧へ足した。文書は本ファイル・`focus.md`・`product.md` の手書きの数と古い記述。コードの陳腐化（完了した spec を「これから作る」と書いたコメント・古い `#[allow(dead_code)]` の注釈）は 0 件。`dist/README.txt` の冒頭の日付は `alpha-release-signoff` の仕上げに任せる。
-2. **バグを 1 本起票した＝`frame-phases-after-exit`（XS・2〜3 タスク）。** 表に行を持たない覚え書き「メニューの終了の直後に表示の適用が窓の無い所へ届き ERROR が 1 件残る」（09-27 `ghost-change-name-resolution` の目視で登記）の根本を静的に特定した＝終了の相 `ghost_quit_system` と毎フレームの相 `emo2_frame_system` は同じ巡で続けて走り、後者は終了の指示を見ない。直す位置は `emo2_frame_system` の先頭 1 か所で、`quit_app` の 7 つの出所と全相がまとめて塞がる。presenter で読み飛ばす案（表示の適用しか塞がらない）と `derive_scale` の level を下げる案（生きた窓の DPI 欠落は本物の異常）は採らない。α の一周の最後（メニューからの終了）で毎回起こり得て、`alpha-release-signoff` の実機のログ判定を濁すのでバグとして先頭に置く。
-3. **`frame-phases-after-exit` は `ghost-install` と完全並走できる**（前者が触るのは `emo2_boot/frame.rs`〔509 行〕と新しい兄弟テストだけ・`ghost-install` の一覧に `frame.rs` は無い＝共有ソース 0。`menu/ghost_frame.rs`・`menu/install_frame.rs` は別ファイル）。
-4. **`ghost-install` は 15〜18 タスク・議題 4 件**（09-28 再測定）。新しい議題 ⑷＝インストールの途中でアプリや Windows を終えたとき（`areka-nar` の確定は `rename` 2 回で、その間に落ちると元のゴーストのフォルダが消える・通常の終了も OS の終了も背景のインストールを知らない）。利用条件の箱とファイル選択は背景スレッドで出す（UI スレッドの `MenuAction` は World を借りたまま走り、箱の入れ子のメッセージループの間に `WM_ENDSESSION` が来ると `os_session_end_world_busy` で後始末が飛ぶ）＝答えが明白なので議題にせず設計の決めとして brief に書いた。`ghost_switch.rs` は「触らない」ではなくなった（`record_last_installed` の `#[allow(dead_code)]` と注釈の 2 行を消す）。`ghost-install` は `KanadeMsg::RaiseEvent` の最初の本番の呼び手になる＝許可表は分けずに 13 → 23。
-5. **`shell-balloon-switch`・`network-update` の再測定で崩れたのは行数と共有本数だけ**。`ghost-install` との共有は `shell-balloon-switch` 7 本（＋`dist/README.txt` の同じ 2 行＝前回の見落とし）・`network-update` 8 本＝直列は変わらない。新しい決まり 1 つ＝`session-mark-residue` が入れた同期の送信の許可表（`session_end_sync_send_tests.rs` の `ALLOWED_SYNC_SENDS`・2 行）により、本番コードに `SendMessageW(`／`SendMessageTimeoutW(` を足すとテストが赤になる。規模は据え置き（15〜18・13〜16）。
-6. **`alpha-release-signoff` の前提は 3 本＋バグ 1 本**（`frame-phases-after-exit`・`ghost-install`・`shell-balloon-switch`・`network-update`）。emo2 の `halt` の台詞は 09-28 も 0 件＝**開発者の手のまま**。既知の制限の候補「Windows の終了を数十秒止める」は `session-mark-residue`（上限 3 秒）で不要になった。項目 13 の経路（次の起動が emo2 に Ref6＝`halt`）は `session-mark-residue` の実機で 2 通り確認済み（LogSink へ倒れた回・OS の終了で 3 秒を超えた回）。
-7. **Fable で要件定義を行う spec**: `ghost-install`（議題 4 件・⑴ と ⑷ は `session-mark-residue` の終了経路と切替の経路を読み合わせないと答えられず、⑷ の形は `network-update` が再利用する）・`shell-balloon-switch`・`network-update`（据え置き）。Opus で足りる: `frame-phases-after-exit`（議題 0）・`alpha-release-signoff`。
-8. **α の残り 5 本（バグ 1 本を含む）の想定タスク合計＝50〜62**（`frame-phases-after-exit` 2〜3・`ghost-install` 15〜18・`shell-balloon-switch` 15〜18・`network-update` 13〜16・`alpha-release-signoff` 5〜7）。
-9. **追記（同日・`ghost-install` の要件ディスカッション議題 1・開発者確定）: ドラッグ＆ドロップを `file-drop` へ切り出した。** `ghost-install` のギャップ分析の見立てが 20〜26 タスクで上限 20 を超えた（応えの有無を知る道で kanade の `msg.rs`・`actor.rs`、書庫の中の `terms.txt` を読む口で `areka-nar`、置換語で `areka-sylphya` に手が入る）。書庫でない物の投げ込みだけを切っても 1〜2 しか減らないので、投げ込みを丸ごと切った。`ghost-install` は 16〜22、`file-drop` は 5〜7（S・Opus で足りる）。`file-drop` は B6 に挿し、`shell-balloon-switch`・`network-update`・`alpha-release-signoff` を B7〜B9 へ繰り下げた。α の残りは 6 本・想定合計 56〜71。
-
-## ウェーブ編成（着手順の正本・2026-09-28 棚卸⑲／**09-29 に B7・B8 を入れ替え**・α＝B5〜B9〔09-28 `file-drop` の起票で B6 を挿し、以降を 1 つずつ繰り下げた〕。A0〜B4 は完了）
-
-> 各ウェーブは**フルライフサイクル**（要件→設計→タスク→実装→`/kiro-complete`＝PR squash マージ）を完走してから次へ。並走はウェーブ内のみ（1 spec = 1 worktree = 1 PR）。同居は**実測で共有ファイル 0**が原則（記憶 prefer-clean-waves-over-max-parallelism）。α は**ほぼ直列**である——切替・根・メニューが `main.rs`／`areka-ghost/src/runtime.rs`／`kanade/schedule/*` を順に触るため、並走させると後着が毎回 rebase する。**文書だけの段は置かない**（2026-09-27 棚卸⑱の裁定 8・それ以前の「文書フェーズは先行可」を改めた）。
-
-| Wave | ユニット（優先順） | 開始コマンド | 編成根拠・条件 |
+| Wave | ユニット（優先順） | 開始コマンド | 編成根拠（触るファイル）|
 |---|---|---|---|
-| W1〜W13 ✅ | 完了サマリ参照 | — | 旧行全文は history |
-| **B5**（**バグ 1 本 ∥ α 実装 1 本・共有 0**・2026-09-28 棚卸⑲） | ① `frame-phases-after-exit`（バグ・✅ 09-28 完了） ∥ ② `ghost-install`（✅ 09-29 完了） | `/kiro-start areka-P0-frame-phases-after-exit` ／ `/kiro-start areka-P0-ghost-install` | **着手中の spec は 0 本・open PR 0 本**（09-28 実測）。B4 の 2 本は完了（`lastinstalled` の受け皿＝`ghost_switch.rs` の `record_last_installed`・本番の呼び手 0）。① が触るのは `crates/areka/src/emo2_boot/frame.rs` と新しい兄弟テスト `frame_exit_gate_tests.rs` だけ。② の一覧（brief「2026-09-28 棚卸⑲の再測定」）に `frame.rs` は無い＝**①② の共有ソース 0**（文書は `roadmap.md` の別の行だけ）。② の `_Depends(confirmed): pilot-dropfiles-on-wuc-window` は充足（go）。② の議題 ⑴ を (b)／(c) で決めれば `switch_to` に触らない。`alert.rs` に「はい／いいえを返す」口を足すのは ②（`shiori-fault-notice` 要件 5.4） |
-| **B6**（**α 1 本 ∥ 前倒し 1 本・共有 0**・09-28 起票／09-29 前倒しを追加） | ① `file-drop`（✅ 09-29 完了） ∥ ② `balloon-color-emoji`（前倒し・✅ 09-30 完了） | `/kiro-start areka-P0-file-drop` ／ `/kiro-start areka-P0-balloon-color-emoji` | **②**: α の機能ではないが、並走できるので前倒し（段「前倒し」の定義を見よ）。`file-drop` の枝と `areka-emo-text`・`areka-sakura`・`areka-parsers`・`Cargo` の接触 0（09-29 `git diff --stat` で確認）。B7 `shell-balloon-switch` と時期が重なっても `sink.rs`（`TextMsg`）に触らなければ共有 0。**①**: `ghost-install` の後（依頼の型と手続きの入口が**機能の前提**・許可表の数 21 → 23・`ghost_session.rs`・台帳を共有）。`ghost-install` の要件ディスカッション議題 1 で切り出した（同 spec の見立て 20〜26 が上限 20 を超えた）。α の一周の入口「`.nar` を窓へ落とす」はここで成り立つ＝棚卸⑱の「入口を先に通す」に従い `shell-balloon-switch` より前に置く。先進坑 `pilot-dropfiles-on-wuc-window` の go の結果（宣言は `WS_EX_ACCEPTFILES` の 1 ビット・絵の外の処理は要らない）は brief に転記済み |
-| **B7**（単独・**09-29 に B8 から繰り上げ**） | `network-update`（✅ 09-30 完了・PR は本完了の手続き。実装中に要件を 2 度改訂〔5.9 読み直しの後に残りを消す・`OnUpdateComplete`／総括を再起動の後へ〕・補助プロセスのコンソール窓を直した・α 後の `network-update-canon-order` を起票） | `/kiro-start areka-P0-network-update` | `file-drop` の後（許可表の数・`ghost_session.rs`・台帳を共有）・`ghost-install` の後（共有 7 本＋条件付き 2 本）。**09-29 開発者指示で `shell-balloon-switch` と入れ替えた**＝機能の前提は `ghost-install` の `install_cue.rs` だけで（棚卸⑱ 項目 4）、`shell-balloon-switch` とは共有 5 本の直列にすぎない。前倒しの `balloon-color-emoji` と共有 0（`areka-emo-text` の `sink.rs` を触るのは `shell-balloon-switch` の側）。「現シェル＋現バルーンの更新」は、シェル・バルーンの切替が無くても起動時のシェル・バルーンを指す＝要件で確かめる。先頭タスクでエンジンの改修（`crates/areka-update/`）。実機で一度 https を通す（候補＝emo2 の `homeurl`・議題 ⑷） |
-| **B8**（単独・**09-29 に B7 から繰り下げ**） | `shell-balloon-switch`（✅ 10-01 完了・PR は本完了の手続き。実機 ①〜⑦ 合格・完了時に 1 件を直し〔頼んだ段で seriko が倒れても切替の印が消える〕、バグ `balloon-reappear-short-talk` を起票〔同日 ✅ 完了〕） | `/kiro-start areka-P0-shell-balloon-switch` | `network-update` の後（許可表の数・`ghost_session.rs`・`emo2_boot/mod.rs`・`consumer_ledger.rs`・`menu/mod.rs` の共有 5 本＝直列）・`file-drop` の後・`ghost-install` の後（共有 5 本）。`_Depends(confirmed): pilot-balloon-asset-swap`（09-24 充足＝案 B）。`SwitchRequest`／`GhostSpec`／`request_ghost_switch` の形は変えず、シェル・バルーンの入口は自前で作る。`areka-emo-text` の `sink.rs`（`TextMsg`）を触る＝`balloon-color-emoji` が先に着地していればその上に載せる |
-| **B9** | `alpha-release-signoff` | `/kiro-start areka-P0-alpha-release-signoff` | `alpha-package` の zip で第三者の手順 12 項目の実機一周（`shell-implicit-surface` の目視 5 項目を含む）＋`dist/README.txt` の仕上げ＋開発者の署名。**開発者の手＝emo2 の辞書に `halt` の台詞を足す**（いつでも先に済ませてよい）。**α 完成宣言の器**。前提に `frame-phases-after-exit`・`file-drop` を足した（09-28）。**✅ 2026-10-02 完了・α 完成宣言** |
-| **α 後** | 台帳の段列が「α 後」の 39 行（うち 10 行は「SSP MCP の移植」節の M1〜M4 で並びを決めてある）（旧 W14〜W17 ほか・登記だけの行を含む） | — | 旧ウェーブ行と干渉台帳は history「2026-09-18 棚卸⑭退避」節。α 完了後の棚卸で `briefing.md` の順位に沿って並べ直す |
-| **保留** | `tick-gate-adoption` | — | 夜間/25 分/n≥3 の実測要求が開発者方針「長時間試行禁止」と正面衝突＝要件段階で「始める前に決着可能な A/B 設計」を組めた時点で単独ウェーブへ。他 spec と並走しない（計測を汚す） |
+| **C1**（8 本並走・**バグ 4 本＋持ち越し 2 本＋土台 2 本**） | ① `drag-click-without-move`（バグ） ∥ ② `choice-timeout-directive`（バグ） ∥ ③ `restart-chain-finalize-stall`（バグ） ∥ ④ `package-check-temp-cleanup`（道具のバグ） ∥ ⑤ `install-live-target-hazards` ∥ ⑥ `install-companion-canon` ∥ ⑦ `emo-text-file-split` ∥ ⑧ `mcp-server-core` | `/kiro-start areka-P0-<名>` | ①＝`crates/wintf/src/ecs/{window_proc,drag}/`・`crates/areka/src/placement/` のテスト。②＝`crates/areka-sakura/src/compile.rs`。③＝`crates/areka/src/emo2_boot/frame/drain_resnap.rs`。④＝`tools/package-alpha.ps1`。⑤＝`crates/areka/src/install/{judge,procedure,overwrite,desk}.rs`・`session_end.rs`・`app_exit.rs`。⑥＝`crates/areka-nar/src/`・`crates/areka/src/install/terms.rs`・`crates/areka-ghost/src/catalog.rs`・`crates/areka/src/boot_config.rs`。⑦＝`crates/areka-emo-text/src/{actor,layout,viewbox,viewbox_draw}.rs`・`crates/areka/src/input_events/balloon.rs`・`crates/areka/src/emo2_boot/balloon_visibility.rs`。⑧＝新規 `crates/areka-mcp/`・`crates/areka/src/main.rs`・`crates/areka/Cargo.toml`・`Cargo.lock`。**互いの境目は各 brief の Constraints と「棚卸⑳の再測定」に書いてある**（⑤ は `areka-nar`・`terms.rs`・`drain_resnap.rs`・`main.rs`・`ghost_session.rs` に触らない） |
+| **C2**（3 本並走・C1 の ⑦⑧ の後） | ① `shell-balloon` ∥ ② `translate-pipeline` ∥ ③ `mcp-tool-entrances` | `/kiro-start areka-P0-<名>` | ①＝シェルのパーサ・`areka-seriko/src/actor.rs`・emo-text・emo-present の差し込み口・`emo2_boot/`・`input_events/`。②＝`crates/areka-kanade/src/`（`schedule/steady.rs` の分割を含む）・`areka-sakura/src/sysvar.rs`。③＝`crates/areka-mcp/src/tools/`・新規 `crates/areka/src/mcp/`・`ghost_session.rs`・`main.rs`。①は `emo-text-file-split`、③は `mcp-server-core` が前提 |
+| **C3 以降**（次の棚卸で組む・下の「直列の列」から 1 本ずつ取る） | 先頭の候補＝`status-execution-states`（潜在バグ） ／ `balloon-font-file` ／ `mcp-stdio-bridge`・MCP の個別 6 本 ／ `coverage-roadmap-refresh` ／ `property-query-channels` | — | C2 の着地で brief が古くなるので、いまは並べない（文書だけの段を置かないのと同じ理由） |
+| **保留** | `tick-gate-adoption` | — | 「長い試行はしない」と両立する短い A/B の測り方を先に組む。計測を汚すので他と並べない |
 
-**干渉台帳**: 完了した A0〜B2 の行と、2026-09-18／09-20 の干渉台帳（A1・A2 以降）は 2026-09-26 に history「2026-09-26 番号表記の廃止に伴う退避」節へ逐語で移した。B5 以降の接触ファイルは各 brief の「2026-09-28 棚卸⑲の再測定」節（`frame-phases-after-exit` は brief の Constraints）が正本。**保存義務（据え置き）**: 切替の spec は既存の終了経路（右クリックメニューの「終了」→ `OnClose` 握手 → `ghost_quit`）の決定論テストを 1 本も落とさない。実機サインオフの「絶対パス起動」（argv 上書き）を残す。
+### 直列の列（同じ列の spec は同時に走らせない・列が違えば並べられる）
 
-## 直接修正候補（spec なし・任意・S）
+棚卸⑳の再測定で、**同じ場所へ行を足す spec の群れ**が 5 つ見つかった。ファイルを分割しても重なりは消えない（同じ表・同じ関数へ足すため）。C3 以降のウェーブは、各列の先頭から 1 本ずつ取り、取った組の接触ファイルを照合してから組む。
 
-> **2026-09-24 一掃**: 残っていた 8 件のうち 5 件をこのブランチで直し（各 1 コミット・バグにはテスト付き）、2 件を消した。直したのは `writing.rs` の警告文言（`emo-text-canon-residue` 項目 12）・`WM_ACTIVATE` の `JustStarted`・見張りの末尾 `/` の穴・コードページ 65001 で赤くなるテスト（＋古い注記）・`areka-nar` の理由の 1 行の肥大 2 か所。`roadmap-history.md` の `\w[ms]` 記述は「history は非改変」ゆえ作業が無く消した。`main.rs` の `warn!` 継続は `baseware-root-layout`（PR#177）が撤去した（根・ゴースト・バルーンが決まらなければ告知して終了コード 1）。残った判定器の 1 件は、前の裁定（下記）と同じ結論になり取り下げた。
+| 列 | 重なる場所 | 並び（先頭から） |
+|---|---|---|
+| **文字とバルーン** | `crates/areka-emo-text/src/`（`state.rs` の `CueCommand::Custom` の腕・実行時の状態の構造体）・`crates/areka-parsers/src/balloon/{model,parse}.rs`・`crates/areka/src/input_events/` のバルーン | `emo-text-file-split`（C1）→ `shell-balloon`（C2）→ `balloon-font-file` → `anchor-tag-canon`（働きの側・優先度 高）→ `text-typesetting` → `talk-fast-forward` → `balloon-markers` → `text-ruby` → `text-reveal-fade` → `balloon-scroll-fade` → `text-align-shadow-canon` → `choice-marker-styling` → `anchor-tag-canon`（装飾）→ `text-reveal-dance`（夢） |
+| **シェルの element** | `crates/areka-parsers/src/shell/{model,decode}.rs`・`crates/areka-emo-compose/`・`crates/areka-emo-atlas/src/manifest.rs` | `shell-balloon`（C2）→ `surface-element-nesting` → `animated-image-playback`（`animated-image-decode` も前提）→ `balloon-element-order` → `surfaces-basepos`（据え置き） |
+| **kanade の進行** | `crates/areka-kanade/src/schedule/{steady,events,change}.rs`・`msg.rs` | `translate-pipeline`（C2）→ `property-query-channels` → `balloon-lifecycle-events`（項目 8・10）→ `network-update-canon-order` → `mcp-kanade-tools` → `makoto-dll-host` |
+| **台本のコンパイル** | `crates/areka-sakura/src/compile.rs` | `choice-timeout-directive`（C1）→ `anchor-tag-canon`（働きの側）→ `talk-fast-forward` → `sakura-time-directives`（残り） |
+| **`emo2_boot` の結線** | `crates/areka/src/emo2_boot/{mod,ghost_switch,consumer_ledger}.rs`・`frame/{attach,switch}.rs` | `shell-balloon`（C2）→ `status-execution-states` → `balloon-canon-residue`（項目 2 から）→ `property-query-channels` → `currentghost-property-tree` → `property-catalog-lists` → `network-update-canon-order` |
 
-**2026-09-26 棚卸⑰**: 見つけた即時修正（コメントの陳腐化 2 件・本ファイルと `product.md`・`focus.md` の手書きの数と古い記述）は棚卸⑰のブランチで直して閉じた（「棚卸⑰の裁定」1）。**直接修正候補は 0 件**（2026-09-24 棚卸⑯で再確認。brief 側の陳腐化 2 件＝`dpi-transition-two-tick-bounce` と `balloon-canon-residue` は同日に是正済み。根の `README.md` のライセンス表記の不一致は開発者の決めごとなので `alpha-release-signoff` の議題へ）。取り下げた 1 件を再登記しないこと——判定器（`crates/areka/src/placement/transition_judge_verdict.rs`）の窓ごとの書込上限（要件 4.5）が見送り窓を除いていないのは**意図どおり**である。除くと、偽の違反（実機 15 遷移で 0 件）と引き換えに、見送り窓の上で「大きさと位置を別々に書く」本物の欠陥が見えなくなる。裁定は `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §13.1、2026-09-24 に開発者が再確認した。理由はコードの当該の検査にもコメントで残した。
+- **依存を足す spec は 1 ウェーブに 1 本**（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md` が重なる）: `mcp-server-core`（C1）・`animated-image-decode`・`mcp-stdio-bridge`。
+- **網羅台帳をまとめて書き換える `coverage-roadmap-refresh` は、台帳の行を直す spec と同じウェーブに置かない**。
+- **列に属さず、いつでも単独で取れる**: `coverage-roadmap-refresh`・`animated-image-decode`・`mcp-stdio-bridge`（`mcp-tool-entrances` の後）・MCP の個別（`mcp-get-property`・`mcp-expression-table`・`mcp-log-history`・`mcp-dump-images`＝`mcp-tool-entrances` が触るファイルを固定してから）・`zorder-property`・`popup-menu-residue`。
 
-**2026-09-27 棚卸⑱**: 見つけた即時修正（コメントの陳腐化 3 件・`dist/README.txt` のゴースト切替の記述・本ファイルと `focus.md`・`product.md`・`structure.md` の手書きの数と古い記述）は棚卸⑱のブランチで直して閉じた（「棚卸⑱の裁定」1）。**直接修正候補は 0 件のまま。**
+**保存義務（据え置き）**: 既存の終了経路（右クリックメニューの「終了」→ `OnClose` の握手 → `ghost_quit`）の決定論テストを 1 本も落とさない。実機サインオフの「絶対パス起動」（argv 上書き）を残す。
 
-**2026-09-28 棚卸⑲**: 見つけた即時修正（`doc/COMPAT_ARCHITECTURE.md` §8 の「きれいな終わり」の定義の欠け 1 件・本ファイルと `focus.md`・`product.md` の手書きの数と古い記述）は棚卸⑲のブランチで直して閉じた（「棚卸⑲の裁定」1）。**直接修正候補は 0 件のまま。**
+## spec 台帳（brief を持つ 52 本・2026-10-02 棚卸⑳）
+
+> **spec は名前で呼ぶ**（2026-09-26 開発者指示）: 報告・brief・コミット・PR で spec を指すときは spec 名（`areka-P0-` は省略してよい）を書く。「#数字」は `PR#185` の形の PR 番号にだけ使う。古い文書に台帳番号が出てきたら、その時点の表（history）で名前へ読み替える。
+> **段**: **バグ**＝バグ修正（先頭）／**優先**＝ウェーブ C1・C2 に入れた機能／**後続**＝直列の列の順番待ち・前提待ち／**据え置き**＝当面着手しない（理由は行に）／**保留**。完了した spec はこの表に置かない（完了サマリと history）。
+> **段の数え方**: `awk '/^\| spec（`areka-P0-` 省略）/{f=1;next} f&&/^\|/{print} f&&!/^\|/{f=0}' .kiro/steering/roadmap.md | awk -F'|' 'NR>1{gsub(/ /,"",$3);print $3}' | sort | uniq -c`（2026-10-02 の数え＝バグ 5・優先 7・後続 33・据え置き 6・保留 1 ＝ 52）
+> **規模**は棚卸⑳の再測定の見立て（タスク数）。**上限は 1 spec 20 タスク**。「要件で切る」と書いた行は、着手のときに要件の段で切り出す（先に起票しない＝spec 工場の禁止）。**Fable**列＝要件定義を Fable で起動したセッションで進めることを勧める（○）か、Opus で足りる（−）か。各 brief の末尾「2026-10-02 棚卸⑳の再測定」が、崩れた前提・触るファイル・議題の正本。
+
+| spec（`areka-P0-` 省略） | 段 | 何をするか | 規模 | 並び | 前提（先に着地） | Fable |
+|---|---|---|---|---|---|---|
+| `drag-click-without-move` | バグ | キャラクターの絵を動かさずにクリックしただけで窓の位置が保存されるのを止める（wintf が動かし始める前でも終了を配る 5 か所を先例に揃える） | S（6〜9） | **C1-①** | なし | − |
+| `choice-timeout-directive`（**10-02 起票**・`sakura-time-directives` から切り出し） | バグ | `\![set,choicetimeout,時間]` が効かず、時間切れなしを指定したメニューが 30 秒で閉じるのを直す（compile が値を選択待ちへ焼く） | XS〜S（3〜5） | **C1-②** | なし | − |
+| `restart-chain-finalize-stall`（**10-02 起票**・覚え書きから格上げ） | バグ | ゴーストを起こし直した後に `deferrals=600` の WARN が鳴るのを止める（窓の無い巡を見送りに数えない） | XS（2〜3） | **C1-③** | なし | − |
+| `package-check-temp-cleanup` | バグ | `tools/package-alpha.ps1 -Check` の展開先をワークツリーの `target\` の下へ移し、判定の後に片付ける | XS〜S（3〜5） | **C1-④** | なし | − |
+| `status-execution-states` | バグ | SHIORI へ渡す `Status` に `online`・`nouserbreak`・`balloon` を載せる（今は載らず、更新中や割り込み禁止の区間に雑談が割り込みうる＝潜在） | S〜M（5〜8） | C3 の先頭の候補 | なし（`shell-balloon` と `emo2_boot` を分け合う＝その後） | − |
+| `install-live-target-hazards` | 優先 | 表示中のシェル・使用中のバルーンへの上書きと、起動中のゴーストへ入れる途中の Windows の終了を**実測してから**扱いを決める | S〜M（8〜14） | **C1-⑤** | なし | ○ |
+| `install-companion-canon` | 優先 | 同梱インストールの `install.txt` の読み方を ukadoc に揃える 4 点＋起動時の同梱バルーンの問い | S〜M（8〜12） | **C1-⑥** | なし | ○ |
+| `emo-text-file-split`（**10-02 起票**） | 優先 | 文字まわりの上限に張り付いた 6 ファイルを、振る舞いを変えずに分ける（後続 10 本以上の「分割が先」をここで済ませる） | S（5〜8） | **C1-⑦** | なし | − |
+| `mcp-server-core` | 優先 | 新クレート `areka-mcp`＝公式 SDK `rmcp` で `127.0.0.1` の MCP サーバ（ツール 0 本・既定ポート 9821） | M（11〜14） | **C1-⑧** | なし | ○ |
+| `shell-balloon` | 優先 | シェルの絵の中に台詞を書く（areka 独自）。`balloon.名前`ブレス・element定義 `elementN,balloon,名前,X,Y`・行き先は「スコープ × 名前」 | L（15〜19） | **C2-①** | `emo-text-file-split` | ○ |
+| `translate-pipeline` | 優先 | `OnTranslate` の往復（里々・YAYA の辞書が文を直す段）。今は直す前の文が出ている | M（14〜18） | **C2-②** | なし | ○ |
+| `mcp-tool-entrances` | 優先 | MCP のツール 10 本の定義を SSP と逐語一致・World への橋・9 本はダミー | M（13〜17） | **C2-③** | `mcp-server-core` | ○ |
+| `balloon-font-file` | 後続 | `font.name`・`\f[name]` のフォントファイル | M（7〜10） | 文字とバルーンの列 | `shell-balloon` | − |
+| `anchor-tag-canon` | 後続 | `\_a` のリンク（今は押しても何も起きない＝優先度 高）と装飾 16。**要件で「働き」と「装飾」に切る・働きが先** | 20 超 → 切る | 文字とバルーンの列・コンパイルの列 | `shell-balloon`・`choice-timeout-directive` | ○ |
+| `text-typesetting` | 後続 | 禁則・ぶら下げ・縦中横・字の向き（areka 独自） | M〜L（13〜18） | 文字とバルーンの列 | `shell-balloon` | ○ |
+| `talk-fast-forward` | 後続 | クリックでの早送り・`\x`／`\x[noclear]`・`clickwaitmarker.*` | M（13〜18） | 文字とバルーンの列・コンパイルの列 | `shell-balloon` | ○ |
+| `balloon-markers` | 後続 | `arrow*` と手動スクロール・`onlinemarker`・`number`・SSTP の印（表示だけ）・装飾の系列 | M〜L（14〜19） | 文字とバルーンの列 | `shell-balloon` | − |
+| `text-ruby` | 後続 | ルビ `\![text,ruby,親文字,ルビ]`・`line_height`・`letter_spacing` | M〜L | 文字とバルーンの列 | `text-typesetting` | ○ |
+| `text-reveal-fade` | 後続 | 1 字ずつの表示で字が透明から不透明へ変わる（既定は無効） | M（8〜12） | 文字とバルーンの列 | `shell-balloon` | − |
+| `balloon-scroll-fade` | 後続 | 自動スクロールで押し出される行のフェード（既定は無効） | S〜M | 文字とバルーンの列 | `balloon-markers` | − |
+| `text-align-shadow-canon` | 後続 | `\f[align]`／`\f[valign]`・影。**20 を超えそうなら「影」と「寄せ」に切る** | M（20 に近い） | 文字とバルーンの列 | `text-typesetting` | ○ |
+| `choice-marker-styling` | 後続 | `\f[cursor*]` 10 項目と本物の下線 | S | 文字とバルーンの列 | `text-align-shadow-canon`（同じファイル） | − |
+| `surface-element-nesting` | 後続 | element定義でサーフェスを部品として置く（数字だけ＝サーフェスの番号）・子の時計は独立 | M〜L（16〜22） | シェルの element の列 | `shell-balloon` | ○ |
+| `animated-image-decode` | 後続 | 動く GIF・APNG・WebP の全コマと待ち時間を読む（`image` クレートを本番へ＝承認が要る） | M（11〜15） | 単独で取れる（依存を足す＝1 ウェーブに 1 本） | なし | ○ |
+| `animated-image-playback` | 後続 | 動く絵を子サーフェスへ分解して自動で回す・`import`・interval `always` | M〜L（15〜20） | シェルの element の列 | `animated-image-decode`・`surface-element-nesting` | ○ |
+| `balloon-element-order` | 後続 | `balloon` の element定義を並び順どおりの重ね順で描く | M | シェルの element の列 | `shell-balloon`・`animated-image-playback` | ○ |
+| `property-query-channels` | 後続 | `\![get/set,property]`・`%property[…]`。**`\![embed]` は要件で切り離す**。許可の表の迂回を最初に決める | M（12〜16） | kanade の列・`emo2_boot` の列 | `translate-pipeline` | ○ |
+| `balloon-lifecycle-events` | 後続 | `OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak`（項目 8・10 を先に。項目 7 の `balloontimeout` は `sakura-time-directives` を待つ） | M | kanade の列 | `translate-pipeline`・`emo-text-file-split` | − |
+| `network-update-canon-order` | 後続 | 更新のイベントを ukadoc の発生順序に揃える（MD5 の取り直し・台詞の終わりを待つ・総括の 2 段） | M（10〜15） | kanade の列・`emo2_boot` の列 | なし（列の順番待ち） | ○ |
+| `balloon-canon-residue` | 後続 | 残り 5 件（項目 2＝面の偶奇で左右のバルーンを選ぶ、を先に。項目 4 `\![reload,balloon]` は切替の仕組みに載せる） | M | `emo2_boot` の列 | `shell-balloon` | − |
+| `currentghost-property-tree` | 後続 | `currentghost.*` の約 65 値。**要件で `balloon.scope` の 19 項目を先に切る** | 20 超 → 切る | `emo2_boot` の列 | `property-query-channels`（読む道）か `mcp-get-property` | − |
+| `property-catalog-lists` | 後続 | `system.*` と一覧（`ghostlist`・`balloonlist`＝列挙は α で実在）。**要件で 2 つに切る** | 20 超 → 切る | `emo2_boot` の列 | `currentghost-property-tree` | − |
+| `zorder-property` | 後続 | `currentghost.seriko.zorder` の読み書き | S | 単独で取れる | 書く側は `property-query-channels` | − |
+| `sakura-time-directives` | 後続 | 残りの時間の指令（`quicksection`・`balloonwait`・`balloontimeout`）。C・D 群は消費する者が現れるまで置く | 20 超 → 切る | コンパイルの列 | `choice-timeout-directive`・`talk-fast-forward` | ○ |
+| `makoto-dll-host` | 後続 | MAKOTO/2.0 の DLL を掛ける。**要件で「ホストと鎖」と「load/unload/reload」に切る** | 20 超 → 切る | kanade の列 | `translate-pipeline` | ○ |
+| `mcp-stdio-bridge` | 後続 | Claude Desktop 用の stdio ⇔ HTTP 中継 exe | S（7〜10） | 単独で取れる | `mcp-server-core`・`package-check-temp-cleanup` | − |
+| `mcp-get-property` | 後続 | `get_property` | S | MCP の個別 | `mcp-tool-entrances` | − |
+| `mcp-kanade-tools` | 後続 | `get_status`・`sakurascript`・`raise_event`（許可の表の迂回は `property-query-channels` と一度で設計） | M〜L | MCP の個別・kanade の列 | `mcp-tool-entrances` | ○ |
+| `mcp-expression-table` | 後続 | `get_expression_table` | S〜M | MCP の個別 | `mcp-tool-entrances` | ○ |
+| `mcp-log-history` | 後続 | `get_log`（tracing の履歴） | M | MCP の個別 | `mcp-tool-entrances` | ○ |
+| `mcp-reload` | 後続 | `reload` と台本の `\![reload,…]` | M〜L | MCP の個別 | `mcp-tool-entrances` | ○ |
+| `mcp-dump-images` | 後続 | `dump_surface`・`dump_balloon` | M | MCP の個別 | `mcp-tool-entrances` | ○ |
+| `mcp-strict-errors` | 後続 | `strict`（不在の面・未知のタグなどをエラーログへ） | M | MCP の最後 | `mcp-log-history`・`mcp-kanade-tools` | ○ |
+| `coverage-roadmap-refresh`（**10-02 に覚え書き `ukadoc-coverage-custody` を合流**） | 後続 | 網羅台帳の手書きの数と持ち主が黙って偽になるのを止める（検査が `completed/` を走査・128 行の持ち主の付け替え・実在しない仕様名 107 項目） | M（14〜18） | 単独で取れる（台帳を直す spec と同じウェーブに置かない） | なし | − |
+| `popup-menu-residue` | 後続 | メニューの残件 4（記録の文言・テストの穴・World 借用中の `ShellExecuteW`）。次に `menu/` を触る spec へ相乗りが安い | S（6〜8） | 単独で取れる | なし | − |
+| `surfaces-basepos` | 据え置き | surfaces.txt の `point.basepos`。宣言するシェルが要るまで始めない | S | シェルの element の列の最後 | — | − |
+| `property-ipc-transport` | 据え置き | 台本を通さないプロパティの読み取り。**最初の 1 段（調べて裁定）で終わる形へ縮める** | S（裁定まで） | — | — | ○ |
+| `dpi-transition-two-tick-bounce` | 据え置き | 拡大率の切替で位置と大きさが 1 コマずれる（開発者が許容）。着手するなら最初に測り直し、跳ねが無ければ取り下げ | S〜M | — | — | ○ |
+| `zorder-chain-residue` | 据え置き | 間欠赤のテスト族と文書。09-11 以降 main で赤 0 件＝先回りしない | M | — | — | ○（A 群） |
+| `text-reveal-dance` | 据え置き | 字が現れるときだけ跳ねる・揺れる（夢・開発者が望んだときだけ） | M〜L | — | `text-reveal-fade` | ○ |
+| `emo-text-canon-residue` | 据え置き | **取り下げ予定・着手しない**。残っていた 1 件（折り返しの警告にバルーンの名前を出す）は `shell-balloon` が引き取った。フォルダを消すと網羅台帳の整合検査（`roadmap-draft.md` の `[[spec]]` の表）が赤くなるので、表から外すのと一緒に `coverage-roadmap-refresh` が片付ける | — | — | — | − |
+| `tick-gate-adoption` | 保留 | 既定で切の門を入れるか（待機中の CPU 17〜22% → 3% 未満の見込み）。短い A/B の測り方を先に組む | M〜L | 保留 | — | ○ |
+
+## 覚え書き（brief なし・引受先が消えたまま忘れないための一覧）
+
+> brief を書くほど固まっていない宿題。**着手の判断は棚卸で行う**（格上げするときは `/kiro-discovery`）。登記時の全文（数え方つき）は history「2026-10-02 棚卸⑳退避」。
+
+**製品の穴**
+
+- **`present-write-coherence` の未達 40 件**（性能・L）。完了仕様が自ら「引受先なし・新規仕様の起票が必要」と書いた残量＝`visualize_to_write_us` が上限 16,667µs の 12.6〜18.4 倍・32 窓中 0 窓が上限以下。開発者裁定で「未達のまま GO」済み。着手前に測り直す。
+- **正典語彙の孤児 2 件**（S）。`font.outline`（白抜き）の**描画**の引受先／「スタイルシートのキーワード」の持ち主。
+- **配布物を束ねる／作る側の 3 件**（XS〜S）。`install.txt` の `type,package` を解く・`developer_options.txt`（配布物を作る道具が読む）。
+- **壊れたゴーストを表示し続ける形**（互換・M）。SSP は切替先の SHIORI が死んでいても切替を成功扱いにして表示し続ける。areka は「既定ゴーストへ戻して `OnBoot` の Ref6＝`halt`」を採った（09-26 裁定）。あるべき姿としては残る。
+- **SSTP の受信**（L）。`balloon-markers` の `sstpmarker`／`sstpmessage` が実際に画面に出るのはこれが入ってから。起票するときは同 spec の縮退の口を埋める。
+- **更新のオプションと `OnUpdateCheck*`**（10-02 登記）。完了 `network-update` が「α 後」とした更新のオプション（`checkonly` など）・`OnUpdateCheck*` の 4 語・`other_homeurl_override`。`network-update-canon-order` は範囲外と明記していて、持ち主が居ない。
+- **3 人目以降のキャラクターの窓**（10-02 登記）。`char{n≧2}` の窓は出ない（説明書の既知の制限）。`popup-menu-residue` は完了済みの `ghost-shell-balloon-switch` へ渡すと書いたままで、持ち主が居ない。
+- **説明書の既知の制限のうち持ち主の居ないもの**（10-02 登記・`dist/README.txt`）: 管理者として動かした areka へは投げ込みが届かない／`%TEMP%\areka\download\` に取ってきた書庫が残る／`.update-work` を手で戻す／引数で起動したときは更新が次の起動から効く／ゴーストの指示で取ってくるのは `.nar` だけ／署名なし。仕様としての決めかどうかを含めて次の棚卸で仕分ける。
+- **`shell-implicit-surface` の着地で残した 7 件**（09-20 登記・検体 3 体に該当 0 件）: ⑴ `.pna` は非対応のまま（開発者方針）⑵ `use_self_alpha,full`（全面不透明）は未実装 ⑶ 透過の宣言を読む経路が無い（常に `1` 扱い・`(Off, KeyColor)` も未実装）⑷ 全画素が透明になる面の窓・当たり判定が未確認 ⑸ `surfaces.txt` が無い／波括弧 0 個で画像だけのシェルは起動の失敗のまま ⑹ `overlay` 以外の描画メソッドの `element0` を持つ面で画像が土台に使われるずれ ⑺ `sometimes`・`rarely` 以外の間隔の語は動かない（`always` は `animated-image-playback` が入れる）。**同じく引受先なし**: `surface.append` の行に**しか**現れない絵のファイル名は焼かれない。
+
+**潜在の性質（実害は観測されていない）**
+
+- **SHIORI へ渡す置き場所のパスの形**（XS）。`load`／`loadu` へ渡すパスが `…\ghost/master` の形（区切りの混在・末尾の区切りなし）。出どころは `crates/areka-parsers/src/package/resolve_shell.rs` の定数 `GHOST_MASTER`（09-24 の登記は `resolve.rs` と書いていた＝10-02 に訂正）。正典は沈黙。直すなら SHIORI へ渡す 2 つの口（`crates/areka-ghost/src/{shiori_inproc,shiori_wiring}.rs`）だけで揃えるのが影響が狭い。
+- **wintf の兄弟の重なり順が描画と当たり判定で逆**（XS〜S）。`visual_hierarchy_sync_system` は先頭の子を最上に描き、`hit_test` は最後の子から調べる。本番は 1 窓に装着が 1 組だけなので表に出ない。**裁定は、子を初めて複数作る `shell-balloon` か `surface-element-nesting` の要件に乗せる**（どちらの順に揃えるか）。訂正（10-02）: 文字の層の差し込み口は、表示中は当たり判定を持つ。
+- **`InProc` の SHIORI を外から終わらせる手が無い**。本番は `Helper` だけを選ぶので今日は踏まない。`InProc` を本番に使うときに決める。
+
+**道具と試験**
+
+- **`tools/perf` の実走していない 3 経路**（S）。`invoke-perf-run.ps1` へ `-GhostRoot`／`-BalloonRoot` を渡す実走・`invoke-followup-checks.ps1` の単独起動・`check-quiet.ps1`。**自己検査の赤（終了コード 4）は 10-02 の実行で再現しなかった**（`SELFTEST RESULT ok=9 ng=0`・終了コード 0）。性能改善ループを次に回す前に 3 経路を通す。
+- **一度だけ落ちた試験 2 本**（原因未調査・再発したら出力を添えて起票）: `sample-ghost-kit` の展開テストの os error 5（09-26）／i686 の `shiori_proxy::tests::testdll_drop_invokes_courtesy_unload`（09-30）。
+
+## 直接修正候補（spec なし）
+
+> **2026-10-02 棚卸⑳で直した**: 利用条件の文の切り詰めが絵文字の途中で切れる件（`crates/areka/src/install/terms.rs`・書記素クラスタで数える・テスト付き）／`completed/` が抜けて切れていたパス 8 か所／完了した spec を「後続」と書いていたコメント（`install/mod.rs`・`menu/mod.rs`・`doc/COMPAT_ARCHITECTURE.md` §8）／`talk_lifecycle.rs` の予約の持ち主の名前／steering の古い数と状態（`focus.md`・`product.md`・`structure.md`・`tech.md`）。
+
+残っている候補（どれも振る舞いを変えない掃除・**開発者の一声で着手**）:
+
+1. **根の `README.md`・`doc/ARCHITECTURE.md`・`doc/CONSTITUTION.md` の状態の記述が古い**。`areka *(予定)*`・DirectComposition（今は WUC）・`bevy_ecs 0.18`（今は 0.19）・`Taffy 0.9.2`（今は 0.13）・「アルファリリース目標: ぱすたさん」（α は「第三者が管理できる」で完了）・Phase A〜E の表・ツリーが 3 クレート（今は 29）。部分的に直すより状態の節を書き直す規模で、外から見える顔なので**書き直してよいかを開発者が決める**。
+2. **段階的な実装の名残のコメントと `#[allow(dead_code)]`**（`crates/areka/src/placement/{mod,persist,spawn,source,config}.rs`・`placement/follow/anchor.rs`・`emo2_boot/{mod,move_cue,spine,spine_conformance_script,hit_region}.rs`・`placement/transition_diag.rs` ほか約 25 か所）。「task N が結線するまで」と書いたまま、もう結線済み。allow を外せるかは `--force-warn dead_code` のビルドで確かめる（examples が `#[path]` で取り込むので要るものが残りうる）。
+3. **「M2」を先送り先として書いたコメント 52 行**（`areka-emo-text/src/{canvas,viewbox,writing}.rs` ほか）。M2 は 2026-09-18 に「α」へ決め直されて完了したので意味がずれている。置き換える語（「α 後」か「M3 以降」）は M3 のゴールが決まってからの方が手戻りが無い。
+4. **`tech.md` の主要な依存の一覧に無い本番の依存**（`budouy`・`rectangle-pack`・`bitflags`・`async-io`・`async-channel`・`human-panic`）。一覧は網羅を謳っていないので急がない。
+
+取り下げた 1 件を再登記しないこと——判定器（`crates/areka/src/placement/transition_judge_verdict.rs`）の窓ごとの書込上限が見送り窓を除いていないのは**意図どおり**（`completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §13.1・2026-09-24 に開発者が再確認）。
+
+## 生きている決まり（棚卸⑭〜⑲の裁定のうち今も効くもの・全文は history）
+
+1. **着手の優先度は「バグ修正 → 優先度の高い機能」**（09-20 開発者指示・10-02 に α の語を外して継続）。バグかどうかは実測で分ける（利用者から見える実害／潜在／テストの穴／正典の追加）。
+2. **規模の上限は 1 spec 20 タスク**。超えるものは要件の段で切る。**一度切り出した spec を、上限を少しまたぐ理由でさらに削らない**（09-28）。
+3. **並走の物差し＝触るソースファイルの重なり 0**（09-20）。**文書だけの段は置かない**（09-27・要件は前の spec の着地で古くなる）。
+4. **エンジンを切り出した spec は網羅台帳に触らない**。台帳の更新は結線の側がまとめて行う（09-20）。
+5. **`zorder-chain-residue` の A 群は先回りしない**（main で赤が出たら、その時点で A 群だけを単独で挟む）。
+6. **メニューは Win32 標準**・オーナードローと着せ替えメニューは予約のまま。**ゴースト切替はプロセス内**・アプリの寿命は窓の数から切り離す。**HTTP は WinHTTP・MD5 は OS の CNG**。**投げ込みは `WM_DROPFILES`**。**消滅（`\![vanishbymyself]`）は要望が出たら S で切る**。
+7. **失敗は既定ゴースト（emo2）の台詞で伝える**（`OnBoot` の Ref6＝`halt`・Ref7＝落ちたゴーストの名前）。メッセージボックスは出さない。**インストールと切り替えは別のイベント**（入れた後の切替を areka は主導しない）。
+8. **要件定義・設計のサブエージェントは起動中のモデルを継承し、上位へ上げない**（09-30）。Fable 列は「Fable で起動したセッションを勧める」だけ。
+9. **並走できる spec の紹介は「完全並走できるものだけ」・Fable 推奨を先頭に、名前＋一言＋コマンドの短い形**（09-26）。
+
+## 棚卸⑳の裁定（2026-10-02・main `03e8d7d6`・開発者指示「main が進んだので棚卸＆深掘り＆徹底ブリーフィング。完了ロードマップの整理。バグ修正 → 優先度の高い機能」）
+
+> α 完成宣言（PR#210）の直後の棚卸。brief を持つ 49 本すべてを、サブエージェント 5 系統（Opus）で main `03e8d7d6` に照らして再測定し、結果を各 brief の「2026-10-02 棚卸⑳の再測定」節へ書いた。
+
+1. **本ファイルを書き直した**。完了行 40・棚卸⑭〜⑲の裁定・α のウェーブ表・旧「登記だけの行」を history へ逐語で移し、台帳は brief を持つ行だけにした（202 KB → 約 60 KB）。台帳の列「状態」と、brief を持たない行は表から外した（後者は「覚え書き」節）。
+2. **即時修正を実施して閉じた**（「直接修正候補」節の冒頭）。残した 4 件は開発者の一声を待つ。
+3. **バグを 2 本起票した**: `choice-timeout-directive`（再測定で見つけた・`sakura-time-directives` から切り出し。正典はミリ秒・`0` か `-1` で時間切れなし、areka は読まずに 30 秒で閉じる）と `restart-chain-finalize-stall`（覚え書きの格上げ・2 回観測。窓の無い区間も見送りを数え続ける）。
+4. **土台を 1 本起票した**: `emo-text-file-split`。文字まわりの 10 本以上の brief が「分割が先」と書きながら誰が切るかを決めておらず、任せると同じファイルを別々の形で切る。
+5. **`status-execution-states` をバグ（潜在）へ改めた**。出どころが無いとされた 3 状態（`online`・`nouserbreak`・`balloon`）は α で実在するようになり、載せないことで雑談が更新や割り込み禁止の区間に割り込みうる。
+6. **覚え書き `ukadoc-coverage-custody` を `coverage-roadmap-refresh` へ合流した**（同じ仕組みの同じファイルを直す。持ち主が完了済みの行は 29 → 128 行に増えていた）。
+7. **`emo-text-canon-residue` は取り下げ予定にした**（残り 1 件を `shell-balloon` が引き取る）。フォルダを `_rejected/` へ移すと網羅台帳の整合検査が赤くなる（`roadmap-draft.md` の `[[spec]]` の表が名前を持つ）ことを実際に赤で確かめたので、フォルダは置いたまま、片付けは `coverage-roadmap-refresh` に任せる。
+8. **旧 S1・S2 の「並走できる見込み」は外れだった**。`shell-balloon` ∥ `balloon-font-file`・`text-typesetting` ∥ `talk-fast-forward` はどちらもソースを共有する。文字まわりの spec は同じ表・同じ関数へ行を足すので、分割しても並走できない＝「直列の列」として並べた。`animated-image-decode` ∥ `surface-element-nesting` も、brief どおりに作ると `manifest.rs` を共有する（両方が設計で避ければ 0 にできる＝各 brief に書いた）。
+9. **20 タスクを超える 6 本は、着手のときに要件の段で切る**（`anchor-tag-canon`・`currentghost-property-tree`・`property-catalog-lists`・`sakura-time-directives`・`makoto-dll-host`・`property-query-channels` の `\![embed]`）。いま起票はしない（先の brief は着地で古くなる）。
+10. **Fable で要件定義を勧める spec（C1・C2）**: `mcp-server-core`（rmcp の版・HTTP の土台・tokio の閉じ込め）・`install-live-target-hazards`（測ってから決める・OS の終了）・`install-companion-canon`（正典の読みと安全の検査）・`shell-balloon`・`translate-pipeline`・`mcp-tool-entrances`。Opus で足りる: `drag-click-without-move`・`choice-timeout-directive`・`restart-chain-finalize-stall`・`package-check-temp-cleanup`・`emo-text-file-split`。
+11. **C1 の想定タスクの合計＝46〜70**（8 本）。**C2＝42〜54**（3 本）。
+12. **開発者に決めてほしいこと**: ⑴ M3 のゴール ⑵ 根の `README.md` ほかの状態の節を書き直してよいか（直接修正候補 1）。どちらも C1 の着手を止めない。
 
 ## 着手手順
 
-- **brief の体制**: 台帳 94 行のうち **84 本に brief あり**・登記だけの行 10 本。**段列の機械の数え＝完了 39・α 1・バグ 0・前倒し 0・α 後 53・保留 1**（2026-10-01 の機械の数え。動く画像の 3 本と文字の現れ方の 2 本の起票を反映。シェル内バルーンの 8 本と登記だけの行「SSTP の受信」の起票を反映。`network-update`・`shell-balloon-switch`・`balloon-reappear-short-talk` の完了と `network-update-canon-order`・`balloon-reappear-short-talk` の起票を反映。09-30 以前は `balloon-color-emoji` の完了を反映。`frame-phases-after-exit`・`ghost-install` の完了と SSP MCP の移植 10 本・`balloon-color-emoji` の起票を反映）＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。brief の file:line は起票時値＝**着手時に必ず再検証**（棚卸⑲では α の残り 4 本を main `10a8d724` で再測定し、結果を各 brief の「2026-09-28 棚卸⑲の再測定」の節へ書いた。`frame-phases-after-exit` は同日の起票値。α 後の brief は再測定していない）。
-- 新規課題の起票は `/kiro-discovery`（再入）で just-in-time。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
-- **Fable 列 ○＝Fable で起動したセッションで進めることを勧める spec**（勧めるだけ）。**要件定義・設計のサブエージェントは起動中のモデルを継承し、上位へ上げない**（Opus で起動したら Opus のまま・Fable 列 ○ でも `model: "fable"` を付けない＝意図しない課金を避ける 2026-09-30 開発者指示）。タスク生成と実装は skill の Preflight に従う（記憶 requirements-design-need-fable-grade-review／fable-main-opus-subagents-token-policy）。
-- **ukadoc 台帳の `owner`**: α の残りの spec は起票時点で台帳（`doc/ukadoc-coverage/ledger/`）の `owner` に登記していない。各 spec の要件段階で登記し、同時に `roadmap-draft.md` の `owner_count` を追随させる（記憶 sylphya-set-ledger の教訓＝担当欄を埋めたら同時に追随）。
+- 着手は該当の brief を読んで `/kiro-start <名>` へ直行する。brief の file:line は起票時値＝**着手時に必ず再検証**（C1・C2 の brief は main `03e8d7d6` で再測定済み。それ以外は崩れた前提と触るファイルの見立てまで）。
+- 新しい課題の起票は `/kiro-discovery`（再入）で just-in-time。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブをまたぐ合流の判断は別セッションで一括。
+- **ukadoc 台帳の `owner`**: 各 spec の要件の段で台帳（`doc/ukadoc-coverage/ledger/`）の `owner` に登記し、同時に `roadmap-draft.md` の `owner_count` を追随させる。完了のときに状態を実装済みへ直す（直さないと `coverage-roadmap-refresh` の数え直しの対象が増える）。
+- 完了のとき（`/kiro-complete`）は、本ファイルの台帳からその行を消し、「完了サマリ」へ 1 行足す。
 
 ## 制約
 
@@ -369,16 +262,19 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - 実機運転の定石: 起動に渡す**検体の絶対パスは `cargo run -p sample-ghost-kit --bin nar-sample-path -- emo2` が印字する**（`folder=` がゴースト・`balloon.<名>=` が同梱バルーン。呼ぶたびに `manual/<検体>/` を作り直すので、**2 つの端末で同時に呼ぶと互いの木を消す**＝1 度印字してから使う）。絶対パス起動（相対は pasta.dll LOAD 失敗）・i686 helper を先ビルド・`AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋`RUST_LOG` grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。自動終了は強制終了の経路で終了挨拶を経ないので、終了挨拶を確かめる走行では自動終了を上限に留め、終了はキャラ窓の右クリックメニューの「終了」で求める（2026-09-17 host32-window-thread-pump の裁定は Ctrl＋左ダブルクリックだったが、2026-09-19 に `areka-P0-popup-menu-minimal` がその入口を取り除いた。強制退避の Ctrl＋Shift＋左ダブルクリックは残る）。
 - 常時テストは x86 を避け偽境界で純 x64 決定論（記憶 prefer-x64-fake-boundary-tests-not-x86）。**ネットへ出るテストを常時テストに入れない**（`network-update` は偽 `HttpFetch`）。
 
-## SSP MCP の移植（α 後・2026-09-29 `/kiro-discovery` で起票）
+## テーマ別の決めごと（起票のときに開発者が確定した中身・要件の段で覆してよい）
+
+> 4 つのテーマ（SSP MCP の移植・シェル内バルーン・動く画像・文字の現れ方）と α の持ち越しについて、起票のときに決めたことを残す。**着手の並びは「ウェーブ編成」節が正本**で、起票時の「ウェーブ」の小節（M1〜M4・S1〜S4・V1〜V2・R1）は棚卸⑳の再測定で組み直したので history へ移した（旧 S1・S2 の並走の見込みは外れ・文字まわりは `emo-text-file-split` を先頭に直列）。「Existing Spec Updates」の小節（各 brief への追記）はすべて済み。
+
+### SSP MCP の移植（α 後・2026-09-29 `/kiro-discovery` で起票）
 
 > 開発者指示（2026-09-29）「ssp mcp tool の完全移植のための spec 群を立ち上げて。実装は α リリースの後。areka の 127.0.0.1 の適当なポートでサーバを開く形。基本実装 → 空のダミー関数を置いて入り口だけ全部整備 → 個別のコマンド実装。平行開発しやすいように spec 分割」。**事実の正本**は [doc/ssp-mcp/survey.md](../../doc/ssp-mcp/survey.md)（SSP 2.9.05 への実測・ツール定義の逐語は同フォルダの JSON）。ukadoc MCP には MCP の節が索引されていない＝出典は ukadoc の「その他の機能」と SSTP 仕様と実測。
 
 - **決めたこと（起票時・要件の段で開発者が覆してよい）**: ⑴ 本体が 127.0.0.1 で HTTP を待ち受け、Claude Code・Cursor は HTTP で直接つなぐ。**Claude Desktop 用に SSP の `mcp.exe` 相当の中継 exe を `mcp-stdio-bridge` で作る**（2026-09-29 開発者判断。Desktop の `claude_desktop_config.json` は `command` の欄が必須で `url` を書けない〔Desktop 2.9939.4.0 の検査関数で確認〕・コネクタは Anthropic のクラウドからつなぐので 127.0.0.1 へ届かない〔公式の案内〕）。⑵ 既定ポート 9821・`AREKA_MCP_PORT`（`0` で待ち受けない）・既定で有効（SSP と同じ）。9801 は SSP と同時に動かすと衝突し、将来の SSTP の口でもあるので避けた。⑶ SSP の欠陥 2 件（表情表の文字化け・script ログの JSON エスケープ漏れ）は移植しない。⑸ **MCP のプロトコルは自作せず公式 Rust SDK `rmcp` を使う・tokio 依存を入れてよい**（2026-09-29 開発者判断「tokio 依存は入れちゃってもよい。mcp を自作するのは避けた方がよさそう」）。MCP の新しい版への追随は rmcp の版上げで行い、SSP の輸送の癖（survey §2）は参考に格下げ＝ツールの名前・引数・結果の文字列だけを SSP と一致させる。中継 exe は写すだけなので rmcp を使わない。⑷ 分け方は開発者の 3 段（基本 → 入り口 → 個別）に、個別を「触るエンジン」で 6 本に割り、strict を 4 段目に出した。
 - **採らなかった分け方**: ツールごとに 1 spec（10 本）＝`get_status`・`sakurascript`・`raise_event` が kanade の同じ箇所を触り並走できず、`get_active_ghost_list` などは小さすぎる。基本と入り口を 1 本＝開発者の 3 段に反し、M3 の並走の土台（触るファイルの固定）が基本の検査と同じ spec に埋もれる。
 - **既存 spec の更新**: `makoto-dll-host`（brief へ「MCP の reload makoto の口を埋める」を追記済み）。`status-execution-states` は `get_status` の消費者が 1 つ増えるだけ（brief の更新なし）。
-- **直接修正**: `doc/CONSTITUTION.md` の MCP 節の実在しないリンク（`areka-P0-mcp-server/`）を本節へ向け直した（本起票のコミットで済み）。
 
-### Specs (dependency order)
+#### Specs (dependency order)
 
 - [ ] areka-P0-mcp-server-core -- 127.0.0.1 の HTTP・JSON-RPC・MCP の版と検査（ツール 0 本）。Dependencies: α 完成宣言
 - [ ] areka-P0-mcp-tool-entrances -- ツール 10 本の定義・引数検査・ghost_name の解決・World への橋・ダミー 9 本。Dependencies: areka-P0-mcp-server-core
@@ -391,16 +287,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - [ ] areka-P0-mcp-dump-images -- dump_surface・dump_balloon。Dependencies: areka-P0-mcp-tool-entrances
 - [ ] areka-P0-mcp-strict-errors -- strict の記録。Dependencies: areka-P0-mcp-log-history, areka-P0-mcp-kanade-tools
 
-### ウェーブ（α 後の棚卸で全体の並びへ組み込む）
-
-| Wave | ユニット | 編成根拠・干渉条件 |
-|---|---|---|
-| **M1**（単独） | `mcp-server-core` | 新クレートだけ＋`main.rs` の起動と終了の配線。依存（`rmcp`・`tokio` ほか）は 09-29 に開発者が承認済み＝`deny.toml` と `THIRD-PARTY-NOTICES.md` を本 spec で追随 |
-| **M2**（2 本並走） | `mcp-tool-entrances` ∥ `mcp-stdio-bridge` | 中継は自分の bin クレートと `/api/mcp/help` の文面と配布スクリプトだけを触る＝入り口と共有 0 の見込み（help の文面のファイルが入り口と重なるなら入り口の後へ）。**M3 を並走させるための段**＝ツールごとの 1 ファイル（`areka-mcp` 側と `crates/areka` 側）・要求の enum の全変種・汲むシステムをここで完成させ、M3 の各 spec が触るファイルを design で固定して本表へ書き足す |
-| **M3**（**6 本並走**） | `mcp-get-property` ∥ `mcp-kanade-tools` ∥ `mcp-expression-table` ∥ `mcp-log-history` ∥ `mcp-reload` ∥ `mcp-dump-images` | 触るエンジンが別＝sylphya と ghost runtime／kanade／areka-parsers の shell／main.rs の subscriber と areka-update／ghost_switch と ghost_session／emo-present と emo-text。**見張る継ぎ目**: ⑴ `crates/areka-ghost/src/runtime.rs`（`get-property` の取り出し口と `reload` の載せ替え）、⑵ kanade（`reload` が触るなら `kanade-tools` の後へ回す）、⑶ script 種別のログ（`kanade-tools` が出し `log-history` が受ける＝tracing の target 名だけで結び、コードの依存を作らない）。着手時に各 brief の接触ファイルを実測し、共有が 0 でない組は分ける（記憶 prefer-clean-waves-over-max-parallelism） |
-| **M4**（単独） | `mcp-strict-errors` | `log-history`（記録の口）と `kanade-tools`（strict の引数の口）の後。sakura・seriko・emo・`\!` の消費者を横に触る＝α 後の正典の spec と並走しない |
-
-## シェル内バルーン（α 後・2026-10-01 `/kiro-discovery` で起票）
+### シェル内バルーン（α 後・2026-10-01 `/kiro-discovery` で起票）
 
 > 開発者指示（2026-10-01）「areka では設計上、シェルとバルーンの描画区別を付けないように留意してもらっていたと思う。実際に、シェル内にバルーン領域を持つゴーストを設計したい。イメージは『窓際のぱすたさん』の縦書きキャッチコピー（ghost_dev リポジトリ `doc/assets/text_layout/縦書きキャッチコピー.html`）。実装時期は α 後なるべく早い時期」。**完全に areka 独自の仕様＝差別化のための機能**（開発者）。参考の寸法は同ゴーストの `doc/画面設計_縦書き要件定義.md` §3.1（白い窓の絵の中に、天 62px・外側 14px・右の台詞欄 2 列・左の独白欄 3 列・本文 27px・列ピッチ 48px）。
 
@@ -416,18 +303,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
   8. 未実装の印（`arrow*`・`onlinemarker.*`・`number.*`・`sstpmarker.*`・`sstpmessage.*`）も今回の spec 群で実装まで持つ（開発者指示）。SSTP の 2 項目は表示だけ作り、受信は登記だけの行「SSTP の受信」。
 - **採らなかったもの**: 透明なバルーンをシェルに重ねる案（正典だけで組めるが窓が 2 枚・1 人 2 か所が無理）・バルーンの側に「シェルの上に描く」と書かせる案（バルーンが特定のシェルの寸法に縛られる）・`balloon.*`ブレスは見た目だけで矩形はサーフェスの専用行に書く案（将来のサーフェスの element定義と書き方が分かれる）・青空文庫式のルビ（唐突）・新しいタグ（`\_r` など）・自動の改ページ・背景の絵・SSP の「縦書きでは同梱フォントを標準ゴシックへ差し替える」（GDI の制約で、areka の DirectWrite には無い）。
 
-### Existing Spec Updates
-
-- [ ] `balloon-canon-residue` -- 項目 1（装飾の画像の系列）を `balloon-markers` へ（brief に追記済み）。Dependencies: none
-- [ ] `balloon-lifecycle-events` -- 項目 9（`\x`／`\x[noclear]`）を `talk-fast-forward` へ（brief に追記済み）。Dependencies: none
-- [ ] `emo-text-canon-residue` -- 項目 11（縦書きの字形の観測点）と 15（行末のぶら下げ）を `text-typesetting` へ（brief に追記済み）。Dependencies: none
-- [ ] `sakura-time-directives` -- `\_q`・`balloonwait` は担当のまま・早送りとは別物と注記（brief に追記済み）。Dependencies: none
-
-### Direct Implementation Candidates
-
-- なし。
-
-### Specs (dependency order)
+#### Specs (dependency order)
 
 - [ ] areka-P0-shell-balloon -- `balloon.*`ブレス・描画メソッド `balloon`・シェルの窓への結線・行き先と切り替え・併用しない。Dependencies: α 完成宣言
 - [ ] areka-P0-balloon-font-file -- `font.name`・`\f[name]` のフォントファイル（バルーン／シェル → ゴーストのフォルダ）。Dependencies: α 完成宣言
@@ -438,16 +314,7 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - [ ] areka-P0-balloon-scroll-fade -- 押し出される行（列）のフェード（areka 独自・既定は無効）。Dependencies: areka-P0-balloon-markers
 - [ ] areka-P0-balloon-element-order -- `balloon` の element定義を並び順どおりの重ね順で描く（`shell-balloon` の縮めを外す追跡 spec）。Dependencies: areka-P0-shell-balloon
 
-### ウェーブ（α 後の棚卸で全体の並びへ組み込む・開発者「α 後なるべく早い時期」）
-
-| Wave | ユニット | 編成根拠・干渉条件 |
-|---|---|---|
-| **S1**（2 本並走） | `shell-balloon` ∥ `balloon-font-file` | 前者は `areka-emo-text` の `actor.rs`・`region.rs`（分割が先）と `crates/areka/src/emo2_boot/`・`areka-parsers` の shell、後者は `draw_catalog.rs`・`draw.rs` の周り＝共有ファイル 0 の見込み（着手時に照合）。フォントの探し場所の一覧は `shell-balloon` が渡す口＝後から着地した方がつなぐ |
-| **S2**（2 本並走） | `text-typesetting` ∥ `talk-fast-forward` | 前者は `layout.rs`（分割が先）・`wrap.rs`・`writing.rs`、後者は台詞の時計（`talk_clock.rs`）・入力（`input_events/`）・`areka-sakura` の `\x`＝別の場所。`text-typesetting` は S1 と並べてもよいが、`areka-emo-text` の分割が 3 本同時に走るのを避けて S2 に置いた |
-| **S3**（2 本並走） | `text-ruby` ∥ `balloon-markers` | `text-ruby` は `layout.rs`（`text-typesetting` の後）、`balloon-markers` は `viewbox.rs`・`areka-emo-present` の `balloon.rs`（系列）・`areka-parsers` の balloon。**見張る継ぎ目**: 両方が `areka-parsers/src/balloon/` にキーを足す＝同じ表に行を足すだけなら衝突は小さい |
-| **S4**（2 本並走） | `balloon-scroll-fade` ∥ `balloon-element-order` | 前者はスクロールの部分（`balloon-markers` の後）、後者は emo-compose・emo-present の合成の分割＝別の場所 |
-
-## 動く画像（α 後・2026-10-01 `/kiro-discovery` で起票）
+### 動く画像（α 後・2026-10-01 `/kiro-discovery` で起票）
 
 > 開発者指示（2026-10-01）「アニメーションをサポートする画像ファイルに対応して欲しい。具体的には、画像読み込み時にサブエレメント分解して、アニメーション表示を回す案を出しておきます。arekaのシェルエレメント管理は再帰構造を持つように設計指示していたので、ちゃんと実現されているなら可能なはず。webp形式サポートとかがよいかな？apngもあるけど。時期はα後」。正典は ukadoc の element定義の項「surface*.pngまたはelement定義にアニメGIF/APNG/WebPアニメを指定すると、SERIKO定義を書かなくても自動的にアニメーションする(SSP 2.7.38～)」と、pattern の描画メソッド `import`（2.7.50）。
 
@@ -457,24 +324,13 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - **階層化エレメントの議題（2026-10-01・決着）**: 開発者の問い「階層化エレメントが扱えるか・surfaces.txt でどう定義できるようにするか」。実測は上のとおり「再帰の骨組み（合成器・アトラス）は在り、入口（element の型）と内側の時計が無い」。決めたことは ⑹〜⑽。「シェル内バルーン」節のセッションへ実測と方針を共有した。
 - **依存の追加**: `image`（本番へ移す・`gif` の機能を足す）は `tech.md` の「意図的依存追加」への登記と開発者の承認が要る＝`animated-image-decode` の要件の段で。
 
-### Existing Spec Updates
-
-- [ ] `shell-balloon` -- element の型を `surface-element-nesting` と共有する（描画メソッド `balloon`／数字だけ＝サーフェスの番号／画像の 3 通り）。入れ子の内側の `balloon` は警告して無視（後から着地した方が入れる＝brief に追記済み）。Dependencies: none
-
-### Specs (dependency order)
+#### Specs (dependency order)
 
 - [ ] areka-P0-animated-image-decode -- 動く GIF・APNG・WebP の全部のコマ・待ち時間・繰り返し回数を読み、アトラスにコマの番号で載せる。Dependencies: α 完成宣言
 - [ ] areka-P0-surface-element-nesting -- element定義でサーフェスを置く（数字だけ＝番号）・子の当たり判定・子の時計は独立。Dependencies: α 完成宣言
 - [ ] areka-P0-animated-image-playback -- 動く絵を子サーフェスへ分解して置く自動アニメーション・`import` メソッド・interval `always`。Dependencies: areka-P0-animated-image-decode, areka-P0-surface-element-nesting
 
-### ウェーブ（α 後の棚卸で全体の並びへ組み込む）
-
-| Wave | ユニット | 編成根拠・干渉条件 |
-|---|---|---|
-| **V1**（2 本並走） | `animated-image-decode` ∥ `surface-element-nesting` | 前者は `areka-emo-atlas` の decode・アトラスの鍵と焼き込み・依存の登記、後者は `areka-parsers` の shell の element の型・`areka-emo-compose` の再帰と当たり判定・`areka-seriko` の子の時計。**見張る継ぎ目**: `areka-emo-atlas/src/manifest.rs`（前者はコマの鍵・後者は element の参照のたどり＝後から着地した方が合わせる）。`areka-emo-present/src/balloon.rs`（面の発見）は `shell-balloon`・`balloon-markers` も触る。**`surface-element-nesting` と `shell-balloon` は同じ element の型を触る＝同時に走らせない**（後から着地した方が 3 通りの読み分けと内側の `balloon` の警告を揃える） |
-| **V2**（単独） | `animated-image-playback` | 子サーフェスの合成・`always` と `import`（`areka-seriko` の表・`areka-emo-compose` の描画メソッド）。**見張る継ぎ目**: `areka-parsers` の shell の element定義（`shell-balloon` が描画メソッド `balloon` を足す）・`areka-emo-compose`／`areka-emo-present` の合成（`balloon-element-order`）＝同時に走らせない |
-
-## 文字の現れ方（α 後・2026-10-01 `/kiro-discovery` で起票）
+### 文字の現れ方（α 後・2026-10-01 `/kiro-discovery` で起票）
 
 > 開発者指示（2026-10-01）「文字のタイプライター表現において、フェードインしながら文字を表示するモードが欲しい。よくノベルゲームで見ますよね。より夢のある仕様では、ニンテンドーのゲームみたいに、文字が踊りながら表示されるエフェクトも欲しいけど、これは Option の夢 spec として別に切ってください」。
 
@@ -482,19 +338,12 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - **決めたこと（開発者確定）**: ⑴ 有効にする書き方はバルーンのキー `text_reveal`（`balloon.*`ブレスにも書ける）と台本 `\![text,reveal,…]`（台詞の終わりまで）の両方。⑵ 早送りのクリックと `\_q` の中では即座に不透明・定位置。⑶ 既定のフェードの長さは 150ms。⑷ 夢の方は**現れるときだけ動いて止まる**（跳ねる＝ポーンと跳ねて定位置に戻る・揺れる）。ずっと動き続ける演出は負荷が大きく目に毒なので作らない。
 - **採らなかったもの**: キーだけ（ここぞという台詞だけ切り替えられない）・早送りでもフェードを待たせる・ずっと動き続ける演出。
 
-### Specs (dependency order)
+#### Specs (dependency order)
 
 - [ ] areka-P0-text-reveal-fade -- 字が透明から不透明へ変わる現れ方（`text_reveal,fade`・`\![text,reveal,fade,…]`）。Dependencies: α 完成宣言
 - [ ] areka-P0-text-reveal-dance -- 現れるときだけ跳ねる・揺れる（夢・任意）。Dependencies: areka-P0-text-reveal-fade
 
-### ウェーブ（α 後の棚卸で全体の並びへ組み込む）
-
-| Wave | ユニット | 編成根拠・干渉条件 |
-|---|---|---|
-| **R1**（単独） | `text-reveal-fade` | 透明度を時間で変える仕組みと描き直しの口を `balloon-scroll-fade`（シェル内バルーン S4）と共用＝**2 本は同時に走らせない**（先に着地した方が作る）。`areka-emo-text` の `state.rs`・`draw.rs`・`surface.rs` を触る＝シェル内バルーンの `text-typesetting`・`text-ruby`（`layout.rs`）とは別の場所だが、同じクレートの分割と重ならないよう着手時に照合する |
-| **夢**（順不同・任意） | `text-reveal-dance` | `text-reveal-fade` の後ならいつでも。着手は開発者が望んだときだけ |
-
-## alpha-release-signoff の持ち越し（α 後・2026-10-02 `/kiro-discovery` で起票）
+### alpha-release-signoff の持ち越し（α 後・2026-10-02 `/kiro-discovery` で起票）
 
 > 出どころは `alpha-release-signoff` の完成判定 `verification/alpha-completion.md` §6「持ち越した事項」の、引受先を「α 後の `/kiro-discovery`」と書いた 5 行（受入記録 `verification/acceptance-record.md` の §8.1 ⑴・⑵・§8.5・§8.6・§8.8）。開発者指示（2026-10-02）「あ、起票はあとでやってくれますよね。「実装完了を承認」スキルは最後に実施しますし。その前提で、今は実装に戻ってください。」。どの行も α の判定を書き換えない。
 
@@ -502,25 +351,17 @@ areka（x64）が最小 SSP 互換ベースウェアとして、適合対象ゴ�
 - **採らなかった分け方**: §8.1 と §8.8 を 1 本（どちらもインストール）＝§8.8 は ukadoc の読み方を揃える正典の仕事で、実測を待たずに進められる。実測待ちの ⑴⑵ と束ねると、正典の仕事が実機の結果を待つことになる。§8.5 を登記だけの行にする＝設計の意図（掴んで離したときだけ保存）に反するバグで、初回だけの位置合わせの規則を崩すので brief を持たせた。
 - **段**: 4 本とも「α 後」（開発者指示）。`drag-click-without-move` は種別がバグなので、α 後の棚卸で「バグ → その他」の順の先頭に並べ直してよい。
 
-### Specs (dependency order)
+#### Specs (dependency order)
 
 - [ ] areka-P0-install-live-target-hazards -- 表示中のシェル・使用中のバルーンのフォルダへの上書きと、起動中のゴーストへ入れる途中の Windows の終了を実測し、扱いを決めて実装する。Dependencies: α 完成宣言
 - [ ] areka-P0-drag-click-without-move -- 動かさない左クリックで窓の位置を保存しない（バグ）。Dependencies: α 完成宣言
 - [ ] areka-P0-package-check-temp-cleanup -- `package-alpha.ps1 -Check` の展開先をワークツリーの `target\` の下へ・判定の後に片付け・記録は残す。Dependencies: α 完成宣言
 - [ ] areka-P0-install-companion-canon -- 同梱インストールの `install.txt` の読み方を ukadoc に揃える 4 点＋起動時の同梱バルーンの問い。Dependencies: α 完成宣言
 
-### ウェーブ（α 後の棚卸で全体の並びへ組み込む）
+## 予約（全て任意・brief なし）
 
-| Wave | ユニット | 編成根拠・干渉条件 |
-|---|---|---|
-| **持ち越し**（4 本並走の見込み） | `install-live-target-hazards` ∥ `drag-click-without-move` ∥ `package-check-temp-cleanup` ∥ `install-companion-canon` | 触る場所＝インストールの手続きと終了の受け手（`crates/areka/src/install/`・`session_end.rs`）／wintf のドラッグと `crates/areka/src/placement/follow/drag_follow.rs`／`tools/package-alpha.ps1`／`crates/areka-nar/src/{manifest,names,plan}.rs` と `areka-ghost` の `catalog.rs`。**見張る継ぎ目**: `install-live-target-hazards` の扱いが `areka-nar` の確定（`install.rs`）に及ぶなら `install-companion-canon` と同じクレートを触る＝着手時に接触ファイルを照合し、重なれば分ける。実機の確かめ（`install-live-target-hazards`・`drag-click-without-move`）は同じ機械で同時に走らせない |
-
-## α 後（M2 の残りと M3）
-
-**α 完成宣言（`alpha-release-signoff`）を起点に組み直す。** 材料＝`doc/ukadoc-coverage/`（段階 A の先頭ウェーブ 6 束・324 件が `roadmap-draft.md` にそのまま残っている）＋ α 後 19 本の brief。順位付けは `briefing.md` の 4 軸（壊れ方＞伺からしさ＞資産の広さ＞基盤共有度）へ戻す。M3「伺かの冠」の受入基準の候補は `roadmap-draft.md`「M3 の受入基準の候補」。
-
-予約（全て任意・brief なし・仮裁定 2 改訂版）: アプリ層＝SSTP（9801）・FMO・DirectSSTP・Plugin/HEADLINE・多重ゴースト・**トレイアイコン**（裁定 ⑷）・**消滅**（裁定 6）・設定画面と設定ファイル・`\![update,platform]`（本体の更新）・`\![execute,createnar]`／`createupdatedata`（作る側＝開発者機能）。互換面＝SAORI は実装しない（SHIORI が直接 `LoadLibrary`・台帳 `not-applicable`）・里々/YAYA 網羅。emo テキスト進化＝回転テキスト（`TextEffects` 予約名 `rotation`／`multicolor`）。**`\f[sub]`／`\f[sup]`／`\f[outline]` は DirectWrite の標準機能で表せる手段が見つかるまで語彙のみ**（2026-09-11 裁定・台帳 `vocabulary-only`・追跡先はこの行）。バルーン美観配置。pasta の native x64／`IShiori` in-proc・ベクトル描画・**owner-draw 右クリックメニュー**（裁定 3・`popup-menu-minimal` の構造の上に見た目を被せる）・着せ替えメニュー。
+アプリ層＝FMO・DirectSSTP・Plugin/HEADLINE・多重ゴースト・トレイアイコン・消滅・設定画面と設定ファイル・`\![update,platform]`（本体の更新）・`\![execute,createnar]`／`createupdatedata`（作る側＝開発者機能）。SSTP の受信は「覚え書き」。互換面＝SAORI は実装しない（SHIORI が直接 `LoadLibrary`・台帳 `not-applicable`）・里々/YAYA 網羅。emo テキスト進化＝回転テキスト（`TextEffects` 予約名 `rotation`／`multicolor`）。**`\f[sub]`／`\f[sup]`／`\f[outline]` は DirectWrite の標準機能で表せる手段が見つかるまで語彙のみ**（2026-09-11 裁定・台帳 `vocabulary-only`・追跡先はこの行）。バルーン美観配置。pasta の native x64／`IShiori` in-proc・ベクトル描画・owner-draw 右クリックメニュー（`popup-menu-minimal` の構造の上に見た目を被せる）・着せ替えメニュー。段階 A の先頭ウェーブ 6 束（`roadmap-draft.md`・324 件）は M3 のゴールを決めるときの材料。
 
 ---
 
-**追記台帳**: 追記(95)〜(103) の要約は 2026-09-26 に history「2026-09-26 番号表記の廃止に伴う退避」節へ逐語で移した（当時の台帳番号で書かれており、番号の付け替え〔09-19 の 38→46 など〕を含むため、今の対応で読み替えると誤る）。
+**追記台帳**: 追記(95)〜(103) の要約は history「2026-09-26 番号表記の廃止に伴う退避」節。

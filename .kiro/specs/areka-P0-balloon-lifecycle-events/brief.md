@@ -59,3 +59,13 @@ kanade（会話進行）と UI（表示寿命）の間に通知路を 1 本敷�
 ---
 
 > **📌 2026-10-01 `/kiro-discovery`（シェル内バルーン）による引き取り**——**項目 9（`\x`／`\x[noclear]`＝クリック待ち）は新 spec `areka-P0-talk-fast-forward` が引き取った**。クリックでの早送り（areka 独自・話している最中のバルーンの 1 クリックで次の `\x` か台詞の終わりまで進む）と、`\x` での停止と再開と、クリック待ちの印 `clickwaitmarker.*` を 1 つの spec に揃えた（どれも「クリックで台詞の時計を進める」同じ仕組み）。開発者裁定「クリック待ちは台本に明示した `\x` だけ・自動でクリックを求める仕組みは作らない」もそちらの brief にある。**本 spec に残るのは項目 7・8・10**（`balloontimeout` の実導出・`OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` の発火・中断で終わった会話のタイムアウト起点）。上の 2026-09-13 の相互登記（`\x` で `\f` 状態の何が戻るか）は `talk-fast-forward` がそのまま使う。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 残りは項目 7・8・10（項目 9 の `\x` は `talk-fast-forward` へ移した＝`text-decoration-canon` への依存も消えた）。優先度 中。
+- **項目 8 と 10 は今すぐ始められる**: 完了 `balloon-break` が `Input::UserBreak{scope}` と `schedule/user_break.rs` を入れたので、`OnBalloonBreak` へ届く道は既に在る。項目 7（`balloontimeout`）だけが `sakura-time-directives` を待つ＝**着手するときは 8 と 10 を先に、7 は切り離す**。
+- 変わっていない点: `BalloonLifecycleNotice` は予約のまま（`emo2_boot/talk_lifecycle.rs`・コメントの持ち主の名前は棚卸⑳で本 spec へ直した）・`OnBalloonClose`／`OnBalloonTimeout`／`OnBalloonBreak` は許可の表に無い。
+- **触るファイル**: kanade の `schedule/{steady.rs 935, events.rs}`・`crates/areka/src/emo2_boot/{talk_lifecycle.rs, balloon_visibility 系}`・`crates/areka/src/input_events/` のバルーン。大きいファイルの分割は `emo-text-file-split` と `translate-pipeline`（`steady.rs`）が先に済ませる。

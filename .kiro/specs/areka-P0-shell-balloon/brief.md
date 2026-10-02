@@ -97,3 +97,22 @@ surface1000
 - 1 ファイル 1,000 行（番人の例外表に触れない）。
 - 決定論テスト網羅は必達。ログ無しの失敗の経路を作らない。
 - 意味論は ukadoc から輸入するが、本 spec の語（`balloon.*`ブレス・描画メソッド `balloon`・`\b[名前]`）は areka 独自。網羅台帳（`doc/ukadoc-coverage/`）の外の語として `doc/COMPAT_ARCHITECTURE.md` §8 に登記する。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **ウェーブ C2（`emo-text-file-split` の直後）・Fable 推奨**。規模 L（**分割を先に済ませて 15〜19 タスク**＝上限の内。切り分けはしない）。
+- 合っていた点: どの窓にも文字の層の差し込み口がある（`VisualMount::attach`）・`text_slot_view` は相手を問わない（定義は `presenter/read.rs`）・**拡大率の追い直しは「未確認」でなく確定**＝`emo2_boot/frame/scale_text.rs` は `balloon_target(scope)` しか組み直さない。
+- **brief の誤りと抜け（要件で必ず扱う）**:
+  1. **差し込み口は 1 つの窓に 1 つ**で、`TextSurface::attach` はその entity に直に文字の面を挿す（`surface.rs`）＝1 つの窓に文字の面は 1 枚しか載らない。箱を 2 つ以上置くには差し込み口を箱の数だけ作るか子の entity を作る（触る先は emo-present の `mount.rs`・`presenter/read.rs` か emo-text の `surface.rs`）。
+  2. **`ActorKey` は dola の型**（`crates/dola/src/cue/command.rs`）で、テスト以外の 71 ファイルが使う。「`ActorKey` の形の見直し」をそのまま行うと dola・sakura・seriko・ghost まで波及する。**`ActorKey` は残し、emo-text の中（`TextLayerRuntime` の各表と `state.rs`）に箱の名前の副キーを足す**形が現実的。
+  3. **`region.rs` は分割も変更も要らない見込み**。`TextRegion::resolve` は validrect を書かなければ画像いっぱい・origin を書かなければ書き出しの角を返す＝画像の大きさに箱の `size` を渡せば Approach はそのまま成り立つ。
+  4. **シェルのパーサは `overlay` の element しか拾わない**（`shell/decode.rs` の `decode_elements`）。`Element` の型に描画メソッドの欄は無い。欄を足すか `Shell` に別の表を持たせるかで、約 20 ファイルへの波及が変わる（`surface-element-nesting`・`balloon-element-order` が触るのと同じ型）。
+  5. **`\b[名前]` を今受けているのは seriko**（`crates/areka-seriko/src/actor.rs` の `BalloonResolve::NameForm` で warn して読み飛ばす）。直さないと `\b[台詞]` のたびに warn が出る。
+  6. **「箱のクリックは従来どおりシェルのクリック」**: areka は今 `OnMouseClick` を送っていない（送るのは `OnMouseMove`／`OnMouseDoubleClick`）。表示中の差し込み口は当たり判定を持つので、見えている箱はサーフェスの当たり判定より手前でポインタを取る＝素通しにするかを決める。
+- **触るファイル**: `crates/areka-parsers/src/{shell/{decode,model,mod}.rs, balloon/{parse,mod}.rs}`・`crates/areka-seriko/src/actor.rs`・`crates/areka-emo-text/src/{actor 系, actor_decoration.rs, state.rs, surface.rs, lib.rs}` か `crates/areka-emo-present/src/{mount.rs, presenter/read.rs}`・`crates/areka/src/emo2_boot/{frame/attach.rs, frame/scale_text.rs, assets.rs, balloon_visibility 系, frame/switch.rs か shell_balloon_switch.rs}`・`crates/areka/src/input_events/`・検体・`doc/COMPAT_ARCHITECTURE.md` §8。`main.rs`・`Cargo` の類・wintf・`placement/`・`areka-nar` には触らない見込み。
+- **議題**: 「スコープ × 名前」の鍵を emo-text の中だけで持つか／箱を差し込み口を増やして載せるか子の entity にするか／element の型を広げるか別の表か／表示中の箱が取るポインタ判定／選択肢のクリックを受ける場所。
+- **引き取り**: `emo-text-canon-residue` の最後の 1 件（項目 14＝折り返しの警告にバルーンの名前を出す・`region.rs` の `BALLOON_NAME_PLACEHOLDER`）を本 spec が引き取る（名前を持つバルーンを入れるのが本 spec＝棚卸⑳で `emo-text-canon-residue` を取り下げ予定にした）。wintf の「兄弟の重なり順」の裁定も、箱を子として複数作るなら本 spec の要件に乗せる。
+- **並べ方（厳しい目）**: 文字まわりの spec（`balloon-font-file`・`text-typesetting`・`talk-fast-forward`・`text-reveal-fade`・`balloon-markers` ほか）とは**同時に走らせない**。roadmap の旧 S1「`balloon-font-file` と並走」は外れ＝`actor` 系・`actor_decoration.rs`・`frame/attach.rs` を共有する。

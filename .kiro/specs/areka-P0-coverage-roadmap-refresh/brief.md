@@ -77,3 +77,36 @@ ukadoc 網羅調査の文書（`doc/ukadoc-coverage/roadmap-draft.md`・`briefin
 - 文書と検査だけの spec（製品コードに触れない）。α の必須ではないが、α の 6 本が着地するたびに同じ申し送りが増えるので、A0 の着地直後が最も安い。
 - 1,000 行の番人は `log-capture-kit` に住む・`ukadoc-survey` のテストは報告の鮮度も見るので、文書を触ったら `report`／`report-summary` を作り直す。
 - 規模の見立て: S〜M。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **roadmap の覚え書き `ukadoc-coverage-custody`（仮称・brief なし）を本 spec へ合流した**（棚卸⑳の裁定）。どちらも「網羅台帳の手書きの数と持ち主が、spec が完了するたびに黙って偽になる」同じ仕組みを直す仕事で、触るファイルも同じ（`doc/ukadoc-coverage/{briefing,roadmap-draft,README}.md`・`ledger/*.toml`・`crates/ukadoc-survey/src/check/`）。2 本に分けると同じファイルを順に書き換えることになる。
+- 前提（`nar-install`・`popup-menu-minimal`・`default-balloon-bundle`）はすべて完了＝着手できる。優先度 中（製品は何も壊れないが、spec が 1 本完了するたびに悪くなる。09-19 から約 4 倍）。規模 M（**14〜18 タスク**。下の ⑵⑶ を機械でまとめて書き換える前提。1 行ずつ人が裁くと 20 を超える）。
+- **数え直し（main `03e8d7d6`）**。左が 09-19 の覚え書き、右が今。
+
+| 項目 | 09-19 | 今 |
+|---|---|---|
+| `briefing.md` の `[[owner_completed]]`（手書きで凍結した一覧） | 14 | **14**（変わらず。検査は今も `completed/` を走査しない） |
+| `completed/` の `areka-P0-*` のフォルダ | 82 | **110**（全フォルダ 213） |
+| 台帳の持ち主が完了済みなのに一覧に居ない | 4 本・29 行 | **16 本・128 行**（`network-update` 30・`text-decoration-canon` 16・`baseware-root-layout` 15・`ghost-install` 13・`nar-install` 11・`popup-menu-minimal` 10・`shell-balloon-switch` 7・`balloon-font-descript-keys` 7・`charset-canon` 5・`ghost-shell-balloon-switch` 4 ほか） |
+| 持ち主が完了済みで状態が `vocabulary-only`（誰も仕上げられない行） | 5 | **9**（`popup-menu-minimal` の 4 行が増えた）。ほかに `degraded` で持ち主が完了済みの行が 11 |
+| `roadmap-draft.md` の `[[spec]]` が完了済みを未完として載せる | 8 | **39 行のうち 20** |
+| 一度も起票されなかった仕様名（`areka-P0-seriko-runtime`・`areka-P0-balloon-loader`・`areka-P0-shiori-host-32`）を引く項目 | 107 | **107**（`assets.toml` 105・`shiori.toml` 2） |
+| さくらスクリプトの台帳で持ち主が空 | 263／342 | **248／342** |
+| `briefing.md` 5-3 の持ち主あり／空 | 416／1,333 | **517／1,232**（合計 1,749 は不変） |
+| `roadmap-draft.md` の波の欄の旧番号（W13〜W17） | 全行 | **70 か所のまま** |
+
+- **本文の古くなった点**: 候補名 `areka-P0-network-update` の重なり（「裁定待ち」）は、その spec が完了して自然に解けた＝`roadmap-draft.md` の記述を直すだけ。`README.md` は今も、完了済みの `ukadoc-coverage-roadmap` を「統合担当」として申し送り先に書いている。
+- **合流した後の範囲**:
+  1. 整合検査が `.kiro/specs/completed/` を走査する（手書きの `[[owner_completed]]` をやめるか、そこから導く）。一度も起票されなかった仕様名も検査で赤にする。
+  2. 持ち主が完了済みの 128 行を、実装済みへ改めるか生きている持ち主へ付け替える（機械でまとめて）。誰も仕上げられない 9 行は裁定する（`popup-menu-minimal` の 4 行は `popup-menu-residue` へ）。
+  3. 実在しない仕様名を引く 107 項目を書き換える（機械でまとめて・各名前を今の持ち主へ対応付ける）。
+  4. 日付つきの数の撮り直しを道具に任せる（手で直さない）・波の欄の旧番号と `network-update` の名前の記述を直す。
+  5. `README.md` の「統合担当」の指示を改める。「持ち主の居ない一覧」（`\_` の仲間の 7 件・さくらスクリプトの空の 248 行・段階が仮の 11 束）は**道具が出す一覧**にし、1 行ずつの裁定は本 spec に含めない。
+  6. 取り下げ予定の `emo-text-canon-residue` を `roadmap-draft.md` の `[[spec]]` の表から外し、フォルダを片付ける（残り 1 件は `shell-balloon` が引き取り済み）。
+  7. 完了 `ghost-install` が申し送った「`assets.toml` の `manual_install` の束の行の語の食い違い」を引き取る。
+- **合流しない物**: 覚え書きの残り 3 つ（`present-write-coherence` の未達 40 件・正典語彙の孤児 2 件・配布物を束ねる／作る側の 3 件）は製品の穴で、台帳の番ではない＝roadmap の覚え書きに残す。
+- **並べ方**: 触るのは `doc/ukadoc-coverage/` と `crates/ukadoc-survey/` だけで製品のコードと共有 0。ただし**台帳を書き換える spec とは同じウェーブに置かない**（C1 の `choice-timeout-directive`・`install-companion-canon` は台帳の行を直す）。

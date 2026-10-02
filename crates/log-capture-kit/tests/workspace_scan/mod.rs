@@ -32,7 +32,7 @@
 //! # 行数の定義
 //!
 //! [`line_count`] は**改行の個数**を返す。着手前インベントリ
-//!（`.kiro/specs/areka-P0-test-cage-determinism/verification/remeasure.md` §6）が
+//!（`.kiro/specs/completed/areka-P0-test-cage-determinism/verification/remeasure.md` §6）が
 //! 同じ定義で 1,000 行超 11 件を採っているので、番人の例外表と数え方が一致する。
 
 // 本 module は 3 つの試験対象（較正・迂回検知の見張り・行数の見張り）から共有され、

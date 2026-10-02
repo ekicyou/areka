@@ -59,3 +59,10 @@
 
 - バルーンの文字の単位は `char` から書記素クラスタ（人が 1 文字と見る単位）に替わった。範囲（`ChoiceSpan::glyph_range`・`style_runs`・`segment_text_range`）はクラスタの通し番号で数え、UTF-16 の位置はクラスタ文字列の長さを積む。
 - `TextItem::Glyph` と `PositionedGlyph` の中身は `text: Arc<str>`（`Copy` なし）。構築は `TextItem::glyph(&str)`、切り方は `areka_sakura::cluster::clusters` だけが決める。文字を比べる処理（行末のぶら下げの判定など）は `&str` で比べる。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 低。中身は今も正しいが、行番号はすべてずれた（警告は今 `choice.rs` の 585〜591 行あたり）。`text-align-shadow-canon` への依存は同じファイルを触るだけ（`look.rs`・`viewbox_draw` 系）＝文字まわりの直列の列に並ぶ。

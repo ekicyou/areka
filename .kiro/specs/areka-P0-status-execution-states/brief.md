@@ -75,3 +75,14 @@ ukadoc `Status` 実行状態語彙の各状態が、それぞれの源サブシ�
 
 > **📌 2026-09-02 棚卸⑫（Current State の陳腐化を登記）**——⑴ **`choosing` は実導出済み**（`crates/areka-kanade/src/status.rs:171-174` `if snapshot.choice_active { states.push(ExecutionState::Choosing) }`・`:21` が「M1 で実導出するのは `Talking` と `Choosing` の 2 状態」と宣言）＝台帳表の「M1（M-dialogue）」行は**完了**。⑵ `talking` の実導出は `kanade/src/status.rs:160-185 ExecutionStatus::derive`（brief の `events.rs` は file-slimming で分離済み）。⑶ `EmoPresenter::target_visible` は `presenter/read.rs:208`→**:218**。⑷ pasta `virtual_dispatcher.lua:98,:123` の完全一致比較は**逐語一致**（fail-open は今日も成立）。⑸ **`balloon(ID群)` と `minimizing` の源は今日すでに実在**（`read.rs:218` と wintf の窓状態）＝「M1〜M2」行は今日でも配線可能。⑹ **台帳表に不在の項目**: `status.rs:15-17` が「実 SSP 2.3.86 は `balloon(0=2,1=0)` を送る（区切り `/` 対 `,`）差異は実導出の解禁時に本 spec で決着」と登記済み＝本 brief の負う項目として追加すること（現時点は非アクティブゆえ実害 0・潜在互換バグ）。⑺ COMPAT §8 :160/:165 の引用は棚卸⑫で本 brief への引用に差替済み。編集集合＝`kanade/src/status.rs`（`ExecutionSnapshot` フィールド追加＋SEAM 行 :175-182 差替）＋`areka/emo2_boot/` の配線。規模 S（台帳）。
 
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **種別を「台帳」から「バグ（潜在）」へ改めた**。優先度 中。規模 S〜M（5〜8 タスク）。着手できる（`property-query-channels` への依存は実体が無いので外した）。
+- **崩れた前提**: 「状態の出どころがまだ無い」は 3 つについて誤りになった。`nouserbreak`＝完了 `balloon-break` の `\![enter/leave,nouserbreakmode]`（`input_events/user_break.rs`・`emo2_boot/user_break_cue.rs`）／`online`＝完了 `network-update` の `Stage::Running`（`crates/areka/src/update/desk.rs`）／`balloon`＝`EmoPresenter::target_visible`。まだ無いのは `minimizing`・`induction`・`passive`・`timecritical`・`opening`。
+- **なぜバグか**: ゴースト（pasta を含む）は `online`・`nouserbreak` のあいだ自発の台詞を止める。areka がそれを `Status` に載せないので、ネットワーク更新の最中や割り込み禁止の区間に雑談が割り込みうる。
+- **pasta の受け入れ条件は要らなくなった**: 固定している pasta（`48c42fc`）は `Status` を部分一致で調べる（`virtual_dispatcher.lua`）＝`talking,balloon(0)` のような複合の値でも安全。
+- 残る問い: `balloon(0=2/1=0)` か SSP の `balloon(0=2,1=0)` か（区切り）。
+- **触るファイル**: `crates/areka-kanade/src/status.rs`（391）と、UI スレッドから kanade の写しへ届ける配線（`crates/areka/src/emo2_boot/`）。`shell-balloon` など `emo2_boot` を触る spec とは同時に走らせない。

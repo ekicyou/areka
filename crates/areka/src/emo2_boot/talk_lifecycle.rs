@@ -21,7 +21,7 @@
 //! 解除後の cue が horizon を引き上げて計測が正しく再開する。中断（Requirement 4.6）も起点は
 //! 正常終了と同一値（占有 horizon）になり、誤差は**表示を保持する側**にのみ倒れる
 //! （Requirement 4.8 と同じ側）。中断時刻を起点に採る精密化は追跡 spec
-//! `areka-P0-balloon-canon-residue` が [`BalloonLifecycleNotice`] の実発火と一体で所有する。
+//! `areka-P0-balloon-lifecycle-events` が [`BalloonLifecycleNotice`] の実発火と一体で所有する。
 //!
 //! # 会話境界の自己検出
 //!
@@ -175,7 +175,7 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
 ///
 /// 本 enum を構築する側も消費する側も**現時点で存在しない**。M1 はこれらの SHIORI イベントを
 /// 発火しない（Requirement 7.2）ため、実発火の配線——UI→kanade の口（`MouseWiring` /
-/// `ChoiceForwarder` と同型）——を敷くのは追跡 spec `areka-P0-balloon-canon-residue` の所有範囲
+/// `ChoiceForwarder` と同型）——を敷くのは追跡 spec `areka-P0-balloon-lifecycle-events` の所有範囲
 /// である。ここに型だけを残すのは、語彙と Reference 割当（下記コメント）を実コードの側にも
 /// 固定し、「語彙だけが増えて配線の追跡が失われる」既知の失敗を繰り返さないため。
 ///
@@ -192,7 +192,7 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
 ///
 /// なお `OnBalloonClick` は正典に存在せず、クリックによる閉鎖は `OnBalloonClose` へ集約される
 /// （Requirement 7.3）——独自のクリック閉鎖 variant をここへ足してはならない。
-#[allow(dead_code)] // 消費者ゼロ（意図的予約・Requirement 7.8）: 実発火は areka-P0-balloon-canon-residue が所有
+#[allow(dead_code)] // 消費者ゼロ（意図的予約・Requirement 7.8）: 実発火は areka-P0-balloon-lifecycle-events が所有
 pub(crate) enum BalloonLifecycleNotice {
     /// `OnBalloonClose`。`script`＝閉じる際に表示されていたスクリプト（Ref0）。
     Closed { script: String },

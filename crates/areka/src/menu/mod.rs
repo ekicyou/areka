@@ -2,8 +2,8 @@
 //!
 //! このファイルは登記の口を持つ: 枠 7 種とその並び（[`Frame::ORDER`]）、登記の単位
 //! （[`MenuItem`]）、枠ごとに 1 つだけ持つ供給関数（[`Supplier`]）、登記・取り消し・写しの
-//! 取得（[`MenuRegistry`]）。後続 spec（列挙・切替・インストール・更新）はメニュー本体を
-//! 触らず、自分の枠へ供給関数を登記するだけで項目を足せる（要件 6.1）。
+//! 取得（[`MenuRegistry`]）。列挙・切替・インストール・更新の各 spec はメニュー本体を
+//! 触らず、自分の枠へ供給関数を登記して項目を足している（要件 6.1・登記者は `*_frame.rs`）。
 //! 登記の口と、表示 1 枚の旗・照会の返事待ちは [`MenuWiring`] が 1 つの資源として束ねる。
 //! 起動時の結線（[`wire_menu`]）と、本体が自分で登記する 2 項目（説明書・終了）もここに置く。
 //!
@@ -166,7 +166,7 @@ pub(crate) type ToScreen = fn(HWND, i32, i32) -> Option<(i32, i32)>;
 /// 登記の口・運行（kanade）への送り口・表示 1 枚の旗・照会の返事待ちを 1 つに束ねる。
 /// 旗と返事待ちを動かすのは [`trigger`] だけである。
 pub(crate) struct MenuWiring {
-    /// 登記の口。後続 spec はここへ供給関数を登記する。
+    /// 登記の口。各枠の spec はここへ供給関数を登記する。
     pub registry: MenuRegistry,
     /// 照会（`KanadeMsg::ResourceQuery`）の送り口。
     kanade: Sender<KanadeMsg>,

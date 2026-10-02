@@ -76,3 +76,14 @@ ukadoc の正典では、SHIORI が返した台詞（さくらスクリプト）
 - 「同時 1 往復まで」の規律に例外を作らない（⒜ 推奨）。
 - 実装済みの証拠（ukadoc URL コメント）は置かない＝`ukadoc-survey-shiori` の仕事。
 - 正典の根拠: ukadoc [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_translator.html)・[OnTranslate](https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1)・YAYA wiki「Tips/OnTranslate の使い方」・里々 wiki「OnTranslate」。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **優先度 高・ウェーブ C2・Fable 推奨**。規模 M（14〜18 タスク）。着手できる（`property-query-channels` への依存は同じファイルを触るだけで機能の前提ではない＝外した）。
+- なぜ高いか: 里々・YAYA の標準の辞書は `OnTranslate` で文を直す（「さんさん」の重なりの除去・語尾・自動の間）。areka は直す前の文をそのまま出している。
+- **崩れた前提（着手の前に Current State を直す）**: SHIORI の返事が台詞になる場所は 7 か所でなく **11 か所**（ゴースト切替の `schedule/change.rs` の 2 か所が増え、`RaiseEvent` の出どころも流れ込む）。許可の表は 11 語でなく 44 語。**新しい問い**: ゴースト切替の最中の `OnTranslate` はどちらの SHIORI へ送るか。
+- 変わっていない点: `OnTranslate` の消費者は 0・台詞の出口は 1 つ・「SHIORI との往復は一度に 1 つ」の決まり。
+- **触るファイル**: `crates/areka-kanade/src/{actor.rs 707, msg.rs 894, schedule/{steady.rs 935, mod.rs 859, change.rs, boot.rs, close.rs, events.rs}}`・`crates/areka-sakura/src/sysvar.rs`。**`steady.rs` は 935 行＝本 spec の先頭タスクで分割する**。`crates/areka/src/` には触らない見込み（触ると分かったら `ghost_session.rs`・`main.rs`・`emo2_boot/` を避ける＝同じウェーブの `mcp-tool-entrances`・`shell-balloon` が触る）。
