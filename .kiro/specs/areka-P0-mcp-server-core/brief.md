@@ -66,3 +66,17 @@
 - rmcp の版は固定し、上げるときは本 spec の決定論テストを通す（MCP の新しい版への追随は rmcp の版上げで行う）。
 - 常時テストはネットへ出ない（ループバックのみ）。ポートはテストごとにエフェメラル。
 - ログは `tracing`、失敗の経路は必ず `error!`/`warn!` を出す。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **ウェーブ C1・Fable 推奨**。規模 M（11〜14 タスク）。
+- **brief の直し**: 「サーバの類は 0」は本番については正しいが、テストには前例がある＝`crates/areka-update/src/winhttp_real_tests.rs` が `std::net::TcpListener::bind("127.0.0.1:0")` で偽の HTTP サーバを立てている。決定論テストはこの形を流用できる。`serde_json` の出どころには `budouy`（`areka-emo-text` 経由で本番に入っている）もある。
+- **依存の状態**: `rmcp` は `Cargo.lock` にも `vendors/` にも無い（新しく入れる）。`tokio` は lock に在るがビルドされていない（wasm の任意依存）。rmcp の「無状態・JSON 応答」の対応は手元では確かめられない＝要件の段で版を固定するときに裏を取る。
+- **起動と終了の配線（`crates/areka/src/main.rs`・946 行）**: 関数は `fn main()` 1 つ。前例は `perf_thread_report::start()`（`thread_roles::install()` の直後に立て、`finish_after_run` の閉包の中の `stop_and_report_final()` で畳む）。**注意**: 閉包の中の `down?` が早く戻ると perf の後始末は飛ぶ＝MCP を畳む処理は `down?` より前に置くか `Drop` で畳む。`main.rs` は上限が近いので、ポートと環境変数の読み解きは `areka-mcp` の中に置く（`main.rs` へ足すのは立てる・畳むの 2〜3 行）。
+- **設計に入れること（`areka-actor` との付き合い）**: ⑴ ランタイムは `areka_actor::spawn_actor("mcp", …)` で起こしたスレッドの中の `new_current_thread()`（マルチスレッドにすると名簿に載らないスレッドが perf の報告に出る）。⑵ 畳む合図は `async-channel`（既に workspace の依存）か tokio の oneshot（actor の std の受け口は await できない）。⑶ 次の `mcp-tool-entrances` では、塞ぐ `ReplyReceiver::recv_timeout` を `spawn_blocking` で包むか async の返事へ替える。
+- **触るファイル**: 新規 `crates/areka-mcp/**`・`crates/areka/Cargo.toml`（1 行）・`crates/areka/src/main.rs`（`fn main()` の 2 か所）・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`（`tools/test-all.ps1 -License` が作り直す＝手で直さない）・`.kiro/steering/{tech.md, structure.md}`。依存を `crates/areka-mcp/Cargo.toml` だけに書けば根の `Cargo.toml` は触らない。`deny.toml` は許可の表の外のライセンスが出たときだけ。`tools/package-alpha.ps1`・`dist/`・`ghost_session.rs`・`session_end.rs`・`emo2_boot/` は不要。
+- **議題**: 既定ポート 9821 と既定で有効にするか／serverInfo の名前と版／手打ちフォームを作るか／rmcp の版と無状態の対応が足りないとき差として受け入れるか／HTTP の土台（axum か hyper を直にか＝ライセンスの一覧の量が変わる）／Origin 検査は rmcp の内蔵か自前か／待受に失敗したら記録だけか別のポートを試すか。
+- **並べ方**: `animated-image-decode` とは同じウェーブに置かない（どちらも依存を足し、`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md` が重なる）。

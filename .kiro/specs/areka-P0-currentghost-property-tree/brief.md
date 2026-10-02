@@ -67,3 +67,12 @@
 ---
 
 > **📌 2026-09-11 棚卸⑬（三重所有の仮裁定・前提の再測定）**——本 spec の `currentghost.seriko.*` は **`zorder` を除外**した 13 項（`sticky-window` は残す）。`zorder` の値は `areka-P0-zorder-property`、SET 台帳行は `areka-P0-sylphya-set-ledger`。Adjacent 節の「`zorder-property` は本ブランチに不在」は偽（実在・棚卸⑫追記どおり）。publish 縫い目は `crates/areka/src/emo2_boot/mod.rs` の `GhostBootOptions` 構築（:442 付近）と sinks vec（:448 付近）＝行番号は再びずれているが実体は健在。編成＝**W15**（`property-query-channels` W14 の後・`property-catalog-lists` とは `dotted.rs`／`key.rs`／`mod.rs` を共有＝直列で W16 へ）。先行スライス「balloon.scope 19 項目」は要件段階で L→M に縮める選択肢として保持。要件定義は Opus（scope ID 集合と未解決スコープの表現の 2 議題）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 中。規模 L（**そのままでは 20 タスクを超える**＝要件の段で `balloon.scope` の 19 項目を先に切る）。
+- **崩れた前提**: 「値を出す場所は `emo2_boot` の 1 か所」は古い。α でゴースト・シェル・バルーンの切替が入り、ゴーストを起こすたびに実行環境が新しくなる＝値は実行環境ごと・切替のたびに出し直す（前例 `install/names.rs` の種の入れ直し・`ghost_switch.rs`）。`shelllist.*` は `areka_ghost::catalog::{list_shells, list_all_shells}` から出せる。`currentghost.status` は `ExecutionStatus::render` を使い回す。
+- 読む道は `property-query-channels` か `mcp-get-property`（開発者向け）。出すだけなら単独で作って試験できる。`property-catalog-lists` とは同じファイル（sylphya の語彙・`emo2_boot/mod.rs`）を触る＝直列。

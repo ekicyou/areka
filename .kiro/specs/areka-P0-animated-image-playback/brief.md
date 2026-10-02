@@ -60,3 +60,12 @@
 ## Constraints
 
 - アニメのエンジンは 2 つ（sakura・seriko）のまま。1 ファイル 1,000 行。決定論テスト網羅は必達。合成のキャッシュ `CAPACITY` は統制された定数＝変えるなら根拠を残す。動かないシェルの 1 コマの時間を落とさない。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 規模 M〜L（15〜20 タスク）。brief の記述は実物と一致（seriko の表は `Random`・`BindRandom`・`sometimes`・`rarely` だけを記録・`is_implemented` は Overlay だけ・`CAPACITY = 3`）。軽い違い 1 つ＝`balloon_tables` は `assets.rs` が面ごとに作っている（emo2 では中身が空なだけ）。
+- **触るファイル**: `crates/areka-seriko/src/{table.rs, timeline.rs, looper.rs}`・`crates/areka-emo-compose/src/{method.rs, plan.rs}`・自動アニメーションの合成サーフェスを作る場所（設計で決める）・`doc/ukadoc-coverage/ledger/assets.toml`・検体。
+- **議題**: 合成サーフェスの番号の空間／ファイルの繰り返し回数を守るか／`CAPACITY` を変えるか。

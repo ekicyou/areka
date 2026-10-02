@@ -74,3 +74,11 @@ SSP プロパティ木の過半は `currentghost` の外にある——`system.*
 
 
 > **📌 2026-09-17 `areka-P0-sylphya-set-ledger` が **完了**（PR#151・`.kiro/specs/completed/areka-P0-sylphya-set-ledger/`）**——サウンドプロパティ名 18 葉（2.8.72 の 10 葉＋2.8.73 の `meta.` 8 葉）は `dotted.rs` の記録用の表 `SOUND_PROP_NAMES`（書き込みの仕分けは読まない・各要素に正典 URL）として登記済みで、その表の持ち主は `sylphya-set-ledger`（`doc/COMPAT_ARCHITECTURE.md` §8 の【所有の相互参照】行）。SET 有効の 3 葉 `pause`／`playing`／`position` は `SET_EFFECTIVE` へ末尾形で登記済み。本 spec に残るのは `currentghost.sound.*` の**値の導出**（音再生基盤の解禁ゲート下）で、In の「サウンド語彙族の登記」は済み。調査台帳のサウンド 18 行の宛先は本 spec のまま。アンカーのずれ: `dotted.rs:106-109` → `pub const EXT_EVENT_GET`／`EXT_EVENT_SET` の定義行（`.ext.*` の運搬は `areka-P0-property-ipc-transport`）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 低〜中。**そのままでは 20 タスクを超える**＝要件の段で ⒜ `system.*`（時計・モニタ・OS の値）と ⒝ 一覧（`ghostlist`・`balloonlist`）に切る。
+- **崩れた前提**: 「一覧の列挙は M2 の基盤でまだ無い」は誤りになった＝`areka_ghost::catalog::{list_ghosts, list_balloons, list_shells}` が在る。`ghostlist`・`balloonlist` は今日出せる。`activeghostlist` は 1 体だけなので今のゴーストそのもの。音・履歴・利用率・プラグインは登記だけのまま。網羅台帳で本 spec が持つ行は 120（最多）。

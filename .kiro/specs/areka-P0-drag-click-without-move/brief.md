@@ -64,3 +64,15 @@
 - バグの修正は根本・0 フレーム・決定論のテスト（直す前に赤）。ログの無い失敗の経路を作らない。
 - 実機の確かめは判定の分岐の記録の level（`areka::persist::save` と `drag_follow` の debug）まで `RUST_LOG` を開ける。実機の根はワークツリーの `target\` の下だけ。
 - 1 ファイル 1,000 行（`drag_follow.rs` の行数は着手時に確かめ、足すなら兄弟のファイルで）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **段はバグ・ウェーブ C1**。規模 S（6〜9 タスク）・議題 0 件・Opus で足りる。
+- brief の記述はすべて実物と一致した。**足りなかった事実**: `crates/wintf/src/ecs/window_proc/keyboard.rs` にも、動かし始める前（`Preparing`）から終了（`Ended{cancelled:true}`）を積む所が 3 か所ある（ESC の `WM_KEYDOWN`・`WM_CANCELMODE`・`WM_CAPTURECHANGED`）。areka は cancelled でも保存するので同じ穴である。同じファイルの `WM_ACTIVATE` は既に `Preparing` を除いている＝案 (a) はこの先例へ残り 5 か所（`mouse_click.rs` の 2 か所＋上の 3 か所）を揃える形になる。
+- **注意（仮説）**: `DragAccumulator.pending_transition` は 1 枠しかなく、`set_transition` は上書きする。開始と終了が同じ反映の前に重なると開始が消え、「開始の無い終了」になる。brief の「多窓で `DraggingState` が先に落ちる」縮退の本当の原因はこれかもしれない。だとすると、案 (a) を `JustStarted` まで広げると本物の速いドラッグの保存が落ちる＝**`JustStarted` は今の扱いを残す**。
+- **触るファイル**: `crates/wintf/src/ecs/window_proc/{mouse_click.rs 569, keyboard.rs 263}`・判断を純関数にするなら `crates/wintf/src/ecs/drag/state/mod.rs`（574）・テスト `crates/wintf/src/ecs/drag/state/tests.rs` か `crates/wintf/tests/drag/dispatch_test.rs`・areka の赤テスト `crates/areka/src/placement/follow_drag_end_persist_tests.rs`（712）か兄弟の新しいファイル（その場合 `placement/follow.rs` に登録の 1 行）・`doc/COMPAT_ARCHITECTURE.md` §8。案 (b) を採ると `placement/follow/drag_follow.rs`（**936 行・上限まで 64 行**）へ足すことになる＝(a) を推す理由がもう 1 つ。
+- **要件で決めること 1 つ**: 動かし始める前の ESC・`WM_CANCELMODE`・`WM_CAPTURECHANGED` でも終了を配らないか（推しは「配らない」）。
+- **同じウェーブの他の spec との約束**: `crates/areka/src/emo2_boot/`・`crates/areka/src/input_events/`・`crates/areka/src/install/` には触らない。

@@ -54,3 +54,12 @@
 ## Constraints
 
 - 既定で今の出力と同じ（既存テストが無改変で緑）。1 フレーム遅らせる解は取らない。1 ファイル 1,000 行（`areka-emo-text` の大きいファイルは新しいファイルで足す）。決定論テスト網羅は必達。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 規模 M（8〜12 タスク）。文字まわりの直列の列。
+- **brief の誤り**: 「一度描いた字は描き直さない」の実体は `surface.rs` ではない。判断は見える範囲の計画（`ScrollPlanner`・`DirtyRect`）と `viewbox_draw` 系の `render_styled` が持ち、`actor` 系の `present_actor` から動く。触るのは `state.rs`・`actor` 系・`viewbox_draw` 系・`viewbox_draw_plan.rs`・場合により `viewbox` 系。
+- **`\_q` は実装が無い**（パーサにも compile にも腕が無い・担当は `sakura-time-directives`）＝「`\_q` の中は即座」はつなぐ先が無い。口だけ用意し、後から着地する側がつなぐ。

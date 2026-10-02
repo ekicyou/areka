@@ -47,3 +47,10 @@
 ## Constraints
 
 - 文字だけが変わるコマで合成をやり直さないこと（今の性能を落とさない）。1 ファイル 1,000 行。決定論テスト網羅は必達。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- `shell-balloon` の追跡 spec。element の型とシェルのパーサ・emo-compose／emo-present の合成を触る＝`surface-element-nesting`・`animated-image-playback` と同時に走らせない（シェルの element の直列の列）。

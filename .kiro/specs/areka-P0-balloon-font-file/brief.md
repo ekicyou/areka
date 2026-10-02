@@ -52,3 +52,13 @@
 
 - `draw.rs` 761 行＝足す量によっては新しいファイルで足す。1 ファイル 1,000 行。
 - 試験用フォントの同梱はライセンスの確認を要件で決める（OFL など再配布可のものに限る）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 規模 M（7〜10 タスク）。**`shell-balloon` とは並走できない**（棚卸⑳で訂正＝`actor` 系・`actor_decoration.rs`・`emo2_boot/frame/attach.rs` を共有）。文字まわりの直列の列で `shell-balloon` の後。
+- 合っていた点: `.ttf`／`.otf`／`.ttc` は警告を出して読み飛ばしている（`draw_catalog.rs`）・`create_text_format` はフォント集に `None` を渡している（`draw.rs`）・DirectWrite の機能は既に有効＝`Cargo` の変更は要らない。
+- **抜け**: ⑴ 計測用の `CreateTextFormat` がもう 1 か所ある（`draw_metrics.rs`・書式からフォント集を読み直す所も）。⑵ `FontCatalog` はスコープごとに `actor_decoration.rs` の `build_actor_render` で作られ、`BalloonModel` はフォルダの場所を持たない＝探すフォルダの一覧を `emo2_boot`（`frame/attach.rs` か切替の流れ）から emo-text の実行時の状態へ運ぶ必要がある。⑶ **`THIRD-PARTY-NOTICES.md` は生成物**（`tools/test-all.ps1` が作り直す）＝試験用フォントのライセンスを手で書くと消える。検体の隣に置くか `about.hbs` で扱う。⑷ `communicatebox.*` はどこにも実装が無い＝「同じ読み手を通す」は読み手を公開するところまで。⑸ `viewbox_draw` 系も `create_text_format` を 2 か所で呼ぶ。
+- **議題**: フォルダの一覧をランタイムごとに渡すかスコープごとに渡すか／ライセンスの置き場所。

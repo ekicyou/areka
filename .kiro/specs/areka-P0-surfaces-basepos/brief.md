@@ -52,3 +52,11 @@ surfaces.txt の `point.basepos.x/y` 宣言が parse で転記され、move 解�
 
 > **📌 2026-09-02 棚卸⑫**——アンカー **ドリフト 0**（`move_cue.rs:338 BaseposResolver`／`:347 CanonDefaultBasepos`／`:392-398` に `k: ScaleRatio` 第 5 引数・parsers `basepos` 0 件・emo2 `surfaces.txt` 未宣言・COMPAT §8 :146）。追記(63) の再突合は済み（式・署名とも記載どおり・`\![move]` k 倍は意図的 SSP 非互換の裁定で不変）。前提「`point.basepos` を宣言する実シェルの適合」は未充足＝M2 ゲート据え置き。規模 S・wintf 直近コミットと非交差。
 
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 低・据え置き（basepos を宣言するシェルが要るまで始めない）。
+- **brief の誤り**: 「trait の実装を差し替えるだけ」は成り立たない。`fn basepos(&self, window_size)` は面の番号を受け取らないが、宣言された basepos は面ごとの値である＝trait の形を変える必要があり、値は作者の画素なので拡大率を掛ける。
+- シェルのパーサ（`areka-parsers/src/shell/{model,decode}.rs`）を `shell-balloon`・`surface-element-nesting`・`animated-image-playback` と共有＝それらの後。

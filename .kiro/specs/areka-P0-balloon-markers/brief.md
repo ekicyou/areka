@@ -59,3 +59,12 @@
 
 - `viewbox.rs` 871 行・`layout.rs` 977 行＝新しいファイルで足す。1 ファイル 1,000 行。
 - 決定論テスト網羅は必達。印の画像の検体はリポジトリ内に作る（既定バルーン `StayseeBalloon` が装飾の系列を持つかは着手時に確かめる）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 規模 M〜L（14〜19 タスク）。文字まわりの直列の列（`shell-balloon` の後）。
+- 合っていた点: `SeriesFamily`（emo-present の `balloon.rs`）は旧名の列を積める・パーサにこれらのキーは無い。既定バルーン（Staysee）には `arrow0/1.png`・`online0〜8.png`・`sstp.png`・`marker.png` が在り、`clickwait*` と数字の画像は無い。
+- **触るファイル**: `crates/areka-parsers/src/balloon/{model.rs 774, parse.rs}`（キーが多く 850 行を超えうる＝新しいファイルへ）・emo-present の `balloon.rs`・emo-text の `viewbox` 系・`layout` 系（`visible_window`）・`actor` 系・`state.rs`（`balloonnum`）・`crates/areka/src/input_events/` のバルーン（矢印のクリックとホイール）・通信のきっかけの配線（`emo2_boot/update_cue.rs` か `crates/areka/src/update/`）・台帳。

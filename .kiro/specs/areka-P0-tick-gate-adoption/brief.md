@@ -62,3 +62,10 @@ dlp が建てた自走ループ（perf-loop）を**測定側 3 是正を先に�
 
 > **📌 2026-09-02 棚卸⑫**——アンカー **ドリフト 0**（`tick_gate.rs`:154/:53/:58・`tick_gate_config.rs:25`・`tools/perf/perf-loop.ps1`・agents 4 本・dlp `results/` 全実在）。ウェーブ番号整数化＝本文の W6.9→**W10**・W6.95→**W11**（roadmap 冒頭対応表）。編成＝**M1 完成後・単独**（e2e と並走不可）。⚠ **開発者方針「長時間試行禁止」**（zsp の 4,440 走行の教訓・記憶 areka-p0-scope-zorder-pinning）と本 spec の走行時間要求（夜間/25 分/n≥3）が正面衝突する——要件段階で「始める前に決着可能な A/B 設計」を先に組むこと。分割シーム＝測定側是正 ⇄ 製品側変更（brief 記載どおり）。zsp 残件 B-3（生産者名簿の穴・`tick_gate_tests.rs`／`tick_gate_config_producers_tests.rs`）は `zorder-chain-residue` が持つ（本 spec は名簿を読む側）。
 
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 保留のまま。門は今も既定で切（`wintf/src/ecs/world/mod.rs`）。基準の数は 08-23 のもので、その後に毎フレーム・表示・World を触るコミットが約 15 件入った＝測り直しが要る。
+- 着手の前に、開発者方針「長い試行はしない」と両立する短い A/B の測り方へ brief を書き直す。`main.rs`・`tools/perf/`・wintf を触り、計測を汚すので他の spec と並べない。

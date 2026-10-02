@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-09-26
+updated_at: 2026-10-02
 ---
 
 # Project Structure
@@ -262,14 +262,15 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 ### Application Binary Crate
 **Location**: `/crates/areka/`  
 **Purpose**: デスクトップマスコット・プラットフォーム本体  
-**Status**: M1 完成（2026-09-11）・α（M2）進行中。`areka.exe <ghost root> [<balloon root>]` の位置引数で実ゴーストを起動する（構成入力の解決は `boot_config.rs`・本番 env は `AREKA_` 冠）。SHIORI 契約チェーン e2e（`shiori_host`/`shiori_session`/`reference_brain`＝native 脳デモ・`shiori_create` 入口）も同居  
+**Status**: M1 完成（2026-09-11）・α（M2）完成（2026-10-02）。`areka.exe <ghost root> [<balloon root>]` の位置引数で実ゴーストを起動する（構成入力の解決は `boot_config.rs`・本番 env は `AREKA_` 冠）。SHIORI 契約チェーン e2e（`shiori_host`/`shiori_session`/`reference_brain`＝native 脳デモ・`shiori_create` 入口）も同居  
 **Modules（役割のパターン）**:
 - `emo2_boot/` - **統合の背骨**（エンジン群の実 sink 差し替え・窓装着・毎フレーム駆動 `frame.rs`・起動〜終了の `spine.rs`）。名前は M-boot の経緯で、今は emo2 専用ではない（検体 3 体が同じ経路を通る）
   - **cue の受け口は `*_cue.rs` の同型**（`zorder_cue`／`move_cue`／`readme_cue`）: 台本の cue は全員へ配られるので、受け口は ⑴ **自己選別**（自分の担当のコマンド名だけ受理・他は良性の読み飛ばし）と ⑵ **送り出し**（UI 側へ要求を運ぶだけ）に限る。担当の重複・取りこぼしは `consumer_ledger.rs`（消費者台帳）が見張る。新しい `\!` コマンドの消費者を足すときはこの型に倣う
 - `placement/` - 窓の生成・既定位置・ドラッグ・バルーン追従・DPI 追従（`follow.rs` はファサード形式の代表例）
 - `input_events/` - ポインタ入力 → SHIORI マウスイベント／メニューの引き金
-- `menu/` - 右クリックメニュー（`areka-P0-popup-menu-minimal` 2026-09-19）。**枠 7 種に供給関数を登記する口**（`MenuRegistry`）を持ち、後続 spec（列挙・切替・インストール・更新）は**メニュー本体を触らず自分の枠へ登記するだけ**で項目を足す。`plan`（構造の計算・純粋）／`captions`（項目名の SHIORI リソース照会）／`trigger`（引き金と段取り）／`win32`（`TrackPopupMenuEx`＝OS ネイティブ・自前窓なし・**`unsafe` はこのファイルに閉じる**）
+- `menu/` - 右クリックメニュー（`areka-P0-popup-menu-minimal` 2026-09-19）。**枠 7 種に供給関数を登記する口**（`MenuRegistry`）を持ち、列挙・切替・インストール・更新の各 spec は**メニュー本体を触らず自分の枠へ登記して**項目を足している（登記者は `*_frame.rs`）。`plan`（構造の計算・純粋）／`captions`（項目名の SHIORI リソース照会）／`trigger`（引き金と段取り）／`win32`（`TrackPopupMenuEx`＝OS ネイティブ・自前窓なし・**`unsafe` はこのファイルに閉じる**）
 - `readme.rs` - 説明書を既定アプリで開く葉 module（メニューにも入力配線にも依存しない）
+- `install/` - `.nar` のインストールの結線（`areka-P0-ghost-install` 2026-09-29・窓への投げ込みは `input_events/file_drop.rs`＝`areka-P0-file-drop`）。UI 側の窓口 `desk.rs`・背景スレッド `worker.rs`・純粋な手続き `procedure.rs`・行き先の判断 `judge.rs`・利用条件 `terms.rs`・ファイルを選ぶ画面 `pick.rs`・起動中のゴーストへの上書き `overwrite.rs`・台本の指示で取ってくる `fetch_url.rs`・置換語の値 `names.rs`。エンジンは `areka-nar`
 - `update/` - ネットワーク更新の結線（`areka-P0-network-update` 2026-09-30）。`install/` と同じ形＝UI 側の窓口 `desk.rs`（受付・段・預かり 1 枠・対象の解決・読み直しと後送りの列）・背景スレッド `worker.rs`（本物の口・門）・純粋な手続き `procedure.rs`（口 `UpdatePorts`・偽の口で決定論テスト）・写し `refs.rs`（イベント名 19 語・Reference・失敗の語）。エンジンは `areka-update`。成功の `OnUpdateComplete` と総括は再起動の後の新しいゴーストへ（kanade `BootOrigin::Updated`）
 **Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 

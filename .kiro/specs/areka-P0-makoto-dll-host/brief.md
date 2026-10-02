@@ -105,3 +105,12 @@ x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DL
 
 - SSP MCP 移植の `areka-P0-mcp-reload`（α 後）が、再読み込みの操作と台本の `\![reload,ghost／shiori／shell／balloon／descript]` を作る。上の Downstream の「`\![reload,shiori]`（reload 機構の再…）」は同 spec が引き受けた。
 - `mcp-reload` は **makoto だけ `NG:` で返してログを出す縮退の口**を置く。本 spec が `\![reload,makoto]` を作るときは、その口（MCP の `reload` の `target: "makoto"`）も同じ操作へつなぐこと。どちらが先に着地しても、後着がつなぐ。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 低〜中（MAKOTO を同梱する今どきのゴーストは少ない）。**そのままでは 20 タスクを超える**＝要件の段で ⒜ ホスト・文字コード・鎖 と ⒝ `\![load/unload/reload,makoto]` に切る（⒝ は `mcp-reload` と口を共有）。
+- **崩れた前提**: 「`\!` の消費者は 4 つだけ」は誤り（切替・インストール・更新・説明書・割り込み禁止が増えた）／「読み直しは無い」は誤り（`crates/areka/src/update/procedure.rs` がゴーストを読み直す）／「シェルの切替は将来」は誤り（`shell-balloon-switch` が着地）＝**シェルの側の MAKOTO を切替と更新の後に付け直すことが範囲に入る**。
+- 前提は `translate-pipeline`（掛ける場所）。`property-ipc-transport` とは同じクレートを触るので同時に走らせない。

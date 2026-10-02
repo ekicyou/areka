@@ -66,3 +66,20 @@
 - 意味論は ukadoc から輸入する（SSP の実測には合わせない）。ukadoc の原文に誤記の疑いがあれば兄弟の項目の型で読み、字面どおりだと作者の意図に反するときだけ開発者へ上げる。
 - 第三者の書庫を受ける口＝安全の検査を緩めない。決定論のテスト網羅は必達。ログの無い失敗の経路を作らない。
 - 検体・一時フォルダはワークツリーの `target\` の下だけ。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- **ウェーブ C1・Fable 推奨**。規模 S〜M（8〜12 タスク）。
+- brief の記述はすべて実物と一致した。**足りなかった事実**:
+  - `crates/areka/src/install/terms.rs` の `nested_terms` が `format!("{}/{file}", companion.source_directory)` で書庫を引く。階層付きの取り出し元を入れるとここも追随が要る（正規化の形を `/` 区切りにすれば無改変で済む見込み）。
+  - `crates/areka-nar/src/plan.rs` の `companion_placement` は `collect_tree(..., 1)` で先頭の 1 要素だけを剥がす。階層付きなら剥がす数を変える。
+  - `crates/sample-ghost-kit/examples/fold-samples.rs` も `source_directory` を読む。
+  - 記録は `crates/areka-nar/src/lib.rs` が `outcome.warnings` を回して出す＝`ManifestWarning`（`error.rs`）に種類を足せば areka の側は変えずに済む。
+  - `crates/areka-nar/src/plan_tests.rs` は **916 行**＝新しいテストは兄弟の新しいファイルへ。
+- **触るファイル**: `crates/areka-nar/src/{manifest.rs 431, names.rs 229, plan.rs 273, error.rs 328}` とテスト・場合により `crates/areka/src/install/terms.rs`・起動時のバルーンを直すなら `crates/areka-ghost/src/catalog.rs`（377）と `crates/areka/src/boot_config.rs`（357）・`doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md`。
+- **同じウェーブの他の spec との約束**: `crates/areka/src/install/` は `terms.rs` だけ（ほかは `install-live-target-hazards`）。`crates/areka-nar/src/install.rs` の確定の手順には触らない。
+- **議題 2 件**: 起動時に紐づく同梱バルーン（無印が無ければ `balloon0` か・シェルの `install.txt` も読むか）／2.9.00 以降の形に揃えるか。
+- 利用条件の文の切り詰めが絵文字を割る件（同じ `terms.rs`）は棚卸⑳で先に直した。

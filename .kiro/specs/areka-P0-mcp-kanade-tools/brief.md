@@ -52,3 +52,11 @@ MCP でいちばん使われるのは「台本を流して見る」（`sakurascr
 
 - kanade の talk の ID と枠を崩さない（既存の決定論テストを 1 本も落とさない）。
 - 規模 M〜L。kanade を触るのは同じウェーブで本 spec だけにする（干渉台帳）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 棚卸⑳では個別の再測定をしていない（`mcp-tool-entrances` が、各 spec の触るファイルを設計で固定する）。着手は `mcp-tool-entrances` の完了の後で、そのとき接触ファイルを照合する。
+- `raise_event` は kanade の許可の表（`ALLOWED_EVENT_IDS`・44 語）を通らない名前を起こす必要がある。`property-query-channels` の `\![get,property,<イベント名>]` も同じ迂回が要る＝先に着手した方が一度で設計する。`get_status` は `status-execution-states` が足す状態を読む。

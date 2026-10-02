@@ -99,3 +99,18 @@ surface100
 ## Constraints
 
 - アニメのエンジンは 2 つ（sakura・seriko）のまま。1 ファイル 1,000 行。決定論テスト網羅は必達。ログ無しの失敗の経路を作らない（循環・無い番号・内側の `balloon` は警告）。入れ子の無いシェル（emo2 を含む）の見た目・合成の回数・1 コマの時間を変えない。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 規模 M〜L（**16〜22 タスク＝上限 20 の境目**。一度も切り出していないが、少しまたぐだけなら削らずに進める。24 を超えたら継ぎ目は「静的な入れ子（parser・atlas・合成・当たり判定）」と「子の時計（seriko・`PatternState`・`ComposeKey`）」）。
+- brief の記述は実物と一致。**足りなかった事実**:
+  - `crates/areka-emo-atlas/src/manifest.rs` の `derive` は集合の全サーフェスの element をもともと集める。入れ子で要る変更は「数字だけの element を画像の鍵から外す」こと＝`manifest.rs` には必ず触る。
+  - `Element` の形を enum へ変えると、`ElementPath::new` を書く約 20 ファイル（parser・atlas・compose・present・emo-text のテスト・`emo2_boot/balloon_background_tests.rs`）へ波及する。**`ElementPath` のまま下流で読む**（例 `ElementPath::surface_ref()`）形なら波及しない＝「parser は転記・解決は下流」の原則とも合う。
+  - `PatternState`（鍵は animation id）を子の時計向けに鍵ごと変えると約 40 ファイルへ波及する（`emo2_boot/adapter.rs` を含む）。
+  - 外形の計算（`compute_extent`・`flatten_extent`）は合成の再帰と別の関数で、合わせて変える。
+- **触るファイル**: `crates/areka-parsers/src/shell/{model.rs, decode.rs}`・`crates/areka-emo-atlas/src/manifest.rs`・`crates/areka-emo-compose/src/{plan.rs 730, atlas_bind.rs, hit.rs 714, fold.rs, pattern.rs}`・`crates/areka-seriko/src/{table.rs, looper.rs, actor.rs 645, state.rs}`・`crates/areka-emo-present/src/cache.rs`・検体・`doc/COMPAT_ARCHITECTURE.md` §8。テストは新しい兄弟ファイルへ（`plan_ops_tests.rs` 1374・`fold_tests.rs` 968・seriko の `bind.rs` 1043 は伸ばさない）。
+- **議題**: element の型を parser の enum にするか `ElementPath` のまま下流で読むか（`shell-balloon` との並びと接触面が決まる）／子の時計の持ち方／pattern が指すサーフェスの内側を動かすか／着せ替え（bind）を子へ持ち込むか。
+- **並べ方**: `shell-balloon` の後（同じ element の読み方とシェルのパーサを触る）。wintf の「兄弟の重なり順が描画と当たり判定で逆」（roadmap の覚え書き）は、子を初めて複数作る本 spec か `shell-balloon` の要件で裁定する。

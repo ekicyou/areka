@@ -58,3 +58,12 @@
 - 影の複製を同じ指定で描くと、カラー絵文字の影まで多色になる。**影の複製はカラーフォントを使わずに、単色のブラシで描く**こと。
 - 影の位置と幅は、書記素クラスタ単位になった後の計測に従う。
 - 2026-09-30 着地時の追記: 描画オプションの定義点は `crates/areka-emo-text/src/draw.rs` の `TEXT_DRAW_OPTIONS`（`ENABLE_COLOR_FONT`）。影の複製はこれを使わず `D2D1_DRAW_TEXT_OPTIONS_NONE` を明示して描く。幅の計測（`GlyphMetrics::advance`／`advance_styled`）はクラスタ文字列（`&str`）で受ける。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 中。**`emo-text-canon-residue` への依存は消えた**（重なっていた項目 15 が `text-typesetting` へ移った）。本当の制約は `layout` 系・`viewbox_draw` 系を `text-typesetting`・`text-ruby`・`shell-balloon`・`balloon-scroll-fade` と共有すること＝文字まわりの直列の列に並ぶ。
+- 記述は実物と一致（寄せは `draw.rs` に直書き・影のキーは予約だけ）。
+- **20 タスクを超えるおそれ**＝要件の段で「影（描く層）」と「寄せ（配置の層）」に分ける。

@@ -49,3 +49,11 @@
 - 編集集合の見込み: `crates/shiori-host32-ipc/src/lib.rs`・`crates/shiori-host32-host/src/`・`crates/shiori-host32-helper/src/`・`crates/shiori-abi/src/interface.rs`・`crates/areka/src/{shiori_host,main}.rs`・`crates/areka-ghost/src/shiori_inproc.rs`。W14 の `property-query-channels` とは `areka-ghost` crate 同居・別ファイル（channels は `prop_sink.rs`／`runtime.rs`）。
 - 常時テストは x86 を避け偽境界で純 x64 決定論（記憶 prefer-x64-fake-boundary-tests-not-x86）。実機は i686 helper を先ビルド。
 - **要件定義は Fable**（輸送路が未確定で、snapshot に無い一次資料の読みと 2 案の裁定が要る）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 優先度 低。前提（`charset-canon`・`host32-window-thread-pump`）は完了済み。通信の札（Hello/Load/Request/Response/Unload）は変わっていない。
+- **縮める**: SHIORI/3 にベースウェアへ問い合わせる正典の道は無い見込みで、答えは「登記して先送り」か「SSTP 経由」になりそうである＝**最初の 1 段（調べて裁定する・文書だけ）で終わる形にする**。輸送を作ると決まったときだけ M。`makoto-dll-host` と同じクレートを触るので同時に走らせない。`main.rs`（946 行）を触りうる。

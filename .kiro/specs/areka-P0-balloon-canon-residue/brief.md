@@ -107,3 +107,14 @@
 ---
 
 > **📌 2026-10-01 `/kiro-discovery`（シェル内バルーン）による引き取り**——**項目 1（装飾の系列の per-scope 化と深い旧名）は新 spec `areka-P0-balloon-markers` が引き取った**。開発者指示「未実装だった項目（`arrow*`・`onlinemarker.*`・`sstpmarker.*`・`number.*`・`sstpmessage.*`）も、実装が必要な spec として今回の spec 群に含めて」により、印の描画と、その絵の系列の解決を同じ spec に揃えた（系列だけ先に作っても使い手が無い）。`clickwait*` の系列は `balloon-markers` と `areka-P0-talk-fast-forward` が同じ仕組みを使う（先に着地した方が作る）。**本 spec に残るのは項目 2〜6**（面の偶奇と左右向き・`defaultsurface`・`\![reload,balloon]`・`balloonc*` の kero 側・多面の検体）。網羅台帳の `arrow*`・`clickwaitmarker*`・`onlinemarker*`・`sstpmarker*` の行の引受先は、`balloon-markers`（`clickwaitmarker*` は `talk-fast-forward`）の着地時に書き換える。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 残りは項目 2〜6（項目 1 は `balloon-markers` へ移した）。互いに関係の薄い 5 件である。
+- 変わっていない点: バルーンの面の番号は `0` の直書き（`emo2_boot/frame/attach.rs` の `surface_id: 0`）・`defaultsurface` と `\![reload,balloon]` は無い。
+- **項目 4（`\![reload,balloon]`）は安くなった**: α がバルーンだけを組み直す道（`build_balloon_assets`・切替の仕組み）を作った＝その上に載せる。
+- **項目 2（面の偶数・奇数で左右のバルーンを選ぶ）が最も利用者に近い**（優先度 中）。着手するときは項目 2 を先に、3〜6 は後ろへ。
+- **触るファイル**: `crates/areka-emo-present/src/balloon.rs`（658）・`crates/areka/src/emo2_boot/frame/{attach,switch}.rs`・`crates/areka/src/placement/config.rs`（715）。`shell-balloon`・`balloon-markers` と emo-present の `balloon.rs`・`emo2_boot/frame/` を共有＝同時に走らせない。

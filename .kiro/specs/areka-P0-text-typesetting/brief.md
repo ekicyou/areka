@@ -56,3 +56,13 @@
 
 - 既定値で今の出力と同じになること（既存の決定論テストが無改変で緑）。
 - 1 ファイル 1,000 行。決定論テスト網羅は必達。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 規模 M〜L（13〜18 タスク）。文字まわりの直列の列（`emo-text-file-split` → `shell-balloon` の後）。**`talk-fast-forward` とは並走できない**（棚卸⑳で訂正＝`areka-parsers/src/balloon/{model,parse}.rs` と `state.rs` を共有）。
+- 合っていた点: 予約キーは `writing.rs` に在る・ぶら下げの「未実装」の注記は `layout.rs` と `region.rs` に在る。`layout.rs` の分割は `emo-text-file-split` が先に済ませる。
+- **抜け**: ⑴ 描画の側も触る＝字の向きは `DirectionRecipe`（`draw.rs`）か行の TextLayout（`draw_line_store.rs`）、計測用は `draw_metrics.rs`。DirectWrite に縦中横の機能は無いので、塊を自前で描く（`viewbox_draw` 系が太る）。⑵ 縦中横の塊を「一度に現れる 1 単位」にすると `state.rs` の現れる時刻の列を触る。
+- **議題**: 禁則の表を手で書くかクレート（UAX#14）か（クレートなら `Cargo` の類を触る・手書きを推す）／縦中横を自前で描く方式。

@@ -52,3 +52,11 @@ UI スレッドの処理で読み戻し → premultiplied から straight α へ
 ## Constraints
 
 - 規模 M。GPU の読み戻しは UI スレッドで、サーバのスレッドを長く待たせない（待ちの上限は `mcp-tool-entrances`）。
+
+
+---
+
+## 2026-10-02 棚卸⑳の再測定（main `03e8d7d6`・α 完成宣言の後）
+
+- 棚卸⑳では個別の再測定をしていない（`mcp-tool-entrances` が、各 spec の触るファイルを設計で固定する）。着手は `mcp-tool-entrances` の完了の後で、そのとき接触ファイルを照合する。
+- emo-present と emo-text を読む＝文字まわりの spec と時期が重なるときは接触ファイルを照合する。
