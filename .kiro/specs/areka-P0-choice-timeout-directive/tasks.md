@@ -66,7 +66,7 @@
   - _Requirements: 10.3, 10.4, 10.6_
   - _Boundary: doc COMPAT_ARCHITECTURE, choice-cascade-compat, briefing_
 
-- [ ] 5. 全体の回帰を確かめる
+- [x] 5. 全体の回帰を確かめる
   - `tools/test-all.ps1` でワークスペース全体を回し、緑であること（クリック待ち・時間待ちの既存の檻・指定の無い台本の既存の檻を含む）
   - `git diff --stat main...HEAD` で、触らない場所と `Cargo.toml`・`Cargo.lock` が 0 ファイルであることを確かめる
   - _Requirements: 5.4, 9.5, 9.6, 10.2_
