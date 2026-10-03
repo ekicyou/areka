@@ -4,7 +4,7 @@
 > `Cargo.toml` は根・`crates/areka-mcp`・`crates/areka` のどれも 0 行。触るファイルは design.md「File Structure Plan」の範囲に限り、ほかを触る要が出たら止めて報告する。
 
 - [ ] 1. 土台: 両側のモジュールとテストの骨組み
-- [ ] 1.1 プロトコル側（`areka-mcp`）に検査とツールのモジュールの骨組みを置く
+- [x] 1.1 プロトコル側（`areka-mcp`）に検査とツールのモジュールの骨組みを置く
   - `lib.rs` に `mod check;` と `pub mod tools;` の 2 行を足す（既存の `pub use` は変えない）
   - `tools/` の下に表・橋・結果の形・10 本のツールのファイルを空で作り、各テストファイル（`check_tests.rs`・`tools_tests.rs`・`tools_socket_tests.rs`・`bridge_tests.rs`・`outcome_tests.rs`）の接続も置く。以後の並走タスクが `lib.rs`・`tools/mod.rs` の宣言を取り合わないようにする
   - 完了の姿: `cargo build -p areka-mcp` と `cargo test -p areka-mcp --no-run` が緑で、`mcp-server-core` の既存テストが 0 行の変更のまま緑
