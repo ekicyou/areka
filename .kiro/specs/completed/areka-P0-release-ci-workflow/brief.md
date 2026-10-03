@@ -19,7 +19,7 @@
 2. 失敗したら Release を作らない（zip が 1 つでも作れなければ止める）。途中で止まった跡（下書きの Release）を残さない。
 3. 普通の PR・main への push では動かない。手で `workflow_dispatch` から同じ手順を乾いた走り（Release を作らない）で試せる。
 4. 配布スクリプトの `-Check`（窓を出す自己検査）は CI では省く。その代わり、開発者が手元で `-Check` を通してから版を上げる、を `release-cycle` の手順に置く。
-5. 後段は別の workflow が持ち、きっかけは後段が自分で受ける: crates.io へ出す `crates-io.yml`（`crates-io-publish`・同じウェーブ C2）と winget へ PR を出す `winget.yml`（`winget-manifest-submission`）。`release.yml` は後段を呼ばない。本 spec は `release.yml` が Release を**公開**（下書きでない）で作ることと、workflow の名前 `release`・ファイル `.github/workflows/release.yml`・「タグの push で始まった回が成功で終わる ⇔ そのタグの Release が公開（下書きでない）で 4 つのファイル付きで在る」を保つことを約束する。`crates-io.yml` は同じタグの push を自分で受け、`gh api` で同じタグの `release.yml` の回が成功で終わるのを待ってから出す（10-03 `crates-io-publish` の完了時の開発者の裁定＝案 B）。理由: `GITHUB_TOKEN` で作った Release は別の workflow の `release: published` を起こさない（GitHub の決まり）。`workflow_run` で動いた回は crates.io の Trusted Publishing が鍵を渡さない。そのため `release.yml` の名前・ファイル名・きっかけを変えるときは `crates-io.yml` の待ちの段も見直す。
+5. 後段は別の workflow が持つ: crates.io へ出す `crates-io.yml`（`crates-io-publish`・同じウェーブ C2）と winget へ PR を出す `winget.yml`（`winget-manifest-submission`）。本 spec は `release.yml` が Release を**公開**（下書きでない）で作ることだけを約束する。（10-03 改め: `GITHUB_TOKEN` で公開した Release は後段を起こさないので「`release: published` で動く」は取らない。`release.yml` は後段を呼ばず合図も送らず、権限は `contents: write` だけ。後段が自分で受ける＝`winget.yml` は `release` の走りの終わり（`workflow_run`）を受けて「タグの push で始まった」かつ「成功」で絞る。`crates-io.yml` は crates.io の Trusted Publishing が `workflow_run` を断るので、自分もタグの push で起き、同じコミットの `release` の走りが成功で終わるのを待ってから出す（セッション間の合意・開発者の裁定は「自動で流れるならどの案でもよい」）。正本は本 spec の requirements.md の要件 8。）
 6. `tech.md` の「外部 CI は持たない」を「テストの門は手元・ビルドと配布は Actions」に改める。
 
 ## Approach

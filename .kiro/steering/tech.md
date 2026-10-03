@@ -75,7 +75,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **重いビルドを同時に走らせない**: `-j 4`（ページング不足 os error 1455 の回避）。`cargo deny`／`cargo about` はテストと並べると rustc がメモリ不足で落ちるので最後に直列
 - 実物の SHIORI・実機サインオフ用のテストは環境変数（`AREKA_EMO2_REAL_RUN`・`HOST32_PASTA_DLL` など）が無ければ飛ばす＝フルテストの対象外。ネットへ出るテストは常時テストに入れない
 
-**外部 CI は持たない**（2026-09-24 に GitHub Actions への移管を検討し見送り）。テストの主役は実窓・WUC・GPU 描画の GUI 層で、ホスト型 runner で同じ水準を確かめられる見込みが薄いため（デバッグビルドの `GraphicsCore::new()` は D3D11 デバッグ層を必ず要求する等）。常設ゲートはローカルのフルテストである。
+**テストの門は手元のフルテスト（`tools/test-all.ps1`）のまま。ビルドと配布だけを GitHub Actions に乗せる**（タグ `v*` の push のときだけ・`.github/workflows/release.yml`。x64 と arm64 の zip と SHA256 を作って GitHub Release を公開する。手で始めて公開しない試しの走りもある）。zip の起動確認（配布スクリプトの `-Check`）は窓を出すので CI では回さず、手元で通す（`release-cycle` の手順）。テストを GitHub Actions へ移すことは 2026-09-24 に検討して見送った。テストの主役は実窓・WUC・GPU 描画の GUI 層で、ホスト型の実行環境で同じ水準を確かめられる見込みが薄いため（デバッグビルドの `GraphicsCore::new()` は D3D11 デバッグ層を必ず要求する等）。
 
 ## Development Environment
 

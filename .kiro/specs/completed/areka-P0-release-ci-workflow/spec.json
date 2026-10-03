@@ -1,0 +1,29 @@
+{
+  "feature_name": "areka-P0-release-ci-workflow",
+  "created_at": "2026-10-03T10:14:31Z",
+  "updated_at": "2026-10-03T14:24:32Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-03T10:22:45Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-03T10:52:28Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-10-03T11:25:03Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-10-03T14:24:32Z"
+    }
+  },
+  "ready_for_implementation": true
+}
