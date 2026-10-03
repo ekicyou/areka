@@ -1,6 +1,7 @@
 //! actor の子: 1 コマの描画の流れ（未解決の見送り・初回の装着・配置→装飾→描画→提示）。
 //! 足す予定の spec: text-reveal-fade（`present_actor`）・balloon-markers・anchor-tag-canon。
 
+use bevy_ecs::hierarchy::Children;
 use bevy_ecs::prelude::World;
 use tracing::{debug, error, info, warn};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
@@ -11,7 +12,7 @@ use crate::choice::{
     annotate_lines, decorate_canvas, derive_hit_rows, line_bands, to_window_physical,
 };
 use crate::layout::{LayoutEngine, WrapPlan};
-use crate::place::PlaceKey;
+use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
 use crate::segment::segment_plan;
 use crate::surface::TextSurface;
@@ -49,19 +50,24 @@ pub fn present_frame(
     // 割り当ててしまう。逆に、既に供給面を持つスコープは中身が空でも外せない（`Clear`／
     // `ClearAll` の後の 1 フレームで実際に画面を消すのがこの走査だから）。
     //
-    // 走査するのは普通のバルーンの場所だけ（箱の場所の提示は箱の面の登録が担う）。
-    let places: Vec<PlaceKey> = runtime
+    // 箱の場所は、毎フレームの箱の同期（`sync_boxes`）が登録した場所だけを走査する（文字を持ち、
+    // 今のサーフェスに置かれ、隠されていない箱。登録を外すと面も片付くので、面だけが残る箱は無い）。
+    let mut places: Vec<PlaceKey> = runtime
         .state
         .actors()
         .map(|(key, state)| (PlaceKey::balloon(key), state))
         .filter(|(place, state)| !state.items().is_empty() || runtime.surfaces.contains_key(place))
         .map(|(place, _)| place)
         .collect();
+    let mut boxes: Vec<PlaceKey> = runtime.box_sites.keys().cloned().collect();
+    boxes.sort();
+    places.extend(boxes);
     let mut first_err: Option<TextLayerError> = None;
+    let mut presented: Vec<PlaceKey> = Vec::new();
     for place in &places {
         let actor = &place.actor;
         match present_actor(runtime, world, place, talk_time) {
-            Ok(()) => {}
+            Ok(()) => presented.push(place.clone()),
             // 未解決 actor: 蓄積継続・描画スキップ・次フレーム再試行（正常経路・Err にしない）。
             Err(TextLayerError::SlotNotAttached { .. }) => {
                 if runtime.unresolved_warned.insert(place.clone()) {
@@ -86,6 +92,8 @@ pub fn present_frame(
             }
         }
     }
+    // 文字の出ている箱の四角の写しを、このフレームの提示の結果で作り直す。
+    runtime.refresh_shown_boxes(&presented, talk_time);
     match first_err {
         Some(e) => Err(e),
         None => Ok(()),
@@ -113,6 +121,8 @@ fn present_actor(
     };
 
     let contract = ScaleContract::new(binding.scale, None);
+    // 場所の左上の窓の中の位置（image px）: 箱は置き場所の (X,Y)、普通のバルーンは (0,0)。
+    let origin = runtime.box_origin(place);
 
     // ── 初回解決フレーム: World 資源から描画資源を構築し予約スロットへ装着（初回のみ） ──
     if !runtime.surfaces.contains_key(place) {
@@ -122,10 +132,28 @@ fn present_actor(
             contract.physical_extent(ImagePx(region.right() - region.left())),
             contract.physical_extent(ImagePx(region.bottom() - region.top())),
         );
+        // 箱の面は `(箱の X + 領域の左, 箱の Y + 領域の上) × k`（シェルの窓の中の位置）。
         let physical_offset = (
-            contract.to_physical(ImagePx(region.left())).0,
-            contract.to_physical(ImagePx(region.top())).0,
+            contract.to_physical(ImagePx(origin.0 + region.left())).0,
+            contract.to_physical(ImagePx(origin.1 + region.top())).0,
         );
+        // 箱の面はシェルの窓の直接の子として、差し込み口の直後から element番号の大きい順に挿す。
+        let child_index = match &place.place {
+            TextPlace::Balloon => None,
+            TextPlace::Box(_) => {
+                let children: Vec<bevy_ecs::entity::Entity> = world
+                    .get::<Children>(binding.window)
+                    .map(|c| c.iter().copied().collect())
+                    .unwrap_or_default();
+                let Some(index) = runtime.box_child_index(&children, place) else {
+                    // 差し込み口がシェルの窓の子に無い: 未解決として次フレームで再試行する。
+                    return Err(TextLayerError::SlotNotAttached {
+                        actor: actor.to_string(),
+                    });
+                };
+                Some(index)
+            }
+        };
 
         // Compositor は所有クローンで取り出し、以後の &mut World 装着と借用衝突しない
         // ようにする（emo-present presenter.rs と同じ規律）。
@@ -159,14 +187,25 @@ fn present_actor(
             |world,
              core: bevy_ecs::world::Mut<GraphicsCore>|
              -> Result<ActorRender, TextLayerError> {
-                let surface = TextSurface::attach(
-                    world,
-                    &binding,
-                    &compositor,
-                    &core,
-                    physical_size,
-                    physical_offset,
-                )?;
+                let surface = match child_index {
+                    None => TextSurface::attach(
+                        world,
+                        &binding,
+                        &compositor,
+                        &core,
+                        physical_size,
+                        physical_offset,
+                    )?,
+                    Some(index) => TextSurface::attach_window_child(
+                        world,
+                        binding.window,
+                        index,
+                        &compositor,
+                        &core,
+                        physical_size,
+                        physical_offset,
+                    )?,
+                };
                 decoration::build_actor_render(
                     &core,
                     surface,
@@ -180,6 +219,7 @@ fn present_actor(
         runtime.surfaces.insert(place.clone(), render);
         info!(
             actor = %actor,
+            place = ?place.place,
             slot = ?binding.slot,
             ?physical_size,
             wrap = ?resolved.wrap,
@@ -297,6 +337,7 @@ fn present_actor(
                             resolved.mode,
                             committed,
                             &contract,
+                            origin,
                         ),
                     })
             })

@@ -9,7 +9,7 @@
 //!
 //! 窓の子の entity を消すので `World` に触れる（純粋な走査の外）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
@@ -20,6 +20,7 @@ use bevy_ecs::prelude::World;
 use tracing::{debug, warn};
 
 use super::{ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding};
+use crate::choice::HitRectPx;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
@@ -61,6 +62,7 @@ impl TextLayerRuntime {
         self.choice_snapshot.retain(|k, _| !is_box(k));
         self.box_sites.clear();
         self.box_overflow_warned.clear();
+        self.shown_boxes.clear();
 
         let index: BTreeMap<u32, Vec<BoxName>> = layout
             .surfaces()
@@ -120,6 +122,138 @@ impl TextLayerRuntime {
     pub fn hide_boxes(&mut self, actor: &ActorKey) {
         debug!(actor = %actor, "箱を隠す印を立てた（次の台詞の頭まで）");
         self.hidden_boxes.insert(actor.clone());
+        self.shown_boxes.remove(actor);
+    }
+
+    /// 最後に提示したフレームで文字が 1 字以上見えていた箱の四角（手前＝element番号の大きい順・
+    /// シェルの窓の物理 px）。行き先の変化・`\c`・台詞の頭・箱を隠す印・箱の束の差し替えで
+    /// 出なくなった箱は、次の提示を待たずに外れている。
+    pub fn shown_boxes(&self, actor: &ActorKey) -> &[ShownBox] {
+        self.shown_boxes.get(actor).map_or(&[], Vec::as_slice)
+    }
+
+    /// 普通のバルーンの窓に今出ている文字の数（要件 5.1・5.2）: スコープの今のサーフェスに箱が
+    /// あれば 0（窓を出さない）、無ければ普通のバルーンの場所の見えている文字の数。
+    pub fn balloon_shown_glyphs(&self, actor: &ActorKey, talk_time: f64) -> usize {
+        let has_boxes = self
+            .state
+            .current_surface(actor)
+            .is_some_and(|surface| !self.box_layout.placements(surface).is_empty());
+        if has_boxes {
+            0
+        } else {
+            self.state.visible_glyphs(actor, talk_time)
+        }
+    }
+}
+
+/// 文字の出ている箱 1 つ（[`TextLayerRuntime::shown_boxes`] の要素）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShownBox {
+    /// 箱の名前（`balloon.*`ブレスの名前）。
+    pub name: BoxName,
+    /// 今のサーフェスでの element番号（大きいほど手前・要件 3.9）。
+    pub element: u32,
+    /// 箱の四角（シェルの窓の物理 px＝`(X, Y, X+幅, Y+高さ) × 拡大率`）。
+    pub rect: HitRectPx,
+}
+
+impl TextLayerRuntime {
+    /// 場所の左上の、窓の中の位置（image px）: 箱は登録済みの置き場所の (X,Y)、普通のバルーンと
+    /// 登録の無い場所は (0,0)。面の装着位置と選択肢の当たり行へ足す。
+    pub(super) fn box_origin(&self, place: &PlaceKey) -> (f32, f32) {
+        self.box_sites
+            .get(place)
+            .map_or((0.0, 0.0), |site| (site.x as f32, site.y as f32))
+    }
+
+    /// 提示のたびに写しを作り直す（`present_frame` の最後）。`presented` はこのフレームで提示に
+    /// 成功した場所。箱の場所で、今も出ていてよく（[`box_still_shown`](Self::box_still_shown)）、
+    /// 文字が 1 字以上見えているものだけを、スコープごとに手前から並べる。
+    pub(super) fn refresh_shown_boxes(&mut self, presented: &[PlaceKey], talk_time: f64) {
+        let mut shown: HashMap<ActorKey, Vec<ShownBox>> = HashMap::new();
+        for key in presented {
+            let TextPlace::Box(name) = &key.place else {
+                continue;
+            };
+            let visible = self
+                .state
+                .place_state(key)
+                .map_or(0, |s| s.reveal().visible(talk_time));
+            if visible == 0 || !self.box_still_shown(key) {
+                continue;
+            }
+            // `box_still_shown` が登録（置き場所）を確かめ済み。装着先と定義は登録と対で在る。
+            let (Some(site), Some(binding), Some(def)) = (
+                self.box_sites.get(key),
+                self.routing.get(key),
+                self.box_layout.def(name),
+            ) else {
+                warn!(
+                    name = name.as_str(),
+                    "登録済みの箱の装着先か定義が無い（構造不変の破れ）——写しに載せない"
+                );
+                continue;
+            };
+            let contract = ScaleContract::new(binding.scale, None);
+            let at = |v: i64| contract.to_physical(ImagePx(v as f32)).0;
+            shown.entry(key.actor.clone()).or_default().push(ShownBox {
+                name: name.clone(),
+                element: site.element,
+                rect: HitRectPx {
+                    left: at(site.x),
+                    top: at(site.y),
+                    right: at(site.x + i64::from(def.size.0)),
+                    bottom: at(site.y + i64::from(def.size.1)),
+                },
+            });
+        }
+        for boxes in shown.values_mut() {
+            boxes.sort_by_key(|b| std::cmp::Reverse(b.element));
+        }
+        self.shown_boxes = shown;
+    }
+
+    /// 出なくなった箱を写しからその場で外す（cue の適用のたび）。
+    pub(super) fn prune_shown_boxes(&mut self) {
+        let mut shown = std::mem::take(&mut self.shown_boxes);
+        for (actor, boxes) in shown.iter_mut() {
+            boxes.retain(|b| {
+                self.box_still_shown(&PlaceKey {
+                    actor: actor.clone(),
+                    place: TextPlace::Box(b.name.clone()),
+                })
+            });
+        }
+        shown.retain(|_, boxes| !boxes.is_empty());
+        self.shown_boxes = shown;
+    }
+
+    /// 箱の場所が今も描かれたままでよいか: 隠す印が無く、文字を持ち、今のサーフェスでの置き場所が
+    /// 登録済み（＝提示した）置き場所と同じ。`\b[名前]` で行き先だけが替わっても前の箱の文字は
+    /// 出たまま（要件 4.5）なので外さない。`\c`・台詞の頭は文字が無くなり、サーフェスの切替・
+    /// 非表示は置き場所が変わる（または無くなる）ので外れる。
+    fn box_still_shown(&self, key: &PlaceKey) -> bool {
+        let TextPlace::Box(name) = &key.place else {
+            return false;
+        };
+        let Some(registered) = self.box_sites.get(key) else {
+            return false;
+        };
+        !self.hidden_boxes.contains(&key.actor)
+            && self
+                .state
+                .place_state(key)
+                .is_some_and(|s| !s.items().is_empty())
+            && self
+                .state
+                .current_surface(&key.actor)
+                .is_some_and(|surface| {
+                    self.box_layout
+                        .placements(surface)
+                        .iter()
+                        .any(|p| p.name == *name && p == registered)
+                })
     }
 }
 
@@ -284,6 +418,11 @@ impl TextLayerRuntime {
         self.box_sites.remove(key);
         // 見えない箱の当たり行を残さない（次の提示で再び導く）。
         self.choice_snapshot.remove(key);
+        if let (Some(boxes), TextPlace::Box(name)) =
+            (self.shown_boxes.get_mut(&key.actor), &key.place)
+        {
+            boxes.retain(|b| b.name != *name);
+        }
         if let Some(render) = self.surfaces.remove(key) {
             render.surface.despawn_window_child(world);
         }
@@ -293,7 +432,6 @@ impl TextLayerRuntime {
     /// 箱の面を窓の `Children`（`children`）のどこへ挿すか: 差し込み口の直後から、element番号の
     /// 大きい順（絵より前＝手前・要件 3.7・3.9）。同じスコープで面を持つ、より大きい element番号の
     /// 箱の数だけ後ろへずらす。差し込み口が子に無い・登録されていない箱は `None`。
-    #[cfg_attr(not(test), allow(dead_code))] // 箱の面の提示（7.5）が使う
     pub(super) fn box_child_index(&self, children: &[Entity], place: &PlaceKey) -> Option<usize> {
         let element = self.box_sites.get(place)?.element;
         let slot = self.routing.get(place)?.slot;

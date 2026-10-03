@@ -386,6 +386,7 @@ mod tests {
     const SOURCES_OUTSIDE_THE_PURE_SCAN: &[&str] = &[
         "actor.rs",
         "actor_box.rs",
+        "actor_box_present_tests.rs",
         "actor_box_sync_tests.rs",
         "actor_box_tests.rs",
         "actor_choice_contract_tests.rs",

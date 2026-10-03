@@ -363,6 +363,10 @@ pub fn derive_hit_rows(
 /// - 軸割当は writing_mode 正準表: **horizontal_tb**＝行内 x／ブロック y・
 ///   **vertical_rl/lr**＝行内 y／ブロック x（committed はブロック軸へ）。
 ///
+/// - `origin`＝場所の左上の窓の中の位置（image px）。箱はシェルの窓の中の箱の置き場所（X,Y）、
+///   普通のバルーンは (0,0)。領域の原点と同じく ×k の前に足す（箱の面の装着位置
+///   `(箱の X + 領域の左, 箱の Y + 領域の上) × k` と同源）。
+///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn to_window_physical(
     row: &CanvasHitRow,
@@ -370,10 +374,11 @@ pub fn to_window_physical(
     mode: WritingMode,
     committed: i32,
     contract: &ScaleContract,
+    origin: (f32, f32),
 ) -> HitRectPx {
     let k = contract.scale;
     let committed = committed as f32;
-    let (ox, oy) = (region.left(), region.top());
+    let (ox, oy) = (origin.0 + region.left(), origin.1 + region.top());
     let r = &row.rect;
     // 行内軸: phys = (region_inline_origin + inline) × k
     // ブロック軸: phys = (region_block_origin + block) × k + committed

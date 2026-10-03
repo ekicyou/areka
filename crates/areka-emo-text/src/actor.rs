@@ -250,6 +250,9 @@ pub struct TextLayerRuntime {
     box_sites: HashMap<PlaceKey, BoxPlacement>,
     /// はみ出しを警告済みの（サーフェス番号, 箱の名前）。箱の束を差し替えると空に戻す。
     box_overflow_warned: BTreeSet<(u32, BoxName)>,
+    /// スコープ → 最後に提示したフレームで文字が 1 字以上見えていた箱の四角（手前から・
+    /// `actor_box.rs` の `shown_boxes`）。提示のたびに作り直し、出なくなった箱はその場で外す。
+    shown_boxes: HashMap<ActorKey, Vec<ShownBox>>,
 }
 
 impl TextLayerRuntime {
@@ -275,6 +278,7 @@ impl TextLayerRuntime {
             box_layout: BoxLayout::default(),
             box_sites: HashMap::new(),
             box_overflow_warned: BTreeSet::new(),
+            shown_boxes: HashMap::new(),
         }
     }
 
@@ -347,6 +351,8 @@ impl TextLayerRuntime {
             | CueCommand::Wait => {}
         }
         self.state.apply_cue(cue);
+        // 行き先の変化・`\c`・台詞の頭で出なくなった箱を、提示を待たずに写しから外す。
+        self.prune_shown_boxes();
     }
 
     /// 純粋状態機械（可視グリフ数・actor 状態の読み取り口）。
@@ -392,21 +398,27 @@ impl TextLayerRuntime {
     /// 縮退する（stale ordinal——`decorate_canvas` が hover 印を付けない・design.md RuntimeContract）。
     /// 縮退検出時は `debug!` を一件出す（log-first・ループを殺さない）。
     pub fn inject_choice_hover(&mut self, actor: &ActorKey, hover: Option<usize>) {
+        self.inject_choice_hover_at(&PlaceKey::balloon(actor), hover);
+    }
+
+    /// 場所を指す hover 状態注入（箱の選択肢の強調・要件 8.2）。意味は
+    /// [`inject_choice_hover`](Self::inject_choice_hover) と同じで、宛先が場所の鍵になる。
+    pub fn inject_choice_hover_at(&mut self, place: &PlaceKey, hover: Option<usize>) {
         // 現存スパンに無い ordinal は縮退（ハイライト無し）——検出を debug ログに残す（panic しない）。
         if let Some(ordinal) = hover {
             let exists = self
                 .state
-                .actor_state(actor)
+                .place_state(place)
                 .is_some_and(|s| s.choices().iter().any(|span| span.ordinal == ordinal));
             if !exists {
                 debug!(
-                    actor = %actor,
+                    actor = %place.actor,
                     ordinal,
                     "inject_choice_hover: 現存選択肢スパンに無い ordinal——ハイライト無しとして縮退（保持のみ・panic なし）"
                 );
             }
         }
-        self.choice_hover.insert(PlaceKey::balloon(actor), hover);
+        self.choice_hover.insert(place.clone(), hover);
     }
 
     /// 行ヒットジオメトリ照会（契約正本・R3.2）。
@@ -415,9 +427,13 @@ impl TextLayerRuntime {
     /// （R3.3/5.2・population は present_actor＝task 8.2）。未装着・選択肢なし・スナップショット未
     /// population は空 slice。
     pub fn choice_hit_rows(&self, actor: &ActorKey) -> &[ChoiceHitRow] {
-        self.choice_snapshot
-            .get(&PlaceKey::balloon(actor))
-            .map_or(&[], Vec::as_slice)
+        self.choice_hit_rows_at(&PlaceKey::balloon(actor))
+    }
+
+    /// 場所を指す行ヒットジオメトリ照会（要件 8.2）。箱の場所の矩形は**シェルの窓**の物理 px
+    /// （箱の位置を足し済み）。鮮度契約は [`choice_hit_rows`](Self::choice_hit_rows) と同じ。
+    pub fn choice_hit_rows_at(&self, place: &PlaceKey) -> &[ChoiceHitRow] {
+        self.choice_snapshot.get(place).map_or(&[], Vec::as_slice)
     }
 
     /// 「選択肢表示中」照会（R1.3・照会のみ＝バリア解決はしない）。
@@ -483,6 +499,7 @@ mod boxes;
 #[path = "actor_present.rs"]
 mod present;
 
+pub use boxes::ShownBox;
 pub use present::present_frame;
 
 #[cfg(test)]
@@ -528,6 +545,10 @@ mod box_tests;
 #[cfg(test)]
 #[path = "actor_box_sync_tests.rs"]
 mod box_sync_tests;
+
+#[cfg(test)]
+#[path = "actor_box_present_tests.rs"]
+mod box_present_tests;
 
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]

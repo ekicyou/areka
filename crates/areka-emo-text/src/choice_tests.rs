@@ -466,7 +466,14 @@ fn to_window_physical_horizontal_applies_formula() {
     // k=2・committed=50: 行内 x=(36+inline)×2・ブロック y=(46+block)×2+50。
     let contract = ScaleContract::new(2.0, None);
     assert_eq!(
-        to_window_physical(&row, &region, WritingMode::HorizontalTb, 50, &contract),
+        to_window_physical(
+            &row,
+            &region,
+            WritingMode::HorizontalTb,
+            50,
+            &contract,
+            (0.0, 0.0)
+        ),
         HitRectPx {
             left: 92.0,    // (36+10)×2
             top: 142.0,    // (46+0)×2 + 50
@@ -492,7 +499,7 @@ fn to_window_physical_vertical_puts_committed_on_x_block_axis() {
     let contract = ScaleContract::new(2.0, None);
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
         assert_eq!(
-            to_window_physical(&row, &region, mode, 50, &contract),
+            to_window_physical(&row, &region, mode, 50, &contract, (0.0, 0.0)),
             HitRectPx {
                 left: 142.0,   // (36+10)×2 + 50（x=ブロック）
                 top: 92.0,     // (46+0)×2（y=行内・committed 非加算）
@@ -528,7 +535,7 @@ fn to_window_physical_parameterized_over_k_committed_and_modes() {
                 WritingMode::VerticalRl,
                 WritingMode::VerticalLr,
             ] {
-                let got = to_window_physical(&row, &region, mode, c, &contract);
+                let got = to_window_physical(&row, &region, mode, c, &contract, (0.0, 0.0));
                 let expected = match mode {
                     // horizontal: x=行内（×k）・y=ブロック（×k+committed）。
                     WritingMode::HorizontalTb => HitRectPx {
@@ -567,13 +574,69 @@ fn to_window_physical_unit_scale_no_scroll_equals_absolute_image_px() {
     };
     let contract = ScaleContract::new(1.0, None);
     assert_eq!(
-        to_window_physical(&row, &region, WritingMode::HorizontalTb, 0, &contract),
+        to_window_physical(
+            &row,
+            &region,
+            WritingMode::HorizontalTb,
+            0,
+            &contract,
+            (0.0, 0.0)
+        ),
         HitRectPx {
             left: 46.0,
             top: 46.0,
             right: 66.0,
             bottom: 56.0
         } // = 絶対 image px
+    );
+}
+
+/// 箱の位置（image px）は領域の原点と同じく ×k の前に足す: 行内・ブロックとも
+/// `(箱の位置 + 原点 + canvas-local) × k`（committed はブロック軸だけ）。普通のバルーンは (0,0)。
+#[test]
+fn to_window_physical_adds_the_box_origin_before_scaling() {
+    let region = region(36, 46, 356, 168);
+    let row = CanvasHitRow {
+        ordinal: 0,
+        rect: LineRect {
+            left: 10.0,
+            top: 0.0,
+            right: 30.0,
+            bottom: 10.0,
+        },
+    };
+    let contract = ScaleContract::new(2.0, None);
+    assert_eq!(
+        to_window_physical(
+            &row,
+            &region,
+            WritingMode::HorizontalTb,
+            50,
+            &contract,
+            (100.0, 7.0)
+        ),
+        HitRectPx {
+            left: 292.0,   // (100+36+10)×2
+            top: 156.0,    // (7+46+0)×2 + 50
+            right: 332.0,  // (100+36+30)×2
+            bottom: 176.0  // (7+46+10)×2 + 50
+        }
+    );
+    assert_eq!(
+        to_window_physical(
+            &row,
+            &region,
+            WritingMode::VerticalRl,
+            50,
+            &contract,
+            (100.0, 7.0)
+        ),
+        HitRectPx {
+            left: 342.0,   // (100+36+10)×2 + 50
+            top: 106.0,    // (7+46+0)×2
+            right: 382.0,  // (100+36+30)×2 + 50
+            bottom: 126.0  // (7+46+10)×2
+        }
     );
 }
 

@@ -53,7 +53,7 @@ element1,balloon,a,150,0
 ";
 
 /// シェルの窓のサーフェスの画像の大きさ（はみ出しの判定に使う native 原寸）。
-const SHELL_IMAGE: (u32, u32) = (200, 300);
+pub(super) const SHELL_IMAGE: (u32, u32) = (200, 300);
 
 /// はみ出しの警告の文言（発行点と 1 文字も違わないこと）。
 const OVERFLOW_MESSAGE: &str =
@@ -62,14 +62,14 @@ const OVERFLOW_MESSAGE: &str =
 /// 登録したときの記録の文言（同じ置き場所で何もしないことを数えるのに使う）。
 const REGISTER_MESSAGE: &str = "箱の置き場所を登録した（面は次の提示で作る）";
 
-fn layout() -> BoxLayout {
+pub(super) fn layout() -> BoxLayout {
     let world = EmoWorld::build(&parse(SHELL));
     let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
     assert_eq!(report.issues, vec![], "文面は誤りを持たない");
     layout
 }
 
-fn name(layout: &BoxLayout, surface: u32, name: &str) -> BoxName {
+pub(super) fn name(layout: &BoxLayout, surface: u32, name: &str) -> BoxName {
     layout
         .placements(surface)
         .iter()
@@ -80,7 +80,7 @@ fn name(layout: &BoxLayout, surface: u32, name: &str) -> BoxName {
 }
 
 /// 偽の閉包: 数字ならその番号を表示、`-1` は非表示。
-fn resolver() -> SurfaceKeyResolver {
+pub(super) fn resolver() -> SurfaceKeyResolver {
     Box::new(|key: &str| match key {
         "-1" => SurfaceKeyOutcome::Hide,
         _ => key
@@ -89,15 +89,15 @@ fn resolver() -> SurfaceKeyResolver {
     })
 }
 
-fn emote(actor: &str, key: &str) -> TalkCue {
+pub(super) fn emote(actor: &str, key: &str) -> TalkCue {
     cue(actor, 0.0, CueCommand::Emote { key: key.into() })
 }
 
-fn text(actor: &str, t: &str) -> TalkCue {
+pub(super) fn text(actor: &str, t: &str) -> TalkCue {
     cue(actor, 0.0, CueCommand::Text(t.into()))
 }
 
-fn select(actor: &str, name: &str) -> TalkCue {
+pub(super) fn select(actor: &str, name: &str) -> TalkCue {
     cue(
         actor,
         0.0,
@@ -107,15 +107,15 @@ fn select(actor: &str, name: &str) -> TalkCue {
     )
 }
 
-struct Fixture {
-    world: World,
-    rt: TextLayerRuntime,
-    layout: BoxLayout,
-    window: Entity,
-    slot: Entity,
+pub(super) struct Fixture {
+    pub(super) world: World,
+    pub(super) rt: TextLayerRuntime,
+    pub(super) layout: BoxLayout,
+    pub(super) window: Entity,
+    pub(super) slot: Entity,
 }
 
-fn fixture() -> Fixture {
+pub(super) fn fixture() -> Fixture {
     let mut world = World::new();
     let (window, slot) = spawn_reserved_slot(&mut world);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -131,7 +131,7 @@ fn fixture() -> Fixture {
 }
 
 impl Fixture {
-    fn shell(&self, scale: f32) -> TextSlotBinding {
+    pub(super) fn shell(&self, scale: f32) -> TextSlotBinding {
         let physical = (
             (SHELL_IMAGE.0 as f32 * scale).ceil() as u32,
             (SHELL_IMAGE.1 as f32 * scale).ceil() as u32,
@@ -139,13 +139,13 @@ impl Fixture {
         TextSlotBinding::new(self.slot, self.window, scale, physical, SHELL_IMAGE)
     }
 
-    fn sync(&mut self, scale: Option<f32>) {
+    pub(super) fn sync(&mut self, scale: Option<f32>) {
         let shell = scale.map(|k| self.shell(k));
         self.rt
             .sync_box_bindings(&mut self.world, &[(ActorKey::from("0"), shell)]);
     }
 
-    fn key(&self, surface: u32, box_name: &str) -> PlaceKey {
+    pub(super) fn key(&self, surface: u32, box_name: &str) -> PlaceKey {
         PlaceKey {
             actor: ActorKey::from("0"),
             place: TextPlace::Box(name(&self.layout, surface, box_name)),
