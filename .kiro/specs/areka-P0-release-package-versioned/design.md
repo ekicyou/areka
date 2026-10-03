@@ -118,7 +118,7 @@ graph TB
 | 層 | 選択 | 役割 | 備考 |
 |---|---|---|---|
 | 配布スクリプト | PowerShell 7.x（実測 7.6.6） | 段の直列・PE の読み取り・zip・SHA256 | `Get-FileHash -Algorithm SHA256` は大文字の 16 進を返すので小文字へ |
-| ビルド | `cargo build --locked --release`・`rustup target add` | x64・arm64・i686 の 3 ターゲット | arm64 のリンクは VS の `Microsoft.VisualStudio.Component.VC.Tools.ARM64` が要る（`vswhere` で前提を確かめる） |
+| ビルド | `cargo build --locked --release`・`rustup target add` | x64・arm64・i686 の 3 ターゲット | arm64 のリンクは VS の `Microsoft.VisualStudio.Component.VC.Tools.ARM64` が要る（`vswhere` で前提を確かめる。`vswhere.exe` は PATH に無いので `VSWHERE_PATH` の固定の場所から呼ぶ） |
 | 版の読み取り | `cargo metadata --no-deps --locked --format-version 1` | `areka` パッケージの `version` を読む | ネットワーク不要・実測で `0.0.1` が返る |
 | 謝辞・ライセンス | `cargo about generate`・`cargo deny check licenses` | 今どおり | `--target` を 3 つ渡す（CPU 種別で分けない） |
 | areka 本体 | Rust 標準ライブラリ | `symlink_metadata`・`read_link`・`path::absolute`・`OnceLock` | `read_link` は外せるときは `\\?\` を外した普通の綴りを返す（rustc 1.99 の標準ライブラリで確認） |
@@ -136,7 +136,7 @@ crates/areka/src/
 └── boot_config_exe_link_tests.rs                 # 新規: follow_exe_links の判断の分岐の決定論テスト（接続は boot_config.rs 末尾の #[cfg(test)] #[path] mod exe_link_tests）
 .kiro/steering/
 ├── structure.md                                  # 変更: tools/ の説明（新しい名前と役割）
-├── tech.md                                       # 変更: arm64 の zip に要る道具・補助 exe は arm64 の zip でも i686
+├── tech.md                                       # 変更: arm64 の zip に要る道具（VS の ARM64 の部品・vswhere の固定の置き場）・補助 exe は arm64 の zip でも i686
 ├── roadmap.md                                    # 変更: 旧名 3 か所 → tools/package.ps1
 └── product.md                                    # 変更: 旧名 1 か所 → tools/package.ps1
 .kiro/specs/
@@ -226,7 +226,7 @@ flowchart TD
 | 3.1 | `-Arch` の 3 値と既定 | S1 | `x64`・`arm64`・`all`・省略は `x64` | 段 A |
 | 3.2 | 不正な値 → 3 | S1 | 受け付ける値を印字 | 段 A |
 | 3.3 | arm64 のビルド | S2 | `ARCHS.arm64.Target`＝`aarch64-pc-windows-msvc`・helper は i686 のまま | 段 E |
-| 3.4 | arm64 の道具が無い → 3 | S1 | `vswhere -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64` が空なら 3 | 段 A |
+| 3.4 | arm64 の道具が無い → 3 | S1 | `VSWHERE_PATH` → PATH の順で `vswhere` を探し、無いか `-requires Microsoft.VisualStudio.Component.VC.Tools.ARM64` が空なら 3 | 段 A |
 | 3.5 | 検査 8 項目を arm64 にも | S4 | 機械種別の表を `ARCHS` から引く（`areka.exe`＝0xAA64・helper と `pasta.dll`＝0x014c）・6 番も効く | 段 M |
 | 3.6 | 中身の構成は同じ | S3・S4 | 謝辞は 3 ターゲットで 1 つ・stage の 9 項目は同じ写し元 | 段 H・K |
 | 3.7 | `all` は両方そろって成功 | S7・後始末 | 完成は最後の段で全組を一度に改名・途中の失敗は `.tmp` を全部消す | 段 S |
@@ -257,7 +257,7 @@ flowchart TD
 | 8.1 | 改名・旧名を残さない | `tools/package.ps1` | `git mv` | − |
 | 8.2 | 使い方の説明 | S1（説明の欄） | 下の「使い方の説明の欄」 | − |
 | 8.3 | `structure.md` | steering | `tools/` の説明の 1 行 | − |
-| 8.4 | `tech.md` | steering | arm64 の道具・補助 exe は i686 のまま | − |
+| 8.4 | `tech.md` | steering | arm64 の道具（VS の部品名と `vswhere` の固定の置き場）・補助 exe は i686 のまま | − |
 | 8.5 | 過去の記録は触らない | − | `completed/`・`roadmap-history.md` は変更 0 | − |
 | 8.6 | 生きている文書の旧名を直す | steering・brief | `roadmap.md`（3）・`product.md`（1）・brief 3 本 | − |
 
@@ -288,6 +288,7 @@ flowchart TD
 | `ARCHS` | `x64 → {Target='x86_64-pc-windows-msvc'; Machine=0x8664}`／`arm64 → {Target='aarch64-pc-windows-msvc'; Machine=0xAA64}`（順序つき） | ビルド・zip の名前・機械種別の検査・`arch=` の行の唯一の出どころ |
 | `HELPER_TARGET`・`HELPER_MACHINE` | `i686-pc-windows-msvc`・`0x014c` | 補助 exe と `pasta.dll` は CPU 種別に依らず 32 ビット |
 | `ARM64_VS_COMPONENT` | `Microsoft.VisualStudio.Component.VC.Tools.ARM64` | `vswhere -requires` に渡す部品名（3.4・5.3 の印字にも使う） |
+| `VSWHERE_PATH` | `"$([Environment]::GetFolderPath('ProgramFilesX86'))\Microsoft Visual Studio\Installer\vswhere.exe"` | `vswhere.exe` の固定の置き場（VS Installer 同梱・**PATH には載らない**＝開発機と GitHub の Windows ランナーで実測）。無ければ PATH の `vswhere` を試す |
 | `EXPAND_DIR_MAX_CHARS` | `160` | 今どおり |
 | `REMOVE_RETRY`・`REMOVE_RETRY_WAIT_SEC` | `5`・`1` | 後片付けの再試行（補助 exe の終了や Windows Defender の走査でファイルが掴まれる間） |
 | `VERSION_PATTERN` | `^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$` | 版の形（`+` のビルドの付記はファイル名と URL で困るので受けない） |
@@ -308,11 +309,13 @@ flowchart TD
 #### S1 前提の確認と版と置き場（段「前提の確認」）
 
 - 入力の検査の順: `-SmokeExitMs` → `-Arch` → `-Check`×`-Arch` の組み合わせ → `-CheckDir`（絶対パス・リポジトリの中なら `<リポジトリ>\target\` の下か）→ 展開先の長さ（`-Check` か `-CheckDir` のとき・160 字）→ git → 道具（`cargo about`・`cargo deny`・`Cargo.lock`・`-Arch` に arm64 を含むときだけ `vswhere` と ARM64 の部品）→ 版。
+- `vswhere` の探し方: `VSWHERE_PATH` の固定の場所 → 無ければ PATH の `vswhere`（`Get-Command vswhere -ErrorAction SilentlyContinue`）の順。どちらにも無ければ 3 で止め、探した 2 か所を印字する（名前だけで呼ぶ実装にすると、部品のそろった機械でも常に 3 になる）。見つかった実行ファイルで `-latest -products * -requires $ARM64_VS_COMPONENT -property installationPath` を呼び、空なら 3。
+- rustup のビルドのターゲット（i686・arm64）は「欠けたら 3」ではなく、今どおり段 `rustup target add` で足す（S2・失敗は 1）。自動で足せる物は 5.3 の「欠ける前提」に数えない（CI の workflow に別の段を要らせない）。
 - 版: `cargo metadata --no-deps --locked --format-version 1` の JSON から `name` が `areka` のパッケージの `version` を読む。読めない・空・`VERSION_PATTERN` に合わない → 3（理由を印字・ビルドしない）。`$script:Version` に持つ。
 - 名前の組み立ては 1 関数 `Get-ArtifactNames($Arch)` に集め、`Zip`・`Sha`・`ZipTmp`・`ShaTmp` の 4 つの絶対パスを返す（`$OUT_DIR\areka-{版}-{arch}.zip`・同 `.zip.sha256`・それぞれに `.tmp`）。zip の名前と `arch=` の行と 8 項目の期待値はすべてこの関数と `ARCHS` から引く（手書きの重複を作らない）。
 - 前回の組の削除: 作る CPU 種別ごとに `Zip`・`Sha`・`ZipTmp`・`ShaTmp` が在れば消す（2.4）。
 - 展開先: `$script:ExpandDir = <親>\check-<HHmmss>`・`$script:LogDir = "$ExpandDir-logs"`（旧 `areka-alpha-check-` の「alpha」は落とす）。既定の親は `[IO.Path]::GetFullPath("$PSScriptRoot\..\target\package")`。
-- 道具が欠けるときの印字は 1 行で「何が無いか・どう入れるか」（例: `arm64 のリンクに要る VS の部品が無い（VS Installer で Microsoft.VisualStudio.Component.VC.Tools.ARM64 を追加する）`・`vswhere.exe が無い（Visual Studio か Build Tools を入れる）`）。
+- 道具が欠けるときの印字は 1 行で「何が無いか・どう入れるか」（例: `arm64 のリンクに要る VS の部品が無い（VS Installer で Microsoft.VisualStudio.Component.VC.Tools.ARM64 を追加する）`・`vswhere.exe が無い（探した場所: <VSWHERE_PATH> と PATH。Visual Studio か Build Tools を入れる）`）。
 - `-Check` を付けず `-CheckDir` も無いとき、展開先の長さは検査しない（今どおり。CI の長いパスで止めない）。
 
 #### S2 ビルド
@@ -346,8 +349,8 @@ flowchart TD
 
 #### S7 完成と後始末
 
-- 段「完成」は「git status 不変の確認」の後の最後の段。作った CPU 種別ごとに `ZipTmp → Zip`・`ShaTmp → Sha` を改名し、`$script:Finalized` に登録してから `zip: <絶対パス>`・`sha256: <絶対パス>`・`version: <版>` を CPU 種別ごとに印字する（2.6）。
-- `Invoke-Cleanup` は `$script:TmpFiles`（全 CPU 種別の `ZipTmp`・`ShaTmp`）と、終了コードが 0 でないときの `$script:Finalized` を消す。これで「完成品の名前の zip と `.sha256` が在る ⇔ 終了コード 0」が保たれる（2.5・3.7）。
+- 段「完成」は「git status 不変の確認」の後の最後の段。作った CPU 種別ごとに `ZipTmp → Zip`・`ShaTmp → Sha` を改名し、**改名が済んだ物から順に** `$script:Finalized` へ登録してから `zip: <絶対パス>`・`sha256: <絶対パス>`・`version: <版>` を CPU 種別ごとに印字する（2.6）。途中で落ちたときは済んだ分だけが `$script:Finalized` に在り、後始末で消える。
+- 後始末は終了コードを受け取る形に改める: `Invoke-Cleanup([int]$Code)`。`Exit-Script($Code, …)` は自分の `$Code` を渡し、成功の最後（スクリプト末尾）は `Invoke-Cleanup 0` を呼ぶ（今の `Invoke-Cleanup` は引数なしで両方から同じ形で呼ばれている）。`Invoke-Cleanup` は `$script:TmpFiles`（全 CPU 種別の `ZipTmp`・`ShaTmp`）を常に消し、`$Code` が 0 でないときだけ `$script:Finalized` も消す。これで「完成品の名前の zip と `.sha256` が在る ⇔ 終了コード 0」が保たれる（2.5・3.7）。
 - git status の確認は改名の前に行う（`target` は追跡外なので改名の前後で結果は変わらないが、確認の段を最後の判定より前に置く今の意味を保つ）。
 
 #### 使い方の説明の欄（`Get-Help`・8.2・1.10）
@@ -400,7 +403,7 @@ pub(crate) fn follow_exe_links(
 - 事後条件:
   - `probe(exe)` が `NotALink` → `(exe の綴りそのまま, None)`（6.3）。ただしその綴りが `\\?\` の接頭辞（`std::path::Prefix::Verbatim*`）で始まれば `(exe, Some(VerbatimPrefix))`。
   - `Target(t)` → `t` が絶対ならそれ、相対ならそのリンクの親と結合し、`std::path::absolute` で正規化（`..`・`.` を畳む）したものを次のパスとして `probe` を繰り返す（6.2）。`absolute` が失敗したら `Unreadable`。
-  - 繰り返しが `EXE_LINK_MAX_HOPS` を超えたら `(exe, Some(TooManyHops))`。
+  - `probe` が `Target` を返した回数が `EXE_LINK_MAX_HOPS` に達したら、次を読まずに `(exe, Some(TooManyHops))`（`probe` の呼ばれる回数はちょうど `EXE_LINK_MAX_HOPS`＝32 回。輪になったリンクで 33 回目を読まない）。
   - `Unreadable(r)` → `(exe, Some(Unreadable { link, reason: r }))`。
   - 戻りのパスは `read_link` の綴りを使うので、途中のドライブ文字・`subst`・割り当てたネットワークドライブの綴りを書き換えない。`canonicalize` は使わない（6.5）。
 - 不変: 警告が `Some` なら戻りのパスは入力 `exe` と等しい。
@@ -473,7 +476,7 @@ pub(crate) fn exe_location() -> Option<&'static std::path::Path>;
 | 起動確認の記録の判定の否 | 2 | 否の行の名前・記録と展開先の置き場（木は残す） |
 | 全段 緑 | 0 | CPU 種別ごとの zip と `.sha256` の絶対パスと版 |
 
-- 失敗の経路はすべて `Exit-Script` → `Invoke-Cleanup` を通る: `.tmp` の削除・今回の完成品の削除（終了コードが 0 でないとき）・自分の子の停止・環境変数と PATH の復元。展開した木は失敗の経路では消さない（調べる証拠）。
+- 失敗の経路はすべて `Exit-Script($Code)` → `Invoke-Cleanup($Code)` を通る: `.tmp` の削除・今回の完成品の削除（`$Code` が 0 でないとき）・自分の子の停止・環境変数と PATH の復元。展開した木は失敗の経路では消さない（調べる証拠）。
 - 黙って倒れる形を作らない: `-Arch all` で arm64 の道具が無いときは x64 だけ作って 0 で終わらず 3 で止める。後片付けが消せなかったときは 1 で終わる。
 
 ### areka 本体
@@ -491,7 +494,7 @@ pub(crate) fn exe_location() -> Option<&'static std::path::Path>;
 2. 絶対の先を 1 段 → 先のパス・警告なし（6.1）。
 3. 相対の先（`..\pkg\areka.exe`）→ リンクの親と結合し `..` を畳んだ絶対パス（6.2）。
 4. リンクのリンク（2 段）→ 最後のパス（6.2）。
-5. 輪になったリンク → `TooManyHops { limit: 32 }`・戻りは入力（6.6）。`probe` の呼ばれた回数が上限と一致することも見る。
+5. 輪になったリンク → `TooManyHops { limit: 32 }`・戻りは入力（6.6）。`probe` の呼ばれた回数がちょうど 32 回（上限に達したら次を読まない）であることも見る。
 6. `Unreadable` → `Unreadable { link, reason }`・戻りは入力（6.6）。
 7. 先が `\\?\C:\…` の綴り → `VerbatimPrefix`・戻りは入力（6.5）。
 8. `resolve_root_from(Some(env), …)`・`AREKA_PROFILE_DIR` の分岐が exe より先に評価されること（6.4）は既存の `mod root` のテストと、`default_app_profile_dir` の env の分岐（コードが変わらないこと）で足りる＝新しいテストは足さない。

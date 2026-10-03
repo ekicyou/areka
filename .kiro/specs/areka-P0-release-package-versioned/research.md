@@ -234,6 +234,10 @@
 | （追加）完成を最後へ | 「完成」の段を「git status 不変の確認」の後の最後に置く | 議題 8 の帰結。完成品の名前の物が在る ⇔ 終了コード 0 |
 | （追加）1.2 の検査の範囲 | 展開先の長さは `-Check` か `-CheckDir` を付けたときだけ検査（今どおり） | 要件 1.2 は起動確認の文脈。`-Check` 無しの CI の長いパスで止めない |
 | （追加）警告の形 | `warn!(event = "exe_link_unresolved", exe, reason)` 1 行。新しい info の行は足さない | 6.6 は警告を求め、6.8 は新しい行を足さないと言う。実機の判定は既存の `root_resolved` の `root=` で足りる |
+| （設計討議 2026-10-03・自明な修正）`vswhere` の探し方 | 較正値 `VSWHERE_PATH`（`%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe`）→ PATH の順。無ければ探した場所を印字して 3 | `vswhere.exe` は PATH に載らない（開発機で `where.exe vswhere` が空・固定の場所には在る）。名前だけで呼ぶと部品のそろった機械でも常に 3 |
+| （同）後始末の契約 | `Invoke-Cleanup([int]$Code)`。`Exit-Script` は自分の `$Code` を渡し、成功の末尾は `Invoke-Cleanup 0`。`$script:Finalized` は改名が済んだ物から順に登録 | 今の `Invoke-Cleanup` は引数なし。終了コードを渡さないと「完成品が在る ⇔ 0」が実装の暗黙の約束になる（設計検証の指摘 2） |
+| （同）rustup のターゲット | 「欠けたら 3」に数えず、今どおり段 `rustup target add` で足す（失敗は 1） | 自動で足せる物は前提の欠けではない。CI に別の段を要らせない |
+| （同）`TooManyHops` の数え方 | `probe` が `Target` を返した回数が 32 に達したら次を読まない（`probe` はちょうど 32 回） | テストの期待値を 1 つに固定する（設計検証の残る危うさ） |
 
 ### 9.4 統合の観点（設計の整理）
 
