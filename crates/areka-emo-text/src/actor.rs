@@ -22,9 +22,10 @@ use tracing::debug;
 use crate::choice::ResolvedChoiceStyle;
 use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, DWriteMetrics, ResolvedFont};
+use crate::place::PlaceKey;
 use crate::region::{ScaleContract, TextRegion};
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
-use crate::state::{TextLayerConfig, TextLayerState};
+use crate::state::{SurfaceKeyOutcome, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
 use crate::wrap::WrapMode;
@@ -182,6 +183,12 @@ struct ActorRender {
     metrics: DWriteMetrics,
 }
 
+/// `\s` の鍵を今のシェルで解決する閉包（結線が渡す・文字の層は seriko の型を名指ししない）。
+///
+/// 中身は結線の純関数（`resolve_for_text`）で、今のシェルの面の表に無い番号は
+/// [`SurfaceKeyOutcome::Unresolved`] を返す（design.md「箱の束の結線」）。
+pub type SurfaceKeyResolver = Box<dyn Fn(&str) -> SurfaceKeyOutcome>;
+
 /// UI スレッド所有の集約ルート（NonSend・design.md「TextLayerRuntime」正本）。
 ///
 /// 純粋状態（[`TextLayerState`]）・binding（結線側が登録）・COM 資源（actor 別の
@@ -195,27 +202,28 @@ struct ActorRender {
 pub struct TextLayerRuntime {
     /// 純粋状態機械（actor 別・cue 列→行/グリフ状態）。
     state: TextLayerState,
-    /// actor → 装着先（予約スロット）。結線側が [`register_actor`](Self::register_actor) で登録。
-    routing: HashMap<ActorKey, TextSlotBinding>,
-    /// actor → layout 入力（writing_mode/region/font の解決済み束）。routing と対で登録。
-    layout_input: HashMap<ActorKey, ResolvedBalloonText>,
+    /// 場所 → 装着先（予約スロット）。結線側が [`register_actor`](Self::register_actor) で登録
+    /// （スコープで引く口は普通のバルーンの場所 [`PlaceKey::balloon`] を引く）。
+    routing: HashMap<PlaceKey, TextSlotBinding>,
+    /// 場所 → layout 入力（writing_mode/region/font の解決済み束）。routing と対で登録。
+    layout_input: HashMap<PlaceKey, ResolvedBalloonText>,
     /// actor 別の描画資源（遅延生成——`ActorRender` 不在の解決フレームで World 資源から構築・装着。
     /// k 再追従（[`TextLayerRuntime::refresh_actor_scale`]）は本 map の当該エントリだけを破棄し、
     /// 次フレームの再生成へ委ねる——純粋状態 `state` には触れない・R8.2/R8.3）。
-    surfaces: HashMap<ActorKey, ActorRender>,
+    surfaces: HashMap<PlaceKey, ActorRender>,
     /// 調整値（行送りの行間 `line_gap`）。reveal ペースは配送 duration 由来ゆえ char_wait は
     /// 持たない（本 config は `DWriteMetrics::new` の行送り算出にのみ使う）。
     /// [`TextLayerRuntime::new`] で正規化済み——以降はこの値をそのまま配る。
     config: TextLayerConfig,
     /// 未解決 actor の warn を actor ごと初回のみに抑える記録（以降は debug!——
     /// design Error Handling「未 binding actor の cue」）。
-    unresolved_warned: BTreeSet<ActorKey>,
+    unresolved_warned: BTreeSet<PlaceKey>,
     /// actor → hover 注入状態（`None`＝ハイライト無し・[`inject_choice_hover`](Self::inject_choice_hover)
     /// で更新・present_actor の装飾（task 8.2）が読む・UI スレッド専用）。
-    choice_hover: HashMap<ActorKey, Option<usize>>,
+    choice_hover: HashMap<PlaceKey, Option<usize>>,
     /// actor → 提示フレーム同期ヒット行スナップショット（[`choice_hit_rows`](Self::choice_hit_rows)
     /// の照会源）。population は present_actor（task 8.2）が present 成功時に行う——本 task では空のまま。
-    choice_snapshot: HashMap<ActorKey, Vec<ChoiceHitRow>>,
+    choice_snapshot: HashMap<PlaceKey, Vec<ChoiceHitRow>>,
     /// `\_l` の座標解決の縮退（`CursorDegrade`＝`Unparsable`／`CenterAxisMismatch`・5.1〜5.3）の actor ごと warn-once 持続状態。present_actor が
     /// [`LayoutEngine::layout_styled`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
     /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
@@ -226,6 +234,9 @@ pub struct TextLayerRuntime {
     /// [`DEFAULT_BALLOON_BACKGROUND`]（白）。読み口は
     /// [`background_of`](Self::background_of)（`actor_decoration.rs`）。
     balloon_background: HashMap<ActorKey, (u8, u8, u8)>,
+    /// `\s` の鍵の解決の閉包（始めは無し）。無いあいだは `Emote` を読まない＝行き先は常に
+    /// 普通のバルーン（要件 5.4）。本番の差し込みは箱の束の受け取りが行う。
+    surface_resolver: Option<SurfaceKeyResolver>,
 }
 
 impl TextLayerRuntime {
@@ -245,6 +256,7 @@ impl TextLayerRuntime {
             choice_snapshot: HashMap::new(),
             cursor_warn: CursorWarnGuard::default(),
             balloon_background: HashMap::new(),
+            surface_resolver: None,
         }
     }
 
@@ -265,7 +277,12 @@ impl TextLayerRuntime {
         // コンパイラへ描画実行部側の再検討を強制する（no-catch-all 規律）。
         match &cue.command {
             CueCommand::Clear => {
-                if let Some(render) = self.surfaces.get_mut(&cue.actor) {
+                // `\c` が消すのは今の行き先の場所だけ（純粋状態の `apply_cue` と同じ宛先）。
+                let place = PlaceKey {
+                    actor: cue.actor.clone(),
+                    place: self.state.destination(&cue.actor),
+                };
+                if let Some(render) = self.surfaces.get_mut(&place) {
                     render.executor.request_clear();
                 }
                 // 選択肢ライフサイクルの原子的無効化（R5.1/5.2/5.4）: 当該 actor の hover を None へ
@@ -275,8 +292,8 @@ impl TextLayerRuntime {
                 // items と同一ライフサイクルで担う。snapshot を明示除去するのは、`choice_active` が
                 // span 由来で即時に false へ倒れる一方、snapshot は present まで stale 行を保持しうる
                 // 隙間を塞ぎ、5.2 の原子性を照会時点で成立させるため（次 present の空再導出と冪等）。
-                self.choice_hover.remove(&cue.actor);
-                self.choice_snapshot.remove(&cue.actor);
+                self.choice_hover.remove(&place);
+                self.choice_snapshot.remove(&place);
             }
             CueCommand::ClearAll => {
                 for render in self.surfaces.values_mut() {
@@ -289,11 +306,18 @@ impl TextLayerRuntime {
                 self.choice_hover.clear();
                 self.choice_snapshot.clear();
             }
+            // `\s` は解決の閉包で番号に解いて行き先へ渡す（要件 4.1）。閉包が無いあいだは
+            // 読まない＝行き先は普通のバルーンのまま（要件 5.4）。
+            CueCommand::Emote { key } => match &self.surface_resolver {
+                Some(resolve) => self.state.route_surface(&cue.actor, resolve(key)),
+                None => {
+                    debug!(actor = %cue.actor, key, "解決の閉包が無い——\\s を読まない（行き先は普通のバルーン）")
+                }
+            },
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
             // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
             // warn-once 良性スキップ・記録は純粋層 `state.apply_cue` が担う（本口は clear 要否のみ）。
             CueCommand::Text(_)
-            | CueCommand::Emote { .. }
             | CueCommand::Choice { .. }
             | CueCommand::EntityRef(_)
             | CueCommand::Custom { .. }
@@ -317,12 +341,14 @@ impl TextLayerRuntime {
 
     /// actor の供給面が予約スロットへ装着済みか。
     pub fn is_attached(&self, actor: &ActorKey) -> bool {
-        self.surfaces.contains_key(actor)
+        self.surfaces.contains_key(&PlaceKey::balloon(actor))
     }
 
     /// 装着済み actor の供給面（readback 等の観測口・未装着は `None`）。
     pub fn surface(&self, actor: &ActorKey) -> Option<&TextSurface> {
-        self.surfaces.get(actor).map(|render| &render.surface)
+        self.surfaces
+            .get(&PlaceKey::balloon(actor))
+            .map(|render| &render.surface)
     }
 
     /// 装着済み actor の決定論観測統計（[`ViewboxExecutor::stats`]・未装着は `None`）。
@@ -335,7 +361,7 @@ impl TextLayerRuntime {
     /// 抱えられており、この読み口がないと example から R10.3 checkpoint が成立しない。
     pub fn draw_stats(&self, actor: &ActorKey) -> Option<DrawStats> {
         self.surfaces
-            .get(actor)
+            .get(&PlaceKey::balloon(actor))
             .map(|render| render.executor.stats())
     }
 
@@ -360,7 +386,7 @@ impl TextLayerRuntime {
                 );
             }
         }
-        self.choice_hover.insert(actor.clone(), hover);
+        self.choice_hover.insert(PlaceKey::balloon(actor), hover);
     }
 
     /// 行ヒットジオメトリ照会（契約正本・R3.2）。
@@ -369,18 +395,27 @@ impl TextLayerRuntime {
     /// （R3.3/5.2・population は present_actor＝task 8.2）。未装着・選択肢なし・スナップショット未
     /// population は空 slice。
     pub fn choice_hit_rows(&self, actor: &ActorKey) -> &[ChoiceHitRow] {
-        self.choice_snapshot.get(actor).map_or(&[], Vec::as_slice)
+        self.choice_snapshot
+            .get(&PlaceKey::balloon(actor))
+            .map_or(&[], Vec::as_slice)
     }
 
     /// 「選択肢表示中」照会（R1.3・照会のみ＝バリア解決はしない）。
     ///
     /// **表示層自身**の選択肢スパン集合（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）が
     /// 非空であることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
-    /// 未知 actor・スパン空は `false`。
+    /// スコープの**どの場所か**（普通のバルーン・箱）に選択肢があれば真（要件 8.4——時間切れの
+    /// 待ちを止める条件と kanade の選択待ちの単位がスコープだから）。未知 actor・スパン空は `false`。
     pub fn choice_active(&self, actor: &ActorKey) -> bool {
         self.state
-            .actor_state(actor)
-            .is_some_and(|s| !s.choices().is_empty())
+            .places()
+            .any(|(key, s)| key.actor == *actor && !s.choices().is_empty())
+    }
+
+    /// `\s` の解決の閉包を差し込む（テスト専用の口・本番は箱の束の受け取りがこの欄へ入れる）。
+    #[cfg(test)]
+    pub(super) fn set_surface_resolver(&mut self, resolve: SurfaceKeyResolver) {
+        self.surface_resolver = Some(resolve);
     }
 }
 
@@ -457,6 +492,10 @@ mod region_warn_tests;
 #[cfg(test)]
 #[path = "actor_scroll_retain_tests.rs"]
 mod scroll_retain_tests;
+
+#[cfg(test)]
+#[path = "actor_route_tests.rs"]
+mod route_tests;
 
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]

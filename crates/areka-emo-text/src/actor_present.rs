@@ -1,7 +1,6 @@
 //! actor の子: 1 コマの描画の流れ（未解決の見送り・初回の装着・配置→装飾→描画→提示）。
 //! 足す予定の spec: text-reveal-fade（`present_actor`）・balloon-markers・anchor-tag-canon。
 
-use areka_sakura::contract::ActorKey;
 use bevy_ecs::prelude::World;
 use tracing::{debug, error, info, warn};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
@@ -12,6 +11,7 @@ use crate::choice::{
     annotate_lines, decorate_canvas, derive_hit_rows, line_bands, to_window_physical,
 };
 use crate::layout::{LayoutEngine, WrapPlan};
+use crate::place::PlaceKey;
 use crate::region::{ImagePx, ScaleContract};
 use crate::segment::segment_plan;
 use crate::surface::TextSurface;
@@ -48,19 +48,23 @@ pub fn present_frame(
     // 生まれる——器だけを提示対象に数えると、一度も発話していないスコープにまで供給面を
     // 割り当ててしまう。逆に、既に供給面を持つスコープは中身が空でも外せない（`Clear`／
     // `ClearAll` の後の 1 フレームで実際に画面を消すのがこの走査だから）。
-    let actors: Vec<ActorKey> = runtime
+    //
+    // 走査するのは普通のバルーンの場所だけ（箱の場所の提示は箱の面の登録が担う）。
+    let places: Vec<PlaceKey> = runtime
         .state
         .actors()
-        .filter(|(key, state)| !state.items().is_empty() || runtime.surfaces.contains_key(*key))
-        .map(|(key, _)| key.clone())
+        .map(|(key, state)| (PlaceKey::balloon(key), state))
+        .filter(|(place, state)| !state.items().is_empty() || runtime.surfaces.contains_key(place))
+        .map(|(place, _)| place)
         .collect();
     let mut first_err: Option<TextLayerError> = None;
-    for actor in &actors {
-        match present_actor(runtime, world, actor, talk_time) {
+    for place in &places {
+        let actor = &place.actor;
+        match present_actor(runtime, world, place, talk_time) {
             Ok(()) => {}
             // 未解決 actor: 蓄積継続・描画スキップ・次フレーム再試行（正常経路・Err にしない）。
             Err(TextLayerError::SlotNotAttached { .. }) => {
-                if runtime.unresolved_warned.insert(actor.clone()) {
+                if runtime.unresolved_warned.insert(place.clone()) {
                     warn!(
                         actor = %actor,
                         talk_time,
@@ -88,19 +92,20 @@ pub fn present_frame(
     }
 }
 
-/// 1 actor 分のフレーム提示（[`present_frame`] の内訳・log-first）。
+/// 1 場所分のフレーム提示（[`present_frame`] の内訳・log-first）。
 ///
 /// binding 未解決は [`TextLayerError::SlotNotAttached`]（呼び手が skip 写像）。
 fn present_actor(
     runtime: &mut TextLayerRuntime,
     world: &mut World,
-    actor: &ActorKey,
+    place: &PlaceKey,
     talk_time: f64,
 ) -> Result<(), TextLayerError> {
+    let actor = &place.actor;
     // ── 解決確認: binding＋layout 入力が揃うまでは蓄積のみ（描画スキップ） ──
     let (Some(binding), Some(resolved)) = (
-        runtime.routing.get(actor).copied(),
-        runtime.layout_input.get(actor).cloned(),
+        runtime.routing.get(place).copied(),
+        runtime.layout_input.get(place).cloned(),
     ) else {
         return Err(TextLayerError::SlotNotAttached {
             actor: actor.to_string(),
@@ -110,7 +115,7 @@ fn present_actor(
     let contract = ScaleContract::new(binding.scale, None);
 
     // ── 初回解決フレーム: World 資源から描画資源を構築し予約スロットへ装着（初回のみ） ──
-    if !runtime.surfaces.contains_key(actor) {
+    if !runtime.surfaces.contains_key(place) {
         let region = &resolved.region;
         // 物理寸＝ceil(validrect 寸 × k)・offset＝validrect 原点 × k（DPI/スケール契約）。
         let physical_size = (
@@ -172,7 +177,7 @@ fn present_actor(
                 )
             },
         )?;
-        runtime.surfaces.insert(actor.clone(), render);
+        runtime.surfaces.insert(place.clone(), render);
         info!(
             actor = %actor,
             slot = ?binding.slot,
@@ -183,7 +188,7 @@ fn present_actor(
     }
 
     // ── リビール進行（純粋）→ レイアウト決定（純粋）→ viewbox ダーティ矩形描画 → 提示（Present のみ） ──
-    let Some(render) = runtime.surfaces.get_mut(actor) else {
+    let Some(render) = runtime.surfaces.get_mut(place) else {
         // 直前の insert 直後に到達するため構造上起こらない——防御（panic 禁止・log-first）。
         error!(actor = %actor, "present_frame: 装着済み描画資源の引き当てに失敗（構造不変の破れ）");
         return Err(TextLayerError::Device {
@@ -191,11 +196,11 @@ fn present_actor(
             context: "ActorRender missing after attach",
         });
     };
-    let Some(actor_state) = runtime.state.actor_state(actor) else {
-        // present_frame は state.actors() 由来の actor だけを渡す——防御的に空フレーム扱い。
+    let Some(actor_state) = runtime.state.place_state(place) else {
+        // present_frame は state 由来の場所だけを渡す——防御的に空フレーム扱い。
         return Ok(());
     };
-    let visible = runtime.state.visible_glyphs(actor, talk_time);
+    let visible = actor_state.reveal().visible(talk_time);
     // 折返し計画: ON（BudouxWordWrap）のときだけ分かち書き境界を全 items から計算し
     // layout へ供給する。OFF（CharByChar）は plan を計算すらしない（R4.2 の構造保証——
     // segment_plan を呼ぶのは Segmented アームだけ）。`plan` は ON アームでのみ束縛され、
@@ -239,7 +244,7 @@ fn present_actor(
     // 既定の大きさに等しいので、従来と 1 画素も変わらない。
     let bands = line_bands(&lines, resolved.mode, &render.metrics);
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。
-    let hover = runtime.choice_hover.get(actor).copied().flatten();
+    let hover = runtime.choice_hover.get(place).copied().flatten();
     // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
     let canvas = decorate_canvas(
@@ -296,7 +301,7 @@ fn present_actor(
                     })
             })
             .collect();
-        runtime.choice_snapshot.insert(actor.clone(), snapshot);
+        runtime.choice_snapshot.insert(place.clone(), snapshot);
         render.surface.present()?;
     }
     Ok(())

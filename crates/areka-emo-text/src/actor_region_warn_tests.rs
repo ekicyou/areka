@@ -53,6 +53,7 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::spawn_reserved_slot;
 use super::{TextLayerRuntime, TextSlotBinding};
+use crate::place::PlaceKey;
 use crate::region::TextRegion;
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
@@ -347,7 +348,9 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn() {
         "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
     );
     assert_eq!(
-        rt.layout_input[&actor].region.wrap_threshold(),
+        rt.layout_input[&PlaceKey::balloon(&actor)]
+            .region
+            .wrap_threshold(),
         KERO_WRAP_X,
         "前提: 領域の値は据え置き"
     );
@@ -642,7 +645,7 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
         binding(slot, window, SAKURA_IMAGE),
         &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
     );
-    let before = rt.layout_input[&actor].region;
+    let before = rt.layout_input[&PlaceKey::balloon(&actor)].region;
 
     // image 原寸は据え置き（＝領域は同値）で k と物理寸だけを変える。
     let scaled = TextSlotBinding::new(slot, window, 2.0, (800, 448), SAKURA_IMAGE);
@@ -663,7 +666,8 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
         "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
     );
     assert_eq!(
-        rt.layout_input[&actor].region, before,
+        rt.layout_input[&PlaceKey::balloon(&actor)].region,
+        before,
         "前提: 領域の値は据え置き"
     );
     assert_eq!(

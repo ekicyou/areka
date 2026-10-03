@@ -391,6 +391,7 @@ mod tests {
         "actor_decoration_frame_tests.rs",
         "actor_decoration_tests.rs",
         "actor_region_warn_tests.rs",
+        "actor_route_tests.rs",
         "actor_runtime_frame_tests.rs",
         "actor_scale_refresh_tests.rs",
         "actor_scroll_retain_tests.rs",
