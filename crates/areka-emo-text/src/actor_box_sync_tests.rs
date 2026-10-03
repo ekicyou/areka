@@ -411,6 +411,42 @@ fn overflowing_box_is_kept_and_warned_once() {
     assert_eq!(messages(&events, OVERFLOW_MESSAGE), 0, "2 度目は出さない");
 }
 
+/// はみ出しの判定は拡大率に依らず native 原寸どうしで比べる（Implementation Notes 7.4）。
+/// k=2.0 で初めて面にする: 物理寸の箱（200×100）を native のサーフェス（200×300）と比べると
+/// 収まるサーフェス 0 の a（右端 10+200=210）が誤って警告になり、native の箱を物理寸のサーフェス
+/// （400×600）と比べるとはみ出すサーフェス 3 の a（右端 250）が警告されなくなる。
+#[test]
+fn overflow_is_judged_in_native_size_even_at_double_scale() {
+    let mut f = fixture();
+    f.rt.apply_cue(&emote("0", "0"));
+    f.rt.apply_cue(&text("0", "あ"));
+    let ((), events) = capture(|| f.sync(Some(2.0)));
+    assert_eq!(messages(&events, REGISTER_MESSAGE), 1, "k=2.0 で初めて登録");
+    assert_eq!(
+        messages(&events, OVERFLOW_MESSAGE),
+        0,
+        "native で収まる箱は k=2.0 でも警告しない"
+    );
+
+    f.rt.apply_cue(&emote("0", "3"));
+    let ((), events) = capture(|| f.sync(Some(2.0)));
+    let warns: Vec<&CapturedEvent> = events
+        .iter()
+        .filter(|e| e.message() == OVERFLOW_MESSAGE)
+        .collect();
+    assert_eq!(warns.len(), 1, "native ではみ出す箱は k=2.0 でも警告する");
+    assert_eq!(
+        warns[0].field("rect"),
+        Some("(150, 0, 100, 50)"),
+        "箱の四角は native 原寸"
+    );
+    assert_eq!(
+        warns[0].field("surface_size"),
+        Some("(200, 300)"),
+        "サーフェスの大きさは native 原寸"
+    );
+}
+
 /// 箱の面を窓の子のどこへ挿すか: 差し込み口の直後（面を持つ箱が他に無いとき）。
 /// 差し込み口が窓の子に無ければ挿す位置は無い。
 #[test]
