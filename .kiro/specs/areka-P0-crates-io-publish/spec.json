@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-crates-io-publish",
   "created_at": "2026-10-03T10:14:53Z",
-  "updated_at": "2026-10-03T10:17:29Z",
+  "updated_at": "2026-10-03T12:00:00Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {

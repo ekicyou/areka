@@ -190,3 +190,96 @@
 - crates.io の公開の速さの上限: [crates.io rate limits](https://crates.io/docs/rate-limits)
 - Trusted Publishing の仕組み: [RFC 3691](https://rust-lang.github.io/rfcs/3691-trusted-publishing-cratesio.html)・[rust-lang/crates-io-auth-action](https://github.com/rust-lang/crates-io-auth-action)
 - `cargo publish --workspace` が既に在る版で止まる件と `--exclude` の回り道: [Epistates/turbovault #75](https://github.com/Epistates/turbovault/pull/75)（cargo の issue rust-lang/cargo#13397 を参照）
+
+---
+
+# 設計フェーズの追記（2026-10-03・`kiro-spec-design`）
+
+> 範囲を改めた後（出すのは `wintf`・`dola` だけ）の調べと決定。上の本文（21 クレート前提）と食い違うところは、ここが新しい。
+
+## Summary
+
+- **Feature**: `areka-P0-crates-io-publish`
+- **Discovery Scope**: Extension（既存のワークスペースと `tools/` への追加。外部の仕組みはギャップ分析で調べ済みなので、軽い調べ＋実測）
+- **Key Findings**:
+  - 版の指定が要るのは `wintf` → `dola` の 1 行だけ。出さない 3 クレートの `wintf` の版の指定は外せる。
+  - 2 クレートの確認は速い。包むだけ約 7 秒、組み立てまで 1 分 41 秒（空の置き場から）。
+  - 「その版が crates.io に在るか」は索引（`https://index.crates.io/`）を読めば分かる（在れば 200・無ければ 404）。
+
+## Research Log
+
+### 実測（写しで・追跡ファイルには触れていない・何も上げていない）
+
+- **Context**: 決定 1・2 と確認の形が成り立つかを確かめる。
+- **やり方**: `git archive HEAD` をワークツリーの `target\crates-io-design\ws\` へ写し、その中だけで設定を書き換えた。cargo 1.99.0。写しは実測の後に消した。
+- **写しへの変更**: 根の `[workspace.package] publish = false` を消す／根の `[workspace.dependencies]` に `dola = { version = "0.0.1", path = "crates/dola" }`／`wintf` の `dola = { workspace = true }`／`areka`・`areka-emo-present`・`areka-emo-text` の `wintf` の行から `version` を外す／`areka` を `publish = false # 理由`。
+- **Findings**:
+  - `cargo publish --dry-run --no-verify --allow-dirty --locked -p dola -p wintf` は終了コード 0・6.8 秒。`dola` → `wintf` の順に包み、「crate wintf@0.0.1 already exists on crates.io index」「crate dola@0.0.1 already exists on crates.io index」の警告が出た（止まらない）。
+  - 包んだ大きさ: `dola` 172,644 バイト・`wintf` 1,087,496 バイト（上限 10,485,760）。置き場は `target\package\tmp-crate\{名前}-{版}.crate`（`--target-dir` を付ければその下の `package\tmp-crate\`）。
+  - 包んだ `wintf` の `Cargo.toml` には `[dependencies.dola] version = "0.0.1"`（`path` なし）と `readme = "README.md"` が入り、`log-capture-kit`（版の無いテスト専用の依存）は消えていた。
+  - 組み立てまで（`--no-verify` なし）は終了コード 0・101 秒（空の `target\` から）。
+  - `Cargo.lock` は変更の前後でバイト一致。
+  - `cargo metadata --no-deps` の `publish` は、`publish = false` が `[]`、`publish = true` が `null`。30 クレート中 `[]` が 28、`null` が `wintf`・`dola`。
+  - 版だけ 0.0.2 に上げ、`dola` の版の指定を 0.0.1 のままにすると、`cargo check` が「failed to select a version for the requirement `dola = "^0.0.1"` … candidate versions found which didn't match: 0.0.2」で落ちた（動かし忘れは即座に分かる）。
+  - 両方を 0.0.2 にすると、まだ crates.io に無い 0.0.2 でも乾いた走りは終了コード 0（`dola` 0.0.2 を仮の置き場で補う）。出さない 3 クレートは `wintf` の版の指定なしで解決が通った。`Cargo.lock` は 30 クレートの版の行（60 行の差）だけ動く。
+  - `dola` の版の指定を外すと、「all dependencies must have a version requirement specified when publishing. dependency `dola` does not specify a version」で落ちた（1.7 の漏れは cargo が止める）。
+- **Implications**: 自分で書く判定は「一覧」「欄」「理由」「大きさ」「版」「残り」に絞れる。版の指定の漏れ・不一致・既に在る版の扱いは cargo に任せられる。
+
+### crates.io の索引
+
+- **Sources Consulted**: `https://index.crates.io/do/la/dola`（200）・`https://index.crates.io/wi/nt/wintf`（200・1 行 1 版の JSON で `vers` を持つ）・在り得ない名前（404）。
+- **Implications**: 4.5（1 つも版が無い）は 404、4.8（その版が在る）は `vers` の一致で判定できる。配信の都合で反映が遅れうる点は、安全な側（cargo が「既に在る」で止まる）に倒れる。
+
+### Trusted Publishing の受け取り
+
+- **Sources Consulted**: `rust-lang/crates-io-auth-action` の README と `action.yml`（2026-10-03 取得）。
+- **Findings**: 参照は `@v1`。出力は `token`。ジョブの終わりに後始末の段が鍵を自動で取り消す。
+- **Implications**: 鍵は `CARGO_REGISTRY_TOKEN` の環境変数で `cargo publish` に渡す。秘密の置き場は要らない。
+
+## Design Decisions
+
+### Decision: `dola` の版の指定は根の `[workspace.dependencies]`
+
+- **Alternatives Considered**:
+  1. `crates/wintf/Cargo.toml` に直接 `dola = { version = "0.0.1", path = "../dola" }` — 変更は 1 行だが、版上げで動くファイルが 2 つになる。
+  2. 根に置いて `wintf` は `workspace = true` — 版上げで動くのが根の 2 行に閉じる。
+  3. 緩い指定（`>=0.0.1`）で版上げのたびに動かさない — 出た `wintf` が古い `dola` や将来の壊れる版を許してしまう。要件 1.7 の「ワークスペースの版と一致」にも合わない。
+- **Selected Approach**: 2。
+- **Trade-offs**: `wintf` の 1 行の書き方が変わる（意味は同じ）。
+
+### Decision: 出さない 3 クレートの `wintf` の版の指定を外す
+
+- **Alternatives Considered**: 外す／版上げで一緒に動かす。
+- **Selected Approach**: 外す。`pilot` が既に同じ形。
+- **Rationale**: 出さないクレートに版の指定は要らず、残すと版上げのたびに 3 ファイル 3 行が増える。
+- **Follow-up**: `release-cycle` の brief の該当の文を改める（設計の File Structure Plan に載せた）。`cargo set-version --workspace` が根の `[workspace.dependencies]` の版も動かすかは `release-cycle` で確かめる。
+
+### Decision: 鍵を受け取る前に確認し、`--no-verify` で上げる
+
+- **Rationale**: 鍵は短命。同じコミットを直前に組み立て済み。
+
+### Decision: 判定の較正をスクリプトに内蔵する
+
+- **Context**: 判定の分かれ目をテストで固定したいが、PowerShell のテストの道具（Pester など）は足したくない。
+- **Selected Approach**: 判定を「値を受けて結果を返す」関数にし、確認の最初に正しい見本・誤った見本へ当てる。全体テストの 1 つの段の中で毎回走る。
+- **Trade-offs**: 見本はスクリプトの中に持つ（数行ずつ）。
+
+### Decision: 作らないもの（単純化）
+
+- 公開の段の乾いた走りの口（上げる前に止まる作りで足りる）。
+- GitHub の environment・人の承認。
+- ビルドのキャッシュ（リリースは稀・組み立ては短い）。
+- 根の `[workspace.package] publish = false`（消す）。
+
+## Risks & Mitigations
+
+- 公開の段の実走は本 spec の中で試せない — 上げる前に止まる作り・同じ版でのやり直し・予備の手順。
+- 索引の反映の遅れ — 安全な側に倒れる。時間を置いてやり直す。
+- 全体テストがネットに依存する段を 1 つ持つ — 既にほかの段もネットを使う。
+- 版上げで根の 2 行目を動かし忘れる — どの cargo の操作も即座に落ちる。
+
+## References
+
+- [rust-lang/crates-io-auth-action](https://github.com/rust-lang/crates-io-auth-action) — 鍵の受け取り
+- [crates.io の索引](https://index.crates.io/) — 版の有無の判定
+- 上の §8 の出典（きっかけの壁・速さの上限・`--workspace` と既に在る版）
