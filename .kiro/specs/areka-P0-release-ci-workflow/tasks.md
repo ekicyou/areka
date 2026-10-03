@@ -54,7 +54,7 @@
   - _Requirements: 1.3, 4.1, 4.3, 4.4, 6.5, 8.1, 8.2, 8.3, 8.5_
   - _Boundary: release.yml_
 
-- [ ] 2. (P) steering の 2 本を改める
+- [x] 2. (P) steering の 2 本を改める
   - `tech.md` の「外部 CI は持たない」の段落を、テストの門は手元のフルテストのまま・ビルドと配布だけをタグ `v*` のときに GitHub Actions に乗せる趣旨に改め、zip の起動確認を CI で回さない理由（窓を出す）を書き、2026-09-24 の見送りの経緯はテストの門の話として残す
   - `structure.md` の「その他の最上位」の行に `.github/`（`workflows/release.yml`＝タグで動くリリース）を足す
   - 完了の形: 2 本の該当箇所が設計の Modified Files の趣旨どおりに書き換わり、ほかの節は変わっていない
