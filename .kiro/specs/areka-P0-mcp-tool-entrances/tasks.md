@@ -21,7 +21,7 @@
   - _Requirements: 7.2_
   - _Depends: 1.1_
   - _Boundary: tools/outcome.rs_
-- [ ] 2.2 (P) inputSchema に照らした引数の検査
+- [x] 2.2 (P) inputSchema に照らした引数の検査
   - 「必須の欄 → 型」の順に調べ、最初の誤りの理由（`missing required argument: <名前>`／`argument <名前> must be <型>`）を返す純粋な関数を作る。理由は `failed to deserialize parameters:` で始めない
   - 必須の欄は「無い・`null`」で拒むが、`ghost_name` は調べない。型は `null` でない値だけを string・boolean・integer・array（`items.type` があれば各要素も）で調べ、`properties` に無い欄と未知の `type` は見ない
   - integer の読み方を 1 つの関数にする（`as_i64` が取れればその値、小数部 0 かつ絶対値 2^53 以下の数は受ける、`1.5`・`i64` に収まらない数・数でない値は拒む）。各ツールの詰め替えも同じ関数を使う
