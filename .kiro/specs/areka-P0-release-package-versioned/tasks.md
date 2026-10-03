@@ -118,3 +118,4 @@
 - 3.3: `-CheckDir` の既定の親は `"$PSScriptRoot\..\target\package"` の直書きで `OUT_DIR` を通っていない（値は同じ・設計 S1 は直書き・較正値の表は OUT_DIR に含める＝設計の内部で食い違い）。動きに差は無い。直すなら `Join-Path $PSScriptRoot "..\$OUT_DIR"` に寄せ、説明の欄の OUT_DIR の行に check-* を足す。→ validate-impl の後にこの形へ直し、design S1 も合わせた。
 - 6.1: 実走 11 回で「後片付け」はどれも 0 秒（1 回目で消えた）。3.1 で見た 4 秒は一度きり＝較正値（5×1 秒）は据え置く。
 - 6.2: 手元のマニフェストで入れた物は winget の ID が `ARP\User\X64\Areka.Areka.Portable__DefaultSource` になり、`winget uninstall --id Areka.Areka.Portable` では見つからない（その ID に `--exact --purge` で外した）。開発者モードがオフだと winget はリンクを作らず PATH を足す＝リンク経由の確かめには開発者モードが要る。
+- 完了時にその場で解決: (1) `placement/transition_judge_offset_signoff_tests.rs` の説明文の「`current_exe()` の親」を `exe_location` の親へ (2) `winget-manifest-submission` の brief へ手元のマニフェストの実測（LocalManifestFiles・ARP の ID・開発者モード）を申し送り。起票 0 件。
