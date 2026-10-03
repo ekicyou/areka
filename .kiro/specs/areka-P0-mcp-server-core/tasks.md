@@ -92,7 +92,7 @@
   - _Boundary: server_gate_help_tests_
 
 - [ ] 5. アプリへの結線と文書・登記
-- [ ] 5.1 (P) アプリ本体へ「立てる 1 行」を足す
+- [x] 5.1 (P) アプリ本体へ「立てる 1 行」を足す
   - `crates/areka/Cargo.toml` に `areka-mcp` の path 依存を 1 行（外部依存は足さない）
   - `fn main()` の `resolve_boot` の直後・`WinApp` の構築より前（`thread_roles` と `perf_thread_report` の起動より後）に、取っ手を `_mcp` で受ける 1 行と意図のコメント（`Drop` で畳む・`down?` の早い戻りを避ける・`app` より先に宣言）を置く。畳む行は書かない
   - 完了の姿: `cargo build -p areka` が緑・`main.rs` が 1,000 行を超えない・終了コードは待受と無関係（`start` は `Result` を返さない）
