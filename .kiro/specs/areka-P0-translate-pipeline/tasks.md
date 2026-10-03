@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 土台: 前提の確かめと、振る舞いを変えない部品
+- [x] 1. 土台: 前提の確かめと、振る舞いを変えない部品
 - [x] 1.1 emo2 の pasta が `OnTranslate` に 204 を返すことを実機で確かめ、実装前の比べる記録を採る
   - 既存の `crates/areka-kanade/tests/kanade/real_helper_test.rs` と同じ補助プロセス経由の読み込みを使う使い捨ての `#[ignore]` テストで、本物の pasta（emo2・絶対パス）へ `OnTranslate` の GET を正典の Reference0〜3 の形で送る。根はワークツリーの `target\` の下に置く
   - 続きを待っているシーンがある状態（雑談の途中）でも 204 で、そのシーンの進み方が変わらないことを見る
@@ -34,7 +34,7 @@
   - _Requirements: 2.2, 2.3, 2.4, 2.5, 8.1_
   - _Depends: 1.3_
 
-- [ ] 1.5 (P) 運行に、展開と MAKOTO の鎖を外から渡す口の型を足す
+- [x] 1.5 (P) 運行に、展開と MAKOTO の鎖を外から渡す口の型を足す
   - 展開の関数と MAKOTO の口（台詞と元のイベントの ID を受け取り台詞を返す）の 2 つを束ねた型と、どちらも台詞をそのまま返す素通しを用意し、クレートの公開面に出す
   - 口の引数は文字列 2 つだけで、DLL・プロセス・文字コードの型を持たない
   - 完了の状態: 素通しが台詞を 1 文字も変えずに返すテストが緑で、運行のクレートの依存（`Cargo.toml`）は変わっていない
@@ -142,3 +142,4 @@
 
 ## Implementation Notes
 - 1.1: emo2 の pasta は `OnTranslate` に 204（雑談の途中でも続きは変わらない）。比べる記録は `target\translate-baseline\`（`talk-record.txt`）。今の版は台詞の本文を記録に残さないので、6.2 は「どのイベントが台詞を返しどの順で再生が始まったか」の並びと画面の目視で比べる。Ctrl＋ダブルクリックの終了は 09-19 に撤去済みで、終了は右クリックのメニューの「終了」。`cargo build` の後は 32bit の helper を `target\debug\` へ写し直してから起動する
+- 1.2〜1.5: clippy は HEAD の時点で既に赤（`areka-kanade/src/shiori/real.rs` の `collapsible_if`・`dola` の 21 件・`areka-sakura/src/compile_arm_tests.rs` の doc の字下げ・`shiori-host32-host/tests` の `drop_non_drop`）。担当は `clippy-199-lints` で、本 spec では触らない。自分が触ったファイルに指摘が無いことだけを見る。`areka-sakura` には `log-capture-kit` が無いので、記録の数はテストの中の小さな `tracing::Subscriber` で数える

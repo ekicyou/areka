@@ -35,6 +35,7 @@ pub(crate) mod schedule;
 pub mod shiori;
 pub mod status;
 pub mod talk;
+pub mod translate;
 
 pub use actor::{spawn_kanade, spawn_kanade_with_stop_sink};
 pub use change::{
@@ -56,6 +57,7 @@ pub use status::{
     ExternalStates,
 };
 pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
+pub use translate::{MakotoChain, ScriptExpander, TranslateSeams};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
 ///
