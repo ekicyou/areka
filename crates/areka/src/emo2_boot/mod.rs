@@ -33,6 +33,8 @@ mod readme_cue;
 pub(crate) mod shell_balloon_resolve;
 /// シェル・バルーンの切替の入口（areka-P0-shell-balloon-switch）。
 pub(crate) mod shell_balloon_switch;
+/// 箱の束（置き場所の表・別名の写し・在るサーフェス番号・フォントの探す場所・areka-P0-shell-balloon）。
+pub(crate) mod shell_box_assets;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
 /// `\![change,shell|balloon,…]` の受け口（areka-P0-shell-balloon-switch）。
