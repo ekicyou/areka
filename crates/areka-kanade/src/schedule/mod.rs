@@ -40,6 +40,8 @@ pub(crate) mod log_capture;
 pub mod resources;
 pub(crate) mod steady;
 pub(crate) mod talk_gap;
+/// 運行表の翻訳（`OnTranslate`）——帳簿の型・元のイベントの控え・応答の読み。
+pub(crate) mod translate;
 pub(crate) mod user_break;
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。
@@ -236,6 +238,12 @@ pub(crate) struct State {
     pub talk_gap: Option<talk_gap::GapWatch>,
     /// 外から届いた実行状態の写し（中断の旗・通信中・見えているバルーンの組）。ゴーストごとに新品。
     pub external: ExternalStates,
+    /// 翻訳の待ちの帳簿（高々 1 つ・[`translate::TranslateWait`]）。
+    pub translate: Option<translate::TranslateWait>,
+    /// 応答を待っている GET の元のイベント（一括の最後の往復が GET のときだけ `Some`）。
+    ///
+    /// 書くのは [`translate::after`]、SHIORI の応答の入力で 1 回だけ取り出すのは [`translate::before`]。
+    pub reply_source: Option<events::SourceEvent>,
 }
 
 impl State {
@@ -256,6 +264,8 @@ impl State {
             pending_change: None,
             talk_gap: None,
             external: ExternalStates::default(),
+            translate: None,
+            reply_source: None,
         }
     }
 
@@ -417,12 +427,16 @@ pub(crate) enum Action {
 /// 防御アームを実装し、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
 /// 「横断遷移を先に判定 → 該当しなければフェーズ分岐」である。
 ///
-/// どの入力でも、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
+/// どの入力でも、遷移の前後で元のイベントの控え（[`translate::before`]・[`translate::after`]）を
+/// 扱い、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
 /// （見張りが無ければ何もしない）。
-pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
+pub(crate) fn step(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     // 印のイベントの応答なら、遷移の前のトークを控える（応答で台詞が始まったかを後で突き合わせる）。
     let marked_reply = talk_gap::marked_reply(&state, &input);
+    // 応答の入力なら、応答を待っていた GET の元のイベントの控えを取り出す（1 回だけ使う）。
+    translate::before(&mut state, &input);
     let (mut state, actions) = route(state, input, config);
+    let actions = translate::after(&mut state, actions);
     talk_gap::observe(&mut state, marked_reply);
     (state, actions)
 }

@@ -53,7 +53,7 @@
   - _Depends: 1.2_
 
 - [ ] 3. 運行表の翻訳の帳簿と殻の実行
-- [ ] 3.1 応答の読みと元のイベントの控えを運行表に足す（まだ翻訳は始めない）
+- [x] 3.1 応答の読みと元のイベントの控えを運行表に足す（まだ翻訳は始めない）
   - 運行の状態に「翻訳の待ち」と「応答を待っている GET の元のイベント」の 2 欄を足す。一括の最後の往復が GET ならその元のイベントを控え、NOTIFY・降ろす往復なら空にし、SHIORI の応答の入力で 1 回だけ取り出す
   - 運行表の翻訳のモジュール（`schedule/translate.rs`）を新しく作り、翻訳の待ち・殻への依頼（台詞・元のイベント・Status）・殻が戻す結果の 3 つの型をここに置く（3.2・3.3 はこの型を使う）
   - `OnTranslate` の生の結果を読む純粋な関数を、design の表どおり（置換・空・204・エラー応答・輸送路の失敗・GET では起きない結果）に足し、どの行も元のイベントの ID つきで 1 件記録する
@@ -144,3 +144,4 @@
 - 1.1: emo2 の pasta は `OnTranslate` に 204（雑談の途中でも続きは変わらない）。比べる記録は `target\translate-baseline\`（`talk-record.txt`）。今の版は台詞の本文を記録に残さないので、6.2 は「どのイベントが台詞を返しどの順で再生が始まったか」の並びと画面の目視で比べる。Ctrl＋ダブルクリックの終了は 09-19 に撤去済みで、終了は右クリックのメニューの「終了」。`cargo build` の後は 32bit の helper を `target\debug\` へ写し直してから起動する
 - 1.2〜1.5: clippy は HEAD の時点で既に赤（`areka-kanade/src/shiori/real.rs` の `collapsible_if`・`dola` の 21 件・`areka-sakura/src/compile_arm_tests.rs` の doc の字下げ・`shiori-host32-host/tests` の `drop_non_drop`）。担当は `clippy-199-lints` で、本 spec では触らない。自分が触ったファイルに指摘が無いことだけを見る。`areka-sakura` には `log-capture-kit` が無いので、記録の数はテストの中の小さな `tracing::Subscriber` で数える
 - 2.1: 台帳 `shiori.toml` の `OnTranslate` の note は最終形の振る舞いで書いた。根拠の場所は今は `events.rs`・`shiori3.rs` だけなので、3.x で `schedule/translate.rs`・`actor_translate.rs` ができたら根拠の行に書き足す。台帳を変えたら `briefing.md` の barrier の数・`roadmap-draft.md` の `owner_count` も合わせ、`report/*.md` は手でなく `cargo run -p ukadoc-survey -- report`／`-- report-summary` で作り直す（改行だけ変わった報告ファイルはコミットに含めない）
+- 3.1: `translate::before` は `Option<SourceEvent>` を返し、`after` は `replied` を取らない形で入れた（使い手がまだ無いため）。3.4 で設計の `Replied` の形に広げ、`after` の控えの決まりに「最後の往復が `Action::Translate` なら空にする」を足す。輸送路の失敗は `read_reply` では記録せず、`on_done` の `translate_failed`（3.3）が受け持つ。`State` を `..` なしで組む既存テストは 14 か所で、`steady_flow_tests.rs` は `..base_state()` なので触っておらず 925 行のまま（3.4 の行数の見積もりは 925 から）
