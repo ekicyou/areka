@@ -121,7 +121,7 @@ $env:PATH =($env:PATH -split ';' | Where-Object {
 # =============================================================================
 # 後始末
 # =============================================================================
-$script:ZipTmp = $null       # 圧縮の段が .zip.tmp のパスを入れる
+$script:TmpFiles = [Collections.Generic.List[string]]::new()   # 圧縮の段が CPU 種別ごとの .zip.tmp のパスを入れる
 $script:SavedEnv = @{}       # Set-EnvTemp が差し替える前の値（$null は「無かった」）
 
 # 環境変数をこのプロセスで差し替える。元の値は最初の 1 回だけ覚え、後始末で戻す。
@@ -147,8 +147,8 @@ function Restore-Env {
 }
 
 function Invoke-Cleanup {
-    if ($script:ZipTmp -and (Test-Path -LiteralPath $script:ZipTmp)) {
-        Remove-Item -LiteralPath $script:ZipTmp -Force
+    foreach ($p in $script:TmpFiles) {
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
     }
     # 起動から番犬までの段で落ちたときに、自分が起こした子だけを止める（名前では探さない）
     if ($script:Child -and -not $script:Child.HasExited) { $script:Child.Kill() }
@@ -292,8 +292,7 @@ Step '前提の確認' {
     Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件・版 $script:Version・CPU 種別 $($script:BuildArchs -join '・')"
 }
 
-$X64 = $ARCHS['x64'].Target; $I686 = $HELPER_TARGET
-$script:AppExe = "$OUT_DIR/$X64/release/areka.exe"
+$I686 = $HELPER_TARGET
 $script:HelperExe = "$OUT_DIR/$I686/release/shiori-host32-helper.exe"
 $script:Notices = "$OUT_DIR/THIRD-PARTY-NOTICES.md"
 # 開発者のシェルの値に継ぎ足さない（-C target-cpu=native 等が混ざると開発機でしか動かない exe になる）
@@ -373,9 +372,11 @@ Step '静的リンクの確認' {
 
 Step 'ライセンス検査' { cargo deny --locked check licenses }
 
+# -Arch に依らず全ターゲット（ARCHS の行＋helper）で 1 回。どの CPU 種別の zip にも同じ物を入れる
 Step '謝辞の生成' {
     if (Test-Path -LiteralPath $script:Notices) { Remove-Item -LiteralPath $script:Notices -Force }
-    cargo about generate --locked --workspace --target $X64 --target $I686 about.hbs -o $script:Notices
+    $targets = @($ARCHS.Values | ForEach-Object Target) + $HELPER_TARGET | ForEach-Object { '--target', $_ }
+    cargo about generate --locked --workspace @targets about.hbs -o $script:Notices
     if ($LASTEXITCODE) { return }
     if (-not (Test-Path -LiteralPath $script:Notices)) { throw "謝辞の出力が無い: $script:Notices" }
 }
@@ -402,37 +403,40 @@ Step '検体の展開' {
     $script:StayseeDir = (Read-SamplePaths 'StayseeBalloon' @('folder'))['folder']
 }
 
-$STAGE_DIR = "$OUT_DIR/stage"
-Step '組み立て' {
-    if (Test-Path -LiteralPath $STAGE_DIR) { Remove-Item -LiteralPath $STAGE_DIR -Recurse -Force }
-    $null = New-Item -ItemType Directory -Path "$STAGE_DIR/ghost", "$STAGE_DIR/balloon"
-    # 設計の「zip の中身」の 9 行だけ（写す元が無ければ Copy-Item が throw）
-    Copy-Item -LiteralPath $script:AppExe -Destination $STAGE_DIR
-    Copy-Item -LiteralPath $script:HelperExe -Destination $STAGE_DIR
-    Copy-Item -LiteralPath $script:GhostDir -Destination "$STAGE_DIR/ghost/emo2" -Recurse
-    Copy-Item -LiteralPath $script:KakukakuDir -Destination "$STAGE_DIR/balloon/emo2-kakukaku" -Recurse
-    Copy-Item -LiteralPath $script:StayseeDir -Destination "$STAGE_DIR/balloon/StayseeBalloon" -Recurse
-    Copy-Item -LiteralPath 'dist/README.txt' -Destination $STAGE_DIR
-    Copy-Item -LiteralPath 'LICENSE-MIT' -Destination $STAGE_DIR
-    Copy-Item -LiteralPath $script:Notices -Destination $STAGE_DIR
-    $info = @(
-        "commit=$script:Commit"
-        "dirty=$script:Dirty"
-        "built=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))"
-        "script=tools/package.ps1 $SCRIPT_VERSION"
-        "rustflags=$script:RustFlags"
-    )
-    [IO.File]::WriteAllLines((Join-Path (Resolve-Path -LiteralPath $STAGE_DIR) 'BUILD-INFO.txt'), $info)   # UTF-8（BOM 無し）
-}
+foreach ($a in $script:BuildArchs) {
+    $stage = "$OUT_DIR/stage-$a"
+    Step "$a 組み立て" {
+        if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+        $null = New-Item -ItemType Directory -Path "$stage/ghost", "$stage/balloon"
+        # 設計の「zip の中身」の 9 行だけ（写す元が無ければ Copy-Item が throw）。areka.exe だけ CPU 種別ごと
+        Copy-Item -LiteralPath "$OUT_DIR/$($ARCHS[$a].Target)/release/areka.exe" -Destination $stage
+        Copy-Item -LiteralPath $script:HelperExe -Destination $stage
+        Copy-Item -LiteralPath $script:GhostDir -Destination "$stage/ghost/emo2" -Recurse
+        Copy-Item -LiteralPath $script:KakukakuDir -Destination "$stage/balloon/emo2-kakukaku" -Recurse
+        Copy-Item -LiteralPath $script:StayseeDir -Destination "$stage/balloon/StayseeBalloon" -Recurse
+        Copy-Item -LiteralPath 'dist/README.txt' -Destination $stage
+        Copy-Item -LiteralPath 'LICENSE-MIT' -Destination $stage
+        Copy-Item -LiteralPath $script:Notices -Destination $stage
+        $info = @(
+            "version=$script:Version"
+            "arch=$a"
+            "commit=$script:Commit"
+            "dirty=$script:Dirty"
+            "built=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+            "script=tools/package.ps1 $SCRIPT_VERSION"
+            "rustflags=$script:RustFlags"
+        )
+        [IO.File]::WriteAllLines((Join-Path (Resolve-Path -LiteralPath $stage) 'BUILD-INFO.txt'), $info)   # UTF-8（BOM 無し）
+    }
 
-Step '圧縮' {
-    $n = Get-ArtifactNames 'x64'
-    $script:ZipFinal = $n.Zip
-    $script:ZipTmp = $n.ZipTmp
-    if (Test-Path -LiteralPath $script:ZipTmp) { Remove-Item -LiteralPath $script:ZipTmp -Force }
-    # includeBaseDirectory を $false にしないと stage/ が最上位に入る
-    [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path -LiteralPath $STAGE_DIR), $script:ZipTmp, [IO.Compression.CompressionLevel]::Optimal, $false)
-    Write-Host $script:ZipTmp
+    Step "$a 圧縮" {
+        $tmp = (Get-ArtifactNames $a).ZipTmp
+        $script:TmpFiles.Add($tmp)
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force }
+        # includeBaseDirectory を $false にしないと stage-{arch}/ が最上位に入る
+        [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path -LiteralPath $stage), $tmp, [IO.Compression.CompressionLevel]::Optimal, $false)
+        Write-Host $tmp
+    }
 }
 
 # zip の項目名（区切りを / に揃える・大文字小文字を区別する）→ 項目。呼ぶ側が .Zip を Dispose する。
@@ -518,17 +522,22 @@ function Test-ZipContent([string]$ZipPath) {
     , $bad.ToArray()
 }
 
-Step '中身の判定' {
-    $bad = Test-ZipContent $script:ZipTmp
-    if (-not $bad.Count) { Write-Host '判定 1〜8 すべて合'; return }
-    $bad | ForEach-Object { Write-Host "否 $_" }
-    throw "中身の判定で否が $($bad.Count) 件"
+# 判定はまだ x64 の zip だけ（Test-ZipContent の機械種別の表が x64 固定のため）
+if ($script:BuildArchs -ccontains 'x64') {
+    Step '中身の判定' {
+        $bad = Test-ZipContent (Get-ArtifactNames 'x64').ZipTmp
+        if (-not $bad.Count) { Write-Host '判定 1〜8 すべて合'; return }
+        $bad | ForEach-Object { Write-Host "否 $_" }
+        throw "中身の判定で否が $($bad.Count) 件"
+    }
 }
 
 Step '完成' {
-    Move-Item -LiteralPath $script:ZipTmp -Destination $script:ZipFinal -Force
-    $script:ZipTmp = $null
-    Write-Host "zip: $script:ZipFinal"
+    foreach ($a in $script:BuildArchs) {
+        $n = Get-ArtifactNames $a
+        Move-Item -LiteralPath $n.ZipTmp -Destination $n.Zip -Force
+        Write-Host "zip: $($n.Zip)"
+    }
     Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
 }
 
@@ -571,7 +580,7 @@ if ($Check) {
         # 展開先の長さは「前提の確認」で確かめ済み
         if (Test-Path -LiteralPath $script:ExpandDir) { throw "展開先が既に在る: $script:ExpandDir" }
         if (Test-Path -LiteralPath $script:LogDir) { throw "記録の置き場が既に在る: $script:LogDir" }
-        [IO.Compression.ZipFile]::ExtractToDirectory($script:ZipFinal, $script:ExpandDir)
+        [IO.Compression.ZipFile]::ExtractToDirectory((Get-ArtifactNames 'x64').Zip, $script:ExpandDir)
         $null = New-Item -ItemType Directory -Path $script:LogDir
         $script:RunLog = Join-Path $script:LogDir 'run.log'
         $script:RunErrLog = Join-Path $script:LogDir 'run.stderr.log'
