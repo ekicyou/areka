@@ -34,7 +34,7 @@ SHIORI の台詞が再生へ渡る経路は次の 5 種類で、今日はすべ�
   - `areka-P0-makoto-dll-host` は、本 spec が用意する口へ「台詞と元のイベントの出所を受け取り、台詞を返す」形で MAKOTO の鎖を差し込む。本 spec はその口の向こうで何が起きるか（DLL・プロセス・文字コード）を一切持たない。
   - SHIORI の失敗の分類（エラー応答 400・500 は 204 と同じ扱いで会話を続ける・輸送路の失敗はそのゴーストの SHIORI の故障）は、完了 spec `areka-P0-shiori-fault-notice` の決まりをそのまま使い、`OnTranslate` のために例外を作らない。
   - `areka-P0-property-query-channels`・`areka-P0-balloon-lifecycle-events`・`areka-P0-network-update-canon-order` は同じ運行の判断のファイルを触るので、本 spec と同時には進めない（本 spec が先）。`areka-P0-ukadoc-survey-shiori` は完了済みのため、`OnTranslate` の ukadoc の URL の注記と台帳の更新は本 spec が行う（要件 3.7）。
-- **開発上の制約**: 1 ファイル 1,000 行未満を保つ（触るファイルが上限に近い場合は、振る舞いを変えずに先に分ける）。ファイルの長さの検査の例外表には触れない。areka 本体のクレートの `ghost_session.rs`・`main.rs`・`emo2_boot/` には触れない（同じウェーブの spec が触る）。
+- **開発上の制約**: 1 ファイル 1,000 行未満を保つ（触るファイルが上限に近い場合は、振る舞いを変えずに先に分ける）。ファイルの長さの検査の例外表には触れない。areka 本体のクレートの `ghost_session.rs`・`main.rs`・`emo2_boot/` の本番のコードには触れない（同じウェーブの spec が触る）。例外として、`emo2_boot/` と `crates/areka/src/` のテスト用の偽の SHIORI（`emo2_boot/spine.rs` の `ScriptedShioriBackend`）に「`OnTranslate` は既定で 204」を足すことと、テストの期待（記録した呼び出しの列）に `OnTranslate` を書き足すことは行ってよい（2026-10-03 開発者裁定）。既定の 204 は呼び出しの記録に残し、記録から隠さない。同じテストのファイルを同じウェーブの spec（`shell-balloon` 等）も触った場合は、後から着地する側がテストの行を rebase で直す。`crates/areka-ghost/tests/ghost/spine_e2e_test.rs` の同名の偽の SHIORI も同じ扱いとする。
 
 ## Requirements
 
