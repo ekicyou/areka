@@ -184,7 +184,7 @@ crates/areka-emo-present/src/presenter/
 - `crates/areka/src/input_events/balloon.rs` — `BalloonWiring` へ `balloon_hover: HashSet<usize>`（＋`set`/`clear`/`is_balloon_hovered` accessor）を追加し、`on_balloon_pointer_moved` で挿入・`clear_balloon_hover_on_leave` で除去。陳腐化注記（`:315`/`:472`/`:780`/`:804`/`:821` ほか本番結線済みの全箇所）と対応する `#[allow(dead_code)]` を実態へ是正（Requirement 9.7。到達実態は各注記ごとに `main.rs:363`/`:731` 起点で個別確認して書き換える）。
 - `crates/areka/src/emo2_boot/spine_display_tests.rs`・`frame_attach_tests.rs`・`spine_text_scale_tests.rs`・`spine_test_support.rs` — 「attach 初回表示済み」前提の文言・assert を「不可視のまま確立済み」へ更新し、起動時 `target_visible == Some(false)` の積極 assert を追加（Requirement 9.6。readback・スロット成立・適用 k の既存 assert は前提変更なしで維持）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 沈黙ルール対応表へ本仕様の行を追記（詳細は Components「互換記録」）。
-- `.kiro/specs/areka-P0-status-execution-states/brief.md` — `Status: balloon` の唯一の情報源が本仕様の表示状態（`EmoPresenter::target_visible`）である旨の登記 1 行（Requirement 7.5）。
+- `.kiro/specs/completed/areka-P0-status-execution-states/brief.md` — `Status: balloon` の唯一の情報源が本仕様の表示状態（`EmoPresenter::target_visible`）である旨の登記 1 行（Requirement 7.5）。
 - `.kiro/steering/roadmap.md` — 先送り 3 件（balloontimeout タグ・SHIORI 3 イベント・`\x`）の受け皿 spec と解禁条件の明記を確認し、欠けていれば追記（Requirement 7.7）。
 
 ## System Flows

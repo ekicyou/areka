@@ -410,7 +410,7 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 - emo2 fixture — `crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/pasta.toml:23-24`（`talk_interval` 15/30）・`dic/menu.pasta:36-49`（実行時プリセット）
 - 実需正本 — `doc/emo2-conformance-scope.md:18,22,27`（emo2 が読むヘッダ・OnSecondChange＝心臓部・`OnTalk`/`OnHour` 送出禁止）
 - 先例 — `.kiro/specs/completed/areka-P0-cue-playback-duration/tasks.md:218`（実機サインオフ運用＝絶対パス起動・i686 helper 上書きコピー）
-- 下流契約 — `.kiro/specs/areka-P0-status-execution-states/brief.md`（残状態の台帳・Approach 2b＝消費側互換の檻）
+- 下流契約 — `.kiro/specs/completed/areka-P0-status-execution-states/brief.md`（残状態の台帳・Approach 2b＝消費側互換の檻）
 
 ## 16. 設計ディスカッション決着ログ（2026-07-17）
 
