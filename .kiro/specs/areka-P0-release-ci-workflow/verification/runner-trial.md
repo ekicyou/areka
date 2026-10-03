@@ -38,6 +38,8 @@ gh api repos/actions/checkout/commits/v7.0.1 --jq .sha
 
 段を置く前に同じ道具を回すと「`版の検査` の段が 0 件」で失敗した（赤）。道具が判定できることの較正として、不一致のときの `exit 1` を一時的に `exit 0` へ変えて回すと、タグ `v0.0.2`・`v`・`v0.0.1-x` の 3 通りが FAIL になった（`release.yml` は元へ戻した）。
 
+（追記・タスク 1.5 の差し戻し 1 回目）タグの版と `Cargo.toml` の版の比べを `-ceq` から `[string]::Equals(…, [StringComparison]::Ordinal)` に替えた（`-ceq` は文化に従い、BOM や U+200B などの幅のない字を無視する）。替えた後の本文で上の 5 通りを回し直し、5 通りとも同じ結果だった。加えて、タグ `v0.0.1`＋U+200B が失敗（終了コード 1）になることを確かめた。結果は 1.5 の「差し戻し 1 回目の直し」の節。
+
 ## 1.3 既存の Release の検査の段（S5）を手元で回す
 
 回した日: 2026-10-03。段の名前は `既存の Release の検査`・`id` は `guard`・`timeout-minutes: 5`。トークン（`GH_TOKEN`）と S4 の版（`VERSION`）は段の `env:` で渡し、本文に `${{` は無い。
@@ -72,6 +74,8 @@ gh api repos/actions/checkout/commits/v7.0.1 --jq .sha
 
 1 行目が完了の形の「無い・`v0.0.1`」。
 
+（追記・タスク 1.5 の差し戻し 1 回目）Release を探す行のタグの名前の比べを `-ceq` から `[string]::Equals(…, [StringComparison]::Ordinal)` に替えた（1 行のまま）。替えた後の本文で、1 行目（`ekicyou/areka`・タグ `v0.0.2`・本番）と、下の表の「本番で在る」（`cli/cli`・タグ `v2.101.0`）を回し直し、同じ結果だった。結果は 1.5 の「差し戻し 1 回目の直し」の節。
+
 ### 在る経路と取れない経路（ほかの公開リポジトリを読むだけで通した）
 
 Release を作らずに「在る」経路を通すため、Release を持つ公開リポジトリ `cli/cli` を読むだけで回した。`cli/cli` は Release が 205 件・タグが 205 本で、どちらも 3 ページにまたがる（ページ送りが要る）。
@@ -88,7 +92,7 @@ Release を作らずに「在る」経路を通すため、Release を持つ公�
 ### 残り
 
 - 下書きの Release が一覧に入ることは、Release を作らないので手元では確かめていない（設計の Risks のとおり `release-cycle` へ申し送る）。
-- Release を探す行（`$found = @(gh api --paginate ... | Where-Object { ... -ceq $tag })`）は後始末の段（タスク 1.6）でそのまま使う 1 行にしてある。2 か所が同じことの判定はタスク 3 で行う。
+- Release を探す行（`$found = @(gh api --paginate ... | Where-Object { ... -ceq $tag })`。タスク 1.5 の差し戻しで比べを `[string]::Equals(…, [StringComparison]::Ordinal)` に替えた）は後始末の段（タスク 1.6）でそのまま使う 1 行にしてある。2 か所が同じことの判定はタスク 3 で行う。
 
 ## 1.4 道具の用意（S6）と環境の記録（S7）の段
 
@@ -147,3 +151,116 @@ Python と PyYAML で `release.yml` を読む確かめの道具をワークツ�
 | (e) ARM64 の部品が無い | 本文の写しで部品の名前だけを在らない名前へ替えた | `arm64 のリンクの道具: 無い（Microsoft.VisualStudio.Component.NoSuch.ARM64・vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe・終了コード 0）` | 0 |
 
 どの場合も段は止まらず、印字だけをして終了コード 0 で終わった（合否を付けない）。arm64 の問い方（`VSWHERE_PATH` の固定の置き場を先に見て、無ければ `PATH` の `vswhere`・`-latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath`）は `tools/package.ps1` の前提の検査と同じ。一時ファイル（確かめの道具・本文の写し・空のフォルダ・読んだ manifest）は確かめの後に消した。
+
+## 1.5 zip を作る段（S8）と 4 つの確かめの段（S9）
+
+回した日: 2026-10-03。2 段は `環境の記録` のすぐ後に、`zip を作る` → `4 つの確かめ` の順で置いた。
+
+段の形:
+
+- S8 `zip を作る`: `timeout-minutes: 90`・`env` なし（トークン・`CARGO_TARGET_DIR`・`RUSTFLAGS` なし）。本文は、この段の出力の文字コードを UTF-8 にしたうえで、別の PowerShell のプロセスを `pwsh -NoProfile -NonInteractive -Command '[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ./tools/package.ps1 -Arch all; exit $LASTEXITCODE'` で起こす（`-File` では呼ぶ前に文字コードを設定できないので `-Command`）。子の終了コードを `$code` に取り、`$host.SetShouldExit($code)` の後に `exit $code` で終わる。
+- S9 `4 つの確かめ`: `timeout-minutes` なし・`env` は `VERSION: ${{ steps.version.outputs.version }}` の 1 つだけ（本文に `${{` は無い）。置き場は今いるフォルダからの `target/package`。4 つの名前を組み立てて在りかを確かめ、無ければ無い名前を全部印字して `exit 1`。各 zip の SHA256（`Get-FileHash` を小文字に）から期待の中身「16 進 64 字・空白 2 つ・zip のファイル名・LF」を組み、`.sha256` のバイト列を `[Text.Encoding]::UTF8.GetString` で字にし（BOM は外されず U+FEFF の字として残る）、`[string]::Equals(実際, 期待, [StringComparison]::Ordinal)` で字のとおりに丸ごと比べる（`-ceq` は文化に従い U+FEFF や U+200B を無視するので使わない）。違えば `{名前}.sha256 が {zip} と合わない（期待 '…'・実際 '…'）` を印字して `exit 1`。印字では空白から `~` までの外の字を、CR は `\r`・LF は `\n`・ほかは `\uXXXX`（BOM は `\uFEFF`）の形で見せる。揃えば 4 つの名前・各 zip の SHA256・作業ドライブの空き容量を印字して `exit 0`。期待の形は `tools/package.ps1` の段「SHA256」の書き方（`"{0}  {1}`n"`・BOM 無し・LF）に合わせた。
+
+### 見つけたこと: GitHub の pwsh の段は本文の `exit 3` を 1 に変える
+
+最初の形は S8 の最後を `exit $LASTEXITCODE` にしていた。GitHub の pwsh の段の包み方（`pwsh -command ". '{0}'"`・先頭に `$ErrorActionPreference = 'stop'`・末尾に `if ((Test-Path -LiteralPath variable:\LASTEXITCODE)) { exit $LASTEXITCODE }`）を写して回すと、子が `exit 3` で終わっても段は終了コード 1 で終わった。PowerShell の `-Command` は、最後に回したスクリプトが 0 と 1 以外の終了コードで終わると、プロセスの終了コードを 1 に変える（手元の pwsh 7.6.6 で、`exit 3` だけのファイルを `-Command ". 'ファイル'"` で回すと 1、`-File` で回すと 3 になることを確かめた）。末尾に足される行は本文の `exit` より後なので届かない。本文の中で `$host.SetShouldExit($code)` を呼んでから `exit $code` にすると、同じ包み方で 3 がそのまま返った。今の S8 はこの形。
+
+### 静的な確かめ（機械で判定）
+
+Python と PyYAML で `release.yml` を読む確かめの道具をワークツリーの `target\` の下に置き、段を置く前と後に回した。判定した項目: S8・S9 がちょうど 1 件ずつ在る・`環境の記録` → `zip を作る` → `4 つの確かめ` の順で隣り合う・S8 の `timeout-minutes` が 90・S9 に `timeout-minutes` が無い・S8 に `env` が無い・S9 の `env` が `VERSION: ${{ steps.version.outputs.version }}` だけ・S8 と S9 にトークンが無い・S8 が別の `pwsh` で UTF-8 にしてから配布スクリプトを呼ぶ・S8 が `$code = $LASTEXITCODE` → `$host.SetShouldExit($code)` → `exit $code` で終わる・S8 に `CARGO_TARGET_DIR`・`RUSTFLAGS` が無い・S9 が `target/package` を読む・ファイル全体で配布スクリプトの呼び出しが 1 件で引数が `-Arch all` だけ・`-Check` を付けた呼び出しが 0 件・`GH_TOKEN` を持つ段が `既存の Release の検査` だけ（この時点）・どの段の本文にも `${{` が無い。
+
+- 置く前（赤）: 「S8 がちょうど 1 件」「S9 がちょうど 1 件」「配布スクリプトの呼び出しが 1 件で引数が `-Arch all` だけ」が FAIL、終了コード 1。
+- 置いた後（緑）: 16 項目すべて PASS、終了コード 0。
+
+### S8 の本文を手元で回す（本物の配布スクリプト）
+
+本文の取り出し方は 1.2 と同じ（名前が `zip を作る` の段をちょうど 1 件取り、`run:` の本文を `target\` の下の一時ファイルへ書き、先頭に `$ErrorActionPreference = 'stop'`、末尾に `if ((Test-Path -LiteralPath variable:\LASTEXITCODE)) { exit $LASTEXITCODE }` を足す）。ワークツリーの根から `pwsh -NoProfile -NonInteractive -Command ". '<一時ファイル>'"` で回し、印字はファイルへ流した（実行環境と同じく、端末ではなく流し先へ書く形）。回している間はファイルを書き換えていない（配布スクリプトの段「git status 不変の確認」が緑）。
+
+| 回 | 本文 | 終了コード | 所要時間 | 印字（要点） |
+|---|---|---|---|---|
+| 1 回目（冷えたビルド） | 最初の形（最後が `exit $LASTEXITCODE`） | 0 | 860 秒 | `OK 前提の確認` から `OK 完成` までの 20 段がすべて緑・`全段 緑`。段の時間は i686 helper ビルド 141 秒・x64 本体ビルド 355 秒・arm64 本体ビルド 294 秒・謝辞の生成 48 秒。`zip:`・`sha256:`・`version: 0.0.1` を x64 と arm64 の 2 組 |
+| 2 回目（ビルド済み） | 今の形（`$host.SetShouldExit` 入り） | 0 | 36 秒 | 同じく 20 段がすべて緑・`全段 緑` |
+
+どちらの回も、段の名前（`前提の確認`・`x64 本体ビルド`・`謝辞の生成` など）と `全段 緑` が UTF-8 のまま読めた（化けなし）。手元のビルドには `CARGO_TARGET_DIR`・`RUSTFLAGS` を設定していない。
+
+### S9 の本文を手元で回す
+
+本文の取り出し方は S8 と同じ（名前が `4 つの確かめ` の段）。`VERSION=0.0.1` を環境変数で渡した。写しは `target\rc15\root\target\package\` に作り、その都度 `target\rc15\root` へ移ってから回した（本文は今いるフォルダからの `target/package` を読むので、本文を変えずに写しを読ませられる）。
+
+S8 の 2 回目が作った 4 つに対して:
+
+```
+揃った: areka-0.0.1-x64.zip（SHA256 3e4723939056cec63a3293440b88b86d136b492f9a17f0a3c311a9cae24561c9）
+揃った: areka-0.0.1-x64.zip.sha256
+揃った: areka-0.0.1-arm64.zip（SHA256 e5784caf68a05eedf326c2d4d574fa5e54a4ec0442891511aff496de2cc7d271）
+揃った: areka-0.0.1-arm64.zip.sha256
+作業ドライブ C:\ の空き容量: 181.8 GB
+```
+
+終了コード 0。別の道具でも、`target\package` で `sha256sum -c areka-0.0.1-x64.zip.sha256 areka-0.0.1-arm64.zip.sha256` が 2 つとも `OK` だった。1 回目のビルドの 4 つでも同じく揃った（SHA256 は x64 `6d15185366dd4b61779e307cdf12a8f41135822cf72743e492ba25d3ccb09cfc`・arm64 `a54171e72c55df1ead751d7ed9bfdc9c0afad5878fec3bf6ed979ddaf0296922`。作るたびに zip の中の時刻などが変わるので回ごとに値は違う）。
+
+写しで回した場合（判定は道具が終了コードと印字の字で機械でした）:
+
+| 場合 | 写しの作り方 | 期待 | 終了コード | 印字（要点） | 判定 |
+|---|---|---|---|---|---|
+| 写しのまま | 4 つを写しただけ | 成功 | 0 | 4 つの `揃った:` と空き容量 | PASS |
+| `.sha256` のハッシュの 1 字 | arm64 の `.sha256` の先頭の字 `e` を `0` に | 失敗 | 1 | `areka-0.0.1-arm64.zip.sha256 が areka-0.0.1-arm64.zip と合わない（期待 'e5784caf…d271  areka-0.0.1-arm64.zip\n'・実際 '05784caf…d271  areka-0.0.1-arm64.zip\n'）` | PASS |
+| `.sha256` のファイル名の 1 字 | x64 の `.sha256` の `-x64.zip` を `-x65.zip` に（ハッシュは正しいまま） | 失敗 | 1 | `areka-0.0.1-x64.zip.sha256 が areka-0.0.1-x64.zip と合わない（期待 '…  areka-0.0.1-x64.zip\n'・実際 '…  areka-0.0.1-x65.zip\n'）` | PASS |
+| 改行が CRLF | x64 の `.sha256` の LF を CRLF に | 失敗 | 1 | 実際の側の末尾が `\r\n` | PASS |
+| ファイルの欠け | arm64 の zip を消す | 失敗 | 1 | `無い: areka-0.0.1-arm64.zip（置き場 …\target\rc15\root\target\package）` | PASS |
+
+ハッシュの 1 字の場合が完了の形の「不一致で失敗」、本物の 4 つの場合が「揃った」。
+
+### S8 の終了コードの伝わり方（偽の配布スクリプト）
+
+`target\rc15\stub\tools\package.ps1` に、受けた引数を印字して決まった終了コードで終わる偽物を置き、`target\rc15\stub` へ移って S8 の本文（同じ包み方）を回した。`tools\` の本物には触れていない。
+
+| 偽物の終了コード | 段の終了コード | 印字 | 判定 |
+|---|---|---|---|
+| 3 | 3 | `引数: 0・Arch=all`（余りの引数 0 個・`-Arch` は `all`）・偽物の 1 行 | PASS |
+| 1 | 1 | 同上・`FAIL ビルド（偽）` | PASS |
+| 2 | 2 | 同上 | PASS |
+| 0 | 0 | 同上 | PASS |
+
+較正: 最初の形（最後が `exit $LASTEXITCODE`）で同じ道具を回すと、偽物が 3 のとき段が 1 で終わり FAIL になった（上の「見つけたこと」）。偽物が 1 の場合は最初の形でも 1 だった。
+
+一時ファイル（確かめの道具・本文の写し・写しの根・偽物・印字の流し先）は確かめの後に消した。配布スクリプトが作った `target\package\` の 4 つは残した（追跡外）。
+
+### 差し戻し 1 回目の直し（字のとおりの比べ）
+
+レビューの指摘: PowerShell の `-ceq` は文化に従って比べ、U+FEFF（BOM）と U+200B（幅のない空白）を無視する（`"x"+U+FEFF -ceq "x"` も `"a"+U+200B+"b" -ceq "ab"` も真）。そのため最初の S9 は、先頭に BOM の付いた `.sha256` や、ファイル名に U+200B の入った `.sha256` を「揃った」と通していた（`sha256sum -c` はどちらも通さない）。上の「段の形」の最初の版にあった「BOM も字として残る…丸ごと比べる」という説明は、字は残っても比べが無視していたので誤りだった。同じ弱さが S4 のタグの版の比べと、S5 の Release を探す行にもあった。
+
+直したこと（`release.yml` だけ）:
+
+- S9: 比べを `[string]::Equals($actual, $expected, [StringComparison]::Ordinal)` に替えた。印字の見せ方を、空白から `~` までの外の字すべてを `\r`・`\n`・`\uXXXX` で見せる形に広げた。
+- S4: `$tagVersion -ceq $version` を `[string]::Equals($tagVersion, $version, [StringComparison]::Ordinal)` に替えた。
+- S5: Release を探す行の `$_.Split("`t")[0] -ceq $tag` を `[string]::Equals($_.Split("`t")[0], $tag, [StringComparison]::Ordinal)` に替えた（1 行のまま。後始末の段でそのまま写す）。
+- S8: 説明の行の「起動確認の -Check は付けない」を「起動確認の引数は付けない」にした（ファイルの中の `-Check` を 0 件にするため）。本文は変えていない。
+
+残した `-ceq` は 4 か所（S4 の `$_.name -ceq 'areka'`・`$env:GITHUB_REF_TYPE -ceq 'tag'`、S5 の `$env:GITHUB_REF_TYPE -ceq 'tag'`・`$env:PUBLISH -ceq 'true'`）。どれも cargo か GitHub が決めた値を固定の語と比べるだけの行で、利用者が付けた名前（タグ）や配布物の中身は比べていない。
+
+回し直し（本文の取り出し方と包み方は 1.2 と同じ。判定は道具が、終了コード・印字の字（Ordinal で探す）・`GITHUB_OUTPUT` の中身で機械でした）。較正のため、S4 と S5 は `git show HEAD:.github/workflows/release.yml` から取った直す前の本文でも回した。S9 は、直した本文の比べの行だけを `($actual -ceq $expected)` に戻した写しでも回した:
+
+| 段 | 場合 | 本文 | 期待 | 終了コード | 印字（要点）・`GITHUB_OUTPUT` | 判定 |
+|---|---|---|---|---|---|---|
+| S4 | タグ `v0.0.1` | 直した後 | 成功 | 0 | 一致（'0.0.1'）・`version=0.0.1` | PASS |
+| S4 | タグ `v0.0.2` | 直した後 | 失敗 | 1 | `0.0.2` と `0.0.1` の両方・空 | PASS |
+| S4 | タグ `v` | 直した後 | 失敗 | 1 | 空の版と `0.0.1`・空 | PASS |
+| S4 | タグ `v0.0.1-x` | 直した後 | 失敗 | 1 | `0.0.1-x`・空 | PASS |
+| S4 | 枝 `main` | 直した後 | 成功 | 0 | タグが無いので比べを飛ばす・`version=0.0.1` | PASS |
+| S4 | タグ `v0.0.1`＋U+200B | 直した後 | 失敗 | 1 | `タグの版と Cargo.toml の版が違う（タグの版 '0.0.1'＋U+200B・Cargo.toml の版 '0.0.1'）`・空 | PASS |
+| S4 | タグ `v0.0.1`＋U+200B | 直す前（較正） | 誤って成功 | 0 | 一致（'0.0.1'）・`version=0.0.1` | 弱さを再現 |
+| S5 | `ekicyou/areka`・タグ `v0.0.2`・本番 | 直した後 | 無い | 0 | `タグ 'v0.0.2' の Release は無い（下書きを含めて 0 件）`・`一つ前のタグ: 'v0.0.1'`・`absent=true`・`prev_tag=v0.0.1` | PASS |
+| S5 | `cli/cli`・タグ `v2.101.0`・本番 | 直した後 | 在る | 1 | `タグ 'v2.101.0' の Release が既に在る（URL https://github.com/cli/cli/releases/tag/v2.101.0・下書き false）`・空 | PASS |
+| S5 | `cli/cli`・タグ `v2.101.0`＋U+200B・本番 | 直した後 | 無い | 0 | `の Release は無い（下書きを含めて 0 件）`・`一つ前のタグ: 'v2.100.0'`・`absent=true`・`prev_tag=v2.100.0` | PASS |
+| S5 | `cli/cli`・タグ `v2.101.0`＋U+200B・本番 | 直す前（較正） | 誤って在る | 1 | `の Release が既に在る（URL …/v2.101.0…）`・空 | 弱さを再現 |
+| S9 | 本物の 4 つ（S8 の 2 回目が作った物） | 直した後 | 成功 | 0 | 4 つの `揃った:`（x64 `3e472393…61c9`・arm64 `e5784caf…d271`）・空き容量 | PASS |
+| S9 | x64 の `.sha256` の先頭に BOM（EF BB BF・書いた後にバイト列で確かめた） | 直した後 | 失敗 | 1 | `areka-0.0.1-x64.zip.sha256 が areka-0.0.1-x64.zip と合わない（期待 '3e472393…61c9  areka-0.0.1-x64.zip\n'・実際 '\uFEFF3e472393…61c9  areka-0.0.1-x64.zip\n'）` | PASS |
+| S9 | 同上 | `-ceq` の写し（較正） | 誤って成功 | 0 | 4 つの `揃った:` | 弱さを再現 |
+| S9 | arm64 の `.sha256` のファイル名に U+200B（`-arm64`＋U+200B＋`.zip`） | 直した後 | 失敗 | 1 | `… 実際 'e5784caf…d271  areka-0.0.1-arm64\u200B.zip\n'）` | PASS |
+| S9 | 同上 | `-ceq` の写し（較正） | 誤って成功 | 0 | 4 つの `揃った:` | 弱さを再現 |
+| S9 | ハッシュの 1 字・ファイル名の 1 字・CRLF・arm64 の zip の欠け・写しのまま | 直した後 | 失敗×4・成功×1 | 1・1・1・1・0 | 上の表と同じ印字 | PASS |
+
+直した後の本文の場合（17 通り）はすべて PASS。直す前の本文と `-ceq` の写しの 4 通りは、どれも U+FEFF か U+200B を無視して通した（弱さの再現＝道具が違いを見分けられることの較正）。S4 の印字の中の U+200B は見えないまま出る（S4 の印字は字をそのまま出す）。
+
+直した後の `release.yml` への静的な確かめ（機械で判定）: ファイルの中の `-Check` が 0 件・配布スクリプトの呼び出しが 1 件で引数が `-Arch all` だけ・S4 と S9 の比べが Ordinal・S5 の探す行が Ordinal の 1 行・S9 に `-ceq` が無い・ファイルの中の U+FEFF と U+200B が 0 件・どの段の本文にも `${{` が無い・S8 の上限が 90 で S9 は上限なし・`GH_TOKEN` を持つ段が `既存の Release の検査` だけ。9 項目すべて PASS。YAML として読める。一時ファイルは確かめの後に消した。

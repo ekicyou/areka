@@ -74,7 +74,8 @@ jobs:
           if ($env:GITHUB_REF_TYPE -ceq 'tag') {
             $tagVersion = $env:GITHUB_REF_NAME
             if ($tagVersion.StartsWith('v', [StringComparison]::Ordinal)) { $tagVersion = $tagVersion.Substring(1) }
-            if (-not ($tagVersion -ceq $version)) {
+            # 字のとおりに比べる（-ceq は文化に従い、BOM や幅のない字を無視する）
+            if (-not [string]::Equals($tagVersion, $version, [StringComparison]::Ordinal)) {
               Write-Host "タグの版と Cargo.toml の版が違う（タグの版 '$tagVersion'・Cargo.toml の版 '$version'）"
               exit 1
             }
@@ -113,7 +114,7 @@ jobs:
           }
           $tag = if ($env:GITHUB_REF_TYPE -ceq 'tag') { $env:GITHUB_REF_NAME } else { "v$env:VERSION" }
           # タグの名前で Release を探す行（後始末の段と 1 字違わず同じ）。下書きを含む一覧を全部取る
-          $found = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | [.tag_name, .id, .html_url, .draft] | @tsv' | Where-Object { $_.Split("`t")[0] -ceq $tag })
+          $found = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | [.tag_name, .id, .html_url, .draft] | @tsv' | Where-Object { [string]::Equals($_.Split("`t")[0], $tag, [StringComparison]::Ordinal) })
           if ($LASTEXITCODE) {
             Write-Host "Release の一覧を取れない（gh api が終了コード $LASTEXITCODE）"
             exit 1
@@ -188,6 +189,70 @@ jobs:
             } else {
               Write-Host "arm64 のリンクの道具: 在る（$vs）"
             }
+          }
+          $root = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
+          try {
+            $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($root))
+            Write-Host ("作業ドライブ {0} の空き容量: {1:N1} GB" -f $drive.Name, ($drive.AvailableFreeSpace / 1GB))
+          } catch {
+            Write-Host "作業ドライブの空き容量: 読めない（$_）"
+          }
+          exit 0
+
+      - name: zip を作る
+        timeout-minutes: 90
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          # 配布スクリプトは別の PowerShell のプロセスで呼ぶ（-File では呼ぶ前に文字コードを設定できないので -Command）
+          # 子の出力の文字コードを UTF-8 にしてから、引数 -Arch all だけで呼ぶ（起動確認の引数は付けない）
+          # 失敗の段の名前（FAIL {段の名前}）は配布スクリプトが印字する。この段は子の終了コードをそのまま返すだけ
+          pwsh -NoProfile -NonInteractive -Command '[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ./tools/package.ps1 -Arch all; exit $LASTEXITCODE'
+          $code = $LASTEXITCODE
+          # この本文は GitHub が pwsh -command ". '{0}'" で回し、本文の exit の 0 と 1 以外の値は 1 に変わる。
+          # 子の終了コード（3 など）をそのまま段の終了コードにするため、先にホストへ終了コードを渡してから exit する
+          $host.SetShouldExit($code)
+          exit $code
+
+      - name: 4 つの確かめ
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          # 入力は環境変数 VERSION だけ。置き場は今いるフォルダ（作業ツリーの根）からの target/package
+          # 読むだけ。4 つのファイルを書き換えない・作り直さない
+          $dir = Join-Path (Get-Location).Path 'target/package'
+          $zips = @("areka-$env:VERSION-x64.zip", "areka-$env:VERSION-arm64.zip")
+          $names = @(foreach ($z in $zips) { $z; "$z.sha256" })
+          $missing = @($names | Where-Object { -not (Test-Path -LiteralPath (Join-Path $dir $_) -PathType Leaf) })
+          if ($missing.Count) {
+            foreach ($n in $missing) { Write-Host "無い: $n（置き場 $dir）" }
+            exit 1
+          }
+          # .sha256 は「小文字の 16 進 64 字・空白 2 つ・zip のファイル名・LF」の 1 行（tools/package.ps1 の書き方）。
+          # 中身を字のとおり（Ordinal）に丸ごと比べる。-ceq は文化に従い、BOM や幅のない字を無視するので使わない
+          # 印字では、空白から ~ までの外の字を \r・\n・\uXXXX の形で見せる（BOM は \uFEFF）
+          function Show-Text([string]$s) {
+            [regex]::Replace($s, '[^\x20-\x7E]', {
+              param($m)
+              switch ([int]$m.Value[0]) { 13 { '\r' } 10 { '\n' } default { '\u{0:X4}' -f $_ } }
+            })
+          }
+          $hashes = @{}
+          $bad = 0
+          foreach ($z in $zips) {
+            $hashes[$z] = (Get-FileHash -LiteralPath (Join-Path $dir $z) -Algorithm SHA256).Hash.ToLowerInvariant()
+            $expected = "$($hashes[$z])  $z`n"
+            # バイト列を UTF-8 の字にする（Encoding.GetString は BOM を外さず U+FEFF として残す）
+            $actual = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes((Join-Path $dir "$z.sha256")))
+            if (-not [string]::Equals($actual, $expected, [StringComparison]::Ordinal)) {
+              Write-Host "$z.sha256 が $z と合わない（期待 '$(Show-Text $expected)'・実際 '$(Show-Text $actual)'）"
+              $bad++
+            }
+          }
+          if ($bad) { exit 1 }
+          foreach ($z in $zips) {
+            Write-Host "揃った: $z（SHA256 $($hashes[$z])）"
+            Write-Host "揃った: $z.sha256"
           }
           $root = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { (Get-Location).Path }
           try {
