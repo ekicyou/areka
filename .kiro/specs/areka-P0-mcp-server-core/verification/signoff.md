@@ -1,10 +1,10 @@
 # 実機確認の記録（タスク 6.2・要件 9.5・9.6）
 
 - **実施日**: 2026-10-03
-- **判定に使った版**: コミット `ce8ba54`（直しのコミット `52c9136f` を含む）。配布物の `BUILD-INFO.txt` は `commit=ce8ba54` `dirty=0`
-- **ビルド**: `pwsh -NoProfile -File tools/package-alpha.ps1`（全段 緑・終了コード 0）→ `target\alpha\areka-alpha-x64-20261003-ce8ba54.zip`
-  （組む間だけ、追跡外のこの記録を `target\` へ退けて、未コミットの変更 0 件で組んだ）
-- **展開先**: `target\signoff-mcp\b\`（ワークツリーの `target\` の下・絶対パス）。記録は `target\signoff-mcp\logs\`
+- **判定に使った版**: ⑴〜⑷ はすべてコミット `0ca0b6b`（ポートの裁定の実装 `8d1adf22` を含む）で判定した。配布物の `BUILD-INFO.txt` は `commit=0ca0b6b` `dirty=0`。⑴〜⑶ は走行 7・8、⑷ は走行 6
+- **ビルド**: `pwsh -NoProfile -File tools/package-alpha.ps1`（全段 緑・終了コード 0）→ `target\alpha\areka-alpha-x64-20261003-0ca0b6b.zip`
+- **展開先**: `target\signoff-mcp\c\`（ワークツリーの `target\` の下・絶対パス）。記録は `target\signoff-mcp\logs\`
+- **裁定前の記録**: 走行 3・4（コミット `ce8ba54`・展開先 `target\signoff-mcp\b\`・既定の番号は 9821 固定）は経緯として残す。性能の報告（`actor:mcp`）と大きさの比べ方の詳細は走行 3 のときのもの
 - **起動のしかた**: `AREKA_*`／`WINTF_*` を全部外してから、`Start-Process -PassThru` で展開先の `areka.exe` を起こした（作業フォルダは展開先）。終わらせ方は有界の自動終了 `AREKA_APP_SMOKE_EXIT_MS`。自分で起こしたプロセス以外は止めていない
 - **使った道具**: Claude Code `2.1.283`・curl（Git for Windows 同梱）
 
@@ -12,16 +12,16 @@
 
 | # | 確かめたこと | 結果 |
 |---|---|---|
-| ⑴ | `claude mcp add` で登録し、Claude Code から接続できる | **合**（`✔ Connected`・ツールの一覧の取得も通った） |
-| ⑵ | `curl` で `initialize`→`tools/list`→`ping` | **合** |
-| ⑶ | `AREKA_MCP_PORT=0` で接続できず `info!` が出る | **合** |
+| ⑴ | `claude mcp add` で登録し、Claude Code から接続できる | **合**（走行 7。SSP が 9801・9821 を握る机で areka は 9802 で待ち受け、`http://127.0.0.1:9802/api/mcp/v1` の登録で `✔ Connected`・`server/discover` と `tools/list` は 200） |
+| ⑵ | `curl` で `initialize`→`tools/list`→`ping` | **合**（走行 7・9802） |
+| ⑶ | `AREKA_MCP_PORT=0` で接続できず `info!` が出る | **合**（走行 8。areka の待受 0・9802 へ接続できない） |
 | ⑷ | SSP が既定の番号を握っている机で areka が隣の番号で待ち受ける | **合**（走行 6・タスク 7.6。SSP が 9801 と 9821 を握る机で areka は 9802 で待ち受け、`ping` 200・help は 9802 を案内。下記）。裁定前の走行 5 は不合（9821 固定で束ねられなかった） |
-| 記録 | 要求ごとに `debug!` 1 件・悪い `Origin` に `warn!` 1 件 | **合** |
-| 記録 | 性能の報告に `actor:mcp` が出る | **合** |
-| 記録 | 待受の開始・閉じたときの `info!`、終了後に 9821 が閉じている | **合** |
-| 大きさ | リリースの `areka.exe` の増分 | +1,674,752 バイト（下記） |
+| 記録 | 要求ごとに `debug!` 1 件・悪い `Origin` に `warn!` 1 件 | **合**（走行 7） |
+| 記録 | 性能の報告に `actor:mcp` が出る | **合**（走行 3・`ce8ba54`。`0ca0b6b` では測り直していない） |
+| 記録 | 待受の開始・閉じたときの `info!`、終了後に待受が閉じている | **合**（走行 7。終了後に 9802 の待受が無い） |
+| 大きさ | リリースの `areka.exe` の増分 | `0ca0b6b` で +1,678,848 バイト（下記） |
 
-**ERROR の行は 0 件**（下の走行 3・走行 4 とも、標準出力・標準エラー出力の両方）。
+**ERROR の段の行は 0 件**（走行 3・4・7・8 のどれも、標準出力・標準エラー出力の両方）。
 
 ## 1 度目の走行で見つかった失敗（経緯）
 
@@ -40,7 +40,7 @@ Claude Code 2.1.283 は `initialize` を送らず、無状態版（`2026-07-28`�
 直し: コミット `52c9136f`（無状態版の `tools/list` の答えに `ttlMs: 0` と `cacheScope: "private"` を足す。
 旧式の版の答えは変えない。要件 3.15・設計 B-12・差の一覧の「困るので直した」1 行）。以下はすべて直した後の版での結果である。
 
-## 走行 3（既定の番号 9821・記録を細かく）
+## 走行 3（裁定前の経緯・`ce8ba54`・既定の番号 9821・記録を細かく）
 
 環境変数:
 
@@ -186,7 +186,7 @@ INFO  actor{actor=emo-text}: areka_mcp::server: MCP: 待受を閉じた addr=127
 curl: (7) Failed to connect to 127.0.0.1:9821 after 2005 ms: Could not connect to server
 ```
 
-## 走行 4（`AREKA_MCP_PORT=0`）— ⑶
+## 走行 4（裁定前の経緯・`ce8ba54`・`AREKA_MCP_PORT=0`）— ⑶
 
 環境変数: `AREKA_APP_SMOKE_EXIT_MS=20000`・`AREKA_NO_ALERT=1`・`NO_COLOR=1`・`RUST_LOG=info,areka_mcp=debug`・`AREKA_MCP_PORT=0`。
 プロセス番号 33360・20 秒後に自動終了で終わり、終了コード 0。起動の 6 秒後（動いている間）に:
@@ -257,13 +257,120 @@ INFO  actor{actor=emo-text}: areka_mcp::server: MCP: 待受を閉じた addr=127
 - 飛ばした 2 つの候補はそれぞれ `debug!` 1 件（番号と OS の理由）、移った旨は待受の `info!` の同じ 1 行（要件 1.2・1.10）。ERROR の段の行は 0 件。
 - 自動終了で終了コード 0。終了後は 9802 の待受が無い（SSP の 9801・9821 はそのまま）。
 
+## 走行 7・8（0ca0b6b）— ⑴〜⑶ の判定
+
+裁定の後の版で ⑴〜⑶ を確かめ直した。版は走行 6 と同じ `0ca0b6b`（展開先 `target\signoff-mcp\c\`・`BUILD-INFO.txt` は `commit=0ca0b6b` `dirty=0`）。
+どちらの走行の間も SSP（PID 32480）が 9801 と 9821 で待ち受けていた（触っていない）。
+
+### 走行 7（既定の番号・SSP と並んで 9802）— ⑴・⑵・記録
+
+環境変数: `AREKA_APP_SMOKE_EXIT_MS=120000`・`AREKA_NO_ALERT=1`・`NO_COLOR=1`・`RUST_LOG=info,areka_mcp=debug`。
+起こしたプロセス番号 25172。記録は `target\signoff-mcp\logs\run7.log`。
+
+起動の直後の記録と待受（実際の番号は `info!` の行から 9802 と読んだ）:
+
+```
+DEBUG areka_mcp::server: MCP: 候補のポートを束ねられなかった（次の候補へ） port=9801 error=… (os error 10048)
+DEBUG areka_mcp::server: MCP: 候補のポートを束ねられなかった（次の候補へ） port=9821 error=… (os error 10048)
+INFO  areka_mcp::server: MCP: 待受を始めた（先の候補が使用中なので移った） url=http://127.0.0.1:9802/api/mcp/v1 skipped=[9801, 9821]
+
+> netstat -ano | Select-String 'LISTENING' | Select-String ':98[0-3][0-9] '
+  TCP    127.0.0.1:9801         0.0.0.0:0              LISTENING       32480   ← SSP
+  TCP    127.0.0.1:9802         0.0.0.0:0              LISTENING       25172   ← areka
+  TCP    127.0.0.1:9821         0.0.0.0:0              LISTENING       32480   ← SSP
+  TCP    [::1]:9801             [::]:0                 LISTENING       32480
+  TCP    [::1]:9821             [::]:0                 LISTENING       32480
+```
+
+⑵ `curl`（宛先 `http://127.0.0.1:9802/api/mcp/v1`・`-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream"`・本文は走行 3 と同じ）:
+
+```
+## initialize               → HTTP/1.1 200 OK  {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"areka-mcp-server","version":"0.0.1"},"instructions":"..."}}
+## notifications/initialized → HTTP/1.1 202 Accepted
+## tools/list               → HTTP/1.1 200 OK  {"jsonrpc":"2.0","id":2,"result":{"tools":[]}}
+## ping                     → HTTP/1.1 200 OK  {"jsonrpc":"2.0","id":3,"result":{}}
+## 悪い Origin（-H "Origin: http://evil.example" の ping）→ HTTP/1.1 403 Forbidden  Forbidden
+```
+
+⑴ Claude Code（走行 3 と同じ手順。`target\signoff-mcp\proj\` の中だけで `--scope project`・同じフォルダの
+`.claude\settings.local.json` に `{"enabledMcpjsonServers": ["areka"]}`・見るのは `get` だけ）:
+
+```
+> claude mcp add --transport http --scope project areka http://127.0.0.1:9802/api/mcp/v1
+Added HTTP MCP server areka with URL: http://127.0.0.1:9802/api/mcp/v1 to project config
+
+> claude mcp get areka
+areka:
+  Scope: Project config (shared via .mcp.json)
+  Status: ✔ Connected
+  Type: http
+  URL: http://127.0.0.1:9802/api/mcp/v1
+```
+
+後始末: `claude mcp remove areka -s project`（`.mcp.json` は `{"mcpServers": {}}`）、`.claude\settings.local.json` とそのフォルダを消した。
+`~/.claude.json` に `signoff-mcp` の記録は 0 件。
+
+`areka_mcp` の行の全部（起動の 3 行は上に書いた）:
+
+```
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=initialize id=1 status=200 path=/api/mcp/v1
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=notifications/initialized id=- status=202 path=/api/mcp/v1
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=tools/list id=2 status=200 path=/api/mcp/v1
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=ping id=3 status=200 path=/api/mcp/v1
+WARN  actor{actor=mcp}: areka_mcp::dispatch: MCP: Origin を拒んだ origin=http://evil.example path=/api/mcp/v1
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=- id=- status=403 path=/api/mcp/v1
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=server/discover id="server-discover-probe-1" status=200 path=/api/mcp/v1
+DEBUG actor{actor=mcp}: areka_mcp::dispatch: MCP: 要求に応えた method=tools/list id=0 status=200 path=/api/mcp/v1
+INFO  actor{actor=emo-text}: areka: smoke 自動 close: ゴースト窓を despawn しました count=4
+INFO  actor{actor=emo-text}: areka_mcp::server: MCP: 待受を閉じた addr=127.0.0.1:9802
+```
+
+- 送った要求は 7 本（curl 5 本・Claude Code 2 本）で、`debug!` も 7 件。1 本に 1 件。Claude Code の `server/discover` と `tools/list` はどちらも 200。
+- 悪い `Origin` の `warn!` は 1 件（値つき）。`areka_mcp` の `WARN` は全体でこの 1 件だけ。
+- 自動終了（120 秒）で終了コード 0。終了後の待受は SSP の 9801・9821 だけで、9802 の待受は無い:
+
+```
+  TCP    127.0.0.1:9801         0.0.0.0:0              LISTENING       32480
+  TCP    127.0.0.1:9821         0.0.0.0:0              LISTENING       32480
+  TCP    [::1]:9801             [::]:0                 LISTENING       32480
+  TCP    [::1]:9821             [::]:0                 LISTENING       32480
+```
+
+### 走行 8（`AREKA_MCP_PORT=0`）— ⑶
+
+環境変数: `AREKA_APP_SMOKE_EXIT_MS=20000`・`AREKA_NO_ALERT=1`・`NO_COLOR=1`・`RUST_LOG=info,areka_mcp=debug`・`AREKA_MCP_PORT=0`。
+プロセス番号 4040。記録は `target\signoff-mcp\logs\run8.log`。起動の 6 秒後（動いている間）に:
+
+```
+> netstat -ano | Select-String 'LISTENING' | Select-String ':98[0-3][0-9] '
+  TCP    127.0.0.1:9801         0.0.0.0:0              LISTENING       32480   ← SSP
+  TCP    127.0.0.1:9821         0.0.0.0:0              LISTENING       32480   ← SSP
+  TCP    [::1]:9801             [::]:0                 LISTENING       32480
+  TCP    [::1]:9821             [::]:0                 LISTENING       32480
+
+> （待受のうち持ち主が 4040 のもの）
+（出力なし＝areka はどの番号でも待ち受けていない）
+
+> curl.exe -sS -m 5 -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" --data '{"jsonrpc":"2.0","id":1,"method":"ping"}' http://127.0.0.1:9802/api/mcp/v1
+curl: (7) Failed to connect to 127.0.0.1:9802 after 2010 ms: Could not connect to server
+```
+
+記録（`areka_mcp` の行はこの 1 件だけ。候補を試す `debug!` も出ていない）:
+
+```
+INFO  areka_mcp::server: MCP: 待ち受けない（AREKA_MCP_PORT が 0）
+```
+
+ゴーストはいつもどおり起動し、自動終了の行（`smoke 自動 close: ゴースト窓を despawn しました count=4`）まで進み、終了コード 0。
+
 ## リリースの `areka.exe` の増分
 
 | | コミット | `areka.exe` の大きさ |
 |---|---|---|
 | 比べる元 | `7393c30` | 6,594,048 バイト |
-| 本 spec | `ce8ba54` | 8,268,800 バイト |
-| 増分 | | **+1,674,752 バイト（約 +1.60 MiB・+25.4%）** |
+| 本 spec（判定の版） | `0ca0b6b` | 8,272,896 バイト |
+| 増分 | | **+1,678,848 バイト（約 +1.60 MiB・+25.5%）** |
+| （参考）裁定前 | `ce8ba54` | 8,268,800 バイト（+1,674,752） |
 
 測り方: どちらも `tools/package-alpha.ps1`（同じ版 1.0.0・`rustflags=-C target-feature=+crt-static`）が作った配布 zip の
 中の `areka.exe` を比べた。比べる元は、別のワークツリーに残っていた
@@ -271,7 +378,8 @@ INFO  actor{actor=emo-text}: areka_mcp::server: MCP: 待受を閉じた addr=127
 すぐ後の文書だけのコミットで、`git diff --stat 1ce4c74e 7393c30 -- . ':!.kiro' ':!doc'` が空
 ＝ソースは分かれ目と同じ。本 spec と分かれ目の差（`.kiro`・`doc` を除く）は `crates/areka-mcp/` の新設と
 `crates/areka/Cargo.toml`・`main.rs`・`Cargo.lock` 等の 21 ファイルなので、増分はこの spec の分とみてよい。
-配布 zip の大きさは 7,564,054 → 8,214,690 バイト（+650,636 バイト）。
+配布 zip の大きさは 7,564,054 → 8,216,634 バイト（`0ca0b6b`・+652,580 バイト）。`ce8ba54` の zip は 8,214,690 バイトだった。
+`0ca0b6b` の `areka.exe` は展開先 `target\signoff-mcp\c\areka.exe` の大きさで測った。
 
 ## 確かめられなかったこと
 
