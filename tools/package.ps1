@@ -121,7 +121,7 @@ $env:PATH =($env:PATH -split ';' | Where-Object {
 # =============================================================================
 # 後始末
 # =============================================================================
-$script:TmpFiles = [Collections.Generic.List[string]]::new()   # 圧縮の段が CPU 種別ごとの .zip.tmp のパスを入れる
+$script:TmpFiles = [Collections.Generic.List[string]]::new()   # 圧縮と SHA256 の段が CPU 種別ごとの .zip.tmp・.sha256.tmp のパスを入れる
 $script:SavedEnv = @{}       # Set-EnvTemp が差し替える前の値（$null は「無かった」）
 
 # 環境変数をこのプロセスで差し替える。元の値は最初の 1 回だけ覚え、後始末で戻す。
@@ -403,6 +403,90 @@ Step '検体の展開' {
     $script:StayseeDir = (Read-SamplePaths 'StayseeBalloon' @('folder'))['folder']
 }
 
+# zip の項目名（区切りを / に揃える・大文字小文字を区別する）→ 項目。呼ぶ側が .Zip を Dispose する。
+function Get-ZipEntryMap([string]$Path) {
+    $zip = [IO.Compression.ZipFile]::OpenRead($Path)
+    $map = [hashtable]::new([StringComparer]::Ordinal)
+    foreach ($e in $zip.Entries) { $map[$e.FullName.Replace('\', '/')] = $e }
+    [pscustomobject]@{ Zip = $zip; Map = $map }
+}
+
+function Read-ZipEntry($Entry) {
+    $ms = [IO.MemoryStream]::new(); $s = $Entry.Open()
+    try { $s.CopyTo($ms) } finally { $s.Dispose() }
+    , $ms.ToArray()
+}
+
+# zip を読み戻して設計の「zip の中身の判定」1〜8 を全部行い、否の項目の文を全部返す（空なら合）。
+# $Arch は ARCHS のキー（本体の機械種別と BUILD-INFO.txt の arch= の期待値）。
+function Test-ZipContent([string]$ZipPath, [string]$Arch) {
+    $bad = [Collections.Generic.List[string]]::new()
+    $same = { param([byte[]]$a, [byte[]]$b) [Linq.Enumerable]::SequenceEqual($a, $b) }
+    $z = Get-ZipEntryMap $ZipPath
+    try {
+        $map = $z.Map
+        $names = @($map.Keys | Sort-Object)
+
+        # 1. 必須の項目
+        foreach ($r in @('areka.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/descript.txt', 'ghost/emo2/install.txt',
+                'balloon/emo2-kakukaku/descript.txt', 'balloon/StayseeBalloon/descript.txt',
+                'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')) {
+            if (-not $map.ContainsKey($r)) { $bad.Add("1 必須の項目が無い: $r") }
+        }
+        # 2. 最上位・ghost/ 直下・balloon/ 直下の許可表
+        $allowed = @{
+            ''         = @('areka.exe', 'shiori-host32-helper.exe', 'ghost', 'balloon', 'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')
+            'ghost/'   = @('emo2')
+            'balloon/' = @('emo2-kakukaku', 'StayseeBalloon')
+        }
+        foreach ($prefix in $allowed.Keys) {
+            $kids = $names | Where-Object { $_.StartsWith($prefix, [StringComparison]::Ordinal) } |
+                ForEach-Object { $_.Substring($prefix.Length).Split('/')[0] } | Where-Object { $_ } | Sort-Object -Unique
+            $kids | Where-Object { $allowed[$prefix] -cnotcontains $_ } | ForEach-Object { $bad.Add("2 許可表に無い項目: $prefix$_") }
+        }
+        # 3. 起動記録
+        $prof = @($names | Where-Object { $_ -match '(^|/)profile/' })
+        if ($prof.Count) { $bad.Add("3 profile/ を含む項目が $($prof.Count) 件（最初: $($prof[0])）") }
+        # 4. 実行ファイルと DLL は許可表の 3 本だけ
+        $execs = @($names | Where-Object { $_ -match '\.(exe|dll)$' })
+        $execs | Where-Object { $ALLOWED_EXECUTABLES -cnotcontains $_ } | ForEach-Object { $bad.Add("4 許可表に無い実行ファイル: $_") }
+        $ALLOWED_EXECUTABLES | Where-Object { $execs -cnotcontains $_ } | ForEach-Object { $bad.Add("4 実行ファイルが無い: $_") }
+        # 5. PE の機種・6. 依存 DLL（本体と helper だけ）
+        $machines = [ordered]@{ 'areka.exe' = $ARCHS[$Arch].Machine; 'shiori-host32-helper.exe' = $HELPER_MACHINE; 'ghost/emo2/ghost/master/pasta.dll' = $HELPER_MACHINE }
+        foreach ($n in $machines.Keys) {
+            if (-not $map.ContainsKey($n)) { continue }   # 無いことは 1／4 が言う
+            try { $info = Read-PeInfo (Read-ZipEntry $map[$n]) } catch { $bad.Add("5 PE として読めない: $n（$_）"); continue }
+            Write-Host ('{0}: 機種 0x{1:x4}・取り込み {2}' -f $n, $info.Machine, ($info.Imports -join ', '))
+            if ($info.Machine -ne $machines[$n]) { $bad.Add(('5 機種が違う: {0} は 0x{1:x4}（期待 0x{2:x4}）' -f $n, $info.Machine, $machines[$n])) }
+            if ($n -like '*.exe') {
+                $denied = @(Get-DeniedImports $info.Imports)
+                if ($denied.Count) { $bad.Add("6 拒否表の DLL を読む: $n → $($denied -join ', ')") }
+            }
+        }
+        # 7. 説明書 2 本は emo2.nar の中身とバイトが同じ
+        $nar = Get-ZipEntryMap (Resolve-Path -LiteralPath 'vendors/sample_ghost/emo2.nar')
+        try {
+            foreach ($pair in @(@('ghost/emo2/readme.txt', 'readme.txt'), @('ghost/emo2/shell/master/readme.txt', 'shell/master/readme.txt'))) {
+                if (-not $map.ContainsKey($pair[0])) { $bad.Add("7 説明書が無い: $($pair[0])"); continue }
+                if (-not $nar.Map.ContainsKey($pair[1])) { $bad.Add("7 emo2.nar に $($pair[1]) が無い"); continue }
+                if (-not (& $same (Read-ZipEntry $map[$pair[0]]) (Read-ZipEntry $nar.Map[$pair[1]]))) { $bad.Add("7 emo2.nar の $($pair[1]) とバイトが違う: $($pair[0])") }
+            }
+        } finally { $nar.Zip.Dispose() }
+        # 8. README・ライセンス・謝辞は写す元とバイトが同じ・BUILD-INFO.txt の値
+        foreach ($pair in @(@('README.txt', 'dist/README.txt'), @('LICENSE-MIT', 'LICENSE-MIT'), @('THIRD-PARTY-NOTICES.md', $script:Notices))) {
+            if (-not $map.ContainsKey($pair[0])) { continue }   # 無いことは 1 が言う
+            if (-not (& $same (Read-ZipEntry $map[$pair[0]]) ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $pair[1]))))) { $bad.Add("8 $($pair[1]) とバイトが違う: $($pair[0])") }
+        }
+        if ($map.ContainsKey('BUILD-INFO.txt')) {
+            $info = [Text.Encoding]::UTF8.GetString((Read-ZipEntry $map['BUILD-INFO.txt'])) -split "`r?`n"
+            foreach ($want in @("version=$script:Version", "arch=$Arch", "commit=$script:Commit", "dirty=$script:Dirty")) {
+                if ($info -cnotcontains $want) { $bad.Add("8 BUILD-INFO.txt に $want が無い") }
+            }
+        }
+    } finally { $z.Zip.Dispose() }
+    , $bad.ToArray()
+}
+
 foreach ($a in $script:BuildArchs) {
     $stage = "$OUT_DIR/stage-$a"
     Step "$a 組み立て" {
@@ -437,98 +521,21 @@ foreach ($a in $script:BuildArchs) {
         [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path -LiteralPath $stage), $tmp, [IO.Compression.CompressionLevel]::Optimal, $false)
         Write-Host $tmp
     }
-}
 
-# zip の項目名（区切りを / に揃える・大文字小文字を区別する）→ 項目。呼ぶ側が .Zip を Dispose する。
-function Get-ZipEntryMap([string]$Path) {
-    $zip = [IO.Compression.ZipFile]::OpenRead($Path)
-    $map = [hashtable]::new([StringComparer]::Ordinal)
-    foreach ($e in $zip.Entries) { $map[$e.FullName.Replace('\', '/')] = $e }
-    [pscustomobject]@{ Zip = $zip; Map = $map }
-}
-
-function Read-ZipEntry($Entry) {
-    $ms = [IO.MemoryStream]::new(); $s = $Entry.Open()
-    try { $s.CopyTo($ms) } finally { $s.Dispose() }
-    , $ms.ToArray()
-}
-
-# zip を読み戻して設計の「zip の中身の判定」1〜8 を全部行い、否の項目の文を全部返す（空なら合）。
-function Test-ZipContent([string]$ZipPath) {
-    $bad = [Collections.Generic.List[string]]::new()
-    $same = { param([byte[]]$a, [byte[]]$b) [Linq.Enumerable]::SequenceEqual($a, $b) }
-    $z = Get-ZipEntryMap $ZipPath
-    try {
-        $map = $z.Map
-        $names = @($map.Keys | Sort-Object)
-
-        # 1. 必須の項目
-        foreach ($r in @('areka.exe', 'shiori-host32-helper.exe', 'ghost/emo2/ghost/master/descript.txt', 'ghost/emo2/install.txt',
-                'balloon/emo2-kakukaku/descript.txt', 'balloon/StayseeBalloon/descript.txt',
-                'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')) {
-            if (-not $map.ContainsKey($r)) { $bad.Add("1 必須の項目が無い: $r") }
-        }
-        # 2. 最上位・ghost/ 直下・balloon/ 直下の許可表
-        $allowed = @{
-            ''         = @('areka.exe', 'shiori-host32-helper.exe', 'ghost', 'balloon', 'README.txt', 'LICENSE-MIT', 'THIRD-PARTY-NOTICES.md', 'BUILD-INFO.txt')
-            'ghost/'   = @('emo2')
-            'balloon/' = @('emo2-kakukaku', 'StayseeBalloon')
-        }
-        foreach ($prefix in $allowed.Keys) {
-            $kids = $names | Where-Object { $_.StartsWith($prefix, [StringComparison]::Ordinal) } |
-                ForEach-Object { $_.Substring($prefix.Length).Split('/')[0] } | Where-Object { $_ } | Sort-Object -Unique
-            $kids | Where-Object { $allowed[$prefix] -cnotcontains $_ } | ForEach-Object { $bad.Add("2 許可表に無い項目: $prefix$_") }
-        }
-        # 3. 起動記録
-        $prof = @($names | Where-Object { $_ -match '(^|/)profile/' })
-        if ($prof.Count) { $bad.Add("3 profile/ を含む項目が $($prof.Count) 件（最初: $($prof[0])）") }
-        # 4. 実行ファイルと DLL は許可表の 3 本だけ
-        $execs = @($names | Where-Object { $_ -match '\.(exe|dll)$' })
-        $execs | Where-Object { $ALLOWED_EXECUTABLES -cnotcontains $_ } | ForEach-Object { $bad.Add("4 許可表に無い実行ファイル: $_") }
-        $ALLOWED_EXECUTABLES | Where-Object { $execs -cnotcontains $_ } | ForEach-Object { $bad.Add("4 実行ファイルが無い: $_") }
-        # 5. PE の機種・6. 依存 DLL（本体と helper だけ）
-        $machines = [ordered]@{ 'areka.exe' = $ARCHS['x64'].Machine; 'shiori-host32-helper.exe' = $HELPER_MACHINE; 'ghost/emo2/ghost/master/pasta.dll' = $HELPER_MACHINE }
-        foreach ($n in $machines.Keys) {
-            if (-not $map.ContainsKey($n)) { continue }   # 無いことは 1／4 が言う
-            try { $info = Read-PeInfo (Read-ZipEntry $map[$n]) } catch { $bad.Add("5 PE として読めない: $n（$_）"); continue }
-            Write-Host ('{0}: 機種 0x{1:x4}・取り込み {2}' -f $n, $info.Machine, ($info.Imports -join ', '))
-            if ($info.Machine -ne $machines[$n]) { $bad.Add(('5 機種が違う: {0} は 0x{1:x4}（期待 0x{2:x4}）' -f $n, $info.Machine, $machines[$n])) }
-            if ($n -like '*.exe') {
-                $denied = @(Get-DeniedImports $info.Imports)
-                if ($denied.Count) { $bad.Add("6 拒否表の DLL を読む: $n → $($denied -join ', ')") }
-            }
-        }
-        # 7. 説明書 2 本は emo2.nar の中身とバイトが同じ
-        $nar = Get-ZipEntryMap (Resolve-Path -LiteralPath 'vendors/sample_ghost/emo2.nar')
-        try {
-            foreach ($pair in @(@('ghost/emo2/readme.txt', 'readme.txt'), @('ghost/emo2/shell/master/readme.txt', 'shell/master/readme.txt'))) {
-                if (-not $map.ContainsKey($pair[0])) { $bad.Add("7 説明書が無い: $($pair[0])"); continue }
-                if (-not $nar.Map.ContainsKey($pair[1])) { $bad.Add("7 emo2.nar に $($pair[1]) が無い"); continue }
-                if (-not (& $same (Read-ZipEntry $map[$pair[0]]) (Read-ZipEntry $nar.Map[$pair[1]]))) { $bad.Add("7 emo2.nar の $($pair[1]) とバイトが違う: $($pair[0])") }
-            }
-        } finally { $nar.Zip.Dispose() }
-        # 8. README・ライセンス・謝辞は写す元とバイトが同じ・BUILD-INFO.txt の値
-        foreach ($pair in @(@('README.txt', 'dist/README.txt'), @('LICENSE-MIT', 'LICENSE-MIT'), @('THIRD-PARTY-NOTICES.md', $script:Notices))) {
-            if (-not $map.ContainsKey($pair[0])) { continue }   # 無いことは 1 が言う
-            if (-not (& $same (Read-ZipEntry $map[$pair[0]]) ([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $pair[1]))))) { $bad.Add("8 $($pair[1]) とバイトが違う: $($pair[0])") }
-        }
-        if ($map.ContainsKey('BUILD-INFO.txt')) {
-            $info = [Text.Encoding]::UTF8.GetString((Read-ZipEntry $map['BUILD-INFO.txt'])) -split "`r?`n"
-            foreach ($want in @("commit=$script:Commit", "dirty=$script:Dirty")) {
-                if ($info -cnotcontains $want) { $bad.Add("8 BUILD-INFO.txt に $want が無い") }
-            }
-        }
-    } finally { $z.Zip.Dispose() }
-    , $bad.ToArray()
-}
-
-# 判定はまだ x64 の zip だけ（Test-ZipContent の機械種別の表が x64 固定のため）
-if ($script:BuildArchs -ccontains 'x64') {
-    Step '中身の判定' {
-        $bad = Test-ZipContent (Get-ArtifactNames 'x64').ZipTmp
+    Step "$a 中身の判定" {
+        $bad = Test-ZipContent (Get-ArtifactNames $a).ZipTmp $a
         if (-not $bad.Count) { Write-Host '判定 1〜8 すべて合'; return }
         $bad | ForEach-Object { Write-Host "否 $_" }
         throw "中身の判定で否が $($bad.Count) 件"
+    }
+
+    Step "$a SHA256" {
+        $n = Get-ArtifactNames $a
+        $script:TmpFiles.Add($n.ShaTmp)
+        # Get-FileHash は大文字を返す。ファイル名は完成後の名前（sha256sum -c を完成品の隣でそのまま通す）
+        $hash = (Get-FileHash -LiteralPath $n.ZipTmp -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::WriteAllText($n.ShaTmp, ("{0}  {1}`n" -f $hash, (Split-Path $n.Zip -Leaf)))   # UTF-8（BOM 無し）・LF
+        Write-Host $n.ShaTmp
     }
 }
 
@@ -536,7 +543,9 @@ Step '完成' {
     foreach ($a in $script:BuildArchs) {
         $n = Get-ArtifactNames $a
         Move-Item -LiteralPath $n.ZipTmp -Destination $n.Zip -Force
+        Move-Item -LiteralPath $n.ShaTmp -Destination $n.Sha -Force
         Write-Host "zip: $($n.Zip)"
+        Write-Host "sha256: $($n.Sha)"
     }
     Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
 }
