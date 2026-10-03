@@ -221,8 +221,8 @@ fn reply_takes_the_note_only_once() {
         outcome: ShioriOutcome::NoContent,
         origin: "OnSecondChange",
     };
-    assert_eq!(before(&mut s, &reply), Some(stale_source()));
-    assert_eq!(before(&mut s, &reply), None, "控えは 1 回だけ使う");
+    assert_eq!(before(&mut s, &reply).source, Some(stale_source()));
+    assert_eq!(before(&mut s, &reply).source, None, "控えは 1 回だけ使う");
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn non_reply_input_does_not_take_the_note() {
     let input = Input::Tick {
         now: MonotonicMs(600),
     };
-    assert_eq!(before(&mut s, &input), None);
+    assert_eq!(before(&mut s, &input).source, None);
     assert_eq!(s.reply_source, Some(stale_source()));
 }
 
@@ -288,7 +288,11 @@ fn translate_at_the_end_of_the_batch_clears_the_note() {
         reply_source: Some(stale_source()),
         ..steady()
     };
-    let actions = after(&mut s, vec![Action::Translate(request(ORIGINAL))]);
+    let actions = after(
+        &mut s,
+        before(&mut State::initial(), &Input::Boot),
+        vec![Action::Translate(request(ORIGINAL))],
+    );
     assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
     assert_eq!(
         s.reply_source, None,
@@ -596,4 +600,146 @@ fn pass_translate_reinputs_the_script_as_is_and_returns_the_continuation() {
     // 翻訳の行動だけの一括でなければ、そのまま返す。
     let (_, actions) = pass_translate((s, vec![Action::ShioriUnload]), &cfg());
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
+}
+
+// ============================================================
+// 出口の規則（after が SHIORI の台詞の再生開始を捕まえる）——最上位の step から
+// ============================================================
+
+/// 再生中の相で汎用の通知の入口から `id` の GET を頼み、その応答 `outcome` を入れる。
+fn raise_get_and_reply(
+    s: State,
+    id: &str,
+    outcome: ShioriOutcome,
+) -> (State, Vec<Action>, Vec<CapturedEvent>) {
+    let input = Input::RaiseEvent {
+        id: id.to_string(),
+        references: vec!["r0".to_string()],
+        method: ShioriMethod::Get,
+    };
+    let (s, _) = step(s, input, &cfg());
+    let mut out = None;
+    let ev = capture(|| {
+        out = Some(step(
+            s,
+            Input::ShioriReply {
+                outcome,
+                origin: "raise",
+            },
+            &cfg(),
+        ))
+    });
+    let (s, actions) = out.expect("step は必ず値を返す");
+    (s, actions, ev)
+}
+
+fn talking() -> State {
+    State {
+        phase: Phase::Steady {
+            talk: Some(active(TALK)),
+        },
+        next_talk_id: 7,
+        ..steady()
+    }
+}
+
+#[test]
+fn shiori_script_is_captured_into_a_single_translate_action() {
+    let (s, actions, ev) =
+        raise_get_and_reply(talking(), "OnBoot", ShioriOutcome::Value(ORIGINAL.into()));
+    let [Action::Translate(req)] = actions.as_slice() else {
+        panic!("一括は翻訳の行動 1 つだけのはず: {} 件", actions.len());
+    };
+    assert_eq!(req.script, ORIGINAL, "SHIORI が返したまま（展開の前）");
+    assert_eq!(
+        req.source,
+        SourceEvent {
+            id: EventId::Static("OnBoot"),
+            references: vec!["r0".to_string()],
+        }
+    );
+    // Status は捕まえた時点（腕が相を決めた後＝新しいトークを再生する相）の状態から導く。
+    assert_eq!(req.status, ExecutionStatus::derive(&s.snapshot()));
+    assert!(s.snapshot().talk_active, "捕まえた時点の相は再生中");
+    let wait = s.translate.as_ref().expect("帳簿を置く");
+    assert_eq!(wait.talk_id, TalkId(7), "一括の再生の開始の talk_id");
+    assert_eq!(wait.source, EventId::Static("OnBoot"));
+    assert!(matches!(wait.deferred.as_slice(), [Action::StartTalk(t)] if t.talk_id == TalkId(7)));
+    assert_eq!(s.reply_source, None, "翻訳の依頼は往復なので控えを空にする");
+    let hit = logged_once(&ev, Level::DEBUG, "translate_begin");
+    assert_eq!(hit.fields.get("talk_id").map(String::as_str), Some("7"));
+    assert_eq!(hit.fields.get("source").map(String::as_str), Some("OnBoot"));
+
+    // 翻訳の結果の step は捕まえない（預けた一括がそのまま返る）。
+    let (s, actions) = pass_translate((s, actions), &cfg());
+    assert!(matches!(actions.as_slice(), [Action::StartTalk(t)] if t.script == ORIGINAL));
+    assert!(s.translate.is_none());
+}
+
+#[test]
+fn empty_script_is_played_without_translation() {
+    let (s, actions, ev) =
+        raise_get_and_reply(talking(), "OnBoot", ShioriOutcome::Value(String::new()));
+    assert!(matches!(actions.as_slice(), [Action::StartTalk(t)] if t.script.is_empty()));
+    assert!(s.translate.is_none());
+    let hit = logged_once(&ev, Level::TRACE, "translate_skipped_empty");
+    assert_eq!(hit.fields.get("talk_id").map(String::as_str), Some("7"));
+    assert_not_logged(&ev, "translate_begin");
+}
+
+#[test]
+fn reply_to_on_translate_is_played_without_translation() {
+    let (s, actions, ev) = raise_get_and_reply(
+        talking(),
+        "OnTranslate",
+        ShioriOutcome::Value(ORIGINAL.into()),
+    );
+    assert!(matches!(actions.as_slice(), [Action::StartTalk(t)] if t.script == ORIGINAL));
+    assert!(
+        s.translate.is_none(),
+        "OnTranslate の応答に OnTranslate を送らない（要件 4.6）"
+    );
+    let hit = logged_once(&ev, Level::DEBUG, "translate_skipped_self");
+    assert_eq!(hit.fields.get("talk_id").map(String::as_str), Some("7"));
+    assert_not_logged(&ev, "translate_begin");
+}
+
+#[test]
+fn missing_source_plays_the_script_with_an_error() {
+    // 控えを消してから応答を入れる（構造上は起きない）。
+    let input = Input::RaiseEvent {
+        id: "OnBoot".to_string(),
+        references: Vec::new(),
+        method: ShioriMethod::Get,
+    };
+    let (mut s, _) = step(talking(), input, &cfg());
+    s.reply_source = None;
+    let mut out = None;
+    let ev = capture(|| {
+        out = Some(step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value(ORIGINAL.into()),
+                origin: "raise",
+            },
+            &cfg(),
+        ))
+    });
+    let (s, actions) = out.expect("step は必ず値を返す");
+    assert!(
+        matches!(actions.as_slice(), [Action::StartTalk(t)] if t.script == ORIGINAL),
+        "台詞を捨てずに今日どおり再生する"
+    );
+    assert!(s.translate.is_none());
+    let hit = logged_once(&ev, Level::ERROR, "translate_source_missing");
+    assert_eq!(hit.fields.get("talk_id").map(String::as_str), Some("7"));
+}
+
+#[test]
+fn no_content_reply_is_not_captured() {
+    // areka が自分で作る台詞（台詞の無い応答の step で生まれる）は規則に当たらない。
+    let (s, actions, ev) = raise_get_and_reply(talking(), "OnBoot", ShioriOutcome::NoContent);
+    assert!(!actions.iter().any(|a| matches!(a, Action::Translate(_))));
+    assert!(s.translate.is_none());
+    assert_not_logged(&ev, "translate_skipped_empty");
 }

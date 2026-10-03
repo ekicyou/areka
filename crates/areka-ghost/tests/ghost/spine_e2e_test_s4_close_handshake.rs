@@ -231,6 +231,11 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
             &config,
             &areka_kanade::ExecutionSnapshot::INACTIVE,
         )),
+        // 台詞は再生の前に OnTranslate へかける（偽の SHIORI の既定は 204）。
+        super::expected_translate(
+            r"\s[0]hello\e",
+            &events::on_boot(&config, &areka_kanade::ExecutionSnapshot::INACTIVE),
+        ),
         expected_from_shiori_call(events::baseware_version(
             &config,
             &areka_kanade::ExecutionSnapshot::INACTIVE,
@@ -239,6 +244,13 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
             CloseReason::User { scope: 0 },
             &areka_kanade::ExecutionSnapshot::INACTIVE,
         )),
+        super::expected_translate(
+            r"\-",
+            &events::on_close(
+                CloseReason::User { scope: 0 },
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            ),
+        ),
         RecordedCall::Unload,
     ];
     let calls_without_status: Vec<RecordedCall> = handle
@@ -251,8 +263,8 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
         .collect();
     assert_eq!(
         calls_without_status, expected_sequence,
-        "起動系列＋close 握手系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→basewareversion→\
-         OnClose→Unload）が正典順序で発火していない"
+        "起動系列＋close 握手系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion→\
+         OnClose→OnTranslate→Unload）が正典順序で発火していない"
     );
 
     // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----

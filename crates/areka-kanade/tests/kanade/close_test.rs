@@ -38,7 +38,7 @@ use areka_kanade::{
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
     Fixture, Harness, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call,
-    expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    expected_translate, expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
     spawn_harness_with_stop_sink,
 };
 

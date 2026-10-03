@@ -3,7 +3,7 @@
 //! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
 //! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
 
-use areka_kanade::ShioriCall;
+use areka_kanade::{ExecutionSnapshot, ExecutionStatus, ShioriCall, events};
 
 // ============================================================================
 // RecordedCall — 受理された shiori 呼出の記録単位
@@ -94,4 +94,27 @@ pub fn expected_unload() -> RecordedCall {
         // Unload は Status ヘッダを持たない正規終了経路（5.1）。
         status: None,
     }
+}
+
+/// 元のイベントの呼出 `source` が台詞 `script` を返した後に送る `OnTranslate` の期待
+/// [`RecordedCall`]（偽の shiori の既定は 204）。`snapshot` は再生を始める時点の状態。
+///
+/// 期待は `areka_kanade::events::on_translate` から導出する（Reference をハードコードしない）。
+/// 展開の口は素通しなので、Reference0 は `script` そのものになる。
+pub fn expected_translate(
+    script: &str,
+    source: &ShioriCall,
+    snapshot: &ExecutionSnapshot,
+) -> RecordedCall {
+    let (ShioriCall::Get { id, references, .. } | ShioriCall::Notify { id, references, .. }) =
+        source;
+    let source = events::SourceEvent {
+        id: id.clone(),
+        references: references.clone(),
+    };
+    expected_call(events::on_translate(
+        script,
+        &source,
+        ExecutionStatus::derive(snapshot),
+    ))
 }

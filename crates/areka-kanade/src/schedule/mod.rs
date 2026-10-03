@@ -434,16 +434,16 @@ pub(crate) enum Action {
 /// 防御アームを実装し、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
 /// 「横断遷移を先に判定 → 該当しなければフェーズ分岐」である。
 ///
-/// どの入力でも、遷移の前後で元のイベントの控え（[`translate::before`]・[`translate::after`]）を
-/// 扱い、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
+/// どの入力でも、遷移の前後で元のイベントの控えと翻訳の出口の規則（[`translate::before`]・
+/// [`translate::after`]）を扱い、遷移の後に台詞の切れ目の見極め（[`talk_gap::observe`]）を 1 回だけ走らせる
 /// （見張りが無ければ何もしない）。
 pub(crate) fn step(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     // 印のイベントの応答なら、遷移の前のトークを控える（応答で台詞が始まったかを後で突き合わせる）。
     let marked_reply = talk_gap::marked_reply(&state, &input);
     // 応答の入力なら、応答を待っていた GET の元のイベントの控えを取り出す（1 回だけ使う）。
-    translate::before(&mut state, &input);
+    let replied = translate::before(&mut state, &input);
     let (mut state, actions) = route(state, input, config);
-    let actions = translate::after(&mut state, actions);
+    let actions = translate::after(&mut state, replied, actions);
     talk_gap::observe(&mut state, marked_reply);
     (state, actions)
 }

@@ -49,21 +49,42 @@ pub(crate) enum ReplyReading {
     Failed(ShioriFailure),
 }
 
+/// [`before`] が入力から取り出した、出口の規則（[`after`]）の材料。
+pub(super) struct Replied {
+    /// 入力が SHIORI の応答で結果が台詞（`Value`）のときの、その台詞（それ以外は `None`）。
+    script: Option<String>,
+    /// 応答を待っていた GET の元のイベント（控えから取り出したもの）。
+    source: Option<SourceEvent>,
+}
+
 /// [`step`](super::step) が `route` の前に呼ぶ。入力が SHIORI の応答なら、応答を待っていた GET の
-/// 元のイベントの控えを取り出して返す（控えは 1 回だけ使う）。他の入力では控えに触れない。
-pub(super) fn before(state: &mut State, input: &Input) -> Option<SourceEvent> {
+/// 元のイベントの控えを取り出し（控えは 1 回だけ使う）、台詞の応答ならその台詞と一緒に返す。
+/// 他の入力では控えに触れない。
+pub(super) fn before(state: &mut State, input: &Input) -> Replied {
     match input {
-        Input::ShioriReply { .. } => state.reply_source.take(),
-        _ => None,
+        Input::ShioriReply { outcome, .. } => Replied {
+            script: match outcome {
+                ShioriOutcome::Value(script) => Some(script.clone()),
+                _ => None,
+            },
+            source: state.reply_source.take(),
+        },
+        _ => Replied {
+            script: None,
+            source: None,
+        },
     }
 }
 
-/// [`step`](super::step) が `route` の後に呼ぶ。返す一括の最後の往復が GET ならその ID と
-/// Reference の写しを控え、NOTIFY・降ろす往復・翻訳の依頼なら控えを空にする。往復の無い一括では
-/// 変えない。
+/// [`step`](super::step) が `route` の後に呼ぶ。
+///
+/// まず出口の規則（[`capture`]）で SHIORI の台詞の再生開始を捕まえ、一括を帳簿へ預けて
+/// `[Action::Translate]` に替える。その後、返す一括の最後の往復が GET ならその ID と Reference の
+/// 写しを控え、NOTIFY・降ろす往復・翻訳の依頼なら控えを空にする。往復の無い一括では変えない。
 ///
 /// 殻は一括の最後の往復の結果だけを入れ直すので、次の応答の入力はここで控えた往復のものになる。
-pub(super) fn after(state: &mut State, actions: Vec<Action>) -> Vec<Action> {
+pub(super) fn after(state: &mut State, replied: Replied, actions: Vec<Action>) -> Vec<Action> {
+    let actions = capture(state, replied, actions);
     let last_round_trip = actions.iter().rev().find_map(|action| match action {
         Action::ShioriRequest(ShioriCall::Get { id, references, .. }) => Some(Some(SourceEvent {
             id: id.clone(),
@@ -78,6 +99,50 @@ pub(super) fn after(state: &mut State, actions: Vec<Action>) -> Vec<Action> {
         state.reply_source = source;
     }
     actions
+}
+
+/// 出口の規則。次の 4 つをすべて満たす一括を、順序を保って帳簿へ預け、翻訳の行動 1 つに替える。
+///
+/// ⑴ 入力が SHIORI の応答で結果が台詞 ⑵ その台詞が 1 文字以上 ⑶ 一括に再生の開始がある
+/// ⑷ 元のイベントが `OnTranslate` でない（外から頼まれた `OnTranslate` の応答を再び翻訳しない）。
+///
+/// ⑴⑶ を満たして ⑵ か ⑷ を満たさないとき、または元のイベントが分からないとき（構造上は
+/// 起きない）は、記録を 1 件残して今日どおり再生する。相・採番・期限・控えは腕が決めたまま
+/// 触らない。Status は捕まえた時点（腕が相を決めた後＝再生を始める時点）の状態から導く。
+fn capture(state: &mut State, replied: Replied, actions: Vec<Action>) -> Vec<Action> {
+    let Some(script) = replied.script else {
+        return actions;
+    };
+    let Some(talk_id) = actions.iter().find_map(|action| match action {
+        Action::StartTalk(start) => Some(start.talk_id),
+        _ => None,
+    }) else {
+        return actions;
+    };
+    if script.is_empty() {
+        tracing::trace!(target: "kanade", event = "translate_skipped_empty", talk_id = talk_id.0, "0 文字の台詞——翻訳せずに再生する");
+        return actions;
+    }
+    let Some(source) = replied.source else {
+        tracing::error!(target: "kanade", event = "translate_source_missing", talk_id = talk_id.0, "台詞を返した応答の元のイベントが分からない——翻訳せずに再生する");
+        return actions;
+    };
+    if source.id.as_str() == "OnTranslate" {
+        tracing::debug!(target: "kanade", event = "translate_skipped_self", talk_id = talk_id.0, "OnTranslate の応答の台詞——再び翻訳せずに再生する");
+        return actions;
+    }
+    tracing::debug!(target: "kanade", event = "translate_begin", talk_id = talk_id.0, source = %source.id, "台詞の再生開始を預けて OnTranslate へ");
+    let status = ExecutionStatus::derive(&state.snapshot());
+    state.translate = Some(TranslateWait {
+        talk_id,
+        source: source.id.clone(),
+        deferred: actions,
+    });
+    vec![Action::Translate(TranslateRequest {
+        script,
+        source,
+        status,
+    })]
 }
 
 /// `OnTranslate` の生の結果を読む（殻が呼ぶ純粋な関数）。

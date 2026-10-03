@@ -5,6 +5,7 @@ use super::test_support::{
 use super::*;
 use crate::msg::ShioriCall;
 use crate::schedule::step;
+use crate::schedule::translate_test_support::pass_translate;
 use crate::talk::TalkEndReason;
 
 // ============================================================
@@ -825,12 +826,15 @@ fn choice_happy_path_emits_no_error_level_logs() {
             &cfg,
         );
         // 3) Value 応答 → [ResolveChoice, StartTalk]・slot 差替。
-        let (s3, resolved) = step(
-            s2,
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Value(r"\0次のシーン\e".to_string()),
-                origin: "OnChoiceEvent",
-            },
+        let (s3, resolved) = pass_translate(
+            step(
+                s2,
+                Input::ShioriReply {
+                    outcome: ShioriOutcome::Value(r"\0次のシーン\e".to_string()),
+                    origin: "OnChoiceEvent",
+                },
+                &cfg,
+            ),
             &cfg,
         );
         // 4) 旧 talk の遅延 Done（F1 残余レース）→ 1 世代 stale 防御で info 棄却。

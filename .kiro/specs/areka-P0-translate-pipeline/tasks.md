@@ -78,7 +78,7 @@
   - 完了の状態: 帳簿を直接置いた状態からの結果の入力のテスト（差し替え・控えの書き換え・故障・帳簿なし）が緑で、既存のテストは変更なしで緑
   - _Requirements: 1.4, 4.5, 6.1, 6.2, 8.4_
 
-- [ ] 3.4 運行表の出口で SHIORI の台詞の再生開始を捕まえ、既存のテストの期待を直す
+- [x] 3.4 運行表の出口で SHIORI の台詞の再生開始を捕まえ、既存のテストの期待を直す
   - `step` の出口で、条件 4 つ（SHIORI の応答で台詞あり・1 文字以上・一括に再生の開始・元のイベントが `OnTranslate` でない）を満たす一括を順序を保って帳簿へ預け、翻訳の行動 1 つに替える。Status は捕まえた時点の状態から導く
   - 空の台詞は `translate_skipped_empty`、`OnTranslate` の応答は `translate_skipped_self`、元のイベントが分からないときは `translate_source_missing` を残して今日どおり再生する
   - 既存の運行表・殻・結合のテストのうち台詞を返すものの期待に `OnTranslate` を書き足す（3.3 の補助を使う）。行数の上限に近いテストのファイル（`actor_tests.rs` 970 行・`steady_flow_tests.rs` 3.1 の後で 931 行）は書き足す前に行数を見積もり、あふれる分は新しい兄弟ファイルへ置く
@@ -147,3 +147,4 @@
 - 3.1: `translate::before` は `Option<SourceEvent>` を返し、`after` は `replied` を取らない形で入れた（使い手がまだ無いため）。3.4 で設計の `Replied` の形に広げ、`after` の控えの決まりに「最後の往復が `Action::Translate` なら空にする」を足す。輸送路の失敗は `read_reply` では記録せず、`on_done` の `translate_failed`（3.3）が受け持つ。`State` を `..` なしで組む既存テストは 14 か所で、`steady_flow_tests.rs` は `..base_state()` なので触っておらず 925 行のまま（3.4 の行数の見積もりは 925 から）
 - 3.2: `lib.rs` の `mod actor_translate;` に一時の `#[allow(dead_code)]` がある。3.3 で `execute_actions` の腕から `run_translate` を呼んだら外す。送出は `round_trip_raw`（検査・印の置き換え・`shiori_request`・往復）と、エラー応答を写す `round_trip_request` の 2 段。偽の SHIORI のスレッドは送り手を落としてから join しないと `recv` で止まる
 - 3.3: 殻の本番の関数は `drive_translating`・`execute_batch` の名前になり、元の `drive`・`execute_actions` は素通しの口を渡す `#[cfg(test)]` の包みとして残した（既存テストを変えないため）。`actor.rs` は 876 行で、3.4 以降で殻に書き足す余地は 120 行ほど。翻訳の失敗で切替の台詞は `None`（下流は `unwrap_or_default()` で空文字）。設計の `translate_tests.rs` の行「選択の連鎖の後でも故障になること（論点 10）」はまだ無いので、3.5 で足す
+- 3.4: `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` は本 spec の前から 1,129 行で長さの検査の例外表に載っている。期待の列に `OnTranslate` を 1 つ足して 1,135 行（検査は例外のファイルの行数を固定しないので緑・例外表は触らない）。`State` を手で組み `reply_source: None` のまま SHIORI の応答を入れる既存テストは、構造上は起きない `translate_source_missing`（error）の枝を通って今日どおり再生する（触っていない）。主な経路の通過は 3.5 で固定する。3.5 では「204 の応答の `step` で生まれる起動の記録だけの台詞（`StartTalk` あり）を捕まえない」も固定する（3.4 の `no_content_reply_is_not_captured` は `StartTalk` の無い一括しか見ていない）。4.2 で本物の展開を渡すと、`spine_conformance_script.rs` の `translated()` と areka-ghost の `expected_translate` の Reference0（今は展開の前の台詞）が変わる

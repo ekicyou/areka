@@ -516,11 +516,15 @@ fn production_path_follows_a_silent_complete_ex_with_the_legacy_complete() {
     assert_eq!(last.as_deref(), Some("newbie"));
 }
 
-/// `OnInstallCompleteEx` に台本が返れば、`OnInstallComplete` は送らない。切替も要求しない。
+/// `OnInstallCompleteEx` に台本が返れば、`OnInstallComplete` は送らない（台本を再生の前にかける
+/// `OnTranslate` だけが続く）。切替も要求しない。
 #[test]
 fn production_path_sends_no_legacy_complete_after_a_complete_ex_script() {
     let (calls, switched, last) = install_through_production_path(Some(r"\0入れたよ\e"));
     assert!(!switched, "切替を要求しない");
-    assert_eq!(calls, ["OnInstallBegin", "OnInstallCompleteEx"]);
+    assert_eq!(
+        calls,
+        ["OnInstallBegin", "OnInstallCompleteEx", "OnTranslate"]
+    );
     assert_eq!(last.as_deref(), Some("newbie"));
 }

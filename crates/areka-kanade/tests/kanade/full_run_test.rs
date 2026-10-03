@@ -20,7 +20,7 @@ use areka_kanade::{
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, Harness,
-    QuitPolicy, expected_call, expected_unload, join_bounded, spawn_harness,
+    QuitPolicy, expected_call, expected_translate, expected_unload, join_bounded, spawn_harness,
 };
 
 /// 主観測の駆動と検証を 1 回分実行する（反復同一性のため単一関数に閉じる）。
@@ -92,20 +92,20 @@ fn drive_full_run() {
     // ========================================================================
     // 期待値は events 表から導出する（ハーネスに Reference をハードコードしない・Req 7.1）。
     // boot 系列前段は INACTIVE（Status 行なし）・basewareversion は挨拶追跡後の talk_active=true
-    // （Status: talking・DD-IT-12）。
+    // （Status: talking・DD-IT-12）。挨拶の台詞は再生の前に OnTranslate へかける（偽の shiori は 204）。
+    let talking = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: false,
+        ..ExecutionSnapshot::INACTIVE
+    };
+    let on_boot = events::on_boot(&config, &ExecutionSnapshot::INACTIVE);
     let expected_boot_prefix = vec![
         expected_call(events::on_initialize(&ExecutionSnapshot::INACTIVE)), // NOTIFY
         expected_call(resources::resource_username(&ExecutionSnapshot::INACTIVE)), // GET（prefetch・R4.1）→204
         expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)),     // GET →204
         expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)),     // GET →Value
-        expected_call(events::baseware_version(
-            &config,
-            &ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        )), // NOTIFY（Status: talking）
+        expected_translate(FIXED_BOOT_SCRIPT, &on_boot, &talking), // GET（挨拶の翻訳）→204
+        expected_call(events::baseware_version(&config, &talking)), // NOTIFY（Status: talking）
     ];
     assert!(
         recorded.len() >= expected_boot_prefix.len(),

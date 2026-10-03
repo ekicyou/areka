@@ -81,6 +81,28 @@ pub enum RecordedCall {
     Status,
 }
 
+/// 元のイベントの呼出 `source` が台詞 `script` を返した後に届く `OnTranslate` の期待の記録
+/// （[`ScriptedShioriBackend`] の既定は 204）。期待は events 表の `on_translate` から導く
+/// （Reference をハードコードしない）。記録は Status を持たないので、Status は何でもよい。
+pub fn expected_translate(script: &str, source: &areka_kanade::ShioriCall) -> RecordedCall {
+    let (areka_kanade::ShioriCall::Get { id, references, .. }
+    | areka_kanade::ShioriCall::Notify { id, references, .. }) = source;
+    let source = areka_kanade::events::SourceEvent {
+        id: id.clone(),
+        references: references.clone(),
+    };
+    let status = areka_kanade::ExecutionStatus::derive(&areka_kanade::ExecutionSnapshot::INACTIVE);
+    let areka_kanade::ShioriCall::Get { id, references, .. } =
+        areka_kanade::events::on_translate(script, &source, status)
+    else {
+        panic!("OnTranslate は GET");
+    };
+    RecordedCall::Get {
+        id: id.to_string(),
+        references,
+    }
+}
+
 /// [`ScriptedShioriBackend`] を組み立てるビルダー（台本の事前登録）。
 ///
 /// GET/NOTIFY は id ごとに応答列（`VecDeque`）を積み上げ、呼出のたびに先頭から 1 件
@@ -199,6 +221,8 @@ impl ShioriBackend for ScriptedShioriBackend {
         self.get_scripts
             .get_mut(id)
             .and_then(VecDeque::pop_front)
+            // OnTranslate は台詞の数だけ届く＝台本に無ければ既定の 204 で答える（記録には残る）。
+            .or_else(|| (id == "OnTranslate").then_some(Ok(None)))
             .unwrap_or_else(|| {
                 panic!("ScriptedShioriBackend::get(\"{id}\"): no scripted response left (never configured or script exhausted)")
             })

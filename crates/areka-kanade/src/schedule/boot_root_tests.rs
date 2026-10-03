@@ -48,15 +48,13 @@ fn updated() -> BootOrigin {
     }
 }
 
+/// SHIORI の応答を入れる（翻訳の行動が出たら、`OnTranslate` が 204 を返したときの続きを返す）。
 fn reply(s: State, outcome: ShioriOutcome, c: &KanadeConfig) -> (State, Vec<Action>) {
-    step(
-        s,
-        Input::ShioriReply {
-            outcome,
-            origin: "test",
-        },
-        c,
-    )
+    let input = Input::ShioriReply {
+        outcome,
+        origin: "test",
+    };
+    crate::schedule::translate_test_support::pass_translate(step(s, input, c), c)
 }
 
 /// Boot → OnInitialize 完了 → username 照会 204 まで進め、照会の応答が返した Action 列を返す。

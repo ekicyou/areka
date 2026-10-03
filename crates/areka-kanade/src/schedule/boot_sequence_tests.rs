@@ -1,5 +1,6 @@
 use super::test_support::{assert_get, assert_notify, config, initial};
 use super::*;
+use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
 
@@ -72,12 +73,15 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
 
     // 4. BootMain + Value("greeting") → StartTalk(id=1) + basewareversion NOTIFY /
     //    BootVersion{talk: Some(挨拶)}（DD-IT-12: 挨拶を正規追跡）。
-    let (s, actions) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("greeting".to_string()),
-            origin: "test",
-        },
+    let (s, actions) = pass_translate(
+        step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("greeting".to_string()),
+                origin: "test",
+            },
+            &cfg,
+        ),
         &cfg,
     );
     assert!(
@@ -169,12 +173,15 @@ fn boot_type_value_skips_onboot_and_starts_talk() {
     assert!(matches!(s.phase, Phase::BootType));
 
     // BootType + Value("earlygreet") → StartTalk + basewareversion NOTIFY / BootVersion。
-    let (s, actions) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("earlygreet".to_string()),
-            origin: "test",
-        },
+    let (s, actions) = pass_translate(
+        step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("earlygreet".to_string()),
+                origin: "test",
+            },
+            &cfg,
+        ),
         &cfg,
     );
     assert!(
@@ -567,12 +574,15 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
         },
         &cfg,
     ); // BootType→BootMain（OnBoot GET）
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("greeting".to_string()),
-            origin: "test",
-        },
+    let (s, _) = pass_translate(
+        step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("greeting".to_string()),
+                origin: "test",
+            },
+            &cfg,
+        ),
         &cfg,
     ); // BootMain(Value)→BootVersion{talk: Some(id=1)}
     let (s, _) = step(

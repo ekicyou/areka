@@ -26,13 +26,14 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 
     // ── (1) scripted boot 発火: boot 系列が backend へ (method,id) 順で届く ──
     // boot 系列は kanade スレッド上の同期往復のみで完走する（Tick 不要）。実スレッド境界を跨ぐため
-    // 有界スピン待機（sleep なし・yield_now のみ）で 5 呼出の到達を待ってから照合する。task 8.2 の
-    // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり boot 系列は 5 呼出。
+    // 有界スピン待機（sleep なし・yield_now のみ）で 6 呼出の到達を待ってから照合する。task 8.2 の
+    // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）と、挨拶の台詞を再生の前に
+    // かける OnTranslate（OnBoot の後・偽の SHIORI の既定は 204）が加わり boot 系列は 6 呼出。
     // 打ち切りは反復回数でなく [`spin_wait_until`] の時刻期限（反復は経過時間の代理にならない）。
     let mut boot_calls = Vec::new();
     spin_wait_until(|| {
         boot_calls = harness.shiori_handle.non_status_calls();
-        boot_calls.len() >= 5
+        boot_calls.len() >= 6
     });
     let projected: Vec<(&str, &str)> = boot_calls
         .iter()
@@ -44,19 +45,20 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
         })
         .collect();
     assert!(
-        projected.len() >= 5,
+        projected.len() >= 6,
         "scripted boot 系列が有界内に発火しない（scripted ghost を boot できていない）: {boot_calls:?}"
     );
     assert_eq!(
-        &projected[..5],
+        &projected[..6],
         &[
             ("notify", "OnInitialize"),
             ("get", "username"),
             ("get", "OnFirstBoot"),
             ("get", "OnBoot"),
+            ("get", "OnTranslate"),
             ("notify", "basewareversion"),
         ],
-        "boot 系列が正典順序（OnInitialize→username prefetch→OnFirstBoot→OnBoot→basewareversion）で発火していない"
+        "boot 系列が正典順序（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）で発火していない"
     );
 
     // ── (2) Tick 注入の疎通（ghost スタック生存・sleep 不使用・R8.3） ──

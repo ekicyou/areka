@@ -179,6 +179,11 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
             &config,
             &areka_kanade::ExecutionSnapshot::INACTIVE,
         )),
+        // 挨拶の台詞は再生の前に OnTranslate へかける（偽の SHIORI の既定は 204）。
+        super::expected_translate(
+            r"\s[0]hello\e",
+            &events::on_boot(&config, &areka_kanade::ExecutionSnapshot::INACTIVE),
+        ),
         expected_from_shiori_call(events::baseware_version(
             &config,
             &areka_kanade::ExecutionSnapshot::INACTIVE,
@@ -223,7 +228,7 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     }
     assert!(
         boot_prefix_len >= expected_boot_prefix.len(),
-        "S1: boot 系列 {} 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が \
+        "S1: boot 系列 {} 呼出（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion）が \
          {:?} 以内に揃わなかった——Status を除く観測件数は {} 件",
         expected_boot_prefix.len(),
         super::E2E_BOUND,
@@ -238,7 +243,7 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
         .collect();
     assert_eq!(
         calls_without_status, expected_boot_prefix,
-        "起動系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→basewareversion）が正典順序で発火していない"
+        "起動系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）が正典順序で発火していない"
     );
 
     // ---- (b)(c) RecordingSink の発火列（broadcast・at 昇順・内容一致）----

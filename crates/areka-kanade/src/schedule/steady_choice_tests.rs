@@ -5,6 +5,7 @@ use super::test_support::{
 use super::*;
 use crate::msg::ShioriCall;
 use crate::schedule::step;
+use crate::schedule::translate_test_support::pass_translate;
 
 // --- A. 棄却分岐（規則 1）: すべて状態不変・Action なし ---
 
@@ -432,12 +433,15 @@ fn one_choice_yields_at_most_one_cascade_resolve_and_start() {
         Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
         &config(),
     );
-    let (s2, a2) = step(
-        s1,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("script".to_string()),
-            origin: "OnChoiceEvent",
-        },
+    let (s2, a2) = pass_translate(
+        step(
+            s1,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("script".to_string()),
+                origin: "OnChoiceEvent",
+            },
+            &config(),
+        ),
         &config(),
     );
     // 解決後に遅れて届く応答・遅延した選択確定はいずれも追加のカスケードを起こさない。
@@ -538,12 +542,15 @@ fn canonical_value_at_first_stage_skips_the_remaining_stage() {
         Input::Choice(choice_input_of("choice1", "ラベル", &[])),
         &config(),
     );
-    let (s2, a2) = step(
-        s1,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("script".to_string()),
-            origin: "OnChoiceSelectEx",
-        },
+    let (s2, a2) = pass_translate(
+        step(
+            s1,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("script".to_string()),
+                origin: "OnChoiceSelectEx",
+            },
+            &config(),
+        ),
         &config(),
     );
     assert!(

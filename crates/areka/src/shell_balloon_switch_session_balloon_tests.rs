@@ -294,9 +294,12 @@ fn script_balloon_switch_round_trips_and_binds_the_next_talk_to_the_new_slot() {
                     "NOTIFY OnInitialize".to_owned(),
                     "GET username".to_owned(),
                     "GET OnBoot".to_owned(),
+                    "GET OnTranslate".to_owned(),
                     "NOTIFY basewareversion".to_owned(),
                     "GET OnBalloonChange".to_owned(),
+                    "GET OnTranslate".to_owned(),
                     "GET OnBalloonChange".to_owned(),
+                    "GET OnTranslate".to_owned(),
                 ]
             ),
             (

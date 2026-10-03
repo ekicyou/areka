@@ -201,7 +201,8 @@ fn snapshot_without_talk_keeps_only_online_and_balloons() {
     );
 }
 
-/// 写しを満たした `state` から `inputs` を順に流し、各入力が返した最後のリクエストを集める。
+/// 写しを満たした `state` から `inputs` を順に流し、各入力が返した最後のリクエストを集める
+/// （翻訳の行動が出たら、`OnTranslate` が 204 を返したときの続きのリクエストを集める）。
 fn walk(state: State, inputs: Vec<Input>, config: &KanadeConfig) -> Vec<(String, Option<String>)> {
     let mut state = State {
         external: full_copy(),
@@ -209,7 +210,8 @@ fn walk(state: State, inputs: Vec<Input>, config: &KanadeConfig) -> Vec<(String,
     };
     let mut seen = Vec::new();
     for input in inputs {
-        let (next, actions) = step(state, input, config);
+        let next = step(state, input, config);
+        let (next, actions) = crate::schedule::translate_test_support::pass_translate(next, config);
         seen.push(last_request(&actions));
         state = next;
     }
