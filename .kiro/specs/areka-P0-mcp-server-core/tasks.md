@@ -115,7 +115,7 @@
   - _Boundary: steering_
 
 - [ ] 6. 検証
-- [ ] 6.1 ライセンスの門と全体テスト
+- [x] 6.1 ライセンスの門と全体テスト
   - `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` を回し、`cargo deny check`・`cargo about generate` が緑で、`THIRD-PARTY-NOTICES.md` は道具が作り直したもの（手の差分 0 行）であることを確かめる
   - 全体テストで既存のテストが緑のまま・1,000 行の番人が緑・`log-capture-kit` が `[dependencies]` に無いことの見張りが緑
   - 完了の姿: `test-all.ps1 -Format -License` が終了コード 0・`deny.toml`／`about.toml`／根の `[workspace.dependencies]` の差分 0 行
