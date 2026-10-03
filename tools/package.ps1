@@ -7,7 +7,7 @@
   印字して、後始末（.zip.tmp の削除・差し替えた環境変数の復元）をしてから即終了する
   （tools/test-all.ps1 の「最後まで回す」とは逆）。
   最後の段「git status 不変の確認」で、始めと終わりの git status --porcelain が同じことを確かめる
-  （追跡しているファイルを 1 つも書き換えない。zip と途中物は追跡外の target/alpha/ に置く）。
+  （追跡しているファイルを 1 つも書き換えない。zip と途中物は追跡外の target/package/ に置く）。
 
   注意: 同じ検体で実機を回している最中に実行すると、その走行の展開した木を消す（target/nar-samples/manual/<検体>/）。
   検体の展開は nar-sample-path が同じ manual/<検体>/ を消してから作り直すため。実機の走行が終わってから実行すること。
@@ -20,6 +20,11 @@
 
   較正値・調整値の一覧（変更するときはスクリプト冒頭の「較正値」の 1 か所だけを書き換える）:
     SCRIPT_VERSION                  本スクリプトの版（BUILD-INFO.txt の script= に書く）
+    OUT_DIR              = target/package  cargo の --target-dir・zip・.sha256 の置き場
+    ARCHS                           CPU 種別ごとのビルドのターゲットと機械種別（x64・arm64）
+    HELPER_TARGET／HELPER_MACHINE   補助 exe と pasta.dll のターゲットと機械種別（i686・0x014c）
+    REMOVE_RETRY = 5／REMOVE_RETRY_WAIT_SEC = 1  消す処理の再試行の回数と間隔（秒）
+    VERSION_PATTERN                 受け付ける版の形（+ の付記は受けない）
     SMOKE_EXIT_MS        = 10000    -Check の有界の自動終了（ミリ秒・-SmokeExitMs で上書き）
     WATCHDOG_MARGIN_SEC  = 60       自動終了の予定から番犬が子を止めるまでの猶予（秒）
     EXPAND_DIR_MAX_CHARS = 160      -Check の展開先のフルパスの長さの上限（文字）
@@ -39,16 +44,19 @@
   -Check の有界の自動終了（ミリ秒・正の整数）。省略時は SMOKE_EXIT_MS。
 
 .EXAMPLE
-  pwsh -NoProfile -File tools/package-alpha.ps1
+  pwsh -NoProfile -File tools/package.ps1
 
 .EXAMPLE
-  pwsh -NoProfile -File tools/package-alpha.ps1 -Check -CheckDir C:\t -SmokeExitMs 10000
+  pwsh -NoProfile -File tools/package.ps1 -Check -CheckDir C:\t -SmokeExitMs 10000
 #>
 # 使い方の説明（上）は Get-Help がファイルの先頭でしか読まないので、#Requires はここに置く
 #Requires -Version 7
 param(
+    # 受け付ける値以外も終了コード 3 で断るため、ValidateSet でなく文字列で受けて自分で読む
+    [string]$Arch = 'x64',
     [switch]$Check,
     [string]$CheckDir,
+    [switch]$KeepExpanded,
     # 数でない値も終了コード 3 で断るため、文字列で受けて自分で読む
     [string]$SmokeExitMs
 )
@@ -62,7 +70,20 @@ $PSNativeCommandUseErrorActionPreference = $false
 # =============================================================================
 # 較正値（説明の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION       = '1.0.0'
+$SCRIPT_VERSION       = '2.0.0'
+$OUT_DIR              = 'target/package'
+# CPU 種別ごとの値の唯一の出どころ（ビルドのターゲット・zip の名前の {arch}・機械種別の検査）。順序つき
+$ARCHS = [ordered]@{
+    x64   = @{ Target = 'x86_64-pc-windows-msvc'; Machine = 0x8664 }
+    arm64 = @{ Target = 'aarch64-pc-windows-msvc'; Machine = 0xAA64 }
+}
+# 補助 exe と pasta.dll は CPU 種別に依らず 32 ビット
+$HELPER_TARGET        = 'i686-pc-windows-msvc'
+$HELPER_MACHINE       = 0x014c
+$REMOVE_RETRY         = 5
+$REMOVE_RETRY_WAIT_SEC = 1
+# 版の形（+ のビルドの付記はファイル名と URL で困るので受けない）
+$VERSION_PATTERN      = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
 $SMOKE_EXIT_MS        = 10000   # 2026-09-26 実測: 挨拶はゲートから約 2.1 秒（release・展開直後の初回起動）。余裕 5 倍
 $WATCHDOG_MARGIN_SEC  = 60
 $EXPAND_DIR_MAX_CHARS = 160
@@ -135,6 +156,12 @@ function Exit-Script([int]$Code, [string]$Message) {
     exit $Code
 }
 
+# CPU 種別 1 つ分の成果物の 4 つの絶対パス（名前の決め方はここだけ。版は前提の確認で読んだ $script:Version）
+function Get-ArtifactNames([string]$Arch) {
+    $zip = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../$OUT_DIR/areka-$script:Version-$Arch.zip"))
+    [pscustomobject]@{ Zip = $zip; Sha = "$zip.sha256"; ZipTmp = "$zip.tmp"; ShaTmp = "$zip.sha256.tmp" }
+}
+
 # =============================================================================
 # 段の直列
 # =============================================================================
@@ -178,6 +205,14 @@ Step '前提の確認' {
     } else {
         $script:SmokeMs = $SMOKE_EXIT_MS
     }
+    $accepted = @($ARCHS.Keys) + 'all'
+    if ($accepted -cnotcontains $Arch) {
+        Exit-Script $EXIT_BAD_ARGS ("-Arch は {0} のどれかで指定する（受け取った値: '{1}'）" -f ($accepted -join '・'), $Arch)
+    }
+    $script:BuildArchs = ($Arch -eq 'all') ? @($ARCHS.Keys) : @($Arch)
+    if ($Check -and $script:BuildArchs -cnotcontains 'x64') {
+        Exit-Script $EXIT_BAD_ARGS "-Check の起動確認には x64 の zip が要る（-Arch x64 か all と組み合わせる・受け取った値: '$Arch'）"
+    }
     if ($CheckDir -and -not [IO.Path]::IsPathFullyQualified($CheckDir)) {
         Exit-Script $EXIT_BAD_ARGS "-CheckDir は絶対パスで指定する（受け取った値: '$CheckDir'）"
     }
@@ -205,11 +240,38 @@ Step '前提の確認' {
     if ($LASTEXITCODE) { Exit-Script $EXIT_BAD_ARGS 'cargo deny が無い（cargo install cargo-deny --version 0.20.2 --locked で入れる）' }
     if (-not (Test-Path -LiteralPath 'Cargo.lock')) { Exit-Script $EXIT_BAD_ARGS 'Cargo.lock が無い（追跡している Cargo.lock を git から戻す）' }
 
-    Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件"
+    # 版（正本は Cargo.toml の [workspace.package] version。areka パッケージ経由で読む）。3 で止まる検査の最後
+    $out = @(cargo metadata --no-deps --locked --format-version 1 2>&1)
+    $code = $LASTEXITCODE
+    $err = @($out | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object { "$_" })
+    if ($code) {
+        Exit-Script $EXIT_BAD_ARGS ("版を読めない（cargo metadata が終了コード {0}: {1}）" -f $code, ($err | Select-Object -Last 1))
+    }
+    try {
+        $meta = ($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n" | ConvertFrom-Json
+    } catch {
+        Exit-Script $EXIT_BAD_ARGS "版を読めない（cargo metadata の出力が JSON として読めない: $_）"
+    }
+    $pkg = @($meta.packages | Where-Object { $_.name -ceq 'areka' })
+    if ($pkg.Count -ne 1) { Exit-Script $EXIT_BAD_ARGS "版を読めない（cargo metadata に areka のパッケージが $($pkg.Count) 件）" }
+    $script:Version = "$($pkg[0].version)"
+    if (-not $script:Version) { Exit-Script $EXIT_BAD_ARGS '版を読めない（areka の version が空。Cargo.toml の [workspace.package] version を書く）' }
+    if ($script:Version -cnotmatch $VERSION_PATTERN) {
+        Exit-Script $EXIT_BAD_ARGS "版の形が違う（'$script:Version'・受け付ける形 $VERSION_PATTERN。+ の付記は付けない）"
+    }
+
+    # 前回の同名の組をビルドの前に消す（今回が失敗しても前回の物が完成品に見えて残らない）
+    foreach ($a in $script:BuildArchs) {
+        $n = Get-ArtifactNames $a
+        foreach ($p in @($n.Zip, $n.Sha, $n.ZipTmp, $n.ShaTmp)) {
+            if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force; Write-Host "前回の物を消した: $p" }
+        }
+    }
+
+    Write-Host "コミット $script:Commit・未コミットの変更 $script:Dirty 件・版 $script:Version・CPU 種別 $($script:BuildArchs -join '・')"
 }
 
-$X64 = 'x86_64-pc-windows-msvc'; $I686 = 'i686-pc-windows-msvc'
-$OUT_DIR = 'target/alpha'
+$X64 = $ARCHS['x64'].Target; $I686 = $HELPER_TARGET
 $script:AppExe = "$OUT_DIR/$X64/release/areka.exe"
 $script:HelperExe = "$OUT_DIR/$I686/release/shiori-host32-helper.exe"
 $script:Notices = "$OUT_DIR/THIRD-PARTY-NOTICES.md"
@@ -325,16 +387,16 @@ Step '組み立て' {
         "commit=$script:Commit"
         "dirty=$script:Dirty"
         "built=$([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))"
-        "script=tools/package-alpha.ps1 $SCRIPT_VERSION"
+        "script=tools/package.ps1 $SCRIPT_VERSION"
         "rustflags=$script:RustFlags"
     )
     [IO.File]::WriteAllLines((Join-Path (Resolve-Path -LiteralPath $STAGE_DIR) 'BUILD-INFO.txt'), $info)   # UTF-8（BOM 無し）
 }
 
 Step '圧縮' {
-    $name = 'areka-alpha-x64-{0}-{1}{2}.zip' -f (Get-Date -Format 'yyyyMMdd'), $script:Commit, $(if ($script:Dirty) { '-dirty' } else { '' })
-    $script:ZipFinal = Join-Path (Resolve-Path -LiteralPath $OUT_DIR) $name
-    $script:ZipTmp = "$script:ZipFinal.tmp"
+    $n = Get-ArtifactNames 'x64'
+    $script:ZipFinal = $n.Zip
+    $script:ZipTmp = $n.ZipTmp
     if (Test-Path -LiteralPath $script:ZipTmp) { Remove-Item -LiteralPath $script:ZipTmp -Force }
     # includeBaseDirectory を $false にしないと stage/ が最上位に入る
     [IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path -LiteralPath $STAGE_DIR), $script:ZipTmp, [IO.Compression.CompressionLevel]::Optimal, $false)
@@ -389,7 +451,7 @@ function Test-ZipContent([string]$ZipPath) {
         $execs | Where-Object { $ALLOWED_EXECUTABLES -cnotcontains $_ } | ForEach-Object { $bad.Add("4 許可表に無い実行ファイル: $_") }
         $ALLOWED_EXECUTABLES | Where-Object { $execs -cnotcontains $_ } | ForEach-Object { $bad.Add("4 実行ファイルが無い: $_") }
         # 5. PE の機種・6. 依存 DLL（本体と helper だけ）
-        $machines = [ordered]@{ 'areka.exe' = 0x8664; 'shiori-host32-helper.exe' = 0x014c; 'ghost/emo2/ghost/master/pasta.dll' = 0x014c }
+        $machines = [ordered]@{ 'areka.exe' = $ARCHS['x64'].Machine; 'shiori-host32-helper.exe' = $HELPER_MACHINE; 'ghost/emo2/ghost/master/pasta.dll' = $HELPER_MACHINE }
         foreach ($n in $machines.Keys) {
             if (-not $map.ContainsKey($n)) { continue }   # 無いことは 1／4 が言う
             try { $info = Read-PeInfo (Read-ZipEntry $map[$n]) } catch { $bad.Add("5 PE として読めない: $n（$_）"); continue }
