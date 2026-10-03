@@ -99,7 +99,7 @@
   - _Requirements: 1.1, 1.4, 1.7, 8.6_
   - _Depends: 3.3_
   - _Boundary: areka の main の結線_
-- [ ] 5.2 (P) SSP との輸送の差の一覧
+- [x] 5.2 (P) SSP との輸送の差の一覧
   - `doc/ssp-mcp/transport-diff-areka.md` を新しく書く: survey §2 の 14 行＋§1 のフォーム＝15 行に、本文の上限（4 MiB）と `Accept` の 2 行を足した 17 行。列は「項目／SSP／areka（rmcp 3.5.0）／判定／測ったテスト名」。先頭に測った rmcp の版と日付
   - 判定は「同じ／違うが困らない／困るので直した」のどれか。物差し（Claude Code・Cursor が登録・initialize・tools/list・ping に失敗する差）に当たる行は 0（直した行 0）であることを明記する
   - 完了の姿: 17 行すべてに判定とテスト名が入り空欄 0 行・`survey.md` の本文は変えていない
@@ -136,3 +136,4 @@
 - 4.2: 閉じたループバックのポートへの `connect` は Windows では SYN を再送して拒否まで約 2 秒かかる。「つながらない」の判定は `connect_timeout`（500 ms）で足りる
 - 4.3: `server/discover` が答えるのは無状態の送り方（`_meta` の protocolVersion＋ヘッダ `MCP-Protocol-Version: 2026-07-28`）のときだけ。`_meta` だけは 400（-32020）・どちらも無しは 200（-32601）。serverInfo は `_meta."io.modelcontextprotocol/serverInfo"` の下
 - 4.4: 悪い `Host` は `/api/mcp/v1` では rmcp の `allowed_hosts` も 403 を返すので、`gate` の Host 検査を固定できるのは rmcp を通らない help の経路だけ。`isError` は true／false の両方を往復させないと「常に error」の変異が通る
+- 5.2: 差の一覧の値はすべてテストの assert から写す。survey の行に areka の測りが無ければ、文書に「未測定」と書く前にテストへ assert を足して測る（バッチ・エラーの形・無状態版の 3 つ・`Accept` の片方だけを 4.3 に追補した）

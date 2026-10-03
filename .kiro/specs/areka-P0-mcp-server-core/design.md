@@ -659,7 +659,7 @@ impl Drop for McpServer { /* 上記 */ }
 | `get_v1_has_no_form` | `GET /api/mcp/v1` → 405（本文に `<form` 無し） | 3.11 |
 | `server_discover_stateless` | `server/discover` → `supportedVersions`（5 版）・`capabilities`・`instructions`・serverInfo。本文と食い違う `Mcp-Method: tools/list` → 400・`-32020`（ヘッダと本文のメソッドの食い違い・文言はテストに逐語） | 3.12 |
 | `protocol_version_header_old_or_missing_is_passthrough` | ヘッダ無し・4 旧版のそれぞれで `ping` が `{}` | 3.13 |
-| `unknown_protocol_version_header_is_rejected` | `MCP-Protocol-Version: 1999-01-01` → 4xx（400 の見込み）。`2026-07-28` で `_meta` の無い `ping` → 400・`-32020`「missing required Mcp-Method header」、`Mcp-Method: ping` も付けると 400・`-32602`「Invalid params: request _meta is missing or has malformed required fields: …」 | 3.13 |
+| `unknown_protocol_version_header_is_rejected` | `MCP-Protocol-Version: 1999-01-01` → 400・平文。`2026-07-28` で `_meta` の無い `ping` → 400・`-32020`「missing required Mcp-Method header」、`Mcp-Method: ping` も付けると 400・`-32602`「Invalid params: request _meta is missing or has malformed required fields: …」 | 3.13 |
 | `accept_header_missing_is_406` | `Accept` 無しの `ping` → 406（差の一覧の行）。`Accept` が `application/json` だけ・`text/event-stream` だけでも 406・平文「Not Acceptable: Client must accept both application/json and text/event-stream」 | 5.1（B-8） |
 | `body_over_limit_is_413` | 4 MiB＋1 の本文 → 413（差の一覧の行） | 5.1（B-7） |
 
