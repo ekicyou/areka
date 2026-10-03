@@ -2,7 +2,7 @@
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use areka_emo_compose::ScaleRatio;
 use areka_emo_present::{EmoPresenter, TargetId};
@@ -301,9 +301,22 @@ pub(super) fn finalize_chain_once(presenter: &EmoPresenter, world: &mut World) {
 ///
 /// # 見送りの可観測性（scg 6.5）
 ///
-/// 毎フレームの見送りは無音のままだが、有界の待ち（[`CHAIN_FINALIZE_STALL_FRAMES`]）を超えても
-/// 未確定なら [`defer_chain_finalize`] が**一度だけ**理由つきの `warn!` を出す。正常な待ちと
-/// 永久に条件が揃わない停滞を、事後にログから判別できるようにするため。
+/// 見送りの理由は「ゴースト待ち」と「areka 自身の待ち」に仕分ける。仕分けは理由の全列挙子を
+/// 書いた `match` で決める（理由が増えたら、足した側がコンパイルエラーでどちらかを選ぶ）。
+///
+/// - **ゴースト待ち**（窓が無い・スコープが無い・まだ一度も表示されていない）は数えない。
+///   `trace!` を 1 行残して戻るだけで、[`defer_chain_finalize`] を呼ばない（窓を閉じた後に
+///   数の記録が作り直されることも無い）。この待ちの長さはゴーストの台本しだい（最初の `\s`
+///   をいつ出すか）で決まり、巡でも秒でも決まった数で区切る限り、どこかのゴーストの正常な
+///   待ちで鳴ってしまうため。「まだ一度も表示されていない」には表示側がまだ装着されていない
+///   巡も含まれる（走査からは見分けられない）。装着の失敗は装着の側が自分で記録する。
+/// - **areka 自身の待ち**（表示された後の処理が着地しない）は今日どおり [`defer_chain_finalize`]
+///   へ渡す。有界の待ち（[`CHAIN_FINALIZE_STALL_FRAMES`]）を超えても未確定なら**一度だけ**
+///   理由つきの `warn!` を出し、正常な待ちと永久に条件が揃わない停滞をログから見分けられる
+///   ようにする。
+///
+/// 走査はスコープの昇順で最初に躓いた理由 1 つで打ち切るので、仕分けもその 1 つで決まる。
+/// 同じ巡に areka 自身の理由と未表示が重なっていれば、先に躓いたスコープの側で決まる。
 ///
 /// [`CHAIN_FINALIZE_STALL_FRAMES`]: crate::placement::chain_finalize::CHAIN_FINALIZE_STALL_FRAMES
 pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
@@ -317,7 +330,25 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     let (states, targets) = match collect_chain_states(source, world) {
         Ok(scan) => scan,
         Err(reason) => {
-            defer_chain_finalize(world, reason);
+            match reason {
+                // ゴースト待ち: 数えない（長さはゴーストの台本しだい）。
+                ChainDeferReason::NoGhostWindows
+                | ChainDeferReason::NoScopes
+                | ChainDeferReason::NotShownYet { .. } => {
+                    trace!(
+                        scope = ?reason.scope(),
+                        reason = %reason,
+                        "chain_finalize: ゴースト待ちのため見送りを数えない（窓が無い・まだ一度も表示されていない）"
+                    );
+                }
+                // areka 自身の待ち: 今日どおり数える。
+                ChainDeferReason::NoCharWindow { .. }
+                | ChainDeferReason::UnusableShownSize { .. }
+                | ChainDeferReason::NoWindowPos { .. }
+                | ChainDeferReason::IncompleteWindowPos { .. }
+                | ChainDeferReason::ResnapNotLanded { .. }
+                | ChainDeferReason::DpiSyncHeld { .. } => defer_chain_finalize(world, reason),
+            }
             return;
         }
     };
@@ -461,6 +492,10 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
 }
 
 /// 見送りを 1 フレームぶん記録し、有界の待ちを超えていれば**一度だけ**診断を出す（scg 6.5）。
+///
+/// 呼び手（[`finalize_chain_once_with`]）は **areka 自身の理由**だけを渡す。ゴースト待ち
+/// （窓が無い・スコープが無い・まだ一度も表示されていない）はここへ来ないので、数は「areka 自身の理由で
+/// 見送った巡の数」になる。
 ///
 /// 正常な起動ではログを 1 行も増やさない（確定は閾値の遥か手前で起きる）。報告後は数えも報せも
 /// しないため、停滞し続けても出力は 1 行のまま。

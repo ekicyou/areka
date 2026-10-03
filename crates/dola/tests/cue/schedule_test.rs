@@ -349,6 +349,84 @@ fn wait_for_choice_barrier_resolved_with_choice_id() {
     assert_eq!(sched.ready(), &["after_choice".to_string()]);
 }
 
+// ============================================================================
+// 選択待ちの区切りの値は再生層が解かない（areka-P0-choice-timeout-directive 要件 5.1〜5.3）
+// ============================================================================
+
+/// 値 `timeout` の選択待ちの区切りを 1.0 に置き、`tick(1.0)` で区切りに着いたとき
+/// 止まって後続を配らないことを確かめる（値は上位層へ運ぶ指令で、区切りを飛ばす理由にしない）。
+fn assert_choice_barrier_stops_on_arrival(timeout: Option<f64>) {
+    let mut sched = TimedSchedule::<String>::new(0.0);
+    sched.insert(Entry::Barrier(1.0, BarrierKind::WaitForChoice { timeout }));
+    sched.insert(Entry::Payload(1.0, "after".into()));
+
+    sched.tick(1.0);
+    assert_eq!(
+        sched.current_barrier(),
+        Some(&BarrierKind::WaitForChoice { timeout })
+    );
+    assert!(sched.ready().is_empty());
+}
+
+#[test]
+fn choice_barrier_with_zero_timeout_stops_on_arrival() {
+    // 値 0（時間切れなしの指令）でも区切りを飛ばさない（要件 5.1）
+    assert_choice_barrier_stops_on_arrival(Some(0.0));
+}
+
+#[test]
+fn choice_barrier_with_negative_timeout_stops_on_arrival() {
+    // 負の値（時間切れなしの指令）でも区切りを飛ばさない（要件 5.1）
+    assert_choice_barrier_stops_on_arrival(Some(-0.001));
+}
+
+#[test]
+fn choice_barrier_with_timeout_not_skipped_when_jumped_past() {
+    // 区切り＋値（1.0 + 0.5 = 1.5）を一度に越えてから着いても止まる（要件 5.2）。
+    // `input_barrier_with_timeout_skipped_when_jumped_past` の選択待ち版で、期待は逆
+    let mut sched = TimedSchedule::<String>::new(0.0);
+    sched.insert(Entry::Barrier(
+        1.0,
+        BarrierKind::WaitForChoice { timeout: Some(0.5) },
+    ));
+    sched.insert(Entry::Payload(2.0, "after".into()));
+
+    sched.tick(2.0);
+    assert_eq!(
+        sched.current_barrier(),
+        Some(&BarrierKind::WaitForChoice { timeout: Some(0.5) })
+    );
+    assert!(sched.ready().is_empty());
+}
+
+#[test]
+fn choice_barrier_with_timeout_never_self_releases_only_external_resolve() {
+    // 止まった後に時計を大きく進めても自分では解かない（要件 5.3）。
+    // 解けるのは外からの解決（notify_barrier_resolved）だけ
+    let mut sched = TimedSchedule::<String>::new(0.0);
+    sched.insert(Entry::Barrier(
+        1.0,
+        BarrierKind::WaitForChoice { timeout: Some(0.5) },
+    ));
+    sched.insert(Entry::Payload(2.0, "after".into()));
+
+    sched.tick(1.0);
+    assert!(sched.current_barrier().is_some());
+
+    sched.tick(10.0);
+    assert_eq!(
+        sched.current_barrier(),
+        Some(&BarrierKind::WaitForChoice { timeout: Some(0.5) })
+    );
+    assert!(sched.ready().is_empty());
+
+    sched.notify_barrier_resolved(Some("yes".to_string()));
+    assert!(sched.current_barrier().is_none());
+
+    sched.tick(10.5);
+    assert_eq!(sched.ready(), &["after".to_string()]);
+}
+
 #[test]
 fn input_barrier_with_timeout_skipped_when_jumped_past() {
     // バリア到達前にタイムアウト時刻を一気に飛び越えた場合、

@@ -160,6 +160,9 @@ mod balloon_drag_tests;
 #[path = "follow_balloon_limit_tests.rs"]
 mod balloon_limit_wiring_tests;
 #[cfg(test)]
+#[path = "follow_drag_end_gate_tests.rs"]
+mod drag_end_gate_tests;
+#[cfg(test)]
 #[path = "follow_drag_end_limit_tests.rs"]
 mod drag_end_limit_tests;
 #[cfg(test)]

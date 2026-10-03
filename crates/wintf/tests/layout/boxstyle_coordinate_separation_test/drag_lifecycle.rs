@@ -29,7 +29,7 @@ fn test_drag_end_syncs_window_pos_changed() {
     world.init_resource::<bevy_ecs::message::Messages<DragEvent>>();
     world.init_resource::<bevy_ecs::message::Messages<DragEndEvent>>();
 
-    // Window entity（WindowDragging マーカー付き = ドラッグ中を模擬）
+    // Window entity（ドラッグ中の印は開始を配って入れる）
     // ドラッグ中に WindowPos.position は bypass で (500, 600) に更新されたが、
     // Arrangement.offset はまだ旧値 (300, 400) のまま
     let window_entity = world
@@ -53,7 +53,6 @@ fn test_drag_end_syncs_window_pos_changed() {
                 },
             },
             GlobalArrangement::default(),
-            WindowDragging, // ドラッグ中状態
         ))
         .id();
 
@@ -86,6 +85,16 @@ fn test_drag_end_syncs_window_pos_changed() {
     // 初回: Added で発火
     schedule.run(&mut world);
     let initial = world.resource::<ArrangementChangedCount>().0;
+
+    // Started を配ってドラッグ中にする（WindowPos・Arrangement は触らない）
+    world
+        .resource::<DragAccumulatorResource>()
+        .set_transition(DragTransition::Started {
+            entity: drag_entity,
+            start_pos: PhysicalPoint::new(510, 610),
+            timestamp: Instant::now(),
+        });
+    dispatch_drag_events(&mut world);
 
     // Ended 遷移を設定
     world
@@ -138,7 +147,6 @@ fn test_drag_end_clears_context_resource() {
             DPI::default(),
             Arrangement::default(),
             GlobalArrangement::default(),
-            WindowDragging,
         ))
         .id();
 
@@ -149,15 +157,17 @@ fn test_drag_end_clears_context_resource() {
         ))
         .id();
 
-    // コンテキストをセットしておく
+    // Started を配ってコンテキストをセットしておく
     world
-        .resource::<WindowDragContextResource>()
-        .set(wintf::ecs::drag::WindowDragContext {
-            hwnd: None,
-            initial_window_pos: Some(Point { x: 100, y: 200 }.into()),
-            move_window: true,
-            constraint: None,
+        .resource::<DragAccumulatorResource>()
+        .set_transition(DragTransition::Started {
+            entity: drag_entity,
+            start_pos: PhysicalPoint::new(150, 250),
+            timestamp: Instant::now(),
         });
+    dispatch_drag_events(&mut world);
+    let ctx = world.resource::<WindowDragContextResource>().get().unwrap();
+    assert_eq!(ctx.initial_window_pos, Some(Point { x: 100, y: 200 }));
 
     // Ended を設定
     world
@@ -273,7 +283,6 @@ fn test_window_dragging_removed_on_drag_end() {
             DPI::default(),
             Arrangement::default(),
             GlobalArrangement::default(),
-            WindowDragging, // 事前に挿入
         ))
         .id();
 
@@ -283,6 +292,16 @@ fn test_window_dragging_removed_on_drag_end() {
             bevy_ecs::hierarchy::ChildOf(window_entity),
         ))
         .id();
+
+    // Started を配ってドラッグ中にする
+    world
+        .resource::<DragAccumulatorResource>()
+        .set_transition(DragTransition::Started {
+            entity: drag_entity,
+            start_pos: PhysicalPoint::new(310, 410),
+            timestamp: Instant::now(),
+        });
+    dispatch_drag_events(&mut world);
 
     // ドラッグ中: WindowDragging あり
     assert!(
