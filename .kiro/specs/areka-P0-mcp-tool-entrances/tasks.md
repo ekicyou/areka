@@ -86,7 +86,7 @@
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 3.8, 3.9, 4.2, 4.4, 4.5_
   - _Depends: 1.2_
   - _Boundary: mcp/resolve.rs_
-- [ ] 5.2 `get_active_ghost_list` の本物の処理と 9 本のダミー
+- [x] 5.2 `get_active_ghost_list` の本物の処理と 9 本のダミー
   - `get_active_ghost_list` は一覧に出す値を素の値で送る（1 行・末尾の改行なし・0 体なら空の本文）
   - 9 本は design.md の形の処理で、本体は `NG:not implemented yet` を送る 1 文だけ（World・ゴースト・引数を使わない）。文言は各ファイルに直に書く
   - 完了の姿: `get_active_ghost_list_tests.rs` で名前あり・`name` 無し・0 体がどれも `isError: false` で期待の本文、9 つの `_tests.rs` で空の World と作ったゴースト・引数から `try_answer` が `NG:not implemented yet`・`isError: true` を返すことが緑
