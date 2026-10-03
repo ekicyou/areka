@@ -1,6 +1,7 @@
 # Implementation Plan
 
-> 設計の正本は design.md。ファイル・型・関数の名前は design.md の「File Structure Plan」と「Components and Interfaces」に従う。テストは実装の隣の `*_tests.rs`（`#[cfg(test)] #[path = "…"] mod …;`）。1 ファイル 1,000 行を超えない。常時テストはネットへ出ず、ポートは `127.0.0.1:0` で OS に割り当てさせる（9821 を使うテスト 0 本）。
+> 設計の正本は design.md。ファイル・型・関数の名前は design.md の「File Structure Plan」と「Components and Interfaces」に従う。テストは実装の隣の `*_tests.rs`（`#[cfg(test)] #[path = "…"] mod …;`）。1 ファイル 1,000 行を超えない。常時テストはネットへ出ず、ポートは `127.0.0.1:0` で OS に割り当てさせる（9801・9821 その他の固定の番号を束ねるテスト 0 本）。
+> **2026-10-03・開発者裁定**: 既定ポートを「9821 決め打ち・失敗は記録だけ」から「9801 → 9821 の早い者勝ち・どちらも使用中なら隣の 20 候補・`AREKA_MCP_PORT` の指定は 1 つだけ」へ改めた（design.md B-13）。完了済みのタスク 2.1・2.3・3.3・4.1・4.2・5.1 の記述は裁定の前のまま残し、改める仕事はタスク 7 に置いた。
 
 - [x] 1. 土台: 新しい葉クレートと依存
 - [x] 1.1 `areka-mcp` クレートを足し、依存とモジュール・テストの骨組みを置く
@@ -125,7 +126,54 @@
   - `RUST_LOG=info,areka_mcp=debug` で要求ごとの `debug!` 1 件と、`Origin: http://evil.example` の `warn!` 1 件を確かめ、性能の報告に `actor:mcp` が出ることも見る。リリースの `areka.exe` の増分を測る
   - 実機の根・一時フォルダはワークツリーの `target\` の下だけ
   - 完了の姿: `.kiro/specs/areka-P0-mcp-server-core/verification/signoff.md` に 4 項目とログの確かめ・増分が記録されている
+  - ⑷ は 9821 決め打ちの前提が崩れて不合だった（SSP が 9801 と 9821 の両方で待ち受けていた）。開発者裁定（2026-10-03）を受けて、⑴〜⑶ を含めて 7.6 でやり直す
   - _Requirements: 9.5, 9.6_
+
+- [ ] 7. 既定ポートの早い者勝ちと隣への退避（開発者裁定 2026-10-03）
+- [ ] 7.1 候補の列と環境変数の読み解き
+  - `port.rs` の既定の番号 1 つ（`DEFAULT_PORT`）と「値 → 番号 1 つ」の判断を、design.md の契約どおり `DEFAULT_PORTS = [9801, 9821]`・`FALLBACK_STEPS = 9`・`candidates_from_env_value(Option<&str>) -> Vec<u16>`（純粋）・`read_port_candidates() -> Vec<u16>` へ置き換える。既定の列は 9801・9821・9802・9822・…・9810・9830 の 20 個で、組む場所はこの 1 か所
+  - 未設定 → 既定の列・`0` → 空・1〜65535 → その 1 つだけ（空白許容・隣は足さない）・読めない値と非 UTF-8 → `warn!` 1 件＋既定の列（文面は「既定の候補で待ち受ける」）
+  - `port_tests.rs` の表を新しい対応に書き換え（`candidates_from_env_value_fixed_table`・非 UTF-8 の 1 本）、20 個の並びを逐語で固定する `default_candidates_are_twenty_in_alternating_order` を足す
+  - 完了の姿: 要件 2.6 の 9 値の表（warn の件数つき）・20 個の並び・非 UTF-8 の 3 本が `port_tests.rs` で緑。テストはソケットを開かない
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8_
+  - _Depends: 2.1_
+  - _Boundary: port_
+- [ ] 7.2 候補を順に束ねる起動と結線
+  - `start(candidates: &[u16], registry)` へ署名を変える: 空 → 待ち受けない `info!`。先頭から順に `127.0.0.1` へ束ね、失敗した候補ごとに `debug!` 1 件（番号・OS の理由）で次へ。全部だめなら `error!` 1 件（試した候補・最後の OS の理由）で待ち受けない取っ手。束ねたら `info!` 1 件（実番号の URL。先頭の候補でなければ同じ行に飛ばした候補と「先の候補が使用中なので移った」）。`set_nonblocking`／`local_addr` の失敗もその候補の失敗として次へ進む
+  - `lib.rs` の公開面を `DEFAULT_PORTS`・`FALLBACK_STEPS`・`PORT_ENV`・`candidates_from_env_value`・`read_port_candidates` に替える（旧 `DEFAULT_PORT`・`port_from_env_value`・`read_port_env` は残さない）
+  - `crates/areka/src/main.rs` の 1 行を `areka_mcp::start(&areka_mcp::read_port_candidates(), …)` に替える（コメントの意図は変えない・行は増やさない）
+  - 完了の姿: `cargo build -p areka` と `cargo clippy -p areka-mcp -p areka` が緑・公開面が design.md の契約どおり（振る舞いは 7.4 で固定）
+  - _Requirements: 1.1, 1.2, 1.3, 1.10, 2.1, 2.3, 2.4_
+  - _Depends: 7.1_
+  - _Boundary: server, lib, areka の main の結線 1 行_
+- [ ] 7.3 (P) help の ⑷ を既定の順の説明へ
+  - ⑷ を「既定は 9801 → 9821 の早い者勝ち・どちらも使用中なら隣（9802・9822 … 9810・9830）へ・`AREKA_MCP_PORT` で 1 つを指定・`0` で待ち受けない」の文面にし、番号は `DEFAULT_PORTS`・`FALLBACK_STEPS` から組む（手で数を書かない）。URL・登録コマンド・`mcpServers` の断片は今までどおり引数の実番号
+  - `help_tests.rs` の「`9821` がちょうど 1 回」の assert を置き換え、`help_html(12345)` の本文に `127.0.0.1:9801`・`127.0.0.1:9821` のどちらも無いこと・⑷ が既定の順（先頭 2 つと末尾 2 つ）を説明していることを確かめる
+  - 完了の姿: `help_tests.rs` が緑
+  - _Requirements: 6.1, 6.2_
+  - _Depends: 7.1_
+  - _Boundary: help_
+- [ ] 7.4 候補の飛ばしと全部だめの実ソケットのテスト
+  - `server_tests.rs` に `default_candidates_skip_taken_port`（std `TcpListener` で空きポートを 1 つ占め、`start(&[占めた番号, 0])` → 占めた番号と違う番号で待受中・`debug!` 1 件・移った旨の `info!` 1 件・`error!` 0 件）と `all_candidates_taken_logs_one_error`（空きポートを 2 つ占めて候補に渡す → `error!` 1 件・`debug!` 2 件・待ち受けない）を足す。ログは `capture` で数える
+  - 署名の変更で壊れる既存のテストを直す: `start(Some(0), …)` → `start(&[0], …)`・`start(None, …)` → `start(&[], …)`・束ねの失敗のテストは `start(&[占めた番号], …)`（`testkit.rs` の起こし口も同じ）。`server_protocol_tests.rs`・`server_gate_help_tests.rs` は署名が強いる行だけ触る。`server_gate_help_tests.rs` の「空きポートがたまたま 9821 なら固定の番号の検出を飛ばす」の守りは 9801 にも広げる
+  - 完了の姿: `cargo test -p areka-mcp` が緑・固定の番号を束ねるテスト 0 本（9801・9821 を `bind` するテスト 0 本）
+  - _Requirements: 1.2, 1.3, 1.10, 2.9, 9.1, 9.3_
+  - _Depends: 7.2_
+  - _Boundary: server_tests, testkit, server_protocol_tests と server_gate_help_tests（署名が強いる行だけ）_
+- [ ] 7.5 (P) 文書の追随
+  - `.kiro/steering/structure.md` の `areka-mcp` の節（Purpose の「未設定は 9821」・規律の「`start(Some(0), …)`」「9821 を掴まない」）と `tech.md`（既定ポートの記述があれば）を B-13 の形へ直す。`roadmap.md` の `mcp-server-core` の行の「既定ポート 9821」も直す（起票時の「決めたこと」の段落は記録なので書き換えず、覆したことを 1 文足す）
+  - `doc/ssp-mcp/transport-diff-areka.md` にポートの行は無い（survey §2 の表に無い項目）ことを確かめ、変えない。先頭の説明に既定ポートの記述があれば直す
+  - 完了の姿: steering と差の一覧に B-13 と食い違う「9821 決め打ち」「別のポートは試さない」の記述が 0 件（grep で確かめる）
+  - _Requirements: 8.5_
+  - _Depends: 7.2_
+  - _Boundary: steering, 差の一覧_
+- [ ] 7.6 実機の ⑷ のやり直しと全体テスト
+  - 配布形（`tools/package-alpha.ps1`・出力はワークツリーの `target/alpha/`）の `areka.exe` で、SSP が 9801 と 9821 で待ち受けている机のまま起動し、9802（またはその先の空いた候補）で待ち受けること・そこへの `curl` の `ping` が 200・help がその番号を示すこと・`info!` が移った旨と飛ばした候補を載せること・`RUST_LOG=info,areka_mcp=debug` で 9801・9821 を飛ばした `debug!` 2 件を確かめる。⑴ の登録（`claude mcp add` は実番号で）・⑵・⑶ も同じ版でやり直す
+  - `pwsh -NoProfile -File tools/test-all.ps1 -Format -License` を回して緑を確かめる
+  - 実機の根・一時フォルダはワークツリーの `target\` の下だけ
+  - 完了の姿: `verification/signoff.md` に裁定後の走行（⑴〜⑷・ログ・全体テストの終了コード 0）が追記され、裁定前の ⑷ の不合の記録はそのまま残っている
+  - _Requirements: 9.5, 9.6, 8.1_
+  - _Depends: 7.3, 7.4, 7.5_
 
 ## Implementation Notes
 - 1.1: `Cargo.lock` に増える外部クレートは 38 件。研究の 30 件は `cargo tree -e normal`（この機械向け）の数で、全部入っている。残り 8 件（iana-time-zone 系・wasi・cc 等）は chrono・mio が他の OS 向けに引くもので x64 のビルドには 0 件。数え方の差であって増えたのではない
@@ -138,3 +186,4 @@
 - 4.4: 悪い `Host` は `/api/mcp/v1` では rmcp の `allowed_hosts` も 403 を返すので、`gate` の Host 検査を固定できるのは rmcp を通らない help の経路だけ。`isError` は true／false の両方を往復させないと「常に error」の変異が通る
 - 5.2: 差の一覧の値はすべてテストの assert から写す。survey の行に areka の測りが無ければ、文書に「未測定」と書く前にテストへ assert を足して測る（バッチ・エラーの形・無状態版の 3 つ・`Accept` の片方だけを 4.3 に追補した）
 - 6.2: Claude Code 2.1.283 は `initialize` を送らず 2026-07-28 の無状態版（`server/discover`→`tools/list`）でつなぐ。この版の list 結果は `ttlMs`・`cacheScope` が必須で、rmcp 3.5.0 は任意（`with_all_items` で欠ける）。後続 spec が `resources/list`・`prompts/list` を足すときも同じ 2 欄を付ける
+- 7: 2026-10-03 の開発者裁定（既定は 9801 → 9821 の早い者勝ち・隣の 20 候補・指定は 1 つだけ）で 2.3 の「`9821` を 1 回だけ」と 6.2 の ⑷ の前提が変わった。改める仕事はタスク 7（design.md B-13）

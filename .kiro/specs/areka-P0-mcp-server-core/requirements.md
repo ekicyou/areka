@@ -3,6 +3,7 @@
 > 本文の実測は **2026-10-03・本ブランチ**（main `76e17654`＝棚卸⑳の PR#211 のコミット。brief の 10-02 の再測定〔main `03e8d7d6`〕からコードの変更は 0 件で、変わったのは roadmap だけ）のもの。コードは「何の定義か」（関数名・型名・定数名＋ファイルパス）で指し、行番号では指さない。
 > 「要件の段での暫定の裁定」の表は、要件を書く途中で答えが要った点に対する**推奨案による暫定の確定**であり、要件ディスカッションで覆せる（覆したら該当要件も改める）。答えで作業が変わる議題は見込み 2 件（既定ポートと既定で有効にするか・`serverInfo` の名前）で、どちらも表に載せた。
 > **2026-10-03・実機確認 6.2 で判明した改訂**: 「Claude Code・Cursor は旧式の 4 版の経路（`initialize`→`tools/list`→`ping`）でつなぐ」という前提は Claude Code について誤りだった。Claude Code 2.1.283 は `initialize` を送らず、無状態版（`2026-07-28`）の `server/discover`→`tools/list` でつなぎ、`tools/list` の結果に `ttlMs`・`cacheScope` が無いので接続に失敗した（Cursor の送り方は未確認）。いま何が起きているかの rmcp の段・要件 3 の Objective・要件 5.2 の物差し・要件 9.2 を改め、要件 3.15 を足した。
+> **2026-10-03・開発者裁定（実機確認 6.2 の ⑷ で、開発者の机の SSP が 9801 と 9821 の両方で待ち受けており、既定 9821 を束ねられなかった）**: areka は SSP と同じ種類のベースウェアなので、同じ既定の番号を SSP と取り合う＝**早い者勝ち**。既定の候補は 9801 → 9821 の順で、先に束ねられた 1 つだけで待ち受ける（両方で待ち受ける SSP の形は取らない）。両方とも使用中なら隣の番号へ逃げる（9802 → 9822 → 9803 → 9823 → … → 9810 → 9830 の計 20 候補）。`AREKA_MCP_PORT` で番号を指定したときはその 1 つだけを試す。これは要件ディスカッション議題 1（既定 9821・9801 は SSP が使うので避ける・失敗は記録だけで別のポートを試さない）を覆す。要件 1.2・1.3・2（Objective・2.1〜2.6）・6.1・6.2・9.1・9.3・9.5 と Boundary・裁定の表 1〜3 を改め、要件 1.10・2.8・2.9 を足した。
 
 ## Project Description (Input)
 
@@ -10,7 +11,7 @@
 
 **今の状態**: areka 本体にサーバの類は 0（本番の `std::net`・tokio・HTTP の土台いずれも無し）。MCP の受け口も、ツールも、登録の案内も無い。
 
-**何を変えるか**: areka が起動すると `127.0.0.1:<port>`（既定 9821・`AREKA_MCP_PORT` で変更・`0` で待ち受けない）で HTTP を受け、`POST /api/mcp/v1` が MCP サーバ（公式 Rust SDK `rmcp`・無状態・JSON の単発応答）として `initialize`→`tools/list`→`ping` に応える。ツールはまだ 0 本で、後続 spec がツールを足すための登録口だけを持つ。`GET /api/mcp/help` で登録手順を示し、`Origin` がループバック以外なら拒否する。待受の失敗はログに理由を 1 件残してアプリは動き続ける。SSP の輸送の癖との差は一覧にし、クライアントが困る行だけ直す。
+**何を変えるか**: areka が起動すると `127.0.0.1:<port>`（既定は 9801 → 9821 の早い者勝ち・どちらも使用中なら隣の番号へ・`AREKA_MCP_PORT` で変更・`0` で待ち受けない）で HTTP を受け、`POST /api/mcp/v1` が MCP サーバ（公式 Rust SDK `rmcp`・無状態・JSON の単発応答）として `initialize`→`tools/list`→`ping` に応える。ツールはまだ 0 本で、後続 spec がツールを足すための登録口だけを持つ。`GET /api/mcp/help` で登録手順を示し、`Origin` がループバック以外なら拒否する。待受の失敗はログに理由を 1 件残してアプリは動き続ける。SSP の輸送の癖との差は一覧にし、クライアントが困る行だけ直す。
 
 > 起票: 2026-09-29 `/kiro-discovery`（開発者指示「ssp mcp tool の完全移植のための spec 群を立ち上げて。実装は α リリースの後。areka の 127.0.0.1 の適当なポートでサーバを開く形。基本実装 → 空のダミー関数を置いて入り口だけ全部整備 → 個別のコマンド実装」）。SSP MCP 移植の **1 段目（基本実装）**。事実の正本は [doc/ssp-mcp/survey.md](../../../doc/ssp-mcp/survey.md)（SSP 2.9.05 の実測）。全体の並びは `.kiro/steering/roadmap.md`「SSP MCP の移植」節。
 
@@ -41,9 +42,9 @@
 
 | # | 議題（brief） | 暫定の裁定 | 根拠 | 載せた要件 |
 |---|---|---|---|---|
-| 1 | 既定ポート 9821・既定で有効にするか | **9821・既定で有効**（SSP と同じく常に待ち受ける）＝**2026-10-03 要件ディスカッション議題 1 で開発者が確定** | 9801 は開発者の机で SSP が使い、将来の SSTP の口。既定で無効だと「登録したのにつながらない」が最初の体験になる | 2.1・2.2 |
-| 2 | `AREKA_MCP_PORT` が数でない・範囲外のとき | **`warn!` 1 件を残して既定 9821 で待ち受ける**（無効へ倒さない） | `0` が「待ち受けない」の明示の値なので、書き損じで黙って止まる形を避ける | 2.5 |
-| 3 | 待受に失敗したら記録だけか別のポートを試すか | **記録だけ**（`error!` 1 件・再試行 0 回・別のポート 0 回）＝**議題 1 で開発者が確定** | 別のポートへ逃げると help の URL と登録済みのクライアントの URL が食い違う。`AREKA_MCP_PORT` で選び直せる | 1.3 |
+| 1 | 既定ポートと既定で有効にするか | **既定は 9801 → 9821 の早い者勝ち・先に束ねられた 1 つだけで待ち受ける・既定で有効**（SSP と同じく常に待ち受ける）＝**2026-10-03 開発者裁定**（同日の要件ディスカッション議題 1「既定 9821・9801 は避ける」を覆した） | areka は SSP と同じ種類のベースウェアで、同じ既定の番号を取り合う（先に起きた方が取る）。実機確認 6.2 で SSP が 9801 と 9821 の両方で待ち受ける机があり、9821 決め打ちでは SSP と並べたとき待ち受けられなかった。両方で待ち受ける形（SSP の形）は取らない。既定で無効だと「登録したのにつながらない」が最初の体験になる | 2.1・2.2・2.8 |
+| 2 | `AREKA_MCP_PORT` が数でない・範囲外のとき | **`warn!` 1 件を残して既定の候補（9801 → 9821 → 隣）で待ち受ける**（無効へ倒さない・1 つの番号へ倒さない）＝2026-10-03 開発者裁定で「既定 9821」から改めた | `0` が「待ち受けない」の明示の値なので、書き損じで黙って止まる形を避ける | 2.5 |
+| 3 | 待受に失敗したら記録だけか別のポートを試すか | **既定の候補のときだけ隣へ逃げる**（9801・9821 がどちらも使用中なら 9802 → 9822 → … → 9810 → 9830 の計 20 候補を順に試す。全部だめなら `error!` 1 件で待ち受けない）。**`AREKA_MCP_PORT` で指定した番号は逃げない**（その 1 つだけ・だめなら `error!` 1 件）＝**2026-10-03 開発者裁定**（議題 1「記録だけ・別のポート 0 回」を覆した） | 早い者勝ちで後から起きた方も待ち受けられるようにする。実際の番号は `info!` の URL と help に必ず出るので、移ったことは分かる（登録済みのクライアントの URL が別のベースウェアを指しうる点は、早い者勝ちの代わりに受け入れる＝`serverInfo` の名前で見分けられる）。指定した番号から逃げると利用者の意図に反する | 1.3・1.10・2.3・2.9 |
 | 4 | `serverInfo` の名前と版 | **`areka-mcp-server`・版は areka の Cargo の版**（今は `0.0.1`）＝**議題 2 で開発者が確定** | SSP の `ssp-mcp-server`／`2.9.05` の型に倣う | 3.1 |
 | 5 | `GET /api/mcp/v1` の手打ちフォーム | **作らない**（0 ページ） | `curl` で足りる。SSP のフォームは手打ち用の便利機能で、クライアントは使わない | 3.11・Out of scope |
 | 6 | `Host` の検査 | **rmcp の既定どおりループバック以外を 403 で拒む** | DNS 再束縛への備えが `Origin` だけの SSP より堅く、正規のクライアントは `127.0.0.1:<port>` を書くので困らない | 4.4 |
@@ -71,13 +72,13 @@
   - 認証・TLS・リモート接続（`127.0.0.1` 以外での待受は 0 件）。
   - rmcp の中身に手を入れること（フォーク・パッチ 0 件）。差はクライアントが困る行だけ areka 側（自分の `ServerHandler` の実装・HTTP の層の前後）で直す。
   - `GET /api/mcp/v1` の手打ちフォーム（裁定 5）。
-  - SSTP（9801）とその HTTP 経路。MCP を SSTP の口へ同居させるかは SSTP の spec が決める。本 spec は 9801 を開かない。
+  - SSTP とその HTTP 経路。本 spec が 9801 で待ち受けても、受けるのは `/api/mcp/v1` と `/api/mcp/help` だけ（SSTP は 0 件）。SSTP を同じ口へ同居させるかは SSTP の spec が決める。
   - ゴーストが MCP クライアントになる構想（`doc/CONSTITUTION.md`「MCP 採用方針」の片側）。
   - SSP の欠陥 2 件（survey §4＝表情表の文字化け・script ログの JSON エスケープ漏れ）はツールの話で、本 spec では扱わない（0 件）。
   - `resources`・`prompts` の能力（SSP は空の配列を返すが実体が無い。areka は `capabilities` に載せず、差の一覧に書く）。
 - **Adjacent expectations**:
   - 後続 `mcp-tool-entrances` は、本 spec の登録口を通してツール 10 本を足す。待受・ポート・`Origin`・help の振る舞いは変えない（本 spec の決定論テストが変わらず緑であること）。
-  - 後続 `mcp-stdio-bridge` は、本 spec の help に Desktop 用の設定例を足し、`AREKA_MCP_PORT` を同じ意味で読む（既定 9821）。`dist/README.txt` への `AREKA_MCP_PORT` の記述もそちらで書く（本 spec は書かない＝要件 2.7）。
+  - 後続 `mcp-stdio-bridge` は、本 spec の help に Desktop 用の設定例を足し、`AREKA_MCP_PORT` を同じ意味で読む（既定は 9801 → 9821 → 隣の 20 候補。areka がどの候補で待ち受けているかの見つけ方は `mcp-stdio-bridge` の設計で決める）。`dist/README.txt` への `AREKA_MCP_PORT` の記述もそちらで書く（本 spec は書かない＝要件 2.7）。
   - 後続 `mcp-tool-entrances` は、本 spec の登録口の handler の形（同期か非同期か＝設計で決める）に従う。問い合わせの間に他の接続の要求を止めない（要件 1.5）のは後続でも変えない。
   - `perf_thread_report`（`crates/areka/src/perf_thread_report.rs`）の名簿に、本 spec が起こすスレッドが載ること（載らないスレッドは性能の報告に「名簿外」として出る）。設計で `areka_actor::spawn_actor` の作法に合わせる。
   - 依存を足す spec は 1 ウェーブに 1 本（`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`tech.md` が重なる）＝`animated-image-decode`・`mcp-stdio-bridge` と同じウェーブに置かない（roadmap の干渉台帳）。
@@ -92,28 +93,31 @@
 #### Acceptance Criteria
 
 1. When areka が起動する（ゴーストの起動の成否・既定ゴーストへの切り戻しによらない）, the areka shall `127.0.0.1` の要件 2 で決まるポートで HTTP の待受を始める。待ち受けるのは IPv4 のループバック 1 つだけ（`0.0.0.0`・`::1`・LAN のアドレスでは受けない＝0 件）。
-2. When 待受が始まる, the areka shall `info!` を 1 件残し、待ち受けている URL（`http://127.0.0.1:<port>/api/mcp/v1`）を載せる。
-3. If 待受に失敗する（ポートが使用中＝同じポートで 2 つ目の areka を起動した・SSP と同じ番号を指定した、権限、など）, then the areka shall `error!` を 1 件残し（ポート番号と OS の理由を載せる）、ゴーストの起動・会話・メニュー・終了を妨げずに動き続ける。別のポートは試さず（0 回）、再試行もせず（0 回）、利用者への画面の告知は出さない（0 件）。
+2. When 待受が始まる, the areka shall `info!` を 1 件残し、待ち受けている URL（`http://127.0.0.1:<実際の番号>/api/mcp/v1`）を載せる。束ねた番号が最初の候補でないときは、同じ 1 行に「先の候補が使用中なので移った」旨を載せる（行は増やさない＝1 件のまま）。
+3. If 要件 2 で決まる候補のどれでも待受に失敗する（既定の 20 候補がすべて使用中・`AREKA_MCP_PORT` で指定した 1 つが使用中＝同じ番号で 2 つ目の areka を起動した・SSP と同じ番号を指定した、権限、など）, then the areka shall `error!` を 1 件残し（試した番号の範囲と最後の OS の理由を載せる）、ゴーストの起動・会話・メニュー・終了を妨げずに動き続ける。候補の外の番号は試さず（0 回）、同じ候補をもう一度試すこともせず（再試行 0 回）、利用者への画面の告知は出さない（0 件）。
 4. The areka shall 待受の成否で終了コードを変えない（終了コードは待受と無関係）。
 5. While 待受中, the areka shall 2 本以上の接続を同時に受け付け、1 本の接続が開いたままでも他の接続の要求に答える。
 6. While 待受中, the areka shall 要求の処理でゴーストの描画・台詞の再生・メニュー・クリック透過の付け外しを止めない（要求の処理は UI のスレッドの時間を使わない）。
 7. When アプリが終了する（メニューの終了・OS の終了・強制退避・自動終了のいずれでも）, the areka shall 待受を閉じ、終了の後にそのポートへ新しい接続ができない状態にする。
 8. When アプリが終了するときに接続が開いたままである, the areka shall その接続を待たずに終了する（終了の手順が待受の後始末で止まらない）。
 9. When 待受を閉じる, the areka shall `info!` を 1 件残す。
+10. When 候補の 1 つを束ねられず次の候補へ進む, the areka shall `debug!` を 1 件残し、その番号と OS の理由を載せる（黙って飛ばさない）。
 
 ### Requirement 2: ポートの決め方と環境変数 `AREKA_MCP_PORT`
 
-**Objective:** As a areka と SSP を同じ机で動かす開発者, I want ポートを環境変数で選べ・止めたいときは止められること, so that 9801 の SSP と衝突せず、要らない机では口を閉じられる
+**Objective:** As a areka と SSP を同じ机で動かす開発者, I want 既定の番号を SSP と早い者勝ちで分け合い・ポートを環境変数で選べ・止めたいときは止められること, so that 後から起きた方も隣の番号で待ち受けられ、要らない机では口を閉じられる
 
 #### Acceptance Criteria
 
-1. The areka shall 既定のポートを 9821 とする（9801 は使わない）。
-2. When `AREKA_MCP_PORT` が未設定である, the areka shall 既定の 9821 で待ち受ける（既定で有効）。
-3. When `AREKA_MCP_PORT` が 1〜65535 の整数である（前後の空白は許す）, the areka shall その番号で待ち受ける。
+1. The areka shall 既定の候補を 9801 → 9821 の順とし、その中で最初に束ねられた 1 つだけで待ち受ける（両方で待ち受けない＝待受は 1 つ）。両方とも束ねられなければ隣の番号へ逃げ、候補の全体を 9801・9821・9802・9822・9803・9823・…・9810・9830 の 20 個（9801〜9810 と 9821〜9830 を交互に）とする。
+2. When `AREKA_MCP_PORT` が未設定である, the areka shall 既定の候補（要件 2.1）で待ち受ける（既定で有効）。
+3. When `AREKA_MCP_PORT` が 1〜65535 の整数である（前後の空白は許す）, the areka shall その番号だけを試す（隣へ逃げない。束ねられなければ要件 1.3 の `error!` 1 件で待ち受けない）。
 4. When `AREKA_MCP_PORT` が `0` である, the areka shall 待ち受けない（接続 0 件・スレッド 0 本）。`info!` を 1 件残し、待ち受けないことと理由（環境変数が `0`）を載せる。
-5. If `AREKA_MCP_PORT` が空・空白だけ・数でない・負・65536 以上・溢れる値・UTF-8 でない値である, then the areka shall `warn!` を 1 件残し（その値を載せる。UTF-8 でなければその旨）、既定の 9821 で待ち受ける。
-6. The areka shall 「値 → ポート／待ち受けない／既定へ倒す」の対応を、環境変数を読まない判断として持ち、未設定・`0`・`9821`・`65535`・`65536`・`-1`・`abc`・空・` 9000 `（空白付き）の各値について決定論テストで固定する。
+5. If `AREKA_MCP_PORT` が空・空白だけ・数でない・負・65536 以上・溢れる値・UTF-8 でない値である, then the areka shall `warn!` を 1 件残し（その値を載せる。UTF-8 でなければその旨）、既定の候補（要件 2.1）で待ち受ける（1 つの番号へは倒さない）。
+6. The areka shall 「値 → 試す候補の列」の対応を、環境変数を読まない判断として持ち、次の各値について決定論テストで固定する: 未設定 → 既定の候補・`0` → 空（待ち受けない）・`9821` → 9821 だけ・`65535` → 65535 だけ・`65536` → `warn!`＋既定の候補・`-1` → `warn!`＋既定の候補・`abc` → `warn!`＋既定の候補・空 → `warn!`＋既定の候補・` 9000 `（空白付き）→ 9000 だけ。
 7. The areka shall 環境変数の名前を `AREKA_MCP_PORT` の 1 つだけとし（`AREKA_` の冠・新しい名前 0 個）、help の本文（要件 6）以外に別名を書かない。`dist/README.txt` には本 spec では書かない（roadmap の C1 の行で本 spec が触るファイルの外＝配布の spec 群と分け合うファイル。後続 `mcp-stdio-bridge` が Desktop の設定例と一緒に書く）。
+8. The areka shall 既定の候補の 20 個の並び（要件 2.1）を決定論テストで固定する（個数・先頭の 9801 と 9821・末尾の 9810 と 9830・交互の順）。
+9. The areka shall 「使用中の候補を飛ばして次の候補で待ち受ける」振る舞いを、OS が割り当てる空きポートだけを使う実ソケットの決定論テストで固定する（先に空きポートを 1 つ占め、その番号と「OS に任せる」の 2 つを候補に渡すと、占めた番号でない番号で待ち受け、飛ばした分の `debug!` が 1 件出る）。候補をすべて占めたときに `error!` 1 件で待ち受けないことも同じく固定する。テストは 9801・9821 その他の固定の番号を束ねない（0 本）。
 
 ### Requirement 3: `POST /api/mcp/v1` が MCP サーバとして応える（ツール 0 本）
 
@@ -166,8 +170,8 @@
 
 #### Acceptance Criteria
 
-1. When `GET /api/mcp/help` が届く, the areka shall HTTP `200`・`Content-Type: text/html; charset=utf-8` の日本語のページを返し、次の 5 つを載せる: ⑴ 今まさに待ち受けている URL（`http://127.0.0.1:<port>/api/mcp/v1`・`<port>` は実際の番号）、⑵ Claude Code の登録コマンド `claude mcp add --transport http areka http://127.0.0.1:<port>/api/mcp/v1`、⑶ Cursor 向けの設定の断片（`mcpServers` の `url` の形）、⑷ ポートの変え方（`AREKA_MCP_PORT`・`0` で待ち受けない）、⑸ Claude Desktop は HTTP を直接書けないので中継が要ること（中継は後続 spec＝設定例 0 件）。
-2. When `AREKA_MCP_PORT` で既定以外の番号を選んでいる, the areka shall help の URL とコマンド例にその番号を載せる（9821 を固定で書かない）。
+1. When `GET /api/mcp/help` が届く, the areka shall HTTP `200`・`Content-Type: text/html; charset=utf-8` の日本語のページを返し、次の 5 つを載せる: ⑴ 今まさに待ち受けている URL（`http://127.0.0.1:<port>/api/mcp/v1`・`<port>` は実際の番号）、⑵ Claude Code の登録コマンド `claude mcp add --transport http areka http://127.0.0.1:<port>/api/mcp/v1`、⑶ Cursor 向けの設定の断片（`mcpServers` の `url` の形）、⑷ ポートの決まり方と変え方（既定は 9801 → 9821 の早い者勝ち・どちらも使用中なら隣の番号〔9802・9822 …〕へ・`AREKA_MCP_PORT`・`0` で待ち受けない）、⑸ Claude Desktop は HTTP を直接書けないので中継が要ること（中継は後続 spec＝設定例 0 件）。
+2. When 待ち受けている番号が既定の最初の候補でない（隣へ逃げた・`AREKA_MCP_PORT` で選んだ）, the areka shall help の URL とコマンド例に実際の番号を載せる（9801・9821 を固定で書かない）。
 3. The areka shall help のページに `Origin` の検査を同じく適用する（要件 4。ブラウザのアドレス欄から開く要求には `Origin` が無いので通る）。
 4. If `/api/mcp/v1` と `/api/mcp/help` 以外のパス（`/`・`/api/mcp/`・`/api/mcp/help/x` など）に要求が届く, then the areka shall HTTP `404` で答える（他のページ 0 枚）。
 5. If `/api/mcp/help` に `GET` 以外のメソッドが届く, then the areka shall HTTP の 4xx で答え、ページを返さない。
@@ -202,9 +206,9 @@
 
 #### Acceptance Criteria
 
-1. The areka shall 常時テスト（`cargo test`・`tools/test-all.ps1`）でネットへ出ない（ループバックのみ）。ポートは OS が割り当てる空きポート（`127.0.0.1:0`）をテストごとに取り、固定の番号を使わない（9821 を使うテスト 0 本）。
+1. The areka shall 常時テスト（`cargo test`・`tools/test-all.ps1`）でネットへ出ない（ループバックのみ）。ポートは OS が割り当てる空きポート（`127.0.0.1:0`）をテストごとに取り、固定の番号を使わない（9801・9821 を束ねるテスト 0 本）。
 2. The areka shall 実ソケットで次を決定論テストに持つ: `initialize` の旧式 4 版が要求どおり（3.1）・`2026-07-28` が `2025-11-25` へ倒れる（3.1）・未知の版（3.2）・`notifications/initialized` の 202（3.3）・`tools/list` が 0 本（3.4）・`ping`（3.5）・`tools/call` の `-32602`（3.6）・未知メソッドのエラー（3.7）・JSON でない本文（3.8＝`Content-Type` 違いと壊れた JSON の 2 本）・5 版のいずれでもない `MCP-Protocol-Version`（3.13）・`initialize` 無しの `ping`（3.9）・`application/json` の単発（3.10）・`server/discover`（3.12）・無状態版の `tools/list` の `ttlMs`・`cacheScope`（3.15）・悪い `Origin` の 403（4.3）・悪い `Host` の 403（4.4）・help の 200 と本文（6.1・6.2）・未知のパスの 404（6.4）・登録 1 本の往復（7.2・7.3）。
-3. The areka shall 待受の失敗を決定論テストで踏む: 先に `std::net::TcpListener` で空きポートを占め、その番号で待受を始めると `error!` が 1 件出てアプリ側の処理が続く（1.3）。ログの捕捉は `log-capture-kit` を通す。
+3. The areka shall 待受の失敗を決定論テストで踏む: 先に `std::net::TcpListener` で空きポートを占め、その番号だけを候補に待受を始めると `error!` が 1 件出てアプリ側の処理が続く（1.3）。占めた番号の次に「OS に任せる」を置くと飛ばして待ち受け、`debug!` 1 件と移った旨の `info!` が出る（1.2・1.10・2.9）。ログの捕捉は `log-capture-kit` を通す。
 4. The areka shall 終了を決定論テストで踏む: 待受を畳んだ後に同じポートへ接続できない（1.7）。接続を開いたまま畳んでも畳む側が有限の時間で戻る（1.8）。
-5. The areka shall 実機で確かめ、結果を `.kiro/specs/areka-P0-mcp-server-core/verification/signoff.md` に残す: ⑴ 配布形の `areka.exe` を起動して `claude mcp add --transport http areka http://127.0.0.1:9821/api/mcp/v1` で登録し、`claude mcp list` が接続できたことを示す、⑵ `curl` で `initialize`→`tools/list`→`ping` が通る、⑶ `AREKA_MCP_PORT=0` で起動すると接続できず `info!` が出る、⑷ SSP が 9801 で動いている机で areka が 9821 で同時に待ち受ける。
+5. The areka shall 実機で確かめ、結果を `.kiro/specs/areka-P0-mcp-server-core/verification/signoff.md` に残す: ⑴ 配布形の `areka.exe` を起動して `info!`（または help）が示す URL で `claude mcp add --transport http areka http://127.0.0.1:<実際の番号>/api/mcp/v1` と登録し、`claude mcp list` が接続できたことを示す、⑵ `curl` で `initialize`→`tools/list`→`ping` が通る、⑶ `AREKA_MCP_PORT=0` で起動すると接続できず `info!` が出る、⑷ SSP が 9801 と 9821 で待ち受けている机で areka を起動すると、9802（またはその先の空いた候補）で待ち受け、そこへの `ping` が 200 で答え、help がその番号を示し、`info!` が移った旨を載せる。
 6. The areka shall 実機確認の走行で `RUST_LOG` に要件 3.14 の `debug!` が出る階層まで開け、拒んだ要求（4.3）の `warn!` が記録に残ることを確かめる。
