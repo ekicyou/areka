@@ -342,3 +342,120 @@ Python と PyYAML で `release.yml` を読み、30 項目を判定させた。�
 
 - S10 が実際に Release を公開すること（gh の下書き→4 つの添付→公開・`v0.0.1` からの自動のノート）と、S11 の消す経路（止められた gh の下書きや公開済みの Release を番号で消すこと・下書きがトークンから見えること）は、実行環境での走り（乾いた走り）でも通らない。初めて動くのは `release-cycle` の初回の実走で、そこへ申し送る。
 - 偽の `gh` は PowerShell の関数なので、本物の gh へ渡るときの引数の引用（Windows のコマンド行への組み立て）は確かめていない。渡す値はどれも空白や引用符を含まない（作業ツリーの絶対パス・`v0.0.2`・`ekicyou/areka` の形）。
+
+## 3 静的な確かめ
+
+設計の Testing Strategy の「静的な確かめ」1〜7 と 9 に、時間の上限の合計（a）と Release を探す行の一致（b）を足し、検索で数を数えて合否を出す道具（Python 3.13＋PyYAML）で判定した。8（走らせたコミットとの差）はタスク 4.2 で判定する。
+
+| 項目 | 値 |
+|---|---|
+| 確かめた日 | 2026-10-03 |
+| 確かめたコミット（HEAD） | `2f0858d206f8226f24013d6fa8e31d22b96dd749` |
+| main との分かれ目（`git merge-base main HEAD`） | `d4f9e93daf9d3d10918d6590f0fd58ff0a1745d7` |
+| 対象 | `git show HEAD:.github/workflows/release.yml` の写し（作業ツリーのファイルと `cmp` で一致・作業ツリーは未変更 0） |
+| 判定の道具の結果 | 40 件中 PASS 40・FAIL 0・終了コード 0 |
+
+### 判定の道具の要点
+
+- YAML を PyYAML で読み、`on`（PyYAML では真偽値 `True` の鍵になるので両方を見る）・`permissions`・`jobs`・各段の `name`・`env`・`if`・`timeout-minutes`・`with` を構造として比べる。
+- 「件数 0」の検索はファイル全体（注記の行を含む）に対して数える＝注記に書いただけでも FAIL になる、厳しい側の数え方。
+- 「在る」を確かめる検索（配布スクリプトの呼び出し・S10 の引数）は、`#` で始まる注記の行を除いて数える。注記の行に同じ語が在ると、本文から消えても数が残るため（較正で実際に見つけた。下の「較正で直した数え方」）。
+- 9 は `git diff --name-only main...HEAD` の全パスを `^crates/`・`^tools/`・`(^|/)Cargo\.(toml|lock)$`・`^dist/README\.txt$` で数え、加えて `git diff --stat main...HEAD -- crates tools Cargo.toml Cargo.lock ':(glob)**/Cargo.toml' dist/README.txt` の印字が空かを見る。
+- 各項目を `PASS`／`FAIL` で印字し、1 つでも FAIL なら終了コード 1。
+
+### 結果
+
+| 確かめ | 判定の中身 | 数えた値 | 合否 |
+|---|---|---|---|
+| 1a | `on` の鍵が `push` と `workflow_dispatch` の 2 つだけ | `['push', 'workflow_dispatch']` | PASS |
+| 1b | `push` の下が `tags: ['v*']` だけ | `{'tags': ['v*']}` | PASS |
+| 1c | `branches` の件数（ファイル全体） | 0 | PASS |
+| 1d | `workflow_dispatch` に入力が無い | 空（`None`） | PASS |
+| 2a | 頭の `permissions` が `contents: write` だけ | `{'contents': 'write'}` | PASS |
+| 2b | job の `permissions` の件数 | 0 | PASS |
+| 2c | `secrets.` の件数 | 0 | PASS |
+| 2d | `git remote` の件数 | 0 | PASS |
+| 2e | `git push` の件数 | 0 | PASS |
+| 2f | `git tag` の件数 | 0 | PASS |
+| 2g | `env` に `GH_TOKEN` を持つ段 | 既存の Release の検査・Release を公開・後始末（この順の 3 つ） | PASS |
+| 2h | `GH_TOKEN:` の件数（ファイル全体） | 3 | PASS |
+| 2i | 取り出しの段の `persist-credentials` | 1 段・`false` | PASS |
+| 3a | `uses:` の件数 | 2 | PASS |
+| 3b | `@` の後が 40 桁の小文字 16 進の `uses:` の件数 | 2（2 件中 2 件） | PASS |
+| 3c | `cache` を名に含む action の件数 | 0 | PASS |
+| 3d | `fallback: none` の件数 | 1 | PASS |
+| 4z | 注記でない行のうち `package.ps1` を含む行の件数 | 1 | PASS |
+| 4a | 配布スクリプトの呼び出し（`& …package.ps1`）の件数 | 1 | PASS |
+| 4b | 呼び出しの引数 | `-Arch all` だけ | PASS |
+| 4c | `-Check` の件数（ファイル全体） | 0 | PASS |
+| 5a | job の数 | 1 | PASS |
+| 5b | `runs-on:` の件数 | 1 | PASS |
+| 5c | job の `timeout-minutes` | 150 | PASS |
+| 5d | S3・S5・S6・S8・S10・S11 の `timeout-minutes` | Rust の固定 10・既存の Release の検査 5・道具の用意 10・zip を作る 90・Release を公開 10・後始末 5（6 段とも在る） | PASS |
+| a | 全段の `timeout-minutes` の合計 < job の値 | 130 < 150 | PASS |
+| 6a | S10 の `if` に `PUBLISH` | `env.PUBLISH == 'true'` | PASS |
+| 6b | S10 の本文（注記の行を除く）の `--verify-tag` | 1 | PASS |
+| 6c | 同じく `--generate-notes` | 1 | PASS |
+| 6d | 同じく `--notes-start-tag` | 1 | PASS |
+| 6e | 同じく `--repo` | 1 | PASS |
+| 6f | `--draft` の件数（ファイル全体） | 0 | PASS |
+| 6g | S10 の後ろの段 | 後始末だけ | PASS |
+| 6h | S11 の `if` に `failure()`・`cancelled()`・`PUBLISH`・`steps.guard.outputs.absent` | 4 つとも在る | PASS |
+| b | S5 と S11 の `$found = @(gh api --paginate` で始まる行 | S5 に 1 行・S11 に 1 行・バイト列が同じ | PASS |
+| 7a | `workflow_call` の件数 | 0 | PASS |
+| 7b | `repository_dispatch` の件数 | 0 | PASS |
+| 7c | `gh workflow run` の件数 | 0 | PASS |
+| 9a | `main...HEAD` の変更のうち `crates/`・`tools/`・各 `Cargo.toml`・`Cargo.lock`・`dist/README.txt` の件数 | 0（変更は `.github/workflows/release.yml` と `.kiro/` の下（この spec の文書・`tech.md`・`structure.md`・後段 2 本の brief）の計 12 ファイル） | PASS |
+| 9b | `git diff --stat main...HEAD -- crates tools Cargo.toml Cargo.lock ':(glob)**/Cargo.toml' dist/README.txt` の行数 | 0 | PASS |
+
+### 較正（9 の 0 が意味を持つこと）
+
+同じ数え方を、該当のパスに触れたと分かっている main の範囲に向けて、0 でない数が出ることを確かめた。
+
+| 範囲 | 結果 |
+|---|---|
+| `main~5 main`（9a と同じ正規表現） | 113 件（`crates/` 111・`tools/` 1・`Cargo.lock` 1。`:(glob)**/Cargo.toml` は `crates/areka-mcp/Cargo.toml`・`crates/areka/Cargo.toml` を拾う） |
+| `main~5 main`（9b と同じ pathspec の `--stat`） | `113 files changed, 11333 insertions(+), 3945 deletions(-)` |
+| `03e8d7d6~1 03e8d7d6`（同じ pathspec） | `dist/README.txt` を含む 6 件 |
+| `73a6c70d~1 73a6c70d`（同じ pathspec） | `tools/package.ps1` を含む 4 件 |
+
+`Cargo.toml`・`Cargo.lock`・`dist/README.txt` は `git ls-files` で実在する。
+
+### 較正（判定の道具が変異を見分けること）
+
+HEAD の `release.yml` の写しに 1 か所ずつ変異を入れ、道具が終了コード 1 と、狙った確かめの FAIL を出すことを確かめた（9 は変異と無関係なので外して回した）。24 通りすべてで狙いどおりに FAIL が出た。
+
+| 写しへの変え方 | FAIL になった確かめ |
+|---|---|
+| `push` に `branches: [main]` を足す | 1b・1c |
+| `on` に `pull_request:` を足す | 1a |
+| `workflow_dispatch` に入力を足す | 1d |
+| `GH_TOKEN` を `secrets.GITHUB_TOKEN` に | 2c |
+| job に `permissions` を足す | 2b |
+| 改行の設定の段に `git push origin HEAD` を足す | 2e |
+| 環境の記録の段に `GH_TOKEN` を足す | 2g・2h |
+| `persist-credentials: false` を消す | 2i |
+| `actions/cache@{40 桁}` の段を足す | 3a・3b・3c |
+| 取り出しを `actions/checkout@v4` に | 3b |
+| `fallback: none` を消す | 3d |
+| 配布スクリプトの引数に `-Check` を足す | 4b・4c |
+| job の `timeout-minutes` を消す | 5c・a |
+| S3 の `timeout-minutes` を消す | 5d |
+| S8 の上限を 90 から 140 に | a |
+| S10 の `if` を `success()` に | 6a |
+| S10 の本文から `'--verify-tag', ` を消す | 6b |
+| S10 の本文から `--repo` とその値を消す | 6e |
+| S10 の本文に `'--draft'` を足す | 6f |
+| 後始末の後ろに段を足す | 6g |
+| S11 の `if` から `cancelled()` を外す | 6h |
+| S11 の探す行の `per_page=100` を `per_page=10` に（1 字） | b |
+| `gh workflow run next` を足す | 7c |
+| `on` に `repository_dispatch:` を足す | 1a・7b |
+
+### 較正で直した数え方
+
+- 初めの版の道具は、`package.ps1` を含む行をすべて呼び出しと数え、注記の行（`tools/package.ps1 と同じ` など）まで拾って 4a が 5 件の FAIL になった。注記の行を除き、`& …package.ps1` の形だけを呼び出しと数えるよう道具を直した（`release.yml` は変えていない）。
+- `runs-on:` を行頭で数える検索に複数行の指定が抜けていて 5b が 0 件の FAIL になった。道具を直した。
+- 6b は初め「S10 の本文に 1 件以上」で数えていたため、本文から `--verify-tag` を消しても注記の行（`--verify-tag で gh が止まる`）の 1 件が残って PASS のままだった（変異を見分けなかった）。注記の行を除いてちょうど 1 件と数えるよう 6b〜6e を直し、変異が FAIL になることを確かめた。
+
+一時ファイル（判定の道具・変異の道具・写し・印字）は `target\rc3\` の下にだけ置き、確かめの後に消した。道具はリポジトリに加えていない。
