@@ -10,9 +10,11 @@
 
 use super::*;
 use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, TryRecvError, channel};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
+use areka_kanade::online::OnlineCounter;
 use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::schedule::Schedules;
 use bevy_ecs::world::World;
@@ -216,25 +218,37 @@ fn not_path_warns_once_and_sends_nothing() {
 
 // ---------------------------------------------------------------- url の腕
 
+/// 偽の取得口を差した本物の取得のスレッドを起こす口。起こした手綱は `handles_tx` へ渡す。
+fn fetching_start(
+    fake: FakeFetch,
+    dir: PathBuf,
+    online: &'static OnlineCounter,
+    handles_tx: Sender<Option<JoinHandle<()>>>,
+) -> StartFetch {
+    Arc::new(move |url, tx| {
+        let fake = fake.clone();
+        let make: MakeFetch = Box::new(move || Ok(Box::new(fake) as Box<dyn areka_update::Fetch>));
+        let handle = spawn_download_with(url, tx, dir.clone(), make, online);
+        handles_tx.send(handle).expect("手綱を渡せる");
+    })
+}
+
 /// 台本の文字列の `\![execute,install,url,URL,nar]` は、偽の取得口を差した取得のスレッドを 1 本
 /// 起こし、落とし終えたら出どころ「台本」の生の要求がちょうど 1 件届く（要件 6.1・9.11）。
+/// 取得を抜けた後は通信中の数が 0 に戻っている（要件 2.3）。
 #[test]
 fn url_arm_starts_one_fetch_and_one_script_request_arrives() {
+    static ONLINE: OnlineCounter = OnlineCounter::new();
     let tmp = TempPath::new("install-cue-url");
     let dir = tmp.child("download");
     let (tx, rx) = channel();
     let (handles_tx, handles_rx) = channel();
-    let fake = FakeFetch::new().serve(URL, BODY);
-    let start: StartFetch = Arc::new({
-        let dir = dir.clone();
-        move |url, tx| {
-            let fake = fake.clone();
-            let make: MakeFetch =
-                Box::new(move || Ok(Box::new(fake) as Box<dyn areka_update::Fetch>));
-            let handle = spawn_download_with(url, tx, dir.clone(), make);
-            handles_tx.send(handle).expect("手綱を渡せる");
-        }
-    });
+    let start = fetching_start(
+        FakeFetch::new().serve(URL, BODY),
+        dir.clone(),
+        &ONLINE,
+        handles_tx,
+    );
 
     let ((), events) = capture(|| {
         play_script(
@@ -249,6 +263,7 @@ fn url_arm_starts_one_fetch_and_one_script_request_arrives() {
     let request = rx.recv_timeout(BOUND).expect("依頼が届く");
     handle.join().expect("install-fetch が panic しない");
 
+    assert!(!ONLINE.is_online(), "取得を抜けたら数は 0");
     assert_eq!(request.origin, InstallOrigin::Script);
     assert_eq!(request.path.parent(), Some(dir.as_path()));
     assert_eq!(std::fs::read(&request.path).expect("読める"), BODY);
@@ -263,6 +278,35 @@ fn url_arm_starts_one_fetch_and_one_script_request_arrives() {
         "取得は 1 本だけ"
     );
     assert_eq!(warns(&events), Vec::<Option<&str>>::new(), "警告なし");
+}
+
+/// `url` の腕で取得が失敗しても、依頼 0 件で通信中の数は 0 に戻る（要件 2.3・6.4）。
+#[test]
+fn url_arm_fetch_failure_sends_nothing_and_restores_online() {
+    static ONLINE: OnlineCounter = OnlineCounter::new();
+    let tmp = TempPath::new("install-cue-url-fail");
+    let (tx, rx) = channel();
+    let (handles_tx, handles_rx) = channel();
+    let start = fetching_start(
+        FakeFetch::new().fail(URL, areka_update::FetchError::Timeout),
+        tmp.child("download"),
+        &ONLINE,
+        handles_tx,
+    );
+
+    play_script(
+        &format!(r"\![execute,install,url,{URL},nar]\e"),
+        InstallCueSink::with_fetch(tx, start),
+    );
+    handles_rx
+        .try_recv()
+        .expect("取得が起きる")
+        .expect("install-fetch が起きる")
+        .join()
+        .expect("install-fetch が panic しない");
+
+    assert!(!ONLINE.is_online(), "取得を抜けたら数は 0");
+    assert_eq!(rx.try_recv(), Err(TryRecvError::Disconnected), "依頼 0");
 }
 
 /// 種別の省略は `nar` と同じく取得を起こす。種別より後ろの引数は `warn!` 1 件を残して読まない
