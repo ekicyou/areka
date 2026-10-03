@@ -58,6 +58,7 @@
 - `fetch_and_send`・`spawn_download_with`・`spawn_worker`・`KanadePorts` の引数が増える → `install/fetch_url_tests.rs`・`emo2_boot/install_cue_tests.rs`・`update/worker_tests.rs`・`update/desk_*_tests.rs`。
 - tick の門（`AREKA_TICK_GATE`）が既定で有効になる → 入力の段とバルーンの相が毎フレーム走る前提（要件 5.2）を見直す。
 - `Emo2Wiring` に欄を足すので、`Emo2Wiring::new` の呼び手と、相の分解（`let Emo2Wiring { .. } = wiring`）の形。
+- `State` に `external` の欄を足すので、`State { .. }` の構造体リテラルを持つ kanade の既存テスト（14 か所）に `external: ExternalStates::default()` を足す。
 - `KanadeConfig` に `online` の欄を足すので、`KanadeConfig::new` の既定（`&online::PROCESS`）。構成は全部 `KanadeConfig::new` を通る（構造体リテラルは本番にもテストにも無い）ので、呼び手は無改変。
 - `balloon_visibility_phase.rs` の冒頭の `use super::super::frame::{…}` に名前を足すので、同じ行を `emo-text-file-split` が触ると併合のときに文字の上の衝突が起きうる（研究 4.3）。併合のときに見るべき 1 行。
 - ukadoc 網羅の台帳で `\t` の宛先を `areka-P0-sakura-time-directives` へ移すので、同 spec の `[[spec]].owner_count`。
@@ -283,7 +284,7 @@ sequenceDiagram
 | 8.1 | 組み合わせの決定論テスト | `status_derive_tests.rs`（48 通り）・`external_state_tests.rs`（gating） | — | — |
 | 8.2 | 送り口を通した観測 | `tests/kanade/external_status_test.rs`・`shiori/real_tests.rs` の複合値 1 件 | — | — |
 | 8.3 | 既存の期待値の更新 | 構造体リテラルの追随。一周の照合（spine）は `GhostSlot` を据えないので期待値は変わらない（R2） | — | — |
-| 8.4 | emo2 が雑談しない | `real_pasta_test.rs` に env ゲートの 1 件（`PROCESS` の guard を持ったまま OnSecondChange を回す） | — | — |
+| 8.4 | emo2 が雑談しない | 別の実行ファイル `crates/areka-ghost/tests/real_pasta_online.rs` に env ゲートの 1 件（`PROCESS` の guard を持ったまま OnSecondChange を回す） | — | — |
 
 ## Components and Interfaces
 
